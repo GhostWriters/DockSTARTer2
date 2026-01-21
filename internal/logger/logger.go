@@ -48,9 +48,10 @@ func logAt(ctx context.Context, t time.Time, level slog.Level, msg any, args ...
 	}
 
 	msgStr := resolveMsg(msg)
-	// If it's a string, we might need to format it with args
-	if s, ok := msg.(string); ok && len(args) > 0 {
-		msgStr = fmt.Sprintf(s, args...)
+	// If it's a string (or resolved from a slice), we might need to format it with args.
+	// We check if args are present and msgStr has format specifiers.
+	if len(args) > 0 && strings.Contains(msgStr, "%") {
+		msgStr = fmt.Sprintf(msgStr, args...)
 		args = nil // Reset args as they are now consumed
 	}
 	msgStr = console.Parse(msgStr)
@@ -443,7 +444,12 @@ func Fatal(ctx context.Context, msg any, args ...any) {
 
 // FatalNoTrace logs a message at FatalLevel without stack trace and exits
 func FatalNoTrace(ctx context.Context, msg any, args ...any) {
-	logAt(ctx, time.Now(), LevelFatal, msg, args...)
+	output := []any{
+		msg,
+		"",
+		"[_FatalFooter_]Please let the dev know of this error.",
+	}
+	logAt(ctx, time.Now(), LevelFatal, output, args...)
 	panic(FatalError{})
 }
 

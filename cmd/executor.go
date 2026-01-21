@@ -184,6 +184,23 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				}
 			}
 			ranCommand = true
+		case "--theme-table", "--config-pm-table", "--config-pm-existing-table",
+			"-a", "--add",
+			"-c", "--compose",
+			"-e", "--env",
+			"-l", "--list", "--list-added", "--list-builtin", "--list-deprecated", "--list-enabled", "--list-disabled", "--list-nondeprecated", "--list-referenced",
+			"-p", "--prune",
+			"-r", "--remove",
+			"-R", "--reset",
+			"-s", "--status", "--status-enable", "--status-disable",
+			"-S", "--select", "--menu-config-app-select", "--menu-app-select",
+			"-t", "--test",
+			"--config-pm", "--config-pm-auto", "--config-pm-list", "--config-pm-existing-list",
+			"--config-show", "--show-config",
+			"--env-appvars", "--env-appvars-lines",
+			"--env-get", "--env-get-line", "--env-get-literal", "--env-get-lower", "--env-get-lower-line", "--env-get-lower-literal",
+			"--env-set", "--env-set-lower":
+			logger.FatalNoTrace(ctx, "The '[_UserCommand_]%s[-]' command is not implemented yet.", group.Command)
 		case "--theme-lines", "--theme-no-lines", "--theme-line", "--theme-no-line",
 			"--theme-borders", "--theme-no-borders", "--theme-border", "--theme-no-border",
 			"--theme-shadows", "--theme-no-shadows", "--theme-shadow", "--theme-no-shadow",
