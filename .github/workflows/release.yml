@@ -48,64 +48,69 @@ jobs:
       - name: Generate Version Tag
         id: tag
         run: |
-          TODAY=$(date +'%Y.%m.%d')
-          PREFIX="v${TODAY}"
+          # GoReleaser strictly enforces 3-component SemVer (Major.Minor.Patch).
+          # vYYYY.MM.DD.N is 4 components (Invalid).
+          # Solution: Merge Day and Counter into Patch: vYYYY.MM.DDCC
+          # Example: v2026.01.2101 (Day 21, Counter 01)
+          
+          YEAR_MONTH=$(date +'%Y.%m')
+          DAY=$(date +'%d')
+          PREFIX="v${YEAR_MONTH}"
           
           git fetch --tags --force
           
-          # Determine Suffix and Regex based on branch
           if [[ "${{ github.ref_name }}" == "main" ]]; then
             SUFFIX=""
-            # Match strict: vYYYY.MM.DD or vYYYY.MM.DD.N
-            # Exclude anything with a hyphen (branch suffixes)
-            REGEX="^${PREFIX}(\.[0-9]+)?$"
+            # Match vYYYY.MM.DDCC
+            REGEX="^${PREFIX}\.${DAY}[0-9]{2}$"
           else
             SAFE_BRANCH=$(echo "${{ github.ref_name }}" | sed 's/[^a-zA-Z0-9]/-/g')
             SUFFIX="-${SAFE_BRANCH}"
-            # Match strict: vYYYY.MM.DD-branch or vYYYY.MM.DD.N-branch
-            REGEX="^${PREFIX}(\.[0-9]+)?${SUFFIX}$"
+            # Match vYYYY.MM.DDCC-branch
+            REGEX="^${PREFIX}\.${DAY}[0-9]{2}${SUFFIX}$"
           fi
           
           echo "Scope: ${{ github.ref_name }}"
           echo "Suffix: '$SUFFIX'"
           echo "Regex: '$REGEX'"
 
-          MAX_N="-1"
+          MAX_C="-1"
           
-          # Get all tags for today
+          # Get all tags for this Month (vYYYY.MM.*)
           TAGS=$(git tag -l "${PREFIX}*")
           
           for tag in $TAGS; do
-            # Check if tag matches our scoped regex
             if [[ "$tag" =~ $REGEX ]]; then
-              # Valid tag for this scope. Extract N.
-              
-              # Strip suffix first (vYYYY.MM.DD.N or vYYYY.MM.DD)
+              # Strip suffix: vYYYY.MM.DDCC
               base="${tag%$SUFFIX}"
-              # Strip prefix (vYYYY.MM.DD)
-              rest="${base#$PREFIX}"
+              # Extract Patch (DDCC): Remove vYYYY.MM.
+              patch="${base#$PREFIX.}"
               
-              if [[ -z "$rest" ]]; then
-                n=0
-              else
-                # rest is ".N"
-                n="${rest#.}"
-              fi
-              
-              if (( n > MAX_N )); then
-                MAX_N=$n
+              # Extract Counter (last 2 digits)
+              # Assumption: Day is always 2 digits, Patch is 4 digits.
+              if [[ ${#patch} -ge 4 ]]; then
+                 c="${patch:2:2}"
+                 # Remove leading zero for math
+                 c=$((10#$c))
+                 
+                 if (( c > MAX_C )); then
+                   MAX_C=$c
+                 fi
               fi
             fi
           done
           
-          if [ "$MAX_N" == "-1" ]; then
-             # First release of the day for this scope. Start at 1.
-             NEXT_N=1
+          if [ "$MAX_C" == "-1" ]; then
+             NEXT_C=1
           else
-             NEXT_N=$((MAX_N + 1))
+             NEXT_C=$((MAX_C + 1))
           fi
           
-          FINAL_VER="${PREFIX}.${NEXT_N}${SUFFIX}"
+          # Pad counter to 2 digits
+          PADDED_C=$(printf "%02d" $NEXT_C)
+          
+          # Final Format: vYYYY.MM.DDCC[-Suffix]
+          FINAL_VER="${PREFIX}.${DAY}${PADDED_C}${SUFFIX}"
           
           echo "Generated Version: $FINAL_VER"
           echo "version=$FINAL_VER" >> $GITHUB_OUTPUT
