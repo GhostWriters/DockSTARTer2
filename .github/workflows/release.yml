@@ -48,69 +48,61 @@ jobs:
       - name: Generate Version Tag
         id: tag
         run: |
-          # GoReleaser strictly enforces 3-component SemVer (Major.Minor.Patch).
-          # vYYYY.MM.DD.N is 4 components (Invalid).
-          # Solution: Merge Day and Counter into Patch: vYYYY.MM.DDCC
-          # Example: v2026.01.2101 (Day 21, Counter 01)
+          # Versioning Scheme: v1.YYYYMMDD.N[-Suffix]
+          # Major: 1
+          # Minor: YYYYMMDD
+          # Patch: N (Daily build counter)
           
-          YEAR_MONTH=$(date +'%Y.%m')
-          DAY=$(date +'%d')
-          PREFIX="v${YEAR_MONTH}"
+          # Example: v1.20260121.1
+          
+          TODAY_INT=$(date +'%Y%m%d')
+          PREFIX="v1.${TODAY_INT}"
           
           git fetch --tags --force
           
           if [[ "${{ github.ref_name }}" == "main" ]]; then
             SUFFIX=""
-            # Match vYYYY.MM.DDCC
-            REGEX="^${PREFIX}\.${DAY}[0-9]{2}$"
+            # Match v1.YYYYMMDD.N
+            REGEX="^${PREFIX}\.[0-9]+$"
           else
             SAFE_BRANCH=$(echo "${{ github.ref_name }}" | sed 's/[^a-zA-Z0-9]/-/g')
             SUFFIX="-${SAFE_BRANCH}"
-            # Match vYYYY.MM.DDCC-branch
-            REGEX="^${PREFIX}\.${DAY}[0-9]{2}${SUFFIX}$"
+            # Match v1.YYYYMMDD.N-branch
+            REGEX="^${PREFIX}\.[0-9]+${SUFFIX}$"
           fi
           
           echo "Scope: ${{ github.ref_name }}"
           echo "Suffix: '$SUFFIX'"
           echo "Regex: '$REGEX'"
 
-          MAX_C="-1"
+          MAX_N="-1"
           
-          # Get all tags for this Month (vYYYY.MM.*)
+          # Get all tags for this "Minor" version (v1.YYYYMMDD.*)
           TAGS=$(git tag -l "${PREFIX}*")
           
           for tag in $TAGS; do
             if [[ "$tag" =~ $REGEX ]]; then
-              # Strip suffix: vYYYY.MM.DDCC
+              # Strip suffix: v1.YYYYMMDD.N
               base="${tag%$SUFFIX}"
-              # Extract Patch (DDCC): Remove vYYYY.MM.
-              patch="${base#$PREFIX.}"
+              # Extract Patch (N): Remove v1.YYYYMMDD.
+              n="${base#$PREFIX.}"
               
-              # Extract Counter (last 2 digits)
-              # Assumption: Day is always 2 digits, Patch is 4 digits.
-              if [[ ${#patch} -ge 4 ]]; then
-                 c="${patch:2:2}"
-                 # Remove leading zero for math
-                 c=$((10#$c))
-                 
-                 if (( c > MAX_C )); then
-                   MAX_C=$c
+              # Ensure n is numeric
+              if [[ "$n" =~ ^[0-9]+$ ]]; then
+                 if (( n > MAX_N )); then
+                   MAX_N=$n
                  fi
               fi
             fi
           done
           
-          if [ "$MAX_C" == "-1" ]; then
-             NEXT_C=1
+          if [ "$MAX_N" == "-1" ]; then
+             NEXT_N=1
           else
-             NEXT_C=$((MAX_C + 1))
+             NEXT_N=$((MAX_N + 1))
           fi
           
-          # Pad counter to 2 digits
-          PADDED_C=$(printf "%02d" $NEXT_C)
-          
-          # Final Format: vYYYY.MM.DDCC[-Suffix]
-          FINAL_VER="${PREFIX}.${DAY}${PADDED_C}${SUFFIX}"
+          FINAL_VER="${PREFIX}.${NEXT_N}${SUFFIX}"
           
           echo "Generated Version: $FINAL_VER"
           echo "version=$FINAL_VER" >> $GITHUB_OUTPUT
