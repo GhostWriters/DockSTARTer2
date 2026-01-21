@@ -1,5 +1,9 @@
 # DockSTARTer 2
 
+> [!WARNING]
+> **Work In Progress**
+> This project is currently under active development and is **NOT** yet functional. This repository is a rewrite of the original Bash based DockSTARTer and is not ready for use.
+
 DockSTARTer makes it easy to install and manage Docker and Docker Compose on your machine. This is the new, Go-based version of the project, replacing the original Bash scripts for improved performance, maintainability, and cross-platform support.
 
 ## Getting Started
