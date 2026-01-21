@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"DockSTARTer2/cmd"
+	"DockSTARTer2/internal/assets"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/update"
@@ -41,6 +42,12 @@ func run() (exitCode int) {
 	}()
 
 	logger.Notice(ctx, "[_ApplicationName_]%s[-] [[_Version_]%s[-]]", version.ApplicationName, version.Version)
+
+	// Ensure embedded assets are extracted
+	if err := assets.EnsureAssets(ctx); err != nil {
+		logger.Error(ctx, "Failed to ensure assets: %v", err)
+		// We continue, as the app might still work with hardcoded defaults
+	}
 
 	// Check if the current channel still exists on GitHub
 	_ = update.CheckCurrentStatus(ctx)

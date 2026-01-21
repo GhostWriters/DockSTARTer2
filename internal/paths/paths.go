@@ -82,25 +82,14 @@ func GetCacheDir() string {
 	return filepath.Join(xdg.CacheHome, "dockstarter")
 }
 
-// GetThemesDir returns the absolute path to the .themes directory.
-// It looks for a .themes directory in the same folder as the executable, or the current working directory.
+// GetConfigDir returns the absolute path to the dockstarter configuration directory.
+func GetConfigDir() string {
+	return filepath.Dir(GetConfigFilePath())
+}
+
+// GetThemesDir returns the absolute path to the themes directory in the state folder.
 func GetThemesDir() string {
-	// 1. Check relative to executable
-	exePath, _ := os.Executable()
-	exeDir := filepath.Dir(exePath)
-	path := filepath.Join(exeDir, ".themes")
-	if _, err := os.Stat(path); err == nil {
-		return path
-	}
-
-	// 2. Check current working directory (useful for development)
-	cwd, _ := os.Getwd()
-	path = filepath.Join(cwd, ".themes")
-	if _, err := os.Stat(path); err == nil {
-		return path
-	}
-
-	return path // Fallback to executable-relative path even if missing
+	return filepath.Join(GetStateDir(), "themes")
 }
 
 // GetStateDir returns the absolute path to the dockstarter state directory.
