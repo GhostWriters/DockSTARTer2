@@ -11,7 +11,9 @@ func showOptionsMenu(backAction func()) {
 			Desc:     "Choose a theme for " + version.ApplicationName,
 			Help:     "Select visual appearance",
 			Shortcut: 'C',
-			Action:   nil,
+			Action: func() {
+				showThemeSelection(func() { showOptionsMenu(backAction) })
+			},
 		},
 		{
 			Tag:      "Display Options",
@@ -32,6 +34,23 @@ func showOptionsMenu(backAction func()) {
 	dialog, list := NewMenuDialog("Options", "What would you like to do?", items, backAction)
 
 	// Update Panels
+	panels.AddPanel("menu", dialog, true, true)
+	panels.ShowPanel("menu")
+	app.SetFocus(list)
+}
+
+func showThemeSelection(backAction func()) {
+	items := []MenuItem{
+		{
+			Tag:      "Back",
+			Desc:     "Return to previous menu",
+			Shortcut: 'B',
+			Action:   backAction,
+		},
+	}
+
+	dialog, list := NewMenuDialog("Choose Theme", "Select a theme:", items, backAction)
+
 	panels.AddPanel("menu", dialog, true, true)
 	panels.ShowPanel("menu")
 	app.SetFocus(list)

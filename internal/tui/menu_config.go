@@ -21,7 +21,9 @@ func showConfigMenu(backAction func()) {
 			Desc:     "Select which apps to run. Previously installed apps are remembered",
 			Help:     "Choose which services to enable",
 			Shortcut: 'S',
-			Action:   nil,
+			Action: func() {
+				showAppSelect(func() { showConfigMenu(backAction) })
+			},
 		},
 		{
 			Tag:      "Configure Applications",
@@ -56,6 +58,23 @@ func showConfigMenu(backAction func()) {
 	dialog, list := NewMenuDialog("Configuration Menu", "What would you like to do?", items, backAction)
 
 	// Update Panels
+	panels.AddPanel("menu", dialog, true, true)
+	panels.ShowPanel("menu")
+	app.SetFocus(list)
+}
+
+func showAppSelect(backAction func()) {
+	items := []MenuItem{
+		{
+			Tag:      "Back",
+			Desc:     "Return to previous menu",
+			Shortcut: 'B',
+			Action:   backAction,
+		},
+	}
+
+	dialog, list := NewMenuDialog("Select Applications", "Choose applications to install:", items, backAction)
+
 	panels.AddPanel("menu", dialog, true, true)
 	panels.ShowPanel("menu")
 	app.SetFocus(list)

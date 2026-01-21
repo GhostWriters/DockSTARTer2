@@ -250,6 +250,7 @@ func NewMenuDialog(title string, text string, items []MenuItem, backAction func(
 		idx := i
 		listItem.SetSelectedFunc(func() {
 			list.SetCurrentItem(idx)
+			menuSelectedIndices[title] = idx // Ensure index is saved for mouse clicks
 			app.SetFocus(list)
 			refreshHelpline(idx)
 			if action != nil {
@@ -300,12 +301,14 @@ func NewMenuDialog(title string, text string, items []MenuItem, backAction func(
 		menuSelectedIndices[title] = index
 	})
 
+	// Restore previous selection if it exists
+	currIdx := list.GetCurrentItemIndex()
 	if idx, ok := menuSelectedIndices[title]; ok && idx >= 0 && idx < len(items) {
-		list.SetCurrentItem(idx)
+		currIdx = idx
+		list.SetCurrentItem(currIdx)
 	}
 
 	// Initial helpline
-	currIdx := list.GetCurrentItemIndex()
 	refreshHelpline(currIdx)
 
 	btnSelect.SetSelectedFunc(func() {
