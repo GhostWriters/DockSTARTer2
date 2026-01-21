@@ -538,7 +538,7 @@ func (d *ThreeDBox) Draw(screen tcell.Screen) {
 }
 
 // Start starts the TUI application.
-func Start(ctx context.Context) error {
+func Start(ctx context.Context, startMenu string) error {
 	logger.Info(ctx, "TUI Starting...")
 	currentConfig = config.LoadGUIConfig()
 	func() {
@@ -565,7 +565,6 @@ func Start(ctx context.Context) error {
 	app.SetScreen(screen)
 	app.EnableMouse(true)
 
-	// Background update check
 	// Background update check
 	go func() {
 		// Initial check
@@ -711,7 +710,14 @@ func Start(ctx context.Context) error {
 	rootGrid.AddItem(panels, 2, 0, 1, 1, 0, 0, true)
 	rootGrid.AddItem(helpline, 3, 0, 1, 1, 0, 0, false)
 
-	showMainMenu()
+	switch startMenu {
+	case "config":
+		showConfigMenu()
+	case "options":
+		showOptionsMenu()
+	default:
+		showMainMenu()
+	}
 
 	app.SetRoot(rootGrid, true)
 	err = app.Run()

@@ -120,7 +120,11 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			}
 			ranCommand = true
 		case "-M", "--menu":
-			if err := tui.Start(ctx); err != nil {
+			target := ""
+			if len(group.Args) > 0 {
+				target = group.Args[0]
+			}
+			if err := tui.Start(ctx, target); err != nil {
 				logger.Error(ctx, "TUI Error: %v", err)
 			}
 			ranCommand = true
@@ -223,7 +227,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 	// Parse typically returns at least one group if we want default behavior?
 	// If groups is empty, loop didn't run.
 	if !ranCommand {
-		if err := tui.Start(ctx); err != nil {
+		if err := tui.Start(ctx, ""); err != nil {
 			logger.Error(ctx, "TUI Error: %v", err)
 		}
 	}
