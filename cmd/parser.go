@@ -215,7 +215,6 @@ func Parse(args []string) ([]CommandGroup, error) {
 		switch cmd {
 		// Commands that take unlimited arguments (until next flag)
 		case "-a", "--add",
-			"-c", "--compose",
 			"--env-appvars", "--env-appvars-lines",
 			"--env-get", "--env-get-line", "--env-get-literal",
 			"--env-get-lower", "--env-get-lower-line", "--env-get-lower-literal",
@@ -223,6 +222,25 @@ func Parse(args []string) ([]CommandGroup, error) {
 			"-s", "--status",
 			"--status-enable", "--status-disable":
 			consumesUntilDash = true
+
+		case "-c", "--compose":
+			if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
+				sub := expandedArgs[i]
+				validSubs := map[string]bool{
+					"pull": true, "up": true, "down": true, "stop": true, "restart": true, "update": true,
+					"generate": true, "merge": true,
+				}
+				if !validSubs[sub] {
+					return nil, &ParseError{Args: expandedArgs, Index: i, FailingCommand: cmd, Message: "Invalid option %o"}
+				}
+				currentGroup.Args = append(currentGroup.Args, sub)
+				i++
+
+				// generate and merge take NO more args
+				if sub != "generate" && sub != "merge" {
+					consumesUntilDash = true
+				}
+			}
 
 		// Commands that require exactly ONE argument
 		case "-t", "--test", "--config-pm":
@@ -233,9 +251,25 @@ func Parse(args []string) ([]CommandGroup, error) {
 			i++
 
 		// Commands that accept OPTIONAL arguments (Max 1)
-		case "-T", "--theme", "-M", "--menu", "-S", "--select", "--menu-config-app-select", "--menu-app-select":
+		case "-T", "--theme", "-S", "--select", "--menu-config-app-select", "--menu-app-select":
 			if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
 				currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
+				i++
+			}
+
+		case "-M", "--menu":
+			if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
+				sub := expandedArgs[i]
+				validSubs := map[string]bool{
+					"main": true, "config": true, "options": true,
+					"options-display": true, "display": true,
+					"options-theme": true, "theme": true,
+					"config-app-select": true, "app-select": true, "select": true,
+				}
+				if !validSubs[sub] {
+					return nil, &ParseError{Args: expandedArgs, Index: i, FailingCommand: cmd, Message: "Invalid option %o"}
+				}
+				currentGroup.Args = append(currentGroup.Args, sub)
 				i++
 			}
 
