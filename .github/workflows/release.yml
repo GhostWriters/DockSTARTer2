@@ -1,0 +1,123 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+      - '**' # Trigger on all branches
+  workflow_dispatch:
+    inputs:
+      force_release:
+        description: 'Force release even if tests fail'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Run Unit Tests
+        run: go test -v ./...
+
+  release:
+    needs: test
+    if: always() && (needs.test.result == 'success' || inputs.force_release == true)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Generate Version Tag
+        id: tag
+        run: |
+          TODAY=$(date +'%Y.%m.%d')
+          PREFIX="v${TODAY}"
+          
+          # We need to fetch tags to determine the increment
+          git fetch --tags --force
+          
+          # Check if valid existing tags for today exist
+          # Filter for tags starting with prefix, remove prefix, find max
+          # Examples: v2024.01.20 (no suffix), v2024.01.20.1 (suffix 1)
+          
+          # Logic:
+          # 1. Check if "vYYYY.MM.DD" exists.
+          # 2. If NO -> Use "vYYYY.MM.DD".
+          # 3. If YES -> Find max suffix X of "vYYYY.MM.DD.X" and use X+1.
+          
+          if git tag -l "${PREFIX}" | grep -Fxq "${PREFIX}"; then
+            # Base tag exists, find max suffix
+            # Get all tags matching "vYYYY.MM.DD.*"
+            # Strip prefix + "."
+            # Sort numerically
+            # Take last
+            MAX_SUFFIX=$(git tag -l "${PREFIX}.*" | sed "s/^${PREFIX}\.//" | grep -E '^[0-9]+$' | sort -n | tail -1)
+            
+            if [ -z "$MAX_SUFFIX" ]; then
+              # Base exists but no .X tags found (unlikely if base exists, but means next is .1)
+              NEXT_SUFFIX="1"
+            else
+              NEXT_SUFFIX=$((MAX_SUFFIX + 1))
+            fi
+            BASE_VER="${PREFIX}.${NEXT_SUFFIX}"
+          else
+            # Base tag does not exist, use it
+            BASE_VER="${PREFIX}"
+          fi
+
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
+            FINAL_VER="$BASE_VER"
+          else
+            # Sanitize branch name: replace non-alphanumeric with hyphens
+            SAFE_BRANCH=$(echo "${{ github.ref_name }}" | sed 's/[^a-zA-Z0-9]/-/g')
+            FINAL_VER="${BASE_VER}-${SAFE_BRANCH}"
+          fi
+          
+          echo "Generated Version: $FINAL_VER"
+          echo "version=$FINAL_VER" >> $GITHUB_OUTPUT
+
+      - name: Tag Commit
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git tag -a "${{ steps.tag.outputs.version }}" -m "Release ${{ steps.tag.outputs.version }}"
+          # We don't push the tag explicitly; goreleaser (or just the existence of the tag locally) 
+          # might be enough if we use --clean. 
+          # However, allow goreleaser to handle it or push it so it persists. 
+          # Goreleaser usually expects the tag to be present on the commit it builds.
+          # But for 'goreleaser release', it usually runs ON a tag. 
+          # Since we are running on a branch push, we are creating a tag dynamically.
+          # We should push it so GitHub knows about it, OR just let goreleaser use the local tag.
+          # Let's push it to be safe and ensure the Release is tied to it.
+          git push origin "${{ steps.tag.outputs.version }}"
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Determine if it's a prerelease contextually? 
+          # Goreleaser 'auto' prerelease looks at the tag format. 
+          # Since we use hyphens for branches (v...-branch), it should auto-detect as prerelease.

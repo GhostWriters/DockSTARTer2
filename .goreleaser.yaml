@@ -1,0 +1,58 @@
+version: 2
+
+project_name: ds2
+
+builds:
+  - id: ds2
+    binary: ds2
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X DockSTARTer2/internal/version.Version={{.Tag}}
+      - -X DockSTARTer2/internal/version.Commit={{.Commit}}
+      - -X DockSTARTer2/internal/version.BuildDate={{.Date}}
+
+archives:
+  - format: tar.gz
+    # this name template makes the OS and Arch compatible with the results of uname.
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- .Arch }}
+    builds:
+      - ds2
+    files:
+      - README.md
+      - LICENSE
+    format_overrides:
+      - goos: windows
+        format: zip
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: "{{ .Tag }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+
+release:
+  # IF the version has a hyphen (e.g. v2024.01.20.1-feature), it's a prerelease.
+  prerelease: auto
+  draft: false
+  replace_existing_draft: true
+  replace_existing_artifacts: true

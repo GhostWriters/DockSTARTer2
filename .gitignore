@@ -1,0 +1,48 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+test_*.exe
+
+# GoReleaser
+dist/
+
+# Dependencies
+vendor/
+
+# Workspaces
+go.work
+go.work.sum
+
+# IDE / Debug
+__debug_bin
+.vscode/
+.idea/
+
+# Legacy / DockSTARTer Specific
+/.cache
+/.dialogoptions
+/.dialogrc
+/.temp/
+/.instances/
+/.local/
+/.config/
+/cli-plugins/
+/compose/
+/config.json
+/config/
+/configs/
+/menu.ini
+/dockstarter.ini
+*.log
+/share/
+/shared/
+/site/
+
+# Project Specific
+ds2.exe
+dockstarter.exe
+dockstarter.log
+fatal.log
