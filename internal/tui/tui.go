@@ -37,8 +37,6 @@ var (
 	panels              *cview.Panels
 	menuSelectedIndices = make(map[string]int)
 	rightView           *cview.TextView
-	appUpdateAvailable  bool
-	tmplUpdateAvailable bool
 )
 
 // Helper to set title with auto-translation
@@ -571,9 +569,7 @@ func Start(ctx context.Context, startMenu string) error {
 	// Background update check
 	go func() {
 		// Initial check
-		appUpdate, tmplUpdate := update.GetUpdateStatus(ctx)
-		appUpdateAvailable = appUpdate
-		tmplUpdateAvailable = tmplUpdate
+		update.GetUpdateStatus(ctx)
 		app.QueueUpdateDraw(func() {
 			refreshHeader()
 		})
@@ -586,10 +582,10 @@ func Start(ctx context.Context, startMenu string) error {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				appUpdate, tmplUpdate := update.GetUpdateStatus(ctx)
-				if appUpdate != appUpdateAvailable || tmplUpdate != tmplUpdateAvailable {
-					appUpdateAvailable = appUpdate
-					tmplUpdateAvailable = tmplUpdate
+				appUpdateOld := update.AppUpdateAvailable
+				tmplUpdateOld := update.TmplUpdateAvailable
+				update.GetUpdateStatus(ctx)
+				if update.AppUpdateAvailable != appUpdateOld || update.TmplUpdateAvailable != tmplUpdateOld {
 					app.QueueUpdateDraw(func() {
 						refreshHeader()
 					})
@@ -738,7 +734,7 @@ func refreshHeader() {
 	// App Update Flag
 	appUpdateFlag := " "
 	appVerTag := "[_ThemeApplicationVersion_]"
-	if appUpdateAvailable {
+	if update.AppUpdateAvailable {
 		appUpdateFlag = "[_ThemeApplicationUpdate_]*[_ThemeReset_]"
 		appVerTag = "[_ThemeApplicationUpdate_]"
 	}
@@ -746,13 +742,12 @@ func refreshHeader() {
 	// Templates Update Flag
 	tmplUpdateFlag := " "
 	tmplVerTag := "[_ThemeApplicationVersion_]"
-	if tmplUpdateAvailable {
+	if update.TmplUpdateAvailable {
 		tmplUpdateFlag = "[_ThemeApplicationUpdate_]*[_ThemeReset_]"
 		tmplVerTag = "[_ThemeApplicationUpdate_]"
 	}
 
 	// Structure: [Flag][Brackets]A:[Version[Brackets]]
-	// We use the colors from the tags and let Translate + cview handle the single brackets
 	appText := fmt.Sprintf("%s[_ThemeApplicationVersionBrackets_]A:[%s%s[_ThemeApplicationVersionBrackets_]]", appUpdateFlag, appVerTag, appVer)
 	tmplText := fmt.Sprintf("%s[_ThemeApplicationVersionBrackets_]T:[%s%s[_ThemeApplicationVersionBrackets_]]", tmplUpdateFlag, tmplVerTag, tmplVer)
 

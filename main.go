@@ -41,7 +41,7 @@ func run() (exitCode int) {
 		}
 	}()
 
-	logger.Notice(ctx, "[_ApplicationName_]%s[-] [[_Version_]%s[-]]", version.ApplicationName, version.Version)
+	logger.Notice(ctx, update.GetAppVersionDisplay())
 
 	// Ensure embedded assets are extracted
 	if err := assets.EnsureAssets(ctx); err != nil {
@@ -51,6 +51,8 @@ func run() (exitCode int) {
 
 	// Check if the current channel still exists on GitHub
 	_ = update.CheckCurrentStatus(ctx)
+	// Check for application and template updates
+	update.CheckUpdates(ctx)
 	// Parse command line arguments
 	groups, err := cmd.Parse(os.Args[1:])
 	if err != nil {
