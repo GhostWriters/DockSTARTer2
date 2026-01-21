@@ -1,6 +1,6 @@
 package tui
 
-func showConfigMenu() {
+func showConfigMenu(backAction func()) {
 	items := []MenuItem{
 		{
 			Tag:      "Full Setup",
@@ -53,7 +53,7 @@ func showConfigMenu() {
 		},
 	}
 
-	dialog, list := NewMenuDialog("Configuration Menu", "What would you like to do?", items, showMainMenu)
+	dialog, list := NewMenuDialog("Configuration Menu", "What would you like to do?", items, backAction)
 
 	// Update Panels
 	panels.AddPanel("menu", dialog, true, true)

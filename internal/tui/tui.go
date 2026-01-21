@@ -712,9 +712,9 @@ func Start(ctx context.Context, startMenu string) error {
 
 	switch startMenu {
 	case "config":
-		showConfigMenu()
+		showConfigMenu(nil)
 	case "options":
-		showOptionsMenu()
+		showOptionsMenu(nil)
 	default:
 		showMainMenu()
 	}

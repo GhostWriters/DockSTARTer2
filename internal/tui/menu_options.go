@@ -4,7 +4,7 @@ import (
 	"DockSTARTer2/internal/version"
 )
 
-func showOptionsMenu() {
+func showOptionsMenu(backAction func()) {
 	items := []MenuItem{
 		{
 			Tag:      "Choose Theme",
@@ -29,7 +29,7 @@ func showOptionsMenu() {
 		},
 	}
 
-	dialog, list := NewMenuDialog("Options", "What would you like to do?", items, showMainMenu)
+	dialog, list := NewMenuDialog("Options", "What would you like to do?", items, backAction)
 
 	// Update Panels
 	panels.AddPanel("menu", dialog, true, true)

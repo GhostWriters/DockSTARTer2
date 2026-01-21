@@ -11,7 +11,9 @@ func showMainMenu() {
 			Desc:     "Setup and start applications",
 			Help:     "Modify " + version.ApplicationName + " configuration",
 			Shortcut: 'C',
-			Action:   showConfigMenu,
+			Action: func() {
+				showConfigMenu(showMainMenu)
+			},
 		},
 		{
 			Tag:      "Install Dependencies",
@@ -32,7 +34,9 @@ func showMainMenu() {
 			Desc:     "Adjust options for " + version.ApplicationName,
 			Help:     "Set display options and other " + version.ApplicationName + " settings",
 			Shortcut: 'O',
-			Action:   showOptionsMenu,
+			Action: func() {
+				showOptionsMenu(showMainMenu)
+			},
 		},
 	}
 
