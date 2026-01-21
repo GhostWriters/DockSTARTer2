@@ -127,7 +127,12 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 		logger.Notice(ctx, "Forcefully re-applying [_ApplicationName_]%s[-] update '[_Version_]%s[-]'", version.ApplicationName, bestVersion)
 	}
 
-	err = updater.UpdateTo(ctx, &bestMatch, os.Args[0])
+	exePath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to get executable path: %w", err)
+	}
+
+	err = updater.UpdateTo(ctx, &bestMatch, exePath)
 	if err != nil {
 		return fmt.Errorf("failed to update: %w", err)
 	}
@@ -137,7 +142,7 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 
 	if len(restArgs) > 0 {
 		logger.Notice(ctx, "Re-executing with remaining arguments: %v", restArgs)
-		cmd := exec.Command(os.Args[0], restArgs...)
+		cmd := exec.Command(exePath, restArgs...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		cmd.Stdin = os.Stdin
