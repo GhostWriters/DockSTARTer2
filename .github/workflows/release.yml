@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - '**' # Trigger on all branches
   workflow_dispatch:
     inputs:
       force_release:
@@ -55,33 +54,48 @@ jobs:
           # We need to fetch tags to determine the increment
           git fetch --tags --force
           
-          # Check if valid existing tags for today exist
-          # Filter for tags starting with prefix, remove prefix, find max
-          # Examples: v2024.01.20 (no suffix), v2024.01.20.1 (suffix 1)
+          # Find the highest version number for today across ALL tags (including branches)
+          # Tags look like: v2024.01.20, v2024.01.20.1, v2024.01.20-branch, v2024.01.20.2-branch
           
-          # Logic:
-          # 1. Check if "vYYYY.MM.DD" exists.
-          # 2. If NO -> Use "vYYYY.MM.DD".
-          # 3. If YES -> Find max suffix X of "vYYYY.MM.DD.X" and use X+1.
+          MAX_N="-1"
           
-          if git tag -l "${PREFIX}" | grep -Fxq "${PREFIX}"; then
-            # Base tag exists, find max suffix
-            # Get all tags matching "vYYYY.MM.DD.*"
-            # Strip prefix + "."
-            # Sort numerically
-            # Take last
-            MAX_SUFFIX=$(git tag -l "${PREFIX}.*" | sed "s/^${PREFIX}\.//" | grep -E '^[0-9]+$' | sort -n | tail -1)
+          # List all tags starting with prefix
+          # Use grep to ensure we don't pick up other days if specific logic fails
+          TAGS=$(git tag -l "${PREFIX}*")
+          
+          for tag in $TAGS; do
+            # Remove prefix
+            rest="${tag#$PREFIX}"
             
-            if [ -z "$MAX_SUFFIX" ]; then
-              # Base exists but no .X tags found (unlikely if base exists, but means next is .1)
-              NEXT_SUFFIX="1"
+            if [[ -z "$rest" || "$rest" == -* ]]; then
+               # e.g. v2024.01.20 or v2024.01.20-branch
+               n=0
+            elif [[ "$rest" == .* ]]; then
+               # e.g. .1, .2, .1-branch
+               # Remove leading dot
+               no_dot="${rest#.}"
+               # Extract leading digits
+               if [[ "$no_dot" =~ ^[0-9]+ ]]; then
+                 n="${BASH_REMATCH[0]}"
+               else
+                 n=0
+               fi
             else
-              NEXT_SUFFIX=$((MAX_SUFFIX + 1))
+               continue
             fi
-            BASE_VER="${PREFIX}.${NEXT_SUFFIX}"
+            
+            if (( n > MAX_N )); then
+              MAX_N=$n
+            fi
+          done
+          
+          if [ "$MAX_N" == "-1" ]; then
+             # No tags exist for today
+             NEXT_N=0
+             BASE_VER="${PREFIX}"
           else
-            # Base tag does not exist, use it
-            BASE_VER="${PREFIX}"
+             NEXT_N=$((MAX_N + 1))
+             BASE_VER="${PREFIX}.${NEXT_N}"
           fi
 
           if [[ "${{ github.ref_name }}" == "main" ]]; then
