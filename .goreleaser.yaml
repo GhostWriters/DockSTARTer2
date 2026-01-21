@@ -21,21 +21,25 @@ builds:
       - -X DockSTARTer2/internal/version.BuildDate={{.Date}}
 
 archives:
-  - format: tar.gz
+  - format: tar.gz # Deprecated, but some versions allow it as alias? No, use formats.
+    # Actually, let's replace the whole block to be safe.
+    
+  - formats: 
+      - tar.gz
     # this name template makes the OS and Arch compatible with the results of uname.
     name_template: >-
       {{ .ProjectName }}_
       {{- .Version }}_
       {{- .Os }}_
       {{- .Arch }}
-    builds:
-      - ds2
+    # builds: [ds2] # Removed (deprecated)
     files:
       - README.md
       - LICENSE
     format_overrides:
       - goos: windows
-        format: zip
+        formats: 
+          - zip
 
 checksum:
   name_template: 'checksums.txt'
