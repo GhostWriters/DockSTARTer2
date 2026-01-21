@@ -21,9 +21,7 @@ builds:
       - -X DockSTARTer2/internal/version.BuildDate={{.Date}}
 
 archives:
-  - format: tar.gz # Deprecated, but some versions allow it as alias? No, use formats.
-    # Actually, let's replace the whole block to be safe.
-    
+
   - formats: 
       - tar.gz
     # this name template makes the OS and Arch compatible with the results of uname.
