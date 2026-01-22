@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
@@ -250,6 +251,90 @@ func checkTmplUpdate(ctx context.Context) (bool, string) {
 	}
 
 	return false, head.Hash().String()[:7]
+}
+
+// compareVersions compares two version strings and returns:
+// -1 if v1 < v2
+//
+//	0 if v1 == v2
+//	1 if v1 > v2
+func compareVersions(v1, v2 string) int {
+	v1 = strings.TrimPrefix(v1, "v")
+	v2 = strings.TrimPrefix(v2, "v")
+
+	// First try strictly semantic versioning
+	sv1, err1 := semver.NewVersion(v1)
+	sv2, err2 := semver.NewVersion(v2)
+	if err1 == nil && err2 == nil {
+		return sv1.Compare(sv2)
+	}
+
+	// Fallback for custom versioning (e.g. 2024.01.01.1)
+	// Split by dots and compare parts
+	p1 := strings.Split(v1, ".")
+	p2 := strings.Split(v2, ".")
+
+	for i := 0; i < len(p1) && i < len(p2); i++ {
+		s1 := p1[i]
+		s2 := p2[i]
+
+		if s1 == s2 {
+			continue
+		}
+
+		// Handle suffixes (e.g. "1.0.0-beta" vs "1.0.0")
+		// If one has a suffix and the other doesn't, and they are otherwise equal:
+		// the one without a suffix is GREATER (stable > pre-release)
+		h1 := strings.Contains(s1, "-")
+		h2 := strings.Contains(s2, "-")
+		if h1 || h2 {
+			if h1 != h2 {
+				if h1 {
+					return -1 // s1 has suffix, s2 doesn't -> s1 < s2
+				}
+				return 1 // s2 has suffix, s1 doesn't -> s1 > s2
+			}
+			// Both have suffixes, just string compare
+			if s1 > s2 {
+				return 1
+			}
+			return -1
+		}
+
+		// Try numeric comparison
+		n1, e1 := strconv.Atoi(s1)
+		n2, e2 := strconv.Atoi(s2)
+
+		if e1 == nil && e2 == nil {
+			if n1 > n2 {
+				return 1
+			}
+			return -1
+		}
+
+		// Fallback to string comparison
+		if s1 > s2 {
+			return 1
+		}
+		return -1
+	}
+
+	if len(p1) > len(p2) {
+		// 1.0.0.1 > 1.0.0
+		// But check if the extra part is a suffix
+		if strings.Contains(p1[len(p2)], "-") {
+			return -1
+		}
+		return 1
+	}
+	if len(p1) < len(p2) {
+		if strings.Contains(p2[len(p1)], "-") {
+			return 1
+		}
+		return -1
+	}
+
+	return 0
 }
 
 // GetCurrentChannel returns the update channel based on the current version string.
