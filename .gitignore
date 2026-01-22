@@ -44,5 +44,7 @@ __debug_bin
 # Project Specific
 ds2.exe
 dockstarter.exe
-dockstarter.log
-fatal.log
+DockSTARTer2.exe
+/build.ps1
+/build.bat
+/.ds2.new
