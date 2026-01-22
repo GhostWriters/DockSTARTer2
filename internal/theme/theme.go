@@ -103,18 +103,15 @@ func Load(themeName string) error {
 	Default()
 
 	themesDir := paths.GetThemesDir()
-	themePath := filepath.Join(themesDir, themeName)
+	themePath := filepath.Join(themesDir, themeName+".ds2theme")
 
 	if _, err := os.Stat(themePath); os.IsNotExist(err) {
 		// If theme doesn't exist, we just stay with defaults
 		return nil
 	}
 
-	// Parse theme.ini (Overrides defaults)
-	tiPath := filepath.Join(themePath, "theme.ini")
-	if _, err := os.Stat(tiPath); err == nil {
-		_ = parseThemeINI(tiPath)
-	}
+	// Parse .ds2theme (Overrides defaults)
+	_ = parseThemeINI(themePath)
 
 	return nil
 }

@@ -52,14 +52,14 @@ jobs:
           # Major: 2
           # Minor: YYYYMMDD
           # Patch: N (Daily build counter)
-          
+
           # Example: v2.20260121.1
-          
+
           TODAY_INT=$(date +'%Y%m%d')
           PREFIX="v2.${TODAY_INT}"
-          
+
           git fetch --tags --force
-          
+
           if [[ "${{ github.ref_name }}" == "main" ]]; then
             SUFFIX=""
             # Match v2.YYYYMMDD.N
@@ -70,23 +70,23 @@ jobs:
             # Match v2.YYYYMMDD.N-branch
             REGEX="^${PREFIX}\.[0-9]+${SUFFIX}$"
           fi
-          
+
           echo "Scope: ${{ github.ref_name }}"
           echo "Suffix: '$SUFFIX'"
           echo "Regex: '$REGEX'"
 
           MAX_N="-1"
-          
+
           # Get all tags for this "Minor" version (v2.YYYYMMDD.*)
           TAGS=$(git tag -l "${PREFIX}*")
-          
+
           for tag in $TAGS; do
             if [[ "$tag" =~ $REGEX ]]; then
               # Strip suffix: v2.YYYYMMDD.N
               base="${tag%$SUFFIX}"
               # Extract Patch (N): Remove v2.YYYYMMDD.
               n="${base#$PREFIX.}"
-              
+
               # Ensure n is numeric
               if [[ "$n" =~ ^[0-9]+$ ]]; then
                  if (( n > MAX_N )); then
@@ -95,15 +95,15 @@ jobs:
               fi
             fi
           done
-          
+
           if [ "$MAX_N" == "-1" ]; then
              NEXT_N=1
           else
              NEXT_N=$((MAX_N + 1))
           fi
-          
+
           FINAL_VER="${PREFIX}.${NEXT_N}${SUFFIX}"
-          
+
           echo "Generated Version: $FINAL_VER"
           echo "version=$FINAL_VER" >> $GITHUB_OUTPUT
 
@@ -112,11 +112,11 @@ jobs:
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git tag -a "${{ steps.tag.outputs.version }}" -m "Release ${{ steps.tag.outputs.version }}"
-          # We don't push the tag explicitly; goreleaser (or just the existence of the tag locally) 
-          # might be enough if we use --clean. 
-          # However, allow goreleaser to handle it or push it so it persists. 
+          # We don't push the tag explicitly; goreleaser (or just the existence of the tag locally)
+          # might be enough if we use --clean.
+          # However, allow goreleaser to handle it or push it so it persists.
           # Goreleaser usually expects the tag to be present on the commit it builds.
-          # But for 'goreleaser release', it usually runs ON a tag. 
+          # But for 'goreleaser release', it usually runs ON a tag.
           # Since we are running on a branch push, we are creating a tag dynamically.
           # We should push it so GitHub knows about it, OR just let goreleaser use the local tag.
           # Let's push it to be safe and ensure the Release is tied to it.
@@ -130,6 +130,6 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Determine if it's a prerelease contextually? 
-          # Goreleaser 'auto' prerelease looks at the tag format. 
+          # Determine if it's a prerelease contextually?
+          # Goreleaser 'auto' prerelease looks at the tag format.
           # Since we use hyphens for branches (v...-branch), it should auto-detect as prerelease.

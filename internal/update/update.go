@@ -110,8 +110,12 @@ func CheckCurrentStatus(ctx context.Context) error {
 	if requestedVersion == "dev" {
 		// Log a warning if 'dev' is used, as it might no longer exist in some contexts
 		// (Matching the behavior observed in previous logs)
-		logger.Warn(ctx, "[_ApplicationName_]%s[-] channel 'dev' appears to no longer exist.", version.ApplicationName)
-		logger.Warn(ctx, "Run '[_UserCommand_]%s -u main[-] balance to update to the latest stable release.", version.CommandName)
+		msg := []string{
+			fmt.Sprintf("[_ApplicationName_]%s[-] channel '[_Branch_]%s[-]' appears to no longer exist.", version.ApplicationName, requestedVersion),
+			fmt.Sprintf("[_ApplicationName_]%s[-] is currently on version '[_Version_]%s[-]'.", version.ApplicationName, version.Version),
+			fmt.Sprintf("Run '[_UserCommand_]%s -u main[-] to update to the latest stable release.", version.CommandName),
+		}
+		logger.Warn(ctx, msg)
 	}
 
 	return nil
@@ -140,19 +144,26 @@ func CheckUpdates(ctx context.Context) {
 
 	// 1. Application Updates
 	if AppUpdateAvailable {
-		logger.Warn(ctx, GetAppVersionDisplay())
-		logger.Warn(ctx, "An update to [_ApplicationName_]%s[-] is available.", version.ApplicationName)
-		logger.Warn(ctx, "Run '[_UserCommand_]%s -u[-]' to update to version '[_Version_]%s[-]'.", version.CommandName, LatestAppVersion)
+		msg := []string{
+			GetAppVersionDisplay(),
+			fmt.Sprintf("An update to [_ApplicationName_]%s[-] is available.", version.ApplicationName),
+			fmt.Sprintf("Run '[_UserCommand_]%s -u[-]' to update to version '[_Version_]%s[-]'.", version.CommandName, LatestAppVersion),
+		}
+		logger.Warn(ctx, msg)
 	} else {
+		// Info level is hidden by default (-v shows it), matching main.sh use of VERBOSE
 		logger.Info(ctx, GetAppVersionDisplay())
 	}
 
 	// 2. Template Updates
 	if TmplUpdateAvailable {
 		tmplName := "DockSTARTer-Templates"
-		logger.Warn(ctx, GetTmplVersionDisplay())
-		logger.Warn(ctx, "An update to [_ApplicationName_]%s[-] is available.", tmplName)
-		logger.Warn(ctx, "Run '[_UserCommand_]%s -u[-]' to update to version '[_Version_]%s[-]'.", version.CommandName, LatestTmplVersion)
+		msg := []string{
+			GetTmplVersionDisplay(),
+			fmt.Sprintf("An update to [_ApplicationName_]%s[-] is available.", tmplName),
+			fmt.Sprintf("Run '[_UserCommand_]%s -u[-]' to update to version '[_Version_]%s[-]'.", version.CommandName, LatestTmplVersion),
+		}
+		logger.Warn(ctx, msg)
 	} else {
 		logger.Info(ctx, GetTmplVersionDisplay())
 	}
@@ -163,17 +174,8 @@ func CheckUpdates(ctx context.Context) {
 func GetAppVersionDisplay() string {
 	name := version.ApplicationName
 	ver := version.Version
-	updateFlag := ""
-	updateTagOpen := ""
-	updateTagClose := ""
 
-	if AppUpdateAvailable {
-		updateFlag = "[_Update_]*[-] "
-		updateTagOpen = "[_Update_]"
-		updateTagClose = "[-]"
-	}
-
-	return fmt.Sprintf("%s[_ApplicationName_]%s[-]%s [%s%s%s%s]", updateFlag, name, updateTagClose, updateTagOpen, "[_Version_]", ver, "[-]")
+	return fmt.Sprintf("[_ApplicationName_]%s[-] [[_Version_]%s[-]]", name, ver)
 }
 
 // GetTmplVersionDisplay returns a formatted version string for the templates,
@@ -181,17 +183,8 @@ func GetAppVersionDisplay() string {
 func GetTmplVersionDisplay() string {
 	name := "DockSTARTer-Templates"
 	ver := paths.GetTemplatesVersion()
-	updateFlag := ""
-	updateTagOpen := ""
-	updateTagClose := ""
 
-	if TmplUpdateAvailable {
-		updateFlag = "[_Update_]*[-] "
-		updateTagOpen = "[_Update_]"
-		updateTagClose = "[-]"
-	}
-
-	return fmt.Sprintf("%s[_ApplicationName_]%s[-]%s [%s%s%s%s]", updateFlag, name, updateTagClose, updateTagOpen, "[_Version_]", ver, "[-]")
+	return fmt.Sprintf("[_ApplicationName_]%s[-] [[_Version_]%s[-]]", name, ver)
 }
 
 func checkAppUpdate(ctx context.Context) (bool, string) {

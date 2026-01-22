@@ -41,8 +41,6 @@ func run() (exitCode int) {
 		}
 	}()
 
-	logger.Notice(ctx, update.GetAppVersionDisplay())
-
 	// Ensure embedded assets are extracted
 	if err := assets.EnsureAssets(ctx); err != nil {
 		logger.Error(ctx, "Failed to ensure assets: %v", err)
