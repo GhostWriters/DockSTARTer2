@@ -1,6 +1,7 @@
 package update
 
 import (
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/version"
@@ -33,29 +34,90 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 	repo := selfupdate.ParseSlug(slug)
 
 	currentChannel := GetCurrentChannel()
-	if requestedVersion == "" || requestedVersion == "stable" {
+	if requestedVersion == "" {
 		requestedVersion = currentChannel
 	}
 
-	logger.Info(ctx, "Checking for updates to [_ApplicationName_]%s[-] (%s channel)...", version.ApplicationName, requestedVersion)
+	var (
+		latest *selfupdate.Release
+		found  bool
+		err    error
+	)
 
-	latest, err := selfupdate.UpdateSelf(ctx, version.Version, repo)
+	// Detect latest version first
+	updater, err := getUpdater(ctx, requestedVersion)
+	if err != nil {
+		return fmt.Errorf("failed to create updater: %w", err)
+	}
+
+	if strings.HasPrefix(requestedVersion, "v") {
+		// Specific version requested
+		latest, found, err = updater.DetectVersion(ctx, repo, requestedVersion)
+	} else {
+		// Default latest for the channel
+		latest, found, err = updater.DetectLatest(ctx, repo)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to detect latest version: %w", err)
+	}
+	if !found {
+		return fmt.Errorf("no version found for target %s", requestedVersion)
+	}
+
+	remoteVersion := latest.Version()
+	currentVersion := version.Version
+	// Strict channel matching (except when a specific version was requested)
+	if !strings.HasPrefix(requestedVersion, "v") {
+		remoteChannel := GetChannelFromVersion(remoteVersion)
+		if !strings.EqualFold(remoteChannel, currentChannel) {
+			logger.Notice(ctx, "[_ApplicationName_]%s[-] is on channel '%s', but latest release is on channel '%s'. Ignoring.", version.ApplicationName, currentChannel, remoteChannel)
+			return nil
+		}
+	}
+
+	question := ""
+	initiationNotice := ""
+	noNotice := fmt.Sprintf("[_ApplicationName_]%s[-] will not be updated.", version.ApplicationName)
+
+	// Wrap logger.Notice to match console.Printer
+	noticePrinter := func(ctx context.Context, msg string, args ...any) {
+		logger.Notice(ctx, msg, args...)
+	}
+
+	if currentVersion == remoteVersion {
+		if force {
+			question = fmt.Sprintf("Would you like to forcefully re-apply [_ApplicationName_]%s[-] update '[_Version_]%s[-]'?", version.ApplicationName, currentVersion)
+			initiationNotice = fmt.Sprintf("Forcefully re-applying [_ApplicationName_]%s[-] update '[_Version_]%s[-]'", version.ApplicationName, remoteVersion)
+		} else {
+			logger.Notice(ctx, "[_ApplicationName_]%s[-] is already up to date on channel '%s'.", version.ApplicationName, requestedVersion)
+			logger.Notice(ctx, "Current version is '[_Version_]%s[-]'", currentVersion)
+			return nil
+		}
+	} else {
+		question = fmt.Sprintf("Would you like to update [_ApplicationName_]%s[-] from '[_Version_]%s[-]' to '[_Version_]%s[-]' now?", version.ApplicationName, currentVersion, remoteVersion)
+		initiationNotice = fmt.Sprintf("Updating [_ApplicationName_]%s[-] from '[_Version_]%s[-]' to '[_Version_]%s[-]'", version.ApplicationName, currentVersion, remoteVersion)
+	}
+
+	// Prompt user
+	if !console.QuestionPrompt(ctx, noticePrinter, question, "Y", yes) {
+		logger.Notice(ctx, noNotice)
+		return nil
+	}
+
+	// Execution
+	logger.Notice(ctx, initiationNotice)
+	if strings.HasPrefix(requestedVersion, "v") {
+		err = selfupdate.UpdateTo(ctx, version.Version, requestedVersion, slug)
+	} else {
+		_, err = updater.UpdateSelf(ctx, version.Version, repo)
+	}
+
 	if err != nil {
 		return fmt.Errorf("failed to update application: %w", err)
 	}
 
-	latestVer, err := semver.NewVersion(latest.Version())
-	if err != nil {
-		return fmt.Errorf("failed to parse latest version: %w", err)
-	}
-	currentVer := semver.MustParse(version.Version)
-
-	if latestVer.Equal(currentVer) {
-		logger.Notice(ctx, "[_ApplicationName_]%s[-] is already up to date.", version.ApplicationName)
-	} else {
-		logger.Notice(ctx, "Successfully updated [_ApplicationName_]%s[-] to version [_Version_]%s[-].", version.ApplicationName, latest.Version())
-		logger.Notice(ctx, "Please restart the application.")
-	}
+	logger.Notice(ctx, "Updated [_ApplicationName_]%s[-] to '[_Version_]%s[-]'", version.ApplicationName, remoteVersion)
 
 	return nil
 }
@@ -76,27 +138,99 @@ func UpdateTemplates(ctx context.Context, force bool, yes bool, requestedBranch 
 		requestedBranch = "main"
 	}
 
-	logger.Info(ctx, "Updating templates at %s (branch %s)...", templatesDir, requestedBranch)
-
-	w, err := repo.Worktree()
-	if err != nil {
-		return fmt.Errorf("failed to get worktree: %w", err)
+	// Fetch updates to get remote hash
+	err = repo.Fetch(&git.FetchOptions{
+		RemoteName: "origin",
+		Tags:       git.AllTags,
+	})
+	if err != nil && err != git.NoErrAlreadyUpToDate {
+		return fmt.Errorf("failed to fetch templates: %w", err)
 	}
 
-	err = w.Pull(&git.PullOptions{
-		RemoteName:    "origin",
-		ReferenceName: plumbing.ReferenceName("refs/heads/" + requestedBranch),
-	})
+	// Compare current HEAD with remote
+	head, err := repo.Head()
 	if err != nil {
-		if err == git.NoErrAlreadyUpToDate {
-			logger.Notice(ctx, "Templates are already up to date.")
+		return fmt.Errorf("failed to get templates HEAD: %w", err)
+	}
+	currentVersion := head.Hash().String()[:7]
+
+	remoteRef, err := repo.Reference(plumbing.ReferenceName("refs/remotes/origin/"+requestedBranch), true)
+	if err != nil {
+		// Fallback to tags if branch not found
+		remoteRef, err = repo.Reference(plumbing.ReferenceName("refs/tags/"+requestedBranch), true)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to resolve templates target %s: %w", requestedBranch, err)
+	}
+	remoteVersion := remoteRef.Hash().String()[:7]
+
+	question := ""
+	initiationNotice := ""
+	targetName := "DockSTARTer-Templates"
+	noNotice := fmt.Sprintf("[_ApplicationName_]%s[-] will not be updated.", targetName)
+
+	if currentVersion == remoteVersion {
+		if force {
+			question = fmt.Sprintf("Would you like to forcefully re-apply [_ApplicationName_]%s[-] update '[_Version_]%s[-]'?", targetName, currentVersion)
+			initiationNotice = fmt.Sprintf("Forcefully re-applying [_ApplicationName_]%s[-] update '[_Version_]%s[-]'", targetName, remoteVersion)
+		} else {
+			logger.Notice(ctx, "[_ApplicationName_]%s[-] is already up to date on branch '%s'.", targetName, requestedBranch)
+			logger.Notice(ctx, "Current version is '[_Version_]%s[-]'", currentVersion)
 			return nil
 		}
-		return fmt.Errorf("failed to pull templates: %w", err)
+	} else {
+		question = fmt.Sprintf("Would you like to update [_ApplicationName_]%s[-] from '[_Version_]%s[-]' to '[_Version_]%s[-]' now?", targetName, currentVersion, remoteVersion)
+		initiationNotice = fmt.Sprintf("Updating [_ApplicationName_]%s[-] from '[_Version_]%s[-]' to '[_Version_]%s[-]'", targetName, currentVersion, remoteVersion)
 	}
 
-	head, _ := repo.Head()
-	logger.Notice(ctx, "Successfully updated templates to commit [_Version_]%s[-].", head.Hash().String()[:7])
+	// Wrap logger.Notice to match console.Printer
+	noticePrinter := func(ctx context.Context, msg string, args ...any) {
+		logger.Notice(ctx, msg, args...)
+	}
+
+	// Prompt user
+	if !console.QuestionPrompt(ctx, noticePrinter, question, "Y", yes) {
+		logger.Notice(ctx, noNotice)
+		return nil
+	}
+
+	// Execution
+	logger.Notice(ctx, initiationNotice)
+	w, err := repo.Worktree()
+	if err != nil {
+		return fmt.Errorf("failed to get templates worktree: %w", err)
+	}
+
+	// Try checking out as branch first
+	err = w.Checkout(&git.CheckoutOptions{
+		Branch: plumbing.NewBranchReferenceName(requestedBranch),
+	})
+	if err != nil {
+		// Fallback to tag
+		err = w.Checkout(&git.CheckoutOptions{
+			Branch: plumbing.NewTagReferenceName(requestedBranch),
+		})
+	}
+	if err != nil {
+		// Fallback to specific commit/reference
+		err = w.Checkout(&git.CheckoutOptions{
+			Hash: remoteRef.Hash(),
+		})
+	}
+
+	if err != nil {
+		// Final attempt: try pulling if it's the current branch
+		err = w.Pull(&git.PullOptions{
+			RemoteName:    "origin",
+			ReferenceName: plumbing.ReferenceName("refs/heads/" + requestedBranch),
+		})
+	}
+
+	if err != nil && err != git.NoErrAlreadyUpToDate {
+		return fmt.Errorf("failed to update templates to %s: %w", requestedBranch, err)
+	}
+
+	logger.Notice(ctx, "Updated [_ApplicationName_]%s[-] to '[_Version_]%s[-]'", targetName, paths.GetTemplatesVersion())
 
 	return nil
 }
@@ -191,16 +325,32 @@ func checkAppUpdate(ctx context.Context) (bool, string) {
 	slug := "GhostWriters/DockSTARTer2"
 	repo := selfupdate.ParseSlug(slug)
 
-	latest, err := selfupdate.UpdateSelf(ctx, version.Version, repo)
+	channel := GetCurrentChannel()
+	updater, err := getUpdater(ctx, channel)
 	if err != nil {
 		return false, ""
 	}
 
-	latestVer, err := semver.NewVersion(latest.Version())
+	latest, found, err := updater.DetectLatest(ctx, repo)
+	if err != nil || !found {
+		return false, ""
+	}
+
+	remoteVersion := latest.Version()
+	remoteChannel := GetChannelFromVersion(remoteVersion)
+	if !strings.EqualFold(remoteChannel, channel) {
+		// Not the same channel, ignore
+		return false, ""
+	}
+
+	latestVer, err := semver.NewVersion(remoteVersion)
 	if err != nil {
 		return false, ""
 	}
-	currentVer := semver.MustParse(version.Version)
+	currentVer, err := semver.NewVersion(version.Version)
+	if err != nil {
+		return false, ""
+	}
 
 	if latestVer.GreaterThan(currentVer) {
 		return true, latest.Version()
@@ -330,11 +480,29 @@ func compareVersions(v1, v2 string) int {
 	return 0
 }
 
+// getUpdater returns a configured selfupdate.Updater for the given channel.
+func getUpdater(ctx context.Context, channel string) (*selfupdate.Updater, error) {
+	cfg := selfupdate.Config{}
+	// Only allow prereleases if the user is on a prerelease/dev channel
+	if !strings.EqualFold(channel, "stable") {
+		cfg.Prerelease = true
+	} else {
+		cfg.Prerelease = false
+	}
+	return selfupdate.NewUpdater(cfg)
+}
+
 // GetCurrentChannel returns the update channel based on the current version string.
-// v1.YYYYMMDD.N is stable, v0.0.0.0-dev is dev.
+// v1.YYYYMMDD.N is stable, v0.0.0.0-dev is dev, -Prerelease is prerelease, -rc1 is rc1, etc.
 func GetCurrentChannel() string {
-	if strings.Contains(version.Version, "-dev") {
-		return "dev"
+	return GetChannelFromVersion(version.Version)
+}
+
+// GetChannelFromVersion extracts the channel (suffix) from a version string.
+func GetChannelFromVersion(v string) string {
+	parts := strings.SplitN(v, "-", 2)
+	if len(parts) > 1 {
+		return parts[1]
 	}
 	return "stable"
 }

@@ -347,9 +347,9 @@ func InitFlags() {
 
 	// Installation / Update
 	pflag.BoolP("install", "i", false, "Install/update dependencies")
-	pflag.StringP("update", "u", "", "Update DockSTARTer and Templates")
-	pflag.String("update-app", "", "Update DockSTARTer only")
-	pflag.String("update-templates", "", "Update Templates only")
+	pflag.StringP("update", "u", "", "Update DockSTARTer and Templates (can specify tag/branch)")
+	pflag.String("update-app", "", "Update DockSTARTer only (can specify tag)")
+	pflag.String("update-templates", "", "Update Templates only (can specify tag/branch)")
 	pflag.StringP("version", "V", "", "Show version")
 
 	// Environment Variables
