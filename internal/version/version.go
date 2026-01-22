@@ -15,7 +15,7 @@ var CommandName = "ds2"
 
 // Version is the current version of the application.
 // This is intended to be overwritten at build time using:
-// -ldflags "-X DockSTARTer2/internal/version.Version=vYYYY.MM.DD.N"
+// -ldflags "-X DockSTARTer2/internal/version.Version=v2.YYYYMMDD.N"
 var Version = "v0.0.0.0-dev"
 
 // Commit is the git commit hash of the build.

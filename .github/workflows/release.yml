@@ -48,26 +48,26 @@ jobs:
       - name: Generate Version Tag
         id: tag
         run: |
-          # Versioning Scheme: v1.YYYYMMDD.N[-Suffix]
-          # Major: 1
+          # Versioning Scheme: v2.YYYYMMDD.N[-Suffix]
+          # Major: 2
           # Minor: YYYYMMDD
           # Patch: N (Daily build counter)
           
-          # Example: v1.20260121.1
+          # Example: v2.20260121.1
           
           TODAY_INT=$(date +'%Y%m%d')
-          PREFIX="v1.${TODAY_INT}"
+          PREFIX="v2.${TODAY_INT}"
           
           git fetch --tags --force
           
           if [[ "${{ github.ref_name }}" == "main" ]]; then
             SUFFIX=""
-            # Match v1.YYYYMMDD.N
+            # Match v2.YYYYMMDD.N
             REGEX="^${PREFIX}\.[0-9]+$"
           else
             SAFE_BRANCH=$(echo "${{ github.ref_name }}" | sed 's/[^a-zA-Z0-9]/-/g')
             SUFFIX="-${SAFE_BRANCH}"
-            # Match v1.YYYYMMDD.N-branch
+            # Match v2.YYYYMMDD.N-branch
             REGEX="^${PREFIX}\.[0-9]+${SUFFIX}$"
           fi
           
@@ -77,14 +77,14 @@ jobs:
 
           MAX_N="-1"
           
-          # Get all tags for this "Minor" version (v1.YYYYMMDD.*)
+          # Get all tags for this "Minor" version (v2.YYYYMMDD.*)
           TAGS=$(git tag -l "${PREFIX}*")
           
           for tag in $TAGS; do
             if [[ "$tag" =~ $REGEX ]]; then
-              # Strip suffix: v1.YYYYMMDD.N
+              # Strip suffix: v2.YYYYMMDD.N
               base="${tag%$SUFFIX}"
-              # Extract Patch (N): Remove v1.YYYYMMDD.
+              # Extract Patch (N): Remove v2.YYYYMMDD.
               n="${base#$PREFIX.}"
               
               # Ensure n is numeric
