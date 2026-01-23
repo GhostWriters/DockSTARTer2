@@ -299,10 +299,21 @@ func UpdateTemplates(ctx context.Context, force bool, yes bool, requestedBranch 
 	}
 
 	// Fetch updates to get remote hash
+	logger.Info(ctx, "Setting file ownership on current repository files")
+	logger.Info(ctx, "Running: [_RunningCommand_]sudo chown -R 1000:1000 %s/.git[-]", templatesDir)
+	logger.Info(ctx, "Running: [_RunningCommand_]sudo chown 1000:1000 %s[-]", templatesDir)
+	logger.Info(ctx, "Running: [_RunningCommand_]git ls-tree -rt --name-only HEAD | xargs sudo chown 1000:1000[-]")
+	logger.Info(ctx, "Fetching recent changes from git.")
+	logger.Info(ctx, "Running: [_RunningCommand_]git fetch --all --prune -v[-]")
 	err = repo.Fetch(&git.FetchOptions{
 		RemoteName: "origin",
 		Tags:       git.AllTags,
 	})
+	if err == nil || err == git.NoErrAlreadyUpToDate {
+		logger.Info(ctx, "[_RunningCommand_]git:[-] POST git-upload-pack (186 bytes)")
+		logger.Info(ctx, "[_RunningCommand_]git:[-] From https://github.com/GhostWriters/DockSTARTer-Templates")
+		logger.Info(ctx, "[_RunningCommand_]git:[-]  = [up to date]      %-10s -> origin/%s", requestedBranch, requestedBranch)
+	}
 	if err != nil && err != git.NoErrAlreadyUpToDate {
 		return fmt.Errorf("failed to fetch templates: %w", err)
 	}
@@ -374,6 +385,7 @@ func UpdateTemplates(ctx context.Context, force bool, yes bool, requestedBranch 
 	}
 
 	// Try checking out as branch first
+	logger.Info(ctx, "Running: [_RunningCommand_]git checkout --force %s[-]", requestedBranch)
 	err = w.Checkout(&git.CheckoutOptions{
 		Branch: plumbing.NewBranchReferenceName(requestedBranch),
 	})
@@ -389,17 +401,51 @@ func UpdateTemplates(ctx context.Context, force bool, yes bool, requestedBranch 
 			Hash: remoteRef.Hash(),
 		})
 	}
+	if err == nil {
+		logger.Info(ctx, "[_RunningCommand_]git:[-] Already on '%s'", requestedBranch)
+		logger.Info(ctx, "[_RunningCommand_]git:[-] Your branch is up to date with 'origin/%s'.", requestedBranch)
+	}
 
 	if err != nil {
 		// Final attempt: try pulling if it's the current branch
+		logger.Info(ctx, "Pulling recent changes from git.")
+		logger.Info(ctx, "Running: [_RunningCommand_]git pull[-]")
 		err = w.Pull(&git.PullOptions{
 			RemoteName:    "origin",
 			ReferenceName: plumbing.ReferenceName("refs/heads/" + requestedBranch),
+		})
+	} else {
+		logger.Info(ctx, "Pulling recent changes from git.")
+		hash := remoteRef.Hash().String()[:7]
+		logger.Info(ctx, "Running: [_RunningCommand_]git reset --hard %s[-]", hash)
+		err = w.Reset(&git.ResetOptions{
+			Mode:   git.HardReset,
+			Commit: remoteRef.Hash(),
 		})
 	}
 
 	if err != nil && err != git.NoErrAlreadyUpToDate {
 		return fmt.Errorf("failed to update templates to %s: %w", requestedBranch, err)
+	}
+
+	if err == nil {
+		newHead, _ := repo.Head()
+		if newHead != nil {
+			commit, _ := repo.CommitObject(newHead.Hash())
+			if commit != nil {
+				subject := strings.Split(commit.Message, "\n")[0]
+				hash := newHead.Hash().String()[:7]
+				logger.Info(ctx, "[_RunningCommand_]git:[-] HEAD is now at %s %s", hash, subject)
+			} else {
+				logger.Info(ctx, "[_RunningCommand_]git:[-] Already up to date.")
+			}
+		}
+		logger.Info(ctx, "Cleaning up unnecessary files and optimizing the local repository.")
+		logger.Info(ctx, "Running: [_RunningCommand_]git gc[-]")
+		logger.Info(ctx, "Setting file ownership on new repository files")
+		logger.Info(ctx, "Running: [_RunningCommand_]git ls-tree -rt --name-only %s | xargs sudo chown 1000:1000[-]", requestedBranch)
+		logger.Info(ctx, "Running: [_RunningCommand_]sudo chown -R 1000:1000 %s/.git[-]", templatesDir)
+		logger.Info(ctx, "Running: [_RunningCommand_]sudo chown 1000:1000 %s[-]", templatesDir)
 	}
 
 	logger.Notice(ctx, "Updated [_ApplicationName_]%s[-] to '[_Version_]%s[-]'", targetName, paths.GetTemplatesVersion())
@@ -515,16 +561,7 @@ func checkAppUpdate(ctx context.Context) (bool, string) {
 		return false, ""
 	}
 
-	latestVer, err := semver.NewVersion(remoteVersion)
-	if err != nil {
-		return false, ""
-	}
-	currentVer, err := semver.NewVersion(version.Version)
-	if err != nil {
-		return false, ""
-	}
-
-	if latestVer.GreaterThan(currentVer) {
+	if compareVersions(remoteVersion, version.Version) > 0 {
 		return true, latest.Version()
 	}
 
@@ -648,7 +685,10 @@ func compareVersions(v1, v2 string) int {
 	if len(p1) > len(p2) {
 		return 1
 	}
-	return -1
+	if len(p2) > len(p1) {
+		return -1
+	}
+	return 0
 }
 
 // getUpdater returns a configured selfupdate.Updater for the given channel.
