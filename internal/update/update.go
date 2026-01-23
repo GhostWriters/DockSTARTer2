@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/creativeprojects/go-selfupdate"
@@ -141,6 +142,41 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 		logger.Info(ctx, "Application location is '[_File_]%s[-]'.", exePath)
 	}
 
+	// Re-execution logic
+	if len(restArgs) > 0 {
+		return ReExec(ctx, exePath, restArgs)
+	}
+
+	return nil
+}
+
+// ReExec re-executes the current application with the given arguments.
+// It uses syscall.Exec to replace the current process.
+func ReExec(ctx context.Context, exePath string, args []string) error {
+	if exePath == "unknown" {
+		return fmt.Errorf("cannot re-exec: unknown executable path")
+	}
+
+	// Construct command line for logging
+	fullCmd := exePath
+	if len(args) > 0 {
+		fullCmd += " " + strings.Join(args, " ")
+	}
+
+	logger.Notice(ctx, "Running: [_RunningCommand_]exec %s[-]", fullCmd)
+
+	// In Go, syscall.Exec takes (path, argv, envv).
+	// argv[0] is typically the executable name.
+	argv := append([]string{exePath}, args...)
+	envv := os.Environ()
+
+	// Perform re-execution
+	err := syscall.Exec(exePath, argv, envv)
+	if err != nil {
+		return fmt.Errorf("failed to re-execute: %w", err)
+	}
+
+	// Should never be reached on success
 	return nil
 }
 
