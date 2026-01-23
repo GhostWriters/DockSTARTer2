@@ -93,7 +93,7 @@ jobs:
 
           # Example: v2.20260121.1
 
-          TODAY_INT=$(date +'%Y%m%d')
+          TODAY_INT=$(date -u +'%Y%m%d')
           PREFIX="v2.${TODAY_INT}"
 
           git fetch --tags --force
