@@ -36,6 +36,15 @@ var (
 
 // SelfUpdate handles updating the application binary using GitHub Releases.
 func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion string, restArgs []string) error {
+	// Get current executable path for logging later
+	// We do this early because self-update acts on the running binary (renaming it),
+	// so os.Executable() might return .ds2.old if called after the update.
+	exePath, err := os.Executable()
+	if err != nil {
+		// Fallback if we can't get it, though unlikely
+		exePath = "unknown"
+	}
+
 	slug := "GhostWriters/DockSTARTer2"
 	repo := selfupdate.ParseSlug(slug)
 
@@ -47,7 +56,6 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 	var (
 		latest *selfupdate.Release
 		found  bool
-		err    error
 	)
 
 	// Detect latest version first
@@ -231,6 +239,10 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 	}
 
 	logger.Notice(ctx, "Updated [_ApplicationName_]%s[-] to '[_Version_]%s[-]'", version.ApplicationName, remoteVersion)
+
+	if exePath != "unknown" {
+		logger.Info(ctx, "Application location is '[_File_]%s[-]'.", exePath)
+	}
 
 	return nil
 }
