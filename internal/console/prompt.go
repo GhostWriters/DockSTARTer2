@@ -62,6 +62,15 @@ func QuestionPrompt(ctx context.Context, printer Printer, question string, defau
 
 		input := string(b[0])
 
+		// Handle Ctrl-C (0x03)
+		if input == "\x03" {
+			if oldState != nil {
+				_ = term.Restore(fd, oldState)
+			}
+			// Exit with 130 (SIGINT standard)
+			os.Exit(130)
+		}
+
 		// Handle Enter key (CR or LF)
 		if input == "\r" || input == "\n" {
 			if strings.EqualFold(defaultValue, "y") {
