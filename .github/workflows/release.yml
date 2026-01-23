@@ -1,13 +1,10 @@
 name: Release
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
     inputs:
       force_release:
-        description: 'Force release even if tests fail'
+        description: 'Force release even if no meaningful changes detected'
         type: boolean
         required: false
         default: false
@@ -32,7 +29,6 @@ jobs:
 
   release:
     needs: test
-    if: always() && (needs.test.result == 'success' || inputs.force_release == true)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -45,7 +41,49 @@ jobs:
         with:
           go-version-file: 'go.mod'
 
+      - name: Check for Changes
+        id: check
+        run: |
+          FORCE="${{ inputs.force_release }}"
+          echo "Force Release: $FORCE"
+          
+          if [ "$FORCE" == "true" ]; then
+            echo "Release forced by user."
+            echo "skip=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          git fetch --tags --force
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          
+          if [ -z "$LAST_TAG" ]; then
+            echo "No tags found. Assuming first release."
+            echo "skip=false" >> $GITHUB_OUTPUT
+          else
+            echo "Last tag: $LAST_TAG"
+            CHANGED=$(git diff --name-only "$LAST_TAG" HEAD)
+            
+            if [ -z "$CHANGED" ]; then
+               echo "No file changes found."
+               echo "skip=true" >> $GITHUB_OUTPUT
+            else
+               echo "Changed files:"
+               echo "$CHANGED"
+               
+               # Check for non-ignored files
+               # returns 0 if matches found (meaningful changes)
+               if echo "$CHANGED" | grep -Eqv '^(docs/|\.github/|\.gitignore|\.editorconfig|README\.md|LICENSE)'; then
+                 echo "Meaningful changes detected."
+                 echo "skip=false" >> $GITHUB_OUTPUT
+               else
+                 echo "No meaningful changes detected."
+                 echo "skip=true" >> $GITHUB_OUTPUT
+               fi
+            fi
+          fi
+
       - name: Generate Version Tag
+        if: steps.check.outputs.skip == 'false'
         id: tag
         run: |
           # Versioning Scheme: v2.YYYYMMDD.N[-Suffix]
@@ -108,21 +146,15 @@ jobs:
           echo "version=$FINAL_VER" >> $GITHUB_OUTPUT
 
       - name: Tag Commit
+        if: steps.check.outputs.skip == 'false'
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git tag -a "${{ steps.tag.outputs.version }}" -m "Release ${{ steps.tag.outputs.version }}"
-          # We don't push the tag explicitly; goreleaser (or just the existence of the tag locally)
-          # might be enough if we use --clean.
-          # However, allow goreleaser to handle it or push it so it persists.
-          # Goreleaser usually expects the tag to be present on the commit it builds.
-          # But for 'goreleaser release', it usually runs ON a tag.
-          # Since we are running on a branch push, we are creating a tag dynamically.
-          # We should push it so GitHub knows about it, OR just let goreleaser use the local tag.
-          # Let's push it to be safe and ensure the Release is tied to it.
           git push origin "${{ steps.tag.outputs.version }}"
 
       - name: Run GoReleaser
+        if: steps.check.outputs.skip == 'false'
         uses: goreleaser/goreleaser-action@v5
         with:
           distribution: goreleaser
@@ -130,6 +162,3 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Determine if it's a prerelease contextually?
-          # Goreleaser 'auto' prerelease looks at the tag format.
-          # Since we use hyphens for branches (v...-branch), it should auto-detect as prerelease.
