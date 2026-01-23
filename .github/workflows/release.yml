@@ -46,39 +46,39 @@ jobs:
         run: |
           FORCE="${{ inputs.force_release }}"
           echo "Force Release: $FORCE"
-          
+
           if [ "$FORCE" == "true" ]; then
             echo "Release forced by user."
             echo "skip=false" >> $GITHUB_OUTPUT
             exit 0
           fi
-          
+
           git fetch --tags --force
           LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          
+
           if [ -z "$LAST_TAG" ]; then
             echo "No tags found. Assuming first release."
             echo "skip=false" >> $GITHUB_OUTPUT
           else
             echo "Last tag: $LAST_TAG"
             CHANGED=$(git diff --name-only "$LAST_TAG" HEAD)
-            
+
             if [ -z "$CHANGED" ]; then
-               echo "No file changes found."
-               echo "skip=true" >> $GITHUB_OUTPUT
+              echo "No file changes found."
+              echo "skip=true" >> $GITHUB_OUTPUT
             else
-               echo "Changed files:"
-               echo "$CHANGED"
-               
-               # Check for non-ignored files
-               # returns 0 if matches found (meaningful changes)
-               if echo "$CHANGED" | grep -Eqv '^(docs/|\.github/|\.gitignore|\.editorconfig|README\.md|LICENSE)'; then
-                 echo "Meaningful changes detected."
-                 echo "skip=false" >> $GITHUB_OUTPUT
-               else
-                 echo "No meaningful changes detected."
-                 echo "skip=true" >> $GITHUB_OUTPUT
-               fi
+              echo "Changed files:"
+              echo "$CHANGED"
+
+              # Check for non-ignored files
+              # returns 0 if matches found (meaningful changes)
+              if echo "$CHANGED" | grep -Eqv '^(docs/|\.github/|\.gitignore|\.editorconfig|README\.md|LICENSE)'; then
+                echo "Meaningful changes detected."
+                echo "skip=false" >> $GITHUB_OUTPUT
+              else
+                echo "No meaningful changes detected."
+                echo "skip=true" >> $GITHUB_OUTPUT
+              fi
             fi
           fi
 
