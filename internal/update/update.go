@@ -71,7 +71,7 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 	if !strings.HasPrefix(requestedVersion, "v") {
 		remoteChannel := GetChannelFromVersion(remoteVersion)
 		if !strings.EqualFold(remoteChannel, currentChannel) {
-			logger.Notice(ctx, "[_ApplicationName_]%s[-] is on channel '%s', but latest release is on channel '%s'. Ignoring.", version.ApplicationName, currentChannel, remoteChannel)
+			logger.Warn(ctx, "[_ApplicationName_]%s[-] is on channel '[_Branch_]%s[-]', but latest release is on channel '[_Branch_]%s[-]'. Ignoring.", version.ApplicationName, currentChannel, remoteChannel)
 			return nil
 		}
 	}
@@ -152,7 +152,8 @@ func UpdateTemplates(ctx context.Context, force bool, yes bool, requestedBranch 
 	if err != nil {
 		return fmt.Errorf("failed to get templates HEAD: %w", err)
 	}
-	currentVersion := head.Hash().String()[:7]
+	currentHash := head.Hash().String()[:7]
+	currentDisplay := paths.GetTemplatesVersion()
 
 	remoteRef, err := repo.Reference(plumbing.ReferenceName("refs/remotes/origin/"+requestedBranch), true)
 	if err != nil {
@@ -162,25 +163,36 @@ func UpdateTemplates(ctx context.Context, force bool, yes bool, requestedBranch 
 	if err != nil {
 		return fmt.Errorf("failed to resolve templates target %s: %w", requestedBranch, err)
 	}
-	remoteVersion := remoteRef.Hash().String()[:7]
+	remoteHash := remoteRef.Hash().String()[:7]
+	remoteDisplay := remoteHash
+
+	// Try to find a tag for the remote commit
+	tags, _ := repo.Tags()
+	_ = tags.ForEach(func(ref *plumbing.Reference) error {
+		if ref.Hash() == remoteRef.Hash() {
+			remoteDisplay = ref.Name().Short()
+			return fmt.Errorf("found")
+		}
+		return nil
+	})
 
 	question := ""
 	initiationNotice := ""
 	targetName := "DockSTARTer-Templates"
 	noNotice := fmt.Sprintf("[_ApplicationName_]%s[-] will not be updated.", targetName)
 
-	if currentVersion == remoteVersion {
+	if currentHash == remoteHash {
 		if force {
-			question = fmt.Sprintf("Would you like to forcefully re-apply [_ApplicationName_]%s[-] update '[_Version_]%s[-]'?", targetName, currentVersion)
-			initiationNotice = fmt.Sprintf("Forcefully re-applying [_ApplicationName_]%s[-] update '[_Version_]%s[-]'", targetName, remoteVersion)
+			question = fmt.Sprintf("Would you like to forcefully re-apply [_ApplicationName_]%s[-] update '[_Version_]%s[-]'?", targetName, currentDisplay)
+			initiationNotice = fmt.Sprintf("Forcefully re-applying [_ApplicationName_]%s[-] update '[_Version_]%s[-]'", targetName, remoteDisplay)
 		} else {
-			logger.Notice(ctx, "[_ApplicationName_]%s[-] is already up to date on branch '%s'.", targetName, requestedBranch)
-			logger.Notice(ctx, "Current version is '[_Version_]%s[-]'", currentVersion)
+			logger.Notice(ctx, "[_ApplicationName_]%s[-] is already up to date on branch '[_Branch_]%s[-]'.", targetName, requestedBranch)
+			logger.Notice(ctx, "Current version is '[_Version_]%s[-]'", currentDisplay)
 			return nil
 		}
 	} else {
-		question = fmt.Sprintf("Would you like to update [_ApplicationName_]%s[-] from '[_Version_]%s[-]' to '[_Version_]%s[-]' now?", targetName, currentVersion, remoteVersion)
-		initiationNotice = fmt.Sprintf("Updating [_ApplicationName_]%s[-] from '[_Version_]%s[-]' to '[_Version_]%s[-]'", targetName, currentVersion, remoteVersion)
+		question = fmt.Sprintf("Would you like to update [_ApplicationName_]%s[-] from '[_Version_]%s[-]' to '[_Version_]%s[-]' now?", targetName, currentDisplay, remoteDisplay)
+		initiationNotice = fmt.Sprintf("Updating [_ApplicationName_]%s[-] from '[_Version_]%s[-]' to '[_Version_]%s[-]'", targetName, currentDisplay, remoteDisplay)
 	}
 
 	// Wrap logger.Notice to match console.Printer
