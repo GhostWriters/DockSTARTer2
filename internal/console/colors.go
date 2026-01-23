@@ -235,6 +235,7 @@ func RegisterBaseTags() {
 
 	RegisterColor("_ApplicationName_", Colors.ApplicationName)
 	RegisterColor("_Version_", Colors.Version)
+	RegisterColor("_Branch_", Colors.Branch)
 	RegisterColor("_UserCommand_", Colors.UserCommand)
 	RegisterColor("_UserCommandError_", Colors.UserCommandError)
 	RegisterColor("_UserCommandErrorMarker_", Colors.UserCommandErrorMarker)

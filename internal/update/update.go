@@ -82,6 +82,14 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 		}
 	}
 
+	// Ensure versions start with 'v' for consistent display
+	if !strings.HasPrefix(remoteVersion, "v") {
+		remoteVersion = "v" + remoteVersion
+	}
+	if !strings.HasPrefix(currentVersion, "v") {
+		currentVersion = "v" + currentVersion
+	}
+
 	question := ""
 	initiationNotice := ""
 	noNotice := fmt.Sprintf("[_ApplicationName_]%s[-] will not be updated.", version.ApplicationName)
@@ -91,13 +99,13 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 		logger.Notice(ctx, msg, args...)
 	}
 
-	if currentVersion == remoteVersion {
+	if compareVersions(currentVersion, remoteVersion) == 0 {
 		if force {
 			question = fmt.Sprintf("Would you like to forcefully re-apply [_ApplicationName_]%s[-] update '[_Version_]%s[-]'?", version.ApplicationName, currentVersion)
 			initiationNotice = fmt.Sprintf("Forcefully re-applying [_ApplicationName_]%s[-] update '[_Version_]%s[-]'", version.ApplicationName, remoteVersion)
 		} else {
 			logger.Notice(ctx, "[_ApplicationName_]%s[-] is already up to date on channel '%s'.", version.ApplicationName, requestedVersion)
-			logger.Notice(ctx, "Current version is '[_Version_]%s[-]'", currentVersion)
+			logger.Notice(ctx, "Current version is '[_Version_]%s[-]'.", currentVersion)
 			return nil
 		}
 	} else {
