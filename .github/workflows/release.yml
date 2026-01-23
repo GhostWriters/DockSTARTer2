@@ -127,17 +127,17 @@ jobs:
 
               # Ensure n is numeric
               if [[ "$n" =~ ^[0-9]+$ ]]; then
-                 if (( n > MAX_N )); then
-                   MAX_N=$n
-                 fi
+                if (( n > MAX_N )); then
+                  MAX_N=$n
+                fi
               fi
             fi
           done
 
           if [ "$MAX_N" == "-1" ]; then
-             NEXT_N=1
+            NEXT_N=1
           else
-             NEXT_N=$((MAX_N + 1))
+            NEXT_N=$((MAX_N + 1))
           fi
 
           FINAL_VER="${PREFIX}.${NEXT_N}${SUFFIX}"
