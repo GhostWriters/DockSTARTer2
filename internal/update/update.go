@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 
@@ -70,7 +71,7 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 	// Strict channel matching (except when a specific version was requested)
 	if !strings.HasPrefix(requestedVersion, "v") {
 		remoteChannel := GetChannelFromVersion(remoteVersion)
-		if !strings.EqualFold(remoteChannel, currentChannel) {
+		if !strings.EqualFold(remoteChannel, currentChannel) && !strings.EqualFold(requestedVersion, remoteChannel) {
 			logger.Warn(ctx, "[_ApplicationName_]%s[-] is on channel '[_Branch_]%s[-]', but latest release is on channel '[_Branch_]%s[-]'. Ignoring.", version.ApplicationName, currentChannel, remoteChannel)
 			return nil
 		}
@@ -114,6 +115,19 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 	}
 
 	if err != nil {
+		if strings.Contains(err.Error(), "permission denied") || strings.Contains(err.Error(), "Access is denied") {
+			logger.Warn(ctx, "Permission denied. Attempting to run with sudo...")
+			exe, _ := os.Executable()
+			args := os.Args[1:]
+			cmd := exec.Command("sudo", append([]string{exe}, args...)...)
+			cmd.Stdin = os.Stdin
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			if runErr := cmd.Run(); runErr != nil {
+				return fmt.Errorf("failed to update with sudo: %w", runErr)
+			}
+			return nil
+		}
 		return fmt.Errorf("failed to update application: %w", err)
 	}
 
@@ -482,14 +496,13 @@ func compareVersions(v1, v2 string) int {
 		}
 		return 1
 	}
-	if len(p1) < len(p2) {
-		if strings.Contains(p2[len(p1)], "-") {
-			return 1
-		}
-		return -1
-	}
 
-	return 0
+	// Lengths are different, but no dash in the longer part
+	// 1.0.1 > 1.0
+	if len(p1) > len(p2) {
+		return 1
+	}
+	return -1
 }
 
 // getUpdater returns a configured selfupdate.Updater for the given channel.
