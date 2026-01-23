@@ -129,113 +129,10 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 
 	// Execution
 	logger.Notice(ctx, initiationNotice)
-	if strings.HasPrefix(requestedVersion, "v") {
-		err = selfupdate.UpdateTo(ctx, version.Version, requestedVersion, slug)
-	} else {
-		_, err = updater.UpdateSelf(ctx, version.Version, repo)
-	}
 
+	err = installUpdate(ctx, latest.AssetURL)
 	if err != nil {
-		if strings.Contains(err.Error(), "permission denied") || strings.Contains(err.Error(), "Access is denied") {
-			logger.Warn(ctx, "Requesting root permissions to apply update.")
-
-			// 1. Get current executable path
-			exe, err := os.Executable()
-			if err != nil {
-				return fmt.Errorf("failed to get executable path: %w", err)
-			}
-
-			// 2. Create temp dir and copy
-			tmpDir, err := os.MkdirTemp("", "ds2-update-*")
-			if err != nil {
-				return fmt.Errorf("failed to create temp dir: %w", err)
-			}
-			defer os.RemoveAll(tmpDir) // Cleanup on exit
-
-			exeName := filepath.Base(exe)
-			tmpExe := filepath.Join(tmpDir, exeName)
-
-			// 3. Download and extract update manually
-			// Use the asset URL from the release struct
-			assetURL := latest.AssetURL
-			if assetURL == "" {
-				return fmt.Errorf("no asset URL found for release")
-			}
-
-			logger.Info(ctx, "Downloading update from [_URL_]%s[-]", assetURL)
-			resp, err := http.Get(assetURL)
-			if err != nil {
-				return fmt.Errorf("failed to download update: %w", err)
-			}
-			defer resp.Body.Close()
-
-			// Extract
-			// Check extension
-			if strings.HasSuffix(assetURL, ".tar.gz") || strings.HasSuffix(assetURL, ".tgz") {
-				gw, err := gzip.NewReader(resp.Body)
-				if err != nil {
-					return fmt.Errorf("failed to create gzip reader: %w", err)
-				}
-				defer gw.Close()
-				tr := tar.NewReader(gw)
-
-				foundExe := false
-				for {
-					header, err := tr.Next()
-					if err == io.EOF {
-						break
-					}
-					if err != nil {
-						return fmt.Errorf("failed to read tar header: %w", err)
-					}
-
-					// Look for the executable (usually match the current exe name or just is executable)
-					if filepath.Base(header.Name) == filepath.Base(exe) {
-						// Extract to tmpExe
-						out, err := os.Create(tmpExe)
-						if err != nil {
-							return fmt.Errorf("failed to create temp executable file: %w", err)
-						}
-						if _, err := io.Copy(out, tr); err != nil {
-							out.Close()
-							return fmt.Errorf("failed to extract file: %w", err)
-						}
-						out.Close()
-						foundExe = true
-						break
-					}
-				}
-				if !foundExe {
-					return fmt.Errorf("executable not found in update archive")
-				}
-			} else {
-				// Fallback for raw binary or other formats if needed, or error
-				return fmt.Errorf("unsupported archive format: %s", assetURL)
-			}
-
-			if err := os.Chmod(tmpExe, 0755); err != nil {
-				return fmt.Errorf("failed to chmod temp executable: %w", err)
-			}
-
-			// 4. Move updated temp copy back to real location using sudo
-
-			mvCmd := exec.Command("sudo", "mv", tmpExe, exe)
-			// We don't pipe stdin/out for mv, just check error
-			if out, err := mvCmd.CombinedOutput(); err != nil {
-				return fmt.Errorf("failed to install update with sudo: %s: %w", string(out), err)
-			}
-
-			// Restore ownership if needed? sudo mv usually preserves ownership of source (user),
-			// so we might want to chown to root:root if the original was root.
-			// Ideally we replicate the info of 'exe'.
-			// But 'sudo chown root:root' is a safe bet for /usr/bin/ds2.
-			exec.Command("sudo", "chown", "root:root", exe).Run()
-
-			logger.Notice(ctx, "Updated [_ApplicationName_]%s[-] to version '[_Version_]%s[-]'.", version.ApplicationName, remoteVersion)
-			logger.Info(ctx, "Application location is '[_File_]%s[-]'.", exe)
-			return nil
-		}
-		return fmt.Errorf("failed to update application: %w", err)
+		return fmt.Errorf("failed to install update: %w", err)
 	}
 
 	logger.Notice(ctx, "Updated [_ApplicationName_]%s[-] to '[_Version_]%s[-]'", version.ApplicationName, remoteVersion)
@@ -243,6 +140,108 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 	if exePath != "unknown" {
 		logger.Info(ctx, "Application location is '[_File_]%s[-]'.", exePath)
 	}
+
+	return nil
+}
+
+// installUpdate downloads and installs the binary from the given URL.
+func installUpdate(ctx context.Context, assetURL string) error {
+	// 1. Get current executable path
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to get executable path: %w", err)
+	}
+
+	// 2. Create temp dir
+	tmpDir, err := os.MkdirTemp("", "ds2-update-*")
+	if err != nil {
+		return fmt.Errorf("failed to create temp dir: %w", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// 3. Download
+	logger.Info(ctx, "Downloading update from [_URL_]%s[-]", assetURL)
+	resp, err := http.Get(assetURL)
+	if err != nil {
+		return fmt.Errorf("failed to download: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// 4. Extract
+	tmpExe := filepath.Join(tmpDir, filepath.Base(exe))
+
+	// Handle compressed formats
+	if strings.HasSuffix(assetURL, ".tar.gz") || strings.HasSuffix(assetURL, ".tgz") {
+		gw, err := gzip.NewReader(resp.Body)
+		if err != nil {
+			return fmt.Errorf("failed to create gzip reader: %w", err)
+		}
+		defer gw.Close()
+		tr := tar.NewReader(gw)
+
+		found := false
+		for {
+			header, err := tr.Next()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return fmt.Errorf("failed to read tar header: %w", err)
+			}
+
+			// Simple heuristic: if name matches exe name
+			if filepath.Base(header.Name) == filepath.Base(exe) {
+				out, err := os.Create(tmpExe)
+				if err != nil {
+					return fmt.Errorf("failed to create temp file: %w", err)
+				}
+				if _, err := io.Copy(out, tr); err != nil {
+					out.Close()
+					return fmt.Errorf("failed to extract: %w", err)
+				}
+				out.Close()
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("executable not found in archive")
+		}
+	} else {
+		return fmt.Errorf("unsupported format: %s", assetURL)
+	}
+
+	if err := os.Chmod(tmpExe, 0755); err != nil {
+		return fmt.Errorf("failed to chmod: %w", err)
+	}
+
+	// 5. Replace
+	// Try direct rename first (fast, works if writable)
+	// We rename current to .old just in case (though Linux overwrites active files fine usually, Windows does not)
+	// On Windows, we can't overwrite running exe. DockerSTARTer logic was usually Linux-centric but we are in Go now.
+	// selfupdate library usually handles this by rename.
+
+	// We will try to mv tmpExe -> exe
+	// If it fails with permission, we try sudo.
+
+	// Prepare move command
+	err = os.Rename(tmpExe, exe)
+	if err == nil {
+		return nil
+	}
+
+	// Check for permission errors specifically? or just try sudo if ANY error?
+	// Simplified: try sudo if rename failed.
+	logger.Warn(ctx, "Direct update failed (%v), trying with sudo...", err)
+
+	mvCmd := exec.Command("sudo", "mv", tmpExe, exe)
+	if out, err := mvCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("sudo update failed: %s: %w", string(out), err)
+	}
+
+	// Restore ownership to root:root if sudo was used?
+	// Usually /usr/local/bin is root owned.
+	exec.Command("sudo", "chown", "root:root", exe).Run()
 
 	return nil
 }
