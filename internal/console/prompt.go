@@ -34,8 +34,10 @@ func QuestionPrompt(ctx context.Context, printer Printer, question string, defau
 
 	// Switch to raw mode to read a single character
 	fd := int(os.Stdin.Fd())
+	var oldState *term.State
 	if term.IsTerminal(fd) {
-		oldState, err := term.MakeRaw(fd)
+		var err error
+		oldState, err = term.MakeRaw(fd)
 		if err == nil {
 			defer term.Restore(fd, oldState)
 		}
@@ -87,6 +89,11 @@ func QuestionPrompt(ctx context.Context, printer Printer, question string, defau
 			break
 		}
 		// Ignore other keys
+	}
+
+	// Restore terminal before printing log messages
+	if oldState != nil {
+		_ = term.Restore(fd, oldState)
 	}
 
 	if answer {
