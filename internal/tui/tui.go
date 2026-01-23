@@ -539,19 +539,38 @@ func (d *ThreeDBox) Draw(screen tcell.Screen) {
 }
 
 // Start starts the TUI application.
-func Start(ctx context.Context, startMenu string) error {
+func Start(ctx context.Context, startMenu string) (err error) {
 	logger.Info(ctx, "TUI Starting...")
 	currentConfig = config.LoadGUIConfig()
-	func() {
+
+	// Ensure we recover from any TUI panic and stop the application gracefully
+	defer func() {
 		if r := recover(); r != nil {
 			if app != nil {
 				app.Stop()
 			}
-			logger.Error(ctx, "TUI Panic: %v", r)
+			msg := fmt.Sprintf("%v", r)
+			// If it's the known tcell/v3 palette panic, give a more helpful message
+			if strings.Contains(msg, "index out of range [0]") {
+				err = fmt.Errorf("terminal initialization failed: terminal may be incompatible or too small: %v", r)
+			} else {
+				err = fmt.Errorf("TUI panic: %v", r)
+			}
+			logger.Error(ctx, err.Error())
 		}
 	}()
 
 	_ = theme.Load(currentConfig.Theme)
+
+	// Check terminal size before starting
+	// tcell can panic if width or height is reported as 0 on some Windows setups
+	width, height, err := console.GetTerminalSize()
+	if err != nil {
+		return fmt.Errorf("failed to get terminal size: %w", err)
+	}
+	if width <= 0 || height <= 0 {
+		return fmt.Errorf("terminal size is too small (%dx%d)", width, height)
+	}
 
 	screen, err := tcell.NewScreen()
 	if err != nil {

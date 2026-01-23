@@ -5,10 +5,15 @@ import (
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/version"
+	"archive/tar"
+	"compress/gzip"
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -116,16 +121,102 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 
 	if err != nil {
 		if strings.Contains(err.Error(), "permission denied") || strings.Contains(err.Error(), "Access is denied") {
-			logger.Warn(ctx, "Permission denied. Attempting to run with sudo...")
-			exe, _ := os.Executable()
-			args := os.Args[1:]
-			cmd := exec.Command("sudo", append([]string{exe}, args...)...)
-			cmd.Stdin = os.Stdin
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			if runErr := cmd.Run(); runErr != nil {
-				return fmt.Errorf("failed to update with sudo: %w", runErr)
+			logger.Warn(ctx, "Requesting root permissions to apply update.")
+
+			// 1. Get current executable path
+			exe, err := os.Executable()
+			if err != nil {
+				return fmt.Errorf("failed to get executable path: %w", err)
 			}
+
+			// 2. Create temp dir and copy
+			tmpDir, err := os.MkdirTemp("", "ds2-update-*")
+			if err != nil {
+				return fmt.Errorf("failed to create temp dir: %w", err)
+			}
+			defer os.RemoveAll(tmpDir) // Cleanup on exit
+
+			exeName := filepath.Base(exe)
+			tmpExe := filepath.Join(tmpDir, exeName)
+
+			// 3. Download and extract update manually
+			// Use the asset URL from the release struct
+			assetURL := latest.AssetURL
+			if assetURL == "" {
+				return fmt.Errorf("no asset URL found for release")
+			}
+
+			logger.Info(ctx, "Downloading update from [_URL_]%s[-]", assetURL)
+			resp, err := http.Get(assetURL)
+			if err != nil {
+				return fmt.Errorf("failed to download update: %w", err)
+			}
+			defer resp.Body.Close()
+
+			// Extract
+			// Check extension
+			if strings.HasSuffix(assetURL, ".tar.gz") || strings.HasSuffix(assetURL, ".tgz") {
+				gw, err := gzip.NewReader(resp.Body)
+				if err != nil {
+					return fmt.Errorf("failed to create gzip reader: %w", err)
+				}
+				defer gw.Close()
+				tr := tar.NewReader(gw)
+
+				foundExe := false
+				for {
+					header, err := tr.Next()
+					if err == io.EOF {
+						break
+					}
+					if err != nil {
+						return fmt.Errorf("failed to read tar header: %w", err)
+					}
+
+					// Look for the executable (usually match the current exe name or just is executable)
+					if filepath.Base(header.Name) == filepath.Base(exe) {
+						// Extract to tmpExe
+						out, err := os.Create(tmpExe)
+						if err != nil {
+							return fmt.Errorf("failed to create temp executable file: %w", err)
+						}
+						if _, err := io.Copy(out, tr); err != nil {
+							out.Close()
+							return fmt.Errorf("failed to extract file: %w", err)
+						}
+						out.Close()
+						foundExe = true
+						break
+					}
+				}
+				if !foundExe {
+					return fmt.Errorf("executable not found in update archive")
+				}
+			} else {
+				// Fallback for raw binary or other formats if needed, or error
+				return fmt.Errorf("unsupported archive format: %s", assetURL)
+			}
+
+			if err := os.Chmod(tmpExe, 0755); err != nil {
+				return fmt.Errorf("failed to chmod temp executable: %w", err)
+			}
+
+			// 4. Move updated temp copy back to real location using sudo
+
+			mvCmd := exec.Command("sudo", "mv", tmpExe, exe)
+			// We don't pipe stdin/out for mv, just check error
+			if out, err := mvCmd.CombinedOutput(); err != nil {
+				return fmt.Errorf("failed to install update with sudo: %s: %w", string(out), err)
+			}
+
+			// Restore ownership if needed? sudo mv usually preserves ownership of source (user),
+			// so we might want to chown to root:root if the original was root.
+			// Ideally we replicate the info of 'exe'.
+			// But 'sudo chown root:root' is a safe bet for /usr/bin/ds2.
+			exec.Command("sudo", "chown", "root:root", exe).Run()
+
+			logger.Notice(ctx, "Updated [_ApplicationName_]%s[-] to version '[_Version_]%s[-]'.", version.ApplicationName, remoteVersion)
+			logger.Info(ctx, "Application location is '[_File_]%s[-]'.", exe)
 			return nil
 		}
 		return fmt.Errorf("failed to update application: %w", err)

@@ -260,4 +260,5 @@ func RegisterBaseTags() {
 	RegisterColor("_Debug_", Colors.Debug)
 	RegisterColor("_Info_", Colors.Info)
 	RegisterColor("_Trace_", Colors.Trace)
+	RegisterColor("_URL_", Colors.URL)
 }
