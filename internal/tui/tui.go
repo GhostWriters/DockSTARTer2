@@ -538,10 +538,45 @@ func (d *ThreeDBox) Draw(screen tcell.Screen) {
 	}
 }
 
+// Initialize sets up the screen and application without starting the run loop.
+func Initialize(ctx context.Context) error {
+	console.TUIConfirm = Confirm
+
+	if app != nil {
+		return nil
+	}
+	currentConfig = config.LoadGUIConfig()
+	_ = theme.Load(currentConfig.Theme)
+
+	width, height, err := console.GetTerminalSize()
+	if err != nil {
+		return fmt.Errorf("failed to get terminal size: %w", err)
+	}
+	if width <= 0 || height <= 0 {
+		return fmt.Errorf("terminal size is too small (%dx%d)", width, height)
+	}
+
+	screen, err := tcell.NewScreen()
+	if err != nil {
+		return fmt.Errorf("failed to create screen: %w", err)
+	}
+	if err := screen.Init(); err != nil {
+		return fmt.Errorf("failed to initialize screen: %w", err)
+	}
+
+	app = cview.NewApplication()
+	app.SetScreen(screen)
+	app.EnableMouse(true)
+
+	console.TUIConfirm = Confirm
+
+	initLayout()
+	return nil
+}
+
 // Start starts the TUI application.
 func Start(ctx context.Context, startMenu string) (err error) {
 	logger.Info(ctx, "TUI Starting...")
-	currentConfig = config.LoadGUIConfig()
 
 	// Ensure we recover from any TUI panic and stop the application gracefully
 	defer func() {
@@ -560,30 +595,12 @@ func Start(ctx context.Context, startMenu string) (err error) {
 		}
 	}()
 
-	_ = theme.Load(currentConfig.Theme)
+	if err := Initialize(ctx); err != nil {
+		return err
+	}
+	defer app.GetScreen().Fini()
 
-	// Check terminal size before starting
-	// tcell can panic if width or height is reported as 0 on some Windows setups
-	width, height, err := console.GetTerminalSize()
-	if err != nil {
-		return fmt.Errorf("failed to get terminal size: %w", err)
-	}
-	if width <= 0 || height <= 0 {
-		return fmt.Errorf("terminal size is too small (%dx%d)", width, height)
-	}
-
-	screen, err := tcell.NewScreen()
-	if err != nil {
-		return fmt.Errorf("failed to create screen: %w", err)
-	}
-	if err := screen.Init(); err != nil {
-		return fmt.Errorf("failed to initialize screen: %w", err)
-	}
-	defer screen.Fini()
-
-	app = cview.NewApplication()
-	app.SetScreen(screen)
-	app.EnableMouse(true)
+	// Background update check
 
 	// Background update check
 	go func() {
@@ -613,6 +630,21 @@ func Start(ctx context.Context, startMenu string) (err error) {
 		}
 	}()
 
+	switch startMenu {
+	case "config":
+		showConfigMenu(nil)
+	case "options":
+		showOptionsMenu(nil)
+	default:
+		showMainMenu()
+	}
+
+	app.SetRoot(rootGrid, true)
+	err = app.Run()
+	return err
+}
+
+func initLayout() {
 	headerBG := theme.Current.ScreenBG
 	headerFG := tcell.ColorBlack
 
@@ -727,19 +759,6 @@ func Start(ctx context.Context, startMenu string) (err error) {
 	rootGrid.AddItem(headerSep, 1, 0, 1, 1, 0, 0, false)
 	rootGrid.AddItem(panels, 2, 0, 1, 1, 0, 0, true)
 	rootGrid.AddItem(helpline, 3, 0, 1, 1, 0, 0, false)
-
-	switch startMenu {
-	case "config":
-		showConfigMenu(nil)
-	case "options":
-		showOptionsMenu(nil)
-	default:
-		showMainMenu()
-	}
-
-	app.SetRoot(rootGrid, true)
-	err = app.Run()
-	return err
 }
 
 func refreshHeader() {

@@ -1,9 +1,5 @@
 package console
 
-import (
-	"os"
-)
-
 // Raw ANSI Color Codes
 const (
 	// Reset
@@ -124,95 +120,91 @@ type AppColors struct {
 var Colors AppColors
 
 func init() {
-	// Check if stdout is a TTY
-	stat, _ := os.Stdout.Stat()
-	isTTY := (stat.Mode() & os.ModeCharDevice) != 0
+	// IMPORTANT: ALWAYS initialize color definitions, regardless of TTY status
+	// The TTY check should only affect whether Parse outputs ANSI codes, not whether colors are defined
+	// This is crucial for cross-compilation (e.g., building on Windows for Linux)
+	Colors = AppColors{
+		// Base Codes (Mapped to cview-like tags for parsing)
+		Reset:     "[-]",
+		Bold:      "[::b]",
+		Dim:       "[::d]",
+		Underline: "[::u]",
+		Blink:     "[::l]",
+		Reverse:   "[::r]",
 
-	if isTTY {
-		Colors = AppColors{
-			// Base Codes
-			Reset:     CodeReset,
-			Bold:      CodeBold,
-			Dim:       CodeDim,
-			Underline: CodeUnderline,
-			Blink:     CodeBlink,
-			Reverse:   CodeReverse,
+		// Base Colors (Foreground - standard names)
+		Black:   "[black]",
+		Red:     "[red]",
+		Green:   "[green]",
+		Yellow:  "[yellow]",
+		Blue:    "[blue]",
+		Magenta: "[magenta]",
+		Cyan:    "[cyan]",
+		White:   "[white]",
 
-			// Base Colors (Foreground)
-			Black:   CodeBlack,
-			Red:     CodeRed,
-			Green:   CodeGreen,
-			Yellow:  CodeYellow,
-			Blue:    CodeBlue,
-			Magenta: CodeMagenta,
-			Cyan:    CodeCyan,
-			White:   CodeWhite,
+		// Base Colors (Background)
+		BlackBg:   "[:black]",
+		RedBg:     "[:red]",
+		GreenBg:   "[:green]",
+		YellowBg:  "[:yellow]",
+		BlueBg:    "[:blue]",
+		MagentaBg: "[:magenta]",
+		CyanBg:    "[:cyan]",
+		WhiteBg:   "[:white]",
 
-			// Base Colors (Background)
-			BlackBg:   CodeBlackBg,
-			RedBg:     CodeRedBg,
-			GreenBg:   CodeGreenBg,
-			YellowBg:  CodeYellowBg,
-			BlueBg:    CodeBlueBg,
-			MagentaBg: CodeMagentaBg,
-			CyanBg:    CodeCyanBg,
-			WhiteBg:   CodeWhiteBg,
+		// Semantic Colors (Standard DockSTARTer mappings)
+		Timestamp:              "[-]",
+		Trace:                  "[blue]",
+		Debug:                  "[blue]",
+		Info:                   "[blue]",
+		Notice:                 "[green]",
+		Warn:                   "[yellow]",
+		Error:                  "[red]",
+		Fatal:                  "[white:red]", // Red BG, White Text
+		FatalFooter:            "[-]",
+		TraceHeader:            "[red]",
+		TraceFooter:            "[red]",
+		TraceFrameNumber:       "[red]",
+		TraceFrameLines:        "[red]",
+		TraceSourceFile:        "[cyan::b]",
+		TraceLineNumber:        "[yellow::b]",
+		TraceFunction:          "[green::b]",
+		TraceCmd:               "[green::b]",
+		TraceCmdArgs:           "[green]",
+		UnitTestPass:           "[green]",
+		UnitTestFail:           "[red]",
+		UnitTestFailArrow:      "[red]",
+		App:                    "[cyan]",
+		ApplicationName:        "[cyan::b]",
+		Branch:                 "[cyan]",
+		FailingCommand:         "[red]",
+		File:                   "[cyan::b]",
+		Folder:                 "[cyan::b]",
+		Program:                "[cyan]",
+		RunningCommand:         "[green::b]",
+		Theme:                  "[cyan]",
+		Update:                 "[green]",
+		User:                   "[cyan]",
+		URL:                    "[cyan::u]",
+		UserCommand:            "[yellow::b]",
+		UserCommandError:       "[red::u]",
+		UserCommandErrorMarker: "[red]",
+		Var:                    "[magenta]",
+		Version:                "[cyan]",
+		Yes:                    "[green]",
+		No:                     "[red]",
 
-			// Semantic Colors
-			Timestamp:              "[reset]",
-			Trace:                  "[blue]",
-			Debug:                  "[blue]",
-			Info:                   "[blue]",
-			Notice:                 "[green]",
-			Warn:                   "[yellow]",
-			Error:                  "[red]",
-			Fatal:                  "[white:red]", // Red BG, White Text
-			FatalFooter:            "[reset]",
-			TraceHeader:            "[red]",
-			TraceFooter:            "[red]",
-			TraceFrameNumber:       "[red]",
-			TraceFrameLines:        "[red]",
-			TraceSourceFile:        "[cyan::b]",
-			TraceLineNumber:        "[yellow::b]",
-			TraceFunction:          "[green::b]",
-			TraceCmd:               "[green::b]",
-			TraceCmdArgs:           "[green]",
-			UnitTestPass:           "[green]",
-			UnitTestFail:           "[red]",
-			UnitTestFailArrow:      "[red]",
-			App:                    "[cyan]",
-			ApplicationName:        "[cyan::b]",
-			Branch:                 "[cyan]",
-			FailingCommand:         "[red]",
-			File:                   "[cyan::b]",
-			Folder:                 "[cyan::b]",
-			Program:                "[cyan]",
-			RunningCommand:         "[green::b]",
-			Theme:                  "[cyan]",
-			Update:                 "[green]",
-			User:                   "[cyan]",
-			URL:                    "[cyan::u]",
-			UserCommand:            "[yellow::b]",
-			UserCommandError:       "[red::u]",
-			UserCommandErrorMarker: "[red]",
-			Var:                    "[magenta]",
-			Version:                "[cyan]",
-			Yes:                    "[green]",
-			No:                     "[red]",
-
-			// Usage Colors
-			UsageCommand: "[yellow::b]",
-			UsageOption:  "[yellow]",
-			UsageApp:     "[cyan]",
-			UsageBranch:  "[cyan]",
-			UsageFile:    "[cyan::b]",
-			UsagePage:    "[cyan::b]",
-			UsageTheme:   "[cyan]",
-			UsageVar:     "[magenta]",
-		}
-		RegisterBaseTags()
+		// Usage Colors
+		UsageCommand: "[yellow::b]",
+		UsageOption:  "[yellow]",
+		UsageApp:     "[cyan]",
+		UsageBranch:  "[cyan]",
+		UsageFile:    "[cyan::b]",
+		UsagePage:    "[cyan::b]",
+		UsageTheme:   "[cyan]",
+		UsageVar:     "[magenta]",
 	}
-	// If not TTY, fields remain empty strings (default)
+	RegisterBaseTags()
 }
 
 // RegisterBaseTags registers all the semantic shorthands and aliases
@@ -229,51 +221,52 @@ func RegisterBaseTags() {
 	RegisterColor("_ul_", "[::u]")
 	RegisterColor("_blink_", "[::l]")
 
-	// These tags are automatically registered as [_FieldName_] by the parser's buildColorMap,
+	// These tags are automatically registered as [_fieldname_] by the parser's buildColorMap,
 	// but we double-register them here as aliases to ensure they are available in the aliasMap
 	// and to maintain explicit mapping for all semantic tags.
+	// IMPORTANT: Use lowercase to match BuildColorMap's strings.ToLower(field.Name) conversion!
 
-	RegisterColor("_ApplicationName_", Colors.ApplicationName)
-	RegisterColor("_Version_", Colors.Version)
-	RegisterColor("_Branch_", Colors.Branch)
-	RegisterColor("_UserCommand_", Colors.UserCommand)
-	RegisterColor("_UserCommandError_", Colors.UserCommandError)
-	RegisterColor("_UserCommandErrorMarker_", Colors.UserCommandErrorMarker)
-	RegisterColor("_Yes_", Colors.Yes)
-	RegisterColor("_No_", Colors.No)
+	RegisterColor("_applicationname_", Colors.ApplicationName)
+	RegisterColor("_version_", Colors.Version)
+	RegisterColor("_branch_", Colors.Branch)
+	RegisterColor("_usercommand_", Colors.UserCommand)
+	RegisterColor("_usercommanderror_", Colors.UserCommandError)
+	RegisterColor("_usercommanderrormarker_", Colors.UserCommandErrorMarker)
+	RegisterColor("_yes_", Colors.Yes)
+	RegisterColor("_no_", Colors.No)
 
 	// Usage Colors
-	RegisterColor("_UsageCommand_", Colors.UsageCommand)
-	RegisterColor("_UsageOption_", Colors.UsageOption)
-	RegisterColor("_UsageApp_", Colors.UsageApp)
-	RegisterColor("_UsageBranch_", Colors.UsageBranch)
-	RegisterColor("_UsageFile_", Colors.UsageFile)
-	RegisterColor("_UsagePage_", Colors.UsagePage)
-	RegisterColor("_UsageTheme_", Colors.UsageTheme)
-	RegisterColor("_UsageVar_", Colors.UsageVar)
+	RegisterColor("_usagecommand_", Colors.UsageCommand)
+	RegisterColor("_usageoption_", Colors.UsageOption)
+	RegisterColor("_usageapp_", Colors.UsageApp)
+	RegisterColor("_usagebranch_", Colors.UsageBranch)
+	RegisterColor("_usagefile_", Colors.UsageFile)
+	RegisterColor("_usagepage_", Colors.UsagePage)
+	RegisterColor("_usagetheme_", Colors.UsageTheme)
+	RegisterColor("_usagevar_", Colors.UsageVar)
 
 	// Log Level Tags (Shorthands for logger consistency)
-	RegisterColor("_Timestamp_", Colors.Timestamp)
-	RegisterColor("_Notice_", Colors.Notice)
-	RegisterColor("_Warn_", Colors.Warn)
-	RegisterColor("_Error_", Colors.Error)
-	RegisterColor("_Fatal_", Colors.Fatal)
-	RegisterColor("_Debug_", Colors.Debug)
-	RegisterColor("_Info_", Colors.Info)
-	RegisterColor("_Trace_", Colors.Trace)
-	RegisterColor("_URL_", Colors.URL)
+	RegisterColor("_timestamp_", Colors.Timestamp)
+	RegisterColor("_notice_", Colors.Notice)
+	RegisterColor("_warn_", Colors.Warn)
+	RegisterColor("_error_", Colors.Error)
+	RegisterColor("_fatal_", Colors.Fatal)
+	RegisterColor("_debug_", Colors.Debug)
+	RegisterColor("_info_", Colors.Info)
+	RegisterColor("_trace_", Colors.Trace)
+	RegisterColor("_url_", Colors.URL)
 
 	// Missing Semantic Tags from main.sh
-	RegisterColor("_App_", Colors.App)
-	RegisterColor("_FailingCommand_", Colors.FailingCommand)
-	RegisterColor("_File_", Colors.File)
-	RegisterColor("_Folder_", Colors.Folder)
-	RegisterColor("_Program_", Colors.Program)
-	RegisterColor("_RunningCommand_", Colors.RunningCommand)
-	RegisterColor("_Theme_", Colors.Theme)
-	RegisterColor("_Update_", Colors.Update)
-	RegisterColor("_User_", Colors.User)
-	RegisterColor("_Var_", Colors.Var)
+	RegisterColor("_app_", Colors.App)
+	RegisterColor("_failingcommand_", Colors.FailingCommand)
+	RegisterColor("_file_", Colors.File)
+	RegisterColor("_folder_", Colors.Folder)
+	RegisterColor("_program_", Colors.Program)
+	RegisterColor("_runningcommand_", Colors.RunningCommand)
+	RegisterColor("_theme_", Colors.Theme)
+	RegisterColor("_update_", Colors.Update)
+	RegisterColor("_user_", Colors.User)
+	RegisterColor("_var_", Colors.Var)
 
 	// Legacy Foreground Colors (F array in main.sh)
 	RegisterColor("_B_", Colors.Blue)

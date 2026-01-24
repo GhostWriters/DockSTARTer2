@@ -6,6 +6,7 @@ import (
 	"DockSTARTer2/internal/version"
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/user"
@@ -16,6 +17,13 @@ import (
 
 	"github.com/lmittmann/tint"
 )
+
+const TUIWriterKey = "tui_writer"
+
+// WithTUIWriter returns a new context with a TUI writer attached.
+func WithTUIWriter(ctx context.Context, w io.Writer) context.Context {
+	return context.WithValue(ctx, TUIWriterKey, w)
+}
 
 // Helper to resolve message from any type to string
 func resolveMsg(msg any) string {
@@ -54,21 +62,42 @@ func logAt(ctx context.Context, t time.Time, level slog.Level, msg any, args ...
 		msgStr = fmt.Sprintf(msgStr, args...)
 		args = nil // Reset args as they are now consumed
 	}
-	msgStr = console.Parse(msgStr)
-
-	// Ensure the message resets colors at the end (for single line case)
-	// For multi-line, we'll append to each line below.
-	if !strings.Contains(msgStr, "\n") {
-		r := slog.NewRecord(t, level, msgStr+console.CodeReset, 0)
-		r.Add(args...)
-		_ = h.Handle(ctx, r)
-		return
-	}
 
 	lines := strings.Split(msgStr, "\n")
 	for i, line := range lines {
-		// Append reset to every line to prevent color bleed to next timestamp
-		r := slog.NewRecord(t, level, line+console.CodeReset, 0)
+		// 1. Output to TUI if writer is in context
+		if w, ok := ctx.Value(TUIWriterKey).(io.Writer); ok {
+			timeStr := t.Format("2006-01-02 15:04:05")
+			levelStr := ""
+			switch level {
+			case LevelTrace:
+				levelStr = "TRACE "
+			case LevelDebug:
+				levelStr = "DEBUG "
+			case LevelInfo:
+				levelStr = "INFO  "
+			case LevelNotice:
+				levelStr = "NOTICE"
+			case LevelWarn:
+				levelStr = "WARN  "
+			case LevelError:
+				levelStr = "ERROR "
+			case LevelFatal:
+				levelStr = "FATAL "
+			default:
+				levelStr = level.String()
+			}
+			// Exactly match tint console format: TIME [LEVEL]  MESSAGE (2 spaces after level)
+			// Use PrepareForTUI to convert semantic tags to cview tags and remove ANSI while keeping cview colors
+			// NOTE: Do NOT call cview.Escape() here - PrepareForTUI already produces proper cview format
+			tuiMsg := fmt.Sprintf("%s [%s]  %s", timeStr, levelStr, console.PrepareForTUI(line))
+			fmt.Fprintln(w, tuiMsg)
+		}
+
+		// 2. Output to standard slog handlers (stderr, file)
+		// IMPORTANT: Always use Parse for stderr to get ANSI colors, regardless of TUI mode
+		msgAnsi := console.Parse(line) + console.CodeReset
+		r := slog.NewRecord(t, level, msgAnsi, 0)
 		if i == 0 {
 			r.Add(args...)
 		}
@@ -296,6 +325,30 @@ func Warn(ctx context.Context, msg any, args ...any) {
 
 func Error(ctx context.Context, msg any, args ...any) {
 	log(ctx, LevelError, msg, args...)
+}
+
+// Display prints a message without any timestamps or log level metadata.
+// It still redirects to the TUI if a TUI writer is present in the context.
+// This output is NOT written to the log file.
+func Display(ctx context.Context, msg any, args ...any) {
+	msgStr := resolveMsg(msg)
+	if len(args) > 0 && strings.Contains(msgStr, "%") {
+		msgStr = fmt.Sprintf(msgStr, args...)
+	}
+
+	lines := strings.Split(msgStr, "\n")
+	for _, line := range lines {
+		// 1. Output to TUI if writer is in context
+		if w, ok := ctx.Value(TUIWriterKey).(io.Writer); ok {
+			// Use PrepareForTUI to keep cview colors while removing ANSI
+			// NOTE: Do NOT call cview.Escape() - PrepareForTUI output is already in cview format
+			fmt.Fprintln(w, console.PrepareForTUI(line))
+		}
+
+		// 2. Output directly to terminal (stdout)
+		// IMPORTANT: Always use Parse for stdout to get ANSI colors, regardless of TUI mode
+		fmt.Println(console.Parse(line) + console.CodeReset)
+	}
 }
 
 func getSystemInfo() []string {

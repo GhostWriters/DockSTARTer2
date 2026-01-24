@@ -11,6 +11,10 @@ import (
 // Printer is a function compatible with logger.Notice
 type Printer func(ctx context.Context, msg string, args ...any)
 
+// TUIConfirm is a function that can be registered by the tui package
+// to allow QuestionPrompt to show a graphical dialog.
+var TUIConfirm func(title, question string, defaultYes bool) bool
+
 // QuestionPrompt prompts the user with a Yes/No question.
 // It returns true if the user answers Yes, false otherwise.
 // defaultValue determines the default action if the user just presses Enter ("Y"=Yes, "N"=No, ""=Require Input).
@@ -18,6 +22,19 @@ type Printer func(ctx context.Context, msg string, args ...any)
 func QuestionPrompt(ctx context.Context, printer Printer, question string, defaultValue string, forceYes bool) bool {
 	if forceYes {
 		return true
+	}
+
+	// Check if we should use TUI for this prompt
+	// we use a check for the "tui_writer" key in context as a proxy for "are we in a TUI task?"
+	if ctx.Value("tui_writer") != nil && TUIConfirm != nil {
+		defaultYes := strings.EqualFold(defaultValue, "y")
+		answer := TUIConfirm("Confirmation", question, defaultYes)
+		if answer {
+			printer(ctx, "Answered: [_Yes_]Yes[-]")
+		} else {
+			printer(ctx, "Answered: [_No_]No[-]")
+		}
+		return answer
 	}
 
 	// Prepare prompt string
