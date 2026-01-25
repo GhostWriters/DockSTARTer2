@@ -1,31 +1,34 @@
 package paths
 
 import (
+	"DockSTARTer2/internal/version"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/adrg/xdg"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 )
 
-// GetConfigFilePath returns the absolute path to the dockstarter2.ini file.
-// On macOS, it explicitly uses ~/.config/dockstarter2.ini to match bash version behavior.
-// On other platforms, it uses the standard xdg.ConfigHome.
+// GetConfigFilePath returns the absolute path to the config.ini file.
+// It places it in a subdirectory named after the application (e.g., ~/.config/dockstarter2/config.ini).
 func GetConfigFilePath() string {
+	appName := strings.ToLower(version.ApplicationName)
 	if runtime.GOOS == "darwin" {
 		home, _ := os.UserHomeDir()
-		return filepath.Join(home, ".config", "dockstarter2.ini")
+		return filepath.Join(home, ".config", appName, "config.ini")
 	}
-	return filepath.Join(xdg.ConfigHome, "dockstarter2.ini")
+	return filepath.Join(xdg.ConfigHome, appName, "config.ini")
 }
 
 // GetTemplatesDir returns the absolute path to the DockSTARTer-Templates repository.
 // It uses xdg.StateHome (e.g., %LOCALAPPDATA% on Windows) with a dockstarter subfolder.
 func GetTemplatesDir() string {
-	return filepath.Join(xdg.StateHome, "dockstarter", "templates", "DockSTARTer-Templates")
+	appName := strings.ToLower(version.ApplicationName)
+	return filepath.Join(xdg.StateHome, appName, "templates", "DockSTARTer-Templates")
 }
 
 // GetTemplatesVersion retrieves the current version of the DockSTARTer-Templates repository.
@@ -79,7 +82,8 @@ func GetTemplatesVersion() string {
 
 // GetCacheDir returns the absolute path to the dockstarter cache directory.
 func GetCacheDir() string {
-	return filepath.Join(xdg.CacheHome, "dockstarter")
+	appName := strings.ToLower(version.ApplicationName)
+	return filepath.Join(xdg.CacheHome, appName)
 }
 
 // GetConfigDir returns the absolute path to the dockstarter configuration directory.
@@ -94,5 +98,6 @@ func GetThemesDir() string {
 
 // GetStateDir returns the absolute path to the dockstarter state directory.
 func GetStateDir() string {
-	return filepath.Join(xdg.StateHome, "dockstarter")
+	appName := strings.ToLower(version.ApplicationName)
+	return filepath.Join(xdg.StateHome, appName)
 }
