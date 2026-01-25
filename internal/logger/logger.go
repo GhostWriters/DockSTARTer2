@@ -195,11 +195,16 @@ func NewLogger() *slog.Logger {
 	consoleHandler := tint.NewHandler(wStderr, consoleOpts)
 
 	// 2. Configure File Handler (No Color)
-	logFilePath := "dockstarter.log"
-	// Ensure clean start
-	_ = os.Remove(logFilePath)
-	// Attempt to open file
-	wFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+	cacheDir := paths.GetCacheDir()
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create cache directory: %v\n", err)
+	}
+
+	appName := strings.ToLower(version.ApplicationName)
+	logFilePath := filepath.Join(cacheDir, appName+".log")
+
+	// Open file in Append mode
+	wFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to open log file: %v\n", err)
 	}
@@ -208,7 +213,7 @@ func NewLogger() *slog.Logger {
 
 	if wFile != nil {
 		replaceAttrFile := func(groups []string, a slog.Attr) slog.Attr {
-			// Strip ANSI codes from message if possible, or just Ensure we don't ADD them for levels
+			// Strip ANSI codes from message if possible, or just Ensure we don't View them for levels
 			if a.Key == slog.LevelKey {
 				level := a.Value.Any().(slog.Level)
 				// Clean level strings
@@ -230,16 +235,6 @@ func NewLogger() *slog.Logger {
 				default:
 					a.Value = slog.StringValue("[" + level.String() + "]")
 				}
-			}
-			if a.Key == slog.MessageKey {
-				// Strip basic color codes from the message string itself?
-				// console.Strip() function might be useful if available,
-				// but for now we rely on tint NoColor=true to handle attributes key/values,
-				// and manually strip if we built the message with colors.
-				// Our 'logAt' helper calls console.Parse(msg).
-				// We might need to write a 'Strip' helper in console package later.
-				// For now, let's trust tint.Options{NoColor: true}.
-				// NOTE: tint's NoColor affects its own formatting, not the message content string.
 			}
 			return a
 		}
@@ -486,11 +481,14 @@ func Fatal(ctx context.Context, msg any, args ...any) {
 		msg,
 		"",
 		"{{_FatalFooter_}}Please let the dev know of this error.",
-		"{{_FatalFooter_}}It has been written to {{|-|}}'{{_File_}}FATAL_LOG{{|-|}}'{{_FatalFooter_}}, and appended to {{|-|}}'{{_File_}}APPLICATION_LOG{{|-|}}'{{_FatalFooter_}}.",
+		"{{_FatalFooter_}}It has been written to {{|-|}}'{{_File_}}" + filepath.Join(paths.GetCacheDir(), strings.ToLower(version.ApplicationName)+".fatal.log") + "{{|-|}}'{{_FatalFooter_}}, and appended to {{|-|}}'{{_File_}}" + filepath.Join(paths.GetCacheDir(), strings.ToLower(version.ApplicationName)+".log") + "{{|-|}}'{{_FatalFooter_}}.",
 	}
 
 	// 4. Log Everything
 	logAt(ctx, now, LevelFatal, output, args...)
+
+	// 5. Write to fatal log file
+	writeFatalLog(ctx, now, output, args...)
 
 	panic(FatalError{})
 }
@@ -502,10 +500,84 @@ func FatalNoTrace(ctx context.Context, msg any, args ...any) {
 		"",
 		"{{_FatalFooter_}}Please let the dev know of this error.",
 	}
-	logAt(ctx, time.Now(), LevelFatal, output, args...)
+	now := time.Now()
+	logAt(ctx, now, LevelFatal, output, args...)
+
+	// Write to fatal log file
+	writeFatalLog(ctx, now, output, args...)
+
 	panic(FatalError{})
+}
+
+// writeFatalLog writes the resolved message to a separate fatal log file
+func writeFatalLog(ctx context.Context, t time.Time, msg any, args ...any) {
+	cacheDir := paths.GetCacheDir()
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		return
+	}
+
+	appName := strings.ToLower(version.ApplicationName)
+	fatalLogPath := filepath.Join(cacheDir, appName+".fatal.log")
+
+	// Explicitly truncate the file to ensure we only have the latest fatal error
+	f, err := os.OpenFile(fatalLogPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create fatal log file: %v\n", err)
+		return
+	}
+	defer f.Close()
+
+	msgStr := resolveMsg(msg)
+	if len(args) > 0 && strings.Contains(msgStr, "%") {
+		msgStr = fmt.Sprintf(msgStr, args...)
+	}
+
+	lines := strings.Split(msgStr, "\n")
+	for _, line := range lines {
+		// Just write plain text
+		// We'll leave the tags in for now as they are semantic and might be useful
+		// until a StripTags function is available.
+		fmt.Fprintln(f, line)
+	}
 }
 
 // FatalError is a special error used to panic from Fatal logger calls
 // This allows the main run loop to recover and perform cleanup before exiting
 type FatalError struct{}
+
+// Cleanup performs final logging tasks, such as truncating the log file.
+func Cleanup() {
+	cacheDir := paths.GetCacheDir()
+	appName := strings.ToLower(version.ApplicationName)
+	logFilePath := filepath.Join(cacheDir, appName+".log")
+	truncateLogFile(logFilePath, 1000)
+}
+
+// truncateLogFile keeps the last N lines of the file at path
+func truncateLogFile(path string, limit int) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return // File likely doesn't exist, which is fine
+	}
+
+	lines := strings.Split(string(content), "\n")
+	if len(lines) <= limit {
+		return // No need to truncate
+	}
+
+	// Keep last limit lines
+	// Note: Split often results in a trailing empty string if file ends with newline
+	// We should be careful.
+	// If the file ends with \n, the last element is empty.
+	// Let's just take the last limit.
+
+	start := len(lines) - limit
+	keptLines := lines[start:]
+
+	output := strings.Join(keptLines, "\n")
+
+	// Rewrite file
+	if err := os.WriteFile(path, []byte(output), 0666); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to rotate log file: %v\n", err)
+	}
+}

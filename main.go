@@ -66,4 +66,5 @@ func run() (exitCode int) {
 
 func cleanup(ctx context.Context) {
 	logger.Info(ctx, "Cleaning up...")
+	logger.Cleanup()
 }
