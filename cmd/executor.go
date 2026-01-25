@@ -154,9 +154,9 @@ func handleVersion(ctx context.Context) {
 }
 
 func handleInstall(ctx context.Context, group *CommandGroup, state *CmdState) {
-	logger.Warn(ctx, fmt.Sprintf("The '{{_UserCommand_}}%s{{|-|}}' command is deprecated.", group.Command))
+	logger.Warn(ctx, fmt.Sprintf("The '{{_UserCommand_}}%s{{|-|}}' command is deprecated. The only dependency is '{{_UserCommand_}}docker{{|-|}}'.", group.Command))
 	if state.Force {
-		logger.Notice(ctx, "Force flag detected in installation stub.")
+		logger.Notice(ctx, "Force flag ignored.")
 	}
 }
 
