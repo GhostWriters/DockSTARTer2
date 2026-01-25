@@ -37,6 +37,15 @@ var (
 	panels              *cview.Panels
 	menuSelectedIndices = make(map[string]int)
 	rightView           *cview.TextView
+
+	// Drag state
+	dragState struct {
+		dragging bool
+		startX   int
+		startY   int
+		offsetX  int
+		offsetY  int
+	}
 )
 
 // Helper to set title with auto-translation
@@ -91,8 +100,20 @@ func WrapInDialogFrame(title string, text string, content cview.Primitive, conte
 	innerFlex.SetBorder(false)
 	innerFlex.SetTitle("")
 
+	// Title Frame (3 rows for dragging)
+	titleFrame := cview.NewTextView()
+	// Use {{_ThemeTitle_}} to match the theme's Title color/style preference
+	titleFrame.SetText(console.Translate("{{_ThemeTitle_}}" + title + "{{|-|}}"))
+	titleFrame.SetTextAlign(cview.AlignCenter)
+	titleFrame.SetBackgroundColor(theme.Current.TitleBG)
+	titleFrame.SetTextColor(theme.Current.TitleFG)
+	titleFrame.SetDynamicColors(true)
+	disableFocus(titleFrame.Box)
+
 	// Spacers for ThreeDBox border rows
 	innerFlex.AddItem(makeSpacer(), 1, 0, false) // Row 0 (Border)
+	innerFlex.AddItem(titleFrame, 1, 0, false)   // Row 1 (Title Text)
+	innerFlex.AddItem(makeSpacer(), 1, 0, false) // Row 2 (Title Separator)
 	innerFlex.AddItem(makePaddedFlex(textView, false), 1, 0, false)
 	innerFlex.AddItem(makePaddedFlex(content, true), 0, 1, true)
 	innerFlex.AddItem(makeSpacer(), 1, 0, false) // Row for Separator Line
@@ -111,13 +132,13 @@ func WrapInDialogFrame(title string, text string, content cview.Primitive, conte
 		DialogBG:    dialogBgColor,
 		DrawBorders: currentConfig.Borders,
 		SeparatorDy: 3,
-		TitlePlain:  fmt.Sprintf(" %s ", title),
+		TitlePlain:  "", // Title now in frame, not border
 		TitleStyle:  titleStyle,
 	}
 
-	// Dialog Dimensions
+	// Dialog Dimensions (title frame adds 3 rows)
 	dialogWidth := contentWidth + 4
-	dialogHeight := contentHeight + 7
+	dialogHeight := contentHeight + 9 // +3 for title frame, +6 for other UI elements
 
 	// Centering Grid
 	grid := cview.NewGrid()
@@ -144,7 +165,10 @@ func WrapInDialogFrame(title string, text string, content cview.Primitive, conte
 
 	grid.AddItem(threeDBox, 1, 1, 2, 2, 0, 0, true)
 
-	return grid
+	// Wrap in draggable grid for mouse drag support
+	draggableGrid := NewDraggableGrid(grid, dialogWidth, dialogHeight)
+
+	return draggableGrid
 }
 
 // NewMenuDialog creates a centered dialog with a menu list
@@ -518,6 +542,30 @@ func (d *ThreeDBox) Draw(screen tcell.Screen) {
 		for i, r := range d.TitlePlain {
 			screen.SetContent(titleX+i, y, r, nil, d.TitleStyle)
 		}
+	}
+
+	// Title separator line (at row 2: immediately below title text)
+	titleSepY := y + 2
+	if titleSepY < y+height-1 {
+		horiz := cview.Borders.Horizontal
+
+		// Styles
+		borderStyle := tcell.StyleDefault.Foreground(theme.Current.BorderFG).Background(d.DialogBG)
+		shadowStyle := tcell.StyleDefault.Foreground(d.Border2FG).Background(d.DialogBG)
+
+		leftT := cview.Borders.LeftT
+		rightT := cview.Borders.RightT
+
+		// Draw T-junction on left (Standard Border Color)
+		screen.SetContent(x, titleSepY, leftT, nil, borderStyle)
+
+		// Draw horizontal line (Shadow Color for 3D effect)
+		for dx := 1; dx < width-1; dx++ {
+			screen.SetContent(x+dx, titleSepY, horiz, nil, shadowStyle)
+		}
+
+		// Draw T-junction on right (Shadow Color)
+		screen.SetContent(x+width-1, titleSepY, rightT, nil, shadowStyle)
 	}
 
 	// Separator
