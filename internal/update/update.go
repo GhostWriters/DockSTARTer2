@@ -254,7 +254,7 @@ func installUpdate(ctx context.Context, assetURL string) error {
 	// 5. Replace
 	// Try direct rename first (fast, works if writable)
 	// We rename current to .old just in case (though Linux overwrites active files fine usually, Windows does not)
-	// On Windows, we can't overwrite running exe. DockerSTARTer logic was usually Linux-centric but we are in Go now.
+	// On Windows, we can't overwrite running exe. DockSTARTer logic was usually Linux-centric but we are in Go now.
 	// selfupdate library usually handles this by rename.
 
 	// We will try to mv tmpExe -> exe

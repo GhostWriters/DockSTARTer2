@@ -341,13 +341,13 @@ func GetUsage(target string) string {
 	if match("-u", "--update", "--update-app", "--update-templates") {
 		printStr(
 			"{{_UsageCommand_}}-u --update{{|-|}}",
-			"	Update {{_ApplicationName_}}DockSTARTer{{|-|}} using GitHub Releases and {{_ApplicationName_}}DockSTARTer-Templates{{|-|}} using git.",
+			fmt.Sprintf("	Update {{_ApplicationName_}}%s{{|-|}} using GitHub Releases and {{_ApplicationName_}}DockSTARTer-Templates{{|-|}} using git.", appName),
 			"{{_UsageCommand_}}-u --update{{|-|}} {{_UsageBranch_}}<AppVersionOrChannel>{{|-|}} {{_UsageBranch_}}<TemplateBranch>{{|-|}}",
 			"	Update to specific versions. <AppVersionOrChannel> can be a version like 'v2.0.0.1' or a channel like 'testing'.",
 			"{{_UsageCommand_}}--update-app{{|-|}}",
-			"	Update {{_ApplicationName_}}DockSTARTer{{|-|}} only.",
+			fmt.Sprintf("	Update {{_ApplicationName_}}%s{{|-|}} only.", appName),
 			"{{_UsageCommand_}}--update-app{{|-|}} {{_UsageBranch_}}<AppVersionOrChannel>{{|-|}}",
-			"	Update {{_ApplicationName_}}DockSTARTer{{|-|}} to the specified version or channel.",
+			fmt.Sprintf("	Update {{_ApplicationName_}}%s{{|-|}} to the specified version or channel.", appName),
 			"{{_UsageCommand_}}--update-templates{{|-|}}",
 			"	Update {{_ApplicationName_}}DockSTARTer-Templates{{|-|}} only.",
 			"{{_UsageCommand_}}--update-templates{{|-|}} {{_UsageBranch_}}<TemplateBranch>{{|-|}}",

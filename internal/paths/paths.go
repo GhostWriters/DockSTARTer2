@@ -25,7 +25,7 @@ func GetConfigFilePath() string {
 }
 
 // GetTemplatesDir returns the absolute path to the DockSTARTer-Templates repository.
-// It uses xdg.StateHome (e.g., %LOCALAPPDATA% on Windows) with a dockstarter subfolder.
+// It uses xdg.StateHome (e.g., %LOCALAPPDATA% on Windows) with a dockstarter2 subfolder.
 func GetTemplatesDir() string {
 	appName := strings.ToLower(version.ApplicationName)
 	return filepath.Join(xdg.StateHome, appName, "templates", "DockSTARTer-Templates")
@@ -80,13 +80,13 @@ func GetTemplatesVersion() string {
 	return fmt.Sprintf("%s commit %s", branchName, hash)
 }
 
-// GetCacheDir returns the absolute path to the dockstarter cache directory.
+// GetCacheDir returns the absolute path to the dockstarter2 cache directory.
 func GetCacheDir() string {
 	appName := strings.ToLower(version.ApplicationName)
 	return filepath.Join(xdg.CacheHome, appName)
 }
 
-// GetConfigDir returns the absolute path to the dockstarter configuration directory.
+// GetConfigDir returns the absolute path to the dockstarter2 configuration directory.
 func GetConfigDir() string {
 	return filepath.Dir(GetConfigFilePath())
 }
@@ -96,7 +96,7 @@ func GetThemesDir() string {
 	return filepath.Join(GetStateDir(), "themes")
 }
 
-// GetStateDir returns the absolute path to the dockstarter state directory.
+// GetStateDir returns the absolute path to the dockstarter2 state directory.
 func GetStateDir() string {
 	appName := strings.ToLower(version.ApplicationName)
 	return filepath.Join(xdg.StateHome, appName)

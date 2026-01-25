@@ -42,8 +42,6 @@ func (e *ParseError) Error() string {
 	// Join parts and wrap in single quotes as a whole visual unit (bash style)
 	// bash: 'previous parts failing_part'
 	cmdLineStr := "'" + strings.Join(cmdLineParts, " ") + "'"
-
-	// Calculate offset for the pointer
 	// Indent + ' + ds2 + space + previous args + spaces
 	caretOffset := len(indent) + 1 + len(version.CommandName) + 1 // "   " + "'" + "ds2" + " "
 	for i := 0; i < e.Index && i < len(e.Args); i++ {
