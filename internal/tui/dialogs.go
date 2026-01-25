@@ -42,17 +42,17 @@ func Message(title, message string) {
 
 // Success displays a success message with the appropriate title color.
 func Success(title, message string) {
-	Message("[_Notice_]"+title, message)
+	Message("{{_Notice_}}"+title, message)
 }
 
 // Warning displays a warning message with the appropriate title color.
 func Warning(title, message string) {
-	Message("[_Warn_]"+title, message)
+	Message("{{_Warn_}}"+title, message)
 }
 
 // Error displays an error message with the appropriate title color.
 func Error(title, message string) {
-	Message("[_Error_]"+title, message)
+	Message("{{_Error_}}"+title, message)
 }
 
 // Confirm displays a Yes/No dialog and returns the user's choice.
@@ -93,7 +93,7 @@ func Confirm(title, question string, defaultYes bool) bool {
 		content := cview.NewBox()
 		content.SetBackgroundColor(theme.Current.DialogBG)
 
-		dialog := WrapInDialogFrame("[_Notice_]"+title, question, content, 40, 0, nil, buttonsFlex)
+		dialog := WrapInDialogFrame("{{_Notice_}}"+title, question, content, 40, 0, nil, buttonsFlex)
 		panels.AddPanel("confirm", dialog, true, true)
 
 		if defaultYes {

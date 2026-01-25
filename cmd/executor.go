@@ -59,7 +59,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		for _, part := range group.FullSlice() {
 			cmdStr += " " + part
 		}
-		logger.Notice(ctx, fmt.Sprintf("[_ApplicationName_]%s[-] command: '[_UserCommand_]%s[-]'", version.ApplicationName, cmdStr))
+		logger.Notice(ctx, fmt.Sprintf("{{_ApplicationName_}}%s{{|-|}} command: '{{_UserCommand_}}%s{{|-|}}'", version.ApplicationName, cmdStr))
 
 		// Log execution arguments for verification
 		logger.Debug(ctx, fmt.Sprintf("Execution Args -> State: %+v, Command: %v, Rest: %v", state, fullCmd, restArgs))
@@ -76,11 +76,11 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				ranCommand = true
 			case "-V", "--version":
 				// Version Info
-				logger.Display(subCtx, fmt.Sprintf("[_ApplicationName_]%s[-] [[_Version_]%s[-]]", version.ApplicationName, version.Version))
-				logger.Display(subCtx, fmt.Sprintf("[_ApplicationName_]DockSTARTer-Templates[-] [[_Version_]%s[-]]", paths.GetTemplatesVersion()))
+				logger.Display(subCtx, fmt.Sprintf("{{_ApplicationName_}}%s{{|-|}} [{{_Version_}}%s{{|-|}}]", version.ApplicationName, version.Version))
+				logger.Display(subCtx, fmt.Sprintf("{{_ApplicationName_}}DockSTARTer-Templates{{|-|}} [{{_Version_}}%s{{|-|}}]", paths.GetTemplatesVersion()))
 				ranCommand = true
 			case "-i", "--install":
-				logger.Warn(subCtx, fmt.Sprintf("The '[_UserCommand_]%s[-]' command is deprecated.", group.Command))
+				logger.Warn(subCtx, fmt.Sprintf("The '{{_UserCommand_}}%s{{|-|}}' command is deprecated.", group.Command))
 				if state.Force {
 					logger.Notice(subCtx, "Force flag detected in installation stub.")
 				}
@@ -136,7 +136,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 					themesDir := paths.GetThemesDir()
 					themePath := filepath.Join(themesDir, newTheme)
 					if _, err := os.Stat(themePath); os.IsNotExist(err) {
-						logger.Error(subCtx, "Theme '[_Theme_]%s[-]' not found in '[_Folder_]%s[-]'.", newTheme, themesDir)
+						logger.Error(subCtx, "Theme '{{_Theme_}}%s{{|-|}}' not found in '{{_Folder_}}%s{{|-|}}'.", newTheme, themesDir)
 						return nil
 					}
 
@@ -144,14 +144,14 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 					if err := config.SaveGUIConfig(conf); err != nil {
 						logger.Error(subCtx, "Failed to save theme setting: %v", err)
 					} else {
-						logger.Notice(subCtx, "Theme updated to: [_Theme_]%s[-]", newTheme)
+						logger.Notice(subCtx, "Theme updated to: {{_Theme_}}%s{{|-|}}", newTheme)
 						// Reload theme for subsequent commands in the same execution
 						_ = theme.Load(newTheme)
 					}
 				} else {
 					// No args? Show current theme
-					logger.Notice(subCtx, "Current theme is: [_Theme_]%s[-]", conf.Theme)
-					logger.Notice(subCtx, "Run '[_UserCommand_]%s --theme-list[-]' to see available themes.", version.CommandName)
+					logger.Notice(subCtx, "Current theme is: {{_Theme_}}%s{{|-|}}", conf.Theme)
+					logger.Notice(subCtx, "Run '{{_UserCommand_}}%s --theme-list{{|-|}}' to see available themes.", version.CommandName)
 				}
 				ranCommand = true
 			case "--theme-list":
@@ -176,9 +176,9 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				}
 
 				if len(themes) == 0 {
-					logger.Warn(subCtx, "No themes found in '[_Folder_]%s[-]'.", themesDir)
+					logger.Warn(subCtx, "No themes found in '{{_Folder_}}%s{{|-|}}'.", themesDir)
 				} else {
-					logger.Notice(subCtx, "Available themes in '[_Folder_]%s[-]':", themesDir)
+					logger.Notice(subCtx, "Available themes in '{{_Folder_}}%s{{|-|}}':", themesDir)
 					for _, t := range themes {
 						logger.Notice(subCtx, "  - %s", t)
 					}
@@ -200,7 +200,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				"--env-appvars", "--env-appvars-lines",
 				"--env-get", "--env-get-line", "--env-get-literal", "--env-get-lower", "--env-get-lower-line", "--env-get-lower-literal",
 				"--env-set", "--env-set-lower":
-				logger.FatalNoTrace(subCtx, "The '[_UserCommand_]%s[-]' command is not implemented yet.", group.Command)
+				logger.FatalNoTrace(subCtx, "The '{{_UserCommand_}}%s{{|-|}}' command is not implemented yet.", group.Command)
 			case "--theme-lines", "--theme-no-lines", "--theme-line", "--theme-no-line",
 				"--theme-borders", "--theme-no-borders", "--theme-border", "--theme-no-border",
 				"--theme-shadows", "--theme-no-shadows", "--theme-shadow", "--theme-no-shadow",

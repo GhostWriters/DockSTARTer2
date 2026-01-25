@@ -37,7 +37,7 @@ func run() (exitCode int) {
 			}
 		}
 		if exitCode != 0 {
-			fmt.Fprintln(os.Stderr, console.Parse(fmt.Sprintf("[_ApplicationName_]%s[-] did not finish running successfully.", version.ApplicationName)))
+			fmt.Fprintln(os.Stderr, console.Parse(fmt.Sprintf("{{_ApplicationName_}}%s{{|-|}} did not finish running successfully.", version.ApplicationName)))
 		}
 	}()
 

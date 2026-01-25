@@ -119,26 +119,26 @@ func Load(themeName string) error {
 // Apply updates the global console.Colors with theme-specific tags
 func Apply() {
 	// 1. Register component tags from Current config (Defaults)
-	// This maps the struct fields (colors) to tags like [_ThemeScreen_]
+	// This maps the struct fields (colors) to tags like {{_ThemeScreen_}}
 	updateTagsFromCurrent()
 
 	// 2. Map theme.ini fields to themed tags (NOT overwriting global console.Colors)
-	// This ensures that when Translate("[_Notice_]") is called in TUI, it uses the theme color.
+	// This ensures that when Translate("{{_Notice_}}") is called in TUI, it uses the theme color.
 	for themeKey, consoleField := range themeToConsoleMap {
-		themeTag := "[_Theme" + themeKey + "_]"
+		themeTag := "{{_Theme" + themeKey + "_}}"
 		// Eagerly resolve the theme tag to its actual cview tag
 		resolved := console.Translate(themeTag)
-		console.RegisterColor("_"+consoleField+"_", resolved)
+		console.RegisterSemanticTag(consoleField, resolved)
 	}
 
 	// Re-register tags in console to reflect changes
 	console.RegisterBaseTags()
 	console.BuildColorMap()
 
-	// Register _ThemeReset_ AFTER all other tags are loaded
+	// Register ThemeReset AFTER all other tags are loaded
 	// We check if "VersionBrackets" uses Reverse. If so, we must invert our colors
-	// because the Reverse flag is sticky and we cannot use [-] to clear it (causes black flash).
-	bracketsDef := console.GetColorDefinition("_ThemeApplicationVersionBrackets_")
+	// because the Reverse flag is sticky and we cannot use {{_-_}} to clear it (causes black flash).
+	bracketsDef := console.GetColorDefinition("ThemeApplicationVersionBrackets")
 	isReversed := strings.Contains(bracketsDef, ":r") || strings.Contains(bracketsDef, "reverse")
 
 	bgStr := GetColorStr(Current.ScreenBG)
@@ -150,10 +150,10 @@ func Apply() {
 		// inherit the stable background.
 		// Solution: Set BOTH to ScreenBG. Results in invisible text for the gap (Silver on Silver),
 		// but ensures the Next tag sees "BG=Silver", so "Blue on Silver" reversed becomes "Silver on Blue".
-		console.RegisterColor("_ThemeReset_", "["+bgStr+":"+bgStr+"]")
+		console.RegisterSemanticTag("ThemeReset", "["+bgStr+":"+bgStr+"]")
 	} else {
 		// Normal: Set FG/BG normally.
-		console.RegisterColor("_ThemeReset_", "["+fgStr+":"+bgStr+"]")
+		console.RegisterSemanticTag("ThemeReset", "["+fgStr+":"+bgStr+"]")
 	}
 
 	// 3. Update global cview styles to match theme globals
@@ -165,7 +165,7 @@ func updateTagsFromCurrent() {
 		fgName := GetColorStr(fg)
 		bgName := GetColorStr(bg)
 		tag := "[" + fgName + ":" + bgName + "]"
-		console.RegisterColor("_Theme"+name+"_", tag)
+		console.RegisterSemanticTag("Theme"+name, tag)
 	}
 
 	regComp("Screen", Current.ScreenFG, Current.ScreenBG)
@@ -183,9 +183,9 @@ func updateTagsFromCurrent() {
 	regComp("Item", Current.ItemFG, Current.ItemBG)
 	regComp("Tag", Current.TagFG, Current.TagBG)
 
-	console.RegisterColor("_ThemeTagKey_", "["+GetColorStr(Current.TagKeyFG)+"]")
-	console.RegisterColor("_ThemeTagKeySelected_", "["+GetColorStr(Current.TagKeySelectedFG)+"]")
-	console.RegisterColor("_ThemeShadow_", "["+GetColorStr(Current.ShadowColor)+"]")
+	console.RegisterSemanticTag("ThemeTagKey", "["+GetColorStr(Current.TagKeyFG)+"]")
+	console.RegisterSemanticTag("ThemeTagKeySelected", "["+GetColorStr(Current.TagKeySelectedFG)+"]")
+	console.RegisterSemanticTag("ThemeShadow", "["+GetColorStr(Current.ShadowColor)+"]")
 }
 
 func updateStyles() {
@@ -225,16 +225,16 @@ func Default() {
 	Apply()
 
 	// Register basic theme fallbacks to prevent literal tags if theme files fail to load
-	console.RegisterColor("_ThemeApplicationName_", "[::b]")
-	console.RegisterColor("_ThemeApplicationVersion_", "[-]")
-	console.RegisterColor("_ThemeApplicationVersionBrackets_", "[-]")
-	console.RegisterColor("_ThemeApplicationVersionSpace_", "[_ThemeScreen_] ")
-	console.RegisterColor("_ThemeApplicationFlags_", "[-]")
-	console.RegisterColor("_ThemeApplicationFlagsBrackets_", "[-]")
-	console.RegisterColor("_ThemeApplicationFlagsSpace_", "[_ThemeScreen_] ")
-	console.RegisterColor("_ThemeApplicationUpdate_", "[yellow]")
-	console.RegisterColor("_ThemeApplicationUpdateBrackets_", "[-]")
-	console.RegisterColor("_ThemeHostname_", "[::b]")
+	console.RegisterSemanticTag("ThemeApplicationName", "[::b]")
+	console.RegisterSemanticTag("ThemeApplicationVersion", "[-]")
+	console.RegisterSemanticTag("ThemeApplicationVersionBrackets", "[-]")
+	console.RegisterSemanticTag("ThemeApplicationVersionSpace", console.ToTview("{{_ThemeScreen_}}")+" ")
+	console.RegisterSemanticTag("ThemeApplicationFlags", "[-]")
+	console.RegisterSemanticTag("ThemeApplicationFlagsBrackets", "[-]")
+	console.RegisterSemanticTag("ThemeApplicationFlagsSpace", console.ToTview("{{_ThemeScreen_}}")+" ")
+	console.RegisterSemanticTag("ThemeApplicationUpdate", "[yellow]")
+	console.RegisterSemanticTag("ThemeApplicationUpdateBrackets", "[-]")
+	console.RegisterSemanticTag("ThemeHostname", "[::b]")
 }
 
 func parseColor(c string) tcell.Color {
@@ -309,11 +309,14 @@ func parseThemeINI(path string) error {
 		// Expand app name if present
 		expanded := replacer.Replace(val)
 
-		// 1. Directly register the value as the tag (Legacy behavior + Custom overrides)
-		console.RegisterColor("_Theme"+key+"_", expanded)
+		// Convert {{|code|}} format to tview [code] format
+		tviewValue := console.ToTview(expanded)
+
+		// 1. Register the tview-format value as the tag
+		console.RegisterSemanticTag("Theme"+key, tviewValue)
 
 		// 2. Map known keys to Current struct fields
-		fg, bg := parseTagToColor(expanded)
+		fg, bg := parseTagToColor(tviewValue)
 		switch key {
 		case "Screen":
 			Current.ScreenFG, Current.ScreenBG = fg, bg
@@ -364,23 +367,23 @@ func parseThemeINI(path string) error {
 
 	// Map theme.ini fields to themed tags
 	for themeKey, consoleField := range themeToConsoleMap {
-		themeTag := "[_Theme" + themeKey + "_]"
+		themeTag := "{{_Theme" + themeKey + "_}}"
 		resolved := console.Translate(themeTag)
-		console.RegisterColor("_"+consoleField+"_", resolved)
+		console.RegisterSemanticTag(consoleField, resolved)
 	}
 
 	console.RegisterBaseTags()
 	console.BuildColorMap()
 
-	bracketsDef := console.GetColorDefinition("_ThemeApplicationVersionBrackets_")
+	bracketsDef := console.GetColorDefinition("ThemeApplicationVersionBrackets")
 	isReversed := strings.Contains(bracketsDef, ":r") || strings.Contains(bracketsDef, "reverse")
 	bgStr := GetColorStr(Current.ScreenBG)
 	fgStr := GetColorStr(Current.ScreenFG)
 
 	if isReversed {
-		console.RegisterColor("_ThemeReset_", "["+bgStr+":"+bgStr+"]")
+		console.RegisterSemanticTag("ThemeReset", "["+bgStr+":"+bgStr+"]")
 	} else {
-		console.RegisterColor("_ThemeReset_", "["+fgStr+":"+bgStr+"]")
+		console.RegisterSemanticTag("ThemeReset", "["+fgStr+":"+bgStr+"]")
 	}
 
 	return nil

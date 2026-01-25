@@ -101,7 +101,7 @@ func WrapInDialogFrame(title string, text string, content cview.Primitive, conte
 
 	// Wrap in ThreeDBox
 	titleStyle := tcell.StyleDefault.Foreground(theme.Current.TitleFG).Background(theme.Current.TitleBG)
-	if strings.Contains(console.Translate("[_ThemeTitle_]"), ":u") {
+	if strings.Contains(console.Translate("{{_ThemeTitle_}}"), ":u") {
 		titleStyle = titleStyle.Underline(true)
 	}
 
@@ -681,7 +681,7 @@ func initLayout() {
 	centerView.SetTextAlign(cview.AlignCenter)
 
 	hostname, _ := os.Hostname()
-	leftText := "[_ThemeHostname_]" + hostname + " [-]"
+	leftText := "{{_ThemeHostname_}}" + hostname + " {{|-|}}"
 	var flags []string
 	if v, _ := pflag.CommandLine.GetBool("verbose"); v {
 		flags = append(flags, "VERBOSE")
@@ -696,18 +696,18 @@ func initLayout() {
 		flags = append(flags, "YES")
 	}
 	if len(flags) > 0 {
-		leftText += " [_ThemeApplicationFlagsBrackets_]|[-]"
+		leftText += " {{_ThemeApplicationFlagsBrackets_}}|{{|-|}}"
 		for i, f := range flags {
 			if i > 0 {
-				leftText += "[_ThemeApplicationFlagsSpace_]|[-]"
+				leftText += "{{_ThemeApplicationFlagsSpace_}}|{{|-|}}"
 			}
-			leftText += "[_ThemeApplicationFlags_]" + f + "[-]"
+			leftText += "{{_ThemeApplicationFlags_}}" + f + "{{|-|}}"
 		}
-		leftText += "[_ThemeApplicationFlagsBrackets_]|[-]"
+		leftText += "{{_ThemeApplicationFlagsBrackets_}}|{{|-|}}"
 	}
 	leftView.SetText(console.Translate(leftText))
 
-	centerView.SetText(console.Translate("[_ThemeApplicationName_]" + version.ApplicationName + "[-]"))
+	centerView.SetText(console.Translate("{{_ThemeApplicationName_}}" + version.ApplicationName + "{{|-|}}"))
 
 	rightView = cview.NewTextView()
 	rightView.SetDynamicColors(true)
@@ -771,25 +771,25 @@ func refreshHeader() {
 
 	// App Update Flag
 	appUpdateFlag := " "
-	appVerTag := "[_ThemeApplicationVersion_]"
+	appVerTag := "{{_ThemeApplicationVersion_}}"
 	if update.AppUpdateAvailable {
-		appUpdateFlag = "[_ThemeApplicationUpdate_]*[_ThemeReset_]"
-		appVerTag = "[_ThemeApplicationUpdate_]"
+		appUpdateFlag = "{{_ThemeApplicationUpdate_}}*{{_ThemeReset_}}"
+		appVerTag = "{{_ThemeApplicationUpdate_}}"
 	}
 
 	// Templates Update Flag
 	tmplUpdateFlag := " "
-	tmplVerTag := "[_ThemeApplicationVersion_]"
+	tmplVerTag := "{{_ThemeApplicationVersion_}}"
 	if update.TmplUpdateAvailable {
-		tmplUpdateFlag = "[_ThemeApplicationUpdate_]*[_ThemeReset_]"
-		tmplVerTag = "[_ThemeApplicationUpdate_]"
+		tmplUpdateFlag = "{{_ThemeApplicationUpdate_}}*{{_ThemeReset_}}"
+		tmplVerTag = "{{_ThemeApplicationUpdate_}}"
 	}
 
 	// Structure: [Flag][Brackets]A:[Version[Brackets]]
-	appText := fmt.Sprintf("%s[_ThemeApplicationVersionBrackets_]A:[%s%s[_ThemeApplicationVersionBrackets_]]", appUpdateFlag, appVerTag, appVer)
-	tmplText := fmt.Sprintf("%s[_ThemeApplicationVersionBrackets_]T:[%s%s[_ThemeApplicationVersionBrackets_]]", tmplUpdateFlag, tmplVerTag, tmplVer)
+	appText := fmt.Sprintf("%s{{_ThemeApplicationVersionBrackets_}}A:[%s%s{{_ThemeApplicationVersionBrackets_}}]", appUpdateFlag, appVerTag, appVer)
+	tmplText := fmt.Sprintf("%s{{_ThemeApplicationVersionBrackets_}}T:[%s%s{{_ThemeApplicationVersionBrackets_}}]", tmplUpdateFlag, tmplVerTag, tmplVer)
 
-	fullText := appText + "[_ThemeApplicationVersionSpace_]" + tmplText
+	fullText := appText + "{{_ThemeApplicationVersionSpace_}}" + tmplText
 
 	rightView.SetText(console.Translate(fullText))
 }

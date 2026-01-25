@@ -34,6 +34,7 @@ const (
 )
 
 // AppColors defines the struct for program-wide colors/styles
+// Values are stored in tview tag format (e.g., "[cyan::b]")
 type AppColors struct {
 	// Base Codes
 	Reset     string
@@ -120,11 +121,10 @@ type AppColors struct {
 var Colors AppColors
 
 func init() {
-	// IMPORTANT: ALWAYS initialize color definitions, regardless of TTY status
-	// The TTY check should only affect whether Parse outputs ANSI codes, not whether colors are defined
-	// This is crucial for cross-compilation (e.g., building on Windows for Linux)
+	// Initialize color definitions in tview tag format
+	// These are the OUTPUT format values that ToTview() will produce
 	Colors = AppColors{
-		// Base Codes (Mapped to cview-like tags for parsing)
+		// Base Codes (tview format)
 		Reset:     "[-]",
 		Bold:      "[::b]",
 		Dim:       "[::d]",
@@ -132,7 +132,7 @@ func init() {
 		Blink:     "[::l]",
 		Reverse:   "[::r]",
 
-		// Base Colors (Foreground - standard names)
+		// Base Colors (Foreground)
 		Black:   "[black]",
 		Red:     "[red]",
 		Green:   "[green]",
@@ -160,7 +160,7 @@ func init() {
 		Notice:                 "[green]",
 		Warn:                   "[yellow]",
 		Error:                  "[red]",
-		Fatal:                  "[white:red]", // Red BG, White Text
+		Fatal:                  "[white:red]",
 		FatalFooter:            "[-]",
 		TraceHeader:            "[red]",
 		TraceFooter:            "[red]",
@@ -207,94 +207,93 @@ func init() {
 	RegisterBaseTags()
 }
 
-// RegisterBaseTags registers all the semantic shorthands and aliases
-// that are used throughout the application.
+// RegisterBaseTags registers semantic tag aliases
+// These map semantic names to their tview-format output values
 func RegisterBaseTags() {
 	// Bash-style aliases from main.sh
-	RegisterColor("_NC_", "[-]")
-	RegisterColor("_BD_", "[::b]")
-	RegisterColor("_UL_", "[::u]")
-	RegisterColor("_DM_", "[::d]")
-	RegisterColor("_BL_", "[::l]")
+	RegisterSemanticTag("NC", "[-]")
+	RegisterSemanticTag("BD", "[::b]")
+	RegisterSemanticTag("UL", "[::u]")
+	RegisterSemanticTag("DM", "[::d]")
+	RegisterSemanticTag("BL", "[::l]")
 
 	// Existing shorthands
-	RegisterColor("_ul_", "[::u]")
-	RegisterColor("_blink_", "[::l]")
+	RegisterSemanticTag("ul", "[::u]")
+	RegisterSemanticTag("blink", "[::l]")
 
-	// These tags are automatically registered as [_fieldname_] by the parser's buildColorMap,
-	// but we double-register them here as aliases to ensure they are available in the aliasMap
-	// and to maintain explicit mapping for all semantic tags.
-	// IMPORTANT: Use lowercase to match BuildColorMap's strings.ToLower(field.Name) conversion!
-
-	RegisterColor("_applicationname_", Colors.ApplicationName)
-	RegisterColor("_version_", Colors.Version)
-	RegisterColor("_branch_", Colors.Branch)
-	RegisterColor("_usercommand_", Colors.UserCommand)
-	RegisterColor("_usercommanderror_", Colors.UserCommandError)
-	RegisterColor("_usercommanderrormarker_", Colors.UserCommandErrorMarker)
-	RegisterColor("_yes_", Colors.Yes)
-	RegisterColor("_no_", Colors.No)
+	// Semantic tags from struct fields (auto-registered by BuildColorMap)
+	// Double-register here for explicit visibility and aliasMap access
+	RegisterSemanticTag("applicationname", Colors.ApplicationName)
+	RegisterSemanticTag("version", Colors.Version)
+	RegisterSemanticTag("branch", Colors.Branch)
+	RegisterSemanticTag("usercommand", Colors.UserCommand)
+	RegisterSemanticTag("usercommanderror", Colors.UserCommandError)
+	RegisterSemanticTag("usercommanderrormarker", Colors.UserCommandErrorMarker)
+	RegisterSemanticTag("yes", Colors.Yes)
+	RegisterSemanticTag("no", Colors.No)
 
 	// Usage Colors
-	RegisterColor("_usagecommand_", Colors.UsageCommand)
-	RegisterColor("_usageoption_", Colors.UsageOption)
-	RegisterColor("_usageapp_", Colors.UsageApp)
-	RegisterColor("_usagebranch_", Colors.UsageBranch)
-	RegisterColor("_usagefile_", Colors.UsageFile)
-	RegisterColor("_usagepage_", Colors.UsagePage)
-	RegisterColor("_usagetheme_", Colors.UsageTheme)
-	RegisterColor("_usagevar_", Colors.UsageVar)
+	RegisterSemanticTag("usagecommand", Colors.UsageCommand)
+	RegisterSemanticTag("usageoption", Colors.UsageOption)
+	RegisterSemanticTag("usageapp", Colors.UsageApp)
+	RegisterSemanticTag("usagebranch", Colors.UsageBranch)
+	RegisterSemanticTag("usagefile", Colors.UsageFile)
+	RegisterSemanticTag("usagepage", Colors.UsagePage)
+	RegisterSemanticTag("usagetheme", Colors.UsageTheme)
+	RegisterSemanticTag("usagevar", Colors.UsageVar)
 
-	// Log Level Tags (Shorthands for logger consistency)
-	RegisterColor("_timestamp_", Colors.Timestamp)
-	RegisterColor("_notice_", Colors.Notice)
-	RegisterColor("_warn_", Colors.Warn)
-	RegisterColor("_error_", Colors.Error)
-	RegisterColor("_fatal_", Colors.Fatal)
-	RegisterColor("_debug_", Colors.Debug)
-	RegisterColor("_info_", Colors.Info)
-	RegisterColor("_trace_", Colors.Trace)
-	RegisterColor("_url_", Colors.URL)
+	// Log Level Tags
+	RegisterSemanticTag("timestamp", Colors.Timestamp)
+	RegisterSemanticTag("notice", Colors.Notice)
+	RegisterSemanticTag("warn", Colors.Warn)
+	RegisterSemanticTag("error", Colors.Error)
+	RegisterSemanticTag("fatal", Colors.Fatal)
+	RegisterSemanticTag("debug", Colors.Debug)
+	RegisterSemanticTag("info", Colors.Info)
+	RegisterSemanticTag("trace", Colors.Trace)
+	RegisterSemanticTag("url", Colors.URL)
 
-	// Missing Semantic Tags from main.sh
-	RegisterColor("_app_", Colors.App)
-	RegisterColor("_failingcommand_", Colors.FailingCommand)
-	RegisterColor("_file_", Colors.File)
-	RegisterColor("_folder_", Colors.Folder)
-	RegisterColor("_program_", Colors.Program)
-	RegisterColor("_runningcommand_", Colors.RunningCommand)
-	RegisterColor("_theme_", Colors.Theme)
-	RegisterColor("_update_", Colors.Update)
-	RegisterColor("_user_", Colors.User)
-	RegisterColor("_var_", Colors.Var)
+	// Additional Semantic Tags
+	RegisterSemanticTag("app", Colors.App)
+	RegisterSemanticTag("failingcommand", Colors.FailingCommand)
+	RegisterSemanticTag("file", Colors.File)
+	RegisterSemanticTag("folder", Colors.Folder)
+	RegisterSemanticTag("program", Colors.Program)
+	RegisterSemanticTag("runningcommand", Colors.RunningCommand)
+	RegisterSemanticTag("theme", Colors.Theme)
+	RegisterSemanticTag("update", Colors.Update)
+	RegisterSemanticTag("user", Colors.User)
+	RegisterSemanticTag("var", Colors.Var)
 
 	// Legacy Foreground Colors (F array in main.sh)
-	RegisterColor("_B_", Colors.Blue)
-	RegisterColor("_C_", Colors.Cyan)
-	RegisterColor("_G_", Colors.Green)
-	RegisterColor("_K_", Colors.Black)
-	RegisterColor("_M_", Colors.Magenta)
-	RegisterColor("_R_", Colors.Red)
-	RegisterColor("_W_", Colors.White)
-	RegisterColor("_Y_", Colors.Yellow)
+	RegisterSemanticTag("B", Colors.Blue)
+	RegisterSemanticTag("C", Colors.Cyan)
+	RegisterSemanticTag("G", Colors.Green)
+	RegisterSemanticTag("K", Colors.Black)
+	RegisterSemanticTag("M", Colors.Magenta)
+	RegisterSemanticTag("R", Colors.Red)
+	RegisterSemanticTag("W", Colors.White)
+	RegisterSemanticTag("Y", Colors.Yellow)
 
 	// Explicit F Array Aliases
-	RegisterColor("_F_B_", Colors.Blue)
-	RegisterColor("_F_C_", Colors.Cyan)
-	RegisterColor("_F_G_", Colors.Green)
-	RegisterColor("_F_K_", Colors.Black)
-	RegisterColor("_F_M_", Colors.Magenta)
-	RegisterColor("_F_R_", Colors.Red)
-	RegisterColor("_F_W_", Colors.White)
-	RegisterColor("_F_Y_", Colors.Yellow)
+	RegisterSemanticTag("F_B", Colors.Blue)
+	RegisterSemanticTag("F_C", Colors.Cyan)
+	RegisterSemanticTag("F_G", Colors.Green)
+	RegisterSemanticTag("F_K", Colors.Black)
+	RegisterSemanticTag("F_M", Colors.Magenta)
+	RegisterSemanticTag("F_R", Colors.Red)
+	RegisterSemanticTag("F_W", Colors.White)
+	RegisterSemanticTag("F_Y", Colors.Yellow)
 
 	// Legacy Background Colors (B array in main.sh)
-	RegisterColor("_B_B_", Colors.BlueBg)
-	RegisterColor("_B_C_", Colors.CyanBg)
-	RegisterColor("_B_G_", Colors.GreenBg)
-	RegisterColor("_B_K_", Colors.BlackBg)
-	RegisterColor("_B_M_", Colors.MagentaBg)
-	RegisterColor("_B_R_", Colors.RedBg)
-	RegisterColor("_B_W_", Colors.WhiteBg)
-	RegisterColor("_B_Y_", Colors.YellowBg)
+	RegisterSemanticTag("B_B", Colors.BlueBg)
+	RegisterSemanticTag("B_C", Colors.CyanBg)
+	RegisterSemanticTag("B_G", Colors.GreenBg)
+	RegisterSemanticTag("B_K", Colors.BlackBg)
+	RegisterSemanticTag("B_M", Colors.MagentaBg)
+	RegisterSemanticTag("B_R", Colors.RedBg)
+	RegisterSemanticTag("B_W", Colors.WhiteBg)
+	RegisterSemanticTag("B_Y", Colors.YellowBg)
+	// NOTE: Theme-related tags (ThemeHostname, ThemeTitle, etc.) are registered
+	// by the theme package in theme.go Default() and Apply() functions.
 }

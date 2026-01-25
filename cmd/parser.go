@@ -26,15 +26,15 @@ func (e *ParseError) Error() string {
 	var cmdLineParts []string
 
 	// Prepend "ds2" as the command text
-	cmdLineParts = append(cmdLineParts, fmt.Sprintf("[_UserCommand_]%s[-]", version.CommandName))
+	cmdLineParts = append(cmdLineParts, fmt.Sprintf("{{_UserCommand_}}%s{{_-_}}", version.CommandName))
 
 	for i := 0; i <= e.Index && i < len(e.Args); i++ {
 		str := e.Args[i]
 		if i == e.Index {
 			// Highlight failing option
-			str = fmt.Sprintf("[_UserCommandError_]%s[-]", str)
+			str = fmt.Sprintf("{{_UserCommandError_}}%s{{_-_}}", str)
 		} else {
-			str = fmt.Sprintf("[_UserCommand_]%s[-]", str)
+			str = fmt.Sprintf("{{_UserCommand_}}%s{{_-_}}", str)
 		}
 		cmdLineParts = append(cmdLineParts, str)
 	}
@@ -49,7 +49,7 @@ func (e *ParseError) Error() string {
 	for i := 0; i < e.Index && i < len(e.Args); i++ {
 		caretOffset += len(e.Args[i]) + 1 // arg + space
 	}
-	pointerLine := strings.Repeat(" ", caretOffset) + "[_UserCommandErrorMarker_]^[-]"
+	pointerLine := strings.Repeat(" ", caretOffset) + "{{_UserCommandErrorMarker_}}^{{_-_}}"
 
 	// Format Message
 	// Message might contain %c (command) or %o (option)
@@ -59,8 +59,8 @@ func (e *ParseError) Error() string {
 	}
 
 	// Bash uses UserCommand (yellow) for %c and %o in the message text itself
-	formattedCmd := fmt.Sprintf("'[_UserCommand_]%s[-]'", e.FailingCommand)
-	formattedOpt := fmt.Sprintf("'[_UserCommand_]%s[-]'", failingOpt)
+	formattedCmd := fmt.Sprintf("'{{_UserCommand_}}%s{{_-_}}'", e.FailingCommand)
+	formattedOpt := fmt.Sprintf("'{{_UserCommand_}}%s{{_-_}}'", failingOpt)
 
 	replacer := strings.NewReplacer(
 		"%c", formattedCmd,
@@ -81,7 +81,7 @@ func (e *ParseError) Error() string {
 			out += fmt.Sprintf("%s%s\n", indent, line)
 		}
 	} else {
-		out += fmt.Sprintf("\n%sRun '[_UserCommand_]%s --help[-]' for usage.\n", indent, version.CommandName)
+		out += fmt.Sprintf("\n%sRun '{{_UserCommand_}}%s --help{{_-_}}' for usage.\n", indent, version.CommandName)
 	}
 
 	return out

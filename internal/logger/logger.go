@@ -355,8 +355,8 @@ func getSystemInfo() []string {
 	var info []string
 
 	// App Info
-	info = append(info, fmt.Sprintf("[_ApplicationName_]%s[-] [[_Version_]%s[-]]", version.ApplicationName, version.Version))
-	info = append(info, fmt.Sprintf("[_ApplicationName_]DockSTARTer-Templates[-] [[_Version_]%s[-]]", paths.GetTemplatesVersion()))
+	info = append(info, fmt.Sprintf("{{_ApplicationName_}}%s{{|-|}} [{{_Version_}}%s{{|-|}}]", version.ApplicationName, version.Version))
+	info = append(info, fmt.Sprintf("{{_ApplicationName_}}DockSTARTer-Templates{{|-|}} [{{_Version_}}%s{{|-|}}]", paths.GetTemplatesVersion()))
 	info = append(info, "")
 
 	// Process Info
@@ -455,17 +455,17 @@ func Fatal(ctx context.Context, msg any, args ...any) {
 
 		// Create format string dynamically to pad frame number
 		// Note: We leave the tags in the string. logAt -> console.Parse will replace them.
-		fmtStr := fmt.Sprintf("%%s%%%dd[-]%%s %%s%%s%%s%%s:%%s%%d[-] (%%s%%s[-])", width)
+		fmtStr := fmt.Sprintf("%%s%%%dd{{|-|}}%%s %%s%%s%%s%%s:%%s%%d{{|-|}} (%%s%%s{{|-|}})", width)
 
 		line := fmt.Sprintf(
 			fmtStr,
-			"[_TraceFrameNumber_]", i,
+			"{{_TraceFrameNumber_}}", i,
 			":",
 			arrowIndent,
-			"[_TraceFrameLines_]"+suffix+"[-]",
-			"[_TraceSourceFile_]", frame.File,
-			"[_TraceLineNumber_]", frame.Line,
-			"[_TraceFunction_]", filepath.Base(frame.Function),
+			"{{_TraceFrameLines_}}"+suffix+"{{|-|}}",
+			"{{_TraceSourceFile_}}", frame.File,
+			"{{_TraceLineNumber_}}", frame.Line,
+			"{{_TraceFunction_}}", filepath.Base(frame.Function),
 		)
 
 		traceLines = append(traceLines, "  "+line)
@@ -477,16 +477,16 @@ func Fatal(ctx context.Context, msg any, args ...any) {
 	// 3. Assemble Final Output
 	// This provides a visual representation of the final log block structure
 	output := []any{
-		"[_TraceHeader_]### BEGIN SYSTEM INFORMATION AND STACK TRACE ###",
+		"{{_TraceHeader_}}### BEGIN SYSTEM INFORMATION AND STACK TRACE ###",
 		infoLines,
 		"", // Separator
 		traceLines,
-		"[_TraceFooter_]### END SYSTEM INFORMATION AND STACK TRACE ###",
+		"{{_TraceFooter_}}### END SYSTEM INFORMATION AND STACK TRACE ###",
 		"",
 		msg,
 		"",
-		"[_FatalFooter_]Please let the dev know of this error.",
-		"[_FatalFooter_]It has been written to [-]'[_File_]FATAL_LOG[-]'[_FatalFooter_], and appended to [-]'[_File_]APPLICATION_LOG[-]'[_FatalFooter_].",
+		"{{_FatalFooter_}}Please let the dev know of this error.",
+		"{{_FatalFooter_}}It has been written to {{|-|}}'{{_File_}}FATAL_LOG{{|-|}}'{{_FatalFooter_}}, and appended to {{|-|}}'{{_File_}}APPLICATION_LOG{{|-|}}'{{_FatalFooter_}}.",
 	}
 
 	// 4. Log Everything
@@ -500,7 +500,7 @@ func FatalNoTrace(ctx context.Context, msg any, args ...any) {
 	output := []any{
 		msg,
 		"",
-		"[_FatalFooter_]Please let the dev know of this error.",
+		"{{_FatalFooter_}}Please let the dev know of this error.",
 	}
 	logAt(ctx, time.Now(), LevelFatal, output, args...)
 	panic(FatalError{})
