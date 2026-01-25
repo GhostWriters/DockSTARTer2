@@ -13,15 +13,15 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 )
 
-// GetConfigFilePath returns the absolute path to the config.ini file.
-// It places it in a subdirectory named after the application (e.g., ~/.config/dockstarter2/config.ini).
+// GetConfigFilePath returns the absolute path to the dockstarter2.ini file.
+// It places it in a subdirectory named after the application (e.g., ~/.config/dockstarter2/dockstarter2.ini).
 func GetConfigFilePath() string {
 	appName := strings.ToLower(version.ApplicationName)
 	if runtime.GOOS == "darwin" {
 		home, _ := os.UserHomeDir()
-		return filepath.Join(home, ".config", appName, "config.ini")
+		return filepath.Join(home, ".config", appName, "dockstarter2.ini")
 	}
-	return filepath.Join(xdg.ConfigHome, appName, "config.ini")
+	return filepath.Join(xdg.ConfigHome, appName, "dockstarter2.ini")
 }
 
 // GetTemplatesDir returns the absolute path to the DockSTARTer-Templates repository.
