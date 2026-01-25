@@ -195,13 +195,13 @@ func NewLogger() *slog.Logger {
 	consoleHandler := tint.NewHandler(wStderr, consoleOpts)
 
 	// 2. Configure File Handler (No Color)
-	cacheDir := paths.GetCacheDir()
-	if err := os.MkdirAll(cacheDir, 0755); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create cache directory: %v\n", err)
+	stateDir := paths.GetStateDir()
+	if err := os.MkdirAll(stateDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create state directory: %v\n", err)
 	}
 
 	appName := strings.ToLower(version.ApplicationName)
-	logFilePath := filepath.Join(cacheDir, appName+".log")
+	logFilePath := filepath.Join(stateDir, appName+".log")
 
 	// Open file in Append mode
 	wFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
@@ -481,7 +481,7 @@ func Fatal(ctx context.Context, msg any, args ...any) {
 		msg,
 		"",
 		"{{_FatalFooter_}}Please let the dev know of this error.",
-		"{{_FatalFooter_}}It has been written to {{|-|}}'{{_File_}}" + filepath.Join(paths.GetCacheDir(), strings.ToLower(version.ApplicationName)+".fatal.log") + "{{|-|}}'{{_FatalFooter_}}, and appended to {{|-|}}'{{_File_}}" + filepath.Join(paths.GetCacheDir(), strings.ToLower(version.ApplicationName)+".log") + "{{|-|}}'{{_FatalFooter_}}.",
+		"{{_FatalFooter_}}It has been written to {{|-|}}'{{_File_}}" + filepath.Join(paths.GetStateDir(), strings.ToLower(version.ApplicationName)+".fatal.log") + "{{|-|}}'{{_FatalFooter_}}, and appended to {{|-|}}'{{_File_}}" + filepath.Join(paths.GetStateDir(), strings.ToLower(version.ApplicationName)+".log") + "{{|-|}}'{{_FatalFooter_}}.",
 	}
 
 	// 4. Log Everything
@@ -511,13 +511,13 @@ func FatalNoTrace(ctx context.Context, msg any, args ...any) {
 
 // writeFatalLog writes the resolved message to a separate fatal log file
 func writeFatalLog(ctx context.Context, t time.Time, msg any, args ...any) {
-	cacheDir := paths.GetCacheDir()
-	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+	stateDir := paths.GetStateDir()
+	if err := os.MkdirAll(stateDir, 0755); err != nil {
 		return
 	}
 
 	appName := strings.ToLower(version.ApplicationName)
-	fatalLogPath := filepath.Join(cacheDir, appName+".fatal.log")
+	fatalLogPath := filepath.Join(stateDir, appName+".fatal.log")
 
 	// Explicitly truncate the file to ensure we only have the latest fatal error
 	f, err := os.OpenFile(fatalLogPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
@@ -547,9 +547,9 @@ type FatalError struct{}
 
 // Cleanup performs final logging tasks, such as truncating the log file.
 func Cleanup() {
-	cacheDir := paths.GetCacheDir()
+	stateDir := paths.GetStateDir()
 	appName := strings.ToLower(version.ApplicationName)
-	logFilePath := filepath.Join(cacheDir, appName+".log")
+	logFilePath := filepath.Join(stateDir, appName+".log")
 	truncateLogFile(logFilePath, 1000)
 }
 
