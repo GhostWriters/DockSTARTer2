@@ -5,8 +5,6 @@ import (
 	"DockSTARTer2/internal/version"
 	"fmt"
 	"strings"
-
-	"github.com/spf13/pflag"
 )
 
 // PrintHelp prints usage information.
@@ -397,80 +395,4 @@ func GetUsage(target string) string {
 	}
 
 	return strings.TrimRight(sb.String(), "\n")
-}
-
-// InitFlags defines the pflags used for argument validation and help.
-func InitFlags() {
-	// Modifiers
-	pflag.BoolP("force", "f", false, "Force execution")
-	pflag.BoolP("gui", "g", false, "Show GUI")
-	pflag.BoolP("verbose", "v", false, "Verbose output")
-	pflag.BoolP("debug", "x", false, "Debug output")
-	pflag.BoolP("yes", "y", false, "Assume yes")
-	pflag.BoolP("help", "h", false, "Show help")
-
-	// App Management
-	pflag.StringP("add", "a", "", "Add application(s)")
-	pflag.StringP("remove", "r", "", "Remove application(s)")
-	pflag.StringP("select", "S", "", "Select apps (Application Selection menu)")
-	pflag.StringP("status", "s", "", "Application status")
-	pflag.String("status-enable", "", "Enable app(s)")
-	pflag.String("status-disable", "", "Disable app(s)")
-
-	// Listing
-	pflag.BoolP("list", "l", false, "List all apps")
-	pflag.Bool("list-added", false, "List added apps")
-	pflag.Bool("list-builtin", false, "List builtin apps")
-	pflag.Bool("list-deprecated", false, "List deprecated apps")
-	pflag.Bool("list-enabled", false, "List enabled apps")
-	pflag.Bool("list-disabled", false, "List disabled apps")
-	pflag.Bool("list-referenced", false, "List referenced apps")
-
-	// Docker Compose
-	pflag.StringP("compose", "c", "", "Docker Compose operations (up, down, pull, etc.)")
-	pflag.StringP("prune", "p", "", "Prune docker resources")
-
-	// Installation / Update
-	pflag.BoolP("install", "i", false, "Install/update dependencies")
-	pflag.StringP("update", "u", "", "Update DockSTARTer and Templates (can specify tag/branch)")
-	pflag.String("update-app", "", "Update DockSTARTer only (can specify tag)")
-	pflag.String("update-templates", "", "Update Templates only (can specify tag/branch)")
-	pflag.StringP("version", "V", "", "Show version")
-
-	// Environment Variables
-	pflag.BoolP("env", "e", false, "Update .env files")
-	pflag.String("env-appvars", "", "List variable names for app")
-	pflag.String("env-appvars-lines", "", "List variable lines for app")
-	pflag.String("env-get", "", "Get variable value")
-	pflag.String("env-get-line", "", "Get variable line")
-	pflag.String("env-get-literal", "", "Get variable literal value")
-	pflag.String("env-set", "", "Set variable value")
-
-	// Configuration / Menu
-	pflag.StringP("menu", "M", "", "Show menu (main, config, options, etc.)")
-	pflag.String("config-pm", "", "Config package manager")
-	pflag.Bool("config-pm-auto", false, "Auto-detect package manager")
-	pflag.Bool("config-show", false, "Show configuration")
-
-	// Theme
-	pflag.StringP("theme", "T", "", "Theme operations")
-	pflag.Bool("theme-list", false, "List themes")
-	pflag.Bool("theme-table", false, "List themes table")
-	pflag.Bool("theme-lines", false, "Turn line drawing characters on")
-	pflag.Bool("theme-no-lines", false, "Turn line drawing characters off")
-	pflag.Bool("theme-line", false, "Turn line drawing characters on")
-	pflag.Bool("theme-no-line", false, "Turn line drawing characters off")
-	pflag.Bool("theme-borders", false, "Turn borders on")
-	pflag.Bool("theme-no-borders", false, "Turn borders off")
-	pflag.Bool("theme-border", false, "Turn borders on")
-	pflag.Bool("theme-no-border", false, "Turn borders off")
-	pflag.Bool("theme-shadows", false, "Turn shadows on")
-	pflag.Bool("theme-no-shadows", false, "Turn shadows off")
-	pflag.Bool("theme-shadow", false, "Turn shadows on")
-	pflag.Bool("theme-no-shadow", false, "Turn shadows off")
-	pflag.Bool("theme-scrollbar", false, "Turn scrollbar on")
-	pflag.Bool("theme-no-scrollbar", false, "Turn scrollbar off")
-
-	// Testing
-	pflag.StringP("test", "t", "", "Run test script")
 }
