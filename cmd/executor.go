@@ -68,121 +68,22 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		task := func(subCtx context.Context) error {
 			switch group.Command {
 			case "-h", "--help":
-				target := ""
-				if len(group.Args) > 0 {
-					target = group.Args[0]
-				}
-				PrintHelp(target)
+				handleHelp(&group)
 				ranCommand = true
 			case "-V", "--version":
-				// Version Info
-				logger.Display(subCtx, fmt.Sprintf("{{_ApplicationName_}}%s{{|-|}} [{{_Version_}}%s{{|-|}}]", version.ApplicationName, version.Version))
-				logger.Display(subCtx, fmt.Sprintf("{{_ApplicationName_}}DockSTARTer-Templates{{|-|}} [{{_Version_}}%s{{|-|}}]", paths.GetTemplatesVersion()))
+				handleVersion(subCtx)
 				ranCommand = true
 			case "-i", "--install":
-				logger.Warn(subCtx, fmt.Sprintf("The '{{_UserCommand_}}%s{{|-|}}' command is deprecated.", group.Command))
-				if state.Force {
-					logger.Notice(subCtx, "Force flag detected in installation stub.")
-				}
+				handleInstall(subCtx, &group, &state)
 				ranCommand = true
-			case "-u", "--update":
-				appVer := ""
-				templBranch := ""
-				if len(group.Args) > 0 {
-					appVer = group.Args[0]
-				}
-				if len(group.Args) > 1 {
-					templBranch = group.Args[1]
-				}
-				if err := update.UpdateTemplates(subCtx, state.Force, state.Yes, templBranch); err != nil {
-					logger.Error(subCtx, "Templates update failed: %v", err)
-				}
-				if err := update.SelfUpdate(subCtx, state.Force, state.Yes, appVer, restArgs); err != nil {
-					logger.Error(subCtx, "App update failed: %v", err)
-				}
-				ranCommand = true
-			case "--update-app":
-				appVer := ""
-				if len(group.Args) > 0 {
-					appVer = group.Args[0]
-				}
-				if err := update.SelfUpdate(subCtx, state.Force, state.Yes, appVer, restArgs); err != nil {
-					logger.Error(subCtx, "App update failed: %v", err)
-				}
-				ranCommand = true
-			case "--update-templates":
-				templBranch := ""
-				if len(group.Args) > 0 {
-					templBranch = group.Args[0]
-				}
-				if err := update.UpdateTemplates(subCtx, state.Force, state.Yes, templBranch); err != nil {
-					logger.Error(subCtx, "Templates update failed: %v", err)
-				}
+			case "-u", "--update", "--update-app", "--update-templates":
+				handleUpdate(subCtx, &group, &state, restArgs)
 				ranCommand = true
 			case "-M", "--menu":
-				target := ""
-				if len(group.Args) > 0 {
-					target = group.Args[0]
-				}
-				if err := tui.Start(subCtx, target); err != nil {
-					logger.Error(subCtx, "TUI Error: %v", err)
-				}
+				handleMenu(subCtx, &group)
 				ranCommand = true
-			case "-T", "--theme":
-				conf := config.LoadGUIConfig()
-				if len(group.Args) > 0 {
-					newTheme := group.Args[0]
-					// Validate theme existence
-					themesDir := paths.GetThemesDir()
-					themePath := filepath.Join(themesDir, newTheme)
-					if _, err := os.Stat(themePath); os.IsNotExist(err) {
-						logger.Error(subCtx, "Theme '{{_Theme_}}%s{{|-|}}' not found in '{{_Folder_}}%s{{|-|}}'.", newTheme, themesDir)
-						return nil
-					}
-
-					conf.Theme = newTheme
-					if err := config.SaveGUIConfig(conf); err != nil {
-						logger.Error(subCtx, "Failed to save theme setting: %v", err)
-					} else {
-						logger.Notice(subCtx, "Theme updated to: {{_Theme_}}%s{{|-|}}", newTheme)
-						// Reload theme for subsequent commands in the same execution
-						_ = theme.Load(newTheme)
-					}
-				} else {
-					// No args? Show current theme
-					logger.Notice(subCtx, "Current theme is: {{_Theme_}}%s{{|-|}}", conf.Theme)
-					logger.Notice(subCtx, "Run '{{_UserCommand_}}%s --theme-list{{|-|}}' to see available themes.", version.CommandName)
-				}
-				ranCommand = true
-			case "--theme-list":
-				themesDir := paths.GetThemesDir()
-				entries, err := os.ReadDir(themesDir)
-				if err != nil {
-					logger.Error(subCtx, "Failed to read themes directory: %v", err)
-					return nil
-				}
-
-				var themes []string
-				for _, entry := range entries {
-					if entry.IsDir() {
-						// Basic check: does it have a theme.ini or .dialogrc?
-						themePath := filepath.Join(themesDir, entry.Name())
-						if _, err := os.Stat(filepath.Join(themePath, "theme.ini")); err == nil {
-							themes = append(themes, entry.Name())
-						} else if _, err := os.Stat(filepath.Join(themePath, ".dialogrc")); err == nil {
-							themes = append(themes, entry.Name())
-						}
-					}
-				}
-
-				if len(themes) == 0 {
-					logger.Warn(subCtx, "No themes found in '{{_Folder_}}%s{{|-|}}'.", themesDir)
-				} else {
-					logger.Notice(subCtx, "Available themes in '{{_Folder_}}%s{{|-|}}':", themesDir)
-					for _, t := range themes {
-						logger.Notice(subCtx, "  - %s", t)
-					}
-				}
+			case "-T", "--theme", "--theme-list":
+				handleTheme(subCtx, &group)
 				ranCommand = true
 			case "--theme-table", "--config-pm-table", "--config-pm-existing-table",
 				"-a", "--add",
@@ -205,30 +106,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				"--theme-borders", "--theme-no-borders", "--theme-border", "--theme-no-border",
 				"--theme-shadows", "--theme-no-shadows", "--theme-shadow", "--theme-no-shadow",
 				"--theme-scrollbar", "--theme-no-scrollbar":
-				conf := config.LoadGUIConfig()
-				switch group.Command {
-				case "--theme-lines", "--theme-line":
-					conf.LineCharacters = true
-				case "--theme-no-lines", "--theme-no-line":
-					conf.LineCharacters = false
-				case "--theme-borders", "--theme-border":
-					conf.Borders = true
-				case "--theme-no-borders", "--theme-no-border":
-					conf.Borders = false
-				case "--theme-shadows", "--theme-shadow":
-					conf.Shadow = true
-				case "--theme-no-shadows", "--theme-no-shadow":
-					conf.Shadow = false
-				case "--theme-scrollbar":
-					conf.Scrollbar = true
-				case "--theme-no-scrollbar":
-					conf.Scrollbar = false
-				}
-				if err := config.SaveGUIConfig(conf); err != nil {
-					logger.Error(subCtx, "Failed to save theme setting: %v", err)
-				} else {
-					logger.Notice(subCtx, "Theme setting updated: %s", group.Command)
-				}
+				handleThemeSettings(subCtx, &group)
 				ranCommand = true
 			default:
 				// Custom command logic would be hooked in here.
@@ -261,4 +139,155 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 	}
 
 	return 0
+}
+func handleHelp(group *CommandGroup) {
+	target := ""
+	if len(group.Args) > 0 {
+		target = group.Args[0]
+	}
+	PrintHelp(target)
+}
+
+func handleVersion(ctx context.Context) {
+	logger.Display(ctx, fmt.Sprintf("{{_ApplicationName_}}%s{{|-|}} [{{_Version_}}%s{{|-|}}]", version.ApplicationName, version.Version))
+	logger.Display(ctx, fmt.Sprintf("{{_ApplicationName_}}DockSTARTer-Templates{{|-|}} [{{_Version_}}%s{{|-|}}]", paths.GetTemplatesVersion()))
+}
+
+func handleInstall(ctx context.Context, group *CommandGroup, state *CmdState) {
+	logger.Warn(ctx, fmt.Sprintf("The '{{_UserCommand_}}%s{{|-|}}' command is deprecated.", group.Command))
+	if state.Force {
+		logger.Notice(ctx, "Force flag detected in installation stub.")
+	}
+}
+
+func handleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, restArgs []string) {
+	switch group.Command {
+	case "-u", "--update":
+		appVer := ""
+		templBranch := ""
+		if len(group.Args) > 0 {
+			appVer = group.Args[0]
+		}
+		if len(group.Args) > 1 {
+			templBranch = group.Args[1]
+		}
+		if err := update.UpdateTemplates(ctx, state.Force, state.Yes, templBranch); err != nil {
+			logger.Error(ctx, "Templates update failed: %v", err)
+		}
+		if err := update.SelfUpdate(ctx, state.Force, state.Yes, appVer, restArgs); err != nil {
+			logger.Error(ctx, "App update failed: %v", err)
+		}
+	case "--update-app":
+		appVer := ""
+		if len(group.Args) > 0 {
+			appVer = group.Args[0]
+		}
+		if err := update.SelfUpdate(ctx, state.Force, state.Yes, appVer, restArgs); err != nil {
+			logger.Error(ctx, "App update failed: %v", err)
+		}
+	case "--update-templates":
+		templBranch := ""
+		if len(group.Args) > 0 {
+			templBranch = group.Args[0]
+		}
+		if err := update.UpdateTemplates(ctx, state.Force, state.Yes, templBranch); err != nil {
+			logger.Error(ctx, "Templates update failed: %v", err)
+		}
+	}
+}
+
+func handleMenu(ctx context.Context, group *CommandGroup) {
+	target := ""
+	if len(group.Args) > 0 {
+		target = group.Args[0]
+	}
+	if err := tui.Start(ctx, target); err != nil {
+		logger.Error(ctx, "TUI Error: %v", err)
+	}
+}
+
+func handleTheme(ctx context.Context, group *CommandGroup) {
+	switch group.Command {
+	case "-T", "--theme":
+		conf := config.LoadGUIConfig()
+		if len(group.Args) > 0 {
+			newTheme := group.Args[0]
+			// Validate theme existence
+			themesDir := paths.GetThemesDir()
+			themePath := filepath.Join(themesDir, newTheme)
+			if _, err := os.Stat(themePath); os.IsNotExist(err) {
+				logger.Error(ctx, "Theme '{{_Theme_}}%s{{|-|}}' not found in '{{_Folder_}}%s{{|-|}}'.", newTheme, themesDir)
+				return
+			}
+
+			conf.Theme = newTheme
+			if err := config.SaveGUIConfig(conf); err != nil {
+				logger.Error(ctx, "Failed to save theme setting: %v", err)
+			} else {
+				logger.Notice(ctx, "Theme updated to: {{_Theme_}}%s{{|-|}}", newTheme)
+				// Reload theme for subsequent commands in the same execution
+				_ = theme.Load(newTheme)
+			}
+		} else {
+			// No args? Show current theme
+			logger.Notice(ctx, "Current theme is: {{_Theme_}}%s{{|-|}}", conf.Theme)
+			logger.Notice(ctx, "Run '{{_UserCommand_}}%s --theme-list{{|-|}}' to see available themes.", version.CommandName)
+		}
+	case "--theme-list":
+		themesDir := paths.GetThemesDir()
+		entries, err := os.ReadDir(themesDir)
+		if err != nil {
+			logger.Error(ctx, "Failed to read themes directory: %v", err)
+			return
+		}
+
+		var themes []string
+		for _, entry := range entries {
+			if entry.IsDir() {
+				// Basic check: does it have a theme.ini or .dialogrc?
+				themePath := filepath.Join(themesDir, entry.Name())
+				if _, err := os.Stat(filepath.Join(themePath, "theme.ini")); err == nil {
+					themes = append(themes, entry.Name())
+				} else if _, err := os.Stat(filepath.Join(themePath, ".dialogrc")); err == nil {
+					themes = append(themes, entry.Name())
+				}
+			}
+		}
+
+		if len(themes) == 0 {
+			logger.Warn(ctx, "No themes found in '{{_Folder_}}%s{{|-|}}'.", themesDir)
+		} else {
+			logger.Notice(ctx, "Available themes in '{{_Folder_}}%s{{|-|}}':", themesDir)
+			for _, t := range themes {
+				logger.Notice(ctx, "  - %s", t)
+			}
+		}
+	}
+}
+
+func handleThemeSettings(ctx context.Context, group *CommandGroup) {
+	conf := config.LoadGUIConfig()
+	switch group.Command {
+	case "--theme-lines", "--theme-line":
+		conf.LineCharacters = true
+	case "--theme-no-lines", "--theme-no-line":
+		conf.LineCharacters = false
+	case "--theme-borders", "--theme-border":
+		conf.Borders = true
+	case "--theme-no-borders", "--theme-no-border":
+		conf.Borders = false
+	case "--theme-shadows", "--theme-shadow":
+		conf.Shadow = true
+	case "--theme-no-shadows", "--theme-no-shadow":
+		conf.Shadow = false
+	case "--theme-scrollbar":
+		conf.Scrollbar = true
+	case "--theme-no-scrollbar":
+		conf.Scrollbar = false
+	}
+	if err := config.SaveGUIConfig(conf); err != nil {
+		logger.Error(ctx, "Failed to save theme setting: %v", err)
+	} else {
+		logger.Notice(ctx, "Theme setting updated: %s", group.Command)
+	}
 }
