@@ -47,7 +47,13 @@ func run() (exitCode int) {
 		// We continue, as the app might still work with hardcoded defaults
 	}
 
+	// Ensure templates are cloned
+	if err := update.EnsureTemplates(ctx); err != nil {
+		logger.Fatal(ctx, "Failed to clone {{_ApplicationName_}}DockSTARTer-Templates{{|-|}} repo.")
+	}
+
 	// Check if the current channel still exists on GitHub
+
 	_ = update.CheckCurrentStatus(ctx)
 	// Check for application and template updates
 	update.CheckUpdates(ctx)

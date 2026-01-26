@@ -717,3 +717,40 @@ func GetChannelFromVersion(v string) string {
 	}
 	return "stable"
 }
+
+// EnsureTemplates checks if the templates directory exists and clones it if missing.
+func EnsureTemplates(ctx context.Context) error {
+	templatesDir := paths.GetTemplatesDir()
+	// Check if the directory is a valid git repository
+	if _, err := git.PlainOpen(templatesDir); err == nil {
+		return nil
+	}
+
+	logger.Warn(ctx, "Attempting to clone {{_ApplicationName_}}DockSTARTer-Templates{{|-|}} repo to '{{_Folder_}}%s{{|-|}}' location.", templatesDir)
+
+	// Remove if exists but is invalid (no .git)
+	if _, err := os.Stat(templatesDir); err == nil {
+		logger.Notice(ctx, "Running: {{_RunningCommand_}}rm -rf %s{{|-|}}", templatesDir)
+		if err := os.RemoveAll(templatesDir); err != nil {
+			logger.Fatal(ctx, "Failed to remove %s.", templatesDir)
+		}
+	}
+
+	url := "https://github.com/GhostWriters/DockSTARTer-Templates"
+	branch := "main" // Default branch
+
+	logger.Notice(ctx, "Running: {{_RunningCommand_}}git clone -b %s %s %s{{|-|}}", branch, url, templatesDir)
+	logger.Notice(ctx, "{{_RunningCommand_}}git:{{|-|}} Cloning into '%s'...", templatesDir)
+
+	_, err := git.PlainClone(templatesDir, false, &git.CloneOptions{
+		URL:           url,
+		ReferenceName: plumbing.ReferenceName("refs/heads/" + branch),
+		// Progress: nil, // Silent, as RunAndLog swallows output unless verbose/error, but we don't have a stream logger handy.
+		// Main.sh clone_repo uses "RunAndLog notice" which logs the command.
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
