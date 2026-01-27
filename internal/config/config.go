@@ -4,24 +4,66 @@ import (
 	"DockSTARTer2/internal/paths"
 	"bufio"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strings"
+
+	"github.com/adrg/xdg"
 )
 
-// GUIConfig holds the TUI configuration settings.
-type GUIConfig struct {
-	Borders        bool
-	LineCharacters bool
-	Shadow         bool
-	Scrollbar      bool
-	Theme          string
-	ConfigFolder   string
-	ComposeFolder  string
+// AppConfig holds the application configuration settings.
+type AppConfig struct {
+	Borders                 bool
+	LineCharacters          bool
+	Shadow                  bool
+	Scrollbar               bool
+	Theme                   string
+	ConfigFolder            string
+	ConfigFolderUnexpanded  string
+	ComposeFolder           string
+	ComposeFolderUnexpanded string
 }
 
-// LoadGUIConfig reads the dockstarter2.ini file and returns the configuration.
-func LoadGUIConfig() GUIConfig {
-	conf := GUIConfig{
+// expandVariables expands environment variables in the config values.
+// It supports:
+// - ${XDG_CONFIG_HOME} -> xdg.ConfigHome
+// - ${XDG_DATA_HOME}   -> xdg.DataHome
+// - ${XDG_STATE_HOME}  -> xdg.StateHome
+// - ${XDG_CACHE_HOME}  -> xdg.CacheHome
+// - ${HOME}            -> os.UserHomeDir()
+// - ${USER}            -> Current username
+func expandVariables(val string) string {
+	mapper := func(varName string) string {
+		switch varName {
+		case "XDG_CONFIG_HOME":
+			return xdg.ConfigHome
+		case "XDG_DATA_HOME":
+			return xdg.DataHome
+		case "XDG_STATE_HOME":
+			return xdg.StateHome
+		case "XDG_CACHE_HOME":
+			return xdg.CacheHome
+		case "HOME":
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return ""
+			}
+			return home
+		case "USER":
+			u, err := user.Current()
+			if err != nil {
+				return os.Getenv("USERNAME") // Fallback for Windows
+			}
+			return u.Username
+		}
+		return ""
+	}
+	return os.Expand(val, mapper)
+}
+
+// LoadAppConfig reads the dockstarter2.ini file and returns the configuration.
+func LoadAppConfig() AppConfig {
+	conf := AppConfig{
 		Borders:        true,
 		LineCharacters: true,
 		Shadow:         true,
@@ -36,8 +78,12 @@ func LoadGUIConfig() GUIConfig {
 	if err != nil {
 		// If file doesn't exist, create it with defaults
 		if os.IsNotExist(err) {
-			SaveGUIConfig(conf)
+			SaveAppConfig(conf)
 		}
+		conf.ConfigFolderUnexpanded = conf.ConfigFolder
+		conf.ComposeFolderUnexpanded = conf.ComposeFolder
+		conf.ConfigFolder = expandVariables(conf.ConfigFolder)
+		conf.ComposeFolder = expandVariables(conf.ComposeFolder)
 		return conf
 	}
 	defer file.Close()
@@ -56,6 +102,7 @@ func LoadGUIConfig() GUIConfig {
 
 		key := strings.TrimSpace(parts[0])
 		value := strings.Trim(strings.TrimSpace(parts[1]), "'\"")
+		expandedValue := expandVariables(value)
 
 		isTrue := func(v string) bool {
 			v = strings.ToLower(v)
@@ -74,17 +121,22 @@ func LoadGUIConfig() GUIConfig {
 		case "Theme":
 			conf.Theme = value
 		case "ConfigFolder":
-			conf.ConfigFolder = value
+			conf.ConfigFolderUnexpanded = value
+			conf.ConfigFolder = expandedValue
 		case "ComposeFolder":
-			conf.ComposeFolder = value
+			conf.ComposeFolderUnexpanded = value
+			conf.ComposeFolder = expandedValue
 		}
 	}
 
 	return conf
 }
 
-// SaveGUIConfig writes the configuration to dockstarter2.ini.
-func SaveGUIConfig(conf GUIConfig) error {
+// SaveAppConfig writes the configuration to dockstarter2.ini.
+// Note: It writes the raw values currently in the struct.
+// TODO: If we want to preserve variables (like ${XDG_CONFIG_HOME}) on save,
+// we would need to track raw vs expanded values. For now, it saves the expanded path.
+func SaveAppConfig(conf AppConfig) error {
 	path := paths.GetConfigFilePath()
 
 	// Create directory if it doesn't exist

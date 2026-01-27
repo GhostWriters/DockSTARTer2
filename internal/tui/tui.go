@@ -31,7 +31,7 @@ type MenuItem struct {
 
 var (
 	app                 *cview.Application
-	currentConfig       config.GUIConfig
+	currentConfig       config.AppConfig
 	helpline            *cview.TextView
 	rootGrid            *cview.Grid
 	panels              *cview.Panels
@@ -593,7 +593,7 @@ func Initialize(ctx context.Context) error {
 	if app != nil {
 		return nil
 	}
-	currentConfig = config.LoadGUIConfig()
+	currentConfig = config.LoadAppConfig()
 	_ = theme.Load(currentConfig.Theme)
 
 	width, height, err := console.GetTerminalSize()

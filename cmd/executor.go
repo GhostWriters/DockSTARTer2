@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/theme"
@@ -24,7 +25,7 @@ type CmdState struct {
 // Execute runs the logic for a sequence of command groups.
 // It handles flag application, command switching, and state resetting.
 func Execute(ctx context.Context, groups []CommandGroup) int {
-	conf := config.LoadGUIConfig()
+	conf := config.LoadAppConfig()
 	_ = theme.Load(conf.Theme)
 
 	ranCommand := false
@@ -85,6 +86,40 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			case "-T", "--theme", "--theme-list":
 				handleTheme(subCtx, &group)
 				ranCommand = true
+			case "--config-show", "--show-config":
+				conf := config.LoadAppConfig()
+				logger.Notice(subCtx, "Current Configuration:")
+
+				// Helper for boolean values
+				boolVal := func(b bool) string {
+					if b {
+						return "{{_Var_}}yes{{|-|}}"
+					}
+					return "{{_Var_}}no{{|-|}}"
+				}
+
+				// Helper for raw values
+				rawVal := func(s string, isFolder bool) string {
+					color := "{{_Var_}}"
+					if isFolder {
+						color = "{{_Folder_}}"
+					}
+					return color + s + "{{|-|}}"
+				}
+
+				headers := []string{"{{_UsageCommand_}}Option{{|-|}}", "{{_UsageCommand_}}Value{{|-|}}", "{{_UsageCommand_}}Expanded Value{{|-|}}"}
+				data := []string{
+					"ConfigFolder", rawVal(conf.ConfigFolderUnexpanded, true), rawVal(conf.ConfigFolder, true),
+					"ComposeFolder", rawVal(conf.ComposeFolderUnexpanded, true), rawVal(conf.ComposeFolder, true),
+					"PackageManager", "{{_Var_}}unknown{{|-|}}", "", // Not implemented yet
+					"Theme", rawVal(conf.Theme, false), "",
+					"Borders", boolVal(conf.Borders), "",
+					"LineCharacters", boolVal(conf.LineCharacters), "",
+					"Scrollbar", boolVal(conf.Scrollbar), "",
+					"Shadow", boolVal(conf.Shadow), "",
+				}
+				console.PrintTable(headers, data, conf.LineCharacters)
+				ranCommand = true
 			case "--theme-table", "--config-pm-table", "--config-pm-existing-table",
 				"-a", "--add",
 				"-c", "--compose",
@@ -97,7 +132,6 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				"-S", "--select", "--menu-config-app-select", "--menu-app-select",
 				"-t", "--test",
 				"--config-pm", "--config-pm-auto", "--config-pm-list", "--config-pm-existing-list",
-				"--config-show", "--show-config",
 				"--env-appvars", "--env-appvars-lines",
 				"--env-get", "--env-get-line", "--env-get-literal", "--env-get-lower", "--env-get-lower-line", "--env-get-lower-literal",
 				"--env-set", "--env-set-lower":
@@ -209,7 +243,7 @@ func handleMenu(ctx context.Context, group *CommandGroup) {
 func handleTheme(ctx context.Context, group *CommandGroup) {
 	switch group.Command {
 	case "-T", "--theme":
-		conf := config.LoadGUIConfig()
+		conf := config.LoadAppConfig()
 		if len(group.Args) > 0 {
 			newTheme := group.Args[0]
 			// Validate theme existence
@@ -221,7 +255,7 @@ func handleTheme(ctx context.Context, group *CommandGroup) {
 			}
 
 			conf.Theme = newTheme
-			if err := config.SaveGUIConfig(conf); err != nil {
+			if err := config.SaveAppConfig(conf); err != nil {
 				logger.Error(ctx, "Failed to save theme setting: %v", err)
 			} else {
 				logger.Notice(ctx, "Theme updated to: {{_Theme_}}%s{{|-|}}", newTheme)
@@ -266,7 +300,7 @@ func handleTheme(ctx context.Context, group *CommandGroup) {
 }
 
 func handleThemeSettings(ctx context.Context, group *CommandGroup) {
-	conf := config.LoadGUIConfig()
+	conf := config.LoadAppConfig()
 	switch group.Command {
 	case "--theme-lines", "--theme-line":
 		conf.LineCharacters = true
@@ -285,7 +319,7 @@ func handleThemeSettings(ctx context.Context, group *CommandGroup) {
 	case "--theme-no-scrollbar":
 		conf.Scrollbar = false
 	}
-	if err := config.SaveGUIConfig(conf); err != nil {
+	if err := config.SaveAppConfig(conf); err != nil {
 		logger.Error(ctx, "Failed to save theme setting: %v", err)
 	} else {
 		logger.Notice(ctx, "Theme setting updated: %s", group.Command)

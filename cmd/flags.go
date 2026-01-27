@@ -56,6 +56,7 @@ func InitFlags() {
 	pflag.String("config-pm", "", "Config package manager")
 	pflag.Bool("config-pm-auto", false, "Auto-detect package manager")
 	pflag.Bool("config-show", false, "Show configuration")
+	pflag.Bool("show-config", false, "Show configuration (alias)")
 
 	// Theme
 	pflag.StringP("theme", "T", "", "Theme operations")
