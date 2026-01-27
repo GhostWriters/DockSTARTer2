@@ -88,7 +88,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				ranCommand = true
 			case "--config-show", "--show-config":
 				conf := config.LoadAppConfig()
-				logger.Notice(subCtx, "Current Configuration:")
+				console.Println(fmt.Sprintf("Configuration options stored in '{{_File_}}%s{{|-|}}':", paths.GetConfigFilePath()))
 
 				// Helper for boolean values
 				boolVal := func(b bool) string {
