@@ -400,6 +400,17 @@ func handleAppVarsCreate(ctx context.Context, group *CommandGroup) {
 		return
 	}
 
+	// Ensure env file exists (create if needed)
+	envFile := filepath.Join(conf.ComposeFolder, ".env")
+	if err := env.Create(envFile, filepath.Join(conf.ConfigFolder, ".env.example")); err != nil {
+		logger.Debug(ctx, "Ensure env file error: %v", err)
+	}
+
+	// Enable the apps first
+	if err := apps.Enable(ctx, group.Args, conf); err != nil {
+		logger.Error(ctx, "Failed to enable apps: %v", err)
+	}
+
 	for _, arg := range group.Args {
 		if err := apps.Create(ctx, arg, conf); err != nil {
 			logger.Error(ctx, "%v", err)
