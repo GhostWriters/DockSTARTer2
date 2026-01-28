@@ -36,23 +36,24 @@ func FormatLines(currentEnvFile, defaultEnvFile, appName, composeEnvFile string)
 	var appNiceName string
 
 	if appName != "" {
-		// Check if user defined (now in env package)
-		appIsUserDefined = IsUserDefined(appName, composeEnvFile)
+		// Check if user defined (full Bash parity)
+		appIsUserDefined = IsUserDefinedApp(appName, composeEnvFile)
 
 		// Get nice name (inline implementation)
 		appNiceName = getNiceName(appName)
 
-		// Get description (inline simple version for now)
-		appDescription := getSimpleDescription(appName, appIsUserDefined)
+		// Get description from labels.yml (full Bash parity)
+		appDescription := getDescriptionFromLabels(appName, appIsUserDefined)
 
 		// Build heading title
 		headingTitle := appNiceName
 		if appIsUserDefined {
 			headingTitle += appUserDefinedTag
 		} else {
-			// Check deprecated/disabled status
-			// For now, skip IsDeprecated (requires template check from apps package)
-			// We can add it later if needed as a parameter
+			// Check deprecated/disabled status (full Bash parity)
+			if IsDeprecatedApp(appName) {
+				headingTitle += appDeprecatedTag
+			}
 			if IsDisabled(appName, composeEnvFile) {
 				headingTitle += appDisabledTag
 			}
@@ -159,7 +160,7 @@ func FormatLinesForApp(currentEnvFile, appName, templatesDir, composeEnvFile str
 	var defaultEnvFile string
 
 	// Get default app .env file if not user-defined
-	if !IsUserDefined(appName, composeEnvFile) {
+	if !IsUserDefinedApp(appName, composeEnvFile) {
 		// Get template .env for this app
 		baseApp := getBaseAppName(appName)
 		defaultEnvFile = filepath.Join(templatesDir, ".apps", baseApp, ".env")
