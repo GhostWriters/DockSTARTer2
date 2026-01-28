@@ -61,6 +61,22 @@ func IsReferenced(ctx context.Context, app string, conf config.AppConfig) bool {
 	return false
 }
 
+// IsDisabled checks if an app has __ENABLED variable set to false/no/off.
+// Mirrors app_is_disabled.sh functionality.
+func IsDisabled(appname string, envFile string) bool {
+	appUpper := strings.ToUpper(appname)
+	enabledVar := appUpper + "__ENABLED"
+
+	val, err := env.Get(enabledVar, envFile)
+	if err != nil {
+		// Variable doesn't exist, not explicitly disabled
+		return false
+	}
+
+	// Check if value is false/no/off (opposite of IsTrue)
+	return !IsTrue(val)
+}
+
 // IsTrue helper for boolean strings.
 func IsTrue(val string) bool {
 	v := strings.ToUpper(strings.Trim(val, `"' `))
