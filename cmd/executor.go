@@ -301,12 +301,6 @@ func handleEnvGet(ctx context.Context, group *CommandGroup) {
 			val, err = env.GetLiteral(key, file)
 		case strings.HasPrefix(baseCmd, "--env-get-line"):
 			val, err = env.GetLine(key, file)
-		case strings.HasPrefix(baseCmd, "--env-get-number"):
-			var lineNum int
-			lineNum, err = env.GetLineNumber(key, file)
-			if err == nil && lineNum > 0 {
-				val = fmt.Sprintf("%d", lineNum)
-			}
 		case strings.HasPrefix(baseCmd, "--env-get-line-regex"):
 			var lines []string
 			lines, err = env.GetLineRegex(key, file)

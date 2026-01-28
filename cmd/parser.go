@@ -214,7 +214,7 @@ func Parse(args []string) ([]CommandGroup, error) {
 		// Commands that take unlimited arguments (until next flag)
 		case "-a", "--add",
 			"--env-appvars", "--env-appvars-lines",
-			"--env-get", "--env-get-line", "--env-get-line-regex", "--env-get-literal", "--env-get-number",
+			"--env-get", "--env-get-line", "--env-get-line-regex", "--env-get-literal",
 			"--env-get-lower", "--env-get-lower-line", "--env-get-lower-literal",
 			"--env-set", "--env-set-lower", "--env-set-literal", "--env-set-lower-literal",
 			"-r", "--remove",

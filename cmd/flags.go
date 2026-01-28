@@ -53,7 +53,6 @@ func InitFlags() {
 	pflag.String("env-get-lower", "", "Get variable value (lowercase)")
 	pflag.String("env-get-lower-line", "", "Get variable line (lowercase)")
 	pflag.String("env-get-lower-literal", "", "Get variable literal value (lowercase)")
-	pflag.String("env-get-number", "", "Get variable line number")
 	pflag.String("env-set", "", "Set variable value")
 	pflag.String("env-set-literal", "", "Set variable literal value")
 	pflag.String("env-set-lower", "", "Set variable value (lowercase)")
