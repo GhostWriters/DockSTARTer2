@@ -25,8 +25,10 @@ require (
 	github.com/clipperhouse/stringish v0.1.1 // indirect
 	github.com/clipperhouse/uax29/v2 v2.3.0 // indirect
 	github.com/cloudflare/circl v1.6.1 // indirect
+	github.com/compose-spec/compose-go/v2 v2.10.1 // indirect
 	github.com/cyphar/filepath-securejoin v0.4.1 // indirect
 	github.com/davidmz/go-pageant v1.0.2 // indirect
+	github.com/docker/docker v28.5.2+incompatible // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/gdamore/encoding v1.0.1 // indirect
 	github.com/go-fed/httpsig v1.1.0 // indirect

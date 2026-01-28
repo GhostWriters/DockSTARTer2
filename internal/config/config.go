@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/adrg/xdg"
@@ -18,10 +19,24 @@ type AppConfig struct {
 	Shadow                  bool
 	Scrollbar               bool
 	Theme                   string
+	Arch                    string
 	ConfigFolder            string
 	ConfigFolderUnexpanded  string
 	ComposeFolder           string
 	ComposeFolderUnexpanded string
+}
+
+// getArch returns the CPU architecture (x86_64 or aarch64).
+func getArch() string {
+	arch := runtime.GOARCH
+	switch arch {
+	case "amd64":
+		return "x86_64"
+	case "arm64":
+		return "aarch64"
+	default:
+		return arch
+	}
 }
 
 // expandVariables expands environment variables in the config values.
@@ -74,6 +89,9 @@ func LoadAppConfig() AppConfig {
 		ComposeFolder:           "${XDG_CONFIG_HOME}/compose",
 		ComposeFolderUnexpanded: "${XDG_CONFIG_HOME}/compose",
 	}
+
+	// Set architecture
+	conf.Arch = getArch()
 
 	path := paths.GetConfigFilePath()
 	file, err := os.Open(path)

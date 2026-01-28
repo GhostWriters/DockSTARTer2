@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"DockSTARTer2/internal/apps"
+	"DockSTARTer2/internal/compose"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/docker"
@@ -97,8 +98,8 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				handleAppVarsCreate(subCtx, &group)
 				ranCommand = true
 			case "-c", "--compose":
-				// docker_compose
-				// handleCompose(subCtx, &group)
+				handleCompose(subCtx, &group, &state)
+				ranCommand = true
 			case "-e", "--env":
 				handleAppVarsCreateAll(subCtx, &group)
 				ranCommand = true
@@ -755,5 +756,27 @@ func handleTest(ctx context.Context, group *CommandGroup) {
 
 	if err := cmd.Run(); err != nil {
 		// Test failures are handled by the 'go test' output itself
+	}
+}
+
+func handleCompose(ctx context.Context, group *CommandGroup, state *CmdState) {
+	operation := ""
+	var apps []string
+
+	// Parse compose operation and app names
+	if len(group.Args) > 0 {
+		operation = group.Args[0]
+		if len(group.Args) > 1 {
+			apps = group.Args[1:]
+		}
+	}
+
+	// If no operation specified, default to "update"
+	if operation == "" {
+		operation = "update"
+	}
+
+	if err := compose.ExecuteCompose(ctx, operation, apps...); err != nil {
+		logger.Error(ctx, "Compose operation failed: %v", err)
 	}
 }
