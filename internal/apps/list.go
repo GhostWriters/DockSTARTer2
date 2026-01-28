@@ -73,6 +73,7 @@ func ListDeprecated() ([]string, error) {
 }
 
 // ListEnabled returns all applications that are explicitly enabled in the .env.
+// Mirrors app_list_enabled.sh - checks both ENABLED=true AND instance folder exists.
 func ListEnabled(envFile string) ([]string, error) {
 	keys, err := env.ListVars(envFile)
 	if err != nil {
@@ -85,8 +86,16 @@ func ListEnabled(envFile string) ([]string, error) {
 			val, _ := env.Get(key, envFile)
 			if IsTrue(val) {
 				appName := strings.TrimSuffix(key, "__ENABLED")
-				// Bash checks if instance folder exists, but we'll stick to enabled status for now
-				enabled = append(enabled, appName)
+
+				// Bash checks if instance folder exists (line 17 in app_list_enabled.sh)
+				// Instance folder path: ${INSTANCES_FOLDER}/${appname}
+				baseapp := appname_to_baseappname(appName)
+				instanceFolder := filepath.Join(paths.GetInstancesDir(), strings.ToLower(baseapp))
+
+				// Only include if instance folder exists
+				if info, err := os.Stat(instanceFolder); err == nil && info.IsDir() {
+					enabled = append(enabled, appName)
+				}
 			}
 		}
 	}
@@ -175,11 +184,14 @@ func ListReferenced(ctx context.Context, conf config.AppConfig) ([]string, error
 	}
 
 	// 3. From override file
+	// Bash regex: ^(?:[^#]*)(?:\s|^)(?<Q>['"]?)(?:[.]\/)?[.]env[.]app[.]\K([a-z][a-z0-9]*(?:__[a-z0-9]+)?)(?=\k<Q>(?:\s|$))
 	overrideFile := filepath.Join(conf.ComposeFolder, "docker-compose.override.yml")
 	if _, err := os.Stat(overrideFile); err == nil {
 		content, _ := os.ReadFile(overrideFile)
-		// Regex for .env.app.appName
-		reOverride := regexp.MustCompile(`\.env\.app\.([a-z][a-z0-9]*(?:__[a-z0-9]+)?)`)
+		// Pattern matches uncommented lines with .env.app.appname
+		// Handles optional quotes and ./ prefix
+		// Since Go doesn't support \K or backreferences in the same way, we capture and extract
+		reOverride := regexp.MustCompile(`(?m)^(?:[^#]*)(?:\s|^)(?:['"]?)(?:[.]\/)?[.]env[.]app[.]([a-z][a-z0-9]*(?:__[a-z0-9]+)?)(?:['"]?)(?:\s|$)`)
 		matches := reOverride.FindAllStringSubmatch(string(content), -1)
 		for _, m := range matches {
 			if len(m) > 1 {

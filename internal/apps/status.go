@@ -22,33 +22,39 @@ func IsEnabled(app, envFile string) bool {
 }
 
 // IsReferenced checks if an app is referenced in any configuration.
+// Mirrors app_is_referenced.sh functionality.
 func IsReferenced(ctx context.Context, app string, conf config.AppConfig) bool {
-	// Reuse ListReferenced logic or simplified check?
-	// Simplified check for efficiency:
 	appUpper := strings.ToUpper(app)
 	appLower := strings.ToLower(app)
 
-	// 1. In global .env
-	envFile := filepath.Join(conf.ComposeFolder, ".env")
-	keys, _ := env.ListVars(envFile)
-	for key := range keys {
-		if strings.HasPrefix(key, appUpper+"__") {
-			return true
-		}
-	}
-
-	// 2. App env file exists
-	appEnvFile := filepath.Join(conf.ComposeFolder, ".env.app."+appLower)
-	if _, err := os.Stat(appEnvFile); err == nil {
+	// 1. Check for app variables in the global .env file
+	// Bash: run_script 'appvars_list' "${APPNAME}"
+	vars, err := VarsList(appUpper, conf)
+	if err == nil && len(vars) > 0 {
 		return true
 	}
 
-	// 3. In override
+	// 2. Check for app variables in the .env.app.appname file
+	// Bash: run_script 'appvars_list' "${APPNAME}:"
+	varsApp, err := VarsList(appUpper+":", conf)
+	if err == nil && len(varsApp) > 0 {
+		return true
+	}
+
+	// 3. Check for uncommented reference to .env.app.appname in the override file
+	// Bash regex: ^(?:[^#]*)(?:\s|^)(?<Q>['"]?)(?:[.]\/)?${SearchString}(?=\k<Q>(?:\s|$))
 	overrideFile := filepath.Join(conf.ComposeFolder, "docker-compose.override.yml")
 	if _, err := os.Stat(overrideFile); err == nil {
-		content, _ := os.ReadFile(overrideFile)
-		if strings.Contains(string(content), ".env.app."+appLower) {
-			return true
+		content, err := os.ReadFile(overrideFile)
+		if err == nil {
+			// Pattern matches uncommented lines with .env.app.appname (with optional quotes and ./)
+			appEnvFile := "\\.env\\.app\\." + regexp.QuoteMeta(appLower)
+			// Handle both quoted and unquoted, with optional ./
+			pattern := fmt.Sprintf(`(?m)^(?:[^#]*)(?:\s|^)(?:['"]?)(?:[.]\/)?%s(?:['"]?)(?:\s|$)`, appEnvFile)
+			re := regexp.MustCompile(pattern)
+			if re.MatchString(string(content)) {
+				return true
+			}
 		}
 	}
 
