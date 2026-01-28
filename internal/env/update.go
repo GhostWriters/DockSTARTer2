@@ -63,24 +63,13 @@ func Update(ctx context.Context, file string) error {
 
 			if strings.Contains(key, "__") {
 				// App Variable
-				// Logic based on varname_to_appname.sh:
-				// App Name is the first alphanumeric word, optionally followed by "__" and another word.
-				// This loosely translates to: Take the first 2 parts if available, otherwise 1.
-				parts := strings.Split(key, "__")
-				var prefix string
-				if len(parts) >= 3 {
-					// e.g. RADARR__4K__ENABLED -> RADARR__4K
-					prefix = parts[0] + "__" + parts[1]
-				} else if len(parts) == 2 {
-					// e.g. RADARR__ENABLED -> RADARR
-					prefix = parts[0]
+				prefix := VarNameToAppName(key)
+				if prefix != "" {
+					appVars[prefix] = append(appVars[prefix], fullLine)
 				} else {
-					// Fallback (shouldn't happen with Contains check)
+					// Fallback if logic failed to return prefix despite having __
 					globals = append(globals, fullLine)
-					continue
 				}
-
-				appVars[prefix] = append(appVars[prefix], fullLine)
 			} else {
 				// Global Variable
 				globals = append(globals, fullLine)
