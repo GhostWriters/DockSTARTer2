@@ -29,6 +29,7 @@ func InitFlags() {
 	pflag.Bool("list-deprecated", false, "List deprecated apps")
 	pflag.Bool("list-enabled", false, "List enabled apps")
 	pflag.Bool("list-disabled", false, "List disabled apps")
+	pflag.Bool("list-nondeprecated", false, "List nondeprecated apps")
 	pflag.Bool("list-referenced", false, "List referenced apps")
 
 	// Docker Compose
@@ -41,7 +42,7 @@ func InitFlags() {
 	pflag.String("update-app", "", "Update DockSTARTer only (can specify tag)")
 	pflag.String("update-templates", "", "Update Templates only (can specify tag/branch)")
 	pflag.StringP("version", "V", "", "Show version")
-
+	pflag.BoolP("reset", "R", false, "Reset DockSTARTer to process all actions")
 	// Environment Variables
 	pflag.BoolP("env", "e", false, "Update .env files")
 	pflag.String("env-appvars", "", "List variable names for app")
@@ -49,7 +50,14 @@ func InitFlags() {
 	pflag.String("env-get", "", "Get variable value")
 	pflag.String("env-get-line", "", "Get variable line")
 	pflag.String("env-get-literal", "", "Get variable literal value")
+	pflag.String("env-get-lower", "", "Get variable value (lowercase)")
+	pflag.String("env-get-lower-line", "", "Get variable line (lowercase)")
+	pflag.String("env-get-lower-literal", "", "Get variable literal value (lowercase)")
+	pflag.String("env-get-number", "", "Get variable line number")
 	pflag.String("env-set", "", "Set variable value")
+	pflag.String("env-set-literal", "", "Set variable literal value")
+	pflag.String("env-set-lower", "", "Set variable value (lowercase)")
+	pflag.String("env-set-lower-literal", "", "Set variable literal value (lowercase)")
 
 	// Configuration / Menu
 	pflag.StringP("menu", "M", "", "Show menu (main, config, options, etc.)")

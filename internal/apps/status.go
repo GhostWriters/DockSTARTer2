@@ -1,0 +1,136 @@
+package apps
+
+import (
+	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/env"
+	"DockSTARTer2/internal/paths"
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+)
+
+// IsEnabled checks if an app is enabled in the .env file.
+func IsEnabled(app, envFile string) bool {
+	if !IsBuiltin(app) {
+		return false
+	}
+	val, _ := env.Get(app+"__ENABLED", envFile)
+	return IsTrue(val)
+}
+
+// IsReferenced checks if an app is referenced in any configuration.
+func IsReferenced(ctx context.Context, app string, conf config.AppConfig) bool {
+	// Reuse ListReferenced logic or simplified check?
+	// Simplified check for efficiency:
+	appUpper := strings.ToUpper(app)
+	appLower := strings.ToLower(app)
+
+	// 1. In global .env
+	envFile := filepath.Join(conf.ComposeFolder, ".env")
+	keys, _ := env.ListVars(envFile)
+	for key := range keys {
+		if strings.HasPrefix(key, appUpper+"__") {
+			return true
+		}
+	}
+
+	// 2. App env file exists
+	appEnvFile := filepath.Join(conf.ComposeFolder, ".env.app."+appLower)
+	if _, err := os.Stat(appEnvFile); err == nil {
+		return true
+	}
+
+	// 3. In override
+	overrideFile := filepath.Join(conf.ComposeFolder, "docker-compose.override.yml")
+	if _, err := os.Stat(overrideFile); err == nil {
+		content, _ := os.ReadFile(overrideFile)
+		if strings.Contains(string(content), ".env.app."+appLower) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// IsTrue helper for boolean strings.
+func IsTrue(val string) bool {
+	v := strings.ToUpper(strings.Trim(val, `"' `))
+	return v == "1" || v == "ON" || v == "TRUE" || v == "YES"
+}
+
+// Status returns a string describing the current status of an app.
+func Status(ctx context.Context, app string, conf config.AppConfig) string {
+	appUpper := strings.ToUpper(app)
+	envFile := filepath.Join(conf.ComposeFolder, ".env")
+	nice := NiceName(appUpper)
+
+	if !IsAppNameValid(appUpper) {
+		return fmt.Sprintf("{{_App_}}%s{{|-|}} is not a valid application name.", nice)
+	}
+
+	if IsReferenced(ctx, appUpper, conf) {
+		addedVars, _ := env.ListVars(envFile)
+		isAdded := false
+		for k := range addedVars {
+			if strings.HasPrefix(k, appUpper+"__ENABLED") {
+				isAdded = true
+				break
+			}
+		}
+
+		if isAdded {
+			if IsEnabled(appUpper, envFile) {
+				return fmt.Sprintf("{{_App_}}%s{{|-|}} is enabled.", nice)
+			}
+			return fmt.Sprintf("{{_App_}}%s{{|-|}} is disabled.", nice)
+		}
+		return fmt.Sprintf("{{_App_}}%s{{|-|}} is referenced.", nice)
+	}
+
+	if IsBuiltin(appUpper) {
+		return fmt.Sprintf("{{_App_}}%s{{|-|}} is not added.", nice)
+	}
+
+	return fmt.Sprintf("{{_App_}}%s{{|-|}} does not exist.", nice)
+}
+
+// NiceName returns the "NiceName" of the app.
+// Matches Bash app_nicename: checks template labels or defaults to title case.
+func NiceName(app string) string {
+	base := appname_to_baseappname(app)
+	instance := appname_to_instancename(app)
+
+	// Default: titleize base (first letter upper, rest lower)
+	displayName := ""
+	if base != "" {
+		displayName = strings.ToUpper(base[:1]) + strings.ToLower(base[1:])
+	}
+
+	// Try to get from template
+	templatesDir := paths.GetTemplatesDir()
+	labelsFile := filepath.Join(templatesDir, ".apps", strings.ToLower(base), strings.ToLower(base)+".labels.yml")
+	if _, err := os.Stat(labelsFile); err == nil {
+		content, err := os.ReadFile(labelsFile)
+		if err == nil {
+			re := regexp.MustCompile(`(?m)^\s*com\.dockstarter\.appinfo\.nicename:\s*(.*)`)
+			matches := re.FindStringSubmatch(string(content))
+			if len(matches) > 1 {
+				displayName = strings.Trim(matches[1], `"' `)
+			}
+		}
+	}
+
+	// Remove any placeholders from the template's nicename (mirroring Bash behavior of using processed base file)
+	displayName = strings.ReplaceAll(displayName, "<__INSTANCE>", "")
+	displayName = strings.ReplaceAll(displayName, "<__Instance>", "")
+	displayName = strings.ReplaceAll(displayName, "<__instance>", "")
+
+	if instance != "" {
+		displayName += "__" + strings.ToUpper(instance[:1]) + strings.ToLower(instance[1:])
+	}
+
+	return displayName
+}

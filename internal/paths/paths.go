@@ -101,3 +101,13 @@ func GetStateDir() string {
 	appName := strings.ToLower(version.ApplicationName)
 	return filepath.Join(xdg.StateHome, appName)
 }
+
+// GetInstancesDir returns the absolute path to the dockstarter2 instances directory.
+func GetInstancesDir() string {
+	return filepath.Join(GetStateDir(), "instances")
+}
+
+// GetTimestampsDir returns the absolute path to the dockstarter2 timestamps directory.
+func GetTimestampsDir() string {
+	return filepath.Join(GetStateDir(), "timestamps")
+}

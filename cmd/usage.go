@@ -126,38 +126,7 @@ func GetUsage(target string) string {
 			"	Generates the '{{_UsageFile_}}docker-compose.yml{{|-|}} file",
 		)
 	}
-	if match("--config-pm", "--config-pm-auto") {
-		printStr(
-			"{{_UsageCommand_}}--config-pm{{|-|}} {{_UsageOption_}}<package manager>{{|-|}}",
-			"	Select the specified package manager to install dependencies",
-			"{{_UsageCommand_}}--config-pm-auto{{|-|}}",
-			"	Autodetect the package manager",
-		)
-	}
-	if match("--config-pm-list") {
-		printStr(
-			"{{_UsageCommand_}}--config-pm-list{{|-|}}",
-			"	Lists the compatible package managers",
-		)
-	}
-	if match("--config-pm-table") {
-		printStr(
-			"{{_UsageCommand_}}--config-pm-table{{|-|}}",
-			"	Lists the compatible package managers in a table format",
-		)
-	}
-	if match("--config-pm-existing-list") {
-		printStr(
-			"{{_UsageCommand_}}--config-pm-existing-list{{|-|}}",
-			"	Lists the existing package managers",
-		)
-	}
-	if match("--config-pm-existing-table") {
-		printStr(
-			"{{_UsageCommand_}}--config-pm-existing-table{{|-|}}",
-			"	Lists the existing package managers in a table format",
-		)
-	}
+
 	if match("--config-show", "--show-config") {
 		printStr(
 			"{{_UsageCommand_}}--config-show{{|-|}}",
@@ -267,12 +236,7 @@ func GetUsage(target string) string {
 			"	Show the usage of the specified option",
 		)
 	}
-	if match("-i", "--install") {
-		printStr(
-			"{{_UsageCommand_}}-i --install{{|-|}}",
-			"	Install/update all dependencies",
-		)
-	}
+
 	if match("-p", "--prune") {
 		printStr(
 			"{{_UsageCommand_}}-p --prune{{|-|}}",

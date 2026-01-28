@@ -1,8 +1,11 @@
 package cmd
 
 import (
+	"DockSTARTer2/internal/apps"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/docker"
+	"DockSTARTer2/internal/env"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/theme"
@@ -12,7 +15,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 // CmdState holds the state of flags for a single command group.
@@ -86,61 +91,66 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			case "-T", "--theme", "--theme-list":
 				handleTheme(subCtx, &group)
 				ranCommand = true
-			case "--config-show", "--show-config":
-				conf := config.LoadAppConfig()
-				console.Println(fmt.Sprintf("Configuration options stored in '{{_File_}}%s{{|-|}}':", paths.GetConfigFilePath()))
 
-				// Helper for boolean values
-				boolVal := func(b bool) string {
-					if b {
-						return "{{_Var_}}yes{{|-|}}"
-					}
-					return "{{_Var_}}no{{|-|}}"
-				}
-
-				// Helper for raw values
-				rawVal := func(s string, isFolder bool) string {
-					color := "{{_Var_}}"
-					if isFolder {
-						color = "{{_Folder_}}"
-					}
-					return color + s + "{{|-|}}"
-				}
-
-				headers := []string{"{{_UsageCommand_}}Option{{|-|}}", "{{_UsageCommand_}}Value{{|-|}}", "{{_UsageCommand_}}Expanded Value{{|-|}}"}
-				data := []string{
-					"ConfigFolder", rawVal(conf.ConfigFolderUnexpanded, true), rawVal(conf.ConfigFolder, true),
-					"ComposeFolder", rawVal(conf.ComposeFolderUnexpanded, true), rawVal(conf.ComposeFolder, true),
-					"PackageManager", "{{_Var_}}unknown{{|-|}}", "", // Not implemented yet
-					"Theme", rawVal(conf.Theme, false), "",
-					"Borders", boolVal(conf.Borders), "",
-					"LineCharacters", boolVal(conf.LineCharacters), "",
-					"Scrollbar", boolVal(conf.Scrollbar), "",
-					"Shadow", boolVal(conf.Shadow), "",
-				}
-				console.PrintTable(headers, data, conf.LineCharacters)
+			case "-a", "--add":
+				// appvars_create (single)
+				handleAppVarsCreate(subCtx, &group)
 				ranCommand = true
-			case "--theme-table", "--config-pm-table", "--config-pm-existing-table",
-				"-a", "--add",
-				"-c", "--compose",
-				"-e", "--env",
-				"-l", "--list", "--list-added", "--list-builtin", "--list-deprecated", "--list-enabled", "--list-disabled", "--list-nondeprecated", "--list-referenced",
-				"-p", "--prune",
-				"-r", "--remove",
-				"-R", "--reset",
-				"-s", "--status", "--status-enable", "--status-disable",
-				"-S", "--select", "--menu-config-app-select", "--menu-app-select",
-				"-t", "--test",
-				"--config-pm", "--config-pm-auto", "--config-pm-list", "--config-pm-existing-list",
-				"--env-appvars", "--env-appvars-lines",
-				"--env-get", "--env-get-line", "--env-get-literal", "--env-get-lower", "--env-get-lower-line", "--env-get-lower-literal",
-				"--env-set", "--env-set-lower":
+			case "-c", "--compose":
+				// docker_compose
+				// handleCompose(subCtx, &group)
+			case "-e", "--env":
+				handleAppVarsCreateAll(subCtx, &group)
+				ranCommand = true
+			case "-l", "--list", "--list-added", "--list-builtin", "--list-deprecated", "--list-enabled", "--list-disabled", "--list-nondeprecated", "--list-referenced":
+				handleList(subCtx, &group)
+				ranCommand = true
+			case "-s", "--status":
+				handleStatus(subCtx, &group)
+				ranCommand = true
+			case "--config-pm", "--config-pm-auto", "--config-pm-list", "--config-pm-table", "--config-pm-existing-list", "--config-pm-existing-table":
+				handleConfigPm(subCtx, &group)
+				ranCommand = true
+			case "--status-enable", "--status-disable":
+				handleStatusChange(subCtx, &group)
+				ranCommand = true
+			case "-r", "--remove":
+				handleRemove(subCtx, &group, &state)
+				ranCommand = true
+			case "-S", "--select", "--menu-config-app-select", "--menu-app-select":
 				logger.FatalNoTrace(subCtx, "The '{{_UserCommand_}}%s{{|-|}}' command is not implemented yet.", group.Command)
+			case "-t", "--test":
+				handleTest(subCtx, &group)
+				ranCommand = true
+			case "--env-appvars":
+				handleEnvAppVars(subCtx, &group)
+				ranCommand = true
+			case "--env-appvars-lines":
+				handleEnvAppVarsLines(subCtx, &group)
+				ranCommand = true
+			case "--env-get", "--env-get-line", "--env-get-literal", "--env-get-lower", "--env-get-lower-line", "--env-get-lower-literal":
+				handleEnvGet(subCtx, &group)
+				ranCommand = true
+			case "--env-set", "--env-set-lower", "--env-set-literal", "--env-set-lower-literal":
+				handleEnvSet(subCtx, &group)
+				ranCommand = true
 			case "--theme-lines", "--theme-no-lines", "--theme-line", "--theme-no-line",
 				"--theme-borders", "--theme-no-borders", "--theme-border", "--theme-no-border",
 				"--theme-shadows", "--theme-no-shadows", "--theme-shadow", "--theme-no-shadow",
 				"--theme-scrollbar", "--theme-no-scrollbar":
 				handleThemeSettings(subCtx, &group)
+				ranCommand = true
+			case "--config-show", "--show-config":
+				handleConfigShow(subCtx, &conf)
+				ranCommand = true
+			case "-p", "--prune":
+				handlePrune(subCtx, &state)
+				ranCommand = true
+			case "-R", "--reset":
+				handleReset(subCtx)
+				ranCommand = true
+			case "--theme-table":
+				handleThemeTable(subCtx)
 				ranCommand = true
 			default:
 				// Custom command logic would be hooked in here.
@@ -194,6 +204,10 @@ func handleInstall(ctx context.Context, group *CommandGroup, state *CmdState) {
 	}
 }
 
+func handleConfigPm(ctx context.Context, group *CommandGroup) {
+	logger.Warn(ctx, fmt.Sprintf("The '{{_UserCommand_}}%s{{|-|}}' command is deprecated. Package manager configuration is no longer needed.", group.Command))
+}
+
 func handleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, restArgs []string) {
 	switch group.Command {
 	case "-u", "--update":
@@ -237,6 +251,164 @@ func handleMenu(ctx context.Context, group *CommandGroup) {
 	}
 	if err := tui.Start(ctx, target); err != nil {
 		logger.Error(ctx, "TUI Error: %v", err)
+	}
+}
+
+// Helper to resolve VAR and FILE from argument
+// Arg can be "VAR" (uses default file) or "APP:VAR" (uses app file)
+func resolveEnvVar(arg string, conf config.AppConfig) (string, string) {
+	if strings.Contains(arg, ":") {
+		parts := strings.SplitN(arg, ":", 2)
+		appName := strings.ToLower(parts[0])
+		varName := parts[1]
+		// AppEnvFilename=".env.app.${appname}"
+		filename := fmt.Sprintf(".env.app.%s", appName)
+		return varName, filepath.Join(conf.ComposeFolder, filename)
+	}
+	// Default to .env in ComposeFolder
+	return arg, filepath.Join(conf.ComposeFolder, ".env")
+}
+
+func handleEnvGet(ctx context.Context, group *CommandGroup) {
+	conf := config.LoadAppConfig()
+
+	// 1. Determine variables to process
+	var args []string
+	baseCmd := group.Command
+	if idx := strings.Index(baseCmd, "="); idx != -1 {
+		// Single parameter version: --env-get=VAR
+		args = []string{baseCmd[idx+1:]}
+		baseCmd = baseCmd[:idx]
+	} else {
+		// Multiple parameter version: --env-get VAR1 VAR2 ...
+		args = group.Args
+	}
+
+	upperCase := !strings.Contains(baseCmd, "-lower")
+
+	for _, arg := range args {
+		key, file := resolveEnvVar(arg, conf)
+		if upperCase && !strings.Contains(arg, ":") {
+			key = strings.ToUpper(key)
+		}
+
+		var val string
+		var err error
+
+		// Determine operation based on command
+		switch {
+		case strings.HasPrefix(baseCmd, "--env-get-literal"):
+			val, err = env.GetLiteral(key, file)
+		case strings.HasPrefix(baseCmd, "--env-get-line"):
+			val, err = env.GetLine(key, file)
+		case strings.HasPrefix(baseCmd, "--env-get-number"):
+			var lineNum int
+			lineNum, err = env.GetLineNumber(key, file)
+			if err == nil && lineNum > 0 {
+				val = fmt.Sprintf("%d", lineNum)
+			}
+		case strings.HasPrefix(baseCmd, "--env-get-line-regex"):
+			var lines []string
+			lines, err = env.GetLineRegex(key, file)
+			if err == nil {
+				val = strings.Join(lines, "\n")
+			}
+		case strings.HasPrefix(baseCmd, "--env-get"):
+			val, err = env.Get(key, file)
+		}
+
+		if err != nil {
+			logger.Error(ctx, "Error getting %s: %v", arg, err)
+			continue
+		}
+
+		if val != "" {
+			console.Println(val)
+		}
+	}
+}
+
+func handleEnvSet(ctx context.Context, group *CommandGroup) {
+	conf := config.LoadAppConfig()
+
+	type kv struct {
+		key string
+		val string
+	}
+	var pairs []kv
+
+	baseCmd := group.Command
+	if idx := strings.Index(baseCmd, "="); idx != -1 {
+		// Single parameter version: --env-set=VAR,VAL
+		param := baseCmd[idx+1:]
+		baseCmd = baseCmd[:idx]
+		parts := strings.Split(param, ",")
+		if len(parts) >= 2 {
+			pairs = append(pairs, kv{parts[0], strings.Join(parts[1:], ",")})
+		} else {
+			logger.Error(ctx, "Command %s requires a variable name and a value (separated by comma).", group.Command)
+			return
+		}
+	} else {
+		// Argument version: --env-set VAR=VAL
+		for _, arg := range group.Args {
+			if strings.Contains(arg, "=") {
+				parts := strings.SplitN(arg, "=", 2)
+				pairs = append(pairs, kv{parts[0], parts[1]})
+			} else {
+				// We don't support separate VAR VAL here to match Bash's check for '=' in the arg
+				logger.Error(ctx, "Argument %s missing '='", arg)
+			}
+		}
+	}
+
+	upperCase := !strings.Contains(baseCmd, "-lower")
+	isLiteral := strings.Contains(baseCmd, "-literal")
+
+	for _, p := range pairs {
+		varName, file := resolveEnvVar(p.key, conf)
+		if upperCase && !strings.Contains(p.key, ":") {
+			varName = strings.ToUpper(varName)
+		}
+
+		// Ensure env file exists (create if needed)
+		if err := env.Create(file, filepath.Join(conf.ConfigFolder, ".env.example")); err != nil {
+			logger.Debug(ctx, "Ensure env file error: %v", err)
+		}
+
+		var err error
+		if isLiteral {
+			err = env.SetLiteral(varName, p.val, file)
+		} else {
+			err = env.Set(varName, p.val, file)
+		}
+
+		if err != nil {
+			logger.Error(ctx, "Error setting %s: %v", p.key, err)
+		} else {
+			logger.Debug(ctx, "Set %s=%s in %s", varName, p.val, file)
+		}
+	}
+}
+
+func handleAppVarsCreateAll(ctx context.Context, group *CommandGroup) {
+	conf := config.LoadAppConfig()
+	if err := apps.CreateAll(ctx, conf); err != nil {
+		logger.Error(ctx, "Failed to create app variables: %v", err)
+	}
+}
+
+func handleAppVarsCreate(ctx context.Context, group *CommandGroup) {
+	conf := config.LoadAppConfig()
+	if len(group.Args) == 0 {
+		logger.Error(ctx, "The '{{_UserCommand_}}%s{{|-|}}' command requires at least one application name.", group.Command)
+		return
+	}
+
+	for _, arg := range group.Args {
+		if err := apps.Create(ctx, arg, conf); err != nil {
+			logger.Error(ctx, "%v", err)
+		}
 	}
 }
 
@@ -323,5 +495,271 @@ func handleThemeSettings(ctx context.Context, group *CommandGroup) {
 		logger.Error(ctx, "Failed to save theme setting: %v", err)
 	} else {
 		logger.Notice(ctx, "Theme setting updated: %s", group.Command)
+	}
+}
+
+func handleList(ctx context.Context, group *CommandGroup) {
+	conf := config.LoadAppConfig()
+	envFile := filepath.Join(conf.ComposeFolder, ".env")
+	var result []string
+	var err error
+
+	switch group.Command {
+	case "-l", "--list":
+		result, err = apps.ListBuiltin()
+	case "--list-added":
+		result, err = apps.ListAdded(envFile)
+	case "--list-builtin":
+		result, err = apps.ListBuiltin()
+	case "--list-deprecated":
+		result, err = apps.ListDeprecated()
+	case "--list-enabled":
+		result, err = apps.ListEnabled(envFile)
+	case "--list-disabled":
+		result, err = apps.ListDisabled(envFile)
+	case "--list-nondeprecated":
+		result, err = apps.ListNonDeprecated()
+	case "--list-referenced":
+		result, err = apps.ListReferenced(ctx, conf)
+	}
+
+	if err != nil {
+		logger.Error(ctx, "List failed: %v", err)
+		return
+	}
+
+	for _, item := range result {
+		fmt.Println(apps.NiceName(item))
+	}
+}
+
+func handleStatus(ctx context.Context, group *CommandGroup) {
+	conf := config.LoadAppConfig()
+	if len(group.Args) == 0 {
+		logger.Error(ctx, "The '{{_UserCommand_}}%s{{|-|}}' command requires at least one application name.", group.Command)
+		return
+	}
+
+	for _, arg := range group.Args {
+		// Bash splits by space, our parser already did that if they are separate args.
+		// If they passed "app1 app2" as one arg, we might need more splitting but pflag usually treats spaces as separate unless quoted.
+		status := apps.Status(ctx, arg, conf)
+		logger.Display(ctx, status)
+	}
+}
+
+func handleStatusChange(ctx context.Context, group *CommandGroup) {
+	conf := config.LoadAppConfig()
+	if len(group.Args) == 0 {
+		logger.Error(ctx, "The '{{_UserCommand_}}%s{{|-|}}' command requires at least one application name.", group.Command)
+		return
+	}
+
+	var err error
+	if group.Command == "--status-enable" {
+		err = apps.Enable(ctx, group.Args, conf)
+	} else if group.Command == "--status-disable" {
+		err = apps.Disable(ctx, group.Args, conf)
+	}
+
+	if err != nil {
+		logger.Error(ctx, "Failed to change app status: %v", err)
+	}
+}
+
+func handleRemove(ctx context.Context, group *CommandGroup, state *CmdState) {
+	conf := config.LoadAppConfig()
+
+	// Remove accepts optional app names (empty = all disabled apps)
+	err := apps.Remove(ctx, group.Args, conf, state.Yes)
+
+	if err != nil {
+		logger.Error(ctx, "Failed to remove app variables: %v", err)
+	}
+}
+
+func handleConfigShow(ctx context.Context, conf *config.AppConfig) {
+	headers := []string{
+		"{{_UsageCommand_}}Option{{|-|}}",
+		"{{_UsageCommand_}}Value{{|-|}}",
+		"{{_UsageCommand_}}Expanded Value{{|-|}}",
+	}
+
+	keys := []string{
+		"ConfigFolder",
+		"ComposeFolder",
+		"Theme",
+		"Borders",
+		"LineCharacters",
+		"Scrollbar",
+		"Shadow",
+	}
+
+	displayNames := map[string]string{
+		"ConfigFolder":   "Config Folder",
+		"ComposeFolder":  "Compose Folder",
+		"Theme":          "Theme",
+		"Borders":        "Borders",
+		"LineCharacters": "Line Characters",
+		"Scrollbar":      "Scrollbar",
+		"Shadow":         "Shadow",
+	}
+
+	var data []string
+
+	boolToYesNo := func(val bool) string {
+		if val {
+			return "{{_Var_}}yes{{|-|}}"
+		}
+		return "{{_Var_}}no{{|-|}}"
+	}
+
+	for _, key := range keys {
+		var value, expandedValue string
+		var useFolderColor bool
+
+		switch key {
+		case "ConfigFolder":
+			value = conf.ConfigFolderUnexpanded
+			expandedValue = conf.ConfigFolder
+			useFolderColor = true
+		case "ComposeFolder":
+			value = conf.ComposeFolderUnexpanded
+			expandedValue = conf.ComposeFolder
+			useFolderColor = true
+		case "Theme":
+			value = conf.Theme
+		case "Borders":
+			value = boolToYesNo(conf.Borders)
+		case "LineCharacters":
+			value = boolToYesNo(conf.LineCharacters)
+		case "Scrollbar":
+			value = boolToYesNo(conf.Scrollbar)
+		case "Shadow":
+			value = boolToYesNo(conf.Shadow)
+		}
+
+		colorTag := "{{_Var_}}"
+		if useFolderColor {
+			colorTag = "{{_Folder_}}"
+		}
+
+		// Option column
+		data = append(data, displayNames[key])
+
+		// Value column
+		// For booleans, value already has formatting. For strings, add color.
+		if useFolderColor || key == "Theme" {
+			data = append(data, fmt.Sprintf("%s%s{{|-|}}", colorTag, value))
+		} else {
+			data = append(data, value)
+		}
+
+		// Expanded Value column
+		if expandedValue != "" {
+			if useFolderColor {
+				data = append(data, fmt.Sprintf("%s%s{{|-|}}", colorTag, expandedValue))
+			} else {
+				data = append(data, fmt.Sprintf("%s%s{{|-|}}", colorTag, expandedValue))
+			}
+		} else {
+			data = append(data, "")
+		}
+	}
+
+	logger.Info(ctx, "Configuration options stored in '{{_File_}}%s{{|-|}}':", paths.GetConfigFilePath())
+	console.PrintTable(headers, data, conf.LineCharacters)
+}
+
+func handlePrune(ctx context.Context, state *CmdState) {
+	if err := docker.Prune(ctx, state.Yes); err != nil {
+		logger.Error(ctx, "Prune failed: %v", err)
+	}
+}
+
+func handleReset(ctx context.Context) {
+	logger.Notice(ctx, "Resetting {{_ApplicationName_}}%s{{|-|}} to process all actions.", version.ApplicationName)
+	timestampDir := paths.GetTimestampsDir()
+	if err := os.RemoveAll(timestampDir); err != nil {
+		logger.Error(ctx, "Failed to remove timestamps directory: %v", err)
+	}
+	// Also ensure permissions are set? Bash script calls set_permissions.
+	// We might need a set_permissions equivalent eventually.
+}
+
+func handleThemeTable(ctx context.Context) {
+	headers := []string{"Theme", "Description", "Author"}
+	themes, err := theme.List()
+	if err != nil {
+		logger.Error(ctx, "Failed to list themes: %v", err)
+		return
+	}
+
+	var data []string
+	for _, t := range themes {
+		data = append(data, t.Name, t.Description, t.Author)
+	}
+
+	// Default theme info (hardcoded for now as it's built-in)
+	// Bash implementation iterates folders, so it only shows what's in the folder.
+	// If we want to show 'default' or 'classic' if it's not a file, we should add it?
+	// But theme.go defines Default() which is hardcoded.
+	// We should probably include it if it's not in the list.
+	// Bash: lists folders. If "Default" is a folder, it shows it.
+
+	console.PrintTable(headers, data, true)
+}
+
+func handleEnvAppVars(ctx context.Context, group *CommandGroup) {
+	conf := config.LoadAppConfig()
+	args := group.Args
+	if len(args) == 0 {
+		logger.FatalNoTrace(ctx, "Command --env-appvars requires one or more application names.")
+	}
+
+	for _, appName := range args {
+		vars, err := apps.ListVars(ctx, appName, conf.ComposeFolder)
+		if err != nil {
+			logger.Error(ctx, "Failed to list variables for %s: %v", appName, err)
+			continue
+		}
+		for _, v := range vars {
+			fmt.Println(v)
+		}
+	}
+}
+
+func handleEnvAppVarsLines(ctx context.Context, group *CommandGroup) {
+	conf := config.LoadAppConfig()
+	args := group.Args
+	if len(args) == 0 {
+		logger.FatalNoTrace(ctx, "Command --env-appvars-lines requires one or more application names.")
+	}
+
+	for _, appName := range args {
+		lines, err := apps.ListVarLines(ctx, appName, conf.ComposeFolder)
+		if err != nil {
+			logger.Error(ctx, "Failed to list variable lines for %s: %v", appName, err)
+			continue
+		}
+		for _, l := range lines {
+			fmt.Println(l)
+		}
+	}
+}
+
+func handleTest(ctx context.Context, group *CommandGroup) {
+	args := []string{"test", "-v", "./..."}
+	if len(group.Args) > 0 {
+		args = append(args, "-run", strings.Join(group.Args, "|"))
+	}
+
+	cmd := exec.Command("go", args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Dir = "." // Project root
+
+	if err := cmd.Run(); err != nil {
+		// Test failures are handled by the 'go test' output itself
 	}
 }

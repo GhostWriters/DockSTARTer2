@@ -12,8 +12,13 @@ import (
 	"path/filepath"
 )
 
-//go:embed defaults themes
+//go:embed all:defaults themes
 var embeddedFS embed.FS
+
+// GetDefaultEnv returns the content of the default .env example file.
+func GetDefaultEnv() ([]byte, error) {
+	return embeddedFS.ReadFile("defaults/.env.example")
+}
 
 // EnsureAssets extracts embedded assets to the user's system if they are missing.
 func EnsureAssets(ctx context.Context) error {

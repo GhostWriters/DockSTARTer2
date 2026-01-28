@@ -64,13 +64,15 @@ func expandVariables(val string) string {
 // LoadAppConfig reads the dockstarter2.ini file and returns the configuration.
 func LoadAppConfig() AppConfig {
 	conf := AppConfig{
-		Borders:        true,
-		LineCharacters: true,
-		Shadow:         true,
-		Scrollbar:      true,
-		Theme:          "DockSTARTer",
-		ConfigFolder:   "${XDG_CONFIG_HOME}",
-		ComposeFolder:  "${XDG_CONFIG_HOME}/compose",
+		Borders:                 true,
+		LineCharacters:          true,
+		Shadow:                  true,
+		Scrollbar:               true,
+		Theme:                   "DockSTARTer",
+		ConfigFolder:            "${XDG_CONFIG_HOME}",
+		ConfigFolderUnexpanded:  "${XDG_CONFIG_HOME}",
+		ComposeFolder:           "${XDG_CONFIG_HOME}/compose",
+		ComposeFolderUnexpanded: "${XDG_CONFIG_HOME}/compose",
 	}
 
 	path := paths.GetConfigFilePath()
