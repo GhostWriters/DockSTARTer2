@@ -63,29 +63,22 @@ func Update(ctx context.Context, file string) error {
 
 			if strings.Contains(key, "__") {
 				// App Variable
-				// Determine prefix. Usually APPNAME__VAR
+				// Logic based on varname_to_appname.sh:
+				// App Name is the first alphanumeric word, optionally followed by "__" and another word.
+				// This loosely translates to: Take the first 2 parts if available, otherwise 1.
 				parts := strings.Split(key, "__")
-				prefix := parts[0]
-
-				// Special case for sub-apps like RADARR__4K__VAR -> Prefix RADARR
-				// Wait, Bash env_update logic is:
-				// Global: ! [[ ${line} == *"__"* ]]
-				// Apps: everything else.
-				// Grouping:
-				// Iterates through variables.
-				// Uses `appname_from_servicename` equivalent?
-				// Actually `env_update.sh` calls `env_update_global` then loops through ALL defined apps.
-				// It iterates `yq` list of apps.
-				// Then for each app, it greps `^${A}__` from the file.
-
-				// Since we don't want to depend on yq/app list here if possible, let's infer from the keys?
-				// Or should we assume the prefix is the app name?
-				// If we have RADARR__4K__ENABLED, the prefix is RADARR.
-				// If we have RADARR__ENABLED, the prefix is RADARR.
-
-				// Let's use the first part as the grouping key.
-				// Exception: maybe some vars have multiple underscores?
-				// Standard DS pattern is APPNAME__VAR.
+				var prefix string
+				if len(parts) >= 3 {
+					// e.g. RADARR__4K__ENABLED -> RADARR__4K
+					prefix = parts[0] + "__" + parts[1]
+				} else if len(parts) == 2 {
+					// e.g. RADARR__ENABLED -> RADARR
+					prefix = parts[0]
+				} else {
+					// Fallback (shouldn't happen with Contains check)
+					globals = append(globals, fullLine)
+					continue
+				}
 
 				appVars[prefix] = append(appVars[prefix], fullLine)
 			} else {
@@ -119,8 +112,6 @@ func Update(ctx context.Context, file string) error {
 	w := bufio.NewWriter(fNew)
 
 	// Header
-	// Bash adds a generic header or just starts?
-	// env_update_global adds "# Global settings"
 	w.WriteString("# Global settings\n")
 	for _, line := range globals {
 		w.WriteString(line + "\n")
@@ -129,37 +120,7 @@ func Update(ctx context.Context, file string) error {
 
 	// Apps
 	for _, app := range appNames {
-		// Need "Nice Name" for header?
-		// We can try to format the app name nicely (Capitalize)
-		// Or if we have access to the app definition, use it.
-		// `update.go` is in `env` package, might not have `apps` package ref to avoid cycle?
-		// `apps` imports `env`. `env` cannot import `apps`.
-		// So we can't call `apps.NiceName`.
-		// We'll just title case the key for now.
-		niceName := TitleCase(strings.ToLower(app))
-
-		// Handle sub-instances for header?
-		// If sorting groups by prefix `RADARR`, `RADARR__4K` vars would be in `RADARR` group if we split by `__`?
-		// Wait, `RADARR__4K__ENABLED`: `parts[0]` is `RADARR`.
-		// So `RADARR__4K` vars end up in `RADARR` block.
-		// Is that what we want?
-		// Bash: `env_update` loops over `mapfile -t APP_LIST < <(params_list)`.
-		// `params_list` gets all known apps.
-		// It greps using the full app name. `RADARR` and `RADARR__4K` are separate apps in `params_list`?
-		// If so, we should group by the full app prefix.
-
-		// However, we are inferring groups from the existing file, we don't know the list of valid apps here without circular dependency.
-		// If we group strictly by first token before `__`, `RADARR__4K` variables go into `RADARR`.
-		// If `RADARR` and `RADARR__4K` are distinct apps, we might want to separate them.
-		// But `RADARR__4K` starts with `RADARR__`.
-
-		// Let's refine the grouping.
-		// If we strictly follow the 'split by first __' rule:
-		// RADARR__ENABLED -> RADARR
-		// RADARR__4K__ENABLED -> RADARR
-		// The header will be `# Radarr settings`.
-		// And inside, `RADARR__4K__ENABLED` will just be sorted alphabetically next to `RADARR__ENABLED`.
-		// This seems acceptable and robust enough without knowing the full app list.
+		niceName := formatTitle(app)
 
 		w.WriteString(fmt.Sprintf("# %s settings\n", niceName))
 		for _, line := range appVars[app] {
@@ -179,9 +140,15 @@ func CopyFile(src, dst string) error {
 	return os.WriteFile(dst, input, 0644)
 }
 
-func TitleCase(s string) string {
-	if len(s) == 0 {
-		return s
+func formatTitle(s string) string {
+	// RADARR__4K -> Radarr (4k)
+	// RADARR -> Radarr
+
+	if strings.Contains(s, "__") {
+		parts := strings.SplitN(s, "__", 2)
+		base := strings.Title(strings.ToLower(parts[0]))
+		instance := strings.ToLower(parts[1])
+		return fmt.Sprintf("%s (%s)", base, instance)
 	}
-	return strings.ToUpper(s[:1]) + strings.ToLower(s[1:])
+	return strings.Title(strings.ToLower(s))
 }
