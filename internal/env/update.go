@@ -59,19 +59,35 @@ func Update(ctx context.Context, file string) error {
 			// For now, let's use the key=val structure we found, but maybe trust the original line content for value accuracy?
 			// Actually, if we want to ensure sorting, we need the key.
 			// Let's store the full line "KEY=VALUE".
+			// Reconstruct line in clean format
 			fullLine := fmt.Sprintf("%s=%s", key, val)
 
 			if strings.Contains(key, "__") {
-				// App Variable
-				prefix := VarNameToAppName(key)
-				if prefix != "" {
-					appVars[prefix] = append(appVars[prefix], fullLine)
+				// Try to extract app name
+				appName := VarNameToAppName(key)
+				if appName != "" {
+					// Validate the app name
+					if !AppNameIsValid(appName) {
+						// Invalid app name (e.g., has reserved instance like RADARR__ENABLED)
+						// Extract base app and group under that instead
+						parts := strings.Split(appName, "__")
+						if len(parts) > 0 {
+							baseApp := parts[0]
+							appVars[baseApp] = append(appVars[baseApp], fullLine)
+						} else {
+							// Shouldn't happen, but fallback to global
+							globals = append(globals, fullLine)
+						}
+					} else {
+						// Valid app name, use it
+						appVars[appName] = append(appVars[appName], fullLine)
+					}
 				} else {
-					// Fallback if logic failed to return prefix despite having __
+					// Extraction failed, treat as global
 					globals = append(globals, fullLine)
 				}
 			} else {
-				// Global Variable
+				// No double underscore, it's a global variable
 				globals = append(globals, fullLine)
 			}
 		}
