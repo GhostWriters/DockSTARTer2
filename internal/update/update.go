@@ -143,11 +143,11 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 	}
 
 	// Re-execution logic
-	if len(restArgs) > 0 {
-		return ReExec(ctx, exePath, restArgs)
+	// Bash update_self.sh lines 90-94: if no args passed, exec with -e flag
+	if len(restArgs) == 0 {
+		return ReExec(ctx, exePath, []string{"-e"})
 	}
-
-	return nil
+	return ReExec(ctx, exePath, restArgs)
 }
 
 // ReExec re-executes the current application with the given arguments.
