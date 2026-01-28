@@ -28,8 +28,40 @@ func VarNameToAppName(key string) string {
 
 	matches := re.FindStringSubmatch(key)
 	if len(matches) > 1 {
-		return matches[1]
+		appName := matches[1]
+		// Check for multiple underscores to identify instance
+		if strings.Contains(appName, "__") {
+			parts := strings.Split(appName, "__")
+			instance := parts[1]
+			if !InstanceNameIsValid(instance) {
+				// Fallback to base app name
+				return parts[0]
+			}
+		}
+		return appName
 	}
 
 	return ""
+}
+
+// InstanceNameIsValid checks if the instance name is allowed.
+// Based on appname_is_valid.sh blacklist.
+func InstanceNameIsValid(name string) bool {
+	invalidNames := map[string]bool{
+		"CONTAINER":   true,
+		"DEVICE":      true,
+		"DEVICES":     true,
+		"ENABLED":     true,
+		"ENVIRONMENT": true,
+		"HOSTNAME":    true,
+		"PORT":        true,
+		"NETWORK":     true,
+		"RESTART":     true,
+		"STORAGE":     true,
+		"STORAGE2":    true,
+		"STORAGE3":    true,
+		"STORAGE4":    true,
+		"TAG":         true,
+	}
+	return !invalidNames[name]
 }
