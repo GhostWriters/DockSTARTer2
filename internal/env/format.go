@@ -130,7 +130,20 @@ func FormatLines(currentEnvFile, defaultEnvFile, appName, composeEnvFile string)
 	// 5. Add user-defined variables section if needed (lines 92-123)
 	if len(remainingVars) > 0 {
 		// Add "User Defined" heading if not already user-defined app (lines 93-108)
-		if appName == "" || !appIsUserDefined {
+		// CRITICAL: For globals, DON'T add this header if we successfully read .env.example
+		//           The variables should have been updated in-place above
+		shouldAddHeader := false
+		if appName != "" {
+			// For apps, add header unless it's a user-defined app
+			shouldAddHeader = !appIsUserDefined
+		} else {
+			// For globals, ONLY add header if we didn't read a default file
+			// If we DID read .env.example, something went wrong and we shouldn't
+			// add a misleading "User Defined" header
+			shouldAddHeader = (defaultEnvFile == "")
+		}
+
+		if shouldAddHeader {
 			var headingTitle string
 			if appName != "" {
 				headingTitle = appNiceName + userDefinedVarsTag
