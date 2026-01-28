@@ -116,7 +116,9 @@ func ProcessInstanceFile(ctx context.Context, appName, fileSuffix string) (strin
 
 	appTemplateDir := filepath.Join(templatesDir, ".apps", baseApp)
 	if _, err := os.Stat(appTemplateDir); os.IsNotExist(err) {
-		return "", fmt.Errorf("template folder not found: %s", appTemplateDir)
+		// Template folder doesn't exist - this is not an error, just means no template available
+		// Matches Bash behavior which silently continues
+		return "", nil
 	}
 
 	// Resolve template filename (replace * with baseApp)

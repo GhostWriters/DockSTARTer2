@@ -23,7 +23,7 @@ func Remove(ctx context.Context, appNames []string, conf config.AppConfig, assum
 
 	// Otherwise purge specific apps
 	for _, appName := range appNames {
-		appName = strings.TrimSpace(strings.ToUpper(appName))
+		appName = strings.TrimSpace(strings.ToLower(appName))
 		if err := removeApp(ctx, appName, conf, assumeYes); err != nil {
 			return err
 		}
