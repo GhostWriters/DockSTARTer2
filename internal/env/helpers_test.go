@@ -15,6 +15,7 @@ func TestVarNameToAppName(t *testing.T) {
 		{"SONARR__4K__CONTAINER_NAME__TEST", "SONARR__4K"},
 		{"SONARR__4K__CONTAINER__NAME", "SONARR__4K"},
 		{"SONARR_4K__CONTAINER__NAME", ""},
+		{"4RADARR__ANIME__VAR", ""},
 		{"DOCKER_VOLUME_STORAGE", ""},
 	}
 
