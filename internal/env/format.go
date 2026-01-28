@@ -32,6 +32,8 @@ func FormatLines(currentEnvFile, defaultEnvFile, appName, composeEnvFile string)
 	)
 
 	// 1. If appName specified, add app header (lines 31-56)
+	// For globals (empty appName), skip header generation - .env.example has its own
+	// But we still need these vars for the user-defined section later
 	appIsUserDefined := false
 	var appNiceName string
 
