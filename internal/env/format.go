@@ -1,9 +1,9 @@
-package format
+package env
 
 import (
-	"DockSTARTer2/internal/apps"
-	"DockSTARTer2/internal/env"
+	"DockSTARTer2/internal/envutil"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -36,22 +36,24 @@ func FormatLines(currentEnvFile, defaultEnvFile, appName, composeEnvFile string)
 	var appNiceName string
 
 	if appName != "" {
-		// Check if user defined
-		appIsUserDefined = apps.IsUserDefined(appName, composeEnvFile)
+		// Check if user defined (now in env package)
+		appIsUserDefined = IsUserDefined(appName, composeEnvFile)
 
-		// Get nice name and description
-		appNiceName = apps.GetNiceName(appName)
-		appDescription := apps.GetDescription(appName)
+		// Get nice name (inline implementation)
+		appNiceName = getNiceName(appName)
+
+		// Get description (inline simple version for now)
+		appDescription := getSimpleDescription(appName, appIsUserDefined)
 
 		// Build heading title
 		headingTitle := appNiceName
 		if appIsUserDefined {
 			headingTitle += appUserDefinedTag
 		} else {
-			if apps.IsDeprecated(appName) {
-				headingTitle += appDeprecatedTag
-			}
-			if apps.IsDisabled(appName, composeEnvFile) {
+			// Check deprecated/disabled status
+			// For now, skip IsDeprecated (requires template check from apps package)
+			// We can add it later if needed as a parameter
+			if IsDisabled(appName, composeEnvFile) {
 				headingTitle += appDisabledTag
 			}
 		}
@@ -99,7 +101,7 @@ func FormatLines(currentEnvFile, defaultEnvFile, appName, composeEnvFile string)
 	var currentEnvLines []string
 	if currentEnvFile != "" {
 		if info, err := os.Stat(currentEnvFile); err == nil && !info.IsDir() {
-			lines, err := env.ReadLines(currentEnvFile)
+			lines, err := envutil.ReadLines(currentEnvFile)
 			if err == nil {
 				currentEnvLines = lines
 			}
@@ -149,6 +151,78 @@ func FormatLines(currentEnvFile, defaultEnvFile, appName, composeEnvFile string)
 	}
 
 	return result, nil
+}
+
+// FormatLinesForApp is a convenience wrapper for FormatLines that handles app-specific logic.
+// It determines the default template .env file based on whether the app is user-defined.
+func FormatLinesForApp(currentEnvFile, appName, templatesDir, composeEnvFile string) ([]string, error) {
+	var defaultEnvFile string
+
+	// Get default app .env file if not user-defined
+	if !IsUserDefined(appName, composeEnvFile) {
+		// Get template .env for this app
+		baseApp := getBaseAppName(appName)
+		defaultEnvFile = filepath.Join(templatesDir, ".apps", baseApp, ".env")
+	}
+
+	return FormatLines(currentEnvFile, defaultEnvFile, appName, composeEnvFile)
+}
+
+// GetReferencedApps returns a list of apps referenced in the compose env file.
+func GetReferencedApps(composeEnvFile string) ([]string, error) {
+	lines, err := envutil.ReadLines(composeEnvFile)
+	if err != nil {
+		return nil, err
+	}
+
+	appMap := make(map[string]bool)
+	for _, line := range lines {
+		varName := line
+		if idx := strings.Index(line, "="); idx > 0 {
+			varName = strings.TrimSpace(line[:idx])
+		}
+		appName := VarNameToAppName(varName)
+		if appName != "" && AppNameIsValid(appName) {
+			appMap[appName] = true
+		}
+	}
+
+	var result []string
+	for app := range appMap {
+		result = append(result, app)
+	}
+	return result, nil
+}
+
+// getBaseAppName returns the base app name without instance suffix.
+func getBaseAppName(appName string) string {
+	appLower := strings.ToLower(appName)
+	if idx := strings.Index(appLower, "__"); idx > 0 {
+		return appLower[:idx]
+	}
+	return appLower
+}
+
+// getNiceName returns a nicely formatted app name.
+func getNiceName(appName string) string {
+	appUpper := strings.ToUpper(appName)
+	parts := strings.Split(appUpper, "__")
+
+	var niceParts []string
+	for _, part := range parts {
+		niceParts = append(niceParts, strings.Title(strings.ToLower(part)))
+	}
+
+	return strings.Join(niceParts, " ")
+}
+
+// getSimpleDescription returns a simple description for an app.
+func getSimpleDescription(appName string, isUserDefined bool) string {
+	niceName := getNiceName(appName)
+	if isUserDefined {
+		return niceName + " is a user defined application"
+	}
+	return niceName + " application"
 }
 
 // wordWrap wraps text at the specified width, breaking on word boundaries.

@@ -1,122 +1,143 @@
 package env
 
 import (
+	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/logger"
-	"bufio"
+	"DockSTARTer2/internal/paths"
 	"context"
 	"fmt"
 	"os"
-	"sort"
+	"path/filepath"
 	"strings"
 )
 
 // Update regenerates the .env file to ensure correct sorting and headers.
-// Mirrors env_update.sh functionality using appvars_lines.sh logic.
+// Mirrors env_update.sh functionality (lines 33-80).
 func Update(ctx context.Context, file string) error {
 	logger.Info(ctx, "Updating '{{_File_}}%s{{|-|}}'.", file)
 
-	// 1. Backup
-	bak := file + ".bak"
-	if err := CopyFile(file, bak); err != nil {
-		logger.Warn(ctx, "Failed to backup .env: %v", err)
-	}
+	// Get app config for paths
+	conf := config.LoadAppConfig()
+	composeEnvFile := filepath.Join(conf.ComposeFolder, ".env")
 
-	// 2. Read all lines from file
+	// Read current .env file content
 	input, err := os.ReadFile(file)
-	if err != nil {
+	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
-
 	allLines := strings.Split(string(input), "\n")
 
-	// 3. Extract globals using AppVarsLines with empty appName
-	globals := AppVarsLines("", allLines)
-
-	// 4. Identify all unique app names from the file
-	appNamesMap := make(map[string]bool)
-	for _, line := range allLines {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-
-		// Extract variable name
-		idx := strings.Index(line, "=")
-		if idx > 0 {
-			varName := strings.TrimSpace(line[:idx])
-			appName := VarNameToAppName(varName)
-			if appName != "" && AppNameIsValid(appName) {
-				appNamesMap[appName] = true
-			}
-		}
-	}
-
-	// 5. For each app, extract its variables using AppVarsLines
-	appVars := make(map[string][]string)
-	for appName := range appNamesMap {
-		appVars[appName] = AppVarsLines(appName, allLines)
-	}
-
-	// 6. Sort globals and apps
-	sort.Strings(globals)
-
-	var appNames []string
-	for app := range appVars {
-		appNames = append(appNames, app)
-	}
-	sort.Strings(appNames)
-
-	// Sort vars within each app
-	for _, app := range appNames {
-		sort.Strings(appVars[app])
-	}
-
-	// 7. Re-write file with headers
-	fNew, err := os.Create(file)
+	// Get list of referenced apps
+	appList, err := GetReferencedApps(composeEnvFile)
 	if err != nil {
-		return err
+		logger.Warn(ctx, "Failed to get referenced apps: %v", err)
+		appList = []string{}
 	}
-	defer fNew.Close()
 
-	w := bufio.NewWriter(fNew)
-
-	// Global header
-	w.WriteString("# Global settings\n")
-	for _, line := range globals {
-		w.WriteString(line + "\n")
+	// Temporary file for current env lines (bash line 39)
+	currentLinesFile, err := os.CreateTemp("", "dockstarter2.env_update.*.tmp")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
 	}
-	w.WriteString("\n")
+	defer os.Remove(currentLinesFile.Name())
+	defer currentLinesFile.Close()
 
-	// App sections
-	for _, app := range appNames {
-		niceName := formatTitle(app)
-		w.WriteString(fmt.Sprintf("# %s settings\n", niceName))
-		for _, line := range appVars[app] {
-			w.WriteString(line + "\n")
+	// Variable to accumulate all formatted lines
+	var updatedEnvLines []string
+
+	// === Format global .env section (lines 40-45) ===
+	// Get current global vars
+	globalVars := AppVarsLines("", allLines)
+
+	// Write to temp file
+	currentLinesFile.Truncate(0)
+	currentLinesFile.Seek(0, 0)
+	for _, line := range globalVars {
+		fmt.Fprintln(currentLinesFile, line)
+	}
+	currentLinesFile.Sync()
+
+	// Get default .env.example path
+	templatesDir := paths.GetTemplatesDir()
+	defaultEnvFile := filepath.Join(templatesDir, ".env.example")
+
+	// Call FormatLines for globals
+	formattedGlobals, err := FormatLines(
+		currentLinesFile.Name(),
+		defaultEnvFile,
+		"", // empty appName for globals
+		composeEnvFile,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to format global vars: %w", err)
+	}
+	updatedEnvLines = append(updatedEnvLines, formattedGlobals...)
+
+	// === Format app sections (lines 47-59) ===
+	if len(appList) > 0 {
+		for _, appName := range appList {
+			// Get app-specific vars
+			appVars := AppVarsLines(appName, allLines)
+
+			// Write to temp file
+			currentLinesFile.Truncate(0)
+			currentLinesFile.Seek(0, 0)
+			for _, line := range appVars {
+				fmt.Fprintln(currentLinesFile, line)
+			}
+			currentLinesFile.Sync()
+
+			// Get default app .env file path (will be built by format package)
+			templatesDir := paths.GetTemplatesDir()
+
+			// Call FormatLines for this app (line 55-57)
+			// It will determine the default env file internally
+			formattedApp, err := FormatLinesForApp(
+				currentLinesFile.Name(),
+				appName,
+				templatesDir,
+				composeEnvFile,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to format %s vars: %w", appName, err)
+			}
+			updatedEnvLines = append(updatedEnvLines, formattedApp...)
 		}
-		w.WriteString("\n")
 	}
 
-	return w.Flush()
+	// === Write to .env file (lines 64-78) ===
+	// Create temp output file
+	tempOutputFile, err := os.CreateTemp("", "dockstarter2.env_updated.*.tmp")
+	if err != nil {
+		return fmt.Errorf("failed to create temp output file: %w", err)
+	}
+	tempOutputPath := tempOutputFile.Name()
+	defer os.Remove(tempOutputPath)
+
+	// Write all formatted lines
+	for _, line := range updatedEnvLines {
+		fmt.Fprintln(tempOutputFile, line)
+	}
+	tempOutputFile.Close()
+
+	// Copy temp file to actual .env
+	if err := CopyFile(tempOutputPath, file); err != nil {
+		return fmt.Errorf("failed to update .env file: %w", err)
+	}
+
+	// Set permissions (line 78)
+	if err := os.Chmod(file, 0644); err != nil {
+		logger.Warn(ctx, "Failed to set permissions on .env: %v", err)
+	}
+
+	return nil
 }
 
+// CopyFile copies a file from src to dst
 func CopyFile(src, dst string) error {
 	input, err := os.ReadFile(src)
 	if err != nil {
 		return err
 	}
 	return os.WriteFile(dst, input, 0644)
-}
-
-func formatTitle(s string) string {
-	// RADARR__4K -> Radarr (4k)
-	// RADARR -> Radarr
-
-	if strings.Contains(s, "__") {
-		parts := strings.SplitN(s, "__", 2)
-		base := strings.Title(strings.ToLower(parts[0]))
-		instance := strings.ToLower(parts[1])
-		return fmt.Sprintf("%s (%s)", base, instance)
-	}
-	return strings.Title(strings.ToLower(s))
 }
