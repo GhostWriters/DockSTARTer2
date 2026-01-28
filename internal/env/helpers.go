@@ -2,6 +2,8 @@ package env
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -201,4 +203,109 @@ func AppVarsLines(appName string, lines []string) []string {
 	}
 
 	return appVars
+}
+
+// VarExists checks if a variable exists in an environment file.
+// Mirrors env_var_exists.sh functionality.
+//
+// Supports two forms:
+// - VarExists("VAR_NAME", "file.env") - checks in specified file
+// - VarExists("APPNAME:VAR_NAME", "") - checks in .env.app.appname file
+func VarExists(varName string, varFile string) bool {
+	// Check if varName is in "APPNAME:VARIABLE" format
+	if strings.Contains(varName, ":") && !strings.HasPrefix(varName, ":") {
+		parts := strings.SplitN(varName, ":", 2)
+		appName := parts[0]
+		actualVarName := parts[1]
+
+		// Determine app env file path
+		// This requires config, but for now we'll use a simple path construction
+		// TODO: Consider passing config or making this configurable
+		appLower := strings.ToLower(appName)
+		// Assuming standard location - might need to adjust
+		homeDir, _ := os.UserHomeDir()
+		varFile = filepath.Join(homeDir, ".config", "compose", ".env.app."+appLower)
+		varName = actualVarName
+	}
+
+	// If no file specified, use default .env
+	if varFile == "" {
+		homeDir, _ := os.UserHomeDir()
+		varFile = filepath.Join(homeDir, ".config", "compose", ".env")
+	}
+
+	// Check if file exists
+	if _, err := os.Stat(varFile); err != nil {
+		return false
+	}
+
+	// Read file and search for variable
+	content, err := os.ReadFile(varFile)
+	if err != nil {
+		return false
+	}
+
+	// Pattern: ^\s*VAR_NAME\s*=
+	pattern := fmt.Sprintf(`(?m)^\s*%s\s*=`, regexp.QuoteMeta(varName))
+	re := regexp.MustCompile(pattern)
+	return re.MatchString(string(content))
+}
+
+// VarNameIsValid validates if a variable name is valid according to DockSTARTer rules.
+// Based on varname_is_valid.sh functionality.
+//
+// This is a complex validation function that supports multiple modes:
+// - Empty mode: accepts any variable type (bare or app-specific)
+// - "_BARE_": accepts bare variables (standard shell var names)
+// - "_GLOBAL_": accepts global variables (no app prefix)
+// - "_APPNAME_": accepts app-specific variables
+// - "APPNAME": accepts variables for specific app
+func VarNameIsValid(varName string, varType string) bool {
+	varType = strings.ToUpper(varType)
+
+	switch varType {
+	case "":
+		// Accept any variable type
+		return VarNameIsValid(varName, "_BARE_") || VarNameIsValid(varName, "_APPNAME_")
+
+	case "_BARE_":
+		// Bare variable: [a-zA-Z_][a-zA-Z0-9_]*
+		return regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`).MatchString(varName)
+
+	case "_GLOBAL_":
+		// Global variable: bare but NOT an app variable
+		if !VarNameIsValid(varName, "_BARE_") {
+			return false
+		}
+		return VarNameToAppName(varName) == ""
+
+	case "_APPNAME_":
+		// App variable: bare and HAS an app prefix
+		if !VarNameIsValid(varName, "_BARE_") {
+			return false
+		}
+		return VarNameToAppName(varName) != ""
+
+	default:
+		// Specific app name: must be bare, have matching app prefix
+		if strings.HasSuffix(varType, ":") {
+			// Format: "APPNAME:varname" - check if varname part is bare
+			if !strings.Contains(varName, ":") {
+				return false
+			}
+			parts := strings.SplitN(varName, ":", 2)
+			appPart := strings.ToUpper(parts[0])
+			varPart := parts[1]
+
+			expectedApp := strings.TrimSuffix(varType, ":")
+			return appPart == expectedApp && VarNameIsValid(varPart, "_BARE_")
+		}
+
+		// Format: check if variable's app name matches varType
+		if !VarNameIsValid(varName, "_BARE_") {
+			return false
+		}
+		appName := VarNameToAppName(varName)
+		return strings.ToUpper(appName) == strings.ToUpper(varType)
+	}
 }

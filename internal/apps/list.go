@@ -197,3 +197,30 @@ func ListReferenced(ctx context.Context, conf config.AppConfig) ([]string, error
 	sort.Strings(result)
 	return result, nil
 }
+
+// ListHasVarFile returns all apps that have a .env.app.* file.
+// Mirrors app_list_hasvarfile.sh functionality.
+func ListHasVarFile(composeFolder string) ([]string, error) {
+	pattern := filepath.Join(composeFolder, ".env.app.*")
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []string
+	for _, match := range matches {
+		// Extract app name from filename: .env.app.appname -> appname
+		basename := filepath.Base(match)
+		if !strings.HasPrefix(basename, ".env.app.") {
+			continue
+		}
+
+		appname := strings.TrimPrefix(basename, ".env.app.")
+		// Convert to uppercase (Bash uses varfile_to_appname_pipe which uppercases)
+		result = append(result, strings.ToUpper(appname))
+	}
+
+	// Sort for consistent output
+	sort.Strings(result)
+	return result, nil
+}
