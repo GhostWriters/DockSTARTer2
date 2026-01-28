@@ -107,6 +107,10 @@ func Create(ctx context.Context, appNameRaw string, conf config.AppConfig) error
 
 // ProcessInstanceFile replicates the logic of Bash app_instance_file.sh
 // It returns the path to the processed file, or empty string if no template exists.
+//
+// This function creates instance files from templates with placeholder replacement and
+// stores a copy of the original template for change detection. The original template
+// is stored with a .original suffix next to the instance file.
 func ProcessInstanceFile(ctx context.Context, appName, fileSuffix string) (string, error) {
 	templatesDir := paths.GetTemplatesDir()
 	instancesDir := paths.GetInstancesDir()
@@ -114,27 +118,52 @@ func ProcessInstanceFile(ctx context.Context, appName, fileSuffix string) (strin
 	baseApp := appname_to_baseappname(appName)
 	instance := appname_to_instancename(appName)
 
-	appTemplateDir := filepath.Join(templatesDir, ".apps", baseApp)
-	if _, err := os.Stat(appTemplateDir); os.IsNotExist(err) {
-		// Template folder doesn't exist - this is not an error, just means no template available
-		// Matches Bash behavior which silently continues
+	// Template paths (from .apps folder)
+	templateFolder := filepath.Join(templatesDir, ".apps", baseApp)
+	templateFilename := strings.ReplaceAll(fileSuffix, "*", baseApp)
+	templateFile := filepath.Join(templateFolder, templateFilename)
+
+	// Instance paths - store original template with .original suffix for change tracking
+	instanceFolder := filepath.Join(instancesDir, appName)
+	instanceFilename := strings.ReplaceAll(fileSuffix, "*", appName)
+	instanceFile := filepath.Join(instanceFolder, instanceFilename)
+	instanceOriginalFile := instanceFile + ".original"
+
+	// Check if template folder exists
+	if _, err := os.Stat(templateFolder); os.IsNotExist(err) {
+		// Template folder doesn't exist - this is not an error per Bash behavior
+		// Return empty to signal no template available
 		return "", nil
 	}
 
-	// Resolve template filename (replace * with baseApp)
-	templateFilename := strings.ReplaceAll(fileSuffix, "*", baseApp)
-	templateFile := filepath.Join(appTemplateDir, templateFilename)
-
+	// Check if template file exists
 	if _, err := os.Stat(templateFile); os.IsNotExist(err) {
-		return "", nil // No template, nothing to do
+		// Template file doesn't exist, return empty
+		return "", nil
 	}
 
-	// Instance file path (replace * with appName)
-	instanceFilename := strings.ReplaceAll(fileSuffix, "*", appName)
-	instanceFile := filepath.Join(instancesDir, appName, instanceFilename)
+	// Read template content for comparison
+	templateContent, err := os.ReadFile(templateFile)
+	if err != nil {
+		return "", err
+	}
 
-	// Create instance folder
-	if err := os.MkdirAll(filepath.Dir(instanceFile), 0755); err != nil {
+	// Check if instance file and original template both exist and template hasn't changed
+	// This optimization avoids recreating files when templates haven't changed
+	if _, errInstance := os.Stat(instanceFile); errInstance == nil {
+		if originalContent, errOriginal := os.ReadFile(instanceOriginalFile); errOriginal == nil {
+			// Compare current template with stored original
+			if string(templateContent) == string(originalContent) {
+				// Template hasn't changed, nothing to do
+				return instanceFile, nil
+			}
+		}
+	}
+
+	// If we got here, we need to create/recreate the instance files
+
+	// Create instance folder if needed
+	if err := os.MkdirAll(instanceFolder, 0755); err != nil {
 		return "", err
 	}
 
@@ -147,18 +176,19 @@ func ProcessInstanceFile(ctx context.Context, appName, fileSuffix string) (strin
 		__instance = "__" + strings.ToLower(instance)
 	}
 
-	content, err := os.ReadFile(templateFile)
-	if err != nil {
-		return "", err
-	}
-
-	strContent := string(content)
+	// Replace placeholders - for base apps (no instance), these will be empty strings
+	strContent := string(templateContent)
 	strContent = strings.ReplaceAll(strContent, "<__INSTANCE>", __INSTANCE)
 	strContent = strings.ReplaceAll(strContent, "<__Instance>", __Instance)
 	strContent = strings.ReplaceAll(strContent, "<__instance>", __instance)
 
-	// Write processed file
+	// Write processed instance file
 	if err := os.WriteFile(instanceFile, []byte(strContent), 0644); err != nil {
+		return "", err
+	}
+
+	// Store the original template for change detection
+	if err := os.WriteFile(instanceOriginalFile, templateContent, 0644); err != nil {
 		return "", err
 	}
 
