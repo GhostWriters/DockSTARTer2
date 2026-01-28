@@ -391,6 +391,9 @@ func handleAppVarsCreateAll(ctx context.Context, group *CommandGroup) {
 	if err := apps.CreateAll(ctx, conf); err != nil {
 		logger.Error(ctx, "Failed to create app variables: %v", err)
 	}
+	if err := env.Update(ctx, filepath.Join(conf.ComposeFolder, ".env")); err != nil {
+		logger.Warn(ctx, "Failed to update env usage: %v", err)
+	}
 }
 
 func handleAppVarsCreate(ctx context.Context, group *CommandGroup) {
@@ -415,6 +418,10 @@ func handleAppVarsCreate(ctx context.Context, group *CommandGroup) {
 		if err := apps.Create(ctx, arg, conf); err != nil {
 			logger.Error(ctx, "%v", err)
 		}
+	}
+
+	if err := env.Update(ctx, envFile); err != nil {
+		logger.Warn(ctx, "Failed to update env usage: %v", err)
 	}
 }
 
@@ -571,6 +578,9 @@ func handleStatusChange(ctx context.Context, group *CommandGroup) {
 	if err != nil {
 		logger.Error(ctx, "Failed to change app status: %v", err)
 	}
+	if err := env.Update(ctx, filepath.Join(conf.ComposeFolder, ".env")); err != nil {
+		logger.Warn(ctx, "Failed to update env usage: %v", err)
+	}
 }
 
 func handleRemove(ctx context.Context, group *CommandGroup, state *CmdState) {
@@ -581,6 +591,9 @@ func handleRemove(ctx context.Context, group *CommandGroup, state *CmdState) {
 
 	if err != nil {
 		logger.Error(ctx, "Failed to remove app variables: %v", err)
+	}
+	if err := env.Update(ctx, filepath.Join(conf.ComposeFolder, ".env")); err != nil {
+		logger.Warn(ctx, "Failed to update env usage: %v", err)
 	}
 }
 
