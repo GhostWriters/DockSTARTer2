@@ -128,3 +128,103 @@ func TestInstanceNameIsValid(t *testing.T) {
 		}
 	}
 }
+
+func TestIsGlobalVar(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected bool
+	}{
+		// Global variables (no __ or only one segment)
+		{"PUID", true},
+		{"PGID", true},
+		{"TZ", true},
+		{"DOCKER_VOLUME_STORAGE", true},
+		{"HOME", true},
+
+		// App variables (have __ with segments)
+		{"RADARR__ENABLED", false},
+		{"RADARR__PORT_7878", false},
+		{"RADARR__4K__ENABLED", false},
+		{"SONARR__CONTAINER_NAME", false},
+	}
+
+	for _, test := range tests {
+		result := IsGlobalVar(test.input)
+		if result != test.expected {
+			t.Errorf("IsGlobalVar(%q) = %v; want %v", test.input, result, test.expected)
+		}
+	}
+}
+
+func TestAppVarsLines(t *testing.T) {
+	lines := []string{
+		"PUID='1000'",
+		"PGID='1000'",
+		"TZ='UTC'",
+		"RADARR__ENABLED='true'",
+		"RADARR__PORT_7878='7878'",
+		"RADARR__CONTAINER_NAME='radarr'",
+		"RADARR__4K__ENABLED='true'",
+		"RADARR__4K__PORT_7878='7879'",
+		"RADARR__4K__CONTAINER_NAME='radarr__4k'",
+		"SONARR__ENABLED='true'",
+		"# Comment line",
+		"",
+	}
+
+	// Test globals (empty appName)
+	globals := AppVarsLines("", lines)
+	expectedGlobals := []string{
+		"PUID='1000'",
+		"PGID='1000'",
+		"TZ='UTC'",
+	}
+	if len(globals) != len(expectedGlobals) {
+		t.Errorf("AppVarsLines(\"\") returned %d variables, want %d", len(globals), len(expectedGlobals))
+	}
+	for i, expected := range expectedGlobals {
+		if i >= len(globals) || globals[i] != expected {
+			t.Errorf("AppVarsLines(\"\")[%d] = %q; want %q", i, globals[i], expected)
+		}
+	}
+
+	// Test RADARR (should not include RADARR__4K vars)
+	radarrVars := AppVarsLines("RADARR", lines)
+	expectedRadarr := []string{
+		"RADARR__ENABLED='true'",
+		"RADARR__PORT_7878='7878'",
+		"RADARR__CONTAINER_NAME='radarr'",
+	}
+	if len(radarrVars) != len(expectedRadarr) {
+		t.Errorf("AppVarsLines(\"RADARR\") returned %d variables, want %d", len(radarrVars), len(expectedRadarr))
+		t.Logf("Got: %v", radarrVars)
+	}
+	for i, expected := range expectedRadarr {
+		if i >= len(radarrVars) || radarrVars[i] != expected {
+			t.Errorf("AppVarsLines(\"RADARR\")[%d] = %q; want %q", i, radarrVars[i], expected)
+		}
+	}
+
+	// Test RADARR__4K (should only include RADARR__4K vars)
+	radarr4kVars := AppVarsLines("RADARR__4K", lines)
+	expectedRadarr4k := []string{
+		"RADARR__4K__ENABLED='true'",
+		"RADARR__4K__PORT_7878='7879'",
+		"RADARR__4K__CONTAINER_NAME='radarr__4k'",
+	}
+	if len(radarr4kVars) != len(expectedRadarr4k) {
+		t.Errorf("AppVarsLines(\"RADARR__4K\") returned %d variables, want %d", len(radarr4kVars), len(expectedRadarr4k))
+		t.Logf("Got: %v", radarr4kVars)
+	}
+	for i, expected := range expectedRadarr4k {
+		if i >= len(radarr4kVars) || radarr4kVars[i] != expected {
+			t.Errorf("AppVarsLines(\"RADARR__4K\")[%d] = %q; want %q", i, radarr4kVars[i], expected)
+		}
+	}
+
+	// Test SONARR
+	sonarrVars := AppVarsLines("SONARR", lines)
+	if len(sonarrVars) != 1 {
+		t.Errorf("AppVarsLines(\"SONARR\") returned %d variables, want 1", len(sonarrVars))
+	}
+}

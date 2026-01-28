@@ -6,13 +6,12 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"regexp"
 	"sort"
 	"strings"
 )
 
 // Update regenerates the .env file to ensure correct sorting and headers.
-// Mirrors env_update.sh functionality.
+// Mirrors env_update.sh functionality using appvars_lines.sh logic.
 func Update(ctx context.Context, file string) error {
 	logger.Info(ctx, "Updating '{{_File_}}%s{{|-|}}'.", file)
 
@@ -22,92 +21,57 @@ func Update(ctx context.Context, file string) error {
 		logger.Warn(ctx, "Failed to backup .env: %v", err)
 	}
 
-	// 2. Read all lines and parse variables
-	f, err := os.Open(file)
+	// 2. Read all lines from file
+	input, err := os.ReadFile(file)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
 
-	var globals []string
-	appVars := make(map[string][]string) // Map of AppPrefix -> []VariableLines
+	allLines := strings.Split(string(input), "\n")
 
-	scanner := bufio.NewScanner(f)
-	reVar := regexp.MustCompile(`^\s*([a-zA-Z0-9_]+)=(.*)$`)
+	// 3. Extract globals using AppVarsLines with empty appName
+	globals := AppVarsLines("", allLines)
 
-	seen := make(map[string]bool)
-
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
+	// 4. Identify all unique app names from the file
+	appNamesMap := make(map[string]bool)
+	for _, line := range allLines {
+		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
-			continue // Skip comments and empty lines during parse, we rebuild them
+			continue
 		}
 
-		matches := reVar.FindStringSubmatch(line)
-		if matches != nil {
-			key := matches[1]
-			val := matches[2]
-
-			if seen[key] {
-				continue // Skip duplicates, keep first occurrence
-			}
-			seen[key] = true
-
-			// Reconstruct line to ensure clean format if needed, or use original line?
-			// Bash env_update re-quotes things.
-			// We should probably keep the line closely valid but clean up quotes if possible.
-			// For now, let's use the key=val structure we found, but maybe trust the original line content for value accuracy?
-			// Actually, if we want to ensure sorting, we need the key.
-			// Let's store the full line "KEY=VALUE".
-			// Reconstruct line in clean format
-			fullLine := fmt.Sprintf("%s=%s", key, val)
-
-			if strings.Contains(key, "__") {
-				// Try to extract app name
-				appName := VarNameToAppName(key)
-				if appName != "" {
-					// Validate the app name
-					if !AppNameIsValid(appName) {
-						// Invalid app name (e.g., has reserved instance like RADARR__ENABLED)
-						// Extract base app and group under that instead
-						parts := strings.Split(appName, "__")
-						if len(parts) > 0 {
-							baseApp := parts[0]
-							appVars[baseApp] = append(appVars[baseApp], fullLine)
-						} else {
-							// Shouldn't happen, but fallback to global
-							globals = append(globals, fullLine)
-						}
-					} else {
-						// Valid app name, use it
-						appVars[appName] = append(appVars[appName], fullLine)
-					}
-				} else {
-					// Extraction failed, treat as global
-					globals = append(globals, fullLine)
-				}
-			} else {
-				// No double underscore, it's a global variable
-				globals = append(globals, fullLine)
+		// Extract variable name
+		idx := strings.Index(line, "=")
+		if idx > 0 {
+			varName := strings.TrimSpace(line[:idx])
+			appName := VarNameToAppName(varName)
+			if appName != "" && AppNameIsValid(appName) {
+				appNamesMap[appName] = true
 			}
 		}
 	}
 
-	// 3. Sort Globals
+	// 5. For each app, extract its variables using AppVarsLines
+	appVars := make(map[string][]string)
+	for appName := range appNamesMap {
+		appVars[appName] = AppVarsLines(appName, allLines)
+	}
+
+	// 6. Sort globals and apps
 	sort.Strings(globals)
 
-	// 4. Sort Apps
 	var appNames []string
 	for app := range appVars {
 		appNames = append(appNames, app)
 	}
 	sort.Strings(appNames)
-	// Sort vars within apps
+
+	// Sort vars within each app
 	for _, app := range appNames {
 		sort.Strings(appVars[app])
 	}
 
-	// 5. Re-Write File
+	// 7. Re-write file with headers
 	fNew, err := os.Create(file)
 	if err != nil {
 		return err
@@ -116,17 +80,16 @@ func Update(ctx context.Context, file string) error {
 
 	w := bufio.NewWriter(fNew)
 
-	// Header
+	// Global header
 	w.WriteString("# Global settings\n")
 	for _, line := range globals {
 		w.WriteString(line + "\n")
 	}
 	w.WriteString("\n")
 
-	// Apps
+	// App sections
 	for _, app := range appNames {
 		niceName := formatTitle(app)
-
 		w.WriteString(fmt.Sprintf("# %s settings\n", niceName))
 		for _, line := range appVars[app] {
 			w.WriteString(line + "\n")

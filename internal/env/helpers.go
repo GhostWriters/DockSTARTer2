@@ -1,6 +1,7 @@
 package env
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 )
@@ -119,4 +120,85 @@ func InstanceNameIsValid(name string) bool {
 	}
 
 	return !invalidNames[strings.ToUpper(name)]
+}
+
+// IsGlobalVar checks if a variable name is a global variable (not app-specific).
+// Based on appvars_lines.sh logic for filtering global variables.
+//
+// A global variable does NOT match the pattern: [A-Z][A-Z0-9]*(__[A-Z0-9]+)+\w+
+// Examples:
+//
+//	PUID         -> true (global)
+//	TZ           -> true (global)
+//	RADARR__ENABLED -> false (app var)
+//	RADARR__4K__ENABLED -> false (app var)
+func IsGlobalVar(varName string) bool {
+	// Pattern from Bash: [A-Z][A-Z0-9]*(__[A-Z0-9]+)+\w+
+	// This matches app variables (must have at least one __ followed by more content)
+	appVarPattern := regexp.MustCompile(`^[A-Z][A-Z0-9]*(__[A-Z0-9]+)+\w+`)
+	return !appVarPattern.MatchString(varName)
+}
+
+// AppVarsLines filters environment variable lines to only those belonging to the specified app.
+// Based on appvars_lines.sh regex logic.
+//
+// The Bash function uses negative lookahead: ${APPNAME}__(?![A-Za-z0-9]+__)\\w+
+// Since Go doesn't support lookahead, we match and then manually filter.
+//
+// Examples for appName="RADARR":
+//
+//	RADARR__ENABLED='true'        -> included
+//	RADARR__PORT_7878='7878'      -> included
+//	RADARR__4K__ENABLED='true'    -> excluded (belongs to RADARR__4K instance)
+//
+// Examples for appName="RADARR__4K":
+//
+//	RADARR__4K__ENABLED='true'    -> included
+//	RADARR__4K__PORT_7878='7878'  -> included
+//	RADARR__ENABLED='true'        -> excluded (belongs to RADARR base)
+func AppVarsLines(appName string, lines []string) []string {
+	if appName == "" {
+		// Return all global variables
+		var globals []string
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+
+			// Extract variable name
+			matches := regexp.MustCompile(`^([A-Za-z0-9_]+)=`).FindStringSubmatch(line)
+			if len(matches) > 1 {
+				varName := matches[1]
+				if IsGlobalVar(varName) {
+					globals = append(globals, line)
+				}
+			}
+		}
+		return globals
+	}
+
+	// Match variables that start with APPNAME__
+	// Then manually filter out those that have another __ segment (nested instances)
+	pattern := fmt.Sprintf(`^\s*(%s__\w+)\s*=`, regexp.QuoteMeta(appName))
+	re := regexp.MustCompile(pattern)
+
+	var appVars []string
+	for _, line := range lines {
+		matches := re.FindStringSubmatch(line)
+		if len(matches) > 1 {
+			varName := matches[1]
+			// Check if this variable belongs to a nested instance
+			// by seeing if there's another __ after removing APPNAME__
+			suffix := strings.TrimPrefix(varName, appName+"__")
+			// If suffix contains __ followed by alphanumeric, it's a nested instance
+			if regexp.MustCompile(`^[A-Za-z0-9]+__`).MatchString(suffix) {
+				// This is a nested instance like RADARR__4K__ENABLED when appName is RADARR
+				continue
+			}
+			appVars = append(appVars, strings.TrimSpace(line))
+		}
+	}
+
+	return appVars
 }
