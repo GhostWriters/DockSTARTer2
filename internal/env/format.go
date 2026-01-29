@@ -177,16 +177,14 @@ func FormatLinesForApp(currentEnvFile, appName, templatesDir, composeEnvFile str
 
 	// Get default app .env file if not user-defined
 	if !IsUserDefinedApp(appName, composeEnvFile) {
-		// 1. Try to use the processed instance file first (contains correct values/placeholders replaced)
+		// Use the processed instance file (contains correct values/placeholders replaced)
 		instancesDir := paths.GetInstancesDir()
 		processedInstanceFile := filepath.Join(instancesDir, appName, ".env")
 		if _, err := os.Stat(processedInstanceFile); err == nil {
 			defaultEnvFile = processedInstanceFile
-		} else {
-			// 2. Fallback to raw template if processed file doesn't exist
-			baseApp := getBaseAppName(appName)
-			defaultEnvFile = filepath.Join(templatesDir, ".apps", baseApp, ".env")
 		}
+		// logic change: Do NOT fallback to raw template. Using raw template injects unprocessed placeholders.
+		// If instance file is missing, we treat it as having no template (safer).
 	}
 
 	return FormatLines(currentEnvFile, defaultEnvFile, appName, composeEnvFile)
