@@ -2,6 +2,7 @@ package env
 
 import (
 	"DockSTARTer2/internal/envutil"
+	"DockSTARTer2/internal/paths"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -176,9 +177,16 @@ func FormatLinesForApp(currentEnvFile, appName, templatesDir, composeEnvFile str
 
 	// Get default app .env file if not user-defined
 	if !IsUserDefinedApp(appName, composeEnvFile) {
-		// Get template .env for this app
-		baseApp := getBaseAppName(appName)
-		defaultEnvFile = filepath.Join(templatesDir, ".apps", baseApp, ".env")
+		// 1. Try to use the processed instance file first (contains correct values/placeholders replaced)
+		instancesDir := paths.GetInstancesDir()
+		processedInstanceFile := filepath.Join(instancesDir, appName, ".env")
+		if _, err := os.Stat(processedInstanceFile); err == nil {
+			defaultEnvFile = processedInstanceFile
+		} else {
+			// 2. Fallback to raw template if processed file doesn't exist
+			baseApp := getBaseAppName(appName)
+			defaultEnvFile = filepath.Join(templatesDir, ".apps", baseApp, ".env")
+		}
 	}
 
 	return FormatLines(currentEnvFile, defaultEnvFile, appName, composeEnvFile)
