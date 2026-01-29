@@ -183,8 +183,6 @@ func FormatLinesForApp(currentEnvFile, appName, templatesDir, composeEnvFile str
 		if _, err := os.Stat(processedInstanceFile); err == nil {
 			defaultEnvFile = processedInstanceFile
 		}
-		// logic change: Do NOT fallback to raw template. Using raw template injects unprocessed placeholders.
-		// If instance file is missing, we treat it as having no template (safer).
 	}
 
 	return FormatLines(currentEnvFile, defaultEnvFile, appName, composeEnvFile)
