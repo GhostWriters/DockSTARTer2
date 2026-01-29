@@ -54,7 +54,16 @@ jobs:
           fi
 
           git fetch --tags --force
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          
+          # Check if current commit is already tagged
+          TAG_AT_HEAD=$(git tag --points-at HEAD)
+          
+          if [ -n "$TAG_AT_HEAD" ]; then
+            echo "Current commit is manually tagged ($TAG_AT_HEAD). Comparing against previous tag."
+            LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          else
+            LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          fi
 
           if [ -z "$LAST_TAG" ]; then
             echo "No tags found. Assuming first release."
