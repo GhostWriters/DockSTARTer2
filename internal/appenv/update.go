@@ -14,7 +14,8 @@ import (
 // Update regenerates the .env file to ensure correct sorting and headers.
 // Mirrors env_update.sh functionality (lines 33-80).
 func Update(ctx context.Context, file string) error {
-	logger.Info(ctx, "Updating '{{_File_}}%s{{|-|}}'.", file)
+	logger.Notice(ctx, "Updating environment variable files.")
+	logger.Notice(ctx, "Updating '{{_File_}}%s{{|-|}}'.", file)
 
 	// Get app config for paths
 	conf := config.LoadAppConfig()

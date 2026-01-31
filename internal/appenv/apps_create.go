@@ -40,7 +40,7 @@ func CreateAll(ctx context.Context, conf config.AppConfig) error {
 		return nil
 	}
 
-	logger.Notice(ctx, "Creating environment variables for added  Please be patient, this can take a while.")
+	logger.Notice(ctx, "Creating environment variables for added apps. Please be patient, this can take a while.")
 
 	for _, appNameUpper := range added {
 		if err := CreateApp(ctx, appNameUpper, conf); err != nil {

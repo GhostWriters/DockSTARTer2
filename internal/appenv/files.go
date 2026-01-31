@@ -1,6 +1,7 @@
 package appenv
 
 import (
+	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"bytes"
 	"context"
@@ -50,6 +51,7 @@ func AppInstanceFile(ctx context.Context, appName, fileSuffix string) (string, e
 	// Check if we need to update/recreate
 	originalContent, _ := os.ReadFile(instanceOriginalFile)
 	if !bytes.Equal(templateContent, originalContent) {
+		logger.Notice(ctx, "Creating '{{_File_}}%s{{|-|}}'", instanceFile)
 		// Template changed or missing, recreate instance
 		if err := os.WriteFile(instanceOriginalFile, templateContent, 0644); err != nil {
 			return "", err

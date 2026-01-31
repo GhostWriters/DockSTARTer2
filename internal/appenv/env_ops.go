@@ -72,9 +72,9 @@ func EnvCreate(ctx context.Context, conf config.AppConfig) error {
 		return err
 	}
 	if len(added) == 0 {
-		logger.Info(ctx, "Installing default applications.")
+		logger.Notice(ctx, "Installing default applications.")
 		// Add Watchtower
-		if err := Set("WATCHTOWER__ENABLED", "true", envFile); err != nil {
+		if err := Enable(ctx, []string{"WATCHTOWER"}, conf); err != nil {
 			return err
 		}
 	}
