@@ -28,7 +28,7 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 	var appNiceName string
 
 	if appName != "" {
-		appIsUserDefined = IsAppUserDefined(appName, composeEnvFile)
+		appIsUserDefined = IsAppUserDefined(ctx, appName, composeEnvFile)
 		appNiceName = GetNiceName(ctx, appName)
 		appDescription := GetDescription(ctx, appName, composeEnvFile)
 
@@ -134,7 +134,7 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 // FormatLinesForApp convenience wrapper.
 func FormatLinesForApp(ctx context.Context, currentEnvFile, appName, templatesDir, composeEnvFile string) ([]string, error) {
 	var defaultEnvFile string
-	if !IsAppUserDefined(appName, composeEnvFile) {
+	if !IsAppUserDefined(ctx, appName, composeEnvFile) {
 		instancesDir := paths.GetInstancesDir()
 		processedInstanceFile := filepath.Join(instancesDir, appName, ".env")
 		if _, err := os.Stat(processedInstanceFile); err == nil {

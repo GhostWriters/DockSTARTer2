@@ -7,10 +7,11 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/user"
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/adrg/xdg"
 )
 
 // EnvCreate initializes the DockSTARTer environment file.
@@ -99,7 +100,6 @@ func BackupEnv(ctx context.Context, file string) error {
 // SanitizeEnv sanitizes the environment file by setting default values
 func SanitizeEnv(ctx context.Context, file string, conf config.AppConfig) error {
 	// 1. Merge default values (if keys missing)
-	// Create temp default file
 	tmpDefault := filepath.Join(os.TempDir(), "ds2_default.env")
 	defaultContent, err := assets.GetDefaultEnv()
 	if err != nil {
@@ -114,96 +114,211 @@ func SanitizeEnv(ctx context.Context, file string, conf config.AppConfig) error 
 		logger.Error(ctx, "Failed to merge defaults: %v", err)
 	}
 
+	// 2. Load all variables for expansion context
+	vars, err := ListVars(file)
+	if err != nil {
+		return fmt.Errorf("failed to read env vars: %w", err)
+	}
+
+	expansionContext := make(map[string]string)
+	for _, e := range os.Environ() {
+		pair := strings.SplitN(e, "=", 2)
+		if len(pair) == 2 {
+			expansionContext[pair[0]] = pair[1]
+		}
+	}
+
+	// Inject XDG variables if missing
+	if _, ok := expansionContext["XDG_CONFIG_HOME"]; !ok {
+		expansionContext["XDG_CONFIG_HOME"] = xdg.ConfigHome
+	}
+	if _, ok := expansionContext["XDG_DATA_HOME"]; !ok {
+		expansionContext["XDG_DATA_HOME"] = xdg.DataHome
+	}
+	if _, ok := expansionContext["XDG_CACHE_HOME"]; !ok {
+		expansionContext["XDG_CACHE_HOME"] = xdg.CacheHome
+	}
+	if _, ok := expansionContext["XDG_STATE_HOME"]; !ok {
+		expansionContext["XDG_STATE_HOME"] = xdg.StateHome
+	}
+
+	for k, v := range vars {
+		expansionContext[k] = v
+	}
+
+	getExpanded := func(key string) string {
+		val := vars[key]
+		return ExpandVars(val, expansionContext)
+	}
+
 	// 2. Collect Updates
 	var updatedVars []string
 	updates := make(map[string]string)
 
-	home, _ := os.UserHomeDir()
+	detectedHome, _ := os.UserHomeDir()
 
-	addUpdate := func(key, value string, literal bool) {
-		// Replace absolute home with ${HOME} reference if it matches
-		if home != "" && strings.HasPrefix(value, home) {
-			value = strings.Replace(value, home, "${HOME}", 1)
-		}
-
-		// Normalize separators for the platform
-		// But don't use filepath.Clean on variable strings if they look like / paths for Docker
-		if runtime.GOOS == "windows" {
-			// If it starts with a drive letter or looks like an absolute path, normalize it
-			if len(value) > 2 && value[1] == ':' {
-				value = filepath.Clean(value)
-			} else {
-				// For variable-based paths like ${VAR}/path, we prefer keeping them as-is or using /
-				// However, if we want consistency with the platform:
-				value = filepath.FromSlash(value)
-			}
-		}
-
-		var finalVal string
-		if literal {
-			finalVal = value
-		} else {
-			finalVal = "'" + strings.ReplaceAll(value, "'", `'"'"'`) + "'"
-		}
-
+	addUpdate := func(key, value string) {
 		updatedVars = append(updatedVars, key)
-		updates[key] = finalVal
-	}
-
-	// PUID/PGID
-	currentUser, err := user.Current()
-	if err == nil {
-		puid := currentUser.Uid
-		pgid := currentUser.Gid
-		if runtime.GOOS == "windows" {
-			puid = "1000"
-			pgid = "1000"
-		}
-
-		val, _ := Get("PUID", file)
-		if strings.Contains(val, "x") || val == "" {
-			addUpdate("PUID", puid, false)
-		}
-
-		val, _ = Get("PGID", file)
-		if strings.Contains(val, "x") || val == "" {
-			addUpdate("PGID", pgid, false)
-		}
-	}
-
-	// TZ
-	val, _ := Get("TZ", file)
-	if val == "" {
-		addUpdate("TZ", "UTC", false)
+		updates[key] = value
+		expansionContext[key] = value // Update context with potential literal? Or value?
+		// For Sanitization loop, we assume value is what we want to use.
+		// If explicit quotes are needed, 'value' should have them.
 	}
 
 	// HOME
-	home, _ = os.UserHomeDir()
-	val, _ = Get("HOME", file)
-	if val == "" || strings.Contains(val, "x") {
-		addUpdate("HOME", home, true)
+	// Bash: HOME="${DETECTED_HOMEDIR}" (No quotes added by env_sanitize)
+	currentHomeExpanded := getExpanded("HOME")
+	if currentHomeExpanded != detectedHome {
+		addUpdate("HOME", detectedHome)
 	}
 
 	// DOCKER_CONFIG_FOLDER
-	val, _ = Get("DOCKER_CONFIG_FOLDER", file)
-	if val == "" || strings.Contains(val, "x") {
-		// Use unexpanded to preserve ${XDG_CONFIG_HOME}
-		addUpdate("DOCKER_CONFIG_FOLDER", conf.ConfigFolderUnexpanded, true)
+	rawConfig := conf.ConfigFolderUnexpanded
+
+	// Create strict context for config expansion as per global_variables.sh
+	configExpansionContext := map[string]string{
+		"XDG_CONFIG_HOME": xdg.ConfigHome,
+		"HOME":            detectedHome,
+	}
+
+	expandedConfig := ExpandVars(rawConfig, configExpansionContext)
+	expandedConfig = filepath.Clean(expandedConfig)
+	if runtime.GOOS == "windows" {
+		expandedConfig = filepath.ToSlash(expandedConfig)
+	}
+
+	// Normalize detectedHome for replacement matching
+	replHome := filepath.Clean(detectedHome)
+	if runtime.GOOS == "windows" {
+		replHome = filepath.ToSlash(replHome)
+	}
+
+	homeMap := map[string]string{"HOME": replHome}
+	targetConfigLiteral := ReplaceWithVars(expandedConfig, homeMap)
+
+	currentConfigLiteral := vars["DOCKER_CONFIG_FOLDER"]
+	if currentConfigLiteral != targetConfigLiteral {
+		addUpdate("DOCKER_CONFIG_FOLDER", targetConfigLiteral)
 	}
 
 	// DOCKER_COMPOSE_FOLDER
-	val, _ = Get("DOCKER_COMPOSE_FOLDER", file)
-	if val == "" || strings.Contains(val, "x") {
-		// Use unexpanded to preserve ${XDG_CONFIG_HOME}
-		addUpdate("DOCKER_COMPOSE_FOLDER", conf.ComposeFolderUnexpanded, true)
+	rawCompose := conf.ComposeFolderUnexpanded
+
+	// Strict context for compose expansion
+	composeExpansionContext := map[string]string{
+		"ConfigFolder":         expandedConfig,
+		"DOCKER_CONFIG_FOLDER": expandedConfig,
+		"XDG_CONFIG_HOME":      xdg.ConfigHome,
+		"HOME":                 detectedHome,
 	}
 
-	// DOCKER_HOSTNAME
-	val, _ = Get("DOCKER_HOSTNAME", file)
-	if val == "" || strings.Contains(val, "x") {
-		hostname, err := os.Hostname()
-		if err == nil {
-			addUpdate("DOCKER_HOSTNAME", hostname, false)
+	expandedCompose := ExpandVars(rawCompose, composeExpansionContext)
+	expandedCompose = filepath.Clean(expandedCompose)
+	if runtime.GOOS == "windows" {
+		expandedCompose = filepath.ToSlash(expandedCompose)
+	}
+
+	composeMap := map[string]string{
+		"DOCKER_CONFIG_FOLDER": expandedConfig, // Use expanded path for replacement matching
+		"HOME":                 replHome,
+	}
+
+	targetComposeLiteral := ReplaceWithVars(expandedCompose, composeMap)
+
+	currentComposeLiteral := vars["DOCKER_COMPOSE_FOLDER"]
+	if currentComposeLiteral != targetComposeLiteral {
+		addUpdate("DOCKER_COMPOSE_FOLDER", targetComposeLiteral)
+	}
+
+	// Apply defaults using VarDefaultValue (Global variables)
+	defaultsList1 := []string{"DOCKER_HOSTNAME", "TZ"}
+	for _, key := range defaultsList1 {
+		val := vars[key]
+		if val == "" {
+			def := VarDefaultValue(ctx, key, conf)
+			if def != "" {
+				addUpdate(key, def)
+			}
+		}
+	}
+
+	defaultsList2 := []string{"GLOBAL_LAN_NETWORK", "DOCKER_GID", "PGID", "PUID"}
+	for _, key := range defaultsList2 {
+		val := vars[key]
+		if val == "" || strings.Contains(val, "x") {
+			def := VarDefaultValue(ctx, key, conf)
+			if def != "" {
+				addUpdate(key, def)
+			}
+		}
+	}
+
+	// Volumes - ReplaceWithVars Logic
+	volumeVars := []string{
+		"DOCKER_VOLUME_CONFIG",
+		"DOCKER_VOLUME_STORAGE",
+		"DOCKER_VOLUME_STORAGE2",
+		"DOCKER_VOLUME_STORAGE3",
+		"DOCKER_VOLUME_STORAGE4",
+	}
+
+	// Normalize specific paths for volume replacements
+	replHomeVol := filepath.Clean(detectedHome)
+	if runtime.GOOS == "windows" {
+		replHomeVol = filepath.ToSlash(replHomeVol)
+	}
+	replacements := map[string]string{
+		"DOCKER_CONFIG_FOLDER": expandedConfig,
+		"HOME":                 replHomeVol,
+	}
+
+	for _, vVar := range volumeVars {
+		currentValExpanded := getExpanded(vVar)
+		sanitized := filepath.Clean(currentValExpanded)
+		if runtime.GOOS == "windows" {
+			sanitized = filepath.ToSlash(sanitized)
+		}
+
+		restored := ReplaceWithVars(sanitized, replacements)
+
+		// In Bash: UpdatedValue like "${HOME}/storage"
+		// Logic: VarsToUpdate+=("${VarName}")
+		// UpdatedVarValue["${VarName}"]="\"${UpdatedValue}\""
+		// It EXPLICITLY quotes the restored value with double quotes.
+
+		// Check overlap with current literal
+		currentLiteral := vars[vVar]
+
+		// Bash checks if ${Value} (expanded/current) != ${UpdatedValue} (restored)
+		// Wait, Bash check: if [[ ${Value} != "${UpdatedValue}" ]]; then
+		// Value is get_env (literal? or expanded?). env_get returns value.
+		// If env_get returns literal, then we compare Literal vs Restored.
+		// If env_get returns expanded (vars expanded?), then we compare Expanded vs Restored.
+
+		// Actually env_get source simply sources the file and echoes the var.
+		// So `env_get` returns the EXPANDED value if the file has `VAR=${OTHER}`.
+
+		// So Bash compares EXPANDED vs RESTORED.
+		// Example: File has `STORAGE=/home/user/storage`.
+		// Expanded: `/home/user/storage`.
+		// Restored: `${HOME}/storage`.
+		// Are they equal? NO.
+		// So strict equality fails -> Update.
+		// Update set to `"\"${UpdatedValue}\""` => `"${HOME}/storage"`.
+
+		// If File has `STORAGE="${HOME}/storage"`.
+		// Expanded: `/home/user/storage`.
+		// Restored: `${HOME}/storage`.
+		// Equality fails -> Update.
+		// Update set to `"${HOME}/storage"`. (Same literal).
+
+		// If `vars[vVar]` (literal) is same as `"${restored}"` (quoted restored), skipping?
+		// But Bash logic seems to force update if expanded != restored.
+		// Which means it effectively enforces standard variable syntax?
+
+		targetVal := fmt.Sprintf("\"%s\"", restored)
+		if currentLiteral != targetVal {
+			addUpdate(vVar, targetVal)
 		}
 	}
 

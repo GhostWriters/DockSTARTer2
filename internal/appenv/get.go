@@ -123,6 +123,7 @@ func GetLiteral(key, file string) (string, error) {
 }
 
 // GetLineNumber returns the line number of the variable definition.
+// GetLineNumber returns the line number of the variable definition.
 func GetLineNumber(key, file string) (int, error) {
 	f, err := os.Open(file)
 	if err != nil {
@@ -133,15 +134,10 @@ func GetLineNumber(key, file string) (int, error) {
 	}
 	defer f.Close()
 
-	re := regexp.MustCompile(fmt.Sprintf(`^\s*%s\s*=`, regexp.QuoteMeta(key)))
-
 	lineNum := 0
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		lineNum++
-		if re.MatchString(scanner.Text()) {
-			return lineNum, nil
-		}
 	}
-	return 0, scanner.Err()
+	return 0, nil
 }

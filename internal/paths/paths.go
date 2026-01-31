@@ -134,3 +134,12 @@ func GetInstanceFolder(appName string) string {
 func GetConfigFolder() string {
 	return GetConfigDir()
 }
+
+// GetExecDirectory returns the directory of the currently running executable.
+func GetExecDirectory() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return "."
+	}
+	return filepath.Dir(exe)
+}

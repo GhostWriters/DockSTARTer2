@@ -26,7 +26,7 @@ func AppStatus(ctx context.Context, app string, conf config.AppConfig) string {
 	}
 
 	envFile := filepath.Join(conf.ComposeFolder, ".env")
-	if IsAppAdded(app, envFile) {
+	if IsAppAdded(ctx, app, envFile) {
 		return "Enabled"
 	}
 

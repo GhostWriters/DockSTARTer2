@@ -77,18 +77,20 @@ func IsAppDeprecated(ctx context.Context, appName string) bool {
 }
 
 // IsAppUserDefined checks if an app is user-defined (not built-in OR missing ENABLED var).
-func IsAppUserDefined(appName string, envFile string) bool {
+func IsAppUserDefined(ctx context.Context, appName string, envFile string) bool {
 	appUpper := strings.ToUpper(appName)
 	if IsAppBuiltIn(appUpper) {
 		return false
 	}
-	return VarExists(appUpper+"__ENABLED", envFile)
+	exists, _ := EnvVarExists(ctx, appUpper+"__ENABLED", envFile)
+	return exists
 }
 
 // IsAppAdded checks if an app is both builtin and has an __ENABLED variable.
-func IsAppAdded(appName string, envFile string) bool {
+func IsAppAdded(ctx context.Context, appName string, envFile string) bool {
 	appUpper := strings.ToUpper(appName)
-	return IsAppBuiltIn(appUpper) && VarExists(appUpper+"__ENABLED", envFile)
+	exists, _ := EnvVarExists(ctx, appUpper+"__ENABLED", envFile)
+	return IsAppBuiltIn(appUpper) && exists
 }
 
 // IsAppRunnable checks if an app has the required YML template files for the current architecture.
@@ -119,6 +121,8 @@ func IsAppNonDeprecated(ctx context.Context, appName string) bool {
 
 // IsAppEnabled checks if an app is enabled (ENABLED=true).
 func IsAppEnabled(app, envFile string) bool {
+	// bash checks value being IsTrue.
+	// We need to read the value.
 	val, _ := Get(app+"__ENABLED", envFile)
 	return IsTrue(val)
 }
@@ -134,6 +138,7 @@ func IsAppReferenced(ctx context.Context, app string, conf config.AppConfig) boo
 	overrideFile := filepath.Join(conf.ComposeFolder, "docker-compose.override.yml")
 	if _, err := os.Stat(overrideFile); err == nil {
 		content, _ := os.ReadFile(overrideFile)
+		// Grep for .env.app.APPNAME
 		if strings.Contains(string(content), ".env.app."+strings.ToLower(app)) {
 			return true
 		}
@@ -197,27 +202,34 @@ func VarNameIsValid(varName string, varType string) bool {
 	}
 }
 
-// VarExists checks if a variable exists in an environment file.
-func VarExists(varName string, varFile string) bool {
-	if strings.Contains(varName, ":") && !strings.HasPrefix(varName, ":") {
-		parts := strings.SplitN(varName, ":", 2)
+// EnvVarExists checks if a variable exists in the specified file.
+// If key is "APPNAME:VARNAME", it resolves the app instance file.
+// Mirrors env_var_exists.sh.
+func EnvVarExists(ctx context.Context, key string, file string) (bool, error) {
+	targetFile := file
+	targetKey := key
+
+	// Check for APPNAME:VARNAME syntax
+	if strings.Contains(key, ":") {
+		parts := strings.SplitN(key, ":", 2)
 		appName := parts[0]
-		actualVarName := parts[1]
-		homeDir, _ := os.UserHomeDir()
-		varFile = filepath.Join(homeDir, ".config", "compose", ".app."+strings.ToLower(appName))
-		varName = actualVarName
+		targetKey = parts[1]
+
+		f, err := AppInstanceFile(ctx, appName, ".env")
+		if err != nil {
+			return false, err
+		}
+		targetFile = f
 	}
-	if varFile == "" {
-		homeDir, _ := os.UserHomeDir()
-		varFile = filepath.Join(homeDir, ".config", "compose", ".env")
+
+	if targetFile == "" {
+		return false, fmt.Errorf("no file specified")
 	}
-	if _, err := os.Stat(varFile); err != nil {
-		return false
-	}
-	content, err := os.ReadFile(varFile)
+
+	// Logic: grep -q -E "^\s*${VAR_NAME}\s*="
+	line, err := GetLine(targetKey, targetFile)
 	if err != nil {
-		return false
+		return false, err
 	}
-	pattern := fmt.Sprintf(`(?m)^\s*%s\s*=`, regexp.QuoteMeta(varName))
-	return regexp.MustCompile(pattern).MatchString(string(content))
+	return line != "", nil
 }

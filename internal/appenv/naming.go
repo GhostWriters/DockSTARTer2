@@ -79,7 +79,7 @@ func GetNiceName(ctx context.Context, appName string) string {
 // GetDescription returns the description of an application.
 func GetDescription(ctx context.Context, appName string, envFile string) string {
 	// Check if user defined
-	if IsAppUserDefined(appName, envFile) {
+	if IsAppUserDefined(ctx, appName, envFile) {
 		return GetNiceName(ctx, appName) + " is a user defined application"
 	}
 
