@@ -80,10 +80,7 @@ func EnvCreate(ctx context.Context, conf config.AppConfig) error {
 	}
 
 	// 4. Update file (sorting/formatting)
-	if err := Update(ctx, envFile); err != nil {
-		return err
-	}
-
+	// DELETED: Update(ctx, envFile) - This was masking variable additions from CreateAll/MergeNewOnly
 	return nil
 }
 
