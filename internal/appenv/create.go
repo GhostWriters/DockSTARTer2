@@ -31,11 +31,30 @@ func Create(file, defaultFile string) error {
 		return fmt.Errorf("failed to read default env %s: %w", defaultFile, err)
 	}
 
-	// Expand variables
-	content := config.ExpandVariables(string(input))
-
-	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+	// Write raw content first
+	if err := os.WriteFile(file, input, 0644); err != nil {
 		return fmt.Errorf("failed to create env file %s: %w", file, err)
 	}
+
+	// Sanitize: Set specific top-level variables
+	// We do NOT want to expand everything, as variables defined later should reference these.
+
+	// 1. HOME
+	home, err := os.UserHomeDir()
+	if err == nil {
+		if err := Set("HOME", home, file); err != nil {
+			return fmt.Errorf("failed to set HOME in env file: %w", err)
+		}
+	}
+
+	// 2. CONFIG/COMPOSE FOLDERS
+	conf := config.LoadAppConfig()
+	if err := Set("DOCKER_CONFIG_FOLDER", conf.ConfigFolder, file); err != nil {
+		return fmt.Errorf("failed to set DOCKER_CONFIG_FOLDER: %w", err)
+	}
+	if err := Set("DOCKER_COMPOSE_FOLDER", conf.ComposeFolder, file); err != nil {
+		return fmt.Errorf("failed to set DOCKER_COMPOSE_FOLDER: %w", err)
+	}
+
 	return nil
 }
