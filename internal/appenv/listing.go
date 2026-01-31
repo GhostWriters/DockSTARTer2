@@ -287,3 +287,33 @@ func AppVarsLines(appName string, lines []string) []string {
 
 	return appVars
 }
+
+// ListAppVarLines returns a list of variable lines (KEY=VALUE) for the specified app.
+func ListAppVarLines(ctx context.Context, appName string, conf config.AppConfig) ([]string, error) {
+	envFile := filepath.Join(conf.ComposeFolder, ".env")
+
+	// If appName ends with ":", use app-specific env file
+	if strings.HasSuffix(appName, ":") {
+		baseApp := strings.TrimSuffix(appName, ":")
+		targetFile := filepath.Join(conf.ComposeFolder, ".env.app."+strings.ToLower(baseApp))
+		content, err := os.ReadFile(targetFile)
+		if err != nil {
+			return nil, err
+		}
+		var lines []string
+		scanner := bufio.NewScanner(strings.NewReader(string(content)))
+		for scanner.Scan() {
+			lines = append(lines, scanner.Text())
+		}
+		return lines, scanner.Err()
+	}
+
+	// Otherwise, use AppVarsLines to filter from global .env
+	content, err := os.ReadFile(envFile)
+	if err != nil {
+		return nil, err
+	}
+
+	lines := strings.Split(string(content), "\n")
+	return AppVarsLines(strings.ToUpper(appName), lines), nil
+}

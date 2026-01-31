@@ -518,10 +518,9 @@ func handleList(ctx context.Context, group *CommandGroup) {
 
 	switch group.Command {
 	case "-l", "--list":
-		result, err = appenv.ListBuiltin()
 		result, err = appenv.ListBuiltinApps()
 	case "--list-added":
-		result, err = appenv.ListAdded(ctx, envFile)
+		result, err = appenv.ListAddedApps(ctx, envFile)
 	case "--list-builtin":
 		result, err = appenv.ListBuiltinApps()
 	case "--list-deprecated":
@@ -542,7 +541,7 @@ func handleList(ctx context.Context, group *CommandGroup) {
 	}
 
 	for _, item := range result {
-		fmt.Println(appenv.GetNiceName(item))
+		fmt.Println(appenv.GetNiceName(ctx, item))
 	}
 }
 
@@ -737,7 +736,7 @@ func handleEnvAppVars(ctx context.Context, group *CommandGroup) {
 	}
 
 	for _, appName := range args {
-		vars, err := appenv.ListAppVars(ctx, appName, conf.ComposeFolder)
+		vars, err := appenv.ListAppVars(ctx, appName, conf)
 		if err != nil {
 			logger.Error(ctx, "Failed to list variables for %s: %v", appName, err)
 			continue
@@ -756,7 +755,7 @@ func handleEnvAppVarsLines(ctx context.Context, group *CommandGroup) {
 	}
 
 	for _, appName := range args {
-		lines, err := appenv.ListVarLines(ctx, appName, conf.ComposeFolder)
+		lines, err := appenv.ListAppVarLines(ctx, appName, conf)
 		if err != nil {
 			logger.Error(ctx, "Failed to list variable lines for %s: %v", appName, err)
 			continue
