@@ -13,6 +13,13 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 )
 
+var (
+	// StateHomeOverride allows overriding the state home for tests.
+	StateHomeOverride string
+	// TemplatesDirOverride allows overriding the templates directory for tests.
+	TemplatesDirOverride string
+)
+
 // GetConfigFilePath returns the absolute path to the dockstarter2.ini file.
 // It places it in a subdirectory named after the application (e.g., ~/.config/dockstarter2/dockstarter2.ini).
 func GetConfigFilePath() string {
@@ -27,6 +34,9 @@ func GetConfigFilePath() string {
 // GetTemplatesDir returns the absolute path to the DockSTARTer-Templates repository.
 // It uses xdg.StateHome (e.g., %LOCALAPPDATA% on Windows) with a dockstarter2 subfolder.
 func GetTemplatesDir() string {
+	if TemplatesDirOverride != "" {
+		return TemplatesDirOverride
+	}
 	appName := strings.ToLower(version.ApplicationName)
 	return filepath.Join(xdg.StateHome, appName, "templates", "DockSTARTer-Templates")
 }
@@ -98,6 +108,9 @@ func GetThemesDir() string {
 
 // GetStateDir returns the absolute path to the dockstarter2 state directory.
 func GetStateDir() string {
+	if StateHomeOverride != "" {
+		return StateHomeOverride
+	}
 	appName := strings.ToLower(version.ApplicationName)
 	return filepath.Join(xdg.StateHome, appName)
 }

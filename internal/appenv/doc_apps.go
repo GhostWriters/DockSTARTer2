@@ -19,4 +19,4 @@
 //
 // The package maintains strict compatibility with the original Bash
 // implementation's behavior and output.
-package apps
+package appenv

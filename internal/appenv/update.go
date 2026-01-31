@@ -1,4 +1,4 @@
-package env
+package appenv
 
 import (
 	"DockSTARTer2/internal/config"
@@ -57,12 +57,13 @@ func Update(ctx context.Context, file string) error {
 	}
 	currentLinesFile.Sync()
 
-	// Get default .env.example path
+	// Get default .example path
 	templatesDir := paths.GetTemplatesDir()
-	defaultEnvFile := filepath.Join(templatesDir, ".env.example")
+	defaultEnvFile := filepath.Join(templatesDir, ".example")
 
 	// Call FormatLines for globals
 	formattedGlobals, err := FormatLines(
+		ctx,
 		currentLinesFile.Name(),
 		defaultEnvFile,
 		"", // empty appName for globals
@@ -93,6 +94,7 @@ func Update(ctx context.Context, file string) error {
 			// Call FormatLines for this app (line 55-57)
 			// It will determine the default env file internally
 			formattedApp, err := FormatLinesForApp(
+				ctx,
 				currentLinesFile.Name(),
 				appName,
 				templatesDir,
@@ -134,10 +136,3 @@ func Update(ctx context.Context, file string) error {
 }
 
 // CopyFile copies a file from src to dst
-func CopyFile(src, dst string) error {
-	input, err := os.ReadFile(src)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(dst, input, 0644)
-}

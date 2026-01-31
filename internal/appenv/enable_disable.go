@@ -1,8 +1,7 @@
-package apps
+package appenv
 
 import (
 	"DockSTARTer2/internal/config"
-	"DockSTARTer2/internal/env"
 	"DockSTARTer2/internal/logger"
 	"context"
 	"path/filepath"
@@ -15,16 +14,16 @@ func Enable(ctx context.Context, appNames []string, conf config.AppConfig) error
 	envFile := filepath.Join(conf.ComposeFolder, ".env")
 
 	for _, appName := range appNames {
-		appName = strings.TrimSpace(strings.ToUpper(appName))
-		niceName := NiceName(appName)
+		appUpper := strings.TrimSpace(strings.ToUpper(appName))
+		niceName := GetNiceName(ctx, appUpper)
 
-		if IsBuiltin(appName) {
-			enabledVar := appName + "__ENABLED"
+		if IsAppBuiltIn(appUpper) {
+			enabledVar := appUpper + "__ENABLED"
 			logger.Info(ctx, "Enabling application '{{_App_}}%s{{|-|}}'", niceName)
 			logger.Notice(ctx, "Setting variable in '{{_File_}}%s{{|-|}}':", envFile)
 			logger.Notice(ctx, "   {{_Var_}}%s='true'{{|-|}}", enabledVar)
 
-			if err := env.Set(enabledVar, "true", envFile); err != nil {
+			if err := Set(enabledVar, "true", envFile); err != nil {
 				return err
 			}
 		} else {
@@ -41,16 +40,16 @@ func Disable(ctx context.Context, appNames []string, conf config.AppConfig) erro
 	envFile := filepath.Join(conf.ComposeFolder, ".env")
 
 	for _, appName := range appNames {
-		appName = strings.TrimSpace(strings.ToUpper(appName))
-		niceName := NiceName(appName)
+		appUpper := strings.TrimSpace(strings.ToUpper(appName))
+		niceName := GetNiceName(ctx, appUpper)
 
-		if IsBuiltin(appName) {
-			enabledVar := appName + "__ENABLED"
+		if IsAppBuiltIn(appUpper) {
+			enabledVar := appUpper + "__ENABLED"
 			logger.Info(ctx, "Disabling application '{{_App_}}%s{{|-|}}'", niceName)
 			logger.Notice(ctx, "Setting variable in '{{_File_}}%s{{|-|}}':", envFile)
 			logger.Notice(ctx, "   {{_Var_}}%s='false'{{|-|}}", enabledVar)
 
-			if err := env.Set(enabledVar, "false", envFile); err != nil {
+			if err := Set(enabledVar, "false", envFile); err != nil {
 				return err
 			}
 		} else {

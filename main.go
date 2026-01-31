@@ -52,8 +52,6 @@ func run() (exitCode int) {
 		logger.Fatal(ctx, "Failed to clone {{_ApplicationName_}}DockSTARTer-Templates{{|-|}} repo.")
 	}
 
-	// Check if the current channel still exists on GitHub
-
 	_ = update.CheckCurrentStatus(ctx)
 	// Check for application and template updates
 	update.CheckUpdates(ctx)

@@ -20,4 +20,4 @@
 //
 // The package maintains strict compatibility with the original Bash
 // implementation's parsing rules and behavior.
-package env
+package appenv

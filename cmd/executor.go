@@ -1,12 +1,11 @@
 package cmd
 
 import (
-	"DockSTARTer2/internal/apps"
+	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/compose"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/docker"
-	"DockSTARTer2/internal/env"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/theme"
@@ -299,17 +298,17 @@ func handleEnvGet(ctx context.Context, group *CommandGroup) {
 		// Determine operation based on command
 		switch {
 		case strings.HasPrefix(baseCmd, "--env-get-literal"):
-			val, err = env.GetLiteral(key, file)
+			val, err = appenv.GetLiteral(key, file)
 		case strings.HasPrefix(baseCmd, "--env-get-line"):
-			val, err = env.GetLine(key, file)
+			val, err = appenv.GetLine(key, file)
 		case strings.HasPrefix(baseCmd, "--env-get-line-regex"):
 			var lines []string
-			lines, err = env.GetLineRegex(key, file)
+			lines, err = appenv.GetLineRegex(key, file)
 			if err == nil {
 				val = strings.Join(lines, "\n")
 			}
 		case strings.HasPrefix(baseCmd, "--env-get"):
-			val, err = env.Get(key, file)
+			val, err = appenv.Get(key, file)
 		}
 
 		if err != nil {
@@ -367,15 +366,15 @@ func handleEnvSet(ctx context.Context, group *CommandGroup) {
 		}
 
 		// Ensure env file exists (create if needed)
-		if err := env.Create(file, filepath.Join(conf.ConfigFolder, ".env.example")); err != nil {
+		if err := appenv.Create(file, filepath.Join(conf.ConfigFolder, ".env.example")); err != nil {
 			logger.Debug(ctx, "Ensure env file error: %v", err)
 		}
 
 		var err error
 		if isLiteral {
-			err = env.SetLiteral(varName, p.val, file)
+			err = appenv.SetLiteral(varName, p.val, file)
 		} else {
-			err = env.Set(varName, p.val, file)
+			err = appenv.Set(varName, p.val, file)
 		}
 
 		if err != nil {
@@ -388,10 +387,10 @@ func handleEnvSet(ctx context.Context, group *CommandGroup) {
 
 func handleAppVarsCreateAll(ctx context.Context, group *CommandGroup) {
 	conf := config.LoadAppConfig()
-	if err := apps.CreateAll(ctx, conf); err != nil {
+	if err := appenv.CreateAll(ctx, conf); err != nil {
 		logger.Error(ctx, "Failed to create app variables: %v", err)
 	}
-	if err := env.Update(ctx, filepath.Join(conf.ComposeFolder, ".env")); err != nil {
+	if err := appenv.Update(ctx, filepath.Join(conf.ComposeFolder, ".env")); err != nil {
 		logger.Warn(ctx, "Failed to update env usage: %v", err)
 	}
 }
@@ -405,22 +404,22 @@ func handleAppVarsCreate(ctx context.Context, group *CommandGroup) {
 
 	// Ensure env file exists (create if needed)
 	envFile := filepath.Join(conf.ComposeFolder, ".env")
-	if err := env.Create(envFile, filepath.Join(conf.ConfigFolder, ".env.example")); err != nil {
+	if err := appenv.Create(envFile, filepath.Join(conf.ConfigFolder, ".env.example")); err != nil {
 		logger.Debug(ctx, "Ensure env file error: %v", err)
 	}
 
 	// Enable the apps first
-	if err := apps.Enable(ctx, group.Args, conf); err != nil {
+	if err := appenv.Enable(ctx, group.Args, conf); err != nil {
 		logger.Error(ctx, "Failed to enable apps: %v", err)
 	}
 
 	for _, arg := range group.Args {
-		if err := apps.Create(ctx, arg, conf); err != nil {
+		if err := appenv.CreateApp(ctx, arg, conf); err != nil {
 			logger.Error(ctx, "%v", err)
 		}
 	}
 
-	if err := env.Update(ctx, envFile); err != nil {
+	if err := appenv.Update(ctx, envFile); err != nil {
 		logger.Warn(ctx, "Failed to update env usage: %v", err)
 	}
 }
@@ -519,21 +518,22 @@ func handleList(ctx context.Context, group *CommandGroup) {
 
 	switch group.Command {
 	case "-l", "--list":
-		result, err = apps.ListBuiltin()
+		result, err = appenv.ListBuiltin()
+		result, err = appenv.ListBuiltinApps()
 	case "--list-added":
-		result, err = apps.ListAdded(envFile)
+		result, err = appenv.ListAdded(ctx, envFile)
 	case "--list-builtin":
-		result, err = apps.ListBuiltin()
+		result, err = appenv.ListBuiltinApps()
 	case "--list-deprecated":
-		result, err = apps.ListDeprecated()
+		result, err = appenv.ListDeprecatedApps(ctx)
 	case "--list-enabled":
-		result, err = apps.ListEnabled(envFile)
+		result, err = appenv.ListEnabledApps(conf)
 	case "--list-disabled":
-		result, err = apps.ListDisabled(envFile)
+		result, err = appenv.ListDisabledApps(envFile)
 	case "--list-nondeprecated":
-		result, err = apps.ListNonDeprecated()
+		result, err = appenv.ListNonDeprecatedApps(ctx)
 	case "--list-referenced":
-		result, err = apps.ListReferenced(ctx, conf)
+		result, err = appenv.ListReferencedApps(ctx, conf)
 	}
 
 	if err != nil {
@@ -542,7 +542,7 @@ func handleList(ctx context.Context, group *CommandGroup) {
 	}
 
 	for _, item := range result {
-		fmt.Println(apps.NiceName(item))
+		fmt.Println(appenv.GetNiceName(item))
 	}
 }
 
@@ -556,7 +556,7 @@ func handleStatus(ctx context.Context, group *CommandGroup) {
 	for _, arg := range group.Args {
 		// Bash splits by space, our parser already did that if they are separate args.
 		// If they passed "app1 app2" as one arg, we might need more splitting but pflag usually treats spaces as separate unless quoted.
-		status := apps.Status(ctx, arg, conf)
+		status := appenv.Status(ctx, arg, conf)
 		logger.Display(ctx, status)
 	}
 }
@@ -570,15 +570,15 @@ func handleStatusChange(ctx context.Context, group *CommandGroup) {
 
 	var err error
 	if group.Command == "--status-enable" {
-		err = apps.Enable(ctx, group.Args, conf)
+		err = appenv.Enable(ctx, group.Args, conf)
 	} else if group.Command == "--status-disable" {
-		err = apps.Disable(ctx, group.Args, conf)
+		err = appenv.Disable(ctx, group.Args, conf)
 	}
 
 	if err != nil {
 		logger.Error(ctx, "Failed to change app status: %v", err)
 	}
-	if err := env.Update(ctx, filepath.Join(conf.ComposeFolder, ".env")); err != nil {
+	if err := appenv.Update(ctx, filepath.Join(conf.ComposeFolder, ".env")); err != nil {
 		logger.Warn(ctx, "Failed to update env usage: %v", err)
 	}
 }
@@ -587,12 +587,12 @@ func handleRemove(ctx context.Context, group *CommandGroup, state *CmdState) {
 	conf := config.LoadAppConfig()
 
 	// Remove accepts optional app names (empty = all disabled apps)
-	err := apps.Remove(ctx, group.Args, conf, state.Yes)
+	err := appenv.Remove(ctx, group.Args, conf, state.Yes)
 
 	if err != nil {
 		logger.Error(ctx, "Failed to remove app variables: %v", err)
 	}
-	if err := env.Update(ctx, filepath.Join(conf.ComposeFolder, ".env")); err != nil {
+	if err := appenv.Update(ctx, filepath.Join(conf.ComposeFolder, ".env")); err != nil {
 		logger.Warn(ctx, "Failed to update env usage: %v", err)
 	}
 }
@@ -737,7 +737,7 @@ func handleEnvAppVars(ctx context.Context, group *CommandGroup) {
 	}
 
 	for _, appName := range args {
-		vars, err := apps.ListVars(ctx, appName, conf.ComposeFolder)
+		vars, err := appenv.ListAppVars(ctx, appName, conf.ComposeFolder)
 		if err != nil {
 			logger.Error(ctx, "Failed to list variables for %s: %v", appName, err)
 			continue
@@ -756,7 +756,7 @@ func handleEnvAppVarsLines(ctx context.Context, group *CommandGroup) {
 	}
 
 	for _, appName := range args {
-		lines, err := apps.ListVarLines(ctx, appName, conf.ComposeFolder)
+		lines, err := appenv.ListVarLines(ctx, appName, conf.ComposeFolder)
 		if err != nil {
 			logger.Error(ctx, "Failed to list variable lines for %s: %v", appName, err)
 			continue
@@ -785,13 +785,13 @@ func handleTest(ctx context.Context, group *CommandGroup) {
 
 func handleCompose(ctx context.Context, group *CommandGroup, state *CmdState) {
 	operation := ""
-	var apps []string
+	var appsList []string
 
 	// Parse compose operation and app names
 	if len(group.Args) > 0 {
 		operation = group.Args[0]
 		if len(group.Args) > 1 {
-			apps = group.Args[1:]
+			appsList = group.Args[1:]
 		}
 	}
 
@@ -800,7 +800,7 @@ func handleCompose(ctx context.Context, group *CommandGroup, state *CmdState) {
 		operation = "update"
 	}
 
-	if err := compose.ExecuteCompose(ctx, operation, apps...); err != nil {
-		logger.Error(ctx, "Compose operation failed: %v", err)
+	if err := compose.ExecuteCompose(ctx, operation, appsList...); err != nil {
+		logger.Error(ctx, "Compose failed: %v", err)
 	}
 }

@@ -1,9 +1,8 @@
-package apps
+package appenv
 
 import (
 	"DockSTARTer2/internal/assets"
 	"DockSTARTer2/internal/config"
-	"DockSTARTer2/internal/env"
 	"DockSTARTer2/internal/logger"
 	"context"
 	"fmt"
@@ -67,13 +66,14 @@ func EnvCreate(ctx context.Context, conf config.AppConfig) error {
 		}
 	}
 
-	// 4. Default Apps (Watchtower) if none referenced
-	// Check regardless of creation or existing
-	added, _ := ListAdded(envFile)
+	added, err := ListAddedApps(ctx, envFile)
+	if err != nil {
+		return err
+	}
 	if len(added) == 0 {
 		logger.Info(ctx, "Installing default applications.")
 		// Add Watchtower
-		if err := env.Set("WATCHTOWER__ENABLED", "true", envFile); err != nil {
+		if err := Set("WATCHTOWER__ENABLED", "true", envFile); err != nil {
 			return err
 		}
 		// Sanitize again? Bash says env_sanitize.
@@ -84,9 +84,9 @@ func EnvCreate(ctx context.Context, conf config.AppConfig) error {
 
 // BackupEnv creates a backup of the environment file
 func BackupEnv(ctx context.Context, file string) error {
-	// Simple backup: .env.bak
+	// Simple backup: .bak
 	// Bash does full timestamp folder.
-	// For now, let's do .env.bak to basic safety.
+	// For now, let's do .bak to basic safety.
 	bak := file + ".bak"
 	logger.Info(ctx, "Copying '{{_File_}}.env{{|-|}}' file to '{{_File_}}%s{{|-|}}'", bak)
 	input, err := os.ReadFile(file)
@@ -110,7 +110,7 @@ func SanitizeEnv(ctx context.Context, file string, conf config.AppConfig) error 
 	}
 	defer os.Remove(tmpDefault)
 
-	if _, err := env.MergeNewOnly(ctx, file, tmpDefault); err != nil {
+	if _, err := MergeNewOnly(ctx, file, tmpDefault); err != nil {
 		logger.Error(ctx, "Failed to merge defaults: %v", err)
 	}
 
@@ -160,46 +160,46 @@ func SanitizeEnv(ctx context.Context, file string, conf config.AppConfig) error 
 			pgid = "1000"
 		}
 
-		val, _ := env.Get("PUID", file)
+		val, _ := Get("PUID", file)
 		if strings.Contains(val, "x") || val == "" {
 			addUpdate("PUID", puid, false)
 		}
 
-		val, _ = env.Get("PGID", file)
+		val, _ = Get("PGID", file)
 		if strings.Contains(val, "x") || val == "" {
 			addUpdate("PGID", pgid, false)
 		}
 	}
 
 	// TZ
-	val, _ := env.Get("TZ", file)
+	val, _ := Get("TZ", file)
 	if val == "" {
 		addUpdate("TZ", "UTC", false)
 	}
 
 	// HOME
 	home, _ = os.UserHomeDir()
-	val, _ = env.Get("HOME", file)
+	val, _ = Get("HOME", file)
 	if val == "" || strings.Contains(val, "x") {
 		addUpdate("HOME", home, true)
 	}
 
 	// DOCKER_CONFIG_FOLDER
-	val, _ = env.Get("DOCKER_CONFIG_FOLDER", file)
+	val, _ = Get("DOCKER_CONFIG_FOLDER", file)
 	if val == "" || strings.Contains(val, "x") {
 		// Use unexpanded to preserve ${XDG_CONFIG_HOME}
 		addUpdate("DOCKER_CONFIG_FOLDER", conf.ConfigFolderUnexpanded, true)
 	}
 
 	// DOCKER_COMPOSE_FOLDER
-	val, _ = env.Get("DOCKER_COMPOSE_FOLDER", file)
+	val, _ = Get("DOCKER_COMPOSE_FOLDER", file)
 	if val == "" || strings.Contains(val, "x") {
 		// Use unexpanded to preserve ${XDG_CONFIG_HOME}
 		addUpdate("DOCKER_COMPOSE_FOLDER", conf.ComposeFolderUnexpanded, true)
 	}
 
 	// DOCKER_HOSTNAME
-	val, _ = env.Get("DOCKER_HOSTNAME", file)
+	val, _ = Get("DOCKER_HOSTNAME", file)
 	if val == "" || strings.Contains(val, "x") {
 		hostname, err := os.Hostname()
 		if err == nil {
@@ -213,7 +213,7 @@ func SanitizeEnv(ctx context.Context, file string, conf config.AppConfig) error 
 		for _, key := range updatedVars {
 			val := updates[key]
 			logger.Notice(ctx, "   {{_Var_}}%s=%s{{|-|}}", key, val)
-			env.SetLiteral(key, val, file)
+			SetLiteral(key, val, file)
 		}
 	}
 

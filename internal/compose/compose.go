@@ -1,9 +1,8 @@
 package compose
 
 import (
-	"DockSTARTer2/internal/apps"
+	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/config"
-	"DockSTARTer2/internal/env"
 	execpkg "DockSTARTer2/internal/exec"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
@@ -28,14 +27,14 @@ func MergeYML(ctx context.Context) error {
 
 	// Create all app environment variables first
 	conf := config.LoadAppConfig()
-	if err := apps.CreateAll(ctx, conf); err != nil {
+	if err := appenv.CreateAll(ctx, conf); err != nil {
 		return fmt.Errorf("failed to create environment variables: %w", err)
 	}
 
 	logger.Notice(ctx, "Adding enabled app templates to merge '{{_File_}}docker-compose.yml{{|-|}}'.  Please be patient, this can take a while.")
 
 	envFile := filepath.Join(conf.ComposeFolder, ".env")
-	enabledApps, err := apps.ListEnabled(envFile)
+	enabledApps, err := appenv.ListEnabledApps(conf)
 	if err != nil {
 		return fmt.Errorf("failed to get enabled apps: %w", err)
 	}
@@ -50,7 +49,7 @@ func MergeYML(ctx context.Context) error {
 
 	for _, appName := range enabledApps {
 		appNameLower := strings.ToLower(appName)
-		niceName := apps.NiceName(appName)
+		niceName := appenv.GetNiceName(ctx, appName)
 
 		instanceFolder := paths.GetInstanceFolder(appNameLower)
 		if !dirExists(instanceFolder) {
@@ -59,7 +58,7 @@ func MergeYML(ctx context.Context) error {
 		}
 
 		// Check if app is deprecated
-		if apps.IsDeprecated(appName) {
+		if appenv.IsAppDeprecated(ctx, appName) {
 			logger.Warn(ctx,
 				"'{{_App_}}%s{{|-|}}' IS DEPRECATED!",
 				niceName)
@@ -77,7 +76,7 @@ func MergeYML(ctx context.Context) error {
 		composeFiles = append(composeFiles, archFile)
 
 		// Network mode specific files
-		netMode, _ := env.Get(fmt.Sprintf("%s__NETWORK_MODE", appName), envFile)
+		netMode, _ := appenv.Get(fmt.Sprintf("%s__NETWORK_MODE", appName), envFile)
 		if netMode == "" || netMode == "bridge" {
 			// Add hostname file if exists
 			hostnameFile := filepath.Join(instanceFolder, fmt.Sprintf("%s.hostname.yml", appNameLower))
@@ -105,19 +104,19 @@ func MergeYML(ctx context.Context) error {
 		}
 
 		// Storage files
-		multipleStorage, _ := env.Get("DOCKER_MULTIPLE_STORAGE", envFile)
+		multipleStorage, _ := appenv.Get("DOCKER_MULTIPLE_STORAGE", envFile)
 		storageNumbers := []string{""}
 		if multipleStorage == "true" {
 			storageNumbers = append(storageNumbers, "2", "3", "4")
 		}
 
 		for _, num := range storageNumbers {
-			storageOn, _ := env.Get(fmt.Sprintf("%s__STORAGE%s_ON", appName, num), envFile)
+			storageOn, _ := appenv.Get(fmt.Sprintf("%s__STORAGE%s_ON", appName, num), envFile)
 			if storageOn == "" {
-				storageOn, _ = env.Get(fmt.Sprintf("DOCKER_STORAGE%s_ON", num), envFile)
+				storageOn, _ = appenv.Get(fmt.Sprintf("DOCKER_STORAGE%s_ON", num), envFile)
 			}
 			if storageOn == "true" {
-				storageVolume, _ := env.Get(fmt.Sprintf("DOCKER_VOLUME_STORAGE%s", num), envFile)
+				storageVolume, _ := appenv.Get(fmt.Sprintf("DOCKER_VOLUME_STORAGE%s", num), envFile)
 				if storageVolume != "" {
 					storageFile := filepath.Join(instanceFolder, fmt.Sprintf("%s.storage%s.yml", appNameLower, num))
 					if fileExists(storageFile) {
@@ -130,7 +129,7 @@ func MergeYML(ctx context.Context) error {
 		}
 
 		// Devices file
-		appDevices, _ := env.Get(fmt.Sprintf("%s__DEVICES", appName), envFile)
+		appDevices, _ := appenv.Get(fmt.Sprintf("%s__DEVICES", appName), envFile)
 		if appDevices == "true" {
 			devicesFile := filepath.Join(instanceFolder, fmt.Sprintf("%s.devices.yml", appNameLower))
 			if fileExists(devicesFile) {
@@ -151,7 +150,7 @@ func MergeYML(ctx context.Context) error {
 		logger.Info(ctx, "All configurations for '{{_App_}}%s{{|-|}}' are included.", niceName)
 
 		// Create app folders
-		if err := apps.Create(ctx, appName, conf); err != nil {
+		if err := appenv.CreateApp(ctx, appName, conf); err != nil {
 			logger.Warn(ctx, "Failed to create folders for %s: %v", appName, err)
 		}
 	}
@@ -204,7 +203,7 @@ func ExecuteCompose(ctx context.Context, command string, appNames ...string) err
 	if len(appNames) > 0 {
 		var niceNames []string
 		for _, appName := range appNames {
-			niceNames = append(niceNames, apps.NiceName(appName))
+			niceNames = append(niceNames, appenv.GetNiceName(ctx, appName))
 		}
 		appNamesJoined = strings.Join(niceNames, ", ")
 	}

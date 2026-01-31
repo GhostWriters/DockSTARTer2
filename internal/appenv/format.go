@@ -1,8 +1,10 @@
-package env
+package appenv
 
 import (
 	"DockSTARTer2/internal/envutil"
 	"DockSTARTer2/internal/paths"
+	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -10,19 +12,9 @@ import (
 )
 
 // FormatLines formats environment variable lines with proper headers and structure.
-// Mirrors Bash env_format_lines.sh functionality.
-//
-// Parameters:
-//   - currentEnvFile:  File containing current variable values (or empty string for new vars)
-//   - defaultEnvFile:  Template file to preserve exact formatting (e.g., .env.example or app template)
-//   - appName:         Application name (empty for globals)
-//   - composeEnvFile:  Path to global .env file (for checking IsUserDefined/IsDisabled)
-//
-// Returns: Array of formatted lines ready to write to file
-func FormatLines(currentEnvFile, defaultEnvFile, appName, composeEnvFile string) ([]string, error) {
+func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, composeEnvFile string) ([]string, error) {
 	var result []string
 
-	// Tags/constants matching Bash (lines 15-20)
 	const (
 		globalVarsHeading        = "Global Variables"
 		appDeprecatedTag         = " [*DEPRECATED*]"
@@ -32,40 +24,27 @@ func FormatLines(currentEnvFile, defaultEnvFile, appName, composeEnvFile string)
 		userDefinedGlobalVarsTag = " (User Defined)"
 	)
 
-	// 1. If appName specified, add app header (lines 31-56)
-	// For globals (empty appName), skip header generation - .env.example has its own
-	// But we still need these vars for the user-defined section later
 	appIsUserDefined := false
 	var appNiceName string
 
 	if appName != "" {
-		// Check if user defined (full Bash parity)
-		appIsUserDefined = IsUserDefinedApp(appName, composeEnvFile)
+		appIsUserDefined = IsAppUserDefined(appName, composeEnvFile)
+		appNiceName = GetNiceName(ctx, appName)
+		appDescription := GetDescription(ctx, appName, composeEnvFile)
 
-		// Get nice name (inline implementation)
-		appNiceName = getNiceName(appName)
-
-		// Get description from labels.yml (full Bash parity)
-		appDescription := getDescriptionFromLabels(appName, appIsUserDefined)
-
-		// Build heading title
 		headingTitle := appNiceName
 		if appIsUserDefined {
 			headingTitle += appUserDefinedTag
 		} else {
-			// Check deprecated/disabled status (full Bash parity)
-			if IsDeprecatedApp(appName) {
+			if IsAppDeprecated(ctx, appName) {
 				headingTitle += appDeprecatedTag
 			}
-			if IsDisabled(appName, composeEnvFile) {
+			if !IsAppEnabled(appName, composeEnvFile) {
 				headingTitle += appDisabledTag
 			}
 		}
 
-		// Wrap description at 75 chars (line 37)
 		wrapped := wordWrap(appDescription, 75)
-
-		// Create header (lines 46-55)
 		result = append(result, "###")
 		result = append(result, "### "+headingTitle)
 		result = append(result, "###")
@@ -75,7 +54,6 @@ func FormatLines(currentEnvFile, defaultEnvFile, appName, composeEnvFile string)
 		result = append(result, "###")
 	}
 
-	// 2. If defaultEnvFile exists, read verbatim (lines 57-64)
 	if defaultEnvFile != "" {
 		if info, err := os.Stat(defaultEnvFile); err == nil && !info.IsDir() {
 			content, err := os.ReadFile(defaultEnvFile)
@@ -83,16 +61,13 @@ func FormatLines(currentEnvFile, defaultEnvFile, appName, composeEnvFile string)
 				lines := strings.Split(strings.TrimRight(string(content), "\n"), "\n")
 				result = append(result, lines...)
 				if len(result) > 0 {
-					result = append(result, "") // blank line
+					result = append(result, "")
 				}
 			}
 		}
 	}
 
-	// 3. Build index of variables already in result (lines 66-78)
 	formattedEnvVarIndex := make(map[string]int)
-
-	// Regex to extract variable names from lines (line 71)
 	varRe := regexp.MustCompile(`^([A-Za-z0-9_]+)=`)
 	for i, line := range result {
 		matches := varRe.FindStringSubmatch(line)
@@ -101,7 +76,6 @@ func FormatLines(currentEnvFile, defaultEnvFile, appName, composeEnvFile string)
 		}
 	}
 
-	// 4. Read current env lines (lines 22-25, 80-91)
 	var currentEnvLines []string
 	if currentEnvFile != "" {
 		if info, err := os.Stat(currentEnvFile); err == nil && !info.IsDir() {
@@ -112,35 +86,24 @@ func FormatLines(currentEnvFile, defaultEnvFile, appName, composeEnvFile string)
 		}
 	}
 
-	// Update existing variables and track remaining (lines 82-90)
 	var remainingVars []string
 	for _, line := range currentEnvLines {
 		matches := varRe.FindStringSubmatch(line)
 		if len(matches) > 1 {
 			varName := matches[1]
 			if idx, exists := formattedEnvVarIndex[varName]; exists {
-				// Update existing variable
 				result[idx] = line
 			} else {
-				// Track for adding later
 				remainingVars = append(remainingVars, line)
 			}
 		}
 	}
 
-	// 5. Add user-defined variables section if needed (lines 92-123)
 	if len(remainingVars) > 0 {
-		// Add "User Defined" heading if not already user-defined app (lines 93-108)
-		// CRITICAL: For globals, DON'T add this header if we successfully read .env.example
-		//           The variables should have been updated in-place above
 		shouldAddHeader := false
 		if appName != "" {
-			// For apps, add header unless it's a user-defined app
 			shouldAddHeader = !appIsUserDefined
 		} else {
-			// For globals, ONLY add header if we didn't read a default file
-			// If we DID read .env.example, something went wrong and we shouldn't
-			// add a misleading "User Defined" header
 			shouldAddHeader = (defaultEnvFile == "")
 		}
 
@@ -157,35 +120,28 @@ func FormatLines(currentEnvFile, defaultEnvFile, appName, composeEnvFile string)
 			result = append(result, "###")
 		}
 
-		// Add the remaining variables (lines 110-121)
 		for _, line := range remainingVars {
 			result = append(result, line)
 		}
 		result = append(result, "")
 	} else if len(result) > 0 {
-		// Just add blank line if no user vars (line 125)
 		result = append(result, "")
 	}
 
 	return result, nil
 }
 
-// FormatLinesForApp is a convenience wrapper for FormatLines that handles app-specific logic.
-// It determines the default template .env file based on whether the app is user-defined.
-func FormatLinesForApp(currentEnvFile, appName, templatesDir, composeEnvFile string) ([]string, error) {
+// FormatLinesForApp convenience wrapper.
+func FormatLinesForApp(ctx context.Context, currentEnvFile, appName, templatesDir, composeEnvFile string) ([]string, error) {
 	var defaultEnvFile string
-
-	// Get default app .env file if not user-defined
-	if !IsUserDefinedApp(appName, composeEnvFile) {
-		// Use the processed instance file (contains correct values/placeholders replaced)
+	if !IsAppUserDefined(appName, composeEnvFile) {
 		instancesDir := paths.GetInstancesDir()
 		processedInstanceFile := filepath.Join(instancesDir, appName, ".env")
 		if _, err := os.Stat(processedInstanceFile); err == nil {
 			defaultEnvFile = processedInstanceFile
 		}
 	}
-
-	return FormatLines(currentEnvFile, defaultEnvFile, appName, composeEnvFile)
+	return FormatLines(ctx, currentEnvFile, defaultEnvFile, appName, composeEnvFile)
 }
 
 // GetReferencedApps returns a list of apps referenced in the compose env file.
@@ -202,7 +158,7 @@ func GetReferencedApps(composeEnvFile string) ([]string, error) {
 			varName = strings.TrimSpace(line[:idx])
 		}
 		appName := VarNameToAppName(varName)
-		if appName != "" && AppNameIsValid(appName) {
+		if appName != "" && IsAppNameValid(appName) {
 			appMap[appName] = true
 		}
 	}
@@ -212,37 +168,6 @@ func GetReferencedApps(composeEnvFile string) ([]string, error) {
 		result = append(result, app)
 	}
 	return result, nil
-}
-
-// getBaseAppName returns the base app name without instance suffix.
-func getBaseAppName(appName string) string {
-	appLower := strings.ToLower(appName)
-	if idx := strings.Index(appLower, "__"); idx > 0 {
-		return appLower[:idx]
-	}
-	return appLower
-}
-
-// getNiceName returns a nicely formatted app name.
-func getNiceName(appName string) string {
-	appUpper := strings.ToUpper(appName)
-	parts := strings.Split(appUpper, "__")
-
-	var niceParts []string
-	for _, part := range parts {
-		niceParts = append(niceParts, strings.Title(strings.ToLower(part)))
-	}
-
-	return strings.Join(niceParts, " ")
-}
-
-// getSimpleDescription returns a simple description for an app.
-func getSimpleDescription(appName string, isUserDefined bool) string {
-	niceName := getNiceName(appName)
-	if isUserDefined {
-		return niceName + " is a user defined application"
-	}
-	return niceName + " application"
 }
 
 // wordWrap wraps text at the specified width, breaking on word boundaries.
@@ -271,4 +196,19 @@ func wordWrap(text string, width int) []string {
 	}
 
 	return lines
+}
+
+// FormatDescriptions lists applications and their descriptions.
+func FormatDescriptions(ctx context.Context, apps []string, envFile string) {
+	if len(apps) == 0 {
+		fmt.Println("   None")
+		return
+	}
+
+	for _, appName := range apps {
+		desc := GetDescription(ctx, appName, envFile)
+		niceName := GetNiceName(ctx, appName)
+		fmt.Printf("   %-20s %s\n", appName, niceName)
+		fmt.Printf("      %s\n", desc)
+	}
 }

@@ -1,4 +1,4 @@
-package apps
+package appenv
 
 import (
 	"DockSTARTer2/internal/config"
@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-// Remove (purge) prompts to remove variables for the specified apps or all disabled apps.
+// Remove (purge) prompts to remove variables for the specified apps or all disabled
 // Mirrors appvars_purge.sh and appvars_purge_all.sh functionality.
 func Remove(ctx context.Context, appNames []string, conf config.AppConfig, assumeYes bool) error {
 	// If no apps specified, purge all disabled apps
@@ -34,13 +34,13 @@ func Remove(ctx context.Context, appNames []string, conf config.AppConfig, assum
 
 func removeAllDisabled(ctx context.Context, conf config.AppConfig, assumeYes bool) error {
 	envFile := filepath.Join(conf.ComposeFolder, ".env")
-	disabledApps, err := ListDisabled(envFile)
+	disabledApps, err := ListDisabledApps(envFile)
 	if err != nil {
 		return err
 	}
 
 	if len(disabledApps) == 0 {
-		logger.Notice(ctx, "'{{_File_}}%s{{|-|}}' does not contain any disabled apps.", envFile)
+		logger.Notice(ctx, "'{{_File_}}%s{{|-|}}' does not contain any disabled ", envFile)
 		return nil
 	}
 
@@ -62,9 +62,10 @@ func removeAllDisabled(ctx context.Context, conf config.AppConfig, assumeYes boo
 }
 
 func removeApp(ctx context.Context, appName string, conf config.AppConfig, assumeYes bool) error {
-	niceName := NiceName(appName)
+	appUpper := strings.ToUpper(appName)
+	nice := GetNiceName(ctx, appUpper)
 	envFile := filepath.Join(conf.ComposeFolder, ".env")
-	appEnvFile := filepath.Join(conf.ComposeFolder, fmt.Sprintf(".env.app.%s", strings.ToLower(appName)))
+	appEnvFile := filepath.Join(conf.ComposeFolder, fmt.Sprintf(".app.%s", strings.ToLower(appName)))
 
 	// Get current and default variables
 	currentGlobalVars, err := listAppVars(appName, envFile)
@@ -91,13 +92,13 @@ func removeApp(ctx context.Context, appName string, conf config.AppConfig, assum
 
 	// Check if there's anything to remove
 	if len(globalVarsToRemove) == 0 && len(appVarsToRemove) == 0 {
-		logger.Warn(ctx, "'{{_App_}}%s{{|-|}}' has no variables to remove.", niceName)
+		logger.Warn(ctx, "'{{_App_}}%s{{|-|}}' has no variables to remove.", nice)
 		return nil
 	}
 
 	// Build the question showing what will be removed (matching Bash format exactly)
 	indent := "   "
-	question := fmt.Sprintf("Would you like to purge these settings for '{{_App_}}%s{{|-|}}'?\n", niceName)
+	question := fmt.Sprintf("Would you like to purge these settings for '{{_App_}}%s{{|-|}}'?\n", nice)
 
 	if len(globalLinesToRemove) > 0 {
 		question += fmt.Sprintf("%s{{_Folder_}}%s{{|-|}}:\n", indent, envFile)
@@ -115,11 +116,11 @@ func removeApp(ctx context.Context, appName string, conf config.AppConfig, assum
 
 	// Prompt for confirmation
 	if !assumeYes && !promptYesNo(ctx, question) {
-		logger.Info(ctx, "Keeping '{{_App_}}%s{{|-|}}' variables.", niceName)
+		logger.Info(ctx, "Keeping '{{_App_}}%s{{|-|}}' variables.", nice)
 		return nil
 	}
 
-	logger.Info(ctx, "Purging '{{_App_}}%s{{|-|}}' variables.", niceName)
+	logger.Info(ctx, "Purging '{{_App_}}%s{{|-|}}' variables.", nice)
 
 	// Remove global variables (matching Bash multi-line notice format)
 	if len(globalVarsToRemove) > 0 {
@@ -131,7 +132,7 @@ func removeApp(ctx context.Context, appName string, conf config.AppConfig, assum
 		logger.Notice(ctx, msg)
 
 		if err := removeVarsFromFile(globalVarsToRemove, envFile); err != nil {
-			return fmt.Errorf("failed to purge '%s' variables: %w", niceName, err)
+			return fmt.Errorf("failed to purge '%s' variables: %w", nice, err)
 		}
 	}
 
@@ -145,7 +146,7 @@ func removeApp(ctx context.Context, appName string, conf config.AppConfig, assum
 		logger.Notice(ctx, msg)
 
 		if err := removeVarsFromFile(appVarsToRemove, appEnvFile); err != nil {
-			return fmt.Errorf("failed to purge '%s' variables: %w", niceName, err)
+			return fmt.Errorf("failed to purge '%s' variables: %w", nice, err)
 		}
 	}
 
@@ -189,8 +190,7 @@ func listAppVars(prefix string, filePath string) ([]string, error) {
 
 // listDefaultGlobalVars lists default global variables for an app
 func listDefaultGlobalVars(ctx context.Context, appName string) ([]string, error) {
-	// Use ProcessInstanceFile to get the processed .env file (handling placeholders)
-	processedFile, err := ProcessInstanceFile(ctx, appName, ".env")
+	processedFile, err := AppInstanceFile(ctx, appName, ".env")
 	if err != nil {
 		return nil, err
 	}
@@ -202,8 +202,7 @@ func listDefaultGlobalVars(ctx context.Context, appName string) ([]string, error
 
 // listDefaultAppVars lists default app-specific variables
 func listDefaultAppVars(ctx context.Context, appName string) ([]string, error) {
-	// Use ProcessInstanceFile for .env.app.*
-	processedFile, err := ProcessInstanceFile(ctx, appName, ".env.app.*")
+	processedFile, err := AppInstanceFile(ctx, appName, ".app.*")
 	if err != nil {
 		return nil, err
 	}

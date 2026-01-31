@@ -1,4 +1,4 @@
-package env
+package appenv
 
 import (
 	"testing"
@@ -23,7 +23,7 @@ func TestVarNameToAppName(t *testing.T) {
 		{"SONARR_4K__CONTAINER__NAME", ""}, // Single underscore
 		{"4RADARR__ANIME__VAR", ""},        // Starts with number
 
-		// These extract successfully, but AppNameIsValid would reject them
+		// These extract successfully, but IsAppNameValid would reject them
 		{"RADARR__ENABLED__FOO", "RADARR__ENABLED"},
 		{"RADARR__TAG__VAR", "RADARR__TAG"},
 	}
@@ -55,7 +55,7 @@ func TestAppNameToInstanceName(t *testing.T) {
 	}
 }
 
-func TestAppNameIsValid(t *testing.T) {
+func TestIsAppNameValid(t *testing.T) {
 	tests := []struct {
 		input    string
 		expected bool
@@ -83,9 +83,9 @@ func TestAppNameIsValid(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		result := AppNameIsValid(test.input)
+		result := IsAppNameValid(test.input)
 		if result != test.expected {
-			t.Errorf("AppNameIsValid(%q) = %v; want %v", test.input, result, test.expected)
+			t.Errorf("IsAppNameValid(%q) = %v; want %v", test.input, result, test.expected)
 		}
 	}
 }
@@ -115,6 +115,7 @@ func TestInstanceNameIsValid(t *testing.T) {
 		{"STORAGE2", false},
 		{"STORAGE3", false},
 		{"STORAGE4", false},
+		{"TAG", false},
 
 		// Case insensitive
 		{"enabled", false},
@@ -172,7 +173,6 @@ func TestAppVarsLines(t *testing.T) {
 		"",
 	}
 
-	// Test globals (empty appName)
 	globals := AppVarsLines("", lines)
 	expectedGlobals := []string{
 		"PUID='1000'",
@@ -188,7 +188,6 @@ func TestAppVarsLines(t *testing.T) {
 		}
 	}
 
-	// Test RADARR (should not include RADARR__4K vars)
 	radarrVars := AppVarsLines("RADARR", lines)
 	expectedRadarr := []string{
 		"RADARR__ENABLED='true'",
@@ -205,7 +204,6 @@ func TestAppVarsLines(t *testing.T) {
 		}
 	}
 
-	// Test RADARR__4K (should only include RADARR__4K vars)
 	radarr4kVars := AppVarsLines("RADARR__4K", lines)
 	expectedRadarr4k := []string{
 		"RADARR__4K__ENABLED='true'",
@@ -222,7 +220,6 @@ func TestAppVarsLines(t *testing.T) {
 		}
 	}
 
-	// Test SONARR
 	sonarrVars := AppVarsLines("SONARR", lines)
 	if len(sonarrVars) != 1 {
 		t.Errorf("AppVarsLines(\"SONARR\") returned %d variables, want 1", len(sonarrVars))
