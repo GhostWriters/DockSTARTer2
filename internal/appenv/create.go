@@ -1,6 +1,7 @@
 package appenv
 
 import (
+	"DockSTARTer2/internal/config"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -30,7 +31,10 @@ func Create(file, defaultFile string) error {
 		return fmt.Errorf("failed to read default env %s: %w", defaultFile, err)
 	}
 
-	if err := os.WriteFile(file, input, 0644); err != nil {
+	// Expand variables
+	content := config.ExpandVariables(string(input))
+
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to create env file %s: %w", file, err)
 	}
 	return nil

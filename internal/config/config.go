@@ -39,7 +39,7 @@ func getArch() string {
 	}
 }
 
-// expandVariables expands environment variables in the config values.
+// ExpandVariables expands environment variables in the config values.
 // It supports:
 // - ${XDG_CONFIG_HOME} -> xdg.ConfigHome
 // - ${XDG_DATA_HOME}   -> xdg.DataHome
@@ -47,7 +47,7 @@ func getArch() string {
 // - ${XDG_CACHE_HOME}  -> xdg.CacheHome
 // - ${HOME}            -> os.UserHomeDir()
 // - ${USER}            -> Current username
-func expandVariables(val string) string {
+func ExpandVariables(val string) string {
 	mapper := func(varName string) string {
 		switch varName {
 		case "XDG_CONFIG_HOME":
@@ -102,8 +102,8 @@ func LoadAppConfig() AppConfig {
 		}
 		conf.ConfigFolderUnexpanded = conf.ConfigFolder
 		conf.ComposeFolderUnexpanded = conf.ComposeFolder
-		conf.ConfigFolder = expandVariables(conf.ConfigFolder)
-		conf.ComposeFolder = expandVariables(conf.ComposeFolder)
+		conf.ConfigFolder = ExpandVariables(conf.ConfigFolder)
+		conf.ComposeFolder = ExpandVariables(conf.ComposeFolder)
 		return conf
 	}
 	defer file.Close()
@@ -122,7 +122,7 @@ func LoadAppConfig() AppConfig {
 
 		key := strings.TrimSpace(parts[0])
 		value := strings.Trim(strings.TrimSpace(parts[1]), "'\"")
-		expandedValue := expandVariables(value)
+		expandedValue := ExpandVariables(value)
 
 		isTrue := func(v string) bool {
 			v = strings.ToLower(v)
