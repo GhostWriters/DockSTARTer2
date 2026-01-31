@@ -130,12 +130,12 @@ func IsAppEnabled(app, envFile string) bool {
 // IsAppReferenced checks if an app is referenced in .env or compose override.
 func IsAppReferenced(ctx context.Context, app string, conf config.AppConfig) bool {
 	// Implementation from status.go
-	envFile := filepath.Join(conf.ComposeFolder, ".env")
+	envFile := filepath.Join(conf.ComposeDir, ".env")
 	if IsAppEnabled(app, envFile) {
 		return true
 	}
 	// Also check overrides...
-	overrideFile := filepath.Join(conf.ComposeFolder, "docker-compose.override.yml")
+	overrideFile := filepath.Join(conf.ComposeDir, "docker-compose.override.yml")
 	if _, err := os.Stat(overrideFile); err == nil {
 		content, _ := os.ReadFile(overrideFile)
 		// Grep for .env.app.APPNAME

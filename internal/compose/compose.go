@@ -33,7 +33,7 @@ func MergeYML(ctx context.Context) error {
 
 	logger.Notice(ctx, "Adding enabled app templates to merge '{{_File_}}docker-compose.yml{{|-|}}'.  Please be patient, this can take a while.")
 
-	envFile := filepath.Join(conf.ComposeFolder, ".env")
+	envFile := filepath.Join(conf.ComposeDir, ".env")
 	enabledApps, err := appenv.ListEnabledApps(conf)
 	if err != nil {
 		return fmt.Errorf("failed to get enabled apps: %w", err)
@@ -51,7 +51,7 @@ func MergeYML(ctx context.Context) error {
 		appNameLower := strings.ToLower(appName)
 		niceName := appenv.GetNiceName(ctx, appName)
 
-		instanceFolder := paths.GetInstanceFolder(appNameLower)
+		instanceFolder := paths.GetInstanceDir(appNameLower)
 		if !dirExists(instanceFolder) {
 			logger.Error(ctx, "Folder '{{_Folder_}}%s/{{|-|}}' does not exist.", instanceFolder)
 			return fmt.Errorf("folder %s does not exist", instanceFolder)
@@ -158,16 +158,16 @@ func MergeYML(ctx context.Context) error {
 	// Run docker compose config to merge files
 	logger.Info(ctx, "Running compose config to create '{{_File_}}docker-compose.yml{{|-|}}' file from enabled templates.")
 
-	composePath := filepath.Join(conf.ComposeFolder, "docker-compose.yml")
+	composePath := filepath.Join(conf.ComposeDir, "docker-compose.yml")
 
 	// Set COMPOSE_FILE environment variable
 	os.Setenv("COMPOSE_FILE", strings.Join(composeFiles, string(os.PathListSeparator)))
 
-	cmd := exec.CommandContext(ctx, "docker", "compose", "--project-directory", conf.ComposeFolder+"/", "config")
+	cmd := exec.CommandContext(ctx, "docker", "compose", "--project-directory", conf.ComposeDir+"/", "config")
 	output, err := cmd.Output()
 	if err != nil {
 		logger.Error(ctx, "Failed to output compose config.")
-		logger.Error(ctx, "Failing command: {{_FailingCommand_}}docker compose --project-directory %s/ config > \"%s\"{{|-|}}", conf.ComposeFolder, composePath)
+		logger.Error(ctx, "Failing command: {{_FailingCommand_}}docker compose --project-directory %s/ config > \"%s\"{{|-|}}", conf.ComposeDir, composePath)
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			logger.Error(ctx, "Error output: %s", string(exitErr.Stderr))
 		}
@@ -216,7 +216,7 @@ func ExecuteCompose(ctx context.Context, command string, appNames ...string) err
 		} else {
 			logger.Notice(ctx, "Stopping and removing containers, networks, volumes, and images created by {{_ApplicationName_}}DockSTARTer{{|-|}}.")
 		}
-		args = []string{"compose", "--project-directory", conf.ComposeFolder + "/", "down", "--remove-orphans"}
+		args = []string{"compose", "--project-directory", conf.ComposeDir + "/", "down", "--remove-orphans"}
 		args = append(args, appNames...)
 
 	case "pause":
@@ -225,7 +225,7 @@ func ExecuteCompose(ctx context.Context, command string, appNames ...string) err
 		} else {
 			logger.Notice(ctx, "Pausing all running containers.")
 		}
-		args = []string{"compose", "--project-directory", conf.ComposeFolder + "/", "pause"}
+		args = []string{"compose", "--project-directory", conf.ComposeDir + "/", "pause"}
 		args = append(args, appNames...)
 
 	case "pull":
@@ -234,7 +234,7 @@ func ExecuteCompose(ctx context.Context, command string, appNames ...string) err
 		} else {
 			logger.Notice(ctx, "Pulling the latest images for all enabled services.")
 		}
-		args = []string{"compose", "--project-directory", conf.ComposeFolder + "/", "pull", "--include-deps"}
+		args = []string{"compose", "--project-directory", conf.ComposeDir + "/", "pull", "--include-deps"}
 		args = append(args, appNames...)
 
 	case "restart":
@@ -243,7 +243,7 @@ func ExecuteCompose(ctx context.Context, command string, appNames ...string) err
 		} else {
 			logger.Notice(ctx, "Restarting all stopped and running containers.")
 		}
-		args = []string{"compose", "--project-directory", conf.ComposeFolder + "/", "restart"}
+		args = []string{"compose", "--project-directory", conf.ComposeDir + "/", "restart"}
 		args = append(args, appNames...)
 
 	case "stop":
@@ -252,7 +252,7 @@ func ExecuteCompose(ctx context.Context, command string, appNames ...string) err
 		} else {
 			logger.Notice(ctx, "Stopping all running services.")
 		}
-		args = []string{"compose", "--project-directory", conf.ComposeFolder + "/", "stop"}
+		args = []string{"compose", "--project-directory", conf.ComposeDir + "/", "stop"}
 		args = append(args, appNames...)
 
 	case "unpause":
@@ -261,7 +261,7 @@ func ExecuteCompose(ctx context.Context, command string, appNames ...string) err
 		} else {
 			logger.Notice(ctx, "Unpausing all running containers.")
 		}
-		args = []string{"compose", "--project-directory", conf.ComposeFolder + "/", "unpause"}
+		args = []string{"compose", "--project-directory", conf.ComposeDir + "/", "unpause"}
 		args = append(args, appNames...)
 
 	case "update":
@@ -271,12 +271,12 @@ func ExecuteCompose(ctx context.Context, command string, appNames ...string) err
 			logger.Notice(ctx, "Updating and starting containers for all enabled services.")
 		}
 		// Update = pull + up
-		pullArgs := []string{"compose", "--project-directory", conf.ComposeFolder + "/", "pull", "--include-deps"}
+		pullArgs := []string{"compose", "--project-directory", conf.ComposeDir + "/", "pull", "--include-deps"}
 		pullArgs = append(pullArgs, appNames...)
 		if err := runDockerCommand(ctx, pullArgs...); err != nil {
 			return err
 		}
-		args = []string{"compose", "--project-directory", conf.ComposeFolder + "/", "up", "-d", "--remove-orphans"}
+		args = []string{"compose", "--project-directory", conf.ComposeDir + "/", "up", "-d", "--remove-orphans"}
 		args = append(args, appNames...)
 
 	case "up":
@@ -285,7 +285,7 @@ func ExecuteCompose(ctx context.Context, command string, appNames ...string) err
 		} else {
 			logger.Notice(ctx, "Starting containers for all enabled services.")
 		}
-		args = []string{"compose", "--project-directory", conf.ComposeFolder + "/", "up", "-d", "--remove-orphans"}
+		args = []string{"compose", "--project-directory", conf.ComposeDir + "/", "up", "-d", "--remove-orphans"}
 		args = append(args, appNames...)
 
 	case "generate", "merge":
@@ -295,11 +295,11 @@ func ExecuteCompose(ctx context.Context, command string, appNames ...string) err
 	default:
 		// Default to update
 		logger.Notice(ctx, "Updating containers for all enabled services.")
-		pullArgs := []string{"compose", "--project-directory", conf.ComposeFolder + "/", "pull", "--include-deps"}
+		pullArgs := []string{"compose", "--project-directory", conf.ComposeDir + "/", "pull", "--include-deps"}
 		if err := runDockerCommand(ctx, pullArgs...); err != nil {
 			return err
 		}
-		args = []string{"compose", "--project-directory", conf.ComposeFolder + "/", "up", "-d", "--remove-orphans"}
+		args = []string{"compose", "--project-directory", conf.ComposeDir + "/", "up", "-d", "--remove-orphans"}
 	}
 
 	return runDockerCommand(ctx, args...)
@@ -322,21 +322,21 @@ func runDockerCommand(ctx context.Context, args ...string) error {
 func NeedsYMLMerge(ctx context.Context) bool {
 	// Check if the needs file exists
 	conf := config.LoadAppConfig()
-	needsFile := filepath.Join(conf.ConfigFolder, "needs", "yml_merge")
+	needsFile := filepath.Join(conf.ConfigDir, "needs", "yml_merge")
 	return fileExists(needsFile)
 }
 
 // UnsetNeedsYMLMerge marks YML merge as complete
 func UnsetNeedsYMLMerge(ctx context.Context) {
 	conf := config.LoadAppConfig()
-	needsFile := filepath.Join(conf.ConfigFolder, "needs", "yml_merge")
+	needsFile := filepath.Join(conf.ConfigDir, "needs", "yml_merge")
 	os.Remove(needsFile)
 }
 
 // SetNeedsYMLMerge marks that YML merge is needed
 func SetNeedsYMLMerge(ctx context.Context) error {
 	conf := config.LoadAppConfig()
-	needsDir := filepath.Join(conf.ConfigFolder, "needs")
+	needsDir := filepath.Join(conf.ConfigDir, "needs")
 	if err := os.MkdirAll(needsDir, 0755); err != nil {
 		return err
 	}

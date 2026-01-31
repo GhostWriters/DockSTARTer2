@@ -25,7 +25,7 @@ func AppStatus(ctx context.Context, app string, conf config.AppConfig) string {
 		return "Not installed"
 	}
 
-	envFile := filepath.Join(conf.ComposeFolder, ".env")
+	envFile := filepath.Join(conf.ComposeDir, ".env")
 	if IsAppAdded(ctx, app, envFile) {
 		return "Enabled"
 	}
@@ -36,7 +36,7 @@ func AppStatus(ctx context.Context, app string, conf config.AppConfig) string {
 // Status returns a string describing the current status of an app.
 func Status(ctx context.Context, app string, conf config.AppConfig) string {
 	appUpper := strings.ToUpper(app)
-	envFile := filepath.Join(conf.ComposeFolder, ".env")
+	envFile := filepath.Join(conf.ComposeDir, ".env")
 	nice := GetNiceName(ctx, appUpper)
 
 	if !IsAppNameValid(appUpper) {

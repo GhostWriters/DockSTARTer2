@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -105,6 +106,7 @@ func GetLineRegex(keyRegex, file string) ([]string, error) {
 			lines = append(lines, line)
 		}
 	}
+	sort.Strings(lines)
 	return lines, scanner.Err()
 }
 

@@ -14,16 +14,16 @@ import (
 
 // AppConfig holds the application configuration settings.
 type AppConfig struct {
-	Borders                 bool
-	LineCharacters          bool
-	Shadow                  bool
-	Scrollbar               bool
-	Theme                   string
-	Arch                    string
-	ConfigFolder            string
-	ConfigFolderUnexpanded  string
-	ComposeFolder           string
-	ComposeFolderUnexpanded string
+	Borders              bool
+	LineCharacters       bool
+	Shadow               bool
+	Scrollbar            bool
+	Theme                string
+	Arch                 string
+	ConfigDir            string
+	ConfigDirUnexpanded  string
+	ComposeDir           string
+	ComposeDirUnexpanded string
 }
 
 // getArch returns the CPU architecture (x86_64 or aarch64).
@@ -79,15 +79,15 @@ func ExpandVariables(val string) string {
 // LoadAppConfig reads the dockstarter2.ini file and returns the configuration.
 func LoadAppConfig() AppConfig {
 	conf := AppConfig{
-		Borders:                 true,
-		LineCharacters:          true,
-		Shadow:                  true,
-		Scrollbar:               true,
-		Theme:                   "DockSTARTer",
-		ConfigFolder:            "${XDG_CONFIG_HOME}",
-		ConfigFolderUnexpanded:  "${XDG_CONFIG_HOME}",
-		ComposeFolder:           "${XDG_CONFIG_HOME}/compose",
-		ComposeFolderUnexpanded: "${XDG_CONFIG_HOME}/compose",
+		Borders:              true,
+		LineCharacters:       true,
+		Shadow:               true,
+		Scrollbar:            true,
+		Theme:                "DockSTARTer",
+		ConfigDir:            "${XDG_CONFIG_HOME}",
+		ConfigDirUnexpanded:  "${XDG_CONFIG_HOME}",
+		ComposeDir:           "${XDG_CONFIG_HOME}/compose",
+		ComposeDirUnexpanded: "${XDG_CONFIG_HOME}/compose",
 	}
 
 	// Set architecture
@@ -100,10 +100,10 @@ func LoadAppConfig() AppConfig {
 		if os.IsNotExist(err) {
 			SaveAppConfig(conf)
 		}
-		conf.ConfigFolderUnexpanded = conf.ConfigFolder
-		conf.ComposeFolderUnexpanded = conf.ComposeFolder
-		conf.ConfigFolder = ExpandVariables(conf.ConfigFolder)
-		conf.ComposeFolder = ExpandVariables(conf.ComposeFolder)
+		conf.ConfigDirUnexpanded = conf.ConfigDir
+		conf.ComposeDirUnexpanded = conf.ComposeDir
+		conf.ConfigDir = ExpandVariables(conf.ConfigDir)
+		conf.ComposeDir = ExpandVariables(conf.ComposeDir)
 		return conf
 	}
 	defer file.Close()
@@ -141,11 +141,11 @@ func LoadAppConfig() AppConfig {
 		case "Theme":
 			conf.Theme = value
 		case "ConfigFolder":
-			conf.ConfigFolderUnexpanded = value
-			conf.ConfigFolder = expandedValue
+			conf.ConfigDirUnexpanded = value
+			conf.ConfigDir = expandedValue
 		case "ComposeFolder":
-			conf.ComposeFolderUnexpanded = value
-			conf.ComposeFolder = expandedValue
+			conf.ComposeDirUnexpanded = value
+			conf.ComposeDir = expandedValue
 		}
 	}
 
@@ -184,8 +184,8 @@ func SaveAppConfig(conf AppConfig) error {
 		return "no"
 	}
 
-	writeOption("ConfigFolder", conf.ConfigFolder)
-	writeOption("ComposeFolder", conf.ComposeFolder)
+	writeOption("ConfigFolder", conf.ConfigDir)
+	writeOption("ComposeFolder", conf.ComposeDir)
 	writeOption("Borders", boolToYesNo(conf.Borders))
 	writeOption("LineCharacters", boolToYesNo(conf.LineCharacters))
 	writeOption("Scrollbar", boolToYesNo(conf.Scrollbar))

@@ -18,7 +18,7 @@ func Update(ctx context.Context, file string) error {
 
 	// Get app config for paths
 	conf := config.LoadAppConfig()
-	composeEnvFile := filepath.Join(conf.ComposeFolder, ".env")
+	composeEnvFile := filepath.Join(conf.ComposeDir, ".env")
 
 	// Read current .env file content
 	input, err := os.ReadFile(file)
@@ -57,9 +57,9 @@ func Update(ctx context.Context, file string) error {
 	}
 	currentLinesFile.Sync()
 
-	// Get default .example path
-	templatesDir := paths.GetTemplatesDir()
-	defaultEnvFile := filepath.Join(templatesDir, ".example")
+	// Get default .env.example path
+	configDir := paths.GetConfigDir()
+	defaultEnvFile := filepath.Join(configDir, ".env.example")
 
 	// Call FormatLines for globals
 	formattedGlobals, err := FormatLines(
@@ -108,28 +108,77 @@ func Update(ctx context.Context, file string) error {
 	}
 
 	// === Write to .env file (lines 64-78) ===
-	// Create temp output file
 	tempOutputFile, err := os.CreateTemp("", "dockstarter2.env_updated.*.tmp")
 	if err != nil {
 		return fmt.Errorf("failed to create temp output file: %w", err)
 	}
 	tempOutputPath := tempOutputFile.Name()
-	defer os.Remove(tempOutputPath)
 
-	// Write all formatted lines
 	for _, line := range updatedEnvLines {
 		fmt.Fprintln(tempOutputFile, line)
 	}
 	tempOutputFile.Close()
 
-	// Copy temp file to actual .env
 	if err := CopyFile(tempOutputPath, file); err != nil {
+		os.Remove(tempOutputPath)
 		return fmt.Errorf("failed to update .env file: %w", err)
 	}
+	os.Remove(tempOutputPath)
+	os.Chmod(file, 0644)
 
-	// Set permissions (line 78)
-	if err := os.Chmod(file, 0644); err != nil {
-		logger.Warn(ctx, "Failed to set permissions on .env: %v", err)
+	// === Process all referenced .env.app.appname files (lines 82-121) ===
+	if len(appList) > 0 {
+		for _, appName := range appList {
+			appUpper := strings.ToUpper(appName)
+			appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf(".env.app.%s", strings.ToLower(appName)))
+
+			if _, err := os.Stat(appEnvFile); os.IsNotExist(err) {
+				logger.Notice(ctx, "Creating '{{_File_}}%s{{|-|}}'.", appEnvFile)
+			} else {
+				logger.Notice(ctx, "Updating '{{_File_}}%s{{|-|}}'.", appEnvFile)
+			}
+
+			// In Bash: APP_DEFAULT_ENV_FILE="$(run_script 'app_instance_file' "${appname}" ".env.app.*")"
+			appDefaultEnvFile, err := AppInstanceFile(ctx, appUpper, ".env.app.*")
+			if err != nil {
+				logger.Warn(ctx, "Failed to get default env file for %s: %v", appName, err)
+				appDefaultEnvFile = ""
+			}
+
+			// env_format_lines for these uses the actual app file as currentEnvFile
+			formattedAppFile, err := FormatLines(
+				ctx,
+				appEnvFile,
+				appDefaultEnvFile,
+				appUpper,
+				composeEnvFile,
+			)
+			if err != nil {
+				logger.Warn(ctx, "Failed to format app file for %s: %v", appName, err)
+				continue
+			}
+
+			// Write to temp and copy to actual
+			tempAppFile, err := os.CreateTemp("", fmt.Sprintf("dockstarter2.env_app_%s.*.tmp", appName))
+			if err != nil {
+				logger.Warn(ctx, "Failed to create temp file for %s: %v", appName, err)
+				continue
+			}
+			tempAppPath := tempAppFile.Name()
+
+			for _, line := range formattedAppFile {
+				fmt.Fprintln(tempAppFile, line)
+			}
+			tempAppFile.Close()
+
+			if err := CopyFile(tempAppPath, appEnvFile); err != nil {
+				logger.Warn(ctx, "Failed to update %s: %v", appEnvFile, err)
+			}
+			os.Remove(tempAppPath)
+
+			// Set permissions
+			os.Chmod(appEnvFile, 0644)
+		}
 	}
 
 	return nil

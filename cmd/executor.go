@@ -263,10 +263,10 @@ func resolveEnvVar(arg string, conf config.AppConfig) (string, string) {
 		varName := parts[1]
 		// AppEnvFilename=".env.app.${appname}"
 		filename := fmt.Sprintf(".env.app.%s", appName)
-		return varName, filepath.Join(conf.ComposeFolder, filename)
+		return varName, filepath.Join(conf.ComposeDir, filename)
 	}
-	// Default to .env in ComposeFolder
-	return arg, filepath.Join(conf.ComposeFolder, ".env")
+	// Default to .env in ComposeDir
+	return arg, filepath.Join(conf.ComposeDir, ".env")
 }
 
 func handleEnvGet(ctx context.Context, group *CommandGroup) {
@@ -366,7 +366,7 @@ func handleEnvSet(ctx context.Context, group *CommandGroup) {
 		}
 
 		// Ensure env file exists (create if needed)
-		if err := appenv.Create(file, filepath.Join(conf.ConfigFolder, ".env.example")); err != nil {
+		if err := appenv.Create(file, filepath.Join(conf.ConfigDir, ".env.example")); err != nil {
 			logger.Debug(ctx, "Ensure env file error: %v", err)
 		}
 
@@ -390,7 +390,7 @@ func handleAppVarsCreateAll(ctx context.Context, group *CommandGroup) {
 	if err := appenv.CreateAll(ctx, conf); err != nil {
 		logger.Error(ctx, "Failed to create app variables: %v", err)
 	}
-	if err := appenv.Update(ctx, filepath.Join(conf.ComposeFolder, ".env")); err != nil {
+	if err := appenv.Update(ctx, filepath.Join(conf.ComposeDir, ".env")); err != nil {
 		logger.Warn(ctx, "Failed to update env usage: %v", err)
 	}
 }
@@ -403,8 +403,8 @@ func handleAppVarsCreate(ctx context.Context, group *CommandGroup) {
 	}
 
 	// Ensure env file exists (create if needed)
-	envFile := filepath.Join(conf.ComposeFolder, ".env")
-	if err := appenv.Create(envFile, filepath.Join(conf.ConfigFolder, ".env.example")); err != nil {
+	envFile := filepath.Join(conf.ComposeDir, ".env")
+	if err := appenv.Create(envFile, filepath.Join(conf.ConfigDir, ".env.example")); err != nil {
 		logger.Debug(ctx, "Ensure env file error: %v", err)
 	}
 
@@ -512,7 +512,7 @@ func handleThemeSettings(ctx context.Context, group *CommandGroup) {
 
 func handleList(ctx context.Context, group *CommandGroup) {
 	conf := config.LoadAppConfig()
-	envFile := filepath.Join(conf.ComposeFolder, ".env")
+	envFile := filepath.Join(conf.ComposeDir, ".env")
 	var result []string
 	var err error
 
@@ -577,7 +577,7 @@ func handleStatusChange(ctx context.Context, group *CommandGroup) {
 	if err != nil {
 		logger.Error(ctx, "Failed to change app status: %v", err)
 	}
-	if err := appenv.Update(ctx, filepath.Join(conf.ComposeFolder, ".env")); err != nil {
+	if err := appenv.Update(ctx, filepath.Join(conf.ComposeDir, ".env")); err != nil {
 		logger.Warn(ctx, "Failed to update env usage: %v", err)
 	}
 }
@@ -591,7 +591,7 @@ func handleRemove(ctx context.Context, group *CommandGroup, state *CmdState) {
 	if err != nil {
 		logger.Error(ctx, "Failed to remove app variables: %v", err)
 	}
-	if err := appenv.Update(ctx, filepath.Join(conf.ComposeFolder, ".env")); err != nil {
+	if err := appenv.Update(ctx, filepath.Join(conf.ComposeDir, ".env")); err != nil {
 		logger.Warn(ctx, "Failed to update env usage: %v", err)
 	}
 }
@@ -638,12 +638,12 @@ func handleConfigShow(ctx context.Context, conf *config.AppConfig) {
 
 		switch key {
 		case "ConfigFolder":
-			value = conf.ConfigFolderUnexpanded
-			expandedValue = conf.ConfigFolder
+			value = conf.ConfigDirUnexpanded
+			expandedValue = conf.ConfigDir
 			useFolderColor = true
 		case "ComposeFolder":
-			value = conf.ComposeFolderUnexpanded
-			expandedValue = conf.ComposeFolder
+			value = conf.ComposeDirUnexpanded
+			expandedValue = conf.ComposeDir
 			useFolderColor = true
 		case "Theme":
 			value = conf.Theme

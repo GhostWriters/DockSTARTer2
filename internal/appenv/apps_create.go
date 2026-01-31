@@ -25,7 +25,7 @@ func CreateAll(ctx context.Context, conf config.AppConfig) error {
 		return err
 	}
 
-	envFile := filepath.Join(conf.ComposeFolder, ".env")
+	envFile := filepath.Join(conf.ComposeDir, ".env")
 
 	// Ensure main env exists
 	// This is partly env_create logic but appvars_create_all calls it
@@ -67,7 +67,7 @@ func CreateApp(ctx context.Context, appNameRaw string, conf config.AppConfig) er
 		return fmt.Errorf("'{{_App_}}%s{{|-|}}' is not a valid application name", niceName)
 	}
 
-	envFile := filepath.Join(conf.ComposeFolder, ".env")
+	envFile := filepath.Join(conf.ComposeDir, ".env")
 	appName := strings.ToLower(appNameUpper)
 
 	if IsAppBuiltIn(appName) {
@@ -84,7 +84,7 @@ func CreateApp(ctx context.Context, appNameRaw string, conf config.AppConfig) er
 		}
 
 		// 2. Get path to App specific .env instance file (.env.app.*)
-		targetAppEnv := filepath.Join(conf.ComposeFolder, fmt.Sprintf(".env.app.%s", appName))
+		targetAppEnv := filepath.Join(conf.ComposeDir, fmt.Sprintf(".env.app.%s", appName))
 		processedAppEnv, err := AppInstanceFile(ctx, appName, ".env.app.*")
 		if err != nil {
 			logger.Debug(ctx, "No app-specific .env template for %s: %v", appNameUpper, err)

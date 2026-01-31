@@ -33,7 +33,7 @@ func Remove(ctx context.Context, appNames []string, conf config.AppConfig, assum
 }
 
 func removeAllDisabled(ctx context.Context, conf config.AppConfig, assumeYes bool) error {
-	envFile := filepath.Join(conf.ComposeFolder, ".env")
+	envFile := filepath.Join(conf.ComposeDir, ".env")
 	disabledApps, err := ListDisabledApps(envFile)
 	if err != nil {
 		return err
@@ -64,8 +64,8 @@ func removeAllDisabled(ctx context.Context, conf config.AppConfig, assumeYes boo
 func removeApp(ctx context.Context, appName string, conf config.AppConfig, assumeYes bool) error {
 	appUpper := strings.ToUpper(appName)
 	nice := GetNiceName(ctx, appUpper)
-	envFile := filepath.Join(conf.ComposeFolder, ".env")
-	appEnvFile := filepath.Join(conf.ComposeFolder, fmt.Sprintf(".app.%s", strings.ToLower(appName)))
+	envFile := filepath.Join(conf.ComposeDir, ".env")
+	appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf(".app.%s", strings.ToLower(appName)))
 
 	// Get current and default variables
 	currentGlobalVars, err := listAppVars(appName, envFile)

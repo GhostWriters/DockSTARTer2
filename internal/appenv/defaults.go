@@ -85,9 +85,9 @@ func VarDefaultValue(ctx context.Context, key string, conf config.AppConfig) str
 	case "GLOBAL":
 		switch cleanVarName {
 		case "DOCKER_COMPOSE_FOLDER":
-			return conf.ComposeFolderUnexpanded
+			return conf.ComposeDirUnexpanded
 		case "DOCKER_CONFIG_FOLDER":
-			return conf.ConfigFolderUnexpanded
+			return conf.ConfigDirUnexpanded
 		case "DOCKER_GID":
 			return fmt.Sprintf("'%s'", GroupId(ctx, "docker"))
 		case "DOCKER_HOSTNAME":

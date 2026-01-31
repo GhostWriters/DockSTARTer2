@@ -27,12 +27,12 @@ import (
 //
 // Returns an error if critical operations like folder creation or file writing fail.
 func EnvCreate(ctx context.Context, conf config.AppConfig) error {
-	envFile := filepath.Join(conf.ComposeFolder, ".env")
+	envFile := filepath.Join(conf.ComposeDir, ".env")
 
 	// 1. Ensure Folder
-	if _, err := os.Stat(conf.ComposeFolder); os.IsNotExist(err) {
-		logger.Notice(ctx, "Creating folder '{{_Folder_}}%s{{|-|}}'.", conf.ComposeFolder)
-		if err := os.MkdirAll(conf.ComposeFolder, 0755); err != nil {
+	if _, err := os.Stat(conf.ComposeDir); os.IsNotExist(err) {
+		logger.Notice(ctx, "Creating folder '{{_Folder_}}%s{{|-|}}'.", conf.ComposeDir)
+		if err := os.MkdirAll(conf.ComposeDir, 0755); err != nil {
 			return fmt.Errorf("failed to create compose folder: %w", err)
 		}
 	} else if err != nil {
@@ -77,7 +77,11 @@ func EnvCreate(ctx context.Context, conf config.AppConfig) error {
 		if err := Set("WATCHTOWER__ENABLED", "true", envFile); err != nil {
 			return err
 		}
-		// Sanitize again? Bash says env_sanitize.
+	}
+
+	// 4. Update file (sorting/formatting)
+	if err := Update(ctx, envFile); err != nil {
+		return err
 	}
 
 	return nil
@@ -173,7 +177,7 @@ func SanitizeEnv(ctx context.Context, file string, conf config.AppConfig) error 
 	}
 
 	// DOCKER_CONFIG_FOLDER
-	rawConfig := conf.ConfigFolderUnexpanded
+	rawConfig := conf.ConfigDirUnexpanded
 
 	// Create strict context for config expansion as per global_variables.sh
 	configExpansionContext := map[string]string{
@@ -202,7 +206,7 @@ func SanitizeEnv(ctx context.Context, file string, conf config.AppConfig) error 
 	}
 
 	// DOCKER_COMPOSE_FOLDER
-	rawCompose := conf.ComposeFolderUnexpanded
+	rawCompose := conf.ComposeDirUnexpanded
 
 	// Strict context for compose expansion
 	composeExpansionContext := map[string]string{

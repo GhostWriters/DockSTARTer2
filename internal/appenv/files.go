@@ -57,11 +57,17 @@ func AppInstanceFile(ctx context.Context, appName, fileSuffix string) (string, e
 
 		// Process content (replace placeholders)
 		content := string(templateContent)
+
+		var __INSTANCE, __Instance, __instance string
 		if instance != "" {
-			content = strings.ReplaceAll(content, "<__INSTANCE>", "__"+instance)
-		} else {
-			content = strings.ReplaceAll(content, "<__INSTANCE>", "")
+			__INSTANCE = "__" + strings.ToUpper(instance)
+			__Instance = "__" + strings.Title(strings.ToLower(instance))
+			__instance = "__" + strings.ToLower(instance)
 		}
+
+		content = strings.ReplaceAll(content, "<__INSTANCE>", __INSTANCE)
+		content = strings.ReplaceAll(content, "<__Instance>", __Instance)
+		content = strings.ReplaceAll(content, "<__instance>", __instance)
 
 		if err := os.WriteFile(instanceFile, []byte(content), 0644); err != nil {
 			return "", err

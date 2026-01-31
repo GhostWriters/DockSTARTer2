@@ -125,14 +125,9 @@ func GetTimestampsDir() string {
 	return filepath.Join(GetStateDir(), "timestamps")
 }
 
-// GetInstanceFolder returns the absolute path to the folder for a specific app instance.
-func GetInstanceFolder(appName string) string {
+// GetInstanceDir returns the absolute path to the folder for a specific app instance.
+func GetInstanceDir(appName string) string {
 	return filepath.Join(GetInstancesDir(), appName)
-}
-
-// GetConfigFolder returns the absolute path to the configuration folder (same as GetConfigDir).
-func GetConfigFolder() string {
-	return GetConfigDir()
 }
 
 // GetExecDirectory returns the directory of the currently running executable.

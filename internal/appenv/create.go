@@ -49,10 +49,10 @@ func Create(file, defaultFile string) error {
 
 	// 2. CONFIG/COMPOSE FOLDERS
 	conf := config.LoadAppConfig()
-	if err := Set("DOCKER_CONFIG_FOLDER", conf.ConfigFolder, file); err != nil {
+	if err := Set("DOCKER_CONFIG_FOLDER", conf.ConfigDir, file); err != nil {
 		return fmt.Errorf("failed to set DOCKER_CONFIG_FOLDER: %w", err)
 	}
-	if err := Set("DOCKER_COMPOSE_FOLDER", conf.ComposeFolder, file); err != nil {
+	if err := Set("DOCKER_COMPOSE_FOLDER", conf.ComposeDir, file); err != nil {
 		return fmt.Errorf("failed to set DOCKER_COMPOSE_FOLDER: %w", err)
 	}
 

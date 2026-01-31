@@ -2,6 +2,7 @@ package appenv
 
 import (
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/envutil"
 	"DockSTARTer2/internal/paths"
 	"bufio"
 	"context"
@@ -122,7 +123,7 @@ func ListReferencedApps(ctx context.Context, conf config.AppConfig) ([]string, e
 		referenced[app] = true
 	}
 
-	entries, _ := os.ReadDir(conf.ComposeFolder)
+	entries, _ := os.ReadDir(conf.ComposeDir)
 	for _, entry := range entries {
 		if !entry.IsDir() && strings.HasPrefix(entry.Name(), ".env.app.") {
 			appName := strings.TrimPrefix(entry.Name(), ".env.app.")
@@ -130,7 +131,7 @@ func ListReferencedApps(ctx context.Context, conf config.AppConfig) ([]string, e
 		}
 	}
 
-	overrideFile := filepath.Join(conf.ComposeFolder, "docker-compose.override.yml")
+	overrideFile := filepath.Join(conf.ComposeDir, "docker-compose.override.yml")
 	if _, err := os.Stat(overrideFile); err == nil {
 		content, _ := os.ReadFile(overrideFile)
 		re := regexp.MustCompile(`\.env\.app\.([a-z0-9_]+)`)
@@ -154,7 +155,7 @@ func ListReferencedApps(ctx context.Context, conf config.AppConfig) ([]string, e
 
 // ListEnabledApps returns a sorted list of enabled applications.
 func ListEnabledApps(conf config.AppConfig) ([]string, error) {
-	envFile := filepath.Join(conf.ComposeFolder, ".env")
+	envFile := filepath.Join(conf.ComposeDir, ".env")
 	content, err := os.ReadFile(envFile)
 	if err != nil {
 		return nil, err
@@ -181,12 +182,12 @@ func ListEnabledApps(conf config.AppConfig) ([]string, error) {
 
 // ListAppVars returns a list of variable names for the specified app.
 func ListAppVars(ctx context.Context, appName string, conf config.AppConfig) ([]string, error) {
-	envFile := filepath.Join(conf.ComposeFolder, ".env")
+	envFile := filepath.Join(conf.ComposeDir, ".env")
 
 	// If appName ends with ":", use app-specific env file
 	if strings.HasSuffix(appName, ":") {
 		baseApp := strings.TrimSuffix(appName, ":")
-		targetFile := filepath.Join(conf.ComposeFolder, ".env.app."+strings.ToLower(baseApp))
+		targetFile := filepath.Join(conf.ComposeDir, ".env.app."+strings.ToLower(baseApp))
 		varsMap, err := ListVars(targetFile)
 		if err != nil {
 			return nil, err
@@ -217,7 +218,7 @@ func ListAppVars(ctx context.Context, appName string, conf config.AppConfig) ([]
 			result = append(result, varName)
 		}
 	}
-
+	sort.Strings(result)
 	return result, nil
 }
 
@@ -252,15 +253,19 @@ func ListVars(file string) (map[string]string, error) {
 func AppVarsLines(appName string, lines []string) []string {
 	if appName == "" {
 		var globals []string
+		// Search for all variables not for an app
+		// Exclude empty lines and comments
+		reEmpty := regexp.MustCompile(`^\s*$`)
+		reComment := regexp.MustCompile(`^\s*#`)
+
 		for _, line := range lines {
-			line = strings.TrimSpace(line)
-			if line == "" || strings.HasPrefix(line, "#") {
+			if reEmpty.MatchString(line) || reComment.MatchString(line) {
 				continue
 			}
 
-			matches := regexp.MustCompile(`^([A-Za-z0-9_]+)=`).FindStringSubmatch(line)
-			if len(matches) > 1 {
-				varName := matches[1]
+			// Check if line contains a variable assignment
+			if idx := strings.Index(line, "="); idx > 0 {
+				varName := strings.TrimSpace(line[:idx])
 				if IsGlobalVar(varName) {
 					globals = append(globals, line)
 				}
@@ -269,19 +274,22 @@ func AppVarsLines(appName string, lines []string) []string {
 		return globals
 	}
 
-	pattern := fmt.Sprintf(`^\s*(%s__\w+)\s*=`, regexp.QuoteMeta(appName))
+	// Search for all variables for app "appName"
+	// Match lines starting with appName__
+	pattern := fmt.Sprintf(`^\s*%s__([A-Za-z0-9_]+)\s*=`, regexp.QuoteMeta(appName))
 	re := regexp.MustCompile(pattern)
 
 	var appVars []string
 	for _, line := range lines {
 		matches := re.FindStringSubmatch(line)
 		if len(matches) > 1 {
-			varName := matches[1]
-			suffix := strings.TrimPrefix(varName, appName+"__")
-			if regexp.MustCompile(`^[A-Za-z0-9]+__`).MatchString(suffix) {
-				continue
+			suffix := matches[1]
+			// Bash: APPNAME__(?![A-Za-z0-9]+__)\w+
+			// This means the suffix should NOT contain another __
+			// (which would indicate an instance of this app, which is a separate app)
+			if !strings.Contains(suffix, "__") {
+				appVars = append(appVars, line)
 			}
-			appVars = append(appVars, strings.TrimSpace(line))
 		}
 	}
 
@@ -290,30 +298,27 @@ func AppVarsLines(appName string, lines []string) []string {
 
 // ListAppVarLines returns a list of variable lines (KEY=VALUE) for the specified app.
 func ListAppVarLines(ctx context.Context, appName string, conf config.AppConfig) ([]string, error) {
-	envFile := filepath.Join(conf.ComposeFolder, ".env")
+	appName = strings.ToUpper(appName)
+	envFile := filepath.Join(conf.ComposeDir, ".env")
 
 	// If appName ends with ":", use app-specific env file
 	if strings.HasSuffix(appName, ":") {
 		baseApp := strings.TrimSuffix(appName, ":")
-		targetFile := filepath.Join(conf.ComposeFolder, ".env.app."+strings.ToLower(baseApp))
-		content, err := os.ReadFile(targetFile)
-		if err != nil {
-			return nil, err
-		}
-		var lines []string
-		scanner := bufio.NewScanner(strings.NewReader(string(content)))
-		for scanner.Scan() {
-			lines = append(lines, scanner.Text())
-		}
-		return lines, scanner.Err()
+		targetFile := filepath.Join(conf.ComposeDir, ".env.app."+strings.ToLower(baseApp))
+		return envutil.ReadLines(targetFile)
 	}
 
 	// Otherwise, use AppVarsLines to filter from global .env
 	content, err := os.ReadFile(envFile)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return []string{}, nil
+		}
 		return nil, err
 	}
 
 	lines := strings.Split(string(content), "\n")
-	return AppVarsLines(strings.ToUpper(appName), lines), nil
+	result := AppVarsLines(appName, lines)
+	sort.Strings(result)
+	return result, nil
 }
