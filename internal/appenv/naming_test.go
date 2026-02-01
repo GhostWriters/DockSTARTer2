@@ -58,6 +58,12 @@ services:
 	content, _ := os.ReadFile(instFile)
 	t.Logf("Instance file content:\n%s", string(content))
 
+	// 2.5 Setup mock .env file (required for IsAppUserDefined check)
+	envFile := filepath.Join(tempDir, ".env")
+	if err := os.WriteFile(envFile, []byte("TESTAPP__ENABLED=true\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
 	// 2. Test IsAppDeprecated
 	deprecated := IsAppDeprecated(ctx, appName)
 	if !deprecated {
@@ -65,7 +71,7 @@ services:
 	}
 
 	// 3. Test GetDescription
-	desc := GetDescription(ctx, appName, "")
+	desc := GetDescription(ctx, appName, envFile)
 	if desc != "This is a deprecated test app" {
 		t.Errorf("Expected description 'This is a deprecated test app', got '%s'", desc)
 	}
