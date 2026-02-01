@@ -179,9 +179,12 @@ func MergeYML(ctx context.Context, force bool) error {
 
 		logger.Info(ctx, "All configurations for '{{_App_}}%s{{|-|}}' are included.", niceName)
 
-		// Create app folders
+		// Create app environment variables and config folders
 		if err := appenv.CreateApp(ctx, appName, conf); err != nil {
-			logger.Warn(ctx, "Failed to create folders for %s: %v", appName, err)
+			logger.Warn(ctx, "Failed to create environment variables for %s: %v", appName, err)
+		}
+		if err := appenv.CreateAppFolders(ctx, appName, conf); err != nil {
+			logger.Warn(ctx, "Failed to create config folders for %s: %v", appName, err)
 		}
 	}
 
@@ -425,13 +428,7 @@ func NeedsYMLMerge(ctx context.Context, force bool) bool {
 
 	conf := config.LoadAppConfig()
 
-	// 1. Check for forced flag file (legacy Go behavior + Force equivalent)
-	needsFile := filepath.Join(paths.GetStateDir(), "needs", "yml_merge")
-	if fileExists(needsFile) {
-		return true
-	}
-
-	// 2. Check if docker-compose.yml is missing
+	// 1. Check if docker-compose.yml is missing
 	composeFile := filepath.Join(conf.ComposeDir, "docker-compose.yml")
 	if !fileExists(composeFile) {
 		return true
@@ -466,13 +463,7 @@ func NeedsYMLMerge(ctx context.Context, force bool) bool {
 func UnsetNeedsYMLMerge(ctx context.Context) {
 	conf := config.LoadAppConfig()
 
-	// 1. Remove forced flag file and needs directory
-	needsDir := filepath.Join(paths.GetStateDir(), "needs")
-	needsFile := filepath.Join(needsDir, "yml_merge")
-	os.Remove(needsFile)
-	os.Remove(needsDir) // Try to remove if empty
-
-	// 2. Clear old timestamps
+	// 1. Clear old timestamps
 	timestampsDir := paths.GetTimestampsDir()
 	if !dirExists(timestampsDir) {
 		_ = os.MkdirAll(timestampsDir, 0755)
@@ -502,14 +493,22 @@ func UnsetNeedsYMLMerge(ctx context.Context) {
 	}
 }
 
-// SetNeedsYMLMerge marks that YML merge is needed by creating a flag file
+// SetNeedsYMLMerge marks that YML merge is needed by clearing timestamps
 func SetNeedsYMLMerge(ctx context.Context) error {
-	needsDir := filepath.Join(paths.GetStateDir(), "needs")
-	if err := os.MkdirAll(needsDir, 0755); err != nil {
-		return err
+	timestampsDir := paths.GetTimestampsDir()
+	if !dirExists(timestampsDir) {
+		return nil
 	}
-	needsFile := filepath.Join(needsDir, "yml_merge")
-	return os.WriteFile(needsFile, []byte(""), 0644)
+	entries, err := os.ReadDir(timestampsDir)
+	if err != nil {
+		return nil
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "yml_merge_") {
+			os.Remove(filepath.Join(timestampsDir, entry.Name()))
+		}
+	}
+	return nil
 }
 
 // Helper functions

@@ -699,9 +699,6 @@ func handleReset(ctx context.Context) {
 	logger.Notice(ctx, "Resetting {{_ApplicationName_}}%s{{|-|}} to process all actions.", version.ApplicationName)
 	timestampDir := paths.GetTimestampsDir()
 	_ = os.RemoveAll(timestampDir)
-
-	needsDir := filepath.Join(paths.GetStateDir(), "needs")
-	_ = os.RemoveAll(needsDir)
 	// Also ensure permissions are set? Bash script calls set_permissions.
 	// We might need a set_permissions equivalent eventually.
 }
