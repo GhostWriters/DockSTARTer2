@@ -694,8 +694,9 @@ func handlePrune(ctx context.Context, state *CmdState) {
 
 func handleReset(ctx context.Context) {
 	logger.Notice(ctx, "Resetting {{_ApplicationName_}}%s{{|-|}} to process all actions.", version.ApplicationName)
-	timestampDir := paths.GetTimestampsDir()
-	_ = os.RemoveAll(timestampDir)
+	if err := paths.ResetNeeds(); err != nil {
+		logger.Error(ctx, "Failed to reset: %v", err)
+	}
 	// Also ensure permissions are set? Bash script calls set_permissions.
 	// We might need a set_permissions equivalent eventually.
 }

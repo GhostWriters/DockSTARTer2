@@ -139,7 +139,7 @@ func GetExecDirectory() string {
 	return filepath.Dir(exe)
 }
 
-// ResetNeeds deletes the entire timestamps directory, mirroring reset_needs.sh.
+// ResetNeeds deletes the timestamps directory, mirroring reset_needs.sh.
 func ResetNeeds() error {
 	timestampDir := GetTimestampsDir()
 	if _, err := os.Stat(timestampDir); err == nil {

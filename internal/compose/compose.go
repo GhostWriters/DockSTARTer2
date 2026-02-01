@@ -509,7 +509,11 @@ func updateTimestamp(ctx context.Context, conf config.AppConfig, path string) {
 	}
 
 	filename := filepath.Base(path)
-	timestampFile := filepath.Join(paths.GetTimestampsDir(), "yml_merge_"+filename)
+	timestampDir := paths.GetTimestampsDir()
+	timestampFile := filepath.Join(timestampDir, "yml_merge_"+filename)
+
+	// Ensure timestamps directory exists
+	_ = os.MkdirAll(timestampDir, 0755)
 
 	// Create empty timestamp file
 	f, err := os.Create(timestampFile)
