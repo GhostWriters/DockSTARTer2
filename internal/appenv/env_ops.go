@@ -317,8 +317,11 @@ func SanitizeEnv(ctx context.Context, file string, conf config.AppConfig) error 
 		// But Bash logic seems to force update if expanded != restored.
 		// Which means it effectively enforces standard variable syntax?
 
+		// FIX: ListVars returns cleaned values (unquoted). targetVal is quoted.
+		// Comparing cleaned vs quoted causes infinite loop.
+		// Compare current cleaned value vs restored (unquoted) value.
 		targetVal := fmt.Sprintf("\"%s\"", restored)
-		if currentLiteral != targetVal {
+		if currentLiteral != restored {
 			addUpdate(vVar, targetVal)
 		}
 	}
