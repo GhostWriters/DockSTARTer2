@@ -1,0 +1,31 @@
+internal\docker\cli.go:13:func RunCommand(ctx context.Context, args ...string) error {
+internal\docker\prune.go:16:func Prune(ctx context.Context, assumeYes bool) error {
+internal\envutil\lines.go:15:func ReadLines(filename string) ([]string, error) {
+internal\exec\exec.go:27:func RunAndLog(ctx context.Context, runningNoticeType, outputNoticeType, errorNoticeType, errorMessage, command string, args ...string) error {
+internal\exec\exec.go:94:func logByType(ctx context.Context, noticeType string, format string, args ...any) {
+internal\exec\exec.go:112:func RunCommand(ctx context.Context, command string, args ...string) error {
+internal\exec\exec.go:118:func RunCommandOutput(ctx context.Context, command string, args ...string) (string, error) {
+internal\logger\logger.go:24:func WithTUIWriter(ctx context.Context, w io.Writer) context.Context {
+internal\logger\logger.go:29:func resolveMsg(msg any) string {
+internal\logger\logger.go:47:func log(ctx context.Context, level slog.Level, msg any, args ...any) {
+internal\logger\logger.go:52:func logAt(ctx context.Context, t time.Time, level slog.Level, msg any, args ...any) {
+internal\logger\logger.go:123:func init() {
+internal\logger\logger.go:128:func SetLevel(level slog.Level) {
+internal\logger\logger.go:138:func NewLogger() *slog.Logger {
+internal\logger\logger.go:260:func (h *FanoutHandler) Enabled(ctx context.Context, level slog.Level) bool {
+internal\logger\logger.go:269:func (h *FanoutHandler) Handle(ctx context.Context, r slog.Record) error {
+internal\logger\logger.go:284:func (h *FanoutHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+internal\logger\logger.go:292:func (h *FanoutHandler) WithGroup(name string) slog.Handler {
+internal\logger\logger.go:301:func Trace(ctx context.Context, msg any, args ...any) {
+internal\logger\logger.go:305:func Debug(ctx context.Context, msg any, args ...any) {
+internal\logger\logger.go:309:func Info(ctx context.Context, msg any, args ...any) {
+internal\logger\logger.go:313:func Notice(ctx context.Context, msg any, args ...any) {
+internal\logger\logger.go:317:func Warn(ctx context.Context, msg any, args ...any) {
+internal\logger\logger.go:321:func Error(ctx context.Context, msg any, args ...any) {
+internal\logger\logger.go:328:func Display(ctx context.Context, msg any, args ...any) {
+internal\logger\logger.go:349:func getSystemInfo() []string {
+internal\logger\logger.go:388:func Fatal(ctx context.Context, msg any, args ...any) {
+internal\logger\logger.go:497:func FatalNoTrace(ctx context.Context, msg any, args ...any) {
+internal\logger\logger.go:513:func writeFatalLog(ctx context.Context, t time.Time, msg any, args ...any) {
+internal\logger\logger.go:549:func Cleanup() {
+internal\logger\logger.go:557:func truncateLogFile(path string, limit int) {

@@ -1,0 +1,37 @@
+main.go:17:func main() {
+main.go:21:func run() (exitCode int) {
+main.go:71:func cleanup(ctx context.Context) {
+cmd\executor.go:32:func Execute(ctx context.Context, groups []CommandGroup) int {
+cmd\executor.go:187:func handleHelp(group *CommandGroup) {
+cmd\executor.go:195:func handleVersion(ctx context.Context) {
+cmd\executor.go:200:func handleInstall(ctx context.Context, group *CommandGroup, state *CmdState) {
+cmd\executor.go:207:func handleConfigPm(ctx context.Context, group *CommandGroup) {
+cmd\executor.go:211:func handleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, restArgs []string) {
+cmd\executor.go:247:func handleMenu(ctx context.Context, group *CommandGroup) {
+cmd\executor.go:259:func resolveEnvVar(arg string, conf config.AppConfig) (string, string) {
+cmd\executor.go:272:func handleEnvGet(ctx context.Context, group *CommandGroup) {
+cmd\executor.go:325:func handleEnvSet(ctx context.Context, group *CommandGroup) {
+cmd\executor.go:388:func handleAppVarsCreateAll(ctx context.Context, group *CommandGroup, state *CmdState) {
+cmd\executor.go:395:func handleAppVarsCreate(ctx context.Context, group *CommandGroup, state *CmdState) {
+cmd\executor.go:424:func handleTheme(ctx context.Context, group *CommandGroup) {
+cmd\executor.go:483:func handleThemeSettings(ctx context.Context, group *CommandGroup) {
+cmd\executor.go:510:func handleList(ctx context.Context, group *CommandGroup) {
+cmd\executor.go:545:func handleStatus(ctx context.Context, group *CommandGroup) {
+cmd\executor.go:560:func handleStatusChange(ctx context.Context, group *CommandGroup) {
+cmd\executor.go:582:func handleRemove(ctx context.Context, group *CommandGroup, state *CmdState) {
+cmd\executor.go:596:func handleConfigShow(ctx context.Context, conf *config.AppConfig) {
+cmd\executor.go:689:func handlePrune(ctx context.Context, state *CmdState) {
+cmd\executor.go:695:func handleReset(ctx context.Context) {
+cmd\executor.go:704:func handleThemeTable(ctx context.Context) {
+cmd\executor.go:727:func handleEnvAppVars(ctx context.Context, group *CommandGroup) {
+cmd\executor.go:746:func handleEnvAppVarsLines(ctx context.Context, group *CommandGroup) {
+cmd\executor.go:765:func handleTest(ctx context.Context, group *CommandGroup) {
+cmd\executor.go:781:func handleCompose(ctx context.Context, group *CommandGroup, state *CmdState) {
+cmd\flags.go:8:func InitFlags() {
+cmd\parser.go:22:func (e *ParseError) Error() string {
+cmd\parser.go:96:func (cg CommandGroup) FullSlice() []string {
+cmd\parser.go:107:func (cg CommandGroup) CommandSlice() []string {
+cmd\parser.go:117:func Flatten(groups []CommandGroup) []string {
+cmd\parser.go:127:func Parse(args []string) ([]CommandGroup, error) {
+cmd\usage.go:13:func PrintHelp(target string) {
+cmd\usage.go:20:func GetUsage(target string) string {

@@ -2,6 +2,7 @@ package appenv
 
 import (
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"context"
@@ -24,7 +25,7 @@ import (
 //
 // Returns an error only if critical initialization (EnvCreate or ListAdded) fails.
 func CreateAll(ctx context.Context, force bool, conf config.AppConfig) error {
-	envFile := filepath.Join(conf.ComposeDir, ".env")
+	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
 
 	// Ensure main env exists first to check for added apps
 	if err := EnvCreate(ctx, conf); err != nil {
@@ -88,7 +89,7 @@ func CreateApp(ctx context.Context, appNameRaw string, conf config.AppConfig) er
 		logger.Info(ctx, "Creating environment variables for '{{_App_}}%s{{|-|}}'.", niceName)
 
 		// 1. Get path to Global .env instance file
-		processedGlobalEnv, err := AppInstanceFile(ctx, appName, ".env")
+		processedGlobalEnv, err := AppInstanceFile(ctx, appName, constants.EnvFileName)
 		if err != nil {
 			logger.Debug(ctx, "No global .env template for %s: %v", appNameUpper, err)
 		} else if processedGlobalEnv != "" {
@@ -98,8 +99,8 @@ func CreateApp(ctx context.Context, appNameRaw string, conf config.AppConfig) er
 		}
 
 		// 2. Get path to App specific .env instance file (.env.app.*)
-		targetAppEnv := filepath.Join(conf.ComposeDir, fmt.Sprintf(".env.app.%s", appName))
-		processedAppEnv, err := AppInstanceFile(ctx, appName, ".env.app.*")
+		targetAppEnv := filepath.Join(conf.ComposeDir, fmt.Sprintf("%s%s", constants.AppEnvFileNamePrefix, appName))
+		processedAppEnv, err := AppInstanceFile(ctx, appName, fmt.Sprintf("%s*", constants.AppEnvFileNamePrefix))
 		if err != nil {
 			logger.Debug(ctx, "No app-specific .env template for %s: %v", appNameUpper, err)
 		} else if processedAppEnv != "" {
@@ -130,7 +131,7 @@ func NeedsCreateAll(ctx context.Context, force bool, added []string, conf config
 		return true
 	}
 
-	envFile := filepath.Join(conf.ComposeDir, ".env")
+	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
 	if fileChanged(conf, envFile) {
 		return true
 	}
@@ -151,7 +152,7 @@ func NeedsCreateAll(ctx context.Context, force bool, added []string, conf config
 	}
 
 	for _, appName := range added {
-		appEnvFile := filepath.Join(conf.ComposeDir, ".env.app."+strings.ToLower(appName))
+		appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf("%s%s", constants.AppEnvFileNamePrefix, strings.ToLower(appName)))
 		if fileChanged(conf, appEnvFile) {
 			return true
 		}
@@ -163,7 +164,7 @@ func NeedsCreateAll(ctx context.Context, force bool, added []string, conf config
 // UnsetNeedsCreateAll marks environment variable creation as complete by updating timestamps.
 // Mirrors unset_needs_appvars_create.sh
 func UnsetNeedsCreateAll(ctx context.Context, added []string, conf config.AppConfig) {
-	envFile := filepath.Join(conf.ComposeDir, ".env")
+	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
 	updateTimestamp(conf, envFile)
 
 	// Update Granular Markers
@@ -177,7 +178,7 @@ func UnsetNeedsCreateAll(ctx context.Context, added []string, conf config.AppCon
 	}
 
 	for _, appName := range added {
-		appEnvFile := filepath.Join(conf.ComposeDir, ".env.app."+strings.ToLower(appName))
+		appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf("%s%s", constants.AppEnvFileNamePrefix, strings.ToLower(appName)))
 		updateTimestamp(conf, appEnvFile)
 	}
 }
@@ -188,7 +189,7 @@ func fileChanged(conf config.AppConfig, path string) bool {
 	}
 
 	filename := filepath.Base(path)
-	timestampFile := filepath.Join(paths.GetTimestampsDir(), "appvars_create_"+filename)
+	timestampFile := filepath.Join(paths.GetTimestampsDir(), constants.AppVarsCreateMarkerPrefix+filename)
 
 	info, err := os.Stat(path)
 	tsInfo, tsErr := os.Stat(timestampFile)
@@ -210,7 +211,7 @@ func updateTimestamp(conf config.AppConfig, path string) {
 	}
 
 	filename := filepath.Base(path)
-	timestampFile := filepath.Join(paths.GetTimestampsDir(), "appvars_create_"+filename)
+	timestampFile := filepath.Join(paths.GetTimestampsDir(), constants.AppVarsCreateMarkerPrefix+filename)
 
 	_ = os.MkdirAll(filepath.Dir(timestampFile), 0755)
 
@@ -228,7 +229,7 @@ func updateTimestamp(conf config.AppConfig, path string) {
 
 func partialChanged(conf config.AppConfig, path string, key, currentValue string) bool {
 	filename := filepath.Base(path)
-	partialFile := filepath.Join(paths.GetTimestampsDir(), "appvars_create_"+filename+"_"+key)
+	partialFile := filepath.Join(paths.GetTimestampsDir(), constants.AppVarsCreateMarkerPrefix+filename+"_"+key)
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return true
@@ -244,7 +245,7 @@ func partialChanged(conf config.AppConfig, path string, key, currentValue string
 
 func updatePartial(conf config.AppConfig, path string, key, value string) {
 	filename := filepath.Base(path)
-	partialFile := filepath.Join(paths.GetTimestampsDir(), "appvars_create_"+filename+"_"+key)
+	partialFile := filepath.Join(paths.GetTimestampsDir(), constants.AppVarsCreateMarkerPrefix+filename+"_"+key)
 
 	_ = os.MkdirAll(filepath.Dir(partialFile), 0755)
 	_ = os.WriteFile(partialFile, []byte(value), 0644)

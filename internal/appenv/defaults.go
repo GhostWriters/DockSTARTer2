@@ -2,6 +2,7 @@ package appenv
 
 import (
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/constants"
 	"context"
 	"fmt"
 	"os"
@@ -34,7 +35,7 @@ func VarDefaultValue(ctx context.Context, key string, conf config.AppConfig) str
 
 	switch varType {
 	case "APP":
-		defFile, _ := AppInstanceFile(ctx, appName, ".env")
+		defFile, _ := AppInstanceFile(ctx, appName, constants.EnvFileName)
 		if defFile != "" {
 			exists, _ := EnvVarExists(ctx, cleanVarName, defFile)
 			if exists {
@@ -72,7 +73,7 @@ func VarDefaultValue(ctx context.Context, key string, conf config.AppConfig) str
 		}
 
 	case "APPENV":
-		defFile, _ := AppInstanceFile(ctx, appName, ".env.app.*")
+		defFile, _ := AppInstanceFile(ctx, appName, fmt.Sprintf("%s*", constants.AppEnvFileNamePrefix))
 		if defFile != "" {
 			exists, _ := EnvVarExists(ctx, cleanVarName, defFile)
 			if exists {

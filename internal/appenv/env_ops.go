@@ -3,6 +3,7 @@ package appenv
 import (
 	"DockSTARTer2/internal/assets"
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/logger"
 	"context"
 	"fmt"
@@ -27,7 +28,7 @@ import (
 //
 // Returns an error if critical operations like folder creation or file writing fail.
 func EnvCreate(ctx context.Context, conf config.AppConfig) error {
-	envFile := filepath.Join(conf.ComposeDir, ".env")
+	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
 
 	// 1. Ensure Folder
 	if _, err := os.Stat(conf.ComposeDir); os.IsNotExist(err) {

@@ -2,6 +2,7 @@ package appenv
 
 import (
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/logger"
 	"bufio"
 	"context"
@@ -31,8 +32,8 @@ func CreateAppFolders(ctx context.Context, appNameRaw string, conf config.AppCon
 	var foldersToCreate []string
 
 	// Load environment variables for expansion context
-	envFile := filepath.Join(conf.ComposeDir, ".env")
-	appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf(".env.app.%s", appName))
+	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
+	appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf("%s%s", constants.AppEnvFileNamePrefix, appName))
 
 	vars, err := ListVars(envFile)
 	if err != nil {

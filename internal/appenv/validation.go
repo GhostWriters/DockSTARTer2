@@ -2,6 +2,7 @@ package appenv
 
 import (
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/paths"
 	"context"
 	"fmt"
@@ -46,7 +47,7 @@ func IsAppBuiltIn(appName string) bool {
 	base = strings.ToLower(base)
 
 	templatesDir := paths.GetTemplatesDir()
-	appDir := filepath.Join(templatesDir, ".apps", base)
+	appDir := filepath.Join(templatesDir, constants.TemplatesDirName, base)
 	info, err := os.Stat(appDir)
 	return err == nil && info.IsDir()
 }
@@ -97,7 +98,7 @@ func IsAppAdded(ctx context.Context, appName string, envFile string) bool {
 func IsAppRunnable(appName string, conf config.AppConfig) bool {
 	basename := AppNameToBaseAppName(appName)
 	templatesDir := paths.GetTemplatesDir()
-	templateFolder := filepath.Join(templatesDir, ".apps", basename)
+	templateFolder := filepath.Join(templatesDir, constants.TemplatesDirName, basename)
 
 	// Check for main.yml
 	mainYml := filepath.Join(templateFolder, basename+".yml")
@@ -133,16 +134,16 @@ func IsAppEnabled(app, envFile string) bool {
 // IsAppReferenced checks if an app is referenced in .env or compose override.
 func IsAppReferenced(ctx context.Context, app string, conf config.AppConfig) bool {
 	// Implementation from status.go
-	envFile := filepath.Join(conf.ComposeDir, ".env")
+	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
 	if IsAppEnabled(app, envFile) {
 		return true
 	}
 	// Also check overrides...
-	overrideFile := filepath.Join(conf.ComposeDir, "docker-compose.override.yml")
+	overrideFile := filepath.Join(conf.ComposeDir, constants.ComposeOverrideFileName)
 	if _, err := os.Stat(overrideFile); err == nil {
 		content, _ := os.ReadFile(overrideFile)
-		// Grep for .env.app.APPNAME
-		if strings.Contains(string(content), ".env.app."+strings.ToLower(app)) {
+		// Grep for Prefix + APPNAME
+		if strings.Contains(string(content), constants.AppEnvFileNamePrefix+strings.ToLower(app)) {
 			return true
 		}
 	}
@@ -218,7 +219,7 @@ func EnvVarExists(ctx context.Context, key string, file string) (bool, error) {
 		appName := parts[0]
 		targetKey = parts[1]
 
-		f, err := AppInstanceFile(ctx, appName, ".env")
+		f, err := AppInstanceFile(ctx, appName, constants.EnvFileName)
 		if err != nil {
 			return false, err
 		}

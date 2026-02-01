@@ -4,6 +4,7 @@ import (
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/constants"
 	execpkg "DockSTARTer2/internal/exec"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
@@ -421,7 +422,7 @@ func NeedsYMLMerge(ctx context.Context, force bool) bool {
 	conf := config.LoadAppConfig()
 
 	// 1. Check if docker-compose.yml is missing
-	composeFile := filepath.Join(conf.ComposeDir, "docker-compose.yml")
+	composeFile := filepath.Join(conf.ComposeDir, constants.ComposeFileName)
 	if !fileExists(composeFile) {
 		return true
 	}
@@ -460,22 +461,22 @@ func UnsetNeedsYMLMerge(ctx context.Context) {
 	timestampsDir := paths.GetTimestampsDir()
 	if entries, err := os.ReadDir(timestampsDir); err == nil {
 		for _, entry := range entries {
-			if strings.HasPrefix(entry.Name(), "yml_merge_") {
+			if strings.HasPrefix(entry.Name(), constants.YmlMergeMarkerPrefix) {
 				_ = os.Remove(filepath.Join(timestampsDir, entry.Name()))
 			}
 		}
 	}
 
 	// Update markers for all relevant files
-	composeFile := filepath.Join(conf.ComposeDir, "docker-compose.yml")
+	composeFile := filepath.Join(conf.ComposeDir, constants.ComposeFileName)
 	updateTimestamp(ctx, conf, composeFile)
 
-	envFile := filepath.Join(conf.ComposeDir, ".env")
+	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
 	updateTimestamp(ctx, conf, envFile)
 
 	enabledApps, _ := appenv.ListEnabledApps(conf)
 	for _, appName := range enabledApps {
-		appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf(".env.app.%s", strings.ToLower(appName)))
+		appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf("%s%s", constants.AppEnvFileNamePrefix, strings.ToLower(appName)))
 		updateTimestamp(ctx, conf, appEnvFile)
 	}
 }
@@ -484,7 +485,7 @@ func UnsetNeedsYMLMerge(ctx context.Context) {
 
 func fileChanged(conf config.AppConfig, path string) bool {
 	filename := filepath.Base(path)
-	timestampFile := filepath.Join(paths.GetTimestampsDir(), "yml_merge_"+filename)
+	timestampFile := filepath.Join(paths.GetTimestampsDir(), constants.YmlMergeMarkerPrefix+filename)
 
 	info, err := os.Stat(path)
 	tsInfo, tsErr := os.Stat(timestampFile)
@@ -510,7 +511,7 @@ func updateTimestamp(ctx context.Context, conf config.AppConfig, path string) {
 
 	filename := filepath.Base(path)
 	timestampDir := paths.GetTimestampsDir()
-	timestampFile := filepath.Join(timestampDir, "yml_merge_"+filename)
+	timestampFile := filepath.Join(timestampDir, constants.YmlMergeMarkerPrefix+filename)
 
 	// Ensure timestamps directory exists
 	_ = os.MkdirAll(timestampDir, 0755)

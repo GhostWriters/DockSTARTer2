@@ -2,6 +2,7 @@ package appenv
 
 import (
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/logger"
 	"bufio"
 	"context"
@@ -33,7 +34,7 @@ func Remove(ctx context.Context, appNames []string, conf config.AppConfig, assum
 }
 
 func removeAllDisabled(ctx context.Context, conf config.AppConfig, assumeYes bool) error {
-	envFile := filepath.Join(conf.ComposeDir, ".env")
+	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
 	disabledApps, err := ListDisabledApps(envFile)
 	if err != nil {
 		return err
@@ -64,8 +65,8 @@ func removeAllDisabled(ctx context.Context, conf config.AppConfig, assumeYes boo
 func removeApp(ctx context.Context, appName string, conf config.AppConfig, assumeYes bool) error {
 	appUpper := strings.ToUpper(appName)
 	nice := GetNiceName(ctx, appUpper)
-	envFile := filepath.Join(conf.ComposeDir, ".env")
-	appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf(".app.%s", strings.ToLower(appName)))
+	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
+	appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf("%s%s", constants.AppEnvFileNamePrefix, strings.ToLower(appName)))
 
 	// Get current and default variables
 	currentGlobalVars, err := listAppVars(appName, envFile)
@@ -190,7 +191,7 @@ func listAppVars(prefix string, filePath string) ([]string, error) {
 
 // listDefaultGlobalVars lists default global variables for an app
 func listDefaultGlobalVars(ctx context.Context, appName string) ([]string, error) {
-	processedFile, err := AppInstanceFile(ctx, appName, ".env")
+	processedFile, err := AppInstanceFile(ctx, appName, constants.EnvFileName)
 	if err != nil {
 		return nil, err
 	}
@@ -202,7 +203,7 @@ func listDefaultGlobalVars(ctx context.Context, appName string) ([]string, error
 
 // listDefaultAppVars lists default app-specific variables
 func listDefaultAppVars(ctx context.Context, appName string) ([]string, error) {
-	processedFile, err := AppInstanceFile(ctx, appName, ".app.*")
+	processedFile, err := AppInstanceFile(ctx, appName, fmt.Sprintf("%s*", constants.AppEnvFileNamePrefix))
 	if err != nil {
 		return nil, err
 	}

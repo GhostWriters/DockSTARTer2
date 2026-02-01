@@ -1,6 +1,7 @@
 package config
 
 import (
+	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/paths"
 	"bufio"
 	"os"
@@ -130,20 +131,20 @@ func LoadAppConfig() AppConfig {
 		}
 
 		switch key {
-		case "Borders":
+		case constants.BordersKey:
 			conf.Borders = isTrue(value)
-		case "LineCharacters":
+		case constants.LineCharactersKey:
 			conf.LineCharacters = isTrue(value)
-		case "Shadow":
+		case constants.ShadowKey:
 			conf.Shadow = isTrue(value)
-		case "Scrollbar":
+		case constants.ScrollbarKey:
 			conf.Scrollbar = isTrue(value)
-		case "Theme":
+		case constants.ThemeKey:
 			conf.Theme = value
-		case "ConfigFolder":
+		case constants.ConfigFolderKey:
 			conf.ConfigDirUnexpanded = value
 			conf.ConfigDir = expandedValue
-		case "ComposeFolder":
+		case constants.ComposeFolderKey:
 			conf.ComposeDirUnexpanded = value
 			conf.ComposeDir = expandedValue
 		}
@@ -184,13 +185,13 @@ func SaveAppConfig(conf AppConfig) error {
 		return "no"
 	}
 
-	writeOption("ConfigFolder", conf.ConfigDir)
-	writeOption("ComposeFolder", conf.ComposeDir)
-	writeOption("Borders", boolToYesNo(conf.Borders))
-	writeOption("LineCharacters", boolToYesNo(conf.LineCharacters))
-	writeOption("Scrollbar", boolToYesNo(conf.Scrollbar))
-	writeOption("Shadow", boolToYesNo(conf.Shadow))
-	writeOption("Theme", conf.Theme)
+	writeOption(constants.ConfigFolderKey, conf.ConfigDir)
+	writeOption(constants.ComposeFolderKey, conf.ComposeDir)
+	writeOption(constants.BordersKey, boolToYesNo(conf.Borders))
+	writeOption(constants.LineCharactersKey, boolToYesNo(conf.LineCharacters))
+	writeOption(constants.ScrollbarKey, boolToYesNo(conf.Scrollbar))
+	writeOption(constants.ShadowKey, boolToYesNo(conf.Shadow))
+	writeOption(constants.ThemeKey, conf.Theme)
 
 	return writer.Flush()
 }

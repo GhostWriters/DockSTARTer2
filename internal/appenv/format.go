@@ -1,6 +1,7 @@
 package appenv
 
 import (
+	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/envutil"
 	"context"
 	"os"
@@ -177,7 +178,7 @@ func FormatLinesForApp(ctx context.Context, currentEnvFile, appName, templatesDi
 		// In update.go, it is indeed used in the app sections pass for the GLOBAL .env file.
 		// So it should use ".env" as the suffix.
 
-		processedInstanceFile, err := AppInstanceFile(ctx, appUpper, ".env")
+		processedInstanceFile, err := AppInstanceFile(ctx, appUpper, constants.EnvFileName)
 		if err == nil && processedInstanceFile != "" {
 			defaultEnvFile = processedInstanceFile
 		}

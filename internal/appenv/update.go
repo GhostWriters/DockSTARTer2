@@ -2,6 +2,7 @@ package appenv
 
 import (
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"context"
@@ -23,7 +24,7 @@ func Update(ctx context.Context, force bool, file string) error {
 
 	// Get app config for paths
 	conf := config.LoadAppConfig()
-	composeEnvFile := filepath.Join(conf.ComposeDir, ".env")
+	composeEnvFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
 
 	// Read current .env file content
 	input, err := os.ReadFile(file)
@@ -64,7 +65,7 @@ func Update(ctx context.Context, force bool, file string) error {
 
 	// Get default .env.example path
 	configDir := paths.GetConfigDir()
-	defaultEnvFile := filepath.Join(configDir, ".env.example")
+	defaultEnvFile := filepath.Join(configDir, constants.EnvExampleFileName)
 
 	// Call FormatLines for globals
 	formattedGlobals, err := FormatLines(
@@ -138,10 +139,10 @@ func Update(ctx context.Context, force bool, file string) error {
 	if len(appList) > 0 {
 		for _, appName := range appList {
 			appUpper := strings.ToUpper(appName)
-			appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf(".env.app.%s", strings.ToLower(appName)))
+			appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf("%s%s", constants.AppEnvFileNamePrefix, strings.ToLower(appName)))
 
 			// Get default template file for the application
-			appDefaultEnvFile, err := AppInstanceFile(ctx, appUpper, ".env.app.*")
+			appDefaultEnvFile, err := AppInstanceFile(ctx, appUpper, fmt.Sprintf("%s*", constants.AppEnvFileNamePrefix))
 			if err != nil {
 				logger.Warn(ctx, "Failed to get default env file for %s: %v", appName, err)
 				appDefaultEnvFile = ""
@@ -234,7 +235,7 @@ func updateFileChanged(conf config.AppConfig, path string) bool {
 	}
 
 	filename := filepath.Base(path)
-	timestampFile := filepath.Join(paths.GetTimestampsDir(), "env_update_"+filename)
+	timestampFile := filepath.Join(paths.GetTimestampsDir(), constants.EnvUpdateMarkerPrefix+filename)
 
 	info, err := os.Stat(path)
 	tsInfo, tsErr := os.Stat(timestampFile)
@@ -256,7 +257,7 @@ func updateTimestampForUpdate(conf config.AppConfig, path string) {
 	}
 
 	filename := filepath.Base(path)
-	timestampFile := filepath.Join(paths.GetTimestampsDir(), "env_update_"+filename)
+	timestampFile := filepath.Join(paths.GetTimestampsDir(), constants.EnvUpdateMarkerPrefix+filename)
 
 	_ = os.MkdirAll(filepath.Dir(timestampFile), 0755)
 

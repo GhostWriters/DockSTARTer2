@@ -2,6 +2,7 @@ package appenv
 
 import (
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/envutil"
 	"DockSTARTer2/internal/paths"
 	"bufio"
@@ -39,7 +40,7 @@ func ListAddedApps(ctx context.Context, envFile string) ([]string, error) {
 // ListBuiltinApps returns a sorted list of all builtin applications.
 func ListBuiltinApps() ([]string, error) {
 	templatesDir := paths.GetTemplatesDir()
-	appsDir := filepath.Join(templatesDir, ".apps")
+	appsDir := filepath.Join(templatesDir, constants.TemplatesDirName)
 
 	entries, err := os.ReadDir(appsDir)
 	if err != nil {
@@ -125,16 +126,16 @@ func ListReferencedApps(ctx context.Context, conf config.AppConfig) ([]string, e
 
 	entries, _ := os.ReadDir(conf.ComposeDir)
 	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasPrefix(entry.Name(), ".env.app.") {
-			appName := strings.TrimPrefix(entry.Name(), ".env.app.")
+		if !entry.IsDir() && strings.HasPrefix(entry.Name(), constants.AppEnvFileNamePrefix) {
+			appName := strings.TrimPrefix(entry.Name(), constants.AppEnvFileNamePrefix)
 			referenced[strings.ToUpper(appName)] = true
 		}
 	}
 
-	overrideFile := filepath.Join(conf.ComposeDir, "docker-compose.override.yml")
+	overrideFile := filepath.Join(conf.ComposeDir, constants.ComposeOverrideFileName)
 	if _, err := os.Stat(overrideFile); err == nil {
 		content, _ := os.ReadFile(overrideFile)
-		re := regexp.MustCompile(`\.env\.app\.([a-z0-9_]+)`)
+		re := regexp.MustCompile(regexp.QuoteMeta(constants.AppEnvFileNamePrefix) + `([a-z0-9_]+)`)
 		matches := re.FindAllStringSubmatch(string(content), -1)
 		for _, m := range matches {
 			if len(m) > 1 {
@@ -155,7 +156,7 @@ func ListReferencedApps(ctx context.Context, conf config.AppConfig) ([]string, e
 
 // ListEnabledApps returns a sorted list of enabled applications.
 func ListEnabledApps(conf config.AppConfig) ([]string, error) {
-	envFile := filepath.Join(conf.ComposeDir, ".env")
+	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
 	vars, err := ListVars(envFile)
 	if err != nil {
 		return nil, err
@@ -177,12 +178,12 @@ func ListEnabledApps(conf config.AppConfig) ([]string, error) {
 
 // ListAppVars returns a list of variable names for the specified app.
 func ListAppVars(ctx context.Context, appName string, conf config.AppConfig) ([]string, error) {
-	envFile := filepath.Join(conf.ComposeDir, ".env")
+	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
 
 	// If appName ends with ":", use app-specific env file
 	if strings.HasSuffix(appName, ":") {
 		baseApp := strings.TrimSuffix(appName, ":")
-		targetFile := filepath.Join(conf.ComposeDir, ".env.app."+strings.ToLower(baseApp))
+		targetFile := filepath.Join(conf.ComposeDir, constants.AppEnvFileNamePrefix+strings.ToLower(baseApp))
 		varsMap, err := ListVars(targetFile)
 		if err != nil {
 			return nil, err
@@ -294,12 +295,12 @@ func AppVarsLines(appName string, lines []string) []string {
 // ListAppVarLines returns a list of variable lines (KEY=VALUE) for the specified app.
 func ListAppVarLines(ctx context.Context, appName string, conf config.AppConfig) ([]string, error) {
 	appName = strings.ToUpper(appName)
-	envFile := filepath.Join(conf.ComposeDir, ".env")
+	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
 
 	// If appName ends with ":", use app-specific env file
 	if strings.HasSuffix(appName, ":") {
 		baseApp := strings.TrimSuffix(appName, ":")
-		targetFile := filepath.Join(conf.ComposeDir, ".env.app."+strings.ToLower(baseApp))
+		targetFile := filepath.Join(conf.ComposeDir, constants.AppEnvFileNamePrefix+strings.ToLower(baseApp))
 		return envutil.ReadLines(targetFile)
 	}
 

@@ -1,6 +1,7 @@
 package appenv
 
 import (
+	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/paths"
 	"bytes"
 	"context"
@@ -18,7 +19,7 @@ func AppInstanceFile(ctx context.Context, appName, fileSuffix string) (string, e
 	instance := AppNameToInstanceName(appName)
 
 	// Template paths
-	templateFolder := filepath.Join(templatesDir, ".apps", baseApp)
+	templateFolder := filepath.Join(templatesDir, constants.TemplatesDirName, baseApp)
 	templateFilename := strings.ReplaceAll(fileSuffix, "*", baseApp)
 	templateFile := filepath.Join(templateFolder, templateFilename)
 

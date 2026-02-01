@@ -1,0 +1,72 @@
+internal\paths\paths.go:25:func GetConfigFilePath() string {
+internal\paths\paths.go:36:func GetTemplatesDir() string {
+internal\paths\paths.go:45:func GetTemplatesVersion() string {
+internal\paths\paths.go:94:func GetCacheDir() string {
+internal\paths\paths.go:100:func GetConfigDir() string {
+internal\paths\paths.go:105:func GetThemesDir() string {
+internal\paths\paths.go:110:func GetStateDir() string {
+internal\paths\paths.go:119:func GetInstancesDir() string {
+internal\paths\paths.go:124:func GetTimestampsDir() string {
+internal\paths\paths.go:129:func GetInstanceDir(appName string) string {
+internal\paths\paths.go:134:func GetExecDirectory() string {
+internal\paths\paths.go:143:func ResetNeeds() error {
+internal\theme\list.go:19:func List() ([]ThemeMetadata, error) {
+internal\theme\list.go:41:func getThemeMetadata(path string) (ThemeMetadata, error) {
+internal\theme\theme.go:37:func GetColorStr(c tcell.Color) string {
+internal\theme\theme.go:101:func Load(themeName string) error {
+internal\theme\theme.go:120:func Apply() {
+internal\theme\theme.go:163:func updateTagsFromCurrent() {
+internal\theme\theme.go:191:func updateStyles() {
+internal\theme\theme.go:199:func Default() {
+internal\theme\theme.go:240:func parseColor(c string) tcell.Color {
+internal\theme\theme.go:268:func parseTagToColor(tag string) (fg, bg tcell.Color) {
+internal\theme\theme.go:282:func parseThemeINI(path string) error {
+internal\theme\theme_test.go:10:func TestGetColorStr(t *testing.T) {
+internal\tui\dialogs.go:10:func Message(title, message string) {
+internal\tui\dialogs.go:44:func Success(title, message string) {
+internal\tui\dialogs.go:49:func Warning(title, message string) {
+internal\tui\dialogs.go:54:func Error(title, message string) {
+internal\tui\dialogs.go:59:func Confirm(title, question string, defaultYes bool) bool {
+internal\tui\dialogs.go:110:func NewProgramBox(title string, text string) (*cview.TextView, *cview.Button, cview.Primitive) {
+internal\tui\draggable.go:25:func NewDraggableGrid(grid *cview.Grid, width, height int) *DraggableGrid {
+internal\tui\draggable.go:50:func (dg *DraggableGrid) MouseHandler() func(action cview.MouseAction, event *tcell.EventMouse, setFocus func(p cview.Primitive)) (consumed bool, capture cview.Primitive) {
+internal\tui\draggable.go:120:func (dg *DraggableGrid) Draw(screen tcell.Screen) {
+internal\tui\draggable.go:147:func (dg *DraggableGrid) GetRect() (int, int, int, int) {
+internal\tui\draggable.go:152:func (dg *DraggableGrid) SetRect(x, y, width, height int) {
+internal\tui\menu_config.go:3:func showConfigMenu(backAction func()) {
+internal\tui\menu_config.go:66:func showAppSelect(backAction func()) {
+internal\tui\menu_main.go:7:func showMainMenu() {
+internal\tui\menu_options.go:7:func showOptionsMenu(backAction func()) {
+internal\tui\menu_options.go:42:func showThemeSelection(backAction func()) {
+internal\tui\runner.go:16:func (w *TUIWriter) Write(p []byte) (n int, err error) {
+internal\tui\runner.go:26:func RunCommand(ctx context.Context, title string, task func(context.Context) error) error {
+internal\tui\tui.go:52:func setTitle(p *cview.Box, title string) {
+internal\tui\tui.go:57:func setText(p *cview.TextView, text string) {
+internal\tui\tui.go:62:func WrapInDialogFrame(title string, text string, content cview.Primitive, contentWidth, contentHeight int, backAction func(), buttonsFlex *cview.Flex) cview.Primitive {
+internal\tui\tui.go:175:func NewMenuDialog(title string, text string, items []MenuItem, backAction func()) (cview.Primitive, *cview.List) {
+internal\tui\tui.go:450:func draw3DBorder(screen tcell.Screen, x, y, width, height int, fg, bg tcell.Color) {
+internal\tui\tui.go:472:func (d *ThreeDList) Draw(screen tcell.Screen) {
+internal\tui\tui.go:510:func (d *ThreeDBox) Draw(screen tcell.Screen) {
+internal\tui\tui.go:590:func Initialize(ctx context.Context) error {
+internal\tui\tui.go:626:func Start(ctx context.Context, startMenu string) (err error) {
+internal\tui\tui.go:695:func initLayout() {
+internal\tui\tui.go:812:func refreshHeader() {
+internal\update\copyfile.go:9:func copyFile(src, dst string) error {
+internal\update\update.go:39:func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion string, restArgs []string) error {
+internal\update\update.go:158:func ReExec(ctx context.Context, exePath string, args []string) error {
+internal\update\update.go:186:func installUpdate(ctx context.Context, assetURL string) error {
+internal\update\update.go:284:func UpdateTemplates(ctx context.Context, force bool, yes bool, requestedBranch string) error {
+internal\update\update.go:458:func CheckCurrentStatus(ctx context.Context) error {
+internal\update\update.go:477:func GetUpdateStatus(ctx context.Context) (appUpdate bool, tmplUpdate bool) {
+internal\update\update.go:493:func CheckUpdates(ctx context.Context) {
+internal\update\update.go:526:func GetAppVersionDisplay() string {
+internal\update\update.go:535:func GetTmplVersionDisplay() string {
+internal\update\update.go:542:func checkAppUpdate(ctx context.Context) (bool, string) {
+internal\update\update.go:571:func checkTmplUpdate(ctx context.Context) (bool, string) {
+internal\update\update.go:613:func compareVersions(v1, v2 string) int {
+internal\update\update.go:695:func getUpdater(ctx context.Context, channel string) (*selfupdate.Updater, error) {
+internal\update\update.go:708:func GetCurrentChannel() string {
+internal\update\update.go:713:func GetChannelFromVersion(v string) string {
+internal\update\update.go:722:func EnsureTemplates(ctx context.Context) error {
+internal\update\update_test.go:9:func TestCompareVersions(t *testing.T) {
+internal\version\version.go:27:func init() {

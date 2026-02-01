@@ -2,6 +2,7 @@ package appenv
 
 import (
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/paths"
 	"context"
 	"fmt"
@@ -25,7 +26,7 @@ func AppStatus(ctx context.Context, app string, conf config.AppConfig) string {
 		return "Not installed"
 	}
 
-	envFile := filepath.Join(conf.ComposeDir, ".env")
+	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
 	if IsAppAdded(ctx, app, envFile) {
 		return "Enabled"
 	}
@@ -36,7 +37,7 @@ func AppStatus(ctx context.Context, app string, conf config.AppConfig) string {
 // Status returns a string describing the current status of an app.
 func Status(ctx context.Context, app string, conf config.AppConfig) string {
 	appUpper := strings.ToUpper(app)
-	envFile := filepath.Join(conf.ComposeDir, ".env")
+	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
 	nice := GetNiceName(ctx, appUpper)
 
 	if !IsAppNameValid(appUpper) {

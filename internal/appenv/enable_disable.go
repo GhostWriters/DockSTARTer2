@@ -2,6 +2,7 @@ package appenv
 
 import (
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/logger"
 	"context"
 	"path/filepath"
@@ -11,7 +12,7 @@ import (
 // Enable sets the __ENABLED variable to 'true' for the specified app(s).
 // Mirrors enable_app.sh functionality.
 func Enable(ctx context.Context, appNames []string, conf config.AppConfig) error {
-	envFile := filepath.Join(conf.ComposeDir, ".env")
+	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
 
 	for _, appName := range appNames {
 		appUpper := strings.TrimSpace(strings.ToUpper(appName))
@@ -37,7 +38,7 @@ func Enable(ctx context.Context, appNames []string, conf config.AppConfig) error
 // Disable sets the __ENABLED variable to 'false' for the specified app(s).
 // Mirrors disable_app.sh functionality.
 func Disable(ctx context.Context, appNames []string, conf config.AppConfig) error {
-	envFile := filepath.Join(conf.ComposeDir, ".env")
+	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
 
 	for _, appName := range appNames {
 		appUpper := strings.TrimSpace(strings.ToUpper(appName))

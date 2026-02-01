@@ -1,0 +1,99 @@
+internal\appenv\apps_create.go:26:func CreateAll(ctx context.Context, force bool, conf config.AppConfig) error {
+internal\appenv\apps_create.go:70:func CreateApp(ctx context.Context, appNameRaw string, conf config.AppConfig) error {
+internal\appenv\apps_create.go:128:func NeedsCreateAll(ctx context.Context, force bool, added []string, conf config.AppConfig) bool {
+internal\appenv\apps_create.go:165:func UnsetNeedsCreateAll(ctx context.Context, added []string, conf config.AppConfig) {
+internal\appenv\apps_create.go:185:func fileChanged(conf config.AppConfig, path string) bool {
+internal\appenv\apps_create.go:207:func updateTimestamp(conf config.AppConfig, path string) {
+internal\appenv\apps_create.go:229:func partialChanged(conf config.AppConfig, path string, key, currentValue string) bool {
+internal\appenv\apps_create.go:245:func updatePartial(conf config.AppConfig, path string, key, value string) {
+internal\appenv\create.go:13:func Create(ctx context.Context, file, defaultFile string) error {
+internal\appenv\defaults.go:16:func VarDefaultValue(ctx context.Context, key string, conf config.AppConfig) string {
+internal\appenv\defaults.go:115:func getDefaultPuid() string {
+internal\appenv\defaults.go:126:func getDefaultPgid() string {
+internal\appenv\enable_disable.go:13:func Enable(ctx context.Context, appNames []string, conf config.AppConfig) error {
+internal\appenv\enable_disable.go:39:func Disable(ctx context.Context, appNames []string, conf config.AppConfig) error {
+internal\appenv\env_helpers_test.go:7:func TestVarNameToAppName(t *testing.T) {
+internal\appenv\env_helpers_test.go:39:func TestAppNameToInstanceName(t *testing.T) {
+internal\appenv\env_helpers_test.go:58:func TestIsAppNameValid(t *testing.T) {
+internal\appenv\env_helpers_test.go:93:func TestInstanceNameIsValid(t *testing.T) {
+internal\appenv\env_helpers_test.go:133:func TestIsGlobalVar(t *testing.T) {
+internal\appenv\env_helpers_test.go:160:func TestAppVarsLines(t *testing.T) {
+internal\appenv\env_ops.go:29:func EnvCreate(ctx context.Context, conf config.AppConfig) error {
+internal\appenv\env_ops.go:88:func BackupEnv(ctx context.Context, file string) error {
+internal\appenv\env_ops.go:102:func SanitizeEnv(ctx context.Context, file string, conf config.AppConfig) error {
+internal\appenv\env_test.go:10:func setupTestEnv(t *testing.T) string {
+internal\appenv\env_test.go:41:func TestGet(t *testing.T) {
+internal\appenv\env_test.go:67:func TestGetLiteral(t *testing.T) {
+internal\appenv\env_test.go:93:func TestGetLine(t *testing.T) {
+internal\appenv\env_test.go:118:func TestMergeNewOnly(t *testing.T) {
+internal\appenv\env_test.go:159:func TestGetLineRegex(t *testing.T) {
+internal\appenv\expand.go:9:func ExpandVars(s string, vars map[string]string) string {
+internal\appenv\expand.go:44:func ReplaceWithVars(s string, vars map[string]string) string {
+internal\appenv\files.go:13:func AppInstanceFile(ctx context.Context, appName, fileSuffix string) (string, error) {
+internal\appenv\files.go:93:func CopyFile(src, dst string) error {
+internal\appenv\folders.go:16:func CreateAppFolders(ctx context.Context, appNameRaw string, conf config.AppConfig) error {
+internal\appenv\folders.go:94:func fileExists(path string) bool {
+internal\appenv\format.go:14:func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, composeEnvFile string) ([]string, error) {
+internal\appenv\format.go:163:func FormatLinesForApp(ctx context.Context, currentEnvFile, appName, templatesDir, composeEnvFile string) ([]string, error) {
+internal\appenv\format.go:189:func GetReferencedApps(composeEnvFile string) ([]string, error) {
+internal\appenv\format.go:216:func wordWrap(text string, width int) []string {
+internal\appenv\get.go:17:func Get(key, file string) (string, error) {
+internal\appenv\get.go:64:func GetLine(key, file string) (string, error) {
+internal\appenv\get.go:89:func GetLineRegex(keyRegex, file string) ([]string, error) {
+internal\appenv\get.go:115:func GetLiteral(key, file string) (string, error) {
+internal\appenv\get.go:129:func GetLineNumber(key, file string) (int, error) {
+internal\appenv\listing.go:18:func ListAddedApps(ctx context.Context, envFile string) ([]string, error) {
+internal\appenv\listing.go:40:func ListBuiltinApps() ([]string, error) {
+internal\appenv\listing.go:61:func ListDeprecatedApps(ctx context.Context) ([]string, error) {
+internal\appenv\listing.go:79:func ListDisabledApps(envFile string) ([]string, error) {
+internal\appenv\listing.go:100:func ListNonDeprecatedApps(ctx context.Context) ([]string, error) {
+internal\appenv\listing.go:118:func ListReferencedApps(ctx context.Context, conf config.AppConfig) ([]string, error) {
+internal\appenv\listing.go:157:func ListEnabledApps(conf config.AppConfig) ([]string, error) {
+internal\appenv\listing.go:179:func ListAppVars(ctx context.Context, appName string, conf config.AppConfig) ([]string, error) {
+internal\appenv\listing.go:221:func ListVars(file string) (map[string]string, error) {
+internal\appenv\listing.go:248:func AppVarsLines(appName string, lines []string) []string {
+internal\appenv\listing.go:295:func ListAppVarLines(ctx context.Context, appName string, conf config.AppConfig) ([]string, error) {
+internal\appenv\merge.go:12:func MergeNewOnly(ctx context.Context, targetFile, sourceFile string) ([]string, error) {
+internal\appenv\naming.go:20:func AppNameToBaseAppName(appName string) string {
+internal\appenv\naming.go:29:func AppNameToInstanceName(appName string) string {
+internal\appenv\naming.go:38:func VarNameToAppName(varName string) string {
+internal\appenv\naming.go:52:func GetNiceName(ctx context.Context, appName string) string {
+internal\appenv\naming.go:80:func GetDescription(ctx context.Context, appName string, envFile string) string {
+internal\appenv\naming_test.go:11:func TestGetDeprecatedFromLabels(t *testing.T) {
+internal\appenv\network.go:13:func DetectLANNetwork() string {
+internal\appenv\remove.go:18:func Remove(ctx context.Context, appNames []string, conf config.AppConfig, assumeYes bool) error {
+internal\appenv\remove.go:35:func removeAllDisabled(ctx context.Context, conf config.AppConfig, assumeYes bool) error {
+internal\appenv\remove.go:64:func removeApp(ctx context.Context, appName string, conf config.AppConfig, assumeYes bool) error {
+internal\appenv\remove.go:157:func listAppVars(prefix string, filePath string) ([]string, error) {
+internal\appenv\remove.go:192:func listDefaultGlobalVars(ctx context.Context, appName string) ([]string, error) {
+internal\appenv\remove.go:204:func listDefaultAppVars(ctx context.Context, appName string) ([]string, error) {
+internal\appenv\remove.go:216:func intersection(a, b []string) []string {
+internal\appenv\remove.go:233:func getVarLines(vars []string, filePath string) ([]string, error) {
+internal\appenv\remove.go:269:func removeVarsFromFile(vars []string, filePath string) error {
+internal\appenv\remove.go:316:func promptYesNo(ctx context.Context, question string) bool {
+internal\appenv\set.go:15:func Set(key, value, file string) error {
+internal\appenv\set.go:24:func SetLiteral(key, value, file string) error {
+internal\appenv\set.go:29:func setInFile(key, newLine, file string) error {
+internal\appenv\set.go:68:func writeLines(lines []string, file string) error {
+internal\appenv\status.go:15:func AppStatus(ctx context.Context, app string, conf config.AppConfig) string {
+internal\appenv\status.go:37:func Status(ctx context.Context, app string, conf config.AppConfig) string {
+internal\appenv\system.go:13:func GroupId(ctx context.Context, groupName string) string {
+internal\appenv\update.go:16:func Update(ctx context.Context, force bool, file string) error {
+internal\appenv\update.go:195:func NeedsUpdate(ctx context.Context, force bool, file string) bool {
+internal\appenv\update.go:220:func UnsetNeedsUpdate(ctx context.Context, file string) {
+internal\appenv\update.go:231:func updateFileChanged(conf config.AppConfig, path string) bool {
+internal\appenv\update.go:253:func updateTimestampForUpdate(conf config.AppConfig, path string) {
+internal\appenv\validation.go:17:func IsAppNameValid(appName string) bool {
+internal\appenv\validation.go:44:func IsAppBuiltIn(appName string) bool {
+internal\appenv\validation.go:55:func IsAppDeprecated(ctx context.Context, appName string) bool {
+internal\appenv\validation.go:80:func IsAppUserDefined(ctx context.Context, appName string, envFile string) bool {
+internal\appenv\validation.go:90:func IsAppAdded(ctx context.Context, appName string, envFile string) bool {
+internal\appenv\validation.go:97:func IsAppRunnable(appName string, conf config.AppConfig) bool {
+internal\appenv\validation.go:118:func IsAppNonDeprecated(ctx context.Context, appName string) bool {
+internal\appenv\validation.go:123:func IsAppEnabled(app, envFile string) bool {
+internal\appenv\validation.go:134:func IsAppReferenced(ctx context.Context, app string, conf config.AppConfig) bool {
+internal\appenv\validation.go:153:func IsTrue(val string) bool {
+internal\appenv\validation.go:159:func InstanceNameIsValid(name string) bool {
+internal\appenv\validation.go:170:func IsGlobalVar(varName string) bool {
+internal\appenv\validation.go:176:func VarNameIsValid(varName string, varType string) bool {
+internal\appenv\validation.go:211:func EnvVarExists(ctx context.Context, key string, file string) (bool, error) {

@@ -1,6 +1,7 @@
 package paths
 
 import (
+	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/version"
 	"fmt"
 	"os"
@@ -26,9 +27,9 @@ func GetConfigFilePath() string {
 	appName := strings.ToLower(version.ApplicationName)
 	if runtime.GOOS == "darwin" {
 		home, _ := os.UserHomeDir()
-		return filepath.Join(home, ".config", appName, "dockstarter2.ini")
+		return filepath.Join(home, ".config", appName, constants.AppINIFileName)
 	}
-	return filepath.Join(xdg.ConfigHome, appName, "dockstarter2.ini")
+	return filepath.Join(xdg.ConfigHome, appName, constants.AppINIFileName)
 }
 
 // GetTemplatesDir returns the absolute path to the DockSTARTer-Templates repository.
@@ -38,7 +39,7 @@ func GetTemplatesDir() string {
 		return TemplatesDirOverride
 	}
 	appName := strings.ToLower(version.ApplicationName)
-	return filepath.Join(xdg.StateHome, appName, "templates", "DockSTARTer-Templates")
+	return filepath.Join(xdg.StateHome, appName, "templates", "DockSTARTer-Templates") // Note: Repo name is still specific, but subfolders are constants
 }
 
 // GetTemplatesVersion retrieves the current version of the DockSTARTer-Templates repository.
@@ -103,7 +104,7 @@ func GetConfigDir() string {
 
 // GetThemesDir returns the absolute path to the themes directory in the state folder.
 func GetThemesDir() string {
-	return filepath.Join(GetStateDir(), "themes")
+	return filepath.Join(GetStateDir(), constants.ThemesDirName)
 }
 
 // GetStateDir returns the absolute path to the dockstarter2 state directory.
@@ -117,12 +118,12 @@ func GetStateDir() string {
 
 // GetInstancesDir returns the absolute path to the dockstarter2 instances directory.
 func GetInstancesDir() string {
-	return filepath.Join(GetStateDir(), "instances")
+	return filepath.Join(GetStateDir(), constants.InstancesDirName)
 }
 
 // GetTimestampsDir returns the absolute path to the dockstarter2 timestamps directory.
 func GetTimestampsDir() string {
-	return filepath.Join(GetStateDir(), "timestamps")
+	return filepath.Join(GetStateDir(), constants.TimestampsDirName)
 }
 
 // GetInstanceDir returns the absolute path to the folder for a specific app instance.

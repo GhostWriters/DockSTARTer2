@@ -1,6 +1,7 @@
 package appenv
 
 import (
+	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/paths"
 	"context"
 	"os"
@@ -32,7 +33,7 @@ func TestGetDeprecatedFromLabels(t *testing.T) {
 
 	// Create template directory structure
 	templatesDir := paths.TemplatesDirOverride
-	appTemplateDir := filepath.Join(templatesDir, ".apps", baseApp)
+	appTemplateDir := filepath.Join(templatesDir, constants.TemplatesDirName, baseApp)
 	if err := os.MkdirAll(appTemplateDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +60,7 @@ services:
 	t.Logf("Instance file content:\n%s", string(content))
 
 	// 2.5 Setup mock .env file (required for IsAppUserDefined check)
-	envFile := filepath.Join(tempDir, ".env")
+	envFile := filepath.Join(tempDir, constants.EnvFileName)
 	if err := os.WriteFile(envFile, []byte("TESTAPP__ENABLED=true\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
