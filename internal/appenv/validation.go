@@ -138,6 +138,9 @@ func IsAppReferenced(ctx context.Context, app string, conf config.AppConfig) boo
 	if IsAppEnabled(app, envFile) {
 		return true
 	}
+	if IsAppAdded(ctx, app, envFile) {
+		return true
+	}
 	// Also check overrides...
 	overrideFile := filepath.Join(conf.ComposeDir, constants.ComposeOverrideFileName)
 	if _, err := os.Stat(overrideFile); err == nil {
