@@ -1,7 +1,6 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"bytes"
 	"context"
@@ -78,8 +77,6 @@ func AppInstanceFile(ctx context.Context, appName, fileSuffix string) (string, e
 	content = strings.ReplaceAll(content, "<__Instance>", __Instance)
 	content = strings.ReplaceAll(content, "<__instance>", __instance)
 
-	// Write Instance File
-	logger.Notice(ctx, "Creating '{{_File_}}%s{{|-|}}'", instanceFile)
 	if err := os.WriteFile(instanceFile, []byte(content), 0644); err != nil {
 		return "", err
 	}
