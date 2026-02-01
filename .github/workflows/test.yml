@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - main
+      - WorkingCLI
   pull_request:
     branches:
       - main
+      - WorkingCLI
 
 jobs:
   test:
