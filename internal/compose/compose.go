@@ -20,8 +20,8 @@ import (
 // Note: Will need to handle YML generation and service orchestration programmatically
 
 // MergeYML merges enabled app templates into docker-compose.yml
-func MergeYML(ctx context.Context) error {
-	if !NeedsYMLMerge(ctx) {
+func MergeYML(ctx context.Context, force bool) error {
+	if !NeedsYMLMerge(ctx, force) {
 		logger.Notice(ctx, "Enabled app templates already merged to '{{_File_}}docker-compose.yml{{|-|}}'.")
 		return nil
 	}
@@ -218,9 +218,9 @@ func MergeYML(ctx context.Context) error {
 }
 
 // ExecuteCompose executes Docker Compose commands
-func ExecuteCompose(ctx context.Context, yes bool, command string, appNames ...string) error {
+func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, appNames ...string) error {
 	// First ensure YML is merged
-	if err := MergeYML(ctx); err != nil {
+	if err := MergeYML(ctx, force); err != nil {
 		return err
 	}
 
@@ -366,7 +366,7 @@ func ExecuteCompose(ctx context.Context, yes bool, command string, appNames ...s
 		// Already merged above, just printing logic here if forced
 		if console.QuestionPrompt(ctx, logger.Notice, question, "Y", yes) {
 			logger.Notice(ctx, yesNotice)
-			return MergeYML(ctx) // Re-run merge if requested explicitly
+			return MergeYML(ctx, force) // Re-run merge if requested explicitly
 		} else {
 			logger.Notice(ctx, noNotice)
 			return nil
@@ -416,11 +416,15 @@ func runDockerCommand(ctx context.Context, args ...string) error {
 }
 
 // NeedsYMLMerge checks if YML merge is needed using timestamp comparison
-func NeedsYMLMerge(ctx context.Context) bool {
+func NeedsYMLMerge(ctx context.Context, force bool) bool {
+	if force {
+		return true
+	}
+
 	conf := config.LoadAppConfig()
 
 	// 1. Check for forced flag file (legacy Go behavior + Force equivalent)
-	needsFile := filepath.Join(conf.ConfigDir, "needs", "yml_merge")
+	needsFile := filepath.Join(paths.GetStateDir(), "needs", "yml_merge")
 	if fileExists(needsFile) {
 		return true
 	}
@@ -465,11 +469,11 @@ func UnsetNeedsYMLMerge(ctx context.Context) {
 	conf := config.LoadAppConfig()
 
 	// 1. Remove forced flag file
-	needsFile := filepath.Join(conf.ConfigDir, "needs", "yml_merge")
+	needsFile := filepath.Join(paths.GetStateDir(), "needs", "yml_merge")
 	os.Remove(needsFile)
 
 	// 2. Clear old timestamps
-	timestampsDir := filepath.Join(conf.ConfigDir, "timestamps")
+	timestampsDir := paths.GetTimestampsDir()
 	if !dirExists(timestampsDir) {
 		if err := os.MkdirAll(timestampsDir, 0755); err != nil {
 			logger.Warn(ctx, "Failed to create timestamps directory: %v", err)
@@ -503,8 +507,7 @@ func UnsetNeedsYMLMerge(ctx context.Context) {
 
 // SetNeedsYMLMerge marks that YML merge is needed by creating a flag file
 func SetNeedsYMLMerge(ctx context.Context) error {
-	conf := config.LoadAppConfig()
-	needsDir := filepath.Join(conf.ConfigDir, "needs")
+	needsDir := filepath.Join(paths.GetStateDir(), "needs")
 	if err := os.MkdirAll(needsDir, 0755); err != nil {
 		return err
 	}
@@ -516,7 +519,7 @@ func SetNeedsYMLMerge(ctx context.Context) error {
 
 func fileChanged(conf config.AppConfig, path string) bool {
 	filename := filepath.Base(path)
-	timestampFile := filepath.Join(conf.ConfigDir, "timestamps", "yml_merge_"+filename)
+	timestampFile := filepath.Join(paths.GetTimestampsDir(), "yml_merge_"+filename)
 
 	info, err := os.Stat(path)
 	tsInfo, tsErr := os.Stat(timestampFile)
@@ -543,7 +546,7 @@ func updateTimestamp(ctx context.Context, conf config.AppConfig, path string) {
 	}
 
 	filename := filepath.Base(path)
-	timestampFile := filepath.Join(conf.ConfigDir, "timestamps", "yml_merge_"+filename)
+	timestampFile := filepath.Join(paths.GetTimestampsDir(), "yml_merge_"+filename)
 
 	// Create empty timestamp file
 	f, err := os.Create(timestampFile)
