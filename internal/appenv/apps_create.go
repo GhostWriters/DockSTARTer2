@@ -109,11 +109,6 @@ func CreateApp(ctx context.Context, appNameRaw string, conf config.AppConfig) er
 			}
 		}
 
-		// Ensure config folders exist
-		if err := CreateAppFolders(ctx, appName, conf); err != nil {
-			logger.Warn(ctx, "Failed to create config folders for %s: %v", appName, err)
-		}
-
 		logger.Info(ctx, "Environment variables created for '{{_App_}}%s{{|-|}}'.", niceName)
 		return nil
 	} else {
