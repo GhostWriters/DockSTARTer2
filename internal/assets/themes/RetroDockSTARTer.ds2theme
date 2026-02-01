@@ -1,0 +1,84 @@
+#
+# DockSTARTer theme file
+# theme.ini
+#
+# Color List:
+#
+# ${_B_}   Blue
+# ${_C_}   Cyan
+# ${_G_}   Green
+# ${_K_}   Black
+# ${_M_}   Magenta
+# ${_R_}   Red
+# ${_W_}   White
+# ${_Y_}   Yellow
+# ${_RV_}  Reverse
+# ${_NRV_} No Reverse
+# ${_BD_}  Bold
+# ${_NBD_} No Bold
+# ${_U_}   Underline
+# ${_NU_}  No Underline
+# ${_NC_}  No Color
+
+ThemeName='RetroDockSTARTer'
+ThemeDescription='The retro DockSTARTer theme'
+ThemeAuthor='CLHatch'
+
+ApplicationName="{{|black:white|}}"
+ApplicationVersion="{{|black:white|}}"
+ApplicationVersionBrackets="{{|black:white|}}"
+ApplicationVersionSpace="{{|white:black|}}"
+ApplicationFlags="{{|white:black|}}"
+ApplicationFlagsBrackets="{{|black:white|}}"
+ApplicationFlagsSpace="{{|black:white|}}"
+ApplicationUpdate="{{|black:white|}}"
+ApplicationUpdateBrackets="{{|black:white|}}"
+Hostname="{{|black:white|}}"
+Title="{{|white:black:u|}}"
+Subtitle="{{|black:white:b|}}"
+TitleSuccess="{{|black:green|}}"
+TitleError="{{|black:red|}}"
+TitleWarning="{{|black:yellow|}}"
+TitleQuestion="{{|black:yellow|}}"
+Heading="{{|black:white|}}"
+HeadingTag="{{|black:white|}}"
+HeadingValue="{{|black:white:b|}}"
+HeadingAppDescription="{{|white:black:b|}}"
+Highlight="{{|white:black:b|}}"
+LineHeading="{{|white:black:bu|}}"
+LineComment="{{|black:black:b|}}"
+LineOther="{{|black:black:b|}}"
+LineVar="{{|black:black|}}"
+LineModifiedVar="{{|white:black|}}"
+LineAddVariable="{{|black:black|}}"
+ListDefault="{{|black:black|}}"
+ListApp=""
+ListAppUserDefined="{{|black:black|}}"
+CommandLine="{{|white:black:b|}}"
+KeyCap="{{|black:white|}}"
+ProgressWaiting="{{|white:black:b|}}"
+ProgressInProgress="{{|black:white|}}"
+ProgressCompleted="{{|black:white:b|}}"
+
+# Imported from .dialogrc
+ButtonInactive="{{|black:white|}}"
+ItemSelected="{{|white:red|}}"
+Item="{{|black:magenta|}}"
+Tag="{{|black:white|}}"
+TagKeySelected="{{|white:red|}}"
+Screen="{{|black:magenta|}}"
+Dialog="{{|black:white|}}"
+Border="{{|black:white|}}"
+ButtonActive="{{|white:red:b|}}"
+TagSelected="{{|white:red|}}"
+TagKey="{{|red:white|}}"
+Shadow="{{|black:black:b|}}"
+
+# Imported from .dialogrc
+BoxTitle="{{|white:black|}}"
+
+# Imported from .dialogrc
+BorderContrast="{{|black:white|}}"
+
+# Imported from .dialogrc
+Border2="{{|black:white|}}"

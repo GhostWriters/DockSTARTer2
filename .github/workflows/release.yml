@@ -1,14 +1,10 @@
 name: Release
 
 on:
-  push:
-    branches:
-      - main
-      - '**' # Trigger on all branches
   workflow_dispatch:
     inputs:
       force_release:
-        description: 'Force release even if tests fail'
+        description: 'Force release even if no meaningful changes detected'
         type: boolean
         required: false
         default: false
@@ -33,7 +29,6 @@ jobs:
 
   release:
     needs: test
-    if: always() && (needs.test.result == 'success' || inputs.force_release == true)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -46,78 +41,133 @@ jobs:
         with:
           go-version-file: 'go.mod'
 
-      - name: Generate Version Tag
-        id: tag
+      - name: Check for Changes
+        id: check
         run: |
-          TODAY=$(date +'%Y.%m.%d')
-          PREFIX="v${TODAY}"
-          
-          # We need to fetch tags to determine the increment
-          git fetch --tags --force
-          
-          # Check if valid existing tags for today exist
-          # Filter for tags starting with prefix, remove prefix, find max
-          # Examples: v2024.01.20 (no suffix), v2024.01.20.1 (suffix 1)
-          
-          # Logic:
-          # 1. Check if "vYYYY.MM.DD" exists.
-          # 2. If NO -> Use "vYYYY.MM.DD".
-          # 3. If YES -> Find max suffix X of "vYYYY.MM.DD.X" and use X+1.
-          
-          if git tag -l "${PREFIX}" | grep -Fxq "${PREFIX}"; then
-            # Base tag exists, find max suffix
-            # Get all tags matching "vYYYY.MM.DD.*"
-            # Strip prefix + "."
-            # Sort numerically
-            # Take last
-            MAX_SUFFIX=$(git tag -l "${PREFIX}.*" | sed "s/^${PREFIX}\.//" | grep -E '^[0-9]+$' | sort -n | tail -1)
-            
-            if [ -z "$MAX_SUFFIX" ]; then
-              # Base exists but no .X tags found (unlikely if base exists, but means next is .1)
-              NEXT_SUFFIX="1"
-            else
-              NEXT_SUFFIX=$((MAX_SUFFIX + 1))
-            fi
-            BASE_VER="${PREFIX}.${NEXT_SUFFIX}"
-          else
-            # Base tag does not exist, use it
-            BASE_VER="${PREFIX}"
+          FORCE="${{ inputs.force_release }}"
+          echo "Force Release: $FORCE"
+
+          if [ "$FORCE" == "true" ]; then
+            echo "Release forced by user."
+            echo "skip=false" >> $GITHUB_OUTPUT
+            exit 0
           fi
 
-          if [[ "${{ github.ref_name }}" == "main" ]]; then
-            FINAL_VER="$BASE_VER"
-          else
-            # Sanitize branch name: replace non-alphanumeric with hyphens
-            SAFE_BRANCH=$(echo "${{ github.ref_name }}" | sed 's/[^a-zA-Z0-9]/-/g')
-            FINAL_VER="${BASE_VER}-${SAFE_BRANCH}"
-          fi
+          git fetch --tags --force
           
+          # Check if current commit is already tagged
+          TAG_AT_HEAD=$(git tag --points-at HEAD)
+          
+          if [ -n "$TAG_AT_HEAD" ]; then
+            echo "Current commit is manually tagged ($TAG_AT_HEAD). Comparing against previous tag."
+            LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          else
+            LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          fi
+
+          if [ -z "$LAST_TAG" ]; then
+            echo "No tags found. Assuming first release."
+            echo "skip=false" >> $GITHUB_OUTPUT
+          else
+            echo "Last tag: $LAST_TAG"
+            CHANGED=$(git diff --name-only "$LAST_TAG" HEAD)
+
+            if [ -z "$CHANGED" ]; then
+              echo "No file changes found."
+              echo "skip=true" >> $GITHUB_OUTPUT
+            else
+              echo "Changed files:"
+              echo "$CHANGED"
+
+              # Check for non-ignored files
+              # returns 0 if matches found (meaningful changes)
+              if echo "$CHANGED" | grep -Eqv '^(docs/|\.github/|\.gitignore|\.editorconfig|README\.md|LICENSE)'; then
+                echo "Meaningful changes detected."
+                echo "skip=false" >> $GITHUB_OUTPUT
+              else
+                echo "No meaningful changes detected."
+                echo "skip=true" >> $GITHUB_OUTPUT
+              fi
+            fi
+          fi
+
+      - name: Generate Version Tag
+        if: steps.check.outputs.skip == 'false'
+        id: tag
+        run: |
+          # Versioning Scheme: v2.YYYYMMDD.N[-Suffix]
+          # Major: 2
+          # Minor: YYYYMMDD
+          # Patch: N (Daily build counter)
+
+          # Example: v2.20260121.1
+
+          TODAY_INT=$(date -u +'%Y%m%d')
+          PREFIX="v2.${TODAY_INT}"
+
+          git fetch --tags --force
+
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
+            SUFFIX=""
+            # Match v2.YYYYMMDD.N
+            REGEX="^${PREFIX}\.[0-9]+$"
+          else
+            SAFE_BRANCH=$(echo "${{ github.ref_name }}" | sed 's/[^a-zA-Z0-9]/-/g')
+            SUFFIX="-${SAFE_BRANCH}"
+            # Match v2.YYYYMMDD.N-branch
+            REGEX="^${PREFIX}\.[0-9]+${SUFFIX}$"
+          fi
+
+          echo "Scope: ${{ github.ref_name }}"
+          echo "Suffix: '$SUFFIX'"
+          echo "Regex: '$REGEX'"
+
+          MAX_N="-1"
+
+          # Get all tags for this "Minor" version (v2.YYYYMMDD.*)
+          TAGS=$(git tag -l "${PREFIX}*")
+
+          for tag in $TAGS; do
+            if [[ "$tag" =~ $REGEX ]]; then
+              # Strip suffix: v2.YYYYMMDD.N
+              base="${tag%$SUFFIX}"
+              # Extract Patch (N): Remove v2.YYYYMMDD.
+              n="${base#$PREFIX.}"
+
+              # Ensure n is numeric
+              if [[ "$n" =~ ^[0-9]+$ ]]; then
+                if (( n > MAX_N )); then
+                  MAX_N=$n
+                fi
+              fi
+            fi
+          done
+
+          if [ "$MAX_N" == "-1" ]; then
+            NEXT_N=1
+          else
+            NEXT_N=$((MAX_N + 1))
+          fi
+
+          FINAL_VER="${PREFIX}.${NEXT_N}${SUFFIX}"
+
           echo "Generated Version: $FINAL_VER"
           echo "version=$FINAL_VER" >> $GITHUB_OUTPUT
 
       - name: Tag Commit
+        if: steps.check.outputs.skip == 'false'
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git tag -a "${{ steps.tag.outputs.version }}" -m "Release ${{ steps.tag.outputs.version }}"
-          # We don't push the tag explicitly; goreleaser (or just the existence of the tag locally) 
-          # might be enough if we use --clean. 
-          # However, allow goreleaser to handle it or push it so it persists. 
-          # Goreleaser usually expects the tag to be present on the commit it builds.
-          # But for 'goreleaser release', it usually runs ON a tag. 
-          # Since we are running on a branch push, we are creating a tag dynamically.
-          # We should push it so GitHub knows about it, OR just let goreleaser use the local tag.
-          # Let's push it to be safe and ensure the Release is tied to it.
           git push origin "${{ steps.tag.outputs.version }}"
 
       - name: Run GoReleaser
+        if: steps.check.outputs.skip == 'false'
         uses: goreleaser/goreleaser-action@v5
         with:
           distribution: goreleaser
-          version: latest
+          version: '~> v2'
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Determine if it's a prerelease contextually? 
-          # Goreleaser 'auto' prerelease looks at the tag format. 
-          # Since we use hyphens for branches (v...-branch), it should auto-detect as prerelease.

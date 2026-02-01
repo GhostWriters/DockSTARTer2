@@ -21,21 +21,23 @@ builds:
       - -X DockSTARTer2/internal/version.BuildDate={{.Date}}
 
 archives:
-  - format: tar.gz
+
+  - formats: 
+      - tar.gz
     # this name template makes the OS and Arch compatible with the results of uname.
     name_template: >-
       {{ .ProjectName }}_
       {{- .Version }}_
       {{- .Os }}_
       {{- .Arch }}
-    builds:
-      - ds2
+    # builds: [ds2] # Removed (deprecated)
     files:
       - README.md
       - LICENSE
     format_overrides:
       - goos: windows
-        format: zip
+        formats: 
+          - zip
 
 checksum:
   name_template: 'checksums.txt'

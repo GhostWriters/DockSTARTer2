@@ -37,6 +37,7 @@ __debug_bin
 /menu.ini
 /dockstarter.ini
 *.log
+*.txt
 /share/
 /shared/
 /site/
@@ -44,5 +45,7 @@ __debug_bin
 # Project Specific
 ds2.exe
 dockstarter.exe
-dockstarter.log
-fatal.log
+DockSTARTer2.exe
+/build.ps1
+/build.bat
+/.ds2.new
