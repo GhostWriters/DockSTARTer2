@@ -48,6 +48,9 @@ func CreateAll(ctx context.Context, conf config.AppConfig) error {
 		}
 	}
 
+	// Format and sort all environment files (Parity Fix)
+	_ = Update(ctx, envFile)
+
 	return nil
 }
 
