@@ -33,8 +33,8 @@ func Update(ctx context.Context, force bool, file string) error {
 	}
 	allLines := strings.Split(string(input), "\n")
 
-	// Get list of referenced apps
-	appList, err := GetReferencedApps(composeEnvFile)
+	// Get list of referenced apps (using robust logic that includes enabled apps)
+	appList, err := ListReferencedApps(ctx, conf)
 	if err != nil {
 		logger.Warn(ctx, "Failed to get referenced apps: %v", err)
 		appList = []string{}
@@ -198,18 +198,65 @@ func NeedsUpdate(ctx context.Context, force bool, file string) bool {
 		return true
 	}
 	conf := config.LoadAppConfig()
+	filename := filepath.Base(file)
 
-	// Check main file timestamp
-	if updateFileChanged(conf, file) {
-		return true
+	// Check main file timestamp and content markers
+	if filename == constants.EnvFileName {
+		if updateFileChanged(conf, file, "") {
+			return true
+		}
+		// Check ReferencedApps list
+		referencedAppsFile := filepath.Join(paths.GetTimestampsDir(), constants.EnvUpdateMarkerPrefix+filename+"_ReferencedApps")
+		currentReferenced, _ := ListReferencedApps(ctx, conf)
+		storedReferencedBytes, err := os.ReadFile(referencedAppsFile)
+		if err != nil {
+			return true
+		}
+		if strings.TrimSpace(string(storedReferencedBytes)) != strings.TrimSpace(strings.Join(currentReferenced, " ")) {
+			return true
+		}
+		return false
 	}
 
 	// Check app-specific files
-	appList, _ := GetReferencedApps(file)
-	for _, appName := range appList {
-		appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf(".env.app.%s", strings.ToLower(appName)))
-		if updateFileChanged(conf, appEnvFile) {
-			return true
+	if updateFileChanged(conf, file, "") {
+		return true
+	}
+
+	// Check if .env changed relative to app file (dependency check)
+	composeEnv := filepath.Join(conf.ComposeDir, constants.EnvFileName)
+	if updateFileChanged(conf, composeEnv, filename+"_"+filepath.Base(composeEnv)) {
+		// Bash: if file_changed "${COMPOSE_ENV}" "${filename}_$(basename "${COMPOSE_ENV}")"
+		// This means we check .env against a specific marker for this app file.
+
+		// If main env changed, we check if ENABLED status changed for this app
+		// Extract appname from filename (e.g. .env.app.plex -> PLEX)
+		// Assuming VarNameToAppName works on filenames? No, we need a helper.
+		appName := ""
+		if strings.HasPrefix(filename, constants.AppEnvFileNamePrefix) {
+			appName = strings.ToUpper(strings.TrimPrefix(filename, constants.AppEnvFileNamePrefix))
+		}
+
+		if appName != "" {
+			enabledVar := appName + "__ENABLED"
+			enabledValPtr := ""
+			vars, err := ListVars(composeEnv)
+			if err == nil {
+				if v, ok := vars[enabledVar]; ok {
+					enabledValPtr = v
+				}
+			}
+
+			enabledMarkerFile := filepath.Join(paths.GetTimestampsDir(), constants.EnvUpdateMarkerPrefix+filename+"_"+enabledVar)
+			storedEnabledBytes, err := os.ReadFile(enabledMarkerFile)
+			if err != nil {
+				return true
+			}
+
+			// Compare
+			if strings.TrimSpace(string(storedEnabledBytes)) != strings.TrimSpace(enabledValPtr) {
+				return true
+			}
 		}
 	}
 
@@ -220,22 +267,84 @@ func NeedsUpdate(ctx context.Context, force bool, file string) bool {
 // Mirrors unset_needs_env_update.sh
 func UnsetNeedsUpdate(ctx context.Context, file string) {
 	conf := config.LoadAppConfig()
-	updateTimestampForUpdate(conf, file)
 
-	appList, _ := GetReferencedApps(file)
-	for _, appName := range appList {
-		appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf(".env.app.%s", strings.ToLower(appName)))
-		updateTimestampForUpdate(conf, appEnvFile)
+	// If file is empty/not provided (conceptually), process all
+	// In Go, we are usually called with the main env file or specific one?
+	// The function signature takes 'file'.
+	// Bash unset_needs_env_update is called with NO args to do everything.
+	// But our Update function calls it with 'file'.
+	// If 'file' is the main env file, we should recursively call for all referenced apps?
+	// The Bash script does recursion if no args.
+
+	filename := filepath.Base(file)
+
+	// Update main timestamp for this file
+	updateTimestampForUpdate(conf, file, "")
+
+	if filename == constants.EnvFileName {
+		// Update ReferencedApps marker
+		referencedAppsFile := filepath.Join(paths.GetTimestampsDir(), constants.EnvUpdateMarkerPrefix+filename+"_ReferencedApps")
+		apps, _ := ListReferencedApps(ctx, conf)
+		_ = os.WriteFile(referencedAppsFile, []byte(strings.Join(apps, " ")), 0644)
+
+		// Also recurses for all referenced apps in Bash if no args provided.
+		// Since we called Update which processes everything, we should probably update markers for all of them too.
+		// "Process all referenced .env.app files" loop in Update calls UnsetNeedsUpdate? No, it calls Update?
+		// No, the loop in Update does internal logic. It does NOT call UnsetNeedsUpdate for each app.
+		// So we must do it here.
+
+		for _, appName := range apps {
+			appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf("%s%s", constants.AppEnvFileNamePrefix, strings.ToLower(appName)))
+			UnsetNeedsUpdate(ctx, appEnvFile)
+		}
+
+	} else {
+		// App specific file
+		// Store ENABLED status
+		appName := ""
+		if strings.HasPrefix(filename, constants.AppEnvFileNamePrefix) {
+			appName = strings.ToUpper(strings.TrimPrefix(filename, constants.AppEnvFileNamePrefix))
+		}
+
+		if appName != "" {
+			composeEnv := filepath.Join(conf.ComposeDir, constants.EnvFileName)
+			enabledVar := appName + "__ENABLED"
+			enabledVal := ""
+			vars, err := ListVars(composeEnv)
+			if err == nil {
+				if v, ok := vars[enabledVar]; ok {
+					enabledVal = v
+				}
+			}
+
+			// Write ENABLED marker
+			enabledMarkerFile := filepath.Join(paths.GetTimestampsDir(), constants.EnvUpdateMarkerPrefix+filename+"_"+enabledVar)
+			_ = os.WriteFile(enabledMarkerFile, []byte(enabledVal), 0644)
+
+			// Also update the dependency timestamp (main env vs this app)
+			// Bash: touch -r "${VarFile}" "$(timestamp_file "${filename}")"
+			// But for app file, we also need to handle the COMPOSE_ENV check in NeedsUpdate.
+			// Bash needs_env_update checks `file_changed "${COMPOSE_ENV}" "${filename}_$(basename "${COMPOSE_ENV}")"`.
+			// So we need to create/touch `${filename}_$(basename "${COMPOSE_ENV}")` reference to COMPOSE_ENV's time?
+			// Unlike Bash which can touch -r, we just write/copy the modtime.
+			// Actually Go's updateTimestampForUpdate does the touch.
+
+			updateTimestampForUpdate(conf, composeEnv, filename+"_"+filepath.Base(composeEnv))
+		}
 	}
 }
 
-func updateFileChanged(conf config.AppConfig, path string) bool {
+func updateFileChanged(conf config.AppConfig, path string, markerSuffix string) bool {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return true
 	}
 
 	filename := filepath.Base(path)
-	timestampFile := filepath.Join(paths.GetTimestampsDir(), constants.EnvUpdateMarkerPrefix+filename)
+	markerName := constants.EnvUpdateMarkerPrefix + filename
+	if markerSuffix != "" {
+		markerName = constants.EnvUpdateMarkerPrefix + markerSuffix
+	}
+	timestampFile := filepath.Join(paths.GetTimestampsDir(), markerName)
 
 	info, err := os.Stat(path)
 	tsInfo, tsErr := os.Stat(timestampFile)
@@ -251,13 +360,17 @@ func updateFileChanged(conf config.AppConfig, path string) bool {
 	return !info.ModTime().Equal(tsInfo.ModTime())
 }
 
-func updateTimestampForUpdate(conf config.AppConfig, path string) {
+func updateTimestampForUpdate(conf config.AppConfig, path string, markerSuffix string) {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return
 	}
 
 	filename := filepath.Base(path)
-	timestampFile := filepath.Join(paths.GetTimestampsDir(), constants.EnvUpdateMarkerPrefix+filename)
+	markerName := constants.EnvUpdateMarkerPrefix + filename
+	if markerSuffix != "" {
+		markerName = constants.EnvUpdateMarkerPrefix + markerSuffix
+	}
+	timestampFile := filepath.Join(paths.GetTimestampsDir(), markerName)
 
 	_ = os.MkdirAll(filepath.Dir(timestampFile), 0755)
 
