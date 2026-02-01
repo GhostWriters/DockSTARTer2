@@ -69,8 +69,11 @@ func MergeYML(ctx context.Context) error {
 		}
 
 		// Get architecture-specific file
-		archFile := filepath.Join(instanceFolder, fmt.Sprintf("%s.%s.yml", appNameLower, arch))
-		if !fileExists(archFile) {
+		archFile, err := appenv.AppInstanceFile(ctx, appName, fmt.Sprintf("*.%s.yml", arch))
+		if err != nil {
+			return fmt.Errorf("failed to get arch file for %s: %w", appName, err)
+		}
+		if archFile == "" || !fileExists(archFile) {
 			logger.Error(ctx, "File '{{_File_}}%s{{|-|}}' does not exist.", archFile)
 			return fmt.Errorf("file %s does not exist", archFile)
 		}
@@ -80,27 +83,44 @@ func MergeYML(ctx context.Context) error {
 		netMode, _ := appenv.Get(fmt.Sprintf("%s__NETWORK_MODE", appName), envFile)
 		if netMode == "" || netMode == "bridge" {
 			// Add hostname file if exists
-			hostnameFile := filepath.Join(instanceFolder, fmt.Sprintf("%s.hostname.yml", appNameLower))
-			if fileExists(hostnameFile) {
+			hostnameFile, err := appenv.AppInstanceFile(ctx, appName, "*.hostname.yml")
+			if err != nil {
+				return err
+			}
+			if hostnameFile != "" && fileExists(hostnameFile) {
 				composeFiles = append(composeFiles, hostnameFile)
 			} else {
-				logger.Info(ctx, "File '{{_File_}}%s{{|-|}}' does not exist.", hostnameFile)
+				// Log path even if empty/missing to match legacy behavior roughly,
+				// though legacy logs the *expected* path.
+				// Here we just log if file logic returned something usable but missing, or standardizing logging.
+				// Bash logs "does not exist" if missing.
+				// We can reconstruct expected path for logging if needed, or just skip logging if no template.
+				// Bash: checks app_instance_file return. If it returned valid path, and file missing -> log.
+				// With update, AppInstanceFile returns path only if exists (or created).
+				// So if "" returned, silence is correct (no template).
+				// If path returned, it exists.
+				// But let's log "does not exist" if we interpret parity strictly?
+				// Bash: checks if file exists.
+				// If AppInstanceFile returns "", we can't log the "path".
+				// So we'll skip logging "does not exist" if template is missing, which is cleaner.
 			}
 
 			// Add ports file if exists
-			portsFile := filepath.Join(instanceFolder, fmt.Sprintf("%s.ports.yml", appNameLower))
-			if fileExists(portsFile) {
+			portsFile, err := appenv.AppInstanceFile(ctx, appName, "*.ports.yml")
+			if err != nil {
+				return err
+			}
+			if portsFile != "" && fileExists(portsFile) {
 				composeFiles = append(composeFiles, portsFile)
-			} else {
-				logger.Info(ctx, "File '{{_File_}}%s{{|-|}}' does not exist.", portsFile)
 			}
 		} else if netMode != "" {
 			// Add netmode file if exists
-			netmodeFile := filepath.Join(instanceFolder, fmt.Sprintf("%s.netmode.yml", appNameLower))
-			if fileExists(netmodeFile) {
+			netmodeFile, err := appenv.AppInstanceFile(ctx, appName, "*.netmode.yml")
+			if err != nil {
+				return err
+			}
+			if netmodeFile != "" && fileExists(netmodeFile) {
 				composeFiles = append(composeFiles, netmodeFile)
-			} else {
-				logger.Info(ctx, "File '{{_File_}}%s{{|-|}}' does not exist.", netmodeFile)
 			}
 		}
 
@@ -119,11 +139,12 @@ func MergeYML(ctx context.Context) error {
 			if storageOn == "true" {
 				storageVolume, _ := appenv.Get(fmt.Sprintf("DOCKER_VOLUME_STORAGE%s", num), envFile)
 				if storageVolume != "" {
-					storageFile := filepath.Join(instanceFolder, fmt.Sprintf("%s.storage%s.yml", appNameLower, num))
-					if fileExists(storageFile) {
+					storageFile, err := appenv.AppInstanceFile(ctx, appName, fmt.Sprintf("*.storage%s.yml", num))
+					if err != nil {
+						return err
+					}
+					if storageFile != "" && fileExists(storageFile) {
 						composeFiles = append(composeFiles, storageFile)
-					} else {
-						logger.Info(ctx, "File '{{_File_}}%s{{|-|}}' does not exist.", storageFile)
 					}
 				}
 			}
@@ -132,19 +153,27 @@ func MergeYML(ctx context.Context) error {
 		// Devices file
 		appDevices, _ := appenv.Get(fmt.Sprintf("%s__DEVICES", appName), envFile)
 		if appDevices == "true" {
-			devicesFile := filepath.Join(instanceFolder, fmt.Sprintf("%s.devices.yml", appNameLower))
-			if fileExists(devicesFile) {
+			devicesFile, err := appenv.AppInstanceFile(ctx, appName, "*.devices.yml")
+			if err != nil {
+				return err
+			}
+			if devicesFile != "" && fileExists(devicesFile) {
 				composeFiles = append(composeFiles, devicesFile)
-			} else {
-				logger.Info(ctx, "File '{{_File_}}%s{{|-|}}' does not exist.", devicesFile)
 			}
 		}
 
 		// Main file (always last)
-		mainFile := filepath.Join(instanceFolder, fmt.Sprintf("%s.yml", appNameLower))
-		if !fileExists(mainFile) {
-			logger.Error(ctx, "File '{{_File_}}%s{{|-|}}' does not exist.", mainFile)
-			return fmt.Errorf("file %s does not exist", mainFile)
+		mainFile, err := appenv.AppInstanceFile(ctx, appName, "*.yml")
+		if err != nil {
+			return err
+		}
+		if mainFile == "" || !fileExists(mainFile) {
+			// Bash: if [[ -f ${main_yml} ]]; then ... else error ...
+			// Reconstruct path for logging if missing?
+			// The caller expects it.
+			expectedMain := filepath.Join(instanceFolder, fmt.Sprintf("%s.yml", appNameLower))
+			logger.Error(ctx, "File '{{_File_}}%s{{|-|}}' does not exist.", expectedMain)
+			return fmt.Errorf("file %s does not exist", expectedMain)
 		}
 		composeFiles = append(composeFiles, mainFile)
 
