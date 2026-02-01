@@ -459,27 +459,22 @@ func NeedsYMLMerge(ctx context.Context, force bool) bool {
 	return false
 }
 
-// UnsetNeedsYMLMerge marks YML merge as complete by updating timestamps
+// Mark YML merge as complete by clearing all yml_merge_* files
+// and updating timestamps for current state.
 func UnsetNeedsYMLMerge(ctx context.Context) {
 	conf := config.LoadAppConfig()
 
-	// 1. Clear old timestamps
+	// Clear old yml_merge markers to ensure a clean state
 	timestampsDir := paths.GetTimestampsDir()
-	if !dirExists(timestampsDir) {
-		_ = os.MkdirAll(timestampsDir, 0755)
-	} else {
-		// Remove all yml_merge_* files
-		entries, err := os.ReadDir(timestampsDir)
-		if err == nil {
-			for _, entry := range entries {
-				if strings.HasPrefix(entry.Name(), "yml_merge_") {
-					os.Remove(filepath.Join(timestampsDir, entry.Name()))
-				}
+	if entries, err := os.ReadDir(timestampsDir); err == nil {
+		for _, entry := range entries {
+			if strings.HasPrefix(entry.Name(), "yml_merge_") {
+				_ = os.Remove(filepath.Join(timestampsDir, entry.Name()))
 			}
 		}
 	}
 
-	// 3. Update timestamps for relevant files
+	// Update markers for all relevant files
 	composeFile := filepath.Join(conf.ComposeDir, "docker-compose.yml")
 	updateTimestamp(ctx, conf, composeFile)
 
@@ -493,24 +488,6 @@ func UnsetNeedsYMLMerge(ctx context.Context) {
 	}
 }
 
-// SetNeedsYMLMerge marks that YML merge is needed by clearing timestamps
-func SetNeedsYMLMerge(ctx context.Context) error {
-	timestampsDir := paths.GetTimestampsDir()
-	if !dirExists(timestampsDir) {
-		return nil
-	}
-	entries, err := os.ReadDir(timestampsDir)
-	if err != nil {
-		return nil
-	}
-	for _, entry := range entries {
-		if strings.HasPrefix(entry.Name(), "yml_merge_") {
-			os.Remove(filepath.Join(timestampsDir, entry.Name()))
-		}
-	}
-	return nil
-}
-
 // Helper functions
 
 func fileChanged(conf config.AppConfig, path string) bool {
@@ -520,8 +497,7 @@ func fileChanged(conf config.AppConfig, path string) bool {
 	info, err := os.Stat(path)
 	tsInfo, tsErr := os.Stat(timestampFile)
 
-	// If source doesn't exist AND timestamp doesn't exist (e.g. optional file) -> Not changed (consistent absence)
-	// Bash logic: [[ ! -f ${file} && ! -f ${timestamp_file} ]] -> return 1 (false)
+	// If neither file nor marker exists, consider it unchanged (optional file case)
 	if os.IsNotExist(err) && os.IsNotExist(tsErr) {
 		return false
 	}
@@ -531,8 +507,7 @@ func fileChanged(conf config.AppConfig, path string) bool {
 		return true
 	}
 
-	// Both exist -> Compare ModTime
-	// Bash logic uses `stat -c %Y` which is seconds since epoch
+	// Both exist, compare modification times
 	return !info.ModTime().Equal(tsInfo.ModTime())
 }
 

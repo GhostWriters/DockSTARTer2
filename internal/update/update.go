@@ -142,8 +142,11 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 		logger.Info(ctx, "Application location is '{{_File_}}%s{{|-|}}'.", exePath)
 	}
 
+	// Reset all needs markers
+	_ = paths.ResetNeeds()
+
 	// Re-execution logic
-	// Bash update_self.sh lines 90-94: if no args passed, exec with -e flag
+	// If no args passed, default to -e flag
 	if len(restArgs) == 0 {
 		return ReExec(ctx, exePath, []string{"-e"})
 	}
@@ -165,8 +168,7 @@ func ReExec(ctx context.Context, exePath string, args []string) error {
 
 	logger.Notice(ctx, "Running: {{_RunningCommand_}}exec %s{{|-|}}", fullCmd)
 
-	// In Go, syscall.Exec takes (path, argv, envv).
-	// argv[0] is typically the executable name.
+	// Construct argv and envv for syscall.Exec
 	argv := append([]string{exePath}, args...)
 	envv := os.Environ()
 
@@ -252,10 +254,7 @@ func installUpdate(ctx context.Context, assetURL string) error {
 	}
 
 	// 5. Replace
-	// Try direct rename first (fast, works if writable)
-	// We rename current to .old just in case (though Linux overwrites active files fine usually, Windows does not)
-	// On Windows, we can't overwrite running exe. DockSTARTer logic was usually Linux-centric but we are in Go now.
-	// selfupdate library usually handles this by rename.
+	// Try to replace the current executable
 
 	// We will try to mv tmpExe -> exe
 	// If it fails with permission, we try sudo.
@@ -266,8 +265,7 @@ func installUpdate(ctx context.Context, assetURL string) error {
 		return nil
 	}
 
-	// Check for permission errors specifically? or just try sudo if ANY error?
-	// Simplified: try sudo if rename failed.
+	// If direct rename fails, attempt with sudo
 	logger.Warn(ctx, "Direct update failed (%v), trying with sudo...", err)
 
 	mvCmd := exec.Command("sudo", "mv", tmpExe, exe)
@@ -450,6 +448,9 @@ func UpdateTemplates(ctx context.Context, force bool, yes bool, requestedBranch 
 
 	logger.Notice(ctx, "Updated {{_ApplicationName_}}%s{{|-|}} to '{{_Version_}}%s{{|-|}}'", targetName, paths.GetTemplatesVersion())
 
+	// Reset all needs markers
+	_ = paths.ResetNeeds()
+
 	return nil
 }
 
@@ -461,7 +462,6 @@ func CheckCurrentStatus(ctx context.Context) error {
 	// and verifies the current version is still conceptually valid for the channel.
 	if requestedVersion == "dev" {
 		// Log a warning if 'dev' is used, as it might no longer exist in some contexts
-		// (Matching the behavior observed in previous logs)
 		msg := []string{
 			fmt.Sprintf("{{_ApplicationName_}}%s{{|-|}} channel '{{_Branch_}}%s{{|-|}}' appears to no longer exist.", version.ApplicationName, requestedVersion),
 			fmt.Sprintf("{{_ApplicationName_}}%s{{|-|}} is currently on version '{{_Version_}}%s{{|-|}}'.", version.ApplicationName, version.Version),
@@ -745,8 +745,6 @@ func EnsureTemplates(ctx context.Context) error {
 	_, err := git.PlainClone(templatesDir, false, &git.CloneOptions{
 		URL:           url,
 		ReferenceName: plumbing.ReferenceName("refs/heads/" + branch),
-		// Progress: nil, // Silent, as RunAndLog swallows output unless verbose/error, but we don't have a stream logger handy.
-		// Main.sh clone_repo uses "RunAndLog notice" which logs the command.
 	})
 	if err != nil {
 		return err

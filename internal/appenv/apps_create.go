@@ -37,7 +37,7 @@ func CreateAll(ctx context.Context, force bool, conf config.AppConfig) error {
 		return err
 	}
 
-	// Check if update is needed (Parity Fix)
+	// Check if update is needed
 	if !NeedsCreateAll(ctx, force, added, conf) {
 		logger.Notice(ctx, "Environment variables already created for all added apps.")
 		return nil
@@ -56,10 +56,10 @@ func CreateAll(ctx context.Context, force bool, conf config.AppConfig) error {
 		}
 	}
 
-	// Format and sort all environment files (Parity Fix)
+	// Format and sort all environment files
 	_ = Update(ctx, envFile)
 
-	// Mark as complete by updating timestamps (Parity Fix)
+	// Mark as complete by updating timestamps
 	UnsetNeedsCreateAll(ctx, added, conf)
 
 	return nil
@@ -130,6 +130,21 @@ func NeedsCreateAll(ctx context.Context, force bool, added []string, conf config
 		return true
 	}
 
+	// Track changes to the set of enabled applications
+	if partialChanged(conf, envFile, "ReferencedApps", strings.Join(added, " ")) {
+		return true
+	}
+
+	// Track enabled status for each individual application
+	vars, _ := ListVars(envFile)
+	for _, appName := range added {
+		enabledVar := strings.ToUpper(appName) + "__ENABLED"
+		enabledVal := vars[enabledVar]
+		if partialChanged(conf, envFile, enabledVar, enabledVal) {
+			return true
+		}
+	}
+
 	for _, appName := range added {
 		appEnvFile := filepath.Join(conf.ComposeDir, ".env.app."+strings.ToLower(appName))
 		if fileChanged(conf, appEnvFile) {
@@ -145,6 +160,16 @@ func NeedsCreateAll(ctx context.Context, force bool, added []string, conf config
 func UnsetNeedsCreateAll(ctx context.Context, added []string, conf config.AppConfig) {
 	envFile := filepath.Join(conf.ComposeDir, ".env")
 	updateTimestamp(conf, envFile)
+
+	// Update Granular Markers
+	updatePartial(conf, envFile, "ReferencedApps", strings.Join(added, " "))
+
+	vars, _ := ListVars(envFile)
+	for _, appName := range added {
+		enabledVar := strings.ToUpper(appName) + "__ENABLED"
+		enabledVal := vars[enabledVar]
+		updatePartial(conf, envFile, enabledVar, enabledVal)
+	}
 
 	for _, appName := range added {
 		appEnvFile := filepath.Join(conf.ComposeDir, ".env.app."+strings.ToLower(appName))
@@ -194,4 +219,28 @@ func updateTimestamp(conf config.AppConfig, path string) {
 	if err == nil {
 		_ = os.Chtimes(timestampFile, info.ModTime(), info.ModTime())
 	}
+}
+
+func partialChanged(conf config.AppConfig, path string, key, currentValue string) bool {
+	filename := filepath.Base(path)
+	partialFile := filepath.Join(paths.GetTimestampsDir(), "appvars_create_"+filename+"_"+key)
+
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return true
+	}
+
+	storedValue, err := os.ReadFile(partialFile)
+	if err != nil {
+		return true
+	}
+
+	return strings.TrimSpace(string(storedValue)) != strings.TrimSpace(currentValue)
+}
+
+func updatePartial(conf config.AppConfig, path string, key, value string) {
+	filename := filepath.Base(path)
+	partialFile := filepath.Join(paths.GetTimestampsDir(), "appvars_create_"+filename+"_"+key)
+
+	_ = os.MkdirAll(filepath.Dir(partialFile), 0755)
+	_ = os.WriteFile(partialFile, []byte(value), 0644)
 }

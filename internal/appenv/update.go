@@ -12,8 +12,13 @@ import (
 )
 
 // Update regenerates the .env file to ensure correct sorting and headers.
-// Mirrors env_update.sh functionality (lines 33-80).
+// Mirrors env_update.sh functionality.
 func Update(ctx context.Context, file string) error {
+	if !NeedsUpdate(ctx, file) {
+		logger.Info(ctx, "Environment variable file '{{_File_}}%s{{|-|}}' already updated.", file)
+		return nil
+	}
+
 	logger.Notice(ctx, "Updating environment variable files.")
 
 	// Get app config for paths
@@ -34,7 +39,7 @@ func Update(ctx context.Context, file string) error {
 		appList = []string{}
 	}
 
-	// Temporary file for current env lines (bash line 39)
+	// Temporary file for current env lines
 	currentLinesFile, err := os.CreateTemp("", "dockstarter2.env_update.*.tmp")
 	if err != nil {
 		return fmt.Errorf("failed to create temp file: %w", err)
@@ -45,7 +50,7 @@ func Update(ctx context.Context, file string) error {
 	// Variable to accumulate all formatted lines
 	var updatedEnvLines []string
 
-	// === Format global .env section (lines 40-45) ===
+	// Format global .env section
 	// Get current global vars
 	globalVars := AppVarsLines("", allLines)
 
@@ -74,7 +79,7 @@ func Update(ctx context.Context, file string) error {
 	}
 	updatedEnvLines = append(updatedEnvLines, formattedGlobals...)
 
-	// === Format app sections (lines 47-59) ===
+	// Format app sections
 	if len(appList) > 0 {
 		for _, appName := range appList {
 			// Get app-specific vars
@@ -91,7 +96,7 @@ func Update(ctx context.Context, file string) error {
 			// Get default app .env file path (will be built by format package)
 			templatesDir := paths.GetTemplatesDir()
 
-			// Call FormatLines for this app (line 55-57)
+			// Call FormatLines for this app
 			// It will determine the default env file internally
 			formattedApp, err := FormatLinesForApp(
 				ctx,
@@ -107,7 +112,7 @@ func Update(ctx context.Context, file string) error {
 		}
 	}
 
-	// === Write to .env file (lines 64-78) ===
+	// Write to .env file
 	contentStr := strings.Join(updatedEnvLines, "\n")
 	if len(updatedEnvLines) > 0 {
 		contentStr += "\n"
@@ -116,8 +121,7 @@ func Update(ctx context.Context, file string) error {
 	// Read existing content for comparison
 	existingContent, err := os.ReadFile(file)
 	if err != nil && !os.IsNotExist(err) {
-		// If we can't read it, we assume it needs updating (or let WriteFile fail later)
-		// This matches Bash behavior of not failing explicitly on a comparison check
+		// If we can't read it, we assume it needs updating
 		existingContent = []byte{}
 	}
 
@@ -130,13 +134,13 @@ func Update(ctx context.Context, file string) error {
 		logger.Info(ctx, "'{{_File_}}%s{{|-|}}' already updated.", file)
 	}
 
-	// === Process all referenced .env.app.appname files (lines 82-121) ===
+	// Process all referenced .env.app files
 	if len(appList) > 0 {
 		for _, appName := range appList {
 			appUpper := strings.ToUpper(appName)
 			appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf(".env.app.%s", strings.ToLower(appName)))
 
-			// In Bash: APP_DEFAULT_ENV_FILE="$(run_script 'app_instance_file' "${appname}" ".env.app.*")"
+			// Get default template file for the application
 			appDefaultEnvFile, err := AppInstanceFile(ctx, appUpper, ".env.app.*")
 			if err != nil {
 				logger.Warn(ctx, "Failed to get default env file for %s: %v", appName, err)
@@ -181,7 +185,88 @@ func Update(ctx context.Context, file string) error {
 		}
 	}
 
+	UnsetNeedsUpdate(ctx, file)
+
 	return nil
+}
+
+// NeedsUpdate checks if an environment file update is required.
+// Mirrors needs_env_update.sh
+func NeedsUpdate(ctx context.Context, file string) bool {
+	conf := config.LoadAppConfig()
+
+	// Check main file timestamp
+	if updateFileChanged(conf, file) {
+		return true
+	}
+
+	// Check app-specific files
+	appList, _ := GetReferencedApps(file)
+	for _, appName := range appList {
+		appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf(".env.app.%s", strings.ToLower(appName)))
+		if updateFileChanged(conf, appEnvFile) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// UnsetNeedsUpdate marks the environment files as updated by creating markers.
+// Mirrors unset_needs_env_update.sh
+func UnsetNeedsUpdate(ctx context.Context, file string) {
+	conf := config.LoadAppConfig()
+	updateTimestampForUpdate(conf, file)
+
+	appList, _ := GetReferencedApps(file)
+	for _, appName := range appList {
+		appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf(".env.app.%s", strings.ToLower(appName)))
+		updateTimestampForUpdate(conf, appEnvFile)
+	}
+}
+
+func updateFileChanged(conf config.AppConfig, path string) bool {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return true
+	}
+
+	filename := filepath.Base(path)
+	timestampFile := filepath.Join(paths.GetTimestampsDir(), "env_update_"+filename)
+
+	info, err := os.Stat(path)
+	tsInfo, tsErr := os.Stat(timestampFile)
+
+	if os.IsNotExist(tsErr) {
+		return true
+	}
+
+	if err != nil {
+		return false
+	}
+
+	return !info.ModTime().Equal(tsInfo.ModTime())
+}
+
+func updateTimestampForUpdate(conf config.AppConfig, path string) {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return
+	}
+
+	filename := filepath.Base(path)
+	timestampFile := filepath.Join(paths.GetTimestampsDir(), "env_update_"+filename)
+
+	_ = os.MkdirAll(filepath.Dir(timestampFile), 0755)
+
+	f, err := os.Create(timestampFile)
+	if err != nil {
+		return
+	}
+	f.Close()
+
+	info, err := os.Stat(path)
+	if err == nil {
+		_ = os.Chtimes(timestampFile, info.ModTime(), info.ModTime())
+	}
 }
 
 // CopyFile copies a file from src to dst
