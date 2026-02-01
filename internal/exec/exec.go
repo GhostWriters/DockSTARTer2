@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -34,16 +35,24 @@ func RunAndLog(ctx context.Context, runningNoticeType, outputNoticeType, errorNo
 		logByType(ctx, runningNoticeType, "Running: {{_RunningCommand_}}%s{{|-|}}", cmdText)
 	}
 
-	// Execute the command and capture output
+	// Execute the command
 	cmd := exec.CommandContext(ctx, command, args...)
 	var outputBuf bytes.Buffer
-	cmd.Stdout = &outputBuf
-	cmd.Stderr = &outputBuf
+
+	// If outputNoticeType is set, capture output to process it.
+	// Otherwise, stream directly to stdout/stderr.
+	if outputNoticeType != "" {
+		cmd.Stdout = &outputBuf
+		cmd.Stderr = &outputBuf
+	} else {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	}
 
 	err := cmd.Run()
 
 	// Process output if we have any and outputNoticeType is set
-	if outputBuf.Len() > 0 && outputNoticeType != "" {
+	if outputNoticeType != "" && outputBuf.Len() > 0 {
 		// Parse prefix and notice type (e.g., "docker:notice" -> prefix="docker:", type="notice")
 		prefix := ""
 		noticeType := outputNoticeType

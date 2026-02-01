@@ -799,7 +799,7 @@ func handleCompose(ctx context.Context, group *CommandGroup, state *CmdState) {
 		operation = "update"
 	}
 
-	if err := compose.ExecuteCompose(ctx, operation, appsList...); err != nil {
+	if err := compose.ExecuteCompose(ctx, state.Yes, operation, appsList...); err != nil {
 		logger.Error(ctx, "Compose failed: %v", err)
 	}
 }

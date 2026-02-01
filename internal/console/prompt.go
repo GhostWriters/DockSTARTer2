@@ -9,7 +9,7 @@ import (
 )
 
 // Printer is a function compatible with logger.Notice
-type Printer func(ctx context.Context, msg string, args ...any)
+type Printer func(ctx context.Context, msg any, args ...any)
 
 // TUIConfirm is a function that can be registered by the tui package
 // to allow QuestionPrompt to show a graphical dialog.

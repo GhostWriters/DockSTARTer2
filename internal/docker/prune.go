@@ -19,7 +19,7 @@ func Prune(ctx context.Context, assumeYes bool) error {
 	noNotice := "Nothing will be removed."
 
 	// Notice printer adapter
-	printer := func(ctx context.Context, msg string, args ...any) {
+	printer := func(ctx context.Context, msg any, args ...any) {
 		logger.Notice(ctx, msg, args...)
 	}
 

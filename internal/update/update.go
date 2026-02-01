@@ -104,7 +104,7 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 	noNotice := fmt.Sprintf("{{_ApplicationName_}}%s{{|-|}} will not be updated.", version.ApplicationName)
 
 	// Wrap logger.Notice to match console.Printer
-	noticePrinter := func(ctx context.Context, msg string, args ...any) {
+	noticePrinter := func(ctx context.Context, msg any, args ...any) {
 		logger.Notice(ctx, msg, args...)
 	}
 
@@ -367,7 +367,7 @@ func UpdateTemplates(ctx context.Context, force bool, yes bool, requestedBranch 
 	}
 
 	// Wrap logger.Notice to match console.Printer
-	noticePrinter := func(ctx context.Context, msg string, args ...any) {
+	noticePrinter := func(ctx context.Context, msg any, args ...any) {
 		logger.Notice(ctx, msg, args...)
 	}
 

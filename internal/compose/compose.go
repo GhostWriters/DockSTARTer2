@@ -3,6 +3,7 @@ package compose
 import (
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
 	execpkg "DockSTARTer2/internal/exec"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
@@ -188,7 +189,7 @@ func MergeYML(ctx context.Context) error {
 }
 
 // ExecuteCompose executes Docker Compose commands
-func ExecuteCompose(ctx context.Context, command string, appNames ...string) error {
+func ExecuteCompose(ctx context.Context, yes bool, command string, appNames ...string) error {
 	// First ensure YML is merged
 	if err := MergeYML(ctx); err != nil {
 		return err
@@ -208,101 +209,168 @@ func ExecuteCompose(ctx context.Context, command string, appNames ...string) err
 		appNamesJoined = strings.Join(niceNames, ", ")
 	}
 
+	var question, yesNotice, noNotice string
+
 	// Build command based on operation
 	switch command {
 	case "down":
 		if appNamesJoined != "" {
-			logger.Notice(ctx, "Stopping and removing {{_App_}}%s{{|-|}}.", appNamesJoined)
+			question = fmt.Sprintf("Stop and remove: {{_App_}}%s{{|-|}}?", appNamesJoined)
+			yesNotice = fmt.Sprintf("Stopping and removing {{_App_}}%s{{|-|}}.", appNamesJoined)
+			noNotice = fmt.Sprintf("Not stopping and removing: {{_App_}}%s{{|-|}}.", appNamesJoined)
 		} else {
-			logger.Notice(ctx, "Stopping and removing containers, networks, volumes, and images created by {{_ApplicationName_}}DockSTARTer{{|-|}}.")
+			question = "Stop and remove containers, networks, volumes, and images created by {{_ApplicationName_}}DockSTARTer{{|-|}}?"
+			yesNotice = "Stopping and removing containers, networks, volumes, and images created by {{_ApplicationName_}}DockSTARTer{{|-|}}."
+			noNotice = "Not stopping and removing containers, networks, volumes, and images created by {{_ApplicationName_}}DockSTARTer{{|-|}}."
 		}
 		args = []string{"compose", "--project-directory", conf.ComposeDir + "/", "down", "--remove-orphans"}
 		args = append(args, appNames...)
 
 	case "pause":
 		if appNamesJoined != "" {
-			logger.Notice(ctx, "Pausing: {{_App_}}%s{{|-|}}.", appNamesJoined)
+			question = fmt.Sprintf("Pause: {{_App_}}%s{{|-|}}?", appNamesJoined)
+			yesNotice = fmt.Sprintf("Pausing: {{_App_}}%s{{|-|}}.", appNamesJoined)
+			noNotice = fmt.Sprintf("Not pausing: {{_App_}}%s{{|-|}}.", appNamesJoined)
 		} else {
-			logger.Notice(ctx, "Pausing all running containers.")
+			question = "Pause all running containers?"
+			yesNotice = "Pausing all running containers."
+			noNotice = "Not pausing all running containers."
 		}
 		args = []string{"compose", "--project-directory", conf.ComposeDir + "/", "pause"}
 		args = append(args, appNames...)
 
 	case "pull":
 		if appNamesJoined != "" {
-			logger.Notice(ctx, "Pulling the latest images for: {{_App_}}%s{{|-|}}.", appNamesJoined)
+			question = fmt.Sprintf("Pull the latest images for: {{_App_}}%s{{|-|}}?", appNamesJoined)
+			yesNotice = fmt.Sprintf("Pulling the latest images for: {{_App_}}%s{{|-|}}.", appNamesJoined)
+			noNotice = fmt.Sprintf("Not pulling the latest images for: {{_App_}}%s{{|-|}}.", appNamesJoined)
 		} else {
-			logger.Notice(ctx, "Pulling the latest images for all enabled services.")
+			question = "Pull the latest images for all enabled services?"
+			yesNotice = "Pulling the latest images for all enabled services."
+			noNotice = "Not pulling the latest images for all enabled services."
 		}
 		args = []string{"compose", "--project-directory", conf.ComposeDir + "/", "pull", "--include-deps"}
 		args = append(args, appNames...)
 
 	case "restart":
 		if appNamesJoined != "" {
-			logger.Notice(ctx, "Restarting: {{_App_}}%s{{|-|}}.", appNamesJoined)
+			question = fmt.Sprintf("Restart: {{_App_}}%s{{|-|}}?", appNamesJoined)
+			yesNotice = fmt.Sprintf("Restarting: {{_App_}}%s{{|-|}}.", appNamesJoined)
+			noNotice = fmt.Sprintf("Not restarting: {{_App_}}%s{{|-|}}.", appNamesJoined)
 		} else {
-			logger.Notice(ctx, "Restarting all stopped and running containers.")
+			question = "Restart all stopped and running containers?"
+			yesNotice = "Restarting all stopped and running containers."
+			noNotice = "Not restarting all stopped and running containers."
 		}
 		args = []string{"compose", "--project-directory", conf.ComposeDir + "/", "restart"}
 		args = append(args, appNames...)
 
 	case "stop":
 		if appNamesJoined != "" {
-			logger.Notice(ctx, "Stopping: {{_App_}}%s{{|-|}}.", appNamesJoined)
+			question = fmt.Sprintf("Stop: {{_App_}}%s{{|-|}}?", appNamesJoined)
+			yesNotice = fmt.Sprintf("Stopping: {{_App_}}%s{{|-|}}.", appNamesJoined)
+			noNotice = fmt.Sprintf("Not stopping: {{_App_}}%s{{|-|}}.", appNamesJoined)
 		} else {
-			logger.Notice(ctx, "Stopping all running services.")
+			question = "Stop all running services?"
+			yesNotice = "Stopping all running services."
+			noNotice = "Not stopping all running services."
 		}
 		args = []string{"compose", "--project-directory", conf.ComposeDir + "/", "stop"}
 		args = append(args, appNames...)
 
 	case "unpause":
 		if appNamesJoined != "" {
-			logger.Notice(ctx, "Unpausing: {{_App_}}%s{{|-|}}.", appNamesJoined)
+			question = fmt.Sprintf("Unpause: {{_App_}}%s{{|-|}}?", appNamesJoined)
+			yesNotice = fmt.Sprintf("Unpausing: {{_App_}}%s{{|-|}}.", appNamesJoined)
+			noNotice = fmt.Sprintf("Not unpausing: {{_App_}}%s{{|-|}}.", appNamesJoined)
 		} else {
-			logger.Notice(ctx, "Unpausing all running containers.")
+			question = "Unpause all running containers?"
+			yesNotice = "Unpausing all running containers."
+			noNotice = "Not unpausing all running containers."
 		}
 		args = []string{"compose", "--project-directory", conf.ComposeDir + "/", "unpause"}
 		args = append(args, appNames...)
 
 	case "update":
 		if appNamesJoined != "" {
-			logger.Notice(ctx, "Updating and starting: {{_App_}}%s{{|-|}}.", appNamesJoined)
+			question = fmt.Sprintf("Update and start: {{_App_}}%s{{|-|}}?", appNamesJoined)
+			yesNotice = fmt.Sprintf("Updating and starting: {{_App_}}%s{{|-|}}.", appNamesJoined)
+			noNotice = fmt.Sprintf("Not updating and starting: {{_App_}}%s{{|-|}}.", appNamesJoined)
 		} else {
-			logger.Notice(ctx, "Updating and starting containers for all enabled services.")
+			question = "Update and start containers for all enabled services?"
+			yesNotice = "Updating and starting containers for all enabled services."
+			noNotice = "Not updating and starting containers for all enabled services."
 		}
-		// Update = pull + up
-		pullArgs := []string{"compose", "--project-directory", conf.ComposeDir + "/", "pull", "--include-deps"}
-		pullArgs = append(pullArgs, appNames...)
-		if err := runDockerCommand(ctx, pullArgs...); err != nil {
-			return err
+		// Update = pull + up - requires separate execution
+		if console.QuestionPrompt(ctx, logger.Notice, question, "Y", yes) {
+			logger.Notice(ctx, yesNotice)
+			pullArgs := []string{"compose", "--project-directory", conf.ComposeDir + "/", "pull", "--include-deps"}
+			pullArgs = append(pullArgs, appNames...)
+			if err := runDockerCommand(ctx, pullArgs...); err != nil {
+				return err
+			}
+			args = []string{"compose", "--project-directory", conf.ComposeDir + "/", "up", "-d", "--remove-orphans"}
+			args = append(args, appNames...)
+			return runDockerCommand(ctx, args...)
+		} else {
+			logger.Notice(ctx, noNotice)
+			return nil
 		}
-		args = []string{"compose", "--project-directory", conf.ComposeDir + "/", "up", "-d", "--remove-orphans"}
-		args = append(args, appNames...)
 
 	case "up":
 		if appNamesJoined != "" {
-			logger.Notice(ctx, "Starting: {{_App_}}%s{{|-|}}.", appNamesJoined)
+			question = fmt.Sprintf("Start: {{_App_}}%s{{|-|}}?", appNamesJoined)
+			yesNotice = fmt.Sprintf("Starting: {{_App_}}%s{{|-|}}.", appNamesJoined)
+			noNotice = fmt.Sprintf("Not starting: {{_App_}}%s{{|-|}}.", appNamesJoined)
 		} else {
-			logger.Notice(ctx, "Starting containers for all enabled services.")
+			question = "Start containers for all enabled services?"
+			yesNotice = "Starting containers for all enabled services."
+			noNotice = "Not starting containers for all enabled services."
 		}
 		args = []string{"compose", "--project-directory", conf.ComposeDir + "/", "up", "-d", "--remove-orphans"}
 		args = append(args, appNames...)
 
 	case "generate", "merge":
-		// Already merged above
-		return nil
+		question = "Merge enabled app templates to '{{_File_}}docker-compose.yml{{|-|}}'?"
+		yesNotice = "Merging enabled app templates to '{{_File_}}docker-compose.yml{{|-|}}'."
+		noNotice = "Not merging enabled app templates to '{{_File_}}docker-compose.yml{{|-|}}'."
+		// Already merged above, just printing logic here if forced
+		if console.QuestionPrompt(ctx, logger.Notice, question, "Y", yes) {
+			logger.Notice(ctx, yesNotice)
+			return MergeYML(ctx) // Re-run merge if requested explicitly
+		} else {
+			logger.Notice(ctx, noNotice)
+			return nil
+		}
 
 	default:
 		// Default to update
-		logger.Notice(ctx, "Updating containers for all enabled services.")
-		pullArgs := []string{"compose", "--project-directory", conf.ComposeDir + "/", "pull", "--include-deps"}
-		if err := runDockerCommand(ctx, pullArgs...); err != nil {
-			return err
+		question = "Update containers for all enabled services?"
+		yesNotice = "Updating containers for all enabled services."
+		noNotice = "Not updating containers for all enabled services."
+
+		if console.QuestionPrompt(ctx, logger.Notice, question, "Y", yes) {
+			logger.Notice(ctx, yesNotice)
+			pullArgs := []string{"compose", "--project-directory", conf.ComposeDir + "/", "pull", "--include-deps"}
+			if err := runDockerCommand(ctx, pullArgs...); err != nil {
+				return err
+			}
+			args = []string{"compose", "--project-directory", conf.ComposeDir + "/", "up", "-d", "--remove-orphans"}
+			return runDockerCommand(ctx, args...)
+		} else {
+			logger.Notice(ctx, noNotice)
+			return nil
 		}
-		args = []string{"compose", "--project-directory", conf.ComposeDir + "/", "up", "-d", "--remove-orphans"}
 	}
 
-	return runDockerCommand(ctx, args...)
+	// General Execution for non-custom paths
+	if console.QuestionPrompt(ctx, logger.Notice, question, "Y", yes) {
+		logger.Notice(ctx, yesNotice)
+		return runDockerCommand(ctx, args...)
+	} else {
+		logger.Notice(ctx, noNotice)
+		return nil
+	}
 }
 
 // runDockerCommand runs a docker command using RunAndLog pattern
@@ -318,22 +386,93 @@ func runDockerCommand(ctx context.Context, args ...string) error {
 	)
 }
 
-// NeedsYMLMerge checks if YML merge is needed
+// NeedsYMLMerge checks if YML merge is needed using timestamp comparison
 func NeedsYMLMerge(ctx context.Context) bool {
-	// Check if the needs file exists
 	conf := config.LoadAppConfig()
+
+	// 1. Check for forced flag file (legacy Go behavior + Force equivalent)
 	needsFile := filepath.Join(conf.ConfigDir, "needs", "yml_merge")
-	return fileExists(needsFile)
+	if fileExists(needsFile) {
+		return true
+	}
+
+	// 2. Check if docker-compose.yml is missing
+	composeFile := filepath.Join(conf.ComposeDir, "docker-compose.yml")
+	if !fileExists(composeFile) {
+		return true
+	}
+
+	// 3. Timestamp-based checks (Bash parity)
+	// Check compose file itself
+	if fileChanged(conf, composeFile) {
+		return true
+	}
+
+	// Check .env
+	envFile := filepath.Join(conf.ComposeDir, ".env")
+	if fileChanged(conf, envFile) {
+		return true
+	}
+
+	// Check enabled apps .env files
+	enabledApps, err := appenv.ListEnabledApps(conf)
+	if err != nil {
+		logger.Error(ctx, "Failed to list enabled apps during merge check: %v", err)
+		return true // Fail safe: merge if unsure
+	}
+
+	for _, appName := range enabledApps {
+		appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf(".env.app.%s", strings.ToLower(appName)))
+		if fileChanged(conf, appEnvFile) {
+			return true
+		}
+	}
+
+	return false
 }
 
-// UnsetNeedsYMLMerge marks YML merge as complete
+// UnsetNeedsYMLMerge marks YML merge as complete by updating timestamps
 func UnsetNeedsYMLMerge(ctx context.Context) {
 	conf := config.LoadAppConfig()
+
+	// 1. Remove forced flag file
 	needsFile := filepath.Join(conf.ConfigDir, "needs", "yml_merge")
 	os.Remove(needsFile)
+
+	// 2. Clear old timestamps
+	timestampsDir := filepath.Join(conf.ConfigDir, "timestamps")
+	if !dirExists(timestampsDir) {
+		if err := os.MkdirAll(timestampsDir, 0755); err != nil {
+			logger.Warn(ctx, "Failed to create timestamps directory: %v", err)
+			return
+		}
+	} else {
+		// Remove all yml_merge_* files
+		entries, err := os.ReadDir(timestampsDir)
+		if err == nil {
+			for _, entry := range entries {
+				if strings.HasPrefix(entry.Name(), "yml_merge_") {
+					os.Remove(filepath.Join(timestampsDir, entry.Name()))
+				}
+			}
+		}
+	}
+
+	// 3. Update timestamps for relevant files
+	composeFile := filepath.Join(conf.ComposeDir, "docker-compose.yml")
+	updateTimestamp(ctx, conf, composeFile)
+
+	envFile := filepath.Join(conf.ComposeDir, ".env")
+	updateTimestamp(ctx, conf, envFile)
+
+	enabledApps, _ := appenv.ListEnabledApps(conf)
+	for _, appName := range enabledApps {
+		appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf(".env.app.%s", strings.ToLower(appName)))
+		updateTimestamp(ctx, conf, appEnvFile)
+	}
 }
 
-// SetNeedsYMLMerge marks that YML merge is needed
+// SetNeedsYMLMerge marks that YML merge is needed by creating a flag file
 func SetNeedsYMLMerge(ctx context.Context) error {
 	conf := config.LoadAppConfig()
 	needsDir := filepath.Join(conf.ConfigDir, "needs")
@@ -345,6 +484,57 @@ func SetNeedsYMLMerge(ctx context.Context) error {
 }
 
 // Helper functions
+
+func fileChanged(conf config.AppConfig, path string) bool {
+	filename := filepath.Base(path)
+	timestampFile := filepath.Join(conf.ConfigDir, "timestamps", "yml_merge_"+filename)
+
+	info, err := os.Stat(path)
+	tsInfo, tsErr := os.Stat(timestampFile)
+
+	// If source doesn't exist AND timestamp doesn't exist (e.g. optional file) -> Not changed (consistent absence)
+	// Bash logic: [[ ! -f ${file} && ! -f ${timestamp_file} ]] -> return 1 (false)
+	if os.IsNotExist(err) && os.IsNotExist(tsErr) {
+		return false
+	}
+
+	// If one exists and other doesn't -> Changed
+	if (err == nil && tsErr != nil) || (err != nil && tsErr == nil) {
+		return true
+	}
+
+	// Both exist -> Compare ModTime
+	// Bash logic uses `stat -c %Y` which is seconds since epoch
+	return !info.ModTime().Equal(tsInfo.ModTime())
+}
+
+func updateTimestamp(ctx context.Context, conf config.AppConfig, path string) {
+	if !fileExists(path) {
+		return
+	}
+
+	filename := filepath.Base(path)
+	timestampFile := filepath.Join(conf.ConfigDir, "timestamps", "yml_merge_"+filename)
+
+	// Create empty timestamp file
+	f, err := os.Create(timestampFile)
+	if err != nil {
+		logger.Warn(ctx, "Failed to create timestamp file for %s: %v", filename, err)
+		return
+	}
+	f.Close()
+
+	// Sync timestamp with source file
+	info, err := os.Stat(path)
+	if err != nil {
+		return
+	}
+
+	if err := os.Chtimes(timestampFile, info.ModTime(), info.ModTime()); err != nil {
+		logger.Warn(ctx, "Failed to set timestamp for %s: %v", filename, err)
+	}
+}
+
 func fileExists(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && !info.IsDir()
