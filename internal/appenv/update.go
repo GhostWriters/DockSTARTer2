@@ -119,20 +119,12 @@ func Update(ctx context.Context, force bool, file string) error {
 		contentStr += "\n"
 	}
 
-	// Read existing content for comparison
-	existingContent, err := os.ReadFile(file)
-	if err != nil && !os.IsNotExist(err) {
-		// If we can't read it, we assume it needs updating
-		existingContent = []byte{}
-	}
-
-	if force || string(existingContent) != contentStr {
-		logger.Notice(ctx, "Updating '{{_File_}}%s{{|-|}}'.", file)
-		if err := os.WriteFile(file, []byte(contentStr), 0644); err != nil {
-			return fmt.Errorf("failed to update .env file: %w", err)
-		}
-	} else {
-		logger.Info(ctx, "'{{_File_}}%s{{|-|}}' already updated.", file)
+	// Bash parity: If we reached this point, needs_env_update returned true (or force=true).
+	// Bash env_update.sh does NOT check if content changed before writing.
+	// It proceeds to write blindly if needs_env_update was true.
+	logger.Notice(ctx, "Updating '{{_File_}}%s{{|-|}}'.", file)
+	if err := os.WriteFile(file, []byte(contentStr), 0644); err != nil {
+		return fmt.Errorf("failed to update .env file: %w", err)
 	}
 
 	// Process all referenced .env.app files
@@ -166,22 +158,25 @@ func Update(ctx context.Context, force bool, file string) error {
 				appContentStr += "\n"
 			}
 
-			// Read existing app env content for comparison
-			existingAppContent, err := os.ReadFile(appEnvFile)
-			// checking err here is good but we also handle NotExist in strict write
+			// Bash parity: For app files, it also checks needs_env_update inside the loop.
+			// But we are already inside Update() which is driven by CreateAll or explicit call.
+			// Wait, env_update.sh iterates applist and calls needs_env_update for EACH app file.
 
-			if force || os.IsNotExist(err) || string(existingAppContent) != appContentStr {
-				if os.IsNotExist(err) {
-					logger.Notice(ctx, "Creating '{{_File_}}%s{{|-|}}'.", appEnvFile)
-				} else {
-					logger.Notice(ctx, "Updating '{{_File_}}%s{{|-|}}'.", appEnvFile)
-				}
-
-				if err := os.WriteFile(appEnvFile, []byte(appContentStr), 0644); err != nil {
-					logger.Warn(ctx, "Failed to update %s: %v", appEnvFile, err)
-				}
-			} else {
+			// We must check NeedsUpdate for the app file before writing.
+			// The original code passed 'force' down implicitly by logic flow, but here we iterate.
+			if !force && !NeedsUpdate(ctx, false, appEnvFile) {
 				logger.Info(ctx, "'{{_File_}}%s{{|-|}}' already updated.", appEnvFile)
+				continue
+			}
+
+			if _, err := os.Stat(appEnvFile); os.IsNotExist(err) {
+				logger.Notice(ctx, "Creating '{{_File_}}%s{{|-|}}'.", appEnvFile)
+			} else {
+				logger.Notice(ctx, "Updating '{{_File_}}%s{{|-|}}'.", appEnvFile)
+			}
+
+			if err := os.WriteFile(appEnvFile, []byte(appContentStr), 0644); err != nil {
+				logger.Warn(ctx, "Failed to update %s: %v", appEnvFile, err)
 			}
 		}
 	}
