@@ -65,7 +65,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		for _, part := range group.FullSlice() {
 			cmdStr += " " + part
 		}
-		logger.Notice(ctx, fmt.Sprintf("{{_ApplicationName_}}%s{{|-|}} command: '{{_UserCommand_}}%s{{|-|}}'", version.ApplicationName, cmdStr))
+		logger.Notice(ctx, fmt.Sprintf("%s command: '{{_UserCommand_}}%s{{|-|}}'", version.ApplicationName, cmdStr))
 
 		// Log execution arguments for verification
 		logger.Debug(ctx, fmt.Sprintf("Execution Args -> State: %+v, Command: %v, Rest: %v", state, fullCmd, restArgs))
