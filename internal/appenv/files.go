@@ -31,16 +31,32 @@ func AppInstanceFile(ctx context.Context, appName, fileSuffix string) (string, e
 
 	// Check if template folder exists
 	if _, err := os.Stat(templateFolder); os.IsNotExist(err) {
-		return "", nil // No template, no instance
+		// Parity: remove instance folders if template folder is gone
+		_ = os.RemoveAll(instanceFolder)
+		return "", nil
 	}
 
-	// Read template
+	// Check if template file exists
 	templateContent, err := os.ReadFile(templateFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return "", nil // Some apps don't have all files
+			// Parity: remove instance files if template file is gone
+			_ = os.Remove(instanceFile)
+			_ = os.Remove(instanceOriginalFile)
+			return "", nil
 		}
 		return "", err
+	}
+
+	// Check if we need to update/recreate
+	// Bash logic (adapted for .original):
+	// Return early ONLY if InstanceFile exists AND Original exists AND Original == Template.
+	if _, err := os.Stat(instanceFile); err == nil {
+		// Instance exists, check original
+		originalContent, err := os.ReadFile(instanceOriginalFile)
+		if err == nil && bytes.Equal(templateContent, originalContent) {
+			return instanceFile, nil
+		}
 	}
 
 	// Create instance folder
@@ -48,32 +64,29 @@ func AppInstanceFile(ctx context.Context, appName, fileSuffix string) (string, e
 		return "", err
 	}
 
-	// Check if we need to update/recreate
-	originalContent, _ := os.ReadFile(instanceOriginalFile)
-	if !bytes.Equal(templateContent, originalContent) {
-		logger.Notice(ctx, "Creating '{{_File_}}%s{{|-|}}'", instanceFile)
-		// Template changed or missing, recreate instance
-		if err := os.WriteFile(instanceOriginalFile, templateContent, 0644); err != nil {
-			return "", err
-		}
+	// Process content (replace placeholders)
+	content := string(templateContent)
 
-		// Process content (replace placeholders)
-		content := string(templateContent)
+	var __INSTANCE, __Instance, __instance string
+	if instance != "" {
+		__INSTANCE = "__" + strings.ToUpper(instance)
+		__Instance = "__" + strings.Title(strings.ToLower(instance))
+		__instance = "__" + strings.ToLower(instance)
+	}
 
-		var __INSTANCE, __Instance, __instance string
-		if instance != "" {
-			__INSTANCE = "__" + strings.ToUpper(instance)
-			__Instance = "__" + strings.Title(strings.ToLower(instance))
-			__instance = "__" + strings.ToLower(instance)
-		}
+	content = strings.ReplaceAll(content, "<__INSTANCE>", __INSTANCE)
+	content = strings.ReplaceAll(content, "<__Instance>", __Instance)
+	content = strings.ReplaceAll(content, "<__instance>", __instance)
 
-		content = strings.ReplaceAll(content, "<__INSTANCE>", __INSTANCE)
-		content = strings.ReplaceAll(content, "<__Instance>", __Instance)
-		content = strings.ReplaceAll(content, "<__instance>", __instance)
+	// Write Instance File
+	logger.Notice(ctx, "Creating '{{_File_}}%s{{|-|}}'", instanceFile)
+	if err := os.WriteFile(instanceFile, []byte(content), 0644); err != nil {
+		return "", err
+	}
 
-		if err := os.WriteFile(instanceFile, []byte(content), 0644); err != nil {
-			return "", err
-		}
+	// Write Original Template File
+	if err := os.WriteFile(instanceOriginalFile, templateContent, 0644); err != nil {
+		return "", err
 	}
 
 	return instanceFile, nil
