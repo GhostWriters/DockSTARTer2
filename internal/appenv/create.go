@@ -2,17 +2,18 @@ package appenv
 
 import (
 	"DockSTARTer2/internal/config"
-	"fmt"
+	"DockSTARTer2/internal/logger"
+	"context"
 	"os"
 	"path/filepath"
 )
 
 // Create ensures the environment file exists.
 // If not, it copies from the default template.
-func Create(file, defaultFile string) error {
+func Create(ctx context.Context, file, defaultFile string) error {
 	dir := filepath.Dir(file)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("failed to create folder %s: %w", dir, err)
+		logger.Fatal(ctx, "Failed to create folder '{{_Folder_}}%s{{|-|}}'.", dir)
 	}
 
 	if _, err := os.Stat(file); err == nil {
@@ -22,18 +23,18 @@ func Create(file, defaultFile string) error {
 	// Copy from default
 	input, err := os.ReadFile(defaultFile)
 	if err != nil {
-		// If default doesn't exist, create empty? Or error?
-		// Bash says: warn ... Copying example template. cp ...
-		// If template missing, maybe just create empty.
 		if os.IsNotExist(err) {
-			return os.WriteFile(file, []byte{}, 0644)
+			if err := os.WriteFile(file, []byte{}, 0644); err != nil {
+				logger.Fatal(ctx, "Failed to create empty env file '{{_File_}}%s{{|-|}}'.", file)
+			}
+			return nil
 		}
-		return fmt.Errorf("failed to read default env %s: %w", defaultFile, err)
+		logger.Fatal(ctx, "Failed to read default env '{{_File_}}%s{{|-|}}'.", defaultFile)
 	}
 
 	// Write raw content first
 	if err := os.WriteFile(file, input, 0644); err != nil {
-		return fmt.Errorf("failed to create env file %s: %w", file, err)
+		logger.Fatal(ctx, "Failed to create env file '{{_File_}}%s{{|-|}}'.", file)
 	}
 
 	// Sanitize: Set specific top-level variables
@@ -43,17 +44,17 @@ func Create(file, defaultFile string) error {
 	home, err := os.UserHomeDir()
 	if err == nil {
 		if err := Set("HOME", home, file); err != nil {
-			return fmt.Errorf("failed to set HOME in env file: %w", err)
+			logger.Fatal(ctx, "Failed to set HOME in env file: %v", err)
 		}
 	}
 
 	// 2. CONFIG/COMPOSE FOLDERS
 	conf := config.LoadAppConfig()
 	if err := Set("DOCKER_CONFIG_FOLDER", conf.ConfigDir, file); err != nil {
-		return fmt.Errorf("failed to set DOCKER_CONFIG_FOLDER: %w", err)
+		logger.Fatal(ctx, "Failed to set DOCKER_CONFIG_FOLDER: %v", err)
 	}
 	if err := Set("DOCKER_COMPOSE_FOLDER", conf.ComposeDir, file); err != nil {
-		return fmt.Errorf("failed to set DOCKER_COMPOSE_FOLDER: %w", err)
+		logger.Fatal(ctx, "Failed to set DOCKER_COMPOSE_FOLDER: %v", err)
 	}
 
 	return nil
