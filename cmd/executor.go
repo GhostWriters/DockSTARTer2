@@ -701,6 +701,10 @@ func handleReset(ctx context.Context) {
 	if err := os.RemoveAll(timestampDir); err != nil {
 		logger.Error(ctx, "Failed to remove timestamps directory: %v", err)
 	}
+	needsDir := filepath.Join(paths.GetStateDir(), "needs")
+	if err := os.RemoveAll(needsDir); err != nil {
+		logger.Error(ctx, "Failed to remove needs directory: %v", err)
+	}
 	// Also ensure permissions are set? Bash script calls set_permissions.
 	// We might need a set_permissions equivalent eventually.
 }

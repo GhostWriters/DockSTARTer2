@@ -219,9 +219,11 @@ func MergeYML(ctx context.Context, force bool) error {
 
 // ExecuteCompose executes Docker Compose commands
 func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, appNames ...string) error {
-	// First ensure YML is merged
-	if err := MergeYML(ctx, force); err != nil {
-		return err
+	// First ensure YML is merged (skipping explicit merge/generate commands to avoid double-run/confusing logs)
+	if command != "merge" && command != "generate" {
+		if err := MergeYML(ctx, force); err != nil {
+			return err
+		}
 	}
 
 	conf := config.LoadAppConfig()
@@ -468,9 +470,11 @@ func NeedsYMLMerge(ctx context.Context, force bool) bool {
 func UnsetNeedsYMLMerge(ctx context.Context) {
 	conf := config.LoadAppConfig()
 
-	// 1. Remove forced flag file
-	needsFile := filepath.Join(paths.GetStateDir(), "needs", "yml_merge")
+	// 1. Remove forced flag file and needs directory
+	needsDir := filepath.Join(paths.GetStateDir(), "needs")
+	needsFile := filepath.Join(needsDir, "yml_merge")
 	os.Remove(needsFile)
+	os.Remove(needsDir) // Try to remove if empty
 
 	// 2. Clear old timestamps
 	timestampsDir := paths.GetTimestampsDir()
