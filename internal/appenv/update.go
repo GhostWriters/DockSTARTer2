@@ -13,8 +13,8 @@ import (
 
 // Update regenerates the .env file to ensure correct sorting and headers.
 // Mirrors env_update.sh functionality.
-func Update(ctx context.Context, file string) error {
-	if !NeedsUpdate(ctx, file) {
+func Update(ctx context.Context, force bool, file string) error {
+	if !force && !NeedsUpdate(ctx, false, file) {
 		logger.Info(ctx, "Environment variable file '{{_File_}}%s{{|-|}}' already updated.", file)
 		return nil
 	}
@@ -125,7 +125,7 @@ func Update(ctx context.Context, file string) error {
 		existingContent = []byte{}
 	}
 
-	if string(existingContent) != contentStr {
+	if force || string(existingContent) != contentStr {
 		logger.Notice(ctx, "Updating '{{_File_}}%s{{|-|}}'.", file)
 		if err := os.WriteFile(file, []byte(contentStr), 0644); err != nil {
 			return fmt.Errorf("failed to update .env file: %w", err)
@@ -169,7 +169,7 @@ func Update(ctx context.Context, file string) error {
 			existingAppContent, err := os.ReadFile(appEnvFile)
 			// checking err here is good but we also handle NotExist in strict write
 
-			if os.IsNotExist(err) || string(existingAppContent) != appContentStr {
+			if force || os.IsNotExist(err) || string(existingAppContent) != appContentStr {
 				if os.IsNotExist(err) {
 					logger.Notice(ctx, "Creating '{{_File_}}%s{{|-|}}'.", appEnvFile)
 				} else {
@@ -192,7 +192,10 @@ func Update(ctx context.Context, file string) error {
 
 // NeedsUpdate checks if an environment file update is required.
 // Mirrors needs_env_update.sh
-func NeedsUpdate(ctx context.Context, file string) bool {
+func NeedsUpdate(ctx context.Context, force bool, file string) bool {
+	if force {
+		return true
+	}
 	conf := config.LoadAppConfig()
 
 	// Check main file timestamp

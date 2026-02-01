@@ -178,14 +178,6 @@ func MergeYML(ctx context.Context, force bool) error {
 		composeFiles = append(composeFiles, mainFile)
 
 		logger.Info(ctx, "All configurations for '{{_App_}}%s{{|-|}}' are included.", niceName)
-
-		// Create app environment variables and config folders
-		if err := appenv.CreateApp(ctx, appName, conf); err != nil {
-			logger.Warn(ctx, "Failed to create environment variables for %s: %v", appName, err)
-		}
-		if err := appenv.CreateAppFolders(ctx, appName, conf); err != nil {
-			logger.Warn(ctx, "Failed to create config folders for %s: %v", appName, err)
-		}
 	}
 
 	// Run docker compose config to merge files

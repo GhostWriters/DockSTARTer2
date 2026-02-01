@@ -57,7 +57,7 @@ func CreateAll(ctx context.Context, force bool, conf config.AppConfig) error {
 	}
 
 	// Format and sort all environment files
-	_ = Update(ctx, envFile)
+	_ = Update(ctx, force, envFile)
 
 	// Mark as complete by updating timestamps
 	UnsetNeedsCreateAll(ctx, added, conf)
@@ -106,6 +106,11 @@ func CreateApp(ctx context.Context, appNameRaw string, conf config.AppConfig) er
 			if _, err := MergeNewOnly(ctx, targetAppEnv, processedAppEnv); err != nil {
 				return fmt.Errorf("failed to merge app env for %s: %w", appNameUpper, err)
 			}
+		}
+
+		// Ensure config folders exist
+		if err := CreateAppFolders(ctx, appName, conf); err != nil {
+			logger.Warn(ctx, "Failed to create config folders for %s: %v", appName, err)
 		}
 
 		logger.Info(ctx, "Environment variables created for '{{_App_}}%s{{|-|}}'.", niceName)

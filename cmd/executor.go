@@ -416,7 +416,7 @@ func handleAppVarsCreate(ctx context.Context, group *CommandGroup, state *CmdSta
 		}
 	}
 
-	if err := appenv.Update(ctx, envFile); err != nil {
+	if err := appenv.Update(ctx, state.Force, envFile); err != nil {
 		logger.Warn(ctx, "Failed to update env usage: %v", err)
 	}
 }
@@ -574,7 +574,7 @@ func handleStatusChange(ctx context.Context, group *CommandGroup) {
 	if err != nil {
 		logger.Error(ctx, "Failed to change app status: %v", err)
 	}
-	if err := appenv.Update(ctx, filepath.Join(conf.ComposeDir, ".env")); err != nil {
+	if err := appenv.Update(ctx, false, filepath.Join(conf.ComposeDir, ".env")); err != nil {
 		logger.Warn(ctx, "Failed to update env usage: %v", err)
 	}
 }
@@ -588,7 +588,7 @@ func handleRemove(ctx context.Context, group *CommandGroup, state *CmdState) {
 	if err != nil {
 		logger.Error(ctx, "Failed to remove app variables: %v", err)
 	}
-	if err := appenv.Update(ctx, filepath.Join(conf.ComposeDir, ".env")); err != nil {
+	if err := appenv.Update(ctx, false, filepath.Join(conf.ComposeDir, ".env")); err != nil {
 		logger.Warn(ctx, "Failed to update env usage: %v", err)
 	}
 }

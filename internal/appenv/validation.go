@@ -196,12 +196,12 @@ func VarNameIsValid(varName string, varType string) bool {
 				return false
 			}
 			parts := strings.SplitN(varName, ":", 2)
-			return strings.ToUpper(parts[0]) == strings.TrimSuffix(varType, ":") && VarNameIsValid(parts[1], "_BARE_")
+			return strings.EqualFold(parts[0], strings.TrimSuffix(varType, ":")) && VarNameIsValid(parts[1], "_BARE_")
 		}
 		if !VarNameIsValid(varName, "_BARE_") {
 			return false
 		}
-		return strings.ToUpper(VarNameToAppName(varName)) == strings.ToUpper(varType)
+		return strings.EqualFold(VarNameToAppName(varName), varType)
 	}
 }
 
