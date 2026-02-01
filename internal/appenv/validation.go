@@ -79,11 +79,11 @@ func IsAppDeprecated(ctx context.Context, appName string) bool {
 // IsAppUserDefined checks if an app is user-defined (not built-in OR missing ENABLED var).
 func IsAppUserDefined(ctx context.Context, appName string, envFile string) bool {
 	appUpper := strings.ToUpper(appName)
-	if IsAppBuiltIn(appUpper) {
-		return false
+	if !IsAppBuiltIn(appUpper) {
+		return true
 	}
 	exists, _ := EnvVarExists(ctx, appUpper+"__ENABLED", envFile)
-	return exists
+	return !exists
 }
 
 // IsAppAdded checks if an app is both builtin and has an __ENABLED variable.
@@ -121,6 +121,9 @@ func IsAppNonDeprecated(ctx context.Context, appName string) bool {
 
 // IsAppEnabled checks if an app is enabled (ENABLED=true).
 func IsAppEnabled(app, envFile string) bool {
+	if !IsAppBuiltIn(app) {
+		return false
+	}
 	// bash checks value being IsTrue.
 	// We need to read the value.
 	val, _ := Get(app+"__ENABLED", envFile)

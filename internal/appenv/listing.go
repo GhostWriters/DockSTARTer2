@@ -156,28 +156,23 @@ func ListReferencedApps(ctx context.Context, conf config.AppConfig) ([]string, e
 // ListEnabledApps returns a sorted list of enabled applications.
 func ListEnabledApps(conf config.AppConfig) ([]string, error) {
 	envFile := filepath.Join(conf.ComposeDir, ".env")
-	content, err := os.ReadFile(envFile)
+	vars, err := ListVars(envFile)
 	if err != nil {
 		return nil, err
 	}
 
-	var added []string
-	lines := strings.Split(string(content), "\n")
-	re := regexp.MustCompile(`^([A-Z0-9_]+)__ENABLED=true$`)
-
-	for _, line := range lines {
-		matches := re.FindStringSubmatch(line)
-		if len(matches) > 1 {
-			key := matches[1]
+	var enabled []string
+	for key, val := range vars {
+		if strings.HasSuffix(key, "__ENABLED") && IsTrue(val) {
 			appName := strings.TrimSuffix(key, "__ENABLED")
 			if IsAppNameValid(appName) && IsAppBuiltIn(appName) {
-				added = append(added, appName)
+				enabled = append(enabled, appName)
 			}
 		}
 	}
 
-	sort.Strings(added)
-	return added, nil
+	sort.Strings(enabled)
+	return enabled, nil
 }
 
 // ListAppVars returns a list of variable names for the specified app.
