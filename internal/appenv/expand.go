@@ -1,6 +1,7 @@
 package appenv
 
 import (
+	"sort"
 	"strings"
 )
 
@@ -39,30 +40,33 @@ func ExpandVars(s string, vars map[string]string) string {
 }
 
 // ReplaceWithVars replaces occurrences of specified variables in the string.
-// It mimics the Bash replace_with_vars function.
-// It specifically handles patterns like ${KEY?}.
+// It mimics the Bash replace_with_vars function but ensures deterministic replacement order.
+// Keys are sorted by the length of their values (descending) to ensure specific paths
+// are replaced before their parent paths (e.g., replace DOCKER_CONFIG_FOLDER before HOME).
 func ReplaceWithVars(s string, vars map[string]string) string {
-	// bash version iterates over keys in order passed, but map is unordered.
-	// bash version escapes patterns for sed/regex. Go strings.ReplaceAll handles literal string matching.
+	type kv struct {
+		Key string
+		Val string
+	}
 
-	for key, val := range vars {
-		if val == "" {
-			continue
+	var sorted []kv
+	for k, v := range vars {
+		if v != "" {
+			sorted = append(sorted, kv{Key: k, Val: v})
 		}
-		// Bash replace_with_vars constructs replacement as ${KEY?}
-		// Wait, usage in env_sanitize is:
-		// replace_with_vars "${UpdatedValue}" DOCKER_CONFIG_FOLDER "${DOCKER_CONFIG_FOLDER}" ...
-		// It REPLACES the *value* (path) WITH the variable reference *pattern* (${KEY?}).
-		// It is the INVERSE of expansion. It's used to sanitize absolute paths BACK to variables.
+	}
 
-		// In Bash: Pattern="${Value...}", Replacement="\${${Key}?}"
-		// String="${String//${Pattern}/${Replacement}}"
+	// Sort by value length descending. If lengths equal, sort by key ascending for stability.
+	sort.Slice(sorted, func(i, j int) bool {
+		if len(sorted[i].Val) != len(sorted[j].Val) {
+			return len(sorted[i].Val) > len(sorted[j].Val)
+		}
+		return sorted[i].Key < sorted[j].Key
+	})
 
-		// So if Value is "/home/user/.config", Key is "DOCKER_CONFIG_FOLDER"
-		// It replaces "/home/user/.config" with "${DOCKER_CONFIG_FOLDER?}"
-
-		replacement := "${" + key + "?}"
-		s = strings.ReplaceAll(s, val, replacement)
+	for _, item := range sorted {
+		replacement := "${" + item.Key + "?}"
+		s = strings.ReplaceAll(s, item.Val, replacement)
 	}
 	return s
 }
