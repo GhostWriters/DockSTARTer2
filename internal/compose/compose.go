@@ -450,11 +450,7 @@ func NeedsYMLMerge(ctx context.Context, force bool) bool {
 	}
 
 	// Check enabled apps .env files
-	enabledApps, err := appenv.ListEnabledApps(conf)
-	if err != nil {
-		logger.Error(ctx, "Failed to list enabled apps during merge check: %v", err)
-		return true // Fail safe: merge if unsure
-	}
+	enabledApps, _ := appenv.ListEnabledApps(conf)
 
 	for _, appName := range enabledApps {
 		appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf(".env.app.%s", strings.ToLower(appName)))
@@ -479,10 +475,7 @@ func UnsetNeedsYMLMerge(ctx context.Context) {
 	// 2. Clear old timestamps
 	timestampsDir := paths.GetTimestampsDir()
 	if !dirExists(timestampsDir) {
-		if err := os.MkdirAll(timestampsDir, 0755); err != nil {
-			logger.Warn(ctx, "Failed to create timestamps directory: %v", err)
-			return
-		}
+		_ = os.MkdirAll(timestampsDir, 0755)
 	} else {
 		// Remove all yml_merge_* files
 		entries, err := os.ReadDir(timestampsDir)
@@ -555,7 +548,6 @@ func updateTimestamp(ctx context.Context, conf config.AppConfig, path string) {
 	// Create empty timestamp file
 	f, err := os.Create(timestampFile)
 	if err != nil {
-		logger.Warn(ctx, "Failed to create timestamp file for %s: %v", filename, err)
 		return
 	}
 	f.Close()
@@ -566,9 +558,7 @@ func updateTimestamp(ctx context.Context, conf config.AppConfig, path string) {
 		return
 	}
 
-	if err := os.Chtimes(timestampFile, info.ModTime(), info.ModTime()); err != nil {
-		logger.Warn(ctx, "Failed to set timestamp for %s: %v", filename, err)
-	}
+	_ = os.Chtimes(timestampFile, info.ModTime(), info.ModTime())
 }
 
 func fileExists(path string) bool {

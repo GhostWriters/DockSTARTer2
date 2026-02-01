@@ -698,13 +698,10 @@ func handlePrune(ctx context.Context, state *CmdState) {
 func handleReset(ctx context.Context) {
 	logger.Notice(ctx, "Resetting {{_ApplicationName_}}%s{{|-|}} to process all actions.", version.ApplicationName)
 	timestampDir := paths.GetTimestampsDir()
-	if err := os.RemoveAll(timestampDir); err != nil {
-		logger.Error(ctx, "Failed to remove timestamps directory: %v", err)
-	}
+	_ = os.RemoveAll(timestampDir)
+
 	needsDir := filepath.Join(paths.GetStateDir(), "needs")
-	if err := os.RemoveAll(needsDir); err != nil {
-		logger.Error(ctx, "Failed to remove needs directory: %v", err)
-	}
+	_ = os.RemoveAll(needsDir)
 	// Also ensure permissions are set? Bash script calls set_permissions.
 	// We might need a set_permissions equivalent eventually.
 }
