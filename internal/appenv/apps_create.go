@@ -3,8 +3,10 @@ package appenv
 import (
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/paths"
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -12,27 +14,33 @@ import (
 // CreateAll generates environment variables for all added applications.
 //
 // This function mirrors appvars_create_all.sh and performs the following steps:
-//  1. Ensures the main .env file exists via EnvCreate
-//  2. Identifies all "added" applications (those with __ENABLED variables)
-//  3. For each added app, creates its environment variables via CreateApp
+//  1. Checks if an update is required via timestamp tracking
+//  2. Ensures the main .env file exists via EnvCreate
+//  3. Identifies all "added" applications (those with __ENABLED variables)
+//  4. For each added app, creates its environment variables via CreateApp
 //
 // The function will log progress and continue processing remaining apps even if
 // individual app creation fails.
 //
 // Returns an error only if critical initialization (EnvCreate or ListAdded) fails.
-func CreateAll(ctx context.Context, conf config.AppConfig) error {
+func CreateAll(ctx context.Context, force bool, conf config.AppConfig) error {
+	envFile := filepath.Join(conf.ComposeDir, ".env")
+
+	// Ensure main env exists first to check for added apps
 	if err := EnvCreate(ctx, conf); err != nil {
 		return err
 	}
 
-	envFile := filepath.Join(conf.ComposeDir, ".env")
-
-	// Ensure main env exists
-	// This is partly env_create logic but appvars_create_all calls it
 	// Check installed apps
 	added, err := ListAddedApps(ctx, envFile)
 	if err != nil {
 		return err
+	}
+
+	// Check if update is needed (Parity Fix)
+	if !NeedsCreateAll(ctx, force, added, conf) {
+		logger.Notice(ctx, "Environment variables already created for all added apps.")
+		return nil
 	}
 
 	if len(added) == 0 {
@@ -50,6 +58,9 @@ func CreateAll(ctx context.Context, conf config.AppConfig) error {
 
 	// Format and sort all environment files (Parity Fix)
 	_ = Update(ctx, envFile)
+
+	// Mark as complete by updating timestamps (Parity Fix)
+	UnsetNeedsCreateAll(ctx, added, conf)
 
 	return nil
 }
@@ -102,5 +113,85 @@ func CreateApp(ctx context.Context, appNameRaw string, conf config.AppConfig) er
 	} else {
 		logger.Warn(ctx, "Application '{{_App_}}%s{{|-|}}' does not exist.", niceName)
 		return nil
+	}
+}
+
+// --- Parity Timestamp Helpers ---
+
+// NeedsCreateAll checks if environment variables need to be created/updated.
+// Mirrors needs_appvars_create.sh
+func NeedsCreateAll(ctx context.Context, force bool, added []string, conf config.AppConfig) bool {
+	if force {
+		return true
+	}
+
+	envFile := filepath.Join(conf.ComposeDir, ".env")
+	if fileChanged(conf, envFile) {
+		return true
+	}
+
+	for _, appName := range added {
+		appEnvFile := filepath.Join(conf.ComposeDir, ".env.app."+strings.ToLower(appName))
+		if fileChanged(conf, appEnvFile) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// UnsetNeedsCreateAll marks environment variable creation as complete by updating timestamps.
+// Mirrors unset_needs_appvars_create.sh
+func UnsetNeedsCreateAll(ctx context.Context, added []string, conf config.AppConfig) {
+	envFile := filepath.Join(conf.ComposeDir, ".env")
+	updateTimestamp(conf, envFile)
+
+	for _, appName := range added {
+		appEnvFile := filepath.Join(conf.ComposeDir, ".env.app."+strings.ToLower(appName))
+		updateTimestamp(conf, appEnvFile)
+	}
+}
+
+func fileChanged(conf config.AppConfig, path string) bool {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return true // File missing -> needs creation
+	}
+
+	filename := filepath.Base(path)
+	timestampFile := filepath.Join(paths.GetTimestampsDir(), "appvars_create_"+filename)
+
+	info, err := os.Stat(path)
+	tsInfo, tsErr := os.Stat(timestampFile)
+
+	if os.IsNotExist(tsErr) {
+		return true
+	}
+
+	if err != nil {
+		return false
+	}
+
+	return !info.ModTime().Equal(tsInfo.ModTime())
+}
+
+func updateTimestamp(conf config.AppConfig, path string) {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return
+	}
+
+	filename := filepath.Base(path)
+	timestampFile := filepath.Join(paths.GetTimestampsDir(), "appvars_create_"+filename)
+
+	_ = os.MkdirAll(filepath.Dir(timestampFile), 0755)
+
+	f, err := os.Create(timestampFile)
+	if err != nil {
+		return
+	}
+	f.Close()
+
+	info, err := os.Stat(path)
+	if err == nil {
+		_ = os.Chtimes(timestampFile, info.ModTime(), info.ModTime())
 	}
 }

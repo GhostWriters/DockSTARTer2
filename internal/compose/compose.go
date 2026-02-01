@@ -28,7 +28,7 @@ func MergeYML(ctx context.Context, force bool) error {
 
 	// Create all app environment variables first
 	conf := config.LoadAppConfig()
-	if err := appenv.CreateAll(ctx, conf); err != nil {
+	if err := appenv.CreateAll(ctx, force, conf); err != nil {
 		return fmt.Errorf("failed to create environment variables: %w", err)
 	}
 

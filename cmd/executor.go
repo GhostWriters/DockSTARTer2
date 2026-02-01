@@ -94,13 +94,13 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 
 			case "-a", "--add":
 				// appvars_create (single)
-				handleAppVarsCreate(subCtx, &group)
+				handleAppVarsCreate(subCtx, &group, &state)
 				ranCommand = true
 			case "-c", "--compose":
 				handleCompose(subCtx, &group, &state)
 				ranCommand = true
 			case "-e", "--env":
-				handleAppVarsCreateAll(subCtx, &group)
+				handleAppVarsCreateAll(subCtx, &group, &state)
 				ranCommand = true
 			case "-l", "--list", "--list-added", "--list-builtin", "--list-deprecated", "--list-enabled", "--list-disabled", "--list-nondeprecated", "--list-referenced":
 				handleList(subCtx, &group)
@@ -385,17 +385,14 @@ func handleEnvSet(ctx context.Context, group *CommandGroup) {
 	}
 }
 
-func handleAppVarsCreateAll(ctx context.Context, group *CommandGroup) {
+func handleAppVarsCreateAll(ctx context.Context, group *CommandGroup, state *CmdState) {
 	conf := config.LoadAppConfig()
-	if err := appenv.CreateAll(ctx, conf); err != nil {
+	if err := appenv.CreateAll(ctx, state.Force, conf); err != nil {
 		logger.Error(ctx, "Failed to create app variables: %v", err)
-	}
-	if err := appenv.Update(ctx, filepath.Join(conf.ComposeDir, ".env")); err != nil {
-		logger.Warn(ctx, "Failed to update env usage: %v", err)
 	}
 }
 
-func handleAppVarsCreate(ctx context.Context, group *CommandGroup) {
+func handleAppVarsCreate(ctx context.Context, group *CommandGroup, state *CmdState) {
 	conf := config.LoadAppConfig()
 	if len(group.Args) == 0 {
 		logger.Error(ctx, "The '{{_UserCommand_}}%s{{|-|}}' command requires at least one application name.", group.Command)
