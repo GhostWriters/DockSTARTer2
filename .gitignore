@@ -37,6 +37,7 @@ __debug_bin
 /menu.ini
 /dockstarter.ini
 *.log
+*.txt
 /share/
 /shared/
 /site/
