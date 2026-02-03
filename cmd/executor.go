@@ -11,6 +11,7 @@ import (
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/tui"
+	_ "DockSTARTer2/internal/tui/screens" // Register screen creators
 	"DockSTARTer2/internal/update"
 	"DockSTARTer2/internal/version"
 	"context"
@@ -429,7 +430,7 @@ func handleTheme(ctx context.Context, group *CommandGroup) {
 			newTheme := group.Args[0]
 			// Validate theme existence
 			themesDir := paths.GetThemesDir()
-			themePath := filepath.Join(themesDir, newTheme)
+			themePath := filepath.Join(themesDir, newTheme+".ds2theme")
 			if _, err := os.Stat(themePath); os.IsNotExist(err) {
 				logger.Error(ctx, "Theme '{{_Theme_}}%s{{|-|}}' not found in '{{_Folder_}}%s{{|-|}}'.", newTheme, themesDir)
 				return
