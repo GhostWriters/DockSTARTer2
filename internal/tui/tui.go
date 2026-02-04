@@ -12,6 +12,8 @@ import (
 	"DockSTARTer2/internal/update"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 )
 
 var (
@@ -36,6 +38,9 @@ func Initialize(ctx context.Context) error {
 
 	// Initialize styles from theme
 	InitStyles(currentConfig)
+
+	// Configure lipgloss renderer for TrueColor support
+	lipgloss.SetColorProfile(termenv.TrueColor)
 
 	return nil
 }
@@ -173,8 +178,8 @@ func Error(title, message string) {
 // We use function variables to avoid circular imports
 
 var (
-	createMainScreen   func() ScreenModel
-	createConfigScreen func() ScreenModel
+	createMainScreen    func() ScreenModel
+	createConfigScreen  func() ScreenModel
 	createOptionsScreen func() ScreenModel
 )
 

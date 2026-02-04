@@ -104,7 +104,8 @@ func InitStyles(cfg config.AppConfig) {
 	currentStyles.DialogTitle = lipgloss.NewStyle().
 		Background(tcellToLipgloss(t.TitleBG)).
 		Foreground(tcellToLipgloss(t.TitleFG)).
-		Bold(true)
+		Bold(t.TitleBold).
+		Underline(t.TitleUnderline)
 
 	// Border colors
 	currentStyles.BorderColor = tcellToLipgloss(t.BorderFG)

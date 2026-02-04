@@ -79,6 +79,8 @@ type ThemeConfig struct {
 	Border2BG        tcell.Color
 	TitleFG          tcell.Color
 	TitleBG          tcell.Color
+	TitleBold        bool
+	TitleUnderline   bool
 	ShadowColor      tcell.Color
 	ButtonActiveFG   tcell.Color
 	ButtonActiveBG   tcell.Color
@@ -279,6 +281,27 @@ func parseTagToColor(tag string) (fg, bg tcell.Color) {
 	return
 }
 
+// parseTagWithStyles parses a theme tag and extracts colors and style flags
+func parseTagWithStyles(tag string) (fg, bg tcell.Color, bold, underline bool) {
+	tag = strings.Trim(tag, "[]")
+	parts := strings.Split(tag, ":")
+	if len(parts) > 0 {
+		fg = parseColor(parts[0])
+	}
+	if len(parts) > 1 {
+		bg = parseColor(parts[1])
+	} else {
+		bg = tcell.ColorDefault
+	}
+	// Parse style flags (third part and beyond)
+	if len(parts) > 2 {
+		flags := parts[2]
+		bold = strings.Contains(flags, "b")
+		underline = strings.Contains(flags, "u")
+	}
+	return
+}
+
 func parseThemeINI(path string) error {
 	file, err := os.Open(path)
 	if err != nil {
@@ -290,6 +313,9 @@ func parseThemeINI(path string) error {
 	replacer := strings.NewReplacer(
 		"${1}", version.ApplicationName,
 	)
+
+	// Track whether Title was explicitly set (for BoxTitle fallback)
+	titleWasSet := false
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -326,8 +352,18 @@ func parseThemeINI(path string) error {
 			Current.BorderFG, Current.BorderBG = fg, bg
 		case "Border2":
 			Current.Border2FG, Current.Border2BG = fg, bg
-		case "BoxTitle": // Specific key for Border Title
+		case "Title": // Menu title with style flags (underline, bold, etc.)
+			var bold, underline bool
+			fg, bg, bold, underline = parseTagWithStyles(tviewValue)
 			Current.TitleFG, Current.TitleBG = fg, bg
+			Current.TitleBold, Current.TitleUnderline = bold, underline
+			titleWasSet = true
+		case "BoxTitle": // Fallback from .dialogrc (no styles)
+			// Only set if Title wasn't explicitly provided in theme
+			if !titleWasSet {
+				Current.TitleFG, Current.TitleBG = fg, bg
+				// BoxTitle doesn't have style flags, leave Bold/Underline as false
+			}
 		case "Shadow":
 			// Shadow is usually just BG
 			// But tag might be [black:black:b]

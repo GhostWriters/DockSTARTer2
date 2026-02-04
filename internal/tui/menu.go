@@ -288,38 +288,22 @@ func (m MenuModel) View() string {
 		}
 	}
 
-	// Create list content with padding
+	// Create list content with padding and border
 	listContent := b.String()
-	paddedList := styles.Dialog.
-		Width(contentWidth).
-		Padding(0, 1).
-		Render(listContent)
+	listStyle := styles.Dialog.
+		Padding(0, 1)
+	listStyle = Apply3DBorder(listStyle)
+	paddedList := listStyle.Render(listContent)
 
-	// Create separator line (full width including padding)
-	border := styles.Border
-	borderStyleLight := lipgloss.NewStyle().
-		Foreground(styles.BorderColor).
-		Background(styles.Dialog.GetBackground())
-	borderStyleDark := lipgloss.NewStyle().
-		Foreground(styles.Border2Color).
-		Background(styles.Dialog.GetBackground())
+	// Create buttons in a full bordered box matching menu width
+	listWidth := lipgloss.Width(paddedList)
+	// Subtract padding (2) since buttonBox adds its own
+	innerWidth := listWidth - 2
+	buttons := m.renderButtons(innerWidth)
+	buttonBox := m.renderButtonBox(buttons, innerWidth)
 
-	separator := borderStyleLight.Render(border.Left) +
-		borderStyleLight.Render(strings.Repeat(border.Top, contentWidth)) +
-		borderStyleDark.Render(border.Right)
-
-	// Create buttons with padding
-	buttons := m.renderButtons(contentWidth)
-	paddedButtons := styles.Dialog.
-		Width(contentWidth).
-		Padding(0, 1).
-		Render(buttons)
-
-	// Combine all parts
-	dialogContent := paddedList + "\n" + separator + "\n" + paddedButtons
-
-	// Wrap in dialog frame
-	return m.renderDialog(dialogContent, contentWidth)
+	// Wrap in dialog frame (button box has its own border)
+	return m.renderDialog(paddedList, buttonBox, listWidth)
 }
 
 func (m MenuModel) renderButtons(contentWidth int) string {
@@ -363,88 +347,60 @@ func (m MenuModel) renderButtons(contentWidth int) string {
 	return buttons
 }
 
-func (m MenuModel) renderDialog(content string, contentWidth int) string {
+func (m MenuModel) renderButtonBox(buttons string, contentWidth int) string {
 	styles := GetStyles()
 
-	// Subtitle (left-aligned like bash version) with same width as content
-	var subtitle string
+	// Center buttons in content width
+	centeredButtons := lipgloss.NewStyle().
+		Width(contentWidth).
+		Align(lipgloss.Center).
+		Background(styles.Dialog.GetBackground()).
+		Render(buttons)
+
+	// Add padding and full border
+	boxStyle := lipgloss.NewStyle().
+		Background(styles.Dialog.GetBackground()).
+		Padding(0, 1)
+	boxStyle = Apply3DBorder(boxStyle)
+
+	return boxStyle.Render(centeredButtons)
+}
+
+func (m MenuModel) renderDialog(menuContent, buttonBox string, listWidth int) string {
+	styles := GetStyles()
+
+	// Build inner content parts (menu section only)
+	var innerParts []string
+
+	// Subtitle (left-aligned, matching content width)
 	if m.subtitle != "" {
-		subtitleStyle := styles.Dialog.
-			Width(contentWidth).
+		// TODO: Investigate why foreground color isn't rendering in terminal
+		subtitle := styles.Dialog.Copy().
+			Width(listWidth).
 			Padding(0, 1).
-			Align(lipgloss.Left)
-		subtitle = subtitleStyle.Render(m.subtitle)
+			Render(m.subtitle)
+		innerParts = append(innerParts, subtitle)
 	}
 
-	// Combine subtitle and content
-	var parts []string
-	if m.subtitle != "" {
-		parts = append(parts, subtitle)
-	}
-	parts = append(parts, content)
+	// Menu content (already padded)
+	innerParts = append(innerParts, menuContent)
 
-	inner := lipgloss.JoinVertical(lipgloss.Center, parts...)
+	// Join menu parts
+	menuSection := lipgloss.JoinVertical(lipgloss.Left, innerParts...)
 
-	// Wrap in dialog border with title in border (3D effect for rounded borders)
+	// Render with borders and append button box
 	var dialogBox string
 
 	if m.title != "" {
-		// Manually render with title in border
-		titleInBorder := " " + m.title + " "
-		border := styles.Border
-
-		// Content is already padded, just apply background
-		contentRendered := lipgloss.NewStyle().
-			Background(styles.Dialog.GetBackground()).
-			Render(inner)
-
-		// Get content width
-		cWidth := lipgloss.Width(contentRendered)
-
-		// Build top border with title
-		titleLen := lipgloss.Width(titleInBorder)
-		leftBorder := (cWidth - titleLen) / 2
-		rightBorder := cWidth - titleLen - leftBorder
-
-		titleStyle := lipgloss.NewStyle().
-			Foreground(styles.DialogTitle.GetForeground()).
-			Background(styles.Dialog.GetBackground())
-
-		borderStyleLight := lipgloss.NewStyle().
-			Foreground(styles.BorderColor).
-			Background(styles.Dialog.GetBackground())
-
-		topBorder := borderStyleLight.Render(border.TopLeft+strings.Repeat(border.Top, leftBorder)) +
-			titleStyle.Render(titleInBorder) +
-			borderStyleLight.Render(strings.Repeat(border.Top, rightBorder)+border.TopRight)
-
-		// Build middle lines with left and right borders
-		lines := strings.Split(contentRendered, "\n")
-		var result strings.Builder
-		result.WriteString(topBorder + "\n")
-
-		borderStyleDark := lipgloss.NewStyle().
-			Foreground(styles.Border2Color).
-			Background(styles.Dialog.GetBackground())
-
-		for _, line := range lines {
-			leftB := borderStyleLight.Render(border.Left)
-			rightB := borderStyleDark.Render(border.Right)
-			result.WriteString(leftB + line + rightB + "\n")
-		}
-
-		// Bottom border (dark)
-		bottomBorder := borderStyleDark.Render(border.BottomLeft + strings.Repeat(border.Bottom, cWidth) + border.BottomRight)
-		result.WriteString(bottomBorder)
-
-		dialogBox = result.String()
+		dialogBox = m.renderBorderWithTitle(menuSection, buttonBox, listWidth)
 	} else {
-		// No title, use standard border
-		dialogBoxStyle := lipgloss.NewStyle().
+		// No title, use standard border around menu, then append button box
+		menuBoxStyle := lipgloss.NewStyle().
 			Background(styles.Dialog.GetBackground()).
 			Padding(0, 1)
-		dialogBoxStyle = Apply3DBorder(dialogBoxStyle)
-		dialogBox = dialogBoxStyle.Render(inner)
+		menuBoxStyle = Apply3DBorder(menuBoxStyle)
+		menuRendered := menuBoxStyle.Render(menuSection)
+		dialogBox = menuRendered + "\n" + buttonBox
 	}
 
 	// Add shadow effect
@@ -461,6 +417,58 @@ func (m MenuModel) renderDialog(content string, contentWidth int) string {
 	)
 
 	return centered
+}
+
+func (m MenuModel) renderBorderWithTitle(menuContent, buttonBox string, contentWidth int) string {
+	styles := GetStyles()
+	border := styles.Border
+
+	// Style definitions
+	borderBG := styles.Dialog.GetBackground()
+	borderStyleLight := lipgloss.NewStyle().
+		Foreground(styles.BorderColor).
+		Background(borderBG)
+	borderStyleDark := lipgloss.NewStyle().
+		Foreground(styles.Border2Color).
+		Background(borderBG)
+	titleStyle := styles.DialogTitle.Copy().
+		Background(borderBG)
+
+	// Get actual content width (should be contentWidth + 2 for padding)
+	lines := strings.Split(menuContent, "\n")
+	actualWidth := 0
+	if len(lines) > 0 {
+		actualWidth = lipgloss.Width(lines[0])
+	}
+
+	// Build top border with title
+	titleText := " " + m.title + " "
+	titleLen := lipgloss.Width(titleText)
+	leftPad := (actualWidth - titleLen) / 2
+	rightPad := actualWidth - titleLen - leftPad
+
+	var result strings.Builder
+
+	// Top border
+	result.WriteString(borderStyleLight.Render(border.TopLeft))
+	result.WriteString(borderStyleLight.Render(strings.Repeat(border.Top, leftPad)))
+	result.WriteString(titleStyle.Render(titleText))
+	result.WriteString(borderStyleLight.Render(strings.Repeat(border.Top, rightPad)))
+	result.WriteString(borderStyleLight.Render(border.TopRight))
+	result.WriteString("\n")
+
+	// Menu content lines with left/right borders only (no bottom border)
+	for _, line := range lines {
+		result.WriteString(borderStyleLight.Render(border.Left))
+		result.WriteString(line)
+		result.WriteString(borderStyleDark.Render(border.Right))
+		result.WriteString("\n")
+	}
+
+	// Append button box (which has its own full border - top is separator, bottom is overall bottom)
+	result.WriteString(buttonBox)
+
+	return result.String()
 }
 
 // SetSize updates the menu dimensions
