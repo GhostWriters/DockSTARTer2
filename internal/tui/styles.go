@@ -103,7 +103,7 @@ func InitStyles(cfg config.AppConfig) {
 	currentStyles.Shadow = lipgloss.NewStyle().
 		Background(tcellToLipgloss(t.ShadowColor))
 
-	// Buttons
+	// Buttons (spacing handled at layout level)
 	currentStyles.ButtonActive = lipgloss.NewStyle().
 		Background(tcellToLipgloss(t.ButtonActiveBG)).
 		Foreground(tcellToLipgloss(t.ButtonActiveFG))

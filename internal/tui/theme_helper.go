@@ -39,10 +39,20 @@ var themeTagRegex = regexp.MustCompile(`\{\{(_[^}]+_|\|[^}]*\|)\}\}`)
 var cviewColorRegex = regexp.MustCompile(`\[([^\]]+)\]`)
 
 // RenderThemeText takes text with {{...}} theme tags and returns lipgloss-styled text
-func RenderThemeText(text string) string {
+// defaultStyle is used for reset state and unstyled text
+func RenderThemeText(text string, defaultStyle ...lipgloss.Style) string {
 	var result strings.Builder
 	var currentStyle lipgloss.Style
-	isReset := true // Start in reset state (no styling)
+	var resetStyle lipgloss.Style
+
+	// Use provided default style or blank style
+	if len(defaultStyle) > 0 {
+		resetStyle = defaultStyle[0]
+	} else {
+		resetStyle = lipgloss.NewStyle()
+	}
+
+	currentStyle = resetStyle
 	lastEnd := 0
 
 	matches := themeTagRegex.FindAllStringSubmatchIndex(text, -1)
@@ -50,26 +60,19 @@ func RenderThemeText(text string) string {
 		// Add text before this match with current style
 		if match[0] > lastEnd {
 			textBefore := text[lastEnd:match[0]]
-			if isReset {
-				// In reset state, append text without styling so it inherits context
-				result.WriteString(textBefore)
-			} else {
-				result.WriteString(currentStyle.Render(textBefore))
-			}
+			result.WriteString(currentStyle.Render(textBefore))
 		}
 
 		// Parse the tag content
 		tagContent := text[match[2]:match[3]]
 
 		if tagContent == "|-|" || tagContent == "-" {
-			// Reset style - don't apply colors, let text inherit from context
-			isReset = true
-			currentStyle = lipgloss.NewStyle()
+			// Reset style to default
+			currentStyle = resetStyle
 		} else if strings.HasPrefix(tagContent, "|") && strings.HasSuffix(tagContent, "|") {
 			// Direct color code: {{|white:blue:b|}}
 			colorCode := strings.Trim(tagContent, "|")
 			currentStyle = parseColorCode(colorCode)
-			isReset = false
 		} else if strings.HasPrefix(tagContent, "_") && strings.HasSuffix(tagContent, "_") {
 			// Semantic tag: {{_ThemeHostname_}}
 			// Translate to get the cview format, then extract color code
@@ -77,7 +80,6 @@ func RenderThemeText(text string) string {
 			// Extract color code from [code] format
 			if cviewMatch := cviewColorRegex.FindStringSubmatch(translated); len(cviewMatch) > 1 {
 				currentStyle = parseColorCode(cviewMatch[1])
-				isReset = false
 			}
 		}
 
@@ -86,11 +88,7 @@ func RenderThemeText(text string) string {
 
 	// Add remaining text
 	if lastEnd < len(text) {
-		if isReset {
-			result.WriteString(text[lastEnd:])
-		} else {
-			result.WriteString(currentStyle.Render(text[lastEnd:]))
-		}
+		result.WriteString(currentStyle.Render(text[lastEnd:]))
 	}
 
 	return result.String()

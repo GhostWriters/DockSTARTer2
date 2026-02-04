@@ -2,7 +2,6 @@ package tui
 
 import (
 	"os"
-	"strings"
 
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/update"
@@ -71,57 +70,42 @@ func (m HeaderModel) View() string {
 	styles := GetStyles()
 
 	// Left section: hostname + flags
+	// Render content for each section
 	left := m.renderLeft()
-
-	// Center section: application name
 	center := m.renderCenter()
-
-	// Right section: version info with update indicators
 	right := m.renderRight()
 
-	// Calculate visual widths (lipgloss.Width strips ANSI codes)
-	leftWidth := lipgloss.Width(left)
+	// Calculate center width (strip ANSI codes for accurate width)
 	centerWidth := lipgloss.Width(center)
-	rightWidth := lipgloss.Width(right)
 
-	// Total content width
-	totalContentWidth := leftWidth + centerWidth + rightWidth
-	if totalContentWidth >= m.width {
-		// Not enough space, just concatenate
-		headerLine := left + center + right
-		return styles.HeaderBG.Width(m.width).Render(headerLine)
-	}
+	// Divide width into three sections
+	// Center gets the exact space it needs, sides split the rest
+	remainingWidth := m.width - centerWidth
+	leftSectionWidth := remainingWidth / 2
+	rightSectionWidth := remainingWidth - leftSectionWidth
 
-	// Center the app name in the middle of the screen
-	// Calculate where the center text should start to be truly centered
-	centerPos := (m.width - centerWidth) / 2
+	// Wrap each section with alignment and header background
+	leftSection := styles.HeaderBG.
+		Width(leftSectionWidth).
+		Align(lipgloss.Left).
+		Render(left)
 
-	// Left padding: space between left content and center
-	leftPad := centerPos - leftWidth
-	if leftPad < 1 {
-		leftPad = 1
-	}
+	centerSection := styles.HeaderBG.
+		Width(centerWidth).
+		Render(center)
 
-	// Right padding: space between center and right content
-	// Position where right content should start
-	rightPos := m.width - rightWidth
-	rightPad := rightPos - centerPos - centerWidth
-	if rightPad < 1 {
-		rightPad = 1
-	}
+	rightSection := styles.HeaderBG.
+		Width(rightSectionWidth).
+		Align(lipgloss.Right).
+		Render(right)
 
-	// Build the header with explicit spacing
-	headerLine := left +
-		strings.Repeat(" ", leftPad) +
-		center +
-		strings.Repeat(" ", rightPad) +
-		right
-
-	// Apply header background to the entire line
-	return styles.HeaderBG.Width(m.width).Render(headerLine)
+	// Join the three sections
+	return lipgloss.JoinHorizontal(lipgloss.Top, leftSection, centerSection, rightSection)
 }
 
 func (m HeaderModel) renderLeft() string {
+	styles := GetStyles()
+
 	// Build hostname with theme tag
 	leftText := "{{_ThemeHostname_}}" + m.hostname + "{{|-|}}"
 
@@ -137,16 +121,18 @@ func (m HeaderModel) renderLeft() string {
 		leftText += "{{_ThemeApplicationFlagsBrackets_}}|{{|-|}}"
 	}
 
-	// Translate theme tags and render with lipgloss
-	return RenderThemeText(leftText)
+	// Translate theme tags and render with lipgloss, using header background as default
+	return RenderThemeText(leftText, styles.HeaderBG)
 }
 
 func (m HeaderModel) renderCenter() string {
+	styles := GetStyles()
 	centerText := "{{_ThemeApplicationName_}}" + version.ApplicationName + "{{|-|}}"
-	return RenderThemeText(centerText)
+	return RenderThemeText(centerText, styles.HeaderBG)
 }
 
 func (m HeaderModel) renderRight() string {
+	styles := GetStyles()
 	appVer := version.Version
 	tmplVer := paths.GetTemplatesVersion()
 
@@ -165,5 +151,5 @@ func (m HeaderModel) renderRight() string {
 	}
 	rightText += "{{_ThemeApplicationVersion_}}T:[" + tmplVer + "]{{|-|}}"
 
-	return RenderThemeText(rightText)
+	return RenderThemeText(rightText, styles.HeaderBG)
 }

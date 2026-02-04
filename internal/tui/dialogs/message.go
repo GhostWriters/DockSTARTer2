@@ -169,10 +169,17 @@ func (d *ConfirmDialog) View() string {
 	}
 	contentWidth += 4 // Padding
 
-	// Build buttons
+	// Build buttons with dialog background spacing
+	styles := tui.GetStyles()
 	yesBtn := tui.RenderButton("Yes", d.focusYes)
 	noBtn := tui.RenderButton("No", !d.focusYes)
-	buttons := lipgloss.JoinHorizontal(lipgloss.Center, yesBtn, "  ", noBtn)
+
+	// Calculate button widths and create sections with dialog background
+	yesWidth := lipgloss.Width(yesBtn)
+	noWidth := lipgloss.Width(noBtn)
+	yesSection := styles.Dialog.Width(yesWidth + 4).Align(lipgloss.Center).Render(yesBtn)
+	noSection := styles.Dialog.Width(noWidth + 4).Align(lipgloss.Center).Render(noBtn)
+	buttons := lipgloss.JoinHorizontal(lipgloss.Center, yesSection, noSection)
 
 	// Build content
 	content := d.question + "\n\n" + buttons

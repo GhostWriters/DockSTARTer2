@@ -298,8 +298,8 @@ func (m MenuModel) View() string {
 		Padding(0, 1).
 		Render(listContent)
 
-	// Create buttons
-	buttons := m.renderButtons()
+	// Create buttons - width must match listBox (contentWidth + border(2) + padding(2) = contentWidth + 4)
+	buttons := m.renderButtons(contentWidth + 4)
 
 	// Combine into dialog
 	dialogContent := lipgloss.JoinVertical(lipgloss.Center, listBox, buttons)
@@ -308,7 +308,7 @@ func (m MenuModel) View() string {
 	return m.renderDialog(dialogContent, contentWidth)
 }
 
-func (m MenuModel) renderButtons() string {
+func (m MenuModel) renderButtons(totalWidth int) string {
 	styles := GetStyles()
 
 	// Select button
@@ -335,11 +335,19 @@ func (m MenuModel) renderButtons() string {
 	}
 	exitBtn := exitStyle.Render("<Exit>")
 
-	// Join buttons with spacing
+	// Create styled spacing with dialog background
+	spacing := styles.Dialog.Render("  ")
+
+	// Create button row that fills the total width with dialog background
+	var buttons string
 	if m.backAction != nil {
-		return lipgloss.JoinHorizontal(lipgloss.Center, selectBtn, "  ", backBtn, "  ", exitBtn)
+		buttons = lipgloss.JoinHorizontal(lipgloss.Center, selectBtn, spacing, backBtn, spacing, exitBtn)
+	} else {
+		buttons = lipgloss.JoinHorizontal(lipgloss.Center, selectBtn, spacing, exitBtn)
 	}
-	return lipgloss.JoinHorizontal(lipgloss.Center, selectBtn, "  ", exitBtn)
+
+	// Render with dialog background filling the full width
+	return styles.Dialog.Width(totalWidth).Align(lipgloss.Center).Render(buttons)
 }
 
 func (m MenuModel) renderDialog(content string, contentWidth int) string {
