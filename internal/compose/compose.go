@@ -146,6 +146,8 @@ func MergeYML(ctx context.Context, force bool) error {
 					}
 					if storageFile != "" && fileExists(storageFile) {
 						composeFiles = append(composeFiles, storageFile)
+					} else if storageFile != "" {
+						logger.Info(ctx, "File '{{_File_}}%s{{|-|}}' does not exist.", storageFile)
 					}
 				}
 			}
@@ -160,6 +162,8 @@ func MergeYML(ctx context.Context, force bool) error {
 			}
 			if devicesFile != "" && fileExists(devicesFile) {
 				composeFiles = append(composeFiles, devicesFile)
+			} else if devicesFile != "" {
+				logger.Info(ctx, "File '{{_File_}}%s{{|-|}}' does not exist.", devicesFile)
 			}
 		}
 
