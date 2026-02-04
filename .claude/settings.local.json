@@ -12,7 +12,9 @@
       "Bash(git push)",
       "Bash(git restore:*)",
       "Bash(git commit:*)",
-      "Bash(go doc:*)"
+      "Bash(go doc:*)",
+      "Bash(git checkout:*)",
+      "Bash(git push:*)"
     ]
   }
 }

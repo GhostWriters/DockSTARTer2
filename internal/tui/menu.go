@@ -3,8 +3,8 @@ package tui
 import (
 	"fmt"
 	"strings"
-	"unicode"
 
+	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
@@ -18,6 +18,11 @@ type MenuItem struct {
 	Shortcut rune    // Keyboard shortcut (usually first letter of Tag)
 	Action   tea.Cmd // Command to execute when selected
 }
+
+// Implement list.Item interface for bubbles/list
+func (i MenuItem) FilterValue() string { return i.Tag }
+func (i MenuItem) Title() string       { return i.Tag }
+func (i MenuItem) Description() string { return i.Desc }
 
 // MenuModel represents a selectable menu
 type MenuModel struct {
@@ -36,8 +41,11 @@ type MenuModel struct {
 	// Back action (nil if no back button)
 	backAction tea.Cmd
 
-	// Zone manager for mouse support
+	// Zone manager for mouse support (TODO: remove when bubbles/list handles mouse)
 	zoneManager *zone.Manager
+
+	// Bubbles list model
+	list list.Model
 }
 
 // FocusItem represents which UI element has focus
@@ -68,6 +76,24 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 		cursor = idx
 	}
 
+	// Convert MenuItems to list.Items
+	listItems := make([]list.Item, len(items))
+	for i, item := range items {
+		listItems[i] = item
+	}
+
+	// Create bubbles list with default styling (Phase 1 - keep it simple!)
+	l := list.New(listItems, list.NewDefaultDelegate(), 0, 0)
+	l.Title = title
+	l.SetShowStatusBar(false)
+	l.SetFilteringEnabled(false)
+	l.SetShowHelp(false)
+
+	// Set initial cursor position
+	if cursor > 0 && cursor < len(items) {
+		l.Select(cursor)
+	}
+
 	return MenuModel{
 		id:          id,
 		title:       title,
@@ -78,6 +104,7 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 		focused:     true,
 		focusedItem: FocusList,
 		zoneManager: zone.New(),
+		list:        l,
 	}
 }
 
@@ -86,8 +113,37 @@ func (m MenuModel) Init() tea.Cmd {
 	return nil
 }
 
-// Update implements tea.Model
+// Update implements tea.Model (Phase 1: delegate to bubbles/list)
 func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "enter":
+			// Execute action for selected item
+			selectedItem := m.list.SelectedItem()
+			if item, ok := selectedItem.(MenuItem); ok {
+				if item.Action != nil {
+					return m, item.Action
+				}
+			}
+			return m, nil
+
+		case "esc":
+			if m.backAction != nil {
+				return m, m.backAction
+			}
+			return m, tea.Quit
+		}
+	}
+
+	// Delegate all other messages to the list
+	var cmd tea.Cmd
+	m.list, cmd = m.list.Update(msg)
+	return m, cmd
+}
+
+/* OLD UPDATE METHOD - Kept for reference
+func (m MenuModel) updateOld(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.MouseMsg:
 		// TODO: Mouse support disabled due to position offset issues
@@ -95,7 +151,7 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// For now, use keyboard navigation
 		return m, nil
 
-		/* DISABLED - Position offset issues
+		// DISABLED - Position offset issues
 		// Handle mouse clicks using zones (automatic position tracking)
 		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
 			// Check if Select button was clicked
@@ -128,7 +184,6 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
-		*/
 
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -186,6 +241,7 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	return m, nil
 }
+*/
 
 func (m MenuModel) nextFocus() FocusItem {
 	switch m.focusedItem {
@@ -240,7 +296,18 @@ func (m MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 }
 
 // View renders the menu
+// View renders the menu using bubbles/list (Phase 1 - simple version)
 func (m MenuModel) View() string {
+	// Phase 1: Use default bubbles/list rendering
+	// Set list size to fill available space
+	m.list.SetSize(m.width, m.height)
+
+	// Return simple list view (no custom styling yet)
+	return m.list.View()
+}
+
+/* OLD CUSTOM RENDERING - Kept for reference (Phase 2 will add back custom styling)
+func (m MenuModel) viewOld() string {
 	styles := GetStyles()
 
 	// Calculate dimensions
@@ -378,6 +445,7 @@ func (m MenuModel) View() string {
 	// Scan zones for mouse support (zone manager tracks positions)
 	return m.zoneManager.Scan(view)
 }
+*/
 
 // addZonesToRenderedDialog adds zone markers to specific lines in the fully rendered dialog
 func (m MenuModel) addZonesToRenderedDialog(dialog string) string {
