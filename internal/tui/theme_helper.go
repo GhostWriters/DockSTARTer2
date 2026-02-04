@@ -42,6 +42,7 @@ var cviewColorRegex = regexp.MustCompile(`\[([^\]]+)\]`)
 func RenderThemeText(text string) string {
 	var result strings.Builder
 	var currentStyle lipgloss.Style
+	isReset := true // Start in reset state (no styling)
 	lastEnd := 0
 
 	matches := themeTagRegex.FindAllStringSubmatchIndex(text, -1)
@@ -49,19 +50,26 @@ func RenderThemeText(text string) string {
 		// Add text before this match with current style
 		if match[0] > lastEnd {
 			textBefore := text[lastEnd:match[0]]
-			result.WriteString(currentStyle.Render(textBefore))
+			if isReset {
+				// In reset state, append text without styling so it inherits context
+				result.WriteString(textBefore)
+			} else {
+				result.WriteString(currentStyle.Render(textBefore))
+			}
 		}
 
 		// Parse the tag content
 		tagContent := text[match[2]:match[3]]
 
 		if tagContent == "|-|" || tagContent == "-" {
-			// Reset style
+			// Reset style - don't apply colors, let text inherit from context
+			isReset = true
 			currentStyle = lipgloss.NewStyle()
 		} else if strings.HasPrefix(tagContent, "|") && strings.HasSuffix(tagContent, "|") {
 			// Direct color code: {{|white:blue:b|}}
 			colorCode := strings.Trim(tagContent, "|")
 			currentStyle = parseColorCode(colorCode)
+			isReset = false
 		} else if strings.HasPrefix(tagContent, "_") && strings.HasSuffix(tagContent, "_") {
 			// Semantic tag: {{_ThemeHostname_}}
 			// Translate to get the cview format, then extract color code
@@ -69,6 +77,7 @@ func RenderThemeText(text string) string {
 			// Extract color code from [code] format
 			if cviewMatch := cviewColorRegex.FindStringSubmatch(translated); len(cviewMatch) > 1 {
 				currentStyle = parseColorCode(cviewMatch[1])
+				isReset = false
 			}
 		}
 
@@ -77,7 +86,11 @@ func RenderThemeText(text string) string {
 
 	// Add remaining text
 	if lastEnd < len(text) {
-		result.WriteString(currentStyle.Render(text[lastEnd:]))
+		if isReset {
+			result.WriteString(text[lastEnd:])
+		} else {
+			result.WriteString(currentStyle.Render(text[lastEnd:]))
+		}
 	}
 
 	return result.String()
