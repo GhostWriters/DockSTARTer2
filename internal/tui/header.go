@@ -139,17 +139,19 @@ func (m HeaderModel) renderRight() string {
 	var rightText string
 	if update.AppUpdateAvailable {
 		rightText += "{{_ThemeApplicationUpdate_}}*{{|-|}}"
+		rightText += "{{_ThemeApplicationVersion_}}A:[{{|-|}}{{_ThemeApplicationUpdate_}}" + appVer + "{{|-|}}{{_ThemeApplicationVersion_}}]{{|-|}}"
 	} else {
 		rightText += " "
+		rightText += "{{_ThemeApplicationVersion_}}A:[" + appVer + "]{{|-|}}"
 	}
-	rightText += "{{_ThemeApplicationVersion_}}A:[" + appVer + "]{{|-|}}"
 
 	if update.TmplUpdateAvailable {
 		rightText += "{{_ThemeApplicationUpdate_}}*{{|-|}}"
+		rightText += "{{_ThemeApplicationVersion_}}T:[{{|-|}}{{_ThemeApplicationUpdate_}}" + tmplVer + "{{|-|}}{{_ThemeApplicationVersion_}}]{{|-|}}"
 	} else {
 		rightText += " "
+		rightText += "{{_ThemeApplicationVersion_}}T:[" + tmplVer + "]{{|-|}}"
 	}
-	rightText += "{{_ThemeApplicationVersion_}}T:[" + tmplVer + "]{{|-|}}"
 
 	return RenderThemeText(rightText, styles.HeaderBG)
 }
