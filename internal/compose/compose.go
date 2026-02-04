@@ -128,7 +128,7 @@ func MergeYML(ctx context.Context, force bool) error {
 		// Storage files
 		multipleStorage, _ := appenv.Get("DOCKER_MULTIPLE_STORAGE", envFile)
 		storageNumbers := []string{""}
-		if multipleStorage == "true" {
+		if appenv.IsTrue(multipleStorage) {
 			storageNumbers = append(storageNumbers, "2", "3", "4")
 		}
 
@@ -137,7 +137,7 @@ func MergeYML(ctx context.Context, force bool) error {
 			if storageOn == "" {
 				storageOn, _ = appenv.Get(fmt.Sprintf("DOCKER_STORAGE%s_ON", num), envFile)
 			}
-			if storageOn == "true" {
+			if appenv.IsTrue(storageOn) {
 				storageVolume, _ := appenv.Get(fmt.Sprintf("DOCKER_VOLUME_STORAGE%s", num), envFile)
 				if storageVolume != "" {
 					storageFile, err := appenv.AppInstanceFile(ctx, appName, fmt.Sprintf("*.storage%s.yml", num))
@@ -155,7 +155,7 @@ func MergeYML(ctx context.Context, force bool) error {
 
 		// Devices file
 		appDevices, _ := appenv.Get(fmt.Sprintf("%s__DEVICES", appName), envFile)
-		if appDevices == "true" {
+		if appenv.IsTrue(appDevices) {
 			devicesFile, err := appenv.AppInstanceFile(ctx, appName, "*.devices.yml")
 			if err != nil {
 				return err
