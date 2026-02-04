@@ -83,11 +83,14 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 	}
 
 	// Create bubbles list with default styling (Phase 1 - keep it simple!)
-	l := list.New(listItems, list.NewDefaultDelegate(), 0, 0)
+	// Use reasonable default size (will be updated on WindowSizeMsg)
+	delegate := list.NewDefaultDelegate()
+	l := list.New(listItems, delegate, 80, 24)
 	l.Title = title
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(false)
 	l.SetShowHelp(false)
+	// Note: Mouse support should be built-in, but may not work in all terminals
 
 	// Set initial cursor position
 	if cursor > 0 && cursor < len(items) {
@@ -115,9 +118,20 @@ func (m MenuModel) Init() tea.Cmd {
 
 // Update implements tea.Model (Phase 1: delegate to bubbles/list)
 func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
+	// Handle window size first
+	if wsMsg, ok := msg.(tea.WindowSizeMsg); ok {
+		m.width = wsMsg.Width
+		m.height = wsMsg.Height
+		m.list.SetSize(wsMsg.Width, wsMsg.Height)
+	}
+
+	// IMPORTANT: Always delegate to list FIRST (enables mouse support)
+	var cmd tea.Cmd
+	m.list, cmd = m.list.Update(msg)
+
+	// Then handle our special keys
+	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+		switch keyMsg.String() {
 		case "enter":
 			// Execute action for selected item
 			selectedItem := m.list.SelectedItem()
@@ -136,9 +150,6 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Delegate all other messages to the list
-	var cmd tea.Cmd
-	m.list, cmd = m.list.Update(msg)
 	return m, cmd
 }
 
@@ -299,10 +310,7 @@ func (m MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 // View renders the menu using bubbles/list (Phase 1 - simple version)
 func (m MenuModel) View() string {
 	// Phase 1: Use default bubbles/list rendering
-	// Set list size to fill available space
-	m.list.SetSize(m.width, m.height)
-
-	// Return simple list view (no custom styling yet)
+	// (Size is set in Update() on WindowSizeMsg)
 	return m.list.View()
 }
 
