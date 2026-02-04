@@ -1,11 +1,13 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"unicode"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	zone "github.com/lrstanley/bubblezone"
 )
 
 // MenuItem defines an item in a menu
@@ -33,6 +35,9 @@ type MenuModel struct {
 
 	// Back action (nil if no back button)
 	backAction tea.Cmd
+
+	// Zone manager for mouse support
+	zoneManager *zone.Manager
 }
 
 // FocusItem represents which UI element has focus
@@ -72,6 +77,7 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 		backAction:  backAction,
 		focused:     true,
 		focusedItem: FocusList,
+		zoneManager: zone.New(),
 	}
 }
 
@@ -84,13 +90,45 @@ func (m MenuModel) Init() tea.Cmd {
 func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.MouseMsg:
-		// Handle mouse clicks for menu selection
+		// TODO: Mouse support disabled due to position offset issues
+		// Will be re-enabled when switching to bubbles/list (has built-in mouse support)
+		// For now, use keyboard navigation
+		return m, nil
+
+		/* DISABLED - Position offset issues
+		// Handle mouse clicks using zones (automatic position tracking)
 		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
-			// Mouse support for list items would require tracking positions
-			// For now, focus on keyboard navigation
-			// TODO: Implement proper mouse click detection for menu items
+			// Check if Select button was clicked
+			if m.zoneManager.Get("btn-select").InBounds(msg) {
+				if m.cursor >= 0 && m.cursor < len(m.items) {
+					if m.items[m.cursor].Action != nil {
+						return m, m.items[m.cursor].Action
+					}
+				}
+				return m, nil
+			}
+
+			// Check if Back button was clicked
+			if m.backAction != nil && m.zoneManager.Get("btn-back").InBounds(msg) {
+				return m, m.backAction
+			}
+
+			// Check if Exit button was clicked
+			if m.zoneManager.Get("btn-exit").InBounds(msg) {
+				return m, tea.Quit
+			}
+
+			// Check if any menu item was clicked
+			for i := range m.items {
+				if m.zoneManager.Get(fmt.Sprintf("item-%d", i)).InBounds(msg) {
+					m.cursor = i
+					menuSelectedIndices[m.id] = i
+					return m, nil
+				}
+			}
 		}
 		return m, nil
+		*/
 
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -220,17 +258,41 @@ func (m MenuModel) View() string {
 	colPadding := 2
 	contentWidth := maxTagLen + colPadding + maxDescLen + 4
 
-	// Ensure minimum width for title and buttons
+	// Ensure minimum width for title
 	titleWidth := len(m.title) + 4
 	if titleWidth > contentWidth {
 		contentWidth = titleWidth
 	}
-	buttonsWidth := 28
+
+	// Calculate minimum width for buttons
+	// Button texts: "<Select>" (8), "<Back>" (6), "<Exit>" (6)
+	buttonTexts := []string{"<Select>", "<Exit>"}
 	if m.backAction != nil {
-		buttonsWidth += 10
+		buttonTexts = []string{"<Select>", "<Back>", "<Exit>"}
 	}
-	if buttonsWidth > contentWidth {
-		contentWidth = buttonsWidth
+
+	// Calculate minimum width per button section (button text + some padding)
+	minButtonSectionWidth := 12 // Minimum space per button for readability
+	totalButtonWidth := len(buttonTexts) * minButtonSectionWidth
+
+	// Account for button box padding and border (4 chars total)
+	minButtonBoxWidth := totalButtonWidth
+
+	if minButtonBoxWidth > contentWidth {
+		contentWidth = minButtonBoxWidth
+	}
+
+	// Constrain to terminal width (leave space for outer borders, padding, and shadow)
+	// Outer dialog has: padding(2) + border(2) + shadow(2) = 6 extra chars
+	// List/button boxes inside have: padding(2) + border(2) = 4 extra chars
+	// Total overhead: ~10 chars
+	maxAvailableWidth := m.width - 10
+	if maxAvailableWidth < 30 {
+		maxAvailableWidth = 30 // Absolute minimum
+	}
+	if contentWidth > maxAvailableWidth {
+		contentWidth = maxAvailableWidth
+		// Button text will be clipped if sections are too narrow
 	}
 
 	// Build the menu content
@@ -288,8 +350,10 @@ func (m MenuModel) View() string {
 		}
 	}
 
-	// Create list content with padding and border
+	// Create list content (no zones yet - we'll add them after full render)
 	listContent := b.String()
+
+	// Apply padding and border to list
 	listStyle := styles.Dialog.
 		Padding(0, 1)
 	listStyle = Apply3DBorder(listStyle)
@@ -298,22 +362,78 @@ func (m MenuModel) View() string {
 	// Create buttons in a full bordered box matching menu width
 	listWidth := lipgloss.Width(paddedList)
 
-	// Inner width for buttons: listWidth - 2 (Box Pad) - 2 (Box Border)
-	// But renderButtonBox takes CONTENT width target?
-	// renderButtonBox(w) -> Style.Width(w).Padding(0,1).Border -> w+4
-	// We want total width w+4 to match Top Total (listWidth + 2 + 2) = listWidth + 4.
-	// So we pass listWidth.
-
-	// However, renderButtons needs available space to space buttons out.
-	// innerWidth is for renderButtons spacing calculation.
-	// Available space inside buttonBox = listWidth.
-
-	innerWidth := listWidth
+	// listWidth includes padding(2) + border(2) = 4 extra characters
+	// To match the total width, buttonBox needs the same total width
+	// renderButtonBox adds padding(2) + border(2), so we need inner content width = listWidth - 4
+	innerWidth := listWidth - 4
 	buttons := m.renderButtons(innerWidth)
-	buttonBox := m.renderButtonBox(buttons, listWidth)
+	buttonBox := m.renderButtonBox(buttons, innerWidth)
 
 	// Wrap in dialog frame (button box has its own border)
-	return m.renderDialog(paddedList, buttonBox, listWidth)
+	view := m.renderDialog(paddedList, buttonBox, listWidth)
+
+	// NOW add zones to the fully rendered output
+	view = m.addZonesToRenderedDialog(view)
+
+	// Scan zones for mouse support (zone manager tracks positions)
+	return m.zoneManager.Scan(view)
+}
+
+// addZonesToRenderedDialog adds zone markers to specific lines in the fully rendered dialog
+func (m MenuModel) addZonesToRenderedDialog(dialog string) string {
+	lines := strings.Split(dialog, "\n")
+
+	// Calculate line offsets based on dialog structure
+	lineIdx := 0
+
+	// Line 0: Title in border
+	lineIdx++
+
+	// Subtitle (if present)
+	if m.subtitle != "" {
+		lineIdx++
+	}
+
+	// Outer padding
+	lineIdx++
+
+	// List box top border
+	lineIdx++
+
+	// Now we're at the first menu item
+	firstItemLine := lineIdx
+
+	// Mark menu item lines
+	for i := 0; i < len(m.items); i++ {
+		itemLineIdx := firstItemLine + i
+		if itemLineIdx < len(lines) {
+			lines[itemLineIdx] = m.zoneManager.Mark(fmt.Sprintf("item-%d", i), lines[itemLineIdx])
+		}
+	}
+
+	// Find button lines (they're near the end)
+	// Button box structure: border, button line, border
+	// It's after the list box bottom border
+	buttonLineIdx := firstItemLine + len(m.items) + 2 // +1 for list bottom border, +1 for button top border
+	if buttonLineIdx < len(lines) {
+		// Mark the button line with all button zones
+		lines[buttonLineIdx] = m.addButtonZonesToLine(lines[buttonLineIdx])
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// addButtonZonesToLine marks button zones on a single line
+func (m MenuModel) addButtonZonesToLine(line string) string {
+	// The buttons are already positioned in sections
+	// We need to mark each section with its zone
+	// For now, mark the entire line and we'll refine based on click position
+
+	// This is simplified - we'd need to calculate exact button positions
+	// For now, mark the whole line and check button zones in mouse handler
+	line = m.zoneManager.Mark("btn-select", line)
+
+	return line
 }
 
 func (m MenuModel) renderButtons(contentWidth int) string {
@@ -343,18 +463,30 @@ func (m MenuModel) renderButtons(contentWidth int) string {
 	}
 	exitBtn := exitStyle.Render("<Exit>")
 
-	// Create styled spacing with dialog background
-	spacing := styles.Dialog.Render("  ")
-
-	// Create button row (width and padding handled by caller)
-	var buttons string
+	// Collect all buttons
+	var buttonStrs []string
+	buttonStrs = append(buttonStrs, selectBtn)
 	if m.backAction != nil {
-		buttons = lipgloss.JoinHorizontal(lipgloss.Center, selectBtn, spacing, backBtn, spacing, exitBtn)
-	} else {
-		buttons = lipgloss.JoinHorizontal(lipgloss.Center, selectBtn, spacing, exitBtn)
+		buttonStrs = append(buttonStrs, backBtn)
+	}
+	buttonStrs = append(buttonStrs, exitBtn)
+
+	// Divide available width into equal sections (one per button)
+	numButtons := len(buttonStrs)
+	sectionWidth := contentWidth / numButtons
+
+	// Center each button in its section
+	var sections []string
+	for _, btn := range buttonStrs {
+		centeredBtn := lipgloss.NewStyle().
+			Width(sectionWidth).
+			Align(lipgloss.Center).
+			Background(styles.Dialog.GetBackground()).
+			Render(btn)
+		sections = append(sections, centeredBtn)
 	}
 
-	return buttons
+	return lipgloss.JoinHorizontal(lipgloss.Top, sections...)
 }
 
 func (m MenuModel) renderButtonBox(buttons string, contentWidth int) string {
@@ -379,44 +511,46 @@ func (m MenuModel) renderButtonBox(buttons string, contentWidth int) string {
 func (m MenuModel) renderDialog(menuContent, buttonBox string, listWidth int) string {
 	styles := GetStyles()
 
-	// Build inner content parts (menu section only)
+	// Build inner content parts
 	var innerParts []string
 
 	// Subtitle (left-aligned, matching content width)
 	if m.subtitle != "" {
-		// TODO: Investigate why foreground color isn't rendering in terminal
-		subtitle := styles.Dialog.Copy().
+		subtitle := styles.Dialog.
 			Width(listWidth).
+			Padding(0, 1).
+			Align(lipgloss.Left).
 			Render(m.subtitle)
 		innerParts = append(innerParts, subtitle)
 	}
 
-	// Menu content (already padded)
+	// Add list box (already has its own border)
 	innerParts = append(innerParts, menuContent)
 
-	// Join menu parts
-	menuSection := lipgloss.JoinVertical(lipgloss.Left, innerParts...)
+	// Add button box (already has its own border)
+	innerParts = append(innerParts, buttonBox)
 
-	// Add the outer margin (1 space left/right) to the entire block inside the border
-	// This creates the "one space inside margin" requested
-	menuSection = lipgloss.NewStyle().
+	// Join all parts
+	innerContent := lipgloss.JoinVertical(lipgloss.Left, innerParts...)
+
+	// Add padding inside the outer border
+	paddedContent := lipgloss.NewStyle().
 		Background(styles.Dialog.GetBackground()).
 		Padding(0, 1).
-		Render(menuSection)
+		Render(innerContent)
 
-	// Render with borders and append button box
+	// Wrap with outer border
 	var dialogBox string
 
 	if m.title != "" {
-		dialogBox = m.renderBorderWithTitle(menuSection, buttonBox, listWidth)
+		dialogBox = m.renderBorderWithTitle(paddedContent, listWidth)
 	} else {
-		// No title, use standard border around menu, then append button box
-		menuBoxStyle := lipgloss.NewStyle().
+		// No title, use standard border
+		boxStyle := lipgloss.NewStyle().
 			Background(styles.Dialog.GetBackground()).
 			Padding(0, 1)
-		menuBoxStyle = Apply3DBorder(menuBoxStyle)
-		menuRendered := menuBoxStyle.Render(menuSection)
-		dialogBox = menuRendered + "\n" + buttonBox
+		boxStyle = Apply3DBorder(boxStyle)
+		dialogBox = boxStyle.Render(paddedContent)
 	}
 
 	// Add shadow effect
@@ -435,7 +569,7 @@ func (m MenuModel) renderDialog(menuContent, buttonBox string, listWidth int) st
 	return centered
 }
 
-func (m MenuModel) renderBorderWithTitle(menuContent, buttonBox string, contentWidth int) string {
+func (m MenuModel) renderBorderWithTitle(content string, contentWidth int) string {
 	styles := GetStyles()
 	border := styles.Border
 
@@ -450,8 +584,8 @@ func (m MenuModel) renderBorderWithTitle(menuContent, buttonBox string, contentW
 	titleStyle := styles.DialogTitle.Copy().
 		Background(borderBG)
 
-	// Get actual content width (should be contentWidth + 2 for padding)
-	lines := strings.Split(menuContent, "\n")
+	// Get actual content width
+	lines := strings.Split(content, "\n")
 	actualWidth := 0
 	if len(lines) > 0 {
 		actualWidth = lipgloss.Width(lines[0])
@@ -473,7 +607,7 @@ func (m MenuModel) renderBorderWithTitle(menuContent, buttonBox string, contentW
 	result.WriteString(borderStyleLight.Render(border.TopRight))
 	result.WriteString("\n")
 
-	// Menu content lines with left/right borders only (no bottom border)
+	// Content lines with left/right borders
 	for _, line := range lines {
 		result.WriteString(borderStyleLight.Render(border.Left))
 		result.WriteString(line)
@@ -481,8 +615,10 @@ func (m MenuModel) renderBorderWithTitle(menuContent, buttonBox string, contentW
 		result.WriteString("\n")
 	}
 
-	// Append button box (which has its own full border - top is separator, bottom is overall bottom)
-	result.WriteString(buttonBox)
+	// Bottom border
+	result.WriteString(borderStyleDark.Render(border.BottomLeft))
+	result.WriteString(borderStyleDark.Render(strings.Repeat(border.Bottom, actualWidth)))
+	result.WriteString(borderStyleDark.Render(border.BottomRight))
 
 	return result.String()
 }
