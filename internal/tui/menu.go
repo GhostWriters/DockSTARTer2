@@ -83,6 +83,15 @@ func (m MenuModel) Init() tea.Cmd {
 // Update implements tea.Model
 func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.MouseMsg:
+		// Handle mouse clicks for menu selection
+		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+			// Mouse support for list items would require tracking positions
+			// For now, focus on keyboard navigation
+			// TODO: Implement proper mouse click detection for menu items
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "up", "k":

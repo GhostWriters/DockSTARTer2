@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"os"
 	"strings"
 
@@ -80,112 +79,91 @@ func (m HeaderModel) View() string {
 	// Right section: version info with update indicators
 	right := m.renderRight()
 
-	// Calculate widths
+	// Calculate visual widths (lipgloss.Width strips ANSI codes)
 	leftWidth := lipgloss.Width(left)
 	centerWidth := lipgloss.Width(center)
 	rightWidth := lipgloss.Width(right)
 
-	// Calculate padding to center the app name and right-align version
+	// Total content width
 	totalContentWidth := leftWidth + centerWidth + rightWidth
 	if totalContentWidth >= m.width {
 		// Not enough space, just concatenate
-		return styles.HeaderBG.Width(m.width).Render(left + center + right)
+		headerLine := left + center + right
+		return styles.HeaderBG.Width(m.width).Render(headerLine)
 	}
 
-	// Calculate spaces needed
-	remainingSpace := m.width - totalContentWidth
-	leftPad := remainingSpace / 2
-	rightPad := remainingSpace - leftPad
+	// Center the app name in the middle of the screen
+	// Calculate where the center text should start to be truly centered
+	centerPos := (m.width - centerWidth) / 2
 
-	// Build the header line
-	result := left +
+	// Left padding: space between left content and center
+	leftPad := centerPos - leftWidth
+	if leftPad < 1 {
+		leftPad = 1
+	}
+
+	// Right padding: space between center and right content
+	// Position where right content should start
+	rightPos := m.width - rightWidth
+	rightPad := rightPos - centerPos - centerWidth
+	if rightPad < 1 {
+		rightPad = 1
+	}
+
+	// Build the header with explicit spacing
+	headerLine := left +
 		strings.Repeat(" ", leftPad) +
 		center +
 		strings.Repeat(" ", rightPad) +
 		right
 
-	return styles.HeaderBG.Width(m.width).Render(result)
+	// Apply header background to the entire line
+	return styles.HeaderBG.Width(m.width).Render(headerLine)
 }
 
 func (m HeaderModel) renderLeft() string {
-	styles := GetStyles()
+	// Build hostname with theme tag
+	leftText := "{{_ThemeHostname_}}" + m.hostname + "{{|-|}}"
 
-	// Hostname (bold)
-	hostnameStyle := styles.HeaderBG.Bold(true)
-	result := hostnameStyle.Render(m.hostname)
-
-	// Flags
+	// Add flags if present
 	if len(m.flags) > 0 {
-		result += " "
-
-		// Bracket style
-		bracketStyle := styles.HeaderBG
-
-		result += bracketStyle.Render("|")
+		leftText += " {{_ThemeApplicationFlagsBrackets_}}|{{|-|}}"
 		for i, flag := range m.flags {
 			if i > 0 {
-				result += bracketStyle.Render("|")
+				leftText += "{{_ThemeApplicationFlagsSpace_}}|{{|-|}}"
 			}
-			flagStyle := styles.HeaderBG.Bold(true)
-			result += flagStyle.Render(flag)
+			leftText += "{{_ThemeApplicationFlags_}}" + flag + "{{|-|}}"
 		}
-		result += bracketStyle.Render("|")
+		leftText += "{{_ThemeApplicationFlagsBrackets_}}|{{|-|}}"
 	}
 
-	return result
+	// Translate theme tags and render with lipgloss
+	return RenderThemeText(leftText)
 }
 
 func (m HeaderModel) renderCenter() string {
-	styles := GetStyles()
-
-	// Application name (bold)
-	nameStyle := styles.HeaderBG.Bold(true)
-	return nameStyle.Render(version.ApplicationName)
+	centerText := "{{_ThemeApplicationName_}}" + version.ApplicationName + "{{|-|}}"
+	return RenderThemeText(centerText)
 }
 
 func (m HeaderModel) renderRight() string {
-	styles := GetStyles()
-
 	appVer := version.Version
 	tmplVer := paths.GetTemplatesVersion()
 
-	// App version with update indicator
-	var appSection string
+	var rightText string
 	if update.AppUpdateAvailable {
-		// Yellow asterisk for update available
-		updateStyle := lipgloss.NewStyle().
-			Background(styles.HeaderBG.GetBackground()).
-			Foreground(lipgloss.Color("#ffff00")). // Yellow
-			Bold(true)
-		appSection = updateStyle.Render("*")
-
-		// Version in yellow
-		verStyle := lipgloss.NewStyle().
-			Background(styles.HeaderBG.GetBackground()).
-			Foreground(lipgloss.Color("#ffff00"))
-		appSection += styles.HeaderBG.Render("A:[") + verStyle.Render(appVer) + styles.HeaderBG.Render("]")
+		rightText += "{{_ThemeApplicationUpdate_}}*{{|-|}}"
 	} else {
-		appSection = " " + styles.HeaderBG.Render(fmt.Sprintf("A:[%s]", appVer))
+		rightText += " "
 	}
+	rightText += "{{_ThemeApplicationVersion_}}A:[" + appVer + "]{{|-|}}"
 
-	// Template version with update indicator
-	var tmplSection string
 	if update.TmplUpdateAvailable {
-		// Yellow asterisk for update available
-		updateStyle := lipgloss.NewStyle().
-			Background(styles.HeaderBG.GetBackground()).
-			Foreground(lipgloss.Color("#ffff00")). // Yellow
-			Bold(true)
-		tmplSection = updateStyle.Render("*")
-
-		// Version in yellow
-		verStyle := lipgloss.NewStyle().
-			Background(styles.HeaderBG.GetBackground()).
-			Foreground(lipgloss.Color("#ffff00"))
-		tmplSection += styles.HeaderBG.Render("T:[") + verStyle.Render(tmplVer) + styles.HeaderBG.Render("]")
+		rightText += "{{_ThemeApplicationUpdate_}}*{{|-|}}"
 	} else {
-		tmplSection = " " + styles.HeaderBG.Render(fmt.Sprintf("T:[%s]", tmplVer))
+		rightText += " "
 	}
+	rightText += "{{_ThemeApplicationVersion_}}T:[" + tmplVer + "]{{|-|}}"
 
-	return appSection + tmplSection
+	return RenderThemeText(rightText)
 }

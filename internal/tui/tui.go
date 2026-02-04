@@ -70,7 +70,7 @@ func Start(ctx context.Context, startMenu string) error {
 	program = tea.NewProgram(
 		model,
 		tea.WithAltScreen(),
-		tea.WithMouseCellMotion(),
+		tea.WithMouseAllMotion(),
 	)
 
 	// Start background update checker
