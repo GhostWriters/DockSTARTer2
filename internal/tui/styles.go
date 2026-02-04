@@ -165,3 +165,62 @@ func PadRight(s string, width int) string {
 	}
 	return s + lipgloss.NewStyle().Width(width-textWidth).Render("")
 }
+
+// Apply3DBorder applies 3D border effect to a style
+// Light color on top/left, dark color on bottom/right
+func Apply3DBorder(style lipgloss.Style) lipgloss.Style {
+	// Get the dialog background color for border backgrounds
+	borderBG := currentStyles.Dialog.GetBackground()
+
+	return style.
+		BorderTopForeground(currentStyles.BorderColor).
+		BorderLeftForeground(currentStyles.BorderColor).
+		BorderBottomForeground(currentStyles.Border2Color).
+		BorderRightForeground(currentStyles.Border2Color).
+		BorderTopBackground(borderBG).
+		BorderLeftBackground(borderBG).
+		BorderBottomBackground(borderBG).
+		BorderRightBackground(borderBG)
+}
+
+// AddShadow adds a shadow effect to rendered content if shadow is enabled
+func AddShadow(content string) string {
+	if !currentConfig.Shadow {
+		return content
+	}
+
+	// Get dimensions of the content
+	contentWidth := lipgloss.Width(content)
+	contentHeight := lipgloss.Height(content)
+
+	// Create shadow elements
+	// Bottom shadow: 1 char high, contentWidth wide, positioned 1 char right
+	bottomShadow := currentStyles.Shadow.
+		Width(contentWidth).
+		Height(1).
+		Render("")
+
+	// Right shadow: contentHeight high, 1 char wide
+	rightShadow := currentStyles.Shadow.
+		Width(1).
+		Height(contentHeight).
+		Render("")
+
+	// Corner shadow: 1x1
+	cornerShadow := currentStyles.Shadow.
+		Width(1).
+		Height(1).
+		Render("")
+
+	// Stack the content with shadows using JoinVertical and JoinHorizontal
+	// First, add right shadow to content
+	contentWithRightShadow := lipgloss.JoinHorizontal(lipgloss.Top, content, rightShadow)
+
+	// Then add bottom shadow and corner
+	// Use dialog background for the spacer to avoid black rectangle
+	spacer := currentStyles.Dialog.Width(1).Height(1).Render(" ")
+	bottomRow := lipgloss.JoinHorizontal(lipgloss.Top, spacer+bottomShadow, cornerShadow)
+
+	// Combine vertically
+	return lipgloss.JoinVertical(lipgloss.Left, contentWithRightShadow, bottomRow)
+}

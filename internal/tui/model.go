@@ -121,11 +121,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.ready = true
 
-		// Update header width
-		m.header.SetWidth(m.width)
+		// Update header width (reduced by 2 for invisible margins)
+		m.header.SetWidth(m.width - 2)
 
-		// Calculate content area height (header + sep + content + helpline)
-		contentHeight := m.height - 3 // 1 header + 1 sep + 1 helpline
+		// Calculate content area height (header + sep + helpline)
+		contentHeight := m.height - 3
 
 		// Update active screen size
 		if m.activeScreen != nil {
@@ -228,13 +228,24 @@ func (m AppModel) View() string {
 	styles := GetStyles()
 	var b strings.Builder
 
-	// Header
-	b.WriteString(m.header.View())
+	// Header with 1-char padding on left and right
+	headerContent := m.header.View()
+	headerStyle := lipgloss.NewStyle().
+		Width(m.width).
+		PaddingLeft(1).
+		PaddingRight(1).
+		Background(styles.Screen.GetBackground())
+	b.WriteString(headerStyle.Render(headerContent))
 	b.WriteString("\n")
 
-	// Separator line
-	sep := strings.Repeat(styles.SepChar, m.width)
-	b.WriteString(styles.HeaderBG.Render(sep))
+	// Separator line with 1-char padding on left and right
+	sep := strings.Repeat(styles.SepChar, m.width-2)
+	sepStyle := lipgloss.NewStyle().
+		Width(m.width).
+		PaddingLeft(1).
+		PaddingRight(1).
+		Background(styles.HeaderBG.GetBackground())
+	b.WriteString(sepStyle.Render(sep))
 	b.WriteString("\n")
 
 	// Content area
@@ -254,13 +265,7 @@ func (m AppModel) View() string {
 		content += strings.Repeat("\n", contentHeight-contentLines)
 	}
 
-	// Apply screen background to content area
-	contentStyle := lipgloss.NewStyle().
-		Width(m.width).
-		Height(contentHeight).
-		Background(styles.Screen.GetBackground())
-
-	b.WriteString(contentStyle.Render(content))
+	b.WriteString(content)
 
 	// Help line
 	b.WriteString(m.helpline.View(m.width))

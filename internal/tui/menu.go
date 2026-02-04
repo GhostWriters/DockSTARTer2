@@ -10,20 +10,20 @@ import (
 
 // MenuItem defines an item in a menu
 type MenuItem struct {
-	Tag      string   // Display name (first letter used as shortcut)
-	Desc     string   // Description text
-	Help     string   // Help line text shown when item is selected
-	Shortcut rune     // Keyboard shortcut (usually first letter of Tag)
-	Action   tea.Cmd  // Command to execute when selected
+	Tag      string  // Display name (first letter used as shortcut)
+	Desc     string  // Description text
+	Help     string  // Help line text shown when item is selected
+	Shortcut rune    // Keyboard shortcut (usually first letter of Tag)
+	Action   tea.Cmd // Command to execute when selected
 }
 
 // MenuModel represents a selectable menu
 type MenuModel struct {
-	id       string     // Unique identifier for selection persistence
-	title    string     // Menu title
-	subtitle string     // Optional subtitle/description
+	id       string // Unique identifier for selection persistence
+	title    string // Menu title
+	subtitle string // Optional subtitle/description
 	items    []MenuItem
-	cursor   int        // Current selection
+	cursor   int // Current selection
 	width    int
 	height   int
 
@@ -64,13 +64,13 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 	}
 
 	return MenuModel{
-		id:         id,
-		title:      title,
-		subtitle:   subtitle,
-		items:      items,
-		cursor:     cursor,
-		backAction: backAction,
-		focused:    true,
+		id:          id,
+		title:       title,
+		subtitle:    subtitle,
+		items:       items,
+		cursor:      cursor,
+		backAction:  backAction,
+		focused:     true,
 		focusedItem: FocusList,
 	}
 }
@@ -288,15 +288,15 @@ func (m MenuModel) View() string {
 		}
 	}
 
-	// Create list box with border
+	// Create list box with border and 3D effect
 	listContent := b.String()
 
-	listBox := lipgloss.NewStyle().
+	listBoxStyle := lipgloss.NewStyle().
 		Border(styles.Border).
-		BorderForeground(styles.BorderColor).
 		Background(styles.Dialog.GetBackground()).
-		Padding(0, 1).
-		Render(listContent)
+		Padding(0, 1)
+	listBoxStyle = Apply3DBorder(listBoxStyle)
+	listBox := listBoxStyle.Render(listContent)
 
 	// Create buttons - width must match listBox (contentWidth + border(2) + padding(2) = contentWidth + 4)
 	buttons := m.renderButtons(contentWidth + 4)
@@ -378,13 +378,16 @@ func (m MenuModel) renderDialog(content string, contentWidth int) string {
 
 	inner := lipgloss.JoinVertical(lipgloss.Center, parts...)
 
-	// Wrap in dialog border
-	dialogBox := lipgloss.NewStyle().
+	// Wrap in dialog border with 3D effect
+	dialogBoxStyle := lipgloss.NewStyle().
 		Border(styles.Border).
-		BorderForeground(styles.BorderColor).
 		Background(styles.Dialog.GetBackground()).
-		Padding(0, 1).
-		Render(inner)
+		Padding(0, 1)
+	dialogBoxStyle = Apply3DBorder(dialogBoxStyle)
+	dialogBox := dialogBoxStyle.Render(inner)
+
+	// Add shadow effect
+	dialogBox = AddShadow(dialogBox)
 
 	// Center in the available space
 	centered := lipgloss.Place(
