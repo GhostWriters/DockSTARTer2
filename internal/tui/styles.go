@@ -4,6 +4,7 @@ import (
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/theme"
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/gdamore/tcell/v3"
@@ -189,38 +190,36 @@ func AddShadow(content string) string {
 		return content
 	}
 
-	// Get dimensions of the content
-	contentWidth := lipgloss.Width(content)
-	contentHeight := lipgloss.Height(content)
+	content = strings.Trim(content, "\n")
+	lines := strings.Split(content, "\n")
+	if len(lines) == 0 {
+		return content
+	}
 
-	// Create shadow elements
-	// Bottom shadow: 1 char high, contentWidth wide, positioned 1 char right
-	bottomShadow := currentStyles.Shadow.
-		Width(contentWidth).
-		Height(1).
-		Render("")
+	contentWidth := lipgloss.Width(lines[0])
+	shadowCell := currentStyles.Shadow.Width(1).Height(1).Render(" ")
+	screenBackground := currentStyles.Screen.GetBackground()
 
-	// Right shadow: contentHeight high, 1 char wide
-	rightShadow := currentStyles.Shadow.
-		Width(1).
-		Height(contentHeight).
-		Render("")
+	// Create a spacer style with the screen background
+	spacerStyle := lipgloss.NewStyle().Background(screenBackground).Width(1).Height(1)
+	spacer := spacerStyle.Render(" ")
 
-	// Corner shadow: 1x1
-	cornerShadow := currentStyles.Shadow.
-		Width(1).
-		Height(1).
-		Render("")
+	var result strings.Builder
+	for i, line := range lines {
+		result.WriteString(line)
+		if i > 0 {
+			result.WriteString(shadowCell)
+		} else {
+			result.WriteString(spacer)
+		}
+		result.WriteString("\n")
+	}
 
-	// Stack the content with shadows using JoinVertical and JoinHorizontal
-	// First, add right shadow to content
-	contentWithRightShadow := lipgloss.JoinHorizontal(lipgloss.Top, content, rightShadow)
+	// Add final shadow row
+	result.WriteString(spacer)
+	for i := 0; i < contentWidth; i++ {
+		result.WriteString(shadowCell)
+	}
 
-	// Then add bottom shadow and corner
-	// Use dialog background for the spacer to avoid black rectangle
-	spacer := currentStyles.Dialog.Width(1).Height(1).Render(" ")
-	bottomRow := lipgloss.JoinHorizontal(lipgloss.Top, spacer+bottomShadow, cornerShadow)
-
-	// Combine vertically
-	return lipgloss.JoinVertical(lipgloss.Left, contentWithRightShadow, bottomRow)
+	return result.String()
 }
