@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(go get:*)",
+      "Bash(go build:*)",
+      "Bash(go mod tidy:*)",
+      "Bash(dir \"C:\\\\Users\\\\CLHat\\\\AppData\\\\Local\\\\dockstarter2\\\\themes\")",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat\\(tui\\): replace cview with Bubble Tea and lipgloss\n\n- Replace cview-based TUI with Bubble Tea framework\n- Add lipgloss for styling with theme adapter\n- Implement menu system with keyboard shortcuts\n- Preserve header layout with hostname, flags, and version info\n- Add screen navigation with back support\n- Create reusable menu and dialog components\n- Fix theme validation to use .ds2theme extension\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push)",
+      "Bash(git restore:*)",
+      "Bash(git commit:*)",
+      "Bash(go doc:*)"
+    ]
+  }
+}

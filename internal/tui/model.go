@@ -265,7 +265,13 @@ func (m AppModel) View() string {
 		content += strings.Repeat("\n", contentHeight-contentLines)
 	}
 
-	b.WriteString(content)
+	// Apply screen background to content area
+	contentStyle := lipgloss.NewStyle().
+		Width(m.width).
+		Height(contentHeight).
+		Background(styles.Screen.GetBackground())
+
+	b.WriteString(contentStyle.Render(content))
 
 	// Help line
 	b.WriteString(m.helpline.View(m.width))

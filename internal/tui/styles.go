@@ -67,6 +67,17 @@ func tcellToLipgloss(c tcell.Color) lipgloss.Color {
 	return lipgloss.Color(fmt.Sprintf("#%06x", c.Hex()))
 }
 
+var AsciiBorder = lipgloss.Border{
+	Top:         "-",
+	Bottom:      "-",
+	Left:        "|",
+	Right:       "|",
+	TopLeft:     "+",
+	TopRight:    "+",
+	BottomLeft:  "+",
+	BottomRight: "+",
+}
+
 // InitStyles initializes lipgloss styles from the current theme
 func InitStyles(cfg config.AppConfig) {
 	t := theme.Current
@@ -76,7 +87,7 @@ func InitStyles(cfg config.AppConfig) {
 		currentStyles.Border = lipgloss.RoundedBorder()
 		currentStyles.SepChar = "─"
 	} else {
-		currentStyles.Border = lipgloss.NormalBorder()
+		currentStyles.Border = AsciiBorder
 		currentStyles.SepChar = "-"
 	}
 
@@ -174,6 +185,7 @@ func Apply3DBorder(style lipgloss.Style) lipgloss.Style {
 	borderBG := currentStyles.Dialog.GetBackground()
 
 	return style.
+		Border(currentStyles.Border).
 		BorderTopForeground(currentStyles.BorderColor).
 		BorderLeftForeground(currentStyles.BorderColor).
 		BorderBottomForeground(currentStyles.Border2Color).
@@ -184,42 +196,135 @@ func Apply3DBorder(style lipgloss.Style) lipgloss.Style {
 		BorderRightBackground(borderBG)
 }
 
-// AddShadow adds a shadow effect to rendered content if shadow is enabled
-func AddShadow(content string) string {
-	if !currentConfig.Shadow {
-		return content
-	}
-
-	content = strings.Trim(content, "\n")
+// Render3DBorder manually renders content with a 3D border effect
+// This ensures proper color rendering for each border side
+func Render3DBorder(content string, padding int) string {
 	lines := strings.Split(content, "\n")
 	if len(lines) == 0 {
 		return content
 	}
 
-	contentWidth := lipgloss.Width(lines[0])
-	shadowCell := currentStyles.Shadow.Width(1).Height(1).Render(" ")
-	screenBackground := currentStyles.Screen.GetBackground()
+	// Find maximum line width (accounting for ANSI codes)
+	maxWidth := 0
+	for _, line := range lines {
+		w := lipgloss.Width(line)
+		if w > maxWidth {
+			maxWidth = w
+		}
+	}
 
-	// Create a spacer style with the screen background
-	spacerStyle := lipgloss.NewStyle().Background(screenBackground).Width(1).Height(1)
-	spacer := spacerStyle.Render(" ")
+	totalWidth := maxWidth + padding*2
+
+	borderBG := currentStyles.Dialog.GetBackground()
+
+	// Create style for light borders (top/left) - using theme border colors
+	lightStyle := lipgloss.NewStyle().
+		Foreground(currentStyles.BorderColor).
+		Background(borderBG)
+
+	// Create style for dark borders (bottom/right)
+	// Use a darker/contrasting color - if Border2Color is too dark, use gray
+	darkColor := currentStyles.Border2Color
+	// If Border2Color appears to be black or very dark, use a visible gray instead
+	darkColorStr := fmt.Sprintf("%v", darkColor)
+	if strings.Contains(darkColorStr, "000000") || strings.Contains(darkColorStr, "Black") {
+		darkColor = lipgloss.Color("#666666") // Medium gray for visibility
+	}
+
+	darkStyle := lipgloss.NewStyle().
+		Foreground(darkColor).
+		Background(borderBG)
+
+	// Create style for content area with background
+	contentStyle := lipgloss.NewStyle().
+		Background(borderBG).
+		Width(totalWidth)
+
+	// Get border characters
+	border := currentStyles.Border
 
 	var result strings.Builder
-	for i, line := range lines {
-		result.WriteString(line)
-		if i > 0 {
-			result.WriteString(shadowCell)
-		} else {
-			result.WriteString(spacer)
-		}
+
+	// Top border: light color
+	topLine := lightStyle.Render(border.TopLeft + strings.Repeat(border.Top, totalWidth) + border.TopRight)
+	result.WriteString(topLine)
+	result.WriteString("\n")
+
+	// Add padded content lines
+	paddingStr := strings.Repeat(" ", padding)
+	for _, line := range lines {
+		// Calculate how much padding needed on right to fill width
+		lineWidth := lipgloss.Width(line)
+		rightPad := maxWidth - lineWidth
+
+		// Build the full line with proper width
+		fullLine := paddingStr + line + strings.Repeat(" ", rightPad) + paddingStr
+
+		// Render each component separately
+		leftBorder := lightStyle.Render(border.Left)
+		rightBorder := darkStyle.Render(border.Right)
+
+		// Style the content line with background
+		styledContent := contentStyle.Copy().Width(0).Render(fullLine)
+
+		// Join horizontally to preserve styles
+		lineStr := lipgloss.JoinHorizontal(lipgloss.Top, leftBorder, styledContent, rightBorder)
+		result.WriteString(lineStr)
 		result.WriteString("\n")
 	}
 
-	// Add final shadow row
-	result.WriteString(spacer)
-	for i := 0; i < contentWidth; i++ {
-		result.WriteString(shadowCell)
+	// Bottom border: dark color
+	bottomLine := darkStyle.Render(border.BottomLeft + strings.Repeat(border.Bottom, totalWidth) + border.BottomRight)
+	result.WriteString(bottomLine)
+
+	return result.String()
+}
+
+// AddShadow adds a shadow effect to rendered content if shadow is enabled
+// Shadow is offset 1 character right and 1 down, with 2-char wide right shadow
+func AddShadow(content string) string {
+	if !currentConfig.Shadow {
+		return content
 	}
+
+	// Split content into lines
+	lines := strings.Split(content, "\n")
+	if len(lines) == 0 {
+		return content
+	}
+
+	// Get width from first line
+	contentWidth := lipgloss.Width(lines[0])
+
+	// Create shadow cells (2 chars wide for right shadow)
+	shadowCell := currentStyles.Shadow.Width(2).Height(1).Render("")
+	spacerCell := lipgloss.NewStyle().
+		Background(currentStyles.Screen.GetBackground()).
+		Width(2).Height(1).Render("")
+
+	var result strings.Builder
+
+	// First line: content + spacer (no shadow on top row)
+	result.WriteString(lines[0])
+	result.WriteString(spacerCell)
+	result.WriteString("\n")
+
+	// Middle and last content lines: content + 2-char shadow on right
+	for i := 1; i < len(lines); i++ {
+		result.WriteString(lines[i])
+		result.WriteString(shadowCell)
+		result.WriteString("\n")
+	}
+
+	// Bottom shadow row: 1-char spacer + shadow across (width-1) + 2-char corner shadow
+	// This creates the proper 1-right, 1-down offset
+	spacer1 := lipgloss.NewStyle().
+		Background(currentStyles.Screen.GetBackground()).
+		Width(1).Height(1).Render("")
+	result.WriteString(spacer1)
+	bottomShadow := currentStyles.Shadow.Width(contentWidth - 1).Height(1).Render("")
+	result.WriteString(bottomShadow)
+	result.WriteString(shadowCell)
 
 	return result.String()
 }

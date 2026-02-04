@@ -45,9 +45,8 @@ func RenderDialogBox(title, content string, dialogType DialogType, width, height
 	// Combine title and content
 	inner := lipgloss.JoinVertical(lipgloss.Center, titleRendered, contentRendered)
 
-	// Wrap in border with 3D effect
+	// Wrap in border (3D effect for rounded borders)
 	borderStyle := lipgloss.NewStyle().
-		Border(styles.Border).
 		Background(styles.Dialog.GetBackground()).
 		Padding(0, 1)
 	borderStyle = Apply3DBorder(borderStyle)
