@@ -297,10 +297,20 @@ func (m MenuModel) View() string {
 
 	// Create buttons in a full bordered box matching menu width
 	listWidth := lipgloss.Width(paddedList)
-	// Subtract padding (2) since buttonBox adds its own
-	innerWidth := listWidth - 2
+
+	// Inner width for buttons: listWidth - 2 (Box Pad) - 2 (Box Border)
+	// But renderButtonBox takes CONTENT width target?
+	// renderButtonBox(w) -> Style.Width(w).Padding(0,1).Border -> w+4
+	// We want total width w+4 to match Top Total (listWidth + 2 + 2) = listWidth + 4.
+	// So we pass listWidth.
+
+	// However, renderButtons needs available space to space buttons out.
+	// innerWidth is for renderButtons spacing calculation.
+	// Available space inside buttonBox = listWidth.
+
+	innerWidth := listWidth
 	buttons := m.renderButtons(innerWidth)
-	buttonBox := m.renderButtonBox(buttons, innerWidth)
+	buttonBox := m.renderButtonBox(buttons, listWidth)
 
 	// Wrap in dialog frame (button box has its own border)
 	return m.renderDialog(paddedList, buttonBox, listWidth)
@@ -377,7 +387,6 @@ func (m MenuModel) renderDialog(menuContent, buttonBox string, listWidth int) st
 		// TODO: Investigate why foreground color isn't rendering in terminal
 		subtitle := styles.Dialog.Copy().
 			Width(listWidth).
-			Padding(0, 1).
 			Render(m.subtitle)
 		innerParts = append(innerParts, subtitle)
 	}
@@ -387,6 +396,13 @@ func (m MenuModel) renderDialog(menuContent, buttonBox string, listWidth int) st
 
 	// Join menu parts
 	menuSection := lipgloss.JoinVertical(lipgloss.Left, innerParts...)
+
+	// Add the outer margin (1 space left/right) to the entire block inside the border
+	// This creates the "one space inside margin" requested
+	menuSection = lipgloss.NewStyle().
+		Background(styles.Dialog.GetBackground()).
+		Padding(0, 1).
+		Render(menuSection)
 
 	// Render with borders and append button box
 	var dialogBox string
