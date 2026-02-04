@@ -33,7 +33,7 @@ var colorMap = map[string]string{
 }
 
 // themeTagRegex matches {{_SymanticColor_}} or {{|codes|}} or {{|-|}}
-var themeTagRegex = regexp.MustCompile(`\{\{([^}]+)\}\}`)
+var themeTagRegex = regexp.MustCompile(`\{\{(_[^}]+_|\|[^}]*\|)\}\}`)
 
 // cviewColorRegex matches cview color tags like [white:blue:b] or [-]
 var cviewColorRegex = regexp.MustCompile(`\[([^\]]+)\]`)
