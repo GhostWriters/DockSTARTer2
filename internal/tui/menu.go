@@ -468,8 +468,8 @@ func (m MenuModel) View() string {
 	targetWidth := lipgloss.Width(borderedList)
 
 	// Render buttons to match the same bordered width
-	// Account for the border (2) and padding (2) that renderButtonBox will add
-	buttonInnerWidth := targetWidth - 4
+	// Account for the padding (2) that renderButtonBox will add
+	buttonInnerWidth := targetWidth - 2
 	buttonRow := m.renderSimpleButtons(buttonInnerWidth)
 	borderedButtonBox := m.renderButtonBox(buttonRow, buttonInnerWidth)
 
@@ -545,29 +545,50 @@ func (m MenuModel) View() string {
 func (m MenuModel) renderSimpleButtons(contentWidth int) string {
 	styles := GetStyles()
 
-	// Select button
+	// Calculate button widths to find the longest
+	buttonTexts := []string{" Select ", " Exit "}
+	if m.backAction != nil {
+		buttonTexts = append(buttonTexts, " Back ")
+	}
+
+	// Find the maximum button text width
+	maxButtonWidth := 0
+	for _, text := range buttonTexts {
+		width := lipgloss.Width(text)
+		if width > maxButtonWidth {
+			maxButtonWidth = width
+		}
+	}
+
+	// Select button with border and fixed width
 	selectStyle := styles.ButtonInactive
 	if m.focusedItem == FocusSelectBtn {
 		selectStyle = styles.ButtonActive
 	}
-	selectBtn := selectStyle.Render(" Select ")
+	selectBtnStyle := selectStyle.Copy().Width(maxButtonWidth).Align(lipgloss.Center)
+	selectBtnStyle = Apply3DBorder(selectBtnStyle)
+	selectBtn := selectBtnStyle.Render(" Select ")
 
-	// Back button (optional)
+	// Back button with border and fixed width (optional)
 	var backBtn string
 	if m.backAction != nil {
 		backStyle := styles.ButtonInactive
 		if m.focusedItem == FocusBackBtn {
 			backStyle = styles.ButtonActive
 		}
-		backBtn = backStyle.Render(" Back ")
+		backBtnStyle := backStyle.Copy().Width(maxButtonWidth).Align(lipgloss.Center)
+		backBtnStyle = Apply3DBorder(backBtnStyle)
+		backBtn = backBtnStyle.Render(" Back ")
 	}
 
-	// Exit button
+	// Exit button with border and fixed width
 	exitStyle := styles.ButtonInactive
 	if m.focusedItem == FocusExitBtn {
 		exitStyle = styles.ButtonActive
 	}
-	exitBtn := exitStyle.Render(" Exit ")
+	exitBtnStyle := exitStyle.Copy().Width(maxButtonWidth).Align(lipgloss.Center)
+	exitBtnStyle = Apply3DBorder(exitBtnStyle)
+	exitBtn := exitBtnStyle.Render(" Exit ")
 
 	// Collect all buttons
 	var buttons []string
@@ -581,7 +602,7 @@ func (m MenuModel) renderSimpleButtons(contentWidth int) string {
 	numButtons := len(buttons)
 	sectionWidth := contentWidth / numButtons
 
-	// Center each button in its section
+	// Center each bordered button in its section
 	var sections []string
 	for _, btn := range buttons {
 		centeredBtn := lipgloss.NewStyle().
@@ -856,11 +877,10 @@ func (m MenuModel) renderButtonBox(buttons string, contentWidth int) string {
 		Background(styles.Dialog.GetBackground()).
 		Render(buttons)
 
-	// Add padding and full border
+	// Add padding for spacing (no border since buttons have their own)
 	boxStyle := lipgloss.NewStyle().
 		Background(styles.Dialog.GetBackground()).
 		Padding(0, 1)
-	boxStyle = Apply3DBorder(boxStyle)
 
 	return boxStyle.Render(centeredButtons)
 }
