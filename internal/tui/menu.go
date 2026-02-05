@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -23,6 +24,60 @@ type MenuItem struct {
 func (i MenuItem) FilterValue() string { return i.Tag }
 func (i MenuItem) Title() string       { return i.Tag }
 func (i MenuItem) Description() string { return i.Desc }
+
+// customDelegate implements list.ItemDelegate with our custom two-column styling
+type customDelegate struct {
+	maxTagLen int
+}
+
+func (d customDelegate) Height() int                             { return 1 }
+func (d customDelegate) Spacing() int                            { return 0 }
+func (d customDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
+
+func (d customDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+	menuItem, ok := item.(MenuItem)
+	if !ok {
+		return
+	}
+
+	styles := GetStyles()
+	isSelected := index == m.Index()
+
+	// Render tag with first-letter highlighting
+	tagRunes := []rune(menuItem.Tag)
+	var tagStr string
+	if len(tagRunes) > 0 {
+		firstLetter := string(tagRunes[0])
+		rest := string(tagRunes[1:])
+
+		if isSelected {
+			keyStyle := styles.TagKeySelected
+			restStyle := styles.ItemSelected
+			tagStr = keyStyle.Render(firstLetter) + restStyle.Render(rest)
+		} else {
+			keyStyle := styles.TagKey
+			restStyle := styles.TagNormal
+			tagStr = keyStyle.Render(firstLetter) + restStyle.Render(rest)
+		}
+	}
+
+	// Pad tag to align descriptions
+	tagWidth := len(menuItem.Tag)
+	padding := strings.Repeat(" ", d.maxTagLen-tagWidth+2) // 2 for column spacing
+
+	// Render description
+	var descStr string
+	if isSelected {
+		descStr = styles.ItemSelected.Render(padding + menuItem.Desc)
+	} else {
+		descStr = styles.ItemNormal.Render(padding + menuItem.Desc)
+	}
+
+	// Combine with left and right margin
+	line := " " + tagStr + descStr + " " // Add 1 space margin on each side
+
+	fmt.Fprint(w, line)
+}
 
 // MenuModel represents a selectable menu
 type MenuModel struct {
@@ -82,15 +137,31 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 		listItems[i] = item
 	}
 
-	// Create bubbles list with default styling (Phase 1 - keep it simple!)
-	// Use reasonable default size (will be updated on WindowSizeMsg)
-	delegate := list.NewDefaultDelegate()
-	l := list.New(listItems, delegate, 80, 24)
-	l.Title = title
+	// Calculate max tag length for column alignment
+	maxTagLen := 0
+	for _, item := range items {
+		if len(item.Tag) > maxTagLen {
+			maxTagLen = len(item.Tag)
+		}
+	}
+
+	// Create bubbles list with CUSTOM delegate (Phase 2 - custom styling!)
+	// Size based on actual number of items for dynamic sizing
+	delegate := customDelegate{maxTagLen: maxTagLen}
+	initialHeight := len(items) + 2 // Add buffer to prevent pagination
+	l := list.New(listItems, delegate, 80, initialHeight)
+	// Don't set l.Title - we render title in border instead
+	l.SetShowTitle(false)        // Disable list's built-in title rendering
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(false)
 	l.SetShowHelp(false)
-	// Note: Mouse support should be built-in, but may not work in all terminals
+
+	// Set list background to match dialog background (not black!)
+	styles := GetStyles()
+	dialogBg := styles.Dialog.GetBackground()
+	l.Styles.NoItems = l.Styles.NoItems.Background(dialogBg)
+	l.Styles.PaginationStyle = l.Styles.PaginationStyle.Background(dialogBg)
+	l.Styles.HelpStyle = l.Styles.HelpStyle.Background(dialogBg)
 
 	// Set initial cursor position
 	if cursor > 0 && cursor < len(items) {
@@ -122,25 +193,33 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if wsMsg, ok := msg.(tea.WindowSizeMsg); ok {
 		m.width = wsMsg.Width
 		m.height = wsMsg.Height
-		m.list.SetSize(wsMsg.Width, wsMsg.Height)
-	}
 
-	// IMPORTANT: Always delegate to list FIRST (enables mouse support)
-	var cmd tea.Cmd
-	m.list, cmd = m.list.Update(msg)
+		// Set list width based on available space
+		listWidth := wsMsg.Width - 12 // Account for borders, padding, shadow
+		if listWidth < 40 {
+			listWidth = 40
+		}
+
+		// Set list height based on actual number of items (dynamic sizing!)
+		// Each item is 1 line tall, with minimal overhead to prevent pagination
+		listHeight := len(m.items) + 2 // Add buffer to prevent pagination
+
+		m.list.SetSize(listWidth, listHeight)
+	}
 
 	// Then handle our special keys
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		switch keyMsg.String() {
-		case "enter":
-			// Execute action for selected item
-			selectedItem := m.list.SelectedItem()
-			if item, ok := selectedItem.(MenuItem); ok {
-				if item.Action != nil {
-					return m, item.Action
-				}
-			}
+		case "tab", "right":
+			m.focusedItem = m.nextFocus()
 			return m, nil
+
+		case "shift+tab", "left":
+			m.focusedItem = m.prevFocus()
+			return m, nil
+
+		case "enter":
+			return m.handleEnter()
 
 		case "esc":
 			if m.backAction != nil {
@@ -150,7 +229,14 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	return m, cmd
+	// Delegate to list only when list has focus
+	if m.focusedItem == FocusList {
+		var cmd tea.Cmd
+		m.list, cmd = m.list.Update(msg)
+		return m, cmd
+	}
+
+	return m, nil
 }
 
 /* OLD UPDATE METHOD - Kept for reference
@@ -291,9 +377,14 @@ func (m MenuModel) prevFocus() FocusItem {
 func (m MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 	switch m.focusedItem {
 	case FocusList, FocusSelectBtn:
-		if m.cursor >= 0 && m.cursor < len(m.items) {
-			if m.items[m.cursor].Action != nil {
-				return m, m.items[m.cursor].Action
+		// Get selected item from bubbles list
+		selectedItem := m.list.SelectedItem()
+		if item, ok := selectedItem.(MenuItem); ok {
+			if item.Action != nil {
+				// Update cursor for persistence
+				m.cursor = m.list.Index()
+				menuSelectedIndices[m.id] = m.cursor
+				return m, item.Action
 			}
 		}
 	case FocusBackBtn:
@@ -306,12 +397,101 @@ func (m MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// View renders the menu
-// View renders the menu using bubbles/list (Phase 1 - simple version)
+// View renders the menu with custom styling (Phase 2)
 func (m MenuModel) View() string {
-	// Phase 1: Use default bubbles/list rendering
-	// (Size is set in Update() on WindowSizeMsg)
-	return m.list.View()
+	styles := GetStyles()
+
+	// Get list view and apply background color
+	listView := m.list.View()
+	// Wrap with dialog background to eliminate black space
+	listView = lipgloss.NewStyle().
+		Background(styles.Dialog.GetBackground()).
+		Render(listView)
+	listWidth := lipgloss.Width(listView)
+
+	// Render buttons
+	buttons := m.renderSimpleButtons(listWidth)
+
+	// Combine list and buttons vertically
+	content := lipgloss.JoinVertical(lipgloss.Left, listView, buttons)
+
+	// Wrap in bordered dialog with title embedded in border
+	var dialog string
+	if m.title != "" {
+		dialog = m.renderBorderWithTitle(content, listWidth)
+	} else {
+		// No title, use standard border
+		dialogStyle := lipgloss.NewStyle().
+			Background(styles.Dialog.GetBackground()).
+			Padding(0, 1)
+		dialogStyle = Apply3DBorder(dialogStyle)
+		dialog = dialogStyle.Render(content)
+	}
+
+	// Add shadow
+	dialog = AddShadow(dialog)
+
+	// Center in terminal
+	centered := lipgloss.Place(
+		m.width,
+		m.height,
+		lipgloss.Center,
+		lipgloss.Center,
+		dialog,
+		lipgloss.WithWhitespaceBackground(styles.Screen.GetBackground()),
+	)
+
+	return centered
+}
+
+// renderSimpleButtons creates a simple button row
+func (m MenuModel) renderSimpleButtons(contentWidth int) string {
+	styles := GetStyles()
+
+	// Select button
+	selectStyle := styles.ButtonInactive
+	if m.focusedItem == FocusSelectBtn {
+		selectStyle = styles.ButtonActive
+	}
+	selectBtn := selectStyle.Render(" Select ")
+
+	// Back button (optional)
+	var backBtn string
+	if m.backAction != nil {
+		backStyle := styles.ButtonInactive
+		if m.focusedItem == FocusBackBtn {
+			backStyle = styles.ButtonActive
+		}
+		backBtn = backStyle.Render(" Back ")
+	}
+
+	// Exit button
+	exitStyle := styles.ButtonInactive
+	if m.focusedItem == FocusExitBtn {
+		exitStyle = styles.ButtonActive
+	}
+	exitBtn := exitStyle.Render(" Exit ")
+
+	// Collect all buttons
+	var buttons []string
+	buttons = append(buttons, selectBtn)
+	if m.backAction != nil {
+		buttons = append(buttons, backBtn)
+	}
+	buttons = append(buttons, exitBtn)
+
+	// Space buttons evenly
+	buttonRow := lipgloss.JoinHorizontal(lipgloss.Center, buttons...)
+
+	// Center the button row and add some spacing
+	centeredButtons := lipgloss.NewStyle().
+		Width(contentWidth).
+		Align(lipgloss.Center).
+		Background(styles.Dialog.GetBackground()).
+		PaddingTop(1).
+		Render(buttonRow)
+
+	return centeredButtons
 }
 
 /* OLD CUSTOM RENDERING - Kept for reference (Phase 2 will add back custom styling)
