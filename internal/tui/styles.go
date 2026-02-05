@@ -154,8 +154,8 @@ func InitStyles(cfg config.AppConfig) {
 
 	// Help line
 	currentStyles.HelpLine = lipgloss.NewStyle().
-		Background(tcellToLipgloss(t.ScreenBG)).
-		Foreground(tcellToLipgloss(t.ScreenFG))
+		Background(tcellToLipgloss(t.ItemHelpBG)).
+		Foreground(tcellToLipgloss(t.ItemHelpFG))
 }
 
 // Helper functions for common style operations

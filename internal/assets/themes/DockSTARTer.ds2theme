@@ -82,3 +82,6 @@ BorderContrast="{{|black:cyan|}}"
 
 # Imported from .dialogrc
 Border2="{{|black:cyan|}}"
+
+# Imported from .dialogrc (itemhelp_color)
+ItemHelp="{{|black:cyan|}}"

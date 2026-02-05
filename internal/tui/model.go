@@ -274,6 +274,7 @@ func (m AppModel) View() string {
 	b.WriteString(contentStyle.Render(content))
 
 	// Help line
+	b.WriteString("\n")
 	b.WriteString(m.helpline.View(m.width))
 
 	return b.String()

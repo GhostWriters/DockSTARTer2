@@ -21,12 +21,6 @@ func NewMainMenuScreen() *MainMenuScreen {
 			Action: navigateToConfigMenu(),
 		},
 		{
-			Tag:    "Install Dependencies",
-			Desc:   "Install required components",
-			Help:   "Install Docker and other dependencies",
-			Action: nil, // Not implemented yet
-		},
-		{
 			Tag:    "Update",
 			Desc:   "Update DockSTARTer2",
 			Help:   "Check for and install updates",

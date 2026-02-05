@@ -94,6 +94,8 @@ type ThemeConfig struct {
 	TagBG            tcell.Color
 	TagKeyFG         tcell.Color
 	TagKeySelectedFG tcell.Color
+	ItemHelpFG       tcell.Color
+	ItemHelpBG       tcell.Color
 }
 
 // Current holds the active theme configuration
@@ -223,6 +225,8 @@ func Default() {
 		TagBG:            tcell.ColorTeal,
 		TagKeyFG:         tcell.ColorMaroon,
 		TagKeySelectedFG: tcell.ColorBlack,
+		ItemHelpFG:       tcell.ColorBlack,
+		ItemHelpBG:       tcell.ColorTeal,
 	}
 	Apply()
 
@@ -383,6 +387,8 @@ func parseThemeINI(path string) error {
 			Current.TagKeyFG = fg
 		case "TagKeySelected":
 			Current.TagKeySelectedFG = fg
+		case "ItemHelp":
+			Current.ItemHelpFG, Current.ItemHelpBG = fg, bg
 		}
 	}
 
