@@ -167,13 +167,25 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 	// Create bubbles list with CUSTOM delegate (Phase 2 - custom styling!)
 	// Size based on actual number of items for dynamic sizing
 	delegate := customDelegate{maxTagLen: maxTagLen}
-	initialHeight := len(items) + 2 // Add minimal buffer to prevent pagination
+
+	// Calculate proper height based on delegate metrics
+	// Total height = (items * itemHeight) + ((items - 1) * spacing)
+	itemHeight := delegate.Height()
+	spacing := delegate.Spacing()
+	totalItemHeight := len(items) * itemHeight
+	if len(items) > 1 && spacing > 0 {
+		totalItemHeight += (len(items) - 1) * spacing
+	}
+	// Try exact height with no buffer now that pagination is disabled
+	initialHeight := totalItemHeight
+
 	l := list.New(listItems, delegate, initialWidth, initialHeight)
 	// Don't set l.Title - we render title in border instead
 	l.SetShowTitle(false)        // Disable list's built-in title rendering
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(false)
 	l.SetShowHelp(false)
+	l.SetShowPagination(false)   // Disable pagination indicators
 
 	// Set list background to match dialog background (not black!)
 	styles := GetStyles()
@@ -230,8 +242,16 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		listWidth := maxTagLen + 2 + maxDescLen + 2 + 4
 
 		// Set list height based on actual number of items (dynamic sizing!)
-		// Each item is 1 line tall, add minimal buffer to prevent pagination
-		listHeight := len(m.items) + 2 // Add minimal buffer to prevent pagination
+		// Calculate proper height based on delegate metrics
+		// customDelegate has Height=1 and Spacing=0
+		itemHeight := 1
+		spacing := 0
+		totalItemHeight := len(m.items) * itemHeight
+		if len(m.items) > 1 && spacing > 0 {
+			totalItemHeight += (len(m.items) - 1) * spacing
+		}
+		// Try exact height with no buffer now that pagination is disabled
+		listHeight := totalItemHeight
 
 		m.list.SetSize(listWidth, listHeight)
 	}
