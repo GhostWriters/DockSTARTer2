@@ -62,7 +62,8 @@ func (d customDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 	}
 
 	// Pad tag to align descriptions
-	tagWidth := len(menuItem.Tag)
+	// Use lipgloss.Width() for proper terminal width measurement
+	tagWidth := lipgloss.Width(menuItem.Tag)
 	padding := strings.Repeat(" ", d.maxTagLen-tagWidth+2) // 2 for column spacing
 
 	// Render description
@@ -73,8 +74,15 @@ func (d customDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 		descStr = styles.ItemNormal.Render(padding + menuItem.Desc)
 	}
 
-	// Combine with left and right margin
-	line := " " + tagStr + descStr + " " // Add 1 space margin on each side
+	// Combine tag and description
+	line := tagStr + descStr
+
+	// Apply background and padding to fill list width
+	lineStyle := lipgloss.NewStyle().
+		Background(styles.Dialog.GetBackground()).
+		Padding(0, 1). // Add 1 space margin on left and right
+		Width(m.Width())
+	line = lineStyle.Render(line)
 
 	fmt.Fprint(w, line)
 }
@@ -137,19 +145,30 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 		listItems[i] = item
 	}
 
-	// Calculate max tag length for column alignment
+	// Calculate max tag and desc length for sizing
+	// Use lipgloss.Width() instead of len() for proper terminal width
 	maxTagLen := 0
+	maxDescLen := 0
 	for _, item := range items {
-		if len(item.Tag) > maxTagLen {
-			maxTagLen = len(item.Tag)
+		tagWidth := lipgloss.Width(item.Tag)
+		descWidth := lipgloss.Width(item.Desc)
+		if tagWidth > maxTagLen {
+			maxTagLen = tagWidth
+		}
+		if descWidth > maxDescLen {
+			maxDescLen = descWidth
 		}
 	}
+
+	// Calculate initial width based on actual content
+	// Width = tag + spacing(2) + desc + margins(2)
+	initialWidth := maxTagLen + 2 + maxDescLen + 2
 
 	// Create bubbles list with CUSTOM delegate (Phase 2 - custom styling!)
 	// Size based on actual number of items for dynamic sizing
 	delegate := customDelegate{maxTagLen: maxTagLen}
-	initialHeight := len(items) + 2 // Add buffer to prevent pagination
-	l := list.New(listItems, delegate, 80, initialHeight)
+	initialHeight := len(items) + 2 // Add minimal buffer to prevent pagination
+	l := list.New(listItems, delegate, initialWidth, initialHeight)
 	// Don't set l.Title - we render title in border instead
 	l.SetShowTitle(false)        // Disable list's built-in title rendering
 	l.SetShowStatusBar(false)
@@ -194,15 +213,25 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = wsMsg.Width
 		m.height = wsMsg.Height
 
-		// Set list width based on available space
-		listWidth := wsMsg.Width - 12 // Account for borders, padding, shadow
-		if listWidth < 40 {
-			listWidth = 40
+		// Calculate list width based on actual content
+		maxTagLen := 0
+		maxDescLen := 0
+		for _, item := range m.items {
+			tagWidth := lipgloss.Width(item.Tag)
+			descWidth := lipgloss.Width(item.Desc)
+			if tagWidth > maxTagLen {
+				maxTagLen = tagWidth
+			}
+			if descWidth > maxDescLen {
+				maxDescLen = descWidth
+			}
 		}
+		// Width = tag + spacing(2) + desc + margins(2) + buffer(4)
+		listWidth := maxTagLen + 2 + maxDescLen + 2 + 4
 
 		// Set list height based on actual number of items (dynamic sizing!)
-		// Each item is 1 line tall, with minimal overhead to prevent pagination
-		listHeight := len(m.items) + 2 // Add buffer to prevent pagination
+		// Each item is 1 line tall, add minimal buffer to prevent pagination
+		listHeight := len(m.items) + 2 // Add minimal buffer to prevent pagination
 
 		m.list.SetSize(listWidth, listHeight)
 	}
@@ -407,18 +436,66 @@ func (m MenuModel) View() string {
 	listView = lipgloss.NewStyle().
 		Background(styles.Dialog.GetBackground()).
 		Render(listView)
-	listWidth := lipgloss.Width(listView)
 
-	// Render buttons
-	buttons := m.renderSimpleButtons(listWidth)
+	// Wrap list in its own border (no padding, items have their own margins)
+	listStyle := styles.Dialog.
+		Padding(0, 0)
+	listStyle = Apply3DBorder(listStyle)
+	borderedList := listStyle.Render(listView)
 
-	// Combine list and buttons vertically
-	content := lipgloss.JoinVertical(lipgloss.Left, listView, buttons)
+	// Calculate the target width for all content
+	// This is the width of the bordered list
+	targetWidth := lipgloss.Width(borderedList)
+
+	// Render buttons to match the same bordered width
+	// Account for the border (2) and padding (2) that renderButtonBox will add
+	buttonInnerWidth := targetWidth - 4
+	buttonRow := m.renderSimpleButtons(buttonInnerWidth)
+	borderedButtonBox := m.renderButtonBox(buttonRow, buttonInnerWidth)
+
+	// Verify button box width matches
+	buttonBoxWidth := lipgloss.Width(borderedButtonBox)
+	if buttonBoxWidth != targetWidth {
+		// If it doesn't match, explicitly set it
+		borderedButtonBox = lipgloss.NewStyle().
+			Background(styles.Dialog.GetBackground()).
+			Width(targetWidth).
+			Render(borderedButtonBox)
+	}
+
+	// Add equal margins around both boxes for spacing
+	marginStyle := lipgloss.NewStyle().
+		Background(styles.Dialog.GetBackground()).
+		Padding(0, 1)
+
+	paddedList := marginStyle.Render(borderedList)
+	paddedButtons := marginStyle.Render(borderedButtonBox)
+
+	// Build inner content parts
+	var innerParts []string
+
+	// Add subtitle if present (left-aligned, matching padded width)
+	if m.subtitle != "" {
+		paddedWidth := lipgloss.Width(paddedList)
+		subtitle := styles.Dialog.
+			Width(paddedWidth).
+			Padding(0, 1).
+			Align(lipgloss.Left).
+			Render(m.subtitle)
+		innerParts = append(innerParts, subtitle)
+	}
+
+	// Add list box and button box
+	innerParts = append(innerParts, paddedList)
+	innerParts = append(innerParts, paddedButtons)
+
+	// Combine all parts - they should all have the same width now
+	content := lipgloss.JoinVertical(lipgloss.Left, innerParts...)
 
 	// Wrap in bordered dialog with title embedded in border
 	var dialog string
 	if m.title != "" {
-		dialog = m.renderBorderWithTitle(content, listWidth)
+		dialog = m.renderBorderWithTitle(content, targetWidth)
 	} else {
 		// No title, use standard border
 		dialogStyle := lipgloss.NewStyle().
@@ -444,7 +521,7 @@ func (m MenuModel) View() string {
 	return centered
 }
 
-// renderSimpleButtons creates a simple button row
+// renderSimpleButtons creates a button row with evenly spaced sections
 func (m MenuModel) renderSimpleButtons(contentWidth int) string {
 	styles := GetStyles()
 
@@ -480,18 +557,22 @@ func (m MenuModel) renderSimpleButtons(contentWidth int) string {
 	}
 	buttons = append(buttons, exitBtn)
 
-	// Space buttons evenly
-	buttonRow := lipgloss.JoinHorizontal(lipgloss.Center, buttons...)
+	// Divide available width into equal sections (one per button)
+	numButtons := len(buttons)
+	sectionWidth := contentWidth / numButtons
 
-	// Center the button row and add some spacing
-	centeredButtons := lipgloss.NewStyle().
-		Width(contentWidth).
-		Align(lipgloss.Center).
-		Background(styles.Dialog.GetBackground()).
-		PaddingTop(1).
-		Render(buttonRow)
+	// Center each button in its section
+	var sections []string
+	for _, btn := range buttons {
+		centeredBtn := lipgloss.NewStyle().
+			Width(sectionWidth).
+			Align(lipgloss.Center).
+			Background(styles.Dialog.GetBackground()).
+			Render(btn)
+		sections = append(sections, centeredBtn)
+	}
 
-	return centeredButtons
+	return lipgloss.JoinHorizontal(lipgloss.Top, sections...)
 }
 
 /* OLD CUSTOM RENDERING - Kept for reference (Phase 2 will add back custom styling)
