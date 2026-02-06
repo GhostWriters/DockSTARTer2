@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"io"
 	"time"
 
 	"DockSTARTer2/internal/config"
@@ -116,62 +117,39 @@ func startUpdateChecker(ctx context.Context) {
 
 // RunCommand executes a task with output displayed in a TUI dialog
 func RunCommand(ctx context.Context, title string, task func(context.Context) error) error {
-	// For now, just run the task directly
-	// TODO: Implement ProgramBox dialog for streaming output
-	return task(ctx)
+	// Wrap the task to capture output
+	wrappedTask := func(ctx context.Context, w io.Writer) error {
+		// TODO: Redirect stdout/stderr to the writer
+		// For now, just run the task
+		return task(ctx)
+	}
+
+	return RunProgramBox(ctx, title, "", wrappedTask)
 }
 
 // Confirm shows a confirmation dialog and returns the user's choice
 func Confirm(title, question string, defaultYes bool) bool {
-	if program == nil {
-		// Fallback to default if TUI not running
-		return defaultYes
-	}
-
-	// TODO: Implement proper async dialog handling with Bubble Tea
-	// For now, return the default value
-	// This is a placeholder until we implement the dialog system properly
-	return defaultYes
+	return ShowConfirmDialog(title, question, defaultYes)
 }
 
 // Message shows an info message dialog
 func Message(title, message string) {
-	if program == nil {
-		fmt.Println(title + ": " + message)
-		return
-	}
-	// TODO: Show message dialog
-	fmt.Println(title + ": " + message)
+	ShowInfoDialog(title, message)
 }
 
 // Success shows a success message dialog
 func Success(title, message string) {
-	if program == nil {
-		fmt.Println("[SUCCESS] " + title + ": " + message)
-		return
-	}
-	// TODO: Show success dialog
-	fmt.Println("[SUCCESS] " + title + ": " + message)
+	ShowSuccessDialog(title, message)
 }
 
 // Warning shows a warning message dialog
 func Warning(title, message string) {
-	if program == nil {
-		fmt.Println("[WARNING] " + title + ": " + message)
-		return
-	}
-	// TODO: Show warning dialog
-	fmt.Println("[WARNING] " + title + ": " + message)
+	ShowWarningDialog(title, message)
 }
 
 // Error shows an error message dialog
 func Error(title, message string) {
-	if program == nil {
-		fmt.Println("[ERROR] " + title + ": " + message)
-		return
-	}
-	// TODO: Show error dialog
-	fmt.Println("[ERROR] " + title + ": " + message)
+	ShowErrorDialog(title, message)
 }
 
 // Screen creation functions (these will be replaced by proper imports)
