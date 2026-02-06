@@ -117,10 +117,10 @@ func startUpdateChecker(ctx context.Context) {
 
 // RunCommand executes a task with output displayed in a TUI dialog
 func RunCommand(ctx context.Context, title string, task func(context.Context) error) error {
-	// Wrap the task to capture output and redirect logger to the dialog
+	// Wrap the task to pass the writer
+	// Note: We don't use WithTUIWriter here because stdout/stderr redirection
+	// in RunProgramBox already captures all output including logger output
 	wrappedTask := func(ctx context.Context, w io.Writer) error {
-		// Attach the writer to the context so logger redirects to it
-		ctx = logger.WithTUIWriter(ctx, w)
 		return task(ctx)
 	}
 
