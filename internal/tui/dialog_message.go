@@ -4,7 +4,6 @@ import (
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/theme"
 
-	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -69,27 +68,30 @@ func (m messageDialogModel) View() string {
 
 	switch m.messageType {
 	case MessageSuccess:
+		// Use green for success (approximating theme's TitleSuccess color)
 		messageStyle = lipgloss.NewStyle().
-			Foreground(styles.ItemSelected).
+			Foreground(lipgloss.Color("#00FF00")).
 			Padding(1, 2)
 		titlePrefix = "✓ "
 
 	case MessageWarning:
+		// Use yellow for warning (approximating theme's TitleWarning color)
 		messageStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("yellow")).
+			Foreground(lipgloss.Color("#FFFF00")).
 			Padding(1, 2)
 		titlePrefix = "⚠ "
 
 	case MessageError:
+		// Use red for error (from TagKey which is red in theme)
 		messageStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("red")).
+			Foreground(styles.TagKey.GetForeground()).
 			Bold(true).
 			Padding(1, 2)
 		titlePrefix = "✗ "
 
 	default: // MessageInfo
 		messageStyle = lipgloss.NewStyle().
-			Foreground(styles.ItemNormal).
+			Foreground(styles.ItemNormal.GetForeground()).
 			Padding(1, 2)
 		titlePrefix = "ℹ "
 	}
@@ -97,7 +99,7 @@ func (m messageDialogModel) View() string {
 	// Build dialog content
 	content := messageStyle.Render(m.message) + "\n\n" +
 		lipgloss.NewStyle().
-			Foreground(styles.ItemHelp).
+			Foreground(styles.HelpLine.GetForeground()).
 			Italic(true).
 			Align(lipgloss.Center).
 			Render("Press any key to continue")

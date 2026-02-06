@@ -80,13 +80,13 @@ func (m confirmDialogModel) View() string {
 
 	// Question text
 	questionStyle := lipgloss.NewStyle().
-		Foreground(styles.ItemSelected).
+		Foreground(styles.ItemSelected.GetForeground()).
 		Bold(true).
 		Padding(1, 2)
 
 	// Button styles
-	yesStyle := styles.Button
-	noStyle := styles.Button
+	yesStyle := styles.ButtonInactive
+	noStyle := styles.ButtonInactive
 
 	if m.result {
 		yesStyle = styles.ButtonActive

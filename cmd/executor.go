@@ -539,7 +539,7 @@ func handleList(ctx context.Context, group *CommandGroup) {
 	}
 
 	for _, item := range result {
-		fmt.Println(appenv.GetNiceName(ctx, item))
+		logger.Display(ctx, appenv.GetNiceName(ctx, item))
 	}
 }
 
@@ -739,7 +739,7 @@ func handleEnvAppVars(ctx context.Context, group *CommandGroup) {
 			continue
 		}
 		for _, v := range vars {
-			fmt.Println(v)
+			logger.Display(ctx, v)
 		}
 	}
 }
@@ -758,7 +758,7 @@ func handleEnvAppVarsLines(ctx context.Context, group *CommandGroup) {
 			continue
 		}
 		for _, l := range lines {
-			fmt.Println(l)
+			logger.Display(ctx, l)
 		}
 	}
 }

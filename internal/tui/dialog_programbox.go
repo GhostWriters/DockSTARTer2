@@ -166,7 +166,7 @@ func (m programBoxModel) View() string {
 
 	// Status line
 	statusStyle := lipgloss.NewStyle().
-		Foreground(styles.ItemHelp).
+		Foreground(styles.HelpLine.GetForeground()).
 		Italic(true)
 
 	var status string
