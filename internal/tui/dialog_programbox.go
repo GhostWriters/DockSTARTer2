@@ -226,38 +226,46 @@ func RunProgramBox(ctx context.Context, title, subtitle string, task func(contex
 	// Create a pipe for output
 	reader, writer := io.Pipe()
 
-	// Create a multi-writer that writes to both the pipe and captures output
-	multiWriter := io.MultiWriter(writer)
-
-	// Save original stdout/stderr and redirect them
-	oldStdout := os.Stdout
-	oldStderr := os.Stderr
-
-	// Create pipes for stdout/stderr redirection
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-	os.Stderr = w
-
-	// Copy stdout/stderr to our pipe
-	go func() {
-		io.Copy(writer, r)
-	}()
+	// Create Bubble Tea program FIRST (before redirecting stdout/stderr)
+	// so it can use the real terminal
+	p := tea.NewProgram(model)
 
 	// Run the task in a goroutine
 	errChan := make(chan error, 1)
 	go func() {
-		defer func() {
-			// Restore original stdout/stderr
-			w.Close()
-			os.Stdout = oldStdout
-			os.Stderr = oldStderr
-			writer.Close()
-		}()
-		errChan <- task(ctx, multiWriter)
-	}()
+		defer writer.Close()
 
-	// Create Bubble Tea program
-	p := tea.NewProgram(model)
+		// Save original stdout/stderr
+		oldStdout := os.Stdout
+		oldStderr := os.Stderr
+
+		// Create pipes for stdout/stderr redirection
+		r, w, _ := os.Pipe()
+
+		// Redirect stdout/stderr to our pipe
+		os.Stdout = w
+		os.Stderr = w
+
+		// Copy from the pipe to our writer in a goroutine
+		copyDone := make(chan struct{})
+		go func() {
+			io.Copy(writer, r)
+			close(copyDone)
+		}()
+
+		// Run the task
+		err := task(ctx, writer)
+
+		// Restore original stdout/stderr
+		w.Close()
+		os.Stdout = oldStdout
+		os.Stderr = oldStderr
+
+		// Wait for copy to finish
+		<-copyDone
+
+		errChan <- err
+	}()
 
 	// Start streaming output
 	go func() {
