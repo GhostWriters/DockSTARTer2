@@ -235,36 +235,49 @@ func RunProgramBox(ctx context.Context, title, subtitle string, task func(contex
 	go func() {
 		defer writer.Close()
 
-		// Save original stdout/stderr
-		oldStdout := os.Stdout
-		oldStderr := os.Stderr
+		// Check if stdout/stderr are already redirected (not terminals)
+		// If they are, don't redirect again - they're likely already going to a dialog
+		stdoutStat, _ := os.Stdout.Stat()
+		stderrStat, _ := os.Stderr.Stat()
+		stdoutIsTerminal := (stdoutStat.Mode() & os.ModeCharDevice) != 0
+		stderrIsTerminal := (stderrStat.Mode() & os.ModeCharDevice) != 0
 
-		// Create pipes for stdout/stderr redirection
-		r, w, _ := os.Pipe()
+		// Only redirect if stdout/stderr are actual terminals
+		if stdoutIsTerminal && stderrIsTerminal {
+			// Save original stdout/stderr
+			oldStdout := os.Stdout
+			oldStderr := os.Stderr
 
-		// Redirect stdout/stderr to our pipe
-		os.Stdout = w
-		os.Stderr = w
+			// Create pipes for stdout/stderr redirection
+			r, w, _ := os.Pipe()
 
-		// Copy from the pipe to our writer in a goroutine
-		copyDone := make(chan struct{})
-		go func() {
-			io.Copy(writer, r)
-			close(copyDone)
-		}()
+			// Redirect stdout/stderr to our pipe
+			os.Stdout = w
+			os.Stderr = w
 
-		// Run the task
-		err := task(ctx, writer)
+			// Copy from the pipe to our writer in a goroutine
+			copyDone := make(chan struct{})
+			go func() {
+				io.Copy(writer, r)
+				close(copyDone)
+			}()
 
-		// Restore original stdout/stderr
-		w.Close()
-		os.Stdout = oldStdout
-		os.Stderr = oldStderr
+			// Run the task
+			err := task(ctx, writer)
 
-		// Wait for copy to finish
-		<-copyDone
+			// Restore original stdout/stderr
+			w.Close()
+			os.Stdout = oldStdout
+			os.Stderr = oldStderr
 
-		errChan <- err
+			// Wait for copy to finish
+			<-copyDone
+
+			errChan <- err
+		} else {
+			// stdout/stderr already redirected, just run the task
+			errChan <- task(ctx, writer)
+		}
 	}()
 
 	// Start streaming output
