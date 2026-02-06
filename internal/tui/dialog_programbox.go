@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"io"
+	"os"
 	"strings"
 
 	"DockSTARTer2/internal/config"
@@ -225,11 +226,34 @@ func RunProgramBox(ctx context.Context, title, subtitle string, task func(contex
 	// Create a pipe for output
 	reader, writer := io.Pipe()
 
+	// Create a multi-writer that writes to both the pipe and captures output
+	multiWriter := io.MultiWriter(writer)
+
+	// Save original stdout/stderr and redirect them
+	oldStdout := os.Stdout
+	oldStderr := os.Stderr
+
+	// Create pipes for stdout/stderr redirection
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+	os.Stderr = w
+
+	// Copy stdout/stderr to our pipe
+	go func() {
+		io.Copy(writer, r)
+	}()
+
 	// Run the task in a goroutine
 	errChan := make(chan error, 1)
 	go func() {
-		defer writer.Close()
-		errChan <- task(ctx, writer)
+		defer func() {
+			// Restore original stdout/stderr
+			w.Close()
+			os.Stdout = oldStdout
+			os.Stderr = oldStderr
+			writer.Close()
+		}()
+		errChan <- task(ctx, multiWriter)
 	}()
 
 	// Create Bubble Tea program
