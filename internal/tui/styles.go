@@ -49,6 +49,9 @@ type Styles struct {
 
 	// Separator
 	SepChar string
+
+	// Settings
+	LineCharacters bool
 }
 
 // currentStyles holds the active styles
@@ -67,7 +70,8 @@ func tcellToLipgloss(c tcell.Color) lipgloss.Color {
 	return lipgloss.Color(fmt.Sprintf("#%06x", c.Hex()))
 }
 
-var AsciiBorder = lipgloss.Border{
+// asciiBorder defines a simple ASCII-only border for terminals without Unicode support
+var asciiBorder = lipgloss.Border{
 	Top:         "-",
 	Bottom:      "-",
 	Left:        "|",
@@ -78,16 +82,43 @@ var AsciiBorder = lipgloss.Border{
 	BottomRight: "+",
 }
 
+// roundedAsciiBorder defines a softer ASCII border with rounded appearance for buttons
+var roundedAsciiBorder = lipgloss.Border{
+	Top:         "-",
+	Bottom:      "-",
+	Left:        "|",
+	Right:       "|",
+	TopLeft:     ".",
+	TopRight:    ".",
+	BottomLeft:  "'",
+	BottomRight: "'",
+}
+
+// slantedAsciiBorder defines a beveled ASCII border with slanted corners
+var slantedAsciiBorder = lipgloss.Border{
+	Top:         "-",
+	Bottom:      "-",
+	Left:        "|",
+	Right:       "|",
+	TopLeft:     "/",
+	TopRight:    "\\",
+	BottomLeft:  "\\",
+	BottomRight: "/",
+}
+
 // InitStyles initializes lipgloss styles from the current theme
 func InitStyles(cfg config.AppConfig) {
 	t := theme.Current
+
+	// Store LineCharacters setting for later use
+	currentStyles.LineCharacters = cfg.LineCharacters
 
 	// Border style based on LineCharacters setting
 	if cfg.LineCharacters {
 		currentStyles.Border = lipgloss.RoundedBorder()
 		currentStyles.SepChar = "─"
 	} else {
-		currentStyles.Border = AsciiBorder
+		currentStyles.Border = asciiBorder
 		currentStyles.SepChar = "-"
 	}
 
@@ -187,6 +218,84 @@ func Apply3DBorder(style lipgloss.Style) lipgloss.Style {
 
 	return style.
 		Border(currentStyles.Border).
+		BorderTopForeground(currentStyles.BorderColor).
+		BorderLeftForeground(currentStyles.BorderColor).
+		BorderBottomForeground(currentStyles.Border2Color).
+		BorderRightForeground(currentStyles.Border2Color).
+		BorderTopBackground(borderBG).
+		BorderLeftBackground(borderBG).
+		BorderBottomBackground(borderBG).
+		BorderRightBackground(borderBG)
+}
+
+// ApplyStraightBorder applies a 3D border with straight edges
+// Uses asciiBorder or NormalBorder based on LineCharacters setting
+func ApplyStraightBorder(style lipgloss.Style, useLineChars bool) lipgloss.Style {
+	// Get the dialog background color for border backgrounds
+	borderBG := currentStyles.Dialog.GetBackground()
+
+	// Choose border style based on LineCharacters setting
+	var border lipgloss.Border
+	if useLineChars {
+		border = lipgloss.NormalBorder()
+	} else {
+		border = asciiBorder
+	}
+
+	return style.
+		Border(border).
+		BorderTopForeground(currentStyles.BorderColor).
+		BorderLeftForeground(currentStyles.BorderColor).
+		BorderBottomForeground(currentStyles.Border2Color).
+		BorderRightForeground(currentStyles.Border2Color).
+		BorderTopBackground(borderBG).
+		BorderLeftBackground(borderBG).
+		BorderBottomBackground(borderBG).
+		BorderRightBackground(borderBG)
+}
+
+// ApplyRoundedBorder applies a 3D border with rounded corners
+// Uses roundedAsciiBorder or RoundedBorder based on LineCharacters setting
+func ApplyRoundedBorder(style lipgloss.Style, useLineChars bool) lipgloss.Style {
+	// Get the dialog background color for border backgrounds
+	borderBG := currentStyles.Dialog.GetBackground()
+
+	// Choose border style based on LineCharacters setting
+	var border lipgloss.Border
+	if useLineChars {
+		border = lipgloss.RoundedBorder()
+	} else {
+		border = roundedAsciiBorder
+	}
+
+	return style.
+		Border(border).
+		BorderTopForeground(currentStyles.BorderColor).
+		BorderLeftForeground(currentStyles.BorderColor).
+		BorderBottomForeground(currentStyles.Border2Color).
+		BorderRightForeground(currentStyles.Border2Color).
+		BorderTopBackground(borderBG).
+		BorderLeftBackground(borderBG).
+		BorderBottomBackground(borderBG).
+		BorderRightBackground(borderBG)
+}
+
+// ApplySlantedBorder applies a 3D border with slanted/beveled corners
+// Uses slantedAsciiBorder or RoundedBorder based on LineCharacters setting
+func ApplySlantedBorder(style lipgloss.Style, useLineChars bool) lipgloss.Style {
+	// Get the dialog background color for border backgrounds
+	borderBG := currentStyles.Dialog.GetBackground()
+
+	// Choose border style based on LineCharacters setting
+	var border lipgloss.Border
+	if useLineChars {
+		border = lipgloss.RoundedBorder()
+	} else {
+		border = slantedAsciiBorder
+	}
+
+	return style.
+		Border(border).
 		BorderTopForeground(currentStyles.BorderColor).
 		BorderLeftForeground(currentStyles.BorderColor).
 		BorderBottomForeground(currentStyles.Border2Color).

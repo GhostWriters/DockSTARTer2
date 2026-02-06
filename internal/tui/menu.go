@@ -460,7 +460,7 @@ func (m MenuModel) View() string {
 	// Wrap list in its own border (no padding, items have their own margins)
 	listStyle := styles.Dialog.
 		Padding(0, 0)
-	listStyle = Apply3DBorder(listStyle)
+	listStyle = ApplyStraightBorder(listStyle, styles.LineCharacters)
 	borderedList := listStyle.Render(listView)
 
 	// Calculate the target width for all content
@@ -521,7 +521,7 @@ func (m MenuModel) View() string {
 		dialogStyle := lipgloss.NewStyle().
 			Background(styles.Dialog.GetBackground()).
 			Padding(0, 1)
-		dialogStyle = Apply3DBorder(dialogStyle)
+		dialogStyle = ApplyStraightBorder(dialogStyle, styles.LineCharacters)
 		dialog = dialogStyle.Render(content)
 	}
 
@@ -566,7 +566,7 @@ func (m MenuModel) renderSimpleButtons(contentWidth int) string {
 		selectStyle = styles.ButtonActive
 	}
 	selectBtnStyle := selectStyle.Copy().Width(maxButtonWidth).Align(lipgloss.Center)
-	selectBtnStyle = Apply3DBorder(selectBtnStyle)
+	selectBtnStyle = ApplyRoundedBorder(selectBtnStyle, styles.LineCharacters)
 	selectBtn := selectBtnStyle.Render(" Select ")
 
 	// Back button with border and fixed width (optional)
@@ -577,7 +577,7 @@ func (m MenuModel) renderSimpleButtons(contentWidth int) string {
 			backStyle = styles.ButtonActive
 		}
 		backBtnStyle := backStyle.Copy().Width(maxButtonWidth).Align(lipgloss.Center)
-		backBtnStyle = Apply3DBorder(backBtnStyle)
+		backBtnStyle = ApplyRoundedBorder(backBtnStyle, styles.LineCharacters)
 		backBtn = backBtnStyle.Render(" Back ")
 	}
 
@@ -587,7 +587,7 @@ func (m MenuModel) renderSimpleButtons(contentWidth int) string {
 		exitStyle = styles.ButtonActive
 	}
 	exitBtnStyle := exitStyle.Copy().Width(maxButtonWidth).Align(lipgloss.Center)
-	exitBtnStyle = Apply3DBorder(exitBtnStyle)
+	exitBtnStyle = ApplyRoundedBorder(exitBtnStyle, styles.LineCharacters)
 	exitBtn := exitBtnStyle.Render(" Exit ")
 
 	// Collect all buttons
@@ -948,7 +948,13 @@ func (m MenuModel) renderDialog(menuContent, buttonBox string, listWidth int) st
 
 func (m MenuModel) renderBorderWithTitle(content string, contentWidth int) string {
 	styles := GetStyles()
-	border := styles.Border
+	// Use straight border (not rounded) for dialogs
+	var border lipgloss.Border
+	if styles.LineCharacters {
+		border = lipgloss.NormalBorder()
+	} else {
+		border = asciiBorder
+	}
 
 	// Style definitions
 	borderBG := styles.Dialog.GetBackground()
