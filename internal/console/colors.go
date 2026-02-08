@@ -62,29 +62,7 @@ const (
 	CodeBrightWhiteBg   = "\033[107m"
 )
 
-// ColorToHexMap maps standard color names to hex codes for TrueColor consistency
-// ColorToHexMap maps standard color names to ANSI indices for terminal consistency
-// Using indices (0-15) ensures colors match the terminal's theme and resets (\x1b[0m)
-var ColorToHexMap = map[string]string{
-	"black":   "0",
-	"red":     "1",
-	"green":   "2",
-	"yellow":  "3",
-	"blue":    "4",
-	"magenta": "5",
-	"cyan":    "6",
-	"white":   "7",
-	"gray":    "8",
-	"maroon":  "1",
-	"olive":   "3",
-	"navy":    "4",
-	"purple":  "5",
-	"teal":    "6",
-	"silver":  "7",
-	"lime":    "10",
-	"fuchsia": "13",
-	"aqua":    "14",
-}
+// ColorToHexMap has been removed in favor of tcell/v3/color parsing in internal/theme
 
 // AppColors defines the struct for program-wide colors/styles
 // Values are stored in tview tag format (e.g., "[cyan::b]")

@@ -39,3 +39,33 @@ func TestGetColorStr(t *testing.T) {
 
 	testutils.PrintTestTable(t, cases)
 }
+
+func TestParseColor(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		// Standard Colors (Now expecting Hex)
+		{"black", "#000000"},
+		{"red", "#ff0000"},
+
+		// Hex Codes
+		{"#123456", "#123456"},
+
+		// Tcell Extended Colors
+		{"orange", "#ffa500"}, // CSS Orange
+		{"rebeccapurple", "#663399"},
+	}
+
+	for _, tt := range tests {
+		c := parseColor(tt.input)
+		actual := ""
+		if c != nil {
+			actual = fmt.Sprintf("%v", c)
+		}
+
+		if actual != tt.expected {
+			t.Errorf("parseColor(%q) = %q, want %q", tt.input, actual, tt.expected)
+		}
+	}
+}

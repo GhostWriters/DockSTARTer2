@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	tcellColor "github.com/gdamore/tcell/v3/color"
 	"github.com/muesli/termenv"
 )
 
@@ -40,6 +41,10 @@ func init() {
 
 	// Detect color profile
 	preferredProfile = detectProfile()
+
+	// Alias standard ANSI color names for tcell
+	tcellColor.Names["magenta"] = tcellColor.Fuchsia
+	tcellColor.Names["cyan"] = tcellColor.Aqua
 
 	// Build color maps lazily via ensureMaps()
 }
@@ -292,31 +297,35 @@ func parseStyleCodeToANSI(content string) string {
 		}
 
 		color := preferredProfile.Color(colorName)
+
 		if strings.HasPrefix(colorName, "#") {
 			// Hex color
 			codes.WriteString(wrapSequence(color.Sequence(false)))
-		} else if val, ok := ColorToHexMap[colorName]; ok {
-			// Named color resolved to hex or index
-			if highIntensity {
-				if brightVal, ok := getBrightIndex(val); ok {
-					val = brightVal
+		} else {
+			if code, ok := ansiMap[colorName]; ok {
+				// Direct ANSI code mapping (e.g., "bold" or custom)
+				codes.WriteString(code)
+				goto FoundFG
+			}
+
+			// Try resolving with tcell (Extended colors)
+			if tc := tcellColor.GetColor(colorName); tc != tcellColor.Default {
+				if h := tc.Hex(); h >= 0 {
+					color := preferredProfile.Color(fmt.Sprintf("#%06x", h))
+					codes.WriteString(wrapSequence(color.Sequence(false)))
+					// Match found, skip fallback
+					goto FoundFG
 				}
 			}
-			color = preferredProfile.Color(val)
-			codes.WriteString(wrapSequence(color.Sequence(false)))
-		} else if code, ok := ansiMap[colorName]; ok {
-			// Direct ANSI code mapping (e.g., "bold" or custom)
-			codes.WriteString(code)
-		} else {
+
 			// Fallback: Try to use it as a raw color (e.g. "7", "235")
-			// This handles the case where theme.go resolves "silver" to "7"
-			// and passes "7" here, which isn't in ColorToHexMap/ansiMap.
-			color = preferredProfile.Color(colorName)
+			color := preferredProfile.Color(colorName)
 			seq := color.Sequence(false)
 			if seq != "" {
 				codes.WriteString(wrapSequence(seq))
 			}
 		}
+	FoundFG:
 	}
 
 	// Part 1: Background color
@@ -329,29 +338,35 @@ func parseStyleCodeToANSI(content string) string {
 		}
 
 		color := preferredProfile.Color(colorName)
+
 		if strings.HasPrefix(colorName, "#") {
 			// Hex color
 			codes.WriteString(wrapSequence(color.Sequence(true)))
-		} else if val, ok := ColorToHexMap[colorName]; ok {
-			// Named color resolved to hex or index
-			if highIntensity {
-				if brightVal, ok := getBrightIndex(val); ok {
-					val = brightVal
+		} else {
+			if code, ok := ansiMap[colorName+"bg"]; ok {
+				// Direct ANSI code mapping
+				codes.WriteString(code)
+				goto FoundBG
+			}
+
+			// Try resolving with tcell (Extended colors)
+			if tc := tcellColor.GetColor(colorName); tc != tcellColor.Default {
+				if h := tc.Hex(); h >= 0 {
+					color := preferredProfile.Color(fmt.Sprintf("#%06x", h))
+					codes.WriteString(wrapSequence(color.Sequence(true)))
+					// Match found, skip fallback
+					goto FoundBG
 				}
 			}
-			color = preferredProfile.Color(val)
-			codes.WriteString(wrapSequence(color.Sequence(true)))
-		} else if code, ok := ansiMap[colorName+"bg"]; ok {
-			// Direct ANSI code mapping
-			codes.WriteString(code)
-		} else {
-			// Fallback: Try to use it as a raw color (e.g. "7", "235")
-			color = preferredProfile.Color(colorName)
+
+			// Fallback
+			color := preferredProfile.Color(colorName)
 			seq := color.Sequence(true)
 			if seq != "" {
 				codes.WriteString(wrapSequence(seq))
 			}
 		}
+	FoundBG:
 	}
 
 	// Part 2: Flags (each character is a flag: b=bold, u=underline, etc.)

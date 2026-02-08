@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/gdamore/tcell/v3/color"
 )
 
 // GetColorStr is moved to console package for reuse
@@ -21,9 +22,7 @@ func GetColorStr(c lipgloss.TerminalColor) string {
 	}
 	// Extract the color name or hex
 	name := fmt.Sprintf("%v", c)
-	if hex, ok := console.ColorToHexMap[strings.ToLower(name)]; ok {
-		return hex
-	}
+	// Return the hex or name directly as we no longer have a map to look up
 	return strings.ToLower(name)
 }
 
@@ -70,6 +69,8 @@ type ThemeConfig struct {
 	TagKeySelectedFG     lipgloss.TerminalColor
 	ItemHelpFG           lipgloss.TerminalColor
 	ItemHelpBG           lipgloss.TerminalColor
+	ProgramFG            lipgloss.TerminalColor
+	ProgramBG            lipgloss.TerminalColor
 }
 
 // Current holds the active theme configuration
@@ -157,6 +158,8 @@ func updateTagsFromCurrent() {
 	console.RegisterSemanticTag("ThemeTagKey", "{{|"+GetColorStr(Current.TagKeyFG)+"|}}")
 	console.RegisterSemanticTag("ThemeTagKeySelected", "{{|"+GetColorStr(Current.TagKeySelectedFG)+"|}}")
 	console.RegisterSemanticTag("ThemeShadow", "{{|"+GetColorStr(Current.ShadowColor)+"|}}")
+
+	regComp("Program", Current.ProgramFG, Current.ProgramBG)
 }
 
 // Default initializes the Current ThemeConfig with standard DockSTARTer colors (Classic)
@@ -187,6 +190,8 @@ func Default() {
 		TagKeySelectedFG: lipgloss.Color("0"),  // Black
 		ItemHelpFG:       lipgloss.Color("0"),  // Black
 		ItemHelpBG:       lipgloss.Color("6"),  // Teal
+		ProgramFG:        lipgloss.Color("15"), // Bright White
+		ProgramBG:        lipgloss.Color("0"),  // Black
 	}
 	Apply()
 
@@ -204,11 +209,30 @@ func Default() {
 
 }
 
+// parseColor converts a color name or hex string to a lipgloss.TerminalColor.
+//
+// Standard ANSI Color Reference (for tcell/lipgloss mapping):
+// black   = 0 (#000000)
+// red     = 1 (#800000 / #ff0000)
+// green   = 2 (#008000)
+// yellow  = 3 (#808000 / #ffff00)
+// blue    = 4 (#000080)
+// magenta = 5 (#800080 / #ff00ff) (Aliased to Fuchsia)
+// cyan    = 6 (#008080 / #00ffff) (Aliased to Aqua)
+// white   = 7 (#c0c0c0)
 func parseColor(c string) lipgloss.TerminalColor {
 	c = strings.ToLower(strings.TrimSpace(c))
-	if idx, ok := console.ColorToHexMap[c]; ok {
-		return lipgloss.Color(idx)
+
+	// 1. Try resolving with tcell/v3/color (Supports extended names like "navy", "orange")
+	// GetColor returns color.Default (0) if not found.
+	// We also verify Hex() returns a valid value (>= 0).
+	if tColor := color.GetColor(c); tColor != color.Default {
+		if h := tColor.Hex(); h >= 0 {
+			return lipgloss.Color(fmt.Sprintf("#%06x", h))
+		}
 	}
+
+	// 2. Hex codes (Fallback if tcell didn't catch it, though tcell handles many)
 	if strings.HasPrefix(c, "#") {
 		return lipgloss.Color(c)
 	}
@@ -346,6 +370,8 @@ func parseThemeINI(path string) error {
 			Current.TagKeySelectedFG = fg
 		case "ItemHelp":
 			Current.ItemHelpFG, Current.ItemHelpBG = fg, bg
+		case "Program":
+			Current.ProgramFG, Current.ProgramBG = fg, bg
 		}
 	}
 

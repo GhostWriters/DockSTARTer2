@@ -59,7 +59,9 @@ func newProgramBox(title, subtitle, command string) programBoxModel {
 	styles := GetStyles()
 	m.viewport.Style = styles.Dialog.Copy().Padding(0, 0)
 	// Use theme-defined console colors to properly display ANSI colors from command output
-	m.viewport.Style = m.viewport.Style.Copy().Background(styles.Console.GetBackground())
+	m.viewport.Style = m.viewport.Style.Copy().
+		Background(styles.Console.GetBackground()).
+		Foreground(styles.Console.GetForeground())
 
 	return m
 }
