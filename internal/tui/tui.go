@@ -13,8 +13,6 @@ import (
 	"DockSTARTer2/internal/update"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
 )
 
 var (
@@ -40,8 +38,8 @@ func Initialize(ctx context.Context) error {
 	// Initialize styles from theme
 	InitStyles(currentConfig)
 
-	// Configure lipgloss renderer for TrueColor support
-	lipgloss.SetColorProfile(termenv.TrueColor)
+	// Initialize styles from theme
+	InitStyles(currentConfig)
 
 	return nil
 }

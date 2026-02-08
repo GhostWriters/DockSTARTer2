@@ -74,6 +74,12 @@ func tcellToLipgloss(c tcell.Color) lipgloss.Color {
 	if c == tcell.ColorDefault {
 		return lipgloss.Color("")
 	}
+	// Use ANSI indices for standard 256-color palette (0-255)
+	// to respect terminal themes and allow proper downsampling.
+	if c < 256 {
+		return lipgloss.Color(fmt.Sprintf("%d", c))
+	}
+	// For true RGB colors, use hex
 	return lipgloss.Color(fmt.Sprintf("#%06x", c.Hex()))
 }
 
