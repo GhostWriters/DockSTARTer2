@@ -12,12 +12,12 @@ func TestGetColorStr(t *testing.T) {
 		input    tcell.Color
 		expected string
 	}{
-		// Standard Colors (Mapped to Hex)
-		{tcell.ColorBlack, "#000000"},
-		{tcell.ColorRed, "#ff0000"},
-		{tcell.ColorGreen, "#008000"},
-		{tcell.ColorBlue, "#0000ff"},
-		{tcell.ColorWhite, "#ffffff"},
+		// Standard Colors (Mapped to ANSI Indices)
+		{tcell.ColorBlack, "0"},
+		{tcell.ColorRed, "9"},
+		{tcell.ColorGreen, "2"},
+		{tcell.ColorBlue, "12"},
+		{tcell.ColorWhite, "15"},
 
 		// Custom RGB (Not in map, returns Name/Hex from tcell)
 		// tcell.NewRGBColor returns a color where .Name() might be the hex string if not standard.
