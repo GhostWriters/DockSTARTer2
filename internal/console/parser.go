@@ -61,8 +61,12 @@ func detectProfile() termenv.Profile {
 	switch colorTerm {
 	case "truecolor", "24bit":
 		return termenv.TrueColor
-	case "8bit":
+	case "8bit", "256color":
 		return termenv.ANSI256
+	case "4bit", "16color", "8color", "3bit":
+		return termenv.ANSI
+	case "1bit", "2color", "mono", "false", "0":
+		return termenv.Ascii
 	}
 
 	// 2. Check TERM for well-known color-capable terms
