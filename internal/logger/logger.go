@@ -90,13 +90,13 @@ func logAt(ctx context.Context, t time.Time, level slog.Level, msg any, args ...
 			// Exactly match tint console format: TIME [LEVEL]  MESSAGE (2 spaces after level)
 			// Use PrepareForTUI to convert semantic tags to cview tags and remove ANSI while keeping cview colors
 			// NOTE: Do NOT call cview.Escape() here - PrepareForTUI already produces proper cview format
-			tuiMsg := fmt.Sprintf("%s [%s]  %s", timeStr, levelStr, console.PrepareForTUI(line))
+			tuiMsg := fmt.Sprintf("%s [%s]  %s", timeStr, levelStr, console.ForTUI(line))
 			fmt.Fprintln(w, tuiMsg)
 		}
 
 		// 2. Output to standard slog handlers (stderr, file)
 		// IMPORTANT: Always use Parse for stderr to get ANSI colors, regardless of TUI mode
-		msgAnsi := console.Parse(line) + console.CodeReset
+		msgAnsi := console.ToANSI(line) + console.CodeReset
 		r := slog.NewRecord(t, level, msgAnsi, 0)
 		if i == 0 {
 			r.Add(args...)
@@ -337,12 +337,12 @@ func Display(ctx context.Context, msg any, args ...any) {
 		if w, ok := ctx.Value(TUIWriterKey).(io.Writer); ok {
 			// Use PrepareForTUI to keep cview colors while removing ANSI
 			// NOTE: Do NOT call cview.Escape() - PrepareForTUI output is already in cview format
-			fmt.Fprintln(w, console.PrepareForTUI(line))
+			fmt.Fprintln(w, console.ForTUI(line))
 		}
 
 		// 2. Output directly to terminal (stdout)
 		// IMPORTANT: Always use Parse for stdout to get ANSI colors, regardless of TUI mode
-		fmt.Println(console.Parse(line) + console.CodeReset)
+		fmt.Println(console.ToANSI(line) + console.CodeReset)
 	}
 }
 

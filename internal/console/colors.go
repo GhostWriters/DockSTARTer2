@@ -179,15 +179,15 @@ var Colors AppColors
 // These map semantic names to their tview-format output values
 func RegisterBaseTags() {
 	// Bash-style aliases from main.sh
-	RegisterSemanticTag("NC", "[-]")
-	RegisterSemanticTag("BD", "[::b]")
-	RegisterSemanticTag("UL", "[::u]")
-	RegisterSemanticTag("DM", "[::d]")
-	RegisterSemanticTag("BL", "[::l]")
+	RegisterSemanticTag("NC", "{{|-|}}")
+	RegisterSemanticTag("BD", "{{|::B|}}")
+	RegisterSemanticTag("UL", "{{|::U|}}")
+	RegisterSemanticTag("DM", "{{|::D|}}")
+	RegisterSemanticTag("BL", "{{|::L|}}")
 
 	// Existing shorthands
-	RegisterSemanticTag("ul", "[::u]")
-	RegisterSemanticTag("blink", "[::l]")
+	RegisterSemanticTag("ul", "{{|::U|}}")
+	RegisterSemanticTag("blink", "{{|::L|}}")
 
 	// Semantic tags from struct fields (auto-registered by BuildColorMap)
 	// Double-register here for explicit visibility and aliasMap access

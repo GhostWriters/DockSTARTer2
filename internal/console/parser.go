@@ -7,12 +7,11 @@ import (
 	"regexp"
 	"strings"
 
-	"codeberg.org/tslocum/cview"
 	"github.com/muesli/termenv"
 )
 
 var (
-	// semanticMap stores semantic tag -> tview format mappings (e.g., "version" -> "[cyan]")
+	// semanticMap stores semantic tag -> standardized tag mappings (e.g., "version" -> "{{|cyan|}}")
 	semanticMap map[string]string
 
 	// ansiMap stores color/modifier names -> ANSI code mappings
@@ -188,16 +187,16 @@ func BuildColorMap() {
 	}
 }
 
-// RegisterSemanticTag registers a semantic tag with its tview-format value
-func RegisterSemanticTag(name, tviewValue string) {
+// RegisterSemanticTag registers a semantic tag with its standardized tag value
+func RegisterSemanticTag(name, taggedValue string) {
 	ensureMaps()
-	semanticMap[strings.ToLower(name)] = tviewValue
+	semanticMap[strings.ToLower(name)] = taggedValue
 }
 
-// ToTview converts semantic and direct tags to tview [color] format
+// ExpandTags converts semantic and direct tags to standardized {{|style|}} format
 // - {{_Tag_}} : Semantic lookup
-// - {{|code|}} : Direct tview-style (just replace delimiters)
-func ToTview(text string) string {
+// - {{|code|}} : Direct style (no-op, just for consistency)
+func ExpandTags(text string) string {
 	ensureMaps()
 
 	// 1. Process semantic tags {{_Tag_}}
@@ -206,18 +205,12 @@ func ToTview(text string) string {
 		content = strings.ToLower(content)
 
 		// Check semantic map
-		if tviewTag, ok := semanticMap[content]; ok {
-			return tviewTag
+		if tag, ok := semanticMap[content]; ok {
+			return tag
 		}
 
 		// Unknown semantic tag - strip it
 		return ""
-	})
-
-	// 2. Process direct tags {{|code|}} -> [code]
-	text = directRegex.ReplaceAllStringFunc(text, func(match string) string {
-		content := match[3 : len(match)-3] // Strip "{{|" and "|}}"
-		return "[" + content + "]"
 	})
 
 	return text
@@ -238,9 +231,9 @@ func ToANSI(text string) string {
 		content := match[3 : len(match)-3] // Strip "{{_" and "_}}"
 		content = strings.ToLower(content)
 
-		// Check semantic map, then resolve tview tag to ANSI
-		if tviewTag, ok := semanticMap[content]; ok {
-			return tviewTagToANSI(tviewTag)
+		// Check semantic map, then resolve tagged style to ANSI
+		if tag, ok := semanticMap[content]; ok {
+			return resolveTaggedStyleToANSI(tag)
 		}
 
 		// Unknown semantic tag - strip it
@@ -250,7 +243,7 @@ func ToANSI(text string) string {
 	// 2. Process direct tags {{|code|}} -> ANSI
 	text = directRegex.ReplaceAllStringFunc(text, func(match string) string {
 		content := match[3 : len(match)-3] // Strip "{{|" and "|}}"
-		return parseTviewStyleToANSI(content)
+		return parseStyleCodeToANSI(content)
 	})
 
 	return text
@@ -263,18 +256,19 @@ func Strip(text string) string {
 	return text
 }
 
-// tviewTagToANSI converts a tview-format tag like "[cyan::b]" to ANSI codes
-func tviewTagToANSI(tviewTag string) string {
-	// Remove brackets: "[cyan::b]" -> "cyan::b"
-	if len(tviewTag) < 2 || tviewTag[0] != '[' || tviewTag[len(tviewTag)-1] != ']' {
-		return ""
+// resolveTaggedStyleToANSI converts a standardized tag like "{{|cyan::B|}}" to ANSI codes
+func resolveTaggedStyleToANSI(tag string) string {
+	// Support both "{{|content|}}" and plain "content"
+	content := tag
+	if strings.HasPrefix(tag, "{{|") && strings.HasSuffix(tag, "|}}") {
+		content = tag[3 : len(tag)-3]
 	}
-	content := tviewTag[1 : len(tviewTag)-1]
-	return parseTviewStyleToANSI(content)
+
+	return parseStyleCodeToANSI(content)
 }
 
-// parseTviewStyleToANSI parses fg:bg:flags format and returns ANSI codes
-func parseTviewStyleToANSI(content string) string {
+// parseStyleCodeToANSI parses fg:bg:flags format and returns ANSI codes
+func parseStyleCodeToANSI(content string) string {
 	if content == "-" {
 		return CodeReset
 	}
@@ -316,6 +310,15 @@ func parseTviewStyleToANSI(content string) string {
 		} else if code, ok := ansiMap[colorName]; ok {
 			// Direct ANSI code mapping (e.g., "bold" or custom)
 			codes.WriteString(code)
+		} else {
+			// Fallback: Try to use it as a raw color (e.g. "7", "235")
+			// This handles the case where theme.go resolves "silver" to "7"
+			// and passes "7" here, which isn't in ColorToHexMap/ansiMap.
+			color = preferredProfile.Color(colorName)
+			seq := color.Sequence(false)
+			if seq != "" {
+				codes.WriteString(wrapSequence(seq))
+			}
 		}
 	}
 
@@ -344,6 +347,13 @@ func parseTviewStyleToANSI(content string) string {
 		} else if code, ok := ansiMap[colorName+"bg"]; ok {
 			// Direct ANSI code mapping
 			codes.WriteString(code)
+		} else {
+			// Fallback: Try to use it as a raw color (e.g. "7", "235")
+			color = preferredProfile.Color(colorName)
+			seq := color.Sequence(true)
+			if seq != "" {
+				codes.WriteString(wrapSequence(seq))
+			}
 		}
 	}
 
@@ -408,36 +418,25 @@ func Parse(text string) string {
 	return ToANSI(text)
 }
 
-// Translate is a convenience alias for ToTview (backwards compatibility)
+// Translate is a convenience alias for ExpandTags (backwards compatibility)
 func Translate(text string) string {
-	return ToTview(text)
+	return ExpandTags(text)
 }
 
-// PrepareForTUI is a convenience alias for ToTview (backwards compatibility)
-func PrepareForTUI(text string) string {
-	return ToTview(text)
-}
-
-// ExpandSemanticTags is a convenience alias for ToTview (backwards compatibility)
+// ExpandSemanticTags is a convenience alias for ExpandTags (backwards compatibility)
 func ExpandSemanticTags(text string) string {
-	return ToTview(text)
+	return ExpandTags(text)
 }
 
-// TranslateToTview is a convenience alias for ToTview (backwards compatibility)
-func TranslateToTview(text string) string {
-	return ToTview(text)
+// TranslateToTagged is a convenience alias for ExpandTags
+func TranslateToTagged(text string) string {
+	return ExpandTags(text)
 }
 
-// ForTUI prepares text for cview/tview display with proper bracket escaping.
-// Order of operations:
-// 1. Escape literal brackets [text] -> [[text]] (cview.Escape)
-// 2. Convert our tags {{_Tag_}} and {{|code|}} to [cview] format
-// This ensures user content like [NOTICE] or [v2.0] doesn't get interpreted as color codes.
+// ForTUI prepares text for display with standardized tags.
+// Literal brackets [text] are now treated as plain text and do NOT need escaping.
 func ForTUI(text string) string {
-	// 1. Escape any literal brackets in the text
-	text = cview.Escape(text)
-	// 2. Convert our semantic and direct tags to cview format
-	return ToTview(text)
+	return ExpandTags(text)
 }
 
 // Legacy compatibility functions

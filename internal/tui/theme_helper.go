@@ -15,9 +15,6 @@ import (
 // themeTagRegex matches {{_SymanticColor_}} or {{|codes|}} or {{|-|}}
 var themeTagRegex = regexp.MustCompile(`\{\{(_[^}]+_|\|[^}]*\|)\}\}`)
 
-// cviewColorRegex matches cview color tags like [white:blue:b] or [-]
-var cviewColorRegex = regexp.MustCompile(`\[([^\]]+)\]`)
-
 // RenderThemeText takes text with {{...}} theme tags and returns lipgloss-styled text
 // defaultStyle is used for reset state and unstyled text
 func RenderThemeText(text string, defaultStyle ...lipgloss.Style) string {
@@ -65,22 +62,14 @@ func RenderThemeText(text string, defaultStyle ...lipgloss.Style) string {
 		} else if strings.HasPrefix(tagContent, "|") && strings.HasSuffix(tagContent, "|") {
 			// Direct color code: {{|white:blue:b|}}
 			colorCode := strings.Trim(tagContent, "|")
-			currentStyle = ApplyTviewStyle(currentStyle, resetStyle, colorCode)
+			currentStyle = ApplyStyleCode(currentStyle, resetStyle, colorCode)
 		} else if strings.HasPrefix(tagContent, "_") && strings.HasSuffix(tagContent, "_") {
 			// Semantic tag: {{_ThemeHostname_}}
 			translated := console.Translate("{{" + tagContent + "}}")
-			// Match ALL tview tags in the definition (e.g. [-][black:green])
-			if matches := cviewColorRegex.FindAllStringSubmatch(translated, -1); len(matches) > 0 {
-				for j, m := range matches {
-					// Special Handling: If the LAST tag in the definition is a REset [-],
-					// and we have prior tags, we likely want to ignore this reset.
-					if j == len(matches)-1 && len(matches) > 1 {
-						if m[1] == "-" {
-							continue
-						}
-					}
-					currentStyle = ApplyTviewStyle(currentStyle, resetStyle, m[1])
-				}
+			// The translated value is now also in {{|code|}} format
+			if strings.HasPrefix(translated, "{{|") && strings.HasSuffix(translated, "|}}") {
+				code := translated[3 : len(translated)-3]
+				currentStyle = ApplyStyleCode(currentStyle, resetStyle, code)
 			}
 		}
 
@@ -99,22 +88,14 @@ func RenderThemeText(text string, defaultStyle ...lipgloss.Style) string {
 	return result.String()
 }
 
-// ApplyTviewStyle updates an existing lipgloss.Style with tview-style color codes like "white:blue:b"
-// currentStyle is the style to update, resetStyle is used for field resets (indicated by '-')
-func ApplyTviewStyle(currentStyle lipgloss.Style, resetStyle lipgloss.Style, def string) lipgloss.Style {
+// ApplyStyleCode applies tview-style color codes (fg:bg:flags) to a lipgloss style
+func ApplyStyleCode(style lipgloss.Style, resetStyle lipgloss.Style, styleCode string) lipgloss.Style {
 	// Full reset to base style
-	if def == "[-]" || def == "-" {
+	if styleCode == "[-]" || styleCode == "-" {
 		return resetStyle
 	}
 
-	style := currentStyle
-
-	// Remove brackets if present (from semantic definitions)
-	if strings.HasPrefix(def, "[") && strings.HasSuffix(def, "]") {
-		def = def[1 : len(def)-1]
-	}
-
-	parts := strings.Split(def, ":")
+	parts := strings.Split(styleCode, ":")
 	if len(parts) == 0 {
 		return style
 	}
@@ -286,24 +267,14 @@ func GetInitialStyle(text string, base lipgloss.Style) lipgloss.Style {
 		tagContent := match[1]
 		if strings.HasPrefix(tagContent, "_") && strings.HasSuffix(tagContent, "_") {
 			translated := console.Translate("{{" + tagContent + "}}")
-			// Match ALL tview tags in the definition (e.g. [-][black:green])
-			if matches := cviewColorRegex.FindAllStringSubmatch(translated, -1); len(matches) > 0 {
-				style := base
-				for j, m := range matches {
-					// Special Handling: If the LAST tag in the definition is a REset [-],
-					// and we have prior tags, we likely want to ignore this reset.
-					if j == len(matches)-1 && len(matches) > 1 {
-						if m[1] == "-" {
-							continue
-						}
-					}
-					style = ApplyTviewStyle(style, base, m[1])
-				}
-				return style
+			// The translated value is now in {{|code|}} format
+			if strings.HasPrefix(translated, "{{|") && strings.HasSuffix(translated, "|}}") {
+				code := translated[3 : len(translated)-3]
+				return ApplyStyleCode(base, base, code)
 			}
 		} else if strings.HasPrefix(tagContent, "|") && strings.HasSuffix(tagContent, "|") {
 			colorCode := strings.Trim(tagContent, "|")
-			return ApplyTviewStyle(base, base, colorCode)
+			return ApplyStyleCode(base, base, colorCode)
 		}
 	}
 	return base

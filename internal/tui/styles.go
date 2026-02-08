@@ -203,10 +203,10 @@ func InitStyles(cfg config.AppConfig) {
 
 	// Initialize semantic styles from console color tags (Theme-specific to avoid log interference)
 	// Initialize semantic styles from console color tags (Theme-specific to avoid log interference)
-	currentStyles.StatusSuccess = ApplyTviewStyle(lipgloss.NewStyle(), lipgloss.NewStyle(), console.GetColorDefinition("ThemeTitleNotice"))
-	currentStyles.StatusWarn = ApplyTviewStyle(lipgloss.NewStyle(), lipgloss.NewStyle(), console.GetColorDefinition("ThemeTitleWarn"))
-	currentStyles.StatusError = ApplyTviewStyle(lipgloss.NewStyle(), lipgloss.NewStyle(), console.GetColorDefinition("ThemeTitleError"))
-	currentStyles.Console = ApplyTviewStyle(lipgloss.NewStyle(), lipgloss.NewStyle(), console.GetColorDefinition("ThemeProgram"))
+	currentStyles.StatusSuccess = ApplyStyleCode(lipgloss.NewStyle(), lipgloss.NewStyle(), console.GetColorDefinition("ThemeTitleNotice"))
+	currentStyles.StatusWarn = ApplyStyleCode(lipgloss.NewStyle(), lipgloss.NewStyle(), console.GetColorDefinition("ThemeTitleWarn"))
+	currentStyles.StatusError = ApplyStyleCode(lipgloss.NewStyle(), lipgloss.NewStyle(), console.GetColorDefinition("ThemeTitleError"))
+	currentStyles.Console = ApplyStyleCode(lipgloss.NewStyle(), lipgloss.NewStyle(), console.GetColorDefinition("ThemeProgram"))
 }
 
 // ApplyFlags applies ANSI style modifiers to a lipgloss.Style

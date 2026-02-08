@@ -25,9 +25,8 @@ func ParseTitleTags(text string, baseStyle lipgloss.Style) (string, lipgloss.Sty
 
 	lastIndex := 0
 
-	// Compile regex for parsing resolved tview tags (e.g. [-], [red], [white:blue])
-	// Same as cviewColorRegex in theme_helper.go
-	tviewTagRegex := regexp.MustCompile(`\[([^\]]+)\]`)
+	// Direct tag regex for parsing resolved tags (e.g. {{|white:blue|}})
+	directTagRegex := regexp.MustCompile(`\{\{\|([A-Za-z0-9_:\-#]+)\|\}\}`)
 
 	// Iterate through all found tags
 	for i, match := range matches {
@@ -45,33 +44,30 @@ func ParseTitleTags(text string, baseStyle lipgloss.Style) (string, lipgloss.Sty
 			tagName := text[match[2]:match[3]]
 			def := console.GetColorDefinition(tagName)
 
-			// The definition might be a simple "white:blue" OR a complex "[-][black:green:u][-]"
-			// We need to look for [...] patterns within the definition
-			subMatches := tviewTagRegex.FindAllStringSubmatch(def, -1)
+			// The definition is now in {{|code|}} format
+			subMatches := directTagRegex.FindAllStringSubmatch(def, -1)
 			if len(subMatches) > 0 {
-				// Apply each tview tag found in the definition sequentially
+				// Apply each direct tag found in the definition sequentially
 				for j, sm := range subMatches {
-					// Special Handling: If the LAST tag in the definition is a REset [-],
-					// and we have prior tags, we likely want to ignore this reset
-					// because usage of this variable implies setting a state for subsequent text.
-					// If we honor the trailing reset, the variable becomes a no-op for styling.
+					// Special Handling: If the LAST tag in the definition is a REset {{|-|}},
+					// and we have prior tags, we likely want to ignore this reset.
 					if j == len(subMatches)-1 && len(subMatches) > 1 {
 						if sm[1] == "-" {
 							continue
 						}
 					}
-					style = ApplyTviewStyle(style, baseStyle, sm[1])
+					style = ApplyStyleCode(style, baseStyle, sm[1])
 				}
-			} else if def != "" {
+			} else {
 				// Fallback for simple definitions without brackets
-				style = ApplyTviewStyle(style, baseStyle, def)
+				style = ApplyStyleCode(style, baseStyle, def)
 			}
 
 		} else if match[4] != -1 {
 			// Check for Direct Code (Group 2)
 			code := text[match[4]:match[5]]
 			if code != "" {
-				style = ApplyTviewStyle(style, baseStyle, code)
+				style = ApplyStyleCode(style, baseStyle, code)
 			}
 		}
 
@@ -83,10 +79,9 @@ func ParseTitleTags(text string, baseStyle lipgloss.Style) (string, lipgloss.Sty
 
 	// Remove processed tags and clean up
 	cleanText := text[lastIndex:]
-	// Strip remaining TUI tags
+	// Strip remaining styling tags
 	cleanText = tagRegex.ReplaceAllString(cleanText, "")
-	// Also strip any residual tview tags that might have leaked
-	cleanText = tviewTagRegex.ReplaceAllString(cleanText, "")
+	cleanText = directTagRegex.ReplaceAllString(cleanText, "")
 
 	return cleanText, style
 }

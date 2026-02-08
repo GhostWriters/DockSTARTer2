@@ -154,10 +154,10 @@ func Apply() {
 		// inherit the stable background.
 		// Solution: Set BOTH to ScreenBG. Results in invisible text for the gap (Silver on Silver),
 		// but ensures the Next tag sees "BG=Silver", so "Blue on Silver" reversed becomes "Silver on Blue".
-		console.RegisterSemanticTag("ThemeReset", "["+bgStr+":"+bgStr+"]")
+		console.RegisterSemanticTag("ThemeReset", "{{|"+bgStr+":"+bgStr+"|}}")
 	} else {
 		// Normal: Set FG/BG normally.
-		console.RegisterSemanticTag("ThemeReset", "["+fgStr+":"+bgStr+"]")
+		console.RegisterSemanticTag("ThemeReset", "{{|"+fgStr+":"+bgStr+"|}}")
 	}
 
 	// 3. Update global cview styles to match theme globals
@@ -168,7 +168,7 @@ func updateTagsFromCurrent() {
 	regComp := func(name string, fg, bg tcell.Color) {
 		fgName := GetColorStr(fg)
 		bgName := GetColorStr(bg)
-		tag := "[" + fgName + ":" + bgName + "]"
+		tag := "{{|" + fgName + ":" + bgName + "|}}"
 		console.RegisterSemanticTag("Theme"+name, tag)
 	}
 
@@ -187,9 +187,9 @@ func updateTagsFromCurrent() {
 	regComp("Item", Current.ItemFG, Current.ItemBG)
 	regComp("Tag", Current.TagFG, Current.TagBG)
 
-	console.RegisterSemanticTag("ThemeTagKey", "["+GetColorStr(Current.TagKeyFG)+"]")
-	console.RegisterSemanticTag("ThemeTagKeySelected", "["+GetColorStr(Current.TagKeySelectedFG)+"]")
-	console.RegisterSemanticTag("ThemeShadow", "["+GetColorStr(Current.ShadowColor)+"]")
+	console.RegisterSemanticTag("ThemeTagKey", "{{|"+GetColorStr(Current.TagKeyFG)+"|}}")
+	console.RegisterSemanticTag("ThemeTagKeySelected", "{{|"+GetColorStr(Current.TagKeySelectedFG)+"|}}")
+	console.RegisterSemanticTag("ThemeShadow", "{{|"+GetColorStr(Current.ShadowColor)+"|}}")
 }
 
 func updateStyles() {
@@ -231,16 +231,16 @@ func Default() {
 	Apply()
 
 	// Register basic theme fallbacks to prevent literal tags if theme files fail to load
-	console.RegisterSemanticTag("ThemeApplicationName", "[::b]")
-	console.RegisterSemanticTag("ThemeApplicationVersion", "[-]")
-	console.RegisterSemanticTag("ThemeApplicationVersionBrackets", "[-]")
-	console.RegisterSemanticTag("ThemeApplicationVersionSpace", console.ToTview("{{_ThemeScreen_}}")+" ")
-	console.RegisterSemanticTag("ThemeApplicationFlags", "[-]")
-	console.RegisterSemanticTag("ThemeApplicationFlagsBrackets", "[-]")
-	console.RegisterSemanticTag("ThemeApplicationFlagsSpace", console.ToTview("{{_ThemeScreen_}}")+" ")
-	console.RegisterSemanticTag("ThemeApplicationUpdate", "[yellow]")
-	console.RegisterSemanticTag("ThemeApplicationUpdateBrackets", "[-]")
-	console.RegisterSemanticTag("ThemeHostname", "[::b]")
+	console.RegisterSemanticTag("ThemeApplicationName", "{{|::B|}}")
+	console.RegisterSemanticTag("ThemeApplicationVersion", "{{|-|}}")
+	console.RegisterSemanticTag("ThemeApplicationVersionBrackets", "{{|-|}}")
+	console.RegisterSemanticTag("ThemeApplicationVersionSpace", console.ExpandTags("{{_ThemeScreen_}}")+" ")
+	console.RegisterSemanticTag("ThemeApplicationFlags", "{{|-|}}")
+	console.RegisterSemanticTag("ThemeApplicationFlagsBrackets", "{{|-|}}")
+	console.RegisterSemanticTag("ThemeApplicationFlagsSpace", console.ExpandTags("{{_ThemeScreen_}}")+" ")
+	console.RegisterSemanticTag("ThemeApplicationUpdate", "{{|yellow|}}")
+	console.RegisterSemanticTag("ThemeApplicationUpdateBrackets", "{{|-|}}")
+	console.RegisterSemanticTag("ThemeHostname", "{{|::B|}}")
 }
 
 func parseColor(c string) tcell.Color {
@@ -272,7 +272,11 @@ func parseColor(c string) tcell.Color {
 }
 
 func parseTagToColor(tag string) (fg, bg tcell.Color) {
+	tag = strings.TrimPrefix(tag, "{{|")
+	tag = strings.TrimSuffix(tag, "|}}")
+	// Also support legacy brackets for robustness during transition
 	tag = strings.Trim(tag, "[]")
+
 	parts := strings.Split(tag, ":")
 	if len(parts) > 0 {
 		fg = parseColor(parts[0])
@@ -287,7 +291,10 @@ func parseTagToColor(tag string) (fg, bg tcell.Color) {
 
 // parseTagWithStyles parses a theme tag and extracts colors and style flags
 func parseTagWithStyles(tag string) (fg, bg tcell.Color, styles StyleFlags) {
+	tag = strings.TrimPrefix(tag, "{{|")
+	tag = strings.TrimSuffix(tag, "|}}")
 	tag = strings.Trim(tag, "[]")
+
 	parts := strings.Split(tag, ":")
 	if len(parts) > 0 {
 		fg = parseColor(parts[0])
@@ -346,22 +353,22 @@ func parseThemeINI(path string) error {
 		expanded := replacer.Replace(val)
 
 		// Convert {{|code|}} format to tview [code] format
-		tviewValue := console.ToTview(expanded)
+		styleValue := console.ExpandTags(expanded)
 
 		// 1. Register the tview-format value as the tag
-		console.RegisterSemanticTag("Theme"+key, tviewValue)
+		console.RegisterSemanticTag(key, styleValue)
 
 		// 2. Update global console.Colors if this key is in the map
 		if fieldName, ok := themeToConsoleMap[key]; ok {
 			// Update global console.Colors
 			f := reflect.ValueOf(&console.Colors).Elem().FieldByName(fieldName)
 			if f.IsValid() && f.CanSet() {
-				f.SetString(tviewValue)
+				f.SetString(styleValue)
 			}
 		}
 
 		// 3. Map known keys to Current struct fields
-		fg, bg := parseTagToColor(tviewValue)
+		fg, bg := parseTagToColor(styleValue)
 		switch key {
 		case "Screen":
 			Current.ScreenFG, Current.ScreenBG = fg, bg
@@ -373,7 +380,7 @@ func parseThemeINI(path string) error {
 			Current.Border2FG, Current.Border2BG = fg, bg
 		case "Title": // Menu title with style flags (underline, bold, etc.)
 			var styles StyleFlags
-			fg, bg, styles = parseTagWithStyles(tviewValue)
+			fg, bg, styles = parseTagWithStyles(styleValue)
 			Current.TitleFG, Current.TitleBG = fg, bg
 			Current.TitleBold, Current.TitleUnderline = styles.Bold, styles.Underline
 			titleWasSet = true
@@ -389,11 +396,11 @@ func parseThemeINI(path string) error {
 			// We take the BG? Or FG? Usually same.
 			Current.ShadowColor = fg
 		case "ButtonActive":
-			fg, bg, styles := parseTagWithStyles(tviewValue)
+			fg, bg, styles := parseTagWithStyles(styleValue)
 			Current.ButtonActiveFG, Current.ButtonActiveBG = fg, bg
 			Current.ButtonActiveStyles = styles
 		case "ButtonInactive":
-			fg, bg, styles := parseTagWithStyles(tviewValue)
+			fg, bg, styles := parseTagWithStyles(styleValue)
 			Current.ButtonInactiveFG, Current.ButtonInactiveBG = fg, bg
 			Current.ButtonInactiveStyles = styles
 		case "ItemSelected":
@@ -433,9 +440,9 @@ func parseThemeINI(path string) error {
 	fgStr := GetColorStr(Current.ScreenFG)
 
 	if isReversed {
-		console.RegisterSemanticTag("ThemeReset", "["+bgStr+":"+bgStr+"]")
+		console.RegisterSemanticTag("ThemeReset", "{{|"+bgStr+":"+bgStr+"|}}")
 	} else {
-		console.RegisterSemanticTag("ThemeReset", "["+fgStr+":"+bgStr+"]")
+		console.RegisterSemanticTag("ThemeReset", "{{|"+fgStr+":"+bgStr+"|}}")
 	}
 
 	return nil
