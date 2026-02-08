@@ -29,6 +29,9 @@ jobs:
 
   release:
     needs: test
+    if: |
+      always() &&
+      (needs.test.result == 'success' || inputs.force_release == true)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
