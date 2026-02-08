@@ -138,14 +138,14 @@ func (m programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Height calculation:
-		// viewport.Height = (height - 4) - shadowHeight - 2 (border) - 1 (padding top) - 1 (command) - 3 (button) - 2 (viewport border) - 1 (scroll)
+		// viewport.Height = (height - 4) - shadowHeight - 2 (border) - 0 (padding top) - 1 (command) - 3 (button) - 2 (viewport border) - 1 (scroll)
 		commandHeight := 1
 		if m.command == "" {
 			commandHeight = 0
 		}
-		// Removed blank line (-1) and reduced padding from 2 to 1 (top only)
-		m.viewport.Width = m.width - 4 - shadowWidth - 2 - 4 - 2 - 2
-		m.viewport.Height = m.height - 4 - shadowHeight - 2 - 1 - commandHeight - 3 - 2 - 1
+		// Reduced padding from 2 (sides) to 1, and 1 (top) to 0
+		m.viewport.Width = m.width - 4 - shadowWidth - 2 - 2 - 2 - 2
+		m.viewport.Height = m.height - 4 - shadowHeight - 2 - 0 - commandHeight - 3 - 2 - 1
 		if m.viewport.Height < 5 {
 			m.viewport.Height = 5
 		}
@@ -251,9 +251,9 @@ func (m programBoxModel) View() string {
 	content := lipgloss.JoinVertical(lipgloss.Left, contentParts...)
 
 	// Add padding to content (border will be added by RenderDialogWithTitle)
-	// Padding(top, right, bottom, left) -> (1, 2, 0, 2) to remove bottom padding
+	// Padding(top, right, bottom, left) -> (0, 1, 0, 1) to reduce margin around viewport
 	paddedContent := styles.Dialog.
-		Padding(1, 2, 0, 2).
+		Padding(0, 1, 0, 1).
 		Render(content)
 
 	// Wrap in border with title embedded (matching menu style)
