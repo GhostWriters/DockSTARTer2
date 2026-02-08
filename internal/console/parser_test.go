@@ -2,6 +2,8 @@ package console
 
 import (
 	"testing"
+
+	"github.com/muesli/termenv"
 )
 
 func TestStrip(t *testing.T) {
@@ -130,6 +132,7 @@ func TestToTview(t *testing.T) {
 func TestToANSI(t *testing.T) {
 	// Setup for TTY mode
 	isTTYGlobal = true
+	SetPreferredProfile(termenv.TrueColor)
 
 	// Setup semantic map for tests
 	semanticMap = make(map[string]string)
@@ -198,6 +201,7 @@ func TestBackwardsCompatibility(t *testing.T) {
 
 	// Parse should be alias for ToANSI
 	isTTYGlobal = true
+	SetPreferredProfile(termenv.TrueColor)
 	ansiMap = make(map[string]string)
 	ansiMap["-"] = CodeReset
 	ansiMap["green"] = CodeGreen

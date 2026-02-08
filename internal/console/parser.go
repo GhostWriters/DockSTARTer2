@@ -5,10 +5,10 @@ import (
 	"os"
 	"reflect"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"codeberg.org/tslocum/cview"
+	"github.com/muesli/termenv"
 )
 
 var (
@@ -25,6 +25,9 @@ var (
 	directRegex = regexp.MustCompile(`\{\{\|([A-Za-z0-9_:\-#]+)\|\}\}`)
 
 	isTTYGlobal bool
+
+	// preferredProfile stores the detected or forced color profile
+	preferredProfile termenv.Profile
 )
 
 func init() {
@@ -36,7 +39,49 @@ func init() {
 	stat, _ := os.Stdout.Stat()
 	isTTYGlobal = (stat.Mode() & os.ModeCharDevice) != 0
 
+	// Detect color profile
+	preferredProfile = detectProfile()
+
 	// Build color maps lazily via ensureMaps()
+}
+
+// GetPreferredProfile returns the detected or forced color profile
+func GetPreferredProfile() termenv.Profile {
+	return preferredProfile
+}
+
+// SetPreferredProfile explicitly sets the color profile (useful for testing)
+func SetPreferredProfile(p termenv.Profile) {
+	preferredProfile = p
+}
+
+func detectProfile() termenv.Profile {
+	// 1. Check COLORTERM for explicit overrides
+	colorTerm := strings.ToLower(os.Getenv("COLORTERM"))
+	switch colorTerm {
+	case "truecolor", "24bit":
+		return termenv.TrueColor
+	case "8bit":
+		return termenv.ANSI256
+	}
+
+	// 2. Check TERM for well-known color-capable terms
+	term := strings.ToLower(os.Getenv("TERM"))
+	if strings.Contains(term, "direct") {
+		return termenv.TrueColor
+	}
+	if strings.Contains(term, "256color") {
+		return termenv.ANSI256
+	}
+	if strings.Contains(term, "16color") {
+		return termenv.ANSI
+	}
+	if term == "dumb" {
+		return termenv.Ascii
+	}
+
+	// 3. Fallback to automatic detection
+	return termenv.ColorProfile()
 }
 
 // ensureMaps ensures color maps are built if they were missed by init
@@ -215,60 +260,32 @@ func parseTviewStyleToANSI(content string) string {
 
 	// Part 0: Foreground color
 	if len(parts) > 0 && parts[0] != "" && parts[0] != "-" {
+		color := preferredProfile.Color(parts[0])
 		if strings.HasPrefix(parts[0], "#") {
-			if len(parts[0]) == 7 {
-				r, _ := strconv.ParseInt(parts[0][1:3], 16, 64)
-				g, _ := strconv.ParseInt(parts[0][3:5], 16, 64)
-				b, _ := strconv.ParseInt(parts[0][5:7], 16, 64)
-				codes.WriteString(fmt.Sprintf("\033[38;2;%d;%d;%dm", r, g, b))
-			}
+			// Hex color
+			codes.WriteString(wrapSequence(color.Sequence(false)))
 		} else if val, ok := ColorToHexMap[strings.ToLower(parts[0])]; ok {
-			if strings.HasPrefix(val, "#") {
-				// Handle hex codes
-				r, _ := strconv.ParseInt(val[1:3], 16, 64)
-				g, _ := strconv.ParseInt(val[3:5], 16, 64)
-				b, _ := strconv.ParseInt(val[5:7], 16, 64)
-				codes.WriteString(fmt.Sprintf("\033[38;2;%d;%d;%dm", r, g, b))
-			} else {
-				// Handle ANSI indices (0-15)
-				idx, _ := strconv.Atoi(val)
-				if idx < 8 {
-					codes.WriteString(fmt.Sprintf("\033[%dm", 30+idx))
-				} else {
-					codes.WriteString(fmt.Sprintf("\033[%dm", 90+(idx-8)))
-				}
-			}
+			// Named color resolved to hex or index
+			color = preferredProfile.Color(val)
+			codes.WriteString(wrapSequence(color.Sequence(false)))
 		} else if code, ok := ansiMap[parts[0]]; ok {
+			// Direct ANSI code mapping
 			codes.WriteString(code)
 		}
 	}
 
 	// Part 1: Background color
 	if len(parts) > 1 && parts[1] != "" && parts[1] != "-" {
+		color := preferredProfile.Color(parts[1])
 		if strings.HasPrefix(parts[1], "#") {
-			if len(parts[1]) == 7 {
-				r, _ := strconv.ParseInt(parts[1][1:3], 16, 64)
-				g, _ := strconv.ParseInt(parts[1][3:5], 16, 64)
-				b, _ := strconv.ParseInt(parts[1][5:7], 16, 64)
-				codes.WriteString(fmt.Sprintf("\033[48;2;%d;%d;%dm", r, g, b))
-			}
+			// Hex color
+			codes.WriteString(wrapSequence(color.Sequence(true)))
 		} else if val, ok := ColorToHexMap[strings.ToLower(parts[1])]; ok {
-			if strings.HasPrefix(val, "#") {
-				// Handle hex codes
-				r, _ := strconv.ParseInt(val[1:3], 16, 64)
-				g, _ := strconv.ParseInt(val[3:5], 16, 64)
-				b, _ := strconv.ParseInt(val[5:7], 16, 64)
-				codes.WriteString(fmt.Sprintf("\033[48;2;%d;%d;%dm", r, g, b))
-			} else {
-				// Handle ANSI indices (0-15)
-				idx, _ := strconv.Atoi(val)
-				if idx < 8 {
-					codes.WriteString(fmt.Sprintf("\033[%dm", 40+idx))
-				} else {
-					codes.WriteString(fmt.Sprintf("\033[%dm", 100+(idx-8)))
-				}
-			}
+			// Named color resolved to hex or index
+			color = preferredProfile.Color(val)
+			codes.WriteString(wrapSequence(color.Sequence(true)))
 		} else if code, ok := ansiMap[parts[1]+"bg"]; ok {
+			// Direct ANSI code mapping
 			codes.WriteString(code)
 		}
 	}
@@ -284,6 +301,17 @@ func parseTviewStyleToANSI(content string) string {
 	}
 
 	return codes.String()
+}
+
+// wrapSequence ensures a color sequence part is wrapped in CSI delimiters
+func wrapSequence(seq string) string {
+	if seq == "" {
+		return ""
+	}
+	if strings.HasPrefix(seq, "\x1b[") {
+		return seq
+	}
+	return "\033[" + seq + "m"
 }
 
 // Sprintf formats according to a format specifier and returns the string with ANSI codes

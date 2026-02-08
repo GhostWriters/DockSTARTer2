@@ -13,6 +13,7 @@ import (
 	"DockSTARTer2/internal/update"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 var (
@@ -38,8 +39,8 @@ func Initialize(ctx context.Context) error {
 	// Initialize styles from theme
 	InitStyles(currentConfig)
 
-	// Initialize styles from theme
-	InitStyles(currentConfig)
+	// Set color profile from centralized detection (respects COLORTERM/TERM)
+	lipgloss.SetColorProfile(console.GetPreferredProfile())
 
 	return nil
 }
