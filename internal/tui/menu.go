@@ -181,11 +181,11 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 
 	l := list.New(listItems, delegate, initialWidth, initialHeight)
 	// Don't set l.Title - we render title in border instead
-	l.SetShowTitle(false)        // Disable list's built-in title rendering
+	l.SetShowTitle(false) // Disable list's built-in title rendering
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(false)
 	l.SetShowHelp(false)
-	l.SetShowPagination(false)   // Disable pagination indicators
+	l.SetShowPagination(false) // Disable pagination indicators
 
 	// Set list background to match dialog background (not black!)
 	styles := GetStyles()
@@ -966,7 +966,7 @@ func (m MenuModel) renderBorderWithTitle(content string, contentWidth int) strin
 	}
 
 	// Build top border with title
-	titleText := " " + m.title + " "
+	titleText := m.title
 	titleLen := lipgloss.Width(titleText)
 	leftPad := (actualWidth - titleLen) / 2
 	rightPad := actualWidth - titleLen - leftPad

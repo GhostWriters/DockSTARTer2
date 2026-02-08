@@ -107,7 +107,7 @@ func (m messageDialogModel) View() string {
 
 	// Add title with prefix and wrap in border with title embedded (matching menu style)
 	fullTitle := titlePrefix + m.title
-	dialogWithTitle := RenderDialogWithTitle(fullTitle, paddedContent)
+	dialogWithTitle := RenderDialog(fullTitle, paddedContent)
 
 	// Add shadow (matching menu style)
 	dialogWithTitle = AddShadow(dialogWithTitle)
@@ -146,8 +146,8 @@ func (m messageWithBackdrop) View() string {
 	// Use overlay to composite dialog over backdrop
 	// overlay.Composite(foreground, background, xPos, yPos, xOffset, yOffset)
 	return overlay.Composite(
-		m.dialog.View(),    // foreground (dialog content)
-		m.backdrop.View(),  // background (backdrop base)
+		m.dialog.View(),   // foreground (dialog content)
+		m.backdrop.View(), // background (backdrop base)
 		overlay.Center,
 		overlay.Center,
 		0,

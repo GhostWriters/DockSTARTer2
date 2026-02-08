@@ -29,6 +29,63 @@ type CmdState struct {
 	Yes   bool
 }
 
+// commandTitles maps command flags to display titles for the TUI dialog
+var commandTitles = map[string]string{
+	"-a":                         "Add Application",
+	"--add":                      "Add Application",
+	"-c":                         "Docker Compose",
+	"--compose":                  "Docker Compose",
+	"--config-pm":                "Select Package Manager",
+	"--config-pm-auto":           "Select Package Manager",
+	"--config-pm-list":           "List Known Package Managers",
+	"--config-pm-table":          "List Known Package Managers",
+	"--config-pm-existing-list":  "List Existing Package Managers",
+	"--config-pm-existing-table": "List Existing Package Managers",
+	"--config-show":              "Show Configuration",
+	"--show-config":              "Show Configuration",
+	"-e":                         "Creating Environment Variables",
+	"--env":                      "Creating Environment Variables",
+	"--env-appvars":              "Variables for Application",
+	"--env-appvars-lines":        "Variable Lines for Application",
+	"--env-get":                  "Get Value of Variable",
+	"--env-get-lower":            "Get Value of Variable",
+	"--env-get-line":             "Get Line of Variable",
+	"--env-get-lower-line":       "Get Line of Variable",
+	"--env-get-literal":          "Get Literal Value of Variable",
+	"--env-get-lower-literal":    "Get Literal Value of Variable",
+	"--env-set":                  "Set Value of Variable",
+	"--env-set-lower":            "Set Value of Variable",
+	"-l":                         "List All Applications",
+	"--list":                     "List All Applications",
+	"--list-builtin":             "List Builtin Applications",
+	"--list-deprecated":          "List Deprecated Applications",
+	"--list-nondeprecated":       "List Non-Deprecated Applications",
+	"--list-added":               "List Added Applications",
+	"--list-enabled":             "List Enabled Applications",
+	"--list-disabled":            "List Disabled Applications",
+	"--list-referenced":          "List Referenced Applications",
+	"-p":                         "Docker Prune",
+	"--prune":                    "Docker Prune",
+	"-r":                         "Remove Application",
+	"--remove":                   "Remove Application",
+	"-R":                         "Reset Actions",
+	"--reset":                    "Reset Actions",
+	"-s":                         "Application Status",
+	"--status":                   "Application Status",
+	"--status-enable":            "Enable Application",
+	"--status-disable":           "Disable Application",
+	"--theme-list":               "List Themes",
+	"--theme-table":              "List Themes",
+	"--theme-shadows":            "Turned On Shadows",
+	"--theme-no-shadows":         "Turned Off Shadows",
+	"--theme-scrollbar":          "Turned On Scrollbars",
+	"--theme-no-scrollbar":       "Turned Off Scrollbars",
+	"--theme-lines":              "Turned On Line Drawing",
+	"--theme-no-lines":           "Turned Off Line Drawing",
+	"--theme-borders":            "Turned On Borders",
+	"--theme-no-borders":         "Turned Off Borders",
+}
+
 // Execute runs the logic for a sequence of command groups.
 // It handles flag application, command switching, and state resetting.
 func Execute(ctx context.Context, groups []CommandGroup) int {
@@ -162,7 +219,12 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		}
 
 		if state.GUI && group.Command != "" && group.Command != "-M" && group.Command != "--menu" {
-			err := tui.RunCommand(ctx, "Command Execution", task)
+			// Look up display title for this command
+			title := commandTitles[group.Command]
+			if title == "" {
+				title = "Command Execution"
+			}
+			err := tui.RunCommand(ctx, title, cmdStr, task)
 			if err != nil {
 				logger.Error(ctx, "TUI Run Error: %v", err)
 			}

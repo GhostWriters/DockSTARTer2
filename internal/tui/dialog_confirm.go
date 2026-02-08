@@ -109,7 +109,7 @@ func (m confirmDialogModel) View() string {
 		Render(content)
 
 	// Wrap in border with title embedded (matching menu style)
-	dialogWithTitle := RenderDialogWithTitle(m.title, paddedContent)
+	dialogWithTitle := RenderDialog(m.title, paddedContent)
 
 	// Add shadow (matching menu style)
 	dialogWithTitle = AddShadow(dialogWithTitle)
@@ -148,8 +148,8 @@ func (m confirmWithBackdrop) View() string {
 	// Use overlay to composite dialog over backdrop
 	// overlay.Composite(foreground, background, xPos, yPos, xOffset, yOffset)
 	return overlay.Composite(
-		m.dialog.View(),    // foreground (dialog content)
-		m.backdrop.View(),  // background (backdrop base)
+		m.dialog.View(),   // foreground (dialog content)
+		m.backdrop.View(), // background (backdrop base)
 		overlay.Center,
 		overlay.Center,
 		0,

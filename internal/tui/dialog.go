@@ -144,8 +144,9 @@ func RenderCenteredButtons(contentWidth int, buttons ...ButtonSpec) string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, sections...)
 }
 
-// RenderDialogWithTitle renders a dialog with title embedded in the top border (matching menu style)
-func RenderDialogWithTitle(title, content string) string {
+// RenderDialog renders a dialog with optional title embedded in the top border
+// If title is empty, renders a plain top border without title
+func RenderDialog(title, content string) string {
 	styles := GetStyles()
 
 	// Use straight border for dialogs
@@ -174,19 +175,23 @@ func RenderDialogWithTitle(title, content string) string {
 		actualWidth = lipgloss.Width(lines[0])
 	}
 
-	// Build top border with title embedded
-	titleText := " " + title + " "
-	titleLen := lipgloss.Width(titleText)
-	leftPad := (actualWidth - titleLen) / 2
-	rightPad := actualWidth - titleLen - leftPad
-
 	var result strings.Builder
 
-	// Top border with embedded title
+	// Top border (with or without title)
 	result.WriteString(borderStyleLight.Render(border.TopLeft))
-	result.WriteString(borderStyleLight.Render(strings.Repeat(border.Top, leftPad)))
-	result.WriteString(titleStyle.Render(titleText))
-	result.WriteString(borderStyleLight.Render(strings.Repeat(border.Top, rightPad)))
+	if title == "" {
+		// Plain top border without title
+		result.WriteString(borderStyleLight.Render(strings.Repeat(border.Top, actualWidth)))
+	} else {
+		// Top border with embedded title
+		titleText := title
+		titleLen := lipgloss.Width(titleText)
+		leftPad := (actualWidth - titleLen) / 2
+		rightPad := actualWidth - titleLen - leftPad
+		result.WriteString(borderStyleLight.Render(strings.Repeat(border.Top, leftPad)))
+		result.WriteString(titleStyle.Render(titleText))
+		result.WriteString(borderStyleLight.Render(strings.Repeat(border.Top, rightPad)))
+	}
 	result.WriteString(borderStyleLight.Render(border.TopRight))
 	result.WriteString("\n")
 

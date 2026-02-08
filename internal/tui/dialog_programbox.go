@@ -198,15 +198,6 @@ func (m programBoxModel) View() string {
 
 	styles := GetStyles()
 
-	// Build command display in yellow/gold color
-	var commandDisplay string
-	if m.command != "" {
-		commandStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("3")). // Yellow/gold color
-			Padding(0, 2)
-		commandDisplay = commandStyle.Render(m.command)
-	}
-
 	// Calculate scroll percentage
 	scrollPercent := m.viewport.ScrollPercent()
 	scrollIndicator := lipgloss.NewStyle().
@@ -234,6 +225,18 @@ func (m programBoxModel) View() string {
 	// viewport.Width + border (2) + padding (2) = viewport.Width + 4
 	contentWidth := m.viewport.Width + 4
 
+	// Build command display in yellow/gold color with dialog background
+	// Must be after contentWidth calculation to use proper width
+	var commandDisplay string
+	if m.command != "" {
+		commandStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("3")). // Yellow/gold color
+			Background(styles.Dialog.GetBackground()).
+			Width(contentWidth). // Fill the entire row
+			Padding(0, 1)
+		commandDisplay = commandStyle.Render(m.command)
+	}
+
 	// Render OK button using the standard button helper (ensures consistency)
 	buttonRow := RenderCenteredButtons(
 		contentWidth,
@@ -257,7 +260,7 @@ func (m programBoxModel) View() string {
 		Render(content)
 
 	// Wrap in border with title embedded (matching menu style)
-	dialogWithTitle := RenderDialogWithTitle(m.title, paddedContent)
+	dialogWithTitle := RenderDialog(m.title, paddedContent)
 
 	// Add shadow (matching menu style)
 	dialogWithTitle = AddShadow(dialogWithTitle)
