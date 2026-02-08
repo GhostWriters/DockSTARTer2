@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -83,4 +85,123 @@ func RenderButton(label string, focused bool) string {
 // RenderButtonRow renders a row of buttons centered
 func RenderButtonRow(buttons ...string) string {
 	return lipgloss.JoinHorizontal(lipgloss.Center, buttons...)
+}
+
+// ButtonSpec defines a button to render
+type ButtonSpec struct {
+	Text   string
+	Active bool
+}
+
+// RenderCenteredButtons renders buttons centered in sections (matching menu style)
+// This ensures consistent button placement across all dialogs
+func RenderCenteredButtons(contentWidth int, buttons ...ButtonSpec) string {
+	if len(buttons) == 0 {
+		return ""
+	}
+
+	styles := GetStyles()
+
+	// Find the maximum button text width
+	maxButtonWidth := 0
+	for _, btn := range buttons {
+		width := lipgloss.Width(btn.Text)
+		if width > maxButtonWidth {
+			maxButtonWidth = width
+		}
+	}
+
+	// Render each button with fixed width and rounded border
+	var renderedButtons []string
+	for _, btn := range buttons {
+		var buttonStyle lipgloss.Style
+		if btn.Active {
+			buttonStyle = styles.ButtonActive
+		} else {
+			buttonStyle = styles.ButtonInactive
+		}
+
+		buttonStyle = buttonStyle.Copy().Width(maxButtonWidth).Align(lipgloss.Center)
+		buttonStyle = ApplyRoundedBorder(buttonStyle, styles.LineCharacters)
+		renderedButtons = append(renderedButtons, buttonStyle.Render(btn.Text))
+	}
+
+	// Divide available width into equal sections (one per button)
+	numButtons := len(buttons)
+	sectionWidth := contentWidth / numButtons
+
+	// Center each button in its section
+	var sections []string
+	for _, btn := range renderedButtons {
+		centeredBtn := lipgloss.NewStyle().
+			Width(sectionWidth).
+			Align(lipgloss.Center).
+			Background(styles.Dialog.GetBackground()).
+			Render(btn)
+		sections = append(sections, centeredBtn)
+	}
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, sections...)
+}
+
+// RenderDialogWithTitle renders a dialog with title embedded in the top border (matching menu style)
+func RenderDialogWithTitle(title, content string) string {
+	styles := GetStyles()
+
+	// Use straight border for dialogs
+	var border lipgloss.Border
+	if styles.LineCharacters {
+		border = lipgloss.NormalBorder()
+	} else {
+		border = asciiBorder
+	}
+
+	// Style definitions
+	borderBG := styles.Dialog.GetBackground()
+	borderStyleLight := lipgloss.NewStyle().
+		Foreground(styles.BorderColor).
+		Background(borderBG)
+	borderStyleDark := lipgloss.NewStyle().
+		Foreground(styles.Border2Color).
+		Background(borderBG)
+	titleStyle := styles.DialogTitle.Copy().
+		Background(borderBG)
+
+	// Get actual content width
+	lines := strings.Split(content, "\n")
+	actualWidth := 0
+	if len(lines) > 0 {
+		actualWidth = lipgloss.Width(lines[0])
+	}
+
+	// Build top border with title embedded
+	titleText := " " + title + " "
+	titleLen := lipgloss.Width(titleText)
+	leftPad := (actualWidth - titleLen) / 2
+	rightPad := actualWidth - titleLen - leftPad
+
+	var result strings.Builder
+
+	// Top border with embedded title
+	result.WriteString(borderStyleLight.Render(border.TopLeft))
+	result.WriteString(borderStyleLight.Render(strings.Repeat(border.Top, leftPad)))
+	result.WriteString(titleStyle.Render(titleText))
+	result.WriteString(borderStyleLight.Render(strings.Repeat(border.Top, rightPad)))
+	result.WriteString(borderStyleLight.Render(border.TopRight))
+	result.WriteString("\n")
+
+	// Content lines with left/right borders
+	for _, line := range lines {
+		result.WriteString(borderStyleLight.Render(border.Left))
+		result.WriteString(line)
+		result.WriteString(borderStyleDark.Render(border.Right))
+		result.WriteString("\n")
+	}
+
+	// Bottom border
+	result.WriteString(borderStyleDark.Render(border.BottomLeft))
+	result.WriteString(borderStyleDark.Render(strings.Repeat(border.Bottom, actualWidth)))
+	result.WriteString(borderStyleDark.Render(border.BottomRight))
+
+	return result.String()
 }

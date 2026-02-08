@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	overlay "github.com/rmhubbert/bubbletea-overlay"
 )
 
 // MessageType represents the type of message dialog
@@ -57,7 +58,7 @@ func (m messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m messageDialogModel) View() string {
 	if m.width == 0 {
-		return "Loading..."
+		return ""
 	}
 
 	styles := GetStyles()
@@ -97,31 +98,60 @@ func (m messageDialogModel) View() string {
 	}
 
 	// Build dialog content
-	content := messageStyle.Render(m.message) + "\n\n" +
-		lipgloss.NewStyle().
-			Foreground(styles.HelpLine.GetForeground()).
-			Italic(true).
-			Align(lipgloss.Center).
-			Render("Press any key to continue")
+	content := messageStyle.Render(m.message)
 
-	// Wrap in dialog box
-	dialogStyle := styles.Dialog.
-		Padding(0, 1)
-	dialogStyle = ApplyStraightBorder(dialogStyle, styles.LineCharacters)
+	// Add padding to content (border will be added by RenderDialogWithTitle)
+	paddedContent := styles.Dialog.
+		Padding(0, 1).
+		Render(content)
 
-	dialog := dialogStyle.Render(content)
-
-	// Add title with prefix
+	// Add title with prefix and wrap in border with title embedded (matching menu style)
 	fullTitle := titlePrefix + m.title
-	dialogWithTitle := renderBorderWithTitleStatic(fullTitle, dialog)
+	dialogWithTitle := RenderDialogWithTitle(fullTitle, paddedContent)
 
-	// Center on screen
-	return lipgloss.Place(
-		m.width,
-		m.height,
-		lipgloss.Center,
-		lipgloss.Center,
-		dialogWithTitle,
+	// Add shadow (matching menu style)
+	dialogWithTitle = AddShadow(dialogWithTitle)
+
+	// Just return the dialog content - backdrop will be handled by overlay
+	return dialogWithTitle
+}
+
+// messageWithBackdrop wraps a message dialog with backdrop using overlay
+type messageWithBackdrop struct {
+	backdrop BackdropModel
+	dialog   messageDialogModel
+}
+
+func (m messageWithBackdrop) Init() tea.Cmd {
+	return tea.Batch(m.backdrop.Init(), m.dialog.Init())
+}
+
+func (m messageWithBackdrop) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+
+	// Update backdrop
+	backdropModel, cmd := m.backdrop.Update(msg)
+	m.backdrop = backdropModel.(BackdropModel)
+	cmds = append(cmds, cmd)
+
+	// Update dialog
+	dialogModel, cmd := m.dialog.Update(msg)
+	m.dialog = dialogModel.(messageDialogModel)
+	cmds = append(cmds, cmd)
+
+	return m, tea.Batch(cmds...)
+}
+
+func (m messageWithBackdrop) View() string {
+	// Use overlay to composite dialog over backdrop
+	// overlay.Composite(foreground, background, xPos, yPos, xOffset, yOffset)
+	return overlay.Composite(
+		m.dialog.View(),    // foreground (dialog content)
+		m.backdrop.View(),  // background (backdrop base)
+		overlay.Center,
+		overlay.Center,
+		0,
+		0,
 	)
 }
 
@@ -133,9 +163,13 @@ func ShowMessageDialog(title, message string, msgType MessageType) {
 		InitStyles(cfg)
 	}
 
-	model := newMessageDialog(title, message, msgType)
-	p := tea.NewProgram(model)
+	helpText := "Press any key to continue"
+	model := messageWithBackdrop{
+		backdrop: NewBackdropModel(helpText),
+		dialog:   newMessageDialog(title, message, msgType),
+	}
 
+	p := tea.NewProgram(model)
 	p.Run()
 }
 

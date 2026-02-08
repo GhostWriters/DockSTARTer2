@@ -528,17 +528,8 @@ func (m MenuModel) View() string {
 	// Add shadow
 	dialog = AddShadow(dialog)
 
-	// Center in terminal
-	centered := lipgloss.Place(
-		m.width,
-		m.height,
-		lipgloss.Center,
-		lipgloss.Center,
-		dialog,
-		lipgloss.WithWhitespaceBackground(styles.Screen.GetBackground()),
-	)
-
-	return centered
+	// Return just the dialog - overlay.Composite() in AppModel will center it
+	return dialog
 }
 
 // renderSimpleButtons creates a button row with evenly spaced sections

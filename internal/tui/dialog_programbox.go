@@ -3,6 +3,7 @@ package tui
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -14,12 +15,14 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	overlay "github.com/rmhubbert/bubbletea-overlay"
 )
 
 // programBoxModel represents a dialog that displays streaming program output
 type programBoxModel struct {
 	title    string
 	subtitle string
+	command  string // Command being executed (displayed above output)
 	viewport viewport.Model
 	lines    []string
 	done     bool
@@ -39,7 +42,7 @@ type outputDoneMsg struct {
 }
 
 // newProgramBox creates a new program box dialog
-func newProgramBox(title, subtitle string) programBoxModel {
+func newProgramBox(title, subtitle, command string) programBoxModel {
 	vp := viewport.New(0, 0)
 	// Use white-on-black background to properly display ANSI colors from command output
 	vp.Style = lipgloss.NewStyle().
@@ -49,6 +52,7 @@ func newProgramBox(title, subtitle string) programBoxModel {
 	return programBoxModel{
 		title:    title,
 		subtitle: subtitle,
+		command:  command,
 		viewport: vp,
 		lines:    []string{},
 	}
@@ -102,16 +106,46 @@ func (m programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
-		// Calculate viewport size
-		// Account for borders, title, padding
-		m.viewport.Width = m.width - 8
-		m.viewport.Height = m.height - 10
+		// Calculate viewport size for full-screen dialog
+		// Dialog positioned at (3, 2) with size (width - 6) x (height - 4)
+		//
+		// Working backwards from dialog to viewport:
+		// 1. Dialog size: (width - 6) x (height - 4)
+		// 2. Remove shadow (if enabled): -2 width, -1 height
+		// 3. Remove outer border: -2 width, -2 height
+		// 4. Remove padding (1, 2): -4 width, -2 height
+		// 5. Remove inner components:
+		//    - Command line: 1 height (if present)
+		//    - Blank line: 1 height
+		//    - Button row: 3 height
+		//    - Viewport border: 2 height
+		//    - Scroll indicator: 1 height
+		//    - Viewport padding (0, 1): 2 width
 
-		if m.viewport.Width < 0 {
-			m.viewport.Width = 0
+		cfg := config.LoadAppConfig()
+		shadowWidth := 0
+		shadowHeight := 0
+		if cfg.Shadow {
+			shadowWidth = 2
+			shadowHeight = 1
 		}
-		if m.viewport.Height < 0 {
-			m.viewport.Height = 0
+
+		// Width calculation:
+		// viewport.Width = (width - 6) - shadowWidth - 2 (border) - 4 (padding) - 2 (viewport border) - 2 (viewport padding)
+		m.viewport.Width = m.width - 6 - shadowWidth - 2 - 4 - 2 - 2
+		if m.viewport.Width < 20 {
+			m.viewport.Width = 20
+		}
+
+		// Height calculation:
+		// viewport.Height = (height - 4) - shadowHeight - 2 (border) - 2 (padding) - 1 (command) - 1 (blank) - 3 (button) - 2 (viewport border) - 1 (scroll)
+		commandHeight := 1
+		if m.command == "" {
+			commandHeight = 0
+		}
+		m.viewport.Height = m.height - 4 - shadowHeight - 2 - 2 - commandHeight - 1 - 3 - 2 - 1
+		if m.viewport.Height < 5 {
+			m.viewport.Height = 5
 		}
 
 		return m, nil
@@ -157,59 +191,144 @@ func (m programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m programBoxModel) View() string {
 	if m.width == 0 {
-		return "Loading..."
+		return ""
 	}
 
 	styles := GetStyles()
 
-	// Build content
-	content := m.viewport.View()
-
-	// Status line
-	statusStyle := lipgloss.NewStyle().
-		Foreground(styles.HelpLine.GetForeground()).
-		Italic(true)
-
-	var status string
-	if m.done {
-		if m.err != nil {
-			status = statusStyle.Render("Error: " + m.err.Error() + " | Press Enter or Esc to close")
-		} else {
-			status = statusStyle.Render("Complete | Press Enter or Esc to close")
-		}
-	} else {
-		status = statusStyle.Render("Running... | Press Ctrl+C to cancel")
+	// Build command display in yellow/gold color
+	var commandDisplay string
+	if m.command != "" {
+		commandStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("3")). // Yellow/gold color
+			Padding(0, 2)
+		commandDisplay = commandStyle.Render(m.command)
 	}
 
-	// Combine content and status
-	fullContent := lipgloss.JoinVertical(lipgloss.Left,
-		content,
-		"",
-		status,
+	// Calculate scroll percentage
+	scrollPercent := m.viewport.ScrollPercent()
+	scrollIndicator := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("0")). // Black text
+		Background(lipgloss.Color("1")). // Red background
+		Bold(true).
+		Render(fmt.Sprintf(" %d%% ", int(scrollPercent*100)))
+
+	// Add scroll indicator at bottom of viewport content
+	viewportWithScroll := m.viewport.View() + "\n" +
+		lipgloss.NewStyle().
+			Width(m.viewport.Width).
+			Align(lipgloss.Center).
+			Background(lipgloss.Color("0")). // Black background
+			Render(scrollIndicator)
+
+	// Wrap viewport in rounded inner border with black background
+	viewportStyle := lipgloss.NewStyle().
+		Background(lipgloss.Color("0")). // Black background
+		Padding(0, 1)
+	viewportStyle = ApplyRoundedBorder(viewportStyle, styles.LineCharacters)
+	borderedViewport := viewportStyle.Render(viewportWithScroll)
+
+	// Calculate content width based on viewport (matches borderedViewport width)
+	// viewport.Width + border (2) + padding (2) = viewport.Width + 4
+	contentWidth := m.viewport.Width + 4
+
+	// Render OK button using the standard button helper (ensures consistency)
+	buttonRow := RenderCenteredButtons(
+		contentWidth,
+		ButtonSpec{Text: " OK ", Active: m.done},
 	)
 
-	// Wrap in dialog box
-	dialogStyle := styles.Dialog.
-		Padding(1, 2)
-	dialogStyle = ApplyStraightBorder(dialogStyle, styles.LineCharacters)
+	// Build dialog content
+	var contentParts []string
+	if commandDisplay != "" {
+		contentParts = append(contentParts, commandDisplay)
+	}
+	contentParts = append(contentParts, borderedViewport)
+	contentParts = append(contentParts, "") // Blank line
+	contentParts = append(contentParts, buttonRow)
 
-	dialog := dialogStyle.Render(fullContent)
+	content := lipgloss.JoinVertical(lipgloss.Left, contentParts...)
 
-	// Add title
-	titleText := m.title
-	if m.subtitle != "" {
-		titleText += " - " + m.subtitle
+	// Add padding to content (border will be added by RenderDialogWithTitle)
+	paddedContent := styles.Dialog.
+		Padding(1, 2).
+		Render(content)
+
+	// Wrap in border with title embedded (matching menu style)
+	dialogWithTitle := RenderDialogWithTitle(m.title, paddedContent)
+
+	// Add shadow (matching menu style)
+	dialogWithTitle = AddShadow(dialogWithTitle)
+
+	// Just return the dialog content - backdrop will be handled by overlay
+	return dialogWithTitle
+}
+
+// getHelpText returns the dynamic help text based on the current state
+func (m programBoxModel) getHelpText() string {
+	scrollInfo := ""
+	if m.viewport.TotalLineCount() > m.viewport.VisibleLineCount() {
+		scrollPercent := m.viewport.ScrollPercent()
+		scrollInfo = fmt.Sprintf(" | %d%%", int(scrollPercent*100))
 	}
 
-	dialogWithTitle := renderBorderWithTitleStatic(titleText, dialog)
+	if m.done {
+		if m.err != nil {
+			return "Error: " + m.err.Error() + scrollInfo + " | Press Enter or Esc to close"
+		}
+		return "Complete" + scrollInfo + " | Press Enter or Esc to close | PgUp/PgDn to scroll"
+	}
+	return "Running..." + scrollInfo + " | Press Ctrl+C to cancel | PgUp/PgDn to scroll"
+}
 
-	// Center on screen
-	return lipgloss.Place(
-		m.width,
-		m.height,
-		lipgloss.Center,
-		lipgloss.Center,
-		dialogWithTitle,
+// programBoxWithBackdrop wraps a program box dialog with backdrop using overlay
+type programBoxWithBackdrop struct {
+	backdrop BackdropModel
+	dialog   programBoxModel
+}
+
+func (m programBoxWithBackdrop) Init() tea.Cmd {
+	return tea.Batch(m.backdrop.Init(), m.dialog.Init())
+}
+
+func (m programBoxWithBackdrop) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+
+	// Update backdrop
+	backdropModel, cmd := m.backdrop.Update(msg)
+	m.backdrop = backdropModel.(BackdropModel)
+	cmds = append(cmds, cmd)
+
+	// Update dialog
+	dialogModel, cmd := m.dialog.Update(msg)
+	m.dialog = dialogModel.(programBoxModel)
+	cmds = append(cmds, cmd)
+
+	// Update backdrop helpText based on dialog state
+	m.backdrop.SetHelpText(m.dialog.getHelpText())
+
+	return m, tea.Batch(cmds...)
+}
+
+func (m programBoxWithBackdrop) View() string {
+	// Get backdrop and dialog views
+	backdropView := m.backdrop.View()
+	dialogView := m.dialog.View()
+
+	// If dialog isn't ready yet, just show backdrop
+	if dialogView == "" {
+		return backdropView
+	}
+
+	// Position dialog using offsets from top-left corner
+	// Offset by (3, 2) to match bash version positioning
+	return overlay.Composite(
+		dialogView,   // foreground (dialog content)
+		backdropView, // background (backdrop base)
+		0,            // xPos: top-left
+		0,            // yPos: top-left
+		3,            // xOffset: 3 chars from left
+		2,            // yOffset: 2 lines down
 	)
 }
 
@@ -221,7 +340,15 @@ func RunProgramBox(ctx context.Context, title, subtitle string, task func(contex
 		InitStyles(cfg)
 	}
 
-	model := newProgramBox(title, subtitle)
+	// Use subtitle as command display (can be empty)
+	dialogModel := newProgramBox(title, subtitle, subtitle)
+
+	// Create wrapper with backdrop
+	initialHelpText := "Running... | Press Ctrl+C to cancel | PgUp/PgDn to scroll"
+	model := programBoxWithBackdrop{
+		backdrop: NewBackdropModel(initialHelpText),
+		dialog:   dialogModel,
+	}
 
 	// Create a pipe for output
 	reader, writer := io.Pipe()

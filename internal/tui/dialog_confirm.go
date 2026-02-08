@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	overlay "github.com/rmhubbert/bubbletea-overlay"
 )
 
 // confirmDialogModel represents a yes/no confirmation dialog
@@ -73,7 +74,7 @@ func (m confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m confirmDialogModel) View() string {
 	if m.width == 0 {
-		return "Loading..."
+		return ""
 	}
 
 	styles := GetStyles()
@@ -84,55 +85,76 @@ func (m confirmDialogModel) View() string {
 		Bold(true).
 		Padding(1, 2)
 
-	// Button styles
-	yesStyle := styles.ButtonInactive
-	noStyle := styles.ButtonInactive
+	questionText := questionStyle.Render(m.question)
 
-	if m.result {
-		yesStyle = styles.ButtonActive
-	} else {
-		noStyle = styles.ButtonActive
+	// Calculate content width based on question text (with reasonable min/max)
+	contentWidth := lipgloss.Width(questionText)
+	if contentWidth < 40 {
+		contentWidth = 40
 	}
 
-	yesBtn := yesStyle.Render(" Yes ")
-	noBtn := noStyle.Render(" No ")
+	// Render buttons using the standard button helper (ensures consistency)
+	buttonRow := RenderCenteredButtons(
+		contentWidth,
+		ButtonSpec{Text: " Yes ", Active: m.result},
+		ButtonSpec{Text: " No ", Active: !m.result},
+	)
 
 	// Build dialog content
-	content := questionStyle.Render(m.question) + "\n\n" +
-		lipgloss.JoinHorizontal(lipgloss.Center, yesBtn, "  ", noBtn)
+	content := questionText + "\n\n" + buttonRow
 
-	// Wrap in dialog box with title
-	dialogStyle := styles.Dialog.
-		Padding(0, 1)
-	dialogStyle = ApplyStraightBorder(dialogStyle, styles.LineCharacters)
+	// Add padding to content (border will be added by RenderDialogWithTitle)
+	paddedContent := styles.Dialog.
+		Padding(0, 1).
+		Render(content)
 
-	dialog := dialogStyle.Render(content)
+	// Wrap in border with title embedded (matching menu style)
+	dialogWithTitle := RenderDialogWithTitle(m.title, paddedContent)
 
-	// Add title
-	dialogWithTitle := renderBorderWithTitleStatic(m.title, dialog)
+	// Add shadow (matching menu style)
+	dialogWithTitle = AddShadow(dialogWithTitle)
 
-	// Center on screen
-	return lipgloss.Place(
-		m.width,
-		m.height,
-		lipgloss.Center,
-		lipgloss.Center,
-		dialogWithTitle,
-	)
+	// Just return the dialog content - backdrop will be handled by overlay
+	return dialogWithTitle
 }
 
-// renderBorderWithTitleStatic is a static version of renderBorderWithTitle for dialog use
-func renderBorderWithTitleStatic(title, content string) string {
-	styles := GetStyles()
+// confirmWithBackdrop wraps a confirmation dialog with backdrop using overlay
+type confirmWithBackdrop struct {
+	backdrop BackdropModel
+	dialog   confirmDialogModel
+}
 
-	// For simplicity in dialogs, just prepend the title
-	titleStyle := styles.DialogTitle.Copy().
-		Padding(0, 1).
-		Bold(true)
+func (m confirmWithBackdrop) Init() tea.Cmd {
+	return tea.Batch(m.backdrop.Init(), m.dialog.Init())
+}
 
-	titleBar := titleStyle.Render(title)
+func (m confirmWithBackdrop) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
 
-	return lipgloss.JoinVertical(lipgloss.Left, titleBar, content)
+	// Update backdrop
+	backdropModel, cmd := m.backdrop.Update(msg)
+	m.backdrop = backdropModel.(BackdropModel)
+	cmds = append(cmds, cmd)
+
+	// Update dialog
+	dialogModel, cmd := m.dialog.Update(msg)
+	m.dialog = dialogModel.(confirmDialogModel)
+	cmds = append(cmds, cmd)
+
+	return m, tea.Batch(cmds...)
+}
+
+func (m confirmWithBackdrop) View() string {
+	// Use overlay to composite dialog over backdrop
+	// overlay.Composite(foreground, background, xPos, yPos, xOffset, yOffset)
+	return overlay.Composite(
+		m.dialog.View(),    // foreground (dialog content)
+		m.backdrop.View(),  // background (backdrop base)
+		overlay.Center,
+		overlay.Center,
+		0,
+		0,
+	)
 }
 
 // ShowConfirmDialog displays a confirmation dialog and returns the result
@@ -143,7 +165,12 @@ func ShowConfirmDialog(title, question string, defaultYes bool) bool {
 		InitStyles(cfg)
 	}
 
-	model := newConfirmDialog(title, question, defaultYes)
+	helpText := "Y/N to choose | Enter to confirm | Esc to cancel"
+	model := confirmWithBackdrop{
+		backdrop: NewBackdropModel(helpText),
+		dialog:   newConfirmDialog(title, question, defaultYes),
+	}
+
 	p := tea.NewProgram(model)
 
 	finalModel, err := p.Run()
@@ -152,8 +179,8 @@ func ShowConfirmDialog(title, question string, defaultYes bool) bool {
 		return defaultYes
 	}
 
-	if m, ok := finalModel.(confirmDialogModel); ok {
-		return m.result
+	if m, ok := finalModel.(confirmWithBackdrop); ok {
+		return m.dialog.result
 	}
 
 	return defaultYes
