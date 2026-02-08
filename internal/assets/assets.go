@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 //go:embed all:defaults themes
@@ -53,9 +54,10 @@ func extractFolder(ctx context.Context, srcDir, destDir string) error {
 			return os.MkdirAll(targetPath, 0755)
 		}
 
-		// Extract file if it doesn't exist
-		if _, err := os.Stat(targetPath); err == nil {
-			// File exists, skip
+		// Extract file if it doesn't exist, OR if it's a theme file (force update for dev)
+		// TODO: implementing a deeper check (hash/version) would be better for prod
+		if _, err := os.Stat(targetPath); err == nil && !strings.Contains(targetPath, "themes") {
+			// File exists, skip (unless it's a theme)
 			return nil
 		}
 

@@ -29,6 +29,64 @@ type CmdState struct {
 	Yes   bool
 }
 
+// commandTitles maps command flags to display titles for the TUI dialog
+var commandTitles = map[string]string{
+	"-a":                         "Add Application",
+	"--add":                      "Add Application",
+	"-c":                         "Docker Compose",
+	"--compose":                  "Docker Compose",
+	"--config-pm":                "Select Package Manager",
+	"--config-pm-auto":           "Select Package Manager",
+	"--config-pm-list":           "List Known Package Managers",
+	"--config-pm-table":          "List Known Package Managers",
+	"--config-pm-existing-list":  "List Existing Package Managers",
+	"--config-pm-existing-table": "List Existing Package Managers",
+	"--config-show":              "Show Configuration",
+	"--show-config":              "Show Configuration",
+	"-e":                         "Creating Environment Variables",
+	"--env":                      "Creating Environment Variables",
+	"--env-appvars":              "Variables for Application",
+	"--env-appvars-lines":        "Variable Lines for Application",
+	"--env-get":                  "Get Value of Variable",
+	"--env-get-lower":            "Get Value of Variable",
+	"--env-get-line":             "Get Line of Variable",
+	"--env-get-lower-line":       "Get Line of Variable",
+	"--env-get-literal":          "Get Literal Value of Variable",
+	"--env-get-lower-literal":    "Get Literal Value of Variable",
+	"--env-set":                  "Set Value of Variable",
+	"--env-set-lower":            "Set Value of Variable",
+	"-l":                         "List All Applications",
+	"--list":                     "List All Applications",
+	"--list-builtin":             "List Builtin Applications",
+	"--list-deprecated":          "List Deprecated Applications",
+	"--list-nondeprecated":       "List Non-Deprecated Applications",
+	"--list-added":               "List Added Applications",
+	"--list-enabled":             "List Enabled Applications",
+	"--list-disabled":            "List Disabled Applications",
+	"--list-referenced":          "List Referenced Applications",
+	"-p":                         "Docker Prune",
+	"--prune":                    "Docker Prune",
+	"-r":                         "Remove Application",
+	"--remove":                   "Remove Application",
+	"-R":                         "Reset Actions",
+	"--reset":                    "Reset Actions",
+	"-s":                         "Application Status",
+	"--status":                   "Application Status",
+	"--status-enable":            "Enable Application",
+	"--status-disable":           "Disable Application",
+	"--theme-list":               "List Themes",
+	"--theme-table":              "List Themes",
+	"--theme-shadows":            "Turned On Shadows",
+	"--theme-no-shadows":         "Turned Off Shadows",
+	"--theme-shadow-level":       "Set Shadow Level",
+	"--theme-scrollbar":          "Turned On Scrollbars",
+	"--theme-no-scrollbar":       "Turned Off Scrollbars",
+	"--theme-lines":              "Turned On Line Drawing",
+	"--theme-no-lines":           "Turned Off Line Drawing",
+	"--theme-borders":            "Turned On Borders",
+	"--theme-no-borders":         "Turned Off Borders",
+}
+
 // Execute runs the logic for a sequence of command groups.
 // It handles flag application, command switching, and state resetting.
 func Execute(ctx context.Context, groups []CommandGroup) int {
@@ -67,6 +125,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		for _, part := range group.FullSlice() {
 			cmdStr += " " + part
 		}
+		subtitle := " {{_ThemeCommandLine_}}" + cmdStr + "{{|-|}}"
 		logger.Notice(ctx, fmt.Sprintf("%s command: '{{_UserCommand_}}%s{{|-|}}'", version.ApplicationName, cmdStr))
 
 		// Log execution arguments for verification
@@ -138,7 +197,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				ranCommand = true
 			case "--theme-lines", "--theme-no-lines", "--theme-line", "--theme-no-line",
 				"--theme-borders", "--theme-no-borders", "--theme-border", "--theme-no-border",
-				"--theme-shadows", "--theme-no-shadows", "--theme-shadow", "--theme-no-shadow",
+				"--theme-shadows", "--theme-no-shadows", "--theme-shadow", "--theme-no-shadow", "--theme-shadow-level",
 				"--theme-scrollbar", "--theme-no-scrollbar":
 				handleThemeSettings(subCtx, &group)
 				ranCommand = true
@@ -162,7 +221,13 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		}
 
 		if state.GUI && group.Command != "" && group.Command != "-M" && group.Command != "--menu" {
-			err := tui.RunCommand(ctx, "Command Execution", task)
+			// Look up display title for this command
+			title := commandTitles[group.Command]
+			if title == "" {
+				title = "Running Command"
+			}
+			title = "{{_ThemeTitleSuccess_}}" + title + "{{|-|}}"
+			err := tui.RunCommand(ctx, title, subtitle, task)
 			if err != nil {
 				logger.Error(ctx, "TUI Run Error: %v", err)
 			}
@@ -496,15 +561,85 @@ func handleThemeSettings(ctx context.Context, group *CommandGroup) {
 		conf.Shadow = true
 	case "--theme-no-shadows", "--theme-no-shadow":
 		conf.Shadow = false
+	case "--theme-shadow-level":
+		// Set shadow level (0-4 or aliases)
+		if len(group.Args) > 0 {
+			arg := strings.ToLower(group.Args[0])
+			switch arg {
+			case "0", "off", "none", "false", "no":
+				conf.ShadowLevel = 0
+				conf.Shadow = false
+			case "1", "light":
+				conf.ShadowLevel = 1
+				conf.Shadow = true
+			case "2", "medium":
+				conf.ShadowLevel = 2
+				conf.Shadow = true
+			case "3", "dark":
+				conf.ShadowLevel = 3
+				conf.Shadow = true
+			case "4", "solid", "full":
+				conf.ShadowLevel = 4
+				conf.Shadow = true
+			default:
+				// specialized handling for percentage strings
+				if strings.HasSuffix(arg, "%") {
+					var percent int
+					if _, err := fmt.Sscanf(arg, "%d%%", &percent); err == nil {
+						if percent <= 12 {
+							conf.ShadowLevel = 0
+							conf.Shadow = false
+						} else if percent <= 37 {
+							conf.ShadowLevel = 1
+							conf.Shadow = true
+						} else if percent <= 62 {
+							conf.ShadowLevel = 2
+							conf.Shadow = true
+						} else if percent <= 87 {
+							conf.ShadowLevel = 3
+							conf.Shadow = true
+						} else {
+							conf.ShadowLevel = 4
+							conf.Shadow = true
+						}
+						break
+					}
+				}
+				logger.Error(ctx, "Invalid shadow level: %s (use 0-4, or: off, light, medium, dark, solid, or percentage e.g. 50%%)", arg)
+				return
+			}
+		} else {
+			logger.Display(ctx, "Current shadow level: %d", conf.ShadowLevel)
+			return
+		}
 	case "--theme-scrollbar":
 		conf.Scrollbar = true
 	case "--theme-no-scrollbar":
 		conf.Scrollbar = false
+		// theme handlers above...
 	}
 	if err := config.SaveAppConfig(conf); err != nil {
 		logger.Error(ctx, "Failed to save theme setting: %v", err)
 	} else {
-		logger.Notice(ctx, "Theme setting updated: %s", group.Command)
+		// Specialized output for shadow level
+		if group.Command == "--theme-shadow-level" {
+			var percent int
+			switch conf.ShadowLevel {
+			case 0:
+				percent = 0
+			case 1:
+				percent = 25
+			case 2:
+				percent = 50
+			case 3:
+				percent = 75
+			case 4:
+				percent = 100
+			}
+			logger.Notice(ctx, "Shadow level set to %d%%.", percent)
+		} else {
+			logger.Notice(ctx, "Theme setting updated: %s", group.Command)
+		}
 	}
 }
 
@@ -539,7 +674,7 @@ func handleList(ctx context.Context, group *CommandGroup) {
 	}
 
 	for _, item := range result {
-		fmt.Println(appenv.GetNiceName(ctx, item))
+		logger.Display(ctx, appenv.GetNiceName(ctx, item))
 	}
 }
 
@@ -609,6 +744,7 @@ func handleConfigShow(ctx context.Context, conf *config.AppConfig) {
 		"LineCharacters",
 		"Scrollbar",
 		"Shadow",
+		"ShadowLevel",
 	}
 
 	displayNames := map[string]string{
@@ -619,6 +755,7 @@ func handleConfigShow(ctx context.Context, conf *config.AppConfig) {
 		"LineCharacters": "Line Characters",
 		"Scrollbar":      "Scrollbar",
 		"Shadow":         "Shadow",
+		"ShadowLevel":    "Shadow Level",
 	}
 
 	var data []string
@@ -653,6 +790,8 @@ func handleConfigShow(ctx context.Context, conf *config.AppConfig) {
 			value = boolToYesNo(conf.Scrollbar)
 		case "Shadow":
 			value = boolToYesNo(conf.Shadow)
+		case "ShadowLevel":
+			value = fmt.Sprintf("{{_Var_}}%d{{|-|}}", conf.ShadowLevel)
 		}
 
 		colorTag := "{{_Var_}}"
@@ -739,7 +878,7 @@ func handleEnvAppVars(ctx context.Context, group *CommandGroup) {
 			continue
 		}
 		for _, v := range vars {
-			fmt.Println(v)
+			logger.Display(ctx, v)
 		}
 	}
 }
@@ -758,7 +897,7 @@ func handleEnvAppVarsLines(ctx context.Context, group *CommandGroup) {
 			continue
 		}
 		for _, l := range lines {
-			fmt.Println(l)
+			logger.Display(ctx, l)
 		}
 	}
 }

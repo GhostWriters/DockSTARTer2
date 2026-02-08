@@ -7,11 +7,11 @@ import (
 	"regexp"
 	"strings"
 
-	"codeberg.org/tslocum/cview"
+	"github.com/muesli/termenv"
 )
 
 var (
-	// semanticMap stores semantic tag -> tview format mappings (e.g., "version" -> "[cyan]")
+	// semanticMap stores semantic tag -> standardized tag mappings (e.g., "version" -> "{{|cyan|}}")
 	semanticMap map[string]string
 
 	// ansiMap stores color/modifier names -> ANSI code mappings
@@ -24,6 +24,9 @@ var (
 	directRegex = regexp.MustCompile(`\{\{\|([A-Za-z0-9_:\-#]+)\|\}\}`)
 
 	isTTYGlobal bool
+
+	// preferredProfile stores the detected or forced color profile
+	preferredProfile termenv.Profile
 )
 
 func init() {
@@ -35,7 +38,53 @@ func init() {
 	stat, _ := os.Stdout.Stat()
 	isTTYGlobal = (stat.Mode() & os.ModeCharDevice) != 0
 
+	// Detect color profile
+	preferredProfile = detectProfile()
+
 	// Build color maps lazily via ensureMaps()
+}
+
+// GetPreferredProfile returns the detected or forced color profile
+func GetPreferredProfile() termenv.Profile {
+	return preferredProfile
+}
+
+// SetPreferredProfile explicitly sets the color profile (useful for testing)
+func SetPreferredProfile(p termenv.Profile) {
+	preferredProfile = p
+}
+
+func detectProfile() termenv.Profile {
+	// 1. Check COLORTERM for explicit overrides
+	colorTerm := strings.ToLower(os.Getenv("COLORTERM"))
+	switch colorTerm {
+	case "truecolor", "24bit":
+		return termenv.TrueColor
+	case "8bit", "256color":
+		return termenv.ANSI256
+	case "4bit", "16color", "8color", "3bit":
+		return termenv.ANSI
+	case "1bit", "2color", "mono", "false", "0":
+		return termenv.Ascii
+	}
+
+	// 2. Check TERM for well-known color-capable terms
+	term := strings.ToLower(os.Getenv("TERM"))
+	if strings.Contains(term, "direct") {
+		return termenv.TrueColor
+	}
+	if strings.Contains(term, "256color") {
+		return termenv.ANSI256
+	}
+	if strings.Contains(term, "16color") {
+		return termenv.ANSI
+	}
+	if term == "dumb" {
+		return termenv.Ascii
+	}
+
+	// 3. Fallback to automatic detection
+	return termenv.ColorProfile()
 }
 
 // ensureMaps ensures color maps are built if they were missed by init
@@ -72,6 +121,16 @@ func BuildColorMap() {
 	ansiMap["cyan"] = CodeCyan
 	ansiMap["white"] = CodeWhite
 
+	// Foreground colors (Bright)
+	ansiMap["bright-black"] = CodeBrightBlack
+	ansiMap["bright-red"] = CodeBrightRed
+	ansiMap["bright-green"] = CodeBrightGreen
+	ansiMap["bright-yellow"] = CodeBrightYellow
+	ansiMap["bright-blue"] = CodeBrightBlue
+	ansiMap["bright-magenta"] = CodeBrightMagenta
+	ansiMap["bright-cyan"] = CodeBrightCyan
+	ansiMap["bright-white"] = CodeBrightWhite
+
 	// Background colors (with "bg" suffix for fg:bg parsing)
 	ansiMap["blackbg"] = CodeBlackBg
 	ansiMap["redbg"] = CodeRedBg
@@ -82,12 +141,29 @@ func BuildColorMap() {
 	ansiMap["cyanbg"] = CodeCyanBg
 	ansiMap["whitebg"] = CodeWhiteBg
 
+	// Background colors (Bright)
+	ansiMap["bright-blackbg"] = CodeBrightBlackBg
+	ansiMap["bright-redbg"] = CodeBrightRedBg
+	ansiMap["bright-greenbg"] = CodeBrightGreenBg
+	ansiMap["bright-yellowbg"] = CodeBrightYellowBg
+	ansiMap["bright-bluebg"] = CodeBrightBlueBg
+	ansiMap["bright-magentabg"] = CodeBrightMagentaBg
+	ansiMap["bright-cyanbg"] = CodeBrightCyanBg
+	ansiMap["bright-whitebg"] = CodeBrightWhiteBg
+
 	// Flag character mappings
-	ansiMap["b"] = CodeBold
-	ansiMap["d"] = CodeDim
-	ansiMap["u"] = CodeUnderline
-	ansiMap["l"] = CodeBlink
-	ansiMap["r"] = CodeReverse
+	ansiMap["b"] = CodeBoldOff
+	ansiMap["B"] = CodeBold
+	ansiMap["d"] = CodeDimOff
+	ansiMap["D"] = CodeDim
+	ansiMap["u"] = CodeUnderlineOff
+	ansiMap["U"] = CodeUnderline
+	ansiMap["l"] = CodeBlinkOff
+	ansiMap["L"] = CodeBlink
+	ansiMap["r"] = CodeReverseOff
+	ansiMap["R"] = CodeReverse
+	ansiMap["s"] = CodeStrikethroughOff
+	ansiMap["S"] = CodeStrikethrough
 
 	// Build semantic map from Colors struct
 	val := reflect.ValueOf(Colors)
@@ -111,16 +187,16 @@ func BuildColorMap() {
 	}
 }
 
-// RegisterSemanticTag registers a semantic tag with its tview-format value
-func RegisterSemanticTag(name, tviewValue string) {
+// RegisterSemanticTag registers a semantic tag with its standardized tag value
+func RegisterSemanticTag(name, taggedValue string) {
 	ensureMaps()
-	semanticMap[strings.ToLower(name)] = tviewValue
+	semanticMap[strings.ToLower(name)] = taggedValue
 }
 
-// ToTview converts semantic and direct tags to tview [color] format
+// ExpandTags converts semantic and direct tags to standardized {{|style|}} format
 // - {{_Tag_}} : Semantic lookup
-// - {{|code|}} : Direct tview-style (just replace delimiters)
-func ToTview(text string) string {
+// - {{|code|}} : Direct style (no-op, just for consistency)
+func ExpandTags(text string) string {
 	ensureMaps()
 
 	// 1. Process semantic tags {{_Tag_}}
@@ -129,18 +205,12 @@ func ToTview(text string) string {
 		content = strings.ToLower(content)
 
 		// Check semantic map
-		if tviewTag, ok := semanticMap[content]; ok {
-			return tviewTag
+		if tag, ok := semanticMap[content]; ok {
+			return tag
 		}
 
-		// Unknown semantic tag - leave as-is for debugging
-		return match
-	})
-
-	// 2. Process direct tags {{|code|}} -> [code]
-	text = directRegex.ReplaceAllStringFunc(text, func(match string) string {
-		content := match[3 : len(match)-3] // Strip "{{|" and "|}}"
-		return "[" + content + "]"
+		// Unknown semantic tag - strip it
+		return ""
 	})
 
 	return text
@@ -161,9 +231,9 @@ func ToANSI(text string) string {
 		content := match[3 : len(match)-3] // Strip "{{_" and "_}}"
 		content = strings.ToLower(content)
 
-		// Check semantic map, then resolve tview tag to ANSI
-		if tviewTag, ok := semanticMap[content]; ok {
-			return tviewTagToANSI(tviewTag)
+		// Check semantic map, then resolve tagged style to ANSI
+		if tag, ok := semanticMap[content]; ok {
+			return resolveTaggedStyleToANSI(tag)
 		}
 
 		// Unknown semantic tag - strip it
@@ -173,8 +243,7 @@ func ToANSI(text string) string {
 	// 2. Process direct tags {{|code|}} -> ANSI
 	text = directRegex.ReplaceAllStringFunc(text, func(match string) string {
 		content := match[3 : len(match)-3] // Strip "{{|" and "|}}"
-		content = strings.ToLower(content)
-		return parseTviewStyleToANSI(content)
+		return parseStyleCodeToANSI(content)
 	})
 
 	return text
@@ -187,18 +256,19 @@ func Strip(text string) string {
 	return text
 }
 
-// tviewTagToANSI converts a tview-format tag like "[cyan::b]" to ANSI codes
-func tviewTagToANSI(tviewTag string) string {
-	// Remove brackets: "[cyan::b]" -> "cyan::b"
-	if len(tviewTag) < 2 || tviewTag[0] != '[' || tviewTag[len(tviewTag)-1] != ']' {
-		return ""
+// resolveTaggedStyleToANSI converts a standardized tag like "{{|cyan::B|}}" to ANSI codes
+func resolveTaggedStyleToANSI(tag string) string {
+	// Support both "{{|content|}}" and plain "content"
+	content := tag
+	if strings.HasPrefix(tag, "{{|") && strings.HasSuffix(tag, "|}}") {
+		content = tag[3 : len(tag)-3]
 	}
-	content := tviewTag[1 : len(tviewTag)-1]
-	return parseTviewStyleToANSI(content)
+
+	return parseStyleCodeToANSI(content)
 }
 
-// parseTviewStyleToANSI parses fg:bg:flags format and returns ANSI codes
-func parseTviewStyleToANSI(content string) string {
+// parseStyleCodeToANSI parses fg:bg:flags format and returns ANSI codes
+func parseStyleCodeToANSI(content string) string {
 	if content == "-" {
 		return CodeReset
 	}
@@ -207,18 +277,83 @@ func parseTviewStyleToANSI(content string) string {
 	parts := strings.Split(content, ":")
 	var codes strings.Builder
 
+	// Flags (peek for H early to affect colors)
+	highIntensity := false
+	if len(parts) > 2 {
+		if strings.Contains(strings.ToLower(parts[2]), "h") {
+			highIntensity = true
+		}
+	}
+
 	// Part 0: Foreground color
 	if len(parts) > 0 && parts[0] != "" && parts[0] != "-" {
-		if code, ok := ansiMap[parts[0]]; ok {
+		colorName := strings.ToLower(parts[0])
+		if highIntensity {
+			if brightName, ok := getBrightVariant(colorName); ok {
+				colorName = brightName
+			}
+		}
+
+		color := preferredProfile.Color(colorName)
+		if strings.HasPrefix(colorName, "#") {
+			// Hex color
+			codes.WriteString(wrapSequence(color.Sequence(false)))
+		} else if val, ok := ColorToHexMap[colorName]; ok {
+			// Named color resolved to hex or index
+			if highIntensity {
+				if brightVal, ok := getBrightIndex(val); ok {
+					val = brightVal
+				}
+			}
+			color = preferredProfile.Color(val)
+			codes.WriteString(wrapSequence(color.Sequence(false)))
+		} else if code, ok := ansiMap[colorName]; ok {
+			// Direct ANSI code mapping (e.g., "bold" or custom)
 			codes.WriteString(code)
+		} else {
+			// Fallback: Try to use it as a raw color (e.g. "7", "235")
+			// This handles the case where theme.go resolves "silver" to "7"
+			// and passes "7" here, which isn't in ColorToHexMap/ansiMap.
+			color = preferredProfile.Color(colorName)
+			seq := color.Sequence(false)
+			if seq != "" {
+				codes.WriteString(wrapSequence(seq))
+			}
 		}
 	}
 
 	// Part 1: Background color
 	if len(parts) > 1 && parts[1] != "" && parts[1] != "-" {
-		// Try with "bg" suffix
-		if code, ok := ansiMap[parts[1]+"bg"]; ok {
+		colorName := strings.ToLower(parts[1])
+		if highIntensity {
+			if brightName, ok := getBrightVariant(colorName); ok {
+				colorName = brightName
+			}
+		}
+
+		color := preferredProfile.Color(colorName)
+		if strings.HasPrefix(colorName, "#") {
+			// Hex color
+			codes.WriteString(wrapSequence(color.Sequence(true)))
+		} else if val, ok := ColorToHexMap[colorName]; ok {
+			// Named color resolved to hex or index
+			if highIntensity {
+				if brightVal, ok := getBrightIndex(val); ok {
+					val = brightVal
+				}
+			}
+			color = preferredProfile.Color(val)
+			codes.WriteString(wrapSequence(color.Sequence(true)))
+		} else if code, ok := ansiMap[colorName+"bg"]; ok {
+			// Direct ANSI code mapping
 			codes.WriteString(code)
+		} else {
+			// Fallback: Try to use it as a raw color (e.g. "7", "235")
+			color = preferredProfile.Color(colorName)
+			seq := color.Sequence(true)
+			if seq != "" {
+				codes.WriteString(wrapSequence(seq))
+			}
 		}
 	}
 
@@ -233,6 +368,37 @@ func parseTviewStyleToANSI(content string) string {
 	}
 
 	return codes.String()
+}
+
+func getBrightVariant(name string) (string, bool) {
+	if strings.HasPrefix(name, "bright-") {
+		return name, true
+	}
+	// Check if bright variant exists in ansiMap
+	if _, ok := ansiMap["bright-"+name]; ok {
+		return "bright-" + name, true
+	}
+	return name, false
+}
+
+func getBrightIndex(val string) (string, bool) {
+	// If val is a single digit 0-7, shift it to 8-15
+	if len(val) == 1 && val[0] >= '0' && val[0] <= '7' {
+		return string(val[0] + 8), true
+	}
+	// Handle cases like "13" etc if needed, but usually standard colors are 0-7
+	return val, false
+}
+
+// wrapSequence ensures a color sequence part is wrapped in CSI delimiters
+func wrapSequence(seq string) string {
+	if seq == "" {
+		return ""
+	}
+	if strings.HasPrefix(seq, "\x1b[") {
+		return seq
+	}
+	return "\033[" + seq + "m"
 }
 
 // Sprintf formats according to a format specifier and returns the string with ANSI codes
@@ -252,36 +418,25 @@ func Parse(text string) string {
 	return ToANSI(text)
 }
 
-// Translate is a convenience alias for ToTview (backwards compatibility)
+// Translate is a convenience alias for ExpandTags (backwards compatibility)
 func Translate(text string) string {
-	return ToTview(text)
+	return ExpandTags(text)
 }
 
-// PrepareForTUI is a convenience alias for ToTview (backwards compatibility)
-func PrepareForTUI(text string) string {
-	return ToTview(text)
-}
-
-// ExpandSemanticTags is a convenience alias for ToTview (backwards compatibility)
+// ExpandSemanticTags is a convenience alias for ExpandTags (backwards compatibility)
 func ExpandSemanticTags(text string) string {
-	return ToTview(text)
+	return ExpandTags(text)
 }
 
-// TranslateToTview is a convenience alias for ToTview (backwards compatibility)
-func TranslateToTview(text string) string {
-	return ToTview(text)
+// TranslateToTagged is a convenience alias for ExpandTags
+func TranslateToTagged(text string) string {
+	return ExpandTags(text)
 }
 
-// ForTUI prepares text for cview/tview display with proper bracket escaping.
-// Order of operations:
-// 1. Escape literal brackets [text] -> [[text]] (cview.Escape)
-// 2. Convert our tags {{_Tag_}} and {{|code|}} to [cview] format
-// This ensures user content like [NOTICE] or [v2.0] doesn't get interpreted as color codes.
+// ForTUI prepares text for display with standardized tags.
+// Literal brackets [text] are now treated as plain text and do NOT need escaping.
 func ForTUI(text string) string {
-	// 1. Escape any literal brackets in the text
-	text = cview.Escape(text)
-	// 2. Convert our semantic and direct tags to cview format
-	return ToTview(text)
+	return ExpandTags(text)
 }
 
 // Legacy compatibility functions

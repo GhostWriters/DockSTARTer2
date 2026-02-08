@@ -6,11 +6,20 @@ const (
 	CodeReset = "\033[0m"
 
 	// Modifiers
-	CodeBold      = "\033[1m"
-	CodeDim       = "\033[2m"
-	CodeUnderline = "\033[4m"
-	CodeBlink     = "\033[5m"
-	CodeReverse   = "\033[7m"
+	CodeBold          = "\033[1m"
+	CodeDim           = "\033[2m"
+	CodeUnderline     = "\033[4m"
+	CodeBlink         = "\033[5m"
+	CodeReverse       = "\033[7m"
+	CodeStrikethrough = "\033[9m"
+
+	// Modifiers (Off)
+	CodeBoldOff          = "\033[22m"
+	CodeDimOff           = "\033[22m"
+	CodeUnderlineOff     = "\033[24m"
+	CodeBlinkOff         = "\033[25m"
+	CodeReverseOff       = "\033[27m"
+	CodeStrikethroughOff = "\033[29m"
 
 	// Foreground
 	CodeBlack   = "\033[30m"
@@ -22,6 +31,16 @@ const (
 	CodeCyan    = "\033[36m"
 	CodeWhite   = "\033[37m"
 
+	// Foreground (Bright)
+	CodeBrightBlack   = "\033[90m"
+	CodeBrightRed     = "\033[91m"
+	CodeBrightGreen   = "\033[92m"
+	CodeBrightYellow  = "\033[93m"
+	CodeBrightBlue    = "\033[94m"
+	CodeBrightMagenta = "\033[95m"
+	CodeBrightCyan    = "\033[96m"
+	CodeBrightWhite   = "\033[97m"
+
 	// Background
 	CodeBlackBg   = "\033[40m"
 	CodeRedBg     = "\033[41m"
@@ -31,18 +50,54 @@ const (
 	CodeMagentaBg = "\033[45m"
 	CodeCyanBg    = "\033[46m"
 	CodeWhiteBg   = "\033[47m"
+
+	// Background (Bright)
+	CodeBrightBlackBg   = "\033[100m"
+	CodeBrightRedBg     = "\033[101m"
+	CodeBrightGreenBg   = "\033[102m"
+	CodeBrightYellowBg  = "\033[103m"
+	CodeBrightBlueBg    = "\033[104m"
+	CodeBrightMagentaBg = "\033[105m"
+	CodeBrightCyanBg    = "\033[106m"
+	CodeBrightWhiteBg   = "\033[107m"
 )
+
+// ColorToHexMap maps standard color names to hex codes for TrueColor consistency
+// ColorToHexMap maps standard color names to ANSI indices for terminal consistency
+// Using indices (0-15) ensures colors match the terminal's theme and resets (\x1b[0m)
+var ColorToHexMap = map[string]string{
+	"black":   "0",
+	"red":     "1",
+	"green":   "2",
+	"yellow":  "3",
+	"blue":    "4",
+	"magenta": "5",
+	"cyan":    "6",
+	"white":   "7",
+	"gray":    "8",
+	"maroon":  "1",
+	"olive":   "3",
+	"navy":    "4",
+	"purple":  "5",
+	"teal":    "6",
+	"silver":  "7",
+	"lime":    "10",
+	"fuchsia": "13",
+	"aqua":    "14",
+}
 
 // AppColors defines the struct for program-wide colors/styles
 // Values are stored in tview tag format (e.g., "[cyan::b]")
 type AppColors struct {
 	// Base Codes
-	Reset     string
-	Bold      string
-	Dim       string
-	Underline string
-	Blink     string
-	Reverse   string
+	Reset         string
+	Bold          string
+	Dim           string
+	Underline     string
+	Blink         string
+	Reverse       string
+	Strikethrough string
+	HighIntensity string
 
 	// Base Colors (Foreground)
 	Black   string
@@ -124,15 +179,15 @@ var Colors AppColors
 // These map semantic names to their tview-format output values
 func RegisterBaseTags() {
 	// Bash-style aliases from main.sh
-	RegisterSemanticTag("NC", "[-]")
-	RegisterSemanticTag("BD", "[::b]")
-	RegisterSemanticTag("UL", "[::u]")
-	RegisterSemanticTag("DM", "[::d]")
-	RegisterSemanticTag("BL", "[::l]")
+	RegisterSemanticTag("NC", "{{|-|}}")
+	RegisterSemanticTag("BD", "{{|::B|}}")
+	RegisterSemanticTag("UL", "{{|::U|}}")
+	RegisterSemanticTag("DM", "{{|::D|}}")
+	RegisterSemanticTag("BL", "{{|::L|}}")
 
 	// Existing shorthands
-	RegisterSemanticTag("ul", "[::u]")
-	RegisterSemanticTag("blink", "[::l]")
+	RegisterSemanticTag("ul", "{{|::U|}}")
+	RegisterSemanticTag("blink", "{{|::L|}}")
 
 	// Semantic tags from struct fields (auto-registered by BuildColorMap)
 	// Double-register here for explicit visibility and aliasMap access

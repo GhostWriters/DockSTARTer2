@@ -2,12 +2,11 @@ package tui
 
 import (
 	"context"
-	"strings"
 
 	"DockSTARTer2/internal/config"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	overlay "github.com/rmhubbert/bubbletea-overlay"
 )
 
 // ScreenType identifies different screens in the TUI
@@ -69,9 +68,8 @@ type AppModel struct {
 	activeScreen ScreenModel
 	screenStack  []ScreenModel
 
-	// Persistent components
-	header   HeaderModel
-	helpline HelplineModel
+	// Persistent backdrop (header + separator + helpline)
+	backdrop BackdropModel
 
 	// Modal dialog overlay (nil when no dialog)
 	dialog tea.Model
@@ -82,20 +80,25 @@ type AppModel struct {
 
 // NewAppModel creates a new application model
 func NewAppModel(ctx context.Context, cfg config.AppConfig, startScreen ScreenModel) AppModel {
+	// Get initial help text from screen if available
+	helpText := ""
+	if startScreen != nil {
+		helpText = startScreen.HelpText()
+	}
+
 	return AppModel{
 		ctx:          ctx,
 		config:       cfg,
 		activeScreen: startScreen,
 		screenStack:  make([]ScreenModel, 0),
-		header:       NewHeaderModel(),
-		helpline:     NewHelplineModel(),
+		backdrop:     NewBackdropModel(helpText),
 	}
 }
 
 // Init implements tea.Model
 func (m AppModel) Init() tea.Cmd {
 	cmds := []tea.Cmd{
-		m.header.Init(),
+		m.backdrop.Init(),
 	}
 	if m.activeScreen != nil {
 		cmds = append(cmds, m.activeScreen.Init())
@@ -121,21 +124,19 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.ready = true
 
-		// Update header width (reduced by 2 for invisible margins)
-		m.header.SetWidth(m.width - 2)
+		// Update backdrop size FIRST
+		backdropModel, _ := m.backdrop.Update(msg)
+		m.backdrop = backdropModel.(BackdropModel)
 
-		// Calculate content area height (header + sep + helpline)
-		contentHeight := m.height - 3
-
-		// Update active screen size
+		// Update active screen size with full dimensions
 		if m.activeScreen != nil {
-			m.activeScreen.SetSize(m.width, contentHeight)
+			m.activeScreen.SetSize(m.width, m.height)
 		}
 
 		// Update dialog size if present
 		if m.dialog != nil {
 			if sizable, ok := m.dialog.(interface{ SetSize(int, int) }); ok {
-				sizable.SetSize(m.width, contentHeight)
+				sizable.SetSize(m.width, m.height)
 			}
 		}
 
@@ -148,9 +149,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.activeScreen = msg.Screen
 		if m.activeScreen != nil {
-			contentHeight := m.height - 3
-			m.activeScreen.SetSize(m.width, contentHeight)
-			m.helpline.SetText(m.activeScreen.HelpText())
+			m.activeScreen.SetSize(m.width, m.height)
+			m.backdrop.SetHelpText(m.activeScreen.HelpText())
 			cmds = append(cmds, m.activeScreen.Init())
 		}
 		return m, tea.Batch(cmds...)
@@ -161,7 +161,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.activeScreen = m.screenStack[len(m.screenStack)-1]
 			m.screenStack = m.screenStack[:len(m.screenStack)-1]
 			if m.activeScreen != nil {
-				m.helpline.SetText(m.activeScreen.HelpText())
+				m.backdrop.SetHelpText(m.activeScreen.HelpText())
 			}
 		}
 		return m, nil
@@ -170,8 +170,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dialog = msg.Dialog
 		if m.dialog != nil {
 			if sizable, ok := m.dialog.(interface{ SetSize(int, int) }); ok {
-				contentHeight := m.height - 3
-				sizable.SetSize(m.width, contentHeight)
+				sizable.SetSize(m.width, m.height)
 			}
 			cmds = append(cmds, m.dialog.Init())
 		}
@@ -182,18 +181,19 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case UpdateHeaderMsg:
-		m.header.Refresh()
+		m.backdrop.header.Refresh()
 		return m, nil
 
 	case QuitMsg:
 		return m, tea.Quit
 	}
 
-	// Update header
-	var headerCmd tea.Cmd
-	m.header, headerCmd = m.header.Update(msg)
-	if headerCmd != nil {
-		cmds = append(cmds, headerCmd)
+	// Update backdrop
+	var backdropCmd tea.Cmd
+	backdropModel, backdropCmd := m.backdrop.Update(msg)
+	m.backdrop = backdropModel.(BackdropModel)
+	if backdropCmd != nil {
+		cmds = append(cmds, backdropCmd)
 	}
 
 	// Update dialog if present, otherwise update active screen
@@ -213,68 +213,43 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, screenCmd)
 		}
 		// Update helpline from screen
-		m.helpline.SetText(m.activeScreen.HelpText())
+		m.backdrop.SetHelpText(m.activeScreen.HelpText())
 	}
 
 	return m, tea.Batch(cmds...)
 }
 
 // View implements tea.Model
+// Uses backdrop + overlay pattern (same as dialogs)
 func (m AppModel) View() string {
 	if !m.ready {
 		return "Initializing..."
 	}
 
-	styles := GetStyles()
-	var b strings.Builder
+	// Get backdrop view
+	backdropView := m.backdrop.View()
 
-	// Header with 1-char padding on left and right
-	headerContent := m.header.View()
-	headerStyle := lipgloss.NewStyle().
-		Width(m.width).
-		PaddingLeft(1).
-		PaddingRight(1).
-		Background(styles.Screen.GetBackground())
-	b.WriteString(headerStyle.Render(headerContent))
-	b.WriteString("\n")
-
-	// Separator line with 1-char padding on left and right
-	sep := strings.Repeat(styles.SepChar, m.width-2)
-	sepStyle := lipgloss.NewStyle().
-		Width(m.width).
-		PaddingLeft(1).
-		PaddingRight(1).
-		Background(styles.HeaderBG.GetBackground())
-	b.WriteString(sepStyle.Render(sep))
-	b.WriteString("\n")
-
-	// Content area
-	contentHeight := m.height - 3
-	var content string
-
+	// Get content view (dialog or screen)
+	var contentView string
 	if m.dialog != nil {
-		// Show dialog over screen
-		content = m.dialog.View()
+		contentView = m.dialog.View()
 	} else if m.activeScreen != nil {
-		content = m.activeScreen.View()
+		contentView = m.activeScreen.View()
 	}
 
-	// Ensure content fills the height
-	contentLines := strings.Count(content, "\n") + 1
-	if contentLines < contentHeight {
-		content += strings.Repeat("\n", contentHeight-contentLines)
+	// If no content, just show backdrop
+	if contentView == "" {
+		return backdropView
 	}
 
-	// Apply screen background to content area
-	contentStyle := lipgloss.NewStyle().
-		Width(m.width).
-		Height(contentHeight).
-		Background(styles.Screen.GetBackground())
-
-	b.WriteString(contentStyle.Render(content))
-
-	// Help line
-	b.WriteString(m.helpline.View(m.width))
-
-	return b.String()
+	// Use overlay to composite content over backdrop
+	// overlay.Composite(foreground, background, xPos, yPos, xOffset, yOffset)
+	return overlay.Composite(
+		contentView,   // foreground (content to overlay)
+		backdropView,  // background (backdrop base)
+		overlay.Center,
+		overlay.Center,
+		0,
+		0,
+	)
 }

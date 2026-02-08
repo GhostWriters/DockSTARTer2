@@ -2,6 +2,7 @@ package tui
 
 import (
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/theme"
 	"fmt"
 	"strings"
@@ -49,6 +50,15 @@ type Styles struct {
 
 	// Separator
 	SepChar string
+
+	// Settings
+	LineCharacters bool
+
+	// Semantic styles derived from theme tags
+	StatusSuccess lipgloss.Style
+	StatusWarn    lipgloss.Style
+	StatusError   lipgloss.Style
+	Console       lipgloss.Style
 }
 
 // currentStyles holds the active styles
@@ -64,10 +74,17 @@ func tcellToLipgloss(c tcell.Color) lipgloss.Color {
 	if c == tcell.ColorDefault {
 		return lipgloss.Color("")
 	}
+	// Use ANSI indices for standard 256-color palette (0-255)
+	// to respect terminal themes and allow proper downsampling.
+	if c < 256 {
+		return lipgloss.Color(fmt.Sprintf("%d", c))
+	}
+	// For true RGB colors, use hex
 	return lipgloss.Color(fmt.Sprintf("#%06x", c.Hex()))
 }
 
-var AsciiBorder = lipgloss.Border{
+// asciiBorder defines a simple ASCII-only border for terminals without Unicode support
+var asciiBorder = lipgloss.Border{
 	Top:         "-",
 	Bottom:      "-",
 	Left:        "|",
@@ -78,16 +95,43 @@ var AsciiBorder = lipgloss.Border{
 	BottomRight: "+",
 }
 
+// roundedAsciiBorder defines a softer ASCII border with rounded appearance for buttons
+var roundedAsciiBorder = lipgloss.Border{
+	Top:         "-",
+	Bottom:      "-",
+	Left:        "|",
+	Right:       "|",
+	TopLeft:     ".",
+	TopRight:    ".",
+	BottomLeft:  "'",
+	BottomRight: "'",
+}
+
+// slantedAsciiBorder defines a beveled ASCII border with slanted corners
+var slantedAsciiBorder = lipgloss.Border{
+	Top:         "-",
+	Bottom:      "-",
+	Left:        "|",
+	Right:       "|",
+	TopLeft:     "/",
+	TopRight:    "\\",
+	BottomLeft:  "\\",
+	BottomRight: "/",
+}
+
 // InitStyles initializes lipgloss styles from the current theme
 func InitStyles(cfg config.AppConfig) {
 	t := theme.Current
+
+	// Store LineCharacters setting for later use
+	currentStyles.LineCharacters = cfg.LineCharacters
 
 	// Border style based on LineCharacters setting
 	if cfg.LineCharacters {
 		currentStyles.Border = lipgloss.RoundedBorder()
 		currentStyles.SepChar = "─"
 	} else {
-		currentStyles.Border = AsciiBorder
+		currentStyles.Border = asciiBorder
 		currentStyles.SepChar = "-"
 	}
 
@@ -117,13 +161,13 @@ func InitStyles(cfg config.AppConfig) {
 		Background(tcellToLipgloss(t.ShadowColor))
 
 	// Buttons (spacing handled at layout level)
-	currentStyles.ButtonActive = lipgloss.NewStyle().
+	currentStyles.ButtonActive = ApplyFlags(lipgloss.NewStyle().
 		Background(tcellToLipgloss(t.ButtonActiveBG)).
-		Foreground(tcellToLipgloss(t.ButtonActiveFG))
+		Foreground(tcellToLipgloss(t.ButtonActiveFG)), t.ButtonActiveStyles)
 
-	currentStyles.ButtonInactive = lipgloss.NewStyle().
+	currentStyles.ButtonInactive = ApplyFlags(lipgloss.NewStyle().
 		Background(tcellToLipgloss(t.ButtonInactiveBG)).
-		Foreground(tcellToLipgloss(t.ButtonInactiveFG))
+		Foreground(tcellToLipgloss(t.ButtonInactiveFG)), t.ButtonInactiveStyles)
 
 	// List items
 	currentStyles.ItemNormal = lipgloss.NewStyle().
@@ -154,8 +198,38 @@ func InitStyles(cfg config.AppConfig) {
 
 	// Help line
 	currentStyles.HelpLine = lipgloss.NewStyle().
-		Background(tcellToLipgloss(t.ScreenBG)).
-		Foreground(tcellToLipgloss(t.ScreenFG))
+		Background(tcellToLipgloss(t.ItemHelpBG)).
+		Foreground(tcellToLipgloss(t.ItemHelpFG))
+
+	// Initialize semantic styles from console color tags (Theme-specific to avoid log interference)
+	// Initialize semantic styles from console color tags (Theme-specific to avoid log interference)
+	currentStyles.StatusSuccess = ApplyStyleCode(lipgloss.NewStyle(), lipgloss.NewStyle(), console.GetColorDefinition("ThemeTitleNotice"))
+	currentStyles.StatusWarn = ApplyStyleCode(lipgloss.NewStyle(), lipgloss.NewStyle(), console.GetColorDefinition("ThemeTitleWarn"))
+	currentStyles.StatusError = ApplyStyleCode(lipgloss.NewStyle(), lipgloss.NewStyle(), console.GetColorDefinition("ThemeTitleError"))
+	currentStyles.Console = ApplyStyleCode(lipgloss.NewStyle(), lipgloss.NewStyle(), console.GetColorDefinition("ThemeProgram"))
+}
+
+// ApplyFlags applies ANSI style modifiers to a lipgloss.Style
+func ApplyFlags(style lipgloss.Style, flags theme.StyleFlags) lipgloss.Style {
+	style = style.
+		Bold(flags.Bold).
+		Underline(flags.Underline).
+		Italic(flags.Italic).
+		Blink(flags.Blink).
+		Faint(flags.Dim).
+		Reverse(flags.Reverse).
+		Strikethrough(flags.Strikethrough)
+
+	if flags.HighIntensity {
+		if fg := style.GetForeground(); fg != nil {
+			style = style.Foreground(brightenColor(fg))
+		}
+		if bg := style.GetBackground(); bg != nil {
+			style = style.Background(brightenColor(bg))
+		}
+	}
+
+	return style
 }
 
 // Helper functions for common style operations
@@ -187,6 +261,84 @@ func Apply3DBorder(style lipgloss.Style) lipgloss.Style {
 
 	return style.
 		Border(currentStyles.Border).
+		BorderTopForeground(currentStyles.BorderColor).
+		BorderLeftForeground(currentStyles.BorderColor).
+		BorderBottomForeground(currentStyles.Border2Color).
+		BorderRightForeground(currentStyles.Border2Color).
+		BorderTopBackground(borderBG).
+		BorderLeftBackground(borderBG).
+		BorderBottomBackground(borderBG).
+		BorderRightBackground(borderBG)
+}
+
+// ApplyStraightBorder applies a 3D border with straight edges
+// Uses asciiBorder or NormalBorder based on LineCharacters setting
+func ApplyStraightBorder(style lipgloss.Style, useLineChars bool) lipgloss.Style {
+	// Get the dialog background color for border backgrounds
+	borderBG := currentStyles.Dialog.GetBackground()
+
+	// Choose border style based on LineCharacters setting
+	var border lipgloss.Border
+	if useLineChars {
+		border = lipgloss.NormalBorder()
+	} else {
+		border = asciiBorder
+	}
+
+	return style.
+		Border(border).
+		BorderTopForeground(currentStyles.BorderColor).
+		BorderLeftForeground(currentStyles.BorderColor).
+		BorderBottomForeground(currentStyles.Border2Color).
+		BorderRightForeground(currentStyles.Border2Color).
+		BorderTopBackground(borderBG).
+		BorderLeftBackground(borderBG).
+		BorderBottomBackground(borderBG).
+		BorderRightBackground(borderBG)
+}
+
+// ApplyRoundedBorder applies a 3D border with rounded corners
+// Uses roundedAsciiBorder or RoundedBorder based on LineCharacters setting
+func ApplyRoundedBorder(style lipgloss.Style, useLineChars bool) lipgloss.Style {
+	// Get the dialog background color for border backgrounds
+	borderBG := currentStyles.Dialog.GetBackground()
+
+	// Choose border style based on LineCharacters setting
+	var border lipgloss.Border
+	if useLineChars {
+		border = lipgloss.RoundedBorder()
+	} else {
+		border = roundedAsciiBorder
+	}
+
+	return style.
+		Border(border).
+		BorderTopForeground(currentStyles.BorderColor).
+		BorderLeftForeground(currentStyles.BorderColor).
+		BorderBottomForeground(currentStyles.Border2Color).
+		BorderRightForeground(currentStyles.Border2Color).
+		BorderTopBackground(borderBG).
+		BorderLeftBackground(borderBG).
+		BorderBottomBackground(borderBG).
+		BorderRightBackground(borderBG)
+}
+
+// ApplySlantedBorder applies a 3D border with slanted/beveled corners
+// Uses slantedAsciiBorder or RoundedBorder based on LineCharacters setting
+func ApplySlantedBorder(style lipgloss.Style, useLineChars bool) lipgloss.Style {
+	// Get the dialog background color for border backgrounds
+	borderBG := currentStyles.Dialog.GetBackground()
+
+	// Choose border style based on LineCharacters setting
+	var border lipgloss.Border
+	if useLineChars {
+		border = lipgloss.RoundedBorder()
+	} else {
+		border = slantedAsciiBorder
+	}
+
+	return style.
+		Border(border).
 		BorderTopForeground(currentStyles.BorderColor).
 		BorderLeftForeground(currentStyles.BorderColor).
 		BorderBottomForeground(currentStyles.Border2Color).
@@ -294,37 +446,83 @@ func AddShadow(content string) string {
 		return content
 	}
 
-	// Get width from first line
-	contentWidth := lipgloss.Width(lines[0])
+	// Calculate max width from all lines
+	contentWidth := 0
+	for _, line := range lines {
+		w := lipgloss.Width(line)
+		if w > contentWidth {
+			contentWidth = w
+		}
+	}
 
-	// Create shadow cells (2 chars wide for right shadow)
-	shadowCell := currentStyles.Shadow.Width(2).Height(1).Render("")
+	var shadowCell, bottomShadowChars string
+
+	if currentStyles.LineCharacters {
+		// Unicode mode: use shade characters with shadow color foreground
+		shadowStyle := lipgloss.NewStyle().
+			Foreground(currentStyles.ShadowColor).
+			Background(currentStyles.Screen.GetBackground())
+
+		// Select shade character based on config
+		var shadeChar string
+		switch currentConfig.ShadowLevel {
+		case 1:
+			shadeChar = "░" // Light shade (25%)
+		case 2:
+			shadeChar = "▒" // Medium shade (50%)
+		case 3:
+			shadeChar = "▓" // Dark shade (75%)
+		case 4:
+			shadeChar = "█" // Full block (100%)
+		default:
+			shadeChar = "▓" // Default to dark if invalid/unset
+		}
+
+		shadowCell = shadowStyle.Render(strings.Repeat(shadeChar, 2))
+		bottomShadowChars = shadowStyle.Render(strings.Repeat(shadeChar, contentWidth-1))
+	} else {
+		// ASCII mode: use solid background color
+		shadowCell = currentStyles.Shadow.Width(2).Height(1).Render("")
+		bottomShadowChars = currentStyles.Shadow.Width(contentWidth - 1).Height(1).Render("")
+	}
+
 	spacerCell := lipgloss.NewStyle().
 		Background(currentStyles.Screen.GetBackground()).
 		Width(2).Height(1).Render("")
+	spacer1 := lipgloss.NewStyle().
+		Background(currentStyles.Screen.GetBackground()).
+		Width(1).Height(1).Render("")
 
 	var result strings.Builder
 
 	// First line: content + spacer (no shadow on top row)
-	result.WriteString(lines[0])
+	line0 := lines[0]
+	w0 := lipgloss.Width(line0)
+	padding0 := ""
+	if w0 < contentWidth {
+		padding0 = strings.Repeat(" ", contentWidth-w0)
+	}
+	result.WriteString(line0 + padding0)
 	result.WriteString(spacerCell)
 	result.WriteString("\n")
 
 	// Middle and last content lines: content + 2-char shadow on right
 	for i := 1; i < len(lines); i++ {
-		result.WriteString(lines[i])
+		line := lines[i]
+		w := lipgloss.Width(line)
+		padding := ""
+		if w < contentWidth {
+			padding = strings.Repeat(" ", contentWidth-w)
+		}
+		result.WriteString(line + padding)
 		result.WriteString(shadowCell)
 		result.WriteString("\n")
 	}
 
 	// Bottom shadow row: 1-char spacer + shadow across (width-1) + 2-char corner shadow
 	// This creates the proper 1-right, 1-down offset
-	spacer1 := lipgloss.NewStyle().
-		Background(currentStyles.Screen.GetBackground()).
-		Width(1).Height(1).Render("")
 	result.WriteString(spacer1)
-	bottomShadow := currentStyles.Shadow.Width(contentWidth - 1).Height(1).Render("")
-	result.WriteString(bottomShadow)
+	result.WriteString(bottomShadowChars)
 	result.WriteString(shadowCell)
 
 	return result.String()

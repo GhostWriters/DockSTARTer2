@@ -11,7 +11,7 @@ import (
 // If target is empty, prints global usage.
 // If target is specified, prints usage for that specific flag/command.
 func PrintHelp(target string) {
-	fmt.Println(console.Parse(GetUsage(target)))
+	fmt.Println(console.ToANSI(GetUsage(target)))
 }
 
 // GetUsage returns usage information as a string.
