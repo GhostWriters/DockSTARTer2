@@ -188,8 +188,8 @@ func ToTview(text string) string {
 			return tviewTag
 		}
 
-		// Unknown semantic tag - leave as-is for debugging
-		return match
+		// Unknown semantic tag - strip it
+		return ""
 	})
 
 	// 2. Process direct tags {{|code|}} -> [code]

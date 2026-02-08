@@ -116,7 +116,7 @@ func TestToTview(t *testing.T) {
 		{
 			name:     "Unknown semantic stays intact",
 			input:    "{{_UnknownTag_}}",
-			expected: "{{_UnknownTag_}}",
+			expected: "",
 		},
 	}
 
