@@ -241,6 +241,7 @@ func Default() {
 	console.RegisterSemanticTag("ThemeApplicationUpdate", "{{|yellow|}}")
 	console.RegisterSemanticTag("ThemeApplicationUpdateBrackets", "{{|-|}}")
 	console.RegisterSemanticTag("ThemeHostname", "{{|::B|}}")
+
 }
 
 func parseColor(c string) tcell.Color {
@@ -357,6 +358,8 @@ func parseThemeINI(path string) error {
 
 		// 1. Register the tview-format value as the tag
 		console.RegisterSemanticTag(key, styleValue)
+		// Register "Theme"+Key as well, for semantic consistency
+		console.RegisterSemanticTag("Theme"+key, styleValue)
 
 		// 2. Update global console.Colors if this key is in the map
 		if fieldName, ok := themeToConsoleMap[key]; ok {

@@ -122,13 +122,13 @@ func (m HeaderModel) renderLeft() string {
 	}
 
 	// Translate theme tags and render with lipgloss, using header background as default
-	return RenderThemeText(leftText, styles.HeaderBG)
+	return MaintainBackground(RenderThemeText(leftText, styles.HeaderBG), styles.HeaderBG)
 }
 
 func (m HeaderModel) renderCenter() string {
 	styles := GetStyles()
 	centerText := "{{_ThemeApplicationName_}}" + version.ApplicationName + "{{|-|}}"
-	return RenderThemeText(centerText, styles.HeaderBG)
+	return MaintainBackground(RenderThemeText(centerText, styles.HeaderBG), styles.HeaderBG)
 }
 
 func (m HeaderModel) renderRight() string {
@@ -153,5 +153,5 @@ func (m HeaderModel) renderRight() string {
 		rightText += "{{_ThemeApplicationVersion_}}T:[" + tmplVer + "]{{|-|}}"
 	}
 
-	return RenderThemeText(rightText, styles.HeaderBG)
+	return MaintainBackground(RenderThemeText(rightText, styles.HeaderBG), styles.HeaderBG)
 }

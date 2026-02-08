@@ -25,5 +25,5 @@ func (m HelplineModel) View(width int) string {
 
 	// Center the help text
 	helpStyle := styles.HelpLine.Width(width).Align(lipgloss.Center)
-	return helpStyle.Render(m.text)
+	return MaintainBackground(helpStyle.Render(m.text), styles.HelpLine)
 }

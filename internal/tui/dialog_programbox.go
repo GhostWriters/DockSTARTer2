@@ -141,14 +141,15 @@ func (m programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Height calculation:
-		// viewport.Height = (height - 4) - shadowHeight - 2 (border) - 0 (padding top) - 1 (command) - 3 (button) - 2 (viewport border) - 1 (scroll)
+
+		// viewport.Height = (height - 4) - shadowHeight - 2 (border) - 0 (padding top) - 1 (command) - 3 (button) - 2 (viewport border)
 		commandHeight := 1
 		if m.command == "" {
 			commandHeight = 0
 		}
 		// Reduced padding from 2 (sides) to 1, and 1 (top) to 0
 		m.viewport.Width = m.width - 4 - shadowWidth - 2 - 2 - 2 - 2
-		m.viewport.Height = m.height - 4 - shadowHeight - 2 - 0 - commandHeight - 3 - 2 - 1
+		m.viewport.Height = m.height - 4 - shadowHeight - 2 - 0 - commandHeight - 3 - 2
 		if m.viewport.Height < 5 {
 			m.viewport.Height = 5
 		}
@@ -205,25 +206,84 @@ func (m programBoxModel) View() string {
 	scrollPercent := m.viewport.ScrollPercent()
 
 	// Add scroll indicator at bottom of viewport content
-	scrollIndicator := styles.StatusSuccess.Copy().
+	scrollIndicator := styles.TagKey.Copy().
 		Bold(true).
-		Render(fmt.Sprintf(" %d%% ", int(scrollPercent*100)))
+		Render(fmt.Sprintf("%d%%", int(scrollPercent*100)))
 
 	// Use console background for the spacer row
 	// Apply background maintenance to captured output to prevent resets from bleeding
 	viewportContent := MaintainBackground(m.viewport.View(), styles.Console)
-	viewportWithScroll := viewportContent + "\n" +
-		lipgloss.NewStyle().
-			Width(m.viewport.Width).
-			Align(lipgloss.Center).
-			Background(styles.Console.GetBackground()).
-			Render(scrollIndicator)
+	// viewportWithScroll := viewportContent + "\n" +
+	// 	lipgloss.NewStyle().
+	// 		Width(m.viewport.Width).
+	// 		Align(lipgloss.Center).
+	// 		Background(styles.Console.GetBackground()).
+	// 		Render(scrollIndicator)
 
 	// Wrap viewport in rounded inner border with console background
 	viewportStyle := styles.Console.Copy().
 		Padding(0, 1)
 	viewportStyle = ApplyRoundedBorder(viewportStyle, styles.LineCharacters)
-	borderedViewport := viewportStyle.Render(viewportWithScroll)
+
+	// Apply scroll indicator manually to bottom border
+	// We disable the bottom border initially to let us construct it ourselves
+	viewportStyle = viewportStyle.BorderBottom(false)
+
+	borderedViewport := viewportStyle.Render(viewportContent)
+
+	// Construct custom bottom border with label
+	border := styles.Border
+	width := m.viewport.Width + 2 // Add 2 for left/right padding of viewportStyle
+	labelWidth := lipgloss.Width(scrollIndicator)
+
+	// Determine T-connectors based on line style
+	var leftT, rightT string
+	if styles.LineCharacters {
+		// Use inverse T connectors for bottom border
+		leftT = "┤"
+		rightT = "├"
+	} else {
+		leftT = "|"
+		rightT = "|"
+	}
+
+	// Calculate padding for label to place it on the right
+	// We want it close to the right corner, e.g., 2 chars padding
+	rightPadCnt := 2
+
+	// Ensure we have enough space
+	totalLabelWidth := 1 + labelWidth + 1 // connector + label + connector
+	if width < totalLabelWidth+rightPadCnt+2 {
+		// Fallback to center if too narrow
+		rightPadCnt = (width - totalLabelWidth) / 2
+	}
+
+	leftPadCnt := width - totalLabelWidth - rightPadCnt
+	if leftPadCnt < 0 {
+		leftPadCnt = 0
+	}
+
+	// Style for border segments (match ApplyRoundedBorder logic)
+	borderStyle := lipgloss.NewStyle().
+		Foreground(styles.Border2Color).
+		Background(styles.Dialog.GetBackground())
+
+	// Build bottom line parts
+	// Left part: BottomLeftCorner + HorizontalLine...
+	leftPart := borderStyle.Render(border.BottomLeft + strings.Repeat(border.Bottom, leftPadCnt))
+
+	// Connectors
+	leftConnector := borderStyle.Render(leftT)
+	rightConnector := borderStyle.Render(rightT)
+
+	// Right part: ...HorizontalLine + BottomRightCorner
+	rightPart := borderStyle.Render(strings.Repeat(border.Bottom, rightPadCnt) + border.BottomRight)
+
+	// Combine parts: Left-----┤100%├--Right
+	bottomLine := lipgloss.JoinHorizontal(lipgloss.Bottom, leftPart, leftConnector, scrollIndicator, rightConnector, rightPart)
+
+	// Append custom bottom line to viewport
+	borderedViewport = lipgloss.JoinVertical(lipgloss.Left, borderedViewport, bottomLine)
 
 	// Calculate content width based on viewport (matches borderedViewport width)
 	// viewport.Width + border (2) + padding (2) = viewport.Width + 4

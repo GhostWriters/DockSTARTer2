@@ -205,8 +205,8 @@ func RenderDialog(title, content string) string {
 			leftT = "┤"
 			rightT = "├"
 		} else {
-			leftT = "+"
-			rightT = "+"
+			leftT = "|"
+			rightT = "|"
 		}
 		// Total title section width: leftT + space + title + space + rightT
 		titleSectionLen := 1 + 1 + lipgloss.Width(title) + 1 + 1
