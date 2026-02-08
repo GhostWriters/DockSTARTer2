@@ -183,13 +183,27 @@ func RenderDialog(title, content string) string {
 		// Plain top border without title
 		result.WriteString(borderStyleLight.Render(strings.Repeat(border.Top, actualWidth)))
 	} else {
-		// Top border with embedded title
-		titleText := title
-		titleLen := lipgloss.Width(titleText)
-		leftPad := (actualWidth - titleLen) / 2
-		rightPad := actualWidth - titleLen - leftPad
+		// Top border with embedded title using T connectors
+		// Format: ────┤ Title ├────
+		// Spaces are rendered with border style, not title style
+		var leftT, rightT string
+		if styles.LineCharacters {
+			leftT = "┤"
+			rightT = "├"
+		} else {
+			leftT = "+"
+			rightT = "+"
+		}
+		// Total title section width: leftT + space + title + space + rightT
+		titleSectionLen := 1 + 1 + lipgloss.Width(title) + 1 + 1
+		leftPad := (actualWidth - titleSectionLen) / 2
+		rightPad := actualWidth - titleSectionLen - leftPad
 		result.WriteString(borderStyleLight.Render(strings.Repeat(border.Top, leftPad)))
-		result.WriteString(titleStyle.Render(titleText))
+		result.WriteString(borderStyleLight.Render(leftT))
+		result.WriteString(borderStyleLight.Render(" "))
+		result.WriteString(titleStyle.Render(title))
+		result.WriteString(borderStyleLight.Render(" "))
+		result.WriteString(borderStyleLight.Render(rightT))
 		result.WriteString(borderStyleLight.Render(strings.Repeat(border.Top, rightPad)))
 	}
 	result.WriteString(borderStyleLight.Render(border.TopRight))

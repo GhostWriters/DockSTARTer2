@@ -406,11 +406,30 @@ func AddShadow(content string) string {
 	// Get width from first line
 	contentWidth := lipgloss.Width(lines[0])
 
-	// Create shadow cells (2 chars wide for right shadow)
-	shadowCell := currentStyles.Shadow.Width(2).Height(1).Render("")
+	var shadowCell, bottomShadowChars string
+
+	if currentStyles.LineCharacters {
+		// Unicode mode: use shade characters with shadow color foreground
+		shadowStyle := lipgloss.NewStyle().
+			Foreground(currentStyles.ShadowColor).
+			Background(currentStyles.Screen.GetBackground())
+
+		// Use dark shade character (▓ U+2593) for shadow effect
+		const shadeChar = "▓"
+		shadowCell = shadowStyle.Render(strings.Repeat(shadeChar, 2))
+		bottomShadowChars = shadowStyle.Render(strings.Repeat(shadeChar, contentWidth-1))
+	} else {
+		// ASCII mode: use solid background color
+		shadowCell = currentStyles.Shadow.Width(2).Height(1).Render("")
+		bottomShadowChars = currentStyles.Shadow.Width(contentWidth - 1).Height(1).Render("")
+	}
+
 	spacerCell := lipgloss.NewStyle().
 		Background(currentStyles.Screen.GetBackground()).
 		Width(2).Height(1).Render("")
+	spacer1 := lipgloss.NewStyle().
+		Background(currentStyles.Screen.GetBackground()).
+		Width(1).Height(1).Render("")
 
 	var result strings.Builder
 
@@ -428,12 +447,8 @@ func AddShadow(content string) string {
 
 	// Bottom shadow row: 1-char spacer + shadow across (width-1) + 2-char corner shadow
 	// This creates the proper 1-right, 1-down offset
-	spacer1 := lipgloss.NewStyle().
-		Background(currentStyles.Screen.GetBackground()).
-		Width(1).Height(1).Render("")
 	result.WriteString(spacer1)
-	bottomShadow := currentStyles.Shadow.Width(contentWidth - 1).Height(1).Render("")
-	result.WriteString(bottomShadow)
+	result.WriteString(bottomShadowChars)
 	result.WriteString(shadowCell)
 
 	return result.String()
