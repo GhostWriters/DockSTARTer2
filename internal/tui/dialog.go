@@ -154,7 +154,6 @@ func RenderDialog(title, content string) string {
 	}
 	styles := GetStyles()
 
-	// Use straight border for dialogs
 	var border lipgloss.Border
 	if styles.LineCharacters {
 		border = lipgloss.NormalBorder()

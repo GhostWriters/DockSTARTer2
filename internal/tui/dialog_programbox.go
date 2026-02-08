@@ -47,18 +47,21 @@ func newProgramBox(title, subtitle, command string) programBoxModel {
 	// Title is parsed by RenderDialog when View() is called.
 	// Subtitle/Command is parsed in View().
 
-	vp := viewport.New(0, 0)
-	// Use theme-defined console colors to properly display ANSI colors from command output
-	styles := GetStyles()
-	vp.Style = styles.Console.Copy()
-
-	return programBoxModel{
+	m := programBoxModel{
 		title:    title,
 		subtitle: subtitle,
 		command:  command,
-		viewport: vp,
+		viewport: viewport.New(0, 0),
 		lines:    []string{},
 	}
+
+	// Initialize viewport style to match dialog background (fixes black scrollbar)
+	styles := GetStyles()
+	m.viewport.Style = styles.Dialog.Copy().Padding(0, 0)
+	// Use theme-defined console colors to properly display ANSI colors from command output
+	m.viewport.Style = m.viewport.Style.Copy().Background(styles.Console.GetBackground())
+
+	return m
 }
 
 // startStreamingOutput reads from the provided reader and sends output lines
@@ -109,22 +112,6 @@ func (m programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
-		// Calculate viewport size for full-screen dialog
-		// Dialog positioned at (2, 2) with size (width - 4) x (height - 4)
-		//
-		// Working backwards from dialog to viewport:
-		// 1. Dialog size: (width - 4) x (height - 4)
-		// 2. Remove shadow (if enabled): -2 width, -1 height
-		// 3. Remove outer border: -2 width, -2 height
-		// 4. Remove padding (1, 2): -4 width, -2 height
-		// 5. Remove inner components:
-		//    - Command line: 1 height (if present)
-		//    - Blank line: 1 height
-		//    - Button row: 3 height
-		//    - Viewport border: 2 height
-		//    - Scroll indicator: 1 height
-		//    - Viewport padding (0, 1): 2 width
-
 		cfg := config.LoadAppConfig()
 		shadowWidth := 0
 		shadowHeight := 0
@@ -133,23 +120,19 @@ func (m programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			shadowHeight = 1
 		}
 
-		// Width calculation:
-		// viewport.Width = (width - 4) - shadowWidth - 2 (border) - 4 (padding) - 2 (viewport border) - 2 (viewport padding)
-		m.viewport.Width = m.width - 4 - shadowWidth - 2 - 4 - 2 - 2
-		if m.viewport.Width < 20 {
-			m.viewport.Width = 20
-		}
-
-		// Height calculation:
-
-		// viewport.Height = (height - 4) - shadowHeight - 2 (border) - 0 (padding top) - 1 (command) - 3 (button) - 2 (viewport border)
 		commandHeight := 1
 		if m.command == "" {
 			commandHeight = 0
 		}
-		// Reduced padding from 2 (sides) to 1, and 1 (top) to 0
-		m.viewport.Width = m.width - 4 - shadowWidth - 2 - 2 - 2 - 2
-		m.viewport.Height = m.height - 4 - shadowHeight - 2 - 0 - commandHeight - 3 - 2
+
+		// Width calculation: screen - margins(4) - shadow(2) - borders(2 outer + 2 inner)
+		m.viewport.Width = m.width - 4 - shadowWidth - 4
+		if m.viewport.Width < 20 {
+			m.viewport.Width = 20
+		}
+
+		// Height calculation: screen - margins(4) - shadow(1) - borders(2 outer + 2 inner) - other components(cmd line + button row)
+		m.viewport.Height = m.height - 4 - shadowHeight - 4 - commandHeight - 3
 		if m.viewport.Height < 5 {
 			m.viewport.Height = 5
 		}
@@ -222,7 +205,7 @@ func (m programBoxModel) View() string {
 
 	// Wrap viewport in rounded inner border with console background
 	viewportStyle := styles.Console.Copy().
-		Padding(0, 1)
+		Padding(0, 0) // Remove side padding inside inner box for a tighter look
 	viewportStyle = ApplyRoundedBorder(viewportStyle, styles.LineCharacters)
 
 	// Apply scroll indicator manually to bottom border
@@ -258,9 +241,16 @@ func (m programBoxModel) View() string {
 		rightPadCnt = (width - totalLabelWidth) / 2
 	}
 
-	leftPadCnt := width - totalLabelWidth - rightPadCnt
+	// Correct math for bottom line length:
+	// Corner(1) + LeftPad + Connector(1) + Label + Connector(1) + RightPad + Corner(1) = width
+	// LeftPad + RightPad + Label + 4 = width
+	leftPadCnt := width - labelWidth - 4 - rightPadCnt
 	if leftPadCnt < 0 {
 		leftPadCnt = 0
+		rightPadCnt = width - labelWidth - 4
+		if rightPadCnt < 0 {
+			rightPadCnt = 0
+		}
 	}
 
 	// Style for border segments (match ApplyRoundedBorder logic)
@@ -283,11 +273,13 @@ func (m programBoxModel) View() string {
 	bottomLine := lipgloss.JoinHorizontal(lipgloss.Bottom, leftPart, leftConnector, scrollIndicator, rightConnector, rightPart)
 
 	// Append custom bottom line to viewport
-	borderedViewport = lipgloss.JoinVertical(lipgloss.Left, borderedViewport, bottomLine)
+	// Use strings.Join to avoid extra newlines often added by lipgloss.JoinVertical
+	borderedViewport = strings.TrimSuffix(borderedViewport, "\n")
+	borderedViewport = borderedViewport + "\n" + bottomLine
 
 	// Calculate content width based on viewport (matches borderedViewport width)
-	// viewport.Width + border (2) + padding (2) = viewport.Width + 4
-	contentWidth := m.viewport.Width + 4
+	// viewport.Width + border (2) = viewport.Width + 2
+	contentWidth := m.viewport.Width + 2
 
 	// Build command display using theme semantic tags
 	var commandDisplay string
@@ -299,12 +291,14 @@ func (m programBoxModel) View() string {
 		base := styles.Dialog.Copy()
 		renderedCmd := RenderThemeText(m.command, base)
 
+		// Use lipgloss to render the row so width and background are handled correctly
+		// even with ANSI codes in renderedCmd.
+		// Use lipgloss to render the row so width and background are handled correctly
+		// even with ANSI codes in renderedCmd.
 		commandDisplay = lipgloss.NewStyle().
-			Width(contentWidth).                       // Fill the entire row
-			Padding(0, 1, 0, 0).                       // Align with inner border
-			Background(styles.Dialog.GetBackground()). // Set background for entire row (filler)
-			Render("_COMMAND_")
-		commandDisplay = strings.Replace(commandDisplay, "_COMMAND_", renderedCmd, 1)
+			Width(contentWidth).
+			Background(styles.Dialog.GetBackground()).
+			Render(renderedCmd)
 	}
 
 	// Render OK button using the standard button helper (ensures consistency)
@@ -319,14 +313,21 @@ func (m programBoxModel) View() string {
 		contentParts = append(contentParts, commandDisplay)
 	}
 	contentParts = append(contentParts, borderedViewport)
-	contentParts = append(contentParts, buttonRow)
+	// Trim newlines from each part to ensure tight vertical stacking
+	// and remove horizontal space above/below.
+	var contentPartsCleaned []string
+	if commandDisplay != "" {
+		contentPartsCleaned = append(contentPartsCleaned, strings.Trim(commandDisplay, "\n"))
+	}
+	contentPartsCleaned = append(contentPartsCleaned, strings.Trim(borderedViewport, "\n"))
+	contentPartsCleaned = append(contentPartsCleaned, strings.Trim(buttonRow, "\n"))
 
-	content := lipgloss.JoinVertical(lipgloss.Left, contentParts...)
+	content := strings.Join(contentPartsCleaned, "\n")
 
-	// Add padding to content (border will be added by RenderDialogWithTitle)
-	// Padding(top, right, bottom, left) -> (0, 1, 0, 1) to reduce margin around viewport
+	// Remove padding to content (border will be added by RenderDialogWithTitle)
+	// We want the inner border to be flush against the outer border
 	paddedContent := styles.Dialog.
-		Padding(0, 1, 0, 1).
+		Padding(0, 0).
 		Render(content)
 
 	// Wrap in border with title embedded (matching menu style)
