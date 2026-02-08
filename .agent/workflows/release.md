@@ -6,6 +6,8 @@ description: how to perform a push and release to Prerelease or main
 
 Follow these steps to push changes and trigger a release.
 
+
+
 ## 1. Prerelease Branch (Development/Test Release)
 Use this for testing changes. It generates a version tag like `v2.YYYYMMDD.N-Prerelease`.
 
@@ -27,6 +29,8 @@ Use this for testing changes. It generates a version tag like `v2.YYYYMMDD.N-Pre
    ```powershell
    gh workflow run release.yml --ref Prerelease
    ```
+
+
 
 ## 2. Main Branch (Production Release)
 Use this for official releases. It generates a production tag like `v2.YYYYMMDD.N`.
@@ -50,8 +54,11 @@ Use this for official releases. It generates a production tag like `v2.YYYYMMDD.
    gh workflow run release.yml --ref main
    ```
 
+
+
 ## 3. Monitoring
 You can monitor the progress of the release using:
+
 ```powershell
 gh run list --workflow release.yml --limit 5
 ```
