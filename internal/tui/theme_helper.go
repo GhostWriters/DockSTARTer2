@@ -18,8 +18,6 @@ var themeTagRegex = regexp.MustCompile(`\{\{(_[^}]+_|\|[^}]*\|)\}\}`)
 // RenderThemeText takes text with {{...}} theme tags and returns lipgloss-styled text
 // defaultStyle is used for reset state and unstyled text
 func RenderThemeText(text string, defaultStyle ...lipgloss.Style) string {
-	var result strings.Builder
-	var currentStyle lipgloss.Style
 	var resetStyle lipgloss.Style
 
 	// Use provided default style or blank style
@@ -29,69 +27,23 @@ func RenderThemeText(text string, defaultStyle ...lipgloss.Style) string {
 		resetStyle = lipgloss.NewStyle()
 	}
 
-	currentStyle = resetStyle
-	lastEnd := 0
-
-	// Helper to get ANSI codes from a style without the trailing reset
+	// 1. Get initial codes for the default style
+	// This ensures the starting text has the correct background/foreground
 	getCodes := func(s lipgloss.Style) string {
-		// Use Zero Width No-Break Space as marker to force code generation
-		// without visible artifacts or layout impact
-		marker := "\uFEFF"
-		rendered := s.Render(marker)
-		parts := strings.Split(rendered, marker)
-		if len(parts) > 0 {
-			return parts[0]
-		}
-		return ""
+		rendered := s.Render("_")
+		return strings.Split(rendered, "_")[0]
 	}
 
-	matches := themeTagRegex.FindAllStringSubmatchIndex(text, -1)
-	for _, match := range matches {
-		// Add text before this match with current style
-		if match[0] > lastEnd {
-			textBefore := text[lastEnd:match[0]]
-			result.WriteString(getCodes(currentStyle) + textBefore)
-		}
+	// 2. Convert all tags to ANSI using standard console logic
+	// This ensures {{_Tag_}} and {{|code|}} behave exactly as in terminal logs
+	rendered := console.ToANSI(text)
 
-		// Parse the tag content
-		tagContent := text[match[2]:match[3]]
+	// 3. Prepend default style codes and apply background maintenance
+	// We wrap the text in a reset at the end too.
+	result := getCodes(resetStyle) + rendered + "\x1b[0m"
 
-		if tagContent == "|-|" || tagContent == "-" {
-			// Reset style to default
-			currentStyle = resetStyle
-		} else if strings.HasPrefix(tagContent, "|") && strings.HasSuffix(tagContent, "|") {
-			// Direct color code: {{|white:blue:b|}}
-			colorCode := strings.Trim(tagContent, "|")
-			currentStyle = ApplyStyleCode(currentStyle, resetStyle, colorCode)
-		} else if strings.HasPrefix(tagContent, "_") && strings.HasSuffix(tagContent, "_") {
-			// Semantic tag: {{_ThemeHostname_}}
-			translated := console.Translate("{{" + tagContent + "}}")
-			// The translated value might contain multiple tags like {{|-|}}{{|blue|}}
-			subMatches := themeTagRegex.FindAllStringSubmatch(translated, -1)
-			for _, subMatch := range subMatches {
-				subContent := subMatch[1]
-				if subContent == "|-|" || subContent == "-" {
-					currentStyle = resetStyle
-				} else if strings.HasPrefix(subContent, "|") && strings.HasSuffix(subContent, "|") {
-					code := strings.Trim(subContent, "|")
-					currentStyle = ApplyStyleCode(currentStyle, resetStyle, code)
-				}
-			}
-		}
-
-		lastEnd = match[1]
-	}
-
-	// Always ensure we have trailing text covered if no tags followed
-	if lastEnd < len(text) {
-		result.WriteString(getCodes(currentStyle) + text[lastEnd:])
-	}
-
-	// Terminate with a hard reset to prevent style bleeding (e.g. underline)
-	// into subsequent UI elements
-	result.WriteString("\x1b[0m")
-
-	return result.String()
+	// 4. Ensure resets within the text don't kill the container's background
+	return MaintainBackground(result, resetStyle)
 }
 
 // ApplyStyleCode applies tview-style color codes (fg:bg:flags) to a lipgloss style
@@ -106,9 +58,16 @@ func ApplyStyleCode(style lipgloss.Style, resetStyle lipgloss.Style, styleCode s
 		return style
 	}
 
-	// Pre-emptive reset if flags start with '-'
+	// Pre-emptive reset of flags ONLY if they start with '-'
 	if len(parts) > 2 && strings.HasPrefix(parts[2], "-") {
-		style = resetStyle
+		style = style.
+			Bold(false).
+			Underline(false).
+			Italic(false).
+			Faint(false).
+			Blink(false).
+			Reverse(false).
+			Strikethrough(false)
 	}
 
 	// Foreground color
@@ -139,6 +98,16 @@ func ApplyStyleCode(style lipgloss.Style, resetStyle lipgloss.Style, styleCode s
 
 	// Styles (bold, underline, etc.)
 	if len(parts) > 2 {
+		if strings.HasPrefix(parts[2], "-") {
+			// Reset all supported flags before applying new ones
+			style = style.Bold(false).
+				Underline(false).
+				Italic(false).
+				Faint(false).
+				Blink(false).
+				Reverse(false).
+				Strikethrough(false)
+		}
 		s := strings.TrimPrefix(parts[2], "-")
 		for _, char := range s {
 			switch char {
@@ -172,7 +141,6 @@ func ApplyStyleCode(style lipgloss.Style, resetStyle lipgloss.Style, styleCode s
 				style = style.Strikethrough(false)
 			case 'H':
 				// High intensity: if foreground/background are standard, shift them
-				// (Shift logic will be handled by a dedicated helper or inline if simple)
 				if fg := style.GetForeground(); fg != nil {
 					style = style.Foreground(brightenColor(fg))
 				}

@@ -83,6 +83,8 @@ func Start(ctx context.Context, startMenu string) error {
 
 	// Run the program
 	_, err := program.Run()
+	// Reset terminal colors on exit to prevent "bleeding" into the shell prompt
+	fmt.Print("\x1b[0m\n")
 	return err
 }
 

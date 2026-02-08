@@ -3,6 +3,7 @@ package tui
 import (
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/theme"
+	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -165,6 +166,8 @@ func ShowMessageDialog(title, message string, msgType MessageType) {
 
 	p := tea.NewProgram(model)
 	p.Run()
+	// Reset terminal colors on exit to prevent "bleeding" into the shell prompt
+	fmt.Print("\x1b[0m\n")
 }
 
 // ShowInfoDialog displays an info message dialog

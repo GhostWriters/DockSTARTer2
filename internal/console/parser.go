@@ -267,9 +267,10 @@ func parseStyleCodeToANSI(content string) string {
 	parts := strings.Split(content, ":")
 	var codes strings.Builder
 
-	// Pre-emptive reset if flags start with '-'
+	// Pre-emptive reset of flags ONLY if they start with '-'
 	if len(parts) > 2 && strings.HasPrefix(parts[2], "-") {
-		codes.WriteString(CodeReset)
+		// 22:Bold/Dim off, 23:Italic off, 24:Underline off, 25:Blink off, 27:Reverse off, 29:Strikethrough off
+		codes.WriteString("\x1b[22m\x1b[23m\x1b[24m\x1b[25m\x1b[27m\x1b[29m")
 	}
 
 	// Flags (peek for H early to affect colors)

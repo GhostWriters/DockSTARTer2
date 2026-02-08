@@ -303,7 +303,8 @@ func (m programBoxModel) View() string {
 			Width(contentWidth).                       // Fill the entire row
 			Padding(0, 1, 0, 0).                       // Align with inner border
 			Background(styles.Dialog.GetBackground()). // Set background for entire row (filler)
-			Render(renderedCmd)
+			Render("_COMMAND_")
+		commandDisplay = strings.Replace(commandDisplay, "_COMMAND_", renderedCmd, 1)
 	}
 
 	// Render OK button using the standard button helper (ensures consistency)
@@ -505,5 +506,7 @@ func RunProgramBox(ctx context.Context, title, subtitle string, task func(contex
 	}()
 
 	_, err := p.Run()
+	// Reset terminal colors on exit to prevent "bleeding" into the shell prompt
+	fmt.Print("\x1b[0m\n")
 	return err
 }
