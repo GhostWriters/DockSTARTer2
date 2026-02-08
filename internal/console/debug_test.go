@@ -2,9 +2,16 @@ package console
 
 import (
 	"testing"
+
+	"github.com/muesli/termenv"
 )
 
 func TestParseStyleCodeToANSI(t *testing.T) {
+	// Force specific profile for deterministic testing (CI environment might be ansi/ascii)
+	originalProfile := preferredProfile
+	defer func() { preferredProfile = originalProfile }()
+	preferredProfile = termenv.TrueColor
+
 	// Set up maps
 	RegisterBaseTags()
 	BuildColorMap()
