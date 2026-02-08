@@ -143,7 +143,8 @@ func LoadAppConfig() AppConfig {
 		case constants.ShadowLevelKey:
 			// Parse shadow level (0-4)
 			level := 3 // default to dark
-			switch strings.ToLower(value) {
+			val := strings.ToLower(value)
+			switch val {
 			case "0", "off", "none", "false", "no":
 				level = 0
 			case "1", "light":
@@ -154,6 +155,24 @@ func LoadAppConfig() AppConfig {
 				level = 3
 			case "4", "solid", "full":
 				level = 4
+			default:
+				// specialized handling for percentage strings
+				if strings.HasSuffix(val, "%") {
+					var percent int
+					if _, err := fmt.Sscanf(val, "%d%%", &percent); err == nil {
+						if percent <= 12 {
+							level = 0
+						} else if percent <= 37 {
+							level = 1
+						} else if percent <= 62 {
+							level = 2
+						} else if percent <= 87 {
+							level = 3
+						} else {
+							level = 4
+						}
+					}
+				}
 			}
 			conf.ShadowLevel = level
 		case constants.ScrollbarKey:

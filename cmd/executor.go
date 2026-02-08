@@ -125,6 +125,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		for _, part := range group.FullSlice() {
 			cmdStr += " " + part
 		}
+		subtitle := " {{_ThemeCommandLine_}}" + cmdStr + "{{|-|}}"
 		logger.Notice(ctx, fmt.Sprintf("%s command: '{{_UserCommand_}}%s{{|-|}}'", version.ApplicationName, cmdStr))
 
 		// Log execution arguments for verification
@@ -223,9 +224,10 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			// Look up display title for this command
 			title := commandTitles[group.Command]
 			if title == "" {
-				title = "Command Execution"
+				title = "Running Command"
 			}
-			err := tui.RunCommand(ctx, title, cmdStr, task)
+			title = "{{_ThemeTitleSuccess_}}" + title + "{{|-|}}"
+			err := tui.RunCommand(ctx, title, subtitle, task)
 			if err != nil {
 				logger.Error(ctx, "TUI Run Error: %v", err)
 			}
@@ -580,7 +582,30 @@ func handleThemeSettings(ctx context.Context, group *CommandGroup) {
 				conf.ShadowLevel = 4
 				conf.Shadow = true
 			default:
-				logger.Error(ctx, "Invalid shadow level: %s (use 0-4, or: off, light, medium, dark, solid)", arg)
+				// specialized handling for percentage strings
+				if strings.HasSuffix(arg, "%") {
+					var percent int
+					if _, err := fmt.Sscanf(arg, "%d%%", &percent); err == nil {
+						if percent <= 12 {
+							conf.ShadowLevel = 0
+							conf.Shadow = false
+						} else if percent <= 37 {
+							conf.ShadowLevel = 1
+							conf.Shadow = true
+						} else if percent <= 62 {
+							conf.ShadowLevel = 2
+							conf.Shadow = true
+						} else if percent <= 87 {
+							conf.ShadowLevel = 3
+							conf.Shadow = true
+						} else {
+							conf.ShadowLevel = 4
+							conf.Shadow = true
+						}
+						break
+					}
+				}
+				logger.Error(ctx, "Invalid shadow level: %s (use 0-4, or: off, light, medium, dark, solid, or percentage e.g. 50%%)", arg)
 				return
 			}
 		} else {
@@ -591,11 +616,30 @@ func handleThemeSettings(ctx context.Context, group *CommandGroup) {
 		conf.Scrollbar = true
 	case "--theme-no-scrollbar":
 		conf.Scrollbar = false
+		// theme handlers above...
 	}
 	if err := config.SaveAppConfig(conf); err != nil {
 		logger.Error(ctx, "Failed to save theme setting: %v", err)
 	} else {
-		logger.Notice(ctx, "Theme setting updated: %s", group.Command)
+		// Specialized output for shadow level
+		if group.Command == "--theme-shadow-level" {
+			var percent int
+			switch conf.ShadowLevel {
+			case 0:
+				percent = 0
+			case 1:
+				percent = 25
+			case 2:
+				percent = 50
+			case 3:
+				percent = 75
+			case 4:
+				percent = 100
+			}
+			logger.Notice(ctx, "Shadow level set to %d%%.", percent)
+		} else {
+			logger.Notice(ctx, "Theme setting updated: %s", group.Command)
+		}
 	}
 }
 

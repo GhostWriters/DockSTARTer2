@@ -497,11 +497,17 @@ func (m MenuModel) View() string {
 	// Add subtitle if present (left-aligned, matching padded width)
 	if m.subtitle != "" {
 		paddedWidth := lipgloss.Width(paddedList)
-		subtitle := styles.Dialog.
+
+		subtitleStyle := styles.Dialog.
 			Width(paddedWidth).
 			Padding(0, 1).
-			Align(lipgloss.Left).
-			Render(m.subtitle)
+			Align(lipgloss.Left)
+
+		// Parse tags for subtitle
+		var subStr string
+		subStr, subtitleStyle = ParseTitleTags(m.subtitle, subtitleStyle)
+
+		subtitle := subtitleStyle.Render(subStr)
 		innerParts = append(innerParts, subtitle)
 	}
 
@@ -958,6 +964,10 @@ func (m MenuModel) renderBorderWithTitle(content string, contentWidth int) strin
 	titleStyle := styles.DialogTitle.Copy().
 		Background(borderBG)
 
+	// Parse color tags from title and update style
+	var title string
+	title, titleStyle = ParseTitleTags(m.title, titleStyle)
+
 	// Get actual content width
 	lines := strings.Split(content, "\n")
 	actualWidth := 0
@@ -977,7 +987,7 @@ func (m MenuModel) renderBorderWithTitle(content string, contentWidth int) strin
 		rightT = "+"
 	}
 	// Total title section width: leftT + space + title + space + rightT
-	titleSectionLen := 1 + 1 + lipgloss.Width(m.title) + 1 + 1
+	titleSectionLen := 1 + 1 + lipgloss.Width(title) + 1 + 1
 	leftPad := (actualWidth - titleSectionLen) / 2
 	rightPad := actualWidth - titleSectionLen - leftPad
 
@@ -988,7 +998,7 @@ func (m MenuModel) renderBorderWithTitle(content string, contentWidth int) strin
 	result.WriteString(borderStyleLight.Render(strings.Repeat(border.Top, leftPad)))
 	result.WriteString(borderStyleLight.Render(leftT))
 	result.WriteString(borderStyleLight.Render(" "))
-	result.WriteString(titleStyle.Render(m.title))
+	result.WriteString(titleStyle.Render(title))
 	result.WriteString(borderStyleLight.Render(" "))
 	result.WriteString(borderStyleLight.Render(rightT))
 	result.WriteString(borderStyleLight.Render(strings.Repeat(border.Top, rightPad)))

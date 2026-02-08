@@ -25,11 +25,11 @@ func RenderDialogBox(title, content string, dialogType DialogType, width, height
 	titleStyle := styles.DialogTitle
 	switch dialogType {
 	case DialogTypeSuccess:
-		titleStyle = titleStyle.Foreground(lipgloss.Color("#00ff00")) // Green
+		titleStyle = titleStyle.Foreground(styles.StatusSuccess.GetForeground())
 	case DialogTypeWarning:
-		titleStyle = titleStyle.Foreground(lipgloss.Color("#ffff00")) // Yellow
+		titleStyle = titleStyle.Foreground(styles.StatusWarn.GetForeground())
 	case DialogTypeError:
-		titleStyle = titleStyle.Foreground(lipgloss.Color("#ff0000")) // Red
+		titleStyle = titleStyle.Foreground(styles.StatusError.GetForeground())
 	}
 
 	// Render title
@@ -146,7 +146,12 @@ func RenderCenteredButtons(contentWidth int, buttons ...ButtonSpec) string {
 
 // RenderDialog renders a dialog with optional title embedded in the top border
 // If title is empty, renders a plain top border without title
+// RenderDialog renders a dialog with optional title embedded in the top border
+// If title is empty, renders a plain top border without title
 func RenderDialog(title, content string) string {
+	if title != "" && !strings.HasSuffix(title, "{{|-|}}") {
+		title += "{{|-|}}"
+	}
 	styles := GetStyles()
 
 	// Use straight border for dialogs
@@ -165,14 +170,23 @@ func RenderDialog(title, content string) string {
 	borderStyleDark := lipgloss.NewStyle().
 		Foreground(styles.Border2Color).
 		Background(borderBG)
+
+	// Prepare title style (default)
 	titleStyle := styles.DialogTitle.Copy().
 		Background(borderBG)
 
-	// Get actual content width
+	// Parse color tags from title and render as rich text
+	// This replaces ParseTitleTags which only supported a single style
+	title = RenderThemeText(title, titleStyle)
+
+	// Get actual content width (maximum width of all lines)
 	lines := strings.Split(content, "\n")
 	actualWidth := 0
-	if len(lines) > 0 {
-		actualWidth = lipgloss.Width(lines[0])
+	for _, line := range lines {
+		w := lipgloss.Width(line)
+		if w > actualWidth {
+			actualWidth = w
+		}
 	}
 
 	var result strings.Builder
@@ -196,12 +210,18 @@ func RenderDialog(title, content string) string {
 		}
 		// Total title section width: leftT + space + title + space + rightT
 		titleSectionLen := 1 + 1 + lipgloss.Width(title) + 1 + 1
+
+		// Ensure dialog is wide enough for title
+		if titleSectionLen > actualWidth {
+			actualWidth = titleSectionLen
+		}
+
 		leftPad := (actualWidth - titleSectionLen) / 2
 		rightPad := actualWidth - titleSectionLen - leftPad
 		result.WriteString(borderStyleLight.Render(strings.Repeat(border.Top, leftPad)))
 		result.WriteString(borderStyleLight.Render(leftT))
 		result.WriteString(borderStyleLight.Render(" "))
-		result.WriteString(titleStyle.Render(title))
+		result.WriteString(title)
 		result.WriteString(borderStyleLight.Render(" "))
 		result.WriteString(borderStyleLight.Render(rightT))
 		result.WriteString(borderStyleLight.Render(strings.Repeat(border.Top, rightPad)))
@@ -212,7 +232,13 @@ func RenderDialog(title, content string) string {
 	// Content lines with left/right borders
 	for _, line := range lines {
 		result.WriteString(borderStyleLight.Render(border.Left))
-		result.WriteString(line)
+		// Pad line to actualWidth to ensure borders align
+		textWidth := lipgloss.Width(line)
+		padding := ""
+		if textWidth < actualWidth {
+			padding = strings.Repeat(" ", actualWidth-textWidth)
+		}
+		result.WriteString(line + padding)
 		result.WriteString(borderStyleDark.Render(border.Right))
 		result.WriteString("\n")
 	}

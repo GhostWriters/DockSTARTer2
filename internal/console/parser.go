@@ -5,6 +5,7 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"codeberg.org/tslocum/cview"
@@ -83,11 +84,16 @@ func BuildColorMap() {
 	ansiMap["whitebg"] = CodeWhiteBg
 
 	// Flag character mappings
-	ansiMap["b"] = CodeBold
-	ansiMap["d"] = CodeDim
-	ansiMap["u"] = CodeUnderline
-	ansiMap["l"] = CodeBlink
-	ansiMap["r"] = CodeReverse
+	ansiMap["b"] = CodeBoldOff
+	ansiMap["B"] = CodeBold
+	ansiMap["d"] = CodeDimOff
+	ansiMap["D"] = CodeDim
+	ansiMap["u"] = CodeUnderlineOff
+	ansiMap["U"] = CodeUnderline
+	ansiMap["l"] = CodeBlinkOff
+	ansiMap["L"] = CodeBlink
+	ansiMap["r"] = CodeReverseOff
+	ansiMap["R"] = CodeReverse
 
 	// Build semantic map from Colors struct
 	val := reflect.ValueOf(Colors)
@@ -209,15 +215,60 @@ func parseTviewStyleToANSI(content string) string {
 
 	// Part 0: Foreground color
 	if len(parts) > 0 && parts[0] != "" && parts[0] != "-" {
-		if code, ok := ansiMap[parts[0]]; ok {
+		if strings.HasPrefix(parts[0], "#") {
+			if len(parts[0]) == 7 {
+				r, _ := strconv.ParseInt(parts[0][1:3], 16, 64)
+				g, _ := strconv.ParseInt(parts[0][3:5], 16, 64)
+				b, _ := strconv.ParseInt(parts[0][5:7], 16, 64)
+				codes.WriteString(fmt.Sprintf("\033[38;2;%d;%d;%dm", r, g, b))
+			}
+		} else if val, ok := ColorToHexMap[strings.ToLower(parts[0])]; ok {
+			if strings.HasPrefix(val, "#") {
+				// Handle hex codes
+				r, _ := strconv.ParseInt(val[1:3], 16, 64)
+				g, _ := strconv.ParseInt(val[3:5], 16, 64)
+				b, _ := strconv.ParseInt(val[5:7], 16, 64)
+				codes.WriteString(fmt.Sprintf("\033[38;2;%d;%d;%dm", r, g, b))
+			} else {
+				// Handle ANSI indices (0-15)
+				idx, _ := strconv.Atoi(val)
+				if idx < 8 {
+					codes.WriteString(fmt.Sprintf("\033[%dm", 30+idx))
+				} else {
+					codes.WriteString(fmt.Sprintf("\033[%dm", 90+(idx-8)))
+				}
+			}
+		} else if code, ok := ansiMap[parts[0]]; ok {
 			codes.WriteString(code)
 		}
 	}
 
 	// Part 1: Background color
 	if len(parts) > 1 && parts[1] != "" && parts[1] != "-" {
-		// Try with "bg" suffix
-		if code, ok := ansiMap[parts[1]+"bg"]; ok {
+		if strings.HasPrefix(parts[1], "#") {
+			if len(parts[1]) == 7 {
+				r, _ := strconv.ParseInt(parts[1][1:3], 16, 64)
+				g, _ := strconv.ParseInt(parts[1][3:5], 16, 64)
+				b, _ := strconv.ParseInt(parts[1][5:7], 16, 64)
+				codes.WriteString(fmt.Sprintf("\033[48;2;%d;%d;%dm", r, g, b))
+			}
+		} else if val, ok := ColorToHexMap[strings.ToLower(parts[1])]; ok {
+			if strings.HasPrefix(val, "#") {
+				// Handle hex codes
+				r, _ := strconv.ParseInt(val[1:3], 16, 64)
+				g, _ := strconv.ParseInt(val[3:5], 16, 64)
+				b, _ := strconv.ParseInt(val[5:7], 16, 64)
+				codes.WriteString(fmt.Sprintf("\033[48;2;%d;%d;%dm", r, g, b))
+			} else {
+				// Handle ANSI indices (0-15)
+				idx, _ := strconv.Atoi(val)
+				if idx < 8 {
+					codes.WriteString(fmt.Sprintf("\033[%dm", 40+idx))
+				} else {
+					codes.WriteString(fmt.Sprintf("\033[%dm", 100+(idx-8)))
+				}
+			}
+		} else if code, ok := ansiMap[parts[1]+"bg"]; ok {
 			codes.WriteString(code)
 		}
 	}

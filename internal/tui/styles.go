@@ -2,6 +2,7 @@ package tui
 
 import (
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/theme"
 	"fmt"
 	"strings"
@@ -52,6 +53,12 @@ type Styles struct {
 
 	// Settings
 	LineCharacters bool
+
+	// Semantic styles derived from theme tags
+	StatusSuccess lipgloss.Style
+	StatusWarn    lipgloss.Style
+	StatusError   lipgloss.Style
+	Console       lipgloss.Style
 }
 
 // currentStyles holds the active styles
@@ -187,6 +194,13 @@ func InitStyles(cfg config.AppConfig) {
 	currentStyles.HelpLine = lipgloss.NewStyle().
 		Background(tcellToLipgloss(t.ItemHelpBG)).
 		Foreground(tcellToLipgloss(t.ItemHelpFG))
+
+	// Initialize semantic styles from console color tags (Theme-specific to avoid log interference)
+	// Initialize semantic styles from console color tags (Theme-specific to avoid log interference)
+	currentStyles.StatusSuccess = ApplyTviewStyle(lipgloss.NewStyle(), lipgloss.NewStyle(), console.GetColorDefinition("ThemeTitleNotice"))
+	currentStyles.StatusWarn = ApplyTviewStyle(lipgloss.NewStyle(), lipgloss.NewStyle(), console.GetColorDefinition("ThemeTitleWarn"))
+	currentStyles.StatusError = ApplyTviewStyle(lipgloss.NewStyle(), lipgloss.NewStyle(), console.GetColorDefinition("ThemeTitleError"))
+	currentStyles.Console = ApplyTviewStyle(lipgloss.NewStyle(), lipgloss.NewStyle(), console.GetColorDefinition("ThemeProgram"))
 }
 
 // Helper functions for common style operations
@@ -403,8 +417,14 @@ func AddShadow(content string) string {
 		return content
 	}
 
-	// Get width from first line
-	contentWidth := lipgloss.Width(lines[0])
+	// Calculate max width from all lines
+	contentWidth := 0
+	for _, line := range lines {
+		w := lipgloss.Width(line)
+		if w > contentWidth {
+			contentWidth = w
+		}
+	}
 
 	var shadowCell, bottomShadowChars string
 
@@ -447,13 +467,25 @@ func AddShadow(content string) string {
 	var result strings.Builder
 
 	// First line: content + spacer (no shadow on top row)
-	result.WriteString(lines[0])
+	line0 := lines[0]
+	w0 := lipgloss.Width(line0)
+	padding0 := ""
+	if w0 < contentWidth {
+		padding0 = strings.Repeat(" ", contentWidth-w0)
+	}
+	result.WriteString(line0 + padding0)
 	result.WriteString(spacerCell)
 	result.WriteString("\n")
 
 	// Middle and last content lines: content + 2-char shadow on right
 	for i := 1; i < len(lines); i++ {
-		result.WriteString(lines[i])
+		line := lines[i]
+		w := lipgloss.Width(line)
+		padding := ""
+		if w < contentWidth {
+			padding = strings.Repeat(" ", contentWidth-w)
+		}
+		result.WriteString(line + padding)
 		result.WriteString(shadowCell)
 		result.WriteString("\n")
 	}

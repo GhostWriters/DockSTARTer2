@@ -12,6 +12,13 @@ const (
 	CodeBlink     = "\033[5m"
 	CodeReverse   = "\033[7m"
 
+	// Modifiers (Off)
+	CodeBoldOff      = "\033[22m"
+	CodeDimOff       = "\033[22m"
+	CodeUnderlineOff = "\033[24m"
+	CodeBlinkOff     = "\033[25m"
+	CodeReverseOff   = "\033[27m"
+
 	// Foreground
 	CodeBlack   = "\033[30m"
 	CodeRed     = "\033[31m"
@@ -32,6 +39,28 @@ const (
 	CodeCyanBg    = "\033[46m"
 	CodeWhiteBg   = "\033[47m"
 )
+
+// ColorToHexMap maps standard color names to hex codes for TrueColor consistency
+// ColorToHexMap maps standard color names to ANSI indices for terminal consistency
+// Using indices (0-15) ensures colors match the terminal's theme and resets (\x1b[0m)
+var ColorToHexMap = map[string]string{
+	"black":   "0",
+	"maroon":  "1",
+	"green":   "2",
+	"olive":   "3",
+	"navy":    "4",
+	"purple":  "5",
+	"teal":    "6",
+	"silver":  "7",
+	"gray":    "8",
+	"red":     "9",
+	"lime":    "10",
+	"yellow":  "11",
+	"blue":    "12",
+	"fuchsia": "13",
+	"aqua":    "14",
+	"white":   "15",
+}
 
 // AppColors defines the struct for program-wide colors/styles
 // Values are stored in tview tag format (e.g., "[cyan::b]")

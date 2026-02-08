@@ -8,34 +8,17 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"codeberg.org/tslocum/cview"
 	"github.com/gdamore/tcell/v3"
 )
 
-// colorToHexMap maps tcell colors to cview-safe hex strings
-var colorToHexMap = map[tcell.Color]string{
-	tcell.ColorBlack:   "#000000",
-	tcell.ColorMaroon:  "#800000",
-	tcell.ColorGreen:   "#008000",
-	tcell.ColorOlive:   "#808000",
-	tcell.ColorNavy:    "#000080",
-	tcell.ColorPurple:  "#800080",
-	tcell.ColorTeal:    "#008080",
-	tcell.ColorSilver:  "#c0c0c0",
-	tcell.ColorGray:    "#808080",
-	tcell.ColorRed:     "#ff0000",
-	tcell.ColorLime:    "#00ff00",
-	tcell.ColorYellow:  "#ffff00",
-	tcell.ColorBlue:    "#0000ff",
-	tcell.ColorFuchsia: "#ff00ff",
-	tcell.ColorAqua:    "#00ffff",
-	tcell.ColorWhite:   "#ffffff",
-}
+// GetColorStr is moved to console package for reuse
 
 func GetColorStr(c tcell.Color) string {
-	if hex, ok := colorToHexMap[c]; ok {
+	if hex, ok := console.ColorToHexMap[strings.ToLower(c.Name())]; ok {
 		return hex
 	}
 	name := strings.ToLower(c.Name())
@@ -57,13 +40,9 @@ var themeToConsoleMap = map[string]string{
 	"ApplicationUpdateBrackets":  "UpdateBrackets",
 	"Hostname":                   "Hostname",
 	"Title":                      "Theme",
-	"TitleSuccess":               "Notice",
-	"TitleError":                 "Error",
-	"TitleWarning":               "Warn",
 	"Heading":                    "Info",
 	"Highlight":                  "UserCommand",
 	"LineComment":                "Trace",
-	"CommandLine":                "RunningCommand",
 	"Var":                        "Var",
 }
 
@@ -115,13 +94,22 @@ func Load(themeName string) error {
 	}
 
 	// Parse .ds2theme (Overrides defaults)
+	// fmt.Println("DEBUG: Loading theme from:", themePath)
 	_ = parseThemeINI(themePath)
+
+	// Synchronize themed values to console semantic tags
+	Apply()
 
 	return nil
 }
 
 // Apply updates the global console.Colors with theme-specific tags
 func Apply() {
+	// 0. Ensure base tags and color map are built from defaults FIRST
+	// This prevents theme-specific registration from being wiped out later.
+	console.RegisterBaseTags()
+	console.BuildColorMap()
+
 	// 1. Register component tags from Current config (Defaults)
 	// This maps the struct fields (colors) to tags like {{_ThemeScreen_}}
 	updateTagsFromCurrent()
@@ -135,9 +123,7 @@ func Apply() {
 		console.RegisterSemanticTag(consoleField, resolved)
 	}
 
-	// Re-register tags in console to reflect changes
-	console.RegisterBaseTags()
-	console.BuildColorMap()
+	// 3. Update global cview styles to match theme globals
 
 	// Register ThemeReset AFTER all other tags are loaded
 	// We check if "VersionBrackets" uses Reverse. If so, we must invert our colors
@@ -345,7 +331,16 @@ func parseThemeINI(path string) error {
 		// 1. Register the tview-format value as the tag
 		console.RegisterSemanticTag("Theme"+key, tviewValue)
 
-		// 2. Map known keys to Current struct fields
+		// 2. Update global console.Colors if this key is in the map
+		if fieldName, ok := themeToConsoleMap[key]; ok {
+			// Update global console.Colors
+			f := reflect.ValueOf(&console.Colors).Elem().FieldByName(fieldName)
+			if f.IsValid() && f.CanSet() {
+				f.SetString(tviewValue)
+			}
+		}
+
+		// 3. Map known keys to Current struct fields
 		fg, bg := parseTagToColor(tviewValue)
 		switch key {
 		case "Screen":
@@ -394,18 +389,9 @@ func parseThemeINI(path string) error {
 
 	// 3. Re-apply styles and tags based on updated Current
 	// Note: We do NOT call updateTagsFromCurrent() because we want to keep the specific tags registered above.
-	// However, we MUST update global cview styles.
-	updateStyles()
-
-	// We also need to re-run the complex logic in Apply() regarding _ThemeReset_ and standard mappings
-	// Apply() calls updateTagsFromCurrent() which overwrites tags.
-	// But parseThemeINI just overwrote them with EXACT values from INI.
-	// If INI has "Screen", parseThemeINI registers _ThemeScreen_.
-	// If INI forces "Title" (Content), it registers _ThemeTitle_.
-	// Apply's mapping loop registers maps like Title->Theme.
-
-	// Let's call the REST of Apply's logic.
-	// Actually, we can just duplicate the needed parts to avoid circular overwrite.
+	// We MUST ensure base tags and color map are built before we finalize mappings.
+	console.RegisterBaseTags()
+	console.BuildColorMap()
 
 	// Map theme.ini fields to themed tags
 	for themeKey, consoleField := range themeToConsoleMap {
@@ -414,8 +400,8 @@ func parseThemeINI(path string) error {
 		console.RegisterSemanticTag(consoleField, resolved)
 	}
 
-	console.RegisterBaseTags()
-	console.BuildColorMap()
+	// Update global cview styles.
+	updateStyles()
 
 	bracketsDef := console.GetColorDefinition("ThemeApplicationVersionBrackets")
 	isReversed := strings.Contains(bracketsDef, ":r") || strings.Contains(bracketsDef, "reverse")

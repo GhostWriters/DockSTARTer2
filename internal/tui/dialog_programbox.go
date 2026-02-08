@@ -44,11 +44,13 @@ type outputDoneMsg struct {
 
 // newProgramBox creates a new program box dialog
 func newProgramBox(title, subtitle, command string) programBoxModel {
+	// Title is parsed by RenderDialog when View() is called.
+	// Subtitle/Command is parsed in View().
+
 	vp := viewport.New(0, 0)
-	// Use white-on-black background to properly display ANSI colors from command output
-	vp.Style = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("255")). // White
-		Background(lipgloss.Color("0"))    // Black
+	// Use theme-defined console colors to properly display ANSI colors from command output
+	styles := GetStyles()
+	vp.Style = styles.Console.Copy()
 
 	return programBoxModel{
 		title:    title,
@@ -201,23 +203,24 @@ func (m programBoxModel) View() string {
 
 	// Calculate scroll percentage
 	scrollPercent := m.viewport.ScrollPercent()
-	scrollIndicator := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("0")). // Black text
-		Background(lipgloss.Color("1")). // Red background
+
+	// Add scroll indicator at bottom of viewport content
+	scrollIndicator := styles.StatusSuccess.Copy().
 		Bold(true).
 		Render(fmt.Sprintf(" %d%% ", int(scrollPercent*100)))
 
-	// Add scroll indicator at bottom of viewport content
-	viewportWithScroll := m.viewport.View() + "\n" +
+	// Use console background for the spacer row
+	// Apply background maintenance to captured output to prevent resets from bleeding
+	viewportContent := MaintainBackground(m.viewport.View(), styles.Console)
+	viewportWithScroll := viewportContent + "\n" +
 		lipgloss.NewStyle().
 			Width(m.viewport.Width).
 			Align(lipgloss.Center).
-			Background(lipgloss.Color("0")). // Black background
+			Background(styles.Console.GetBackground()).
 			Render(scrollIndicator)
 
-	// Wrap viewport in rounded inner border with black background
-	viewportStyle := lipgloss.NewStyle().
-		Background(lipgloss.Color("0")). // Black background
+	// Wrap viewport in rounded inner border with console background
+	viewportStyle := styles.Console.Copy().
 		Padding(0, 1)
 	viewportStyle = ApplyRoundedBorder(viewportStyle, styles.LineCharacters)
 	borderedViewport := viewportStyle.Render(viewportWithScroll)
@@ -226,16 +229,21 @@ func (m programBoxModel) View() string {
 	// viewport.Width + border (2) + padding (2) = viewport.Width + 4
 	contentWidth := m.viewport.Width + 4
 
-	// Build command display in yellow/gold color with dialog background
-	// Must be after contentWidth calculation to use proper width
+	// Build command display using theme semantic tags
 	var commandDisplay string
 	if m.command != "" {
-		commandStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("3")). // Yellow/gold color
-			Background(styles.Dialog.GetBackground()).
-			Width(contentWidth). // Fill the entire row
-			Padding(0, 1)
-		commandDisplay = commandStyle.Render(m.command)
+		// Use RenderThemeText for robust parsing of embedded tags/colors
+		// We use the console style as base, but DO NOT force the background color onto the whole bar
+		// This allows the user to have unstyled spaces or mixed colors.
+		// Use styles.Dialog as base so unstyled text matches the dialog background
+		base := styles.Dialog.Copy()
+		renderedCmd := RenderThemeText(m.command, base)
+
+		commandDisplay = lipgloss.NewStyle().
+			Width(contentWidth).                       // Fill the entire row
+			Padding(0, 1, 0, 0).                       // Align with inner border
+			Background(styles.Dialog.GetBackground()). // Set background for entire row (filler)
+			Render(renderedCmd)
 	}
 
 	// Render OK button using the standard button helper (ensures consistency)
@@ -340,6 +348,14 @@ func (m programBoxWithBackdrop) View() string {
 
 // RunProgramBox displays a program box dialog that shows command output
 func RunProgramBox(ctx context.Context, title, subtitle string, task func(context.Context, io.Writer) error) error {
+	// Automatically append reset tags to title/subtitle if missing
+	if title != "" && !strings.HasSuffix(title, "{{|-|}}") {
+		title += "{{|-|}}"
+	}
+	if subtitle != "" && !strings.HasSuffix(subtitle, "{{|-|}}") {
+		subtitle += "{{|-|}}"
+	}
+
 	// Initialize TUI if not already done
 	cfg := config.LoadAppConfig()
 	logger.Debug(ctx, "RunProgramBox config: Shadow=%v, ShadowLevel=%d, LineCharacters=%v", cfg.Shadow, cfg.ShadowLevel, cfg.LineCharacters)

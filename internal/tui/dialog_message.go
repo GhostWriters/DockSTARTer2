@@ -69,23 +69,17 @@ func (m messageDialogModel) View() string {
 
 	switch m.messageType {
 	case MessageSuccess:
-		// Use green for success (approximating theme's TitleSuccess color)
-		messageStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#00FF00")).
+		messageStyle = styles.StatusSuccess.Copy().
 			Padding(1, 2)
 		titlePrefix = "✓ "
 
 	case MessageWarning:
-		// Use yellow for warning (approximating theme's TitleWarning color)
-		messageStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFFF00")).
+		messageStyle = styles.StatusWarn.Copy().
 			Padding(1, 2)
 		titlePrefix = "⚠ "
 
 	case MessageError:
-		// Use red for error (from TagKey which is red in theme)
-		messageStyle = lipgloss.NewStyle().
-			Foreground(styles.TagKey.GetForeground()).
+		messageStyle = styles.StatusError.Copy().
 			Bold(true).
 			Padding(1, 2)
 		titlePrefix = "✗ "
