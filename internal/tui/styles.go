@@ -2,13 +2,11 @@ package tui
 
 import (
 	"DockSTARTer2/internal/config"
-	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/theme"
 	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/gdamore/tcell/v3"
 )
 
 // Styles holds all lipgloss styles derived from the theme
@@ -69,20 +67,6 @@ func GetStyles() Styles {
 	return currentStyles
 }
 
-// tcellToLipgloss converts a tcell.Color to lipgloss.Color
-func tcellToLipgloss(c tcell.Color) lipgloss.Color {
-	if c == tcell.ColorDefault {
-		return lipgloss.Color("")
-	}
-	// Use ANSI indices for standard 256-color palette (0-255)
-	// to respect terminal themes and allow proper downsampling.
-	if c < 256 {
-		return lipgloss.Color(fmt.Sprintf("%d", c))
-	}
-	// For true RGB colors, use hex
-	return lipgloss.Color(fmt.Sprintf("#%06x", c.Hex()))
-}
-
 // asciiBorder defines a simple ASCII-only border for terminals without Unicode support
 var asciiBorder = lipgloss.Border{
 	Top:         "-",
@@ -137,76 +121,75 @@ func InitStyles(cfg config.AppConfig) {
 
 	// Screen background
 	currentStyles.Screen = lipgloss.NewStyle().
-		Background(tcellToLipgloss(t.ScreenBG)).
-		Foreground(tcellToLipgloss(t.ScreenFG))
+		Background(t.ScreenBG).
+		Foreground(t.ScreenFG)
 
 	// Dialog
 	currentStyles.Dialog = lipgloss.NewStyle().
-		Background(tcellToLipgloss(t.DialogBG)).
-		Foreground(tcellToLipgloss(t.DialogFG))
+		Background(t.DialogBG).
+		Foreground(t.DialogFG)
 
 	currentStyles.DialogTitle = lipgloss.NewStyle().
-		Background(tcellToLipgloss(t.TitleBG)).
-		Foreground(tcellToLipgloss(t.TitleFG)).
+		Background(t.TitleBG).
+		Foreground(t.TitleFG).
 		Bold(t.TitleBold).
 		Underline(t.TitleUnderline)
 
 	// Border colors
-	currentStyles.BorderColor = tcellToLipgloss(t.BorderFG)
-	currentStyles.Border2Color = tcellToLipgloss(t.Border2FG)
+	currentStyles.BorderColor = t.BorderFG
+	currentStyles.Border2Color = t.Border2FG
 
 	// Shadow
-	currentStyles.ShadowColor = tcellToLipgloss(t.ShadowColor)
+	currentStyles.ShadowColor = t.ShadowColor
 	currentStyles.Shadow = lipgloss.NewStyle().
-		Background(tcellToLipgloss(t.ShadowColor))
+		Background(t.ShadowColor)
 
 	// Buttons (spacing handled at layout level)
 	currentStyles.ButtonActive = ApplyFlags(lipgloss.NewStyle().
-		Background(tcellToLipgloss(t.ButtonActiveBG)).
-		Foreground(tcellToLipgloss(t.ButtonActiveFG)), t.ButtonActiveStyles)
+		Background(t.ButtonActiveBG).
+		Foreground(t.ButtonActiveFG), t.ButtonActiveStyles)
 
 	currentStyles.ButtonInactive = ApplyFlags(lipgloss.NewStyle().
-		Background(tcellToLipgloss(t.ButtonInactiveBG)).
-		Foreground(tcellToLipgloss(t.ButtonInactiveFG)), t.ButtonInactiveStyles)
+		Background(t.ButtonInactiveBG).
+		Foreground(t.ButtonInactiveFG), t.ButtonInactiveStyles)
 
 	// List items
 	currentStyles.ItemNormal = lipgloss.NewStyle().
-		Background(tcellToLipgloss(t.ItemBG)).
-		Foreground(tcellToLipgloss(t.ItemFG))
+		Background(t.ItemBG).
+		Foreground(t.ItemFG)
 
 	currentStyles.ItemSelected = lipgloss.NewStyle().
-		Background(tcellToLipgloss(t.ItemSelectedBG)).
-		Foreground(tcellToLipgloss(t.ItemSelectedFG))
+		Background(t.ItemSelectedBG).
+		Foreground(t.ItemSelectedFG)
 
 	// Tags
 	currentStyles.TagNormal = lipgloss.NewStyle().
-		Background(tcellToLipgloss(t.TagBG)).
-		Foreground(tcellToLipgloss(t.TagFG))
+		Background(t.TagBG).
+		Foreground(t.TagFG)
 
 	currentStyles.TagKey = lipgloss.NewStyle().
-		Background(tcellToLipgloss(t.TagBG)).
-		Foreground(tcellToLipgloss(t.TagKeyFG))
+		Background(t.TagBG).
+		Foreground(t.TagKeyFG)
 
 	currentStyles.TagKeySelected = lipgloss.NewStyle().
-		Background(tcellToLipgloss(t.ItemSelectedBG)).
-		Foreground(tcellToLipgloss(t.TagKeySelectedFG))
+		Background(t.ItemSelectedBG).
+		Foreground(t.TagKeySelectedFG)
 
 	// Header
 	currentStyles.HeaderBG = lipgloss.NewStyle().
-		Background(tcellToLipgloss(t.ScreenBG)).
-		Foreground(tcellToLipgloss(t.ScreenFG))
+		Background(t.ScreenBG).
+		Foreground(t.ScreenFG)
 
 	// Help line
 	currentStyles.HelpLine = lipgloss.NewStyle().
-		Background(tcellToLipgloss(t.ItemHelpBG)).
-		Foreground(tcellToLipgloss(t.ItemHelpFG))
+		Background(t.ItemHelpBG).
+		Foreground(t.ItemHelpFG)
 
 	// Initialize semantic styles from console color tags (Theme-specific to avoid log interference)
-	// Initialize semantic styles from console color tags (Theme-specific to avoid log interference)
-	currentStyles.StatusSuccess = ApplyStyleCode(lipgloss.NewStyle(), lipgloss.NewStyle(), console.GetColorDefinition("ThemeTitleNotice"))
-	currentStyles.StatusWarn = ApplyStyleCode(lipgloss.NewStyle(), lipgloss.NewStyle(), console.GetColorDefinition("ThemeTitleWarn"))
-	currentStyles.StatusError = ApplyStyleCode(lipgloss.NewStyle(), lipgloss.NewStyle(), console.GetColorDefinition("ThemeTitleError"))
-	currentStyles.Console = ApplyStyleCode(lipgloss.NewStyle(), lipgloss.NewStyle(), console.GetColorDefinition("ThemeProgram"))
+	currentStyles.StatusSuccess = ApplyTagsToStyle("{{_ThemeTitleNotice_}}", lipgloss.NewStyle(), lipgloss.NewStyle())
+	currentStyles.StatusWarn = ApplyTagsToStyle("{{_ThemeTitleWarn_}}", lipgloss.NewStyle(), lipgloss.NewStyle())
+	currentStyles.StatusError = ApplyTagsToStyle("{{_ThemeTitleError_}}", lipgloss.NewStyle(), lipgloss.NewStyle())
+	currentStyles.Console = ApplyTagsToStyle("{{_ThemeProgram_}}", lipgloss.NewStyle(), lipgloss.NewStyle())
 }
 
 // ApplyFlags applies ANSI style modifiers to a lipgloss.Style

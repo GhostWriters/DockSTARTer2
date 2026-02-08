@@ -5,14 +5,12 @@ go 1.25.4
 require github.com/lmittmann/tint v1.1.2
 
 require (
-	codeberg.org/tslocum/cview v1.6.3
 	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/adrg/xdg v0.5.3
 	github.com/charmbracelet/bubbles v0.21.1
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/creativeprojects/go-selfupdate v1.5.2
-	github.com/gdamore/tcell/v3 v3.0.4
 	github.com/go-git/go-git/v5 v5.16.4
 	github.com/lrstanley/bubblezone v1.0.0
 	github.com/muesli/termenv v0.16.0
@@ -24,7 +22,6 @@ require (
 
 require (
 	code.gitea.io/sdk/gitea v0.22.1 // indirect
-	codeberg.org/tslocum/cbind v0.1.8 // indirect
 	dario.cat/mergo v1.0.0 // indirect
 	github.com/42wim/httpsig v1.2.3 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
@@ -43,7 +40,6 @@ require (
 	github.com/davidmz/go-pageant v1.0.2 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
-	github.com/gdamore/encoding v1.0.1 // indirect
 	github.com/go-fed/httpsig v1.1.0 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.6.2 // indirect

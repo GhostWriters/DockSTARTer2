@@ -8,42 +8,23 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 
-	"codeberg.org/tslocum/cview"
-	"github.com/gdamore/tcell/v3"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // GetColorStr is moved to console package for reuse
 
-func GetColorStr(c tcell.Color) string {
-	if hex, ok := console.ColorToHexMap[strings.ToLower(c.Name())]; ok {
+func GetColorStr(c lipgloss.TerminalColor) string {
+	if c == nil {
+		return ""
+	}
+	// Extract the color name or hex
+	name := fmt.Sprintf("%v", c)
+	if hex, ok := console.ColorToHexMap[strings.ToLower(name)]; ok {
 		return hex
 	}
-	name := strings.ToLower(c.Name())
-	if name == "" {
-		return fmt.Sprintf("#%06x", c.Hex())
-	}
-	return name
-}
-
-// Mapping from theme.ini keys to console.AppColors field names
-var themeToConsoleMap = map[string]string{
-	"ApplicationName":            "ApplicationName",
-	"ApplicationVersion":         "Version",
-	"ApplicationVersionBrackets": "VersionBrackets",
-	"ApplicationVersionSpace":    "VersionSpace",
-	"ApplicationFlagsBrackets":   "FlagsBrackets",
-	"ApplicationFlagsSpace":      "FlagsSpace",
-	"ApplicationUpdate":          "Update",
-	"ApplicationUpdateBrackets":  "UpdateBrackets",
-	"Hostname":                   "Hostname",
-	"Title":                      "Theme",
-	"Heading":                    "Info",
-	"Highlight":                  "UserCommand",
-	"LineComment":                "Trace",
-	"Var":                        "Var",
+	return strings.ToLower(name)
 }
 
 // StyleFlags holds ANSI style modifiers
@@ -60,35 +41,35 @@ type StyleFlags struct {
 
 // ThemeConfig holds colors derived from .dialogrc and theme.ini
 type ThemeConfig struct {
-	ScreenFG             tcell.Color
-	ScreenBG             tcell.Color
-	DialogFG             tcell.Color
-	DialogBG             tcell.Color
-	BorderFG             tcell.Color
-	BorderBG             tcell.Color
-	Border2FG            tcell.Color
-	Border2BG            tcell.Color
-	TitleFG              tcell.Color
-	TitleBG              tcell.Color
+	ScreenFG             lipgloss.TerminalColor
+	ScreenBG             lipgloss.TerminalColor
+	DialogFG             lipgloss.TerminalColor
+	DialogBG             lipgloss.TerminalColor
+	BorderFG             lipgloss.TerminalColor
+	BorderBG             lipgloss.TerminalColor
+	Border2FG            lipgloss.TerminalColor
+	Border2BG            lipgloss.TerminalColor
+	TitleFG              lipgloss.TerminalColor
+	TitleBG              lipgloss.TerminalColor
 	TitleBold            bool
 	TitleUnderline       bool
-	ShadowColor          tcell.Color
-	ButtonActiveFG       tcell.Color
-	ButtonActiveBG       tcell.Color
+	ShadowColor          lipgloss.TerminalColor
+	ButtonActiveFG       lipgloss.TerminalColor
+	ButtonActiveBG       lipgloss.TerminalColor
 	ButtonActiveStyles   StyleFlags
-	ButtonInactiveFG     tcell.Color
-	ButtonInactiveBG     tcell.Color
+	ButtonInactiveFG     lipgloss.TerminalColor
+	ButtonInactiveBG     lipgloss.TerminalColor
 	ButtonInactiveStyles StyleFlags
-	ItemSelectedFG       tcell.Color
-	ItemSelectedBG       tcell.Color
-	ItemFG               tcell.Color
-	ItemBG               tcell.Color
-	TagFG                tcell.Color
-	TagBG                tcell.Color
-	TagKeyFG             tcell.Color
-	TagKeySelectedFG     tcell.Color
-	ItemHelpFG           tcell.Color
-	ItemHelpBG           tcell.Color
+	ItemSelectedFG       lipgloss.TerminalColor
+	ItemSelectedBG       lipgloss.TerminalColor
+	ItemFG               lipgloss.TerminalColor
+	ItemBG               lipgloss.TerminalColor
+	TagFG                lipgloss.TerminalColor
+	TagBG                lipgloss.TerminalColor
+	TagKeyFG             lipgloss.TerminalColor
+	TagKeySelectedFG     lipgloss.TerminalColor
+	ItemHelpFG           lipgloss.TerminalColor
+	ItemHelpBG           lipgloss.TerminalColor
 }
 
 // Current holds the active theme configuration
@@ -128,16 +109,7 @@ func Apply() {
 	// This maps the struct fields (colors) to tags like {{_ThemeScreen_}}
 	updateTagsFromCurrent()
 
-	// 2. Map theme.ini fields to themed tags (NOT overwriting global console.Colors)
-	// This ensures that when Translate("{{_Notice_}}") is called in TUI, it uses the theme color.
-	for themeKey, consoleField := range themeToConsoleMap {
-		themeTag := "{{_Theme" + themeKey + "_}}"
-		// Eagerly resolve the theme tag to its actual cview tag
-		resolved := console.Translate(themeTag)
-		console.RegisterSemanticTag(consoleField, resolved)
-	}
-
-	// 3. Update global cview styles to match theme globals
+	// 2. Update global cview styles to match theme globals
 
 	// Register ThemeReset AFTER all other tags are loaded
 	// We check if "VersionBrackets" uses Reverse. If so, we must invert our colors
@@ -152,20 +124,15 @@ func Apply() {
 		// Reverse is active: Swapping FG/BG will result in Correct orientation after rendering
 		// BUT we must ensure the logical BACKGROUND is the ScreenBG so that subsequent tags (like "T:")
 		// inherit the stable background.
-		// Solution: Set BOTH to ScreenBG. Results in invisible text for the gap (Silver on Silver),
-		// but ensures the Next tag sees "BG=Silver", so "Blue on Silver" reversed becomes "Silver on Blue".
 		console.RegisterSemanticTag("ThemeReset", "{{|"+bgStr+":"+bgStr+"|}}")
 	} else {
 		// Normal: Set FG/BG normally.
 		console.RegisterSemanticTag("ThemeReset", "{{|"+fgStr+":"+bgStr+"|}}")
 	}
-
-	// 3. Update global cview styles to match theme globals
-	updateStyles()
 }
 
 func updateTagsFromCurrent() {
-	regComp := func(name string, fg, bg tcell.Color) {
+	regComp := func(name string, fg, bg lipgloss.TerminalColor) {
 		fgName := GetColorStr(fg)
 		bgName := GetColorStr(bg)
 		tag := "{{|" + fgName + ":" + bgName + "|}}"
@@ -192,41 +159,34 @@ func updateTagsFromCurrent() {
 	console.RegisterSemanticTag("ThemeShadow", "{{|"+GetColorStr(Current.ShadowColor)+"|}}")
 }
 
-func updateStyles() {
-	cview.Styles.PrimitiveBackgroundColor = Current.ScreenBG
-	cview.Styles.PrimaryTextColor = Current.ScreenFG
-	cview.Styles.BorderColor = Current.BorderFG
-	cview.Styles.TitleColor = Current.TitleFG
-}
-
 // Default initializes the Current ThemeConfig with standard DockSTARTer colors (Classic)
 func Default() {
 	Current = ThemeConfig{
-		ScreenFG:         tcell.ColorBlack,
-		ScreenBG:         tcell.ColorSilver, // Light background
-		DialogFG:         tcell.ColorBlack,
-		DialogBG:         tcell.ColorTeal,
-		BorderFG:         tcell.ColorWhite,
-		BorderBG:         tcell.ColorTeal,
-		Border2FG:        tcell.ColorBlack, // Default contrast is black on teal
-		Border2BG:        tcell.ColorTeal,
-		TitleFG:          tcell.ColorBlack,
-		TitleBG:          tcell.ColorTeal,
-		ShadowColor:      tcell.ColorBlack,
-		ButtonActiveFG:   tcell.ColorWhite,
-		ButtonActiveBG:   tcell.ColorMaroon,
-		ButtonInactiveFG: tcell.ColorBlack,
-		ButtonInactiveBG: tcell.ColorTeal,
-		ItemSelectedFG:   tcell.ColorBlack,
-		ItemSelectedBG:   tcell.ColorMaroon,
-		ItemFG:           tcell.ColorBlack,
-		ItemBG:           tcell.ColorTeal,
-		TagFG:            tcell.ColorBlack,
-		TagBG:            tcell.ColorTeal,
-		TagKeyFG:         tcell.ColorMaroon,
-		TagKeySelectedFG: tcell.ColorBlack,
-		ItemHelpFG:       tcell.ColorBlack,
-		ItemHelpBG:       tcell.ColorTeal,
+		ScreenFG:         lipgloss.Color("0"),  // Black
+		ScreenBG:         lipgloss.Color("7"),  // Silver
+		DialogFG:         lipgloss.Color("0"),  // Black
+		DialogBG:         lipgloss.Color("6"),  // Teal
+		BorderFG:         lipgloss.Color("15"), // Bright White
+		BorderBG:         lipgloss.Color("6"),  // Teal
+		Border2FG:        lipgloss.Color("0"),  // Black
+		Border2BG:        lipgloss.Color("6"),  // Teal
+		TitleFG:          lipgloss.Color("0"),  // Black
+		TitleBG:          lipgloss.Color("6"),  // Teal
+		ShadowColor:      lipgloss.Color("0"),  // Black
+		ButtonActiveFG:   lipgloss.Color("15"), // Bright White
+		ButtonActiveBG:   lipgloss.Color("1"),  // Maroon
+		ButtonInactiveFG: lipgloss.Color("0"),  // Black
+		ButtonInactiveBG: lipgloss.Color("6"),  // Teal
+		ItemSelectedFG:   lipgloss.Color("0"),  // Black
+		ItemSelectedBG:   lipgloss.Color("1"),  // Maroon
+		ItemFG:           lipgloss.Color("0"),  // Black
+		ItemBG:           lipgloss.Color("6"),  // Teal
+		TagFG:            lipgloss.Color("0"),  // Black
+		TagBG:            lipgloss.Color("6"),  // Teal
+		TagKeyFG:         lipgloss.Color("1"),  // Maroon
+		TagKeySelectedFG: lipgloss.Color("0"),  // Black
+		ItemHelpFG:       lipgloss.Color("0"),  // Black
+		ItemHelpBG:       lipgloss.Color("6"),  // Teal
 	}
 	Apply()
 
@@ -244,35 +204,18 @@ func Default() {
 
 }
 
-func parseColor(c string) tcell.Color {
-	c = strings.ToUpper(strings.TrimSpace(c))
-	switch c {
-	case "BLACK":
-		return tcell.ColorBlack
-	case "RED":
-		return tcell.ColorMaroon
-	case "GREEN":
-		return tcell.ColorGreen
-	case "YELLOW":
-		return tcell.ColorOlive
-	case "BLUE":
-		return tcell.ColorNavy
-	case "MAGENTA":
-		return tcell.ColorPurple
-	case "CYAN":
-		return tcell.ColorTeal
-	case "WHITE":
-		return tcell.ColorWhite
-	case "SILVER":
-		return tcell.ColorSilver
-	case "GRAY", "GREY":
-		return tcell.ColorGray
-	default:
-		return tcell.ColorDefault
+func parseColor(c string) lipgloss.TerminalColor {
+	c = strings.ToLower(strings.TrimSpace(c))
+	if idx, ok := console.ColorToHexMap[c]; ok {
+		return lipgloss.Color(idx)
 	}
+	if strings.HasPrefix(c, "#") {
+		return lipgloss.Color(c)
+	}
+	return nil
 }
 
-func parseTagToColor(tag string) (fg, bg tcell.Color) {
+func parseTagToColor(tag string) (fg, bg lipgloss.TerminalColor) {
 	tag = strings.TrimPrefix(tag, "{{|")
 	tag = strings.TrimSuffix(tag, "|}}")
 	// Also support legacy brackets for robustness during transition
@@ -284,14 +227,12 @@ func parseTagToColor(tag string) (fg, bg tcell.Color) {
 	}
 	if len(parts) > 1 {
 		bg = parseColor(parts[1])
-	} else {
-		bg = tcell.ColorDefault
 	}
 	return
 }
 
 // parseTagWithStyles parses a theme tag and extracts colors and style flags
-func parseTagWithStyles(tag string) (fg, bg tcell.Color, styles StyleFlags) {
+func parseTagWithStyles(tag string) (fg, bg lipgloss.TerminalColor, styles StyleFlags) {
 	tag = strings.TrimPrefix(tag, "{{|")
 	tag = strings.TrimSuffix(tag, "|}}")
 	tag = strings.Trim(tag, "[]")
@@ -302,8 +243,6 @@ func parseTagWithStyles(tag string) (fg, bg tcell.Color, styles StyleFlags) {
 	}
 	if len(parts) > 1 {
 		bg = parseColor(parts[1])
-	} else {
-		bg = tcell.ColorDefault
 	}
 	// Parse style flags (third part and beyond)
 	if len(parts) > 2 {
@@ -356,21 +295,10 @@ func parseThemeINI(path string) error {
 		// Convert {{|code|}} format to tview [code] format
 		styleValue := console.ExpandTags(expanded)
 
-		// 1. Register the tview-format value as the tag
-		console.RegisterSemanticTag(key, styleValue)
-		// Register "Theme"+Key as well, for semantic consistency
+		// Register "Theme"+Key exclusively for themed tags (prevents collision with system semantic tags)
 		console.RegisterSemanticTag("Theme"+key, styleValue)
 
-		// 2. Update global console.Colors if this key is in the map
-		if fieldName, ok := themeToConsoleMap[key]; ok {
-			// Update global console.Colors
-			f := reflect.ValueOf(&console.Colors).Elem().FieldByName(fieldName)
-			if f.IsValid() && f.CanSet() {
-				f.SetString(styleValue)
-			}
-		}
-
-		// 3. Map known keys to Current struct fields
+		// 2. Map known keys to Current struct fields
 		fg, bg := parseTagToColor(styleValue)
 		switch key {
 		case "Screen":
@@ -421,21 +349,11 @@ func parseThemeINI(path string) error {
 		}
 	}
 
-	// 3. Re-apply styles and tags based on updated Current
+	// 3. Re-apply tags based on updated Current
 	// Note: We do NOT call updateTagsFromCurrent() because we want to keep the specific tags registered above.
 	// We MUST ensure base tags and color map are built before we finalize mappings.
 	console.RegisterBaseTags()
 	console.BuildColorMap()
-
-	// Map theme.ini fields to themed tags
-	for themeKey, consoleField := range themeToConsoleMap {
-		themeTag := "{{_Theme" + themeKey + "_}}"
-		resolved := console.Translate(themeTag)
-		console.RegisterSemanticTag(consoleField, resolved)
-	}
-
-	// Update global cview styles.
-	updateStyles()
 
 	bracketsDef := console.GetColorDefinition("ThemeApplicationVersionBrackets")
 	isReversed := strings.Contains(bracketsDef, ":r") || strings.Contains(bracketsDef, "reverse")

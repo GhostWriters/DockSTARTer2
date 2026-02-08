@@ -66,10 +66,16 @@ func RenderThemeText(text string, defaultStyle ...lipgloss.Style) string {
 		} else if strings.HasPrefix(tagContent, "_") && strings.HasSuffix(tagContent, "_") {
 			// Semantic tag: {{_ThemeHostname_}}
 			translated := console.Translate("{{" + tagContent + "}}")
-			// The translated value is now also in {{|code|}} format
-			if strings.HasPrefix(translated, "{{|") && strings.HasSuffix(translated, "|}}") {
-				code := translated[3 : len(translated)-3]
-				currentStyle = ApplyStyleCode(currentStyle, resetStyle, code)
+			// The translated value might contain multiple tags like {{|-|}}{{|blue|}}
+			subMatches := themeTagRegex.FindAllStringSubmatch(translated, -1)
+			for _, subMatch := range subMatches {
+				subContent := subMatch[1]
+				if subContent == "|-|" || subContent == "-" {
+					currentStyle = resetStyle
+				} else if strings.HasPrefix(subContent, "|") && strings.HasSuffix(subContent, "|") {
+					code := strings.Trim(subContent, "|")
+					currentStyle = ApplyStyleCode(currentStyle, resetStyle, code)
+				}
 			}
 		}
 
@@ -100,6 +106,11 @@ func ApplyStyleCode(style lipgloss.Style, resetStyle lipgloss.Style, styleCode s
 		return style
 	}
 
+	// Pre-emptive reset if flags start with '-'
+	if len(parts) > 2 && strings.HasPrefix(parts[2], "-") {
+		style = resetStyle
+	}
+
 	// Foreground color
 	if len(parts) > 0 && parts[0] != "" {
 		if parts[0] == "-" {
@@ -128,59 +139,74 @@ func ApplyStyleCode(style lipgloss.Style, resetStyle lipgloss.Style, styleCode s
 
 	// Styles (bold, underline, etc.)
 	if len(parts) > 2 {
-		for _, s := range parts[2:] {
-			for _, char := range s {
-				switch char {
-				case 'B':
-					style = style.Bold(true)
-				case 'b':
-					style = style.Bold(false)
-				case 'U':
-					style = style.Underline(true)
-				case 'u':
-					style = style.Underline(false)
-				case 'I':
-					style = style.Italic(true)
-				case 'i':
-					style = style.Italic(false)
-				case 'D':
-					style = style.Faint(true)
-				case 'd':
-					style = style.Faint(false)
-				case 'L':
-					style = style.Blink(true)
-				case 'l':
-					style = style.Blink(false)
-				case 'R':
-					style = style.Reverse(true)
-				case 'r':
-					style = style.Reverse(false)
-				case 'S':
-					style = style.Strikethrough(true)
-				case 's':
-					style = style.Strikethrough(false)
-				case 'H':
-					// High intensity: if foreground/background are standard, shift them
-					// (Shift logic will be handled by a dedicated helper or inline if simple)
-					if fg := style.GetForeground(); fg != nil {
-						style = style.Foreground(brightenColor(fg))
-					}
-					if bg := style.GetBackground(); bg != nil {
-						style = style.Background(brightenColor(bg))
-					}
-				case 'h':
-					// Normal intensity: if foreground/background are bright, shift them back
-					if fg := style.GetForeground(); fg != nil {
-						style = style.Foreground(dimColor(fg))
-					}
-					if bg := style.GetBackground(); bg != nil {
-						style = style.Background(dimColor(bg))
-					}
+		s := strings.TrimPrefix(parts[2], "-")
+		for _, char := range s {
+			switch char {
+			case 'B':
+				style = style.Bold(true)
+			case 'b':
+				style = style.Bold(false)
+			case 'U':
+				style = style.Underline(true)
+			case 'u':
+				style = style.Underline(false)
+			case 'I':
+				style = style.Italic(true)
+			case 'i':
+				style = style.Italic(false)
+			case 'D':
+				style = style.Faint(true)
+			case 'd':
+				style = style.Faint(false)
+			case 'L':
+				style = style.Blink(true)
+			case 'l':
+				style = style.Blink(false)
+			case 'R':
+				style = style.Reverse(true)
+			case 'r':
+				style = style.Reverse(false)
+			case 'S':
+				style = style.Strikethrough(true)
+			case 's':
+				style = style.Strikethrough(false)
+			case 'H':
+				// High intensity: if foreground/background are standard, shift them
+				// (Shift logic will be handled by a dedicated helper or inline if simple)
+				if fg := style.GetForeground(); fg != nil {
+					style = style.Foreground(brightenColor(fg))
+				}
+				if bg := style.GetBackground(); bg != nil {
+					style = style.Background(brightenColor(bg))
+				}
+			case 'h':
+				// Normal intensity: if foreground/background are bright, shift them back
+				if fg := style.GetForeground(); fg != nil {
+					style = style.Foreground(dimColor(fg))
+				}
+				if bg := style.GetBackground(); bg != nil {
+					style = style.Background(dimColor(bg))
 				}
 			}
 		}
 	}
 
+	return style
+}
+
+// ApplyTagsToStyle translates any {{...}} tags and applies them to the given style
+func ApplyTagsToStyle(text string, style lipgloss.Style, resetStyle lipgloss.Style) lipgloss.Style {
+	translated := console.Translate(text)
+	subMatches := themeTagRegex.FindAllStringSubmatch(translated, -1)
+	for _, subMatch := range subMatches {
+		subContent := subMatch[1]
+		if subContent == "|-|" || subContent == "-" {
+			style = resetStyle
+		} else if strings.HasPrefix(subContent, "|") && strings.HasSuffix(subContent, "|") {
+			code := strings.Trim(subContent, "|")
+			style = ApplyStyleCode(style, resetStyle, code)
+		}
+	}
 	return style
 }
 

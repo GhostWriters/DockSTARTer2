@@ -2,27 +2,26 @@ package theme
 
 import (
 	"DockSTARTer2/internal/testutils"
+	"fmt"
 	"testing"
 
-	"github.com/gdamore/tcell/v3"
+	"github.com/charmbracelet/lipgloss"
 )
 
 func TestGetColorStr(t *testing.T) {
 	tests := []struct {
-		input    tcell.Color
+		input    lipgloss.TerminalColor
 		expected string
 	}{
 		// Standard Colors (Mapped to ANSI Indices)
-		{tcell.ColorBlack, "0"},
-		{tcell.ColorRed, "1"},
-		{tcell.ColorGreen, "2"},
-		{tcell.ColorBlue, "4"},
-		{tcell.ColorWhite, "7"},
+		{lipgloss.Color("0"), "0"},
+		{lipgloss.Color("1"), "1"},
+		{lipgloss.Color("2"), "2"},
+		{lipgloss.Color("4"), "4"},
+		{lipgloss.Color("7"), "7"},
 
-		// Custom RGB (Not in map, returns Name/Hex from tcell)
-		// tcell.NewRGBColor returns a color where .Name() might be the hex string if not standard.
-		// GetColorStr falls back to c.Name().ToLower()
-		{tcell.NewRGBColor(1, 2, 3), "#010203"},
+		// Custom RGB
+		{lipgloss.Color("#010203"), "#010203"},
 	}
 
 	var cases []testutils.TestCase
@@ -31,7 +30,7 @@ func TestGetColorStr(t *testing.T) {
 		actual := GetColorStr(tt.input)
 		pass := actual == tt.expected
 		cases = append(cases, testutils.TestCase{
-			Input:    tt.input.String(), // tcell.Color.String() typically returns Name or Hex
+			Input:    fmt.Sprintf("%v", tt.input),
 			Expected: tt.expected,
 			Actual:   actual,
 			Pass:     pass,

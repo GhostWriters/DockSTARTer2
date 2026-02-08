@@ -226,21 +226,11 @@ func ToANSI(text string) string {
 		return Strip(text)
 	}
 
-	// 1. Process semantic tags {{_Tag_}}
-	text = semanticRegex.ReplaceAllStringFunc(text, func(match string) string {
-		content := match[3 : len(match)-3] // Strip "{{_" and "_}}"
-		content = strings.ToLower(content)
+	// 1. Expand all semantic tags first (Pass 1)
+	// This ensures that multi-tag definitions like {{|-|}}{{|blue|}} are fully expanded
+	text = ExpandTags(text)
 
-		// Check semantic map, then resolve tagged style to ANSI
-		if tag, ok := semanticMap[content]; ok {
-			return resolveTaggedStyleToANSI(tag)
-		}
-
-		// Unknown semantic tag - strip it
-		return ""
-	})
-
-	// 2. Process direct tags {{|code|}} -> ANSI
+	// 2. Process all direct tags {{|code|}} -> ANSI (Pass 2)
 	text = directRegex.ReplaceAllStringFunc(text, func(match string) string {
 		content := match[3 : len(match)-3] // Strip "{{|" and "|}}"
 		return parseStyleCodeToANSI(content)
@@ -277,10 +267,16 @@ func parseStyleCodeToANSI(content string) string {
 	parts := strings.Split(content, ":")
 	var codes strings.Builder
 
+	// Pre-emptive reset if flags start with '-'
+	if len(parts) > 2 && strings.HasPrefix(parts[2], "-") {
+		codes.WriteString(CodeReset)
+	}
+
 	// Flags (peek for H early to affect colors)
 	highIntensity := false
 	if len(parts) > 2 {
-		if strings.Contains(strings.ToLower(parts[2]), "h") {
+		f := parts[2]
+		if strings.Contains(strings.ToLower(f), "h") {
 			highIntensity = true
 		}
 	}
@@ -359,7 +355,8 @@ func parseStyleCodeToANSI(content string) string {
 
 	// Part 2: Flags (each character is a flag: b=bold, u=underline, etc.)
 	if len(parts) > 2 && parts[2] != "" {
-		for _, flag := range parts[2] {
+		f := strings.TrimPrefix(parts[2], "-")
+		for _, flag := range f {
 			flagStr := string(flag)
 			if code, ok := ansiMap[flagStr]; ok {
 				codes.WriteString(code)
