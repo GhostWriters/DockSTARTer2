@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -177,6 +178,23 @@ func ApplyTviewStyle(currentStyle lipgloss.Style, resetStyle lipgloss.Style, def
 					style = style.Strikethrough(true)
 				case 's':
 					style = style.Strikethrough(false)
+				case 'H':
+					// High intensity: if foreground/background are standard, shift them
+					// (Shift logic will be handled by a dedicated helper or inline if simple)
+					if fg := style.GetForeground(); fg != nil {
+						style = style.Foreground(brightenColor(fg))
+					}
+					if bg := style.GetBackground(); bg != nil {
+						style = style.Background(brightenColor(bg))
+					}
+				case 'h':
+					// Normal intensity: if foreground/background are bright, shift them back
+					if fg := style.GetForeground(); fg != nil {
+						style = style.Foreground(dimColor(fg))
+					}
+					if bg := style.GetBackground(); bg != nil {
+						style = style.Background(dimColor(bg))
+					}
 				}
 			}
 		}
@@ -230,6 +248,34 @@ func ParseColor(name string) lipgloss.TerminalColor {
 
 	// Fallback
 	return lipgloss.Color(name)
+}
+
+// brightenColor shifts standard ANSI colors (0-7) to bright variants (8-15)
+func brightenColor(c lipgloss.TerminalColor) lipgloss.TerminalColor {
+	if tc, ok := c.(lipgloss.Color); ok {
+		s := string(tc)
+		switch s {
+		case "0", "1", "2", "3", "4", "5", "6", "7":
+			idx := 0
+			fmt.Sscanf(s, "%d", &idx)
+			return lipgloss.Color(fmt.Sprintf("%d", idx+8))
+		}
+	}
+	return c
+}
+
+// dimColor shifts bright ANSI colors (8-15) back to standard variants (0-7)
+func dimColor(c lipgloss.TerminalColor) lipgloss.TerminalColor {
+	if tc, ok := c.(lipgloss.Color); ok {
+		s := string(tc)
+		switch s {
+		case "8", "9", "10", "11", "12", "13", "14", "15":
+			idx := 0
+			fmt.Sscanf(s, "%d", &idx)
+			return lipgloss.Color(fmt.Sprintf("%d", idx-8))
+		}
+	}
+	return c
 }
 
 // GetInitialStyle peeks at the first theme tag in text and returns a style derived from it.

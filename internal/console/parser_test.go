@@ -137,20 +137,10 @@ func TestToANSI(t *testing.T) {
 
 	// Setup semantic map for tests
 	semanticMap = make(map[string]string)
-	ansiMap = make(map[string]string)
+	// Use the real BuildColorMap to ensure all standard codes (including bright/strikethrough) are registered
+	BuildColorMap()
 
-	// Register standard ANSI codes
-	ansiMap["-"] = CodeReset
-	ansiMap["red"] = CodeRed
-	ansiMap["green"] = CodeGreen
-	ansiMap["cyan"] = CodeCyan
-	ansiMap["white"] = CodeWhite
-	ansiMap["redbg"] = CodeRedBg
-	ansiMap["b"] = CodeBold
-	ansiMap["u"] = CodeUnderline
-	ansiMap["S"] = CodeStrikethrough
-
-	// Register semantic tags
+	// Register test-specific semantic tags
 	semanticMap["notice"] = "[green]"
 	semanticMap["version"] = "[cyan]"
 
@@ -176,13 +166,18 @@ func TestToANSI(t *testing.T) {
 		},
 		{
 			name:     "Direct tview-style with flags to ANSI",
-			input:    "{{|cyan::b|}}Bold{{|-|}}",
+			input:    "{{|cyan::B|}}Bold{{|-|}}",
 			expected: CodeCyan + CodeBold + "Bold" + CodeReset,
 		},
 		{
-			name:     "Direct tview-style with strikethrough to ANSI",
-			input:    "{{|white:blue:S|}}Strikethrough{{|-|}}",
-			expected: CodeWhite + CodeBlueBg + CodeStrikethrough + "Strikethrough" + CodeReset,
+			name:     "Direct tview-style with High Intensity (H) to ANSI",
+			input:    "{{|red::H|}}Vibrant{{|-|}}",
+			expected: CodeBrightRed + "Vibrant" + CodeReset,
+		},
+		{
+			name:     "Direct tview-style with mix High Intensity and Dim (HD) to ANSI",
+			input:    "{{|red::HD|}}MutedVibrant{{|-|}}",
+			expected: CodeBrightRed + CodeDim + "MutedVibrant" + CodeReset,
 		},
 	}
 

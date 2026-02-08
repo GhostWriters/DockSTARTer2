@@ -122,6 +122,16 @@ func BuildColorMap() {
 	ansiMap["cyan"] = CodeCyan
 	ansiMap["white"] = CodeWhite
 
+	// Foreground colors (Bright)
+	ansiMap["bright-black"] = CodeBrightBlack
+	ansiMap["bright-red"] = CodeBrightRed
+	ansiMap["bright-green"] = CodeBrightGreen
+	ansiMap["bright-yellow"] = CodeBrightYellow
+	ansiMap["bright-blue"] = CodeBrightBlue
+	ansiMap["bright-magenta"] = CodeBrightMagenta
+	ansiMap["bright-cyan"] = CodeBrightCyan
+	ansiMap["bright-white"] = CodeBrightWhite
+
 	// Background colors (with "bg" suffix for fg:bg parsing)
 	ansiMap["blackbg"] = CodeBlackBg
 	ansiMap["redbg"] = CodeRedBg
@@ -131,6 +141,16 @@ func BuildColorMap() {
 	ansiMap["magentabg"] = CodeMagentaBg
 	ansiMap["cyanbg"] = CodeCyanBg
 	ansiMap["whitebg"] = CodeWhiteBg
+
+	// Background colors (Bright)
+	ansiMap["bright-blackbg"] = CodeBrightBlackBg
+	ansiMap["bright-redbg"] = CodeBrightRedBg
+	ansiMap["bright-greenbg"] = CodeBrightGreenBg
+	ansiMap["bright-yellowbg"] = CodeBrightYellowBg
+	ansiMap["bright-bluebg"] = CodeBrightBlueBg
+	ansiMap["bright-magentabg"] = CodeBrightMagentaBg
+	ansiMap["bright-cyanbg"] = CodeBrightCyanBg
+	ansiMap["bright-whitebg"] = CodeBrightWhiteBg
 
 	// Flag character mappings
 	ansiMap["b"] = CodeBoldOff
@@ -230,7 +250,6 @@ func ToANSI(text string) string {
 	// 2. Process direct tags {{|code|}} -> ANSI
 	text = directRegex.ReplaceAllStringFunc(text, func(match string) string {
 		content := match[3 : len(match)-3] // Strip "{{|" and "|}}"
-		content = strings.ToLower(content)
 		return parseTviewStyleToANSI(content)
 	})
 
@@ -264,33 +283,65 @@ func parseTviewStyleToANSI(content string) string {
 	parts := strings.Split(content, ":")
 	var codes strings.Builder
 
+	// Flags (peek for H early to affect colors)
+	highIntensity := false
+	if len(parts) > 2 {
+		if strings.Contains(strings.ToLower(parts[2]), "h") {
+			highIntensity = true
+		}
+	}
+
 	// Part 0: Foreground color
 	if len(parts) > 0 && parts[0] != "" && parts[0] != "-" {
-		color := preferredProfile.Color(parts[0])
-		if strings.HasPrefix(parts[0], "#") {
+		colorName := strings.ToLower(parts[0])
+		if highIntensity {
+			if brightName, ok := getBrightVariant(colorName); ok {
+				colorName = brightName
+			}
+		}
+
+		color := preferredProfile.Color(colorName)
+		if strings.HasPrefix(colorName, "#") {
 			// Hex color
 			codes.WriteString(wrapSequence(color.Sequence(false)))
-		} else if val, ok := ColorToHexMap[strings.ToLower(parts[0])]; ok {
+		} else if val, ok := ColorToHexMap[colorName]; ok {
 			// Named color resolved to hex or index
+			if highIntensity {
+				if brightVal, ok := getBrightIndex(val); ok {
+					val = brightVal
+				}
+			}
 			color = preferredProfile.Color(val)
 			codes.WriteString(wrapSequence(color.Sequence(false)))
-		} else if code, ok := ansiMap[parts[0]]; ok {
-			// Direct ANSI code mapping
+		} else if code, ok := ansiMap[colorName]; ok {
+			// Direct ANSI code mapping (e.g., "bold" or custom)
 			codes.WriteString(code)
 		}
 	}
 
 	// Part 1: Background color
 	if len(parts) > 1 && parts[1] != "" && parts[1] != "-" {
-		color := preferredProfile.Color(parts[1])
-		if strings.HasPrefix(parts[1], "#") {
+		colorName := strings.ToLower(parts[1])
+		if highIntensity {
+			if brightName, ok := getBrightVariant(colorName); ok {
+				colorName = brightName
+			}
+		}
+
+		color := preferredProfile.Color(colorName)
+		if strings.HasPrefix(colorName, "#") {
 			// Hex color
 			codes.WriteString(wrapSequence(color.Sequence(true)))
-		} else if val, ok := ColorToHexMap[strings.ToLower(parts[1])]; ok {
+		} else if val, ok := ColorToHexMap[colorName]; ok {
 			// Named color resolved to hex or index
+			if highIntensity {
+				if brightVal, ok := getBrightIndex(val); ok {
+					val = brightVal
+				}
+			}
 			color = preferredProfile.Color(val)
 			codes.WriteString(wrapSequence(color.Sequence(true)))
-		} else if code, ok := ansiMap[parts[1]+"bg"]; ok {
+		} else if code, ok := ansiMap[colorName+"bg"]; ok {
 			// Direct ANSI code mapping
 			codes.WriteString(code)
 		}
@@ -307,6 +358,26 @@ func parseTviewStyleToANSI(content string) string {
 	}
 
 	return codes.String()
+}
+
+func getBrightVariant(name string) (string, bool) {
+	if strings.HasPrefix(name, "bright-") {
+		return name, true
+	}
+	// Check if bright variant exists in ansiMap
+	if _, ok := ansiMap["bright-"+name]; ok {
+		return "bright-" + name, true
+	}
+	return name, false
+}
+
+func getBrightIndex(val string) (string, bool) {
+	// If val is a single digit 0-7, shift it to 8-15
+	if len(val) == 1 && val[0] >= '0' && val[0] <= '7' {
+		return string(val[0] + 8), true
+	}
+	// Handle cases like "13" etc if needed, but usually standard colors are 0-7
+	return val, false
 }
 
 // wrapSequence ensures a color sequence part is wrapped in CSI delimiters

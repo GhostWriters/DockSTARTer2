@@ -31,6 +31,16 @@ const (
 	CodeCyan    = "\033[36m"
 	CodeWhite   = "\033[37m"
 
+	// Foreground (Bright)
+	CodeBrightBlack   = "\033[90m"
+	CodeBrightRed     = "\033[91m"
+	CodeBrightGreen   = "\033[92m"
+	CodeBrightYellow  = "\033[93m"
+	CodeBrightBlue    = "\033[94m"
+	CodeBrightMagenta = "\033[95m"
+	CodeBrightCyan    = "\033[96m"
+	CodeBrightWhite   = "\033[97m"
+
 	// Background
 	CodeBlackBg   = "\033[40m"
 	CodeRedBg     = "\033[41m"
@@ -40,6 +50,16 @@ const (
 	CodeMagentaBg = "\033[45m"
 	CodeCyanBg    = "\033[46m"
 	CodeWhiteBg   = "\033[47m"
+
+	// Background (Bright)
+	CodeBrightBlackBg   = "\033[100m"
+	CodeBrightRedBg     = "\033[101m"
+	CodeBrightGreenBg   = "\033[102m"
+	CodeBrightYellowBg  = "\033[103m"
+	CodeBrightBlueBg    = "\033[104m"
+	CodeBrightMagentaBg = "\033[105m"
+	CodeBrightCyanBg    = "\033[106m"
+	CodeBrightWhiteBg   = "\033[107m"
 )
 
 // ColorToHexMap maps standard color names to hex codes for TrueColor consistency
@@ -77,6 +97,7 @@ type AppColors struct {
 	Blink         string
 	Reverse       string
 	Strikethrough string
+	HighIntensity string
 
 	// Base Colors (Foreground)
 	Black   string

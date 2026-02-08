@@ -55,6 +55,7 @@ type StyleFlags struct {
 	Dim           bool
 	Reverse       bool
 	Strikethrough bool
+	HighIntensity bool
 }
 
 // ThemeConfig holds colors derived from .dialogrc and theme.ini
@@ -306,6 +307,7 @@ func parseTagWithStyles(tag string) (fg, bg tcell.Color, styles StyleFlags) {
 		styles.Dim = strings.Contains(flags, "d")
 		styles.Reverse = strings.Contains(flags, "r")
 		styles.Strikethrough = strings.Contains(flags, "s")
+		styles.HighIntensity = strings.Contains(flags, "h")
 	}
 	return
 }
