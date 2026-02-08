@@ -161,13 +161,13 @@ func InitStyles(cfg config.AppConfig) {
 		Background(tcellToLipgloss(t.ShadowColor))
 
 	// Buttons (spacing handled at layout level)
-	currentStyles.ButtonActive = lipgloss.NewStyle().
+	currentStyles.ButtonActive = ApplyFlags(lipgloss.NewStyle().
 		Background(tcellToLipgloss(t.ButtonActiveBG)).
-		Foreground(tcellToLipgloss(t.ButtonActiveFG))
+		Foreground(tcellToLipgloss(t.ButtonActiveFG)), t.ButtonActiveStyles)
 
-	currentStyles.ButtonInactive = lipgloss.NewStyle().
+	currentStyles.ButtonInactive = ApplyFlags(lipgloss.NewStyle().
 		Background(tcellToLipgloss(t.ButtonInactiveBG)).
-		Foreground(tcellToLipgloss(t.ButtonInactiveFG))
+		Foreground(tcellToLipgloss(t.ButtonInactiveFG)), t.ButtonInactiveStyles)
 
 	// List items
 	currentStyles.ItemNormal = lipgloss.NewStyle().
@@ -207,6 +207,18 @@ func InitStyles(cfg config.AppConfig) {
 	currentStyles.StatusWarn = ApplyTviewStyle(lipgloss.NewStyle(), lipgloss.NewStyle(), console.GetColorDefinition("ThemeTitleWarn"))
 	currentStyles.StatusError = ApplyTviewStyle(lipgloss.NewStyle(), lipgloss.NewStyle(), console.GetColorDefinition("ThemeTitleError"))
 	currentStyles.Console = ApplyTviewStyle(lipgloss.NewStyle(), lipgloss.NewStyle(), console.GetColorDefinition("ThemeProgram"))
+}
+
+// ApplyFlags applies ANSI style modifiers to a lipgloss.Style
+func ApplyFlags(style lipgloss.Style, flags theme.StyleFlags) lipgloss.Style {
+	return style.
+		Bold(flags.Bold).
+		Underline(flags.Underline).
+		Italic(flags.Italic).
+		Blink(flags.Blink).
+		Faint(flags.Dim).
+		Reverse(flags.Reverse).
+		Strikethrough(flags.Strikethrough)
 }
 
 // Helper functions for common style operations

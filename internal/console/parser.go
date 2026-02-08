@@ -143,6 +143,8 @@ func BuildColorMap() {
 	ansiMap["L"] = CodeBlink
 	ansiMap["r"] = CodeReverseOff
 	ansiMap["R"] = CodeReverse
+	ansiMap["s"] = CodeStrikethroughOff
+	ansiMap["S"] = CodeStrikethrough
 
 	// Build semantic map from Colors struct
 	val := reflect.ValueOf(Colors)

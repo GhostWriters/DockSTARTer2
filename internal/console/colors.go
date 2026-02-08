@@ -6,18 +6,20 @@ const (
 	CodeReset = "\033[0m"
 
 	// Modifiers
-	CodeBold      = "\033[1m"
-	CodeDim       = "\033[2m"
-	CodeUnderline = "\033[4m"
-	CodeBlink     = "\033[5m"
-	CodeReverse   = "\033[7m"
+	CodeBold          = "\033[1m"
+	CodeDim           = "\033[2m"
+	CodeUnderline     = "\033[4m"
+	CodeBlink         = "\033[5m"
+	CodeReverse       = "\033[7m"
+	CodeStrikethrough = "\033[9m"
 
 	// Modifiers (Off)
-	CodeBoldOff      = "\033[22m"
-	CodeDimOff       = "\033[22m"
-	CodeUnderlineOff = "\033[24m"
-	CodeBlinkOff     = "\033[25m"
-	CodeReverseOff   = "\033[27m"
+	CodeBoldOff          = "\033[22m"
+	CodeDimOff           = "\033[22m"
+	CodeUnderlineOff     = "\033[24m"
+	CodeBlinkOff         = "\033[25m"
+	CodeReverseOff       = "\033[27m"
+	CodeStrikethroughOff = "\033[29m"
 
 	// Foreground
 	CodeBlack   = "\033[30m"
@@ -68,12 +70,13 @@ var ColorToHexMap = map[string]string{
 // Values are stored in tview tag format (e.g., "[cyan::b]")
 type AppColors struct {
 	// Base Codes
-	Reset     string
-	Bold      string
-	Dim       string
-	Underline string
-	Blink     string
-	Reverse   string
+	Reset         string
+	Bold          string
+	Dim           string
+	Underline     string
+	Blink         string
+	Reverse       string
+	Strikethrough string
 
 	// Base Colors (Foreground)
 	Black   string

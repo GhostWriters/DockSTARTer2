@@ -148,6 +148,7 @@ func TestToANSI(t *testing.T) {
 	ansiMap["redbg"] = CodeRedBg
 	ansiMap["b"] = CodeBold
 	ansiMap["u"] = CodeUnderline
+	ansiMap["S"] = CodeStrikethrough
 
 	// Register semantic tags
 	semanticMap["notice"] = "[green]"
@@ -179,9 +180,9 @@ func TestToANSI(t *testing.T) {
 			expected: CodeCyan + CodeBold + "Bold" + CodeReset,
 		},
 		{
-			name:     "Preserve literal brackets",
-			input:    "{{_Notice_}}Version [v2.0]{{|-|}}",
-			expected: CodeGreen + "Version [v2.0]" + CodeReset,
+			name:     "Direct tview-style with strikethrough to ANSI",
+			input:    "{{|white:blue:S|}}Strikethrough{{|-|}}",
+			expected: CodeWhite + CodeBlueBg + CodeStrikethrough + "Strikethrough" + CodeReset,
 		},
 	}
 

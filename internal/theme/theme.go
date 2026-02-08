@@ -46,35 +46,48 @@ var themeToConsoleMap = map[string]string{
 	"Var":                        "Var",
 }
 
+// StyleFlags holds ANSI style modifiers
+type StyleFlags struct {
+	Bold          bool
+	Underline     bool
+	Italic        bool
+	Blink         bool
+	Dim           bool
+	Reverse       bool
+	Strikethrough bool
+}
+
 // ThemeConfig holds colors derived from .dialogrc and theme.ini
 type ThemeConfig struct {
-	ScreenFG         tcell.Color
-	ScreenBG         tcell.Color
-	DialogFG         tcell.Color
-	DialogBG         tcell.Color
-	BorderFG         tcell.Color
-	BorderBG         tcell.Color
-	Border2FG        tcell.Color
-	Border2BG        tcell.Color
-	TitleFG          tcell.Color
-	TitleBG          tcell.Color
-	TitleBold        bool
-	TitleUnderline   bool
-	ShadowColor      tcell.Color
-	ButtonActiveFG   tcell.Color
-	ButtonActiveBG   tcell.Color
-	ButtonInactiveFG tcell.Color
-	ButtonInactiveBG tcell.Color
-	ItemSelectedFG   tcell.Color
-	ItemSelectedBG   tcell.Color
-	ItemFG           tcell.Color
-	ItemBG           tcell.Color
-	TagFG            tcell.Color
-	TagBG            tcell.Color
-	TagKeyFG         tcell.Color
-	TagKeySelectedFG tcell.Color
-	ItemHelpFG       tcell.Color
-	ItemHelpBG       tcell.Color
+	ScreenFG             tcell.Color
+	ScreenBG             tcell.Color
+	DialogFG             tcell.Color
+	DialogBG             tcell.Color
+	BorderFG             tcell.Color
+	BorderBG             tcell.Color
+	Border2FG            tcell.Color
+	Border2BG            tcell.Color
+	TitleFG              tcell.Color
+	TitleBG              tcell.Color
+	TitleBold            bool
+	TitleUnderline       bool
+	ShadowColor          tcell.Color
+	ButtonActiveFG       tcell.Color
+	ButtonActiveBG       tcell.Color
+	ButtonActiveStyles   StyleFlags
+	ButtonInactiveFG     tcell.Color
+	ButtonInactiveBG     tcell.Color
+	ButtonInactiveStyles StyleFlags
+	ItemSelectedFG       tcell.Color
+	ItemSelectedBG       tcell.Color
+	ItemFG               tcell.Color
+	ItemBG               tcell.Color
+	TagFG                tcell.Color
+	TagBG                tcell.Color
+	TagKeyFG             tcell.Color
+	TagKeySelectedFG     tcell.Color
+	ItemHelpFG           tcell.Color
+	ItemHelpBG           tcell.Color
 }
 
 // Current holds the active theme configuration
@@ -272,7 +285,7 @@ func parseTagToColor(tag string) (fg, bg tcell.Color) {
 }
 
 // parseTagWithStyles parses a theme tag and extracts colors and style flags
-func parseTagWithStyles(tag string) (fg, bg tcell.Color, bold, underline bool) {
+func parseTagWithStyles(tag string) (fg, bg tcell.Color, styles StyleFlags) {
 	tag = strings.Trim(tag, "[]")
 	parts := strings.Split(tag, ":")
 	if len(parts) > 0 {
@@ -285,9 +298,14 @@ func parseTagWithStyles(tag string) (fg, bg tcell.Color, bold, underline bool) {
 	}
 	// Parse style flags (third part and beyond)
 	if len(parts) > 2 {
-		flags := parts[2]
-		bold = strings.Contains(flags, "b")
-		underline = strings.Contains(flags, "u")
+		flags := strings.ToLower(parts[2])
+		styles.Bold = strings.Contains(flags, "b")
+		styles.Underline = strings.Contains(flags, "u")
+		styles.Italic = strings.Contains(flags, "i")
+		styles.Blink = strings.Contains(flags, "l")
+		styles.Dim = strings.Contains(flags, "d")
+		styles.Reverse = strings.Contains(flags, "r")
+		styles.Strikethrough = strings.Contains(flags, "s")
 	}
 	return
 }
@@ -352,10 +370,10 @@ func parseThemeINI(path string) error {
 		case "Border2":
 			Current.Border2FG, Current.Border2BG = fg, bg
 		case "Title": // Menu title with style flags (underline, bold, etc.)
-			var bold, underline bool
-			fg, bg, bold, underline = parseTagWithStyles(tviewValue)
+			var styles StyleFlags
+			fg, bg, styles = parseTagWithStyles(tviewValue)
 			Current.TitleFG, Current.TitleBG = fg, bg
-			Current.TitleBold, Current.TitleUnderline = bold, underline
+			Current.TitleBold, Current.TitleUnderline = styles.Bold, styles.Underline
 			titleWasSet = true
 		case "BoxTitle": // Fallback from .dialogrc (no styles)
 			// Only set if Title wasn't explicitly provided in theme
@@ -369,9 +387,13 @@ func parseThemeINI(path string) error {
 			// We take the BG? Or FG? Usually same.
 			Current.ShadowColor = fg
 		case "ButtonActive":
+			fg, bg, styles := parseTagWithStyles(tviewValue)
 			Current.ButtonActiveFG, Current.ButtonActiveBG = fg, bg
+			Current.ButtonActiveStyles = styles
 		case "ButtonInactive":
+			fg, bg, styles := parseTagWithStyles(tviewValue)
 			Current.ButtonInactiveFG, Current.ButtonInactiveBG = fg, bg
+			Current.ButtonInactiveStyles = styles
 		case "ItemSelected":
 			Current.ItemSelectedFG, Current.ItemSelectedBG = fg, bg
 		case "Item":

@@ -173,6 +173,10 @@ func ApplyTviewStyle(currentStyle lipgloss.Style, resetStyle lipgloss.Style, def
 					style = style.Reverse(true)
 				case 'r':
 					style = style.Reverse(false)
+				case 'S':
+					style = style.Strikethrough(true)
+				case 's':
+					style = style.Strikethrough(false)
 				}
 			}
 		}
