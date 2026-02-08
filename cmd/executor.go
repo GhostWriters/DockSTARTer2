@@ -744,6 +744,7 @@ func handleConfigShow(ctx context.Context, conf *config.AppConfig) {
 		"LineCharacters",
 		"Scrollbar",
 		"Shadow",
+		"ShadowLevel",
 	}
 
 	displayNames := map[string]string{
@@ -754,6 +755,7 @@ func handleConfigShow(ctx context.Context, conf *config.AppConfig) {
 		"LineCharacters": "Line Characters",
 		"Scrollbar":      "Scrollbar",
 		"Shadow":         "Shadow",
+		"ShadowLevel":    "Shadow Level",
 	}
 
 	var data []string
@@ -788,6 +790,8 @@ func handleConfigShow(ctx context.Context, conf *config.AppConfig) {
 			value = boolToYesNo(conf.Scrollbar)
 		case "Shadow":
 			value = boolToYesNo(conf.Shadow)
+		case "ShadowLevel":
+			value = fmt.Sprintf("{{_Var_}}%d{{|-|}}", conf.ShadowLevel)
 		}
 
 		colorTag := "{{_Var_}}"
