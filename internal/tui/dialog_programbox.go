@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/theme"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -341,6 +342,7 @@ func (m programBoxWithBackdrop) View() string {
 func RunProgramBox(ctx context.Context, title, subtitle string, task func(context.Context, io.Writer) error) error {
 	// Initialize TUI if not already done
 	cfg := config.LoadAppConfig()
+	logger.Debug(ctx, "RunProgramBox config: Shadow=%v, ShadowLevel=%d, LineCharacters=%v", cfg.Shadow, cfg.ShadowLevel, cfg.LineCharacters)
 	currentConfig = cfg // Set global config so styles like AddShadow work correctly
 	if err := theme.Load(cfg.Theme); err == nil {
 		InitStyles(cfg)

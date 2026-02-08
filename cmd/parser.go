@@ -250,7 +250,7 @@ func Parse(args []string) ([]CommandGroup, error) {
 			i++
 
 		// Commands that accept OPTIONAL arguments (Max 1)
-		case "-T", "--theme", "-S", "--select", "--menu-config-app-select", "--menu-app-select":
+		case "-T", "--theme", "-S", "--select", "--menu-config-app-select", "--menu-app-select", "--theme-shadow-level":
 			if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
 				currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
 				i++

@@ -78,6 +78,7 @@ var commandTitles = map[string]string{
 	"--theme-table":              "List Themes",
 	"--theme-shadows":            "Turned On Shadows",
 	"--theme-no-shadows":         "Turned Off Shadows",
+	"--theme-shadow-level":       "Set Shadow Level",
 	"--theme-scrollbar":          "Turned On Scrollbars",
 	"--theme-no-scrollbar":       "Turned Off Scrollbars",
 	"--theme-lines":              "Turned On Line Drawing",
@@ -195,7 +196,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				ranCommand = true
 			case "--theme-lines", "--theme-no-lines", "--theme-line", "--theme-no-line",
 				"--theme-borders", "--theme-no-borders", "--theme-border", "--theme-no-border",
-				"--theme-shadows", "--theme-no-shadows", "--theme-shadow", "--theme-no-shadow",
+				"--theme-shadows", "--theme-no-shadows", "--theme-shadow", "--theme-no-shadow", "--theme-shadow-level",
 				"--theme-scrollbar", "--theme-no-scrollbar":
 				handleThemeSettings(subCtx, &group)
 				ranCommand = true
@@ -558,6 +559,34 @@ func handleThemeSettings(ctx context.Context, group *CommandGroup) {
 		conf.Shadow = true
 	case "--theme-no-shadows", "--theme-no-shadow":
 		conf.Shadow = false
+	case "--theme-shadow-level":
+		// Set shadow level (0-4 or aliases)
+		if len(group.Args) > 0 {
+			arg := strings.ToLower(group.Args[0])
+			switch arg {
+			case "0", "off", "none", "false", "no":
+				conf.ShadowLevel = 0
+				conf.Shadow = false
+			case "1", "light":
+				conf.ShadowLevel = 1
+				conf.Shadow = true
+			case "2", "medium":
+				conf.ShadowLevel = 2
+				conf.Shadow = true
+			case "3", "dark":
+				conf.ShadowLevel = 3
+				conf.Shadow = true
+			case "4", "solid", "full":
+				conf.ShadowLevel = 4
+				conf.Shadow = true
+			default:
+				logger.Error(ctx, "Invalid shadow level: %s (use 0-4, or: off, light, medium, dark, solid)", arg)
+				return
+			}
+		} else {
+			logger.Display(ctx, "Current shadow level: %d", conf.ShadowLevel)
+			return
+		}
 	case "--theme-scrollbar":
 		conf.Scrollbar = true
 	case "--theme-no-scrollbar":

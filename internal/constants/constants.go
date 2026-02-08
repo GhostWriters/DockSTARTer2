@@ -27,6 +27,7 @@ const (
 	BordersKey        = "Borders"
 	LineCharactersKey = "LineCharacters"
 	ShadowKey         = "Shadow"
+	ShadowLevelKey    = "ShadowLevel"
 	ScrollbarKey      = "Scrollbar"
 	ThemeKey          = "Theme"
 )

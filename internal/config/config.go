@@ -4,6 +4,7 @@ import (
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/paths"
 	"bufio"
+	"fmt"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -18,6 +19,7 @@ type AppConfig struct {
 	Borders              bool
 	LineCharacters       bool
 	Shadow               bool
+	ShadowLevel          int // 0=off, 1=light(░), 2=medium(▒), 3=dark(▓), 4=solid(█)
 	Scrollbar            bool
 	Theme                string
 	Arch                 string
@@ -83,6 +85,7 @@ func LoadAppConfig() AppConfig {
 		Borders:              true,
 		LineCharacters:       true,
 		Shadow:               true,
+		ShadowLevel:          3, // Default: dark (▓)
 		Scrollbar:            true,
 		Theme:                "DockSTARTer",
 		ConfigDir:            "${XDG_CONFIG_HOME}",
@@ -137,6 +140,22 @@ func LoadAppConfig() AppConfig {
 			conf.LineCharacters = isTrue(value)
 		case constants.ShadowKey:
 			conf.Shadow = isTrue(value)
+		case constants.ShadowLevelKey:
+			// Parse shadow level (0-4)
+			level := 3 // default to dark
+			switch strings.ToLower(value) {
+			case "0", "off", "none", "false", "no":
+				level = 0
+			case "1", "light":
+				level = 1
+			case "2", "medium":
+				level = 2
+			case "3", "dark":
+				level = 3
+			case "4", "solid", "full":
+				level = 4
+			}
+			conf.ShadowLevel = level
 		case constants.ScrollbarKey:
 			conf.Scrollbar = isTrue(value)
 		case constants.ThemeKey:
@@ -191,6 +210,7 @@ func SaveAppConfig(conf AppConfig) error {
 	writeOption(constants.LineCharactersKey, boolToYesNo(conf.LineCharacters))
 	writeOption(constants.ScrollbarKey, boolToYesNo(conf.Scrollbar))
 	writeOption(constants.ShadowKey, boolToYesNo(conf.Shadow))
+	writeOption(constants.ShadowLevelKey, fmt.Sprintf("%d", conf.ShadowLevel))
 	writeOption(constants.ThemeKey, conf.Theme)
 
 	return writer.Flush()

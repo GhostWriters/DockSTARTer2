@@ -81,6 +81,7 @@ func InitFlags() {
 	pflag.Bool("theme-no-shadows", false, "Turn shadows off")
 	pflag.Bool("theme-shadow", false, "Turn shadows on")
 	pflag.Bool("theme-no-shadow", false, "Turn shadows off")
+	pflag.String("theme-shadow-level", "", "Set shadow level (0-4 or off/light/medium/dark/solid)")
 	pflag.Bool("theme-scrollbar", false, "Turn scrollbar on")
 	pflag.Bool("theme-no-scrollbar", false, "Turn scrollbar off")
 

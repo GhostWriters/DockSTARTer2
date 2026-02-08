@@ -414,8 +414,21 @@ func AddShadow(content string) string {
 			Foreground(currentStyles.ShadowColor).
 			Background(currentStyles.Screen.GetBackground())
 
-		// Use dark shade character (▓ U+2593) for shadow effect
-		const shadeChar = "▓"
+		// Select shade character based on config
+		var shadeChar string
+		switch currentConfig.ShadowLevel {
+		case 1:
+			shadeChar = "░" // Light shade (25%)
+		case 2:
+			shadeChar = "▒" // Medium shade (50%)
+		case 3:
+			shadeChar = "▓" // Dark shade (75%)
+		case 4:
+			shadeChar = "█" // Full block (100%)
+		default:
+			shadeChar = "▓" // Default to dark if invalid/unset
+		}
+
 		shadowCell = shadowStyle.Render(strings.Repeat(shadeChar, 2))
 		bottomShadowChars = shadowStyle.Render(strings.Repeat(shadeChar, contentWidth-1))
 	} else {
