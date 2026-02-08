@@ -336,6 +336,7 @@ func (m programBoxWithBackdrop) View() string {
 func RunProgramBox(ctx context.Context, title, subtitle string, task func(context.Context, io.Writer) error) error {
 	// Initialize TUI if not already done
 	cfg := config.LoadAppConfig()
+	currentConfig = cfg // Set global config so styles like AddShadow work correctly
 	if err := theme.Load(cfg.Theme); err == nil {
 		InitStyles(cfg)
 	}
