@@ -107,10 +107,10 @@ func (m programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 
 		// Calculate viewport size for full-screen dialog
-		// Dialog positioned at (3, 2) with size (width - 6) x (height - 4)
+		// Dialog positioned at (2, 2) with size (width - 4) x (height - 4)
 		//
 		// Working backwards from dialog to viewport:
-		// 1. Dialog size: (width - 6) x (height - 4)
+		// 1. Dialog size: (width - 4) x (height - 4)
 		// 2. Remove shadow (if enabled): -2 width, -1 height
 		// 3. Remove outer border: -2 width, -2 height
 		// 4. Remove padding (1, 2): -4 width, -2 height
@@ -131,8 +131,8 @@ func (m programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Width calculation:
-		// viewport.Width = (width - 6) - shadowWidth - 2 (border) - 4 (padding) - 2 (viewport border) - 2 (viewport padding)
-		m.viewport.Width = m.width - 6 - shadowWidth - 2 - 4 - 2 - 2
+		// viewport.Width = (width - 4) - shadowWidth - 2 (border) - 4 (padding) - 2 (viewport border) - 2 (viewport padding)
+		m.viewport.Width = m.width - 4 - shadowWidth - 2 - 4 - 2 - 2
 		if m.viewport.Width < 20 {
 			m.viewport.Width = 20
 		}
@@ -321,13 +321,13 @@ func (m programBoxWithBackdrop) View() string {
 	}
 
 	// Position dialog using offsets from top-left corner
-	// Offset by (3, 2) to match bash version positioning
+	// Offset using parameters (2, 2)
 	return overlay.Composite(
 		dialogView,   // foreground (dialog content)
 		backdropView, // background (backdrop base)
 		0,            // xPos: top-left
 		0,            // yPos: top-left
-		3,            // xOffset: 3 chars from left
+		2,            // xOffset: 2 chars from left
 		2,            // yOffset: 2 lines down
 	)
 }
