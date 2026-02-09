@@ -137,7 +137,11 @@ func (m HeaderModel) renderRight() string {
 	tmplVer := paths.GetTemplatesVersion()
 
 	var rightText string
-	if update.AppUpdateAvailable {
+	// Show update indicator: "?" if check failed, "*" if update available, " " otherwise
+	if update.UpdateCheckError {
+		rightText += "{{_ThemeApplicationUpdate_}}?{{|-|}}"
+		rightText += "{{_ThemeApplicationVersion_}}A:[" + appVer + "]{{|-|}}"
+	} else if update.AppUpdateAvailable {
 		rightText += "{{_ThemeApplicationUpdate_}}*{{|-|}}"
 		rightText += "{{_ThemeApplicationVersion_}}A:[{{|-|}}{{_ThemeApplicationUpdate_}}" + appVer + "{{|-|}}{{_ThemeApplicationVersion_}}]{{|-|}}"
 	} else {
@@ -145,7 +149,10 @@ func (m HeaderModel) renderRight() string {
 		rightText += "{{_ThemeApplicationVersion_}}A:[" + appVer + "]{{|-|}}"
 	}
 
-	if update.TmplUpdateAvailable {
+	if update.UpdateCheckError {
+		rightText += "{{_ThemeApplicationUpdate_}}?{{|-|}}"
+		rightText += "{{_ThemeApplicationVersion_}}T:[" + tmplVer + "]{{|-|}}"
+	} else if update.TmplUpdateAvailable {
 		rightText += "{{_ThemeApplicationUpdate_}}*{{|-|}}"
 		rightText += "{{_ThemeApplicationVersion_}}T:[{{|-|}}{{_ThemeApplicationUpdate_}}" + tmplVer + "{{|-|}}{{_ThemeApplicationVersion_}}]{{|-|}}"
 	} else {

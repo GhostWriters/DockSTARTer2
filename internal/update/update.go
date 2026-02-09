@@ -30,6 +30,8 @@ var (
 	AppUpdateAvailable bool
 	// TmplUpdateAvailable is true if a template update is available.
 	TmplUpdateAvailable bool
+	// UpdateCheckError is true if the last update check failed due to network/timeout errors.
+	UpdateCheckError bool
 	// LatestAppVersion is the tag name of the latest application release.
 	LatestAppVersion string
 	// LatestTmplVersion is the short hash of the latest template commit.
@@ -477,15 +479,25 @@ func CheckCurrentStatus(ctx context.Context) error {
 // GetUpdateStatus checks for updates in the background without prompting.
 func GetUpdateStatus(ctx context.Context) (appUpdate bool, tmplUpdate bool) {
 	// 1. Check Application Updates
-	appUpdate, appVer := checkAppUpdate(ctx)
+	appUpdate, appVer, appErr := checkAppUpdate(ctx)
 
 	// 2. Check Template Updates
-	tmplUpdate, tmplVer := checkTmplUpdate(ctx)
+	tmplUpdate, tmplVer, tmplErr := checkTmplUpdate(ctx)
 
+	// Set global state
 	AppUpdateAvailable = appUpdate
 	LatestAppVersion = appVer
 	TmplUpdateAvailable = tmplUpdate
 	LatestTmplVersion = tmplVer
+	UpdateCheckError = appErr || tmplErr
+
+	// Log warnings if checks failed
+	if appErr {
+		logger.Warn(ctx, "Failed to check for {{_ApplicationName_}}%s{{|-|}} updates (network timeout or error).", version.ApplicationName)
+	}
+	if tmplErr {
+		logger.Warn(ctx, "Failed to check for {{_ApplicationName_}}DockSTARTer-Templates{{|-|}} updates (network timeout or error).")
+	}
 
 	return appUpdate, tmplUpdate
 }
@@ -546,44 +558,44 @@ func GetTmplVersionDisplay() string {
 	return fmt.Sprintf("{{_ApplicationName_}}%s{{|-|}} [{{_Version_}}%s{{|-|}}]", name, ver)
 }
 
-func checkAppUpdate(ctx context.Context) (bool, string) {
+func checkAppUpdate(ctx context.Context) (updateAvailable bool, ver string, hadError bool) {
 	slug := "GhostWriters/DockSTARTer2"
 	repo := selfupdate.ParseSlug(slug)
 
 	channel := GetCurrentChannel()
 	updater, err := getUpdater(ctx, channel)
 	if err != nil {
-		return false, ""
+		return false, "", true
 	}
 
 	latest, found, err := updater.DetectLatest(ctx, repo)
 	if err != nil || !found {
-		return false, ""
+		return false, "", true
 	}
 
 	remoteVersion := latest.Version()
 	remoteChannel := GetChannelFromVersion(remoteVersion)
 	if !strings.EqualFold(remoteChannel, channel) {
 		// Not the same channel, ignore
-		return false, ""
+		return false, "", false
 	}
 
 	if compareVersions(remoteVersion, version.Version) > 0 {
-		return true, latest.Version()
+		return true, latest.Version(), false
 	}
 
-	return false, version.Version
+	return false, version.Version, false
 }
 
-func checkTmplUpdate(ctx context.Context) (bool, string) {
+func checkTmplUpdate(ctx context.Context) (updateAvailable bool, ver string, hadError bool) {
 	templatesDir := paths.GetTemplatesDir()
 	if _, err := os.Stat(templatesDir); os.IsNotExist(err) {
-		return false, ""
+		return false, "", false // Not an error - just no templates dir yet
 	}
 
 	repo, err := git.PlainOpen(templatesDir)
 	if err != nil {
-		return false, ""
+		return false, "", false // Not an error - just no git repo yet
 	}
 
 	// Fetch updates with timeout
@@ -594,26 +606,26 @@ func checkTmplUpdate(ctx context.Context) (bool, string) {
 		RemoteName: "origin",
 	})
 	if err != nil && err != git.NoErrAlreadyUpToDate {
-		// Timeout or network error - skip update check
-		return false, ""
+		// Timeout or network error - this IS an error
+		return false, "", true
 	}
 
 	// Compare current HEAD with origin/main
 	head, err := repo.Head()
 	if err != nil {
-		return false, ""
+		return false, "", false // Repo issue, not network error
 	}
 
 	remoteHead, err := repo.Reference(plumbing.ReferenceName("refs/remotes/origin/main"), true)
 	if err != nil {
-		return false, ""
+		return false, "", false // Repo issue, not network error
 	}
 
 	if head.Hash() != remoteHead.Hash() {
-		return true, remoteHead.Hash().String()[:7]
+		return true, remoteHead.Hash().String()[:7], false
 	}
 
-	return false, head.Hash().String()[:7]
+	return false, head.Hash().String()[:7], false
 }
 
 // compareVersions compares two version strings and returns:

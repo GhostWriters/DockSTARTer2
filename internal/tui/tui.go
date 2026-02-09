@@ -96,7 +96,7 @@ func startUpdateChecker(ctx context.Context) {
 		program.Send(UpdateHeaderMsg{})
 	}
 
-	ticker := time.NewTicker(5 * time.Minute)
+	ticker := time.NewTicker(3 * time.Minute)
 	defer ticker.Stop()
 
 	for {
@@ -106,8 +106,9 @@ func startUpdateChecker(ctx context.Context) {
 		case <-ticker.C:
 			appUpdateOld := update.AppUpdateAvailable
 			tmplUpdateOld := update.TmplUpdateAvailable
+			errorOld := update.UpdateCheckError
 			update.GetUpdateStatus(ctx)
-			if update.AppUpdateAvailable != appUpdateOld || update.TmplUpdateAvailable != tmplUpdateOld {
+			if update.AppUpdateAvailable != appUpdateOld || update.TmplUpdateAvailable != tmplUpdateOld || update.UpdateCheckError != errorOld {
 				if program != nil {
 					program.Send(UpdateHeaderMsg{})
 				}
