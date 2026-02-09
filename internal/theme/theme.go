@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/gdamore/tcell/v3/color"
 )
 
 // GetColorStr is moved to console package for reuse
@@ -223,13 +222,9 @@ func Default() {
 func parseColor(c string) lipgloss.TerminalColor {
 	c = strings.ToLower(strings.TrimSpace(c))
 
-	// 1. Try resolving with tcell/v3/color (Supports extended names like "navy", "orange")
-	// GetColor returns color.Default (0) if not found.
-	// We also verify Hex() returns a valid value (>= 0).
-	if tColor := color.GetColor(c); tColor != color.Default {
-		if h := tColor.Hex(); h >= 0 {
-			return lipgloss.Color(fmt.Sprintf("#%06x", h))
-		}
+	// 1. Try resolving with helpers in console package (Supports extended names and aliases)
+	if hexVal := console.GetHexForColor(c); hexVal != "" {
+		return lipgloss.Color(hexVal)
 	}
 
 	// 2. Hex codes (Fallback if tcell didn't catch it, though tcell handles many)

@@ -21,11 +21,31 @@ func TestParseStyleCodeToANSI(t *testing.T) {
 		input    string
 		expected string // We check for containment or specific codes
 	}{
-		{"Named Color", "red", "\x1b[31m"},
-		{"Hex Color", "#ff0000", "255;0;0m"}, // Ends with m, contains RGB
-		{"Numeric Index", "7", "37m"},        // 7 is silver/white (37)
-		{"Numeric Index BG", ":7", "47m"},    // BG 7 is silver/white (47)
-		{"Mixed", "red:blue", "31m"},
+		{
+			name:     "Named Color",
+			input:    "red",
+			expected: "\x1b[31m", // Standard Red (ansiMap priority)
+		},
+		{
+			name:     "Hex Color",
+			input:    "#00ff00",
+			expected: "\x1b[38;2;0;255;0m",
+		},
+		{
+			name:     "Numeric Index",
+			input:    "202",
+			expected: "", // Removed termenv fallback.
+		},
+		{
+			name:     "Numeric Index BG",
+			input:    ":235",
+			expected: "", // Removed termenv fallback.
+		},
+		{
+			name:     "Mixed",
+			input:    "white:red:b",
+			expected: "\x1b[37m\x1b[41m" + CodeBold,
+		},
 		{"Reset", "-", "\x1b[0m"},
 	}
 
@@ -36,13 +56,10 @@ func TestParseStyleCodeToANSI(t *testing.T) {
 				if len(got) < 5 {
 					t.Errorf("parseStyleCodeToANSI(%q) = %q, expected longer sequence", tt.input, got)
 				}
-			} else if got != tt.expected && len(tt.expected) > 0 && got[len(got)-len(tt.expected):] != tt.expected {
-				// Loose check for containment or suffix
-				// For exact matches:
-				if got != tt.expected && tt.name != "Hex Color" {
-					// We might have different prefixes depending on profile
-					// But "red" should contain [31m
-					t.Logf("Got: %q", got)
+			} else if tt.expected != "" {
+				// Exact match check for standard ANSI or Reset
+				if got != tt.expected {
+					t.Errorf("parseStyleCodeToANSI(%q) = %q, want %q", tt.input, got, tt.expected)
 				}
 			}
 		})

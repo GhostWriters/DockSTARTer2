@@ -1,5 +1,12 @@
 package console
 
+import (
+	"fmt"
+	"strings"
+
+	tcellColor "github.com/gdamore/tcell/v3/color"
+)
+
 // Raw ANSI Color Codes
 const (
 	// Reset
@@ -61,6 +68,138 @@ const (
 	CodeBrightCyanBg    = "\033[106m"
 	CodeBrightWhiteBg   = "\033[107m"
 )
+
+var colorAliases map[string]string
+
+func init() {
+	colorAliases = make(map[string]string)
+
+	// Register common aliases for tcell compatibility
+	colorAliases["cyan"] = "aqua"
+	colorAliases["magenta"] = "fuchsia"
+
+	// Register "bright-" variants
+	colorAliases["bright-red"] = "red"
+	colorAliases["bright-green"] = "lime"
+	colorAliases["bright-blue"] = "blue"
+	colorAliases["bright-yellow"] = "yellow"
+	colorAliases["bright-magenta"] = "fuchsia"
+	colorAliases["bright-cyan"] = "aqua"
+	colorAliases["bright-white"] = "white"
+	colorAliases["bright-black"] = "gray"
+
+	// Initialize color definitions in tview tag format
+	// These are the OUTPUT format values that ToANSI() will handle
+	Colors = AppColors{
+		// Base Codes (Standardized format)
+		Reset:     "{{|-|}}",
+		Bold:      "{{|::B|}}",
+		Dim:       "{{|::D|}}",
+		Underline: "{{|::U|}}",
+		Blink:     "{{|::L|}}",
+		Reverse:   "{{|::R|}}",
+
+		// Base Colors (Foreground)
+		Black:   "{{|black|}}",
+		Red:     "{{|red|}}",
+		Green:   "{{|green|}}",
+		Yellow:  "{{|yellow|}}",
+		Blue:    "{{|blue|}}",
+		Magenta: "{{|magenta|}}",
+		Cyan:    "{{|cyan|}}",
+		White:   "{{|white|}}",
+
+		// Base Colors (Background)
+		BlackBg:   "{{|:black|}}",
+		RedBg:     "{{|:red|}}",
+		GreenBg:   "{{|:green|}}",
+		YellowBg:  "{{|:yellow|}}",
+		BlueBg:    "{{|:blue|}}",
+		MagentaBg: "{{|:magenta|}}",
+		CyanBg:    "{{|:cyan|}}",
+		WhiteBg:   "{{|:white|}}",
+
+		// Semantic Colors (Standard DockSTARTer mappings)
+		Timestamp:              "{{|-|}}",
+		Trace:                  "{{|-|}}{{|blue|}}",
+		Debug:                  "{{|-|}}{{|blue|}}",
+		Info:                   "{{|-|}}{{|blue|}}",
+		Notice:                 "{{|-|}}{{|green|}}",
+		Warn:                   "{{|-|}}{{|yellow|}}",
+		Error:                  "{{|-|}}{{|red|}}",
+		Fatal:                  "{{|-|}}{{|white:red|}}",
+		FatalFooter:            "{{|-|}}",
+		TraceHeader:            "{{|-|}}{{|red|}}",
+		TraceFooter:            "{{|-|}}{{|red|}}",
+		TraceFrameNumber:       "{{|-|}}{{|red|}}",
+		TraceFrameLines:        "{{|-|}}{{|red|}}",
+		TraceSourceFile:        "{{|-|}}{{|cyan::B|}}",
+		TraceLineNumber:        "{{|-|}}{{|yellow::B|}}",
+		TraceFunction:          "{{|-|}}{{|green::B|}}",
+		TraceCmd:               "{{|-|}}{{|green::B|}}",
+		TraceCmdArgs:           "{{|-|}}{{|green|}}",
+		UnitTestPass:           "{{|-|}}{{|green|}}",
+		UnitTestFail:           "{{|-|}}{{|red|}}",
+		UnitTestFailArrow:      "{{|-|}}{{|red|}}",
+		App:                    "{{|-|}}{{|cyan|}}",
+		ApplicationName:        "{{|-|}}{{|cyan::B|}}",
+		Branch:                 "{{|-|}}{{|cyan|}}",
+		FailingCommand:         "{{|-|}}{{|red|}}",
+		File:                   "{{|-|}}{{|cyan::B|}}",
+		Folder:                 "{{|-|}}{{|cyan::B|}}",
+		Program:                "{{|-|}}{{|cyan|}}",
+		RunningCommand:         "{{|-|}}{{|green::B|}}",
+		Theme:                  "{{|-|}}{{|cyan|}}",
+		Update:                 "{{|-|}}{{|green|}}",
+		User:                   "{{|-|}}{{|cyan|}}",
+		URL:                    "{{|-|}}{{|cyan::U|}}",
+		UserCommand:            "{{|-|}}{{|yellow::B|}}",
+		UserCommandError:       "{{|-|}}{{|red::U|}}",
+		UserCommandErrorMarker: "{{|-|}}{{|red|}}",
+		Var:                    "{{|-|}}{{|magenta|}}",
+		Version:                "{{|-|}}{{|cyan|}}",
+		Yes:                    "{{|-|}}{{|green|}}",
+		No:                     "{{|-|}}{{|red|}}",
+
+		// Usage Colors
+		UsageCommand: "{{|-|}}{{|yellow::B|}}",
+		UsageOption:  "{{|-|}}{{|yellow|}}",
+		UsageApp:     "{{|-|}}{{|cyan|}}",
+		UsageBranch:  "{{|-|}}{{|cyan|}}",
+		UsageFile:    "{{|-|}}{{|cyan::B|}}",
+		UsagePage:    "{{|-|}}{{|cyan::B|}}",
+		UsageTheme:   "{{|-|}}{{|cyan|}}",
+		UsageVar:     "{{|-|}}{{|magenta|}}",
+	}
+
+	// Register base tags once Colors is populated
+	RegisterBaseTags()
+}
+
+// ResolveTcellColor attempts to resolve a color name using local aliases first, then tcell
+func ResolveTcellColor(name string) tcellColor.Color {
+	name = strings.ToLower(name)
+	if alias, ok := colorAliases[name]; ok {
+		name = alias
+	}
+	return tcellColor.GetColor(name)
+}
+
+// GetHexForColor resolves a color name (including aliases) to a Hex string.
+// Returns empty string if not found or invalid.
+func GetHexForColor(name string) string {
+	tc := ResolveTcellColor(name)
+	if tc != tcellColor.Default {
+		if h := tc.Hex(); h >= 0 {
+			return fmt.Sprintf("#%06x", h)
+		}
+	}
+	// Also check if it's already a hex string
+	if strings.HasPrefix(name, "#") {
+		return name
+	}
+	return ""
+}
 
 // ColorToHexMap has been removed in favor of tcell/v3/color parsing in internal/theme
 

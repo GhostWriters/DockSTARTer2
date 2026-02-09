@@ -138,33 +138,38 @@ func TestToANSI(t *testing.T) {
 	}{
 		{
 			name:     "Resolve semantic to ANSI",
-			input:    "{{_Notice_}}Text{{|-|}}",
-			expected: CodeGreen + "Text" + CodeReset,
+			input:    "{{_Notice_}}Hello{{|-|}}",
+			expected: "\x1b[32m" + "Hello" + CodeReset,
 		},
 		{
-			name:     "Direct color to ANSI",
+			name:     "Resolve direct tag (color)",
 			input:    "{{|red|}}Error{{|-|}}",
-			expected: CodeRed + "Error" + CodeReset,
+			expected: "\x1b[31m" + "Error" + CodeReset,
 		},
 		{
-			name:     "Direct style fg:bg to ANSI",
+			name:     "Resolve direct tag (color:bg)",
 			input:    "{{|white:red|}}Alert{{|-|}}",
-			expected: CodeWhite + CodeRedBg + "Alert" + CodeReset,
+			expected: "\x1b[37m\x1b[41m" + "Alert" + CodeReset,
 		},
 		{
-			name:     "Direct style with flags to ANSI",
+			name:     "Resolve direct tag (color::flags)",
 			input:    "{{|cyan::B|}}Bold{{|-|}}",
-			expected: CodeCyan + CodeBold + "Bold" + CodeReset,
+			expected: "\x1b[36m" + CodeBold + "Bold" + CodeReset,
+		},
+		{
+			name:     "Resolve direct tag (color:bg:flags)",
+			input:    "{{|red:white:U|}}Underline{{|-|}}",
+			expected: "\x1b[31m\x1b[47m" + CodeUnderline + "Underline" + CodeReset,
 		},
 		{
 			name:     "Direct style with High Intensity (H) to ANSI",
 			input:    "{{|red::H|}}Vibrant{{|-|}}",
-			expected: CodeBrightRed + "Vibrant" + CodeReset,
+			expected: "\x1b[91m" + "Vibrant" + CodeReset,
 		},
 		{
 			name:     "Direct style with mix High Intensity and Dim (HD) to ANSI",
 			input:    "{{|red::HD|}}MutedVibrant{{|-|}}",
-			expected: CodeBrightRed + CodeDim + "MutedVibrant" + CodeReset,
+			expected: "\x1b[91m" + CodeDim + "MutedVibrant" + CodeReset,
 		},
 	}
 

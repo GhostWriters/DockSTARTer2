@@ -18,6 +18,12 @@ var (
 	// ansiMap stores color/modifier names -> ANSI code mappings
 	ansiMap map[string]string
 
+	// attributeMap stores non-color attribute names -> ANSI code mappings
+	attributeMap map[string]string
+
+	// legacyColorIndex maps standard color names to ANSI index strings
+	legacyColorIndex map[string]string
+
 	// semanticRegex matches {{_content_}} format for semantic tags
 	semanticRegex = regexp.MustCompile(`\{\{_([A-Za-z0-9_]+)_\}\}`)
 
@@ -34,19 +40,198 @@ func init() {
 	// Initialize maps
 	semanticMap = make(map[string]string)
 	ansiMap = make(map[string]string)
+	// Modifiers/Attributes map
+	// We only store non-color attributes here. Colors are handled via preferredProfile.Color()
+	attributeMap = map[string]string{
+		"reset":          CodeReset,
+		"-":              CodeReset,
+		"bold":           CodeBold,
+		"b":              CodeBold,
+		"dim":            CodeDim,
+		"d":              CodeDim,
+		"underline":      CodeUnderline,
+		"u":              CodeUnderline,
+		"blink":          CodeBlink,
+		"l":              CodeBlink,
+		"reverse":        CodeReverse,
+		"r":              CodeReverse,
+		"strikethrough":  CodeStrikethrough,
+		"s":              CodeStrikethrough,
+		"-bold":          CodeBoldOff,
+		"-b":             CodeBoldOff,
+		"-dim":           CodeDimOff,
+		"-d":             CodeDimOff,
+		"-underline":     CodeUnderlineOff,
+		"-u":             CodeUnderlineOff,
+		"-blink":         CodeBlinkOff,
+		"-l":             CodeBlinkOff,
+		"-reverse":       CodeReverseOff,
+		"-r":             CodeReverseOff,
+		"-strikethrough": CodeStrikethroughOff,
+		"-s":             CodeStrikethroughOff,
+	}
 
-	// Check TTY once
-	stat, _ := os.Stdout.Stat()
-	isTTYGlobal = (stat.Mode() & os.ModeCharDevice) != 0
+	// Legacy color name to ANSI index string mapping
+	// Used to pass standard colors to termenv as indices (respecting terminal theme)
+	legacyColorIndex = map[string]string{
+		"black":   "0",
+		"red":     "1",
+		"green":   "2",
+		"yellow":  "3",
+		"blue":    "4",
+		"magenta": "5",
+		"cyan":    "6",
+		"white":   "7",
+		"gray":    "8", // Usually bright black
+	}
 
-	// Detect color profile
+	// NEW: Initialize TTY and Profile
+	isTTYGlobal = false
+	if stat, err := os.Stdout.Stat(); err == nil {
+		isTTYGlobal = (stat.Mode() & os.ModeCharDevice) != 0
+	}
 	preferredProfile = detectProfile()
+}
 
-	// Alias standard ANSI color names for tcell
-	tcellColor.Names["magenta"] = tcellColor.Fuchsia
-	tcellColor.Names["cyan"] = tcellColor.Aqua
+// parseStyleCodeToANSI parses fg:bg:flags format and returns ANSI codes
+func parseStyleCodeToANSI(content string) string {
+	if content == "-" {
+		return CodeReset
+	}
 
-	// Build color maps lazily via ensureMaps()
+	// Split by colons: fg:bg:flags
+	parts := strings.Split(content, ":")
+	var codes strings.Builder
+
+	// Pre-emptive reset of flags ONLY if they start with '-'
+	if len(parts) > 2 && strings.HasPrefix(parts[2], "-") {
+		// 22:Bold/Dim off, 23:Italic off, 24:Underline off, 25:Blink off, 27:Reverse off, 29:Strikethrough off
+		codes.WriteString("\x1b[22m\x1b[23m\x1b[24m\x1b[25m\x1b[27m\x1b[29m")
+	}
+
+	// Flags (peek for H early to affect colors)
+	highIntensity := false
+	if len(parts) > 2 {
+		f := parts[2]
+		if strings.Contains(strings.ToLower(f), "h") {
+			highIntensity = true
+		}
+	}
+
+	// Part 0: Foreground color
+	if len(parts) > 0 && parts[0] != "" && parts[0] != "-" {
+		colorName := strings.ToLower(parts[0])
+		// Handle high intensity by pretending it's the "bright" variant name if standard
+		if highIntensity {
+			if brightName, ok := getBrightVariant(colorName); ok {
+				colorName = brightName
+			}
+		}
+
+		if strings.HasPrefix(colorName, "#") {
+			// Already Hex: Pass directly to termenv
+			codes.WriteString(wrapSequence(preferredProfile.Color(colorName).Sequence(false)))
+		} else {
+			// Check for non-color attributes (bold, etc.) first
+			if code, ok := attributeMap[colorName]; ok {
+				codes.WriteString(code)
+				goto FoundFG
+			}
+
+			// NEW: Check ansiMap for standard colors (max compatibility)
+			if code, ok := ansiMap[colorName]; ok {
+				codes.WriteString(code)
+				goto FoundFG
+			}
+
+			// Color Name Resolution Strategy:
+			// 1. Ask tcell for the color (handles standard "red", extended "orange", and aliases)
+			// 2. Get the Hex value from tcell
+			// 3. Pass Hex to termenv/lipgloss profile to generate correct sequence (or empty if mono)
+
+			tc := ResolveTcellColor(colorName)
+			// tcell.GetColor returns ColorDefault if unknown, or a valid color
+			// It handles "red", "black", "orange", etc.
+
+			if tc != tcellColor.Default {
+				// We have a valid tcell color. Use its Hex value.
+				// For mapped colors (like ColorRed), .Hex() returns the standard hex (e.g. 0xFF0000)
+				hexVal := tc.Hex()
+				if hexVal >= 0 {
+					hexStr := fmt.Sprintf("#%06x", hexVal)
+					if c := preferredProfile.Color(hexStr); c != nil {
+						codes.WriteString(wrapSequence(c.Sequence(false)))
+					}
+					goto FoundFG
+				}
+			}
+
+			// Fallback: Drop unsafe termenv name lookup.
+			// Only hex or tcell-resolved colors are supported for names.
+			// If it's a raw number string (e.g. "235"), termenv might handle it if we passed it?
+			// But for now, strict tcell usage is safer to avoid panics.
+
+		}
+	}
+FoundFG:
+
+	// Part 1: Background color
+	if len(parts) > 1 && parts[1] != "" && parts[1] != "-" {
+		colorName := strings.ToLower(parts[1])
+		// Handle high intensity background if needed (though usually flags handle this)
+		if highIntensity {
+			if brightName, ok := getBrightVariant(colorName); ok {
+				colorName = brightName
+			}
+		}
+
+		if strings.HasPrefix(colorName, "#") {
+			// Hex color
+			if c := preferredProfile.Color(colorName); c != nil {
+				codes.WriteString(wrapSequence(c.Sequence(true)))
+			}
+		} else {
+			if code, ok := attributeMap[colorName]; ok {
+				// Attributes acting as background? Rare but possible for some maps
+				codes.WriteString(code)
+				goto FoundBG
+			}
+
+			// NEW: Check ansiMap for standard background colors (max compatibility)
+			if code, ok := ansiMap[colorName+"bg"]; ok {
+				codes.WriteString(code)
+				goto FoundBG
+			}
+
+			// Standard/Extended Color Resolution via tcell
+			tc := ResolveTcellColor(colorName)
+			if tc != tcellColor.Default {
+				hexVal := tc.Hex()
+				if hexVal >= 0 {
+					hexStr := fmt.Sprintf("#%06x", hexVal)
+					if c := preferredProfile.Color(hexStr); c != nil {
+						codes.WriteString(wrapSequence(c.Sequence(true)))
+					}
+					goto FoundBG
+				}
+			}
+			// Or safer: just drop the naive fallback.
+		}
+	}
+FoundBG:
+
+	// Part 2: Flags (each character is a flag: b=bold, u=underline, etc.)
+	if len(parts) > 2 && parts[2] != "" {
+		f := strings.TrimPrefix(parts[2], "-")
+		for _, flag := range f {
+			flagStr := strings.ToLower(string(flag))
+			if code, ok := ansiMap[flagStr]; ok {
+				codes.WriteString(code)
+			}
+		}
+	}
+
+	return codes.String()
 }
 
 // GetPreferredProfile returns the detected or forced color profile
@@ -111,10 +296,17 @@ func BuildColorMap() {
 	ansiMap["-"] = CodeReset
 	ansiMap["reset"] = CodeReset
 	ansiMap["bold"] = CodeBold
+	ansiMap["b"] = CodeBold
 	ansiMap["dim"] = CodeDim
+	ansiMap["d"] = CodeDim
 	ansiMap["underline"] = CodeUnderline
+	ansiMap["u"] = CodeUnderline
 	ansiMap["blink"] = CodeBlink
+	ansiMap["l"] = CodeBlink
 	ansiMap["reverse"] = CodeReverse
+	ansiMap["r"] = CodeReverse
+	ansiMap["strikethrough"] = CodeStrikethrough
+	ansiMap["s"] = CodeStrikethrough
 
 	// Foreground colors
 	ansiMap["black"] = CodeBlack
@@ -155,20 +347,6 @@ func BuildColorMap() {
 	ansiMap["bright-magentabg"] = CodeBrightMagentaBg
 	ansiMap["bright-cyanbg"] = CodeBrightCyanBg
 	ansiMap["bright-whitebg"] = CodeBrightWhiteBg
-
-	// Flag character mappings
-	ansiMap["b"] = CodeBoldOff
-	ansiMap["B"] = CodeBold
-	ansiMap["d"] = CodeDimOff
-	ansiMap["D"] = CodeDim
-	ansiMap["u"] = CodeUnderlineOff
-	ansiMap["U"] = CodeUnderline
-	ansiMap["l"] = CodeBlinkOff
-	ansiMap["L"] = CodeBlink
-	ansiMap["r"] = CodeReverseOff
-	ansiMap["R"] = CodeReverse
-	ansiMap["s"] = CodeStrikethroughOff
-	ansiMap["S"] = CodeStrikethrough
 
 	// Build semantic map from Colors struct
 	val := reflect.ValueOf(Colors)
@@ -226,6 +404,7 @@ func ExpandTags(text string) string {
 // - {{|code|}} : Direct tview-style -> ANSI
 func ToANSI(text string) string {
 	ensureMaps()
+	// FORCE TTY for debugging
 	if !isTTYGlobal {
 		// Not a TTY, strip all codes
 		return Strip(text)
@@ -260,127 +439,6 @@ func resolveTaggedStyleToANSI(tag string) string {
 	}
 
 	return parseStyleCodeToANSI(content)
-}
-
-// parseStyleCodeToANSI parses fg:bg:flags format and returns ANSI codes
-func parseStyleCodeToANSI(content string) string {
-	if content == "-" {
-		return CodeReset
-	}
-
-	// Split by colons: fg:bg:flags
-	parts := strings.Split(content, ":")
-	var codes strings.Builder
-
-	// Pre-emptive reset of flags ONLY if they start with '-'
-	if len(parts) > 2 && strings.HasPrefix(parts[2], "-") {
-		// 22:Bold/Dim off, 23:Italic off, 24:Underline off, 25:Blink off, 27:Reverse off, 29:Strikethrough off
-		codes.WriteString("\x1b[22m\x1b[23m\x1b[24m\x1b[25m\x1b[27m\x1b[29m")
-	}
-
-	// Flags (peek for H early to affect colors)
-	highIntensity := false
-	if len(parts) > 2 {
-		f := parts[2]
-		if strings.Contains(strings.ToLower(f), "h") {
-			highIntensity = true
-		}
-	}
-
-	// Part 0: Foreground color
-	if len(parts) > 0 && parts[0] != "" && parts[0] != "-" {
-		colorName := strings.ToLower(parts[0])
-		if highIntensity {
-			if brightName, ok := getBrightVariant(colorName); ok {
-				colorName = brightName
-			}
-		}
-
-		color := preferredProfile.Color(colorName)
-
-		if strings.HasPrefix(colorName, "#") {
-			// Hex color
-			codes.WriteString(wrapSequence(color.Sequence(false)))
-		} else {
-			if code, ok := ansiMap[colorName]; ok {
-				// Direct ANSI code mapping (e.g., "bold" or custom)
-				codes.WriteString(code)
-				goto FoundFG
-			}
-
-			// Try resolving with tcell (Extended colors)
-			if tc := tcellColor.GetColor(colorName); tc != tcellColor.Default {
-				if h := tc.Hex(); h >= 0 {
-					color := preferredProfile.Color(fmt.Sprintf("#%06x", h))
-					codes.WriteString(wrapSequence(color.Sequence(false)))
-					// Match found, skip fallback
-					goto FoundFG
-				}
-			}
-
-			// Fallback: Try to use it as a raw color (e.g. "7", "235")
-			color := preferredProfile.Color(colorName)
-			seq := color.Sequence(false)
-			if seq != "" {
-				codes.WriteString(wrapSequence(seq))
-			}
-		}
-	FoundFG:
-	}
-
-	// Part 1: Background color
-	if len(parts) > 1 && parts[1] != "" && parts[1] != "-" {
-		colorName := strings.ToLower(parts[1])
-		if highIntensity {
-			if brightName, ok := getBrightVariant(colorName); ok {
-				colorName = brightName
-			}
-		}
-
-		color := preferredProfile.Color(colorName)
-
-		if strings.HasPrefix(colorName, "#") {
-			// Hex color
-			codes.WriteString(wrapSequence(color.Sequence(true)))
-		} else {
-			if code, ok := ansiMap[colorName+"bg"]; ok {
-				// Direct ANSI code mapping
-				codes.WriteString(code)
-				goto FoundBG
-			}
-
-			// Try resolving with tcell (Extended colors)
-			if tc := tcellColor.GetColor(colorName); tc != tcellColor.Default {
-				if h := tc.Hex(); h >= 0 {
-					color := preferredProfile.Color(fmt.Sprintf("#%06x", h))
-					codes.WriteString(wrapSequence(color.Sequence(true)))
-					// Match found, skip fallback
-					goto FoundBG
-				}
-			}
-
-			// Fallback
-			color := preferredProfile.Color(colorName)
-			seq := color.Sequence(true)
-			if seq != "" {
-				codes.WriteString(wrapSequence(seq))
-			}
-		}
-	FoundBG:
-	}
-
-	// Part 2: Flags (each character is a flag: b=bold, u=underline, etc.)
-	if len(parts) > 2 && parts[2] != "" {
-		f := strings.TrimPrefix(parts[2], "-")
-		for _, flag := range f {
-			flagStr := string(flag)
-			if code, ok := ansiMap[flagStr]; ok {
-				codes.WriteString(code)
-			}
-		}
-	}
-
-	return codes.String()
 }
 
 func getBrightVariant(name string) (string, bool) {
