@@ -1,6 +1,7 @@
 package theme
 
 import (
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/testutils"
 	"fmt"
 	"testing"
@@ -27,7 +28,7 @@ func TestGetColorStr(t *testing.T) {
 	var cases []testutils.TestCase
 
 	for _, tt := range tests {
-		actual := GetColorStr(tt.input)
+		actual := console.GetColorStr(tt.input)
 		pass := actual == tt.expected
 		cases = append(cases, testutils.TestCase{
 			Input:    fmt.Sprintf("%v", tt.input),

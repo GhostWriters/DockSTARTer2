@@ -176,22 +176,9 @@ func ApplyTagsToStyle(text string, style lipgloss.Style, resetStyle lipgloss.Sty
 	return style
 }
 
-// ParseColor converts a color name or hex to lipgloss.TerminalColor using RGB values.
-// This uses tcell to resolve color names to hex values, ensuring proper color profile
-// downgrading for terminals with limited color support.
+// ParseColor is a wrapper around console.ParseColor for TUI use
 func ParseColor(name string) lipgloss.TerminalColor {
-	if strings.HasPrefix(name, "#") {
-		return lipgloss.Color(name)
-	}
-
-	// Use tcell to resolve color name to hex value
-	// This handles standard colors, extended colors, and aliases
-	if hexVal := console.GetHexForColor(name); hexVal != "" {
-		return lipgloss.Color(hexVal)
-	}
-
-	// Fallback for numeric color codes or unknown colors
-	return lipgloss.Color(name)
+	return console.ParseColor(name)
 }
 
 // brightenColor attempts to brighten a color by adding 30% of remaining headroom.

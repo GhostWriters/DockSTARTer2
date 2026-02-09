@@ -5,25 +5,12 @@ import (
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/version"
 	"bufio"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 )
-
-// GetColorStr is moved to console package for reuse
-
-func GetColorStr(c lipgloss.TerminalColor) string {
-	if c == nil {
-		return ""
-	}
-	// Extract the color name or hex
-	name := fmt.Sprintf("%v", c)
-	// Return the hex or name directly as we no longer have a map to look up
-	return strings.ToLower(name)
-}
 
 // StyleFlags holds ANSI style modifiers
 type StyleFlags struct {
@@ -117,8 +104,8 @@ func Apply() {
 	bracketsDef := console.GetColorDefinition("ThemeApplicationVersionBrackets")
 	isReversed := strings.Contains(bracketsDef, ":r") || strings.Contains(bracketsDef, "reverse")
 
-	bgStr := GetColorStr(Current.ScreenBG)
-	fgStr := GetColorStr(Current.ScreenFG)
+	bgStr := console.GetColorStr(Current.ScreenBG)
+	fgStr := console.GetColorStr(Current.ScreenFG)
 
 	if isReversed {
 		// Reverse is active: Swapping FG/BG will result in Correct orientation after rendering
@@ -133,8 +120,8 @@ func Apply() {
 
 func updateTagsFromCurrent() {
 	regComp := func(name string, fg, bg lipgloss.TerminalColor) {
-		fgName := GetColorStr(fg)
-		bgName := GetColorStr(bg)
+		fgName := console.GetColorStr(fg)
+		bgName := console.GetColorStr(bg)
 		tag := "{{|" + fgName + ":" + bgName + "|}}"
 		console.RegisterSemanticTag("Theme"+name, tag)
 	}
@@ -154,9 +141,9 @@ func updateTagsFromCurrent() {
 	regComp("Item", Current.ItemFG, Current.ItemBG)
 	regComp("Tag", Current.TagFG, Current.TagBG)
 
-	console.RegisterSemanticTag("ThemeTagKey", "{{|"+GetColorStr(Current.TagKeyFG)+"|}}")
-	console.RegisterSemanticTag("ThemeTagKeySelected", "{{|"+GetColorStr(Current.TagKeySelectedFG)+"|}}")
-	console.RegisterSemanticTag("ThemeShadow", "{{|"+GetColorStr(Current.ShadowColor)+"|}}")
+	console.RegisterSemanticTag("ThemeTagKey", "{{|"+console.GetColorStr(Current.TagKeyFG)+"|}}")
+	console.RegisterSemanticTag("ThemeTagKeySelected", "{{|"+console.GetColorStr(Current.TagKeySelectedFG)+"|}}")
+	console.RegisterSemanticTag("ThemeShadow", "{{|"+console.GetColorStr(Current.ShadowColor)+"|}}")
 
 	regComp("Helpline", Current.HelplineFG, Current.HelplineBG)
 	regComp("ItemHelp", Current.HelplineFG, Current.HelplineBG)
@@ -381,8 +368,8 @@ func parseThemeINI(path string) error {
 
 	bracketsDef := console.GetColorDefinition("ThemeApplicationVersionBrackets")
 	isReversed := strings.Contains(bracketsDef, ":r") || strings.Contains(bracketsDef, "reverse")
-	bgStr := GetColorStr(Current.ScreenBG)
-	fgStr := GetColorStr(Current.ScreenFG)
+	bgStr := console.GetColorStr(Current.ScreenBG)
+	fgStr := console.GetColorStr(Current.ScreenFG)
 
 	if isReversed {
 		console.RegisterSemanticTag("ThemeReset", "{{|"+bgStr+":"+bgStr+"|}}")
