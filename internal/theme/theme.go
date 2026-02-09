@@ -164,35 +164,36 @@ func updateTagsFromCurrent() {
 }
 
 // Default initializes the Current ThemeConfig with standard DockSTARTer colors (Classic)
+// All colors are resolved through tcell to RGB/hex values for proper color profile support
 func Default() {
 	Current = ThemeConfig{
-		ScreenFG:         lipgloss.Color("0"),  // Black
-		ScreenBG:         lipgloss.Color("7"),  // Silver
-		DialogFG:         lipgloss.Color("0"),  // Black
-		DialogBG:         lipgloss.Color("6"),  // Teal
-		BorderFG:         lipgloss.Color("15"), // Bright White
-		BorderBG:         lipgloss.Color("6"),  // Teal
-		Border2FG:        lipgloss.Color("0"),  // Black
-		Border2BG:        lipgloss.Color("6"),  // Teal
-		TitleFG:          lipgloss.Color("0"),  // Black
-		TitleBG:          lipgloss.Color("6"),  // Teal
-		ShadowColor:      lipgloss.Color("0"),  // Black
-		ButtonActiveFG:   lipgloss.Color("15"), // Bright White
-		ButtonActiveBG:   lipgloss.Color("1"),  // Maroon
-		ButtonInactiveFG: lipgloss.Color("0"),  // Black
-		ButtonInactiveBG: lipgloss.Color("6"),  // Teal
-		ItemSelectedFG:   lipgloss.Color("0"),  // Black
-		ItemSelectedBG:   lipgloss.Color("1"),  // Maroon
-		ItemFG:           lipgloss.Color("0"),  // Black
-		ItemBG:           lipgloss.Color("6"),  // Teal
-		TagFG:            lipgloss.Color("0"),  // Black
-		TagBG:            lipgloss.Color("6"),  // Teal
-		TagKeyFG:         lipgloss.Color("1"),  // Maroon
-		TagKeySelectedFG: lipgloss.Color("0"),  // Black
-		HelplineFG:       lipgloss.Color("0"),  // Black
-		HelplineBG:       lipgloss.Color("6"),  // Teal
-		ProgramFG:        lipgloss.Color("15"), // Bright White
-		ProgramBG:        lipgloss.Color("0"),  // Black
+		ScreenFG:         parseColor("black"),
+		ScreenBG:         parseColor("silver"),
+		DialogFG:         parseColor("black"),
+		DialogBG:         parseColor("cyan"),
+		BorderFG:         parseColor("bright-white"),
+		BorderBG:         parseColor("cyan"),
+		Border2FG:        parseColor("black"),
+		Border2BG:        parseColor("cyan"),
+		TitleFG:          parseColor("black"),
+		TitleBG:          parseColor("cyan"),
+		ShadowColor:      parseColor("black"),
+		ButtonActiveFG:   parseColor("bright-white"),
+		ButtonActiveBG:   parseColor("red"),
+		ButtonInactiveFG: parseColor("black"),
+		ButtonInactiveBG: parseColor("cyan"),
+		ItemSelectedFG:   parseColor("black"),
+		ItemSelectedBG:   parseColor("red"),
+		ItemFG:           parseColor("black"),
+		ItemBG:           parseColor("cyan"),
+		TagFG:            parseColor("black"),
+		TagBG:            parseColor("cyan"),
+		TagKeyFG:         parseColor("red"),
+		TagKeySelectedFG: parseColor("black"),
+		HelplineFG:       parseColor("black"),
+		HelplineBG:       parseColor("cyan"),
+		ProgramFG:        parseColor("bright-white"),
+		ProgramBG:        parseColor("black"),
 	}
 	Apply()
 

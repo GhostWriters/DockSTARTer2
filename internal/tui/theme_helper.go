@@ -10,7 +10,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// colorMap is deprecated in favor of ParseColor helper
+// Color parsing now uses tcell/v3/colors for RGB conversion via console.GetHexForColor().
+// This ensures all colors are resolved to RGB/hex values, allowing proper color profile
+// downgrading for terminals with limited color support.
 
 // themeTagRegex matches {{_SymanticColor_}} or {{|codes|}} or {{|-|}}
 var themeTagRegex = regexp.MustCompile(`\{\{(_[^}]+_|\|[^}]*\|)\}\}`)
@@ -140,7 +142,7 @@ func ApplyStyleCode(style lipgloss.Style, resetStyle lipgloss.Style, styleCode s
 			case 's':
 				style = style.Strikethrough(false)
 			case 'H':
-				// High intensity: if foreground/background are standard, shift them
+				// High intensity ON: brighten the color
 				if fg := style.GetForeground(); fg != nil {
 					style = style.Foreground(brightenColor(fg))
 				}
@@ -148,13 +150,9 @@ func ApplyStyleCode(style lipgloss.Style, resetStyle lipgloss.Style, styleCode s
 					style = style.Background(brightenColor(bg))
 				}
 			case 'h':
-				// Normal intensity: if foreground/background are bright, shift them back
-				if fg := style.GetForeground(); fg != nil {
-					style = style.Foreground(dimColor(fg))
-				}
-				if bg := style.GetBackground(); bg != nil {
-					style = style.Background(dimColor(bg))
-				}
+				// High intensity OFF: do nothing (colors remain at base level)
+				// Note: Cannot undo previous 'H' in sequential processing
+				// If dimming is needed, use 'D' flag for ANSI dim attribute
 			}
 		}
 	}
@@ -178,78 +176,50 @@ func ApplyTagsToStyle(text string, style lipgloss.Style, resetStyle lipgloss.Sty
 	return style
 }
 
-// ParseColor converts a color name or hex to lipgloss.TerminalColor
+// ParseColor converts a color name or hex to lipgloss.TerminalColor using RGB values.
+// This uses tcell to resolve color names to hex values, ensuring proper color profile
+// downgrading for terminals with limited color support.
 func ParseColor(name string) lipgloss.TerminalColor {
 	if strings.HasPrefix(name, "#") {
 		return lipgloss.Color(name)
 	}
 
-	// Map standard names to ANSI indices (0-15) for terminal theme consistency
-	switch strings.ToLower(name) {
-	case "black":
-		return lipgloss.Color("0")
-	case "red":
-		return lipgloss.Color("1")
-	case "green":
-		return lipgloss.Color("2")
-	case "yellow":
-		return lipgloss.Color("3")
-	case "blue":
-		return lipgloss.Color("4")
-	case "magenta", "purple":
-		return lipgloss.Color("5")
-	case "cyan":
-		return lipgloss.Color("6")
-	case "white", "gray", "grey", "silver":
-		return lipgloss.Color("7")
-	// Bright variants
-	case "bright-black", "dark-gray":
-		return lipgloss.Color("8")
-	case "bright-red":
-		return lipgloss.Color("9")
-	case "bright-green":
-		return lipgloss.Color("10")
-	case "bright-yellow":
-		return lipgloss.Color("11")
-	case "bright-blue":
-		return lipgloss.Color("12")
-	case "bright-magenta":
-		return lipgloss.Color("13")
-	case "bright-cyan":
-		return lipgloss.Color("14")
-	case "bright-white":
-		return lipgloss.Color("15")
+	// Use tcell to resolve color name to hex value
+	// This handles standard colors, extended colors, and aliases
+	if hexVal := console.GetHexForColor(name); hexVal != "" {
+		return lipgloss.Color(hexVal)
 	}
 
-	// Fallback
+	// Fallback for numeric color codes or unknown colors
 	return lipgloss.Color(name)
 }
 
-// brightenColor shifts standard ANSI colors (0-7) to bright variants (8-15)
+// brightenColor attempts to brighten a color by adding 30% of remaining headroom.
+// Used by 'H' flag for high intensity ON.
+// For hex colors, this applies mathematical brightening.
+// For color names, they're already resolved to hex by ParseColor.
 func brightenColor(c lipgloss.TerminalColor) lipgloss.TerminalColor {
-	if tc, ok := c.(lipgloss.Color); ok {
-		s := string(tc)
-		switch s {
-		case "0", "1", "2", "3", "4", "5", "6", "7":
-			idx := 0
-			fmt.Sscanf(s, "%d", &idx)
-			return lipgloss.Color(fmt.Sprintf("%d", idx+8))
-		}
+	if c == nil {
+		return c
 	}
-	return c
-}
 
-// dimColor shifts bright ANSI colors (8-15) back to standard variants (0-7)
-func dimColor(c lipgloss.TerminalColor) lipgloss.TerminalColor {
 	if tc, ok := c.(lipgloss.Color); ok {
 		s := string(tc)
-		switch s {
-		case "8", "9", "10", "11", "12", "13", "14", "15":
-			idx := 0
-			fmt.Sscanf(s, "%d", &idx)
-			return lipgloss.Color(fmt.Sprintf("%d", idx-8))
+
+		// If it's a hex color, brighten it mathematically
+		if strings.HasPrefix(s, "#") && len(s) == 7 {
+			var r, g, b int
+			fmt.Sscanf(s[1:], "%02x%02x%02x", &r, &g, &b)
+
+			// Brighten by 30% of remaining headroom (capped at 255)
+			r = min(255, r+int(float64(255-r)*0.3))
+			g = min(255, g+int(float64(255-g)*0.3))
+			b = min(255, b+int(float64(255-b)*0.3))
+
+			return lipgloss.Color(fmt.Sprintf("#%02x%02x%02x", r, g, b))
 		}
 	}
+
 	return c
 }
 
