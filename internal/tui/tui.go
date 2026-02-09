@@ -14,6 +14,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	zone "github.com/lrstanley/bubblezone"
 )
 
 var (
@@ -30,6 +31,9 @@ var (
 // Initialize sets up the TUI without starting the run loop
 func Initialize(ctx context.Context) error {
 	console.TUIConfirm = Confirm
+
+	// Initialize global zone manager for mouse support
+	zone.NewGlobal()
 
 	currentConfig = config.LoadAppConfig()
 	if err := theme.Load(currentConfig.Theme); err != nil {

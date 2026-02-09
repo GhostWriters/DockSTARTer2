@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	"io"
-	"os"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -109,9 +108,6 @@ type MenuModel struct {
 	// Back action (nil if no back button)
 	backAction tea.Cmd
 
-	// Zone manager for mouse support (TODO: remove when bubbles/list handles mouse)
-	zoneManager *zone.Manager
-
 	// Bubbles list model
 	list list.Model
 }
@@ -213,7 +209,6 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 		backAction:  backAction,
 		focused:     true,
 		focusedItem: FocusList,
-		zoneManager: zone.New(),
 		list:        l,
 	}
 }
@@ -261,135 +256,48 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.list.SetSize(listWidth, listHeight)
 	}
 
-	// Handle mouse events with coordinate adjustment for centering
+	// Handle mouse events using BubbleZones
 	if mouseMsg, ok := msg.(tea.MouseMsg); ok {
-		// DEBUG: Log menu mouse handling
-		if mouseMsg.Action == tea.MouseActionPress {
-			f, _ := os.OpenFile("C:\\Users\\CLHat\\Documents\\GitHub\\GhostWriters\\DockSTARTer2\\mouse_debug.log", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
-			if f != nil {
-				fmt.Fprintf(f, "\n=== Click at X=%d Y=%d ===\n", mouseMsg.X, mouseMsg.Y)
-				fmt.Fprintf(f, "Terminal size: %dx%d\n", m.width, m.height)
-				fmt.Fprintf(f, "List widget size: %dx%d\n", m.list.Width(), len(m.items))
-
-				// Log menu items and their expected positions
-				fmt.Fprintf(f, "Menu items (%d total):\n", len(m.items))
-				for i, item := range m.items {
-					fmt.Fprintf(f, "  [%d] %s\n", i, item.Tag)
-				}
-				f.Close()
-			}
-		}
-
-		// Calculate dialog dimensions (approximate - we don't have exact rendered size here)
-		// This is a limitation of the overlay architecture
-		// For now, we'll adjust based on estimated dialog size
-		dialogWidth := m.list.Width() + 8  // list width + borders + padding + shadow
-		dialogHeight := len(m.items) + 12  // items + borders + title + buttons + shadow
-
-		// Calculate centering offset
-		offsetX := (m.width - dialogWidth) / 2
-		offsetY := (m.height - dialogHeight) / 2
-
-		// DEBUG: Log offset calculation
-		if mouseMsg.Action == tea.MouseActionPress {
-			f, _ := os.OpenFile("C:\\Users\\CLHat\\Documents\\GitHub\\GhostWriters\\DockSTARTer2\\mouse_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			if f != nil {
-				fmt.Fprintf(f, "Dialog size: %dx%d\n", dialogWidth, dialogHeight)
-				fmt.Fprintf(f, "Dialog position (top-left): X=%d Y=%d\n", offsetX, offsetY)
-				fmt.Fprintf(f, "Dialog bounds: X[%d-%d] Y[%d-%d]\n",
-					offsetX, offsetX+dialogWidth, offsetY, offsetY+dialogHeight)
-
-				// Estimate list area position (inside dialog, accounting for borders/title/buttons)
-				// Title + border + padding + margin + list border = 5 lines to first item
-				listStartY := offsetY + 5
-				if m.subtitle != "" {
-					listStartY++ // Add 1 for subtitle
-				}
-				listEndY := listStartY + len(m.items)
-				fmt.Fprintf(f, "List area (items): Y[%d-%d] (lines %d-%d in terminal)\n",
-					listStartY, listEndY, listStartY, listEndY)
-				f.Close()
-			}
-		}
-
-		// First adjust to dialog coordinates
-		dialogX := mouseMsg.X - offsetX
-		dialogY := mouseMsg.Y - offsetY
-
-		// Calculate list widget offset within dialog
-		// Based on actual rendering: title border + padding + margin + list border = 5 lines to first item
-		listOffsetY := 5
-		if m.subtitle != "" {
-			listOffsetY++ // Add 1 for subtitle line
-		}
-		listOffsetX := 3 // Border (1) + padding (1) + margin (1)
-
-		// Adjust to list widget coordinates
-		adjustedMsg := mouseMsg
-		adjustedMsg.X = dialogX - listOffsetX
-		adjustedMsg.Y = dialogY - listOffsetY
-
-		// DEBUG: Log adjusted coordinates
-		if mouseMsg.Action == tea.MouseActionPress {
-			f, _ := os.OpenFile("C:\\Users\\CLHat\\Documents\\GitHub\\GhostWriters\\DockSTARTer2\\mouse_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			if f != nil {
-				fmt.Fprintf(f, "Adjusted to dialog: X=%d Y=%d\n", dialogX, dialogY)
-				fmt.Fprintf(f, "List offset within dialog: X=%d Y=%d\n", listOffsetX, listOffsetY)
-				fmt.Fprintf(f, "Adjusted to list widget: X=%d Y=%d\n", adjustedMsg.X, adjustedMsg.Y)
-				fmt.Fprintf(f, "InBounds=%v, HasFocus=%v\n",
-					dialogX >= 0 && dialogX < dialogWidth && dialogY >= 0 && dialogY < dialogHeight,
-					m.focusedItem == FocusList)
-				f.Close()
-			}
-		}
-
-		// Only process if click is within dialog bounds
-		if dialogX >= 0 && dialogX < dialogWidth &&
-			dialogY >= 0 && dialogY < dialogHeight {
-
-			// Forward adjusted mouse event to list when it has focus
-			if m.focusedItem == FocusList {
-				// Manual click handling - bubbles/list doesn't handle item clicks by default
-				if mouseMsg.Action == tea.MouseActionPress && adjustedMsg.Button == tea.MouseButtonLeft {
-					// Calculate which item was clicked based on Y coordinate
-					// Each item takes 1 line (delegate.Height() = 1, delegate.Spacing() = 0)
-					clickedItemIndex := adjustedMsg.Y
-
-					f, _ := os.OpenFile("C:\\Users\\CLHat\\Documents\\GitHub\\GhostWriters\\DockSTARTer2\\mouse_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-					if f != nil {
-						fmt.Fprintf(f, "Manual click handling: Y=%d -> item index %d (total items: %d)\n",
-							adjustedMsg.Y, clickedItemIndex, len(m.items))
-						f.Close()
-					}
-
-					// Check if clicked item is valid
-					if clickedItemIndex >= 0 && clickedItemIndex < len(m.items) {
-						// Single click = navigate/select only (like arrow keys)
-						// User must press Enter to execute
-						oldListIndex := m.list.Index()
-						m.list.Select(clickedItemIndex)
-						newListIndex := m.list.Index()
-						m.cursor = clickedItemIndex
-						menuSelectedIndices[m.id] = clickedItemIndex
-
-						f, _ := os.OpenFile("C:\\Users\\CLHat\\Documents\\GitHub\\GhostWriters\\DockSTARTer2\\mouse_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-						if f != nil {
-							fmt.Fprintf(f, "Selected item %d: %s (navigated from %d)\n",
-								clickedItemIndex, m.items[clickedItemIndex].Tag, oldListIndex)
-							fmt.Fprintf(f, "List index: %d -> %d (selection only, no execution)\n", oldListIndex, newListIndex)
-							f.Close()
-						}
-
-						return m, nil
+		// Only handle left mouse button press
+		if mouseMsg.Action == tea.MouseActionPress && mouseMsg.Button == tea.MouseButtonLeft {
+			// Check each zone to see if the click is within bounds
+			// Menu item zones - clicking executes immediately (same as clicking Select)
+			for i := 0; i < len(m.items); i++ {
+				zoneID := fmt.Sprintf("item-%d", i)
+				if zoneInfo := zone.Get(zoneID); zoneInfo != nil {
+					if zoneInfo.InBounds(mouseMsg) {
+						// Select and execute the clicked item
+						m.list.Select(i)
+						m.cursor = i
+						menuSelectedIndices[m.id] = i
+						m.focusedItem = FocusList
+						return m.handleEnter()
 					}
 				}
+			}
 
-				// Still forward to list for other mouse events (scrolling, etc.)
-				var cmd tea.Cmd
-				m.list, cmd = m.list.Update(adjustedMsg)
-				m.cursor = m.list.Index()
-				menuSelectedIndices[m.id] = m.cursor
-				return m, cmd
+			// Button zones
+			if zoneInfo := zone.Get("btn-select"); zoneInfo != nil {
+				if zoneInfo.InBounds(mouseMsg) {
+					m.focusedItem = FocusSelectBtn
+					return m.handleEnter()
+				}
+			}
+
+			if m.backAction != nil {
+				if zoneInfo := zone.Get("btn-back"); zoneInfo != nil {
+					if zoneInfo.InBounds(mouseMsg) {
+						m.focusedItem = FocusBackBtn
+						return m.handleEnter()
+					}
+				}
+			}
+
+			if zoneInfo := zone.Get("btn-exit"); zoneInfo != nil {
+				if zoneInfo.InBounds(mouseMsg) {
+					m.focusedItem = FocusExitBtn
+					return m.handleEnter()
+				}
 			}
 		}
 		return m, nil
@@ -429,107 +337,6 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	return m, nil
 }
-
-/* OLD UPDATE METHOD - Kept for reference
-func (m MenuModel) updateOld(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.MouseMsg:
-		// TODO: Mouse support disabled due to position offset issues
-		// Will be re-enabled when switching to bubbles/list (has built-in mouse support)
-		// For now, use keyboard navigation
-		return m, nil
-
-		// DISABLED - Position offset issues
-		// Handle mouse clicks using zones (automatic position tracking)
-		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
-			// Check if Select button was clicked
-			if m.zoneManager.Get("btn-select").InBounds(msg) {
-				if m.cursor >= 0 && m.cursor < len(m.items) {
-					if m.items[m.cursor].Action != nil {
-						return m, m.items[m.cursor].Action
-					}
-				}
-				return m, nil
-			}
-
-			// Check if Back button was clicked
-			if m.backAction != nil && m.zoneManager.Get("btn-back").InBounds(msg) {
-				return m, m.backAction
-			}
-
-			// Check if Exit button was clicked
-			if m.zoneManager.Get("btn-exit").InBounds(msg) {
-				return m, tea.Quit
-			}
-
-			// Check if any menu item was clicked
-			for i := range m.items {
-				if m.zoneManager.Get(fmt.Sprintf("item-%d", i)).InBounds(msg) {
-					m.cursor = i
-					menuSelectedIndices[m.id] = i
-					return m, nil
-				}
-			}
-		}
-		return m, nil
-
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "up", "k":
-			if m.focusedItem == FocusList {
-				m.cursor--
-				if m.cursor < 0 {
-					m.cursor = len(m.items) - 1
-				}
-				menuSelectedIndices[m.id] = m.cursor
-			}
-
-		case "down", "j":
-			if m.focusedItem == FocusList {
-				m.cursor++
-				if m.cursor >= len(m.items) {
-					m.cursor = 0
-				}
-				menuSelectedIndices[m.id] = m.cursor
-			}
-
-		case "tab", "right":
-			m.focusedItem = m.nextFocus()
-
-		case "shift+tab", "left":
-			m.focusedItem = m.prevFocus()
-
-		case "enter":
-			return m.handleEnter()
-
-		case "esc":
-			if m.backAction != nil {
-				return m, m.backAction
-			}
-			return m, tea.Quit
-
-		default:
-			// Check for shortcut keys
-			if len(msg.String()) == 1 {
-				r := []rune(msg.String())[0]
-				for i, item := range m.items {
-					if unicode.ToLower(item.Shortcut) == unicode.ToLower(r) {
-						m.cursor = i
-						m.focusedItem = FocusList
-						menuSelectedIndices[m.id] = m.cursor
-						if item.Action != nil {
-							return m, item.Action
-						}
-						return m, nil
-					}
-				}
-			}
-		}
-	}
-
-	return m, nil
-}
-*/
 
 func (m MenuModel) nextFocus() FocusItem {
 	switch m.focusedItem {
@@ -676,8 +483,61 @@ func (m MenuModel) View() string {
 	// Add shadow
 	dialog = AddShadow(dialog)
 
-	// Return just the dialog - overlay.Composite() in AppModel will center it
+	// Mark zones for mouse interaction before returning
+	// Note: Zones are scanned at root level (AppModel.View()), not here
+	dialog = m.markZones(dialog)
+
 	return dialog
+}
+
+// markZones marks clickable zones in the rendered dialog for mouse interaction
+func (m MenuModel) markZones(dialog string) string {
+	lines := strings.Split(dialog, "\n")
+
+	// Calculate line positions based on actual rendering structure:
+	// Line 0: Outer border top with title embedded
+	// Line 1: Subtitle (if present) OR first line of paddedList
+	// Line 1 or 2: Inner list border top (first line of borderedList inside paddedList)
+	// Lines 2+ or 3+: Menu items
+	// Line X: Inner list border bottom
+	// Line X+1: Inner button border top
+	// Line X+2: Button line
+	// Line X+3: Inner button border bottom
+	// Line X+4: Outer border bottom
+	// Lines X+5+: Shadow (if enabled)
+
+	lineIdx := 0
+
+	// Line 0: Outer border top with title
+	lineIdx++
+
+	// Line 1: Subtitle (if present)
+	if m.subtitle != "" {
+		lineIdx++
+	}
+
+	// Next line: Inner list border top
+	lineIdx++
+
+	// Now we're at the first menu item
+	// Mark each menu item line (entire line is clickable)
+	for i := 0; i < len(m.items); i++ {
+		if lineIdx < len(lines) {
+			lines[lineIdx] = zone.Mark(fmt.Sprintf("item-%d", i), lines[lineIdx])
+		}
+		lineIdx++
+	}
+
+	// Skip inner list border bottom
+	lineIdx++
+
+	// Skip inner button border top
+	lineIdx++
+
+	// Button line - zones are already marked during rendering in renderSimpleButtons()
+	// No need to mark here
+
+	return strings.Join(lines, "\n")
 }
 
 // renderSimpleButtons creates a button row with evenly spaced sections
@@ -741,14 +601,23 @@ func (m MenuModel) renderSimpleButtons(contentWidth int) string {
 	numButtons := len(buttons)
 	sectionWidth := contentWidth / numButtons
 
-	// Center each bordered button in its section
+	// Center each bordered button in its section and mark with zone
 	var sections []string
-	for _, btn := range buttons {
+	buttonIDs := []string{"btn-select"}
+	if m.backAction != nil {
+		buttonIDs = append(buttonIDs, "btn-back")
+	}
+	buttonIDs = append(buttonIDs, "btn-exit")
+
+	for i, btn := range buttons {
 		centeredBtn := lipgloss.NewStyle().
 			Width(sectionWidth).
 			Align(lipgloss.Center).
 			Background(styles.Dialog.GetBackground()).
 			Render(btn)
+
+		// Mark this button section with its zone BEFORE joining
+		centeredBtn = zone.Mark(buttonIDs[i], centeredBtn)
 		sections = append(sections, centeredBtn)
 	}
 
@@ -895,63 +764,6 @@ func (m MenuModel) viewOld() string {
 	return m.zoneManager.Scan(view)
 }
 */
-
-// addZonesToRenderedDialog adds zone markers to specific lines in the fully rendered dialog
-func (m MenuModel) addZonesToRenderedDialog(dialog string) string {
-	lines := strings.Split(dialog, "\n")
-
-	// Calculate line offsets based on dialog structure
-	lineIdx := 0
-
-	// Line 0: Title in border
-	lineIdx++
-
-	// Subtitle (if present)
-	if m.subtitle != "" {
-		lineIdx++
-	}
-
-	// Outer padding
-	lineIdx++
-
-	// List box top border
-	lineIdx++
-
-	// Now we're at the first menu item
-	firstItemLine := lineIdx
-
-	// Mark menu item lines
-	for i := 0; i < len(m.items); i++ {
-		itemLineIdx := firstItemLine + i
-		if itemLineIdx < len(lines) {
-			lines[itemLineIdx] = m.zoneManager.Mark(fmt.Sprintf("item-%d", i), lines[itemLineIdx])
-		}
-	}
-
-	// Find button lines (they're near the end)
-	// Button box structure: border, button line, border
-	// It's after the list box bottom border
-	buttonLineIdx := firstItemLine + len(m.items) + 2 // +1 for list bottom border, +1 for button top border
-	if buttonLineIdx < len(lines) {
-		// Mark the button line with all button zones
-		lines[buttonLineIdx] = m.addButtonZonesToLine(lines[buttonLineIdx])
-	}
-
-	return strings.Join(lines, "\n")
-}
-
-// addButtonZonesToLine marks button zones on a single line
-func (m MenuModel) addButtonZonesToLine(line string) string {
-	// The buttons are already positioned in sections
-	// We need to mark each section with its zone
-	// For now, mark the entire line and we'll refine based on click position
-
-	// This is simplified - we'd need to calculate exact button positions
-	// For now, mark the whole line and check button zones in mouse handler
-	line = m.zoneManager.Mark("btn-select", line)
-
-	return line
-}
 
 func (m MenuModel) renderButtons(contentWidth int) string {
 	styles := GetStyles()

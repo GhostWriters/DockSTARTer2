@@ -2,12 +2,11 @@ package tui
 
 import (
 	"context"
-	"fmt"
-	"os"
 
 	"DockSTARTer2/internal/config"
 
 	tea "github.com/charmbracelet/bubbletea"
+	zone "github.com/lrstanley/bubblezone"
 	overlay "github.com/rmhubbert/bubbletea-overlay"
 )
 
@@ -122,17 +121,6 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.MouseMsg:
-		// DEBUG: Log mouse events to verify terminal support
-		// TODO: Remove this debug code once mouse support is verified
-		if msg.Action == tea.MouseActionPress {
-			// Log to a file since we can't use stdout during TUI
-			f, _ := os.OpenFile("C:\\Users\\CLHat\\Documents\\GitHub\\GhostWriters\\DockSTARTer2\\mouse_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			if f != nil {
-				fmt.Fprintf(f, "Mouse click detected: X=%d Y=%d Button=%v\n", msg.X, msg.Y, msg.Button)
-				f.Close()
-			}
-		}
-
 		// Forward mouse events to dialog or active screen
 		if m.dialog != nil {
 			var cmd tea.Cmd
@@ -265,13 +253,18 @@ func (m AppModel) View() string {
 	}
 
 	// Use overlay to composite content over backdrop
+	// Since we scan zones AFTER compositing (at root level), we can safely center
 	// overlay.Composite(foreground, background, xPos, yPos, xOffset, yOffset)
-	return overlay.Composite(
-		contentView,   // foreground (content to overlay)
-		backdropView,  // background (backdrop base)
-		overlay.Center,
-		overlay.Center,
-		0,
-		0,
+	output := overlay.Composite(
+		contentView,    // foreground (content to overlay)
+		backdropView,   // background (backdrop base)
+		overlay.Center, // xPos: center horizontally
+		overlay.Center, // yPos: center vertically
+		0,              // xOffset: no offset
+		0,              // yOffset: no offset
 	)
+
+	// Scan zones at the root level (required for BubbleZones to work correctly)
+	// Zones are positioned correctly because scanning happens AFTER compositing
+	return zone.Scan(output)
 }
