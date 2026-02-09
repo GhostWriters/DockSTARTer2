@@ -182,8 +182,8 @@ func InitStyles(cfg config.AppConfig) {
 
 	// Help line
 	currentStyles.HelpLine = lipgloss.NewStyle().
-		Background(t.ItemHelpBG).
-		Foreground(t.ItemHelpFG)
+		Background(t.HelplineBG).
+		Foreground(t.HelplineFG)
 
 	// Initialize semantic styles from console color tags (Theme-specific to avoid log interference)
 	currentStyles.StatusSuccess = ApplyTagsToStyle("{{_ThemeTitleNotice_}}", lipgloss.NewStyle(), lipgloss.NewStyle())

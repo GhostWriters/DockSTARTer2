@@ -77,7 +77,7 @@ TagKey="{{|red:cyan|}}"
 
 # Imported from .dialogrc
 BoxTitle="{{|black:cyan|}}"
-Program="{{|white:blue}}"
+Program="{{|white:black|}}"
 
 # Imported from .dialogrc
 BorderContrast="{{|black:cyan|}}"
@@ -85,4 +85,5 @@ BorderContrast="{{|black:cyan|}}"
 # Imported from .dialogrc
 
 # Imported from .dialogrc (itemhelp_color)
+Helpline="{{|black:cyan|}}"
 ItemHelp="{{|black:cyan|}}"

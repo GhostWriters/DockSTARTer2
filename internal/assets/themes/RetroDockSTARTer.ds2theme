@@ -82,3 +82,7 @@ BorderContrast="{{|black:white|}}"
 
 # Imported from .dialogrc
 Border2="{{|black:white|}}"
+
+Helpline="{{|black:cyan|}}"
+ItemHelp="{{|black:cyan|}}"
+Program="{{|white:blue|}}"

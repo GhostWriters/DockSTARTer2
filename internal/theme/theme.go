@@ -66,8 +66,8 @@ type ThemeConfig struct {
 	TagBG                lipgloss.TerminalColor
 	TagKeyFG             lipgloss.TerminalColor
 	TagKeySelectedFG     lipgloss.TerminalColor
-	ItemHelpFG           lipgloss.TerminalColor
-	ItemHelpBG           lipgloss.TerminalColor
+	HelplineFG           lipgloss.TerminalColor
+	HelplineBG           lipgloss.TerminalColor
 	ProgramFG            lipgloss.TerminalColor
 	ProgramBG            lipgloss.TerminalColor
 }
@@ -158,6 +158,8 @@ func updateTagsFromCurrent() {
 	console.RegisterSemanticTag("ThemeTagKeySelected", "{{|"+GetColorStr(Current.TagKeySelectedFG)+"|}}")
 	console.RegisterSemanticTag("ThemeShadow", "{{|"+GetColorStr(Current.ShadowColor)+"|}}")
 
+	regComp("Helpline", Current.HelplineFG, Current.HelplineBG)
+	regComp("ItemHelp", Current.HelplineFG, Current.HelplineBG)
 	regComp("Program", Current.ProgramFG, Current.ProgramBG)
 }
 
@@ -187,8 +189,8 @@ func Default() {
 		TagBG:            lipgloss.Color("6"),  // Teal
 		TagKeyFG:         lipgloss.Color("1"),  // Maroon
 		TagKeySelectedFG: lipgloss.Color("0"),  // Black
-		ItemHelpFG:       lipgloss.Color("0"),  // Black
-		ItemHelpBG:       lipgloss.Color("6"),  // Teal
+		HelplineFG:       lipgloss.Color("0"),  // Black
+		HelplineBG:       lipgloss.Color("6"),  // Teal
 		ProgramFG:        lipgloss.Color("15"), // Bright White
 		ProgramBG:        lipgloss.Color("0"),  // Black
 	}
@@ -363,8 +365,8 @@ func parseThemeINI(path string) error {
 			Current.TagKeyFG = fg
 		case "TagKeySelected":
 			Current.TagKeySelectedFG = fg
-		case "ItemHelp":
-			Current.ItemHelpFG, Current.ItemHelpBG = fg, bg
+		case "Helpline", "ItemHelp", "itemhelp_color":
+			Current.HelplineFG, Current.HelplineBG = fg, bg
 		case "Program":
 			Current.ProgramFG, Current.ProgramBG = fg, bg
 		}
