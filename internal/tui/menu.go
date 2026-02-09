@@ -286,6 +286,9 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.focusedItem == FocusList {
 		var cmd tea.Cmd
 		m.list, cmd = m.list.Update(msg)
+		// Sync cursor with list index for helpline updates
+		m.cursor = m.list.Index()
+		menuSelectedIndices[m.id] = m.cursor
 		return m, cmd
 	}
 
