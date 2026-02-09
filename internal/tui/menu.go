@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -258,6 +259,140 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		listHeight := totalItemHeight
 
 		m.list.SetSize(listWidth, listHeight)
+	}
+
+	// Handle mouse events with coordinate adjustment for centering
+	if mouseMsg, ok := msg.(tea.MouseMsg); ok {
+		// DEBUG: Log menu mouse handling
+		if mouseMsg.Action == tea.MouseActionPress {
+			f, _ := os.OpenFile("C:\\Users\\CLHat\\Documents\\GitHub\\GhostWriters\\DockSTARTer2\\mouse_debug.log", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+			if f != nil {
+				fmt.Fprintf(f, "\n=== Click at X=%d Y=%d ===\n", mouseMsg.X, mouseMsg.Y)
+				fmt.Fprintf(f, "Terminal size: %dx%d\n", m.width, m.height)
+				fmt.Fprintf(f, "List widget size: %dx%d\n", m.list.Width(), len(m.items))
+
+				// Log menu items and their expected positions
+				fmt.Fprintf(f, "Menu items (%d total):\n", len(m.items))
+				for i, item := range m.items {
+					fmt.Fprintf(f, "  [%d] %s\n", i, item.Tag)
+				}
+				f.Close()
+			}
+		}
+
+		// Calculate dialog dimensions (approximate - we don't have exact rendered size here)
+		// This is a limitation of the overlay architecture
+		// For now, we'll adjust based on estimated dialog size
+		dialogWidth := m.list.Width() + 8  // list width + borders + padding + shadow
+		dialogHeight := len(m.items) + 12  // items + borders + title + buttons + shadow
+
+		// Calculate centering offset
+		offsetX := (m.width - dialogWidth) / 2
+		offsetY := (m.height - dialogHeight) / 2
+
+		// DEBUG: Log offset calculation
+		if mouseMsg.Action == tea.MouseActionPress {
+			f, _ := os.OpenFile("C:\\Users\\CLHat\\Documents\\GitHub\\GhostWriters\\DockSTARTer2\\mouse_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if f != nil {
+				fmt.Fprintf(f, "Dialog size: %dx%d\n", dialogWidth, dialogHeight)
+				fmt.Fprintf(f, "Dialog position (top-left): X=%d Y=%d\n", offsetX, offsetY)
+				fmt.Fprintf(f, "Dialog bounds: X[%d-%d] Y[%d-%d]\n",
+					offsetX, offsetX+dialogWidth, offsetY, offsetY+dialogHeight)
+
+				// Estimate list area position (inside dialog, accounting for borders/title/buttons)
+				// Title + border + padding + margin + list border = 5 lines to first item
+				listStartY := offsetY + 5
+				if m.subtitle != "" {
+					listStartY++ // Add 1 for subtitle
+				}
+				listEndY := listStartY + len(m.items)
+				fmt.Fprintf(f, "List area (items): Y[%d-%d] (lines %d-%d in terminal)\n",
+					listStartY, listEndY, listStartY, listEndY)
+				f.Close()
+			}
+		}
+
+		// First adjust to dialog coordinates
+		dialogX := mouseMsg.X - offsetX
+		dialogY := mouseMsg.Y - offsetY
+
+		// Calculate list widget offset within dialog
+		// Based on actual rendering: title border + padding + margin + list border = 5 lines to first item
+		listOffsetY := 5
+		if m.subtitle != "" {
+			listOffsetY++ // Add 1 for subtitle line
+		}
+		listOffsetX := 3 // Border (1) + padding (1) + margin (1)
+
+		// Adjust to list widget coordinates
+		adjustedMsg := mouseMsg
+		adjustedMsg.X = dialogX - listOffsetX
+		adjustedMsg.Y = dialogY - listOffsetY
+
+		// DEBUG: Log adjusted coordinates
+		if mouseMsg.Action == tea.MouseActionPress {
+			f, _ := os.OpenFile("C:\\Users\\CLHat\\Documents\\GitHub\\GhostWriters\\DockSTARTer2\\mouse_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if f != nil {
+				fmt.Fprintf(f, "Adjusted to dialog: X=%d Y=%d\n", dialogX, dialogY)
+				fmt.Fprintf(f, "List offset within dialog: X=%d Y=%d\n", listOffsetX, listOffsetY)
+				fmt.Fprintf(f, "Adjusted to list widget: X=%d Y=%d\n", adjustedMsg.X, adjustedMsg.Y)
+				fmt.Fprintf(f, "InBounds=%v, HasFocus=%v\n",
+					dialogX >= 0 && dialogX < dialogWidth && dialogY >= 0 && dialogY < dialogHeight,
+					m.focusedItem == FocusList)
+				f.Close()
+			}
+		}
+
+		// Only process if click is within dialog bounds
+		if dialogX >= 0 && dialogX < dialogWidth &&
+			dialogY >= 0 && dialogY < dialogHeight {
+
+			// Forward adjusted mouse event to list when it has focus
+			if m.focusedItem == FocusList {
+				// Manual click handling - bubbles/list doesn't handle item clicks by default
+				if mouseMsg.Action == tea.MouseActionPress && adjustedMsg.Button == tea.MouseButtonLeft {
+					// Calculate which item was clicked based on Y coordinate
+					// Each item takes 1 line (delegate.Height() = 1, delegate.Spacing() = 0)
+					clickedItemIndex := adjustedMsg.Y
+
+					f, _ := os.OpenFile("C:\\Users\\CLHat\\Documents\\GitHub\\GhostWriters\\DockSTARTer2\\mouse_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+					if f != nil {
+						fmt.Fprintf(f, "Manual click handling: Y=%d -> item index %d (total items: %d)\n",
+							adjustedMsg.Y, clickedItemIndex, len(m.items))
+						f.Close()
+					}
+
+					// Check if clicked item is valid
+					if clickedItemIndex >= 0 && clickedItemIndex < len(m.items) {
+						// Single click = navigate/select only (like arrow keys)
+						// User must press Enter to execute
+						oldListIndex := m.list.Index()
+						m.list.Select(clickedItemIndex)
+						newListIndex := m.list.Index()
+						m.cursor = clickedItemIndex
+						menuSelectedIndices[m.id] = clickedItemIndex
+
+						f, _ := os.OpenFile("C:\\Users\\CLHat\\Documents\\GitHub\\GhostWriters\\DockSTARTer2\\mouse_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+						if f != nil {
+							fmt.Fprintf(f, "Selected item %d: %s (navigated from %d)\n",
+								clickedItemIndex, m.items[clickedItemIndex].Tag, oldListIndex)
+							fmt.Fprintf(f, "List index: %d -> %d (selection only, no execution)\n", oldListIndex, newListIndex)
+							f.Close()
+						}
+
+						return m, nil
+					}
+				}
+
+				// Still forward to list for other mouse events (scrolling, etc.)
+				var cmd tea.Cmd
+				m.list, cmd = m.list.Update(adjustedMsg)
+				m.cursor = m.list.Index()
+				menuSelectedIndices[m.id] = m.cursor
+				return m, cmd
+			}
+		}
+		return m, nil
 	}
 
 	// Then handle our special keys

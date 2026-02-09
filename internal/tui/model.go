@@ -2,6 +2,8 @@ package tui
 
 import (
 	"context"
+	"fmt"
+	"os"
 
 	"DockSTARTer2/internal/config"
 
@@ -118,6 +120,26 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.dialog, cmd = m.dialog.Update(msg)
 			return m, cmd
 		}
+
+	case tea.MouseMsg:
+		// DEBUG: Log mouse events to verify terminal support
+		// TODO: Remove this debug code once mouse support is verified
+		if msg.Action == tea.MouseActionPress {
+			// Log to a file since we can't use stdout during TUI
+			f, _ := os.OpenFile("C:\\Users\\CLHat\\Documents\\GitHub\\GhostWriters\\DockSTARTer2\\mouse_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if f != nil {
+				fmt.Fprintf(f, "Mouse click detected: X=%d Y=%d Button=%v\n", msg.X, msg.Y, msg.Button)
+				f.Close()
+			}
+		}
+
+		// Forward mouse events to dialog or active screen
+		if m.dialog != nil {
+			var cmd tea.Cmd
+			m.dialog, cmd = m.dialog.Update(msg)
+			return m, cmd
+		}
+		// If no dialog, let it fall through to active screen handling below
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
