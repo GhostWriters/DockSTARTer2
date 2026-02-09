@@ -491,27 +491,24 @@ func GetUpdateStatus(ctx context.Context) (appUpdate bool, tmplUpdate bool) {
 	LatestTmplVersion = tmplVer
 	UpdateCheckError = appErr || tmplErr
 
-	// Log warnings if checks failed
-	if appErr {
-		logger.Warn(ctx, "Failed to check for {{_ApplicationName_}}%s{{|-|}} updates (network timeout or error).", version.ApplicationName)
-	}
-	if tmplErr {
-		logger.Warn(ctx, "Failed to check for {{_ApplicationName_}}DockSTARTer-Templates{{|-|}} updates (network timeout or error).")
-	}
-
 	return appUpdate, tmplUpdate
 }
 
 // CheckUpdates performs a startup update check and notifies the user if updates are available.
 func CheckUpdates(ctx context.Context) {
-	// Create a timeout context for the entire update check (10 seconds total)
-	checkCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// Create a timeout context for the update check (3 seconds max)
+	checkCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
 
-	// Run update check asynchronously - don't block startup
-	go func() {
-		defer cancel()
-		GetUpdateStatus(checkCtx)
+	// Run update check synchronously (before user command executes)
+	GetUpdateStatus(checkCtx)
 
+	// Log update check results (either success with updates, or failure)
+	if UpdateCheckError {
+		// Check failed - warn user
+		logger.Warn(ctx, "Failed to check for updates (network timeout or error).")
+	} else {
+		// Check succeeded - log update availability
 		// 1. Application Updates
 		if AppUpdateAvailable {
 			msg := []string{
@@ -537,7 +534,7 @@ func CheckUpdates(ctx context.Context) {
 		} else {
 			logger.Info(ctx, GetTmplVersionDisplay())
 		}
-	}()
+	}
 }
 
 // GetAppVersionDisplay returns a formatted version string for the application,
