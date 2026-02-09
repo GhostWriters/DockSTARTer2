@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/creativeprojects/go-selfupdate"
@@ -491,34 +492,40 @@ func GetUpdateStatus(ctx context.Context) (appUpdate bool, tmplUpdate bool) {
 
 // CheckUpdates performs a startup update check and notifies the user if updates are available.
 func CheckUpdates(ctx context.Context) {
-	// Trigger status update
-	GetUpdateStatus(ctx)
+	// Create a timeout context for the entire update check (10 seconds total)
+	checkCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 
-	// 1. Application Updates
-	if AppUpdateAvailable {
-		msg := []string{
-			GetAppVersionDisplay(),
-			fmt.Sprintf("An update to {{_ApplicationName_}}%s{{|-|}} is available.", version.ApplicationName),
-			fmt.Sprintf("Run '{{_UserCommand_}}%s -u{{|-|}}' to update to version '{{_Version_}}%s{{|-|}}'.", version.CommandName, LatestAppVersion),
-		}
-		logger.Warn(ctx, msg)
-	} else {
-		// Info level is hidden by default (-v shows it), matching main.sh use of VERBOSE
-		logger.Info(ctx, GetAppVersionDisplay())
-	}
+	// Run update check asynchronously - don't block startup
+	go func() {
+		defer cancel()
+		GetUpdateStatus(checkCtx)
 
-	// 2. Template Updates
-	if TmplUpdateAvailable {
-		tmplName := "DockSTARTer-Templates"
-		msg := []string{
-			GetTmplVersionDisplay(),
-			fmt.Sprintf("An update to {{_ApplicationName_}}%s{{|-|}} is available.", tmplName),
-			fmt.Sprintf("Run '{{_UserCommand_}}%s -u{{|-|}}' to update to version '{{_Version_}}%s{{|-|}}'.", version.CommandName, LatestTmplVersion),
+		// 1. Application Updates
+		if AppUpdateAvailable {
+			msg := []string{
+				GetAppVersionDisplay(),
+				fmt.Sprintf("An update to {{_ApplicationName_}}%s{{|-|}} is available.", version.ApplicationName),
+				fmt.Sprintf("Run '{{_UserCommand_}}%s -u{{|-|}}' to update to version '{{_Version_}}%s{{|-|}}'.", version.CommandName, LatestAppVersion),
+			}
+			logger.Warn(ctx, msg)
+		} else {
+			// Info level is hidden by default (-v shows it), matching main.sh use of VERBOSE
+			logger.Info(ctx, GetAppVersionDisplay())
 		}
-		logger.Warn(ctx, msg)
-	} else {
-		logger.Info(ctx, GetTmplVersionDisplay())
-	}
+
+		// 2. Template Updates
+		if TmplUpdateAvailable {
+			tmplName := "DockSTARTer-Templates"
+			msg := []string{
+				GetTmplVersionDisplay(),
+				fmt.Sprintf("An update to {{_ApplicationName_}}%s{{|-|}} is available.", tmplName),
+				fmt.Sprintf("Run '{{_UserCommand_}}%s -u{{|-|}}' to update to version '{{_Version_}}%s{{|-|}}'.", version.CommandName, LatestTmplVersion),
+			}
+			logger.Warn(ctx, msg)
+		} else {
+			logger.Info(ctx, GetTmplVersionDisplay())
+		}
+	}()
 }
 
 // GetAppVersionDisplay returns a formatted version string for the application,
@@ -579,11 +586,15 @@ func checkTmplUpdate(ctx context.Context) (bool, string) {
 		return false, ""
 	}
 
-	// Fetch updates
-	err = repo.Fetch(&git.FetchOptions{
+	// Fetch updates with timeout
+	fetchCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	err = repo.FetchContext(fetchCtx, &git.FetchOptions{
 		RemoteName: "origin",
 	})
 	if err != nil && err != git.NoErrAlreadyUpToDate {
+		// Timeout or network error - skip update check
 		return false, ""
 	}
 
