@@ -64,20 +64,24 @@ func (d customDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 	// Pad tag to align descriptions
 	// Use lipgloss.Width() for proper terminal width measurement
 	tagWidth := lipgloss.Width(menuItem.Tag)
-	padding := strings.Repeat(" ", d.maxTagLen-tagWidth+2) // 2 for column spacing
+	paddingSpaces := strings.Repeat(" ", d.maxTagLen-tagWidth+2) // 2 for column spacing
 
-	// Render description
+	// Render padding with dialog background (not black/transparent)
+	paddingStyle := lipgloss.NewStyle().Background(styles.Dialog.GetBackground())
+	padding := paddingStyle.Render(paddingSpaces)
+
+	// Render description (padding OUTSIDE style to create separate highlight boxes)
 	var descStr string
 	if isSelected {
-		descStr = styles.ItemSelected.Render(padding + menuItem.Desc)
+		descStr = padding + styles.ItemSelected.Render(menuItem.Desc)
 	} else {
-		descStr = styles.ItemNormal.Render(padding + menuItem.Desc)
+		descStr = padding + styles.ItemNormal.Render(menuItem.Desc)
 	}
 
 	// Combine tag and description
 	line := tagStr + descStr
 
-	// Apply background and padding to fill list width
+	// Apply dialog background and padding to fill list width
 	lineStyle := lipgloss.NewStyle().
 		Background(styles.Dialog.GetBackground()).
 		Padding(0, 1). // Add 1 space margin on left and right

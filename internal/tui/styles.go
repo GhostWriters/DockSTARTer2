@@ -153,24 +153,26 @@ func InitStyles(cfg config.AppConfig) {
 		Background(t.ButtonInactiveBG).
 		Foreground(t.ButtonInactiveFG), t.ButtonInactiveStyles)
 
-	// List items
+	// List items - descriptions have cyan background (from .dialogrc item_color)
 	currentStyles.ItemNormal = lipgloss.NewStyle().
 		Background(t.ItemBG).
 		Foreground(t.ItemFG)
 
+	// Selected items: highlight box around text only (like original bash version)
 	currentStyles.ItemSelected = lipgloss.NewStyle().
 		Background(t.ItemSelectedBG).
 		Foreground(t.ItemSelectedFG)
 
-	// Tags
+	// Tags - use dialog background (not TagBG cyan) to fix bleeding
 	currentStyles.TagNormal = lipgloss.NewStyle().
-		Background(t.TagBG).
+		Background(t.DialogBG).
 		Foreground(t.TagFG)
 
 	currentStyles.TagKey = lipgloss.NewStyle().
-		Background(t.TagBG).
+		Background(t.DialogBG).
 		Foreground(t.TagKeyFG)
 
+	// Selected tag key: highlight box around text only (like original bash version)
 	currentStyles.TagKeySelected = lipgloss.NewStyle().
 		Background(t.ItemSelectedBG).
 		Foreground(t.TagKeySelectedFG)

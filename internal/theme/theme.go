@@ -174,7 +174,7 @@ func Default() {
 		ItemFG:           parseColor("black"),
 		ItemBG:           parseColor("cyan"),
 		TagFG:            parseColor("black"),
-		TagBG:            parseColor("cyan"),
+		TagBG:            parseColor("blue"),
 		TagKeyFG:         parseColor("red"),
 		TagKeySelectedFG: parseColor("black"),
 		HelplineFG:       parseColor("black"),
