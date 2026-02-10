@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
-	charmlog "github.com/charmbracelet/log"
 	"github.com/charmbracelet/lipgloss"
+	charmlog "github.com/charmbracelet/log"
 )
 
 const TUIWriterKey = "tui_writer"
@@ -88,15 +88,15 @@ func logAt(ctx context.Context, t time.Time, level slog.Level, msg any, args ...
 			default:
 				levelStr = level.String()
 			}
-			// Exactly match tint console format: TIME [LEVEL]  MESSAGE (2 spaces after level)
-			// Use PrepareForTUI to convert semantic tags to cview tags and remove ANSI while keeping cview colors
-			// NOTE: Do NOT call cview.Escape() here - PrepareForTUI already produces proper cview format
-			tuiMsg := fmt.Sprintf("%s [%s]  %s", timeStr, levelStr, console.ForTUI(line))
+			// Match standard console format: TIME [LEVEL] \t MESSAGE (space-tab after level)
+			// Use ForTUI to convert semantic tags to lipgloss styles and remove ANSI
+			// NOTE: Do NOT escape here - ForTUI already produces proper format
+			tuiMsg := fmt.Sprintf("%s [%s] \t%s", timeStr, levelStr, console.ForTUI(line))
 			fmt.Fprintln(w, tuiMsg)
 		}
 
 		// 2. Output to standard slog handlers (stderr, file)
-		// IMPORTANT: Always use Parse for stderr to get ANSI colors, regardless of TUI mode
+		// IMPORTANT: Always use ToANSI for stderr to get ANSI colors, regardless of TUI mode
 		msgAnsi := console.ToANSI(line) + console.CodeReset
 		r := slog.NewRecord(t, level, msgAnsi, 0)
 		if i == 0 {
@@ -151,23 +151,22 @@ func SetLevel(level slog.Level) {
 func buildConsoleStyles() *charmlog.Styles {
 	st := charmlog.DefaultStyles()
 
-	blue   := lipgloss.NewStyle().Foreground(lipgloss.Color("4"))
-	green  := lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
+	blue := lipgloss.NewStyle().Foreground(lipgloss.Color("4"))
+	green := lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
 	yellow := lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
-	red    := lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
-	fatal  := lipgloss.NewStyle().Foreground(lipgloss.Color("7")).Background(lipgloss.Color("1"))
+	red := lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+	fatal := lipgloss.NewStyle().Foreground(lipgloss.Color("7")).Background(lipgloss.Color("1"))
 
-	st.Levels[charmlog.Level(LevelTrace)]  = blue.SetString("[TRACE ]")
-	st.Levels[charmlog.Level(LevelDebug)]  = blue.SetString("[DEBUG ]")
-	st.Levels[charmlog.Level(LevelInfo)]   = blue.SetString("[INFO  ]")
+	st.Levels[charmlog.Level(LevelTrace)] = blue.SetString("[TRACE ]")
+	st.Levels[charmlog.Level(LevelDebug)] = blue.SetString("[DEBUG ]")
+	st.Levels[charmlog.Level(LevelInfo)] = blue.SetString("[INFO  ]")
 	st.Levels[charmlog.Level(LevelNotice)] = green.SetString("[NOTICE]")
-	st.Levels[charmlog.Level(LevelWarn)]   = yellow.SetString("[WARN  ]")
-	st.Levels[charmlog.Level(LevelError)]  = red.SetString("[ERROR ]")
-	st.Levels[charmlog.Level(LevelFatal)]  = fatal.SetString("[FATAL ]")
+	st.Levels[charmlog.Level(LevelWarn)] = yellow.SetString("[WARN  ]")
+	st.Levels[charmlog.Level(LevelError)] = red.SetString("[ERROR ]")
+	st.Levels[charmlog.Level(LevelFatal)] = fatal.SetString("[FATAL ]")
 
 	return st
 }
-
 
 func NewLogger() *slog.Logger {
 	wStderr := os.Stderr
@@ -297,13 +296,13 @@ func Display(ctx context.Context, msg any, args ...any) {
 	for _, line := range lines {
 		// 1. Output to TUI if writer is in context
 		if w, ok := ctx.Value(TUIWriterKey).(io.Writer); ok {
-			// Use PrepareForTUI to keep cview colors while removing ANSI
-			// NOTE: Do NOT call cview.Escape() - PrepareForTUI output is already in cview format
+			// Use ForTUI to keep styles while removing ANSI
+			// NOTE: Do NOT escape - ForTUI output is already in proper format
 			fmt.Fprintln(w, console.ForTUI(line))
 		}
 
 		// 2. Output directly to terminal (stdout)
-		// IMPORTANT: Always use Parse for stdout to get ANSI colors, regardless of TUI mode
+		// IMPORTANT: Always use ToANSI for stdout to get ANSI colors, regardless of TUI mode
 		fmt.Println(console.ToANSI(line) + console.CodeReset)
 	}
 }
@@ -363,7 +362,7 @@ func FatalWithStack(ctx context.Context, msg any, args ...any) {
 	rawInfo := getSystemInfo()
 	for _, i := range rawInfo {
 		if i != "" {
-			infoLines = append(infoLines, "\t"+i /* console.Parse handled by logAt */)
+			infoLines = append(infoLines, "\t"+i /* console.ToANSI handled by logAt */)
 		} else {
 			infoLines = append(infoLines, "")
 		}
@@ -411,7 +410,7 @@ func FatalWithStack(ctx context.Context, msg any, args ...any) {
 		}
 
 		// Create format string dynamically to pad frame number
-		// Note: We leave the tags in the string. logAt -> console.Parse will replace them.
+		// Note: We leave the tags in the string. logAt -> console.ToANSI will replace them.
 		fmtStr := fmt.Sprintf("%%s%%%dd{{|-|}}%%s %%s%%s%%s%%s:%%s%%d{{|-|}} (%%s%%s{{|-|}})", width)
 
 		line := fmt.Sprintf(
@@ -443,7 +442,8 @@ func FatalWithStack(ctx context.Context, msg any, args ...any) {
 		msg,
 		"",
 		"{{_FatalFooter_}}Please let the dev know of this error.",
-		"{{_FatalFooter_}}It has been written to {{|-|}}'{{_File_}}" + filepath.Join(paths.GetStateDir(), strings.ToLower(version.ApplicationName)+".fatal.log") + "{{|-|}}'{{_FatalFooter_}}, and appended to {{|-|}}'{{_File_}}" + filepath.Join(paths.GetStateDir(), strings.ToLower(version.ApplicationName)+".log") + "{{|-|}}'{{_FatalFooter_}}.",
+		"{{_FatalFooter_}}It has been written to {{|-|}}'{{_File_}}" + filepath.Join(paths.GetStateDir(), strings.ToLower(version.ApplicationName)+".fatal.log") + "{{|-|}}'{{_FatalFooter_}},",
+		"and appended to {{|-|}}'{{_File_}}" + filepath.Join(paths.GetStateDir(), strings.ToLower(version.ApplicationName)+".log") + "{{|-|}}'{{_FatalFooter_}}.",
 	}
 
 	// 4. Log Everything
