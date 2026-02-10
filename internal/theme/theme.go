@@ -5,6 +5,7 @@ import (
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/version"
 	"bufio"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -301,7 +302,6 @@ func parseTagWithStyles(tag string) (fg, bg lipgloss.TerminalColor, styles Style
 	// Parse style flags (third part and beyond)
 	if len(parts) > 2 {
 		flags := parts[2]
-		styles.Bold = strings.Contains(flags, "B")
 		styles.Underline = strings.Contains(flags, "U")
 		styles.Italic = strings.Contains(flags, "I")
 		styles.Blink = strings.Contains(flags, "L")
@@ -311,6 +311,137 @@ func parseTagWithStyles(tag string) (fg, bg lipgloss.TerminalColor, styles Style
 		styles.HighIntensity = strings.Contains(flags, "H")
 	}
 	return
+}
+
+// resolveThemeValue recursively resolves a theme value string, handling semantic references and overrides.
+// It supports chaining (A->B->C) and partial overlays (Base + {{|:green|}}).
+func resolveThemeValue(raw string, rawValues map[string]string, visiting map[string]bool) (string, error) {
+	// 1. Expand standard semantic tags first (e.g. {{_Notice_}})
+	// This is standard single-pass expansion for global system tags.
+	// But for THEME tags ({{_ThemeXXX_}}), we need to look them up in our map if possible,
+	// because they might be defined LATER in the file (forward reference)
+	// or we want the RAW value to overlay on.
+
+	// Actually, console.ExpandTags does a lookup in console.semanticMap.
+	// We haven't registered the future theme keys yet!
+	// So we must manually parse {{_ThemeX_}} tags here.
+
+	// var resultParts []string // Not used, removing.
+
+	// Simple state machine to parse the string
+	// We are looking for {{_ThemeX_}} or {{_X_}} tags.
+	// And {{|...|}} style tags.
+
+	// For simplicity, let's use the existing console expansion logic BUT
+	// we intercept the unknown tags or specifically look for Theme tags.
+
+	// Hack: We can regex for {{_..._}}
+	// But we need to handle "Base" + "Overlay" composition.
+
+	// Strategy:
+	// 1. Find all {{_Tag_}} references.
+	// 2. Resolve them recursively.
+	// 3. Flatten the result into a sequence of style components.
+	// 4. Merge them into a single final {{|fg:bg:flags|}} string.
+
+	// Step 1: Split into tokens (text, reference, style)
+	// This is complex to write from scratch efficiently.
+	// Let's assume the input is mostly "Reference" + "Style".
+	// e.g. "{{_ThemeTitle_}}{{|:green|}}"
+
+	// Let's define a composed style.
+	var finalFG, finalBG string
+	var finalFlags string
+
+	// Helper to merge a style string "ShowMe" logic
+	mergeStyle := func(styleStr string) {
+		// remove wrappers
+		inner := strings.TrimSuffix(strings.TrimPrefix(styleStr, "{{|"), "|}}")
+		parts := strings.Split(inner, ":")
+
+		if len(parts) > 0 && parts[0] != "" {
+			finalFG = parts[0]
+		}
+		if len(parts) > 1 && parts[1] != "" {
+			finalBG = parts[1]
+		}
+		if len(parts) > 2 {
+			// Merge flags: Upper sets ON, lower sets OFF
+			for _, f := range parts[2] {
+				flag := string(f)
+				// If specific flag (case sensitive)
+				// Overwrite existing state for that letter (upper or lower)
+				// Actually, we can just append to a "history" and let the final consumer resolve?
+				// But we want to produce a CLEAN string like "B" or "BU".
+
+				// If we append, "b" (bold off) after "B" (bold on).
+				// Our styles logic handles this! "b" turns off bold.
+				// So we can just concatenate flags!
+				finalFlags += flag
+			}
+		}
+	}
+
+	// We iterate through the string seeking {{...}}
+	cur := raw
+	for {
+		start := strings.Index(cur, "{{")
+		if start == -1 {
+			break
+		}
+		end := strings.Index(cur[start:], "}}")
+		if end == -1 {
+			break
+		}
+		end += start + 2
+
+		tag := cur[start:end]
+
+		if strings.HasPrefix(tag, "{{|") {
+			// Direct style tag
+			mergeStyle(tag)
+		} else if strings.HasPrefix(tag, "{{_") {
+			// Semantic reference
+			refKey := strings.TrimSuffix(strings.TrimPrefix(tag, "{{_"), "_}}")
+
+			// Check if it's a theme key reference (Theme...)
+			if strings.HasPrefix(refKey, "Theme") {
+				targetKey := strings.TrimPrefix(refKey, "Theme")
+
+				// Resolve it recursively
+				resolvedRef, err := resolveThemeValue(rawValues[targetKey], rawValues, visiting)
+				if err == nil {
+					mergeStyle(resolvedRef)
+				} else {
+					// referencing non-existent internal key?
+					// Maybe it's a global semantic tag (like {{_Notice_}})?
+					// Try console lookup by expanding it.
+					expanded := console.ExpandTags(tag)
+					if expanded != tag && expanded != "" {
+						mergeStyle(expanded)
+					}
+				}
+			} else {
+				// Regular semantic tag (e.g. {{_Notice_}})
+				expanded := console.ExpandTags(tag)
+				if expanded != tag && expanded != "" {
+					mergeStyle(expanded)
+				}
+			}
+		}
+
+		cur = cur[end:]
+	}
+
+	// Construct final string
+	// Clean flags? We could normalize (remove B then b).
+	// But letting the renderer handle it is robust.
+	// Actually, let's just output components.
+
+	// Default empty colors to nothing (inherit? No, theme values are absolute usually)
+	// But for "partial" overlays, they rely on the base.
+
+	return fmt.Sprintf("{{|%s:%s:%s|}}", finalFG, finalBG, finalFlags), nil
 }
 
 func parseThemeINI(path string) error {
@@ -325,8 +456,10 @@ func parseThemeINI(path string) error {
 		"${1}", version.ApplicationName,
 	)
 
-	// Track whether Title was explicitly set (for BoxTitle fallback)
-	titleWasSet := false
+	// 1. Read all raw values into a map first
+	// We need to resolve references (e.g., TitleSuccess -> Title) before parsing colors
+	rawValues := make(map[string]string)
+	keysOrder := []string{} // Maintain order for semantic registration
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -343,16 +476,73 @@ func parseThemeINI(path string) error {
 		key := strings.TrimSpace(parts[0])
 		val := strings.Trim(strings.TrimSpace(parts[1]), "'\"")
 
-		// Expand app name if present
+		// Expand app name if present (legacy support)
 		expanded := replacer.Replace(val)
+		rawValues[key] = expanded
+		keysOrder = append(keysOrder, key)
+	}
 
-		// Convert {{|code|}} format to tview [code] format
-		styleValue := console.ExpandTags(expanded)
+	if err := scanner.Err(); err != nil {
+		return err
+	}
 
-		// Register "Theme"+Key exclusively for themed tags (prevents collision with system semantic tags)
+	// 2. Resolve values and register/apply them
+	// We iterate through the file order, but resolution handles dependencies
+	resolvedValues := make(map[string]string)
+	visiting := make(map[string]bool)
+	var resolve func(string) (string, error)
+
+	resolve = func(key string) (string, error) {
+		if v, ok := resolvedValues[key]; ok {
+			return v, nil
+		}
+		if visiting[key] {
+			return "", fmt.Errorf("circular reference detected for key: %s", key)
+		}
+		visiting[key] = true
+		defer func() { visiting[key] = false }()
+
+		raw, ok := rawValues[key]
+		if !ok {
+			// If not in our theme file, it might be an external semantic tag?
+			// For now, only resolve internal references or specific known overrides.
+			// But wait, the user wants `{{_ThemeTitle_}}`. That tag doesn't exist yet!
+			// Actually, the user writes `{{_ThemeTitle_}}`. We need to parse that string.
+			return "", fmt.Errorf("key not found: %s", key)
+		}
+
+		// Parse the value for referenced tags
+		// Value might be: "{{_ThemeTitle_}}{{|:green|}}"
+		// We need to expand semantic tags recursively.
+		// resolveThemeValue helper does this using the rawValues map
+		res, err := resolveThemeValue(raw, rawValues, visiting)
+		if err != nil {
+			return "", err
+		}
+
+		resolvedValues[key] = res
+		return res, nil
+	}
+
+	// Resolve all keys
+	for _, key := range keysOrder {
+		styleValue, err := resolve(key)
+		if err != nil {
+			// Log error but continue? Or fail? Best to allow partial load.
+			// For now, stick to original value if resolution fails?
+			// No, better to warn. We don't have a logger here.
+			// Fallback to raw expansion for robustness
+			styleValue = console.ExpandTags(rawValues[key])
+		}
+
+		// Register "Theme"+Key explicitly
+		// This makes the resolved value available as a semantic tag for SUBSEQUENT keys too?
+		// Yes, because we resolved it.
+		// But wait, our resolve() function uses the map, not registered tags.
+		// The semantic registration is for OTHER parts of the app (like prints).
 		console.RegisterSemanticTag("Theme"+key, styleValue)
 
-		// 2. Map known keys to Current struct fields
+		// Map known keys to Current struct fields
 		fg, bg := parseTagToColor(styleValue)
 		switch key {
 		case "Screen":
@@ -365,10 +555,10 @@ func parseThemeINI(path string) error {
 			Current.Border2FG, Current.Border2BG = fg, bg
 		case "Title": // Menu title with style flags (underline, bold, etc.)
 			Current.TitleFG, Current.TitleBG, Current.TitleStyles = parseTagWithStyles(styleValue)
-			titleWasSet = true
+			// titleWasSet = true // No longer needed with map logic? Check below.
 		case "BoxTitle": // Fallback from .dialogrc (no styles)
 			// Only set if Title wasn't explicitly provided in theme
-			if !titleWasSet {
+			if _, titleExists := rawValues["Title"]; !titleExists {
 				Current.TitleFG, Current.TitleBG, Current.TitleStyles = parseTagWithStyles(styleValue)
 			}
 		case "Shadow":

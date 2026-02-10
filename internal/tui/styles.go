@@ -586,29 +586,15 @@ func AddPatternHalo(content string) string {
 		contentWidth++
 	}
 
-	// Ensure halo uses the standard shadow foreground and screen background
+	// Ensure halo uses the border color (Border2Color) as requested, to extend the border
 	shadowStyle := lipgloss.NewStyle().
-		Foreground(currentStyles.ShadowColor).
+		Foreground(currentStyles.Border2Color).
 		Background(currentStyles.Screen.GetBackground())
 
 	var shadeChar string
 
-	if currentStyles.LineCharacters {
-		switch currentConfig.ShadowLevel {
-		case 1:
-			shadeChar = "░"
-		case 2:
-			shadeChar = "▒"
-		case 3:
-			shadeChar = "▓"
-		case 4:
-			shadeChar = "█"
-		default:
-			shadeChar = "▒"
-		}
-	} else {
-		shadeChar = "▒" // Default for ASCII to avoid full blocks if not desired
-	}
+	// Force full block character for a solid border effect
+	shadeChar = "█"
 
 	// Create a single cell of shadow (2 characters wide)
 	var shadowCell string
