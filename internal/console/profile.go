@@ -33,6 +33,14 @@ func SetPreferredProfile(p termenv.Profile) {
 	preferredProfile = p
 }
 
+// SetTTY allows forcing the TTY status (useful for testing ANSI output in non-interactive tests).
+// Returns the previous value so it can be restored.
+func SetTTY(isTTY bool) bool {
+	old := isTTYGlobal
+	isTTYGlobal = isTTY
+	return old
+}
+
 // detectProfile determines the appropriate color profile based on environment variables.
 // Priority: COLORTERM > TERM > automatic detection
 func detectProfile() termenv.Profile {

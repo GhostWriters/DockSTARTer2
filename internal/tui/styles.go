@@ -472,7 +472,7 @@ func Render3DBorder(content string, padding int) string {
 		rightBorder := darkStyle.Render(border.Right)
 
 		// Style the content line with background
-		styledContent := contentStyle.Copy().Width(0).Render(fullLine)
+		styledContent := contentStyle.Width(0).Render(fullLine)
 
 		// Join horizontally to preserve styles
 		lineStr := lipgloss.JoinHorizontal(lipgloss.Top, leftBorder, styledContent, rightBorder)

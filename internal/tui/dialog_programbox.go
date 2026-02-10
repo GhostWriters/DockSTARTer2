@@ -58,9 +58,9 @@ func newProgramBox(title, subtitle, command string) *programBoxModel {
 
 	// Initialize viewport style to match dialog background (fixes black scrollbar)
 	styles := GetStyles()
-	m.viewport.Style = styles.Dialog.Copy().Padding(0, 0)
+	m.viewport.Style = styles.Dialog.Padding(0, 0)
 	// Use theme-defined console colors to properly display ANSI colors from command output
-	m.viewport.Style = m.viewport.Style.Copy().
+	m.viewport.Style = m.viewport.Style.
 		Background(styles.Console.GetBackground()).
 		Foreground(styles.Console.GetForeground())
 
@@ -204,7 +204,7 @@ func (m *programBoxModel) View() string {
 	scrollPercent := m.viewport.ScrollPercent()
 
 	// Add scroll indicator at bottom of viewport content
-	scrollIndicator := styles.TagKey.Copy().
+	scrollIndicator := styles.TagKey.
 		Bold(true).
 		Render(fmt.Sprintf("%d%%", int(scrollPercent*100)))
 
@@ -219,7 +219,7 @@ func (m *programBoxModel) View() string {
 	// 		Render(scrollIndicator)
 
 	// Wrap viewport in rounded inner border with console background
-	viewportStyle := styles.Console.Copy().
+	viewportStyle := styles.Console.
 		Padding(0, 0) // Remove side padding inside inner box for a tighter look
 	viewportStyle = ApplyRoundedBorder(viewportStyle, styles.LineCharacters)
 
@@ -303,7 +303,7 @@ func (m *programBoxModel) View() string {
 		// We use the console style as base, but DO NOT force the background color onto the whole bar
 		// This allows the user to have unstyled spaces or mixed colors.
 		// Use styles.Dialog as base so unstyled text matches the dialog background
-		base := styles.Dialog.Copy()
+		base := styles.Dialog
 		renderedCmd := RenderThemeText(m.command, base)
 
 		// Use lipgloss to render the row so width and background are handled correctly

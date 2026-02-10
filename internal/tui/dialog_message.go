@@ -81,17 +81,17 @@ func (m *messageDialogModel) View() string {
 
 	switch m.messageType {
 	case MessageSuccess:
-		messageStyle = styles.StatusSuccess.Copy().
+		messageStyle = styles.StatusSuccess.
 			Padding(1, 2)
 		titlePrefix = "✓ "
 
 	case MessageWarning:
-		messageStyle = styles.StatusWarn.Copy().
+		messageStyle = styles.StatusWarn.
 			Padding(1, 2)
 		titlePrefix = "⚠ "
 
 	case MessageError:
-		messageStyle = styles.StatusError.Copy().
+		messageStyle = styles.StatusError.
 			Bold(true).
 			Padding(1, 2)
 		titlePrefix = "✗ "

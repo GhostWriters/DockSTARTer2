@@ -164,7 +164,7 @@ func RenderCenteredButtons(contentWidth int, buttons ...ButtonSpec) string {
 			buttonStyle = styles.ButtonInactive
 		}
 
-		buttonStyle = buttonStyle.Copy().Width(maxButtonWidth).Align(lipgloss.Center)
+		buttonStyle = buttonStyle.Width(maxButtonWidth).Align(lipgloss.Center)
 		buttonStyle = ApplyRoundedBorder(buttonStyle, styles.LineCharacters)
 
 		renderedLabel := RenderHotkeyLabel(btn.Text, btn.Active)

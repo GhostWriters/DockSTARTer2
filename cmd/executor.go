@@ -975,7 +975,7 @@ func handleTest(ctx context.Context, group *CommandGroup) {
 	cmd.Dir = "." // Project root
 
 	if err := cmd.Run(); err != nil {
-		// Test failures are handled by the 'go test' output itself
+		// Test failures are handled by the 'go test' output itself, so we don't need to log specific errors here.
 	}
 }
 

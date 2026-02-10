@@ -8,6 +8,10 @@ import (
 )
 
 func TestResolveThemeValue(t *testing.T) {
+	// Force TTY mode to ensure ANSI codes are generated
+	oldTTY := console.SetTTY(true)
+	defer console.SetTTY(oldTTY)
+
 	// Setup console maps for resolution
 	console.RegisterBaseTags()
 	console.BuildColorMap()
@@ -25,10 +29,6 @@ func TestResolveThemeValue(t *testing.T) {
 		"CircularA":    "{{_Theme_CircularB_}}",
 		"CircularB":    "{{_Theme_CircularA_}}",
 	}
-
-	// Register base keys as semantic tags (as we would during parsing)
-	// We need a way to mock the registration or expose the resolution logic directly.
-	// For this test, we'll implement a simplified resolver that looks up from themeMap.
 
 	tests := []struct {
 		name     string
@@ -69,23 +69,11 @@ func TestResolveThemeValue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// This test relies on the NEW logic we are about to implement.
-			// It will fail until resolveThemeValue is implemented.
-			// For TDD, we define the expected behavior first.
-
-			// We need to inject the map into the resolver.
-			// Ideally, we'd refactor theme.go to expose a Resolver struct or function.
-			// For now, let's assume a function resolveThemeValue(key, map) exists or we export it.
-
 			// Note: Since we haven't implemented resolveThemeValue yet, this test serves as our spec.
 			// We will implement `resolveThemeValue` in theme.go next.
 			// Note: We use the raw value from the map as the starting point
 			rawVal, ok := themeMap[tt.key]
 			if !ok {
-				// For the test cases that are "Direct keys", the test struct has the key.
-				// But some tests might just pass a raw string?
-				// Actually the test loop iterates over keys in themeMap.
-				// Wait, the test case struct has 'key'. We should look it up.
 				t.Fatalf("Test key %s not found in themeMap", tt.key)
 			}
 
@@ -96,19 +84,12 @@ func TestResolveThemeValue(t *testing.T) {
 				t.Fatalf("resolve error: %v", err)
 			}
 
-			// Check for inclusion of ANSI codes because order might vary slightly
-			// or we can exact match if we are confident.
-			// For simplicity: verify the string *contains* the expected sequences.
-			// Ideally we should verify logic.
+			// Since resolveThemeValue returns a tag string (e.g. {{|red:blue:B|}}),
+			// we must expand it to ANSI to compare with expected ANSI values.
+			gotExpanded := console.ToANSI(got)
 
-			// To compare exact strings, we need exact expected ANSI strings.
-			// Let's rely on exact match for this test as ANSI codes are deterministic.
-
-			// Adjust expected validation logic as needed during implementation.
-			if !strings.Contains(got, tt.expected) {
-				// Fallback because map iteration order in partials might affect output string construction?
-				// Actually, our resolution should be deterministic.
-				// Let's just check equality for now, if it fails we see why.
+			if !strings.Contains(gotExpanded, tt.expected) {
+				t.Errorf("resolveThemeValue() ANSI = %q, want %q (raw: %v)", gotExpanded, tt.expected, got)
 			}
 		})
 	}

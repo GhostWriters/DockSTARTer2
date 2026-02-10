@@ -90,20 +90,6 @@ func MergeYML(ctx context.Context, force bool) error {
 			}
 			if hostnameFile != "" && fileExists(hostnameFile) {
 				composeFiles = append(composeFiles, hostnameFile)
-			} else {
-				// Log path even if empty/missing to match legacy behavior roughly,
-				// though legacy logs the *expected* path.
-				// Here we just log if file logic returned something usable but missing, or standardizing logging.
-				// Bash logs "does not exist" if missing.
-				// We can reconstruct expected path for logging if needed, or just skip logging if no template.
-				// Bash: checks app_instance_file return. If it returned valid path, and file missing -> log.
-				// With update, AppInstanceFile returns path only if exists (or created).
-				// So if "" returned, silence is correct (no template).
-				// If path returned, it exists.
-				// But let's log "does not exist" if we interpret parity strictly?
-				// Bash: checks if file exists.
-				// If AppInstanceFile returns "", we can't log the "path".
-				// So we'll skip logging "does not exist" if template is missing, which is cleaner.
 			}
 
 			// Add ports file if exists

@@ -970,7 +970,7 @@ func (m MenuModel) renderBorderWithTitle(content string, contentWidth int) strin
 	borderStyleDark := lipgloss.NewStyle().
 		Foreground(styles.Border2Color).
 		Background(borderBG)
-	titleStyle := styles.DialogTitle.Copy().
+	titleStyle := styles.DialogTitle.
 		Background(borderBG)
 
 	// Parse color tags from title and update style
