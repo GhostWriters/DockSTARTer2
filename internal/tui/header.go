@@ -140,7 +140,7 @@ func (m HeaderModel) renderRight() string {
 	// Show update indicator: "?" if check failed, "*" if update available, " " otherwise
 	if update.UpdateCheckError {
 		rightText += "{{_Theme_ApplicationUpdate_}}?{{|-|}}"
-		rightText += "{{_Theme_ApplicationVersion_}}A:[" + appVer + "]{{|-|}}"
+		rightText += "{{_Theme_ApplicationVersion_}}A:[{{|-|}}{{_Theme_ApplicationUpdate_}}" + appVer + "{{|-|}}{{_Theme_ApplicationVersion_}}]{{|-|}}"
 	} else if update.AppUpdateAvailable {
 		rightText += "{{_Theme_ApplicationUpdate_}}*{{|-|}}"
 		rightText += "{{_Theme_ApplicationVersion_}}A:[{{|-|}}{{_Theme_ApplicationUpdate_}}" + appVer + "{{|-|}}{{_Theme_ApplicationVersion_}}]{{|-|}}"
@@ -151,7 +151,7 @@ func (m HeaderModel) renderRight() string {
 
 	if update.UpdateCheckError {
 		rightText += "{{_Theme_ApplicationUpdate_}}?{{|-|}}"
-		rightText += "{{_Theme_ApplicationVersion_}}T:[" + tmplVer + "]{{|-|}}"
+		rightText += "{{_Theme_ApplicationVersion_}}T:[{{|-|}}{{_Theme_ApplicationUpdate_}}" + tmplVer + "{{|-|}}{{_Theme_ApplicationVersion_}}]{{|-|}}"
 	} else if update.TmplUpdateAvailable {
 		rightText += "{{_Theme_ApplicationUpdate_}}*{{|-|}}"
 		rightText += "{{_Theme_ApplicationVersion_}}T:[{{|-|}}{{_Theme_ApplicationUpdate_}}" + tmplVer + "{{|-|}}{{_Theme_ApplicationVersion_}}]{{|-|}}"
