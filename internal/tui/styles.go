@@ -219,9 +219,9 @@ func InitStyles(cfg config.AppConfig) {
 		Foreground(t.HelplineFG), t.HelplineStyles)
 
 	// Initialize semantic styles from console color tags (Theme-specific to avoid log interference)
-	currentStyles.StatusSuccess = ApplyTagsToStyle("{{_ThemeTitleNotice_}}", lipgloss.NewStyle(), lipgloss.NewStyle())
-	currentStyles.StatusWarn = ApplyTagsToStyle("{{_ThemeTitleWarn_}}", lipgloss.NewStyle(), lipgloss.NewStyle())
-	currentStyles.StatusError = ApplyTagsToStyle("{{_ThemeTitleError_}}", lipgloss.NewStyle(), lipgloss.NewStyle())
+	currentStyles.StatusSuccess = ApplyTagsToStyle("{{_Theme_TitleNotice_}}", lipgloss.NewStyle(), lipgloss.NewStyle())
+	currentStyles.StatusWarn = ApplyTagsToStyle("{{_Theme_TitleWarn_}}", lipgloss.NewStyle(), lipgloss.NewStyle())
+	currentStyles.StatusError = ApplyTagsToStyle("{{_Theme_TitleError_}}", lipgloss.NewStyle(), lipgloss.NewStyle())
 	currentStyles.Console = ApplyFlags(lipgloss.NewStyle().
 		Background(t.ProgramBG).
 		Foreground(t.ProgramFG), t.ProgramStyles)

@@ -24,10 +24,16 @@ ThemeName='Whiptail Ripoff'
 ThemeDescription='Dockstarter Whiptail ripoff theme'
 ThemeAuthor='Westlin'
 
+Screen="{{|yellow:blue:B|}}"
+Dialog="{{|black:white|}}"
+Border="{{|white:white:B|}}"
+Border2="{{|black:white|}}"
+Shadow="{{|black:black:B|}}"
+BoxTitle="{{|red:white:B|}}"
+Program="{{|white:black|}}"
+
 ApplicationName="{{|black:white|}}"
 ApplicationVersion="{{|black:white|}}"
-ApplicationVersionBrackets="{{|black:white|}}"
-ApplicationVersionSpace="{{|white:black|}}"
 ApplicationVersionBrackets="{{|black:white|}}"
 ApplicationVersionSpace="{{|white:black|}}"
 ApplicationFlags="{{|white:black|}}"
@@ -36,13 +42,29 @@ ApplicationFlagsSpace="{{|black:white|}}"
 ApplicationUpdate="{{|white:black|}}"
 ApplicationUpdateBrackets="{{|white:black|}}"
 Hostname="{{|black:white|}}"
+
 Title="{{|white:black:U|}}"
-Subtitle="{{|black:white|}}"
-TitleSuccess="{{|black:white|}}"
+TitleHelp="{{_Theme_Title_}}"
+TitleNotice="{{|white:green:B|}}"
+TitleWarn="{{|black:white|}}"
 TitleError="{{|black:white:B|}}"
+TitleSuccess="{{|black:white|}}"
 TitleWarning="{{|black:white|}}"
 TitleQuestion="{{|black:white|}}"
-TitleHelp="{{_ThemeTitle_}}"
+
+CommandLine="{{|white:black|}}"
+ButtonActive="{{|white:red:B|}}"
+ButtonInactive="{{|black:white|}}"
+Item="{{|yellow:blue|}}"
+ItemSelected="{{|yellow:blue:B|}}"
+Tag="{{|yellow:blue:B|}}"
+TagSelected="{{|yellow:blue:B|}}"
+TagKey="{{|yellow:blue|}}"
+TagKeySelected="{{|white:blue:B|}}"
+Helpline="{{|white:blue|}}"
+ItemHelp="{{|white:blue|}}"
+
+Subtitle="{{|black:white|}}"
 Heading="{{|black:white|}}"
 HeadingTag="{{|white:black:B|}}"
 HeadingValue="{{|white:black:BU|}}"
@@ -57,35 +79,7 @@ LineAddVariable="{{|black:white|}}"
 ListDefault=""
 ListApp=""
 ListAppUserDefined="{{|black:white|}}"
-CommandLine="{{|white:black|}}"
 KeyCap="{{|black:white|}}"
 ProgressWaiting="{{|white:black|}}"
 ProgressInProgress="{{|white:black:B|}}"
 ProgressCompleted="{{|black:white|}}"
-
-# Imported from .dialogrc
-Border="{{|white:white:B|}}"
-ButtonActive="{{|white:red:B|}}"
-TagSelected="{{|yellow:blue:B|}}"
-TagKey="{{|yellow:blue|}}"
-Shadow="{{|black:black:B|}}"
-ButtonInactive="{{|black:white|}}"
-ItemSelected="{{|yellow:blue:B|}}"
-Item="{{|yellow:blue|}}"
-Tag="{{|yellow:blue:B|}}"
-TagKeySelected="{{|white:blue:B|}}"
-Screen="{{|yellow:blue:B|}}"
-Dialog="{{|black:white|}}"
-
-# Imported from .dialogrc
-BoxTitle="{{|red:white:B|}}"
-
-# Imported from .dialogrc
-BorderContrast="{{|black:white|}}"
-
-# Imported from .dialogrc
-Border2="{{|black:white|}}"
-
-Helpline="{{|white:blue|}}"
-ItemHelp="{{|white:blue|}}"
-Program="{{|white:black|}}"

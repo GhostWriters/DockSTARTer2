@@ -126,10 +126,10 @@ func Apply() {
 		// Reverse is active: Swapping FG/BG will result in Correct orientation after rendering
 		// BUT we must ensure the logical BACKGROUND is the ScreenBG so that subsequent tags (like "T:")
 		// inherit the stable background.
-		console.RegisterSemanticTag("ThemeReset", "{{|"+bgStr+":"+bgStr+"|}}")
+		console.RegisterSemanticTag("Theme_Reset", "{{|"+bgStr+":"+bgStr+"|}}")
 	} else {
 		// Normal: Set FG/BG normally.
-		console.RegisterSemanticTag("ThemeReset", "{{|"+fgStr+":"+bgStr+"|}}")
+		console.RegisterSemanticTag("Theme_Reset", "{{|"+fgStr+":"+bgStr+"|}}")
 	}
 }
 
@@ -138,7 +138,7 @@ func updateTagsFromCurrent() {
 		fgName := console.GetColorStr(fg)
 		bgName := console.GetColorStr(bg)
 		tag := "{{|" + fgName + ":" + bgName + "|}}"
-		console.RegisterSemanticTag("Theme"+name, tag)
+		console.RegisterSemanticTag("Theme_"+name, tag)
 	}
 
 	regComp("Screen", Current.ScreenFG, Current.ScreenBG)
@@ -146,8 +146,8 @@ func updateTagsFromCurrent() {
 	regComp("Border", Current.BorderFG, Current.BorderBG)
 	regComp("Border2", Current.Border2FG, Current.Border2BG)
 
-	console.RegisterSemanticTag("ThemeTitle", buildTag(Current.TitleFG, Current.TitleBG, Current.TitleStyles))
-	console.RegisterSemanticTag("ThemeTitleHelp", buildTag(Current.TitleHelpFG, Current.TitleHelpBG, Current.TitleHelpStyles))
+	console.RegisterSemanticTag("Theme_Title", buildTag(Current.TitleFG, Current.TitleBG, Current.TitleStyles))
+	console.RegisterSemanticTag("Theme_TitleHelp", buildTag(Current.TitleHelpFG, Current.TitleHelpBG, Current.TitleHelpStyles))
 
 	regComp("ButtonActive", Current.ButtonActiveFG, Current.ButtonActiveBG)
 	regComp("ItemSelected", Current.ItemSelectedFG, Current.ItemSelectedBG)
@@ -155,13 +155,13 @@ func updateTagsFromCurrent() {
 	regComp("Tag", Current.TagFG, Current.TagBG)
 	regComp("TagSelected", Current.TagSelectedFG, Current.TagSelectedBG)
 
-	console.RegisterSemanticTag("ThemeTagKey", buildTag(Current.TagKeyFG, Current.TagKeyBG, Current.TagKeyStyles))
-	console.RegisterSemanticTag("ThemeTagKeySelected", buildTag(Current.TagKeySelectedFG, Current.TagKeySelectedBG, Current.TagKeySelectedStyles))
-	console.RegisterSemanticTag("ThemeShadow", "{{|"+console.GetColorStr(Current.ShadowColor)+"|}}")
+	console.RegisterSemanticTag("Theme_TagKey", buildTag(Current.TagKeyFG, Current.TagKeyBG, Current.TagKeyStyles))
+	console.RegisterSemanticTag("Theme_TagKeySelected", buildTag(Current.TagKeySelectedFG, Current.TagKeySelectedBG, Current.TagKeySelectedStyles))
+	console.RegisterSemanticTag("Theme_Shadow", "{{|"+console.GetColorStr(Current.ShadowColor)+"|}}")
 
-	console.RegisterSemanticTag("ThemeHelpline", buildTag(Current.HelplineFG, Current.HelplineBG, Current.HelplineStyles))
-	console.RegisterSemanticTag("ThemeItemHelp", buildTag(Current.HelplineFG, Current.HelplineBG, Current.HelplineStyles))
-	console.RegisterSemanticTag("ThemeProgram", buildTag(Current.ProgramFG, Current.ProgramBG, Current.ProgramStyles))
+	console.RegisterSemanticTag("Theme_Helpline", buildTag(Current.HelplineFG, Current.HelplineBG, Current.HelplineStyles))
+	console.RegisterSemanticTag("Theme_ItemHelp", buildTag(Current.HelplineFG, Current.HelplineBG, Current.HelplineStyles))
+	console.RegisterSemanticTag("Theme_Program", buildTag(Current.ProgramFG, Current.ProgramBG, Current.ProgramStyles))
 }
 
 // buildTag constructs a {{|fg:bg:flags|}} string
@@ -237,16 +237,16 @@ func Default() {
 	Apply()
 
 	// Register basic theme fallbacks to prevent literal tags if theme files fail to load
-	console.RegisterSemanticTag("ThemeApplicationName", "{{|::B|}}")
-	console.RegisterSemanticTag("ThemeApplicationVersion", "{{|-|}}")
-	console.RegisterSemanticTag("ThemeApplicationVersionBrackets", "{{|-|}}")
-	console.RegisterSemanticTag("ThemeApplicationVersionSpace", console.ExpandTags("{{_ThemeScreen_}}")+" ")
-	console.RegisterSemanticTag("ThemeApplicationFlags", "{{|-|}}")
-	console.RegisterSemanticTag("ThemeApplicationFlagsBrackets", "{{|-|}}")
-	console.RegisterSemanticTag("ThemeApplicationFlagsSpace", console.ExpandTags("{{_ThemeScreen_}}")+" ")
-	console.RegisterSemanticTag("ThemeApplicationUpdate", "{{|yellow|}}")
-	console.RegisterSemanticTag("ThemeApplicationUpdateBrackets", "{{|-|}}")
-	console.RegisterSemanticTag("ThemeHostname", "{{|::B|}}")
+	console.RegisterSemanticTag("Theme_ApplicationName", "{{|::B|}}")
+	console.RegisterSemanticTag("Theme_ApplicationVersion", "{{|-|}}")
+	console.RegisterSemanticTag("Theme_ApplicationVersionBrackets", "{{|-|}}")
+	console.RegisterSemanticTag("Theme_ApplicationVersionSpace", console.ExpandTags("{{_Theme_Screen_}}")+" ")
+	console.RegisterSemanticTag("Theme_ApplicationFlags", "{{|-|}}")
+	console.RegisterSemanticTag("Theme_ApplicationFlagsBrackets", "{{|-|}}")
+	console.RegisterSemanticTag("Theme_ApplicationFlagsSpace", console.ExpandTags("{{_Theme_Screen_}}")+" ")
+	console.RegisterSemanticTag("Theme_ApplicationUpdate", "{{|yellow|}}")
+	console.RegisterSemanticTag("Theme_ApplicationUpdateBrackets", "{{|-|}}")
+	console.RegisterSemanticTag("Theme_Hostname", "{{|::B|}}")
 
 }
 
@@ -410,9 +410,9 @@ func resolveThemeValue(raw string, rawValues map[string]string, visiting map[str
 			// Semantic reference
 			refKey := strings.TrimSuffix(strings.TrimPrefix(tag, "{{_"), "_}}")
 
-			// Check if it's a theme key reference (Theme...)
-			if strings.HasPrefix(refKey, "Theme") {
-				targetKey := strings.TrimPrefix(refKey, "Theme")
+			// Check if it's a theme key reference (Theme_...)
+			if strings.HasPrefix(refKey, "Theme_") {
+				targetKey := strings.TrimPrefix(refKey, "Theme_")
 
 				// Resolve it recursively
 				resolvedRef, err := resolveThemeValue(rawValues[targetKey], rawValues, visiting)
@@ -541,12 +541,12 @@ func parseThemeINI(path string) error {
 			styleValue = console.ExpandTags(rawValues[key])
 		}
 
-		// Register "Theme"+Key explicitly
+		// Register "Theme_"+Key explicitly
 		// This makes the resolved value available as a semantic tag for SUBSEQUENT keys too?
 		// Yes, because we resolved it.
 		// But wait, our resolve() function uses the map, not registered tags.
 		// The semantic registration is for OTHER parts of the app (like prints).
-		console.RegisterSemanticTag("Theme"+key, styleValue)
+		console.RegisterSemanticTag("Theme_"+key, styleValue)
 
 		// Map known keys to Current struct fields
 		fg, bg := parseTagToColor(styleValue)
@@ -613,9 +613,9 @@ func parseThemeINI(path string) error {
 	fgStr := console.GetColorStr(Current.ScreenFG)
 
 	if isReversed {
-		console.RegisterSemanticTag("ThemeReset", "{{|"+bgStr+":"+bgStr+"|}}")
+		console.RegisterSemanticTag("Theme_Reset", "{{|"+bgStr+":"+bgStr+"|}}")
 	} else {
-		console.RegisterSemanticTag("ThemeReset", "{{|"+fgStr+":"+bgStr+"|}}")
+		console.RegisterSemanticTag("Theme_Reset", "{{|"+fgStr+":"+bgStr+"|}}")
 	}
 
 	return nil

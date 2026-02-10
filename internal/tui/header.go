@@ -107,18 +107,18 @@ func (m HeaderModel) renderLeft() string {
 	styles := GetStyles()
 
 	// Build hostname with theme tag
-	leftText := "{{_ThemeHostname_}}" + m.hostname + "{{|-|}}"
+	leftText := "{{_Theme_Hostname_}}" + m.hostname + "{{|-|}}"
 
 	// Add flags if present
 	if len(m.flags) > 0 {
-		leftText += " {{_ThemeApplicationFlagsBrackets_}}|{{|-|}}"
+		leftText += " {{_Theme_ApplicationFlagsBrackets_}}|{{|-|}}"
 		for i, flag := range m.flags {
 			if i > 0 {
-				leftText += "{{_ThemeApplicationFlagsSpace_}}|{{|-|}}"
+				leftText += "{{_Theme_ApplicationFlagsSpace_}}|{{|-|}}"
 			}
-			leftText += "{{_ThemeApplicationFlags_}}" + flag + "{{|-|}}"
+			leftText += "{{_Theme_ApplicationFlags_}}" + flag + "{{|-|}}"
 		}
-		leftText += "{{_ThemeApplicationFlagsBrackets_}}|{{|-|}}"
+		leftText += "{{_Theme_ApplicationFlagsBrackets_}}|{{|-|}}"
 	}
 
 	// Translate theme tags and render with lipgloss, using header background as default
@@ -127,7 +127,7 @@ func (m HeaderModel) renderLeft() string {
 
 func (m HeaderModel) renderCenter() string {
 	styles := GetStyles()
-	centerText := "{{_ThemeApplicationName_}}" + version.ApplicationName + "{{|-|}}"
+	centerText := "{{_Theme_ApplicationName_}}" + version.ApplicationName + "{{|-|}}"
 	return MaintainBackground(RenderThemeText(centerText, styles.HeaderBG), styles.HeaderBG)
 }
 
@@ -139,25 +139,25 @@ func (m HeaderModel) renderRight() string {
 	var rightText string
 	// Show update indicator: "?" if check failed, "*" if update available, " " otherwise
 	if update.UpdateCheckError {
-		rightText += "{{_ThemeApplicationUpdate_}}?{{|-|}}"
-		rightText += "{{_ThemeApplicationVersion_}}A:[" + appVer + "]{{|-|}}"
+		rightText += "{{_Theme_ApplicationUpdate_}}?{{|-|}}"
+		rightText += "{{_Theme_ApplicationVersion_}}A:[" + appVer + "]{{|-|}}"
 	} else if update.AppUpdateAvailable {
-		rightText += "{{_ThemeApplicationUpdate_}}*{{|-|}}"
-		rightText += "{{_ThemeApplicationVersion_}}A:[{{|-|}}{{_ThemeApplicationUpdate_}}" + appVer + "{{|-|}}{{_ThemeApplicationVersion_}}]{{|-|}}"
+		rightText += "{{_Theme_ApplicationUpdate_}}*{{|-|}}"
+		rightText += "{{_Theme_ApplicationVersion_}}A:[{{|-|}}{{_Theme_ApplicationUpdate_}}" + appVer + "{{|-|}}{{_Theme_ApplicationVersion_}}]{{|-|}}"
 	} else {
 		rightText += " "
-		rightText += "{{_ThemeApplicationVersion_}}A:[" + appVer + "]{{|-|}}"
+		rightText += "{{_Theme_ApplicationVersion_}}A:[" + appVer + "]{{|-|}}"
 	}
 
 	if update.UpdateCheckError {
-		rightText += "{{_ThemeApplicationUpdate_}}?{{|-|}}"
-		rightText += "{{_ThemeApplicationVersion_}}T:[" + tmplVer + "]{{|-|}}"
+		rightText += "{{_Theme_ApplicationUpdate_}}?{{|-|}}"
+		rightText += "{{_Theme_ApplicationVersion_}}T:[" + tmplVer + "]{{|-|}}"
 	} else if update.TmplUpdateAvailable {
-		rightText += "{{_ThemeApplicationUpdate_}}*{{|-|}}"
-		rightText += "{{_ThemeApplicationVersion_}}T:[{{|-|}}{{_ThemeApplicationUpdate_}}" + tmplVer + "{{|-|}}{{_ThemeApplicationVersion_}}]{{|-|}}"
+		rightText += "{{_Theme_ApplicationUpdate_}}*{{|-|}}"
+		rightText += "{{_Theme_ApplicationVersion_}}T:[{{|-|}}{{_Theme_ApplicationUpdate_}}" + tmplVer + "{{|-|}}{{_Theme_ApplicationVersion_}}]{{|-|}}"
 	} else {
 		rightText += " "
-		rightText += "{{_ThemeApplicationVersion_}}T:[" + tmplVer + "]{{|-|}}"
+		rightText += "{{_Theme_ApplicationVersion_}}T:[" + tmplVer + "]{{|-|}}"
 	}
 
 	return MaintainBackground(RenderThemeText(rightText, styles.HeaderBG), styles.HeaderBG)

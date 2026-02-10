@@ -15,15 +15,15 @@ func TestResolveThemeValue(t *testing.T) {
 	// Mock theme data map (simulating what we read from INI)
 	themeMap := map[string]string{
 		"Simple":       "{{|red:blue:B|}}",
-		"Reference":    "{{_ThemeSimple_}}",
-		"OverrideFG":   "{{_ThemeSimple_}}{{|green|}}",
-		"OverrideBG":   "{{_ThemeSimple_}}{{|:green|}}",
-		"OverrideFlag": "{{_ThemeSimple_}}{{|::U|}}",
+		"Reference":    "{{_Theme_Simple_}}",
+		"OverrideFG":   "{{_Theme_Simple_}}{{|green|}}",
+		"OverrideBG":   "{{_Theme_Simple_}}{{|:green|}}",
+		"OverrideFlag": "{{_Theme_Simple_}}{{|::U|}}",
 		"ChainA":       "{{|white|}}",
-		"ChainB":       "{{_ThemeChainA_}}{{|:black|}}", // white:black
-		"ChainC":       "{{_ThemeChainB_}}{{|::B|}}",    // white:black:B
-		"CircularA":    "{{_ThemeCircularB_}}",
-		"CircularB":    "{{_ThemeCircularA_}}",
+		"ChainB":       "{{_Theme_ChainA_}}{{|:black|}}", // white:black
+		"ChainC":       "{{_Theme_ChainB_}}{{|::B|}}",    // white:black:B
+		"CircularA":    "{{_Theme_CircularB_}}",
+		"CircularB":    "{{_Theme_CircularA_}}",
 	}
 
 	// Register base keys as semantic tags (as we would during parsing)

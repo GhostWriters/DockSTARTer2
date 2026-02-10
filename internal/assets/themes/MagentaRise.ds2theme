@@ -24,10 +24,16 @@ ThemeName='Magenta Rise'
 ThemeDescription='Dockstarter Magenta Rise theme'
 ThemeAuthor='Westlin'
 
+Screen="{{|magenta:black:B|}}"
+Dialog="{{|magenta:black|}}"
+Border="{{|magenta:black|}}"
+Border2="{{|magenta:black|}}"
+Shadow="{{|black:black:B|}}"
+BoxTitle="{{|magenta:black|}}"
+Program="{{|black:white|}}"
+
 ApplicationName="{{|black:white|}}"
 ApplicationVersion="{{|black:white|}}"
-ApplicationVersionBrackets="{{|black:white|}}"
-ApplicationVersionSpace="{{|white:black|}}"
 ApplicationVersionBrackets="{{|black:white|}}"
 ApplicationVersionSpace="{{|white:black|}}"
 ApplicationFlags="{{|white:black|}}"
@@ -36,13 +42,29 @@ ApplicationFlagsSpace="{{|black:white|}}"
 ApplicationUpdate="{{|white:black|}}"
 ApplicationUpdateBrackets="{{|white:black|}}"
 Hostname="{{|black:white|}}"
+
 Title="{{|white:black:U|}}"
-Subtitle="{{|black:white|}}"
-TitleSuccess="{{|black:white|}}"
+TitleHelp="{{_Theme_Title_}}"
+TitleNotice="{{|white:green:B|}}"
+TitleWarn="{{|black:white|}}"
 TitleError="{{|black:white:B|}}"
+TitleSuccess="{{|black:white|}}"
 TitleWarning="{{|black:white|}}"
 TitleQuestion="{{|black:white|}}"
-TitleHelp="{{_ThemeTitle_}}"
+
+CommandLine="{{|white:black|}}"
+ButtonActive="{{|magenta:black:B|}}"
+ButtonInactive="{{|magenta:black|}}"
+Item="{{|magenta:black|}}"
+ItemSelected="{{|magenta:black:B|}}"
+Tag="{{|magenta:black|}}"
+TagSelected="{{|magenta:black:B|}}"
+TagKey="{{|magenta:black|}}"
+TagKeySelected="{{|magenta:black:B|}}"
+Helpline="{{|white:magenta|}}"
+ItemHelp="{{|white:magenta|}}"
+
+Subtitle="{{|black:white|}}"
 Heading="{{|black:white|}}"
 HeadingTag="{{|white:black:B|}}"
 HeadingValue="{{|white:black:BU|}}"
@@ -57,35 +79,7 @@ LineAddVariable="{{|black:white|}}"
 ListDefault=""
 ListApp=""
 ListAppUserDefined="{{|black:white|}}"
-CommandLine="{{|white:black|}}"
 KeyCap="{{|black:white|}}"
 ProgressWaiting="{{|white:black|}}"
 ProgressInProgress="{{|white:black:B|}}"
 ProgressCompleted="{{|black:white|}}"
-
-# Imported from .dialogrc
-Screen="{{|magenta:black:B|}}"
-Dialog="{{|magenta:black|}}"
-Border="{{|magenta:black|}}"
-ButtonActive="{{|magenta:black:B|}}"
-TagSelected="{{|magenta:black:B|}}"
-TagKey="{{|magenta:black|}}"
-Shadow="{{|black:black:B|}}"
-ButtonInactive="{{|magenta:black|}}"
-ItemSelected="{{|magenta:black:B|}}"
-Item="{{|magenta:black|}}"
-Tag="{{|magenta:black|}}"
-TagKeySelected="{{|magenta:black:B|}}"
-
-# Imported from .dialogrc
-BoxTitle="{{|magenta:black|}}"
-
-# Imported from .dialogrc
-BorderContrast="{{|magenta:black|}}"
-
-# Imported from .dialogrc
-Border2="{{|magenta:black|}}"
-
-Helpline="{{|white:magenta|}}"
-ItemHelp="{{|white:magenta|}}"
-Program="{{|black:white|}}"

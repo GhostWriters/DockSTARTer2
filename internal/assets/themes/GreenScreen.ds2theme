@@ -24,10 +24,16 @@ ThemeName='GreenScreen'
 ThemeDescription='Dockstarter Green Screen theme'
 ThemeAuthor='Westlin'
 
+Screen="{{|black:green:B|}}"
+Dialog="{{|green:black:-|}}"
+Border="{{|green:black:-|}}"
+Border2="{{|green:black:-|}}"
+Shadow="{{|black:green:B|}}"
+BoxTitle="{{|green:black:-|}}"
+Program="{{|green:black:-|}}"
+
 ApplicationName="{{|green:black|}}"
 ApplicationVersion="{{|green:black|}}"
-ApplicationVersionBrackets="{{|green:black|}}"
-ApplicationVersionSpace="{{|black:green|}}"
 ApplicationVersionBrackets="{{|green:black|}}"
 ApplicationVersionSpace="{{|black:green|}}"
 ApplicationFlags="{{|black:green|}}"
@@ -36,13 +42,29 @@ ApplicationFlagsSpace="{{|green:black|}}"
 ApplicationUpdate="{{|green:black|}}"
 ApplicationUpdateBrackets="{{|green:black|}}"
 Hostname="{{|green:black|}}"
+
 Title="{{|green:black:U|}}"
-Subtitle="{{|green:black|}}"
-TitleSuccess="{{|green:black|}}"
+TitleHelp="{{_Theme_Title_}}"
+TitleNotice="{{|white:green:B|}}"
+TitleWarn="{{|green:black|}}"
 TitleError="{{|green:black:B|}}"
+TitleSuccess="{{|green:black|}}"
 TitleWarning="{{|green:black|}}"
 TitleQuestion="{{|green:black|}}"
-TitleHelp="{{_ThemeTitle_}}"
+
+CommandLine="{{|green:black|}}"
+ButtonActive="{{|black:green:-|}}"
+ButtonInactive="{{|green:black:-|}}"
+Item="{{|green:black:-|}}"
+ItemSelected="{{|black:green:B|}}"
+Tag="{{|green:black:-|}}"
+TagSelected="{{|black:green:-|}}"
+TagKey="{{|black:green:B|}}"
+TagKeySelected="{{|black:green:B|}}"
+Helpline="{{|green:black:-|}}"
+ItemHelp="{{|green:black:-|}}"
+
+Subtitle="{{|green:black|}}"
 Heading="{{|green:black|}}"
 HeadingTag="{{|white:black:B|}}"
 HeadingValue="{{|white:black:BU|}}"
@@ -57,35 +79,7 @@ LineAddVariable="{{|black:white|}}"
 ListDefault=""
 ListApp=""
 ListAppUserDefined="{{|green:black|}}"
-CommandLine="{{|green:black|}}"
 KeyCap="{{|green:black|}}"
 ProgressWaiting="{{|black:green|}}"
 ProgressInProgress="{{|black:green:B|}}"
 ProgressCompleted="{{|green:black|}}"
-
-# Imported from .dialogrc
-Tag="{{|green:black:-|}}"
-TagKeySelected="{{|black:green:B|}}"
-Screen="{{|black:green:B|}}"
-Dialog="{{|green:black:-|}}"
-Border="{{|green:black:-|}}"
-ButtonActive="{{|black:green:-|}}"
-TagSelected="{{|black:green:-|}}"
-TagKey="{{|black:green:B|}}"
-Shadow="{{|black:green:B|}}"
-ButtonInactive="{{|green:black:-|}}"
-ItemSelected="{{|black:green:B|}}"
-Item="{{|green:black:-|}}"
-
-# Imported from .dialogrc
-BoxTitle="{{|green:black:-|}}"
-
-# Imported from .dialogrc
-BorderContrast="{{|green:black:-|}}"
-
-# Imported from .dialogrc
-Border2="{{|green:black:-|}}"
-
-Helpline="{{|green:black:-|}}"
-ItemHelp="{{|green:black:-|}}"
-Program="{{|green:black:-|}}"

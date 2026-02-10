@@ -125,7 +125,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		for _, part := range group.FullSlice() {
 			cmdStr += " " + part
 		}
-		subtitle := " {{_ThemeCommandLine_}}" + cmdStr + "{{|-|}}"
+		subtitle := " {{_Theme_CommandLine_}}" + cmdStr + "{{|-|}}"
 		logger.Notice(ctx, fmt.Sprintf("%s command: '{{_UserCommand_}}%s{{|-|}}'", version.ApplicationName, cmdStr))
 
 		// Log execution arguments for verification
@@ -226,7 +226,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			if title == "" {
 				title = "Running Command"
 			}
-			title = "{{_ThemeTitleSuccess_}}" + title + "{{|-|}}"
+			title = "{{_Theme_TitleSuccess_}}" + title + "{{|-|}}"
 			err := tui.RunCommand(ctx, title, subtitle, task)
 			if err != nil {
 				logger.Error(ctx, "TUI Run Error: %v", err)
