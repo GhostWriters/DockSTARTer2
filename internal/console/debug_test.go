@@ -43,7 +43,7 @@ func TestParseStyleCodeToANSI(t *testing.T) {
 		},
 		{
 			name:     "Mixed",
-			input:    "white:red:b",
+			input:    "white:red:B",
 			expected: "\x1b[37m\x1b[41m" + CodeBold,
 		},
 		{"Reset", "-", "\x1b[0m"},
