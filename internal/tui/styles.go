@@ -581,7 +581,11 @@ func AddPatternHalo(content string) string {
 		contentWidth++
 	}
 
-	shadowStyle := currentStyles.Shadow
+	// Ensure halo uses the standard shadow foreground and screen background
+	shadowStyle := lipgloss.NewStyle().
+		Foreground(currentStyles.ShadowColor).
+		Background(currentStyles.Screen.GetBackground())
+
 	var shadeChar string
 
 	if currentStyles.LineCharacters {
@@ -606,7 +610,8 @@ func AddPatternHalo(content string) string {
 	if currentStyles.LineCharacters {
 		shadowCell = shadowStyle.Render(strings.Repeat(shadeChar, 2))
 	} else {
-		shadowCell = shadowStyle.Width(2).Height(1).Render("")
+		// Even in ASCII, we use the pattern style for the "halo" effect
+		shadowCell = shadowStyle.Render(strings.Repeat(shadeChar, 2))
 	}
 
 	// Horizontal shadow line (covers top/bottom + 2 cells for corners)
