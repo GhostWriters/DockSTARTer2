@@ -87,11 +87,36 @@ var commandTitles = map[string]string{
 	"--theme-no-borders":         "Turned Off Borders",
 }
 
+func handleConfigSettings(ctx context.Context, group *CommandGroup) {
+	conf := config.LoadAppConfig()
+	switch group.Command {
+	case "--config-folder":
+		if len(group.Args) > 0 {
+			conf.Paths.ConfigFolder = group.Args[0]
+		} else {
+			logger.Display(ctx, "Current config folder: {{_Folder_}}%s{{|-|}}", conf.Paths.ConfigFolder)
+			return
+		}
+	case "--config-compose-folder":
+		if len(group.Args) > 0 {
+			conf.Paths.ComposeFolder = group.Args[0]
+		} else {
+			logger.Display(ctx, "Current compose folder: {{_Folder_}}%s{{|-|}}", conf.Paths.ComposeFolder)
+			return
+		}
+	}
+	if err := config.SaveAppConfig(conf); err != nil {
+		logger.Error(ctx, "Failed to save configuration: %v", err)
+	} else {
+		logger.Notice(ctx, "Configuration updated successfully.")
+	}
+}
+
 // Execute runs the logic for a sequence of command groups.
 // It handles flag application, command switching, and state resetting.
 func Execute(ctx context.Context, groups []CommandGroup) int {
 	conf := config.LoadAppConfig()
-	_ = theme.Load(conf.Theme)
+	_ = theme.Load(conf.UI.Theme)
 
 	ranCommand := false
 
@@ -195,14 +220,17 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			case "--env-set", "--env-set-lower", "--env-set-literal", "--env-set-lower-literal":
 				handleEnvSet(subCtx, &group)
 				ranCommand = true
+			case "--config-show", "--show-config":
+				handleConfigShow(subCtx, &conf)
+				ranCommand = true
+			case "--config-folder", "--config-compose-folder":
+				handleConfigSettings(subCtx, &group)
+				ranCommand = true
 			case "--theme-lines", "--theme-no-lines", "--theme-line", "--theme-no-line",
 				"--theme-borders", "--theme-no-borders", "--theme-border", "--theme-no-border",
 				"--theme-shadows", "--theme-no-shadows", "--theme-shadow", "--theme-no-shadow", "--theme-shadow-level",
-				"--theme-scrollbar", "--theme-no-scrollbar":
+				"--theme-scrollbar", "--theme-no-scrollbar", "--theme-border-color":
 				handleThemeSettings(subCtx, &group)
-				ranCommand = true
-			case "--config-show", "--show-config":
-				handleConfigShow(subCtx, &conf)
 				ranCommand = true
 			case "-p", "--prune":
 				handlePrune(subCtx, &state)
@@ -432,7 +460,7 @@ func handleEnvSet(ctx context.Context, group *CommandGroup) {
 		}
 
 		// Ensure env file exists (create if needed)
-		if err := appenv.Create(ctx, file, filepath.Join(conf.ConfigDir, constants.EnvExampleFileName)); err != nil {
+		if err := appenv.Create(ctx, file, filepath.Join(conf.Paths.ConfigFolder, constants.EnvExampleFileName)); err != nil {
 			logger.Debug(ctx, "Ensure env file error: %v", err)
 		}
 
@@ -467,7 +495,7 @@ func handleAppVarsCreate(ctx context.Context, group *CommandGroup, state *CmdSta
 
 	// Ensure env file exists (create if needed)
 	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
-	if err := appenv.Create(ctx, envFile, filepath.Join(conf.ConfigDir, constants.EnvExampleFileName)); err != nil {
+	if err := appenv.Create(ctx, envFile, filepath.Join(conf.Paths.ConfigFolder, constants.EnvExampleFileName)); err != nil {
 		logger.Debug(ctx, "Ensure env file error: %v", err)
 	}
 
@@ -501,7 +529,27 @@ func handleTheme(ctx context.Context, group *CommandGroup) {
 				return
 			}
 
-			conf.Theme = newTheme
+			conf.UI.Theme = newTheme
+			// Apply theme defaults if any
+			if tf, err := theme.GetThemeFile(newTheme); err == nil && tf.Defaults != nil {
+				changes := theme.ApplyThemeDefaults(&conf, *tf.Defaults)
+				if len(changes) > 0 {
+					var lines []string
+					for k, v := range changes {
+						status := v
+						if v == "true" {
+							status = "{{_Var_}}ON{{|-|}}"
+						} else if v == "false" {
+							status = "{{_Var_}}OFF{{|-|}}"
+						} else {
+							status = fmt.Sprintf("{{_Var_}}%s{{|-|}}", v)
+						}
+						lines = append(lines, fmt.Sprintf("  - %s: %s", k, status))
+					}
+					logger.Notice(ctx, "Applying settings from theme file:\n%s", strings.Join(lines, "\n"))
+				}
+			}
+
 			if err := config.SaveAppConfig(conf); err != nil {
 				logger.Error(ctx, "Failed to save theme setting: %v", err)
 			} else {
@@ -511,7 +559,7 @@ func handleTheme(ctx context.Context, group *CommandGroup) {
 			}
 		} else {
 			// No args? Show current theme
-			logger.Notice(ctx, "Current theme is: {{_Theme_}}%s{{|-|}}", conf.Theme)
+			logger.Notice(ctx, "Current theme is: {{_Theme_}}%s{{|-|}}", conf.UI.Theme)
 			logger.Notice(ctx, "Run '{{_UserCommand_}}%s --theme-list{{|-|}}' to see available themes.", version.CommandName)
 		}
 	case "--theme-list":
@@ -550,57 +598,57 @@ func handleThemeSettings(ctx context.Context, group *CommandGroup) {
 	conf := config.LoadAppConfig()
 	switch group.Command {
 	case "--theme-lines", "--theme-line":
-		conf.LineCharacters = true
+		conf.UI.LineCharacters = true
 	case "--theme-no-lines", "--theme-no-line":
-		conf.LineCharacters = false
+		conf.UI.LineCharacters = false
 	case "--theme-borders", "--theme-border":
-		conf.Borders = true
+		conf.UI.Borders = true
 	case "--theme-no-borders", "--theme-no-border":
-		conf.Borders = false
+		conf.UI.Borders = false
 	case "--theme-shadows", "--theme-shadow":
-		conf.Shadow = true
+		conf.UI.Shadow = true
 	case "--theme-no-shadows", "--theme-no-shadow":
-		conf.Shadow = false
+		conf.UI.Shadow = false
 	case "--theme-shadow-level":
 		// Set shadow level (0-4 or aliases)
 		if len(group.Args) > 0 {
 			arg := strings.ToLower(group.Args[0])
 			switch arg {
 			case "0", "off", "none", "false", "no":
-				conf.ShadowLevel = 0
-				conf.Shadow = false
+				conf.UI.ShadowLevel = 0
+				conf.UI.Shadow = false
 			case "1", "light":
-				conf.ShadowLevel = 1
-				conf.Shadow = true
+				conf.UI.ShadowLevel = 1
+				conf.UI.Shadow = true
 			case "2", "medium":
-				conf.ShadowLevel = 2
-				conf.Shadow = true
+				conf.UI.ShadowLevel = 2
+				conf.UI.Shadow = true
 			case "3", "dark":
-				conf.ShadowLevel = 3
-				conf.Shadow = true
+				conf.UI.ShadowLevel = 3
+				conf.UI.Shadow = true
 			case "4", "solid", "full":
-				conf.ShadowLevel = 4
-				conf.Shadow = true
+				conf.UI.ShadowLevel = 4
+				conf.UI.Shadow = true
 			default:
 				// specialized handling for percentage strings
 				if strings.HasSuffix(arg, "%") {
 					var percent int
 					if _, err := fmt.Sscanf(arg, "%d%%", &percent); err == nil {
 						if percent <= 12 {
-							conf.ShadowLevel = 0
-							conf.Shadow = false
+							conf.UI.ShadowLevel = 0
+							conf.UI.Shadow = false
 						} else if percent <= 37 {
-							conf.ShadowLevel = 1
-							conf.Shadow = true
+							conf.UI.ShadowLevel = 1
+							conf.UI.Shadow = true
 						} else if percent <= 62 {
-							conf.ShadowLevel = 2
-							conf.Shadow = true
+							conf.UI.ShadowLevel = 2
+							conf.UI.Shadow = true
 						} else if percent <= 87 {
-							conf.ShadowLevel = 3
-							conf.Shadow = true
+							conf.UI.ShadowLevel = 3
+							conf.UI.Shadow = true
 						} else {
-							conf.ShadowLevel = 4
-							conf.Shadow = true
+							conf.UI.ShadowLevel = 4
+							conf.UI.Shadow = true
 						}
 						break
 					}
@@ -609,22 +657,42 @@ func handleThemeSettings(ctx context.Context, group *CommandGroup) {
 				return
 			}
 		} else {
-			logger.Display(ctx, "Current shadow level: %d", conf.ShadowLevel)
+			logger.Display(ctx, "Current shadow level: %d", conf.UI.ShadowLevel)
 			return
 		}
 	case "--theme-scrollbar":
-		conf.Scrollbar = true
+		conf.UI.Scrollbar = true
 	case "--theme-no-scrollbar":
-		conf.Scrollbar = false
-		// theme handlers above...
+		conf.UI.Scrollbar = false
+	case "--theme-border-color":
+		if len(group.Args) > 0 {
+			switch group.Args[0] {
+			case "1":
+				conf.UI.BorderColor = 1
+			case "2":
+				conf.UI.BorderColor = 2
+			case "3":
+				conf.UI.BorderColor = 3
+			default:
+				logger.Error(ctx, "Invalid border color: %s (use 1, 2, or 3)", group.Args[0])
+				return
+			}
+		} else {
+			logger.Display(ctx, "Current border color setting: %d", conf.UI.BorderColor)
+			return
+		}
 	}
 	if err := config.SaveAppConfig(conf); err != nil {
 		logger.Error(ctx, "Failed to save theme setting: %v", err)
 	} else {
+		// Log specific update if appropriate
+		if group.Command == "--theme-border-color" && len(group.Args) > 0 {
+			logger.Notice(ctx, "Border color set to: {{_Var_}}%s{{|-|}}", group.Args[0])
+		}
 		// Specialized output for shadow level
-		if group.Command == "--theme-shadow-level" {
+		if group.Command == "--theme-shadow-level" && len(group.Args) > 0 {
 			var percent int
-			switch conf.ShadowLevel {
+			switch conf.UI.ShadowLevel {
 			case 0:
 				percent = 0
 			case 1:
@@ -736,17 +804,7 @@ func handleConfigShow(ctx context.Context, conf *config.AppConfig) {
 		"{{_UsageCommand_}}Expanded Value{{|-|}}",
 	}
 
-	keys := []string{
-		"ConfigFolder",
-		"ComposeFolder",
-		"Theme",
-		"Borders",
-		"LineCharacters",
-		"Scrollbar",
-		"Shadow",
-		"ShadowLevel",
-	}
-
+	keys := []string{"ConfigFolder", "ComposeFolder", "Theme", "Borders", "LineCharacters", "Scrollbar", "Shadow", "ShadowLevel", "BorderColor"}
 	displayNames := map[string]string{
 		"ConfigFolder":   "Config Folder",
 		"ComposeFolder":  "Compose Folder",
@@ -756,6 +814,7 @@ func handleConfigShow(ctx context.Context, conf *config.AppConfig) {
 		"Scrollbar":      "Scrollbar",
 		"Shadow":         "Shadow",
 		"ShadowLevel":    "Shadow Level",
+		"BorderColor":    "Border Color",
 	}
 
 	var data []string
@@ -773,25 +832,27 @@ func handleConfigShow(ctx context.Context, conf *config.AppConfig) {
 
 		switch key {
 		case "ConfigFolder":
-			value = conf.ConfigDirUnexpanded
+			value = conf.Paths.ConfigFolder
 			expandedValue = conf.ConfigDir
 			useFolderColor = true
 		case "ComposeFolder":
-			value = conf.ComposeDirUnexpanded
+			value = conf.Paths.ComposeFolder
 			expandedValue = conf.ComposeDir
 			useFolderColor = true
 		case "Theme":
-			value = conf.Theme
+			value = conf.UI.Theme
 		case "Borders":
-			value = boolToYesNo(conf.Borders)
+			value = boolToYesNo(conf.UI.Borders)
 		case "LineCharacters":
-			value = boolToYesNo(conf.LineCharacters)
+			value = boolToYesNo(conf.UI.LineCharacters)
 		case "Scrollbar":
-			value = boolToYesNo(conf.Scrollbar)
+			value = boolToYesNo(conf.UI.Scrollbar)
 		case "Shadow":
-			value = boolToYesNo(conf.Shadow)
+			value = boolToYesNo(conf.UI.Shadow)
 		case "ShadowLevel":
-			value = fmt.Sprintf("{{_Var_}}%d{{|-|}}", conf.ShadowLevel)
+			value = fmt.Sprintf("{{_Var_}}%d{{|-|}}", conf.UI.ShadowLevel)
+		case "BorderColor":
+			value = fmt.Sprintf("{{_Var_}}%d{{|-|}}", conf.UI.BorderColor)
 		}
 
 		colorTag := "{{_Var_}}"
@@ -823,7 +884,7 @@ func handleConfigShow(ctx context.Context, conf *config.AppConfig) {
 	}
 
 	logger.Info(ctx, "Configuration options stored in '{{_File_}}%s{{|-|}}':", paths.GetConfigFilePath())
-	console.PrintTable(headers, data, conf.LineCharacters)
+	console.PrintTable(headers, data, conf.UI.LineCharacters)
 }
 
 func handlePrune(ctx context.Context, state *CmdState) {

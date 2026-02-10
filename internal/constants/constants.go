@@ -17,7 +17,7 @@ const (
 	EnvFileName             = ".env"
 	EnvExampleFileName      = ".env.example"
 	AppEnvFileNamePrefix    = ".env.app."
-	AppINIFileName          = "dockstarter2.ini"
+	AppConfigFileName       = "dockstarter2.toml"
 )
 
 // Config INI Keys

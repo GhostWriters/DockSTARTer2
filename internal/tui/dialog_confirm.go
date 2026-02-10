@@ -204,7 +204,7 @@ func ShowConfirmDialog(title, question string, defaultYes bool) bool {
 
 	// Initialize TUI if not already done
 	cfg := config.LoadAppConfig()
-	if err := theme.Load(cfg.Theme); err == nil {
+	if err := theme.Load(cfg.UI.Theme); err == nil {
 		InitStyles(cfg)
 	}
 

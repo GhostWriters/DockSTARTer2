@@ -242,7 +242,7 @@ func Parse(args []string) ([]CommandGroup, error) {
 			}
 
 		// Commands that require exactly ONE argument
-		case "-t", "--test", "--config-pm":
+		case "-t", "--test", "--config-pm", "--config-folder", "--config-compose-folder", "--theme-border-color":
 			if i >= len(expandedArgs) || strings.HasPrefix(expandedArgs[i], "-") {
 				return nil, &ParseError{Args: expandedArgs, Index: i - 1, FailingCommand: cmd, Message: fmt.Sprintf("Command %s requires an argument.", cmd)}
 			}

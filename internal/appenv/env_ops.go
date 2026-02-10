@@ -28,13 +28,32 @@ import (
 //
 // Returns an error if critical operations like folder creation or file writing fail.
 func EnvCreate(ctx context.Context, conf config.AppConfig) error {
-	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
+	// 1. Ensure main config env file exists (in ConfigDir)
+	exampleFile := filepath.Join(conf.Paths.ConfigFolder, constants.EnvExampleFileName)
+	envFile := filepath.Join(conf.Paths.ConfigFolder, constants.EnvFileName)
+	if err := Create(ctx, envFile, exampleFile); err != nil {
+		return err
+	}
 
-	// 1. Ensure Folder
-	if _, err := os.Stat(conf.ComposeDir); os.IsNotExist(err) {
-		logger.Notice(ctx, "Creating folder '{{_Folder_}}%s{{|-|}}'.", conf.ComposeDir)
-		if err := os.MkdirAll(conf.ComposeDir, 0755); err != nil {
+	// 2. Ensure main app env file exists (in ComposeDir)
+	mainEnvPath := filepath.Join(conf.Paths.ComposeFolder, constants.EnvFileName)
+	if err := Create(ctx, mainEnvPath, envFile); err != nil {
+		return err
+	}
+
+	// 3. Ensure Folders
+	if _, err := os.Stat(conf.Paths.ComposeFolder); os.IsNotExist(err) {
+		logger.Notice(ctx, "Creating folder '{{_Folder_}}%s{{|-|}}'.", conf.Paths.ComposeFolder)
+		if err := os.MkdirAll(conf.Paths.ComposeFolder, 0755); err != nil {
 			logger.Fatal(ctx, "Failed to create compose folder: %v", err)
+		}
+	} else if err != nil {
+		return err
+	}
+	if _, err := os.Stat(conf.Paths.ConfigFolder); os.IsNotExist(err) {
+		logger.Notice(ctx, "Creating folder '{{_Folder_}}%s{{|-|}}'.", conf.Paths.ConfigFolder)
+		if err := os.MkdirAll(conf.Paths.ConfigFolder, 0755); err != nil {
+			logger.Fatal(ctx, "Failed to create config folder: %v", err)
 		}
 	} else if err != nil {
 		return err // Stat error, usually permissions or disk error. Maybe fatal too?
@@ -175,7 +194,7 @@ func SanitizeEnv(ctx context.Context, file string, conf config.AppConfig) error 
 	}
 
 	// DOCKER_CONFIG_FOLDER
-	rawConfig := conf.ConfigDirUnexpanded
+	rawConfig := conf.Paths.ConfigFolder
 
 	// Create strict context for config expansion as per global_variables.sh
 	configExpansionContext := map[string]string{
@@ -204,7 +223,7 @@ func SanitizeEnv(ctx context.Context, file string, conf config.AppConfig) error 
 	}
 
 	// DOCKER_COMPOSE_FOLDER
-	rawCompose := conf.ComposeDirUnexpanded
+	rawCompose := conf.Paths.ComposeFolder
 
 	// Strict context for compose expansion
 	composeExpansionContext := map[string]string{

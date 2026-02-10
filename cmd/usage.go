@@ -127,11 +127,15 @@ func GetUsage(target string) string {
 		)
 	}
 
-	if match("--config-show", "--show-config") {
+	if match("--config-show", "--show-config", "--config-folder", "--config-compose-folder") {
 		printStr(
 			"{{_UsageCommand_}}--config-show{{|-|}}",
 			"{{_UsageCommand_}}--show-config{{|-|}}",
 			"	Shows the current configuration options",
+			"{{_UsageCommand_}}--config-folder{{|-|}} {{_UsageFile_}}<path>{{|-|}}",
+			"	Sets the folder where application variables are stored.",
+			"{{_UsageCommand_}}--config-compose-folder{{|-|}} {{_UsageFile_}}<path>{{|-|}}",
+			"	Sets the folder where the docker-compose.yml file is stored.",
 		)
 	}
 	if match("-e", "--env") {
@@ -278,7 +282,7 @@ func GetUsage(target string) string {
 			"	Run tests to check the program",
 		)
 	}
-	if match("-T", "--theme", "--theme-list", "--theme-table", "--theme-lines", "--theme-no-lines", "--theme-borders", "--theme-no-borders", "--theme-shadows", "--theme-no-shadows", "--theme-scrollbar", "--theme-no-scrollbar") {
+	if match("-T", "--theme", "--theme-list", "--theme-table", "--theme-lines", "--theme-no-lines", "--theme-borders", "--theme-no-borders", "--theme-shadows", "--theme-no-shadows", "--theme-shadow-level", "--theme-scrollbar", "--theme-no-scrollbar", "--theme-border-color") {
 		printStr(
 			"{{_UsageCommand_}}-T --theme{{|-|}}",
 			"	Shows the current theme",
@@ -297,9 +301,13 @@ func GetUsage(target string) string {
 			"{{_UsageCommand_}}--theme-shadows{{|-|}}",
 			"{{_UsageCommand_}}--theme-no-shadows{{|-|}}",
 			"	Turn the shadows on or off in the GUI",
+			"{{_UsageCommand_}}--theme-shadow-level{{|-|}} {{_UsageOption_}}<level>{{|-|}}",
+			"	Set the shadow level (0-4 or off/light/medium/dark/solid)",
 			"{{_UsageCommand_}}--theme-scrollbar{{|-|}}",
 			"{{_UsageCommand_}}--theme-no-scrollbar{{|-|}}",
 			"	Turn the scrollbar on or off in the GUI",
+			"{{_UsageCommand_}}--theme-border-color{{|-|}} {{_UsageOption_}}<level>{{|-|}}",
+			"	Set the border color (1=Border, 2=Border2, 3=Both)",
 		)
 	}
 	if match("-u", "--update", "--update-app", "--update-templates") {

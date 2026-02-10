@@ -130,13 +130,14 @@ var slantedAsciiBorder = lipgloss.Border{
 
 // InitStyles initializes lipgloss styles from the current theme
 func InitStyles(cfg config.AppConfig) {
+	_ = theme.Load(cfg.UI.Theme) // Updated: Use cfg.UI.Theme
 	t := theme.Current
 
 	// Store LineCharacters setting for later use
-	currentStyles.LineCharacters = cfg.LineCharacters
+	currentStyles.LineCharacters = cfg.UI.LineCharacters // Updated: Use cfg.UI.LineCharacters
 
 	// Border style based on LineCharacters setting
-	if cfg.LineCharacters {
+	if cfg.UI.LineCharacters { // Updated: Use cfg.UI.LineCharacters
 		currentStyles.Border = lipgloss.RoundedBorder()
 		currentStyles.SepChar = "─"
 	} else {
@@ -163,8 +164,19 @@ func InitStyles(cfg config.AppConfig) {
 		Foreground(t.TitleHelpFG), t.TitleHelpStyles)
 
 	// Border colors
-	currentStyles.BorderColor = t.BorderFG
-	currentStyles.Border2Color = t.Border2FG
+	switch cfg.UI.BorderColor {
+	case 1:
+		currentStyles.BorderColor = t.BorderFG
+		currentStyles.Border2Color = t.BorderFG
+	case 2:
+		currentStyles.BorderColor = t.Border2FG
+		currentStyles.Border2Color = t.Border2FG
+	case 3:
+		fallthrough
+	default:
+		currentStyles.BorderColor = t.BorderFG
+		currentStyles.Border2Color = t.Border2FG
+	}
 
 	// Shadow
 	currentStyles.ShadowColor = t.ShadowColor
@@ -478,8 +490,8 @@ func Render3DBorder(content string, padding int) string {
 // AddShadow adds a shadow effect to rendered content if shadow is enabled
 // Shadow is offset 1 character right and 1 down, with 2-char wide right shadow
 func AddShadow(content string) string {
-	if !currentConfig.Shadow {
-		return content
+	if !currentConfig.UI.Shadow { // Updated: Use currentConfig.UI.Shadow
+		return content // Changed `return inner` to `return content` as `inner` was not defined.
 	}
 
 	// Split content into lines
@@ -507,7 +519,7 @@ func AddShadow(content string) string {
 
 		// Select shade character based on config
 		var shadeChar string
-		switch currentConfig.ShadowLevel {
+		switch currentConfig.UI.ShadowLevel {
 		case 1:
 			shadeChar = "░" // Light shade (25%)
 		case 2:

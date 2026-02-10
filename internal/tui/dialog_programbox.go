@@ -118,7 +118,7 @@ func (m *programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cfg := config.LoadAppConfig()
 		shadowWidth := 0
 		shadowHeight := 0
-		if cfg.Shadow {
+		if cfg.UI.Shadow {
 			shadowWidth = 2
 			shadowHeight = 1
 		}
@@ -364,7 +364,7 @@ func (m *programBoxModel) SetSize(w, h int) {
 	cfg := config.LoadAppConfig()
 	shadowWidth := 0
 	shadowHeight := 0
-	if cfg.Shadow {
+	if cfg.UI.Shadow {
 		shadowWidth = 2
 		shadowHeight = 1
 	}
@@ -473,9 +473,9 @@ func RunProgramBox(ctx context.Context, title, subtitle string, task func(contex
 
 	// Initialize TUI if not already done
 	cfg := config.LoadAppConfig()
-	logger.Debug(ctx, "RunProgramBox config: Shadow=%v, ShadowLevel=%d, LineCharacters=%v", cfg.Shadow, cfg.ShadowLevel, cfg.LineCharacters)
+	logger.Debug(ctx, "RunProgramBox config: Shadow=%v, ShadowLevel=%d, LineCharacters=%v", cfg.UI.Shadow, cfg.UI.ShadowLevel, cfg.UI.LineCharacters)
 	currentConfig = cfg // Set global config so styles like AddShadow work correctly
-	if err := theme.Load(cfg.Theme); err == nil {
+	if err := theme.Load(cfg.UI.Theme); err == nil {
 		InitStyles(cfg)
 	}
 

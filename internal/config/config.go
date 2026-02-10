@@ -12,21 +12,35 @@ import (
 	"strings"
 
 	"github.com/adrg/xdg"
+	toml "github.com/pelletier/go-toml/v2"
 )
 
 // AppConfig holds the application configuration settings.
 type AppConfig struct {
-	Borders              bool
-	LineCharacters       bool
-	Shadow               bool
-	ShadowLevel          int // 0=off, 1=light(░), 2=medium(▒), 3=dark(▓), 4=solid(█)
-	Scrollbar            bool
-	Theme                string
-	Arch                 string
-	ConfigDir            string
-	ConfigDirUnexpanded  string
-	ComposeDir           string
-	ComposeDirUnexpanded string
+	UI    UIConfig   `toml:"ui"`
+	Paths PathConfig `toml:"paths"`
+
+	// These are helper fields for runtime use, not saved to TOML
+	Arch       string `toml:"-"`
+	ConfigDir  string `toml:"-"`
+	ComposeDir string `toml:"-"`
+}
+
+// UIConfig holds user interface related settings.
+type UIConfig struct {
+	Theme          string `toml:"theme"`
+	Borders        bool   `toml:"borders"`
+	LineCharacters bool   `toml:"line_characters"`
+	Shadow         bool   `toml:"shadow"`
+	ShadowLevel    int    `toml:"shadow_level"` // 0=off, 1=light(░), 2=medium(▒), 3=dark(▓), 4=solid(█)
+	Scrollbar      bool   `toml:"scrollbar"`
+	BorderColor    int    `toml:"border_color"` // 1=Border, 2=Border2, 3=Both
+}
+
+// PathConfig holds directory path settings.
+type PathConfig struct {
+	ConfigFolder  string `toml:"config_folder"`
+	ComposeFolder string `toml:"compose_folder"`
 }
 
 // getArch returns the CPU architecture (x86_64 or aarch64).
@@ -79,36 +93,81 @@ func ExpandVariables(val string) string {
 	return os.Expand(val, mapper)
 }
 
-// LoadAppConfig reads the dockstarter2.ini file and returns the configuration.
+// LoadAppConfig reads the configuration file and returns the configuration.
 func LoadAppConfig() AppConfig {
 	conf := AppConfig{
-		Borders:              true,
-		LineCharacters:       true,
-		Shadow:               true,
-		ShadowLevel:          3, // Default: dark (▓)
-		Scrollbar:            true,
-		Theme:                "DockSTARTer",
-		ConfigDir:            "${XDG_CONFIG_HOME}",
-		ConfigDirUnexpanded:  "${XDG_CONFIG_HOME}",
-		ComposeDir:           "${XDG_CONFIG_HOME}/compose",
-		ComposeDirUnexpanded: "${XDG_CONFIG_HOME}/compose",
+		UI: UIConfig{
+			Theme:          "DockSTARTer",
+			Borders:        true,
+			LineCharacters: true,
+			Shadow:         true,
+			ShadowLevel:    2, // Default: medium (▒)
+			Scrollbar:      true,
+			BorderColor:    3,
+		},
+		Paths: PathConfig{
+			ConfigFolder:  "${XDG_CONFIG_HOME}",
+			ComposeFolder: "${XDG_CONFIG_HOME}/compose",
+		},
 	}
 
-	// Set architecture
+	// Set architecture (runtime only)
 	conf.Arch = getArch()
 
 	path := paths.GetConfigFilePath()
+	data, err := os.ReadFile(path)
+	if err == nil {
+		// Found TOML config
+		if err := toml.Unmarshal(data, &conf); err == nil {
+			// Expand variables for runtime use
+			conf.ConfigDir = ExpandVariables(conf.Paths.ConfigFolder)
+			conf.ComposeDir = ExpandVariables(conf.Paths.ComposeFolder)
+			return conf
+		}
+	}
+
+	// If TOML not found or invalid, check for migration from old INI
+	oldPath := filepath.Join(filepath.Dir(path), "dockstarter2.ini")
+	if _, err := os.Stat(oldPath); err == nil {
+		fmt.Printf("Migrating configuration from %s to %s\n", oldPath, path)
+		if oldConf, err := loadLegacyConfig(oldPath); err == nil {
+			conf = oldConf
+			// Save to new format
+			SaveAppConfig(conf)
+			// Cleanup old file
+			os.Rename(oldPath, oldPath+".bak")
+			return conf
+		}
+	}
+
+	// If neither exists, save defaults to TOML
+	conf.ConfigDir = ExpandVariables(conf.Paths.ConfigFolder)
+	conf.ComposeDir = ExpandVariables(conf.Paths.ComposeFolder)
+	SaveAppConfig(conf)
+	return conf
+}
+
+// loadLegacyConfig reads the old .ini format for migration purposes.
+func loadLegacyConfig(path string) (AppConfig, error) {
+	conf := AppConfig{
+		UI: UIConfig{
+			Theme:          "DockSTARTer",
+			Borders:        true,
+			LineCharacters: true,
+			Shadow:         true,
+			ShadowLevel:    2,
+			Scrollbar:      true,
+		},
+		Paths: PathConfig{
+			ConfigFolder:  "${XDG_CONFIG_HOME}",
+			ComposeFolder: "${XDG_CONFIG_HOME}/compose",
+		},
+	}
+	conf.Arch = getArch()
+
 	file, err := os.Open(path)
 	if err != nil {
-		// If file doesn't exist, create it with defaults
-		if os.IsNotExist(err) {
-			SaveAppConfig(conf)
-		}
-		conf.ConfigDirUnexpanded = conf.ConfigDir
-		conf.ComposeDirUnexpanded = conf.ComposeDir
-		conf.ConfigDir = ExpandVariables(conf.ConfigDir)
-		conf.ComposeDir = ExpandVariables(conf.ComposeDir)
-		return conf
+		return conf, err
 	}
 	defer file.Close()
 
@@ -126,7 +185,6 @@ func LoadAppConfig() AppConfig {
 
 		key := strings.TrimSpace(parts[0])
 		value := strings.Trim(strings.TrimSpace(parts[1]), "'\"")
-		expandedValue := ExpandVariables(value)
 
 		isTrue := func(v string) bool {
 			v = strings.ToLower(v)
@@ -135,14 +193,13 @@ func LoadAppConfig() AppConfig {
 
 		switch key {
 		case constants.BordersKey:
-			conf.Borders = isTrue(value)
+			conf.UI.Borders = isTrue(value)
 		case constants.LineCharactersKey:
-			conf.LineCharacters = isTrue(value)
+			conf.UI.LineCharacters = isTrue(value)
 		case constants.ShadowKey:
-			conf.Shadow = isTrue(value)
+			conf.UI.Shadow = isTrue(value)
 		case constants.ShadowLevelKey:
-			// Parse shadow level (0-4)
-			level := 3 // default to dark
+			level := 3
 			val := strings.ToLower(value)
 			switch val {
 			case "0", "off", "none", "false", "no":
@@ -155,46 +212,24 @@ func LoadAppConfig() AppConfig {
 				level = 3
 			case "4", "solid", "full":
 				level = 4
-			default:
-				// specialized handling for percentage strings
-				if strings.HasSuffix(val, "%") {
-					var percent int
-					if _, err := fmt.Sscanf(val, "%d%%", &percent); err == nil {
-						if percent <= 12 {
-							level = 0
-						} else if percent <= 37 {
-							level = 1
-						} else if percent <= 62 {
-							level = 2
-						} else if percent <= 87 {
-							level = 3
-						} else {
-							level = 4
-						}
-					}
-				}
 			}
-			conf.ShadowLevel = level
+			conf.UI.ShadowLevel = level
 		case constants.ScrollbarKey:
-			conf.Scrollbar = isTrue(value)
+			conf.UI.Scrollbar = isTrue(value)
 		case constants.ThemeKey:
-			conf.Theme = value
+			conf.UI.Theme = value
 		case constants.ConfigFolderKey:
-			conf.ConfigDirUnexpanded = value
-			conf.ConfigDir = expandedValue
+			conf.Paths.ConfigFolder = value
 		case constants.ComposeFolderKey:
-			conf.ComposeDirUnexpanded = value
-			conf.ComposeDir = expandedValue
+			conf.Paths.ComposeFolder = value
 		}
 	}
-
-	return conf
+	conf.ConfigDir = ExpandVariables(conf.Paths.ConfigFolder)
+	conf.ComposeDir = ExpandVariables(conf.Paths.ComposeFolder)
+	return conf, nil
 }
 
-// SaveAppConfig writes the configuration to dockstarter2.ini.
-// Note: It writes the raw values currently in the struct.
-// TODO: If we want to preserve variables (like ${XDG_CONFIG_HOME}) on save,
-// we would need to track raw vs expanded values. For now, it saves the expanded path.
+// SaveAppConfig writes the configuration to dockstarter2.toml.
 func SaveAppConfig(conf AppConfig) error {
 	path := paths.GetConfigFilePath()
 
@@ -204,33 +239,10 @@ func SaveAppConfig(conf AppConfig) error {
 		return err
 	}
 
-	file, err := os.Create(path)
+	data, err := toml.Marshal(conf)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
 
-	writer := bufio.NewWriter(file)
-
-	writeOption := func(key string, val string) {
-		writer.WriteString(key + "='" + val + "'\n")
-	}
-
-	boolToYesNo := func(val bool) string {
-		if val {
-			return "yes"
-		}
-		return "no"
-	}
-
-	writeOption(constants.ConfigFolderKey, conf.ConfigDir)
-	writeOption(constants.ComposeFolderKey, conf.ComposeDir)
-	writeOption(constants.BordersKey, boolToYesNo(conf.Borders))
-	writeOption(constants.LineCharactersKey, boolToYesNo(conf.LineCharacters))
-	writeOption(constants.ScrollbarKey, boolToYesNo(conf.Scrollbar))
-	writeOption(constants.ShadowKey, boolToYesNo(conf.Shadow))
-	writeOption(constants.ShadowLevelKey, fmt.Sprintf("%d", conf.ShadowLevel))
-	writeOption(constants.ThemeKey, conf.Theme)
-
-	return writer.Flush()
+	return os.WriteFile(path, data, 0644)
 }

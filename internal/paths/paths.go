@@ -19,6 +19,8 @@ var (
 	StateHomeOverride string
 	// TemplatesDirOverride allows overriding the templates directory for tests.
 	TemplatesDirOverride string
+	// ConfigHomeOverride allows overriding the config home for tests.
+	ConfigHomeOverride string
 )
 
 // GetConfigFilePath returns the absolute path to the dockstarter2.ini file.
@@ -27,9 +29,12 @@ func GetConfigFilePath() string {
 	appName := strings.ToLower(version.ApplicationName)
 	if runtime.GOOS == "darwin" {
 		home, _ := os.UserHomeDir()
-		return filepath.Join(home, ".config", appName, constants.AppINIFileName)
+		return filepath.Join(home, ".config", appName, constants.AppConfigFileName)
 	}
-	return filepath.Join(xdg.ConfigHome, appName, constants.AppINIFileName)
+	if ConfigHomeOverride != "" {
+		return filepath.Join(ConfigHomeOverride, appName, constants.AppConfigFileName)
+	}
+	return filepath.Join(xdg.ConfigHome, appName, constants.AppConfigFileName)
 }
 
 // GetTemplatesDir returns the absolute path to the DockSTARTer-Templates repository.

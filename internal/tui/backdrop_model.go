@@ -128,7 +128,7 @@ func (m BackdropModel) GetContentArea() (width, height int) {
 	// Account for shadow if enabled (2 chars wide on right, 1 line on bottom)
 	shadowWidth := 0
 	shadowHeight := 0
-	if currentConfig.Shadow {
+	if currentConfig.UI.Shadow {
 		shadowWidth = 2
 		shadowHeight = 1
 	}

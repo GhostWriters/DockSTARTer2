@@ -36,7 +36,7 @@ func Initialize(ctx context.Context) error {
 	zone.NewGlobal()
 
 	currentConfig = config.LoadAppConfig()
-	if err := theme.Load(currentConfig.Theme); err != nil {
+	if err := theme.Load(currentConfig.UI.Theme); err != nil {
 		return fmt.Errorf("failed to load theme: %w", err)
 	}
 

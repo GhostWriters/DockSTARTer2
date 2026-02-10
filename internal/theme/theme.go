@@ -1,16 +1,16 @@
 package theme
 
 import (
+	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/paths"
-	"DockSTARTer2/internal/version"
-	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/pelletier/go-toml/v2"
 )
 
 // StyleFlags holds ANSI style modifiers
@@ -92,7 +92,7 @@ func Load(themeName string) error {
 
 	// Parse .ds2theme (Overrides defaults)
 	// fmt.Println("DEBUG: Loading theme from:", themePath)
-	_ = parseThemeINI(themePath)
+	_ = parseThemeTOML(themePath)
 
 	// Synchronize themed values to console semantic tags
 	Apply()
@@ -450,102 +450,97 @@ func resolveThemeValue(raw string, rawValues map[string]string, visiting map[str
 	return fmt.Sprintf("{{|%s:%s:%s|}}", finalFG, finalBG, finalFlags), nil
 }
 
-func parseThemeINI(path string) error {
-	file, err := os.Open(path)
+type ThemeDefaults struct {
+	Borders        *bool `toml:"borders"`
+	LineCharacters *bool `toml:"line_characters"`
+	Shadow         *bool `toml:"shadow"`
+	ShadowLevel    *int  `toml:"shadow_level"`
+	Scrollbar      *bool `toml:"scrollbar"`
+	BorderColor    *int  `toml:"border_color"`
+}
+
+type ThemeFile struct {
+	Metadata struct {
+		Name        string `toml:"name"`
+		Description string `toml:"description"`
+		Author      string `toml:"author"`
+	} `toml:"metadata"`
+	Defaults *ThemeDefaults    `toml:"defaults"`
+	Colors   map[string]string `toml:"colors"`
+}
+
+// GetThemeFile reads a theme file and returns its structured content without applying it.
+func GetThemeFile(themeName string) (ThemeFile, error) {
+	themePath := filepath.Join(paths.GetThemesDir(), themeName+".ds2theme")
+	data, err := os.ReadFile(themePath)
+	if err != nil {
+		return ThemeFile{}, err
+	}
+
+	var tf ThemeFile
+	if err := toml.Unmarshal(data, &tf); err != nil {
+		return ThemeFile{}, err
+	}
+	return tf, nil
+}
+
+// ApplyThemeDefaults updates the app config with any defaults provided by the theme.
+// It returns a map of all settings provided by the theme and their values.
+func ApplyThemeDefaults(conf *config.AppConfig, defaults ThemeDefaults) map[string]string {
+	applied := make(map[string]string)
+	if defaults.Borders != nil {
+		conf.UI.Borders = *defaults.Borders
+		applied["Borders"] = fmt.Sprintf("%v", conf.UI.Borders)
+	}
+	if defaults.LineCharacters != nil {
+		conf.UI.LineCharacters = *defaults.LineCharacters
+		applied["Line Characters"] = fmt.Sprintf("%v", conf.UI.LineCharacters)
+	}
+	if defaults.Shadow != nil {
+		conf.UI.Shadow = *defaults.Shadow
+		applied["Shadow"] = fmt.Sprintf("%v", conf.UI.Shadow)
+	}
+	if defaults.ShadowLevel != nil {
+		conf.UI.ShadowLevel = *defaults.ShadowLevel
+		applied["Shadow Level"] = fmt.Sprintf("%d", conf.UI.ShadowLevel)
+	}
+	if defaults.Scrollbar != nil {
+		conf.UI.Scrollbar = *defaults.Scrollbar
+		applied["Scrollbar"] = fmt.Sprintf("%v", conf.UI.Scrollbar)
+	}
+	if defaults.BorderColor != nil {
+		conf.UI.BorderColor = *defaults.BorderColor
+		applied["Border Color"] = fmt.Sprintf("%d", conf.UI.BorderColor)
+	}
+	return applied
+}
+
+func parseThemeTOML(path string) error {
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
 
-	// Define Bash variable expansion to map to cview-style tags (Legacy support mostly removed)
-	replacer := strings.NewReplacer(
-		"${1}", version.ApplicationName,
-	)
-
-	// 1. Read all raw values into a map first
-	// We need to resolve references (e.g., TitleSuccess -> Title) before parsing colors
-	rawValues := make(map[string]string)
-	keysOrder := []string{} // Maintain order for semantic registration
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-
-		key := strings.TrimSpace(parts[0])
-		val := strings.Trim(strings.TrimSpace(parts[1]), "'\"")
-
-		// Expand app name if present (legacy support)
-		expanded := replacer.Replace(val)
-		rawValues[key] = expanded
-		keysOrder = append(keysOrder, key)
-	}
-
-	if err := scanner.Err(); err != nil {
+	var tf ThemeFile
+	if err := toml.Unmarshal(data, &tf); err != nil {
 		return err
 	}
 
-	// 2. Resolve values and register/apply them
-	// We iterate through the file order, but resolution handles dependencies
+	// 1. Resolve values and register/apply them
+	// We need to resolve references (e.g., TitleSuccess -> Title) before parsing colors
+	rawValues := tf.Colors
 	resolvedValues := make(map[string]string)
 	visiting := make(map[string]bool)
-	var resolve func(string) (string, error)
 
-	resolve = func(key string) (string, error) {
-		if v, ok := resolvedValues[key]; ok {
-			return v, nil
-		}
-		if visiting[key] {
-			return "", fmt.Errorf("circular reference detected for key: %s", key)
-		}
-		visiting[key] = true
-		defer func() { visiting[key] = false }()
-
-		raw, ok := rawValues[key]
-		if !ok {
-			// If not in our theme file, it might be an external semantic tag?
-			// For now, only resolve internal references or specific known overrides.
-			// But wait, the user wants `{{_ThemeTitle_}}`. That tag doesn't exist yet!
-			// Actually, the user writes `{{_ThemeTitle_}}`. We need to parse that string.
-			return "", fmt.Errorf("key not found: %s", key)
-		}
-
-		// Parse the value for referenced tags
-		// Value might be: "{{_ThemeTitle_}}{{|:green|}}"
-		// We need to expand semantic tags recursively.
-		// resolveThemeValue helper does this using the rawValues map
-		res, err := resolveThemeValue(raw, rawValues, visiting)
+	// Maintains consistent registration/mapping logic from INI version
+	for key, raw := range rawValues {
+		styleValue, err := resolveThemeValue(raw, rawValues, visiting)
 		if err != nil {
-			return "", err
-		}
-
-		resolvedValues[key] = res
-		return res, nil
-	}
-
-	// Resolve all keys
-	for _, key := range keysOrder {
-		styleValue, err := resolve(key)
-		if err != nil {
-			// Log error but continue? Or fail? Best to allow partial load.
-			// For now, stick to original value if resolution fails?
-			// No, better to warn. We don't have a logger here.
 			// Fallback to raw expansion for robustness
-			styleValue = console.ExpandTags(rawValues[key])
+			styleValue = console.ExpandTags(raw)
 		}
 
-		// Register "Theme_"+Key explicitly
-		// This makes the resolved value available as a semantic tag for SUBSEQUENT keys too?
-		// Yes, because we resolved it.
-		// But wait, our resolve() function uses the map, not registered tags.
-		// The semantic registration is for OTHER parts of the app (like prints).
+		resolvedValues[key] = styleValue
 		console.RegisterSemanticTag("Theme_"+key, styleValue)
 
 		// Map known keys to Current struct fields
@@ -559,20 +554,16 @@ func parseThemeINI(path string) error {
 			Current.BorderFG, Current.BorderBG = fg, bg
 		case "Border2":
 			Current.Border2FG, Current.Border2BG = fg, bg
-		case "Title": // Menu title with style flags (underline, bold, etc.)
+		case "Title":
 			Current.TitleFG, Current.TitleBG, Current.TitleStyles = parseTagWithStyles(styleValue)
 		case "TitleHelp":
 			Current.TitleHelpFG, Current.TitleHelpBG, Current.TitleHelpStyles = parseTagWithStyles(styleValue)
-			// titleWasSet = true // No longer needed with map logic? Check below.
-		case "BoxTitle": // Fallback from .dialogrc (no styles)
+		case "BoxTitle":
 			// Only set if Title wasn't explicitly provided in theme
 			if _, titleExists := rawValues["Title"]; !titleExists {
 				Current.TitleFG, Current.TitleBG, Current.TitleStyles = parseTagWithStyles(styleValue)
 			}
 		case "Shadow":
-			// Shadow is usually just BG
-			// But tag might be [black:black:b]
-			// We take the BG? Or FG? Usually same.
 			Current.ShadowColor = fg
 		case "ButtonActive":
 			fg, bg, styles := parseTagWithStyles(styleValue)
@@ -601,9 +592,7 @@ func parseThemeINI(path string) error {
 		}
 	}
 
-	// 3. Re-apply tags based on updated Current
-	// Note: We do NOT call updateTagsFromCurrent() because we want to keep the specific tags registered above.
-	// We MUST ensure base tags and color map are built before we finalize mappings.
+	// 2. Re-apply tags based on updated Current
 	console.RegisterBaseTags()
 	console.BuildColorMap()
 

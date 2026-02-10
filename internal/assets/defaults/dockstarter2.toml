@@ -1,0 +1,12 @@
+[paths]
+config_folder = "${XDG_CONFIG_HOME}"
+compose_folder = "${XDG_CONFIG_HOME}/compose"
+
+[ui]
+theme = "DockSTARTer"
+borders = true
+line_characters = true
+scrollbar = true
+border_color = 3
+shadow = true
+shadow_level = 2

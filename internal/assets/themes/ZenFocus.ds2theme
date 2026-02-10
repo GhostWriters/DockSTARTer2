@@ -1,85 +1,67 @@
-#
-# DockSTARTer theme file
-# theme.ini
-#
-# Color List:
-#
-# ${_B_}   Blue
-# ${_C_}   Cyan
-# ${_G_}   Green
-# ${_K_}   Black
-# ${_M_}   Magenta
-# ${_R_}   Red
-# ${_W_}   White
-# ${_Y_}   Yellow
-# ${_RV_}  Reverse
-# ${_NRV_} No Reverse
-# ${_BD_}  Bold
-# ${_NBD_} No Bold
-# ${_U_}   Underline
-# ${_NU_}  No Underline
-# ${_NC_}  No Color
+[metadata]
+name = "ZenFocus"
+description = "Dockstarter2 Zen Focus theme"
+author = "Antigravity"
 
-ThemeName='ZenFocus'
-ThemeDescription='Dockstarter Zen Focus theme'
-ThemeAuthor='Antigravity'
+[colors]
+Screen = "{{|black:white:B|}}"
+Dialog = "{{|white:black|}}"
+Border = "{{|white:white:B|}}"
+Border2 = "{{|black:white:B|}}"
+Shadow = "{{|black|}}"
+BoxTitle = "{{|white:black:B|}}"
+Program = "{{|white:black:B|}}"
+ApplicationName = "{{_Theme_Screen_}}"
+ApplicationVersion = "{{_Theme_Screen_}}"
+ApplicationVersionBrackets = "{{_Theme_Screen_}}"
+ApplicationVersionSpace = "{{_Theme_Screen_}}"
+ApplicationFlags = "{{_Theme_Screen_}}"
+ApplicationFlagsBrackets = "{{_Theme_Screen_}}"
+ApplicationFlagsSpace = "{{_Theme_Screen_}}"
+ApplicationUpdate = "{{|yellow:black:B|}}"
+ApplicationUpdateBrackets = "{{_Theme_Screen_}}"
+Hostname = "{{_Theme_Screen_}}"
+Title = "{{_Theme_BoxTitle_}}"
+TitleHelp = "{{|white:white:B|}}"
+TitleNotice = "{{|white:green:B|}}"
+TitleWarn = "{{|white:yellow:B|}}"
+TitleError = "{{|white:red:B|}}"
+TitleSuccess = "{{|white:green:B|}}"
+TitleWarning = "{{|white:yellow:B|}}"
+TitleQuestion = "{{|white:black:B|}}"
+CommandLine = "{{_Theme_Screen_}}"
+ButtonActive = "{{|black:white:B|}}"
+ButtonInactive = "{{|white:black|}}"
+Item = "{{|white:black|}}"
+ItemSelected = "{{|black:white:B|}}"
+Tag = "{{|white:black|}}"
+TagSelected = "{{|black:white:B|}}"
+TagKey = "{{|white:black:B|}}"
+TagKeySelected = "{{|black:white:B|}}"
+Helpline = "{{|white:black|}}"
+ItemHelp = "{{|white:black:B|}}"
+Subtitle = "{{|white:black:B|}}"
+Heading = "{{|white:black:B|}}"
+HeadingTag = "{{|black:white:B|}}"
+HeadingValue = "{{|black:white:BU|}}"
+HeadingAppDescription = "{{|white:black|}}"
+Highlight = "{{|black:white:B|}}"
+LineHeading = "{{|white:black:BU|}}"
+LineComment = "{{|white:black:D|}}"
+LineOther = "{{|white:black|}}"
+LineVar = "{{|white:black|}}"
+LineModifiedVar = "{{|black:white:B|}}"
+LineAddVariable = "{{|black:white:B|}}"
+ListDefault = ""
+ListApp = ""
+ListAppUserDefined = "{{|black:white:B|}}"
+KeyCap = "{{|black:white:B|}}"
+ProgressWaiting = "{{|white:black|}}"
+ProgressInProgress = "{{|white:black:B|}}"
+ProgressCompleted = "{{|black:white:B|}}"
 
-Screen="{{|black:white:B|}}"
-Dialog="{{|white:black|}}"
-Border="{{|white:white:B|}}"
-Border2="{{|black:white:B|}}"
-Shadow="{{|black|}}"
-BoxTitle="{{|white:black:B|}}"
-Program="{{|white:black:B|}}"
-
-ApplicationName="{{_Theme_Screen_}}"
-ApplicationVersion="{{_Theme_Screen_}}"
-ApplicationVersionBrackets="{{_Theme_Screen_}}"
-ApplicationVersionSpace="{{_Theme_Screen_}}"
-ApplicationFlags="{{_Theme_Screen_}}"
-ApplicationFlagsBrackets="{{_Theme_Screen_}}"
-ApplicationFlagsSpace="{{_Theme_Screen_}}"
-ApplicationUpdate="{{|yellow:black:B|}}"
-ApplicationUpdateBrackets="{{_Theme_Screen_}}"
-Hostname="{{_Theme_Screen_}}"
-
-Title="{{_Theme_BoxTitle_}}"
-TitleHelp="{{|white:white:B|}}"
-TitleNotice="{{|white:green:B|}}"
-TitleWarn="{{|white:yellow:B|}}"
-TitleError="{{|white:red:B|}}"
-TitleSuccess="{{|white:green:B|}}"
-TitleWarning="{{|white:yellow:B|}}"
-TitleQuestion="{{|white:black:B|}}"
-
-CommandLine="{{_Theme_Screen_}}"
-ButtonActive="{{|black:white:B|}}"
-ButtonInactive="{{|white:black|}}"
-Item="{{|white:black|}}"
-ItemSelected="{{|black:white:B|}}"
-Tag="{{|white:black|}}"
-TagSelected="{{|black:white:B|}}"
-TagKey="{{|white:black:B|}}"
-TagKeySelected="{{|black:white:B|}}"
-Helpline="{{|white:black|}}"
-ItemHelp="{{|white:black:B|}}"
-
-Subtitle="{{|white:black:B|}}"
-Heading="{{|white:black:B|}}"
-HeadingTag="{{|black:white:B|}}"
-HeadingValue="{{|black:white:BU|}}"
-HeadingAppDescription="{{|white:black|}}"
-Highlight="{{|black:white:B|}}"
-LineHeading="{{|white:black:BU|}}"
-LineComment="{{|white:black:D|}}"
-LineOther="{{|white:black|}}"
-LineVar="{{|white:black|}}"
-LineModifiedVar="{{|black:white:B|}}"
-LineAddVariable="{{|black:white:B|}}"
-ListDefault=""
-ListApp=""
-ListAppUserDefined="{{|black:white:B|}}"
-KeyCap="{{|black:white:B|}}"
-ProgressWaiting="{{|white:black|}}"
-ProgressInProgress="{{|white:black:B|}}"
-ProgressCompleted="{{|black:white:B|}}"
+[defaults]
+borders = true
+line_characters = true
+shadow = false
+border_color = 1

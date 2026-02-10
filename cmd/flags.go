@@ -63,6 +63,8 @@ func InitFlags() {
 	pflag.String("config-pm", "", "Config package manager")
 	pflag.Bool("config-pm-auto", false, "Auto-detect package manager")
 	pflag.Bool("config-show", false, "Show configuration")
+	pflag.String("config-folder", "", "Set config folder path")
+	pflag.String("config-compose-folder", "", "Set compose folder path")
 	pflag.Bool("show-config", false, "Show configuration (alias)")
 
 	// Theme
@@ -84,6 +86,7 @@ func InitFlags() {
 	pflag.String("theme-shadow-level", "", "Set shadow level (0-4 or off/light/medium/dark/solid)")
 	pflag.Bool("theme-scrollbar", false, "Turn scrollbar on")
 	pflag.Bool("theme-no-scrollbar", false, "Turn scrollbar off")
+	pflag.String("theme-border-color", "", "Set border color (1=Border, 2=Border2, 3=Both)")
 
 	// Testing
 	pflag.StringP("test", "t", "", "Run test script")
