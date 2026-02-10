@@ -24,7 +24,6 @@ ThemeName='DockSTARTer'
 ThemeDescription='The default DockSTARTer theme'
 ThemeAuthor='CLHatch'
 
-
 Screen="{{|black:white:-|}}"
 Dialog="{{|black:cyan:-|}}"
 Border="{{|white:-:-|}}"
@@ -47,6 +46,7 @@ TitleSuccess="{{_ThemeTitle_}}{{|:green|}}"
 TitleError="{{_ThemeTitle_}}{{|:red|}}"
 TitleWarning="{{_ThemeTitle_}}{{|:yellow|}}"
 TitleQuestion="{{_ThemeTitle_}}{{|:yellow|}}"
+TitleHelp="{{_ThemeTitle_}}{{|red|}}"
 Subtitle="{{|black:-:-|}}"
 Heading="{{|black:cyan|}}"
 HeadingTag="{{|white:cyan:-B|}}"

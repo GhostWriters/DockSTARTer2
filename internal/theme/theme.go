@@ -38,6 +38,9 @@ type ThemeConfig struct {
 	TitleFG              lipgloss.TerminalColor
 	TitleBG              lipgloss.TerminalColor
 	TitleStyles          StyleFlags
+	TitleHelpFG          lipgloss.TerminalColor
+	TitleHelpBG          lipgloss.TerminalColor
+	TitleHelpStyles      StyleFlags
 	ShadowColor          lipgloss.TerminalColor
 	ButtonActiveFG       lipgloss.TerminalColor
 	ButtonActiveBG       lipgloss.TerminalColor
@@ -144,6 +147,7 @@ func updateTagsFromCurrent() {
 	regComp("Border2", Current.Border2FG, Current.Border2BG)
 
 	console.RegisterSemanticTag("ThemeTitle", buildTag(Current.TitleFG, Current.TitleBG, Current.TitleStyles))
+	console.RegisterSemanticTag("ThemeTitleHelp", buildTag(Current.TitleHelpFG, Current.TitleHelpBG, Current.TitleHelpStyles))
 
 	regComp("ButtonActive", Current.ButtonActiveFG, Current.ButtonActiveBG)
 	regComp("ItemSelected", Current.ItemSelectedFG, Current.ItemSelectedBG)
@@ -206,6 +210,8 @@ func Default() {
 		Border2BG:        parseColor("cyan"),
 		TitleFG:          parseColor("black"),
 		TitleBG:          parseColor("cyan"),
+		TitleHelpFG:      parseColor("black"),
+		TitleHelpBG:      parseColor("cyan"),
 		ShadowColor:      parseColor("black"),
 		ButtonActiveFG:   parseColor("bright-white"),
 		ButtonActiveBG:   parseColor("red"),
@@ -555,6 +561,8 @@ func parseThemeINI(path string) error {
 			Current.Border2FG, Current.Border2BG = fg, bg
 		case "Title": // Menu title with style flags (underline, bold, etc.)
 			Current.TitleFG, Current.TitleBG, Current.TitleStyles = parseTagWithStyles(styleValue)
+		case "TitleHelp":
+			Current.TitleHelpFG, Current.TitleHelpBG, Current.TitleHelpStyles = parseTagWithStyles(styleValue)
 			// titleWasSet = true // No longer needed with map logic? Check below.
 		case "BoxTitle": // Fallback from .dialogrc (no styles)
 			// Only set if Title wasn't explicitly provided in theme

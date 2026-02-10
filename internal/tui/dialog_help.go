@@ -66,7 +66,9 @@ func (m *helpDialogModel) View() string {
 
 	// Apply theme styles to the help component
 	dimStyle := bgStyle.Foreground(styles.ItemNormal.GetForeground())
-	keyStyle := bgStyle.Foreground(styles.TagKey.GetForeground()).Bold(true)
+	// Ensure keys use the theme's TagKey style (including flags like Bold/Italic)
+	// but override background to match the help dialog background
+	keyStyle := styles.TagKey.Background(bgStyle.GetBackground())
 	sepStyle := bgStyle.Foreground(styles.BorderColor)
 
 	m.help.Styles.ShortKey = keyStyle

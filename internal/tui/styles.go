@@ -14,8 +14,9 @@ type Styles struct {
 	Screen lipgloss.Style
 
 	// Dialog
-	Dialog      lipgloss.Style
-	DialogTitle lipgloss.Style
+	Dialog          lipgloss.Style
+	DialogTitle     lipgloss.Style
+	DialogTitleHelp lipgloss.Style
 
 	// Borders
 	Border       lipgloss.Border
@@ -156,6 +157,10 @@ func InitStyles(cfg config.AppConfig) {
 	currentStyles.DialogTitle = ApplyFlags(lipgloss.NewStyle().
 		Background(t.TitleBG).
 		Foreground(t.TitleFG), t.TitleStyles)
+
+	currentStyles.DialogTitleHelp = ApplyFlags(lipgloss.NewStyle().
+		Background(t.TitleHelpBG).
+		Foreground(t.TitleHelpFG), t.TitleHelpStyles)
 
 	// Border colors
 	currentStyles.BorderColor = t.BorderFG

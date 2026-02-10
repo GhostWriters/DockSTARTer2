@@ -255,7 +255,7 @@ func RenderDialog(title, content string, focused bool, borders ...BorderPair) st
 		}
 	}
 
-	return renderDialogWithBorder(title, content, border, focused, true, true)
+	return renderDialogWithBorder(title, content, border, focused, true, true, styles.DialogTitle)
 }
 
 // RenderUniformBlockDialog renders a dialog with block borders and uniform dark colors (no 3D effect).
@@ -263,7 +263,8 @@ func RenderDialog(title, content string, focused bool, borders ...BorderPair) st
 func RenderUniformBlockDialog(title, content string) string {
 	styles := GetStyles()
 	borders := GetBlockBorders(styles.LineCharacters)
-	return renderDialogWithBorder(title, content, borders.Focused, true, false, false)
+	// Use DialogTitleHelp for help dialogs (which use this renderer)
+	return renderDialogWithBorder(title, content, borders.Focused, true, false, false, styles.DialogTitleHelp)
 }
 
 // GetBlockBorders returns a BorderPair with solid block borders for both states
@@ -290,7 +291,7 @@ func GetBlockBorders(lineCharacters bool) BorderPair {
 // It handles title centering, background maintenance, and padding.
 // If threeD is false, it uses a uniform border color (Border2Color).
 // If useConnectors is true, it uses T-junctions (┤, ┫, etc.) to embed the title.
-func renderDialogWithBorder(title, content string, border lipgloss.Border, focused bool, threeD bool, useConnectors bool) string {
+func renderDialogWithBorder(title, content string, border lipgloss.Border, focused bool, threeD bool, useConnectors bool, titleStyle lipgloss.Style) string {
 	if title != "" && !strings.HasSuffix(title, "{{|-|}}") {
 		title += "{{|-|}}"
 	}
@@ -310,9 +311,10 @@ func renderDialogWithBorder(title, content string, border lipgloss.Border, focus
 		borderStyleLight = borderStyleDark
 	}
 
-	// Prepare title style (default)
-	titleStyle := styles.DialogTitle.Copy().
-		Background(borderBG)
+	// Prepare title style (using provided style, defaulting to borderBG if not set)
+	titleStyle = lipgloss.NewStyle().
+		Background(borderBG).
+		Inherit(titleStyle)
 
 	// Parse color tags from title and render as rich text
 	title = RenderThemeText(title, titleStyle)
