@@ -5,6 +5,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -303,21 +304,41 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Then handle our special keys
+	// Handle key events
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
-		switch keyMsg.String() {
-		case "tab", "right":
-			m.focusedItem = m.nextFocus()
+		switch {
+		// Help dialog (takes priority so ? doesn't get eaten by list)
+		case key.Matches(keyMsg, Keys.Help):
+			return m, func() tea.Msg { return ShowDialogMsg{Dialog: newHelpDialogModel()} }
+
+		// Tab / ShiftTab: switch between screen-level elements
+		// (e.g., menu dialog ↔ header version widget in the future)
+		// A whole dialog/window is one screen element; buttons/list within it are not.
+		// Does nothing until multi-element screens are implemented.
+		case key.Matches(keyMsg, Keys.Tab), key.Matches(keyMsg, Keys.ShiftTab):
 			return m, nil
 
-		case "shift+tab", "left":
-			m.focusedItem = m.prevFocus()
+		// Up / Down: navigate the list (and return focus to the list from buttons)
+		case key.Matches(keyMsg, Keys.Up), key.Matches(keyMsg, Keys.Down):
+			m.focusedItem = FocusList
+			// Falls through to list.Update below so the cursor also moves
+
+		// Right: move to next button (from list → first button; wraps within button row)
+		case key.Matches(keyMsg, Keys.Right):
+			m.focusedItem = m.nextButtonFocus()
 			return m, nil
 
-		case "enter":
+		// Left: move to prev button (from list → last button; wraps within button row)
+		case key.Matches(keyMsg, Keys.Left):
+			m.focusedItem = m.prevButtonFocus()
+			return m, nil
+
+		// Enter: select/confirm current focused element
+		case key.Matches(keyMsg, Keys.Enter):
 			return m.handleEnter()
 
-		case "esc":
+		// Esc: back if available, else exit
+		case key.Matches(keyMsg, Keys.Esc):
 			if m.backAction != nil {
 				return m, m.backAction
 			}
@@ -338,6 +359,8 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// nextFocus cycles focus forward through all focus areas (list → buttons).
+// Used for future Tab/window-cycling logic.
 func (m MenuModel) nextFocus() FocusItem {
 	switch m.focusedItem {
 	case FocusList:
@@ -355,6 +378,8 @@ func (m MenuModel) nextFocus() FocusItem {
 	return FocusList
 }
 
+// prevFocus cycles focus backward through all focus areas.
+// Used for future ShiftTab/window-cycling logic.
 func (m MenuModel) prevFocus() FocusItem {
 	switch m.focusedItem {
 	case FocusList:
@@ -370,6 +395,40 @@ func (m MenuModel) prevFocus() FocusItem {
 		return FocusSelectBtn
 	}
 	return FocusList
+}
+
+// nextButtonFocus cycles the Right arrow through buttons only.
+// From the list or last button, moves to the first button (Select).
+func (m MenuModel) nextButtonFocus() FocusItem {
+	switch m.focusedItem {
+	case FocusList, FocusExitBtn:
+		return FocusSelectBtn
+	case FocusSelectBtn:
+		if m.backAction != nil {
+			return FocusBackBtn
+		}
+		return FocusExitBtn
+	case FocusBackBtn:
+		return FocusExitBtn
+	}
+	return FocusSelectBtn
+}
+
+// prevButtonFocus cycles the Left arrow through buttons only.
+// From the list or first button, moves to the last button (Exit).
+func (m MenuModel) prevButtonFocus() FocusItem {
+	switch m.focusedItem {
+	case FocusList, FocusSelectBtn:
+		return FocusExitBtn
+	case FocusExitBtn:
+		if m.backAction != nil {
+			return FocusBackBtn
+		}
+		return FocusSelectBtn
+	case FocusBackBtn:
+		return FocusSelectBtn
+	}
+	return FocusExitBtn
 }
 
 func (m MenuModel) handleEnter() (tea.Model, tea.Cmd) {
@@ -472,11 +531,15 @@ func (m MenuModel) View() string {
 	if m.title != "" {
 		dialog = m.renderBorderWithTitle(content, targetWidth)
 	} else {
-		// No title, use standard border
+		// No title: focused uses thick border, background uses normal border
 		dialogStyle := lipgloss.NewStyle().
 			Background(styles.Dialog.GetBackground()).
 			Padding(0, 1)
-		dialogStyle = ApplyStraightBorder(dialogStyle, styles.LineCharacters)
+		if m.focused {
+			dialogStyle = ApplyThickBorder(dialogStyle, styles.LineCharacters)
+		} else {
+			dialogStyle = ApplyStraightBorder(dialogStyle, styles.LineCharacters)
+		}
 		dialog = dialogStyle.Render(content)
 	}
 
@@ -829,12 +892,20 @@ func (m MenuModel) renderDialog(menuContent, buttonBox string, listWidth int) st
 
 func (m MenuModel) renderBorderWithTitle(content string, contentWidth int) string {
 	styles := GetStyles()
-	// Use straight border (not rounded) for dialogs
+	// Focused dialogs use thick border, background dialogs use normal border
 	var border lipgloss.Border
 	if styles.LineCharacters {
-		border = lipgloss.NormalBorder()
+		if m.focused {
+			border = lipgloss.ThickBorder()
+		} else {
+			border = lipgloss.NormalBorder()
+		}
 	} else {
-		border = asciiBorder
+		if m.focused {
+			border = thickAsciiBorder
+		} else {
+			border = asciiBorder
+		}
 	}
 
 	// Style definitions
@@ -860,15 +931,25 @@ func (m MenuModel) renderBorderWithTitle(content string, contentWidth int) strin
 	}
 
 	// Build top border with title using T connectors
-	// Format: ────┤ Title ├────
+	// Format: ────┤ Title ├──── (normal) or ━━━━┫ Title ┣━━━━ (thick/focused)
 	// Spaces are rendered with border style, not title style
 	var leftT, rightT string
 	if styles.LineCharacters {
-		leftT = "┤"
-		rightT = "├"
+		if m.focused {
+			leftT = "┫"
+			rightT = "┣"
+		} else {
+			leftT = "┤"
+			rightT = "├"
+		}
 	} else {
-		leftT = "+"
-		rightT = "+"
+		if m.focused {
+			leftT = "H" // thick ASCII T-connector
+			rightT = "H"
+		} else {
+			leftT = "+"
+			rightT = "+"
+		}
 	}
 	// Total title section width: leftT + space + title + space + rightT
 	titleSectionLen := 1 + 1 + lipgloss.Width(title) + 1 + 1

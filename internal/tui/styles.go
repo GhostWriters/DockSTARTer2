@@ -3,7 +3,6 @@ package tui
 import (
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/theme"
-	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -85,6 +84,30 @@ var roundedAsciiBorder = lipgloss.Border{
 	Bottom:      "-",
 	Left:        "|",
 	Right:       "|",
+	TopLeft:     ".",
+	TopRight:    ".",
+	BottomLeft:  "'",
+	BottomRight: "'",
+}
+
+// thickAsciiBorder simulates a thick border using ASCII characters (#===# style)
+var thickAsciiBorder = lipgloss.Border{
+	Top:         "=",
+	Bottom:      "=",
+	Left:        "H",
+	Right:       "H",
+	TopLeft:     "#",
+	TopRight:    "#",
+	BottomLeft:  "#",
+	BottomRight: "#",
+}
+
+// roundedThickAsciiBorder simulates a thick border with rounded corners (.===H===. style)
+var roundedThickAsciiBorder = lipgloss.Border{
+	Top:         "=",
+	Bottom:      "=",
+	Left:        "H",
+	Right:       "H",
 	TopLeft:     ".",
 	TopRight:    ".",
 	BottomLeft:  "'",
@@ -282,6 +305,30 @@ func ApplyStraightBorder(style lipgloss.Style, useLineChars bool) lipgloss.Style
 		BorderRightBackground(borderBG)
 }
 
+// ApplyThickBorder applies a 3D border with thick edges
+// Uses thickAsciiBorder or ThickBorder based on LineCharacters setting
+func ApplyThickBorder(style lipgloss.Style, useLineChars bool) lipgloss.Style {
+	borderBG := currentStyles.Dialog.GetBackground()
+
+	var border lipgloss.Border
+	if useLineChars {
+		border = lipgloss.ThickBorder()
+	} else {
+		border = thickAsciiBorder
+	}
+
+	return style.
+		Border(border).
+		BorderTopForeground(currentStyles.BorderColor).
+		BorderLeftForeground(currentStyles.BorderColor).
+		BorderBottomForeground(currentStyles.Border2Color).
+		BorderRightForeground(currentStyles.Border2Color).
+		BorderTopBackground(borderBG).
+		BorderLeftBackground(borderBG).
+		BorderBottomBackground(borderBG).
+		BorderRightBackground(borderBG)
+}
+
 // ApplyRoundedBorder applies a 3D border with rounded corners
 // Uses roundedAsciiBorder or RoundedBorder based on LineCharacters setting
 func ApplyRoundedBorder(style lipgloss.Style, useLineChars bool) lipgloss.Style {
@@ -364,10 +411,10 @@ func Render3DBorder(content string, padding int) string {
 	// Use a darker/contrasting color - if Border2Color is too dark, use gray
 	darkColor := currentStyles.Border2Color
 	// If Border2Color appears to be black or very dark, use a visible gray instead
-	darkColorStr := fmt.Sprintf("%v", darkColor)
-	if strings.Contains(darkColorStr, "000000") || strings.Contains(darkColorStr, "Black") {
-		darkColor = lipgloss.Color("#666666") // Medium gray for visibility
-	}
+	// darkColorStr := fmt.Sprintf("%v", darkColor)
+	// if strings.Contains(darkColorStr, "000000") || strings.Contains(darkColorStr, "Black") {
+	// 	darkColor = lipgloss.Color("#666666") // Medium gray for visibility
+	// }
 
 	darkStyle := lipgloss.NewStyle().
 		Foreground(darkColor).

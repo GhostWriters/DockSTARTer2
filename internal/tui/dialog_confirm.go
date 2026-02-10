@@ -50,21 +50,21 @@ func (m confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch {
-		case key.Matches(msg, key.NewBinding(key.WithKeys("y", "Y"))):
+		case key.Matches(msg, Keys.Yes):
 			m.result = true
 			m.confirmed = true
 			return m, tea.Quit
 
-		case key.Matches(msg, key.NewBinding(key.WithKeys("n", "N", "esc"))):
+		case key.Matches(msg, Keys.No), key.Matches(msg, Keys.Esc):
 			m.result = false
 			m.confirmed = true
 			return m, tea.Quit
 
-		case key.Matches(msg, key.NewBinding(key.WithKeys("enter"))):
+		case key.Matches(msg, Keys.Enter):
 			m.confirmed = true
 			return m, tea.Quit
 
-		case key.Matches(msg, key.NewBinding(key.WithKeys("ctrl+c"))):
+		case key.Matches(msg, Keys.ForceQuit):
 			m.result = false
 			m.confirmed = true
 			return m, tea.Quit
@@ -133,7 +133,7 @@ func (m confirmDialogModel) View() string {
 		Render(content)
 
 	// Wrap in border with title embedded (matching menu style)
-	dialogWithTitle := RenderDialog(m.title, paddedContent)
+	dialogWithTitle := RenderDialog(m.title, paddedContent, true)
 
 	// Add shadow (matching menu style)
 	dialogWithTitle = AddShadow(dialogWithTitle)

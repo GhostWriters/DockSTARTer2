@@ -160,11 +160,10 @@ func RenderCenteredButtons(contentWidth int, buttons ...ButtonSpec) string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, sections...)
 }
 
-// RenderDialog renders a dialog with optional title embedded in the top border
-// If title is empty, renders a plain top border without title
-// RenderDialog renders a dialog with optional title embedded in the top border
-// If title is empty, renders a plain top border without title
-func RenderDialog(title, content string) string {
+// RenderDialog renders a dialog with optional title embedded in the top border.
+// If title is empty, renders a plain top border without title.
+// focused=true uses a thick border (active dialog), focused=false uses normal border (background dialog).
+func RenderDialog(title, content string, focused bool) string {
 	if title != "" && !strings.HasSuffix(title, "{{|-|}}") {
 		title += "{{|-|}}"
 	}
@@ -172,9 +171,17 @@ func RenderDialog(title, content string) string {
 
 	var border lipgloss.Border
 	if styles.LineCharacters {
-		border = lipgloss.NormalBorder()
+		if focused {
+			border = lipgloss.ThickBorder()
+		} else {
+			border = lipgloss.NormalBorder()
+		}
 	} else {
-		border = asciiBorder
+		if focused {
+			border = thickAsciiBorder
+		} else {
+			border = asciiBorder
+		}
 	}
 
 	// Style definitions
@@ -213,15 +220,25 @@ func RenderDialog(title, content string) string {
 		result.WriteString(borderStyleLight.Render(strings.Repeat(border.Top, actualWidth)))
 	} else {
 		// Top border with embedded title using T connectors
-		// Format: ────┤ Title ├────
+		// Format: ────┤ Title ├──── (normal) or ━━━━┫ Title ┣━━━━ (thick/focused)
 		// Spaces are rendered with border style, not title style
 		var leftT, rightT string
 		if styles.LineCharacters {
-			leftT = "┤"
-			rightT = "├"
+			if focused {
+				leftT = "┫"
+				rightT = "┣"
+			} else {
+				leftT = "┤"
+				rightT = "├"
+			}
 		} else {
-			leftT = "|"
-			rightT = "|"
+			if focused {
+				leftT = "H" // thick ASCII T-connector
+				rightT = "H"
+			} else {
+				leftT = "|"
+				rightT = "|"
+			}
 		}
 		// Total title section width: leftT + space + title + space + rightT
 		titleSectionLen := 1 + 1 + lipgloss.Width(title) + 1 + 1

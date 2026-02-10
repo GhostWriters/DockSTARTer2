@@ -125,7 +125,7 @@ func (m messageDialogModel) View() string {
 
 	// Add title with prefix and wrap in border with title embedded (matching menu style)
 	fullTitle := titlePrefix + m.title
-	dialogWithTitle := RenderDialog(fullTitle, paddedContent)
+	dialogWithTitle := RenderDialog(fullTitle, paddedContent, true)
 
 	// Add shadow (matching menu style)
 	dialogWithTitle = AddShadow(dialogWithTitle)

@@ -161,15 +161,15 @@ func (m programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch {
-		case key.Matches(msg, key.NewBinding(key.WithKeys("q", "esc"))):
+		case key.Matches(msg, Keys.Esc):
 			if m.done {
 				return m, tea.Quit
 			}
 
-		case key.Matches(msg, key.NewBinding(key.WithKeys("ctrl+c"))):
+		case key.Matches(msg, Keys.ForceQuit):
 			return m, tea.Quit
 
-		case key.Matches(msg, key.NewBinding(key.WithKeys("enter"))):
+		case key.Matches(msg, Keys.Enter):
 			if m.done {
 				return m, tea.Quit
 			}
@@ -347,7 +347,7 @@ func (m programBoxModel) View() string {
 		Render(content)
 
 	// Wrap in border with title embedded (matching menu style)
-	dialogWithTitle := RenderDialog(m.title, paddedContent)
+	dialogWithTitle := RenderDialog(m.title, paddedContent, true)
 
 	// Add shadow (matching menu style)
 	dialogWithTitle = AddShadow(dialogWithTitle)
