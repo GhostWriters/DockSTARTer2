@@ -28,8 +28,8 @@ type confirmResultMsg struct {
 }
 
 // newConfirmDialog creates a new confirmation dialog
-func newConfirmDialog(title, question string, defaultYes bool) confirmDialogModel {
-	return confirmDialogModel{
+func newConfirmDialog(title, question string, defaultYes bool) *confirmDialogModel {
+	return &confirmDialogModel{
 		title:      title,
 		question:   question,
 		defaultYes: defaultYes,
@@ -37,11 +37,11 @@ func newConfirmDialog(title, question string, defaultYes bool) confirmDialogMode
 	}
 }
 
-func (m confirmDialogModel) Init() tea.Cmd {
+func (m *confirmDialogModel) Init() tea.Cmd {
 	return nil
 }
 
-func (m confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -95,7 +95,7 @@ func (m confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m confirmDialogModel) View() string {
+func (m *confirmDialogModel) View() string {
 	if m.width == 0 {
 		return ""
 	}
@@ -142,10 +142,16 @@ func (m confirmDialogModel) View() string {
 	return dialogWithTitle
 }
 
+// SetSize updates the dialog dimensions
+func (m *confirmDialogModel) SetSize(w, h int) {
+	m.width = w
+	m.height = h
+}
+
 // confirmWithBackdrop wraps a confirmation dialog with backdrop using overlay
 type confirmWithBackdrop struct {
 	backdrop BackdropModel
-	dialog   confirmDialogModel
+	dialog   *confirmDialogModel
 }
 
 func (m confirmWithBackdrop) Init() tea.Cmd {
@@ -162,7 +168,7 @@ func (m confirmWithBackdrop) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Update dialog
 	dialogModel, cmd := m.dialog.Update(msg)
-	m.dialog = dialogModel.(confirmDialogModel)
+	m.dialog = dialogModel.(*confirmDialogModel)
 	cmds = append(cmds, cmd)
 
 	return m, tea.Batch(cmds...)

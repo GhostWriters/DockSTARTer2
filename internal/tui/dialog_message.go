@@ -31,19 +31,19 @@ type messageDialogModel struct {
 }
 
 // newMessageDialog creates a new message dialog
-func newMessageDialog(title, message string, msgType MessageType) messageDialogModel {
-	return messageDialogModel{
+func newMessageDialog(title, message string, msgType MessageType) *messageDialogModel {
+	return &messageDialogModel{
 		title:       title,
 		message:     message,
 		messageType: msgType,
 	}
 }
 
-func (m messageDialogModel) Init() tea.Cmd {
+func (m *messageDialogModel) Init() tea.Cmd {
 	return nil
 }
 
-func (m messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -68,7 +68,7 @@ func (m messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m messageDialogModel) View() string {
+func (m *messageDialogModel) View() string {
 	if m.width == 0 {
 		return ""
 	}
@@ -134,10 +134,16 @@ func (m messageDialogModel) View() string {
 	return dialogWithTitle
 }
 
+// SetSize updates the dialog dimensions
+func (m *messageDialogModel) SetSize(w, h int) {
+	m.width = w
+	m.height = h
+}
+
 // messageWithBackdrop wraps a message dialog with backdrop using overlay
 type messageWithBackdrop struct {
 	backdrop BackdropModel
-	dialog   messageDialogModel
+	dialog   *messageDialogModel
 }
 
 func (m messageWithBackdrop) Init() tea.Cmd {
@@ -154,7 +160,7 @@ func (m messageWithBackdrop) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Update dialog
 	dialogModel, cmd := m.dialog.Update(msg)
-	m.dialog = dialogModel.(messageDialogModel)
+	m.dialog = dialogModel.(*messageDialogModel)
 	cmds = append(cmds, cmd)
 
 	return m, tea.Batch(cmds...)

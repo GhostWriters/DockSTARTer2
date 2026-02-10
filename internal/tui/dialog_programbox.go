@@ -44,11 +44,11 @@ type outputDoneMsg struct {
 }
 
 // newProgramBox creates a new program box dialog
-func newProgramBox(title, subtitle, command string) programBoxModel {
+func newProgramBox(title, subtitle, command string) *programBoxModel {
 	// Title is parsed by RenderDialog when View() is called.
 	// Subtitle/Command is parsed in View().
 
-	m := programBoxModel{
+	m := &programBoxModel{
 		title:    title,
 		subtitle: subtitle,
 		command:  command,
@@ -88,7 +88,7 @@ func startStreamingOutput(reader io.Reader) tea.Cmd {
 }
 
 // streamReader creates a command that continuously reads from the reader
-func (m programBoxModel) streamReader(reader io.Reader) tea.Cmd {
+func (m *programBoxModel) streamReader(reader io.Reader) tea.Cmd {
 	return func() tea.Msg {
 		scanner := bufio.NewScanner(reader)
 		if scanner.Scan() {
@@ -103,11 +103,11 @@ func (m programBoxModel) streamReader(reader io.Reader) tea.Cmd {
 	}
 }
 
-func (m programBoxModel) Init() tea.Cmd {
+func (m *programBoxModel) Init() tea.Cmd {
 	return nil
 }
 
-func (m programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
@@ -193,7 +193,7 @@ func (m programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m programBoxModel) View() string {
+func (m *programBoxModel) View() string {
 	if m.width == 0 {
 		return ""
 	}
@@ -356,8 +356,39 @@ func (m programBoxModel) View() string {
 	return dialogWithTitle
 }
 
+// SetSize updates the dialog dimensions (called by AppModel on window resize).
+func (m *programBoxModel) SetSize(w, h int) {
+	m.width = w
+	m.height = h
+
+	cfg := config.LoadAppConfig()
+	shadowWidth := 0
+	shadowHeight := 0
+	if cfg.Shadow {
+		shadowWidth = 2
+		shadowHeight = 1
+	}
+
+	commandHeight := 1
+	if m.command == "" {
+		commandHeight = 0
+	}
+
+	// Width calculation: screen - margins(4) - shadow(2) - borders(2 outer + 2 inner)
+	m.viewport.Width = m.width - 4 - shadowWidth - 4
+	if m.viewport.Width < 20 {
+		m.viewport.Width = 20
+	}
+
+	// Height calculation: screen - margins(4) - shadow(1) - borders(2 outer + 2 inner) - other components(cmd line + button row)
+	m.viewport.Height = m.height - 4 - shadowHeight - 4 - commandHeight - 3
+	if m.viewport.Height < 5 {
+		m.viewport.Height = 5
+	}
+}
+
 // getHelpText returns the dynamic help text based on the current state
-func (m programBoxModel) getHelpText() string {
+func (m *programBoxModel) getHelpText() string {
 	scrollInfo := ""
 	if m.viewport.TotalLineCount() > m.viewport.VisibleLineCount() {
 		scrollPercent := m.viewport.ScrollPercent()
@@ -376,7 +407,7 @@ func (m programBoxModel) getHelpText() string {
 // programBoxWithBackdrop wraps a program box dialog with backdrop using overlay
 type programBoxWithBackdrop struct {
 	backdrop BackdropModel
-	dialog   programBoxModel
+	dialog   *programBoxModel
 }
 
 func (m programBoxWithBackdrop) Init() tea.Cmd {
@@ -393,7 +424,7 @@ func (m programBoxWithBackdrop) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Update dialog
 	dialogModel, cmd := m.dialog.Update(msg)
-	m.dialog = dialogModel.(programBoxModel)
+	m.dialog = dialogModel.(*programBoxModel)
 	cmds = append(cmds, cmd)
 
 	// Update backdrop helpText based on dialog state

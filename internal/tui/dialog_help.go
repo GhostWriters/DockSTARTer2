@@ -16,15 +16,15 @@ type helpDialogModel struct {
 	height int
 }
 
-func newHelpDialogModel() helpDialogModel {
+func newHelpDialogModel() *helpDialogModel {
 	h := help.New()
 	h.ShowAll = true
-	return helpDialogModel{help: h}
+	return &helpDialogModel{help: h}
 }
 
-func (m helpDialogModel) Init() tea.Cmd { return nil }
+func (m *helpDialogModel) Init() tea.Cmd { return nil }
 
-func (m helpDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *helpDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		// Any key closes the help dialog (? toggles it off, Esc also works)
@@ -39,7 +39,7 @@ func (m helpDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m helpDialogModel) View() string {
+func (m *helpDialogModel) View() string {
 	if m.width == 0 {
 		return ""
 	}
