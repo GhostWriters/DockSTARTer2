@@ -327,6 +327,13 @@ func renderDialogWithBorder(title, content string, border lipgloss.Border, focus
 		}
 	}
 
+	// For halo/shadow alignment, ensure actualWidth makes the total dialog even.
+	// borders are 1 char each, so total width = 1 + actualWidth + 1
+	// if actualWidth is even, total width is even.
+	if actualWidth%2 != 0 {
+		actualWidth++
+	}
+
 	var result strings.Builder
 
 	// Top border (with or without title)

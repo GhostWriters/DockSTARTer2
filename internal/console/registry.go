@@ -35,6 +35,8 @@ func init() {
 		"l":              CodeBlink,
 		"reverse":        CodeReverse,
 		"r":              CodeReverse,
+		"italic":         CodeItalic,
+		"i":              CodeItalic,
 		"strikethrough":  CodeStrikethrough,
 		"s":              CodeStrikethrough,
 		"-bold":          CodeBoldOff,
@@ -47,6 +49,8 @@ func init() {
 		"-l":             CodeBlinkOff,
 		"-reverse":       CodeReverseOff,
 		"-r":             CodeReverseOff,
+		"-italic":        CodeItalicOff,
+		"-i":             CodeItalicOff,
 		"-strikethrough": CodeStrikethroughOff,
 		"-s":             CodeStrikethroughOff,
 	}
@@ -67,21 +71,23 @@ func BuildColorMap() {
 		semanticMap = make(map[string]string)
 	}
 
-	// Standard ANSI color/modifier mappings
+	// Standard ANSI color/modifier mappings (Case-sensitive for tags)
 	ansiMap["-"] = CodeReset
 	ansiMap["reset"] = CodeReset
-	ansiMap["bold"] = CodeBold
-	ansiMap["b"] = CodeBold
-	ansiMap["dim"] = CodeDim
-	ansiMap["d"] = CodeDim
-	ansiMap["underline"] = CodeUnderline
-	ansiMap["u"] = CodeUnderline
-	ansiMap["blink"] = CodeBlink
-	ansiMap["l"] = CodeBlink
-	ansiMap["reverse"] = CodeReverse
-	ansiMap["r"] = CodeReverse
-	ansiMap["strikethrough"] = CodeStrikethrough
-	ansiMap["s"] = CodeStrikethrough
+	ansiMap["B"] = CodeBold
+	ansiMap["b"] = CodeBoldOff
+	ansiMap["D"] = CodeDim
+	ansiMap["d"] = CodeDimOff
+	ansiMap["U"] = CodeUnderline
+	ansiMap["u"] = CodeUnderlineOff
+	ansiMap["L"] = CodeBlink
+	ansiMap["l"] = CodeBlinkOff
+	ansiMap["R"] = CodeReverse
+	ansiMap["r"] = CodeReverseOff
+	ansiMap["I"] = CodeItalic
+	ansiMap["i"] = CodeItalicOff
+	ansiMap["S"] = CodeStrikethrough
+	ansiMap["s"] = CodeStrikethroughOff
 
 	// Foreground colors
 	ansiMap["black"] = CodeBlack

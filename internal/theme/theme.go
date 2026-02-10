@@ -36,8 +36,7 @@ type ThemeConfig struct {
 	Border2BG            lipgloss.TerminalColor
 	TitleFG              lipgloss.TerminalColor
 	TitleBG              lipgloss.TerminalColor
-	TitleBold            bool
-	TitleUnderline       bool
+	TitleStyles          StyleFlags
 	ShadowColor          lipgloss.TerminalColor
 	ButtonActiveFG       lipgloss.TerminalColor
 	ButtonActiveBG       lipgloss.TerminalColor
@@ -47,16 +46,28 @@ type ThemeConfig struct {
 	ButtonInactiveStyles StyleFlags
 	ItemSelectedFG       lipgloss.TerminalColor
 	ItemSelectedBG       lipgloss.TerminalColor
+	ItemSelectedStyles   StyleFlags
 	ItemFG               lipgloss.TerminalColor
 	ItemBG               lipgloss.TerminalColor
+	ItemStyles           StyleFlags
 	TagFG                lipgloss.TerminalColor
 	TagBG                lipgloss.TerminalColor
+	TagStyles            StyleFlags
+	TagSelectedFG        lipgloss.TerminalColor
+	TagSelectedBG        lipgloss.TerminalColor
+	TagSelectedStyles    StyleFlags
 	TagKeyFG             lipgloss.TerminalColor
+	TagKeyBG             lipgloss.TerminalColor
+	TagKeyStyles         StyleFlags
 	TagKeySelectedFG     lipgloss.TerminalColor
+	TagKeySelectedBG     lipgloss.TerminalColor
+	TagKeySelectedStyles StyleFlags
 	HelplineFG           lipgloss.TerminalColor
 	HelplineBG           lipgloss.TerminalColor
+	HelplineStyles       StyleFlags
 	ProgramFG            lipgloss.TerminalColor
 	ProgramBG            lipgloss.TerminalColor
+	ProgramStyles        StyleFlags
 }
 
 // Current holds the active theme configuration
@@ -131,23 +142,53 @@ func updateTagsFromCurrent() {
 	regComp("Border", Current.BorderFG, Current.BorderBG)
 	regComp("Border2", Current.Border2FG, Current.Border2BG)
 
-	// Note: Title here refers to the mapped _ThemeTitle_ tag, which is usually the Main Menu text.
-	// If theme.ini overrides it with a "Title" key, that will take precedence.
-	regComp("Title", Current.TitleFG, Current.TitleBG)
+	console.RegisterSemanticTag("ThemeTitle", buildTag(Current.TitleFG, Current.TitleBG, Current.TitleStyles))
 
 	regComp("ButtonActive", Current.ButtonActiveFG, Current.ButtonActiveBG)
-	regComp("ButtonInactive", Current.ButtonInactiveFG, Current.ButtonInactiveBG)
 	regComp("ItemSelected", Current.ItemSelectedFG, Current.ItemSelectedBG)
 	regComp("Item", Current.ItemFG, Current.ItemBG)
 	regComp("Tag", Current.TagFG, Current.TagBG)
+	regComp("TagSelected", Current.TagSelectedFG, Current.TagSelectedBG)
 
-	console.RegisterSemanticTag("ThemeTagKey", "{{|"+console.GetColorStr(Current.TagKeyFG)+"|}}")
-	console.RegisterSemanticTag("ThemeTagKeySelected", "{{|"+console.GetColorStr(Current.TagKeySelectedFG)+"|}}")
+	console.RegisterSemanticTag("ThemeTagKey", buildTag(Current.TagKeyFG, Current.TagKeyBG, Current.TagKeyStyles))
+	console.RegisterSemanticTag("ThemeTagKeySelected", buildTag(Current.TagKeySelectedFG, Current.TagKeySelectedBG, Current.TagKeySelectedStyles))
 	console.RegisterSemanticTag("ThemeShadow", "{{|"+console.GetColorStr(Current.ShadowColor)+"|}}")
 
-	regComp("Helpline", Current.HelplineFG, Current.HelplineBG)
-	regComp("ItemHelp", Current.HelplineFG, Current.HelplineBG)
-	regComp("Program", Current.ProgramFG, Current.ProgramBG)
+	console.RegisterSemanticTag("ThemeHelpline", buildTag(Current.HelplineFG, Current.HelplineBG, Current.HelplineStyles))
+	console.RegisterSemanticTag("ThemeItemHelp", buildTag(Current.HelplineFG, Current.HelplineBG, Current.HelplineStyles))
+	console.RegisterSemanticTag("ThemeProgram", buildTag(Current.ProgramFG, Current.ProgramBG, Current.ProgramStyles))
+}
+
+// buildTag constructs a {{|fg:bg:flags|}} string
+func buildTag(fg, bg lipgloss.TerminalColor, styles StyleFlags) string {
+	fgStr := console.GetColorStr(fg)
+	bgStr := console.GetColorStr(bg)
+	flags := ""
+	if styles.Bold {
+		flags += "B"
+	}
+	if styles.Underline {
+		flags += "U"
+	}
+	if styles.Italic {
+		flags += "I"
+	}
+	if styles.Blink {
+		flags += "L"
+	}
+	if styles.Dim {
+		flags += "D"
+	}
+	if styles.Reverse {
+		flags += "R"
+	}
+	if styles.Strikethrough {
+		flags += "S"
+	}
+	if styles.HighIntensity {
+		flags += "H"
+	}
+	return "{{|" + fgStr + ":" + bgStr + ":" + flags + "|}}"
 }
 
 // Default initializes the Current ThemeConfig with standard DockSTARTer colors (Classic)
@@ -174,9 +215,13 @@ func Default() {
 		ItemFG:           parseColor("black"),
 		ItemBG:           parseColor("cyan"),
 		TagFG:            parseColor("black"),
-		TagBG:            parseColor("blue"),
+		TagBG:            parseColor("cyan"),
+		TagSelectedFG:    parseColor("black"),
+		TagSelectedBG:    parseColor("red"),
 		TagKeyFG:         parseColor("red"),
+		TagKeyBG:         parseColor("cyan"),
 		TagKeySelectedFG: parseColor("black"),
+		TagKeySelectedBG: parseColor("red"),
 		HelplineFG:       parseColor("black"),
 		HelplineBG:       parseColor("cyan"),
 		ProgramFG:        parseColor("bright-white"),
@@ -255,15 +300,15 @@ func parseTagWithStyles(tag string) (fg, bg lipgloss.TerminalColor, styles Style
 	}
 	// Parse style flags (third part and beyond)
 	if len(parts) > 2 {
-		flags := strings.ToLower(parts[2])
-		styles.Bold = strings.Contains(flags, "b")
-		styles.Underline = strings.Contains(flags, "u")
-		styles.Italic = strings.Contains(flags, "i")
-		styles.Blink = strings.Contains(flags, "l")
-		styles.Dim = strings.Contains(flags, "d")
-		styles.Reverse = strings.Contains(flags, "r")
-		styles.Strikethrough = strings.Contains(flags, "s")
-		styles.HighIntensity = strings.Contains(flags, "h")
+		flags := parts[2]
+		styles.Bold = strings.Contains(flags, "B")
+		styles.Underline = strings.Contains(flags, "U")
+		styles.Italic = strings.Contains(flags, "I")
+		styles.Blink = strings.Contains(flags, "L")
+		styles.Dim = strings.Contains(flags, "D")
+		styles.Reverse = strings.Contains(flags, "R")
+		styles.Strikethrough = strings.Contains(flags, "S")
+		styles.HighIntensity = strings.Contains(flags, "H")
 	}
 	return
 }
@@ -319,16 +364,12 @@ func parseThemeINI(path string) error {
 		case "Border2":
 			Current.Border2FG, Current.Border2BG = fg, bg
 		case "Title": // Menu title with style flags (underline, bold, etc.)
-			var styles StyleFlags
-			fg, bg, styles = parseTagWithStyles(styleValue)
-			Current.TitleFG, Current.TitleBG = fg, bg
-			Current.TitleBold, Current.TitleUnderline = styles.Bold, styles.Underline
+			Current.TitleFG, Current.TitleBG, Current.TitleStyles = parseTagWithStyles(styleValue)
 			titleWasSet = true
 		case "BoxTitle": // Fallback from .dialogrc (no styles)
 			// Only set if Title wasn't explicitly provided in theme
 			if !titleWasSet {
-				Current.TitleFG, Current.TitleBG = fg, bg
-				// BoxTitle doesn't have style flags, leave Bold/Underline as false
+				Current.TitleFG, Current.TitleBG, Current.TitleStyles = parseTagWithStyles(styleValue)
 			}
 		case "Shadow":
 			// Shadow is usually just BG
@@ -344,19 +385,21 @@ func parseThemeINI(path string) error {
 			Current.ButtonInactiveFG, Current.ButtonInactiveBG = fg, bg
 			Current.ButtonInactiveStyles = styles
 		case "ItemSelected":
-			Current.ItemSelectedFG, Current.ItemSelectedBG = fg, bg
+			Current.ItemSelectedFG, Current.ItemSelectedBG, Current.ItemSelectedStyles = parseTagWithStyles(styleValue)
 		case "Item":
-			Current.ItemFG, Current.ItemBG = fg, bg
+			Current.ItemFG, Current.ItemBG, Current.ItemStyles = parseTagWithStyles(styleValue)
 		case "Tag":
-			Current.TagFG, Current.TagBG = fg, bg
+			Current.TagFG, Current.TagBG, Current.TagStyles = parseTagWithStyles(styleValue)
+		case "TagSelected":
+			Current.TagSelectedFG, Current.TagSelectedBG, Current.TagSelectedStyles = parseTagWithStyles(styleValue)
 		case "TagKey":
-			Current.TagKeyFG = fg
+			Current.TagKeyFG, Current.TagKeyBG, Current.TagKeyStyles = parseTagWithStyles(styleValue)
 		case "TagKeySelected":
-			Current.TagKeySelectedFG = fg
+			Current.TagKeySelectedFG, Current.TagKeySelectedBG, Current.TagKeySelectedStyles = parseTagWithStyles(styleValue)
 		case "Helpline", "ItemHelp", "itemhelp_color":
-			Current.HelplineFG, Current.HelplineBG = fg, bg
+			Current.HelplineFG, Current.HelplineBG, Current.HelplineStyles = parseTagWithStyles(styleValue)
 		case "Program":
-			Current.ProgramFG, Current.ProgramBG = fg, bg
+			Current.ProgramFG, Current.ProgramBG, Current.ProgramStyles = parseTagWithStyles(styleValue)
 		}
 	}
 

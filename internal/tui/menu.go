@@ -61,7 +61,7 @@ func (d customDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 		var keyStyle, restStyle lipgloss.Style
 		if isSelected {
 			keyStyle = styles.TagKeySelected
-			restStyle = styles.ItemSelected
+			restStyle = styles.TagSelected
 		} else {
 			keyStyle = styles.TagKey
 			restStyle = styles.TagNormal

@@ -36,6 +36,7 @@ type Styles struct {
 
 	// Tags (menu item labels)
 	TagNormal      lipgloss.Style
+	TagSelected    lipgloss.Style
 	TagKey         lipgloss.Style // First letter highlight
 	TagKeySelected lipgloss.Style
 
@@ -152,11 +153,9 @@ func InitStyles(cfg config.AppConfig) {
 		Background(t.DialogBG).
 		Foreground(t.DialogFG)
 
-	currentStyles.DialogTitle = lipgloss.NewStyle().
+	currentStyles.DialogTitle = ApplyFlags(lipgloss.NewStyle().
 		Background(t.TitleBG).
-		Foreground(t.TitleFG).
-		Bold(t.TitleBold).
-		Underline(t.TitleUnderline)
+		Foreground(t.TitleFG), t.TitleStyles)
 
 	// Border colors
 	currentStyles.BorderColor = t.BorderFG
@@ -177,28 +176,32 @@ func InitStyles(cfg config.AppConfig) {
 		Foreground(t.ButtonInactiveFG), t.ButtonInactiveStyles)
 
 	// List items - descriptions have cyan background (from .dialogrc item_color)
-	currentStyles.ItemNormal = lipgloss.NewStyle().
+	currentStyles.ItemNormal = ApplyFlags(lipgloss.NewStyle().
 		Background(t.ItemBG).
-		Foreground(t.ItemFG)
+		Foreground(t.ItemFG), t.ItemStyles)
 
 	// Selected items: highlight box around text only (like original bash version)
-	currentStyles.ItemSelected = lipgloss.NewStyle().
+	currentStyles.ItemSelected = ApplyFlags(lipgloss.NewStyle().
 		Background(t.ItemSelectedBG).
-		Foreground(t.ItemSelectedFG)
+		Foreground(t.ItemSelectedFG), t.ItemSelectedStyles)
 
-	// Tags - use dialog background (not TagBG cyan) to fix bleeding
-	currentStyles.TagNormal = lipgloss.NewStyle().
-		Background(t.DialogBG).
-		Foreground(t.TagFG)
+	// Tags - use background from theme (not hardcoded DialogBG)
+	currentStyles.TagNormal = ApplyFlags(lipgloss.NewStyle().
+		Background(t.TagBG).
+		Foreground(t.TagFG), t.TagStyles)
 
-	currentStyles.TagKey = lipgloss.NewStyle().
-		Background(t.DialogBG).
-		Foreground(t.TagKeyFG)
+	currentStyles.TagSelected = ApplyFlags(lipgloss.NewStyle().
+		Background(t.TagSelectedBG).
+		Foreground(t.TagSelectedFG), t.TagSelectedStyles)
+
+	currentStyles.TagKey = ApplyFlags(lipgloss.NewStyle().
+		Background(t.TagKeyBG).
+		Foreground(t.TagKeyFG), t.TagKeyStyles)
 
 	// Selected tag key: highlight box around text only (like original bash version)
-	currentStyles.TagKeySelected = lipgloss.NewStyle().
-		Background(t.ItemSelectedBG).
-		Foreground(t.TagKeySelectedFG)
+	currentStyles.TagKeySelected = ApplyFlags(lipgloss.NewStyle().
+		Background(t.TagKeySelectedBG).
+		Foreground(t.TagKeySelectedFG), t.TagKeySelectedStyles)
 
 	// Header
 	currentStyles.HeaderBG = lipgloss.NewStyle().
@@ -206,15 +209,17 @@ func InitStyles(cfg config.AppConfig) {
 		Foreground(t.ScreenFG)
 
 	// Help line
-	currentStyles.HelpLine = lipgloss.NewStyle().
+	currentStyles.HelpLine = ApplyFlags(lipgloss.NewStyle().
 		Background(t.HelplineBG).
-		Foreground(t.HelplineFG)
+		Foreground(t.HelplineFG), t.HelplineStyles)
 
 	// Initialize semantic styles from console color tags (Theme-specific to avoid log interference)
 	currentStyles.StatusSuccess = ApplyTagsToStyle("{{_ThemeTitleNotice_}}", lipgloss.NewStyle(), lipgloss.NewStyle())
 	currentStyles.StatusWarn = ApplyTagsToStyle("{{_ThemeTitleWarn_}}", lipgloss.NewStyle(), lipgloss.NewStyle())
 	currentStyles.StatusError = ApplyTagsToStyle("{{_ThemeTitleError_}}", lipgloss.NewStyle(), lipgloss.NewStyle())
-	currentStyles.Console = ApplyTagsToStyle("{{_ThemeProgram_}}", lipgloss.NewStyle(), lipgloss.NewStyle())
+	currentStyles.Console = ApplyFlags(lipgloss.NewStyle().
+		Background(t.ProgramBG).
+		Foreground(t.ProgramFG), t.ProgramStyles)
 }
 
 // ApplyFlags applies ANSI style modifiers to a lipgloss.Style

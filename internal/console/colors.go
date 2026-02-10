@@ -18,6 +18,7 @@ const (
 	CodeUnderline     = "\033[4m"
 	CodeBlink         = "\033[5m"
 	CodeReverse       = "\033[7m"
+	CodeItalic        = "\033[3m"
 	CodeStrikethrough = "\033[9m"
 
 	// Modifiers (Off)
@@ -26,6 +27,7 @@ const (
 	CodeUnderlineOff     = "\033[24m"
 	CodeBlinkOff         = "\033[25m"
 	CodeReverseOff       = "\033[27m"
+	CodeItalicOff        = "\033[23m"
 	CodeStrikethroughOff = "\033[29m"
 
 	// Foreground

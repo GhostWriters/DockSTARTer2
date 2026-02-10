@@ -27,7 +27,7 @@ func parseStyleCodeToANSI(content string) string {
 	highIntensity := false
 	if len(parts) > 2 {
 		f := parts[2]
-		if strings.Contains(strings.ToLower(f), "h") {
+		if strings.Contains(f, "H") {
 			highIntensity = true
 		}
 	}
@@ -138,7 +138,7 @@ FoundBG:
 	if len(parts) > 2 && parts[2] != "" {
 		f := strings.TrimPrefix(parts[2], "-")
 		for _, flag := range f {
-			flagStr := strings.ToLower(string(flag))
+			flagStr := string(flag)
 			if code, ok := ansiMap[flagStr]; ok {
 				codes.WriteString(code)
 			}
