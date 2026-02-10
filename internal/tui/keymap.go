@@ -36,13 +36,9 @@ type KeyMap struct {
 	Enter key.Binding
 	Esc   key.Binding
 
-	// Confirm dialog
-	Yes key.Binding
-	No  key.Binding
-
 	// Viewport scrolling (programbox)
 	PageUp       key.Binding
-	PageDown      key.Binding
+	PageDown     key.Binding
 	HalfPageUp   key.Binding
 	HalfPageDown key.Binding
 
@@ -56,14 +52,11 @@ func (k KeyMap) ShortHelp() []key.Binding {
 	return []key.Binding{k.Up, k.Down, k.Enter, k.Esc, k.Help}
 }
 
-// FullHelp returns all bindings grouped by category.
+// FullHelp returns all bindings grouped into two columns for better vertical scaling.
 func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.Up, k.Down, k.Left, k.Right},
-		{k.Tab, k.ShiftTab, k.ChromeFocus, k.Enter, k.Esc},
-		{k.Yes, k.No},
-		{k.PageUp, k.PageDown, k.HalfPageUp, k.HalfPageDown},
-		{k.Help, k.ForceQuit},
+		{k.Up, k.Down, k.Left, k.Right, k.Tab, k.ShiftTab, k.ChromeFocus},
+		{k.Enter, k.Esc, k.PageUp, k.PageDown, k.HalfPageUp, k.HalfPageDown, k.Help, k.ForceQuit},
 	}
 }
 
@@ -104,14 +97,6 @@ var Keys = KeyMap{
 	Esc: key.NewBinding(
 		key.WithKeys("esc"),
 		key.WithHelp("esc", "back/exit"),
-	),
-	Yes: key.NewBinding(
-		key.WithKeys("y", "Y"),
-		key.WithHelp("y", "yes"),
-	),
-	No: key.NewBinding(
-		key.WithKeys("n", "N"),
-		key.WithHelp("n", "no"),
 	),
 	PageUp: key.NewBinding(
 		key.WithKeys("pgup"),

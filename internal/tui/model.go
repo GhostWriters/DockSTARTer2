@@ -149,8 +149,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				sizable.SetSize(m.width, m.height)
 			}
 		}
-
-		return m, nil
+		// NOTE: We don't return early here anymore.
+		// We let it fall through to the end of the function where msg is passed to m.dialog.Update(msg)
+		// and m.activeScreen.Update(msg).
 
 	case NavigateMsg:
 		// Push current screen to stack and switch to new screen
@@ -237,34 +238,38 @@ func (m AppModel) View() string {
 	}
 
 	// Get backdrop view
-	backdropView := m.backdrop.View()
+	output := m.backdrop.View()
 
-	// Get content view (dialog or screen)
-	var contentView string
+	// Layer 1: Active Screen
+	if m.activeScreen != nil {
+		screenView := m.activeScreen.View()
+		if screenView != "" {
+			output = overlay.Composite(
+				screenView,
+				output,
+				overlay.Center,
+				overlay.Center,
+				0,
+				0,
+			)
+		}
+	}
+
+	// Layer 2: Modal Dialog
 	if m.dialog != nil {
-		contentView = m.dialog.View()
-	} else if m.activeScreen != nil {
-		contentView = m.activeScreen.View()
+		dialogView := m.dialog.View()
+		if dialogView != "" {
+			output = overlay.Composite(
+				dialogView,
+				output,
+				overlay.Center,
+				overlay.Center,
+				0,
+				0,
+			)
+		}
 	}
 
-	// If no content, just show backdrop
-	if contentView == "" {
-		return backdropView
-	}
-
-	// Use overlay to composite content over backdrop
-	// Since we scan zones AFTER compositing (at root level), we can safely center
-	// overlay.Composite(foreground, background, xPos, yPos, xOffset, yOffset)
-	output := overlay.Composite(
-		contentView,    // foreground (content to overlay)
-		backdropView,   // background (backdrop base)
-		overlay.Center, // xPos: center horizontally
-		overlay.Center, // yPos: center vertically
-		0,              // xOffset: no offset
-		0,              // yOffset: no offset
-	)
-
-	// Scan zones at the root level (required for BubbleZones to work correctly)
-	// Zones are positioned correctly because scanning happens AFTER compositing
+	// Scan zones at the root level
 	return zone.Scan(output)
 }

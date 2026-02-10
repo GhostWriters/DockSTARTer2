@@ -559,3 +559,83 @@ func AddShadow(content string) string {
 
 	return result.String()
 }
+
+// AddPatternHalo surrounds content with a 1-cell halo of the shadow pattern
+func AddPatternHalo(content string) string {
+	lines := strings.Split(content, "\n")
+	if len(lines) == 0 {
+		return content
+	}
+
+	// Find maximum width
+	maxWidth := 0
+	for _, line := range lines {
+		w := lipgloss.Width(line)
+		if w > maxWidth {
+			maxWidth = w
+		}
+	}
+
+	contentWidth := maxWidth
+	if contentWidth%2 != 0 {
+		contentWidth++
+	}
+
+	shadowStyle := currentStyles.Shadow
+	var shadeChar string
+
+	if currentStyles.LineCharacters {
+		switch currentConfig.ShadowLevel {
+		case 1:
+			shadeChar = "░"
+		case 2:
+			shadeChar = "▒"
+		case 3:
+			shadeChar = "▓"
+		case 4:
+			shadeChar = "█"
+		default:
+			shadeChar = "▒"
+		}
+	} else {
+		shadeChar = "▒" // Default for ASCII to avoid full blocks if not desired
+	}
+
+	// Create a single cell of shadow (2 characters wide)
+	var shadowCell string
+	if currentStyles.LineCharacters {
+		shadowCell = shadowStyle.Render(strings.Repeat(shadeChar, 2))
+	} else {
+		shadowCell = shadowStyle.Width(2).Height(1).Render("")
+	}
+
+	// Horizontal shadow line (covers top/bottom + 2 cells for corners)
+	// totalWidth = shadowCell(1) + contentWidth + shadowCell(1)
+	gridWidth := contentWidth + 4
+	numCells := gridWidth / 2
+	horizontalShadow := strings.Repeat(shadowCell, numCells)
+
+	var result strings.Builder
+
+	// Top halo row
+	result.WriteString(horizontalShadow)
+	result.WriteString("\n")
+
+	// Content rows with halo on both sides
+	for _, line := range lines {
+		w := lipgloss.Width(line)
+		padding := ""
+		if w < contentWidth {
+			padding = strings.Repeat(" ", contentWidth-w)
+		}
+		result.WriteString(shadowCell)
+		result.WriteString(line + padding)
+		result.WriteString(shadowCell)
+		result.WriteString("\n")
+	}
+
+	// Bottom halo row
+	result.WriteString(horizontalShadow)
+
+	return result.String()
+}

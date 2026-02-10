@@ -50,12 +50,7 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch {
-		case key.Matches(msg, Keys.Yes):
-			m.result = true
-			m.confirmed = true
-			return m, tea.Quit
-
-		case key.Matches(msg, Keys.No), key.Matches(msg, Keys.Esc):
+		case key.Matches(msg, Keys.Esc):
 			m.result = false
 			m.confirmed = true
 			return m, tea.Quit
@@ -68,6 +63,18 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.result = false
 			m.confirmed = true
 			return m, tea.Quit
+
+		default:
+			// Check dynamic hotkeys for buttons (Yes/No)
+			buttons := []ButtonSpec{
+				{Text: " Yes "},
+				{Text: " No "},
+			}
+			if idx, found := CheckButtonHotkeys(msg, buttons); found {
+				m.result = (idx == 0) // Yes is index 0
+				m.confirmed = true
+				return m, tea.Quit
+			}
 		}
 
 	case tea.MouseMsg:

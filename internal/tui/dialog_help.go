@@ -31,6 +31,11 @@ func (m *helpDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		_ = msg
 		return m, func() tea.Msg { return CloseDialogMsg{} }
 
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		return m, nil
+
 	case tea.MouseMsg:
 		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
 			return m, func() tea.Msg { return CloseDialogMsg{} }
@@ -45,21 +50,24 @@ func (m *helpDialogModel) View() string {
 	}
 
 	styles := GetStyles()
+	bgStyle := lipgloss.NewStyle().Background(styles.Dialog.GetBackground())
 
-	// Set help model width to fit comfortably in the dialog
-	m.help.Width = m.width - 12
+	// Determine a reasonable width for the help component
+	// We want it to be wide enough for at least 2 columns if window allows
+	const minDesiredWidth = 60
+	targetWidth := m.width - 8 // Snugger margins for the halo/shadow
+	if targetWidth > 120 {
+		targetWidth = 120 // Max width for readability
+	}
+	if targetWidth < minDesiredWidth && m.width > minDesiredWidth+4 {
+		targetWidth = minDesiredWidth
+	}
+	m.help.Width = targetWidth
 
 	// Apply theme styles to the help component
-	dimStyle := lipgloss.NewStyle().
-		Foreground(styles.ItemNormal.GetForeground()).
-		Background(styles.Dialog.GetBackground())
-	keyStyle := lipgloss.NewStyle().
-		Foreground(styles.TagKey.GetForeground()).
-		Background(styles.Dialog.GetBackground()).
-		Bold(true)
-	sepStyle := lipgloss.NewStyle().
-		Foreground(styles.BorderColor).
-		Background(styles.Dialog.GetBackground())
+	dimStyle := bgStyle.Foreground(styles.ItemNormal.GetForeground())
+	keyStyle := bgStyle.Foreground(styles.TagKey.GetForeground()).Bold(true)
+	sepStyle := bgStyle.Foreground(styles.BorderColor)
 
 	m.help.Styles.ShortKey = keyStyle
 	m.help.Styles.ShortDesc = dimStyle
@@ -71,21 +79,34 @@ func (m *helpDialogModel) View() string {
 
 	content := m.help.View(Keys)
 
-	// Apply dialog background to each line to prevent color bleed
+	// Apply dialog background and add 1 space indent on both sides
 	lines := strings.Split(content, "\n")
-	bgStyle := lipgloss.NewStyle().Background(styles.Dialog.GetBackground())
+
+	// Find the actual max width of the rendered help content to make the box snug
+	maxLineWidth := 0
 	for i, line := range lines {
-		lines[i] = bgStyle.Render(line)
+		trimmed := strings.TrimRight(line, " ")
+		lines[i] = trimmed
+		w := lipgloss.Width(trimmed)
+		if w > maxLineWidth {
+			maxLineWidth = w
+		}
+	}
+
+	for i, line := range lines {
+		// Indent 1 space + content + pad to max width + 1 space trailing
+		lineWidth := lipgloss.Width(line)
+		paddedLine := " " + line + strings.Repeat(" ", maxLineWidth-lineWidth) + " "
+		lines[i] = MaintainBackground(bgStyle.Render(paddedLine), bgStyle)
 	}
 	content = strings.Join(lines, "\n")
 
-	// Wrap in padded dialog style
-	paddedContent := styles.Dialog.
-		Padding(0, 1).
-		Render(content)
+	// Use RenderUniformBlockDialog for a distinct look for help (uniform Border2Color)
+	// Passing content directly - RenderDialog logic will handle vertical growth
+	dialogStr := RenderUniformBlockDialog("Keyboard Shortcuts", content)
 
-	dialogWithTitle := RenderDialog("Keyboard Shortcuts", paddedContent, true)
-	return AddShadow(dialogWithTitle)
+	// Use AddPatternHalo instead of AddShadow for a surrounding "halo" effect
+	return AddPatternHalo(dialogStr)
 }
 
 // SetSize updates the dialog dimensions (called by AppModel on window resize).

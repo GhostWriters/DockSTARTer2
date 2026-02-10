@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 )
@@ -17,6 +18,12 @@ const (
 	DialogTypeError
 	DialogTypeConfirm
 )
+
+// BorderPair holds the border styles for focused and unfocused states
+type BorderPair struct {
+	Focused   lipgloss.Border
+	Unfocused lipgloss.Border
+}
 
 // RenderDialogBox renders content in a centered dialog box
 func RenderDialogBox(title, content string, dialogType DialogType, width, height, containerWidth, containerHeight int) string {
@@ -80,7 +87,41 @@ func RenderButton(label string, focused bool) string {
 		style = styles.ButtonActive
 	}
 
-	return style.Render("<" + label + ">")
+	renderedLabel := RenderHotkeyLabel(label, focused)
+	return style.Render("<" + renderedLabel + ">")
+}
+
+// RenderHotkeyLabel styles the first letter of a label with the theme's hotkey color
+func RenderHotkeyLabel(label string, focused bool) string {
+	styles := GetStyles()
+
+	// Normalize label: remove spacing but keep it for rendering if needed
+	trimmed := strings.TrimSpace(label)
+	if len(trimmed) == 0 {
+		return label
+	}
+
+	// Determine styles
+	var charStyle, restStyle lipgloss.Style
+	if focused {
+		charStyle = styles.TagKeySelected
+		restStyle = styles.ButtonActive
+	} else {
+		charStyle = styles.TagKey
+		restStyle = styles.ButtonInactive
+	}
+
+	// Handle leading spaces if they were trimmed
+	prefix := ""
+	if strings.HasPrefix(label, " ") {
+		prefix = strings.Repeat(" ", len(label)-len(strings.TrimLeft(label, " ")))
+	}
+
+	// Apply styles
+	firstChar := string(trimmed[0])
+	rest := trimmed[1:]
+
+	return prefix + charStyle.Render(firstChar) + restStyle.Render(rest)
 }
 
 // RenderButtonRow renders a row of buttons centered
@@ -125,7 +166,9 @@ func RenderCenteredButtons(contentWidth int, buttons ...ButtonSpec) string {
 
 		buttonStyle = buttonStyle.Copy().Width(maxButtonWidth).Align(lipgloss.Center)
 		buttonStyle = ApplyRoundedBorder(buttonStyle, styles.LineCharacters)
-		renderedButtons = append(renderedButtons, buttonStyle.Render(btn.Text))
+
+		renderedLabel := RenderHotkeyLabel(btn.Text, btn.Active)
+		renderedButtons = append(renderedButtons, buttonStyle.Render(renderedLabel))
 	}
 
 	// Divide available width into equal sections (one per button)
@@ -160,29 +203,98 @@ func RenderCenteredButtons(contentWidth int, buttons ...ButtonSpec) string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, sections...)
 }
 
+// CheckButtonHotkeys checks if a key matches the first letter of any button.
+// Returns button index and true if a match is found.
+func CheckButtonHotkeys(msg tea.KeyMsg, buttons []ButtonSpec) (int, bool) {
+	if msg.Type != tea.KeyRunes {
+		return -1, false
+	}
+	keyRune := strings.ToLower(string(msg.Runes))
+
+	for i, btn := range buttons {
+		// Normalize button text (remove brackets/spaces)
+		text := strings.TrimSpace(btn.Text)
+		text = strings.Trim(text, "<>")
+		if len(text) > 0 {
+			firstChar := strings.ToLower(string(text[0]))
+			if firstChar == keyRune {
+				return i, true
+			}
+		}
+	}
+	return -1, false
+}
+
 // RenderDialog renders a dialog with optional title embedded in the top border.
 // If title is empty, renders a plain top border without title.
 // focused=true uses a thick border (active dialog), focused=false uses normal border (background dialog).
-func RenderDialog(title, content string, focused bool) string {
+// Optional borders parameter allows overriding the default theme borders.
+func RenderDialog(title, content string, focused bool, borders ...BorderPair) string {
+	styles := GetStyles()
+
+	var border lipgloss.Border
+	if len(borders) > 0 {
+		if focused {
+			border = borders[0].Focused
+		} else {
+			border = borders[0].Unfocused
+		}
+	} else {
+		if styles.LineCharacters {
+			if focused {
+				border = lipgloss.ThickBorder()
+			} else {
+				border = lipgloss.NormalBorder()
+			}
+		} else {
+			if focused {
+				border = thickAsciiBorder
+			} else {
+				border = asciiBorder
+			}
+		}
+	}
+
+	return renderDialogWithBorder(title, content, border, focused, true, true)
+}
+
+// RenderUniformBlockDialog renders a dialog with block borders and uniform dark colors (no 3D effect).
+// It also disables specialized T-connectors for the title for a more solid "frame" look.
+func RenderUniformBlockDialog(title, content string) string {
+	styles := GetStyles()
+	borders := GetBlockBorders(styles.LineCharacters)
+	return renderDialogWithBorder(title, content, borders.Focused, true, false, false)
+}
+
+// GetBlockBorders returns a BorderPair with solid block borders for both states
+func GetBlockBorders(lineCharacters bool) BorderPair {
+	var block lipgloss.Border
+	if lineCharacters {
+		block = lipgloss.BlockBorder()
+	} else {
+		block = lipgloss.Border{
+			Top:         "█",
+			Bottom:      "█",
+			Left:        "█",
+			Right:       "█",
+			TopLeft:     "█",
+			TopRight:    "█",
+			BottomLeft:  "█",
+			BottomRight: "█",
+		}
+	}
+	return BorderPair{Focused: block, Unfocused: block}
+}
+
+// renderDialogWithBorder is the internal shared rendering logic.
+// It handles title centering, background maintenance, and padding.
+// If threeD is false, it uses a uniform border color (Border2Color).
+// If useConnectors is true, it uses T-junctions (┤, ┫, etc.) to embed the title.
+func renderDialogWithBorder(title, content string, border lipgloss.Border, focused bool, threeD bool, useConnectors bool) string {
 	if title != "" && !strings.HasSuffix(title, "{{|-|}}") {
 		title += "{{|-|}}"
 	}
 	styles := GetStyles()
-
-	var border lipgloss.Border
-	if styles.LineCharacters {
-		if focused {
-			border = lipgloss.ThickBorder()
-		} else {
-			border = lipgloss.NormalBorder()
-		}
-	} else {
-		if focused {
-			border = thickAsciiBorder
-		} else {
-			border = asciiBorder
-		}
-	}
 
 	// Style definitions
 	borderBG := styles.Dialog.GetBackground()
@@ -193,12 +305,16 @@ func RenderDialog(title, content string, focused bool) string {
 		Foreground(styles.Border2Color).
 		Background(borderBG)
 
+	// If not 3D, use the dark/secondary color for EVERYTHING
+	if !threeD {
+		borderStyleLight = borderStyleDark
+	}
+
 	// Prepare title style (default)
 	titleStyle := styles.DialogTitle.Copy().
 		Background(borderBG)
 
 	// Parse color tags from title and render as rich text
-	// This replaces ParseTitleTags which only supported a single style
 	title = RenderThemeText(title, titleStyle)
 
 	// Get actual content width (maximum width of all lines)
@@ -219,27 +335,32 @@ func RenderDialog(title, content string, focused bool) string {
 		// Plain top border without title
 		result.WriteString(borderStyleLight.Render(strings.Repeat(border.Top, actualWidth)))
 	} else {
-		// Top border with embedded title using T connectors
-		// Format: ────┤ Title ├──── (normal) or ━━━━┫ Title ┣━━━━ (thick/focused)
-		// Spaces are rendered with border style, not title style
+		// Top border with embedded title
 		var leftT, rightT string
-		if styles.LineCharacters {
-			if focused {
-				leftT = "┫"
-				rightT = "┣"
+		if useConnectors {
+			if styles.LineCharacters {
+				if focused {
+					leftT = "┫"
+					rightT = "┣"
+				} else {
+					leftT = "┤"
+					rightT = "├"
+				}
 			} else {
-				leftT = "┤"
-				rightT = "├"
+				if focused {
+					leftT = "H" // thick ASCII T-connector
+					rightT = "H"
+				} else {
+					leftT = "|"
+					rightT = "|"
+				}
 			}
 		} else {
-			if focused {
-				leftT = "H" // thick ASCII T-connector
-				rightT = "H"
-			} else {
-				leftT = "|"
-				rightT = "|"
-			}
+			// No specialized connectors: just use the standard border character
+			leftT = border.Top
+			rightT = border.Top
 		}
+
 		// Total title section width: leftT + space + title + space + rightT
 		titleSectionLen := 1 + 1 + lipgloss.Width(title) + 1 + 1
 
@@ -268,9 +389,11 @@ func RenderDialog(title, content string, focused bool) string {
 		textWidth := lipgloss.Width(line)
 		padding := ""
 		if textWidth < actualWidth {
-			padding = strings.Repeat(" ", actualWidth-textWidth)
+			padding = lipgloss.NewStyle().Background(borderBG).Render(strings.Repeat(" ", actualWidth-textWidth))
 		}
-		result.WriteString(line + padding)
+		// Use MaintainBackground to ensure internal resets don't bleed to black
+		fullLine := MaintainBackground(line+padding, styles.Dialog)
+		result.WriteString(fullLine)
 		result.WriteString(borderStyleDark.Render(border.Right))
 		result.WriteString("\n")
 	}

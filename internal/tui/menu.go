@@ -45,21 +45,29 @@ func (d customDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 	isSelected := index == m.Index()
 
 	// Render tag with first-letter highlighting
-	tagRunes := []rune(menuItem.Tag)
+	tag := menuItem.Tag
 	var tagStr string
-	if len(tagRunes) > 0 {
-		firstLetter := string(tagRunes[0])
-		rest := string(tagRunes[1:])
-
-		if isSelected {
-			keyStyle := styles.TagKeySelected
-			restStyle := styles.ItemSelected
-			tagStr = keyStyle.Render(firstLetter) + restStyle.Render(rest)
-		} else {
-			keyStyle := styles.TagKey
-			restStyle := styles.TagNormal
-			tagStr = keyStyle.Render(firstLetter) + restStyle.Render(rest)
+	if len(tag) > 0 {
+		// Find the index of the first letter (skip brackets)
+		letterIdx := 0
+		if strings.HasPrefix(tag, "[") && len(tag) > 1 {
+			letterIdx = 1
 		}
+
+		prefix := tag[:letterIdx]
+		firstLetter := string(tag[letterIdx])
+		rest := tag[letterIdx+1:]
+
+		var keyStyle, restStyle lipgloss.Style
+		if isSelected {
+			keyStyle = styles.TagKeySelected
+			restStyle = styles.ItemSelected
+		} else {
+			keyStyle = styles.TagKey
+			restStyle = styles.TagNormal
+		}
+
+		tagStr = restStyle.Render(prefix) + keyStyle.Render(firstLetter) + restStyle.Render(rest)
 	}
 
 	// Pad tag to align descriptions
@@ -343,6 +351,50 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.backAction
 			}
 			return m, tea.Quit
+
+		// Dynamic Hotkeys
+		default:
+			if keyMsg.Type == tea.KeyRunes {
+				keyRune := strings.ToLower(string(keyMsg.Runes))
+
+				// 1. Check Menu Items first (priority)
+				for i, item := range m.items {
+					// Handle tagged tags like [F] properly
+					tag := strings.Trim(item.Tag, "[]")
+					if len(tag) > 0 {
+						firstChar := strings.ToLower(string(tag[0]))
+						if firstChar == keyRune {
+							m.list.Select(i)
+							m.cursor = i
+							menuSelectedIndices[m.id] = i
+							m.focusedItem = FocusList
+							return m.handleEnter()
+						}
+					}
+				}
+
+				// 2. Check Buttons (if no item matched)
+				// Determine available buttons
+				var buttons []ButtonSpec
+				buttons = append(buttons, ButtonSpec{Text: "Select"})
+				if m.backAction != nil {
+					buttons = append(buttons, ButtonSpec{Text: "Back"})
+				}
+				buttons = append(buttons, ButtonSpec{Text: "Exit"})
+
+				if idx, found := CheckButtonHotkeys(keyMsg, buttons); found {
+					// Map index back to FocusItem
+					switch buttons[idx].Text {
+					case "Select":
+						m.focusedItem = FocusSelectBtn
+					case "Back":
+						m.focusedItem = FocusBackBtn
+					case "Exit":
+						m.focusedItem = FocusExitBtn
+					}
+					return m.handleEnter()
+				}
+			}
 		}
 	}
 
@@ -625,11 +677,13 @@ func (m MenuModel) viewOld() string {
 	maxTagLen := 0
 	maxDescLen := 0
 	for _, item := range m.items {
-		if len(item.Tag) > maxTagLen {
-			maxTagLen = len(item.Tag)
+		tagWidth := lipgloss.Width(item.Tag)
+		if tagWidth > maxTagLen {
+			maxTagLen = tagWidth
 		}
-		if len(item.Desc) > maxDescLen {
-			maxDescLen = len(item.Desc)
+		descWidth := lipgloss.Width(item.Desc)
+		if descWidth > maxDescLen {
+			maxDescLen = descWidth
 		}
 	}
 
@@ -637,7 +691,7 @@ func (m MenuModel) viewOld() string {
 	contentWidth := maxTagLen + colPadding + maxDescLen + 4
 
 	// Ensure minimum width for title
-	titleWidth := len(m.title) + 4
+	titleWidth := lipgloss.Width(m.title) + 4
 	if titleWidth > contentWidth {
 		contentWidth = titleWidth
 	}
@@ -701,7 +755,7 @@ func (m MenuModel) viewOld() string {
 		}
 
 		// Pad tag to align descriptions
-		tagWidth := len(item.Tag)
+		tagWidth := lipgloss.Width(item.Tag)
 		padding := strings.Repeat(" ", maxTagLen-tagWidth+colPadding)
 
 		// Render description
@@ -973,7 +1027,18 @@ func (m MenuModel) renderBorderWithTitle(content string, contentWidth int) strin
 	// Content lines with left/right borders
 	for _, line := range lines {
 		result.WriteString(borderStyleLight.Render(border.Left))
-		result.WriteString(line)
+
+		// Pad line to actualWidth with styled padding to prevent black splotches
+		textWidth := lipgloss.Width(line)
+		padding := ""
+		if textWidth < actualWidth {
+			padding = lipgloss.NewStyle().Background(borderBG).Render(strings.Repeat(" ", actualWidth-textWidth))
+		}
+
+		// Use MaintainBackground to handle internal color resets within the line
+		fullLine := MaintainBackground(line+padding, styles.Dialog)
+		result.WriteString(fullLine)
+
 		result.WriteString(borderStyleDark.Render(border.Right))
 		result.WriteString("\n")
 	}
