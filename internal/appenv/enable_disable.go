@@ -22,7 +22,7 @@ func Enable(ctx context.Context, appNames []string, conf config.AppConfig) error
 			enabledVar := appUpper + "__ENABLED"
 			logger.Info(ctx, "Enabling application '{{_App_}}%s{{|-|}}'", niceName)
 			logger.Notice(ctx, "Setting variable in '{{_File_}}%s{{|-|}}':", envFile)
-			logger.Notice(ctx, "   {{_Var_}}%s='true'{{|-|}}", enabledVar)
+			logger.Notice(ctx, "\t{{_Var_}}%s='true'{{|-|}}", enabledVar)
 
 			if err := Set(enabledVar, "true", envFile); err != nil {
 				return err
@@ -48,7 +48,7 @@ func Disable(ctx context.Context, appNames []string, conf config.AppConfig) erro
 			enabledVar := appUpper + "__ENABLED"
 			logger.Info(ctx, "Disabling application '{{_App_}}%s{{|-|}}'", niceName)
 			logger.Notice(ctx, "Setting variable in '{{_File_}}%s{{|-|}}':", envFile)
-			logger.Notice(ctx, "   {{_Var_}}%s='false'{{|-|}}", enabledVar)
+			logger.Notice(ctx, "\t{{_Var_}}%s='false'{{|-|}}", enabledVar)
 
 			if err := Set(enabledVar, "false", envFile); err != nil {
 				return err

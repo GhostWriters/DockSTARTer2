@@ -168,6 +168,7 @@ func buildConsoleStyles() *charmlog.Styles {
 	return st
 }
 
+
 func NewLogger() *slog.Logger {
 	wStderr := os.Stderr
 
@@ -362,7 +363,7 @@ func FatalWithStack(ctx context.Context, msg any, args ...any) {
 	rawInfo := getSystemInfo()
 	for _, i := range rawInfo {
 		if i != "" {
-			infoLines = append(infoLines, "  "+i /* console.Parse handled by logAt */)
+			infoLines = append(infoLines, "\t"+i /* console.Parse handled by logAt */)
 		} else {
 			infoLines = append(infoLines, "")
 		}
@@ -424,7 +425,7 @@ func FatalWithStack(ctx context.Context, msg any, args ...any) {
 			"{{_TraceFunction_}}", filepath.Base(frame.Function),
 		)
 
-		traceLines = append(traceLines, "  "+line)
+		traceLines = append(traceLines, "\t"+line)
 
 		// Prepare for next frame
 		indent += "  "

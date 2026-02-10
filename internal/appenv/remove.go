@@ -98,7 +98,7 @@ func removeApp(ctx context.Context, appName string, conf config.AppConfig, assum
 	}
 
 	// Build the question showing what will be removed (matching Bash format exactly)
-	indent := "   "
+	indent := "\t"
 	question := fmt.Sprintf("Would you like to purge these settings for '{{_App_}}%s{{|-|}}'?\n", nice)
 
 	if len(globalLinesToRemove) > 0 {

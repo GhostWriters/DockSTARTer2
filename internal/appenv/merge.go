@@ -65,7 +65,7 @@ func MergeNewOnly(ctx context.Context, targetFile, sourceFile string) ([]string,
 		if len(varsToLog) > 0 {
 			logger.Notice(ctx, "Adding variables to {{_File_}}%s{{|-|}}:", targetFile)
 			for _, line := range varsToLog {
-				logger.Notice(ctx, "   {{_Var_}}%s{{|-|}}", line)
+				logger.Notice(ctx, "\t{{_Var_}}%s{{|-|}}", line)
 			}
 		}
 

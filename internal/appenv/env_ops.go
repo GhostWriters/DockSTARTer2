@@ -332,7 +332,7 @@ func SanitizeEnv(ctx context.Context, file string, conf config.AppConfig) error 
 		logger.Notice(ctx, "Setting variables in '{{_File_}}%s{{|-|}}':", file)
 		for _, key := range updatedVars {
 			val := updates[key]
-			logger.Notice(ctx, "   {{_Var_}}%s=%s{{|-|}}", key, val)
+			logger.Notice(ctx, "\t{{_Var_}}%s=%s{{|-|}}", key, val)
 			SetLiteral(key, val, file)
 		}
 	}
