@@ -179,7 +179,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				handleRemove(subCtx, &group, &state)
 				ranCommand = true
 			case "-S", "--select", "--menu-config-app-select", "--menu-app-select":
-				logger.FatalNoTrace(subCtx, "The '{{_UserCommand_}}%s{{|-|}}' command is not implemented yet.", group.Command)
+				logger.Fatal(subCtx, "The '{{_UserCommand_}}%s{{|-|}}' command is not implemented yet.", group.Command)
 			case "-t", "--test":
 				handleTest(subCtx, &group)
 				ranCommand = true
@@ -868,7 +868,7 @@ func handleEnvAppVars(ctx context.Context, group *CommandGroup) {
 	conf := config.LoadAppConfig()
 	args := group.Args
 	if len(args) == 0 {
-		logger.FatalNoTrace(ctx, "Command --env-appvars requires one or more application names.")
+		logger.Fatal(ctx, "Command --env-appvars requires one or more application names.")
 	}
 
 	for _, appName := range args {
@@ -887,7 +887,7 @@ func handleEnvAppVarsLines(ctx context.Context, group *CommandGroup) {
 	conf := config.LoadAppConfig()
 	args := group.Args
 	if len(args) == 0 {
-		logger.FatalNoTrace(ctx, "Command --env-appvars-lines requires one or more application names.")
+		logger.Fatal(ctx, "Command --env-appvars-lines requires one or more application names.")
 	}
 
 	for _, appName := range args {

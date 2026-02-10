@@ -752,7 +752,7 @@ func EnsureTemplates(ctx context.Context) error {
 	if _, err := os.Stat(templatesDir); err == nil {
 		logger.Notice(ctx, "Running: {{_RunningCommand_}}rm -rf %s{{|-|}}", templatesDir)
 		if err := os.RemoveAll(templatesDir); err != nil {
-			logger.Fatal(ctx, "Failed to remove %s.", templatesDir)
+			logger.FatalWithStack(ctx, "Failed to remove %s.", templatesDir)
 		}
 	}
 

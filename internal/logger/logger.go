@@ -15,7 +15,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lmittmann/tint"
+	charmlog "github.com/charmbracelet/log"
+	"github.com/charmbracelet/lipgloss"
 )
 
 const TUIWriterKey = "tui_writer"
@@ -120,6 +121,10 @@ const (
 var LevelVar = new(slog.LevelVar)
 var FileLevelVar = new(slog.LevelVar)
 
+// Package-level logger instances kept for dynamic level updates via SetLevel.
+var consoleLogger *charmlog.Logger
+var fileLogger *charmlog.Logger
+
 func init() {
 	LevelVar.Set(LevelNotice)
 	FileLevelVar.Set(LevelInfo) // Default file to Info (-v behavior)
@@ -127,72 +132,54 @@ func init() {
 
 func SetLevel(level slog.Level) {
 	LevelVar.Set(level)
-	// File level should be at least Info, or lower if Debug is requested
-	if level < LevelInfo {
-		FileLevelVar.Set(level)
-	} else {
-		FileLevelVar.Set(LevelInfo)
+	if consoleLogger != nil {
+		consoleLogger.SetLevel(charmlog.Level(level))
 	}
+	// File level should be at least Info, or lower if Debug is requested
+	fileLevel := LevelInfo
+	if level < LevelInfo {
+		fileLevel = level
+	}
+	FileLevelVar.Set(fileLevel)
+	if fileLogger != nil {
+		fileLogger.SetLevel(charmlog.Level(fileLevel))
+	}
+}
+
+// buildConsoleStyles returns level styles using lipgloss colors.
+// Colors are auto-stripped by charmbracelet/log when the output is not a TTY.
+func buildConsoleStyles() *charmlog.Styles {
+	st := charmlog.DefaultStyles()
+
+	blue   := lipgloss.NewStyle().Foreground(lipgloss.Color("4"))
+	green  := lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
+	yellow := lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+	red    := lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+	fatal  := lipgloss.NewStyle().Foreground(lipgloss.Color("7")).Background(lipgloss.Color("1"))
+
+	st.Levels[charmlog.Level(LevelTrace)]  = blue.SetString("[TRACE ]")
+	st.Levels[charmlog.Level(LevelDebug)]  = blue.SetString("[DEBUG ]")
+	st.Levels[charmlog.Level(LevelInfo)]   = blue.SetString("[INFO  ]")
+	st.Levels[charmlog.Level(LevelNotice)] = green.SetString("[NOTICE]")
+	st.Levels[charmlog.Level(LevelWarn)]   = yellow.SetString("[WARN  ]")
+	st.Levels[charmlog.Level(LevelError)]  = red.SetString("[ERROR ]")
+	st.Levels[charmlog.Level(LevelFatal)]  = fatal.SetString("[FATAL ]")
+
+	return st
 }
 
 func NewLogger() *slog.Logger {
 	wStderr := os.Stderr
 
-	// Check if output is a terminal (TTY)
-	stat, _ := wStderr.Stat()
-	isTTY := (stat.Mode() & os.ModeCharDevice) != 0
-
-	// 1. Configure Console Handler (Colors if TTY)
-	var (
-		ansiReset  string
-		ansiBlue   string
-		ansiGreen  string
-		ansiYellow string
-		ansiRed    string
-		ansiRedBg  string
-	)
-
-	if isTTY {
-		ansiReset = console.CodeReset
-		ansiBlue = console.CodeBlue
-		ansiGreen = console.CodeGreen // Notice
-		ansiYellow = console.CodeYellow
-		ansiRed = console.CodeRed
-		ansiRedBg = console.CodeRedBg + console.CodeWhite
-	}
-
-	replaceAttrConsole := func(groups []string, a slog.Attr) slog.Attr {
-		if a.Key == slog.LevelKey {
-			level := a.Value.Any().(slog.Level)
-			switch level {
-			case LevelTrace:
-				a.Value = slog.StringValue(ansiBlue + "[TRACE ]" + ansiReset + "  ")
-			case LevelDebug:
-				a.Value = slog.StringValue(ansiBlue + "[DEBUG ]" + ansiReset + "  ")
-			case LevelInfo:
-				a.Value = slog.StringValue(ansiBlue + "[INFO  ]" + ansiReset + "  ")
-			case LevelNotice:
-				a.Value = slog.StringValue(ansiGreen + "[NOTICE]" + ansiReset + "  ")
-			case LevelWarn:
-				a.Value = slog.StringValue(ansiYellow + "[WARN  ]" + ansiReset + "  ")
-			case LevelError:
-				a.Value = slog.StringValue(ansiRed + "[ERROR ]" + ansiReset + "  ")
-			case LevelFatal:
-				a.Value = slog.StringValue(ansiRedBg + "[FATAL ]" + ansiReset + "  ")
-			default:
-				a.Value = slog.StringValue("[" + level.String() + "]")
-			}
-		}
-		return a
-	}
-
-	consoleOpts := &tint.Options{
-		Level:       LevelVar,
-		TimeFormat:  "2006-01-02 15:04:05",
-		NoColor:     !isTTY,
-		ReplaceAttr: replaceAttrConsole,
-	}
-	consoleHandler := tint.NewHandler(wStderr, consoleOpts)
+	// 1. Configure Console Handler using charmbracelet/log.
+	// Color support is auto-detected from the output writer (TTY vs non-TTY).
+	consoleLogger = charmlog.NewWithOptions(wStderr, charmlog.Options{
+		Level:           charmlog.Level(LevelVar.Level()),
+		TimeFormat:      "2006-01-02 15:04:05",
+		ReportTimestamp: true,
+	})
+	consoleLogger.SetStyles(buildConsoleStyles())
+	consoleHandler := consoleLogger // implements slog.Handler
 
 	// 2. Configure File Handler (No Color)
 	stateDir := paths.GetStateDir()
@@ -212,40 +199,14 @@ func NewLogger() *slog.Logger {
 	handlers := []slog.Handler{consoleHandler}
 
 	if wFile != nil {
-		replaceAttrFile := func(groups []string, a slog.Attr) slog.Attr {
-			// Strip ANSI codes from message if possible, or just Ensure we don't View them for levels
-			if a.Key == slog.LevelKey {
-				level := a.Value.Any().(slog.Level)
-				// Clean level strings
-				switch level {
-				case LevelTrace:
-					a.Value = slog.StringValue("[TRACE ]  ")
-				case LevelDebug:
-					a.Value = slog.StringValue("[DEBUG ]  ")
-				case LevelInfo:
-					a.Value = slog.StringValue("[INFO  ]  ")
-				case LevelNotice:
-					a.Value = slog.StringValue("[NOTICE]  ")
-				case LevelWarn:
-					a.Value = slog.StringValue("[WARN  ]  ")
-				case LevelError:
-					a.Value = slog.StringValue("[ERROR ]  ")
-				case LevelFatal:
-					a.Value = slog.StringValue("[FATAL ]  ")
-				default:
-					a.Value = slog.StringValue("[" + level.String() + "]")
-				}
-			}
-			return a
-		}
-
-		fileOpts := &tint.Options{
-			Level:       FileLevelVar,
-			TimeFormat:  "2006-01-02 15:04:05",
-			NoColor:     true, // Important
-			ReplaceAttr: replaceAttrFile,
-		}
-		fileHandler := tint.NewHandler(wFile, fileOpts)
+		// File handler: charmbracelet/log auto-strips colors for non-TTY writers.
+		fileLogger = charmlog.NewWithOptions(wFile, charmlog.Options{
+			Level:           charmlog.Level(FileLevelVar.Level()),
+			TimeFormat:      "2006-01-02 15:04:05",
+			ReportTimestamp: true,
+		})
+		fileLogger.SetStyles(buildConsoleStyles())
+		fileHandler := fileLogger // implements slog.Handler
 		handlers = append(handlers, fileHandler)
 	}
 
@@ -385,7 +346,7 @@ func getSystemInfo() []string {
 }
 
 // Fatal logs a message at FatalLevel and exits
-func Fatal(ctx context.Context, msg any, args ...any) {
+func FatalWithStack(ctx context.Context, msg any, args ...any) {
 	// Capture time once for all lines
 	now := time.Now()
 
@@ -494,7 +455,7 @@ func Fatal(ctx context.Context, msg any, args ...any) {
 }
 
 // FatalNoTrace logs a message at FatalLevel without stack trace and exits
-func FatalNoTrace(ctx context.Context, msg any, args ...any) {
+func Fatal(ctx context.Context, msg any, args ...any) {
 	output := []any{
 		msg,
 		"",

@@ -29,7 +29,7 @@ func run() (exitCode int) {
 	defer func() {
 		if r := recover(); r != nil {
 			if _, ok := r.(logger.FatalError); ok {
-				// This panic was intentional from logger.Fatal/FatalNoTrace
+				// This panic was intentional from logger.Fatal/FatalWithStack
 				exitCode = 1
 			} else {
 				// Re-panic for other errors
@@ -49,7 +49,7 @@ func run() (exitCode int) {
 
 	// Ensure templates are cloned
 	if err := update.EnsureTemplates(ctx); err != nil {
-		logger.Fatal(ctx, "Failed to clone {{_ApplicationName_}}DockSTARTer-Templates{{|-|}} repo.")
+		logger.FatalWithStack(ctx, "Failed to clone {{_ApplicationName_}}DockSTARTer-Templates{{|-|}} repo.")
 	}
 
 	_ = update.CheckCurrentStatus(ctx)

@@ -34,7 +34,7 @@ func EnvCreate(ctx context.Context, conf config.AppConfig) error {
 	if _, err := os.Stat(conf.ComposeDir); os.IsNotExist(err) {
 		logger.Notice(ctx, "Creating folder '{{_Folder_}}%s{{|-|}}'.", conf.ComposeDir)
 		if err := os.MkdirAll(conf.ComposeDir, 0755); err != nil {
-			logger.FatalNoTrace(ctx, "Failed to create compose folder: %v", err)
+			logger.Fatal(ctx, "Failed to create compose folder: %v", err)
 		}
 	} else if err != nil {
 		return err // Stat error, usually permissions or disk error. Maybe fatal too?
@@ -56,11 +56,11 @@ func EnvCreate(ctx context.Context, conf config.AppConfig) error {
 
 		defaultContent, err := assets.GetDefaultEnv()
 		if err != nil {
-			logger.FatalNoTrace(ctx, "Failed to load default env template: %v", err)
+			logger.Fatal(ctx, "Failed to load default env template: %v", err)
 		}
 
 		if err := os.WriteFile(envFile, defaultContent, 0644); err != nil {
-			logger.FatalNoTrace(ctx, "Failed to create default env file: %v", err)
+			logger.Fatal(ctx, "Failed to create default env file: %v", err)
 		}
 		// Sanitize new
 		if err := SanitizeEnv(ctx, envFile, conf); err != nil {
