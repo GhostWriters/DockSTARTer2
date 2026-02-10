@@ -542,86 +542,16 @@ func (m MenuModel) markZones(dialog string) string {
 
 // renderSimpleButtons creates a button row with evenly spaced sections
 func (m MenuModel) renderSimpleButtons(contentWidth int) string {
-	styles := GetStyles()
-
-	// Calculate button widths to find the longest
-	buttonTexts := []string{" Select ", " Exit "}
+	// Build button specs with focus state and explicit zone IDs
+	specs := []ButtonSpec{
+		{Text: " Select ", Active: m.focusedItem == FocusSelectBtn, ZoneID: "btn-select"},
+	}
 	if m.backAction != nil {
-		buttonTexts = append(buttonTexts, " Back ")
+		specs = append(specs, ButtonSpec{Text: " Back ", Active: m.focusedItem == FocusBackBtn, ZoneID: "btn-back"})
 	}
+	specs = append(specs, ButtonSpec{Text: " Exit ", Active: m.focusedItem == FocusExitBtn, ZoneID: "btn-exit"})
 
-	// Find the maximum button text width
-	maxButtonWidth := 0
-	for _, text := range buttonTexts {
-		width := lipgloss.Width(text)
-		if width > maxButtonWidth {
-			maxButtonWidth = width
-		}
-	}
-
-	// Select button with border and fixed width
-	selectStyle := styles.ButtonInactive
-	if m.focusedItem == FocusSelectBtn {
-		selectStyle = styles.ButtonActive
-	}
-	selectBtnStyle := selectStyle.Copy().Width(maxButtonWidth).Align(lipgloss.Center)
-	selectBtnStyle = ApplyRoundedBorder(selectBtnStyle, styles.LineCharacters)
-	selectBtn := selectBtnStyle.Render(" Select ")
-
-	// Back button with border and fixed width (optional)
-	var backBtn string
-	if m.backAction != nil {
-		backStyle := styles.ButtonInactive
-		if m.focusedItem == FocusBackBtn {
-			backStyle = styles.ButtonActive
-		}
-		backBtnStyle := backStyle.Copy().Width(maxButtonWidth).Align(lipgloss.Center)
-		backBtnStyle = ApplyRoundedBorder(backBtnStyle, styles.LineCharacters)
-		backBtn = backBtnStyle.Render(" Back ")
-	}
-
-	// Exit button with border and fixed width
-	exitStyle := styles.ButtonInactive
-	if m.focusedItem == FocusExitBtn {
-		exitStyle = styles.ButtonActive
-	}
-	exitBtnStyle := exitStyle.Copy().Width(maxButtonWidth).Align(lipgloss.Center)
-	exitBtnStyle = ApplyRoundedBorder(exitBtnStyle, styles.LineCharacters)
-	exitBtn := exitBtnStyle.Render(" Exit ")
-
-	// Collect all buttons
-	var buttons []string
-	buttons = append(buttons, selectBtn)
-	if m.backAction != nil {
-		buttons = append(buttons, backBtn)
-	}
-	buttons = append(buttons, exitBtn)
-
-	// Divide available width into equal sections (one per button)
-	numButtons := len(buttons)
-	sectionWidth := contentWidth / numButtons
-
-	// Center each bordered button in its section and mark with zone
-	var sections []string
-	buttonIDs := []string{"btn-select"}
-	if m.backAction != nil {
-		buttonIDs = append(buttonIDs, "btn-back")
-	}
-	buttonIDs = append(buttonIDs, "btn-exit")
-
-	for i, btn := range buttons {
-		centeredBtn := lipgloss.NewStyle().
-			Width(sectionWidth).
-			Align(lipgloss.Center).
-			Background(styles.Dialog.GetBackground()).
-			Render(btn)
-
-		// Mark this button section with its zone BEFORE joining
-		centeredBtn = zone.Mark(buttonIDs[i], centeredBtn)
-		sections = append(sections, centeredBtn)
-	}
-
-	return lipgloss.JoinHorizontal(lipgloss.Top, sections...)
+	return RenderCenteredButtons(contentWidth, specs...)
 }
 
 /* OLD CUSTOM RENDERING - Kept for reference (Phase 2 will add back custom styling)

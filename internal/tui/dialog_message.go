@@ -7,6 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	zone "github.com/lrstanley/bubblezone"
 	overlay "github.com/rmhubbert/bubbletea-overlay"
 )
 
@@ -52,6 +53,16 @@ func (m messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		// Any key press closes the dialog
 		return m, tea.Quit
+
+	case tea.MouseMsg:
+		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+			// Check if OK button was clicked (auto-generated zone ID: "Button.OK")
+			if zoneInfo := zone.Get("Button.OK"); zoneInfo != nil {
+				if zoneInfo.InBounds(msg) {
+					return m, tea.Quit
+				}
+			}
+		}
 	}
 
 	return m, nil
@@ -95,10 +106,22 @@ func (m messageDialogModel) View() string {
 	// Build dialog content
 	content := messageStyle.Render(m.message)
 
+	// Calculate content width for button row
+	contentWidth := lipgloss.Width(content)
+
+	// Render OK button with automatic zone marking (zone ID: "Button.OK")
+	buttonRow := RenderCenteredButtons(
+		contentWidth,
+		ButtonSpec{Text: " OK ", Active: true},
+	)
+
+	// Combine message and button
+	fullContent := lipgloss.JoinVertical(lipgloss.Left, content, buttonRow)
+
 	// Add padding to content (border will be added by RenderDialogWithTitle)
 	paddedContent := styles.Dialog.
 		Padding(0, 1).
-		Render(content)
+		Render(fullContent)
 
 	// Add title with prefix and wrap in border with title embedded (matching menu style)
 	fullTitle := titlePrefix + m.title
@@ -140,7 +163,7 @@ func (m messageWithBackdrop) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m messageWithBackdrop) View() string {
 	// Use overlay to composite dialog over backdrop
 	// overlay.Composite(foreground, background, xPos, yPos, xOffset, yOffset)
-	return overlay.Composite(
+	output := overlay.Composite(
 		m.dialog.View(),   // foreground (dialog content)
 		m.backdrop.View(), // background (backdrop base)
 		overlay.Center,
@@ -148,10 +171,16 @@ func (m messageWithBackdrop) View() string {
 		0,
 		0,
 	)
+
+	// Scan zones at root level for mouse support
+	return zone.Scan(output)
 }
 
 // ShowMessageDialog displays a message dialog
 func ShowMessageDialog(title, message string, msgType MessageType) {
+	// Initialize global zone manager for mouse support (safe to call multiple times)
+	zone.NewGlobal()
+
 	// Initialize TUI if not already done
 	cfg := config.LoadAppConfig()
 	if err := theme.Load(cfg.Theme); err == nil {
@@ -164,7 +193,7 @@ func ShowMessageDialog(title, message string, msgType MessageType) {
 		dialog:   newMessageDialog(title, message, msgType),
 	}
 
-	p := tea.NewProgram(model)
+	p := tea.NewProgram(model, tea.WithMouseAllMotion())
 	p.Run()
 	// Reset terminal colors on exit to prevent "bleeding" into the shell prompt
 	fmt.Print("\x1b[0m\n")

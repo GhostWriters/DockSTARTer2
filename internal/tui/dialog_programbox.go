@@ -16,6 +16,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	zone "github.com/lrstanley/bubblezone"
 	overlay "github.com/rmhubbert/bubbletea-overlay"
 )
 
@@ -173,6 +174,18 @@ func (m programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 		}
+
+	case tea.MouseMsg:
+		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+			// Check if OK button was clicked (auto-generated zone ID: "Button.OK")
+			if m.done {
+				if zoneInfo := zone.Get("Button.OK"); zoneInfo != nil {
+					if zoneInfo.InBounds(msg) {
+						return m, tea.Quit
+					}
+				}
+			}
+		}
 	}
 
 	// Update viewport for scrolling
@@ -304,6 +317,7 @@ func (m programBoxModel) View() string {
 	}
 
 	// Render OK button using the standard button helper (ensures consistency)
+	// Zone marking is handled automatically by RenderCenteredButtons (zone ID: "Button.OK")
 	buttonRow := RenderCenteredButtons(
 		contentWidth,
 		ButtonSpec{Text: " OK ", Active: m.done},
@@ -400,7 +414,7 @@ func (m programBoxWithBackdrop) View() string {
 
 	// Position dialog using offsets from top-left corner
 	// Offset using parameters (2, 2)
-	return overlay.Composite(
+	output := overlay.Composite(
 		dialogView,   // foreground (dialog content)
 		backdropView, // background (backdrop base)
 		0,            // xPos: top-left
@@ -408,6 +422,9 @@ func (m programBoxWithBackdrop) View() string {
 		2,            // xOffset: 2 chars from left
 		2,            // yOffset: 2 lines down
 	)
+
+	// Scan zones at root level for mouse support
+	return zone.Scan(output)
 }
 
 // RunProgramBox displays a program box dialog that shows command output
@@ -419,6 +436,9 @@ func RunProgramBox(ctx context.Context, title, subtitle string, task func(contex
 	if subtitle != "" && !strings.HasSuffix(subtitle, "{{|-|}}") {
 		subtitle += "{{|-|}}"
 	}
+
+	// Initialize global zone manager for mouse support (safe to call multiple times)
+	zone.NewGlobal()
 
 	// Initialize TUI if not already done
 	cfg := config.LoadAppConfig()
@@ -443,7 +463,7 @@ func RunProgramBox(ctx context.Context, title, subtitle string, task func(contex
 
 	// Create Bubble Tea program FIRST (before redirecting stdout/stderr)
 	// so it can use the real terminal
-	p := tea.NewProgram(model)
+	p := tea.NewProgram(model, tea.WithMouseAllMotion())
 
 	// Run the task in a goroutine
 	errChan := make(chan error, 1)

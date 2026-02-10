@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	zone "github.com/lrstanley/bubblezone"
 )
 
 // DialogType represents the type of dialog for styling
@@ -91,6 +92,7 @@ func RenderButtonRow(buttons ...string) string {
 type ButtonSpec struct {
 	Text   string
 	Active bool
+	ZoneID string // Optional zone ID for mouse support (empty = no zone marking)
 }
 
 // RenderCenteredButtons renders buttons centered in sections (matching menu style)
@@ -130,14 +132,28 @@ func RenderCenteredButtons(contentWidth int, buttons ...ButtonSpec) string {
 	numButtons := len(buttons)
 	sectionWidth := contentWidth / numButtons
 
-	// Center each button in its section
+	// Center each button in its section and mark zones
 	var sections []string
-	for _, btn := range renderedButtons {
+	for i, btn := range renderedButtons {
 		centeredBtn := lipgloss.NewStyle().
 			Width(sectionWidth).
 			Align(lipgloss.Center).
 			Background(styles.Dialog.GetBackground()).
 			Render(btn)
+
+		// Generate zone ID from button text if not provided
+		zoneID := buttons[i].ZoneID
+		if zoneID == "" {
+			// Auto-generate zone ID from button text
+			// Format: "Button.<normalized-text>"
+			// E.g., " OK " -> "Button.OK", " Yes " -> "Button.Yes"
+			normalizedText := strings.TrimSpace(buttons[i].Text)
+			zoneID = "Button." + normalizedText
+		}
+
+		// Mark zone with the ID
+		centeredBtn = zone.Mark(zoneID, centeredBtn)
+
 		sections = append(sections, centeredBtn)
 	}
 

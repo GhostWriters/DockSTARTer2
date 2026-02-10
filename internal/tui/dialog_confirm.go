@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	zone "github.com/lrstanley/bubblezone"
 	overlay "github.com/rmhubbert/bubbletea-overlay"
 )
 
@@ -68,6 +69,27 @@ func (m confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.confirmed = true
 			return m, tea.Quit
 		}
+
+	case tea.MouseMsg:
+		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+			// Check if Yes button was clicked (auto-generated zone ID: "Button.Yes")
+			if zoneInfo := zone.Get("Button.Yes"); zoneInfo != nil {
+				if zoneInfo.InBounds(msg) {
+					m.result = true
+					m.confirmed = true
+					return m, tea.Quit
+				}
+			}
+
+			// Check if No button was clicked (auto-generated zone ID: "Button.No")
+			if zoneInfo := zone.Get("Button.No"); zoneInfo != nil {
+				if zoneInfo.InBounds(msg) {
+					m.result = false
+					m.confirmed = true
+					return m, tea.Quit
+				}
+			}
+		}
 	}
 
 	return m, nil
@@ -95,6 +117,7 @@ func (m confirmDialogModel) View() string {
 	}
 
 	// Render buttons using the standard button helper (ensures consistency)
+	// Zone marking is handled automatically by RenderCenteredButtons (zone IDs: "Button.Yes", "Button.No")
 	buttonRow := RenderCenteredButtons(
 		contentWidth,
 		ButtonSpec{Text: " Yes ", Active: m.result},
@@ -148,7 +171,7 @@ func (m confirmWithBackdrop) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m confirmWithBackdrop) View() string {
 	// Use overlay to composite dialog over backdrop
 	// overlay.Composite(foreground, background, xPos, yPos, xOffset, yOffset)
-	return overlay.Composite(
+	output := overlay.Composite(
 		m.dialog.View(),   // foreground (dialog content)
 		m.backdrop.View(), // background (backdrop base)
 		overlay.Center,
@@ -156,10 +179,16 @@ func (m confirmWithBackdrop) View() string {
 		0,
 		0,
 	)
+
+	// Scan zones at root level for mouse support
+	return zone.Scan(output)
 }
 
 // ShowConfirmDialog displays a confirmation dialog and returns the result
 func ShowConfirmDialog(title, question string, defaultYes bool) bool {
+	// Initialize global zone manager for mouse support (safe to call multiple times)
+	zone.NewGlobal()
+
 	// Initialize TUI if not already done
 	cfg := config.LoadAppConfig()
 	if err := theme.Load(cfg.Theme); err == nil {
@@ -172,7 +201,7 @@ func ShowConfirmDialog(title, question string, defaultYes bool) bool {
 		dialog:   newConfirmDialog(title, question, defaultYes),
 	}
 
-	p := tea.NewProgram(model)
+	p := tea.NewProgram(model, tea.WithMouseAllMotion())
 
 	finalModel, err := p.Run()
 	// Reset terminal colors on exit to prevent "bleeding" into the shell prompt
