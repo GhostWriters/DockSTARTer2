@@ -23,8 +23,8 @@ var (
 	ConfigHomeOverride string
 )
 
-// GetConfigFilePath returns the absolute path to the dockstarter2.ini file.
-// It places it in a subdirectory named after the application (e.g., ~/.config/dockstarter2/dockstarter2.ini).
+// GetConfigFilePath returns the absolute path to the dockstarter2.toml file.
+// It places it in a subdirectory named after the application (e.g., ~/.config/dockstarter2/dockstarter2.toml).
 func GetConfigFilePath() string {
 	appName := strings.ToLower(version.ApplicationName)
 	if runtime.GOOS == "darwin" {

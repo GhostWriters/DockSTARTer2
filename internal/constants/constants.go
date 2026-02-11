@@ -20,18 +20,6 @@ const (
 	AppConfigFileName       = "dockstarter2.toml"
 )
 
-// Config INI Keys
-const (
-	ConfigFolderKey   = "ConfigFolder"
-	ComposeFolderKey  = "ComposeFolder"
-	BordersKey        = "Borders"
-	LineCharactersKey = "LineCharacters"
-	ShadowKey         = "Shadow"
-	ShadowLevelKey    = "ShadowLevel"
-	ScrollbarKey      = "Scrollbar"
-	ThemeKey          = "Theme"
-)
-
 // Marker Prefixes
 const (
 	YmlMergeMarkerPrefix      = "yml_merge_"
