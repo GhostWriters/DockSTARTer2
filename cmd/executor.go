@@ -544,7 +544,7 @@ func handleTheme(ctx context.Context, group *CommandGroup) {
 						} else {
 							status = fmt.Sprintf("{{_Var_}}%s{{|-|}}", v)
 						}
-						lines = append(lines, fmt.Sprintf("  - %s: %s", k, status))
+						lines = append(lines, fmt.Sprintf("\t- %s: %s", k, status))
 					}
 					logger.Notice(ctx, "Applying settings from theme file:\n%s", strings.Join(lines, "\n"))
 				}
