@@ -75,13 +75,13 @@ func ForTUI(text string) string {
 }
 
 // Sprintf formats according to a format specifier and returns the string with ANSI codes
-func Sprintf(format string, a ...interface{}) string {
+func Sprintf(format string, a ...any) string {
 	msg := fmt.Sprintf(format, a...)
 	return ToANSI(msg)
 }
 
 // Println prints a line with ANSI color codes parsed
-func Println(a ...interface{}) {
+func Println(a ...any) {
 	msg := fmt.Sprint(a...)
 	fmt.Println(ToANSI(msg))
 }

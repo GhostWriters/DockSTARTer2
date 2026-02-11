@@ -20,19 +20,13 @@ func PrintTable(headers []string, data []string, useLineChars bool) {
 
 	// Check headers
 	for i, h := range headers {
-		l := utf8.RuneCountInString(Strip(h))
-		if l > colWidths[i] {
-			colWidths[i] = l
-		}
+		colWidths[i] = max(colWidths[i], utf8.RuneCountInString(Strip(h)))
 	}
 
 	// Check data
 	for i, d := range data {
 		col := i % cols
-		l := utf8.RuneCountInString(Strip(d))
-		if l > colWidths[col] {
-			colWidths[col] = l
-		}
+		colWidths[col] = max(colWidths[col], utf8.RuneCountInString(Strip(d)))
 	}
 
 	// 2. Define Character Set

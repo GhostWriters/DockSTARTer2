@@ -6,7 +6,7 @@ import (
 	"context"
 	"os"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -209,7 +209,7 @@ func GetReferencedApps(composeEnvFile string) ([]string, error) {
 	for app := range appMap {
 		result = append(result, app)
 	}
-	sort.Strings(result)
+	slices.Sort(result)
 	return result, nil
 }
 

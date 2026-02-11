@@ -10,7 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -185,7 +185,7 @@ func listAppVars(prefix string, filePath string) ([]string, error) {
 	for v := range vars {
 		result = append(result, v)
 	}
-	sort.Strings(result)
+	slices.Sort(result)
 	return result, scanner.Err()
 }
 
@@ -226,7 +226,7 @@ func intersection(a, b []string) []string {
 			result = append(result, item)
 		}
 	}
-	sort.Strings(result)
+	slices.Sort(result)
 	return result
 }
 

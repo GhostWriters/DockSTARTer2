@@ -11,7 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -33,7 +33,7 @@ func ListAddedApps(ctx context.Context, envFile string) ([]string, error) {
 		}
 	}
 
-	sort.Strings(added)
+	slices.Sort(added)
 	return added, nil
 }
 
@@ -54,7 +54,7 @@ func ListBuiltinApps() ([]string, error) {
 		}
 	}
 
-	sort.Strings(builtin)
+	slices.Sort(builtin)
 	return builtin, nil
 }
 
@@ -72,7 +72,7 @@ func ListDeprecatedApps(ctx context.Context) ([]string, error) {
 		}
 	}
 
-	sort.Strings(deprecated)
+	slices.Sort(deprecated)
 	return deprecated, nil
 }
 
@@ -93,7 +93,7 @@ func ListDisabledApps(envFile string) ([]string, error) {
 		}
 	}
 
-	sort.Strings(disabled)
+	slices.Sort(disabled)
 	return disabled, nil
 }
 
@@ -111,7 +111,7 @@ func ListNonDeprecatedApps(ctx context.Context) ([]string, error) {
 		}
 	}
 
-	sort.Strings(nonDeprecated)
+	slices.Sort(nonDeprecated)
 	return nonDeprecated, nil
 }
 
@@ -150,7 +150,7 @@ func ListReferencedApps(ctx context.Context, conf config.AppConfig) ([]string, e
 			result = append(result, app)
 		}
 	}
-	sort.Strings(result)
+	slices.Sort(result)
 	return result, nil
 }
 
@@ -172,7 +172,7 @@ func ListEnabledApps(conf config.AppConfig) ([]string, error) {
 		}
 	}
 
-	sort.Strings(enabled)
+	slices.Sort(enabled)
 	return enabled, nil
 }
 
@@ -192,7 +192,7 @@ func ListAppVars(ctx context.Context, appName string, conf config.AppConfig) ([]
 		for k := range varsMap {
 			result = append(result, k)
 		}
-		sort.Strings(result)
+		slices.Sort(result)
 		return result, nil
 	}
 
@@ -214,7 +214,7 @@ func ListAppVars(ctx context.Context, appName string, conf config.AppConfig) ([]
 			result = append(result, varName)
 		}
 	}
-	sort.Strings(result)
+	slices.Sort(result)
 	return result, nil
 }
 
@@ -315,6 +315,6 @@ func ListAppVarLines(ctx context.Context, appName string, conf config.AppConfig)
 
 	lines := strings.Split(string(content), "\n")
 	result := AppVarsLines(appName, lines)
-	sort.Strings(result)
+	slices.Sort(result)
 	return result, nil
 }
