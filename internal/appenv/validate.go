@@ -37,6 +37,7 @@ func ValidateComposeOverride(ctx context.Context, conf config.AppConfig) {
 	// We set SkipValidation to false to ensure structural validation occurs.
 	// We skip interpolation to avoid errors about missing variables.
 	_, err := loader.LoadWithContext(ctx, configDetails, func(options *loader.Options) {
+		options.SetProjectName("dockstarter", true) // Set a dummy project name to satisfy loader requirements
 		options.SkipInterpolation = true
 		options.SkipValidation = false
 		options.SkipConsistencyCheck = true
