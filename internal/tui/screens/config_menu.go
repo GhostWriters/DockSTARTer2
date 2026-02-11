@@ -103,6 +103,11 @@ func (s *ConfigMenuScreen) SetSize(width, height int) {
 	s.menu.SetSize(width, height)
 }
 
+// SetFocused propagates focus state to the inner menu (used by log panel focus)
+func (s *ConfigMenuScreen) SetFocused(f bool) {
+	s.menu.SetFocused(f)
+}
+
 // navigateBack returns a command to go back to the previous screen
 func navigateBack() tea.Cmd {
 	return func() tea.Msg {

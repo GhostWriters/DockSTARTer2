@@ -78,3 +78,8 @@ func (s *OptionsMenuScreen) HelpText() string {
 func (s *OptionsMenuScreen) SetSize(width, height int) {
 	s.menu.SetSize(width, height)
 }
+
+// SetFocused propagates focus state to the inner menu (used by log panel focus)
+func (s *OptionsMenuScreen) SetFocused(f bool) {
+	s.menu.SetFocused(f)
+}

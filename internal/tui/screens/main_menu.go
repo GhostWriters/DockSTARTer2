@@ -79,6 +79,11 @@ func (s *MainMenuScreen) SetSize(width, height int) {
 	s.menu.SetSize(width, height)
 }
 
+// SetFocused propagates focus state to the inner menu (used by log panel focus)
+func (s *MainMenuScreen) SetFocused(f bool) {
+	s.menu.SetFocused(f)
+}
+
 // Navigation commands
 func navigateToConfigMenu() tea.Cmd {
 	return func() tea.Msg {

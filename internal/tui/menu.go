@@ -222,6 +222,12 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 	}
 }
 
+// SetFocused sets whether this menu's dialog border is rendered as focused (thick)
+// or unfocused (normal). Called by AppModel when the log panel takes focus.
+func (m *MenuModel) SetFocused(f bool) {
+	m.focused = f
+}
+
 // Init implements tea.Model
 func (m MenuModel) Init() tea.Cmd {
 	return nil

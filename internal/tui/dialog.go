@@ -178,24 +178,22 @@ func RenderCenteredButtons(contentWidth int, buttons ...ButtonSpec) string {
 	// Center each button in its section and mark zones
 	var sections []string
 	for i, btn := range renderedButtons {
-		centeredBtn := lipgloss.NewStyle().
-			Width(sectionWidth).
-			Align(lipgloss.Center).
-			Background(styles.Dialog.GetBackground()).
-			Render(btn)
-
 		// Generate zone ID from button text if not provided
 		zoneID := buttons[i].ZoneID
 		if zoneID == "" {
-			// Auto-generate zone ID from button text
-			// Format: "Button.<normalized-text>"
-			// E.g., " OK " -> "Button.OK", " Yes " -> "Button.Yes"
 			normalizedText := strings.TrimSpace(buttons[i].Text)
 			zoneID = "Button." + normalizedText
 		}
 
-		// Mark zone with the ID
-		centeredBtn = zone.Mark(zoneID, centeredBtn)
+		// Mark zone on the button BEFORE padding so the zone covers only the
+		// button itself, not the empty space on either side of it.
+		markedBtn := zone.Mark(zoneID, btn)
+
+		centeredBtn := lipgloss.NewStyle().
+			Width(sectionWidth).
+			Align(lipgloss.Center).
+			Background(styles.Dialog.GetBackground()).
+			Render(markedBtn)
 
 		sections = append(sections, centeredBtn)
 	}
