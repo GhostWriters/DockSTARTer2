@@ -47,7 +47,23 @@ services:
 			t.Fatalf("Failed to write valid override file: %v", err)
 		}
 		// This should pass without error (and thus no warning logged)
-		// We rely on absence of panic and logs (if we could capture logs, but focused on crash/error first)
+		ValidateComposeOverride(context.Background(), conf)
+	})
+
+	// Case 3: Valid YAML with Ports (Reproduce strict validation)
+	t.Run("ValidYAML_WithPorts", func(t *testing.T) {
+		validContent := `services:
+  app1:
+    image: busybox
+    ports:
+      - "${PORT}:80"
+      - ${OTHER_PORT}
+    unknown_field: "should fail if strict"
+`
+		if err := os.WriteFile(overrideFile, []byte(validContent), 0644); err != nil {
+			t.Fatalf("Failed to write valid override file: %v", err)
+		}
+		// This should pass. If validation is too strict, it might fail here.
 		ValidateComposeOverride(context.Background(), conf)
 	})
 }

@@ -39,7 +39,7 @@ func ValidateComposeOverride(ctx context.Context, conf config.AppConfig) {
 	_, err := loader.LoadWithContext(ctx, configDetails, func(options *loader.Options) {
 		options.SetProjectName("dockstarter", true) // Set a dummy project name to satisfy loader requirements
 		options.SkipInterpolation = true
-		options.SkipValidation = false
+		options.SkipValidation = true // We only want to ensure the YAML is valid, not strictly validate against schema
 		options.SkipConsistencyCheck = true
 	})
 
