@@ -118,6 +118,26 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 	conf := config.LoadAppConfig()
 	_ = theme.Load(conf.UI.Theme)
 
+	// Validate override file for operational commands
+	shouldValidate := false
+	for _, g := range groups {
+		switch g.Command {
+		case "-h", "--help", "-V", "--version", "--config-show", "--show-config",
+			"--config-folder", "--config-compose-folder", "-T", "--theme", "--theme-list",
+			"--theme-lines", "--theme-no-lines", "--theme-line", "--theme-no-line",
+			"--theme-borders", "--theme-no-borders", "--theme-border", "--theme-no-border",
+			"--theme-shadows", "--theme-no-shadows", "--theme-shadow", "--theme-no-shadow", "--theme-shadow-level",
+			"--theme-scrollbar", "--theme-no-scrollbar", "--theme-border-color", "--theme-table":
+			// Skip validation for meta/config commands
+		default:
+			shouldValidate = true
+		}
+	}
+
+	if shouldValidate {
+		appenv.ValidateComposeOverride(ctx, conf)
+	}
+
 	ranCommand := false
 
 	for i, group := range groups {

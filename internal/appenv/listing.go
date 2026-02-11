@@ -13,6 +13,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 // ListAddedApps returns a sorted list of all added applications (those with __ENABLED variables).
@@ -134,13 +136,39 @@ func ListReferencedApps(ctx context.Context, conf config.AppConfig) ([]string, e
 
 	overrideFile := filepath.Join(conf.ComposeDir, constants.ComposeOverrideFileName)
 	if _, err := os.Stat(overrideFile); err == nil {
-		content, _ := os.ReadFile(overrideFile)
-		re := regexp.MustCompile(regexp.QuoteMeta(constants.AppEnvFileNamePrefix) + `([a-z0-9_]+)`)
-		matches := re.FindAllStringSubmatch(string(content), -1)
-		for _, m := range matches {
-			if len(m) > 1 {
-				referenced[strings.ToUpper(m[1])] = true
+		content, err := os.ReadFile(overrideFile)
+		if err == nil {
+			var override struct {
+				Services map[string]struct {
+					EnvFile interface{} `yaml:"env_file"`
+				} `yaml:"services"`
 			}
+			if err := yaml.Unmarshal(content, &override); err == nil {
+				for _, service := range override.Services {
+					checkEnvFile := func(v interface{}) {
+						switch val := v.(type) {
+						case string:
+							clean := strings.TrimPrefix(val, "./")
+							if strings.HasPrefix(clean, constants.AppEnvFileNamePrefix) {
+								appName := strings.TrimPrefix(clean, constants.AppEnvFileNamePrefix)
+								referenced[strings.ToUpper(appName)] = true
+							}
+						case []interface{}:
+							for _, item := range val {
+								if s, ok := item.(string); ok {
+									clean := strings.TrimPrefix(s, "./")
+									if strings.HasPrefix(clean, constants.AppEnvFileNamePrefix) {
+										appName := strings.TrimPrefix(clean, constants.AppEnvFileNamePrefix)
+										referenced[strings.ToUpper(appName)] = true
+									}
+								}
+							}
+						}
+					}
+					checkEnvFile(service.EnvFile)
+				}
+			}
+
 		}
 	}
 
