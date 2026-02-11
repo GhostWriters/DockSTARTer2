@@ -87,11 +87,11 @@ func EnvCreate(ctx context.Context, conf config.AppConfig) error {
 		}
 	}
 
-	added, err := ListAddedApps(ctx, envFile)
+	referenced, err := ListReferencedApps(ctx, conf)
 	if err != nil {
 		return err
 	}
-	if len(added) == 0 {
+	if len(referenced) == 0 {
 		logger.Notice(ctx, "Installing default applications.")
 		// Add Watchtower
 		if err := Enable(ctx, []string{"WATCHTOWER"}, conf); err != nil {
