@@ -26,6 +26,23 @@ func WithTUIWriter(ctx context.Context, w io.Writer) context.Context {
 	return context.WithValue(ctx, TUIWriterKey, w)
 }
 
+// logLineCh carries TUI-formatted log lines to the log panel.
+var logLineCh = make(chan string, 200)
+
+// SubscribeLogLines returns a read-only channel that receives every log line
+// formatted for TUI display (same format written to TUI writer).
+func SubscribeLogLines() <-chan string {
+	return logLineCh
+}
+
+// logFilePath is set during NewLogger so the TUI can pre-load it.
+var logFilePath string
+
+// GetLogFilePath returns the path to the current log file (empty if not yet initialised).
+func GetLogFilePath() string {
+	return logFilePath
+}
+
 // Helper to resolve message from any type to string
 func resolveMsg(msg any) string {
 	switch v := msg.(type) {
@@ -66,8 +83,8 @@ func logAt(ctx context.Context, t time.Time, level slog.Level, msg any, args ...
 
 	lines := strings.Split(msgStr, "\n")
 	for i, line := range lines {
-		// 1. Output to TUI if writer is in context
-		if w, ok := ctx.Value(TUIWriterKey).(io.Writer); ok {
+		// 1. Build TUI-formatted line for both the context writer and the log panel channel
+		{
 			timeStr := t.Format("2006-01-02 15:04:05")
 			levelStr := ""
 			switch level {
@@ -89,10 +106,20 @@ func logAt(ctx context.Context, t time.Time, level slog.Level, msg any, args ...
 				levelStr = level.String()
 			}
 			// Match standard console format: TIME [LEVEL] \t MESSAGE (space-tab after level)
-			// Use ForTUI to convert semantic tags to lipgloss styles and remove ANSI
-			// NOTE: Do NOT escape here - ForTUI already produces proper format
-			tuiMsg := fmt.Sprintf("%s [%s] \t%s", timeStr, levelStr, console.ForTUI(line))
-			fmt.Fprintln(w, tuiMsg)
+			timeLevel := fmt.Sprintf("%s [%s] \t", timeStr, levelStr)
+
+			// Send to context TUI writer using expanded (but not yet ANSI) tags
+			if w, ok := ctx.Value(TUIWriterKey).(io.Writer); ok {
+				tuiMsg := timeLevel + console.ForTUI(line)
+				fmt.Fprintln(w, tuiMsg)
+			}
+
+			// Send to log panel channel with full ANSI codes so the viewport can render them
+			// (non-blocking — drop if full)
+			select {
+			case logLineCh <- timeLevel + console.ToANSI(line):
+			default:
+			}
 		}
 
 		// 2. Output to standard slog handlers (stderr, file)
@@ -188,7 +215,7 @@ func NewLogger() *slog.Logger {
 	}
 
 	appName := strings.ToLower(version.ApplicationName)
-	logFilePath := filepath.Join(stateDir, appName+".log")
+	logFilePath = filepath.Join(stateDir, appName+".log")
 
 	// Open file in Append mode
 	wFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)

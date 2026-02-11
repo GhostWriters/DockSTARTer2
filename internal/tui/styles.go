@@ -58,6 +58,9 @@ type Styles struct {
 	StatusWarn    lipgloss.Style
 	StatusError   lipgloss.Style
 	Console       lipgloss.Style
+
+	// Log panel border/strip color
+	LogPanelColor lipgloss.TerminalColor
 }
 
 // currentStyles holds the active styles
@@ -237,6 +240,8 @@ func InitStyles(cfg config.AppConfig) {
 	currentStyles.Console = ApplyFlags(lipgloss.NewStyle().
 		Background(t.ProgramBG).
 		Foreground(t.ProgramFG), t.ProgramStyles)
+
+	currentStyles.LogPanelColor = t.LogPanelFG
 }
 
 // ApplyFlags applies ANSI style modifiers to a lipgloss.Style

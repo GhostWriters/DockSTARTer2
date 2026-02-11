@@ -59,6 +59,8 @@ KeyCap = "{{|black:white:B|}}"
 ProgressWaiting = "{{|white:black|}}"
 ProgressInProgress = "{{|white:black:B|}}"
 ProgressCompleted = "{{|black:white:B|}}"
+LogPanel = "{{|white:black|}}"
+
 
 [defaults]
 borders = true

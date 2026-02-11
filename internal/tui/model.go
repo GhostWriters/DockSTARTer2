@@ -5,7 +5,9 @@ import (
 
 	"DockSTARTer2/internal/config"
 
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 	overlay "github.com/rmhubbert/bubbletea-overlay"
 )
@@ -72,6 +74,10 @@ type AppModel struct {
 	// Persistent backdrop (header + separator + helpline)
 	backdrop BackdropModel
 
+	// Slide-up log panel (always present below helpline)
+	logPanel        LogPanelModel
+	logPanelFocused bool
+
 	// Modal dialog overlay (nil when no dialog)
 	dialog tea.Model
 
@@ -93,6 +99,7 @@ func NewAppModel(ctx context.Context, cfg config.AppConfig, startScreen ScreenMo
 		activeScreen: startScreen,
 		screenStack:  make([]ScreenModel, 0),
 		backdrop:     NewBackdropModel(helpText),
+		logPanel:     NewLogPanelModel(),
 	}
 }
 
@@ -100,6 +107,7 @@ func NewAppModel(ctx context.Context, cfg config.AppConfig, startScreen ScreenMo
 func (m AppModel) Init() tea.Cmd {
 	cmds := []tea.Cmd{
 		m.backdrop.Init(),
+		m.logPanel.Init(),
 	}
 	if m.activeScreen != nil {
 		cmds = append(cmds, m.activeScreen.Init())
@@ -112,7 +120,62 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
+	case toggleLogPanelMsg:
+		updated, cmd := m.logPanel.Update(msg)
+		m.logPanel = updated.(LogPanelModel)
+		// Return focus to screen when panel collapses
+		if !m.logPanel.expanded {
+			m.setLogPanelFocus(false)
+		}
+		// Resize backdrop, screen, and dialog to match new panel height
+		backdropHeight := m.height - m.logPanel.Height()
+		backdropMsg := tea.WindowSizeMsg{Width: m.width, Height: backdropHeight}
+		backdropModel, _ := m.backdrop.Update(backdropMsg)
+		m.backdrop = backdropModel.(BackdropModel)
+		if m.activeScreen != nil {
+			m.activeScreen.SetSize(m.width, backdropHeight)
+		}
+		if m.dialog != nil {
+			if sizable, ok := m.dialog.(interface{ SetSize(int, int) }); ok {
+				sizable.SetSize(m.width, backdropHeight)
+			}
+		}
+		return m, cmd
+
+	case logLineMsg:
+		updated, cmd := m.logPanel.Update(msg)
+		m.logPanel = updated.(LogPanelModel)
+		return m, cmd
+
 	case tea.KeyMsg:
+		// Toggle log panel (always works, even when focused)
+		if key.Matches(msg, Keys.ToggleLog) {
+			return m, func() tea.Msg { return toggleLogPanelMsg{} }
+		}
+
+		// When log panel is focused, it gets all scroll/navigation keys
+		if m.logPanelFocused {
+			// Esc or Tab unfocuses the panel and returns focus to the screen
+			if key.Matches(msg, Keys.Esc) || key.Matches(msg, Keys.Tab) {
+				m.setLogPanelFocus(false)
+				return m, nil
+			}
+			// Enter or Space toggles the panel open/closed
+			if key.Matches(msg, Keys.Enter) || msg.String() == " " {
+				return m, func() tea.Msg { return toggleLogPanelMsg{} }
+			}
+			// All other keys go to the panel viewport
+			updated, cmd := m.logPanel.Update(msg)
+			m.logPanel = updated.(LogPanelModel)
+			return m, cmd
+		}
+
+		// Tab focuses the log panel strip (works whether collapsed or expanded)
+		if key.Matches(msg, Keys.Tab) && m.dialog == nil {
+			m.setLogPanelFocus(true)
+			return m, nil
+		}
+
 		// If dialog is open, send keys to dialog
 		if m.dialog != nil {
 			var cmd tea.Cmd
@@ -121,6 +184,21 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.MouseMsg:
+		// Check log panel clicks
+		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+			if zi := zone.Get(logPanelZoneID); zi != nil && zi.InBounds(msg) {
+				return m, func() tea.Msg { return toggleLogPanelMsg{} }
+			}
+			if zi := zone.Get(logViewportZoneID); zi != nil && zi.InBounds(msg) {
+				m.setLogPanelFocus(true)
+				return m, nil
+			}
+			// Click outside log panel — return focus to screen/dialog without
+			// swallowing the click (falls through so buttons/items still fire)
+			if m.logPanelFocused {
+				m.setLogPanelFocus(false)
+			}
+		}
 		// Forward mouse events to dialog or active screen
 		if m.dialog != nil {
 			var cmd tea.Cmd
@@ -134,24 +212,39 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.ready = true
 
-		// Update backdrop size FIRST
-		backdropModel, _ := m.backdrop.Update(msg)
+		// Update log panel with full dimensions first (so Height() is correct)
+		m.logPanel.SetSize(m.width, m.height)
+
+		// All other components use backdropHeight (terminal minus log panel strip)
+		backdropHeight := m.height - m.logPanel.Height()
+		sizeMsg := tea.WindowSizeMsg{Width: m.width, Height: backdropHeight}
+
+		// Update backdrop
+		backdropModel, _ := m.backdrop.Update(sizeMsg)
 		m.backdrop = backdropModel.(BackdropModel)
 
-		// Update active screen size with full dimensions
-		if m.activeScreen != nil {
-			m.activeScreen.SetSize(m.width, m.height)
-		}
-
-		// Update dialog size if present
+		// Update dialog or active screen with the reduced height message
 		if m.dialog != nil {
 			if sizable, ok := m.dialog.(interface{ SetSize(int, int) }); ok {
-				sizable.SetSize(m.width, m.height)
+				sizable.SetSize(m.width, backdropHeight)
 			}
+			var dialogCmd tea.Cmd
+			m.dialog, dialogCmd = m.dialog.Update(sizeMsg)
+			if dialogCmd != nil {
+				cmds = append(cmds, dialogCmd)
+			}
+		} else if m.activeScreen != nil {
+			m.activeScreen.SetSize(m.width, backdropHeight)
+			updated, screenCmd := m.activeScreen.Update(sizeMsg)
+			if screen, ok := updated.(ScreenModel); ok {
+				m.activeScreen = screen
+			}
+			if screenCmd != nil {
+				cmds = append(cmds, screenCmd)
+			}
+			m.backdrop.SetHelpText(m.activeScreen.HelpText())
 		}
-		// NOTE: We don't return early here anymore.
-		// We let it fall through to the end of the function where msg is passed to m.dialog.Update(msg)
-		// and m.activeScreen.Update(msg).
+		return m, tea.Batch(cmds...)
 
 	case NavigateMsg:
 		// Push current screen to stack and switch to new screen
@@ -160,7 +253,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.activeScreen = msg.Screen
 		if m.activeScreen != nil {
-			m.activeScreen.SetSize(m.width, m.height)
+			m.activeScreen.SetSize(m.width, m.height-m.logPanel.Height())
 			m.backdrop.SetHelpText(m.activeScreen.HelpText())
 			cmds = append(cmds, m.activeScreen.Init())
 		}
@@ -230,6 +323,18 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
+// setLogPanelFocus updates logPanelFocused and tells the active screen to
+// unfocus/refocus its border accordingly (if it supports the interface).
+func (m *AppModel) setLogPanelFocus(focused bool) {
+	m.logPanelFocused = focused
+	m.logPanel.focused = focused
+	if m.activeScreen != nil {
+		if focusable, ok := m.activeScreen.(interface{ SetFocused(bool) }); ok {
+			focusable.SetFocused(!focused)
+		}
+	}
+}
+
 // View implements tea.Model
 // Uses backdrop + overlay pattern (same as dialogs)
 func (m AppModel) View() string {
@@ -269,6 +374,9 @@ func (m AppModel) View() string {
 			)
 		}
 	}
+
+	// Layer 3: Log panel — appended below the backdrop (below helpline)
+	output = lipgloss.JoinVertical(lipgloss.Left, output, m.logPanel.View())
 
 	// Scan zones at the root level
 	return zone.Scan(output)

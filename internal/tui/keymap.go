@@ -45,6 +45,9 @@ type KeyMap struct {
 	// Utility
 	Help      key.Binding
 	ForceQuit key.Binding
+
+	// Log panel
+	ToggleLog key.Binding
 }
 
 // ShortHelp returns bindings shown in the compact helpline.
@@ -56,7 +59,7 @@ func (k KeyMap) ShortHelp() []key.Binding {
 func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Left, k.Right, k.Tab, k.ShiftTab, k.ChromeFocus},
-		{k.Enter, k.Esc, k.PageUp, k.PageDown, k.HalfPageUp, k.HalfPageDown, k.Help, k.ForceQuit},
+		{k.Enter, k.Esc, k.PageUp, k.PageDown, k.HalfPageUp, k.HalfPageDown, k.Help, k.ForceQuit, k.ToggleLog},
 	}
 }
 
@@ -121,5 +124,9 @@ var Keys = KeyMap{
 	ForceQuit: key.NewBinding(
 		key.WithKeys("ctrl+c"),
 		key.WithHelp("ctrl+c", "force quit"),
+	),
+	ToggleLog: key.NewBinding(
+		key.WithKeys("f10", "ctrl+l"),
+		key.WithHelp("F10/ctrl+l", "toggle log panel"),
 	),
 }

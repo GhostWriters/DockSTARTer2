@@ -95,8 +95,12 @@ func RenderWithBackdrop(dialogContent string, helpText string, width, height int
 	return b.String()
 }
 
+// logPanelExtraHeight is set by the log panel when it expands so that
+// GetAvailableDialogSize can shrink dialogs to avoid overlap.
+var logPanelExtraHeight int
+
 // GetAvailableDialogSize returns the maximum size for dialog content
-// accounting for header, separator, helpline, and shadow
+// accounting for header, separator, helpline, shadow, and log panel.
 func GetAvailableDialogSize(width, height int) (int, int) {
 	if width == 0 || height == 0 {
 		return 0, 0
@@ -119,9 +123,9 @@ func GetAvailableDialogSize(width, height int) (int, int) {
 		shadowHeight = 1
 	}
 
-	// Available size for dialog content (including shadow)
+	// Available size for dialog content (including shadow and log panel)
 	availableWidth := width - shadowWidth
-	availableHeight := height - headerHeight - separatorHeight - helplineHeight - shadowHeight
+	availableHeight := height - headerHeight - separatorHeight - helplineHeight - shadowHeight - logPanelExtraHeight
 
 	// Leave some margin
 	if availableHeight < 5 {

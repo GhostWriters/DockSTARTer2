@@ -72,6 +72,8 @@ type ThemeConfig struct {
 	ProgramFG            lipgloss.TerminalColor
 	ProgramBG            lipgloss.TerminalColor
 	ProgramStyles        StyleFlags
+	LogPanelFG           lipgloss.TerminalColor
+	LogPanelBG           lipgloss.TerminalColor
 }
 
 // Current holds the active theme configuration
@@ -162,6 +164,7 @@ func updateTagsFromCurrent() {
 	console.RegisterSemanticTag("Theme_Helpline", buildTag(Current.HelplineFG, Current.HelplineBG, Current.HelplineStyles))
 	console.RegisterSemanticTag("Theme_ItemHelp", buildTag(Current.HelplineFG, Current.HelplineBG, Current.HelplineStyles))
 	console.RegisterSemanticTag("Theme_Program", buildTag(Current.ProgramFG, Current.ProgramBG, Current.ProgramStyles))
+	regComp("LogPanel", Current.LogPanelFG, Current.LogPanelBG)
 }
 
 // buildTag constructs a {{|fg:bg:flags|}} string
@@ -233,6 +236,8 @@ func Default() {
 		HelplineBG:       parseColor("cyan"),
 		ProgramFG:        parseColor("bright-white"),
 		ProgramBG:        parseColor("black"),
+		LogPanelFG:       parseColor("cyan"),
+		LogPanelBG:       parseColor("black"),
 	}
 	Apply()
 
@@ -589,6 +594,8 @@ func parseThemeTOML(path string) error {
 			Current.HelplineFG, Current.HelplineBG, Current.HelplineStyles = parseTagWithStyles(styleValue)
 		case "Program":
 			Current.ProgramFG, Current.ProgramBG, Current.ProgramStyles = parseTagWithStyles(styleValue)
+		case "LogPanel":
+			Current.LogPanelFG, Current.LogPanelBG = fg, bg
 		}
 	}
 
