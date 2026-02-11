@@ -61,7 +61,6 @@ ProgressInProgress = "{{|white:black:B|}}"
 ProgressCompleted = "{{|black:white:B|}}"
 LogPanel = "{{|white:black|}}"
 
-
 [defaults]
 borders = true
 line_characters = true

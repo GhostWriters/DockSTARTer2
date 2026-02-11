@@ -29,6 +29,8 @@ TitleError = "{{|green:black:B|}}"
 TitleSuccess = "{{|green:black|}}"
 TitleWarning = "{{|green:black|}}"
 TitleQuestion = "{{|green:black|}}"
+LogPanel = "{{_Theme_Title_}}"
+
 CommandLine = "{{|green:black|}}"
 ButtonActive = "{{|black:green:-|}}"
 ButtonInactive = "{{|green:black:-|}}"
