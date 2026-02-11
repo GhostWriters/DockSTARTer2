@@ -123,9 +123,9 @@ func logAt(ctx context.Context, t time.Time, level slog.Level, msg any, args ...
 		}
 
 		// 2. Output to standard slog handlers (stderr, file)
-		// IMPORTANT: Always use ToANSI for stderr to get ANSI colors, regardless of TUI mode
-		msgAnsi := console.ToANSI(line) + console.CodeReset
-		r := slog.NewRecord(t, level, msgAnsi, 0)
+		// We pass the RAW line (with tags) to slog.Record.
+		// The TagProcessorHandler will handle ANSI/Strip per handler.
+		r := slog.NewRecord(t, level, line, 0)
 		if i == 0 {
 			r.Add(args...)
 		}
@@ -206,7 +206,7 @@ func NewLogger() *slog.Logger {
 		ReportTimestamp: true,
 	})
 	consoleLogger.SetStyles(buildConsoleStyles())
-	consoleHandler := consoleLogger // implements slog.Handler
+	consoleHandler := &TagProcessorHandler{base: consoleLogger, mode: "ansi"}
 
 	// 2. Configure File Handler (No Color)
 	stateDir := paths.GetStateDir()
@@ -226,6 +226,8 @@ func NewLogger() *slog.Logger {
 	handlers := []slog.Handler{consoleHandler}
 
 	if wFile != nil {
+		fmt.Fprintln(wFile, version.ApplicationName+" Log")
+
 		// File handler: charmbracelet/log auto-strips colors for non-TTY writers.
 		fileLogger = charmlog.NewWithOptions(wFile, charmlog.Options{
 			Level:           charmlog.Level(FileLevelVar.Level()),
@@ -233,7 +235,7 @@ func NewLogger() *slog.Logger {
 			ReportTimestamp: true,
 		})
 		fileLogger.SetStyles(buildConsoleStyles())
-		fileHandler := fileLogger // implements slog.Handler
+		fileHandler := &TagProcessorHandler{base: fileLogger, mode: "strip"}
 		handlers = append(handlers, fileHandler)
 	}
 
@@ -283,6 +285,46 @@ func (h *FanoutHandler) WithGroup(name string) slog.Handler {
 		newHandlers[i] = handler.WithGroup(name)
 	}
 	return &FanoutHandler{handlers: newHandlers}
+}
+
+// TagProcessorHandler processes custom tags and ANSI codes before passing to the base handler
+type TagProcessorHandler struct {
+	base slog.Handler
+	mode string // "ansi", "strip", or "tui"
+}
+
+func (h *TagProcessorHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return h.base.Enabled(ctx, level)
+}
+
+func (h *TagProcessorHandler) Handle(ctx context.Context, r slog.Record) error {
+	// 1. Resolve message (it contains raw tags)
+	msg := r.Message
+
+	// 2. Process based on mode
+	switch h.mode {
+	case "ansi":
+		msg = console.ToANSI(msg)
+	case "strip":
+		msg = console.Strip(msg)
+	}
+
+	// 3. Create new record with processed message
+	newR := slog.NewRecord(r.Time, r.Level, msg, r.PC)
+	r.Attrs(func(a slog.Attr) bool {
+		newR.AddAttrs(a)
+		return true
+	})
+
+	return h.base.Handle(ctx, newR)
+}
+
+func (h *TagProcessorHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &TagProcessorHandler{base: h.base.WithAttrs(attrs), mode: h.mode}
+}
+
+func (h *TagProcessorHandler) WithGroup(name string) slog.Handler {
+	return &TagProcessorHandler{base: h.base.WithGroup(name), mode: h.mode}
 }
 
 // Global helpers for custom levels that don't satisfy standard slog methods

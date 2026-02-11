@@ -852,11 +852,11 @@ func handleConfigShow(ctx context.Context, conf *config.AppConfig) {
 
 		switch key {
 		case "ConfigFolder":
-			value = conf.Paths.ConfigFolder
+			value = conf.RawPaths.ConfigFolder
 			expandedValue = conf.ConfigDir
 			useFolderColor = true
 		case "ComposeFolder":
-			value = conf.Paths.ComposeFolder
+			value = conf.RawPaths.ComposeFolder
 			expandedValue = conf.ComposeDir
 			useFolderColor = true
 		case "Theme":

@@ -61,11 +61,11 @@ func ToANSI(text string) string {
 	return text
 }
 
-// Strip removes all semantic and direct tags from text, leaving plain text
+// Strip removes all semantic and direct tags from text, as well as ANSI escape sequences
 func Strip(text string) string {
 	text = semanticRegex.ReplaceAllString(text, "")
 	text = directRegex.ReplaceAllString(text, "")
-	return text
+	return StripANSI(text)
 }
 
 // ForTUI prepares text for display with standardized tags.

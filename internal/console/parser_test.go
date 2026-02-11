@@ -71,6 +71,44 @@ func TestStrip(t *testing.T) {
 	}
 }
 
+func TestStripANSI(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "Base text",
+			input:    "Hello World",
+			expected: "Hello World",
+		},
+		{
+			name:     "Simple ANSI color",
+			input:    "\x1b[31mRed Text\x1b[0m",
+			expected: "Red Text",
+		},
+		{
+			name:     "Multiple ANSI codes",
+			input:    "\x1b[31;1;4mBold Underline Red\x1b[0m",
+			expected: "Bold Underline Red",
+		},
+		{
+			name:     "Mixed ANSI and tags",
+			input:    "\x1b[31m{{_Notice_}}Hello{{|-|}}\x1b[0m",
+			expected: "{{_Notice_}}Hello{{|-|}}", // Note: StripANSI ONLY strips real ANSI, Strip() strips both
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := StripANSI(tt.input)
+			if actual != tt.expected {
+				t.Errorf("StripANSI(%q) = %q; want %q", tt.input, actual, tt.expected)
+			}
+		})
+	}
+}
+
 func TestExpandTags(t *testing.T) {
 	ensureMaps()
 	semanticMap["notice"] = "{{|green|}}"

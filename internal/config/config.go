@@ -1,10 +1,7 @@
 package config
 
 import (
-	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/paths"
-	"bufio"
-	"fmt"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -21,9 +18,10 @@ type AppConfig struct {
 	Paths PathConfig `toml:"paths"`
 
 	// These are helper fields for runtime use, not saved to TOML
-	Arch       string `toml:"-"`
-	ConfigDir  string `toml:"-"`
-	ComposeDir string `toml:"-"`
+	Arch       string     `toml:"-"`
+	ConfigDir  string     `toml:"-"`
+	ComposeDir string     `toml:"-"`
+	RawPaths   PathConfig `toml:"-"` // Unexpanded values as read from TOML
 }
 
 // UIConfig holds user interface related settings.
@@ -64,7 +62,17 @@ func getArch() string {
 // - ${XDG_CACHE_HOME}  -> xdg.CacheHome
 // - ${HOME}            -> os.UserHomeDir()
 // - ${USER}            -> Current username
+// - ~/...              -> home-relative path (tilde expansion)
+// - ${ANY}             -> os.Getenv("ANY") fallback for unrecognised variables
 func ExpandVariables(val string) string {
+	// Tilde expansion: ~/... or bare ~
+	if val == "~" || strings.HasPrefix(val, "~/") {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			val = home + val[1:]
+		}
+	}
+
 	mapper := func(varName string) string {
 		switch varName {
 		case "XDG_CONFIG_HOME":
@@ -88,7 +96,8 @@ func ExpandVariables(val string) string {
 			}
 			return u.Username
 		}
-		return ""
+		// Fall back to the real environment for any unrecognised variable
+		return os.Getenv(varName)
 	}
 	return os.Expand(val, mapper)
 }
@@ -119,114 +128,27 @@ func LoadAppConfig() AppConfig {
 	if err == nil {
 		// Found TOML config
 		if err := toml.Unmarshal(data, &conf); err == nil {
-			// Expand variables for runtime use
-			conf.ConfigDir = ExpandVariables(conf.Paths.ConfigFolder)
-			conf.ComposeDir = ExpandVariables(conf.Paths.ComposeFolder)
+			// Save raw (unexpanded) values for display purposes
+			conf.RawPaths = conf.Paths
+			// Expand variables in paths for runtime use
+			conf.Paths.ConfigFolder = ExpandVariables(conf.Paths.ConfigFolder)
+			conf.Paths.ComposeFolder = ExpandVariables(conf.Paths.ComposeFolder)
+			conf.ConfigDir = conf.Paths.ConfigFolder
+			conf.ComposeDir = conf.Paths.ComposeFolder
 			return conf
 		}
 	}
 
-	// If TOML not found or invalid, check for migration from old INI
-	oldPath := filepath.Join(filepath.Dir(path), "dockstarter2.ini")
-	if _, err := os.Stat(oldPath); err == nil {
-		fmt.Printf("Migrating configuration from %s to %s\n", oldPath, path)
-		if oldConf, err := loadLegacyConfig(oldPath); err == nil {
-			conf = oldConf
-			// Save to new format
-			SaveAppConfig(conf)
-			// Cleanup old file
-			os.Rename(oldPath, oldPath+".bak")
-			return conf
-		}
-	}
-
-	// If neither exists, save defaults to TOML
-	conf.ConfigDir = ExpandVariables(conf.Paths.ConfigFolder)
-	conf.ComposeDir = ExpandVariables(conf.Paths.ComposeFolder)
+	// No config found; save defaults to TOML (with template variables, not expanded)
 	SaveAppConfig(conf)
+	// Save raw (unexpanded) values for display purposes
+	conf.RawPaths = conf.Paths
+	// Expand after saving so the on-disk file retains ${XDG_CONFIG_HOME} references
+	conf.Paths.ConfigFolder = ExpandVariables(conf.Paths.ConfigFolder)
+	conf.Paths.ComposeFolder = ExpandVariables(conf.Paths.ComposeFolder)
+	conf.ConfigDir = conf.Paths.ConfigFolder
+	conf.ComposeDir = conf.Paths.ComposeFolder
 	return conf
-}
-
-// loadLegacyConfig reads the old .ini format for migration purposes.
-func loadLegacyConfig(path string) (AppConfig, error) {
-	conf := AppConfig{
-		UI: UIConfig{
-			Theme:          "DockSTARTer",
-			Borders:        true,
-			LineCharacters: true,
-			Shadow:         true,
-			ShadowLevel:    2,
-			Scrollbar:      true,
-		},
-		Paths: PathConfig{
-			ConfigFolder:  "${XDG_CONFIG_HOME}",
-			ComposeFolder: "${XDG_CONFIG_HOME}/compose",
-		},
-	}
-	conf.Arch = getArch()
-
-	file, err := os.Open(path)
-	if err != nil {
-		return conf, err
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-
-		key := strings.TrimSpace(parts[0])
-		value := strings.Trim(strings.TrimSpace(parts[1]), "'\"")
-
-		isTrue := func(v string) bool {
-			v = strings.ToLower(v)
-			return v == "1" || v == "true" || v == "yes" || v == "on"
-		}
-
-		switch key {
-		case constants.BordersKey:
-			conf.UI.Borders = isTrue(value)
-		case constants.LineCharactersKey:
-			conf.UI.LineCharacters = isTrue(value)
-		case constants.ShadowKey:
-			conf.UI.Shadow = isTrue(value)
-		case constants.ShadowLevelKey:
-			level := 3
-			val := strings.ToLower(value)
-			switch val {
-			case "0", "off", "none", "false", "no":
-				level = 0
-			case "1", "light":
-				level = 1
-			case "2", "medium":
-				level = 2
-			case "3", "dark":
-				level = 3
-			case "4", "solid", "full":
-				level = 4
-			}
-			conf.UI.ShadowLevel = level
-		case constants.ScrollbarKey:
-			conf.UI.Scrollbar = isTrue(value)
-		case constants.ThemeKey:
-			conf.UI.Theme = value
-		case constants.ConfigFolderKey:
-			conf.Paths.ConfigFolder = value
-		case constants.ComposeFolderKey:
-			conf.Paths.ComposeFolder = value
-		}
-	}
-	conf.ConfigDir = ExpandVariables(conf.Paths.ConfigFolder)
-	conf.ComposeDir = ExpandVariables(conf.Paths.ComposeFolder)
-	return conf, nil
 }
 
 // SaveAppConfig writes the configuration to dockstarter2.toml.

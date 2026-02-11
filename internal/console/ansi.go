@@ -2,6 +2,7 @@ package console
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	tcellColor "github.com/gdamore/tcell/v3/color"
@@ -146,6 +147,13 @@ FoundBG:
 	}
 
 	return codes.String()
+}
+
+var ansiRegex = regexp.MustCompile("[\u001B\u009B][[\\]()#;?]*((?:[a-zA-Z\\d]*(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]*)*)?\u0007|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PR-TZcf-ntqry=><~]))")
+
+// StripANSI removes all ANSI escape sequences from a string
+func StripANSI(text string) string {
+	return ansiRegex.ReplaceAllString(text, "")
 }
 
 // resolveTaggedStyleToANSI converts a standardized tag like "{{|cyan::B|}}" to ANSI codes
