@@ -8,42 +8,28 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/compose-spec/compose-go/v2/loader"
-	"github.com/compose-spec/compose-go/v2/types"
+	"gopkg.in/yaml.v3"
 )
 
-// ValidateComposeOverride checks if the docker-compose.override.yml file is valid using the Docker Compose SDK.
-// It logs a warning if the file is invalid.
+// ValidateComposeOverride checks if the docker-compose.override.yml file is valid YAML.
+// It logs a warning if the file contains syntax errors.
 func ValidateComposeOverride(ctx context.Context, conf config.AppConfig) {
 	overrideFile := filepath.Join(conf.ComposeDir, constants.ComposeOverrideFileName)
 
-	// We can check existence first to avoid "no such file" errors from the loader
+	// We can check existence first
 	if _, err := os.Stat(overrideFile); os.IsNotExist(err) {
 		return
 	}
 
-	// The loader expects a list of config files.
-	// We load just the override file to check its syntax/structure validity in isolation.
-	configDetails := types.ConfigDetails{
-		WorkingDir: conf.ComposeDir,
-		ConfigFiles: []types.ConfigFile{
-			{
-				Filename: overrideFile,
-			},
-		},
+	content, err := os.ReadFile(overrideFile)
+	if err != nil {
+		logger.Warn(ctx, "Failed to read '{{_File_}}%s{{|-|}}': %v", constants.ComposeOverrideFileName, err)
+		return
 	}
 
-	// We use loader.LoadWithContext to validate the config.
-	// We set SkipValidation to false to ensure structural validation occurs.
-	// We skip interpolation to avoid errors about missing variables.
-	_, err := loader.LoadWithContext(ctx, configDetails, func(options *loader.Options) {
-		options.SetProjectName("dockstarter", true) // Set a dummy project name to satisfy loader requirements
-		options.SkipInterpolation = true
-		options.SkipValidation = true // We only want to ensure the YAML is valid, not strictly validate against schema
-		options.SkipConsistencyCheck = true
-	})
-
-	if err != nil {
+	// Unmarshal into a generic map to check for YAML syntax errors
+	var dst map[string]any
+	if err := yaml.Unmarshal(content, &dst); err != nil {
 		// For errors, we warn.
 		logger.Warn(ctx, "Failed to validate '{{_File_}}%s{{|-|}}': %v", constants.ComposeOverrideFileName, err)
 		logger.Warn(ctx, "Please fix the syntax in your override file.")
