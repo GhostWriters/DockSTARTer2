@@ -66,4 +66,32 @@ services:
 		// This should pass. If validation is too strict, it might fail here.
 		ValidateComposeOverride(context.Background(), conf)
 	})
+
+	// Case 4: Strict Validation (Future Proofing)
+	t.Run("StrictValidation", func(t *testing.T) {
+		// Valid YAML but might fail strict schema if variables aren't handled or if unknown fields exist
+		// Let's use a clean valid file for strict pass
+		validContent := `services:
+  app1:
+    image: busybox
+    ports:
+      - "80:80"
+`
+		if err := os.WriteFile(overrideFile, []byte(validContent), 0644); err != nil {
+			t.Fatalf("Failed to write valid override file: %v", err)
+		}
+		ValidateComposeOverrideStrict(context.Background(), conf)
+
+		// Invalid Strict (Unknown Field)
+		invalidContent := `services:
+  app1:
+    image: busybox
+    unknown_field: "fail"
+`
+		if err := os.WriteFile(overrideFile, []byte(invalidContent), 0644); err != nil {
+			t.Fatalf("Failed to write invalid strict file: %v", err)
+		}
+		// This prints a warning to log, but doesn't panic. We just verify it runs.
+		ValidateComposeOverrideStrict(context.Background(), conf)
+	})
 }
