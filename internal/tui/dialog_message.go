@@ -7,8 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	zone "github.com/lrstanley/bubblezone"
-	overlay "github.com/rmhubbert/bubbletea-overlay"
+	zone "github.com/lrstanley/bubblezone/v2"
 )
 
 // MessageType represents the type of message dialog
@@ -50,17 +49,15 @@ func (m *messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		return m, nil
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		// Any key press closes the dialog
 		return m, tea.Quit
 
-	case tea.MouseMsg:
-		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
-			// Check if OK button was clicked (auto-generated zone ID: "Button.OK")
-			if zoneInfo := zone.Get("Button.OK"); zoneInfo != nil {
-				if zoneInfo.InBounds(msg) {
-					return m, tea.Quit
-				}
+	case tea.MouseClickMsg:
+		// Check if OK button was clicked (auto-generated zone ID: "Button.OK")
+		if zoneInfo := zone.Get("Button.OK"); zoneInfo != nil {
+			if zoneInfo.InBounds(msg) {
+				return m, tea.Quit
 			}
 		}
 	}
@@ -68,7 +65,8 @@ func (m *messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *messageDialogModel) View() tea.View {
+// viewString returns the dialog content as a string for compositing
+func (m *messageDialogModel) viewString() string {
 	if m.width == 0 {
 		return ""
 	}
@@ -128,10 +126,11 @@ func (m *messageDialogModel) View() tea.View {
 	dialogWithTitle := RenderDialog(fullTitle, paddedContent, true)
 
 	// Add shadow (matching menu style)
-	dialogWithTitle = AddShadow(dialogWithTitle)
+	return AddShadow(dialogWithTitle)
+}
 
-	// Just return the dialog content - backdrop will be handled by overlay
-	return dialogWithTitle
+func (m *messageDialogModel) View() tea.View {
+	return tea.NewView(m.viewString())
 }
 
 // SetSize updates the dialog dimensions
@@ -167,19 +166,24 @@ func (m messageWithBackdrop) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m messageWithBackdrop) View() tea.View {
+	// Get string content from sub-views
+	dialogContent := m.dialog.viewString()
+	backdropContent := m.backdrop.viewString()
+
 	// Use overlay to composite dialog over backdrop
-	// overlay.Composite(foreground, background, xPos, yPos, xOffset, yOffset)
-	output := overlay.Composite(
-		m.dialog.View(),   // foreground (dialog content)
-		m.backdrop.View(), // background (backdrop base)
-		overlay.Center,
-		overlay.Center,
+	output := Overlay(
+		dialogContent,
+		backdropContent,
+		OverlayCenter,
+		OverlayCenter,
 		0,
 		0,
 	)
 
 	// Scan zones at root level for mouse support
-	return zone.Scan(output)
+	v := tea.NewView(zone.Scan(output))
+	v.MouseMode = tea.MouseModeAllMotion
+	return v
 }
 
 // ShowMessageDialog displays a message dialog
@@ -199,7 +203,7 @@ func ShowMessageDialog(title, message string, msgType MessageType) {
 		dialog:   newMessageDialog(title, message, msgType),
 	}
 
-	p := tea.NewProgram(model, tea.WithMouseAllMotion())
+	p := tea.NewProgram(model)
 	p.Run()
 	// Reset terminal colors on exit to prevent "bleeding" into the shell prompt
 	fmt.Print("\x1b[0m\n")

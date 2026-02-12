@@ -65,8 +65,8 @@ func (m *HeaderModel) Refresh() {
 	// Nothing to cache currently, but could be used for update status
 }
 
-// View renders the header
-func (m HeaderModel) View() tea.View {
+// View renders the header as a string (used by backdrop for compositing)
+func (m HeaderModel) View() string {
 	styles := GetStyles()
 
 	// Left section: hostname + flags

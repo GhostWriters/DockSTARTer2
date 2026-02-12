@@ -8,8 +8,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	zone "github.com/lrstanley/bubblezone"
-	overlay "github.com/rmhubbert/bubbletea-overlay"
+	zone "github.com/lrstanley/bubblezone/v2"
 )
 
 // ScreenType identifies different screens in the TUI
@@ -335,25 +334,33 @@ func (m *AppModel) setLogPanelFocus(focused bool) {
 	}
 }
 
+// viewStringer is an interface for models that provide string content for compositing
+type viewStringer interface {
+	viewString() string
+}
+
 // View implements tea.Model
 // Uses backdrop + overlay pattern (same as dialogs)
 func (m AppModel) View() tea.View {
 	if !m.ready {
-		return "Initializing..."
+		return tea.NewView("Initializing...")
 	}
 
-	// Get backdrop view
-	output := m.backdrop.View()
+	// Get backdrop view as string
+	output := m.backdrop.viewString()
 
 	// Layer 1: Active Screen
 	if m.activeScreen != nil {
-		screenView := m.activeScreen.View()
-		if screenView != "" {
-			output = overlay.Composite(
-				screenView,
+		var screenContent string
+		if vs, ok := m.activeScreen.(viewStringer); ok {
+			screenContent = vs.viewString()
+		}
+		if screenContent != "" {
+			output = Overlay(
+				screenContent,
 				output,
-				overlay.Center,
-				overlay.Center,
+				OverlayCenter,
+				OverlayCenter,
 				0,
 				0,
 			)
@@ -362,13 +369,16 @@ func (m AppModel) View() tea.View {
 
 	// Layer 2: Modal Dialog
 	if m.dialog != nil {
-		dialogView := m.dialog.View()
-		if dialogView != "" {
-			output = overlay.Composite(
-				dialogView,
+		var dialogContent string
+		if vs, ok := m.dialog.(viewStringer); ok {
+			dialogContent = vs.viewString()
+		}
+		if dialogContent != "" {
+			output = Overlay(
+				dialogContent,
 				output,
-				overlay.Center,
-				overlay.Center,
+				OverlayCenter,
+				OverlayCenter,
 				0,
 				0,
 			)
@@ -376,8 +386,14 @@ func (m AppModel) View() tea.View {
 	}
 
 	// Layer 3: Log panel — appended below the backdrop (below helpline)
-	output = lipgloss.JoinVertical(lipgloss.Left, output, m.logPanel.View())
+	var logPanelContent string
+	if vs, ok := interface{}(m.logPanel).(viewStringer); ok {
+		logPanelContent = vs.viewString()
+	}
+	output = lipgloss.JoinVertical(lipgloss.Left, output, logPanelContent)
 
 	// Scan zones at the root level
-	return zone.Scan(output)
+	v := tea.NewView(zone.Scan(output))
+	v.MouseMode = tea.MouseModeAllMotion
+	return v
 }

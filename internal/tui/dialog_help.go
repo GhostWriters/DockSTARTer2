@@ -26,7 +26,7 @@ func (m *helpDialogModel) Init() tea.Cmd { return nil }
 
 func (m *helpDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		// Any key closes the help dialog (? toggles it off, Esc also works)
 		_ = msg
 		return m, func() tea.Msg { return CloseDialogMsg{} }
@@ -36,15 +36,16 @@ func (m *helpDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		return m, nil
 
-	case tea.MouseMsg:
-		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
-			return m, func() tea.Msg { return CloseDialogMsg{} }
-		}
+	case tea.MouseClickMsg:
+		// Any click closes the help dialog
+		_ = msg
+		return m, func() tea.Msg { return CloseDialogMsg{} }
 	}
 	return m, nil
 }
 
-func (m *helpDialogModel) View() tea.View {
+// viewString returns the dialog content as a string for compositing
+func (m *helpDialogModel) viewString() string {
 	if m.width == 0 {
 		return ""
 	}
@@ -62,7 +63,7 @@ func (m *helpDialogModel) View() tea.View {
 	if targetWidth < minDesiredWidth && m.width > minDesiredWidth+4 {
 		targetWidth = minDesiredWidth
 	}
-	m.help.Width = targetWidth
+	m.help.SetWidth(targetWidth)
 
 	// Apply theme styles to the help component
 	dimStyle := bgStyle.Foreground(styles.ItemNormal.GetForeground())
@@ -111,9 +112,13 @@ func (m *helpDialogModel) View() tea.View {
 	return AddPatternHalo(dialogStr)
 }
 
+func (m *helpDialogModel) View() tea.View {
+	return tea.NewView(m.viewString())
+}
+
 // SetSize updates the dialog dimensions (called by AppModel on window resize).
 func (m *helpDialogModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
-	m.help.Width = w - 12
+	m.help.SetWidth(w - 12)
 }

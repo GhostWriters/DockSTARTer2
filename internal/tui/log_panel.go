@@ -11,7 +11,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	zone "github.com/lrstanley/bubblezone"
+	zone "github.com/lrstanley/bubblezone/v2"
 )
 
 const (
@@ -40,7 +40,7 @@ type LogPanelModel struct {
 
 // NewLogPanelModel creates a new log panel in collapsed state.
 func NewLogPanelModel() LogPanelModel {
-	vp := viewport.New(0, 0)
+	vp := viewport.New()
 	return LogPanelModel{viewport: vp}
 }
 
@@ -67,8 +67,8 @@ func (m *LogPanelModel) SetSize(width, totalTermHeight int) {
 		if vpH < 1 {
 			vpH = 1
 		}
-		m.viewport.Width = width
-		m.viewport.Height = vpH
+		m.viewport.SetWidth(width)
+		m.viewport.SetHeight(vpH)
 	}
 }
 
@@ -140,8 +140,8 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if vpH < 1 {
 				vpH = 1
 			}
-			m.viewport.Width = m.width
-			m.viewport.Height = vpH
+			m.viewport.SetWidth(m.width)
+			m.viewport.SetHeight(vpH)
 			// Re-set content so the viewport is correctly sized
 			m.viewport.SetContent(strings.Join(m.lines, "\n"))
 			m.viewport.GotoBottom()
@@ -161,8 +161,8 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// View renders the panel at its current height.
-func (m LogPanelModel) View() tea.View {
+// viewString returns the panel content as a string for compositing
+func (m LogPanelModel) viewString() string {
 	styles := GetStyles()
 
 	// Choose line character: thick when focused, normal otherwise
@@ -226,11 +226,16 @@ func (m LogPanelModel) View() tea.View {
 	// Expanded: viewport below the strip
 	vpStyle := lipgloss.NewStyle().
 		Width(m.width).
-		Height(m.viewport.Height).
+		Height(m.viewport.Height()).
 		Background(styles.Console.GetBackground()).
 		Foreground(styles.Console.GetForeground())
 	m.viewport.Style = vpStyle
 
 	vpView := zone.Mark(logViewportZoneID, m.viewport.View())
 	return lipgloss.JoinVertical(lipgloss.Left, strip, vpView)
+}
+
+// View renders the panel at its current height.
+func (m LogPanelModel) View() tea.View {
+	return tea.NewView(m.viewString())
 }

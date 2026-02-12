@@ -14,7 +14,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	zone "github.com/lrstanley/bubblezone"
+	zone "github.com/lrstanley/bubblezone/v2"
 )
 
 var (
@@ -79,7 +79,6 @@ func Start(ctx context.Context, startMenu string) error {
 	program = tea.NewProgram(
 		model,
 		tea.WithAltScreen(),
-		tea.WithMouseAllMotion(),
 	)
 
 	// Start background update checker

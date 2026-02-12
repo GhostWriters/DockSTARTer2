@@ -16,8 +16,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	zone "github.com/lrstanley/bubblezone"
-	overlay "github.com/rmhubbert/bubbletea-overlay"
+	zone "github.com/lrstanley/bubblezone/v2"
 )
 
 // programBoxModel represents a dialog that displays streaming program output
@@ -52,7 +51,7 @@ func newProgramBox(title, subtitle, command string) *programBoxModel {
 		title:    title,
 		subtitle: subtitle,
 		command:  command,
-		viewport: viewport.New(0, 0),
+		viewport: viewport.New(),
 		lines:    []string{},
 	}
 
@@ -129,16 +128,18 @@ func (m *programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Width calculation: screen - margins(4) - shadow(2) - borders(2 outer + 2 inner)
-		m.viewport.Width = m.width - 4 - shadowWidth - 4
-		if m.viewport.Width < 20 {
-			m.viewport.Width = 20
+		vpWidth := m.width - 4 - shadowWidth - 4
+		if vpWidth < 20 {
+			vpWidth = 20
 		}
+		m.viewport.SetWidth(vpWidth)
 
 		// Height calculation: screen - margins(4) - shadow(1) - borders(2 outer + 2 inner) - other components(cmd line + button row)
-		m.viewport.Height = m.height - 4 - shadowHeight - 4 - commandHeight - 3
-		if m.viewport.Height < 5 {
-			m.viewport.Height = 5
+		vpHeight := m.height - 4 - shadowHeight - 4 - commandHeight - 3
+		if vpHeight < 5 {
+			vpHeight = 5
 		}
+		m.viewport.SetHeight(vpHeight)
 
 		return m, nil
 
@@ -159,7 +160,7 @@ func (m *programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.GotoBottom()
 		return m, nil
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch {
 		case key.Matches(msg, Keys.Esc):
 			if m.done {
@@ -175,14 +176,12 @@ func (m *programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-	case tea.MouseMsg:
-		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
-			// Check if OK button was clicked (auto-generated zone ID: "Button.OK")
-			if m.done {
-				if zoneInfo := zone.Get("Button.OK"); zoneInfo != nil {
-					if zoneInfo.InBounds(msg) {
-						return m, tea.Quit
-					}
+	case tea.MouseClickMsg:
+		// Check if OK button was clicked (auto-generated zone ID: "Button.OK")
+		if m.done {
+			if zoneInfo := zone.Get("Button.OK"); zoneInfo != nil {
+				if zoneInfo.InBounds(msg) {
+					return m, tea.Quit
 				}
 			}
 		}
@@ -193,7 +192,8 @@ func (m *programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m *programBoxModel) View() tea.View {
+// viewString returns the dialog content as a string for compositing
+func (m *programBoxModel) viewString() string {
 	if m.width == 0 {
 		return ""
 	}
@@ -231,7 +231,7 @@ func (m *programBoxModel) View() tea.View {
 
 	// Construct custom bottom border with label
 	border := styles.Border
-	width := m.viewport.Width + 2 // Add 2 for left/right padding of viewportStyle
+	width := m.viewport.Width() + 2 // Add 2 for left/right padding of viewportStyle
 	labelWidth := lipgloss.Width(scrollIndicator)
 
 	// Determine T-connectors based on line style
@@ -293,8 +293,8 @@ func (m *programBoxModel) View() tea.View {
 	borderedViewport = borderedViewport + "\n" + bottomLine
 
 	// Calculate content width based on viewport (matches borderedViewport width)
-	// viewport.Width + border (2) = viewport.Width + 2
-	contentWidth := m.viewport.Width + 2
+	// viewport.Width() + border (2) = viewport.Width() + 2
+	contentWidth := m.viewport.Width() + 2
 
 	// Build command display using theme semantic tags
 	var commandDisplay string
@@ -356,6 +356,10 @@ func (m *programBoxModel) View() tea.View {
 	return dialogWithTitle
 }
 
+func (m *programBoxModel) View() tea.View {
+	return tea.NewView(m.viewString())
+}
+
 // SetSize updates the dialog dimensions (called by AppModel on window resize).
 func (m *programBoxModel) SetSize(w, h int) {
 	m.width = w
@@ -375,16 +379,18 @@ func (m *programBoxModel) SetSize(w, h int) {
 	}
 
 	// Width calculation: screen - margins(4) - shadow(2) - borders(2 outer + 2 inner)
-	m.viewport.Width = m.width - 4 - shadowWidth - 4
-	if m.viewport.Width < 20 {
-		m.viewport.Width = 20
+	vpWidth := m.width - 4 - shadowWidth - 4
+	if vpWidth < 20 {
+		vpWidth = 20
 	}
+	m.viewport.SetWidth(vpWidth)
 
 	// Height calculation: screen - margins(4) - shadow(1) - borders(2 outer + 2 inner) - other components(cmd line + button row)
-	m.viewport.Height = m.height - 4 - shadowHeight - 4 - commandHeight - 3
-	if m.viewport.Height < 5 {
-		m.viewport.Height = 5
+	vpHeight := m.height - 4 - shadowHeight - 4 - commandHeight - 3
+	if vpHeight < 5 {
+		vpHeight = 5
 	}
+	m.viewport.SetHeight(vpHeight)
 }
 
 // getHelpText returns the dynamic help text based on the current state
@@ -434,28 +440,32 @@ func (m programBoxWithBackdrop) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m programBoxWithBackdrop) View() tea.View {
-	// Get backdrop and dialog views
-	backdropView := m.backdrop.View()
-	dialogView := m.dialog.View()
+	// Get string content from sub-views
+	dialogContent := m.dialog.viewString()
+	backdropContent := m.backdrop.viewString()
 
 	// If dialog isn't ready yet, just show backdrop
-	if dialogView == "" {
-		return backdropView
+	if dialogContent == "" {
+		v := tea.NewView(backdropContent)
+		v.MouseMode = tea.MouseModeAllMotion
+		return v
 	}
 
 	// Position dialog using offsets from top-left corner
 	// Offset using parameters (2, 2)
-	output := overlay.Composite(
-		dialogView,   // foreground (dialog content)
-		backdropView, // background (backdrop base)
-		0,            // xPos: top-left
-		0,            // yPos: top-left
-		2,            // xOffset: 2 chars from left
-		2,            // yOffset: 2 lines down
+	output := Overlay(
+		dialogContent,
+		backdropContent,
+		OverlayLeft,
+		OverlayTop,
+		2,
+		2,
 	)
 
 	// Scan zones at root level for mouse support
-	return zone.Scan(output)
+	v := tea.NewView(zone.Scan(output))
+	v.MouseMode = tea.MouseModeAllMotion
+	return v
 }
 
 // RunProgramBox displays a program box dialog that shows command output
@@ -494,7 +504,7 @@ func RunProgramBox(ctx context.Context, title, subtitle string, task func(contex
 
 	// Create Bubble Tea program FIRST (before redirecting stdout/stderr)
 	// so it can use the real terminal
-	p := tea.NewProgram(model, tea.WithMouseAllMotion())
+	p := tea.NewProgram(model)
 
 	// Run the task in a goroutine
 	errChan := make(chan error, 1)

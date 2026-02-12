@@ -8,8 +8,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	zone "github.com/lrstanley/bubblezone"
-	overlay "github.com/rmhubbert/bubbletea-overlay"
+	zone "github.com/lrstanley/bubblezone/v2"
 )
 
 // confirmDialogModel represents a yes/no confirmation dialog
@@ -48,7 +47,7 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		return m, nil
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch {
 		case key.Matches(msg, Keys.Esc):
 			m.result = false
@@ -77,24 +76,22 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-	case tea.MouseMsg:
-		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
-			// Check if Yes button was clicked (auto-generated zone ID: "Button.Yes")
-			if zoneInfo := zone.Get("Button.Yes"); zoneInfo != nil {
-				if zoneInfo.InBounds(msg) {
-					m.result = true
-					m.confirmed = true
-					return m, tea.Quit
-				}
+	case tea.MouseClickMsg:
+		// Check if Yes button was clicked (auto-generated zone ID: "Button.Yes")
+		if zoneInfo := zone.Get("Button.Yes"); zoneInfo != nil {
+			if zoneInfo.InBounds(msg) {
+				m.result = true
+				m.confirmed = true
+				return m, tea.Quit
 			}
+		}
 
-			// Check if No button was clicked (auto-generated zone ID: "Button.No")
-			if zoneInfo := zone.Get("Button.No"); zoneInfo != nil {
-				if zoneInfo.InBounds(msg) {
-					m.result = false
-					m.confirmed = true
-					return m, tea.Quit
-				}
+		// Check if No button was clicked (auto-generated zone ID: "Button.No")
+		if zoneInfo := zone.Get("Button.No"); zoneInfo != nil {
+			if zoneInfo.InBounds(msg) {
+				m.result = false
+				m.confirmed = true
+				return m, tea.Quit
 			}
 		}
 	}
@@ -102,7 +99,8 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *confirmDialogModel) View() tea.View {
+// viewString returns the dialog content as a string for compositing
+func (m *confirmDialogModel) viewString() string {
 	if m.width == 0 {
 		return ""
 	}
@@ -143,10 +141,11 @@ func (m *confirmDialogModel) View() tea.View {
 	dialogWithTitle := RenderDialog(m.title, paddedContent, true)
 
 	// Add shadow (matching menu style)
-	dialogWithTitle = AddShadow(dialogWithTitle)
+	return AddShadow(dialogWithTitle)
+}
 
-	// Just return the dialog content - backdrop will be handled by overlay
-	return dialogWithTitle
+func (m *confirmDialogModel) View() tea.View {
+	return tea.NewView(m.viewString())
 }
 
 // SetSize updates the dialog dimensions
@@ -182,19 +181,24 @@ func (m confirmWithBackdrop) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m confirmWithBackdrop) View() tea.View {
+	// Get string content from sub-views
+	dialogContent := m.dialog.viewString()
+	backdropContent := m.backdrop.viewString()
+
 	// Use overlay to composite dialog over backdrop
-	// overlay.Composite(foreground, background, xPos, yPos, xOffset, yOffset)
-	output := overlay.Composite(
-		m.dialog.View(),   // foreground (dialog content)
-		m.backdrop.View(), // background (backdrop base)
-		overlay.Center,
-		overlay.Center,
+	output := Overlay(
+		dialogContent,
+		backdropContent,
+		OverlayCenter,
+		OverlayCenter,
 		0,
 		0,
 	)
 
 	// Scan zones at root level for mouse support
-	return zone.Scan(output)
+	v := tea.NewView(zone.Scan(output))
+	v.MouseMode = tea.MouseModeAllMotion
+	return v
 }
 
 // ShowConfirmDialog displays a confirmation dialog and returns the result
@@ -214,7 +218,7 @@ func ShowConfirmDialog(title, question string, defaultYes bool) bool {
 		dialog:   newConfirmDialog(title, question, defaultYes),
 	}
 
-	p := tea.NewProgram(model, tea.WithMouseAllMotion())
+	p := tea.NewProgram(model)
 
 	finalModel, err := p.Run()
 	// Reset terminal colors on exit to prevent "bleeding" into the shell prompt
