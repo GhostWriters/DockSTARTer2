@@ -3,7 +3,7 @@ package tui
 import (
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // RenderWithBackdrop renders dialog content with header and helpline
@@ -71,7 +71,7 @@ func RenderWithBackdrop(dialogContent string, helpText string, width, height int
 			lipgloss.Center,
 			lipgloss.Center,
 			dialogContent,
-			lipgloss.WithWhitespaceBackground(styles.Screen.GetBackground()),
+			lipgloss.WithWhitespaceStyle(lipgloss.NewStyle().Background(styles.Screen.GetBackground())),
 		)
 	}
 

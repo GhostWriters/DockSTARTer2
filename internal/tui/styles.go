@@ -3,9 +3,10 @@ package tui
 import (
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/theme"
+	"image/color"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // Styles holds all lipgloss styles derived from the theme
@@ -20,12 +21,12 @@ type Styles struct {
 
 	// Borders
 	Border       lipgloss.Border
-	BorderColor  lipgloss.TerminalColor
-	Border2Color lipgloss.TerminalColor
+	BorderColor  color.Color
+	Border2Color color.Color
 
 	// Shadow
 	Shadow      lipgloss.Style
-	ShadowColor lipgloss.TerminalColor
+	ShadowColor color.Color
 
 	// Buttons
 	ButtonActive   lipgloss.Style
@@ -60,7 +61,7 @@ type Styles struct {
 	Console       lipgloss.Style
 
 	// Log panel border/strip color
-	LogPanelColor lipgloss.TerminalColor
+	LogPanelColor color.Color
 }
 
 // currentStyles holds the active styles

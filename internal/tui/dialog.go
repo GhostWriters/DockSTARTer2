@@ -3,8 +3,8 @@ package tui
 import (
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	zone "github.com/lrstanley/bubblezone"
 )
 
@@ -72,7 +72,7 @@ func RenderDialogBox(title, content string, dialogType DialogType, width, height
 		lipgloss.Center,
 		lipgloss.Center,
 		dialogBox,
-		lipgloss.WithWhitespaceBackground(styles.Screen.GetBackground()),
+		lipgloss.WithWhitespaceStyle(lipgloss.NewStyle().Background(styles.Screen.GetBackground())),
 	)
 
 	return centered
@@ -203,11 +203,13 @@ func RenderCenteredButtons(contentWidth int, buttons ...ButtonSpec) string {
 
 // CheckButtonHotkeys checks if a key matches the first letter of any button.
 // Returns button index and true if a match is found.
-func CheckButtonHotkeys(msg tea.KeyMsg, buttons []ButtonSpec) (int, bool) {
-	if msg.Type != tea.KeyRunes {
+// NOTE: In Bubble Tea v2, KeyMsg is now a union type - use tea.KeyPressMsg for key press events.
+func CheckButtonHotkeys(msg tea.KeyPressMsg, buttons []ButtonSpec) (int, bool) {
+	// In v2, msg.Text contains the printable character(s)
+	if msg.Text == "" {
 		return -1, false
 	}
-	keyRune := strings.ToLower(string(msg.Runes))
+	keyRune := strings.ToLower(msg.Text)
 
 	for i, btn := range buttons {
 		// Normalize button text (remove brackets/spaces)

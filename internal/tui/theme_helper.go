@@ -2,12 +2,13 @@ package tui
 
 import (
 	"fmt"
+	"image/color"
 	"regexp"
 	"strings"
 
 	"DockSTARTer2/internal/console"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // Color parsing now uses tcell/v3/colors for RGB conversion via console.GetHexForColor().
@@ -177,7 +178,7 @@ func ApplyTagsToStyle(text string, style lipgloss.Style, resetStyle lipgloss.Sty
 }
 
 // ParseColor is a wrapper around console.ParseColor for TUI use
-func ParseColor(name string) lipgloss.TerminalColor {
+func ParseColor(name string) color.Color {
 	return console.ParseColor(name)
 }
 
@@ -185,7 +186,7 @@ func ParseColor(name string) lipgloss.TerminalColor {
 // Used by 'H' flag for high intensity ON.
 // For hex colors, this applies mathematical brightening.
 // For color names, they're already resolved to hex by ParseColor.
-func brightenColor(c lipgloss.TerminalColor) lipgloss.TerminalColor {
+func brightenColor(c color.Color) color.Color {
 	if c == nil {
 		return c
 	}

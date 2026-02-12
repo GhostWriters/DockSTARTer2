@@ -3,7 +3,7 @@ package screens
 import (
 	"DockSTARTer2/internal/tui"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // ConfigMenuScreen is the configuration menu screen

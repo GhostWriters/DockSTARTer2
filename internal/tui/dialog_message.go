@@ -5,8 +5,8 @@ import (
 	"DockSTARTer2/internal/theme"
 	"fmt"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	zone "github.com/lrstanley/bubblezone"
 	overlay "github.com/rmhubbert/bubbletea-overlay"
 )

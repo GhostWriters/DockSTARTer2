@@ -4,7 +4,7 @@ import (
 	"DockSTARTer2/internal/console"
 	"regexp"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 var (

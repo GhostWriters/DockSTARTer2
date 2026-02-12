@@ -1,6 +1,7 @@
 package theme
 
 import (
+	"image/color"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/paths"
@@ -9,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"github.com/pelletier/go-toml/v2"
 )
 
@@ -27,53 +28,53 @@ type StyleFlags struct {
 
 // ThemeConfig holds colors derived from .dialogrc and theme.ini
 type ThemeConfig struct {
-	ScreenFG             lipgloss.TerminalColor
-	ScreenBG             lipgloss.TerminalColor
-	DialogFG             lipgloss.TerminalColor
-	DialogBG             lipgloss.TerminalColor
-	BorderFG             lipgloss.TerminalColor
-	BorderBG             lipgloss.TerminalColor
-	Border2FG            lipgloss.TerminalColor
-	Border2BG            lipgloss.TerminalColor
-	TitleFG              lipgloss.TerminalColor
-	TitleBG              lipgloss.TerminalColor
+	ScreenFG             color.Color
+	ScreenBG             color.Color
+	DialogFG             color.Color
+	DialogBG             color.Color
+	BorderFG             color.Color
+	BorderBG             color.Color
+	Border2FG            color.Color
+	Border2BG            color.Color
+	TitleFG              color.Color
+	TitleBG              color.Color
 	TitleStyles          StyleFlags
-	TitleHelpFG          lipgloss.TerminalColor
-	TitleHelpBG          lipgloss.TerminalColor
+	TitleHelpFG          color.Color
+	TitleHelpBG          color.Color
 	TitleHelpStyles      StyleFlags
-	ShadowColor          lipgloss.TerminalColor
-	ButtonActiveFG       lipgloss.TerminalColor
-	ButtonActiveBG       lipgloss.TerminalColor
+	ShadowColor          color.Color
+	ButtonActiveFG       color.Color
+	ButtonActiveBG       color.Color
 	ButtonActiveStyles   StyleFlags
-	ButtonInactiveFG     lipgloss.TerminalColor
-	ButtonInactiveBG     lipgloss.TerminalColor
+	ButtonInactiveFG     color.Color
+	ButtonInactiveBG     color.Color
 	ButtonInactiveStyles StyleFlags
-	ItemSelectedFG       lipgloss.TerminalColor
-	ItemSelectedBG       lipgloss.TerminalColor
+	ItemSelectedFG       color.Color
+	ItemSelectedBG       color.Color
 	ItemSelectedStyles   StyleFlags
-	ItemFG               lipgloss.TerminalColor
-	ItemBG               lipgloss.TerminalColor
+	ItemFG               color.Color
+	ItemBG               color.Color
 	ItemStyles           StyleFlags
-	TagFG                lipgloss.TerminalColor
-	TagBG                lipgloss.TerminalColor
+	TagFG                color.Color
+	TagBG                color.Color
 	TagStyles            StyleFlags
-	TagSelectedFG        lipgloss.TerminalColor
-	TagSelectedBG        lipgloss.TerminalColor
+	TagSelectedFG        color.Color
+	TagSelectedBG        color.Color
 	TagSelectedStyles    StyleFlags
-	TagKeyFG             lipgloss.TerminalColor
-	TagKeyBG             lipgloss.TerminalColor
+	TagKeyFG             color.Color
+	TagKeyBG             color.Color
 	TagKeyStyles         StyleFlags
-	TagKeySelectedFG     lipgloss.TerminalColor
-	TagKeySelectedBG     lipgloss.TerminalColor
+	TagKeySelectedFG     color.Color
+	TagKeySelectedBG     color.Color
 	TagKeySelectedStyles StyleFlags
-	HelplineFG           lipgloss.TerminalColor
-	HelplineBG           lipgloss.TerminalColor
+	HelplineFG           color.Color
+	HelplineBG           color.Color
 	HelplineStyles       StyleFlags
-	ProgramFG            lipgloss.TerminalColor
-	ProgramBG            lipgloss.TerminalColor
+	ProgramFG            color.Color
+	ProgramBG            color.Color
 	ProgramStyles        StyleFlags
-	LogPanelFG           lipgloss.TerminalColor
-	LogPanelBG           lipgloss.TerminalColor
+	LogPanelFG           color.Color
+	LogPanelBG           color.Color
 }
 
 // Current holds the active theme configuration
@@ -136,7 +137,7 @@ func Apply() {
 }
 
 func updateTagsFromCurrent() {
-	regComp := func(name string, fg, bg lipgloss.TerminalColor) {
+	regComp := func(name string, fg, bg color.Color) {
 		fgName := console.GetColorStr(fg)
 		bgName := console.GetColorStr(bg)
 		tag := "{{|" + fgName + ":" + bgName + "|}}"
@@ -168,7 +169,7 @@ func updateTagsFromCurrent() {
 }
 
 // buildTag constructs a {{|fg:bg:flags|}} string
-func buildTag(fg, bg lipgloss.TerminalColor, styles StyleFlags) string {
+func buildTag(fg, bg color.Color, styles StyleFlags) string {
 	fgStr := console.GetColorStr(fg)
 	bgStr := console.GetColorStr(bg)
 	flags := ""
@@ -255,7 +256,7 @@ func Default() {
 
 }
 
-// parseColor converts a color name or hex string to a lipgloss.TerminalColor.
+// parseColor converts a color name or hex string to a color.Color.
 //
 // Standard ANSI Color Reference (for tcell/lipgloss mapping):
 // black   = 0 (#000000)
@@ -266,7 +267,7 @@ func Default() {
 // magenta = 5 (#800080 / #ff00ff) (Aliased to Fuchsia)
 // cyan    = 6 (#008080 / #00ffff) (Aliased to Aqua)
 // white   = 7 (#c0c0c0)
-func parseColor(c string) lipgloss.TerminalColor {
+func parseColor(c string) color.Color {
 	c = strings.ToLower(strings.TrimSpace(c))
 
 	// 1. Try resolving with helpers in console package (Supports extended names and aliases)
@@ -281,7 +282,7 @@ func parseColor(c string) lipgloss.TerminalColor {
 	return nil
 }
 
-func parseTagToColor(tag string) (fg, bg lipgloss.TerminalColor) {
+func parseTagToColor(tag string) (fg, bg color.Color) {
 	tag = strings.TrimPrefix(tag, "{{|")
 	tag = strings.TrimSuffix(tag, "|}}")
 	// Also support legacy brackets for robustness during transition
@@ -298,7 +299,7 @@ func parseTagToColor(tag string) (fg, bg lipgloss.TerminalColor) {
 }
 
 // parseTagWithStyles parses a theme tag and extracts colors and style flags
-func parseTagWithStyles(tag string) (fg, bg lipgloss.TerminalColor, styles StyleFlags) {
+func parseTagWithStyles(tag string) (fg, bg color.Color, styles StyleFlags) {
 	tag = strings.TrimPrefix(tag, "{{|")
 	tag = strings.TrimSuffix(tag, "|}}")
 	tag = strings.Trim(tag, "[]")
