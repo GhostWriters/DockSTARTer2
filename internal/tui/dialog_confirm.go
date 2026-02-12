@@ -102,7 +102,7 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *confirmDialogModel) View() string {
+func (m *confirmDialogModel) View() tea.View {
 	if m.width == 0 {
 		return ""
 	}
@@ -181,7 +181,7 @@ func (m confirmWithBackdrop) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-func (m confirmWithBackdrop) View() string {
+func (m confirmWithBackdrop) View() tea.View {
 	// Use overlay to composite dialog over backdrop
 	// overlay.Composite(foreground, background, xPos, yPos, xOffset, yOffset)
 	output := overlay.Composite(

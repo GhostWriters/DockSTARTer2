@@ -65,7 +65,7 @@ func (d *MessageDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View implements tea.Model
-func (d *MessageDialog) View() string {
+func (d *MessageDialog) View() tea.View {
 	// Calculate content width
 	contentWidth := len(d.message)
 	if len(d.title) > contentWidth {
@@ -161,7 +161,7 @@ func (d *ConfirmDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View implements tea.Model
-func (d *ConfirmDialog) View() string {
+func (d *ConfirmDialog) View() tea.View {
 	// Calculate content width
 	contentWidth := len(d.question)
 	if len(d.title) > contentWidth {

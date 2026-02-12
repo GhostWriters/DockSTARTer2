@@ -513,7 +513,7 @@ func (m MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 }
 
 // View renders the menu with custom styling (Phase 2)
-func (m MenuModel) View() string {
+func (m MenuModel) View() tea.View {
 	styles := GetStyles()
 
 	// Get list view and apply background color

@@ -337,7 +337,7 @@ func (m *AppModel) setLogPanelFocus(focused bool) {
 
 // View implements tea.Model
 // Uses backdrop + overlay pattern (same as dialogs)
-func (m AppModel) View() string {
+func (m AppModel) View() tea.View {
 	if !m.ready {
 		return "Initializing..."
 	}

@@ -193,7 +193,7 @@ func (m *programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m *programBoxModel) View() string {
+func (m *programBoxModel) View() tea.View {
 	if m.width == 0 {
 		return ""
 	}
@@ -433,7 +433,7 @@ func (m programBoxWithBackdrop) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-func (m programBoxWithBackdrop) View() string {
+func (m programBoxWithBackdrop) View() tea.View {
 	// Get backdrop and dialog views
 	backdropView := m.backdrop.View()
 	dialogView := m.dialog.View()

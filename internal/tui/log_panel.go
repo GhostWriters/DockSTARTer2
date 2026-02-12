@@ -162,7 +162,7 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View renders the panel at its current height.
-func (m LogPanelModel) View() string {
+func (m LogPanelModel) View() tea.View {
 	styles := GetStyles()
 
 	// Choose line character: thick when focused, normal otherwise

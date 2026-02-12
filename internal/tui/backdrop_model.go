@@ -52,9 +52,9 @@ func (m BackdropModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View implements tea.Model
 // Matches AppModel.View() rendering approach for consistent spacing
-func (m BackdropModel) View() string {
+func (m BackdropModel) View() tea.View {
 	if m.width == 0 || m.height == 0 {
-		return ""
+		return tea.NewView("")
 	}
 
 	styles := GetStyles()
@@ -106,7 +106,7 @@ func (m BackdropModel) View() string {
 	b.WriteString("\n")
 	b.WriteString(helplineView)
 
-	return b.String()
+	return tea.NewView(b.String())
 }
 
 // GetContentArea returns the dimensions available for overlay content

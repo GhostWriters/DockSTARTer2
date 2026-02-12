@@ -66,7 +66,7 @@ func (m *HeaderModel) Refresh() {
 }
 
 // View renders the header
-func (m HeaderModel) View() string {
+func (m HeaderModel) View() tea.View {
 	styles := GetStyles()
 
 	// Left section: hostname + flags

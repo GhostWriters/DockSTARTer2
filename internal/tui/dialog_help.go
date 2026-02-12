@@ -44,7 +44,7 @@ func (m *helpDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *helpDialogModel) View() string {
+func (m *helpDialogModel) View() tea.View {
 	if m.width == 0 {
 		return ""
 	}

@@ -68,7 +68,7 @@ func (m *messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *messageDialogModel) View() string {
+func (m *messageDialogModel) View() tea.View {
 	if m.width == 0 {
 		return ""
 	}
@@ -166,7 +166,7 @@ func (m messageWithBackdrop) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-func (m messageWithBackdrop) View() string {
+func (m messageWithBackdrop) View() tea.View {
 	// Use overlay to composite dialog over backdrop
 	// overlay.Composite(foreground, background, xPos, yPos, xOffset, yOffset)
 	output := overlay.Composite(
