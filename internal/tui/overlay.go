@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"strings"
-
 	"charm.land/lipgloss/v2"
 )
 
@@ -18,7 +16,7 @@ const (
 )
 
 // Overlay composites a foreground string over a background string at the specified position.
-// Uses lipgloss.Place with the screen background color for proper ANSI handling.
+// Uses lipgloss.Place for centering with screen background for whitespace.
 func Overlay(foreground, background string, hPos, vPos OverlayPosition, xOffset, yOffset int) string {
 	if foreground == "" {
 		return background
@@ -28,14 +26,8 @@ func Overlay(foreground, background string, hPos, vPos OverlayPosition, xOffset,
 	}
 
 	// Get background dimensions
-	bgLines := strings.Split(background, "\n")
-	bgHeight := len(bgLines)
-	bgWidth := 0
-	for _, line := range bgLines {
-		if w := lipgloss.Width(line); w > bgWidth {
-			bgWidth = w
-		}
-	}
+	bgWidth := lipgloss.Width(background)
+	bgHeight := lipgloss.Height(background)
 
 	// Convert position to lipgloss alignment
 	var hAlign, vAlign lipgloss.Position
@@ -57,7 +49,6 @@ func Overlay(foreground, background string, hPos, vPos OverlayPosition, xOffset,
 	}
 
 	// Use lipgloss.Place with the screen background for whitespace
-	// This properly handles ANSI codes and fills empty space with the screen bg
 	styles := GetStyles()
 	return lipgloss.Place(
 		bgWidth,
