@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
-	charmlog "github.com/charmbracelet/log"
-	lipglossv1 "github.com/charmbracelet/lipgloss" // v1 for charmbracelet/log compatibility
+	charmlog "charm.land/log/v2"
+	"charm.land/lipgloss/v2"
 )
 
 const TUIWriterKey = "tui_writer"
@@ -175,15 +175,14 @@ func SetLevel(level slog.Level) {
 
 // buildConsoleStyles returns level styles using lipgloss colors.
 // Colors are auto-stripped by charmbracelet/log when the output is not a TTY.
-// NOTE: Uses lipgloss v1 for compatibility with charmbracelet/log until it updates to v2.
 func buildConsoleStyles() *charmlog.Styles {
 	st := charmlog.DefaultStyles()
 
-	blue := lipglossv1.NewStyle().Foreground(lipglossv1.Color("4"))
-	green := lipglossv1.NewStyle().Foreground(lipglossv1.Color("2"))
-	yellow := lipglossv1.NewStyle().Foreground(lipglossv1.Color("3"))
-	red := lipglossv1.NewStyle().Foreground(lipglossv1.Color("1"))
-	fatal := lipglossv1.NewStyle().Foreground(lipglossv1.Color("7")).Background(lipglossv1.Color("1"))
+	blue := lipgloss.NewStyle().Foreground(lipgloss.Color("4"))
+	green := lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
+	yellow := lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+	red := lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+	fatal := lipgloss.NewStyle().Foreground(lipgloss.Color("7")).Background(lipgloss.Color("1"))
 
 	st.Levels[charmlog.Level(LevelTrace)] = blue.SetString("[TRACE ]")
 	st.Levels[charmlog.Level(LevelDebug)] = blue.SetString("[DEBUG ]")

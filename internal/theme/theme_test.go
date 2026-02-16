@@ -4,6 +4,7 @@ import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/testutils"
 	"fmt"
+	"image/color"
 	"testing"
 
 	"charm.land/lipgloss/v2"
@@ -11,15 +12,15 @@ import (
 
 func TestGetColorStr(t *testing.T) {
 	tests := []struct {
-		input    lipgloss.TerminalColor
+		input    color.Color
 		expected string
 	}{
-		// Standard Colors (Mapped to ANSI Indices)
-		{lipgloss.Color("0"), "0"},
-		{lipgloss.Color("1"), "1"},
-		{lipgloss.Color("2"), "2"},
-		{lipgloss.Color("4"), "4"},
-		{lipgloss.Color("7"), "7"},
+		// Standard Colors (converted to hex in lipgloss v2)
+		{lipgloss.Color("0"), "#000000"},   // black
+		{lipgloss.Color("1"), "#800000"},   // red (ANSI)
+		{lipgloss.Color("2"), "#008000"},   // green
+		{lipgloss.Color("4"), "#000080"},   // blue
+		{lipgloss.Color("7"), "#c0c0c0"},   // white (silver)
 
 		// Custom RGB
 		{lipgloss.Color("#010203"), "#010203"},
@@ -62,7 +63,7 @@ func TestParseColor(t *testing.T) {
 		c := parseColor(tt.input)
 		actual := ""
 		if c != nil {
-			actual = fmt.Sprintf("%v", c)
+			actual = console.GetColorStr(c)
 		}
 
 		if actual != tt.expected {

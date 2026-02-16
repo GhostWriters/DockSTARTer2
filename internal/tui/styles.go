@@ -188,40 +188,75 @@ func InitStyles(cfg config.AppConfig) {
 		Background(t.ShadowColor)
 
 	// Buttons (spacing handled at layout level)
+	// Handle nil (inherit) backgrounds by falling back to DialogBG
+	buttonActiveBG := t.ButtonActiveBG
+	if buttonActiveBG == nil {
+		buttonActiveBG = t.DialogBG
+	}
+	buttonInactiveBG := t.ButtonInactiveBG
+	if buttonInactiveBG == nil {
+		buttonInactiveBG = t.DialogBG
+	}
 	currentStyles.ButtonActive = ApplyFlags(lipgloss.NewStyle().
-		Background(t.ButtonActiveBG).
+		Background(buttonActiveBG).
 		Foreground(t.ButtonActiveFG), t.ButtonActiveStyles)
 
 	currentStyles.ButtonInactive = ApplyFlags(lipgloss.NewStyle().
-		Background(t.ButtonInactiveBG).
+		Background(buttonInactiveBG).
 		Foreground(t.ButtonInactiveFG), t.ButtonInactiveStyles)
 
 	// List items - descriptions have cyan background (from .dialogrc item_color)
+	// Handle nil (inherit) by falling back to DialogBG
+	itemBG := t.ItemBG
+	if itemBG == nil {
+		itemBG = t.DialogBG
+	}
+	itemSelectedBG := t.ItemSelectedBG
+	if itemSelectedBG == nil {
+		itemSelectedBG = t.DialogBG
+	}
 	currentStyles.ItemNormal = ApplyFlags(lipgloss.NewStyle().
-		Background(t.ItemBG).
+		Background(itemBG).
 		Foreground(t.ItemFG), t.ItemStyles)
 
 	// Selected items: highlight box around text only (like original bash version)
 	currentStyles.ItemSelected = ApplyFlags(lipgloss.NewStyle().
-		Background(t.ItemSelectedBG).
+		Background(itemSelectedBG).
 		Foreground(t.ItemSelectedFG), t.ItemSelectedStyles)
 
 	// Tags - use background from theme (not hardcoded DialogBG)
+	// Handle nil (inherit) by falling back to DialogBG
+	tagBG := t.TagBG
+	if tagBG == nil {
+		tagBG = t.DialogBG
+	}
+	tagSelectedBG := t.TagSelectedBG
+	if tagSelectedBG == nil {
+		tagSelectedBG = t.DialogBG
+	}
+	tagKeyBG := t.TagKeyBG
+	if tagKeyBG == nil {
+		tagKeyBG = t.DialogBG
+	}
+	tagKeySelectedBG := t.TagKeySelectedBG
+	if tagKeySelectedBG == nil {
+		tagKeySelectedBG = t.DialogBG
+	}
 	currentStyles.TagNormal = ApplyFlags(lipgloss.NewStyle().
-		Background(t.TagBG).
+		Background(tagBG).
 		Foreground(t.TagFG), t.TagStyles)
 
 	currentStyles.TagSelected = ApplyFlags(lipgloss.NewStyle().
-		Background(t.TagSelectedBG).
+		Background(tagSelectedBG).
 		Foreground(t.TagSelectedFG), t.TagSelectedStyles)
 
 	currentStyles.TagKey = ApplyFlags(lipgloss.NewStyle().
-		Background(t.TagKeyBG).
+		Background(tagKeyBG).
 		Foreground(t.TagKeyFG), t.TagKeyStyles)
 
 	// Selected tag key: highlight box around text only (like original bash version)
 	currentStyles.TagKeySelected = ApplyFlags(lipgloss.NewStyle().
-		Background(t.TagKeySelectedBG).
+		Background(tagKeySelectedBG).
 		Foreground(t.TagKeySelectedFG), t.TagKeySelectedStyles)
 
 	// Header
@@ -542,16 +577,16 @@ func AddShadow(content string) string {
 		bottomShadowChars = shadowStyle.Render(strings.Repeat(shadeChar, contentWidth-1))
 	} else {
 		// ASCII mode: use solid background color
-		shadowCell = currentStyles.Shadow.Width(2).Height(1).Render("")
-		bottomShadowChars = currentStyles.Shadow.Width(contentWidth - 1).Height(1).Render("")
+		shadowCell = currentStyles.Shadow.Width(2).Render(" ")
+		bottomShadowChars = currentStyles.Shadow.Width(contentWidth - 1).Render(strings.Repeat(" ", contentWidth-1))
 	}
 
 	spacerCell := lipgloss.NewStyle().
 		Background(currentStyles.Screen.GetBackground()).
-		Width(2).Height(1).Render("")
+		Width(2).Render("  ")
 	spacer1 := lipgloss.NewStyle().
 		Background(currentStyles.Screen.GetBackground()).
-		Width(1).Height(1).Render("")
+		Width(1).Render(" ")
 
 	var result strings.Builder
 

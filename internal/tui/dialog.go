@@ -155,6 +155,8 @@ func RenderCenteredButtons(contentWidth int, buttons ...ButtonSpec) string {
 	}
 
 	// Render each button with fixed width and rounded border
+	// Add 2 to width to account for border characters (1 left + 1 right)
+	buttonContentWidth := maxButtonWidth + 2
 	var renderedButtons []string
 	for _, btn := range buttons {
 		var buttonStyle lipgloss.Style
@@ -164,7 +166,7 @@ func RenderCenteredButtons(contentWidth int, buttons ...ButtonSpec) string {
 			buttonStyle = styles.ButtonInactive
 		}
 
-		buttonStyle = buttonStyle.Width(maxButtonWidth).Align(lipgloss.Center)
+		buttonStyle = buttonStyle.Width(buttonContentWidth).Align(lipgloss.Center)
 		buttonStyle = ApplyRoundedBorder(buttonStyle, styles.LineCharacters)
 
 		renderedLabel := RenderHotkeyLabel(btn.Text, btn.Active)

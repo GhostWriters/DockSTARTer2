@@ -537,23 +537,20 @@ func (m MenuModel) ViewString() string {
 	buttonRow := m.renderSimpleButtons(buttonInnerWidth)
 	borderedButtonBox := m.renderButtonBox(buttonRow, buttonInnerWidth)
 
-	// Verify button box width matches
-	buttonBoxWidth := lipgloss.Width(borderedButtonBox)
-	if buttonBoxWidth != targetWidth {
-		// If it doesn't match, explicitly set it
-		borderedButtonBox = lipgloss.NewStyle().
-			Background(styles.Dialog.GetBackground()).
-			Width(targetWidth).
-			Render(borderedButtonBox)
-	}
-
 	// Add equal margins around both boxes for spacing
 	marginStyle := lipgloss.NewStyle().
 		Background(styles.Dialog.GetBackground()).
 		Padding(0, 1)
 
 	paddedList := marginStyle.Render(borderedList)
-	paddedButtons := marginStyle.Render(borderedButtonBox)
+	paddedListWidth := lipgloss.Width(paddedList)
+
+	// Ensure button box has same width as list for proper vertical alignment
+	paddedButtons := lipgloss.NewStyle().
+		Background(styles.Dialog.GetBackground()).
+		Width(paddedListWidth).
+		Padding(0, 1).
+		Render(borderedButtonBox)
 
 	// Build inner content parts
 	var innerParts []string

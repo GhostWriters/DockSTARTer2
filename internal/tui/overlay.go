@@ -16,7 +16,7 @@ const (
 )
 
 // Overlay composites a foreground string over a background string at the specified position.
-// Uses lipgloss v2 Compositor with z-index for proper layering.
+// Uses lipgloss v2 Compositor with z-index for proper layering that preserves the background.
 func Overlay(foreground, background string, hPos, vPos OverlayPosition, xOffset, yOffset int) string {
 	if foreground == "" {
 		return background
