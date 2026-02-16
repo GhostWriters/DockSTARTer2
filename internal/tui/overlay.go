@@ -18,7 +18,7 @@ const (
 )
 
 // Overlay composites a foreground string over a background string at the specified position.
-// This replaces the external bubbletea-overlay library with a lipgloss v2 compatible implementation.
+// Uses lipgloss.Place with the screen background color for proper ANSI handling.
 func Overlay(foreground, background string, hPos, vPos OverlayPosition, xOffset, yOffset int) string {
 	if foreground == "" {
 		return background
@@ -27,13 +27,9 @@ func Overlay(foreground, background string, hPos, vPos OverlayPosition, xOffset,
 		return foreground
 	}
 
-	// Get dimensions
+	// Get background dimensions
 	bgLines := strings.Split(background, "\n")
-	fgLines := strings.Split(foreground, "\n")
-
 	bgHeight := len(bgLines)
-	fgHeight := len(fgLines)
-
 	bgWidth := 0
 	for _, line := range bgLines {
 		if w := lipgloss.Width(line); w > bgWidth {
@@ -41,119 +37,34 @@ func Overlay(foreground, background string, hPos, vPos OverlayPosition, xOffset,
 		}
 	}
 
-	fgWidth := 0
-	for _, line := range fgLines {
-		if w := lipgloss.Width(line); w > fgWidth {
-			fgWidth = w
-		}
-	}
-
-	// Calculate starting position
-	var startX, startY int
-
+	// Convert position to lipgloss alignment
+	var hAlign, vAlign lipgloss.Position
 	switch hPos {
-	case OverlayCenter:
-		startX = (bgWidth - fgWidth) / 2
 	case OverlayLeft:
-		startX = 0
+		hAlign = lipgloss.Left
 	case OverlayRight:
-		startX = bgWidth - fgWidth
+		hAlign = lipgloss.Right
 	default:
-		startX = (bgWidth - fgWidth) / 2
+		hAlign = lipgloss.Center
 	}
-
 	switch vPos {
-	case OverlayCenter:
-		startY = (bgHeight - fgHeight) / 2
 	case OverlayTop:
-		startY = 0
+		vAlign = lipgloss.Top
 	case OverlayBottom:
-		startY = bgHeight - fgHeight
+		vAlign = lipgloss.Bottom
 	default:
-		startY = (bgHeight - fgHeight) / 2
+		vAlign = lipgloss.Center
 	}
 
-	// Apply offsets
-	startX += xOffset
-	startY += yOffset
-
-	// Ensure non-negative
-	if startX < 0 {
-		startX = 0
-	}
-	if startY < 0 {
-		startY = 0
-	}
-
-	// Build the result by overlaying foreground onto background
-	result := make([]string, bgHeight)
-	for i := 0; i < bgHeight; i++ {
-		if i < len(bgLines) {
-			result[i] = bgLines[i]
-		} else {
-			result[i] = ""
-		}
-	}
-
-	// Overlay foreground lines
-	for i, fgLine := range fgLines {
-		bgLineIdx := startY + i
-		if bgLineIdx < 0 || bgLineIdx >= bgHeight {
-			continue
-		}
-
-		bgLine := result[bgLineIdx]
-		bgLineWidth := lipgloss.Width(bgLine)
-
-		// Ensure background line is wide enough
-		if bgLineWidth < startX {
-			bgLine += strings.Repeat(" ", startX-bgLineWidth)
-			bgLineWidth = startX
-		}
-
-		// Extract runes for proper handling of wide characters
-		bgRunes := []rune(bgLine)
-		fgLineWidth := lipgloss.Width(fgLine)
-
-		// Build the new line: prefix + foreground + suffix
-		var newLine strings.Builder
-
-		// Calculate prefix (characters before the foreground)
-		prefixWidth := 0
-		prefixEnd := 0
-		for prefixEnd < len(bgRunes) && prefixWidth < startX {
-			prefixWidth++
-			prefixEnd++
-		}
-
-		// Write prefix
-		newLine.WriteString(string(bgRunes[:prefixEnd]))
-
-		// Add padding if needed
-		if prefixWidth < startX {
-			newLine.WriteString(strings.Repeat(" ", startX-prefixWidth))
-		}
-
-		// Write foreground
-		newLine.WriteString(fgLine)
-
-		// Calculate where the suffix starts (after foreground)
-		suffixStartX := startX + fgLineWidth
-		if suffixStartX < bgLineWidth {
-			// Find the position in bgRunes that corresponds to suffixStartX
-			currentWidth := 0
-			suffixStart := 0
-			for suffixStart < len(bgRunes) && currentWidth < suffixStartX {
-				currentWidth++
-				suffixStart++
-			}
-			if suffixStart < len(bgRunes) {
-				newLine.WriteString(string(bgRunes[suffixStart:]))
-			}
-		}
-
-		result[bgLineIdx] = newLine.String()
-	}
-
-	return strings.Join(result, "\n")
+	// Use lipgloss.Place with the screen background for whitespace
+	// This properly handles ANSI codes and fills empty space with the screen bg
+	styles := GetStyles()
+	return lipgloss.Place(
+		bgWidth,
+		bgHeight,
+		hAlign,
+		vAlign,
+		foreground,
+		lipgloss.WithWhitespaceStyle(lipgloss.NewStyle().Background(styles.Screen.GetBackground())),
+	)
 }
