@@ -44,8 +44,8 @@ func (m *helpDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// viewString returns the dialog content as a string for compositing
-func (m *helpDialogModel) viewString() string {
+// ViewString returns the dialog content as a string for compositing
+func (m *helpDialogModel) ViewString() string {
 	if m.width == 0 {
 		return ""
 	}
@@ -113,7 +113,7 @@ func (m *helpDialogModel) viewString() string {
 }
 
 func (m *helpDialogModel) View() tea.View {
-	return tea.NewView(m.viewString())
+	return tea.NewView(m.ViewString())
 }
 
 // SetSize updates the dialog dimensions (called by AppModel on window resize).

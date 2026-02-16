@@ -50,8 +50,8 @@ func (m BackdropModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// viewString returns the backdrop content as a string for compositing
-func (m BackdropModel) viewString() string {
+// ViewString returns the backdrop content as a string for compositing
+func (m BackdropModel) ViewString() string {
 	if m.width == 0 || m.height == 0 {
 		return ""
 	}
@@ -111,7 +111,7 @@ func (m BackdropModel) viewString() string {
 // View implements tea.Model
 // Matches AppModel.View() rendering approach for consistent spacing
 func (m BackdropModel) View() tea.View {
-	return tea.NewView(m.viewString())
+	return tea.NewView(m.ViewString())
 }
 
 // GetContentArea returns the dimensions available for overlay content

@@ -161,8 +161,8 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// viewString returns the panel content as a string for compositing
-func (m LogPanelModel) viewString() string {
+// ViewString returns the panel content as a string for compositing
+func (m LogPanelModel) ViewString() string {
 	styles := GetStyles()
 
 	// Choose line character: thick when focused, normal otherwise
@@ -237,5 +237,5 @@ func (m LogPanelModel) viewString() string {
 
 // View renders the panel at its current height.
 func (m LogPanelModel) View() tea.View {
-	return tea.NewView(m.viewString())
+	return tea.NewView(m.ViewString())
 }

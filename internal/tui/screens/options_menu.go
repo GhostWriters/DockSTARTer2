@@ -59,6 +59,11 @@ func (s *OptionsMenuScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return s, cmd
 }
 
+// ViewString returns the screen content as a string (for compositing)
+func (s *OptionsMenuScreen) ViewString() string {
+	return s.menu.ViewString()
+}
+
 // View implements tea.Model
 func (s *OptionsMenuScreen) View() tea.View {
 	return s.menu.View()

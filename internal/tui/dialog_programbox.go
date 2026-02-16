@@ -192,8 +192,8 @@ func (m *programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// viewString returns the dialog content as a string for compositing
-func (m *programBoxModel) viewString() string {
+// ViewString returns the dialog content as a string for compositing
+func (m *programBoxModel) ViewString() string {
 	if m.width == 0 {
 		return ""
 	}
@@ -357,7 +357,7 @@ func (m *programBoxModel) viewString() string {
 }
 
 func (m *programBoxModel) View() tea.View {
-	return tea.NewView(m.viewString())
+	return tea.NewView(m.ViewString())
 }
 
 // SetSize updates the dialog dimensions (called by AppModel on window resize).
@@ -441,8 +441,8 @@ func (m programBoxWithBackdrop) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m programBoxWithBackdrop) View() tea.View {
 	// Get string content from sub-views
-	dialogContent := m.dialog.viewString()
-	backdropContent := m.backdrop.viewString()
+	dialogContent := m.dialog.ViewString()
+	backdropContent := m.backdrop.ViewString()
 
 	// If dialog isn't ready yet, just show backdrop
 	if dialogContent == "" {

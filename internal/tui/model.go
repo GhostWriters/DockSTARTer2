@@ -334,9 +334,9 @@ func (m *AppModel) setLogPanelFocus(focused bool) {
 	}
 }
 
-// viewStringer is an interface for models that provide string content for compositing
-type viewStringer interface {
-	viewString() string
+// ViewStringer is an interface for models that provide string content for compositing
+type ViewStringer interface {
+	ViewString() string
 }
 
 // View implements tea.Model
@@ -347,13 +347,13 @@ func (m AppModel) View() tea.View {
 	}
 
 	// Get backdrop view as string
-	output := m.backdrop.viewString()
+	output := m.backdrop.ViewString()
 
 	// Layer 1: Active Screen
 	if m.activeScreen != nil {
 		var screenContent string
-		if vs, ok := m.activeScreen.(viewStringer); ok {
-			screenContent = vs.viewString()
+		if vs, ok := m.activeScreen.(ViewStringer); ok {
+			screenContent = vs.ViewString()
 		}
 		if screenContent != "" {
 			output = Overlay(
@@ -370,8 +370,8 @@ func (m AppModel) View() tea.View {
 	// Layer 2: Modal Dialog
 	if m.dialog != nil {
 		var dialogContent string
-		if vs, ok := m.dialog.(viewStringer); ok {
-			dialogContent = vs.viewString()
+		if vs, ok := m.dialog.(ViewStringer); ok {
+			dialogContent = vs.ViewString()
 		}
 		if dialogContent != "" {
 			output = Overlay(
@@ -387,8 +387,8 @@ func (m AppModel) View() tea.View {
 
 	// Layer 3: Log panel — appended below the backdrop (below helpline)
 	var logPanelContent string
-	if vs, ok := interface{}(m.logPanel).(viewStringer); ok {
-		logPanelContent = vs.viewString()
+	if vs, ok := interface{}(m.logPanel).(ViewStringer); ok {
+		logPanelContent = vs.ViewString()
 	}
 	output = lipgloss.JoinVertical(lipgloss.Left, output, logPanelContent)
 

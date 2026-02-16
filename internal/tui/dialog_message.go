@@ -65,8 +65,8 @@ func (m *messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// viewString returns the dialog content as a string for compositing
-func (m *messageDialogModel) viewString() string {
+// ViewString returns the dialog content as a string for compositing
+func (m *messageDialogModel) ViewString() string {
 	if m.width == 0 {
 		return ""
 	}
@@ -130,7 +130,7 @@ func (m *messageDialogModel) viewString() string {
 }
 
 func (m *messageDialogModel) View() tea.View {
-	return tea.NewView(m.viewString())
+	return tea.NewView(m.ViewString())
 }
 
 // SetSize updates the dialog dimensions
@@ -167,8 +167,8 @@ func (m messageWithBackdrop) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m messageWithBackdrop) View() tea.View {
 	// Get string content from sub-views
-	dialogContent := m.dialog.viewString()
-	backdropContent := m.backdrop.viewString()
+	dialogContent := m.dialog.ViewString()
+	backdropContent := m.backdrop.ViewString()
 
 	// Use overlay to composite dialog over backdrop
 	output := Overlay(

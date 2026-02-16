@@ -510,8 +510,8 @@ func (m MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// View renders the menu with custom styling (Phase 2)
-func (m MenuModel) View() tea.View {
+// ViewString renders the menu content as a string (for compositing)
+func (m MenuModel) ViewString() string {
 	styles := GetStyles()
 
 	// Get list view and apply background color
@@ -606,7 +606,12 @@ func (m MenuModel) View() tea.View {
 	// Note: Zones are scanned at root level (AppModel.View()), not here
 	dialog = m.markZones(dialog)
 
-	return tea.NewView(dialog)
+	return dialog
+}
+
+// View implements tea.Model
+func (m MenuModel) View() tea.View {
+	return tea.NewView(m.ViewString())
 }
 
 // markZones marks clickable zones in the rendered dialog for mouse interaction
