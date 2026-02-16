@@ -16,7 +16,8 @@
       "Bash(git checkout:*)",
       "Bash(git push:*)",
       "WebFetch(domain:github.com)",
-      "Bash(go test:*)"
+      "Bash(go test:*)",
+      "Bash(go clean:*)"
     ]
   }
 }
