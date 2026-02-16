@@ -60,7 +60,7 @@ func (s *MainMenuScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View implements tea.Model
-func (s *MainMenuScreen) View() string {
+func (s *MainMenuScreen) View() tea.View {
 	return s.menu.View()
 }
 

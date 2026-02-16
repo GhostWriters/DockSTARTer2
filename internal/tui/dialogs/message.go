@@ -76,7 +76,7 @@ func (d *MessageDialog) View() tea.View {
 	// Build content
 	content := d.message + "\n\n" + tui.RenderButton("OK", true)
 
-	return tui.RenderDialogBox(
+	return tea.NewView(tui.RenderDialogBox(
 		d.title,
 		content,
 		d.dialogType,
@@ -84,7 +84,7 @@ func (d *MessageDialog) View() tea.View {
 		5,
 		d.width,
 		d.height,
-	)
+	))
 }
 
 // SetSize sets the dialog container dimensions
@@ -184,7 +184,7 @@ func (d *ConfirmDialog) View() tea.View {
 	// Build content
 	content := d.question + "\n\n" + buttons
 
-	return tui.RenderDialogBox(
+	return tea.NewView(tui.RenderDialogBox(
 		d.title,
 		content,
 		tui.DialogTypeConfirm,
@@ -192,7 +192,7 @@ func (d *ConfirmDialog) View() tea.View {
 		5,
 		d.width,
 		d.height,
-	)
+	))
 }
 
 // SetSize sets the dialog container dimensions

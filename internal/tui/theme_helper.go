@@ -184,31 +184,25 @@ func ParseColor(name string) color.Color {
 
 // brightenColor attempts to brighten a color by adding 30% of remaining headroom.
 // Used by 'H' flag for high intensity ON.
-// For hex colors, this applies mathematical brightening.
-// For color names, they're already resolved to hex by ParseColor.
+// Works by extracting RGBA values and brightening them mathematically.
 func brightenColor(c color.Color) color.Color {
 	if c == nil {
 		return c
 	}
 
-	if tc, ok := c.(lipgloss.Color); ok {
-		s := string(tc)
+	// Extract RGBA values (returns 0-65535 range)
+	rr, gg, bb, _ := c.RGBA()
+	// Convert to 0-255 range
+	r := int(rr >> 8)
+	g := int(gg >> 8)
+	b := int(bb >> 8)
 
-		// If it's a hex color, brighten it mathematically
-		if strings.HasPrefix(s, "#") && len(s) == 7 {
-			var r, g, b int
-			fmt.Sscanf(s[1:], "%02x%02x%02x", &r, &g, &b)
+	// Brighten by 30% of remaining headroom (capped at 255)
+	r = min(255, r+int(float64(255-r)*0.3))
+	g = min(255, g+int(float64(255-g)*0.3))
+	b = min(255, b+int(float64(255-b)*0.3))
 
-			// Brighten by 30% of remaining headroom (capped at 255)
-			r = min(255, r+int(float64(255-r)*0.3))
-			g = min(255, g+int(float64(255-g)*0.3))
-			b = min(255, b+int(float64(255-b)*0.3))
-
-			return lipgloss.Color(fmt.Sprintf("#%02x%02x%02x", r, g, b))
-		}
-	}
-
-	return c
+	return lipgloss.Color(fmt.Sprintf("#%02x%02x%02x", r, g, b))
 }
 
 // GetInitialStyle peeks at the first theme tag in text and returns a style derived from it.

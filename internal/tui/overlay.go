@@ -122,7 +122,6 @@ func Overlay(foreground, background string, hPos, vPos OverlayPosition, xOffset,
 		prefixWidth := 0
 		prefixEnd := 0
 		for prefixEnd < len(bgRunes) && prefixWidth < startX {
-			r := bgRunes[prefixEnd]
 			prefixWidth++
 			prefixEnd++
 		}

@@ -272,47 +272,44 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	// Handle mouse events using BubbleZones
-	if mouseMsg, ok := msg.(tea.MouseMsg); ok {
-		// Only handle left mouse button press
-		if mouseMsg.Action == tea.MouseActionPress && mouseMsg.Button == tea.MouseButtonLeft {
-			// Check each zone to see if the click is within bounds
-			// Menu item zones - clicking executes immediately (same as clicking Select)
-			for i := 0; i < len(m.items); i++ {
-				zoneID := fmt.Sprintf("item-%d", i)
-				if zoneInfo := zone.Get(zoneID); zoneInfo != nil {
-					if zoneInfo.InBounds(mouseMsg) {
-						// Select and execute the clicked item
-						m.list.Select(i)
-						m.cursor = i
-						menuSelectedIndices[m.id] = i
-						m.focusedItem = FocusList
-						return m.handleEnter()
-					}
-				}
-			}
-
-			// Button zones
-			if zoneInfo := zone.Get("btn-select"); zoneInfo != nil {
+	if mouseMsg, ok := msg.(tea.MouseClickMsg); ok && mouseMsg.Button == tea.MouseLeft {
+		// Check each zone to see if the click is within bounds
+		// Menu item zones - clicking executes immediately (same as clicking Select)
+		for i := 0; i < len(m.items); i++ {
+			zoneID := fmt.Sprintf("item-%d", i)
+			if zoneInfo := zone.Get(zoneID); zoneInfo != nil {
 				if zoneInfo.InBounds(mouseMsg) {
-					m.focusedItem = FocusSelectBtn
+					// Select and execute the clicked item
+					m.list.Select(i)
+					m.cursor = i
+					menuSelectedIndices[m.id] = i
+					m.focusedItem = FocusList
 					return m.handleEnter()
 				}
 			}
+		}
 
-			if m.backAction != nil {
-				if zoneInfo := zone.Get("btn-back"); zoneInfo != nil {
-					if zoneInfo.InBounds(mouseMsg) {
-						m.focusedItem = FocusBackBtn
-						return m.handleEnter()
-					}
-				}
+		// Button zones
+		if zoneInfo := zone.Get("btn-select"); zoneInfo != nil {
+			if zoneInfo.InBounds(mouseMsg) {
+				m.focusedItem = FocusSelectBtn
+				return m.handleEnter()
 			}
+		}
 
-			if zoneInfo := zone.Get("btn-exit"); zoneInfo != nil {
+		if m.backAction != nil {
+			if zoneInfo := zone.Get("btn-back"); zoneInfo != nil {
 				if zoneInfo.InBounds(mouseMsg) {
-					m.focusedItem = FocusExitBtn
+					m.focusedItem = FocusBackBtn
 					return m.handleEnter()
 				}
+			}
+		}
+
+		if zoneInfo := zone.Get("btn-exit"); zoneInfo != nil {
+			if zoneInfo.InBounds(mouseMsg) {
+				m.focusedItem = FocusExitBtn
+				return m.handleEnter()
 			}
 		}
 		return m, nil
@@ -360,8 +357,9 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Dynamic Hotkeys
 		default:
-			if keyMsg.Type == tea.KeyRunes {
-				keyRune := strings.ToLower(string(keyMsg.Runes))
+			// In v2, type assert to KeyPressMsg and use Text field
+			if pressMsg, ok := keyMsg.(tea.KeyPressMsg); ok && pressMsg.Text != "" {
+				keyRune := strings.ToLower(pressMsg.Text)
 
 				// 1. Check Menu Items first (priority)
 				for i, item := range m.items {
@@ -388,7 +386,7 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				buttons = append(buttons, ButtonSpec{Text: "Exit"})
 
-				if idx, found := CheckButtonHotkeys(keyMsg, buttons); found {
+				if idx, found := CheckButtonHotkeys(pressMsg, buttons); found {
 					// Map index back to FocusItem
 					switch buttons[idx].Text {
 					case "Select":
@@ -608,7 +606,7 @@ func (m MenuModel) View() tea.View {
 	// Note: Zones are scanned at root level (AppModel.View()), not here
 	dialog = m.markZones(dialog)
 
-	return dialog
+	return tea.NewView(dialog)
 }
 
 // markZones marks clickable zones in the rendered dialog for mouse interaction
@@ -944,7 +942,7 @@ func (m MenuModel) renderDialog(menuContent, buttonBox string, listWidth int) st
 		lipgloss.Center,
 		lipgloss.Center,
 		dialogBox,
-		lipgloss.WithWhitespaceBackground(styles.Screen.GetBackground()),
+		lipgloss.WithWhitespaceStyle(lipgloss.NewStyle().Background(styles.Screen.GetBackground())),
 	)
 
 	return centered

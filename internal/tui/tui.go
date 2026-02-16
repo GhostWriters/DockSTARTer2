@@ -13,7 +13,6 @@ import (
 	"DockSTARTer2/internal/update"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 )
 
@@ -43,9 +42,7 @@ func Initialize(ctx context.Context) error {
 	// Initialize styles from theme
 	InitStyles(currentConfig)
 
-	// Set color profile from centralized detection (respects COLORTERM/TERM)
-	lipgloss.SetColorProfile(console.GetPreferredProfile())
-
+	// Note: In lipgloss v2, color profile is auto-detected from terminal
 	return nil
 }
 
@@ -76,10 +73,8 @@ func Start(ctx context.Context, startMenu string) error {
 	model := NewAppModel(ctx, currentConfig, startScreen)
 
 	// Create and run the Bubble Tea program
-	program = tea.NewProgram(
-		model,
-		tea.WithAltScreen(),
-	)
+	// Note: AltScreen is set via View().AltScreen in v2
+	program = tea.NewProgram(model)
 
 	// Start background update checker
 	go startUpdateChecker(ctx)

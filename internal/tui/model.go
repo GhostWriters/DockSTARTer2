@@ -182,9 +182,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
-	case tea.MouseMsg:
-		// Check log panel clicks
-		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+	case tea.MouseClickMsg:
+		// Check log panel clicks (left button only)
+		if msg.Button == tea.MouseLeft {
 			if zi := zone.Get(logPanelZoneID); zi != nil && zi.InBounds(msg) {
 				return m, func() tea.Msg { return toggleLogPanelMsg{} }
 			}
@@ -395,5 +395,6 @@ func (m AppModel) View() tea.View {
 	// Scan zones at the root level
 	v := tea.NewView(zone.Scan(output))
 	v.MouseMode = tea.MouseModeAllMotion
+	v.AltScreen = true
 	return v
 }
