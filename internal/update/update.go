@@ -60,6 +60,11 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 		requestedVersion = currentChannel
 	}
 
+	// Map "main" to "stable" channel
+	if strings.EqualFold(requestedVersion, "main") {
+		requestedVersion = "stable"
+	}
+
 	var (
 		latest *selfupdate.Release
 		found  bool
@@ -75,7 +80,7 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 		// Specific version requested
 		latest, found, err = updater.DetectVersion(ctx, repo, requestedVersion)
 	} else {
-		// Default latest for the channel
+		// Default latest for the channel (filtered by channel in getUpdater)
 		latest, found, err = updater.DetectLatest(ctx, repo)
 	}
 
@@ -83,7 +88,14 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 		return fmt.Errorf("failed to detect latest version: %w", err)
 	}
 	if !found {
-		return fmt.Errorf("no version found for target %s", requestedVersion)
+		// Show warning for channels with no releases (e.g., dev)
+		msg := []string{
+			fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} channel '{{|Branch|}}%s{{[-]}}' appears to no longer exist (no releases found).", version.ApplicationName, requestedVersion),
+			fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} is currently on version '{{|Version|}}%s{{[-]}}'.", version.ApplicationName, version.Version),
+			fmt.Sprintf("Run '{{|UserCommand|}}%s -u main{{[-]}}' to update to the latest stable release.", version.CommandName),
+		}
+		logger.Warn(ctx, msg)
+		return nil
 	}
 
 	remoteVersion := latest.Version()
