@@ -13,7 +13,7 @@ func MergeNewOnly(ctx context.Context, targetFile, sourceFile string) ([]string,
 	var addedVars []string
 
 	if _, err := os.Stat(sourceFile); os.IsNotExist(err) {
-		logger.Warn(ctx, "File '{{_File_}}%s{{|-|}}' does not exist.", sourceFile)
+		logger.Warn(ctx, "File '{{|File|}}%s{{[-]}}' does not exist.", sourceFile)
 		return nil, nil
 	}
 
@@ -63,9 +63,9 @@ func MergeNewOnly(ctx context.Context, targetFile, sourceFile string) ([]string,
 
 	if len(newLines) > 0 {
 		if len(varsToLog) > 0 {
-			logger.Notice(ctx, "Adding variables to {{_File_}}%s{{|-|}}:", targetFile)
+			logger.Notice(ctx, "Adding variables to {{|File|}}%s{{[-]}}:", targetFile)
 			for _, line := range varsToLog {
-				logger.Notice(ctx, "\t{{_Var_}}%s{{|-|}}", line)
+				logger.Notice(ctx, "\t{{|Var|}}%s{{[-]}}", line)
 			}
 		}
 

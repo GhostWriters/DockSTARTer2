@@ -20,15 +20,15 @@ func Enable(ctx context.Context, appNames []string, conf config.AppConfig) error
 
 		if IsAppBuiltIn(appUpper) {
 			enabledVar := appUpper + "__ENABLED"
-			logger.Info(ctx, "Enabling application '{{_App_}}%s{{|-|}}'", niceName)
-			logger.Notice(ctx, "Setting variable in '{{_File_}}%s{{|-|}}':", envFile)
-			logger.Notice(ctx, "\t{{_Var_}}%s='true'{{|-|}}", enabledVar)
+			logger.Info(ctx, "Enabling application '{{|App|}}%s{{[-]}}'", niceName)
+			logger.Notice(ctx, "Setting variable in '{{|File|}}%s{{[-]}}':", envFile)
+			logger.Notice(ctx, "\t{{|Var|}}%s='true'{{[-]}}", enabledVar)
 
 			if err := Set(enabledVar, "true", envFile); err != nil {
 				return err
 			}
 		} else {
-			logger.Warn(ctx, "Application '{{_App_}}%s{{|-|}}' does not exist.", niceName)
+			logger.Warn(ctx, "Application '{{|App|}}%s{{[-]}}' does not exist.", niceName)
 		}
 	}
 
@@ -46,15 +46,15 @@ func Disable(ctx context.Context, appNames []string, conf config.AppConfig) erro
 
 		if IsAppBuiltIn(appUpper) {
 			enabledVar := appUpper + "__ENABLED"
-			logger.Info(ctx, "Disabling application '{{_App_}}%s{{|-|}}'", niceName)
-			logger.Notice(ctx, "Setting variable in '{{_File_}}%s{{|-|}}':", envFile)
-			logger.Notice(ctx, "\t{{_Var_}}%s='false'{{|-|}}", enabledVar)
+			logger.Info(ctx, "Disabling application '{{|App|}}%s{{[-]}}'", niceName)
+			logger.Notice(ctx, "Setting variable in '{{|File|}}%s{{[-]}}':", envFile)
+			logger.Notice(ctx, "\t{{|Var|}}%s='false'{{[-]}}", enabledVar)
 
 			if err := Set(enabledVar, "false", envFile); err != nil {
 				return err
 			}
 		} else {
-			logger.Warn(ctx, "Application '{{_App_}}%s{{|-|}}' does not exist.", niceName)
+			logger.Warn(ctx, "Application '{{|App|}}%s{{[-]}}' does not exist.", niceName)
 		}
 	}
 

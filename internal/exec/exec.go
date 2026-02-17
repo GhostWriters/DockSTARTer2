@@ -32,7 +32,7 @@ func RunAndLog(ctx context.Context, runningNoticeType, outputNoticeType, errorNo
 
 	// Log the running command if runningNoticeType is set
 	if runningNoticeType != "" {
-		logByType(ctx, runningNoticeType, "Running: {{_RunningCommand_}}%s{{|-|}}", cmdText)
+		logByType(ctx, runningNoticeType, "Running: {{|RunningCommand|}}%s{{[-]}}", cmdText)
 	}
 
 	// Execute the command
@@ -68,7 +68,7 @@ func RunAndLog(ctx context.Context, runningNoticeType, outputNoticeType, errorNo
 			line := scanner.Text()
 			if line != "" { // Skip empty lines
 				if prefix != "" {
-					prefixedLine := fmt.Sprintf("{{_RunningCommand_}}%s{{|-|}} %s", prefix, line)
+					prefixedLine := fmt.Sprintf("{{|RunningCommand|}}%s{{[-]}} %s", prefix, line)
 					logByType(ctx, noticeType, prefixedLine)
 				} else {
 					logByType(ctx, noticeType, line)
@@ -82,7 +82,7 @@ func RunAndLog(ctx context.Context, runningNoticeType, outputNoticeType, errorNo
 		if errorNoticeType != "" && errorMessage != "" {
 			// Log error message and failing command
 			logByType(ctx, errorNoticeType, errorMessage)
-			logByType(ctx, errorNoticeType, "Failing command: {{_FailingCommand_}}%s{{|-|}}", cmdText)
+			logByType(ctx, errorNoticeType, "Failing command: {{|FailingCommand|}}%s{{[-]}}", cmdText)
 		}
 		return fmt.Errorf("command failed: %w", err)
 	}

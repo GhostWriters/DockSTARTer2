@@ -4,30 +4,84 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/muesli/termenv"
 )
 
 var (
-	// semanticRegex matches {{_content_}} format for semantic tags
-	semanticRegex = regexp.MustCompile(`\{\{_([A-Za-z0-9_]+)_\}\}`)
+	// Delimiters for semantic and direct tags (Library Standard)
+	SemanticPrefix = "{{|"
+	SemanticSuffix = "|}}"
+	DirectPrefix   = "{{["
+	DirectSuffix   = "]}}"
 
-	// directRegex matches {{|content|}} format for direct tview-style codes
-	directRegex = regexp.MustCompile(`\{\{\|([A-Za-z0-9_:\-#]+)\|\}\}`)
+	// Precompiled regexes (Locked to standard)
+	semanticRegex *regexp.Regexp
+	directRegex   *regexp.Regexp
 )
 
-// ExpandTags converts semantic and direct tags to standardized {{|style|}} format
-// - {{_Tag_}} : Semantic lookup
-// - {{|code|}} : Direct style (no-op, just for consistency)
+func init() {
+	rebuildRegexes()
+}
+
+func rebuildRegexes() {
+	// Re-compile based on static defaults
+	// We use QuoteMeta to be safe, even though we know the defaults.
+	semEscPre := regexp.QuoteMeta(SemanticPrefix)
+	semEscSuf := regexp.QuoteMeta(SemanticSuffix)
+	dirEscPre := regexp.QuoteMeta(DirectPrefix)
+	dirEscSuf := regexp.QuoteMeta(DirectSuffix)
+
+	semanticRegex = regexp.MustCompile(semEscPre + `(?P<content>[A-Za-z0-9_]+)` + semEscSuf)
+	directRegex = regexp.MustCompile(dirEscPre + `(?P<content>[A-Za-z0-9_:\-#;]+)` + dirEscSuf)
+}
+
+// GetDelimitedRegex returns the standard regex for both semantic and direct tags.
+func GetDelimitedRegex() *regexp.Regexp {
+	semEscPre := regexp.QuoteMeta(SemanticPrefix)
+	semEscSuf := regexp.QuoteMeta(SemanticSuffix)
+	dirEscPre := regexp.QuoteMeta(DirectPrefix)
+	dirEscSuf := regexp.QuoteMeta(DirectSuffix)
+
+	// Group 1: Semantic, Group 2: Direct
+	pattern := fmt.Sprintf(`(?:%s(?P<semantic>[A-Za-z0-9_]+)%s|%s(?P<direct>[A-Za-z0-9_:\-#;]+)%s)`,
+		semEscPre, semEscSuf, dirEscPre, dirEscSuf)
+	return regexp.MustCompile(pattern)
+}
+
+// GetDirectRegex returns the standard regex for direct tags only.
+func GetDirectRegex() *regexp.Regexp {
+	return directRegex
+}
+
+// WrapSemantic wraps a tag name in standard semantic delimiters
+func WrapSemantic(name string) string {
+	return SemanticPrefix + name + SemanticSuffix
+}
+
+// WrapDirect wraps a style code in standard direct delimiters
+func WrapDirect(code string) string {
+	return DirectPrefix + code + DirectSuffix
+}
+
+// ExpandTags converts semantic tags to standardized direct format using raw style codes
 func ExpandTags(text string) string {
 	ensureMaps()
 
-	// 1. Process semantic tags {{_Tag_}}
+	// 1. Process semantic tags
 	text = semanticRegex.ReplaceAllStringFunc(text, func(match string) string {
-		content := match[3 : len(match)-3] // Strip "{{_" and "_}}"
-		content = strings.ToLower(content)
+		// Extract content using the named group
+		groupIndex := semanticRegex.SubexpIndex("content")
+		subMatch := semanticRegex.FindStringSubmatch(match)
+		if len(subMatch) <= groupIndex {
+			return ""
+		}
+		content := strings.ToLower(subMatch[groupIndex])
 
-		// Check semantic map
-		if tag, ok := semanticMap[content]; ok {
-			return tag
+		// Check semantic map (stores RAW codes)
+		if rawCode, ok := semanticMap[content]; ok {
+			// Wrap the raw code in standard direct delimiters
+			return WrapDirect(rawCode)
 		}
 
 		// Unknown semantic tag - strip it
@@ -37,28 +91,42 @@ func ExpandTags(text string) string {
 	return text
 }
 
-// ToANSI converts semantic and direct tags to ANSI escape sequences
-// - {{_Tag_}} : Semantic lookup -> ANSI
-// - {{|code|}} : Direct tview-style -> ANSI
+// ToANSI converts semantic and direct tags to ANSI escape sequences.
+// It uses the default stdout profile.
 func ToANSI(text string) string {
+	return ToANSIWithProfile(text)
+}
+
+// ToANSIWithProfile allows specifying a profile (e.g. for TUI vs CLI).
+func ToANSIWithProfile(text string, profile ...termenv.Profile) string {
 	ensureMaps()
-	// FORCE TTY for debugging
-	if !isTTYGlobal {
-		// Not a TTY, strip all codes
+
+	p := preferredProfile
+	if len(profile) > 0 {
+		p = profile[0]
+	} else if !isTTYGlobal && !TUIMode {
+		// Only check globals if no specific profile was requested
+		return Strip(text)
+	}
+
+	// If the profile is ASCII, just strip
+	if p == termenv.Ascii {
 		return Strip(text)
 	}
 
 	// 1. Expand all semantic tags first (Pass 1)
-	// This ensures that multi-tag definitions like {{|-|}}{{|blue|}} are fully expanded
 	text = ExpandTags(text)
 
-	// 2. Process all direct tags {{|code|}} -> ANSI (Pass 2)
-	text = directRegex.ReplaceAllStringFunc(text, func(match string) string {
-		content := match[3 : len(match)-3] // Strip "{{|" and "|}}"
-		return parseStyleCodeToANSI(content)
+	// 2. Process all direct tags -> ANSI (Pass 2)
+	re := GetDirectRegex()
+	return re.ReplaceAllStringFunc(text, func(match string) string {
+		groupIndex := re.SubexpIndex("content")
+		subMatch := re.FindStringSubmatch(match)
+		if len(subMatch) <= groupIndex {
+			return ""
+		}
+		return parseStyleCodeToANSI(subMatch[groupIndex], p)
 	})
-
-	return text
 }
 
 // Strip removes all semantic and direct tags from text, as well as ANSI escape sequences
@@ -68,8 +136,7 @@ func Strip(text string) string {
 	return StripANSI(text)
 }
 
-// ForTUI prepares text for display with standardized tags.
-// Literal brackets [text] are now treated as plain text and do NOT need escaping.
+// ForTUI prepares text for display with standardized tags
 func ForTUI(text string) string {
 	return ExpandTags(text)
 }

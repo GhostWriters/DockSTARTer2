@@ -41,7 +41,7 @@ func removeAllDisabled(ctx context.Context, conf config.AppConfig, assumeYes boo
 	}
 
 	if len(disabledApps) == 0 {
-		logger.Notice(ctx, "'{{_File_}}%s{{|-|}}' does not contain any disabled ", envFile)
+		logger.Notice(ctx, "'{{|File|}}%s{{[-]}}' does not contain any disabled ", envFile)
 		return nil
 	}
 
@@ -93,42 +93,42 @@ func removeApp(ctx context.Context, appName string, conf config.AppConfig, assum
 
 	// Check if there's anything to remove
 	if len(globalVarsToRemove) == 0 && len(appVarsToRemove) == 0 {
-		logger.Warn(ctx, "'{{_App_}}%s{{|-|}}' has no variables to remove.", nice)
+		logger.Warn(ctx, "'{{|App|}}%s{{[-]}}' has no variables to remove.", nice)
 		return nil
 	}
 
 	// Build the question showing what will be removed (matching Bash format exactly)
 	indent := "\t"
-	question := fmt.Sprintf("Would you like to purge these settings for '{{_App_}}%s{{|-|}}'?\n", nice)
+	question := fmt.Sprintf("Would you like to purge these settings for '{{|App|}}%s{{[-]}}'?\n", nice)
 
 	if len(globalLinesToRemove) > 0 {
-		question += fmt.Sprintf("%s{{_Folder_}}%s{{|-|}}:\n", indent, envFile)
+		question += fmt.Sprintf("%s{{|Folder|}}%s{{[-]}}:\n", indent, envFile)
 		for _, line := range globalLinesToRemove {
-			question += fmt.Sprintf("%s%s{{_Var_}}%s{{|-|}}\n", indent, indent, line)
+			question += fmt.Sprintf("%s%s{{|Var|}}%s{{[-]}}\n", indent, indent, line)
 		}
 	}
 
 	if len(appLinesToRemove) > 0 {
-		question += fmt.Sprintf("%s{{_Folder_}}%s{{|-|}}:\n", indent, appEnvFile)
+		question += fmt.Sprintf("%s{{|Folder|}}%s{{[-]}}:\n", indent, appEnvFile)
 		for _, line := range appLinesToRemove {
-			question += fmt.Sprintf("%s%s{{_Var_}}%s{{|-|}}\n", indent, indent, line)
+			question += fmt.Sprintf("%s%s{{|Var|}}%s{{[-]}}\n", indent, indent, line)
 		}
 	}
 
 	// Prompt for confirmation
 	if !assumeYes && !promptYesNo(ctx, question) {
-		logger.Info(ctx, "Keeping '{{_App_}}%s{{|-|}}' variables.", nice)
+		logger.Info(ctx, "Keeping '{{|App|}}%s{{[-]}}' variables.", nice)
 		return nil
 	}
 
-	logger.Info(ctx, "Purging '{{_App_}}%s{{|-|}}' variables.", nice)
+	logger.Info(ctx, "Purging '{{|App|}}%s{{[-]}}' variables.", nice)
 
 	// Remove global variables (matching Bash multi-line notice format)
 	if len(globalVarsToRemove) > 0 {
 		// Build multi-line message
-		msg := fmt.Sprintf("Removing variables from {{_File_}}%s{{|-|}}:", envFile)
+		msg := fmt.Sprintf("Removing variables from {{|File|}}%s{{[-]}}:", envFile)
 		for _, line := range globalLinesToRemove {
-			msg += fmt.Sprintf("\n%s{{_Var_}}%s{{|-|}}", indent, line)
+			msg += fmt.Sprintf("\n%s{{|Var|}}%s{{[-]}}", indent, line)
 		}
 		logger.Notice(ctx, msg)
 
@@ -140,9 +140,9 @@ func removeApp(ctx context.Context, appName string, conf config.AppConfig, assum
 	// Remove app-specific variables (matching Bash multi-line notice format)
 	if len(appVarsToRemove) > 0 {
 		// Build multi-line message
-		msg := fmt.Sprintf("Removing variables from {{_File_}}%s{{|-|}}:", appEnvFile)
+		msg := fmt.Sprintf("Removing variables from {{|File|}}%s{{[-]}}:", appEnvFile)
 		for _, line := range appLinesToRemove {
-			msg += fmt.Sprintf("\n%s{{_Var_}}%s{{|-|}}", indent, line)
+			msg += fmt.Sprintf("\n%s{{|Var|}}%s{{[-]}}", indent, line)
 		}
 		logger.Notice(ctx, msg)
 

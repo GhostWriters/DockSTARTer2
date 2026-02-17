@@ -6,10 +6,16 @@ import (
 	"strings"
 
 	tcellColor "github.com/gdamore/tcell/v3/color"
+	"github.com/muesli/termenv"
 )
 
 // parseStyleCodeToANSI parses fg:bg:flags format and returns ANSI codes
-func parseStyleCodeToANSI(content string) string {
+// Uses the provided profile for color conversion, or preferredProfile if none given
+func parseStyleCodeToANSI(content string, profile ...termenv.Profile) string {
+	p := preferredProfile
+	if len(profile) > 0 {
+		p = profile[0]
+	}
 	if content == "-" {
 		return CodeReset
 	}
@@ -45,7 +51,7 @@ func parseStyleCodeToANSI(content string) string {
 
 		if strings.HasPrefix(colorName, "#") {
 			// Already Hex: Pass directly to termenv
-			codes.WriteString(wrapSequence(preferredProfile.Color(colorName).Sequence(false)))
+			codes.WriteString(wrapSequence(p.Color(colorName).Sequence(false)))
 		} else {
 			// Check for non-color attributes (bold, etc.) first
 			if code, ok := attributeMap[colorName]; ok {
@@ -74,7 +80,7 @@ func parseStyleCodeToANSI(content string) string {
 				hexVal := tc.Hex()
 				if hexVal >= 0 {
 					hexStr := fmt.Sprintf("#%06x", hexVal)
-					if c := preferredProfile.Color(hexStr); c != nil {
+					if c := p.Color(hexStr); c != nil {
 						codes.WriteString(wrapSequence(c.Sequence(false)))
 					}
 					goto FoundFG
@@ -102,7 +108,7 @@ FoundFG:
 
 		if strings.HasPrefix(colorName, "#") {
 			// Hex color
-			if c := preferredProfile.Color(colorName); c != nil {
+			if c := p.Color(colorName); c != nil {
 				codes.WriteString(wrapSequence(c.Sequence(true)))
 			}
 		} else {
@@ -124,7 +130,7 @@ FoundFG:
 				hexVal := tc.Hex()
 				if hexVal >= 0 {
 					hexStr := fmt.Sprintf("#%06x", hexVal)
-					if c := preferredProfile.Color(hexStr); c != nil {
+					if c := p.Color(hexStr); c != nil {
 						codes.WriteString(wrapSequence(c.Sequence(true)))
 					}
 					goto FoundBG
@@ -156,12 +162,12 @@ func StripANSI(text string) string {
 	return ansiRegex.ReplaceAllString(text, "")
 }
 
-// resolveTaggedStyleToANSI converts a standardized tag like "{{|cyan::B|}}" to ANSI codes
+// resolveTaggedStyleToANSI converts a standardized tag like "{{[cyan::B]}}" to ANSI codes
 func resolveTaggedStyleToANSI(tag string) string {
-	// Support both "{{|content|}}" and plain "content"
+	// Support both "{{[content]}}" and plain "content"
 	content := tag
-	if strings.HasPrefix(tag, "{{|") && strings.HasSuffix(tag, "|}}") {
-		content = tag[3 : len(tag)-3]
+	if strings.HasPrefix(tag, DirectPrefix) && strings.HasSuffix(tag, DirectSuffix) {
+		content = tag[len(DirectPrefix) : len(tag)-len(DirectSuffix)]
 	}
 
 	return parseStyleCodeToANSI(content)

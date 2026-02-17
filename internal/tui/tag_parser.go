@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	// Matches {{_Tag_}} OR {{|Code|}}
+	// Matches {{|Tag|}} OR {{|Code|}}
 	// Group 1: Semantic Tag Name
 	// Group 2: Direct Code
 	tagRegex = regexp.MustCompile(`\{\{(?:_([A-Za-z0-9_]+)_|\|([A-Za-z0-9_:\-#]+)\|)\}\}`)
@@ -49,7 +49,7 @@ func ParseTitleTags(text string, baseStyle lipgloss.Style) (string, lipgloss.Sty
 			if len(subMatches) > 0 {
 				// Apply each direct tag found in the definition sequentially
 				for j, sm := range subMatches {
-					// Special Handling: If the LAST tag in the definition is a REset {{|-|}},
+					// Special Handling: If the LAST tag in the definition is a REset {{[-]}},
 					// and we have prior tags, we likely want to ignore this reset.
 					if j == len(subMatches)-1 && len(subMatches) > 1 {
 						if sm[1] == "-" {

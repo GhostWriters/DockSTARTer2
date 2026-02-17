@@ -89,7 +89,7 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 	if !strings.HasPrefix(requestedVersion, "v") {
 		remoteChannel := GetChannelFromVersion(remoteVersion)
 		if !strings.EqualFold(remoteChannel, currentChannel) && !strings.EqualFold(requestedVersion, remoteChannel) {
-			logger.Warn(ctx, "{{_ApplicationName_}}%s{{|-|}} is on channel '{{_Branch_}}%s{{|-|}}', but latest release is on channel '{{_Branch_}}%s{{|-|}}'. Ignoring.", version.ApplicationName, currentChannel, remoteChannel)
+			logger.Warn(ctx, "{{|ApplicationName|}}%s{{[-]}} is on channel '{{|Branch|}}%s{{[-]}}', but latest release is on channel '{{|Branch|}}%s{{[-]}}'. Ignoring.", version.ApplicationName, currentChannel, remoteChannel)
 			return nil
 		}
 	}
@@ -104,7 +104,7 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 
 	question := ""
 	initiationNotice := ""
-	noNotice := fmt.Sprintf("{{_ApplicationName_}}%s{{|-|}} will not be updated.", version.ApplicationName)
+	noNotice := fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} will not be updated.", version.ApplicationName)
 
 	// Wrap logger.Notice to match console.Printer
 	noticePrinter := func(ctx context.Context, msg any, args ...any) {
@@ -113,16 +113,16 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 
 	if compareVersions(currentVersion, remoteVersion) == 0 {
 		if force {
-			question = fmt.Sprintf("Would you like to forcefully re-apply {{_ApplicationName_}}%s{{|-|}} update '{{_Version_}}%s{{|-|}}'?", version.ApplicationName, currentVersion)
-			initiationNotice = fmt.Sprintf("Forcefully re-applying {{_ApplicationName_}}%s{{|-|}} update '{{_Version_}}%s{{|-|}}'", version.ApplicationName, remoteVersion)
+			question = fmt.Sprintf("Would you like to forcefully re-apply {{|ApplicationName|}}%s{{[-]}} update '{{|Version|}}%s{{[-]}}'?", version.ApplicationName, currentVersion)
+			initiationNotice = fmt.Sprintf("Forcefully re-applying {{|ApplicationName|}}%s{{[-]}} update '{{|Version|}}%s{{[-]}}'", version.ApplicationName, remoteVersion)
 		} else {
-			logger.Notice(ctx, "{{_ApplicationName_}}%s{{|-|}} is already up to date on channel '{{_Branch_}}%s{{|-|}}'.", version.ApplicationName, requestedVersion)
-			logger.Notice(ctx, "Current version is '{{_Version_}}%s{{|-|}}'.", currentVersion)
+			logger.Notice(ctx, "{{|ApplicationName|}}%s{{[-]}} is already up to date on channel '{{|Branch|}}%s{{[-]}}'.", version.ApplicationName, requestedVersion)
+			logger.Notice(ctx, "Current version is '{{|Version|}}%s{{[-]}}'.", currentVersion)
 			return nil
 		}
 	} else {
-		question = fmt.Sprintf("Would you like to update {{_ApplicationName_}}%s{{|-|}} from '{{_Version_}}%s{{|-|}}' to '{{_Version_}}%s{{|-|}}' now?", version.ApplicationName, currentVersion, remoteVersion)
-		initiationNotice = fmt.Sprintf("Updating {{_ApplicationName_}}%s{{|-|}} from '{{_Version_}}%s{{|-|}}' to '{{_Version_}}%s{{|-|}}'", version.ApplicationName, currentVersion, remoteVersion)
+		question = fmt.Sprintf("Would you like to update {{|ApplicationName|}}%s{{[-]}} from '{{|Version|}}%s{{[-]}}' to '{{|Version|}}%s{{[-]}}' now?", version.ApplicationName, currentVersion, remoteVersion)
+		initiationNotice = fmt.Sprintf("Updating {{|ApplicationName|}}%s{{[-]}} from '{{|Version|}}%s{{[-]}}' to '{{|Version|}}%s{{[-]}}'", version.ApplicationName, currentVersion, remoteVersion)
 	}
 
 	// Prompt user
@@ -139,10 +139,10 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 		return fmt.Errorf("failed to install update: %w", err)
 	}
 
-	logger.Notice(ctx, "Updated {{_ApplicationName_}}%s{{|-|}} to '{{_Version_}}%s{{|-|}}'", version.ApplicationName, remoteVersion)
+	logger.Notice(ctx, "Updated {{|ApplicationName|}}%s{{[-]}} to '{{|Version|}}%s{{[-]}}'", version.ApplicationName, remoteVersion)
 
 	if exePath != "unknown" {
-		logger.Info(ctx, "Application location is '{{_File_}}%s{{|-|}}'.", exePath)
+		logger.Info(ctx, "Application location is '{{|File|}}%s{{[-]}}'.", exePath)
 	}
 
 	// Reset all needs markers
@@ -169,7 +169,7 @@ func ReExec(ctx context.Context, exePath string, args []string) error {
 		fullCmd += " " + strings.Join(args, " ")
 	}
 
-	logger.Notice(ctx, "Running: {{_RunningCommand_}}exec %s{{|-|}}", fullCmd)
+	logger.Notice(ctx, "Running: {{|RunningCommand|}}exec %s{{[-]}}", fullCmd)
 
 	// Construct argv and envv for syscall.Exec
 	argv := append([]string{exePath}, args...)
@@ -201,7 +201,7 @@ func installUpdate(ctx context.Context, assetURL string) error {
 	defer os.RemoveAll(tmpDir)
 
 	// 3. Download
-	logger.Info(ctx, "Downloading update from {{_URL_}}%s{{|-|}}", assetURL)
+	logger.Info(ctx, "Downloading update from {{|URL|}}%s{{[-]}}", assetURL)
 	resp, err := http.Get(assetURL)
 	if err != nil {
 		return fmt.Errorf("failed to download: %w", err)
@@ -301,19 +301,19 @@ func UpdateTemplates(ctx context.Context, force bool, yes bool, requestedBranch 
 
 	// Fetch updates to get remote hash
 	logger.Info(ctx, "Setting file ownership on current repository files")
-	logger.Info(ctx, "Running: {{_RunningCommand_}}sudo chown -R 1000:1000 %s/.git{{|-|}}", templatesDir)
-	logger.Info(ctx, "Running: {{_RunningCommand_}}sudo chown 1000:1000 %s{{|-|}}", templatesDir)
-	logger.Info(ctx, "Running: {{_RunningCommand_}}git ls-tree -rt --name-only HEAD | xargs sudo chown 1000:1000{{|-|}}")
+	logger.Info(ctx, "Running: {{|RunningCommand|}}sudo chown -R 1000:1000 %s/.git{{[-]}}", templatesDir)
+	logger.Info(ctx, "Running: {{|RunningCommand|}}sudo chown 1000:1000 %s{{[-]}}", templatesDir)
+	logger.Info(ctx, "Running: {{|RunningCommand|}}git ls-tree -rt --name-only HEAD | xargs sudo chown 1000:1000{{[-]}}")
 	logger.Info(ctx, "Fetching recent changes from git.")
-	logger.Info(ctx, "Running: {{_RunningCommand_}}git fetch --all --prune -v{{|-|}}")
+	logger.Info(ctx, "Running: {{|RunningCommand|}}git fetch --all --prune -v{{[-]}}")
 	err = repo.Fetch(&git.FetchOptions{
 		RemoteName: "origin",
 		Tags:       git.AllTags,
 	})
 	if err == nil || err == git.NoErrAlreadyUpToDate {
-		logger.Info(ctx, "{{_RunningCommand_}}git:{{|-|}} POST git-upload-pack (186 bytes)")
-		logger.Info(ctx, "{{_RunningCommand_}}git:{{|-|}} From https://github.com/GhostWriters/DockSTARTer-Templates")
-		logger.Info(ctx, "{{_RunningCommand_}}git:{{|-|}}  = [up to date]      %-10s -> origin/%s", requestedBranch, requestedBranch)
+		logger.Info(ctx, "{{|RunningCommand|}}git:{{[-]}} POST git-upload-pack (186 bytes)")
+		logger.Info(ctx, "{{|RunningCommand|}}git:{{[-]}} From https://github.com/GhostWriters/DockSTARTer-Templates")
+		logger.Info(ctx, "{{|RunningCommand|}}git:{{[-]}}  = [up to date]      %-10s -> origin/%s", requestedBranch, requestedBranch)
 	}
 	if err != nil && err != git.NoErrAlreadyUpToDate {
 		return fmt.Errorf("failed to fetch templates: %w", err)
@@ -351,20 +351,20 @@ func UpdateTemplates(ctx context.Context, force bool, yes bool, requestedBranch 
 	question := ""
 	initiationNotice := ""
 	targetName := "DockSTARTer-Templates"
-	noNotice := fmt.Sprintf("{{_ApplicationName_}}%s{{|-|}} will not be updated.", targetName)
+	noNotice := fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} will not be updated.", targetName)
 
 	if currentHash == remoteHash {
 		if force {
-			question = fmt.Sprintf("Would you like to forcefully re-apply {{_ApplicationName_}}%s{{|-|}} update '{{_Version_}}%s{{|-|}}'?", targetName, currentDisplay)
-			initiationNotice = fmt.Sprintf("Forcefully re-applying {{_ApplicationName_}}%s{{|-|}} update '{{_Version_}}%s{{|-|}}'", targetName, remoteDisplay)
+			question = fmt.Sprintf("Would you like to forcefully re-apply {{|ApplicationName|}}%s{{[-]}} update '{{|Version|}}%s{{[-]}}'?", targetName, currentDisplay)
+			initiationNotice = fmt.Sprintf("Forcefully re-applying {{|ApplicationName|}}%s{{[-]}} update '{{|Version|}}%s{{[-]}}'", targetName, remoteDisplay)
 		} else {
-			logger.Notice(ctx, "{{_ApplicationName_}}%s{{|-|}} is already up to date on branch '{{_Branch_}}%s{{|-|}}'.", targetName, requestedBranch)
-			logger.Notice(ctx, "Current version is '{{_Version_}}%s{{|-|}}'", currentDisplay)
+			logger.Notice(ctx, "{{|ApplicationName|}}%s{{[-]}} is already up to date on branch '{{|Branch|}}%s{{[-]}}'.", targetName, requestedBranch)
+			logger.Notice(ctx, "Current version is '{{|Version|}}%s{{[-]}}'", currentDisplay)
 			return nil
 		}
 	} else {
-		question = fmt.Sprintf("Would you like to update {{_ApplicationName_}}%s{{|-|}} from '{{_Version_}}%s{{|-|}}' to '{{_Version_}}%s{{|-|}}' now?", targetName, currentDisplay, remoteDisplay)
-		initiationNotice = fmt.Sprintf("Updating {{_ApplicationName_}}%s{{|-|}} from '{{_Version_}}%s{{|-|}}' to '{{_Version_}}%s{{|-|}}'", targetName, currentDisplay, remoteDisplay)
+		question = fmt.Sprintf("Would you like to update {{|ApplicationName|}}%s{{[-]}} from '{{|Version|}}%s{{[-]}}' to '{{|Version|}}%s{{[-]}}' now?", targetName, currentDisplay, remoteDisplay)
+		initiationNotice = fmt.Sprintf("Updating {{|ApplicationName|}}%s{{[-]}} from '{{|Version|}}%s{{[-]}}' to '{{|Version|}}%s{{[-]}}'", targetName, currentDisplay, remoteDisplay)
 	}
 
 	// Wrap logger.Notice to match console.Printer
@@ -386,7 +386,7 @@ func UpdateTemplates(ctx context.Context, force bool, yes bool, requestedBranch 
 	}
 
 	// Try checking out as branch first
-	logger.Info(ctx, "Running: {{_RunningCommand_}}git checkout --force %s{{|-|}}", requestedBranch)
+	logger.Info(ctx, "Running: {{|RunningCommand|}}git checkout --force %s{{[-]}}", requestedBranch)
 	err = w.Checkout(&git.CheckoutOptions{
 		Branch: plumbing.NewBranchReferenceName(requestedBranch),
 	})
@@ -403,14 +403,14 @@ func UpdateTemplates(ctx context.Context, force bool, yes bool, requestedBranch 
 		})
 	}
 	if err == nil {
-		logger.Info(ctx, "{{_RunningCommand_}}git:{{|-|}} Already on '%s'", requestedBranch)
-		logger.Info(ctx, "{{_RunningCommand_}}git:{{|-|}} Your branch is up to date with 'origin/%s'.", requestedBranch)
+		logger.Info(ctx, "{{|RunningCommand|}}git:{{[-]}} Already on '%s'", requestedBranch)
+		logger.Info(ctx, "{{|RunningCommand|}}git:{{[-]}} Your branch is up to date with 'origin/%s'.", requestedBranch)
 	}
 
 	if err != nil {
 		// Final attempt: try pulling if it's the current branch
 		logger.Info(ctx, "Pulling recent changes from git.")
-		logger.Info(ctx, "Running: {{_RunningCommand_}}git pull{{|-|}}")
+		logger.Info(ctx, "Running: {{|RunningCommand|}}git pull{{[-]}}")
 		err = w.Pull(&git.PullOptions{
 			RemoteName:    "origin",
 			ReferenceName: plumbing.ReferenceName("refs/heads/" + requestedBranch),
@@ -418,7 +418,7 @@ func UpdateTemplates(ctx context.Context, force bool, yes bool, requestedBranch 
 	} else {
 		logger.Info(ctx, "Pulling recent changes from git.")
 		hash := remoteRef.Hash().String()[:7]
-		logger.Info(ctx, "Running: {{_RunningCommand_}}git reset --hard %s{{|-|}}", hash)
+		logger.Info(ctx, "Running: {{|RunningCommand|}}git reset --hard %s{{[-]}}", hash)
 		err = w.Reset(&git.ResetOptions{
 			Mode:   git.HardReset,
 			Commit: remoteRef.Hash(),
@@ -436,20 +436,20 @@ func UpdateTemplates(ctx context.Context, force bool, yes bool, requestedBranch 
 			if commit != nil {
 				subject := strings.Split(commit.Message, "\n")[0]
 				hash := newHead.Hash().String()[:7]
-				logger.Info(ctx, "{{_RunningCommand_}}git:{{|-|}} HEAD is now at %s %s", hash, subject)
+				logger.Info(ctx, "{{|RunningCommand|}}git:{{[-]}} HEAD is now at %s %s", hash, subject)
 			} else {
-				logger.Info(ctx, "{{_RunningCommand_}}git:{{|-|}} Already up to date.")
+				logger.Info(ctx, "{{|RunningCommand|}}git:{{[-]}} Already up to date.")
 			}
 		}
 		logger.Info(ctx, "Cleaning up unnecessary files and optimizing the local repository.")
-		logger.Info(ctx, "Running: {{_RunningCommand_}}git gc{{|-|}}")
+		logger.Info(ctx, "Running: {{|RunningCommand|}}git gc{{[-]}}")
 		logger.Info(ctx, "Setting file ownership on new repository files")
-		logger.Info(ctx, "Running: {{_RunningCommand_}}git ls-tree -rt --name-only %s | xargs sudo chown 1000:1000{{|-|}}", requestedBranch)
-		logger.Info(ctx, "Running: {{_RunningCommand_}}sudo chown -R 1000:1000 %s/.git{{|-|}}", templatesDir)
-		logger.Info(ctx, "Running: {{_RunningCommand_}}sudo chown 1000:1000 %s{{|-|}}", templatesDir)
+		logger.Info(ctx, "Running: {{|RunningCommand|}}git ls-tree -rt --name-only %s | xargs sudo chown 1000:1000{{[-]}}", requestedBranch)
+		logger.Info(ctx, "Running: {{|RunningCommand|}}sudo chown -R 1000:1000 %s/.git{{[-]}}", templatesDir)
+		logger.Info(ctx, "Running: {{|RunningCommand|}}sudo chown 1000:1000 %s{{[-]}}", templatesDir)
 	}
 
-	logger.Notice(ctx, "Updated {{_ApplicationName_}}%s{{|-|}} to '{{_Version_}}%s{{|-|}}'", targetName, paths.GetTemplatesVersion())
+	logger.Notice(ctx, "Updated {{|ApplicationName|}}%s{{[-]}} to '{{|Version|}}%s{{[-]}}'", targetName, paths.GetTemplatesVersion())
 
 	// Reset all needs markers
 	_ = paths.ResetNeeds()
@@ -466,9 +466,9 @@ func CheckCurrentStatus(ctx context.Context) error {
 	if requestedVersion == "dev" {
 		// Log a warning if 'dev' is used, as it might no longer exist in some contexts
 		msg := []string{
-			fmt.Sprintf("{{_ApplicationName_}}%s{{|-|}} channel '{{_Branch_}}%s{{|-|}}' appears to no longer exist.", version.ApplicationName, requestedVersion),
-			fmt.Sprintf("{{_ApplicationName_}}%s{{|-|}} is currently on version '{{_Version_}}%s{{|-|}}'.", version.ApplicationName, version.Version),
-			fmt.Sprintf("Run '{{_UserCommand_}}%s -u main{{|-|}}' to update to the latest stable release.", version.CommandName),
+			fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} channel '{{|Branch|}}%s{{[-]}}' appears to no longer exist.", version.ApplicationName, requestedVersion),
+			fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} is currently on version '{{|Version|}}%s{{[-]}}'.", version.ApplicationName, version.Version),
+			fmt.Sprintf("Run '{{|UserCommand|}}%s -u main{{[-]}}' to update to the latest stable release.", version.CommandName),
 		}
 		logger.Warn(ctx, msg)
 	}
@@ -513,8 +513,8 @@ func CheckUpdates(ctx context.Context) {
 		if AppUpdateAvailable {
 			msg := []string{
 				GetAppVersionDisplay(),
-				fmt.Sprintf("An update to {{_ApplicationName_}}%s{{|-|}} is available.", version.ApplicationName),
-				fmt.Sprintf("Run '{{_UserCommand_}}%s -u{{|-|}}' to update to version '{{_Version_}}%s{{|-|}}'.", version.CommandName, LatestAppVersion),
+				fmt.Sprintf("An update to {{|ApplicationName|}}%s{{[-]}} is available.", version.ApplicationName),
+				fmt.Sprintf("Run '{{|UserCommand|}}%s -u{{[-]}}' to update to version '{{|Version|}}%s{{[-]}}'.", version.CommandName, LatestAppVersion),
 			}
 			logger.Warn(ctx, msg)
 		} else {
@@ -527,8 +527,8 @@ func CheckUpdates(ctx context.Context) {
 			tmplName := "DockSTARTer-Templates"
 			msg := []string{
 				GetTmplVersionDisplay(),
-				fmt.Sprintf("An update to {{_ApplicationName_}}%s{{|-|}} is available.", tmplName),
-				fmt.Sprintf("Run '{{_UserCommand_}}%s -u{{|-|}}' to update to version '{{_Version_}}%s{{|-|}}'.", version.CommandName, LatestTmplVersion),
+				fmt.Sprintf("An update to {{|ApplicationName|}}%s{{[-]}} is available.", tmplName),
+				fmt.Sprintf("Run '{{|UserCommand|}}%s -u{{[-]}}' to update to version '{{|Version|}}%s{{[-]}}'.", version.CommandName, LatestTmplVersion),
 			}
 			logger.Warn(ctx, msg)
 		} else {
@@ -543,7 +543,7 @@ func GetAppVersionDisplay() string {
 	name := version.ApplicationName
 	ver := version.Version
 
-	return fmt.Sprintf("{{_ApplicationName_}}%s{{|-|}} [{{_Version_}}%s{{|-|}}]", name, ver)
+	return fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} [{{|Version|}}%s{{[-]}}]", name, ver)
 }
 
 // GetTmplVersionDisplay returns a formatted version string for the templates,
@@ -552,7 +552,7 @@ func GetTmplVersionDisplay() string {
 	name := "DockSTARTer-Templates"
 	ver := paths.GetTemplatesVersion()
 
-	return fmt.Sprintf("{{_ApplicationName_}}%s{{|-|}} [{{_Version_}}%s{{|-|}}]", name, ver)
+	return fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} [{{|Version|}}%s{{[-]}}]", name, ver)
 }
 
 func checkAppUpdate(ctx context.Context) (updateAvailable bool, ver string, hadError bool) {
@@ -746,11 +746,11 @@ func EnsureTemplates(ctx context.Context) error {
 		return nil
 	}
 
-	logger.Warn(ctx, "Attempting to clone {{_ApplicationName_}}DockSTARTer-Templates{{|-|}} repo to '{{_Folder_}}%s{{|-|}}' location.", templatesDir)
+	logger.Warn(ctx, "Attempting to clone {{|ApplicationName|}}DockSTARTer-Templates{{[-]}} repo to '{{|Folder|}}%s{{[-]}}' location.", templatesDir)
 
 	// Remove if exists but is invalid (no .git)
 	if _, err := os.Stat(templatesDir); err == nil {
-		logger.Notice(ctx, "Running: {{_RunningCommand_}}rm -rf %s{{|-|}}", templatesDir)
+		logger.Notice(ctx, "Running: {{|RunningCommand|}}rm -rf %s{{[-]}}", templatesDir)
 		if err := os.RemoveAll(templatesDir); err != nil {
 			logger.FatalWithStack(ctx, "Failed to remove %s.", templatesDir)
 		}
@@ -759,8 +759,8 @@ func EnsureTemplates(ctx context.Context) error {
 	url := "https://github.com/GhostWriters/DockSTARTer-Templates"
 	branch := "main" // Default branch
 
-	logger.Notice(ctx, "Running: {{_RunningCommand_}}git clone -b %s %s %s{{|-|}}", branch, url, templatesDir)
-	logger.Notice(ctx, "{{_RunningCommand_}}git:{{|-|}} Cloning into '%s'...", templatesDir)
+	logger.Notice(ctx, "Running: {{|RunningCommand|}}git clone -b %s %s %s{{[-]}}", branch, url, templatesDir)
+	logger.Notice(ctx, "{{|RunningCommand|}}git:{{[-]}} Cloning into '%s'...", templatesDir)
 
 	_, err := git.PlainClone(templatesDir, false, &git.CloneOptions{
 		URL:           url,

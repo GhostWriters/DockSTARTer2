@@ -25,7 +25,7 @@ func ValidateComposeOverride(ctx context.Context, conf config.AppConfig) {
 
 	content, err := os.ReadFile(overrideFile)
 	if err != nil {
-		logger.Warn(ctx, "Failed to read '{{_File_}}%s{{|-|}}': %v", constants.ComposeOverrideFileName, err)
+		logger.Warn(ctx, "Failed to read '{{|File|}}%s{{[-]}}': %v", constants.ComposeOverrideFileName, err)
 		return
 	}
 
@@ -33,7 +33,7 @@ func ValidateComposeOverride(ctx context.Context, conf config.AppConfig) {
 	var dst map[string]any
 	if err := yaml.Unmarshal(content, &dst); err != nil {
 		// For errors, we warn.
-		logger.Warn(ctx, "Failed to validate '{{_File_}}%s{{|-|}}': %v", constants.ComposeOverrideFileName, err)
+		logger.Warn(ctx, "Failed to validate '{{|File|}}%s{{[-]}}': %v", constants.ComposeOverrideFileName, err)
 		logger.Warn(ctx, "Please fix the syntax in your override file.")
 	}
 }
@@ -66,6 +66,6 @@ func ValidateComposeOverrideStrict(ctx context.Context, conf config.AppConfig) {
 	})
 
 	if err != nil {
-		logger.Warn(ctx, "Strict validation failed for '{{_File_}}%s{{|-|}}': %v", constants.ComposeOverrideFileName, err)
+		logger.Warn(ctx, "Strict validation failed for '{{|File|}}%s{{[-]}}': %v", constants.ComposeOverrideFileName, err)
 	}
 }

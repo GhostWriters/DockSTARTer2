@@ -10,7 +10,9 @@ import (
 // Raw ANSI Color Codes
 const (
 	// Reset
-	CodeReset = "\033[0m"
+	CodeReset   = "\033[0m"
+	CodeFGReset = "\033[39m" // Reset foreground to default
+	CodeBGReset = "\033[49m" // Reset background to default
 
 	// Modifiers
 	CodeBold          = "\033[1m"
@@ -94,84 +96,84 @@ func init() {
 	// These are the OUTPUT format values that ToANSI() will handle
 	Colors = AppColors{
 		// Base Codes (Standardized format)
-		Reset:     "{{|-|}}",
-		Bold:      "{{|::B|}}",
-		Dim:       "{{|::D|}}",
-		Underline: "{{|::U|}}",
-		Blink:     "{{|::L|}}",
-		Reverse:   "{{|::R|}}",
+		Reset:     "{{[-]}}",
+		Bold:      "{{[::B]}}",
+		Dim:       "{{[::D]}}",
+		Underline: "{{[::U]}}",
+		Blink:     "{{[::L]}}",
+		Reverse:   "{{[::R]}}",
 
 		// Base Colors (Foreground)
-		Black:   "{{|black|}}",
-		Red:     "{{|red|}}",
-		Green:   "{{|green|}}",
-		Yellow:  "{{|yellow|}}",
-		Blue:    "{{|blue|}}",
-		Magenta: "{{|magenta|}}",
-		Cyan:    "{{|cyan|}}",
-		White:   "{{|white|}}",
+		Black:   "{{[black]}}",
+		Red:     "{{[red]}}",
+		Green:   "{{[green]}}",
+		Yellow:  "{{[yellow]}}",
+		Blue:    "{{[blue]}}",
+		Magenta: "{{[magenta]}}",
+		Cyan:    "{{[cyan]}}",
+		White:   "{{[white]}}",
 
 		// Base Colors (Background)
-		BlackBg:   "{{|:black|}}",
-		RedBg:     "{{|:red|}}",
-		GreenBg:   "{{|:green|}}",
-		YellowBg:  "{{|:yellow|}}",
-		BlueBg:    "{{|:blue|}}",
-		MagentaBg: "{{|:magenta|}}",
-		CyanBg:    "{{|:cyan|}}",
-		WhiteBg:   "{{|:white|}}",
+		BlackBg:   "{{[:black]}}",
+		RedBg:     "{{[:red]}}",
+		GreenBg:   "{{[:green]}}",
+		YellowBg:  "{{[:yellow]}}",
+		BlueBg:    "{{[:blue]}}",
+		MagentaBg: "{{[:magenta]}}",
+		CyanBg:    "{{[:cyan]}}",
+		WhiteBg:   "{{[:white]}}",
 
 		// Semantic Colors (Standard DockSTARTer mappings)
-		Timestamp:              "{{|-|}}",
-		Trace:                  "{{|-|}}{{|blue|}}",
-		Debug:                  "{{|-|}}{{|blue|}}",
-		Info:                   "{{|-|}}{{|blue|}}",
-		Notice:                 "{{|-|}}{{|green|}}",
-		Warn:                   "{{|-|}}{{|yellow|}}",
-		Error:                  "{{|-|}}{{|red|}}",
-		Fatal:                  "{{|-|}}{{|white:red|}}",
-		FatalFooter:            "{{|-|}}",
-		TraceHeader:            "{{|-|}}{{|red|}}",
-		TraceFooter:            "{{|-|}}{{|red|}}",
-		TraceFrameNumber:       "{{|-|}}{{|red|}}",
-		TraceFrameLines:        "{{|-|}}{{|red|}}",
-		TraceSourceFile:        "{{|-|}}{{|cyan::B|}}",
-		TraceLineNumber:        "{{|-|}}{{|yellow::B|}}",
-		TraceFunction:          "{{|-|}}{{|green::B|}}",
-		TraceCmd:               "{{|-|}}{{|green::B|}}",
-		TraceCmdArgs:           "{{|-|}}{{|green|}}",
-		UnitTestPass:           "{{|-|}}{{|green|}}",
-		UnitTestFail:           "{{|-|}}{{|red|}}",
-		UnitTestFailArrow:      "{{|-|}}{{|red|}}",
-		App:                    "{{|-|}}{{|cyan|}}",
-		ApplicationName:        "{{|-|}}{{|cyan::B|}}",
-		Branch:                 "{{|-|}}{{|cyan|}}",
-		FailingCommand:         "{{|-|}}{{|red|}}",
-		File:                   "{{|-|}}{{|cyan::B|}}",
-		Folder:                 "{{|-|}}{{|cyan::B|}}",
-		Program:                "{{|-|}}{{|cyan|}}",
-		RunningCommand:         "{{|-|}}{{|green::B|}}",
-		Theme:                  "{{|-|}}{{|cyan|}}",
-		Update:                 "{{|-|}}{{|green|}}",
-		User:                   "{{|-|}}{{|cyan|}}",
-		URL:                    "{{|-|}}{{|cyan::U|}}",
-		UserCommand:            "{{|-|}}{{|yellow::B|}}",
-		UserCommandError:       "{{|-|}}{{|red::U|}}",
-		UserCommandErrorMarker: "{{|-|}}{{|red|}}",
-		Var:                    "{{|-|}}{{|magenta|}}",
-		Version:                "{{|-|}}{{|cyan|}}",
-		Yes:                    "{{|-|}}{{|green|}}",
-		No:                     "{{|-|}}{{|red|}}",
+		Timestamp:              "{{[-]}}",
+		Trace:                  "{{[-]}}{{[blue]}}",
+		Debug:                  "{{[-]}}{{[blue]}}",
+		Info:                   "{{[-]}}{{[blue]}}",
+		Notice:                 "{{[-]}}{{[green]}}",
+		Warn:                   "{{[-]}}{{[yellow]}}",
+		Error:                  "{{[-]}}{{[red]}}",
+		Fatal:                  "{{[-]}}{{[white:red]}}",
+		FatalFooter:            "{{[-]}}",
+		TraceHeader:            "{{[-]}}{{[red]}}",
+		TraceFooter:            "{{[-]}}{{[red]}}",
+		TraceFrameNumber:       "{{[-]}}{{[red]}}",
+		TraceFrameLines:        "{{[-]}}{{[red]}}",
+		TraceSourceFile:        "{{[-]}}{{[cyan::B]}}",
+		TraceLineNumber:        "{{[-]}}{{[yellow::B]}}",
+		TraceFunction:          "{{[-]}}{{[green::B]}}",
+		TraceCmd:               "{{[-]}}{{[green::B]}}",
+		TraceCmdArgs:           "{{[-]}}{{[green]}}",
+		UnitTestPass:           "{{[-]}}{{[green]}}",
+		UnitTestFail:           "{{[-]}}{{[red]}}",
+		UnitTestFailArrow:      "{{[-]}}{{[red]}}",
+		App:                    "{{[-]}}{{[cyan]}}",
+		ApplicationName:        "{{[-]}}{{[cyan::B]}}",
+		Branch:                 "{{[-]}}{{[cyan]}}",
+		FailingCommand:         "{{[-]}}{{[red]}}",
+		File:                   "{{[-]}}{{[cyan::B]}}",
+		Folder:                 "{{[-]}}{{[cyan::B]}}",
+		Program:                "{{[-]}}{{[cyan]}}",
+		RunningCommand:         "{{[-]}}{{[green::B]}}",
+		Theme:                  "{{[-]}}{{[cyan]}}",
+		Update:                 "{{[-]}}{{[green]}}",
+		User:                   "{{[-]}}{{[cyan]}}",
+		URL:                    "{{[-]}}{{[cyan::U]}}",
+		UserCommand:            "{{[-]}}{{[yellow::B]}}",
+		UserCommandError:       "{{[-]}}{{[red::U]}}",
+		UserCommandErrorMarker: "{{[-]}}{{[red]}}",
+		Var:                    "{{[-]}}{{[magenta]}}",
+		Version:                "{{[-]}}{{[cyan]}}",
+		Yes:                    "{{[-]}}{{[green]}}",
+		No:                     "{{[-]}}{{[red]}}",
 
 		// Usage Colors
-		UsageCommand: "{{|-|}}{{|yellow::B|}}",
-		UsageOption:  "{{|-|}}{{|yellow|}}",
-		UsageApp:     "{{|-|}}{{|cyan|}}",
-		UsageBranch:  "{{|-|}}{{|cyan|}}",
-		UsageFile:    "{{|-|}}{{|cyan::B|}}",
-		UsagePage:    "{{|-|}}{{|cyan::B|}}",
-		UsageTheme:   "{{|-|}}{{|cyan|}}",
-		UsageVar:     "{{|-|}}{{|magenta|}}",
+		UsageCommand: "{{[-]}}{{[yellow::B]}}",
+		UsageOption:  "{{[-]}}{{[yellow]}}",
+		UsageApp:     "{{[-]}}{{[cyan]}}",
+		UsageBranch:  "{{[-]}}{{[cyan]}}",
+		UsageFile:    "{{[-]}}{{[cyan::B]}}",
+		UsagePage:    "{{[-]}}{{[cyan::B]}}",
+		UsageTheme:   "{{[-]}}{{[cyan]}}",
+		UsageVar:     "{{[-]}}{{[magenta]}}",
 	}
 
 	// Register base tags once Colors is populated
@@ -298,15 +300,15 @@ var Colors AppColors
 // These map semantic names to their tview-format output values
 func RegisterBaseTags() {
 	// Bash-style aliases from main.sh
-	RegisterSemanticTag("NC", "{{|-|}}")
-	RegisterSemanticTag("BD", "{{|::B|}}")
-	RegisterSemanticTag("UL", "{{|::U|}}")
-	RegisterSemanticTag("DM", "{{|::D|}}")
-	RegisterSemanticTag("BL", "{{|::L|}}")
+	RegisterSemanticTag("NC", "{{[-]}}")
+	RegisterSemanticTag("BD", "{{[::B]}}")
+	RegisterSemanticTag("UL", "{{[::U]}}")
+	RegisterSemanticTag("DM", "{{[::D]}}")
+	RegisterSemanticTag("BL", "{{[::L]}}")
 
 	// Existing shorthands
-	RegisterSemanticTag("ul", "{{|::U|}}")
-	RegisterSemanticTag("blink", "{{|::L|}}")
+	RegisterSemanticTag("ul", "{{[::U]}}")
+	RegisterSemanticTag("blink", "{{[::L]}}")
 
 	// Semantic tags from struct fields (auto-registered by BuildColorMap)
 	// Double-register here for explicit visibility and aliasMap access

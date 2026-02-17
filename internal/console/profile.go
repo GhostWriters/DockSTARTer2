@@ -12,6 +12,9 @@ var (
 
 	// preferredProfile stores the detected or forced color profile
 	preferredProfile termenv.Profile
+
+	// TUIMode indicates whether we're running in TUI mode (always render colors)
+	TUIMode bool
 )
 
 func init() {

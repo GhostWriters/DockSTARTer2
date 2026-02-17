@@ -6,7 +6,7 @@ import (
 )
 
 var (
-	// semanticMap stores semantic tag -> standardized tag mappings (e.g., "version" -> "{{|cyan|}}")
+	// semanticMap stores semantic tag -> raw style code mappings (e.g., "version" -> "cyan")
 	semanticMap map[string]string
 
 	// ansiMap stores color/modifier names -> ANSI code mappings
@@ -20,40 +20,7 @@ func init() {
 	// Initialize maps
 	semanticMap = make(map[string]string)
 	ansiMap = make(map[string]string)
-	// Modifiers/Attributes map
-	// We only store non-color attributes here. Colors are handled via preferredProfile.Color()
-	attributeMap = map[string]string{
-		"reset":          CodeReset,
-		"-":              CodeReset,
-		"bold":           CodeBold,
-		"b":              CodeBold,
-		"dim":            CodeDim,
-		"d":              CodeDim,
-		"underline":      CodeUnderline,
-		"u":              CodeUnderline,
-		"blink":          CodeBlink,
-		"l":              CodeBlink,
-		"reverse":        CodeReverse,
-		"r":              CodeReverse,
-		"italic":         CodeItalic,
-		"i":              CodeItalic,
-		"strikethrough":  CodeStrikethrough,
-		"s":              CodeStrikethrough,
-		"-bold":          CodeBoldOff,
-		"-b":             CodeBoldOff,
-		"-dim":           CodeDimOff,
-		"-d":             CodeDimOff,
-		"-underline":     CodeUnderlineOff,
-		"-u":             CodeUnderlineOff,
-		"-blink":         CodeBlinkOff,
-		"-l":             CodeBlinkOff,
-		"-reverse":       CodeReverseOff,
-		"-r":             CodeReverseOff,
-		"-italic":        CodeItalicOff,
-		"-i":             CodeItalicOff,
-		"-strikethrough": CodeStrikethroughOff,
-		"-s":             CodeStrikethroughOff,
-	}
+	attributeMap = make(map[string]string)
 }
 
 // ensureMaps ensures color maps are built if they were missed by init
@@ -64,14 +31,18 @@ func ensureMaps() {
 }
 
 // BuildColorMap initializes the ANSI code mappings and semantic tag definitions.
-// NOTE: This preserves existing semantic tags to allow theme registration before/after this call.
 func BuildColorMap() {
-	ansiMap = make(map[string]string)
+	if ansiMap == nil {
+		ansiMap = make(map[string]string)
+	}
 	if semanticMap == nil {
 		semanticMap = make(map[string]string)
 	}
+	if attributeMap == nil {
+		attributeMap = make(map[string]string)
+	}
 
-	// Standard ANSI color/modifier mappings (Case-sensitive for tags)
+	// Standard ANSI mappings
 	ansiMap["-"] = CodeReset
 	ansiMap["reset"] = CodeReset
 	ansiMap["B"] = CodeBold
@@ -89,7 +60,39 @@ func BuildColorMap() {
 	ansiMap["S"] = CodeStrikethrough
 	ansiMap["s"] = CodeStrikethroughOff
 
-	// Foreground colors
+	// Attribute mappings (normalized names)
+	attributeMap["reset"] = CodeReset
+	attributeMap["-"] = CodeReset
+	attributeMap["bold"] = CodeBold
+	attributeMap["b"] = CodeBold
+	attributeMap["dim"] = CodeDim
+	attributeMap["d"] = CodeDim
+	attributeMap["underline"] = CodeUnderline
+	attributeMap["u"] = CodeUnderline
+	attributeMap["blink"] = CodeBlink
+	attributeMap["l"] = CodeBlink
+	attributeMap["reverse"] = CodeReverse
+	attributeMap["r"] = CodeReverse
+	attributeMap["italic"] = CodeItalic
+	attributeMap["i"] = CodeItalic
+	attributeMap["strikethrough"] = CodeStrikethrough
+	attributeMap["s"] = CodeStrikethrough
+	attributeMap["-bold"] = CodeBoldOff
+	attributeMap["-b"] = CodeBoldOff
+	attributeMap["-dim"] = CodeDimOff
+	attributeMap["-d"] = CodeDimOff
+	attributeMap["-underline"] = CodeUnderlineOff
+	attributeMap["-u"] = CodeUnderlineOff
+	attributeMap["-blink"] = CodeBlinkOff
+	attributeMap["-l"] = CodeBlinkOff
+	attributeMap["-reverse"] = CodeReverseOff
+	attributeMap["-r"] = CodeReverseOff
+	attributeMap["-italic"] = CodeItalicOff
+	attributeMap["-i"] = CodeItalicOff
+	attributeMap["-strikethrough"] = CodeStrikethroughOff
+	attributeMap["-s"] = CodeStrikethroughOff
+
+	// Colors...
 	ansiMap["black"] = CodeBlack
 	ansiMap["red"] = CodeRed
 	ansiMap["green"] = CodeGreen
@@ -98,8 +101,6 @@ func BuildColorMap() {
 	ansiMap["magenta"] = CodeMagenta
 	ansiMap["cyan"] = CodeCyan
 	ansiMap["white"] = CodeWhite
-
-	// Foreground colors (Bright)
 	ansiMap["bright-black"] = CodeBrightBlack
 	ansiMap["bright-red"] = CodeBrightRed
 	ansiMap["bright-green"] = CodeBrightGreen
@@ -109,7 +110,6 @@ func BuildColorMap() {
 	ansiMap["bright-cyan"] = CodeBrightCyan
 	ansiMap["bright-white"] = CodeBrightWhite
 
-	// Background colors (with "bg" suffix for fg:bg parsing)
 	ansiMap["blackbg"] = CodeBlackBg
 	ansiMap["redbg"] = CodeRedBg
 	ansiMap["greenbg"] = CodeGreenBg
@@ -118,8 +118,6 @@ func BuildColorMap() {
 	ansiMap["magentabg"] = CodeMagentaBg
 	ansiMap["cyanbg"] = CodeCyanBg
 	ansiMap["whitebg"] = CodeWhiteBg
-
-	// Background colors (Bright)
 	ansiMap["bright-blackbg"] = CodeBrightBlackBg
 	ansiMap["bright-redbg"] = CodeBrightRedBg
 	ansiMap["bright-greenbg"] = CodeBrightGreenBg
@@ -133,7 +131,6 @@ func BuildColorMap() {
 	val := reflect.ValueOf(Colors)
 	typ := val.Type()
 
-	// Whitelist of base codes that are NOT semantic
 	baseKeys := map[string]bool{
 		"reset": true, "bold": true, "dim": true, "underline": true, "blink": true, "reverse": true,
 		"black": true, "red": true, "green": true, "yellow": true, "blue": true, "magenta": true, "cyan": true, "white": true,
@@ -145,24 +142,35 @@ func BuildColorMap() {
 		key := strings.ToLower(field.Name)
 		if !baseKeys[key] {
 			valStr := val.Field(i).String()
-			// Store the tview-format value (e.g., "[cyan::b]")
-			semanticMap[key] = valStr
+			// Store raw value (strip brackets if present)
+			semanticMap[key] = StripDelimiters(valStr)
 		}
 	}
 }
 
-// RegisterSemanticTag registers a semantic tag with its standardized tag value
+// RegisterSemanticTag registers a semantic tag with its standardized tag value.
+// It automatically strips delimiters if present to store the raw value.
 func RegisterSemanticTag(name, taggedValue string) {
-	ensureMaps()
-	semanticMap[strings.ToLower(name)] = taggedValue
+	RegisterSemanticTagRaw(name, StripDelimiters(taggedValue))
 }
 
-// GetColorDefinition returns the tview-format value for a semantic tag
+// RegisterSemanticTagRaw registers a semantic tag with a raw style code (no brackets).
+func RegisterSemanticTagRaw(name, rawValue string) {
+	ensureMaps()
+	semanticMap[strings.ToLower(name)] = rawValue
+}
+
+// GetColorDefinition returns the formatted tag value (with brackets) for a semantic tag.
+// This is used for expansion and backward compatibility.
 func GetColorDefinition(name string) string {
 	ensureMaps()
 	name = strings.TrimPrefix(name, "_")
 	name = strings.TrimSuffix(name, "_")
-	return semanticMap[strings.ToLower(name)]
+	raw := semanticMap[strings.ToLower(name)]
+	if raw == "" {
+		return ""
+	}
+	return WrapDirect(raw)
 }
 
 // UnregisterColor removes a semantic tag
@@ -176,4 +184,34 @@ func UnregisterColor(name string) {
 // ResetCustomColors clears all semantic tags and rebuilds from Colors struct
 func ResetCustomColors() {
 	BuildColorMap()
+}
+
+// StripDelimiters removes any known library delimiters from a style string to get the raw content
+func StripDelimiters(text string) string {
+	// Check current semantic delimiters
+	if strings.HasPrefix(text, SemanticPrefix) && strings.HasSuffix(text, SemanticSuffix) {
+		return text[len(SemanticPrefix) : len(text)-len(SemanticSuffix)]
+	}
+	// Check current direct delimiters
+	if strings.HasPrefix(text, DirectPrefix) && strings.HasSuffix(text, DirectSuffix) {
+		return text[len(DirectPrefix) : len(text)-len(DirectSuffix)]
+	}
+	// Fallback to standard delimiters if they differ
+	if SemanticPrefix != "{{|" {
+		if strings.HasPrefix(text, "{{|") && strings.HasSuffix(text, "|}}") {
+			return text[3 : len(text)-3]
+		}
+	}
+	// Also fallback to the previous legacy semantic delimiter
+	if SemanticPrefix != "{{|" {
+		if strings.HasPrefix(text, "{{|") && strings.HasSuffix(text, "|}}") {
+			return text[3 : len(text)-3]
+		}
+	}
+	if DirectPrefix != "{{[" {
+		if strings.HasPrefix(text, "{{[") && strings.HasSuffix(text, "]}}") {
+			return text[3 : len(text)-3]
+		}
+	}
+	return text
 }

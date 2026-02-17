@@ -16,7 +16,7 @@ import (
 // Mirrors env_update.sh functionality.
 func Update(ctx context.Context, force bool, file string) error {
 	if !force && !NeedsUpdate(ctx, false, file) {
-		logger.Info(ctx, "Environment variable file '{{_File_}}%s{{|-|}}' already updated.", file)
+		logger.Info(ctx, "Environment variable file '{{|File|}}%s{{[-]}}' already updated.", file)
 		return nil
 	}
 
@@ -122,7 +122,7 @@ func Update(ctx context.Context, force bool, file string) error {
 	// Bash parity: If we reached this point, needs_env_update returned true (or force=true).
 	// Bash env_update.sh does NOT check if content changed before writing.
 	// It proceeds to write blindly if needs_env_update was true.
-	logger.Notice(ctx, "Updating '{{_File_}}%s{{|-|}}'.", file)
+	logger.Notice(ctx, "Updating '{{|File|}}%s{{[-]}}'.", file)
 	if err := os.WriteFile(file, []byte(contentStr), 0644); err != nil {
 		return fmt.Errorf("failed to update .env file: %w", err)
 	}
@@ -165,14 +165,14 @@ func Update(ctx context.Context, force bool, file string) error {
 			// We must check NeedsUpdate for the app file before writing.
 			// The original code passed 'force' down implicitly by logic flow, but here we iterate.
 			if !force && !NeedsUpdate(ctx, false, appEnvFile) {
-				logger.Info(ctx, "'{{_File_}}%s{{|-|}}' already updated.", appEnvFile)
+				logger.Info(ctx, "'{{|File|}}%s{{[-]}}' already updated.", appEnvFile)
 				continue
 			}
 
 			if _, err := os.Stat(appEnvFile); os.IsNotExist(err) {
-				logger.Notice(ctx, "Creating '{{_File_}}%s{{|-|}}'.", appEnvFile)
+				logger.Notice(ctx, "Creating '{{|File|}}%s{{[-]}}'.", appEnvFile)
 			} else {
-				logger.Notice(ctx, "Updating '{{_File_}}%s{{|-|}}'.", appEnvFile)
+				logger.Notice(ctx, "Updating '{{|File|}}%s{{[-]}}'.", appEnvFile)
 			}
 
 			if err := os.WriteFile(appEnvFile, []byte(appContentStr), 0644); err != nil {

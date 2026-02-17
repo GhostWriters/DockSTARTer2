@@ -270,9 +270,9 @@ func InitStyles(cfg config.AppConfig) {
 		Foreground(t.HelplineFG), t.HelplineStyles)
 
 	// Initialize semantic styles from console color tags (Theme-specific to avoid log interference)
-	currentStyles.StatusSuccess = ApplyTagsToStyle("{{_Theme_TitleNotice_}}", lipgloss.NewStyle(), lipgloss.NewStyle())
-	currentStyles.StatusWarn = ApplyTagsToStyle("{{_Theme_TitleWarn_}}", lipgloss.NewStyle(), lipgloss.NewStyle())
-	currentStyles.StatusError = ApplyTagsToStyle("{{_Theme_TitleError_}}", lipgloss.NewStyle(), lipgloss.NewStyle())
+	currentStyles.StatusSuccess = SemanticRawStyle("Theme_TitleNotice")
+	currentStyles.StatusWarn = SemanticRawStyle("Theme_TitleWarn")
+	currentStyles.StatusError = SemanticRawStyle("Theme_TitleError")
 	currentStyles.Console = ApplyFlags(lipgloss.NewStyle().
 		Background(t.ProgramBG).
 		Foreground(t.ProgramFG), t.ProgramStyles)
@@ -328,25 +328,29 @@ func PadRight(s string, width int) string {
 // Light color on top/left, dark color on bottom/right
 func Apply3DBorder(style lipgloss.Style) lipgloss.Style {
 	// Get the dialog background color for border backgrounds
-	borderBG := currentStyles.Dialog.GetBackground()
+	borderBG := SemanticStyle("{{|Theme_Dialog|}}").GetBackground()
 
-	return style.
+	borderStyle := lipgloss.NewStyle().
+		Background(borderBG).
 		Border(currentStyles.Border).
-		BorderTopForeground(currentStyles.BorderColor).
-		BorderLeftForeground(currentStyles.BorderColor).
-		BorderBottomForeground(currentStyles.Border2Color).
-		BorderRightForeground(currentStyles.Border2Color).
+		BorderTopForeground(SemanticStyle("{{|Theme_Border|}}").GetForeground()).
+		BorderLeftForeground(SemanticStyle("{{|Theme_Border|}}").GetForeground()).
+		BorderBottomForeground(SemanticStyle("{{|Theme_Border2|}}").GetForeground()).
+		BorderRightForeground(SemanticStyle("{{|Theme_Border2|}}").GetForeground()).
 		BorderTopBackground(borderBG).
 		BorderLeftBackground(borderBG).
 		BorderBottomBackground(borderBG).
-		BorderRightBackground(borderBG)
+		BorderRightBackground(borderBG).
+		Padding(0, 1)
+
+	return style.Inherit(borderStyle)
 }
 
 // ApplyStraightBorder applies a 3D border with straight edges
 // Uses asciiBorder or NormalBorder based on LineCharacters setting
 func ApplyStraightBorder(style lipgloss.Style, useLineChars bool) lipgloss.Style {
 	// Get the dialog background color for border backgrounds
-	borderBG := currentStyles.Dialog.GetBackground()
+	borderBG := SemanticStyle("{{|Theme_Dialog|}}").GetBackground()
 
 	// Choose border style based on LineCharacters setting
 	var border lipgloss.Border
@@ -358,10 +362,10 @@ func ApplyStraightBorder(style lipgloss.Style, useLineChars bool) lipgloss.Style
 
 	return style.
 		Border(border).
-		BorderTopForeground(currentStyles.BorderColor).
-		BorderLeftForeground(currentStyles.BorderColor).
-		BorderBottomForeground(currentStyles.Border2Color).
-		BorderRightForeground(currentStyles.Border2Color).
+		BorderTopForeground(SemanticStyle("{{|Theme_Border|}}").GetForeground()).
+		BorderLeftForeground(SemanticStyle("{{|Theme_Border|}}").GetForeground()).
+		BorderBottomForeground(SemanticStyle("{{|Theme_Border2|}}").GetForeground()).
+		BorderRightForeground(SemanticStyle("{{|Theme_Border2|}}").GetForeground()).
 		BorderTopBackground(borderBG).
 		BorderLeftBackground(borderBG).
 		BorderBottomBackground(borderBG).
@@ -371,7 +375,7 @@ func ApplyStraightBorder(style lipgloss.Style, useLineChars bool) lipgloss.Style
 // ApplyThickBorder applies a 3D border with thick edges
 // Uses thickAsciiBorder or ThickBorder based on LineCharacters setting
 func ApplyThickBorder(style lipgloss.Style, useLineChars bool) lipgloss.Style {
-	borderBG := currentStyles.Dialog.GetBackground()
+	borderBG := SemanticStyle("{{|Theme_Dialog|}}").GetBackground()
 
 	var border lipgloss.Border
 	if useLineChars {
@@ -382,10 +386,10 @@ func ApplyThickBorder(style lipgloss.Style, useLineChars bool) lipgloss.Style {
 
 	return style.
 		Border(border).
-		BorderTopForeground(currentStyles.BorderColor).
-		BorderLeftForeground(currentStyles.BorderColor).
-		BorderBottomForeground(currentStyles.Border2Color).
-		BorderRightForeground(currentStyles.Border2Color).
+		BorderTopForeground(SemanticStyle("{{|Theme_Border|}}").GetForeground()).
+		BorderLeftForeground(SemanticStyle("{{|Theme_Border|}}").GetForeground()).
+		BorderBottomForeground(SemanticStyle("{{|Theme_Border2|}}").GetForeground()).
+		BorderRightForeground(SemanticStyle("{{|Theme_Border2|}}").GetForeground()).
 		BorderTopBackground(borderBG).
 		BorderLeftBackground(borderBG).
 		BorderBottomBackground(borderBG).
@@ -396,7 +400,7 @@ func ApplyThickBorder(style lipgloss.Style, useLineChars bool) lipgloss.Style {
 // Uses roundedAsciiBorder or RoundedBorder based on LineCharacters setting
 func ApplyRoundedBorder(style lipgloss.Style, useLineChars bool) lipgloss.Style {
 	// Get the dialog background color for border backgrounds
-	borderBG := currentStyles.Dialog.GetBackground()
+	borderBG := SemanticStyle("{{|Theme_Dialog|}}").GetBackground()
 
 	// Choose border style based on LineCharacters setting
 	var border lipgloss.Border
@@ -408,10 +412,10 @@ func ApplyRoundedBorder(style lipgloss.Style, useLineChars bool) lipgloss.Style 
 
 	return style.
 		Border(border).
-		BorderTopForeground(currentStyles.BorderColor).
-		BorderLeftForeground(currentStyles.BorderColor).
-		BorderBottomForeground(currentStyles.Border2Color).
-		BorderRightForeground(currentStyles.Border2Color).
+		BorderTopForeground(SemanticStyle("{{|Theme_Border|}}").GetForeground()).
+		BorderLeftForeground(SemanticStyle("{{|Theme_Border|}}").GetForeground()).
+		BorderBottomForeground(SemanticStyle("{{|Theme_Border2|}}").GetForeground()).
+		BorderRightForeground(SemanticStyle("{{|Theme_Border2|}}").GetForeground()).
 		BorderTopBackground(borderBG).
 		BorderLeftBackground(borderBG).
 		BorderBottomBackground(borderBG).
@@ -422,7 +426,7 @@ func ApplyRoundedBorder(style lipgloss.Style, useLineChars bool) lipgloss.Style 
 // Uses slantedAsciiBorder or RoundedBorder based on LineCharacters setting
 func ApplySlantedBorder(style lipgloss.Style, useLineChars bool) lipgloss.Style {
 	// Get the dialog background color for border backgrounds
-	borderBG := currentStyles.Dialog.GetBackground()
+	borderBG := SemanticStyle("{{|Theme_Dialog|}}").GetBackground()
 
 	// Choose border style based on LineCharacters setting
 	var border lipgloss.Border
@@ -434,10 +438,10 @@ func ApplySlantedBorder(style lipgloss.Style, useLineChars bool) lipgloss.Style 
 
 	return style.
 		Border(border).
-		BorderTopForeground(currentStyles.BorderColor).
-		BorderLeftForeground(currentStyles.BorderColor).
-		BorderBottomForeground(currentStyles.Border2Color).
-		BorderRightForeground(currentStyles.Border2Color).
+		BorderTopForeground(SemanticStyle("{{|Theme_Border|}}").GetForeground()).
+		BorderLeftForeground(SemanticStyle("{{|Theme_Border|}}").GetForeground()).
+		BorderBottomForeground(SemanticStyle("{{|Theme_Border2|}}").GetForeground()).
+		BorderRightForeground(SemanticStyle("{{|Theme_Border2|}}").GetForeground()).
 		BorderTopBackground(borderBG).
 		BorderLeftBackground(borderBG).
 		BorderBottomBackground(borderBG).
@@ -463,21 +467,15 @@ func Render3DBorder(content string, padding int) string {
 
 	totalWidth := maxWidth + padding*2
 
-	borderBG := currentStyles.Dialog.GetBackground()
+	borderBG := SemanticRawStyle("Theme_Dialog").GetBackground()
 
 	// Create style for light borders (top/left) - using theme border colors
 	lightStyle := lipgloss.NewStyle().
-		Foreground(currentStyles.BorderColor).
+		Foreground(SemanticRawStyle("Theme_Border").GetForeground()).
 		Background(borderBG)
 
 	// Create style for dark borders (bottom/right)
-	// Use a darker/contrasting color - if Border2Color is too dark, use gray
-	darkColor := currentStyles.Border2Color
-	// If Border2Color appears to be black or very dark, use a visible gray instead
-	// darkColorStr := fmt.Sprintf("%v", darkColor)
-	// if strings.Contains(darkColorStr, "000000") || strings.Contains(darkColorStr, "Black") {
-	// 	darkColor = lipgloss.Color("#666666") // Medium gray for visibility
-	// }
+	darkColor := SemanticRawStyle("Theme_Border2").GetForeground()
 
 	darkStyle := lipgloss.NewStyle().
 		Foreground(darkColor).
@@ -554,9 +552,8 @@ func AddShadow(content string) string {
 
 	if currentStyles.LineCharacters {
 		// Unicode mode: use shade characters with shadow color foreground
-		shadowStyle := lipgloss.NewStyle().
-			Foreground(currentStyles.ShadowColor).
-			Background(currentStyles.Screen.GetBackground())
+		shadowStyle := SemanticRawStyle("Theme_Shadow").
+			Background(SemanticRawStyle("Theme_Screen").GetBackground())
 
 		// Select shade character based on config
 		var shadeChar string
@@ -577,15 +574,15 @@ func AddShadow(content string) string {
 		bottomShadowChars = shadowStyle.Render(strings.Repeat(shadeChar, contentWidth-1))
 	} else {
 		// ASCII mode: use solid background color
-		shadowCell = currentStyles.Shadow.Width(2).Render(" ")
-		bottomShadowChars = currentStyles.Shadow.Width(contentWidth - 1).Render(strings.Repeat(" ", contentWidth-1))
+		shadowCell = SemanticRawStyle("Theme_Shadow").Width(2).Render(" ")
+		bottomShadowChars = SemanticRawStyle("Theme_Shadow").Width(contentWidth - 1).Render(strings.Repeat(" ", contentWidth-1))
 	}
 
 	spacerCell := lipgloss.NewStyle().
-		Background(currentStyles.Screen.GetBackground()).
+		Background(SemanticRawStyle("Theme_Screen").GetBackground()).
 		Width(2).Render("  ")
 	spacer1 := lipgloss.NewStyle().
-		Background(currentStyles.Screen.GetBackground()).
+		Background(SemanticStyle("{{|Theme_Screen|}}").GetBackground()).
 		Width(1).Render(" ")
 
 	var result strings.Builder
@@ -645,9 +642,8 @@ func AddPatternHalo(content string) string {
 	}
 
 	// Ensure halo uses the border color (Border2Color) as requested, to extend the border
-	shadowStyle := lipgloss.NewStyle().
-		Foreground(currentStyles.Border2Color).
-		Background(currentStyles.Screen.GetBackground())
+	shadowStyle := SemanticStyle("{{|Theme_Border2|}}").
+		Background(SemanticStyle("{{|Theme_Screen|}}").GetBackground())
 
 	var shadeChar string
 

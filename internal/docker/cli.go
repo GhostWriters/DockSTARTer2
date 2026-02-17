@@ -12,7 +12,7 @@ import (
 // It logs the command before execution and any error output.
 func RunCommand(ctx context.Context, args ...string) error {
 	cmdText := fmt.Sprintf("docker %s", strings.Join(args, " "))
-	logger.Info(ctx, "Running: {{_RunningCommand_}}%s{{|-|}}", cmdText)
+	logger.Info(ctx, "Running: {{|RunningCommand|}}%s{{[-]}}", cmdText)
 
 	cmd := exec.CommandContext(ctx, "docker", args...)
 

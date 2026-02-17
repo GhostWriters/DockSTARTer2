@@ -294,8 +294,8 @@ func GetBlockBorders(lineCharacters bool) BorderPair {
 // If threeD is false, it uses a uniform border color (Border2Color).
 // If useConnectors is true, it uses T-junctions (┤, ┫, etc.) to embed the title.
 func renderDialogWithBorder(title, content string, border lipgloss.Border, focused bool, threeD bool, useConnectors bool, titleStyle lipgloss.Style) string {
-	if title != "" && !strings.HasSuffix(title, "{{|-|}}") {
-		title += "{{|-|}}"
+	if title != "" && !strings.HasSuffix(title, "{{[-]}}") {
+		title += "{{[-]}}"
 	}
 	styles := GetStyles()
 

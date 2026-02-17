@@ -37,7 +37,7 @@ func run() (exitCode int) {
 			}
 		}
 		if exitCode != 0 {
-			fmt.Fprintln(os.Stderr, console.Parse(fmt.Sprintf("{{_ApplicationName_}}%s{{|-|}} did not finish running successfully.", version.ApplicationName)))
+			fmt.Fprintln(os.Stderr, console.Parse(fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} did not finish running successfully.", version.ApplicationName)))
 		}
 	}()
 
@@ -49,7 +49,7 @@ func run() (exitCode int) {
 
 	// Ensure templates are cloned
 	if err := update.EnsureTemplates(ctx); err != nil {
-		logger.FatalWithStack(ctx, "Failed to clone {{_ApplicationName_}}DockSTARTer-Templates{{|-|}} repo.")
+		logger.FatalWithStack(ctx, "Failed to clone {{|ApplicationName|}}DockSTARTer-Templates{{[-]}} repo.")
 	}
 
 	_ = update.CheckCurrentStatus(ctx)

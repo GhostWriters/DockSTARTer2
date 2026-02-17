@@ -94,14 +94,14 @@ func handleConfigSettings(ctx context.Context, group *CommandGroup) {
 		if len(group.Args) > 0 {
 			conf.Paths.ConfigFolder = group.Args[0]
 		} else {
-			logger.Display(ctx, "Current config folder: {{_Folder_}}%s{{|-|}}", conf.Paths.ConfigFolder)
+			logger.Display(ctx, "Current config folder: {{|Folder|}}%s{{[-]}}", conf.Paths.ConfigFolder)
 			return
 		}
 	case "--config-compose-folder":
 		if len(group.Args) > 0 {
 			conf.Paths.ComposeFolder = group.Args[0]
 		} else {
-			logger.Display(ctx, "Current compose folder: {{_Folder_}}%s{{|-|}}", conf.Paths.ComposeFolder)
+			logger.Display(ctx, "Current compose folder: {{|Folder|}}%s{{[-]}}", conf.Paths.ComposeFolder)
 			return
 		}
 	}
@@ -170,8 +170,8 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		for _, part := range group.FullSlice() {
 			cmdStr += " " + part
 		}
-		subtitle := " {{_Theme_CommandLine_}}" + cmdStr + "{{|-|}}"
-		logger.Notice(ctx, fmt.Sprintf("%s command: '{{_UserCommand_}}%s{{|-|}}'", version.ApplicationName, cmdStr))
+		subtitle := " {{|Theme_CommandLine|}}" + cmdStr + "{{[-]}}"
+		logger.Notice(ctx, fmt.Sprintf("%s command: '{{|UserCommand|}}%s{{[-]}}'", version.ApplicationName, cmdStr))
 
 		// Log execution arguments for verification
 		logger.Debug(ctx, fmt.Sprintf("Execution Args -> State: %+v, Command: %v, Rest: %v", state, fullCmd, restArgs))
@@ -224,7 +224,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				handleRemove(subCtx, &group, &state)
 				ranCommand = true
 			case "-S", "--select", "--menu-config-app-select", "--menu-app-select":
-				logger.Fatal(subCtx, "The '{{_UserCommand_}}%s{{|-|}}' command is not implemented yet.", group.Command)
+				logger.Fatal(subCtx, "The '{{|UserCommand|}}%s{{[-]}}' command is not implemented yet.", group.Command)
 			case "-t", "--test":
 				handleTest(subCtx, &group)
 				ranCommand = true
@@ -274,7 +274,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			if title == "" {
 				title = "Running Command"
 			}
-			title = "{{_Theme_TitleSuccess_}}" + title + "{{|-|}}"
+			title = "{{|Theme_TitleSuccess|}}" + title + "{{[-]}}"
 			err := tui.RunCommand(ctx, title, subtitle, task)
 			if err != nil {
 				logger.Error(ctx, "TUI Run Error: %v", err)
@@ -308,19 +308,19 @@ func handleHelp(group *CommandGroup) {
 }
 
 func handleVersion(ctx context.Context) {
-	logger.Display(ctx, fmt.Sprintf("{{_ApplicationName_}}%s{{|-|}} [{{_Version_}}%s{{|-|}}]", version.ApplicationName, version.Version))
-	logger.Display(ctx, fmt.Sprintf("{{_ApplicationName_}}DockSTARTer-Templates{{|-|}} [{{_Version_}}%s{{|-|}}]", paths.GetTemplatesVersion()))
+	logger.Display(ctx, fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} [{{|Version|}}%s{{[-]}}]", version.ApplicationName, version.Version))
+	logger.Display(ctx, fmt.Sprintf("{{|ApplicationName|}}DockSTARTer-Templates{{[-]}} [{{|Version|}}%s{{[-]}}]", paths.GetTemplatesVersion()))
 }
 
 func handleInstall(ctx context.Context, group *CommandGroup, state *CmdState) {
-	logger.Warn(ctx, fmt.Sprintf("The '{{_UserCommand_}}%s{{|-|}}' command is deprecated. The only dependency is '{{_UserCommand_}}docker{{|-|}}'.", group.Command))
+	logger.Warn(ctx, fmt.Sprintf("The '{{|UserCommand|}}%s{{[-]}}' command is deprecated. The only dependency is '{{|UserCommand|}}docker{{[-]}}'.", group.Command))
 	if state.Force {
 		logger.Notice(ctx, "Force flag ignored.")
 	}
 }
 
 func handleConfigPm(ctx context.Context, group *CommandGroup) {
-	logger.Warn(ctx, fmt.Sprintf("The '{{_UserCommand_}}%s{{|-|}}' command is deprecated. Package manager configuration is no longer needed.", group.Command))
+	logger.Warn(ctx, fmt.Sprintf("The '{{|UserCommand|}}%s{{[-]}}' command is deprecated. Package manager configuration is no longer needed.", group.Command))
 }
 
 func handleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, restArgs []string) {
@@ -509,7 +509,7 @@ func handleAppVarsCreateAll(ctx context.Context, group *CommandGroup, state *Cmd
 func handleAppVarsCreate(ctx context.Context, group *CommandGroup, state *CmdState) {
 	conf := config.LoadAppConfig()
 	if len(group.Args) == 0 {
-		logger.Error(ctx, "The '{{_UserCommand_}}%s{{|-|}}' command requires at least one application name.", group.Command)
+		logger.Error(ctx, "The '{{|UserCommand|}}%s{{[-]}}' command requires at least one application name.", group.Command)
 		return
 	}
 
@@ -545,7 +545,7 @@ func handleTheme(ctx context.Context, group *CommandGroup) {
 			themesDir := paths.GetThemesDir()
 			themePath := filepath.Join(themesDir, newTheme+".ds2theme")
 			if _, err := os.Stat(themePath); os.IsNotExist(err) {
-				logger.Error(ctx, "Theme '{{_Theme_}}%s{{|-|}}' not found in '{{_Folder_}}%s{{|-|}}'.", newTheme, themesDir)
+				logger.Error(ctx, "Theme '{{|Theme|}}%s{{[-]}}' not found in '{{|Folder|}}%s{{[-]}}'.", newTheme, themesDir)
 				return
 			}
 
@@ -558,11 +558,11 @@ func handleTheme(ctx context.Context, group *CommandGroup) {
 					for k, v := range changes {
 						status := v
 						if v == "true" {
-							status = "{{_Var_}}ON{{|-|}}"
+							status = "{{|Var|}}ON{{[-]}}"
 						} else if v == "false" {
-							status = "{{_Var_}}OFF{{|-|}}"
+							status = "{{|Var|}}OFF{{[-]}}"
 						} else {
-							status = fmt.Sprintf("{{_Var_}}%s{{|-|}}", v)
+							status = fmt.Sprintf("{{|Var|}}%s{{[-]}}", v)
 						}
 						lines = append(lines, fmt.Sprintf("\t- %s: %s", k, status))
 					}
@@ -573,14 +573,14 @@ func handleTheme(ctx context.Context, group *CommandGroup) {
 			if err := config.SaveAppConfig(conf); err != nil {
 				logger.Error(ctx, "Failed to save theme setting: %v", err)
 			} else {
-				logger.Notice(ctx, "Theme updated to: {{_Theme_}}%s{{|-|}}", newTheme)
+				logger.Notice(ctx, "Theme updated to: {{|Theme|}}%s{{[-]}}", newTheme)
 				// Reload theme for subsequent commands in the same execution
 				_ = theme.Load(newTheme)
 			}
 		} else {
 			// No args? Show current theme
-			logger.Notice(ctx, "Current theme is: {{_Theme_}}%s{{|-|}}", conf.UI.Theme)
-			logger.Notice(ctx, "Run '{{_UserCommand_}}%s --theme-list{{|-|}}' to see available themes.", version.CommandName)
+			logger.Notice(ctx, "Current theme is: {{|Theme|}}%s{{[-]}}", conf.UI.Theme)
+			logger.Notice(ctx, "Run '{{|UserCommand|}}%s --theme-list{{[-]}}' to see available themes.", version.CommandName)
 		}
 	case "--theme-list":
 		themesDir := paths.GetThemesDir()
@@ -604,9 +604,9 @@ func handleTheme(ctx context.Context, group *CommandGroup) {
 		}
 
 		if len(themes) == 0 {
-			logger.Warn(ctx, "No themes found in '{{_Folder_}}%s{{|-|}}'.", themesDir)
+			logger.Warn(ctx, "No themes found in '{{|Folder|}}%s{{[-]}}'.", themesDir)
 		} else {
-			logger.Notice(ctx, "Available themes in '{{_Folder_}}%s{{|-|}}':", themesDir)
+			logger.Notice(ctx, "Available themes in '{{|Folder|}}%s{{[-]}}':", themesDir)
 			for _, t := range themes {
 				logger.Notice(ctx, "  - %s", t)
 			}
@@ -707,7 +707,7 @@ func handleThemeSettings(ctx context.Context, group *CommandGroup) {
 	} else {
 		// Log specific update if appropriate
 		if group.Command == "--theme-border-color" && len(group.Args) > 0 {
-			logger.Notice(ctx, "Border color set to: {{_Var_}}%s{{|-|}}", group.Args[0])
+			logger.Notice(ctx, "Border color set to: {{|Var|}}%s{{[-]}}", group.Args[0])
 		}
 		// Specialized output for shadow level
 		if group.Command == "--theme-shadow-level" && len(group.Args) > 0 {
@@ -769,7 +769,7 @@ func handleList(ctx context.Context, group *CommandGroup) {
 func handleStatus(ctx context.Context, group *CommandGroup) {
 	conf := config.LoadAppConfig()
 	if len(group.Args) == 0 {
-		logger.Error(ctx, "The '{{_UserCommand_}}%s{{|-|}}' command requires at least one application name.", group.Command)
+		logger.Error(ctx, "The '{{|UserCommand|}}%s{{[-]}}' command requires at least one application name.", group.Command)
 		return
 	}
 
@@ -784,7 +784,7 @@ func handleStatus(ctx context.Context, group *CommandGroup) {
 func handleStatusChange(ctx context.Context, group *CommandGroup) {
 	conf := config.LoadAppConfig()
 	if len(group.Args) == 0 {
-		logger.Error(ctx, "The '{{_UserCommand_}}%s{{|-|}}' command requires at least one application name.", group.Command)
+		logger.Error(ctx, "The '{{|UserCommand|}}%s{{[-]}}' command requires at least one application name.", group.Command)
 		return
 	}
 
@@ -819,9 +819,9 @@ func handleRemove(ctx context.Context, group *CommandGroup, state *CmdState) {
 
 func handleConfigShow(ctx context.Context, conf *config.AppConfig) {
 	headers := []string{
-		"{{_UsageCommand_}}Option{{|-|}}",
-		"{{_UsageCommand_}}Value{{|-|}}",
-		"{{_UsageCommand_}}Expanded Value{{|-|}}",
+		"{{|UsageCommand|}}Option{{[-]}}",
+		"{{|UsageCommand|}}Value{{[-]}}",
+		"{{|UsageCommand|}}Expanded Value{{[-]}}",
 	}
 
 	keys := []string{"ConfigFolder", "ComposeFolder", "Theme", "Borders", "LineCharacters", "Scrollbar", "Shadow", "ShadowLevel", "BorderColor"}
@@ -841,9 +841,9 @@ func handleConfigShow(ctx context.Context, conf *config.AppConfig) {
 
 	boolToYesNo := func(val bool) string {
 		if val {
-			return "{{_Var_}}yes{{|-|}}"
+			return "{{|Var|}}yes{{[-]}}"
 		}
-		return "{{_Var_}}no{{|-|}}"
+		return "{{|Var|}}no{{[-]}}"
 	}
 
 	for _, key := range keys {
@@ -870,14 +870,14 @@ func handleConfigShow(ctx context.Context, conf *config.AppConfig) {
 		case "Shadow":
 			value = boolToYesNo(conf.UI.Shadow)
 		case "ShadowLevel":
-			value = fmt.Sprintf("{{_Var_}}%d{{|-|}}", conf.UI.ShadowLevel)
+			value = fmt.Sprintf("{{|Var|}}%d{{[-]}}", conf.UI.ShadowLevel)
 		case "BorderColor":
-			value = fmt.Sprintf("{{_Var_}}%d{{|-|}}", conf.UI.BorderColor)
+			value = fmt.Sprintf("{{|Var|}}%d{{[-]}}", conf.UI.BorderColor)
 		}
 
-		colorTag := "{{_Var_}}"
+		colorTag := "{{|Var|}}"
 		if useFolderColor {
-			colorTag = "{{_Folder_}}"
+			colorTag = "{{|Folder|}}"
 		}
 
 		// Option column
@@ -886,7 +886,7 @@ func handleConfigShow(ctx context.Context, conf *config.AppConfig) {
 		// Value column
 		// For booleans, value already has formatting. For strings, add color.
 		if useFolderColor || key == "Theme" {
-			data = append(data, fmt.Sprintf("%s%s{{|-|}}", colorTag, value))
+			data = append(data, fmt.Sprintf("%s%s{{[-]}}", colorTag, value))
 		} else {
 			data = append(data, value)
 		}
@@ -894,16 +894,16 @@ func handleConfigShow(ctx context.Context, conf *config.AppConfig) {
 		// Expanded Value column
 		if expandedValue != "" {
 			if useFolderColor {
-				data = append(data, fmt.Sprintf("%s%s{{|-|}}", colorTag, expandedValue))
+				data = append(data, fmt.Sprintf("%s%s{{[-]}}", colorTag, expandedValue))
 			} else {
-				data = append(data, fmt.Sprintf("%s%s{{|-|}}", colorTag, expandedValue))
+				data = append(data, fmt.Sprintf("%s%s{{[-]}}", colorTag, expandedValue))
 			}
 		} else {
 			data = append(data, "")
 		}
 	}
 
-	logger.Info(ctx, "Configuration options stored in '{{_File_}}%s{{|-|}}':", paths.GetConfigFilePath())
+	logger.Info(ctx, "Configuration options stored in '{{|File|}}%s{{[-]}}':", paths.GetConfigFilePath())
 	console.PrintTable(headers, data, conf.UI.LineCharacters)
 }
 
@@ -914,7 +914,7 @@ func handlePrune(ctx context.Context, state *CmdState) {
 }
 
 func handleReset(ctx context.Context) {
-	logger.Notice(ctx, "Resetting {{_ApplicationName_}}%s{{|-|}} to process all actions.", version.ApplicationName)
+	logger.Notice(ctx, "Resetting {{|ApplicationName|}}%s{{[-]}} to process all actions.", version.ApplicationName)
 	if err := paths.ResetNeeds(); err != nil {
 		logger.Error(ctx, "Failed to reset: %v", err)
 	}

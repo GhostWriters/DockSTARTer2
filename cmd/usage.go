@@ -33,12 +33,12 @@ func GetUsage(target string) string {
 	if target == "" {
 		// Mimic the header section
 		printStr(
-			fmt.Sprintf("{{_ApplicationName_}}%s{{|-|}} [{{_Version_}}%s{{|-|}}]", appName, version.Version),
-			"{{_ApplicationName_}}DockSTARTer-Templates{{|-|}} [{{_Version_}}Unknown Version{{|-|}}]",
+			fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} [{{|Version|}}%s{{[-]}}]", appName, version.Version),
+			"{{|ApplicationName|}}DockSTARTer-Templates{{[-]}} [{{|Version|}}Unknown Version{{[-]}}]",
 			"",
-			fmt.Sprintf("Usage: {{_UsageCommand_}}%s{{|-|}} [{{_UsageCommand_}}<Flags>{{|-|}}] [{{_UsageCommand_}}<Command>{{|-|}}] ...", appCmd),
+			fmt.Sprintf("Usage: {{|UsageCommand|}}%s{{[-]}} [{{|UsageCommand|}}<Flags>{{[-]}}] [{{|UsageCommand|}}<Command>{{[-]}}] ...", appCmd),
 			"",
-			fmt.Sprintf("This is the main {{_ApplicationName_}}%s{{|-|}} script.", appName),
+			fmt.Sprintf("This is the main {{|ApplicationName|}}%s{{[-]}} script.", appName),
 			"For regular usage you can run without providing any options.",
 			"",
 			"You may include multiple commands on the command-line, and they will be executed in",
@@ -46,9 +46,9 @@ func GetUsage(target string) string {
 			"following command, and get reset before the next command.",
 			"",
 			"Any command that takes a variable name, the variable will by default be looked for",
-			"in the global '{{_UsageFile_}}.env{{|-|}}' file. If the variable name used is in form of '{{_UsageVar_}}app:var{{|-|}}', it",
-			"will instead refer to the variable '{{_UsageVar_}}<var>{{|-|}}' in '{{_UsageFile_}}.env.app.<app>{{|-|}}'.  Some commands",
-			"that take app names can use the form '{{_UsageApp_}}app:{{|-|}}' to refer to the same file.",
+			"in the global '{{|UsageFile|}}.env{{[-]}}' file. If the variable name used is in form of '{{|UsageVar|}}app:var{{[-]}}', it",
+			"will instead refer to the variable '{{|UsageVar|}}<var>{{[-]}}' in '{{|UsageFile|}}.env.app.<app>{{[-]}}'.  Some commands",
+			"that take app names can use the form '{{|UsageApp|}}app:{{[-]}}' to refer to the same file.",
 			"",
 			"Flags:",
 			"",
@@ -73,31 +73,31 @@ func GetUsage(target string) string {
 	// Flags
 	if match("-f", "--force") {
 		printStr(
-			"{{_UsageCommand_}}-f --force{{|-|}}",
+			"{{|UsageCommand|}}-f --force{{[-]}}",
 			"	Force certain install/upgrade actions to run even if they would not be needed.",
 		)
 	}
 	if match("-g", "--gui") {
 		printStr(
-			"{{_UsageCommand_}}-g --gui{{|-|}}",
+			"{{|UsageCommand|}}-g --gui{{[-]}}",
 			"	Use dialog boxes",
 		)
 	}
 	if match("-v", "--verbose") {
 		printStr(
-			"{{_UsageCommand_}}-v --verbose{{|-|}}",
+			"{{|UsageCommand|}}-v --verbose{{[-]}}",
 			"	Verbose",
 		)
 	}
 	if match("-x", "--debug") {
 		printStr(
-			"{{_UsageCommand_}}-x --debug{{|-|}}",
+			"{{|UsageCommand|}}-x --debug{{[-]}}",
 			"	Debug",
 		)
 	}
 	if match("-y", "--yes") {
 		printStr(
-			"{{_UsageCommand_}}-y --yes{{|-|}}",
+			"{{|UsageCommand|}}-y --yes{{[-]}}",
 			"	Assume Yes for all prompts",
 		)
 	}
@@ -113,224 +113,224 @@ func GetUsage(target string) string {
 	// CLI Commands
 	if match("-a", "--add") {
 		printStr(
-			"{{_UsageCommand_}}-a --add{{|-|}} {{_UsageApp_}}<app>{{|-|}} [{{_UsageApp_}}<app>{{|-|}} ...]{{|-|}}",
+			"{{|UsageCommand|}}-a --add{{[-]}} {{|UsageApp|}}<app>{{[-]}} [{{|UsageApp|}}<app>{{[-]}} ...]{{[-]}}",
 			"	Add the default variables for the app(s) specified",
 		)
 	}
 	if match("-c", "--compose") {
 		printStr(
-			"{{_UsageCommand_}}-c --compose{{|-|}} < {{_UsageOption_}}pull{{|-|}} | {{_UsageOption_}}up{{|-|}} | {{_UsageOption_}}down{{|-|}} | {{_UsageOption_}}stop{{|-|}} | {{_UsageOption_}}restart{{|-|}} | {{_UsageOption_}}update{{|-|}} > [{{_UsageApp_}}<app>{{|-|}} ...]{{|-|}}",
-			"	Run docker compose commands. If no command is given, it does an '{{_UsageOption_}}update{{|-|}}'.",
-			"	The '{{_UsageOption_}}update{{|-|}}' command is the same as a '{{_UsageOption_}}pull{{|-|}}' followed by an '{{_UsageOption_}}up{{|-|}}'",
-			"{{_UsageCommand_}}-c --compose{{|-|}} < {{_UsageOption_}}generate{{|-|}} | {{_UsageOption_}}merge{{|-|}} >{{|-|}}",
-			"	Generates the '{{_UsageFile_}}docker-compose.yml{{|-|}} file",
+			"{{|UsageCommand|}}-c --compose{{[-]}} < {{|UsageOption|}}pull{{[-]}} | {{|UsageOption|}}up{{[-]}} | {{|UsageOption|}}down{{[-]}} | {{|UsageOption|}}stop{{[-]}} | {{|UsageOption|}}restart{{[-]}} | {{|UsageOption|}}update{{[-]}} > [{{|UsageApp|}}<app>{{[-]}} ...]{{[-]}}",
+			"	Run docker compose commands. If no command is given, it does an '{{|UsageOption|}}update{{[-]}}'.",
+			"	The '{{|UsageOption|}}update{{[-]}}' command is the same as a '{{|UsageOption|}}pull{{[-]}}' followed by an '{{|UsageOption|}}up{{[-]}}'",
+			"{{|UsageCommand|}}-c --compose{{[-]}} < {{|UsageOption|}}generate{{[-]}} | {{|UsageOption|}}merge{{[-]}} >{{[-]}}",
+			"	Generates the '{{|UsageFile|}}docker-compose.yml{{[-]}} file",
 		)
 	}
 
 	if match("--config-show", "--show-config", "--config-folder", "--config-compose-folder") {
 		printStr(
-			"{{_UsageCommand_}}--config-show{{|-|}}",
-			"{{_UsageCommand_}}--show-config{{|-|}}",
+			"{{|UsageCommand|}}--config-show{{[-]}}",
+			"{{|UsageCommand|}}--show-config{{[-]}}",
 			"	Shows the current configuration options",
-			"{{_UsageCommand_}}--config-folder{{|-|}} {{_UsageFile_}}<path>{{|-|}}",
+			"{{|UsageCommand|}}--config-folder{{[-]}} {{|UsageFile|}}<path>{{[-]}}",
 			"	Sets the folder where application variables are stored.",
-			"{{_UsageCommand_}}--config-compose-folder{{|-|}} {{_UsageFile_}}<path>{{|-|}}",
+			"{{|UsageCommand|}}--config-compose-folder{{[-]}} {{|UsageFile|}}<path>{{[-]}}",
 			"	Sets the folder where the docker-compose.yml file is stored.",
 		)
 	}
 	if match("-e", "--env") {
 		printStr(
-			"{{_UsageCommand_}}-e --env{{|-|}}",
-			"	Update your '{{_UsageFile_}}.env{{|-|}}' files with new variables",
+			"{{|UsageCommand|}}-e --env{{[-]}}",
+			"	Update your '{{|UsageFile|}}.env{{[-]}}' files with new variables",
 		)
 	}
 	if match("--env-appvars") {
 		printStr(
-			"{{_UsageCommand_}}--env-appvars{{|-|}} {{_UsageApp_}}<app>{{|-|}} [{{_UsageApp_}}<app>{{|-|}} ...]{{|-|}}",
+			"{{|UsageCommand|}}--env-appvars{{[-]}} {{|UsageApp|}}<app>{{[-]}} [{{|UsageApp|}}<app>{{[-]}} ...]{{[-]}}",
 			"	List all variable names for the app(s) specified",
 		)
 	}
 	if match("--env-appvars-lines") {
 		printStr(
-			"{{_UsageCommand_}}--env-appvars-lines{{|-|}} {{_UsageApp_}}<app>{{|-|}} [{{_UsageApp_}}<app>{{|-|}} ...]{{|-|}}",
+			"{{|UsageCommand|}}--env-appvars-lines{{[-]}} {{|UsageApp|}}<app>{{[-]}} [{{|UsageApp|}}<app>{{[-]}} ...]{{[-]}}",
 			"	List all variables and values for the app(s) specified",
 		)
 	}
 	if match("--env-get", "--env-get=") {
 		printStr(
-			"{{_UsageCommand_}}--env-get{{|-|}} {{_UsageVar_}}<var>{{|-|}} [{{_UsageVar_}}<var>{{|-|}} ...]{{|-|}}",
-			"{{_UsageCommand_}}--env-get={{|-|}}{{_UsageVar_}}<var>{{|-|}}",
-			"	Get the value of a {{_UsageVar_}}<var>{{|-|}}iable (variable name is forced to UPPER CASE)",
+			"{{|UsageCommand|}}--env-get{{[-]}} {{|UsageVar|}}<var>{{[-]}} [{{|UsageVar|}}<var>{{[-]}} ...]{{[-]}}",
+			"{{|UsageCommand|}}--env-get={{[-]}}{{|UsageVar|}}<var>{{[-]}}",
+			"	Get the value of a {{|UsageVar|}}<var>{{[-]}}iable (variable name is forced to UPPER CASE)",
 		)
 	}
 	if match("--env-get-line", "--env-get-line=") {
 		printStr(
-			"{{_UsageCommand_}}--env-get-line{{|-|}} {{_UsageVar_}}<var>{{|-|}} [{{_UsageVar_}}<var>{{|-|}} ...]{{|-|}}",
-			"{{_UsageCommand_}}--env-get-line={{|-|}}{{_UsageVar_}}<var>{{|-|}}",
-			"	Get the line of a {{_UsageVar_}}<var>{{|-|}}iable (variable name is forced to UPPER CASE)",
+			"{{|UsageCommand|}}--env-get-line{{[-]}} {{|UsageVar|}}<var>{{[-]}} [{{|UsageVar|}}<var>{{[-]}} ...]{{[-]}}",
+			"{{|UsageCommand|}}--env-get-line={{[-]}}{{|UsageVar|}}<var>{{[-]}}",
+			"	Get the line of a {{|UsageVar|}}<var>{{[-]}}iable (variable name is forced to UPPER CASE)",
 		)
 	}
 	if match("--env-get-literal", "--env-get-literal=") {
 		printStr(
-			"{{_UsageCommand_}}--env-get-literal{{|-|}} {{_UsageVar_}}<var>{{|-|}} [{{_UsageVar_}}<var>{{|-|}} ...]{{|-|}}",
-			"{{_UsageCommand_}}--env-get-literal{{|-|}}={{_UsageVar_}}<var>{{|-|}}",
-			"	Get the literal value (including quotes) of a {{_UsageVar_}}<var>{{|-|}}iable (variable name is forced to UPPER CASE)",
+			"{{|UsageCommand|}}--env-get-literal{{[-]}} {{|UsageVar|}}<var>{{[-]}} [{{|UsageVar|}}<var>{{[-]}} ...]{{[-]}}",
+			"{{|UsageCommand|}}--env-get-literal{{[-]}}={{|UsageVar|}}<var>{{[-]}}",
+			"	Get the literal value (including quotes) of a {{|UsageVar|}}<var>{{[-]}}iable (variable name is forced to UPPER CASE)",
 		)
 	}
 	if match("--env-get-lower", "--env-get-lower=") {
 		printStr(
-			"{{_UsageCommand_}}--env-get-lower{{|-|}} {{_UsageVar_}}<var>{{|-|}} [{{_UsageVar_}}<var>{{|-|}} ...]{{|-|}}",
-			"{{_UsageCommand_}}--env-get-lower{{|-|}}={{_UsageVar_}}<var>{{|-|}}",
-			"	Get the value of a {{_UsageVar_}}<var>{{|-|}}iable",
+			"{{|UsageCommand|}}--env-get-lower{{[-]}} {{|UsageVar|}}<var>{{[-]}} [{{|UsageVar|}}<var>{{[-]}} ...]{{[-]}}",
+			"{{|UsageCommand|}}--env-get-lower{{[-]}}={{|UsageVar|}}<var>{{[-]}}",
+			"	Get the value of a {{|UsageVar|}}<var>{{[-]}}iable",
 		)
 	}
 	if match("--env-get-lower-line", "--env-get-lower-line=") {
 		printStr(
-			"{{_UsageCommand_}}--env-get-lower-line{{|-|}} {{_UsageVar_}}<var>{{|-|}} [{{_UsageVar_}}<var>{{|-|}} ...]",
-			"{{_UsageCommand_}}--env-get-lower-line={{|-|}}{{_UsageVar_}}<var>{{|-|}}",
-			"	Get the line of a {{_UsageVar_}}<var>{{|-|}}iable",
+			"{{|UsageCommand|}}--env-get-lower-line{{[-]}} {{|UsageVar|}}<var>{{[-]}} [{{|UsageVar|}}<var>{{[-]}} ...]",
+			"{{|UsageCommand|}}--env-get-lower-line={{[-]}}{{|UsageVar|}}<var>{{[-]}}",
+			"	Get the line of a {{|UsageVar|}}<var>{{[-]}}iable",
 		)
 	}
 	if match("--env-get-lower-literal", "--env-get-lower-literal=") {
 		printStr(
-			"{{_UsageCommand_}}--env-get-lower-literal{{|-|}} {{_UsageVar_}}<var>{{|-|}} [{{_UsageVar_}}<var>{{|-|}} ...]{{|-|}}",
-			"{{_UsageCommand_}}--env-get-lower-literal={{|-|}}{{_UsageVar_}}<var>{{|-|}}",
-			"	Get the literal value (including quotes) of a {{_UsageVar_}}<var>{{|-|}}iable",
+			"{{|UsageCommand|}}--env-get-lower-literal{{[-]}} {{|UsageVar|}}<var>{{[-]}} [{{|UsageVar|}}<var>{{[-]}} ...]{{[-]}}",
+			"{{|UsageCommand|}}--env-get-lower-literal={{[-]}}{{|UsageVar|}}<var>{{[-]}}",
+			"	Get the literal value (including quotes) of a {{|UsageVar|}}<var>{{[-]}}iable",
 		)
 	}
 	if match("--env-set", "--env-set=") {
 		printStr(
-			"{{_UsageCommand_}}--env-set{{|-|}} {{_UsageVar_}}<var>=<val>{{|-|}}",
-			"{{_UsageCommand_}}--env-set={{|-|}}{{_UsageVar_}}<var>,<val>{{|-|}}",
-			"	Set the {{_UsageVar_}}<val>{{|-|}}ue of a {{_UsageVar_}}<var>{{|-|}}iable (variable name is forced to UPPER CASE).",
+			"{{|UsageCommand|}}--env-set{{[-]}} {{|UsageVar|}}<var>=<val>{{[-]}}",
+			"{{|UsageCommand|}}--env-set={{[-]}}{{|UsageVar|}}<var>,<val>{{[-]}}",
+			"	Set the {{|UsageVar|}}<val>{{[-]}}ue of a {{|UsageVar|}}<var>{{[-]}}iable (variable name is forced to UPPER CASE).",
 		)
 	}
 	if match("--env-set-lower", "--env-set-lower=") {
 		printStr(
-			"{{_UsageCommand_}}--env-set-lower{{|-|}} {{_UsageVar_}}<var>=<val>{{|-|}}",
-			"{{_UsageCommand_}}--env-set-lower={{|-|}}{{_UsageVar_}}<var>,<val>{{|-|}}",
-			"	Set the {{_UsageVar_}}<val>{{|-|}}ue of a {{_UsageVar_}}<var>{{|-|}}iable",
+			"{{|UsageCommand|}}--env-set-lower{{[-]}} {{|UsageVar|}}<var>=<val>{{[-]}}",
+			"{{|UsageCommand|}}--env-set-lower={{[-]}}{{|UsageVar|}}<var>,<val>{{[-]}}",
+			"	Set the {{|UsageVar|}}<val>{{[-]}}ue of a {{|UsageVar|}}<var>{{[-]}}iable",
 		)
 	}
 	if match("-l", "--list", "--list-added", "--list-builtin", "--list-deprecated", "--list-enabled", "--list-disabled", "--list-nondeprecated", "--list-referenced") {
 		printStr(
-			"{{_UsageCommand_}}-l --list{{|-|}}",
+			"{{|UsageCommand|}}-l --list{{[-]}}",
 			"	List all apps",
-			"{{_UsageCommand_}}--list-added{{|-|}}",
+			"{{|UsageCommand|}}--list-added{{[-]}}",
 			"	List added apps",
-			"{{_UsageCommand_}}--list-builtin{{|-|}}",
+			"{{|UsageCommand|}}--list-builtin{{[-]}}",
 			"	List builtin apps",
-			"{{_UsageCommand_}}--list-deprecated{{|-|}}",
+			"{{|UsageCommand|}}--list-deprecated{{[-]}}",
 			"	List deprecated apps",
-			"{{_UsageCommand_}}--list-enabled{{|-|}}",
+			"{{|UsageCommand|}}--list-enabled{{[-]}}",
 			"	List enabled apps",
-			"{{_UsageCommand_}}--list-disabled{{|-|}}",
+			"{{|UsageCommand|}}--list-disabled{{[-]}}",
 			"	List disabled apps",
-			"{{_UsageCommand_}}--list-nondeprecated{{|-|}}",
+			"{{|UsageCommand|}}--list-nondeprecated{{[-]}}",
 			"	List non-deprecated apps",
-			"{{_UsageCommand_}}--list-referenced{{|-|}}",
+			"{{|UsageCommand|}}--list-referenced{{[-]}}",
 			"	List referenced apps",
 		)
 	}
 	if match("-h", "--help") {
 		printStr(
-			"{{_UsageCommand_}}-h --help{{|-|}}",
+			"{{|UsageCommand|}}-h --help{{[-]}}",
 			"	Show this usage information",
-			"{{_UsageCommand_}}-h --help{{|-|}} {{_UsageOption_}}<option>{{|-|}}",
+			"{{|UsageCommand|}}-h --help{{[-]}} {{|UsageOption|}}<option>{{[-]}}",
 			"	Show the usage of the specified option",
 		)
 	}
 
 	if match("-p", "--prune") {
 		printStr(
-			"{{_UsageCommand_}}-p --prune{{|-|}}",
+			"{{|UsageCommand|}}-p --prune{{[-]}}",
 			"	Remove unused docker resources",
 		)
 	}
 	if match("-r", "--remove") {
 		printStr(
-			"{{_UsageCommand_}}-r --remove{{|-|}}",
+			"{{|UsageCommand|}}-r --remove{{[-]}}",
 			"	Prompt to remove variables for all disabled apps",
-			"{{_UsageCommand_}}-r --remove{{|-|}} {{_UsageApp_}}<app>{{|-|}} [{{_UsageApp_}}<app>{{|-|}} ...]{{|-|}}",
+			"{{|UsageCommand|}}-r --remove{{[-]}} {{|UsageApp|}}<app>{{[-]}} [{{|UsageApp|}}<app>{{[-]}} ...]{{[-]}}",
 			"	Prompt to remove the variables for the app specified",
 		)
 	}
 	if match("-R", "--reset") {
 		printStr(
-			"{{_UsageCommand_}}-R --reset{{|-|}}",
-			fmt.Sprintf("	Resets {{_ApplicationName_}}%s to always process environment files.", appName),
+			"{{|UsageCommand|}}-R --reset{{[-]}}",
+			fmt.Sprintf("	Resets {{|ApplicationName|}}%s to always process environment files.", appName),
 			"	This is usually not needed unless you have modified application templates yourself.",
 		)
 	}
 	if match("-s", "--status") {
 		printStr(
-			"{{_UsageCommand_}}-s --status{{|-|}} {{_UsageApp_}}<app>{{|-|}} [{{_UsageApp_}}<app>{{|-|}} ...]{{|-|}}",
+			"{{|UsageCommand|}}-s --status{{[-]}} {{|UsageApp|}}<app>{{[-]}} [{{|UsageApp|}}<app>{{[-]}} ...]{{[-]}}",
 			"	Returns the enabled/disabled status for the app specified",
 		)
 	}
 	if match("--status-disable", "--status-enable") {
 		printStr(
-			"{{_UsageCommand_}}--status-disable{{|-|}} {{_UsageApp_}}<app>{{|-|}} [{{_UsageApp_}}<app>{{|-|}} ...]{{|-|}}",
+			"{{|UsageCommand|}}--status-disable{{[-]}} {{|UsageApp|}}<app>{{[-]}} [{{|UsageApp|}}<app>{{[-]}} ...]{{[-]}}",
 			"	Disable the app specified",
-			"{{_UsageCommand_}}--status-enable{{|-|}} {{_UsageApp_}}<app>{{|-|}} [{{_UsageApp_}}<app>{{|-|}} ...]{{|-|}}",
+			"{{|UsageCommand|}}--status-enable{{[-]}} {{|UsageApp|}}<app>{{[-]}} [{{|UsageApp|}}<app>{{[-]}} ...]{{[-]}}",
 			"	Enable the app specified",
 		)
 	}
 	if match("-t", "--test") {
 		printStr(
-			"{{_UsageCommand_}}-t --test{{|-|}} {{_UsageFile_}}<test_name>{{|-|}}",
+			"{{|UsageCommand|}}-t --test{{[-]}} {{|UsageFile|}}<test_name>{{[-]}}",
 			"	Run tests to check the program",
 		)
 	}
 	if match("-T", "--theme", "--theme-list", "--theme-table", "--theme-lines", "--theme-no-lines", "--theme-borders", "--theme-no-borders", "--theme-shadows", "--theme-no-shadows", "--theme-shadow-level", "--theme-scrollbar", "--theme-no-scrollbar", "--theme-border-color") {
 		printStr(
-			"{{_UsageCommand_}}-T --theme{{|-|}}",
+			"{{|UsageCommand|}}-T --theme{{[-]}}",
 			"	Shows the current theme",
-			"{{_UsageCommand_}}-T --theme{{|-|}} {{_UsageTheme_}}<themename>{{|-|}}",
+			"{{|UsageCommand|}}-T --theme{{[-]}} {{|UsageTheme|}}<themename>{{[-]}}",
 			"	Saves and applies the specified theme to the GUI",
-			"{{_UsageCommand_}}--theme-list{{|-|}}",
+			"{{|UsageCommand|}}--theme-list{{[-]}}",
 			"	Lists the available themes",
-			"{{_UsageCommand_}}--theme-table{{|-|}}",
+			"{{|UsageCommand|}}--theme-table{{[-]}}",
 			"	Lists the available themes in a table format",
-			"{{_UsageCommand_}}--theme-lines{{|-|}}",
-			"{{_UsageCommand_}}--theme-no-lines{{|-|}}",
+			"{{|UsageCommand|}}--theme-lines{{[-]}}",
+			"{{|UsageCommand|}}--theme-no-lines{{[-]}}",
 			"	Turn the line drawing characters on or off in the GUI",
-			"{{_UsageCommand_}}--theme-borders{{|-|}}",
-			"{{_UsageCommand_}}--theme-no-borders{{|-|}}",
+			"{{|UsageCommand|}}--theme-borders{{[-]}}",
+			"{{|UsageCommand|}}--theme-no-borders{{[-]}}",
 			"	Turn the borders on and off in the GUI",
-			"{{_UsageCommand_}}--theme-shadows{{|-|}}",
-			"{{_UsageCommand_}}--theme-no-shadows{{|-|}}",
+			"{{|UsageCommand|}}--theme-shadows{{[-]}}",
+			"{{|UsageCommand|}}--theme-no-shadows{{[-]}}",
 			"	Turn the shadows on or off in the GUI",
-			"{{_UsageCommand_}}--theme-shadow-level{{|-|}} {{_UsageOption_}}<level>{{|-|}}",
+			"{{|UsageCommand|}}--theme-shadow-level{{[-]}} {{|UsageOption|}}<level>{{[-]}}",
 			"	Set the shadow level (0-4 or off/light/medium/dark/solid)",
-			"{{_UsageCommand_}}--theme-scrollbar{{|-|}}",
-			"{{_UsageCommand_}}--theme-no-scrollbar{{|-|}}",
+			"{{|UsageCommand|}}--theme-scrollbar{{[-]}}",
+			"{{|UsageCommand|}}--theme-no-scrollbar{{[-]}}",
 			"	Turn the scrollbar on or off in the GUI",
-			"{{_UsageCommand_}}--theme-border-color{{|-|}} {{_UsageOption_}}<level>{{|-|}}",
+			"{{|UsageCommand|}}--theme-border-color{{[-]}} {{|UsageOption|}}<level>{{[-]}}",
 			"	Set the border color (1=Border, 2=Border2, 3=Both)",
 		)
 	}
 	if match("-u", "--update", "--update-app", "--update-templates") {
 		printStr(
-			"{{_UsageCommand_}}-u --update{{|-|}}",
-			fmt.Sprintf("	Update {{_ApplicationName_}}%s{{|-|}} using GitHub Releases and {{_ApplicationName_}}DockSTARTer-Templates{{|-|}} using git.", appName),
-			"{{_UsageCommand_}}-u --update{{|-|}} {{_UsageBranch_}}<AppVersionOrChannel>{{|-|}} {{_UsageBranch_}}<TemplateBranch>{{|-|}}",
+			"{{|UsageCommand|}}-u --update{{[-]}}",
+			fmt.Sprintf("	Update {{|ApplicationName|}}%s{{[-]}} using GitHub Releases and {{|ApplicationName|}}DockSTARTer-Templates{{[-]}} using git.", appName),
+			"{{|UsageCommand|}}-u --update{{[-]}} {{|UsageBranch|}}<AppVersionOrChannel>{{[-]}} {{|UsageBranch|}}<TemplateBranch>{{[-]}}",
 			"	Update to specific versions. <AppVersionOrChannel> can be a version like 'v2.0.0.1' or a channel like 'testing'.",
-			"{{_UsageCommand_}}--update-app{{|-|}}",
-			fmt.Sprintf("	Update {{_ApplicationName_}}%s{{|-|}} only.", appName),
-			"{{_UsageCommand_}}--update-app{{|-|}} {{_UsageBranch_}}<AppVersionOrChannel>{{|-|}}",
-			fmt.Sprintf("	Update {{_ApplicationName_}}%s{{|-|}} to the specified version or channel.", appName),
-			"{{_UsageCommand_}}--update-templates{{|-|}}",
-			"	Update {{_ApplicationName_}}DockSTARTer-Templates{{|-|}} only.",
-			"{{_UsageCommand_}}--update-templates{{|-|}} {{_UsageBranch_}}<TemplateBranch>{{|-|}}",
-			"	Update {{_ApplicationName_}}DockSTARTer-Templates{{|-|}} to the specified branch.",
+			"{{|UsageCommand|}}--update-app{{[-]}}",
+			fmt.Sprintf("	Update {{|ApplicationName|}}%s{{[-]}} only.", appName),
+			"{{|UsageCommand|}}--update-app{{[-]}} {{|UsageBranch|}}<AppVersionOrChannel>{{[-]}}",
+			fmt.Sprintf("	Update {{|ApplicationName|}}%s{{[-]}} to the specified version or channel.", appName),
+			"{{|UsageCommand|}}--update-templates{{[-]}}",
+			"	Update {{|ApplicationName|}}DockSTARTer-Templates{{[-]}} only.",
+			"{{|UsageCommand|}}--update-templates{{[-]}} {{|UsageBranch|}}<TemplateBranch>{{[-]}}",
+			"	Update {{|ApplicationName|}}DockSTARTer-Templates{{[-]}} to the specified branch.",
 		)
 	}
 	if match("-V", "--version") {
 		printStr(
-			"{{_UsageCommand_}}-V --version{{|-|}}",
+			"{{|UsageCommand|}}-V --version{{[-]}}",
 			"	Display version information",
-			"{{_UsageCommand_}}-V --version{{|-|}} {{_UsageBranch_}}<AppBranch>{{|-|}} {{_UsageBranch_}}<TemplateBranch>{{|-|}}",
+			"{{|UsageCommand|}}-V --version{{[-]}} {{|UsageBranch|}}<AppBranch>{{[-]}} {{|UsageBranch|}}<TemplateBranch>{{[-]}}",
 			"	Display version information for the specified branches",
 		)
 	}
@@ -346,23 +346,23 @@ func GetUsage(target string) string {
 	// Menu Commands
 	if match("-M", "--menu") {
 		printStr(
-			"{{_UsageCommand_}}-M --menu{{|-|}}",
+			"{{|UsageCommand|}}-M --menu{{[-]}}",
 			"	Start the menu system.",
-			fmt.Sprintf("	This is the same as typing '{{_UsageCommand_}}%s{{|-|}}'.", appCmd),
-			"{{_UsageCommand_}}-M --menu{{|-|}} < {{_UsageOption_}}main{{|-|}} | {{_UsageOption_}}config{{|-|}} | {{_UsageOption_}}options{{|-|}} >{{|-|}}",
+			fmt.Sprintf("	This is the same as typing '{{|UsageCommand|}}%s{{[-]}}'.", appCmd),
+			"{{|UsageCommand|}}-M --menu{{[-]}} < {{|UsageOption|}}main{{[-]}} | {{|UsageOption|}}config{{[-]}} | {{|UsageOption|}}options{{[-]}} >{{[-]}}",
 			"	Load the specified page in the menu.",
-			"{{_UsageCommand_}}-M --menu{{|-|}} < {{_UsageOption_}}options-display{{|-|}} | {{_UsageOption_}}display{{|-|}} >{{|-|}}",
-			"	Load the {{_UsagePage_}}Display Options{{|-|}} page in the menu.",
-			"{{_UsageCommand_}}-M --menu{{|-|}} < {{_UsageOption_}}options-theme{{|-|}} | {{_UsageOption_}}theme{{|-|}} >{{|-|}}",
-			"	Load the {{_UsagePage_}}Theme Chooser{{|-|}} page in the menu.",
-			"{{_UsageCommand_}}-M --menu{{|-|}} < {{_UsageOption_}}config-app-select{{|-|}} | {{_UsageOption_}}app-select{{|-|}} | {{_UsageOption_}}select{{|-|}} >{{|-|}}",
-			"	Load the {{_UsagePage_}}Application Selection{{|-|}} page in the menu.",
+			"{{|UsageCommand|}}-M --menu{{[-]}} < {{|UsageOption|}}options-display{{[-]}} | {{|UsageOption|}}display{{[-]}} >{{[-]}}",
+			"	Load the {{|UsagePage|}}Display Options{{[-]}} page in the menu.",
+			"{{|UsageCommand|}}-M --menu{{[-]}} < {{|UsageOption|}}options-theme{{[-]}} | {{|UsageOption|}}theme{{[-]}} >{{[-]}}",
+			"	Load the {{|UsagePage|}}Theme Chooser{{[-]}} page in the menu.",
+			"{{|UsageCommand|}}-M --menu{{[-]}} < {{|UsageOption|}}config-app-select{{[-]}} | {{|UsageOption|}}app-select{{[-]}} | {{|UsageOption|}}select{{[-]}} >{{[-]}}",
+			"	Load the {{|UsagePage|}}Application Selection{{[-]}} page in the menu.",
 		)
 	}
 	if match("-S", "--select", "--menu-config-app-select", "--menu-app-select") {
 		printStr(
-			"{{_UsageCommand_}}-S --select{{|-|}}",
-			"	Load the {{_UsagePage_}}Application Selection{{|-|}} page in the menu.",
+			"{{|UsageCommand|}}-S --select{{[-]}}",
+			"	Load the {{|UsagePage|}}Application Selection{{[-]}} page in the menu.",
 		)
 	}
 

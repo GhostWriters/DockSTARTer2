@@ -13,7 +13,7 @@ import (
 func Create(ctx context.Context, file, defaultFile string) error {
 	dir := filepath.Dir(file)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		logger.FatalWithStack(ctx, "Failed to create folder '{{_Folder_}}%s{{|-|}}'.", dir)
+		logger.FatalWithStack(ctx, "Failed to create folder '{{|Folder|}}%s{{[-]}}'.", dir)
 	}
 
 	if _, err := os.Stat(file); err == nil {
@@ -25,16 +25,16 @@ func Create(ctx context.Context, file, defaultFile string) error {
 	if err != nil {
 		if os.IsNotExist(err) {
 			if err := os.WriteFile(file, []byte{}, 0644); err != nil {
-				logger.FatalWithStack(ctx, "Failed to create empty env file '{{_File_}}%s{{|-|}}'.", file)
+				logger.FatalWithStack(ctx, "Failed to create empty env file '{{|File|}}%s{{[-]}}'.", file)
 			}
 			return nil
 		}
-		logger.FatalWithStack(ctx, "Failed to read default env '{{_File_}}%s{{|-|}}'.", defaultFile)
+		logger.FatalWithStack(ctx, "Failed to read default env '{{|File|}}%s{{[-]}}'.", defaultFile)
 	}
 
 	// Write raw content first
 	if err := os.WriteFile(file, input, 0644); err != nil {
-		logger.FatalWithStack(ctx, "Failed to create env file '{{_File_}}%s{{|-|}}'.", file)
+		logger.FatalWithStack(ctx, "Failed to create env file '{{|File|}}%s{{[-]}}'.", file)
 	}
 
 	// Sanitize: Set specific top-level variables

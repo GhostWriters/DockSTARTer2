@@ -17,17 +17,18 @@ func TestResolveThemeValue(t *testing.T) {
 	console.BuildColorMap()
 
 	// Mock theme data map (simulating what we read from INI)
+	// Using new delimiter format: {{[direct]}} and {{|semantic|}}
 	themeMap := map[string]string{
-		"Simple":       "{{|red:blue:B|}}",
-		"Reference":    "{{_Theme_Simple_}}",
-		"OverrideFG":   "{{_Theme_Simple_}}{{|green|}}",
-		"OverrideBG":   "{{_Theme_Simple_}}{{|:green|}}",
-		"OverrideFlag": "{{_Theme_Simple_}}{{|::U|}}",
-		"ChainA":       "{{|white|}}",
-		"ChainB":       "{{_Theme_ChainA_}}{{|:black|}}", // white:black
-		"ChainC":       "{{_Theme_ChainB_}}{{|::B|}}",    // white:black:B
-		"CircularA":    "{{_Theme_CircularB_}}",
-		"CircularB":    "{{_Theme_CircularA_}}",
+		"Simple":       "{{[red:blue:B]}}",
+		"Reference":    "{{|Theme_Simple|}}",
+		"OverrideFG":   "{{|Theme_Simple|}}{{[green]}}",
+		"OverrideBG":   "{{|Theme_Simple|}}{{[:green]}}",
+		"OverrideFlag": "{{|Theme_Simple|}}{{[::U]}}",
+		"ChainA":       "{{[white]}}",
+		"ChainB":       "{{|Theme_ChainA|}}{{[:black]}}", // white:black
+		"ChainC":       "{{|Theme_ChainB|}}{{[::B]}}",    // white:black:B
+		"CircularA":    "{{|Theme_CircularB|}}",
+		"CircularB":    "{{|Theme_CircularA|}}",
 	}
 
 	tests := []struct {
@@ -79,14 +80,16 @@ func TestResolveThemeValue(t *testing.T) {
 
 			// We need to pass the *value* associated with the key to resolveThemeValue,
 			// because resolveThemeValue expects the raw string, not the key.
-			got, err := resolveThemeValue(rawVal, themeMap, make(map[string]bool))
+			// Pass the delimiters used in the test data
+			got, err := resolveThemeValue(rawVal, themeMap, make(map[string]bool),
+				console.SemanticPrefix, console.SemanticSuffix, console.DirectPrefix, console.DirectSuffix)
 			if err != nil {
 				t.Fatalf("resolve error: %v", err)
 			}
 
-			// Since resolveThemeValue returns a tag string (e.g. {{|red:blue:B|}}),
+			// Since resolveThemeValue returns a tag string (e.g. {{[red:blue:B]}}),
 			// we must expand it to ANSI to compare with expected ANSI values.
-			gotExpanded := console.ToANSI(got)
+			gotExpanded := console.ToANSI(console.WrapDirect(got))
 
 			if !strings.Contains(gotExpanded, tt.expected) {
 				t.Errorf("resolveThemeValue() ANSI = %q, want %q (raw: %v)", gotExpanded, tt.expected, got)

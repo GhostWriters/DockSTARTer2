@@ -77,12 +77,12 @@ func CreateAppFolders(ctx context.Context, appNameRaw string, conf config.AppCon
 
 	// 3. Create folders and log
 	if len(foldersToCreate) > 0 {
-		logger.Notice(ctx, "Creating config folders for '{{_App_}}%s{{|-|}}'.", niceName)
+		logger.Notice(ctx, "Creating config folders for '{{|App|}}%s{{[-]}}'.", niceName)
 		for _, folder := range foldersToCreate {
-			logger.Notice(ctx, "Creating folder '{{_Folder_}}%s{{|-|}}'", folder)
+			logger.Notice(ctx, "Creating folder '{{|Folder|}}%s{{[-]}}'", folder)
 			if err := os.MkdirAll(folder, 0755); err != nil {
-				logger.Warn(ctx, "Could not create folder '{{_Folder_}}%s{{|-|}}'", folder)
-				logger.Warn(ctx, "Failing command: {{_FailingCommand_}}mkdir -p \"%s\"{{|-|}}", folder)
+				logger.Warn(ctx, "Could not create folder '{{|Folder|}}%s{{[-]}}'", folder)
+				logger.Warn(ctx, "Failing command: {{|FailingCommand|}}mkdir -p \"%s\"{{[-]}}", folder)
 			}
 			// Bash version calls set_permissions here.
 			// We might need a set_permissions equivalent eventually.

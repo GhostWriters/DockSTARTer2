@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
-	charmlog "charm.land/log/v2"
 	"charm.land/lipgloss/v2"
+	charmlog "charm.land/log/v2"
 )
 
 const TUIWriterKey = "tui_writer"
@@ -380,8 +380,8 @@ func getSystemInfo() []string {
 	var info []string
 
 	// App Info
-	info = append(info, fmt.Sprintf("{{_ApplicationName_}}%s{{|-|}} [{{_Version_}}%s{{|-|}}]", version.ApplicationName, version.Version))
-	info = append(info, fmt.Sprintf("{{_ApplicationName_}}DockSTARTer-Templates{{|-|}} [{{_Version_}}%s{{|-|}}]", paths.GetTemplatesVersion()))
+	info = append(info, fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} [{{|Version|}}%s{{[-]}}]", version.ApplicationName, version.Version))
+	info = append(info, fmt.Sprintf("{{|ApplicationName|}}DockSTARTer-Templates{{[-]}} [{{|Version|}}%s{{[-]}}]", paths.GetTemplatesVersion()))
 	info = append(info, "")
 
 	// Process Info
@@ -480,17 +480,17 @@ func FatalWithStack(ctx context.Context, msg any, args ...any) {
 
 		// Create format string dynamically to pad frame number
 		// Note: We leave the tags in the string. logAt -> console.ToANSI will replace them.
-		fmtStr := fmt.Sprintf("%%s%%%dd{{|-|}}%%s %%s%%s%%s%%s:%%s%%d{{|-|}} (%%s%%s{{|-|}})", width)
+		fmtStr := fmt.Sprintf("%%s%%%dd{{[-]}}%%s %%s%%s%%s%%s:%%s%%d{{[-]}} (%%s%%s{{[-]}})", width)
 
 		line := fmt.Sprintf(
 			fmtStr,
-			"{{_TraceFrameNumber_}}", i,
+			"{{|TraceFrameNumber|}}", i,
 			":",
 			arrowIndent,
-			"{{_TraceFrameLines_}}"+suffix+"{{|-|}}",
-			"{{_TraceSourceFile_}}", frame.File,
-			"{{_TraceLineNumber_}}", frame.Line,
-			"{{_TraceFunction_}}", filepath.Base(frame.Function),
+			"{{|TraceFrameLines|}}"+suffix+"{{[-]}}",
+			"{{|TraceSourceFile|}}", frame.File,
+			"{{|TraceLineNumber|}}", frame.Line,
+			"{{|TraceFunction|}}", filepath.Base(frame.Function),
 		)
 
 		traceLines = append(traceLines, "\t"+line)
@@ -502,17 +502,17 @@ func FatalWithStack(ctx context.Context, msg any, args ...any) {
 	// 3. Assemble Final Output
 	// This provides a visual representation of the final log block structure
 	output := []any{
-		"{{_TraceHeader_}}### BEGIN SYSTEM INFORMATION AND STACK TRACE ###",
+		"{{|TraceHeader|}}### BEGIN SYSTEM INFORMATION AND STACK TRACE ###",
 		infoLines,
 		"", // Separator
 		traceLines,
-		"{{_TraceFooter_}}### END SYSTEM INFORMATION AND STACK TRACE ###",
+		"{{|TraceFooter|}}### END SYSTEM INFORMATION AND STACK TRACE ###",
 		"",
 		msg,
 		"",
-		"{{_FatalFooter_}}Please let the dev know of this error.",
-		"{{_FatalFooter_}}It has been written to {{|-|}}'{{_File_}}" + filepath.Join(paths.GetStateDir(), strings.ToLower(version.ApplicationName)+".fatal.log") + "{{|-|}}'{{_FatalFooter_}},",
-		"and appended to {{|-|}}'{{_File_}}" + filepath.Join(paths.GetStateDir(), strings.ToLower(version.ApplicationName)+".log") + "{{|-|}}'{{_FatalFooter_}}.",
+		"{{|FatalFooter|}}Please let the dev know of this error.",
+		"{{|FatalFooter|}}It has been written to {{[-]}}'{{|File|}}" + filepath.Join(paths.GetStateDir(), strings.ToLower(version.ApplicationName)+".fatal.log") + "{{[-]}}'{{|FatalFooter|}},",
+		"and appended to {{[-]}}'{{|File|}}" + filepath.Join(paths.GetStateDir(), strings.ToLower(version.ApplicationName)+".log") + "{{[-]}}'{{|FatalFooter|}}.",
 	}
 
 	// 4. Log Everything
@@ -529,7 +529,7 @@ func Fatal(ctx context.Context, msg any, args ...any) {
 	output := []any{
 		msg,
 		"",
-		"{{_FatalFooter_}}Please let the dev know of this error.",
+		"{{|FatalFooter|}}Please let the dev know of this error.",
 	}
 	now := time.Now()
 	logAt(ctx, now, LevelFatal, output, args...)

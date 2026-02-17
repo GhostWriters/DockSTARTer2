@@ -44,7 +44,7 @@ func Status(ctx context.Context, app string, conf config.AppConfig) string {
 	nice := GetNiceName(ctx, appUpper)
 
 	if !IsAppNameValid(appUpper) {
-		return fmt.Sprintf("{{_App_}}%s{{|-|}} is not a valid application name.", nice)
+		return fmt.Sprintf("{{|App|}}%s{{[-]}} is not a valid application name.", nice)
 	}
 
 	if IsAppReferenced(ctx, appUpper, conf) {
@@ -59,16 +59,16 @@ func Status(ctx context.Context, app string, conf config.AppConfig) string {
 
 		if isAdded {
 			if IsAppEnabled(appUpper, envFile) {
-				return fmt.Sprintf("{{_App_}}%s{{|-|}} is enabled.", nice)
+				return fmt.Sprintf("{{|App|}}%s{{[-]}} is enabled.", nice)
 			}
-			return fmt.Sprintf("{{_App_}}%s{{|-|}} is disabled.", nice)
+			return fmt.Sprintf("{{|App|}}%s{{[-]}} is disabled.", nice)
 		}
-		return fmt.Sprintf("{{_App_}}%s{{|-|}} is referenced.", nice)
+		return fmt.Sprintf("{{|App|}}%s{{[-]}} is referenced.", nice)
 	}
 
 	if IsAppBuiltIn(appUpper) {
-		return fmt.Sprintf("{{_App_}}%s{{|-|}} is not added.", nice)
+		return fmt.Sprintf("{{|App|}}%s{{[-]}} is not added.", nice)
 	}
 
-	return fmt.Sprintf("{{_App_}}%s{{|-|}} does not exist.", nice)
+	return fmt.Sprintf("{{|App|}}%s{{[-]}} does not exist.", nice)
 }

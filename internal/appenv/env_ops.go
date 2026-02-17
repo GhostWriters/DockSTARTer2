@@ -43,7 +43,7 @@ func EnvCreate(ctx context.Context, conf config.AppConfig) error {
 
 	// 3. Ensure Folders
 	if _, err := os.Stat(conf.Paths.ComposeFolder); os.IsNotExist(err) {
-		logger.Notice(ctx, "Creating folder '{{_Folder_}}%s{{|-|}}'.", conf.Paths.ComposeFolder)
+		logger.Notice(ctx, "Creating folder '{{|Folder|}}%s{{[-]}}'.", conf.Paths.ComposeFolder)
 		if err := os.MkdirAll(conf.Paths.ComposeFolder, 0755); err != nil {
 			logger.Fatal(ctx, "Failed to create compose folder: %v", err)
 		}
@@ -51,7 +51,7 @@ func EnvCreate(ctx context.Context, conf config.AppConfig) error {
 		return err
 	}
 	if _, err := os.Stat(conf.Paths.ConfigFolder); os.IsNotExist(err) {
-		logger.Notice(ctx, "Creating folder '{{_Folder_}}%s{{|-|}}'.", conf.Paths.ConfigFolder)
+		logger.Notice(ctx, "Creating folder '{{|Folder|}}%s{{[-]}}'.", conf.Paths.ConfigFolder)
 		if err := os.MkdirAll(conf.Paths.ConfigFolder, 0755); err != nil {
 			logger.Fatal(ctx, "Failed to create config folder: %v", err)
 		}
@@ -61,7 +61,7 @@ func EnvCreate(ctx context.Context, conf config.AppConfig) error {
 
 	// 2. Backup
 	if _, err := os.Stat(envFile); err == nil {
-		logger.Info(ctx, "File '{{_File_}}%s{{|-|}}' found.", envFile)
+		logger.Info(ctx, "File '{{|File|}}%s{{[-]}}' found.", envFile)
 		if err := BackupEnv(ctx, envFile); err != nil {
 			logger.Warn(ctx, "Failed to backup .env: %v", err)
 		}
@@ -71,7 +71,7 @@ func EnvCreate(ctx context.Context, conf config.AppConfig) error {
 		}
 	} else {
 		// 3. Create from default if missing
-		logger.Warn(ctx, "File '{{_File_}}%s{{|-|}}' not found. Copying example template.", envFile)
+		logger.Warn(ctx, "File '{{|File|}}%s{{[-]}}' not found. Copying example template.", envFile)
 
 		defaultContent, err := assets.GetDefaultEnv()
 		if err != nil {
@@ -110,7 +110,7 @@ func BackupEnv(ctx context.Context, file string) error {
 	// Bash does full timestamp folder.
 	// For now, let's do .bak to basic safety.
 	bak := file + ".bak"
-	logger.Info(ctx, "Copying '{{_File_}}.env{{|-|}}' file to '{{_File_}}%s{{|-|}}'", bak)
+	logger.Info(ctx, "Copying '{{|File|}}.env{{[-]}}' file to '{{|File|}}%s{{[-]}}'", bak)
 	input, err := os.ReadFile(file)
 	if err != nil {
 		return err
@@ -348,10 +348,10 @@ func SanitizeEnv(ctx context.Context, file string, conf config.AppConfig) error 
 
 	// 3. Log and Apply Updates
 	if len(updatedVars) > 0 {
-		logger.Notice(ctx, "Setting variables in '{{_File_}}%s{{|-|}}':", file)
+		logger.Notice(ctx, "Setting variables in '{{|File|}}%s{{[-]}}':", file)
 		for _, key := range updatedVars {
 			val := updates[key]
-			logger.Notice(ctx, "\t{{_Var_}}%s=%s{{|-|}}", key, val)
+			logger.Notice(ctx, "\t{{|Var|}}%s=%s{{[-]}}", key, val)
 			SetLiteral(key, val, file)
 		}
 	}

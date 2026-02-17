@@ -10,9 +10,9 @@ import (
 func TestStrip(t *testing.T) {
 	// Setup style maps via ensureMaps
 	ensureMaps()
-	semanticMap["notice"] = "{{|green|}}"
-	semanticMap["applicationname"] = "{{|cyan::B|}}"
-	semanticMap["version"] = "{{|cyan|}}"
+	semanticMap["notice"] = "green"        // RAW value (no brackets)
+	semanticMap["applicationname"] = "cyan::B"
+	semanticMap["version"] = "cyan"
 
 	tests := []struct {
 		name     string
@@ -26,7 +26,7 @@ func TestStrip(t *testing.T) {
 		},
 		{
 			name:     "Semantic tag",
-			input:    "{{_Notice_}}Hello{{|-|}}",
+			input:    "{{|Notice|}}Hello{{[-]}}",
 			expected: "Hello",
 		},
 		{
@@ -41,22 +41,22 @@ func TestStrip(t *testing.T) {
 		},
 		{
 			name:     "Multiple semantic tags",
-			input:    "{{_ApplicationName_}}App{{|-|}} {{_Version_}}v1.0{{|-|}}",
+			input:    "{{|ApplicationName|}}App{{[-]}} {{|Version|}}v1.0{{[-]}}",
 			expected: "App v1.0",
 		},
 		{
 			name:     "Mixed literal and semantic",
-			input:    "{{_Notice_}}Update [v2.0] available{{|-|}}",
+			input:    "{{|Notice|}}Update [v2.0] available{{[-]}}",
 			expected: "Update [v2.0] available",
 		},
 		{
 			name:     "Direct color tag",
-			input:    "{{|red|}}Error{{|-|}}",
+			input:    "{{[red]}}Error{{[-]}}",
 			expected: "Error",
 		},
 		{
 			name:     "Direct style tag",
-			input:    "{{|cyan::B|}}Bold cyan{{|-|}}",
+			input:    "{{[cyan::B]}}Bold cyan{{[-]}}",
 			expected: "Bold cyan",
 		},
 	}
@@ -94,8 +94,8 @@ func TestStripANSI(t *testing.T) {
 		},
 		{
 			name:     "Mixed ANSI and tags",
-			input:    "\x1b[31m{{_Notice_}}Hello{{|-|}}\x1b[0m",
-			expected: "{{_Notice_}}Hello{{|-|}}", // Note: StripANSI ONLY strips real ANSI, Strip() strips both
+			input:    "\x1b[31m{{|Notice|}}Hello{{[-]}}\x1b[0m",
+			expected: "{{|Notice|}}Hello{{[-]}}", // Note: StripANSI ONLY strips real ANSI, Strip() strips both
 		},
 	}
 
@@ -111,9 +111,9 @@ func TestStripANSI(t *testing.T) {
 
 func TestExpandTags(t *testing.T) {
 	ensureMaps()
-	semanticMap["notice"] = "{{|green|}}"
-	semanticMap["applicationname"] = "{{|cyan::B|}}"
-	semanticMap["version"] = "{{|cyan|}}"
+	semanticMap["notice"] = "green"        // RAW value (no brackets)
+	semanticMap["applicationname"] = "cyan::B"
+	semanticMap["version"] = "cyan"
 
 	tests := []struct {
 		name     string
@@ -122,27 +122,27 @@ func TestExpandTags(t *testing.T) {
 	}{
 		{
 			name:     "Resolve semantic tag",
-			input:    "{{_Notice_}}Text{{|-|}}",
-			expected: "{{|green|}}Text{{|-|}}",
+			input:    "{{|Notice|}}Text{{[-]}}",
+			expected: "{{[green]}}Text{{[-]}}",
 		},
 		{
 			name:     "ApplicationName semantic",
-			input:    "{{_ApplicationName_}}",
-			expected: "{{|cyan::B|}}",
+			input:    "{{|ApplicationName|}}",
+			expected: "{{[cyan::B]}}",
 		},
 		{
 			name:     "Direct color stays intact",
-			input:    "{{|red|}}Error{{|-|}}",
-			expected: "{{|red|}}Error{{|-|}}",
+			input:    "{{[red]}}Error{{[-]}}",
+			expected: "{{[red]}}Error{{[-]}}",
 		},
 		{
 			name:     "Preserve literal brackets",
-			input:    "{{_Notice_}}Version [v2.0]{{|-|}}",
-			expected: "{{|green|}}Version [v2.0]{{|-|}}",
+			input:    "{{|Notice|}}Version [v2.0]{{[-]}}",
+			expected: "{{[green]}}Version [v2.0]{{[-]}}",
 		},
 		{
 			name:     "Unknown semantic tag - strip it",
-			input:    "{{_UnknownTag_}}",
+			input:    "{{|UnknownTag|}}",
 			expected: "",
 		},
 	}
@@ -165,9 +165,9 @@ func TestToANSI(t *testing.T) {
 	ensureMaps()
 	BuildColorMap()
 
-	// Register test-specific semantic tags
-	semanticMap["notice"] = "{{|green|}}"
-	semanticMap["version"] = "{{|cyan|}}"
+	// Register test-specific semantic tags (RAW values)
+	semanticMap["notice"] = "green"
+	semanticMap["version"] = "cyan"
 
 	tests := []struct {
 		name     string
@@ -176,37 +176,37 @@ func TestToANSI(t *testing.T) {
 	}{
 		{
 			name:     "Resolve semantic to ANSI",
-			input:    "{{_Notice_}}Hello{{|-|}}",
+			input:    "{{|Notice|}}Hello{{[-]}}",
 			expected: "\x1b[32m" + "Hello" + CodeReset,
 		},
 		{
 			name:     "Resolve direct tag (color)",
-			input:    "{{|red|}}Error{{|-|}}",
+			input:    "{{[red]}}Error{{[-]}}",
 			expected: "\x1b[31m" + "Error" + CodeReset,
 		},
 		{
 			name:     "Resolve direct tag (color:bg)",
-			input:    "{{|white:red|}}Alert{{|-|}}",
+			input:    "{{[white:red]}}Alert{{[-]}}",
 			expected: "\x1b[37m\x1b[41m" + "Alert" + CodeReset,
 		},
 		{
 			name:     "Resolve direct tag (color::flags)",
-			input:    "{{|cyan::B|}}Bold{{|-|}}",
+			input:    "{{[cyan::B]}}Bold{{[-]}}",
 			expected: "\x1b[36m" + CodeBold + "Bold" + CodeReset,
 		},
 		{
 			name:     "Resolve direct tag (color:bg:flags)",
-			input:    "{{|red:white:U|}}Underline{{|-|}}",
+			input:    "{{[red:white:U]}}Underline{{[-]}}",
 			expected: "\x1b[31m\x1b[47m" + CodeUnderline + "Underline" + CodeReset,
 		},
 		{
 			name:     "Direct style with High Intensity (H) to ANSI",
-			input:    "{{|red::H|}}Vibrant{{|-|}}",
+			input:    "{{[red::H]}}Vibrant{{[-]}}",
 			expected: "\x1b[91m" + "Vibrant" + CodeReset,
 		},
 		{
 			name:     "Direct style with mix High Intensity and Dim (HD) to ANSI",
-			input:    "{{|red::HD|}}MutedVibrant{{|-|}}",
+			input:    "{{[red::HD]}}MutedVibrant{{[-]}}",
 			expected: "\x1b[91m" + CodeDim + "MutedVibrant" + CodeReset,
 		},
 	}
@@ -223,12 +223,12 @@ func TestToANSI(t *testing.T) {
 
 func TestBackwardsCompatibility(t *testing.T) {
 	ensureMaps()
-	semanticMap["notice"] = "{{|green|}}"
+	semanticMap["notice"] = "green"  // RAW value
 
 	isTTYGlobal = true
 	SetPreferredProfile(termenv.TrueColor)
 
-	input := "{{_Notice_}}Test{{|-|}}"
+	input := "{{|Notice|}}Test{{[-]}}"
 
 	// Test Parse alias
 	parseResult := Parse(input)
@@ -253,7 +253,7 @@ func TestBackwardsCompatibility(t *testing.T) {
 
 func TestSemanticVsDirectDistinction(t *testing.T) {
 	ensureMaps()
-	semanticMap["blue"] = "{{|#0066CC|}}" // Custom blue shade
+	semanticMap["blue"] = "#0066CC" // Custom blue shade (RAW value)
 
 	tests := []struct {
 		name     string
@@ -262,18 +262,18 @@ func TestSemanticVsDirectDistinction(t *testing.T) {
 	}{
 		{
 			name:     "Semantic blue uses custom color",
-			input:    "{{_blue_}}",
-			expected: "{{|#0066CC|}}",
+			input:    "{{|blue|}}",
+			expected: "{{[#0066CC]}}",
 		},
 		{
 			name:     "Direct blue uses default blue",
-			input:    "{{|blue|}}",
-			expected: "{{|blue|}}",
+			input:    "{{[blue]}}",
+			expected: "{{[blue]}}",
 		},
 		{
 			name:     "Mixed semantic and direct",
-			input:    "{{_blue_}}custom{{|-|}} vs {{|blue|}}standard{{|-|}}",
-			expected: "{{|#0066CC|}}custom{{|-|}} vs {{|blue|}}standard{{|-|}}",
+			input:    "{{|blue|}}custom{{[-]}} vs {{[blue]}}standard{{[-]}}",
+			expected: "{{[#0066CC]}}custom{{[-]}} vs {{[blue]}}standard{{[-]}}",
 		},
 	}
 

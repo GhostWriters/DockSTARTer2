@@ -30,9 +30,9 @@ func QuestionPrompt(ctx context.Context, printer Printer, question string, defau
 		defaultYes := strings.EqualFold(defaultValue, "y")
 		answer := TUIConfirm("Confirmation", question, defaultYes)
 		if answer {
-			printer(ctx, "Answered: {{_Yes_}}Yes{{|-|}}")
+			printer(ctx, "Answered: {{|Yes|}}Yes{{[-]}}")
 		} else {
-			printer(ctx, "Answered: {{_No_}}No{{|-|}}")
+			printer(ctx, "Answered: {{|No|}}No{{[-]}}")
 		}
 		return answer
 	}
@@ -123,9 +123,9 @@ func QuestionPrompt(ctx context.Context, printer Printer, question string, defau
 	}
 
 	if answer {
-		printer(ctx, "Answered: {{_Yes_}}Yes{{|-|}}")
+		printer(ctx, "Answered: {{|Yes|}}Yes{{[-]}}")
 	} else {
-		printer(ctx, "Answered: {{_No_}}No{{|-|}}")
+		printer(ctx, "Answered: {{|No|}}No{{[-]}}")
 	}
 
 	return answer

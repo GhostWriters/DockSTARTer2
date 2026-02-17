@@ -45,7 +45,7 @@ func CreateAll(ctx context.Context, force bool, conf config.AppConfig) error {
 	}
 
 	if len(added) == 0 {
-		logger.Notice(ctx, "'{{_File_}}%s{{|-|}}' does not contain any added ", envFile)
+		logger.Notice(ctx, "'{{|File|}}%s{{[-]}}' does not contain any added ", envFile)
 		return nil
 	}
 
@@ -79,14 +79,14 @@ func CreateApp(ctx context.Context, appNameRaw string, conf config.AppConfig) er
 
 	niceName := GetNiceName(ctx, appNameUpper)
 	if !IsAppNameValid(appNameUpper) {
-		return fmt.Errorf("'{{_App_}}%s{{|-|}}' is not a valid application name", niceName)
+		return fmt.Errorf("'{{|App|}}%s{{[-]}}' is not a valid application name", niceName)
 	}
 
 	envFile := filepath.Join(conf.ComposeDir, ".env")
 	appName := strings.ToLower(appNameUpper)
 
 	if IsAppBuiltIn(appName) {
-		logger.Info(ctx, "Creating environment variables for '{{_App_}}%s{{|-|}}'.", niceName)
+		logger.Info(ctx, "Creating environment variables for '{{|App|}}%s{{[-]}}'.", niceName)
 
 		// 1. Get path to Global .env instance file
 		processedGlobalEnv, err := AppInstanceFile(ctx, appName, constants.EnvFileName)
@@ -109,10 +109,10 @@ func CreateApp(ctx context.Context, appNameRaw string, conf config.AppConfig) er
 			}
 		}
 
-		logger.Info(ctx, "Environment variables created for '{{_App_}}%s{{|-|}}'.", niceName)
+		logger.Info(ctx, "Environment variables created for '{{|App|}}%s{{[-]}}'.", niceName)
 		return nil
 	} else {
-		logger.Warn(ctx, "Application '{{_App_}}%s{{|-|}}' does not exist.", niceName)
+		logger.Warn(ctx, "Application '{{|App|}}%s{{[-]}}' does not exist.", niceName)
 		return nil
 	}
 }

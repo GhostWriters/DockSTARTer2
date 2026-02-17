@@ -471,11 +471,11 @@ func (m programBoxWithBackdrop) View() tea.View {
 // RunProgramBox displays a program box dialog that shows command output
 func RunProgramBox(ctx context.Context, title, subtitle string, task func(context.Context, io.Writer) error) error {
 	// Automatically append reset tags to title/subtitle if missing
-	if title != "" && !strings.HasSuffix(title, "{{|-|}}") {
-		title += "{{|-|}}"
+	if title != "" && !strings.HasSuffix(title, "{{[-]}}") {
+		title += "{{[-]}}"
 	}
-	if subtitle != "" && !strings.HasSuffix(subtitle, "{{|-|}}") {
-		subtitle += "{{|-|}}"
+	if subtitle != "" && !strings.HasSuffix(subtitle, "{{[-]}}") {
+		subtitle += "{{[-]}}"
 	}
 
 	// Initialize global zone manager for mouse support (safe to call multiple times)
