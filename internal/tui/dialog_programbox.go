@@ -7,17 +7,37 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/theme"
 
 	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/progress"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 )
+
+// TaskStatus defines the state of a background task
+type TaskStatus int
+
+const (
+	StatusWaiting TaskStatus = iota
+	StatusInProgress
+	StatusCompleted
+)
+
+// Task represents a structured progress item
+type Task struct {
+	Label     string
+	Command   string
+	Apps      []string
+	Status    TaskStatus
+	ActiveApp string
+}
 
 // ProgramBoxModel represents a dialog that displays streaming program output
 type ProgramBoxModel struct {
@@ -31,14 +51,25 @@ type ProgramBoxModel struct {
 	width    int
 	height   int
 
-	// Dialog behavior
-	isDialog bool
-	task     func(context.Context, io.Writer) error
-	focused  bool
+	// Dialog behavior and auto-close
+	isDialog       bool
+	maximized      bool
+	autoClose      bool
+	autoCloseDelay time.Duration
+	task           func(context.Context, io.Writer) error
+	focused        bool
+
+	// Progress tracking
+	Tasks    []Task
+	Percent  float64
+	progress progress.Model
 }
 
 // programBoxModel is an alias for backward compatibility
 type programBoxModel = ProgramBoxModel
+
+// autoCloseMsg signals that the auto-close delay is over
+type autoCloseMsg struct{}
 
 // outputLineMsg carries a new line of output
 type outputLineMsg struct {
@@ -48,6 +79,18 @@ type outputLineMsg struct {
 // outputDoneMsg signals that output is complete
 type outputDoneMsg struct {
 	err error
+}
+
+// UpdateTaskMsg updates a task's status or active app
+type UpdateTaskMsg struct {
+	Label     string
+	Status    TaskStatus
+	ActiveApp string
+}
+
+// UpdatePercentMsg updates the progress bar percentage
+type UpdatePercentMsg struct {
+	Percent float64
 }
 
 // newProgramBox creates a new program box dialog (internal use)
@@ -61,6 +104,7 @@ func newProgramBox(title, subtitle, command string) *ProgramBoxModel {
 		command:  command,
 		viewport: viewport.New(),
 		lines:    []string{},
+		Tasks:    []Task{},
 		focused:  true,
 	}
 
@@ -72,7 +116,52 @@ func newProgramBox(title, subtitle, command string) *ProgramBoxModel {
 		Background(styles.Console.GetBackground()).
 		Foreground(styles.Console.GetForeground())
 
+	// Initialize progress bar with default options
+	m.progress = progress.New()
+
 	return m
+}
+
+// AddTask adds a task category to the progress header
+func (m *ProgramBoxModel) AddTask(label, command string, apps []string) {
+	m.Tasks = append(m.Tasks, Task{
+		Label:   label,
+		Command: command,
+		Apps:    apps,
+		Status:  StatusWaiting,
+	})
+}
+
+// UpdateTaskStatus updates a task's state and active app
+func (m *ProgramBoxModel) UpdateTaskStatus(label string, status TaskStatus, activeApp string) {
+	for i, t := range m.Tasks {
+		if t.Label == label {
+			m.Tasks[i].Status = status
+			m.Tasks[i].ActiveApp = activeApp
+			break
+		}
+	}
+}
+
+// SetPercent updates the progress bar percentage (0.0 to 1.0)
+func (m *ProgramBoxModel) SetPercent(percent float64) {
+	m.Percent = percent
+}
+
+// SetMaximized sets whether the dialog should be maximized
+func (m *ProgramBoxModel) SetMaximized(maximized bool) {
+	m.maximized = maximized
+}
+
+// IsMaximized returns whether the dialog is maximized
+func (m *ProgramBoxModel) IsMaximized() bool {
+	return m.maximized
+}
+
+// SetAutoClose sets whether the dialog should auto-close after completion
+func (m *ProgramBoxModel) SetAutoClose(autoClose bool, delay time.Duration) {
+	m.autoClose = autoClose
+	m.autoCloseDelay = delay
 }
 
 // NewProgramBoxModel creates a new program box dialog (exported)

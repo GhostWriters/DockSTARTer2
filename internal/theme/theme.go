@@ -87,11 +87,27 @@ type ThemeConfig struct {
 	HelplineFG           color.Color
 	HelplineBG           color.Color
 	HelplineStyles       StyleFlags
-	ProgramFG            color.Color
-	ProgramBG            color.Color
-	ProgramStyles        StyleFlags
-	LogPanelFG           color.Color
-	LogPanelBG           color.Color
+	ProgramFG                color.Color
+	ProgramBG                color.Color
+	ProgramStyles            StyleFlags
+	LogBoxFG                 color.Color
+	LogBoxBG                 color.Color
+	LogBoxStyles             StyleFlags
+	LogPanelFG               color.Color
+	LogPanelBG               color.Color
+	HeaderTag                string
+	ProgressWaitingFG        color.Color
+	ProgressWaitingBG        color.Color
+	ProgressWaitingStyles    StyleFlags
+	ProgressInProgressFG     color.Color
+	ProgressInProgressBG     color.Color
+	ProgressInProgressStyles StyleFlags
+	ProgressCompletedFG      color.Color
+	ProgressCompletedBG      color.Color
+	ProgressCompletedStyles  StyleFlags
+	VersionSelectedFG        color.Color
+	VersionSelectedBG        color.Color
+	VersionSelectedStyles    StyleFlags
 }
 
 // Current holds the active theme configuration
@@ -161,7 +177,13 @@ func updateTagsFromCurrent() {
 	console.RegisterSemanticTagRaw("Theme_Helpline", buildRawTag(Current.HelplineFG, Current.HelplineBG, Current.HelplineStyles))
 	console.RegisterSemanticTagRaw("Theme_ItemHelp", buildRawTag(Current.HelplineFG, Current.HelplineBG, Current.HelplineStyles))
 	console.RegisterSemanticTagRaw("Theme_Program", buildRawTag(Current.ProgramFG, Current.ProgramBG, Current.ProgramStyles))
+	console.RegisterSemanticTagRaw("Theme_ProgramBox", buildRawTag(Current.ProgramFG, Current.ProgramBG, Current.ProgramStyles))
+	console.RegisterSemanticTagRaw("Theme_LogBox", buildRawTag(Current.LogBoxFG, Current.LogBoxBG, Current.LogBoxStyles))
 	regComp("LogPanel", Current.LogPanelFG, Current.LogPanelBG)
+	console.RegisterSemanticTagRaw("Theme_ProgressWaiting", buildRawTag(Current.ProgressWaitingFG, Current.ProgressWaitingBG, Current.ProgressWaitingStyles))
+	console.RegisterSemanticTagRaw("Theme_ProgressInProgress", buildRawTag(Current.ProgressInProgressFG, Current.ProgressInProgressBG, Current.ProgressInProgressStyles))
+	console.RegisterSemanticTagRaw("Theme_ProgressCompleted", buildRawTag(Current.ProgressCompletedFG, Current.ProgressCompletedBG, Current.ProgressCompletedStyles))
+	console.RegisterSemanticTagRaw("Theme_VersionSelected", buildRawTag(Current.VersionSelectedFG, Current.VersionSelectedBG, Current.VersionSelectedStyles))
 }
 
 // buildRawTag constructs a raw "fg:bg:flags" string (no delimiters)
@@ -231,10 +253,20 @@ func Default() {
 		TagKeySelectedBG: parseColor("red"),
 		HelplineFG:       parseColor("black"),
 		HelplineBG:       parseColor("cyan"),
-		ProgramFG:        parseColor("bright-white"),
-		ProgramBG:        parseColor("black"),
-		LogPanelFG:       parseColor("cyan"),
-		LogPanelBG:       parseColor("black"),
+		ProgramFG:            parseColor("bright-white"),
+		ProgramBG:            parseColor("black"),
+		LogBoxFG:             parseColor("bright-white"),
+		LogBoxBG:             parseColor("black"),
+		LogPanelFG:           parseColor("cyan"),
+		LogPanelBG:           parseColor("black"),
+		ProgressWaitingFG:    parseColor("gray"),
+		ProgressWaitingBG:    parseColor("cyan"),
+		ProgressInProgressFG: parseColor("yellow"),
+		ProgressInProgressBG: parseColor("cyan"),
+		ProgressCompletedFG:  parseColor("green"),
+		ProgressCompletedBG:  parseColor("cyan"),
+		VersionSelectedFG:    parseColor("bright-white"),
+		VersionSelectedBG:    parseColor("blue"),
 	}
 	Apply()
 
@@ -560,10 +592,22 @@ func parseThemeTOML(path string) error {
 			Current.TagKeySelectedFG, Current.TagKeySelectedBG, Current.TagKeySelectedStyles = parseRawWithStyles(styleValue)
 		case "Helpline", "ItemHelp", "itemhelp_color":
 			Current.HelplineFG, Current.HelplineBG, Current.HelplineStyles = parseRawWithStyles(styleValue)
-		case "Program":
+		case "Program", "ProgramBox":
 			Current.ProgramFG, Current.ProgramBG, Current.ProgramStyles = parseRawWithStyles(styleValue)
+		case "LogBox":
+			Current.LogBoxFG, Current.LogBoxBG, Current.LogBoxStyles = parseRawWithStyles(styleValue)
 		case "LogPanel":
 			Current.LogPanelFG, Current.LogPanelBG = fg, bg
+		case "Header":
+			Current.HeaderTag = styleValue
+		case "ProgressWaiting":
+			Current.ProgressWaitingFG, Current.ProgressWaitingBG, Current.ProgressWaitingStyles = parseRawWithStyles(styleValue)
+		case "ProgressInProgress":
+			Current.ProgressInProgressFG, Current.ProgressInProgressBG, Current.ProgressInProgressStyles = parseRawWithStyles(styleValue)
+		case "ProgressCompleted":
+			Current.ProgressCompletedFG, Current.ProgressCompletedBG, Current.ProgressCompletedStyles = parseRawWithStyles(styleValue)
+		case "VersionSelected":
+			Current.VersionSelectedFG, Current.VersionSelectedBG, Current.VersionSelectedStyles = parseRawWithStyles(styleValue)
 		}
 	}
 

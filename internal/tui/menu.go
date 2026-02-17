@@ -381,6 +381,11 @@ func (m *MenuModel) SetMaximized(maximized bool) {
 	m.maximized = maximized
 }
 
+// SetShowExit sets whether to show the Exit button
+func (m *MenuModel) SetShowExit(show bool) {
+	m.showExit = show
+}
+
 // IsMaximized returns whether the menu is maximized
 func (m MenuModel) IsMaximized() bool {
 	return m.maximized

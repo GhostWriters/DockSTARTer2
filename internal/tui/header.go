@@ -3,13 +3,29 @@ package tui
 import (
 	"os"
 
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/update"
 	"DockSTARTer2/internal/version"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/spf13/pflag"
+	zone "github.com/lrstanley/bubblezone/v2"
+)
+
+// HeaderFocus states for interactive elements
+type HeaderFocus int
+
+const (
+	HeaderFocusNone HeaderFocus = iota
+	HeaderFocusApp
+	HeaderFocusTmpl
+)
+
+// Zone IDs
+const (
+	ZoneAppVersion  = "header_app_ver"
+	ZoneTmplVersion = "header_tmpl_ver"
 )
 
 // HeaderModel represents the header bar at the top of the TUI
@@ -19,6 +35,7 @@ type HeaderModel struct {
 	// Cached values
 	hostname string
 	flags    []string
+	focus    HeaderFocus
 }
 
 // NewHeaderModel creates a new header model
@@ -26,22 +43,23 @@ func NewHeaderModel() HeaderModel {
 	hostname, _ := os.Hostname()
 
 	var flags []string
-	if v, _ := pflag.CommandLine.GetBool("verbose"); v {
+	if console.Verbose() {
 		flags = append(flags, "VERBOSE")
 	}
-	if d, _ := pflag.CommandLine.GetBool("debug"); d {
+	if console.Debug() {
 		flags = append(flags, "DEBUG")
 	}
-	if f, _ := pflag.CommandLine.GetBool("force"); f {
+	if console.Force() {
 		flags = append(flags, "FORCE")
 	}
-	if y, _ := pflag.CommandLine.GetBool("yes"); y {
+	if console.AssumeYes() {
 		flags = append(flags, "YES")
 	}
 
 	return HeaderModel{
 		hostname: hostname,
 		flags:    flags,
+		focus:    HeaderFocusNone,
 	}
 }
 
@@ -63,6 +81,35 @@ func (m *HeaderModel) SetWidth(width int) {
 // Refresh updates the header (called when update status changes)
 func (m *HeaderModel) Refresh() {
 	// Nothing to cache currently, but could be used for update status
+}
+
+// SetFocus sets the focus state of the header
+func (m *HeaderModel) SetFocus(f HeaderFocus) {
+	m.focus = f
+}
+
+// GetFocus returns the current focus state
+func (m *HeaderModel) GetFocus() HeaderFocus {
+	return m.focus
+}
+
+// HandleMouse handles mouse events for the header
+// Returns true if the event was handled (and potentially a command)
+func (m *HeaderModel) HandleMouse(msg tea.MouseClickMsg) (bool, tea.Cmd) {
+	if msg.Button != tea.MouseLeft {
+		return false, nil
+	}
+
+	if zi := zone.Get(ZoneAppVersion); zi != nil && zi.InBounds(msg) {
+		m.SetFocus(HeaderFocusApp)
+		return true, nil
+	}
+	if zi := zone.Get(ZoneTmplVersion); zi != nil && zi.InBounds(msg) {
+		m.SetFocus(HeaderFocusTmpl)
+		return true, nil
+	}
+
+	return false, nil
 }
 
 // View renders the header as a string (used by backdrop for compositing)
@@ -136,29 +183,49 @@ func (m HeaderModel) renderRight() string {
 	appVer := version.Version
 	tmplVer := paths.GetTemplatesVersion()
 
-	var rightText string
-	// Show update indicator: "?" if check failed, "*" if update available, " " otherwise
-	if update.UpdateCheckError {
-		rightText += "{{|Theme_ApplicationUpdate|}}?{{[-]}}"
-		rightText += "{{|Theme_ApplicationVersion|}}A:[{{[-]}}{{|Theme_ApplicationUpdate|}}" + appVer + "{{[-]}}{{|Theme_ApplicationVersion|}}]{{[-]}}"
-	} else if update.AppUpdateAvailable {
-		rightText += "{{|Theme_ApplicationUpdate|}}*{{[-]}}"
-		rightText += "{{|Theme_ApplicationVersion|}}A:[{{[-]}}{{|Theme_ApplicationUpdate|}}" + appVer + "{{[-]}}{{|Theme_ApplicationVersion|}}]{{[-]}}"
-	} else {
-		rightText += " "
-		rightText += "{{|Theme_ApplicationVersion|}}A:[" + appVer + "]{{[-]}}"
+	// Helper to render version blocks
+	// format: [StatusIcon] [Label][ [Version] ]
+	renderVersionBlock := func(ver string, label string, isAvailable bool, isError bool, isFocused bool, zoneID string) string {
+		var text string
+
+		// 1. Status Icon / Prefix
+		if isError {
+			text += "{{|Theme_ApplicationUpdate|}}?{{|Theme_StatusBar|}}"
+		} else if isAvailable {
+			text += "{{|Theme_ApplicationUpdate|}}*{{|Theme_StatusBar|}}"
+		} else {
+			text += " "
+		}
+
+		// 2. Label + Open Bracket (Standard or Update color)
+		// Typically label is cyan/Theme_ApplicationVersion
+		text += "{{|Theme_ApplicationVersion|}}" + label + ":[{{|Theme_StatusBar|}}"
+
+		// 3. Version Number (The Interactive Part)
+		// If Focused -> Selection Style
+		// If Update/Error -> Update Style (Red/Yellow)
+		// Else -> Default Style (Inherit or specific)
+		var verStyled string
+		if isFocused {
+			verStyled = "{{|Theme_VersionSelected|}}" + ver + "{{|Theme_StatusBar|}}"
+		} else if isError || isAvailable {
+			verStyled = "{{|Theme_ApplicationUpdate|}}" + ver + "{{|Theme_StatusBar|}}"
+		} else {
+			// Inherit Theme_ApplicationVersion for standard look, but since we reset before, we must apply it
+			verStyled = "{{|Theme_ApplicationVersion|}}" + ver + "{{|Theme_StatusBar|}}"
+		}
+		text += verStyled
+
+		// 4. Close Bracket
+		text += "{{|Theme_ApplicationVersion|}}]{{|Theme_StatusBar|}}"
+
+		// 5. Wrap in Zone for clicking (Mouse area covers full block)
+		return zone.Mark(zoneID, MaintainBackground(RenderThemeText(text, styles.HeaderBG), styles.HeaderBG))
 	}
 
-	if update.UpdateCheckError {
-		rightText += "{{|Theme_ApplicationUpdate|}}?{{[-]}}"
-		rightText += "{{|Theme_ApplicationVersion|}}T:[{{[-]}}{{|Theme_ApplicationUpdate|}}" + tmplVer + "{{[-]}}{{|Theme_ApplicationVersion|}}]{{[-]}}"
-	} else if update.TmplUpdateAvailable {
-		rightText += "{{|Theme_ApplicationUpdate|}}*{{[-]}}"
-		rightText += "{{|Theme_ApplicationVersion|}}T:[{{[-]}}{{|Theme_ApplicationUpdate|}}" + tmplVer + "{{[-]}}{{|Theme_ApplicationVersion|}}]{{[-]}}"
-	} else {
-		rightText += " "
-		rightText += "{{|Theme_ApplicationVersion|}}T:[" + tmplVer + "]{{[-]}}"
-	}
+	appText := renderVersionBlock(appVer, "A", update.AppUpdateAvailable, update.UpdateCheckError, m.focus == HeaderFocusApp, ZoneAppVersion)
+	tmplText := renderVersionBlock(tmplVer, "T", update.TmplUpdateAvailable, update.UpdateCheckError, m.focus == HeaderFocusTmpl, ZoneTmplVersion)
 
-	return MaintainBackground(RenderThemeText(rightText, styles.HeaderBG), styles.HeaderBG)
+	// Join them
+	return lipgloss.JoinHorizontal(lipgloss.Top, appText, tmplText)
 }

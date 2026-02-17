@@ -182,7 +182,58 @@ func init() {
 	createAppSelectionScreen = func() ScreenModel { return nil }
 }
 
-// TriggerUpdate returns a command that initiates the update process
+// TriggerAppUpdate returns a tea.Cmd that performs the application update.
+// It detects the currently active screen to support sticky restarts (using --menu pagename).
+func TriggerAppUpdate() tea.Cmd {
+	return func() tea.Msg {
+		task := func(ctx context.Context, w io.Writer) error {
+			// Redirect logger to the TUI writer
+			ctx = logger.WithTUIWriter(ctx, w)
+
+			force := console.Force()
+			yes := console.AssumeYes()
+
+			// We use CurrentPageName (tracked in tui/model.go) for sticky re-exec
+			reExecArgs := append([]string{}, console.CurrentFlags...)
+			reExecArgs = append(reExecArgs, "--menu")
+			if CurrentPageName != "" {
+				reExecArgs = append(reExecArgs, CurrentPageName)
+			}
+			reExecArgs = append(reExecArgs, console.RestArgs...)
+			return update.SelfUpdate(ctx, force, yes, "", reExecArgs)
+		}
+
+		dialog := NewProgramBoxModel("{{|Theme_TitleSuccess|}}Updating App{{[-]}}", "Checking for app updates...", "")
+		dialog.SetTask(task)
+		dialog.SetIsDialog(true)
+
+		return ShowDialogMsg{Dialog: dialog}
+	}
+}
+
+// TriggerTemplateUpdate returns a tea.Cmd that performs the template update.
+func TriggerTemplateUpdate() tea.Cmd {
+	return func() tea.Msg {
+		task := func(ctx context.Context, w io.Writer) error {
+			// Redirect logger to the TUI writer
+			ctx = logger.WithTUIWriter(ctx, w)
+
+			force := console.Force()
+			yes := console.AssumeYes()
+
+			return update.UpdateTemplates(ctx, force, yes, "")
+		}
+
+		dialog := NewProgramBoxModel("{{|Theme_TitleSuccess|}}Updating Templates{{[-]}}", "Checking for template updates...", "")
+		dialog.SetTask(task)
+		dialog.SetIsDialog(true)
+
+		return ShowDialogMsg{Dialog: dialog}
+	}
+}
+
+// TriggerUpdate returns a tea.Cmd that performs both application and template updates.
+// Kept for backward compatibility with main menu update button.
 func TriggerUpdate() tea.Cmd {
 	return func() tea.Msg {
 		task := func(ctx context.Context, w io.Writer) error {
@@ -211,5 +262,12 @@ func TriggerUpdate() tea.Cmd {
 		dialog.SetIsDialog(true)
 
 		return ShowDialogMsg{Dialog: dialog}
+	}
+}
+
+// Send sends a message to the running Bubble Tea program
+func Send(msg tea.Msg) {
+	if program != nil {
+		program.Send(msg)
 	}
 }
