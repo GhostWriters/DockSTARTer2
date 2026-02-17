@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/tui"
 
 	tea "charm.land/bubbletea/v2"
@@ -30,7 +31,7 @@ func NewConfigMenuScreen() *ConfigMenuScreen {
 			Tag:    "Select Applications",
 			Desc:   "Choose which apps to enable",
 			Help:   "Enable or disable applications",
-			Action: nil, // Not implemented yet - will navigate to app_select
+			Action: navigateToAppSelection(),
 		},
 		{
 			Tag:    "Configure Applications",
@@ -132,5 +133,13 @@ func (s *ConfigMenuScreen) MenuName() string {
 func navigateBack() tea.Cmd {
 	return func() tea.Msg {
 		return tui.NavigateBackMsg{}
+	}
+}
+
+// navigateToAppSelection returns a command to navigate to the app selection screen
+func navigateToAppSelection() tea.Cmd {
+	return func() tea.Msg {
+		conf := config.LoadAppConfig()
+		return tui.NavigateMsg{Screen: NewAppSelectionScreen(conf)}
 	}
 }

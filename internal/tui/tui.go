@@ -68,6 +68,8 @@ func Start(ctx context.Context, startMenu string) error {
 		startScreen = createConfigScreen()
 	case "options":
 		startScreen = createOptionsScreen()
+	case "app-select", "select", "config-app-select":
+		startScreen = createAppSelectionScreen()
 	default:
 		startScreen = createMainScreen()
 	}
@@ -130,8 +132,19 @@ func RunCommand(ctx context.Context, title, subtitle string, task func(context.C
 	return RunProgramBox(ctx, title, subtitle, wrappedTask)
 }
 
-// Confirm shows a confirmation dialog and returns the user's choice
+// Confirm shows a confirmation dialog and returns the user's choice.
+// If a program is already running, it sends a message to the active program.
 func Confirm(title, question string, defaultYes bool) bool {
+	if program != nil {
+		resultChan := make(chan bool)
+		program.Send(ShowConfirmDialogMsg{
+			Title:      title,
+			Question:   question,
+			DefaultYes: defaultYes,
+			ResultChan: resultChan,
+		})
+		return <-resultChan
+	}
 	return ShowConfirmDialog(title, question, defaultYes)
 }
 

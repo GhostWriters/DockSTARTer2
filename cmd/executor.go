@@ -85,6 +85,8 @@ var commandTitles = map[string]string{
 	"--theme-no-lines":           "Turned Off Line Drawing",
 	"--theme-borders":            "Turned On Borders",
 	"--theme-no-borders":         "Turned Off Borders",
+	"-S":                         "Select Applications",
+	"--select":                   "Select Applications",
 }
 
 func handleConfigSettings(ctx context.Context, group *CommandGroup) {
@@ -224,7 +226,8 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				handleRemove(subCtx, &group, &state)
 				ranCommand = true
 			case "-S", "--select", "--menu-config-app-select", "--menu-app-select":
-				logger.Fatal(subCtx, "The '{{|UserCommand|}}%s{{[-]}}' command is not implemented yet.", group.Command)
+				handleAppSelect(subCtx, &group)
+				ranCommand = true
 			case "-t", "--test":
 				handleTest(subCtx, &group)
 				ranCommand = true
@@ -365,6 +368,13 @@ func handleMenu(ctx context.Context, group *CommandGroup) {
 		target = group.Args[0]
 	}
 	if err := tui.Start(ctx, target); err != nil {
+		logger.Error(ctx, "TUI Error: %v", err)
+	}
+}
+
+func handleAppSelect(ctx context.Context, group *CommandGroup) {
+	// -S / --select always opens the app selection menu
+	if err := tui.Start(ctx, "app-select"); err != nil {
 		logger.Error(ctx, "TUI Error: %v", err)
 	}
 }
