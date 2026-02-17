@@ -88,3 +88,18 @@ func (s *OptionsMenuScreen) SetSize(width, height int) {
 func (s *OptionsMenuScreen) SetFocused(f bool) {
 	s.menu.SetFocused(f)
 }
+
+// IsMaximized implements ScreenModel
+func (s *OptionsMenuScreen) IsMaximized() bool {
+	return s.menu.IsMaximized()
+}
+
+// HasDialog implements ScreenModel
+func (s *OptionsMenuScreen) HasDialog() bool {
+	return s.menu.HasDialog()
+}
+
+// MenuName implements ScreenModel
+func (s *OptionsMenuScreen) MenuName() string {
+	return "options"
+}

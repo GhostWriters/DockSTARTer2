@@ -113,6 +113,21 @@ func (s *ConfigMenuScreen) SetFocused(f bool) {
 	s.menu.SetFocused(f)
 }
 
+// IsMaximized implements ScreenModel
+func (s *ConfigMenuScreen) IsMaximized() bool {
+	return s.menu.IsMaximized()
+}
+
+// HasDialog implements ScreenModel
+func (s *ConfigMenuScreen) HasDialog() bool {
+	return s.menu.HasDialog()
+}
+
+// MenuName implements ScreenModel
+func (s *ConfigMenuScreen) MenuName() string {
+	return "config"
+}
+
 // navigateBack returns a command to go back to the previous screen
 func navigateBack() tea.Cmd {
 	return func() tea.Msg {

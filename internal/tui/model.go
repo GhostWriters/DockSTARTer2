@@ -28,6 +28,9 @@ type ScreenModel interface {
 	Title() string
 	HelpText() string
 	SetSize(width, height int)
+	IsMaximized() bool
+	HasDialog() bool
+	MenuName() string // Returns the name used for --menu or -M to return to this screen
 }
 
 // Navigation messages

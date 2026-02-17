@@ -19,8 +19,8 @@ import (
 	zone "github.com/lrstanley/bubblezone/v2"
 )
 
-// programBoxModel represents a dialog that displays streaming program output
-type programBoxModel struct {
+// ProgramBoxModel represents a dialog that displays streaming program output
+type ProgramBoxModel struct {
 	title    string
 	subtitle string
 	command  string // Command being executed (displayed above output)
@@ -30,7 +30,15 @@ type programBoxModel struct {
 	err      error
 	width    int
 	height   int
+
+	// Dialog behavior
+	isDialog bool
+	task     func(context.Context, io.Writer) error
+	focused  bool
 }
+
+// programBoxModel is an alias for backward compatibility
+type programBoxModel = ProgramBoxModel
 
 // outputLineMsg carries a new line of output
 type outputLineMsg struct {
@@ -42,17 +50,18 @@ type outputDoneMsg struct {
 	err error
 }
 
-// newProgramBox creates a new program box dialog
-func newProgramBox(title, subtitle, command string) *programBoxModel {
+// newProgramBox creates a new program box dialog (internal use)
+func newProgramBox(title, subtitle, command string) *ProgramBoxModel {
 	// Title is parsed by RenderDialog when View() is called.
 	// Subtitle/Command is parsed in View().
 
-	m := &programBoxModel{
+	m := &ProgramBoxModel{
 		title:    title,
 		subtitle: subtitle,
 		command:  command,
 		viewport: viewport.New(),
 		lines:    []string{},
+		focused:  true,
 	}
 
 	// Initialize viewport style to match dialog background (fixes black scrollbar)
@@ -64,6 +73,26 @@ func newProgramBox(title, subtitle, command string) *programBoxModel {
 		Foreground(styles.Console.GetForeground())
 
 	return m
+}
+
+// NewProgramBoxModel creates a new program box dialog (exported)
+func NewProgramBoxModel(title, subtitle, command string) *ProgramBoxModel {
+	return newProgramBox(title, subtitle, command)
+}
+
+// SetTask sets the task function to execute
+func (m *ProgramBoxModel) SetTask(task func(context.Context, io.Writer) error) {
+	m.task = task
+}
+
+// SetIsDialog sets whether this is a modal dialog overlay
+func (m *ProgramBoxModel) SetIsDialog(isDialog bool) {
+	m.isDialog = isDialog
+}
+
+// SetFocused sets the focus state
+func (m *ProgramBoxModel) SetFocused(focused bool) {
+	m.focused = focused
 }
 
 // startStreamingOutput reads from the provided reader and sends output lines

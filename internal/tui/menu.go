@@ -19,6 +19,17 @@ type MenuItem struct {
 	Help     string  // Help line text shown when item is selected
 	Shortcut rune    // Keyboard shortcut (usually first letter of Tag)
 	Action   tea.Cmd // Command to execute when selected
+
+	// Checklist support
+	Selectable bool // Whether this item can be toggled
+	Selected   bool // Current selection state
+
+	// Layout support
+	IsSeparator bool // Whether this is a non-selectable header/separator
+
+	// Metadata
+	IsUserDefined bool              // Whether this is a user-defined app (for color parity)
+	Metadata      map[string]string // Optional extra data (e.g. internal app name)
 }
 
 // Implement list.Item interface for bubbles/list
@@ -26,78 +37,199 @@ func (i MenuItem) FilterValue() string { return i.Tag }
 func (i MenuItem) Title() string       { return i.Tag }
 func (i MenuItem) Description() string { return i.Desc }
 
-// customDelegate implements list.ItemDelegate with our custom two-column styling
-type customDelegate struct {
+// menuItemDelegate implements list.ItemDelegate for standard navigation menus
+type menuItemDelegate struct {
+	menuID    string
 	maxTagLen int
 }
 
-func (d customDelegate) Height() int                             { return 1 }
-func (d customDelegate) Spacing() int                            { return 0 }
-func (d customDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
+func (d menuItemDelegate) Height() int                             { return 1 }
+func (d menuItemDelegate) Spacing() int                            { return 0 }
+func (d menuItemDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
 
-func (d customDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	menuItem, ok := item.(MenuItem)
 	if !ok {
 		return
 	}
 
-	styles := GetStyles()
+	dialogStyle := SemanticStyle("{{|Theme_Dialog|}}")
+	dialogBG := dialogStyle.GetBackground()
 	isSelected := index == m.Index()
+
+	// Handle separator items
+	if menuItem.IsSeparator {
+		lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(m.Width())
+		var content string
+		if menuItem.Tag != "" {
+			content = SemanticStyle("{{|Theme_TagKey|}}").Render(menuItem.Tag)
+		} else {
+			content = strings.Repeat("─", m.Width()-2)
+		}
+		fmt.Fprint(w, lineStyle.Render(content))
+		return
+	}
+
+	neutralStyle := lipgloss.NewStyle().Background(dialogBG)
+	itemStyle := SemanticStyle("{{|Theme_Item|}}")
+	tagStyle := SemanticStyle("{{|Theme_Tag|}}")
+	keyStyle := SemanticStyle("{{|Theme_TagKey|}}")
+
+	if isSelected {
+		itemStyle = SemanticStyle("{{|Theme_ItemSelected|}}")
+		tagStyle = SemanticStyle("{{|Theme_TagSelected|}}")
+		keyStyle = SemanticStyle("{{|Theme_TagKeySelected|}}")
+	} else {
+		itemStyle = itemStyle.Background(dialogBG)
+		tagStyle = tagStyle.Background(dialogBG)
+		keyStyle = keyStyle.Background(dialogBG)
+	}
 
 	// Render tag with first-letter highlighting
 	tag := menuItem.Tag
 	var tagStr string
 	if len(tag) > 0 {
-		// Find the index of the first letter (skip brackets)
 		letterIdx := 0
 		if strings.HasPrefix(tag, "[") && len(tag) > 1 {
 			letterIdx = 1
 		}
-
 		prefix := tag[:letterIdx]
 		firstLetter := string(tag[letterIdx])
 		rest := tag[letterIdx+1:]
-
-		var keyStyle, restStyle lipgloss.Style
-		if isSelected {
-			keyStyle = styles.TagKeySelected
-			restStyle = styles.TagSelected
-		} else {
-			keyStyle = styles.TagKey
-			restStyle = styles.TagNormal
-		}
-
-		tagStr = restStyle.Render(prefix) + keyStyle.Render(firstLetter) + restStyle.Render(rest)
+		tagStr = tagStyle.Render(prefix) + keyStyle.Render(firstLetter) + tagStyle.Render(rest)
 	}
 
-	// Pad tag to align descriptions
-	// Use lipgloss.Width() for proper terminal width measurement
 	tagWidth := lipgloss.Width(menuItem.Tag)
-	paddingSpaces := strings.Repeat(" ", d.maxTagLen-tagWidth+2) // 2 for column spacing
+	paddingSpaces := strings.Repeat(" ", d.maxTagLen-tagWidth+2)
 
-	// Render padding with dialog background (not black/transparent)
-	paddingStyle := lipgloss.NewStyle().Background(styles.Dialog.GetBackground())
-	padding := paddingStyle.Render(paddingSpaces)
-
-	// Render description (padding OUTSIDE style to create separate highlight boxes)
-	var descStr string
-	if isSelected {
-		descStr = padding + styles.ItemSelected.Render(menuItem.Desc)
-	} else {
-		descStr = padding + styles.ItemNormal.Render(menuItem.Desc)
+	availableWidth := m.Width() - (d.maxTagLen + 2) - 2
+	if availableWidth < 0 {
+		availableWidth = 0
 	}
 
-	// Combine tag and description
-	line := tagStr + descStr
+	descStr := RenderThemeText(menuItem.Desc, itemStyle)
+	descStr = itemStyle.MaxWidth(availableWidth).Height(1).Render(descStr)
+	descLine := strings.Split(descStr, "\n")[0]
 
-	// Apply dialog background and padding to fill list width
-	lineStyle := lipgloss.NewStyle().
-		Background(styles.Dialog.GetBackground()).
-		Padding(0, 1). // Add 1 space margin on left and right
-		Width(m.Width())
+	line := tagStr + neutralStyle.Render(paddingSpaces) + descLine
+
+	actualWidth := lipgloss.Width(line)
+	if actualWidth < m.Width()-2 {
+		line += neutralStyle.Render(strings.Repeat(" ", m.Width()-2-actualWidth))
+	}
+
+	lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(m.Width())
 	line = lineStyle.Render(line)
 
-	fmt.Fprint(w, line)
+	zoneID := fmt.Sprintf("menu-%s-item-%d", d.menuID, index)
+	fmt.Fprint(w, zone.Mark(zoneID, line))
+}
+
+// checkboxItemDelegate implements specialized styling for app selection screens
+type checkboxItemDelegate struct {
+	menuID    string
+	maxTagLen int
+}
+
+func (d checkboxItemDelegate) Height() int                             { return 1 }
+func (d checkboxItemDelegate) Spacing() int                            { return 0 }
+func (d checkboxItemDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
+
+func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+	menuItem, ok := item.(MenuItem)
+	if !ok {
+		return
+	}
+
+	dialogStyle := SemanticStyle("{{|Theme_Dialog|}}")
+	dialogBG := dialogStyle.GetBackground()
+	isSelected := index == m.Index()
+
+	// Handle separator items
+	if menuItem.IsSeparator {
+		lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(m.Width())
+		var content string
+		if menuItem.Tag != "" {
+			content = SemanticStyle("{{|Theme_TagKey|}}").Render(menuItem.Tag)
+		} else {
+			content = strings.Repeat("─", m.Width()-2)
+		}
+		fmt.Fprint(w, lineStyle.Render(content))
+		return
+	}
+
+	neutralStyle := lipgloss.NewStyle().Background(dialogBG)
+
+	itemStyle := SemanticStyle("{{|Theme_Item|}}").Background(dialogBG)
+	tagStyle := SemanticStyle("{{|Theme_Tag|}}").Background(dialogBG)
+	keyStyle := SemanticStyle("{{|Theme_TagKey|}}").Background(dialogBG)
+
+	if isSelected {
+		itemStyle = SemanticStyle("{{|Theme_ItemSelected|}}")
+		tagStyle = SemanticStyle("{{|Theme_TagSelected|}}")
+		keyStyle = SemanticStyle("{{|Theme_TagKeySelected|}}")
+	}
+
+	// Render checkbox for selectable items
+	var checkbox string
+	if menuItem.Selectable {
+		cbContent := " "
+		if menuItem.Selected {
+			cbContent = "*"
+		}
+
+		if isSelected {
+			checkbox = itemStyle.Render("["+cbContent+"]") + neutralStyle.Render(" ")
+		} else {
+			checkbox = neutralStyle.Render("[") + keyStyle.Render(cbContent) + neutralStyle.Render("] ")
+		}
+	}
+
+	var tagStr string
+	tag := menuItem.Tag
+	if len(tag) > 0 {
+		if isSelected {
+			tagStr = tagStyle.Render(tag)
+		} else {
+			letterIdx := 0
+			if strings.HasPrefix(tag, "[") && len(tag) > 1 {
+				letterIdx = 1
+			}
+			prefix := tag[:letterIdx]
+			firstLetter := string(tag[letterIdx])
+			rest := tag[letterIdx+1:]
+			tagStr = tagStyle.Render(prefix) + keyStyle.Render(firstLetter) + tagStyle.Render(rest)
+		}
+	}
+
+	tagWidth := 0
+	if menuItem.Selectable {
+		tagWidth += 4
+	}
+	tagWidth += lipgloss.Width(menuItem.Tag)
+	paddingSpaces := strings.Repeat(" ", d.maxTagLen-tagWidth+2)
+
+	availableWidth := m.Width() - (d.maxTagLen + 2) - 2
+	if availableWidth < 0 {
+		availableWidth = 0
+	}
+
+	descStr := RenderThemeText(menuItem.Desc, itemStyle)
+	descStr = itemStyle.MaxWidth(availableWidth).Height(1).Render(descStr)
+	descLine := strings.Split(descStr, "\n")[0]
+
+	line := checkbox + tagStr + neutralStyle.Render(paddingSpaces) + descLine
+
+	actualWidth := lipgloss.Width(line)
+	if actualWidth < m.Width()-2 {
+		line += neutralStyle.Render(strings.Repeat(" ", m.Width()-2-actualWidth))
+	}
+
+	lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(m.Width())
+	line = lineStyle.Render(line)
+
+	zoneID := fmt.Sprintf("menu-%s-item-%d", d.menuID, index)
+	fmt.Fprint(w, zone.Mark(zoneID, line))
 }
 
 // MenuModel represents a selectable menu
@@ -118,7 +250,22 @@ type MenuModel struct {
 	backAction tea.Cmd
 
 	// Bubbles list model
-	list list.Model
+	list      list.Model
+	maximized bool // Whether to maximize the dialog to fill available space
+	showExit  bool // Whether to show Exit button (default true for main menus)
+
+	// Key override actions
+	escAction   tea.Cmd
+	enterAction tea.Cmd
+	spaceAction tea.Cmd
+
+	// Custom button labels
+	selectLabel string
+	backLabel   string
+	exitLabel   string
+
+	// Checkbox mode (for app selection)
+	checkboxMode bool
 }
 
 // FocusItem represents which UI element has focus
@@ -176,7 +323,7 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 
 	// Create bubbles list with CUSTOM delegate (Phase 2 - custom styling!)
 	// Size based on actual number of items for dynamic sizing
-	delegate := customDelegate{maxTagLen: maxTagLen}
+	delegate := menuItemDelegate{menuID: id, maxTagLen: maxTagLen}
 
 	// Calculate proper height based on delegate metrics
 	// Total height = (items * itemHeight) + ((items - 1) * spacing)
@@ -219,6 +366,7 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 		focused:     true,
 		focusedItem: FocusList,
 		list:        l,
+		showExit:    true, // Default to showing Exit button
 	}
 }
 
@@ -226,6 +374,66 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 // or unfocused (normal). Called by AppModel when the log panel takes focus.
 func (m *MenuModel) SetFocused(f bool) {
 	m.focused = f
+}
+
+// SetMaximized sets whether the menu should expand to fill available space
+func (m *MenuModel) SetMaximized(maximized bool) {
+	m.maximized = maximized
+}
+
+// IsMaximized returns whether the menu is maximized
+func (m MenuModel) IsMaximized() bool {
+	return m.maximized
+}
+
+// HasDialog returns whether the menu has an active dialog overlay
+func (m MenuModel) HasDialog() bool {
+	return false // Menus don't have nested dialogs
+}
+
+// SetCheckboxMode enables checkbox rendering for app selection
+func (m *MenuModel) SetCheckboxMode(enabled bool) {
+	m.checkboxMode = enabled
+}
+
+// SetEscAction sets a custom action for the Escape key
+func (m *MenuModel) SetEscAction(action tea.Cmd) {
+	m.escAction = action
+}
+
+// SetEnterAction sets a custom action for the Enter key
+func (m *MenuModel) SetEnterAction(action tea.Cmd) {
+	m.enterAction = action
+}
+
+// SetSpaceAction sets a custom action for the Space key
+func (m *MenuModel) SetSpaceAction(action tea.Cmd) {
+	m.spaceAction = action
+}
+
+// SetButtonLabels sets custom labels for the buttons
+func (m *MenuModel) SetButtonLabels(selectLabel, backLabel, exitLabel string) {
+	m.selectLabel = selectLabel
+	m.backLabel = backLabel
+	m.exitLabel = exitLabel
+}
+
+// ToggleSelectedItem toggles the selected state of the current item (for checkbox mode)
+func (m *MenuModel) ToggleSelectedItem() {
+	if m.cursor >= 0 && m.cursor < len(m.items) && m.items[m.cursor].Selectable {
+		m.items[m.cursor].Selected = !m.items[m.cursor].Selected
+		// Update the list item too
+		listItems := make([]list.Item, len(m.items))
+		for i, item := range m.items {
+			listItems[i] = item
+		}
+		m.list.SetItems(listItems)
+	}
+}
+
+// GetItems returns the current menu items (for reading selection state)
+func (m MenuModel) GetItems() []MenuItem {
+	return m.items
 }
 
 // Init implements tea.Model
@@ -258,7 +466,7 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Set list height based on actual number of items (dynamic sizing!)
 		// Calculate proper height based on delegate metrics
-		// customDelegate has Height=1 and Spacing=0
+		// menuItemDelegate has Height=1 and Spacing=0
 		itemHeight := 1
 		spacing := 0
 		totalItemHeight := len(m.items) * itemHeight

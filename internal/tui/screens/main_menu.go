@@ -24,7 +24,7 @@ func NewMainMenuScreen() *MainMenuScreen {
 			Tag:    "Update",
 			Desc:   "Update DockSTARTer2",
 			Help:   "Check for and install updates",
-			Action: nil, // Not implemented yet
+			Action: tui.TriggerUpdate(),
 		},
 		{
 			Tag:    "Options",
@@ -87,6 +87,21 @@ func (s *MainMenuScreen) SetSize(width, height int) {
 // SetFocused propagates focus state to the inner menu (used by log panel focus)
 func (s *MainMenuScreen) SetFocused(f bool) {
 	s.menu.SetFocused(f)
+}
+
+// IsMaximized implements ScreenModel
+func (s *MainMenuScreen) IsMaximized() bool {
+	return s.menu.IsMaximized()
+}
+
+// HasDialog implements ScreenModel
+func (s *MainMenuScreen) HasDialog() bool {
+	return s.menu.HasDialog()
+}
+
+// MenuName implements ScreenModel
+func (s *MainMenuScreen) MenuName() string {
+	return ""
 }
 
 // Navigation commands

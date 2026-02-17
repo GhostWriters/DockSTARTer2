@@ -25,6 +25,9 @@ var (
 
 	// confirmResult is used for synchronous confirmation dialogs
 	confirmResult chan bool
+
+	// CurrentPageName tracks the active menu page for re-execution parity
+	CurrentPageName string
 )
 
 // Initialize sets up the TUI without starting the run loop
@@ -156,16 +159,18 @@ func Error(title, message string) {
 // We use function variables to avoid circular imports
 
 var (
-	createMainScreen    func() ScreenModel
-	createConfigScreen  func() ScreenModel
-	createOptionsScreen func() ScreenModel
+	createMainScreen         func() ScreenModel
+	createConfigScreen       func() ScreenModel
+	createOptionsScreen      func() ScreenModel
+	createAppSelectionScreen func() ScreenModel
 )
 
 // RegisterScreenCreators allows the screens package to register screen creation functions
-func RegisterScreenCreators(main, cfg, opts func() ScreenModel) {
+func RegisterScreenCreators(main, cfg, opts, appSel func() ScreenModel) {
 	createMainScreen = main
 	createConfigScreen = cfg
 	createOptionsScreen = opts
+	createAppSelectionScreen = appSel
 }
 
 // init sets up default screen creators
@@ -174,4 +179,37 @@ func init() {
 	createMainScreen = func() ScreenModel { return nil }
 	createConfigScreen = func() ScreenModel { return nil }
 	createOptionsScreen = func() ScreenModel { return nil }
+	createAppSelectionScreen = func() ScreenModel { return nil }
+}
+
+// TriggerUpdate returns a command that initiates the update process
+func TriggerUpdate() tea.Cmd {
+	return func() tea.Msg {
+		task := func(ctx context.Context, w io.Writer) error {
+			// Redirect logger to the TUI writer
+			ctx = logger.WithTUIWriter(ctx, w)
+
+			force := console.Force()
+			yes := console.AssumeYes()
+
+			if err := update.UpdateTemplates(ctx, force, yes, ""); err != nil {
+				return err
+			}
+
+			// We use CurrentPageName for sticky re-exec
+			reExecArgs := append([]string{}, console.CurrentFlags...)
+			reExecArgs = append(reExecArgs, "--menu")
+			if CurrentPageName != "" {
+				reExecArgs = append(reExecArgs, CurrentPageName)
+			}
+			reExecArgs = append(reExecArgs, console.RestArgs...)
+			return update.SelfUpdate(ctx, force, yes, "", reExecArgs)
+		}
+
+		dialog := NewProgramBoxModel("{{|Theme_TitleSuccess|}}Updating DockSTARTer2{{[-]}}", "Checking for updates...", "")
+		dialog.SetTask(task)
+		dialog.SetIsDialog(true)
+
+		return ShowDialogMsg{Dialog: dialog}
+	}
 }
