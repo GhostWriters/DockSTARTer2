@@ -21,6 +21,7 @@ import (
 	"github.com/Masterminds/semver/v3"
 	"github.com/creativeprojects/go-selfupdate"
 	"github.com/go-git/go-git/v5"
+	gitConfig "github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 )
 
@@ -63,6 +64,24 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 	// Map "main" to "stable" channel
 	if strings.EqualFold(requestedVersion, "main") {
 		requestedVersion = "stable"
+	}
+
+	// Quick check using git ls-remote to see if tags for this channel exist
+	// This avoids hitting the GitHub releases API unnecessarily
+	if !strings.HasPrefix(requestedVersion, "v") {
+		hasTags, err := hasChannelTags(ctx, requestedVersion)
+		if err != nil {
+			logger.Debug(ctx, "Git tag check failed: %v (will fall back to API)", err)
+		} else if !hasTags {
+			// No tags found for this channel - show warning and return early
+			msg := []string{
+				fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} channel '{{|Branch|}}%s{{[-]}}' appears to no longer exist (no releases found).", version.ApplicationName, requestedVersion),
+				fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} is currently on version '{{|Version|}}%s{{[-]}}'.", version.ApplicationName, version.Version),
+				fmt.Sprintf("Run '{{|UserCommand|}}%s -u main{{[-]}}' to update to the latest stable release.", version.CommandName),
+			}
+			logger.Warn(ctx, msg)
+			return nil
+		}
 	}
 
 	var (
@@ -573,6 +592,15 @@ func checkAppUpdate(ctx context.Context) (updateAvailable bool, ver string, hadE
 	repo := selfupdate.ParseSlug(slug)
 
 	channel := GetCurrentChannel()
+
+	// Quick check using git ls-remote to see if tags for this channel exist
+	// This avoids hitting the GitHub releases API unnecessarily
+	hasTags, err := hasChannelTags(ctx, channel)
+	if err == nil && !hasTags {
+		// No tags found for this channel - not an error, just no updates
+		return false, "", false
+	}
+
 	updater, err := getUpdater(ctx, channel)
 	if err != nil {
 		return false, "", true
@@ -734,6 +762,36 @@ func getUpdater(ctx context.Context, channel string) (*selfupdate.Updater, error
 		cfg.Prerelease = false
 	}
 	return selfupdate.NewUpdater(cfg)
+}
+
+// hasChannelTags checks if any tags matching the channel exist on GitHub.
+// This uses git ls-remote to avoid hitting the GitHub releases API unnecessarily.
+func hasChannelTags(ctx context.Context, channel string) (bool, error) {
+	remote := git.NewRemote(nil, &gitConfig.RemoteConfig{
+		Name: "origin",
+		URLs: []string{"https://github.com/GhostWriters/DockSTARTer2.git"},
+	})
+
+	refs, err := remote.List(&git.ListOptions{})
+	if err != nil {
+		return false, err
+	}
+
+	// Look for tags matching the channel pattern
+	for _, ref := range refs {
+		if !ref.Name().IsTag() {
+			continue
+		}
+		tagName := ref.Name().Short()
+
+		// Check if this tag matches the channel
+		tagChannel := GetChannelFromVersion(tagName)
+		if strings.EqualFold(tagChannel, channel) {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 // GetCurrentChannel returns the update channel based on the current version string.
