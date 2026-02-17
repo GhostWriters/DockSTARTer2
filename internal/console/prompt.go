@@ -15,6 +15,10 @@ type Printer func(ctx context.Context, msg any, args ...any)
 // to allow QuestionPrompt to show a graphical dialog.
 var TUIConfirm func(title, question string, defaultYes bool) bool
 
+// TUIShutdown is a function that can be registered by the tui package
+// to allow the application to cleanly exit the TUI before re-execution.
+var TUIShutdown func()
+
 // QuestionPrompt prompts the user with a Yes/No question.
 // It returns true if the user answers Yes, false otherwise.
 // defaultValue determines the default action if the user just presses Enter ("Y"=Yes, "N"=No, ""=Require Input).

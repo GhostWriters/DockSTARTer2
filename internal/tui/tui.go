@@ -28,11 +28,15 @@ var (
 
 	// CurrentPageName tracks the active menu page for re-execution parity
 	CurrentPageName string
+
+	// programExited is used to synchronize TUI shutdown for updates
+	programExited chan struct{}
 )
 
 // Initialize sets up the TUI without starting the run loop
 func Initialize(ctx context.Context) error {
 	console.TUIConfirm = Confirm
+	console.TUIShutdown = Shutdown
 
 	// Initialize global zone manager for mouse support
 	zone.NewGlobal()
@@ -81,14 +85,32 @@ func Start(ctx context.Context, startMenu string) error {
 	// Note: AltScreen is set via View().AltScreen in v2
 	program = tea.NewProgram(model)
 
+	// Initialize re-execution sync
+	programExited = make(chan struct{})
+
 	// Start background update checker
 	go startUpdateChecker(ctx)
 
 	// Run the program
 	_, err := program.Run()
+
+	// Signal that the program has exited
+	close(programExited)
+
 	// Reset terminal colors on exit to prevent "bleeding" into the shell prompt
 	fmt.Print("\x1b[0m\n")
 	return err
+}
+
+// Shutdown signals the running Bubble Tea program to exit and waits for it to finish
+func Shutdown() {
+	if program != nil {
+		program.Quit()
+		// Wait for the program to actually restore terminal state
+		if programExited != nil {
+			<-programExited
+		}
+	}
 }
 
 // startUpdateChecker runs the background update check

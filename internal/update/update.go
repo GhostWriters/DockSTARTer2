@@ -16,7 +16,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/Masterminds/semver/v3"
@@ -36,6 +35,10 @@ var (
 	LatestAppVersion string
 	// LatestTmplVersion is the short hash of the latest template commit.
 	LatestTmplVersion string
+
+	// PendingReExec stores the command to run after the TUI shuts down.
+	// The actual exec is performed by the main thread after return.
+	PendingReExec []string
 )
 
 // SelfUpdate handles updating the application binary using GitHub Releases.
@@ -156,8 +159,9 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 	return ReExec(ctx, exePath, restArgs)
 }
 
-// ReExec re-executes the current application with the given arguments.
-// It uses syscall.Exec to replace the current process.
+// ReExec prepares the application for re-execution with the given arguments.
+// It stores the command in PendingReExec and shuts down the TUI.
+// The actual exec is performed by the main thread after return.
 func ReExec(ctx context.Context, exePath string, args []string) error {
 	if exePath == "unknown" {
 		return fmt.Errorf("cannot re-exec: unknown executable path")
@@ -171,17 +175,14 @@ func ReExec(ctx context.Context, exePath string, args []string) error {
 
 	logger.Notice(ctx, "Running: {{|RunningCommand|}}exec %s{{[-]}}", fullCmd)
 
-	// Construct argv and envv for syscall.Exec
-	argv := append([]string{exePath}, args...)
-	envv := os.Environ()
+	// Store for main thread execution
+	PendingReExec = append([]string{exePath}, args...)
 
-	// Perform re-execution
-	err := syscall.Exec(exePath, argv, envv)
-	if err != nil {
-		return fmt.Errorf("failed to re-execute: %w", err)
+	// Cleanly shut down TUI if active before re-execution
+	if console.TUIShutdown != nil {
+		console.TUIShutdown()
 	}
 
-	// Should never be reached on success
 	return nil
 }
 

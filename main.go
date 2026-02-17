@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"syscall"
 
 	"DockSTARTer2/cmd"
 	"DockSTARTer2/internal/assets"
@@ -15,7 +16,18 @@ import (
 )
 
 func main() {
-	os.Exit(run())
+	exitCode := run()
+	if update.PendingReExec != nil {
+		// Perform re-execution if triggered by the TUI update
+		// This uses the simplest approach: the main thread executes the replacement
+		// after the TUI has cleanly shut down and returned from run().
+		exePath := update.PendingReExec[0]
+		argv := update.PendingReExec
+		envv := os.Environ()
+		_ = syscall.Exec(exePath, argv, envv)
+		// If exec fails, we fall through to os.Exit
+	}
+	os.Exit(exitCode)
 }
 
 func run() (exitCode int) {
