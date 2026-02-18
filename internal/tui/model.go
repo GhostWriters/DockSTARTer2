@@ -359,24 +359,51 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
-	case tea.MouseClickMsg:
+	case tea.MouseMsg:
 		// Specialized Help Blockade
-		// If help is open, ANY click closes it and we return immediately to prevent leaks.
+		// If help is open, ANY click closes it for convenience.
 		if m.dialog != nil {
 			if _, ok := m.dialog.(*helpDialogModel); ok {
-				var cmd tea.Cmd
-				m.dialog, cmd = m.dialog.Update(msg)
-				return m, cmd
+				if _, ok := msg.(tea.MouseClickMsg); ok {
+					var cmd tea.Cmd
+					m.dialog, cmd = m.dialog.Update(msg)
+					return m, cmd
+				}
 			}
 		}
 
-		// Check for header clicks (triggers update when clicking version numbers)
-		if msg.Button == tea.MouseLeft {
-			if handled, cmd := m.backdrop.header.HandleMouse(msg); handled {
+		// MODAL PRIORITY: Handle dialog mouse events FIRST
+		if m.dialog != nil {
+			var cmd tea.Cmd
+			m.dialog, cmd = m.dialog.Update(msg)
+			if cmd != nil {
+				return m, cmd
+			}
+			// If dialog is modal, we usually don't want clicks falling through
+			// unless it's a click outside the dialog. For now, we allow fallthrough
+			// for background elements IF the dialog didn't consume it.
+		}
+
+		// Handle specific global mouse interactions (Header, Log Panel)
+		if click, ok := msg.(tea.MouseClickMsg); ok && click.Button == tea.MouseLeft {
+			// Check log panel clicks (top level UI elements)
+			if zi := zone.Get(logPanelZoneID); zi != nil && zi.InBounds(click) {
+				return m, func() tea.Msg { return toggleLogPanelMsg{} }
+			}
+			if zi := zone.Get(logViewportZoneID); zi != nil && zi.InBounds(click) {
+				m.setLogPanelFocus(true)
+				return m, nil
+			}
+			// Click outside log panel — return focus to screen/dialog
+			if m.logPanelFocused {
+				m.setLogPanelFocus(false)
+			}
+
+			// Check for header clicks (backdrop elements)
+			if handled, cmd := m.backdrop.header.HandleMouse(click); handled {
 				// If header took focus, ensure we unfocus screen/logpanel
 				if m.backdrop.header.GetFocus() != HeaderFocusNone {
 					m.setLogPanelFocus(false)
-					// setLogPanelFocus(false) refocuses screen/dialog. We need to unfocus them for Header focus.
 					if m.dialog != nil {
 						if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
 							focusable.SetFocused(false)
@@ -389,10 +416,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 				// Trigger update on click
-				if zi := zone.Get(ZoneAppVersion); zi != nil && zi.InBounds(msg) {
+				if zi := zone.Get(ZoneAppVersion); zi != nil && zi.InBounds(click) {
 					return m, TriggerAppUpdate()
 				}
-				if zi := zone.Get(ZoneTmplVersion); zi != nil && zi.InBounds(msg) {
+				if zi := zone.Get(ZoneTmplVersion); zi != nil && zi.InBounds(click) {
 					return m, TriggerTemplateUpdate()
 				}
 
@@ -400,28 +427,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Check log panel clicks (left button only)
-		if msg.Button == tea.MouseLeft {
-			if zi := zone.Get(logPanelZoneID); zi != nil && zi.InBounds(msg) {
-				return m, func() tea.Msg { return toggleLogPanelMsg{} }
-			}
-			if zi := zone.Get(logViewportZoneID); zi != nil && zi.InBounds(msg) {
-				m.setLogPanelFocus(true)
-				return m, nil
-			}
-			// Click outside log panel — return focus to screen/dialog without
-			// swallowing the click (falls through so buttons/items still fire)
-			if m.logPanelFocused {
-				m.setLogPanelFocus(false)
-			}
-		}
-		// Forward mouse events to dialog or active screen
-		if m.dialog != nil {
-			var cmd tea.Cmd
-			m.dialog, cmd = m.dialog.Update(msg)
-			return m, cmd
-		}
-		// If no dialog, let it fall through to active screen handling below
+		// Fall through to common update logic (backdrop and activeScreen)
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -638,12 +644,14 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, backdropCmd)
 	}
 
-	// Update dialog if present, otherwise update active screen
+	// Update dialog if present (ALREADY HANDLED for MouseMsg above)
 	if m.dialog != nil {
-		var dialogCmd tea.Cmd
-		m.dialog, dialogCmd = m.dialog.Update(msg)
-		if dialogCmd != nil {
-			cmds = append(cmds, dialogCmd)
+		if _, isMouse := msg.(tea.MouseMsg); !isMouse {
+			var dialogCmd tea.Cmd
+			m.dialog, dialogCmd = m.dialog.Update(msg)
+			if dialogCmd != nil {
+				cmds = append(cmds, dialogCmd)
+			}
 		}
 		// If dialog supports help text, update backdrop
 		if h, ok := m.dialog.(interface{ HelpText() string }); ok {
@@ -712,12 +720,17 @@ func (m AppModel) View() tea.View {
 		return tea.NewView("Initializing...")
 	}
 
-	// Get backdrop view as string
-	output := m.backdrop.ViewString()
-
 	// Content area offset: header (1 line) + separator (1 line) = 2 lines from top
 	// Content area ends 1 line before bottom (helpline)
 	contentYOffset := 2
+
+	// Layer 0: Backdrop
+	output := m.backdrop.ViewString()
+	layers := []LayerSpec{
+		{Content: output, X: 0, Y: 0, Z: 0},
+	}
+	bgWidth := lipgloss.Width(output)
+	bgHeight := lipgloss.Height(output)
 
 	// Layer 1: Active Screen
 	if m.activeScreen != nil {
@@ -726,21 +739,14 @@ func (m AppModel) View() tea.View {
 			screenContent = vs.ViewString()
 		}
 		if screenContent != "" {
-			// Maximized screens stay at top, others center vertically in content area
-			vPos := OverlayCenter
-			yOff := 0
+			fgWidth := lipgloss.Width(screenContent)
+			fgHeight := lipgloss.Height(screenContent)
+			x := (bgWidth - fgWidth) / 2
+			y := (bgHeight - fgHeight) / 2 // Default center
 			if m.activeScreen.IsMaximized() {
-				vPos = OverlayTop
-				yOff = contentYOffset
+				y = contentYOffset
 			}
-			output = Overlay(
-				screenContent,
-				output,
-				OverlayCenter,
-				vPos,
-				0,
-				yOff,
-			)
+			layers = append(layers, LayerSpec{Content: screenContent, X: x, Y: y, Z: 1})
 		}
 	}
 
@@ -751,28 +757,23 @@ func (m AppModel) View() tea.View {
 			dialogContent = vs.ViewString()
 		}
 		if dialogContent != "" {
-			// Check if dialog is maximized (if it implements the interface)
 			maximized := false
-			if m, ok := m.dialog.(interface{ IsMaximized() bool }); ok {
-				maximized = m.IsMaximized()
+			if md, ok := m.dialog.(interface{ IsMaximized() bool }); ok {
+				maximized = md.IsMaximized()
 			}
-			// Maximized dialogs stay at top, others center vertically
-			vPos := OverlayCenter
-			yOff := 0
+			fgWidth := lipgloss.Width(dialogContent)
+			fgHeight := lipgloss.Height(dialogContent)
+			x := (bgWidth - fgWidth) / 2
+			y := (bgHeight - fgHeight) / 2 // Default center
 			if maximized {
-				vPos = OverlayTop
-				yOff = contentYOffset
+				y = contentYOffset
 			}
-			output = Overlay(
-				dialogContent,
-				output,
-				OverlayCenter,
-				vPos,
-				0,
-				yOff,
-			)
+			layers = append(layers, LayerSpec{Content: dialogContent, X: x, Y: y, Z: 2})
 		}
 	}
+
+	// Composite all layers
+	output = MultiOverlay(layers...)
 
 	// Layer 3: Log panel — appended below the backdrop (below helpline)
 	var logPanelContent string

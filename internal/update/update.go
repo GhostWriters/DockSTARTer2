@@ -146,12 +146,13 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 	}
 
 	if compareVersions(currentVersion, remoteVersion) == 0 {
+		logger.Notice(ctx, "{{|ApplicationName|}}%s{{[-]}} is already up to date on channel '{{|Branch|}}%s{{[-]}}'.", version.ApplicationName, requestedVersion)
+		logger.Notice(ctx, "Current version is '{{|Version|}}%s{{[-]}}'.", currentVersion)
+
 		if force {
 			question = fmt.Sprintf("Would you like to forcefully re-apply {{|ApplicationName|}}%s{{[-]}} update '{{|Version|}}%s{{[-]}}'?", version.ApplicationName, currentVersion)
 			initiationNotice = fmt.Sprintf("Forcefully re-applying {{|ApplicationName|}}%s{{[-]}} update '{{|Version|}}%s{{[-]}}'", version.ApplicationName, remoteVersion)
 		} else {
-			logger.Notice(ctx, "{{|ApplicationName|}}%s{{[-]}} is already up to date on channel '{{|Branch|}}%s{{[-]}}'.", version.ApplicationName, requestedVersion)
-			logger.Notice(ctx, "Current version is '{{|Version|}}%s{{[-]}}'.", currentVersion)
 			return nil
 		}
 	} else {
@@ -386,12 +387,13 @@ func UpdateTemplates(ctx context.Context, force bool, yes bool, requestedBranch 
 	noNotice := fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} will not be updated.", targetName)
 
 	if currentHash == remoteHash {
+		logger.Notice(ctx, "{{|ApplicationName|}}%s{{[-]}} is already up to date on branch '{{|Branch|}}%s{{[-]}}'.", targetName, requestedBranch)
+		logger.Notice(ctx, "Current version is '{{|Version|}}%s{{[-]}}'", currentDisplay)
+
 		if force {
 			question = fmt.Sprintf("Would you like to forcefully re-apply {{|ApplicationName|}}%s{{[-]}} update '{{|Version|}}%s{{[-]}}'?", targetName, currentDisplay)
-			initiationNotice = fmt.Sprintf("Forcefully re-applying {{|ApplicationName|}}%s{{[-]}} update '{{|Version|}}%s{{[-]}}'", targetName, remoteDisplay)
+			initiationNotice = fmt.Sprintf("Forcefully re-apply {{|ApplicationName|}}%s{{[-]}} update '{{|Version|}}%s{{[-]}}'", targetName, remoteDisplay)
 		} else {
-			logger.Notice(ctx, "{{|ApplicationName|}}%s{{[-]}} is already up to date on branch '{{|Branch|}}%s{{[-]}}'.", targetName, requestedBranch)
-			logger.Notice(ctx, "Current version is '{{|Version|}}%s{{[-]}}'", currentDisplay)
 			return nil
 		}
 	} else {

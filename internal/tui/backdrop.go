@@ -64,15 +64,13 @@ func RenderWithBackdrop(dialogContent string, helpText string, width, height int
 			Background(styles.Screen.GetBackground()).
 			Render(dialogContent)
 	} else {
-		// Centered: dialog is placed in the center of available space
-		content = lipgloss.Place(
-			width,
-			contentHeight,
-			lipgloss.Center,
-			lipgloss.Center,
-			dialogContent,
-			lipgloss.WithWhitespaceStyle(lipgloss.NewStyle().Background(styles.Screen.GetBackground())),
-		)
+		// Centered: dialog is placed in the center of available space using Overlay
+		bg := lipgloss.NewStyle().
+			Width(width).
+			Height(contentHeight).
+			Background(styles.Screen.GetBackground()).
+			Render("")
+		content = Overlay(dialogContent, bg, OverlayCenter, OverlayCenter, 0, 0)
 	}
 
 	// Ensure content fills the height (matches AppModel.View())

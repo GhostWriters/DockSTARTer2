@@ -71,6 +71,17 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, closeWithResult(false)
 
 		default:
+			// Arrow keys toggle between Yes and No
+			if key.Matches(msg, Keys.Left) || key.Matches(msg, Keys.Right) ||
+				key.Matches(msg, Keys.Up) || key.Matches(msg, Keys.Down) {
+				m.result = !m.result
+				return m, nil
+			}
+			// Tab/ShiftTab also toggle
+			if key.Matches(msg, Keys.Tab) || key.Matches(msg, Keys.ShiftTab) {
+				m.result = !m.result
+				return m, nil
+			}
 			// Check dynamic hotkeys for buttons (Yes/No)
 			buttons := []ButtonSpec{
 				{Text: " Yes "},
@@ -119,7 +130,7 @@ func (m *confirmDialogModel) ViewString() string {
 		Padding(1, 2)
 
 	// Apply semantic coloring (e.g. {{|Version|}})
-	questionText := questionStyle.Render(console.Sprintf(m.question))
+	questionText := questionStyle.Render(console.Sprintf("%s", m.question))
 
 	// Calculate content width based on question text (with reasonable min/max)
 	contentWidth := lipgloss.Width(questionText)

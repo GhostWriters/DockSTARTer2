@@ -143,6 +143,7 @@ func (m DialogWithBackdrop[T]) View() tea.View {
 	// Scan zones at root level for mouse support
 	v := tea.NewView(zone.Scan(output))
 	v.MouseMode = tea.MouseModeAllMotion
+	v.AltScreen = true
 	return v
 }
 

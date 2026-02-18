@@ -1118,17 +1118,8 @@ func (m MenuModel) renderDialog(menuContent, buttonBox string, listWidth int) st
 	// Add shadow effect
 	dialogBox = AddShadow(dialogBox)
 
-	// Center in the available space
-	centered := lipgloss.Place(
-		m.width,
-		m.height,
-		lipgloss.Center,
-		lipgloss.Center,
-		dialogBox,
-		lipgloss.WithWhitespaceStyle(lipgloss.NewStyle().Background(styles.Screen.GetBackground())),
-	)
-
-	return centered
+	// Just return the dialogBox - centering and backdrop are handled by AppModel.View
+	return dialogBox
 }
 
 func (m MenuModel) renderBorderWithTitle(content string, contentWidth int) string {

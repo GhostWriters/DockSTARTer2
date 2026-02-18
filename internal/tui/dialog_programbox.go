@@ -419,23 +419,6 @@ func (m *programBoxModel) ViewString() string {
 		return ""
 	}
 
-	// If sub-dialog is active, show it instead of logs
-	if m.subDialog != nil {
-		var viewStr string
-		if vs, ok := m.subDialog.(interface{ ViewString() string }); ok {
-			viewStr = vs.ViewString()
-		} else {
-			viewStr = fmt.Sprintf("%v", m.subDialog.View())
-		}
-
-		return lipgloss.Place(
-			m.width, m.height,
-			lipgloss.Center, lipgloss.Center,
-			viewStr,
-			lipgloss.WithWhitespaceChars(" "),
-		)
-	}
-
 	styles := GetStyles()
 
 	// Calculate scroll percentage
@@ -590,12 +573,26 @@ func (m *programBoxModel) ViewString() string {
 	// Add shadow (matching menu style)
 	dialogWithTitle = AddShadow(dialogWithTitle)
 
-	// Just return the dialog content - backdrop will be handled by overlay
+	// If sub-dialog is active, overlay it
+	if m.subDialog != nil {
+		var subView string
+		if vs, ok := m.subDialog.(interface{ ViewString() string }); ok {
+			subView = vs.ViewString()
+		} else {
+			subView = fmt.Sprintf("%v", m.subDialog.View())
+		}
+		// Overlay sub-dialog on top of the program box content
+		dialogWithTitle = Overlay(subView, dialogWithTitle, OverlayCenter, OverlayCenter, 0, 0)
+	}
+
 	return dialogWithTitle
 }
 
 func (m *programBoxModel) View() tea.View {
-	return tea.NewView(m.ViewString())
+	v := tea.NewView(m.ViewString())
+	v.MouseMode = tea.MouseModeAllMotion
+	v.AltScreen = true
+	return v
 }
 
 // SetSize updates the dialog dimensions (called by AppModel on window resize).

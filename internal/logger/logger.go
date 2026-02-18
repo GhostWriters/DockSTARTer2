@@ -17,14 +17,12 @@ import (
 
 	"charm.land/lipgloss/v2"
 	charmlog "charm.land/log/v2"
+	"github.com/charmbracelet/colorprofile"
+	"github.com/muesli/termenv"
 )
 
-const TUIWriterKey = "tui_writer"
-
-// WithTUIWriter returns a new context with a TUI writer attached.
-func WithTUIWriter(ctx context.Context, w io.Writer) context.Context {
-	return context.WithValue(ctx, TUIWriterKey, w)
-}
+// TUIMode suppresses direct console output (stdout/stderr) when active.
+var TUIMode bool
 
 // logLineCh carries TUI-formatted log lines to the log panel.
 var logLineCh = make(chan string, 200)
@@ -74,62 +72,40 @@ func logAt(ctx context.Context, t time.Time, level slog.Level, msg any, args ...
 	}
 
 	msgStr := resolveMsg(msg)
-	// If it's a string (or resolved from a slice), we might need to format it with args.
-	// We check if args are present and msgStr has format specifiers.
 	if len(args) > 0 && strings.Contains(msgStr, "%") {
 		msgStr = fmt.Sprintf(msgStr, args...)
-		args = nil // Reset args as they are now consumed
+		args = nil
 	}
 
 	lines := strings.Split(msgStr, "\n")
 	for i, line := range lines {
-		// 1. Build TUI-formatted line for both the context writer and the log panel channel
-		{
-			timeStr := t.Format("2006-01-02 15:04:05")
-			levelStr := ""
-			switch level {
-			case LevelTrace:
-				levelStr = "TRACE "
-			case LevelDebug:
-				levelStr = "DEBUG "
-			case LevelInfo:
-				levelStr = "INFO  "
-			case LevelNotice:
-				levelStr = "NOTICE"
-			case LevelWarn:
-				levelStr = "WARN  "
-			case LevelError:
-				levelStr = "ERROR "
-			case LevelFatal:
-				levelStr = "FATAL "
-			default:
-				levelStr = level.String()
-			}
-			// Match standard console format: TIME [LEVEL] \t MESSAGE (space-tab after level)
-			timeLevel := fmt.Sprintf("%s [%s] \t", timeStr, levelStr)
-
-			// Send to context TUI writer using expanded (but not yet ANSI) tags
-			if w, ok := ctx.Value(TUIWriterKey).(io.Writer); ok {
-				tuiMsg := timeLevel + console.ForTUI(line)
-				fmt.Fprintln(w, tuiMsg)
-			}
-
-			// Send to log panel channel with full ANSI codes so the viewport can render them
-			// (non-blocking — drop if full)
-			select {
-			case logLineCh <- timeLevel + console.ToANSI(line):
-			default:
-			}
-		}
-
-		// 2. Output to standard slog handlers (stderr, file)
-		// We pass the RAW line (with tags) to slog.Record.
-		// The TagProcessorHandler will handle ANSI/Strip per handler.
 		r := slog.NewRecord(t, level, line, 0)
 		if i == 0 {
 			r.Add(args...)
 		}
 		_ = h.Handle(ctx, r)
+	}
+}
+
+// FormatLevel returns a consistent 6-character string for log levels.
+func FormatLevel(level slog.Level) string {
+	switch level {
+	case LevelTrace:
+		return "TRACE "
+	case LevelDebug:
+		return "DEBUG "
+	case LevelInfo:
+		return "INFO  "
+	case LevelNotice:
+		return "NOTICE"
+	case LevelWarn:
+		return "WARN  "
+	case LevelError:
+		return "ERROR "
+	case LevelFatal:
+		return "FATAL "
+	default:
+		return level.String()
 	}
 }
 
@@ -170,6 +146,29 @@ func SetLevel(level slog.Level) {
 	FileLevelVar.Set(fileLevel)
 	if fileLogger != nil {
 		fileLogger.SetLevel(charmlog.Level(fileLevel))
+	}
+}
+
+// SetColorProfile forces the color profile for the console logger.
+func SetColorProfile(profile termenv.Profile) {
+	if consoleLogger != nil {
+		consoleLogger.SetColorProfile(colorprofile.Profile(profile))
+	}
+}
+
+// SetConsoleOutput redirects the console logger output to the provided writer.
+// It returns a function that restores the original output (os.Stderr).
+// This is useful for capturing logger output in TUI components.
+func SetConsoleOutput(w io.Writer) func() {
+	if consoleLogger == nil {
+		return func() {}
+	}
+
+	consoleLogger.SetOutput(w)
+
+	return func() {
+		// Restore to default stderr
+		consoleLogger.SetOutput(os.Stderr)
 	}
 }
 
@@ -223,7 +222,11 @@ func NewLogger() *slog.Logger {
 		fmt.Fprintf(os.Stderr, "Failed to open log file: %v\n", err)
 	}
 
-	handlers := []slog.Handler{consoleHandler}
+	handlers := []slog.Handler{
+		consoleHandler,
+		&TUIHandler{level: LevelDebug, global: true},
+		&TUIHandler{level: LevelVar, global: false},
+	}
 
 	if wFile != nil {
 		fmt.Fprintln(wFile, version.ApplicationName+" Log")
@@ -241,6 +244,65 @@ func NewLogger() *slog.Logger {
 
 	return slog.New(&FanoutHandler{handlers: handlers})
 }
+
+// TUIHandler redirects logs to a writer in the context or a global channel.
+type TUIHandler struct {
+	level  slog.Leveler
+	global bool
+}
+
+func (h *TUIHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return level >= h.level.Level()
+}
+
+func (h *TUIHandler) Handle(ctx context.Context, r slog.Record) error {
+	// Format line consistently (TIME [LEVEL] \t MESSAGE)
+	timeStr := r.Time.Format("2006-01-02 15:04:05")
+	levelStr := FormatLevel(r.Level)
+
+	// Wrap level in semantic tag for color
+	var levelTag string
+	switch r.Level {
+	case LevelTrace:
+		levelTag = "{{|Trace|}}"
+	case LevelDebug:
+		levelTag = "{{|Debug|}}"
+	case LevelInfo:
+		levelTag = "{{|Info|}}"
+	case LevelNotice:
+		levelTag = "{{|Notice|}}"
+	case LevelWarn:
+		levelTag = "{{|Warn|}}"
+	case LevelError:
+		levelTag = "{{|Error|}}"
+	case LevelFatal:
+		levelTag = "{{|Fatal|}}"
+	default:
+		levelTag = "{{[-]}}"
+	}
+
+	timeLevel := fmt.Sprintf("%s %s[%s]{{[-]}} \t", timeStr, levelTag, levelStr)
+	tuiMsg := timeLevel + console.ForTUI(r.Message)
+
+	if h.global {
+		// 1. Send to global log channel for TUI log panel
+		select {
+		case logLineCh <- tuiMsg:
+		default:
+			// Drop if full to prevent blocking
+		}
+	} else {
+		// 2. Output to specific TUI writer if present in context (LOCAL command output)
+		if w, ok := ctx.Value(console.TUIWriterKey).(io.Writer); ok {
+			fmt.Fprintln(w, tuiMsg)
+		}
+	}
+
+	return nil
+}
+
+func (h *TUIHandler) WithAttrs(attrs []slog.Attr) slog.Handler { return h }
+func (h *TUIHandler) WithGroup(name string) slog.Handler       { return h }
 
 // FanoutHandler broadcasts records to multiple handlers
 type FanoutHandler struct {
@@ -298,6 +360,11 @@ func (h *TagProcessorHandler) Enabled(ctx context.Context, level slog.Level) boo
 }
 
 func (h *TagProcessorHandler) Handle(ctx context.Context, r slog.Record) error {
+	// Suppress console output in TUI mode (ansi mode is for console)
+	if h.mode == "ansi" && TUIMode {
+		return nil
+	}
+
 	// 1. Resolve message (it contains raw tags)
 	msg := r.Message
 
@@ -364,15 +431,17 @@ func Display(ctx context.Context, msg any, args ...any) {
 	lines := strings.Split(msgStr, "\n")
 	for _, line := range lines {
 		// 1. Output to TUI if writer is in context
-		if w, ok := ctx.Value(TUIWriterKey).(io.Writer); ok {
+		if w, ok := ctx.Value(console.TUIWriterKey).(io.Writer); ok {
 			// Use ForTUI to keep styles while removing ANSI
-			// NOTE: Do NOT escape - ForTUI output is already in proper format
 			fmt.Fprintln(w, console.ForTUI(line))
 		}
 
 		// 2. Output directly to terminal (stdout)
 		// IMPORTANT: Always use ToANSI for stdout to get ANSI colors, regardless of TUI mode
-		fmt.Println(console.ToANSI(line) + console.CodeReset)
+		// Suppress based on TUIMode
+		if !TUIMode {
+			fmt.Println(console.ToANSI(line) + console.CodeReset)
+		}
 	}
 }
 

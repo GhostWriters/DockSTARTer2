@@ -113,7 +113,10 @@ func (m *helpDialogModel) ViewString() string {
 }
 
 func (m *helpDialogModel) View() tea.View {
-	return tea.NewView(m.ViewString())
+	v := tea.NewView(m.ViewString())
+	v.MouseMode = tea.MouseModeAllMotion
+	v.AltScreen = true
+	return v
 }
 
 // SetSize updates the dialog dimensions (called by AppModel on window resize).

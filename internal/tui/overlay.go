@@ -70,3 +70,27 @@ func Overlay(foreground, background string, hPos, vPos OverlayPosition, xOffset,
 	compositor := lipgloss.NewCompositor(bgLayer, fgLayer)
 	return compositor.Render()
 }
+
+// LayerSpec defines a layer for MultiOverlay
+type LayerSpec struct {
+	Content string
+	X, Y, Z int
+}
+
+// MultiOverlay composites multiple layers using a single lipgloss v2 Compositor.
+// This preserves Z-ordering across all layers and is more efficient than nested Overlay calls.
+func MultiOverlay(layers ...LayerSpec) string {
+	if len(layers) == 0 {
+		return ""
+	}
+	if len(layers) == 1 {
+		return layers[0].Content
+	}
+
+	lipglossLayers := make([]*lipgloss.Layer, len(layers))
+	for i, l := range layers {
+		lipglossLayers[i] = lipgloss.NewLayer(l.Content).X(l.X).Y(l.Y).Z(l.Z)
+	}
+
+	return lipgloss.NewCompositor(lipglossLayers...).Render()
+}

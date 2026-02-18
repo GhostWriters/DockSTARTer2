@@ -65,17 +65,14 @@ func RenderDialogBox(title, content string, dialogType DialogType, width, height
 	// Add shadow effect
 	dialogBox = AddShadow(dialogBox)
 
-	// Center in container
-	centered := lipgloss.Place(
-		containerWidth,
-		containerHeight,
-		lipgloss.Center,
-		lipgloss.Center,
-		dialogBox,
-		lipgloss.WithWhitespaceStyle(lipgloss.NewStyle().Background(styles.Screen.GetBackground())),
-	)
+	// Center in container using Overlay for transparency support
+	bg := lipgloss.NewStyle().
+		Width(containerWidth).
+		Height(containerHeight).
+		Background(styles.Screen.GetBackground()).
+		Render("")
 
-	return centered
+	return Overlay(dialogBox, bg, OverlayCenter, OverlayCenter, 0, 0)
 }
 
 // RenderButton renders a button with the given label and focus state

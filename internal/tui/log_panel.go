@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	logPanelZoneID   = "log-toggle"
+	logPanelZoneID    = "log-toggle"
 	logViewportZoneID = "log-viewport"
 )
 
@@ -29,11 +29,11 @@ type toggleLogPanelMsg struct{}
 // When collapsed it shows only a 1-line toggle strip (^).
 // When expanded it occupies half the terminal height.
 type LogPanelModel struct {
-	expanded    bool
-	focused     bool
-	viewport    viewport.Model
-	lines       []string
-	width       int
+	expanded bool
+	focused  bool
+	viewport viewport.Model
+	lines    []string
+	width    int
 	// totalHeight is the full height to use when expanded (set via SetSize).
 	totalHeight int
 }
@@ -124,9 +124,19 @@ func waitForLogLine() tea.Cmd {
 func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case logLineMsg:
+		styles := GetStyles()
 		text := string(msg)
 		newLines := strings.Split(text, "\n")
-		m.lines = append(m.lines, newLines...)
+		for _, line := range newLines {
+			rendered := RenderThemeText(line, styles.Console)
+			// Truncate to viewport width to prevent overflow past borders
+			if m.viewport.Width() > 0 {
+				rendered = lipgloss.NewStyle().
+					MaxWidth(m.viewport.Width()).
+					Render(rendered)
+			}
+			m.lines = append(m.lines, rendered)
+		}
 		content := strings.Join(m.lines, "\n")
 		m.viewport.SetContent(content)
 		m.viewport.GotoBottom()
@@ -231,8 +241,10 @@ func (m LogPanelModel) ViewString() string {
 		Foreground(styles.Console.GetForeground())
 	m.viewport.Style = vpStyle
 
-	vpView := zone.Mark(logViewportZoneID, m.viewport.View())
-	return lipgloss.JoinVertical(lipgloss.Left, strip, vpView)
+	// Use MaintainBackground to ensure console background is preserved through resets
+	vpView := MaintainBackground(m.viewport.View(), styles.Console)
+	vpViewMarked := zone.Mark(logViewportZoneID, vpView)
+	return lipgloss.JoinVertical(lipgloss.Left, strip, vpViewMarked)
 }
 
 // View renders the panel at its current height.
