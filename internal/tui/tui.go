@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -17,6 +18,9 @@ import (
 )
 
 var (
+	// ErrUserAborted is returned when the user cancels an operation
+	ErrUserAborted = errors.New("user aborted")
+
 	// program holds the running Bubble Tea program
 	program *tea.Program
 
@@ -35,7 +39,7 @@ var (
 
 // Initialize sets up the TUI without starting the run loop
 func Initialize(ctx context.Context) error {
-	console.TUIConfirm = Confirm
+	console.TUIConfirm = PromptConfirm
 	console.TUIShutdown = Shutdown
 
 	// Initialize global zone manager for mouse support
@@ -49,12 +53,20 @@ func Initialize(ctx context.Context) error {
 	// Initialize styles from theme
 	InitStyles(currentConfig)
 
-	// Note: In lipgloss v2, color profile is auto-detected from terminal
+	// Force logger to use the console's preferred profile
+	logger.SetColorProfile(console.GetPreferredProfile())
+
 	return nil
 }
 
 // Start launches the TUI application
 func Start(ctx context.Context, startMenu string) error {
+	console.SetTUIEnabled(true)
+	defer console.SetTUIEnabled(false)
+
+	logger.TUIMode = true
+	defer func() { logger.TUIMode = false }()
+
 	logger.Info(ctx, "TUI Starting...")
 
 	if err := Initialize(ctx); err != nil {
@@ -142,15 +154,27 @@ func startUpdateChecker(ctx context.Context) {
 	}
 }
 
-// RunCommand executes a task with output displayed in a TUI dialog
+// RunCommand executes a task with output displayed in a TUI dialog.
+// If a Bubble Tea program is already running, it shows the dialog inline.
+// Otherwise, it starts a standalone program box.
 func RunCommand(ctx context.Context, title, subtitle string, task func(context.Context) error) error {
 	// Wrap the task to pass the writer
-	// Note: We don't use WithTUIWriter here because stdout/stderr redirection
-	// in RunProgramBox already captures all output including logger output
+	// We use WithTUIWriter to ensure logger output is captured by the TUI
 	wrappedTask := func(ctx context.Context, w io.Writer) error {
-		return task(ctx)
+		return task(console.WithTUIWriter(ctx, w))
 	}
 
+	// If TUI is already running, show dialog within existing program
+	if program != nil {
+		dialog := NewProgramBoxModel(title, subtitle, "")
+		dialog.SetTask(wrappedTask)
+		dialog.SetIsDialog(true)
+		dialog.SetMaximized(true)
+		program.Send(ShowDialogMsg{Dialog: dialog})
+		return nil
+	}
+
+	// Otherwise, run standalone with its own Bubble Tea program
 	return RunProgramBox(ctx, title, subtitle, wrappedTask)
 }
 
@@ -222,8 +246,8 @@ func init() {
 func TriggerAppUpdate() tea.Cmd {
 	return func() tea.Msg {
 		task := func(ctx context.Context, w io.Writer) error {
-			// Redirect logger to the TUI writer
-			ctx = logger.WithTUIWriter(ctx, w)
+			// Redirect logger to the pipe so output is captured by the viewport
+			ctx = console.WithTUIWriter(ctx, w)
 
 			force := console.Force()
 			yes := console.AssumeYes()
@@ -241,6 +265,7 @@ func TriggerAppUpdate() tea.Cmd {
 		dialog := NewProgramBoxModel("{{|Theme_TitleSuccess|}}Updating App{{[-]}}", "Checking for app updates...", "")
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
+		dialog.SetMaximized(true)
 
 		return ShowDialogMsg{Dialog: dialog}
 	}
@@ -250,8 +275,8 @@ func TriggerAppUpdate() tea.Cmd {
 func TriggerTemplateUpdate() tea.Cmd {
 	return func() tea.Msg {
 		task := func(ctx context.Context, w io.Writer) error {
-			// Redirect logger to the TUI writer
-			ctx = logger.WithTUIWriter(ctx, w)
+			// Redirect logger to the pipe so output is captured by the viewport
+			ctx = console.WithTUIWriter(ctx, w)
 
 			force := console.Force()
 			yes := console.AssumeYes()
@@ -262,6 +287,7 @@ func TriggerTemplateUpdate() tea.Cmd {
 		dialog := NewProgramBoxModel("{{|Theme_TitleSuccess|}}Updating Templates{{[-]}}", "Checking for template updates...", "")
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
+		dialog.SetMaximized(true)
 
 		return ShowDialogMsg{Dialog: dialog}
 	}
@@ -272,8 +298,8 @@ func TriggerTemplateUpdate() tea.Cmd {
 func TriggerUpdate() tea.Cmd {
 	return func() tea.Msg {
 		task := func(ctx context.Context, w io.Writer) error {
-			// Redirect logger to the TUI writer
-			ctx = logger.WithTUIWriter(ctx, w)
+			// Redirect logger to the pipe so output is captured by the viewport
+			ctx = console.WithTUIWriter(ctx, w)
 
 			force := console.Force()
 			yes := console.AssumeYes()
@@ -295,6 +321,7 @@ func TriggerUpdate() tea.Cmd {
 		dialog := NewProgramBoxModel("{{|Theme_TitleSuccess|}}Updating DockSTARTer2{{[-]}}", "Checking for updates...", "")
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
+		dialog.SetMaximized(true)
 
 		return ShowDialogMsg{Dialog: dialog}
 	}

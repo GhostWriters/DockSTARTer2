@@ -5,11 +5,11 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"time"
 
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/theme"
 
@@ -56,13 +56,31 @@ type ProgramBoxModel struct {
 	maximized      bool
 	autoClose      bool
 	autoCloseDelay time.Duration
-	task           func(context.Context, io.Writer) error
-	focused        bool
+	// AutoExit determines if the dialog should automatically close (and exit app) on success
+	AutoExit bool
+	task     func(context.Context, io.Writer) error
+	focused  bool
+	ctx      context.Context
+
+	// Overlay prompts (for blocking prompts during task)
+	subDialog     tea.Model
+	subDialogChan chan bool
 
 	// Progress tracking
 	Tasks    []Task
 	Percent  float64
 	progress progress.Model
+}
+
+// SubDialogMsg signals a request to show a sub-dialog and blocks the task
+type SubDialogMsg struct {
+	Model tea.Model
+	Chan  chan bool
+}
+
+// SubDialogResultMsg signals the completion of a sub-dialog
+type SubDialogResultMsg struct {
+	Result bool
 }
 
 // programBoxModel is an alias for backward compatibility
@@ -106,6 +124,7 @@ func newProgramBox(title, subtitle, command string) *ProgramBoxModel {
 		lines:    []string{},
 		Tasks:    []Task{},
 		focused:  true,
+		ctx:      context.Background(),
 	}
 
 	// Initialize viewport style to match dialog background (fixes black scrollbar)
@@ -221,48 +240,125 @@ func (m *programBoxModel) streamReader(reader io.Reader) tea.Cmd {
 }
 
 func (m *programBoxModel) Init() tea.Cmd {
+	// If a task function was set (dialog mode), start it now
+	if m.task != nil {
+		task := m.task
+		m.task = nil // Prevent double-start
+
+		return func() tea.Msg {
+			// Create a pipe for streaming output
+			reader, writer := io.Pipe()
+
+			// Channel to signal task is done
+			errChan := make(chan error, 1)
+
+			// Start reading output in a goroutine — sends lines to the viewport
+			go func() {
+				scanner := bufio.NewScanner(reader)
+				for scanner.Scan() {
+					if program != nil {
+						program.Send(outputLineMsg{line: scanner.Text()})
+					}
+				}
+			}()
+
+			// Run the task in a goroutine
+			go func() {
+				defer writer.Close()
+				ctx := m.ctx
+				// task is already wrapped with WithTUIWriter if coming from RunCommand
+				errChan <- task(ctx, writer)
+			}()
+
+			// Log completion happens via errChan if we were using it for sync,
+			// but here we just need to send the Done msg.
+			// Wait, we need to wait for task to finish to send Done.
+			// The goroutine above sends to errChan. We should wait for it.
+			go func() {
+				err := <-errChan
+				if program != nil {
+					program.Send(outputDoneMsg{err: err})
+				}
+			}()
+
+			return nil
+		}
+	}
 	return nil
 }
 
 func (m *programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Handle sub-dialog result specifically (it signals closing of the sub-dialog)
+	if resultMsg, ok := msg.(SubDialogResultMsg); ok {
+		if m.subDialogChan != nil {
+			m.subDialogChan <- resultMsg.Result
+			close(m.subDialogChan)
+			m.subDialogChan = nil
+		}
+		m.subDialog = nil
+		return m, nil
+	}
+
+	// Handle sub-dialog updates if active
+	if m.subDialog != nil {
+		var cmd tea.Cmd
+
+		// Special case: WindowSizeMsg goes to both to ensure ProgramBox stays sized correctly
+		if wsm, ok := msg.(tea.WindowSizeMsg); ok {
+			m.width = wsm.Width
+			m.height = wsm.Height
+			m.subDialog, cmd = m.subDialog.Update(msg)
+			// We fall through to let ProgramBox also handle the resize (viewport mainly)
+		} else {
+			// Exclusive delegations for interaction
+			m.subDialog, cmd = m.subDialog.Update(msg)
+			return m, cmd
+		}
+	}
+
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+	case SubDialogMsg:
+		m.subDialog = msg.Model
+		m.subDialogChan = msg.Chan
+		// Set size immediately so it can render (it might have missed the first WindowSizeMsg)
+		if s, ok := m.subDialog.(interface{ SetSize(int, int) }); ok {
+			s.SetSize(m.width, m.height)
+		}
+		return m, nil
+
+	case CloseDialogMsg:
+		if m.subDialog != nil {
+			if m.subDialogChan != nil {
+				// Handle result if it's a bool (confirmations)
+				if r, ok := msg.Result.(bool); ok {
+					m.subDialogChan <- r
+				} else {
+					m.subDialogChan <- false // Default/cancel
+				}
+			}
+			m.subDialog = nil
+			m.subDialogChan = nil
+			return m, nil
+		}
+
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-
-		cfg := config.LoadAppConfig()
-		shadowWidth := 0
-		shadowHeight := 0
-		if cfg.UI.Shadow {
-			shadowWidth = 2
-			shadowHeight = 1
-		}
-
-		commandHeight := 1
-		if m.command == "" {
-			commandHeight = 0
-		}
-
-		// Width calculation: screen - margins(4) - shadow(2) - borders(2 outer + 2 inner)
-		vpWidth := m.width - 4 - shadowWidth - 4
-		if vpWidth < 20 {
-			vpWidth = 20
-		}
-		m.viewport.SetWidth(vpWidth)
-
-		// Height calculation: screen - margins(4) - shadow(1) - borders(2 outer + 2 inner) - other components(cmd line + button row)
-		vpHeight := m.height - 4 - shadowHeight - 4 - commandHeight - 3
-		if vpHeight < 5 {
-			vpHeight = 5
-		}
-		m.viewport.SetHeight(vpHeight)
-
+		// Delegate to SetSize (single source of truth)
+		m.SetSize(msg.Width, msg.Height)
 		return m, nil
 
 	case outputLineMsg:
-		m.lines = append(m.lines, msg.line)
+		// Convert semantic theme tags to ANSI colors before displaying
+		styles := GetStyles()
+		rendered := RenderThemeText(msg.line, styles.Console)
+		// Truncate to viewport width to prevent overflow past borders
+		if m.viewport.Width() > 0 {
+			rendered = lipgloss.NewStyle().
+				MaxWidth(m.viewport.Width()).
+				Render(rendered)
+		}
+		m.lines = append(m.lines, rendered)
 		m.viewport.SetContent(strings.Join(m.lines, "\n"))
 		m.viewport.GotoBottom()
 
@@ -276,21 +372,28 @@ func (m *programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg.err
 		m.viewport.SetContent(strings.Join(m.lines, "\n"))
 		m.viewport.GotoBottom()
+
+		// If AutoExit is enabled and no error occurred, close immediately
+		if m.AutoExit && m.err == nil {
+			return m, func() tea.Msg { return CloseDialogMsg{} }
+		}
+
 		return m, nil
 
 	case tea.KeyPressMsg:
+		closeDialog := func() tea.Msg { return CloseDialogMsg{} }
 		switch {
 		case key.Matches(msg, Keys.Esc):
 			if m.done {
-				return m, tea.Quit
+				return m, closeDialog
 			}
 
 		case key.Matches(msg, Keys.ForceQuit):
-			return m, tea.Quit
+			return m, closeDialog
 
 		case key.Matches(msg, Keys.Enter):
 			if m.done {
-				return m, tea.Quit
+				return m, closeDialog
 			}
 		}
 
@@ -299,7 +402,7 @@ func (m *programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.done {
 			if zoneInfo := zone.Get("Button.OK"); zoneInfo != nil {
 				if zoneInfo.InBounds(msg) {
-					return m, tea.Quit
+					return m, func() tea.Msg { return CloseDialogMsg{} }
 				}
 			}
 		}
@@ -314,6 +417,23 @@ func (m *programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *programBoxModel) ViewString() string {
 	if m.width == 0 {
 		return ""
+	}
+
+	// If sub-dialog is active, show it instead of logs
+	if m.subDialog != nil {
+		var viewStr string
+		if vs, ok := m.subDialog.(interface{ ViewString() string }); ok {
+			viewStr = vs.ViewString()
+		} else {
+			viewStr = fmt.Sprintf("%v", m.subDialog.View())
+		}
+
+		return lipgloss.Place(
+			m.width, m.height,
+			lipgloss.Center, lipgloss.Center,
+			viewStr,
+			lipgloss.WithWhitespaceChars(" "),
+		)
 	}
 
 	styles := GetStyles()
@@ -496,23 +616,36 @@ func (m *programBoxModel) SetSize(w, h int) {
 		commandHeight = 0
 	}
 
-	// Width calculation: screen - margins(4) - shadow(2) - borders(2 outer + 2 inner)
-	vpWidth := m.width - 4 - shadowWidth - 4
+	// Width calculation:
+	// If maximized, fill available width (only subtract shadow/borders)
+	// If not maximized, use global margins (4)
+	marginW := 4
+	if m.maximized {
+		marginW = 0
+	}
+	vpWidth := m.width - marginW - shadowWidth - 4 // -4 for borders (2 outer + 2 inner)
 	if vpWidth < 20 {
 		vpWidth = 20
 	}
 	m.viewport.SetWidth(vpWidth)
 
-	// Height calculation: screen - margins(4) - shadow(1) - borders(2 outer + 2 inner) - other components(cmd line + button row)
-	vpHeight := m.height - 4 - shadowHeight - 4 - commandHeight - 3
+	// Height calculation:
+	// If maximized, fill available height (only subtract shadow/borders/chrome)
+	// If not maximized, use global margins (4)
+	marginH := 4
+	if m.maximized {
+		marginH = 0
+	}
+	vpHeight := m.height - marginH - shadowHeight - 4 - commandHeight - 3 // -4 for borders, -3 for buttons
 	if vpHeight < 5 {
 		vpHeight = 5
 	}
 	m.viewport.SetHeight(vpHeight)
 }
 
-// getHelpText returns the dynamic help text based on the current state
-func (m *programBoxModel) getHelpText() string {
+// GetHelpText returns the dynamic help text based on the current state
+// Implements DynamicHelpProvider interface for use with DialogWithBackdrop
+func (m *programBoxModel) GetHelpText() string {
 	scrollInfo := ""
 	if m.viewport.TotalLineCount() > m.viewport.VisibleLineCount() {
 		scrollPercent := m.viewport.ScrollPercent()
@@ -528,76 +661,17 @@ func (m *programBoxModel) getHelpText() string {
 	return "Running..." + scrollInfo + " | Press Ctrl+C to cancel | PgUp/PgDn to scroll"
 }
 
-// programBoxWithBackdrop wraps a program box dialog with backdrop using overlay
-type programBoxWithBackdrop struct {
-	backdrop BackdropModel
-	dialog   *programBoxModel
-}
-
-func (m programBoxWithBackdrop) Init() tea.Cmd {
-	return tea.Batch(m.backdrop.Init(), m.dialog.Init())
-}
-
-func (m programBoxWithBackdrop) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmds []tea.Cmd
-
-	// Update backdrop
-	backdropModel, cmd := m.backdrop.Update(msg)
-	m.backdrop = backdropModel.(BackdropModel)
-	cmds = append(cmds, cmd)
-
-	// Update dialog
-	dialogModel, cmd := m.dialog.Update(msg)
-	m.dialog = dialogModel.(*programBoxModel)
-	cmds = append(cmds, cmd)
-
-	// Update backdrop helpText based on dialog state
-	m.backdrop.SetHelpText(m.dialog.getHelpText())
-
-	return m, tea.Batch(cmds...)
-}
-
-func (m programBoxWithBackdrop) View() tea.View {
-	// Get string content from sub-views
-	dialogContent := m.dialog.ViewString()
-	backdropContent := m.backdrop.ViewString()
-
-	// If dialog isn't ready yet, just show backdrop
-	if dialogContent == "" {
-		v := tea.NewView(backdropContent)
-		v.MouseMode = tea.MouseModeAllMotion
-		return v
-	}
-
-	// Position dialog using offsets from top-left corner
-	// Offset using parameters (2, 2)
-	output := Overlay(
-		dialogContent,
-		backdropContent,
-		OverlayLeft,
-		OverlayTop,
-		2,
-		2,
-	)
-
-	// Scan zones at root level for mouse support
-	v := tea.NewView(zone.Scan(output))
-	v.MouseMode = tea.MouseModeAllMotion
-	return v
-}
-
 // RunProgramBox displays a program box dialog that shows command output
 func RunProgramBox(ctx context.Context, title, subtitle string, task func(context.Context, io.Writer) error) error {
-	// Automatically append reset tags to title/subtitle if missing
-	if title != "" && !strings.HasSuffix(title, "{{[-]}}") {
-		title += "{{[-]}}"
-	}
-	if subtitle != "" && !strings.HasSuffix(subtitle, "{{[-]}}") {
-		subtitle += "{{[-]}}"
-	}
-
 	// Initialize global zone manager for mouse support (safe to call multiple times)
 	zone.NewGlobal()
+
+	// Enable TUI mode for console prompts
+	console.SetTUIEnabled(true)
+	defer console.SetTUIEnabled(false)
+
+	logger.TUIMode = true
+	defer func() { logger.TUIMode = false }()
 
 	// Initialize TUI if not already done
 	cfg := config.LoadAppConfig()
@@ -607,88 +681,50 @@ func RunProgramBox(ctx context.Context, title, subtitle string, task func(contex
 		InitStyles(cfg)
 	}
 
-	// Use subtitle as command display (can be empty)
-	dialogModel := newProgramBox(title, subtitle, subtitle)
+	// Create dialog model
+	dialogModel := NewProgramBoxModel(title, subtitle, subtitle)
+	dialogModel.ctx = ctx
+	dialogModel.SetTask(task)
+	dialogModel.SetMaximized(true)
 
-	// Create wrapper with backdrop
-	initialHelpText := "Running... | Press Ctrl+C to cancel | PgUp/PgDn to scroll"
-	model := programBoxWithBackdrop{
-		backdrop: NewBackdropModel(initialHelpText),
-		dialog:   dialogModel,
+	// If -y flag was passed, enable AutoExit
+	if console.GlobalYes {
+		dialogModel.AutoExit = true
 	}
 
-	// Create a pipe for output
-	reader, writer := io.Pipe()
+	// Create full app model with standalone dialog to include log panel and backdrop
+	model := NewAppModelStandalone(ctx, currentConfig, dialogModel)
 
-	// Create Bubble Tea program FIRST (before redirecting stdout/stderr)
-	// so it can use the real terminal
+	// Create Bubble Tea program
 	p := tea.NewProgram(model)
 
-	// Run the task in a goroutine
-	errChan := make(chan error, 1)
-	go func() {
-		defer writer.Close()
-
-		// Check if stdout/stderr are already redirected (not terminals)
-		// If they are, don't redirect again - they're likely already going to a dialog
-		stdoutStat, _ := os.Stdout.Stat()
-		stderrStat, _ := os.Stderr.Stat()
-		stdoutIsTerminal := (stdoutStat.Mode() & os.ModeCharDevice) != 0
-		stderrIsTerminal := (stderrStat.Mode() & os.ModeCharDevice) != 0
-
-		// Only redirect if stdout/stderr are actual terminals
-		if stdoutIsTerminal && stderrIsTerminal {
-			// Save original stdout/stderr
-			oldStdout := os.Stdout
-			oldStderr := os.Stderr
-
-			// Create pipes for stdout/stderr redirection
-			r, w, _ := os.Pipe()
-
-			// Redirect stdout/stderr to our pipe
-			os.Stdout = w
-			os.Stderr = w
-
-			// Copy from the pipe to our writer in a goroutine
-			copyDone := make(chan struct{})
-			go func() {
-				io.Copy(writer, r)
-				close(copyDone)
-			}()
-
-			// Run the task
-			err := task(ctx, writer)
-
-			// Restore original stdout/stderr
-			w.Close()
-			os.Stdout = oldStdout
-			os.Stderr = oldStderr
-
-			// Wait for copy to finish
-			<-copyDone
-
-			errChan <- err
-		} else {
-			// stdout/stderr already redirected, just run the task
-			errChan <- task(ctx, writer)
-		}
+	// Set global program variable so ProgramBoxModel.Init can send messages
+	program = p
+	console.TUIConfirm = PromptConfirm
+	defer func() {
+		program = nil
+		console.TUIConfirm = nil
 	}()
 
-	// Start streaming output
-	go func() {
-		scanner := bufio.NewScanner(reader)
-		for scanner.Scan() {
-			line := scanner.Text()
-			p.Send(outputLineMsg{line: line})
-		}
+	// Run the program (Init will start the task)
+	finalModel, err := p.Run()
 
-		// Signal completion
-		err := <-errChan
-		p.Send(outputDoneMsg{err: err})
-	}()
-
-	_, err := p.Run()
 	// Reset terminal colors on exit to prevent "bleeding" into the shell prompt
 	fmt.Print("\x1b[0m\n")
-	return err
+
+	if err != nil {
+		return err
+	}
+
+	// Extract details from the model
+	if app, ok := finalModel.(AppModel); ok {
+		if app.Fatal {
+			return fmt.Errorf("application force quit")
+		}
+		if box, ok := app.dialog.(*ProgramBoxModel); ok {
+			return box.err
+		}
+	}
+
+	return nil
 }

@@ -2,11 +2,15 @@ package console
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 
 	"golang.org/x/term"
 )
+
+// ErrUserAborted is returned when the user aborts an action
+var ErrUserAborted = errors.New("user aborted")
 
 // Printer is a function compatible with logger.Notice
 type Printer func(ctx context.Context, msg any, args ...any)
@@ -19,6 +23,10 @@ var TUIConfirm func(title, question string, defaultYes bool) bool
 // to allow the application to cleanly exit the TUI before re-execution.
 var TUIShutdown func()
 
+// GlobalYes is set to true when the -y/--yes flag is passed to the application.
+// This allows TUI components to know if they should auto-confirm/auto-exit.
+var GlobalYes bool
+
 // QuestionPrompt prompts the user with a Yes/No question.
 // It returns true if the user answers Yes, false otherwise.
 // defaultValue determines the default action if the user just presses Enter ("Y"=Yes, "N"=No, ""=Require Input).
@@ -29,8 +37,7 @@ func QuestionPrompt(ctx context.Context, printer Printer, question string, defau
 	}
 
 	// Check if we should use TUI for this prompt
-	// we use a check for the "tui_writer" key in context as a proxy for "are we in a TUI task?"
-	if ctx.Value("tui_writer") != nil && TUIConfirm != nil {
+	if IsTUI(ctx) && TUIConfirm != nil {
 		defaultYes := strings.EqualFold(defaultValue, "y")
 		answer := TUIConfirm("Confirmation", question, defaultYes)
 		if answer {

@@ -448,74 +448,9 @@ func (m MenuModel) Init() tea.Cmd {
 
 // Update implements tea.Model (Phase 1: delegate to bubbles/list)
 func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Handle window size first
+	// Handle window size first — delegate to SetSize (single source of truth)
 	if wsMsg, ok := msg.(tea.WindowSizeMsg); ok {
-		m.width = wsMsg.Width
-		m.height = wsMsg.Height
-
-		// Calculate list width based on actual content
-		maxTagLen := 0
-		maxDescLen := 0
-		for _, item := range m.items {
-			tagWidth := lipgloss.Width(item.Tag)
-			descWidth := lipgloss.Width(item.Desc)
-			if tagWidth > maxTagLen {
-				maxTagLen = tagWidth
-			}
-			if descWidth > maxDescLen {
-				maxDescLen = descWidth
-			}
-		}
-		// Width = tag + spacing(2) + desc + margins(2) + buffer(4)
-		listWidth := maxTagLen + 2 + maxDescLen + 2 + 4
-
-		// Constrain width to fit within terminal
-		// Account for: outer border (2) + inner border (2) + margins (6) + shadow (2) = 12
-		if m.width > 0 {
-			maxListWidth := m.width - 12
-			if maxListWidth < 30 {
-				maxListWidth = 30
-			}
-			if listWidth > maxListWidth {
-				listWidth = maxListWidth
-			}
-		}
-
-		// Set list height based on actual number of items (dynamic sizing!)
-		// Calculate proper height based on delegate metrics
-		// menuItemDelegate has Height=1 and Spacing=0
-		itemHeight := 1
-		spacing := 0
-		totalItemHeight := len(m.items) * itemHeight
-		if len(m.items) > 1 && spacing > 0 {
-			totalItemHeight += (len(m.items) - 1) * spacing
-		}
-		listHeight := totalItemHeight
-
-		// When maximized, constrain list height to fit within available space
-		if m.maximized && m.height > 0 {
-			// Calculate available height for the list viewport
-			// Layout: outer border (2) + subtitle (if present) + inner list border (2) + buttons row (3) + shadow (1)
-			subtitleHeight := 0
-			if m.subtitle != "" {
-				subtitleHeight = lipgloss.Height(m.subtitle) + 1 // +1 for padding
-			}
-			shadowHeight := 1
-			// Outer border: 2 (top + bottom)
-			// Inner list border: 2 (top + bottom)
-			// Button area: ~3 lines (border + button + border)
-			// Margins/padding: ~2
-			overhead := 2 + subtitleHeight + 2 + 3 + shadowHeight + 2
-			maxListHeight := m.height - overhead
-			if maxListHeight < 5 {
-				maxListHeight = 5
-			}
-			if listHeight > maxListHeight {
-				listHeight = maxListHeight
-			}
-		}
-
-		m.list.SetSize(listWidth, listHeight)
+		m.SetSize(wsMsg.Width, wsMsg.Height)
 	}
 
 	// Handle mouse events using BubbleZones
@@ -1325,9 +1260,13 @@ func (m *MenuModel) SetSize(width, height int) {
 	listWidth := maxTagLen + 2 + maxDescLen + 2 + 4
 
 	// Constrain width to fit within terminal
-	// Account for: outer border (2) + inner border (2) + margins (6) + shadow (2) = 12
+	// Account for: outer border (2) + inner border (2) + margins (6) + shadow (2 if enabled)
 	if m.width > 0 {
-		maxListWidth := m.width - 12
+		widthOverhead := 10 // outer border (2) + inner border (2) + margins (6)
+		if currentConfig.UI.Shadow {
+			widthOverhead += 2
+		}
+		maxListWidth := m.width - widthOverhead
 		if maxListWidth < 30 {
 			maxListWidth = 30
 		}
@@ -1347,13 +1286,18 @@ func (m *MenuModel) SetSize(width, height int) {
 
 	// When maximized, constrain list height to fit within available space
 	if m.maximized && m.height > 0 {
+		// Window fills contentAreaHeight (m.height). Calculate list height from that.
 		subtitleHeight := 0
 		if m.subtitle != "" {
-			subtitleHeight = lipgloss.Height(m.subtitle) + 1
+			subtitleHeight = lipgloss.Height(m.subtitle)
 		}
-		shadowHeight := 1
-		overhead := 2 + subtitleHeight + 2 + 3 + shadowHeight + 2
-		maxListHeight := m.height - overhead
+		shadowHeight := 0
+		if currentConfig.UI.Shadow {
+			shadowHeight = 1
+		}
+		// Fixed elements: outer border (2) + inner border (2) + buttons (3: border + label + border) + shadow + subtitle
+		fixedElements := 2 + 2 + 3 + shadowHeight + subtitleHeight
+		maxListHeight := m.height - fixedElements
 		if maxListHeight < 5 {
 			maxListHeight = 5
 		}

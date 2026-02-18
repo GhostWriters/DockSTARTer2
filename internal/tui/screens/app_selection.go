@@ -5,7 +5,6 @@ import (
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/constants"
-	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/tui"
 	"context"
 	"fmt"
@@ -189,7 +188,7 @@ func (s *AppSelectionScreen) handleSave() tea.Cmd {
 
 	// Task to execute inside the program box
 	task := func(ctx context.Context, w io.Writer) error {
-		ctx = logger.WithTUIWriter(ctx, w)
+		ctx = console.WithTUIWriter(ctx, w)
 		totalSteps := len(toEnable) + len(toDisable) + 1 // +1 for final update
 		completedSteps := 0
 

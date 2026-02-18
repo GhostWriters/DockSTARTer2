@@ -71,6 +71,13 @@ type (
 		DefaultYes bool
 		ResultChan chan bool
 	}
+
+	// ShowMessageDialogMsg shows a message dialog (info/success/warning/error)
+	ShowMessageDialogMsg struct {
+		Title   string
+		Message string
+		Type    MessageType
+	}
 )
 
 // AppModel is the root Bubble Tea model
@@ -165,16 +172,15 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setLogPanelFocus(false)
 		}
 		// Resize backdrop, screen, and dialog to match new panel height
-		backdropHeight := m.height - m.logPanel.Height()
-		backdropMsg := tea.WindowSizeMsg{Width: m.width, Height: backdropHeight}
+		backdropMsg := tea.WindowSizeMsg{Width: m.width, Height: m.backdropHeight()}
 		backdropModel, _ := m.backdrop.Update(backdropMsg)
 		m.backdrop = backdropModel.(BackdropModel)
 		if m.activeScreen != nil {
-			m.activeScreen.SetSize(m.width, backdropHeight)
+			m.activeScreen.SetSize(m.width, m.contentAreaHeight())
 		}
 		if m.dialog != nil {
 			if sizable, ok := m.dialog.(interface{ SetSize(int, int) }); ok {
-				sizable.SetSize(m.width, backdropHeight)
+				sizable.SetSize(m.width, m.contentAreaHeight())
 			}
 		}
 		return m, cmd
@@ -426,26 +432,27 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.logPanel.SetSize(m.width, m.height)
 
 		// All other components use backdropHeight (terminal minus log panel strip)
-		backdropHeight := m.height - m.logPanel.Height()
-		sizeMsg := tea.WindowSizeMsg{Width: m.width, Height: backdropHeight}
+		backdropSizeMsg := tea.WindowSizeMsg{Width: m.width, Height: m.backdropHeight()}
+		contentAreaHeight := m.contentAreaHeight()
+		contentSizeMsg := tea.WindowSizeMsg{Width: m.width, Height: contentAreaHeight}
 
 		// Update backdrop
-		backdropModel, _ := m.backdrop.Update(sizeMsg)
+		backdropModel, _ := m.backdrop.Update(backdropSizeMsg)
 		m.backdrop = backdropModel.(BackdropModel)
 
-		// Update dialog or active screen with the reduced height message
+		// Update dialog or active screen with content area dimensions
 		if m.dialog != nil {
 			if sizable, ok := m.dialog.(interface{ SetSize(int, int) }); ok {
-				sizable.SetSize(m.width, backdropHeight)
+				sizable.SetSize(m.width, contentAreaHeight)
 			}
 			var dialogCmd tea.Cmd
-			m.dialog, dialogCmd = m.dialog.Update(sizeMsg)
+			m.dialog, dialogCmd = m.dialog.Update(contentSizeMsg)
 			if dialogCmd != nil {
 				cmds = append(cmds, dialogCmd)
 			}
 		} else if m.activeScreen != nil {
-			m.activeScreen.SetSize(m.width, backdropHeight)
-			updated, screenCmd := m.activeScreen.Update(sizeMsg)
+			m.activeScreen.SetSize(m.width, contentAreaHeight)
+			updated, screenCmd := m.activeScreen.Update(contentSizeMsg)
 			if screen, ok := updated.(ScreenModel); ok {
 				m.activeScreen = screen
 			}
@@ -464,7 +471,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.activeScreen = msg.Screen
 		if m.activeScreen != nil {
 			CurrentPageName = m.activeScreen.MenuName()
-			m.activeScreen.SetSize(m.width, m.height-m.logPanel.Height())
+			contentAreaHeight := m.contentAreaHeight()
+			m.activeScreen.SetSize(m.width, contentAreaHeight)
 			m.backdrop.SetHelpText(m.activeScreen.HelpText())
 			cmds = append(cmds, m.activeScreen.Init())
 		}
@@ -477,7 +485,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.screenStack = m.screenStack[:len(m.screenStack)-1]
 			if m.activeScreen != nil {
 				CurrentPageName = m.activeScreen.MenuName()
-				m.activeScreen.SetSize(m.width, m.height-m.logPanel.Height())
+				contentAreaHeight := m.contentAreaHeight()
+				m.activeScreen.SetSize(m.width, contentAreaHeight)
 				m.backdrop.SetHelpText(m.activeScreen.HelpText())
 			}
 		} else {
@@ -501,9 +510,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.dialog = msg.Dialog
 		if m.dialog != nil {
-			backdropHeight := m.height - m.logPanel.Height()
+			contentAreaHeight := m.contentAreaHeight()
 			if sizable, ok := m.dialog.(interface{ SetSize(int, int) }); ok {
-				sizable.SetSize(m.width, backdropHeight)
+				sizable.SetSize(m.width, contentAreaHeight)
 			}
 			// Explicitly focus the new dialog
 			if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
@@ -521,9 +530,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Show it as the main dialog (top of stack)
 		dialog := newConfirmDialog(msg.Title, msg.Question, msg.DefaultYes)
-		backdropHeight := m.height - m.logPanel.Height()
+		contentAreaHeight := m.contentAreaHeight()
 		if sizable, ok := interface{}(dialog).(interface{ SetSize(int, int) }); ok {
-			sizable.SetSize(m.width, backdropHeight)
+			sizable.SetSize(m.width, contentAreaHeight)
 		}
 		m.dialog = dialog
 		// Explicitly focus the new confirmation dialog
@@ -531,6 +540,24 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			focusable.SetFocused(true)
 		}
 		m.pendingConfirm = msg.ResultChan
+		return m, m.dialog.Init()
+
+	case ShowMessageDialogMsg:
+		// If a dialog is already open, push it to stack
+		if m.dialog != nil {
+			m.dialogStack = append(m.dialogStack, m.dialog)
+		}
+
+		// Show message dialog as the main dialog
+		dialog := newMessageDialog(msg.Title, msg.Message, msg.Type)
+		contentAreaHeight := m.contentAreaHeight()
+		if sizable, ok := interface{}(dialog).(interface{ SetSize(int, int) }); ok {
+			sizable.SetSize(m.width, contentAreaHeight)
+		}
+		m.dialog = dialog
+		if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
+			focusable.SetFocused(true)
+		}
 		return m, m.dialog.Init()
 
 	case FinalizeSelectionMsg:
@@ -545,9 +572,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Show the new dialog
 		m.dialog = msg.Dialog
 		if m.dialog != nil {
-			backdropHeight := m.height - m.logPanel.Height()
+			contentAreaHeight := m.contentAreaHeight()
 			if sizable, ok := m.dialog.(interface{ SetSize(int, int) }); ok {
-				sizable.SetSize(m.width, backdropHeight)
+				sizable.SetSize(m.width, contentAreaHeight)
 			}
 			if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
 				focusable.SetFocused(true)
@@ -576,9 +603,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Re-focus and re-size the popped dialog
 			if m.dialog != nil {
-				backdropHeight := m.height - m.logPanel.Height()
+				contentAreaHeight := m.contentAreaHeight()
 				if sizable, ok := m.dialog.(interface{ SetSize(int, int) }); ok {
-					sizable.SetSize(m.width, backdropHeight)
+					sizable.SetSize(m.width, contentAreaHeight)
 				}
 				if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
 					focusable.SetFocused(true)
@@ -662,6 +689,17 @@ func (m *AppModel) setLogPanelFocus(focused bool) {
 	}
 }
 
+// backdropHeight returns the height available for the backdrop (terminal minus log panel).
+func (m AppModel) backdropHeight() int {
+	return m.height - m.logPanel.Height()
+}
+
+// contentAreaHeight returns the height available for screens and dialogs.
+// Subtracts header (1) + separator (1) + helpline (1) + spacing (1) from the backdrop height.
+func (m AppModel) contentAreaHeight() int {
+	return m.backdropHeight() - 4
+}
+
 // ViewStringer is an interface for models that provide string content for compositing
 type ViewStringer interface {
 	ViewString() string
@@ -677,8 +715,8 @@ func (m AppModel) View() tea.View {
 	// Get backdrop view as string
 	output := m.backdrop.ViewString()
 
-	// Offset for content area: header (1 line) + separator (1 line) = 2 lines
-	// Dialog starts directly below the separator (no gap)
+	// Content area offset: header (1 line) + separator (1 line) = 2 lines from top
+	// Content area ends 1 line before bottom (helpline)
 	contentYOffset := 2
 
 	// Layer 1: Active Screen
@@ -688,13 +726,20 @@ func (m AppModel) View() tea.View {
 			screenContent = vs.ViewString()
 		}
 		if screenContent != "" {
+			// Maximized screens stay at top, others center vertically in content area
+			vPos := OverlayCenter
+			yOff := 0
+			if m.activeScreen.IsMaximized() {
+				vPos = OverlayTop
+				yOff = contentYOffset
+			}
 			output = Overlay(
 				screenContent,
 				output,
 				OverlayCenter,
-				OverlayTop,
+				vPos,
 				0,
-				contentYOffset,
+				yOff,
 			)
 		}
 	}
@@ -706,13 +751,25 @@ func (m AppModel) View() tea.View {
 			dialogContent = vs.ViewString()
 		}
 		if dialogContent != "" {
+			// Check if dialog is maximized (if it implements the interface)
+			maximized := false
+			if m, ok := m.dialog.(interface{ IsMaximized() bool }); ok {
+				maximized = m.IsMaximized()
+			}
+			// Maximized dialogs stay at top, others center vertically
+			vPos := OverlayCenter
+			yOff := 0
+			if maximized {
+				vPos = OverlayTop
+				yOff = contentYOffset
+			}
 			output = Overlay(
 				dialogContent,
 				output,
 				OverlayCenter,
-				OverlayTop,
+				vPos,
 				0,
-				contentYOffset,
+				yOff,
 			)
 		}
 	}

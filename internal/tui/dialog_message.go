@@ -1,13 +1,9 @@
 package tui
 
 import (
-	"DockSTARTer2/internal/config"
-	"DockSTARTer2/internal/theme"
-	"fmt"
-
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	zone "github.com/lrstanley/bubblezone/v2"
+	zone "github.com/lrstanley/bubblezone/v2" // used for zone.Get in Update()
 )
 
 // MessageType represents the type of message dialog
@@ -51,13 +47,14 @@ func (m *messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyPressMsg:
 		// Any key press closes the dialog
-		return m, tea.Quit
+		// Use CloseDialogMsg so AppModel can handle it when running within existing TUI
+		return m, func() tea.Msg { return CloseDialogMsg{} }
 
 	case tea.MouseClickMsg:
 		// Check if OK button was clicked (auto-generated zone ID: "Button.OK")
 		if zoneInfo := zone.Get("Button.OK"); zoneInfo != nil {
 			if zoneInfo.InBounds(msg) {
-				return m, tea.Quit
+				return m, func() tea.Msg { return CloseDialogMsg{} }
 			}
 		}
 	}
@@ -126,7 +123,9 @@ func (m *messageDialogModel) ViewString() string {
 	dialogWithTitle := RenderDialog(fullTitle, paddedContent, true)
 
 	// Add shadow (matching menu style)
-	return AddShadow(dialogWithTitle)
+	dialog := AddShadow(dialogWithTitle)
+
+	return dialog
 }
 
 func (m *messageDialogModel) View() tea.View {
@@ -139,74 +138,23 @@ func (m *messageDialogModel) SetSize(w, h int) {
 	m.height = h
 }
 
-// messageWithBackdrop wraps a message dialog with backdrop using overlay
-type messageWithBackdrop struct {
-	backdrop BackdropModel
-	dialog   *messageDialogModel
-}
-
-func (m messageWithBackdrop) Init() tea.Cmd {
-	return tea.Batch(m.backdrop.Init(), m.dialog.Init())
-}
-
-func (m messageWithBackdrop) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmds []tea.Cmd
-
-	// Update backdrop
-	backdropModel, cmd := m.backdrop.Update(msg)
-	m.backdrop = backdropModel.(BackdropModel)
-	cmds = append(cmds, cmd)
-
-	// Update dialog
-	dialogModel, cmd := m.dialog.Update(msg)
-	m.dialog = dialogModel.(*messageDialogModel)
-	cmds = append(cmds, cmd)
-
-	return m, tea.Batch(cmds...)
-}
-
-func (m messageWithBackdrop) View() tea.View {
-	// Get string content from sub-views
-	dialogContent := m.dialog.ViewString()
-	backdropContent := m.backdrop.ViewString()
-
-	// Use overlay to composite dialog over backdrop
-	output := Overlay(
-		dialogContent,
-		backdropContent,
-		OverlayCenter,
-		OverlayCenter,
-		0,
-		0,
-	)
-
-	// Scan zones at root level for mouse support
-	v := tea.NewView(zone.Scan(output))
-	v.MouseMode = tea.MouseModeAllMotion
-	return v
-}
-
 // ShowMessageDialog displays a message dialog
 func ShowMessageDialog(title, message string, msgType MessageType) {
-	// Initialize global zone manager for mouse support (safe to call multiple times)
-	zone.NewGlobal()
-
-	// Initialize TUI if not already done
-	cfg := config.LoadAppConfig()
-	if err := theme.Load(cfg.UI.Theme); err == nil {
-		InitStyles(cfg)
+	// If TUI is already running, show dialog within existing program
+	if program != nil {
+		program.Send(ShowMessageDialogMsg{
+			Title:   title,
+			Message: message,
+			Type:    msgType,
+		})
+		return
 	}
 
+	// Otherwise, run standalone with backdrop
 	helpText := "Press any key to continue"
-	model := messageWithBackdrop{
-		backdrop: NewBackdropModel(helpText),
-		dialog:   newMessageDialog(title, message, msgType),
-	}
+	dialog := newMessageDialog(title, message, msgType)
 
-	p := tea.NewProgram(model)
-	p.Run()
-	// Reset terminal colors on exit to prevent "bleeding" into the shell prompt
-	fmt.Print("\x1b[0m\n")
+	_, _ = RunDialogWithBackdrop(dialog, helpText, PositionCenter)
 }
 
 // ShowInfoDialog displays an info message dialog

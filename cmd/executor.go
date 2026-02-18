@@ -15,6 +15,7 @@ import (
 	"DockSTARTer2/internal/update"
 	"DockSTARTer2/internal/version"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -119,6 +120,7 @@ func handleConfigSettings(ctx context.Context, group *CommandGroup) {
 func Execute(ctx context.Context, groups []CommandGroup) int {
 	conf := config.LoadAppConfig()
 	_ = theme.Load(conf.UI.Theme)
+	exitCode := 0
 
 	// Validate override file for operational commands
 	shouldValidate := false
@@ -149,6 +151,8 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		flags := group.Flags
 		fullCmd := group.CommandSlice()
 		restArgs := Flatten(groups[i+1:])
+		console.CurrentFlags = flags
+		console.RestArgs = restArgs
 
 		// Apply Flags
 		// This logic handles setting state before the command executes.
@@ -191,11 +195,15 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				handleInstall(subCtx, &group, &state)
 				ranCommand = true
 			case "-u", "--update", "--update-app", "--update-templates":
-				handleUpdate(subCtx, &group, &state, restArgs)
 				ranCommand = true
+				if err := handleUpdate(subCtx, &group, &state, restArgs); err != nil {
+					return err
+				}
 			case "-M", "--menu":
-				handleMenu(subCtx, &group)
 				ranCommand = true
+				if err := handleMenu(subCtx, &group); err != nil {
+					return err
+				}
 			case "-T", "--theme", "--theme-list":
 				handleTheme(subCtx, &group)
 				ranCommand = true
@@ -226,8 +234,10 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				handleRemove(subCtx, &group, &state)
 				ranCommand = true
 			case "-S", "--select", "--menu-config-app-select", "--menu-app-select":
-				handleAppSelect(subCtx, &group)
 				ranCommand = true
+				if err := handleAppSelect(subCtx, &group); err != nil {
+					return err
+				}
 			case "-t", "--test":
 				handleTest(subCtx, &group)
 				ranCommand = true
@@ -280,10 +290,17 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			title = "{{|Theme_TitleSuccess|}}" + title + "{{[-]}}"
 			err := tui.RunCommand(ctx, title, subtitle, task)
 			if err != nil {
-				logger.Error(ctx, "TUI Run Error: %v", err)
+				if !errors.Is(err, console.ErrUserAborted) {
+					logger.Error(ctx, "TUI Run Error: %v", err)
+					exitCode = 1
+				}
 			}
 		} else {
-			_ = task(ctx)
+			if err := task(ctx); err != nil {
+				if !errors.Is(err, console.ErrUserAborted) {
+					exitCode = 1
+				}
+			}
 		}
 
 		// Reset Flags
@@ -291,16 +308,17 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		logger.SetLevel(logger.LevelNotice)
 	}
 
-	// If no commands matched (or groups empty), launch TUI?
-	// Parse typically returns at least one group if we want default behavior?
-	// If groups is empty, loop didn't run.
+	// If no commands matched (or groups empty), launch TUI
 	if !ranCommand {
 		if err := tui.Start(ctx, ""); err != nil {
-			logger.Error(ctx, "TUI Error: %v", err)
+			if !errors.Is(err, tui.ErrUserAborted) {
+				logger.Error(ctx, "TUI Error: %v", err)
+			}
+			exitCode = 1
 		}
 	}
 
-	return 0
+	return exitCode
 }
 func handleHelp(group *CommandGroup) {
 	target := ""
@@ -326,7 +344,8 @@ func handleConfigPm(ctx context.Context, group *CommandGroup) {
 	logger.Warn(ctx, fmt.Sprintf("The '{{|UserCommand|}}%s{{[-]}}' command is deprecated. Package manager configuration is no longer needed.", group.Command))
 }
 
-func handleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, restArgs []string) {
+func handleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, restArgs []string) error {
+	errOccurred := false
 	switch group.Command {
 	case "-u", "--update":
 		appVer := ""
@@ -338,10 +357,16 @@ func handleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, res
 			templBranch = group.Args[1]
 		}
 		if err := update.UpdateTemplates(ctx, state.Force, state.Yes, templBranch); err != nil {
-			logger.Error(ctx, "Templates update failed: %v", err)
+			if !errors.Is(err, console.ErrUserAborted) {
+				logger.Error(ctx, "Templates update failed: %v", err)
+			}
+			errOccurred = true
 		}
 		if err := update.SelfUpdate(ctx, state.Force, state.Yes, appVer, restArgs); err != nil {
-			logger.Error(ctx, "App update failed: %v", err)
+			if !errors.Is(err, console.ErrUserAborted) {
+				logger.Error(ctx, "App update failed: %v", err)
+			}
+			errOccurred = true
 		}
 	case "--update-app":
 		appVer := ""
@@ -349,7 +374,10 @@ func handleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, res
 			appVer = group.Args[0]
 		}
 		if err := update.SelfUpdate(ctx, state.Force, state.Yes, appVer, restArgs); err != nil {
-			logger.Error(ctx, "App update failed: %v", err)
+			if !errors.Is(err, console.ErrUserAborted) {
+				logger.Error(ctx, "App update failed: %v", err)
+			}
+			errOccurred = true
 		}
 	case "--update-templates":
 		templBranch := ""
@@ -357,26 +385,46 @@ func handleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, res
 			templBranch = group.Args[0]
 		}
 		if err := update.UpdateTemplates(ctx, state.Force, state.Yes, templBranch); err != nil {
-			logger.Error(ctx, "Templates update failed: %v", err)
+			if !errors.Is(err, console.ErrUserAborted) {
+				logger.Error(ctx, "Templates update failed: %v", err)
+			}
+			errOccurred = true
 		}
 	}
+	if errOccurred {
+		return fmt.Errorf("update failed")
+	}
+	return nil
 }
 
-func handleMenu(ctx context.Context, group *CommandGroup) {
+func handleMenu(ctx context.Context, group *CommandGroup) error {
 	target := ""
 	if len(group.Args) > 0 {
 		target = group.Args[0]
 	}
-	if err := tui.Start(ctx, target); err != nil {
-		logger.Error(ctx, "TUI Error: %v", err)
+	// Normalize targets that mean "app select"
+	switch target {
+	case "config-app-select", "app-select", "select":
+		target = "app-select"
 	}
+	if err := tui.Start(ctx, target); err != nil {
+		if !errors.Is(err, tui.ErrUserAborted) {
+			logger.Error(ctx, "TUI Error: %v", err)
+		}
+		return err
+	}
+	return nil
 }
 
-func handleAppSelect(ctx context.Context, group *CommandGroup) {
+func handleAppSelect(ctx context.Context, group *CommandGroup) error {
 	// -S / --select always opens the app selection menu
 	if err := tui.Start(ctx, "app-select"); err != nil {
-		logger.Error(ctx, "TUI Error: %v", err)
+		if !errors.Is(err, tui.ErrUserAborted) {
+			logger.Error(ctx, "TUI Error: %v", err)
+		}
+		return err
 	}
+	return nil
 }
 
 // Helper to resolve VAR and FILE from argument

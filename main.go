@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"syscall"
 
 	"DockSTARTer2/cmd"
@@ -22,10 +23,40 @@ func main() {
 		// This uses the simplest approach: the main thread executes the replacement
 		// after the TUI has cleanly shut down and returned from run().
 		exePath := update.PendingReExec[0]
-		argv := update.PendingReExec
+		// Args for the new process (excluding the executable name for exec.Command)
+		// update.PendingReExec contains [exePath, arg1, arg2...]
+		var args []string
+		if len(update.PendingReExec) > 1 {
+			args = update.PendingReExec[1:]
+		}
+
+		logger.Debug(context.Background(), "Re-executing: %s %v", exePath, args)
+
 		envv := os.Environ()
-		_ = syscall.Exec(exePath, argv, envv)
-		// If exec fails, we fall through to os.Exit
+
+		// Try syscall.Exec first (non-Windows)
+		err := syscall.Exec(exePath, update.PendingReExec, envv)
+		if err != nil {
+			// Fallback for Windows or other failures
+			logger.Debug(context.Background(), "syscall.Exec failed: %v. Attempting exec.Command...", err)
+
+			cmd := exec.Command(exePath, args...)
+			cmd.Stdin = os.Stdin
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			cmd.Env = envv
+
+			if err := cmd.Start(); err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to re-execute: %v\n", err)
+			} else {
+				// Wait for the child to correct exit code propagation
+				if state, err := cmd.Process.Wait(); err != nil {
+					fmt.Fprintf(os.Stderr, "Failed to wait for re-execution: %v\n", err)
+				} else {
+					exitCode = state.ExitCode()
+				}
+			}
+		}
 	}
 	os.Exit(exitCode)
 }
@@ -61,6 +92,8 @@ func run() (exitCode int) {
 
 	// Ensure templates are cloned
 	if err := update.EnsureTemplates(ctx); err != nil {
+		// Only fatal if we are NOT running a status/help command that doesn't need templates
+		// But practically, most commands need templates.
 		logger.FatalWithStack(ctx, "Failed to clone {{|ApplicationName|}}DockSTARTer-Templates{{[-]}} repo.")
 	}
 
