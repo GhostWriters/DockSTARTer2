@@ -93,7 +93,7 @@ func NewAppSelectionScreen(conf config.AppConfig) *AppSelectionScreen {
 	menu := tui.NewMenuModel(
 		"app_selection",
 		"Select Applications",
-		"Choose which apps you would like to install:\nUse {{|Theme_KeyCap|}}[up]{{[-:-:-]}}, {{|Theme_KeyCap|}}[down]{{[-:-:-]}}, and {{|Theme_KeyCap|}}[space]{{[-:-:-]}} to select apps, and {{|Theme_KeyCap|}}[tab]{{[-:-:-]}} to switch to the buttons at the bottom.",
+		"Choose which apps you would like to install:\nUse {{|Theme_KeyCap|}}[up]{{[-]}}, {{|Theme_KeyCap|}}[down]{{[-]}}, and {{|Theme_KeyCap|}}[space]{{[-]}} to select apps, and {{|Theme_KeyCap|}}[tab]{{[-]}} to switch to the buttons at the bottom.",
 		items,
 		navigateBack(),
 	)

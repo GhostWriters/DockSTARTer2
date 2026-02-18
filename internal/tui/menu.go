@@ -469,6 +469,18 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Width = tag + spacing(2) + desc + margins(2) + buffer(4)
 		listWidth := maxTagLen + 2 + maxDescLen + 2 + 4
 
+		// Constrain width to fit within terminal
+		// Account for: outer border (2) + inner border (2) + margins (6) + shadow (2) = 12
+		if m.width > 0 {
+			maxListWidth := m.width - 12
+			if maxListWidth < 30 {
+				maxListWidth = 30
+			}
+			if listWidth > maxListWidth {
+				listWidth = maxListWidth
+			}
+		}
+
 		// Set list height based on actual number of items (dynamic sizing!)
 		// Calculate proper height based on delegate metrics
 		// menuItemDelegate has Height=1 and Spacing=0
@@ -478,8 +490,30 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if len(m.items) > 1 && spacing > 0 {
 			totalItemHeight += (len(m.items) - 1) * spacing
 		}
-		// Try exact height with no buffer now that pagination is disabled
 		listHeight := totalItemHeight
+
+		// When maximized, constrain list height to fit within available space
+		if m.maximized && m.height > 0 {
+			// Calculate available height for the list viewport
+			// Layout: outer border (2) + subtitle (if present) + inner list border (2) + buttons row (3) + shadow (1)
+			subtitleHeight := 0
+			if m.subtitle != "" {
+				subtitleHeight = lipgloss.Height(m.subtitle) + 1 // +1 for padding
+			}
+			shadowHeight := 1
+			// Outer border: 2 (top + bottom)
+			// Inner list border: 2 (top + bottom)
+			// Button area: ~3 lines (border + button + border)
+			// Margins/padding: ~2
+			overhead := 2 + subtitleHeight + 2 + 3 + shadowHeight + 2
+			maxListHeight := m.height - overhead
+			if maxListHeight < 5 {
+				maxListHeight = 5
+			}
+			if listHeight > maxListHeight {
+				listHeight = maxListHeight
+			}
+		}
 
 		m.list.SetSize(listWidth, listHeight)
 	}
@@ -777,9 +811,8 @@ func (m MenuModel) ViewString() string {
 			Padding(0, 1).
 			Align(lipgloss.Left)
 
-		// Parse tags for subtitle
-		var subStr string
-		subStr, subtitleStyle = ParseTitleTags(m.subtitle, subtitleStyle)
+		// Use RenderThemeText for proper inline tag handling (not just leading tags)
+		subStr := RenderThemeText(m.subtitle, subtitleStyle)
 
 		subtitle := subtitleStyle.Render(subStr)
 		innerParts = append(innerParts, subtitle)
@@ -1270,10 +1303,66 @@ func (m MenuModel) renderBorderWithTitle(content string, contentWidth int) strin
 	return result.String()
 }
 
-// SetSize updates the menu dimensions
+// SetSize updates the menu dimensions and resizes the list
 func (m *MenuModel) SetSize(width, height int) {
 	m.width = width
 	m.height = height
+
+	// Recalculate list dimensions (same logic as WindowSizeMsg handler)
+	maxTagLen := 0
+	maxDescLen := 0
+	for _, item := range m.items {
+		tagWidth := lipgloss.Width(item.Tag)
+		descWidth := lipgloss.Width(item.Desc)
+		if tagWidth > maxTagLen {
+			maxTagLen = tagWidth
+		}
+		if descWidth > maxDescLen {
+			maxDescLen = descWidth
+		}
+	}
+	// Width = tag + spacing(2) + desc + margins(2) + buffer(4)
+	listWidth := maxTagLen + 2 + maxDescLen + 2 + 4
+
+	// Constrain width to fit within terminal
+	// Account for: outer border (2) + inner border (2) + margins (6) + shadow (2) = 12
+	if m.width > 0 {
+		maxListWidth := m.width - 12
+		if maxListWidth < 30 {
+			maxListWidth = 30
+		}
+		if listWidth > maxListWidth {
+			listWidth = maxListWidth
+		}
+	}
+
+	// Calculate list height based on items
+	itemHeight := 1
+	spacing := 0
+	totalItemHeight := len(m.items) * itemHeight
+	if len(m.items) > 1 && spacing > 0 {
+		totalItemHeight += (len(m.items) - 1) * spacing
+	}
+	listHeight := totalItemHeight
+
+	// When maximized, constrain list height to fit within available space
+	if m.maximized && m.height > 0 {
+		subtitleHeight := 0
+		if m.subtitle != "" {
+			subtitleHeight = lipgloss.Height(m.subtitle) + 1
+		}
+		shadowHeight := 1
+		overhead := 2 + subtitleHeight + 2 + 3 + shadowHeight + 2
+		maxListHeight := m.height - overhead
+		if maxListHeight < 5 {
+			maxListHeight = 5
+		}
+		if listHeight > maxListHeight {
+			listHeight = maxListHeight
+		}
+	}
+
+	m.list.SetSize(listWidth, listHeight)
 }
 
 // Title returns the menu title

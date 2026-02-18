@@ -2,21 +2,17 @@ package tui
 
 import (
 	"DockSTARTer2/internal/console"
-	"regexp"
 
 	"charm.land/lipgloss/v2"
-)
-
-var (
-	// Matches {{|Tag|}} OR {{|Code|}}
-	// Group 1: Semantic Tag Name
-	// Group 2: Direct Code
-	tagRegex = regexp.MustCompile(`\{\{(?:_([A-Za-z0-9_]+)_|\|([A-Za-z0-9_:\-#]+)\|)\}\}`)
 )
 
 // ParseTitleTags extracts semantic tags from the start of the string
 // and applies them to the base style. Returns the cleaned text and modified style.
 func ParseTitleTags(text string, baseStyle lipgloss.Style) (string, lipgloss.Style) {
+	// Use the console package's unified regex for both semantic and direct tags
+	tagRegex := console.GetDelimitedRegex()
+	directRegex := console.GetDirectRegex()
+
 	// Find all tags
 	matches := tagRegex.FindAllStringSubmatchIndex(text, -1)
 
@@ -24,9 +20,6 @@ func ParseTitleTags(text string, baseStyle lipgloss.Style) (string, lipgloss.Sty
 	style := baseStyle
 
 	lastIndex := 0
-
-	// Direct tag regex for parsing resolved tags (e.g. {{|white:blue|}})
-	directTagRegex := regexp.MustCompile(`\{\{\|([A-Za-z0-9_:\-#]+)\|\}\}`)
 
 	// Iterate through all found tags
 	for i, match := range matches {
@@ -39,33 +32,42 @@ func ParseTitleTags(text string, baseStyle lipgloss.Style) (string, lipgloss.Sty
 			style = lipgloss.NewStyle().Background(bg)
 		}
 
-		// Check for Semantic Tag (Group 1)
-		if match[2] != -1 {
-			tagName := text[match[2]:match[3]]
+		// Get named group indices
+		semanticIdx := tagRegex.SubexpIndex("semantic")
+		directIdx := tagRegex.SubexpIndex("direct")
+
+		// Check for Semantic Tag
+		if semanticIdx > 0 && match[semanticIdx*2] != -1 {
+			tagName := text[match[semanticIdx*2]:match[semanticIdx*2+1]]
 			def := console.GetColorDefinition(tagName)
 
-			// The definition is now in {{|code|}} format
-			subMatches := directTagRegex.FindAllStringSubmatch(def, -1)
+			// The definition is now in {{[code]}} format (direct tags)
+			subMatches := directRegex.FindAllStringSubmatch(def, -1)
 			if len(subMatches) > 0 {
 				// Apply each direct tag found in the definition sequentially
+				contentIdx := directRegex.SubexpIndex("content")
 				for j, sm := range subMatches {
-					// Special Handling: If the LAST tag in the definition is a REset {{[-]}},
+					if contentIdx >= len(sm) {
+						continue
+					}
+					code := sm[contentIdx]
+					// Special Handling: If the LAST tag in the definition is a Reset {{[-]}},
 					// and we have prior tags, we likely want to ignore this reset.
 					if j == len(subMatches)-1 && len(subMatches) > 1 {
-						if sm[1] == "-" {
+						if code == "-" {
 							continue
 						}
 					}
-					style = ApplyStyleCode(style, baseStyle, sm[1])
+					style = ApplyStyleCode(style, baseStyle, code)
 				}
 			} else {
 				// Fallback for simple definitions without brackets
 				style = ApplyStyleCode(style, baseStyle, def)
 			}
 
-		} else if match[4] != -1 {
-			// Check for Direct Code (Group 2)
-			code := text[match[4]:match[5]]
+		} else if directIdx > 0 && match[directIdx*2] != -1 {
+			// Check for Direct Code
+			code := text[match[directIdx*2]:match[directIdx*2+1]]
 			if code != "" {
 				style = ApplyStyleCode(style, baseStyle, code)
 			}
@@ -79,9 +81,8 @@ func ParseTitleTags(text string, baseStyle lipgloss.Style) (string, lipgloss.Sty
 
 	// Remove processed tags and clean up
 	cleanText := text[lastIndex:]
-	// Strip remaining styling tags
-	cleanText = tagRegex.ReplaceAllString(cleanText, "")
-	cleanText = directTagRegex.ReplaceAllString(cleanText, "")
+	// Strip remaining styling tags using the console package
+	cleanText = console.Strip(cleanText)
 
 	return cleanText, style
 }

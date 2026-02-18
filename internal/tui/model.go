@@ -677,6 +677,10 @@ func (m AppModel) View() tea.View {
 	// Get backdrop view as string
 	output := m.backdrop.ViewString()
 
+	// Offset for content area: header (1 line) + separator (1 line) = 2 lines
+	// Dialog starts directly below the separator (no gap)
+	contentYOffset := 2
+
 	// Layer 1: Active Screen
 	if m.activeScreen != nil {
 		var screenContent string
@@ -688,9 +692,9 @@ func (m AppModel) View() tea.View {
 				screenContent,
 				output,
 				OverlayCenter,
-				OverlayCenter,
+				OverlayTop,
 				0,
-				0,
+				contentYOffset,
 			)
 		}
 	}
@@ -706,9 +710,9 @@ func (m AppModel) View() tea.View {
 				dialogContent,
 				output,
 				OverlayCenter,
-				OverlayCenter,
+				OverlayTop,
 				0,
-				0,
+				contentYOffset,
 			)
 		}
 	}
