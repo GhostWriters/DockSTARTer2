@@ -121,7 +121,7 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 	lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(m.Width())
 	line = lineStyle.Render(line)
 
-	zoneID := fmt.Sprintf("menu-%s-item-%d", d.menuID, index)
+	zoneID := fmt.Sprintf("item-%s-%d", d.menuID, index)
 	fmt.Fprint(w, zone.Mark(zoneID, line))
 }
 
@@ -228,7 +228,7 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 	lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(m.Width())
 	line = lineStyle.Render(line)
 
-	zoneID := fmt.Sprintf("menu-%s-item-%d", d.menuID, index)
+	zoneID := fmt.Sprintf("item-%s-%d", d.menuID, index)
 	fmt.Fprint(w, zone.Mark(zoneID, line))
 }
 
@@ -458,7 +458,7 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Check each zone to see if the click is within bounds
 		// Menu item zones - clicking executes immediately (same as clicking Select)
 		for i := 0; i < len(m.items); i++ {
-			zoneID := fmt.Sprintf("item-%d", i)
+			zoneID := fmt.Sprintf("item-%s-%d", m.id, i)
 			if zoneInfo := zone.Get(zoneID); zoneInfo != nil {
 				if zoneInfo.InBounds(mouseMsg) {
 					// Select and execute the clicked item
@@ -780,66 +780,12 @@ func (m MenuModel) ViewString() string {
 	// Add shadow
 	dialog = AddShadow(dialog)
 
-	// Mark zones for mouse interaction before returning
-	// Note: Zones are scanned at root level (AppModel.View()), not here
-	dialog = m.markZones(dialog)
-
 	return dialog
 }
 
 // View implements tea.Model
 func (m MenuModel) View() tea.View {
 	return tea.NewView(m.ViewString())
-}
-
-// markZones marks clickable zones in the rendered dialog for mouse interaction
-func (m MenuModel) markZones(dialog string) string {
-	lines := strings.Split(dialog, "\n")
-
-	// Calculate line positions based on actual rendering structure:
-	// Line 0: Outer border top with title embedded
-	// Line 1: Subtitle (if present) OR first line of paddedList
-	// Line 1 or 2: Inner list border top (first line of borderedList inside paddedList)
-	// Lines 2+ or 3+: Menu items
-	// Line X: Inner list border bottom
-	// Line X+1: Inner button border top
-	// Line X+2: Button line
-	// Line X+3: Inner button border bottom
-	// Line X+4: Outer border bottom
-	// Lines X+5+: Shadow (if enabled)
-
-	lineIdx := 0
-
-	// Line 0: Outer border top with title
-	lineIdx++
-
-	// Line 1: Subtitle (if present)
-	if m.subtitle != "" {
-		lineIdx++
-	}
-
-	// Next line: Inner list border top
-	lineIdx++
-
-	// Now we're at the first menu item
-	// Mark each menu item line (entire line is clickable)
-	for i := 0; i < len(m.items); i++ {
-		if lineIdx < len(lines) {
-			lines[lineIdx] = zone.Mark(fmt.Sprintf("item-%d", i), lines[lineIdx])
-		}
-		lineIdx++
-	}
-
-	// Skip inner list border bottom
-	lineIdx++
-
-	// Skip inner button border top
-	lineIdx++
-
-	// Button line - zones are already marked during rendering in renderSimpleButtons()
-	// No need to mark here
-
-	return strings.Join(lines, "\n")
 }
 
 // renderSimpleButtons creates a button row with evenly spaced sections
