@@ -5,12 +5,19 @@ import (
 	"testing"
 
 	"DockSTARTer2/internal/console"
+
+	"github.com/muesli/termenv"
 )
 
 func TestResolveThemeValue(t *testing.T) {
 	// Force TTY mode to ensure ANSI codes are generated
 	oldTTY := console.SetTTY(true)
 	defer console.SetTTY(oldTTY)
+
+	// Ensure a color-capable profile is active (for CI environments)
+	oldProfile := console.GetPreferredProfile()
+	console.SetPreferredProfile(termenv.TrueColor)
+	defer console.SetPreferredProfile(oldProfile)
 
 	// Setup console maps for resolution
 	console.RegisterBaseTags()
