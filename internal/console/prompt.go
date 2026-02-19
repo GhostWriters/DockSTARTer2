@@ -24,15 +24,12 @@ var TUIConfirm func(title, question string, defaultYes bool) bool
 var TUIShutdown func()
 
 // GlobalYes is set to true when the -y/--yes flag is passed to the application.
-// This allows TUI components to know if they should auto-confirm/auto-exit.
-var GlobalYes bool
-
 // QuestionPrompt prompts the user with a Yes/No question.
 // It returns true if the user answers Yes, false otherwise.
 // defaultValue determines the default action if the user just presses Enter ("Y"=Yes, "N"=No, ""=Require Input).
 // forceYes if true, immediately returns true without prompting (useful for -y flag).
 func QuestionPrompt(ctx context.Context, printer Printer, question string, defaultValue string, forceYes bool) bool {
-	if forceYes {
+	if forceYes || GlobalYes {
 		return true
 	}
 

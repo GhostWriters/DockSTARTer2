@@ -541,7 +541,7 @@ func (m *programBoxModel) ViewString() string {
 	// Zone marking is handled automatically by RenderCenteredButtons (zone ID: "Button.OK")
 	buttonRow := RenderCenteredButtons(
 		contentWidth,
-		ButtonSpec{Text: " OK ", Active: m.done},
+		ButtonSpec{Text: "OK", Active: m.done},
 	)
 
 	// Build dialog content

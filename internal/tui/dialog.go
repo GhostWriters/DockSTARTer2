@@ -152,8 +152,8 @@ func RenderCenteredButtons(contentWidth int, buttons ...ButtonSpec) string {
 	}
 
 	// Render each button with fixed width and rounded border
-	// Add 2 to width to account for border characters (1 left + 1 right)
-	buttonContentWidth := maxButtonWidth + 2
+	// Add 4 to width to account for border characters (1 left + 1 right) AND padding (1 left + 1 right)
+	buttonContentWidth := maxButtonWidth + 4
 	var renderedButtons []string
 	for _, btn := range buttons {
 		var buttonStyle lipgloss.Style

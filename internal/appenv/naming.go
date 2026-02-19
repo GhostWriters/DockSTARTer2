@@ -78,8 +78,10 @@ func GetNiceName(ctx context.Context, appName string) string {
 
 // GetDescription returns the description of an application.
 func GetDescription(ctx context.Context, appName string, envFile string) string {
-	// Check if user defined
-	if IsAppUserDefined(ctx, appName, envFile) {
+	// Check if user defined (not built-in)
+	// We use IsAppBuiltIn here because IsAppUserDefined also checks if the app is enabled in .env,
+	// which is incorrect for simple description lookup.
+	if !IsAppBuiltIn(appName) {
 		return GetNiceName(ctx, appName) + " is a user defined application"
 	}
 

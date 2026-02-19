@@ -84,8 +84,8 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// Check dynamic hotkeys for buttons (Yes/No)
 			buttons := []ButtonSpec{
-				{Text: " Yes "},
-				{Text: " No "},
+				{Text: "Yes"},
+				{Text: "No"},
 			}
 			if idx, found := CheckButtonHotkeys(msg, buttons); found {
 				m.result = (idx == 0) // Yes is index 0
@@ -142,8 +142,8 @@ func (m *confirmDialogModel) ViewString() string {
 	// Zone marking is handled automatically by RenderCenteredButtons (zone IDs: "Button.Yes", "Button.No")
 	buttonRow := RenderCenteredButtons(
 		contentWidth,
-		ButtonSpec{Text: " Yes ", Active: m.result},
-		ButtonSpec{Text: " No ", Active: !m.result},
+		ButtonSpec{Text: "Yes", Active: m.result},
+		ButtonSpec{Text: "No", Active: !m.result},
 	)
 
 	// Build dialog content
@@ -190,6 +190,9 @@ func ShowConfirmDialog(title, question string, defaultYes bool) bool {
 // PromptConfirm displays a blocking confirmation dialog over the active ProgramBox.
 // It is used by the console package via callback to prompt during background tasks.
 func PromptConfirm(title, question string, defaultYes bool) bool {
+	if console.GlobalYes {
+		return true
+	}
 	if program == nil {
 		return defaultYes
 	}

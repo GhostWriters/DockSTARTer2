@@ -34,6 +34,7 @@ type KeyMap struct {
 
 	// Actions
 	Enter key.Binding
+	Space key.Binding
 	Esc   key.Binding
 
 	// Viewport scrolling (programbox)
@@ -96,6 +97,10 @@ var Keys = KeyMap{
 	Enter: key.NewBinding(
 		key.WithKeys("enter"),
 		key.WithHelp("enter", "select/confirm"),
+	),
+	Space: key.NewBinding(
+		key.WithKeys("space"),
+		key.WithHelp("space", "select/toggle"),
 	),
 	Esc: key.NewBinding(
 		key.WithKeys("esc"),

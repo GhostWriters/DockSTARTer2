@@ -74,7 +74,9 @@ func (d *MessageDialog) View() tea.View {
 	contentWidth += 4 // Padding
 
 	// Build content
-	content := d.message + "\n\n" + tui.RenderButton("OK", true)
+	// Build content with consistent centered button
+	buttonRow := tui.RenderCenteredButtons(contentWidth, tui.ButtonSpec{Text: "OK", Active: true})
+	content := d.message + "\n\n" + buttonRow
 
 	return tea.NewView(tui.RenderDialogBox(
 		d.title,

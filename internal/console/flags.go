@@ -1,7 +1,12 @@
 package console
 
-import (
-	"github.com/spf13/pflag"
+// Flag state variables set by cmd/executor.go
+var (
+	GlobalYes     bool
+	GlobalForce   bool
+	GlobalGUI     bool
+	GlobalVerbose bool
+	GlobalDebug   bool
 )
 
 // CurrentFlags holds the modifier flags (like -f, --force) encountered on the command line,
@@ -14,30 +19,25 @@ var RestArgs []string
 
 // Force returns true if the --force flag is set.
 func Force() bool {
-	v, _ := pflag.CommandLine.GetBool("force")
-	return v
+	return GlobalForce
 }
 
 // AssumeYes returns true if the --yes flag is set.
 func AssumeYes() bool {
-	v, _ := pflag.CommandLine.GetBool("yes")
-	return v
+	return GlobalYes
 }
 
 // Verbose returns true if the --verbose flag is set.
 func Verbose() bool {
-	v, _ := pflag.CommandLine.GetBool("verbose")
-	return v
+	return GlobalVerbose
 }
 
 // Debug returns true if the --debug flag is set.
 func Debug() bool {
-	v, _ := pflag.CommandLine.GetBool("debug")
-	return v
+	return GlobalDebug
 }
 
 // GUI returns true if the --gui flag is set.
 func GUI() bool {
-	v, _ := pflag.CommandLine.GetBool("gui")
-	return v
+	return GlobalGUI
 }

@@ -100,6 +100,7 @@ func NewAppSelectionScreen(conf config.AppConfig) *AppSelectionScreen {
 	menu.SetButtonLabels("Done", "Cancel", "")
 	menu.SetShowExit(false)
 	menu.SetEnterAction(func() tea.Msg { return TriggerSaveMsg{} })
+	menu.SetCheckboxMode(true) // Enable checkboxes for app selection
 
 	return &AppSelectionScreen{
 		menu: menu,

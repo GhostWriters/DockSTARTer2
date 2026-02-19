@@ -178,10 +178,11 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 			cbContent = "*"
 		}
 
+		// Use tag style for checkbox to match user request
 		if isSelected {
-			checkbox = itemStyle.Render("["+cbContent+"]") + neutralStyle.Render(" ")
+			checkbox = tagStyle.Render("["+cbContent+"]") + neutralStyle.Render(" ")
 		} else {
-			checkbox = neutralStyle.Render("[") + keyStyle.Render(cbContent) + neutralStyle.Render("] ")
+			checkbox = neutralStyle.Render("[") + tagStyle.Render(cbContent) + neutralStyle.Render("] ")
 		}
 	}
 
@@ -399,6 +400,27 @@ func (m MenuModel) HasDialog() bool {
 // SetCheckboxMode enables checkbox rendering for app selection
 func (m *MenuModel) SetCheckboxMode(enabled bool) {
 	m.checkboxMode = enabled
+	if enabled {
+		// Switch to checkbox delegate
+		maxTagLen := 0
+		for _, item := range m.items {
+			tagWidth := lipgloss.Width(item.Tag)
+			if tagWidth > maxTagLen {
+				maxTagLen = tagWidth
+			}
+		}
+		m.list.SetDelegate(checkboxItemDelegate{menuID: m.id, maxTagLen: maxTagLen})
+	} else {
+		// Switch back to standard delegate
+		maxTagLen := 0
+		for _, item := range m.items {
+			tagWidth := lipgloss.Width(item.Tag)
+			if tagWidth > maxTagLen {
+				maxTagLen = tagWidth
+			}
+		}
+		m.list.SetDelegate(menuItemDelegate{menuID: m.id, maxTagLen: maxTagLen})
+	}
 }
 
 // SetEscAction sets a custom action for the Escape key
@@ -458,14 +480,26 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Check each zone to see if the click is within bounds
 		// Menu item zones - clicking executes immediately (same as clicking Select)
 		for i := 0; i < len(m.items); i++ {
+			// Skip separator items
+			if m.items[i].IsSeparator {
+				continue
+			}
+
 			zoneID := fmt.Sprintf("item-%s-%d", m.id, i)
 			if zoneInfo := zone.Get(zoneID); zoneInfo != nil {
 				if zoneInfo.InBounds(mouseMsg) {
-					// Select and execute the clicked item
+					// Select the item
 					m.list.Select(i)
 					m.cursor = i
 					menuSelectedIndices[m.id] = i
 					m.focusedItem = FocusList
+
+					// In checkbox mode, toggle selection instead of executing action
+					if m.checkboxMode {
+						m.ToggleSelectedItem()
+						return m, nil
+					}
+
 					return m.handleEnter()
 				}
 			}
@@ -498,7 +532,7 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	// Handle key events
-	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 		switch {
 		// Help dialog (takes priority so ? doesn't get eaten by list)
 		case key.Matches(keyMsg, Keys.Help):
@@ -512,9 +546,38 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		// Up / Down: navigate the list (and return focus to the list from buttons)
-		case key.Matches(keyMsg, Keys.Up), key.Matches(keyMsg, Keys.Down):
+		case key.Matches(keyMsg, Keys.Up):
 			m.focusedItem = FocusList
-			// Falls through to list.Update below so the cursor also moves
+			m.list.CursorUp()
+			// Skip separators automatically
+			for m.items[m.list.Index()].IsSeparator {
+				m.list.CursorUp()
+				// Safety: if we hit top and it's a separator (unlikely with header), stop or wrap?
+				// Simple safety: if index is 0 and it's a separator, try going down instead?
+				// For now, assume top item isn't a separator or just let bubbles handle bounds.
+				if m.list.Index() == 0 && m.items[0].IsSeparator {
+					break
+				}
+			}
+			m.cursor = m.list.Index()
+			menuSelectedIndices[m.id] = m.cursor
+			return m, nil
+
+		case key.Matches(keyMsg, Keys.Down):
+			m.focusedItem = FocusList
+			m.list.CursorDown()
+			// Skip separators automatically
+			for m.items[m.list.Index()].IsSeparator {
+				m.list.CursorDown()
+				if m.list.Index() == len(m.items)-1 && m.items[len(m.items)-1].IsSeparator {
+					// If last item is separator, go back up one?
+					// Or just let it be.
+					break
+				}
+			}
+			m.cursor = m.list.Index()
+			menuSelectedIndices[m.id] = m.cursor
+			return m, nil
 
 		// Right: move to next button (from list → first button; wraps within button row)
 		case key.Matches(keyMsg, Keys.Right):
@@ -530,6 +593,23 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(keyMsg, Keys.Enter):
 			return m.handleEnter()
 
+		// Space: select/toggle current focused element
+		case key.Matches(keyMsg, Keys.Space):
+			if m.focusedItem == FocusList {
+				if m.checkboxMode {
+					m.ToggleSelectedItem()
+					return m, nil
+				}
+				if m.spaceAction != nil {
+					return m, m.spaceAction
+				}
+			}
+			// Fallback to select button if focused
+			if m.focusedItem == FocusSelectBtn {
+				return m.handleEnter()
+			}
+			return m, nil
+
 		// Esc: back if available, else exit
 		case key.Matches(keyMsg, Keys.Esc):
 			if m.backAction != nil {
@@ -539,9 +619,9 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Dynamic Hotkeys
 		default:
-			// In v2, type assert to KeyPressMsg and use Text field
-			if pressMsg, ok := keyMsg.(tea.KeyPressMsg); ok && pressMsg.Text != "" {
-				keyRune := strings.ToLower(pressMsg.Text)
+			// In v2, KeyPressMsg has Text field directly
+			if keyMsg.Text != "" {
+				keyRune := strings.ToLower(keyMsg.Text)
 
 				// 1. Check Menu Items first (priority)
 				for i, item := range m.items {
@@ -560,23 +640,29 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 				// 2. Check Buttons (if no item matched)
-				// Determine available buttons
-				var buttons []ButtonSpec
-				buttons = append(buttons, ButtonSpec{Text: "Select"})
-				if m.backAction != nil {
-					buttons = append(buttons, ButtonSpec{Text: "Back"})
-				}
-				buttons = append(buttons, ButtonSpec{Text: "Exit"})
+				// Determine available buttons using shared helper
+				buttons := m.getButtonSpecs()
 
-				if idx, found := CheckButtonHotkeys(pressMsg, buttons); found {
+				if idx, found := CheckButtonHotkeys(keyMsg, buttons); found {
 					// Map index back to FocusItem
-					switch buttons[idx].Text {
-					case "Select":
-						m.focusedItem = FocusSelectBtn
-					case "Back":
-						m.focusedItem = FocusBackBtn
-					case "Exit":
-						m.focusedItem = FocusExitBtn
+					// Use zone IDs or index to map, assuming standard order
+					// But since we use dynamic buttons, we should map based on the button's intended action
+					// Or just map index if we know the order: Select, [Back], [Exit]
+					// Helper: map button text/zone to FocusItem?
+					// Simpler: iterate known types and check if active in specs?
+					// Because getButtonSpecs builds in order: Select, Back, Exit.
+
+					// Re-derive focus based on index loop
+					focusMap := []FocusItem{FocusSelectBtn}
+					if m.backAction != nil {
+						focusMap = append(focusMap, FocusBackBtn)
+					}
+					if m.showExit {
+						focusMap = append(focusMap, FocusExitBtn)
+					}
+
+					if idx < len(focusMap) {
+						m.focusedItem = focusMap[idx]
 					}
 					return m.handleEnter()
 				}
@@ -607,9 +693,16 @@ func (m MenuModel) nextFocus() FocusItem {
 		if m.backAction != nil {
 			return FocusBackBtn
 		}
-		return FocusExitBtn
+		if m.showExit {
+			return FocusExitBtn
+		}
+		// If no back and no exit, cycle back to list?
+		return FocusList
 	case FocusBackBtn:
-		return FocusExitBtn
+		if m.showExit {
+			return FocusExitBtn
+		}
+		return FocusList
 	case FocusExitBtn:
 		return FocusList
 	}
@@ -621,7 +714,13 @@ func (m MenuModel) nextFocus() FocusItem {
 func (m MenuModel) prevFocus() FocusItem {
 	switch m.focusedItem {
 	case FocusList:
-		return FocusExitBtn
+		if m.showExit {
+			return FocusExitBtn
+		}
+		if m.backAction != nil {
+			return FocusBackBtn
+		}
+		return FocusSelectBtn
 	case FocusSelectBtn:
 		return FocusList
 	case FocusBackBtn:
@@ -645,9 +744,15 @@ func (m MenuModel) nextButtonFocus() FocusItem {
 		if m.backAction != nil {
 			return FocusBackBtn
 		}
-		return FocusExitBtn
+		if m.showExit {
+			return FocusExitBtn
+		}
+		return FocusSelectBtn // wrap around if only one button
 	case FocusBackBtn:
-		return FocusExitBtn
+		if m.showExit {
+			return FocusExitBtn
+		}
+		return FocusSelectBtn
 	}
 	return FocusSelectBtn
 }
@@ -657,7 +762,13 @@ func (m MenuModel) nextButtonFocus() FocusItem {
 func (m MenuModel) prevButtonFocus() FocusItem {
 	switch m.focusedItem {
 	case FocusList, FocusSelectBtn:
-		return FocusExitBtn
+		if m.showExit {
+			return FocusExitBtn
+		}
+		if m.backAction != nil {
+			return FocusBackBtn
+		}
+		return FocusSelectBtn
 	case FocusExitBtn:
 		if m.backAction != nil {
 			return FocusBackBtn
@@ -689,6 +800,12 @@ func (m MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 	case FocusExitBtn:
 		return m, tea.Quit
 	}
+
+	// Fallback to model-level enter action if item had no action
+	if m.enterAction != nil {
+		return m, m.enterAction
+	}
+
 	return m, nil
 }
 
@@ -788,16 +905,42 @@ func (m MenuModel) View() tea.View {
 	return tea.NewView(m.ViewString())
 }
 
+// getButtonSpecs returns the current button configuration based on state
+func (m MenuModel) getButtonSpecs() []ButtonSpec {
+	var specs []ButtonSpec
+
+	// Select Button
+	label := m.selectLabel
+	if label == "" {
+		label = "Select"
+	}
+	specs = append(specs, ButtonSpec{Text: label, Active: m.focusedItem == FocusSelectBtn, ZoneID: "btn-select"})
+
+	// Back Button
+	if m.backAction != nil {
+		label := m.backLabel
+		if label == "" {
+			label = "Back"
+		}
+		specs = append(specs, ButtonSpec{Text: label, Active: m.focusedItem == FocusBackBtn, ZoneID: "btn-back"})
+	}
+
+	// Exit Button
+	if m.showExit {
+		label := m.exitLabel
+		if label == "" {
+			label = "Exit"
+		}
+		specs = append(specs, ButtonSpec{Text: label, Active: m.focusedItem == FocusExitBtn, ZoneID: "btn-exit"})
+	}
+
+	return specs
+}
+
 // renderSimpleButtons creates a button row with evenly spaced sections
 func (m MenuModel) renderSimpleButtons(contentWidth int) string {
 	// Build button specs with focus state and explicit zone IDs
-	specs := []ButtonSpec{
-		{Text: " Select ", Active: m.focusedItem == FocusSelectBtn, ZoneID: "btn-select"},
-	}
-	if m.backAction != nil {
-		specs = append(specs, ButtonSpec{Text: " Back ", Active: m.focusedItem == FocusBackBtn, ZoneID: "btn-back"})
-	}
-	specs = append(specs, ButtonSpec{Text: " Exit ", Active: m.focusedItem == FocusExitBtn, ZoneID: "btn-exit"})
+	specs := m.getButtonSpecs()
 
 	return RenderCenteredButtons(contentWidth, specs...)
 }

@@ -145,11 +145,18 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 	ranCommand := false
 
 	for i, group := range groups {
+		// Reset global state for this command set
+		console.GlobalYes = false
+		console.GlobalForce = false
+		console.GlobalGUI = false
+		console.GlobalVerbose = false
+		console.GlobalDebug = false
+		logger.SetLevel(logger.LevelNotice)
+
 		state := CmdState{}
 
 		// Prepare execution arguments
 		flags := group.Flags
-		fullCmd := group.CommandSlice()
 		restArgs := Flatten(groups[i+1:])
 		console.CurrentFlags = flags
 		console.RestArgs = restArgs
@@ -160,14 +167,19 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			switch flag {
 			case "-v", "--verbose":
 				logger.SetLevel(logger.LevelInfo)
+				console.GlobalVerbose = true
 			case "-x", "--debug":
 				logger.SetLevel(logger.LevelDebug)
+				console.GlobalDebug = true
 			case "-f", "--force":
 				state.Force = true
+				console.GlobalForce = true
 			case "-g", "--gui":
 				state.GUI = true
+				console.GlobalGUI = true
 			case "-y", "--yes":
 				state.Yes = true
+				console.GlobalYes = true
 			}
 		}
 
@@ -178,9 +190,6 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		}
 		subtitle := " {{|Theme_CommandLine|}}" + cmdStr + "{{[-]}}"
 		logger.Notice(ctx, fmt.Sprintf("%s command: '{{|UserCommand|}}%s{{[-]}}'", version.ApplicationName, cmdStr))
-
-		// Log execution arguments for verification
-		logger.Debug(ctx, fmt.Sprintf("Execution Args -> State: %+v, Command: %v, Rest: %v", state, fullCmd, restArgs))
 
 		// Command Execution
 		task := func(subCtx context.Context) error {
@@ -303,9 +312,6 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			}
 		}
 
-		// Reset Flags
-		// This logic resets state after each command group executes.
-		logger.SetLevel(logger.LevelNotice)
 	}
 
 	// If no commands matched (or groups empty), launch TUI

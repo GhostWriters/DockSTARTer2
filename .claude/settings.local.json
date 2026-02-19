@@ -17,7 +17,9 @@
       "Bash(git push:*)",
       "WebFetch(domain:github.com)",
       "Bash(go test:*)",
-      "Bash(go clean:*)"
+      "Bash(go clean:*)",
+      "Bash(for theme in DockSTARTer Firehouse ZenFocus)",
+      "Bash(do echo \"=== $theme.ds2theme ===\")"
     ]
   }
 }
