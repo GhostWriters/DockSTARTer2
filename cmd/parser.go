@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/version"
 	"errors"
 	"fmt"
@@ -47,7 +48,7 @@ func (e *ParseError) Error() string {
 	for i := 0; i < e.Index && i < len(e.Args); i++ {
 		caretOffset += len(e.Args[i]) + 1 // arg + space
 	}
-	pointerLine := strings.Repeat(" ", caretOffset) + "{{|UserCommandErrorMarker|}}^{{[-]}}"
+	pointerLine := strutil.Repeat(" ", caretOffset) + "{{|UserCommandErrorMarker|}}^{{[-]}}"
 
 	// Format Message
 	// Message might contain %c (command) or %o (option)

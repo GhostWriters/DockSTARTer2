@@ -67,23 +67,19 @@ func (k KeyMap) ShortHelp() []key.Binding {
 func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{
-			key.NewBinding(key.WithKeys("up"), key.WithHelp("↑/↓", "move")),
-			key.NewBinding(key.WithKeys("left"), key.WithHelp("←/→", "prev/next button")),
-			key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab/shift+tab", "cycle elements")),
+			key.NewBinding(key.WithKeys("up"), key.WithHelp("↑/↓/scroll", "up/down")),
+			key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup/pgdn", "page up/down")),
+			key.NewBinding(key.WithKeys("ctrl+u"), key.WithHelp("ctrl+u/ctrl+d", "half page up/down")),
+			key.NewBinding(key.WithKeys("home"), key.WithHelp("home/end", "top/bottom")),
+			key.NewBinding(key.WithKeys("left"), key.WithHelp("←/→", "previous/next button")),
+			key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab/shift+tab", "next/previous element")),
 			k.ChromeFocus,
 		},
 		{
+			key.NewBinding(key.WithKeys("space"), key.WithHelp("space/middle click", "select/toggle")),
 			k.Enter,
 			k.Esc,
-			key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup/pgdn", "scroll")),
-			key.NewBinding(key.WithKeys("ctrl+u"), key.WithHelp("ctrl+u/d", "half page")),
-			key.NewBinding(key.WithKeys("home"), key.WithHelp("home/end", "top/bottom")),
 			k.ToggleLog,
-		},
-		{
-			key.NewBinding(key.WithKeys("manual"), key.WithHelp(k.MouseLeft.Help().Key, k.MouseLeft.Help().Desc)),
-			key.NewBinding(key.WithKeys("manual"), key.WithHelp(k.MouseRight.Help().Key, k.MouseRight.Help().Desc)),
-			key.NewBinding(key.WithKeys("manual"), key.WithHelp(k.MouseWheel.Help().Key, k.MouseWheel.Help().Desc)),
 			k.Help,
 			k.ForceQuit,
 		},
@@ -166,13 +162,10 @@ var Keys = KeyMap{
 	),
 	ToggleLog: key.NewBinding(
 		key.WithKeys("f10", "ctrl+l"),
-		key.WithHelp("F10/ctrl+l", "toggle log panel"),
+		key.WithHelp("f10/ctrl+l", "toggle log panel"),
 	),
 	MouseLeft: key.NewBinding(
 		key.WithHelp("left click", "select/confirm"),
-	),
-	MouseRight: key.NewBinding(
-		key.WithHelp("right click", "back/exit"),
 	),
 	MouseWheel: key.NewBinding(
 		key.WithHelp("scroll wheel", "scroll list/logs"),

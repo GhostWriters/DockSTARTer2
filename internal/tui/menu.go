@@ -654,6 +654,23 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			menuSelectedIndices[m.id] = m.cursor
 			return m, nil
 
+		case key.Matches(keyMsg, Keys.HalfPageUp):
+			pageHeight := m.list.Height() / 2
+			if pageHeight < 1 {
+				pageHeight = 1
+			}
+			newIndex := m.list.Index() - pageHeight
+			if newIndex < 0 {
+				newIndex = 0
+			}
+			m.list.Select(newIndex)
+			for m.items[m.list.Index()].IsSeparator && m.list.Index() < len(m.items)-1 {
+				m.list.CursorDown()
+			}
+			m.cursor = m.list.Index()
+			menuSelectedIndices[m.id] = m.cursor
+			return m, nil
+
 		case key.Matches(keyMsg, Keys.PageDown):
 			pageHeight := m.list.Height()
 			if pageHeight < 1 {
@@ -665,6 +682,23 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.list.Select(newIndex)
 			// Skip separators automatically (moving up to find first selectable)
+			for m.items[m.list.Index()].IsSeparator && m.list.Index() > 0 {
+				m.list.CursorUp()
+			}
+			m.cursor = m.list.Index()
+			menuSelectedIndices[m.id] = m.cursor
+			return m, nil
+
+		case key.Matches(keyMsg, Keys.HalfPageDown):
+			pageHeight := m.list.Height() / 2
+			if pageHeight < 1 {
+				pageHeight = 1
+			}
+			newIndex := m.list.Index() + pageHeight
+			if newIndex >= len(m.items) {
+				newIndex = len(m.items) - 1
+			}
+			m.list.Select(newIndex)
 			for m.items[m.list.Index()].IsSeparator && m.list.Index() > 0 {
 				m.list.CursorUp()
 			}

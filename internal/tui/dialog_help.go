@@ -114,7 +114,7 @@ func (m *helpDialogModel) ViewString() string {
 
 	// Use RenderUniformBlockDialog for a distinct look for help (uniform Border2Color)
 	// Passing content directly - RenderDialog logic will handle vertical growth
-	dialogStr := RenderUniformBlockDialog("{{|Theme_TitleHelp|}}Keyboard & Mouse Shortcuts", content)
+	dialogStr := RenderUniformBlockDialog("{{|Theme_TitleHelp|}}Keyboard & Mouse Controls", content)
 
 	// Use AddPatternHalo instead of AddShadow for a surrounding "halo" effect
 	return AddPatternHalo(dialogStr)

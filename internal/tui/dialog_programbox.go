@@ -404,6 +404,14 @@ func (m *programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, Keys.End):
 			m.viewport.GotoBottom()
 			return m, nil
+
+		case key.Matches(msg, Keys.HalfPageUp):
+			m.viewport.HalfPageUp()
+			return m, nil
+
+		case key.Matches(msg, Keys.HalfPageDown):
+			m.viewport.HalfPageDown()
+			return m, nil
 		}
 
 	case tea.MouseClickMsg:
