@@ -42,6 +42,8 @@ type KeyMap struct {
 	PageDown     key.Binding
 	HalfPageUp   key.Binding
 	HalfPageDown key.Binding
+	Home         key.Binding
+	End          key.Binding
 
 	// Utility
 	Help      key.Binding
@@ -49,6 +51,11 @@ type KeyMap struct {
 
 	// Log panel
 	ToggleLog key.Binding
+
+	// Mouse (Mock bindings for help display)
+	MouseLeft  key.Binding
+	MouseRight key.Binding
+	MouseWheel key.Binding
 }
 
 // ShortHelp returns bindings shown in the compact helpline.
@@ -56,11 +63,30 @@ func (k KeyMap) ShortHelp() []key.Binding {
 	return []key.Binding{k.Up, k.Down, k.Enter, k.Esc, k.Help}
 }
 
-// FullHelp returns all bindings grouped into two columns for better vertical scaling.
+// FullHelp returns all bindings grouped into columns for better vertical scaling.
 func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.Up, k.Down, k.Left, k.Right, k.Tab, k.ShiftTab, k.ChromeFocus},
-		{k.Enter, k.Esc, k.PageUp, k.PageDown, k.HalfPageUp, k.HalfPageDown, k.Help, k.ForceQuit, k.ToggleLog},
+		{
+			key.NewBinding(key.WithKeys("up"), key.WithHelp("↑/↓", "move")),
+			key.NewBinding(key.WithKeys("left"), key.WithHelp("←/→", "prev/next button")),
+			key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab/shift+tab", "cycle elements")),
+			k.ChromeFocus,
+		},
+		{
+			k.Enter,
+			k.Esc,
+			key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup/pgdn", "scroll")),
+			key.NewBinding(key.WithKeys("ctrl+u"), key.WithHelp("ctrl+u/d", "half page")),
+			key.NewBinding(key.WithKeys("home"), key.WithHelp("home/end", "top/bottom")),
+			k.ToggleLog,
+		},
+		{
+			key.NewBinding(key.WithKeys("manual"), key.WithHelp(k.MouseLeft.Help().Key, k.MouseLeft.Help().Desc)),
+			key.NewBinding(key.WithKeys("manual"), key.WithHelp(k.MouseRight.Help().Key, k.MouseRight.Help().Desc)),
+			key.NewBinding(key.WithKeys("manual"), key.WithHelp(k.MouseWheel.Help().Key, k.MouseWheel.Help().Desc)),
+			k.Help,
+			k.ForceQuit,
+		},
 	}
 }
 
@@ -107,12 +133,12 @@ var Keys = KeyMap{
 		key.WithHelp("esc", "back/exit"),
 	),
 	PageUp: key.NewBinding(
-		key.WithKeys("pgup"),
-		key.WithHelp("pgup", "scroll up"),
+		key.WithKeys("pgup", "ctrl+b", "ctrl+up"),
+		key.WithHelp("pgup/ctrl+up", "scroll up"),
 	),
 	PageDown: key.NewBinding(
-		key.WithKeys("pgdown"),
-		key.WithHelp("pgdown", "scroll down"),
+		key.WithKeys("pgdown", "ctrl+f", "ctrl+down"),
+		key.WithHelp("pgdn/ctrl+down", "scroll down"),
 	),
 	HalfPageUp: key.NewBinding(
 		key.WithKeys("ctrl+u"),
@@ -121,6 +147,14 @@ var Keys = KeyMap{
 	HalfPageDown: key.NewBinding(
 		key.WithKeys("ctrl+d"),
 		key.WithHelp("ctrl+d", "half page down"),
+	),
+	Home: key.NewBinding(
+		key.WithKeys("home", "ctrl+home"),
+		key.WithHelp("home", "top"),
+	),
+	End: key.NewBinding(
+		key.WithKeys("end", "ctrl+end"),
+		key.WithHelp("end", "bottom"),
 	),
 	Help: key.NewBinding(
 		key.WithKeys("?", "ctrl+h", "f1"),
@@ -133,5 +167,14 @@ var Keys = KeyMap{
 	ToggleLog: key.NewBinding(
 		key.WithKeys("f10", "ctrl+l"),
 		key.WithHelp("F10/ctrl+l", "toggle log panel"),
+	),
+	MouseLeft: key.NewBinding(
+		key.WithHelp("left click", "select/confirm"),
+	),
+	MouseRight: key.NewBinding(
+		key.WithHelp("right click", "back/exit"),
+	),
+	MouseWheel: key.NewBinding(
+		key.WithHelp("scroll wheel", "scroll list/logs"),
 	),
 }

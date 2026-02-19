@@ -51,9 +51,6 @@ func (m *helpDialogModel) ViewString() string {
 		return ""
 	}
 
-	styles := GetStyles()
-	bgStyle := lipgloss.NewStyle().Background(styles.Dialog.GetBackground())
-
 	// Determine a reasonable width for the help component
 	// We want it to be wide enough for at least 2 columns if window allows
 	const minDesiredWidth = 60
@@ -66,12 +63,17 @@ func (m *helpDialogModel) ViewString() string {
 	}
 	m.help.SetWidth(targetWidth)
 
+	dialogStyle := SemanticStyle("{{|Theme_Dialog|}}")
+	borderColor := dialogStyle.GetForeground()
+	bgStyle := lipgloss.NewStyle().Background(dialogStyle.GetBackground())
+
 	// Apply theme styles to the help component
-	dimStyle := bgStyle.Foreground(styles.ItemNormal.GetForeground())
-	// Ensure keys use the theme's TagKey style (including flags like Bold/Italic)
-	// but override background to match the help dialog background
-	keyStyle := styles.TagKey.Background(bgStyle.GetBackground())
-	sepStyle := bgStyle.Foreground(styles.BorderColor)
+	// derive separator color from Dialog foreground (matching WorkingCLI)
+	sepStyle := bgStyle.Foreground(borderColor)
+
+	// Use specific HelpItem and HelpTag colors exactly as defined in the theme
+	dimStyle := SemanticStyle("{{|Theme_HelpItem|}}")
+	keyStyle := SemanticStyle("{{|Theme_HelpTag|}}")
 
 	m.help.Styles.ShortKey = keyStyle
 	m.help.Styles.ShortDesc = dimStyle
@@ -101,13 +103,18 @@ func (m *helpDialogModel) ViewString() string {
 		// Indent 1 space + content + pad to max width + 1 space trailing
 		lineWidth := lipgloss.Width(line)
 		paddedLine := " " + line + strutil.Repeat(" ", maxLineWidth-lineWidth) + " "
+		// Render with background style and hold it through resets
 		lines[i] = MaintainBackground(bgStyle.Render(paddedLine), bgStyle)
 	}
 	content = strings.Join(lines, "\n")
 
+	// Final pass: Ensure internal gaps between help columns (which might be unstyled by bubbles/help)
+	// are captured. Since we already did it per-line above, this is secondary insurance.
+	content = MaintainBackground(bgStyle.Render(content), bgStyle)
+
 	// Use RenderUniformBlockDialog for a distinct look for help (uniform Border2Color)
 	// Passing content directly - RenderDialog logic will handle vertical growth
-	dialogStr := RenderUniformBlockDialog("{{|Theme_TitleHelp|}}Keyboard Shortcuts", content)
+	dialogStr := RenderUniformBlockDialog("{{|Theme_TitleHelp|}}Keyboard & Mouse Shortcuts", content)
 
 	// Use AddPatternHalo instead of AddShadow for a surrounding "halo" effect
 	return AddPatternHalo(dialogStr)

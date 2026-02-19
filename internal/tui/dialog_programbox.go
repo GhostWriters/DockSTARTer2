@@ -396,6 +396,14 @@ func (m *programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Important: consume these keys even if not done to prevent them from bubbling up
 			// or triggering background elements (like the header)
 			return m, nil
+
+		case key.Matches(msg, Keys.Home):
+			m.viewport.GotoTop()
+			return m, nil
+
+		case key.Matches(msg, Keys.End):
+			m.viewport.GotoBottom()
+			return m, nil
 		}
 
 	case tea.MouseClickMsg:
@@ -887,7 +895,9 @@ func RunProgramBox(ctx context.Context, title, subtitle string, task func(contex
 	// Extract details from the model
 	if app, ok := finalModel.(AppModel); ok {
 		if app.Fatal {
-			return fmt.Errorf("application force quit")
+			logger.TUIMode = false
+			console.AbortHandler(ctx)
+			return console.ErrUserAborted
 		}
 		if box, ok := app.dialog.(*ProgramBoxModel); ok {
 			return box.err

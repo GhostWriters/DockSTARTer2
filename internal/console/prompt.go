@@ -12,6 +12,9 @@ import (
 // ErrUserAborted is returned when the user aborts an action
 var ErrUserAborted = errors.New("user aborted")
 
+// AbortHandler is a function that can be registered to handle CTRL-C aborts globally.
+var AbortHandler func(ctx context.Context)
+
 // Printer is a function compatible with logger.Notice
 type Printer func(ctx context.Context, msg any, args ...any)
 
@@ -28,9 +31,9 @@ var TUIShutdown func()
 // It returns true if the user answers Yes, false otherwise.
 // defaultValue determines the default action if the user just presses Enter ("Y"=Yes, "N"=No, ""=Require Input).
 // forceYes if true, immediately returns true without prompting (useful for -y flag).
-func QuestionPrompt(ctx context.Context, printer Printer, question string, defaultValue string, forceYes bool) bool {
+func QuestionPrompt(ctx context.Context, printer Printer, question string, defaultValue string, forceYes bool) (bool, error) {
 	if forceYes || GlobalYes {
-		return true
+		return true, nil
 	}
 
 	// Check if we should use TUI for this prompt
@@ -42,7 +45,7 @@ func QuestionPrompt(ctx context.Context, printer Printer, question string, defau
 		} else {
 			printer(ctx, "Answered: {{|No|}}No{{[-]}}")
 		}
-		return answer
+		return answer, nil
 	}
 
 	// Prepare prompt string
@@ -92,8 +95,10 @@ func QuestionPrompt(ctx context.Context, printer Printer, question string, defau
 			if oldState != nil {
 				_ = term.Restore(fd, oldState)
 			}
-			// Exit with 130 (SIGINT standard)
-			os.Exit(130)
+			if AbortHandler != nil {
+				AbortHandler(ctx)
+			}
+			return false, ErrUserAborted
 		}
 
 		// Handle Enter key (CR or LF)
@@ -136,5 +141,5 @@ func QuestionPrompt(ctx context.Context, printer Printer, question string, defau
 		printer(ctx, "Answered: {{|No|}}No{{[-]}}")
 	}
 
-	return answer
+	return answer, nil
 }

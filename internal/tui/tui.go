@@ -52,9 +52,6 @@ func Initialize(ctx context.Context) error {
 	// Initialize styles from theme
 	InitStyles(currentConfig)
 
-	// Force logger to use the console's preferred profile
-	logger.SetColorProfile(console.GetPreferredProfile())
-
 	return nil
 }
 
@@ -102,15 +99,33 @@ func Start(ctx context.Context, startMenu string) error {
 	// Start background update checker
 	go startUpdateChecker(ctx)
 
+	// Listen for context cancellation to shutdown program
+	go func() {
+		<-ctx.Done()
+		Shutdown()
+	}()
+
 	// Run the program
-	_, err := program.Run()
+	finalModel, err := program.Run()
 
 	// Signal that the program has exited
 	close(programExited)
 
 	// Reset terminal colors on exit to prevent "bleeding" into the shell prompt
 	fmt.Print("\x1b[0m\n")
-	return err
+
+	if err != nil {
+		return err
+	}
+
+	// Check if the model exited via ForceQuit (ctrl-c)
+	if app, ok := finalModel.(AppModel); ok && app.Fatal {
+		logger.TUIMode = false
+		console.AbortHandler(ctx)
+		return ErrUserAborted
+	}
+
+	return nil
 }
 
 // Shutdown signals the running Bubble Tea program to exit and waits for it to finish

@@ -629,10 +629,64 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			for m.items[m.list.Index()].IsSeparator {
 				m.list.CursorDown()
 				if m.list.Index() == len(m.items)-1 && m.items[len(m.items)-1].IsSeparator {
-					// If last item is separator, go back up one?
-					// Or just let it be.
 					break
 				}
+			}
+			m.cursor = m.list.Index()
+			menuSelectedIndices[m.id] = m.cursor
+			return m, nil
+
+		case key.Matches(keyMsg, Keys.PageUp):
+			pageHeight := m.list.Height()
+			if pageHeight < 1 {
+				pageHeight = 5 // Fallback
+			}
+			newIndex := m.list.Index() - pageHeight
+			if newIndex < 0 {
+				newIndex = 0
+			}
+			m.list.Select(newIndex)
+			// Skip separators automatically (moving down to find first selectable)
+			for m.items[m.list.Index()].IsSeparator && m.list.Index() < len(m.items)-1 {
+				m.list.CursorDown()
+			}
+			m.cursor = m.list.Index()
+			menuSelectedIndices[m.id] = m.cursor
+			return m, nil
+
+		case key.Matches(keyMsg, Keys.PageDown):
+			pageHeight := m.list.Height()
+			if pageHeight < 1 {
+				pageHeight = 5 // Fallback
+			}
+			newIndex := m.list.Index() + pageHeight
+			if newIndex >= len(m.items) {
+				newIndex = len(m.items) - 1
+			}
+			m.list.Select(newIndex)
+			// Skip separators automatically (moving up to find first selectable)
+			for m.items[m.list.Index()].IsSeparator && m.list.Index() > 0 {
+				m.list.CursorUp()
+			}
+			m.cursor = m.list.Index()
+			menuSelectedIndices[m.id] = m.cursor
+			return m, nil
+
+		case key.Matches(keyMsg, Keys.Home):
+			m.list.Select(0)
+			// Skip separators automatically
+			for m.items[m.list.Index()].IsSeparator && m.list.Index() < len(m.items)-1 {
+				m.list.CursorDown()
+			}
+			m.cursor = m.list.Index()
+			menuSelectedIndices[m.id] = m.cursor
+			return m, nil
+
+		case key.Matches(keyMsg, Keys.End):
+			m.list.Select(len(m.items) - 1)
+			// Skip separators automatically (moving up)
+			for m.items[m.list.Index()].IsSeparator && m.list.Index() > 0 {
+				m.list.CursorUp()
 			}
 			m.cursor = m.list.Index()
 			menuSelectedIndices[m.id] = m.cursor

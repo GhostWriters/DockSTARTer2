@@ -324,7 +324,11 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 			noNotice = "Not updating and starting containers for all enabled services."
 		}
 		// Update = pull + up - requires separate execution
-		if console.QuestionPrompt(ctx, logger.Notice, question, "Y", yes) {
+		answer, err := console.QuestionPrompt(ctx, logger.Notice, question, "Y", yes)
+		if err != nil {
+			return err
+		}
+		if answer {
 			logger.Notice(ctx, yesNotice)
 			pullArgs := []string{"compose", "--project-directory", conf.ComposeDir + "/", "pull", "--include-deps"}
 			pullArgs = append(pullArgs, appNames...)
@@ -357,7 +361,11 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 		yesNotice = "Merging enabled app templates to '{{|File|}}docker-compose.yml{{[-]}}'."
 		noNotice = "Not merging enabled app templates to '{{|File|}}docker-compose.yml{{[-]}}'."
 		// Already merged above, just printing logic here if forced
-		if console.QuestionPrompt(ctx, logger.Notice, question, "Y", yes) {
+		answer, err := console.QuestionPrompt(ctx, logger.Notice, question, "Y", yes)
+		if err != nil {
+			return err
+		}
+		if answer {
 			logger.Notice(ctx, yesNotice)
 			return MergeYML(ctx, force) // Re-run merge if requested explicitly
 		} else {
@@ -371,7 +379,11 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 		yesNotice = "Updating containers for all enabled services."
 		noNotice = "Not updating containers for all enabled services."
 
-		if console.QuestionPrompt(ctx, logger.Notice, question, "Y", yes) {
+		answer, err := console.QuestionPrompt(ctx, logger.Notice, question, "Y", yes)
+		if err != nil {
+			return err
+		}
+		if answer {
 			logger.Notice(ctx, yesNotice)
 			pullArgs := []string{"compose", "--project-directory", conf.ComposeDir + "/", "pull", "--include-deps"}
 			if err := runDockerCommand(ctx, pullArgs...); err != nil {
@@ -386,7 +398,11 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 	}
 
 	// General Execution for non-custom paths
-	if console.QuestionPrompt(ctx, logger.Notice, question, "Y", yes) {
+	answer, err := console.QuestionPrompt(ctx, logger.Notice, question, "Y", yes)
+	if err != nil {
+		return err
+	}
+	if answer {
 		logger.Notice(ctx, yesNotice)
 		return runDockerCommand(ctx, args...)
 	} else {

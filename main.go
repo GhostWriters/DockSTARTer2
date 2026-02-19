@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"os/signal"
+	"sync"
 	"syscall"
 
 	"DockSTARTer2/cmd"
@@ -63,7 +65,28 @@ func main() {
 
 func run() (exitCode int) {
 	slog.SetDefault(logger.NewLogger())
-	ctx := context.Background()
+
+	// Create a cancelable context
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Use a sync.Once to ensure we only cancel and log once
+	var exitOnce sync.Once
+
+	// Handle signals
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt)
+	go func() {
+		sig, ok := <-sigChan
+		if ok && sig == os.Interrupt {
+			exitOnce.Do(func() {
+				logger.TUIMode = false
+				logger.Error(ctx, "User aborted via CTRL-C")
+				exitCode = 1
+				cancel()
+			})
+		}
+	}()
 
 	// Defer cleanup to ensure it runs even if we return early or panic
 	defer cleanup(ctx)

@@ -90,7 +90,7 @@ var commandTitles = map[string]string{
 	"--select":                   "Select Applications",
 }
 
-func handleConfigSettings(ctx context.Context, group *CommandGroup) {
+func handleConfigSettings(ctx context.Context, group *CommandGroup) error {
 	conf := config.LoadAppConfig()
 	switch group.Command {
 	case "--config-folder":
@@ -98,21 +98,22 @@ func handleConfigSettings(ctx context.Context, group *CommandGroup) {
 			conf.Paths.ConfigFolder = group.Args[0]
 		} else {
 			logger.Display(ctx, "Current config folder: {{|Folder|}}%s{{[-]}}", conf.Paths.ConfigFolder)
-			return
+			return nil
 		}
 	case "--config-compose-folder":
 		if len(group.Args) > 0 {
 			conf.Paths.ComposeFolder = group.Args[0]
 		} else {
 			logger.Display(ctx, "Current compose folder: {{|Folder|}}%s{{[-]}}", conf.Paths.ComposeFolder)
-			return
+			return nil
 		}
 	}
 	if err := config.SaveAppConfig(conf); err != nil {
 		logger.Error(ctx, "Failed to save configuration: %v", err)
-	} else {
-		logger.Notice(ctx, "Configuration updated successfully.")
+		return err
 	}
+	logger.Notice(ctx, "Configuration updated successfully.")
+	return nil
 }
 
 // Execute runs the logic for a sequence of command groups.
@@ -145,6 +146,11 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 	ranCommand := false
 
 	for i, group := range groups {
+		// Check for context cancellation (e.g. Ctrl-C)
+		if ctx.Err() != nil {
+			return 1
+		}
+
 		// Reset global state for this command set
 		console.GlobalYes = false
 		console.GlobalForce = false
@@ -195,94 +201,88 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		task := func(subCtx context.Context) error {
 			switch group.Command {
 			case "-h", "--help":
-				handleHelp(&group)
 				ranCommand = true
+				return handleHelp(&group)
 			case "-V", "--version":
-				handleVersion(subCtx)
 				ranCommand = true
+				return handleVersion(subCtx)
 			case "-i", "--install":
-				handleInstall(subCtx, &group, &state)
 				ranCommand = true
+				return handleInstall(subCtx, &group, &state)
 			case "-u", "--update", "--update-app", "--update-templates":
 				ranCommand = true
-				if err := handleUpdate(subCtx, &group, &state, restArgs); err != nil {
-					return err
-				}
+				return handleUpdate(subCtx, &group, &state, restArgs)
 			case "-M", "--menu":
 				ranCommand = true
-				if err := handleMenu(subCtx, &group); err != nil {
-					return err
-				}
+				return handleMenu(subCtx, &group)
 			case "-T", "--theme", "--theme-list":
-				handleTheme(subCtx, &group)
 				ranCommand = true
+				return handleTheme(subCtx, &group)
 
 			case "-a", "--add":
 				// appvars_create (single)
-				handleAppVarsCreate(subCtx, &group, &state)
 				ranCommand = true
+				return handleAppVarsCreate(subCtx, &group, &state)
 			case "-c", "--compose":
-				handleCompose(subCtx, &group, &state)
 				ranCommand = true
+				return handleCompose(subCtx, &group, &state)
 			case "-e", "--env":
-				handleAppVarsCreateAll(subCtx, &group, &state)
 				ranCommand = true
+				return handleAppVarsCreateAll(subCtx, &group, &state)
 			case "-l", "--list", "--list-added", "--list-builtin", "--list-deprecated", "--list-enabled", "--list-disabled", "--list-nondeprecated", "--list-referenced":
-				handleList(subCtx, &group)
 				ranCommand = true
+				return handleList(subCtx, &group)
 			case "-s", "--status":
-				handleStatus(subCtx, &group)
 				ranCommand = true
+				return handleStatus(subCtx, &group)
 			case "--config-pm", "--config-pm-auto", "--config-pm-list", "--config-pm-table", "--config-pm-existing-list", "--config-pm-existing-table":
-				handleConfigPm(subCtx, &group)
 				ranCommand = true
+				return handleConfigPm(subCtx, &group)
 			case "--status-enable", "--status-disable":
-				handleStatusChange(subCtx, &group)
 				ranCommand = true
+				return handleStatusChange(subCtx, &group)
 			case "-r", "--remove":
-				handleRemove(subCtx, &group, &state)
 				ranCommand = true
+				return handleRemove(subCtx, &group, &state)
 			case "-S", "--select", "--menu-config-app-select", "--menu-app-select":
 				ranCommand = true
-				if err := handleAppSelect(subCtx, &group); err != nil {
-					return err
-				}
+				return handleAppSelect(subCtx, &group)
 			case "-t", "--test":
-				handleTest(subCtx, &group)
 				ranCommand = true
+				return handleTest(subCtx, &group)
 			case "--env-appvars":
-				handleEnvAppVars(subCtx, &group)
 				ranCommand = true
+				return handleEnvAppVars(subCtx, &group)
 			case "--env-appvars-lines":
-				handleEnvAppVarsLines(subCtx, &group)
 				ranCommand = true
+				return handleEnvAppVarsLines(subCtx, &group)
 			case "--env-get", "--env-get-line", "--env-get-literal", "--env-get-lower", "--env-get-lower-line", "--env-get-lower-literal":
-				handleEnvGet(subCtx, &group)
 				ranCommand = true
+				return handleEnvGet(subCtx, &group)
 			case "--env-set", "--env-set-lower", "--env-set-literal", "--env-set-lower-literal":
-				handleEnvSet(subCtx, &group)
 				ranCommand = true
+				return handleEnvSet(subCtx, &group)
 			case "--config-show", "--show-config":
-				handleConfigShow(subCtx, &conf)
 				ranCommand = true
+				return handleConfigShow(subCtx, &conf)
 			case "--config-folder", "--config-compose-folder":
-				handleConfigSettings(subCtx, &group)
 				ranCommand = true
+				return handleConfigSettings(subCtx, &group)
 			case "--theme-lines", "--theme-no-lines", "--theme-line", "--theme-no-line",
 				"--theme-borders", "--theme-no-borders", "--theme-border", "--theme-no-border",
 				"--theme-shadows", "--theme-no-shadows", "--theme-shadow", "--theme-no-shadow", "--theme-shadow-level",
 				"--theme-scrollbar", "--theme-no-scrollbar", "--theme-border-color":
-				handleThemeSettings(subCtx, &group)
 				ranCommand = true
+				return handleThemeSettings(subCtx, &group)
 			case "-p", "--prune":
-				handlePrune(subCtx, &state)
 				ranCommand = true
+				return handlePrune(subCtx, &state)
 			case "-R", "--reset":
-				handleReset(subCtx)
 				ranCommand = true
+				return handleReset(subCtx)
 			case "--theme-table":
-				handleThemeTable(subCtx)
 				ranCommand = true
+				return handleThemeTable(subCtx)
 			default:
 				// Custom command logic would be hooked in here.
 				// If we just had flags (group.Command == ""), ranCommand remains false
@@ -299,16 +299,19 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			title = "{{|Theme_TitleSuccess|}}" + title + "{{[-]}}"
 			err := tui.RunCommand(ctx, title, subtitle, task)
 			if err != nil {
-				if !errors.Is(err, console.ErrUserAborted) {
-					logger.Error(ctx, "TUI Run Error: %v", err)
-					exitCode = 1
+				exitCode = 1
+				if errors.Is(err, console.ErrUserAborted) {
+					return exitCode // Stop execution immediately on user abort
 				}
+				logger.Error(ctx, "TUI Run Error: %v", err)
 			}
 		} else {
 			if err := task(ctx); err != nil {
-				if !errors.Is(err, console.ErrUserAborted) {
-					exitCode = 1
+				exitCode = 1
+				if errors.Is(err, console.ErrUserAborted) {
+					return exitCode // Stop execution immediately on user abort
 				}
+				// Logic for non-abort errors if needed, but usually task handles its own logging
 			}
 		}
 
@@ -317,37 +320,42 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 	// If no commands matched (or groups empty), launch TUI
 	if !ranCommand {
 		if err := tui.Start(ctx, ""); err != nil {
-			if !errors.Is(err, tui.ErrUserAborted) {
-				logger.Error(ctx, "TUI Error: %v", err)
-			}
 			exitCode = 1
+			if errors.Is(err, tui.ErrUserAborted) {
+				return exitCode // Stop execution immediately on user abort
+			}
+			logger.Error(ctx, "TUI Error: %v", err)
 		}
 	}
 
 	return exitCode
 }
-func handleHelp(group *CommandGroup) {
+func handleHelp(group *CommandGroup) error {
 	target := ""
 	if len(group.Args) > 0 {
 		target = group.Args[0]
 	}
 	PrintHelp(target)
+	return nil
 }
 
-func handleVersion(ctx context.Context) {
+func handleVersion(ctx context.Context) error {
 	logger.Display(ctx, fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} [{{|Version|}}%s{{[-]}}]", version.ApplicationName, version.Version))
 	logger.Display(ctx, fmt.Sprintf("{{|ApplicationName|}}DockSTARTer-Templates{{[-]}} [{{|Version|}}%s{{[-]}}]", paths.GetTemplatesVersion()))
+	return nil
 }
 
-func handleInstall(ctx context.Context, group *CommandGroup, state *CmdState) {
+func handleInstall(ctx context.Context, group *CommandGroup, state *CmdState) error {
 	logger.Warn(ctx, fmt.Sprintf("The '{{|UserCommand|}}%s{{[-]}}' command is deprecated. The only dependency is '{{|UserCommand|}}docker{{[-]}}'.", group.Command))
 	if state.Force {
 		logger.Notice(ctx, "Force flag ignored.")
 	}
+	return nil
 }
 
-func handleConfigPm(ctx context.Context, group *CommandGroup) {
+func handleConfigPm(ctx context.Context, group *CommandGroup) error {
 	logger.Warn(ctx, fmt.Sprintf("The '{{|UserCommand|}}%s{{[-]}}' command is deprecated. Package manager configuration is no longer needed.", group.Command))
+	return nil
 }
 
 func handleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, restArgs []string) error {
@@ -447,7 +455,7 @@ func resolveEnvVar(arg string, conf config.AppConfig) (string, string) {
 	return arg, filepath.Join(conf.ComposeDir, constants.EnvFileName)
 }
 
-func handleEnvGet(ctx context.Context, group *CommandGroup) {
+func handleEnvGet(ctx context.Context, group *CommandGroup) error {
 	conf := config.LoadAppConfig()
 
 	// 1. Determine variables to process
@@ -498,9 +506,10 @@ func handleEnvGet(ctx context.Context, group *CommandGroup) {
 			console.Println(val)
 		}
 	}
+	return nil
 }
 
-func handleEnvSet(ctx context.Context, group *CommandGroup) {
+func handleEnvSet(ctx context.Context, group *CommandGroup) error {
 	conf := config.LoadAppConfig()
 
 	type kv struct {
@@ -508,6 +517,7 @@ func handleEnvSet(ctx context.Context, group *CommandGroup) {
 		val string
 	}
 	var pairs []kv
+	var retErr error
 
 	baseCmd := group.Command
 	if idx := strings.Index(baseCmd, "="); idx != -1 {
@@ -519,7 +529,7 @@ func handleEnvSet(ctx context.Context, group *CommandGroup) {
 			pairs = append(pairs, kv{parts[0], strings.Join(parts[1:], ",")})
 		} else {
 			logger.Error(ctx, "Command %s requires a variable name and a value (separated by comma).", group.Command)
-			return
+			return fmt.Errorf("invalid command format")
 		}
 	} else {
 		// Argument version: --env-set VAR=VAL
@@ -557,24 +567,28 @@ func handleEnvSet(ctx context.Context, group *CommandGroup) {
 
 		if err != nil {
 			logger.Error(ctx, "Error setting %s: %v", p.key, err)
+			retErr = err
 		} else {
 			logger.Debug(ctx, "Set %s=%s in %s", varName, p.val, file)
 		}
 	}
+	return retErr
 }
 
-func handleAppVarsCreateAll(ctx context.Context, group *CommandGroup, state *CmdState) {
+func handleAppVarsCreateAll(ctx context.Context, group *CommandGroup, state *CmdState) error {
 	conf := config.LoadAppConfig()
 	if err := appenv.CreateAll(ctx, state.Force, conf); err != nil {
 		logger.Error(ctx, "Failed to create app variables: %v", err)
+		return err
 	}
+	return nil
 }
 
-func handleAppVarsCreate(ctx context.Context, group *CommandGroup, state *CmdState) {
+func handleAppVarsCreate(ctx context.Context, group *CommandGroup, state *CmdState) error {
 	conf := config.LoadAppConfig()
 	if len(group.Args) == 0 {
 		logger.Error(ctx, "The '{{|UserCommand|}}%s{{[-]}}' command requires at least one application name.", group.Command)
-		return
+		return fmt.Errorf("no application name provided")
 	}
 
 	// Ensure env file exists (create if needed)
@@ -586,20 +600,24 @@ func handleAppVarsCreate(ctx context.Context, group *CommandGroup, state *CmdSta
 	// Enable the apps first
 	if err := appenv.Enable(ctx, group.Args, conf); err != nil {
 		logger.Error(ctx, "Failed to enable apps: %v", err)
+		return err
 	}
 
 	for _, arg := range group.Args {
 		if err := appenv.CreateApp(ctx, arg, conf); err != nil {
 			logger.Error(ctx, "%v", err)
+			return err
 		}
 	}
 
 	if err := appenv.Update(ctx, state.Force, envFile); err != nil {
 		logger.Warn(ctx, "Failed to update env usage: %v", err)
+		// Not returning error here as it's a warning
 	}
+	return nil
 }
 
-func handleTheme(ctx context.Context, group *CommandGroup) {
+func handleTheme(ctx context.Context, group *CommandGroup) error {
 	switch group.Command {
 	case "-T", "--theme":
 		conf := config.LoadAppConfig()
@@ -610,7 +628,7 @@ func handleTheme(ctx context.Context, group *CommandGroup) {
 			themePath := filepath.Join(themesDir, newTheme+".ds2theme")
 			if _, err := os.Stat(themePath); os.IsNotExist(err) {
 				logger.Error(ctx, "Theme '{{|Theme|}}%s{{[-]}}' not found in '{{|Folder|}}%s{{[-]}}'.", newTheme, themesDir)
-				return
+				return err
 			}
 
 			conf.UI.Theme = newTheme
@@ -636,6 +654,7 @@ func handleTheme(ctx context.Context, group *CommandGroup) {
 
 			if err := config.SaveAppConfig(conf); err != nil {
 				logger.Error(ctx, "Failed to save theme setting: %v", err)
+				return err
 			} else {
 				logger.Notice(ctx, "Theme updated to: {{|Theme|}}%s{{[-]}}", newTheme)
 				// Reload theme for subsequent commands in the same execution
@@ -651,7 +670,7 @@ func handleTheme(ctx context.Context, group *CommandGroup) {
 		entries, err := os.ReadDir(themesDir)
 		if err != nil {
 			logger.Error(ctx, "Failed to read themes directory: %v", err)
-			return
+			return err
 		}
 
 		var themes []string
@@ -676,9 +695,10 @@ func handleTheme(ctx context.Context, group *CommandGroup) {
 			}
 		}
 	}
+	return nil
 }
 
-func handleThemeSettings(ctx context.Context, group *CommandGroup) {
+func handleThemeSettings(ctx context.Context, group *CommandGroup) error {
 	conf := config.LoadAppConfig()
 	switch group.Command {
 	case "--theme-lines", "--theme-line":
@@ -738,11 +758,11 @@ func handleThemeSettings(ctx context.Context, group *CommandGroup) {
 					}
 				}
 				logger.Error(ctx, "Invalid shadow level: %s (use 0-4, or: off, light, medium, dark, solid, or percentage e.g. 50%%)", arg)
-				return
+				return fmt.Errorf("invalid shadow level")
 			}
 		} else {
 			logger.Display(ctx, "Current shadow level: %d", conf.UI.ShadowLevel)
-			return
+			return nil
 		}
 	case "--theme-scrollbar":
 		conf.UI.Scrollbar = true
@@ -759,15 +779,16 @@ func handleThemeSettings(ctx context.Context, group *CommandGroup) {
 				conf.UI.BorderColor = 3
 			default:
 				logger.Error(ctx, "Invalid border color: %s (use 1, 2, or 3)", group.Args[0])
-				return
+				return fmt.Errorf("invalid border color")
 			}
 		} else {
 			logger.Display(ctx, "Current border color setting: %d", conf.UI.BorderColor)
-			return
+			return nil
 		}
 	}
 	if err := config.SaveAppConfig(conf); err != nil {
 		logger.Error(ctx, "Failed to save theme setting: %v", err)
+		return err
 	} else {
 		// Log specific update if appropriate
 		if group.Command == "--theme-border-color" && len(group.Args) > 0 {
@@ -793,9 +814,10 @@ func handleThemeSettings(ctx context.Context, group *CommandGroup) {
 			logger.Notice(ctx, "Theme setting updated: %s", group.Command)
 		}
 	}
+	return nil
 }
 
-func handleList(ctx context.Context, group *CommandGroup) {
+func handleList(ctx context.Context, group *CommandGroup) error {
 	conf := config.LoadAppConfig()
 	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
 	var result []string
@@ -822,19 +844,20 @@ func handleList(ctx context.Context, group *CommandGroup) {
 
 	if err != nil {
 		logger.Error(ctx, "List failed: %v", err)
-		return
+		return err
 	}
 
 	for _, item := range result {
 		logger.Display(ctx, appenv.GetNiceName(ctx, item))
 	}
+	return nil
 }
 
-func handleStatus(ctx context.Context, group *CommandGroup) {
+func handleStatus(ctx context.Context, group *CommandGroup) error {
 	conf := config.LoadAppConfig()
 	if len(group.Args) == 0 {
 		logger.Error(ctx, "The '{{|UserCommand|}}%s{{[-]}}' command requires at least one application name.", group.Command)
-		return
+		return fmt.Errorf("no application name provided")
 	}
 
 	for _, arg := range group.Args {
@@ -843,13 +866,14 @@ func handleStatus(ctx context.Context, group *CommandGroup) {
 		status := appenv.Status(ctx, arg, conf)
 		logger.Display(ctx, status)
 	}
+	return nil
 }
 
-func handleStatusChange(ctx context.Context, group *CommandGroup) {
+func handleStatusChange(ctx context.Context, group *CommandGroup) error {
 	conf := config.LoadAppConfig()
 	if len(group.Args) == 0 {
 		logger.Error(ctx, "The '{{|UserCommand|}}%s{{[-]}}' command requires at least one application name.", group.Command)
-		return
+		return fmt.Errorf("no application name provided")
 	}
 
 	var err error
@@ -861,13 +885,15 @@ func handleStatusChange(ctx context.Context, group *CommandGroup) {
 
 	if err != nil {
 		logger.Error(ctx, "Failed to change app status: %v", err)
+		return err
 	}
 	if err := appenv.Update(ctx, false, filepath.Join(conf.ComposeDir, constants.EnvFileName)); err != nil {
 		logger.Warn(ctx, "Failed to update env usage: %v", err)
 	}
+	return nil
 }
 
-func handleRemove(ctx context.Context, group *CommandGroup, state *CmdState) {
+func handleRemove(ctx context.Context, group *CommandGroup, state *CmdState) error {
 	conf := config.LoadAppConfig()
 
 	// Remove accepts optional app names (empty = all disabled apps)
@@ -875,13 +901,15 @@ func handleRemove(ctx context.Context, group *CommandGroup, state *CmdState) {
 
 	if err != nil {
 		logger.Error(ctx, "Failed to remove app variables: %v", err)
+		return err
 	}
 	if err := appenv.Update(ctx, false, filepath.Join(conf.ComposeDir, constants.EnvFileName)); err != nil {
 		logger.Warn(ctx, "Failed to update env usage: %v", err)
 	}
+	return nil
 }
 
-func handleConfigShow(ctx context.Context, conf *config.AppConfig) {
+func handleConfigShow(ctx context.Context, conf *config.AppConfig) error {
 	headers := []string{
 		"{{|UsageCommand|}}Option{{[-]}}",
 		"{{|UsageCommand|}}Value{{[-]}}",
@@ -969,29 +997,34 @@ func handleConfigShow(ctx context.Context, conf *config.AppConfig) {
 
 	logger.Info(ctx, "Configuration options stored in '{{|File|}}%s{{[-]}}':", paths.GetConfigFilePath())
 	console.PrintTable(headers, data, conf.UI.LineCharacters)
+	return nil
 }
 
-func handlePrune(ctx context.Context, state *CmdState) {
+func handlePrune(ctx context.Context, state *CmdState) error {
 	if err := docker.Prune(ctx, state.Yes); err != nil {
 		logger.Error(ctx, "Prune failed: %v", err)
+		return err
 	}
+	return nil
 }
 
-func handleReset(ctx context.Context) {
+func handleReset(ctx context.Context) error {
 	logger.Notice(ctx, "Resetting {{|ApplicationName|}}%s{{[-]}} to process all actions.", version.ApplicationName)
 	if err := paths.ResetNeeds(); err != nil {
 		logger.Error(ctx, "Failed to reset: %v", err)
+		return err
 	}
 	// Also ensure permissions are set? Bash script calls set_permissions.
 	// We might need a set_permissions equivalent eventually.
+	return nil
 }
 
-func handleThemeTable(ctx context.Context) {
+func handleThemeTable(ctx context.Context) error {
 	headers := []string{"Theme", "Description", "Author"}
 	themes, err := theme.List()
 	if err != nil {
 		logger.Error(ctx, "Failed to list themes: %v", err)
-		return
+		return err
 	}
 
 	var data []string
@@ -1007,47 +1040,52 @@ func handleThemeTable(ctx context.Context) {
 	// Bash: lists folders. If "Default" is a folder, it shows it.
 
 	console.PrintTable(headers, data, true)
+	return nil
 }
 
-func handleEnvAppVars(ctx context.Context, group *CommandGroup) {
+func handleEnvAppVars(ctx context.Context, group *CommandGroup) error {
 	conf := config.LoadAppConfig()
 	args := group.Args
 	if len(args) == 0 {
 		logger.Fatal(ctx, "Command --env-appvars requires one or more application names.")
+		return fmt.Errorf("no application name provided")
 	}
 
 	for _, appName := range args {
 		vars, err := appenv.ListAppVars(ctx, appName, conf)
 		if err != nil {
 			logger.Error(ctx, "Failed to list variables for %s: %v", appName, err)
-			continue
+			return err
 		}
 		for _, v := range vars {
 			logger.Display(ctx, v)
 		}
 	}
+	return nil
 }
 
-func handleEnvAppVarsLines(ctx context.Context, group *CommandGroup) {
+func handleEnvAppVarsLines(ctx context.Context, group *CommandGroup) error {
 	conf := config.LoadAppConfig()
 	args := group.Args
 	if len(args) == 0 {
 		logger.Fatal(ctx, "Command --env-appvars-lines requires one or more application names.")
+		return fmt.Errorf("no application name provided")
 	}
 
 	for _, appName := range args {
 		lines, err := appenv.ListAppVarLines(ctx, appName, conf)
 		if err != nil {
 			logger.Error(ctx, "Failed to list variable lines for %s: %v", appName, err)
-			continue
+			return err
 		}
 		for _, l := range lines {
 			logger.Display(ctx, l)
 		}
 	}
+	return nil
 }
 
-func handleTest(ctx context.Context, group *CommandGroup) {
+func handleTest(ctx context.Context, group *CommandGroup) error {
 	args := []string{"test", "-v", "./..."}
 	if len(group.Args) > 0 {
 		args = append(args, "-run", strings.Join(group.Args, "|"))
@@ -1060,10 +1098,12 @@ func handleTest(ctx context.Context, group *CommandGroup) {
 
 	if err := cmd.Run(); err != nil {
 		// Test failures are handled by the 'go test' output itself, so we don't need to log specific errors here.
+		return err
 	}
+	return nil
 }
 
-func handleCompose(ctx context.Context, group *CommandGroup, state *CmdState) {
+func handleCompose(ctx context.Context, group *CommandGroup, state *CmdState) error {
 	operation := ""
 	var appsList []string
 
@@ -1082,5 +1122,7 @@ func handleCompose(ctx context.Context, group *CommandGroup, state *CmdState) {
 
 	if err := compose.ExecuteCompose(ctx, state.Yes, state.Force, operation, appsList...); err != nil {
 		logger.Error(ctx, "Compose failed: %v", err)
+		return err
 	}
+	return nil
 }

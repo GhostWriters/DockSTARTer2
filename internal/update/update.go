@@ -161,7 +161,11 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 	}
 
 	// Prompt user
-	if !console.QuestionPrompt(ctx, noticePrinter, question, "Y", yes) {
+	answer, err := console.QuestionPrompt(ctx, noticePrinter, question, "Y", yes)
+	if err != nil {
+		return err
+	}
+	if !answer {
 		logger.Notice(ctx, noNotice)
 		return nil
 	}
@@ -405,7 +409,11 @@ func UpdateTemplates(ctx context.Context, force bool, yes bool, requestedBranch 
 	}
 
 	// Prompt user
-	if !console.QuestionPrompt(ctx, noticePrinter, question, "Y", yes) {
+	answer, err := console.QuestionPrompt(ctx, noticePrinter, question, "Y", yes)
+	if err != nil {
+		return err
+	}
+	if !answer {
 		logger.Notice(ctx, noNotice)
 		return console.ErrUserAborted
 	}

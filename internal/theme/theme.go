@@ -114,6 +114,12 @@ type ThemeConfig struct {
 	ListAppUserDefinedFG     color.Color
 	ListAppUserDefinedBG     color.Color
 	ListAppUserDefinedStyles StyleFlags
+	HelpItemFG               color.Color
+	HelpItemBG               color.Color
+	HelpItemStyles           StyleFlags
+	HelpTagFG                color.Color
+	HelpTagBG                color.Color
+	HelpTagStyles            StyleFlags
 }
 
 // Current holds the active theme configuration
@@ -248,6 +254,8 @@ func Default() {
 	console.RegisterSemanticTagRaw("Theme_ApplicationUpdateBrackets", "-")
 	console.RegisterSemanticTagRaw("Theme_TitleQuestion", "black:yellow:B")
 	console.RegisterSemanticTagRaw("Theme_Hostname", "::B")
+	console.RegisterSemanticTagRaw("Theme_HelpItem", "black::")
+	console.RegisterSemanticTagRaw("Theme_HelpTag", "black:red:")
 
 }
 
@@ -579,6 +587,10 @@ func parseThemeTOML(path string) error {
 			Current.ListAppFG, Current.ListAppBG, Current.ListAppStyles = parseRawWithStyles(styleValue)
 		case "ListAppUserDefined":
 			Current.ListAppUserDefinedFG, Current.ListAppUserDefinedBG, Current.ListAppUserDefinedStyles = parseRawWithStyles(styleValue)
+		case "HelpItem":
+			Current.HelpItemFG, Current.HelpItemBG, Current.HelpItemStyles = parseRawWithStyles(styleValue)
+		case "HelpTag":
+			Current.HelpTagFG, Current.HelpTagBG, Current.HelpTagStyles = parseRawWithStyles(styleValue)
 		}
 	}
 

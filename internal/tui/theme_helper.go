@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"image/color"
+	"regexp"
 	"strings"
 
 	"DockSTARTer2/internal/console"
@@ -249,46 +250,45 @@ func GetInitialStyle(text string, base lipgloss.Style) lipgloss.Style {
 	return base
 }
 
-// MaintainBackground replaces ANSI resets (\x1b[0m) with a reset followed by the parent style's background.
+// MaintainBackground replaces ANSI resets (\x1b[0m, \x1b[m, \x1b[39m, \x1b[49m) with the reset followed by the parent style's codes.
 // This prevents content-level resets from "bleeding" to the terminal default background.
 func MaintainBackground(text string, style lipgloss.Style) string {
 	// Extract foreground and background codes from dummy renders
 	getANSI := func(s lipgloss.Style) (fgCode, bgCode string) {
-		rendered := s.Render("_")
-		// The rendered string is: [fg][bg][attr]_ [reset]
-		// We want to find the codes before the "_"
-		parts := strings.Split(rendered, "_")
-		if len(parts) > 0 {
-			// This is an oversimplification but usually works for simple styles
-			// In lipgloss, FG and BG are separate sequences
-			if fg := s.GetForeground(); fg != nil {
-				fgDummy := lipgloss.NewStyle().Foreground(fg).Render("_")
-				fgCode = strings.Split(fgDummy, "_")[0]
-			}
-			if bg := s.GetBackground(); bg != nil {
-				bgDummy := lipgloss.NewStyle().Background(bg).Render("_")
-				bgCode = strings.Split(bgDummy, "_")[0]
-			}
+		if fg := s.GetForeground(); fg != nil {
+			fgDummy := lipgloss.NewStyle().Foreground(fg).Render("_")
+			fgCode = strings.Split(fgDummy, "_")[0]
+		}
+		if bg := s.GetBackground(); bg != nil {
+			bgDummy := lipgloss.NewStyle().Background(bg).Render("_")
+			bgCode = strings.Split(bgDummy, "_")[0]
 		}
 		return
 	}
 
 	fgCode, bgCode := getANSI(style)
-
-	// Replace \x1b[0m with \x1b[0m + all codes
-	if bgCode != "" || fgCode != "" {
-		text = strings.ReplaceAll(text, console.CodeReset, console.CodeReset+fgCode+bgCode)
+	if fgCode == "" && bgCode == "" {
+		return text
 	}
 
-	// Also replace explicit FG/BG resets
-	if fgCode != "" {
-		text = strings.ReplaceAll(text, console.CodeFGReset, console.CodeFGReset+fgCode)
-	}
-	if bgCode != "" {
-		text = strings.ReplaceAll(text, console.CodeBGReset, console.CodeBGReset+bgCode)
-	}
+	// Regex to find:
+	// 1. Full reset: \x1b[0m or \x1b[m
+	// 2. FG reset: \x1b[39m
+	// 3. BG reset: \x1b[49m
+	re := regexp.MustCompile(`\x1b\[(?:0|39|49)?m`)
 
-	return text
+	return re.ReplaceAllStringFunc(text, func(match string) string {
+		switch match {
+		case "\x1b[0m", "\x1b[m":
+			return match + fgCode + bgCode
+		case "\x1b[39m":
+			return match + fgCode
+		case "\x1b[49m":
+			return match + bgCode
+		default:
+			return match
+		}
+	})
 }
 
 // GetPlainText strips all {{...}} theme tags from text

@@ -9,6 +9,7 @@ import (
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/strutil"
 
+	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -239,6 +240,18 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if msg.Button == tea.MouseWheelDown {
 				m.viewport.ScrollDown(3)
+				return m, nil
+			}
+		}
+
+	case tea.KeyPressMsg:
+		if m.expanded {
+			switch {
+			case key.Matches(msg, Keys.Home):
+				m.viewport.GotoTop()
+				return m, nil
+			case key.Matches(msg, Keys.End):
+				m.viewport.GotoBottom()
 				return m, nil
 			}
 		}

@@ -131,6 +131,11 @@ var fileLogger *charmlog.Logger
 func init() {
 	LevelVar.Set(LevelNotice)
 	FileLevelVar.Set(LevelInfo) // Default file to Info (-v behavior)
+
+	// Register global abort handler for console prompts
+	console.AbortHandler = func(ctx context.Context) {
+		Error(ctx, "User aborted via CTRL-C")
+	}
 }
 
 func SetLevel(level slog.Level) {

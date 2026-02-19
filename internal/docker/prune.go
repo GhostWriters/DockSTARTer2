@@ -24,7 +24,11 @@ func Prune(ctx context.Context, assumeYes bool) error {
 	}
 
 	// Ask for confirmation
-	if !console.QuestionPrompt(ctx, printer, question, "Y", assumeYes) {
+	answer, err := console.QuestionPrompt(ctx, printer, question, "Y", assumeYes)
+	if err != nil {
+		return err
+	}
+	if !answer {
 		logger.Notice(ctx, noNotice)
 		return nil
 	}
