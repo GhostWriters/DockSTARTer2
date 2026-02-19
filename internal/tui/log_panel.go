@@ -17,6 +17,7 @@ import (
 
 const (
 	logPanelZoneID    = "log-toggle"
+	logResizeZoneID   = "log-resize"
 	logViewportZoneID = "log-viewport"
 )
 
@@ -35,8 +36,15 @@ type LogPanelModel struct {
 	viewport viewport.Model
 	lines    []string
 	width    int
-	// totalHeight is the full height to use when expanded (set via SetSize).
+	// totalHeight is the full height of the terminal (used for max constraint)
 	totalHeight int
+	// height is the current variable height of the panel (when expanded)
+	height int
+
+	// Resizing state
+	isDragging        bool
+	dragStartY        int
+	heightAtDragStart int
 }
 
 // NewLogPanelModel creates a new log panel in collapsed state.
@@ -52,8 +60,14 @@ func (m LogPanelModel) CollapsedHeight() int {
 
 // Height returns the current rendered height of the panel.
 func (m LogPanelModel) Height() int {
-	if m.expanded && m.totalHeight > 1 {
-		return m.totalHeight / 2
+	if m.expanded {
+		if m.height > 1 {
+			return m.height
+		}
+		// Fallback if height not set yet
+		if m.totalHeight > 1 {
+			return m.totalHeight / 2
+		}
 	}
 	return 1
 }
@@ -62,9 +76,22 @@ func (m LogPanelModel) Height() int {
 func (m *LogPanelModel) SetSize(width, totalTermHeight int) {
 	m.width = width
 	m.totalHeight = totalTermHeight
+
 	if m.expanded {
-		panelH := totalTermHeight / 2
-		vpH := panelH - 1 // subtract toggle strip
+		// If height is unset (0), default to half screen
+		if m.height == 0 {
+			m.height = totalTermHeight / 2
+		}
+		// Ensure height is within bounds (e.g., if terminal shrank)
+		maxH := totalTermHeight - 4 // Leave room for header/footer
+		if m.height > maxH {
+			m.height = maxH
+		}
+		if m.height < 2 {
+			m.height = 2
+		}
+
+		vpH := m.height - 1 // subtract toggle strip
 		if vpH < 1 {
 			vpH = 1
 		}
@@ -85,6 +112,7 @@ func (m LogPanelModel) Init() tea.Cmd {
 // single logLineMsg with embedded newlines so the panel can display history immediately.
 func preloadLogFile() tea.Msg {
 	path := logger.GetLogFilePath()
+
 	if path == "" {
 		return nil
 	}
@@ -142,7 +170,66 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.SetContent(content)
 		m.viewport.GotoBottom()
 		return m, waitForLogLine()
+
+	case toggleLogPanelMsg:
+		m.expanded = !m.expanded
+		// If expanding, ensure we have the correct size immediately
+		if m.expanded {
+			m.SetSize(m.width, m.totalHeight)
+		}
 		return m, nil
+
+	case tea.MouseClickMsg:
+		// Handle drag start on resize zones
+		if msg.Button == tea.MouseLeft {
+			if zone.Get(logResizeZoneID).InBounds(msg) {
+				m.isDragging = true
+				m.dragStartY = msg.Y
+				m.heightAtDragStart = m.height
+				// If not expanded, we might want to expand?
+				// But user asked for drag resize6. Dragging collapsed strip is weird.
+				// Let's assume drag only works if already expanded OR drag expands it?
+				// User said: "border allows you to drag it up and down to resize it"
+				// If it's collapsed, it's at bottom. Dragging up should expand.
+				if !m.expanded {
+					m.expanded = true
+					m.height = 1 // Start small
+					m.SetSize(m.width, m.totalHeight)
+					m.heightAtDragStart = 1 // Logic will handle delta
+				}
+				return m, nil
+			}
+		}
+
+	case tea.MouseReleaseMsg:
+		if m.isDragging {
+			m.isDragging = false
+			return m, nil
+		}
+
+	case tea.MouseMotionMsg:
+		if m.isDragging {
+			// Calculate delta. Y increases downwards.
+			// Dragging UP (smaller Y) means height increases.
+			// Delta = dragStartY - msg.Y
+			delta := m.dragStartY - msg.Y
+			newHeight := m.heightAtDragStart + delta
+
+			// Clamp height
+			maxH := m.totalHeight - 4 // Leave space for header
+			if newHeight > maxH {
+				newHeight = maxH
+			}
+			if newHeight < 2 {
+				newHeight = 2 // Minimum 1 line content + 1 line strip
+			}
+
+			m.height = newHeight
+			if m.expanded {
+				m.SetSize(m.width, m.totalHeight) // Refresh viewport
+			}
+			return m, nil
+		}
 
 	case tea.MouseWheelMsg:
 		if m.expanded {
@@ -204,28 +291,48 @@ func (m LogPanelModel) ViewString() string {
 	leftDashes := strutil.Repeat(sepChar, dashW)
 
 	rightTotal := m.width - dashW - labelW
-	var stripContent string
+
+	// Use the dedicated LogPanel theme color for the strip line
+	// Note: We render parts separately below, so we don't need a single strip style for the whole line yet.
+	stripStyle := lipgloss.NewStyle().
+		Foreground(styles.LogPanelColor).
+		Background(styles.HelpLine.GetBackground())
+
+	// CLICK ZONES:
+	// Only the label is the toggle. The rests are resize handles.
+	// We need to render them separately to mark zones.
+
+	// Left Handle
+	leftContent := stripStyle.Render(leftDashes)
+	leftMarked := zone.Mark(logResizeZoneID, leftContent)
+
+	// Toggle Label (Title)
+	labelContent := stripStyle.Render(label)
+	labelMarked := zone.Mark(logPanelZoneID, labelContent)
+
+	// Right Handle (including indicator)
+	var rightContentStr string
 	if rightIndicator != "" {
 		indicatorW := lipgloss.Width(rightIndicator)
 		rightDashW := rightTotal - indicatorW
 		if rightDashW < 0 {
 			rightDashW = 0
 		}
-		stripContent = leftDashes + label + strutil.Repeat(sepChar, rightDashW) + rightIndicator
+		rightContentStr = strutil.Repeat(sepChar, rightDashW) + rightIndicator
 	} else {
-		stripContent = leftDashes + label + strutil.Repeat(sepChar, rightTotal)
+		rightContentStr = strutil.Repeat(sepChar, rightTotal)
 	}
+	rightContent := stripStyle.Render(rightContentStr)
+	rightMarked := zone.Mark(logResizeZoneID, rightContent)
 
-	// Use the dedicated LogPanel theme color for the strip line
-	stripStyle := lipgloss.NewStyle().
-		Width(m.width).
-		Foreground(styles.LogPanelColor).
-		Background(styles.HelpLine.GetBackground())
-	strip := zone.Mark(logPanelZoneID, stripStyle.Render(stripContent))
+	// Combine
+	// Use JoinHorizontal to create the single strip line from components
+	strip := lipgloss.JoinHorizontal(lipgloss.Top, leftMarked, labelMarked, rightMarked)
 
-	if !m.expanded {
-		return strip
-	}
+	// Ensure the strip spans the full width (pad right if necessary, though left/right dashes should cover it)
+	// Actually, dashW calculation ensures it fills width.
+	// But let's force width on the container just in case.
+	strip = lipgloss.NewStyle().Width(m.width).Render(strip)
 
 	// Expanded: viewport below the strip
 	vpStyle := lipgloss.NewStyle().

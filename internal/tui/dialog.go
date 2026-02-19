@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"DockSTARTer2/internal/strutil"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -38,6 +39,8 @@ func RenderDialogBox(title, content string, dialogType DialogType, width, height
 		titleStyle = titleStyle.Foreground(styles.StatusWarn.GetForeground())
 	case DialogTypeError:
 		titleStyle = titleStyle.Foreground(styles.StatusError.GetForeground())
+	case DialogTypeConfirm:
+		titleStyle = SemanticRawStyle("Theme_TitleQuestion")
 	}
 
 	// Render title
@@ -111,7 +114,7 @@ func RenderHotkeyLabel(label string, focused bool) string {
 	// Handle leading spaces if they were trimmed
 	prefix := ""
 	if strings.HasPrefix(label, " ") {
-		prefix = strings.Repeat(" ", len(label)-len(strings.TrimLeft(label, " ")))
+		prefix = strutil.Repeat(" ", len(label)-len(strings.TrimLeft(label, " ")))
 	}
 
 	// Apply styles
@@ -229,6 +232,11 @@ func CheckButtonHotkeys(msg tea.KeyPressMsg, buttons []ButtonSpec) (int, bool) {
 // focused=true uses a thick border (active dialog), focused=false uses normal border (background dialog).
 // Optional borders parameter allows overriding the default theme borders.
 func RenderDialog(title, content string, focused bool, borders ...BorderPair) string {
+	return RenderDialogWithType(title, content, focused, DialogTypeInfo, borders...)
+}
+
+// RenderDialogWithType renders a dialog with a specific type for title styling.
+func RenderDialogWithType(title, content string, focused bool, dialogType DialogType, borders ...BorderPair) string {
 	styles := GetStyles()
 
 	var border lipgloss.Border
@@ -254,7 +262,19 @@ func RenderDialog(title, content string, focused bool, borders ...BorderPair) st
 		}
 	}
 
-	return renderDialogWithBorder(title, content, border, focused, true, true, styles.DialogTitle)
+	titleStyle := styles.DialogTitle
+	switch dialogType {
+	case DialogTypeSuccess:
+		titleStyle = titleStyle.Foreground(styles.StatusSuccess.GetForeground())
+	case DialogTypeWarning:
+		titleStyle = titleStyle.Foreground(styles.StatusWarn.GetForeground())
+	case DialogTypeError:
+		titleStyle = titleStyle.Foreground(styles.StatusError.GetForeground())
+	case DialogTypeConfirm:
+		titleStyle = SemanticRawStyle("Theme_TitleQuestion")
+	}
+
+	return renderDialogWithBorder(title, content, border, focused, true, true, titleStyle)
 }
 
 // RenderUniformBlockDialog renders a dialog with block borders and uniform dark colors (no 3D effect).
@@ -341,7 +361,7 @@ func renderDialogWithBorder(title, content string, border lipgloss.Border, focus
 	result.WriteString(borderStyleLight.Render(border.TopLeft))
 	if title == "" {
 		// Plain top border without title
-		result.WriteString(borderStyleLight.Render(strings.Repeat(border.Top, actualWidth)))
+		result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, actualWidth)))
 	} else {
 		// Top border with embedded title
 		var leftT, rightT string
@@ -379,13 +399,13 @@ func renderDialogWithBorder(title, content string, border lipgloss.Border, focus
 
 		leftPad := (actualWidth - titleSectionLen) / 2
 		rightPad := actualWidth - titleSectionLen - leftPad
-		result.WriteString(borderStyleLight.Render(strings.Repeat(border.Top, leftPad)))
+		result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, leftPad)))
 		result.WriteString(borderStyleLight.Render(leftT))
 		result.WriteString(borderStyleLight.Render(" "))
 		result.WriteString(title)
 		result.WriteString(borderStyleLight.Render(" "))
 		result.WriteString(borderStyleLight.Render(rightT))
-		result.WriteString(borderStyleLight.Render(strings.Repeat(border.Top, rightPad)))
+		result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, rightPad)))
 	}
 	result.WriteString(borderStyleLight.Render(border.TopRight))
 	result.WriteString("\n")
@@ -397,7 +417,7 @@ func renderDialogWithBorder(title, content string, border lipgloss.Border, focus
 		textWidth := lipgloss.Width(line)
 		padding := ""
 		if textWidth < actualWidth {
-			padding = lipgloss.NewStyle().Background(borderBG).Render(strings.Repeat(" ", actualWidth-textWidth))
+			padding = lipgloss.NewStyle().Background(borderBG).Render(strutil.Repeat(" ", actualWidth-textWidth))
 		}
 		// Use MaintainBackground to ensure internal resets don't bleed to black
 		fullLine := MaintainBackground(line+padding, styles.Dialog)
@@ -408,7 +428,7 @@ func renderDialogWithBorder(title, content string, border lipgloss.Border, focus
 
 	// Bottom border
 	result.WriteString(borderStyleDark.Render(border.BottomLeft))
-	result.WriteString(borderStyleDark.Render(strings.Repeat(border.Bottom, actualWidth)))
+	result.WriteString(borderStyleDark.Render(strutil.Repeat(border.Bottom, actualWidth)))
 	result.WriteString(borderStyleDark.Render(border.BottomRight))
 
 	return result.String()

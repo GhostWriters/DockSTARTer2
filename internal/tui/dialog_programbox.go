@@ -3,6 +3,7 @@ package tui
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
 
 	"charm.land/bubbles/v2/key"
@@ -113,8 +115,6 @@ type UpdatePercentMsg struct {
 
 // newProgramBox creates a new program box dialog (internal use)
 func newProgramBox(title, subtitle, command string) *ProgramBoxModel {
-	// Title is parsed by RenderDialog when View() is called.
-	// Subtitle/Command is parsed in View().
 
 	m := &ProgramBoxModel{
 		title:    title,
@@ -127,7 +127,7 @@ func newProgramBox(title, subtitle, command string) *ProgramBoxModel {
 		ctx:      context.Background(),
 	}
 
-	// Initialize viewport style to match dialog background (fixes black scrollbar)
+	// Initialize viewport style to match dialog background
 	styles := GetStyles()
 	m.viewport.Style = styles.Dialog.Padding(0, 0)
 	// Use theme-defined console colors to properly display ANSI colors from command output
@@ -246,10 +246,8 @@ func (m *programBoxModel) Init() tea.Cmd {
 		m.task = nil // Prevent double-start
 
 		return func() tea.Msg {
-			// Create a pipe for streaming output
 			reader, writer := io.Pipe()
 
-			// Channel to signal task is done
 			errChan := make(chan error, 1)
 
 			// Start reading output in a goroutine — sends lines to the viewport
@@ -395,6 +393,9 @@ func (m *programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.done {
 				return m, closeDialog
 			}
+			// Important: consume these keys even if not done to prevent them from bubbling up
+			// or triggering background elements (like the header)
+			return m, nil
 		}
 
 	case tea.MouseClickMsg:
@@ -418,6 +419,19 @@ func (m *programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Update viewport for scrolling
 	m.viewport, cmd = m.viewport.Update(msg)
+
+	// Handle mouse wheel scrolling for the program box viewport
+	if mwMsg, ok := msg.(tea.MouseWheelMsg); ok {
+		if mwMsg.Button == tea.MouseWheelUp {
+			m.viewport.ScrollUp(3)
+			return m, nil
+		}
+		if mwMsg.Button == tea.MouseWheelDown {
+			m.viewport.ScrollDown(3)
+			return m, nil
+		}
+	}
+
 	return m, cmd
 }
 
@@ -456,7 +470,9 @@ func (m *programBoxModel) ViewString() string {
 	// We disable the bottom border initially to let us construct it ourselves
 	viewportStyle = viewportStyle.BorderBottom(false)
 
-	borderedViewport := viewportStyle.Render(viewportContent)
+	borderedViewport := viewportStyle.
+		Height(m.viewport.Height()).
+		Render(viewportContent)
 
 	// Construct custom bottom border with label
 	border := styles.Border
@@ -504,14 +520,14 @@ func (m *programBoxModel) ViewString() string {
 
 	// Build bottom line parts
 	// Left part: BottomLeftCorner + HorizontalLine...
-	leftPart := borderStyle.Render(border.BottomLeft + strings.Repeat(border.Bottom, leftPadCnt))
+	leftPart := borderStyle.Render(border.BottomLeft + strutil.Repeat(border.Bottom, leftPadCnt))
 
 	// Connectors
 	leftConnector := borderStyle.Render(leftT)
 	rightConnector := borderStyle.Render(rightT)
 
 	// Right part: ...HorizontalLine + BottomRightCorner
-	rightPart := borderStyle.Render(strings.Repeat(border.Bottom, rightPadCnt) + border.BottomRight)
+	rightPart := borderStyle.Render(strutil.Repeat(border.Bottom, rightPadCnt) + border.BottomRight)
 
 	// Combine parts: Left-----┤100%├--Right
 	bottomLine := lipgloss.JoinHorizontal(lipgloss.Bottom, leftPart, leftConnector, scrollIndicator, rightConnector, rightPart)
@@ -567,27 +583,31 @@ func (m *programBoxModel) ViewString() string {
 	contentParts = append(contentParts, borderedViewport)
 	contentParts = append(contentParts, buttonRow)
 
-	// Combine components with strict trimming to avoid spacing issues
-	var contentPartsCleaned []string
-	for _, part := range contentParts {
-		if part != "" {
-			contentPartsCleaned = append(contentPartsCleaned, strings.Trim(part, "\n"))
-		}
+	// Use JoinVertical to ensure all parts are correctly combined with their heights
+	content := lipgloss.JoinVertical(lipgloss.Left, contentParts...)
+
+	// If maximized, force total content height to match the budget (minus outer borders)
+	// This ensures the dialog box itself is the correct size as requested.
+	if m.maximized {
+		content = lipgloss.NewStyle().
+			Height(m.height - 2).
+			Background(styles.Dialog.GetBackground()).
+			Render(content)
 	}
 
-	content := strings.Join(contentPartsCleaned, "\n")
-
-	// Remove padding to content (border will be added by RenderDialogWithTitle)
-	// We want the inner border to be flush against the outer border
-	paddedContent := styles.Dialog.
-		Padding(0, 0).
-		Render(content)
-
 	// Wrap in border with title embedded (matching menu style)
-	dialogWithTitle := RenderDialog(m.title, paddedContent, true)
+	dialogWithTitle := RenderDialog(m.title, content, true)
 
 	// Add shadow (matching menu style)
 	dialogWithTitle = AddShadow(dialogWithTitle)
+
+	// If error occurred, show it (suppressing "user aborted" which is just a cancellation)
+	if m.err != nil && m.err != ErrUserAborted && !errors.Is(m.err, console.ErrUserAborted) {
+		errStyle := SemanticStyle("{{|Theme_Error|}}")
+		errView := RenderDialog("Error", errStyle.Render(m.err.Error()), true)
+		errView = AddShadow(errView)
+		dialogWithTitle = Overlay(errView, dialogWithTitle, OverlayCenter, OverlayCenter, 0, 0)
+	}
 
 	// If sub-dialog is active, overlay it
 	if m.subDialog != nil {
@@ -638,7 +658,7 @@ func (m *ProgramBoxModel) renderHeaderUI(width int) string {
 		// Calculate gap width: padding to maxLabelLen + 2 spaces
 		gapWidth := maxLabelLen - len(t.Label) + 2
 		// Explicitly use space characters to ensure the background color is visible
-		gap := bgStyle.Render(strings.Repeat(" ", gapWidth))
+		gap := bgStyle.Render(strutil.Repeat(" ", gapWidth))
 
 		headerLine := lipgloss.JoinHorizontal(lipgloss.Top,
 			bgStyle.Render("  "), // 2-char margin
@@ -697,7 +717,6 @@ func (m *ProgramBoxModel) renderHeaderUI(width int) string {
 				Render(appLine)
 			b.WriteString(wrapped + "\n")
 		}
-		b.WriteString(bgStyle.Width(width).Render("") + "\n")
 	}
 
 	// Progress Bar
@@ -725,22 +744,17 @@ func (m *ProgramBoxModel) renderHeaderUI(width int) string {
 // calculateHeaderHeight returns the estimated height of the header UI
 func (m *ProgramBoxModel) calculateHeaderHeight() int {
 	height := 0
-	if m.subtitle != "" {
-		height += 2 // Subtitle + \n
-	}
 	for _, t := range m.Tasks {
 		height += 1 // Label/Status
 		if t.Command != "" || len(t.Apps) > 0 {
 			height += 1 // App list
 		}
-		height += 1 // Spacing
 	}
 	if m.Percent > 0 {
-		height += 2 // Bar + \n
+		height += 1 // Bar (no extra \n)
 	}
-	if height > 0 {
-		height += 1 // Add 1 for extra safety/bottom margin
-	}
+	// Note: spacings are already added in the loop and per-section.
+	// We don't add extra safety line here as it creates gaps.
 	return height
 }
 
@@ -756,14 +770,6 @@ func (m *programBoxModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
 
-	cfg := config.LoadAppConfig()
-	shadowWidth := 0
-	shadowHeight := 0
-	if cfg.UI.Shadow {
-		shadowWidth = 2
-		shadowHeight = 1
-	}
-
 	commandHeight := 1
 	if m.command == "" {
 		commandHeight = 0
@@ -772,28 +778,35 @@ func (m *programBoxModel) SetSize(w, h int) {
 	headerHeight := m.calculateHeaderHeight()
 
 	// Width calculation:
-	// If maximized, fill available width (only subtract shadow/borders)
-	// If not maximized, use global margins (4)
-	marginW := 4
-	if m.maximized {
-		marginW = 0
-	}
-	vpWidth := m.width - marginW - shadowWidth - 4 // -4 for borders (2 outer + 2 inner)
+	// Account for internal overhead: outer dialog border (2) + inner viewport border (2) = 4
+	vpWidth := m.width - 4
 	if vpWidth < 20 {
 		vpWidth = 20
 	}
 	m.viewport.SetWidth(vpWidth)
 
 	// Height calculation:
-	// If maximized, fill available height (only subtract shadow/borders/chrome)
-	// If not maximized, use global margins (4)
-	marginH := 4
-	if m.maximized {
-		marginH = 0
+	// Find number of top-level content parts for JoinVertical
+	numParts := 2 // viewport box + buttons
+	if commandHeight > 0 {
+		numParts++
 	}
-	vpHeight := m.height - marginH - shadowHeight - 4 - commandHeight - headerHeight - 3 // -4 for borders, -3 for buttons
-	if vpHeight < 5 {
-		vpHeight = 5
+	if headerHeight > 0 {
+		numParts++
+	}
+
+	// Overhead:
+	// - outer dialog border (2)
+	// - inner viewport border (2)
+	// - separators between joined parts (numParts - 1)
+	// - header UI lines (headerHeight)
+	// - command line (commandHeight)
+	// - buttons at bottom (3)
+	overhead := 4 + (numParts - 1) + headerHeight + commandHeight + 3
+	vpHeight := m.height - overhead
+
+	if vpHeight < 2 {
+		vpHeight = 2
 	}
 	m.viewport.SetHeight(vpHeight)
 }
@@ -830,7 +843,7 @@ func RunProgramBox(ctx context.Context, title, subtitle string, task func(contex
 
 	// Initialize TUI if not already done
 	cfg := config.LoadAppConfig()
-	logger.Debug(ctx, "RunProgramBox config: Shadow=%v, ShadowLevel=%d, LineCharacters=%v", cfg.UI.Shadow, cfg.UI.ShadowLevel, cfg.UI.LineCharacters)
+
 	currentConfig = cfg // Set global config so styles like AddShadow work correctly
 	if err := theme.Load(cfg.UI.Theme); err == nil {
 		InitStyles(cfg)

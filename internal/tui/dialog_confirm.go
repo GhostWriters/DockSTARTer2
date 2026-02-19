@@ -129,7 +129,7 @@ func (m *confirmDialogModel) ViewString() string {
 	questionStyle := lipgloss.NewStyle().
 		Padding(1, 2)
 
-	// Apply semantic coloring (e.g. {{|Version|}})
+	// Apply semantic coloring
 	questionText := questionStyle.Render(console.Sprintf("%s", m.question))
 
 	// Calculate content width based on question text (with reasonable min/max)
@@ -154,8 +154,8 @@ func (m *confirmDialogModel) ViewString() string {
 		Padding(0, 1).
 		Render(content)
 
-	// Wrap in border with title embedded (matching menu style)
-	dialogWithTitle := RenderDialog(m.title, paddedContent, true)
+	// Wrap in border with title embedded (matching menu style) using confirm styling
+	dialogWithTitle := RenderDialogWithType(m.title, paddedContent, true, DialogTypeConfirm)
 
 	// Add shadow (matching menu style)
 	dialog := AddShadow(dialogWithTitle)
@@ -200,7 +200,7 @@ func PromptConfirm(title, question string, defaultYes bool) bool {
 	ch := make(chan bool)
 	dialog := newConfirmDialog(title, question, defaultYes)
 	dialog.onResult = func(r bool) tea.Msg {
-		return CloseDialogMsg{Result: r}
+		return SubDialogResultMsg{Result: r}
 	}
 
 	program.Send(SubDialogMsg{

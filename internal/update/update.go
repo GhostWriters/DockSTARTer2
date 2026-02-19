@@ -163,7 +163,7 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 	// Prompt user
 	if !console.QuestionPrompt(ctx, noticePrinter, question, "Y", yes) {
 		logger.Notice(ctx, noNotice)
-		return console.ErrUserAborted
+		return nil
 	}
 
 	// Execution
@@ -220,20 +220,19 @@ func ReExec(ctx context.Context, exePath string, args []string) error {
 
 // installUpdate downloads and installs the binary from the given URL.
 func installUpdate(ctx context.Context, assetURL string) error {
-	// 1. Get current executable path
+	// Get current executable path
 	exe, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("failed to get executable path: %w", err)
 	}
 
-	// 2. Create temp dir
+	// Create temp dir
 	tmpDir, err := os.MkdirTemp("", "ds2-update-*")
 	if err != nil {
 		return fmt.Errorf("failed to create temp dir: %w", err)
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// 3. Download
 	logger.Info(ctx, "Downloading update from {{|URL|}}%s{{[-]}}", assetURL)
 	resp, err := http.Get(assetURL)
 	if err != nil {
@@ -241,7 +240,6 @@ func installUpdate(ctx context.Context, assetURL string) error {
 	}
 	defer resp.Body.Close()
 
-	// 4. Extract
 	tmpExe := filepath.Join(tmpDir, filepath.Base(exe))
 
 	// Handle compressed formats
@@ -289,7 +287,7 @@ func installUpdate(ctx context.Context, assetURL string) error {
 		return fmt.Errorf("failed to chmod: %w", err)
 	}
 
-	// 5. Replace
+	// Replace current executable
 	// Try to replace the current executable
 
 	// We will try to mv tmpExe -> exe
@@ -512,10 +510,10 @@ func CheckCurrentStatus(ctx context.Context) error {
 
 // GetUpdateStatus checks for updates in the background without prompting.
 func GetUpdateStatus(ctx context.Context) (appUpdate bool, tmplUpdate bool) {
-	// 1. Check Application Updates
+	// Check Application Updates
 	appUpdate, appVer, appErr := checkAppUpdate(ctx)
 
-	// 2. Check Template Updates
+	// Check Template Updates
 	tmplUpdate, tmplVer, tmplErr := checkTmplUpdate(ctx)
 
 	// Set global state
@@ -543,7 +541,7 @@ func CheckUpdates(ctx context.Context) {
 		logger.Warn(ctx, "Failed to check for updates (network timeout or error).")
 	} else {
 		// Check succeeded - log update availability
-		// 1. Application Updates
+		// Check Application Updates
 		if AppUpdateAvailable {
 			msg := []string{
 				GetAppVersionDisplay(),
@@ -556,7 +554,7 @@ func CheckUpdates(ctx context.Context) {
 			logger.Info(ctx, GetAppVersionDisplay())
 		}
 
-		// 2. Template Updates
+		// Check Template Updates
 		if TmplUpdateAvailable {
 			tmplName := "DockSTARTer-Templates"
 			msg := []string{

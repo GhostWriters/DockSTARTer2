@@ -128,7 +128,11 @@ func Load(themeName string) error {
 	themePath := filepath.Join(themesDir, themeName+".ds2theme")
 
 	if _, err := os.Stat(themePath); os.IsNotExist(err) {
-		// If theme doesn't exist, we just stay with defaults
+		// If theme doesn't exist, try falling back to "DockSTARTer"
+		if themeName != "DockSTARTer" {
+			return Load("DockSTARTer")
+		}
+		// If even DockSTARTer doesn't exist, we stay with minimal defaults
 		return nil
 	}
 
@@ -229,58 +233,7 @@ func buildRawTag(fg, bg color.Color, styles StyleFlags) string {
 // Default initializes the Current ThemeConfig with standard DockSTARTer colors (Classic)
 // All colors are resolved through tcell to RGB/hex values for proper color profile support
 func Default() {
-	Current = ThemeConfig{
-		ScreenFG:                 parseColor("black"),
-		ScreenBG:                 parseColor("silver"),
-		DialogFG:                 parseColor("black"),
-		DialogBG:                 parseColor("cyan"),
-		BorderFG:                 parseColor("bright-white"),
-		BorderBG:                 parseColor("cyan"),
-		Border2FG:                parseColor("black"),
-		Border2BG:                parseColor("cyan"),
-		TitleFG:                  parseColor("black"),
-		TitleBG:                  parseColor("cyan"),
-		TitleHelpFG:              parseColor("black"),
-		TitleHelpBG:              parseColor("cyan"),
-		ShadowColor:              parseColor("black"),
-		ButtonActiveFG:           parseColor("bright-white"),
-		ButtonActiveBG:           parseColor("red"),
-		ButtonInactiveFG:         parseColor("black"),
-		ButtonInactiveBG:         parseColor("cyan"),
-		ItemSelectedFG:           parseColor("black"),
-		ItemSelectedBG:           parseColor("red"),
-		ItemFG:                   parseColor("black"),
-		ItemBG:                   parseColor("cyan"),
-		TagFG:                    parseColor("black"),
-		TagBG:                    parseColor("cyan"),
-		TagSelectedFG:            parseColor("black"),
-		TagSelectedBG:            parseColor("red"),
-		TagKeyFG:                 parseColor("red"),
-		TagKeyBG:                 parseColor("cyan"),
-		TagKeySelectedFG:         parseColor("black"),
-		TagKeySelectedBG:         parseColor("red"),
-		HelplineFG:               parseColor("black"),
-		HelplineBG:               parseColor("cyan"),
-		ProgramFG:                parseColor("bright-white"),
-		ProgramBG:                parseColor("black"),
-		LogBoxFG:                 parseColor("bright-white"),
-		LogBoxBG:                 parseColor("black"),
-		LogPanelFG:               parseColor("cyan"),
-		LogPanelBG:               parseColor("black"),
-		ProgressWaitingFG:        parseColor("gray"),
-		ProgressWaitingBG:        parseColor("cyan"),
-		ProgressInProgressFG:     parseColor("yellow"),
-		ProgressInProgressBG:     parseColor("cyan"),
-		ProgressCompletedFG:      parseColor("green"),
-		ProgressCompletedBG:      parseColor("cyan"),
-		VersionSelectedFG:        parseColor("bright-white"),
-		VersionSelectedBG:        parseColor("blue"),
-		ListAppFG:                parseColor("black"),
-		ListAppBG:                parseColor("cyan"),
-		ListAppUserDefinedFG:     parseColor("black"),
-		ListAppUserDefinedBG:     parseColor("cyan"),
-		ListAppUserDefinedStyles: StyleFlags{Bold: true},
-	}
+	Current = ThemeConfig{}
 	Apply()
 
 	// Register basic theme fallbacks to prevent literal tags if theme files fail to load
@@ -293,6 +246,7 @@ func Default() {
 	console.RegisterSemanticTagRaw("Theme_ApplicationFlagsSpace", console.StripDelimiters(console.ExpandTags(console.WrapSemantic("Theme_Screen"))))
 	console.RegisterSemanticTagRaw("Theme_ApplicationUpdate", "yellow::")
 	console.RegisterSemanticTagRaw("Theme_ApplicationUpdateBrackets", "-")
+	console.RegisterSemanticTagRaw("Theme_TitleQuestion", "black:yellow:B")
 	console.RegisterSemanticTagRaw("Theme_Hostname", "::B")
 
 }

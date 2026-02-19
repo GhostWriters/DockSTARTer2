@@ -105,15 +105,6 @@ func GetAvailableDialogSize(width, height int) (int, int) {
 		return 0, 0
 	}
 
-	// Calculate header height (1 line with padding)
-	headerHeight := 1
-
-	// Calculate separator height (1 line)
-	separatorHeight := 1
-
-	// Calculate helpline height (1 line)
-	helplineHeight := 1
-
 	// Account for shadow if enabled (2 chars wide on right, 1 line on bottom)
 	shadowWidth := 0
 	shadowHeight := 0
@@ -122,9 +113,12 @@ func GetAvailableDialogSize(width, height int) (int, int) {
 		shadowHeight = 1
 	}
 
-	// Available size for dialog content (including shadow and log panel)
-	availableWidth := width - shadowWidth
-	availableHeight := height - headerHeight - separatorHeight - helplineHeight - shadowHeight - logPanelExtraHeight
+	// Available size for dialog content (accounting for outer borders and margins)
+	// Remaining space for dialog: margin (2 per side) = 4
+	availableWidth := width - 4 - shadowWidth
+
+	// Remaining space for dialog: header/sep (2) + gap (1) + helpline (1) = 4
+	availableHeight := height - 4 - shadowHeight - logPanelExtraHeight
 
 	// Leave some margin
 	if availableHeight < 5 {

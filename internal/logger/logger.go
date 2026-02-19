@@ -197,7 +197,7 @@ func buildConsoleStyles() *charmlog.Styles {
 func NewLogger() *slog.Logger {
 	wStderr := os.Stderr
 
-	// 1. Configure Console Handler using charmbracelet/log.
+	// Configure Console Handler using charmbracelet/log.
 	// Color support is auto-detected from the output writer (TTY vs non-TTY).
 	consoleLogger = charmlog.NewWithOptions(wStderr, charmlog.Options{
 		Level:           charmlog.Level(LevelVar.Level()),
@@ -207,7 +207,7 @@ func NewLogger() *slog.Logger {
 	consoleLogger.SetStyles(buildConsoleStyles())
 	consoleHandler := &TagProcessorHandler{base: consoleLogger, mode: "ansi"}
 
-	// 2. Configure File Handler (No Color)
+	// Configure File Handler (No Color)
 	stateDir := paths.GetStateDir()
 	if err := os.MkdirAll(stateDir, 0755); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create state directory: %v\n", err)
@@ -285,14 +285,14 @@ func (h *TUIHandler) Handle(ctx context.Context, r slog.Record) error {
 	tuiMsg := timeLevel + console.ForTUI(r.Message)
 
 	if h.global {
-		// 1. Send to global log channel for TUI log panel
+		// Send to global log channel for TUI log panel
 		select {
 		case logLineCh <- tuiMsg:
 		default:
 			// Drop if full to prevent blocking
 		}
 	} else {
-		// 2. Output to specific TUI writer if present in context (LOCAL command output)
+		// Output to specific TUI writer if present in context (LOCAL command output)
 		if w, ok := ctx.Value(console.TUIWriterKey).(io.Writer); ok {
 			fmt.Fprintln(w, tuiMsg)
 		}
@@ -365,10 +365,10 @@ func (h *TagProcessorHandler) Handle(ctx context.Context, r slog.Record) error {
 		return nil
 	}
 
-	// 1. Resolve message (it contains raw tags)
+	// Resolve message (it contains raw tags)
 	msg := r.Message
 
-	// 2. Process based on mode
+	// Process based on mode
 	switch h.mode {
 	case "ansi":
 		msg = console.ToANSI(msg)
@@ -376,7 +376,7 @@ func (h *TagProcessorHandler) Handle(ctx context.Context, r slog.Record) error {
 		msg = console.Strip(msg)
 	}
 
-	// 3. Create new record with processed message
+	// Create new record with processed message
 	newR := slog.NewRecord(r.Time, r.Level, msg, r.PC)
 	r.Attrs(func(a slog.Attr) bool {
 		newR.AddAttrs(a)
@@ -430,13 +430,13 @@ func Display(ctx context.Context, msg any, args ...any) {
 
 	lines := strings.Split(msgStr, "\n")
 	for _, line := range lines {
-		// 1. Output to TUI if writer is in context
+		// Output to TUI if writer is in context
 		if w, ok := ctx.Value(console.TUIWriterKey).(io.Writer); ok {
 			// Use ForTUI to keep styles while removing ANSI
 			fmt.Fprintln(w, console.ForTUI(line))
 		}
 
-		// 2. Output directly to terminal (stdout)
+		// Output directly to terminal (stdout)
 		// IMPORTANT: Always use ToANSI for stdout to get ANSI colors, regardless of TUI mode
 		// Suppress based on TUIMode
 		if !TUIMode {
@@ -488,12 +488,12 @@ func FatalWithStack(ctx context.Context, msg any, args ...any) {
 	// Capture time once for all lines
 	now := time.Now()
 
-	// 1. Gather Stack Frames
+	// Gather Stack Frames
 	pc := make([]uintptr, 32)
 	n := runtime.Callers(1, pc) // Skip only runtime.Callers, include Fatal
 	frames := runtime.CallersFrames(pc[:n])
 
-	// 2. Prepare Log Components
+	// Prepare Log Components
 
 	// A. System Info
 	var infoLines []string
@@ -568,7 +568,7 @@ func FatalWithStack(ctx context.Context, msg any, args ...any) {
 		indent += "  "
 	}
 
-	// 3. Assemble Final Output
+	// Assemble Final Output
 	// This provides a visual representation of the final log block structure
 	output := []any{
 		"{{|TraceHeader|}}### BEGIN SYSTEM INFORMATION AND STACK TRACE ###",
@@ -584,10 +584,10 @@ func FatalWithStack(ctx context.Context, msg any, args ...any) {
 		"and appended to {{[-]}}'{{|File|}}" + filepath.Join(paths.GetStateDir(), strings.ToLower(version.ApplicationName)+".log") + "{{[-]}}'{{|FatalFooter|}}.",
 	}
 
-	// 4. Log Everything
+	// Log Everything
 	logAt(ctx, now, LevelFatal, output, args...)
 
-	// 5. Write to fatal log file
+	// Write to fatal log file
 	writeFatalLog(ctx, now, output, args...)
 
 	panic(FatalError{})

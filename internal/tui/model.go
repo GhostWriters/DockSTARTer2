@@ -59,6 +59,9 @@ type (
 	// QuitMsg requests application exit
 	QuitMsg struct{}
 
+	// TemplateUpdateSuccessMsg indicates that templates have been successfully updated
+	TemplateUpdateSuccessMsg struct{}
+
 	// FinalizeSelectionMsg combines navigation and dialog display for atomic transitions
 	FinalizeSelectionMsg struct {
 		Dialog tea.Model
@@ -175,12 +178,14 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		backdropMsg := tea.WindowSizeMsg{Width: m.width, Height: m.backdropHeight()}
 		backdropModel, _ := m.backdrop.Update(backdropMsg)
 		m.backdrop = backdropModel.(BackdropModel)
+
+		caW, caH := m.getContentArea()
 		if m.activeScreen != nil {
-			m.activeScreen.SetSize(m.width, m.contentAreaHeight())
+			m.activeScreen.SetSize(caW, caH)
 		}
 		if m.dialog != nil {
 			if sizable, ok := m.dialog.(interface{ SetSize(int, int) }); ok {
-				sizable.SetSize(m.width, m.contentAreaHeight())
+				sizable.SetSize(caW, caH)
 			}
 		}
 		return m, cmd
@@ -220,9 +225,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.setLogPanelFocus(false)
 				// setLogPanelFocus(false) refocuses screen/dialog. We need to unfocus them for Header focus.
 				if m.dialog != nil {
+					// Dialog open: Skip header, return focus to dialog
 					if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
-						focusable.SetFocused(false)
+						focusable.SetFocused(true)
 					}
+					return m, nil
 				} else if m.activeScreen != nil {
 					if focusable, ok := m.activeScreen.(interface{ SetFocused(bool) }); ok {
 						focusable.SetFocused(false)
@@ -269,10 +276,15 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				// From screen to header (tmpl)
 				if m.dialog != nil {
+					// Dialog open: Skip header, go to LogPanel (reverse cycle from Dialog is LogPanel)
 					if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
 						focusable.SetFocused(false)
 					}
-				} else if m.activeScreen != nil {
+					m.setLogPanelFocus(true)
+					return m, nil
+				}
+
+				if m.activeScreen != nil {
 					if focusable, ok := m.activeScreen.(interface{ SetFocused(bool) }); ok {
 						focusable.SetFocused(false)
 					}
@@ -283,7 +295,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Arrow Key Navigation within Header
-		if m.backdrop.header.GetFocus() != HeaderFocusNone {
+		if m.dialog == nil && m.backdrop.header.GetFocus() != HeaderFocusNone {
 			if key.Matches(msg, Keys.Right) {
 				if m.backdrop.header.GetFocus() == HeaderFocusApp {
 					m.backdrop.header.SetFocus(HeaderFocusTmpl)
@@ -301,11 +313,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Escape to return to screen
 			if key.Matches(msg, Keys.Esc) {
 				m.backdrop.header.SetFocus(HeaderFocusNone)
-				if m.dialog != nil {
-					if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
-						focusable.SetFocused(true)
-					}
-				} else if m.activeScreen != nil {
+				if m.activeScreen != nil {
 					if focusable, ok := m.activeScreen.(interface{ SetFocused(bool) }); ok {
 						focusable.SetFocused(true)
 					}
@@ -315,7 +323,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Handle Enter on focused header items
-		if key.Matches(msg, Keys.Enter) {
+		if m.dialog == nil && key.Matches(msg, Keys.Enter) {
 			switch m.backdrop.header.GetFocus() {
 			case HeaderFocusApp:
 				return m, TriggerAppUpdate()
@@ -384,9 +392,40 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// for background elements IF the dialog didn't consume it.
 		}
 
+		// Handle Drag Resizing (Log Panel)
+		// If log panel is dragging, it needs to receive mouse events even if outside its zone
+		if m.logPanel.isDragging {
+			updated, cmd := m.logPanel.Update(msg)
+			m.logPanel = updated.(LogPanelModel)
+
+			// If height changed, we need to resize other components
+			// Resize backdrop, screen, and dialog to match new panel height
+			backdropMsg := tea.WindowSizeMsg{Width: m.width, Height: m.backdropHeight()}
+			backdropModel, _ := m.backdrop.Update(backdropMsg)
+			m.backdrop = backdropModel.(BackdropModel)
+
+			caW, caH := m.getContentArea()
+			if m.activeScreen != nil {
+				m.activeScreen.SetSize(caW, caH)
+			}
+			if m.dialog != nil {
+				if sizable, ok := m.dialog.(interface{ SetSize(int, int) }); ok {
+					sizable.SetSize(caW, caH)
+				}
+			}
+			return m, cmd
+		}
+
 		// Handle specific global mouse interactions (Header, Log Panel)
 		if click, ok := msg.(tea.MouseClickMsg); ok && click.Button == tea.MouseLeft {
-			// Check log panel clicks (top level UI elements)
+			// Check log panel RESIZE clicks (top level UI elements)
+			if zi := zone.Get(logResizeZoneID); zi != nil && zi.InBounds(click) {
+				updated, cmd := m.logPanel.Update(click) // Pass click to start drag
+				m.logPanel = updated.(LogPanelModel)
+				return m, cmd
+			}
+
+			// Check log panel TOGGLE clicks
 			if zi := zone.Get(logPanelZoneID); zi != nil && zi.InBounds(click) {
 				return m, func() tea.Msg { return toggleLogPanelMsg{} }
 			}
@@ -400,30 +439,29 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			// Check for header clicks (backdrop elements)
-			if handled, cmd := m.backdrop.header.HandleMouse(click); handled {
-				// If header took focus, ensure we unfocus screen/logpanel
-				if m.backdrop.header.GetFocus() != HeaderFocusNone {
-					m.setLogPanelFocus(false)
-					if m.dialog != nil {
-						if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
-							focusable.SetFocused(false)
-						}
-					} else if m.activeScreen != nil {
-						if focusable, ok := m.activeScreen.(interface{ SetFocused(bool) }); ok {
-							focusable.SetFocused(false)
+			// Only allow header interaction if NO dialog is open
+			if m.dialog == nil {
+				if handled, cmd := m.backdrop.header.HandleMouse(click); handled {
+					// If header took focus, ensure we unfocus screen/logpanel
+					if m.backdrop.header.GetFocus() != HeaderFocusNone {
+						m.setLogPanelFocus(false)
+						if m.activeScreen != nil {
+							if focusable, ok := m.activeScreen.(interface{ SetFocused(bool) }); ok {
+								focusable.SetFocused(false)
+							}
 						}
 					}
-				}
 
-				// Trigger update on click
-				if zi := zone.Get(ZoneAppVersion); zi != nil && zi.InBounds(click) {
-					return m, TriggerAppUpdate()
-				}
-				if zi := zone.Get(ZoneTmplVersion); zi != nil && zi.InBounds(click) {
-					return m, TriggerTemplateUpdate()
-				}
+					// Trigger update on click
+					if zi := zone.Get(ZoneAppVersion); zi != nil && zi.InBounds(click) {
+						return m, TriggerAppUpdate()
+					}
+					if zi := zone.Get(ZoneTmplVersion); zi != nil && zi.InBounds(click) {
+						return m, TriggerTemplateUpdate()
+					}
 
-				return m, cmd
+					return m, cmd
+				}
 			}
 		}
 
@@ -439,17 +477,18 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// All other components use backdropHeight (terminal minus log panel strip)
 		backdropSizeMsg := tea.WindowSizeMsg{Width: m.width, Height: m.backdropHeight()}
-		contentAreaHeight := m.contentAreaHeight()
-		contentSizeMsg := tea.WindowSizeMsg{Width: m.width, Height: contentAreaHeight}
 
 		// Update backdrop
 		backdropModel, _ := m.backdrop.Update(backdropSizeMsg)
 		m.backdrop = backdropModel.(BackdropModel)
 
+		caW, caH := m.getContentArea()
+		contentSizeMsg := tea.WindowSizeMsg{Width: caW, Height: caH}
+
 		// Update dialog or active screen with content area dimensions
 		if m.dialog != nil {
 			if sizable, ok := m.dialog.(interface{ SetSize(int, int) }); ok {
-				sizable.SetSize(m.width, contentAreaHeight)
+				sizable.SetSize(caW, caH)
 			}
 			var dialogCmd tea.Cmd
 			m.dialog, dialogCmd = m.dialog.Update(contentSizeMsg)
@@ -457,7 +496,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, dialogCmd)
 			}
 		} else if m.activeScreen != nil {
-			m.activeScreen.SetSize(m.width, contentAreaHeight)
+			m.activeScreen.SetSize(caW, caH)
 			updated, screenCmd := m.activeScreen.Update(contentSizeMsg)
 			if screen, ok := updated.(ScreenModel); ok {
 				m.activeScreen = screen
@@ -477,8 +516,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.activeScreen = msg.Screen
 		if m.activeScreen != nil {
 			CurrentPageName = m.activeScreen.MenuName()
-			contentAreaHeight := m.contentAreaHeight()
-			m.activeScreen.SetSize(m.width, contentAreaHeight)
+			caW, caH := m.getContentArea()
+			m.activeScreen.SetSize(caW, caH)
 			m.backdrop.SetHelpText(m.activeScreen.HelpText())
 			cmds = append(cmds, m.activeScreen.Init())
 		}
@@ -491,8 +530,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.screenStack = m.screenStack[:len(m.screenStack)-1]
 			if m.activeScreen != nil {
 				CurrentPageName = m.activeScreen.MenuName()
-				contentAreaHeight := m.contentAreaHeight()
-				m.activeScreen.SetSize(m.width, contentAreaHeight)
+				caW, caH := m.getContentArea()
+				m.activeScreen.SetSize(caW, caH)
 				m.backdrop.SetHelpText(m.activeScreen.HelpText())
 			}
 		} else {
@@ -516,9 +555,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.dialog = msg.Dialog
 		if m.dialog != nil {
-			contentAreaHeight := m.contentAreaHeight()
+			caW, caH := m.getContentArea()
 			if sizable, ok := m.dialog.(interface{ SetSize(int, int) }); ok {
-				sizable.SetSize(m.width, contentAreaHeight)
+				sizable.SetSize(caW, caH)
 			}
 			// Explicitly focus the new dialog
 			if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
@@ -536,9 +575,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Show it as the main dialog (top of stack)
 		dialog := newConfirmDialog(msg.Title, msg.Question, msg.DefaultYes)
-		contentAreaHeight := m.contentAreaHeight()
+		caW, caH := m.getContentArea()
 		if sizable, ok := interface{}(dialog).(interface{ SetSize(int, int) }); ok {
-			sizable.SetSize(m.width, contentAreaHeight)
+			sizable.SetSize(caW, caH)
 		}
 		m.dialog = dialog
 		// Explicitly focus the new confirmation dialog
@@ -556,9 +595,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Show message dialog as the main dialog
 		dialog := newMessageDialog(msg.Title, msg.Message, msg.Type)
-		contentAreaHeight := m.contentAreaHeight()
+		caW, caH := m.getContentArea()
 		if sizable, ok := interface{}(dialog).(interface{ SetSize(int, int) }); ok {
-			sizable.SetSize(m.width, contentAreaHeight)
+			sizable.SetSize(caW, caH)
 		}
 		m.dialog = dialog
 		if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
@@ -578,9 +617,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Show the new dialog
 		m.dialog = msg.Dialog
 		if m.dialog != nil {
-			contentAreaHeight := m.contentAreaHeight()
+			caW, caH := m.getContentArea()
 			if sizable, ok := m.dialog.(interface{ SetSize(int, int) }); ok {
-				sizable.SetSize(m.width, contentAreaHeight)
+				sizable.SetSize(caW, caH)
 			}
 			if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
 				focusable.SetFocused(true)
@@ -609,9 +648,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Re-focus and re-size the popped dialog
 			if m.dialog != nil {
-				contentAreaHeight := m.contentAreaHeight()
+				caW, caH := m.getContentArea()
 				if sizable, ok := m.dialog.(interface{ SetSize(int, int) }); ok {
-					sizable.SetSize(m.width, contentAreaHeight)
+					sizable.SetSize(caW, caH)
 				}
 				if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
 					focusable.SetFocused(true)
@@ -626,6 +665,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.activeScreen == nil {
 			return m, tea.Quit
 		}
+
+		// Ensure header is unfocused when returning to screen
+		m.backdrop.header.SetFocus(HeaderFocusNone)
 		return m, nil
 
 	case UpdateHeaderMsg:
@@ -637,11 +679,21 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	// Update backdrop
-	var backdropCmd tea.Cmd
-	backdropModel, backdropCmd := m.backdrop.Update(msg)
-	m.backdrop = backdropModel.(BackdropModel)
-	if backdropCmd != nil {
-		cmds = append(cmds, backdropCmd)
+	// If a dialog is open, filter out key events to prevent background interaction (like re-triggering header actions)
+	backdropMsg := msg
+	if m.dialog != nil {
+		if _, ok := msg.(tea.KeyPressMsg); ok {
+			backdropMsg = nil
+		}
+	}
+
+	if backdropMsg != nil {
+		var backdropCmd tea.Cmd
+		backdropModel, backdropCmd := m.backdrop.Update(backdropMsg)
+		m.backdrop = backdropModel.(BackdropModel)
+		if backdropCmd != nil {
+			cmds = append(cmds, backdropCmd)
+		}
 	}
 
 	// Update dialog if present (ALREADY HANDLED for MouseMsg above)
@@ -702,10 +754,9 @@ func (m AppModel) backdropHeight() int {
 	return m.height - m.logPanel.Height()
 }
 
-// contentAreaHeight returns the height available for screens and dialogs.
-// Subtracts header (1) + separator (1) + helpline (1) + spacing (1) from the backdrop height.
-func (m AppModel) contentAreaHeight() int {
-	return m.backdropHeight() - 4
+// getContentArea returns the dimensions available for screens and dialogs.
+func (m AppModel) getContentArea() (int, int) {
+	return m.backdrop.GetContentArea()
 }
 
 // ViewStringer is an interface for models that provide string content for compositing
@@ -725,12 +776,14 @@ func (m AppModel) View() tea.View {
 	contentYOffset := 2
 
 	// Layer 0: Backdrop
-	output := m.backdrop.ViewString()
+	backdropContent := m.backdrop.ViewString()
 	layers := []LayerSpec{
-		{Content: output, X: 0, Y: 0, Z: 0},
+		{Content: backdropContent, X: 0, Y: 0, Z: 0},
 	}
-	bgWidth := lipgloss.Width(output)
-	bgHeight := lipgloss.Height(output)
+	bgWidth := m.width
+
+	// Content area boundaries (accounting for header/sep, shadow, and gap)
+	_, caH := m.getContentArea()
 
 	// Layer 1: Active Screen
 	if m.activeScreen != nil {
@@ -741,9 +794,13 @@ func (m AppModel) View() tea.View {
 		if screenContent != "" {
 			fgWidth := lipgloss.Width(screenContent)
 			fgHeight := lipgloss.Height(screenContent)
+
+			// Default: center horizontally, center vertically within content area
 			x := (bgWidth - fgWidth) / 2
-			y := (bgHeight - fgHeight) / 2 // Default center
+			y := contentYOffset + (caH-fgHeight)/2
+
 			if m.activeScreen.IsMaximized() {
+				x = 2
 				y = contentYOffset
 			}
 			layers = append(layers, LayerSpec{Content: screenContent, X: x, Y: y, Z: 1})
@@ -763,9 +820,13 @@ func (m AppModel) View() tea.View {
 			}
 			fgWidth := lipgloss.Width(dialogContent)
 			fgHeight := lipgloss.Height(dialogContent)
+
+			// Default: center horizontally, center vertically within content area
 			x := (bgWidth - fgWidth) / 2
-			y := (bgHeight - fgHeight) / 2 // Default center
+			y := contentYOffset + (caH-fgHeight)/2
+
 			if maximized {
+				x = 2
 				y = contentYOffset
 			}
 			layers = append(layers, LayerSpec{Content: dialogContent, X: x, Y: y, Z: 2})
@@ -773,17 +834,17 @@ func (m AppModel) View() tea.View {
 	}
 
 	// Composite all layers
-	output = MultiOverlay(layers...)
+	rendered := MultiOverlay(layers...)
 
 	// Layer 3: Log panel — appended below the backdrop (below helpline)
 	var logPanelContent string
 	if vs, ok := interface{}(m.logPanel).(ViewStringer); ok {
 		logPanelContent = vs.ViewString()
 	}
-	output = lipgloss.JoinVertical(lipgloss.Left, output, logPanelContent)
+	rendered = lipgloss.JoinVertical(lipgloss.Left, rendered, logPanelContent)
 
 	// Scan zones at the root level
-	v := tea.NewView(zone.Scan(output))
+	v := tea.NewView(zone.Scan(rendered))
 	v.MouseMode = tea.MouseModeAllMotion
 	v.AltScreen = true
 	return v

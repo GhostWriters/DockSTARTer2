@@ -26,8 +26,31 @@ type TriggerSaveMsg struct{}
 
 // NewAppSelectionScreen creates a new AppSelectionScreen
 func NewAppSelectionScreen(conf config.AppConfig) *AppSelectionScreen {
+	menu := tui.NewMenuModel(
+		"app_selection",
+		"Select Applications",
+		"Choose which apps you would like to install:\nUse {{|Theme_KeyCap|}}[up]{{[-]}}, {{|Theme_KeyCap|}}[down]{{[-]}}, and {{|Theme_KeyCap|}}[space]{{[-]}} to select apps, and {{|Theme_KeyCap|}}[tab]{{[-]}} to switch to the buttons at the bottom.",
+		nil, // items will be set by refreshItems
+		navigateBack(),
+	)
+	menu.SetMaximized(true)
+	menu.SetButtonLabels("Done", "Cancel", "")
+	menu.SetShowExit(false)
+	menu.SetEnterAction(func() tea.Msg { return TriggerSaveMsg{} })
+	menu.SetCheckboxMode(true) // Enable checkboxes for app selection
+
+	s := &AppSelectionScreen{
+		menu: menu,
+		conf: conf,
+	}
+	s.refreshItems()
+	return s
+}
+
+// refreshItems re-fetches applications and updates the menu items
+func (s *AppSelectionScreen) refreshItems() {
 	ctx := context.Background()
-	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
+	envFile := filepath.Join(s.conf.ComposeDir, constants.EnvFileName)
 
 	// Fetch applications
 	nonDeprecated, _ := appenv.ListNonDeprecatedApps(ctx)
@@ -48,7 +71,7 @@ func NewAppSelectionScreen(conf config.AppConfig) *AppSelectionScreen {
 	}
 	slices.Sort(allApps)
 
-	enabledApps, _ := appenv.ListEnabledApps(conf)
+	enabledApps, _ := appenv.ListEnabledApps(s.conf)
 	enabledMap := make(map[string]bool)
 	for _, app := range enabledApps {
 		enabledMap[app] = true
@@ -61,10 +84,12 @@ func NewAppSelectionScreen(conf config.AppConfig) *AppSelectionScreen {
 	for _, app := range allApps {
 		letter := strings.ToUpper(app[:1])
 		if letter != lastLetter {
-			items = append(items, tui.MenuItem{
-				Tag:         "", // Blank line separator
-				IsSeparator: true,
-			})
+			if lastLetter != "" {
+				items = append(items, tui.MenuItem{
+					Tag:         "", // Blank line separator
+					IsSeparator: true,
+				})
+			}
 			lastLetter = letter
 		}
 
@@ -89,23 +114,7 @@ func NewAppSelectionScreen(conf config.AppConfig) *AppSelectionScreen {
 		})
 	}
 
-	menu := tui.NewMenuModel(
-		"app_selection",
-		"Select Applications",
-		"Choose which apps you would like to install:\nUse {{|Theme_KeyCap|}}[up]{{[-]}}, {{|Theme_KeyCap|}}[down]{{[-]}}, and {{|Theme_KeyCap|}}[space]{{[-]}} to select apps, and {{|Theme_KeyCap|}}[tab]{{[-]}} to switch to the buttons at the bottom.",
-		items,
-		navigateBack(),
-	)
-	menu.SetMaximized(true)
-	menu.SetButtonLabels("Done", "Cancel", "")
-	menu.SetShowExit(false)
-	menu.SetEnterAction(func() tea.Msg { return TriggerSaveMsg{} })
-	menu.SetCheckboxMode(true) // Enable checkboxes for app selection
-
-	return &AppSelectionScreen{
-		menu: menu,
-		conf: conf,
-	}
+	s.menu.SetItems(items)
 }
 
 // Init implements tea.Model
@@ -115,17 +124,20 @@ func (s *AppSelectionScreen) Init() tea.Cmd {
 
 // Update implements tea.Model
 func (s *AppSelectionScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg.(type) {
+	case tui.TemplateUpdateSuccessMsg:
+		s.refreshItems()
+		return s, nil
+	case TriggerSaveMsg:
+		return s, s.handleSave()
+	}
+
 	// Handle internal menu updates
 	var cmd tea.Cmd
 	var newMenu tea.Model
 	newMenu, cmd = s.menu.Update(msg)
 	if menu, ok := newMenu.(tui.MenuModel); ok {
 		s.menu = menu
-	}
-
-	// Handle save trigger from menu override
-	if _, ok := msg.(TriggerSaveMsg); ok {
-		return s, s.handleSave()
 	}
 
 	return s, cmd

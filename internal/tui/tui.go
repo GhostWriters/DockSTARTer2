@@ -2,7 +2,6 @@ package tui
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -19,7 +18,7 @@ import (
 
 var (
 	// ErrUserAborted is returned when the user cancels an operation
-	ErrUserAborted = errors.New("user aborted")
+	ErrUserAborted = console.ErrUserAborted
 
 	// program holds the running Bubble Tea program
 	program *tea.Program
@@ -259,7 +258,13 @@ func TriggerAppUpdate() tea.Cmd {
 				reExecArgs = append(reExecArgs, CurrentPageName)
 			}
 			reExecArgs = append(reExecArgs, console.RestArgs...)
-			return update.SelfUpdate(ctx, force, yes, "", reExecArgs)
+			err := update.SelfUpdate(ctx, force, yes, "", reExecArgs)
+			if err == nil {
+				// Refresh update status and UI
+				update.GetUpdateStatus(ctx)
+				Send(UpdateHeaderMsg{})
+			}
+			return err
 		}
 
 		dialog := NewProgramBoxModel("{{|Theme_TitleSuccess|}}Updating App{{[-]}}", "Checking for app updates...", "")
@@ -281,7 +286,14 @@ func TriggerTemplateUpdate() tea.Cmd {
 			force := console.Force()
 			yes := console.AssumeYes()
 
-			return update.UpdateTemplates(ctx, force, yes, "")
+			err := update.UpdateTemplates(ctx, force, yes, "")
+			if err == nil {
+				// Refresh update status and UI
+				update.GetUpdateStatus(ctx)
+				Send(UpdateHeaderMsg{})
+				Send(TemplateUpdateSuccessMsg{})
+			}
+			return err
 		}
 
 		dialog := NewProgramBoxModel("{{|Theme_TitleSuccess|}}Updating Templates{{[-]}}", "Checking for template updates...", "")
@@ -315,7 +327,14 @@ func TriggerUpdate() tea.Cmd {
 				reExecArgs = append(reExecArgs, CurrentPageName)
 			}
 			reExecArgs = append(reExecArgs, console.RestArgs...)
-			return update.SelfUpdate(ctx, force, yes, "", reExecArgs)
+			err := update.SelfUpdate(ctx, force, yes, "", reExecArgs)
+			if err == nil {
+				// Refresh update status and UI
+				update.GetUpdateStatus(ctx)
+				Send(UpdateHeaderMsg{})
+				Send(TemplateUpdateSuccessMsg{})
+			}
+			return err
 		}
 
 		dialog := NewProgramBoxModel("{{|Theme_TitleSuccess|}}Updating DockSTARTer2{{[-]}}", "Checking for updates...", "")

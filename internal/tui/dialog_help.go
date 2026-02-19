@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"DockSTARTer2/internal/strutil"
 	"strings"
 
 	"charm.land/bubbles/v2/help"
@@ -99,7 +100,7 @@ func (m *helpDialogModel) ViewString() string {
 	for i, line := range lines {
 		// Indent 1 space + content + pad to max width + 1 space trailing
 		lineWidth := lipgloss.Width(line)
-		paddedLine := " " + line + strings.Repeat(" ", maxLineWidth-lineWidth) + " "
+		paddedLine := " " + line + strutil.Repeat(" ", maxLineWidth-lineWidth) + " "
 		lines[i] = MaintainBackground(bgStyle.Render(paddedLine), bgStyle)
 	}
 	content = strings.Join(lines, "\n")

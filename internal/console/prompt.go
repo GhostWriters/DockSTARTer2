@@ -34,7 +34,7 @@ func QuestionPrompt(ctx context.Context, printer Printer, question string, defau
 	}
 
 	// Check if we should use TUI for this prompt
-	if IsTUI(ctx) && TUIConfirm != nil {
+	if TUIConfirm != nil {
 		defaultYes := strings.EqualFold(defaultValue, "y")
 		answer := TUIConfirm("Confirmation", question, defaultYes)
 		if answer {

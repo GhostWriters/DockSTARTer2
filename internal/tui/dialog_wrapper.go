@@ -4,7 +4,6 @@ import (
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/theme"
 	"fmt"
-	"os"
 
 	tea "charm.land/bubbletea/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
@@ -70,8 +69,7 @@ func (m DialogWithBackdrop[T]) Dialog() T {
 }
 
 func (m DialogWithBackdrop[T]) Init() tea.Cmd {
-	// DEBUG
-	fmt.Fprintln(os.Stderr, "DEBUG: DialogWithBackdrop.Init called")
+
 	return tea.Batch(m.backdrop.Init(), m.dialog.Init())
 }
 

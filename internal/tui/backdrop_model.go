@@ -88,22 +88,23 @@ func (m BackdropModel) ViewString() string {
 	helplineHeight := lipgloss.Height(helplineView)
 
 	contentHeight := m.height - 2 - helplineHeight // -2 for header and separator lines
-
 	if contentHeight < 0 {
 		contentHeight = 0
 	}
 
-	// Fill middle space with screen background (matches AppModel.View())
-	middleSpace := lipgloss.NewStyle().
+	// Fill middle space with screen background
+	// We build it row by row to ensure each line is exactly m.width wide with background color
+	bgStyle := lipgloss.NewStyle().
 		Width(m.width).
-		Height(contentHeight).
-		Background(styles.Screen.GetBackground()).
-		Render("")
+		Background(styles.Screen.GetBackground())
+	fillerRow := bgStyle.Render(strutil.Repeat(" ", m.width))
 
-	b.WriteString(middleSpace)
+	for i := 0; i < contentHeight; i++ {
+		b.WriteString(fillerRow)
+		b.WriteString("\n")
+	}
 
 	// Helpline (matches AppModel.View())
-	b.WriteString("\n")
 	b.WriteString(helplineView)
 
 	return b.String()
@@ -122,26 +123,19 @@ func (m BackdropModel) GetContentArea() (width, height int) {
 		return 0, 0
 	}
 
-	// Calculate header height (1 line with padding)
-	headerHeight := 1
-
-	// Calculate separator height (1 line)
-	separatorHeight := 1
-
-	// Calculate helpline height (1 line)
-	helplineHeight := 1
-
 	// Account for shadow if enabled (2 chars wide on right, 1 line on bottom)
 	shadowWidth := 0
-	shadowHeight := 0
 	if currentConfig.UI.Shadow {
 		shadowWidth = 2
-		shadowHeight = 1
 	}
 
-	// Available content area (accounting for shadow)
-	contentWidth := m.width - shadowWidth
-	contentHeight := m.height - headerHeight - separatorHeight - helplineHeight - shadowHeight
+	// Available content area (accounting for shadow and margins)
+	// Remaining space for dialog: margin (2 per side) = 4
+	contentWidth := m.width - 4 - shadowWidth
+
+	// Remaining space for dialog: header/sep (2) + gap (1) + helpline (1) + shadow (1) = 5
+	contentHeight := m.height - 5
+
 	if contentHeight < 5 {
 		contentHeight = 5
 	}
