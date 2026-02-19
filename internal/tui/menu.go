@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"DockSTARTer2/internal/strutil"
 	"fmt"
 	"io"
 	"strings"
@@ -64,7 +65,7 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 		if menuItem.Tag != "" {
 			content = SemanticStyle("{{|Theme_TagKey|}}").Render(menuItem.Tag)
 		} else {
-			content = strings.Repeat("─", m.Width()-2)
+			content = strutil.Repeat("─", m.Width()-2)
 		}
 		fmt.Fprint(w, lineStyle.Render(content))
 		return
@@ -100,7 +101,7 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 	}
 
 	tagWidth := lipgloss.Width(menuItem.Tag)
-	paddingSpaces := strings.Repeat(" ", d.maxTagLen-tagWidth+2)
+	paddingSpaces := strutil.Repeat(" ", d.maxTagLen-tagWidth+2)
 
 	availableWidth := m.Width() - (d.maxTagLen + 2) - 2
 	if availableWidth < 0 {
@@ -115,7 +116,7 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 
 	actualWidth := lipgloss.Width(line)
 	if actualWidth < m.Width()-2 {
-		line += neutralStyle.Render(strings.Repeat(" ", m.Width()-2-actualWidth))
+		line += neutralStyle.Render(strutil.Repeat(" ", m.Width()-2-actualWidth))
 	}
 
 	lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(m.Width())
@@ -152,7 +153,7 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 		if menuItem.Tag != "" {
 			content = SemanticStyle("{{|Theme_TagKey|}}").Render(menuItem.Tag)
 		} else {
-			content = strings.Repeat("─", m.Width()-2)
+			content = strutil.Repeat("─", ma	x(0, m.Width()-2))
 		}
 		fmt.Fprint(w, lineStyle.Render(content))
 		return
@@ -208,7 +209,7 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 		tagWidth += 4
 	}
 	tagWidth += lipgloss.Width(menuItem.Tag)
-	paddingSpaces := strings.Repeat(" ", d.maxTagLen-tagWidth+2)
+	paddingSpaces := strutil.Repeat(" ", d.maxTagLen-tagWidth+2)
 
 	availableWidth := m.Width() - (d.maxTagLen + 2) - 2
 	if availableWidth < 0 {
@@ -223,7 +224,7 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 
 	actualWidth := lipgloss.Width(line)
 	if actualWidth < m.Width()-2 {
-		line += neutralStyle.Render(strings.Repeat(" ", m.Width()-2-actualWidth))
+		line += neutralStyle.Render(strutil.Repeat(" ", m.Width()-2-actualWidth))
 	}
 
 	lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(m.Width())
@@ -529,6 +530,36 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
+	}
+
+	// Handle mouse wheel scrolling
+	if mwMsg, ok := msg.(tea.MouseWheelMsg); ok {
+		if mwMsg.Button == tea.MouseWheelUp {
+			m.focusedItem = FocusList
+			m.list.CursorUp()
+			for m.items[m.list.Index()].IsSeparator {
+				m.list.CursorUp()
+				if m.list.Index() == 0 && m.items[0].IsSeparator {
+					break
+				}
+			}
+			m.cursor = m.list.Index()
+			menuSelectedIndices[m.id] = m.cursor
+			return m, nil
+		}
+		if mwMsg.Button == tea.MouseWheelDown {
+			m.focusedItem = FocusList
+			m.list.CursorDown()
+			for m.items[m.list.Index()].IsSeparator {
+				m.list.CursorDown()
+				if m.list.Index() == len(m.items)-1 && m.items[len(m.items)-1].IsSeparator {
+					break
+				}
+			}
+			m.cursor = m.list.Index()
+			menuSelectedIndices[m.id] = m.cursor
+			return m, nil
+		}
 	}
 
 	// Handle key events
@@ -1032,7 +1063,7 @@ func (m MenuModel) viewOld() string {
 
 		// Pad tag to align descriptions
 		tagWidth := lipgloss.Width(item.Tag)
-		padding := strings.Repeat(" ", maxTagLen-tagWidth+colPadding)
+		padding := strutil.Repeat(" ", maxTagLen-tagWidth+colPadding)
 
 		// Render description
 		var descStr string
@@ -1281,13 +1312,13 @@ func (m MenuModel) renderBorderWithTitle(content string, contentWidth int) strin
 
 	// Top border
 	result.WriteString(borderStyleLight.Render(border.TopLeft))
-	result.WriteString(borderStyleLight.Render(strings.Repeat(border.Top, leftPad)))
+	result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, leftPad)))
 	result.WriteString(borderStyleLight.Render(leftT))
 	result.WriteString(borderStyleLight.Render(" "))
 	result.WriteString(titleStyle.Render(title))
 	result.WriteString(borderStyleLight.Render(" "))
 	result.WriteString(borderStyleLight.Render(rightT))
-	result.WriteString(borderStyleLight.Render(strings.Repeat(border.Top, rightPad)))
+	result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, rightPad)))
 	result.WriteString(borderStyleLight.Render(border.TopRight))
 	result.WriteString("\n")
 
@@ -1299,7 +1330,7 @@ func (m MenuModel) renderBorderWithTitle(content string, contentWidth int) strin
 		textWidth := lipgloss.Width(line)
 		padding := ""
 		if textWidth < actualWidth {
-			padding = lipgloss.NewStyle().Background(borderBG).Render(strings.Repeat(" ", actualWidth-textWidth))
+			padding = lipgloss.NewStyle().Background(borderBG).Render(strutil.Repeat(" ", actualWidth-textWidth))
 		}
 
 		// Use MaintainBackground to handle internal color resets within the line
@@ -1312,7 +1343,7 @@ func (m MenuModel) renderBorderWithTitle(content string, contentWidth int) strin
 
 	// Bottom border
 	result.WriteString(borderStyleDark.Render(border.BottomLeft))
-	result.WriteString(borderStyleDark.Render(strings.Repeat(border.Bottom, actualWidth)))
+	result.WriteString(borderStyleDark.Render(strutil.Repeat(border.Bottom, actualWidth)))
 	result.WriteString(borderStyleDark.Render(border.BottomRight))
 
 	return result.String()
