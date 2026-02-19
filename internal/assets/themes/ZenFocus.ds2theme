@@ -1,7 +1,7 @@
 [metadata]
 name = "ZenFocus"
 description = "Dockstarter2 Zen Focus theme"
-author = "Gemini"
+author = "Gemini AI"
 
 [syntax]
 semantic_prefix = "{{|"
