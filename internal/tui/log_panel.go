@@ -160,9 +160,14 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		for _, line := range newLines {
 			rendered := RenderThemeText(line, styles.Console)
 			// Truncate to viewport width to prevent overflow past borders
-			if m.viewport.Width() > 0 {
+			// If viewport is not yet expanded, use m.width
+			targetWidth := m.viewport.Width()
+			if targetWidth <= 0 && m.width > 0 {
+				targetWidth = m.width
+			}
+			if targetWidth > 0 {
 				rendered = lipgloss.NewStyle().
-					MaxWidth(m.viewport.Width()).
+					MaxWidth(targetWidth).
 					Render(rendered)
 			}
 			m.lines = append(m.lines, rendered)
@@ -177,6 +182,9 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// If expanding, ensure we have the correct size immediately
 		if m.expanded {
 			m.SetSize(m.width, m.totalHeight)
+			// The viewport's YOffset may be out of bounds if logs arrived while
+			// the panel had 0 height. Scrolling to bottom corrects it.
+			m.viewport.GotoBottom()
 		}
 		return m, nil
 
