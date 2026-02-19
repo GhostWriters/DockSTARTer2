@@ -1,6 +1,7 @@
 package console
 
 import (
+	"DockSTARTer2/internal/strutil"
 	"fmt"
 	"strings"
 	"unicode/utf8"
@@ -72,7 +73,7 @@ func PrintTable(headers []string, data []string, useLineChars bool) {
 		width := colWidths[i]
 		// Padding is +2 (one space on each side)
 		dashCount := width + 2
-		dashes := strings.Repeat(charSet["Horizontal"], dashCount)
+		dashes := strutil.Repeat(charSet["Horizontal"], dashCount)
 
 		topBorder.WriteString(dashes)
 		middleBorder.WriteString(dashes)
@@ -104,7 +105,7 @@ func PrintTable(headers []string, data []string, useLineChars bool) {
 		for i, item := range rowItems {
 			visibleLen := utf8.RuneCountInString(Strip(item))
 			padding := colWidths[i] - visibleLen
-			padStr := strings.Repeat(" ", padding)
+			padStr := strutil.Repeat(" ", padding)
 
 			// Format: " item   |"
 			rowBuilder.WriteString(" ")

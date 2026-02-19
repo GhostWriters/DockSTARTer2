@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"DockSTARTer2/internal/strutil"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -31,7 +32,7 @@ func RenderWithBackdrop(dialogContent string, helpText string, width, height int
 	b.WriteString("\n")
 
 	// Separator line with 1-char padding on left and right (matches AppModel.View())
-	sep := strings.Repeat(styles.SepChar, width-2)
+	sep := strutil.Repeat(styles.SepChar, width-2)
 	sepStyle := lipgloss.NewStyle().
 		Width(width).
 		PaddingLeft(1).
@@ -76,7 +77,7 @@ func RenderWithBackdrop(dialogContent string, helpText string, width, height int
 	// Ensure content fills the height (matches AppModel.View())
 	contentLines := strings.Count(content, "\n") + 1
 	if contentLines < contentHeight {
-		content += strings.Repeat("\n", contentHeight-contentLines)
+		content += strutil.Repeat("\n", contentHeight-contentLines)
 	}
 
 	// Apply screen background to content area (matches AppModel.View())

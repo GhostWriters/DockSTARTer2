@@ -2,6 +2,7 @@ package tui
 
 import (
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
 	"image/color"
 	"strings"
@@ -492,19 +493,19 @@ func Render3DBorder(content string, padding int) string {
 	var result strings.Builder
 
 	// Top border: light color
-	topLine := lightStyle.Render(border.TopLeft + strings.Repeat(border.Top, totalWidth) + border.TopRight)
+	topLine := lightStyle.Render(border.TopLeft + strutil.Repeat(border.Top, totalWidth) + border.TopRight)
 	result.WriteString(topLine)
 	result.WriteString("\n")
 
 	// Add padded content lines
-	paddingStr := strings.Repeat(" ", padding)
+	paddingStr := strutil.Repeat(" ", padding)
 	for _, line := range lines {
 		// Calculate how much padding needed on right to fill width
 		lineWidth := lipgloss.Width(line)
 		rightPad := maxWidth - lineWidth
 
 		// Build the full line with proper width
-		fullLine := paddingStr + line + strings.Repeat(" ", rightPad) + paddingStr
+		fullLine := paddingStr + line + strutil.Repeat(" ", rightPad) + paddingStr
 
 		// Render each component separately
 		leftBorder := lightStyle.Render(border.Left)
@@ -520,7 +521,7 @@ func Render3DBorder(content string, padding int) string {
 	}
 
 	// Bottom border: dark color
-	bottomLine := darkStyle.Render(border.BottomLeft + strings.Repeat(border.Bottom, totalWidth) + border.BottomRight)
+	bottomLine := darkStyle.Render(border.BottomLeft + strutil.Repeat(border.Bottom, totalWidth) + border.BottomRight)
 	result.WriteString(bottomLine)
 
 	return result.String()
@@ -570,12 +571,12 @@ func AddShadow(content string) string {
 			shadeChar = "▓" // Default to dark if invalid/unset
 		}
 
-		shadowCell = shadowStyle.Render(strings.Repeat(shadeChar, 2))
-		bottomShadowChars = shadowStyle.Render(strings.Repeat(shadeChar, contentWidth-1))
+		shadowCell = shadowStyle.Render(strutil.Repeat(shadeChar, 2))
+		bottomShadowChars = shadowStyle.Render(strutil.Repeat(shadeChar, contentWidth-1))
 	} else {
 		// ASCII mode: use solid background color
 		shadowCell = SemanticRawStyle("Theme_Shadow").Width(2).Render(" ")
-		bottomShadowChars = SemanticRawStyle("Theme_Shadow").Width(contentWidth - 1).Render(strings.Repeat(" ", contentWidth-1))
+		bottomShadowChars = SemanticRawStyle("Theme_Shadow").Width(contentWidth - 1).Render(strutil.Repeat(" ", contentWidth-1))
 	}
 
 	spacerCell := lipgloss.NewStyle().
@@ -592,7 +593,7 @@ func AddShadow(content string) string {
 	w0 := lipgloss.Width(line0)
 	padding0 := ""
 	if w0 < contentWidth {
-		padding0 = strings.Repeat(" ", contentWidth-w0)
+		padding0 = strutil.Repeat(" ", contentWidth-w0)
 	}
 	result.WriteString(line0 + padding0)
 	result.WriteString(spacerCell)
@@ -604,7 +605,7 @@ func AddShadow(content string) string {
 		w := lipgloss.Width(line)
 		padding := ""
 		if w < contentWidth {
-			padding = strings.Repeat(" ", contentWidth-w)
+			padding = strutil.Repeat(" ", contentWidth-w)
 		}
 		result.WriteString(line + padding)
 		result.WriteString(shadowCell)
@@ -653,17 +654,17 @@ func AddPatternHalo(content string) string {
 	// Create a single cell of shadow (2 characters wide)
 	var shadowCell string
 	if currentStyles.LineCharacters {
-		shadowCell = shadowStyle.Render(strings.Repeat(shadeChar, 2))
+		shadowCell = shadowStyle.Render(strutil.Repeat(shadeChar, 2))
 	} else {
 		// Even in ASCII, we use the pattern style for the "halo" effect
-		shadowCell = shadowStyle.Render(strings.Repeat(shadeChar, 2))
+		shadowCell = shadowStyle.Render(strutil.Repeat(shadeChar, 2))
 	}
 
 	// Horizontal shadow line (covers top/bottom + 2 cells for corners)
 	// totalWidth = shadowCell(1) + contentWidth + shadowCell(1)
 	gridWidth := contentWidth + 4
 	numCells := gridWidth / 2
-	horizontalShadow := strings.Repeat(shadowCell, numCells)
+	horizontalShadow := strutil.Repeat(shadowCell, numCells)
 
 	var result strings.Builder
 
@@ -676,7 +677,7 @@ func AddPatternHalo(content string) string {
 		w := lipgloss.Width(line)
 		padding := ""
 		if w < contentWidth {
-			padding = strings.Repeat(" ", contentWidth-w)
+			padding = strutil.Repeat(" ", contentWidth-w)
 		}
 		result.WriteString(shadowCell)
 		result.WriteString(line + padding)

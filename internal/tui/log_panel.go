@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/strutil"
 
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
@@ -141,34 +142,27 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.SetContent(content)
 		m.viewport.GotoBottom()
 		return m, waitForLogLine()
-
-	case toggleLogPanelMsg:
-		m.expanded = !m.expanded
-		if m.expanded && m.totalHeight > 1 {
-			panelH := m.totalHeight / 2
-			vpH := panelH - 1
-			if vpH < 1 {
-				vpH = 1
-			}
-			m.viewport.SetWidth(m.width)
-			m.viewport.SetHeight(vpH)
-			// Re-set content so the viewport is correctly sized
-			m.viewport.SetContent(strings.Join(m.lines, "\n"))
-			m.viewport.GotoBottom()
-			logPanelExtraHeight = panelH - 1 // subtract collapsed strip already accounted for
-		} else {
-			logPanelExtraHeight = 0
-		}
 		return m, nil
 
-	default:
+	case tea.MouseWheelMsg:
 		if m.expanded {
-			var cmd tea.Cmd
-			m.viewport, cmd = m.viewport.Update(msg)
-			return m, cmd
+			if msg.Button == tea.MouseWheelUp {
+				m.viewport.ScrollUp(3)
+				return m, nil
+			}
+			if msg.Button == tea.MouseWheelDown {
+				m.viewport.ScrollDown(3)
+				return m, nil
+			}
 		}
 	}
-	return m, nil
+	// Update viewport for other scrolling keys/events (only if expanded)
+	var cmd tea.Cmd
+	if m.expanded {
+		m.viewport, cmd = m.viewport.Update(msg)
+	}
+
+	return m, cmd
 }
 
 // ViewString returns the panel content as a string for compositing
@@ -207,7 +201,7 @@ func (m LogPanelModel) ViewString() string {
 	if dashW < 0 {
 		dashW = 0
 	}
-	leftDashes := strings.Repeat(sepChar, dashW)
+	leftDashes := strutil.Repeat(sepChar, dashW)
 
 	rightTotal := m.width - dashW - labelW
 	var stripContent string
@@ -217,9 +211,9 @@ func (m LogPanelModel) ViewString() string {
 		if rightDashW < 0 {
 			rightDashW = 0
 		}
-		stripContent = leftDashes + label + strings.Repeat(sepChar, rightDashW) + rightIndicator
+		stripContent = leftDashes + label + strutil.Repeat(sepChar, rightDashW) + rightIndicator
 	} else {
-		stripContent = leftDashes + label + strings.Repeat(sepChar, rightTotal)
+		stripContent = leftDashes + label + strutil.Repeat(sepChar, rightTotal)
 	}
 
 	// Use the dedicated LogPanel theme color for the strip line

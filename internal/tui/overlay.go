@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"DockSTARTer2/internal/strutil"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -90,7 +91,7 @@ func Overlay(foreground, background string, hPos, vPos OverlayPosition, xOffset,
 		// 2. Padding if background is shorter than target X
 		lWidth := lipgloss.Width(left)
 		if lWidth < x {
-			left += strings.Repeat(" ", x-lWidth)
+			left += strutil.Repeat(" ", x-lWidth)
 		}
 
 		// 3. Middle portion (foreground)
