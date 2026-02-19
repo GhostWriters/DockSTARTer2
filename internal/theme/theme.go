@@ -45,48 +45,48 @@ func ResetFlags(s lipgloss.Style) lipgloss.Style {
 
 // ThemeConfig holds colors derived from .dialogrc and theme.ini
 type ThemeConfig struct {
-	ScreenFG             color.Color
-	ScreenBG             color.Color
-	DialogFG             color.Color
-	DialogBG             color.Color
-	BorderFG             color.Color
-	BorderBG             color.Color
-	Border2FG            color.Color
-	Border2BG            color.Color
-	TitleFG              color.Color
-	TitleBG              color.Color
-	TitleStyles          StyleFlags
-	TitleHelpFG          color.Color
-	TitleHelpBG          color.Color
-	TitleHelpStyles      StyleFlags
-	ShadowColor          color.Color
-	ButtonActiveFG       color.Color
-	ButtonActiveBG       color.Color
-	ButtonActiveStyles   StyleFlags
-	ButtonInactiveFG     color.Color
-	ButtonInactiveBG     color.Color
-	ButtonInactiveStyles StyleFlags
-	ItemSelectedFG       color.Color
-	ItemSelectedBG       color.Color
-	ItemSelectedStyles   StyleFlags
-	ItemFG               color.Color
-	ItemBG               color.Color
-	ItemStyles           StyleFlags
-	TagFG                color.Color
-	TagBG                color.Color
-	TagStyles            StyleFlags
-	TagSelectedFG        color.Color
-	TagSelectedBG        color.Color
-	TagSelectedStyles    StyleFlags
-	TagKeyFG             color.Color
-	TagKeyBG             color.Color
-	TagKeyStyles         StyleFlags
-	TagKeySelectedFG     color.Color
-	TagKeySelectedBG     color.Color
-	TagKeySelectedStyles StyleFlags
-	HelplineFG           color.Color
-	HelplineBG           color.Color
-	HelplineStyles       StyleFlags
+	ScreenFG                 color.Color
+	ScreenBG                 color.Color
+	DialogFG                 color.Color
+	DialogBG                 color.Color
+	BorderFG                 color.Color
+	BorderBG                 color.Color
+	Border2FG                color.Color
+	Border2BG                color.Color
+	TitleFG                  color.Color
+	TitleBG                  color.Color
+	TitleStyles              StyleFlags
+	TitleHelpFG              color.Color
+	TitleHelpBG              color.Color
+	TitleHelpStyles          StyleFlags
+	ShadowColor              color.Color
+	ButtonActiveFG           color.Color
+	ButtonActiveBG           color.Color
+	ButtonActiveStyles       StyleFlags
+	ButtonInactiveFG         color.Color
+	ButtonInactiveBG         color.Color
+	ButtonInactiveStyles     StyleFlags
+	ItemSelectedFG           color.Color
+	ItemSelectedBG           color.Color
+	ItemSelectedStyles       StyleFlags
+	ItemFG                   color.Color
+	ItemBG                   color.Color
+	ItemStyles               StyleFlags
+	TagFG                    color.Color
+	TagBG                    color.Color
+	TagStyles                StyleFlags
+	TagSelectedFG            color.Color
+	TagSelectedBG            color.Color
+	TagSelectedStyles        StyleFlags
+	TagKeyFG                 color.Color
+	TagKeyBG                 color.Color
+	TagKeyStyles             StyleFlags
+	TagKeySelectedFG         color.Color
+	TagKeySelectedBG         color.Color
+	TagKeySelectedStyles     StyleFlags
+	HelplineFG               color.Color
+	HelplineBG               color.Color
+	HelplineStyles           StyleFlags
 	ProgramFG                color.Color
 	ProgramBG                color.Color
 	ProgramStyles            StyleFlags
@@ -108,6 +108,12 @@ type ThemeConfig struct {
 	VersionSelectedFG        color.Color
 	VersionSelectedBG        color.Color
 	VersionSelectedStyles    StyleFlags
+	ListAppFG                color.Color
+	ListAppBG                color.Color
+	ListAppStyles            StyleFlags
+	ListAppUserDefinedFG     color.Color
+	ListAppUserDefinedBG     color.Color
+	ListAppUserDefinedStyles StyleFlags
 }
 
 // Current holds the active theme configuration
@@ -184,6 +190,8 @@ func updateTagsFromCurrent() {
 	console.RegisterSemanticTagRaw("Theme_ProgressInProgress", buildRawTag(Current.ProgressInProgressFG, Current.ProgressInProgressBG, Current.ProgressInProgressStyles))
 	console.RegisterSemanticTagRaw("Theme_ProgressCompleted", buildRawTag(Current.ProgressCompletedFG, Current.ProgressCompletedBG, Current.ProgressCompletedStyles))
 	console.RegisterSemanticTagRaw("Theme_VersionSelected", buildRawTag(Current.VersionSelectedFG, Current.VersionSelectedBG, Current.VersionSelectedStyles))
+	console.RegisterSemanticTagRaw("Theme_ListApp", buildRawTag(Current.ListAppFG, Current.ListAppBG, Current.ListAppStyles))
+	console.RegisterSemanticTagRaw("Theme_ListAppUserDefined", buildRawTag(Current.ListAppUserDefinedFG, Current.ListAppUserDefinedBG, Current.ListAppUserDefinedStyles))
 }
 
 // buildRawTag constructs a raw "fg:bg:flags" string (no delimiters)
@@ -222,51 +230,56 @@ func buildRawTag(fg, bg color.Color, styles StyleFlags) string {
 // All colors are resolved through tcell to RGB/hex values for proper color profile support
 func Default() {
 	Current = ThemeConfig{
-		ScreenFG:         parseColor("black"),
-		ScreenBG:         parseColor("silver"),
-		DialogFG:         parseColor("black"),
-		DialogBG:         parseColor("cyan"),
-		BorderFG:         parseColor("bright-white"),
-		BorderBG:         parseColor("cyan"),
-		Border2FG:        parseColor("black"),
-		Border2BG:        parseColor("cyan"),
-		TitleFG:          parseColor("black"),
-		TitleBG:          parseColor("cyan"),
-		TitleHelpFG:      parseColor("black"),
-		TitleHelpBG:      parseColor("cyan"),
-		ShadowColor:      parseColor("black"),
-		ButtonActiveFG:   parseColor("bright-white"),
-		ButtonActiveBG:   parseColor("red"),
-		ButtonInactiveFG: parseColor("black"),
-		ButtonInactiveBG: parseColor("cyan"),
-		ItemSelectedFG:   parseColor("black"),
-		ItemSelectedBG:   parseColor("red"),
-		ItemFG:           parseColor("black"),
-		ItemBG:           parseColor("cyan"),
-		TagFG:            parseColor("black"),
-		TagBG:            parseColor("cyan"),
-		TagSelectedFG:    parseColor("black"),
-		TagSelectedBG:    parseColor("red"),
-		TagKeyFG:         parseColor("red"),
-		TagKeyBG:         parseColor("cyan"),
-		TagKeySelectedFG: parseColor("black"),
-		TagKeySelectedBG: parseColor("red"),
-		HelplineFG:       parseColor("black"),
-		HelplineBG:       parseColor("cyan"),
-		ProgramFG:            parseColor("bright-white"),
-		ProgramBG:            parseColor("black"),
-		LogBoxFG:             parseColor("bright-white"),
-		LogBoxBG:             parseColor("black"),
-		LogPanelFG:           parseColor("cyan"),
-		LogPanelBG:           parseColor("black"),
-		ProgressWaitingFG:    parseColor("gray"),
-		ProgressWaitingBG:    parseColor("cyan"),
-		ProgressInProgressFG: parseColor("yellow"),
-		ProgressInProgressBG: parseColor("cyan"),
-		ProgressCompletedFG:  parseColor("green"),
-		ProgressCompletedBG:  parseColor("cyan"),
-		VersionSelectedFG:    parseColor("bright-white"),
-		VersionSelectedBG:    parseColor("blue"),
+		ScreenFG:                 parseColor("black"),
+		ScreenBG:                 parseColor("silver"),
+		DialogFG:                 parseColor("black"),
+		DialogBG:                 parseColor("cyan"),
+		BorderFG:                 parseColor("bright-white"),
+		BorderBG:                 parseColor("cyan"),
+		Border2FG:                parseColor("black"),
+		Border2BG:                parseColor("cyan"),
+		TitleFG:                  parseColor("black"),
+		TitleBG:                  parseColor("cyan"),
+		TitleHelpFG:              parseColor("black"),
+		TitleHelpBG:              parseColor("cyan"),
+		ShadowColor:              parseColor("black"),
+		ButtonActiveFG:           parseColor("bright-white"),
+		ButtonActiveBG:           parseColor("red"),
+		ButtonInactiveFG:         parseColor("black"),
+		ButtonInactiveBG:         parseColor("cyan"),
+		ItemSelectedFG:           parseColor("black"),
+		ItemSelectedBG:           parseColor("red"),
+		ItemFG:                   parseColor("black"),
+		ItemBG:                   parseColor("cyan"),
+		TagFG:                    parseColor("black"),
+		TagBG:                    parseColor("cyan"),
+		TagSelectedFG:            parseColor("black"),
+		TagSelectedBG:            parseColor("red"),
+		TagKeyFG:                 parseColor("red"),
+		TagKeyBG:                 parseColor("cyan"),
+		TagKeySelectedFG:         parseColor("black"),
+		TagKeySelectedBG:         parseColor("red"),
+		HelplineFG:               parseColor("black"),
+		HelplineBG:               parseColor("cyan"),
+		ProgramFG:                parseColor("bright-white"),
+		ProgramBG:                parseColor("black"),
+		LogBoxFG:                 parseColor("bright-white"),
+		LogBoxBG:                 parseColor("black"),
+		LogPanelFG:               parseColor("cyan"),
+		LogPanelBG:               parseColor("black"),
+		ProgressWaitingFG:        parseColor("gray"),
+		ProgressWaitingBG:        parseColor("cyan"),
+		ProgressInProgressFG:     parseColor("yellow"),
+		ProgressInProgressBG:     parseColor("cyan"),
+		ProgressCompletedFG:      parseColor("green"),
+		ProgressCompletedBG:      parseColor("cyan"),
+		VersionSelectedFG:        parseColor("bright-white"),
+		VersionSelectedBG:        parseColor("blue"),
+		ListAppFG:                parseColor("black"),
+		ListAppBG:                parseColor("cyan"),
+		ListAppUserDefinedFG:     parseColor("black"),
+		ListAppUserDefinedBG:     parseColor("cyan"),
+		ListAppUserDefinedStyles: StyleFlags{Bold: true},
 	}
 	Apply()
 
@@ -608,6 +621,10 @@ func parseThemeTOML(path string) error {
 			Current.ProgressCompletedFG, Current.ProgressCompletedBG, Current.ProgressCompletedStyles = parseRawWithStyles(styleValue)
 		case "VersionSelected":
 			Current.VersionSelectedFG, Current.VersionSelectedBG, Current.VersionSelectedStyles = parseRawWithStyles(styleValue)
+		case "ListApp":
+			Current.ListAppFG, Current.ListAppBG, Current.ListAppStyles = parseRawWithStyles(styleValue)
+		case "ListAppUserDefined":
+			Current.ListAppUserDefinedFG, Current.ListAppUserDefinedBG, Current.ListAppUserDefinedStyles = parseRawWithStyles(styleValue)
 		}
 	}
 

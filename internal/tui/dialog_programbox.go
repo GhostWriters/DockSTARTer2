@@ -391,7 +391,7 @@ func (m *programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, Keys.ForceQuit):
 			return m, closeDialog
 
-		case key.Matches(msg, Keys.Enter):
+		case key.Matches(msg, Keys.Enter), msg.String() == "o", msg.String() == "O", key.Matches(msg, Keys.Space):
 			if m.done {
 				return m, closeDialog
 			}
@@ -406,6 +406,14 @@ func (m *programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
+
+	case UpdateTaskMsg:
+		m.UpdateTaskStatus(msg.Label, msg.Status, msg.ActiveApp)
+		return m, nil
+
+	case UpdatePercentMsg:
+		m.SetPercent(msg.Percent)
+		return m, nil
 	}
 
 	// Update viewport for scrolling
@@ -546,18 +554,26 @@ func (m *programBoxModel) ViewString() string {
 
 	// Build dialog content
 	var contentParts []string
+
+	// Header UI: Title + Tasks + Progress Bar
+	headerUI := m.renderHeaderUI(contentWidth)
+	if headerUI != "" {
+		contentParts = append(contentParts, headerUI)
+	}
+
 	if commandDisplay != "" {
 		contentParts = append(contentParts, commandDisplay)
 	}
 	contentParts = append(contentParts, borderedViewport)
-	// Trim newlines from each part to ensure tight vertical stacking
-	// and remove horizontal space above/below.
+	contentParts = append(contentParts, buttonRow)
+
+	// Combine components with strict trimming to avoid spacing issues
 	var contentPartsCleaned []string
-	if commandDisplay != "" {
-		contentPartsCleaned = append(contentPartsCleaned, strings.Trim(commandDisplay, "\n"))
+	for _, part := range contentParts {
+		if part != "" {
+			contentPartsCleaned = append(contentPartsCleaned, strings.Trim(part, "\n"))
+		}
 	}
-	contentPartsCleaned = append(contentPartsCleaned, strings.Trim(borderedViewport, "\n"))
-	contentPartsCleaned = append(contentPartsCleaned, strings.Trim(buttonRow, "\n"))
 
 	content := strings.Join(contentPartsCleaned, "\n")
 
@@ -588,6 +604,146 @@ func (m *programBoxModel) ViewString() string {
 	return dialogWithTitle
 }
 
+// renderHeaderUI renders the tasks and progress bar
+func (m *ProgramBoxModel) renderHeaderUI(width int) string {
+	if len(m.Tasks) == 0 && m.Percent == 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	styles := GetStyles()
+	bgStyle := lipgloss.NewStyle().Background(styles.Dialog.GetBackground())
+
+	// Tasks
+	maxLabelLen := 0
+	for _, t := range m.Tasks {
+		if len(t.Label) > maxLabelLen {
+			maxLabelLen = len(t.Label)
+		}
+	}
+
+	for _, t := range m.Tasks {
+		// Category status colors
+		catStyle := SemanticStyle("{{|Theme_ProgressWaiting|}}")
+		statusText := " Waiting "
+		switch t.Status {
+		case StatusInProgress:
+			catStyle = SemanticStyle("{{|Theme_ProgressInProgress|}}")
+			statusText = " In Progress "
+		case StatusCompleted:
+			catStyle = SemanticStyle("{{|Theme_ProgressCompleted|}}")
+			statusText = " Completed "
+		}
+
+		// Calculate gap width: padding to maxLabelLen + 2 spaces
+		gapWidth := maxLabelLen - len(t.Label) + 2
+		// Explicitly use space characters to ensure the background color is visible
+		gap := bgStyle.Render(strings.Repeat(" ", gapWidth))
+
+		headerLine := lipgloss.JoinHorizontal(lipgloss.Top,
+			bgStyle.Render("  "), // 2-char margin
+			catStyle.Render(t.Label),
+			gap,
+			catStyle.Render("[ "+statusText+" ]"),
+		)
+		// Ensure the line covers full width to avoid black bars on the right
+		fullHeaderLine := bgStyle.Width(width).Render(headerLine)
+		b.WriteString(fullHeaderLine + "\n")
+
+		// Command line: Indent Command App1 App2 ...
+		if t.Command != "" || len(t.Apps) > 0 {
+			appLine := "     " // 2 spaces margin + 3 spaces indent
+			if t.Command != "" {
+				appLine += catStyle.Render(t.Command) + " "
+			}
+
+			foundActive := false
+			for i, app := range t.Apps {
+				appStyle := SemanticStyle("{{|Theme_ProgressWaiting|}}")
+				if t.Status == StatusCompleted {
+					appStyle = SemanticStyle("{{|Theme_ProgressCompleted|}}")
+				} else if t.Status == StatusInProgress {
+					if t.ActiveApp != "" {
+						if app == t.ActiveApp {
+							appStyle = SemanticStyle("{{|Theme_ProgressInProgress|}}")
+							foundActive = true
+						} else if !foundActive {
+							appStyle = SemanticStyle("{{|Theme_ProgressCompleted|}}")
+						} else {
+							appStyle = SemanticStyle("{{|Theme_ProgressWaiting|}}")
+						}
+					} else {
+						// Sub-apps inherit parent status if no specific active app
+						appStyle = SemanticStyle("{{|Theme_ProgressInProgress|}}")
+					}
+				}
+
+				if app == t.ActiveApp {
+					appLine += SemanticStyle("{{|Theme_Highlight|}}").Render(app)
+				} else {
+					appLine += appStyle.Render(app)
+				}
+
+				if i < len(t.Apps)-1 {
+					appLine += " "
+				}
+			}
+			// Wrap app line if too long AND ensure background maintenance
+			// Width is (width - 2) because we want a 2-char right margin too
+			wrapped := lipgloss.NewStyle().
+				Width(width).
+				Background(bgStyle.GetBackground()).
+				PaddingLeft(0). // Alignment handled by appLine string
+				Render(appLine)
+			b.WriteString(wrapped + "\n")
+		}
+		b.WriteString(bgStyle.Width(width).Render("") + "\n")
+	}
+
+	// Progress Bar
+	if m.Percent > 0 {
+		barMargin := 4                    // 2 spaces each side
+		barWidth := width - barMargin - 4 // [ ... ] padding
+		if barWidth < 1 {                 // Ensure barWidth is at least 1
+			barWidth = 1
+		}
+		m.progress.SetWidth(barWidth)
+
+		barRow := bgStyle.Render("  ") + // Left margin
+			styles.Dialog.Render("[ ") +
+			m.progress.ViewAs(m.Percent) +
+			styles.Dialog.Render(" ]")
+
+		// Fill to full width
+		fullBarRow := bgStyle.Width(width).Render(barRow)
+		b.WriteString(fullBarRow + "\n\n")
+	}
+
+	return b.String()
+}
+
+// calculateHeaderHeight returns the estimated height of the header UI
+func (m *ProgramBoxModel) calculateHeaderHeight() int {
+	height := 0
+	if m.subtitle != "" {
+		height += 2 // Subtitle + \n
+	}
+	for _, t := range m.Tasks {
+		height += 1 // Label/Status
+		if t.Command != "" || len(t.Apps) > 0 {
+			height += 1 // App list
+		}
+		height += 1 // Spacing
+	}
+	if m.Percent > 0 {
+		height += 2 // Bar + \n
+	}
+	if height > 0 {
+		height += 1 // Add 1 for extra safety/bottom margin
+	}
+	return height
+}
+
 func (m *programBoxModel) View() tea.View {
 	v := tea.NewView(m.ViewString())
 	v.MouseMode = tea.MouseModeAllMotion
@@ -613,6 +769,8 @@ func (m *programBoxModel) SetSize(w, h int) {
 		commandHeight = 0
 	}
 
+	headerHeight := m.calculateHeaderHeight()
+
 	// Width calculation:
 	// If maximized, fill available width (only subtract shadow/borders)
 	// If not maximized, use global margins (4)
@@ -633,7 +791,7 @@ func (m *programBoxModel) SetSize(w, h int) {
 	if m.maximized {
 		marginH = 0
 	}
-	vpHeight := m.height - marginH - shadowHeight - 4 - commandHeight - 3 // -4 for borders, -3 for buttons
+	vpHeight := m.height - marginH - shadowHeight - 4 - commandHeight - headerHeight - 3 // -4 for borders, -3 for buttons
 	if vpHeight < 5 {
 		vpHeight = 5
 	}
