@@ -286,7 +286,7 @@ func (h *TUIHandler) Handle(ctx context.Context, r slog.Record) error {
 		levelTag = "{{[-]}}"
 	}
 
-	timeLevel := fmt.Sprintf("%s %s[%s]{{[-]}} \t", timeStr, levelTag, levelStr)
+	timeLevel := fmt.Sprintf("%s %s[%s]{{[-]}} ", timeStr, levelTag, levelStr)
 	tuiMsg := timeLevel + console.ForTUI(r.Message)
 
 	if h.global {
