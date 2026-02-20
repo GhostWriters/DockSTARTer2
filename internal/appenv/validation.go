@@ -133,7 +133,6 @@ func IsAppEnabled(app, envFile string) bool {
 
 // IsAppReferenced checks if an app is referenced in .env or compose override.
 func IsAppReferenced(ctx context.Context, app string, conf config.AppConfig) bool {
-	// Implementation from status.go
 	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
 	if IsAppEnabled(app, envFile) {
 		return true
@@ -141,13 +140,44 @@ func IsAppReferenced(ctx context.Context, app string, conf config.AppConfig) boo
 	if IsAppAdded(ctx, app, envFile) {
 		return true
 	}
+
 	// Also check overrides...
 	overrideFile := filepath.Join(conf.ComposeDir, constants.ComposeOverrideFileName)
 	if _, err := os.Stat(overrideFile); err == nil {
-		content, _ := os.ReadFile(overrideFile)
-		// Grep for Prefix + APPNAME
-		if strings.Contains(string(content), constants.AppEnvFileNamePrefix+strings.ToLower(app)) {
-			return true
+		content, err := os.ReadFile(overrideFile)
+		if err == nil {
+			var override struct {
+				Services map[string]struct {
+					EnvFile interface{} `yaml:"env_file"`
+				} `yaml:"services"`
+			}
+			if err := yaml.Unmarshal(content, &override); err == nil {
+				targetEnv := constants.AppEnvFileNamePrefix + strings.ToLower(app)
+				for _, service := range override.Services {
+					checkEnvFile := func(v interface{}) bool {
+						switch val := v.(type) {
+						case string:
+							clean := strings.TrimPrefix(val, "./")
+							if clean == targetEnv {
+								return true
+							}
+						case []interface{}:
+							for _, item := range val {
+								if s, ok := item.(string); ok {
+									clean := strings.TrimPrefix(s, "./")
+									if clean == targetEnv {
+										return true
+									}
+								}
+							}
+						}
+						return false
+					}
+					if checkEnvFile(service.EnvFile) {
+						return true
+					}
+				}
+			}
 		}
 	}
 	return false
