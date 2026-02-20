@@ -15,6 +15,9 @@ type helpDialogModel struct {
 	help   help.Model
 	width  int
 	height int
+
+	// Unified layout (deterministic sizing)
+	layout DialogLayout
 }
 
 func newHelpDialogModel() *helpDialogModel {
@@ -47,19 +50,14 @@ func (m *helpDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // ViewString returns the dialog content as a string for compositing
 func (m *helpDialogModel) ViewString() string {
-	if m.width == 0 {
+	if m.layout.Width == 0 {
 		return ""
 	}
 
-	// Determine a reasonable width for the help component
-	// We want it to be wide enough for at least 2 columns if window allows
-	const minDesiredWidth = 60
-	targetWidth := m.width - 8 // Snugger margins for the halo/shadow
+	// Calculate target width for help content Snugger margins for the halo/shadow
+	targetWidth := m.layout.Width - 10
 	if targetWidth > 120 {
-		targetWidth = 120 // Max width for readability
-	}
-	if targetWidth < minDesiredWidth && m.width > minDesiredWidth+4 {
-		targetWidth = minDesiredWidth
+		targetWidth = 120
 	}
 	m.help.SetWidth(targetWidth)
 
@@ -68,10 +66,7 @@ func (m *helpDialogModel) ViewString() string {
 	bgStyle := lipgloss.NewStyle().Background(dialogStyle.GetBackground())
 
 	// Apply theme styles to the help component
-	// derive separator color from Dialog foreground (matching WorkingCLI)
 	sepStyle := bgStyle.Foreground(borderColor)
-
-	// Use specific HelpItem and HelpTag colors exactly as defined in the theme
 	dimStyle := SemanticStyle("{{|Theme_HelpItem|}}")
 	keyStyle := SemanticStyle("{{|Theme_HelpTag|}}")
 
@@ -87,8 +82,6 @@ func (m *helpDialogModel) ViewString() string {
 
 	// Apply dialog background and add 1 space indent on both sides
 	lines := strings.Split(content, "\n")
-
-	// Find the actual max width of the rendered help content to make the box snug
 	maxLineWidth := 0
 	for i, line := range lines {
 		trimmed := strings.TrimRight(line, " ")
@@ -100,23 +93,28 @@ func (m *helpDialogModel) ViewString() string {
 	}
 
 	for i, line := range lines {
-		// Indent 1 space + content + pad to max width + 1 space trailing
 		lineWidth := lipgloss.Width(line)
 		paddedLine := " " + line + strutil.Repeat(" ", maxLineWidth-lineWidth) + " "
-		// Render with background style and hold it through resets
 		lines[i] = MaintainBackground(bgStyle.Render(paddedLine), bgStyle)
 	}
 	content = strings.Join(lines, "\n")
-
-	// Final pass: Ensure internal gaps between help columns (which might be unstyled by bubbles/help)
-	// are captured. Since we already did it per-line above, this is secondary insurance.
 	content = MaintainBackground(bgStyle.Render(content), bgStyle)
 
-	// Use RenderUniformBlockDialog for a distinct look for help (uniform Border2Color)
-	// Passing content directly - RenderDialog logic will handle vertical growth
+	// Force total content height if height is set
+	// Overhead for Help: Halo (2) + Bordered Dialog (2) = 4
+	styles := GetStyles()
+	heightBudget := m.layout.Height - 4
+	if heightBudget > 0 {
+		content = lipgloss.NewStyle().
+			Height(heightBudget).
+			Background(styles.Dialog.GetBackground()).
+			Render(content)
+	}
+
+	// Use RenderUniformBlockDialog
 	dialogStr := RenderUniformBlockDialog("{{|Theme_TitleHelp|}}Keyboard & Mouse Controls", content)
 
-	// Use AddPatternHalo instead of AddShadow for a surrounding "halo" effect
+	// Use AddPatternHalo
 	return AddPatternHalo(dialogStr)
 }
 
@@ -131,5 +129,20 @@ func (m *helpDialogModel) View() tea.View {
 func (m *helpDialogModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
-	m.help.SetWidth(w - 12)
+	m.calculateLayout()
+}
+
+func (m *helpDialogModel) calculateLayout() {
+	if m.width == 0 || m.height == 0 {
+		return
+	}
+
+	// Overhead for Help: Halo (2) + Bordered Dialog (2) = 4
+	overhead := 4
+
+	m.layout = DialogLayout{
+		Width:    m.width,
+		Height:   m.height,
+		Overhead: overhead,
+	}
 }

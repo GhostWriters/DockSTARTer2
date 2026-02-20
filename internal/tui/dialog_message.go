@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"strings"
+
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	zone "github.com/lrstanley/bubblezone/v2" // used for zone.Get in Update()
@@ -23,6 +25,9 @@ type messageDialogModel struct {
 	messageType MessageType
 	width       int
 	height      int
+
+	// Unified layout (deterministic sizing)
+	layout DialogLayout
 }
 
 // newMessageDialog creates a new message dialog
@@ -98,31 +103,30 @@ func (m *messageDialogModel) ViewString() string {
 		titlePrefix = "ℹ "
 	}
 
-	// Build dialog content
+	// Calculate content dimensions from layout
+	contentWidth := m.layout.Width - 2
+
+	// Wrap message text to fit width
+	messageStyle = messageStyle.Width(contentWidth)
 	content := messageStyle.Render(m.message)
 
-	// Calculate content width for button row
-	contentWidth := lipgloss.Width(content)
-
-	// Render OK button with automatic zone marking (zone ID: "Button.OK")
+	// Render OK button with automatic zone marking
 	buttonRow := RenderCenteredButtons(
 		contentWidth,
 		ButtonSpec{Text: " OK ", Active: true},
 	)
 
 	// Combine message and button
+	// Standardize to use TrimRight to prevent implicit gaps
+	content = strings.TrimRight(content, "\n")
+	buttonRow = strings.TrimRight(buttonRow, "\n")
 	fullContent := lipgloss.JoinVertical(lipgloss.Left, content, buttonRow)
 
-	// Add padding to content (border will be added by RenderDialogWithTitle)
-	paddedContent := styles.Dialog.
-		Padding(0, 1).
-		Render(fullContent)
-
-	// Add title with prefix and wrap in border with title embedded (matching menu style)
+	// Add title with prefix and wrap in border
 	fullTitle := titlePrefix + m.title
-	dialogWithTitle := RenderDialog(fullTitle, paddedContent, true)
+	dialogWithTitle := RenderDialog(fullTitle, fullContent, true)
 
-	// Add shadow (matching menu style)
+	// Add shadow
 	dialog := AddShadow(dialogWithTitle)
 
 	return dialog
@@ -136,6 +140,33 @@ func (m *messageDialogModel) View() tea.View {
 func (m *messageDialogModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
+	m.calculateLayout()
+}
+
+func (m *messageDialogModel) calculateLayout() {
+	if m.width == 0 || m.height == 0 {
+		return
+	}
+
+	// 1. Shadow
+	shadow := 0
+	if currentConfig.UI.Shadow {
+		shadow = DialogShadowHeight
+	}
+
+	// 2. Button
+	buttons := DialogButtonHeight
+
+	// 3. Overhead
+	overhead := DialogBorderHeight + buttons + shadow
+
+	m.layout = DialogLayout{
+		Width:        m.width,
+		Height:       m.height,
+		ButtonHeight: buttons,
+		ShadowHeight: shadow,
+		Overhead:     overhead,
+	}
 }
 
 // ShowMessageDialog displays a message dialog

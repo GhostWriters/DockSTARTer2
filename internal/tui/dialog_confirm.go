@@ -2,6 +2,7 @@ package tui
 
 import (
 	"DockSTARTer2/internal/console"
+	"strings"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
@@ -19,6 +20,9 @@ type confirmDialogModel struct {
 	width      int
 	height     int
 	onResult   func(bool) tea.Msg // Optional: Custom message generator for result
+
+	// Unified layout (deterministic sizing)
+	layout DialogLayout
 }
 
 type confirmResultMsg struct {
@@ -123,23 +127,18 @@ func (m *confirmDialogModel) ViewString() string {
 		return ""
 	}
 
-	styles := GetStyles()
-
-	// Question text
+	// Question text style
 	questionStyle := lipgloss.NewStyle().
 		Padding(1, 2)
 
-	// Apply semantic coloring
+	// Calculate content width from layout
+	contentWidth := m.layout.Width - 2
+
+	// Apply style and wrap
+	questionStyle = questionStyle.Width(contentWidth)
 	questionText := questionStyle.Render(console.Sprintf("%s", m.question))
 
-	// Calculate content width based on question text (with reasonable min/max)
-	contentWidth := lipgloss.Width(questionText)
-	if contentWidth < 40 {
-		contentWidth = 40
-	}
-
-	// Render buttons using the standard button helper (ensures consistency)
-	// Zone marking is handled automatically by RenderCenteredButtons (zone IDs: "Button.Yes", "Button.No")
+	// Render buttons using the standard button helper
 	buttonRow := RenderCenteredButtons(
 		contentWidth,
 		ButtonSpec{Text: "Yes", Active: m.result},
@@ -147,17 +146,17 @@ func (m *confirmDialogModel) ViewString() string {
 	)
 
 	// Build dialog content
-	content := questionText + "\n\n" + buttonRow
+	// Standardize to use TrimRight to prevent implicit gaps
+	questionText = strings.TrimRight(questionText, "\n")
+	buttonRow = strings.TrimRight(buttonRow, "\n")
 
-	// Add padding to content (border will be added by RenderDialogWithTitle)
-	paddedContent := styles.Dialog.
-		Padding(0, 1).
-		Render(content)
+	// Ensure a blank line between question and buttons
+	fullContent := lipgloss.JoinVertical(lipgloss.Left, questionText, "", buttonRow)
 
 	// Wrap in border with title embedded (matching menu style) using confirm styling
-	dialogWithTitle := RenderDialogWithType(m.title, paddedContent, true, DialogTypeConfirm)
+	dialogWithTitle := RenderDialogWithType(m.title, fullContent, true, DialogTypeConfirm)
 
-	// Add shadow (matching menu style)
+	// Add shadow
 	dialog := AddShadow(dialogWithTitle)
 
 	return dialog
@@ -171,6 +170,33 @@ func (m *confirmDialogModel) View() tea.View {
 func (m *confirmDialogModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
+	m.calculateLayout()
+}
+
+func (m *confirmDialogModel) calculateLayout() {
+	if m.width == 0 || m.height == 0 {
+		return
+	}
+
+	// 1. Shadow
+	shadow := 0
+	if currentConfig.UI.Shadow {
+		shadow = DialogShadowHeight
+	}
+
+	// 2. Buttons
+	buttons := DialogButtonHeight
+
+	// 3. Overhead
+	overhead := DialogBorderHeight + buttons + shadow
+
+	m.layout = DialogLayout{
+		Width:        m.width,
+		Height:       m.height,
+		ButtonHeight: buttons,
+		ShadowHeight: shadow,
+		Overhead:     overhead,
+	}
 }
 
 // ShowConfirmDialog displays a confirmation dialog and returns the result

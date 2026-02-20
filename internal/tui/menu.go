@@ -268,6 +268,9 @@ type MenuModel struct {
 
 	// Checkbox mode (for app selection)
 	checkboxMode bool
+
+	// Unified layout (deterministic sizing)
+	layout DialogLayout
 }
 
 // FocusItem represents which UI element has focus
@@ -1028,16 +1031,22 @@ func (m MenuModel) ViewString() string {
 	innerParts = append(innerParts, paddedList)
 	innerParts = append(innerParts, paddedButtons)
 
-	// Combine all parts - they should all have the same width now
+	// Combine all parts and standardize TrimRight to prevent implicit gaps
+	for i, part := range innerParts {
+		innerParts[i] = strings.TrimRight(part, "\n")
+	}
 	content := lipgloss.JoinVertical(lipgloss.Left, innerParts...)
 
-	// If maximized, force total content height to match the budget (minus outer borders)
-	// This ensures the dialog box itself is the correct size as requested.
+	// Force total content height to match the calculated budget (Total - Outer Borders - Shadow)
+	// only if maximized. Otherwise it should have its intrinsic height.
 	if m.maximized {
-		content = lipgloss.NewStyle().
-			Height(m.height - 2).
-			Background(styles.Dialog.GetBackground()).
-			Render(content)
+		heightBudget := m.layout.Height - DialogBorderHeight - m.layout.ShadowHeight
+		if heightBudget > 0 {
+			content = lipgloss.NewStyle().
+				Height(heightBudget).
+				Background(styles.Dialog.GetBackground()).
+				Render(content)
+		}
 	}
 
 	// Wrap in bordered dialog with title embedded in border
@@ -1342,8 +1351,57 @@ func (m MenuModel) renderBorderWithTitle(content string, contentWidth int) strin
 func (m *MenuModel) SetSize(width, height int) {
 	m.width = width
 	m.height = height
+	m.calculateLayout()
+}
 
-	// Recalculate list dimensions (same logic as WindowSizeMsg handler)
+func (m *MenuModel) calculateLayout() {
+	if m.width == 0 || m.height == 0 {
+		return
+	}
+
+	// 1. Shadow
+	shadowHeight := 0
+	if currentConfig.UI.Shadow {
+		shadowHeight = DialogShadowHeight
+	}
+
+	// 2. Buttons
+	// Menu buttons are standard row (3) + their own border (2) = 5
+	buttonHeight := DialogButtonHeight + 2
+
+	// 3. Subtitle
+	subtitleHeight := 0
+	if m.subtitle != "" {
+		subtitleHeight = lipgloss.Height(m.subtitle)
+	}
+
+	// 4. Overhead calculation
+	// - Outer Dialog borders: 2
+	// - List box borders: 2
+	// - Buttons + their border: 5
+	// - Shadow: 1
+	overhead := DialogBorderHeight + subtitleHeight + 2 + buttonHeight + shadowHeight
+
+	maxListHeight := m.height - overhead
+	if maxListHeight < 3 {
+		maxListHeight = 3
+	}
+
+	// Calculate intrinsic list height based on items
+	itemHeight := 1
+	spacing := 0
+	totalItemHeight := len(m.items) * itemHeight
+	if len(m.items) > 1 && spacing > 0 {
+		totalItemHeight += (len(m.items) - 1) * spacing
+	}
+	listHeight := totalItemHeight
+
+	// When maximized, or if list is too tall, constrain to available space
+	if m.maximized || listHeight > maxListHeight {
+		listHeight = maxListHeight
+	}
+
+	// Calculate list width (same logic as before)
 	maxTagLen := 0
 	maxDescLen := 0
 	for _, item := range m.items {
@@ -1361,44 +1419,23 @@ func (m *MenuModel) SetSize(width, height int) {
 
 	// Constrain width to fit within terminal dialog area
 	// Account for internal overhead: outer border (2) + inner border (2) + internal padding (2) = 6
-	if m.width > 0 {
-		widthOverhead := 6
-		maxListWidth := m.width - widthOverhead
-		if maxListWidth < 30 {
-			maxListWidth = 30
-		}
-		if m.maximized || listWidth > maxListWidth {
-			listWidth = maxListWidth
-		}
+	widthOverhead := 6
+	maxListWidth := m.width - widthOverhead
+	if maxListWidth < 30 {
+		maxListWidth = 30
+	}
+	if m.maximized || listWidth > maxListWidth {
+		listWidth = maxListWidth
 	}
 
-	// Calculate list height based on items
-	itemHeight := 1
-	spacing := 0
-	totalItemHeight := len(m.items) * itemHeight
-	if len(m.items) > 1 && spacing > 0 {
-		totalItemHeight += (len(m.items) - 1) * spacing
-	}
-	listHeight := totalItemHeight
-
-	// When maximized, constrain list height to fit within available space
-	if m.maximized && m.height > 0 {
-		// Window fills caH (m.height). Calculate list height from that.
-		subtitleHeight := 0
-		numItems := 2 // list box + button box
-		if m.subtitle != "" {
-			subtitleHeight = lipgloss.Height(m.subtitle)
-			numItems++
-		}
-		// Overhead: outer border (2) + inner border (2) + buttons (3) + join space (numItems - 1)
-		fixedElements := 2 + 2 + 3 + (numItems - 1) + subtitleHeight
-		maxListHeight := m.height - fixedElements
-		if maxListHeight < 5 {
-			maxListHeight = 5
-		}
-		if m.maximized || listHeight > maxListHeight {
-			listHeight = maxListHeight
-		}
+	m.layout = DialogLayout{
+		Width:          m.width,
+		Height:         m.height,
+		HeaderHeight:   subtitleHeight,
+		ViewportHeight: listHeight,
+		ButtonHeight:   buttonHeight,
+		ShadowHeight:   shadowHeight,
+		Overhead:       overhead,
 	}
 
 	m.list.SetSize(listWidth, listHeight)

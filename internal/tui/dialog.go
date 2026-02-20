@@ -26,6 +26,75 @@ type BorderPair struct {
 	Unfocused lipgloss.Border
 }
 
+// Dialog sizing constants for deterministic layout
+const (
+	DialogBorderHeight = 2 // Top + Bottom outer borders
+	DialogShadowHeight = 1 // Bottom shadow line
+	DialogButtonHeight = 3 // Standard button row
+)
+
+// DialogLayout stores pre-calculated vertical budgeting for a dialog.
+// This implements the "calculate once, use everywhere" pattern.
+type DialogLayout struct {
+	Width          int
+	Height         int
+	HeaderHeight   int
+	CommandHeight  int
+	ViewportHeight int
+	ButtonHeight   int
+	ShadowHeight   int
+	Overhead       int
+}
+
+// CalculateBaseOverhead returns the overhead lines for a standard dialog without a viewport
+func CalculateBaseOverhead(hasShadow bool, hasButtons bool) int {
+	overhead := DialogBorderHeight
+	if hasShadow {
+		overhead += DialogShadowHeight
+	}
+	if hasButtons {
+		overhead += DialogButtonHeight
+	}
+	return overhead
+}
+
+// CalculateContentHeight returns the remaining vertical budget for content
+func CalculateContentHeight(totalHeight int, overhead int) int {
+	h := totalHeight - overhead
+	if h < 0 {
+		return 0
+	}
+	return h
+}
+
+// EnforceDialogLayout appends a button row (if specified) to the content
+// and enforces the deterministic height budget if the dialog is maximized.
+func EnforceDialogLayout(content string, buttons []ButtonSpec, layout DialogLayout, maximized bool) string {
+	// Standardize to prevent implicit gaps
+	content = strings.TrimRight(content, "\n")
+
+	// Append buttons if any
+	if len(buttons) > 0 {
+		buttonRow := RenderCenteredButtons(layout.Width-2, buttons...)
+		buttonRow = strings.TrimRight(buttonRow, "\n")
+		content = lipgloss.JoinVertical(lipgloss.Left, content, buttonRow)
+	}
+
+	// Force total content height to match the calculated budget
+	// only if maximized. Otherwise it has its intrinsic height.
+	if maximized {
+		heightBudget := layout.Height - DialogBorderHeight - layout.ShadowHeight
+		if heightBudget > 0 {
+			content = lipgloss.NewStyle().
+				Height(heightBudget).
+				Background(GetStyles().Dialog.GetBackground()).
+				Render(content)
+		}
+	}
+
+	return content
+}
+
 // RenderDialogBox renders content in a centered dialog box
 func RenderDialogBox(title, content string, dialogType DialogType, width, height, containerWidth, containerHeight int) string {
 	styles := GetStyles()

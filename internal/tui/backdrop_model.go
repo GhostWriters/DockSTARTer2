@@ -133,8 +133,18 @@ func (m BackdropModel) GetContentArea() (width, height int) {
 	// Remaining space for dialog: margin (2 per side) = 4
 	contentWidth := m.width - 4 - shadowWidth
 
-	// Remaining space for dialog: header/sep (2) + gap (1) + helpline (1) + shadow (1) = 5
-	contentHeight := m.height - 5
+	// Remaining space for dialog:
+	// - Header/Sep: 2
+	// - Gap after Sep: 1
+	// - Space before helpline: 1
+	// - Helpline: 1
+	// Total overhead: 5 lines for a single space between box and helpline if shadow is off.
+	// If shadow is on, it takes 1 extra line, so we subtract 1 more.
+	overhead := 4
+	if currentConfig.UI.Shadow {
+		overhead = 5
+	}
+	contentHeight := m.height - overhead
 
 	if contentHeight < 5 {
 		contentHeight = 5
