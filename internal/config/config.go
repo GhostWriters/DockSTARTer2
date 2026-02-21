@@ -115,8 +115,8 @@ func LoadAppConfig() AppConfig {
 			BorderColor:    3,
 		},
 		Paths: PathConfig{
-			ConfigFolder:  "${XDG_CONFIG_HOME}",
-			ComposeFolder: "${XDG_CONFIG_HOME}/compose",
+			ConfigFolder:  "${XDG_CONFIG_HOME}/dockstarter2",
+			ComposeFolder: "${XDG_CONFIG_HOME}/dockstarter2/compose",
 		},
 	}
 

@@ -28,20 +28,7 @@ import (
 //
 // Returns an error if critical operations like folder creation or file writing fail.
 func EnvCreate(ctx context.Context, conf config.AppConfig) error {
-	// 1. Ensure main config env file exists (in ConfigDir)
-	exampleFile := filepath.Join(conf.Paths.ConfigFolder, constants.EnvExampleFileName)
-	envFile := filepath.Join(conf.Paths.ConfigFolder, constants.EnvFileName)
-	if err := Create(ctx, envFile, exampleFile); err != nil {
-		return err
-	}
-
-	// 2. Ensure main app env file exists (in ComposeDir)
-	mainEnvPath := filepath.Join(conf.Paths.ComposeFolder, constants.EnvFileName)
-	if err := Create(ctx, mainEnvPath, envFile); err != nil {
-		return err
-	}
-
-	// 3. Ensure Folders
+	// 1. Ensure ComposeFolder exists
 	if _, err := os.Stat(conf.Paths.ComposeFolder); os.IsNotExist(err) {
 		logger.Notice(ctx, "Creating folder '{{|Folder|}}%s{{[-]}}'.", conf.Paths.ComposeFolder)
 		if err := os.MkdirAll(conf.Paths.ComposeFolder, 0755); err != nil {
@@ -50,43 +37,34 @@ func EnvCreate(ctx context.Context, conf config.AppConfig) error {
 	} else if err != nil {
 		return err
 	}
-	if _, err := os.Stat(conf.Paths.ConfigFolder); os.IsNotExist(err) {
-		logger.Notice(ctx, "Creating folder '{{|Folder|}}%s{{[-]}}'.", conf.Paths.ConfigFolder)
-		if err := os.MkdirAll(conf.Paths.ConfigFolder, 0755); err != nil {
-			logger.Fatal(ctx, "Failed to create config folder: %v", err)
-		}
-	} else if err != nil {
-		return err // Stat error, usually permissions or disk error. Maybe fatal too?
-	}
 
-	// 2. Backup
-	if _, err := os.Stat(envFile); err == nil {
-		logger.Info(ctx, "File '{{|File|}}%s{{[-]}}' found.", envFile)
-		if err := BackupEnv(ctx, envFile); err != nil {
-			logger.Warn(ctx, "Failed to backup .env: %v", err)
-		}
-		// Sanitize existing
-		if err := SanitizeEnv(ctx, envFile, conf); err != nil {
-			logger.Warn(ctx, "Failed to sanitize .env: %v", err)
-		}
-	} else {
-		// 3. Create from default if missing
-		logger.Warn(ctx, "File '{{|File|}}%s{{[-]}}' not found. Copying example template.", envFile)
+	mainEnvPath := filepath.Join(conf.Paths.ComposeFolder, constants.EnvFileName)
+
+	// 2. Initialize .env file if missing
+	if _, err := os.Stat(mainEnvPath); os.IsNotExist(err) {
+		logger.Warn(ctx, "File '{{|File|}}%s{{[-]}}' not found. Copying example template.", mainEnvPath)
 
 		defaultContent, err := assets.GetDefaultEnv()
 		if err != nil {
 			logger.Fatal(ctx, "Failed to load default env template: %v", err)
 		}
 
-		if err := os.WriteFile(envFile, defaultContent, 0644); err != nil {
+		if err := os.WriteFile(mainEnvPath, defaultContent, 0644); err != nil {
 			logger.Fatal(ctx, "Failed to create default env file: %v", err)
 		}
-		// Sanitize new
-		if err := SanitizeEnv(ctx, envFile, conf); err != nil {
-			logger.Warn(ctx, "Failed to sanitize .env: %v", err)
+	} else {
+		// 3. Backup if existing
+		if err := BackupEnv(ctx, mainEnvPath, conf); err != nil {
+			logger.Warn(ctx, "Failed to backup .env: %v", err)
 		}
 	}
 
+	// 4. Sanitize (ensures required variables like HOME, Docker paths, etc. are set)
+	if err := SanitizeEnv(ctx, mainEnvPath, conf); err != nil {
+		logger.Warn(ctx, "Failed to sanitize .env: %v", err)
+	}
+
+	// 5. Ensure default apps are enabled if none are referenced
 	referenced, err := ListReferencedApps(ctx, conf)
 	if err != nil {
 		return err
@@ -99,23 +77,7 @@ func EnvCreate(ctx context.Context, conf config.AppConfig) error {
 		}
 	}
 
-	// 4. Update file (sorting/formatting)
-	// DELETED: Update(ctx, envFile) - This was masking variable additions from CreateAll/MergeNewOnly
 	return nil
-}
-
-// BackupEnv creates a backup of the environment file
-func BackupEnv(ctx context.Context, file string) error {
-	// Simple backup: .bak
-	// Bash does full timestamp folder.
-	// For now, let's do .bak to basic safety.
-	bak := file + ".bak"
-	logger.Info(ctx, "Copying '{{|File|}}.env{{[-]}}' file to '{{|File|}}%s{{[-]}}'", bak)
-	input, err := os.ReadFile(file)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(bak, input, 0644)
 }
 
 // SanitizeEnv sanitizes the environment file by setting default values
