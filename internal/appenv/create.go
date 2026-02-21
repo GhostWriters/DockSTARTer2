@@ -43,17 +43,17 @@ func Create(ctx context.Context, file, defaultFile string) error {
 	// 1. HOME
 	home, err := os.UserHomeDir()
 	if err == nil {
-		if err := Set("HOME", home, file); err != nil {
+		if err := Set(ctx, "HOME", home, file); err != nil {
 			logger.FatalWithStack(ctx, "Failed to set HOME in env file: %v", err)
 		}
 	}
 
 	// 2. CONFIG/COMPOSE FOLDERS
 	conf := config.LoadAppConfig()
-	if err := Set("DOCKER_CONFIG_FOLDER", conf.ConfigDir, file); err != nil {
+	if err := Set(ctx, "DOCKER_CONFIG_FOLDER", conf.ConfigDir, file); err != nil {
 		logger.FatalWithStack(ctx, "Failed to set DOCKER_CONFIG_FOLDER: %v", err)
 	}
-	if err := Set("DOCKER_COMPOSE_FOLDER", conf.ComposeDir, file); err != nil {
+	if err := Set(ctx, "DOCKER_COMPOSE_FOLDER", conf.ComposeDir, file); err != nil {
 		logger.FatalWithStack(ctx, "Failed to set DOCKER_COMPOSE_FOLDER: %v", err)
 	}
 

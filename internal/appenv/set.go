@@ -1,7 +1,9 @@
 package appenv
 
 import (
+	"DockSTARTer2/internal/system"
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,21 +14,21 @@ import (
 // Set sets the variable in the file.
 // If it exists, it replaces the first occurrence and removes others.
 // If it doesn't exist, it appends to the end.
-func Set(key, value, file string) error {
+func Set(ctx context.Context, key, value, file string) error {
 	// Use single quotes and escape internal single quotes
 	escapedVal := strings.ReplaceAll(value, "'", `'"'"'`)
 	newLine := fmt.Sprintf("%s='%s'", key, escapedVal)
 
-	return setInFile(key, newLine, file)
+	return setInFile(ctx, key, newLine, file)
 }
 
 // SetLiteral sets the variable with the raw value provided.
-func SetLiteral(key, value, file string) error {
+func SetLiteral(ctx context.Context, key, value, file string) error {
 	newLine := fmt.Sprintf("%s=%s", key, value)
-	return setInFile(key, newLine, file)
+	return setInFile(ctx, key, newLine, file)
 }
 
-func setInFile(key, newLine, file string) error {
+func setInFile(ctx context.Context, key, newLine, file string) error {
 	var lines []string
 	found := false
 	re := regexp.MustCompile(fmt.Sprintf(`^\s*%s\s*=`, regexp.QuoteMeta(key)))
@@ -62,10 +64,10 @@ func setInFile(key, newLine, file string) error {
 		lines = append(lines, newLine)
 	}
 
-	return writeLines(lines, file)
+	return writeLines(ctx, lines, file)
 }
 
-func writeLines(lines []string, file string) error {
+func writeLines(ctx context.Context, lines []string, file string) error {
 	// Ensure dir exists
 	if err := os.MkdirAll(filepath.Dir(file), 0755); err != nil {
 		return err
@@ -82,5 +84,9 @@ func writeLines(lines []string, file string) error {
 	for _, line := range lines {
 		writer.WriteString(line + "\n")
 	}
-	return writer.Flush()
+	if err := writer.Flush(); err != nil {
+		return err
+	}
+	system.SetPermissions(ctx, file)
+	return nil
 }

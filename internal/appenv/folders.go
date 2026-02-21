@@ -4,6 +4,7 @@ import (
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/system"
 	"bufio"
 	"context"
 	"fmt"
@@ -84,8 +85,7 @@ func CreateAppFolders(ctx context.Context, appNameRaw string, conf config.AppCon
 				logger.Warn(ctx, "Could not create folder '{{|Folder|}}%s{{[-]}}'", folder)
 				logger.Warn(ctx, "Failing command: {{|FailingCommand|}}mkdir -p \"%s\"{{[-]}}", folder)
 			}
-			// Bash version calls set_permissions here.
-			// We might need a set_permissions equivalent eventually.
+			system.SetPermissions(ctx, folder)
 		}
 	}
 

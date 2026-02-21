@@ -5,6 +5,7 @@ import (
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/system"
 	"context"
 	"fmt"
 	"os"
@@ -34,6 +35,7 @@ func EnvCreate(ctx context.Context, conf config.AppConfig) error {
 		if err := os.MkdirAll(conf.Paths.ComposeFolder, 0755); err != nil {
 			logger.Fatal(ctx, "Failed to create compose folder: %v", err)
 		}
+		system.SetPermissions(ctx, conf.Paths.ComposeFolder)
 	} else if err != nil {
 		return err
 	}
@@ -52,6 +54,7 @@ func EnvCreate(ctx context.Context, conf config.AppConfig) error {
 		if err := os.WriteFile(mainEnvPath, defaultContent, 0644); err != nil {
 			logger.Fatal(ctx, "Failed to create default env file: %v", err)
 		}
+		system.SetPermissions(ctx, mainEnvPath)
 	} else {
 		// 3. Backup if existing
 		if err := BackupEnv(ctx, mainEnvPath, conf); err != nil {
@@ -314,7 +317,7 @@ func SanitizeEnv(ctx context.Context, file string, conf config.AppConfig) error 
 		for _, key := range updatedVars {
 			val := updates[key]
 			logger.Notice(ctx, "\t{{|Var|}}%s=%s{{[-]}}", key, val)
-			SetLiteral(key, val, file)
+			SetLiteral(ctx, key, val, file)
 		}
 	}
 

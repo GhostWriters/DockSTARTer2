@@ -3,6 +3,7 @@ package appenv
 import (
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/system"
 	"bytes"
 	"context"
 	"os"
@@ -29,9 +30,17 @@ func AppInstanceFile(ctx context.Context, appName, fileSuffix string) (string, e
 	instanceFile := filepath.Join(instanceFolder, instanceFilename)
 	instanceOriginalFile := instanceFile + ".original"
 
+	// 0. Ensure instances folder exists and have permissions
+	if _, err := os.Stat(instancesDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(instancesDir, 0755); err == nil {
+			system.SetPermissions(ctx, instancesDir)
+		}
+	}
+
 	// Check if template folder exists
 	if _, err := os.Stat(templateFolder); os.IsNotExist(err) {
 		// Parity: remove instance folders if template folder is gone
+		system.SetPermissions(ctx, instanceFolder)
 		_ = os.RemoveAll(instanceFolder)
 		return "", nil
 	}
@@ -41,7 +50,9 @@ func AppInstanceFile(ctx context.Context, appName, fileSuffix string) (string, e
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Parity: remove instance files if template file is gone
+			system.SetPermissions(ctx, instanceFile)
 			_ = os.Remove(instanceFile)
+			system.SetPermissions(ctx, instanceOriginalFile)
 			_ = os.Remove(instanceOriginalFile)
 			return "", nil
 		}
@@ -63,6 +74,7 @@ func AppInstanceFile(ctx context.Context, appName, fileSuffix string) (string, e
 	if err := os.MkdirAll(instanceFolder, 0755); err != nil {
 		return "", err
 	}
+	system.SetPermissions(ctx, instanceFolder)
 
 	// Process content (replace placeholders)
 	content := string(templateContent)
@@ -81,11 +93,13 @@ func AppInstanceFile(ctx context.Context, appName, fileSuffix string) (string, e
 	if err := os.WriteFile(instanceFile, []byte(content), 0644); err != nil {
 		return "", err
 	}
+	system.SetPermissions(ctx, instanceFile)
 
 	// Write Original Template File
 	if err := os.WriteFile(instanceOriginalFile, templateContent, 0644); err != nil {
 		return "", err
 	}
+	system.SetPermissions(ctx, instanceOriginalFile)
 
 	return instanceFile, nil
 }

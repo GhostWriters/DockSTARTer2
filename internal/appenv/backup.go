@@ -4,6 +4,7 @@ import (
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/system"
 	"context"
 	"fmt"
 	"os"
@@ -43,7 +44,7 @@ func BackupEnv(ctx context.Context, envFile string, conf config.AppConfig) error
 	}
 	if dockerVolumeConfig == "" {
 		dockerVolumeConfig = VarDefaultValue(ctx, "DOCKER_VOLUME_CONFIG", conf)
-		_ = SetLiteral("DOCKER_VOLUME_CONFIG", dockerVolumeConfig, envFile)
+		_ = SetLiteral(ctx, "DOCKER_VOLUME_CONFIG", dockerVolumeConfig, envFile)
 		dockerVolumeConfig, _ = Get("DOCKER_VOLUME_CONFIG", envFile)
 	}
 
@@ -67,7 +68,7 @@ func BackupEnv(ctx context.Context, envFile string, conf config.AppConfig) error
 
 	// info "Taking ownership of '${C["Folder"]}${DOCKER_VOLUME_CONFIG}${NC}' (non-recursive)."
 	// (Non-functional on Windows, but preserved for parity intent)
-	logger.Info(ctx, "Taking ownership of '{{|Folder|}}%s{{[-]}}' (non-recursive).", expandedVolumeConfig)
+	system.TakeOwnership(ctx, expandedVolumeConfig)
 
 	// 3. Setup backup paths
 	composeBackupsFolder := filepath.Join(expandedVolumeConfig, ".compose.backups")
@@ -125,7 +126,7 @@ func BackupEnv(ctx context.Context, envFile string, conf config.AppConfig) error
 	}
 
 	// run_script 'set_permissions' "${COMPOSE_BACKUPS_FOLDER}"
-	// (Stubbed for parity)
+	system.SetPermissions(ctx, composeBackupsFolder)
 
 	// info "Removing old compose backups."
 	logger.Info(ctx, "Removing old compose backups.")

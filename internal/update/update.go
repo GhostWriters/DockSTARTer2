@@ -4,6 +4,7 @@ import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/system"
 	"DockSTARTer2/internal/version"
 	"archive/tar"
 	"compress/gzip"
@@ -185,6 +186,7 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 	}
 
 	// Reset all needs markers
+	system.SetPermissions(ctx, paths.GetTimestampsDir())
 	_ = paths.ResetNeeds()
 
 	// Re-execution logic
@@ -336,9 +338,7 @@ func UpdateTemplates(ctx context.Context, force bool, yes bool, requestedBranch 
 
 	// Fetch updates to get remote hash
 	logger.Info(ctx, "Setting file ownership on current repository files")
-	logger.Info(ctx, "Running: {{|RunningCommand|}}sudo chown -R 1000:1000 %s/.git{{[-]}}", templatesDir)
-	logger.Info(ctx, "Running: {{|RunningCommand|}}sudo chown 1000:1000 %s{{[-]}}", templatesDir)
-	logger.Info(ctx, "Running: {{|RunningCommand|}}git ls-tree -rt --name-only HEAD | xargs sudo chown 1000:1000{{[-]}}")
+	system.SetPermissions(ctx, templatesDir)
 	logger.Info(ctx, "Fetching recent changes from git.")
 	logger.Info(ctx, "Running: {{|RunningCommand|}}git fetch --all --prune -v{{[-]}}")
 	err = repo.Fetch(&git.FetchOptions{
@@ -484,14 +484,13 @@ func UpdateTemplates(ctx context.Context, force bool, yes bool, requestedBranch 
 		logger.Info(ctx, "Cleaning up unnecessary files and optimizing the local repository.")
 		logger.Info(ctx, "Running: {{|RunningCommand|}}git gc{{[-]}}")
 		logger.Info(ctx, "Setting file ownership on new repository files")
-		logger.Info(ctx, "Running: {{|RunningCommand|}}git ls-tree -rt --name-only %s | xargs sudo chown 1000:1000{{[-]}}", requestedBranch)
-		logger.Info(ctx, "Running: {{|RunningCommand|}}sudo chown -R 1000:1000 %s/.git{{[-]}}", templatesDir)
-		logger.Info(ctx, "Running: {{|RunningCommand|}}sudo chown 1000:1000 %s{{[-]}}", templatesDir)
+		system.SetPermissions(ctx, templatesDir)
 	}
 
 	logger.Notice(ctx, "Updated {{|ApplicationName|}}%s{{[-]}} to '{{|Version|}}%s{{[-]}}'", targetName, paths.GetTemplatesVersion())
 
 	// Reset all needs markers
+	system.SetPermissions(ctx, paths.GetTimestampsDir())
 	_ = paths.ResetNeeds()
 
 	return nil

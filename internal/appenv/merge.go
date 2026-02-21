@@ -2,6 +2,7 @@ package appenv
 
 import (
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/system"
 	"bufio"
 	"context"
 	"os"
@@ -21,6 +22,7 @@ func MergeNewOnly(ctx context.Context, targetFile, sourceFile string) ([]string,
 		if err := os.WriteFile(targetFile, []byte{}, 0644); err != nil {
 			return nil, err
 		}
+		system.SetPermissions(ctx, targetFile)
 	}
 
 	targetVars, err := ListVars(targetFile)
@@ -89,6 +91,7 @@ func MergeNewOnly(ctx context.Context, targetFile, sourceFile string) ([]string,
 		if err := writer.Flush(); err != nil {
 			return nil, err
 		}
+		system.SetPermissions(ctx, targetFile)
 	}
 
 	return addedVars, nil

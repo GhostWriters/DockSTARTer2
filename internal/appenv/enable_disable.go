@@ -24,7 +24,7 @@ func Enable(ctx context.Context, appNames []string, conf config.AppConfig) error
 			logger.Notice(ctx, "Setting variable in '{{|File|}}%s{{[-]}}':", envFile)
 			logger.Notice(ctx, "\t{{|Var|}}%s='true'{{[-]}}", enabledVar)
 
-			if err := Set(enabledVar, "true", envFile); err != nil {
+			if err := Set(ctx, enabledVar, "true", envFile); err != nil {
 				return err
 			}
 		} else {
@@ -50,7 +50,7 @@ func Disable(ctx context.Context, appNames []string, conf config.AppConfig) erro
 			logger.Notice(ctx, "Setting variable in '{{|File|}}%s{{[-]}}':", envFile)
 			logger.Notice(ctx, "\t{{|Var|}}%s='false'{{[-]}}", enabledVar)
 
-			if err := Set(enabledVar, "false", envFile); err != nil {
+			if err := Set(ctx, enabledVar, "false", envFile); err != nil {
 				return err
 			}
 		} else {

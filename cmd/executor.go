@@ -560,9 +560,9 @@ func handleEnvSet(ctx context.Context, group *CommandGroup) error {
 
 		var err error
 		if isLiteral {
-			err = appenv.SetLiteral(varName, p.val, file)
+			err = appenv.SetLiteral(ctx, varName, p.val, file)
 		} else {
-			err = appenv.Set(varName, p.val, file)
+			err = appenv.Set(ctx, varName, p.val, file)
 		}
 
 		if err != nil {
