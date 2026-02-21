@@ -121,19 +121,33 @@ func ListNonDeprecatedApps(ctx context.Context) ([]string, error) {
 func ListReferencedApps(ctx context.Context, conf config.AppConfig) ([]string, error) {
 	referenced := make(map[string]bool)
 
-	enabled, _ := ListEnabledApps(conf)
-	for _, app := range enabled {
-		referenced[app] = true
+	// 1. Scan global .env for all app variables
+	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
+	vars, _ := ListVars(envFile)
+	for key := range vars {
+		if !IsGlobalVar(key) {
+			appName := VarNameToAppName(key)
+			if appName != "" {
+				referenced[strings.ToUpper(appName)] = true
+			}
+		}
 	}
 
+	// 2. Scan for app-specific env files with variables
 	entries, _ := os.ReadDir(conf.ComposeDir)
 	for _, entry := range entries {
 		if !entry.IsDir() && strings.HasPrefix(entry.Name(), constants.AppEnvFileNamePrefix) {
 			appName := strings.TrimPrefix(entry.Name(), constants.AppEnvFileNamePrefix)
-			referenced[strings.ToUpper(appName)] = true
+			appUpper := strings.ToUpper(appName)
+			// Check if it has any variables
+			appSpecificVars, _ := ListAppVars(ctx, appUpper+":", conf)
+			if len(appSpecificVars) > 0 {
+				referenced[appUpper] = true
+			}
 		}
 	}
 
+	// 3. Scan override file
 	overrideFile := filepath.Join(conf.ComposeDir, constants.ComposeOverrideFileName)
 	if _, err := os.Stat(overrideFile); err == nil {
 		content, err := os.ReadFile(overrideFile)
@@ -168,12 +182,12 @@ func ListReferencedApps(ctx context.Context, conf config.AppConfig) ([]string, e
 					checkEnvFile(service.EnvFile)
 				}
 			}
-
 		}
 	}
 
 	var result []string
 	for app := range referenced {
+		// Validating names keeps results clean
 		if IsAppNameValid(app) {
 			result = append(result, app)
 		}

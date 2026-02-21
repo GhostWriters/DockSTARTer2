@@ -133,15 +133,21 @@ func IsAppEnabled(app, envFile string) bool {
 
 // IsAppReferenced checks if an app is referenced in .env or compose override.
 func IsAppReferenced(ctx context.Context, app string, conf config.AppConfig) bool {
-	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
-	if IsAppEnabled(app, envFile) {
-		return true
-	}
-	if IsAppAdded(ctx, app, envFile) {
+	app = strings.ToUpper(app)
+
+	// 1. Check for app variables in the global .env file
+	appVars, _ := ListAppVars(ctx, app, conf)
+	if len(appVars) > 0 {
 		return true
 	}
 
-	// Also check overrides...
+	// 2. Check for app variables in the .env.app.appname file
+	appSpecificVars, _ := ListAppVars(ctx, app+":", conf)
+	if len(appSpecificVars) > 0 {
+		return true
+	}
+
+	// 3. Check for an un-commented reference to .env.app.appname in the override file
 	overrideFile := filepath.Join(conf.ComposeDir, constants.ComposeOverrideFileName)
 	if _, err := os.Stat(overrideFile); err == nil {
 		content, err := os.ReadFile(overrideFile)
@@ -180,6 +186,7 @@ func IsAppReferenced(ctx context.Context, app string, conf config.AppConfig) boo
 			}
 		}
 	}
+
 	return false
 }
 

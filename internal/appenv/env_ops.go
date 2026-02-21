@@ -80,6 +80,11 @@ func EnvCreate(ctx context.Context, conf config.AppConfig) error {
 		}
 	}
 
+	// 6. Cleanup orphaned env files
+	if err := CleanupOrphanedEnvFiles(ctx, conf); err != nil {
+		logger.Warn(ctx, "Failed to cleanup orphaned env files: %v", err)
+	}
+
 	return nil
 }
 
@@ -321,5 +326,35 @@ func SanitizeEnv(ctx context.Context, file string, conf config.AppConfig) error 
 		}
 	}
 
+	// 4. Cleanup orphaned env files (if this was the global .env being sanitized)
+	if filepath.Base(file) == constants.EnvFileName {
+		if err := CleanupOrphanedEnvFiles(ctx, conf); err != nil {
+			logger.Warn(ctx, "Failed to cleanup orphaned env files: %v", err)
+		}
+	}
+
+	return nil
+}
+
+// CleanupOrphanedEnvFiles removes .env.app.* files that are no longer referenced.
+func CleanupOrphanedEnvFiles(ctx context.Context, conf config.AppConfig) error {
+	entries, err := os.ReadDir(conf.ComposeDir)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasPrefix(entry.Name(), constants.AppEnvFileNamePrefix) {
+			appName := strings.TrimPrefix(entry.Name(), constants.AppEnvFileNamePrefix)
+			if !IsAppReferenced(ctx, appName, conf) {
+				targetFile := filepath.Join(conf.ComposeDir, entry.Name())
+				system.SetPermissions(ctx, targetFile)
+				logger.Notice(ctx, "Deleting '{{|File|}}%s{{[-]}}'.", targetFile)
+				if err := os.Remove(targetFile); err != nil {
+					logger.Warn(ctx, "Failed to remove '{{|File|}}%s{{[-]}}': %v", targetFile, err)
+				}
+			}
+		}
+	}
 	return nil
 }
