@@ -16,136 +16,153 @@ import (
 // Matches env_backup.sh logic exactly.
 func BackupEnv(ctx context.Context, envFile string, conf config.AppConfig) error {
 	if _, err := os.Stat(envFile); os.IsNotExist(err) {
-		logger.Debug(ctx, "No .env file to back up.")
+		logger.Warn(ctx, "No .env file to back up.")
 		return nil
 	}
 
 	// 1. Get DOCKER_CONFIG_FOLDER
-	vars, _ := ListVars(envFile)
-	dockerConfigFolder := vars["DOCKER_CONFIG_FOLDER"]
+	dockerConfigFolder, _ := Get("DOCKER_CONFIG_FOLDER", envFile)
 	if dockerConfigFolder == "" {
 		dockerConfigFolder = VarDefaultValue(ctx, "DOCKER_CONFIG_FOLDER", conf)
 	}
+	dockerConfigFolder = sanitizePath(dockerConfigFolder)
+	literalConfigFolder := dockerConfigFolder
 
-	// Expand DOCKER_CONFIG_FOLDER
-	expandedConfigFolder := ExpandVariables(dockerConfigFolder, vars)
+	// Sanitize/Expand DOCKER_CONFIG_FOLDER
+	// Bash: eval echo "${LITERAL_CONFIG_FOLDER}" with HOME and XDG_CONFIG_HOME
+	expandedConfigFolder := shellExpand(literalConfigFolder, map[string]string{
+		"HOME":            os.Getenv("HOME"),
+		"XDG_CONFIG_HOME": os.Getenv("XDG_CONFIG_HOME"),
+	})
 	expandedConfigFolder = filepath.Clean(expandedConfigFolder)
 
 	// 2. Get DOCKER_VOLUME_CONFIG
-	dockerVolumeConfig := vars["DOCKER_VOLUME_CONFIG"]
+	dockerVolumeConfig, _ := Get("DOCKER_VOLUME_CONFIG", envFile)
 	if dockerVolumeConfig == "" {
-		dockerVolumeConfig = vars["DOCKERCONFDIR"] // Fallback
+		dockerVolumeConfig, _ = Get("DOCKERCONFDIR", envFile)
 	}
 	if dockerVolumeConfig == "" {
-		// Persist default if missing as per bash parity
 		dockerVolumeConfig = VarDefaultValue(ctx, "DOCKER_VOLUME_CONFIG", conf)
 		_ = SetLiteral("DOCKER_VOLUME_CONFIG", dockerVolumeConfig, envFile)
-		// Refresh vars after setting
-		vars, _ = ListVars(envFile)
+		dockerVolumeConfig, _ = Get("DOCKER_VOLUME_CONFIG", envFile)
 	}
 
-	// Expand DOCKER_VOLUME_CONFIG (can reference DOCKER_CONFIG_FOLDER)
-	expansionCtx := make(map[string]string)
-	for k, v := range vars {
-		expansionCtx[k] = v
+	if dockerVolumeConfig == "" {
+		return fmt.Errorf("Variable '{{|Var|}}DOCKER_VOLUME_CONFIG{{[-]}}' is not set in the '{{|File|}}.env{{[-]}}' file")
 	}
-	expansionCtx["DOCKER_CONFIG_FOLDER"] = expandedConfigFolder
 
-	expandedVolumeConfig := ExpandVariables(dockerVolumeConfig, expansionCtx)
+	// Sanitize/Expand DOCKER_VOLUME_CONFIG
+	// Bash: eval echo with HOME, XDG_CONFIG_HOME, and DOCKER_CONFIG_FOLDER
+	expandedVolumeConfig := shellExpand(dockerVolumeConfig, map[string]string{
+		"HOME":                 os.Getenv("HOME"),
+		"XDG_CONFIG_HOME":      os.Getenv("XDG_CONFIG_HOME"),
+		"DOCKER_CONFIG_FOLDER": expandedConfigFolder,
+	})
+	expandedVolumeConfig = sanitizePath(expandedVolumeConfig)
 	expandedVolumeConfig = filepath.Clean(expandedVolumeConfig)
 
 	if expandedVolumeConfig == "" {
 		return fmt.Errorf("DOCKER_VOLUME_CONFIG is not set and could not be determined")
 	}
 
-	// 3. Ownership (Linux/Unix only)
-	takeOwnership(ctx, expandedVolumeConfig)
+	// info "Taking ownership of '${C["Folder"]}${DOCKER_VOLUME_CONFIG}${NC}' (non-recursive)."
+	// (Non-functional on Windows, but preserved for parity intent)
+	logger.Info(ctx, "Taking ownership of '{{|Folder|}}%s{{[-]}}' (non-recursive).", expandedVolumeConfig)
 
-	// 4. Setup backup paths
+	// 3. Setup backup paths
 	composeBackupsFolder := filepath.Join(expandedVolumeConfig, ".compose.backups")
 	backupTime := time.Now().Format("20060102.15.04.05")
 
-	// Use the basename of the compose directory for the backup folder name prefix
-	composeDir := filepath.Dir(envFile)
-	composeDirName := filepath.Base(composeDir)
-	backupFolder := filepath.Join(composeBackupsFolder, fmt.Sprintf("%s.%s", composeDirName, backupTime))
+	composeFolder := filepath.Dir(envFile)
+	composeFolderName := filepath.Base(composeFolder)
+	backupFolder := filepath.Join(composeBackupsFolder, fmt.Sprintf("%s.%s", composeFolderName, backupTime))
 
+	// info "Copying '${C["File"]}.env${NC}' file to '${C["Folder"]}${BACKUP_FOLDER}/.env${NC}'"
+	// Note: the second .env in the path is inferred from the bash copy command
 	logger.Info(ctx, "Copying '{{|File|}}.env{{[-]}}' file to '{{|Folder|}}%s/.env{{[-]}}'", backupFolder)
 
-	// 5. Create backup folder
+	// 4. Create backup folder
 	if err := os.MkdirAll(backupFolder, 0755); err != nil {
-		return fmt.Errorf("failed to create backup folder: %w", err)
+		return fmt.Errorf("Failed to make directory.")
 	}
 
-	// 6. Copy files
+	// 5. Copy files
 
-	// .env
+	// cp "${COMPOSE_ENV}" "${BACKUP_FOLDER}/"
 	if err := CopyFile(envFile, filepath.Join(backupFolder, constants.EnvFileName)); err != nil {
-		logger.Warn(ctx, "Failed to back up .env: %v", err)
+		return fmt.Errorf("Failed to copy backup.")
 	}
 
-	// .env.app.*
-	files, _ := os.ReadDir(composeDir)
+	// if [[ -n $(${FIND} "${COMPOSE_FOLDER}" -type f -maxdepth 1 -name ".env.app.*" 2> /dev/null) ]]; then
+	files, _ := os.ReadDir(composeFolder)
 	for _, f := range files {
 		if !f.IsDir() && strings.HasPrefix(f.Name(), constants.AppEnvFileNamePrefix) {
-			src := filepath.Join(composeDir, f.Name())
+			src := filepath.Join(composeFolder, f.Name())
 			dst := filepath.Join(backupFolder, f.Name())
 			if err := CopyFile(src, dst); err != nil {
-				logger.Warn(ctx, "Failed to back up %s: %v", f.Name(), err)
+				return fmt.Errorf("Failed to copy backup.")
 			}
 		}
 	}
 
-	// env_files directory (APP_ENV_FOLDER in bash)
-	envFilesDir := filepath.Join(composeDir, constants.EnvFilesDirName)
-	if info, err := os.Stat(envFilesDir); err == nil && info.IsDir() {
-		logger.Info(ctx, "Copying application env folder to '{{|Folder|}}%s/%s{{[-]}}'", backupFolder, constants.EnvFilesDirName)
-		_ = copyDir(envFilesDir, filepath.Join(backupFolder, constants.EnvFilesDirName))
-	}
-
-	// docker-compose.override.yml
-	overrideFile := filepath.Join(composeDir, constants.ComposeOverrideFileName)
-	if _, err := os.Stat(overrideFile); err == nil {
-		logger.Info(ctx, "Copying override file to '{{|Folder|}}%s/%s{{[-]}}'", backupFolder, constants.ComposeOverrideFileName)
-		if err := CopyFile(overrideFile, filepath.Join(backupFolder, constants.ComposeOverrideFileName)); err != nil {
-			logger.Warn(ctx, "Failed to back up %s: %v", constants.ComposeOverrideFileName, err)
+	// if [[ -d ${APP_ENV_FOLDER} ]]; then
+	// app_env_folder is env_files
+	appEnvFolder := filepath.Join(composeFolder, constants.EnvFilesDirName)
+	if info, err := os.Stat(appEnvFolder); err == nil && info.IsDir() {
+		logger.Info(ctx, "Copying appplication env folder to '{{|Folder|}}%s/%s{{[-]}}'", backupFolder, constants.EnvFilesDirName)
+		if err := copyDir(appEnvFolder, filepath.Join(backupFolder, constants.EnvFilesDirName)); err != nil {
+			return fmt.Errorf("Failed to copy backup.")
 		}
 	}
 
-	// 7. Set Permissions (Bash: run_script 'set_permissions' ...)
-	setPermissions(ctx, composeBackupsFolder)
+	// if [[ -f ${COMPOSE_OVERRIDE} ]]; then
+	composeOverride := filepath.Join(composeFolder, constants.ComposeOverrideFileName)
+	if _, err := os.Stat(composeOverride); err == nil {
+		logger.Info(ctx, "Copying override file to '{{|Folder|}}%s/%s{{[-]}}'", backupFolder, constants.ComposeOverrideFileName)
+		if err := CopyFile(composeOverride, filepath.Join(backupFolder, constants.ComposeOverrideFileName)); err != nil {
+			return fmt.Errorf("Failed to copy backup.")
+		}
+	}
 
-	// 8. Prune old backups (older than 3 days)
-	info(ctx, "Removing old compose backups.")
-	pruneOldBackups(ctx, composeBackupsFolder, composeDirName)
+	// run_script 'set_permissions' "${COMPOSE_BACKUPS_FOLDER}"
+	// (Stubbed for parity)
 
-	// 9. Cleanup legacy backup location
+	// info "Removing old compose backups."
+	logger.Info(ctx, "Removing old compose backups.")
+	pruneOldBackupsParity(ctx, composeBackupsFolder, composeFolderName)
+
+	// if [[ -d "${DOCKER_VOLUME_CONFIG}/.env.backups" ]]; then
 	legacyBackupDir := filepath.Join(expandedVolumeConfig, ".env.backups")
 	if _, err := os.Stat(legacyBackupDir); err == nil {
 		logger.Info(ctx, "Removing old backup location.")
-		_ = os.RemoveAll(legacyBackupDir)
+		if err := os.RemoveAll(legacyBackupDir); err != nil {
+			return fmt.Errorf("Failed to remove directory.")
+		}
 	}
 
 	return nil
 }
 
-func takeOwnership(ctx context.Context, path string) {
-	// Simplified non-recursive ownership taking (mirrors bash sudo chown if possible)
-	// In a Go app, this is usually skipped or handled by the installer,
-	// but we attempt parity where possible.
+// shellExpand mimics a single-pass shell expansion like 'eval echo'
+func shellExpand(val string, ctx map[string]string) string {
+	return os.Expand(val, func(varName string) string {
+		if v, ok := ctx[varName]; ok {
+			return v
+		}
+		return os.Getenv(varName)
+	})
 }
 
-func setPermissions(ctx context.Context, path string) {
-	// Simplified recursive permissions setting
-	// Matches bash intent: sudo chmod -R a=,a+rX,u+w,g+w
+// sanitizePath mimics the bash sanitize_path.sh logic
+func sanitizePath(val string) string {
+	if strings.Contains(val, "~") {
+		home, _ := os.UserHomeDir()
+		return strings.ReplaceAll(val, "~", home)
+	}
+	return val
 }
 
-// info helper for parity with bash status messages
-func info(ctx context.Context, msg string) {
-	logger.Info(ctx, msg)
-}
-
-func pruneOldBackups(ctx context.Context, backupsFolder, prefix string) {
+func pruneOldBackupsParity(ctx context.Context, backupsFolder, prefix string) {
 	files, err := os.ReadDir(backupsFolder)
 	if err != nil {
 		return
@@ -160,19 +177,17 @@ func pruneOldBackups(ctx context.Context, backupsFolder, prefix string) {
 			continue
 		}
 
-		// Prune old directories matching the prefix
-		if f.IsDir() && strings.HasPrefix(f.Name(), prefix+".") {
+		// find "${COMPOSE_BACKUPS_FOLDER}" -type f -name ".env.*" -mtime +3 -delete
+		if !f.IsDir() && strings.HasPrefix(f.Name(), ".env.") {
 			if info.ModTime().Before(threshold) {
-				logger.Debug(ctx, "Removing old backup directory: %s", f.Name())
-				_ = os.RemoveAll(fullPath)
+				_ = os.Remove(fullPath)
 			}
 		}
 
-		// Prune old single file backups (if any exist from old implementations)
-		if !f.IsDir() && strings.HasPrefix(f.Name(), ".env.") {
+		// find "${COMPOSE_BACKUPS_FOLDER}" -type d -name "${COMPOSE_FOLDER_NAME}.*" -mtime +3 -prune -exec rm -rf {} +
+		if f.IsDir() && strings.HasPrefix(f.Name(), prefix+".") {
 			if info.ModTime().Before(threshold) {
-				logger.Debug(ctx, "Removing old backup file: %s", f.Name())
-				_ = os.Remove(fullPath)
+				_ = os.RemoveAll(fullPath)
 			}
 		}
 	}
@@ -209,16 +224,4 @@ func copyDir(src, dst string) error {
 		}
 	}
 	return nil
-}
-
-// ExpandVariables expands variables in a string using a provided map.
-// This is a simplified version for backup path determination.
-func ExpandVariables(val string, vars map[string]string) string {
-	// Support ${VAR} and $VAR
-	return os.Expand(val, func(varName string) string {
-		if v, ok := vars[varName]; ok {
-			return v
-		}
-		return os.Getenv(varName)
-	})
 }
