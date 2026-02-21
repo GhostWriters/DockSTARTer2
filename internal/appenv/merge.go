@@ -7,6 +7,7 @@ import (
 	"context"
 	"os"
 	"regexp"
+	"strings"
 )
 
 // MergeNewOnly merges variables from source file to target file, adding only new ones.
@@ -43,6 +44,8 @@ func MergeNewOnly(ctx context.Context, targetFile, sourceFile string) ([]string,
 	re := regexp.MustCompile(`^\s*([a-zA-Z_][a-zA-Z0-9_]*)=`)
 
 	scanner := bufio.NewScanner(fSource)
+	var currentApp string
+
 	for scanner.Scan() {
 		line := scanner.Text()
 		matches := re.FindStringSubmatch(line)
@@ -51,6 +54,25 @@ func MergeNewOnly(ctx context.Context, targetFile, sourceFile string) ([]string,
 			key := matches[1]
 			// Check if key exists in target
 			if _, exists := targetVars[key]; !exists {
+				// Check for new app heading
+				appName := VarNameToAppName(key)
+				if appName != "" && appName != currentApp {
+					if !headingExists(targetFile, appName) {
+						niceName := GetNiceName(ctx, appName)
+						desc := GetDescription(ctx, appName, targetFile)
+
+						newLines = append(newLines, "")
+						newLines = append(newLines, "###")
+						newLines = append(newLines, "### "+niceName)
+						newLines = append(newLines, "###")
+						if desc != "" && !strings.Contains(desc, "Missing description") {
+							newLines = append(newLines, "### "+desc)
+							newLines = append(newLines, "###")
+						}
+						currentApp = appName
+					}
+				}
+
 				newLines = append(newLines, commentBuffer...)
 				newLines = append(newLines, line)
 				varsToLog = append(varsToLog, line)
@@ -95,4 +117,17 @@ func MergeNewOnly(ctx context.Context, targetFile, sourceFile string) ([]string,
 	}
 
 	return addedVars, nil
+}
+
+// headingExists checks if a heading for the app already exists in the file.
+func headingExists(file, appName string) bool {
+	content, err := os.ReadFile(file)
+	if err != nil {
+		return false
+	}
+
+	appUpper := strings.ToUpper(appName)
+	// Look for "### APPNAME" specifically
+	re := regexp.MustCompile("(?i)###\\s*" + regexp.QuoteMeta(appUpper))
+	return re.Match(content)
 }
