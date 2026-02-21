@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"regexp"
-	"slices"
 	"strings"
 )
 
@@ -106,7 +105,6 @@ func GetLineRegex(keyRegex, file string) ([]string, error) {
 			lines = append(lines, line)
 		}
 	}
-	slices.Sort(lines)
 	return lines, scanner.Err()
 }
 
@@ -125,7 +123,6 @@ func GetLiteral(key, file string) (string, error) {
 }
 
 // GetLineNumber returns the line number of the variable definition.
-// GetLineNumber returns the line number of the variable definition.
 func GetLineNumber(key, file string) (int, error) {
 	f, err := os.Open(file)
 	if err != nil {
@@ -136,10 +133,16 @@ func GetLineNumber(key, file string) (int, error) {
 	}
 	defer f.Close()
 
+	// Regex to match variable definition: ^\s*KEY\s*=
+	re := regexp.MustCompile(fmt.Sprintf(`^\s*%s\s*=`, regexp.QuoteMeta(key)))
+
 	lineNum := 0
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		lineNum++
+		if re.MatchString(scanner.Text()) {
+			return lineNum, nil
+		}
 	}
-	return 0, nil
+	return 0, scanner.Err()
 }

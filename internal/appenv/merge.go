@@ -127,7 +127,7 @@ func headingExists(file, appName string) bool {
 	}
 
 	appUpper := strings.ToUpper(appName)
-	// Look for "### APPNAME" specifically
-	re := regexp.MustCompile("(?i)###\\s*" + regexp.QuoteMeta(appUpper))
+	// Match "### APPNAME" followed by space or end of line.
+	re := regexp.MustCompile("(?i)###\\s*" + regexp.QuoteMeta(appUpper) + `(\s|$)`)
 	return re.Match(content)
 }

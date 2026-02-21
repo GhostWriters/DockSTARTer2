@@ -12,8 +12,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-
-	"gopkg.in/yaml.v3"
 )
 
 // MigrateAppVars performs variable migrations for an application based on a .migrate file.
@@ -152,6 +150,7 @@ func unsetVarInFile(ctx context.Context, varName, file string) error {
 }
 
 // OverrideVarRename renames a variable in the docker-compose.override.yml file.
+// Matches bash parity: global search/replace for variable substitution syntax.
 func OverrideVarRename(ctx context.Context, fromVar, toVar string, conf config.AppConfig) error {
 	overrideFile := filepath.Join(conf.ComposeDir, constants.ComposeOverrideFileName)
 	if _, err := os.Stat(overrideFile); os.IsNotExist(err) {
@@ -163,31 +162,18 @@ func OverrideVarRename(ctx context.Context, fromVar, toVar string, conf config.A
 		return err
 	}
 
-	var override map[string]interface{}
-	if err := yaml.Unmarshal(content, &override); err != nil {
-		return err
-	}
+	// Bash regex: s/([$]\{?)${FromVar}\b/\1${ToVar}/g
+	// This handles both $VAR and ${VAR} syntax.
+	// We use regexp.QuoteMeta to safely inject the variable names.
+	pattern := fmt.Sprintf(`([$]\{?)%s\b`, regexp.QuoteMeta(fromVar))
+	re := regexp.MustCompile(pattern)
+	replacement := fmt.Sprintf(`${1}%s`, toVar)
 
-	changed := false
-	if services, ok := override["services"].(map[string]interface{}); ok {
-		for _, s := range services {
-			if service, ok := s.(map[string]interface{}); ok {
-				if env, ok := service["environment"].(map[string]interface{}); ok {
-					if val, exists := env[fromVar]; exists {
-						env[toVar] = val
-						delete(env, fromVar)
-						changed = true
-					}
-				}
-			}
-		}
-	}
+	if re.Match(content) {
+		logger.Notice(ctx, "Renaming variable in {{|File|}}%s{{[-]}}:", filepath.Base(overrideFile))
+		logger.Notice(ctx, "\t{{|Var|}}%s{{[-]}} to {{|Var|}}%s{{[-]}}", fromVar, toVar)
 
-	if changed {
-		newContent, err := yaml.Marshal(override)
-		if err != nil {
-			return err
-		}
+		newContent := re.ReplaceAll(content, []byte(replacement))
 		if err := os.WriteFile(overrideFile, newContent, 0644); err != nil {
 			return err
 		}

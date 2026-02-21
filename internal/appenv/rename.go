@@ -64,6 +64,16 @@ func RenameAppVars(ctx context.Context, fromApp, toApp string, conf config.AppCo
 		system.SetPermissions(ctx, toAppEnv)
 	}
 
+	// 5. Create variables for the new app (ensures templates are added)
+	if err := CreateApp(ctx, toUpper, conf); err != nil {
+		logger.Warn(ctx, "Failed to create app variables for %s: %v", toUpper, err)
+	}
+
+	// 6. Format and sort all environment files
+	if err := Update(ctx, false, globalEnv); err != nil {
+		logger.Warn(ctx, "Failed to update env usage: %v", err)
+	}
+
 	return nil
 }
 
