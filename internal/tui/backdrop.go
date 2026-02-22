@@ -23,22 +23,22 @@ func RenderWithBackdrop(dialogContent string, helpText string, width, height int
 	header := NewHeaderModel()
 	header.SetWidth(width - 2)
 	headerContent := header.View()
-	headerStyle := lipgloss.NewStyle().
-		Width(width).
-		PaddingLeft(1).
-		PaddingRight(1).
-		Background(styles.Screen.GetBackground())
-	b.WriteString(headerStyle.Render(headerContent))
+	headerLine := " " + headerContent + " "
+	if padLen := width - lipgloss.Width(headerLine); padLen > 0 {
+		headerLine += strutil.Repeat(" ", padLen)
+	}
+	headerStyle := lipgloss.NewStyle().Background(styles.Screen.GetBackground())
+	b.WriteString(headerStyle.Render(headerLine))
 	b.WriteString("\n")
 
 	// Separator line with 1-char padding on left and right (matches AppModel.View())
 	sep := strutil.Repeat(styles.SepChar, width-2)
-	sepStyle := lipgloss.NewStyle().
-		Width(width).
-		PaddingLeft(1).
-		PaddingRight(1).
-		Background(styles.HeaderBG.GetBackground())
-	b.WriteString(sepStyle.Render(sep))
+	sepLine := " " + sep + " "
+	if padLen := width - lipgloss.Width(sepLine); padLen > 0 {
+		sepLine += strutil.Repeat(" ", padLen)
+	}
+	sepStyle := lipgloss.NewStyle().Background(styles.HeaderBG.GetBackground())
+	b.WriteString(sepStyle.Render(sepLine))
 	b.WriteString("\n")
 
 	// Calculate content height (matches AppModel.View())

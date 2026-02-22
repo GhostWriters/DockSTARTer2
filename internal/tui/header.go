@@ -5,6 +5,7 @@ import (
 
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/update"
 	"DockSTARTer2/internal/version"
 
@@ -131,20 +132,20 @@ func (m HeaderModel) View() string {
 	leftSectionWidth := remainingWidth / 2
 	rightSectionWidth := remainingWidth - leftSectionWidth
 
-	// Wrap each section with alignment and header background
-	leftSection := styles.HeaderBG.
-		Width(leftSectionWidth).
-		Align(lipgloss.Left).
-		Render(left)
+	// Build padded strings manually using strutil.Repeat to avoid lipgloss width panics on negative sizes
+	leftAligned := left
+	if w := lipgloss.Width(left); leftSectionWidth > w {
+		leftAligned += strutil.Repeat(" ", leftSectionWidth-w)
+	}
 
-	centerSection := styles.HeaderBG.
-		Width(centerWidth).
-		Render(center)
+	rightAligned := right
+	if w := lipgloss.Width(right); rightSectionWidth > w {
+		rightAligned = strutil.Repeat(" ", rightSectionWidth-w) + rightAligned
+	}
 
-	rightSection := styles.HeaderBG.
-		Width(rightSectionWidth).
-		Align(lipgloss.Right).
-		Render(right)
+	leftSection := styles.HeaderBG.Render(leftAligned)
+	centerSection := styles.HeaderBG.Render(center)
+	rightSection := styles.HeaderBG.Render(rightAligned)
 
 	// Join the three sections
 	return lipgloss.JoinHorizontal(lipgloss.Top, leftSection, centerSection, rightSection)

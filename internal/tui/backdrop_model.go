@@ -73,24 +73,24 @@ func (m BackdropModel) ViewString() string {
 	// Header width reduced by 2 for padding
 	m.header.SetWidth(m.width - 2)
 	headerContent := m.header.View()
-	headerStyle := lipgloss.NewStyle().
-		Width(m.width).
-		PaddingLeft(1).
-		PaddingRight(1).
-		Background(styles.Screen.GetBackground())
-	b.WriteString(headerStyle.Render(headerContent))
+	headerLine := " " + headerContent + " "
+	if padLen := m.width - lipgloss.Width(headerLine); padLen > 0 {
+		headerLine += strutil.Repeat(" ", padLen)
+	}
+	headerStyle := lipgloss.NewStyle().Background(styles.Screen.GetBackground())
+	b.WriteString(headerStyle.Render(headerLine))
 	b.WriteString("\n")
 
 	logger.Info(context.Background(), "Backdrop: Rendering Separator")
 
 	// Separator line with 1-char padding on left and right (matches AppModel.View())
 	sep := strutil.Repeat(styles.SepChar, m.width-2)
-	sepStyle := lipgloss.NewStyle().
-		Width(m.width).
-		PaddingLeft(1).
-		PaddingRight(1).
-		Background(styles.HeaderBG.GetBackground())
-	b.WriteString(sepStyle.Render(sep))
+	sepLine := " " + sep + " "
+	if padLen := m.width - lipgloss.Width(sepLine); padLen > 0 {
+		sepLine += strutil.Repeat(" ", padLen)
+	}
+	sepStyle := lipgloss.NewStyle().Background(styles.HeaderBG.GetBackground())
+	b.WriteString(sepStyle.Render(sepLine))
 	b.WriteString("\n")
 
 	logger.Info(context.Background(), "Backdrop: Rendering Helpline")
@@ -109,9 +109,7 @@ func (m BackdropModel) ViewString() string {
 
 	// Fill middle space with screen background
 	// We build it row by row to ensure each line is exactly m.width wide with background color
-	bgStyle := lipgloss.NewStyle().
-		Width(m.width).
-		Background(styles.Screen.GetBackground())
+	bgStyle := lipgloss.NewStyle().Background(styles.Screen.GetBackground())
 	fillerRow := bgStyle.Render(strutil.Repeat(" ", m.width))
 
 	for i := 0; i < contentHeight; i++ {
