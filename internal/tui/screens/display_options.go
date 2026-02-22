@@ -520,15 +520,15 @@ func (s *DisplayOptionsScreen) renderMockup() string {
 	hStyle := tui.SemanticRawStyle("Preview_Theme_Screen")
 
 	themeName := s.previewTheme
-	themeAuthor := ""
-	themeDesc := ""
-	for _, t := range s.themes {
-		if t.Name == themeName {
-			themeAuthor = t.Author
-			themeDesc = t.Description
-			break
-		}
-	}
+	// themeAuthor := ""
+	// themeDesc := ""
+	// for _, t := range s.themes {
+	// 	if t.Name == themeName {
+	// 		themeAuthor = t.Author
+	// 		themeDesc = t.Description
+	// 		break
+	// 	}
+	// }
 
 	// Header Row (simulate real status bar layout)
 	// Left: Host
@@ -609,13 +609,8 @@ func (s *DisplayOptionsScreen) renderMockup() string {
 	// Backdrop Content (Dialog Simulation)
 	// Shortened strings to prevent overflow in the 44-cell width
 	contentLines := []string{
-		" {{|Preview_Theme_Subtitle|}}Theme: " + themeName + " sample{{[-]}}",
+		" {{|Preview_Theme_Subtitle|}}A Subtitle Line{{[-]}}",
 		"   {{|Preview_Theme_CommandLine|}}ds2 --theme{{[-]}}",
-		"",
-		"   Theme: {{|Preview_Theme_Heading|}}" + strutil.Limit(themeName, 15) + "{{[-]}}",
-		"          {{|Preview_Theme_HeadingAppDescription|}}" + strutil.Limit(themeDesc, 18) + "{{[-]}}",
-		"",
-		"  Author: {{|Preview_Theme_Heading|}}" + strutil.Limit(themeAuthor, 20) + "{{[-]}}",
 		"",
 		" Heading: {{|Preview_Theme_HeadingValue|}}Value{{[-]}} {{|Preview_Theme_HeadingTag|}}[*Tag*]{{[-]}}",
 		"",
