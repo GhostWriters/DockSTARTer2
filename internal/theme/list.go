@@ -2,9 +2,7 @@ package theme
 
 import (
 	"DockSTARTer2/internal/paths"
-	"bufio"
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -30,44 +28,13 @@ func List() ([]ThemeMetadata, error) {
 	for _, entry := range entries {
 		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".ds2theme") {
 			name := strings.TrimSuffix(entry.Name(), ".ds2theme")
-			meta, _ := getThemeMetadata(filepath.Join(themesDir, entry.Name()))
-			meta.Name = name // Ensure name is set from filename
-			themes = append(themes, meta)
+			tf, _ := GetThemeFile(name)
+			themes = append(themes, ThemeMetadata{
+				Name:        name,
+				Description: tf.Metadata.Description,
+				Author:      tf.Metadata.Author,
+			})
 		}
 	}
 	return themes, nil
-}
-
-func getThemeMetadata(path string) (ThemeMetadata, error) {
-	var meta ThemeMetadata
-	// Simple INI parsing just for metadata
-	file, err := os.Open(path)
-	if err != nil {
-		return meta, err
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		key := strings.TrimSpace(parts[0])
-		val := strings.Trim(strings.TrimSpace(parts[1]), "'\"")
-
-		switch key {
-		case "ThemeDescription":
-			meta.Description = val
-		case "ThemeAuthor":
-			meta.Author = val
-		case "ThemeName":
-			meta.Name = val // Optional override
-		}
-	}
-	return meta, scanner.Err()
 }

@@ -97,19 +97,22 @@ func EnforceDialogLayout(content string, buttons []ButtonSpec, layout DialogLayo
 
 // RenderDialogBox renders content in a centered dialog box
 func RenderDialogBox(title, content string, dialogType DialogType, width, height, containerWidth, containerHeight int) string {
-	styles := GetStyles()
+	return RenderDialogBoxCtx(title, content, dialogType, width, height, containerWidth, containerHeight, GetActiveContext())
+}
 
+// RenderDialogBoxCtx renders content in a centered dialog box using a specific context
+func RenderDialogBoxCtx(title, content string, dialogType DialogType, width, height, containerWidth, containerHeight int, ctx StyleContext) string {
 	// Get title style based on dialog type
-	titleStyle := styles.DialogTitle
+	titleStyle := ctx.DialogTitle
 	switch dialogType {
 	case DialogTypeSuccess:
-		titleStyle = titleStyle.Foreground(styles.StatusSuccess.GetForeground())
+		titleStyle = titleStyle.Foreground(ctx.StatusSuccess.GetForeground())
 	case DialogTypeWarning:
-		titleStyle = titleStyle.Foreground(styles.StatusWarn.GetForeground())
+		titleStyle = titleStyle.Foreground(ctx.StatusWarn.GetForeground())
 	case DialogTypeError:
-		titleStyle = titleStyle.Foreground(styles.StatusError.GetForeground())
+		titleStyle = titleStyle.Foreground(ctx.StatusError.GetForeground())
 	case DialogTypeConfirm:
-		titleStyle = SemanticRawStyle("Theme_TitleQuestion")
+		titleStyle = SemanticRawStyle("Theme_TitleQuestion") // Question style is semantic
 	}
 
 	// Render title
@@ -119,7 +122,7 @@ func RenderDialogBox(title, content string, dialogType DialogType, width, height
 		Render(title)
 
 	// Render content
-	contentRendered := styles.Dialog.
+	contentRendered := ctx.Dialog.
 		Width(width).
 		Align(lipgloss.Center).
 		Render(content)
@@ -129,19 +132,19 @@ func RenderDialogBox(title, content string, dialogType DialogType, width, height
 
 	// Wrap in border (3D effect for rounded borders)
 	borderStyle := lipgloss.NewStyle().
-		Background(styles.Dialog.GetBackground()).
+		Background(ctx.Dialog.GetBackground()).
 		Padding(0, 1)
-	borderStyle = Apply3DBorder(borderStyle)
+	borderStyle = Apply3DBorderCtx(borderStyle, ctx)
 	dialogBox := borderStyle.Render(inner)
 
 	// Add shadow effect
-	dialogBox = AddShadow(dialogBox)
+	dialogBox = AddShadowCtx(dialogBox, ctx)
 
 	// Center in container using Overlay for transparency support
 	bg := lipgloss.NewStyle().
 		Width(containerWidth).
 		Height(containerHeight).
-		Background(styles.Screen.GetBackground()).
+		Background(ctx.Screen.GetBackground()).
 		Render("")
 
 	return Overlay(dialogBox, bg, OverlayCenter, OverlayCenter, 0, 0)
@@ -205,14 +208,16 @@ type ButtonSpec struct {
 	ZoneID string // Optional zone ID for mouse support (empty = no zone marking)
 }
 
-// RenderCenteredButtons renders buttons centered in sections (matching menu style)
-// This ensures consistent button placement across all dialogs
+// RenderCenteredButtons renders buttons centered in sections
 func RenderCenteredButtons(contentWidth int, buttons ...ButtonSpec) string {
+	return RenderCenteredButtonsCtx(contentWidth, GetActiveContext(), buttons...)
+}
+
+// RenderCenteredButtonsCtx renders buttons centered using a specific context
+func RenderCenteredButtonsCtx(contentWidth int, ctx StyleContext, buttons ...ButtonSpec) string {
 	if len(buttons) == 0 {
 		return ""
 	}
-
-	styles := GetStyles()
 
 	// Find the maximum button text width
 	maxButtonWidth := 0
@@ -224,52 +229,76 @@ func RenderCenteredButtons(contentWidth int, buttons ...ButtonSpec) string {
 	}
 
 	// Render each button with fixed width and rounded border
-	// Add 4 to width to account for border characters (1 left + 1 right) AND padding (1 left + 1 right)
 	buttonContentWidth := maxButtonWidth + 4
 	var renderedButtons []string
 	for _, btn := range buttons {
 		var buttonStyle lipgloss.Style
 		if btn.Active {
-			buttonStyle = styles.ButtonActive
+			buttonStyle = ctx.ButtonActive
 		} else {
-			buttonStyle = styles.ButtonInactive
+			buttonStyle = ctx.ButtonInactive
 		}
 
 		buttonStyle = buttonStyle.Width(buttonContentWidth).Align(lipgloss.Center)
-		buttonStyle = ApplyRoundedBorder(buttonStyle, styles.LineCharacters)
+		buttonStyle = ApplyRoundedBorderCtx(buttonStyle, ctx)
 
-		renderedLabel := RenderHotkeyLabel(btn.Text, btn.Active)
+		// RenderHotkeyLabel needs to handle focus too, but it uses GetStyles() inside.
+		// Let's pass the context if we refactor it, or just use the existing one for now.
+		// Actually, RenderHotkeyLabel should also be context-aware.
+		renderedLabel := RenderHotkeyLabelCtx(btn.Text, btn.Active, ctx)
 		renderedButtons = append(renderedButtons, buttonStyle.Render(renderedLabel))
 	}
 
-	// Divide available width into equal sections (one per button)
 	numButtons := len(buttons)
 	sectionWidth := contentWidth / numButtons
 
-	// Center each button in its section and mark zones
 	var sections []string
 	for i, btn := range renderedButtons {
-		// Generate zone ID from button text if not provided
 		zoneID := buttons[i].ZoneID
 		if zoneID == "" {
 			normalizedText := strings.TrimSpace(buttons[i].Text)
 			zoneID = "Button." + normalizedText
 		}
 
-		// Mark zone on the button BEFORE padding so the zone covers only the
-		// button itself, not the empty space on either side of it.
 		markedBtn := zone.Mark(zoneID, btn)
 
 		centeredBtn := lipgloss.NewStyle().
 			Width(sectionWidth).
 			Align(lipgloss.Center).
-			Background(styles.Dialog.GetBackground()).
+			Background(ctx.Dialog.GetBackground()).
 			Render(markedBtn)
 
 		sections = append(sections, centeredBtn)
 	}
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, sections...)
+}
+
+// RenderHotkeyLabelCtx styles the first letter of a label with the theme's hotkey color using a context
+func RenderHotkeyLabelCtx(label string, focused bool, ctx StyleContext) string {
+	trimmed := strings.TrimSpace(label)
+	if len(trimmed) == 0 {
+		return label
+	}
+
+	var charStyle, restStyle lipgloss.Style
+	if focused {
+		charStyle = ctx.TagKeySelected
+		restStyle = ctx.ButtonActive
+	} else {
+		charStyle = ctx.TagKey
+		restStyle = ctx.ButtonInactive
+	}
+
+	prefix := ""
+	if strings.HasPrefix(label, " ") {
+		prefix = strutil.Repeat(" ", len(label)-len(strings.TrimLeft(label, " ")))
+	}
+
+	firstChar := string(trimmed[0])
+	rest := trimmed[1:]
+
+	return prefix + charStyle.Render(firstChar) + restStyle.Render(rest)
 }
 
 // CheckButtonHotkeys checks if a key matches the first letter of any button.
@@ -297,17 +326,22 @@ func CheckButtonHotkeys(msg tea.KeyPressMsg, buttons []ButtonSpec) (int, bool) {
 }
 
 // RenderDialog renders a dialog with optional title embedded in the top border.
-// If title is empty, renders a plain top border without title.
-// focused=true uses a thick border (active dialog), focused=false uses normal border (background dialog).
-// Optional borders parameter allows overriding the default theme borders.
 func RenderDialog(title, content string, focused bool, targetHeight int, borders ...BorderPair) string {
-	return RenderDialogWithType(title, content, focused, targetHeight, DialogTypeInfo, borders...)
+	return RenderDialogWithTypeCtx(title, content, focused, targetHeight, DialogTypeInfo, GetActiveContext(), borders...)
+}
+
+// RenderDialogCtx renders a dialog using a specific context
+func RenderDialogCtx(title, content string, focused bool, targetHeight int, ctx StyleContext, borders ...BorderPair) string {
+	return RenderDialogWithTypeCtx(title, content, focused, targetHeight, DialogTypeInfo, ctx, borders...)
 }
 
 // RenderDialogWithType renders a dialog with a specific type for title styling.
 func RenderDialogWithType(title, content string, focused bool, targetHeight int, dialogType DialogType, borders ...BorderPair) string {
-	styles := GetStyles()
+	return RenderDialogWithTypeCtx(title, content, focused, targetHeight, dialogType, GetActiveContext(), borders...)
+}
 
+// RenderDialogWithTypeCtx renders a dialog with a specific type using a specific context
+func RenderDialogWithTypeCtx(title, content string, focused bool, targetHeight int, dialogType DialogType, ctx StyleContext, borders ...BorderPair) string {
 	var border lipgloss.Border
 	if len(borders) > 0 {
 		if focused {
@@ -316,7 +350,7 @@ func RenderDialogWithType(title, content string, focused bool, targetHeight int,
 			border = borders[0].Unfocused
 		}
 	} else {
-		if styles.LineCharacters {
+		if ctx.LineCharacters {
 			if focused {
 				border = lipgloss.ThickBorder()
 			} else {
@@ -331,28 +365,30 @@ func RenderDialogWithType(title, content string, focused bool, targetHeight int,
 		}
 	}
 
-	titleStyle := styles.DialogTitle
+	titleStyle := ctx.DialogTitle
 	switch dialogType {
 	case DialogTypeSuccess:
-		titleStyle = titleStyle.Foreground(styles.StatusSuccess.GetForeground())
+		titleStyle = titleStyle.Foreground(ctx.StatusSuccess.GetForeground())
 	case DialogTypeWarning:
-		titleStyle = titleStyle.Foreground(styles.StatusWarn.GetForeground())
+		titleStyle = titleStyle.Foreground(ctx.StatusWarn.GetForeground())
 	case DialogTypeError:
-		titleStyle = titleStyle.Foreground(styles.StatusError.GetForeground())
+		titleStyle = titleStyle.Foreground(ctx.StatusError.GetForeground())
 	case DialogTypeConfirm:
-		titleStyle = SemanticRawStyle("Theme_TitleQuestion")
+		titleStyle = SemanticRawStyle("Theme_TitleQuestion") // Semantic
 	}
 
-	return renderDialogWithBorder(title, content, border, focused, targetHeight, true, true, titleStyle)
+	return renderDialogWithBorderCtx(title, content, border, focused, targetHeight, true, true, titleStyle, ctx)
 }
 
-// RenderUniformBlockDialog renders a dialog with block borders and uniform dark colors (no 3D effect).
-// It also disables specialized T-connectors for the title for a more solid "frame" look.
+// RenderUniformBlockDialog renders a dialog with block borders and uniform dark colors
 func RenderUniformBlockDialog(title, content string) string {
-	styles := GetStyles()
-	borders := GetBlockBorders(styles.LineCharacters)
-	// Use DialogTitleHelp for help dialogs (which use this renderer)
-	return renderDialogWithBorder(title, content, borders.Focused, true, 0, false, false, styles.DialogTitleHelp)
+	return RenderUniformBlockDialogCtx(title, content, GetActiveContext())
+}
+
+// RenderUniformBlockDialogCtx renders a uniform block dialog using specific context
+func RenderUniformBlockDialogCtx(title, content string, ctx StyleContext) string {
+	borders := GetBlockBorders(ctx.LineCharacters)
+	return renderDialogWithBorderCtx(title, content, borders.Focused, true, 0, false, false, ctx.DialogTitleHelp, ctx)
 }
 
 // GetBlockBorders returns a BorderPair with solid block borders for both states
@@ -375,42 +411,31 @@ func GetBlockBorders(lineCharacters bool) BorderPair {
 	return BorderPair{Focused: block, Unfocused: block}
 }
 
-// renderDialogWithBorder is the internal shared rendering logic.
-// It handles title centering, background maintenance, and padding.
-// If threeD is false, it uses a uniform border color (Border2Color).
-// If useConnectors is true, it uses T-junctions (┤, ┫, etc.) to embed the title.
-func renderDialogWithBorder(title, content string, border lipgloss.Border, focused bool, targetHeight int, threeD bool, useConnectors bool, titleStyle lipgloss.Style) string {
+// renderDialogWithBorderCtx handles internal shared rendering logic using a specific context
+func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, focused bool, targetHeight int, threeD bool, useConnectors bool, titleStyle lipgloss.Style, ctx StyleContext) string {
 	if title != "" && !strings.HasSuffix(title, "{{[-]}}") {
 		title += "{{[-]}}"
 	}
-	styles := GetStyles()
 
-	// Style definitions
-	borderBG := styles.Dialog.GetBackground()
+	borderBG := ctx.Dialog.GetBackground()
 	borderStyleLight := lipgloss.NewStyle().
-		Foreground(styles.BorderColor).
+		Foreground(ctx.BorderColor).
 		Background(borderBG)
 	borderStyleDark := lipgloss.NewStyle().
-		Foreground(styles.Border2Color).
+		Foreground(ctx.Border2Color).
 		Background(borderBG)
 
-	// If not 3D, use the dark/secondary color for EVERYTHING
 	if !threeD {
 		borderStyleLight = borderStyleDark
 	}
 
-	// Prepare title style (using provided style, defaulting to borderBG if not set)
 	titleStyle = lipgloss.NewStyle().
 		Background(borderBG).
 		Inherit(titleStyle)
 
-	// Parse color tags from title and render as rich text
 	title = RenderThemeText(title, titleStyle)
+	content = RenderThemeText(content, ctx.Dialog)
 
-	// Parse color tags from content
-	content = RenderThemeText(content, styles.Dialog)
-
-	// Get actual content width (maximum width of all lines)
 	lines := strings.Split(content, "\n")
 	actualWidth := 0
 	for _, line := range lines {
@@ -420,14 +445,10 @@ func renderDialogWithBorder(title, content string, border lipgloss.Border, focus
 		}
 	}
 
-	// For halo/shadow alignment, ensure actualWidth makes the total dialog even.
-	// borders are 1 char each, so total width = 1 + actualWidth + 1
-	// if actualWidth is even, total width is even.
 	if actualWidth%2 != 0 {
 		actualWidth++
 	}
 
-	// Enforce target height if specified (>2 for borders)
 	if targetHeight > 2 {
 		contentHeight := len(lines)
 		neededPadding := (targetHeight - 2) - contentHeight
@@ -440,16 +461,13 @@ func renderDialogWithBorder(title, content string, border lipgloss.Border, focus
 
 	var result strings.Builder
 
-	// Top border (with or without title)
 	result.WriteString(borderStyleLight.Render(border.TopLeft))
 	if title == "" {
-		// Plain top border without title
 		result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, actualWidth)))
 	} else {
-		// Top border with embedded title
 		var leftT, rightT string
 		if useConnectors {
-			if styles.LineCharacters {
+			if ctx.LineCharacters {
 				if focused {
 					leftT = "┫"
 					rightT = "┣"
@@ -459,7 +477,7 @@ func renderDialogWithBorder(title, content string, border lipgloss.Border, focus
 				}
 			} else {
 				if focused {
-					leftT = "H" // thick ASCII T-connector
+					leftT = "H"
 					rightT = "H"
 				} else {
 					leftT = "|"
@@ -467,15 +485,11 @@ func renderDialogWithBorder(title, content string, border lipgloss.Border, focus
 				}
 			}
 		} else {
-			// No specialized connectors: just use the standard border character
 			leftT = border.Top
 			rightT = border.Top
 		}
 
-		// Total title section width: leftT + space + title + space + rightT
 		titleSectionLen := 1 + 1 + lipgloss.Width(title) + 1 + 1
-
-		// Ensure dialog is wide enough for title
 		if titleSectionLen > actualWidth {
 			actualWidth = titleSectionLen
 		}
@@ -493,23 +507,19 @@ func renderDialogWithBorder(title, content string, border lipgloss.Border, focus
 	result.WriteString(borderStyleLight.Render(border.TopRight))
 	result.WriteString("\n")
 
-	// Content lines with left/right borders
 	for _, line := range lines {
 		result.WriteString(borderStyleLight.Render(border.Left))
-		// Pad line to actualWidth to ensure borders align
 		textWidth := lipgloss.Width(line)
 		padding := ""
 		if textWidth < actualWidth {
 			padding = lipgloss.NewStyle().Background(borderBG).Render(strutil.Repeat(" ", actualWidth-textWidth))
 		}
-		// Use MaintainBackground to ensure internal resets don't bleed to black
-		fullLine := MaintainBackground(line+padding, styles.Dialog)
+		fullLine := MaintainBackground(line+padding, ctx.Dialog)
 		result.WriteString(fullLine)
 		result.WriteString(borderStyleDark.Render(border.Right))
 		result.WriteString("\n")
 	}
 
-	// Bottom border
 	result.WriteString(borderStyleDark.Render(border.BottomLeft))
 	result.WriteString(borderStyleDark.Render(strutil.Repeat(border.Bottom, actualWidth)))
 	result.WriteString(borderStyleDark.Render(border.BottomRight))

@@ -181,6 +181,17 @@ func UnregisterColor(name string) {
 	delete(semanticMap, strings.ToLower(name))
 }
 
+// UnregisterPrefix removes all semantic tags that start with the given prefix
+func UnregisterPrefix(prefix string) {
+	ensureMaps()
+	searchPrefix := strings.ToLower(strings.TrimSuffix(prefix, "_") + "_")
+	for key := range semanticMap {
+		if strings.HasPrefix(key, searchPrefix) {
+			delete(semanticMap, key)
+		}
+	}
+}
+
 // ResetCustomColors clears all semantic tags and rebuilds from Colors struct
 func ResetCustomColors() {
 	BuildColorMap()

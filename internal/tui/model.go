@@ -382,6 +382,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.dialog != nil {
 			var cmd tea.Cmd
 			m.dialog, cmd = m.dialog.Update(msg)
+			// Ensure helpline reflects current state after update
+			if h, ok := m.dialog.(interface{ HelpText() string }); ok {
+				m.backdrop.SetHelpText(h.HelpText())
+			}
 			return m, logger.RecoverTUI(m.ctx, cmd)
 		}
 
@@ -391,6 +395,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if screen, ok := updated.(ScreenModel); ok {
 				m.activeScreen = screen
 			}
+			// Ensure helpline reflects current state after update
+			m.backdrop.SetHelpText(m.activeScreen.HelpText())
 			return m, logger.RecoverTUI(m.ctx, cmd)
 		}
 

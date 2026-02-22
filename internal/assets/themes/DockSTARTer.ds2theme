@@ -80,6 +80,8 @@ LineAddVariable = "{{[black:cyan]}}"
 ListDefault = ""
 ListApp = "{{[black::R]}}"
 ListAppUserDefined = "{{[blue::R]}}"
+ListTheme="{{|ListApp|}}"
+ListThemeUserDefined="{{|ListAppUserDefined|}}"
 
 KeyCap = "{{[::-R]}}"
 

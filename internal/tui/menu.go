@@ -46,6 +46,7 @@ func (i MenuItem) Description() string { return i.Desc }
 type menuItemDelegate struct {
 	menuID    string
 	maxTagLen int
+	focused   bool
 }
 
 func (d menuItemDelegate) Height() int                             { return 1 }
@@ -76,9 +77,9 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 	}
 
 	neutralStyle := lipgloss.NewStyle().Background(dialogBG)
-	itemStyle := SemanticStyle("{{|Theme_Item|}}").Background(dialogBG)
-	tagStyle := SemanticStyle("{{|Theme_Tag|}}").Background(dialogBG)
-	keyStyle := SemanticStyle("{{|Theme_TagKey|}}").Background(dialogBG)
+	itemStyle := SemanticStyle("{{|Theme_Item|}}")
+	tagStyle := SemanticStyle("{{|Theme_Tag|}}")
+	keyStyle := SemanticStyle("{{|Theme_TagKey|}}")
 
 	if isSelected {
 		itemStyle = SemanticStyle("{{|Theme_ItemSelected|}}")
@@ -86,21 +87,26 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 		keyStyle = SemanticStyle("{{|Theme_TagKeySelected|}}")
 	}
 
-	// Render tag with first-letter highlighting
+	// Render tag with first-letter highlighting (if no semantic tags present)
 	tag := menuItem.Tag
 	var tagStr string
 	if len(tag) > 0 {
-		letterIdx := 0
-		if strings.HasPrefix(tag, "[") && len(tag) > 1 {
-			letterIdx = 1
+		// If tag already contains theme tags, render it normally (highlights might be ruined)
+		if strings.Contains(tag, "{{") {
+			tagStr = RenderThemeText(tag, tagStyle)
+		} else {
+			letterIdx := 0
+			if strings.HasPrefix(tag, "[") && len(tag) > 1 {
+				letterIdx = 1
+			}
+			prefix := tag[:letterIdx]
+			firstLetter := string(tag[letterIdx])
+			rest := tag[letterIdx+1:]
+			tagStr = tagStyle.Render(prefix) + keyStyle.Render(firstLetter) + tagStyle.Render(rest)
 		}
-		prefix := tag[:letterIdx]
-		firstLetter := string(tag[letterIdx])
-		rest := tag[letterIdx+1:]
-		tagStr = tagStyle.Render(prefix) + keyStyle.Render(firstLetter) + tagStyle.Render(rest)
 	}
 
-	tagWidth := lipgloss.Width(menuItem.Tag)
+	tagWidth := lipgloss.Width(GetPlainText(tag))
 
 	// Checkbox visual [ ] or [x] / Radio visual ( ) or (*)
 	checkbox := ""
@@ -131,11 +137,13 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 		availableWidth = 0
 	}
 
-	descStr := RenderThemeText(menuItem.Desc, itemStyle)
-	descStr = itemStyle.MaxWidth(availableWidth).Height(1).Render(descStr)
-	descLine := strings.Split(descStr, "\n")[0]
+	descStr := RenderThemeText(menuItem.Desc, lipgloss.NewStyle().Background(dialogBG).Inherit(itemStyle))
+	descStr = lipgloss.NewStyle().MaxWidth(availableWidth).Render(descStr)
+	descLine := strings.ReplaceAll(descStr, "\n", "")
 
-	line := checkbox + tagStr + neutralStyle.Render(paddingSpaces) + descLine
+	// Build the line with neutral background for the gaps
+	padding := neutralStyle.Render(paddingSpaces)
+	line := checkbox + tagStr + padding + descLine
 
 	actualWidth := lipgloss.Width(line)
 	if actualWidth < m.Width()-2 {
@@ -153,6 +161,7 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 type checkboxItemDelegate struct {
 	menuID    string
 	maxTagLen int
+	focused   bool
 }
 
 func (d checkboxItemDelegate) Height() int                             { return 1 }
@@ -184,9 +193,9 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 
 	neutralStyle := lipgloss.NewStyle().Background(dialogBG)
 
-	itemStyle := SemanticStyle("{{|Theme_Item|}}").Background(dialogBG)
-	tagStyle := SemanticStyle("{{|Theme_Tag|}}").Background(dialogBG)
-	keyStyle := SemanticStyle("{{|Theme_TagKey|}}").Background(dialogBG)
+	itemStyle := SemanticStyle("{{|Theme_Item|}}")
+	tagStyle := SemanticStyle("{{|Theme_Tag|}}")
+	keyStyle := SemanticStyle("{{|Theme_TagKey|}}")
 
 	if isSelected {
 		itemStyle = SemanticStyle("{{|Theme_ItemSelected|}}")
@@ -214,16 +223,20 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 	tag := menuItem.Tag
 	if len(tag) > 0 {
 		if isSelected {
-			tagStr = tagStyle.Render(tag)
+			tagStr = RenderThemeText(tag, tagStyle)
 		} else {
-			letterIdx := 0
-			if strings.HasPrefix(tag, "[") && len(tag) > 1 {
-				letterIdx = 1
+			if strings.Contains(tag, "{{") {
+				tagStr = RenderThemeText(tag, tagStyle)
+			} else {
+				letterIdx := 0
+				if strings.HasPrefix(tag, "[") && len(tag) > 1 {
+					letterIdx = 1
+				}
+				prefix := tag[:letterIdx]
+				firstLetter := string(tag[letterIdx])
+				rest := tag[letterIdx+1:]
+				tagStr = tagStyle.Render(prefix) + keyStyle.Render(firstLetter) + tagStyle.Render(rest)
 			}
-			prefix := tag[:letterIdx]
-			firstLetter := string(tag[letterIdx])
-			rest := tag[letterIdx+1:]
-			tagStr = tagStyle.Render(prefix) + keyStyle.Render(firstLetter) + tagStyle.Render(rest)
 		}
 	}
 
@@ -231,17 +244,16 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 	if menuItem.Selectable {
 		tagWidth += 4
 	}
-	tagWidth += lipgloss.Width(menuItem.Tag)
+	tagWidth += lipgloss.Width(GetPlainText(tag))
 	paddingSpaces := strutil.Repeat(" ", d.maxTagLen-tagWidth+2)
-
 	availableWidth := m.Width() - (d.maxTagLen + 2) - 2
 	if availableWidth < 0 {
 		availableWidth = 0
 	}
 
-	descStr := RenderThemeText(menuItem.Desc, itemStyle)
-	descStr = itemStyle.MaxWidth(availableWidth).Height(1).Render(descStr)
-	descLine := strings.Split(descStr, "\n")[0]
+	descStr := RenderThemeText(menuItem.Desc, lipgloss.NewStyle().Background(dialogBG).Inherit(itemStyle))
+	descStr = lipgloss.NewStyle().MaxWidth(availableWidth).Render(descStr)
+	descLine := strings.ReplaceAll(descStr, "\n", "")
 
 	line := checkbox + tagStr + neutralStyle.Render(paddingSpaces) + descLine
 
@@ -365,7 +377,7 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 	// Create bubbles list
 
 	// Size based on actual number of items for dynamic sizing
-	delegate := menuItemDelegate{menuID: id, maxTagLen: maxTagLen}
+	delegate := menuItemDelegate{menuID: id, maxTagLen: maxTagLen, focused: true}
 
 	// Calculate height
 	itemHeight := delegate.Height()
@@ -414,6 +426,7 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 // or unfocused (normal). Called by AppModel when the log panel takes focus.
 func (m *MenuModel) SetFocused(f bool) {
 	m.focused = f
+	m.updateDelegate()
 }
 
 // SetMaximized sets whether the menu should expand to fill available space
@@ -445,11 +458,38 @@ func (m *MenuModel) SetSubMenuMode(enabled bool) {
 // SetSubFocused sets the focus state specifically for sub-menu mode (thick vs normal border)
 func (m *MenuModel) SetSubFocused(focused bool) {
 	m.focusedSub = focused
+	m.updateDelegate()
+}
+
+// IsActive returns whether this menu actually has focus (accounting for subMenuMode)
+func (m *MenuModel) IsActive() bool {
+	if m.subMenuMode {
+		return m.focusedSub
+	}
+	return m.focused
+}
+
+// updateDelegate refreshes the list delegate with the current focus state
+func (m *MenuModel) updateDelegate() {
+	focused := m.IsActive()
+	maxTagLen := 0
+	for _, item := range m.items {
+		tagWidth := lipgloss.Width(item.Tag)
+		if tagWidth > maxTagLen {
+			maxTagLen = tagWidth
+		}
+	}
+	if m.checkboxMode {
+		m.list.SetDelegate(checkboxItemDelegate{menuID: m.id, maxTagLen: maxTagLen, focused: focused})
+	} else {
+		m.list.SetDelegate(menuItemDelegate{menuID: m.id, maxTagLen: maxTagLen, focused: focused})
+	}
 }
 
 // SetCheckboxMode enables checkbox rendering for app selection
 func (m *MenuModel) SetCheckboxMode(enabled bool) {
 	m.checkboxMode = enabled
+	focused := m.IsActive()
 	if enabled {
 		// Switch to checkbox delegate
 		maxTagLen := 0
@@ -459,7 +499,7 @@ func (m *MenuModel) SetCheckboxMode(enabled bool) {
 				maxTagLen = tagWidth
 			}
 		}
-		m.list.SetDelegate(checkboxItemDelegate{menuID: m.id, maxTagLen: maxTagLen})
+		m.list.SetDelegate(checkboxItemDelegate{menuID: m.id, maxTagLen: maxTagLen, focused: focused})
 	} else {
 		// Switch back to standard delegate
 		maxTagLen := 0
@@ -469,7 +509,7 @@ func (m *MenuModel) SetCheckboxMode(enabled bool) {
 				maxTagLen = tagWidth
 			}
 		}
-		m.list.SetDelegate(menuItemDelegate{menuID: m.id, maxTagLen: maxTagLen})
+		m.list.SetDelegate(menuItemDelegate{menuID: m.id, maxTagLen: maxTagLen, focused: focused})
 	}
 }
 
@@ -512,9 +552,12 @@ func (m *MenuModel) SetItems(items []MenuItem) {
 		}
 	}
 
-	// Update delegate with new max tag length
+	// Update delegate with new max tag length and focus
+	focused := m.IsActive()
 	if m.checkboxMode {
-		m.list.SetDelegate(checkboxItemDelegate{menuID: m.id, maxTagLen: maxTagLen})
+		m.list.SetDelegate(checkboxItemDelegate{menuID: m.id, maxTagLen: maxTagLen, focused: focused})
+	} else {
+		m.list.SetDelegate(menuItemDelegate{menuID: m.id, maxTagLen: maxTagLen, focused: focused})
 	}
 }
 
@@ -630,7 +673,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if mwMsg, ok := msg.(tea.MouseWheelMsg); ok {
 		if mwMsg.Button == tea.MouseWheelUp {
 			m.list.CursorUp()
-			for m.items[m.list.Index()].IsSeparator {
+			for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator {
 				m.list.CursorUp()
 				if m.list.Index() == 0 && m.items[0].IsSeparator {
 					break
@@ -642,7 +685,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if mwMsg.Button == tea.MouseWheelDown {
 			m.list.CursorDown()
-			for m.items[m.list.Index()].IsSeparator {
+			for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator {
 				m.list.CursorDown()
 				if m.list.Index() == len(m.items)-1 && m.items[len(m.items)-1].IsSeparator {
 					break
@@ -672,7 +715,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(keyMsg, Keys.Up):
 			m.list.CursorUp()
 			// Skip separators automatically
-			for m.items[m.list.Index()].IsSeparator {
+			for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator {
 				m.list.CursorUp()
 				// Safety: if we hit top and it's a separator (unlikely with header), stop or wrap?
 				// Simple safety: if index is 0 and it's a separator, try going down instead?
@@ -688,7 +731,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(keyMsg, Keys.Down):
 			m.list.CursorDown()
 			// Skip separators automatically
-			for m.items[m.list.Index()].IsSeparator {
+			for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator {
 				m.list.CursorDown()
 				if m.list.Index() == len(m.items)-1 && m.items[len(m.items)-1].IsSeparator {
 					break
@@ -709,7 +752,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.list.Select(newIndex)
 			// Skip separators automatically (moving down to find first selectable)
-			for m.items[m.list.Index()].IsSeparator && m.list.Index() < len(m.items)-1 {
+			for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator && m.list.Index() < len(m.items)-1 {
 				m.list.CursorDown()
 			}
 			m.cursor = m.list.Index()
@@ -726,7 +769,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				newIndex = 0
 			}
 			m.list.Select(newIndex)
-			for m.items[m.list.Index()].IsSeparator && m.list.Index() < len(m.items)-1 {
+			for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator && m.list.Index() < len(m.items)-1 {
 				m.list.CursorDown()
 			}
 			m.cursor = m.list.Index()
@@ -744,7 +787,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.list.Select(newIndex)
 			// Skip separators automatically (moving up to find first selectable)
-			for m.items[m.list.Index()].IsSeparator && m.list.Index() > 0 {
+			for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator && m.list.Index() > 0 {
 				m.list.CursorUp()
 			}
 			m.cursor = m.list.Index()
@@ -761,7 +804,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				newIndex = len(m.items) - 1
 			}
 			m.list.Select(newIndex)
-			for m.items[m.list.Index()].IsSeparator && m.list.Index() > 0 {
+			for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator && m.list.Index() > 0 {
 				m.list.CursorUp()
 			}
 			m.cursor = m.list.Index()
@@ -771,7 +814,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(keyMsg, Keys.Home):
 			m.list.Select(0)
 			// Skip separators automatically
-			for m.items[m.list.Index()].IsSeparator && m.list.Index() < len(m.items)-1 {
+			for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator && m.list.Index() < len(m.items)-1 {
 				m.list.CursorDown()
 			}
 			m.cursor = m.list.Index()
@@ -781,7 +824,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(keyMsg, Keys.End):
 			m.list.Select(len(m.items) - 1)
 			// Skip separators automatically (moving up)
-			for m.items[m.list.Index()].IsSeparator && m.list.Index() > 0 {
+			for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator && m.list.Index() > 0 {
 				m.list.CursorUp()
 			}
 			m.cursor = m.list.Index()
@@ -1017,9 +1060,12 @@ func (m *MenuModel) handleSpace() (tea.Model, tea.Cmd) {
 		if item.IsCheckbox && item.Selectable {
 			item.Checked = !item.Checked
 			// Update the item in our internal list too so state persists
-			m.items[m.list.Index()].Checked = item.Checked
-			// Update list.Model internal items to reflect changes immediately
-			m.list.SetItem(m.list.Index(), item)
+			idx := m.list.Index()
+			if idx >= 0 && idx < len(m.items) {
+				m.items[idx].Checked = item.Checked
+				// Update list.Model internal items to reflect changes immediately
+				m.list.SetItem(idx, item)
+			}
 
 			if item.SpaceAction != nil {
 				return m, item.SpaceAction
@@ -1347,13 +1393,13 @@ func (m *MenuModel) renderDialog(menuContent, buttonBox string, listWidth int) s
 	return dialogBox
 }
 
-func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targetHeight int, focused bool) string {
-	styles := GetStyles()
-	// Focused dialogs use thick border, background dialogs use normal border
+// RenderBorderedBoxCtx renders a dialog with title and borders using a specific context.
+// This is the context-aware version of MenuModel.renderBorderWithTitle.
+func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeight int, focused bool, ctx StyleContext) string {
 	var border lipgloss.Border
-	if !styles.DrawBorders {
+	if !ctx.DrawBorders {
 		border = lipgloss.HiddenBorder()
-	} else if styles.LineCharacters {
+	} else if ctx.LineCharacters {
 		if focused {
 			border = lipgloss.ThickBorder()
 		} else {
@@ -1367,22 +1413,20 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 		}
 	}
 
-	// Style definitions
-	borderBG := styles.Dialog.GetBackground()
+	borderBG := ctx.Dialog.GetBackground()
 	borderStyleLight := lipgloss.NewStyle().
-		Foreground(styles.BorderColor).
+		Foreground(ctx.BorderColor).
 		Background(borderBG)
 	borderStyleDark := lipgloss.NewStyle().
-		Foreground(styles.Border2Color).
+		Foreground(ctx.Border2Color).
 		Background(borderBG)
-	titleStyle := styles.DialogTitle.
+	titleStyle := ctx.DialogTitle.
 		Background(borderBG)
 
-	// Parse color tags from title and update style
+	// ParseTitleTags is a standalone function in menu.go
 	var title string
-	title, titleStyle = ParseTitleTags(m.title, titleStyle)
+	title, titleStyle = ParseTitleTags(rawTitle, titleStyle)
 
-	// Handle actual content width vs requested width
 	lines := strings.Split(content, "\n")
 	actualWidth := contentWidth
 	for _, line := range lines {
@@ -1392,7 +1436,6 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 		}
 	}
 
-	// Enforce target height if specified
 	if targetHeight > 2 {
 		contentHeight := len(lines)
 		neededPadding := (targetHeight - 2) - contentHeight
@@ -1403,14 +1446,11 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 		}
 	}
 
-	// Build top border with title using T connectors
-	// Format: ────┤ Title ├──── (normal) or ━━━━┫ Title ┣━━━━ (thick/focused)
-	// Spaces are rendered with border style, not title style
 	var leftT, rightT string
-	if !styles.DrawBorders {
+	if !ctx.DrawBorders {
 		leftT = " "
 		rightT = " "
-	} else if styles.LineCharacters {
+	} else if ctx.LineCharacters {
 		if focused {
 			leftT = "┫"
 			rightT = "┣"
@@ -1420,21 +1460,20 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 		}
 	} else {
 		if focused {
-			leftT = "H" // thick ASCII T-connector
+			leftT = "H"
 			rightT = "H"
 		} else {
 			leftT = "+"
 			rightT = "+"
 		}
 	}
-	// Total title section width: leftT + space + title + space + rightT
+
 	titleSectionLen := 1 + 1 + lipgloss.Width(title) + 1 + 1
 	leftPad := (actualWidth - titleSectionLen) / 2
 	rightPad := actualWidth - titleSectionLen - leftPad
 
 	var result strings.Builder
 
-	// Top border
 	result.WriteString(borderStyleLight.Render(border.TopLeft))
 	result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, leftPad)))
 	result.WriteString(borderStyleLight.Render(leftT))
@@ -1446,31 +1485,28 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 	result.WriteString(borderStyleLight.Render(border.TopRight))
 	result.WriteString("\n")
 
-	// Content lines with left/right borders
 	for _, line := range lines {
 		result.WriteString(borderStyleLight.Render(border.Left))
-
-		// Pad line to actualWidth with styled padding to prevent black splotches
 		textWidth := lipgloss.Width(line)
 		padding := ""
 		if textWidth < actualWidth {
 			padding = lipgloss.NewStyle().Background(borderBG).Render(strutil.Repeat(" ", actualWidth-textWidth))
 		}
-
-		// Use MaintainBackground to handle internal color resets within the line
-		fullLine := MaintainBackground(line+padding, styles.Dialog)
+		fullLine := MaintainBackground(line+padding, ctx.Dialog)
 		result.WriteString(fullLine)
-
 		result.WriteString(borderStyleDark.Render(border.Right))
 		result.WriteString("\n")
 	}
 
-	// Bottom border
 	result.WriteString(borderStyleDark.Render(border.BottomLeft))
 	result.WriteString(borderStyleDark.Render(strutil.Repeat(border.Bottom, actualWidth)))
 	result.WriteString(borderStyleDark.Render(border.BottomRight))
 
 	return result.String()
+}
+
+func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targetHeight int, focused bool) string {
+	return RenderBorderedBoxCtx(m.title, content, contentWidth, targetHeight, focused, GetActiveContext())
 }
 
 // SetSize updates the menu dimensions and resizes the list
@@ -1605,7 +1641,7 @@ func (m *MenuModel) renderFlow() string {
 	itemSpacing := 3
 
 	for i, item := range m.items {
-		isSelected := i == m.cursor
+		isSelected := i == m.cursor && m.IsActive()
 
 		tagStyle := SemanticStyle("{{|Theme_Tag|}}").Background(dialogBG)
 		keyStyle := SemanticStyle("{{|Theme_TagKey|}}").Background(dialogBG)
