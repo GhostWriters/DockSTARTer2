@@ -18,7 +18,7 @@ import (
 
 // AppSelectionScreen is the screen for selecting applications to enable/disable
 type AppSelectionScreen struct {
-	menu tui.MenuModel
+	menu *tui.MenuModel
 	conf config.AppConfig
 }
 
@@ -40,7 +40,7 @@ func NewAppSelectionScreen(conf config.AppConfig) *AppSelectionScreen {
 	menu.SetCheckboxMode(true) // Enable checkboxes for app selection
 
 	s := &AppSelectionScreen{
-		menu: menu,
+		menu: &menu,
 		conf: conf,
 	}
 	s.refreshItems()
@@ -136,7 +136,7 @@ func (s *AppSelectionScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	var newMenu tea.Model
 	newMenu, cmd = s.menu.Update(msg)
-	if menu, ok := newMenu.(tui.MenuModel); ok {
+	if menu, ok := newMenu.(*tui.MenuModel); ok {
 		s.menu = menu
 	}
 

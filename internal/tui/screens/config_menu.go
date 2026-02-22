@@ -9,7 +9,7 @@ import (
 
 // ConfigMenuScreen is the configuration menu screen
 type ConfigMenuScreen struct {
-	menu tui.MenuModel
+	menu *tui.MenuModel
 }
 
 // NewConfigMenuScreen creates the configuration menu
@@ -67,7 +67,7 @@ func NewConfigMenuScreen() *ConfigMenuScreen {
 		navigateBack(),
 	)
 
-	return &ConfigMenuScreen{menu: menu}
+	return &ConfigMenuScreen{menu: &menu}
 }
 
 // Init implements tea.Model
@@ -78,7 +78,7 @@ func (s *ConfigMenuScreen) Init() tea.Cmd {
 // Update implements tea.Model
 func (s *ConfigMenuScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	updated, cmd := s.menu.Update(msg)
-	if menu, ok := updated.(tui.MenuModel); ok {
+	if menu, ok := updated.(*tui.MenuModel); ok {
 		s.menu = menu
 	}
 	return s, cmd

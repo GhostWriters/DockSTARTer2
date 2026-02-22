@@ -95,12 +95,17 @@ func Overlay(foreground, background string, hPos, vPos OverlayPosition, xOffset,
 		}
 
 		// 3. Middle portion (foreground)
-		// We use fgLine as-is to preserve all markers
+		// We use fgLine, but we MUST ensure it doesn't exceed the background width
+		// to prevent terminal wrapping and layout corruption.
+		availableSpace := bgWidth - x
 		middle := fgLine
+		if lipgloss.Width(middle) > availableSpace {
+			middle = TruncateRight(middle, availableSpace)
+		}
 
 		// 4. Right portion of background
 		// We skip the width that the foreground occupies
-		right := TruncateLeft(bgLine, x+fgWidth)
+		right := TruncateLeft(bgLine, x+lipgloss.Width(middle))
 
 		bgLines[bgRow] = left + middle + right
 	}

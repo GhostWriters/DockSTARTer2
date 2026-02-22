@@ -153,13 +153,13 @@ func RunDialogWithBackdrop[T DialogModel](dialog T, helpText string, position Di
 
 	// Initialize TUI if not already done
 	cfg := config.LoadAppConfig()
-	if err := theme.Load(cfg.UI.Theme); err == nil {
+	if _, err := theme.Load(cfg.UI.Theme, ""); err == nil {
 		InitStyles(cfg)
 	}
 
 	wrapper := NewDialogWithBackdrop(dialog, helpText).WithPosition(position)
 
-	p := tea.NewProgram(wrapper)
+	p := NewProgram(wrapper)
 	finalModel, err := p.Run()
 
 	// Reset terminal colors on exit to prevent "bleeding" into the shell prompt

@@ -8,29 +8,23 @@ import (
 
 // OptionsMenuScreen is the options menu screen
 type OptionsMenuScreen struct {
-	menu tui.MenuModel
+	menu *tui.MenuModel
 }
 
 // NewOptionsMenuScreen creates the options menu
 func NewOptionsMenuScreen() *OptionsMenuScreen {
 	items := []tui.MenuItem{
 		{
-			Tag:    "Choose Theme",
-			Desc:   "Select color theme",
-			Help:   "Change the TUI color scheme",
-			Action: nil, // Not implemented yet - will navigate to theme_select
+			Tag:    "Appearance",
+			Desc:   "Themes and Display Options",
+			Help:   "Configure color scheme, borders, and effects",
+			Action: func() tea.Msg { return tui.NavigateMsg{Screen: NewDisplayOptionsScreen()} },
 		},
 		{
-			Tag:    "Display Options",
-			Desc:   "Configure display settings",
-			Help:   "Borders, shadows, and line characters",
-			Action: nil, // Not implemented yet
-		},
-		{
-			Tag:    "Package Manager",
-			Desc:   "Select package manager",
-			Help:   "Choose apt, yum, dnf, or other",
-			Action: nil, // Not implemented yet
+			Tag:    "Trigger Test Panic",
+			Desc:   "{{|Theme_TitleError|}}Test error handling{{[-]}}",
+			Help:   "Verify branded recovery and stack trace",
+			Action: func() tea.Msg { panic("Manual verification panic (Test: 123)") },
 		},
 	}
 
@@ -42,7 +36,7 @@ func NewOptionsMenuScreen() *OptionsMenuScreen {
 		navigateBack(),
 	)
 
-	return &OptionsMenuScreen{menu: menu}
+	return &OptionsMenuScreen{menu: &menu}
 }
 
 // Init implements tea.Model
@@ -53,7 +47,7 @@ func (s *OptionsMenuScreen) Init() tea.Cmd {
 // Update implements tea.Model
 func (s *OptionsMenuScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	updated, cmd := s.menu.Update(msg)
-	if menu, ok := updated.(tui.MenuModel); ok {
+	if menu, ok := updated.(*tui.MenuModel); ok {
 		s.menu = menu
 	}
 	return s, cmd

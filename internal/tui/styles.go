@@ -135,7 +135,15 @@ var slantedAsciiBorder = lipgloss.Border{
 
 // InitStyles initializes lipgloss styles from the current theme
 func InitStyles(cfg config.AppConfig) {
-	_ = theme.Load(cfg.UI.Theme) // Updated: Use cfg.UI.Theme
+	// Clear the semantic style cache to ensure real-time visual updates on theme swap
+	ClearSemanticCache()
+
+	defaults, _ := theme.Load(cfg.UI.Theme, "") // Updated: Use cfg.UI.Theme and get defaults
+	if defaults != nil {
+		// Apply theme defaults to the configuration if they are defined in the theme file.
+		// This uses the existing ApplyThemeDefaults routine.
+		theme.ApplyThemeDefaults(&cfg, *defaults)
+	}
 	t := theme.Current
 
 	// Store LineCharacters setting for later use

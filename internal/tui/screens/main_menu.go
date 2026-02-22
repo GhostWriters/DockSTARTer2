@@ -8,7 +8,7 @@ import (
 
 // MainMenuScreen is the main menu screen
 type MainMenuScreen struct {
-	menu tui.MenuModel
+	menu *tui.MenuModel
 }
 
 // NewMainMenuScreen creates the main menu
@@ -42,7 +42,7 @@ func NewMainMenuScreen() *MainMenuScreen {
 		nil, // No back action for main menu
 	)
 
-	return &MainMenuScreen{menu: menu}
+	return &MainMenuScreen{menu: &menu}
 }
 
 // Init implements tea.Model
@@ -53,7 +53,7 @@ func (s *MainMenuScreen) Init() tea.Cmd {
 // Update implements tea.Model
 func (s *MainMenuScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	updated, cmd := s.menu.Update(msg)
-	if menu, ok := updated.(tui.MenuModel); ok {
+	if menu, ok := updated.(*tui.MenuModel); ok {
 		s.menu = menu
 	}
 	return s, cmd

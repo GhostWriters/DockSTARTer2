@@ -14,6 +14,12 @@ import (
 
 var semanticStyleCache = make(map[string]lipgloss.Style)
 
+// ClearSemanticCache clears the semantic style cache.
+// This should be called whenever the theme or styles are re-initialized.
+func ClearSemanticCache() {
+	semanticStyleCache = make(map[string]lipgloss.Style)
+}
+
 // SemanticStyle translates a semantic color tag (e.g., {{|Theme_Title|}}) or color code
 // (e.g., {{[black:white:-B]}}) into a lipgloss.Style.
 func SemanticStyle(tag string) lipgloss.Style {

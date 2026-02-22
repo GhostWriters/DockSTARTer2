@@ -154,7 +154,7 @@ func (m *confirmDialogModel) ViewString() string {
 	fullContent := lipgloss.JoinVertical(lipgloss.Left, questionText, "", buttonRow)
 
 	// Wrap in border with title embedded (matching menu style) using confirm styling
-	dialogWithTitle := RenderDialogWithType(m.title, fullContent, true, DialogTypeConfirm)
+	dialogWithTitle := RenderDialogWithType(m.title, fullContent, true, 0, DialogTypeConfirm)
 
 	// Add shadow
 	dialog := AddShadow(dialogWithTitle)

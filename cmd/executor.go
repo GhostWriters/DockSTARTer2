@@ -120,7 +120,7 @@ func handleConfigSettings(ctx context.Context, group *CommandGroup) error {
 // It handles flag application, command switching, and state resetting.
 func Execute(ctx context.Context, groups []CommandGroup) int {
 	conf := config.LoadAppConfig()
-	_ = theme.Load(conf.UI.Theme)
+	_, _ = theme.Load(conf.UI.Theme, "")
 	exitCode := 0
 
 	// Validate override file for operational commands
@@ -658,7 +658,7 @@ func handleTheme(ctx context.Context, group *CommandGroup) error {
 			} else {
 				logger.Notice(ctx, "Theme updated to: {{|Theme|}}%s{{[-]}}", newTheme)
 				// Reload theme for subsequent commands in the same execution
-				_ = theme.Load(newTheme)
+				_, _ = theme.Load(newTheme, "")
 			}
 		} else {
 			// No args? Show current theme

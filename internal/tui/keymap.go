@@ -26,6 +26,10 @@ type KeyMap struct {
 	Tab      key.Binding
 	ShiftTab key.Binding
 
+	// Internal screen cycling (tab/shift-tab)
+	CycleTab      key.Binding
+	CycleShiftTab key.Binding
+
 	// Dialog chrome focus — cycles between title-bar icons (?, X, etc.) and main content.
 	// Title-bar icons are discoverable alternatives to keyboard shortcuts:
 	//   ? icon → same as pressing ?/F1 (help)
@@ -72,7 +76,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 			key.NewBinding(key.WithKeys("ctrl+u"), key.WithHelp("ctrl+u/ctrl+d", "half page up/down")),
 			key.NewBinding(key.WithKeys("home"), key.WithHelp("home/end", "top/bottom")),
 			key.NewBinding(key.WithKeys("left"), key.WithHelp("←/→", "previous/next button")),
-			key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab/shift+tab", "next/previous element")),
+			key.NewBinding(key.WithKeys("ctrl+tab"), key.WithHelp("ctrl+tab/ctrl+shift+tab", "next/previous element")),
 			k.ChromeFocus,
 		},
 		{
@@ -105,12 +109,20 @@ var Keys = KeyMap{
 		key.WithHelp("→", "next button"),
 	),
 	Tab: key.NewBinding(
-		key.WithKeys("tab"),
-		key.WithHelp("tab", "next screen element"),
+		key.WithKeys("ctrl+tab"),
+		key.WithHelp("ctrl+tab", "next screen element"),
 	),
 	ShiftTab: key.NewBinding(
+		key.WithKeys("shift+ctrl+tab"),
+		key.WithHelp("shift+ctrl+tab", "prev screen element"),
+	),
+	CycleTab: key.NewBinding(
+		key.WithKeys("tab"),
+		key.WithHelp("tab", "next focus"),
+	),
+	CycleShiftTab: key.NewBinding(
 		key.WithKeys("shift+tab"),
-		key.WithHelp("shift+tab", "prev screen element"),
+		key.WithHelp("shift+tab", "prev focus"),
 	),
 	ChromeFocus: key.NewBinding(
 		key.WithKeys("ctrl+ "),

@@ -12,5 +12,6 @@ func init() {
 		func() tui.ScreenModel { return NewConfigMenuScreen() },
 		func() tui.ScreenModel { return NewOptionsMenuScreen() },
 		func() tui.ScreenModel { return NewAppSelectionScreen(config.LoadAppConfig()) },
+		func() tui.ScreenModel { return NewDisplayOptionsScreen() },
 	)
 }

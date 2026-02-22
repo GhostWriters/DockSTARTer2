@@ -124,7 +124,7 @@ func (m *messageDialogModel) ViewString() string {
 
 	// Add title with prefix and wrap in border
 	fullTitle := titlePrefix + m.title
-	dialogWithTitle := RenderDialog(fullTitle, fullContent, true)
+	dialogWithTitle := RenderDialog(fullTitle, fullContent, true, 0)
 
 	// Add shadow
 	dialog := AddShadow(dialogWithTitle)

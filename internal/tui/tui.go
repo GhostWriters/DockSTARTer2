@@ -45,7 +45,7 @@ func Initialize(ctx context.Context) error {
 	zone.NewGlobal()
 
 	currentConfig = config.LoadAppConfig()
-	if err := theme.Load(currentConfig.UI.Theme); err != nil {
+	if _, err := theme.Load(currentConfig.UI.Theme, ""); err != nil { // Initial theme load
 		return fmt.Errorf("failed to load theme: %w", err)
 	}
 
@@ -53,6 +53,14 @@ func Initialize(ctx context.Context) error {
 	InitStyles(currentConfig)
 
 	return nil
+}
+
+// NewProgram creates a new Bubble Tea program with standardized options.
+// It also sets the global program variable for cross-component communication.
+func NewProgram(model tea.Model) *tea.Program {
+	p := tea.NewProgram(model, tea.WithoutCatchPanics())
+	program = p
+	return p
 }
 
 // Start launches the TUI application
@@ -64,6 +72,14 @@ func Start(ctx context.Context, startMenu string) error {
 	defer func() { logger.TUIMode = false }()
 
 	logger.Info(ctx, "TUI Starting...")
+
+	// Global panic recovery
+	defer func() {
+		if r := recover(); r != nil {
+			Shutdown()
+			logger.FatalWithStack(ctx, "TUI Panic: %v", r)
+		}
+	}()
 
 	if err := Initialize(ctx); err != nil {
 		return err
@@ -82,6 +98,10 @@ func Start(ctx context.Context, startMenu string) error {
 		startScreen = createOptionsScreen()
 	case "app-select", "select", "config-app-select":
 		startScreen = createAppSelectionScreen()
+	case "theme-select", "theme":
+		startScreen = createDisplayOptionsScreen()
+	case "display-options":
+		startScreen = createDisplayOptionsScreen()
 	default:
 		startScreen = createMainScreen()
 	}
@@ -91,7 +111,7 @@ func Start(ctx context.Context, startMenu string) error {
 
 	// Create and run the Bubble Tea program
 	// Note: AltScreen is set via View().AltScreen in v2
-	program = tea.NewProgram(model)
+	p := NewProgram(model)
 
 	// Initialize re-execution sync
 	programExited = make(chan struct{})
@@ -106,7 +126,7 @@ func Start(ctx context.Context, startMenu string) error {
 	}()
 
 	// Run the program
-	finalModel, err := program.Run()
+	finalModel, err := p.Run()
 
 	// Signal that the program has exited
 	close(programExited)
@@ -115,7 +135,7 @@ func Start(ctx context.Context, startMenu string) error {
 	fmt.Print("\x1b[0m\n")
 
 	if err != nil {
-		return err
+		logger.FatalWithStack(ctx, "TUI Error: %v", err)
 	}
 
 	// Check if the model exited via ForceQuit (ctrl-c)
@@ -232,18 +252,20 @@ func Error(title, message string) {
 // We use function variables to avoid circular imports
 
 var (
-	createMainScreen         func() ScreenModel
-	createConfigScreen       func() ScreenModel
-	createOptionsScreen      func() ScreenModel
-	createAppSelectionScreen func() ScreenModel
+	createMainScreen           func() ScreenModel
+	createConfigScreen         func() ScreenModel
+	createOptionsScreen        func() ScreenModel
+	createAppSelectionScreen   func() ScreenModel
+	createDisplayOptionsScreen func() ScreenModel
 )
 
 // RegisterScreenCreators allows the screens package to register screen creation functions
-func RegisterScreenCreators(main, cfg, opts, appSel func() ScreenModel) {
+func RegisterScreenCreators(main, cfg, opts, appSel, dispOpts func() ScreenModel) {
 	createMainScreen = main
 	createConfigScreen = cfg
 	createOptionsScreen = opts
 	createAppSelectionScreen = appSel
+	createDisplayOptionsScreen = dispOpts
 }
 
 // init sets up default screen creators
@@ -253,6 +275,7 @@ func init() {
 	createConfigScreen = func() ScreenModel { return nil }
 	createOptionsScreen = func() ScreenModel { return nil }
 	createAppSelectionScreen = func() ScreenModel { return nil }
+	createDisplayOptionsScreen = func() ScreenModel { return nil }
 }
 
 // TriggerAppUpdate returns a tea.Cmd that performs the application update.
@@ -365,5 +388,19 @@ func TriggerUpdate() tea.Cmd {
 func Send(msg tea.Msg) {
 	if program != nil {
 		program.Send(msg)
+	}
+}
+
+// CloseDialog returns a command to close the current modal dialog
+func CloseDialog() tea.Cmd {
+	return func() tea.Msg {
+		return CloseDialogMsg{}
+	}
+}
+
+// CloseDialogWithResult returns a command to close the current modal dialog with a result
+func CloseDialogWithResult(result any) tea.Cmd {
+	return func() tea.Msg {
+		return CloseDialogMsg{Result: result}
 	}
 }

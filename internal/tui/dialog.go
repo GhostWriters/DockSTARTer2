@@ -300,12 +300,12 @@ func CheckButtonHotkeys(msg tea.KeyPressMsg, buttons []ButtonSpec) (int, bool) {
 // If title is empty, renders a plain top border without title.
 // focused=true uses a thick border (active dialog), focused=false uses normal border (background dialog).
 // Optional borders parameter allows overriding the default theme borders.
-func RenderDialog(title, content string, focused bool, borders ...BorderPair) string {
-	return RenderDialogWithType(title, content, focused, DialogTypeInfo, borders...)
+func RenderDialog(title, content string, focused bool, targetHeight int, borders ...BorderPair) string {
+	return RenderDialogWithType(title, content, focused, targetHeight, DialogTypeInfo, borders...)
 }
 
 // RenderDialogWithType renders a dialog with a specific type for title styling.
-func RenderDialogWithType(title, content string, focused bool, dialogType DialogType, borders ...BorderPair) string {
+func RenderDialogWithType(title, content string, focused bool, targetHeight int, dialogType DialogType, borders ...BorderPair) string {
 	styles := GetStyles()
 
 	var border lipgloss.Border
@@ -343,7 +343,7 @@ func RenderDialogWithType(title, content string, focused bool, dialogType Dialog
 		titleStyle = SemanticRawStyle("Theme_TitleQuestion")
 	}
 
-	return renderDialogWithBorder(title, content, border, focused, true, true, titleStyle)
+	return renderDialogWithBorder(title, content, border, focused, targetHeight, true, true, titleStyle)
 }
 
 // RenderUniformBlockDialog renders a dialog with block borders and uniform dark colors (no 3D effect).
@@ -352,7 +352,7 @@ func RenderUniformBlockDialog(title, content string) string {
 	styles := GetStyles()
 	borders := GetBlockBorders(styles.LineCharacters)
 	// Use DialogTitleHelp for help dialogs (which use this renderer)
-	return renderDialogWithBorder(title, content, borders.Focused, true, false, false, styles.DialogTitleHelp)
+	return renderDialogWithBorder(title, content, borders.Focused, true, 0, false, false, styles.DialogTitleHelp)
 }
 
 // GetBlockBorders returns a BorderPair with solid block borders for both states
@@ -379,7 +379,7 @@ func GetBlockBorders(lineCharacters bool) BorderPair {
 // It handles title centering, background maintenance, and padding.
 // If threeD is false, it uses a uniform border color (Border2Color).
 // If useConnectors is true, it uses T-junctions (┤, ┫, etc.) to embed the title.
-func renderDialogWithBorder(title, content string, border lipgloss.Border, focused bool, threeD bool, useConnectors bool, titleStyle lipgloss.Style) string {
+func renderDialogWithBorder(title, content string, border lipgloss.Border, focused bool, targetHeight int, threeD bool, useConnectors bool, titleStyle lipgloss.Style) string {
 	if title != "" && !strings.HasSuffix(title, "{{[-]}}") {
 		title += "{{[-]}}"
 	}
@@ -407,6 +407,9 @@ func renderDialogWithBorder(title, content string, border lipgloss.Border, focus
 	// Parse color tags from title and render as rich text
 	title = RenderThemeText(title, titleStyle)
 
+	// Parse color tags from content
+	content = RenderThemeText(content, styles.Dialog)
+
 	// Get actual content width (maximum width of all lines)
 	lines := strings.Split(content, "\n")
 	actualWidth := 0
@@ -422,6 +425,17 @@ func renderDialogWithBorder(title, content string, border lipgloss.Border, focus
 	// if actualWidth is even, total width is even.
 	if actualWidth%2 != 0 {
 		actualWidth++
+	}
+
+	// Enforce target height if specified (>2 for borders)
+	if targetHeight > 2 {
+		contentHeight := len(lines)
+		neededPadding := (targetHeight - 2) - contentHeight
+		if neededPadding > 0 {
+			for i := 0; i < neededPadding; i++ {
+				lines = append(lines, "")
+			}
+		}
 	}
 
 	var result strings.Builder
@@ -501,4 +515,19 @@ func renderDialogWithBorder(title, content string, border lipgloss.Border, focus
 	result.WriteString(borderStyleDark.Render(border.BottomRight))
 
 	return result.String()
+}
+
+// ZoneMark wraps content in a zone identifier
+func ZoneMark(id string, content string) string {
+	return zone.Mark(id, content)
+}
+
+// ZoneClick returns true if the message is a left-click within the specified zone
+func ZoneClick(msg tea.Msg, id string) bool {
+	if mouseMsg, ok := msg.(tea.MouseClickMsg); ok && mouseMsg.Button == tea.MouseLeft {
+		if info := zone.Get(id); info != nil {
+			return info.InBounds(mouseMsg)
+		}
+	}
+	return false
 }

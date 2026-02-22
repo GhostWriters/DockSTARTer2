@@ -12,13 +12,14 @@ import (
 
 	"DockSTARTer2/cmd"
 	"DockSTARTer2/internal/assets"
-	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/update"
-	"DockSTARTer2/internal/version"
 )
 
 func main() {
+	// Create a background context for the recovery handler
+	ctx := context.Background()
+	defer logger.Recover(ctx)
 	exitCode := run()
 	if update.PendingReExec != nil {
 		// Perform re-execution if triggered by the TUI update
@@ -90,22 +91,6 @@ func run() (exitCode int) {
 
 	// Defer cleanup to ensure it runs even if we return early or panic
 	defer cleanup(ctx)
-
-	// Recover from logger.FatalError to ensure cleanup runs
-	defer func() {
-		if r := recover(); r != nil {
-			if _, ok := r.(logger.FatalError); ok {
-				// This panic was intentional from logger.Fatal/FatalWithStack
-				exitCode = 1
-			} else {
-				// Re-panic for other errors
-				panic(r)
-			}
-		}
-		if exitCode != 0 {
-			fmt.Fprintln(os.Stderr, console.Parse(fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} did not finish running successfully.", version.ApplicationName)))
-		}
-	}()
 
 	// Ensure embedded assets are extracted
 	if err := assets.EnsureAssets(ctx); err != nil {

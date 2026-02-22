@@ -15,15 +15,19 @@ import (
 
 // MenuItem defines an item in a menu
 type MenuItem struct {
-	Tag      string  // Display name (first letter used as shortcut)
-	Desc     string  // Description text
-	Help     string  // Help line text shown when item is selected
-	Shortcut rune    // Keyboard shortcut (usually first letter of Tag)
-	Action   tea.Cmd // Command to execute when selected
+	Tag         string  // Display name (first letter used as shortcut)
+	Desc        string  // Description text
+	Help        string  // Help line text shown when item is selected
+	Shortcut    rune    // Keyboard shortcut (usually first letter of Tag)
+	Action      tea.Cmd // Command to execute when selected (Enter)
+	SpaceAction tea.Cmd // Command to execute when Space is pressed
 
 	// Checklist support
-	Selectable bool // Whether this item can be toggled
-	Selected   bool // Current selection state
+	Selectable    bool // Whether this item can be toggled
+	Selected      bool // Current selection state
+	IsCheckbox    bool // Whether this is a checkbox [ ] / [x]
+	IsRadioButton bool // Whether this is a radio button ( ) / (*)
+	Checked       bool // Current checkbox/radio state
 
 	// Layout support
 	IsSeparator bool // Whether this is a non-selectable header/separator
@@ -72,18 +76,14 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 	}
 
 	neutralStyle := lipgloss.NewStyle().Background(dialogBG)
-	itemStyle := SemanticStyle("{{|Theme_Item|}}")
-	tagStyle := SemanticStyle("{{|Theme_Tag|}}")
-	keyStyle := SemanticStyle("{{|Theme_TagKey|}}")
+	itemStyle := SemanticStyle("{{|Theme_Item|}}").Background(dialogBG)
+	tagStyle := SemanticStyle("{{|Theme_Tag|}}").Background(dialogBG)
+	keyStyle := SemanticStyle("{{|Theme_TagKey|}}").Background(dialogBG)
 
 	if isSelected {
 		itemStyle = SemanticStyle("{{|Theme_ItemSelected|}}")
 		tagStyle = SemanticStyle("{{|Theme_TagSelected|}}")
 		keyStyle = SemanticStyle("{{|Theme_TagKeySelected|}}")
-	} else {
-		itemStyle = itemStyle.Background(dialogBG)
-		tagStyle = tagStyle.Background(dialogBG)
-		keyStyle = keyStyle.Background(dialogBG)
 	}
 
 	// Render tag with first-letter highlighting
@@ -101,9 +101,33 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 	}
 
 	tagWidth := lipgloss.Width(menuItem.Tag)
+
+	// Checkbox visual [ ] or [x] / Radio visual ( ) or (*)
+	checkbox := ""
+	if menuItem.IsRadioButton {
+		cb := "( ) "
+		if menuItem.Checked {
+			cb = "(*) "
+		}
+		checkbox = tagStyle.Render(cb)
+	} else if menuItem.IsCheckbox {
+		cb := "[ ] "
+		if menuItem.Checked {
+			cb = "[x] "
+		}
+		// Render with tag style
+		checkbox = tagStyle.Render(cb)
+	}
+
 	paddingSpaces := strutil.Repeat(" ", d.maxTagLen-tagWidth+2)
 
-	availableWidth := m.Width() - (d.maxTagLen + 2) - 2
+	// Account for checkbox/radio width (4) if present
+	cbWidth := 0
+	if menuItem.IsRadioButton || menuItem.IsCheckbox {
+		cbWidth = 4
+	}
+
+	availableWidth := m.Width() - (d.maxTagLen + 2) - 2 - cbWidth
 	if availableWidth < 0 {
 		availableWidth = 0
 	}
@@ -112,7 +136,7 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 	descStr = itemStyle.MaxWidth(availableWidth).Height(1).Render(descStr)
 	descLine := strings.Split(descStr, "\n")[0]
 
-	line := tagStr + neutralStyle.Render(paddingSpaces) + descLine
+	line := checkbox + tagStr + neutralStyle.Render(paddingSpaces) + descLine
 
 	actualWidth := lipgloss.Width(line)
 	if actualWidth < m.Width()-2 {
@@ -248,6 +272,10 @@ type MenuModel struct {
 	focused     bool
 	focusedItem FocusItem // Which element has focus
 
+	// Sub-menu mode (for consolidated screens)
+	subMenuMode bool
+	focusedSub  bool // If false, use normal borders. If true, use thick borders.
+
 	// Back action (nil if no back button)
 	backAction tea.Cmd
 
@@ -268,6 +296,7 @@ type MenuModel struct {
 
 	// Checkbox mode (for app selection)
 	checkboxMode bool
+	flowMode     bool // Whether to layout items horizontally instead of vertically
 
 	// Unified layout (deterministic sizing)
 	layout DialogLayout
@@ -299,6 +328,14 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 	cursor := 0
 	if idx, ok := menuSelectedIndices[id]; ok && idx >= 0 && idx < len(items) {
 		cursor = idx
+	} else {
+		// New: Auto-focus the currently selected radio option if no persistent session
+		for i, item := range items {
+			if item.IsRadioButton && item.Checked {
+				cursor = i
+				break
+			}
+		}
 	}
 
 	// Convert MenuItems to list.Items
@@ -383,6 +420,7 @@ func (m *MenuModel) SetFocused(f bool) {
 // SetMaximized sets whether the menu should expand to fill available space
 func (m *MenuModel) SetMaximized(maximized bool) {
 	m.maximized = maximized
+	m.calculateLayout()
 }
 
 // SetShowExit sets whether to show the Exit button
@@ -398,6 +436,16 @@ func (m MenuModel) IsMaximized() bool {
 // HasDialog returns whether the menu has an active dialog overlay
 func (m MenuModel) HasDialog() bool {
 	return false // Menus don't have nested dialogs
+}
+
+// SetSubMenuMode sets whether the menu acts as a sub-component with simpler borders
+func (m *MenuModel) SetSubMenuMode(enabled bool) {
+	m.subMenuMode = enabled
+}
+
+// SetSubFocused sets the focus state specifically for sub-menu mode (thick vs normal border)
+func (m *MenuModel) SetSubFocused(focused bool) {
+	m.focusedSub = focused
 }
 
 // SetCheckboxMode enables checkbox rendering for app selection
@@ -423,6 +471,51 @@ func (m *MenuModel) SetCheckboxMode(enabled bool) {
 			}
 		}
 		m.list.SetDelegate(menuItemDelegate{menuID: m.id, maxTagLen: maxTagLen})
+	}
+}
+
+// Index returns the current cursor index
+func (m *MenuModel) Index() int {
+	return m.cursor
+}
+
+// Select programmatically sets the cursor index
+func (m *MenuModel) Select(index int) {
+	if index >= 0 && index < len(m.items) {
+		m.cursor = index
+		m.list.Select(index)
+		menuSelectedIndices[m.id] = index
+	}
+}
+
+// GetItems returns the current list of MenuItems
+func (m *MenuModel) GetItems() []MenuItem {
+	return m.items
+}
+
+// SetItems updates the menu items and refreshes the bubbles list
+func (m *MenuModel) SetItems(items []MenuItem) {
+	m.items = items
+
+	// Convert MenuItems to list.Items
+	listItems := make([]list.Item, len(items))
+	for i, item := range items {
+		listItems[i] = item
+	}
+	m.list.SetItems(listItems)
+
+	// Recalculate max tag length for delegate
+	maxTagLen := 0
+	for _, item := range items {
+		tagWidth := lipgloss.Width(item.Tag)
+		if tagWidth > maxTagLen {
+			maxTagLen = tagWidth
+		}
+	}
+
+	// Update delegate with new max tag length
+	if m.checkboxMode {
+		m.list.SetDelegate(checkboxItemDelegate{menuID: m.id, maxTagLen: maxTagLen})
 	}
 }
 
@@ -461,46 +554,13 @@ func (m *MenuModel) ToggleSelectedItem() {
 	}
 }
 
-// SetItems updates the menu items and refreshes the bubbles list
-func (m *MenuModel) SetItems(items []MenuItem) {
-	m.items = items
-
-	// Convert MenuItems to list.Items
-	listItems := make([]list.Item, len(items))
-	for i, item := range items {
-		listItems[i] = item
-	}
-	m.list.SetItems(listItems)
-
-	// Recalculate max tag length for delegate
-	maxTagLen := 0
-	for _, item := range items {
-		tagWidth := lipgloss.Width(item.Tag)
-		if tagWidth > maxTagLen {
-			maxTagLen = tagWidth
-		}
-	}
-
-	// Update delegate with new max tag length
-	if m.checkboxMode {
-		m.list.SetDelegate(checkboxItemDelegate{menuID: m.id, maxTagLen: maxTagLen})
-	} else {
-		m.list.SetDelegate(menuItemDelegate{menuID: m.id, maxTagLen: maxTagLen})
-	}
-}
-
-// GetItems returns the current menu items (for reading selection state)
-func (m MenuModel) GetItems() []MenuItem {
-	return m.items
-}
-
 // Init implements tea.Model
-func (m MenuModel) Init() tea.Cmd {
+func (m *MenuModel) Init() tea.Cmd {
 	return nil
 }
 
 // Update implements tea.Model
-func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Handle window size first — delegate to SetSize (single source of truth)
 	if wsMsg, ok := msg.(tea.WindowSizeMsg); ok {
 		m.SetSize(wsMsg.Width, wsMsg.Height)
@@ -823,7 +883,7 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // nextFocus cycles focus forward through all focus areas (list → buttons).
 // Used for future Tab/window-cycling logic.
-func (m MenuModel) nextFocus() FocusItem {
+func (m *MenuModel) nextFocus() FocusItem {
 	switch m.focusedItem {
 	case FocusList:
 		return FocusSelectBtn
@@ -849,7 +909,7 @@ func (m MenuModel) nextFocus() FocusItem {
 
 // prevFocus cycles focus backward through all focus areas.
 // Used for future ShiftTab/window-cycling logic.
-func (m MenuModel) prevFocus() FocusItem {
+func (m *MenuModel) prevFocus() FocusItem {
 	switch m.focusedItem {
 	case FocusList:
 		if m.showExit {
@@ -874,7 +934,7 @@ func (m MenuModel) prevFocus() FocusItem {
 
 // nextButtonFocus cycles the Right arrow through buttons only.
 // From the list or last button, moves to the first button (Select).
-func (m MenuModel) nextButtonFocus() FocusItem {
+func (m *MenuModel) nextButtonFocus() FocusItem {
 	switch m.focusedItem {
 	case FocusList, FocusExitBtn:
 		return FocusSelectBtn
@@ -897,7 +957,7 @@ func (m MenuModel) nextButtonFocus() FocusItem {
 
 // prevButtonFocus cycles the Left arrow through buttons only.
 // From the list or first button, moves to the last button (Exit).
-func (m MenuModel) prevButtonFocus() FocusItem {
+func (m *MenuModel) prevButtonFocus() FocusItem {
 	switch m.focusedItem {
 	case FocusList, FocusSelectBtn:
 		if m.showExit {
@@ -918,7 +978,7 @@ func (m MenuModel) prevButtonFocus() FocusItem {
 	return FocusExitBtn
 }
 
-func (m MenuModel) handleEnter() (tea.Model, tea.Cmd) {
+func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 	switch m.focusedItem {
 	case FocusList, FocusSelectBtn:
 		// Get selected item from bubbles list
@@ -946,12 +1006,42 @@ func (m MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 
 	return m, nil
 }
-
-func (m MenuModel) handleSpace() (tea.Model, tea.Cmd) {
+func (m *MenuModel) handleSpace() (tea.Model, tea.Cmd) {
 	if m.checkboxMode {
 		m.ToggleSelectedItem()
 		return m, nil
 	}
+
+	// Always prioritize checkbox toggle if item is one
+	selectedItem := m.list.SelectedItem()
+	if item, ok := selectedItem.(MenuItem); ok {
+		if item.IsCheckbox && item.Selectable {
+			item.Checked = !item.Checked
+			// Update the item in our internal list too so state persists
+			m.items[m.list.Index()].Checked = item.Checked
+			// Update list.Model internal items to reflect changes immediately
+			m.list.SetItem(m.list.Index(), item)
+
+			if item.SpaceAction != nil {
+				return m, item.SpaceAction
+			}
+			return m, nil
+		}
+	}
+
+	if m.focusedItem == FocusList {
+		selectedItem := m.list.SelectedItem()
+		if item, ok := selectedItem.(MenuItem); ok {
+			if item.SpaceAction != nil {
+				return m, item.SpaceAction
+			}
+			// Fallback: Space on a list item can also trigger its primary Action if no SpaceAction defined
+			if item.Action != nil {
+				return m, item.Action
+			}
+		}
+	}
+
 	if m.spaceAction != nil {
 		return m, m.spaceAction
 	}
@@ -963,7 +1053,20 @@ func (m MenuModel) handleSpace() (tea.Model, tea.Cmd) {
 }
 
 // ViewString renders the menu content as a string (for compositing)
-func (m MenuModel) ViewString() string {
+func (m *MenuModel) ViewString() string {
+	if m.width == 0 {
+		return ""
+	}
+
+	// In Sub-menu mode, we render a simpler view without the global backdrop logic
+	if m.subMenuMode {
+		return m.viewSubMenu()
+	}
+
+	if m.flowMode {
+		return m.renderFlow()
+	}
+
 	styles := GetStyles()
 
 	// Get list view and apply background color
@@ -1052,7 +1155,7 @@ func (m MenuModel) ViewString() string {
 	// Wrap in bordered dialog with title embedded in border
 	var dialog string
 	if m.title != "" {
-		dialog = m.renderBorderWithTitle(content, targetWidth)
+		dialog = m.renderBorderWithTitle(content, targetWidth, 0, m.focused)
 	} else {
 		// No title: focused uses thick border, background uses normal border
 		dialogStyle := lipgloss.NewStyle().
@@ -1073,12 +1176,12 @@ func (m MenuModel) ViewString() string {
 }
 
 // View implements tea.Model
-func (m MenuModel) View() tea.View {
+func (m *MenuModel) View() tea.View {
 	return tea.NewView(m.ViewString())
 }
 
 // getButtonSpecs returns the current button configuration based on state
-func (m MenuModel) getButtonSpecs() []ButtonSpec {
+func (m *MenuModel) getButtonSpecs() []ButtonSpec {
 	var specs []ButtonSpec
 
 	// Select Button
@@ -1110,14 +1213,14 @@ func (m MenuModel) getButtonSpecs() []ButtonSpec {
 }
 
 // renderSimpleButtons creates a button row with evenly spaced sections
-func (m MenuModel) renderSimpleButtons(contentWidth int) string {
+func (m *MenuModel) renderSimpleButtons(contentWidth int) string {
 	// Build button specs with focus state and explicit zone IDs
 	specs := m.getButtonSpecs()
 
 	return RenderCenteredButtons(contentWidth, specs...)
 }
 
-func (m MenuModel) renderButtons(contentWidth int) string {
+func (m *MenuModel) renderButtons(contentWidth int) string {
 	styles := GetStyles()
 
 	// Select button
@@ -1170,7 +1273,7 @@ func (m MenuModel) renderButtons(contentWidth int) string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, sections...)
 }
 
-func (m MenuModel) renderButtonBox(buttons string, contentWidth int) string {
+func (m *MenuModel) renderButtonBox(buttons string, contentWidth int) string {
 	styles := GetStyles()
 
 	// Center buttons in content width
@@ -1188,7 +1291,7 @@ func (m MenuModel) renderButtonBox(buttons string, contentWidth int) string {
 	return boxStyle.Render(centeredButtons)
 }
 
-func (m MenuModel) renderDialog(menuContent, buttonBox string, listWidth int) string {
+func (m *MenuModel) renderDialog(menuContent, buttonBox string, listWidth int) string {
 	styles := GetStyles()
 
 	// Build inner content parts
@@ -1223,7 +1326,7 @@ func (m MenuModel) renderDialog(menuContent, buttonBox string, listWidth int) st
 	var dialogBox string
 
 	if m.title != "" {
-		dialogBox = m.renderBorderWithTitle(paddedContent, listWidth)
+		dialogBox = m.renderBorderWithTitle(paddedContent, listWidth, 0, m.focused)
 	} else {
 		// No title, use standard border
 		boxStyle := lipgloss.NewStyle().
@@ -1240,18 +1343,18 @@ func (m MenuModel) renderDialog(menuContent, buttonBox string, listWidth int) st
 	return dialogBox
 }
 
-func (m MenuModel) renderBorderWithTitle(content string, contentWidth int) string {
+func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targetHeight int, focused bool) string {
 	styles := GetStyles()
 	// Focused dialogs use thick border, background dialogs use normal border
 	var border lipgloss.Border
 	if styles.LineCharacters {
-		if m.focused {
+		if focused {
 			border = lipgloss.ThickBorder()
 		} else {
 			border = lipgloss.NormalBorder()
 		}
 	} else {
-		if m.focused {
+		if focused {
 			border = thickAsciiBorder
 		} else {
 			border = asciiBorder
@@ -1273,11 +1376,25 @@ func (m MenuModel) renderBorderWithTitle(content string, contentWidth int) strin
 	var title string
 	title, titleStyle = ParseTitleTags(m.title, titleStyle)
 
-	// Get actual content width
+	// Handle actual content width vs requested width
 	lines := strings.Split(content, "\n")
-	actualWidth := 0
-	if len(lines) > 0 {
-		actualWidth = lipgloss.Width(lines[0])
+	actualWidth := contentWidth
+	for _, line := range lines {
+		w := lipgloss.Width(line)
+		if w > actualWidth {
+			actualWidth = w
+		}
+	}
+
+	// Enforce target height if specified
+	if targetHeight > 2 {
+		contentHeight := len(lines)
+		neededPadding := (targetHeight - 2) - contentHeight
+		if neededPadding > 0 {
+			for i := 0; i < neededPadding; i++ {
+				lines = append(lines, "")
+			}
+		}
 	}
 
 	// Build top border with title using T connectors
@@ -1285,7 +1402,7 @@ func (m MenuModel) renderBorderWithTitle(content string, contentWidth int) strin
 	// Spaces are rendered with border style, not title style
 	var leftT, rightT string
 	if styles.LineCharacters {
-		if m.focused {
+		if focused {
 			leftT = "┫"
 			rightT = "┣"
 		} else {
@@ -1293,7 +1410,7 @@ func (m MenuModel) renderBorderWithTitle(content string, contentWidth int) strin
 			rightT = "├"
 		}
 	} else {
-		if m.focused {
+		if focused {
 			leftT = "H" // thick ASCII T-connector
 			rightT = "H"
 		} else {
@@ -1351,7 +1468,16 @@ func (m MenuModel) renderBorderWithTitle(content string, contentWidth int) strin
 func (m *MenuModel) SetSize(width, height int) {
 	m.width = width
 	m.height = height
-	m.calculateLayout()
+
+	// If in flow mode, calculate height based on content
+	if m.flowMode {
+		flowLines := m.GetFlowHeight(width)
+		// +2 for top/bottom borders
+		m.layout.ViewportHeight = flowLines
+		m.layout.Height = flowLines + 2
+	} else {
+		m.calculateLayout()
+	}
 }
 
 func (m *MenuModel) calculateLayout() {
@@ -1376,11 +1502,14 @@ func (m *MenuModel) calculateLayout() {
 	}
 
 	// 4. Overhead calculation
-	// - Outer Dialog borders: 2
-	// - List box borders: 2
-	// - Buttons + their border: 5
-	// - Shadow: 1
-	overhead := DialogBorderHeight + subtitleHeight + 2 + buttonHeight + shadowHeight
+	overhead := 0
+	if m.subMenuMode {
+		// Sub-menu overhead is just the subtitle and its own borders (2)
+		overhead = subtitleHeight + 2
+	} else {
+		// Full dialog overhead: Outer borders (2) + List box borders (2) + Buttons (5) + Shadow (1)
+		overhead = DialogBorderHeight + subtitleHeight + 2 + buttonHeight + shadowHeight
+	}
 
 	maxListHeight := m.height - overhead
 	if maxListHeight < 3 {
@@ -1421,11 +1550,20 @@ func (m *MenuModel) calculateLayout() {
 	// Account for internal overhead: outer border (2) + inner border (2) + internal padding (2) = 6
 	widthOverhead := 6
 	maxListWidth := m.width - widthOverhead
-	if maxListWidth < 30 {
-		maxListWidth = 30
+	if maxListWidth < 34 {
+		maxListWidth = 34
 	}
-	if m.maximized || listWidth > maxListWidth {
+
+	// If maximized, fill the space. Otherwise, ensure minimum for buttons.
+	if m.maximized {
 		listWidth = maxListWidth
+	} else {
+		if listWidth < 34 {
+			listWidth = 34
+		}
+		if listWidth > maxListWidth {
+			listWidth = maxListWidth
+		}
 	}
 
 	m.layout = DialogLayout{
@@ -1441,13 +1579,169 @@ func (m *MenuModel) calculateLayout() {
 	m.list.SetSize(listWidth, listHeight)
 }
 
+// viewSubMenu renders the menu for use as a sub-section of a larger screen
+func (m *MenuModel) renderFlow() string {
+	styles := GetStyles()
+	dialogBG := styles.Dialog.GetBackground()
+
+	// Inner width available for items (total - 2 for borders)
+	maxWidth := m.width
+	if maxWidth > 2 {
+		maxWidth -= 2
+	}
+
+	var lines []string
+	var currentLine []string
+	currentLineWidth := 0
+	itemSpacing := 3
+
+	for i, item := range m.items {
+		isSelected := i == m.cursor
+
+		tagStyle := SemanticStyle("{{|Theme_Tag|}}").Background(dialogBG)
+		keyStyle := SemanticStyle("{{|Theme_TagKey|}}").Background(dialogBG)
+
+		if isSelected {
+			tagStyle = SemanticStyle("{{|Theme_TagSelected|}}")
+			keyStyle = SemanticStyle("{{|Theme_TagKeySelected|}}")
+		}
+
+		// Checkbox/Radio visual
+		prefix := ""
+		if item.IsRadioButton {
+			cbContent := " "
+			if item.Checked {
+				cbContent = "*"
+			}
+			prefix = tagStyle.Render("(") + keyStyle.Render(cbContent) + tagStyle.Render(") ")
+		} else if item.IsCheckbox {
+			cbContent := " "
+			if item.Checked {
+				cbContent = "x"
+			}
+			prefix = tagStyle.Render("[") + keyStyle.Render(cbContent) + tagStyle.Render("] ")
+		}
+
+		// Tag with first-letter shortcut
+		tag := item.Tag
+		tagStr := ""
+		if len(tag) > 0 {
+			letterIdx := 0
+			if strings.HasPrefix(tag, "[") && len(tag) > 1 {
+				letterIdx = 1
+			}
+			p := tag[:letterIdx]
+			f := string(tag[letterIdx])
+			r := tag[letterIdx+1:]
+			tagStr = tagStyle.Render(p) + keyStyle.Render(f) + tagStyle.Render(r)
+		}
+
+		itemContent := prefix + tagStr
+		itemWidth := lipgloss.Width(itemContent)
+
+		// Check if we need to wrap
+		if currentLineWidth > 0 && currentLineWidth+itemSpacing+itemWidth > maxWidth {
+			lines = append(lines, strings.Join(currentLine, strutil.Repeat(" ", itemSpacing)))
+			currentLine = []string{itemContent}
+			currentLineWidth = itemWidth
+		} else {
+			currentLine = append(currentLine, itemContent)
+			if currentLineWidth > 0 {
+				currentLineWidth += itemSpacing
+			}
+			currentLineWidth += itemWidth
+		}
+	}
+
+	// Add final line
+	if len(currentLine) > 0 {
+		lines = append(lines, strings.Join(currentLine, strutil.Repeat(" ", itemSpacing)))
+	}
+
+	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+}
+
+func (m *MenuModel) viewSubMenu() string {
+	styles := GetStyles()
+	var content string
+	if m.flowMode {
+		content = m.renderFlow()
+	} else {
+		content = m.list.View()
+	}
+
+	// Inner content with maintained background
+	inner := MaintainBackground(content, styles.Dialog)
+
+	// Use the shared border-with-title logic
+	// m.width is the total width, so inner width is m.width - 2
+	innerPadding := 0
+	if m.width > 2 {
+		innerPadding = m.width - 2
+	}
+	// When in flow mode, the height is strictly determined by the content + borders
+	targetHeight := m.height
+	if m.flowMode {
+		targetHeight = m.layout.ViewportHeight + 2 // ViewportHeight is lines, +2 for borders
+	}
+	return m.renderBorderWithTitle(inner, innerPadding, targetHeight, m.focusedSub)
+}
+
+// GetFlowHeight calculates required lines for horizontal layout given the available width
+func (m *MenuModel) GetFlowHeight(width int) int {
+	if len(m.items) == 0 {
+		return 0
+	}
+
+	maxWidth := width
+	if maxWidth > 2 {
+		maxWidth -= 2
+	}
+
+	lines := 1
+	currentLineWidth := 0
+	itemSpacing := 3
+
+	for _, item := range m.items {
+		// Approximate width calculation (matches renderFlow)
+		cbWidth := 0
+		if item.IsRadioButton || item.IsCheckbox {
+			cbWidth = 4 // "( ) " or "[ ] "
+		}
+
+		itemWidth := cbWidth + lipgloss.Width(item.Tag)
+
+		if currentLineWidth > 0 && currentLineWidth+itemSpacing+itemWidth > maxWidth {
+			lines++
+			currentLineWidth = itemWidth
+		} else {
+			if currentLineWidth > 0 {
+				currentLineWidth += itemSpacing
+			}
+			currentLineWidth += itemWidth
+		}
+	}
+
+	return lines
+}
+
+// SetFlowMode toggles horizontal flow layout
+func (m *MenuModel) SetFlowMode(flow bool) {
+	m.flowMode = flow
+}
+
+// SetHeaderVisibility toggles background/title for sub-menus
+func (m *MenuModel) SetHeaderVisibility(visible bool) {
+	m.list.SetShowTitle(visible)
+}
+
 // Title returns the menu title
-func (m MenuModel) Title() string {
+func (m *MenuModel) Title() string {
 	return m.title
 }
 
 // HelpText returns the current item's help text
-func (m MenuModel) HelpText() string {
+func (m *MenuModel) HelpText() string {
 	if m.cursor >= 0 && m.cursor < len(m.items) {
 		return m.items[m.cursor].Help
 	}
@@ -1455,6 +1749,6 @@ func (m MenuModel) HelpText() string {
 }
 
 // Cursor returns the current selection index
-func (m MenuModel) Cursor() int {
+func (m *MenuModel) Cursor() int {
 	return m.cursor
 }

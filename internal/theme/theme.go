@@ -45,6 +45,7 @@ func ResetFlags(s lipgloss.Style) lipgloss.Style {
 
 // ThemeConfig holds colors derived from .dialogrc and theme.ini
 type ThemeConfig struct {
+	Name                     string
 	ScreenFG                 color.Color
 	ScreenBG                 color.Color
 	DialogFG                 color.Color
@@ -125,10 +126,17 @@ type ThemeConfig struct {
 // Current holds the active theme configuration
 var Current ThemeConfig
 
-// Load theme by name
-func Load(themeName string) error {
-	// Initialize with defaults first
-	Default()
+// Load theme by name. Returns theme-defined defaults if found.
+// If prefix is provided, semantic tags are registered with that prefix (e.g. "Preview_Theme_Screen")
+// without affecting the global active theme (Current).
+func Load(themeName string, prefix string) (*ThemeDefaults, error) {
+	// 1. Initialize with defaults first (Classic colors)
+	Default(prefix)
+
+	// If main load, set Current name
+	if prefix == "" {
+		Current.Name = themeName
+	}
 
 	themesDir := paths.GetThemesDir()
 	themePath := filepath.Join(themesDir, themeName+".ds2theme")
@@ -136,20 +144,22 @@ func Load(themeName string) error {
 	if _, err := os.Stat(themePath); os.IsNotExist(err) {
 		// If theme doesn't exist, try falling back to "DockSTARTer"
 		if themeName != "DockSTARTer" {
-			return Load("DockSTARTer")
+			return Load("DockSTARTer", prefix)
 		}
 		// If even DockSTARTer doesn't exist, we stay with minimal defaults
-		return nil
+		return nil, nil
 	}
 
-	// Parse .ds2theme (Overrides defaults)
-	// fmt.Println("DEBUG: Loading theme from:", themePath)
-	_ = parseThemeTOML(themePath)
+	// 2. Parse .ds2theme (Overrides defaults)
+	// If prefix is set, we use a temporary config for parsing
+	targetConf := &Current
+	if prefix != "" {
+		tempConf := ThemeConfig{}
+		targetConf = &tempConf
+	}
 
-	// Synchronize themed values to console semantic tags
-	Apply()
-
-	return nil
+	defaults, err := parseThemeTOML(themePath, prefix, targetConf)
+	return defaults, err
 }
 
 // Apply updates the global console.Colors with theme-specific tags
@@ -160,48 +170,80 @@ func Apply() {
 	console.BuildColorMap()
 
 	// 1. Register component tags from Current config (Defaults)
-	// This maps the struct fields (colors) to tags like {{|ThemeScreen|}}
-	updateTagsFromCurrent()
+	// This maps the struct fields (colors) to tags like {{|Theme_Screen|}}
+	RegisterTags("", Current)
 }
 
-func updateTagsFromCurrent() {
+// prefixTag is a helper to consistently prefix theme-related semantic tags
+func prefixTag(prefix, name string) string {
+	if prefix == "" {
+		return name
+	}
+	p := strings.TrimSuffix(prefix, "_")
+	return p + "_" + name
+}
+
+// RegisterTags registers all theme components into the console semantic registry
+func RegisterTags(prefix string, conf ThemeConfig) {
 	regComp := func(name string, fg, bg color.Color) {
 		fgName := console.GetColorStr(fg)
 		bgName := console.GetColorStr(bg)
 		// Register raw value (no delimiters)
-		console.RegisterSemanticTagRaw("Theme_"+name, fgName+":"+bgName+":")
+		console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_"+name), fgName+":"+bgName+":")
 	}
 
-	regComp("Screen", Current.ScreenFG, Current.ScreenBG)
-	regComp("Dialog", Current.DialogFG, Current.DialogBG)
-	regComp("Border", Current.BorderFG, Current.BorderBG)
-	regComp("Border2", Current.Border2FG, Current.Border2BG)
+	regComp("Screen", conf.ScreenFG, conf.ScreenBG)
+	regComp("Dialog", conf.DialogFG, conf.DialogBG)
+	regComp("Border", conf.BorderFG, conf.BorderBG)
+	regComp("Border2", conf.Border2FG, conf.Border2BG)
 
-	console.RegisterSemanticTagRaw("Theme_Title", buildRawTag(Current.TitleFG, Current.TitleBG, Current.TitleStyles))
-	console.RegisterSemanticTagRaw("Theme_TitleHelp", buildRawTag(Current.TitleHelpFG, Current.TitleHelpBG, Current.TitleHelpStyles))
+	console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_Title"), buildRawTag(conf.TitleFG, conf.TitleBG, conf.TitleStyles))
+	console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_TitleHelp"), buildRawTag(conf.TitleHelpFG, conf.TitleHelpBG, conf.TitleHelpStyles))
 
-	regComp("ButtonActive", Current.ButtonActiveFG, Current.ButtonActiveBG)
-	regComp("ItemSelected", Current.ItemSelectedFG, Current.ItemSelectedBG)
-	regComp("Item", Current.ItemFG, Current.ItemBG)
-	regComp("Tag", Current.TagFG, Current.TagBG)
-	regComp("TagSelected", Current.TagSelectedFG, Current.TagSelectedBG)
+	regComp("ButtonActive", conf.ButtonActiveFG, conf.ButtonActiveBG)
+	regComp("ButtonInactive", conf.ButtonInactiveFG, conf.ButtonInactiveBG)
+	regComp("ItemSelected", conf.ItemSelectedFG, conf.ItemSelectedBG)
+	regComp("Item", conf.ItemFG, conf.ItemBG)
+	regComp("Tag", conf.TagFG, conf.TagBG)
+	regComp("TagSelected", conf.TagSelectedFG, conf.TagSelectedBG)
 
-	console.RegisterSemanticTagRaw("Theme_TagKey", buildRawTag(Current.TagKeyFG, Current.TagKeyBG, Current.TagKeyStyles))
-	console.RegisterSemanticTagRaw("Theme_TagKeySelected", buildRawTag(Current.TagKeySelectedFG, Current.TagKeySelectedBG, Current.TagKeySelectedStyles))
-	console.RegisterSemanticTagRaw("Theme_Shadow", console.GetColorStr(Current.ShadowColor)+"::")
+	console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_TagKey"), buildRawTag(conf.TagKeyFG, conf.TagKeyBG, conf.TagKeyStyles))
+	console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_TagKeySelected"), buildRawTag(conf.TagKeySelectedFG, conf.TagKeySelectedBG, conf.TagKeySelectedStyles))
+	console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_Shadow"), console.GetColorStr(conf.ShadowColor)+"::")
 
-	console.RegisterSemanticTagRaw("Theme_Helpline", buildRawTag(Current.HelplineFG, Current.HelplineBG, Current.HelplineStyles))
-	console.RegisterSemanticTagRaw("Theme_ItemHelp", buildRawTag(Current.HelplineFG, Current.HelplineBG, Current.HelplineStyles))
-	console.RegisterSemanticTagRaw("Theme_Program", buildRawTag(Current.ProgramFG, Current.ProgramBG, Current.ProgramStyles))
-	console.RegisterSemanticTagRaw("Theme_ProgramBox", buildRawTag(Current.ProgramFG, Current.ProgramBG, Current.ProgramStyles))
-	console.RegisterSemanticTagRaw("Theme_LogBox", buildRawTag(Current.LogBoxFG, Current.LogBoxBG, Current.LogBoxStyles))
-	regComp("LogPanel", Current.LogPanelFG, Current.LogPanelBG)
-	console.RegisterSemanticTagRaw("Theme_ProgressWaiting", buildRawTag(Current.ProgressWaitingFG, Current.ProgressWaitingBG, Current.ProgressWaitingStyles))
-	console.RegisterSemanticTagRaw("Theme_ProgressInProgress", buildRawTag(Current.ProgressInProgressFG, Current.ProgressInProgressBG, Current.ProgressInProgressStyles))
-	console.RegisterSemanticTagRaw("Theme_ProgressCompleted", buildRawTag(Current.ProgressCompletedFG, Current.ProgressCompletedBG, Current.ProgressCompletedStyles))
-	console.RegisterSemanticTagRaw("Theme_VersionSelected", buildRawTag(Current.VersionSelectedFG, Current.VersionSelectedBG, Current.VersionSelectedStyles))
-	console.RegisterSemanticTagRaw("Theme_ListApp", buildRawTag(Current.ListAppFG, Current.ListAppBG, Current.ListAppStyles))
-	console.RegisterSemanticTagRaw("Theme_ListAppUserDefined", buildRawTag(Current.ListAppUserDefinedFG, Current.ListAppUserDefinedBG, Current.ListAppUserDefinedStyles))
+	console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_Helpline"), buildRawTag(conf.HelplineFG, conf.HelplineBG, conf.HelplineStyles))
+	console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_ItemHelp"), buildRawTag(conf.HelplineFG, conf.HelplineBG, conf.HelplineStyles))
+	console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_Program"), buildRawTag(conf.ProgramFG, conf.ProgramBG, conf.ProgramStyles))
+	console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_ProgramBox"), buildRawTag(conf.ProgramFG, conf.ProgramBG, conf.ProgramStyles))
+	console.RegisterSemanticTagRaw("Theme_LogBox", buildRawTag(conf.LogBoxFG, conf.LogBoxBG, conf.LogBoxStyles))
+	regComp("LogPanel", conf.LogPanelFG, conf.LogPanelBG)
+	console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_ProgressWaiting"), buildRawTag(conf.ProgressWaitingFG, conf.ProgressWaitingBG, conf.ProgressWaitingStyles))
+	console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_ProgressInProgress"), buildRawTag(conf.ProgressInProgressFG, conf.ProgressInProgressBG, conf.ProgressInProgressStyles))
+	console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_ProgressCompleted"), buildRawTag(conf.ProgressCompletedFG, conf.ProgressCompletedBG, conf.ProgressCompletedStyles))
+	console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_VersionSelected"), buildRawTag(conf.VersionSelectedFG, conf.VersionSelectedBG, conf.VersionSelectedStyles))
+	console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_ListApp"), buildRawTag(conf.ListAppFG, conf.ListAppBG, conf.ListAppStyles))
+	console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_ListAppUserDefined"), buildRawTag(conf.ListAppUserDefinedFG, conf.ListAppUserDefinedBG, conf.ListAppUserDefinedStyles))
+	console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_HelpItem"), buildRawTag(conf.HelpItemFG, conf.HelpItemBG, conf.HelpItemStyles))
+	console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_HelpTag"), buildRawTag(conf.HelpTagFG, conf.HelpTagBG, conf.HelpTagStyles))
+}
+
+// Unload unregisters all theme-prefixed tags from the console registry.
+func Unload(prefix string) {
+	if prefix == "" {
+		return // Cannot unload main theme
+	}
+	// Component list (matches RegisterTags)
+	components := []string{
+		"Screen", "Dialog", "Border", "Border2", "Title", "TitleHelp",
+		"ButtonActive", "ButtonInactive", "ItemSelected", "Item", "Tag", "TagSelected",
+		"TagKey", "TagKeySelected", "Shadow", "Helpline", "ItemHelp", "Program",
+		"ProgramBox", "LogBox", "LogPanel", "ProgressWaiting", "ProgressInProgress",
+		"ProgressCompleted", "VersionSelected", "ListApp", "ListAppUserDefined",
+		"HelpItem", "HelpTag",
+	}
+	for _, comp := range components {
+		console.UnregisterColor(prefixTag(prefix, "Theme_"+comp))
+	}
 }
 
 // buildRawTag constructs a raw "fg:bg:flags" string (no delimiters)
@@ -236,27 +278,30 @@ func buildRawTag(fg, bg color.Color, styles StyleFlags) string {
 	return fgStr + ":" + bgStr + ":" + flags
 }
 
-// Default initializes the Current ThemeConfig with standard DockSTARTer colors (Classic)
-// All colors are resolved through tcell to RGB/hex values for proper color profile support
-func Default() {
-	Current = ThemeConfig{}
-	Apply()
+// Default initializes the Current configuration with standard DockSTARTer colors (Classic)
+// If prefix is provided, semantic tags are registered with that prefix.
+func Default(prefix string) {
+	conf := ThemeConfig{}
+	// Only update global Current if prefix is empty
+	if prefix == "" {
+		Current = conf
+	}
+	RegisterTags(prefix, conf)
 
-	// Register basic theme fallbacks to prevent literal tags if theme files fail to load
-	console.RegisterSemanticTagRaw("Theme_ApplicationName", "::B")
-	console.RegisterSemanticTagRaw("Theme_ApplicationVersion", "-")
-	console.RegisterSemanticTagRaw("Theme_ApplicationVersionBrackets", "-")
-	console.RegisterSemanticTagRaw("Theme_ApplicationVersionSpace", console.StripDelimiters(console.ExpandTags(console.WrapSemantic("Theme_Screen"))))
-	console.RegisterSemanticTagRaw("Theme_ApplicationFlags", "-")
-	console.RegisterSemanticTagRaw("Theme_ApplicationFlagsBrackets", "-")
-	console.RegisterSemanticTagRaw("Theme_ApplicationFlagsSpace", console.StripDelimiters(console.ExpandTags(console.WrapSemantic("Theme_Screen"))))
-	console.RegisterSemanticTagRaw("Theme_ApplicationUpdate", "yellow::")
-	console.RegisterSemanticTagRaw("Theme_ApplicationUpdateBrackets", "-")
-	console.RegisterSemanticTagRaw("Theme_TitleQuestion", "black:yellow:B")
-	console.RegisterSemanticTagRaw("Theme_Hostname", "::B")
-	console.RegisterSemanticTagRaw("Theme_HelpItem", "black::")
-	console.RegisterSemanticTagRaw("Theme_HelpTag", "black:red:")
-
+	// Register basic theme fallbacks
+	console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_ApplicationName"), "::B")
+	console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_ApplicationVersion"), "-")
+	console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_ApplicationVersionBrackets"), "-")
+	console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_ApplicationVersionSpace"), console.StripDelimiters(console.ExpandTags(console.WrapSemantic(prefixTag(prefix, "Theme_Screen")))))
+	console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_ApplicationFlags"), "-")
+	console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_ApplicationFlagsBrackets"), "-")
+	console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_ApplicationFlagsSpace"), console.StripDelimiters(console.ExpandTags(console.WrapSemantic(prefixTag(prefix, "Theme_Screen")))))
+	console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_ApplicationUpdate"), "yellow::")
+	console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_ApplicationUpdateBrackets"), "-")
+	console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_TitleQuestion"), "black:yellow:B")
+	console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_Hostname"), "::B")
+	console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_HelpItem"), "black::")
+	console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_HelpTag"), "black:red:")
 }
 
 // parseColor converts a color name or hex string to a color.Color.
@@ -476,15 +521,15 @@ func ApplyThemeDefaults(conf *config.AppConfig, defaults ThemeDefaults) map[stri
 	return applied
 }
 
-func parseThemeTOML(path string) error {
+func parseThemeTOML(path string, prefix string, targetConf *ThemeConfig) (*ThemeDefaults, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var tf ThemeFile
 	if err := toml.Unmarshal(data, &tf); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Get file-specific delimiters (or use code defaults)
@@ -508,7 +553,6 @@ func parseThemeTOML(path string) error {
 	// 1. Resolve values and register/apply them
 	// We need to resolve references (e.g., TitleSuccess -> Title) before parsing colors
 	rawValues := tf.Colors
-	resolvedValues := make(map[string]string)
 	visiting := make(map[string]bool)
 
 	// Maintains consistent registration/mapping logic from INI version
@@ -519,84 +563,85 @@ func parseThemeTOML(path string) error {
 			styleValue = console.StripDelimiters(console.ExpandTags(raw))
 		}
 
-		resolvedValues[key] = styleValue
 		// Register using raw value (no delimiters)
-		console.RegisterSemanticTagRaw("Theme_"+key, styleValue)
+		console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_"+key), styleValue)
 
-		// Map known keys to Current struct fields
+		// Map known keys to target configuration struct fields
 		fg, bg := parseRawToColor(styleValue)
 		switch key {
 		case "Screen":
-			Current.ScreenFG, Current.ScreenBG = fg, bg
+			targetConf.ScreenFG, targetConf.ScreenBG = fg, bg
 		case "Dialog":
-			Current.DialogFG, Current.DialogBG = fg, bg
+			targetConf.DialogFG, targetConf.DialogBG = fg, bg
 		case "Border":
-			Current.BorderFG, Current.BorderBG = fg, bg
+			targetConf.BorderFG, targetConf.BorderBG = fg, bg
 		case "Border2":
-			Current.Border2FG, Current.Border2BG = fg, bg
+			targetConf.Border2FG, targetConf.Border2BG = fg, bg
 		case "Title":
-			Current.TitleFG, Current.TitleBG, Current.TitleStyles = parseRawWithStyles(styleValue)
+			targetConf.TitleFG, targetConf.TitleBG, targetConf.TitleStyles = parseRawWithStyles(styleValue)
 		case "TitleHelp":
-			Current.TitleHelpFG, Current.TitleHelpBG, Current.TitleHelpStyles = parseRawWithStyles(styleValue)
+			targetConf.TitleHelpFG, targetConf.TitleHelpBG, targetConf.TitleHelpStyles = parseRawWithStyles(styleValue)
 		case "BoxTitle":
 			// Only set if Title wasn't explicitly provided in theme
 			if _, titleExists := rawValues["Title"]; !titleExists {
-				Current.TitleFG, Current.TitleBG, Current.TitleStyles = parseRawWithStyles(styleValue)
+				targetConf.TitleFG, targetConf.TitleBG, targetConf.TitleStyles = parseRawWithStyles(styleValue)
 			}
 		case "Shadow":
-			Current.ShadowColor = fg
+			targetConf.ShadowColor = fg
 		case "ButtonActive":
 			fg, bg, styles := parseRawWithStyles(styleValue)
-			Current.ButtonActiveFG, Current.ButtonActiveBG = fg, bg
-			Current.ButtonActiveStyles = styles
+			targetConf.ButtonActiveFG, targetConf.ButtonActiveBG = fg, bg
+			targetConf.ButtonActiveStyles = styles
 		case "ButtonInactive":
 			fg, bg, styles := parseRawWithStyles(styleValue)
-			Current.ButtonInactiveFG, Current.ButtonInactiveBG = fg, bg
-			Current.ButtonInactiveStyles = styles
+			targetConf.ButtonInactiveFG, targetConf.ButtonInactiveBG = fg, bg
+			targetConf.ButtonInactiveStyles = styles
 		case "ItemSelected":
-			Current.ItemSelectedFG, Current.ItemSelectedBG, Current.ItemSelectedStyles = parseRawWithStyles(styleValue)
+			targetConf.ItemSelectedFG, targetConf.ItemSelectedBG, targetConf.ItemSelectedStyles = parseRawWithStyles(styleValue)
 		case "Item":
-			Current.ItemFG, Current.ItemBG, Current.ItemStyles = parseRawWithStyles(styleValue)
+			targetConf.ItemFG, targetConf.ItemBG, targetConf.ItemStyles = parseRawWithStyles(styleValue)
 		case "Tag":
-			Current.TagFG, Current.TagBG, Current.TagStyles = parseRawWithStyles(styleValue)
+			targetConf.TagFG, targetConf.TagBG, targetConf.TagStyles = parseRawWithStyles(styleValue)
 		case "TagSelected":
-			Current.TagSelectedFG, Current.TagSelectedBG, Current.TagSelectedStyles = parseRawWithStyles(styleValue)
+			targetConf.TagSelectedFG, targetConf.TagSelectedBG, targetConf.TagSelectedStyles = parseRawWithStyles(styleValue)
 		case "TagKey":
-			Current.TagKeyFG, Current.TagKeyBG, Current.TagKeyStyles = parseRawWithStyles(styleValue)
+			targetConf.TagKeyFG, targetConf.TagKeyBG, targetConf.TagKeyStyles = parseRawWithStyles(styleValue)
 		case "TagKeySelected":
-			Current.TagKeySelectedFG, Current.TagKeySelectedBG, Current.TagKeySelectedStyles = parseRawWithStyles(styleValue)
+			targetConf.TagKeySelectedFG, targetConf.TagKeySelectedBG, targetConf.TagKeySelectedStyles = parseRawWithStyles(styleValue)
 		case "Helpline", "ItemHelp", "itemhelp_color":
-			Current.HelplineFG, Current.HelplineBG, Current.HelplineStyles = parseRawWithStyles(styleValue)
+			targetConf.HelplineFG, targetConf.HelplineBG, targetConf.HelplineStyles = parseRawWithStyles(styleValue)
 		case "Program", "ProgramBox":
-			Current.ProgramFG, Current.ProgramBG, Current.ProgramStyles = parseRawWithStyles(styleValue)
+			targetConf.ProgramFG, targetConf.ProgramBG, targetConf.ProgramStyles = parseRawWithStyles(styleValue)
 		case "LogBox":
-			Current.LogBoxFG, Current.LogBoxBG, Current.LogBoxStyles = parseRawWithStyles(styleValue)
+			targetConf.LogBoxFG, targetConf.LogBoxBG, targetConf.LogBoxStyles = parseRawWithStyles(styleValue)
 		case "LogPanel":
-			Current.LogPanelFG, Current.LogPanelBG = fg, bg
+			targetConf.LogPanelFG, targetConf.LogPanelBG = fg, bg
 		case "Header":
-			Current.HeaderTag = styleValue
+			targetConf.HeaderTag = styleValue
 		case "ProgressWaiting":
-			Current.ProgressWaitingFG, Current.ProgressWaitingBG, Current.ProgressWaitingStyles = parseRawWithStyles(styleValue)
+			targetConf.ProgressWaitingFG, targetConf.ProgressWaitingBG, targetConf.ProgressWaitingStyles = parseRawWithStyles(styleValue)
 		case "ProgressInProgress":
-			Current.ProgressInProgressFG, Current.ProgressInProgressBG, Current.ProgressInProgressStyles = parseRawWithStyles(styleValue)
+			targetConf.ProgressInProgressFG, targetConf.ProgressInProgressBG, targetConf.ProgressInProgressStyles = parseRawWithStyles(styleValue)
 		case "ProgressCompleted":
-			Current.ProgressCompletedFG, Current.ProgressCompletedBG, Current.ProgressCompletedStyles = parseRawWithStyles(styleValue)
+			targetConf.ProgressCompletedFG, targetConf.ProgressCompletedBG, targetConf.ProgressCompletedStyles = parseRawWithStyles(styleValue)
 		case "VersionSelected":
-			Current.VersionSelectedFG, Current.VersionSelectedBG, Current.VersionSelectedStyles = parseRawWithStyles(styleValue)
+			targetConf.VersionSelectedFG, targetConf.VersionSelectedBG, targetConf.VersionSelectedStyles = parseRawWithStyles(styleValue)
 		case "ListApp":
-			Current.ListAppFG, Current.ListAppBG, Current.ListAppStyles = parseRawWithStyles(styleValue)
+			targetConf.ListAppFG, targetConf.ListAppBG, targetConf.ListAppStyles = parseRawWithStyles(styleValue)
 		case "ListAppUserDefined":
-			Current.ListAppUserDefinedFG, Current.ListAppUserDefinedBG, Current.ListAppUserDefinedStyles = parseRawWithStyles(styleValue)
+			targetConf.ListAppUserDefinedFG, targetConf.ListAppUserDefinedBG, targetConf.ListAppUserDefinedStyles = parseRawWithStyles(styleValue)
 		case "HelpItem":
-			Current.HelpItemFG, Current.HelpItemBG, Current.HelpItemStyles = parseRawWithStyles(styleValue)
+			targetConf.HelpItemFG, targetConf.HelpItemBG, targetConf.HelpItemStyles = parseRawWithStyles(styleValue)
 		case "HelpTag":
-			Current.HelpTagFG, Current.HelpTagBG, Current.HelpTagStyles = parseRawWithStyles(styleValue)
+			targetConf.HelpTagFG, targetConf.HelpTagBG, targetConf.HelpTagStyles = parseRawWithStyles(styleValue)
 		}
 	}
 
-	// 2. Re-apply tags based on updated Current
-	console.RegisterBaseTags()
-	console.BuildColorMap()
+	// 2. Re-apply tags if loading main theme
+	if prefix == "" {
+		console.RegisterBaseTags()
+		console.BuildColorMap()
+	}
 
-	return nil
+	return tf.Defaults, nil
 }

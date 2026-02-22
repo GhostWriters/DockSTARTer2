@@ -1,7 +1,9 @@
 package tui
 
 import (
+	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/strutil"
+	"context"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -42,13 +44,18 @@ func (m BackdropModel) Init() tea.Cmd {
 func (m BackdropModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-		// Header width reduced by 2 for padding left/right
-		m.header.SetWidth(msg.Width - 2)
-		m.helpline.SetText(m.helpText)
+		m.SetSize(msg.Width, msg.Height)
 	}
 	return m, nil
+}
+
+// SetSize updates the backdrop dimensions
+func (m *BackdropModel) SetSize(width, height int) {
+	m.width = width
+	m.height = height
+	// Header width reduced by 2 for padding left/right
+	m.header.SetWidth(width - 2)
+	m.helpline.SetText(m.helpText)
 }
 
 // ViewString returns the backdrop content as a string for compositing
@@ -59,6 +66,8 @@ func (m BackdropModel) ViewString() string {
 
 	styles := GetStyles()
 	var b strings.Builder
+
+	logger.Info(context.Background(), "Backdrop: Rendering Header")
 
 	// Header with 1-char padding on left and right (matches AppModel.View())
 	// Header width reduced by 2 for padding
@@ -72,6 +81,8 @@ func (m BackdropModel) ViewString() string {
 	b.WriteString(headerStyle.Render(headerContent))
 	b.WriteString("\n")
 
+	logger.Info(context.Background(), "Backdrop: Rendering Separator")
+
 	// Separator line with 1-char padding on left and right (matches AppModel.View())
 	sep := strutil.Repeat(styles.SepChar, m.width-2)
 	sepStyle := lipgloss.NewStyle().
@@ -82,6 +93,8 @@ func (m BackdropModel) ViewString() string {
 	b.WriteString(sepStyle.Render(sep))
 	b.WriteString("\n")
 
+	logger.Info(context.Background(), "Backdrop: Rendering Helpline")
+
 	// Calculate content height (matches AppModel.View())
 	m.helpline.SetText(m.helpText)
 	helplineView := m.helpline.View(m.width)
@@ -91,6 +104,8 @@ func (m BackdropModel) ViewString() string {
 	if contentHeight < 0 {
 		contentHeight = 0
 	}
+
+	logger.Info(context.Background(), "Backdrop: Rendering Filler Rows (height: %d)", contentHeight)
 
 	// Fill middle space with screen background
 	// We build it row by row to ensure each line is exactly m.width wide with background color
@@ -106,6 +121,8 @@ func (m BackdropModel) ViewString() string {
 
 	// Helpline (matches AppModel.View())
 	b.WriteString(helplineView)
+
+	logger.Debug(context.Background(), "Backdrop: ViewString complete")
 
 	return b.String()
 }
