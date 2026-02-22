@@ -6,6 +6,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"sort"
+
 	"charm.land/lipgloss/v2"
 	"github.com/mattn/go-runewidth"
 )
@@ -214,6 +216,7 @@ type LayerSpec struct {
 
 // MultiOverlay composites multiple layers.
 // For safety with ANSI markers, it applies each layer sequentially using Overlay.
+// Layers are sorted by Z-index (lowest first) before compositing.
 func MultiOverlay(layers ...LayerSpec) string {
 	if len(layers) == 0 {
 		return ""
@@ -222,14 +225,21 @@ func MultiOverlay(layers ...LayerSpec) string {
 		return layers[0].Content
 	}
 
-	// Start with the base layer (usually Z=0)
-	output := layers[0].Content
+	// Create a copy to avoid mutating the original slice
+	sorted := make([]LayerSpec, len(layers))
+	copy(sorted, layers)
+
+	// Sort by Z-index (stable sort preserve original order for same Z)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		return sorted[i].Z < sorted[j].Z
+	})
+
+	// Start with the base layer (lowest Z)
+	output := sorted[0].Content
 
 	// Overlay subsequent layers
-	for i := 1; i < len(layers); i++ {
-		l := layers[i]
-		// Map LayerSpec to Overlay parameters
-		// Since results of Overlay are always relative to background size:
+	for i := 1; i < len(sorted); i++ {
+		l := sorted[i]
 		output = Overlay(l.Content, output, OverlayLeft, OverlayTop, l.X, l.Y)
 	}
 

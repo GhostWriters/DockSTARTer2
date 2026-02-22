@@ -509,10 +509,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.logPanel.SetSize(m.width, m.height)
 
 		// All other components use backdropHeight (terminal minus log panel strip)
-		backdropSizeMsg := tea.WindowSizeMsg{Width: m.width, Height: m.backdropHeight()}
+		// but we use the content area dimensions calculated below.
+		fullSizeMsg := tea.WindowSizeMsg{Width: m.width, Height: m.height}
 
-		// Update backdrop
-		backdropModel, _ := m.backdrop.Update(backdropSizeMsg)
+		// Update backdrop with full size for base layer reliability
+		backdropModel, _ := m.backdrop.Update(fullSizeMsg)
 		m.backdrop = backdropModel.(BackdropModel)
 
 		caW, caH := m.getContentArea()
@@ -810,6 +811,11 @@ type ViewStringer interface {
 	ViewString() string
 }
 
+// LayeredView is an interface for models that provide multiple layers for compositing
+type LayeredView interface {
+	Layers() []LayerSpec
+}
+
 // View implements tea.Model
 // Uses backdrop + overlay pattern (same as dialogs)
 func (m AppModel) View() tea.View {
@@ -837,67 +843,127 @@ func (m AppModel) View() tea.View {
 	// Content area boundaries (accounting for header/sep, shadow, and gap)
 	_, caH := m.getContentArea()
 
+	// Base coordinates for maximized elements
+	x := 2
+	y := contentYOffset
+
 	// Layer 1: Active Screen
 	if m.activeScreen != nil {
-		var screenContent string
-		if vs, ok := m.activeScreen.(ViewStringer); ok {
-			screenContent = vs.ViewString()
-		}
-		if screenContent != "" {
-			fgWidth := lipgloss.Width(screenContent)
-			fgHeight := lipgloss.Height(screenContent)
-
-			// Default: center horizontally, center vertically within content area
-			x := (bgWidth - fgWidth) / 2
-			y := contentYOffset + (caH-fgHeight)/2
-
-			if m.activeScreen.IsMaximized() {
-				x = 2
-				y = contentYOffset
+		if lv, ok := m.activeScreen.(LayeredView); ok {
+			for _, l := range lv.Layers() {
+				l.X += x
+				l.Y += y
+				layers = append(layers, l)
 			}
-			layers = append(layers, LayerSpec{Content: screenContent, X: x, Y: y, Z: 1})
+		} else {
+			var screenContent string
+			if vs, ok := m.activeScreen.(ViewStringer); ok {
+				screenContent = vs.ViewString()
+			}
+			if screenContent != "" {
+				fgWidth := lipgloss.Width(screenContent)
+				fgHeight := lipgloss.Height(screenContent)
+
+				// Default: center horizontally, center vertically within content area
+				lx := (bgWidth - fgWidth) / 2
+				ly := contentYOffset + (caH-fgHeight)/2
+
+				if m.activeScreen.IsMaximized() {
+					lx = x
+					ly = y
+				}
+				layers = append(layers, LayerSpec{Content: screenContent, X: lx, Y: ly, Z: 1})
+			}
 		}
 	}
 
 	// Layer 2: Modal Dialog
 	if m.dialog != nil {
-		var dialogContent string
-		if vs, ok := m.dialog.(ViewStringer); ok {
-			dialogContent = vs.ViewString()
-		}
-		if dialogContent != "" {
-			maximized := false
-			if md, ok := m.dialog.(interface{ IsMaximized() bool }); ok {
-				maximized = md.IsMaximized()
+		if lv, ok := m.dialog.(LayeredView); ok {
+			for _, l := range lv.Layers() {
+				l.X += x
+				l.Y += y
+				// Ensure dialog layers are above screen layers (Z=2+)
+				if l.Z < 2 {
+					l.Z = 2
+				}
+				layers = append(layers, l)
 			}
-			fgWidth := lipgloss.Width(dialogContent)
-			fgHeight := lipgloss.Height(dialogContent)
-
-			// Default: center horizontally, center vertically within content area
-			x := (bgWidth - fgWidth) / 2
-			y := contentYOffset + (caH-fgHeight)/2
-
-			if maximized {
-				x = 2
-				y = contentYOffset
+		} else {
+			var dialogContent string
+			if vs, ok := m.dialog.(ViewStringer); ok {
+				dialogContent = vs.ViewString()
 			}
-			layers = append(layers, LayerSpec{Content: dialogContent, X: x, Y: y, Z: 2})
+			if dialogContent != "" {
+				maximized := false
+				if md, ok := m.dialog.(interface{ IsMaximized() bool }); ok {
+					maximized = md.IsMaximized()
+				}
+				fgWidth := lipgloss.Width(dialogContent)
+				fgHeight := lipgloss.Height(dialogContent)
+
+				// Default: center horizontally, center vertically within content area
+				lx := (bgWidth - fgWidth) / 2
+				ly := contentYOffset + (caH-fgHeight)/2
+
+				if maximized {
+					lx = x
+					ly = y
+				}
+				layers = append(layers, LayerSpec{Content: dialogContent, X: lx, Y: ly, Z: 2})
+			}
 		}
 	}
 
-	// Composite all layers
-	rendered := MultiOverlay(layers...)
+	// Composite all layers using safe MultiOverlay
+	allLayers := []LayerSpec{
+		{Content: backdropContent, X: 0, Y: 0, Z: 0},
+	}
 
-	// Layer 3: Log panel — appended below the backdrop (below helpline)
+	// Add screen and dialog layers (Z=2, 3...)
+	for _, l := range layers {
+		if l.Content == backdropContent {
+			continue // Skip duplicate backdrop in layers slice
+		}
+		allLayers = append(allLayers, LayerSpec{Content: l.Content, X: l.X, Y: l.Y, Z: l.Z + 2})
+	}
+
+	// Layer 1: Log panel (at the bottom)
 	var logPanelContent string
 	if vs, ok := interface{}(m.logPanel).(ViewStringer); ok {
 		logPanelContent = vs.ViewString()
 	}
-	rendered = lipgloss.JoinVertical(lipgloss.Left, rendered, logPanelContent)
+	if logPanelContent != "" {
+		logY := m.height - m.logPanel.Height()
+		allLayers = append(allLayers, LayerSpec{
+			Content: logPanelContent,
+			X:       0,
+			Y:       logY,
+			Z:       1,
+		})
+	}
+
+	// Final rendered string
+	rendered := MultiOverlay(allLayers...)
 
 	// Scan zones at the root level
 	v := tea.NewView(zone.Scan(rendered))
 	v.MouseMode = tea.MouseModeAllMotion
 	v.AltScreen = true
 	return v
+}
+
+// GetActiveScreen returns the currently active screen
+func (m AppModel) GetActiveScreen() ScreenModel {
+	return m.activeScreen
+}
+
+// GetBackdrop returns the backdrop model
+func (m AppModel) GetBackdrop() BackdropModel {
+	return m.backdrop
+}
+
+// GetLogPanel returns the log panel model
+func (m AppModel) GetLogPanel() LogPanelModel {
+	return m.logPanel
 }

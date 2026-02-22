@@ -459,7 +459,7 @@ func (s *DisplayOptionsScreen) syncOptionsMenu() {
 	s.optionsMenu.SetItems(items)
 }
 
-func (s *DisplayOptionsScreen) ViewString() string {
+func (s *DisplayOptionsScreen) Layers() []tui.LayerSpec {
 	// 1. Render Settings
 	themeView := tui.ZoneMark("ThemePanel", s.themeMenu.ViewString())
 	optionsView := tui.ZoneMark("OptionsPanel", s.optionsMenu.ViewString())
@@ -470,7 +470,6 @@ func (s *DisplayOptionsScreen) ViewString() string {
 	)
 
 	// 2. Render Buttons
-	// Calculate button width to match the column
 	contentWidth := lipgloss.Width(leftColumn)
 	buttons := []tui.ButtonSpec{
 		{Text: "Apply", Active: s.focusedButton == 0, ZoneID: "ApplyBtn"},
@@ -479,18 +478,29 @@ func (s *DisplayOptionsScreen) ViewString() string {
 	}
 	buttonRow := tui.RenderCenteredButtons(contentWidth, buttons...)
 
-	// 3. Wrap Settings + Buttons in a Dialog Box
-	// targetHeight is s.height - 1 (to account for shadow)
+	// 3. Settings Dialog
 	settingsContent := lipgloss.JoinVertical(lipgloss.Left, leftColumn, buttonRow)
 	settingsDialog := tui.RenderDialog("Appearance Settings", settingsContent, true, s.height-1)
 
-	// 4. Render Preview (only if there is space)
-	if s.width >= 100 {
-		preview := s.renderMockup()
-		return lipgloss.JoinHorizontal(lipgloss.Top, settingsDialog, "  ", preview)
+	layers := []tui.LayerSpec{
+		{Content: settingsDialog, X: 0, Y: 0, Z: 1},
 	}
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, settingsDialog) // Using join to force left alignment
+	// 4. Render Preview (if space allows)
+	if s.width >= 100 {
+		preview := s.renderMockup()
+		// Calculate X offset: dialog width + 1-char gutter
+		// This leaves exactly 1 char of backdrop showing through
+		xOffset := lipgloss.Width(settingsDialog) + 1
+		layers = append(layers, tui.LayerSpec{Content: preview, X: xOffset, Y: 0, Z: 1})
+	}
+
+	return layers
+}
+
+func (s *DisplayOptionsScreen) ViewString() string {
+	layers := s.Layers()
+	return tui.MultiOverlay(layers...)
 }
 
 func alignCenter(w int, text string) string {
@@ -729,7 +739,7 @@ func (s *DisplayOptionsScreen) SetSize(width, height int) {
 	s.width = width
 	s.height = height
 
-	menuWidth := width - 55
+	menuWidth := width - 51
 	if menuWidth < 40 {
 		menuWidth = 40
 	}
