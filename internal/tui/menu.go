@@ -59,8 +59,8 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 		return
 	}
 
-	dialogStyle := SemanticStyle("{{|Theme_Dialog|}}")
-	dialogBG := dialogStyle.GetBackground()
+	ctx := GetActiveContext()
+	dialogBG := ctx.Dialog.GetBackground()
 	isSelected := index == m.Index()
 
 	// Handle separator items
@@ -111,26 +111,39 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 	// Checkbox visual [ ] or [x] / Radio visual ( ) or (*)
 	checkbox := ""
 	if menuItem.IsRadioButton {
-		cb := "( ) "
-		if menuItem.Checked {
-			cb = "(*) "
+		var cb string
+		if ctx.LineCharacters {
+			cb = radioUnselected + " "
+			if menuItem.Checked {
+				cb = radioSelected + " "
+			}
+		} else {
+			cb = radioUnselectedAscii
+			if menuItem.Checked {
+				cb = radioSelectedAscii
+			}
 		}
 		checkbox = tagStyle.Render(cb)
 	} else if menuItem.IsCheckbox {
-		cb := "[ ] "
-		if menuItem.Checked {
-			cb = "[x] "
+		var cb string
+		if ctx.LineCharacters {
+			cb = checkUnselected + " "
+			if menuItem.Checked {
+				cb = checkSelected + " "
+			}
+		} else {
+			cb = checkUnselectedAscii
+			if menuItem.Checked {
+				cb = checkSelectedAscii
+			}
 		}
 		checkbox = tagStyle.Render(cb)
 	}
 
 	paddingSpaces := strutil.Repeat(" ", d.maxTagLen-tagWidth+2)
 
-	// Account for checkbox/radio width (4) if present
-	cbWidth := 0
-	if menuItem.IsRadioButton || menuItem.IsCheckbox {
-		cbWidth = 4
-	}
+	// Calculate checkbox/radio width dynamically
+	cbWidth := lipgloss.Width(GetPlainText(checkbox))
 
 	availableWidth := m.Width() - (d.maxTagLen + 2) - 2 - cbWidth
 	if availableWidth < 0 {
@@ -174,8 +187,8 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 		return
 	}
 
-	dialogStyle := SemanticStyle("{{|Theme_Dialog|}}")
-	dialogBG := dialogStyle.GetBackground()
+	ctx := GetActiveContext()
+	dialogBG := ctx.Dialog.GetBackground()
 	isSelected := index == m.Index()
 
 	// Handle separator items
@@ -206,16 +219,20 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 	// Render checkbox for selectable items
 	var checkbox string
 	if menuItem.Selectable {
-		cbContent := " "
-		if menuItem.Selected {
-			cbContent = "*"
-		}
-
-		// Use tag style for checkbox to match user request
-		if isSelected {
-			checkbox = tagStyle.Render("["+cbContent+"]") + neutralStyle.Render(" ")
+		if ctx.LineCharacters {
+			cbGlyph := checkUnselected
+			if menuItem.Selected {
+				cbGlyph = checkSelected
+			}
+			// Use tag style for checkbox to match user request
+			checkbox = tagStyle.Render(cbGlyph) + neutralStyle.Render(" ")
 		} else {
-			checkbox = neutralStyle.Render("[") + tagStyle.Render(cbContent) + neutralStyle.Render("] ")
+			cbContent := checkUnselectedAscii
+			if menuItem.Selected {
+				cbContent = checkSelectedAscii
+			}
+			// Use tag style for checkbox to match user request
+			checkbox = tagStyle.Render(cbContent)
 		}
 	}
 
@@ -240,11 +257,7 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 		}
 	}
 
-	tagWidth := 0
-	if menuItem.Selectable {
-		tagWidth += 4
-	}
-	tagWidth += lipgloss.Width(GetPlainText(tag))
+	tagWidth := lipgloss.Width(GetPlainText(checkbox)) + lipgloss.Width(GetPlainText(tag))
 	paddingSpaces := strutil.Repeat(" ", d.maxTagLen-tagWidth+2)
 	availableWidth := m.Width() - (d.maxTagLen + 2) - 2
 	if availableWidth < 0 {
@@ -1625,6 +1638,7 @@ func (m *MenuModel) calculateLayout() {
 
 // viewSubMenu renders the menu for use as a sub-section of a larger screen
 func (m *MenuModel) renderFlow() string {
+	ctx := GetActiveContext()
 	styles := GetStyles()
 	dialogBG := styles.Dialog.GetBackground()
 
@@ -1653,15 +1667,31 @@ func (m *MenuModel) renderFlow() string {
 		// Checkbox/Radio visual
 		prefix := ""
 		if item.IsRadioButton {
-			cb := "( ) "
-			if item.Checked {
-				cb = "(*) "
+			var cb string
+			if ctx.LineCharacters {
+				cb = radioUnselected + " "
+				if item.Checked {
+					cb = radioSelected + " "
+				}
+			} else {
+				cb = radioUnselectedAscii
+				if item.Checked {
+					cb = radioSelectedAscii
+				}
 			}
 			prefix = tagStyle.Render(cb)
 		} else if item.IsCheckbox {
-			cb := "[ ] "
-			if item.Checked {
-				cb = "[x] "
+			var cb string
+			if ctx.LineCharacters {
+				cb = checkUnselected + " "
+				if item.Checked {
+					cb = checkSelected + " "
+				}
+			} else {
+				cb = checkUnselectedAscii
+				if item.Checked {
+					cb = checkSelectedAscii
+				}
 			}
 			prefix = tagStyle.Render(cb)
 		}
@@ -1681,7 +1711,7 @@ func (m *MenuModel) renderFlow() string {
 		}
 
 		itemContent := prefix + tagStr
-		itemWidth := lipgloss.Width(itemContent)
+		itemWidth := lipgloss.Width(GetPlainText(itemContent))
 
 		// Check if we need to wrap
 		if currentLineWidth > 0 && currentLineWidth+itemSpacing+itemWidth > maxWidth {
@@ -1737,6 +1767,8 @@ func (m *MenuModel) GetFlowHeight(width int) int {
 		return 0
 	}
 
+	ctx := GetActiveContext()
+
 	maxWidth := width
 	if maxWidth > 2 {
 		maxWidth -= 2
@@ -1747,13 +1779,27 @@ func (m *MenuModel) GetFlowHeight(width int) int {
 	itemSpacing := 3
 
 	for _, item := range m.items {
-		// Approximate width calculation (matches renderFlow)
+		// Dynamic width calculation
 		cbWidth := 0
 		if item.IsRadioButton || item.IsCheckbox {
-			cbWidth = 4 // "( ) " or "[ ] "
+			glyph := ""
+			if ctx.LineCharacters {
+				if item.IsRadioButton {
+					glyph = radioUnselected + " "
+				} else {
+					glyph = checkUnselected + " "
+				}
+			} else {
+				if item.IsRadioButton {
+					glyph = radioUnselectedAscii
+				} else {
+					glyph = checkUnselectedAscii
+				}
+			}
+			cbWidth = lipgloss.Width(glyph)
 		}
 
-		itemWidth := cbWidth + lipgloss.Width(item.Tag)
+		itemWidth := cbWidth + lipgloss.Width(GetPlainText(item.Tag))
 
 		if currentLineWidth > 0 && currentLineWidth+itemSpacing+itemWidth > maxWidth {
 			lines++

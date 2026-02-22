@@ -462,19 +462,19 @@ func (m *programBoxModel) ViewString() string {
 		return ""
 	}
 
-	styles := GetStyles()
+	ctx := GetActiveContext()
 
 	// Calculate scroll percentage
 	scrollPercent := m.viewport.ScrollPercent()
 
 	// Add scroll indicator at bottom of viewport content
-	scrollIndicator := styles.TagKey.
+	scrollIndicator := ctx.TagKey.
 		Bold(true).
 		Render(fmt.Sprintf("%d%%", int(scrollPercent*100)))
 
 	// Use console background for the spacer row
 	// Apply background maintenance to captured output to prevent resets from bleeding
-	viewportContent := MaintainBackground(m.viewport.View(), styles.Console)
+	viewportContent := MaintainBackground(m.viewport.View(), ctx.Console)
 	// viewportWithScroll := viewportContent + "\n" +
 	// 	lipgloss.NewStyle().
 	// 		Width(m.viewport.Width).
@@ -483,9 +483,9 @@ func (m *programBoxModel) ViewString() string {
 	// 		Render(scrollIndicator)
 
 	// Wrap viewport in rounded inner border with console background
-	viewportStyle := styles.Console.
+	viewportStyle := ctx.Console.
 		Padding(0, 0) // Remove side padding inside inner box for a tighter look
-	viewportStyle = ApplyRoundedBorder(viewportStyle, styles.LineCharacters)
+	viewportStyle = ApplyRoundedBorderCtx(viewportStyle, ctx)
 
 	// Apply scroll indicator manually to bottom border
 	// We disable the bottom border initially to let us construct it ourselves
@@ -496,13 +496,13 @@ func (m *programBoxModel) ViewString() string {
 		Render(viewportContent)
 
 	// Construct custom bottom border with label
-	border := styles.Border
+	border := ctx.Border
 	width := m.viewport.Width() + 2 // Add 2 for left/right padding of viewportStyle
 	labelWidth := lipgloss.Width(scrollIndicator)
 
 	// Determine T-connectors based on line style
 	var leftT, rightT string
-	if styles.LineCharacters {
+	if ctx.LineCharacters {
 		// Use inverse T connectors for bottom border
 		leftT = "┤"
 		rightT = "├"
@@ -536,8 +536,8 @@ func (m *programBoxModel) ViewString() string {
 
 	// Style for border segments (match ApplyRoundedBorder logic)
 	borderStyle := lipgloss.NewStyle().
-		Foreground(styles.Border2Color).
-		Background(styles.Dialog.GetBackground())
+		Foreground(ctx.Border2Color).
+		Background(ctx.Dialog.GetBackground())
 
 	// Build bottom line parts
 	// Left part: BottomLeftCorner + HorizontalLine...
@@ -569,7 +569,7 @@ func (m *programBoxModel) ViewString() string {
 		// We use the console style as base, but DO NOT force the background color onto the whole bar
 		// This allows the user to have unstyled spaces or mixed colors.
 		// Use styles.Dialog as base so unstyled text matches the dialog background
-		base := styles.Dialog
+		base := ctx.Dialog
 		renderedCmd := RenderThemeText(m.command, base)
 
 		// Use lipgloss to render the row so width and background are handled correctly
@@ -578,7 +578,7 @@ func (m *programBoxModel) ViewString() string {
 		// even with ANSI codes in renderedCmd.
 		commandDisplay = lipgloss.NewStyle().
 			Width(contentWidth).
-			Background(styles.Dialog.GetBackground()).
+			Background(ctx.Dialog.GetBackground()).
 			Render(renderedCmd)
 	}
 
@@ -604,8 +604,9 @@ func (m *programBoxModel) ViewString() string {
 
 	// Render OK button
 	if m.done {
-		buttonRow := RenderCenteredButtons(
+		buttonRow := RenderCenteredButtonsCtx(
 			contentWidth,
+			ctx,
 			ButtonSpec{Text: "OK", Active: m.done},
 		)
 		contentParts = append(contentParts, buttonRow)
@@ -625,7 +626,7 @@ func (m *programBoxModel) ViewString() string {
 		if heightBudget > 0 {
 			content = lipgloss.NewStyle().
 				Height(heightBudget).
-				Background(styles.Dialog.GetBackground()).
+				Background(ctx.Dialog.GetBackground()).
 				Render(content)
 		}
 	}
@@ -666,13 +667,13 @@ func (m *ProgramBoxModel) renderHeaderUI(width int) string {
 	}
 
 	var b strings.Builder
-	styles := GetStyles()
-	bgStyle := lipgloss.NewStyle().Background(styles.Dialog.GetBackground())
+	ctx := GetActiveContext()
+	bgStyle := lipgloss.NewStyle().Background(ctx.Dialog.GetBackground())
 	hasPrevious := false
 
 	// Subtitle (rendered as a heading)
 	if m.subtitle != "" {
-		subtitle := RenderThemeText(m.subtitle, styles.Dialog)
+		subtitle := RenderThemeText(m.subtitle, ctx.Dialog)
 		renderedSubtitle := bgStyle.Width(width).Padding(0, 2).Render(subtitle)
 		b.WriteString(renderedSubtitle + "\n")
 		hasPrevious = true
@@ -757,7 +758,7 @@ func (m *ProgramBoxModel) renderHeaderUI(width int) string {
 				appLine := lipgloss.NewStyle().
 					Width(width).
 					PaddingLeft(4).
-					Background(styles.Dialog.GetBackground()).
+					Background(ctx.Dialog.GetBackground()).
 					Render(appText)
 
 				b.WriteString(appLine + "\n")
@@ -778,16 +779,16 @@ func (m *ProgramBoxModel) renderHeaderUI(width int) string {
 
 		barStyle := lipgloss.NewStyle().
 			Padding(0, 1).
-			Background(styles.Dialog.GetBackground())
+			Background(ctx.Dialog.GetBackground())
 
-		barStyle = ApplyStraightBorder(barStyle, styles.LineCharacters)
+		barStyle = ApplyStraightBorderCtx(barStyle, ctx)
 		borderedBar := barStyle.Render(barView)
 
 		// Center the multiline bordered bar line consistently
 		centeredBar := lipgloss.NewStyle().
 			Width(width).
 			Align(lipgloss.Center).
-			Background(styles.Dialog.GetBackground()).
+			Background(ctx.Dialog.GetBackground()).
 			Render(borderedBar)
 
 		b.WriteString(centeredBar + "\n")

@@ -550,6 +550,8 @@ func (s *DisplayOptionsScreen) renderMockup() string {
 	sepChar := "-"
 	if s.config.UI.LineCharacters {
 		sepChar = "─"
+	} else {
+		sepChar = "-"
 	}
 	// The real separator is indented by 1 character on each side and uses the header/screen background
 	sepLine := strutil.Repeat(sepChar, width-2)
@@ -671,6 +673,8 @@ func (s *DisplayOptionsScreen) renderMockup() string {
 	stripSepChar := "-"
 	if s.config.UI.LineCharacters {
 		stripSepChar = "─"
+	} else {
+		stripSepChar = "-"
 	}
 	marker := "^"
 	label := " " + marker + " Log " + marker + " "

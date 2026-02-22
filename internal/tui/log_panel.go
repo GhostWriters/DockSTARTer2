@@ -281,18 +281,22 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // ViewString returns the panel content as a string for compositing
 func (m LogPanelModel) ViewString() string {
-	styles := GetStyles()
+	ctx := GetActiveContext()
 
 	// Choose line character: thick when focused, normal otherwise
 	var sepChar string
 	if m.focused {
-		if styles.LineCharacters {
+		if ctx.LineCharacters {
 			sepChar = lipgloss.ThickBorder().Top // "━"
 		} else {
 			sepChar = "="
 		}
 	} else {
-		sepChar = styles.SepChar
+		if ctx.LineCharacters {
+			sepChar = "─"
+		} else {
+			sepChar = "-"
+		}
 	}
 
 	// Build label: arrow + title + arrow on both sides
@@ -322,8 +326,8 @@ func (m LogPanelModel) ViewString() string {
 	// Use the dedicated LogPanel theme color for the strip line
 	// Note: We render parts separately below, so we don't need a single strip style for the whole line yet.
 	stripStyle := lipgloss.NewStyle().
-		Foreground(styles.LogPanelColor).
-		Background(styles.HelpLine.GetBackground())
+		Foreground(ctx.LogPanelColor).
+		Background(ctx.HelpLine.GetBackground())
 
 	// CLICK ZONES:
 	// Only the label is the toggle. The rests are resize handles.
@@ -365,12 +369,12 @@ func (m LogPanelModel) ViewString() string {
 	vpStyle := lipgloss.NewStyle().
 		Width(m.width).
 		Height(m.viewport.Height()).
-		Background(styles.Console.GetBackground()).
-		Foreground(styles.Console.GetForeground())
+		Background(ctx.Console.GetBackground()).
+		Foreground(ctx.Console.GetForeground())
 	m.viewport.Style = vpStyle
 
 	// Use MaintainBackground to ensure console background is preserved through resets
-	vpView := MaintainBackground(m.viewport.View(), styles.Console)
+	vpView := MaintainBackground(m.viewport.View(), ctx.Console)
 	vpViewMarked := zone.Mark(logViewportZoneID, vpView)
 	return lipgloss.JoinVertical(lipgloss.Left, strip, vpViewMarked)
 }

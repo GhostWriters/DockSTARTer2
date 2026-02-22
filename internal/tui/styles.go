@@ -92,6 +92,8 @@ type StyleContext struct {
 	StatusSuccess   lipgloss.Style
 	StatusWarn      lipgloss.Style
 	StatusError     lipgloss.Style
+	Console         lipgloss.Style
+	LogPanelColor   color.Color
 }
 
 // currentStyles holds the active styles
@@ -129,6 +131,8 @@ func GetActiveContext() StyleContext {
 		StatusSuccess:   currentStyles.StatusSuccess,
 		StatusWarn:      currentStyles.StatusWarn,
 		StatusError:     currentStyles.StatusError,
+		Console:         currentStyles.Console,
+		LogPanelColor:   currentStyles.LogPanelColor,
 	}
 }
 
