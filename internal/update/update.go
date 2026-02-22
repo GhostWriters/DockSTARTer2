@@ -370,18 +370,28 @@ func UpdateTemplates(ctx context.Context, force bool, yes bool, requestedBranch 
 	if err != nil {
 		return fmt.Errorf("failed to resolve templates target %s: %w", requestedBranch, err)
 	}
-	remoteHash := remoteRef.Hash().String()[:7]
-	remoteDisplay := remoteHash
+	remoteHash := remoteRef.Hash().String()
+	if len(remoteHash) > 7 {
+		remoteHash = remoteHash[:7]
+	}
 
 	// Try to find a tag for the remote commit
 	tags, _ := repo.Tags()
+	foundTag := ""
 	_ = tags.ForEach(func(ref *plumbing.Reference) error {
 		if ref.Hash() == remoteRef.Hash() {
-			remoteDisplay = ref.Name().Short()
+			foundTag = ref.Name().Short()
 			return fmt.Errorf("found")
 		}
 		return nil
 	})
+
+	var remoteDisplay string
+	if foundTag != "" {
+		remoteDisplay = foundTag
+	} else {
+		remoteDisplay = fmt.Sprintf("%s commit %s", requestedBranch, remoteHash)
+	}
 
 	question := ""
 	initiationNotice := ""
@@ -429,17 +439,29 @@ func UpdateTemplates(ctx context.Context, force bool, yes bool, requestedBranch 
 	logger.Info(ctx, "Running: {{|RunningCommand|}}git checkout --force %s{{[-]}}", requestedBranch)
 	err = w.Checkout(&git.CheckoutOptions{
 		Branch: plumbing.NewBranchReferenceName(requestedBranch),
+		Force:  true,
 	})
+	if err != nil {
+		// If branch doesn't exist locally, create it and check it out tracking the remote hash
+		err = w.Checkout(&git.CheckoutOptions{
+			Hash:   remoteRef.Hash(),
+			Branch: plumbing.NewBranchReferenceName(requestedBranch),
+			Create: true,
+			Force:  true,
+		})
+	}
 	if err != nil {
 		// Fallback to tag
 		err = w.Checkout(&git.CheckoutOptions{
 			Branch: plumbing.NewTagReferenceName(requestedBranch),
+			Force:  true,
 		})
 	}
 	if err != nil {
-		// Fallback to specific commit/reference
+		// Fallback to specific commit/reference as a last resort (this results in detached HEAD)
 		err = w.Checkout(&git.CheckoutOptions{
-			Hash: remoteRef.Hash(),
+			Hash:  remoteRef.Hash(),
+			Force: true,
 		})
 	}
 	if err == nil {
@@ -667,10 +689,33 @@ func checkTmplUpdate(ctx context.Context) (updateAvailable bool, ver string, had
 	}
 
 	if head.Hash() != remoteHead.Hash() {
-		return true, remoteHead.Hash().String()[:7], false
+		remoteHash := remoteHead.Hash().String()
+		if len(remoteHash) > 7 {
+			remoteHash = remoteHash[:7]
+		}
+
+		// Try to find a tag for the remote commit
+		tags, _ := repo.Tags()
+		foundTag := ""
+		_ = tags.ForEach(func(ref *plumbing.Reference) error {
+			if ref.Hash() == remoteHead.Hash() {
+				foundTag = ref.Name().Short()
+				return fmt.Errorf("found")
+			}
+			return nil
+		})
+
+		var remoteDisplay string
+		if foundTag != "" {
+			remoteDisplay = foundTag
+		} else {
+			remoteDisplay = fmt.Sprintf("main commit %s", remoteHash)
+		}
+
+		return true, remoteDisplay, false
 	}
 
-	return false, head.Hash().String()[:7], false
+	return false, paths.GetTemplatesVersion(), false
 }
 
 // compareVersions compares two version strings and returns:
