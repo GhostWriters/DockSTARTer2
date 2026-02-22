@@ -1423,9 +1423,8 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 	titleStyle := ctx.DialogTitle.
 		Background(borderBG)
 
-	// ParseTitleTags is a standalone function in menu.go
-	var title string
-	title, titleStyle = ParseTitleTags(rawTitle, titleStyle)
+	// Process the title with full semantic theme tagging support
+	renderedTitle := MaintainBackground(RenderThemeText(rawTitle, titleStyle), titleStyle)
 
 	lines := strings.Split(content, "\n")
 	actualWidth := contentWidth
@@ -1468,7 +1467,7 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 		}
 	}
 
-	titleSectionLen := 1 + 1 + lipgloss.Width(title) + 1 + 1
+	titleSectionLen := 1 + 1 + lipgloss.Width(renderedTitle) + 1 + 1
 	leftPad := (actualWidth - titleSectionLen) / 2
 	rightPad := actualWidth - titleSectionLen - leftPad
 
@@ -1478,7 +1477,7 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 	result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, leftPad)))
 	result.WriteString(borderStyleLight.Render(leftT))
 	result.WriteString(borderStyleLight.Render(" "))
-	result.WriteString(titleStyle.Render(title))
+	result.WriteString(renderedTitle)
 	result.WriteString(borderStyleLight.Render(" "))
 	result.WriteString(borderStyleLight.Render(rightT))
 	result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, rightPad)))
