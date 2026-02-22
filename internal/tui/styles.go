@@ -54,6 +54,7 @@ type Styles struct {
 
 	// Settings
 	LineCharacters bool
+	DrawBorders    bool
 
 	// Semantic styles derived from theme tags
 	StatusSuccess lipgloss.Style
@@ -144,10 +145,10 @@ func InitStyles(cfg config.AppConfig) {
 		// This uses the existing ApplyThemeDefaults routine.
 		theme.ApplyThemeDefaults(&cfg, *defaults)
 	}
-	t := theme.Current
 
 	// Store LineCharacters setting for later use
 	currentStyles.LineCharacters = cfg.UI.LineCharacters // Updated: Use cfg.UI.LineCharacters
+	currentStyles.DrawBorders = cfg.UI.Borders
 
 	// Border style based on LineCharacters setting
 	if cfg.UI.LineCharacters { // Updated: Use cfg.UI.LineCharacters
@@ -159,134 +160,92 @@ func InitStyles(cfg config.AppConfig) {
 	}
 
 	// Screen background
-	currentStyles.Screen = lipgloss.NewStyle().
-		Background(t.ScreenBG).
-		Foreground(t.ScreenFG)
+	currentStyles.Screen = SemanticRawStyle("Theme_Screen")
 
 	// Dialog
-	currentStyles.Dialog = lipgloss.NewStyle().
-		Background(t.DialogBG).
-		Foreground(t.DialogFG)
+	currentStyles.Dialog = SemanticRawStyle("Theme_Dialog")
 
-	currentStyles.DialogTitle = ApplyFlags(lipgloss.NewStyle().
-		Background(t.TitleBG).
-		Foreground(t.TitleFG), t.TitleStyles)
+	currentStyles.DialogTitle = SemanticRawStyle("Theme_Title")
 
-	currentStyles.DialogTitleHelp = ApplyFlags(lipgloss.NewStyle().
-		Background(t.TitleHelpBG).
-		Foreground(t.TitleHelpFG), t.TitleHelpStyles)
+	currentStyles.DialogTitleHelp = SemanticRawStyle("Theme_TitleHelp")
 
 	// Border colors
 	switch cfg.UI.BorderColor {
 	case 1:
-		currentStyles.BorderColor = t.BorderFG
-		currentStyles.Border2Color = t.BorderFG
+		currentStyles.BorderColor = SemanticRawStyle("Theme_Border").GetForeground()
+		currentStyles.Border2Color = SemanticRawStyle("Theme_Border").GetForeground()
 	case 2:
-		currentStyles.BorderColor = t.Border2FG
-		currentStyles.Border2Color = t.Border2FG
+		currentStyles.BorderColor = SemanticRawStyle("Theme_Border2").GetForeground()
+		currentStyles.Border2Color = SemanticRawStyle("Theme_Border2").GetForeground()
 	case 3:
 		fallthrough
 	default:
-		currentStyles.BorderColor = t.BorderFG
-		currentStyles.Border2Color = t.Border2FG
+		currentStyles.BorderColor = SemanticRawStyle("Theme_Border").GetForeground()
+		currentStyles.Border2Color = SemanticRawStyle("Theme_Border2").GetForeground()
 	}
 
 	// Shadow
-	currentStyles.ShadowColor = t.ShadowColor
+	currentStyles.ShadowColor = SemanticRawStyle("Theme_Shadow").GetBackground()
 	currentStyles.Shadow = lipgloss.NewStyle().
-		Background(t.ShadowColor)
+		Background(currentStyles.ShadowColor)
 
 	// Buttons (spacing handled at layout level)
 	// Handle nil (inherit) backgrounds by falling back to DialogBG
-	buttonActiveBG := t.ButtonActiveBG
-	if buttonActiveBG == nil {
-		buttonActiveBG = t.DialogBG
+	currentStyles.ButtonActive = SemanticRawStyle("Theme_ButtonActive")
+	if currentStyles.ButtonActive.GetBackground() == nil {
+		currentStyles.ButtonActive = currentStyles.ButtonActive.Background(currentStyles.Dialog.GetBackground())
 	}
-	buttonInactiveBG := t.ButtonInactiveBG
-	if buttonInactiveBG == nil {
-		buttonInactiveBG = t.DialogBG
-	}
-	currentStyles.ButtonActive = ApplyFlags(lipgloss.NewStyle().
-		Background(buttonActiveBG).
-		Foreground(t.ButtonActiveFG), t.ButtonActiveStyles)
 
-	currentStyles.ButtonInactive = ApplyFlags(lipgloss.NewStyle().
-		Background(buttonInactiveBG).
-		Foreground(t.ButtonInactiveFG), t.ButtonInactiveStyles)
-
-	// List items - descriptions have cyan background (from .dialogrc item_color)
-	// Handle nil (inherit) by falling back to DialogBG
-	itemBG := t.ItemBG
-	if itemBG == nil {
-		itemBG = t.DialogBG
+	currentStyles.ButtonInactive = SemanticRawStyle("Theme_ButtonInactive")
+	if currentStyles.ButtonInactive.GetBackground() == nil {
+		currentStyles.ButtonInactive = currentStyles.ButtonInactive.Background(currentStyles.Dialog.GetBackground())
 	}
-	itemSelectedBG := t.ItemSelectedBG
-	if itemSelectedBG == nil {
-		itemSelectedBG = t.DialogBG
-	}
-	currentStyles.ItemNormal = ApplyFlags(lipgloss.NewStyle().
-		Background(itemBG).
-		Foreground(t.ItemFG), t.ItemStyles)
 
-	// Selected items: highlight box around text only (like original bash version)
-	currentStyles.ItemSelected = ApplyFlags(lipgloss.NewStyle().
-		Background(itemSelectedBG).
-		Foreground(t.ItemSelectedFG), t.ItemSelectedStyles)
-
-	// Tags - use background from theme (not hardcoded DialogBG)
-	// Handle nil (inherit) by falling back to DialogBG
-	tagBG := t.TagBG
-	if tagBG == nil {
-		tagBG = t.DialogBG
+	// List items
+	currentStyles.ItemNormal = SemanticRawStyle("Theme_Item")
+	if currentStyles.ItemNormal.GetBackground() == nil {
+		currentStyles.ItemNormal = currentStyles.ItemNormal.Background(currentStyles.Dialog.GetBackground())
 	}
-	tagSelectedBG := t.TagSelectedBG
-	if tagSelectedBG == nil {
-		tagSelectedBG = t.DialogBG
-	}
-	tagKeyBG := t.TagKeyBG
-	if tagKeyBG == nil {
-		tagKeyBG = t.DialogBG
-	}
-	tagKeySelectedBG := t.TagKeySelectedBG
-	if tagKeySelectedBG == nil {
-		tagKeySelectedBG = t.DialogBG
-	}
-	currentStyles.TagNormal = ApplyFlags(lipgloss.NewStyle().
-		Background(tagBG).
-		Foreground(t.TagFG), t.TagStyles)
 
-	currentStyles.TagSelected = ApplyFlags(lipgloss.NewStyle().
-		Background(tagSelectedBG).
-		Foreground(t.TagSelectedFG), t.TagSelectedStyles)
+	currentStyles.ItemSelected = SemanticRawStyle("Theme_ItemSelected")
+	if currentStyles.ItemSelected.GetBackground() == nil {
+		currentStyles.ItemSelected = currentStyles.ItemSelected.Background(currentStyles.Dialog.GetBackground())
+	}
 
-	currentStyles.TagKey = ApplyFlags(lipgloss.NewStyle().
-		Background(tagKeyBG).
-		Foreground(t.TagKeyFG), t.TagKeyStyles)
+	// Tags
+	currentStyles.TagNormal = SemanticRawStyle("Theme_Tag")
+	if currentStyles.TagNormal.GetBackground() == nil {
+		currentStyles.TagNormal = currentStyles.TagNormal.Background(currentStyles.Dialog.GetBackground())
+	}
 
-	// Selected tag key: highlight box around text only (like original bash version)
-	currentStyles.TagKeySelected = ApplyFlags(lipgloss.NewStyle().
-		Background(tagKeySelectedBG).
-		Foreground(t.TagKeySelectedFG), t.TagKeySelectedStyles)
+	currentStyles.TagSelected = SemanticRawStyle("Theme_TagSelected")
+	if currentStyles.TagSelected.GetBackground() == nil {
+		currentStyles.TagSelected = currentStyles.TagSelected.Background(currentStyles.Dialog.GetBackground())
+	}
+
+	currentStyles.TagKey = SemanticRawStyle("Theme_TagKey")
+	if currentStyles.TagKey.GetBackground() == nil {
+		currentStyles.TagKey = currentStyles.TagKey.Background(currentStyles.Dialog.GetBackground())
+	}
+
+	currentStyles.TagKeySelected = SemanticRawStyle("Theme_TagKeySelected")
+	if currentStyles.TagKeySelected.GetBackground() == nil {
+		currentStyles.TagKeySelected = currentStyles.TagKeySelected.Background(currentStyles.Dialog.GetBackground())
+	}
 
 	// Header
-	currentStyles.HeaderBG = lipgloss.NewStyle().
-		Background(t.ScreenBG).
-		Foreground(t.ScreenFG)
+	currentStyles.HeaderBG = currentStyles.Screen
 
 	// Help line
-	currentStyles.HelpLine = ApplyFlags(lipgloss.NewStyle().
-		Background(t.HelplineBG).
-		Foreground(t.HelplineFG), t.HelplineStyles)
+	currentStyles.HelpLine = SemanticRawStyle("Theme_Helpline")
 
 	// Initialize semantic styles from console color tags (Theme-specific to avoid log interference)
 	currentStyles.StatusSuccess = SemanticRawStyle("Theme_TitleNotice")
 	currentStyles.StatusWarn = SemanticRawStyle("Theme_TitleWarn")
 	currentStyles.StatusError = SemanticRawStyle("Theme_TitleError")
-	currentStyles.Console = ApplyFlags(lipgloss.NewStyle().
-		Background(t.ProgramBG).
-		Foreground(t.ProgramFG), t.ProgramStyles)
+	currentStyles.Console = SemanticRawStyle("Theme_ProgramBox")
 
-	currentStyles.LogPanelColor = t.LogPanelFG
+	currentStyles.LogPanelColor = SemanticRawStyle("Theme_LogPanel").GetForeground()
 }
 
 // ApplyFlags applies ANSI style modifiers to a lipgloss.Style

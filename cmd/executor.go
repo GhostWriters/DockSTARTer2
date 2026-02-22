@@ -786,34 +786,35 @@ func handleThemeSettings(ctx context.Context, group *CommandGroup) error {
 			return nil
 		}
 	}
+
 	if err := config.SaveAppConfig(conf); err != nil {
 		logger.Error(ctx, "Failed to save theme setting: %v", err)
 		return err
-	} else {
-		// Log specific update if appropriate
-		if group.Command == "--theme-border-color" && len(group.Args) > 0 {
-			logger.Notice(ctx, "Border color set to: {{|Var|}}%s{{[-]}}", group.Args[0])
-		}
-		// Specialized output for shadow level
-		if group.Command == "--theme-shadow-level" && len(group.Args) > 0 {
-			var percent int
-			switch conf.UI.ShadowLevel {
-			case 0:
-				percent = 0
-			case 1:
-				percent = 25
-			case 2:
-				percent = 50
-			case 3:
-				percent = 75
-			case 4:
-				percent = 100
-			}
-			logger.Notice(ctx, "Shadow level set to %d%%.", percent)
-		} else {
-			logger.Notice(ctx, "Theme setting updated: %s", group.Command)
-		}
 	}
+
+	// Log specific update if appropriate
+	if group.Command == "--theme-border-color" && len(group.Args) > 0 {
+		logger.Notice(ctx, "Border color set to: {{|Var|}}%s{{[-]}}", group.Args[0])
+	}
+	// Specialized output for shadow level
+	if group.Command == "--theme-shadow-level" && len(group.Args) > 0 {
+		var percent int
+		switch conf.UI.ShadowLevel {
+		case 0:
+			percent = 0
+		case 1:
+			percent = 25
+		case 2:
+			percent = 50
+		case 3:
+			percent = 75
+		case 4:
+			percent = 100
+		}
+		logger.Notice(ctx, "Shadow level set to %d%%.", percent)
+		logger.Notice(ctx, "Theme setting updated: %s", group.Command)
+	}
+
 	return nil
 }
 

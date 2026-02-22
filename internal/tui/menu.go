@@ -115,7 +115,6 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 		if menuItem.Checked {
 			cb = "[x] "
 		}
-		// Render with tag style
 		checkbox = tagStyle.Render(cb)
 	}
 
@@ -1332,7 +1331,12 @@ func (m *MenuModel) renderDialog(menuContent, buttonBox string, listWidth int) s
 		boxStyle := lipgloss.NewStyle().
 			Background(styles.Dialog.GetBackground()).
 			Padding(0, 1)
-		boxStyle = Apply3DBorder(boxStyle)
+
+		if !styles.DrawBorders {
+			boxStyle = boxStyle.Border(lipgloss.HiddenBorder())
+		} else {
+			boxStyle = Apply3DBorder(boxStyle)
+		}
 		dialogBox = boxStyle.Render(paddedContent)
 	}
 
@@ -1347,7 +1351,9 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 	styles := GetStyles()
 	// Focused dialogs use thick border, background dialogs use normal border
 	var border lipgloss.Border
-	if styles.LineCharacters {
+	if !styles.DrawBorders {
+		border = lipgloss.HiddenBorder()
+	} else if styles.LineCharacters {
 		if focused {
 			border = lipgloss.ThickBorder()
 		} else {
@@ -1401,7 +1407,10 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 	// Format: ────┤ Title ├──── (normal) or ━━━━┫ Title ┣━━━━ (thick/focused)
 	// Spaces are rendered with border style, not title style
 	var leftT, rightT string
-	if styles.LineCharacters {
+	if !styles.DrawBorders {
+		leftT = " "
+		rightT = " "
+	} else if styles.LineCharacters {
 		if focused {
 			leftT = "┫"
 			rightT = "┣"
@@ -1609,17 +1618,17 @@ func (m *MenuModel) renderFlow() string {
 		// Checkbox/Radio visual
 		prefix := ""
 		if item.IsRadioButton {
-			cbContent := " "
+			cb := "( ) "
 			if item.Checked {
-				cbContent = "*"
+				cb = "(*) "
 			}
-			prefix = tagStyle.Render("(") + keyStyle.Render(cbContent) + tagStyle.Render(") ")
+			prefix = tagStyle.Render(cb)
 		} else if item.IsCheckbox {
-			cbContent := " "
+			cb := "[ ] "
 			if item.Checked {
-				cbContent = "x"
+				cb = "[x] "
 			}
-			prefix = tagStyle.Render("[") + keyStyle.Render(cbContent) + tagStyle.Render("] ")
+			prefix = tagStyle.Render(cb)
 		}
 
 		// Tag with first-letter shortcut

@@ -2,6 +2,7 @@ package screens
 
 import (
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/tui"
 	"fmt"
@@ -36,7 +37,8 @@ type DisplayOptionsScreen struct {
 	width  int
 	height int
 
-	previewDefaults *theme.ThemeDefaults // Defaults for the currently highlighted theme (for preview)
+	baseConfig    config.AppConfig                // Original exact config before previewing
+	themeDefaults map[string]*theme.ThemeDefaults // Cache parsed defaults
 }
 
 // updateDisplayOptionMsg is sent when an option is changed in the menu
@@ -50,12 +52,14 @@ func NewDisplayOptionsScreen() *DisplayOptionsScreen {
 	current := theme.Current.Name
 
 	s := &DisplayOptionsScreen{
-		config:       config.LoadAppConfig(),
-		themes:       themes,
-		currentTheme: current,
-		previewTheme: current,
+		config:        config.LoadAppConfig(),
+		baseConfig:    config.LoadAppConfig(),
+		themes:        themes,
+		currentTheme:  current,
+		previewTheme:  current,
+		themeDefaults: make(map[string]*theme.ThemeDefaults),
 	}
-	s.previewDefaults, _ = theme.Load(current, "Preview")
+	s.themeDefaults[current], _ = theme.Load(current, "Preview")
 
 	s.initMenus()
 	return s
@@ -216,24 +220,27 @@ func (s *DisplayOptionsScreen) showBorderColorDropdown() tea.Cmd {
 
 func (s *DisplayOptionsScreen) toggleBorders() tea.Cmd {
 	return func() tea.Msg {
+		newState := !s.config.UI.Borders
 		return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
-			cfg.UI.Borders = !cfg.UI.Borders
+			cfg.UI.Borders = newState
 		}}
 	}
 }
 
 func (s *DisplayOptionsScreen) toggleLineChars() tea.Cmd {
 	return func() tea.Msg {
+		newState := !s.config.UI.LineCharacters
 		return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
-			cfg.UI.LineCharacters = !cfg.UI.LineCharacters
+			cfg.UI.LineCharacters = newState
 		}}
 	}
 }
 
 func (s *DisplayOptionsScreen) toggleShadow() tea.Cmd {
 	return func() tea.Msg {
+		newState := !s.config.UI.Shadow
 		return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
-			cfg.UI.Shadow = !cfg.UI.Shadow
+			cfg.UI.Shadow = newState
 		}}
 	}
 }
@@ -335,11 +342,9 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, nil
 		}
 
-		// Enter: Always triggers the active button
 		if key.Matches(msg, tui.Keys.Enter) {
 			switch s.focusedButton {
 			case 0:
-				theme.Unload("Preview")
 				return s, s.handleApply()
 			case 1:
 				theme.Unload("Preview")
@@ -368,22 +373,32 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					s.themeMenu.SetItems(items)
 					s.previewTheme = items[cursor].Tag
+
+					// Reset to base configs
+					s.config = s.baseConfig
+
+					defaults, ok := s.themeDefaults[s.previewTheme]
+					if !ok {
+						var err error
+						defaults, err = theme.Load(s.previewTheme, "Preview")
+						if err != nil {
+							s.previewTheme = "ERR: " + err.Error()
+						}
+						s.themeDefaults[s.previewTheme] = defaults
+					}
+
+					if defaults != nil {
+						theme.ApplyThemeDefaults(&s.config, *defaults)
+					}
+					s.syncOptionsMenu()
+					tui.ClearSemanticCache()
 					return s, nil
 				}
 			}
 
-			oldIdx := s.themeMenu.Index()
 			updated, uCmd := s.themeMenu.Update(msg)
 			if m, ok := updated.(*tui.MenuModel); ok {
 				s.themeMenu = m
-				if s.themeMenu.Index() != oldIdx {
-					items := s.themeMenu.GetItems()
-					idx := s.themeMenu.Index()
-					if idx >= 0 && idx < len(items) {
-						s.previewTheme = items[idx].Tag
-						s.previewDefaults, _ = theme.Load(s.previewTheme, "Preview")
-					}
-				}
 			}
 			return s, uCmd
 		} else if s.focusedPanel == FocusOptions {
@@ -396,19 +411,23 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case updateDisplayOptionMsg:
 		msg.update(&s.config)
-		// Update checkboxes in options menu
-		items := s.optionsMenu.GetItems()
-		items[0].Checked = s.config.UI.Borders
-		items[1].Checked = s.config.UI.LineCharacters
-		items[2].Checked = s.config.UI.Shadow
-		// Update dropdown descriptions
-		items[3].Desc = s.dropdownDesc(s.shadowLevelToDesc(s.config.UI.ShadowLevel))
-		items[4].Desc = s.dropdownDesc(s.borderColorToDesc(s.config.UI.BorderColor))
-		s.optionsMenu.SetItems(items)
+		msg.update(&s.baseConfig) // User actively changed an option, save it to base config
+		s.syncOptionsMenu()
 		return s, nil
 	}
 
 	return s, cmd
+}
+
+func (s *DisplayOptionsScreen) syncOptionsMenu() {
+	items := s.optionsMenu.GetItems()
+	items[0].Checked = s.config.UI.Borders
+	items[1].Checked = s.config.UI.LineCharacters
+	items[2].Checked = s.config.UI.Shadow
+	// Update dropdown descriptions
+	items[3].Desc = s.dropdownDesc(s.shadowLevelToDesc(s.config.UI.ShadowLevel))
+	items[4].Desc = s.dropdownDesc(s.borderColorToDesc(s.config.UI.BorderColor))
+	s.optionsMenu.SetItems(items)
 }
 
 func (s *DisplayOptionsScreen) ViewString() string {
@@ -453,93 +472,176 @@ func alignCenter(w int, text string) string {
 	}
 	left := (w - wt) / 2
 	right := w - wt - left
-	return strings.Repeat(" ", left) + text + strings.Repeat(" ", right)
+	return strutil.Repeat(" ", left) + text + strutil.Repeat(" ", right)
 }
 
 func (s *DisplayOptionsScreen) renderMockup() string {
-	width := 46 // Slightly wider for better balance
+	width := 44 // Reduced width to fit the screen better
 
-	// Helper to create a padded line with a background color
-	paddedLine := func(text string, w int, style lipgloss.Style) string {
-		plain := tui.GetPlainText(text)
+	paddedLine := func(text string, style lipgloss.Style, fallback string) string {
+		rendered := tui.RenderThemeText(text)
+		plain := tui.GetPlainText(rendered)
 		wt := lipgloss.Width(plain)
-		if wt > w {
-			return style.Render(plain[:w])
+		if wt < width {
+			return style.Render(rendered + strutil.Repeat(fallback, width-wt))
 		}
-		return style.Render(text + strings.Repeat(" ", w-wt))
+		return style.Render(plain[:width])
 	}
 
-	// 1. Header (Classic terminal title bar style)
-	headerStyle := tui.SemanticRawStyle("Preview_Theme_Screen")
-	titleStyle := tui.SemanticRawStyle("Preview_Theme_Title")
-	headerText := titleStyle.Render(" DockSTARTer ")
-	headerRow := paddedLine(headerText, width, headerStyle)
+	hStyle := tui.SemanticRawStyle("Preview_Theme_Screen")
+	vStyle := tui.SemanticRawStyle("Preview_Theme_Version")
+	headerRow := paddedLine(fmt.Sprintf(" {{|Preview_Theme_Title|}}DS2{{[-]}} %s", vStyle.Render("v2.1")), hStyle, " ")
 
-	// 2. Separator
+	sepStyle := tui.SemanticRawStyle("Preview_Theme_Border")
 	sepChar := "-"
 	if s.config.UI.LineCharacters {
 		sepChar = "─"
 	}
-	sepStyle := tui.SemanticRawStyle("Preview_Theme_Border")
-	sepRow := sepStyle.Render(strings.Repeat(sepChar, width))
+	sepRow := sepStyle.Render(strutil.Repeat(sepChar, width))
 
-	// 3. Mini Dialog Mockup (Center content)
-	dialogTitle := " " + s.previewTheme + " "
+	bgStyle := tui.SemanticRawStyle("Preview_Theme_Screen")
+	dContent := tui.SemanticRawStyle("Preview_Theme_Dialog")
+	dBorder1 := tui.SemanticRawStyle("Preview_Theme_Border")
+	dBorder2 := tui.SemanticRawStyle("Preview_Theme_Border2")
 
-	// Since we want high fidelity, we'll manually construct the dialog rows using preview colors
-	dStyle := tui.SemanticRawStyle("Preview_Theme_Dialog")
-	dtStyle := tui.SemanticRawStyle("Preview_Theme_Title")
-	dbStyle := tui.SemanticRawStyle("Preview_Theme_Border")
-
-	// Render a fake dialog centered in a few blank lines
-	blank := headerStyle.Render(strings.Repeat(" ", width))
-
-	// Simple Dialog rendering (inside the mini-terminal)
-	dWidth := 30
-	// Title line
-	dTitleLine := dbStyle.Render("[") + dtStyle.Render(alignCenter(dWidth-2, dialogTitle)) + dbStyle.Render("]")
-	// Space out dialogue rows to center in mini terminal
-
-	// Construct the dialogue manually to avoid GetStyles conflicts
-	mockupLines := []string{
-		blank,
-		paddedLine("  "+dTitleLine, width, headerStyle),
-		paddedLine("  "+dbStyle.Render(strings.Repeat(sepChar, dWidth)), width, headerStyle),
-		paddedLine("  "+dStyle.Render(alignCenter(dWidth, "Simulation Mode")), width, headerStyle),
-		paddedLine("  "+dStyle.Render(alignCenter(dWidth, "")), width, headerStyle),
-		paddedLine("  "+tui.RenderCenteredButtons(dWidth, tui.ButtonSpec{Text: "OK", Active: true}), width, headerStyle),
-		blank,
+	// Adjust border colors based on setting
+	switch s.config.UI.BorderColor {
+	case 1:
+		dBorder2 = dBorder1
+	case 2:
+		dBorder1 = dBorder2
 	}
 
-	contentRows := lipgloss.JoinVertical(lipgloss.Left, mockupLines...)
+	dTitle := tui.SemanticRawStyle("Preview_Theme_Title")
+	titleStr := dTitle.Render(" Preview: " + s.previewTheme + " ")
 
-	// 4. Helpline (Bottom bar)
+	// Content lines (abbreviated)
+	contentLines := []string{
+		" {{|Preview_Theme_TitleNotice|}}Notice{{[-]}}   {{|Preview_Theme_TitleSuccess|}}Success{{[-]}}",
+		" {{|Preview_Theme_TitleWarning|}}Warning{{[-]}}  {{|Preview_Theme_TitleError|}}Error{{[-]}}",
+		"",
+		" {{|Preview_Theme_TitleHelp|}}Heading Styl{{[-]}}",
+		" {{|Preview_Theme_HelpTag|}}[Tag]{{[-]}} {{|Preview_Theme_HelpItem|}}Value{{[-]}}",
+		"",
+		" {{|Preview_Theme_TagKey|}}Highlight{{[-]}}",
+		" {{|Preview_Theme_Tag|}}[Key]{{[-]}} {{|Preview_Theme_TagKeySelected|}}[Cap]{{[-]}}",
+		"",
+		" {{|Preview_Theme_ItemHelp|}}*** Variables ***{{[-]}}",
+		" {{|Preview_Theme_Shadow|}}### Comment{{[-]}}",
+		" {{|Preview_Theme_Item|}}VAR=\"Value\"{{[-]}}",
+		" {{|Preview_Theme_ItemSelected|}}NEW=\"New\"{{[-]}}",
+		"",
+		"  {{|Preview_Theme_ButtonActive|}} <ADD> {{[-]}}  ",
+	}
+
+	for i, l := range contentLines {
+		contentLines[i] = tui.RenderThemeText(l)
+	}
+	contentStr := lipgloss.JoinVertical(lipgloss.Left, contentLines...)
+	dialogInner := lipgloss.JoinVertical(lipgloss.Center, titleStr, contentStr)
+
+	var b lipgloss.Border
+	if !s.config.UI.Borders {
+		b = lipgloss.HiddenBorder()
+	} else if s.config.UI.LineCharacters {
+		b = lipgloss.RoundedBorder()
+	} else {
+		b = lipgloss.NormalBorder()
+	}
+
+	dialogBox := lipgloss.NewStyle().
+		Border(b).
+		BorderTopForeground(dBorder1.GetForeground()).
+		BorderLeftForeground(dBorder1.GetForeground()).
+		BorderBottomForeground(dBorder2.GetForeground()).
+		BorderRightForeground(dBorder2.GetForeground()).
+		BorderBackground(dContent.GetBackground()).
+		Background(dContent.GetBackground()).
+		Padding(0, 1).
+		Render(dialogInner)
+
+	// Apply shadow manually if enabled
+	if s.config.UI.Shadow {
+		lines := strings.Split(dialogBox, "\n")
+		dialogWidth := 0
+		for _, line := range lines {
+			if w := lipgloss.Width(line); w > dialogWidth {
+				dialogWidth = w
+			}
+		}
+
+		var shadowCell, bottomShadowChars string
+		if s.config.UI.LineCharacters {
+			shadowStyle := tui.SemanticRawStyle("Preview_Theme_Shadow").
+				Background(tui.SemanticRawStyle("Preview_Theme_Screen").GetBackground())
+
+			var shadeChar string
+			switch s.config.UI.ShadowLevel {
+			case 1:
+				shadeChar = "░"
+			case 2:
+				shadeChar = "▒"
+			case 3:
+				shadeChar = "▓"
+			case 4:
+				shadeChar = "█"
+			default:
+				shadeChar = "▓"
+			}
+			shadowCell = shadowStyle.Render(strutil.Repeat(shadeChar, 2))
+			bottomShadowChars = shadowStyle.Render(strutil.Repeat(shadeChar, dialogWidth-1))
+		} else {
+			shadowCell = tui.SemanticRawStyle("Preview_Theme_Shadow").Width(2).Render("  ")
+			bottomShadowChars = tui.SemanticRawStyle("Preview_Theme_Shadow").Width(dialogWidth - 1).Render(strutil.Repeat(" ", dialogWidth-1))
+		}
+
+		spacerCell := lipgloss.NewStyle().Background(bgStyle.GetBackground()).Width(2).Render("  ")
+		spacer1 := lipgloss.NewStyle().Background(bgStyle.GetBackground()).Width(1).Render(" ")
+
+		var result strings.Builder
+		for i, line := range lines {
+			if i == 0 {
+				result.WriteString(line + spacerCell + "\n")
+			} else {
+				result.WriteString(line + shadowCell + "\n")
+			}
+		}
+		result.WriteString(spacer1 + bottomShadowChars)
+		dialogBox = result.String()
+	}
+
+	// Backdrop
+	backdropHeight := 18
+	backdropLines := make([]string, backdropHeight)
+	filler := bgStyle.Render(strutil.Repeat(" ", width))
+	for i := range backdropLines {
+		backdropLines[i] = filler
+	}
+	backdropBlock := lipgloss.JoinVertical(lipgloss.Left, backdropLines...)
+
+	backdropBlock = tui.Overlay(dialogBox, backdropBlock, tui.OverlayCenter, tui.OverlayCenter, 0, 0)
+
+	logStyle := tui.SemanticRawStyle("Preview_Theme_LogPanel")
+	logRow := paddedLine(" {{|Preview_Theme_TitleNotice|}}LOG:{{[-]}} Ready", logStyle, " ")
+
 	helpStyle := tui.SemanticRawStyle("Preview_Theme_Helpline")
-	helpRow := paddedLine(" Help: [Space] Select | [Arrows] Navigate ", width, helpStyle)
+	helpRow := paddedLine(" Help: [Tab] Cycle | [Esc] Back", helpStyle, " ")
 
-	// 5. Final Mockup assembly
 	mockup := lipgloss.JoinVertical(lipgloss.Left,
 		headerRow,
 		sepRow,
-		contentRows,
+		backdropBlock,
+		logRow,
 		helpRow,
 	)
 
-	// Wrap in a black square container with a border to define the "screen"
 	containerStyle := lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("#444444")).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#555555")).
 		Background(lipgloss.Color("#000000")).
-		Padding(1, 2).
-		Align(lipgloss.Center, lipgloss.Center)
+		Padding(0, 1)
 
-	previewTitle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(tui.SemanticRawStyle("Theme_TitleNotice").GetForeground()).
-		Background(lipgloss.Color("#000000")).
-		Render("Visual Preview (Theme Isolated)")
-
-	return containerStyle.Render(lipgloss.JoinVertical(lipgloss.Center, previewTitle, mockup))
+	return containerStyle.Render(mockup)
 }
 
 func (s *DisplayOptionsScreen) View() tea.View {
