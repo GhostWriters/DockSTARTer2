@@ -26,6 +26,17 @@ const (
 // ansiRegex matches all ANSI escape sequences
 var ansiRegex = regexp.MustCompile("[\u001B\u009B][[\\]()#;?]*((?:[a-zA-Z\\d]*(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]*)*)?\u0007|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PR-TZcf-ntqry=><~]))")
 
+// zoneMarkerRegex matches bubblezone markers: \x1b_bubblezone:...: and \x1b\\
+// These are OSC sequences that lipgloss.Width() doesn't strip correctly
+var zoneMarkerRegex = regexp.MustCompile("\x1b_[^\x1b]*|\x1b\\\\")
+
+// WidthWithoutZones returns the visual width of a string, stripping zone markers first
+// Use this when measuring content that may contain bubblezone markers
+func WidthWithoutZones(s string) int {
+	stripped := zoneMarkerRegex.ReplaceAllString(s, "")
+	return lipgloss.Width(stripped)
+}
+
 // Overlay composites a foreground string over a background string at the specified position.
 // This version is "safe" for ANSI markers like bubblezone because it uses manual string slicing
 // and concatenation instead of the lipgloss v2 compositor which may strip them.
@@ -244,4 +255,93 @@ func MultiOverlay(layers ...LayerSpec) string {
 	}
 
 	return output
+}
+
+// MultiOverlayWithBounds composites layers with explicit bounds checking.
+// Layers that would extend beyond screenW/screenH are clipped.
+// This prevents content bleeding outside the visible area.
+func MultiOverlayWithBounds(screenW, screenH int, layers ...LayerSpec) string {
+	if len(layers) == 0 {
+		return ""
+	}
+
+	// Create a copy to avoid mutating the original slice
+	sorted := make([]LayerSpec, len(layers))
+	copy(sorted, layers)
+
+	// Sort by Z-index (stable sort preserves original order for same Z)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		return sorted[i].Z < sorted[j].Z
+	})
+
+	// Start with the base layer (lowest Z)
+	output := sorted[0].Content
+
+	// Ensure base layer matches screen dimensions
+	baseW := lipgloss.Width(output)
+	baseH := lipgloss.Height(output)
+	if baseW < screenW || baseH < screenH {
+		// Pad the base layer to fill screen if needed
+		output = padToSize(output, screenW, screenH)
+	}
+
+	// Overlay subsequent layers with bounds checking
+	for i := 1; i < len(sorted); i++ {
+		l := sorted[i]
+
+		// Calculate available space for this layer
+		availW := screenW - l.X
+		availH := screenH - l.Y
+
+		if availW <= 0 || availH <= 0 {
+			// Layer is entirely off-screen, skip it
+			continue
+		}
+
+		// Constrain layer content to available space
+		constrained := constrainToSize(l.Content, availW, availH)
+
+		output = Overlay(constrained, output, OverlayLeft, OverlayTop, l.X, l.Y)
+	}
+
+	return output
+}
+
+// padToSize pads content to fill the specified dimensions
+func padToSize(content string, width, height int) string {
+	lines := strings.Split(content, "\n")
+
+	// Pad each line to width
+	for i, line := range lines {
+		lineW := lipgloss.Width(line)
+		if lineW < width {
+			lines[i] = line + strings.Repeat(" ", width-lineW)
+		}
+	}
+
+	// Add empty lines to reach height
+	for len(lines) < height {
+		lines = append(lines, strings.Repeat(" ", width))
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// constrainToSize clips content to fit within width/height
+func constrainToSize(content string, maxW, maxH int) string {
+	lines := strings.Split(content, "\n")
+
+	// Limit number of lines
+	if len(lines) > maxH {
+		lines = lines[:maxH]
+	}
+
+	// Truncate each line to width
+	for i, line := range lines {
+		if lipgloss.Width(line) > maxW {
+			lines[i] = TruncateRight(line, maxW)
+		}
+	}
+
+	return strings.Join(lines, "\n")
 }

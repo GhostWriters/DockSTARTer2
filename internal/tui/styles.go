@@ -44,7 +44,9 @@ type Styles struct {
 	TagKeySelected lipgloss.Style
 
 	// Header
-	HeaderBG lipgloss.Style
+	HeaderBG           lipgloss.Style
+	StatusBar          lipgloss.Style
+	StatusBarSeparator lipgloss.Style
 
 	// Help line
 	HelpLine lipgloss.Style
@@ -295,8 +297,10 @@ func InitStyles(cfg config.AppConfig) {
 		currentStyles.TagKeySelected = currentStyles.TagKeySelected.Background(currentStyles.Dialog.GetBackground())
 	}
 
-	// Header
-	currentStyles.HeaderBG = currentStyles.Screen
+	// Header / Status Bar
+	currentStyles.StatusBar = SemanticRawStyle("Theme_StatusBar")
+	currentStyles.StatusBarSeparator = SemanticRawStyle("Theme_StatusBarSeparator")
+	currentStyles.HeaderBG = currentStyles.StatusBar // Backwards compatibility
 
 	// Help line
 	currentStyles.HelpLine = SemanticRawStyle("Theme_Helpline")

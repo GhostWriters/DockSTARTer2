@@ -6,6 +6,7 @@ author = "Westlin"
 [colors]
 Screen = "{{[black:yellow:B]}}"
 StatusBar = "{{|Theme_Screen|}}"
+StatusBarSeparator = "{{|Theme_StatusBar|}}"
 Dialog = "{{[yellow:black]}}"
 Border = "{{[yellow:black]}}"
 Border2 = "{{[yellow:black]}}"

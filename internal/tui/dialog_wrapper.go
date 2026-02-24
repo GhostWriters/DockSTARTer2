@@ -29,14 +29,24 @@ type DialogPosition struct {
 	YOffset int
 }
 
-// Common dialog positions
-// All positions use OverlayTop with Y offset of 2 to start in the content area
-// (below header line 1 and separator line 2)
+// GetPositionCenter returns a centered dialog position using Layout helpers
+func GetPositionCenter() DialogPosition {
+	layout := GetLayout()
+	return DialogPosition{OverlayCenter, OverlayTop, 0, layout.ContentStartY()}
+}
+
+// GetPositionTopLeft returns top-left position for maximized dialogs using Layout helpers
+func GetPositionTopLeft() DialogPosition {
+	layout := GetLayout()
+	return DialogPosition{OverlayLeft, OverlayTop, layout.EdgeIndent, layout.ContentStartY()}
+}
+
+// Common dialog positions (using Layout helpers)
 var (
 	// PositionCenter centers the dialog horizontally in the content area
-	PositionCenter = DialogPosition{OverlayCenter, OverlayTop, 0, 2}
+	PositionCenter = GetPositionCenter()
 	// PositionTopLeft positions the dialog at top-left of content area (for maximized dialogs)
-	PositionTopLeft = DialogPosition{OverlayLeft, OverlayTop, 2, 2}
+	PositionTopLeft = GetPositionTopLeft()
 )
 
 // DialogWithBackdrop wraps any DialogModel with the standard backdrop

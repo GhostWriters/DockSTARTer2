@@ -6,6 +6,7 @@ author = "CLHatch"
 [colors]
 Screen = "{{[black:magenta]}}"
 StatusBar = "{{|Theme_Screen|}}"
+StatusBarSeparator = "{{|Theme_StatusBar|}}"
 Dialog = "{{[black:white]}}"
 Border = "{{[black:white]}}"
 Border2 = "{{[black:white]}}"

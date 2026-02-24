@@ -18,27 +18,23 @@ func RenderWithBackdrop(dialogContent string, helpText string, width, height int
 	styles := GetStyles()
 	var b strings.Builder
 
-	// Header with 1-char padding on left and right (matches AppModel.View())
-	// Header width reduced by 2 for padding
+	// Header: Fill with StatusBar background, then draw content
+	// Using Width() ensures the line fills exactly width - no padding calculation needed
 	header := NewHeaderModel()
 	header.SetWidth(width - 2)
 	headerContent := header.View()
-	headerLine := " " + headerContent + " "
-	if padLen := width - lipgloss.Width(headerLine); padLen > 0 {
-		headerLine += strutil.Repeat(" ", padLen)
-	}
-	headerStyle := lipgloss.NewStyle().Background(styles.Screen.GetBackground())
-	b.WriteString(headerStyle.Render(headerLine))
+	headerStyle := styles.StatusBar.
+		Width(width).
+		Padding(0, 1) // 1-char padding left/right
+	b.WriteString(headerStyle.Render(headerContent))
 	b.WriteString("\n")
 
-	// Separator line with 1-char padding on left and right (matches AppModel.View())
+	// Separator: Fill with StatusBarSeparator background, then draw separator chars
 	sep := strutil.Repeat(styles.SepChar, width-2)
-	sepLine := " " + sep + " "
-	if padLen := width - lipgloss.Width(sepLine); padLen > 0 {
-		sepLine += strutil.Repeat(" ", padLen)
-	}
-	sepStyle := lipgloss.NewStyle().Background(styles.HeaderBG.GetBackground())
-	b.WriteString(sepStyle.Render(sepLine))
+	sepStyle := styles.StatusBarSeparator.
+		Width(width).
+		Padding(0, 1) // 1-char padding left/right
+	b.WriteString(sepStyle.Render(sep))
 	b.WriteString("\n")
 
 	// Calculate content height (matches AppModel.View())
@@ -105,22 +101,16 @@ func GetAvailableDialogSize(width, height int) (int, int) {
 		return 0, 0
 	}
 
-	// Account for shadow if enabled (2 chars wide on right, 1 line on bottom)
-	shadowWidth := 0
-	shadowHeight := 0
-	if currentConfig.UI.Shadow {
-		shadowWidth = 2
-		shadowHeight = 1
-	}
+	// Use Layout helpers for consistent calculations
+	layout := GetLayout()
+	hasShadow := currentConfig.UI.Shadow
 
-	// Available size for dialog content (accounting for outer borders and margins)
-	// Remaining space for dialog: margin (2 per side) = 4
-	availableWidth := width - 4 - shadowWidth
+	availableWidth, availableHeight := layout.ContentArea(width, height, hasShadow)
 
-	// Remaining space for dialog: header/sep (2) + gap (1) + helpline (1) = 4
-	availableHeight := height - 4 - shadowHeight - logPanelExtraHeight
+	// Account for log panel if visible
+	availableHeight -= logPanelExtraHeight
 
-	// Leave some margin
+	// Ensure minimum height
 	if availableHeight < 5 {
 		availableHeight = 5
 	}

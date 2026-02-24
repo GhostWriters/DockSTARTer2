@@ -470,7 +470,7 @@ func (s *DisplayOptionsScreen) Layers() []tui.LayerSpec {
 	)
 
 	// 2. Render Buttons
-	contentWidth := lipgloss.Width(leftColumn)
+	contentWidth := tui.WidthWithoutZones(leftColumn)
 	buttons := []tui.ButtonSpec{
 		{Text: "Apply", Active: s.focusedButton == 0, ZoneID: "ApplyBtn"},
 		{Text: "Back", Active: s.focusedButton == 1, ZoneID: "BackBtn"},
@@ -491,7 +491,7 @@ func (s *DisplayOptionsScreen) Layers() []tui.LayerSpec {
 		preview := s.renderMockup()
 		// Calculate X offset: dialog width + 1-char gutter
 		// This leaves exactly 1 char of backdrop showing through
-		xOffset := lipgloss.Width(settingsDialog) + 1
+		xOffset := tui.WidthWithoutZones(settingsDialog) + 1
 		layers = append(layers, tui.LayerSpec{Content: preview, X: xOffset, Y: 0, Z: 1})
 	}
 
@@ -500,7 +500,7 @@ func (s *DisplayOptionsScreen) Layers() []tui.LayerSpec {
 
 func (s *DisplayOptionsScreen) ViewString() string {
 	layers := s.Layers()
-	return tui.MultiOverlay(layers...)
+	return tui.MultiOverlayWithBounds(s.width, s.height, layers...)
 }
 
 func alignCenter(w int, text string) string {

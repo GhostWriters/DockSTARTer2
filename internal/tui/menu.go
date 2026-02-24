@@ -151,8 +151,8 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 	}
 
 	descStr := RenderThemeText(menuItem.Desc, lipgloss.NewStyle().Background(dialogBG).Inherit(itemStyle))
-	descStr = lipgloss.NewStyle().MaxWidth(availableWidth).Render(descStr)
-	descLine := strings.ReplaceAll(descStr, "\n", "")
+	// Use TruncateRight for proper truncation instead of MaxWidth which wraps
+	descLine := TruncateRight(descStr, availableWidth)
 
 	// Build the line with neutral background for the gaps
 	padding := neutralStyle.Render(paddingSpaces)
@@ -265,8 +265,8 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 	}
 
 	descStr := RenderThemeText(menuItem.Desc, lipgloss.NewStyle().Background(dialogBG).Inherit(itemStyle))
-	descStr = lipgloss.NewStyle().MaxWidth(availableWidth).Render(descStr)
-	descLine := strings.ReplaceAll(descStr, "\n", "")
+	// Use TruncateRight for proper truncation instead of MaxWidth which wraps
+	descLine := TruncateRight(descStr, availableWidth)
 
 	line := checkbox + tagStr + neutralStyle.Render(paddingSpaces) + descLine
 
@@ -1144,9 +1144,24 @@ func (m *MenuModel) ViewString() string {
 	listStyle = ApplyStraightBorder(listStyle, styles.LineCharacters)
 	borderedList := listStyle.Render(listView)
 
-	// Calculate the target width for all content
-	// This is the width of the bordered list
-	targetWidth := lipgloss.Width(borderedList)
+	// Calculate widths from known dimensions, not measured content
+	// For maximized: use m.width - outer border (2) for the content width
+	// For non-maximized: use list width + inner padding (2) for consistency
+	listWidth := m.list.Width()
+
+	var outerContentWidth int
+	if m.maximized {
+		// Outer dialog fills available space: content = total - outer border
+		outerContentWidth = m.width - 2
+	} else {
+		// Non-maximized: outer content = bordered list (listWidth + 2) + padding (2)
+		outerContentWidth = listWidth + 2 + 2
+	}
+
+	// Inner components should fit within outerContentWidth - padding (2)
+	innerWidth := outerContentWidth - 2
+	// bordered list width = innerWidth, so list content = innerWidth - 2
+	targetWidth := innerWidth
 
 	// Render buttons to match the same bordered width
 	// Account for the padding (2) that renderButtonBox will add
@@ -1160,24 +1175,21 @@ func (m *MenuModel) ViewString() string {
 		Padding(0, 1)
 
 	paddedList := marginStyle.Render(borderedList)
-	paddedListWidth := lipgloss.Width(paddedList)
 
 	// Ensure button box has same width as list for proper vertical alignment
 	paddedButtons := lipgloss.NewStyle().
 		Background(styles.Dialog.GetBackground()).
-		Width(paddedListWidth).
+		Width(outerContentWidth).
 		Padding(0, 1).
 		Render(borderedButtonBox)
 
 	// Build inner content parts
 	var innerParts []string
 
-	// Add subtitle if present (left-aligned, matching padded width)
+	// Add subtitle if present (left-aligned, matching outer content width)
 	if m.subtitle != "" {
-		paddedWidth := lipgloss.Width(paddedList)
-
 		subtitleStyle := styles.Dialog.
-			Width(paddedWidth).
+			Width(outerContentWidth).
 			Padding(0, 1).
 			Align(lipgloss.Left)
 
@@ -1211,9 +1223,10 @@ func (m *MenuModel) ViewString() string {
 	}
 
 	// Wrap in bordered dialog with title embedded in border
+	// Use outerContentWidth - the known content width for the outer dialog
 	var dialog string
 	if m.title != "" {
-		dialog = m.renderBorderWithTitle(content, targetWidth, 0, m.focused)
+		dialog = m.renderBorderWithTitle(content, outerContentWidth, 0, m.focused)
 	} else {
 		// No title: focused uses thick border, background uses normal border
 		dialogStyle := lipgloss.NewStyle().
@@ -1380,11 +1393,14 @@ func (m *MenuModel) renderDialog(menuContent, buttonBox string, listWidth int) s
 		Padding(0, 1).
 		Render(innerContent)
 
+	// Outer content width = listWidth + padding (2)
+	outerContentWidth := listWidth + 2
+
 	// Wrap with outer border
 	var dialogBox string
 
 	if m.title != "" {
-		dialogBox = m.renderBorderWithTitle(paddedContent, listWidth, 0, m.focused)
+		dialogBox = m.renderBorderWithTitle(paddedContent, outerContentWidth, 0, m.focused)
 	} else {
 		// No title, use standard border
 		boxStyle := lipgloss.NewStyle().
@@ -1440,13 +1456,10 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 	renderedTitle := MaintainBackground(RenderThemeText(rawTitle, titleStyle), titleStyle)
 
 	lines := strings.Split(content, "\n")
+	// Trust the passed contentWidth - don't expand based on line widths
+	// Zone markers and other invisible ANSI sequences can inflate lipgloss.Width()
+	// causing incorrect width calculations. The caller knows the correct width.
 	actualWidth := contentWidth
-	for _, line := range lines {
-		w := lipgloss.Width(line)
-		if w > actualWidth {
-			actualWidth = w
-		}
-	}
 
 	if targetHeight > 2 {
 		contentHeight := len(lines)
@@ -1499,7 +1512,8 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 
 	for _, line := range lines {
 		result.WriteString(borderStyleLight.Render(border.Left))
-		textWidth := lipgloss.Width(line)
+		// Use WidthWithoutZones to get accurate visual width (zone markers are invisible)
+		textWidth := WidthWithoutZones(line)
 		padding := ""
 		if textWidth < actualWidth {
 			padding = lipgloss.NewStyle().Background(borderBG).Render(strutil.Repeat(" ", actualWidth-textWidth))
@@ -1603,10 +1617,17 @@ func (m *MenuModel) calculateLayout() {
 	// Width = tag + spacing(2) + desc + margins(2) + buffer(4)
 	listWidth := maxTagLen + 2 + maxDescLen + 2 + 4
 
-	// Constrain width to fit within terminal dialog area
-	// Account for internal overhead: outer border (2) + inner border (2) + internal padding (2) = 6
-	widthOverhead := 6
-	maxListWidth := m.width - widthOverhead
+	// Constrain width to fit within terminal dialog area using Layout helpers
+	layout := GetLayout()
+	var maxListWidth int
+	if m.subMenuMode {
+		// Submenu: just has its own border, content fills the rest
+		maxListWidth, _ = layout.InnerContentSize(m.width, m.height)
+	} else {
+		// Full dialog: outer border + inner list border + padding
+		// Total overhead = outer border (2) + inner border (2) + padding (2) = 6
+		maxListWidth = m.width - 6
+	}
 	if maxListWidth < 34 {
 		maxListWidth = 34
 	}
@@ -1636,17 +1657,15 @@ func (m *MenuModel) calculateLayout() {
 	m.list.SetSize(listWidth, listHeight)
 }
 
-// viewSubMenu renders the menu for use as a sub-section of a larger screen
+// renderFlow renders items in a horizontal flow layout for compact menus
 func (m *MenuModel) renderFlow() string {
 	ctx := GetActiveContext()
 	styles := GetStyles()
 	dialogBG := styles.Dialog.GetBackground()
 
-	// Inner width available for items (total - 2 for borders)
-	maxWidth := m.width
-	if maxWidth > 2 {
-		maxWidth -= 2
-	}
+	// Use Layout helpers for consistent border calculations
+	layout := GetLayout()
+	maxWidth, _ := layout.InnerContentSize(m.width, m.height)
 
 	var lines []string
 	var currentLine []string
@@ -1747,18 +1766,16 @@ func (m *MenuModel) viewSubMenu() string {
 	// Inner content with maintained background
 	inner := MaintainBackground(content, styles.Dialog)
 
-	// Use the shared border-with-title logic
-	// m.width is the total width, so inner width is m.width - 2
-	innerPadding := 0
-	if m.width > 2 {
-		innerPadding = m.width - 2
-	}
+	// Use Layout helpers for consistent border calculations
+	layout := GetLayout()
+	innerWidth, _ := layout.InnerContentSize(m.width, m.height)
+
 	// When in flow mode, the height is strictly determined by the content + borders
 	targetHeight := m.height
 	if m.flowMode {
-		targetHeight = m.layout.ViewportHeight + 2 // ViewportHeight is lines, +2 for borders
+		_, targetHeight = layout.OuterTotalSize(0, m.layout.ViewportHeight)
 	}
-	return m.renderBorderWithTitle(inner, innerPadding, targetHeight, m.focusedSub)
+	return m.renderBorderWithTitle(inner, innerWidth, targetHeight, m.focusedSub)
 }
 
 // GetFlowHeight calculates required lines for horizontal layout given the available width

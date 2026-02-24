@@ -829,122 +829,101 @@ func (m AppModel) View() tea.View {
 		return tea.NewView("Initializing...")
 	}
 
-	// Content area offset: header (1 line) + separator (1 line) = 2 lines from top
-	// Content area ends 1 line before bottom (helpline)
-	contentYOffset := 2
+	// Use Layout helpers for consistent positioning
+	layout := GetLayout()
+	contentYOffset := layout.ContentStartY() // header + separator
 
 	// Layer 0: Backdrop
 	backdropContent := m.backdrop.ViewString()
-	layers := []LayerSpec{
-		{Content: backdropContent, X: 0, Y: 0, Z: 0},
-	}
-	bgWidth := m.width
-
-	// Content area boundaries (accounting for header/sep, shadow, and gap)
-	_, caH := m.getContentArea()
-
-	// Base coordinates for maximized elements
-	x := 2
-	y := contentYOffset
-
-	// Layer 1: Active Screen
-	if m.activeScreen != nil {
-		if lv, ok := m.activeScreen.(LayeredView); ok {
-			for _, l := range lv.Layers() {
-				l.X += x
-				l.Y += y
-				layers = append(layers, l)
-			}
-		} else {
-			var screenContent string
-			if vs, ok := m.activeScreen.(ViewStringer); ok {
-				screenContent = vs.ViewString()
-			}
-			if screenContent != "" {
-				fgWidth := lipgloss.Width(screenContent)
-				fgHeight := lipgloss.Height(screenContent)
-
-				// Default: center horizontally, center vertically within content area
-				lx := (bgWidth - fgWidth) / 2
-				ly := contentYOffset + (caH-fgHeight)/2
-
-				if m.activeScreen.IsMaximized() {
-					lx = x
-					ly = y
-				}
-				layers = append(layers, LayerSpec{Content: screenContent, X: lx, Y: ly, Z: 1})
-			}
-		}
-	}
-
-	// Layer 2: Modal Dialog
-	if m.dialog != nil {
-		if lv, ok := m.dialog.(LayeredView); ok {
-			for _, l := range lv.Layers() {
-				l.X += x
-				l.Y += y
-				// Ensure dialog layers are above screen layers (Z=2+)
-				if l.Z < 2 {
-					l.Z = 2
-				}
-				layers = append(layers, l)
-			}
-		} else {
-			var dialogContent string
-			if vs, ok := m.dialog.(ViewStringer); ok {
-				dialogContent = vs.ViewString()
-			}
-			if dialogContent != "" {
-				maximized := false
-				if md, ok := m.dialog.(interface{ IsMaximized() bool }); ok {
-					maximized = md.IsMaximized()
-				}
-				fgWidth := lipgloss.Width(dialogContent)
-				fgHeight := lipgloss.Height(dialogContent)
-
-				// Default: center horizontally, center vertically within content area
-				lx := (bgWidth - fgWidth) / 2
-				ly := contentYOffset + (caH-fgHeight)/2
-
-				if maximized {
-					lx = x
-					ly = y
-				}
-				layers = append(layers, LayerSpec{Content: dialogContent, X: lx, Y: ly, Z: 2})
-			}
-		}
-	}
-
-	// Composite all layers using safe MultiOverlay
 	allLayers := []LayerSpec{
 		{Content: backdropContent, X: 0, Y: 0, Z: 0},
 	}
 
-	// Add screen and dialog layers (Z=2, 3...)
-	for _, l := range layers {
-		if l.Content == backdropContent {
-			continue // Skip duplicate backdrop in layers slice
-		}
-		allLayers = append(allLayers, LayerSpec{Content: l.Content, X: l.X, Y: l.Y, Z: l.Z + 2})
-	}
+	// Content area boundaries (accounting for header/sep, shadow, and gap)
+	caW, caH := m.getContentArea()
 
-	// Layer 1: Log panel (at the bottom)
-	var logPanelContent string
+	// Base coordinates for maximized elements (edge indent from left, content start from top)
+	maxX := layout.EdgeIndent
+	maxY := contentYOffset
+
+	// Layer 1: Log panel (always at Z=1, rendered at bottom)
 	if vs, ok := interface{}(m.logPanel).(ViewStringer); ok {
-		logPanelContent = vs.ViewString()
-	}
-	if logPanelContent != "" {
-		logY := m.height - m.logPanel.Height()
-		allLayers = append(allLayers, LayerSpec{
-			Content: logPanelContent,
-			X:       0,
-			Y:       logY,
-			Z:       1,
-		})
+		if logContent := vs.ViewString(); logContent != "" {
+			logY := m.height - m.logPanel.Height()
+			allLayers = append(allLayers, LayerSpec{
+				Content: logContent,
+				X:       0,
+				Y:       logY,
+				Z:       1,
+			})
+		}
 	}
 
-	// Final rendered string
-	rendered := MultiOverlay(allLayers...)
+	// Layer 2+: Active Screen
+	if m.activeScreen != nil {
+		if lv, ok := m.activeScreen.(LayeredView); ok {
+			// Screen provides its own layers - just offset them
+			for _, l := range lv.Layers() {
+				l.X += maxX
+				l.Y += maxY
+				l.Z += 2 // Ensure above log panel
+				allLayers = append(allLayers, l)
+			}
+		} else if vs, ok := m.activeScreen.(ViewStringer); ok {
+			if content := vs.ViewString(); content != "" {
+				// Use WidthWithoutZones for accurate width (zone markers don't take visual space)
+				fgWidth := WidthWithoutZones(content)
+				fgHeight := lipgloss.Height(content)
+
+				// Default: center in content area
+				lx := maxX + (caW-fgWidth)/2
+				ly := maxY + (caH-fgHeight)/2
+
+				if m.activeScreen.IsMaximized() {
+					lx = maxX
+					ly = maxY
+				}
+				allLayers = append(allLayers, LayerSpec{Content: content, X: lx, Y: ly, Z: 2})
+			}
+		}
+	}
+
+	// Layer 3+: Modal Dialog (on top of screen)
+	if m.dialog != nil {
+		if lv, ok := m.dialog.(LayeredView); ok {
+			// Dialog provides its own layers - offset them and ensure Z > screen
+			for _, l := range lv.Layers() {
+				l.X += maxX
+				l.Y += maxY
+				l.Z += 3 // Ensure above screen layers
+				allLayers = append(allLayers, l)
+			}
+		} else if vs, ok := m.dialog.(ViewStringer); ok {
+			if content := vs.ViewString(); content != "" {
+				maximized := false
+				if md, ok := m.dialog.(interface{ IsMaximized() bool }); ok {
+					maximized = md.IsMaximized()
+				}
+
+				// Use WidthWithoutZones for accurate width
+				fgWidth := WidthWithoutZones(content)
+				fgHeight := lipgloss.Height(content)
+
+				// Default: center in content area
+				lx := maxX + (caW-fgWidth)/2
+				ly := maxY + (caH-fgHeight)/2
+
+				if maximized {
+					lx = maxX
+					ly = maxY
+				}
+				allLayers = append(allLayers, LayerSpec{Content: content, X: lx, Y: ly, Z: 3})
+			}
+		}
+	}
+
+	// Final rendered string with bounds checking to prevent bleeding
+	rendered := MultiOverlayWithBounds(m.width, m.height, allLayers...)
 
 	// Scan zones at the root level
 	v := tea.NewView(zone.Scan(rendered))

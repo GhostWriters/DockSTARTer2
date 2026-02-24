@@ -117,38 +117,123 @@ func (m *HeaderModel) HandleMouse(msg tea.MouseClickMsg) (bool, tea.Cmd) {
 func (m HeaderModel) View() string {
 	styles := GetStyles()
 
-	// Left section: hostname + flags
 	// Render content for each section
 	left := m.renderLeft()
 	center := m.renderCenter()
-	right := m.renderRight()
+	appVer, tmplVer := m.renderVersions()
 
-	// Calculate center width (strip ANSI codes for accurate width)
-	centerWidth := lipgloss.Width(center)
+	// Calculate widths (use WidthWithoutZones for accurate measurement with zone markers)
+	leftWidth := WidthWithoutZones(left)
+	centerWidth := WidthWithoutZones(center)
+	appVerWidth := WidthWithoutZones(appVer)
+	tmplVerWidth := WidthWithoutZones(tmplVer)
 
-	// Divide width into three sections
-	// Center gets the exact space it needs, sides split the rest
-	remainingWidth := m.width - centerWidth
-	leftSectionWidth := remainingWidth / 2
-	rightSectionWidth := remainingWidth - leftSectionWidth
+	// Try to fit everything on one line: left | center | appVer tmplVer
+	totalWidth := leftWidth + centerWidth + appVerWidth + tmplVerWidth + 2 // +2 for spacing
+	if totalWidth <= m.width {
+		// Single line layout - fill entire width first, then place content
+		right := appVer + tmplVer
+		rightWidth := appVerWidth + tmplVerWidth
 
-	// Build padded strings manually using strutil.Repeat to avoid lipgloss width panics on negative sizes
-	leftAligned := left
-	if w := lipgloss.Width(left); leftSectionWidth > w {
-		leftAligned += strutil.Repeat(" ", leftSectionWidth-w)
+		remainingWidth := m.width - centerWidth
+		leftSectionWidth := remainingWidth / 2
+		rightSectionWidth := remainingWidth - leftSectionWidth
+
+		// Build left section (content + padding to fill section)
+		leftPadding := leftSectionWidth - leftWidth
+		if leftPadding < 0 {
+			leftPadding = 0
+		}
+
+		// Build right section (padding + content to right-align)
+		rightPadding := rightSectionWidth - rightWidth
+		if rightPadding < 0 {
+			rightPadding = 0
+		}
+
+		// Combine all into one line and render with single background style
+		fullLine := left + strutil.Repeat(" ", leftPadding) + center + strutil.Repeat(" ", rightPadding) + right
+
+		// Ensure line fills entire width (handles any rounding issues)
+		lineWidth := WidthWithoutZones(fullLine)
+		if lineWidth < m.width {
+			fullLine += strutil.Repeat(" ", m.width-lineWidth)
+		}
+
+		return MaintainBackground(fullLine, styles.HeaderBG)
 	}
 
-	rightAligned := right
-	if w := lipgloss.Width(right); rightSectionWidth > w {
-		rightAligned = strutil.Repeat(" ", rightSectionWidth-w) + rightAligned
+	// Try fitting left | center | appVer on line 1, tmplVer on line 2
+	line1Width := leftWidth + centerWidth + appVerWidth + 2
+	if line1Width <= m.width {
+		// Line 1: left + center + appVer (with proper spacing)
+		remainingWidth := m.width - centerWidth
+		leftSectionWidth := remainingWidth / 2
+		rightSectionWidth := remainingWidth - leftSectionWidth
+
+		leftPadding := leftSectionWidth - leftWidth
+		if leftPadding < 0 {
+			leftPadding = 0
+		}
+
+		rightPadding := rightSectionWidth - appVerWidth
+		if rightPadding < 0 {
+			rightPadding = 0
+		}
+
+		// Build line 1 as single string
+		fullLine1 := left + strutil.Repeat(" ", leftPadding) + center + strutil.Repeat(" ", rightPadding) + appVer
+
+		// Ensure line fills entire width
+		line1VisualWidth := WidthWithoutZones(fullLine1)
+		if line1VisualWidth < m.width {
+			fullLine1 += strutil.Repeat(" ", m.width-line1VisualWidth)
+		}
+		line1 := MaintainBackground(fullLine1, styles.HeaderBG)
+
+		// Line 2: tmplVer right-aligned with proper background
+		padding2 := m.width - tmplVerWidth
+		if padding2 < 0 {
+			padding2 = 0
+		}
+		fullLine2 := strutil.Repeat(" ", padding2) + tmplVer
+
+		// Ensure line 2 fills entire width
+		line2VisualWidth := WidthWithoutZones(fullLine2)
+		if line2VisualWidth < m.width {
+			fullLine2 += strutil.Repeat(" ", m.width-line2VisualWidth)
+		}
+		line2 := MaintainBackground(fullLine2, styles.HeaderBG)
+
+		return line1 + "\n" + line2
 	}
 
-	leftSection := styles.HeaderBG.Render(leftAligned)
-	centerSection := styles.HeaderBG.Render(center)
-	rightSection := styles.HeaderBG.Render(rightAligned)
+	// Fallback: left + center on line 1, both versions on line 2
+	// Build line 1: content + padding to fill width
+	fullLine1 := left + " " + center
+	line1VisualWidth := WidthWithoutZones(fullLine1)
+	if line1VisualWidth < m.width {
+		fullLine1 += strutil.Repeat(" ", m.width-line1VisualWidth)
+	}
+	line1 := MaintainBackground(fullLine1, styles.HeaderBG)
 
-	// Join the three sections
-	return lipgloss.JoinHorizontal(lipgloss.Top, leftSection, centerSection, rightSection)
+	// Line 2: padding + both versions (right-aligned)
+	right := appVer + tmplVer
+	rightWidth := appVerWidth + tmplVerWidth
+	padding2 := m.width - rightWidth
+	if padding2 < 0 {
+		padding2 = 0
+	}
+	fullLine2 := strutil.Repeat(" ", padding2) + right
+
+	// Ensure line 2 fills entire width
+	line2VisualWidth := WidthWithoutZones(fullLine2)
+	if line2VisualWidth < m.width {
+		fullLine2 += strutil.Repeat(" ", m.width-line2VisualWidth)
+	}
+	line2 := MaintainBackground(fullLine2, styles.HeaderBG)
+
+	return line1 + "\n" + line2
 }
 
 func (m HeaderModel) renderLeft() string {
@@ -179,7 +264,8 @@ func (m HeaderModel) renderCenter() string {
 	return MaintainBackground(RenderThemeText(centerText, styles.HeaderBG), styles.HeaderBG)
 }
 
-func (m HeaderModel) renderRight() string {
+// renderVersions returns app version and template version as separate strings
+func (m HeaderModel) renderVersions() (appText, tmplText string) {
 	styles := GetStyles()
 	appVer := version.Version
 	tmplVer := paths.GetTemplatesVersion()
@@ -224,9 +310,14 @@ func (m HeaderModel) renderRight() string {
 		return zone.Mark(zoneID, MaintainBackground(RenderThemeText(text, styles.HeaderBG), styles.HeaderBG))
 	}
 
-	appText := renderVersionBlock(appVer, "A", update.AppUpdateAvailable, update.UpdateCheckError, m.focus == HeaderFocusApp, ZoneAppVersion)
-	tmplText := renderVersionBlock(tmplVer, "T", update.TmplUpdateAvailable, update.UpdateCheckError, m.focus == HeaderFocusTmpl, ZoneTmplVersion)
+	appText = renderVersionBlock(appVer, "A", update.AppUpdateAvailable, update.UpdateCheckError, m.focus == HeaderFocusApp, ZoneAppVersion)
+	tmplText = renderVersionBlock(tmplVer, "T", update.TmplUpdateAvailable, update.UpdateCheckError, m.focus == HeaderFocusTmpl, ZoneTmplVersion)
 
-	// Join them
+	return appText, tmplText
+}
+
+// renderRight returns both versions combined (for backwards compatibility)
+func (m HeaderModel) renderRight() string {
+	appText, tmplText := m.renderVersions()
 	return lipgloss.JoinHorizontal(lipgloss.Top, appText, tmplText)
 }

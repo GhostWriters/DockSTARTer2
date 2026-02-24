@@ -439,7 +439,8 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 	lines := strings.Split(content, "\n")
 	actualWidth := 0
 	for _, line := range lines {
-		w := lipgloss.Width(line)
+		// Use WidthWithoutZones to avoid zone markers inflating width
+		w := WidthWithoutZones(line)
 		if w > actualWidth {
 			actualWidth = w
 		}
@@ -509,7 +510,8 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 
 	for _, line := range lines {
 		result.WriteString(borderStyleLight.Render(border.Left))
-		textWidth := lipgloss.Width(line)
+		// Use WidthWithoutZones to get accurate visual width (zone markers are invisible)
+		textWidth := WidthWithoutZones(line)
 		padding := ""
 		if textWidth < actualWidth {
 			padding = lipgloss.NewStyle().Background(borderBG).Render(strutil.Repeat(" ", actualWidth-textWidth))

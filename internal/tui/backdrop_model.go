@@ -1,9 +1,7 @@
 package tui
 
 import (
-	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/strutil"
-	"context"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -67,45 +65,44 @@ func (m BackdropModel) ViewString() string {
 	styles := GetStyles()
 	var b strings.Builder
 
-	logger.Info(context.Background(), "Backdrop: Rendering Header")
-
-	// Header with 1-char padding on left and right (matches AppModel.View())
-	// Header width reduced by 2 for padding
+	// Header: Fill with StatusBar background, then draw content
+	// Header handles its own wrapping and alignment for narrow terminals
 	m.header.SetWidth(m.width - 2)
 	headerContent := m.header.View()
-	headerLine := " " + headerContent + " "
-	if padLen := m.width - lipgloss.Width(headerLine); padLen > 0 {
-		headerLine += strutil.Repeat(" ", padLen)
+	headerHeight := lipgloss.Height(headerContent)
+
+	// Render each header line - header already handles alignment,
+	// we just add padding and background without forcing width (which would re-align)
+	headerLines := strings.Split(headerContent, "\n")
+	for _, line := range headerLines {
+		// Pad line to fill width, then apply background
+		// Use WidthWithoutZones because header contains zone markers for version clicks
+		paddedLine := " " + line + " "
+		if lineWidth := WidthWithoutZones(paddedLine); lineWidth < m.width {
+			paddedLine += strutil.Repeat(" ", m.width-lineWidth)
+		}
+		b.WriteString(styles.StatusBar.Render(paddedLine))
+		b.WriteString("\n")
 	}
-	headerStyle := lipgloss.NewStyle().Background(styles.Screen.GetBackground())
-	b.WriteString(headerStyle.Render(headerLine))
-	b.WriteString("\n")
 
-	logger.Info(context.Background(), "Backdrop: Rendering Separator")
-
-	// Separator line with 1-char padding on left and right (matches AppModel.View())
+	// Separator: Fill with StatusBarSeparator background, then draw separator chars
 	sep := strutil.Repeat(styles.SepChar, m.width-2)
-	sepLine := " " + sep + " "
-	if padLen := m.width - lipgloss.Width(sepLine); padLen > 0 {
-		sepLine += strutil.Repeat(" ", padLen)
-	}
-	sepStyle := lipgloss.NewStyle().Background(styles.HeaderBG.GetBackground())
-	b.WriteString(sepStyle.Render(sepLine))
+	sepStyle := styles.StatusBarSeparator.
+		Width(m.width).
+		Padding(0, 1) // 1-char padding left/right
+	b.WriteString(sepStyle.Render(sep))
 	b.WriteString("\n")
 
-	logger.Info(context.Background(), "Backdrop: Rendering Helpline")
-
-	// Calculate content height (matches AppModel.View())
+	// Calculate content height using actual header height
 	m.helpline.SetText(m.helpText)
 	helplineView := m.helpline.View(m.width)
 	helplineHeight := lipgloss.Height(helplineView)
 
-	contentHeight := m.height - 2 - helplineHeight // -2 for header and separator lines
+	// Content area = total height - header lines - separator (1) - helpline
+	contentHeight := m.height - headerHeight - 1 - helplineHeight
 	if contentHeight < 0 {
 		contentHeight = 0
 	}
-
-	logger.Info(context.Background(), "Backdrop: Rendering Filler Rows (height: %d)", contentHeight)
 
 	// Fill middle space with screen background
 	// We build it row by row to ensure each line is exactly m.width wide with background color
@@ -119,8 +116,6 @@ func (m BackdropModel) ViewString() string {
 
 	// Helpline (matches AppModel.View())
 	b.WriteString(helplineView)
-
-	logger.Debug(context.Background(), "Backdrop: ViewString complete")
 
 	return b.String()
 }
@@ -138,32 +133,9 @@ func (m BackdropModel) GetContentArea() (width, height int) {
 		return 0, 0
 	}
 
-	// Account for shadow if enabled (2 chars wide on right, 1 line on bottom)
-	shadowWidth := 0
-	if currentConfig.UI.Shadow {
-		shadowWidth = 2
-	}
+	// Use Layout helpers for consistent calculations
+	layout := GetLayout()
+	hasShadow := currentConfig.UI.Shadow
 
-	// Available content area (accounting for shadow and margins)
-	// Remaining space for dialog: margin (2 per side) = 4
-	contentWidth := m.width - 4 - shadowWidth
-
-	// Remaining space for dialog:
-	// - Header/Sep: 2
-	// - Gap after Sep: 1
-	// - Space before helpline: 1
-	// - Helpline: 1
-	// Total overhead: 5 lines for a single space between box and helpline if shadow is off.
-	// If shadow is on, it takes 1 extra line, so we subtract 1 more.
-	overhead := 4
-	if currentConfig.UI.Shadow {
-		overhead = 5
-	}
-	contentHeight := m.height - overhead
-
-	if contentHeight < 5 {
-		contentHeight = 5
-	}
-
-	return contentWidth, contentHeight
+	return layout.ContentArea(m.width, m.height, hasShadow)
 }
