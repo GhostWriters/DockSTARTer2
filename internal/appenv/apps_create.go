@@ -28,21 +28,26 @@ import (
 func CreateAll(ctx context.Context, force bool, conf config.AppConfig) error {
 	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
 
-	// Ensure main env exists first to check for added apps
+	// 1. Check if update is needed BEFORE doing setup tasks like EnvCreate (which triggers backups)
+	// Get currently added apps from .env if it exists
+	var added []string
+	if _, err := os.Stat(envFile); err == nil {
+		added, _ = ListAddedApps(ctx, envFile)
+		if !NeedsCreateAll(ctx, force, added, conf) {
+			logger.Notice(ctx, "Environment variables already created for all added apps.")
+			return nil
+		}
+	}
+
+	// 2. Ensure main env exists (and is sanitized/backed up) only now that we know we need it
 	if err := EnvCreate(ctx, conf); err != nil {
 		return err
 	}
 
-	// Check installed apps
+	// Re-verify added apps after EnvCreate (which might have sanitized it)
 	added, err := ListAddedApps(ctx, envFile)
 	if err != nil {
 		return err
-	}
-
-	// Check if update is needed
-	if !NeedsCreateAll(ctx, force, added, conf) {
-		logger.Notice(ctx, "Environment variables already created for all added apps.")
-		return nil
 	}
 
 	if len(added) == 0 {

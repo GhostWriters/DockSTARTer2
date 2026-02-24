@@ -67,27 +67,35 @@ func TakeOwnership(ctx context.Context, path string) {
 }
 
 // GetIDs returns the PUID and PGID detected from environment variables (SUDO_UID/SUDO_GID) or os package.
+// Mirrors Bash: DETECTED_PUID=${SUDO_UID:-$UID} and DETECTED_PGID=$(id -g "${DETECTED_PUID}")
 func GetIDs() (int, int) {
+	if runtime.GOOS == "windows" {
+		return 1000, 1000
+	}
+
 	uid := os.Getuid()
 	if sudoUID := os.Getenv("SUDO_UID"); sudoUID != "" {
 		if i, err := strconv.Atoi(sudoUID); err == nil {
 			uid = i
 		}
 	}
+
 	gid := os.Getgid()
+	// Try to get group ID of the detected UID (which might be the sudo user)
+	cmd := exec.Command("id", "-g", strconv.Itoa(uid))
+	if out, err := cmd.Output(); err == nil {
+		if i, err := strconv.Atoi(strings.TrimSpace(string(out))); err == nil {
+			gid = i
+		}
+	}
+
+	// Double check SUDO_GID if id command failed or for extra parity
 	if sudoGID := os.Getenv("SUDO_GID"); sudoGID != "" {
 		if i, err := strconv.Atoi(sudoGID); err == nil {
 			gid = i
 		}
-	} else if runtime.GOOS != "windows" {
-		// Bash: DETECTED_PGID=$(id -g "${DETECTED_PUID}" 2> /dev/null || true)
-		cmd := exec.Command("id", "-g", strconv.Itoa(uid))
-		if out, err := cmd.Output(); err == nil {
-			if i, err := strconv.Atoi(strings.TrimSpace(string(out))); err == nil {
-				gid = i
-			}
-		}
 	}
+
 	return uid, gid
 }
 

@@ -22,17 +22,21 @@ import (
 
 // MergeYML merges enabled app templates into docker-compose.yml
 func MergeYML(ctx context.Context, force bool) error {
-	needsMerge := force || NeedsYMLMerge(ctx, false)
+	// 1. Check if merge is needed (Mirror Bash which checks this BEFORE setup tasks)
+	if !force && !NeedsYMLMerge(ctx, false) {
+		logger.Notice(ctx, "Enabled app templates already merged to '{{|File|}}docker-compose.yml{{[-]}}'.")
+		return nil
+	}
 
 	conf := config.LoadAppConfig()
 
-	// 1. Ensure appvars are created first
+	// 2. Ensure appvars are created first
 	if err := appenv.CreateAll(ctx, force, conf); err != nil {
 		return err
 	}
 
-	// 2. Check again if merge is needed (CreateAll might have modified files)
-	if !needsMerge && !NeedsYMLMerge(ctx, false) {
+	// 3. Dual Check (CreateAll might have modified files)
+	if !force && !NeedsYMLMerge(ctx, false) {
 		logger.Notice(ctx, "Enabled app templates already merged to '{{|File|}}docker-compose.yml{{[-]}}'.")
 		return nil
 	}
@@ -218,6 +222,12 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 	if command != "merge" && command != "generate" {
 		if err := MergeYML(ctx, force); err != nil {
 			return err
+		}
+	} else {
+		// PRE-CHECK for merge/generate: If already merged, return early before prompts or logs
+		if !force && !NeedsYMLMerge(ctx, false) {
+			logger.Notice(ctx, "Enabled app templates already merged to '{{|File|}}docker-compose.yml{{[-]}}'.")
+			return nil
 		}
 	}
 

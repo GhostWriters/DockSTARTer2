@@ -9,6 +9,7 @@ import (
 	"DockSTARTer2/internal/docker"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/system"
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/tui"
 	_ "DockSTARTer2/internal/tui/screens" // Register screen creators
@@ -1011,12 +1012,12 @@ func handlePrune(ctx context.Context, state *CmdState) error {
 
 func handleReset(ctx context.Context) error {
 	logger.Notice(ctx, "Resetting {{|ApplicationName|}}%s{{[-]}} to process all actions.", version.ApplicationName)
+	// Ensure we can delete the directory (parity with bash reset_needs.sh)
+	system.SetPermissions(ctx, paths.GetTimestampsDir())
 	if err := paths.ResetNeeds(); err != nil {
 		logger.Error(ctx, "Failed to reset: %v", err)
 		return err
 	}
-	// Also ensure permissions are set? Bash script calls set_permissions.
-	// We might need a set_permissions equivalent eventually.
 	return nil
 }
 

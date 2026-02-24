@@ -84,7 +84,7 @@ func BackupEnv(ctx context.Context, envFile string, conf config.AppConfig) error
 
 	// 4. Create backup folder
 	if err := os.MkdirAll(backupFolder, 0755); err != nil {
-		return fmt.Errorf("Failed to make directory.")
+		return fmt.Errorf("Failed to make directory '{{|Folder|}}%s{{[-]}}': %v", backupFolder, err)
 	}
 
 	// 5. Copy files
@@ -147,10 +147,28 @@ func BackupEnv(ctx context.Context, envFile string, conf config.AppConfig) error
 // shellExpand mimics a single-pass shell expansion like 'eval echo'
 func shellExpand(val string, ctx map[string]string) string {
 	return os.Expand(val, func(varName string) string {
-		if v, ok := ctx[varName]; ok {
+		// Strip ? suffix used in `${VAR?}`
+		// In bash, ${VAR?} means "error if not set", but we treat it as a normal expansion for parity intent
+		cleanName := strings.TrimSuffix(varName, "?")
+
+		// Handle fallback like `${VAR:-DEFAULT}`
+		if strings.Contains(cleanName, ":-") {
+			parts := strings.SplitN(cleanName, ":-", 2)
+			name := parts[0]
+			fallback := parts[1]
+			if v, ok := ctx[name]; ok && v != "" {
+				return v
+			}
+			if v := os.Getenv(name); v != "" {
+				return v
+			}
+			return fallback
+		}
+
+		if v, ok := ctx[cleanName]; ok {
 			return v
 		}
-		return os.Getenv(varName)
+		return os.Getenv(cleanName)
 	})
 }
 
