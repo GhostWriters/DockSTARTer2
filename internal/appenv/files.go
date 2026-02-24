@@ -112,3 +112,16 @@ func CopyFile(src, dst string) error {
 	}
 	return os.WriteFile(dst, input, 0644)
 }
+
+// CompareFiles returns true if two files have identical contents.
+func CompareFiles(file1, file2 string) bool {
+	f1, err := os.ReadFile(file1)
+	if err != nil {
+		return false
+	}
+	f2, err := os.ReadFile(file2)
+	if err != nil {
+		return false
+	}
+	return bytes.Equal(f1, f2)
+}

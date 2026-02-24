@@ -127,26 +127,32 @@ func NeedsCreateAll(ctx context.Context, force bool, added []string, conf config
 	}
 
 	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
+	// 1. Check if bulk LastSynced exists
+	lastSynced := filepath.Join(paths.GetTimestampsDir(), "appvars_create", "LastSynced")
+	if _, err := os.Stat(lastSynced); os.IsNotExist(err) {
+		return true
+	}
+
+	// 2. Check main .env
 	if fileChanged(conf, envFile) {
 		return true
 	}
 
-	// Track changes to the set of enabled applications
-	if partialChanged(conf, envFile, "ReferencedApps", strings.Join(added, " ")) {
+	// 3. Track changes to the set of enabled applications via AddedApps file parity
+	addedAppsFile := filepath.Join(paths.GetTimestampsDir(), "appvars_create", "AddedApps")
+	storedApps, err := os.ReadFile(addedAppsFile)
+	if err != nil || string(storedApps) != strings.Join(added, "\n") {
 		return true
 	}
 
-	// Track enabled status for each individual application
-	vars, _ := ListVars(envFile)
+	// 4. Track individuals
 	for _, appName := range added {
-		enabledVar := strings.ToUpper(appName) + "__ENABLED"
-		enabledVal := vars[enabledVar]
-		if partialChanged(conf, envFile, enabledVar, enabledVal) {
+		appUpper := strings.ToUpper(appName)
+		// Precise LastSynced check
+		if _, err := os.Stat(filepath.Join(paths.GetTimestampsDir(), "appvars_create", "LastSynced_"+appUpper)); os.IsNotExist(err) {
 			return true
 		}
-	}
 
-	for _, appName := range added {
 		appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf("%s%s", constants.AppEnvFileNamePrefix, strings.ToLower(appName)))
 		if fileChanged(conf, appEnvFile) {
 			return true
@@ -159,32 +165,40 @@ func NeedsCreateAll(ctx context.Context, force bool, added []string, conf config
 // UnsetNeedsCreateAll marks environment variable creation as complete by updating timestamps.
 // Mirrors unset_needs_appvars_create.sh
 func UnsetNeedsCreateAll(ctx context.Context, added []string, conf config.AppConfig) {
+	timestampsFolder := filepath.Join(paths.GetTimestampsDir(), "appvars_create")
+	_ = os.MkdirAll(timestampsFolder, 0755)
+
 	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
-	updateTimestamp(conf, envFile)
+	recordFileState(conf, envFile)
 
-	// Update Granular Markers
-	updatePartial(conf, envFile, "ReferencedApps", strings.Join(added, " "))
+	// Update AddedApps
+	_ = os.WriteFile(filepath.Join(timestampsFolder, "AddedApps"), []byte(strings.Join(added, "\n")), 0644)
 
-	vars, _ := ListVars(envFile)
-	for _, appName := range added {
-		enabledVar := strings.ToUpper(appName) + "__ENABLED"
-		enabledVal := vars[enabledVar]
-		updatePartial(conf, envFile, enabledVar, enabledVal)
+	// Create bulk LastSynced
+	f, _ := os.Create(filepath.Join(timestampsFolder, "LastSynced"))
+	if f != nil {
+		f.Close()
 	}
 
 	for _, appName := range added {
+		appUpper := strings.ToUpper(appName)
+		f, _ := os.Create(filepath.Join(timestampsFolder, "LastSynced_"+appUpper))
+		if f != nil {
+			f.Close()
+		}
+
 		appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf("%s%s", constants.AppEnvFileNamePrefix, strings.ToLower(appName)))
-		updateTimestamp(conf, appEnvFile)
+		recordFileState(conf, appEnvFile)
 	}
 }
 
 func fileChanged(conf config.AppConfig, path string) bool {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return true // File missing -> needs creation
+		return true // File missing -> needs creation (or re-check)
 	}
 
 	filename := filepath.Base(path)
-	timestampFile := filepath.Join(paths.GetTimestampsDir(), constants.AppVarsCreateMarkerPrefix+filename)
+	timestampFile := filepath.Join(paths.GetTimestampsDir(), "appvars_create", filename)
 
 	info, err := os.Stat(path)
 	tsInfo, tsErr := os.Stat(timestampFile)
@@ -197,51 +211,33 @@ func fileChanged(conf config.AppConfig, path string) bool {
 		return false
 	}
 
-	return !info.ModTime().Equal(tsInfo.ModTime())
+	if !info.ModTime().Equal(tsInfo.ModTime()) {
+		// Contents comparison parity with cmp -s
+		if CompareFiles(path, timestampFile) {
+			// Contents are same, sync timestamp to avoid re-check
+			_ = os.Chtimes(timestampFile, info.ModTime(), info.ModTime())
+			return false
+		}
+		return true
+	}
+
+	return false
 }
 
-func updateTimestamp(conf config.AppConfig, path string) {
+func recordFileState(conf config.AppConfig, path string) {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return
 	}
 
 	filename := filepath.Base(path)
-	timestampFile := filepath.Join(paths.GetTimestampsDir(), constants.AppVarsCreateMarkerPrefix+filename)
+	timestampFile := filepath.Join(paths.GetTimestampsDir(), "appvars_create", filename)
 
 	_ = os.MkdirAll(filepath.Dir(timestampFile), 0755)
 
-	f, err := os.Create(timestampFile)
-	if err != nil {
-		return
-	}
-	f.Close()
+	_ = CopyFile(path, timestampFile)
 
 	info, err := os.Stat(path)
 	if err == nil {
 		_ = os.Chtimes(timestampFile, info.ModTime(), info.ModTime())
 	}
-}
-
-func partialChanged(conf config.AppConfig, path string, key, currentValue string) bool {
-	filename := filepath.Base(path)
-	partialFile := filepath.Join(paths.GetTimestampsDir(), constants.AppVarsCreateMarkerPrefix+filename+"_"+key)
-
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return true
-	}
-
-	storedValue, err := os.ReadFile(partialFile)
-	if err != nil {
-		return true
-	}
-
-	return strings.TrimSpace(string(storedValue)) != strings.TrimSpace(currentValue)
-}
-
-func updatePartial(conf config.AppConfig, path string, key, value string) {
-	filename := filepath.Base(path)
-	partialFile := filepath.Join(paths.GetTimestampsDir(), constants.AppVarsCreateMarkerPrefix+filename+"_"+key)
-
-	_ = os.MkdirAll(filepath.Dir(partialFile), 0755)
-	_ = os.WriteFile(partialFile, []byte(value), 0644)
 }

@@ -22,18 +22,19 @@ import (
 
 // MergeYML merges enabled app templates into docker-compose.yml
 func MergeYML(ctx context.Context, force bool) error {
-	if !NeedsYMLMerge(ctx, force) {
+	if !force && !NeedsYMLMerge(ctx, false) {
 		logger.Notice(ctx, "Enabled app templates already merged to '{{|File|}}docker-compose.yml{{[-]}}'.")
 		return nil
 	}
 
-	// Create all app environment variables first
 	conf := config.LoadAppConfig()
+
+	// 1. Ensure appvars are created first
 	if err := appenv.CreateAll(ctx, force, conf); err != nil {
-		return fmt.Errorf("failed to create environment variables: %w", err)
+		return err
 	}
 
-	logger.Notice(ctx, "Adding enabled app templates to merge '{{|File|}}docker-compose.yml{{[-]}}'.  Please be patient, this can take a while.")
+	logger.Notice(ctx, "Adding enabled app templates to merge '{{|File|}}docker-compose.yml{{[-]}}'. Please be patient, this can take a while.")
 
 	envFile := filepath.Join(conf.ComposeDir, ".env")
 	enabledApps, err := appenv.ListEnabledApps(conf)
@@ -432,29 +433,27 @@ func NeedsYMLMerge(ctx context.Context, force bool) bool {
 
 	conf := config.LoadAppConfig()
 
-	// 1. Check if docker-compose.yml is missing
-	composeFile := filepath.Join(conf.ComposeDir, constants.ComposeFileName)
-	if !fileExists(composeFile) {
+	// Check main files
+	dockerCompose := filepath.Join(conf.ComposeDir, constants.ComposeFileName)
+	if fileChanged(conf, dockerCompose) {
 		return true
 	}
 
-	// 3. Timestamp-based checks (Bash parity)
-	// Check compose file itself
-	if fileChanged(conf, composeFile) {
-		return true
-	}
-
-	// Check .env
-	envFile := filepath.Join(conf.ComposeDir, ".env")
+	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
 	if fileChanged(conf, envFile) {
+		return true
+	}
+
+	// Check overrides if they exist
+	override := filepath.Join(conf.ComposeDir, constants.ComposeOverrideFileName)
+	if fileExists(override) && fileChanged(conf, override) {
 		return true
 	}
 
 	// Check enabled apps .env files
 	enabledApps, _ := appenv.ListEnabledApps(conf)
-
 	for _, appName := range enabledApps {
-		appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf(".env.app.%s", strings.ToLower(appName)))
+		appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf("%s%s", constants.AppEnvFileNamePrefix, strings.ToLower(appName)))
 		if fileChanged(conf, appEnvFile) {
 			return true
 		}
@@ -467,20 +466,14 @@ func NeedsYMLMerge(ctx context.Context, force bool) bool {
 // and updating timestamps for current state.
 func UnsetNeedsYMLMerge(ctx context.Context) {
 	conf := config.LoadAppConfig()
+	timestampsFolder := filepath.Join(paths.GetTimestampsDir(), "yml_merge")
 
-	// Clear old yml_merge markers to ensure a clean state
-	timestampsDir := paths.GetTimestampsDir()
-	if entries, err := os.ReadDir(timestampsDir); err == nil {
-		for _, entry := range entries {
-			if strings.HasPrefix(entry.Name(), constants.YmlMergeMarkerPrefix) {
-				_ = os.Remove(filepath.Join(timestampsDir, entry.Name()))
-			}
-		}
-	}
+	// Clear existing yml_merge markers
+	_ = os.RemoveAll(timestampsFolder)
+	_ = os.MkdirAll(timestampsFolder, 0755)
 
-	// Update markers for all relevant files
-	composeFile := filepath.Join(conf.ComposeDir, constants.ComposeFileName)
-	updateTimestamp(ctx, conf, composeFile)
+	dockerCompose := filepath.Join(conf.ComposeDir, constants.ComposeFileName)
+	updateTimestamp(ctx, conf, dockerCompose)
 
 	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
 	updateTimestamp(ctx, conf, envFile)
@@ -490,29 +483,43 @@ func UnsetNeedsYMLMerge(ctx context.Context) {
 		appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf("%s%s", constants.AppEnvFileNamePrefix, strings.ToLower(appName)))
 		updateTimestamp(ctx, conf, appEnvFile)
 	}
+
+	override := filepath.Join(conf.ComposeDir, constants.ComposeOverrideFileName)
+	if fileExists(override) {
+		updateTimestamp(ctx, conf, override)
+	}
 }
 
 // Helper functions
 
 func fileChanged(conf config.AppConfig, path string) bool {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return true
+	}
+
 	filename := filepath.Base(path)
-	timestampFile := filepath.Join(paths.GetTimestampsDir(), constants.YmlMergeMarkerPrefix+filename)
+	timestampFile := filepath.Join(paths.GetTimestampsDir(), "yml_merge", filename)
 
 	info, err := os.Stat(path)
 	tsInfo, tsErr := os.Stat(timestampFile)
 
-	// If neither file nor marker exists, consider it unchanged (optional file case)
-	if os.IsNotExist(err) && os.IsNotExist(tsErr) {
-		return false
-	}
-
-	// If one exists and other doesn't -> Changed
-	if (err == nil && tsErr != nil) || (err != nil && tsErr == nil) {
+	if os.IsNotExist(tsErr) {
 		return true
 	}
 
-	// Both exist, compare modification times
-	return !info.ModTime().Equal(tsInfo.ModTime())
+	if err != nil {
+		return false
+	}
+
+	if !info.ModTime().Equal(tsInfo.ModTime()) {
+		if appenv.CompareFiles(path, timestampFile) {
+			_ = os.Chtimes(timestampFile, info.ModTime(), info.ModTime())
+			return false
+		}
+		return true
+	}
+
+	return false
 }
 
 func updateTimestamp(ctx context.Context, conf config.AppConfig, path string) {
@@ -521,26 +528,16 @@ func updateTimestamp(ctx context.Context, conf config.AppConfig, path string) {
 	}
 
 	filename := filepath.Base(path)
-	timestampDir := paths.GetTimestampsDir()
-	timestampFile := filepath.Join(timestampDir, constants.YmlMergeMarkerPrefix+filename)
+	timestampFile := filepath.Join(paths.GetTimestampsDir(), "yml_merge", filename)
 
-	// Ensure timestamps directory exists
-	_ = os.MkdirAll(timestampDir, 0755)
+	_ = os.MkdirAll(filepath.Dir(timestampFile), 0755)
 
-	// Create empty timestamp file
-	f, err := os.Create(timestampFile)
-	if err != nil {
-		return
-	}
-	f.Close()
+	_ = appenv.CopyFile(path, timestampFile)
 
-	// Sync timestamp with source file
 	info, err := os.Stat(path)
-	if err != nil {
-		return
+	if err == nil {
+		_ = os.Chtimes(timestampFile, info.ModTime(), info.ModTime())
 	}
-
-	_ = os.Chtimes(timestampFile, info.ModTime(), info.ModTime())
 }
 
 func fileExists(path string) bool {
