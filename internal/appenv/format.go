@@ -57,7 +57,12 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 		headingLines = append(headingLines, "")
 
 		for _, hl := range headingLines {
-			formattedEnvLines = append(formattedEnvLines, "### "+hl)
+			trimmed := strings.TrimRight(hl, " \t")
+			if trimmed == "" {
+				formattedEnvLines = append(formattedEnvLines, "###")
+			} else {
+				formattedEnvLines = append(formattedEnvLines, "### "+trimmed)
+			}
 		}
 	}
 
@@ -130,9 +135,20 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 					headingTitle = globalVarsHeading + userDefinedGlobalVarsTag
 				}
 
-				formattedEnvLines = append(formattedEnvLines, "###")
-				formattedEnvLines = append(formattedEnvLines, "### "+headingTitle)
-				formattedEnvLines = append(formattedEnvLines, "###")
+				headingLines := []string{
+					"",
+					headingTitle,
+					"",
+				}
+
+				for _, hl := range headingLines {
+					trimmed := strings.TrimRight(hl, " \t")
+					if trimmed == "" {
+						formattedEnvLines = append(formattedEnvLines, "###")
+					} else {
+						formattedEnvLines = append(formattedEnvLines, "### "+trimmed)
+					}
+				}
 			}
 
 			// Add the user defined variables
