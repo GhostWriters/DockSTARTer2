@@ -136,25 +136,34 @@ func TruncateLeft(s string, width int) string {
 	var b strings.Builder
 	cells := 0
 
-	// Find all ANSI sequences
-	matches := ansiRegex.FindAllStringIndex(s, -1)
+	// Find all ANSI sequences and zone markers (both are invisible)
+	ansiMatches := ansiRegex.FindAllStringIndex(s, -1)
+	zoneMatches := zoneMarkerRegex.FindAllStringIndex(s, -1)
+
+	// Merge and sort all invisible sequence positions
+	allMatches := make([][]int, 0, len(ansiMatches)+len(zoneMatches))
+	allMatches = append(allMatches, ansiMatches...)
+	allMatches = append(allMatches, zoneMatches...)
+	sort.Slice(allMatches, func(i, j int) bool {
+		return allMatches[i][0] < allMatches[j][0]
+	})
 
 	lastIdx := 0
 	for lastIdx < len(s) {
-		// Is there an ANSI sequence at the current position?
-		foundANSI := false
-		for _, m := range matches {
+		// Is there an invisible sequence at the current position?
+		foundSequence := false
+		for _, m := range allMatches {
 			if m[0] == lastIdx {
-				// We keep ALL ANSI sequences even if they are before the cut point,
+				// We keep ALL invisible sequences even if they are before the cut point,
 				// because we want to maintain the state (colors, markers).
 				b.WriteString(s[m[0]:m[1]])
 				lastIdx = m[1]
-				foundANSI = true
+				foundSequence = true
 				break
 			}
 		}
 
-		if foundANSI {
+		if foundSequence {
 			continue
 		}
 
@@ -164,7 +173,7 @@ func TruncateLeft(s string, width int) string {
 			break
 		}
 
-		// Not an ANSI sequence. Count this character.
+		// Not an invisible sequence. Count this character.
 		r, size := utf8.DecodeRuneInString(s[lastIdx:])
 		lastIdx += size
 		cells += runewidth.RuneWidth(r)
@@ -174,7 +183,7 @@ func TruncateLeft(s string, width int) string {
 }
 
 // TruncateRight returns the first 'width' terminal cells of s.
-// Optimized to preserve ANSI sequences.
+// Optimized to preserve ANSI sequences and bubblezone markers.
 func TruncateRight(s string, width int) string {
 	if width <= 0 {
 		return ""
@@ -183,24 +192,34 @@ func TruncateRight(s string, width int) string {
 	var b strings.Builder
 	cells := 0
 
-	// Find all ANSI sequences
-	matches := ansiRegex.FindAllStringIndex(s, -1)
+	// Find all ANSI sequences and zone markers (both are invisible)
+	ansiMatches := ansiRegex.FindAllStringIndex(s, -1)
+	zoneMatches := zoneMarkerRegex.FindAllStringIndex(s, -1)
+
+	// Merge and sort all invisible sequence positions
+	allMatches := make([][]int, 0, len(ansiMatches)+len(zoneMatches))
+	allMatches = append(allMatches, ansiMatches...)
+	allMatches = append(allMatches, zoneMatches...)
+	// Sort by start position (they shouldn't overlap, but sort for safety)
+	sort.Slice(allMatches, func(i, j int) bool {
+		return allMatches[i][0] < allMatches[j][0]
+	})
 
 	lastIdx := 0
 	for lastIdx < len(s) {
-		// Is there an ANSI sequence at the current position?
-		foundANSI := false
-		for _, m := range matches {
+		// Is there an invisible sequence at the current position?
+		foundSequence := false
+		for _, m := range allMatches {
 			if m[0] == lastIdx {
-				// We keep ALL ANSI sequences found within or before the range.
+				// Keep ALL invisible sequences found within or before the range.
 				b.WriteString(s[m[0]:m[1]])
 				lastIdx = m[1]
-				foundANSI = true
+				foundSequence = true
 				break
 			}
 		}
 
-		if foundANSI {
+		if foundSequence {
 			continue
 		}
 
@@ -209,7 +228,7 @@ func TruncateRight(s string, width int) string {
 			break
 		}
 
-		// Not an ANSI sequence. Count this character.
+		// Not an invisible sequence. Count this character.
 		r, size := utf8.DecodeRuneInString(s[lastIdx:])
 		b.WriteString(s[lastIdx : lastIdx+size])
 		lastIdx += size

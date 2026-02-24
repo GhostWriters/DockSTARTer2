@@ -86,6 +86,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 	s.themeMenu = &themeMenu
 	s.themeMenu.SetSubMenuMode(true)
 	s.themeMenu.SetShowExit(false)
+	s.themeMenu.SetMaximized(true) // Fill available width
 
 	// 2. Options Menu
 	optionItems := []tui.MenuItem{
@@ -135,6 +136,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 	s.optionsMenu.SetSubMenuMode(true)
 	s.optionsMenu.SetShowExit(false)
 	s.optionsMenu.SetFlowMode(true)
+	s.optionsMenu.SetMaximized(true) // Fill available width
 
 	// Initial Focus
 	s.focusedPanel = FocusThemes
@@ -460,7 +462,40 @@ func (s *DisplayOptionsScreen) syncOptionsMenu() {
 }
 
 func (s *DisplayOptionsScreen) Layers() []tui.LayerSpec {
-	// 1. Render Settings
+	layout := tui.GetLayout()
+
+	// Calculate known dimensions (same logic as SetSize)
+	// s.width and s.height are already the content area (chrome and shadow space accounted for)
+	shadowW := 0
+	shadowH := 0
+	if s.config.UI.Shadow {
+		shadowW = layout.ShadowWidth
+		shadowH = layout.ShadowHeight
+	}
+
+	previewMinWidth := 48
+	minDialogWidth := 44 + layout.BorderWidth()
+	// Preview fits if: dialog + shadow + gutter + preview fits in content area
+	previewFits := s.width >= minDialogWidth+shadowW+layout.GutterWidth+previewMinWidth
+
+	// Calculate dialog content width based on known size, NOT measured content
+	// Since s.width is already content area, dialog + shadow must fit within s.width
+	var dialogContentWidth int
+	if previewFits {
+		dialogContentWidth = s.width - shadowW - layout.GutterWidth - previewMinWidth
+	} else {
+		// Maximized: dialog + shadow fills content area
+		dialogContentWidth = s.width - shadowW
+	}
+
+	// Menu width = dialog content - outer dialog borders
+	// Must match SetSize calculation exactly
+	menuWidth := dialogContentWidth - layout.BorderWidth()
+	if menuWidth < 40 {
+		menuWidth = 40
+	}
+
+	// 1. Render Settings Menus
 	themeView := tui.ZoneMark("ThemePanel", s.themeMenu.ViewString())
 	optionsView := tui.ZoneMark("OptionsPanel", s.optionsMenu.ViewString())
 
@@ -469,30 +504,44 @@ func (s *DisplayOptionsScreen) Layers() []tui.LayerSpec {
 		optionsView,
 	)
 
-	// 2. Render Buttons
-	contentWidth := tui.WidthWithoutZones(leftColumn)
+	// 2. Render Buttons using known width, not measured
 	buttons := []tui.ButtonSpec{
 		{Text: "Apply", Active: s.focusedButton == 0, ZoneID: "ApplyBtn"},
 		{Text: "Back", Active: s.focusedButton == 1, ZoneID: "BackBtn"},
 		{Text: "Exit", Active: s.focusedButton == 2, ZoneID: "ExitBtn"},
 	}
-	buttonRow := tui.RenderCenteredButtons(contentWidth, buttons...)
+	buttonRow := tui.RenderCenteredButtons(menuWidth, buttons...)
 
-	// 3. Settings Dialog
+	// 3. Settings Dialog with known width
 	settingsContent := lipgloss.JoinVertical(lipgloss.Left, leftColumn, buttonRow)
-	settingsDialog := tui.RenderDialog("Appearance Settings", settingsContent, true, s.height-1)
+
+	// Calculate target height - s.height is already content area
+	// Dialog + shadow must fit within content area
+	targetHeight := s.height - shadowH
+	if targetHeight < 10 {
+		targetHeight = 10
+	}
+
+	// Use RenderBorderedBoxCtx with known width instead of RenderDialog which measures content
+	settingsDialog := tui.RenderBorderedBoxCtx("Appearance Settings", settingsContent, menuWidth, targetHeight, true, tui.GetActiveContext())
+
+	// Add shadow if enabled in config
+	if s.config.UI.Shadow {
+		settingsDialog = tui.AddShadow(settingsDialog)
+	}
+
+	// Calculate actual dialog width (content + borders + shadow)
+	dialogWidth := menuWidth + layout.BorderWidth() + shadowW
 
 	layers := []tui.LayerSpec{
 		{Content: settingsDialog, X: 0, Y: 0, Z: 1},
 	}
 
 	// 4. Render Preview (if space allows)
-	if s.width >= 100 {
+	if previewFits {
+		previewX := dialogWidth + layout.GutterWidth
 		preview := s.renderMockup()
-		// Calculate X offset: dialog width + 1-char gutter
-		// This leaves exactly 1 char of backdrop showing through
-		xOffset := tui.WidthWithoutZones(settingsDialog) + 1
-		layers = append(layers, tui.LayerSpec{Content: preview, X: xOffset, Y: 0, Z: 1})
+		layers = append(layers, tui.LayerSpec{Content: preview, X: previewX, Y: 0, Z: 1})
 	}
 
 	return layers
@@ -739,20 +788,55 @@ func (s *DisplayOptionsScreen) SetSize(width, height int) {
 	s.width = width
 	s.height = height
 
-	menuWidth := width - 51
+	layout := tui.GetLayout()
+
+	// Shadow dimensions (for total dialog size calculation, NOT for content area reduction)
+	// The width/height passed in is already the content area (shadow space already accounted for)
+	shadowW := 0
+	if s.config.UI.Shadow {
+		shadowW = layout.ShadowWidth
+	}
+
+	// Check if preview fits using same logic as IsMaximized()
+	// Note: width is the content area, so total available = width + shadow (if enabled)
+	previewMinWidth := 48
+	minDialogWidth := 44 + layout.BorderWidth() // Minimum dialog without shadow
+	// Preview fits if: dialog + shadow + gutter + preview fits in content area
+	previewFits := width >= minDialogWidth+shadowW+layout.GutterWidth+previewMinWidth
+
+	// Calculate available width for dialog content
+	// Since width is already content area, dialog + shadow must fit within width
+	var dialogContentWidth int
+	if previewFits {
+		// Dialog shares space with preview
+		// dialogContentWidth + shadow + gutter + preview <= width
+		dialogContentWidth = width - shadowW - layout.GutterWidth - previewMinWidth
+	} else {
+		// Dialog fills available width (maximized mode)
+		// dialogContentWidth + shadow = width (dialog with shadow fills content area)
+		dialogContentWidth = width - shadowW
+	}
+
+	// Menu width = dialog content - outer dialog borders
+	menuWidth := dialogContentWidth - layout.BorderWidth()
 	if menuWidth < 40 {
 		menuWidth = 40
 	}
 
-	// Vertical Budgeting:
-	// Total available height is 'height'
-	// Flow options menu height is dynamic
+	// Vertical Budgeting
+	// height is already the content area (chrome already subtracted)
+	// Dialog overhead: outer borders(2) + title line(1) + button row(3) + shadow
+	shadowH := 0
+	if s.config.UI.Shadow {
+		shadowH = layout.ShadowHeight
+	}
+	overhead := layout.BorderHeight() + 1 + layout.ButtonHeight + shadowH
+
+	// Calculate options menu height first (it's dynamic based on flow)
 	optionsFlowLines := s.optionsMenu.GetFlowHeight(menuWidth)
-	optionsHeight := optionsFlowLines + 2 // +2 for borders
+	optionsHeight := optionsFlowLines + layout.BorderHeight()
 
-	// Main dialog overhead: Title(1) + Buttons(1) + Borders(2) + separator(1) = 5
-	overhead := 5
-
+	// Theme list gets remaining height
 	themeHeight := height - optionsHeight - overhead
 	if themeHeight < 4 {
 		themeHeight = 4
@@ -763,7 +847,22 @@ func (s *DisplayOptionsScreen) SetSize(width, height int) {
 }
 
 func (s *DisplayOptionsScreen) IsMaximized() bool {
-	return false
+	// Maximized when preview doesn't fit (no side-by-side layout)
+	layout := tui.GetLayout()
+	previewMinWidth := 48
+	shadowW := 0
+	if s.config.UI.Shadow {
+		shadowW = layout.ShadowWidth
+	}
+
+	// Calculate minimum dialog width (without shadow)
+	minDialogWidth := 44 + layout.BorderWidth()
+
+	// Preview fits if: dialog + shadow + gutter + preview fits in content area (s.width)
+	previewFits := s.width >= minDialogWidth+shadowW+layout.GutterWidth+previewMinWidth
+
+	// When preview doesn't fit, we're in "maximized" mode (dialog fills available width)
+	return !previewFits
 }
 
 func (s *DisplayOptionsScreen) HasDialog() bool {

@@ -373,8 +373,9 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 	maxTagLen := 0
 	maxDescLen := 0
 	for _, item := range items {
-		tagWidth := lipgloss.Width(item.Tag)
-		descWidth := lipgloss.Width(item.Desc)
+		// Use GetPlainText to measure visual width, not raw string with theme tags
+		tagWidth := lipgloss.Width(GetPlainText(item.Tag))
+		descWidth := lipgloss.Width(GetPlainText(item.Desc))
 		if tagWidth > maxTagLen {
 			maxTagLen = tagWidth
 		}
@@ -487,7 +488,7 @@ func (m *MenuModel) updateDelegate() {
 	focused := m.IsActive()
 	maxTagLen := 0
 	for _, item := range m.items {
-		tagWidth := lipgloss.Width(item.Tag)
+		tagWidth := lipgloss.Width(GetPlainText(item.Tag))
 		if tagWidth > maxTagLen {
 			maxTagLen = tagWidth
 		}
@@ -507,7 +508,7 @@ func (m *MenuModel) SetCheckboxMode(enabled bool) {
 		// Switch to checkbox delegate
 		maxTagLen := 0
 		for _, item := range m.items {
-			tagWidth := lipgloss.Width(item.Tag)
+			tagWidth := lipgloss.Width(GetPlainText(item.Tag))
 			if tagWidth > maxTagLen {
 				maxTagLen = tagWidth
 			}
@@ -517,7 +518,7 @@ func (m *MenuModel) SetCheckboxMode(enabled bool) {
 		// Switch back to standard delegate
 		maxTagLen := 0
 		for _, item := range m.items {
-			tagWidth := lipgloss.Width(item.Tag)
+			tagWidth := lipgloss.Width(GetPlainText(item.Tag))
 			if tagWidth > maxTagLen {
 				maxTagLen = tagWidth
 			}
@@ -557,9 +558,10 @@ func (m *MenuModel) SetItems(items []MenuItem) {
 	m.list.SetItems(listItems)
 
 	// Recalculate max tag length for delegate
+	// Use GetPlainText to measure visual width, not raw string with theme tags
 	maxTagLen := 0
 	for _, item := range items {
-		tagWidth := lipgloss.Width(item.Tag)
+		tagWidth := lipgloss.Width(GetPlainText(item.Tag))
 		if tagWidth > maxTagLen {
 			maxTagLen = tagWidth
 		}
@@ -1514,11 +1516,20 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 		result.WriteString(borderStyleLight.Render(border.Left))
 		// Use WidthWithoutZones to get accurate visual width (zone markers are invisible)
 		textWidth := WidthWithoutZones(line)
-		padding := ""
-		if textWidth < actualWidth {
-			padding = lipgloss.NewStyle().Background(borderBG).Render(strutil.Repeat(" ", actualWidth-textWidth))
+
+		var fullLine string
+		if textWidth > actualWidth {
+			// Truncate lines that are too wide to prevent bleeding
+			truncated := TruncateRight(line, actualWidth)
+			fullLine = MaintainBackground(truncated, ctx.Dialog)
+		} else if textWidth < actualWidth {
+			// Pad lines that are too narrow
+			padding := lipgloss.NewStyle().Background(borderBG).Render(strutil.Repeat(" ", actualWidth-textWidth))
+			fullLine = MaintainBackground(line+padding, ctx.Dialog)
+		} else {
+			fullLine = MaintainBackground(line, ctx.Dialog)
 		}
-		fullLine := MaintainBackground(line+padding, ctx.Dialog)
+
 		result.WriteString(fullLine)
 		result.WriteString(borderStyleDark.Render(border.Right))
 		result.WriteString("\n")
@@ -1602,11 +1613,12 @@ func (m *MenuModel) calculateLayout() {
 	}
 
 	// Calculate list width (same logic as before)
+	// Use GetPlainText to measure visual width, not raw string with theme tags
 	maxTagLen := 0
 	maxDescLen := 0
 	for _, item := range m.items {
-		tagWidth := lipgloss.Width(item.Tag)
-		descWidth := lipgloss.Width(item.Desc)
+		tagWidth := lipgloss.Width(GetPlainText(item.Tag))
+		descWidth := lipgloss.Width(GetPlainText(item.Desc))
 		if tagWidth > maxTagLen {
 			maxTagLen = tagWidth
 		}
