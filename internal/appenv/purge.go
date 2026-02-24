@@ -40,7 +40,15 @@ func PurgeAppVars(ctx context.Context, appName string, conf config.AppConfig) er
 	}
 
 	// 3. Cleanup orphaned files (might be redundant if called through flows that already cleanup, but safe)
-	return CleanupOrphanedEnvFiles(ctx, conf)
+	if err := CleanupOrphanedEnvFiles(ctx, conf); err != nil {
+		return err
+	}
+
+	// Bash parity: run_script 'unset_needs_appvars_create'
+	added, _ := ListAddedApps(ctx, globalEnv)
+	UnsetNeedsCreateAll(ctx, added, conf)
+
+	return nil
 }
 
 func purgeFromFile(ctx context.Context, appName string, file string) error {

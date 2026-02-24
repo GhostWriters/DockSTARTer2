@@ -22,16 +22,19 @@ import (
 
 // MergeYML merges enabled app templates into docker-compose.yml
 func MergeYML(ctx context.Context, force bool) error {
-	if !force && !NeedsYMLMerge(ctx, false) {
-		logger.Notice(ctx, "Enabled app templates already merged to '{{|File|}}docker-compose.yml{{[-]}}'.")
-		return nil
-	}
+	needsMerge := force || NeedsYMLMerge(ctx, false)
 
 	conf := config.LoadAppConfig()
 
 	// 1. Ensure appvars are created first
 	if err := appenv.CreateAll(ctx, force, conf); err != nil {
 		return err
+	}
+
+	// 2. Check again if merge is needed (CreateAll might have modified files)
+	if !needsMerge && !NeedsYMLMerge(ctx, false) {
+		logger.Notice(ctx, "Enabled app templates already merged to '{{|File|}}docker-compose.yml{{[-]}}'.")
+		return nil
 	}
 
 	logger.Notice(ctx, "Adding enabled app templates to merge '{{|File|}}docker-compose.yml{{[-]}}'. Please be patient, this can take a while.")
@@ -444,12 +447,6 @@ func NeedsYMLMerge(ctx context.Context, force bool) bool {
 		return true
 	}
 
-	// Check overrides if they exist
-	override := filepath.Join(conf.ComposeDir, constants.ComposeOverrideFileName)
-	if fileExists(override) && fileChanged(conf, override) {
-		return true
-	}
-
 	// Check enabled apps .env files
 	enabledApps, _ := appenv.ListEnabledApps(conf)
 	for _, appName := range enabledApps {
@@ -484,10 +481,6 @@ func UnsetNeedsYMLMerge(ctx context.Context) {
 		updateTimestamp(ctx, conf, appEnvFile)
 	}
 
-	override := filepath.Join(conf.ComposeDir, constants.ComposeOverrideFileName)
-	if fileExists(override) {
-		updateTimestamp(ctx, conf, override)
-	}
 }
 
 // Helper functions

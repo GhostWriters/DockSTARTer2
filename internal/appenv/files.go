@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // AppInstanceFile handles template processing for app instances.
@@ -124,4 +125,20 @@ func CompareFiles(file1, file2 string) bool {
 		return false
 	}
 	return bytes.Equal(f1, f2)
+}
+
+// IsAnyFileNewer checks if any file in the given root (recursively) is newer than the reference time.
+func IsAnyFileNewer(root string, referenceTime time.Time) bool {
+	newer := false
+	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !info.IsDir() && info.ModTime().After(referenceTime) {
+			newer = true
+			return filepath.SkipDir // Found one, can stop
+		}
+		return nil
+	})
+	return newer
 }
