@@ -42,6 +42,33 @@ func (i MenuItem) FilterValue() string { return i.Tag }
 func (i MenuItem) Title() string       { return i.Tag }
 func (i MenuItem) Description() string { return i.Desc }
 
+// calculateMaxTagLength returns the maximum visual width of item tags
+func calculateMaxTagLength(items []MenuItem) int {
+	maxTagLen := 0
+	for _, item := range items {
+		tagWidth := lipgloss.Width(GetPlainText(item.Tag))
+		if tagWidth > maxTagLen {
+			maxTagLen = tagWidth
+		}
+	}
+	return maxTagLen
+}
+
+// calculateMaxTagAndDescLength returns the maximum visual width of item tags and descriptions
+func calculateMaxTagAndDescLength(items []MenuItem) (maxTagLen, maxDescLen int) {
+	for _, item := range items {
+		tagWidth := lipgloss.Width(GetPlainText(item.Tag))
+		descWidth := lipgloss.Width(GetPlainText(item.Desc))
+		if tagWidth > maxTagLen {
+			maxTagLen = tagWidth
+		}
+		if descWidth > maxDescLen {
+			maxDescLen = descWidth
+		}
+	}
+	return
+}
+
 // menuItemDelegate implements list.ItemDelegate for standard navigation menus
 type menuItemDelegate struct {
 	menuID    string
@@ -369,20 +396,7 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 	}
 
 	// Calculate max tag and desc length for sizing
-	// Use lipgloss.Width() instead of len() for proper terminal width
-	maxTagLen := 0
-	maxDescLen := 0
-	for _, item := range items {
-		// Use GetPlainText to measure visual width, not raw string with theme tags
-		tagWidth := lipgloss.Width(GetPlainText(item.Tag))
-		descWidth := lipgloss.Width(GetPlainText(item.Desc))
-		if tagWidth > maxTagLen {
-			maxTagLen = tagWidth
-		}
-		if descWidth > maxDescLen {
-			maxDescLen = descWidth
-		}
-	}
+	maxTagLen, maxDescLen := calculateMaxTagAndDescLength(items)
 
 	// Calculate initial width based on actual content
 	// Width = tag + spacing(2) + desc + margins(2)
@@ -486,13 +500,7 @@ func (m *MenuModel) IsActive() bool {
 // updateDelegate refreshes the list delegate with the current focus state
 func (m *MenuModel) updateDelegate() {
 	focused := m.IsActive()
-	maxTagLen := 0
-	for _, item := range m.items {
-		tagWidth := lipgloss.Width(GetPlainText(item.Tag))
-		if tagWidth > maxTagLen {
-			maxTagLen = tagWidth
-		}
-	}
+	maxTagLen := calculateMaxTagLength(m.items)
 	if m.checkboxMode {
 		m.list.SetDelegate(checkboxItemDelegate{menuID: m.id, maxTagLen: maxTagLen, focused: focused})
 	} else {
@@ -503,28 +511,7 @@ func (m *MenuModel) updateDelegate() {
 // SetCheckboxMode enables checkbox rendering for app selection
 func (m *MenuModel) SetCheckboxMode(enabled bool) {
 	m.checkboxMode = enabled
-	focused := m.IsActive()
-	if enabled {
-		// Switch to checkbox delegate
-		maxTagLen := 0
-		for _, item := range m.items {
-			tagWidth := lipgloss.Width(GetPlainText(item.Tag))
-			if tagWidth > maxTagLen {
-				maxTagLen = tagWidth
-			}
-		}
-		m.list.SetDelegate(checkboxItemDelegate{menuID: m.id, maxTagLen: maxTagLen, focused: focused})
-	} else {
-		// Switch back to standard delegate
-		maxTagLen := 0
-		for _, item := range m.items {
-			tagWidth := lipgloss.Width(GetPlainText(item.Tag))
-			if tagWidth > maxTagLen {
-				maxTagLen = tagWidth
-			}
-		}
-		m.list.SetDelegate(menuItemDelegate{menuID: m.id, maxTagLen: maxTagLen, focused: focused})
-	}
+	m.updateDelegate()
 }
 
 // Index returns the current cursor index
@@ -557,23 +544,8 @@ func (m *MenuModel) SetItems(items []MenuItem) {
 	}
 	m.list.SetItems(listItems)
 
-	// Recalculate max tag length for delegate
-	// Use GetPlainText to measure visual width, not raw string with theme tags
-	maxTagLen := 0
-	for _, item := range items {
-		tagWidth := lipgloss.Width(GetPlainText(item.Tag))
-		if tagWidth > maxTagLen {
-			maxTagLen = tagWidth
-		}
-	}
-
 	// Update delegate with new max tag length and focus
-	focused := m.IsActive()
-	if m.checkboxMode {
-		m.list.SetDelegate(checkboxItemDelegate{menuID: m.id, maxTagLen: maxTagLen, focused: focused})
-	} else {
-		m.list.SetDelegate(menuItemDelegate{menuID: m.id, maxTagLen: maxTagLen, focused: focused})
-	}
+	m.updateDelegate()
 }
 
 // SetEscAction sets a custom action for the Escape key
@@ -1612,20 +1584,8 @@ func (m *MenuModel) calculateLayout() {
 		listHeight = maxListHeight
 	}
 
-	// Calculate list width (same logic as before)
-	// Use GetPlainText to measure visual width, not raw string with theme tags
-	maxTagLen := 0
-	maxDescLen := 0
-	for _, item := range m.items {
-		tagWidth := lipgloss.Width(GetPlainText(item.Tag))
-		descWidth := lipgloss.Width(GetPlainText(item.Desc))
-		if tagWidth > maxTagLen {
-			maxTagLen = tagWidth
-		}
-		if descWidth > maxDescLen {
-			maxDescLen = descWidth
-		}
-	}
+	// Calculate list width based on content
+	maxTagLen, maxDescLen := calculateMaxTagAndDescLength(m.items)
 	// Width = tag + spacing(2) + desc + margins(2) + buffer(4)
 	listWidth := maxTagLen + 2 + maxDescLen + 2 + 4
 

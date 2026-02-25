@@ -126,10 +126,14 @@ func Overlay(foreground, background string, hPos, vPos OverlayPosition, xOffset,
 	return strings.Join(bgLines, "\n")
 }
 
-// TruncateLeft returns the substring of s starting after 'width' terminal cells.
-// Optimized to preserve ANSI sequences.
-func TruncateLeft(s string, width int) string {
+// truncateString is the shared implementation for TruncateLeft and TruncateRight.
+// keepLeft=true: keep first 'width' cells (TruncateRight)
+// keepLeft=false: keep everything after first 'width' cells (TruncateLeft)
+func truncateString(s string, width int, keepLeft bool) string {
 	if width <= 0 {
+		if keepLeft {
+			return ""
+		}
 		return s
 	}
 
@@ -154,8 +158,7 @@ func TruncateLeft(s string, width int) string {
 		foundSequence := false
 		for _, m := range allMatches {
 			if m[0] == lastIdx {
-				// We keep ALL invisible sequences even if they are before the cut point,
-				// because we want to maintain the state (colors, markers).
+				// Keep ALL invisible sequences to maintain state (colors, markers)
 				b.WriteString(s[m[0]:m[1]])
 				lastIdx = m[1]
 				foundSequence = true
@@ -168,13 +171,22 @@ func TruncateLeft(s string, width int) string {
 		}
 
 		if cells >= width {
-			// We've reached the cut point. Append the rest of the string.
+			if keepLeft {
+				// TruncateRight: we've reached desired width, stop
+				break
+			}
+			// TruncateLeft: we've reached cut point, append the rest
 			b.WriteString(s[lastIdx:])
 			break
 		}
 
 		// Not an invisible sequence. Count this character.
 		r, size := utf8.DecodeRuneInString(s[lastIdx:])
+		if keepLeft {
+			// TruncateRight: write characters before cut point
+			b.WriteString(s[lastIdx : lastIdx+size])
+		}
+		// TruncateLeft: skip characters before cut point (already handled above)
 		lastIdx += size
 		cells += runewidth.RuneWidth(r)
 	}
@@ -182,60 +194,16 @@ func TruncateLeft(s string, width int) string {
 	return b.String()
 }
 
+// TruncateLeft returns the substring of s starting after 'width' terminal cells.
+// Preserves ANSI sequences and bubblezone markers.
+func TruncateLeft(s string, width int) string {
+	return truncateString(s, width, false)
+}
+
 // TruncateRight returns the first 'width' terminal cells of s.
-// Optimized to preserve ANSI sequences and bubblezone markers.
+// Preserves ANSI sequences and bubblezone markers.
 func TruncateRight(s string, width int) string {
-	if width <= 0 {
-		return ""
-	}
-
-	var b strings.Builder
-	cells := 0
-
-	// Find all ANSI sequences and zone markers (both are invisible)
-	ansiMatches := ansiRegex.FindAllStringIndex(s, -1)
-	zoneMatches := zoneMarkerRegex.FindAllStringIndex(s, -1)
-
-	// Merge and sort all invisible sequence positions
-	allMatches := make([][]int, 0, len(ansiMatches)+len(zoneMatches))
-	allMatches = append(allMatches, ansiMatches...)
-	allMatches = append(allMatches, zoneMatches...)
-	// Sort by start position (they shouldn't overlap, but sort for safety)
-	sort.Slice(allMatches, func(i, j int) bool {
-		return allMatches[i][0] < allMatches[j][0]
-	})
-
-	lastIdx := 0
-	for lastIdx < len(s) {
-		// Is there an invisible sequence at the current position?
-		foundSequence := false
-		for _, m := range allMatches {
-			if m[0] == lastIdx {
-				// Keep ALL invisible sequences found within or before the range.
-				b.WriteString(s[m[0]:m[1]])
-				lastIdx = m[1]
-				foundSequence = true
-				break
-			}
-		}
-
-		if foundSequence {
-			continue
-		}
-
-		if cells >= width {
-			// We've reached the desired width.
-			break
-		}
-
-		// Not an invisible sequence. Count this character.
-		r, size := utf8.DecodeRuneInString(s[lastIdx:])
-		b.WriteString(s[lastIdx : lastIdx+size])
-		lastIdx += size
-		cells += runewidth.RuneWidth(r)
-	}
-
-	return b.String()
+	return truncateString(s, width, true)
 }
 
 // LayerSpec defines a layer for MultiOverlay

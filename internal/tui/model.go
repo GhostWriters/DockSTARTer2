@@ -223,281 +223,14 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, logger.RecoverTUI(m.ctx, cmd)
 
 	case tea.KeyMsg:
-		// Specialized Help Blockade
-		// If help is open, ANY key closes it and we return immediately to prevent leaks.
-		if m.dialog != nil {
-			if _, ok := m.dialog.(*helpDialogModel); ok {
-				var cmd tea.Cmd
-				m.dialog, cmd = m.dialog.Update(msg)
-				return m, logger.RecoverTUI(m.ctx, cmd)
-			}
-		}
-
-		// Global Priority Actions (always work, regardless of focus)
-		if key.Matches(msg, Keys.ToggleLog) {
-			return m, logger.RecoverTUI(m.ctx, func() tea.Msg { return toggleLogPanelMsg{} })
-		}
-		if key.Matches(msg, Keys.Help) {
-			return m, logger.RecoverTUI(m.ctx, func() tea.Msg { return ShowDialogMsg{Dialog: newHelpDialogModel()} })
-		}
-		if key.Matches(msg, Keys.ForceQuit) {
-			m.Fatal = true
-			return m, logger.RecoverTUI(m.ctx, tea.Quit)
-		}
-
-		// Screen Navigation / Element Cycling
-		// Cycle: Screen -> LogPanel -> Header(App) -> Header(Tmpl) -> Screen
-		if key.Matches(msg, Keys.Tab) {
-			if m.logPanelFocused {
-				m.setLogPanelFocus(false)
-				// setLogPanelFocus(false) refocuses screen/dialog. We need to unfocus them for Header focus.
-				if m.dialog != nil {
-					// Dialog open: Skip header, return focus to dialog
-					if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
-						focusable.SetFocused(true)
-					}
-					return m, nil
-				} else if m.activeScreen != nil {
-					if focusable, ok := m.activeScreen.(interface{ SetFocused(bool) }); ok {
-						focusable.SetFocused(false)
-					}
-				}
-				m.backdrop.header.SetFocus(HeaderFocusApp)
-				return m, nil
-			} else if m.backdrop.header.GetFocus() == HeaderFocusApp {
-				m.backdrop.header.SetFocus(HeaderFocusTmpl)
-				return m, nil
-			} else if m.backdrop.header.GetFocus() == HeaderFocusTmpl {
-				m.backdrop.header.SetFocus(HeaderFocusNone)
-				// Focus returns to screen/dialog
-				if m.dialog != nil {
-					if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
-						focusable.SetFocused(true)
-					}
-				} else if m.activeScreen != nil {
-					if focusable, ok := m.activeScreen.(interface{ SetFocused(bool) }); ok {
-						focusable.SetFocused(true)
-					}
-				}
-				return m, nil
-			} else {
-				// From screen to log panel
-				m.setLogPanelFocus(true)
-				return m, nil
-			}
-		}
-
-		if key.Matches(msg, Keys.ShiftTab) {
-			if m.logPanelFocused {
-				m.setLogPanelFocus(false)
-				// Focus returns to screen/dialog (reverse cycle)
-				// setLogPanelFocus(false) already restores focus, so we are good.
-				return m, nil
-			} else if m.backdrop.header.GetFocus() == HeaderFocusApp {
-				m.backdrop.header.SetFocus(HeaderFocusNone)
-				m.setLogPanelFocus(true)
-				return m, nil
-			} else if m.backdrop.header.GetFocus() == HeaderFocusTmpl {
-				m.backdrop.header.SetFocus(HeaderFocusApp)
-				return m, nil
-			} else {
-				// From screen to header (tmpl)
-				if m.dialog != nil {
-					// Dialog open: Skip header, go to LogPanel (reverse cycle from Dialog is LogPanel)
-					if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
-						focusable.SetFocused(false)
-					}
-					m.setLogPanelFocus(true)
-					return m, nil
-				}
-
-				if m.activeScreen != nil {
-					if focusable, ok := m.activeScreen.(interface{ SetFocused(bool) }); ok {
-						focusable.SetFocused(false)
-					}
-				}
-				m.backdrop.header.SetFocus(HeaderFocusTmpl)
-				return m, nil
-			}
-		}
-
-		// Arrow Key Navigation within Header
-		if m.dialog == nil && m.backdrop.header.GetFocus() != HeaderFocusNone {
-			if key.Matches(msg, Keys.Right) {
-				if m.backdrop.header.GetFocus() == HeaderFocusApp {
-					m.backdrop.header.SetFocus(HeaderFocusTmpl)
-				}
-				// Consume the key event even if already on last item
-				return m, nil
-			}
-			if key.Matches(msg, Keys.Left) {
-				if m.backdrop.header.GetFocus() == HeaderFocusTmpl {
-					m.backdrop.header.SetFocus(HeaderFocusApp)
-				}
-				// Consume the key event even if already on first item
-				return m, nil
-			}
-			// Escape to return to screen
-			if key.Matches(msg, Keys.Esc) {
-				m.backdrop.header.SetFocus(HeaderFocusNone)
-				if m.activeScreen != nil {
-					if focusable, ok := m.activeScreen.(interface{ SetFocused(bool) }); ok {
-						focusable.SetFocused(true)
-					}
-				}
-				return m, nil
-			}
-		}
-
-		// Handle Enter on focused header items
-		if m.dialog == nil && key.Matches(msg, Keys.Enter) {
-			switch m.backdrop.header.GetFocus() {
-			case HeaderFocusApp:
-				return m, logger.RecoverTUI(m.ctx, TriggerAppUpdate())
-			case HeaderFocusTmpl:
-				return m, logger.RecoverTUI(m.ctx, TriggerTemplateUpdate())
-			}
-		}
-
-		// Focused Log Panel Actions
-		// When log panel is focused, it gets all scroll/navigation keys exclusively
-		// We handle this AFTER global cycling (Tab/ShiftTab) so we don't trap those keys.
-		if m.logPanelFocused {
-			// Esc unfocuses the panel and returns focus to the screen/dialog
-			if key.Matches(msg, Keys.Esc) {
-				m.setLogPanelFocus(false)
-				return m, nil
-			}
-			// Enter or Space toggles the panel open/closed
-			if key.Matches(msg, Keys.Enter) || msg.String() == " " {
-				return m, func() tea.Msg { return toggleLogPanelMsg{} }
-			}
-			// All other keys go to the panel viewport
-			updated, cmd := m.logPanel.Update(msg)
-			m.logPanel = updated.(LogPanelModel)
-			return m, logger.RecoverTUI(m.ctx, cmd)
-		}
-
-		// Modal Dialog Support
-		if m.dialog != nil {
-			var cmd tea.Cmd
-			m.dialog, cmd = m.dialog.Update(msg)
-			// Ensure helpline reflects current state after update
-			if h, ok := m.dialog.(interface{ HelpText() string }); ok {
-				m.backdrop.SetHelpText(h.HelpText())
-			}
-			return m, logger.RecoverTUI(m.ctx, cmd)
-		}
-
-		// Active Screen Support (fallback)
-		if m.activeScreen != nil {
-			updated, cmd := m.activeScreen.Update(msg)
-			if screen, ok := updated.(ScreenModel); ok {
-				m.activeScreen = screen
-			}
-			// Ensure helpline reflects current state after update
-			m.backdrop.SetHelpText(m.activeScreen.HelpText())
-			return m, logger.RecoverTUI(m.ctx, cmd)
+		if model, cmd, handled := m.handleKeyMsg(msg); handled {
+			return model, cmd
 		}
 
 	case tea.MouseMsg:
-		// Specialized Help Blockade
-		// If help is open, ANY click closes it for convenience.
-		if m.dialog != nil {
-			if _, ok := m.dialog.(*helpDialogModel); ok {
-				if _, ok := msg.(tea.MouseClickMsg); ok {
-					var cmd tea.Cmd
-					m.dialog, cmd = m.dialog.Update(msg)
-					return m, cmd
-				}
-			}
+		if model, cmd, handled := m.handleMouseMsg(msg); handled {
+			return model, cmd
 		}
-
-		// MODAL PRIORITY: Handle dialog mouse events FIRST
-		if m.dialog != nil {
-			var cmd tea.Cmd
-			m.dialog, cmd = m.dialog.Update(msg)
-			if cmd != nil {
-				return m, logger.RecoverTUI(m.ctx, cmd)
-			}
-			// If dialog is modal, we usually don't want clicks falling through
-			// unless it's a click outside the dialog. For now, we allow fallthrough
-			// for background elements IF the dialog didn't consume it.
-		}
-
-		// Handle Drag Resizing (Log Panel)
-		// If log panel is dragging, it needs to receive mouse events even if outside its zone
-		if m.logPanel.isDragging {
-			updated, cmd := m.logPanel.Update(msg)
-			m.logPanel = updated.(LogPanelModel)
-
-			// If height changed, we need to resize other components
-			// Resize backdrop, screen, and dialog to match new panel height
-			backdropMsg := tea.WindowSizeMsg{Width: m.width, Height: m.backdropHeight()}
-			backdropModel, _ := m.backdrop.Update(backdropMsg)
-			m.backdrop = backdropModel.(BackdropModel)
-
-			caW, caH := m.getContentArea()
-			if m.activeScreen != nil {
-				m.activeScreen.SetSize(caW, caH)
-			}
-			if m.dialog != nil {
-				if sizable, ok := m.dialog.(interface{ SetSize(int, int) }); ok {
-					sizable.SetSize(caW, caH)
-				}
-			}
-			return m, cmd
-		}
-
-		// Handle specific global mouse interactions (Header, Log Panel)
-		if click, ok := msg.(tea.MouseClickMsg); ok && click.Button == tea.MouseLeft {
-			// Check log panel RESIZE clicks (top level UI elements)
-			if zi := zone.Get(logResizeZoneID); zi != nil && zi.InBounds(click) {
-				updated, cmd := m.logPanel.Update(click) // Pass click to start drag
-				m.logPanel = updated.(LogPanelModel)
-				return m, cmd
-			}
-
-			// Check log panel TOGGLE clicks
-			if zi := zone.Get(logPanelZoneID); zi != nil && zi.InBounds(click) {
-				return m, func() tea.Msg { return toggleLogPanelMsg{} }
-			}
-			if zi := zone.Get(logViewportZoneID); zi != nil && zi.InBounds(click) {
-				m.setLogPanelFocus(true)
-				return m, nil
-			}
-			// Click outside log panel — return focus to screen/dialog
-			if m.logPanelFocused {
-				m.setLogPanelFocus(false)
-			}
-
-			// Check for header clicks (backdrop elements)
-			// Only allow header interaction if NO dialog is open
-			if m.dialog == nil {
-				if handled, cmd := m.backdrop.header.HandleMouse(click); handled {
-					// If header took focus, ensure we unfocus screen/logpanel
-					if m.backdrop.header.GetFocus() != HeaderFocusNone {
-						m.setLogPanelFocus(false)
-						if m.activeScreen != nil {
-							if focusable, ok := m.activeScreen.(interface{ SetFocused(bool) }); ok {
-								focusable.SetFocused(false)
-							}
-						}
-					}
-
-					// Trigger update on click
-					if zi := zone.Get(ZoneAppVersion); zi != nil && zi.InBounds(click) {
-						return m, TriggerAppUpdate()
-					}
-					if zi := zone.Get(ZoneTmplVersion); zi != nil && zi.InBounds(click) {
-						return m, TriggerTemplateUpdate()
-					}
-
-					return m, cmd
-				}
-			}
-		}
-
 		// Fall through to common update logic (backdrop and activeScreen)
 
 	case tea.WindowSizeMsg:
@@ -804,6 +537,292 @@ func (m AppModel) backdropHeight() int {
 // getContentArea returns the dimensions available for screens and dialogs.
 func (m AppModel) getContentArea() (int, int) {
 	return m.backdrop.GetContentArea()
+}
+
+// handleKeyMsg processes keyboard input.
+// Returns (model, cmd, handled) where handled indicates if the key was consumed.
+func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
+	// Specialized Help Blockade
+	// If help is open, ANY key closes it and we return immediately to prevent leaks.
+	if m.dialog != nil {
+		if _, ok := m.dialog.(*helpDialogModel); ok {
+			var cmd tea.Cmd
+			m.dialog, cmd = m.dialog.Update(msg)
+			return m, logger.RecoverTUI(m.ctx, cmd), true
+		}
+	}
+
+	// Global Priority Actions (always work, regardless of focus)
+	if key.Matches(msg, Keys.ToggleLog) {
+		return m, logger.RecoverTUI(m.ctx, func() tea.Msg { return toggleLogPanelMsg{} }), true
+	}
+	if key.Matches(msg, Keys.Help) {
+		return m, logger.RecoverTUI(m.ctx, func() tea.Msg { return ShowDialogMsg{Dialog: newHelpDialogModel()} }), true
+	}
+	if key.Matches(msg, Keys.ForceQuit) {
+		m.Fatal = true
+		return m, logger.RecoverTUI(m.ctx, tea.Quit), true
+	}
+
+	// Screen Navigation / Element Cycling
+	// Cycle: Screen -> LogPanel -> Header(App) -> Header(Tmpl) -> Screen
+	if key.Matches(msg, Keys.Tab) {
+		if m.logPanelFocused {
+			m.setLogPanelFocus(false)
+			// setLogPanelFocus(false) refocuses screen/dialog. We need to unfocus them for Header focus.
+			if m.dialog != nil {
+				// Dialog open: Skip header, return focus to dialog
+				if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
+					focusable.SetFocused(true)
+				}
+				return m, nil, true
+			} else if m.activeScreen != nil {
+				if focusable, ok := m.activeScreen.(interface{ SetFocused(bool) }); ok {
+					focusable.SetFocused(false)
+				}
+			}
+			m.backdrop.header.SetFocus(HeaderFocusApp)
+			return m, nil, true
+		} else if m.backdrop.header.GetFocus() == HeaderFocusApp {
+			m.backdrop.header.SetFocus(HeaderFocusTmpl)
+			return m, nil, true
+		} else if m.backdrop.header.GetFocus() == HeaderFocusTmpl {
+			m.backdrop.header.SetFocus(HeaderFocusNone)
+			// Focus returns to screen/dialog
+			if m.dialog != nil {
+				if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
+					focusable.SetFocused(true)
+				}
+			} else if m.activeScreen != nil {
+				if focusable, ok := m.activeScreen.(interface{ SetFocused(bool) }); ok {
+					focusable.SetFocused(true)
+				}
+			}
+			return m, nil, true
+		} else {
+			// From screen to log panel
+			m.setLogPanelFocus(true)
+			return m, nil, true
+		}
+	}
+
+	if key.Matches(msg, Keys.ShiftTab) {
+		if m.logPanelFocused {
+			m.setLogPanelFocus(false)
+			// Focus returns to screen/dialog (reverse cycle)
+			// setLogPanelFocus(false) already restores focus, so we are good.
+			return m, nil, true
+		} else if m.backdrop.header.GetFocus() == HeaderFocusApp {
+			m.backdrop.header.SetFocus(HeaderFocusNone)
+			m.setLogPanelFocus(true)
+			return m, nil, true
+		} else if m.backdrop.header.GetFocus() == HeaderFocusTmpl {
+			m.backdrop.header.SetFocus(HeaderFocusApp)
+			return m, nil, true
+		} else {
+			// From screen to header (tmpl)
+			if m.dialog != nil {
+				// Dialog open: Skip header, go to LogPanel (reverse cycle from Dialog is LogPanel)
+				if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
+					focusable.SetFocused(false)
+				}
+				m.setLogPanelFocus(true)
+				return m, nil, true
+			}
+
+			if m.activeScreen != nil {
+				if focusable, ok := m.activeScreen.(interface{ SetFocused(bool) }); ok {
+					focusable.SetFocused(false)
+				}
+			}
+			m.backdrop.header.SetFocus(HeaderFocusTmpl)
+			return m, nil, true
+		}
+	}
+
+	// Arrow Key Navigation within Header
+	if m.dialog == nil && m.backdrop.header.GetFocus() != HeaderFocusNone {
+		if key.Matches(msg, Keys.Right) {
+			if m.backdrop.header.GetFocus() == HeaderFocusApp {
+				m.backdrop.header.SetFocus(HeaderFocusTmpl)
+			}
+			// Consume the key event even if already on last item
+			return m, nil, true
+		}
+		if key.Matches(msg, Keys.Left) {
+			if m.backdrop.header.GetFocus() == HeaderFocusTmpl {
+				m.backdrop.header.SetFocus(HeaderFocusApp)
+			}
+			// Consume the key event even if already on first item
+			return m, nil, true
+		}
+		// Escape to return to screen
+		if key.Matches(msg, Keys.Esc) {
+			m.backdrop.header.SetFocus(HeaderFocusNone)
+			if m.activeScreen != nil {
+				if focusable, ok := m.activeScreen.(interface{ SetFocused(bool) }); ok {
+					focusable.SetFocused(true)
+				}
+			}
+			return m, nil, true
+		}
+	}
+
+	// Handle Enter on focused header items
+	if m.dialog == nil && key.Matches(msg, Keys.Enter) {
+		switch m.backdrop.header.GetFocus() {
+		case HeaderFocusApp:
+			return m, logger.RecoverTUI(m.ctx, TriggerAppUpdate()), true
+		case HeaderFocusTmpl:
+			return m, logger.RecoverTUI(m.ctx, TriggerTemplateUpdate()), true
+		}
+	}
+
+	// Focused Log Panel Actions
+	// When log panel is focused, it gets all scroll/navigation keys exclusively
+	// We handle this AFTER global cycling (Tab/ShiftTab) so we don't trap those keys.
+	if m.logPanelFocused {
+		// Esc unfocuses the panel and returns focus to the screen/dialog
+		if key.Matches(msg, Keys.Esc) {
+			m.setLogPanelFocus(false)
+			return m, nil, true
+		}
+		// Enter or Space toggles the panel open/closed
+		if key.Matches(msg, Keys.Enter) || msg.String() == " " {
+			return m, func() tea.Msg { return toggleLogPanelMsg{} }, true
+		}
+		// All other keys go to the panel viewport
+		updated, cmd := m.logPanel.Update(msg)
+		m.logPanel = updated.(LogPanelModel)
+		return m, logger.RecoverTUI(m.ctx, cmd), true
+	}
+
+	// Modal Dialog Support
+	if m.dialog != nil {
+		var cmd tea.Cmd
+		m.dialog, cmd = m.dialog.Update(msg)
+		// Ensure helpline reflects current state after update
+		if h, ok := m.dialog.(interface{ HelpText() string }); ok {
+			m.backdrop.SetHelpText(h.HelpText())
+		}
+		return m, logger.RecoverTUI(m.ctx, cmd), true
+	}
+
+	// Active Screen Support (fallback)
+	if m.activeScreen != nil {
+		updated, cmd := m.activeScreen.Update(msg)
+		if screen, ok := updated.(ScreenModel); ok {
+			m.activeScreen = screen
+		}
+		// Ensure helpline reflects current state after update
+		m.backdrop.SetHelpText(m.activeScreen.HelpText())
+		return m, logger.RecoverTUI(m.ctx, cmd), true
+	}
+
+	return m, nil, false
+}
+
+// handleMouseMsg processes mouse input.
+// Returns (model, cmd, handled) where handled indicates if the event was consumed.
+func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
+	// Specialized Help Blockade
+	// If help is open, ANY click closes it for convenience.
+	if m.dialog != nil {
+		if _, ok := m.dialog.(*helpDialogModel); ok {
+			if _, ok := msg.(tea.MouseClickMsg); ok {
+				var cmd tea.Cmd
+				m.dialog, cmd = m.dialog.Update(msg)
+				return m, cmd, true
+			}
+		}
+	}
+
+	// MODAL PRIORITY: Handle dialog mouse events FIRST
+	if m.dialog != nil {
+		var cmd tea.Cmd
+		m.dialog, cmd = m.dialog.Update(msg)
+		if cmd != nil {
+			return m, logger.RecoverTUI(m.ctx, cmd), true
+		}
+		// If dialog is modal, we usually don't want clicks falling through
+		// unless it's a click outside the dialog. For now, we allow fallthrough
+		// for background elements IF the dialog didn't consume it.
+	}
+
+	// Handle Drag Resizing (Log Panel)
+	// If log panel is dragging, it needs to receive mouse events even if outside its zone
+	if m.logPanel.isDragging {
+		updated, cmd := m.logPanel.Update(msg)
+		m.logPanel = updated.(LogPanelModel)
+
+		// If height changed, we need to resize other components
+		// Resize backdrop, screen, and dialog to match new panel height
+		backdropMsg := tea.WindowSizeMsg{Width: m.width, Height: m.backdropHeight()}
+		backdropModel, _ := m.backdrop.Update(backdropMsg)
+		m.backdrop = backdropModel.(BackdropModel)
+
+		caW, caH := m.getContentArea()
+		if m.activeScreen != nil {
+			m.activeScreen.SetSize(caW, caH)
+		}
+		if m.dialog != nil {
+			if sizable, ok := m.dialog.(interface{ SetSize(int, int) }); ok {
+				sizable.SetSize(caW, caH)
+			}
+		}
+		return m, cmd, true
+	}
+
+	// Handle specific global mouse interactions (Header, Log Panel)
+	if click, ok := msg.(tea.MouseClickMsg); ok && click.Button == tea.MouseLeft {
+		// Check log panel RESIZE clicks (top level UI elements)
+		if zi := zone.Get(logResizeZoneID); zi != nil && zi.InBounds(click) {
+			updated, cmd := m.logPanel.Update(click) // Pass click to start drag
+			m.logPanel = updated.(LogPanelModel)
+			return m, cmd, true
+		}
+
+		// Check log panel TOGGLE clicks
+		if zi := zone.Get(logPanelZoneID); zi != nil && zi.InBounds(click) {
+			return m, func() tea.Msg { return toggleLogPanelMsg{} }, true
+		}
+		if zi := zone.Get(logViewportZoneID); zi != nil && zi.InBounds(click) {
+			m.setLogPanelFocus(true)
+			return m, nil, true
+		}
+		// Click outside log panel — return focus to screen/dialog
+		if m.logPanelFocused {
+			m.setLogPanelFocus(false)
+		}
+
+		// Check for header clicks (backdrop elements)
+		// Only allow header interaction if NO dialog is open
+		if m.dialog == nil {
+			if handled, cmd := m.backdrop.header.HandleMouse(click); handled {
+				// If header took focus, ensure we unfocus screen/logpanel
+				if m.backdrop.header.GetFocus() != HeaderFocusNone {
+					m.setLogPanelFocus(false)
+					if m.activeScreen != nil {
+						if focusable, ok := m.activeScreen.(interface{ SetFocused(bool) }); ok {
+							focusable.SetFocused(false)
+						}
+					}
+				}
+
+				// Trigger update on click
+				if zi := zone.Get(ZoneAppVersion); zi != nil && zi.InBounds(click) {
+					return m, TriggerAppUpdate(), true
+				}
+				if zi := zone.Get(ZoneTmplVersion); zi != nil && zi.InBounds(click) {
+					return m, TriggerTemplateUpdate(), true
+				}
+
+				return m, cmd, true
+			}
+		}
+	}
+
+	return m, nil, false
 }
 
 // ViewStringer is an interface for models that provide string content for compositing
