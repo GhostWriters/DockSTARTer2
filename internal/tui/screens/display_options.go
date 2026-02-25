@@ -2,10 +2,12 @@ package screens
 
 import (
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/tui"
 	"fmt"
+	"image/color"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -309,7 +311,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return s, nil
 
 	case tea.MouseClickMsg:
-		// Focus routing via zones
+		// Focus routing via panel zones
 		if tui.ZoneClick(msg, "ThemePanel") {
 			s.focusedPanel = FocusThemes
 			s.updateFocusStates()
@@ -461,41 +463,64 @@ func (s *DisplayOptionsScreen) syncOptionsMenu() {
 	s.optionsMenu.SetItems(items)
 }
 
-func (s *DisplayOptionsScreen) Layers() []tui.LayerSpec {
+func (s *DisplayOptionsScreen) ViewString() string {
 	layout := tui.GetLayout()
 
-	// Calculate known dimensions (same logic as SetSize)
-	// s.width and s.height are already the content area (chrome and shadow space accounted for)
-	shadowW := 0
-	shadowH := 0
-	if s.config.UI.Shadow {
-		shadowW = layout.ShadowWidth
-		shadowH = layout.ShadowHeight
+	// s.width and s.height are already the content area from layout.ContentArea()
+	// which has already subtracted shadow space. Dialog body fits here,
+	// shadow extends past into edge indent area.
+
+	// If dimensions not yet set, use terminal dimensions as fallback
+	// This handles the initial render before WindowSizeMsg arrives
+	width, height := s.width, s.height
+	if width == 0 || height == 0 {
+		termW, termH, _ := console.GetTerminalSize()
+		if termW > 0 && termH > 0 {
+			// Apply content area calculation
+			hasShadow := s.config.UI.Shadow
+			width, height = layout.ContentArea(termW, termH, hasShadow)
+		}
 	}
 
 	previewMinWidth := 48
 	minDialogWidth := 44 + layout.BorderWidth()
-	// Preview fits if: dialog + shadow + gutter + preview fits in content area
-	previewFits := s.width >= minDialogWidth+shadowW+layout.GutterWidth+previewMinWidth
+	// Preview fits if: dialog + gutter + preview fits in content area
+	// (shadow extends past content area, not counted here)
+	previewFits := width >= minDialogWidth+layout.GutterWidth+previewMinWidth
 
-	// Calculate dialog content width based on known size, NOT measured content
-	// Since s.width is already content area, dialog + shadow must fit within s.width
+	// Calculate dialog content width - use local width variable consistently
+	// (which may have been set from terminal size fallback)
 	var dialogContentWidth int
 	if previewFits {
-		dialogContentWidth = s.width - shadowW - layout.GutterWidth - previewMinWidth
+		// Dialog shares space with preview
+		dialogContentWidth = width - layout.GutterWidth - previewMinWidth
 	} else {
-		// Maximized: dialog + shadow fills content area
-		dialogContentWidth = s.width - shadowW
+		// Maximized: dialog fills entire content area
+		dialogContentWidth = width
 	}
 
 	// Menu width = dialog content - outer dialog borders
-	// Must match SetSize calculation exactly
 	menuWidth := dialogContentWidth - layout.BorderWidth()
 	if menuWidth < 40 {
 		menuWidth = 40
 	}
 
+	// Calculate menu heights (same logic as SetSize)
+	overhead := layout.BorderHeight() + 1 + layout.ButtonHeight
+	optionsFlowLines := s.optionsMenu.GetFlowHeight(menuWidth)
+	optionsHeight := optionsFlowLines + layout.BorderHeight()
+	themeHeight := height - optionsHeight - overhead
+	if themeHeight < 4 {
+		themeHeight = 4
+	}
+
+	// Ensure menus are sized correctly for current dimensions
+	// This handles cases where ViewString is called before SetSize
+	s.themeMenu.SetSize(menuWidth, themeHeight)
+	s.optionsMenu.SetSize(menuWidth, optionsHeight)
+
 	// 1. Render Settings Menus
+	// ZoneMark wraps the panel for click detection (focus routing)
 	themeView := tui.ZoneMark("ThemePanel", s.themeMenu.ViewString())
 	optionsView := tui.ZoneMark("OptionsPanel", s.optionsMenu.ViewString())
 
@@ -515,9 +540,9 @@ func (s *DisplayOptionsScreen) Layers() []tui.LayerSpec {
 	// 3. Settings Dialog with known width
 	settingsContent := lipgloss.JoinVertical(lipgloss.Left, leftColumn, buttonRow)
 
-	// Calculate target height - s.height is already content area
-	// Dialog + shadow must fit within content area
-	targetHeight := s.height - shadowH
+	// Target height = content area height (shadow extends past, not counted)
+	// Use local height variable for consistency with width
+	targetHeight := height
 	if targetHeight < 10 {
 		targetHeight = 10
 	}
@@ -530,26 +555,39 @@ func (s *DisplayOptionsScreen) Layers() []tui.LayerSpec {
 		settingsDialog = tui.AddShadow(settingsDialog)
 	}
 
-	// Calculate actual dialog width (content + borders + shadow)
-	dialogWidth := menuWidth + layout.BorderWidth() + shadowW
-
-	layers := []tui.LayerSpec{
-		{Content: settingsDialog, X: 0, Y: 0, Z: 1},
+	// If preview doesn't fit, just return the settings dialog
+	if !previewFits {
+		return settingsDialog
 	}
 
-	// 4. Render Preview (if space allows)
-	if previewFits {
-		previewX := dialogWidth + layout.GutterWidth
-		preview := s.renderMockup()
-		layers = append(layers, tui.LayerSpec{Content: preview, X: previewX, Y: 0, Z: 1})
+	// 4. Render Preview and compose side-by-side
+	preview := s.renderMockup()
+
+	// Constrain preview height to match settings dialog to prevent covering helpline
+	settingsHeight := lipgloss.Height(settingsDialog)
+	previewHeight := lipgloss.Height(preview)
+	if previewHeight > settingsHeight {
+		// Truncate preview to match settings height
+		previewLines := strings.Split(preview, "\n")
+		if len(previewLines) > settingsHeight {
+			previewLines = previewLines[:settingsHeight]
+		}
+		preview = strings.Join(previewLines, "\n")
 	}
 
-	return layers
-}
+	// Create gutter with explicit Screen background color
+	// Height matches settings dialog (preview is already constrained)
+	styles := tui.GetStyles()
+	gutterStyle := lipgloss.NewStyle().Background(styles.Screen.GetBackground())
+	gutterLines := make([]string, settingsHeight)
+	for i := range gutterLines {
+		// Render spaces with Screen background for each line
+		gutterLines[i] = gutterStyle.Render(strutil.Repeat(" ", layout.GutterWidth))
+	}
+	gutter := strings.Join(gutterLines, "\n")
 
-func (s *DisplayOptionsScreen) ViewString() string {
-	layers := s.Layers()
-	return tui.MultiOverlayWithBounds(s.width, s.height, layers...)
+	// Join horizontally: settings | gutter | preview
+	return lipgloss.JoinHorizontal(lipgloss.Top, settingsDialog, gutter, preview)
 }
 
 func alignCenter(w int, text string) string {
@@ -590,17 +628,20 @@ func (s *DisplayOptionsScreen) renderMockup() string {
 	// }
 
 	// Header Row (simulate real status bar layout)
+	// Use thirds for proper centering
+	leftWidth := width / 3
+	centerWidth := width / 3
+	rightWidth := width - leftWidth - centerWidth // Handles odd widths
+
 	// Left: Host
 	leftText := " {{|Preview_Theme_Hostname|}}HOST{{[-]}}"
-	leftSec := hStyle.Width(width / 3).Align(lipgloss.Left).Render(tui.RenderThemeText(leftText, hStyle))
+	leftSec := hStyle.Width(leftWidth).Align(lipgloss.Left).Render(tui.RenderThemeText(leftText, hStyle))
 
-	// Center: App Name
+	// Center: App Name (centered within its third)
 	centerText := "{{|Preview_Theme_ApplicationName|}}" + tui.GetPlainText(themeName) + "{{[-]}}"
-	centerWidth := lipgloss.Width(tui.GetPlainText(centerText))
 	centerSec := hStyle.Width(centerWidth).Align(lipgloss.Center).Render(tui.RenderThemeText(centerText, hStyle))
 
 	// Right: Version
-	rightWidth := width - (width / 3) - centerWidth
 	rightText := "{{|Preview_Theme_ApplicationVersion|}}A:[{{[-]}}{{|Preview_Theme_ApplicationVersion|}}2.1{{[-]}}{{|Preview_Theme_ApplicationVersion|}}]{{[-]}} "
 	rightSec := hStyle.Width(rightWidth).Align(lipgloss.Right).Render(tui.RenderThemeText(rightText, hStyle))
 
@@ -659,7 +700,7 @@ func (s *DisplayOptionsScreen) renderMockup() string {
 		TagKey:          tui.SemanticRawStyle("Preview_Theme_TagKey"),
 		TagKeySelected:  tui.SemanticRawStyle("Preview_Theme_TagKeySelected"),
 		Shadow:          tui.SemanticRawStyle("Preview_Theme_Shadow"),
-		ShadowColor:     tui.SemanticRawStyle("Preview_Theme_Shadow").GetBackground(),
+		ShadowColor:     getPreviewShadowColor(),
 		ShadowLevel:     s.config.UI.ShadowLevel,
 		HelpLine:        tui.SemanticRawStyle("Preview_Theme_Helpline"),
 		StatusSuccess:   tui.SemanticRawStyle("Preview_Theme_TitleNotice"),
@@ -757,13 +798,17 @@ func (s *DisplayOptionsScreen) renderMockup() string {
 		logStripRow,
 	)
 
-	containerStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#555555")).
-		Background(lipgloss.Color("#000000")).
-		Padding(0, 1)
+	// Wrap in a standard dialog using the current (active) theme
+	// The mockup content uses preview theme colors, but the outer dialog uses active theme
+	mockupWidth := lipgloss.Width(mockup)
+	preview := tui.RenderBorderedBoxCtx("Preview", mockup, mockupWidth, 0, false, tui.GetActiveContext())
 
-	return containerStyle.Render(mockup)
+	// Add shadow if enabled
+	if s.config.UI.Shadow {
+		preview = tui.AddShadow(preview)
+	}
+
+	return preview
 }
 
 func (s *DisplayOptionsScreen) View() tea.View {
@@ -790,31 +835,26 @@ func (s *DisplayOptionsScreen) SetSize(width, height int) {
 
 	layout := tui.GetLayout()
 
-	// Shadow dimensions (for total dialog size calculation, NOT for content area reduction)
-	// The width/height passed in is already the content area (shadow space already accounted for)
-	shadowW := 0
-	if s.config.UI.Shadow {
-		shadowW = layout.ShadowWidth
-	}
+	// The width/height passed in is already the content area from layout.ContentArea()
+	// which has already subtracted shadow space. The dialog body fits here,
+	// and the shadow extends past into the edge indent area.
 
-	// Check if preview fits using same logic as IsMaximized()
-	// Note: width is the content area, so total available = width + shadow (if enabled)
+	// Check if preview fits
 	previewMinWidth := 48
-	minDialogWidth := 44 + layout.BorderWidth() // Minimum dialog without shadow
-	// Preview fits if: dialog + shadow + gutter + preview fits in content area
-	previewFits := width >= minDialogWidth+shadowW+layout.GutterWidth+previewMinWidth
+	minDialogWidth := 44 + layout.BorderWidth() // Minimum dialog content + borders
+	// Preview fits if: dialog + gutter + preview fits in content area
+	// (shadow extends past content area, not counted here)
+	previewFits := width >= minDialogWidth+layout.GutterWidth+previewMinWidth
 
 	// Calculate available width for dialog content
-	// Since width is already content area, dialog + shadow must fit within width
 	var dialogContentWidth int
 	if previewFits {
 		// Dialog shares space with preview
-		// dialogContentWidth + shadow + gutter + preview <= width
-		dialogContentWidth = width - shadowW - layout.GutterWidth - previewMinWidth
+		// dialog + gutter + preview = width (content area)
+		dialogContentWidth = width - layout.GutterWidth - previewMinWidth
 	} else {
-		// Dialog fills available width (maximized mode)
-		// dialogContentWidth + shadow = width (dialog with shadow fills content area)
-		dialogContentWidth = width - shadowW
+		// Dialog fills entire content area (maximized mode)
+		dialogContentWidth = width
 	}
 
 	// Menu width = dialog content - outer dialog borders
@@ -824,13 +864,9 @@ func (s *DisplayOptionsScreen) SetSize(width, height int) {
 	}
 
 	// Vertical Budgeting
-	// height is already the content area (chrome already subtracted)
-	// Dialog overhead: outer borders(2) + title line(1) + button row(3) + shadow
-	shadowH := 0
-	if s.config.UI.Shadow {
-		shadowH = layout.ShadowHeight
-	}
-	overhead := layout.BorderHeight() + 1 + layout.ButtonHeight + shadowH
+	// height is already the content area (chrome and shadow space already subtracted)
+	// Dialog overhead: outer borders(2) + title line(1) + button row(3)
+	overhead := layout.BorderHeight() + 1 + layout.ButtonHeight
 
 	// Calculate options menu height first (it's dynamic based on flow)
 	optionsFlowLines := s.optionsMenu.GetFlowHeight(menuWidth)
@@ -847,22 +883,9 @@ func (s *DisplayOptionsScreen) SetSize(width, height int) {
 }
 
 func (s *DisplayOptionsScreen) IsMaximized() bool {
-	// Maximized when preview doesn't fit (no side-by-side layout)
-	layout := tui.GetLayout()
-	previewMinWidth := 48
-	shadowW := 0
-	if s.config.UI.Shadow {
-		shadowW = layout.ShadowWidth
-	}
-
-	// Calculate minimum dialog width (without shadow)
-	minDialogWidth := 44 + layout.BorderWidth()
-
-	// Preview fits if: dialog + shadow + gutter + preview fits in content area (s.width)
-	previewFits := s.width >= minDialogWidth+shadowW+layout.GutterWidth+previewMinWidth
-
-	// When preview doesn't fit, we're in "maximized" mode (dialog fills available width)
-	return !previewFits
+	// Always return true to get left-aligned positioning from AppModel
+	// Both side-by-side and single-dialog modes should start at EdgeIndent
+	return true
 }
 
 func (s *DisplayOptionsScreen) HasDialog() bool {
@@ -881,4 +904,14 @@ func (s *DisplayOptionsScreen) SetFocused(f bool) {
 	} else {
 		s.updateFocusStates()
 	}
+}
+
+// getPreviewShadowColor extracts the shadow color from the preview theme
+// Prefers foreground (for shade chars), falls back to background
+func getPreviewShadowColor() color.Color {
+	shadowStyle := tui.SemanticRawStyle("Preview_Theme_Shadow")
+	if fg := shadowStyle.GetForeground(); fg != nil {
+		return fg
+	}
+	return shadowStyle.GetBackground()
 }

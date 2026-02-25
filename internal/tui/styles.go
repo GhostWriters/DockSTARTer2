@@ -249,9 +249,14 @@ func InitStyles(cfg config.AppConfig) {
 	}
 
 	// Shadow
-	currentStyles.ShadowColor = SemanticRawStyle("Theme_Shadow").GetBackground()
-	currentStyles.Shadow = lipgloss.NewStyle().
-		Background(currentStyles.ShadowColor)
+	// Theme_Shadow defines the shadow color (foreground is used for shade characters like ░▒▓)
+	shadowDef := SemanticRawStyle("Theme_Shadow")
+	currentStyles.ShadowColor = shadowDef.GetForeground()
+	if currentStyles.ShadowColor == nil {
+		currentStyles.ShadowColor = shadowDef.GetBackground()
+	}
+	// Create shadow style with just the foreground color for shade chars
+	currentStyles.Shadow = lipgloss.NewStyle().Foreground(currentStyles.ShadowColor)
 
 	// Buttons (spacing handled at layout level)
 	// Handle nil (inherit) backgrounds by falling back to DialogBG
@@ -581,9 +586,11 @@ func AddShadowCtx(content string, ctx StyleContext) string {
 		return content
 	}
 
+	// Use WidthWithoutZones to get accurate visual width
+	// (zone markers and some ANSI sequences inflate lipgloss.Width)
 	contentWidth := 0
 	for _, line := range lines {
-		w := lipgloss.Width(line)
+		w := WidthWithoutZones(line)
 		if w > contentWidth {
 			contentWidth = w
 		}
@@ -592,11 +599,15 @@ func AddShadowCtx(content string, ctx StyleContext) string {
 	var shadowCell, bottomShadowChars string
 
 	if ctx.LineCharacters {
+		// Unicode mode: use shade characters (░▒▓█)
+		// Shadow foreground color on screen background
 		shadowStyle := ctx.Shadow.
 			Background(ctx.Screen.GetBackground())
 
 		var shadeChar string
 		switch ctx.ShadowLevel {
+		case 0:
+			shadeChar = " " // Off - just use space (effectively no visible shadow)
 		case 1:
 			shadeChar = "░"
 		case 2:
@@ -606,14 +617,35 @@ func AddShadowCtx(content string, ctx StyleContext) string {
 		case 4:
 			shadeChar = "█"
 		default:
-			shadeChar = "▓"
+			shadeChar = "▒" // Default to medium if unrecognized
 		}
 
 		shadowCell = shadowStyle.Render(strutil.Repeat(shadeChar, 2))
 		bottomShadowChars = shadowStyle.Render(strutil.Repeat(shadeChar, contentWidth-1))
 	} else {
-		shadowCell = ctx.Shadow.Width(2).Render(" ")
-		bottomShadowChars = ctx.Shadow.Width(contentWidth - 1).Render(strutil.Repeat(" ", contentWidth-1))
+		// ASCII mode: use ASCII equivalents for shade characters
+		// Shadow foreground color on screen background
+		asciiShadowStyle := ctx.Shadow.
+			Background(ctx.Screen.GetBackground())
+
+		var asciiShadeChar string
+		switch ctx.ShadowLevel {
+		case 0:
+			asciiShadeChar = " " // Off
+		case 1:
+			asciiShadeChar = "."
+		case 2:
+			asciiShadeChar = ":"
+		case 3:
+			asciiShadeChar = "#"
+		case 4:
+			asciiShadeChar = "#"
+		default:
+			asciiShadeChar = ":" // Default to medium if unrecognized
+		}
+
+		shadowCell = asciiShadowStyle.Render(strutil.Repeat(asciiShadeChar, 2))
+		bottomShadowChars = asciiShadowStyle.Render(strutil.Repeat(asciiShadeChar, contentWidth-1))
 	}
 
 	spacerCell := lipgloss.NewStyle().
@@ -626,7 +658,7 @@ func AddShadowCtx(content string, ctx StyleContext) string {
 	var result strings.Builder
 
 	line0 := lines[0]
-	w0 := lipgloss.Width(line0)
+	w0 := WidthWithoutZones(line0)
 	padding0 := ""
 	if w0 < contentWidth {
 		padding0 = strutil.Repeat(" ", contentWidth-w0)
@@ -637,7 +669,7 @@ func AddShadowCtx(content string, ctx StyleContext) string {
 
 	for i := 1; i < len(lines); i++ {
 		line := lines[i]
-		w := lipgloss.Width(line)
+		w := WidthWithoutZones(line)
 		padding := ""
 		if w < contentWidth {
 			padding = strutil.Repeat(" ", contentWidth-w)

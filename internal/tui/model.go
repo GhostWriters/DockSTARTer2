@@ -508,12 +508,12 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Update log panel with full dimensions first (so Height() is correct)
 		m.logPanel.SetSize(m.width, m.height)
 
-		// All other components use backdropHeight (terminal minus log panel strip)
-		// but we use the content area dimensions calculated below.
-		fullSizeMsg := tea.WindowSizeMsg{Width: m.width, Height: m.height}
+		// Backdrop uses backdropHeight (terminal minus log panel strip)
+		// This ensures the helpline appears above the log panel
+		backdropSizeMsg := tea.WindowSizeMsg{Width: m.width, Height: m.backdropHeight()}
 
-		// Update backdrop with full size for base layer reliability
-		backdropModel, _ := m.backdrop.Update(fullSizeMsg)
+		// Update backdrop with adjusted height so helpline is visible above log panel
+		backdropModel, _ := m.backdrop.Update(backdropSizeMsg)
 		m.backdrop = backdropModel.(BackdropModel)
 
 		caW, caH := m.getContentArea()
