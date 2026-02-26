@@ -210,7 +210,8 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.dialog != nil {
 			if sizable, ok := m.dialog.(interface{ SetSize(int, int) }); ok {
-				sizable.SetSize(caW, caH)
+				dW, dH := m.getDialogArea(m.dialog)
+				sizable.SetSize(dW, dH)
 			}
 		}
 		return m, logger.RecoverTUI(m.ctx, cmd)
@@ -248,7 +249,8 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Update dialog or active screen with content area dimensions
 		if m.dialog != nil {
 			if sizable, ok := m.dialog.(interface{ SetSize(int, int) }); ok {
-				sizable.SetSize(caW, caH)
+				dW, dH := m.getDialogArea(m.dialog)
+				sizable.SetSize(dW, dH)
 			}
 			var dialogCmd tea.Cmd
 			m.dialog, dialogCmd = m.dialog.Update(contentSizeMsg)
@@ -315,9 +317,9 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.dialog = msg.Dialog
 		if m.dialog != nil {
-			caW, caH := m.getContentArea()
+			dW, dH := m.getDialogArea(m.dialog)
 			if sizable, ok := m.dialog.(interface{ SetSize(int, int) }); ok {
-				sizable.SetSize(caW, caH)
+				sizable.SetSize(dW, dH)
 			}
 			// Explicitly focus the new dialog
 			if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
@@ -335,9 +337,9 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Show it as the main dialog (top of stack)
 		dialog := newConfirmDialog(msg.Title, msg.Question, msg.DefaultYes)
-		caW, caH := m.getContentArea()
+		dW, dH := m.getDialogArea(dialog)
 		if sizable, ok := interface{}(dialog).(interface{ SetSize(int, int) }); ok {
-			sizable.SetSize(caW, caH)
+			sizable.SetSize(dW, dH)
 		}
 		m.dialog = dialog
 		// Explicitly focus the new confirmation dialog
@@ -355,9 +357,9 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Show message dialog as the main dialog
 		dialog := newMessageDialog(msg.Title, msg.Message, msg.Type)
-		caW, caH := m.getContentArea()
+		dW, dH := m.getDialogArea(dialog)
 		if sizable, ok := interface{}(dialog).(interface{ SetSize(int, int) }); ok {
-			sizable.SetSize(caW, caH)
+			sizable.SetSize(dW, dH)
 		}
 		m.dialog = dialog
 		if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
@@ -377,9 +379,9 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Show the new dialog
 		m.dialog = msg.Dialog
 		if m.dialog != nil {
-			caW, caH := m.getContentArea()
+			dW, dH := m.getDialogArea(m.dialog)
 			if sizable, ok := m.dialog.(interface{ SetSize(int, int) }); ok {
-				sizable.SetSize(caW, caH)
+				sizable.SetSize(dW, dH)
 			}
 			if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
 				focusable.SetFocused(true)
@@ -408,9 +410,9 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Re-focus and re-size the popped dialog
 			if m.dialog != nil {
-				caW, caH := m.getContentArea()
+				dW, dH := m.getDialogArea(m.dialog)
 				if sizable, ok := m.dialog.(interface{ SetSize(int, int) }); ok {
-					sizable.SetSize(caW, caH)
+					sizable.SetSize(dW, dH)
 				}
 				if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
 					focusable.SetFocused(true)
@@ -530,6 +532,21 @@ func (m AppModel) backdropHeight() int {
 // getContentArea returns the dimensions available for screens and dialogs.
 func (m AppModel) getContentArea() (int, int) {
 	return m.backdrop.GetContentArea()
+}
+
+// getDialogArea returns the dimensions available for a specific dialog.
+// Help dialog uses the full terminal height, other dialogs use the backdrop's content area.
+func (m AppModel) getDialogArea(d tea.Model) (int, int) {
+	if _, isHelp := d.(*helpDialogModel); isHelp {
+		// Use Layout helpers directly to get full-screen content area for help
+		layout := GetLayout()
+		headerH := 1
+		if m.backdrop != nil && m.backdrop.header != nil {
+			headerH = m.backdrop.header.Height()
+		}
+		return layout.ContentArea(m.width, m.height, m.config.UI.Shadow, headerH)
+	}
+	return m.getContentArea()
 }
 
 // handleKeyMsg processes keyboard input.
@@ -910,11 +927,14 @@ func (m *AppModel) View() (v tea.View) {
 				fgHeight := lipgloss.Height(content)
 
 				// Use centralized layout helper for consistent positioning and optical centering
-				mode := DialogCentered
+				mode := DialogAbsoluteCentered
+				targetHeight := m.backdropHeight()
+
 				if m.activeScreen.IsMaximized() {
 					mode = DialogMaximized
+					targetHeight = m.height
 				}
-				lx, ly := layout.DialogPosition(mode, fgWidth, fgHeight, m.width, m.height, m.config.UI.Shadow, headerH)
+				lx, ly := layout.DialogPosition(mode, fgWidth, fgHeight, m.width, targetHeight, m.config.UI.Shadow, headerH)
 				allLayers = append(allLayers, LayerSpec{Content: content, X: lx, Y: ly, Z: 2})
 			}
 		}
@@ -942,11 +962,18 @@ func (m *AppModel) View() (v tea.View) {
 				fgHeight := lipgloss.Height(content)
 
 				// Use centralized layout helper for consistent positioning and optical centering
-				mode := DialogCentered
+				mode := DialogAbsoluteCentered
+				targetHeight := m.backdropHeight()
+
 				if maximized {
 					mode = DialogMaximized
+					targetHeight = m.height
+				} else if _, isHelp := m.dialog.(*helpDialogModel); isHelp {
+					// Help dialog ignores log panel and centers on full screen
+					targetHeight = m.height
 				}
-				lx, ly := layout.DialogPosition(mode, fgWidth, fgHeight, m.width, m.height, m.config.UI.Shadow, headerH)
+
+				lx, ly := layout.DialogPosition(mode, fgWidth, fgHeight, m.width, targetHeight, m.config.UI.Shadow, headerH)
 				allLayers = append(allLayers, LayerSpec{Content: content, X: lx, Y: ly, Z: 3})
 			}
 		}

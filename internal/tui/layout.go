@@ -16,6 +16,8 @@ const (
 	DialogMaximized
 	// DialogVerticalMaximized fills vertical space but centers horizontally
 	DialogVerticalMaximized
+	// DialogAbsoluteCentered centers horizontally and vertically in the provided space
+	DialogAbsoluteCentered
 )
 
 // Layout contains all the constants and calculations for TUI positioning.
@@ -154,6 +156,22 @@ func (l Layout) DialogPosition(mode DialogMode, dialogW, dialogH, screenW, scree
 		y = contentStartY + (contentH-dialogH+1)/2
 		if y < contentStartY {
 			y = contentStartY
+		}
+		return x, y
+
+	case DialogAbsoluteCentered:
+		// Center horizontally and vertically within the provided screenW/H
+		// Width: screen minus edge indents and shadow
+		contentW := screenW - (l.EdgeIndent * 2) - shadowW
+		x = l.EdgeIndent + (contentW-dialogW)/2
+		if x < l.EdgeIndent {
+			x = l.EdgeIndent
+		}
+
+		// Center vertically in screenH with an optical bias (+1)
+		y = (screenH - dialogH + 1) / 2
+		if y < 0 {
+			y = 0
 		}
 		return x, y
 	}
