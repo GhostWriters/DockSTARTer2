@@ -62,6 +62,8 @@ func (m *helpDialogModel) ViewString() string {
 	m.help.SetWidth(targetWidth)
 
 	dialogStyle := SemanticStyle("{{|Theme_Dialog|}}")
+	titleStyle := GetStyles().DialogTitleHelp
+	haloColor := titleStyle.GetForeground() // Use the themed black from HelpTitle
 	bgStyle := lipgloss.NewStyle().Background(dialogStyle.GetBackground())
 
 	// Apply theme styles to the help component
@@ -109,11 +111,19 @@ func (m *helpDialogModel) ViewString() string {
 			Render(content)
 	}
 
-	// Use standard RenderUniformBlockDialog (preserves cyan border bg and visible title)
-	dialogStr := RenderUniformBlockDialog("{{|Theme_TitleHelp|}}Keyboard & Mouse Controls", content)
+	// Use standard RenderDialogCtx for the border area
+	// We override the dialog background to Black for the border area and halo
+	// but keep the title's original background so it "shows what it used to"
+	ctx := GetActiveContext()
+	ctx.Dialog = ctx.Dialog.Background(haloColor)
+	ctx.DialogTitle = titleStyle.Background(GetStyles().Dialog.GetBackground())
+	ctx.BorderColor = haloColor
+	ctx.Border2Color = haloColor
 
-	// Use AddPatternHalo with solid black for the outer halo only
-	return AddPatternHalo(dialogStr, GetStyles().ShadowColor)
+	dialogStr := RenderDialogCtx("{{|Theme_TitleHelp|}}Keyboard & Mouse Controls", content, true, 0, ctx)
+
+	// Add the solid black halo
+	return AddPatternHalo(dialogStr, haloColor)
 }
 
 func (m *helpDialogModel) View() tea.View {

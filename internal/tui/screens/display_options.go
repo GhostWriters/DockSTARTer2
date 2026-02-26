@@ -151,7 +151,18 @@ func (s *DisplayOptionsScreen) updateFocusStates() {
 }
 
 func (s *DisplayOptionsScreen) shadowLevelToDesc(l int) string {
-	levels := []string{"(Off)", "(░)", "(▒)", "(▓)", "(█)"}
+	var levels []string
+	if s.config.UI.LineCharacters {
+		levels = []string{"(Off)", "(░)", "(▒)", "(▓)", "(█)"}
+	} else {
+		levels = []string{
+			"(Off)",
+			"({{|Theme_Shadow|}}.{{|Theme_OptionValue|}})",
+			"({{|Theme_Shadow|}}:{{|Theme_OptionValue|}})",
+			"({{|Theme_Shadow|}}#{{|Theme_OptionValue|}})",
+			"({{|Theme_OptionValue|}} )",
+		}
+	}
 	if l < 0 || l >= len(levels) {
 		l = 0
 	}
@@ -164,12 +175,29 @@ func (s *DisplayOptionsScreen) borderColorToDesc(c int) string {
 }
 
 func (s *DisplayOptionsScreen) dropdownDesc(val string) string {
-	return fmt.Sprintf("{{|Theme_OptionValue|}}%s{{[-]}}▼", val)
+	return fmt.Sprintf("{{|Theme_OptionValue|}}%s▼{{[-]}}", val)
 }
 
 func (s *DisplayOptionsScreen) showShadowDropdown() tea.Cmd {
 	return func() tea.Msg {
-		levels := []string{"Off", "Light (░)", "Medium (▒)", "Dark (▓)", "Solid (█)"}
+		var levels []string
+		if s.config.UI.LineCharacters {
+			levels = []string{
+				"Off",
+				"Light {{|Theme_OptionValue|}}(░){{[-]}}",
+				"Medium {{|Theme_OptionValue|}}(▒){{[-]}}",
+				"Dark {{|Theme_OptionValue|}}(▓){{[-]}}",
+				"Solid {{|Theme_OptionValue|}}(█){{[-]}}",
+			}
+		} else {
+			levels = []string{
+				"Off",
+				"Light {{|Theme_OptionValue|}}({{|Theme_Shadow|}}.{{|Theme_OptionValue|}}){{[-]}}",
+				"Medium {{|Theme_OptionValue|}}({{|Theme_Shadow|}}:{{|Theme_OptionValue|}}){{[-]}}",
+				"Dark {{|Theme_OptionValue|}}({{|Theme_Shadow|}}#{{|Theme_OptionValue|}}){{[-]}}",
+				"Solid {{|Theme_OptionValue|}}( ){{[-]}}",
+			}
+		}
 		var items []tui.MenuItem
 		for i, label := range levels {
 			level := i
@@ -198,7 +226,11 @@ func (s *DisplayOptionsScreen) showShadowDropdown() tea.Cmd {
 func (s *DisplayOptionsScreen) showBorderColorDropdown() tea.Cmd {
 	return func() tea.Msg {
 		modes := []int{1, 2, 3}
-		labels := map[int]string{1: "Border 1 (Theme Focus)", 2: "Border 2 (Theme Accent)", 3: "Both (3D Effect)"}
+		labels := map[int]string{
+			1: "Border 1 (Theme Focus) {{|Theme_OptionValue|}}(1){{[-]}}",
+			2: "Border 2 (Theme Accent) {{|Theme_OptionValue|}}(2){{[-]}}",
+			3: "Both (3D Effect) {{|Theme_OptionValue|}}(3D){{[-]}}",
+		}
 		var items []tui.MenuItem
 		for _, m := range modes {
 			mode := m
