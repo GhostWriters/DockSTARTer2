@@ -5,6 +5,7 @@ import (
 	"image/color"
 	"regexp"
 	"strings"
+	"sync"
 
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/theme"
@@ -12,11 +13,16 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-var semanticStyleCache = make(map[string]lipgloss.Style)
+var (
+	semanticStyleCache = make(map[string]lipgloss.Style)
+	cacheMu            sync.RWMutex
+)
 
 // ClearSemanticCache clears the semantic style cache.
 // This should be called whenever the theme or styles are re-initialized.
 func ClearSemanticCache() {
+	cacheMu.Lock()
+	defer cacheMu.Unlock()
 	semanticStyleCache = make(map[string]lipgloss.Style)
 }
 
@@ -24,6 +30,8 @@ func ClearSemanticCache() {
 // the given prefix string. Use this to invalidate a namespaced subset of styles
 // (e.g. "Preview_Theme_") without discarding unrelated cached styles.
 func ClearSemanticCachePrefix(prefix string) {
+	cacheMu.Lock()
+	defer cacheMu.Unlock()
 	for k := range semanticStyleCache {
 		if strings.Contains(k, prefix) {
 			delete(semanticStyleCache, k)
@@ -34,19 +42,27 @@ func ClearSemanticCachePrefix(prefix string) {
 // SemanticStyle translates a semantic color tag (e.g., {{|Theme_Title|}}) or color code
 // (e.g., {{[black:white:-B]}}) into a lipgloss.Style.
 func SemanticStyle(tag string) lipgloss.Style {
-	if s, ok := semanticStyleCache[tag]; ok {
+	cacheMu.RLock()
+	s, ok := semanticStyleCache[tag]
+	cacheMu.RUnlock()
+	if ok {
 		return s
 	}
 
+	var style lipgloss.Style
 	// If it's a semantic tag, we can try resolving it raw first for efficiency
 	if strings.HasPrefix(tag, console.SemanticPrefix) && strings.HasSuffix(tag, console.SemanticSuffix) {
 		name := tag[len(console.SemanticPrefix) : len(tag)-len(console.SemanticSuffix)]
-		return SemanticRawStyle(name)
+		style = SemanticRawStyle(name)
+	} else {
+		style = ApplyTagsToStyle(tag, lipgloss.NewStyle(), lipgloss.NewStyle())
 	}
 
-	s := ApplyTagsToStyle(tag, lipgloss.NewStyle(), lipgloss.NewStyle())
-	semanticStyleCache[tag] = s
-	return s
+	cacheMu.Lock()
+	semanticStyleCache[tag] = style
+	cacheMu.Unlock()
+
+	return style
 }
 
 // SemanticRawStyle translates a raw semantic name (e.g., "Theme_Title") into a lipgloss.Style.

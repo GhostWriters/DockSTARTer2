@@ -847,10 +847,11 @@ type LayeredView interface {
 
 // View implements tea.Model
 // Uses backdrop + overlay pattern (same as dialogs)
-func (m *AppModel) View() tea.View {
+func (m *AppModel) View() (v tea.View) {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Error(m.ctx, "AppModel.View Panic: %v", r)
+			v = tea.NewView("{{|Theme_TitleError|}}Rendering Error{{[-]}}\n\nClick outside to return.")
 		}
 	}()
 
@@ -860,11 +861,17 @@ func (m *AppModel) View() tea.View {
 
 	// Use Layout helpers for consistent positioning
 	layout := GetLayout()
-	headerH := m.backdrop.header.Height()
+	headerH := 1
+	if m.backdrop != nil && m.backdrop.header != nil {
+		headerH = m.backdrop.header.Height()
+	}
 	contentYOffset := layout.ContentStartY(headerH) // header + separator
 
 	// Layer 0: Backdrop
-	backdropContent := m.backdrop.ViewString()
+	backdropContent := ""
+	if m.backdrop != nil {
+		backdropContent = m.backdrop.ViewString()
+	}
 	allLayers := []LayerSpec{
 		{Content: backdropContent, X: 0, Y: 0, Z: 0},
 	}
@@ -949,7 +956,7 @@ func (m *AppModel) View() tea.View {
 	rendered := MultiOverlayWithBounds(m.width, m.height, allLayers...)
 
 	// Scan zones at the root level
-	v := tea.NewView(zone.Scan(rendered))
+	v = tea.NewView(zone.Scan(rendered))
 	v.MouseMode = tea.MouseModeAllMotion
 	v.AltScreen = true
 	return v

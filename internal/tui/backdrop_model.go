@@ -30,7 +30,9 @@ func NewBackdropModel(helpText string) *BackdropModel {
 // SetHelpText updates the help text displayed in the helpline
 func (m *BackdropModel) SetHelpText(text string) {
 	m.helpText = text
-	m.helpline.SetText(text)
+	if m.helpline != nil {
+		m.helpline.SetText(text)
+	}
 }
 
 // Init implements tea.Model
@@ -48,8 +50,12 @@ func (m *BackdropModel) SetSize(width, height int) {
 	m.width = width
 	m.height = height
 	// Header width reduced by 2 for padding left/right
-	m.header.SetWidth(width - 2)
-	m.helpline.SetText(m.helpText)
+	if m.header != nil {
+		m.header.SetWidth(width - 2)
+	}
+	if m.helpline != nil {
+		m.helpline.SetText(m.helpText)
+	}
 }
 
 // ViewString returns the backdrop content as a string for compositing
@@ -63,9 +69,13 @@ func (m *BackdropModel) ViewString() string {
 
 	// Header: Fill with StatusBar background, then draw content
 	// Header handles its own wrapping and alignment for narrow terminals
-	m.header.SetWidth(m.width - 2)
-	headerContent := m.header.ViewString()
-	headerHeight := lipgloss.Height(headerContent)
+	headerContent := ""
+	headerHeight := 0
+	if m.header != nil {
+		m.header.SetWidth(m.width - 2)
+		headerContent = m.header.ViewString()
+		headerHeight = lipgloss.Height(headerContent)
+	}
 
 	// Render each header line - header already handles alignment,
 	// we just add padding and background without forcing width (which would re-align)
@@ -90,9 +100,13 @@ func (m *BackdropModel) ViewString() string {
 	b.WriteString("\n")
 
 	// Calculate content height using actual header height
-	m.helpline.SetText(m.helpText)
-	helplineView := m.helpline.ViewString(m.width)
-	helplineHeight := lipgloss.Height(helplineView)
+	helplineView := ""
+	helplineHeight := 0
+	if m.helpline != nil {
+		m.helpline.SetText(m.helpText)
+		helplineView = m.helpline.ViewString(m.width)
+		helplineHeight = lipgloss.Height(helplineView)
+	}
 
 	// Content area = total height - header lines - separator (1) - helpline
 	contentHeight := m.height - headerHeight - 1 - helplineHeight
@@ -132,7 +146,10 @@ func (m *BackdropModel) GetContentArea() (width, height int) {
 	// Use Layout helpers for consistent calculations
 	layout := GetLayout()
 	hasShadow := currentConfig.UI.Shadow
-	headerH := m.header.Height()
+	headerH := 1
+	if m.header != nil {
+		headerH = m.header.Height()
+	}
 
 	return layout.ContentArea(m.width, m.height, hasShadow, headerH)
 }
