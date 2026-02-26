@@ -39,7 +39,7 @@ type HeaderModel struct {
 	focus    HeaderFocus
 }
 
-// NewHeaderModel creates a new header model
+// NewHeaderModel creates a new header model with default values
 func NewHeaderModel() HeaderModel {
 	hostname, _ := os.Hostname()
 
@@ -113,127 +113,93 @@ func (m *HeaderModel) HandleMouse(msg tea.MouseClickMsg) (bool, tea.Cmd) {
 	return false, nil
 }
 
+// Height returns the number of lines the header currently occupies.
+func (m HeaderModel) Height() int {
+	return lipgloss.Height(m.View())
+}
+
 // View renders the header as a string (used by backdrop for compositing)
 func (m HeaderModel) View() string {
 	styles := GetStyles()
 
-	// Render content for each section
 	left := m.renderLeft()
 	center := m.renderCenter()
 	appVer, tmplVer := m.renderVersions()
 
-	// Calculate widths (use WidthWithoutZones for accurate measurement with zone markers)
-	leftWidth := WidthWithoutZones(left)
-	centerWidth := WidthWithoutZones(center)
-	appVerWidth := WidthWithoutZones(appVer)
-	tmplVerWidth := WidthWithoutZones(tmplVer)
+	leftW := WidthWithoutZones(left)
+	centerW := WidthWithoutZones(center)
+	appW := WidthWithoutZones(appVer)
+	tmplW := WidthWithoutZones(tmplVer)
 
-	// Try to fit everything on one line: left | center | appVer tmplVer
-	totalWidth := leftWidth + centerWidth + appVerWidth + tmplVerWidth + 2 // +2 for spacing
-	if totalWidth <= m.width {
-		// Single line layout - fill entire width first, then place content
-		right := appVer + tmplVer
-		rightWidth := appVerWidth + tmplVerWidth
+	// Branding (center) ideal position
+	centerX := (m.width - centerW) / 2
+	if centerX < 0 {
+		centerX = 0
+	}
 
-		remainingWidth := m.width - centerWidth
-		leftSectionWidth := remainingWidth / 2
-		rightSectionWidth := remainingWidth - leftSectionWidth
+	// 1. Single Line Layout: [Left] [Center] [App] [Tmpl]
+	// Requirements:
+	// - Left doesn't collide with Center (min 1 space)
+	// - Center doesn't collide with Right (min 1 space)
+	// - Right fits in terminal
+	rightW := appW + tmplW
+	fitsLine1 := true
+	if leftW+1 > centerX {
+		fitsLine1 = false
+	}
+	if centerX+centerW+1+rightW > m.width {
+		fitsLine1 = false
+	}
 
-		// Build left section (content + padding to fill section)
-		leftPadding := leftSectionWidth - leftWidth
-		if leftPadding < 0 {
-			leftPadding = 0
-		}
-
-		// Build right section (padding + content to right-align)
-		rightPadding := rightSectionWidth - rightWidth
-		if rightPadding < 0 {
-			rightPadding = 0
-		}
-
-		// Combine all into one line and render with single background style
-		fullLine := left + strutil.Repeat(" ", leftPadding) + center + strutil.Repeat(" ", rightPadding) + right
-
-		// Ensure line fills entire width (handles any rounding issues)
-		lineWidth := WidthWithoutZones(fullLine)
-		if lineWidth < m.width {
-			fullLine += strutil.Repeat(" ", m.width-lineWidth)
-		}
-
+	if fitsLine1 {
+		fullLine := left + strutil.Repeat(" ", centerX-leftW) + center + strutil.Repeat(" ", m.width-(centerX+centerW)-rightW) + appVer + tmplVer
 		return MaintainBackground(fullLine, styles.HeaderBG)
 	}
 
-	// Try fitting left | center | appVer on line 1, tmplVer on line 2
-	line1Width := leftWidth + centerWidth + appVerWidth + 2
-	if line1Width <= m.width {
-		// Line 1: left + center + appVer (with proper spacing)
-		remainingWidth := m.width - centerWidth
-		leftSectionWidth := remainingWidth / 2
-		rightSectionWidth := remainingWidth - leftSectionWidth
-
-		leftPadding := leftSectionWidth - leftWidth
-		if leftPadding < 0 {
-			leftPadding = 0
-		}
-
-		rightPadding := rightSectionWidth - appVerWidth
-		if rightPadding < 0 {
-			rightPadding = 0
-		}
-
-		// Build line 1 as single string
-		fullLine1 := left + strutil.Repeat(" ", leftPadding) + center + strutil.Repeat(" ", rightPadding) + appVer
-
-		// Ensure line fills entire width
-		line1VisualWidth := WidthWithoutZones(fullLine1)
-		if line1VisualWidth < m.width {
-			fullLine1 += strutil.Repeat(" ", m.width-line1VisualWidth)
-		}
-		line1 := MaintainBackground(fullLine1, styles.HeaderBG)
-
-		// Line 2: tmplVer right-aligned with proper background
-		padding2 := m.width - tmplVerWidth
-		if padding2 < 0 {
-			padding2 = 0
-		}
-		fullLine2 := strutil.Repeat(" ", padding2) + tmplVer
-
-		// Ensure line 2 fills entire width
-		line2VisualWidth := WidthWithoutZones(fullLine2)
-		if line2VisualWidth < m.width {
-			fullLine2 += strutil.Repeat(" ", m.width-line2VisualWidth)
-		}
-		line2 := MaintainBackground(fullLine2, styles.HeaderBG)
-
-		return line1 + "\n" + line2
+	// 2. Wrap Stage 1: [Left] [Center] [App] on Line 1, [Tmpl] on Line 2
+	// Verify if Line 1 fits
+	fitsStage1 := true
+	if leftW+1 > centerX {
+		fitsStage1 = false
+	}
+	if centerX+centerW+1+appW > m.width {
+		fitsStage1 = false
 	}
 
-	// Fallback: left + center on line 1, both versions on line 2
-	// Build line 1: content + padding to fill width
-	fullLine1 := left + " " + center
-	line1VisualWidth := WidthWithoutZones(fullLine1)
-	if line1VisualWidth < m.width {
-		fullLine1 += strutil.Repeat(" ", m.width-line1VisualWidth)
+	if fitsStage1 {
+		line1 := left + strutil.Repeat(" ", centerX-leftW) + center + strutil.Repeat(" ", m.width-(centerX+centerW)-appW) + appVer
+		line2 := strutil.Repeat(" ", m.width-tmplW) + tmplVer
+		return MaintainBackground(line1, styles.HeaderBG) + "\n" + MaintainBackground(line2, styles.HeaderBG)
 	}
-	line1 := MaintainBackground(fullLine1, styles.HeaderBG)
 
-	// Line 2: padding + both versions (right-aligned)
-	right := appVer + tmplVer
-	rightWidth := appVerWidth + tmplVerWidth
-	padding2 := m.width - rightWidth
-	if padding2 < 0 {
-		padding2 = 0
+	// 3. Wrap Stage 2: [Left] [Center] on Line 1, [App] on Line 2, [Tmpl] on Line 3
+	// Verify if Line 1 fits
+	if leftW+1 <= centerX {
+		line1 := left + strutil.Repeat(" ", centerX-leftW) + center
+		line1 = line1 + strutil.Repeat(" ", m.width-WidthWithoutZones(line1))
+		line2 := strutil.Repeat(" ", m.width-appW) + appVer
+		line3 := strutil.Repeat(" ", m.width-tmplW) + tmplVer
+		return MaintainBackground(line1, styles.HeaderBG) + "\n" +
+			MaintainBackground(line2, styles.HeaderBG) + "\n" +
+			MaintainBackground(line3, styles.HeaderBG)
 	}
-	fullLine2 := strutil.Repeat(" ", padding2) + right
 
-	// Ensure line 2 fills entire width
-	line2VisualWidth := WidthWithoutZones(fullLine2)
-	if line2VisualWidth < m.width {
-		fullLine2 += strutil.Repeat(" ", m.width-line2VisualWidth)
+	// Fallback: Total Stacked Layout
+	line1 := left
+	if WidthWithoutZones(line1) < m.width {
+		line1 += strutil.Repeat(" ", m.width-WidthWithoutZones(line1))
 	}
-	line2 := MaintainBackground(fullLine2, styles.HeaderBG)
+	line2 := center
+	if WidthWithoutZones(line2) < m.width {
+		line2 += strutil.Repeat(" ", m.width-WidthWithoutZones(line2))
+	}
+	line3 := strutil.Repeat(" ", m.width-appW) + appVer
+	line4 := strutil.Repeat(" ", m.width-tmplW) + tmplVer
 
-	return line1 + "\n" + line2
+	return MaintainBackground(line1, styles.HeaderBG) + "\n" +
+		MaintainBackground(line2, styles.HeaderBG) + "\n" +
+		MaintainBackground(line3, styles.HeaderBG) + "\n" +
+		MaintainBackground(line4, styles.HeaderBG)
 }
 
 func (m HeaderModel) renderLeft() string {

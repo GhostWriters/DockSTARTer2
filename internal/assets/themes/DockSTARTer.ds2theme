@@ -42,6 +42,7 @@ TitleHelp = "{{|Theme_Title|}}"
 
 Title = "{{[black:-:-U]}}"
 TitleNotice = "{{[white:green:B]}}"
+OptionValue = "{{[white:green:B]}}"
 TitleWarn = "{{|Theme_Title|}}{{[:yellow]}}"
 TitleError = "{{|Theme_Title|}}{{[:red]}}"
 TitleSuccess = "{{|Theme_Title|}}{{[:green]}}"

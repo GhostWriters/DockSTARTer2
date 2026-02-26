@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/strutil"
 	"fmt"
 	"io"
@@ -1595,9 +1596,25 @@ func (m *MenuModel) renderFlow() string {
 
 		itemContent := prefix + tagStr
 
+		// For non-checkbox/non-radio items (e.g. dropdowns), append
+		// the Desc inline so the current value is visible without clicking.
+		if !item.IsCheckbox && !item.IsRadioButton && item.Desc != "" {
+			desc := item.Desc
+			if isSelected {
+				// Strip OptionValue tag so the value inherits selection colors (e.g. red background)
+				desc = strings.ReplaceAll(desc, "{{|Theme_OptionValue|}}", "")
+			}
+			// Include leading space in RenderThemeText so it gets the correct background
+			itemContent += RenderThemeText(" "+desc, tagStyle)
+		}
+
 		// Mark zone for click detection
 		zoneID := fmt.Sprintf("item-%s-%d", m.id, i)
 		itemContent = zone.Mark(zoneID, itemContent)
+
+		// Hard reset after each element to ensure background colors (like selection)
+		// don't bleed into the itemSpacing gaps.
+		itemContent += console.CodeReset
 
 		itemWidth := lipgloss.Width(GetPlainText(itemContent))
 
@@ -1686,6 +1703,12 @@ func (m *MenuModel) GetFlowHeight(width int) int {
 		}
 
 		itemWidth := cbWidth + lipgloss.Width(GetPlainText(item.Tag))
+
+		// For non-checkbox/non-radio items, include the Desc width
+		// to match renderFlow which appends Desc inline
+		if !item.IsCheckbox && !item.IsRadioButton && item.Desc != "" {
+			itemWidth += 1 + lipgloss.Width(GetPlainText(item.Desc))
+		}
 
 		if currentLineWidth > 0 && currentLineWidth+itemSpacing+itemWidth > maxWidth {
 			lines++

@@ -661,3 +661,13 @@ func ZoneClick(msg tea.Msg, id string) bool {
 	}
 	return false
 }
+
+// InZone returns true if the mouse message (any type) is within the specified zone
+func InZone(msg tea.Msg, id string) bool {
+	if mouseMsg, ok := msg.(tea.MouseMsg); ok {
+		if info := zone.Get(id); info != nil {
+			return info.InBounds(mouseMsg)
+		}
+	}
+	return false
+}

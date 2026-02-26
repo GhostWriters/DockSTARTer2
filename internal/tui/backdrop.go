@@ -105,7 +105,12 @@ func GetAvailableDialogSize(width, height int) (int, int) {
 	layout := GetLayout()
 	hasShadow := currentConfig.UI.Shadow
 
-	availableWidth, availableHeight := layout.ContentArea(width, height, hasShadow)
+	// Calculate header height dynamically for sizing
+	header := NewHeaderModel()
+	header.SetWidth(width - 2)
+	headerH := header.Height()
+
+	availableWidth, availableHeight := layout.ContentArea(width, height, hasShadow, headerH)
 
 	// Account for log panel if visible
 	availableHeight -= logPanelExtraHeight

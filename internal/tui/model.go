@@ -725,38 +725,12 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 // handleMouseMsg processes mouse input.
 // Returns (model, cmd, handled) where handled indicates if the event was consumed.
 func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
-	// Specialized Help Blockade
-	// If help is open, ANY click closes it for convenience.
-	if m.dialog != nil {
-		if _, ok := m.dialog.(*helpDialogModel); ok {
-			if _, ok := msg.(tea.MouseClickMsg); ok {
-				var cmd tea.Cmd
-				m.dialog, cmd = m.dialog.Update(msg)
-				return m, cmd, true
-			}
-		}
-	}
-
-	// MODAL PRIORITY: Handle dialog mouse events FIRST
-	if m.dialog != nil {
-		var cmd tea.Cmd
-		m.dialog, cmd = m.dialog.Update(msg)
-		if cmd != nil {
-			return m, logger.RecoverTUI(m.ctx, cmd), true
-		}
-		// If dialog is modal, we usually don't want clicks falling through
-		// unless it's a click outside the dialog. For now, we allow fallthrough
-		// for background elements IF the dialog didn't consume it.
-	}
-
-	// Handle Drag Resizing (Log Panel)
-	// If log panel is dragging, it needs to receive mouse events even if outside its zone
+	// 1. RESIZE DRAG PRIORITY: If log panel is dragging, it intercepts EVERYTHING
 	if m.logPanel.isDragging {
 		updated, cmd := m.logPanel.Update(msg)
 		m.logPanel = updated.(LogPanelModel)
 
 		// If height changed, we need to resize other components
-		// Resize backdrop, screen, and dialog to match new panel height
 		backdropMsg := tea.WindowSizeMsg{Width: m.width, Height: m.backdropHeight()}
 		backdropModel, _ := m.backdrop.Update(backdropMsg)
 		m.backdrop = backdropModel.(BackdropModel)
@@ -773,7 +747,49 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		return m, cmd, true
 	}
 
-	// Handle specific global mouse interactions (Header, Log Panel)
+	// 2. FOCUS PRIORITY: If log panel has keyboard focus, it owns the scroll wheel and middle click.
+	// We do this BEFORE dialog checks so that if a user tabs to logs and a dialog is behind it,
+	// the wheel still scrolls the logs.
+	if m.logPanelFocused {
+		if _, ok := msg.(tea.MouseWheelMsg); ok {
+			updated, cmd := m.logPanel.Update(msg)
+			m.logPanel = updated.(LogPanelModel)
+			return m, cmd, true
+		}
+		if click, ok := msg.(tea.MouseClickMsg); ok && click.Button == tea.MouseMiddle {
+			updated, cmd := m.logPanel.Update(msg)
+			m.logPanel = updated.(LogPanelModel)
+			return m, cmd, true
+		}
+	}
+
+	// 3. HELP BLOCKADE: If help is open, ANY click closes it for convenience.
+	if m.dialog != nil {
+		if _, ok := m.dialog.(*helpDialogModel); ok {
+			if _, ok := msg.(tea.MouseClickMsg); ok {
+				var cmd tea.Cmd
+				m.dialog, cmd = m.dialog.Update(msg)
+				return m, cmd, true
+			}
+		}
+	}
+
+	// 4. MODAL PRIORITY: Handle dialog mouse events next
+	if m.dialog != nil {
+		var cmd tea.Cmd
+		m.dialog, cmd = m.dialog.Update(msg)
+		if cmd != nil {
+			return m, logger.RecoverTUI(m.ctx, cmd), true
+		}
+		// If the dialog is modal and it didn't return a command (handled it),
+		// we stop here so clicks don't fall through to elements underneath.
+		// However, wheel events are handled differently in Bubble Tea v2 components
+		// often returning nil cmd but still having internal state changes.
+		// For now, if a dialog exists, we capture MOST things but allow the log panel
+		// toggle/resize below if users really want to click those while a dialog is open.
+	}
+
+	// 5. GLOBAL INTERACTIONS: Header, Log Panel toggles, resizing
 	if click, ok := msg.(tea.MouseClickMsg); ok && click.Button == tea.MouseLeft {
 		// Check log panel RESIZE clicks (top level UI elements)
 		if zi := zone.Get(logResizeZoneID); zi != nil && zi.InBounds(click) {
@@ -786,10 +802,13 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		if zi := zone.Get(logPanelZoneID); zi != nil && zi.InBounds(click) {
 			return m, func() tea.Msg { return toggleLogPanelMsg{} }, true
 		}
+
+		// Click inside log viewport focuses it
 		if zi := zone.Get(logViewportZoneID); zi != nil && zi.InBounds(click) {
 			m.setLogPanelFocus(true)
 			return m, nil, true
 		}
+
 		// Click outside log panel — return focus to screen/dialog
 		if m.logPanelFocused {
 			m.setLogPanelFocus(false)
@@ -850,7 +869,8 @@ func (m AppModel) View() tea.View {
 
 	// Use Layout helpers for consistent positioning
 	layout := GetLayout()
-	contentYOffset := layout.ContentStartY() // header + separator
+	headerH := m.backdrop.header.Height()
+	contentYOffset := layout.ContentStartY(headerH) // header + separator
 
 	// Layer 0: Backdrop
 	backdropContent := m.backdrop.ViewString()

@@ -185,7 +185,11 @@ func ShowMessageDialog(title, message string, msgType MessageType) {
 	helpText := "Press any key to continue"
 	dialog := newMessageDialog(title, message, msgType)
 
-	_, _ = RunDialogWithBackdrop(dialog, helpText, PositionCenter)
+	header := NewHeaderModel()
+	header.SetWidth(80)
+	headerH := header.Height()
+
+	_, _ = RunDialogWithBackdrop(dialog, helpText, GetPositionCenter(headerH))
 }
 
 // ShowInfoDialog displays an info message dialog

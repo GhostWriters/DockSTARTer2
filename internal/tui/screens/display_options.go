@@ -151,7 +151,7 @@ func (s *DisplayOptionsScreen) updateFocusStates() {
 }
 
 func (s *DisplayOptionsScreen) shadowLevelToDesc(l int) string {
-	levels := []string{"Off", "Light (░)", "Medium (▒)", "Dark (▓)", "Solid (█)"}
+	levels := []string{"(Off)", "(░)", "(▒)", "(▓)", "(█)"}
 	if l < 0 || l >= len(levels) {
 		l = 0
 	}
@@ -159,12 +159,12 @@ func (s *DisplayOptionsScreen) shadowLevelToDesc(l int) string {
 }
 
 func (s *DisplayOptionsScreen) borderColorToDesc(c int) string {
-	modes := map[int]string{1: "Border 1", 2: "Border 2", 3: "Both (3D)"}
+	modes := map[int]string{1: "(1)", 2: "(2)", 3: "(3D)"}
 	return modes[c]
 }
 
 func (s *DisplayOptionsScreen) dropdownDesc(val string) string {
-	return fmt.Sprintf("{{[-]}}{{|Theme_TitleNotice|}}%s{{[-]}} {{[-]}}{{|Theme_LineComment|}}▼{{[-]}}", val)
+	return fmt.Sprintf("{{|Theme_OptionValue|}}%s{{[-]}}▼", val)
 }
 
 func (s *DisplayOptionsScreen) showShadowDropdown() tea.Cmd {
@@ -285,32 +285,44 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		s.width = msg.Width
-		s.height = msg.Height
+		s.SetSize(msg.Width, msg.Height)
+		return s, nil
 
-		// The settings dialog has overhead: Title (2) + Borders (2) + Shadow (1) + Buttons (min 3) = 8
-		dialogOverhead := 8
-		menuHeight := s.height - dialogOverhead
-		if menuHeight < 5 {
-			menuHeight = 5
+	case tea.MouseWheelMsg:
+		// ONLY scroll the focused panel, no mouse-over fallback
+		if s.focusedPanel == FocusThemes {
+			updated, uCmd := s.themeMenu.Update(msg)
+			if m, ok := updated.(*tui.MenuModel); ok {
+				s.themeMenu = m
+			}
+			return s, uCmd
+		} else if s.focusedPanel == FocusOptions {
+			updated, uCmd := s.optionsMenu.Update(msg)
+			if m, ok := updated.(*tui.MenuModel); ok {
+				s.optionsMenu = m
+			}
+			return s, uCmd
 		}
-
-		// We pass a modified WindowSizeMsg to the submenus so they size themselves to our available height
-		subMsg := tea.WindowSizeMsg{Width: s.width / 2, Height: menuHeight}
-
-		updatedTheme, _ := s.themeMenu.Update(subMsg)
-		if m, ok := updatedTheme.(*tui.MenuModel); ok {
-			s.themeMenu = m
-		}
-
-		updatedOptions, _ := s.optionsMenu.Update(subMsg)
-		if m, ok := updatedOptions.(*tui.MenuModel); ok {
-			s.optionsMenu = m
-		}
-
 		return s, nil
 
 	case tea.MouseClickMsg:
+		if msg.Button == tea.MouseMiddle {
+			if tui.InZone(msg, "ThemePanel") {
+				updated, uCmd := s.themeMenu.Update(msg)
+				if m, ok := updated.(*tui.MenuModel); ok {
+					s.themeMenu = m
+				}
+				return s, uCmd
+			} else if tui.InZone(msg, "OptionsPanel") {
+				updated, uCmd := s.optionsMenu.Update(msg)
+				if m, ok := updated.(*tui.MenuModel); ok {
+					s.optionsMenu = m
+				}
+				return s, uCmd
+			}
+			return s, nil
+		}
+
 		// Focus routing via panel zones
 		if tui.ZoneClick(msg, "ThemePanel") {
 			s.focusedPanel = FocusThemes
@@ -485,7 +497,10 @@ func (s *DisplayOptionsScreen) ViewString() string {
 		if termW > 0 && termH > 0 {
 			// Apply content area calculation
 			hasShadow := s.config.UI.Shadow
-			width, height = layout.ContentArea(termW, termH, hasShadow)
+			header := tui.NewHeaderModel()
+			header.SetWidth(termW - 2)
+			headerH := header.Height()
+			width, height = layout.ContentArea(termW, termH, hasShadow, headerH)
 			height-- // Match the -1 applied in SetSize (display_options fills full ContentArea)
 		}
 	}

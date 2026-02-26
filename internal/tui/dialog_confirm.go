@@ -204,7 +204,12 @@ func ShowConfirmDialog(title, question string, defaultYes bool) bool {
 	helpText := "Y/N to choose | Enter to confirm | Esc to cancel"
 	dialog := newConfirmDialog(title, question, defaultYes)
 
-	finalDialog, err := RunDialogWithBackdrop(dialog, helpText, PositionCenter)
+	// Otherwise, run standalone with backdrop
+	header := NewHeaderModel()
+	header.SetWidth(80) // Initial width
+	headerH := header.Height()
+
+	finalDialog, err := RunDialogWithBackdrop(dialog, helpText, GetPositionCenter(headerH))
 	if err != nil {
 		// Fallback to default on error
 		return defaultYes

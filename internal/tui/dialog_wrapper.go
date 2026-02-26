@@ -30,24 +30,16 @@ type DialogPosition struct {
 }
 
 // GetPositionCenter returns a centered dialog position using Layout helpers
-func GetPositionCenter() DialogPosition {
+func GetPositionCenter(headerH int) DialogPosition {
 	layout := GetLayout()
-	return DialogPosition{OverlayCenter, OverlayTop, 0, layout.ContentStartY()}
+	return DialogPosition{OverlayCenter, OverlayTop, 0, layout.ContentStartY(headerH)}
 }
 
 // GetPositionTopLeft returns top-left position for maximized dialogs using Layout helpers
-func GetPositionTopLeft() DialogPosition {
+func GetPositionTopLeft(headerH int) DialogPosition {
 	layout := GetLayout()
-	return DialogPosition{OverlayLeft, OverlayTop, layout.EdgeIndent, layout.ContentStartY()}
+	return DialogPosition{OverlayLeft, OverlayTop, layout.EdgeIndent, layout.ContentStartY(headerH)}
 }
-
-// Common dialog positions (using Layout helpers)
-var (
-	// PositionCenter centers the dialog horizontally in the content area
-	PositionCenter = GetPositionCenter()
-	// PositionTopLeft positions the dialog at top-left of content area (for maximized dialogs)
-	PositionTopLeft = GetPositionTopLeft()
-)
 
 // DialogWithBackdrop wraps any DialogModel with the standard backdrop
 type DialogWithBackdrop[T DialogModel] struct {
@@ -59,10 +51,15 @@ type DialogWithBackdrop[T DialogModel] struct {
 
 // NewDialogWithBackdrop creates a new wrapper with centered positioning
 func NewDialogWithBackdrop[T DialogModel](dialog T, helpText string) DialogWithBackdrop[T] {
+	header := NewHeaderModel()
+	// Dummy size for initial height calculation
+	header.SetWidth(80)
+	headerH := header.Height()
+
 	return DialogWithBackdrop[T]{
 		backdrop: NewBackdropModel(helpText),
 		dialog:   dialog,
-		position: PositionCenter,
+		position: GetPositionCenter(headerH),
 		helpText: helpText,
 	}
 }
@@ -100,6 +97,16 @@ func (m DialogWithBackdrop[T]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Resize dialog to fit available space (accounting for header/footer/shadow)
 		availW, availH := GetAvailableDialogSize(wsm.Width, wsm.Height)
 		m.dialog.SetSize(availW, availH)
+
+		// Update position if it was centered/topleft
+		headerH := m.backdrop.header.Height()
+		// We assume if it was centered or at ContentStartY, it should stay that way
+		// but we don't have a record of the "mode".
+		// For simplicity, we just recalculate based on current position's Y if it's aligned to old chrome
+		// But in DialogWithBackdrop, usually it's either centered or top-left.
+		// If YOffset matches old ContentStartY, update it.
+		layout := GetLayout()
+		m.position.YOffset = layout.ContentStartY(headerH)
 
 		// Do not pass WindowSizeMsg to dialog, as we've already handled sizing
 		// and we don't want the dialog to reset to full screen size.
@@ -139,6 +146,11 @@ func (m DialogWithBackdrop[T]) View() tea.View {
 	}
 
 	// Composite dialog over backdrop at the specified position
+	// Ensure YOffset is current
+	headerH := m.backdrop.header.Height()
+	layout := GetLayout()
+	m.position.YOffset = layout.ContentStartY(headerH)
+
 	output := Overlay(
 		dialogContent,
 		backdropContent,

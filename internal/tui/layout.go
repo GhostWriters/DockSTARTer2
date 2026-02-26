@@ -22,7 +22,6 @@ const (
 // This is the single source of truth - no magic numbers elsewhere.
 type Layout struct {
 	// Screen chrome (always present)
-	HeaderHeight    int // Currently 1 line (could be dynamic if header wraps)
 	SeparatorHeight int // 1 line
 
 	// Helpline at bottom
@@ -48,7 +47,6 @@ type Layout struct {
 // DefaultLayout returns the standard layout configuration
 func DefaultLayout() Layout {
 	return Layout{
-		HeaderHeight:      1,
 		SeparatorHeight:   1,
 		HelplineHeight:    1,
 		DialogBorder:      2,
@@ -73,13 +71,13 @@ func GetLayout() Layout {
 // -------------------------------------------------------------------
 
 // ChromeHeight returns the total height of screen chrome (header + separator)
-func (l Layout) ChromeHeight() int {
-	return l.HeaderHeight + l.SeparatorHeight
+func (l Layout) ChromeHeight(headerHeight int) int {
+	return headerHeight + l.SeparatorHeight
 }
 
 // ContentStartY returns the Y coordinate where content area begins (just under separator)
-func (l Layout) ContentStartY() int {
-	return l.ChromeHeight()
+func (l Layout) ContentStartY(headerHeight int) int {
+	return l.ChromeHeight(headerHeight)
 }
 
 // BottomChrome returns total height reserved at bottom (gap + helpline)
@@ -93,7 +91,7 @@ func (l Layout) BottomChrome() int {
 
 // ContentArea returns the dimensions available for dialogs/screens
 // This is the space between header/separator and helpline
-func (l Layout) ContentArea(screenW, screenH int, hasShadow bool) (width, height int) {
+func (l Layout) ContentArea(screenW, screenH int, hasShadow bool, headerHeight int) (width, height int) {
 	shadowW, shadowH := 0, 0
 	if hasShadow {
 		shadowW, shadowH = l.ShadowWidth, l.ShadowHeight
@@ -103,7 +101,7 @@ func (l Layout) ContentArea(screenW, screenH int, hasShadow bool) (width, height
 	width = screenW - (l.EdgeIndent * 2) - shadowW
 
 	// Height: screen minus top chrome, bottom chrome, and shadow
-	height = screenH - l.ChromeHeight() - l.BottomChrome() - shadowH
+	height = screenH - l.ChromeHeight(headerHeight) - l.BottomChrome() - shadowH
 
 	// Ensure minimums
 	if width < 10 {
@@ -121,8 +119,8 @@ func (l Layout) ContentArea(screenW, screenH int, hasShadow bool) (width, height
 // -------------------------------------------------------------------
 
 // DialogPosition returns the X, Y coordinates for a dialog based on mode
-func (l Layout) DialogPosition(mode DialogMode, dialogW, dialogH, screenW, screenH int, hasShadow bool) (x, y int) {
-	contentStartY := l.ContentStartY()
+func (l Layout) DialogPosition(mode DialogMode, dialogW, dialogH, screenW, screenH int, hasShadow bool, headerHeight int) (x, y int) {
+	contentStartY := l.ContentStartY(headerHeight)
 	shadowW, shadowH := 0, 0
 	if hasShadow {
 		shadowW, shadowH = l.ShadowWidth, l.ShadowHeight
@@ -145,7 +143,7 @@ func (l Layout) DialogPosition(mode DialogMode, dialogW, dialogH, screenW, scree
 
 	case DialogCentered:
 		// Center in content area
-		contentW, contentH := l.ContentArea(screenW, screenH, hasShadow)
+		contentW, contentH := l.ContentArea(screenW, screenH, hasShadow, headerHeight)
 
 		// Center horizontally in content area
 		x = l.EdgeIndent + (contentW-dialogW)/2
@@ -165,8 +163,8 @@ func (l Layout) DialogPosition(mode DialogMode, dialogW, dialogH, screenW, scree
 }
 
 // MaximizedDialogSize returns the dimensions for a maximized dialog
-func (l Layout) MaximizedDialogSize(screenW, screenH int, hasShadow bool) (width, height int) {
-	return l.ContentArea(screenW, screenH, hasShadow)
+func (l Layout) MaximizedDialogSize(screenW, screenH int, hasShadow bool, headerHeight int) (width, height int) {
+	return l.ContentArea(screenW, screenH, hasShadow, headerHeight)
 }
 
 // -------------------------------------------------------------------
@@ -278,11 +276,11 @@ func (l Layout) ConstrainWidth(content string, maxWidth int) string {
 // -------------------------------------------------------------------
 
 // PlaceDialog returns a LayerSpec for a dialog with computed position
-func (l Layout) PlaceDialog(content string, screenW, screenH int, mode DialogMode, hasShadow bool, zIndex int) LayerSpec {
+func (l Layout) PlaceDialog(content string, screenW, screenH int, mode DialogMode, hasShadow bool, zIndex int, headerHeight int) LayerSpec {
 	dialogW := lipgloss.Width(content)
 	dialogH := lipgloss.Height(content)
 
-	x, y := l.DialogPosition(mode, dialogW, dialogH, screenW, screenH, hasShadow)
+	x, y := l.DialogPosition(mode, dialogW, dialogH, screenW, screenH, hasShadow, headerHeight)
 
 	return LayerSpec{
 		Content: content,
@@ -293,9 +291,9 @@ func (l Layout) PlaceDialog(content string, screenW, screenH int, mode DialogMod
 }
 
 // PlaceSideBySide returns LayerSpecs for two side-by-side panels
-func (l Layout) PlaceSideBySide(left, right string, screenW, screenH int, hasShadow bool, zIndex int) []LayerSpec {
+func (l Layout) PlaceSideBySide(left, right string, screenW, screenH int, hasShadow bool, zIndex int, headerHeight int) []LayerSpec {
 	_, _, leftX, rightX := l.SideBySideLayout(screenW, hasShadow)
-	y := l.ContentStartY()
+	y := l.ContentStartY(headerHeight)
 
 	return []LayerSpec{
 		{Content: left, X: leftX, Y: y, Z: zIndex},
