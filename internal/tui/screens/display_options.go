@@ -782,7 +782,7 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	// Backdrop - calculate height to fill available space
 	// Structure: headerRow(1) + sepRow(1) + backdrop + helpRow(1) + logStripRow(1) + outer borders(2) + shadow(1 if enabled)
 	fixedLines := 6 // header + sep + help + logstrip + 2 borders
-	if s.config.UI.Shadow {
+	if tui.IsShadowEnabled() {
 		fixedLines++ // shadow adds 1 line
 	}
 	backdropHeight := targetHeight - fixedLines

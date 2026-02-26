@@ -210,6 +210,10 @@ func InitStyles(cfg config.AppConfig) {
 		theme.ApplyThemeDefaults(&cfg, *defaults)
 	}
 
+	// Update the global config so IsShadowEnabled(), GetActiveContext().ShadowLevel,
+	// and any other currentConfig readers see the new values immediately.
+	currentConfig = cfg
+
 	// Store LineCharacters setting for later use
 	currentStyles.LineCharacters = cfg.UI.LineCharacters // Updated: Use cfg.UI.LineCharacters
 	currentStyles.DrawBorders = cfg.UI.Borders
