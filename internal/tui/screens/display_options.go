@@ -456,7 +456,7 @@ func (s *DisplayOptionsScreen) applyPreview(themeName string) {
 		theme.ApplyThemeDefaults(&s.config, *defaults)
 	}
 	s.syncOptionsMenu()
-	tui.ClearSemanticCache()
+	tui.ClearSemanticCachePrefix("Preview_Theme_")
 }
 
 func (s *DisplayOptionsScreen) syncOptionsMenu() {

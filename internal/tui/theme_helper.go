@@ -20,6 +20,17 @@ func ClearSemanticCache() {
 	semanticStyleCache = make(map[string]lipgloss.Style)
 }
 
+// ClearSemanticCachePrefix removes only those cache entries whose key contains
+// the given prefix string. Use this to invalidate a namespaced subset of styles
+// (e.g. "Preview_Theme_") without discarding unrelated cached styles.
+func ClearSemanticCachePrefix(prefix string) {
+	for k := range semanticStyleCache {
+		if strings.Contains(k, prefix) {
+			delete(semanticStyleCache, k)
+		}
+	}
+}
+
 // SemanticStyle translates a semantic color tag (e.g., {{|Theme_Title|}}) or color code
 // (e.g., {{[black:white:-B]}}) into a lipgloss.Style.
 func SemanticStyle(tag string) lipgloss.Style {
