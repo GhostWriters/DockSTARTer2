@@ -127,20 +127,21 @@ func (m *confirmDialogModel) ViewString() string {
 		return ""
 	}
 
-	// Question text style
-	questionStyle := lipgloss.NewStyle().
-		Padding(1, 2)
+	ctx := GetActiveContext()
+	borderBG := ctx.Dialog.GetBackground()
 
-	// Calculate content width from layout
-	contentWidth := m.layout.Width - 2
+	// Question text style - inherit from ctx.Dialog to get background
+	questionStyle := ctx.Dialog.
+		Padding(1, 2).
+		Width(m.layout.Width - 2)
 
 	// Apply style and wrap
-	questionStyle = questionStyle.Width(contentWidth)
 	questionText := questionStyle.Render(console.Sprintf("%s", m.question))
 
 	// Render buttons using the standard button helper
-	buttonRow := RenderCenteredButtons(
-		contentWidth,
+	buttonRow := RenderCenteredButtonsCtx(
+		m.layout.Width-2,
+		ctx,
 		ButtonSpec{Text: "Yes", Active: m.result},
 		ButtonSpec{Text: "No", Active: !m.result},
 	)
@@ -150,8 +151,13 @@ func (m *confirmDialogModel) ViewString() string {
 	questionText = strings.TrimRight(questionText, "\n")
 	buttonRow = strings.TrimRight(buttonRow, "\n")
 
-	// Ensure a blank line between question and buttons
-	fullContent := lipgloss.JoinVertical(lipgloss.Left, questionText, "", buttonRow)
+	// Ensure a blank line between question and buttons carries the background
+	spacer := lipgloss.NewStyle().
+		Width(m.layout.Width - 2).
+		Background(borderBG).
+		Render("")
+
+	fullContent := lipgloss.JoinVertical(lipgloss.Left, questionText, spacer, buttonRow)
 
 	// Wrap in border with title embedded (matching menu style) using confirm styling
 	dialogWithTitle := RenderDialogWithType(m.title, fullContent, true, 0, DialogTypeConfirm)

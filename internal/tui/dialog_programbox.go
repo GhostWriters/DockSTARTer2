@@ -598,7 +598,11 @@ func (m *programBoxModel) ViewString() string {
 	// Render Command display
 	if commandDisplay != "" {
 		contentParts = append(contentParts, commandDisplay)
-		contentParts = append(contentParts, "") // Standard gap after command
+		spacer := lipgloss.NewStyle().
+			Width(contentWidth).
+			Background(ctx.Dialog.GetBackground()).
+			Render("")
+		contentParts = append(contentParts, spacer) // Standard gap after command
 	}
 
 	contentParts = append(contentParts, borderedViewport)
@@ -672,10 +676,13 @@ func (m *ProgramBoxModel) renderHeaderUI(width int) string {
 	bgStyle := lipgloss.NewStyle().Background(ctx.Dialog.GetBackground())
 	hasPrevious := false
 
+	subtitleStyle := bgStyle.Width(width).Padding(0, 2)
+	spacer := bgStyle.Width(width).Render("")
+
 	// Subtitle (rendered as a heading)
 	if m.subtitle != "" {
 		subtitle := RenderThemeText(m.subtitle, ctx.Dialog)
-		renderedSubtitle := bgStyle.Width(width).Padding(0, 2).Render(subtitle)
+		renderedSubtitle := subtitleStyle.Render(subtitle)
 		b.WriteString(renderedSubtitle + "\n")
 		hasPrevious = true
 	}
@@ -683,7 +690,7 @@ func (m *ProgramBoxModel) renderHeaderUI(width int) string {
 	// Tasks
 	if len(m.Tasks) > 0 {
 		if hasPrevious {
-			b.WriteString("\n") // Gap after subtitle
+			b.WriteString(spacer + "\n") // Gap after subtitle
 		}
 		hasPrevious = true
 
@@ -697,7 +704,7 @@ func (m *ProgramBoxModel) renderHeaderUI(width int) string {
 		for i, t := range m.Tasks {
 			// Add blank line between different categories (e.g. Removing vs Adding)
 			if i > 0 && t.Label != m.Tasks[i-1].Label {
-				b.WriteString("\n")
+				b.WriteString(spacer + "\n")
 			}
 
 			catStyle := SemanticStyle("{{|Theme_ProgressWaiting|}}")
