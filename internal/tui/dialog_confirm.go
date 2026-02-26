@@ -130,17 +130,51 @@ func (m *confirmDialogModel) ViewString() string {
 	ctx := GetActiveContext()
 	borderBG := ctx.Dialog.GetBackground()
 
+	// 1. Calculate ideal content width based on question text and buttons
+	// Split question into lines to find longest line
+	questionLines := strings.Split(m.question, "\n")
+	maxQuestionWidth := 0
+	for _, line := range questionLines {
+		w := lipgloss.Width(line)
+		if w > maxQuestionWidth {
+			maxQuestionWidth = w
+		}
+	}
+	// Add padding to question width (matching questionStyle.Padding(1, 2))
+	contentWidth := maxQuestionWidth + 4
+
+	// 2. Measure button requirements
+	// RenderCenteredButtonsCtx uses maxButtonWidth+4 for each button
+	btn1W := lipgloss.Width("Yes") + 4
+	btn2W := lipgloss.Width("No") + 4
+	minButtonWidth := btn1W + btn2W + 4 // Add some gap between buttons
+
+	if minButtonWidth > contentWidth {
+		contentWidth = minButtonWidth
+	}
+
+	// 3. Ensure it's at least as wide as the title
+	titleW := lipgloss.Width(m.title) + 6 // Title + connectors + space
+	if titleW > contentWidth {
+		contentWidth = titleW
+	}
+
+	// 4. Constrain by available layout width
+	if contentWidth > m.layout.Width-2 {
+		contentWidth = m.layout.Width - 2
+	}
+
 	// Question text style - inherit from ctx.Dialog to get background
 	questionStyle := ctx.Dialog.
 		Padding(1, 2).
-		Width(m.layout.Width - 2)
+		Width(contentWidth)
 
 	// Apply style and wrap
 	questionText := questionStyle.Render(console.Sprintf("%s", m.question))
 
 	// Render buttons using the standard button helper
 	buttonRow := RenderCenteredButtonsCtx(
-		m.layout.Width-2,
+		contentWidth,
 		ctx,
 		ButtonSpec{Text: "Yes", Active: m.result},
 		ButtonSpec{Text: "No", Active: !m.result},
@@ -153,7 +187,7 @@ func (m *confirmDialogModel) ViewString() string {
 
 	// Ensure a blank line between question and buttons carries the background
 	spacer := lipgloss.NewStyle().
-		Width(m.layout.Width - 2).
+		Width(contentWidth).
 		Background(borderBG).
 		Render("")
 

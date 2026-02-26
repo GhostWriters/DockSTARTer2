@@ -241,7 +241,7 @@ func RenderCenteredButtonsCtx(contentWidth int, ctx StyleContext, buttons ...But
 		}
 
 		buttonStyle = buttonStyle.Width(buttonContentWidth).Align(lipgloss.Center)
-		buttonStyle = ApplyRoundedBorderCtx(buttonStyle, ctx)
+		buttonStyle = ApplyInnerBorderCtx(buttonStyle, btn.Active, ctx)
 
 		// RenderHotkeyLabel needs to handle focus too, but it uses GetStyles() inside.
 		// Let's pass the context if we refactor it, or just use the existing one for now.
@@ -349,6 +349,20 @@ func RenderDialogWithTypeCtx(title, content string, focused bool, targetHeight i
 			border = borders[0].Focused
 		} else {
 			border = borders[0].Unfocused
+		}
+	} else if dialogType == DialogTypeConfirm {
+		if ctx.LineCharacters {
+			if focused {
+				border = SlantedThickBorder
+			} else {
+				border = SlantedBorder
+			}
+		} else {
+			if focused {
+				border = SlantedThickAsciiBorder
+			} else {
+				border = SlantedAsciiBorder
+			}
 		}
 	} else {
 		if ctx.LineCharacters {

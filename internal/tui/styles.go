@@ -198,12 +198,48 @@ var ThickRoundedBorder = lipgloss.Border{
 	BottomRight: "╯",
 }
 
-// slantedAsciiBorder defines a beveled ASCII border with slanted corners
-var slantedAsciiBorder = lipgloss.Border{
+// SlantedAsciiBorder defines a beveled ASCII border with slanted corners
+var SlantedAsciiBorder = lipgloss.Border{
 	Top:         "-",
 	Bottom:      "-",
 	Left:        "|",
 	Right:       "|",
+	TopLeft:     "/",
+	TopRight:    "\\",
+	BottomLeft:  "\\",
+	BottomRight: "/",
+}
+
+// SlantedBorder defines a beveled border with slanted corners (Unicode)
+var SlantedBorder = lipgloss.Border{
+	Top:         "─",
+	Bottom:      "─",
+	Left:        "│",
+	Right:       "│",
+	TopLeft:     "◢",
+	TopRight:    "◣",
+	BottomLeft:  "◥",
+	BottomRight: "◤",
+}
+
+// SlantedThickBorder defines a thick beveled border with slanted corners (Unicode)
+var SlantedThickBorder = lipgloss.Border{
+	Top:         "━",
+	Bottom:      "━",
+	Left:        "┃",
+	Right:       "┃",
+	TopLeft:     "◢",
+	TopRight:    "◣",
+	BottomLeft:  "◥",
+	BottomRight: "◤",
+}
+
+// SlantedThickAsciiBorder defines a thick beveled ASCII border with slanted corners
+var SlantedThickAsciiBorder = lipgloss.Border{
+	Top:         "=",
+	Bottom:      "=",
+	Left:        "H",
+	Right:       "H",
 	TopLeft:     "/",
 	TopRight:    "\\",
 	BottomLeft:  "\\",
@@ -547,9 +583,9 @@ func ApplySlantedBorderCtx(style lipgloss.Style, ctx StyleContext) lipgloss.Styl
 
 	var border lipgloss.Border
 	if ctx.LineCharacters {
-		border = lipgloss.RoundedBorder()
+		border = SlantedBorder
 	} else {
-		border = slantedAsciiBorder
+		border = SlantedAsciiBorder
 	}
 
 	return style.
