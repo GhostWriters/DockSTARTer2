@@ -566,7 +566,7 @@ func (s *DisplayOptionsScreen) ViewString() string {
 
 	// Use RenderBorderedBoxCtx with known width instead of RenderDialog which measures content
 	// targetHeight uses width/height which are local copies of the intended layout
-	settingsDialog := tui.RenderBorderedBoxCtx("Appearance Settings", settingsContent, menuWidth, s.height, true, tui.GetActiveContext())
+	settingsDialog := tui.RenderBorderedBoxCtx("Appearance Settings", settingsContent, menuWidth, s.height, true, false, tui.GetActiveContext())
 
 	// Add shadow if enabled in global config (not preview config)
 	// The preview mockup shows what shadow would look like, but the
@@ -711,7 +711,7 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	} else if s.config.UI.LineCharacters {
 		b = lipgloss.RoundedBorder()
 	} else {
-		b = lipgloss.NormalBorder()
+		b = tui.RoundedAsciiBorder // Use exported variant from tui package
 	}
 
 	// Build StyleContext for the preview
@@ -782,7 +782,7 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 
 	// Use our new context-aware bordered box renderer for perfect parity
 	// We use 38 to ensure width (38+2 borders + 2 shadow = 42) leaves 1 space indent on both sides of a 44 width backdrop.
-	dialogBox := tui.RenderBorderedBoxCtx(dTitle, contentStr, 38, 0, true, previewCtx)
+	dialogBox := tui.RenderBorderedBoxCtx(dTitle, contentStr, 38, 0, true, false, previewCtx)
 
 	// Add shadow if enabled using our new context-aware helper
 	if s.config.UI.Shadow {
@@ -847,7 +847,7 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	// Wrap in a standard dialog using the current (active) theme
 	// The mockup content uses preview theme colors, but the outer dialog uses active theme
 	mockupWidth := lipgloss.Width(mockup)
-	preview := tui.RenderBorderedBoxCtx("Preview", mockup, mockupWidth, 0, false, tui.GetActiveContext())
+	preview := tui.RenderBorderedBoxCtx("Preview", mockup, mockupWidth, 0, false, false, tui.GetActiveContext())
 
 	// Add shadow if enabled in global config (same as settings dialog)
 	if tui.IsShadowEnabled() {

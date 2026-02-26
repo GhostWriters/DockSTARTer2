@@ -394,21 +394,37 @@ func RenderUniformBlockDialogCtx(title, content string, ctx StyleContext) string
 
 // RenderBorderedBoxCtx renders a dialog with title and borders using a specific context.
 // Unlike renderDialogWithBorderCtx, this accepts a known contentWidth instead of measuring content.
-func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeight int, focused bool, ctx StyleContext) string {
+func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeight int, focused bool, rounded bool, ctx StyleContext) string {
 	var border lipgloss.Border
 	if !ctx.DrawBorders {
 		border = lipgloss.HiddenBorder()
 	} else if ctx.LineCharacters {
-		if focused {
-			border = lipgloss.ThickBorder()
+		if rounded {
+			if focused {
+				border = ThickRoundedBorder
+			} else {
+				border = lipgloss.RoundedBorder()
+			}
 		} else {
-			border = lipgloss.NormalBorder()
+			if focused {
+				border = lipgloss.ThickBorder()
+			} else {
+				border = lipgloss.NormalBorder()
+			}
 		}
 	} else {
-		if focused {
-			border = thickAsciiBorder
+		if rounded {
+			if focused {
+				border = RoundedThickAsciiBorder
+			} else {
+				border = RoundedAsciiBorder
+			}
 		} else {
-			border = asciiBorder
+			if focused {
+				border = thickAsciiBorder
+			} else {
+				border = asciiBorder
+			}
 		}
 	}
 

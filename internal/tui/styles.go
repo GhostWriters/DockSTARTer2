@@ -150,8 +150,8 @@ var asciiBorder = lipgloss.Border{
 	BottomRight: "+",
 }
 
-// roundedAsciiBorder defines a softer ASCII border with rounded appearance for buttons
-var roundedAsciiBorder = lipgloss.Border{
+// RoundedAsciiBorder defines a softer ASCII border with rounded appearance for buttons
+var RoundedAsciiBorder = lipgloss.Border{
 	Top:         "-",
 	Bottom:      "-",
 	Left:        "|",
@@ -174,8 +174,8 @@ var thickAsciiBorder = lipgloss.Border{
 	BottomRight: "#",
 }
 
-// roundedThickAsciiBorder simulates a thick border with rounded corners (.===H===. style)
-var roundedThickAsciiBorder = lipgloss.Border{
+// RoundedThickAsciiBorder simulates a thick border with rounded corners (.===H===. style)
+var RoundedThickAsciiBorder = lipgloss.Border{
 	Top:         "=",
 	Bottom:      "=",
 	Left:        "H",
@@ -184,6 +184,18 @@ var roundedThickAsciiBorder = lipgloss.Border{
 	TopRight:    ".",
 	BottomLeft:  "'",
 	BottomRight: "'",
+}
+
+// ThickRoundedBorder defines a thick border with rounded corners (━┃╭╮ style)
+var ThickRoundedBorder = lipgloss.Border{
+	Top:         "━",
+	Bottom:      "━",
+	Left:        "┃",
+	Right:       "┃",
+	TopLeft:     "╭",
+	TopRight:    "╮",
+	BottomLeft:  "╰",
+	BottomRight: "╯",
 }
 
 // slantedAsciiBorder defines a beveled ASCII border with slanted corners
@@ -469,7 +481,45 @@ func ApplyRoundedBorderCtx(style lipgloss.Style, ctx StyleContext) lipgloss.Styl
 	if ctx.LineCharacters {
 		border = lipgloss.RoundedBorder()
 	} else {
-		border = roundedAsciiBorder
+		border = RoundedAsciiBorder
+	}
+
+	return style.
+		Border(border).
+		BorderTopForeground(ctx.BorderColor).
+		BorderLeftForeground(ctx.BorderColor).
+		BorderBottomForeground(ctx.Border2Color).
+		BorderRightForeground(ctx.Border2Color).
+		BorderTopBackground(borderBG).
+		BorderLeftBackground(borderBG).
+		BorderBottomBackground(borderBG).
+		BorderRightBackground(borderBG)
+}
+
+// ApplyInnerBorder applies a rounded border that becomes thick when focused
+func ApplyInnerBorder(style lipgloss.Style, focused bool, useLineChars bool) lipgloss.Style {
+	ctx := GetActiveContext()
+	ctx.LineCharacters = useLineChars
+	return ApplyInnerBorderCtx(style, focused, ctx)
+}
+
+// ApplyInnerBorderCtx applies a rounded border that becomes thick when focused
+func ApplyInnerBorderCtx(style lipgloss.Style, focused bool, ctx StyleContext) lipgloss.Style {
+	borderBG := ctx.Dialog.GetBackground()
+
+	var border lipgloss.Border
+	if ctx.LineCharacters {
+		if focused {
+			border = ThickRoundedBorder
+		} else {
+			border = lipgloss.RoundedBorder()
+		}
+	} else {
+		if focused {
+			border = RoundedThickAsciiBorder
+		} else {
+			border = RoundedAsciiBorder
+		}
 	}
 
 	return style.

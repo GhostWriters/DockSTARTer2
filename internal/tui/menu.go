@@ -1114,14 +1114,10 @@ func (m *MenuModel) ViewString() string {
 	listView = listViewStyle.Render(listView)
 
 	// Wrap list in its own border (no padding, items have their own margins).
-	// Use thick border when focused for consistency with the appearance menu sub-panels.
+	// Use rounded border when focused for higher visual fidelity.
 	listStyle := styles.Dialog.
 		Padding(0, 0)
-	if m.focused {
-		listStyle = ApplyThickBorder(listStyle, styles.LineCharacters)
-	} else {
-		listStyle = ApplyStraightBorder(listStyle, styles.LineCharacters)
-	}
+	listStyle = ApplyInnerBorder(listStyle, m.focused, styles.LineCharacters)
 	borderedList := listStyle.Render(listView)
 
 	// Calculate widths from known dimensions, not measured content
@@ -1214,17 +1210,13 @@ func (m *MenuModel) ViewString() string {
 	// Use outerContentWidth - the known content width for the outer dialog
 	var dialog string
 	if m.title != "" {
-		dialog = m.renderBorderWithTitle(content, outerContentWidth, targetHeight, m.focused)
+		dialog = m.renderBorderWithTitle(content, outerContentWidth, targetHeight, m.focused, false)
 	} else {
-		// No title: focused uses thick border, background uses normal border
+		// No title: use focus-aware inner rounded border
 		dialogStyle := lipgloss.NewStyle().
 			Background(styles.Dialog.GetBackground()).
 			Padding(0, 1)
-		if m.focused {
-			dialogStyle = ApplyThickBorder(dialogStyle, styles.LineCharacters)
-		} else {
-			dialogStyle = ApplyStraightBorder(dialogStyle, styles.LineCharacters)
-		}
+		dialogStyle = ApplyInnerBorder(dialogStyle, m.focused, styles.LineCharacters)
 		if targetHeight > 0 {
 			dialogStyle = dialogStyle.Height(targetHeight - DialogBorderHeight)
 		}
@@ -1394,7 +1386,7 @@ func (m *MenuModel) renderDialog(menuContent, buttonBox string, listWidth int) s
 	var dialogBox string
 
 	if m.title != "" {
-		dialogBox = m.renderBorderWithTitle(paddedContent, outerContentWidth, 0, m.focused)
+		dialogBox = m.renderBorderWithTitle(paddedContent, outerContentWidth, 0, m.focused, false)
 	} else {
 		// No title, use standard border
 		boxStyle := lipgloss.NewStyle().
@@ -1416,8 +1408,8 @@ func (m *MenuModel) renderDialog(menuContent, buttonBox string, listWidth int) s
 	return dialogBox
 }
 
-func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targetHeight int, focused bool) string {
-	return RenderBorderedBoxCtx(m.title, content, contentWidth, targetHeight, focused, GetActiveContext())
+func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targetHeight int, focused bool, rounded bool) string {
+	return RenderBorderedBoxCtx(m.title, content, contentWidth, targetHeight, focused, rounded, GetActiveContext())
 }
 
 // SetSize updates the menu dimensions and resizes the list
@@ -1691,7 +1683,7 @@ func (m *MenuModel) viewSubMenu() string {
 	if m.flowMode {
 		_, targetHeight = layout.OuterTotalSize(0, m.layout.ViewportHeight)
 	}
-	return m.renderBorderWithTitle(inner, innerWidth, targetHeight, m.focusedSub)
+	return m.renderBorderWithTitle(inner, innerWidth, targetHeight, m.focusedSub, true)
 }
 
 // GetFlowHeight calculates required lines for horizontal layout given the available width

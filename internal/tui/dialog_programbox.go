@@ -480,7 +480,7 @@ func (m *programBoxModel) ViewString() string {
 	// Wrap viewport in rounded inner border with console background
 	viewportStyle := ctx.Console.
 		Padding(0, 0) // Remove side padding inside inner box for a tighter look
-	viewportStyle = ApplyThickBorderCtx(viewportStyle, ctx)
+	viewportStyle = ApplyInnerBorderCtx(viewportStyle, m.focused, ctx)
 
 	// Apply scroll indicator manually to bottom border
 	// We disable the bottom border initially to let us construct it ourselves
@@ -491,25 +491,42 @@ func (m *programBoxModel) ViewString() string {
 		Render(viewportContent)
 
 	// Construct custom bottom border with label.
-	// Use thick border characters to match ApplyThickBorderCtx on the top/sides.
+	// Use border characters matching ApplyInnerBorderCtx focus state.
 	var border lipgloss.Border
 	if ctx.LineCharacters {
-		border = lipgloss.ThickBorder()
+		if m.focused {
+			border = ThickRoundedBorder
+		} else {
+			border = lipgloss.RoundedBorder()
+		}
 	} else {
-		border = thickAsciiBorder
+		if m.focused {
+			border = RoundedThickAsciiBorder
+		} else {
+			border = RoundedAsciiBorder
+		}
 	}
 	width := m.viewport.Width() + 2 // Add 2 for left/right padding of viewportStyle
 	labelWidth := lipgloss.Width(scrollIndicator)
 
-	// Determine T-connectors based on line style
+	// Determine T-connectors based on focus and line style
 	var leftT, rightT string
 	if ctx.LineCharacters {
-		// Use thick T connectors to match the thick viewport border
-		leftT = "┫"
-		rightT = "┣"
+		if m.focused {
+			leftT = "┫"
+			rightT = "┣"
+		} else {
+			leftT = "┤"
+			rightT = "├"
+		}
 	} else {
-		leftT = "H"
-		rightT = "H"
+		if m.focused {
+			leftT = "H"
+			rightT = "H"
+		} else {
+			leftT = "+"
+			rightT = "+"
+		}
 	}
 
 	// Calculate padding for label to place it on the right
