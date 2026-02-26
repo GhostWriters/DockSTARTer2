@@ -38,7 +38,7 @@ type Layout struct {
 	ShadowHeight int // 1 line at the bottom
 
 	// Margins/indents
-	EdgeIndent int // 1 char indent from screen edge for maximized dialogs
+	EdgeIndent        int // 1 char indent from screen edge for maximized dialogs
 	GapBeforeHelpline int // 1 line gap before helpline
 
 	// Gutter for side-by-side layouts
@@ -57,7 +57,7 @@ func DefaultLayout() Layout {
 		ShadowWidth:       2,
 		ShadowHeight:      1,
 		EdgeIndent:        2, // 2 chars margin on each side of content area
-		GapBeforeHelpline: 1,
+		GapBeforeHelpline: 0,
 		GutterWidth:       1,
 	}
 }

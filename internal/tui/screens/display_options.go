@@ -486,6 +486,7 @@ func (s *DisplayOptionsScreen) ViewString() string {
 			// Apply content area calculation
 			hasShadow := s.config.UI.Shadow
 			width, height = layout.ContentArea(termW, termH, hasShadow)
+			height-- // Match the -1 applied in SetSize (display_options fills full ContentArea)
 		}
 	}
 
@@ -862,7 +863,9 @@ func (s *DisplayOptionsScreen) HelpText() string {
 
 func (s *DisplayOptionsScreen) SetSize(width, height int) {
 	s.width = width
-	s.height = height
+	// Subtract 1 to restore effective height pre-GapBeforeHelpline removal:
+	// display_options fills the full ContentArea, so it needs the old budget.
+	s.height = height - 1
 
 	layout := tui.GetLayout()
 
