@@ -75,6 +75,7 @@ type menuItemDelegate struct {
 	menuID    string
 	maxTagLen int
 	focused   bool
+	flowMode  bool
 }
 
 func (d menuItemDelegate) Height() int                             { return 1 }
@@ -141,9 +142,9 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 	if menuItem.IsRadioButton {
 		var cb string
 		if ctx.LineCharacters {
-			cb = radioUnselected + " "
+			cb = radioUnselected
 			if menuItem.Checked {
-				cb = radioSelected + " "
+				cb = radioSelected
 			}
 		} else {
 			cb = radioUnselectedAscii
@@ -151,13 +152,14 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 				cb = radioSelectedAscii
 			}
 		}
-		checkbox = tagStyle.Render(cb)
+		// Render just the glyph with tagStyle, and add a neutral space after it
+		checkbox = tagStyle.Render(cb) + neutralStyle.Render(" ")
 	} else if menuItem.IsCheckbox {
 		var cb string
 		if ctx.LineCharacters {
-			cb = checkUnselected + " "
+			cb = checkUnselected
 			if menuItem.Checked {
-				cb = checkSelected + " "
+				cb = checkSelected
 			}
 		} else {
 			cb = checkUnselectedAscii
@@ -165,8 +167,18 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 				cb = checkSelectedAscii
 			}
 		}
-		checkbox = tagStyle.Render(cb)
+		// Render just the glyph with tagStyle, and add a neutral space after it
+		checkbox = tagStyle.Render(cb) + neutralStyle.Render(" ")
 	}
+
+	// Highlighting for gap and description
+	// Use itemStyle as base for description so highlight applies, or dialogBG if not selected
+	descStyle := lipgloss.NewStyle().Background(dialogBG)
+	if isSelected {
+		descStyle = itemStyle
+	}
+	// Whitespace (gaps and trailing) should always use neutral background
+	gapStyle := neutralStyle
 
 	paddingSpaces := strutil.Repeat(" ", d.maxTagLen-tagWidth+2)
 
@@ -178,17 +190,16 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 		availableWidth = 0
 	}
 
-	descStr := RenderThemeText(menuItem.Desc, lipgloss.NewStyle().Background(dialogBG).Inherit(itemStyle))
+	descStr := RenderThemeText(menuItem.Desc, descStyle)
 	// Use TruncateRight for proper truncation instead of MaxWidth which wraps
 	descLine := TruncateRight(descStr, availableWidth)
 
-	// Build the line with neutral background for the gaps
-	padding := neutralStyle.Render(paddingSpaces)
-	line := checkbox + tagStr + padding + descLine
+	// Build the line
+	line := checkbox + tagStr + gapStyle.Render(paddingSpaces) + descLine
 
 	actualWidth := lipgloss.Width(line)
 	if actualWidth < m.Width()-2 {
-		line += neutralStyle.Render(strutil.Repeat(" ", m.Width()-2-actualWidth))
+		line += gapStyle.Render(strutil.Repeat(" ", m.Width()-2-actualWidth))
 	}
 
 	lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(m.Width())
@@ -203,6 +214,7 @@ type checkboxItemDelegate struct {
 	menuID    string
 	maxTagLen int
 	focused   bool
+	flowMode  bool
 }
 
 func (d checkboxItemDelegate) Height() int                             { return 1 }
@@ -253,6 +265,7 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 				cbGlyph = checkSelected
 			}
 			// Use tag style for checkbox to match user request
+			// Render just the glyph with tagStyle, and add a neutral space after it
 			checkbox = tagStyle.Render(cbGlyph) + neutralStyle.Render(" ")
 		} else {
 			cbContent := checkUnselectedAscii
@@ -286,21 +299,32 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 	}
 
 	tagWidth := lipgloss.Width(GetPlainText(checkbox)) + lipgloss.Width(GetPlainText(tag))
+
+	// Highlighting for gap and description
+	// Use itemStyle as base for description so highlight applies, or dialogBG if not selected
+	descStyle := lipgloss.NewStyle().Background(dialogBG)
+	if isSelected {
+		descStyle = itemStyle
+	}
+	// Whitespace (gaps and trailing) should always use neutral background
+	gapStyle := neutralStyle
+
 	paddingSpaces := strutil.Repeat(" ", d.maxTagLen-tagWidth+2)
 	availableWidth := m.Width() - (d.maxTagLen + 2) - 2
 	if availableWidth < 0 {
 		availableWidth = 0
 	}
 
-	descStr := RenderThemeText(menuItem.Desc, lipgloss.NewStyle().Background(dialogBG).Inherit(itemStyle))
+	descStr := RenderThemeText(menuItem.Desc, descStyle)
 	// Use TruncateRight for proper truncation instead of MaxWidth which wraps
 	descLine := TruncateRight(descStr, availableWidth)
 
-	line := checkbox + tagStr + neutralStyle.Render(paddingSpaces) + descLine
+	// Build the line
+	line := checkbox + tagStr + gapStyle.Render(paddingSpaces) + descLine
 
 	actualWidth := lipgloss.Width(line)
 	if actualWidth < m.Width()-2 {
-		line += neutralStyle.Render(strutil.Repeat(" ", m.Width()-2-actualWidth))
+		line += gapStyle.Render(strutil.Repeat(" ", m.Width()-2-actualWidth))
 	}
 
 	lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(m.Width())
@@ -503,9 +527,9 @@ func (m *MenuModel) updateDelegate() {
 	focused := m.IsActive()
 	maxTagLen := calculateMaxTagLength(m.items)
 	if m.checkboxMode {
-		m.list.SetDelegate(checkboxItemDelegate{menuID: m.id, maxTagLen: maxTagLen, focused: focused})
+		m.list.SetDelegate(checkboxItemDelegate{menuID: m.id, maxTagLen: maxTagLen, focused: focused, flowMode: m.flowMode})
 	} else {
-		m.list.SetDelegate(menuItemDelegate{menuID: m.id, maxTagLen: maxTagLen, focused: focused})
+		m.list.SetDelegate(menuItemDelegate{menuID: m.id, maxTagLen: maxTagLen, focused: focused, flowMode: m.flowMode})
 	}
 }
 

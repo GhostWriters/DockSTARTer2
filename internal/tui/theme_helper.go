@@ -73,15 +73,13 @@ var themeTagRegex = console.GetDelimitedRegex()
 // defaultStyle is used for reset state and unstyled text
 func RenderThemeText(text string, defaultStyle ...lipgloss.Style) string {
 	var resetStyle lipgloss.Style
-
-	// Use provided default style or blank style
 	if len(defaultStyle) > 0 {
 		resetStyle = defaultStyle[0]
 	} else {
 		resetStyle = lipgloss.NewStyle()
 	}
 
-	// Ensure the starting text has the correct background/foreground
+	// Ensure the starting text has the correct background/foreground/attributes
 	getCodes := func(s lipgloss.Style) string {
 		rendered := s.Render("_")
 		return strings.Split(rendered, "_")[0]
@@ -93,7 +91,7 @@ func RenderThemeText(text string, defaultStyle ...lipgloss.Style) string {
 	// Combine components and ensure reset at end
 	result := getCodes(resetStyle) + rendered + console.CodeReset
 
-	// Prevent embedded resets from clearing container background
+	// Prevent embedded resets from clearing container background or attributes
 	return MaintainBackground(result, resetStyle)
 }
 
@@ -150,31 +148,31 @@ func ApplyStyleCode(style lipgloss.Style, resetStyle lipgloss.Style, styleCode s
 		for _, char := range s {
 			switch char {
 			case 'B':
-				style = style.Bold(true)
+				style = style.Bold(!style.GetBold())
 			case 'b':
 				style = style.Bold(false)
 			case 'U':
-				style = style.Underline(true)
+				style = style.Underline(!style.GetUnderline())
 			case 'u':
 				style = style.Underline(false)
 			case 'I':
-				style = style.Italic(true)
+				style = style.Italic(!style.GetItalic())
 			case 'i':
 				style = style.Italic(false)
 			case 'D':
-				style = style.Faint(true)
+				style = style.Faint(!style.GetFaint())
 			case 'd':
 				style = style.Faint(false)
 			case 'L':
-				style = style.Blink(true)
+				style = style.Blink(!style.GetBlink())
 			case 'l':
 				style = style.Blink(false)
 			case 'R':
-				style = style.Reverse(true)
+				style = style.Reverse(!style.GetReverse())
 			case 'r':
 				style = style.Reverse(false)
 			case 'S':
-				style = style.Strikethrough(true)
+				style = style.Strikethrough(!style.GetStrikethrough())
 			case 's':
 				style = style.Strikethrough(false)
 			case 'H':
@@ -268,23 +266,16 @@ func GetInitialStyle(text string, base lipgloss.Style) lipgloss.Style {
 }
 
 // MaintainBackground replaces ANSI resets (\x1b[0m, \x1b[m, \x1b[39m, \x1b[49m) with the reset followed by the parent style's codes.
-// This prevents content-level resets from "bleeding" to the terminal default background.
+// This prevents content-level resets from "bleeding" to the terminal default background or clearing attributes.
 func MaintainBackground(text string, style lipgloss.Style) string {
-	// Extract foreground and background codes from dummy renders
-	getANSI := func(s lipgloss.Style) (fgCode, bgCode string) {
-		if fg := s.GetForeground(); fg != nil {
-			fgDummy := lipgloss.NewStyle().Foreground(fg).Render("_")
-			fgCode = strings.Split(fgDummy, "_")[0]
-		}
-		if bg := s.GetBackground(); bg != nil {
-			bgDummy := lipgloss.NewStyle().Background(bg).Render("_")
-			bgCode = strings.Split(bgDummy, "_")[0]
-		}
-		return
+	// Extract the full ANSI state from a dummy render
+	getANSI := func(s lipgloss.Style) string {
+		rendered := s.Render("_")
+		return strings.Split(rendered, "_")[0]
 	}
 
-	fgCode, bgCode := getANSI(style)
-	if fgCode == "" && bgCode == "" {
+	fullCode := getANSI(style)
+	if fullCode == "" {
 		return text
 	}
 
@@ -295,16 +286,8 @@ func MaintainBackground(text string, style lipgloss.Style) string {
 	re := regexp.MustCompile(`\x1b\[(?:0|39|49)?m`)
 
 	return re.ReplaceAllStringFunc(text, func(match string) string {
-		switch match {
-		case "\x1b[0m", "\x1b[m":
-			return match + fgCode + bgCode
-		case "\x1b[39m":
-			return match + fgCode
-		case "\x1b[49m":
-			return match + bgCode
-		default:
-			return match
-		}
+		// Always restore the full parent state after any reset
+		return match + fullCode
 	})
 }
 
