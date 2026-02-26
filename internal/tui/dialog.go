@@ -449,9 +449,10 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 	borderStyleDark := lipgloss.NewStyle().
 		Foreground(ctx.Border2Color).
 		Background(borderBG)
-	titleStyle := lipgloss.NewStyle().
-		Background(borderBG).
-		Inherit(ctx.DialogTitle)
+	titleStyle := ctx.DialogTitle
+	if titleStyle.GetBackground() == nil {
+		titleStyle = titleStyle.Background(borderBG)
+	}
 
 	// Process the title with full semantic theme tagging support
 	renderedTitle := MaintainBackground(RenderThemeText(rawTitle, titleStyle), titleStyle)
@@ -579,9 +580,9 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 		borderStyleLight = borderStyleDark
 	}
 
-	titleStyle = lipgloss.NewStyle().
-		Background(borderBG).
-		Inherit(titleStyle)
+	if titleStyle.GetBackground() == nil {
+		titleStyle = titleStyle.Background(borderBG)
+	}
 
 	title = RenderThemeText(title, titleStyle)
 	content = RenderThemeText(content, ctx.Dialog)
