@@ -515,6 +515,9 @@ func (s *DisplayOptionsScreen) syncOptionsMenu() {
 }
 
 func (s *DisplayOptionsScreen) ViewString() string {
+	if s.optionsMenu == nil || s.themeMenu == nil {
+		return ""
+	}
 	layout := tui.GetLayout()
 
 	// s.width and s.height are already the content area from layout.ContentArea()
@@ -898,6 +901,9 @@ func (s *DisplayOptionsScreen) Title() string {
 }
 
 func (s *DisplayOptionsScreen) HelpText() string {
+	if s.themeMenu == nil || s.optionsMenu == nil {
+		return ""
+	}
 	if s.focusedPanel == FocusThemes {
 		return s.themeMenu.HelpText()
 	}
@@ -911,6 +917,11 @@ func (s *DisplayOptionsScreen) SetSize(width, height int) {
 	s.width = width
 	// height passed in already accounts for global GapBeforeHelpline
 	s.height = height
+
+	// Guard: menus may not be initialized yet (e.g. called during screen registration)
+	if s.optionsMenu == nil || s.themeMenu == nil {
+		return
+	}
 
 	layout := tui.GetLayout()
 
@@ -970,6 +981,9 @@ func (s *DisplayOptionsScreen) IsMaximized() bool {
 }
 
 func (s *DisplayOptionsScreen) HasDialog() bool {
+	if s.themeMenu == nil || s.optionsMenu == nil {
+		return false
+	}
 	return s.themeMenu.HasDialog() || s.optionsMenu.HasDialog()
 }
 
