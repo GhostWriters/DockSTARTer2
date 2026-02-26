@@ -663,10 +663,117 @@ func Render3DBorderCtx(content string, padding int, ctx StyleContext) string {
 	return result.String()
 }
 
-// AddPatternHalo surrounds content with a 1-cell halo of the shadow pattern
-// DEPRECATED: use AddShadow instead
-func AddPatternHalo(content string) string {
-	return AddShadow(content)
+// AddPatternHalo surrounds content with a 1-cell halo.
+// If haloBg is provided, it uses shared background for a solid look.
+func AddPatternHalo(content string, haloBg ...color.Color) string {
+	var bg color.Color
+	if len(haloBg) > 0 {
+		bg = haloBg[0]
+	}
+	return AddHalo(content, bg)
+}
+
+// AddHalo adds a halo effect (uniform outline) to rendered content if shadow is enabled
+func AddHalo(content string, haloBg color.Color) string {
+	return AddHaloCtx(content, haloBg, GetActiveContext())
+}
+
+// AddHaloCtx adds a halo effect using a specific context.
+// If haloBg is provided, it renders a solid halo matching that color.
+func AddHaloCtx(content string, haloBg color.Color, ctx StyleContext) string {
+	// Split content into lines
+	lines := strings.Split(content, "\n")
+	if len(lines) == 0 {
+		return content
+	}
+
+	// Use WidthWithoutZones to get accurate visual width
+	contentWidth := 0
+	for _, line := range lines {
+		w := WidthWithoutZones(line)
+		if w > contentWidth {
+			contentWidth = w
+		}
+	}
+
+	var haloCell, horizontalHalo string
+
+	if haloBg != nil {
+		// Solid mode: use space characters with the provided background color
+		solidStyle := lipgloss.NewStyle().Background(haloBg)
+		haloCell = solidStyle.Render("  ")
+		horizontalHalo = solidStyle.Render(strutil.Repeat(" ", contentWidth+4))
+	} else if ctx.LineCharacters {
+		// Unicode mode: use shade characters (░▒▓█)
+		haloStyle := ctx.Shadow.Background(ctx.Screen.GetBackground())
+
+		var shadeChar string
+		switch ctx.ShadowLevel {
+		case 0:
+			shadeChar = " "
+		case 1:
+			shadeChar = "░"
+		case 2:
+			shadeChar = "▒"
+		case 3:
+			shadeChar = "▓"
+		case 4:
+			shadeChar = "█"
+		default:
+			shadeChar = "▒"
+		}
+
+		haloCell = haloStyle.Render(strutil.Repeat(shadeChar, 2))
+		horizontalHalo = haloStyle.Render(strutil.Repeat(shadeChar, contentWidth+4))
+	} else {
+		// ASCII mode
+		if ctx.ShadowLevel == 4 {
+			solidStyle := lipgloss.NewStyle().Background(ctx.ShadowColor)
+			haloCell = solidStyle.Render("  ")
+			horizontalHalo = solidStyle.Render(strutil.Repeat(" ", contentWidth+4))
+		} else {
+			asciiHaloStyle := ctx.Shadow.Background(ctx.Screen.GetBackground())
+			var asciiShadeChar string
+			switch ctx.ShadowLevel {
+			case 0:
+				asciiShadeChar = " "
+			case 1:
+				asciiShadeChar = "."
+			case 2:
+				asciiShadeChar = ":"
+			case 3:
+				asciiShadeChar = "#"
+			default:
+				asciiShadeChar = ":"
+			}
+			haloCell = asciiHaloStyle.Render(strutil.Repeat(asciiShadeChar, 2))
+			horizontalHalo = asciiHaloStyle.Render(strutil.Repeat(asciiShadeChar, contentWidth+4))
+		}
+	}
+
+	var result strings.Builder
+
+	// Top Halo
+	result.WriteString(horizontalHalo)
+	result.WriteString("\n")
+
+	// Content with side halos
+	for _, line := range lines {
+		w := WidthWithoutZones(line)
+		padding := ""
+		if w < contentWidth {
+			padding = strutil.Repeat(" ", contentWidth-w)
+		}
+		result.WriteString(haloCell)
+		result.WriteString(line + padding)
+		result.WriteString(haloCell)
+		result.WriteString("\n")
+	}
+
+	// Bottom Halo
+	result.WriteString(horizontalHalo)
+
+	return result.String()
 }
 
 // AddShadow adds a shadow effect to rendered content if shadow is enabled

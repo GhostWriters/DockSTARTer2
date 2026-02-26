@@ -62,11 +62,10 @@ func (m *helpDialogModel) ViewString() string {
 	m.help.SetWidth(targetWidth)
 
 	dialogStyle := SemanticStyle("{{|Theme_Dialog|}}")
-	borderColor := dialogStyle.GetForeground()
 	bgStyle := lipgloss.NewStyle().Background(dialogStyle.GetBackground())
 
 	// Apply theme styles to the help component
-	sepStyle := bgStyle.Foreground(borderColor)
+	sepStyle := bgStyle.Foreground(dialogStyle.GetForeground())
 	dimStyle := SemanticStyle("{{|Theme_HelpItem|}}")
 	keyStyle := SemanticStyle("{{|Theme_HelpTag|}}")
 
@@ -102,20 +101,19 @@ func (m *helpDialogModel) ViewString() string {
 
 	// Force total content height if height is set
 	// Overhead for Help: Halo (2) + Bordered Dialog (2) = 4
-	styles := GetStyles()
 	heightBudget := m.layout.Height - 4
 	if heightBudget > 0 {
 		content = lipgloss.NewStyle().
 			Height(heightBudget).
-			Background(styles.Dialog.GetBackground()).
+			Background(GetStyles().Dialog.GetBackground()).
 			Render(content)
 	}
 
-	// Use RenderUniformBlockDialog
+	// Use standard RenderUniformBlockDialog (preserves cyan border bg and visible title)
 	dialogStr := RenderUniformBlockDialog("{{|Theme_TitleHelp|}}Keyboard & Mouse Controls", content)
 
-	// Use AddPatternHalo
-	return AddPatternHalo(dialogStr)
+	// Use AddPatternHalo with solid black for the outer halo only
+	return AddPatternHalo(dialogStr, GetStyles().ShadowColor)
 }
 
 func (m *helpDialogModel) View() tea.View {
