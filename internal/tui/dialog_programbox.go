@@ -495,8 +495,14 @@ func (m *programBoxModel) ViewString() string {
 		Height(m.viewport.Height()).
 		Render(viewportContent)
 
-	// Construct custom bottom border with label
-	border := ctx.Border
+	// Construct custom bottom border with label.
+	// Use thick border characters to match ApplyThickBorderCtx on the top/sides.
+	var border lipgloss.Border
+	if ctx.LineCharacters {
+		border = lipgloss.ThickBorder()
+	} else {
+		border = thickAsciiBorder
+	}
 	width := m.viewport.Width() + 2 // Add 2 for left/right padding of viewportStyle
 	labelWidth := lipgloss.Width(scrollIndicator)
 

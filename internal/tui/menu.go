@@ -1117,10 +1117,15 @@ func (m *MenuModel) ViewString() string {
 	}
 	listView = listViewStyle.Render(listView)
 
-	// Wrap list in its own border (no padding, items have their own margins)
+	// Wrap list in its own border (no padding, items have their own margins).
+	// Use thick border when focused for consistency with the appearance menu sub-panels.
 	listStyle := styles.Dialog.
 		Padding(0, 0)
-	listStyle = ApplyStraightBorder(listStyle, styles.LineCharacters)
+	if m.focused {
+		listStyle = ApplyThickBorder(listStyle, styles.LineCharacters)
+	} else {
+		listStyle = ApplyStraightBorder(listStyle, styles.LineCharacters)
+	}
 	borderedList := listStyle.Render(listView)
 
 	// Calculate widths from known dimensions, not measured content
