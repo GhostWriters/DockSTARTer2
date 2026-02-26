@@ -501,7 +501,6 @@ func (s *DisplayOptionsScreen) ViewString() string {
 			header.SetWidth(termW - 2)
 			headerH := header.Height()
 			width, height = layout.ContentArea(termW, termH, hasShadow, headerH)
-			height-- // Match the -1 applied in SetSize (display_options fills full ContentArea)
 		}
 	}
 
@@ -528,29 +527,24 @@ func (s *DisplayOptionsScreen) ViewString() string {
 		menuWidth = 40
 	}
 
-	// Calculate menu heights (same logic as SetSize)
-	overhead := layout.BorderHeight() + 1 + layout.ButtonHeight
-	optionsFlowLines := s.optionsMenu.GetFlowHeight(menuWidth)
-	optionsHeight := optionsFlowLines + layout.BorderHeight()
-	themeHeight := height - optionsHeight - overhead
-	if themeHeight < 4 {
-		themeHeight = 4
+	// Calculate menu widths (same logic as SetSize)
+	// These are local and don't modify state, so fine for View pass
+	menuWidth = dialogContentWidth - layout.BorderWidth()
+	if menuWidth < 40 {
+		menuWidth = 40
 	}
-
-	// Ensure menus are sized correctly for current dimensions
-	// This handles cases where ViewString is called before SetSize
-	s.themeMenu.SetSize(menuWidth, themeHeight)
-	s.optionsMenu.SetSize(menuWidth, optionsHeight)
 
 	// 1. Render Settings Menus
 	// ZoneMark wraps the panel for click detection (focus routing)
 	themeView := tui.ZoneMark("ThemePanel", s.themeMenu.ViewString())
 	optionsView := tui.ZoneMark("OptionsPanel", s.optionsMenu.ViewString())
 
-	leftColumn := lipgloss.JoinVertical(lipgloss.Left,
-		themeView,
-		optionsView,
-	)
+	// Trim newlines before joining to prevent extra gaps
+	leftColumnParts := []string{themeView, optionsView}
+	for i, p := range leftColumnParts {
+		leftColumnParts[i] = strings.TrimRight(p, "\n")
+	}
+	leftColumn := lipgloss.JoinVertical(lipgloss.Left, leftColumnParts...)
 
 	// 2. Render Buttons using known width, not measured
 	buttons := []tui.ButtonSpec{
@@ -571,7 +565,8 @@ func (s *DisplayOptionsScreen) ViewString() string {
 	}
 
 	// Use RenderBorderedBoxCtx with known width instead of RenderDialog which measures content
-	settingsDialog := tui.RenderBorderedBoxCtx("Appearance Settings", settingsContent, menuWidth, targetHeight, true, tui.GetActiveContext())
+	// targetHeight uses width/height which are local copies of the intended layout
+	settingsDialog := tui.RenderBorderedBoxCtx("Appearance Settings", settingsContent, menuWidth, s.height, true, tui.GetActiveContext())
 
 	// Add shadow if enabled in global config (not preview config)
 	// The preview mockup shows what shadow would look like, but the
@@ -837,13 +832,17 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 
 	logStripRow := stripStyle.Render(leftDashes + label + rightDashes)
 
-	mockup := lipgloss.JoinVertical(lipgloss.Left,
+	mockupParts := []string{
 		headerRow,
 		sepRow,
 		backdropBlock,
 		helpRow,
 		logStripRow,
-	)
+	}
+	for i, p := range mockupParts {
+		mockupParts[i] = strings.TrimRight(p, "\n")
+	}
+	mockup := lipgloss.JoinVertical(lipgloss.Left, mockupParts...)
 
 	// Wrap in a standard dialog using the current (active) theme
 	// The mockup content uses preview theme colors, but the outer dialog uses active theme
@@ -878,9 +877,8 @@ func (s *DisplayOptionsScreen) HelpText() string {
 
 func (s *DisplayOptionsScreen) SetSize(width, height int) {
 	s.width = width
-	// Subtract 1 to restore effective height pre-GapBeforeHelpline removal:
-	// display_options fills the full ContentArea, so it needs the old budget.
-	s.height = height - 1
+	// height passed in already accounts for global GapBeforeHelpline
+	s.height = height
 
 	layout := tui.GetLayout()
 
@@ -912,17 +910,19 @@ func (s *DisplayOptionsScreen) SetSize(width, height int) {
 		menuWidth = 40
 	}
 
-	// Vertical Budgeting
-	// height is already the content area (chrome and shadow space already subtracted)
-	// Dialog overhead: outer borders(2) + title line(1) + button row(3)
-	overhead := layout.BorderHeight() + 1 + layout.ButtonHeight
+	// Use centralized layout helper for vertical budgeting
+	// Dialog overhead: outer borders, subtitle(0), buttons, shadow
+	hasShadow := tui.IsShadowEnabled()
+	optionsContentHeight := layout.DialogContentHeight(height, 0, true, hasShadow)
+	// overhead = total height - content height
+	overhead := height - optionsContentHeight
 
 	// Calculate options menu height first (it's dynamic based on flow)
 	optionsFlowLines := s.optionsMenu.GetFlowHeight(menuWidth)
 	optionsHeight := optionsFlowLines + layout.BorderHeight()
 
 	// Theme list gets remaining height
-	themeHeight := height - optionsHeight - overhead
+	themeHeight := s.height - optionsHeight - overhead
 	if themeHeight < 4 {
 		themeHeight = 4
 	}

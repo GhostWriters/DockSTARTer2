@@ -105,7 +105,7 @@ type AppModel struct {
 	screenStack  []ScreenModel
 
 	// Persistent backdrop (header + separator + helpline)
-	backdrop BackdropModel
+	backdrop *BackdropModel
 
 	// Slide-up log panel (always present below helpline)
 	logPanel        LogPanelModel
@@ -126,7 +126,7 @@ type AppModel struct {
 }
 
 // NewAppModel creates a new application model
-func NewAppModel(ctx context.Context, cfg config.AppConfig, startScreen ScreenModel) AppModel {
+func NewAppModel(ctx context.Context, cfg config.AppConfig, startScreen ScreenModel) *AppModel {
 	// Get initial help text from screen if available
 	helpText := ""
 	if startScreen != nil {
@@ -134,7 +134,7 @@ func NewAppModel(ctx context.Context, cfg config.AppConfig, startScreen ScreenMo
 		CurrentPageName = startScreen.MenuName()
 	}
 
-	return AppModel{
+	return &AppModel{
 		ctx:          ctx,
 		config:       cfg,
 		activeScreen: startScreen,
@@ -145,8 +145,8 @@ func NewAppModel(ctx context.Context, cfg config.AppConfig, startScreen ScreenMo
 }
 
 // NewAppModelStandalone creates a new application model that starts with a modal dialog only
-func NewAppModelStandalone(ctx context.Context, cfg config.AppConfig, dialog tea.Model) AppModel {
-	return AppModel{
+func NewAppModelStandalone(ctx context.Context, cfg config.AppConfig, dialog tea.Model) *AppModel {
+	return &AppModel{
 		ctx:      ctx,
 		config:   cfg,
 		backdrop: NewBackdropModel(""),
@@ -156,7 +156,7 @@ func NewAppModelStandalone(ctx context.Context, cfg config.AppConfig, dialog tea
 }
 
 // Init implements tea.Model
-func (m AppModel) Init() tea.Cmd {
+func (m *AppModel) Init() tea.Cmd {
 	cmds := []tea.Cmd{
 		m.backdrop.Init(),
 		m.logPanel.Init(),
@@ -171,7 +171,7 @@ func (m AppModel) Init() tea.Cmd {
 }
 
 // Update implements tea.Model
-func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	defer func() {
 		if r := recover(); r != nil {
 			// Suppress further panics during recovery
@@ -202,9 +202,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setLogPanelFocus(false)
 		}
 		// Resize backdrop, screen, and dialog to match new panel height
-		backdropMsg := tea.WindowSizeMsg{Width: m.width, Height: m.backdropHeight()}
-		backdropModel, _ := m.backdrop.Update(backdropMsg)
-		m.backdrop = backdropModel.(BackdropModel)
+		m.backdrop.SetSize(m.width, m.backdropHeight())
 
 		caW, caH := m.getContentArea()
 		if m.activeScreen != nil {
@@ -241,13 +239,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Update log panel with full dimensions first (so Height() is correct)
 		m.logPanel.SetSize(m.width, m.height)
 
-		// Backdrop uses backdropHeight (terminal minus log panel strip)
-		// This ensures the helpline appears above the log panel
-		backdropSizeMsg := tea.WindowSizeMsg{Width: m.width, Height: m.backdropHeight()}
-
 		// Update backdrop with adjusted height so helpline is visible above log panel
-		backdropModel, _ := m.backdrop.Update(backdropSizeMsg)
-		m.backdrop = backdropModel.(BackdropModel)
+		m.backdrop.SetSize(m.width, m.backdropHeight())
 
 		caW, caH := m.getContentArea()
 		contentSizeMsg := tea.WindowSizeMsg{Width: caW, Height: caH}
@@ -470,7 +463,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if backdropMsg != nil {
 		var backdropCmd tea.Cmd
 		backdropModel, backdropCmd := m.backdrop.Update(backdropMsg)
-		m.backdrop = backdropModel.(BackdropModel)
+		m.backdrop = backdropModel.(*BackdropModel)
 		if backdropCmd != nil {
 			cmds = append(cmds, backdropCmd)
 		}
@@ -731,9 +724,7 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		m.logPanel = updated.(LogPanelModel)
 
 		// If height changed, we need to resize other components
-		backdropMsg := tea.WindowSizeMsg{Width: m.width, Height: m.backdropHeight()}
-		backdropModel, _ := m.backdrop.Update(backdropMsg)
-		m.backdrop = backdropModel.(BackdropModel)
+		m.backdrop.SetSize(m.width, m.backdropHeight())
 
 		caW, caH := m.getContentArea()
 		if m.activeScreen != nil {
@@ -856,7 +847,7 @@ type LayeredView interface {
 
 // View implements tea.Model
 // Uses backdrop + overlay pattern (same as dialogs)
-func (m AppModel) View() tea.View {
+func (m *AppModel) View() tea.View {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Error(m.ctx, "AppModel.View Panic: %v", r)
@@ -877,9 +868,6 @@ func (m AppModel) View() tea.View {
 	allLayers := []LayerSpec{
 		{Content: backdropContent, X: 0, Y: 0, Z: 0},
 	}
-
-	// Content area boundaries (accounting for header/sep, shadow, and gap)
-	caW, caH := m.getContentArea()
 
 	// Base coordinates for maximized elements (edge indent from left, content start from top)
 	maxX := layout.EdgeIndent
@@ -914,14 +902,12 @@ func (m AppModel) View() tea.View {
 				fgWidth := WidthWithoutZones(content)
 				fgHeight := lipgloss.Height(content)
 
-				// Default: center in content area
-				lx := maxX + (caW-fgWidth)/2
-				ly := maxY + (caH-fgHeight)/2
-
+				// Use centralized layout helper for consistent positioning and optical centering
+				mode := DialogCentered
 				if m.activeScreen.IsMaximized() {
-					lx = maxX
-					ly = maxY
+					mode = DialogMaximized
 				}
+				lx, ly := layout.DialogPosition(mode, fgWidth, fgHeight, m.width, m.height, m.config.UI.Shadow, headerH)
 				allLayers = append(allLayers, LayerSpec{Content: content, X: lx, Y: ly, Z: 2})
 			}
 		}
@@ -948,14 +934,12 @@ func (m AppModel) View() tea.View {
 				fgWidth := WidthWithoutZones(content)
 				fgHeight := lipgloss.Height(content)
 
-				// Default: center in content area
-				lx := maxX + (caW-fgWidth)/2
-				ly := maxY + (caH-fgHeight)/2
-
+				// Use centralized layout helper for consistent positioning and optical centering
+				mode := DialogCentered
 				if maximized {
-					lx = maxX
-					ly = maxY
+					mode = DialogMaximized
 				}
+				lx, ly := layout.DialogPosition(mode, fgWidth, fgHeight, m.width, m.height, m.config.UI.Shadow, headerH)
 				allLayers = append(allLayers, LayerSpec{Content: content, X: lx, Y: ly, Z: 3})
 			}
 		}
@@ -976,8 +960,8 @@ func (m AppModel) GetActiveScreen() ScreenModel {
 	return m.activeScreen
 }
 
-// GetBackdrop returns the backdrop model
-func (m AppModel) GetBackdrop() BackdropModel {
+// Backdrop returns the shared backdrop model
+func (m *AppModel) Backdrop() *BackdropModel {
 	return m.backdrop
 }
 

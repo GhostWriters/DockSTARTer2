@@ -269,6 +269,7 @@ func (s *AppSelectionScreen) HelpText() string {
 
 // SetSize implements ScreenModel
 func (s *AppSelectionScreen) SetSize(width, height int) {
+	// app_selection leaves 1 blank line before the helpline.
 	s.menu.SetSize(width, height)
 }
 

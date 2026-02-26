@@ -591,11 +591,6 @@ func (m *MenuModel) Init() tea.Cmd {
 
 // Update implements tea.Model
 func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Handle window size first — delegate to SetSize (single source of truth)
-	if wsMsg, ok := msg.(tea.WindowSizeMsg); ok {
-		m.SetSize(wsMsg.Width, wsMsg.Height)
-	}
-
 	// Handle mouse events using BubbleZones
 	if mouseMsg, ok := msg.(tea.MouseClickMsg); ok && mouseMsg.Button == tea.MouseLeft {
 		// Check each zone to see if the click is within bounds
@@ -1185,7 +1180,8 @@ func (m *MenuModel) ViewString() string {
 		innerParts = append(innerParts, subtitle)
 	}
 
-	// Add list box and button box
+	// Add list box and button box with NO gaps to maximize list space
+	// JoinVertical will stack them tightly
 	innerParts = append(innerParts, paddedList)
 	innerParts = append(innerParts, paddedButtons)
 
@@ -1206,12 +1202,19 @@ func (m *MenuModel) ViewString() string {
 				Render(content)
 		}
 	}
+	// Determine target height for the outer dialog
+	targetHeight := 0
+	if m.maximized {
+		targetHeight = m.height
+	}
+
+	// Wrap in bordered dialog with title embedded in border
 
 	// Wrap in bordered dialog with title embedded in border
 	// Use outerContentWidth - the known content width for the outer dialog
 	var dialog string
 	if m.title != "" {
-		dialog = m.renderBorderWithTitle(content, outerContentWidth, 0, m.focused)
+		dialog = m.renderBorderWithTitle(content, outerContentWidth, targetHeight, m.focused)
 	} else {
 		// No title: focused uses thick border, background uses normal border
 		dialogStyle := lipgloss.NewStyle().
@@ -1221,6 +1224,9 @@ func (m *MenuModel) ViewString() string {
 			dialogStyle = ApplyThickBorder(dialogStyle, styles.LineCharacters)
 		} else {
 			dialogStyle = ApplyStraightBorder(dialogStyle, styles.LineCharacters)
+		}
+		if targetHeight > 0 {
+			dialogStyle = dialogStyle.Height(targetHeight - DialogBorderHeight)
 		}
 		dialog = dialogStyle.Render(content)
 	}
@@ -1369,7 +1375,10 @@ func (m *MenuModel) renderDialog(menuContent, buttonBox string, listWidth int) s
 	// Add button box (already has its own border)
 	innerParts = append(innerParts, buttonBox)
 
-	// Join all parts
+	// Join all parts with careful newline trimming to prevent extra gaps
+	for i, part := range innerParts {
+		innerParts[i] = strings.TrimRight(part, "\n")
+	}
 	innerContent := lipgloss.JoinVertical(lipgloss.Left, innerParts...)
 
 	// Add padding inside the outer border
@@ -1432,58 +1441,69 @@ func (m *MenuModel) calculateLayout() {
 		return
 	}
 
-	// 1. Shadow
-	shadowHeight := 0
-	if currentConfig.UI.Shadow {
-		shadowHeight = DialogShadowHeight
-	}
-
-	// 2. Buttons
-	// Menu buttons are standard row (3) + their own border (2) = 5
-	buttonHeight := DialogButtonHeight + 2
-
-	// 3. Subtitle
+	// 1. Subtitle Height
 	subtitleHeight := 0
 	if m.subtitle != "" {
 		subtitleHeight = lipgloss.Height(m.subtitle)
 	}
 
-	// 4. Overhead calculation
-	overhead := 0
-	if m.subMenuMode {
-		// Sub-menu overhead is just the subtitle and its own borders (2)
-		overhead = subtitleHeight + 2
-	} else {
-		// Full dialog overhead: Outer borders (2) + List box borders (2) + Buttons (5) + Shadow (1)
-		overhead = DialogBorderHeight + subtitleHeight + 2 + buttonHeight + shadowHeight
+	// 2. Button and Shadow Heights
+	layout := GetLayout()
+	buttonHeight := DialogButtonHeight
+	shadowHeight := 0
+	hasShadow := currentConfig.UI.Shadow
+	if hasShadow {
+		shadowHeight = DialogShadowHeight
 	}
 
-	maxListHeight := m.height - overhead
+	// 3. Vertical Budgeting Logic
+	var listHeight, overhead int
+	var maxListHeight int
+	if m.subMenuMode {
+		// Sub-menu overhead is just the subtitle and its own borders (2)
+		overhead = subtitleHeight + layout.BorderHeight()
+		maxListHeight = m.height - overhead
+	} else {
+		// Full dialog overhead: borders, subtitle, buttons, shadow
+		// Account for internal gaps: 1 after subtitle, 1 before buttons
+		internalOverhead := subtitleHeight
+		if m.subtitle != "" {
+			internalOverhead += 1 // Gap after subtitle
+		}
+
+		maxListHeight = layout.DialogContentHeight(m.height, internalOverhead, true, hasShadow)
+
+		// Subtract 1 more for the gap before buttons (not covered by DialogButtonHeight)
+		maxListHeight -= 1
+
+		// Total overhead = total height - available list height
+		overhead = m.height - maxListHeight
+	}
+
 	if maxListHeight < 3 {
 		maxListHeight = 3
 	}
 
-	// Calculate intrinsic list height based on items
+	// 4. Calculate intrinsic list height based on items
 	itemHeight := 1
 	spacing := 0
 	totalItemHeight := len(m.items) * itemHeight
 	if len(m.items) > 1 && spacing > 0 {
 		totalItemHeight += (len(m.items) - 1) * spacing
 	}
-	listHeight := totalItemHeight
 
-	// When maximized, or if list is too tall, constrain to available space
+	// Final list height is whichever is smaller: intrinsic or maximum
+	listHeight = totalItemHeight
 	if m.maximized || listHeight > maxListHeight {
 		listHeight = maxListHeight
 	}
 
-	// Calculate list width based on content
+	// 5. Calculate list width based on content
 	maxTagLen, maxDescLen := calculateMaxTagAndDescLength(m.items)
 	// Width = tag + spacing(2) + desc + margins(2) + buffer(4)
 	listWidth := maxTagLen + 2 + maxDescLen + 2 + 4
 
 	// Constrain width to fit within terminal dialog area using Layout helpers
-	layout := GetLayout()
 	var maxListWidth int
 	if m.subMenuMode {
 		// Submenu: just has its own border, content fills the rest
@@ -1531,6 +1551,10 @@ func (m *MenuModel) renderFlow() string {
 	// Use Layout helpers for consistent border calculations
 	layout := GetLayout()
 	maxWidth, _ := layout.InnerContentSize(m.width, m.height)
+	// Subtract 2 for internal 1-char margin on each side (matching standard list menus)
+	if maxWidth > 2 {
+		maxWidth -= 2
+	}
 
 	var lines []string
 	var currentLine []string
@@ -1637,6 +1661,12 @@ func (m *MenuModel) renderFlow() string {
 		lines = append(lines, strings.Join(currentLine, strutil.Repeat(" ", itemSpacing)))
 	}
 
+	// Apply 1-char side margins to match MenuItemDelegate.Render
+	lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(maxWidth + 2)
+	for i, line := range lines {
+		lines[i] = lineStyle.Render(line)
+	}
+
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }
 
@@ -1673,8 +1703,9 @@ func (m *MenuModel) GetFlowHeight(width int) int {
 	ctx := GetActiveContext()
 
 	maxWidth := width
-	if maxWidth > 2 {
-		maxWidth -= 2
+	// Subtract 2 for borders and 2 for internal 1-char margins (matching standard list menus)
+	if maxWidth > 4 {
+		maxWidth -= 4
 	}
 
 	lines := 1

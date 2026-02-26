@@ -43,7 +43,7 @@ func GetPositionTopLeft(headerH int) DialogPosition {
 
 // DialogWithBackdrop wraps any DialogModel with the standard backdrop
 type DialogWithBackdrop[T DialogModel] struct {
-	backdrop BackdropModel
+	backdrop *BackdropModel
 	dialog   T
 	position DialogPosition
 	helpText string // static help text (used if dialog doesn't implement DynamicHelpProvider)
@@ -90,9 +90,8 @@ func (m DialogWithBackdrop[T]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Handle WindowSizeMsg specifically to enforce constraints
 	if wsm, ok := msg.(tea.WindowSizeMsg); ok {
-		// Update backdrop size via Update (which handles WindowSizeMsg)
-		backdropModel, _ := m.backdrop.Update(msg)
-		m.backdrop = backdropModel.(BackdropModel)
+		// Update backdrop size
+		m.backdrop.SetSize(wsm.Width, wsm.Height)
 
 		// Resize dialog to fit available space (accounting for header/footer/shadow)
 		availW, availH := GetAvailableDialogSize(wsm.Width, wsm.Height)
@@ -113,9 +112,8 @@ func (m DialogWithBackdrop[T]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Update backdrop
-	backdropModel, cmd := m.backdrop.Update(msg)
-	m.backdrop = backdropModel.(BackdropModel)
+	// Update backdrop (non-sizing messages)
+	_, cmd := m.backdrop.Update(msg)
 	cmds = append(cmds, cmd)
 
 	// Update dialog

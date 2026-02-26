@@ -81,6 +81,7 @@ func (s *MainMenuScreen) HelpText() string {
 
 // SetSize implements ScreenModel
 func (s *MainMenuScreen) SetSize(width, height int) {
+	// main_menu leaves 1 blank line before the helpline.
 	s.menu.SetSize(width, height)
 }
 

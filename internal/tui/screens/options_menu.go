@@ -75,6 +75,7 @@ func (s *OptionsMenuScreen) HelpText() string {
 
 // SetSize implements ScreenModel
 func (s *OptionsMenuScreen) SetSize(width, height int) {
+	// options leaves 1 blank line before the helpline.
 	s.menu.SetSize(width, height)
 }
 

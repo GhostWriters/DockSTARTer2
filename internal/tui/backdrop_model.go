@@ -14,13 +14,13 @@ type BackdropModel struct {
 	width    int
 	height   int
 	helpText string
-	header   HeaderModel
-	helpline HelplineModel
+	header   *HeaderModel
+	helpline *HelplineModel
 }
 
 // NewBackdropModel creates a new backdrop model
-func NewBackdropModel(helpText string) BackdropModel {
-	return BackdropModel{
+func NewBackdropModel(helpText string) *BackdropModel {
+	return &BackdropModel{
 		helpText: helpText,
 		header:   NewHeaderModel(),
 		helpline: NewHelplineModel(),
@@ -34,16 +34,12 @@ func (m *BackdropModel) SetHelpText(text string) {
 }
 
 // Init implements tea.Model
-func (m BackdropModel) Init() tea.Cmd {
+func (m *BackdropModel) Init() tea.Cmd {
 	return nil
 }
 
 // Update implements tea.Model
-func (m BackdropModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		m.SetSize(msg.Width, msg.Height)
-	}
+func (m *BackdropModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
@@ -57,7 +53,7 @@ func (m *BackdropModel) SetSize(width, height int) {
 }
 
 // ViewString returns the backdrop content as a string for compositing
-func (m BackdropModel) ViewString() string {
+func (m *BackdropModel) ViewString() string {
 	if m.width == 0 || m.height == 0 {
 		return ""
 	}
@@ -68,7 +64,7 @@ func (m BackdropModel) ViewString() string {
 	// Header: Fill with StatusBar background, then draw content
 	// Header handles its own wrapping and alignment for narrow terminals
 	m.header.SetWidth(m.width - 2)
-	headerContent := m.header.View()
+	headerContent := m.header.ViewString()
 	headerHeight := lipgloss.Height(headerContent)
 
 	// Render each header line - header already handles alignment,
@@ -95,7 +91,7 @@ func (m BackdropModel) ViewString() string {
 
 	// Calculate content height using actual header height
 	m.helpline.SetText(m.helpText)
-	helplineView := m.helpline.View(m.width)
+	helplineView := m.helpline.ViewString(m.width)
 	helplineHeight := lipgloss.Height(helplineView)
 
 	// Content area = total height - header lines - separator (1) - helpline
@@ -122,13 +118,13 @@ func (m BackdropModel) ViewString() string {
 
 // View implements tea.Model
 // Matches AppModel.View() rendering approach for consistent spacing
-func (m BackdropModel) View() tea.View {
+func (m *BackdropModel) View() tea.View {
 	return tea.NewView(m.ViewString())
 }
 
 // GetContentArea returns the dimensions available for overlay content
 // This is the space between the header/separator and the helpline, accounting for shadow
-func (m BackdropModel) GetContentArea() (width, height int) {
+func (m *BackdropModel) GetContentArea() (width, height int) {
 	if m.width == 0 || m.height == 0 {
 		return 0, 0
 	}

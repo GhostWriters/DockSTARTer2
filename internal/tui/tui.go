@@ -139,7 +139,7 @@ func Start(ctx context.Context, startMenu string) error {
 	}
 
 	// Check if the model exited via ForceQuit (ctrl-c)
-	if app, ok := finalModel.(AppModel); ok && app.Fatal {
+	if m, ok := finalModel.(*AppModel); ok && m.Fatal {
 		logger.TUIMode = false
 		console.AbortHandler(ctx)
 		return ErrUserAborted

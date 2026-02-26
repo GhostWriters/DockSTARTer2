@@ -10,8 +10,8 @@ type HelplineModel struct {
 }
 
 // NewHelplineModel creates a new helpline model
-func NewHelplineModel() HelplineModel {
-	return HelplineModel{}
+func NewHelplineModel() *HelplineModel {
+	return &HelplineModel{}
 }
 
 // SetText updates the help text
@@ -19,8 +19,8 @@ func (m *HelplineModel) SetText(text string) {
 	m.text = text
 }
 
-// View renders the helpline
-func (m HelplineModel) View(width int) string {
+// ViewString renders the helpline (used by backdrop for compositing)
+func (m *HelplineModel) ViewString(width int) string {
 	styles := GetStyles()
 
 	// Center the help text

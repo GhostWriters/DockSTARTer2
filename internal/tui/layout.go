@@ -55,7 +55,7 @@ func DefaultLayout() Layout {
 		ShadowWidth:       2,
 		ShadowHeight:      1,
 		EdgeIndent:        2, // 2 chars margin on each side of content area
-		GapBeforeHelpline: 0,
+		GapBeforeHelpline: 1,
 		GutterWidth:       1,
 	}
 }
@@ -101,6 +101,8 @@ func (l Layout) ContentArea(screenW, screenH int, hasShadow bool, headerHeight i
 	width = screenW - (l.EdgeIndent * 2) - shadowW
 
 	// Height: screen minus top chrome, bottom chrome, and shadow
+	// Subtracting shadowH here ensures the dialog + its shadow fits
+	// ABOVE the GapBeforeHelpline, leaving that line blank.
 	height = screenH - l.ChromeHeight(headerHeight) - l.BottomChrome() - shadowH
 
 	// Ensure minimums
@@ -114,16 +116,12 @@ func (l Layout) ContentArea(screenW, screenH int, hasShadow bool, headerHeight i
 	return width, height
 }
 
-// -------------------------------------------------------------------
-// Dialog positioning
-// -------------------------------------------------------------------
-
 // DialogPosition returns the X, Y coordinates for a dialog based on mode
 func (l Layout) DialogPosition(mode DialogMode, dialogW, dialogH, screenW, screenH int, hasShadow bool, headerHeight int) (x, y int) {
 	contentStartY := l.ContentStartY(headerHeight)
-	shadowW, shadowH := 0, 0
+	shadowW, _ := 0, 0
 	if hasShadow {
-		shadowW, shadowH = l.ShadowWidth, l.ShadowHeight
+		shadowW, _ = l.ShadowWidth, l.ShadowHeight
 	}
 
 	switch mode {
@@ -151,8 +149,9 @@ func (l Layout) DialogPosition(mode DialogMode, dialogW, dialogH, screenW, scree
 			x = l.EdgeIndent
 		}
 
-		// Center vertically in content area
-		y = contentStartY + (contentH-dialogH-shadowH)/2
+		// Center vertically in content area with an optical bias (+1)
+		// Since contentH already subtracted shadowH, we don't subtract it again here.
+		y = contentStartY + (contentH-dialogH+1)/2
 		if y < contentStartY {
 			y = contentStartY
 		}
@@ -174,15 +173,18 @@ func (l Layout) MaximizedDialogSize(screenW, screenH int, hasShadow bool, header
 // DialogContentHeight returns the height available for content inside a dialog
 // Parameters:
 //   - dialogH: total dialog height (including border)
+//   - headerHeight: height of any header/subtitle inside the dialog (not the screen header)
 //   - hasButtons: whether the dialog has a button row
 //   - hasShadow: whether shadow is enabled
-func (l Layout) DialogContentHeight(dialogH int, hasButtons bool, hasShadow bool) int {
-	overhead := l.DialogBorder + l.DialogPadding
+func (l Layout) DialogContentHeight(dialogH int, headerHeight int, hasButtons bool, hasShadow bool) int {
+	overhead := l.DialogBorder + l.DialogPadding + headerHeight
 	if hasButtons {
 		overhead += l.ButtonHeight
 	}
 	if hasShadow {
-		overhead += l.ShadowHeight
+		// NOTE: Shadow height is NOT subtracted here because the total height
+		// provided (dialogH) from ContentArea already excludes it to reserve space.
+		// If we subtract it again, the dialog will be too short.
 	}
 
 	h := dialogH - overhead

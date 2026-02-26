@@ -40,7 +40,7 @@ type HeaderModel struct {
 }
 
 // NewHeaderModel creates a new header model with default values
-func NewHeaderModel() HeaderModel {
+func NewHeaderModel() *HeaderModel {
 	hostname, _ := os.Hostname()
 
 	var flags []string
@@ -57,7 +57,7 @@ func NewHeaderModel() HeaderModel {
 		flags = append(flags, "YES")
 	}
 
-	return HeaderModel{
+	return &HeaderModel{
 		hostname: hostname,
 		flags:    flags,
 		focus:    HeaderFocusNone,
@@ -65,12 +65,12 @@ func NewHeaderModel() HeaderModel {
 }
 
 // Init implements tea.Model
-func (m HeaderModel) Init() tea.Cmd {
+func (m *HeaderModel) Init() tea.Cmd {
 	return nil
 }
 
 // Update implements tea.Model
-func (m HeaderModel) Update(msg tea.Msg) (HeaderModel, tea.Cmd) {
+func (m *HeaderModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
@@ -114,12 +114,17 @@ func (m *HeaderModel) HandleMouse(msg tea.MouseClickMsg) (bool, tea.Cmd) {
 }
 
 // Height returns the number of lines the header currently occupies.
-func (m HeaderModel) Height() int {
-	return lipgloss.Height(m.View())
+func (m *HeaderModel) Height() int {
+	return lipgloss.Height(m.ViewString())
 }
 
-// View renders the header as a string (used by backdrop for compositing)
-func (m HeaderModel) View() string {
+// View implements tea.Model
+func (m *HeaderModel) View() tea.View {
+	return tea.NewView(m.ViewString())
+}
+
+// ViewString renders the header as a string (used by backdrop for compositing)
+func (m *HeaderModel) ViewString() string {
 	styles := GetStyles()
 
 	left := m.renderLeft()

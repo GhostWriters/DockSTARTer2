@@ -106,6 +106,7 @@ func (s *ConfigMenuScreen) HelpText() string {
 
 // SetSize implements ScreenModel
 func (s *ConfigMenuScreen) SetSize(width, height int) {
+	// config leaves 1 blank line before the helpline.
 	s.menu.SetSize(width, height)
 }
 

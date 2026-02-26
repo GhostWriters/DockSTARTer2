@@ -22,7 +22,7 @@ func RenderWithBackdrop(dialogContent string, helpText string, width, height int
 	// Using Width() ensures the line fills exactly width - no padding calculation needed
 	header := NewHeaderModel()
 	header.SetWidth(width - 2)
-	headerContent := header.View()
+	headerContent := header.ViewString()
 	headerStyle := styles.StatusBar.
 		Width(width).
 		Padding(0, 1) // 1-char padding left/right
@@ -41,7 +41,7 @@ func RenderWithBackdrop(dialogContent string, helpText string, width, height int
 	// Total layout: header (1 line) + separator (1 line) + content + helpline (1 line)
 	helpline := NewHelplineModel()
 	helpline.SetText(helpText)
-	helplineView := helpline.View(width)
+	helplineView := helpline.ViewString(width)
 	helplineHeight := lipgloss.Height(helplineView)
 
 	contentHeight := height - 2 - helplineHeight // -2 for header and separator lines

@@ -29,7 +29,8 @@ type BorderPair struct {
 // Dialog sizing constants for deterministic layout
 const (
 	DialogBorderHeight = 2 // Top + Bottom outer borders
-	DialogShadowHeight = 1 // Bottom shadow line
+	DialogShadowHeight = 1 // Bottom shadow offset
+	DialogShadowWidth  = 2 // Right shadow offset
 	DialogButtonHeight = 3 // Standard button row
 )
 

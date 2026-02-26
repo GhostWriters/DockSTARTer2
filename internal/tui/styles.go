@@ -577,6 +577,12 @@ func Render3DBorderCtx(content string, padding int, ctx StyleContext) string {
 	return result.String()
 }
 
+// AddPatternHalo surrounds content with a 1-cell halo of the shadow pattern
+// DEPRECATED: use AddShadow instead
+func AddPatternHalo(content string) string {
+	return AddShadow(content)
+}
+
 // AddShadow adds a shadow effect to rendered content if shadow is enabled
 func AddShadow(content string) string {
 	return AddShadowCtx(content, GetActiveContext())
@@ -591,7 +597,6 @@ func AddShadowCtx(content string, ctx StyleContext) string {
 	}
 
 	// Use WidthWithoutZones to get accurate visual width
-	// (zone markers and some ANSI sequences inflate lipgloss.Width)
 	contentWidth := 0
 	for _, line := range lines {
 		w := WidthWithoutZones(line)
@@ -604,14 +609,13 @@ func AddShadowCtx(content string, ctx StyleContext) string {
 
 	if ctx.LineCharacters {
 		// Unicode mode: use shade characters (░▒▓█)
-		// Shadow foreground color on screen background
 		shadowStyle := ctx.Shadow.
 			Background(ctx.Screen.GetBackground())
 
 		var shadeChar string
 		switch ctx.ShadowLevel {
 		case 0:
-			shadeChar = " " // Off - just use space (effectively no visible shadow)
+			shadeChar = " "
 		case 1:
 			shadeChar = "░"
 		case 2:
@@ -621,27 +625,25 @@ func AddShadowCtx(content string, ctx StyleContext) string {
 		case 4:
 			shadeChar = "█"
 		default:
-			shadeChar = "▒" // Default to medium if unrecognized
+			shadeChar = "▒"
 		}
 
 		shadowCell = shadowStyle.Render(strutil.Repeat(shadeChar, 2))
 		bottomShadowChars = shadowStyle.Render(strutil.Repeat(shadeChar, contentWidth-1))
 	} else {
-		// ASCII mode: use ASCII equivalents for shade characters
+		// ASCII mode
 		if ctx.ShadowLevel == 4 {
-			// Solid: use space with shadow color as background
 			solidStyle := lipgloss.NewStyle().Background(ctx.ShadowColor)
 			shadowCell = solidStyle.Render("  ")
 			bottomShadowChars = solidStyle.Render(strutil.Repeat(" ", contentWidth-1))
 		} else {
-			// Shadow foreground color on screen background
 			asciiShadowStyle := ctx.Shadow.
 				Background(ctx.Screen.GetBackground())
 
 			var asciiShadeChar string
 			switch ctx.ShadowLevel {
 			case 0:
-				asciiShadeChar = " " // Off
+				asciiShadeChar = " "
 			case 1:
 				asciiShadeChar = "."
 			case 2:
@@ -649,7 +651,7 @@ func AddShadowCtx(content string, ctx StyleContext) string {
 			case 3:
 				asciiShadeChar = "#"
 			default:
-				asciiShadeChar = ":" // Default to medium if unrecognized
+				asciiShadeChar = ":"
 			}
 
 			shadowCell = asciiShadowStyle.Render(strutil.Repeat(asciiShadeChar, 2))
@@ -691,76 +693,6 @@ func AddShadowCtx(content string, ctx StyleContext) string {
 	result.WriteString(spacer1)
 	result.WriteString(bottomShadowChars)
 	result.WriteString(shadowCell)
-
-	return result.String()
-}
-
-// AddPatternHalo surrounds content with a 1-cell halo of the shadow pattern
-func AddPatternHalo(content string) string {
-	lines := strings.Split(content, "\n")
-	if len(lines) == 0 {
-		return content
-	}
-
-	// Find maximum width
-	maxWidth := 0
-	for _, line := range lines {
-		w := lipgloss.Width(line)
-		if w > maxWidth {
-			maxWidth = w
-		}
-	}
-
-	contentWidth := maxWidth
-	if contentWidth%2 != 0 {
-		contentWidth++
-	}
-
-	// Ensure halo uses the border color (Border2Color) as requested, to extend the border
-	shadowStyle := SemanticStyle("{{|Theme_Border2|}}").
-		Background(SemanticStyle("{{|Theme_Screen|}}").GetBackground())
-
-	var shadeChar string
-
-	// Force full block character for a solid border effect
-	shadeChar = "█"
-
-	// Create a single cell of shadow (2 characters wide)
-	var shadowCell string
-	if currentStyles.LineCharacters {
-		shadowCell = shadowStyle.Render(strutil.Repeat(shadeChar, 2))
-	} else {
-		// Even in ASCII, we use the pattern style for the "halo" effect
-		shadowCell = shadowStyle.Render(strutil.Repeat(shadeChar, 2))
-	}
-
-	// Horizontal shadow line (covers top/bottom + 2 cells for corners)
-	// totalWidth = shadowCell(1) + contentWidth + shadowCell(1)
-	gridWidth := contentWidth + 4
-	numCells := gridWidth / 2
-	horizontalShadow := strutil.Repeat(shadowCell, numCells)
-
-	var result strings.Builder
-
-	// Top halo row
-	result.WriteString(horizontalShadow)
-	result.WriteString("\n")
-
-	// Content rows with halo on both sides
-	for _, line := range lines {
-		w := lipgloss.Width(line)
-		padding := ""
-		if w < contentWidth {
-			padding = strutil.Repeat(" ", contentWidth-w)
-		}
-		result.WriteString(shadowCell)
-		result.WriteString(line + padding)
-		result.WriteString(shadowCell)
-		result.WriteString("\n")
-	}
-
-	// Bottom halo row
-	result.WriteString(horizontalShadow)
 
 	return result.String()
 }

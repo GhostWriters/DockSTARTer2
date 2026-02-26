@@ -344,11 +344,6 @@ func (m *programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-	case tea.WindowSizeMsg:
-		// Delegate to SetSize (single source of truth)
-		m.SetSize(msg.Width, msg.Height)
-		return m, nil
-
 	case outputLineMsg:
 		// Convert semantic theme tags to ANSI colors before displaying
 		styles := GetStyles()
@@ -875,9 +870,8 @@ func (m *ProgramBoxModel) calculateLayout() {
 	}
 
 	// 1. Shadow (if enabled)
-	shadow := 0
 	if currentConfig.UI.Shadow {
-		shadow = DialogShadowHeight
+		// Use DialogShadowHeight constant
 	}
 
 	// 2. Buttons (if task done)
@@ -896,17 +890,28 @@ func (m *ProgramBoxModel) calculateLayout() {
 	}
 
 	// 5. Total Overhead
-	// Base Overhead for ProgramBox is 4:
-	// - Outer Dialog Border: 2 (Top/Bottom)
-	// - Inner Viewport Border: 2 (Top Line + Manual Bottom Line)
-	baseOverhead := DialogBorderHeight + 2
-	overhead := baseOverhead + headerHeight + commandLines + buttons + shadow
+	// Use centralized layout helper for vertical budgeting
+	layout := GetLayout()
+	hasShadow := currentConfig.UI.Shadow
+	shadowHeight := 0
+	if hasShadow {
+		shadowHeight = DialogShadowHeight
+	}
+	// ProgramBox has a subtitle/header AND a command line. Both are "header" overhead.
+	internalOverhead := headerHeight + commandLines
+	vpHeight := layout.DialogContentHeight(m.height, internalOverhead, m.done, hasShadow)
 
-	// 6. Viewport Height
-	vpHeight := m.height - overhead
+	// Adjust for internal viewport borders (ProgramBox uses several)
+	// 1. Top viewport border (+1)
+	// 2. Custom bottom line appended (with scroll %) (+1)
+	// Total internal chrome = 2 lines.
+	vpHeight -= 2
+
 	if vpHeight < 2 {
 		vpHeight = 2
 	}
+
+	overhead := m.height - vpHeight
 
 	// Save to layout struct
 	m.layout = DialogLayout{
@@ -916,7 +921,7 @@ func (m *ProgramBoxModel) calculateLayout() {
 		CommandHeight:  commandLines,
 		ViewportHeight: vpHeight,
 		ButtonHeight:   buttons,
-		ShadowHeight:   shadow,
+		ShadowHeight:   shadowHeight,
 		Overhead:       overhead,
 	}
 
@@ -997,13 +1002,13 @@ func RunProgramBox(ctx context.Context, title, subtitle string, task func(contex
 	}
 
 	// Extract details from the model
-	if app, ok := finalModel.(AppModel); ok {
-		if app.Fatal {
+	if m, ok := finalModel.(*AppModel); ok {
+		if m.Fatal {
 			logger.TUIMode = false
 			console.AbortHandler(ctx)
 			return console.ErrUserAborted
 		}
-		if box, ok := app.dialog.(*ProgramBoxModel); ok {
+		if box, ok := m.dialog.(*ProgramBoxModel); ok {
 			return box.err
 		}
 	}
