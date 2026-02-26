@@ -101,15 +101,7 @@ func (m *helpDialogModel) ViewString() string {
 	content = strings.Join(lines, "\n")
 	content = MaintainBackground(bgStyle.Render(content), bgStyle)
 
-	// Force total content height if height is set
-	// Overhead for Help: Halo (2) + Bordered Dialog (2) = 4
-	heightBudget := m.layout.Height - 4
-	if heightBudget > 0 {
-		content = lipgloss.NewStyle().
-			Height(heightBudget).
-			Background(GetStyles().Dialog.GetBackground()).
-			Render(content)
-	}
+	// Content sizes naturally to its lines - no forced height expansion
 
 	// Use standard RenderDialogCtx for the border area
 	// We override the dialog background to Black for the border area and halo
@@ -150,7 +142,7 @@ func (m *helpDialogModel) calculateLayout() {
 
 	m.layout = DialogLayout{
 		Width:    m.width,
-		Height:   m.height,
+		Height:   0, // height is content-driven, not forced
 		Overhead: overhead,
 	}
 }

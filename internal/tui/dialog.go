@@ -9,6 +9,20 @@ import (
 	zone "github.com/lrstanley/bubblezone/v2"
 )
 
+// hasExplicitBackground returns true if the style has a meaningful background color set.
+// When a theme tag uses '-' for background, ApplyStyleCode calls style.Background(nil),
+// which lipgloss stores as NoColor{} — the absence of color.
+// We detect this by direct type assertion, since NoColor{}.RGBA() returns full alpha (0xFFFF)
+// making alpha-based detection unreliable.
+func hasExplicitBackground(s lipgloss.Style) bool {
+	bg := s.GetBackground()
+	if bg == nil {
+		return false
+	}
+	_, isNoColor := bg.(lipgloss.NoColor)
+	return !isNoColor
+}
+
 // DialogType represents the type of dialog for styling
 type DialogType int
 
@@ -450,7 +464,7 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 		Foreground(ctx.Border2Color).
 		Background(borderBG)
 	titleStyle := ctx.DialogTitle
-	if titleStyle.GetBackground() == nil {
+	if !hasExplicitBackground(titleStyle) {
 		titleStyle = titleStyle.Background(borderBG)
 	}
 
@@ -580,7 +594,7 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 		borderStyleLight = borderStyleDark
 	}
 
-	if titleStyle.GetBackground() == nil {
+	if !hasExplicitBackground(titleStyle) {
 		titleStyle = titleStyle.Background(borderBG)
 	}
 
