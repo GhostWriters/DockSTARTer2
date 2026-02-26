@@ -333,6 +333,13 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if tui.ZoneClick(msg, "OptionsPanel") {
 			s.focusedPanel = FocusOptions
 			s.updateFocusStates()
+
+			// Pass click to the options menu to handle item selection
+			updated, uCmd := s.optionsMenu.Update(msg)
+			if m, ok := updated.(*tui.MenuModel); ok {
+				s.optionsMenu = m
+			}
+			return s, uCmd
 		} else if tui.ZoneClick(msg, "ApplyBtn") {
 			s.focusedButton = 0
 			return s, s.handleApply()
@@ -550,8 +557,10 @@ func (s *DisplayOptionsScreen) ViewString() string {
 	// Use RenderBorderedBoxCtx with known width instead of RenderDialog which measures content
 	settingsDialog := tui.RenderBorderedBoxCtx("Appearance Settings", settingsContent, menuWidth, targetHeight, true, tui.GetActiveContext())
 
-	// Add shadow if enabled in config
-	if s.config.UI.Shadow {
+	// Add shadow if enabled in global config (not preview config)
+	// The preview mockup shows what shadow would look like, but the
+	// settings dialog itself uses the current active setting
+	if tui.IsShadowEnabled() {
 		settingsDialog = tui.AddShadow(settingsDialog)
 	}
 
@@ -560,12 +569,18 @@ func (s *DisplayOptionsScreen) ViewString() string {
 		return settingsDialog
 	}
 
-	// 4. Render Preview and compose side-by-side
-	preview := s.renderMockup()
-
-	// Constrain preview height to match settings dialog to prevent covering helpline
+	// Calculate settings height for preview to match
+	styles := tui.GetStyles()
 	settingsHeight := lipgloss.Height(settingsDialog)
+
+	// 4. Render Preview and compose side-by-side
+	// Pass target height so preview can maximize vertically
+	preview := s.renderMockup(settingsHeight)
+
+	// Match preview height to settings dialog to prevent black gaps
 	previewHeight := lipgloss.Height(preview)
+	previewWidth := lipgloss.Width(preview)
+
 	if previewHeight > settingsHeight {
 		// Truncate preview to match settings height
 		previewLines := strings.Split(preview, "\n")
@@ -573,11 +588,19 @@ func (s *DisplayOptionsScreen) ViewString() string {
 			previewLines = previewLines[:settingsHeight]
 		}
 		preview = strings.Join(previewLines, "\n")
+	} else if previewHeight < settingsHeight {
+		// Pad preview with Screen background to match settings height
+		padStyle := lipgloss.NewStyle().
+			Width(previewWidth).
+			Background(styles.Screen.GetBackground())
+		padLine := padStyle.Render("")
+		for i := previewHeight; i < settingsHeight; i++ {
+			preview += "\n" + padLine
+		}
 	}
 
 	// Create gutter with explicit Screen background color
-	// Height matches settings dialog (preview is already constrained)
-	styles := tui.GetStyles()
+	// Height matches settings dialog (preview is already matched)
 	gutterStyle := lipgloss.NewStyle().Background(styles.Screen.GetBackground())
 	gutterLines := make([]string, settingsHeight)
 	for i := range gutterLines {
@@ -601,7 +624,7 @@ func alignCenter(w int, text string) string {
 	return strutil.Repeat(" ", left) + text + strutil.Repeat(" ", right)
 }
 
-func (s *DisplayOptionsScreen) renderMockup() string {
+func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	width := 44 // Reduced width to fit the screen better
 
 	paddedLine := func(text string, style lipgloss.Style, fallback string) string {
@@ -755,8 +778,16 @@ func (s *DisplayOptionsScreen) renderMockup() string {
 		dialogBox = tui.AddShadowCtx(dialogBox, previewCtx)
 	}
 
-	// Backdrop
-	backdropHeight := 18
+	// Backdrop - calculate height to fill available space
+	// Structure: headerRow(1) + sepRow(1) + backdrop + helpRow(1) + logStripRow(1) + outer borders(2) + shadow(1 if enabled)
+	fixedLines := 6 // header + sep + help + logstrip + 2 borders
+	if s.config.UI.Shadow {
+		fixedLines++ // shadow adds 1 line
+	}
+	backdropHeight := targetHeight - fixedLines
+	if backdropHeight < 10 {
+		backdropHeight = 10 // minimum height for content visibility
+	}
 	backdropLines := make([]string, backdropHeight)
 	filler := bgStyle.Render(strutil.Repeat(" ", width))
 	for i := range backdropLines {
@@ -803,8 +834,8 @@ func (s *DisplayOptionsScreen) renderMockup() string {
 	mockupWidth := lipgloss.Width(mockup)
 	preview := tui.RenderBorderedBoxCtx("Preview", mockup, mockupWidth, 0, false, tui.GetActiveContext())
 
-	// Add shadow if enabled
-	if s.config.UI.Shadow {
+	// Add shadow if enabled in global config (same as settings dialog)
+	if tui.IsShadowEnabled() {
 		preview = tui.AddShadow(preview)
 	}
 

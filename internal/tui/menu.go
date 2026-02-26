@@ -620,6 +620,11 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						return m, nil
 					}
 
+					// For individual checkbox items, treat click as Space (toggle)
+					if m.items[i].IsCheckbox && m.items[i].Selectable {
+						return m.handleSpace()
+					}
+
 					return m.handleEnter()
 				}
 			}
@@ -1584,6 +1589,11 @@ func (m *MenuModel) renderFlow() string {
 		}
 
 		itemContent := prefix + tagStr
+
+		// Mark zone for click detection
+		zoneID := fmt.Sprintf("item-%s-%d", m.id, i)
+		itemContent = zone.Mark(zoneID, itemContent)
+
 		itemWidth := lipgloss.Width(GetPlainText(itemContent))
 
 		// Check if we need to wrap

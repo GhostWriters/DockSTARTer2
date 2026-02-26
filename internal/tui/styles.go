@@ -624,28 +624,33 @@ func AddShadowCtx(content string, ctx StyleContext) string {
 		bottomShadowChars = shadowStyle.Render(strutil.Repeat(shadeChar, contentWidth-1))
 	} else {
 		// ASCII mode: use ASCII equivalents for shade characters
-		// Shadow foreground color on screen background
-		asciiShadowStyle := ctx.Shadow.
-			Background(ctx.Screen.GetBackground())
+		if ctx.ShadowLevel == 4 {
+			// Solid: use space with shadow color as background
+			solidStyle := lipgloss.NewStyle().Background(ctx.ShadowColor)
+			shadowCell = solidStyle.Render("  ")
+			bottomShadowChars = solidStyle.Render(strutil.Repeat(" ", contentWidth-1))
+		} else {
+			// Shadow foreground color on screen background
+			asciiShadowStyle := ctx.Shadow.
+				Background(ctx.Screen.GetBackground())
 
-		var asciiShadeChar string
-		switch ctx.ShadowLevel {
-		case 0:
-			asciiShadeChar = " " // Off
-		case 1:
-			asciiShadeChar = "."
-		case 2:
-			asciiShadeChar = ":"
-		case 3:
-			asciiShadeChar = "#"
-		case 4:
-			asciiShadeChar = "#"
-		default:
-			asciiShadeChar = ":" // Default to medium if unrecognized
+			var asciiShadeChar string
+			switch ctx.ShadowLevel {
+			case 0:
+				asciiShadeChar = " " // Off
+			case 1:
+				asciiShadeChar = "."
+			case 2:
+				asciiShadeChar = ":"
+			case 3:
+				asciiShadeChar = "#"
+			default:
+				asciiShadeChar = ":" // Default to medium if unrecognized
+			}
+
+			shadowCell = asciiShadowStyle.Render(strutil.Repeat(asciiShadeChar, 2))
+			bottomShadowChars = asciiShadowStyle.Render(strutil.Repeat(asciiShadeChar, contentWidth-1))
 		}
-
-		shadowCell = asciiShadowStyle.Render(strutil.Repeat(asciiShadeChar, 2))
-		bottomShadowChars = asciiShadowStyle.Render(strutil.Repeat(asciiShadeChar, contentWidth-1))
 	}
 
 	spacerCell := lipgloss.NewStyle().

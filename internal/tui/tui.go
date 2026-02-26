@@ -391,6 +391,12 @@ func Send(msg tea.Msg) {
 	}
 }
 
+// IsShadowEnabled returns whether shadow is currently enabled in the global config.
+// Use this for dialog chrome that should reflect the active setting, not preview changes.
+func IsShadowEnabled() bool {
+	return currentConfig.UI.Shadow
+}
+
 // CloseDialog returns a command to close the current modal dialog
 func CloseDialog() tea.Cmd {
 	return func() tea.Msg {
