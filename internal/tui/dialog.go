@@ -391,6 +391,124 @@ func RenderUniformBlockDialogCtx(title, content string, ctx StyleContext) string
 	return renderDialogWithBorderCtx(title, content, borders.Focused, true, 0, false, false, ctx.DialogTitleHelp, ctx)
 }
 
+// RenderBorderedBoxCtx renders a dialog with title and borders using a specific context.
+// Unlike renderDialogWithBorderCtx, this accepts a known contentWidth instead of measuring content.
+func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeight int, focused bool, ctx StyleContext) string {
+	var border lipgloss.Border
+	if !ctx.DrawBorders {
+		border = lipgloss.HiddenBorder()
+	} else if ctx.LineCharacters {
+		if focused {
+			border = lipgloss.ThickBorder()
+		} else {
+			border = lipgloss.NormalBorder()
+		}
+	} else {
+		if focused {
+			border = thickAsciiBorder
+		} else {
+			border = asciiBorder
+		}
+	}
+
+	borderBG := ctx.Dialog.GetBackground()
+	borderStyleLight := lipgloss.NewStyle().
+		Foreground(ctx.BorderColor).
+		Background(borderBG)
+	borderStyleDark := lipgloss.NewStyle().
+		Foreground(ctx.Border2Color).
+		Background(borderBG)
+	titleStyle := ctx.DialogTitle.
+		Background(borderBG)
+
+	// Process the title with full semantic theme tagging support
+	renderedTitle := MaintainBackground(RenderThemeText(rawTitle, titleStyle), titleStyle)
+
+	lines := strings.Split(content, "\n")
+	// Trust the passed contentWidth - don't expand based on line widths
+	// Zone markers and other invisible ANSI sequences can inflate lipgloss.Width()
+	// causing incorrect width calculations. The caller knows the correct width.
+	actualWidth := contentWidth
+
+	if targetHeight > 2 {
+		contentHeight := len(lines)
+		neededPadding := (targetHeight - 2) - contentHeight
+		if neededPadding > 0 {
+			for i := 0; i < neededPadding; i++ {
+				lines = append(lines, "")
+			}
+		}
+	}
+
+	var leftT, rightT string
+	if !ctx.DrawBorders {
+		leftT = " "
+		rightT = " "
+	} else if ctx.LineCharacters {
+		if focused {
+			leftT = "┫"
+			rightT = "┣"
+		} else {
+			leftT = "┤"
+			rightT = "├"
+		}
+	} else {
+		if focused {
+			leftT = "H"
+			rightT = "H"
+		} else {
+			leftT = "+"
+			rightT = "+"
+		}
+	}
+
+	titleSectionLen := 1 + 1 + lipgloss.Width(renderedTitle) + 1 + 1
+	leftPad := (actualWidth - titleSectionLen) / 2
+	rightPad := actualWidth - titleSectionLen - leftPad
+
+	var result strings.Builder
+
+	result.WriteString(borderStyleLight.Render(border.TopLeft))
+	result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, leftPad)))
+	result.WriteString(borderStyleLight.Render(leftT))
+	result.WriteString(borderStyleLight.Render(" "))
+	result.WriteString(renderedTitle)
+	result.WriteString(borderStyleLight.Render(" "))
+	result.WriteString(borderStyleLight.Render(rightT))
+	result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, rightPad)))
+	result.WriteString(borderStyleLight.Render(border.TopRight))
+	result.WriteString("\n")
+
+	for _, line := range lines {
+		result.WriteString(borderStyleLight.Render(border.Left))
+		// Use WidthWithoutZones to get accurate visual width (zone markers are invisible)
+		textWidth := WidthWithoutZones(line)
+
+		var fullLine string
+		if textWidth > actualWidth {
+			// Truncate lines that are too wide to prevent bleeding
+			truncated := TruncateRight(line, actualWidth)
+			fullLine = MaintainBackground(truncated, ctx.Dialog)
+		} else if textWidth < actualWidth {
+			// Pad lines that are too narrow
+			padding := lipgloss.NewStyle().Background(borderBG).Render(strutil.Repeat(" ", actualWidth-textWidth))
+			fullLine = MaintainBackground(line+padding, ctx.Dialog)
+		} else {
+			fullLine = MaintainBackground(line, ctx.Dialog)
+		}
+
+		result.WriteString(fullLine)
+		result.WriteString(borderStyleDark.Render(border.Right))
+		result.WriteString("\n")
+	}
+
+	result.WriteString(borderStyleDark.Render(border.BottomLeft))
+	result.WriteString(borderStyleDark.Render(strutil.Repeat(border.Bottom, actualWidth)))
+	result.WriteString(borderStyleDark.Render(border.BottomRight))
+
+	return result.String()
+}
+
 // GetBlockBorders returns a BorderPair with solid block borders for both states
 func GetBlockBorders(lineCharacters bool) BorderPair {
 	var block lipgloss.Border
