@@ -485,7 +485,7 @@ func (m *programBoxModel) ViewString() string {
 	// Wrap viewport in rounded inner border with console background
 	viewportStyle := ctx.Console.
 		Padding(0, 0) // Remove side padding inside inner box for a tighter look
-	viewportStyle = ApplyRoundedBorderCtx(viewportStyle, ctx)
+	viewportStyle = ApplyThickBorderCtx(viewportStyle, ctx)
 
 	// Apply scroll indicator manually to bottom border
 	// We disable the bottom border initially to let us construct it ourselves
@@ -503,12 +503,12 @@ func (m *programBoxModel) ViewString() string {
 	// Determine T-connectors based on line style
 	var leftT, rightT string
 	if ctx.LineCharacters {
-		// Use inverse T connectors for bottom border
-		leftT = "┤"
-		rightT = "├"
+		// Use thick T connectors to match the thick viewport border
+		leftT = "┫"
+		rightT = "┣"
 	} else {
-		leftT = "|"
-		rightT = "|"
+		leftT = "H"
+		rightT = "H"
 	}
 
 	// Calculate padding for label to place it on the right
@@ -781,7 +781,7 @@ func (m *ProgramBoxModel) renderHeaderUI(width int) string {
 			Padding(0, 1).
 			Background(ctx.Dialog.GetBackground())
 
-		barStyle = ApplyStraightBorderCtx(barStyle, ctx)
+		barStyle = ApplyThickBorderCtx(barStyle, ctx)
 		borderedBar := barStyle.Render(barView)
 
 		// Center the multiline bordered bar line consistently
