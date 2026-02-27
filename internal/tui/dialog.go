@@ -6,7 +6,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	zone "github.com/lrstanley/bubblezone/v2"
 )
 
 // hasExplicitBackground returns true if the style has a meaningful background color set.
@@ -268,20 +267,12 @@ func RenderCenteredButtonsCtx(contentWidth int, ctx StyleContext, buttons ...But
 	sectionWidth := contentWidth / numButtons
 
 	var sections []string
-	for i, btn := range renderedButtons {
-		zoneID := buttons[i].ZoneID
-		if zoneID == "" {
-			normalizedText := strings.TrimSpace(buttons[i].Text)
-			zoneID = "Button." + normalizedText
-		}
-
-		markedBtn := zone.Mark(zoneID, btn)
-
+	for _, btn := range renderedButtons {
 		centeredBtn := lipgloss.NewStyle().
 			Width(sectionWidth).
 			Align(lipgloss.Center).
 			Background(ctx.Dialog.GetBackground()).
-			Render(markedBtn)
+			Render(btn)
 
 		sections = append(sections, centeredBtn)
 	}
@@ -692,29 +683,4 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 	result.WriteString(borderStyleDark.Render(border.BottomRight))
 
 	return result.String()
-}
-
-// ZoneMark wraps content in a zone identifier
-func ZoneMark(id string, content string) string {
-	return zone.Mark(id, content)
-}
-
-// ZoneClick returns true if the message is a left-click within the specified zone
-func ZoneClick(msg tea.Msg, id string) bool {
-	if mouseMsg, ok := msg.(tea.MouseClickMsg); ok && mouseMsg.Button == tea.MouseLeft {
-		if info := zone.Get(id); info != nil {
-			return info.InBounds(mouseMsg)
-		}
-	}
-	return false
-}
-
-// InZone returns true if the mouse message (any type) is within the specified zone
-func InZone(msg tea.Msg, id string) bool {
-	if mouseMsg, ok := msg.(tea.MouseMsg); ok {
-		if info := zone.Get(id); info != nil {
-			return info.InBounds(mouseMsg)
-		}
-	}
-	return false
 }

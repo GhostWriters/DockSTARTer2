@@ -13,7 +13,6 @@ import (
 	"DockSTARTer2/internal/update"
 
 	tea "charm.land/bubbletea/v2"
-	zone "github.com/lrstanley/bubblezone/v2"
 )
 
 var (
@@ -40,9 +39,6 @@ var (
 func Initialize(ctx context.Context) error {
 	console.TUIConfirm = PromptConfirm
 	console.TUIShutdown = Shutdown
-
-	// Initialize global zone manager for mouse support
-	zone.NewGlobal()
 
 	currentConfig = config.LoadAppConfig()
 	if _, err := theme.Load(currentConfig.UI.Theme, ""); err != nil { // Initial theme load

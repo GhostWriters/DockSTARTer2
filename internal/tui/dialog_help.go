@@ -9,9 +9,9 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// helpDialogModel displays a keyboard shortcut reference dialog.
+// HelpDialogModel displays a keyboard shortcut reference dialog.
 // It integrates with AppModel via ShowDialogMsg/CloseDialogMsg.
-type helpDialogModel struct {
+type HelpDialogModel struct {
 	help   help.Model
 	width  int
 	height int
@@ -20,15 +20,15 @@ type helpDialogModel struct {
 	layout DialogLayout
 }
 
-func newHelpDialogModel() *helpDialogModel {
+func NewHelpDialogModel() *HelpDialogModel {
 	h := help.New()
 	h.ShowAll = true
-	return &helpDialogModel{help: h}
+	return &HelpDialogModel{help: h}
 }
 
-func (m *helpDialogModel) Init() tea.Cmd { return nil }
+func (m *HelpDialogModel) Init() tea.Cmd { return nil }
 
-func (m *helpDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *HelpDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		// Any key closes the help dialog (? toggles it off, Esc also works)
@@ -40,16 +40,15 @@ func (m *helpDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		return m, nil
 
-	case tea.MouseClickMsg:
-		// Any click closes the help dialog
-		_ = msg
+	case LayerHitMsg:
+		// Any click on the help dialog (or its components) closes it
 		return m, func() tea.Msg { return CloseDialogMsg{} }
 	}
 	return m, nil
 }
 
 // ViewString returns the dialog content as a string for compositing
-func (m *helpDialogModel) ViewString() string {
+func (m *HelpDialogModel) ViewString() string {
 	if m.layout.Width == 0 {
 		return ""
 	}
@@ -118,21 +117,29 @@ func (m *helpDialogModel) ViewString() string {
 	return AddPatternHalo(dialogStr, haloColor)
 }
 
-func (m *helpDialogModel) View() tea.View {
+// View implements tea.Model
+func (m *HelpDialogModel) View() tea.View {
 	v := tea.NewView(m.ViewString())
 	v.MouseMode = tea.MouseModeAllMotion
 	v.AltScreen = true
 	return v
 }
 
+// Layers implements LayeredView
+func (m *HelpDialogModel) Layers() []*lipgloss.Layer {
+	return []*lipgloss.Layer{
+		lipgloss.NewLayer(m.ViewString()).Z(ZDialog).ID("Dialog.Help"),
+	}
+}
+
 // SetSize updates the dialog dimensions (called by AppModel on window resize).
-func (m *helpDialogModel) SetSize(w, h int) {
+func (m *HelpDialogModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
 	m.calculateLayout()
 }
 
-func (m *helpDialogModel) calculateLayout() {
+func (m *HelpDialogModel) calculateLayout() {
 	if m.width == 0 || m.height == 0 {
 		return
 	}

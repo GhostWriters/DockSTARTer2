@@ -11,7 +11,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	zone "github.com/lrstanley/bubblezone/v2"
 )
 
 // HeaderFocus states for interactive elements
@@ -94,22 +93,16 @@ func (m *HeaderModel) GetFocus() HeaderFocus {
 	return m.focus
 }
 
-// HandleMouse handles mouse events for the header
-// Returns true if the event was handled (and potentially a command)
-func (m *HeaderModel) HandleMouse(msg tea.MouseClickMsg) (bool, tea.Cmd) {
-	if msg.Button != tea.MouseLeft {
-		return false, nil
-	}
-
-	if zi := zone.Get(ZoneAppVersion); zi != nil && zi.InBounds(msg) {
+// HandleHit handles a hit result from the compositor
+func (m *HeaderModel) HandleHit(id string) (bool, tea.Cmd) {
+	switch id {
+	case IDAppVersion:
 		m.SetFocus(HeaderFocusApp)
 		return true, nil
-	}
-	if zi := zone.Get(ZoneTmplVersion); zi != nil && zi.InBounds(msg) {
+	case IDTmplVersion:
 		m.SetFocus(HeaderFocusTmpl)
 		return true, nil
 	}
-
 	return false, nil
 }
 
@@ -243,7 +236,7 @@ func (m HeaderModel) renderVersions() (appText, tmplText string) {
 
 	// Helper to render version blocks
 	// format: [StatusIcon] [Label][ [Version] ]
-	renderVersionBlock := func(ver string, label string, isAvailable bool, isError bool, isFocused bool, zoneID string) string {
+	renderVersionBlock := func(ver string, label string, isAvailable bool, isError bool, isFocused bool) string {
 		var text string
 
 		// 1. Status Icon / Prefix
@@ -256,20 +249,15 @@ func (m HeaderModel) renderVersions() (appText, tmplText string) {
 		}
 
 		// 2. Label + Open Bracket (Standard or Update color)
-		// Typically label is cyan/Theme_ApplicationVersion
 		text += "{{|Theme_ApplicationVersion|}}" + label + ":[{{|Theme_StatusBar|}}"
 
 		// 3. Version Number (The Interactive Part)
-		// If Focused -> Selection Style
-		// If Update/Error -> Update Style (Red/Yellow)
-		// Else -> Default Style (Inherit or specific)
 		var verStyled string
 		if isFocused {
 			verStyled = "{{|Theme_VersionSelected|}}" + ver + "{{|Theme_StatusBar|}}"
 		} else if isError || isAvailable {
 			verStyled = "{{|Theme_ApplicationUpdate|}}" + ver + "{{|Theme_StatusBar|}}"
 		} else {
-			// Inherit Theme_ApplicationVersion for standard look, but since we reset before, we must apply it
 			verStyled = "{{|Theme_ApplicationVersion|}}" + ver + "{{|Theme_StatusBar|}}"
 		}
 		text += verStyled
@@ -277,14 +265,82 @@ func (m HeaderModel) renderVersions() (appText, tmplText string) {
 		// 4. Close Bracket
 		text += "{{|Theme_ApplicationVersion|}}]{{|Theme_StatusBar|}}"
 
-		// 5. Wrap in Zone for clicking (Mouse area covers full block)
-		return zone.Mark(zoneID, MaintainBackground(RenderThemeText(text, styles.HeaderBG), styles.HeaderBG))
+		return MaintainBackground(RenderThemeText(text, styles.HeaderBG), styles.HeaderBG)
 	}
 
-	appText = renderVersionBlock(appVer, "A", update.AppUpdateAvailable, update.UpdateCheckError, m.focus == HeaderFocusApp, ZoneAppVersion)
-	tmplText = renderVersionBlock(tmplVer, "T", update.TmplUpdateAvailable, update.UpdateCheckError, m.focus == HeaderFocusTmpl, ZoneTmplVersion)
+	appText = renderVersionBlock(appVer, "A", update.AppUpdateAvailable, update.UpdateCheckError, m.focus == HeaderFocusApp)
+	tmplText = renderVersionBlock(tmplVer, "T", update.TmplUpdateAvailable, update.UpdateCheckError, m.focus == HeaderFocusTmpl)
 
 	return appText, tmplText
+}
+
+// Layers returns the hit-testable layers for the header
+func (m *HeaderModel) Layers() []*lipgloss.Layer {
+	left := m.renderLeft()
+	center := m.renderCenter()
+	appVer, tmplVer := m.renderVersions()
+
+	leftW := WidthWithoutZones(left)
+	centerW := WidthWithoutZones(center)
+	appW := WidthWithoutZones(appVer)
+	tmplW := WidthWithoutZones(tmplVer)
+
+	centerX := (m.width - centerW) / 2
+	if centerX < 0 {
+		centerX = 0
+	}
+
+	rightW := appW + tmplW
+	fitsLine1 := true
+	if leftW+1 > centerX {
+		fitsLine1 = false
+	}
+	if centerX+centerW+1+rightW > m.width {
+		fitsLine1 = false
+	}
+
+	// We create transparent layers on top of the version text for hit testing.
+	// We need to match the positions calculated in ViewString().
+	var layers []*lipgloss.Layer
+
+	if fitsLine1 {
+		// Line 1: [Left] [Center] [App] [Tmpl]
+		appX := m.width - rightW
+		tmplX := m.width - tmplW
+		layers = append(layers, lipgloss.NewLayer(appVer).X(appX).Y(0).ID(IDAppVersion).Z(1))
+		layers = append(layers, lipgloss.NewLayer(tmplVer).X(tmplX).Y(0).ID(IDTmplVersion).Z(1))
+	} else {
+		// Wrapping logic from ViewString()
+		// Stage 1: [Left] [Center] [App] on Line 1, [Tmpl] on Line 2
+		fitsStage1 := true
+		if leftW+1 > centerX {
+			fitsStage1 = false
+		}
+		if centerX+centerW+1+appW > m.width {
+			fitsStage1 = false
+		}
+
+		if fitsStage1 {
+			appX := m.width - appW
+			tmplX := m.width - tmplW
+			layers = append(layers, lipgloss.NewLayer(appVer).X(appX).Y(0).ID(IDAppVersion).Z(1))
+			layers = append(layers, lipgloss.NewLayer(tmplVer).X(tmplX).Y(1).ID(IDTmplVersion).Z(1))
+		} else if leftW+1 <= centerX {
+			// Stage 2: [Left] [Center] on Line 1, [App] on Line 2, [Tmpl] on Line 3
+			appX := m.width - appW
+			tmplX := m.width - tmplW
+			layers = append(layers, lipgloss.NewLayer(appVer).X(appX).Y(1).ID(IDAppVersion).Z(1))
+			layers = append(layers, lipgloss.NewLayer(tmplVer).X(tmplX).Y(2).ID(IDTmplVersion).Z(1))
+		} else {
+			// Fallback: Stacked
+			appX := m.width - appW
+			tmplX := m.width - tmplW
+			layers = append(layers, lipgloss.NewLayer(appVer).X(appX).Y(2).ID(IDAppVersion).Z(1))
+			layers = append(layers, lipgloss.NewLayer(tmplVer).X(tmplX).Y(3).ID(IDTmplVersion).Z(1))
+		}
+	}
+
+	return layers
 }
 
 // renderRight returns both versions combined (for backwards compatibility)

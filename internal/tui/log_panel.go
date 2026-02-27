@@ -13,13 +13,12 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	zone "github.com/lrstanley/bubblezone/v2"
 )
 
 const (
-	logPanelZoneID    = "log-toggle"
-	logResizeZoneID   = "log-resize"
-	logViewportZoneID = "log-viewport"
+	logPanelZoneID    = IDLogToggle
+	logResizeZoneID   = IDLogResize
+	logViewportZoneID = IDLogViewport
 )
 
 // logLineMsg carries a new log line from the subscription channel.
@@ -188,26 +187,25 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case LayerHitMsg:
+		if msg.ID == logPanelZoneID {
+			return m, func() tea.Msg { return toggleLogPanelMsg{} }
+		}
+
 	case tea.MouseClickMsg:
 		// Handle drag start on resize zones
 		if msg.Button == tea.MouseLeft {
-			if zone.Get(logResizeZoneID).InBounds(msg) {
-				m.isDragging = true
-				m.dragStartY = msg.Y
-				m.heightAtDragStart = m.height
-				// If not expanded, we might want to expand?
-				// But user asked for drag resize6. Dragging collapsed strip is weird.
-				// Let's assume drag only works if already expanded OR drag expands it?
-				// User said: "border allows you to drag it up and down to resize it"
-				// If it's collapsed, it's at bottom. Dragging up should expand.
-				if !m.expanded {
-					m.expanded = true
-					m.height = 1 // Start small
-					m.SetSize(m.width, m.totalHeight)
-					m.heightAtDragStart = 1 // Logic will handle delta
-				}
-				return m, nil
+			// No direct zone check here, handled by AppModel forwarding
+			m.isDragging = true
+			m.dragStartY = msg.Y
+			m.heightAtDragStart = m.height
+			if !m.expanded {
+				m.expanded = true
+				m.height = 1
+				m.SetSize(m.width, m.totalHeight)
+				m.heightAtDragStart = 1
 			}
+			return m, nil
 		}
 
 	case tea.MouseReleaseMsg:
@@ -324,24 +322,14 @@ func (m LogPanelModel) ViewString() string {
 	rightTotal := m.width - dashW - labelW
 
 	// Use the dedicated LogPanel theme color for the strip line
-	// Note: We render parts separately below, so we don't need a single strip style for the whole line yet.
 	stripStyle := lipgloss.NewStyle().
 		Foreground(ctx.LogPanelColor).
 		Background(ctx.HelpLine.GetBackground())
 
-	// CLICK ZONES:
-	// Only the label is the toggle. The rests are resize handles.
-	// We need to render them separately to mark zones.
-
-	// Left Handle
+	// Build content parts
 	leftContent := stripStyle.Render(leftDashes)
-	leftMarked := zone.Mark(logResizeZoneID, leftContent)
-
-	// Toggle Label (Title)
 	labelContent := stripStyle.Render(label)
-	labelMarked := zone.Mark(logPanelZoneID, labelContent)
 
-	// Right Handle (including indicator)
 	var rightContentStr string
 	if rightIndicator != "" {
 		indicatorW := lipgloss.Width(rightIndicator)
@@ -354,15 +342,10 @@ func (m LogPanelModel) ViewString() string {
 		rightContentStr = strutil.Repeat(sepChar, rightTotal)
 	}
 	rightContent := stripStyle.Render(rightContentStr)
-	rightMarked := zone.Mark(logResizeZoneID, rightContent)
 
 	// Combine
-	// Use JoinHorizontal to create the single strip line from components
-	strip := lipgloss.JoinHorizontal(lipgloss.Top, leftMarked, labelMarked, rightMarked)
-
-	// Ensure the strip spans the full width (pad right if necessary, though left/right dashes should cover it)
-	// Actually, dashW calculation ensures it fills width.
-	// But let's force width on the container just in case.
+	// Just join normally, hit-layers are handled in Layers()
+	strip := lipgloss.JoinHorizontal(lipgloss.Top, leftContent, labelContent, rightContent)
 	strip = lipgloss.NewStyle().Width(m.width).Render(strip)
 
 	// Expanded: viewport below the strip
@@ -375,8 +358,48 @@ func (m LogPanelModel) ViewString() string {
 
 	// Use MaintainBackground to ensure console background is preserved through resets
 	vpView := MaintainBackground(m.viewport.View(), ctx.Console)
-	vpViewMarked := zone.Mark(logViewportZoneID, vpView)
-	return lipgloss.JoinVertical(lipgloss.Left, strip, vpViewMarked)
+	return lipgloss.JoinVertical(lipgloss.Left, strip, vpView)
+}
+
+// Layers implements LayeredView
+func (m LogPanelModel) Layers() []*lipgloss.Layer {
+	// Root layer for the visible panel
+	root := lipgloss.NewLayer(m.ViewString()).Z(ZLogPanel).ID(IDLogPanel)
+
+	// Hit zones for the toggle strip (top line)
+	// Same layout calculation as ViewString
+	marker := "^"
+	if m.expanded {
+		marker = "v"
+	}
+	label := " " + marker + " Log " + marker + " "
+	labelW := lipgloss.Width(label)
+	dashW := (m.width - labelW) / 2
+	if dashW < 0 {
+		dashW = 0
+	}
+	rightTotal := m.width - dashW - labelW
+
+	// 1. Left Handle
+	root.AddLayers(lipgloss.NewLayer(strutil.Repeat(" ", dashW)).
+		X(0).Y(0).ID(IDLogResize).Z(1))
+
+	// 2. Toggle Label
+	root.AddLayers(lipgloss.NewLayer(strutil.Repeat(" ", labelW)).
+		X(dashW).Y(0).ID(IDLogToggle).Z(1))
+
+	// 3. Right Handle
+	root.AddLayers(lipgloss.NewLayer(strutil.Repeat(" ", rightTotal)).
+		X(dashW + labelW).Y(0).ID(IDLogResize).Z(1))
+
+	// 4. Viewport
+	if m.expanded {
+		vpH := m.viewport.Height()
+		root.AddLayers(lipgloss.NewLayer(strings.Repeat(strutil.Repeat(" ", m.width)+"\n", vpH)).
+			X(0).Y(1).ID(IDLogViewport).Z(1))
+	}
+
+	return []*lipgloss.Layer{root}
 }
 
 // View renders the panel at its current height.

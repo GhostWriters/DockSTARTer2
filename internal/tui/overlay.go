@@ -26,19 +26,16 @@ const (
 // ansiRegex matches all ANSI escape sequences
 var ansiRegex = regexp.MustCompile("[\u001B\u009B][[\\]()#;?]*((?:[a-zA-Z\\d]*(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]*)*)?\u0007|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PR-TZcf-ntqry=><~]))")
 
-// zoneMarkerRegex matches bubblezone markers: \x1b_bubblezone:...: and \x1b\\
 // These are OSC sequences that lipgloss.Width() doesn't strip correctly
-var zoneMarkerRegex = regexp.MustCompile("\x1b_[^\x1b]*|\x1b\\\\")
 
 // WidthWithoutZones returns the visual width of a string, stripping zone markers first
-// Use this when measuring content that may contain bubblezone markers
+
 func WidthWithoutZones(s string) int {
-	stripped := zoneMarkerRegex.ReplaceAllString(s, "")
-	return lipgloss.Width(stripped)
+	return lipgloss.Width(s)
 }
 
 // Overlay composites a foreground string over a background string at the specified position.
-// This version is "safe" for ANSI markers like bubblezone because it uses manual string slicing
+
 // and concatenation instead of the lipgloss v2 compositor which may strip them.
 func Overlay(foreground, background string, hPos, vPos OverlayPosition, xOffset, yOffset int) string {
 	if foreground == "" {
@@ -140,14 +137,8 @@ func truncateString(s string, width int, keepLeft bool) string {
 	var b strings.Builder
 	cells := 0
 
-	// Find all ANSI sequences and zone markers (both are invisible)
-	ansiMatches := ansiRegex.FindAllStringIndex(s, -1)
-	zoneMatches := zoneMarkerRegex.FindAllStringIndex(s, -1)
-
-	// Merge and sort all invisible sequence positions
-	allMatches := make([][]int, 0, len(ansiMatches)+len(zoneMatches))
-	allMatches = append(allMatches, ansiMatches...)
-	allMatches = append(allMatches, zoneMatches...)
+	// Find all ANSI sequences (invisible)
+	allMatches := ansiRegex.FindAllStringIndex(s, -1)
 	sort.Slice(allMatches, func(i, j int) bool {
 		return allMatches[i][0] < allMatches[j][0]
 	})
@@ -195,13 +186,13 @@ func truncateString(s string, width int, keepLeft bool) string {
 }
 
 // TruncateLeft returns the substring of s starting after 'width' terminal cells.
-// Preserves ANSI sequences and bubblezone markers.
+
 func TruncateLeft(s string, width int) string {
 	return truncateString(s, width, false)
 }
 
 // TruncateRight returns the first 'width' terminal cells of s.
-// Preserves ANSI sequences and bubblezone markers.
+
 func TruncateRight(s string, width int) string {
 	return truncateString(s, width, true)
 }

@@ -9,11 +9,12 @@ require (
 	charm.land/log/v2 v2.0.0-20251110204020-529bb77f35da
 	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/adrg/xdg v0.5.3
+	github.com/charmbracelet/colorprofile v0.4.2
 	github.com/compose-spec/compose-go/v2 v2.10.1
 	github.com/creativeprojects/go-selfupdate v1.5.2
 	github.com/gdamore/tcell/v3 v3.1.2
 	github.com/go-git/go-git/v5 v5.16.4
-	github.com/lrstanley/bubblezone/v2 v2.0.0-alpha.3
+	github.com/mattn/go-runewidth v0.0.20
 	github.com/muesli/termenv v0.16.0
 	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/spf13/pflag v1.0.10
@@ -29,7 +30,6 @@ require (
 	github.com/ProtonMail/go-crypto v1.1.6 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
-	github.com/charmbracelet/colorprofile v0.4.2 // indirect
 	github.com/charmbracelet/harmonica v0.2.0 // indirect
 	github.com/charmbracelet/ultraviolet v0.0.0-20260205113103-524a6607adb8 // indirect
 	github.com/charmbracelet/x/ansi v0.11.6 // indirect
@@ -37,7 +37,6 @@ require (
 	github.com/charmbracelet/x/termios v0.1.1 // indirect
 	github.com/charmbracelet/x/windows v0.2.2 // indirect
 	github.com/clipperhouse/displaywidth v0.11.0 // indirect
-	github.com/clipperhouse/stringish v0.1.1 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/cloudflare/circl v1.6.1 // indirect
 	github.com/cyphar/filepath-securejoin v0.4.1 // indirect
@@ -61,7 +60,6 @@ require (
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.3.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/mattn/go-runewidth v0.0.20 // indirect
 	github.com/mattn/go-shellwords v1.0.12 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
@@ -88,5 +86,3 @@ require (
 	golang.org/x/time v0.14.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
-
-replace charm.land/lipgloss/v2 => github.com/charmbracelet/lipgloss/v2 v2.0.0-beta.3.0.20260212100304-e18737634dea

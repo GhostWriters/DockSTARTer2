@@ -130,6 +130,18 @@ func (m *BackdropModel) ViewString() string {
 	return b.String()
 }
 
+// Layers returns the composite layers for the backdrop
+func (m *BackdropModel) Layers() []*lipgloss.Layer {
+	base := lipgloss.NewLayer(m.ViewString()).Z(ZBackdrop)
+
+	if m.header != nil {
+		// Add header child layers (version labels, etc.)
+		base.AddLayers(m.header.Layers()...)
+	}
+
+	return []*lipgloss.Layer{base}
+}
+
 // View implements tea.Model
 // Matches AppModel.View() rendering approach for consistent spacing
 func (m *BackdropModel) View() tea.View {

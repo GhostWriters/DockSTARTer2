@@ -10,7 +10,6 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	zone "github.com/lrstanley/bubblezone/v2"
 )
 
 // ScreenType identifies different screens in the TUI
@@ -34,6 +33,11 @@ type ScreenModel interface {
 	IsMaximized() bool
 	HasDialog() bool
 	MenuName() string // Returns the name used for --menu or -M to return to this screen
+}
+
+// LayeredView is an interface for models that provide multiple visual layers
+type LayeredView interface {
+	Layers() []*lipgloss.Layer
 }
 
 // Navigation messages
@@ -89,6 +93,11 @@ type (
 		Message string
 		Type    MessageType
 	}
+
+	// LayerHitMsg is sent when a native compositor layer is hit by a mouse event
+	LayerHitMsg struct {
+		ID string
+	}
 )
 
 // AppModel is the root Bubble Tea model
@@ -123,6 +132,9 @@ type AppModel struct {
 
 	// Fatal indicates if the program should exit with a fatal error message
 	Fatal bool
+
+	// compositor stores the last rendered compositor for hit testing
+	compositor *lipgloss.Compositor
 }
 
 // NewAppModel creates a new application model
@@ -537,7 +549,7 @@ func (m AppModel) getContentArea() (int, int) {
 // getDialogArea returns the dimensions available for a specific dialog.
 // Help dialog uses the full terminal height, other dialogs use the backdrop's content area.
 func (m AppModel) getDialogArea(d tea.Model) (int, int) {
-	if _, isHelp := d.(*helpDialogModel); isHelp {
+	if _, isHelp := d.(*HelpDialogModel); isHelp {
 		// Use Layout helpers directly to get full-screen content area for help
 		layout := GetLayout()
 		headerH := 1
@@ -555,7 +567,7 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	// Specialized Help Blockade
 	// If help is open, ANY key closes it and we return immediately to prevent leaks.
 	if m.dialog != nil {
-		if _, ok := m.dialog.(*helpDialogModel); ok {
+		if _, ok := m.dialog.(*HelpDialogModel); ok {
 			var cmd tea.Cmd
 			m.dialog, cmd = m.dialog.Update(msg)
 			return m, logger.RecoverTUI(m.ctx, cmd), true
@@ -567,7 +579,7 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		return m, logger.RecoverTUI(m.ctx, func() tea.Msg { return toggleLogPanelMsg{} }), true
 	}
 	if key.Matches(msg, Keys.Help) {
-		return m, logger.RecoverTUI(m.ctx, func() tea.Msg { return ShowDialogMsg{Dialog: newHelpDialogModel()} }), true
+		return m, logger.RecoverTUI(m.ctx, func() tea.Msg { return ShowDialogMsg{Dialog: NewHelpDialogModel()} }), true
 	}
 	if key.Matches(msg, Keys.ForceQuit) {
 		m.Fatal = true
@@ -773,7 +785,7 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 
 	// 3. HELP BLOCKADE: If help is open, ANY click closes it for convenience.
 	if m.dialog != nil {
-		if _, ok := m.dialog.(*helpDialogModel); ok {
+		if _, ok := m.dialog.(*HelpDialogModel); ok {
 			if _, ok := msg.(tea.MouseClickMsg); ok {
 				var cmd tea.Cmd
 				m.dialog, cmd = m.dialog.Update(msg)
@@ -799,22 +811,49 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 
 	// 5. GLOBAL INTERACTIONS: Header, Log Panel toggles, resizing
 	if click, ok := msg.(tea.MouseClickMsg); ok && click.Button == tea.MouseLeft {
-		// Check log panel RESIZE clicks (top level UI elements)
-		if zi := zone.Get(logResizeZoneID); zi != nil && zi.InBounds(click) {
-			updated, cmd := m.logPanel.Update(click) // Pass click to start drag
-			m.logPanel = updated.(LogPanelModel)
-			return m, cmd, true
-		}
+		// Native Hit Testing
+		if m.compositor != nil {
+			hit := m.compositor.Hit(click.X, click.Y)
+			if !hit.Empty() {
+				// 1. Global IDs (AppModel handles these)
+				switch hit.ID() {
+				case IDLogToggle:
+					return m, func() tea.Msg { return toggleLogPanelMsg{} }, true
+				case IDLogResize:
+					updated, cmd := m.logPanel.Update(click)
+					m.logPanel = updated.(LogPanelModel)
+					return m, cmd, true
+				case IDLogPanel:
+					// Main panel click (inside viewport)
+					m.setLogPanelFocus(true)
+					return m, nil, true
+				case IDLogViewport:
+					m.setLogPanelFocus(true)
+					return m, nil, true
+				case IDAppVersion:
+					return m, TriggerAppUpdate(), true
+				case IDTmplVersion:
+					return m, TriggerTemplateUpdate(), true
+				}
 
-		// Check log panel TOGGLE clicks
-		if zi := zone.Get(logPanelZoneID); zi != nil && zi.InBounds(click) {
-			return m, func() tea.Msg { return toggleLogPanelMsg{} }, true
-		}
-
-		// Click inside log viewport focuses it
-		if zi := zone.Get(logViewportZoneID); zi != nil && zi.InBounds(click) {
-			m.setLogPanelFocus(true)
-			return m, nil, true
+				// 2. Component IDs (Dispatch to active dialog or screen)
+				hitMsg := LayerHitMsg{ID: hit.ID()}
+				if m.dialog != nil {
+					var cmd tea.Cmd
+					m.dialog, cmd = m.dialog.Update(hitMsg)
+					if cmd != nil {
+						return m, cmd, true
+					}
+				} else if m.activeScreen != nil {
+					var res tea.Model
+					var cmd tea.Cmd
+					res, cmd = m.activeScreen.Update(hitMsg)
+					m.activeScreen = res.(ScreenModel)
+					if cmd != nil {
+						return m, cmd, true
+					}
+				}
+			}
 		}
 
 		// Click outside log panel — return focus to screen/dialog
@@ -822,31 +861,6 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 			m.setLogPanelFocus(false)
 		}
 
-		// Check for header clicks (backdrop elements)
-		// Only allow header interaction if NO dialog is open
-		if m.dialog == nil {
-			if handled, cmd := m.backdrop.header.HandleMouse(click); handled {
-				// If header took focus, ensure we unfocus screen/logpanel
-				if m.backdrop.header.GetFocus() != HeaderFocusNone {
-					m.setLogPanelFocus(false)
-					if m.activeScreen != nil {
-						if focusable, ok := m.activeScreen.(interface{ SetFocused(bool) }); ok {
-							focusable.SetFocused(false)
-						}
-					}
-				}
-
-				// Trigger update on click
-				if zi := zone.Get(ZoneAppVersion); zi != nil && zi.InBounds(click) {
-					return m, TriggerAppUpdate(), true
-				}
-				if zi := zone.Get(ZoneTmplVersion); zi != nil && zi.InBounds(click) {
-					return m, TriggerTemplateUpdate(), true
-				}
-
-				return m, cmd, true
-			}
-		}
 	}
 
 	return m, nil, false
@@ -855,11 +869,6 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 // ViewStringer is an interface for models that provide string content for compositing
 type ViewStringer interface {
 	ViewString() string
-}
-
-// LayeredView is an interface for models that provide multiple layers for compositing
-type LayeredView interface {
-	Layers() []LayerSpec
 }
 
 // View implements tea.Model
@@ -884,49 +893,43 @@ func (m *AppModel) View() (v tea.View) {
 	}
 	contentYOffset := layout.ContentStartY(headerH) // header + separator
 
-	// Layer 0: Backdrop
-	backdropContent := ""
+	// Create native compositor
+	comp := lipgloss.NewCompositor()
+
+	// 1. Layer: Backdrop
 	if m.backdrop != nil {
-		backdropContent = m.backdrop.ViewString()
+		comp.AddLayers(m.backdrop.Layers()...)
 	}
-	allLayers := []LayerSpec{
-		{Content: backdropContent, X: 0, Y: 0, Z: 0},
+
+	// 2. Layer: Log panel
+	logY := m.height - m.logPanel.Height()
+	if lv, ok := interface{}(m.logPanel).(LayeredView); ok {
+		for _, l := range lv.Layers() {
+			comp.AddLayers(l.Y(l.GetY() + logY))
+		}
+	} else if vs, ok := interface{}(m.logPanel).(ViewStringer); ok {
+		if logContent := vs.ViewString(); logContent != "" {
+			comp.AddLayers(lipgloss.NewLayer(logContent).
+				X(0).Y(logY).Z(ZLogPanel).ID(IDLogPanel))
+		}
 	}
 
 	// Base coordinates for maximized elements (edge indent from left, content start from top)
 	maxX := layout.EdgeIndent
 	maxY := contentYOffset
 
-	// Layer 1: Log panel (always at Z=1, rendered at bottom)
-	if vs, ok := interface{}(m.logPanel).(ViewStringer); ok {
-		if logContent := vs.ViewString(); logContent != "" {
-			logY := m.height - m.logPanel.Height()
-			allLayers = append(allLayers, LayerSpec{
-				Content: logContent,
-				X:       0,
-				Y:       logY,
-				Z:       1,
-			})
-		}
-	}
-
-	// Layer 2+: Active Screen
+	// 3. Layer: Active Screen
 	if m.activeScreen != nil {
 		if lv, ok := m.activeScreen.(LayeredView); ok {
-			// Screen provides its own layers - just offset them
 			for _, l := range lv.Layers() {
-				l.X += maxX
-				l.Y += maxY
-				l.Z += 2 // Ensure above log panel
-				allLayers = append(allLayers, l)
+				comp.AddLayers(lipgloss.NewLayer(l.GetContent()).
+					X(l.GetX() + maxX).Y(l.GetY() + maxY).Z(l.GetZ() + ZScreen).ID(l.GetID()))
 			}
 		} else if vs, ok := m.activeScreen.(ViewStringer); ok {
 			if content := vs.ViewString(); content != "" {
-				// Use WidthWithoutZones for accurate width (zone markers don't take visual space)
 				fgWidth := WidthWithoutZones(content)
 				fgHeight := lipgloss.Height(content)
 
-				// Use centralized layout helper for consistent positioning and optical centering
 				mode := DialogAbsoluteCentered
 				targetHeight := m.backdropHeight()
 
@@ -935,55 +938,59 @@ func (m *AppModel) View() (v tea.View) {
 					targetHeight = m.height
 				}
 				lx, ly := layout.DialogPosition(mode, fgWidth, fgHeight, m.width, targetHeight, m.config.UI.Shadow, headerH)
-				allLayers = append(allLayers, LayerSpec{Content: content, X: lx, Y: ly, Z: 2})
+				comp.AddLayers(lipgloss.NewLayer(content).X(lx).Y(ly).Z(ZScreen))
 			}
 		}
 	}
 
-	// Layer 3+: Modal Dialog (on top of screen)
+	// 4. Layer: Modal Dialog
 	if m.dialog != nil {
-		if lv, ok := m.dialog.(LayeredView); ok {
-			// Dialog provides its own layers - offset them and ensure Z > screen
-			for _, l := range lv.Layers() {
-				l.X += maxX
-				l.Y += maxY
-				l.Z += 3 // Ensure above screen layers
-				allLayers = append(allLayers, l)
+		var content string
+		if vs, ok := m.dialog.(ViewStringer); ok {
+			content = vs.ViewString()
+		} else {
+			content = m.dialog.View().Content
+		}
+
+		if content != "" {
+			maximized := false
+			if md, ok := m.dialog.(interface{ IsMaximized() bool }); ok {
+				maximized = md.IsMaximized()
 			}
-		} else if vs, ok := m.dialog.(ViewStringer); ok {
-			if content := vs.ViewString(); content != "" {
-				maximized := false
-				if md, ok := m.dialog.(interface{ IsMaximized() bool }); ok {
-					maximized = md.IsMaximized()
+
+			fgWidth := WidthWithoutZones(content)
+			fgHeight := lipgloss.Height(content)
+
+			mode := DialogAbsoluteCentered
+			targetHeight := m.backdropHeight()
+
+			if _, ok := m.dialog.(*HelpDialogModel); ok {
+				targetHeight = m.height
+			}
+
+			if maximized {
+				mode = DialogMaximized
+				targetHeight = m.height
+			}
+
+			lx, ly := layout.DialogPosition(mode, fgWidth, fgHeight, m.width, targetHeight, m.config.UI.Shadow, headerH)
+
+			if lv, ok := m.dialog.(LayeredView); ok {
+				for _, l := range lv.Layers() {
+					comp.AddLayers(lipgloss.NewLayer(l.GetContent()).
+						X(l.GetX() + lx).Y(l.GetY() + ly).Z(l.GetZ() + ZDialog).ID(l.GetID()))
 				}
-
-				// Use WidthWithoutZones for accurate width
-				fgWidth := WidthWithoutZones(content)
-				fgHeight := lipgloss.Height(content)
-
-				// Use centralized layout helper for consistent positioning and optical centering
-				mode := DialogAbsoluteCentered
-				targetHeight := m.backdropHeight()
-
-				if maximized {
-					mode = DialogMaximized
-					targetHeight = m.height
-				} else if _, isHelp := m.dialog.(*helpDialogModel); isHelp {
-					// Help dialog ignores log panel and centers on full screen
-					targetHeight = m.height
-				}
-
-				lx, ly := layout.DialogPosition(mode, fgWidth, fgHeight, m.width, targetHeight, m.config.UI.Shadow, headerH)
-				allLayers = append(allLayers, LayerSpec{Content: content, X: lx, Y: ly, Z: 3})
+			} else {
+				comp.AddLayers(lipgloss.NewLayer(content).X(lx).Y(ly).Z(ZDialog))
 			}
 		}
 	}
 
-	// Final rendered string with bounds checking to prevent bleeding
-	rendered := MultiOverlayWithBounds(m.width, m.height, allLayers...)
+	// Store for hit testing in next Update
+	m.compositor = comp
 
-	// Scan zones at the root level
-	v = tea.NewView(zone.Scan(rendered))
+	// Render the compositor
+	v = tea.NewView(comp.Render())
 	v.MouseMode = tea.MouseModeAllMotion
 	v.AltScreen = true
 	return v

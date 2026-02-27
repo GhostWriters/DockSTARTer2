@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	tea "charm.land/bubbletea/v2"
-	zone "github.com/lrstanley/bubblezone/v2"
 )
 
 // DialogModel is the interface that dialogs must implement to use the generic wrapper
@@ -158,18 +157,14 @@ func (m DialogWithBackdrop[T]) View() tea.View {
 		m.position.YOffset,
 	)
 
-	// Scan zones at root level for mouse support
-	v := tea.NewView(zone.Scan(output))
+	// Component view (ready for hit-testing in compositor)
+	v := tea.View{Content: output}
 	v.MouseMode = tea.MouseModeAllMotion
 	v.AltScreen = true
 	return v
 }
 
-// RunDialogWithBackdrop is a helper to run any dialog with the standard backdrop.
-// It initializes the TUI, creates the wrapper, and runs the program.
 func RunDialogWithBackdrop[T DialogModel](dialog T, helpText string, position DialogPosition) (T, error) {
-	// Initialize global zone manager for mouse support (safe to call multiple times)
-	zone.NewGlobal()
 
 	// Initialize TUI if not already done
 	cfg := config.LoadAppConfig()

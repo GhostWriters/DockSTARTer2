@@ -5,9 +5,42 @@ import (
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
 	"image/color"
+	"strconv"
 	"strings"
 
 	"charm.land/lipgloss/v2"
+)
+
+// GetMenuItemID returns a unique layer ID for a menu item
+func GetMenuItemID(menuID string, index int) string {
+	return "item-" + menuID + "-" + strconv.Itoa(index)
+}
+
+// Z-Level constants for layering
+const (
+	ZBackdrop = 0
+	ZScreen   = 10
+	ZLogPanel = 20
+	ZDialog   = 30
+	ZHalo     = 35
+	ZOverlay  = 40
+)
+
+// Global Layer IDs for hit testing
+const (
+	IDLogPanel    = "log_panel"
+	IDLogToggle   = "log_toggle"
+	IDLogResize   = "log_resize"
+	IDLogViewport = "log_viewport"
+	IDAppVersion  = "app_version"
+	IDTmplVersion = "tmpl_version"
+
+	// Display Options IDs
+	IDThemePanel   = "theme_panel"
+	IDOptionsPanel = "options_panel"
+	IDApplyButton  = "apply_button"
+	IDBackButton   = "back_button"
+	IDExitButton   = "exit_button"
 )
 
 // Styles holds all lipgloss styles derived from the theme

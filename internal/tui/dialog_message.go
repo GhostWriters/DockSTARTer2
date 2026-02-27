@@ -1,11 +1,11 @@
 package tui
 
 import (
+	"DockSTARTer2/internal/strutil"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	zone "github.com/lrstanley/bubblezone/v2" // used for zone.Get in Update()
 )
 
 // MessageType represents the type of message dialog
@@ -55,12 +55,9 @@ func (m *messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Use CloseDialogMsg so AppModel can handle it when running within existing TUI
 		return m, func() tea.Msg { return CloseDialogMsg{} }
 
-	case tea.MouseClickMsg:
-		// Check if OK button was clicked (auto-generated zone ID: "Button.OK")
-		if zoneInfo := zone.Get("Button.OK"); zoneInfo != nil {
-			if zoneInfo.InBounds(msg) {
-				return m, func() tea.Msg { return CloseDialogMsg{} }
-			}
+	case LayerHitMsg:
+		if msg.ID == "Button.OK" {
+			return m, func() tea.Msg { return CloseDialogMsg{} }
 		}
 	}
 
@@ -132,8 +129,50 @@ func (m *messageDialogModel) ViewString() string {
 	return dialog
 }
 
+// View implements tea.Model
 func (m *messageDialogModel) View() tea.View {
 	return tea.NewView(m.ViewString())
+}
+
+// Layers implements LayeredView
+func (m *messageDialogModel) Layers() []*lipgloss.Layer {
+	// Root dialog layer
+	root := lipgloss.NewLayer(m.ViewString()).Z(ZDialog)
+
+	// Calculate button hit layer
+	// Y = 1 (top border) + messageHeight
+	styles := GetStyles()
+
+	// Replicate message style to measure height
+	var messageStyle lipgloss.Style
+	switch m.messageType {
+	case MessageSuccess:
+		messageStyle = styles.StatusSuccess.Padding(1, 2)
+	case MessageWarning:
+		messageStyle = styles.StatusWarn.Padding(1, 2)
+	case MessageError:
+		messageStyle = styles.StatusError.Bold(true).Padding(1, 2)
+	default: // MessageInfo
+		messageStyle = lipgloss.NewStyle().Foreground(styles.ItemNormal.GetForeground()).Padding(1, 2)
+	}
+
+	contentWidth := m.layout.Width - 2
+	messageStyle = messageStyle.Width(contentWidth)
+	messageHeight := lipgloss.Height(messageStyle.Render(m.message))
+
+	buttonY := 1 + messageHeight
+
+	// OK Button is centered in contentWidth
+	btnW := 12 // Approximate " OK " button width with border
+	btnX := 1 + (contentWidth-btnW)/2
+	if btnX < 1 {
+		btnX = 1
+	}
+
+	root.AddLayers(lipgloss.NewLayer(strutil.Repeat(" ", btnW)).
+		X(btnX).Y(buttonY).ID("Button.OK").Z(1))
+
+	return []*lipgloss.Layer{root}
 }
 
 // SetSize updates the dialog dimensions

@@ -337,60 +337,58 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return s, nil
 
-	case tea.MouseClickMsg:
-		if msg.Button == tea.MouseMiddle {
-			if tui.InZone(msg, "ThemePanel") {
-				updated, uCmd := s.themeMenu.Update(msg)
-				if m, ok := updated.(*tui.MenuModel); ok {
-					s.themeMenu = m
-				}
-				return s, uCmd
-			} else if tui.InZone(msg, "OptionsPanel") {
-				updated, uCmd := s.optionsMenu.Update(msg)
-				if m, ok := updated.(*tui.MenuModel); ok {
-					s.optionsMenu = m
-				}
-				return s, uCmd
-			}
+	case tui.LayerHitMsg:
+		// 1. Focus routing via panel hit
+		if msg.ID == tui.IDThemePanel {
+			s.focusedPanel = FocusThemes
+			s.updateFocusStates()
+			return s, nil
+		} else if msg.ID == tui.IDOptionsPanel {
+			s.focusedPanel = FocusOptions
+			s.updateFocusStates()
 			return s, nil
 		}
 
-		// Focus routing via panel zones
-		if tui.ZoneClick(msg, "ThemePanel") {
+		// 2. Component routing (menus)
+		if strings.HasPrefix(msg.ID, "item-theme_list-") {
+			// Theme selection logic
 			s.focusedPanel = FocusThemes
 			s.updateFocusStates()
 
-			// Check if a specific theme item was clicked
+			// Extract index
+			var idx int
+			fmt.Sscanf(msg.ID, "item-theme_list-%d", &idx)
 			items := s.themeMenu.GetItems()
-			for i := range items {
-				zoneID := fmt.Sprintf("item-theme_list-%d", i)
-				if tui.ZoneClick(msg, zoneID) {
-					for j := range items {
-						items[j].Checked = (i == j)
-					}
-					s.themeMenu.SetItems(items)
-					s.themeMenu.Select(i)
-					s.applyPreview(items[i].Tag)
-					break
+			if idx >= 0 && idx < len(items) {
+				for j := range items {
+					items[j].Checked = (idx == j)
 				}
+				s.themeMenu.SetItems(items)
+				s.themeMenu.Select(idx)
+				s.applyPreview(items[idx].Tag)
 			}
-		} else if tui.ZoneClick(msg, "OptionsPanel") {
+			return s, nil
+		} else if strings.HasPrefix(msg.ID, "item-options_list-") {
 			s.focusedPanel = FocusOptions
 			s.updateFocusStates()
 
-			// Pass click to the options menu to handle item selection
+			// Forward to options menu
 			updated, uCmd := s.optionsMenu.Update(msg)
 			if m, ok := updated.(*tui.MenuModel); ok {
 				s.optionsMenu = m
 			}
 			return s, uCmd
-		} else if tui.ZoneClick(msg, "ApplyBtn") {
+		}
+
+		// 3. Button actions
+		switch msg.ID {
+		case tui.IDApplyButton:
 			s.focusedButton = 0
 			return s, s.handleApply()
-		} else if tui.ZoneClick(msg, "BackBtn") {
+		case tui.IDBackButton:
 			s.focusedButton = 1
 			return s, navigateBack()
-		} else if tui.ZoneClick(msg, "ExitBtn") {
+		case tui.IDExitButton:
 			s.focusedButton = 2
 			return s, tea.Quit
 		}
@@ -570,9 +568,8 @@ func (s *DisplayOptionsScreen) ViewString() string {
 	}
 
 	// 1. Render Settings Menus
-	// ZoneMark wraps the panel for click detection (focus routing)
-	themeView := tui.ZoneMark("ThemePanel", s.themeMenu.ViewString())
-	optionsView := tui.ZoneMark("OptionsPanel", s.optionsMenu.ViewString())
+	themeView := s.themeMenu.ViewString()
+	optionsView := s.optionsMenu.ViewString()
 
 	// Trim newlines before joining to prevent extra gaps
 	leftColumnParts := []string{themeView, optionsView}
@@ -583,9 +580,9 @@ func (s *DisplayOptionsScreen) ViewString() string {
 
 	// 2. Render Buttons using known width, not measured
 	buttons := []tui.ButtonSpec{
-		{Text: "Apply", Active: s.focusedButton == 0, ZoneID: "ApplyBtn"},
-		{Text: "Back", Active: s.focusedButton == 1, ZoneID: "BackBtn"},
-		{Text: "Exit", Active: s.focusedButton == 2, ZoneID: "ExitBtn"},
+		{Text: "Apply", Active: s.focusedButton == 0},
+		{Text: "Back", Active: s.focusedButton == 1},
+		{Text: "Exit", Active: s.focusedButton == 2},
 	}
 	buttonRow := tui.RenderCenteredButtons(menuWidth, buttons...)
 
@@ -893,7 +890,69 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 }
 
 func (s *DisplayOptionsScreen) View() tea.View {
-	return tea.NewView(s.ViewString())
+	v := tea.NewView(s.ViewString())
+	v.MouseMode = tea.MouseModeAllMotion
+	return v
+}
+
+// Layers implements LayeredView
+func (s *DisplayOptionsScreen) Layers() []*lipgloss.Layer {
+	// Root layer for the entire screen content
+	root := lipgloss.NewLayer(s.ViewString()).Z(tui.ZScreen)
+
+	// Settings dialog content starts at (1, 1) relative to root
+	// because of the outer border in RenderBorderedBoxCtx
+	const contentX = 1
+	const contentY = 1
+
+	// 1. Theme Menu Layers
+	for _, l := range s.themeMenu.Layers() {
+		root.AddLayers(lipgloss.NewLayer(l.GetContent()).
+			X(l.GetX() + contentX).
+			Y(l.GetY() + contentY).
+			Z(l.GetZ()).
+			ID(l.GetID()))
+	}
+
+	// Hit panel for Theme selection focus
+	themeRect := strings.Repeat(strutil.Repeat(" ", s.themeMenu.Width())+"\n", s.themeMenu.Height())
+	root.AddLayers(lipgloss.NewLayer(themeRect).
+		X(contentX).Y(contentY).
+		ID(tui.IDThemePanel).
+		Z(1))
+
+	// 2. Options Menu Layers
+	optionsY := contentY + s.themeMenu.Height()
+	for _, l := range s.optionsMenu.Layers() {
+		root.AddLayers(lipgloss.NewLayer(l.GetContent()).
+			X(l.GetX() + contentX).
+			Y(l.GetY() + optionsY).
+			Z(l.GetZ()).
+			ID(l.GetID()))
+	}
+
+	// Hit panel for Options focus
+	optionsRect := strings.Repeat(strutil.Repeat(" ", s.optionsMenu.Width())+"\n", s.optionsMenu.Height())
+	root.AddLayers(lipgloss.NewLayer(optionsRect).
+		X(contentX).Y(optionsY).
+		ID(tui.IDOptionsPanel).
+		Z(1))
+
+	// 3. Button Layers
+	buttonY := optionsY + s.optionsMenu.Height()
+	btnRowWidth := s.themeMenu.Width() // Buttons span same width as menus
+	btnWidth := btnRowWidth / 3
+
+	btnRect := strings.Repeat(strutil.Repeat(" ", btnWidth)+"\n", 3)
+
+	root.AddLayers(lipgloss.NewLayer(btnRect).
+		X(contentX).Y(buttonY).ID(tui.IDApplyButton).Z(1))
+	root.AddLayers(lipgloss.NewLayer(btnRect).
+		X(contentX + btnWidth).Y(buttonY).ID(tui.IDBackButton).Z(1))
+	root.AddLayers(lipgloss.NewLayer(btnRect).
+		X(contentX + 2*btnWidth).Y(buttonY).ID(tui.IDExitButton).Z(1))
+
+	return []*lipgloss.Layer{root}
 }
 
 func (s *DisplayOptionsScreen) Title() string {

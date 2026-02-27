@@ -11,7 +11,6 @@ import (
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	zone "github.com/lrstanley/bubblezone/v2"
 )
 
 // MenuItem defines an item in a menu
@@ -204,9 +203,8 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 
 	lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(m.Width())
 	line = lineStyle.Render(line)
+	fmt.Fprint(w, line)
 
-	zoneID := fmt.Sprintf("item-%s-%d", d.menuID, index)
-	fmt.Fprint(w, zone.Mark(zoneID, line))
 }
 
 // checkboxItemDelegate implements specialized styling for app selection screens
@@ -329,9 +327,8 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 
 	lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(m.Width())
 	line = lineStyle.Render(line)
+	fmt.Fprint(w, line)
 
-	zoneID := fmt.Sprintf("item-%s-%d", d.menuID, index)
-	fmt.Fprint(w, zone.Mark(zoneID, line))
 }
 
 // MenuModel represents a selectable menu
@@ -615,106 +612,11 @@ func (m *MenuModel) Init() tea.Cmd {
 
 // Update implements tea.Model
 func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Handle mouse events using BubbleZones
-	if mouseMsg, ok := msg.(tea.MouseClickMsg); ok && mouseMsg.Button == tea.MouseLeft {
-		// Check each zone to see if the click is within bounds
-		// Menu item zones - clicking executes immediately (same as clicking Select)
-		for i := 0; i < len(m.items); i++ {
-			// Skip separator items
-			if m.items[i].IsSeparator {
-				continue
-			}
-
-			zoneID := fmt.Sprintf("item-%s-%d", m.id, i)
-			if zoneInfo := zone.Get(zoneID); zoneInfo != nil {
-				if zoneInfo.InBounds(mouseMsg) {
-					// Select the item
-					m.list.Select(i)
-					m.cursor = i
-					menuSelectedIndices[m.id] = i
-					m.focusedItem = FocusSelectBtn
-
-					// In checkbox mode, toggle selection instead of executing action
-					if m.checkboxMode {
-						m.ToggleSelectedItem()
-						return m, nil
-					}
-
-					// For individual checkbox items, treat click as Space (toggle)
-					if m.items[i].IsCheckbox && m.items[i].Selectable {
-						return m.handleSpace()
-					}
-
-					return m.handleEnter()
-				}
-			}
-		}
-
-		// Button zones
-		if zoneInfo := zone.Get("btn-select"); zoneInfo != nil {
-			if zoneInfo.InBounds(mouseMsg) {
-				m.focusedItem = FocusSelectBtn
-				return m.handleEnter()
-			}
-		}
-
-		if m.backAction != nil {
-			if zoneInfo := zone.Get("btn-back"); zoneInfo != nil {
-				if zoneInfo.InBounds(mouseMsg) {
-					m.focusedItem = FocusBackBtn
-					return m.handleEnter()
-				}
-			}
-		}
-
-		if zoneInfo := zone.Get("btn-exit"); zoneInfo != nil {
-			if zoneInfo.InBounds(mouseMsg) {
-				m.focusedItem = FocusExitBtn
-				return m.handleEnter()
-			}
-		}
-		return m, nil
-	}
-
-	// Handle MouseMiddle (Space-like, non-pointing)
-	if click, ok := msg.(tea.MouseClickMsg); ok && click.Button == tea.MouseMiddle {
-		return m.handleSpace()
-	}
-
-	// Handle mouse wheel scrolling
-	if mwMsg, ok := msg.(tea.MouseWheelMsg); ok {
-		if mwMsg.Button == tea.MouseWheelUp {
-			m.list.CursorUp()
-			for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator {
-				m.list.CursorUp()
-				if m.list.Index() == 0 && m.items[0].IsSeparator {
-					break
-				}
-			}
-			m.cursor = m.list.Index()
-			menuSelectedIndices[m.id] = m.cursor
-			return m, nil
-		}
-		if mwMsg.Button == tea.MouseWheelDown {
-			m.list.CursorDown()
-			for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator {
-				m.list.CursorDown()
-				if m.list.Index() == len(m.items)-1 && m.items[len(m.items)-1].IsSeparator {
-					break
-				}
-			}
-			m.cursor = m.list.Index()
-			menuSelectedIndices[m.id] = m.cursor
-			return m, nil
-		}
-	}
-
 	// Handle key events
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 		switch {
-		// Help dialog (takes priority so ? doesn't get eaten by list)
 		case key.Matches(keyMsg, Keys.Help):
-			return m, func() tea.Msg { return ShowDialogMsg{Dialog: newHelpDialogModel()} }
+			return m, func() tea.Msg { return ShowDialogMsg{Dialog: NewHelpDialogModel()} }
 
 		// Tab / ShiftTab: switch between screen-level elements
 		// (e.g., menu dialog ↔ header version widget in the future)
@@ -934,6 +836,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	return m, nil
 }
+func (m *MenuModel) View() tea.View { return tea.View{Content: m.ViewString()} }
 
 // nextFocus cycles focus forward through all focus areas (list → buttons).
 // Used for future Tab/window-cycling logic.
@@ -1253,9 +1156,62 @@ func (m *MenuModel) ViewString() string {
 	return dialog
 }
 
-// View implements tea.Model
-func (m *MenuModel) View() tea.View {
-	return tea.NewView(m.ViewString())
+// Layers implements LayeredView
+func (m *MenuModel) Layers() []*lipgloss.Layer {
+	// Root layer for the menu
+	root := lipgloss.NewLayer(m.ViewString()).Z(ZDialog)
+
+	// Add hit layers for menu items
+	// We need to calculate where the list is relative to the menu root
+	styles := GetStyles()
+	headerH := 0
+	if m.title != "" {
+		headerH = DialogBorderHeight
+	}
+
+	// Calculate Y offset for the first visible item
+	// Title (if any) + Subtitle (if any)
+	listY := headerH
+	if m.subtitle != "" {
+		listY += lipgloss.Height(RenderThemeText(m.subtitle, styles.DialogTitle))
+	}
+
+	// Calculate how many items are visible and which ones
+	visibleItems := m.list.VisibleItems()
+	startIndex := m.list.Paginator.Page * m.list.Paginator.PerPage
+
+	for i := 0; i < len(visibleItems); i++ {
+		itemIndex := startIndex + i
+		if itemIndex >= len(m.items) {
+			break
+		}
+		item := m.items[itemIndex]
+		if item.IsSeparator {
+			continue
+		}
+
+		// Create a transparent hit layer for this item
+		ID := GetMenuItemID(m.id, itemIndex)
+		content := strutil.Repeat(" ", m.width)
+		root.AddLayers(lipgloss.NewLayer(content).
+			X(1). // Inside border
+			Y(listY + i).
+			ID(ID).
+			Z(1))
+	}
+
+	// Add hit layers for buttons
+	specs := m.getButtonSpecs()
+	if len(specs) > 0 {
+		buttonRow := m.renderSimpleButtons(m.width - 2) // 2 for borders
+		buttonH := lipgloss.Height(buttonRow)
+		// Calculation for buttonY - buttons are at the bottom of the content
+		// For now we'll just skip precise hit boxes for buttons in this pass
+		// since the menu logic already captures clicks.
+		_ = buttonH
+	}
+
+	return []*lipgloss.Layer{root}
 }
 
 // getButtonSpecs returns the current button configuration based on state
@@ -1450,6 +1406,16 @@ func (m *MenuModel) SetSize(width, height int) {
 	} else {
 		m.calculateLayout()
 	}
+}
+
+// Width returns the menu's width
+func (m *MenuModel) Width() int {
+	return m.width
+}
+
+// Height returns the menu's height
+func (m *MenuModel) Height() int {
+	return m.height
 }
 
 func (m *MenuModel) calculateLayout() {
@@ -1649,8 +1615,6 @@ func (m *MenuModel) renderFlow() string {
 		}
 
 		// Mark zone for click detection
-		zoneID := fmt.Sprintf("item-%s-%d", m.id, i)
-		itemContent = zone.Mark(zoneID, itemContent)
 
 		// Hard reset after each element to ensure background colors (like selection)
 		// don't bleed into the itemSpacing gaps.

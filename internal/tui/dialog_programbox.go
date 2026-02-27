@@ -20,7 +20,6 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	zone "github.com/lrstanley/bubblezone/v2"
 )
 
 // TaskStatus defines the state of a background task
@@ -242,7 +241,7 @@ func (m *programBoxModel) streamReader(reader io.Reader) tea.Cmd {
 	}
 }
 
-func (m *programBoxModel) Init() tea.Cmd {
+func (m *ProgramBoxModel) Init() tea.Cmd {
 	// If a task function was set (dialog mode), start it now
 	if m.task != nil {
 		task := m.task
@@ -288,7 +287,7 @@ func (m *programBoxModel) Init() tea.Cmd {
 	return nil
 }
 
-func (m *programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Handle sub-dialog result specifically (it signals closing of the sub-dialog)
 	if resultMsg, ok := msg.(SubDialogResultMsg); ok {
 		if m.subDialogChan != nil {
@@ -414,16 +413,10 @@ func (m *programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-	case tea.MouseClickMsg:
-		// Check if OK button was clicked (auto-generated zone ID: "Button.OK")
-		if m.done {
-			if zoneInfo := zone.Get("Button.OK"); zoneInfo != nil {
-				if zoneInfo.InBounds(msg) {
-					return m, func() tea.Msg { return CloseDialogMsg{} }
-				}
-			}
+	case LayerHitMsg:
+		if m.done && msg.ID == "Button.OK" {
+			return m, func() tea.Msg { return CloseDialogMsg{} }
 		}
-
 	case UpdateTaskMsg:
 		m.UpdateTaskStatus(msg.Label, msg.Status, msg.ActiveApp)
 		return m, nil
@@ -451,8 +444,7 @@ func (m *programBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// ViewString returns the dialog content as a string for compositing
-func (m *programBoxModel) ViewString() string {
+func (m *ProgramBoxModel) ViewString() string {
 	if m.width == 0 {
 		return ""
 	}
@@ -682,6 +674,69 @@ func (m *programBoxModel) ViewString() string {
 	return dialogWithTitle
 }
 
+// View implements tea.Model
+func (m *ProgramBoxModel) View() tea.View {
+	v := tea.NewView(m.ViewString())
+	v.MouseMode = tea.MouseModeAllMotion
+	v.AltScreen = true
+	return v
+}
+
+// Layers implements LayeredView
+func (m *ProgramBoxModel) Layers() []*lipgloss.Layer {
+	// Root dialog layer
+	viewStr := m.ViewString()
+	root := lipgloss.NewLayer(viewStr).Z(ZDialog)
+
+	// If done, add OK button hit layer
+	if m.done {
+		// Y = 1 (border) + headerH + commandH + (vpHeight + 2)
+		buttonY := 1 + m.layout.HeaderHeight + m.layout.CommandHeight + m.layout.ViewportHeight + 2
+		contentWidth := m.layout.Width - 2
+
+		btnW := 12 // Approximate "OK" button width with border/padding
+		btnX := 1 + (contentWidth-btnW)/2
+		if btnX < 1 {
+			btnX = 1
+		}
+
+		root.AddLayers(lipgloss.NewLayer(strutil.Repeat(" ", btnW)).
+			X(btnX).Y(buttonY).ID("Button.OK").Z(1))
+	}
+
+	// If sub-dialog is active, aggregate its layers
+	if m.subDialog != nil {
+		if lv, ok := m.subDialog.(LayeredView); ok {
+			subLayers := lv.Layers()
+			if len(subLayers) > 0 {
+				// We need to center the sub-dialog layers
+				// Measure sub-dialog size
+				var subStr string
+				if vs, ok := m.subDialog.(interface{ ViewString() string }); ok {
+					subStr = vs.ViewString()
+				} else {
+					subStr = fmt.Sprintf("%v", m.subDialog.View())
+				}
+				subW := lipgloss.Width(subStr)
+				subH := lipgloss.Height(subStr)
+
+				containerW := lipgloss.Width(viewStr)
+				containerH := lipgloss.Height(viewStr)
+
+				offsetX := (containerW - subW) / 2
+				offsetY := (containerH - subH) / 2
+
+				// Create a container layer for sub-dialog to handle relative positioning
+				subContainer := lipgloss.NewLayer("").X(offsetX).Y(offsetY).Z(10)
+				subContainer.AddLayers(subLayers...)
+				root.AddLayers(subContainer)
+			}
+		}
+	}
+
+	return []*lipgloss.Layer{root}
+}
+
 // renderHeaderUI renders the tasks and progress bar
 func (m *ProgramBoxModel) renderHeaderUI(width int) string {
 	if m.subtitle == "" && len(m.Tasks) == 0 && m.Percent == 0 {
@@ -872,15 +927,8 @@ func (m *ProgramBoxModel) calculateHeaderHeight(width int) int {
 	return headerHeight
 }
 
-func (m *programBoxModel) View() tea.View {
-	v := tea.NewView(m.ViewString())
-	v.MouseMode = tea.MouseModeAllMotion
-	v.AltScreen = true
-	return v
-}
-
 // SetSize updates the dialog dimensions (called by AppModel on window resize).
-func (m *programBoxModel) SetSize(w, h int) {
+func (m *ProgramBoxModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
 	m.calculateLayout()
@@ -956,7 +1004,7 @@ func (m *ProgramBoxModel) calculateLayout() {
 
 // GetHelpText returns the dynamic help text based on the current state
 // Implements DynamicHelpProvider interface for use with DialogWithBackdrop
-func (m *programBoxModel) GetHelpText() string {
+func (m *ProgramBoxModel) GetHelpText() string {
 	scrollInfo := ""
 	if m.viewport.TotalLineCount() > m.viewport.VisibleLineCount() {
 		scrollPercent := m.viewport.ScrollPercent()
@@ -974,8 +1022,6 @@ func (m *programBoxModel) GetHelpText() string {
 
 // RunProgramBox displays a program box dialog that shows command output
 func RunProgramBox(ctx context.Context, title, subtitle string, task func(context.Context, io.Writer) error) error {
-	// Initialize global zone manager for mouse support (safe to call multiple times)
-	zone.NewGlobal()
 
 	// Enable TUI mode for console prompts
 	console.SetTUIEnabled(true)

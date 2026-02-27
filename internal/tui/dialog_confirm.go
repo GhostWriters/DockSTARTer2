@@ -2,12 +2,12 @@ package tui
 
 import (
 	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/strutil"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	zone "github.com/lrstanley/bubblezone/v2" // used for zone.Get in Update()
 )
 
 // confirmDialogModel represents a yes/no confirmation dialog
@@ -98,23 +98,16 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-	case tea.MouseClickMsg:
-		// Check if Yes button was clicked (auto-generated zone ID: "Button.Yes")
-		if zoneInfo := zone.Get("Button.Yes"); zoneInfo != nil {
-			if zoneInfo.InBounds(msg) {
-				m.result = true
-				m.confirmed = true
-				return m, closeWithResult(true)
-			}
-		}
-
-		// Check if No button was clicked (auto-generated zone ID: "Button.No")
-		if zoneInfo := zone.Get("Button.No"); zoneInfo != nil {
-			if zoneInfo.InBounds(msg) {
-				m.result = false
-				m.confirmed = true
-				return m, closeWithResult(false)
-			}
+	case LayerHitMsg:
+		switch msg.ID {
+		case "Button.Yes":
+			m.result = true
+			m.confirmed = true
+			return m, closeWithResult(true)
+		case "Button.No":
+			m.result = false
+			m.confirmed = true
+			return m, closeWithResult(false)
 		}
 	}
 
@@ -202,8 +195,45 @@ func (m *confirmDialogModel) ViewString() string {
 	return dialog
 }
 
+// View implements tea.Model
 func (m *confirmDialogModel) View() tea.View {
 	return tea.NewView(m.ViewString())
+}
+
+// Layers implements LayeredView
+func (m *confirmDialogModel) Layers() []*lipgloss.Layer {
+	// Root dialog layer
+	root := lipgloss.NewLayer(m.ViewString()).Z(ZDialog)
+
+	// Calculate button hit layers
+	// These positions are relative to the root dialog layer
+	// Calculation from ViewString():
+	// Y = 1 (top border) + questionHeight + 1 (spacer)
+	ctx := GetActiveContext()
+	questionStyle := ctx.Dialog.Padding(1, 2).Width(m.layout.Width - 2) // Approximate width
+	questionHeight := lipgloss.Height(questionStyle.Render(m.question))
+
+	buttonY := 1 + questionHeight + 1
+	contentWidth := m.layout.Width - 2
+
+	// RenderCenteredButtonsCtx splits contentWidth into numButtons sections
+	numButtons := 2
+	sectionWidth := contentWidth / numButtons
+
+	// Yes Button (Left section)
+	yesX := 1 + (sectionWidth-12)/2 // Approximate 12-char button width
+	if yesX < 1 {
+		yesX = 1
+	}
+	root.AddLayers(lipgloss.NewLayer(strutil.Repeat(" ", 12)).
+		X(yesX).Y(buttonY).ID("Button.Yes").Z(1))
+
+	// No Button (Right section)
+	noX := 1 + sectionWidth + (sectionWidth-10)/2 // Approximate 10-char button width
+	root.AddLayers(lipgloss.NewLayer(strutil.Repeat(" ", 10)).
+		X(noX).Y(buttonY).ID("Button.No").Z(1))
+
+	return []*lipgloss.Layer{root}
 }
 
 // SetSize updates the dialog dimensions
