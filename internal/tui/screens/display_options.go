@@ -735,15 +735,37 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 		return style.Render(plain[:width])
 	}
 
-	hStyle := tui.SemanticRawStyle("Preview_Theme_Screen")
+	hStyle := tui.SemanticRawStyle("Preview_Theme_StatusBar")
 
 	themeName := s.previewTheme
 
-	// Header Row (simulate real status bar layout)
-	// Use thirds for proper centering
-	leftWidth := width / 3
-	centerWidth := width / 3
-	rightWidth := width - leftWidth - centerWidth // Handles odd widths
+	// Border style for the status bar frame (falls back to StatusBar if undefined)
+	bStyle := tui.SemanticRawStyle("Preview_Theme_StatusBarBorder")
+	if bStyle.GetForeground() == nil && bStyle.GetBackground() == nil {
+		bStyle = hStyle
+	}
+
+	// Border characters (unfocused, since the preview is static)
+	var leftChar, rightChar, bottomChar, bottomLeftChar, bottomRightChar string
+	if s.config.UI.LineCharacters {
+		bottomLeftChar = "╰"
+		bottomRightChar = "╯"
+		leftChar = "│"
+		rightChar = "│"
+		bottomChar = "─"
+	} else {
+		bottomLeftChar = "'"
+		bottomRightChar = "'"
+		leftChar = "|"
+		rightChar = "|"
+		bottomChar = "-"
+	}
+
+	// Header content is width-2 (border chars occupy 1 char each side)
+	innerWidth := width - 2
+	leftWidth := innerWidth / 3
+	centerWidth := innerWidth / 3
+	rightWidth := innerWidth - leftWidth - centerWidth
 
 	// Left: Host
 	leftText := " {{|Preview_Theme_Hostname|}}HOST{{[-]}}"
@@ -757,17 +779,11 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	rightText := "{{|Preview_Theme_ApplicationVersion|}}A:[{{[-]}}{{|Preview_Theme_ApplicationVersion|}}2.1{{[-]}}{{|Preview_Theme_ApplicationVersion|}}]{{[-]}} "
 	rightSec := hStyle.Width(rightWidth).Align(lipgloss.Right).Render(tui.RenderThemeText(rightText, hStyle))
 
-	headerRow := lipgloss.JoinHorizontal(lipgloss.Top, leftSec, centerSec, rightSec)
+	headerContent := lipgloss.JoinHorizontal(lipgloss.Top, leftSec, centerSec, rightSec)
+	headerRow := bStyle.Render(leftChar) + headerContent + bStyle.Render(rightChar)
 
-	sepChar := "-"
-	if s.config.UI.LineCharacters {
-		sepChar = "─"
-	} else {
-		sepChar = "-"
-	}
-	// The real separator is indented by 1 character on each side and uses the header/screen background
-	sepLine := strutil.Repeat(sepChar, width-2)
-	sepRow := hStyle.Render(" " + sepLine + " ")
+	// Bottom border replaces the old separator line
+	bottomBorderRow := bStyle.Render(bottomLeftChar + strutil.Repeat(bottomChar, width-2) + bottomRightChar)
 
 	bgStyle := tui.SemanticRawStyle("Preview_Theme_Screen")
 	dContent := tui.SemanticRawStyle("Preview_Theme_Dialog")
@@ -912,7 +928,7 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 
 	mockupParts := []string{
 		headerRow,
-		sepRow,
+		bottomBorderRow,
 		backdropBlock,
 		helpRow,
 		logStripRow,
