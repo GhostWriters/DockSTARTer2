@@ -128,9 +128,13 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, closeWithResult(m.result)
 	}
 
-	// Scroll wheel toggles the focused button between Yes and No
-	if _, ok := msg.(tea.MouseWheelMsg); ok {
-		m.result = !m.result
+	// Scroll wheel selects between Yes (up) and No (down) with clamping — no wrap.
+	if wheelMsg, ok := msg.(tea.MouseWheelMsg); ok {
+		if wheelMsg.Button == tea.MouseWheelUp {
+			m.result = true // Yes (first option — clamps here on repeated up)
+		} else if wheelMsg.Button == tea.MouseWheelDown {
+			m.result = false // No (last option — clamps here on repeated down)
+		}
 		return m, nil
 	}
 

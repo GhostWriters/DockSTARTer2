@@ -72,9 +72,39 @@ func (m *HeaderModel) Init() tea.Cmd {
 func (m *HeaderModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case LayerHitMsg:
+		if msg.ID == IDStatusBar {
+			// Clicking the status bar background → focus App version if nothing is focused.
+			if m.focus == HeaderFocusNone {
+				m.focus = HeaderFocusApp
+			}
+			return m, nil
+		}
 		_, cmd := m.HandleHit(msg.ID)
 		return m, cmd
+
+	case LayerWheelMsg:
+		if msg.ID == IDStatusBar {
+			// Scroll wheel cycles between App and Tmpl version focus.
+			if msg.Button == tea.MouseWheelUp {
+				m.focus = HeaderFocusApp
+			} else if msg.Button == tea.MouseWheelDown {
+				m.focus = HeaderFocusTmpl
+			}
+			return m, nil
+		}
 	}
+
+	// Middle-click (ToggleFocusedMsg) activates the currently focused version item.
+	if _, ok := msg.(ToggleFocusedMsg); ok {
+		switch m.focus {
+		case HeaderFocusApp:
+			return m, TriggerAppUpdate()
+		case HeaderFocusTmpl:
+			return m, TriggerTemplateUpdate()
+		}
+		return m, nil
+	}
+
 	return m, nil
 }
 

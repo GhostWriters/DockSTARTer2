@@ -335,16 +335,14 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return s, uCmd
 		} else if s.focusedPanel == FocusButtons {
-			// Scroll wheel cycles the focused button (up=left, down=right)
+			// Scroll wheel cycles the focused button (up=left, down=right) — clamps, no wrap.
 			if msg.Button == tea.MouseWheelUp {
-				s.focusedButton--
-				if s.focusedButton < 0 {
-					s.focusedButton = 2
+				if s.focusedButton > 0 {
+					s.focusedButton--
 				}
 			} else if msg.Button == tea.MouseWheelDown {
-				s.focusedButton++
-				if s.focusedButton > 2 {
-					s.focusedButton = 0
+				if s.focusedButton < 2 {
+					s.focusedButton++
 				}
 			}
 			return s, nil

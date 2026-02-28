@@ -864,6 +864,19 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 			return m, nil, true
 		}
 
+		// Status bar: route wheel to the header for version cycling
+		if hitID == IDStatusBar || hitID == IDAppVersion || hitID == IDTmplVersion {
+			var cmd tea.Cmd
+			if m.backdrop != nil {
+				updated, bCmd := m.backdrop.Update(LayerWheelMsg{ID: IDStatusBar, Button: wheelMsg.Button})
+				if backdrop, ok := updated.(*BackdropModel); ok {
+					m.backdrop = backdrop
+				}
+				cmd = bCmd
+			}
+			return m, cmd, true
+		}
+
 		// Check if hovering over log panel - if so, focus and scroll it
 		if hitID == IDLogPanel || hitID == IDLogViewport {
 			m.setLogPanelFocus(true)
@@ -874,6 +887,11 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 
 		// Unfocus log panel since we're over something else
 		m.setLogPanelFocus(false)
+
+		// Clear header focus — wheel moved away from the status bar
+		if m.backdrop != nil && m.backdrop.header != nil {
+			m.backdrop.header.SetFocus(HeaderFocusNone)
+		}
 
 		panelID := hitIDToPanelID(hitID)
 
@@ -925,6 +943,19 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		// Hit test to find what's under the mouse
 		hitID := m.hitRegions.FindHit(click.X, click.Y)
 
+		// Status bar: middle-click activates the currently focused version item
+		if hitID == IDStatusBar || hitID == IDAppVersion || hitID == IDTmplVersion {
+			var cmd tea.Cmd
+			if m.backdrop != nil {
+				updated, bCmd := m.backdrop.Update(ToggleFocusedMsg{})
+				if backdrop, ok := updated.(*BackdropModel); ok {
+					m.backdrop = backdrop
+				}
+				cmd = bCmd
+			}
+			return m, cmd, true
+		}
+
 		// Check if hovering over log panel - focus it and send toggle
 		if hitID == IDLogPanel || hitID == IDLogViewport {
 			m.setLogPanelFocus(true)
@@ -935,6 +966,11 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 
 		// Unfocus log panel
 		m.setLogPanelFocus(false)
+
+		// Clear header focus — middle-click landed away from the status bar
+		if m.backdrop != nil && m.backdrop.header != nil {
+			m.backdrop.header.SetFocus(HeaderFocusNone)
+		}
 
 		// Check if the hit ID maps to a panel (submenu or button row).
 		// Panel-mapped IDs use the hover model: focus the panel, then activate the
@@ -1042,8 +1078,11 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 			}
 			return m, nil, true
 		default:
-			// If we hit anything else (dialog, screen, header), ensure logs are unfocused
+			// If we hit anything else (dialog, screen, header), ensure logs and header are unfocused
 			m.setLogPanelFocus(false)
+			if m.backdrop != nil && m.backdrop.header != nil {
+				m.backdrop.header.SetFocus(HeaderFocusNone)
+			}
 		}
 
 		// B. Component-specific Dispatch (Semantic Pre-pass)

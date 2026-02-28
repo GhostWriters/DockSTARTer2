@@ -64,6 +64,9 @@ const (
 	IDAppVersion  = "app_version"
 	IDTmplVersion = "tmpl_version"
 
+	// Status bar
+	IDStatusBar = "status_bar"
+
 	// Display Options IDs
 	IDThemePanel   = "theme_panel"
 	IDOptionsPanel = "options_panel"
@@ -110,6 +113,7 @@ type Styles struct {
 	// Header
 	HeaderBG           lipgloss.Style
 	StatusBar          lipgloss.Style
+	StatusBarBorder    lipgloss.Style
 	StatusBarSeparator lipgloss.Style
 
 	// Help line
@@ -420,7 +424,11 @@ func InitStyles(cfg config.AppConfig) {
 
 	// Header / Status Bar
 	currentStyles.StatusBar = SemanticRawStyle("Theme_StatusBar")
-	currentStyles.StatusBarSeparator = SemanticRawStyle("Theme_StatusBarSeparator")
+	currentStyles.StatusBarBorder = SemanticRawStyle("Theme_StatusBarBorder")
+	if currentStyles.StatusBarBorder.GetForeground() == nil && currentStyles.StatusBarBorder.GetBackground() == nil {
+		// Fallback for themes that don't define StatusBarBorder
+		currentStyles.StatusBarBorder = currentStyles.StatusBar
+	}
 	currentStyles.HeaderBG = currentStyles.StatusBar // Backwards compatibility
 
 	// Help line

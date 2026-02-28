@@ -82,27 +82,66 @@ func (m *BackdropModel) ViewString() string {
 		headerHeight = lipgloss.Height(headerContent)
 	}
 
-	// Render each header line - header already handles alignment,
-	// we just add padding and background without forcing width (which would re-align)
-	headerLines := strings.Split(headerContent, "\n")
-	for _, line := range headerLines {
-		// Pad line to fill width, then apply background
-		// Use WidthWithoutZones because header contains zone markers for version clicks
-		paddedLine := " " + line + " "
-		if lineWidth := WidthWithoutZones(paddedLine); lineWidth < m.width {
-			paddedLine += strutil.Repeat(" ", m.width-lineWidth)
+	// Border style: use the full StatusBarBorder style (fg + bg) for border cells.
+	// Focused (any version is selected) → ThickRounded; otherwise → Rounded.
+	// No top border — the status bar is flush with the top of the terminal.
+	focused := m.header != nil && m.header.GetFocus() != HeaderFocusNone
+	lineChars := styles.LineCharacters
+
+	borderFG := styles.StatusBarBorder.GetForeground()
+	if borderFG == nil {
+		borderFG = styles.StatusBar.GetForeground()
+	}
+	borderBG := styles.StatusBarBorder.GetBackground()
+	if borderBG == nil {
+		borderBG = styles.StatusBar.GetBackground()
+	}
+	borderStyle := lipgloss.NewStyle().Foreground(borderFG).Background(borderBG)
+
+	var leftChar, rightChar, bottomChar, bottomLeftChar, bottomRightChar string
+	if lineChars {
+		bottomLeftChar = "╰"
+		bottomRightChar = "╯"
+		if focused {
+			leftChar = "┃"
+			rightChar = "┃"
+			bottomChar = "━"
+		} else {
+			leftChar = "│"
+			rightChar = "│"
+			bottomChar = "─"
 		}
-		b.WriteString(styles.StatusBar.Render(paddedLine))
-		b.WriteString("\n")
+	} else {
+		bottomLeftChar = "'"
+		bottomRightChar = "'"
+		if focused {
+			leftChar = "H"
+			rightChar = "H"
+			bottomChar = "="
+		} else {
+			leftChar = "|"
+			rightChar = "|"
+			bottomChar = "-"
+		}
 	}
 
-	// Separator: Fill with StatusBarSeparator background, then draw separator chars
-	sep := strutil.Repeat(styles.SepChar, m.width-2)
-	sepStyle := styles.StatusBarSeparator.
-		Width(m.width).
-		Padding(0, 1) // 1-char padding left/right
-	b.WriteString(sepStyle.Render(sep))
-	b.WriteString("\n")
+	// Render each header line with left/right border chars.
+	// Header content is m.width-2 wide; border chars occupy the remaining 2 columns.
+	headerLines := strings.Split(headerContent, "\n")
+	for _, line := range headerLines {
+		// Pad to fill the content width (m.width - 2) so the background extends fully.
+		// Use WidthWithoutZones because header lines contain zone markers for version clicks.
+		paddedLine := line
+		if lw := WidthWithoutZones(paddedLine); lw < m.width-2 {
+			paddedLine += strutil.Repeat(" ", m.width-2-lw)
+		}
+		styledContent := styles.StatusBar.Render(paddedLine)
+		b.WriteString(borderStyle.Render(leftChar) + styledContent + borderStyle.Render(rightChar) + "\n")
+	}
+
+	// Bottom border (replaces the old separator line — same 1-line height).
+	bottomBorder := borderStyle.Render(bottomLeftChar + strutil.Repeat(bottomChar, m.width-2) + bottomRightChar)
+	b.WriteString(bottomBorder + "\n")
 
 	// Calculate content height using actual header height
 	helplineView := ""
@@ -146,8 +185,24 @@ func (m *BackdropModel) Layers() []*lipgloss.Layer {
 func (m *BackdropModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	var regions []HitRegion
 
+	// Full status bar background region (lower Z so specific version regions take priority).
+	// Covers the header content lines + bottom border line.
+	headerH := 1
 	if m.header != nil {
-		// Header is at position (1, 0) due to 1-char left padding
+		m.header.SetWidth(m.width - 2)
+		headerH = m.header.Height()
+	}
+	regions = append(regions, HitRegion{
+		ID:     IDStatusBar,
+		X:      offsetX,
+		Y:      offsetY,
+		Width:  m.width,
+		Height: headerH + 1, // content lines + bottom border
+		ZOrder: ZBackdrop,
+	})
+
+	if m.header != nil {
+		// Version click targets are 1 char in from the left border char.
 		regions = append(regions, m.header.GetHitRegions(offsetX+1, offsetY)...)
 	}
 
