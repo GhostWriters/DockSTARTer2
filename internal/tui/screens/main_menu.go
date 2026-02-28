@@ -4,6 +4,7 @@ import (
 	"DockSTARTer2/internal/tui"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // MainMenuScreen is the main menu screen
@@ -103,6 +104,16 @@ func (s *MainMenuScreen) HasDialog() bool {
 // MenuName implements ScreenModel
 func (s *MainMenuScreen) MenuName() string {
 	return ""
+}
+
+// Layers implements LayeredView for compositing
+func (s *MainMenuScreen) Layers() []*lipgloss.Layer {
+	return s.menu.Layers()
+}
+
+// GetHitRegions implements HitRegionProvider for mouse hit testing
+func (s *MainMenuScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegion {
+	return s.menu.GetHitRegions(offsetX, offsetY)
 }
 
 // Navigation commands

@@ -12,6 +12,7 @@ direct_suffix = "]}}"
 [colors]
 Screen = "{{[black:white:B]}}"
 StatusBar = "{{|Theme_Screen|}}"
+StatusBarBorder = "{{|Theme_StatusBar|}}"
 StatusBarSeparator = "{{|Theme_StatusBar|}}"
 Dialog = "{{[white:black]}}"
 Border = "{{[black:black:B]}}"

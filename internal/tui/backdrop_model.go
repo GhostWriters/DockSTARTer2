@@ -42,6 +42,11 @@ func (m *BackdropModel) Init() tea.Cmd {
 
 // Update implements tea.Model
 func (m *BackdropModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.header != nil {
+		updated, cmd := m.header.Update(msg)
+		m.header = updated.(*HeaderModel)
+		return m, cmd
+	}
 	return m, nil
 }
 
@@ -130,16 +135,23 @@ func (m *BackdropModel) ViewString() string {
 	return b.String()
 }
 
-// Layers returns the composite layers for the backdrop
+// Layers returns the backdrop layer for visual compositing
 func (m *BackdropModel) Layers() []*lipgloss.Layer {
-	base := lipgloss.NewLayer(m.ViewString()).Z(ZBackdrop)
+	return []*lipgloss.Layer{
+		lipgloss.NewLayer(m.ViewString()).Z(ZBackdrop),
+	}
+}
+
+// GetHitRegions returns clickable regions for the backdrop (header version labels)
+func (m *BackdropModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
+	var regions []HitRegion
 
 	if m.header != nil {
-		// Add header child layers (version labels, etc.)
-		base.AddLayers(m.header.Layers()...)
+		// Header is at position (1, 0) due to 1-char left padding
+		regions = append(regions, m.header.GetHitRegions(offsetX+1, offsetY)...)
 	}
 
-	return []*lipgloss.Layer{base}
+	return regions
 }
 
 // View implements tea.Model

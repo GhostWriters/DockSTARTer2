@@ -70,6 +70,11 @@ func (m *HeaderModel) Init() tea.Cmd {
 
 // Update implements tea.Model
 func (m *HeaderModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case LayerHitMsg:
+		_, cmd := m.HandleHit(msg.ID)
+		return m, cmd
+	}
 	return m, nil
 }
 
@@ -98,10 +103,10 @@ func (m *HeaderModel) HandleHit(id string) (bool, tea.Cmd) {
 	switch id {
 	case IDAppVersion:
 		m.SetFocus(HeaderFocusApp)
-		return true, nil
+		return true, TriggerAppUpdate()
 	case IDTmplVersion:
 		m.SetFocus(HeaderFocusTmpl)
-		return true, nil
+		return true, TriggerTemplateUpdate()
 	}
 	return false, nil
 }
@@ -274,8 +279,10 @@ func (m HeaderModel) renderVersions() (appText, tmplText string) {
 	return appText, tmplText
 }
 
-// Layers returns the hit-testable layers for the header
-func (m *HeaderModel) Layers() []*lipgloss.Layer {
+// GetHitRegions returns clickable regions for the header version labels
+func (m *HeaderModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
+	var regions []HitRegion
+
 	left := m.renderLeft()
 	center := m.renderCenter()
 	appVer, tmplVer := m.renderVersions()
@@ -291,56 +298,36 @@ func (m *HeaderModel) Layers() []*lipgloss.Layer {
 	}
 
 	rightW := appW + tmplW
-	fitsLine1 := true
-	if leftW+1 > centerX {
-		fitsLine1 = false
-	}
-	if centerX+centerW+1+rightW > m.width {
-		fitsLine1 = false
-	}
-
-	// We create transparent layers on top of the version text for hit testing.
-	// We need to match the positions calculated in ViewString().
-	var layers []*lipgloss.Layer
+	fitsLine1 := leftW+1 <= centerX && centerX+centerW+1+rightW <= m.width
 
 	if fitsLine1 {
 		// Line 1: [Left] [Center] [App] [Tmpl]
 		appX := m.width - rightW
 		tmplX := m.width - tmplW
-		layers = append(layers, lipgloss.NewLayer(appVer).X(appX).Y(0).ID(IDAppVersion).Z(1))
-		layers = append(layers, lipgloss.NewLayer(tmplVer).X(tmplX).Y(0).ID(IDTmplVersion).Z(1))
+		regions = append(regions, HitRegion{ID: IDAppVersion, X: offsetX + appX, Y: offsetY, Width: appW, Height: 1, ZOrder: ZBackdrop + 1})
+		regions = append(regions, HitRegion{ID: IDTmplVersion, X: offsetX + tmplX, Y: offsetY, Width: tmplW, Height: 1, ZOrder: ZBackdrop + 1})
 	} else {
-		// Wrapping logic from ViewString()
-		// Stage 1: [Left] [Center] [App] on Line 1, [Tmpl] on Line 2
-		fitsStage1 := true
-		if leftW+1 > centerX {
-			fitsStage1 = false
-		}
-		if centerX+centerW+1+appW > m.width {
-			fitsStage1 = false
-		}
+		fitsStage1 := leftW+1 <= centerX && centerX+centerW+1+appW <= m.width
 
 		if fitsStage1 {
 			appX := m.width - appW
 			tmplX := m.width - tmplW
-			layers = append(layers, lipgloss.NewLayer(appVer).X(appX).Y(0).ID(IDAppVersion).Z(1))
-			layers = append(layers, lipgloss.NewLayer(tmplVer).X(tmplX).Y(1).ID(IDTmplVersion).Z(1))
+			regions = append(regions, HitRegion{ID: IDAppVersion, X: offsetX + appX, Y: offsetY, Width: appW, Height: 1, ZOrder: ZBackdrop + 1})
+			regions = append(regions, HitRegion{ID: IDTmplVersion, X: offsetX + tmplX, Y: offsetY + 1, Width: tmplW, Height: 1, ZOrder: ZBackdrop + 1})
 		} else if leftW+1 <= centerX {
-			// Stage 2: [Left] [Center] on Line 1, [App] on Line 2, [Tmpl] on Line 3
 			appX := m.width - appW
 			tmplX := m.width - tmplW
-			layers = append(layers, lipgloss.NewLayer(appVer).X(appX).Y(1).ID(IDAppVersion).Z(1))
-			layers = append(layers, lipgloss.NewLayer(tmplVer).X(tmplX).Y(2).ID(IDTmplVersion).Z(1))
+			regions = append(regions, HitRegion{ID: IDAppVersion, X: offsetX + appX, Y: offsetY + 1, Width: appW, Height: 1, ZOrder: ZBackdrop + 1})
+			regions = append(regions, HitRegion{ID: IDTmplVersion, X: offsetX + tmplX, Y: offsetY + 2, Width: tmplW, Height: 1, ZOrder: ZBackdrop + 1})
 		} else {
-			// Fallback: Stacked
 			appX := m.width - appW
 			tmplX := m.width - tmplW
-			layers = append(layers, lipgloss.NewLayer(appVer).X(appX).Y(2).ID(IDAppVersion).Z(1))
-			layers = append(layers, lipgloss.NewLayer(tmplVer).X(tmplX).Y(3).ID(IDTmplVersion).Z(1))
+			regions = append(regions, HitRegion{ID: IDAppVersion, X: offsetX + appX, Y: offsetY + 2, Width: appW, Height: 1, ZOrder: ZBackdrop + 1})
+			regions = append(regions, HitRegion{ID: IDTmplVersion, X: offsetX + tmplX, Y: offsetY + 3, Width: tmplW, Height: 1, ZOrder: ZBackdrop + 1})
 		}
 	}
 
-	return layers
+	return regions
 }
 
 // renderRight returns both versions combined (for backwards compatibility)

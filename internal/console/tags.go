@@ -69,6 +69,9 @@ func ExpandTags(text string) string {
 	ensureMaps()
 
 	// 1. Process semantic tags
+	// Hold RLock for the duration of the replacement so concurrent writes to
+	// semanticMap (e.g. from theme-loading goroutines) don't cause a data race.
+	semanticMu.RLock()
 	text = semanticRegex.ReplaceAllStringFunc(text, func(match string) string {
 		// Extract content using the named group
 		groupIndex := semanticRegex.SubexpIndex("content")
@@ -87,6 +90,7 @@ func ExpandTags(text string) string {
 		// Unknown semantic tag - strip it
 		return ""
 	})
+	semanticMu.RUnlock()
 
 	return text
 }

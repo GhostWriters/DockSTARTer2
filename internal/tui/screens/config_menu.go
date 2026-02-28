@@ -5,6 +5,7 @@ import (
 	"DockSTARTer2/internal/tui"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // ConfigMenuScreen is the configuration menu screen
@@ -128,6 +129,16 @@ func (s *ConfigMenuScreen) HasDialog() bool {
 // MenuName implements ScreenModel
 func (s *ConfigMenuScreen) MenuName() string {
 	return "config"
+}
+
+// Layers implements LayeredView for compositing
+func (s *ConfigMenuScreen) Layers() []*lipgloss.Layer {
+	return s.menu.Layers()
+}
+
+// GetHitRegions implements HitRegionProvider for mouse hit testing
+func (s *ConfigMenuScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegion {
+	return s.menu.GetHitRegions(offsetX, offsetY)
 }
 
 // navigateBack returns a command to go back to the previous screen

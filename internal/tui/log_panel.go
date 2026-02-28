@@ -361,13 +361,18 @@ func (m LogPanelModel) ViewString() string {
 	return lipgloss.JoinVertical(lipgloss.Left, strip, vpView)
 }
 
-// Layers implements LayeredView
+// Layers returns a single layer with the panel content for visual compositing
 func (m LogPanelModel) Layers() []*lipgloss.Layer {
-	// Root layer for the visible panel
-	root := lipgloss.NewLayer(m.ViewString()).Z(ZLogPanel).ID(IDLogPanel)
+	return []*lipgloss.Layer{
+		lipgloss.NewLayer(m.ViewString()).Z(ZLogPanel).ID(IDLogPanel),
+	}
+}
 
-	// Hit zones for the toggle strip (top line)
-	// Same layout calculation as ViewString
+// GetHitRegions implements HitRegionProvider for mouse hit testing
+func (m LogPanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
+	var regions []HitRegion
+
+	// Calculate layout for the toggle strip
 	marker := "^"
 	if m.expanded {
 		marker = "v"
@@ -380,26 +385,50 @@ func (m LogPanelModel) Layers() []*lipgloss.Layer {
 	}
 	rightTotal := m.width - dashW - labelW
 
-	// 1. Left Handle
-	root.AddLayers(lipgloss.NewLayer(strutil.Repeat(" ", dashW)).
-		X(0).Y(0).ID(IDLogResize).Z(1))
+	// Left resize handle
+	regions = append(regions, HitRegion{
+		ID:     IDLogResize,
+		X:      offsetX,
+		Y:      offsetY,
+		Width:  dashW,
+		Height: 1,
+		ZOrder: ZLogPanel + 1,
+	})
 
-	// 2. Toggle Label
-	root.AddLayers(lipgloss.NewLayer(strutil.Repeat(" ", labelW)).
-		X(dashW).Y(0).ID(IDLogToggle).Z(1))
+	// Toggle label
+	regions = append(regions, HitRegion{
+		ID:     IDLogToggle,
+		X:      offsetX + dashW,
+		Y:      offsetY,
+		Width:  labelW,
+		Height: 1,
+		ZOrder: ZLogPanel + 1,
+	})
 
-	// 3. Right Handle
-	root.AddLayers(lipgloss.NewLayer(strutil.Repeat(" ", rightTotal)).
-		X(dashW + labelW).Y(0).ID(IDLogResize).Z(1))
+	// Right resize handle
+	regions = append(regions, HitRegion{
+		ID:     IDLogResize,
+		X:      offsetX + dashW + labelW,
+		Y:      offsetY,
+		Width:  rightTotal,
+		Height: 1,
+		ZOrder: ZLogPanel + 1,
+	})
 
-	// 4. Viewport
+	// Viewport area (when expanded)
 	if m.expanded {
 		vpH := m.viewport.Height()
-		root.AddLayers(lipgloss.NewLayer(strings.Repeat(strutil.Repeat(" ", m.width)+"\n", vpH)).
-			X(0).Y(1).ID(IDLogViewport).Z(1))
+		regions = append(regions, HitRegion{
+			ID:     IDLogViewport,
+			X:      offsetX,
+			Y:      offsetY + 1,
+			Width:  m.width,
+			Height: vpH,
+			ZOrder: ZLogPanel + 1,
+		})
 	}
 
-	return []*lipgloss.Layer{root}
+	return regions
 }
 
 // View renders the panel at its current height.

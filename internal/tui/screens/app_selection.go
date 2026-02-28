@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // AppSelectionScreen is the screen for selecting applications to enable/disable
@@ -291,4 +292,14 @@ func (s *AppSelectionScreen) IsMaximized() bool {
 // MenuName implements ScreenModel
 func (s *AppSelectionScreen) MenuName() string {
 	return "app-select"
+}
+
+// Layers implements LayeredView for compositing
+func (s *AppSelectionScreen) Layers() []*lipgloss.Layer {
+	return s.menu.Layers()
+}
+
+// GetHitRegions implements HitRegionProvider for mouse hit testing
+func (s *AppSelectionScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegion {
+	return s.menu.GetHitRegions(offsetX, offsetY)
 }

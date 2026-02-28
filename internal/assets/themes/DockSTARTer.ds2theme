@@ -11,8 +11,9 @@ direct_suffix = "]}}"
 
 [colors]
 Screen = "{{[black:white:-]}}"
-StatusBar = "{{|Theme_Screen|}}"
-StatusBarSeparator = "{{|Theme_StatusBar|}}"
+StatusBar = "{{[black:cyan:-]}}"
+StatusBarBorder = "{{|Theme_StatusBar|}}"
+StatusBarSeparator = "{{|Theme_Screen|}}"
 Dialog = "{{[black:cyan:-]}}"
 Border = "{{[white:-:-]}}"
 Border2 = "{{[black:-:-]}}"
@@ -21,8 +22,8 @@ BoxTitle = "{{[black:cyan:-]}}"
 ProgramBox = "{{[white:black:-]}}"
 LogBox = "{{|Theme_ProgramBox|}}"
 
-ApplicationFlagsBrackets = "{{[-:-:-R]}}"
-ApplicationFlags = "{{[-]}}"
+ApplicationFlagsBrackets = "{{[cyan:black:-B]}}"
+ApplicationFlags = "{{[black:cyan:-]}}"
 
 StatusBarFields = "{{[blue:white:-BR]}}"
 Hostname = "{{|Theme_StatusBarFields|}}"
@@ -33,7 +34,7 @@ ApplicationVersionBrackets = "{{|Theme_StatusBarFields|}}"
 
 ApplicationVersionSpace = "{{[-]}}"
 ApplicationFlagsSpace = "{{|Theme_ApplicationVersionSpace|}}"
-ApplicationUpdate = "{{|Theme_StatusBar|}}{{[-:-:-R]}}"
+ApplicationUpdate = "{{[-:-:-R]}}"
 ApplicationUpdateBrackets = "{{|Theme_ApplicationUpdate|}}"
 
 HelpTag = "{{[black:red]}}"

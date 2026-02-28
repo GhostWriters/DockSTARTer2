@@ -58,6 +58,12 @@ type DialogLayout struct {
 	ButtonHeight   int
 	ShadowHeight   int
 	Overhead       int
+
+	// Hit region positions (calculated during render)
+	ListX    int // X offset to first list item content
+	ListY    int // Y offset to first list item
+	ButtonY  int // Y offset to button row
+	ContentW int // Width of content area (inside borders)
 }
 
 // CalculateBaseOverhead returns the overhead lines for a standard dialog without a viewport
@@ -220,6 +226,63 @@ type ButtonSpec struct {
 	Text   string
 	Active bool
 	ZoneID string // Optional zone ID for mouse support (empty = no zone marking)
+}
+
+// GetButtonHitRegions returns hit regions for a row of buttons.
+// Use this when you need clickable buttons - it ensures hit regions
+// match the visual layout from RenderCenteredButtons.
+// Parameters:
+//   - dialogID: prefix for zone IDs to disambiguate multiple dialogs (can be empty)
+//   - offsetX, offsetY: position of the button row in the dialog
+//   - contentWidth: same width passed to RenderCenteredButtons
+//   - zOrder: z-order for the hit regions (typically ZDialog + 20)
+//   - buttons: same button specs passed to RenderCenteredButtons
+func GetButtonHitRegions(dialogID string, offsetX, offsetY, contentWidth, zOrder int, buttons ...ButtonSpec) []HitRegion {
+	if len(buttons) == 0 {
+		return nil
+	}
+
+	// Measure the exact rendered button width by using the same render path
+	// as RenderCenteredButtonsCtx, so hit regions match visually precisely.
+	ctx := GetActiveContext()
+	maxButtonWidth := 0
+	for _, btn := range buttons {
+		width := lipgloss.Width(btn.Text)
+		if width > maxButtonWidth {
+			maxButtonWidth = width
+		}
+	}
+	buttonContentWidth := maxButtonWidth + 4
+	sampleStyle := ctx.ButtonInactive.Width(buttonContentWidth).Align(lipgloss.Center)
+	sampleStyle = ApplyInnerBorderCtx(sampleStyle, false, ctx)
+	buttonWidth := lipgloss.Width(sampleStyle.Render(strings.Repeat("x", maxButtonWidth)))
+
+	var regions []HitRegion
+	numButtons := len(buttons)
+	sectionWidth := contentWidth / numButtons
+
+	for i, btn := range buttons {
+		if btn.ZoneID == "" {
+			continue
+		}
+		// Prepend dialog ID if provided for disambiguation
+		id := btn.ZoneID
+		if dialogID != "" {
+			id = dialogID + "." + btn.ZoneID
+		}
+		// Button is centered within its section
+		buttonX := offsetX + i*sectionWidth + (sectionWidth-buttonWidth)/2
+		regions = append(regions, HitRegion{
+			ID:     id,
+			X:      buttonX,
+			Y:      offsetY,
+			Width:  buttonWidth,
+			Height: 3, // Button border + text + border
+			ZOrder: zOrder,
+		})
+	}
+
+	return regions
 }
 
 // RenderCenteredButtons renders buttons centered in sections

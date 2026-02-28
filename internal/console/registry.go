@@ -3,9 +3,14 @@ package console
 import (
 	"reflect"
 	"strings"
+	"sync"
 )
 
 var (
+	// semanticMu guards all reads and writes of semanticMap, which is written
+	// concurrently by theme-loading goroutines and read by the render goroutine.
+	semanticMu sync.RWMutex
+
 	// semanticMap stores semantic tag -> raw style code mappings (e.g., "version" -> "cyan")
 	semanticMap map[string]string
 
@@ -137,6 +142,7 @@ func BuildColorMap() {
 		"blackbg": true, "redbg": true, "greenbg": true, "yellowbg": true, "bluebg": true, "magentabg": true, "cyanbg": true, "whitebg": true,
 	}
 
+	semanticMu.Lock()
 	for i := 0; i < val.NumField(); i++ {
 		field := typ.Field(i)
 		key := strings.ToLower(field.Name)
@@ -146,6 +152,7 @@ func BuildColorMap() {
 			semanticMap[key] = StripDelimiters(valStr)
 		}
 	}
+	semanticMu.Unlock()
 }
 
 // RegisterSemanticTag registers a semantic tag with its standardized tag value.
@@ -157,7 +164,9 @@ func RegisterSemanticTag(name, taggedValue string) {
 // RegisterSemanticTagRaw registers a semantic tag with a raw style code (no brackets).
 func RegisterSemanticTagRaw(name, rawValue string) {
 	ensureMaps()
+	semanticMu.Lock()
 	semanticMap[strings.ToLower(name)] = rawValue
+	semanticMu.Unlock()
 }
 
 // GetColorDefinition returns the formatted tag value (with brackets) for a semantic tag.
@@ -166,7 +175,9 @@ func GetColorDefinition(name string) string {
 	ensureMaps()
 	name = strings.TrimPrefix(name, "_")
 	name = strings.TrimSuffix(name, "_")
+	semanticMu.RLock()
 	raw := semanticMap[strings.ToLower(name)]
+	semanticMu.RUnlock()
 	if raw == "" {
 		return ""
 	}
@@ -178,18 +189,22 @@ func UnregisterColor(name string) {
 	ensureMaps()
 	name = strings.TrimPrefix(name, "_")
 	name = strings.TrimSuffix(name, "_")
+	semanticMu.Lock()
 	delete(semanticMap, strings.ToLower(name))
+	semanticMu.Unlock()
 }
 
 // UnregisterPrefix removes all semantic tags that start with the given prefix
 func UnregisterPrefix(prefix string) {
 	ensureMaps()
 	searchPrefix := strings.ToLower(strings.TrimSuffix(prefix, "_") + "_")
+	semanticMu.Lock()
 	for key := range semanticMap {
 		if strings.HasPrefix(key, searchPrefix) {
 			delete(semanticMap, key)
 		}
 	}
+	semanticMu.Unlock()
 }
 
 // ResetCustomColors clears all semantic tags and rebuilds from Colors struct

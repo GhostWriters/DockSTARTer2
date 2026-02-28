@@ -4,6 +4,7 @@ import (
 	"DockSTARTer2/internal/tui"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // OptionsMenuScreen is the options menu screen
@@ -97,4 +98,14 @@ func (s *OptionsMenuScreen) HasDialog() bool {
 // MenuName implements ScreenModel
 func (s *OptionsMenuScreen) MenuName() string {
 	return "options"
+}
+
+// Layers implements LayeredView for compositing
+func (s *OptionsMenuScreen) Layers() []*lipgloss.Layer {
+	return s.menu.Layers()
+}
+
+// GetHitRegions implements HitRegionProvider for mouse hit testing
+func (s *OptionsMenuScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegion {
+	return s.menu.GetHitRegions(offsetX, offsetY)
 }
