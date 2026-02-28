@@ -5,6 +5,7 @@ import (
 	"DockSTARTer2/internal/strutil"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -610,10 +611,138 @@ func (m *MenuModel) Init() tea.Cmd {
 	return nil
 }
 
-// Update implements tea.Model
 func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Handle key events
-	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
+	switch msg := msg.(type) {
+	case ToggleFocusedMsg:
+		// Middle click triggers toggle on the currently focused item
+		return m.handleSpace()
+
+	case LayerHitMsg:
+		// Handle specific item clicks
+		if strings.HasPrefix(msg.ID, "item-"+m.id+"-") {
+			indexStr := strings.TrimPrefix(msg.ID, "item-"+m.id+"-")
+			if idx, err := strconv.Atoi(indexStr); err == nil {
+				m.list.Select(idx)
+				m.cursor = idx
+				menuSelectedIndices[m.id] = idx
+				m.focusedItem = FocusList
+
+				// Middle click is handled by AppModel (global Space mapping)
+				// We just handle the selection here.
+				if msg.Button == tea.MouseMiddle {
+					return m, nil
+				}
+
+				// For checkboxes/radio buttons, clicking toggles (Space action)
+				// For regular items, clicking executes (Enter action)
+				if idx >= 0 && idx < len(m.items) {
+					item := m.items[idx]
+					if item.IsCheckbox || item.IsRadioButton || item.Selectable {
+						return m.handleSpace()
+					}
+				}
+				return m.handleEnter()
+			}
+		}
+
+		// Handle clicks on the menu itself (not a specific item/button)
+		if msg.ID == m.id {
+			return m, nil
+		}
+
+		// Handle button clicks
+		switch msg.ID {
+		case IDListPanel:
+			// Hover moved back over the list — restore list focus so the wheel scrolls items.
+			m.focusedItem = FocusList
+			return m, nil
+		case IDButtonPanel:
+			// Hover landed on the button row background — focus the row without executing.
+			// Keep whatever button is already highlighted; default to Select when coming from list.
+			if m.focusedItem == FocusList {
+				m.focusedItem = FocusSelectBtn
+			}
+			return m, nil
+		case "btn-select":
+			m.focusedItem = FocusSelectBtn
+			return m.handleEnter()
+		case "btn-back":
+			if m.backAction != nil {
+				m.focusedItem = FocusBackBtn
+				return m.handleEnter()
+			}
+		case "btn-exit":
+			if m.showExit {
+				m.focusedItem = FocusExitBtn
+				return m.handleEnter()
+			}
+		}
+
+		return m, nil
+
+	case LayerWheelMsg, tea.MouseWheelMsg:
+		// Handle mouse wheel scrolling (raw or semantic)
+		var wheelBtn tea.MouseButton
+		var wheelID string
+		if mwMsg, ok := msg.(tea.MouseWheelMsg); ok {
+			wheelBtn = mwMsg.Button
+		} else if lwMsg, ok := msg.(LayerWheelMsg); ok {
+			wheelBtn = lwMsg.Button
+			wheelID = lwMsg.ID
+		}
+
+		if wheelBtn != 0 {
+			// IDListPanel: scroll the list regardless of button focus state.
+			// Mirrors keyboard up/down — button highlight is preserved independently.
+			if wheelID == IDListPanel {
+				if wheelBtn == tea.MouseWheelUp {
+					m.list.CursorUp()
+					for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator {
+						m.list.CursorUp()
+					}
+				} else if wheelBtn == tea.MouseWheelDown {
+					m.list.CursorDown()
+					for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator {
+						m.list.CursorDown()
+					}
+				}
+				m.cursor = m.list.Index()
+				menuSelectedIndices[m.id] = m.cursor
+				return m, nil
+			}
+
+			// When a button is focused (hover+scroll over button row), shift focus
+			// left/right using the clamping helpers — no wrap at either end.
+			// subMenuMode menus never render buttons, so always fall through to list scroll.
+			if !m.subMenuMode && (m.focusedItem == FocusSelectBtn || m.focusedItem == FocusBackBtn || m.focusedItem == FocusExitBtn) {
+				if wheelBtn == tea.MouseWheelUp {
+					m.focusedItem = m.prevButtonFocus()
+				} else if wheelBtn == tea.MouseWheelDown {
+					m.focusedItem = m.nextButtonFocus()
+				}
+				return m, nil
+			}
+
+			if wheelBtn == tea.MouseWheelUp {
+				m.list.CursorUp()
+				// Skip separators automatically
+				for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator {
+					m.list.CursorUp()
+				}
+			} else if wheelBtn == tea.MouseWheelDown {
+				m.list.CursorDown()
+				// Skip separators automatically
+				for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator {
+					m.list.CursorDown()
+				}
+			}
+			m.cursor = m.list.Index()
+			menuSelectedIndices[m.id] = m.cursor
+			return m, nil
+		}
+
+	case tea.KeyPressMsg:
+		keyMsg := msg
 		switch {
 		case key.Matches(keyMsg, Keys.Help):
 			return m, func() tea.Msg { return ShowDialogMsg{Dialog: NewHelpDialogModel()} }
@@ -823,17 +952,6 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Delegate to list only when list has focus (Deprecated/Removed logic)
-	// But we still need to update the list model if it has internal logic (like spinners, though we turned them off)
-	// Since we handle navigation manually, we might not need this, but for safety:
-	// m.list, cmd = m.list.Update(msg)
-	// Actually, let's remove the conditional since FocusList is gone.
-	// But bubbles/list update handles keys too... strictly strictly speaking we should be careful.
-	// Since handle keys manually, let's just NOT call list.Update for keys.
-	// For other messages (like window size, which we handled), maybe?
-	// Let's just remove the FocusList check and Update list only if strictly needed?
-	// For now, removing the block entirely as we handle everything manually.
-
 	return m, nil
 }
 func (m *MenuModel) View() tea.View { return tea.View{Content: m.ViewString()} }
@@ -889,11 +1007,10 @@ func (m *MenuModel) prevFocus() FocusItem {
 	return FocusList
 }
 
-// nextButtonFocus cycles the Right arrow through buttons only.
-// From the list or last button, moves to the first button (Select).
+// nextButtonFocus moves focus right through buttons, clamping at the last button (no wrap).
 func (m *MenuModel) nextButtonFocus() FocusItem {
 	switch m.focusedItem {
-	case FocusList, FocusExitBtn:
+	case FocusList:
 		return FocusSelectBtn
 	case FocusSelectBtn:
 		if m.backAction != nil {
@@ -902,28 +1019,23 @@ func (m *MenuModel) nextButtonFocus() FocusItem {
 		if m.showExit {
 			return FocusExitBtn
 		}
-		return FocusSelectBtn // wrap around if only one button
+		return FocusSelectBtn // only one button, stay
 	case FocusBackBtn:
 		if m.showExit {
 			return FocusExitBtn
 		}
-		return FocusSelectBtn
+		return FocusBackBtn // rightmost, clamp
+	case FocusExitBtn:
+		return FocusExitBtn // already rightmost, stay
 	}
 	return FocusSelectBtn
 }
 
-// prevButtonFocus cycles the Left arrow through buttons only.
-// From the list or first button, moves to the last button (Exit).
+// prevButtonFocus moves focus left through buttons, clamping at Select (no wrap).
 func (m *MenuModel) prevButtonFocus() FocusItem {
 	switch m.focusedItem {
 	case FocusList, FocusSelectBtn:
-		if m.showExit {
-			return FocusExitBtn
-		}
-		if m.backAction != nil {
-			return FocusBackBtn
-		}
-		return FocusSelectBtn
+		return FocusSelectBtn // already leftmost, stay
 	case FocusExitBtn:
 		if m.backAction != nil {
 			return FocusBackBtn
@@ -932,7 +1044,7 @@ func (m *MenuModel) prevButtonFocus() FocusItem {
 	case FocusBackBtn:
 		return FocusSelectBtn
 	}
-	return FocusExitBtn
+	return FocusSelectBtn
 }
 
 func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
@@ -995,9 +1107,10 @@ func (m *MenuModel) handleSpace() (tea.Model, tea.Cmd) {
 			if item.SpaceAction != nil {
 				return m, item.SpaceAction
 			}
-			// Fallback: Space on a list item can also trigger its primary Action if no SpaceAction defined
+			// Items with only Action (e.g. dropdown selectors) have no SpaceAction.
+			// Fall through to Enter so middle-clicking over the panel activates them.
 			if item.Action != nil {
-				return m, item.Action
+				return m.handleEnter()
 			}
 		}
 	}
@@ -1005,8 +1118,8 @@ func (m *MenuModel) handleSpace() (tea.Model, tea.Cmd) {
 	if m.spaceAction != nil {
 		return m, m.spaceAction
 	}
-	// Fallback to select button if focused
-	if m.focusedItem == FocusSelectBtn {
+	// Fallback: activate whichever button is currently focused
+	if m.focusedItem == FocusSelectBtn || m.focusedItem == FocusBackBtn || m.focusedItem == FocusExitBtn {
 		return m.handleEnter()
 	}
 	return m, nil
@@ -1156,62 +1269,205 @@ func (m *MenuModel) ViewString() string {
 	return dialog
 }
 
-// Layers implements LayeredView
-func (m *MenuModel) Layers() []*lipgloss.Layer {
-	// Root layer for the menu
-	root := lipgloss.NewLayer(m.ViewString()).Z(ZDialog)
+// GetHitRegions implements HitRegionProvider for mouse hit testing
+func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
+	var regions []HitRegion
 
-	// Add hit layers for menu items
-	// We need to calculate where the list is relative to the menu root
+	if m.width == 0 {
+		return regions
+	}
+
+	// Calculate list position by measuring rendered components
 	styles := GetStyles()
-	headerH := 0
-	if m.title != "" {
-		headerH = DialogBorderHeight
+	listY := 0
+	listX := 1 // default: inside outer border
+
+	// Outer border top (with title) adds 1 line
+	if styles.DrawBorders {
+		listY = 1
 	}
 
-	// Calculate Y offset for the first visible item
-	// Title (if any) + Subtitle (if any)
-	listY := headerH
+	// Subtitle adds its rendered height.
+	// Use outerContentWidth (list.Width + 4) to match actual rendering — the subtitle
+	// is rendered at that width in ViewString, not at the narrower list.Width(), so
+	// that text wraps the same number of times as in the real output.
 	if m.subtitle != "" {
-		listY += lipgloss.Height(RenderThemeText(m.subtitle, styles.DialogTitle))
+		subtitleWidth := m.list.Width() + 4
+		subtitleRendered := styles.Dialog.
+			Width(subtitleWidth).
+			Padding(0, 1).
+			Render(m.subtitle)
+		listY += lipgloss.Height(subtitleRendered)
 	}
 
-	// Calculate how many items are visible and which ones
-	visibleItems := m.list.VisibleItems()
-	startIndex := m.list.Paginator.Page * m.list.Paginator.PerPage
+	// In standard mode the list is wrapped in an inner border with a 1-char margin on
+	// each side: outer(1) + margin(1) + inner border(1) = listX 3, listY +1.
+	// In subMenuMode items render directly inside the outer border with no inner border
+	// and no margin, so both adjustments are skipped.
+	if styles.DrawBorders && !m.subMenuMode {
+		listX = 3 // outer border (1) + margin (1) + inner border (1)
+		listY += 1
+	}
 
-	for i := 0; i < len(visibleItems); i++ {
-		itemIndex := startIndex + i
-		if itemIndex >= len(m.items) {
-			break
+	// Item regions: vertical list mode vs horizontal flow mode.
+	if !m.flowMode {
+		// Calculate visible items
+		visibleItems := m.list.VisibleItems()
+		startIndex := m.list.Paginator.Page * m.list.Paginator.PerPage
+
+		// Item regions
+		itemWidth := m.list.Width()
+		for i := 0; i < len(visibleItems); i++ {
+			itemIndex := startIndex + i
+			if itemIndex >= len(m.items) {
+				break
+			}
+			item := m.items[itemIndex]
+			if item.IsSeparator {
+				continue
+			}
+
+			regions = append(regions, HitRegion{
+				ID:     GetMenuItemID(m.id, itemIndex),
+				X:      offsetX + listX,
+				Y:      offsetY + listY + i,
+				Width:  itemWidth,
+				Height: 1,
+				ZOrder: ZDialog + 10,
+			})
 		}
-		item := m.items[itemIndex]
-		if item.IsSeparator {
-			continue
+	} else {
+		// Flow mode: items are arranged horizontally across multiple lines.
+		// Replicate the layout logic from renderFlow() to compute per-item positions.
+		layout := GetLayout()
+		maxWidth, _ := layout.InnerContentSize(m.width, m.height)
+		if maxWidth > 2 {
+			maxWidth -= 2
 		}
 
-		// Create a transparent hit layer for this item
-		ID := GetMenuItemID(m.id, itemIndex)
-		content := strutil.Repeat(" ", m.width)
-		root.AddLayers(lipgloss.NewLayer(content).
-			X(1). // Inside border
-			Y(listY + i).
-			ID(ID).
-			Z(1))
+		ctx := GetActiveContext()
+		const itemSpacing = 3
+		// lineContentX: items start 1 char past listX because renderFlow applies
+		// lineStyle.Padding(0, 1) which adds a 1-char left margin.
+		lineContentX := listX + 1
+
+		flowLine := 0
+		currentLineWidth := 0
+
+		for i, item := range m.items {
+			if item.IsSeparator {
+				continue
+			}
+
+			// Compute visual width of this item, matching renderFlow's logic.
+			cbWidth := 0
+			if item.IsRadioButton || item.IsCheckbox {
+				var glyph string
+				if ctx.LineCharacters {
+					if item.IsRadioButton {
+						glyph = radioUnselected + " "
+					} else {
+						glyph = checkUnselected + " "
+					}
+				} else {
+					if item.IsRadioButton {
+						glyph = radioUnselectedAscii
+					} else {
+						glyph = checkUnselectedAscii
+					}
+				}
+				cbWidth = lipgloss.Width(glyph)
+			}
+
+			itemWidth := cbWidth + lipgloss.Width(GetPlainText(item.Tag))
+			if !item.IsCheckbox && !item.IsRadioButton && item.Desc != "" {
+				itemWidth += 1 + lipgloss.Width(GetPlainText(item.Desc))
+			}
+
+			// Determine item's position within the current line.
+			var itemX int
+			if currentLineWidth > 0 && currentLineWidth+itemSpacing+itemWidth > maxWidth {
+				// This item wraps to the next line.
+				flowLine++
+				itemX = 0
+				currentLineWidth = itemWidth
+			} else {
+				if currentLineWidth > 0 {
+					itemX = currentLineWidth + itemSpacing
+					currentLineWidth += itemSpacing + itemWidth
+				} else {
+					itemX = 0
+					currentLineWidth = itemWidth
+				}
+			}
+
+			regions = append(regions, HitRegion{
+				ID:     GetMenuItemID(m.id, i),
+				X:      offsetX + lineContentX + itemX,
+				Y:      offsetY + listY + flowLine,
+				Width:  itemWidth,
+				Height: 1,
+				ZOrder: ZDialog + 10,
+			})
+		}
 	}
 
-	// Add hit layers for buttons
-	specs := m.getButtonSpecs()
-	if len(specs) > 0 {
-		buttonRow := m.renderSimpleButtons(m.width - 2) // 2 for borders
-		buttonH := lipgloss.Height(buttonRow)
-		// Calculation for buttonY - buttons are at the bottom of the content
-		// For now we'll just skip precise hit boxes for buttons in this pass
-		// since the menu logic already captures clicks.
-		_ = buttonH
+	// Button regions are only valid for full (non-subMenu) menus. SubMenu panels don't
+	// render their own button row, so generating regions for them would create spurious
+	// hit targets at incorrect positions.
+	if !m.subMenuMode {
+		specs := m.getButtonSpecs()
+		if len(specs) > 0 {
+			// Get dialog height without shadow
+			content := m.ViewString()
+			dialogH := lipgloss.Height(content)
+
+			// Account for shadow (1 line at bottom)
+			hasShadow := currentConfig.UI.Shadow
+			if hasShadow {
+				dialogH -= 1
+			}
+
+			// Button box starts 3 lines from bottom: bottom border (1) + button border (1) + button text (1)
+			// We want to cover all 3 lines of the button box (border + text + border)
+			buttonY := dialogH - 4 // Start at top of button box
+
+			// Calculate actual dialog width (not m.width which is available space)
+			dialogW := WidthWithoutZones(content)
+			if hasShadow {
+				dialogW -= 2 // shadow adds 2 chars on right
+			}
+
+			contentWidth := dialogW - 2 // inside borders
+
+			// Background region covering the whole button row — lets hover+scroll cycle buttons
+			// even when the mouse is in the gap between individual buttons.
+			// ZDialog+15 sits below individual button regions (ZDialog+20).
+			regions = append(regions, HitRegion{
+				ID:     IDButtonPanel,
+				X:      offsetX + 1,
+				Y:      offsetY + buttonY,
+				Width:  contentWidth,
+				Height: DialogButtonHeight,
+				ZOrder: ZDialog + 15,
+			})
+
+			// Use centralized helper for button hit regions (empty dialogID since menus don't need prefixes)
+			regions = append(regions, GetButtonHitRegions(
+				"", offsetX+1, offsetY+buttonY, contentWidth, ZDialog+20,
+				specs...,
+			)...)
+		}
 	}
 
-	return []*lipgloss.Layer{root}
+	return regions
+}
+
+// Layers returns a single layer with the menu content for visual compositing
+func (m *MenuModel) Layers() []*lipgloss.Layer {
+	return []*lipgloss.Layer{
+		lipgloss.NewLayer(m.ViewString()).Z(ZDialog).ID(m.id),
+	}
 }
 
 // getButtonSpecs returns the current button configuration based on state

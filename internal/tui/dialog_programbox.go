@@ -74,6 +74,7 @@ type ProgramBoxModel struct {
 
 	// Unified layout (deterministic sizing)
 	layout DialogLayout
+	id     string
 }
 
 // SubDialogMsg signals a request to show a sub-dialog and blocks the task
@@ -119,6 +120,7 @@ type UpdatePercentMsg struct {
 func newProgramBox(title, subtitle, command string) *ProgramBoxModel {
 
 	m := &ProgramBoxModel{
+		id:       "programbox_dialog",
 		title:    title,
 		subtitle: subtitle,
 		command:  command,
@@ -414,15 +416,25 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case LayerHitMsg:
-		if m.done && msg.ID == "Button.OK" {
+		// Check for suffixes to support prefixed IDs (e.g., "programbox_dialog.OK")
+		if m.done && (strings.HasSuffix(msg.ID, ".OK") || msg.ID == "Button.OK") {
 			return m, func() tea.Msg { return CloseDialogMsg{} }
 		}
+
 	case UpdateTaskMsg:
 		m.UpdateTaskStatus(msg.Label, msg.Status, msg.ActiveApp)
 		return m, nil
 
 	case UpdatePercentMsg:
 		m.SetPercent(msg.Percent)
+		return m, nil
+	}
+
+	// Middle-click closes the dialog when the task is done
+	if _, ok := msg.(ToggleFocusedMsg); ok {
+		if m.done {
+			return m, func() tea.Msg { return CloseDialogMsg{} }
+		}
 		return m, nil
 	}
 
@@ -684,33 +696,17 @@ func (m *ProgramBoxModel) View() tea.View {
 
 // Layers implements LayeredView
 func (m *ProgramBoxModel) Layers() []*lipgloss.Layer {
-	// Root dialog layer
+	// Root dialog layer - just the rendered content
+	// Hit testing is handled by GetHitRegions()
 	viewStr := m.ViewString()
 	root := lipgloss.NewLayer(viewStr).Z(ZDialog)
 
-	// If done, add OK button hit layer
-	if m.done {
-		// Y = 1 (border) + headerH + commandH + (vpHeight + 2)
-		buttonY := 1 + m.layout.HeaderHeight + m.layout.CommandHeight + m.layout.ViewportHeight + 2
-		contentWidth := m.layout.Width - 2
-
-		btnW := 12 // Approximate "OK" button width with border/padding
-		btnX := 1 + (contentWidth-btnW)/2
-		if btnX < 1 {
-			btnX = 1
-		}
-
-		root.AddLayers(lipgloss.NewLayer(strutil.Repeat(" ", btnW)).
-			X(btnX).Y(buttonY).ID("Button.OK").Z(1))
-	}
-
-	// If sub-dialog is active, aggregate its layers
+	// If sub-dialog is active, aggregate its layers for visual compositing
 	if m.subDialog != nil {
 		if lv, ok := m.subDialog.(LayeredView); ok {
 			subLayers := lv.Layers()
 			if len(subLayers) > 0 {
-				// We need to center the sub-dialog layers
-				// Measure sub-dialog size
+				// Center the sub-dialog layers
 				var subStr string
 				if vs, ok := m.subDialog.(interface{ ViewString() string }); ok {
 					subStr = vs.ViewString()
@@ -726,15 +722,71 @@ func (m *ProgramBoxModel) Layers() []*lipgloss.Layer {
 				offsetX := (containerW - subW) / 2
 				offsetY := (containerH - subH) / 2
 
-				// Create a container layer for sub-dialog to handle relative positioning
-				subContainer := lipgloss.NewLayer("").X(offsetX).Y(offsetY).Z(10)
-				subContainer.AddLayers(subLayers...)
-				root.AddLayers(subContainer)
+				// Add sub-dialog layers with offset
+				for _, l := range subLayers {
+					root.AddLayers(lipgloss.NewLayer(l.GetContent()).
+						X(l.GetX() + offsetX).
+						Y(l.GetY() + offsetY).
+						Z(l.GetZ() + 10))
+				}
 			}
 		}
 	}
 
 	return []*lipgloss.Layer{root}
+}
+
+// GetHitRegions implements HitRegionProvider for mouse hit testing
+func (m *ProgramBoxModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
+	var regions []HitRegion
+
+	// Viewport hit region so hover+scroll works over the output area
+	if m.layout.Width > 2 && m.layout.ViewportHeight > 0 {
+		viewportY := 1 + m.layout.HeaderHeight + m.layout.CommandHeight
+		regions = append(regions, HitRegion{
+			ID:     m.id + ".viewport",
+			X:      offsetX + 1,
+			Y:      offsetY + viewportY,
+			Width:  m.layout.Width - 2,
+			Height: m.layout.ViewportHeight + 2,
+			ZOrder: ZDialog + 5,
+		})
+	}
+
+	// If done, add OK button hit region using centralized helper
+	if m.done {
+		// Y = 1 (border) + headerH + commandH + vpHeight + viewport border (2)
+		buttonY := 1 + m.layout.HeaderHeight + m.layout.CommandHeight + m.layout.ViewportHeight + 2
+		contentWidth := m.layout.Width - 2
+
+		regions = append(regions, GetButtonHitRegions(
+			m.id, offsetX+1, offsetY+buttonY, contentWidth, ZDialog+20,
+			ButtonSpec{Text: "OK", ZoneID: "OK"},
+		)...)
+	}
+
+	// If sub-dialog is active, collect its hit regions
+	if m.subDialog != nil {
+		if hrp, ok := m.subDialog.(HitRegionProvider); ok {
+			viewStr := m.ViewString()
+			containerW := lipgloss.Width(viewStr)
+			containerH := lipgloss.Height(viewStr)
+
+			var subStr string
+			if vs, ok := m.subDialog.(interface{ ViewString() string }); ok {
+				subStr = vs.ViewString()
+			}
+			subW := lipgloss.Width(subStr)
+			subH := lipgloss.Height(subStr)
+
+			subOffsetX := (containerW - subW) / 2
+			subOffsetY := (containerH - subH) / 2
+
+			regions = append(regions, hrp.GetHitRegions(offsetX+subOffsetX, offsetY+subOffsetY)...)
+		}
+	}
+
+	return regions
 }
 
 // renderHeaderUI renders the tasks and progress bar

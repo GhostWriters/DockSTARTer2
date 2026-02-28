@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"DockSTARTer2/internal/strutil"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -25,14 +24,17 @@ type messageDialogModel struct {
 	messageType MessageType
 	width       int
 	height      int
+	onResult    func() tea.Msg // Optional: Custom message generator for result
 
 	// Unified layout (deterministic sizing)
 	layout DialogLayout
+	id     string
 }
 
 // newMessageDialog creates a new message dialog
 func newMessageDialog(title, message string, msgType MessageType) *messageDialogModel {
 	return &messageDialogModel{
+		id:          "message_dialog",
 		title:       title,
 		message:     message,
 		messageType: msgType,
@@ -48,6 +50,7 @@ func (m *messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		m.calculateLayout()
 		return m, nil
 
 	case tea.KeyPressMsg:
@@ -56,9 +59,22 @@ func (m *messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg { return CloseDialogMsg{} }
 
 	case LayerHitMsg:
-		if msg.ID == "Button.OK" {
-			return m, func() tea.Msg { return CloseDialogMsg{} }
+		// Middle click is handled by AppModel (global Space mapping)
+		if msg.Button == tea.MouseMiddle {
+			return m, nil
 		}
+		// Left click on OK button closes
+		// Check for suffixes to support prefixed IDs (e.g., "message_dialog.OK")
+		if msg.Button == tea.MouseLeft {
+			if strings.HasSuffix(msg.ID, ".OK") || msg.ID == "Button.OK" {
+				return m, func() tea.Msg { return CloseDialogMsg{} }
+			}
+		}
+	}
+
+	// Middle-click dismisses the dialog
+	if _, ok := msg.(ToggleFocusedMsg); ok {
+		return m, func() tea.Msg { return CloseDialogMsg{} }
 	}
 
 	return m, nil
@@ -134,16 +150,18 @@ func (m *messageDialogModel) View() tea.View {
 	return tea.NewView(m.ViewString())
 }
 
-// Layers implements LayeredView
+// Layers returns a single layer with the dialog content for visual compositing
 func (m *messageDialogModel) Layers() []*lipgloss.Layer {
-	// Root dialog layer
-	root := lipgloss.NewLayer(m.ViewString()).Z(ZDialog)
+	return []*lipgloss.Layer{
+		lipgloss.NewLayer(m.ViewString()).Z(ZDialog).ID(m.id),
+	}
+}
 
-	// Calculate button hit layer
-	// Y = 1 (top border) + messageHeight
+// GetHitRegions implements HitRegionProvider for mouse hit testing
+func (m *messageDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	styles := GetStyles()
 
-	// Replicate message style to measure height
+	// Calculate message height to find button position
 	var messageStyle lipgloss.Style
 	switch m.messageType {
 	case MessageSuccess:
@@ -152,7 +170,7 @@ func (m *messageDialogModel) Layers() []*lipgloss.Layer {
 		messageStyle = styles.StatusWarn.Padding(1, 2)
 	case MessageError:
 		messageStyle = styles.StatusError.Bold(true).Padding(1, 2)
-	default: // MessageInfo
+	default:
 		messageStyle = lipgloss.NewStyle().Foreground(styles.ItemNormal.GetForeground()).Padding(1, 2)
 	}
 
@@ -160,19 +178,15 @@ func (m *messageDialogModel) Layers() []*lipgloss.Layer {
 	messageStyle = messageStyle.Width(contentWidth)
 	messageHeight := lipgloss.Height(messageStyle.Render(m.message))
 
+	// buttonY: border (1) + message with padding
 	buttonY := 1 + messageHeight
 
-	// OK Button is centered in contentWidth
-	btnW := 12 // Approximate " OK " button width with border
-	btnX := 1 + (contentWidth-btnW)/2
-	if btnX < 1 {
-		btnX = 1
-	}
-
-	root.AddLayers(lipgloss.NewLayer(strutil.Repeat(" ", btnW)).
-		X(btnX).Y(buttonY).ID("Button.OK").Z(1))
-
-	return []*lipgloss.Layer{root}
+	// Use centralized button hit region helper with dialog ID for disambiguation
+	// Must include Text to properly calculate button width
+	return GetButtonHitRegions(
+		m.id, offsetX+1, offsetY+buttonY, contentWidth, ZDialog+20,
+		ButtonSpec{Text: "OK", ZoneID: "OK"},
+	)
 }
 
 // SetSize updates the dialog dimensions

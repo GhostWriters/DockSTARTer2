@@ -321,7 +321,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return s, nil
 
 	case tea.MouseWheelMsg:
-		// ONLY scroll the focused panel, no mouse-over fallback
+		// ONLY interact with the focused panel, no mouse-over fallback
 		if s.focusedPanel == FocusThemes {
 			updated, uCmd := s.themeMenu.Update(msg)
 			if m, ok := updated.(*tui.MenuModel); ok {
@@ -334,6 +334,20 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				s.optionsMenu = m
 			}
 			return s, uCmd
+		} else if s.focusedPanel == FocusButtons {
+			// Scroll wheel cycles the focused button (up=left, down=right)
+			if msg.Button == tea.MouseWheelUp {
+				s.focusedButton--
+				if s.focusedButton < 0 {
+					s.focusedButton = 2
+				}
+			} else if msg.Button == tea.MouseWheelDown {
+				s.focusedButton++
+				if s.focusedButton > 2 {
+					s.focusedButton = 0
+				}
+			}
+			return s, nil
 		}
 		return s, nil
 
@@ -345,6 +359,10 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, nil
 		} else if msg.ID == tui.IDOptionsPanel {
 			s.focusedPanel = FocusOptions
+			s.updateFocusStates()
+			return s, nil
+		} else if msg.ID == tui.IDButtonPanel {
+			s.focusedPanel = FocusButtons
 			s.updateFocusStates()
 			return s, nil
 		}
@@ -392,6 +410,40 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			s.focusedButton = 2
 			return s, tea.Quit
 		}
+
+	case tui.ToggleFocusedMsg:
+		// Middle click: activate the currently focused item in the hovered panel
+		if s.focusedPanel == FocusThemes {
+			items := s.themeMenu.GetItems()
+			cursor := s.themeMenu.Index()
+			if cursor >= 0 && cursor < len(items) {
+				for i := range items {
+					items[i].Checked = (i == cursor)
+				}
+				s.themeMenu.SetItems(items)
+				s.applyPreview(items[cursor].Tag)
+			}
+			return s, nil
+		} else if s.focusedPanel == FocusOptions {
+			updated, uCmd := s.optionsMenu.Update(msg)
+			if m, ok := updated.(*tui.MenuModel); ok {
+				s.optionsMenu = m
+			}
+			return s, uCmd
+		} else if s.focusedPanel == FocusButtons {
+			// Activate the currently focused button
+			switch s.focusedButton {
+			case 0:
+				return s, s.handleApply()
+			case 1:
+				theme.Unload("Preview")
+				return s, navigateBack()
+			case 2:
+				theme.Unload("Preview")
+				return s, tea.Quit
+			}
+		}
+		return s, nil
 
 	case tea.KeyPressMsg:
 		// 1. Panel Cycling (Tab / Shift-Tab) - Themes <-> Options only
@@ -512,7 +564,12 @@ func (s *DisplayOptionsScreen) syncOptionsMenu() {
 	s.optionsMenu.SetItems(items)
 }
 
-func (s *DisplayOptionsScreen) ViewString() string {
+func (s *DisplayOptionsScreen) ViewString() (result string) {
+	defer func() {
+		if r := recover(); r != nil {
+			result = "(rendering error — theme may still be loading)"
+		}
+	}()
 	if s.optionsMenu == nil || s.themeMenu == nil {
 		return ""
 	}
@@ -683,15 +740,6 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	hStyle := tui.SemanticRawStyle("Preview_Theme_Screen")
 
 	themeName := s.previewTheme
-	// themeAuthor := ""
-	// themeDesc := ""
-	// for _, t := range s.themes {
-	// 	if t.Name == themeName {
-	// 		themeAuthor = t.Author
-	// 		themeDesc = t.Description
-	// 		break
-	// 	}
-	// }
 
 	// Header Row (simulate real status bar layout)
 	// Use thirds for proper centering
@@ -897,62 +945,11 @@ func (s *DisplayOptionsScreen) View() tea.View {
 
 // Layers implements LayeredView
 func (s *DisplayOptionsScreen) Layers() []*lipgloss.Layer {
-	// Root layer for the entire screen content
-	root := lipgloss.NewLayer(s.ViewString()).Z(tui.ZScreen)
-
-	// Settings dialog content starts at (1, 1) relative to root
-	// because of the outer border in RenderBorderedBoxCtx
-	const contentX = 1
-	const contentY = 1
-
-	// 1. Theme Menu Layers
-	for _, l := range s.themeMenu.Layers() {
-		root.AddLayers(lipgloss.NewLayer(l.GetContent()).
-			X(l.GetX() + contentX).
-			Y(l.GetY() + contentY).
-			Z(l.GetZ()).
-			ID(l.GetID()))
+	// Simple layer - just the rendered content
+	// Hit testing is handled separately by GetHitRegions()
+	return []*lipgloss.Layer{
+		lipgloss.NewLayer(s.ViewString()).Z(tui.ZScreen),
 	}
-
-	// Hit panel for Theme selection focus
-	themeRect := strings.Repeat(strutil.Repeat(" ", s.themeMenu.Width())+"\n", s.themeMenu.Height())
-	root.AddLayers(lipgloss.NewLayer(themeRect).
-		X(contentX).Y(contentY).
-		ID(tui.IDThemePanel).
-		Z(1))
-
-	// 2. Options Menu Layers
-	optionsY := contentY + s.themeMenu.Height()
-	for _, l := range s.optionsMenu.Layers() {
-		root.AddLayers(lipgloss.NewLayer(l.GetContent()).
-			X(l.GetX() + contentX).
-			Y(l.GetY() + optionsY).
-			Z(l.GetZ()).
-			ID(l.GetID()))
-	}
-
-	// Hit panel for Options focus
-	optionsRect := strings.Repeat(strutil.Repeat(" ", s.optionsMenu.Width())+"\n", s.optionsMenu.Height())
-	root.AddLayers(lipgloss.NewLayer(optionsRect).
-		X(contentX).Y(optionsY).
-		ID(tui.IDOptionsPanel).
-		Z(1))
-
-	// 3. Button Layers
-	buttonY := optionsY + s.optionsMenu.Height()
-	btnRowWidth := s.themeMenu.Width() // Buttons span same width as menus
-	btnWidth := btnRowWidth / 3
-
-	btnRect := strings.Repeat(strutil.Repeat(" ", btnWidth)+"\n", 3)
-
-	root.AddLayers(lipgloss.NewLayer(btnRect).
-		X(contentX).Y(buttonY).ID(tui.IDApplyButton).Z(1))
-	root.AddLayers(lipgloss.NewLayer(btnRect).
-		X(contentX + btnWidth).Y(buttonY).ID(tui.IDBackButton).Z(1))
-	root.AddLayers(lipgloss.NewLayer(btnRect).
-		X(contentX + 2*btnWidth).Y(buttonY).ID(tui.IDExitButton).Z(1))
-
-	return []*lipgloss.Layer{root}
 }
 
 func (s *DisplayOptionsScreen) Title() string {
@@ -1058,6 +1055,70 @@ func (s *DisplayOptionsScreen) SetFocused(f bool) {
 	} else {
 		s.updateFocusStates()
 	}
+}
+
+// GetHitRegions implements HitRegionProvider for mouse hit testing
+func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegion {
+	var regions []tui.HitRegion
+
+	// Content starts at (1, 1) relative to root because of the outer border
+	const contentX = 1
+	const contentY = 1
+
+	// Theme menu regions
+	themeRegions := s.themeMenu.GetHitRegions(offsetX+contentX, offsetY+contentY)
+	regions = append(regions, themeRegions...)
+
+	// Theme panel hit region
+	regions = append(regions, tui.HitRegion{
+		ID:     tui.IDThemePanel,
+		X:      offsetX + contentX,
+		Y:      offsetY + contentY,
+		Width:  s.themeMenu.Width(),
+		Height: s.themeMenu.Height(),
+		ZOrder: tui.ZScreen + 1,
+	})
+
+	// Options menu regions
+	optionsY := contentY + s.themeMenu.Height()
+	optionsRegions := s.optionsMenu.GetHitRegions(offsetX+contentX, offsetY+optionsY)
+	regions = append(regions, optionsRegions...)
+
+	// Options panel hit region
+	regions = append(regions, tui.HitRegion{
+		ID:     tui.IDOptionsPanel,
+		X:      offsetX + contentX,
+		Y:      offsetY + optionsY,
+		Width:  s.optionsMenu.Width(),
+		Height: s.optionsMenu.Height(),
+		ZOrder: tui.ZScreen + 1,
+	})
+
+	// Button row regions
+	buttonY := optionsY + s.optionsMenu.Height()
+	btnRowWidth := s.themeMenu.Width()
+
+	// Button panel background: covers the full button row so hover+scroll/middle-click
+	// can reach it even between buttons. Lower ZOrder than individual button regions
+	// so left-clicks on a specific button still hit the correct button.
+	regions = append(regions, tui.HitRegion{
+		ID:     tui.IDButtonPanel,
+		X:      offsetX + contentX,
+		Y:      offsetY + buttonY,
+		Width:  btnRowWidth,
+		Height: tui.DialogButtonHeight,
+		ZOrder: tui.ZScreen + 1,
+	})
+
+	// Individual button hit regions (higher ZOrder → take priority for left-click)
+	regions = append(regions, tui.GetButtonHitRegions(
+		"", offsetX+contentX, offsetY+buttonY, btnRowWidth, tui.ZScreen+2,
+		tui.ButtonSpec{Text: "Apply", ZoneID: tui.IDApplyButton},
+		tui.ButtonSpec{Text: "Back", ZoneID: tui.IDBackButton},
+		tui.ButtonSpec{Text: "Exit", ZoneID: tui.IDExitButton},
+	)...)
+
+	return regions
 }
 
 // getPreviewShadowColor extracts the shadow color from the preview theme

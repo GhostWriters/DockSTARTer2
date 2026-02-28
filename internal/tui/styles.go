@@ -11,12 +11,41 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// GetMenuItemID returns a unique layer ID for a menu item
+// GetMenuItemID returns a unique ID for a menu item
 func GetMenuItemID(menuID string, index int) string {
 	return "item-" + menuID + "-" + strconv.Itoa(index)
 }
 
-// Z-Level constants for layering
+// HitRegion represents a clickable area for mouse hit testing
+type HitRegion struct {
+	ID     string
+	X, Y   int
+	Width  int
+	Height int
+	ZOrder int // Higher values are checked first (on top)
+}
+
+// HitRegionProvider is implemented by components that have clickable areas
+type HitRegionProvider interface {
+	GetHitRegions(offsetX, offsetY int) []HitRegion
+}
+
+// HitRegions is a slice of HitRegion that can be sorted by ZOrder
+type HitRegions []HitRegion
+
+// FindHit returns the ID of the topmost region containing the point, or empty string
+func (regions HitRegions) FindHit(x, y int) string {
+	// Check in reverse order (higher ZOrder regions are at the end after sorting)
+	for i := len(regions) - 1; i >= 0; i-- {
+		r := regions[i]
+		if x >= r.X && x < r.X+r.Width && y >= r.Y && y < r.Y+r.Height {
+			return r.ID
+		}
+	}
+	return ""
+}
+
+// Z-Level constants for layering (used for rendering and hit region ordering)
 const (
 	ZBackdrop = 0
 	ZScreen   = 10
@@ -38,6 +67,8 @@ const (
 	// Display Options IDs
 	IDThemePanel   = "theme_panel"
 	IDOptionsPanel = "options_panel"
+	IDButtonPanel  = "button_panel"
+	IDListPanel    = "list_panel"
 	IDApplyButton  = "apply_button"
 	IDBackButton   = "back_button"
 	IDExitButton   = "exit_button"

@@ -2,7 +2,6 @@ package tui
 
 import (
 	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/strutil"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -23,6 +22,7 @@ type confirmDialogModel struct {
 
 	// Unified layout (deterministic sizing)
 	layout DialogLayout
+	id     string
 }
 
 type confirmResultMsg struct {
@@ -32,6 +32,7 @@ type confirmResultMsg struct {
 // newConfirmDialog creates a new confirmation dialog
 func newConfirmDialog(title, question string, defaultYes bool) *confirmDialogModel {
 	return &confirmDialogModel{
+		id:         "confirm_dialog",
 		title:      title,
 		question:   question,
 		defaultYes: defaultYes,
@@ -56,6 +57,7 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		m.calculateLayout()
 		return m, nil
 
 	case tea.KeyPressMsg:
@@ -82,7 +84,7 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			// Tab/ShiftTab also toggle
-			if key.Matches(msg, Keys.Tab) || key.Matches(msg, Keys.ShiftTab) {
+			if key.Matches(msg, Keys.Tab) || key.Matches(msg, Keys.ShiftTab) || msg.String() == " " {
 				m.result = !m.result
 				return m, nil
 			}
@@ -99,16 +101,37 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case LayerHitMsg:
-		switch msg.ID {
-		case "Button.Yes":
-			m.result = true
-			m.confirmed = true
-			return m, closeWithResult(true)
-		case "Button.No":
-			m.result = false
-			m.confirmed = true
-			return m, closeWithResult(false)
+		// Middle click is handled by AppModel (global Space mapping)
+		if msg.Button == tea.MouseMiddle {
+			return m, nil
 		}
+
+		// Left click on buttons triggers action
+		// Check for suffixes to support prefixed IDs (e.g., "confirm_dialog.Yes")
+		if msg.Button == tea.MouseLeft {
+			if strings.HasSuffix(msg.ID, ".Yes") || msg.ID == "Button.Yes" {
+				m.result = true
+				m.confirmed = true
+				return m, closeWithResult(true)
+			}
+			if strings.HasSuffix(msg.ID, ".No") || msg.ID == "Button.No" {
+				m.result = false
+				m.confirmed = true
+				return m, closeWithResult(false)
+			}
+		}
+	}
+
+	// Middle-click activates the currently focused button (Yes or No)
+	if _, ok := msg.(ToggleFocusedMsg); ok {
+		m.confirmed = true
+		return m, closeWithResult(m.result)
+	}
+
+	// Scroll wheel toggles the focused button between Yes and No
+	if _, ok := msg.(tea.MouseWheelMsg); ok {
+		m.result = !m.result
+		return m, nil
 	}
 
 	return m, nil
@@ -200,40 +223,31 @@ func (m *confirmDialogModel) View() tea.View {
 	return tea.NewView(m.ViewString())
 }
 
-// Layers implements LayeredView
+// Layers returns a single layer with the dialog content for visual compositing
 func (m *confirmDialogModel) Layers() []*lipgloss.Layer {
-	// Root dialog layer
-	root := lipgloss.NewLayer(m.ViewString()).Z(ZDialog)
+	return []*lipgloss.Layer{
+		lipgloss.NewLayer(m.ViewString()).Z(ZDialog).ID(m.id),
+	}
+}
 
-	// Calculate button hit layers
-	// These positions are relative to the root dialog layer
-	// Calculation from ViewString():
-	// Y = 1 (top border) + questionHeight + 1 (spacer)
+// GetHitRegions implements HitRegionProvider for mouse hit testing
+func (m *confirmDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
+	// Calculate button positions
 	ctx := GetActiveContext()
-	questionStyle := ctx.Dialog.Padding(1, 2).Width(m.layout.Width - 2) // Approximate width
+	questionStyle := ctx.Dialog.Padding(1, 2).Width(m.layout.Width - 2)
 	questionHeight := lipgloss.Height(questionStyle.Render(m.question))
 
-	buttonY := 1 + questionHeight + 1
+	// buttonY: border (1) + question with padding
+	buttonY := 1 + questionHeight
 	contentWidth := m.layout.Width - 2
 
-	// RenderCenteredButtonsCtx splits contentWidth into numButtons sections
-	numButtons := 2
-	sectionWidth := contentWidth / numButtons
-
-	// Yes Button (Left section)
-	yesX := 1 + (sectionWidth-12)/2 // Approximate 12-char button width
-	if yesX < 1 {
-		yesX = 1
-	}
-	root.AddLayers(lipgloss.NewLayer(strutil.Repeat(" ", 12)).
-		X(yesX).Y(buttonY).ID("Button.Yes").Z(1))
-
-	// No Button (Right section)
-	noX := 1 + sectionWidth + (sectionWidth-10)/2 // Approximate 10-char button width
-	root.AddLayers(lipgloss.NewLayer(strutil.Repeat(" ", 10)).
-		X(noX).Y(buttonY).ID("Button.No").Z(1))
-
-	return []*lipgloss.Layer{root}
+	// Use centralized button hit region helper with dialog ID for disambiguation
+	// Must include Text to properly calculate button width
+	return GetButtonHitRegions(
+		m.id, offsetX+1, offsetY+buttonY, contentWidth, ZDialog+20,
+		ButtonSpec{Text: "Yes", ZoneID: "Yes"},
+		ButtonSpec{Text: "No", ZoneID: "No"},
+	)
 }
 
 // SetSize updates the dialog dimensions
