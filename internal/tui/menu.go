@@ -1151,12 +1151,13 @@ func (m *MenuModel) ViewString() string {
 	// Build inner content parts
 	var innerParts []string
 
-	// Add subtitle if present (left-aligned, matching outer content width)
+	// Add subtitle if present (always left-aligned)
 	if m.subtitle != "" {
+		subAlign := lipgloss.Left
 		subtitleStyle := styles.Dialog.
 			Width(outerContentWidth).
 			Padding(0, 1).
-			Align(lipgloss.Left)
+			Align(subAlign)
 
 		// Use RenderThemeText for proper inline tag handling (not just leading tags)
 		subStr := RenderThemeText(m.subtitle, subtitleStyle)
@@ -1532,9 +1533,12 @@ func (m *MenuModel) renderButtonBox(buttons string, contentWidth int) string {
 	return boxStyle.Render(centeredButtons)
 }
 
-
 func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targetHeight int, focused bool, rounded bool) string {
-	return RenderBorderedBoxCtx(m.title, content, contentWidth, targetHeight, focused, rounded, GetActiveContext())
+	align := GetActiveContext().DialogTitleAlign
+	if m.subMenuMode {
+		align = GetActiveContext().SubmenuTitleAlign
+	}
+	return RenderBorderedBoxCtx(m.title, content, contentWidth, targetHeight, focused, rounded, align, GetActiveContext())
 }
 
 // SetSize updates the menu dimensions and resizes the list

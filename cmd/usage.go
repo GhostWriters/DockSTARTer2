@@ -282,7 +282,7 @@ func GetUsage(target string) string {
 			"	Run tests to check the program",
 		)
 	}
-	if match("-T", "--theme", "--theme-list", "--theme-table", "--theme-lines", "--theme-no-lines", "--theme-borders", "--theme-no-borders", "--theme-shadows", "--theme-no-shadows", "--theme-shadow-level", "--theme-scrollbar", "--theme-no-scrollbar", "--theme-border-color") {
+	if match("-T", "--theme", "--theme-list", "--theme-table", "--theme-lines", "--theme-no-lines", "--theme-borders", "--theme-no-borders", "--theme-shadows", "--theme-no-shadows", "--theme-shadow-level", "--theme-scrollbar", "--theme-no-scrollbar", "--theme-border-color", "--theme-dialog-title", "--theme-submenu-title", "--theme-log-title") {
 		printStr(
 			"{{|UsageCommand|}}-T --theme{{[-]}}",
 			"	Shows the current theme",
@@ -308,6 +308,12 @@ func GetUsage(target string) string {
 			"	Turn the scrollbar on or off in the GUI",
 			"{{|UsageCommand|}}--theme-border-color{{[-]}} {{|UsageOption|}}<level>{{[-]}}",
 			"	Set the border color (1=Border, 2=Border2, 3=Both)",
+			"{{|UsageCommand|}}--theme-dialog-title{{[-]}} {{|UsageOption|}}<align>{{[-]}}",
+			"	Set dialog title alignment ({{|UsageOption|}}left{{[-]}} or {{|UsageOption|}}center{{[-]}})",
+			"{{|UsageCommand|}}--theme-submenu-title{{[-]}} {{|UsageOption|}}<align>{{[-]}}",
+			"	Set submenu title alignment ({{|UsageOption|}}left{{[-]}} or {{|UsageOption|}}center{{[-]}})",
+			"{{|UsageCommand|}}--theme-log-title{{[-]}} {{|UsageOption|}}<align>{{[-]}}",
+			"	Set log panel title alignment ({{|UsageOption|}}left{{[-]}} or {{|UsageOption|}}center{{[-]}})",
 		)
 	}
 	if match("-u", "--update", "--update-app", "--update-templates") {

@@ -123,8 +123,11 @@ type Styles struct {
 	SepChar string
 
 	// Settings
-	LineCharacters bool
-	DrawBorders    bool
+	LineCharacters    bool
+	DrawBorders       bool
+	DialogTitleAlign  string
+	SubmenuTitleAlign string
+	LogTitleAlign     string
 
 	// Semantic styles derived from theme tags
 	StatusSuccess lipgloss.Style
@@ -138,32 +141,35 @@ type Styles struct {
 
 // StyleContext holds a subset of Styles for decoupled rendering
 type StyleContext struct {
-	LineCharacters  bool
-	DrawBorders     bool
-	Screen          lipgloss.Style
-	Dialog          lipgloss.Style
-	DialogTitle     lipgloss.Style
-	DialogTitleHelp lipgloss.Style
-	Border          lipgloss.Border
-	BorderColor     color.Color
-	Border2Color    color.Color
-	ButtonActive    lipgloss.Style
-	ButtonInactive  lipgloss.Style
-	ItemNormal      lipgloss.Style
-	ItemSelected    lipgloss.Style
-	TagNormal       lipgloss.Style
-	TagSelected     lipgloss.Style
-	TagKey          lipgloss.Style
-	TagKeySelected  lipgloss.Style
-	Shadow          lipgloss.Style
-	ShadowColor     color.Color
-	ShadowLevel     int
-	HelpLine        lipgloss.Style
-	StatusSuccess   lipgloss.Style
-	StatusWarn      lipgloss.Style
-	StatusError     lipgloss.Style
-	Console         lipgloss.Style
-	LogPanelColor   color.Color
+	LineCharacters    bool
+	DrawBorders       bool
+	Screen            lipgloss.Style
+	Dialog            lipgloss.Style
+	DialogTitle       lipgloss.Style
+	DialogTitleHelp   lipgloss.Style
+	Border            lipgloss.Border
+	BorderColor       color.Color
+	Border2Color      color.Color
+	ButtonActive      lipgloss.Style
+	ButtonInactive    lipgloss.Style
+	ItemNormal        lipgloss.Style
+	ItemSelected      lipgloss.Style
+	TagNormal         lipgloss.Style
+	TagSelected       lipgloss.Style
+	TagKey            lipgloss.Style
+	TagKeySelected    lipgloss.Style
+	Shadow            lipgloss.Style
+	ShadowColor       color.Color
+	ShadowLevel       int
+	HelpLine          lipgloss.Style
+	StatusSuccess     lipgloss.Style
+	StatusWarn        lipgloss.Style
+	StatusError       lipgloss.Style
+	Console           lipgloss.Style
+	LogPanelColor     color.Color
+	DialogTitleAlign  string
+	SubmenuTitleAlign string
+	LogTitleAlign     string
 }
 
 // currentStyles holds the active styles
@@ -177,32 +183,35 @@ func GetStyles() Styles {
 // GetActiveContext returns the current global styles as a StyleContext
 func GetActiveContext() StyleContext {
 	return StyleContext{
-		LineCharacters:  currentStyles.LineCharacters,
-		DrawBorders:     currentStyles.DrawBorders,
-		Screen:          currentStyles.Screen,
-		Dialog:          currentStyles.Dialog,
-		DialogTitle:     currentStyles.DialogTitle,
-		DialogTitleHelp: currentStyles.DialogTitleHelp,
-		Border:          currentStyles.Border,
-		BorderColor:     currentStyles.BorderColor,
-		Border2Color:    currentStyles.Border2Color,
-		ButtonActive:    currentStyles.ButtonActive,
-		ButtonInactive:  currentStyles.ButtonInactive,
-		ItemNormal:      currentStyles.ItemNormal,
-		ItemSelected:    currentStyles.ItemSelected,
-		TagNormal:       currentStyles.TagNormal,
-		TagSelected:     currentStyles.TagSelected,
-		TagKey:          currentStyles.TagKey,
-		TagKeySelected:  currentStyles.TagKeySelected,
-		Shadow:          currentStyles.Shadow,
-		ShadowColor:     currentStyles.ShadowColor,
-		ShadowLevel:     currentConfig.UI.ShadowLevel,
-		HelpLine:        currentStyles.HelpLine,
-		StatusSuccess:   currentStyles.StatusSuccess,
-		StatusWarn:      currentStyles.StatusWarn,
-		StatusError:     currentStyles.StatusError,
-		Console:         currentStyles.Console,
-		LogPanelColor:   currentStyles.LogPanelColor,
+		LineCharacters:    currentStyles.LineCharacters,
+		DrawBorders:       currentStyles.DrawBorders,
+		Screen:            currentStyles.Screen,
+		Dialog:            currentStyles.Dialog,
+		DialogTitle:       currentStyles.DialogTitle,
+		DialogTitleHelp:   currentStyles.DialogTitleHelp,
+		Border:            currentStyles.Border,
+		BorderColor:       currentStyles.BorderColor,
+		Border2Color:      currentStyles.Border2Color,
+		ButtonActive:      currentStyles.ButtonActive,
+		ButtonInactive:    currentStyles.ButtonInactive,
+		ItemNormal:        currentStyles.ItemNormal,
+		ItemSelected:      currentStyles.ItemSelected,
+		TagNormal:         currentStyles.TagNormal,
+		TagSelected:       currentStyles.TagSelected,
+		TagKey:            currentStyles.TagKey,
+		TagKeySelected:    currentStyles.TagKeySelected,
+		Shadow:            currentStyles.Shadow,
+		ShadowColor:       currentStyles.ShadowColor,
+		ShadowLevel:       currentConfig.UI.ShadowLevel,
+		HelpLine:          currentStyles.HelpLine,
+		StatusSuccess:     currentStyles.StatusSuccess,
+		StatusWarn:        currentStyles.StatusWarn,
+		StatusError:       currentStyles.StatusError,
+		Console:           currentStyles.Console,
+		LogPanelColor:     currentStyles.LogPanelColor,
+		DialogTitleAlign:  currentStyles.DialogTitleAlign,
+		SubmenuTitleAlign: currentStyles.SubmenuTitleAlign,
+		LogTitleAlign:     currentStyles.LogTitleAlign,
 	}
 }
 
@@ -320,11 +329,9 @@ func InitStyles(cfg config.AppConfig) {
 	ClearSemanticCache()
 
 	defaults, _ := theme.Load(cfg.UI.Theme, "") // Updated: Use cfg.UI.Theme and get defaults
-	if defaults != nil {
-		// Apply theme defaults to the configuration if they are defined in the theme file.
-		// This uses the existing ApplyThemeDefaults routine.
-		theme.ApplyThemeDefaults(&cfg, *defaults)
-	}
+	// We no longer apply theme defaults here to respect user overrides in the config file.
+	// Theme defaults are only applied when selecting a theme in the DisplayOptionsScreen.
+	_ = defaults
 
 	// Update the global config so IsShadowEnabled(), GetActiveContext().ShadowLevel,
 	// and any other currentConfig readers see the new values immediately.
@@ -441,6 +448,10 @@ func InitStyles(cfg config.AppConfig) {
 	currentStyles.Console = SemanticRawStyle("Theme_ProgramBox")
 
 	currentStyles.LogPanelColor = SemanticRawStyle("Theme_LogPanel").GetForeground()
+
+	currentStyles.DialogTitleAlign = cfg.UI.DialogTitleAlign
+	currentStyles.SubmenuTitleAlign = cfg.UI.SubmenuTitleAlign
+	currentStyles.LogTitleAlign = cfg.UI.LogTitleAlign
 }
 
 // ApplyFlags applies ANSI style modifiers to a lipgloss.Style

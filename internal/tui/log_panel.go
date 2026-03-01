@@ -311,11 +311,14 @@ func (m LogPanelModel) ViewString() string {
 		rightIndicator = fmt.Sprintf(" %d%% ", pct)
 	}
 
-	// Center the label in the full width; indicator takes space from the right dashes only
+	// Position the label per config (center or left)
 	labelW := lipgloss.Width(label)
-	dashW := (m.width - labelW) / 2
-	if dashW < 0 {
-		dashW = 0
+	var dashW int
+	if ctx.LogTitleAlign != "left" {
+		dashW = (m.width - labelW) / 2
+		if dashW < 0 {
+			dashW = 0
+		}
 	}
 	leftDashes := strutil.Repeat(sepChar, dashW)
 
@@ -372,16 +375,20 @@ func (m LogPanelModel) Layers() []*lipgloss.Layer {
 func (m LogPanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	var regions []HitRegion
 
-	// Calculate layout for the toggle strip
+	// Calculate layout for the toggle strip (must match ViewString alignment)
+	ctx := GetActiveContext()
 	marker := "^"
 	if m.expanded {
 		marker = "v"
 	}
 	label := " " + marker + " Log " + marker + " "
 	labelW := lipgloss.Width(label)
-	dashW := (m.width - labelW) / 2
-	if dashW < 0 {
-		dashW = 0
+	var dashW int
+	if ctx.LogTitleAlign != "left" {
+		dashW = (m.width - labelW) / 2
+		if dashW < 0 {
+			dashW = 0
+		}
 	}
 	rightTotal := m.width - dashW - labelW
 

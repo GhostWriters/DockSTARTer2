@@ -31,8 +31,11 @@ type UIConfig struct {
 	LineCharacters bool   `toml:"line_characters"`
 	Shadow         bool   `toml:"shadow"`
 	ShadowLevel    int    `toml:"shadow_level"` // 0=off, 1=light(░), 2=medium(▒), 3=dark(▓), 4=solid(█)
-	Scrollbar      bool   `toml:"scrollbar"`
-	BorderColor    int    `toml:"border_color"` // 1=Border, 2=Border2, 3=Both
+	Scrollbar        bool   `toml:"scrollbar"`
+	BorderColor      int    `toml:"border_color"`      // 1=Border, 2=Border2, 3=Both
+	DialogTitleAlign string `toml:"dialog_title_align"`  // "center" or "left"
+	SubmenuTitleAlign string `toml:"submenu_title_align"` // "center" or "left"
+	LogTitleAlign    string `toml:"log_title_align"`     // "center" or "left"
 }
 
 // PathConfig holds directory path settings.
@@ -106,13 +109,16 @@ func ExpandVariables(val string) string {
 func LoadAppConfig() AppConfig {
 	conf := AppConfig{
 		UI: UIConfig{
-			Theme:          "DockSTARTer",
-			Borders:        true,
-			LineCharacters: true,
-			Shadow:         true,
-			ShadowLevel:    2, // Default: medium (▒)
-			Scrollbar:      true,
-			BorderColor:    3,
+			Theme:             "DockSTARTer",
+			Borders:           true,
+			LineCharacters:    true,
+			Shadow:            true,
+			ShadowLevel:       2, // Default: medium (▒)
+			Scrollbar:         true,
+			BorderColor:       3,
+			DialogTitleAlign:  "center",
+			SubmenuTitleAlign: "left",
+			LogTitleAlign:     "center",
 		},
 		Paths: PathConfig{
 			ConfigFolder:  "${XDG_CONFIG_HOME}/dockstarter2",

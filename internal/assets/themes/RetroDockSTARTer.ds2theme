@@ -73,3 +73,6 @@ ProgressCompleted = "{{[black:white:B]}}"
 VersionSelected = "{{[white:red:B]}}"
 
 [defaults]
+dialog_title_align = "center"
+submenu_title_align = "left"
+log_title_align = "center"

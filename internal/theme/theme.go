@@ -192,12 +192,15 @@ func resolveThemeValue(raw string, rawValues map[string]string, visiting map[str
 }
 
 type ThemeDefaults struct {
-	Borders        *bool `toml:"borders"`
-	LineCharacters *bool `toml:"line_characters"`
-	Shadow         *bool `toml:"shadow"`
-	ShadowLevel    *int  `toml:"shadow_level"`
-	Scrollbar      *bool `toml:"scrollbar"`
-	BorderColor    *int  `toml:"border_color"`
+	Borders          *bool   `toml:"borders"`
+	LineCharacters   *bool   `toml:"line_characters"`
+	Shadow           *bool   `toml:"shadow"`
+	ShadowLevel      *int    `toml:"shadow_level"`
+	Scrollbar        *bool   `toml:"scrollbar"`
+	BorderColor      *int    `toml:"border_color"`
+	DialogTitleAlign *string `toml:"dialog_title_align"`
+	SubmenuTitleAlign *string `toml:"submenu_title_align"`
+	LogTitleAlign    *string `toml:"log_title_align"`
 }
 
 type ThemeFile struct {
@@ -258,6 +261,18 @@ func ApplyThemeDefaults(conf *config.AppConfig, defaults ThemeDefaults) map[stri
 	if defaults.BorderColor != nil {
 		conf.UI.BorderColor = *defaults.BorderColor
 		applied["Border Color"] = fmt.Sprintf("%d", conf.UI.BorderColor)
+	}
+	if defaults.DialogTitleAlign != nil {
+		conf.UI.DialogTitleAlign = *defaults.DialogTitleAlign
+		applied["Dialog Title Align"] = conf.UI.DialogTitleAlign
+	}
+	if defaults.SubmenuTitleAlign != nil {
+		conf.UI.SubmenuTitleAlign = *defaults.SubmenuTitleAlign
+		applied["Submenu Title Align"] = conf.UI.SubmenuTitleAlign
+	}
+	if defaults.LogTitleAlign != nil {
+		conf.UI.LogTitleAlign = *defaults.LogTitleAlign
+		applied["Log Title Align"] = conf.UI.LogTitleAlign
 	}
 	return applied
 }

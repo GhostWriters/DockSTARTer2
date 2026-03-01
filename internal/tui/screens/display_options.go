@@ -26,9 +26,9 @@ const (
 
 // DisplayOptionsScreen allows the user to configure UI settings and themes together.
 type DisplayOptionsScreen struct {
-	themeMenu     *tui.MenuModel
-	optionsMenu   *tui.MenuModel
-	focusedPanel  DisplayOptionsFocus
+	themeMenu    *tui.MenuModel
+	optionsMenu  *tui.MenuModel
+	focusedPanel DisplayOptionsFocus
 	// focusedButton index: 0=Apply, 1=Back (or Exit when isRoot), 2=Exit (only when !isRoot)
 	focusedButton int
 	isRoot        bool // true when launched directly via -M appearance; hides Back button
@@ -136,6 +136,27 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Help:   "Choose theme colors for borders (Select/Enter for list)",
 			Action: s.showBorderColorDropdown(),
 		},
+		{
+			Tag:  "Dialog Title",
+			Desc: s.dropdownDesc(titleAlignDesc(s.config.UI.DialogTitleAlign)),
+			Help: "Alignment of titles in dialog borders (Enter for options)",
+			Action: s.showTitleAlignDropdown(s.config.UI.DialogTitleAlign, "dialog_title_align", "Dialog Title Align",
+				func(cfg *config.AppConfig, v string) { cfg.UI.DialogTitleAlign = v }),
+		},
+		{
+			Tag:  "Submenu Title",
+			Desc: s.dropdownDesc(titleAlignDesc(s.config.UI.SubmenuTitleAlign)),
+			Help: "Alignment of subtitle rows inside menus (Enter for options)",
+			Action: s.showTitleAlignDropdown(s.config.UI.SubmenuTitleAlign, "submenu_title_align", "Submenu Title Align",
+				func(cfg *config.AppConfig, v string) { cfg.UI.SubmenuTitleAlign = v }),
+		},
+		{
+			Tag:  "Log Title",
+			Desc: s.dropdownDesc(titleAlignDesc(s.config.UI.LogTitleAlign)),
+			Help: "Alignment of the log panel strip label (Enter for options)",
+			Action: s.showTitleAlignDropdown(s.config.UI.LogTitleAlign, "log_title_align", "Log Title Align",
+				func(cfg *config.AppConfig, v string) { cfg.UI.LogTitleAlign = v }),
+		},
 	}
 
 	optionsMenu := tui.NewMenuModel("options_list", "Options", "", optionItems, nil)
@@ -210,6 +231,41 @@ func (s *DisplayOptionsScreen) borderColorToDesc(c int) string {
 
 func (s *DisplayOptionsScreen) dropdownDesc(val string) string {
 	return fmt.Sprintf("{{|Theme_OptionValue|}}%s▼{{[-]}}", val)
+}
+
+func titleAlignDesc(v string) string {
+	if v == "left" {
+		return "Left"
+	}
+	return "Center"
+}
+
+func (s *DisplayOptionsScreen) titleAlignAction(apply func(*config.AppConfig, string), val string) func() tea.Msg {
+	return func() tea.Msg {
+		return tea.Batch(
+			func() tea.Msg {
+				return updateDisplayOptionMsg{func(cfg *config.AppConfig) { apply(cfg, val) }}
+			},
+			tui.CloseDialog(),
+		)()
+	}
+}
+
+func (s *DisplayOptionsScreen) showTitleAlignDropdown(current, menuName, label string, apply func(*config.AppConfig, string)) tea.Cmd {
+	return func() tea.Msg {
+		items := []tui.MenuItem{
+			{Tag: "Left", Help: "Align title to the left", Action: s.titleAlignAction(apply, "left")},
+			{Tag: "Center", Help: "Center the title", Action: s.titleAlignAction(apply, "center")},
+		}
+		menu := tui.NewMenuModel(menuName, label, "Select alignment", items, tui.CloseDialog())
+		menu.SetShowExit(false)
+		if current == "left" {
+			menu.Select(0)
+		} else {
+			menu.Select(1)
+		}
+		return tui.ShowDialogMsg{Dialog: &menu}
+	}
 }
 
 func (s *DisplayOptionsScreen) showShadowDropdown() tea.Cmd {
@@ -583,6 +639,9 @@ func (s *DisplayOptionsScreen) syncOptionsMenu() {
 	// Update dropdown descriptions
 	items[3].Desc = s.dropdownDesc(s.shadowLevelToDesc(s.config.UI.ShadowLevel))
 	items[4].Desc = s.dropdownDesc(s.borderColorToDesc(s.config.UI.BorderColor))
+	items[5].Desc = s.dropdownDesc(titleAlignDesc(s.config.UI.DialogTitleAlign))
+	items[6].Desc = s.dropdownDesc(titleAlignDesc(s.config.UI.SubmenuTitleAlign))
+	items[7].Desc = s.dropdownDesc(titleAlignDesc(s.config.UI.LogTitleAlign))
 	s.optionsMenu.SetItems(items)
 }
 
@@ -685,7 +744,7 @@ func (s *DisplayOptionsScreen) ViewString() (result string) {
 
 	// Use RenderBorderedBoxCtx with known width instead of RenderDialog which measures content
 	// targetHeight uses width/height which are local copies of the intended layout
-	settingsDialog := tui.RenderBorderedBoxCtx("Appearance Settings", settingsContent, menuWidth, s.height, true, false, tui.GetActiveContext())
+	settingsDialog := tui.RenderBorderedBoxCtx("Appearance Settings", settingsContent, menuWidth, s.height, true, false, tui.GetActiveContext().DialogTitleAlign, tui.GetActiveContext())
 
 	// Add shadow if enabled in global config (not preview config)
 	// The preview mockup shows what shadow would look like, but the
@@ -842,30 +901,33 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 
 	// Build StyleContext for the preview
 	previewCtx := tui.StyleContext{
-		LineCharacters:  s.config.UI.LineCharacters,
-		DrawBorders:     s.config.UI.Borders,
-		Screen:          bgStyle,
-		Dialog:          dContent,
-		DialogTitle:     tui.SemanticRawStyle("Preview_Theme_Title"),
-		DialogTitleHelp: tui.SemanticRawStyle("Preview_Theme_TitleHelp"),
-		Border:          b,
-		BorderColor:     dBorder1.GetForeground(),
-		Border2Color:    dBorder2.GetForeground(),
-		ButtonActive:    tui.SemanticRawStyle("Preview_Theme_ButtonActive"),
-		ButtonInactive:  tui.SemanticRawStyle("Preview_Theme_ButtonInactive"),
-		ItemNormal:      tui.SemanticRawStyle("Preview_Theme_Item"),
-		ItemSelected:    tui.SemanticRawStyle("Preview_Theme_ItemSelected"),
-		TagNormal:       tui.SemanticRawStyle("Preview_Theme_Tag"),
-		TagSelected:     tui.SemanticRawStyle("Preview_Theme_TagSelected"),
-		TagKey:          tui.SemanticRawStyle("Preview_Theme_TagKey"),
-		TagKeySelected:  tui.SemanticRawStyle("Preview_Theme_TagKeySelected"),
-		Shadow:          tui.SemanticRawStyle("Preview_Theme_Shadow"),
-		ShadowColor:     getPreviewShadowColor(),
-		ShadowLevel:     s.config.UI.ShadowLevel,
-		HelpLine:        tui.SemanticRawStyle("Preview_Theme_Helpline"),
-		StatusSuccess:   tui.SemanticRawStyle("Preview_Theme_TitleNotice"),
-		StatusWarn:      tui.SemanticRawStyle("Preview_Theme_TitleWarn"),
-		StatusError:     tui.SemanticRawStyle("Preview_Theme_TitleError"),
+		LineCharacters:    s.config.UI.LineCharacters,
+		DrawBorders:       s.config.UI.Borders,
+		Screen:            bgStyle,
+		Dialog:            dContent,
+		DialogTitle:       tui.SemanticRawStyle("Preview_Theme_Title"),
+		DialogTitleHelp:   tui.SemanticRawStyle("Preview_Theme_TitleHelp"),
+		Border:            b,
+		BorderColor:       dBorder1.GetForeground(),
+		Border2Color:      dBorder2.GetForeground(),
+		ButtonActive:      tui.SemanticRawStyle("Preview_Theme_ButtonActive"),
+		ButtonInactive:    tui.SemanticRawStyle("Preview_Theme_ButtonInactive"),
+		ItemNormal:        tui.SemanticRawStyle("Preview_Theme_Item"),
+		ItemSelected:      tui.SemanticRawStyle("Preview_Theme_ItemSelected"),
+		TagNormal:         tui.SemanticRawStyle("Preview_Theme_Tag"),
+		TagSelected:       tui.SemanticRawStyle("Preview_Theme_TagSelected"),
+		TagKey:            tui.SemanticRawStyle("Preview_Theme_TagKey"),
+		TagKeySelected:    tui.SemanticRawStyle("Preview_Theme_TagKeySelected"),
+		Shadow:            tui.SemanticRawStyle("Preview_Theme_Shadow"),
+		ShadowColor:       getPreviewShadowColor(),
+		ShadowLevel:       s.config.UI.ShadowLevel,
+		HelpLine:          tui.SemanticRawStyle("Preview_Theme_Helpline"),
+		StatusSuccess:     tui.SemanticRawStyle("Preview_Theme_TitleNotice"),
+		StatusWarn:        tui.SemanticRawStyle("Preview_Theme_TitleWarn"),
+		StatusError:       tui.SemanticRawStyle("Preview_Theme_TitleError"),
+		DialogTitleAlign:  s.config.UI.DialogTitleAlign,
+		SubmenuTitleAlign: s.config.UI.SubmenuTitleAlign,
+		LogTitleAlign:     s.config.UI.LogTitleAlign,
 	}
 
 	// Backdrop Content (Dialog Simulation)
@@ -908,7 +970,7 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 
 	// Use our new context-aware bordered box renderer for perfect parity
 	// We use 38 to ensure width (38+2 borders + 2 shadow = 42) leaves 1 space indent on both sides of a 44 width backdrop.
-	dialogBox := tui.RenderBorderedBoxCtx(dTitle, contentStr, 38, 0, true, false, previewCtx)
+	dialogBox := tui.RenderBorderedBoxCtx(dTitle, contentStr, 38, 0, true, false, previewCtx.DialogTitleAlign, previewCtx)
 
 	// Add shadow if enabled using our new context-aware helper
 	if s.config.UI.Shadow {
@@ -951,7 +1013,10 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 		Background(helpStyle.GetBackground())
 
 	labelW := lipgloss.Width(label)
-	dashW := (width - labelW) / 2
+	var dashW int
+	if s.config.UI.LogTitleAlign != "left" {
+		dashW = (width - labelW) / 2
+	}
 	leftDashes := strutil.Repeat(stripSepChar, dashW)
 	rightTotal := width - dashW - labelW
 	rightDashes := strutil.Repeat(stripSepChar, rightTotal)
@@ -973,7 +1038,7 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	// Wrap in a standard dialog using the current (active) theme
 	// The mockup content uses preview theme colors, but the outer dialog uses active theme
 	mockupWidth := lipgloss.Width(mockup)
-	preview := tui.RenderBorderedBoxCtx("Preview", mockup, mockupWidth, 0, false, false, tui.GetActiveContext())
+	preview := tui.RenderBorderedBoxCtx("Preview", mockup, mockupWidth, 0, false, false, tui.GetActiveContext().DialogTitleAlign, tui.GetActiveContext())
 
 	// Add shadow if enabled in global config (same as settings dialog)
 	if tui.IsShadowEnabled() {

@@ -87,6 +87,9 @@ func InitFlags() {
 	pflag.Bool("theme-scrollbar", false, "Turn scrollbar on")
 	pflag.Bool("theme-no-scrollbar", false, "Turn scrollbar off")
 	pflag.String("theme-border-color", "", "Set border color (1=Border, 2=Border2, 3=Both)")
+	pflag.String("theme-dialog-title", "", "Set dialog title alignment (left/center)")
+	pflag.String("theme-submenu-title", "", "Set submenu title alignment (left/center)")
+	pflag.String("theme-log-title", "", "Set log title alignment (left/center)")
 
 	// Testing
 	pflag.StringP("test", "t", "", "Run test script")

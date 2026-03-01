@@ -476,7 +476,7 @@ func RenderUniformBlockDialogCtx(title, content string, ctx StyleContext) string
 
 // RenderBorderedBoxCtx renders a dialog with title and borders using a specific context.
 // Unlike renderDialogWithBorderCtx, this accepts a known contentWidth instead of measuring content.
-func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeight int, focused bool, rounded bool, ctx StyleContext) string {
+func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeight int, focused bool, rounded bool, titleAlign string, ctx StyleContext) string {
 	var border lipgloss.Border
 	if !ctx.DrawBorders {
 		border = lipgloss.HiddenBorder()
@@ -564,8 +564,16 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 	}
 
 	titleSectionLen := 1 + 1 + lipgloss.Width(renderedTitle) + 1 + 1
-	leftPad := (actualWidth - titleSectionLen) / 2
+	var leftPad int
+	if titleAlign == "left" {
+		leftPad = 0
+	} else {
+		leftPad = (actualWidth - titleSectionLen) / 2
+	}
 	rightPad := actualWidth - titleSectionLen - leftPad
+	if rightPad < 0 {
+		rightPad = 0
+	}
 
 	var result strings.Builder
 
@@ -714,8 +722,16 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 			actualWidth = titleSectionLen
 		}
 
-		leftPad := (actualWidth - titleSectionLen) / 2
+		var leftPad int
+		if ctx.DialogTitleAlign == "left" {
+			leftPad = 0
+		} else {
+			leftPad = (actualWidth - titleSectionLen) / 2
+		}
 		rightPad := actualWidth - titleSectionLen - leftPad
+		if rightPad < 0 {
+			rightPad = 0
+		}
 		result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, leftPad)))
 		result.WriteString(borderStyleLight.Render(leftT))
 		result.WriteString(borderStyleLight.Render(" "))

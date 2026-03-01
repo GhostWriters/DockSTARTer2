@@ -95,6 +95,15 @@ func handleTheme(ctx context.Context, group *CommandGroup) error {
 	return nil
 }
 
+func parseTitleAlign(ctx context.Context, arg, label string) (string, error) {
+	switch strings.ToLower(arg) {
+	case "left", "center":
+		return strings.ToLower(arg), nil
+	}
+	logger.Error(ctx, "Invalid %s alignment: %s (use left or center)", label, arg)
+	return "", fmt.Errorf("invalid %s alignment", label)
+}
+
 func handleThemeSettings(ctx context.Context, group *CommandGroup) error {
 	conf := config.LoadAppConfig()
 	switch group.Command {
@@ -180,6 +189,39 @@ func handleThemeSettings(ctx context.Context, group *CommandGroup) error {
 			}
 		} else {
 			logger.Display(ctx, "Current border color setting: %d", conf.UI.BorderColor)
+			return nil
+		}
+	case "--theme-dialog-title":
+		if len(group.Args) > 0 {
+			v, err := parseTitleAlign(ctx, group.Args[0], "dialog title")
+			if err != nil {
+				return err
+			}
+			conf.UI.DialogTitleAlign = v
+		} else {
+			logger.Display(ctx, "Current dialog title alignment: %s", conf.UI.DialogTitleAlign)
+			return nil
+		}
+	case "--theme-submenu-title":
+		if len(group.Args) > 0 {
+			v, err := parseTitleAlign(ctx, group.Args[0], "submenu title")
+			if err != nil {
+				return err
+			}
+			conf.UI.SubmenuTitleAlign = v
+		} else {
+			logger.Display(ctx, "Current submenu title alignment: %s", conf.UI.SubmenuTitleAlign)
+			return nil
+		}
+	case "--theme-log-title":
+		if len(group.Args) > 0 {
+			v, err := parseTitleAlign(ctx, group.Args[0], "log title")
+			if err != nil {
+				return err
+			}
+			conf.UI.LogTitleAlign = v
+		} else {
+			logger.Display(ctx, "Current log title alignment: %s", conf.UI.LogTitleAlign)
 			return nil
 		}
 	}
