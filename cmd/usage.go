@@ -354,8 +354,8 @@ func GetUsage(target string) string {
 			"{{|UsageCommand|}}-M --menu{{[-]}} < {{|UsageOption|}}start-page{{[-]}} >{{[-]}}",
 			"	Load the page with full navigation history (Back returns to parent).",
 			"	Pages: {{|UsageOption|}}main{{[-]}} | {{|UsageOption|}}config{{[-]}} | {{|UsageOption|}}options{{[-]}}",
-			"	       {{|UsageOption|}}appearance{{[-]}} (also: display | theme | options-display | options-theme)",
-			"	       {{|UsageOption|}}app-select{{[-]}} (also: select | config-app-select)",
+			"	       {{|UsageOption|}}appearance{{[-]}} (also: {{|UsageOption|}}display{{[-]}} | {{|UsageOption|}}theme{{[-]}} | {{|UsageOption|}}options-display{{[-]}} | {{|UsageOption|}}options-theme{{[-]}})",
+			"	       {{|UsageOption|}}app-select{{[-]}} (also: {{|UsageOption|}}select{{[-]}} | {{|UsageOption|}}config-app-select{{[-]}})",
 		)
 	}
 	if match("-S", "--select", "--menu-config-app-select", "--menu-app-select") {

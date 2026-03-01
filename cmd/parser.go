@@ -265,9 +265,9 @@ func Parse(args []string) ([]CommandGroup, error) {
 					"options-display": true, "display": true,
 					"options-theme": true, "theme": true, "appearance": true,
 					"config-app-select": true, "app-select": true, "select": true,
-					"start-config": true, "start-options": true, "start-appearance": true, "start-app-select": true,
 				}
-				if !validSubs[sub] {
+				bare := strings.TrimPrefix(sub, "start-")
+				if !validSubs[sub] && !(strings.HasPrefix(sub, "start-") && validSubs[bare]) {
 					return nil, &ParseError{Args: expandedArgs, Index: i, FailingCommand: cmd, Message: "Invalid option %o"}
 				}
 				currentGroup.Args = append(currentGroup.Args, sub)
