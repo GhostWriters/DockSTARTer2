@@ -16,6 +16,8 @@ type HelpDialogModel struct {
 	width  int
 	height int
 
+	focused bool // tracks global focus
+
 	// Unified layout (deterministic sizing)
 	layout DialogLayout
 }
@@ -23,7 +25,7 @@ type HelpDialogModel struct {
 func NewHelpDialogModel() *HelpDialogModel {
 	h := help.New()
 	h.ShowAll = true
-	return &HelpDialogModel{help: h}
+	return &HelpDialogModel{help: h, focused: true}
 }
 
 func (m *HelpDialogModel) Init() tea.Cmd { return nil }
@@ -111,7 +113,7 @@ func (m *HelpDialogModel) ViewString() string {
 	ctx.BorderColor = haloColor
 	ctx.Border2Color = haloColor
 
-	dialogStr := RenderDialogCtx("{{|Theme_TitleHelp|}}Keyboard & Mouse Controls", content, true, 0, ctx)
+	dialogStr := RenderDialogCtx("{{|Theme_TitleHelp|}}Keyboard & Mouse Controls", content, m.focused, 0, ctx)
 
 	// Add the solid black halo
 	return AddPatternHalo(dialogStr, haloColor)
@@ -137,6 +139,10 @@ func (m *HelpDialogModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
 	m.calculateLayout()
+}
+
+func (m *HelpDialogModel) SetFocused(f bool) {
+	m.focused = f
 }
 
 func (m *HelpDialogModel) calculateLayout() {

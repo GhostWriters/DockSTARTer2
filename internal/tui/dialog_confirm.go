@@ -19,6 +19,7 @@ type confirmDialogModel struct {
 	width      int
 	height     int
 	onResult   func(bool) tea.Msg // Optional: Custom message generator for result
+	focused    bool               // tracks global focus
 
 	// Unified layout (deterministic sizing)
 	layout DialogLayout
@@ -40,6 +41,7 @@ func newConfirmDialog(title, question string, defaultYes bool) *confirmDialogMod
 		onResult: func(r bool) tea.Msg {
 			return CloseDialogMsg{Result: r}
 		},
+		focused: true, // Default to focused
 	}
 }
 
@@ -214,7 +216,7 @@ func (m *confirmDialogModel) ViewString() string {
 	fullContent := lipgloss.JoinVertical(lipgloss.Left, questionText, spacer, buttonRow)
 
 	// Wrap in border with title embedded (matching menu style) using confirm styling
-	dialogWithTitle := RenderDialogWithType(m.title, fullContent, true, 0, DialogTypeConfirm)
+	dialogWithTitle := RenderDialogWithType(m.title, fullContent, m.focused, 0, DialogTypeConfirm)
 
 	// Add shadow
 	dialog := AddShadow(dialogWithTitle)
@@ -259,6 +261,10 @@ func (m *confirmDialogModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
 	m.calculateLayout()
+}
+
+func (m *confirmDialogModel) SetFocused(f bool) {
+	m.focused = f
 }
 
 func (m *confirmDialogModel) calculateLayout() {

@@ -581,9 +581,25 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 	result.WriteString(borderStyleLight.Render(border.TopLeft))
 	result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, leftPad)))
 	result.WriteString(borderStyleLight.Render(leftT))
-	result.WriteString(borderStyleLight.Render(" "))
+	if focused {
+		if ctx.LineCharacters {
+			result.WriteString(borderStyleLight.Render("▸"))
+		} else {
+			result.WriteString(borderStyleLight.Render(">"))
+		}
+	} else {
+		result.WriteString(borderStyleLight.Render(" "))
+	}
 	result.WriteString(renderedTitle)
-	result.WriteString(borderStyleLight.Render(" "))
+	if focused {
+		if ctx.LineCharacters {
+			result.WriteString(borderStyleLight.Render("◂"))
+		} else {
+			result.WriteString(borderStyleLight.Render("<"))
+		}
+	} else {
+		result.WriteString(borderStyleLight.Render(" "))
+	}
 	result.WriteString(borderStyleLight.Render(rightT))
 	result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, rightPad)))
 	result.WriteString(borderStyleLight.Render(border.TopRight))
@@ -735,9 +751,25 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 		}
 		result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, leftPad)))
 		result.WriteString(borderStyleLight.Render(leftT))
-		result.WriteString(borderStyleLight.Render(" "))
+		if focused {
+			if ctx.LineCharacters {
+				result.WriteString(borderStyleLight.Render("▸"))
+			} else {
+				result.WriteString(borderStyleLight.Render(">"))
+			}
+		} else {
+			result.WriteString(borderStyleLight.Render(" "))
+		}
 		result.WriteString(title)
-		result.WriteString(borderStyleLight.Render(" "))
+		if focused {
+			if ctx.LineCharacters {
+				result.WriteString(borderStyleLight.Render("◂"))
+			} else {
+				result.WriteString(borderStyleLight.Render("<"))
+			}
+		} else {
+			result.WriteString(borderStyleLight.Render(" "))
+		}
 		result.WriteString(borderStyleLight.Render(rightT))
 		result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, rightPad)))
 	}

@@ -41,6 +41,8 @@ type DisplayOptionsScreen struct {
 	width  int
 	height int
 
+	focused bool // tracks global screen focus (header/log panel interaction)
+
 	baseConfig    config.AppConfig                // Original exact config before previewing
 	themeDefaults map[string]*theme.ThemeDefaults // Cache parsed defaults
 }
@@ -69,6 +71,7 @@ func NewDisplayOptionsScreen(isRoot bool) *DisplayOptionsScreen {
 	s.themeDefaults[current], _ = theme.Load(current, "Preview")
 
 	s.initMenus()
+	s.focused = true // Default to focused initially
 	return s
 }
 
@@ -140,21 +143,24 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Tag:  "Dialog Title",
 			Desc: s.dropdownDesc(titleAlignDesc(s.config.UI.DialogTitleAlign)),
 			Help: "Alignment of titles in dialog borders (Enter for options)",
-			Action: s.showTitleAlignDropdown(s.config.UI.DialogTitleAlign, "dialog_title_align", "Dialog Title Align",
+			Action: s.showTitleAlignDropdown("dialog_title_align", "Dialog Title Align",
+				func() string { return s.config.UI.DialogTitleAlign },
 				func(cfg *config.AppConfig, v string) { cfg.UI.DialogTitleAlign = v }),
 		},
 		{
 			Tag:  "Submenu Title",
 			Desc: s.dropdownDesc(titleAlignDesc(s.config.UI.SubmenuTitleAlign)),
 			Help: "Alignment of subtitle rows inside menus (Enter for options)",
-			Action: s.showTitleAlignDropdown(s.config.UI.SubmenuTitleAlign, "submenu_title_align", "Submenu Title Align",
+			Action: s.showTitleAlignDropdown("submenu_title_align", "Submenu Title Align",
+				func() string { return s.config.UI.SubmenuTitleAlign },
 				func(cfg *config.AppConfig, v string) { cfg.UI.SubmenuTitleAlign = v }),
 		},
 		{
 			Tag:  "Log Title",
 			Desc: s.dropdownDesc(titleAlignDesc(s.config.UI.LogTitleAlign)),
 			Help: "Alignment of the log panel strip label (Enter for options)",
-			Action: s.showTitleAlignDropdown(s.config.UI.LogTitleAlign, "log_title_align", "Log Title Align",
+			Action: s.showTitleAlignDropdown("log_title_align", "Log Title Align",
+				func() string { return s.config.UI.LogTitleAlign },
 				func(cfg *config.AppConfig, v string) { cfg.UI.LogTitleAlign = v }),
 		},
 	}
@@ -201,8 +207,14 @@ func (s *DisplayOptionsScreen) execFocusedButton() (tea.Model, tea.Cmd) {
 }
 
 func (s *DisplayOptionsScreen) updateFocusStates() {
-	s.themeMenu.SetSubFocused(s.focusedPanel == FocusThemes)
-	s.optionsMenu.SetSubFocused(s.focusedPanel == FocusOptions)
+	s.themeMenu.SetSubFocused(s.focused && s.focusedPanel == FocusThemes)
+	s.optionsMenu.SetSubFocused(s.focused && s.focusedPanel == FocusOptions)
+}
+
+// SetFocused updates the global focus state for this screen
+func (s *DisplayOptionsScreen) SetFocused(f bool) {
+	s.focused = f
+	s.updateFocusStates()
 }
 
 func (s *DisplayOptionsScreen) shadowLevelToDesc(l int) string {
@@ -251,8 +263,9 @@ func (s *DisplayOptionsScreen) titleAlignAction(apply func(*config.AppConfig, st
 	}
 }
 
-func (s *DisplayOptionsScreen) showTitleAlignDropdown(current, menuName, label string, apply func(*config.AppConfig, string)) tea.Cmd {
+func (s *DisplayOptionsScreen) showTitleAlignDropdown(menuName, label string, getter func() string, apply func(*config.AppConfig, string)) tea.Cmd {
 	return func() tea.Msg {
+		current := getter()
 		items := []tui.MenuItem{
 			{Tag: "Left", Help: "Align title to the left", Action: s.titleAlignAction(apply, "left")},
 			{Tag: "Center", Help: "Center the title", Action: s.titleAlignAction(apply, "center")},
@@ -744,7 +757,7 @@ func (s *DisplayOptionsScreen) ViewString() (result string) {
 
 	// Use RenderBorderedBoxCtx with known width instead of RenderDialog which measures content
 	// targetHeight uses width/height which are local copies of the intended layout
-	settingsDialog := tui.RenderBorderedBoxCtx("Appearance Settings", settingsContent, menuWidth, s.height, true, false, tui.GetActiveContext().DialogTitleAlign, "Theme_Title", tui.GetActiveContext())
+	settingsDialog := tui.RenderBorderedBoxCtx("Appearance Settings", settingsContent, menuWidth, s.height, s.focused, false, tui.GetActiveContext().DialogTitleAlign, "Theme_Title", tui.GetActiveContext())
 
 	// Add shadow if enabled in global config (not preview config)
 	// The preview mockup shows what shadow would look like, but the
@@ -1158,16 +1171,6 @@ func (s *DisplayOptionsScreen) HasDialog() bool {
 
 func (s *DisplayOptionsScreen) MenuName() string {
 	return "appearance"
-}
-
-func (s *DisplayOptionsScreen) SetFocused(f bool) {
-	// If the entire screen loses focus to e.g. the log panel
-	if !f {
-		s.themeMenu.SetSubFocused(false)
-		s.optionsMenu.SetSubFocused(false)
-	} else {
-		s.updateFocusStates()
-	}
 }
 
 // GetHitRegions implements HitRegionProvider for mouse hit testing

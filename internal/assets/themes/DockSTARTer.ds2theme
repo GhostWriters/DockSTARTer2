@@ -52,7 +52,7 @@ TitleQuestion = "{{|Theme_Title|}}{{[:yellow]}}"
 LogPanel = "{{|Theme_Title|}}"
 
 TitleSubMenu = "{{|Theme_Title|}}"
-TitleSubMenuFocused = "{{|Theme_Title|}}{{[::R]}}"
+TitleSubMenuFocused = "{{|Theme_Title|}}{{[:white]}}"
 
 Subtitle = "{{[black:-:-]}}"
 CommandLine = "{{[yellow::-B]}}"

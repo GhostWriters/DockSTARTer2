@@ -297,12 +297,23 @@ func (m LogPanelModel) ViewString() string {
 		}
 	}
 
-	// Build label: arrow + title + arrow on both sides
+	// Build label: focus marker + arrow + title + arrow + focus marker
 	marker := "^"
 	if m.expanded {
 		marker = "v"
 	}
-	label := " " + marker + " Log " + marker + " "
+	focusLeft := " "
+	focusRight := " "
+	if m.focused {
+		if ctx.LineCharacters {
+			focusLeft = "▸"
+			focusRight = "◂"
+		} else {
+			focusLeft = ">"
+			focusRight = "<"
+		}
+	}
+	label := focusLeft + marker + " Log " + marker + focusRight
 
 	// Right-side scroll percent indicator (only when focused and expanded)
 	rightIndicator := ""

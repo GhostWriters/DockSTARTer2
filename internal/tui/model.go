@@ -357,10 +357,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if sizable, ok := m.dialog.(interface{ SetSize(int, int) }); ok {
 				sizable.SetSize(dW, dH)
 			}
-			// Explicitly focus the new dialog
-			if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
-				focusable.SetFocused(true)
-			}
+			m.updateComponentFocus()
 			cmds = append(cmds, m.dialog.Init())
 		}
 		return m, tea.Batch(cmds...)
@@ -378,10 +375,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			sizable.SetSize(dW, dH)
 		}
 		m.dialog = dialog
-		// Explicitly focus the new confirmation dialog
-		if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
-			focusable.SetFocused(true)
-		}
+		m.updateComponentFocus()
 		m.pendingConfirm = msg.ResultChan
 		return m, logger.RecoverTUI(m.ctx, m.dialog.Init())
 
@@ -398,9 +392,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			sizable.SetSize(dW, dH)
 		}
 		m.dialog = dialog
-		if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
-			focusable.SetFocused(true)
-		}
+		m.updateComponentFocus()
 		return m, m.dialog.Init()
 
 	case FinalizeSelectionMsg:
@@ -419,9 +411,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if sizable, ok := m.dialog.(interface{ SetSize(int, int) }); ok {
 				sizable.SetSize(dW, dH)
 			}
-			if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
-				focusable.SetFocused(true)
-			}
+			m.updateComponentFocus()
 			return m, logger.RecoverTUI(m.ctx, m.dialog.Init())
 		}
 		return m, nil
@@ -546,14 +536,32 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *AppModel) setLogPanelFocus(focused bool) {
 	m.logPanelFocused = focused
 	m.logPanel.focused = focused
+	if focused {
+		m.backdrop.header.SetFocus(HeaderFocusNone)
+	}
+	m.updateComponentFocus()
+}
+
+func (m *AppModel) setHeaderFocus(focus HeaderFocus) {
+	m.backdrop.header.SetFocus(focus)
+	if focus != HeaderFocusNone {
+		m.logPanelFocused = false
+		m.logPanel.focused = false
+	}
+	m.updateComponentFocus()
+}
+
+func (m *AppModel) updateComponentFocus() {
+	// Screen/Dialog is focused ONLY if neither log panel nor header have focus
+	mainFocused := !m.logPanelFocused && m.backdrop.header.GetFocus() == HeaderFocusNone
 	if m.activeScreen != nil {
 		if focusable, ok := m.activeScreen.(interface{ SetFocused(bool) }); ok {
-			focusable.SetFocused(!focused)
+			focusable.SetFocused(mainFocused)
 		}
 	}
 	if m.dialog != nil {
 		if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
-			focusable.SetFocused(!focused)
+			focusable.SetFocused(mainFocused)
 		}
 	}
 }
@@ -612,36 +620,18 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	// Cycle: Screen -> LogPanel -> Header(App) -> Header(Tmpl) -> Screen
 	if key.Matches(msg, Keys.Tab) {
 		if m.logPanelFocused {
-			m.setLogPanelFocus(false)
-			// setLogPanelFocus(false) refocuses screen/dialog. We need to unfocus them for Header focus.
 			if m.dialog != nil {
 				// Dialog open: Skip header, return focus to dialog
-				if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
-					focusable.SetFocused(true)
-				}
+				m.setLogPanelFocus(false)
 				return m, nil, true
-			} else if m.activeScreen != nil {
-				if focusable, ok := m.activeScreen.(interface{ SetFocused(bool) }); ok {
-					focusable.SetFocused(false)
-				}
 			}
-			m.backdrop.header.SetFocus(HeaderFocusApp)
+			m.setHeaderFocus(HeaderFocusApp)
 			return m, nil, true
 		} else if m.backdrop.header.GetFocus() == HeaderFocusApp {
-			m.backdrop.header.SetFocus(HeaderFocusTmpl)
+			m.setHeaderFocus(HeaderFocusTmpl)
 			return m, nil, true
 		} else if m.backdrop.header.GetFocus() == HeaderFocusTmpl {
-			m.backdrop.header.SetFocus(HeaderFocusNone)
-			// Focus returns to screen/dialog
-			if m.dialog != nil {
-				if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
-					focusable.SetFocused(true)
-				}
-			} else if m.activeScreen != nil {
-				if focusable, ok := m.activeScreen.(interface{ SetFocused(bool) }); ok {
-					focusable.SetFocused(true)
-				}
-			}
+			m.setHeaderFocus(HeaderFocusNone)
 			return m, nil, true
 		} else {
 			// From screen to log panel
@@ -653,33 +643,21 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	if key.Matches(msg, Keys.ShiftTab) {
 		if m.logPanelFocused {
 			m.setLogPanelFocus(false)
-			// Focus returns to screen/dialog (reverse cycle)
-			// setLogPanelFocus(false) already restores focus, so we are good.
 			return m, nil, true
 		} else if m.backdrop.header.GetFocus() == HeaderFocusApp {
-			m.backdrop.header.SetFocus(HeaderFocusNone)
 			m.setLogPanelFocus(true)
 			return m, nil, true
 		} else if m.backdrop.header.GetFocus() == HeaderFocusTmpl {
-			m.backdrop.header.SetFocus(HeaderFocusApp)
+			m.setHeaderFocus(HeaderFocusApp)
 			return m, nil, true
 		} else {
 			// From screen to header (tmpl)
 			if m.dialog != nil {
-				// Dialog open: Skip header, go to LogPanel (reverse cycle from Dialog is LogPanel)
-				if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
-					focusable.SetFocused(false)
-				}
+				// Dialog open: Skip header, go to LogPanel
 				m.setLogPanelFocus(true)
 				return m, nil, true
 			}
-
-			if m.activeScreen != nil {
-				if focusable, ok := m.activeScreen.(interface{ SetFocused(bool) }); ok {
-					focusable.SetFocused(false)
-				}
-			}
-			m.backdrop.header.SetFocus(HeaderFocusTmpl)
+			m.setHeaderFocus(HeaderFocusTmpl)
 			return m, nil, true
 		}
 	}
@@ -688,26 +666,21 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	if m.dialog == nil && m.backdrop.header.GetFocus() != HeaderFocusNone {
 		if key.Matches(msg, Keys.Right) {
 			if m.backdrop.header.GetFocus() == HeaderFocusApp {
-				m.backdrop.header.SetFocus(HeaderFocusTmpl)
+				m.setHeaderFocus(HeaderFocusTmpl)
 			}
 			// Consume the key event even if already on last item
 			return m, nil, true
 		}
 		if key.Matches(msg, Keys.Left) {
 			if m.backdrop.header.GetFocus() == HeaderFocusTmpl {
-				m.backdrop.header.SetFocus(HeaderFocusApp)
+				m.setHeaderFocus(HeaderFocusApp)
 			}
 			// Consume the key event even if already on first item
 			return m, nil, true
 		}
 		// Escape to return to screen
 		if key.Matches(msg, Keys.Esc) {
-			m.backdrop.header.SetFocus(HeaderFocusNone)
-			if m.activeScreen != nil {
-				if focusable, ok := m.activeScreen.(interface{ SetFocused(bool) }); ok {
-					focusable.SetFocused(true)
-				}
-			}
+			m.setHeaderFocus(HeaderFocusNone)
 			return m, nil, true
 		}
 	}
@@ -893,9 +866,7 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		m.setLogPanelFocus(false)
 
 		// Clear header focus — wheel moved away from the status bar
-		if m.backdrop != nil && m.backdrop.header != nil {
-			m.backdrop.header.SetFocus(HeaderFocusNone)
-		}
+		m.setHeaderFocus(HeaderFocusNone)
 
 		panelID := hitIDToPanelID(hitID)
 
@@ -972,9 +943,7 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		m.setLogPanelFocus(false)
 
 		// Clear header focus — middle-click landed away from the status bar
-		if m.backdrop != nil && m.backdrop.header != nil {
-			m.backdrop.header.SetFocus(HeaderFocusNone)
-		}
+		m.setHeaderFocus(HeaderFocusNone)
 
 		// Check if the hit ID maps to a panel (submenu or button row).
 		// Panel-mapped IDs use the hover model: focus the panel, then activate the
@@ -1084,9 +1053,7 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		default:
 			// If we hit anything else (dialog, screen, header), ensure logs and header are unfocused
 			m.setLogPanelFocus(false)
-			if m.backdrop != nil && m.backdrop.header != nil {
-				m.backdrop.header.SetFocus(HeaderFocusNone)
-			}
+			m.setHeaderFocus(HeaderFocusNone)
 		}
 
 		// B. Component-specific Dispatch (Semantic Pre-pass)
@@ -1112,6 +1079,7 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		}
 
 		// RETURN FALSE: Allow raw message to fall through for full compatibility
+		m.updateComponentFocus()
 		return m, tea.Batch(semanticCmd, backdropCmd), false
 	}
 
@@ -1122,6 +1090,7 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 	}
 
 	// 7. DEFAULT: No hits, no modal.
+	m.updateComponentFocus()
 	return m, nil, false
 }
 

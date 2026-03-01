@@ -25,6 +25,7 @@ type messageDialogModel struct {
 	width       int
 	height      int
 	onResult    func() tea.Msg // Optional: Custom message generator for result
+	focused     bool           // tracks global focus
 
 	// Unified layout (deterministic sizing)
 	layout DialogLayout
@@ -38,6 +39,7 @@ func newMessageDialog(title, message string, msgType MessageType) *messageDialog
 		title:       title,
 		message:     message,
 		messageType: msgType,
+		focused:     true, // Default to focused
 	}
 }
 
@@ -137,7 +139,7 @@ func (m *messageDialogModel) ViewString() string {
 
 	// Add title with prefix and wrap in border
 	fullTitle := titlePrefix + m.title
-	dialogWithTitle := RenderDialog(fullTitle, fullContent, true, 0)
+	dialogWithTitle := RenderDialog(fullTitle, fullContent, m.focused, 0)
 
 	// Add shadow
 	dialog := AddShadow(dialogWithTitle)
@@ -194,6 +196,10 @@ func (m *messageDialogModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
 	m.calculateLayout()
+}
+
+func (m *messageDialogModel) SetFocused(f bool) {
+	m.focused = f
 }
 
 func (m *messageDialogModel) calculateLayout() {
