@@ -351,10 +351,8 @@ func GetUsage(target string) string {
 			fmt.Sprintf("	This is the same as typing '{{|UsageCommand|}}%s{{[-]}}'.", appCmd),
 			"{{|UsageCommand|}}-M --menu{{[-]}} < {{|UsageOption|}}main{{[-]}} | {{|UsageOption|}}config{{[-]}} | {{|UsageOption|}}options{{[-]}} >{{[-]}}",
 			"	Load the specified page in the menu.",
-			"{{|UsageCommand|}}-M --menu{{[-]}} < {{|UsageOption|}}options-display{{[-]}} | {{|UsageOption|}}display{{[-]}} >{{[-]}}",
-			"	Load the {{|UsagePage|}}Display Options{{[-]}} page in the menu.",
-			"{{|UsageCommand|}}-M --menu{{[-]}} < {{|UsageOption|}}options-theme{{[-]}} | {{|UsageOption|}}theme{{[-]}} >{{[-]}}",
-			"	Load the {{|UsagePage|}}Theme Chooser{{[-]}} page in the menu.",
+			"{{|UsageCommand|}}-M --menu{{[-]}} < {{|UsageOption|}}appearance{{[-]}} | {{|UsageOption|}}display{{[-]}} | {{|UsageOption|}}options-display{{[-]}} | {{|UsageOption|}}theme{{[-]}} | {{|UsageOption|}}options-theme{{[-]}} >{{[-]}}",
+			"	Load the {{|UsagePage|}}Appearance{{[-]}} page in the menu.",
 			"{{|UsageCommand|}}-M --menu{{[-]}} < {{|UsageOption|}}config-app-select{{[-]}} | {{|UsageOption|}}app-select{{[-]}} | {{|UsageOption|}}select{{[-]}} >{{[-]}}",
 			"	Load the {{|UsagePage|}}Application Selection{{[-]}} page in the menu.",
 		)

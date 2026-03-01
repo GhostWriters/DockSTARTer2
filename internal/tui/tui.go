@@ -94,9 +94,9 @@ func Start(ctx context.Context, startMenu string) error {
 		startScreen = createOptionsScreen()
 	case "app-select", "select", "config-app-select":
 		startScreen = createAppSelectionScreen()
-	case "theme-select", "theme":
-		startScreen = createDisplayOptionsScreen()
-	case "display-options":
+	case "theme-select", "theme", "options-theme",
+		"display", "options-display",
+		"appearance", "display-options", "display_options":
 		startScreen = createDisplayOptionsScreen()
 	default:
 		startScreen = createMainScreen()

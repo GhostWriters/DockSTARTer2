@@ -1058,7 +1058,7 @@ func (s *DisplayOptionsScreen) HasDialog() bool {
 }
 
 func (s *DisplayOptionsScreen) MenuName() string {
-	return "display_options"
+	return "appearance"
 }
 
 func (s *DisplayOptionsScreen) SetFocused(f bool) {

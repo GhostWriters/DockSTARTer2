@@ -263,7 +263,7 @@ func Parse(args []string) ([]CommandGroup, error) {
 				validSubs := map[string]bool{
 					"main": true, "config": true, "options": true,
 					"options-display": true, "display": true,
-					"options-theme": true, "theme": true,
+					"options-theme": true, "theme": true, "appearance": true,
 					"config-app-select": true, "app-select": true, "select": true,
 				}
 				if !validSubs[sub] {
