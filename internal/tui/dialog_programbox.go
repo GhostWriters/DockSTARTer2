@@ -437,6 +437,7 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case UpdatePercentMsg:
 		m.SetPercent(msg.Percent)
+		m.calculateLayout() // Re-budget viewport when progress bar appears/changes
 		return m, nil
 	}
 
