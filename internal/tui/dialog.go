@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/strutil"
 	"strings"
 
@@ -476,7 +477,7 @@ func RenderUniformBlockDialogCtx(title, content string, ctx StyleContext) string
 
 // RenderBorderedBoxCtx renders a dialog with title and borders using a specific context.
 // Unlike renderDialogWithBorderCtx, this accepts a known contentWidth instead of measuring content.
-func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeight int, focused bool, rounded bool, titleAlign string, ctx StyleContext) string {
+func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeight int, focused bool, rounded bool, titleAlign string, titleTag string, ctx StyleContext) string {
 	var border lipgloss.Border
 	if !ctx.DrawBorders {
 		border = lipgloss.HiddenBorder()
@@ -517,13 +518,13 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 	borderStyleDark := lipgloss.NewStyle().
 		Foreground(ctx.Border2Color).
 		Background(borderBG)
-	titleStyle := ctx.DialogTitle
-	if !hasExplicitBackground(titleStyle) {
-		titleStyle = titleStyle.Background(borderBG)
+
+	if titleTag != "" {
+		rawTitle = console.WrapSemantic(titleTag) + rawTitle
 	}
 
-	// Process the title with full semantic theme tagging support
-	renderedTitle := MaintainBackground(RenderThemeText(rawTitle, titleStyle), titleStyle)
+	// Render title with Dialog background as the base for inheritance
+	renderedTitle := RenderThemeText(rawTitle, lipgloss.NewStyle().Background(ctx.Dialog.GetBackground()))
 
 	lines := strings.Split(content, "\n")
 	// Trust the passed contentWidth - don't expand based on line widths

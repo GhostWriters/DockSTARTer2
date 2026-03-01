@@ -744,7 +744,7 @@ func (s *DisplayOptionsScreen) ViewString() (result string) {
 
 	// Use RenderBorderedBoxCtx with known width instead of RenderDialog which measures content
 	// targetHeight uses width/height which are local copies of the intended layout
-	settingsDialog := tui.RenderBorderedBoxCtx("Appearance Settings", settingsContent, menuWidth, s.height, true, false, tui.GetActiveContext().DialogTitleAlign, tui.GetActiveContext())
+	settingsDialog := tui.RenderBorderedBoxCtx("Appearance Settings", settingsContent, menuWidth, s.height, true, false, tui.GetActiveContext().DialogTitleAlign, "Theme_Title", tui.GetActiveContext())
 
 	// Add shadow if enabled in global config (not preview config)
 	// The preview mockup shows what shadow would look like, but the
@@ -901,33 +901,35 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 
 	// Build StyleContext for the preview
 	previewCtx := tui.StyleContext{
-		LineCharacters:    s.config.UI.LineCharacters,
-		DrawBorders:       s.config.UI.Borders,
-		Screen:            bgStyle,
-		Dialog:            dContent,
-		DialogTitle:       tui.SemanticRawStyle("Preview_Theme_Title"),
-		DialogTitleHelp:   tui.SemanticRawStyle("Preview_Theme_TitleHelp"),
-		Border:            b,
-		BorderColor:       dBorder1.GetForeground(),
-		Border2Color:      dBorder2.GetForeground(),
-		ButtonActive:      tui.SemanticRawStyle("Preview_Theme_ButtonActive"),
-		ButtonInactive:    tui.SemanticRawStyle("Preview_Theme_ButtonInactive"),
-		ItemNormal:        tui.SemanticRawStyle("Preview_Theme_Item"),
-		ItemSelected:      tui.SemanticRawStyle("Preview_Theme_ItemSelected"),
-		TagNormal:         tui.SemanticRawStyle("Preview_Theme_Tag"),
-		TagSelected:       tui.SemanticRawStyle("Preview_Theme_TagSelected"),
-		TagKey:            tui.SemanticRawStyle("Preview_Theme_TagKey"),
-		TagKeySelected:    tui.SemanticRawStyle("Preview_Theme_TagKeySelected"),
-		Shadow:            tui.SemanticRawStyle("Preview_Theme_Shadow"),
-		ShadowColor:       getPreviewShadowColor(),
-		ShadowLevel:       s.config.UI.ShadowLevel,
-		HelpLine:          tui.SemanticRawStyle("Preview_Theme_Helpline"),
-		StatusSuccess:     tui.SemanticRawStyle("Preview_Theme_TitleNotice"),
-		StatusWarn:        tui.SemanticRawStyle("Preview_Theme_TitleWarn"),
-		StatusError:       tui.SemanticRawStyle("Preview_Theme_TitleError"),
-		DialogTitleAlign:  s.config.UI.DialogTitleAlign,
-		SubmenuTitleAlign: s.config.UI.SubmenuTitleAlign,
-		LogTitleAlign:     s.config.UI.LogTitleAlign,
+		LineCharacters:      s.config.UI.LineCharacters,
+		DrawBorders:         s.config.UI.Borders,
+		Screen:              bgStyle,
+		Dialog:              dContent,
+		DialogTitle:         tui.SemanticRawStyle("Preview_Theme_Title"),
+		DialogTitleHelp:     tui.SemanticRawStyle("Preview_Theme_TitleHelp"),
+		SubmenuTitle:        tui.SemanticRawStyle("Preview_Theme_TitleSubMenu"),
+		SubmenuTitleFocused: tui.SemanticRawStyle("Preview_Theme_TitleSubMenuFocused"),
+		Border:              b,
+		BorderColor:         dBorder1.GetForeground(),
+		Border2Color:        dBorder2.GetForeground(),
+		ButtonActive:        tui.SemanticRawStyle("Preview_Theme_ButtonActive"),
+		ButtonInactive:      tui.SemanticRawStyle("Preview_Theme_ButtonInactive"),
+		ItemNormal:          tui.SemanticRawStyle("Preview_Theme_Item"),
+		ItemSelected:        tui.SemanticRawStyle("Preview_Theme_ItemSelected"),
+		TagNormal:           tui.SemanticRawStyle("Preview_Theme_Tag"),
+		TagSelected:         tui.SemanticRawStyle("Preview_Theme_TagSelected"),
+		TagKey:              tui.SemanticRawStyle("Preview_Theme_TagKey"),
+		TagKeySelected:      tui.SemanticRawStyle("Preview_Theme_TagKeySelected"),
+		Shadow:              tui.SemanticRawStyle("Preview_Theme_Shadow"),
+		ShadowColor:         getPreviewShadowColor(),
+		ShadowLevel:         s.config.UI.ShadowLevel,
+		HelpLine:            tui.SemanticRawStyle("Preview_Theme_Helpline"),
+		StatusSuccess:       tui.SemanticRawStyle("Preview_Theme_TitleNotice"),
+		StatusWarn:          tui.SemanticRawStyle("Preview_Theme_TitleWarn"),
+		StatusError:         tui.SemanticRawStyle("Preview_Theme_TitleError"),
+		DialogTitleAlign:    s.config.UI.DialogTitleAlign,
+		SubmenuTitleAlign:   s.config.UI.SubmenuTitleAlign,
+		LogTitleAlign:       s.config.UI.LogTitleAlign,
 	}
 
 	// Backdrop Content (Dialog Simulation)
@@ -970,7 +972,7 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 
 	// Use our new context-aware bordered box renderer for perfect parity
 	// We use 38 to ensure width (38+2 borders + 2 shadow = 42) leaves 1 space indent on both sides of a 44 width backdrop.
-	dialogBox := tui.RenderBorderedBoxCtx(dTitle, contentStr, 38, 0, true, false, previewCtx.DialogTitleAlign, previewCtx)
+	dialogBox := tui.RenderBorderedBoxCtx(dTitle, contentStr, 38, 0, true, false, previewCtx.DialogTitleAlign, "Preview_Theme_Title", previewCtx)
 
 	// Add shadow if enabled using our new context-aware helper
 	if s.config.UI.Shadow {
@@ -1038,7 +1040,7 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	// Wrap in a standard dialog using the current (active) theme
 	// The mockup content uses preview theme colors, but the outer dialog uses active theme
 	mockupWidth := lipgloss.Width(mockup)
-	preview := tui.RenderBorderedBoxCtx("Preview", mockup, mockupWidth, 0, false, false, tui.GetActiveContext().DialogTitleAlign, tui.GetActiveContext())
+	preview := tui.RenderBorderedBoxCtx("Preview", mockup, mockupWidth, 0, false, false, tui.GetActiveContext().DialogTitleAlign, "Theme_Title", tui.GetActiveContext())
 
 	// Add shadow if enabled in global config (same as settings dialog)
 	if tui.IsShadowEnabled() {

@@ -78,6 +78,9 @@ ProgressWaiting = "{{[black:white:B]}}"
 ProgressInProgress = "{{[white:black:B]}}"
 ProgressCompleted = "{{[black:white:B]}}"
 LogPanel = "{{|Theme_Title|}}"
+
+TitleSubMenu = "{{|Theme_Title|}}"
+TitleSubMenuFocused = "{{|Theme_Title|}}{{[::R]}}"
 Program = "{{[white:black]}}"
 
 VersionSelected = "{{|Theme_StatusBar|}}"

@@ -1535,10 +1535,16 @@ func (m *MenuModel) renderButtonBox(buttons string, contentWidth int) string {
 
 func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targetHeight int, focused bool, rounded bool) string {
 	align := GetActiveContext().DialogTitleAlign
+	titleTag := "Theme_Title"
 	if m.subMenuMode {
 		align = GetActiveContext().SubmenuTitleAlign
+		if focused {
+			titleTag = "Theme_TitleSubMenuFocused"
+		} else {
+			titleTag = "Theme_TitleSubMenu"
+		}
 	}
-	return RenderBorderedBoxCtx(m.title, content, contentWidth, targetHeight, focused, rounded, align, GetActiveContext())
+	return RenderBorderedBoxCtx(m.title, content, contentWidth, targetHeight, focused, rounded, align, titleTag, GetActiveContext())
 }
 
 // SetSize updates the menu dimensions and resizes the list

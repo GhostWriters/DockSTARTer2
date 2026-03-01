@@ -36,6 +36,9 @@ TitleWarning = "{{[black:yellow]}}"
 TitleQuestion = "{{[black:yellow]}}"
 LogPanel = "{{|Theme_Title|}}"
 
+TitleSubMenu = "{{|Theme_Title|}}"
+TitleSubMenuFocused = "{{|Theme_Title|}}{{[::R]}}"
+
 CommandLine = "{{[white:black:B]}}"
 ButtonActive = "{{[white:red:B]}}"
 ButtonInactive = "{{[black:white]}}"
