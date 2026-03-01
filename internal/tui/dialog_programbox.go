@@ -321,6 +321,16 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		// AppModel sends a contentSizeMsg right after SetSize. Handle it here so we
+		// re-run calculateLayout() (which re-sets the viewport height) instead of
+		// forwarding to m.viewport.Update which would resize the viewport to the full
+		// content-area height and make the dialog too tall.
+		m.width = msg.Width
+		m.height = msg.Height
+		m.calculateLayout()
+		return m, nil
+
 	case SubDialogMsg:
 		m.subDialog = msg.Model
 		m.subDialogChan = msg.Chan
