@@ -215,6 +215,17 @@ func (m *BackdropModel) View() tea.View {
 	return tea.NewView(m.ViewString())
 }
 
+// ChromeHeight returns the total rendered height of the status bar chrome:
+// header content lines + bottom border line.
+// Use this instead of hardcoding constants when computing content Y offsets.
+func (m *BackdropModel) ChromeHeight() int {
+	if m.header == nil {
+		return 1 // just the bottom border line
+	}
+	m.header.SetWidth(m.width - 2) // ensure width is current before measuring
+	return m.header.Height() + 1   // header content + bottom border
+}
+
 // GetContentArea returns the dimensions available for overlay content
 // This is the space between the header/separator and the helpline, accounting for shadow
 func (m *BackdropModel) GetContentArea() (width, height int) {

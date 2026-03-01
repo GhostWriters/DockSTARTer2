@@ -956,57 +956,6 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 func (m *MenuModel) View() tea.View { return tea.View{Content: m.ViewString()} }
 
-// nextFocus cycles focus forward through all focus areas (list → buttons).
-// Used for future Tab/window-cycling logic.
-func (m *MenuModel) nextFocus() FocusItem {
-	switch m.focusedItem {
-	case FocusList:
-		return FocusSelectBtn
-	case FocusSelectBtn:
-		if m.backAction != nil {
-			return FocusBackBtn
-		}
-		if m.showExit {
-			return FocusExitBtn
-		}
-		// If no back and no exit, cycle back to list?
-		return FocusList
-	case FocusBackBtn:
-		if m.showExit {
-			return FocusExitBtn
-		}
-		return FocusList
-	case FocusExitBtn:
-		return FocusList
-	}
-	return FocusList
-}
-
-// prevFocus cycles focus backward through all focus areas.
-// Used for future ShiftTab/window-cycling logic.
-func (m *MenuModel) prevFocus() FocusItem {
-	switch m.focusedItem {
-	case FocusList:
-		if m.showExit {
-			return FocusExitBtn
-		}
-		if m.backAction != nil {
-			return FocusBackBtn
-		}
-		return FocusSelectBtn
-	case FocusSelectBtn:
-		return FocusList
-	case FocusBackBtn:
-		return FocusSelectBtn
-	case FocusExitBtn:
-		if m.backAction != nil {
-			return FocusBackBtn
-		}
-		return FocusSelectBtn
-	}
-	return FocusList
-}
-
 // nextButtonFocus moves focus right through buttons, clamping at the last button (no wrap).
 func (m *MenuModel) nextButtonFocus() FocusItem {
 	switch m.focusedItem {
@@ -1291,12 +1240,14 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	// Use outerContentWidth (list.Width + 4) to match actual rendering — the subtitle
 	// is rendered at that width in ViewString, not at the narrower list.Width(), so
 	// that text wraps the same number of times as in the real output.
+	// Crucially, expand theme tags via RenderThemeText first so the measured height
+	// matches what ViewString actually renders (unexpanded tags add spurious characters
+	// that cause extra wrapping and push all item hit regions down by 1+ rows).
 	if m.subtitle != "" {
 		subtitleWidth := m.list.Width() + 4
-		subtitleRendered := styles.Dialog.
-			Width(subtitleWidth).
-			Padding(0, 1).
-			Render(m.subtitle)
+		subtitleStyle := styles.Dialog.Width(subtitleWidth).Padding(0, 1)
+		subStr := RenderThemeText(m.subtitle, subtitleStyle)
+		subtitleRendered := subtitleStyle.Render(subStr)
 		listY += lipgloss.Height(subtitleRendered)
 	}
 
@@ -1581,68 +1532,6 @@ func (m *MenuModel) renderButtonBox(buttons string, contentWidth int) string {
 	return boxStyle.Render(centeredButtons)
 }
 
-func (m *MenuModel) renderDialog(menuContent, buttonBox string, listWidth int) string {
-	styles := GetStyles()
-
-	// Build inner content parts
-	var innerParts []string
-
-	// Subtitle (left-aligned, matching content width)
-	if m.subtitle != "" {
-		subtitle := styles.Dialog.
-			Width(listWidth).
-			Padding(0, 1).
-			Align(lipgloss.Left).
-			Render(m.subtitle)
-		innerParts = append(innerParts, subtitle)
-	}
-
-	// Add list box (already has its own border)
-	innerParts = append(innerParts, menuContent)
-
-	// Add button box (already has its own border)
-	innerParts = append(innerParts, buttonBox)
-
-	// Join all parts with careful newline trimming to prevent extra gaps
-	for i, part := range innerParts {
-		innerParts[i] = strings.TrimRight(part, "\n")
-	}
-	innerContent := lipgloss.JoinVertical(lipgloss.Left, innerParts...)
-
-	// Add padding inside the outer border
-	paddedContent := lipgloss.NewStyle().
-		Background(styles.Dialog.GetBackground()).
-		Padding(0, 1).
-		Render(innerContent)
-
-	// Outer content width = listWidth + padding (2)
-	outerContentWidth := listWidth + 2
-
-	// Wrap with outer border
-	var dialogBox string
-
-	if m.title != "" {
-		dialogBox = m.renderBorderWithTitle(paddedContent, outerContentWidth, 0, m.focused, false)
-	} else {
-		// No title, use standard border
-		boxStyle := lipgloss.NewStyle().
-			Background(styles.Dialog.GetBackground()).
-			Padding(0, 1)
-
-		if !styles.DrawBorders {
-			boxStyle = boxStyle.Border(lipgloss.HiddenBorder())
-		} else {
-			boxStyle = Apply3DBorder(boxStyle)
-		}
-		dialogBox = boxStyle.Render(paddedContent)
-	}
-
-	// Add shadow effect
-	dialogBox = AddShadow(dialogBox)
-
-	// Just return the dialogBox - centering and backdrop are handled by AppModel.View
-	return dialogBox
-}
 
 func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targetHeight int, focused bool, rounded bool) string {
 	return RenderBorderedBoxCtx(m.title, content, contentWidth, targetHeight, focused, rounded, GetActiveContext())
@@ -1679,64 +1568,8 @@ func (m *MenuModel) calculateLayout() {
 		return
 	}
 
-	// 1. Subtitle Height
-	subtitleHeight := 0
-	if m.subtitle != "" {
-		subtitleHeight = lipgloss.Height(m.subtitle)
-	}
-
-	// 2. Button and Shadow Heights
+	// 1. Calculate list width first — subtitle height measurement depends on it.
 	layout := GetLayout()
-	buttonHeight := DialogButtonHeight
-	shadowHeight := 0
-	hasShadow := currentConfig.UI.Shadow
-	if hasShadow {
-		shadowHeight = DialogShadowHeight
-	}
-
-	// 3. Vertical Budgeting Logic
-	var listHeight, overhead int
-	var maxListHeight int
-	if m.subMenuMode {
-		// Sub-menu overhead is just the subtitle and its own borders (2)
-		overhead = subtitleHeight + layout.BorderHeight()
-		maxListHeight = m.height - overhead
-	} else {
-		// Full dialog overhead: borders, subtitle, buttons, shadow
-		// Account for internal gaps: 1 after subtitle, 1 before buttons
-		internalOverhead := subtitleHeight
-		if m.subtitle != "" {
-			internalOverhead += 1 // Gap after subtitle
-		}
-
-		maxListHeight = layout.DialogContentHeight(m.height, internalOverhead, true, hasShadow)
-
-		// Subtract 1 more for the gap before buttons (not covered by DialogButtonHeight)
-		maxListHeight -= 1
-
-		// Total overhead = total height - available list height
-		overhead = m.height - maxListHeight
-	}
-
-	if maxListHeight < 3 {
-		maxListHeight = 3
-	}
-
-	// 4. Calculate intrinsic list height based on items
-	itemHeight := 1
-	spacing := 0
-	totalItemHeight := len(m.items) * itemHeight
-	if len(m.items) > 1 && spacing > 0 {
-		totalItemHeight += (len(m.items) - 1) * spacing
-	}
-
-	// Final list height is whichever is smaller: intrinsic or maximum
-	listHeight = totalItemHeight
-	if m.maximized || listHeight > maxListHeight {
-		listHeight = maxListHeight
-	}
-
-	// 5. Calculate list width based on content
 	maxTagLen, maxDescLen := calculateMaxTagAndDescLength(m.items)
 	// Width = tag + spacing(2) + desc + margins(2) + buffer(4)
 	listWidth := maxTagLen + 2 + maxDescLen + 2 + 4
@@ -1765,6 +1598,68 @@ func (m *MenuModel) calculateLayout() {
 		if listWidth > maxListWidth {
 			listWidth = maxListWidth
 		}
+	}
+
+	// 2. Subtitle Height — measured at the actual render width (listWidth + 4) so
+	// word-wrap lines match what ViewString() produces. Using lipgloss.Height(m.subtitle)
+	// only counts explicit '\n' and underestimates at narrow terminal widths.
+	subtitleHeight := 0
+	if m.subtitle != "" {
+		styles := GetStyles()
+		outerContentWidth := listWidth + 4
+		subtitleStyle := styles.Dialog.Width(outerContentWidth).Padding(0, 1)
+		subStr := RenderThemeText(m.subtitle, subtitleStyle)
+		subtitleHeight = lipgloss.Height(subtitleStyle.Render(subStr))
+	}
+
+	// 3. Button and Shadow Heights
+	buttonHeight := DialogButtonHeight
+	shadowHeight := 0
+	hasShadow := currentConfig.UI.Shadow
+	if hasShadow {
+		shadowHeight = DialogShadowHeight
+	}
+
+	// 4. Vertical Budgeting Logic
+	var listHeight, overhead int
+	var maxListHeight int
+	if m.subMenuMode {
+		// Sub-menu overhead is just the subtitle and its own borders (2)
+		overhead = subtitleHeight + layout.BorderHeight()
+		maxListHeight = m.height - overhead
+	} else {
+		// Full dialog overhead: borders, subtitle, buttons, shadow
+		// Account for internal gaps: 1 after subtitle, 1 before buttons
+		internalOverhead := subtitleHeight
+		if m.subtitle != "" {
+			internalOverhead += 1 // Gap after subtitle
+		}
+
+		maxListHeight = layout.DialogContentHeight(m.height, internalOverhead, true, hasShadow)
+
+		// Subtract 1 more for the gap before buttons (not covered by DialogButtonHeight)
+		maxListHeight -= 1
+
+		// Total overhead = total height - available list height
+		overhead = m.height - maxListHeight
+	}
+
+	if maxListHeight < 3 {
+		maxListHeight = 3
+	}
+
+	// 5. Calculate intrinsic list height based on items
+	itemHeight := 1
+	spacing := 0
+	totalItemHeight := len(m.items) * itemHeight
+	if len(m.items) > 1 && spacing > 0 {
+		totalItemHeight += (len(m.items) - 1) * spacing
+	}
+
+	// Final list height is whichever is smaller: intrinsic or maximum
+	listHeight = totalItemHeight
+	if m.maximized || listHeight > maxListHeight {
+		listHeight = maxListHeight
 	}
 
 	m.layout = DialogLayout{

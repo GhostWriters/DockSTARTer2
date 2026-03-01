@@ -264,7 +264,6 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Fall through to common update logic (backdrop and activeScreen)
 
 	case tea.WindowSizeMsg:
-		logger.Debug(m.ctx, "Update: Received WindowSizeMsg: %dx%d", msg.Width, msg.Height)
 		m.width = msg.Width
 		m.height = msg.Height
 		m.ready = true
@@ -571,8 +570,8 @@ func (m AppModel) getDialogArea(d tea.Model) (int, int) {
 		// Use Layout helpers directly to get full-screen content area for help
 		layout := GetLayout()
 		headerH := 1
-		if m.backdrop != nil && m.backdrop.header != nil {
-			headerH = m.backdrop.header.Height()
+		if m.backdrop != nil {
+			headerH = m.backdrop.ChromeHeight() - 1
 		}
 		return layout.ContentArea(m.width, m.height, m.config.UI.Shadow, headerH)
 	}
@@ -1144,11 +1143,14 @@ func (m *AppModel) View() (v tea.View) {
 
 	// Use Layout helpers for consistent positioning
 	layout := GetLayout()
-	headerH := 1
-	if m.backdrop != nil && m.backdrop.header != nil {
-		headerH = m.backdrop.header.Height()
+	// Query the backdrop for the actual rendered chrome height (header + bottom border).
+	// This avoids hardcoding a constant and correctly handles multi-line headers.
+	contentYOffset := 2 // fallback: 1-line header + 1 bottom border
+	headerH := 1        // header content height, needed by layout functions
+	if m.backdrop != nil {
+		contentYOffset = m.backdrop.ChromeHeight()
+		headerH = contentYOffset - 1
 	}
-	contentYOffset := layout.ContentStartY(headerH) // header + separator
 
 	// Create native compositor for rendering
 	comp := lipgloss.NewCompositor()
