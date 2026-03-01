@@ -29,7 +29,9 @@ type DisplayOptionsScreen struct {
 	themeMenu     *tui.MenuModel
 	optionsMenu   *tui.MenuModel
 	focusedPanel  DisplayOptionsFocus
-	focusedButton int // 0=Apply, 1=Cancel
+	// focusedButton index: 0=Apply, 1=Back (or Exit when isRoot), 2=Exit (only when !isRoot)
+	focusedButton int
+	isRoot        bool // true when launched directly via -M appearance; hides Back button
 
 	config       config.AppConfig
 	themes       []theme.ThemeMetadata
@@ -49,11 +51,14 @@ type updateDisplayOptionMsg struct {
 }
 
 // NewDisplayOptionsScreen creates a new consolidated display options screen.
-func NewDisplayOptionsScreen() *DisplayOptionsScreen {
+// NewDisplayOptionsScreen creates a new consolidated display options screen.
+// isRoot suppresses the Back button when this screen is the entry point.
+func NewDisplayOptionsScreen(isRoot bool) *DisplayOptionsScreen {
 	themes, _ := theme.List()
 	current := theme.Current.Name
 
 	s := &DisplayOptionsScreen{
+		isRoot:        isRoot,
 		config:        config.LoadAppConfig(),
 		baseConfig:    config.LoadAppConfig(),
 		themes:        themes,
@@ -143,6 +148,35 @@ func (s *DisplayOptionsScreen) initMenus() {
 	// Initial Focus
 	s.focusedPanel = FocusThemes
 	s.updateFocusStates()
+}
+
+// maxFocusedButton returns the highest valid focusedButton index.
+// When isRoot there is no Back button: Apply=0, Exit=1 (two buttons).
+// Otherwise: Apply=0, Back=1, Exit=2 (three buttons).
+func (s *DisplayOptionsScreen) maxFocusedButton() int {
+	if s.isRoot {
+		return 1
+	}
+	return 2
+}
+
+// execFocusedButton runs the action for the current focusedButton index.
+func (s *DisplayOptionsScreen) execFocusedButton() (tea.Model, tea.Cmd) {
+	switch s.focusedButton {
+	case 0:
+		return s, s.handleApply()
+	case 1:
+		if s.isRoot {
+			theme.Unload("Preview")
+			return s, tea.Quit
+		}
+		theme.Unload("Preview")
+		return s, navigateBack()
+	case 2:
+		theme.Unload("Preview")
+		return s, tea.Quit
+	}
+	return s, nil
 }
 
 func (s *DisplayOptionsScreen) updateFocusStates() {
@@ -336,12 +370,13 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, uCmd
 		} else if s.focusedPanel == FocusButtons {
 			// Scroll wheel cycles the focused button (up=left, down=right) — clamps, no wrap.
+			maxBtn := s.maxFocusedButton()
 			if msg.Button == tea.MouseWheelUp {
 				if s.focusedButton > 0 {
 					s.focusedButton--
 				}
 			} else if msg.Button == tea.MouseWheelDown {
-				if s.focusedButton < 2 {
+				if s.focusedButton < maxBtn {
 					s.focusedButton++
 				}
 			}
@@ -402,10 +437,15 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			s.focusedButton = 0
 			return s, s.handleApply()
 		case tui.IDBackButton:
+			if s.isRoot {
+				return s, nil // Back is not shown when root; ignore stale hits
+			}
 			s.focusedButton = 1
+			theme.Unload("Preview")
 			return s, navigateBack()
 		case tui.IDExitButton:
-			s.focusedButton = 2
+			s.focusedButton = s.maxFocusedButton()
+			theme.Unload("Preview")
 			return s, tea.Quit
 		}
 
@@ -429,17 +469,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return s, uCmd
 		} else if s.focusedPanel == FocusButtons {
-			// Activate the currently focused button
-			switch s.focusedButton {
-			case 0:
-				return s, s.handleApply()
-			case 1:
-				theme.Unload("Preview")
-				return s, navigateBack()
-			case 2:
-				theme.Unload("Preview")
-				return s, tea.Quit
-			}
+			return s.execFocusedButton()
 		}
 		return s, nil
 
@@ -461,34 +491,28 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if key.Matches(msg, tui.Keys.Left) {
 			s.focusedButton--
 			if s.focusedButton < 0 {
-				s.focusedButton = 2
+				s.focusedButton = s.maxFocusedButton()
 			}
 			return s, nil
 		}
 		if key.Matches(msg, tui.Keys.Right) {
 			s.focusedButton++
-			if s.focusedButton > 2 {
+			if s.focusedButton > s.maxFocusedButton() {
 				s.focusedButton = 0
 			}
 			return s, nil
 		}
 
 		if key.Matches(msg, tui.Keys.Enter) {
-			switch s.focusedButton {
-			case 0:
-				return s, s.handleApply()
-			case 1:
-				theme.Unload("Preview")
-				return s, navigateBack()
-			case 2:
-				theme.Unload("Preview")
-				return s, tea.Quit
-			}
+			return s.execFocusedButton()
 		}
 
-		// Esc: Cancel
+		// Esc: Cancel — navigate back or quit if root
 		if key.Matches(msg, tui.Keys.Esc) {
 			theme.Unload("Preview")
+			if s.isRoot {
+				return s, tea.Quit
+			}
 			return s, navigateBack()
 		}
 
@@ -634,10 +658,18 @@ func (s *DisplayOptionsScreen) ViewString() (result string) {
 	leftColumn := lipgloss.JoinVertical(lipgloss.Left, leftColumnParts...)
 
 	// 2. Render Buttons using known width, not measured
-	buttons := []tui.ButtonSpec{
-		{Text: "Apply", Active: s.focusedButton == 0},
-		{Text: "Back", Active: s.focusedButton == 1},
-		{Text: "Exit", Active: s.focusedButton == 2},
+	var buttons []tui.ButtonSpec
+	if s.isRoot {
+		buttons = []tui.ButtonSpec{
+			{Text: "Apply", Active: s.focusedButton == 0},
+			{Text: "Exit", Active: s.focusedButton == 1},
+		}
+	} else {
+		buttons = []tui.ButtonSpec{
+			{Text: "Apply", Active: s.focusedButton == 0},
+			{Text: "Back", Active: s.focusedButton == 1},
+			{Text: "Exit", Active: s.focusedButton == 2},
+		}
 	}
 	buttonRow := tui.RenderCenteredButtons(menuWidth, buttons...)
 
@@ -1125,11 +1157,22 @@ func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegi
 	})
 
 	// Individual button hit regions (higher ZOrder → take priority for left-click)
+	var btnSpecs []tui.ButtonSpec
+	if s.isRoot {
+		btnSpecs = []tui.ButtonSpec{
+			{Text: "Apply", ZoneID: tui.IDApplyButton},
+			{Text: "Exit", ZoneID: tui.IDExitButton},
+		}
+	} else {
+		btnSpecs = []tui.ButtonSpec{
+			{Text: "Apply", ZoneID: tui.IDApplyButton},
+			{Text: "Back", ZoneID: tui.IDBackButton},
+			{Text: "Exit", ZoneID: tui.IDExitButton},
+		}
+	}
 	regions = append(regions, tui.GetButtonHitRegions(
 		"", offsetX+contentX, offsetY+buttonY, btnRowWidth, tui.ZScreen+2,
-		tui.ButtonSpec{Text: "Apply", ZoneID: tui.IDApplyButton},
-		tui.ButtonSpec{Text: "Back", ZoneID: tui.IDBackButton},
-		tui.ButtonSpec{Text: "Exit", ZoneID: tui.IDExitButton},
+		btnSpecs...,
 	)...)
 
 	return regions

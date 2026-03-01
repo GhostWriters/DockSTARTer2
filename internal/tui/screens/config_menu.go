@@ -13,8 +13,9 @@ type ConfigMenuScreen struct {
 	menu *tui.MenuModel
 }
 
-// NewConfigMenuScreen creates the configuration menu
-func NewConfigMenuScreen() *ConfigMenuScreen {
+// NewConfigMenuScreen creates the configuration menu.
+// isRoot suppresses the Back button when this screen is the entry point.
+func NewConfigMenuScreen(isRoot bool) *ConfigMenuScreen {
 	items := []tui.MenuItem{
 		{
 			Tag:    "Full Setup",
@@ -60,12 +61,16 @@ func NewConfigMenuScreen() *ConfigMenuScreen {
 		},
 	}
 
+	var backAction tea.Cmd
+	if !isRoot {
+		backAction = navigateBack()
+	}
 	menu := tui.NewMenuModel(
 		"config_menu",
 		"Configuration",
 		"Setup and configure applications",
 		items,
-		navigateBack(),
+		backAction,
 	)
 
 	return &ConfigMenuScreen{menu: &menu}
@@ -152,6 +157,6 @@ func navigateBack() tea.Cmd {
 func navigateToAppSelection() tea.Cmd {
 	return func() tea.Msg {
 		conf := config.LoadAppConfig()
-		return tui.NavigateMsg{Screen: NewAppSelectionScreen(conf)}
+		return tui.NavigateMsg{Screen: NewAppSelectionScreen(conf, false)}
 	}
 }

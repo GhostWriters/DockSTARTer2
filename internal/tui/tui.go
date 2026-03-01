@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"DockSTARTer2/internal/config"
@@ -30,6 +31,12 @@ var (
 
 	// CurrentPageName tracks the active menu page for re-execution parity
 	CurrentPageName string
+
+	// isRootSession is true when the TUI was started with a plain -M pagename (no start- prefix).
+	// Root sessions suppress the Back button on the entry screen and re-exec to the same plain
+	// pagename after a self-update. Non-root sessions re-exec with the "start-" prefix so the
+	// update restores the full navigation stack.
+	isRootSession bool
 
 	// programExited is used to synchronize TUI shutdown for updates
 	programExited chan struct{}
@@ -81,29 +88,31 @@ func Start(ctx context.Context, startMenu string) error {
 		return err
 	}
 
-	// Import screens package dynamically to avoid circular imports
-	// We'll create the screen based on startMenu parameter
-	var startScreen ScreenModel
+	// Resolve the menu target to a canonical page name and root-session flag.
+	pageName, isRoot := resolveMenuTarget(startMenu)
+	isRootSession = isRoot
 
-	// Defer to the screens package for creating screens
-	// This will be set up in the calling code
-	switch startMenu {
-	case "config":
-		startScreen = createConfigScreen()
-	case "options":
-		startScreen = createOptionsScreen()
-	case "app-select", "select", "config-app-select":
-		startScreen = createAppSelectionScreen()
-	case "theme-select", "theme", "options-theme",
-		"display", "options-display",
-		"appearance", "display-options", "display_options":
-		startScreen = createDisplayOptionsScreen()
-	default:
-		startScreen = createMainScreen()
+	// Look up the screen entry; fall back to "main" if unrecognised.
+	entry, ok := screenRegistry[pageName]
+	if !ok {
+		entry = screenRegistry["main"]
+	}
+
+	startScreen := entry.create(isRoot)
+
+	// For non-root (start-*) sessions, push the canonical parent screens onto the
+	// navigation stack so that Back navigates naturally rather than quitting.
+	var initialStack []ScreenModel
+	if !isRoot {
+		for _, parentName := range entry.parents {
+			if parentEntry, ok := screenRegistry[parentName]; ok {
+				initialStack = append(initialStack, parentEntry.create(false))
+			}
+		}
 	}
 
 	// Create the app model
-	model := NewAppModel(ctx, currentConfig, startScreen)
+	model := NewAppModel(ctx, currentConfig, startScreen, initialStack...)
 
 	// Create and run the Bubble Tea program
 	// Note: AltScreen is set via View().AltScreen in v2
@@ -244,34 +253,70 @@ func Error(title, message string) {
 	ShowErrorDialog(title, message)
 }
 
-// Screen creation functions (these will be replaced by proper imports)
-// We use function variables to avoid circular imports
-
-var (
-	createMainScreen           func() ScreenModel
-	createConfigScreen         func() ScreenModel
-	createOptionsScreen        func() ScreenModel
-	createAppSelectionScreen   func() ScreenModel
-	createDisplayOptionsScreen func() ScreenModel
-)
-
-// RegisterScreenCreators allows the screens package to register screen creation functions
-func RegisterScreenCreators(main, cfg, opts, appSel, dispOpts func() ScreenModel) {
-	createMainScreen = main
-	createConfigScreen = cfg
-	createOptionsScreen = opts
-	createAppSelectionScreen = appSel
-	createDisplayOptionsScreen = dispOpts
+// screenEntry holds a screen's creator function and its canonical parent stack.
+// parents is ordered outermost-first (e.g. ["main", "options"] for the appearance screen).
+type screenEntry struct {
+	create  func(isRoot bool) ScreenModel
+	parents []string
 }
 
-// init sets up default screen creators
-func init() {
-	// Default to nil - must be registered by screens package
-	createMainScreen = func() ScreenModel { return nil }
-	createConfigScreen = func() ScreenModel { return nil }
-	createOptionsScreen = func() ScreenModel { return nil }
-	createAppSelectionScreen = func() ScreenModel { return nil }
-	createDisplayOptionsScreen = func() ScreenModel { return nil }
+// screenRegistry maps canonical page names to their screen entries.
+// Populated by RegisterScreen calls from the screens package.
+var screenRegistry = map[string]*screenEntry{}
+
+// screenAliases maps alternate -M sub-command names to their canonical page name.
+var screenAliases = map[string]string{
+	"display":          "appearance",
+	"options-display":  "appearance",
+	"theme":            "appearance",
+	"options-theme":    "appearance",
+	"theme-select":     "appearance",
+	"display-options":  "appearance",
+	"display_options":  "appearance",
+	"select":           "app-select",
+	"config-app-select": "app-select",
+}
+
+// RegisterScreen registers a screen with its canonical page name, a creator function
+// that accepts isRoot, and an optional ordered list of parent page names.
+// parents should be outermost-first; they are pushed onto the navigation stack
+// when the screen is started via "-M start-<name>" so that Back navigates naturally.
+func RegisterScreen(name string, create func(isRoot bool) ScreenModel, parents []string) {
+	screenRegistry[name] = &screenEntry{create: create, parents: parents}
+}
+
+// resolveMenuTarget normalises a -M sub-command value into a canonical page name
+// and determines whether this should be a root session (no Back button on entry screen).
+//   - "" or "main" with no start- prefix → page "main", isRoot false (normal start)
+//   - "config"                           → page "config", isRoot true
+//   - "start-config"                     → page "config", isRoot false (pre-populated stack)
+func resolveMenuTarget(startMenu string) (pageName string, isRoot bool) {
+	if startMenu == "" {
+		return "main", false
+	}
+	isRoot = true
+	pageName = startMenu
+	if strings.HasPrefix(startMenu, "start-") {
+		isRoot = false
+		pageName = strings.TrimPrefix(startMenu, "start-")
+	}
+	if canonical, ok := screenAliases[pageName]; ok {
+		pageName = canonical
+	}
+	return pageName, isRoot
+}
+
+// reExecMenuArg returns the --menu sub-command value to use when re-executing after a self-update.
+// Root sessions (started with "-M pagename") re-exec to the same plain pagename so they remain
+// root. Non-root sessions use the "start-" prefix so the navigation stack is restored.
+func reExecMenuArg() string {
+	if CurrentPageName == "" {
+		return ""
+	}
+	if isRootSession {
+		return CurrentPageName
+	}
+	return "start-" + CurrentPageName
 }
 
 // TriggerAppUpdate returns a tea.Cmd that performs the application update.
@@ -285,11 +330,13 @@ func TriggerAppUpdate() tea.Cmd {
 			force := console.Force()
 			yes := console.AssumeYes()
 
-			// We use CurrentPageName (tracked in tui/model.go) for sticky re-exec
+			// Re-exec args restore the active screen after update.
+			// Root sessions re-exec to the same plain pagename; non-root sessions
+			// use the "start-" prefix so the navigation stack is rebuilt.
 			reExecArgs := append([]string{}, console.CurrentFlags...)
 			reExecArgs = append(reExecArgs, "--menu")
-			if CurrentPageName != "" {
-				reExecArgs = append(reExecArgs, CurrentPageName)
+			if menuArg := reExecMenuArg(); menuArg != "" {
+				reExecArgs = append(reExecArgs, menuArg)
 			}
 			reExecArgs = append(reExecArgs, console.RestArgs...)
 			err := update.SelfUpdate(ctx, force, yes, "", reExecArgs)
@@ -354,11 +401,11 @@ func TriggerUpdate() tea.Cmd {
 				return err
 			}
 
-			// We use CurrentPageName for sticky re-exec
+			// Re-exec args restore the active screen after update.
 			reExecArgs := append([]string{}, console.CurrentFlags...)
 			reExecArgs = append(reExecArgs, "--menu")
-			if CurrentPageName != "" {
-				reExecArgs = append(reExecArgs, CurrentPageName)
+			if menuArg := reExecMenuArg(); menuArg != "" {
+				reExecArgs = append(reExecArgs, menuArg)
 			}
 			reExecArgs = append(reExecArgs, console.RestArgs...)
 			err := update.SelfUpdate(ctx, force, yes, "", reExecArgs)

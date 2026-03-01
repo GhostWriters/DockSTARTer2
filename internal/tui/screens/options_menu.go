@@ -12,14 +12,15 @@ type OptionsMenuScreen struct {
 	menu *tui.MenuModel
 }
 
-// NewOptionsMenuScreen creates the options menu
-func NewOptionsMenuScreen() *OptionsMenuScreen {
+// NewOptionsMenuScreen creates the options menu.
+// isRoot suppresses the Back button when this screen is the entry point.
+func NewOptionsMenuScreen(isRoot bool) *OptionsMenuScreen {
 	items := []tui.MenuItem{
 		{
 			Tag:    "Appearance",
 			Desc:   "Themes and Display Options",
 			Help:   "Configure color scheme, borders, and effects",
-			Action: func() tea.Msg { return tui.NavigateMsg{Screen: NewDisplayOptionsScreen()} },
+			Action: func() tea.Msg { return tui.NavigateMsg{Screen: NewDisplayOptionsScreen(false)} },
 		},
 		{
 			Tag:    "Trigger Test Panic",
@@ -29,12 +30,16 @@ func NewOptionsMenuScreen() *OptionsMenuScreen {
 		},
 	}
 
+	var backAction tea.Cmd
+	if !isRoot {
+		backAction = navigateBack()
+	}
 	menu := tui.NewMenuModel(
 		"options_menu",
 		"Options",
 		"Customize settings",
 		items,
-		navigateBack(),
+		backAction,
 	)
 
 	return &OptionsMenuScreen{menu: &menu}

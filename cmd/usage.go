@@ -350,11 +350,14 @@ func GetUsage(target string) string {
 			"	Start the menu system.",
 			fmt.Sprintf("	This is the same as typing '{{|UsageCommand|}}%s{{[-]}}'.", appCmd),
 			"{{|UsageCommand|}}-M --menu{{[-]}} < {{|UsageOption|}}main{{[-]}} | {{|UsageOption|}}config{{[-]}} | {{|UsageOption|}}options{{[-]}} >{{[-]}}",
-			"	Load the specified page in the menu.",
+			"	Load the page as the root (no Back button, Exit goes to shell).",
 			"{{|UsageCommand|}}-M --menu{{[-]}} < {{|UsageOption|}}appearance{{[-]}} | {{|UsageOption|}}display{{[-]}} | {{|UsageOption|}}options-display{{[-]}} | {{|UsageOption|}}theme{{[-]}} | {{|UsageOption|}}options-theme{{[-]}} >{{[-]}}",
-			"	Load the {{|UsagePage|}}Appearance{{[-]}} page in the menu.",
+			"	Load the {{|UsagePage|}}Appearance{{[-]}} page as the root.",
 			"{{|UsageCommand|}}-M --menu{{[-]}} < {{|UsageOption|}}config-app-select{{[-]}} | {{|UsageOption|}}app-select{{[-]}} | {{|UsageOption|}}select{{[-]}} >{{[-]}}",
-			"	Load the {{|UsagePage|}}Application Selection{{[-]}} page in the menu.",
+			"	Load the {{|UsagePage|}}Application Selection{{[-]}} page as the root.",
+			"{{|UsageCommand|}}-M --menu{{[-]}} < {{|UsageOption|}}start-config{{[-]}} | {{|UsageOption|}}start-options{{[-]}} | {{|UsageOption|}}start-appearance{{[-]}} | {{|UsageOption|}}start-app-select{{[-]}} >{{[-]}}",
+			"	Load the page with its full navigation history pre-populated.",
+			"	Back returns to the parent page instead of exiting.",
 		)
 	}
 	if match("-S", "--select", "--menu-config-app-select", "--menu-app-select") {

@@ -119,12 +119,12 @@ func (s *MainMenuScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegion {
 // Navigation commands
 func navigateToConfigMenu() tea.Cmd {
 	return func() tea.Msg {
-		return tui.NavigateMsg{Screen: NewConfigMenuScreen()}
+		return tui.NavigateMsg{Screen: NewConfigMenuScreen(false)}
 	}
 }
 
 func navigateToOptionsMenu() tea.Cmd {
 	return func() tea.Msg {
-		return tui.NavigateMsg{Screen: NewOptionsMenuScreen()}
+		return tui.NavigateMsg{Screen: NewOptionsMenuScreen(false)}
 	}
 }

@@ -25,14 +25,19 @@ type AppSelectionScreen struct {
 
 type TriggerSaveMsg struct{}
 
-// NewAppSelectionScreen creates a new AppSelectionScreen
-func NewAppSelectionScreen(conf config.AppConfig) *AppSelectionScreen {
+// NewAppSelectionScreen creates a new AppSelectionScreen.
+// isRoot suppresses the Back button when this screen is the entry point.
+func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScreen {
+	var backAction tea.Cmd
+	if !isRoot {
+		backAction = navigateBack()
+	}
 	menu := tui.NewMenuModel(
 		"app_selection",
 		"Select Applications",
 		"Choose which apps you would like to install:\nUse {{|Theme_KeyCap|}}[up]{{[-]}}, {{|Theme_KeyCap|}}[down]{{[-]}}, and {{|Theme_KeyCap|}}[space]{{[-]}} to select apps, and {{|Theme_KeyCap|}}[tab]{{[-]}} to switch to the buttons at the bottom.",
 		nil, // items will be set by refreshItems
-		navigateBack(),
+		backAction,
 	)
 	menu.SetMaximized(true)
 	menu.SetButtonLabels("Done", "Cancel", "Exit")

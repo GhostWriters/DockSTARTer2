@@ -150,8 +150,10 @@ type AppModel struct {
 	hitRegions HitRegions
 }
 
-// NewAppModel creates a new application model
-func NewAppModel(ctx context.Context, cfg config.AppConfig, startScreen ScreenModel) *AppModel {
+// NewAppModel creates a new application model.
+// initialStack is optional; pass parent screens (outermost first) to pre-populate
+// the navigation stack so that Back navigates to the parent rather than quitting.
+func NewAppModel(ctx context.Context, cfg config.AppConfig, startScreen ScreenModel, initialStack ...ScreenModel) *AppModel {
 	// Get initial help text from screen if available
 	helpText := ""
 	if startScreen != nil {
@@ -159,11 +161,14 @@ func NewAppModel(ctx context.Context, cfg config.AppConfig, startScreen ScreenMo
 		CurrentPageName = startScreen.MenuName()
 	}
 
+	stack := make([]ScreenModel, len(initialStack))
+	copy(stack, initialStack)
+
 	return &AppModel{
 		ctx:          ctx,
 		config:       cfg,
 		activeScreen: startScreen,
-		screenStack:  make([]ScreenModel, 0),
+		screenStack:  stack,
 		backdrop:     NewBackdropModel(helpText),
 		logPanel:     NewLogPanelModel(),
 	}
