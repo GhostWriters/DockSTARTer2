@@ -362,7 +362,6 @@ func handleConfigPm(ctx context.Context, group *CommandGroup) error {
 }
 
 func handleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, restArgs []string) error {
-	errOccurred := false
 	switch group.Command {
 	case "-u", "--update":
 		appVer := ""
@@ -373,43 +372,20 @@ func handleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, res
 		if len(group.Args) > 1 {
 			templBranch = group.Args[1]
 		}
-		if err := update.UpdateTemplates(ctx, state.Force, state.Yes, templBranch); err != nil {
-			if !errors.Is(err, console.ErrUserAborted) {
-				logger.Error(ctx, "Templates update failed: %v", err)
-			}
-			errOccurred = true
-		}
-		if err := update.SelfUpdate(ctx, state.Force, state.Yes, appVer, restArgs); err != nil {
-			if !errors.Is(err, console.ErrUserAborted) {
-				logger.Error(ctx, "App update failed: %v", err)
-			}
-			errOccurred = true
-		}
+		_ = update.UpdateTemplates(ctx, state.Force, state.Yes, templBranch)
+		_ = update.SelfUpdate(ctx, state.Force, state.Yes, appVer, restArgs)
 	case "--update-app":
 		appVer := ""
 		if len(group.Args) > 0 {
 			appVer = group.Args[0]
 		}
-		if err := update.SelfUpdate(ctx, state.Force, state.Yes, appVer, restArgs); err != nil {
-			if !errors.Is(err, console.ErrUserAborted) {
-				logger.Error(ctx, "App update failed: %v", err)
-			}
-			errOccurred = true
-		}
+		_ = update.SelfUpdate(ctx, state.Force, state.Yes, appVer, restArgs)
 	case "--update-templates":
 		templBranch := ""
 		if len(group.Args) > 0 {
 			templBranch = group.Args[0]
 		}
-		if err := update.UpdateTemplates(ctx, state.Force, state.Yes, templBranch); err != nil {
-			if !errors.Is(err, console.ErrUserAborted) {
-				logger.Error(ctx, "Templates update failed: %v", err)
-			}
-			errOccurred = true
-		}
-	}
-	if errOccurred {
-		return fmt.Errorf("update failed")
+		_ = update.UpdateTemplates(ctx, state.Force, state.Yes, templBranch)
 	}
 	return nil
 }

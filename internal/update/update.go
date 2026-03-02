@@ -425,7 +425,7 @@ func UpdateTemplates(ctx context.Context, force bool, yes bool, requestedBranch 
 	}
 	if !answer {
 		logger.Notice(ctx, noNotice)
-		return console.ErrUserAborted
+		return nil
 	}
 
 	// Execution
