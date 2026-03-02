@@ -76,6 +76,9 @@ func (m *LogPanelModel) SetSize(width, totalTermHeight int) {
 	m.width = width
 	m.totalHeight = totalTermHeight
 
+	// Always sync viewport width so background log line wrapping is accurate
+	m.viewport.SetWidth(width)
+
 	if m.expanded {
 		// If height is unset (0), default to half screen
 		if m.height == 0 {
@@ -94,7 +97,6 @@ func (m *LogPanelModel) SetSize(width, totalTermHeight int) {
 		if vpH < 1 {
 			vpH = 1
 		}
-		m.viewport.SetWidth(width)
 		m.viewport.SetHeight(vpH)
 	}
 }
@@ -180,6 +182,11 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// If expanding, ensure we have the correct size immediately
 		if m.expanded {
 			m.SetSize(m.width, m.totalHeight)
+
+			// Repopulate content when opening
+			content := strings.Join(m.lines, "\n")
+			m.viewport.SetContent(content)
+
 			// The viewport's YOffset may be out of bounds if logs arrived while
 			// the panel had 0 height. Scrolling to bottom corrects it.
 			m.viewport.GotoBottom()
@@ -203,6 +210,11 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.height = 1
 				m.SetSize(m.width, m.totalHeight)
 				m.heightAtDragStart = 1
+
+				// Repopulate content when opening via drag
+				content := strings.Join(m.lines, "\n")
+				m.viewport.SetContent(content)
+				m.viewport.GotoBottom()
 			}
 			return m, nil
 		}

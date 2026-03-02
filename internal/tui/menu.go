@@ -1278,10 +1278,7 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	listX := 1 // default: inside outer border
 	subtitleHeight := 0
 
-	// Outer border top (with title) adds 1 line
-	if styles.DrawBorders {
-		listY = 1
-	}
+	listY = 1
 
 	// Subtitle adds its rendered height.
 	// Use outerContentWidth (list.Width + 4) to match actual rendering — the subtitle
@@ -1303,7 +1300,7 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	// each side: outer(1) + margin(1) + inner border(1) = listX 3, listY +1.
 	// In subMenuMode items render directly inside the outer border with no inner border
 	// and no margin, so both adjustments are skipped.
-	if styles.DrawBorders && !m.subMenuMode {
+	if !m.subMenuMode {
 		listX = 3 // outer border (1) + margin (1) + inner border (1)
 		listY += 1
 	}
