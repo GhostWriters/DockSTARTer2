@@ -41,3 +41,23 @@ func Debug() bool {
 func GUI() bool {
 	return GlobalGUI
 }
+
+// SetForce sets the --force flag.
+func SetForce(v bool) {
+	GlobalForce = v
+}
+
+// SetAssumeYes sets the --yes flag.
+func SetAssumeYes(v bool) {
+	GlobalYes = v
+}
+
+// SetVerbose sets the --verbose flag.
+func SetVerbose(v bool) {
+	GlobalVerbose = v
+}
+
+// SetDebug sets the --debug flag.
+func SetDebug(v bool) {
+	GlobalDebug = v
+}

@@ -268,6 +268,9 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Fall through to common update logic (backdrop and activeScreen)
 
+	case ShowGlobalFlagsMsg:
+		return m, func() tea.Msg { return ShowDialogMsg{Dialog: NewFlagsToggleDialog()} }
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -448,24 +451,29 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Fallback: if stack is empty and no screen, we quit.
-		// Reaching here usually means the main dialog that started the program is closing itself.
-		// This handles NewAppModelStandalone cases and standalone screens after NavigateBack is handled.
 		if m.activeScreen == nil {
 			return m, tea.Quit
 		}
 
-		// Ensure header is unfocused when returning to screen
-		m.backdrop.header.SetFocus(HeaderFocusNone)
+		// When returning to screen:
+		// If header was already focused (e.g. status bar flags), KEEP it focused.
+		// Only clear header focus if it wasn't already focused.
+		if m.backdrop.header.GetFocus() == HeaderFocusNone {
+			m.backdrop.header.SetFocus(HeaderFocusNone) // No-op, but for clarity
+		}
+		// In fact, the user wants focus to return to status bar.
+		// If we opened the flags dialog, HeaderFocusFlags was already set.
+		// So we just return.
 		return m, nil
 
 	case UpdateHeaderMsg:
-		m.backdrop.header.Refresh()
+		m.backdrop.header.SyncFlags()
 		return m, nil
 
 	case ConfigChangedMsg:
 		m.config = msg.Config
 		InitStyles(m.config)
-		m.backdrop.header.Refresh()
+		m.backdrop.header.SyncFlags()
 
 		// Manually trigger sizing to avoid the complexities of tea.WindowSizeMsg re-triggering
 		m.backdrop.SetSize(m.width, m.backdropHeight())
@@ -554,9 +562,12 @@ func (m *AppModel) setHeaderFocus(focus HeaderFocus) {
 func (m *AppModel) updateComponentFocus() {
 	// Screen/Dialog is focused ONLY if neither log panel nor header have focus
 	mainFocused := !m.logPanelFocused && m.backdrop.header.GetFocus() == HeaderFocusNone
+	dialogOpen := m.dialog != nil
+
 	if m.activeScreen != nil {
 		if focusable, ok := m.activeScreen.(interface{ SetFocused(bool) }); ok {
-			focusable.SetFocused(mainFocused)
+			// Screen is focused only if main area is focused AND no dialog is open
+			focusable.SetFocused(mainFocused && !dialogOpen)
 		}
 	}
 	if m.dialog != nil {
@@ -616,8 +627,7 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		return m, logger.RecoverTUI(m.ctx, tea.Quit), true
 	}
 
-	// Screen Navigation / Element Cycling
-	// Cycle: Screen -> LogPanel -> Header(App) -> Header(Tmpl) -> Screen
+	// Cycle: Screen -> LogPanel -> Header(Flags) -> Header(App) -> Header(Tmpl) -> Screen
 	if key.Matches(msg, Keys.Tab) {
 		if m.logPanelFocused {
 			if m.dialog != nil {
@@ -625,6 +635,12 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 				m.setLogPanelFocus(false)
 				return m, nil, true
 			}
+			m.setHeaderFocus(HeaderFocusFlags)
+			return m, nil, true
+		} else if m.dialog != nil {
+			// Dialog open: Do not allow tab cycling into the header. Focus just stays in dialog.
+			return m, nil, true
+		} else if m.backdrop.header.GetFocus() == HeaderFocusFlags {
 			m.setHeaderFocus(HeaderFocusApp)
 			return m, nil, true
 		} else if m.backdrop.header.GetFocus() == HeaderFocusApp {
@@ -644,8 +660,11 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		if m.logPanelFocused {
 			m.setLogPanelFocus(false)
 			return m, nil, true
-		} else if m.backdrop.header.GetFocus() == HeaderFocusApp {
+		} else if m.backdrop.header.GetFocus() == HeaderFocusFlags {
 			m.setLogPanelFocus(true)
+			return m, nil, true
+		} else if m.backdrop.header.GetFocus() == HeaderFocusApp {
+			m.setHeaderFocus(HeaderFocusFlags)
 			return m, nil, true
 		} else if m.backdrop.header.GetFocus() == HeaderFocusTmpl {
 			m.setHeaderFocus(HeaderFocusApp)
@@ -663,19 +682,28 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	}
 
 	// Arrow Key Navigation within Header
-	if m.dialog == nil && m.backdrop.header.GetFocus() != HeaderFocusNone {
+	// We handle this regardless of m.dialog != nil because the header should trap its keys if focused
+	if m.backdrop.header.GetFocus() != HeaderFocusNone {
 		if key.Matches(msg, Keys.Right) {
-			if m.backdrop.header.GetFocus() == HeaderFocusApp {
+			switch m.backdrop.header.GetFocus() {
+			case HeaderFocusFlags:
+				m.setHeaderFocus(HeaderFocusApp)
+			case HeaderFocusApp:
 				m.setHeaderFocus(HeaderFocusTmpl)
 			}
-			// Consume the key event even if already on last item
 			return m, nil, true
 		}
 		if key.Matches(msg, Keys.Left) {
-			if m.backdrop.header.GetFocus() == HeaderFocusTmpl {
+			switch m.backdrop.header.GetFocus() {
+			case HeaderFocusTmpl:
 				m.setHeaderFocus(HeaderFocusApp)
+			case HeaderFocusApp:
+				m.setHeaderFocus(HeaderFocusFlags)
 			}
-			// Consume the key event even if already on first item
+			return m, nil, true
+		}
+		// Trap Up/Down keys so they don't leak to underlying screens/dialogs
+		if key.Matches(msg, Keys.Up) || key.Matches(msg, Keys.Down) {
 			return m, nil, true
 		}
 		// Escape to return to screen
@@ -686,8 +714,10 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	}
 
 	// Handle Enter on focused header items
-	if m.dialog == nil && key.Matches(msg, Keys.Enter) {
+	if key.Matches(msg, Keys.Enter) && m.backdrop.header.GetFocus() != HeaderFocusNone {
 		switch m.backdrop.header.GetFocus() {
+		case HeaderFocusFlags:
+			return m, func() tea.Msg { return ShowGlobalFlagsMsg{} }, true
 		case HeaderFocusApp:
 			return m, logger.RecoverTUI(m.ctx, TriggerAppUpdate()), true
 		case HeaderFocusTmpl:
@@ -843,6 +873,9 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 
 		// Status bar: route wheel to the header for version cycling
 		if hitID == IDStatusBar || hitID == IDAppVersion || hitID == IDTmplVersion {
+			if m.dialog != nil {
+				return m, nil, true // Block interaction if dialog is open
+			}
 			var cmd tea.Cmd
 			if m.backdrop != nil {
 				updated, bCmd := m.backdrop.Update(LayerWheelMsg{ID: IDStatusBar, Button: wheelMsg.Button})
@@ -919,7 +952,10 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		hitID := m.hitRegions.FindHit(click.X, click.Y)
 
 		// Status bar: middle-click activates the currently focused version item
-		if hitID == IDStatusBar || hitID == IDAppVersion || hitID == IDTmplVersion {
+		if hitID == IDStatusBar || hitID == IDAppVersion || hitID == IDTmplVersion || hitID == IDHeaderFlags {
+			if m.dialog != nil {
+				return m, nil, true // Block interaction if dialog is open
+			}
 			var cmd tea.Cmd
 			if m.backdrop != nil {
 				updated, bCmd := m.backdrop.Update(ToggleFocusedMsg{})
@@ -1071,11 +1107,16 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		// C. Global Backdrop (Header etc)
 		var backdropCmd tea.Cmd
 		if m.backdrop != nil {
-			updated, bCmd := m.backdrop.Update(semanticMsg)
-			if backdrop, ok := updated.(*BackdropModel); ok {
-				m.backdrop = backdrop
+			// Do NOT forward semantic messages natively to backdrop if a dialog is open (prevents status bar hits)
+			if m.dialog != nil && (hitID == IDStatusBar || hitID == IDAppVersion || hitID == IDTmplVersion || hitID == IDHeaderFlags) {
+				// Block background hits
+			} else {
+				updated, bCmd := m.backdrop.Update(semanticMsg)
+				if backdrop, ok := updated.(*BackdropModel); ok {
+					m.backdrop = backdrop
+				}
+				backdropCmd = bCmd
 			}
-			backdropCmd = bCmd
 		}
 
 		// RETURN FALSE: Allow raw message to fall through for full compatibility

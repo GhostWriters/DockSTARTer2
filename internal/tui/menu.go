@@ -135,7 +135,7 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 		}
 	}
 
-	tagWidth := lipgloss.Width(GetPlainText(tag))
+	// tagWidth removed as it was unused
 
 	// Checkbox visual [ ] or [x] / Radio visual ( ) or (*)
 	checkbox := ""
@@ -180,7 +180,7 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 	// Whitespace (gaps and trailing) should always use neutral background
 	gapStyle := neutralStyle
 
-	paddingSpaces := strutil.Repeat(" ", d.maxTagLen-tagWidth+2)
+	paddingSpaces := strutil.Repeat(" ", max(0, d.maxTagLen-lipgloss.Width(GetPlainText(tag))+3))
 
 	// Calculate checkbox/radio width dynamically
 	cbWidth := lipgloss.Width(GetPlainText(checkbox))
@@ -297,7 +297,7 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 		}
 	}
 
-	tagWidth := lipgloss.Width(GetPlainText(checkbox)) + lipgloss.Width(GetPlainText(tag))
+	// tagWidth removed as it was unused
 
 	// Highlighting for gap and description
 	// Use itemStyle as base for description so highlight applies, or dialogBG if not selected
@@ -308,7 +308,7 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 	// Whitespace (gaps and trailing) should always use neutral background
 	gapStyle := neutralStyle
 
-	paddingSpaces := strutil.Repeat(" ", d.maxTagLen-tagWidth+2)
+	paddingSpaces := strutil.Repeat(" ", max(0, d.maxTagLen-lipgloss.Width(GetPlainText(tag))+3))
 	availableWidth := m.Width() - (d.maxTagLen + 2) - 2
 	if availableWidth < 0 {
 		availableWidth = 0
@@ -371,6 +371,9 @@ type MenuModel struct {
 	// Checkbox mode (for app selection)
 	checkboxMode bool
 	flowMode     bool // Whether to layout items horizontally instead of vertically
+
+	// Dialog positioning
+	isDialog bool // False if it is a full screen (uses ZScreen), True if a popup modal (uses ZDialog)
 
 	// Unified layout (deterministic sizing)
 	layout DialogLayout
@@ -998,7 +1001,7 @@ func (m *MenuModel) prevButtonFocus() FocusItem {
 
 func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 	switch m.focusedItem {
-	case FocusList, FocusSelectBtn:
+	case FocusList:
 		// Get selected item from bubbles list
 		selectedItem := m.list.SelectedItem()
 		if item, ok := selectedItem.(MenuItem); ok {
@@ -1008,6 +1011,15 @@ func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 				menuSelectedIndices[m.id] = m.cursor
 				return m, item.Action
 			}
+			// In checkbox mode, Enter toggles the item if it has no specific action
+			if m.checkboxMode {
+				m.ToggleSelectedItem()
+				return m, nil
+			}
+		}
+	case FocusSelectBtn:
+		if m.enterAction != nil {
+			return m, m.enterAction
 		}
 	case FocusBackBtn:
 		if m.backAction != nil {
@@ -1017,8 +1029,8 @@ func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 
-	// Fallback to model-level enter action if item had no action
-	if m.enterAction != nil {
+	// Fallback to model-level enter action if we are in the list and it had no action
+	if m.focusedItem == FocusList && m.enterAction != nil {
 		return m, m.enterAction
 	}
 
@@ -1157,11 +1169,10 @@ func (m *MenuModel) ViewString() string {
 		subtitleStyle := styles.Dialog.
 			Width(outerContentWidth).
 			Padding(0, 1).
-			Align(subAlign)
+			Align(subAlign).
+			Border(lipgloss.Border{}) // Ensure no border on subtitle itself
 
-		// Use RenderThemeText for proper inline tag handling (not just leading tags)
 		subStr := RenderThemeText(m.subtitle, subtitleStyle)
-
 		subtitle := subtitleStyle.Render(subStr)
 		innerParts = append(innerParts, subtitle)
 	}
@@ -1231,6 +1242,7 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	styles := GetStyles()
 	listY := 0
 	listX := 1 // default: inside outer border
+	subtitleHeight := 0
 
 	// Outer border top (with title) adds 1 line
 	if styles.DrawBorders {
@@ -1246,10 +1258,11 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	// that cause extra wrapping and push all item hit regions down by 1+ rows).
 	if m.subtitle != "" {
 		subtitleWidth := m.list.Width() + 4
-		subtitleStyle := styles.Dialog.Width(subtitleWidth).Padding(0, 1)
+		subtitleStyle := styles.Dialog.Width(subtitleWidth).Padding(0, 1).Border(lipgloss.Border{})
 		subStr := RenderThemeText(m.subtitle, subtitleStyle)
 		subtitleRendered := subtitleStyle.Render(subStr)
-		listY += lipgloss.Height(subtitleRendered)
+		subtitleHeight = lipgloss.Height(subtitleRendered)
+		listY += subtitleHeight
 	}
 
 	// In standard mode the list is wrapped in an inner border with a 1-char margin on
@@ -1259,6 +1272,11 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	if styles.DrawBorders && !m.subMenuMode {
 		listX = 3 // outer border (1) + margin (1) + inner border (1)
 		listY += 1
+	}
+
+	baseZ := ZScreen
+	if m.isDialog {
+		baseZ = ZDialog
 	}
 
 	// Item regions: vertical list mode vs horizontal flow mode.
@@ -1285,7 +1303,7 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 				Y:      offsetY + listY + i,
 				Width:  itemWidth,
 				Height: 1,
-				ZOrder: ZDialog + 10,
+				ZOrder: baseZ + 10,
 			})
 		}
 	} else {
@@ -1359,7 +1377,7 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 				Y:      offsetY + listY + flowLine,
 				Width:  itemWidth,
 				Height: 1,
-				ZOrder: ZDialog + 10,
+				ZOrder: baseZ + 10,
 			})
 		}
 	}
@@ -1401,12 +1419,12 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 				Y:      offsetY + buttonY,
 				Width:  contentWidth,
 				Height: DialogButtonHeight,
-				ZOrder: ZDialog + 15,
+				ZOrder: baseZ + 15,
 			})
 
 			// Use centralized helper for button hit regions (empty dialogID since menus don't need prefixes)
 			regions = append(regions, GetButtonHitRegions(
-				"", offsetX+1, offsetY+buttonY, contentWidth, ZDialog+20,
+				"", offsetX+1, offsetY+buttonY, contentWidth, baseZ+20,
 				specs...,
 			)...)
 		}
@@ -1417,9 +1435,18 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 
 // Layers returns a single layer with the menu content for visual compositing
 func (m *MenuModel) Layers() []*lipgloss.Layer {
-	return []*lipgloss.Layer{
-		lipgloss.NewLayer(m.ViewString()).Z(ZDialog).ID(m.id),
+	baseZ := ZScreen
+	if m.isDialog {
+		baseZ = ZDialog
 	}
+	return []*lipgloss.Layer{
+		lipgloss.NewLayer(m.ViewString()).Z(baseZ).ID(m.id),
+	}
+}
+
+// SetIsDialog sets whether the menu acts as a modal dialog vs an underlying screen
+func (m *MenuModel) SetIsDialog(isDialog bool) {
+	m.isDialog = isDialog
 }
 
 // getButtonSpecs returns the current button configuration based on state
@@ -1639,18 +1666,8 @@ func (m *MenuModel) calculateLayout() {
 		maxListHeight = m.height - overhead
 	} else {
 		// Full dialog overhead: borders, subtitle, buttons, shadow
-		// Account for internal gaps: 1 after subtitle, 1 before buttons
-		internalOverhead := subtitleHeight
-		if m.subtitle != "" {
-			internalOverhead += 1 // Gap after subtitle
-		}
-
-		maxListHeight = layout.DialogContentHeight(m.height, internalOverhead, true, hasShadow)
-
-		// Subtract 1 more for the gap before buttons (not covered by DialogButtonHeight)
-		maxListHeight -= 1
-
-		// Total overhead = total height - available list height
+		// Vertical budgeting uses DialogContentHeight which handles gaps
+		maxListHeight = layout.DialogContentHeight(m.height, subtitleHeight, true, hasShadow)
 		overhead = m.height - maxListHeight
 	}
 

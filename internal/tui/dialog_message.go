@@ -118,8 +118,35 @@ func (m *messageDialogModel) ViewString() string {
 		titlePrefix = "ℹ "
 	}
 
-	// Calculate content dimensions from layout
-	contentWidth := m.layout.Width - 2
+	// 1. Calculate ideal content width based on message text
+	strippedMessage := GetPlainText(m.message)
+	msgLines := strings.Split(strippedMessage, "\n")
+	maxMsgWidth := 0
+	for _, line := range msgLines {
+		w := lipgloss.Width(line)
+		if w > maxMsgWidth {
+			maxMsgWidth = w
+		}
+	}
+	contentWidth := maxMsgWidth + 4 // Padding
+
+	// 2. Measure button string requirements
+	minButtonWidth := lipgloss.Width(" OK ") + 4
+	if minButtonWidth > contentWidth {
+		contentWidth = minButtonWidth
+	}
+
+	// 3. Measure title requirements
+	fullTitle := titlePrefix + GetPlainText(m.title)
+	titleW := lipgloss.Width(fullTitle) + 6
+	if titleW > contentWidth {
+		contentWidth = titleW
+	}
+
+	// 4. Constrain to layout
+	if contentWidth > m.layout.Width-2 {
+		contentWidth = m.layout.Width - 2
+	}
 
 	// Wrap message text to fit width
 	messageStyle = messageStyle.Width(contentWidth)
@@ -138,7 +165,6 @@ func (m *messageDialogModel) ViewString() string {
 	fullContent := lipgloss.JoinVertical(lipgloss.Left, content, buttonRow)
 
 	// Add title with prefix and wrap in border
-	fullTitle := titlePrefix + m.title
 	dialogWithTitle := RenderDialog(fullTitle, fullContent, m.focused, 0)
 
 	// Add shadow
@@ -176,7 +202,33 @@ func (m *messageDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		messageStyle = lipgloss.NewStyle().Foreground(styles.ItemNormal.GetForeground()).Padding(1, 2)
 	}
 
-	contentWidth := m.layout.Width - 2
+	// Recalculate content width for hit regions just like ViewString
+	strippedMessage := GetPlainText(m.message)
+	msgLines := strings.Split(strippedMessage, "\n")
+	maxMsgWidth := 0
+	for _, line := range msgLines {
+		w := lipgloss.Width(line)
+		if w > maxMsgWidth {
+			maxMsgWidth = w
+		}
+	}
+	contentWidth := maxMsgWidth + 4
+
+	minButtonWidth := lipgloss.Width(" OK ") + 4
+	if minButtonWidth > contentWidth {
+		contentWidth = minButtonWidth
+	}
+
+	titleTrimmed := GetPlainText(m.title)
+	titleW := lipgloss.Width(titleTrimmed) + 8
+	if titleW > contentWidth {
+		contentWidth = titleW
+	}
+
+	if contentWidth > m.layout.Width-2 {
+		contentWidth = m.layout.Width - 2
+	}
+
 	messageStyle = messageStyle.Width(contentWidth)
 	messageHeight := lipgloss.Height(messageStyle.Render(m.message))
 

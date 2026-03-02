@@ -153,8 +153,9 @@ func (m *confirmDialogModel) ViewString() string {
 	borderBG := ctx.Dialog.GetBackground()
 
 	// 1. Calculate ideal content width based on question text and buttons
-	// Split question into lines to find longest line
-	questionLines := strings.Split(m.question, "\n")
+	// Strip tags first so they don't incorrectly inflate the width
+	strippedQuestion := GetPlainText(m.question)
+	questionLines := strings.Split(strippedQuestion, "\n")
 	maxQuestionWidth := 0
 	for _, line := range questionLines {
 		w := lipgloss.Width(line)
@@ -176,14 +177,15 @@ func (m *confirmDialogModel) ViewString() string {
 	}
 
 	// 3. Ensure it's at least as wide as the title
-	titleW := lipgloss.Width(m.title) + 6 // Title + connectors + space
+	titleW := lipgloss.Width(GetPlainText(m.title)) + 6 // Title + connectors + space
 	if titleW > contentWidth {
 		contentWidth = titleW
 	}
 
 	// 4. Constrain by available layout width
-	if contentWidth > m.layout.Width-2 {
-		contentWidth = m.layout.Width - 2
+	maxAllowed := m.layout.Width - 2
+	if contentWidth > maxAllowed {
+		contentWidth = maxAllowed
 	}
 
 	// Question text style - inherit from ctx.Dialog to get background
@@ -240,12 +242,38 @@ func (m *confirmDialogModel) Layers() []*lipgloss.Layer {
 func (m *confirmDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	// Calculate button positions
 	ctx := GetActiveContext()
-	questionStyle := ctx.Dialog.Padding(1, 2).Width(m.layout.Width - 2)
+	maxAllowed := m.layout.Width - 2
+
+	questionStyle := ctx.Dialog.Padding(1, 2).Width(maxAllowed)
 	questionHeight := lipgloss.Height(questionStyle.Render(m.question))
 
 	// buttonY: border (1) + question with padding
 	buttonY := 1 + questionHeight
-	contentWidth := m.layout.Width - 2
+
+	// Strip tags first so they don't incorrectly inflate the width
+	strippedQuestion := GetPlainText(m.question)
+	questionLines := strings.Split(strippedQuestion, "\n")
+	maxQuestionWidth := 0
+	for _, line := range questionLines {
+		w := lipgloss.Width(line)
+		if w > maxQuestionWidth {
+			maxQuestionWidth = w
+		}
+	}
+	contentWidth := maxQuestionWidth + 4
+	btn1W := lipgloss.Width("Yes") + 4
+	btn2W := lipgloss.Width("No") + 4
+	minButtonWidth := btn1W + btn2W + 4
+	if minButtonWidth > contentWidth {
+		contentWidth = minButtonWidth
+	}
+	titleW := lipgloss.Width(m.title) + 6
+	if titleW > contentWidth {
+		contentWidth = titleW
+	}
+	if contentWidth > maxAllowed {
+		contentWidth = maxAllowed
+	}
 
 	// Use centralized button hit region helper with dialog ID for disambiguation
 	// Must include Text to properly calculate button width

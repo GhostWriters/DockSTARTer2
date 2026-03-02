@@ -117,6 +117,7 @@ type Styles struct {
 	StatusBar          lipgloss.Style
 	StatusBarBorder    lipgloss.Style
 	StatusBarSeparator lipgloss.Style
+	StatusBarSelected  lipgloss.Style
 
 	// Help line
 	HelpLine lipgloss.Style
@@ -170,6 +171,7 @@ type StyleContext struct {
 	StatusWarn          lipgloss.Style
 	StatusError         lipgloss.Style
 	Console             lipgloss.Style
+	StatusBarSelected   lipgloss.Style
 	LogPanelColor       color.Color
 	DialogTitleAlign    string
 	SubmenuTitleAlign   string
@@ -214,6 +216,7 @@ func GetActiveContext() StyleContext {
 		StatusWarn:          currentStyles.StatusWarn,
 		StatusError:         currentStyles.StatusError,
 		Console:             currentStyles.Console,
+		StatusBarSelected:   currentStyles.StatusBarSelected,
 		LogPanelColor:       currentStyles.LogPanelColor,
 		DialogTitleAlign:    currentStyles.DialogTitleAlign,
 		SubmenuTitleAlign:   currentStyles.SubmenuTitleAlign,
@@ -437,6 +440,8 @@ func InitStyles(cfg config.AppConfig) {
 
 	// Header / Status Bar
 	currentStyles.StatusBar = SemanticRawStyle("Theme_StatusBar")
+	currentStyles.StatusBarSeparator = SemanticRawStyle("Theme_StatusBarSeparator")
+	currentStyles.StatusBarSelected = SemanticRawStyle("Theme_StatusBarSelected")
 	currentStyles.StatusBarBorder = SemanticRawStyle("Theme_StatusBarBorder")
 	if currentStyles.StatusBarBorder.GetForeground() == nil && currentStyles.StatusBarBorder.GetBackground() == nil {
 		// Fallback for themes that don't define StatusBarBorder

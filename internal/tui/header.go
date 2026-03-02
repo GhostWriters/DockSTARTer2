@@ -2,6 +2,7 @@ package tui
 
 import (
 	"os"
+	"sort"
 
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/paths"
@@ -20,11 +21,18 @@ const (
 	HeaderFocusNone HeaderFocus = iota
 	HeaderFocusApp
 	HeaderFocusTmpl
+	HeaderFocusFlags
 )
+
+// ShowGlobalFlagsMsg requests the flags toggle dialog
+type ShowGlobalFlagsMsg struct{}
+
+// RefreshHeaderMsg signals the header to re-read flags and other dynamic data
+type RefreshHeaderMsg struct{}
 
 // Zone IDs
 const (
-	ZoneAppVersion  = "header_app_ver"
+	IDHeaderFlags   = "header_flags"
 	ZoneTmplVersion = "header_tmpl_ver"
 )
 
@@ -75,7 +83,7 @@ func (m *HeaderModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.ID == IDStatusBar {
 			// Clicking the status bar background → focus App version if nothing is focused.
 			if m.focus == HeaderFocusNone {
-				m.focus = HeaderFocusApp
+				m.focus = HeaderFocusFlags
 			}
 			return m, nil
 		}
@@ -84,19 +92,36 @@ func (m *HeaderModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case LayerWheelMsg:
 		if msg.ID == IDStatusBar {
-			// Scroll wheel cycles between App and Tmpl version focus.
+			// Scroll wheel cycles between Flags, App version and Tmpl version focus.
 			if msg.Button == tea.MouseWheelUp {
-				m.focus = HeaderFocusApp
+				switch m.focus {
+				case HeaderFocusNone, HeaderFocusApp:
+					m.focus = HeaderFocusFlags
+				case HeaderFocusTmpl:
+					m.focus = HeaderFocusApp
+				}
 			} else if msg.Button == tea.MouseWheelDown {
-				m.focus = HeaderFocusTmpl
+				switch m.focus {
+				case HeaderFocusNone, HeaderFocusFlags:
+					m.focus = HeaderFocusApp
+				case HeaderFocusApp:
+					m.focus = HeaderFocusTmpl
+				}
 			}
 			return m, nil
 		}
 	}
 
-	// Middle-click (ToggleFocusedMsg) activates the currently focused version item.
+	if _, ok := msg.(RefreshHeaderMsg); ok {
+		m.SyncFlags()
+		return m, nil
+	}
+
+	// Middle-click (ToggleFocusedMsg) activates the currently focused item.
 	if _, ok := msg.(ToggleFocusedMsg); ok {
 		switch m.focus {
+		case HeaderFocusFlags:
+			return m, func() tea.Msg { return ShowGlobalFlagsMsg{} }
 		case HeaderFocusApp:
 			return m, TriggerAppUpdate()
 		case HeaderFocusTmpl:
@@ -113,9 +138,24 @@ func (m *HeaderModel) SetWidth(width int) {
 	m.width = width
 }
 
-// Refresh updates the header (called when update status changes)
-func (m *HeaderModel) Refresh() {
-	// Nothing to cache currently, but could be used for update status
+// SyncFlags re-reads the global console flags into the header's cache
+func (m *HeaderModel) SyncFlags() {
+	var flags []string
+	if console.Verbose() {
+		flags = append(flags, "VERBOSE")
+	}
+	if console.Debug() {
+		flags = append(flags, "DEBUG")
+	}
+	if console.Force() {
+		flags = append(flags, "FORCE")
+	}
+	if console.AssumeYes() {
+		flags = append(flags, "YES")
+	}
+
+	sort.Strings(flags)
+	m.flags = flags
 }
 
 // SetFocus sets the focus state of the header
@@ -137,6 +177,9 @@ func (m *HeaderModel) HandleHit(id string) (bool, tea.Cmd) {
 	case IDTmplVersion:
 		m.SetFocus(HeaderFocusTmpl)
 		return true, TriggerTemplateUpdate()
+	case IDHeaderFlags:
+		m.SetFocus(HeaderFocusFlags)
+		return true, func() tea.Msg { return ShowGlobalFlagsMsg{} }
 	}
 	return false, nil
 }
@@ -237,21 +280,47 @@ func (m *HeaderModel) ViewString() string {
 
 func (m HeaderModel) renderLeft() string {
 	styles := GetStyles()
+	isFocused := m.focus == HeaderFocusFlags
 
-	// Build hostname with theme tag
-	leftText := "{{|Theme_Hostname|}}" + m.hostname + "{{[-]}}"
+	// 1. Hostname
+	leftText := "{{|Theme_Hostname|}}" + m.hostname + "{{[-]}} "
 
-	// Add flags if present
+	// 2. Start selection if focused
+	if isFocused {
+		leftText += "{{|Theme_StatusBarSelected|}}"
+	}
+
+	// 3. Open bracket for flags
+	if !isFocused {
+		leftText += "{{|Theme_ApplicationFlagsBrackets|}}"
+	}
+	leftText += "|"
+
+	// 4. Flags content
 	if len(m.flags) > 0 {
-		leftText += " {{|Theme_ApplicationFlagsBrackets|}}|{{[-]}}"
 		for i, flag := range m.flags {
 			if i > 0 {
-				leftText += "{{|Theme_ApplicationFlagsSpace|}}|{{[-]}}"
+				// Internal separator
+				if isFocused {
+					leftText += "|"
+				} else {
+					leftText += "{{|Theme_ApplicationFlagsBrackets|}}|{{|Theme_ApplicationFlags|}}"
+				}
+			} else if !isFocused {
+				leftText += "{{|Theme_ApplicationFlags|}}"
 			}
-			leftText += "{{|Theme_ApplicationFlags|}}" + flag + "{{[-]}}"
+			leftText += flag
 		}
-		leftText += "{{|Theme_ApplicationFlagsBrackets|}}|{{[-]}}"
 	}
+
+	// 5. Close bracket for flags
+	if !isFocused {
+		leftText += "{{|Theme_ApplicationFlagsBrackets|}}"
+	}
+	leftText += "|"
+
+	// 6. Close selection
+	leftText += "{{[-]}}"
 
 	// Translate theme tags and render with lipgloss, using header background as default
 	return MaintainBackground(RenderThemeText(leftText, styles.HeaderBG), styles.HeaderBG)
@@ -289,7 +358,7 @@ func (m HeaderModel) renderVersions() (appText, tmplText string) {
 		// 3. Version Number (The Interactive Part)
 		var verStyled string
 		if isFocused {
-			verStyled = "{{|Theme_VersionSelected|}}" + ver + "{{|Theme_StatusBar|}}"
+			verStyled = "{{|Theme_StatusBarSelected|}}" + ver + "{{|Theme_StatusBar|}}"
 		} else if isError || isAvailable {
 			verStyled = "{{|Theme_ApplicationUpdate|}}" + ver + "{{|Theme_StatusBar|}}"
 		} else {
@@ -321,6 +390,13 @@ func (m *HeaderModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	centerW := WidthWithoutZones(center)
 	appW := WidthWithoutZones(appVer)
 	tmplW := WidthWithoutZones(tmplVer)
+
+	// Add hostname and flags hit regions
+	// Hostname starts at offset 0
+	// Flags start after hostname (hostname length + 1 space)
+	hostnameW := lipgloss.Width(m.hostname)
+	flagsW := leftW - hostnameW - 1
+	regions = append(regions, HitRegion{ID: IDHeaderFlags, X: offsetX + hostnameW + 1, Y: offsetY, Width: flagsW, Height: 1, ZOrder: ZBackdrop + 1})
 
 	centerX := (m.width - centerW) / 2
 	if centerX < 0 {

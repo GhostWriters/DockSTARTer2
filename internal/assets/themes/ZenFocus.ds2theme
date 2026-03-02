@@ -14,6 +14,7 @@ Screen = "{{[black:white:B]}}"
 StatusBar = "{{[white:black:B]}}"
 StatusBarBorder = "{{|Theme_StatusBar|}}"
 StatusBarSeparator = "{{|Theme_StatusBar|}}"
+StatusBarSelected = "{{|Theme_TagSelected|}}"
 Dialog = "{{[white:black]}}"
 Border = "{{[white:white:B]}}"
 Border2 = "{{[black:white:B]}}"
@@ -93,3 +94,4 @@ border_color = 1
 dialog_title_align = "center"
 submenu_title_align = "left"
 log_title_align = "center"
+

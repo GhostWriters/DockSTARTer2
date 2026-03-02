@@ -145,15 +145,15 @@ func (m *BackdropModel) ViewString() string {
 
 	// Calculate content height using actual header height
 	helplineView := ""
-	helplineHeight := 0
 	if m.helpline != nil {
 		m.helpline.SetText(m.helpText)
 		helplineView = m.helpline.ViewString(m.width)
-		helplineHeight = lipgloss.Height(helplineView)
 	}
 
-	// Content area = total height - header lines - separator (1) - helpline
-	contentHeight := m.height - headerHeight - 1 - helplineHeight
+	layout := GetLayout()
+
+	// Content area = total height - header chrome - bottom chrome
+	contentHeight := m.height - layout.ChromeHeight(headerHeight) - layout.BottomChrome()
 	if contentHeight < 0 {
 		contentHeight = 0
 	}
@@ -187,6 +187,7 @@ func (m *BackdropModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 
 	// Full status bar background region (lower Z so specific version regions take priority).
 	// Covers the header content lines + bottom border line.
+	layout := GetLayout()
 	headerH := 1
 	if m.header != nil {
 		m.header.SetWidth(m.width - 2)
@@ -197,7 +198,7 @@ func (m *BackdropModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		X:      offsetX,
 		Y:      offsetY,
 		Width:  m.width,
-		Height: headerH + 1, // content lines + bottom border
+		Height: layout.ChromeHeight(headerH),
 		ZOrder: ZBackdrop,
 	})
 
@@ -217,13 +218,14 @@ func (m *BackdropModel) View() tea.View {
 
 // ChromeHeight returns the total rendered height of the status bar chrome:
 // header content lines + bottom border line.
-// Use this instead of hardcoding constants when computing content Y offsets.
 func (m *BackdropModel) ChromeHeight() int {
-	if m.header == nil {
-		return 1 // just the bottom border line
+	layout := GetLayout()
+	headerH := 0
+	if m.header != nil {
+		m.header.SetWidth(m.width - 2)
+		headerH = m.header.Height()
 	}
-	m.header.SetWidth(m.width - 2) // ensure width is current before measuring
-	return m.header.Height() + 1   // header content + bottom border
+	return layout.ChromeHeight(headerH)
 }
 
 // GetContentArea returns the dimensions available for overlay content
