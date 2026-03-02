@@ -1267,9 +1267,6 @@ func (m *MenuModel) ViewString() string {
 		dialog = dialogStyle.Render(content)
 	}
 
-	// Add shadow
-	dialog = AddShadow(dialog)
-
 	return dialog
 }
 

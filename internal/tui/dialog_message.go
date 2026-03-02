@@ -167,10 +167,7 @@ func (m *messageDialogModel) ViewString() string {
 	// Add title with prefix and wrap in border
 	dialogWithTitle := RenderDialog(fullTitle, fullContent, m.focused, 0)
 
-	// Add shadow
-	dialog := AddShadow(dialogWithTitle)
-
-	return dialog
+	return dialogWithTitle
 }
 
 // View implements tea.Model

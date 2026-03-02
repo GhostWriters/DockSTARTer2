@@ -220,10 +220,7 @@ func (m *confirmDialogModel) ViewString() string {
 	// Wrap in border with title embedded (matching menu style) using confirm styling
 	dialogWithTitle := RenderDialogWithType(m.title, fullContent, m.focused, 0, DialogTypeConfirm)
 
-	// Add shadow
-	dialog := AddShadow(dialogWithTitle)
-
-	return dialog
+	return dialogWithTitle
 }
 
 // View implements tea.Model

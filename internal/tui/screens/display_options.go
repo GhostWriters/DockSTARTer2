@@ -759,12 +759,8 @@ func (s *DisplayOptionsScreen) ViewString() (result string) {
 	// targetHeight uses width/height which are local copies of the intended layout
 	settingsDialog := tui.RenderBorderedBoxCtx("Appearance Settings", settingsContent, menuWidth, s.height, s.focused, false, tui.GetActiveContext().DialogTitleAlign, "Theme_Title", tui.GetActiveContext())
 
-	// Add shadow if enabled in global config (not preview config)
-	// The preview mockup shows what shadow would look like, but the
-	// settings dialog itself uses the current active setting
-	if tui.IsShadowEnabled() {
-		settingsDialog = tui.AddShadow(settingsDialog)
-	}
+	// Note: AppModel.View adds the shadow as a separate layer for all screens
+	// if enabled. we no longer add it here to avoid double-shadowing.
 
 	// If preview doesn't fit, just return the settings dialog
 	if !previewFits {

@@ -394,7 +394,8 @@ func InitStyles(cfg config.AppConfig) {
 		currentStyles.ShadowColor = shadowDef.GetBackground()
 	}
 	// Create shadow style with just the foreground color for shade chars
-	currentStyles.Shadow = lipgloss.NewStyle().Foreground(currentStyles.ShadowColor)
+	// Explicitly unset background to ensure it is clear/transparent.
+	currentStyles.Shadow = lipgloss.NewStyle().Foreground(currentStyles.ShadowColor).UnsetBackground()
 
 	// Buttons (spacing handled at layout level)
 	// Handle nil (inherit) backgrounds by falling back to DialogBG
@@ -881,46 +882,22 @@ func AddShadow(content string) string {
 	return AddShadowCtx(content, GetActiveContext())
 }
 
-// AddShadowCtx adds a shadow effect using a specific context
-func AddShadowCtx(content string, ctx StyleContext) string {
-	// Split content into lines
-	lines := strings.Split(content, "\n")
-	if len(lines) == 0 {
-		return content
+// GetShadowBoxCtx returns a solid block of shadow characters the same size as the provided content.
+// It uses the style and character set from the provided context.
+func GetShadowBoxCtx(content string, ctx StyleContext) string {
+	contentWidth := WidthWithoutZones(content)
+	contentHeight := lipgloss.Height(content)
+	if contentWidth <= 0 || contentHeight <= 0 {
+		return ""
 	}
 
-	// Use WidthWithoutZones to get accurate visual width
-	contentWidth := 0
-	contentHeight := len(lines)
-	for _, line := range lines {
-		w := WidthWithoutZones(line)
-		if w > contentWidth {
-			contentWidth = w
-		}
-	}
-
-	// Ensure all lines are padded to contentWidth to prevent jagged edges
-	paddedLines := make([]string, contentHeight)
-	for i, line := range lines {
-		w := WidthWithoutZones(line)
-		if w < contentWidth {
-			paddedLines[i] = line + strutil.Repeat(" ", contentWidth-w)
-		} else {
-			paddedLines[i] = line
-		}
-	}
-	paddedContent := strings.Join(paddedLines, "\n")
-
-	// Determine shadow characters and style
+	themeStyles := GetStyles()
+	// Ensure the base shadow style has NO background to maintain transparency
+	shadowStyle := themeStyles.Shadow.UnsetBackground()
 	var shadeChar string
-	var shadowStyle lipgloss.Style
 
 	if ctx.LineCharacters {
-		// Unicode mode: use shade characters (░▒▓█)
-		shadowStyle = ctx.Shadow.Background(ctx.Screen.GetBackground())
 		switch ctx.ShadowLevel {
-		case 0:
-			shadeChar = " "
 		case 1:
 			shadeChar = "░"
 		case 2:
@@ -930,64 +907,61 @@ func AddShadowCtx(content string, ctx StyleContext) string {
 		case 4:
 			shadeChar = "█"
 		default:
-			shadeChar = "▒"
+			shadeChar = "▒" // Default to medium
 		}
 	} else {
-		// ASCII mode
-		if ctx.ShadowLevel == 4 {
-			shadowStyle = lipgloss.NewStyle().Background(ctx.ShadowColor)
+		// ASCII mode uses character density
+		switch ctx.ShadowLevel {
+		case 1:
+			shadeChar = "."
+		case 2:
+			shadeChar = ":"
+		case 3:
+			shadeChar = "#"
+		case 4:
+			// For solid ASCII, we'll use a space and a background color
+			shadowStyle = shadowStyle.Background(ctx.ShadowColor)
 			shadeChar = " "
-		} else {
-			shadowStyle = ctx.Shadow.Background(ctx.Screen.GetBackground())
-			switch ctx.ShadowLevel {
-			case 0:
-				shadeChar = " "
-			case 1:
-				shadeChar = "."
-			case 2:
-				shadeChar = ":"
-			case 3:
-				shadeChar = "#"
-			default:
-				shadeChar = ":"
-			}
+		default:
+			shadeChar = " "
 		}
 	}
 
-	// Create a single shadow cell (2 chars wide for standard look)
-	shadowCell := shadowStyle.Render(strutil.Repeat(shadeChar, 2))
-	// Create a full shadow box string
-	var shadowBoxBuilder strings.Builder
-	shadowLine := strutil.Repeat(shadowCell, (contentWidth/2)+1)
-	// If contentWidth is odd, we might need a partial cell at the end
-	if contentWidth%2 != 0 {
-		shadowLine += shadowStyle.Render(shadeChar)
-	}
+	// BLENDING FIX: Set the background to match the screen so dither "blends" correctly.
+	// This ensures that dithered characters (░▒▓) carry the background color
+	// of the surface they are overlaying. Using lipgloss directly avoids
+	// trailing background bleeds that string-based MaintainBackground causes.
+	shadowStyle = shadowStyle.Background(ctx.Screen.GetBackground())
 
+	// Create the shadow line
+	shadowLine := shadowStyle.Render(strings.Repeat(shadeChar, contentWidth))
+
+	var sb strings.Builder
 	for i := 0; i < contentHeight; i++ {
 		if i > 0 {
-			shadowBoxBuilder.WriteString("\n")
+			sb.WriteString("\n")
 		}
-		shadowBoxBuilder.WriteString(shadowLine)
+		sb.WriteString(shadowLine)
 	}
-	shadowBox := shadowBoxBuilder.String()
 
-	// Dimensions for the combined component
-	// Dialog is at (0,0). Shadow is offset by (2,1).
-	// Total width = contentWidth + 2
-	// Total height = contentHeight + 1
-	totalW := contentWidth + 2
-	totalH := contentHeight + 1
+	return sb.String()
+}
 
-	// Create a styled background canvas
-	canvas := padToSize("", totalW, totalH)
-	canvas = MaintainBackground(canvas, ctx.Screen)
+// AddShadowCtx applies a drop shadow effect to the content by compositing it
+// over a solid shadow box with an offset. Note: This creates a single string
+// which may have "blank" padding in corners. For full transparency, use
+// the compositor and draw the shadow and content as separate layers.
+func AddShadowCtx(content string, ctx StyleContext) string {
+	if !IsShadowEnabled() {
+		return content
+	}
 
-	// Layer the components
-	// 1. Shadow background
-	result := Overlay(shadowBox, canvas, OverlayLeft, OverlayTop, 2, 1)
-	// 2. Main dialog content
-	result = Overlay(paddedContent, result, OverlayLeft, OverlayTop, 0, 0)
+	shadowBox := GetShadowBoxCtx(content, ctx)
+	if shadowBox == "" {
+		return content
+	}
 
-	return result
+	// Composite content at (0,0) and shadow at (2,1)
+	// Overlay pads with spaces where content/shadow don't overlap.
+	return Overlay(content, shadowBox, OverlayLeft, OverlayTop, -2, -1)
 }

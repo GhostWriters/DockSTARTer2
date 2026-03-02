@@ -1236,6 +1236,15 @@ func (m *AppModel) View() (v tea.View) {
 				screenY = maxY + (caH-screenH)/2
 			}
 
+			// Add shadow for all screens
+			if m.config.UI.Shadow {
+				shadowBox := GetShadowBoxCtx(screenContent, GetActiveContext())
+				if shadowBox != "" {
+					// Offset 2 right, 1 down, Z-order below screen
+					comp.AddLayers(lipgloss.NewLayer(shadowBox).X(screenX + 2).Y(screenY + 1).Z(ZScreen - 1))
+				}
+			}
+
 			if lv, ok := m.activeScreen.(LayeredView); ok {
 				for _, l := range lv.Layers() {
 					comp.AddLayers(l.X(l.GetX() + screenX).Y(l.GetY() + screenY))
@@ -1282,6 +1291,15 @@ func (m *AppModel) View() (v tea.View) {
 			}
 
 			lx, ly := layout.DialogPosition(mode, fgWidth, fgHeight, m.width, targetHeight, m.config.UI.Shadow, headerH)
+
+			// Add drop shadow as a separate layer below the dialog
+			if m.config.UI.Shadow {
+				shadowBox := GetShadowBoxCtx(content, GetActiveContext())
+				if shadowBox != "" {
+					// Offset 2 right, 1 down, Z-order just below dialog
+					comp.AddLayers(lipgloss.NewLayer(shadowBox).X(lx + 2).Y(ly + 1).Z(ZDialog - 1))
+				}
+			}
 
 			if lv, ok := m.dialog.(LayeredView); ok {
 				for _, l := range lv.Layers() {
