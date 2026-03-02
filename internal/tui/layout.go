@@ -57,7 +57,7 @@ func DefaultLayout() Layout {
 		ShadowWidth:       2,
 		ShadowHeight:      1,
 		EdgeIndent:        2, // 2 chars margin on each side of content area
-		GapBeforeHelpline: 1,
+		GapBeforeHelpline: 0,
 		GutterWidth:       1,
 	}
 }
