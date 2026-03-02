@@ -152,18 +152,17 @@ func (m *BackdropModel) ViewString() string {
 
 	layout := GetLayout()
 
-	// Content area = total height - header chrome - bottom chrome
-	contentHeight := m.height - layout.ChromeHeight(headerHeight) - layout.BottomChrome()
-	if contentHeight < 0 {
-		contentHeight = 0
+	// Fill middle space (content area + gap) with screen background
+	// Total fill lines = total height - header chrome - helpline height
+	totalFillLines := m.height - layout.ChromeHeight(headerHeight) - layout.HelplineHeight
+	if totalFillLines < 0 {
+		totalFillLines = 0
 	}
 
-	// Fill middle space with screen background
-	// We build it row by row to ensure each line is exactly m.width wide with background color
 	bgStyle := lipgloss.NewStyle().Background(styles.Screen.GetBackground())
 	fillerRow := bgStyle.Render(strutil.Repeat(" ", m.width))
 
-	for i := 0; i < contentHeight; i++ {
+	for i := 0; i < totalFillLines; i++ {
 		b.WriteString(fillerRow)
 		b.WriteString("\n")
 	}
