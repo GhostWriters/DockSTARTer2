@@ -94,6 +94,7 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 
 	// Handle separator items
 	if menuItem.IsSeparator {
+		// Set width to exactly m.Width() so inner text of m.Width()-2 plus 2 chars padding fits perfectly without wrapping
 		lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(m.Width())
 		var content string
 		if menuItem.Tag != "" {
@@ -185,7 +186,8 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 	// Calculate checkbox/radio width dynamically
 	cbWidth := lipgloss.Width(GetPlainText(checkbox))
 
-	availableWidth := m.Width() - (d.maxTagLen + 2) - 2 - cbWidth
+	// Available width: list width - outer padding(2) - (cbWidth + maxTagLen + 3)
+	availableWidth := m.Width() - 2 - (cbWidth + d.maxTagLen + 3)
 	if availableWidth < 0 {
 		availableWidth = 0
 	}
@@ -230,7 +232,6 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 	dialogBG := ctx.Dialog.GetBackground()
 	isSelected := index == m.Index()
 
-	// Handle separator items
 	if menuItem.IsSeparator {
 		lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(m.Width())
 		var content string
@@ -257,10 +258,10 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 
 	// Render checkbox for selectable items
 	var checkbox string
-	if menuItem.Selectable {
+	if menuItem.IsCheckbox {
 		if ctx.LineCharacters {
 			cbGlyph := checkUnselected
-			if menuItem.Selected {
+			if menuItem.Checked {
 				cbGlyph = checkSelected
 			}
 			// Use tag style for checkbox to match user request
@@ -268,11 +269,25 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 			checkbox = tagStyle.Render(cbGlyph) + neutralStyle.Render(" ")
 		} else {
 			cbContent := checkUnselectedAscii
-			if menuItem.Selected {
+			if menuItem.Checked {
 				cbContent = checkSelectedAscii
 			}
 			// Use tag style for checkbox to match user request
-			checkbox = tagStyle.Render(cbContent)
+			checkbox = tagStyle.Render(cbContent) + neutralStyle.Render(" ")
+		}
+	} else if menuItem.IsRadioButton {
+		if ctx.LineCharacters {
+			cbGlyph := radioUnselected
+			if menuItem.Checked {
+				cbGlyph = radioSelected
+			}
+			checkbox = tagStyle.Render(cbGlyph) + neutralStyle.Render(" ")
+		} else {
+			cbContent := radioUnselectedAscii
+			if menuItem.Checked {
+				cbContent = radioSelectedAscii
+			}
+			checkbox = tagStyle.Render(cbContent) + neutralStyle.Render(" ")
 		}
 	}
 
@@ -309,7 +324,13 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 	gapStyle := neutralStyle
 
 	paddingSpaces := strutil.Repeat(" ", max(0, d.maxTagLen-lipgloss.Width(GetPlainText(tag))+3))
-	availableWidth := m.Width() - (d.maxTagLen + 2) - 2
+	// Available width: list width - outer padding(2) - (cbWidth + maxTagLen + 3)
+	// For checkboxItemDelegate, we assume cbWidth is 2 ([ ]) or 4 ([ ] ) depending on characters
+	cbWidth := 2
+	if !ctx.LineCharacters {
+		cbWidth = 4
+	}
+	availableWidth := m.Width() - 2 - (cbWidth + d.maxTagLen + 3)
 	if availableWidth < 0 {
 		availableWidth = 0
 	}
@@ -377,6 +398,9 @@ type MenuModel struct {
 
 	// Unified layout (deterministic sizing)
 	layout DialogLayout
+
+	// Variable height support (for dynamic word wrapping)
+	variableHeight bool
 }
 
 // FocusItem represents which UI element has focus
@@ -538,6 +562,11 @@ func (m *MenuModel) updateDelegate() {
 func (m *MenuModel) SetCheckboxMode(enabled bool) {
 	m.checkboxMode = enabled
 	m.updateDelegate()
+}
+
+// SetVariableHeight enables dynamic multiline word wrapping for the list
+func (m *MenuModel) SetVariableHeight(enabled bool) {
+	m.variableHeight = enabled
 }
 
 // Index returns the current cursor index
@@ -1104,16 +1133,20 @@ func (m *MenuModel) ViewString() string {
 
 	styles := GetStyles()
 
-	// Get list view and apply background color
-	listView := m.list.View()
-	// Wrap with dialog background to eliminate black space
-	listViewStyle := lipgloss.NewStyle().
-		Background(styles.Dialog.GetBackground())
-	if m.maximized {
-		// Only force height when maximized — ensures list fills the full dialog.
-		listViewStyle = listViewStyle.Height(m.list.Height())
+	var listView string
+	if m.variableHeight {
+		listView = m.renderVariableHeightList()
+	} else {
+		listView = m.list.View()
+		// Wrap with dialog background to eliminate black space
+		listViewStyle := lipgloss.NewStyle().
+			Background(styles.Dialog.GetBackground())
+		if m.maximized {
+			// Only force height when maximized — ensures list fills the full dialog.
+			listViewStyle = listViewStyle.Height(m.list.Height())
+		}
+		listView = listViewStyle.Render(listView)
 	}
-	listView = listViewStyle.Render(listView)
 
 	// Wrap list in its own border (no padding, items have their own margins).
 	// Use rounded border when focused for higher visual fidelity.
@@ -1282,30 +1315,123 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 
 	// Item regions: vertical list mode vs horizontal flow mode.
 	if !m.flowMode {
-		// Calculate visible items
-		visibleItems := m.list.VisibleItems()
-		startIndex := m.list.Paginator.Page * m.list.Paginator.PerPage
-
-		// Item regions
-		itemWidth := m.list.Width()
-		for i := 0; i < len(visibleItems); i++ {
-			itemIndex := startIndex + i
-			if itemIndex >= len(m.items) {
-				break
-			}
-			item := m.items[itemIndex]
-			if item.IsSeparator {
-				continue
+		if m.variableHeight {
+			// Variable height list: replicate renderVariableHeightList logic
+			layout := GetLayout()
+			maxWidth, maxHeight := layout.InnerContentSize(m.width, m.height)
+			if maxWidth > 2 {
+				maxWidth -= 2
 			}
 
-			regions = append(regions, HitRegion{
-				ID:     GetMenuItemID(m.id, itemIndex),
-				X:      offsetX + listX,
-				Y:      offsetY + listY + i,
-				Width:  itemWidth,
-				Height: 1,
-				ZOrder: baseZ + 10,
-			})
+			filter := m.list.FilterValue()
+			var visibleItems []MenuItem
+			for _, item := range m.items {
+				if filter != "" && !strings.Contains(strings.ToLower(item.Tag), strings.ToLower(filter)) {
+					continue
+				}
+				visibleItems = append(visibleItems, item)
+			}
+
+			if len(visibleItems) > 0 {
+				ctx := GetActiveContext()
+				var itemHeights []int
+				maxTagLen := calculateMaxTagLength(visibleItems)
+				totalHeight := 0
+				for _, item := range visibleItems {
+					if item.IsSeparator {
+						itemHeights = append(itemHeights, 1)
+						totalHeight += 1
+						continue
+					}
+					cbWidth := 0
+					if item.IsCheckbox || item.IsRadioButton {
+						cbWidth = 2 // standard [ ] or ( )
+						if !ctx.LineCharacters {
+							cbWidth = 4 // standard [ ] or (*)
+						}
+					}
+					prefixWidth := cbWidth + maxTagLen + 3
+					availableWidth := maxWidth - prefixWidth
+					descStr := RenderThemeText(item.Desc, styles.Dialog)
+					wrapped := lipgloss.NewStyle().Width(availableWidth).Render(descStr)
+					h := lipgloss.Height(wrapped)
+					itemHeights = append(itemHeights, h)
+					totalHeight += h
+				}
+
+				actualSelectedVisibleIndex := m.list.Index()
+
+				currentY := 0
+				for i := 0; i < actualSelectedVisibleIndex && i < len(itemHeights); i++ {
+					currentY += itemHeights[i]
+				}
+
+				viewStart := currentY - maxHeight/2
+				if viewStart < 0 {
+					viewStart = 0
+				}
+				if viewStart+maxHeight > totalHeight {
+					viewStart = totalHeight - maxHeight
+				}
+				if totalHeight <= maxHeight {
+					viewStart = 0
+				}
+
+				aggY := 0
+				for i, item := range visibleItems {
+					h := itemHeights[i]
+					if aggY+h > viewStart && aggY < viewStart+maxHeight {
+						// Item is visible, calculate overlap
+						y := aggY - viewStart
+						itemH := h
+						if aggY < viewStart {
+							itemH -= (viewStart - aggY)
+							y = 0
+						}
+						if aggY+h > viewStart+maxHeight {
+							itemH -= (aggY + h - (viewStart + maxHeight))
+						}
+
+						if !item.IsSeparator {
+							regions = append(regions, HitRegion{
+								ID:     GetMenuItemID(m.id, i),
+								X:      offsetX + listX,
+								Y:      offsetY + listY + y,
+								Width:  maxWidth,
+								Height: itemH,
+								ZOrder: baseZ + 10,
+							})
+						}
+					}
+					aggY += h
+				}
+			}
+		} else {
+			// Calculate visible items
+			visibleItems := m.list.VisibleItems()
+			startIndex := m.list.Paginator.Page * m.list.Paginator.PerPage
+
+			// Item regions
+			itemWidth := m.list.Width()
+			for i := 0; i < len(visibleItems); i++ {
+				itemIndex := startIndex + i
+				if itemIndex >= len(m.items) {
+					break
+				}
+				item := m.items[itemIndex]
+				if item.IsSeparator {
+					continue
+				}
+
+				regions = append(regions, HitRegion{
+					ID:     GetMenuItemID(m.id, itemIndex),
+					X:      offsetX + listX,
+					Y:      offsetY + listY + i,
+					Width:  itemWidth,
+					Height: 1,
+					ZOrder: baseZ + 10,
+				})
+			}
 		}
 	} else {
 		// Flow mode: items are arranged horizontally across multiple lines.
@@ -1829,6 +1955,217 @@ func (m *MenuModel) renderFlow() string {
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+}
+
+// renderVariableHeightList renders items vertically with dynamic heights for word wrapping
+func (m *MenuModel) renderVariableHeightList() string {
+	ctx := GetActiveContext()
+	styles := GetStyles()
+	dialogBG := styles.Dialog.GetBackground()
+
+	// Available width for content
+	layout := GetLayout()
+	maxWidth, _ := layout.InnerContentSize(m.width, m.height)
+	if maxWidth > 2 {
+		maxWidth -= 2
+	}
+	maxHeight := m.layout.ViewportHeight
+	if maxHeight < 1 {
+		maxHeight = 1
+	}
+
+	// Filter items manually to match list state
+	filter := m.list.FilterValue()
+	var visibleItems []MenuItem
+	var selectedVisibleIndex int = -1
+
+	filteredCount := 0
+	for _, item := range m.items {
+		if filter != "" && !strings.Contains(strings.ToLower(item.Tag), strings.ToLower(filter)) {
+			continue
+		}
+		visibleItems = append(visibleItems, item)
+		if filteredCount == m.list.Index() {
+			selectedVisibleIndex = len(visibleItems) - 1
+		}
+		filteredCount++
+	}
+
+	if len(visibleItems) == 0 {
+		return lipgloss.NewStyle().
+			Background(dialogBG).
+			Height(maxHeight).
+			Width(maxWidth).
+			Padding(0, 1).
+			Render("No results found.")
+	}
+
+	// Styles for items
+	neutralStyle := lipgloss.NewStyle().Background(dialogBG)
+	tagStyleBase := SemanticStyle("{{|Theme_Tag|}}").Background(dialogBG)
+	keyStyleBase := SemanticStyle("{{|Theme_TagKey|}}").Background(dialogBG)
+	itemStyleBase := SemanticStyle("{{|Theme_Item|}}").Background(dialogBG)
+
+	tagStyleSel := SemanticStyle("{{|Theme_TagSelected|}}")
+	keyStyleSel := SemanticStyle("{{|Theme_TagKeySelected|}}")
+	itemStyleSel := SemanticStyle("{{|Theme_ItemSelected|}}")
+
+	var renderedItems []string
+	var itemHeights []int
+
+	maxTagLen := calculateMaxTagLength(visibleItems)
+
+	for i, item := range visibleItems {
+		isSelected := i == selectedVisibleIndex && m.IsActive()
+
+		tStyle := tagStyleBase
+		kStyle := keyStyleBase
+		dStyle := itemStyleBase
+		if isSelected {
+			tStyle = tagStyleSel
+			kStyle = keyStyleSel
+			dStyle = itemStyleSel
+		}
+
+		if item.IsSeparator {
+			line := ""
+			if item.Tag != "" {
+				line = SemanticStyle("{{|Theme_TagKey|}}").Render(item.Tag)
+			} else {
+				line = strutil.Repeat("─", maxWidth)
+			}
+			renderedItems = append(renderedItems, neutralStyle.Padding(0, 1).Render(line))
+			itemHeights = append(itemHeights, 1)
+			continue
+		}
+
+		checkbox := ""
+		if item.IsRadioButton || item.IsCheckbox {
+			cb := ""
+			if item.IsRadioButton {
+				if ctx.LineCharacters {
+					cb = radioUnselected
+					if item.Checked {
+						cb = radioSelected
+					}
+				} else {
+					cb = radioUnselectedAscii
+					if item.Checked {
+						cb = radioSelectedAscii
+					}
+				}
+			} else {
+				if ctx.LineCharacters {
+					cb = checkUnselected
+					if item.Checked {
+						cb = checkSelected
+					}
+				} else {
+					cb = checkUnselectedAscii
+					if item.Checked {
+						cb = checkSelectedAscii
+					}
+				}
+			}
+			checkbox = tStyle.Render(cb) + neutralStyle.Render(" ")
+		}
+
+		tagStr := ""
+		tag := item.Tag
+		if len(tag) > 0 {
+			letterIdx := 0
+			if strings.HasPrefix(tag, "[") && len(tag) > 1 {
+				letterIdx = 1
+			}
+			p := tag[:letterIdx]
+			f := string(tag[letterIdx])
+			r := tag[letterIdx+1:]
+			tagStr = tStyle.Render(p) + kStyle.Render(f) + tStyle.Render(r)
+		}
+
+		cbWidth := lipgloss.Width(GetPlainText(checkbox))
+		paddingSpaces := strutil.Repeat(" ", max(0, maxTagLen-lipgloss.Width(GetPlainText(tag))+3))
+		prefixWidth := cbWidth + maxTagLen + 3
+		availableWidth := maxWidth - prefixWidth
+
+		descStr := RenderThemeText(item.Desc, dStyle)
+		wrapped := lipgloss.NewStyle().MaxWidth(availableWidth).Render(descStr)
+		lines := strings.Split(wrapped, "\n")
+
+		firstLine := checkbox + tagStr + neutralStyle.Render(paddingSpaces) + lines[0]
+
+		indent := neutralStyle.Render(strutil.Repeat(" ", prefixWidth))
+		renderedItemLines := []string{firstLine}
+		for j := 1; j < len(lines); j++ {
+			renderedItemLines = append(renderedItemLines, indent+lines[j])
+		}
+
+		finalItem := ""
+		for j, l := range renderedItemLines {
+			w := lipgloss.Width(GetPlainText(l))
+			if w < maxWidth {
+				l += console.CodeReset
+				l += neutralStyle.Render(strutil.Repeat(" ", maxWidth-w))
+			}
+			if j > 0 {
+				finalItem += "\n"
+			}
+			finalItem += neutralStyle.Padding(0, 1).Render(l) + console.CodeReset
+		}
+
+		renderedItems = append(renderedItems, finalItem)
+		itemHeights = append(itemHeights, len(lines))
+	}
+
+	totalContentHeight := 0
+	for _, h := range itemHeights {
+		totalContentHeight += h
+	}
+
+	if totalContentHeight <= maxHeight {
+		result := strings.Join(renderedItems, "\n")
+		// Fill remaining height with blank lines
+		paddingLines := maxHeight - totalContentHeight
+		for i := 0; i < paddingLines; i++ {
+			result += "\n" + neutralStyle.Padding(0, 1).Render(strutil.Repeat(" ", maxWidth)) + console.CodeReset
+		}
+		return result
+	}
+
+	currentY := 0
+	for i := 0; i < selectedVisibleIndex && i < len(itemHeights); i++ {
+		currentY += itemHeights[i]
+	}
+
+	viewStart := currentY - maxHeight/2
+	if viewStart < 0 {
+		viewStart = 0
+	}
+	if viewStart+maxHeight > totalContentHeight {
+		viewStart = totalContentHeight - maxHeight
+	}
+
+	var viewLines []string
+	aggY := 0
+	for i, item := range renderedItems {
+		h := itemHeights[i]
+		if aggY+h > viewStart && aggY < viewStart+maxHeight {
+			parts := strings.Split(item, "\n")
+			for j, p := range parts {
+				lineY := aggY + j
+				if lineY >= viewStart && lineY < viewStart+maxHeight {
+					viewLines = append(viewLines, p)
+				}
+			}
+		}
+		aggY += h
+	}
+
+	for len(viewLines) < maxHeight {
+		viewLines = append(viewLines, neutralStyle.Padding(0, 1).Render(strutil.Repeat(" ", maxWidth))+console.CodeReset)
+	}
+
+	return strings.Join(viewLines, "\n")
 }
 
 func (m *MenuModel) viewSubMenu() string {

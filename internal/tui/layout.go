@@ -206,6 +206,7 @@ func (l Layout) DialogContentHeight(dialogH int, headerHeight int, hasButtons bo
 	}
 
 	h := dialogH - overhead
+
 	if h < 1 {
 		h = 1
 	}

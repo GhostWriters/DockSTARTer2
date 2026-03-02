@@ -655,6 +655,139 @@ func GetBlockBorders(lineCharacters bool) BorderPair {
 	return BorderPair{Focused: block, Unfocused: block}
 }
 
+// RenderTopBorderBoxCtx renders only the top border line with a title (suitable for log panel)
+func RenderTopBorderBoxCtx(title, rightTitle, content string, contentWidth int, focused bool, titleStyle, borderStyle lipgloss.Style, ctx StyleContext) string {
+	var border lipgloss.Border
+	if !ctx.DrawBorders {
+		border = lipgloss.HiddenBorder()
+	} else if ctx.LineCharacters {
+		if focused {
+			border = lipgloss.ThickBorder()
+		} else {
+			border = lipgloss.NormalBorder()
+		}
+	} else {
+		if focused {
+			border = lipgloss.Border{
+				Top:         "=",
+				Bottom:      "=",
+				Left:        "|",
+				Right:       "|",
+				TopLeft:     "+",
+				TopRight:    "+",
+				BottomLeft:  "+",
+				BottomRight: "+",
+			}
+		} else {
+			border = lipgloss.Border{
+				Top:         "-",
+				Bottom:      "-",
+				Left:        "|",
+				Right:       "|",
+				TopLeft:     "+",
+				TopRight:    "+",
+				BottomLeft:  "+",
+				BottomRight: "+",
+			}
+		}
+	}
+
+	// Render titles
+	renderedTitle := RenderThemeText(title, titleStyle)
+	renderedRightTitle := ""
+	if rightTitle != "" {
+		renderedRightTitle = RenderThemeText(rightTitle, titleStyle)
+	}
+
+	// actualWidth is the space between corners. Total width is actualWidth + 2.
+	actualWidth := contentWidth - 2
+
+	var leftT, rightT string
+	if !ctx.DrawBorders {
+		leftT = " "
+		rightT = " "
+	} else if ctx.LineCharacters {
+		if focused {
+			leftT = "┫"
+			rightT = "┣"
+		} else {
+			leftT = "┤"
+			rightT = "├"
+		}
+	} else {
+		if focused {
+			leftT = "H"
+			rightT = "H"
+		} else {
+			leftT = "+"
+			rightT = "+"
+		}
+	}
+
+	titleSectionLen := 1 + 1 + WidthWithoutZones(renderedTitle) + 1 + 1
+	var leftPad int
+	if ctx.LogTitleAlign == "left" {
+		leftPad = 0
+	} else {
+		leftPad = (actualWidth - titleSectionLen) / 2
+	}
+	if leftPad < 0 {
+		leftPad = 0
+	}
+
+	// Calculate right padding, accounting for rightTitle
+	remainingWidth := actualWidth - titleSectionLen - leftPad
+	var rightPadMid, rightPadEnd int
+	if rightTitle != "" {
+		rightTitleWidth := WidthWithoutZones(renderedRightTitle)
+		rightPadEnd = 1 // One dash minimum after right title
+		rightPadMid = remainingWidth - rightTitleWidth - rightPadEnd
+		if rightPadMid < 0 {
+			rightPadMid = 0
+		}
+	} else {
+		rightPadMid = remainingWidth
+		rightPadEnd = 0
+	}
+
+	var result strings.Builder
+	result.WriteString(borderStyle.Render(border.TopLeft))
+	result.WriteString(borderStyle.Render(strutil.Repeat(border.Top, leftPad)))
+	result.WriteString(borderStyle.Render(leftT))
+	if focused {
+		if ctx.LineCharacters {
+			result.WriteString(borderStyle.Render("▸"))
+		} else {
+			result.WriteString(borderStyle.Render(">"))
+		}
+	} else {
+		result.WriteString(borderStyle.Render(" "))
+	}
+	result.WriteString(renderedTitle)
+	if focused {
+		if ctx.LineCharacters {
+			result.WriteString(borderStyle.Render("◂"))
+		} else {
+			result.WriteString(borderStyle.Render("<"))
+		}
+	} else {
+		result.WriteString(borderStyle.Render(" "))
+	}
+	result.WriteString(borderStyle.Render(rightT))
+	result.WriteString(borderStyle.Render(strutil.Repeat(border.Top, rightPadMid)))
+	if rightTitle != "" {
+		result.WriteString(renderedRightTitle)
+		result.WriteString(borderStyle.Render(strutil.Repeat(border.Top, rightPadEnd)))
+	}
+	result.WriteString(borderStyle.Render(border.TopRight))
+	result.WriteString("\n")
+
+	// Append original content without side borders
+	result.WriteString(content)
+
+	return result.String()
+}
+
 // renderDialogWithBorderCtx handles internal shared rendering logic using a specific context
 func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, focused bool, targetHeight int, threeD bool, useConnectors bool, titleStyle lipgloss.Style, ctx StyleContext) string {
 	if title != "" && !strings.HasSuffix(title, "{{[-]}}") {

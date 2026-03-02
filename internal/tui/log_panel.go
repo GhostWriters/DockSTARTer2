@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"DockSTARTer2/internal/logger"
-	"DockSTARTer2/internal/strutil"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/viewport"
@@ -281,98 +280,50 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m LogPanelModel) ViewString() string {
 	ctx := GetActiveContext()
 
-	// Choose line character: thick when focused, normal otherwise
-	var sepChar string
-	if m.focused {
-		if ctx.LineCharacters {
-			sepChar = lipgloss.ThickBorder().Top // "━"
-		} else {
-			sepChar = "="
-		}
-	} else {
-		if ctx.LineCharacters {
-			sepChar = "─"
-		} else {
-			sepChar = "-"
-		}
-	}
-
-	// Build label: focus marker + arrow + title + arrow + focus marker
+	// Build label: arrow + Log + arrow
 	marker := "^"
 	if m.expanded {
 		marker = "v"
 	}
-	focusLeft := " "
-	focusRight := " "
-	if m.focused {
-		if ctx.LineCharacters {
-			focusLeft = "▸"
-			focusRight = "◂"
-		} else {
-			focusLeft = ">"
-			focusRight = "<"
-		}
-	}
-	label := focusLeft + marker + " Log " + marker + focusRight
+	title := marker + " Log " + marker
 
-	// Right-side scroll percent indicator (only when focused and expanded)
-	rightIndicator := ""
+	// Scroll percentage (right side)
+	rightTitle := ""
 	if m.focused && m.expanded {
 		pct := int(m.viewport.ScrollPercent() * 100)
-		rightIndicator = fmt.Sprintf(" %d%% ", pct)
+		rightTitle = fmt.Sprintf(" %d%% ", pct)
 	}
 
-	// Position the label per config (center or left)
-	labelW := lipgloss.Width(label)
-	var dashW int
-	if ctx.LogTitleAlign != "left" {
-		dashW = (m.width - labelW) / 2
-		if dashW < 0 {
-			dashW = 0
+	// Render viewport content
+	vpH := m.height - 1
+	if vpH < 1 {
+		if m.totalHeight > 0 {
+			vpH = (m.totalHeight / 2) - 1
+		} else {
+			vpH = 1
 		}
 	}
-	leftDashes := strutil.Repeat(sepChar, dashW)
+	m.viewport.SetHeight(vpH)
+	m.viewport.SetWidth(m.width)
 
-	rightTotal := m.width - dashW - labelW
-
-	// Use the dedicated LogPanel theme color for the strip line
-	stripStyle := lipgloss.NewStyle().
-		Foreground(ctx.LogPanelColor).
-		Background(ctx.HelpLine.GetBackground())
-
-	// Build content parts
-	leftContent := stripStyle.Render(leftDashes)
-	labelContent := stripStyle.Render(label)
-
-	var rightContentStr string
-	if rightIndicator != "" {
-		indicatorW := lipgloss.Width(rightIndicator)
-		rightDashW := rightTotal - indicatorW
-		if rightDashW < 0 {
-			rightDashW = 0
-		}
-		rightContentStr = strutil.Repeat(sepChar, rightDashW) + rightIndicator
-	} else {
-		rightContentStr = strutil.Repeat(sepChar, rightTotal)
-	}
-	rightContent := stripStyle.Render(rightContentStr)
-
-	// Combine
-	// Just join normally, hit-layers are handled in Layers()
-	strip := lipgloss.JoinHorizontal(lipgloss.Top, leftContent, labelContent, rightContent)
-	strip = lipgloss.NewStyle().Width(m.width).Render(strip)
-
-	// Expanded: viewport below the strip
 	vpStyle := lipgloss.NewStyle().
 		Width(m.width).
-		Height(m.viewport.Height()).
+		Height(vpH).
 		Background(ctx.Console.GetBackground()).
 		Foreground(ctx.Console.GetForeground())
 	m.viewport.Style = vpStyle
 
 	// Use MaintainBackground to ensure console background is preserved through resets
 	vpView := MaintainBackground(m.viewport.View(), ctx.Console)
-	return lipgloss.JoinVertical(lipgloss.Left, strip, vpView)
+
+	// Restore original theme colors for the strip
+	// LogPanelColor for foreground, HelpLine background for the line itself.
+	stripStyle := lipgloss.NewStyle().
+		Foreground(ctx.LogPanelColor).
+		Background(ctx.HelpLine.GetBackground())
+
+	// Use the refined dialog helper
+	return RenderTopBorderBoxCtx(title, rightTitle, vpView, m.width, m.focused, stripStyle, stripStyle, ctx)
 }
 
 // Layers returns a single layer with the panel content for visual compositing
@@ -386,29 +337,36 @@ func (m LogPanelModel) Layers() []*lipgloss.Layer {
 func (m LogPanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	var regions []HitRegion
 
-	// Calculate layout for the toggle strip (must match ViewString alignment)
+	// Calculate layout matching RenderTopBorderBoxCtx logic
 	ctx := GetActiveContext()
 	marker := "^"
 	if m.expanded {
 		marker = "v"
 	}
-	label := " " + marker + " Log " + marker + " "
-	labelW := lipgloss.Width(label)
-	var dashW int
-	if ctx.LogTitleAlign != "left" {
-		dashW = (m.width - labelW) / 2
-		if dashW < 0 {
-			dashW = 0
-		}
-	}
-	rightTotal := m.width - dashW - labelW
+	title := marker + " Log " + marker
 
-	// Left resize handle
+	titleWidth := WidthWithoutZones(RenderThemeText(title, ctx.Dialog))
+	titleSectionLen := 1 + 1 + titleWidth + 1 + 1 // connector + arrow + title + arrow + connector
+	actualWidth := m.width - 2
+	var leftPad int
+	if ctx.LogTitleAlign == "left" {
+		leftPad = 0
+	} else {
+		leftPad = (actualWidth - titleSectionLen) / 2
+	}
+	if leftPad < 0 {
+		leftPad = 0
+	}
+
+	titleStart := 1 + leftPad
+	titleEnd := titleStart + titleSectionLen
+
+	// Left part (resize handle)
 	regions = append(regions, HitRegion{
 		ID:     IDLogResize,
 		X:      offsetX,
 		Y:      offsetY,
-		Width:  dashW,
+		Width:  titleStart,
 		Height: 1,
 		ZOrder: ZLogPanel + 1,
 	})
@@ -416,26 +374,26 @@ func (m LogPanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	// Toggle label
 	regions = append(regions, HitRegion{
 		ID:     IDLogToggle,
-		X:      offsetX + dashW,
+		X:      offsetX + titleStart,
 		Y:      offsetY,
-		Width:  labelW,
+		Width:  titleSectionLen,
 		Height: 1,
 		ZOrder: ZLogPanel + 1,
 	})
 
-	// Right resize handle
+	// Right part (resize handle + percentage)
 	regions = append(regions, HitRegion{
 		ID:     IDLogResize,
-		X:      offsetX + dashW + labelW,
+		X:      offsetX + titleEnd,
 		Y:      offsetY,
-		Width:  rightTotal,
+		Width:  m.width - titleEnd,
 		Height: 1,
 		ZOrder: ZLogPanel + 1,
 	})
 
 	// Viewport area (when expanded)
 	if m.expanded {
-		vpH := m.viewport.Height()
+		vpH := m.height - 1
 		regions = append(regions, HitRegion{
 			ID:     IDLogViewport,
 			X:      offsetX,

@@ -227,10 +227,8 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case toggleLogPanelMsg:
 		updated, cmd := m.logPanel.Update(msg)
 		m.logPanel = updated.(LogPanelModel)
-		// Return focus to screen when panel collapses
-		if !m.logPanel.expanded {
-			m.setLogPanelFocus(false)
-		}
+		// Sync focus with expansion state
+		m.setLogPanelFocus(m.logPanel.expanded)
 		// Resize backdrop, screen, and dialog to match new panel height
 		m.backdrop.SetSize(m.width, m.backdropHeight())
 
@@ -584,7 +582,16 @@ func (m AppModel) backdropHeight() int {
 
 // getContentArea returns the dimensions available for screens and dialogs.
 func (m AppModel) getContentArea() (int, int) {
-	return m.backdrop.GetContentArea()
+	// Use backdropHeight() to account for log panel
+	bh := m.backdropHeight()
+	layout := GetLayout()
+	hasShadow := currentConfig.UI.Shadow
+	headerH := 1
+	if m.backdrop != nil {
+		headerH = m.backdrop.header.Height()
+	}
+
+	return layout.ContentArea(m.width, bh, hasShadow, headerH)
 }
 
 // getDialogArea returns the dimensions available for a specific dialog.
@@ -1068,7 +1075,6 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		switch hitID {
 		case IDLogToggle:
 			if me, ok := msg.(tea.MouseClickMsg); ok && me.Button == tea.MouseLeft {
-				m.setLogPanelFocus(false) // Toggle also unfocuses
 				return m, func() tea.Msg { return toggleLogPanelMsg{} }, true
 			}
 		case IDLogResize:
@@ -1076,6 +1082,7 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 				// Correctly deliver raw msg to start dragging
 				updated, cmd := m.logPanel.Update(msg)
 				m.logPanel = updated.(LogPanelModel)
+				m.setLogPanelFocus(true)
 				return m, cmd, true
 			}
 		case IDLogPanel, IDLogViewport:
@@ -1265,7 +1272,7 @@ func (m *AppModel) View() (v tea.View) {
 
 			if maximized {
 				mode = DialogMaximized
-				targetHeight = m.height
+				targetHeight = m.backdropHeight()
 			}
 
 			lx, ly := layout.DialogPosition(mode, fgWidth, fgHeight, m.width, targetHeight, m.config.UI.Shadow, headerH)

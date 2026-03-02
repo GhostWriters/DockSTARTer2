@@ -44,6 +44,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 	menu.SetShowExit(true)
 	menu.SetEnterAction(func() tea.Msg { return TriggerSaveMsg{} })
 	menu.SetCheckboxMode(true) // Enable checkboxes for app selection
+	menu.SetVariableHeight(true)
 
 	s := &AppSelectionScreen{
 		menu: &menu,
@@ -115,6 +116,7 @@ func (s *AppSelectionScreen) refreshItems() {
 			Help:          fmt.Sprintf("Toggle %s", niceName),
 			Selectable:    true,
 			Selected:      enabledMap[app],
+			IsCheckbox:    true,
 			IsUserDefined: appenv.AppNameToInstanceName(app) != "",
 			Metadata:      map[string]string{"appName": app},
 		})
