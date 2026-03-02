@@ -401,6 +401,15 @@ type MenuModel struct {
 
 	// Variable height support (for dynamic word wrapping)
 	variableHeight bool
+
+	// Memoization for expensive rendering
+	lastView      string
+	lastWidth     int
+	lastHeight    int
+	lastIndex     int
+	lastFilter    string
+	lastActive    bool
+	lastLineChars bool
 }
 
 // FocusItem represents which UI element has focus
@@ -1957,6 +1966,18 @@ func (m *MenuModel) renderFlow() string {
 // renderVariableHeightList renders items vertically with dynamic heights for word wrapping
 func (m *MenuModel) renderVariableHeightList() string {
 	ctx := GetActiveContext()
+
+	// Memoization Check
+	if m.lastView != "" &&
+		m.lastWidth == m.width &&
+		m.lastHeight == m.height &&
+		m.lastIndex == m.list.Index() &&
+		m.lastFilter == m.list.FilterValue() &&
+		m.lastActive == m.IsActive() &&
+		m.lastLineChars == ctx.LineCharacters {
+		return m.lastView
+	}
+
 	styles := GetStyles()
 	dialogBG := styles.Dialog.GetBackground()
 
@@ -2126,6 +2147,16 @@ func (m *MenuModel) renderVariableHeightList() string {
 		for i := 0; i < paddingLines; i++ {
 			result += "\n" + neutralStyle.Padding(0, 1).Render(strutil.Repeat(" ", maxWidth)) + console.CodeReset
 		}
+
+		// Save for memoization
+		m.lastView = result
+		m.lastWidth = m.width
+		m.lastHeight = m.height
+		m.lastIndex = m.list.Index()
+		m.lastFilter = m.list.FilterValue()
+		m.lastActive = m.IsActive()
+		m.lastLineChars = ctx.LineCharacters
+
 		return result
 	}
 
@@ -2162,7 +2193,18 @@ func (m *MenuModel) renderVariableHeightList() string {
 		viewLines = append(viewLines, neutralStyle.Padding(0, 1).Render(strutil.Repeat(" ", maxWidth))+console.CodeReset)
 	}
 
-	return strings.Join(viewLines, "\n")
+	finalResult := strings.Join(viewLines, "\n")
+
+	// Save for memoization
+	m.lastView = finalResult
+	m.lastWidth = m.width
+	m.lastHeight = m.height
+	m.lastIndex = m.list.Index()
+	m.lastFilter = m.list.FilterValue()
+	m.lastActive = m.IsActive()
+	m.lastLineChars = ctx.LineCharacters
+
+	return finalResult
 }
 
 func (m *MenuModel) viewSubMenu() string {

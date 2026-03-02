@@ -15,6 +15,7 @@ import (
 
 var (
 	semanticStyleCache = make(map[string]lipgloss.Style)
+	renderCache        = make(map[string]string)
 	cacheMu            sync.RWMutex
 )
 
@@ -24,6 +25,7 @@ func ClearSemanticCache() {
 	cacheMu.Lock()
 	defer cacheMu.Unlock()
 	semanticStyleCache = make(map[string]lipgloss.Style)
+	renderCache = make(map[string]string)
 }
 
 // ClearSemanticCachePrefix removes only those cache entries whose key contains
@@ -88,12 +90,27 @@ var themeTagRegex = console.GetDelimitedRegex()
 // RenderThemeText takes text with {{...}} theme tags and returns lipgloss-styled text
 // defaultStyle is used for reset state and unstyled text
 func RenderThemeText(text string, defaultStyle ...lipgloss.Style) string {
+	if text == "" {
+		return ""
+	}
+
 	var resetStyle lipgloss.Style
 	if len(defaultStyle) > 0 {
 		resetStyle = defaultStyle[0]
 	} else {
 		resetStyle = lipgloss.NewStyle()
 	}
+
+	// Create a cache key from the text and the style's visual identity
+	// We use the style's string representation as a heuristic for its visual properties
+	cacheKey := text + "|" + resetStyle.String()
+
+	cacheMu.RLock()
+	if cached, ok := renderCache[cacheKey]; ok {
+		cacheMu.RUnlock()
+		return cached
+	}
+	cacheMu.RUnlock()
 
 	// Ensure the starting text has the correct background/foreground/attributes
 	getCodes := func(s lipgloss.Style) string {
@@ -108,7 +125,13 @@ func RenderThemeText(text string, defaultStyle ...lipgloss.Style) string {
 	result := getCodes(resetStyle) + rendered + console.CodeReset
 
 	// Prevent embedded resets from clearing container background or attributes
-	return MaintainBackground(result, resetStyle)
+	final := MaintainBackground(result, resetStyle)
+
+	cacheMu.Lock()
+	renderCache[cacheKey] = final
+	cacheMu.Unlock()
+
+	return final
 }
 
 // ApplyStyleCode applies tview-style color codes (fg:bg:flags) to a lipgloss style

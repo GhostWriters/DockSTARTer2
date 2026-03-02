@@ -9,6 +9,9 @@ import (
 	"runtime"
 	"strings"
 
+	"sync"
+	"time"
+
 	"github.com/adrg/xdg"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -21,6 +24,11 @@ var (
 	TemplatesDirOverride string
 	// ConfigHomeOverride allows overriding the config home for tests.
 	ConfigHomeOverride string
+
+	// Version caching
+	versionCacheMu sync.RWMutex
+	lastTmplVer    string
+	lastTmplCheck  time.Time
 )
 
 // GetConfigFilePath returns the absolute path to the dockstarter2.toml file.
@@ -49,6 +57,14 @@ func GetTemplatesDir() string {
 
 // GetTemplatesVersion retrieves the current version of the DockSTARTer-Templates repository.
 func GetTemplatesVersion() string {
+	versionCacheMu.RLock()
+	if time.Since(lastTmplCheck) < 60*time.Second {
+		v := lastTmplVer
+		versionCacheMu.RUnlock()
+		return v
+	}
+	versionCacheMu.RUnlock()
+
 	templatesDir := GetTemplatesDir()
 
 	// Open repository
@@ -77,23 +93,31 @@ func GetTemplatesVersion() string {
 			return nil
 		})
 	}
+
+	var result string
 	if foundTag != "" {
-		return foundTag
+		result = foundTag
+	} else {
+		// 3. Fallback to format: "BranchName commit shortHash"
+		branchName := "HEAD"
+		if head.Name().IsBranch() {
+			branchName = head.Name().Short()
+		}
+
+		// Short hash
+		hash := head.Hash().String()
+		if len(hash) > 7 {
+			hash = hash[:7]
+		}
+		result = fmt.Sprintf("%s commit %s", branchName, hash)
 	}
 
-	// 3. Fallback to format: "BranchName commit shortHash"
-	branchName := "HEAD"
-	if head.Name().IsBranch() {
-		branchName = head.Name().Short()
-	}
+	versionCacheMu.Lock()
+	lastTmplVer = result
+	lastTmplCheck = time.Now()
+	versionCacheMu.Unlock()
 
-	// Short hash
-	hash := head.Hash().String()
-	if len(hash) > 7 {
-		hash = hash[:7]
-	}
-
-	return fmt.Sprintf("%s commit %s", branchName, hash)
+	return result
 }
 
 // GetCacheDir returns the absolute path to the dockstarter2 cache directory.

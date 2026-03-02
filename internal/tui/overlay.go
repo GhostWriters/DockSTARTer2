@@ -8,8 +8,15 @@ import (
 
 	"sort"
 
+	"sync"
+
 	"charm.land/lipgloss/v2"
 	"github.com/mattn/go-runewidth"
+)
+
+var (
+	widthCacheMu sync.RWMutex
+	widthCache   = make(map[string]int)
 )
 
 // Position constants for overlay placement
@@ -31,7 +38,28 @@ var ansiRegex = regexp.MustCompile("[\u001B\u009B][[\\]()#;?]*((?:[a-zA-Z\\d]*(?
 // WidthWithoutZones returns the visual width of a string, stripping zone markers first
 
 func WidthWithoutZones(s string) int {
-	return lipgloss.Width(s)
+	if s == "" {
+		return 0
+	}
+
+	widthCacheMu.RLock()
+	w, ok := widthCache[s]
+	widthCacheMu.RUnlock()
+	if ok {
+		return w
+	}
+
+	w = lipgloss.Width(s)
+
+	widthCacheMu.Lock()
+	// Simple bounded cache: if it gets too large, just clear it
+	if len(widthCache) > 1000 {
+		widthCache = make(map[string]int)
+	}
+	widthCache[s] = w
+	widthCacheMu.Unlock()
+
+	return w
 }
 
 // Overlay composites a foreground string over a background string at the specified position.
