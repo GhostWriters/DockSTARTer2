@@ -929,7 +929,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.backAction != nil {
 				return m, m.backAction
 			}
-			return m, tea.Quit
+			return m, ConfirmExitAction()
 
 		// Dynamic Hotkeys
 		default:
@@ -1061,7 +1061,7 @@ func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 			return m, m.backAction
 		}
 	case FocusExitBtn:
-		return m, tea.Quit
+		return m, ConfirmExitAction()
 	}
 
 	return m, nil

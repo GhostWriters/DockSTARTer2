@@ -195,13 +195,13 @@ func (s *DisplayOptionsScreen) execFocusedButton() (tea.Model, tea.Cmd) {
 	case 1:
 		if s.isRoot {
 			theme.Unload("Preview")
-			return s, tea.Quit
+			return s, tui.ConfirmExitAction()
 		}
 		theme.Unload("Preview")
 		return s, navigateBack()
 	case 2:
 		theme.Unload("Preview")
-		return s, tea.Quit
+		return s, tui.ConfirmExitAction()
 	}
 	return s, nil
 }
@@ -515,7 +515,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tui.IDExitButton:
 			s.focusedButton = s.maxFocusedButton()
 			theme.Unload("Preview")
-			return s, tea.Quit
+			return s, tui.ConfirmExitAction()
 		}
 
 	case tui.ToggleFocusedMsg:
@@ -580,7 +580,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if key.Matches(msg, tui.Keys.Esc) {
 			theme.Unload("Preview")
 			if s.isRoot {
-				return s, tea.Quit
+				return s, tui.ConfirmExitAction()
 			}
 			return s, navigateBack()
 		}

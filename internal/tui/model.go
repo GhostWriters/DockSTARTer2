@@ -342,7 +342,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Check for application exit immediately if we just cleared the last screen and have no dialog.
 		// This avoids the "No active screen" splotch and ensures ESC works for standalone tools.
 		if m.ready && m.activeScreen == nil && m.dialog == nil {
-			return m, tea.Quit
+			return m, ConfirmExitAction()
 		}
 		return m, nil
 
@@ -450,7 +450,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Fallback: if stack is empty and no screen, we quit.
 		if m.activeScreen == nil {
-			return m, tea.Quit
+			return m, ConfirmExitAction()
 		}
 
 		// When returning to screen:
@@ -531,7 +531,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// This happens when NavigateBack is used on the "root" screen.
 	// We wait until the end of Update to handle batches (e.g. ShowDialog + NavigateBack)
 	if m.ready && m.activeScreen == nil && m.dialog == nil {
-		return m, logger.RecoverTUI(m.ctx, tea.Batch(tea.Quit, tea.Batch(cmds...)))
+		return m, logger.RecoverTUI(m.ctx, tea.Batch(ConfirmExitAction(), tea.Batch(cmds...)))
 	}
 
 	return m, logger.RecoverTUI(m.ctx, tea.Batch(cmds...))

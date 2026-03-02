@@ -233,6 +233,17 @@ func Confirm(title, question string, defaultYes bool) bool {
 	return ShowConfirmDialog(title, question, defaultYes)
 }
 
+// ConfirmExitAction returns a tea.Cmd that prompts the user to confirm exiting.
+// If confirmed, it returns tea.QuitMsg to gracefully terminate the application.
+func ConfirmExitAction() tea.Cmd {
+	return func() tea.Msg {
+		if Confirm("Exit DockSTARTer", "Do you want to exit DockSTARTer?", true) {
+			return tea.Quit() // Returns tea.QuitMsg{}
+		}
+		return nil
+	}
+}
+
 // Message shows an info message dialog
 func Message(title, message string) {
 	ShowInfoDialog(title, message)
@@ -266,14 +277,14 @@ var screenRegistry = map[string]*screenEntry{}
 
 // screenAliases maps alternate -M sub-command names to their canonical page name.
 var screenAliases = map[string]string{
-	"display":          "appearance",
-	"options-display":  "appearance",
-	"theme":            "appearance",
-	"options-theme":    "appearance",
-	"theme-select":     "appearance",
-	"display-options":  "appearance",
-	"display_options":  "appearance",
-	"select":           "app-select",
+	"display":           "appearance",
+	"options-display":   "appearance",
+	"theme":             "appearance",
+	"options-theme":     "appearance",
+	"theme-select":      "appearance",
+	"display-options":   "appearance",
+	"display_options":   "appearance",
+	"select":            "app-select",
 	"config-app-select": "app-select",
 }
 
