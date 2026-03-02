@@ -1137,7 +1137,13 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		return m, nil, false // Let raw msg fall through to dialog in standard loop
 	}
 
-	// 7. DEFAULT: No hits, no modal.
+	// 7. DROP UNHANDLED HOVER: Stop unhandled MouseMotion events from falling
+	// through and triggering full-frame UI redrawing up to 120 times a second
+	if _, ok := msg.(tea.MouseMotionMsg); ok {
+		return m, nil, true
+	}
+
+	// 8. DEFAULT: No hits, no modal.
 	m.updateComponentFocus()
 	return m, nil, false
 }
