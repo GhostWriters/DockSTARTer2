@@ -891,6 +891,7 @@ func AddShadowCtx(content string, ctx StyleContext) string {
 
 	// Use WidthWithoutZones to get accurate visual width
 	contentWidth := 0
+	contentHeight := len(lines)
 	for _, line := range lines {
 		w := WidthWithoutZones(line)
 		if w > contentWidth {
@@ -898,14 +899,25 @@ func AddShadowCtx(content string, ctx StyleContext) string {
 		}
 	}
 
-	var shadowCell, bottomShadowChars string
+	// Ensure all lines are padded to contentWidth to prevent jagged edges
+	paddedLines := make([]string, contentHeight)
+	for i, line := range lines {
+		w := WidthWithoutZones(line)
+		if w < contentWidth {
+			paddedLines[i] = line + strutil.Repeat(" ", contentWidth-w)
+		} else {
+			paddedLines[i] = line
+		}
+	}
+	paddedContent := strings.Join(paddedLines, "\n")
+
+	// Determine shadow characters and style
+	var shadeChar string
+	var shadowStyle lipgloss.Style
 
 	if ctx.LineCharacters {
 		// Unicode mode: use shade characters (░▒▓█)
-		shadowStyle := ctx.Shadow.
-			Background(ctx.Screen.GetBackground())
-
-		var shadeChar string
+		shadowStyle = ctx.Shadow.Background(ctx.Screen.GetBackground())
 		switch ctx.ShadowLevel {
 		case 0:
 			shadeChar = " "
@@ -920,72 +932,62 @@ func AddShadowCtx(content string, ctx StyleContext) string {
 		default:
 			shadeChar = "▒"
 		}
-
-		shadowCell = shadowStyle.Render(strutil.Repeat(shadeChar, 2))
-		bottomShadowChars = shadowStyle.Render(strutil.Repeat(shadeChar, contentWidth-1))
 	} else {
 		// ASCII mode
 		if ctx.ShadowLevel == 4 {
-			solidStyle := lipgloss.NewStyle().Background(ctx.ShadowColor)
-			shadowCell = solidStyle.Render("  ")
-			bottomShadowChars = solidStyle.Render(strutil.Repeat(" ", contentWidth-1))
+			shadowStyle = lipgloss.NewStyle().Background(ctx.ShadowColor)
+			shadeChar = " "
 		} else {
-			asciiShadowStyle := ctx.Shadow.
-				Background(ctx.Screen.GetBackground())
-
-			var asciiShadeChar string
+			shadowStyle = ctx.Shadow.Background(ctx.Screen.GetBackground())
 			switch ctx.ShadowLevel {
 			case 0:
-				asciiShadeChar = " "
+				shadeChar = " "
 			case 1:
-				asciiShadeChar = "."
+				shadeChar = "."
 			case 2:
-				asciiShadeChar = ":"
+				shadeChar = ":"
 			case 3:
-				asciiShadeChar = "#"
+				shadeChar = "#"
 			default:
-				asciiShadeChar = ":"
+				shadeChar = ":"
 			}
-
-			shadowCell = asciiShadowStyle.Render(strutil.Repeat(asciiShadeChar, 2))
-			bottomShadowChars = asciiShadowStyle.Render(strutil.Repeat(asciiShadeChar, contentWidth-1))
 		}
 	}
 
-	spacerCell := lipgloss.NewStyle().
-		Background(ctx.Screen.GetBackground()).
-		Width(2).Render("  ")
-	spacer1 := lipgloss.NewStyle().
-		Background(ctx.Screen.GetBackground()).
-		Width(1).Render(" ")
-
-	var result strings.Builder
-
-	line0 := lines[0]
-	w0 := WidthWithoutZones(line0)
-	padding0 := ""
-	if w0 < contentWidth {
-		padding0 = strutil.Repeat(" ", contentWidth-w0)
+	// Create a single shadow cell (2 chars wide for standard look)
+	shadowCell := shadowStyle.Render(strutil.Repeat(shadeChar, 2))
+	// Create a full shadow box string
+	var shadowBoxBuilder strings.Builder
+	shadowLine := strutil.Repeat(shadowCell, (contentWidth/2)+1)
+	// If contentWidth is odd, we might need a partial cell at the end
+	if contentWidth%2 != 0 {
+		shadowLine += shadowStyle.Render(shadeChar)
 	}
-	result.WriteString(line0 + padding0)
-	result.WriteString(spacerCell)
-	result.WriteString("\n")
 
-	for i := 1; i < len(lines); i++ {
-		line := lines[i]
-		w := WidthWithoutZones(line)
-		padding := ""
-		if w < contentWidth {
-			padding = strutil.Repeat(" ", contentWidth-w)
+	for i := 0; i < contentHeight; i++ {
+		if i > 0 {
+			shadowBoxBuilder.WriteString("\n")
 		}
-		result.WriteString(line + padding)
-		result.WriteString(shadowCell)
-		result.WriteString("\n")
+		shadowBoxBuilder.WriteString(shadowLine)
 	}
+	shadowBox := shadowBoxBuilder.String()
 
-	result.WriteString(spacer1)
-	result.WriteString(bottomShadowChars)
-	result.WriteString(shadowCell)
+	// Dimensions for the combined component
+	// Dialog is at (0,0). Shadow is offset by (2,1).
+	// Total width = contentWidth + 2
+	// Total height = contentHeight + 1
+	totalW := contentWidth + 2
+	totalH := contentHeight + 1
 
-	return result.String()
+	// Create a styled background canvas
+	canvas := padToSize("", totalW, totalH)
+	canvas = MaintainBackground(canvas, ctx.Screen)
+
+	// Layer the components
+	// 1. Shadow background
+	result := Overlay(shadowBox, canvas, OverlayLeft, OverlayTop, 2, 1)
+	// 2. Main dialog content
+	result = Overlay(paddedContent, result, OverlayLeft, OverlayTop, 0, 0)
+
+	return result
 }
