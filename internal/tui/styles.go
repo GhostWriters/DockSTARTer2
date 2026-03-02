@@ -48,6 +48,8 @@ func (regions HitRegions) FindHit(x, y int) string {
 // Z-Level constants for layering (used for rendering and hit region ordering)
 const (
 	ZBackdrop = 0
+	ZHeader   = 2
+	ZHelpline = 4
 	ZScreen   = 10
 	ZLogPanel = 20
 	ZDialog   = 30

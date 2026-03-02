@@ -1001,8 +1001,10 @@ func (m *MenuModel) prevButtonFocus() FocusItem {
 
 func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 	switch m.focusedItem {
-	case FocusList:
-		// Get selected item from bubbles list
+	case FocusList, FocusSelectBtn:
+		// 1. Try list item action first (for navigation menus)
+		// This is the primary function for navigation menus, and also applies
+		// if "Select" is used as a proxy for Enter on the list.
 		selectedItem := m.list.SelectedItem()
 		if item, ok := selectedItem.(MenuItem); ok {
 			if item.Action != nil {
@@ -1011,27 +1013,26 @@ func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 				menuSelectedIndices[m.id] = m.cursor
 				return m, item.Action
 			}
-			// In checkbox mode, Enter toggles the item if it has no specific action
-			if m.checkboxMode {
+
+			// In checkbox mode, Enter on a list item toggles its state.
+			// Enter on the "Select" (Done) button should NOT toggle; it should fall through to enterAction.
+			if m.checkboxMode && m.focusedItem == FocusList {
 				m.ToggleSelectedItem()
 				return m, nil
 			}
 		}
-	case FocusSelectBtn:
+
+		// 2. Fall back to model-level enter action (for "Done" buttons on selection screens)
 		if m.enterAction != nil {
 			return m, m.enterAction
 		}
+
 	case FocusBackBtn:
 		if m.backAction != nil {
 			return m, m.backAction
 		}
 	case FocusExitBtn:
 		return m, tea.Quit
-	}
-
-	// Fallback to model-level enter action if we are in the list and it had no action
-	if m.focusedItem == FocusList && m.enterAction != nil {
-		return m, m.enterAction
 	}
 
 	return m, nil
@@ -1668,6 +1669,8 @@ func (m *MenuModel) calculateLayout() {
 		// Full dialog overhead: borders, subtitle, buttons, shadow
 		// Vertical budgeting uses DialogContentHeight which handles gaps
 		maxListHeight = layout.DialogContentHeight(m.height, subtitleHeight, true, hasShadow)
+		// Account for inner border around the list (Top + Bottom = 2 lines)
+		maxListHeight -= layout.BorderHeight()
 		overhead = m.height - maxListHeight
 	}
 

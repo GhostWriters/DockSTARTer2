@@ -63,30 +63,31 @@ func (m *BackdropModel) SetSize(width, height int) {
 	}
 }
 
-// ViewString returns the backdrop content as a string for compositing
+// ViewString returns the solid background box to fill the entire screen
 func (m *BackdropModel) ViewString() string {
 	if m.width == 0 || m.height == 0 {
 		return ""
 	}
 
 	styles := GetStyles()
-	var b strings.Builder
+	bgStyle := lipgloss.NewStyle().Background(styles.Screen.GetBackground())
+	return bgStyle.Width(m.width).Height(m.height).Render("")
+}
 
-	// Header: Fill with StatusBar background, then draw content
-	// Header handles its own wrapping and alignment for narrow terminals
-	headerContent := ""
-	headerHeight := 0
-	if m.header != nil {
-		m.header.SetWidth(m.width - 2)
-		headerContent = m.header.ViewString()
-		headerHeight = lipgloss.Height(headerContent)
+// renderHeader returns the status bar header with its borders
+func (m *BackdropModel) renderHeader() string {
+	if m.header == nil {
+		return ""
 	}
 
-	// Border style: use the full StatusBarBorder style (fg + bg) for border cells.
-	// Focused (any version is selected) → ThickRounded; otherwise → Rounded.
-	// No top border — the status bar is flush with the top of the terminal.
-	focused := m.header != nil && m.header.GetFocus() != HeaderFocusNone
+	styles := GetStyles()
+	var b strings.Builder
+
+	m.header.SetWidth(m.width - 2)
+	headerContent := m.header.ViewString()
+
 	lineChars := styles.LineCharacters
+	focused := m.header.GetFocus() != HeaderFocusNone
 
 	borderFG := styles.StatusBarBorder.GetForeground()
 	if borderFG == nil {
@@ -125,12 +126,8 @@ func (m *BackdropModel) ViewString() string {
 		}
 	}
 
-	// Render each header line with left/right border chars.
-	// Header content is m.width-2 wide; border chars occupy the remaining 2 columns.
 	headerLines := strings.Split(headerContent, "\n")
 	for _, line := range headerLines {
-		// Pad to fill the content width (m.width - 2) so the background extends fully.
-		// Use WidthWithoutZones because header lines contain zone markers for version clicks.
 		paddedLine := line
 		if lw := WidthWithoutZones(paddedLine); lw < m.width-2 {
 			paddedLine += strutil.Repeat(" ", m.width-2-lw)
@@ -139,45 +136,40 @@ func (m *BackdropModel) ViewString() string {
 		b.WriteString(borderStyle.Render(leftChar) + styledContent + borderStyle.Render(rightChar) + "\n")
 	}
 
-	// Bottom border (replaces the old separator line — same 1-line height).
 	bottomBorder := borderStyle.Render(bottomLeftChar + strutil.Repeat(bottomChar, m.width-2) + bottomRightChar)
-	b.WriteString(bottomBorder + "\n")
-
-	// Calculate content height using actual header height
-	helplineView := ""
-	if m.helpline != nil {
-		m.helpline.SetText(m.helpText)
-		helplineView = m.helpline.ViewString(m.width)
-	}
-
-	layout := GetLayout()
-
-	// Fill middle space (content area + gap) with screen background
-	// Total fill lines = total height - header chrome - helpline height
-	totalFillLines := m.height - layout.ChromeHeight(headerHeight) - layout.HelplineHeight
-	if totalFillLines < 0 {
-		totalFillLines = 0
-	}
-
-	bgStyle := lipgloss.NewStyle().Background(styles.Screen.GetBackground())
-	fillerRow := bgStyle.Render(strutil.Repeat(" ", m.width))
-
-	for i := 0; i < totalFillLines; i++ {
-		b.WriteString(fillerRow)
-		b.WriteString("\n")
-	}
-
-	// Helpline (matches AppModel.View())
-	b.WriteString(helplineView)
+	b.WriteString(bottomBorder)
 
 	return b.String()
 }
 
-// Layers returns the backdrop layer for visual compositing
+// renderHelpline returns the help text line positioned at the bottom
+func (m *BackdropModel) renderHelpline() string {
+	if m.helpline == nil {
+		return ""
+	}
+	m.helpline.SetText(m.helpText)
+	return m.helpline.ViewString(m.width)
+}
+
+// Layers returns the backdrop layers for visual compositing:
+// 1. ZBackdrop: Solid background plane
+// 2. ZHeader: The status bar at the top
+// 3. ZHelpline: The help line at the bottom
 func (m *BackdropModel) Layers() []*lipgloss.Layer {
-	return []*lipgloss.Layer{
+	layers := []*lipgloss.Layer{
 		lipgloss.NewLayer(m.ViewString()).Z(ZBackdrop),
 	}
+
+	if headerStr := m.renderHeader(); headerStr != "" {
+		layers = append(layers, lipgloss.NewLayer(headerStr).X(0).Y(0).Z(ZHeader).ID(IDStatusBar))
+	}
+
+	if helpStr := m.renderHelpline(); helpStr != "" {
+		helpY := m.height - lipgloss.Height(helpStr)
+		layers = append(layers, lipgloss.NewLayer(helpStr).X(0).Y(helpY).Z(ZHelpline))
+	}
+
+	return layers
 }
 
 // GetHitRegions returns clickable regions for the backdrop (header version labels)
@@ -198,7 +190,7 @@ func (m *BackdropModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		Y:      offsetY,
 		Width:  m.width,
 		Height: layout.ChromeHeight(headerH),
-		ZOrder: ZBackdrop,
+		ZOrder: ZHeader, // Match header layer
 	})
 
 	if m.header != nil {
