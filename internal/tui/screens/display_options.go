@@ -2,17 +2,13 @@ package screens
 
 import (
 	"DockSTARTer2/internal/config"
-	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/tui"
 	"fmt"
-	"image/color"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 )
 
 // DisplayOptionsFocus defines which area of the screen has focus
@@ -658,3 +654,76 @@ func (s *DisplayOptionsScreen) syncOptionsMenu() {
 	s.optionsMenu.SetItems(items)
 }
 
+func (s *DisplayOptionsScreen) Title() string {
+	return "Display Options"
+}
+
+func (s *DisplayOptionsScreen) HelpText() string {
+	if s.themeMenu == nil || s.optionsMenu == nil {
+		return ""
+	}
+	if s.focusedPanel == FocusThemes {
+		return s.themeMenu.HelpText()
+	}
+	if s.focusedPanel == FocusOptions {
+		return s.optionsMenu.HelpText()
+	}
+	return "Tab to cycle panels, Enter to Apply, Esc to Cancel"
+}
+
+func (s *DisplayOptionsScreen) SetSize(width, height int) {
+	s.width = width
+	s.height = height
+
+	if s.optionsMenu == nil || s.themeMenu == nil {
+		return
+	}
+
+	layout := tui.GetLayout()
+
+	previewMinWidth := 48
+	minDialogWidth := 44 + layout.BorderWidth()
+	previewFits := width >= minDialogWidth+layout.GutterWidth+previewMinWidth
+
+	var dialogContentWidth int
+	if previewFits {
+		dialogContentWidth = width - layout.GutterWidth - previewMinWidth
+	} else {
+		dialogContentWidth = width
+	}
+
+	menuWidth := dialogContentWidth - layout.BorderWidth()
+	if menuWidth < 40 {
+		menuWidth = 40
+	}
+
+	hasShadow := tui.IsShadowEnabled()
+	optionsContentHeight := layout.DialogContentHeight(height, 0, true, hasShadow)
+	overhead := height - optionsContentHeight
+
+	optionsFlowLines := s.optionsMenu.GetFlowHeight(menuWidth)
+	optionsHeight := optionsFlowLines + layout.BorderHeight()
+
+	themeHeight := s.height - optionsHeight - overhead
+	if themeHeight < 4 {
+		themeHeight = 4
+	}
+
+	s.themeMenu.SetSize(menuWidth, themeHeight)
+	s.optionsMenu.SetSize(menuWidth, optionsHeight)
+}
+
+func (s *DisplayOptionsScreen) IsMaximized() bool {
+	return true
+}
+
+func (s *DisplayOptionsScreen) HasDialog() bool {
+	if s.themeMenu == nil || s.optionsMenu == nil {
+		return false
+	}
+	return s.themeMenu.HasDialog() || s.optionsMenu.HasDialog()
+}
+
+func (s *DisplayOptionsScreen) MenuName() string {
+	return "appearance"
+}
