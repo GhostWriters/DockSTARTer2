@@ -58,10 +58,10 @@ jobs:
           fi
 
           git fetch --tags --force
-          
+
           # Check if current commit is already tagged
           TAG_AT_HEAD=$(git tag --points-at HEAD)
-          
+
           if [ -n "$TAG_AT_HEAD" ]; then
             echo "Current commit is manually tagged ($TAG_AT_HEAD). Comparing against previous tag."
             LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
