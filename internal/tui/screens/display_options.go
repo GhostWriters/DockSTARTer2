@@ -776,17 +776,6 @@ func (s *DisplayOptionsScreen) renderPreviewDialog(targetHeight int) string {
 	return s.renderMockup(targetHeight)
 }
 
-func alignCenter(w int, text string) string {
-	plain := tui.GetPlainText(text)
-	wt := lipgloss.Width(plain)
-	if wt >= w {
-		return text
-	}
-	left := (w - wt) / 2
-	right := w - wt - left
-	return strutil.Repeat(" ", left) + text + strutil.Repeat(" ", right)
-}
-
 func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	width := 44 // Reduced width to fit the screen better
 

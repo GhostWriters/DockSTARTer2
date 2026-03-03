@@ -499,14 +499,17 @@ func ApplyFlags(style lipgloss.Style, flags theme.StyleFlags) lipgloss.Style {
 
 // Helper functions for common style operations
 
-// CenterText centers text within a given width
+// CenterText centers text within a given width.
+// It is ANSI-aware: it strips escape codes before measuring to correctly
+// handle pre-styled strings.
 func CenterText(s string, width int) string {
-	textWidth := lipgloss.Width(s)
+	textWidth := lipgloss.Width(GetPlainText(s))
 	if textWidth >= width {
 		return s
 	}
 	leftPad := (width - textWidth) / 2
-	return lipgloss.NewStyle().PaddingLeft(leftPad).Render(s)
+	rightPad := width - textWidth - leftPad
+	return strings.Repeat(" ", leftPad) + s + strings.Repeat(" ", rightPad)
 }
 
 // PadRight pads text to fill width
