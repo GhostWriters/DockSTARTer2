@@ -1,0 +1,4 @@
+# DockSTARTer2/internal/theme [DockSTARTer2/internal/theme.test]
+internal\theme\theme_test.go:63:8: undefined: parseColor
+FAIL	DockSTARTer2/internal/theme [build failed]
+FAIL
