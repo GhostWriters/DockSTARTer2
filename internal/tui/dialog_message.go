@@ -58,7 +58,7 @@ func (m *messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		// Any key press closes the dialog
 		// Use CloseDialogMsg so AppModel can handle it when running within existing TUI
-		return m, func() tea.Msg { return CloseDialogMsg{} }
+		return m, func() tea.Msg { return CloseDialogMsg{Result: true} }
 
 	case LayerHitMsg:
 		// Middle click is handled by AppModel (global Space mapping)
@@ -69,14 +69,14 @@ func (m *messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Check for suffixes to support prefixed IDs (e.g., "message_dialog.OK")
 		if msg.Button == tea.MouseLeft {
 			if strings.HasSuffix(msg.ID, ".OK") || msg.ID == "Button.OK" {
-				return m, func() tea.Msg { return CloseDialogMsg{} }
+				return m, func() tea.Msg { return CloseDialogMsg{Result: true} }
 			}
 		}
 	}
 
 	// Middle-click dismisses the dialog
 	if _, ok := msg.(ToggleFocusedMsg); ok {
-		return m, func() tea.Msg { return CloseDialogMsg{} }
+		return m, func() tea.Msg { return CloseDialogMsg{Result: true} }
 	}
 
 	return m, nil

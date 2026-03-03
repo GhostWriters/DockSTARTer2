@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/user"
 	"runtime"
 	"strconv"
 	"strings"
@@ -82,9 +83,8 @@ func GetIDs() (int, int) {
 
 	gid := os.Getgid()
 	// Try to get group ID of the detected UID (which might be the sudo user)
-	cmd := exec.Command("id", "-g", strconv.Itoa(uid))
-	if out, err := cmd.Output(); err == nil {
-		if i, err := strconv.Atoi(strings.TrimSpace(string(out))); err == nil {
+	if u, err := user.LookupId(strconv.Itoa(uid)); err == nil {
+		if i, err := strconv.Atoi(u.Gid); err == nil {
 			gid = i
 		}
 	}

@@ -448,6 +448,11 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Fallback: if stack is empty and no screen, we quit.
 		if m.activeScreen == nil {
+			// If the dialog signaled success (e.g. "OK" button pressed), skip confirmation and quit immediately.
+			// Do NOT set m.dialog = nil yet, so the caller can still inspect the final state (errors, etc).
+			if result, ok := msg.Result.(bool); ok && result {
+				return m, tea.Quit
+			}
 			return m, ConfirmExitAction()
 		}
 
