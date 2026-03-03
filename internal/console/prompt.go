@@ -42,11 +42,11 @@ func QuestionPrompt(ctx context.Context, printer Printer, title, question string
 	}
 
 	// Format text for semantic colors
-	questionStr := Sprintf(question)
+	questionStr := Sprintf("%s", question)
 	if title == "" {
 		title = "Confirmation"
 	}
-	title = Sprintf(title)
+	title = Sprintf("%s", title)
 
 	// Check if we should use TUI for this prompt
 	if TUIConfirm != nil {
@@ -160,11 +160,11 @@ func QuestionPrompt(ctx context.Context, printer Printer, title, question string
 // If sensitive is true, it attempts to mask the input in standard terminal.
 func TextPrompt(ctx context.Context, printer Printer, title, question string, sensitive bool) (string, error) {
 	// Format text for semantic colors
-	questionStr := Sprintf(question)
+	questionStr := Sprintf("%s", question)
 	if title == "" {
 		title = "Input Required"
 	}
-	title = Sprintf(title)
+	title = Sprintf("%s", title)
 
 	if TUIPrompt != nil {
 		return TUIPrompt(title, questionStr, sensitive)
