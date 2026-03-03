@@ -1,33 +1,67 @@
 package docker
 
 import (
-	"DockSTARTer2/internal/logger"
 	"context"
-	"fmt"
-	"os/exec"
-	"strings"
+	"sync"
+
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/client"
 )
 
-// RunCommand executes a docker command with arguments.
-// It logs the command before execution and any error output.
-func RunCommand(ctx context.Context, args ...string) error {
-	cmdText := fmt.Sprintf("docker %s", strings.Join(args, " "))
-	logger.Info(ctx, "Running: {{|RunningCommand|}}%s{{[-]}}", cmdText)
+var (
+	dockerClient *client.Client
+	clientOnce   sync.Once
+	clientErr    error
+)
 
-	cmd := exec.CommandContext(ctx, "docker", args...)
+// GetClient returns a shared Docker SDK client instance.
+func GetClient() (*client.Client, error) {
+	clientOnce.Do(func() {
+		dockerClient, clientErr = client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	})
+	return dockerClient, clientErr
+}
 
-	// Capture output for logging on error
-	// Bash RunAndLog captures stderr/stdout and logs it on error.
-	output, err := cmd.CombinedOutput()
+// StopContainer stops a container by ID.
+func StopContainer(ctx context.Context, containerID string) error {
+	cli, err := GetClient()
 	if err != nil {
-		logger.Error(ctx, "Command failed: %s", string(output))
-		return fmt.Errorf("failed to run '%s': %w", cmdText, err)
+		return err
 	}
 
-	// Maybe log output at debug level?
-	if len(output) > 0 {
-		logger.Debug(ctx, "%s", string(output))
+	timeout := 10
+	return cli.ContainerStop(ctx, containerID, container.StopOptions{
+		Timeout: &timeout,
+	})
+}
+
+// RemoveContainer removes a container by ID.
+func RemoveContainer(ctx context.Context, containerID string) error {
+	cli, err := GetClient()
+	if err != nil {
+		return err
 	}
 
-	return nil
+	return cli.ContainerRemove(ctx, containerID, container.RemoveOptions{
+		Force:         true,
+		RemoveVolumes: true,
+	})
+}
+
+// GetContainerStatus returns the status of a container by ID.
+func GetContainerStatus(ctx context.Context, containerID string) (string, error) {
+	cli, err := GetClient()
+	if err != nil {
+		return "", err
+	}
+
+	inspect, err := cli.ContainerInspect(ctx, containerID)
+	if err != nil {
+		if client.IsErrNotFound(err) {
+			return "not found", nil
+		}
+		return "", err
+	}
+
+	return inspect.State.Status, nil
 }
