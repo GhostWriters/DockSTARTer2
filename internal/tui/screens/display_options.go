@@ -795,7 +795,9 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 		plain := tui.GetPlainText(rendered)
 		wt := lipgloss.Width(plain)
 		if wt < width {
-			return style.Render(rendered + strutil.Repeat(fallback, width-wt))
+			leftPad := (width - wt) / 2
+			rightPad := width - wt - leftPad
+			return style.Render(strutil.Repeat(fallback, leftPad) + rendered + strutil.Repeat(fallback, rightPad))
 		}
 		return style.Render(plain[:width])
 	}
@@ -932,7 +934,7 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	for i, l := range contentLines {
 		contentLines[i] = tui.RenderThemeText(l, dContent)
 	}
-	contentStr := lipgloss.JoinVertical(lipgloss.Left, contentLines...)
+	contentStr := strings.Join(contentLines, "\n")
 
 	// Multi-segment title on the border
 	titleParts := []string{

@@ -405,13 +405,16 @@ type MenuModel struct {
 	variableHeight bool
 
 	// Memoization for expensive rendering
-	lastView      string
-	lastWidth     int
-	lastHeight    int
-	lastIndex     int
-	lastFilter    string
-	lastActive    bool
-	lastLineChars bool
+	lastView       string
+	lastWidth      int
+	lastHeight     int
+	lastIndex      int
+	lastFilter     string
+	lastActive     bool
+	lastLineChars  bool
+	lastHitRegions []HitRegion // Cache for variable height hit regions
+	viewStartY     int         // Persistent scroll offset for variable height lists
+
 }
 
 // FocusItem represents which UI element has focus
@@ -642,13 +645,19 @@ func (m *MenuModel) SetButtonLabels(selectLabel, backLabel, exitLabel string) {
 // ToggleSelectedItem toggles the selected state of the current item (for checkbox mode)
 func (m *MenuModel) ToggleSelectedItem() {
 	if m.cursor >= 0 && m.cursor < len(m.items) && m.items[m.cursor].Selectable {
-		m.items[m.cursor].Selected = !m.items[m.cursor].Selected
+		if m.items[m.cursor].IsCheckbox || m.items[m.cursor].IsRadioButton {
+			m.items[m.cursor].Checked = !m.items[m.cursor].Checked
+			m.items[m.cursor].Selected = m.items[m.cursor].Checked
+		} else {
+			m.items[m.cursor].Selected = !m.items[m.cursor].Selected
+		}
 		// Update the list item too
 		listItems := make([]list.Item, len(m.items))
 		for i, item := range m.items {
 			listItems[i] = item
 		}
 		m.list.SetItems(listItems)
+		m.lastView = "" // Invalidate view cache since checked/selected state changed
 	}
 }
 
@@ -1091,13 +1100,16 @@ func (m *MenuModel) handleSpace() (tea.Model, tea.Cmd) {
 	if item, ok := selectedItem.(MenuItem); ok {
 		if item.IsCheckbox && item.Selectable {
 			item.Checked = !item.Checked
+			item.Selected = item.Checked
 			// Update the item in our internal list too so state persists
 			idx := m.list.Index()
 			if idx >= 0 && idx < len(m.items) {
 				m.items[idx].Checked = item.Checked
+				m.items[idx].Selected = item.Selected
 				// Update list.Model internal items to reflect changes immediately
 				m.list.SetItem(idx, item)
 			}
+			m.lastView = "" // Invalidate cache
 
 			if item.SpaceAction != nil {
 				return m, item.SpaceAction
@@ -1385,35 +1397,15 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 					viewStart = 0
 				}
 
-				aggY := 0
-				for i, item := range visibleItems {
-					h := itemHeights[i]
-					if aggY+h > viewStart && aggY < viewStart+maxHeight {
-						// Item is visible, calculate overlap
-						y := aggY - viewStart
-						itemH := h
-						if aggY < viewStart {
-							itemH -= (viewStart - aggY)
-							y = 0
-						}
-						if aggY+h > viewStart+maxHeight {
-							itemH -= (aggY + h - (viewStart + maxHeight))
-						}
-
-						if !item.IsSeparator {
-							regions = append(regions, HitRegion{
-								ID:     GetMenuItemID(m.id, i),
-								X:      offsetX + listX,
-								Y:      offsetY + listY + y,
-								Width:  maxWidth,
-								Height: itemH,
-								ZOrder: baseZ + 10,
-							})
-						}
-					}
-					aggY += h
+				for _, r := range m.lastHitRegions {
+					r.X = offsetX + listX
+					r.Y = offsetY + listY + r.Y
+					r.Width = maxWidth
+					r.ZOrder = baseZ + 10
+					regions = append(regions, r)
 				}
 			}
+
 		} else {
 			// Calculate visible items
 			visibleItems := m.list.VisibleItems()
@@ -2110,9 +2102,17 @@ func (m *MenuModel) renderVariableHeightList() string {
 		prefixWidth := cbWidth + maxTagLen + 3
 		availableWidth := maxWidth - prefixWidth
 
+		// The key here is that RenderThemeText must process the raw string *first* so
+		// lipgloss gets real ANSI codes instead of pseudo-brackets `{{ }}` which falsely
+		// inflate the measured width.
 		descStr := RenderThemeText(item.Desc, dStyle)
-		wrapped := lipgloss.NewStyle().MaxWidth(availableWidth).Render(descStr)
+		wrapped := lipgloss.NewStyle().Width(availableWidth).Render(descStr)
 		lines := strings.Split(wrapped, "\n")
+
+		// Trim right spaces from trailing wrapping fills so we don't highlight the background
+		for k, l := range lines {
+			lines[k] = strings.TrimRight(l, " ")
+		}
 
 		firstLine := checkbox + tagStr + neutralStyle.Render(paddingSpaces) + lines[0]
 
@@ -2123,16 +2123,14 @@ func (m *MenuModel) renderVariableHeightList() string {
 		}
 
 		finalItem := ""
+		// maxWidth represents the inner content width. So the outer Lipgloss Width with left/right padding must be maxWidth + 2
+		// otherwise Lipgloss compresses the box and double-wraps the line, stripping our indentation.
+		rowStyle := neutralStyle.Width(maxWidth+2).Padding(0, 1)
 		for j, l := range renderedItemLines {
-			w := lipgloss.Width(GetPlainText(l))
-			if w < maxWidth {
-				l += console.CodeReset
-				l += neutralStyle.Render(strutil.Repeat(" ", maxWidth-w))
-			}
 			if j > 0 {
 				finalItem += "\n"
 			}
-			finalItem += neutralStyle.Padding(0, 1).Render(l) + console.CodeReset
+			finalItem += rowStyle.Render(l) + console.CodeReset
 		}
 
 		renderedItems = append(renderedItems, finalItem)
@@ -2145,6 +2143,28 @@ func (m *MenuModel) renderVariableHeightList() string {
 	}
 
 	if totalContentHeight <= maxHeight {
+		var newHitRegions []HitRegion
+		aggY := 0
+		for i, h := range itemHeights {
+			if !visibleItems[i].IsSeparator {
+				actualIndex := -1
+				for actIdx, mi := range m.items {
+					if mi.Tag == visibleItems[i].Tag && mi.Desc == visibleItems[i].Desc {
+						actualIndex = actIdx
+						break
+					}
+				}
+				if actualIndex >= 0 {
+					newHitRegions = append(newHitRegions, HitRegion{
+						ID:     GetMenuItemID(m.id, actualIndex),
+						Y:      aggY,
+						Height: h,
+					})
+				}
+			}
+			aggY += h
+		}
+
 		result := strings.Join(renderedItems, "\n")
 		// Fill remaining height with blank lines
 		paddingLines := maxHeight - totalContentHeight
@@ -2160,6 +2180,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 		m.lastFilter = m.list.FilterValue()
 		m.lastActive = m.IsActive()
 		m.lastLineChars = ctx.LineCharacters
+		m.lastHitRegions = newHitRegions
 
 		return result
 	}
@@ -2169,19 +2190,61 @@ func (m *MenuModel) renderVariableHeightList() string {
 		currentY += itemHeights[i]
 	}
 
-	viewStart := currentY - maxHeight/2
-	if viewStart < 0 {
-		viewStart = 0
-	}
-	if viewStart+maxHeight > totalContentHeight {
-		viewStart = totalContentHeight - maxHeight
+	selectedHeight := 1
+	if selectedVisibleIndex >= 0 && selectedVisibleIndex < len(itemHeights) {
+		selectedHeight = itemHeights[selectedVisibleIndex]
 	}
 
+	// Bounding box scroll logic: only move viewStart if the selected item is out of bounds
+	if currentY < m.viewStartY {
+		m.viewStartY = currentY
+	} else if currentY+selectedHeight > m.viewStartY+maxHeight {
+		m.viewStartY = currentY + selectedHeight - maxHeight
+	}
+
+	if m.viewStartY < 0 {
+		m.viewStartY = 0
+	}
+	if m.viewStartY+maxHeight > totalContentHeight {
+		m.viewStartY = totalContentHeight - maxHeight
+	}
+
+	viewStart := m.viewStartY
+
 	var viewLines []string
+	var newHitRegions []HitRegion // Build a new cache corresponding to actual visual lines
 	aggY := 0
 	for i, item := range renderedItems {
 		h := itemHeights[i]
 		if aggY+h > viewStart && aggY < viewStart+maxHeight {
+			// Save the hit region exactly corresponding to the rendered lines
+			if !visibleItems[i].IsSeparator {
+				y := aggY - viewStart
+				itemH := h
+				if aggY < viewStart {
+					itemH -= (viewStart - aggY)
+					y = 0
+				}
+				if aggY+h > viewStart+maxHeight {
+					itemH -= (aggY + h - (viewStart + maxHeight))
+				}
+
+				actualIndex := -1
+				for actIdx, mi := range m.items {
+					if mi.Tag == visibleItems[i].Tag && mi.Desc == visibleItems[i].Desc {
+						actualIndex = actIdx
+						break
+					}
+				}
+				if actualIndex >= 0 {
+					newHitRegions = append(newHitRegions, HitRegion{
+						ID:     GetMenuItemID(m.id, actualIndex),
+						Y:      y,
+						Height: itemH,
+					})
+				}
+			}
+
 			parts := strings.Split(item, "\n")
 			for j, p := range parts {
 				lineY := aggY + j
@@ -2207,6 +2270,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 	m.lastFilter = m.list.FilterValue()
 	m.lastActive = m.IsActive()
 	m.lastLineChars = ctx.LineCharacters
+	m.lastHitRegions = newHitRegions
 
 	return finalResult
 }

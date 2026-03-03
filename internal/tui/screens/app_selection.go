@@ -116,6 +116,7 @@ func (s *AppSelectionScreen) refreshItems() {
 			Help:          fmt.Sprintf("Toggle %s", niceName),
 			Selectable:    true,
 			Selected:      enabledMap[app],
+			Checked:       enabledMap[app],
 			IsCheckbox:    true,
 			IsUserDefined: appenv.AppNameToInstanceName(app) != "",
 			Metadata:      map[string]string{"appName": app},
