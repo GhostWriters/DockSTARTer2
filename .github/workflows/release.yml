@@ -47,6 +47,7 @@ jobs:
       - name: Check for Changes
         id: check
         run: |
+          set -euo pipefail
           FORCE="${{ inputs.force_release }}"
           echo "Force Release: $FORCE"
 
@@ -98,6 +99,7 @@ jobs:
         if: steps.check.outputs.skip == 'false'
         id: tag
         run: |
+          set -euo pipefail
           # Versioning Scheme: v2.YYYYMMDD.N[-Suffix]
           # Major: 2
           # Minor: YYYYMMDD
