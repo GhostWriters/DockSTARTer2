@@ -1182,6 +1182,7 @@ func (m *AppModel) View() (v tea.View) {
 
 	// Create native compositor for rendering
 	comp := lipgloss.NewCompositor()
+	maxZ := ZScreen
 
 	// Reset hit regions for this frame
 	m.hitRegions = nil
@@ -1229,6 +1230,8 @@ func (m *AppModel) View() (v tea.View) {
 			screenY := maxY
 
 			// Center if smaller than content area
+
+			// Center if smaller than content area
 			if screenW < caW {
 				screenX = maxX + (caW-screenW)/2
 			}
@@ -1236,21 +1239,39 @@ func (m *AppModel) View() (v tea.View) {
 				screenY = maxY + (caH-screenH)/2
 			}
 
-			// Add shadow for all screens
-			if m.config.UI.Shadow {
-				shadowBox := GetShadowBoxCtx(screenContent, GetActiveContext())
-				if shadowBox != "" {
-					// Offset 2 right, 1 down, Z-order below screen
-					comp.AddLayers(lipgloss.NewLayer(shadowBox).X(screenX + 2).Y(screenY + 1).Z(ZScreen - 1))
+			// Centralized Automatic Shadowing:
+			// Apply a shadow to each layer that is at a main visibility level (ZScreen or ZDialog).
+			// This allows complex screens like DisplayOptionsScreen to have multiple shadowed boxes
+			// without manual shadow logic in the screen code.
+			addShadowForLayer := func(l *lipgloss.Layer) {
+				if m.config.UI.Shadow && (l.GetZ() == ZScreen || l.GetZ() == ZDialog) {
+					content := l.GetContent()
+					shadowBox := GetShadowBoxCtx(content, GetActiveContext())
+					if shadowBox != "" {
+						// Shadow is placed just below the layer with standard offset
+						comp.AddLayers(lipgloss.NewLayer(shadowBox).
+							X(l.GetX() + 2).
+							Y(l.GetY() + 1).
+							Z(l.GetZ() - 1))
+					}
 				}
 			}
 
 			if lv, ok := m.activeScreen.(LayeredView); ok {
 				for _, l := range lv.Layers() {
-					comp.AddLayers(l.X(l.GetX() + screenX).Y(l.GetY() + screenY))
+					// Translate layer relative to screen position
+					l = l.X(l.GetX() + screenX).Y(l.GetY() + screenY)
+					if l.GetZ() > maxZ {
+						maxZ = l.GetZ()
+					}
+					addShadowForLayer(l)
+					comp.AddLayers(l)
 				}
 			} else {
-				comp.AddLayers(lipgloss.NewLayer(screenContent).X(screenX).Y(screenY).Z(ZScreen))
+				l := lipgloss.NewLayer(screenContent).X(screenX).Y(screenY).Z(ZScreen)
+				maxZ = ZScreen
+				addShadowForLayer(l)
+				comp.AddLayers(l)
 			}
 
 			// Collect hit regions from active screen with the actual position
@@ -1292,22 +1313,37 @@ func (m *AppModel) View() (v tea.View) {
 
 			lx, ly := layout.DialogPosition(mode, fgWidth, fgHeight, m.width, targetHeight, m.config.UI.Shadow, headerH)
 
-			// Add drop shadow as a separate layer below the dialog
-			if m.config.UI.Shadow {
-				shadowBox := GetShadowBoxCtx(content, GetActiveContext())
-				if shadowBox != "" {
-					// Offset 2 right, 1 down, Z-order just below dialog
-					comp.AddLayers(lipgloss.NewLayer(shadowBox).X(lx + 2).Y(ly + 1).Z(ZDialog - 1))
+			// Modal Offset: Ensure all dialog layers sit above the screen's maxZ
+			modalZBase := maxZ + 100
+
+			// Centralized Automatic Shadowing for Dialogs
+			addShadowForDialogLayer := func(l *lipgloss.Layer) {
+				// Check if the layer's Z (before modal offset) was at a main visibility level
+				originalZ := l.GetZ() - modalZBase
+				if m.config.UI.Shadow && (originalZ == ZDialog || originalZ == ZScreen) {
+					content := l.GetContent()
+					shadowBox := GetShadowBoxCtx(content, GetActiveContext())
+					if shadowBox != "" {
+						// Shadow is placed just below the layer with standard offset
+						comp.AddLayers(lipgloss.NewLayer(shadowBox).
+							X(l.GetX() + 2).
+							Y(l.GetY() + 1).
+							Z(l.GetZ() - 1))
+					}
 				}
 			}
 
 			if lv, ok := m.dialog.(LayeredView); ok {
 				for _, l := range lv.Layers() {
-					// Offset each layer by the dialog position
-					comp.AddLayers(l.X(l.GetX() + lx).Y(l.GetY() + ly))
+					// Apply modal offset to ensure it sits above the screen content
+					l = l.X(l.GetX() + lx).Y(l.GetY() + ly).Z(l.GetZ() + modalZBase)
+					addShadowForDialogLayer(l)
+					comp.AddLayers(l)
 				}
 			} else {
-				comp.AddLayers(lipgloss.NewLayer(content).X(lx).Y(ly).Z(ZDialog))
+				l := lipgloss.NewLayer(content).X(lx).Y(ly).Z(modalZBase + ZDialog)
+				addShadowForDialogLayer(l)
+				comp.AddLayers(l)
 			}
 
 			// Collect hit regions from dialog

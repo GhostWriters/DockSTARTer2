@@ -399,6 +399,8 @@ type MenuModel struct {
 	// Unified layout (deterministic sizing)
 	layout DialogLayout
 
+	dialogType DialogType
+
 	// Variable height support (for dynamic word wrapping)
 	variableHeight bool
 
@@ -508,6 +510,9 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 		showExit:    true, // Default to show Exit button
 	}
 }
+
+// SetDialogType sets the visual style/type of the menu dialog
+func (m *MenuModel) SetDialogType(t DialogType) { m.dialogType = t }
 
 // SetFocused sets whether this menu's dialog border is rendered as focused (thick)
 // or unfocused (normal). Called by AppModel when the log panel takes focus.
@@ -1701,7 +1706,9 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 			titleTag = "Theme_TitleSubMenu"
 		}
 	}
-	return RenderBorderedBoxCtx(m.title, content, contentWidth, targetHeight, focused, rounded, align, titleTag, GetActiveContext())
+	ctx := GetActiveContext()
+	ctx.Type = m.dialogType
+	return RenderBorderedBoxCtx(m.title, content, contentWidth, targetHeight, focused, rounded, align, titleTag, ctx)
 }
 
 // SetSize updates the menu dimensions and resizes the list

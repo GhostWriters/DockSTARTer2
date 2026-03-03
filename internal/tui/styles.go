@@ -148,6 +148,7 @@ type Styles struct {
 type StyleContext struct {
 	LineCharacters      bool
 	DrawBorders         bool
+	Type                DialogType
 	Screen              lipgloss.Style
 	Dialog              lipgloss.Style
 	DialogTitle         lipgloss.Style
@@ -193,6 +194,7 @@ func GetActiveContext() StyleContext {
 	return StyleContext{
 		LineCharacters:      currentStyles.LineCharacters,
 		DrawBorders:         currentStyles.DrawBorders,
+		Type:                DialogTypeInfo, // Default to info
 		Screen:              currentStyles.Screen,
 		Dialog:              currentStyles.Dialog,
 		DialogTitle:         currentStyles.DialogTitle,
@@ -645,7 +647,21 @@ func ApplyInnerBorderCtx(style lipgloss.Style, focused bool, ctx StyleContext) l
 	borderBG := ctx.Dialog.GetBackground()
 
 	var border lipgloss.Border
-	if ctx.LineCharacters {
+	if ctx.Type == DialogTypeConfirm {
+		if ctx.LineCharacters {
+			if focused {
+				border = SlantedThickBorder
+			} else {
+				border = SlantedBorder
+			}
+		} else {
+			if focused {
+				border = SlantedThickAsciiBorder
+			} else {
+				border = SlantedAsciiBorder
+			}
+		}
+	} else if ctx.LineCharacters {
 		if focused {
 			border = ThickRoundedBorder
 		} else {
@@ -919,8 +935,10 @@ func GetShadowBoxCtx(content string, ctx StyleContext) string {
 		case 3:
 			shadeChar = "#"
 		case 4:
-			// For solid ASCII, we'll use a space and a background color
-			shadowStyle = shadowStyle.Background(ctx.ShadowColor)
+			// For solid ASCII, we'll use a space and reverse the style
+			// This allows the shadow color to be the effective background
+			// while line 934 blends the "reversed foreground" with the screen.
+			shadowStyle = shadowStyle.Foreground(ctx.ShadowColor).Reverse(true)
 			shadeChar = " "
 		default:
 			shadeChar = " "

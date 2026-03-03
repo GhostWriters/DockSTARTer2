@@ -57,6 +57,7 @@ func NewFlagsToggleDialog() *FlagsToggleDialog {
 	menu.SetCheckboxMode(true) // Use the standard checkbox mode like app_selection.go
 	menu.SetMaximized(false)   // Ensure it is NOT maximized
 	menu.SetIsDialog(true)     // Mark this menu as a modal dialog so it elevates ZOrder
+	menu.SetDialogType(DialogTypeConfirm)
 	menu.SetButtonLabels("Done", "", "")
 	menu.SetShowExit(false)
 

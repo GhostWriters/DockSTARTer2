@@ -688,48 +688,71 @@ func (s *DisplayOptionsScreen) ViewString() (result string) {
 		}
 	}
 
-	previewMinWidth := 48
-	minDialogWidth := 44 + layout.BorderWidth()
-	// Preview fits if: dialog + gutter + preview fits in content area
-	// (shadow extends past content area, not counted here)
-	previewFits := width >= minDialogWidth+layout.GutterWidth+previewMinWidth
+	previewMinWidth := 50
+	minDialogWidth := 40 + layout.BorderWidth()
+	gutter := layout.VisualGutter(s.config.UI.Shadow)
 
-	// Calculate dialog content width - use local width variable consistently
-	// (which may have been set from terminal size fallback)
+	// Preview fits if: settings + gutter + preview fits in content area
+	previewFits := width >= minDialogWidth+gutter+previewMinWidth
+
+	// Calculate dialog content width
 	var dialogContentWidth int
 	if previewFits {
-		// Dialog shares space with preview
-		dialogContentWidth = width - layout.GutterWidth - previewMinWidth
+		// Use a fixed width for preview in calculations
+		previewW := 44 + layout.BorderWidth()
+		settingsW := (width - previewW) - gutter
+		dialogContentWidth = settingsW - layout.BorderWidth()
 	} else {
-		// Maximized: dialog fills entire content area
-		dialogContentWidth = width
+		dialogContentWidth = width - layout.BorderWidth()
+	}
+	if dialogContentWidth < 40 {
+		dialogContentWidth = 40
 	}
 
-	// Menu width = dialog content - outer dialog borders
-	menuWidth := dialogContentWidth - layout.BorderWidth()
+	// 1. Render Settings Dialog
+	settingsDialog := s.renderSettingsDialog(dialogContentWidth, height)
+
+	// If preview doesn't fit, just return the settings dialog
+	if !previewFits {
+		return settingsDialog
+	}
+
+	// 2. Render Preview Dialog
+	settingsHeight := lipgloss.Height(settingsDialog)
+	preview := s.renderPreviewDialog(settingsHeight)
+
+	// 3. Compose combined view (for non-layered fallback)
+	styles := tui.GetStyles()
+	previewW := lipgloss.Width(preview)
+	settingsW := lipgloss.Width(settingsDialog)
+
+	// Real visual gutter calculation for ViewString
+	gutterW := width - settingsW - previewW
+	if gutterW < 1 {
+		gutterW = 1
+	}
+	gutterStyle := lipgloss.NewStyle().Background(styles.Screen.GetBackground())
+	gutterStr := gutterStyle.Height(settingsHeight).Width(gutterW).Render("")
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, settingsDialog, gutterStr, preview)
+}
+
+func (s *DisplayOptionsScreen) renderSettingsDialog(dialogWidth, height int) string {
+	layout := tui.GetLayout()
+	menuWidth := dialogWidth - layout.BorderWidth()
 	if menuWidth < 40 {
 		menuWidth = 40
 	}
 
-	// Calculate menu widths (same logic as SetSize)
-	// These are local and don't modify state, so fine for View pass
-	menuWidth = dialogContentWidth - layout.BorderWidth()
-	if menuWidth < 40 {
-		menuWidth = 40
-	}
-
-	// 1. Render Settings Menus
 	themeView := s.themeMenu.ViewString()
 	optionsView := s.optionsMenu.ViewString()
 
-	// Trim newlines before joining to prevent extra gaps
 	leftColumnParts := []string{themeView, optionsView}
 	for i, p := range leftColumnParts {
 		leftColumnParts[i] = strings.TrimRight(p, "\n")
 	}
 	leftColumn := lipgloss.JoinVertical(lipgloss.Left, leftColumnParts...)
 
-	// 2. Render Buttons using known width, not measured
 	var buttons []tui.ButtonSpec
 	if s.isRoot {
 		buttons = []tui.ButtonSpec{
@@ -744,71 +767,13 @@ func (s *DisplayOptionsScreen) ViewString() (result string) {
 		}
 	}
 	buttonRow := tui.RenderCenteredButtons(menuWidth, buttons...)
-
-	// 3. Settings Dialog with known width
 	settingsContent := lipgloss.JoinVertical(lipgloss.Left, leftColumn, buttonRow)
 
-	// Target height = content area height (shadow extends past, not counted)
-	// Use local height variable for consistency with width
-	targetHeight := height
-	if targetHeight < 10 {
-		targetHeight = 10
-	}
+	return tui.RenderBorderedBoxCtx("Appearance Settings", settingsContent, menuWidth, s.height, s.focused, false, tui.GetActiveContext().DialogTitleAlign, "Theme_Title", tui.GetActiveContext())
+}
 
-	// Use RenderBorderedBoxCtx with known width instead of RenderDialog which measures content
-	// targetHeight uses width/height which are local copies of the intended layout
-	settingsDialog := tui.RenderBorderedBoxCtx("Appearance Settings", settingsContent, menuWidth, s.height, s.focused, false, tui.GetActiveContext().DialogTitleAlign, "Theme_Title", tui.GetActiveContext())
-
-	// Note: AppModel.View adds the shadow as a separate layer for all screens
-	// if enabled. we no longer add it here to avoid double-shadowing.
-
-	// If preview doesn't fit, just return the settings dialog
-	if !previewFits {
-		return settingsDialog
-	}
-
-	// Calculate settings height for preview to match
-	styles := tui.GetStyles()
-	settingsHeight := lipgloss.Height(settingsDialog)
-
-	// 4. Render Preview and compose side-by-side
-	// Pass target height so preview can maximize vertically
-	preview := s.renderMockup(settingsHeight)
-
-	// Match preview height to settings dialog to prevent black gaps
-	previewHeight := lipgloss.Height(preview)
-	previewWidth := lipgloss.Width(preview)
-
-	if previewHeight > settingsHeight {
-		// Truncate preview to match settings height
-		previewLines := strings.Split(preview, "\n")
-		if len(previewLines) > settingsHeight {
-			previewLines = previewLines[:settingsHeight]
-		}
-		preview = strings.Join(previewLines, "\n")
-	} else if previewHeight < settingsHeight {
-		// Pad preview with Screen background to match settings height
-		padStyle := lipgloss.NewStyle().
-			Width(previewWidth).
-			Background(styles.Screen.GetBackground())
-		padLine := padStyle.Render("")
-		for i := previewHeight; i < settingsHeight; i++ {
-			preview += "\n" + padLine
-		}
-	}
-
-	// Create gutter with explicit Screen background color
-	// Height matches settings dialog (preview is already matched)
-	gutterStyle := lipgloss.NewStyle().Background(styles.Screen.GetBackground())
-	gutterLines := make([]string, settingsHeight)
-	for i := range gutterLines {
-		// Render spaces with Screen background for each line
-		gutterLines[i] = gutterStyle.Render(strutil.Repeat(" ", layout.GutterWidth))
-	}
-	gutter := strings.Join(gutterLines, "\n")
-
-	// Join horizontally: settings | gutter | preview
-	return lipgloss.JoinHorizontal(lipgloss.Top, settingsDialog, gutter, preview)
+func (s *DisplayOptionsScreen) renderPreviewDialog(targetHeight int) string {
+	return s.renderMockup(targetHeight)
 }
 
 func alignCenter(w int, text string) string {
@@ -979,21 +944,10 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	}
 	dTitle := strings.Join(titleParts, " ")
 
-	// Use our new context-aware bordered box renderer for perfect parity
-	// We use 38 to ensure width (38+2 borders + 2 shadow = 42) leaves 1 space indent on both sides of a 44 width backdrop.
-	dialogBox := tui.RenderBorderedBoxCtx(dTitle, contentStr, 38, 0, true, false, previewCtx.DialogTitleAlign, "Preview_Theme_Title", previewCtx)
-
-	// Add shadow if enabled using our new context-aware helper
-	if s.config.UI.Shadow {
-		dialogBox = tui.AddShadowCtx(dialogBox, previewCtx)
-	}
-
+	layout := tui.GetLayout()
 	// Backdrop - calculate height to fill available space
-	// Structure: headerRow(1) + sepRow(1) + backdrop + helpRow(1) + logStripRow(1) + outer borders(2) + shadow(1 if enabled)
-	fixedLines := 6 // header + sep + help + logstrip + 2 borders
-	if tui.IsShadowEnabled() {
-		fixedLines++ // shadow adds 1 line
-	}
+	// Structure: headerRow(1) + bottomBorderRow(1) + backdrop + helpRow(1) + logStripRow(1) + outer borders(2)
+	fixedLines := layout.BorderHeight() + 4
 	backdropHeight := targetHeight - fixedLines
 	if backdropHeight < 10 {
 		backdropHeight = 10 // minimum height for content visibility
@@ -1005,6 +959,9 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	}
 	backdropBlock := lipgloss.JoinVertical(lipgloss.Left, backdropLines...)
 
+	// Inner dialog mockup (centralized shadowing handles the effect)
+	dialogBox := tui.RenderBorderedBoxCtx(dTitle, contentStr, 38, 0, true, false, previewCtx.DialogTitleAlign, "Preview_Theme_Title", previewCtx)
+	// Backdrop Block with inner dialog overlay
 	backdropBlock = tui.Overlay(dialogBox, backdropBlock, tui.OverlayCenter, tui.OverlayCenter, 0, 0)
 
 	helpStyle := tui.SemanticRawStyle("Preview_Theme_Helpline")
@@ -1047,14 +1004,9 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	mockup := lipgloss.JoinVertical(lipgloss.Left, mockupParts...)
 
 	// Wrap in a standard dialog using the current (active) theme
-	// The mockup content uses preview theme colors, but the outer dialog uses active theme
 	mockupWidth := lipgloss.Width(mockup)
-	preview := tui.RenderBorderedBoxCtx("Preview", mockup, mockupWidth, 0, false, false, tui.GetActiveContext().DialogTitleAlign, "Theme_Title", tui.GetActiveContext())
-
-	// Add shadow if enabled in global config (same as settings dialog)
-	if tui.IsShadowEnabled() {
-		preview = tui.AddShadow(preview)
-	}
+	// Synchronize preview height with settings dialog
+	preview := tui.RenderBorderedBoxCtx("Preview", mockup, mockupWidth, targetHeight, false, false, tui.GetActiveContext().DialogTitleAlign, "Theme_Title", tui.GetActiveContext())
 
 	return preview
 }
@@ -1067,10 +1019,39 @@ func (s *DisplayOptionsScreen) View() tea.View {
 
 // Layers implements LayeredView
 func (s *DisplayOptionsScreen) Layers() []*lipgloss.Layer {
-	// Simple layer - just the rendered content
-	// Hit testing is handled separately by GetHitRegions()
+	width, height := s.width, s.height
+	if width == 0 || height == 0 {
+		return nil
+	}
+
+	layout := tui.GetLayout()
+	gutter := layout.VisualGutter(s.config.UI.Shadow)
+	previewMinWidth := 50
+	previewFits := width >= (40 + layout.BorderWidth() + gutter + previewMinWidth)
+
+	if previewFits {
+		// 1. Render Preview at far right
+		preview := s.renderPreviewDialog(height)
+		previewW := lipgloss.Width(preview)
+		previewX := width - previewW
+
+		// 2. Calculate Settings width to maintain shadow-aware separation
+		settingsW := previewX - gutter
+		dialogContentWidth := settingsW - layout.BorderWidth()
+		if dialogContentWidth < 40 {
+			dialogContentWidth = 40
+		}
+
+		settingsDialog := s.renderSettingsDialog(dialogContentWidth+layout.BorderWidth(), height)
+		return []*lipgloss.Layer{
+			lipgloss.NewLayer(settingsDialog).X(0).Y(0).Z(tui.ZScreen),
+			lipgloss.NewLayer(preview).X(previewX).Y(0).Z(tui.ZScreen),
+		}
+	}
+
+	settingsDialog := s.renderSettingsDialog(width, height)
 	return []*lipgloss.Layer{
-		lipgloss.NewLayer(s.ViewString()).Z(tui.ZScreen),
+		lipgloss.NewLayer(settingsDialog).X(0).Y(0).Z(tui.ZScreen),
 	}
 }
 
@@ -1210,9 +1191,7 @@ func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegi
 	buttonY := optionsY + s.optionsMenu.Height()
 	btnRowWidth := s.themeMenu.Width()
 
-	// Button panel background: covers the full button row so hover+scroll/middle-click
-	// can reach it even between buttons. Lower ZOrder than individual button regions
-	// so left-clicks on a specific button still hit the correct button.
+	// Button panel background
 	regions = append(regions, tui.HitRegion{
 		ID:     tui.IDButtonPanel,
 		X:      offsetX + contentX,
@@ -1222,25 +1201,54 @@ func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegi
 		ZOrder: tui.ZScreen + 1,
 	})
 
-	// Individual button hit regions (higher ZOrder → take priority for left-click)
-	var btnSpecs []tui.ButtonSpec
+	// Individual buttons
+	btnSpecs := []tui.ButtonSpec{
+		{Text: "Apply", ZoneID: tui.IDApplyButton},
+	}
 	if s.isRoot {
-		btnSpecs = []tui.ButtonSpec{
-			{Text: "Apply", ZoneID: tui.IDApplyButton},
-			{Text: "Exit", ZoneID: tui.IDExitButton},
-		}
+		btnSpecs = append(btnSpecs, tui.ButtonSpec{Text: "Exit", ZoneID: tui.IDExitButton})
 	} else {
-		btnSpecs = []tui.ButtonSpec{
-			{Text: "Apply", ZoneID: tui.IDApplyButton},
-			{Text: "Back", ZoneID: tui.IDBackButton},
-			{Text: "Exit", ZoneID: tui.IDExitButton},
-		}
+		btnSpecs = append(btnSpecs,
+			tui.ButtonSpec{Text: "Back", ZoneID: tui.IDBackButton},
+			tui.ButtonSpec{Text: "Exit", ZoneID: tui.IDExitButton},
+		)
 	}
 	regions = append(regions, tui.GetButtonHitRegions(
 		"", offsetX+contentX, offsetY+buttonY, btnRowWidth, tui.ZScreen+2,
 		btnSpecs...,
 	)...)
 
+	// Preview Mockup Regions (when it fits)
+	previewMinWidth := 50
+	layout := tui.GetLayout()
+	previewFits := s.width >= (40 + layout.GutterWidth + previewMinWidth)
+	if previewFits {
+		// Calculate preview position matching Layers()
+		preview := s.renderPreviewDialog(s.height)
+		previewW := lipgloss.Width(preview)
+		previewX := s.width - previewW
+
+		// Pass the preview's absolute position to renderMockup for region calculation
+		mockupRegions := s.getMockupHitRegions(offsetX+previewX, offsetY)
+		regions = append(regions, mockupRegions...)
+	}
+
+	return regions
+}
+
+func (s *DisplayOptionsScreen) getMockupHitRegions(offsetX, offsetY int) []tui.HitRegion {
+	var regions []tui.HitRegion
+	// These IDs should match the ones in renderMockup or follow naming convention
+	// For now, these are the regions for the "mockup" status bar and title
+	regions = append(regions, tui.HitRegion{
+		ID:     "mockup.header",
+		X:      offsetX,
+		Y:      offsetY,
+		Width:  44,
+		Height: 1,
+		ZOrder: tui.ZScreen + 2,
+	})
+	// Add other mockup regions if needed for interactive preview
 	return regions
 }
 

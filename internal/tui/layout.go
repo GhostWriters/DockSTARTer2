@@ -87,6 +87,30 @@ func (l Layout) BottomChrome() int {
 	return l.GapBeforeHelpline + l.HelplineHeight
 }
 
+// VisualWidth returns the total horizontal space consumed by a box's bounding box AND its shadow.
+func (l Layout) VisualWidth(width int, hasShadow bool) int {
+	if hasShadow {
+		return width + l.ShadowWidth
+	}
+	return width
+}
+
+// VisualHeight returns the total vertical space consumed by a box's bounding box AND its shadow.
+func (l Layout) VisualHeight(height int, hasShadow bool) int {
+	if hasShadow {
+		return height + l.ShadowHeight
+	}
+	return height
+}
+
+// VisualGutter returns the required spacing between box borders to maintain a 1-character visual "air" gap.
+func (l Layout) VisualGutter(hasShadow bool) int {
+	if hasShadow {
+		return l.GutterWidth + l.ShadowWidth
+	}
+	return l.GutterWidth
+}
+
 // -------------------------------------------------------------------
 // Content area calculations
 // -------------------------------------------------------------------
@@ -219,13 +243,10 @@ func (l Layout) DialogContentHeight(dialogH int, headerHeight int, hasButtons bo
 
 // SideBySideLayout returns the widths and X positions for two side-by-side panels
 func (l Layout) SideBySideLayout(screenW int, hasShadow bool) (leftW, rightW, leftX, rightX int) {
-	shadowW := 0
-	if hasShadow {
-		shadowW = l.ShadowWidth
-	}
+	gutter := l.VisualGutter(hasShadow)
 
 	// Available width after edges and gutter
-	available := screenW - (l.EdgeIndent * 2) - l.GutterWidth - shadowW
+	available := screenW - (l.EdgeIndent * 2) - gutter
 
 	// Split evenly (left panel is slightly smaller if odd)
 	leftW = available / 2
@@ -233,7 +254,7 @@ func (l Layout) SideBySideLayout(screenW int, hasShadow bool) (leftW, rightW, le
 
 	// Positions
 	leftX = l.EdgeIndent
-	rightX = l.EdgeIndent + leftW + l.GutterWidth
+	rightX = l.EdgeIndent + leftW + gutter
 
 	return leftW, rightW, leftX, rightX
 }

@@ -478,6 +478,20 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 	var border lipgloss.Border
 	if !ctx.DrawBorders {
 		border = lipgloss.HiddenBorder()
+	} else if ctx.Type == DialogTypeConfirm {
+		if ctx.LineCharacters {
+			if focused {
+				border = SlantedThickBorder
+			} else {
+				border = SlantedBorder
+			}
+		} else {
+			if focused {
+				border = SlantedThickAsciiBorder
+			} else {
+				border = SlantedAsciiBorder
+			}
+		}
 	} else if ctx.LineCharacters {
 		if rounded {
 			if focused {
