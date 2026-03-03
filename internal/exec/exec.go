@@ -1,6 +1,7 @@
 package exec
 
 import (
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"bufio"
 	"bytes"
@@ -45,8 +46,13 @@ func RunAndLog(ctx context.Context, runningNoticeType, outputNoticeType, errorNo
 		cmd.Stdout = &outputBuf
 		cmd.Stderr = &outputBuf
 	} else {
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
+		if w := console.GetTUIWriter(ctx); w != nil {
+			cmd.Stdout = w
+			cmd.Stderr = w
+		} else {
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+		}
 	}
 
 	err := cmd.Run()
@@ -111,6 +117,10 @@ func logByType(ctx context.Context, noticeType string, format string, args ...an
 // RunCommand executes a command without logging. Use this for simple command execution.
 func RunCommand(ctx context.Context, command string, args ...string) error {
 	cmd := exec.CommandContext(ctx, command, args...)
+	if w := console.GetTUIWriter(ctx); w != nil {
+		cmd.Stdout = w
+		cmd.Stderr = w
+	}
 	return cmd.Run()
 }
 

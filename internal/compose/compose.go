@@ -193,6 +193,9 @@ func MergeYML(ctx context.Context, force bool) error {
 	os.Setenv("COMPOSE_FILE", strings.Join(composeFiles, string(os.PathListSeparator)))
 
 	cmd := exec.CommandContext(ctx, "docker", "compose", "--project-directory", conf.ComposeDir+"/", "config")
+	if w := console.GetTUIWriter(ctx); w != nil {
+		cmd.Stderr = w
+	}
 	output, err := cmd.Output()
 	if err != nil {
 		logger.Error(ctx, "Failed to output compose config.")

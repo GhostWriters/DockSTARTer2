@@ -38,7 +38,8 @@ type ProgramBoxModel struct {
 	subtitle string
 	command  string // Command being executed (displayed above output)
 	viewport viewport.Model
-	lines    []string
+	lines    []string // Currently rendered/wrapped lines
+	rawLines []string // Themed but unwrapped lines for re-wrapping on resize
 	done     bool
 	err      error
 	width    int
@@ -351,14 +352,17 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Convert semantic theme tags to ANSI colors before displaying
 		styles := GetStyles()
 		rendered := RenderThemeText(msg.line, styles.Console)
-		// Truncate to viewport width to prevent overflow past borders
+		m.rawLines = append(m.rawLines, rendered)
+
+		// Render with wrapping to viewport width
 		if m.viewport.Width() > 0 {
-			rendered = lipgloss.NewStyle().
-				MaxWidth(m.viewport.Width()).
-				Render(rendered)
+			content := lipgloss.NewStyle().
+				Width(m.viewport.Width()).
+				Render(strings.Join(m.rawLines, "\n"))
+			m.viewport.SetContent(content)
+		} else {
+			m.viewport.SetContent(strings.Join(m.rawLines, "\n"))
 		}
-		m.lines = append(m.lines, rendered)
-		m.viewport.SetContent(strings.Join(m.lines, "\n"))
 		m.viewport.GotoBottom()
 
 		// Continue reading if not done
@@ -371,7 +375,14 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg.err
 		// Recalculate size now that done is true (shrinks viewport for OK button)
 		m.SetSize(m.width, m.height)
-		m.viewport.SetContent(strings.Join(m.lines, "\n"))
+
+		// Final content update with correct wrapping for final size
+		if m.viewport.Width() > 0 {
+			content := lipgloss.NewStyle().
+				Width(m.viewport.Width()).
+				Render(strings.Join(m.rawLines, "\n"))
+			m.viewport.SetContent(content)
+		}
 		m.viewport.GotoBottom()
 
 		// If AutoExit is enabled and no error occurred, close immediately
@@ -394,7 +405,7 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, Keys.Enter), msg.String() == "o", msg.String() == "O", key.Matches(msg, Keys.Space):
 			if m.done {
-				return m, closeDialog
+				return m, func() tea.Msg { return CloseDialogMsg{Result: true} }
 			}
 			// Important: consume these keys even if not done to prevent them from bubbling up
 			// or triggering background elements (like the header)
@@ -420,7 +431,7 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case LayerHitMsg:
 		// Check for suffixes to support prefixed IDs (e.g., "programbox_dialog.OK")
 		if m.done && (strings.HasSuffix(msg.ID, ".OK") || msg.ID == "Button.OK") {
-			return m, func() tea.Msg { return CloseDialogMsg{} }
+			return m, func() tea.Msg { return CloseDialogMsg{Result: true} }
 		}
 
 	case UpdateTaskMsg:

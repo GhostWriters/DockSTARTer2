@@ -278,6 +278,14 @@ func (m *ProgramBoxModel) calculateLayout() {
 	// Update viewport dimensions
 	m.viewport.SetWidth(m.width - 4)
 	m.viewport.SetHeight(vpHeight)
+
+	// Refresh content with new word wrap width
+	if m.viewport.Width() > 0 && len(m.rawLines) > 0 {
+		content := lipgloss.NewStyle().
+			Width(m.viewport.Width()).
+			Render(strings.Join(m.rawLines, "\n"))
+		m.viewport.SetContent(content)
+	}
 }
 
 // GetHelpText returns the dynamic help text based on the current state

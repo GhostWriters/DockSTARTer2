@@ -19,3 +19,11 @@ func WithTUIWriter(ctx context.Context, w io.Writer) context.Context {
 func IsTUI(ctx context.Context) bool {
 	return ctx.Value(TUIWriterKey) != nil || IsTUIEnabled()
 }
+
+// GetTUIWriter returns the TUI writer from the context if it exists.
+func GetTUIWriter(ctx context.Context) io.Writer {
+	if w, ok := ctx.Value(TUIWriterKey).(io.Writer); ok {
+		return w
+	}
+	return nil
+}

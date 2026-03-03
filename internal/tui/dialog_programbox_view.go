@@ -1,11 +1,9 @@
 package tui
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
-	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/strutil"
 
 	tea "charm.land/bubbletea/v2"
@@ -215,13 +213,6 @@ func (m *ProgramBoxModel) ViewString() string {
 
 	// Wrap in border with title embedded (matching menu style)
 	dialogWithTitle := RenderDialog(m.title, content, true, 0)
-
-	// If error occurred, show it (suppressing "user aborted" which is just a cancellation)
-	if m.err != nil && m.err != ErrUserAborted && !errors.Is(m.err, console.ErrUserAborted) {
-		errStyle := SemanticStyle("{{|Theme_Error|}}")
-		errView := RenderDialog("Error", errStyle.Render(m.err.Error()), true, 0)
-		dialogWithTitle = Overlay(errView, dialogWithTitle, OverlayCenter, OverlayCenter, 0, 0)
-	}
 
 	// If sub-dialog is active, overlay it
 	if m.subDialog != nil {
