@@ -98,6 +98,14 @@ type (
 		Type    MessageType
 	}
 
+	// ShowPromptDialogMsg shows a text prompt dialog with a result channel
+	ShowPromptDialogMsg struct {
+		Title      string
+		Question   string
+		Sensitive  bool
+		ResultChan chan promptResultMsg
+	}
+
 	// LayerHitMsg is sent when a native compositor layer is hit by a mouse event
 	LayerHitMsg struct {
 		ID     string
@@ -137,6 +145,9 @@ type AppModel struct {
 
 	// Channel for receiving confirmation result from a modal dialog
 	pendingConfirm chan bool
+
+	// Channel for receiving prompt result from a modal dialog
+	pendingPrompt chan promptResultMsg
 
 	// Ready flag (set after first WindowSizeMsg)
 	ready bool
@@ -394,6 +405,23 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateComponentFocus()
 		return m, m.dialog.Init()
 
+	case ShowPromptDialogMsg:
+		// If a dialog is already open, push it to stack
+		if m.dialog != nil {
+			m.dialogStack = append(m.dialogStack, m.dialog)
+		}
+
+		// Show prompt dialog as the main dialog
+		dialog := newPromptDialog(msg.Title, msg.Question, msg.Sensitive)
+		dW, dH := m.getDialogArea(dialog)
+		if sizable, ok := interface{}(dialog).(interface{ SetSize(int, int) }); ok {
+			sizable.SetSize(dW, dH)
+		}
+		m.dialog = dialog
+		m.updateComponentFocus()
+		m.pendingPrompt = msg.ResultChan
+		return m, logger.RecoverTUI(m.ctx, m.dialog.Init())
+
 	case FinalizeSelectionMsg:
 		// Atomically clear/navigate and show dialog to avoid race conditions in batches
 		if len(m.screenStack) > 0 {
@@ -411,19 +439,28 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				sizable.SetSize(dW, dH)
 			}
 			m.updateComponentFocus()
-			return m, logger.RecoverTUI(m.ctx, m.dialog.Init())
 		}
 		return m, nil
 
 	case CloseDialogMsg:
-		// If we (AppModel) have a pending confirmation, we are the direct parent of the closing dialog.
+		// If we're waiting for a confirmation, send the result
 		if m.pendingConfirm != nil {
-			if result, ok := msg.Result.(bool); ok {
-				m.pendingConfirm <- result
+			if b, ok := msg.Result.(bool); ok {
+				m.pendingConfirm <- b
 			} else {
-				m.pendingConfirm <- false // Default to false if result invalid
+				m.pendingConfirm <- false
 			}
 			m.pendingConfirm = nil
+		}
+
+		// If we're waiting for a prompt, send the result
+		if m.pendingPrompt != nil {
+			if r, ok := msg.Result.(promptResultMsg); ok {
+				m.pendingPrompt <- r
+			} else {
+				m.pendingPrompt <- promptResultMsg{confirmed: false}
+			}
+			m.pendingPrompt = nil
 		}
 
 		// Clear current dialog and try to pop from stack

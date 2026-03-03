@@ -58,7 +58,7 @@ type ProgramBoxModel struct {
 
 	// Overlay prompts (for blocking prompts during task)
 	subDialog     tea.Model
-	subDialogChan chan bool
+	subDialogChan any
 
 	// Progress tracking
 	Tasks    []Task
@@ -73,12 +73,12 @@ type ProgramBoxModel struct {
 // SubDialogMsg signals a request to show a sub-dialog and blocks the task
 type SubDialogMsg struct {
 	Model tea.Model
-	Chan  chan bool
+	Chan  any
 }
 
 // SubDialogResultMsg signals the completion of a sub-dialog
 type SubDialogResultMsg struct {
-	Result bool
+	Result any
 }
 
 // programBoxModel is an alias for backward compatibility
@@ -286,8 +286,22 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Handle sub-dialog result specifically (it signals closing of the sub-dialog)
 	if resultMsg, ok := msg.(SubDialogResultMsg); ok {
 		if m.subDialogChan != nil {
-			m.subDialogChan <- resultMsg.Result
-			close(m.subDialogChan)
+			switch ch := m.subDialogChan.(type) {
+			case chan bool:
+				if r, ok := resultMsg.Result.(bool); ok {
+					ch <- r
+				} else {
+					ch <- false
+				}
+				close(ch)
+			case chan promptResultMsg:
+				if r, ok := resultMsg.Result.(promptResultMsg); ok {
+					ch <- r
+				} else {
+					ch <- promptResultMsg{confirmed: false}
+				}
+				close(ch)
+			}
 			m.subDialogChan = nil
 		}
 		m.subDialog = nil
@@ -336,11 +350,20 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case CloseDialogMsg:
 		if m.subDialog != nil {
 			if m.subDialogChan != nil {
-				// Handle result if it's a bool (confirmations)
-				if r, ok := msg.Result.(bool); ok {
-					m.subDialogChan <- r
-				} else {
-					m.subDialogChan <- false // Default/cancel
+				// Handle result based on channel type
+				switch ch := m.subDialogChan.(type) {
+				case chan bool:
+					if r, ok := msg.Result.(bool); ok {
+						ch <- r
+					} else {
+						ch <- false // Default/cancel
+					}
+				case chan promptResultMsg:
+					if r, ok := msg.Result.(promptResultMsg); ok {
+						ch <- r
+					} else {
+						ch <- promptResultMsg{confirmed: false}
+					}
 				}
 			}
 			m.subDialog = nil

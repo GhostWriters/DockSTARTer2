@@ -1,6 +1,7 @@
 package console
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"os"
@@ -22,6 +23,10 @@ type Printer func(ctx context.Context, msg any, args ...any)
 // to allow QuestionPrompt to show a graphical dialog.
 var TUIConfirm func(title, question string, defaultYes bool) bool
 
+// TUIPrompt is a function that can be registered by the tui package
+// to allow TextPrompt to show a graphical text input dialog.
+var TUIPrompt func(title, question string, sensitive bool) (string, error)
+
 // TUIShutdown is a function that can be registered by the tui package
 // to allow the application to cleanly exit the TUI before re-execution.
 var TUIShutdown func()
@@ -31,19 +36,26 @@ var TUIShutdown func()
 // It returns true if the user answers Yes, false otherwise.
 // defaultValue determines the default action if the user just presses Enter ("Y"=Yes, "N"=No, ""=Require Input).
 // forceYes if true, immediately returns true without prompting (useful for -y flag).
-func QuestionPrompt(ctx context.Context, printer Printer, question string, defaultValue string, forceYes bool) (bool, error) {
+func QuestionPrompt(ctx context.Context, printer Printer, title, question string, defaultValue string, forceYes bool) (bool, error) {
 	if forceYes || GlobalYes {
 		return true, nil
 	}
 
+	// Format text for semantic colors
+	questionStr := Sprintf(question)
+	if title == "" {
+		title = "Confirmation"
+	}
+	title = Sprintf(title)
+
 	// Check if we should use TUI for this prompt
 	if TUIConfirm != nil {
 		defaultYes := strings.EqualFold(defaultValue, "y")
-		answer := TUIConfirm("Confirmation", question, defaultYes)
+		answer := TUIConfirm(title, questionStr, defaultYes)
 		if answer {
-			printer(ctx, "Answered: {{|Yes|}}Yes{{[-]}}")
+			printer(ctx, "%s", Sprintf("Answered: {{|Yes|}}Yes{{[-]}}"))
 		} else {
-			printer(ctx, "Answered: {{|No|}}No{{[-]}}")
+			printer(ctx, "%s", Sprintf("Answered: {{|No|}}No{{[-]}}"))
 		}
 		return answer, nil
 	}
@@ -57,8 +69,8 @@ func QuestionPrompt(ctx context.Context, printer Printer, question string, defau
 	}
 
 	// Print the question (parsing semantic colors)
-	printer(ctx, question)
-	printer(ctx, ynPrompt)
+	printer(ctx, "%s", questionStr)
+	printer(ctx, "%s", ynPrompt)
 
 	// Switch to raw mode to read a single character
 	fd := int(os.Stdin.Fd())
@@ -142,4 +154,40 @@ func QuestionPrompt(ctx context.Context, printer Printer, question string, defau
 	}
 
 	return answer, nil
+}
+
+// TextPrompt prompts the user for string input.
+// If sensitive is true, it attempts to mask the input in standard terminal.
+func TextPrompt(ctx context.Context, printer Printer, title, question string, sensitive bool) (string, error) {
+	// Format text for semantic colors
+	questionStr := Sprintf(question)
+	if title == "" {
+		title = "Input Required"
+	}
+	title = Sprintf(title)
+
+	if TUIPrompt != nil {
+		return TUIPrompt(title, questionStr, sensitive)
+	}
+
+	if title != "" {
+		printer(ctx, "%s", title)
+	}
+	printer(ctx, "%s: ", questionStr)
+
+	if sensitive {
+		passwordBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
+		printer(ctx, "") // Print a newline after reading password
+		if err != nil {
+			return "", err
+		}
+		return string(passwordBytes), nil
+	}
+
+	reader := bufio.NewReader(os.Stdin)
+	text, err := reader.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(text), nil
 }

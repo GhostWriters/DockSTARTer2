@@ -45,6 +45,7 @@ var (
 // Initialize sets up the TUI without starting the run loop
 func Initialize(ctx context.Context) error {
 	console.TUIConfirm = PromptConfirm
+	console.TUIPrompt = PromptText
 	console.TUIShutdown = Shutdown
 
 	currentConfig = config.LoadAppConfig()

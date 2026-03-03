@@ -24,7 +24,7 @@ func Prune(ctx context.Context, assumeYes bool) error {
 	}
 
 	// Ask for confirmation
-	answer, err := console.QuestionPrompt(ctx, printer, question, "Y", assumeYes)
+	answer, err := console.QuestionPrompt(ctx, printer, "Docker Prune", question, "Y", assumeYes)
 	if err != nil {
 		return err
 	}

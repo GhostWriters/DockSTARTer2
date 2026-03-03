@@ -341,7 +341,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 			noNotice = "Not updating and starting containers for all enabled services."
 		}
 		// Update = pull + up - requires separate execution
-		answer, err := console.QuestionPrompt(ctx, logger.Notice, question, "Y", yes)
+		answer, err := console.QuestionPrompt(ctx, logger.Notice, "Docker Compose", question, "Y", yes)
 		if err != nil {
 			return err
 		}
@@ -378,7 +378,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 		yesNotice = "Merging enabled app templates to '{{|File|}}docker-compose.yml{{[-]}}'."
 		noNotice = "Not merging enabled app templates to '{{|File|}}docker-compose.yml{{[-]}}'."
 		// Already merged above, just printing logic here if forced
-		answer, err := console.QuestionPrompt(ctx, logger.Notice, question, "Y", yes)
+		answer, err := console.QuestionPrompt(ctx, logger.Notice, "Docker Compose", question, "Y", yes)
 		if err != nil {
 			return err
 		}
@@ -396,7 +396,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 		yesNotice = "Updating containers for all enabled services."
 		noNotice = "Not updating containers for all enabled services."
 
-		answer, err := console.QuestionPrompt(ctx, logger.Notice, question, "Y", yes)
+		answer, err := console.QuestionPrompt(ctx, logger.Notice, "Docker Compose", question, "Y", yes)
 		if err != nil {
 			return err
 		}
@@ -415,11 +415,11 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 	}
 
 	// General Execution for non-custom paths
-	answer, err := console.QuestionPrompt(ctx, logger.Notice, question, "Y", yes)
+	confirmed, err := console.QuestionPrompt(ctx, logger.Notice, "Docker Compose", question, "Y", yes)
 	if err != nil {
 		return err
 	}
-	if answer {
+	if confirmed {
 		logger.Notice(ctx, yesNotice)
 		return runDockerCommand(ctx, args...)
 	} else {

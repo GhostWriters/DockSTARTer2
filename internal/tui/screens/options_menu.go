@@ -1,7 +1,9 @@
 package screens
 
 import (
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/tui"
+	"context"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -27,6 +29,18 @@ func NewOptionsMenuScreen(isRoot bool) *OptionsMenuScreen {
 			Desc:   "{{|Theme_TitleError|}}Test error handling{{[-]}}",
 			Help:   "Verify branded recovery and stack trace",
 			Action: func() tea.Msg { panic("Manual verification panic (Test: 123)") },
+		},
+		{
+			Tag:  "Simulate Sudo Prompt",
+			Desc: "Test universal text prompt",
+			Help: "Show what a sudo password request looks like",
+			Action: func() tea.Msg {
+				go func() {
+					// Simulate executing a background task that requires a password
+					console.TextPrompt(context.Background(), func(context.Context, any, ...any) {}, "{{|Theme_TitleQuestion|}}Sudo Password Required{{[-]}}", "sudo run simulated/command.sh", true)
+				}()
+				return nil
+			},
 		},
 	}
 
