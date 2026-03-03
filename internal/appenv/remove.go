@@ -2,6 +2,7 @@ package appenv
 
 import (
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/logger"
 	"bufio"
@@ -47,7 +48,8 @@ func removeAllDisabled(ctx context.Context, conf config.AppConfig, assumeYes boo
 
 	// Ask once for all disabled apps
 	question := "Would you like to purge variables for all disabled apps?"
-	if !assumeYes && !promptYesNo(ctx, question) {
+	answer, err := console.QuestionPrompt(ctx, logger.Notice, "Remove", question, "Y", assumeYes)
+	if err != nil || !answer {
 		return nil
 	}
 
@@ -116,7 +118,8 @@ func removeApp(ctx context.Context, appName string, conf config.AppConfig, assum
 	}
 
 	// Prompt for confirmation
-	if !assumeYes && !promptYesNo(ctx, question) {
+	answer, err := console.QuestionPrompt(ctx, logger.Notice, "Remove", question, "Y", assumeYes)
+	if err != nil || !answer {
 		logger.Info(ctx, "Keeping '{{|App|}}%s{{[-]}}' variables.", nice)
 		return nil
 	}
@@ -311,18 +314,4 @@ func removeVarsFromFile(vars []string, filePath string) error {
 
 	// Write back
 	return os.WriteFile(filePath, []byte(strings.Join(filteredLines, "\n")+"\n"), 0644)
-}
-
-// promptYesNo prompts the user for yes/no confirmation
-func promptYesNo(ctx context.Context, question string) bool {
-	logger.Display(ctx, question)
-	fmt.Print("(Y/n): ")
-
-	scanner := bufio.NewScanner(os.Stdin)
-	if scanner.Scan() {
-		response := strings.ToLower(strings.TrimSpace(scanner.Text()))
-		return response == "y" || response == "yes" || response == ""
-	}
-
-	return false
 }
