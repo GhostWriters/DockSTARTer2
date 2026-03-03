@@ -1863,8 +1863,8 @@ func (m *MenuModel) renderFlow() string {
 	for i, item := range m.items {
 		isSelected := i == m.cursor && m.IsActive()
 
-		tagStyle := SemanticStyle("{{|Theme_Tag|}}").Background(dialogBG)
-		keyStyle := SemanticStyle("{{|Theme_TagKey|}}").Background(dialogBG)
+		tagStyle := SemanticStyle("{{|Theme_Tag|}}")
+		keyStyle := SemanticStyle("{{|Theme_TagKey|}}")
 
 		if isSelected {
 			tagStyle = SemanticStyle("{{|Theme_TagSelected|}}")
@@ -2024,9 +2024,9 @@ func (m *MenuModel) renderVariableHeightList() string {
 
 	// Styles for items
 	neutralStyle := lipgloss.NewStyle().Background(dialogBG)
-	tagStyleBase := SemanticStyle("{{|Theme_Tag|}}").Background(dialogBG)
-	keyStyleBase := SemanticStyle("{{|Theme_TagKey|}}").Background(dialogBG)
-	itemStyleBase := SemanticStyle("{{|Theme_Item|}}").Background(dialogBG)
+	tagStyleBase := SemanticStyle("{{|Theme_Tag|}}")
+	keyStyleBase := SemanticStyle("{{|Theme_TagKey|}}")
+	itemStyleBase := SemanticStyle("{{|Theme_Item|}}")
 
 	tagStyleSel := SemanticStyle("{{|Theme_TagSelected|}}")
 	keyStyleSel := SemanticStyle("{{|Theme_TagKeySelected|}}")
