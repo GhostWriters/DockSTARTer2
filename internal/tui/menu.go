@@ -403,6 +403,7 @@ type MenuModel struct {
 
 	// Memoization for expensive rendering
 	lastView       string
+	cacheValid     bool // Indicates if lastView is up-to-date with current state
 	lastWidth      int
 	lastHeight     int
 	lastIndex      int
