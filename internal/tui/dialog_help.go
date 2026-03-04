@@ -63,8 +63,7 @@ func (m *HelpDialogModel) ViewString() string {
 	m.help.SetWidth(targetWidth)
 
 	dialogStyle := SemanticStyle("{{|Theme_Dialog|}}")
-	titleStyle := GetStyles().DialogTitleHelp
-	haloColor := titleStyle.GetForeground() // Use the themed black from HelpTitle
+	haloColor := lipgloss.Color("0") // Solid black halo
 	bgStyle := lipgloss.NewStyle().Background(dialogStyle.GetBackground())
 
 	// Apply theme styles to the help component
@@ -109,7 +108,7 @@ func (m *HelpDialogModel) ViewString() string {
 	// but keep the title's original background so it "shows what it used to"
 	ctx := GetActiveContext()
 	ctx.Dialog = ctx.Dialog.Background(haloColor)
-	ctx.DialogTitle = titleStyle.Background(GetStyles().Dialog.GetBackground())
+	ctx.DialogTitle = GetStyles().DialogTitleHelp.Background(GetStyles().Dialog.GetBackground())
 	ctx.BorderColor = haloColor
 	ctx.Border2Color = haloColor
 
