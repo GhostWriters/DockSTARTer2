@@ -138,7 +138,7 @@ func (m DialogWithBackdrop[T]) View() tea.View {
 	// If dialog isn't ready yet, just show backdrop
 	if dialogContent == "" {
 		v := tea.NewView(backdropContent)
-		v.MouseMode = tea.MouseModeAllMotion
+		v.MouseMode = tea.MouseModeCellMotion
 		return v
 	}
 
@@ -159,7 +159,7 @@ func (m DialogWithBackdrop[T]) View() tea.View {
 
 	// Component view (ready for hit-testing in compositor)
 	v := tea.View{Content: output}
-	v.MouseMode = tea.MouseModeAllMotion
+	v.MouseMode = tea.MouseModeCellMotion
 	v.AltScreen = true
 	return v
 }

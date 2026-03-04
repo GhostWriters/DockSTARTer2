@@ -232,7 +232,7 @@ func (m *ProgramBoxModel) ViewString() string {
 // View implements tea.Model
 func (m *ProgramBoxModel) View() tea.View {
 	v := tea.NewView(m.ViewString())
-	v.MouseMode = tea.MouseModeAllMotion
+	v.MouseMode = tea.MouseModeCellMotion
 	v.AltScreen = true
 	return v
 }

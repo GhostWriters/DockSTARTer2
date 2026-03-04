@@ -219,7 +219,7 @@ func (m *AppModel) View() (v tea.View) {
 
 	// Render the compositor
 	v = tea.NewView(comp.Render())
-	v.MouseMode = tea.MouseModeAllMotion
+	v.MouseMode = tea.MouseModeCellMotion
 	v.AltScreen = true
 	return v
 }
