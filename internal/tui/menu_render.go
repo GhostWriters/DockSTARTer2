@@ -12,6 +12,11 @@ func (m *MenuModel) ViewString() string {
 		return ""
 	}
 
+	// Return cached view if the state hasn't changed since the last render
+	if cachedView, valid := m.CheckCache(); valid {
+		return cachedView
+	}
+
 	// In Sub-menu mode, we render a simpler view without the global backdrop logic
 	if m.subMenuMode {
 		return m.viewSubMenu()
@@ -148,7 +153,8 @@ func (m *MenuModel) ViewString() string {
 		dialog = dialogStyle.Render(content)
 	}
 
-	return dialog
+	// Save to cache before returning
+	return m.SaveCache(dialog)
 }
 
 // Layers returns a single layer with the menu content for visual compositing

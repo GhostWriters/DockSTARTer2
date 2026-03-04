@@ -10,6 +10,10 @@ import (
 )
 
 func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Any incoming message (keypress, mouse event, window size) potentially changes
+	// the state of the menu, so we must invalidate the render cache.
+	m.InvalidateCache()
+
 	switch msg := msg.(type) {
 	case ToggleFocusedMsg:
 		// Middle click triggers toggle on the currently focused item
