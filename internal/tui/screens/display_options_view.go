@@ -129,7 +129,7 @@ func (s *DisplayOptionsScreen) renderPreviewDialog(targetHeight int) string {
 
 func (s *DisplayOptionsScreen) View() tea.View {
 	v := tea.NewView(s.ViewString())
-	v.MouseMode = tea.MouseModeAllMotion
+	v.MouseMode = tea.MouseModeCellMotion
 	return v
 }
 

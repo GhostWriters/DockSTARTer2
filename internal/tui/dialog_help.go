@@ -121,7 +121,7 @@ func (m *HelpDialogModel) ViewString() string {
 // View implements tea.Model
 func (m *HelpDialogModel) View() tea.View {
 	v := tea.NewView(m.ViewString())
-	v.MouseMode = tea.MouseModeAllMotion
+	v.MouseMode = tea.MouseModeCellMotion
 	v.AltScreen = true
 	return v
 }
