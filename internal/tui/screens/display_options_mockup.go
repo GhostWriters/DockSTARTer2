@@ -52,23 +52,55 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 
 	// Header content is width-2 (border chars occupy 1 char each side)
 	innerWidth := width - 2
-	leftWidth := innerWidth / 3
-	centerWidth := innerWidth / 3
-	rightWidth := innerWidth - leftWidth - centerWidth
 
 	// Left: Host
 	leftText := " {{|Preview_Theme_Hostname|}}HOST{{[-]}}"
-	leftSec := hStyle.Width(leftWidth).Align(lipgloss.Left).Render(tui.RenderThemeText(leftText, hStyle))
+	leftRendered := tui.RenderThemeText(leftText, hStyle)
+	leftW := lipgloss.Width(tui.GetPlainText(leftRendered))
 
-	// Center: App Name (centered within its third)
+	// Center: App Name
 	centerText := "{{|Preview_Theme_ApplicationName|}}" + tui.GetPlainText(themeName) + "{{[-]}}"
-	centerSec := hStyle.Width(centerWidth).Align(lipgloss.Center).Render(tui.RenderThemeText(centerText, hStyle))
+	centerRendered := tui.RenderThemeText(centerText, hStyle)
+	centerW := lipgloss.Width(tui.GetPlainText(centerRendered))
 
 	// Right: Version
 	rightText := "{{|Preview_Theme_ApplicationVersion|}}A:[{{[-]}}{{|Preview_Theme_ApplicationVersion|}}2.1{{[-]}}{{|Preview_Theme_ApplicationVersion|}}]{{[-]}} "
-	rightSec := hStyle.Width(rightWidth).Align(lipgloss.Right).Render(tui.RenderThemeText(rightText, hStyle))
+	rightRendered := tui.RenderThemeText(rightText, hStyle)
+	rightW := lipgloss.Width(tui.GetPlainText(rightRendered))
 
-	headerContent := lipgloss.JoinHorizontal(lipgloss.Top, leftSec, centerSec, rightSec)
+	// Exact physical alignment like header.go
+	centerX := (innerWidth - centerW) / 2
+	if centerX < 0 {
+		centerX = 0
+	}
+
+	fitsLine1 := true
+	if leftW+1 > centerX {
+		fitsLine1 = false
+	}
+	if centerX+centerW+1+rightW > innerWidth {
+		fitsLine1 = false
+	}
+
+	var headerContent string
+	if fitsLine1 {
+		space1 := centerX - leftW
+		space2 := innerWidth - (centerX + centerW) - rightW
+		fullLine := leftRendered + strutil.Repeat(" ", space1) + centerRendered + strutil.Repeat(" ", space2) + rightRendered
+		headerContent = hStyle.Render(fullLine)
+	} else if leftW+1 <= centerX {
+		// Wrap right side like header.go Wrap Stage 1/2
+		line1 := leftRendered + strutil.Repeat(" ", centerX-leftW) + centerRendered
+		line1 += strutil.Repeat(" ", innerWidth-lipgloss.Width(tui.GetPlainText(line1)))
+		line2 := strutil.Repeat(" ", innerWidth-rightW) + rightRendered
+		headerContent = hStyle.Render(line1) + "\n" + hStyle.Render(line2)
+	} else {
+		// Total stack fallback
+		line1 := leftRendered + strutil.Repeat(" ", innerWidth-leftW)
+		line2 := centerRendered + strutil.Repeat(" ", innerWidth-centerW)
+		line3 := strutil.Repeat(" ", innerWidth-rightW) + rightRendered
+		headerContent = hStyle.Render(line1) + "\n" + hStyle.Render(line2) + "\n" + hStyle.Render(line3)
+	}
 	headerRow := bStyle.Render(leftChar) + headerContent + bStyle.Render(rightChar)
 
 	// Bottom border replaces the old separator line
