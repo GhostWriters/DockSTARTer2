@@ -103,16 +103,20 @@ func (m *HelpDialogModel) ViewString() string {
 
 	// Content sizes naturally to its lines - no forced height expansion
 
-	// Use standard RenderDialogCtx for the border area
-	// We override the dialog background to Black for the border area and halo
-	// but keep the title's original background so it "shows what it used to"
+	// Ensure the title is visible on the black border bar
+	// We use the original themed Dialog background for the title text area
 	ctx := GetActiveContext()
 	ctx.Dialog = ctx.Dialog.Background(haloColor)
-	ctx.DialogTitle = GetStyles().DialogTitleHelp.Background(GetStyles().Dialog.GetBackground())
+	ctx.DialogTitleHelp = GetStyles().DialogTitleHelp.
+		Background(GetStyles().Dialog.GetBackground()).
+		Foreground(GetStyles().DialogTitleHelp.GetForeground())
 	ctx.BorderColor = haloColor
 	ctx.Border2Color = haloColor
 
-	dialogStr := RenderDialogCtx("{{|Theme_TitleHelp|}}Keyboard & Mouse Controls", content, m.focused, 0, ctx)
+	// Render the dialog with solid block borders
+	// Render the dialog with solid block borders
+	// We pass raw text so it uses the ctx.DialogTitleHelp base style without tag overrides
+	dialogStr := RenderUniformBlockDialogCtx(" Keyboard & Mouse Controls ", content, ctx)
 
 	// Add the solid black halo
 	return AddPatternHalo(dialogStr, haloColor)
@@ -129,7 +133,7 @@ func (m *HelpDialogModel) View() tea.View {
 // Layers implements LayeredView
 func (m *HelpDialogModel) Layers() []*lipgloss.Layer {
 	return []*lipgloss.Layer{
-		lipgloss.NewLayer(m.ViewString()).Z(ZDialog).ID("Dialog.Help"),
+		lipgloss.NewLayer(m.ViewString()).Z(ZDialog + 1).ID("Dialog.Help"),
 	}
 }
 

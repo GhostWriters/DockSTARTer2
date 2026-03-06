@@ -74,10 +74,15 @@ func (m *AppModel) View() (v tea.View) {
 	maxX := layout.EdgeIndent
 	maxY := contentYOffset
 
-	// 3. Layer: Active Screen
+	// 3. Layer: Screen Stack
+	allScreens := append([]ScreenModel{}, m.screenStack...)
 	if m.activeScreen != nil {
+		allScreens = append(allScreens, m.activeScreen)
+	}
+
+	for i, s := range allScreens {
 		var screenContent string
-		if vs, ok := m.activeScreen.(ViewStringer); ok {
+		if vs, ok := s.(ViewStringer); ok {
 			screenContent = vs.ViewString()
 		}
 
@@ -98,12 +103,15 @@ func (m *AppModel) View() (v tea.View) {
 				screenY = maxY + (caH-screenH)/2
 			}
 
+			// Base Z for screens: each screen level is 10 units apart within ZScreen band
+			screenZBase := ZScreen + (i * 10)
+
 			// Centralized Automatic Shadowing:
 			// Apply a shadow to each layer that is at a main visibility level (ZScreen or ZDialog).
-			// This allows complex screens like DisplayOptionsScreen to have multiple shadowed boxes
-			// without manual shadow logic in the screen code.
 			addShadowForLayer := func(l *lipgloss.Layer) {
-				if m.config.UI.Shadow && (l.GetZ() == ZScreen || l.GetZ() == ZDialog) {
+				// Use relative Z to check if it's a main layer (offset from the screen's base Z)
+				originalZ := l.GetZ() - screenZBase
+				if m.config.UI.Shadow && (originalZ == ZScreen || originalZ == ZDialog) {
 					content := l.GetContent()
 					shadowBox := GetShadowBoxCtx(content, GetActiveContext())
 					if shadowBox != "" {
@@ -116,10 +124,10 @@ func (m *AppModel) View() (v tea.View) {
 				}
 			}
 
-			if lv, ok := m.activeScreen.(LayeredView); ok {
+			if lv, ok := s.(LayeredView); ok {
 				for _, l := range lv.Layers() {
-					// Translate layer relative to screen position
-					l = l.X(l.GetX() + screenX).Y(l.GetY() + screenY)
+					// Translate layer relative to screen position and stack Z
+					l = l.X(l.GetX() + screenX).Y(l.GetY() + screenY).Z(l.GetZ() + screenZBase - ZScreen)
 					if l.GetZ() > maxZ {
 						maxZ = l.GetZ()
 					}
@@ -127,31 +135,38 @@ func (m *AppModel) View() (v tea.View) {
 					comp.AddLayers(l)
 				}
 			} else {
-				l := lipgloss.NewLayer(screenContent).X(screenX).Y(screenY).Z(ZScreen)
-				maxZ = ZScreen
+				l := lipgloss.NewLayer(screenContent).X(screenX).Y(screenY).Z(screenZBase)
+				if l.GetZ() > maxZ {
+					maxZ = l.GetZ()
+				}
 				addShadowForLayer(l)
 				comp.AddLayers(l)
 			}
 
-			// Collect hit regions from active screen with the actual position
-			if hrp, ok := m.activeScreen.(HitRegionProvider); ok {
+			// Collect hit regions from screen with the actual position
+			if hrp, ok := s.(HitRegionProvider); ok {
 				m.hitRegions = append(m.hitRegions, hrp.GetHitRegions(screenX, screenY)...)
 			}
 		}
 	}
 
-	// 4. Layer: Modal Dialog
+	// 4. Layer: Modal Dialog Stack
+	allDialogs := append([]tea.Model{}, m.dialogStack...)
 	if m.dialog != nil {
+		allDialogs = append(allDialogs, m.dialog)
+	}
+
+	for i, d := range allDialogs {
 		var content string
-		if vs, ok := m.dialog.(ViewStringer); ok {
+		if vs, ok := d.(ViewStringer); ok {
 			content = vs.ViewString()
 		} else {
-			content = m.dialog.View().Content
+			content = d.View().Content
 		}
 
 		if content != "" {
 			maximized := false
-			if md, ok := m.dialog.(interface{ IsMaximized() bool }); ok {
+			if md, ok := d.(interface{ IsMaximized() bool }); ok {
 				maximized = md.IsMaximized()
 			}
 
@@ -161,7 +176,7 @@ func (m *AppModel) View() (v tea.View) {
 			mode := DialogAbsoluteCentered
 			targetHeight := m.backdropHeight()
 
-			if _, ok := m.dialog.(*HelpDialogModel); ok {
+			if _, ok := d.(*HelpDialogModel); ok {
 				targetHeight = m.height
 			}
 
@@ -172,8 +187,9 @@ func (m *AppModel) View() (v tea.View) {
 
 			lx, ly := layout.DialogPosition(mode, fgWidth, fgHeight, m.width, targetHeight, m.config.UI.Shadow, headerH)
 
-			// Modal Offset: Ensure all dialog layers sit above the screen's maxZ
-			modalZBase := maxZ + 100
+			// Modal Offset: Each dialog in the stack sits 100 Z-units above the previous one
+			// Base is maxZ (highest screen layer) + 100
+			modalZBase := maxZ + 100 + (i * 100)
 
 			// Centralized Automatic Shadowing for Dialogs
 			addShadowForDialogLayer := func(l *lipgloss.Layer) {
@@ -192,21 +208,21 @@ func (m *AppModel) View() (v tea.View) {
 				}
 			}
 
-			if lv, ok := m.dialog.(LayeredView); ok {
+			if lv, ok := d.(LayeredView); ok {
 				for _, l := range lv.Layers() {
-					// Apply modal offset to ensure it sits above the screen content
-					l = l.X(l.GetX() + lx).Y(l.GetY() + ly).Z(l.GetZ() + modalZBase)
+					// Apply modal offset to ensure it sits above the background content
+					l = l.X(l.GetX() + lx).Y(l.GetY() + ly).Z(l.GetZ() + modalZBase - ZDialog)
 					addShadowForDialogLayer(l)
 					comp.AddLayers(l)
 				}
 			} else {
-				l := lipgloss.NewLayer(content).X(lx).Y(ly).Z(modalZBase + ZDialog)
+				l := lipgloss.NewLayer(content).X(lx).Y(ly).Z(modalZBase)
 				addShadowForDialogLayer(l)
 				comp.AddLayers(l)
 			}
 
 			// Collect hit regions from dialog
-			if hrp, ok := m.dialog.(HitRegionProvider); ok {
+			if hrp, ok := d.(HitRegionProvider); ok {
 				m.hitRegions = append(m.hitRegions, hrp.GetHitRegions(lx, ly)...)
 			}
 		}

@@ -82,102 +82,64 @@ func AddHalo(content string, haloBg color.Color) string {
 	return AddHaloCtx(content, haloBg, GetActiveContext())
 }
 
+// GetSolidBoxCtx returns a solid block of characters with the provided background color.
+func GetSolidBoxCtx(width, height int, bgColor color.Color) string {
+	if width <= 0 || height <= 0 || bgColor == nil {
+		return ""
+	}
+	style := lipgloss.NewStyle().Background(bgColor)
+	line := style.Render(strings.Repeat(" ", width))
+	var sb strings.Builder
+	for i := 0; i < height; i++ {
+		if i > 0 {
+			sb.WriteString("\n")
+		}
+		sb.WriteString(line)
+	}
+	return sb.String()
+}
+
 // AddHaloCtx adds a halo effect using a specific context.
-// If haloBg is provided, it renders a solid halo matching that color.
 func AddHaloCtx(content string, haloBg color.Color, ctx StyleContext) string {
-	// Split content into lines
-	lines := strings.Split(content, "\n")
-	if len(lines) == 0 {
+	if content == "" {
+		return ""
+	}
+
+	contentW := WidthWithoutZones(content)
+	contentH := lipgloss.Height(content)
+
+	// Halo extends 2 cells horizontally and 1 line vertically on each side
+	haloW := contentW + 4
+	haloH := contentH + 2
+
+	var haloBox string
+	if haloBg != nil {
+		haloBox = GetSolidBoxCtx(haloW, haloH, haloBg)
+	} else {
+		// Dithered/ASCII mode
+		shadowCtx := ctx
+		shadowCtx.ShadowLevel = ctx.ShadowLevel
+		// Pass a dummy string of the halo size to get the dithered box
+		dummy := lipgloss.NewStyle().Width(haloW).Height(haloH).Render("")
+		haloBox = GetShadowBoxCtx(dummy, shadowCtx)
+	}
+
+	if haloBox == "" {
 		return content
 	}
 
-	// Use WidthWithoutZones to get accurate visual width
-	contentWidth := 0
-	for _, line := range lines {
-		w := WidthWithoutZones(line)
-		if w > contentWidth {
-			contentWidth = w
-		}
-	}
+	// Create base layer with screen background to prevent leaks
+	base := lipgloss.NewStyle().
+		Width(haloW).
+		Height(haloH).
+		Background(ctx.Screen.GetBackground()).
+		Render("")
 
-	var haloCell, horizontalHalo string
-
-	if haloBg != nil {
-		// Solid mode: use space characters with the provided background color
-		solidStyle := lipgloss.NewStyle().Background(haloBg)
-		haloCell = solidStyle.Render("  ")
-		horizontalHalo = solidStyle.Render(strutil.Repeat(" ", contentWidth+4))
-	} else if ctx.LineCharacters {
-		// Unicode mode: use shade characters (░▒▓█)
-		haloStyle := ctx.Shadow.Background(ctx.Screen.GetBackground())
-
-		var shadeChar string
-		switch ctx.ShadowLevel {
-		case 0:
-			shadeChar = " "
-		case 1:
-			shadeChar = "░"
-		case 2:
-			shadeChar = "▒"
-		case 3:
-			shadeChar = "▓"
-		case 4:
-			shadeChar = "█"
-		default:
-			shadeChar = "▒"
-		}
-
-		haloCell = haloStyle.Render(strutil.Repeat(shadeChar, 2))
-		horizontalHalo = haloStyle.Render(strutil.Repeat(shadeChar, contentWidth+4))
-	} else {
-		// ASCII mode
-		if ctx.ShadowLevel == 4 {
-			solidStyle := lipgloss.NewStyle().Background(ctx.ShadowColor)
-			haloCell = solidStyle.Render("  ")
-			horizontalHalo = solidStyle.Render(strutil.Repeat(" ", contentWidth+4))
-		} else {
-			asciiHaloStyle := ctx.Shadow.Background(ctx.Screen.GetBackground())
-			var asciiShadeChar string
-			switch ctx.ShadowLevel {
-			case 0:
-				asciiShadeChar = " "
-			case 1:
-				asciiShadeChar = "."
-			case 2:
-				asciiShadeChar = ":"
-			case 3:
-				asciiShadeChar = "#"
-			default:
-				asciiShadeChar = ":"
-			}
-			haloCell = asciiHaloStyle.Render(strutil.Repeat(asciiShadeChar, 2))
-			horizontalHalo = asciiHaloStyle.Render(strutil.Repeat(asciiShadeChar, contentWidth+4))
-		}
-	}
-
-	var result strings.Builder
-
-	// Top Halo
-	result.WriteString(horizontalHalo)
-	result.WriteString("\n")
-
-	// Content with side halos
-	for _, line := range lines {
-		w := WidthWithoutZones(line)
-		padding := ""
-		if w < contentWidth {
-			padding = strutil.Repeat(" ", contentWidth-w)
-		}
-		result.WriteString(haloCell)
-		result.WriteString(line + padding)
-		result.WriteString(haloCell)
-		result.WriteString("\n")
-	}
-
-	// Bottom Halo
-	result.WriteString(horizontalHalo)
-
-	return result.String()
+	return MultiOverlay(
+		LayerSpec{Content: base, X: 0, Y: 0, Z: 0},
+		LayerSpec{Content: haloBox, X: 0, Y: 0, Z: 1},
+		LayerSpec{Content: content, X: 2, Y: 1, Z: 2},
+	)
 }
 
 // AddShadow adds a shadow effect to rendered content if shadow is enabled
