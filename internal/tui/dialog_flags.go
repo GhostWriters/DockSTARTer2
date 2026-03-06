@@ -72,7 +72,7 @@ func NewFlagsToggleDialog() *FlagsToggleDialog {
 	menu.SetEnterAction(func() tea.Msg { return TriggerApplyFlagsMsg{} })
 	menu.SetEscAction(CloseDialog())
 
-	return &FlagsToggleDialog{menu: &menu}
+	return &FlagsToggleDialog{menu: menu}
 }
 
 // Init implements tea.Model
@@ -125,7 +125,15 @@ func (d *FlagsToggleDialog) ViewString() string {
 
 // SetSize implements sizing
 func (d *FlagsToggleDialog) SetSize(width, height int) {
-	d.menu.SetSize(width, height)
+	layout := GetLayout()
+	// Constrain to available content area
+	w := width
+	if w > 60 { // Don't let it get ridiculously wide
+		w = 60
+	}
+	// Subtract borders to get inner width
+	innerW := w - layout.DialogBorder
+	d.menu.SetSize(innerW, height)
 }
 
 // IsMaximized lets the AppModel know its size state

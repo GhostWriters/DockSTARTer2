@@ -117,6 +117,8 @@ type (
 	}
 )
 
+const HoverButton tea.MouseButton = 99
+
 // AppModel is the root Bubble Tea model
 type AppModel struct {
 	ctx    context.Context

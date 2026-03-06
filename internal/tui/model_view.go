@@ -212,8 +212,9 @@ func (m *AppModel) View() (v tea.View) {
 		}
 	}
 
-	// Sort hit regions ascending by ZOrder so FindHit (reverse iteration) checks highest-Z first
-	sort.Slice(m.hitRegions, func(i, j int) bool {
+	// Sort hit regions ascending by ZOrder so FindHit (reverse iteration) checks highest-Z first.
+	// Use Stable sort to ensure specific regions added later take precedence over generic ones.
+	sort.SliceStable(m.hitRegions, func(i, j int) bool {
 		return m.hitRegions[i].ZOrder < m.hitRegions[j].ZOrder
 	})
 

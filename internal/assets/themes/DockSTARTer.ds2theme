@@ -43,6 +43,8 @@ HelpItem = "{{[black]}}"
 TitleHelp = "{{|Theme_Title|}}"
 
 Title = "{{[black:-:-U]}}"
+TitleUnfocusedIndicator = "{{[red::-B]}}"
+TitleFocusIndicator = "{{[red::-B]}}"
 TitleNotice = "{{[white:green:B]}}"
 OptionValue = "{{[white:green:B]}}"
 TitleWarn = "{{|Theme_Title|}}{{[:yellow]}}"

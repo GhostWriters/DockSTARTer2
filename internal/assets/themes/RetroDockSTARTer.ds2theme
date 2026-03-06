@@ -37,6 +37,9 @@ TitleWarning = "{{[black:yellow]}}"
 TitleQuestion = "{{[black:yellow]}}"
 LogPanel = "{{|Theme_Title|}}"
 
+TitleUnfocusedIndicator = "{{[magenta:-B]}}"
+TitleFocusIndicator = "{{[magenta:-B]}}"
+
 TitleSubMenu = "{{|Theme_Title|}}"
 TitleSubMenuFocused = "{{|Theme_Title|}}{{[::R]}}"
 

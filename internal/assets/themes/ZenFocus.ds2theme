@@ -80,6 +80,9 @@ ProgressInProgress = "{{[white:black:B]}}"
 ProgressCompleted = "{{[black:white:B]}}"
 LogPanel = "{{|Theme_Title|}}"
 
+TitleUnfocusedIndicator = "{{[::-B]}}"
+TitleFocusIndicator = "{{[::-B]}}"
+
 TitleSubMenu = "{{|Theme_Title|}}"
 TitleSubMenuFocused = "{{|Theme_Title|}}{{[::R]}}"
 Program = "{{[white:black]}}"

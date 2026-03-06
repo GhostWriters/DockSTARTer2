@@ -28,6 +28,9 @@ func (m *MenuModel) renderFlow() string {
 	itemSpacing := 3
 
 	for i, item := range m.items {
+		if item.IsSeparator {
+			continue
+		}
 		isSelected := i == m.cursor && m.IsActive()
 
 		tagStyle := SemanticStyle("{{|Theme_Tag|}}")
@@ -151,6 +154,9 @@ func (m *MenuModel) GetFlowHeight(width int) int {
 	itemSpacing := 3
 
 	for _, item := range m.items {
+		if item.IsSeparator {
+			continue
+		}
 		// Dynamic width calculation
 		cbWidth := 0
 		if item.IsRadioButton || item.IsCheckbox {

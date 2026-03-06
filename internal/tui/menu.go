@@ -372,9 +372,10 @@ type MenuModel struct {
 	backAction tea.Cmd
 
 	// Bubbles list model
-	list      list.Model
-	maximized bool // Whether to maximize the dialog to fill available space
-	showExit  bool // Whether to show Exit button (default true for main menus)
+	list        list.Model
+	maximized   bool // Whether to maximize the dialog to fill available space
+	showExit    bool // Whether to show Exit button (default true for main menus)
+	showButtons bool // Whether to show any buttons (default true)
 
 	// Key override actions
 	escAction   tea.Cmd
@@ -399,11 +400,15 @@ type MenuModel struct {
 	dialogType DialogType
 
 	// Variable height support (for dynamic word wrapping)
-	variableHeight bool
+	variableHeight bool                                      // Allow list to expand naturally up to layout limits
+	interceptor    func(tea.Msg, *MenuModel) (tea.Cmd, bool) // Optional custom message handler
 
 	// Memoization for expensive rendering
-	lastView       string
-	cacheValid     bool // Indicates if lastView is up-to-date with current state
+	lastView   string
+	cacheValid bool // Indicates if lastView is up-to-date with current state
+
+	// Memoization specifically for the variable-height list (separated to avoid border recursion loops)
+	lastListView   string
 	lastWidth      int
 	lastHeight     int
 	lastIndex      int
@@ -413,6 +418,7 @@ type MenuModel struct {
 	lastHitRegions []HitRegion // Cache for variable height hit regions
 	viewStartY     int         // Persistent scroll offset for variable height lists
 
+	menuName string // Name used for --menu or -M to return to this screen
 }
 
 // FocusItem represents which UI element has focus
@@ -429,7 +435,7 @@ const (
 var menuSelectedIndices = make(map[string]int)
 
 // NewMenuModel creates a new menu model
-func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.Cmd) MenuModel {
+func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.Cmd) *MenuModel {
 	// Set default shortcuts from first letter of Tag
 	for i := range items {
 		if items[i].Shortcut == 0 && len(items[i].Tag) > 0 {
@@ -498,7 +504,7 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 		l.Select(cursor)
 	}
 
-	return MenuModel{
+	return &MenuModel{
 		id:          id,
 		title:       title,
 		subtitle:    subtitle,
@@ -509,11 +515,43 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 		focusedItem: FocusSelectBtn,
 		list:        l,
 		showExit:    true, // Default to show Exit button
+		showButtons: true, // Default to show buttons
 	}
 }
 
+// Title returns the menu title
+func (m *MenuModel) Title() string {
+	return m.title
+}
+
+// Subtitle returns the menu subtitle
+func (m *MenuModel) Subtitle() string {
+	return m.subtitle
+}
+
+// SetTitle sets the menu title
+func (m *MenuModel) SetTitle(title string) { m.title = title }
+
+// ID returns the unique identifier for this menu
+func (m *MenuModel) ID() string { return m.id }
+
 // SetDialogType sets the visual style/type of the menu dialog
 func (m *MenuModel) SetDialogType(t DialogType) { m.dialogType = t }
+
+// MenuName returns the name used for --menu or -M to return to this screen
+func (m *MenuModel) MenuName() string {
+	return m.menuName
+}
+
+// SetMenuName sets the persistent menu name
+func (m *MenuModel) SetMenuName(name string) {
+	m.menuName = name
+}
+
+// View implements tea.Model and ScreenModel
+func (m *MenuModel) View() tea.View {
+	return tea.View{Content: m.ViewString()}
+}
 
 // SetFocused sets whether this menu's dialog border is rendered as focused (thick)
 // or unfocused (normal). Called by AppModel when the log panel takes focus.
@@ -533,6 +571,12 @@ func (m *MenuModel) SetShowExit(show bool) {
 	m.showExit = show
 }
 
+// SetShowButtons sets whether to show the button row at all
+func (m *MenuModel) SetShowButtons(show bool) {
+	m.showButtons = show
+	m.calculateLayout() // Layout needs recalculation when buttons are toggled
+}
+
 // IsMaximized returns whether the menu is maximized
 func (m MenuModel) IsMaximized() bool {
 	return m.maximized
@@ -543,9 +587,13 @@ func (m MenuModel) HasDialog() bool {
 	return false // Menus don't have nested dialogs
 }
 
-// SetSubMenuMode sets whether the menu acts as a sub-component with simpler borders
-func (m *MenuModel) SetSubMenuMode(enabled bool) {
-	m.subMenuMode = enabled
+// SetSubMenuMode enables a compact mode for menus inside other screens/containers
+func (m *MenuModel) SetSubMenuMode(v bool) {
+	m.subMenuMode = v
+	if v {
+		m.showButtons = false
+	}
+	m.calculateLayout()
 }
 
 // SetSubFocused sets the focus state specifically for sub-menu mode (thick vs normal border)
@@ -579,14 +627,24 @@ func (m *MenuModel) SetCheckboxMode(enabled bool) {
 	m.updateDelegate()
 }
 
-// SetVariableHeight enables dynamic multiline word wrapping for the list
-func (m *MenuModel) SetVariableHeight(enabled bool) {
-	m.variableHeight = enabled
+// SetVariableHeight allows the list viewport to expand instead of forcing pagination
+func (m *MenuModel) SetVariableHeight(variable bool) {
+	m.variableHeight = variable
+}
+
+// SetUpdateInterceptor allows setting a custom handler that runs before normal message processing
+func (m *MenuModel) SetUpdateInterceptor(interceptor func(tea.Msg, *MenuModel) (tea.Cmd, bool)) {
+	m.interceptor = interceptor
 }
 
 // Index returns the current cursor index
 func (m *MenuModel) Index() int {
 	return m.cursor
+}
+
+// FocusedItem returns the currently focused UI element
+func (m *MenuModel) FocusedItem() FocusItem {
+	return m.focusedItem
 }
 
 // Select programmatically sets the cursor index
@@ -601,6 +659,26 @@ func (m *MenuModel) Select(index int) {
 // GetItems returns the current list of MenuItems
 func (m *MenuModel) GetItems() []MenuItem {
 	return m.items
+}
+
+// GetInnerContentWidth returns the width of the space inside the outer borders
+func (m *MenuModel) GetInnerContentWidth() int {
+	layout := GetLayout()
+	if m.subMenuMode {
+		return m.width - layout.BorderWidth()
+	}
+
+	var contentWidth int
+	if m.maximized {
+		contentWidth, _ = layout.InnerContentSize(m.width, m.height)
+	} else {
+		contentWidth = m.list.Width() + layout.BorderWidth() + 2
+		maxWidth, _ := layout.InnerContentSize(m.width, m.height)
+		if contentWidth > maxWidth {
+			contentWidth = maxWidth
+		}
+	}
+	return contentWidth
 }
 
 // SetItems updates the menu items and refreshes the bubbles list

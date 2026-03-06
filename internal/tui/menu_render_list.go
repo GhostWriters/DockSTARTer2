@@ -13,14 +13,14 @@ func (m *MenuModel) renderVariableHeightList() string {
 	ctx := GetActiveContext()
 
 	// Memoization Check
-	if m.lastView != "" &&
+	if m.lastListView != "" &&
 		m.lastWidth == m.width &&
 		m.lastHeight == m.height &&
 		m.lastIndex == m.list.Index() &&
 		m.lastFilter == m.list.FilterValue() &&
 		m.lastActive == m.IsActive() &&
 		m.lastLineChars == ctx.LineCharacters {
-		return m.lastView
+		return m.lastListView
 	}
 
 	styles := GetStyles()
@@ -206,7 +206,9 @@ func (m *MenuModel) renderVariableHeightList() string {
 				if actualIndex >= 0 {
 					newHitRegions = append(newHitRegions, HitRegion{
 						ID:     GetMenuItemID(m.id, actualIndex),
+						X:      0, // Relative to start of list-box inner content
 						Y:      aggY,
+						Width:  maxWidth,
 						Height: h,
 					})
 				}
@@ -222,7 +224,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 		}
 
 		// Save for memoization
-		m.lastView = result
+		m.lastListView = result
 		m.lastWidth = m.width
 		m.lastHeight = m.height
 		m.lastIndex = m.list.Index()
@@ -288,7 +290,9 @@ func (m *MenuModel) renderVariableHeightList() string {
 				if actualIndex >= 0 {
 					newHitRegions = append(newHitRegions, HitRegion{
 						ID:     GetMenuItemID(m.id, actualIndex),
+						X:      0, // Relative to list content
 						Y:      y,
+						Width:  maxWidth,
 						Height: itemH,
 					})
 				}
@@ -312,7 +316,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 	finalResult := strings.Join(viewLines, "\n")
 
 	// Save for memoization
-	m.lastView = finalResult
+	m.lastListView = finalResult
 	m.lastWidth = m.width
 	m.lastHeight = m.height
 	m.lastIndex = m.list.Index()

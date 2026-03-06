@@ -3,7 +3,6 @@ package screens
 import (
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/tui"
-	"fmt"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -64,30 +63,64 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, nil
 		}
 
-		// 2. Component routing (menus)
-		if strings.HasPrefix(msg.ID, "item-theme_list-") {
-			// Theme selection logic
+		// 2. Button actions (global buttons not belonging to a sub-menu)
+		switch msg.ID {
+		case tui.IDApplyButton:
+			s.focusedPanel = FocusButtons
+			s.focusedButton = 0
+			s.updateFocusStates()
+			if msg.Button == tui.HoverButton {
+				return s, nil
+			}
+			return s, s.handleApply()
+		case tui.IDBackButton:
+			s.focusedPanel = FocusButtons
+			s.focusedButton = 1
+			s.updateFocusStates()
+			if msg.Button == tui.HoverButton {
+				return s, nil
+			}
+			if s.isRoot {
+				return s, nil
+			}
+			theme.Unload("Preview")
+			return s, navigateBack()
+		case tui.IDExitButton:
+			s.focusedPanel = FocusButtons
+			s.focusedButton = s.maxFocusedButton()
+			s.updateFocusStates()
+			if msg.Button == tui.HoverButton {
+				return s, nil
+			}
+			theme.Unload("Preview")
+			return s, tui.ConfirmExitAction()
+		}
+
+		// 3. Delegation to sub-menus (handles items and internal buttons)
+		if strings.Contains(msg.ID, tui.IDThemePanel) {
 			s.focusedPanel = FocusThemes
 			s.updateFocusStates()
-
-			// Extract index
-			var idx int
-			fmt.Sscanf(msg.ID, "item-theme_list-%d", &idx)
-			items := s.themeMenu.GetItems()
-			if idx >= 0 && idx < len(items) {
-				for j := range items {
-					items[j].Checked = (idx == j)
-				}
-				s.themeMenu.SetItems(items)
-				s.themeMenu.Select(idx)
-				s.applyPreview(items[idx].Tag)
+			updated, uCmd := s.themeMenu.Update(msg)
+			if m, ok := updated.(*tui.MenuModel); ok {
+				s.themeMenu = m
 			}
-			return s, nil
-		} else if strings.HasPrefix(msg.ID, "item-options_list-") {
+			// Hook for theme preview: if theme changed, apply it
+			if strings.HasPrefix(msg.ID, "item-") {
+				idx := s.themeMenu.Index()
+				items := s.themeMenu.GetItems()
+				if idx >= 0 && idx < len(items) {
+					// Update radio button states
+					for i := range items {
+						items[i].Checked = (i == idx)
+					}
+					s.themeMenu.SetItems(items)
+					s.applyPreview(items[idx].Tag)
+				}
+			}
+			return s, uCmd
+		} else if strings.Contains(msg.ID, tui.IDOptionsPanel) {
 			s.focusedPanel = FocusOptions
 			s.updateFocusStates()
-
-			// Forward to options menu
 			updated, uCmd := s.optionsMenu.Update(msg)
 			if m, ok := updated.(*tui.MenuModel); ok {
 				s.optionsMenu = m
@@ -95,35 +128,18 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, uCmd
 		}
 
-		// 3. Button actions
-		switch msg.ID {
-		case tui.IDApplyButton:
-			s.focusedButton = 0
-			return s, s.handleApply()
-		case tui.IDBackButton:
-			if s.isRoot {
-				return s, nil // Back is not shown when root; ignore stale hits
-			}
-			s.focusedButton = 1
-			theme.Unload("Preview")
-			return s, navigateBack()
-		case tui.IDExitButton:
-			s.focusedButton = s.maxFocusedButton()
-			theme.Unload("Preview")
-			return s, tui.ConfirmExitAction()
-		}
-
 	case tui.ToggleFocusedMsg:
 		// Middle click: activate the currently focused item in the hovered panel
 		if s.focusedPanel == FocusThemes {
+			// Activate radio item
+			idx := s.themeMenu.Index()
 			items := s.themeMenu.GetItems()
-			cursor := s.themeMenu.Index()
-			if cursor >= 0 && cursor < len(items) {
+			if idx >= 0 && idx < len(items) {
 				for i := range items {
-					items[i].Checked = (i == cursor)
+					items[i].Checked = (i == idx)
 				}
 				s.themeMenu.SetItems(items)
-				s.applyPreview(items[cursor].Tag)
+				s.applyPreview(items[idx].Tag)
 			}
 			return s, nil
 		} else if s.focusedPanel == FocusOptions {
@@ -153,17 +169,21 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Left/Right: Cycle buttons globally
 		if key.Matches(msg, tui.Keys.Left) {
+			s.focusedPanel = FocusButtons
 			s.focusedButton--
 			if s.focusedButton < 0 {
 				s.focusedButton = s.maxFocusedButton()
 			}
+			s.updateFocusStates()
 			return s, nil
 		}
 		if key.Matches(msg, tui.Keys.Right) {
+			s.focusedPanel = FocusButtons
 			s.focusedButton++
 			if s.focusedButton > s.maxFocusedButton() {
 				s.focusedButton = 0
 			}
+			s.updateFocusStates()
 			return s, nil
 		}
 
@@ -282,18 +302,23 @@ func (s *DisplayOptionsScreen) SetSize(width, height int) {
 
 	previewMinWidth := 48
 	minDialogWidth := 44 + layout.BorderWidth()
-	previewFits := width >= minDialogWidth+layout.GutterWidth+previewMinWidth
+	gutter := layout.VisualGutter(tui.IsShadowEnabled())
+	previewFits := width >= minDialogWidth+gutter+previewMinWidth
 
 	var dialogContentWidth int
 	if previewFits {
-		dialogContentWidth = width - layout.GutterWidth - previewMinWidth
+		dialogContentWidth = width - gutter - previewMinWidth
 	} else {
 		dialogContentWidth = width
 	}
 
 	menuWidth := dialogContentWidth - layout.BorderWidth()
+	// Ensure menuWidth doesn't exceed the safe content area in case of miscalculation
 	if menuWidth < 40 {
 		menuWidth = 40
+	}
+	if menuWidth > width-layout.BorderWidth() {
+		menuWidth = width - layout.BorderWidth()
 	}
 
 	hasShadow := tui.IsShadowEnabled()

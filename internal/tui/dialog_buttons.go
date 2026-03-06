@@ -109,8 +109,11 @@ func GetButtonHitRegions(dialogID string, offsetX, offsetY, contentWidth, zOrder
 		if dialogID != "" {
 			id = dialogID + "." + btn.ZoneID
 		}
-		// Button is centered within its section
-		buttonX := offsetX + i*sectionWidth + (sectionWidth-buttonWidth)/2
+
+		// Calculate precise starting X for this section's button
+		// Centering logic: (section_start) + (half of unused space in section)
+		buttonX := offsetX + (i * sectionWidth) + (sectionWidth-buttonWidth)/2
+
 		regions = append(regions, HitRegion{
 			ID:     id,
 			X:      buttonX,

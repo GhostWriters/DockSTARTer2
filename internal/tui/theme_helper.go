@@ -90,20 +90,22 @@ var themeTagRegex = console.GetDelimitedRegex()
 // RenderThemeText takes text with {{...}} theme tags and returns lipgloss-styled text
 // defaultStyle is used for reset state and unstyled text
 func RenderThemeText(text string, defaultStyle ...lipgloss.Style) string {
+	ctx := GetActiveContext()
+	if len(defaultStyle) > 0 {
+		ctx.Dialog = defaultStyle[0]
+	}
+	return RenderThemeTextCtx(text, ctx)
+}
+
+// RenderThemeTextCtx renders themed text using properties from a specific context
+func RenderThemeTextCtx(text string, ctx StyleContext) string {
 	if text == "" {
 		return ""
 	}
 
-	var resetStyle lipgloss.Style
-	if len(defaultStyle) > 0 {
-		resetStyle = defaultStyle[0]
-	} else {
-		resetStyle = lipgloss.NewStyle()
-	}
-
-	// Create a cache key from the text and the style's visual identity
-	// We use the style's string representation as a heuristic for its visual properties
-	cacheKey := text + "|" + resetStyle.String()
+	resetStyle := ctx.Dialog
+	// Create a cache key from the text, the style, and the prefix
+	cacheKey := text + "|" + resetStyle.String() + "|" + ctx.Prefix
 
 	cacheMu.RLock()
 	if cached, ok := renderCache[cacheKey]; ok {
@@ -118,13 +120,15 @@ func RenderThemeText(text string, defaultStyle ...lipgloss.Style) string {
 		return strings.Split(rendered, "_")[0]
 	}
 
-	// Resolve tags to ANSI
-	rendered := console.ToANSI(text)
+	// Resolve tags to ANSI using the context's prefix
+	rendered := console.ToANSIWithPrefix(text, ctx.Prefix)
 
 	// Combine components and ensure reset at end
 	result := getCodes(resetStyle) + rendered + console.CodeReset
 
 	// Prevent embedded resets from clearing container background or attributes
+	// Important: MaintainBackground must use the SAME style that we used as the base
+	// (resetStyle), NOT necessarily ctx.Dialog if it was overridden.
 	final := MaintainBackground(result, resetStyle)
 
 	cacheMu.Lock()

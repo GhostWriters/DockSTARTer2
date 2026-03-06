@@ -124,7 +124,7 @@ func init() {
 		WhiteBg:   "{{[:white]}}",
 
 		// Semantic Colors (Standard DockSTARTer mappings)
-		Timestamp:              "{{[-]}}",
+		Timestamp:              "{{[-]}}{{[gray::D]}}",
 		Trace:                  "{{[-]}}{{[blue]}}",
 		Debug:                  "{{[-]}}{{[blue]}}",
 		Info:                   "{{[-]}}{{[blue]}}",

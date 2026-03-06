@@ -102,11 +102,21 @@ func Overlay(foreground, background string, hPos, vPos OverlayPosition, xOffset,
 	x += xOffset
 	y += yOffset
 
-	// Ensure non-negative
+	// If position is negative, we need to pad the background to the left/top
 	if x < 0 {
+		pad := strutil.Repeat(" ", -x)
+		bgLines := strings.Split(background, "\n")
+		for i, line := range bgLines {
+			bgLines[i] = pad + line
+		}
+		background = strings.Join(bgLines, "\n")
+		bgWidth += (-x)
 		x = 0
 	}
 	if y < 0 {
+		pad := strings.Repeat(strings.Repeat(" ", bgWidth)+"\n", -y)
+		background = pad + background
+		bgHeight += (-y)
 		y = 0
 	}
 

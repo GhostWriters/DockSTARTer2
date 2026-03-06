@@ -31,7 +31,7 @@ func (s *DisplayOptionsScreen) ViewString() (result string) {
 		termW, termH, _ := console.GetTerminalSize()
 		if termW > 0 && termH > 0 {
 			// Apply content area calculation
-			hasShadow := s.config.UI.Shadow
+			hasShadow := tui.IsShadowEnabled()
 			header := tui.NewHeaderModel()
 			header.SetWidth(termW - 2)
 			headerH := header.Height()
@@ -41,7 +41,7 @@ func (s *DisplayOptionsScreen) ViewString() (result string) {
 
 	previewMinWidth := 50
 	minDialogWidth := 40 + layout.BorderWidth()
-	gutter := layout.VisualGutter(s.config.UI.Shadow)
+	gutter := layout.VisualGutter(tui.IsShadowEnabled())
 
 	// Preview fits if: settings + gutter + preview fits in content area
 	previewFits := width >= minDialogWidth+gutter+previewMinWidth
@@ -107,14 +107,14 @@ func (s *DisplayOptionsScreen) renderSettingsDialog(dialogWidth, height int) str
 	var buttons []tui.ButtonSpec
 	if s.isRoot {
 		buttons = []tui.ButtonSpec{
-			{Text: "Apply", Active: s.focusedButton == 0},
-			{Text: "Exit", Active: s.focusedButton == 1},
+			{Text: "Apply", Active: s.focusedPanel == FocusButtons && s.focusedButton == 0},
+			{Text: "Exit", Active: s.focusedPanel == FocusButtons && s.focusedButton == 1},
 		}
 	} else {
 		buttons = []tui.ButtonSpec{
-			{Text: "Apply", Active: s.focusedButton == 0},
-			{Text: "Back", Active: s.focusedButton == 1},
-			{Text: "Exit", Active: s.focusedButton == 2},
+			{Text: "Apply", Active: s.focusedPanel == FocusButtons && s.focusedButton == 0},
+			{Text: "Back", Active: s.focusedPanel == FocusButtons && s.focusedButton == 1},
+			{Text: "Exit", Active: s.focusedPanel == FocusButtons && s.focusedButton == 2},
 		}
 	}
 	buttonRow := tui.RenderCenteredButtons(menuWidth, buttons...)
@@ -141,7 +141,7 @@ func (s *DisplayOptionsScreen) Layers() []*lipgloss.Layer {
 	}
 
 	layout := tui.GetLayout()
-	gutter := layout.VisualGutter(s.config.UI.Shadow)
+	gutter := layout.VisualGutter(tui.IsShadowEnabled())
 	previewMinWidth := 50
 	previewFits := width >= (40 + layout.BorderWidth() + gutter + previewMinWidth)
 
@@ -175,6 +175,8 @@ func (s *DisplayOptionsScreen) Layers() []*lipgloss.Layer {
 func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegion {
 	var regions []tui.HitRegion
 
+	layout := tui.GetLayout()
+
 	// Content starts at (1, 1) relative to root because of the outer border
 	const contentX = 1
 	const contentY = 1
@@ -193,8 +195,26 @@ func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegi
 		ZOrder: tui.ZScreen + 1,
 	})
 
-	// Options menu regions
+	// Width calculations for the main dialog area
+	gutter := layout.VisualGutter(tui.IsShadowEnabled())
+	previewMinWidth := 50
+	previewFits := s.width >= (40 + layout.BorderWidth() + gutter + previewMinWidth)
+
+	var dialogContentWidth int
+	if previewFits {
+		previewW := 44 + layout.BorderWidth()
+		settingsW := (s.width - previewW) - gutter
+		dialogContentWidth = settingsW - layout.BorderWidth()
+	} else {
+		dialogContentWidth = s.width - layout.BorderWidth()
+	}
+	if dialogContentWidth < 40 {
+		dialogContentWidth = 40
+	}
+
+	// Options menu is rendered directly BELOW the Theme menu
 	optionsY := contentY + s.themeMenu.Height()
+
 	optionsRegions := s.optionsMenu.GetHitRegions(offsetX+contentX, offsetY+optionsY)
 	regions = append(regions, optionsRegions...)
 
@@ -209,8 +229,9 @@ func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegi
 	})
 
 	// Button row regions
-	buttonY := optionsY + s.optionsMenu.Height()
-	btnRowWidth := s.themeMenu.Width()
+	// buttonY = 1 (top border) + themeHeight + optionsHeight
+	buttonY := 1 + s.themeMenu.Height() + s.optionsMenu.Height()
+	btnRowWidth := dialogContentWidth
 
 	// Button panel background
 	regions = append(regions, tui.HitRegion{
@@ -218,7 +239,7 @@ func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegi
 		X:      offsetX + contentX,
 		Y:      offsetY + buttonY,
 		Width:  btnRowWidth,
-		Height: tui.DialogButtonHeight,
+		Height: tui.DialogButtonHeight, // usually 3 to wrap buttons with borders
 		ZOrder: tui.ZScreen + 1,
 	})
 
@@ -235,14 +256,11 @@ func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegi
 		)
 	}
 	regions = append(regions, tui.GetButtonHitRegions(
-		"", offsetX+contentX, offsetY+buttonY, btnRowWidth, tui.ZScreen+2,
+		"", offsetX+contentX, offsetY+buttonY, btnRowWidth, tui.ZScreen+25,
 		btnSpecs...,
 	)...)
 
 	// Preview Mockup Regions (when it fits)
-	previewMinWidth := 50
-	layout := tui.GetLayout()
-	previewFits := s.width >= (40 + layout.GutterWidth + previewMinWidth)
 	if previewFits {
 		// Calculate preview position matching Layers()
 		preview := s.renderPreviewDialog(s.height)

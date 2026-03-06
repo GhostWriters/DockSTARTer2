@@ -257,7 +257,7 @@ func GetShadowBoxCtx(content string, ctx StyleContext) string {
 // which may have "blank" padding in corners. For full transparency, use
 // the compositor and draw the shadow and content as separate layers.
 func AddShadowCtx(content string, ctx StyleContext) string {
-	if !IsShadowEnabled() {
+	if !ctx.DrawShadow {
 		return content
 	}
 
@@ -266,7 +266,24 @@ func AddShadowCtx(content string, ctx StyleContext) string {
 		return content
 	}
 
-	// Composite content at (0,0) and shadow at (2,1)
-	// Overlay pads with spaces where content/shadow don't overlap.
-	return Overlay(content, shadowBox, OverlayLeft, OverlayTop, -2, -1)
+	// Create a base layer that covers the entire area (content + shadow offset)
+	// and is filled with the screen background to prevent "transparent" leaks.
+	contentW := WidthWithoutZones(content)
+	contentH := lipgloss.Height(content)
+
+	// Standard shadow offset is 2 right, 1 down
+	totalW := contentW + 2
+	totalH := contentH + 1
+
+	base := lipgloss.NewStyle().
+		Width(totalW).
+		Height(totalH).
+		Background(ctx.Screen.GetBackground()).
+		Render("")
+
+	return MultiOverlay(
+		LayerSpec{Content: base, X: 0, Y: 0, Z: 0},
+		LayerSpec{Content: shadowBox, X: 2, Y: 1, Z: 1},
+		LayerSpec{Content: content, X: 0, Y: 0, Z: 2},
+	)
 }
