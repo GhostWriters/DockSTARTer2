@@ -44,6 +44,9 @@ func (m *MenuModel) prevButtonFocus() FocusItem {
 
 // getButtonSpecs returns the current button configuration based on state
 func (m *MenuModel) getButtonSpecs() []ButtonSpec {
+	if !m.showButtons {
+		return nil
+	}
 	var specs []ButtonSpec
 
 	// Select Button

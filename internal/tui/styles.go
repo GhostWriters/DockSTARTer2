@@ -178,6 +178,8 @@ type StyleContext struct {
 	DialogTitleAlign    string
 	SubmenuTitleAlign   string
 	LogTitleAlign       string
+	Prefix              string // Prefix for semantic tag remapping (e.g. "Preview_")
+	DrawShadow          bool   // Whether to draw shadows for this context
 }
 
 // currentStyles holds the active styles
@@ -224,11 +226,13 @@ func GetActiveContext() StyleContext {
 		DialogTitleAlign:    currentStyles.DialogTitleAlign,
 		SubmenuTitleAlign:   currentStyles.SubmenuTitleAlign,
 		LogTitleAlign:       currentStyles.LogTitleAlign,
+		Prefix:              "", // Global context has no prefix
+		DrawShadow:          currentConfig.UI.Shadow,
 	}
 }
 
-// asciiBorder defines a simple ASCII-only border for terminals without Unicode support
-var asciiBorder = lipgloss.Border{
+// AsciiBorder defines a simple ASCII-only border for terminals without Unicode support
+var AsciiBorder = lipgloss.Border{
 	Top:         "-",
 	Bottom:      "-",
 	Left:        "|",
@@ -358,7 +362,7 @@ func InitStyles(cfg config.AppConfig) {
 		currentStyles.Border = lipgloss.RoundedBorder()
 		currentStyles.SepChar = "─"
 	} else {
-		currentStyles.Border = asciiBorder
+		currentStyles.Border = AsciiBorder
 		currentStyles.SepChar = "-"
 	}
 

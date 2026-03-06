@@ -153,15 +153,23 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, ConfirmExitAction()
 		}
 		return m, nil
-
 	case ShowDialogMsg:
 		// Push current dialog to stack if one exists
 		if m.dialog != nil {
 			m.dialogStack = append(m.dialogStack, m.dialog)
 		}
 
+		// Safeguard: Prevent pushing the active screen as its own dialog
+		if msg.Dialog == m.activeScreen {
+			return m, nil
+		}
+
 		m.dialog = msg.Dialog
 		if m.dialog != nil {
+			// Ensure MenuModels are marked as dialogs so they render with shadows
+			if menu, ok := m.dialog.(*MenuModel); ok {
+				menu.SetIsDialog(true)
+			}
 			dW, dH := m.getDialogArea(m.dialog)
 			if sizable, ok := m.dialog.(interface{ SetSize(int, int) }); ok {
 				sizable.SetSize(dW, dH)
@@ -231,15 +239,16 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Show the new dialog
-		m.dialog = msg.Dialog
-		if m.dialog != nil {
+		if msg.Dialog != nil && msg.Dialog != m.activeScreen {
+			m.dialog = msg.Dialog
 			dW, dH := m.getDialogArea(m.dialog)
 			if sizable, ok := m.dialog.(interface{ SetSize(int, int) }); ok {
 				sizable.SetSize(dW, dH)
 			}
 			m.updateComponentFocus()
+			cmds = append(cmds, m.dialog.Init())
 		}
-		return m, nil
+		return m, tea.Batch(cmds...)
 
 	case CloseDialogMsg:
 		// If we're waiting for a confirmation, send the result

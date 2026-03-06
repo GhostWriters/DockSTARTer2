@@ -50,64 +50,41 @@ func (m *MenuModel) ViewString() string {
 	listStyle = ApplyInnerBorder(listStyle, m.focused, styles.LineCharacters)
 	borderedList := listStyle.Render(listView)
 
-	// Calculate widths from known dimensions, not measured content
-	// For maximized: use m.width - outer border (2) for the content width
-	// For non-maximized: use list width + inner padding (2) for consistency
-	listWidth := m.list.Width()
+	// Determine the target content width (the space inside the outer dialog borders)
+	layout := GetLayout()
+	contentWidth := m.GetInnerContentWidth()
 
-	var outerContentWidth int
-	if m.maximized {
-		// Outer dialog fills available space: content = total - outer border
-		outerContentWidth = m.width - 2
-	} else {
-		// Non-maximized: outer content = bordered list (listWidth + 2) + padding (2)
-		outerContentWidth = listWidth + 2 + 2
-	}
+	// Inner components (list and button row) should fit within contentWidth - padding (2)
+	// Padding = 1 on each side (fixed margin in marginStyle below)
+	innerBoxWidth := contentWidth - 2
 
-	// Inner components should fit within outerContentWidth - padding (2)
-	innerWidth := outerContentWidth - 2
-	// bordered list width = innerWidth, so list content = innerWidth - 2
-	targetWidth := innerWidth
+	// Render buttons to match the exact same width as the list's border box
+	buttonRow := m.renderSimpleButtons(innerBoxWidth)
+	borderedButtonBox := m.renderButtonBox(buttonRow, innerBoxWidth)
 
-	// Render buttons to match the same bordered width
-	// Account for the padding (2) that renderButtonBox will add
-	buttonInnerWidth := targetWidth - 2
-	buttonRow := m.renderSimpleButtons(buttonInnerWidth)
-	borderedButtonBox := m.renderButtonBox(buttonRow, buttonInnerWidth)
-
-	// Add equal margins around both boxes for spacing
+	// Spacing style for both the list and the button box
 	marginStyle := lipgloss.NewStyle().
 		Background(styles.Dialog.GetBackground()).
 		Padding(0, 1)
 
 	paddedList := marginStyle.Render(borderedList)
-
-	// Ensure button box has same width as list for proper vertical alignment
-	paddedButtons := lipgloss.NewStyle().
-		Background(styles.Dialog.GetBackground()).
-		Width(outerContentWidth).
-		Padding(0, 1).
-		Render(borderedButtonBox)
+	paddedButtons := marginStyle.Width(contentWidth).Render(borderedButtonBox)
 
 	// Build inner content parts
 	var innerParts []string
 
 	// Add subtitle if present (always left-aligned)
 	if m.subtitle != "" {
-		subAlign := lipgloss.Left
 		subtitleStyle := styles.Dialog.
-			Width(outerContentWidth).
+			Width(contentWidth).
 			Padding(0, 1).
-			Align(subAlign).
-			Border(lipgloss.Border{}) // Ensure no border on subtitle itself
+			Align(lipgloss.Left).
+			Border(lipgloss.Border{})
 
 		subStr := RenderThemeText(m.subtitle, subtitleStyle)
-		subtitle := subtitleStyle.Render(subStr)
-		innerParts = append(innerParts, subtitle)
+		innerParts = append(innerParts, subtitleStyle.Render(subStr))
 	}
 
-	// Add list box and button box with NO gaps to maximize list space
-	// JoinVertical will stack them tightly
 	innerParts = append(innerParts, paddedList)
 	innerParts = append(innerParts, paddedButtons)
 
@@ -117,10 +94,10 @@ func (m *MenuModel) ViewString() string {
 	}
 	content := lipgloss.JoinVertical(lipgloss.Left, innerParts...)
 
-	// Force total content height to match the calculated budget (Total - Outer Borders - Shadow)
+	// Force total content height to match the calculated budget
 	// only if maximized. Otherwise it should have its intrinsic height.
 	if m.maximized {
-		heightBudget := m.layout.Height - DialogBorderHeight - m.layout.ShadowHeight
+		heightBudget := m.layout.Height - layout.BorderHeight() - m.layout.ShadowHeight
 		if heightBudget > 0 {
 			content = lipgloss.NewStyle().
 				Height(heightBudget).
@@ -128,6 +105,7 @@ func (m *MenuModel) ViewString() string {
 				Render(content)
 		}
 	}
+
 	// Determine target height for the outer dialog
 	targetHeight := 0
 	if m.maximized {
@@ -135,20 +113,19 @@ func (m *MenuModel) ViewString() string {
 	}
 
 	// Wrap in bordered dialog with title embedded in border
-
-	// Wrap in bordered dialog with title embedded in border
-	// Use outerContentWidth - the known content width for the outer dialog
 	var dialog string
 	if m.title != "" {
-		dialog = m.renderBorderWithTitle(content, outerContentWidth, targetHeight, m.focused, false)
+		dialog = m.renderBorderWithTitle(content, contentWidth, targetHeight, m.focused, false, "Theme_Title")
 	} else {
 		// No title: use focus-aware inner rounded border
+		// We must ensure the style width accounts for the layout's actual visual borders
 		dialogStyle := lipgloss.NewStyle().
 			Background(styles.Dialog.GetBackground()).
-			Padding(0, 1)
+			Width(contentWidth + layout.BorderWidth())
+
 		dialogStyle = ApplyInnerBorder(dialogStyle, m.focused, styles.LineCharacters)
 		if targetHeight > 0 {
-			dialogStyle = dialogStyle.Height(targetHeight - DialogBorderHeight)
+			dialogStyle = dialogStyle.Height(targetHeight)
 		}
 		dialog = dialogStyle.Render(content)
 	}
@@ -173,42 +150,65 @@ func (m *MenuModel) SetIsDialog(isDialog bool) {
 	m.isDialog = isDialog
 }
 
-func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targetHeight int, focused bool, rounded bool) string {
+func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targetHeight int, focused bool, rounded bool, titleTag string) string {
 	align := GetActiveContext().DialogTitleAlign
-	titleTag := "Theme_Title"
 	if m.subMenuMode {
 		align = GetActiveContext().SubmenuTitleAlign
-		if focused {
-			titleTag = "Theme_TitleSubMenuFocused"
-		} else {
-			titleTag = "Theme_TitleSubMenu"
-		}
 	}
+
 	ctx := GetActiveContext()
 	ctx.Type = m.dialogType
+	ctx.DrawShadow = m.isDialog && IsShadowEnabled()
 	return RenderBorderedBoxCtx(m.title, content, contentWidth, targetHeight, focused, rounded, align, titleTag, ctx)
 }
 
-func (m *MenuModel) viewSubMenu() string {
+func (s *MenuModel) viewSubMenu() string {
 	styles := GetStyles()
-	var content string
-	if m.flowMode {
-		content = m.renderFlow()
-	} else {
-		content = m.list.View()
-	}
-
-	// Inner content with maintained background
-	inner := MaintainBackground(content, styles.Dialog)
-
-	// Use Layout helpers for consistent border calculations
 	layout := GetLayout()
-	innerWidth, _ := layout.InnerContentSize(m.width, m.height)
 
-	// When in flow mode, the height is strictly determined by the content + borders
-	targetHeight := m.height
-	if m.flowMode {
-		_, targetHeight = layout.OuterTotalSize(0, m.layout.ViewportHeight)
+	// The target outer dimensions
+	targetHeight := s.height
+	contentWidth := s.width - layout.BorderWidth()
+
+	// 1. Render Subtitle
+	var subtitleView string
+	if s.subtitle != "" {
+		subtitleStyle := styles.Dialog.
+			Width(contentWidth).
+			Padding(0, 1). // matches internal padding
+			Align(lipgloss.Left).
+			Border(lipgloss.Border{})
+
+		subStr := RenderThemeText(s.subtitle, subtitleStyle)
+		subtitleView = subtitleStyle.Render(subStr)
 	}
-	return m.renderBorderWithTitle(inner, innerWidth, targetHeight, m.focusedSub, true)
+
+	// 2. Render List
+	var content string
+	if s.flowMode {
+		content = s.renderFlow()
+	} else {
+		content = MaintainBackground(s.list.View(), styles.Dialog)
+	}
+
+	// 3. Render Buttons (if any)
+	var buttonView string
+	buttons := s.getButtonSpecs()
+	if len(buttons) > 0 {
+		buttonView = RenderCenteredButtons(contentWidth, buttons...)
+	}
+
+	// Combine all internal content vertically
+	parts := []string{subtitleView, strings.TrimRight(content, "\n"), buttonView}
+	var filteredParts []string
+	for _, p := range parts {
+		if p != "" {
+			filteredParts = append(filteredParts, p)
+		}
+	}
+	combined := lipgloss.JoinVertical(lipgloss.Left, filteredParts...)
+
+	// 4. Render the bordered box with embedded title.
+	// We pass 'true' for rounded so submenus use the rounded corner style.
+	return s.renderBorderWithTitle(combined, contentWidth, targetHeight, s.focusedSub, true, "Theme_Title")
 }

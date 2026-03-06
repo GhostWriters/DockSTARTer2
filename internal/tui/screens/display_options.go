@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // DisplayOptionsFocus defines which area of the screen has focus
@@ -86,9 +87,10 @@ func (s *DisplayOptionsScreen) initMenus() {
 		}
 	}
 
-	themeMenu := tui.NewMenuModel("theme_list", "Select Theme", "", themeItems, nil)
-	s.themeMenu = &themeMenu
+	themeMenu := tui.NewMenuModel(tui.IDThemePanel, "Select Theme", "", themeItems, nil)
+	s.themeMenu = themeMenu
 	s.themeMenu.SetSubMenuMode(true)
+	s.themeMenu.SetIsDialog(false) // Part of a screen, not a modal
 	s.themeMenu.SetShowExit(false)
 	s.themeMenu.SetMaximized(true) // Fill available width
 
@@ -159,9 +161,10 @@ func (s *DisplayOptionsScreen) initMenus() {
 		},
 	}
 
-	optionsMenu := tui.NewMenuModel("options_list", "Options", "", optionItems, nil)
-	s.optionsMenu = &optionsMenu
+	optionsMenu := tui.NewMenuModel(tui.IDOptionsPanel, "Options", "", optionItems, nil)
+	s.optionsMenu = optionsMenu
 	s.optionsMenu.SetSubMenuMode(true)
+	s.optionsMenu.SetIsDialog(false) // Part of a screen, not a modal
 	s.optionsMenu.SetShowExit(false)
 	s.optionsMenu.SetFlowMode(true)
 	s.optionsMenu.SetMaximized(true) // Fill available width
@@ -271,7 +274,7 @@ func (s *DisplayOptionsScreen) showTitleAlignDropdown(menuName, label string, ge
 		} else {
 			menu.Select(1)
 		}
-		return tui.ShowDialogMsg{Dialog: &menu}
+		return tui.ShowDialogMsg{Dialog: menu}
 	}
 }
 
@@ -316,7 +319,7 @@ func (s *DisplayOptionsScreen) showShadowDropdown() tea.Cmd {
 		menu := tui.NewMenuModel("shadow_dropdown", "Shadow Level", "Select shadow fill pattern", items, tui.CloseDialog())
 		menu.SetShowExit(false)
 		menu.Select(s.config.UI.ShadowLevel)
-		return tui.ShowDialogMsg{Dialog: &menu}
+		return tui.ShowDialogMsg{Dialog: menu}
 	}
 }
 
@@ -349,7 +352,7 @@ func (s *DisplayOptionsScreen) showBorderColorDropdown() tea.Cmd {
 		menu := tui.NewMenuModel("border_dropdown", "Border Coloring", "Select which theme colors highlight borders", items, tui.CloseDialog())
 		menu.SetShowExit(false)
 		menu.Select(s.config.UI.BorderColor - 1)
-		return tui.ShowDialogMsg{Dialog: &menu}
+		return tui.ShowDialogMsg{Dialog: menu}
 	}
 }
 
@@ -400,11 +403,31 @@ func (s *DisplayOptionsScreen) handleApply() tea.Cmd {
 		// 2. Save Config
 		config.SaveAppConfig(s.config)
 
-		// 3. Close the screen (navigate back) and trigger synchronized style update
+		// 3. Trigger synchronized style update
 		return tui.ConfigChangedMsg{Config: s.config}
 	}
 }
 
 func (s *DisplayOptionsScreen) Init() tea.Cmd {
 	return tea.Batch(s.themeMenu.Init(), s.optionsMenu.Init())
+}
+
+func (s *DisplayOptionsScreen) getLiveContext() tui.StyleContext {
+	ctx := tui.GetActiveContext()
+	ctx.LineCharacters = s.config.UI.LineCharacters
+	ctx.DrawBorders = s.config.UI.Borders
+	ctx.DrawShadow = s.config.UI.Shadow
+	ctx.ShadowLevel = s.config.UI.ShadowLevel
+	ctx.DialogTitleAlign = s.config.UI.DialogTitleAlign
+	ctx.SubmenuTitleAlign = s.config.UI.SubmenuTitleAlign
+	ctx.LogTitleAlign = s.config.UI.LogTitleAlign
+
+	// Re-evaluate border style if LineCharacters changed
+	if ctx.LineCharacters {
+		ctx.Border = lipgloss.RoundedBorder()
+	} else {
+		ctx.Border = tui.AsciiBorder
+	}
+
+	return ctx
 }

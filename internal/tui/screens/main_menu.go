@@ -2,18 +2,10 @@ package screens
 
 import (
 	"DockSTARTer2/internal/tui"
-
-	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 )
 
-// MainMenuScreen is the main menu screen
-type MainMenuScreen struct {
-	menu *tui.MenuModel
-}
-
-// NewMainMenuScreen creates the main menu
-func NewMainMenuScreen() *MainMenuScreen {
+// NewMainMenuScreen creates the main menu as a standalone screen
+func NewMainMenuScreen() tui.ScreenModel {
 	items := []tui.MenuItem{
 		{
 			Tag:    "Configuration",
@@ -36,95 +28,15 @@ func NewMainMenuScreen() *MainMenuScreen {
 	}
 
 	menu := tui.NewMenuModel(
-		"main_menu",
+		tui.IDListPanel,
 		"Main Menu",
 		"What would you like to do?",
 		items,
 		nil, // No back action for main menu
 	)
 
-	return &MainMenuScreen{menu: &menu}
-}
-
-// Init implements tea.Model
-func (s *MainMenuScreen) Init() tea.Cmd {
-	return s.menu.Init()
-}
-
-// Update implements tea.Model
-func (s *MainMenuScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	updated, cmd := s.menu.Update(msg)
-	if menu, ok := updated.(*tui.MenuModel); ok {
-		s.menu = menu
-	}
-	return s, cmd
-}
-
-// ViewString returns the screen content as a string (for compositing)
-func (s *MainMenuScreen) ViewString() string {
-	return s.menu.ViewString()
-}
-
-// View implements tea.Model
-func (s *MainMenuScreen) View() tea.View {
-	return s.menu.View()
-}
-
-// Title implements ScreenModel
-func (s *MainMenuScreen) Title() string {
-	return s.menu.Title()
-}
-
-// HelpText implements ScreenModel
-func (s *MainMenuScreen) HelpText() string {
-	return s.menu.HelpText()
-}
-
-// SetSize implements ScreenModel
-func (s *MainMenuScreen) SetSize(width, height int) {
-	// main_menu leaves 1 blank line before the helpline.
-	s.menu.SetSize(width, height)
-}
-
-// SetFocused propagates focus state to the inner menu (used by log panel focus)
-func (s *MainMenuScreen) SetFocused(f bool) {
-	s.menu.SetFocused(f)
-}
-
-// IsMaximized implements ScreenModel
-func (s *MainMenuScreen) IsMaximized() bool {
-	return s.menu.IsMaximized()
-}
-
-// HasDialog implements ScreenModel
-func (s *MainMenuScreen) HasDialog() bool {
-	return s.menu.HasDialog()
-}
-
-// MenuName implements ScreenModel
-func (s *MainMenuScreen) MenuName() string {
-	return ""
-}
-
-// Layers implements LayeredView for compositing
-func (s *MainMenuScreen) Layers() []*lipgloss.Layer {
-	return s.menu.Layers()
-}
-
-// GetHitRegions implements HitRegionProvider for mouse hit testing
-func (s *MainMenuScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegion {
-	return s.menu.GetHitRegions(offsetX, offsetY)
-}
-
-// Navigation commands
-func navigateToConfigMenu() tea.Cmd {
-	return func() tea.Msg {
-		return tui.NavigateMsg{Screen: NewConfigMenuScreen(false)}
-	}
-}
-
-func navigateToOptionsMenu() tea.Cmd {
-	return func() tea.Msg {
-		return tui.NavigateMsg{Screen: NewOptionsMenuScreen(false)}
-	}
+	// In the new architecture, MenuModel IS the screen.
+	// We just set the name and return it.
+	menu.SetMenuName("")
+	return menu
 }

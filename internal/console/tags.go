@@ -66,14 +66,18 @@ func WrapDirect(code string) string {
 
 // ExpandTags converts semantic tags to standardized direct format using raw style codes
 func ExpandTags(text string) string {
-	ensureMaps()
+	return ExpandTagsWithPrefix(text, "")
+}
 
-	// 1. Process semantic tags
-	// Hold RLock for the duration of the replacement so concurrent writes to
-	// semanticMap (e.g. from theme-loading goroutines) don't cause a data race.
+// ExpandTagsWithPrefix converts semantic tags to standardized direct format,
+// attempting to resolve with the given prefix first (e.g., "Preview_").
+func ExpandTagsWithPrefix(text string, prefix string) string {
+	ensureMaps()
+	prefix = strings.ToLower(prefix)
+
+	// Process semantic tags
 	semanticMu.RLock()
 	text = semanticRegex.ReplaceAllStringFunc(text, func(match string) string {
-		// Extract content using the named group
 		groupIndex := semanticRegex.SubexpIndex("content")
 		subMatch := semanticRegex.FindStringSubmatch(match)
 		if len(subMatch) <= groupIndex {
@@ -81,13 +85,19 @@ func ExpandTags(text string) string {
 		}
 		content := strings.ToLower(subMatch[groupIndex])
 
-		// Check semantic map (stores RAW codes)
+		// 1. Try with prefix if provided
+		if prefix != "" {
+			prefixed := prefix + content
+			if rawCode, ok := semanticMap[prefixed]; ok {
+				return WrapDirect(rawCode)
+			}
+		}
+
+		// 2. Try raw name
 		if rawCode, ok := semanticMap[content]; ok {
-			// Wrap the raw code in standard direct delimiters
 			return WrapDirect(rawCode)
 		}
 
-		// Unknown semantic tag - strip it
 		return ""
 	})
 	semanticMu.RUnlock()
@@ -103,23 +113,26 @@ func ToANSI(text string) string {
 
 // ToANSIWithProfile allows specifying a profile (e.g. for TUI vs CLI).
 func ToANSIWithProfile(text string, profile ...termenv.Profile) string {
+	return ToANSIWithPrefix(text, "", profile...)
+}
+
+// ToANSIWithPrefix allows specifying a prefix for namespaced tag resolution and a profile.
+func ToANSIWithPrefix(text string, prefix string, profile ...termenv.Profile) string {
 	ensureMaps()
 
 	p := preferredProfile
 	if len(profile) > 0 {
 		p = profile[0]
 	} else if !isTTYGlobal && !TUIMode {
-		// Only check globals if no specific profile was requested
 		return Strip(text)
 	}
 
-	// If the profile is ASCII, just strip
 	if p == termenv.Ascii {
 		return Strip(text)
 	}
 
-	// 1. Expand all semantic tags first (Pass 1)
-	text = ExpandTags(text)
+	// 1. Expand all semantic tags (Pass 1)
+	text = ExpandTagsWithPrefix(text, prefix)
 
 	// 2. Process all direct tags -> ANSI (Pass 2)
 	re := GetDirectRegex()

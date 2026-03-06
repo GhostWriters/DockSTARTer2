@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/strutil"
 
 	"charm.land/lipgloss/v2"
@@ -129,9 +130,9 @@ func RenderTopBorderBoxCtx(title, rightTitle, content string, contentWidth int, 
 	result.WriteString(borderStyle.Render(leftT))
 	if focused {
 		if ctx.LineCharacters {
-			result.WriteString(borderStyle.Render("▸"))
+			result.WriteString(borderStyle.Render(console.ToANSI("{{|Theme_TitleFocusIndicator|}}▸")))
 		} else {
-			result.WriteString(borderStyle.Render(">"))
+			result.WriteString(borderStyle.Render(console.ToANSI("{{|Theme_TitleFocusIndicator|}}>")))
 		}
 	} else {
 		result.WriteString(borderStyle.Render(" "))
@@ -139,9 +140,9 @@ func RenderTopBorderBoxCtx(title, rightTitle, content string, contentWidth int, 
 	result.WriteString(renderedTitle)
 	if focused {
 		if ctx.LineCharacters {
-			result.WriteString(borderStyle.Render("◂"))
+			result.WriteString(borderStyle.Render(console.ToANSI("{{|Theme_TitleFocusIndicator|}}◂")))
 		} else {
-			result.WriteString(borderStyle.Render("<"))
+			result.WriteString(borderStyle.Render(console.ToANSI("{{|Theme_TitleFocusIndicator|}}<")))
 		}
 	} else {
 		result.WriteString(borderStyle.Render(" "))
@@ -259,9 +260,9 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 		result.WriteString(borderStyleLight.Render(leftT))
 		if focused {
 			if ctx.LineCharacters {
-				result.WriteString(borderStyleLight.Render("▸"))
+				result.WriteString(borderStyleLight.Render(console.ToANSI("{{|Theme_TitleFocusIndicator|}}▸")))
 			} else {
-				result.WriteString(borderStyleLight.Render(">"))
+				result.WriteString(borderStyleLight.Render(console.ToANSI("{{|Theme_TitleFocusIndicator|}}>")))
 			}
 		} else {
 			result.WriteString(borderStyleLight.Render(" "))
@@ -269,9 +270,9 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 		result.WriteString(title)
 		if focused {
 			if ctx.LineCharacters {
-				result.WriteString(borderStyleLight.Render("◂"))
+				result.WriteString(borderStyleLight.Render(console.ToANSI("{{|Theme_TitleFocusIndicator|}}◂")))
 			} else {
-				result.WriteString(borderStyleLight.Render("<"))
+				result.WriteString(borderStyleLight.Render(console.ToANSI("{{|Theme_TitleFocusIndicator|}}<")))
 			}
 		} else {
 			result.WriteString(borderStyleLight.Render(" "))

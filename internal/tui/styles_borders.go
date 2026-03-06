@@ -44,7 +44,7 @@ func ApplyStraightBorderCtx(style lipgloss.Style, ctx StyleContext) lipgloss.Sty
 	if ctx.LineCharacters {
 		border = lipgloss.NormalBorder()
 	} else {
-		border = asciiBorder
+		border = AsciiBorder
 	}
 
 	return style.

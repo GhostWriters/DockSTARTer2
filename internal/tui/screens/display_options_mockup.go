@@ -12,103 +12,8 @@ import (
 func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	width := 44 // Reduced width to fit the screen better
 
-	paddedLine := func(text string, style lipgloss.Style, fallback string) string {
-		rendered := tui.RenderThemeText(text, style)
-		plain := tui.GetPlainText(rendered)
-		wt := lipgloss.Width(plain)
-		if wt < width {
-			leftPad := (width - wt) / 2
-			rightPad := width - wt - leftPad
-			return style.Render(strutil.Repeat(fallback, leftPad) + rendered + strutil.Repeat(fallback, rightPad))
-		}
-		return style.Render(plain[:width])
-	}
-
-	hStyle := tui.SemanticRawStyle("Preview_Theme_StatusBar")
-
-	themeName := s.previewTheme
-
-	// Border style for the status bar frame (falls back to StatusBar if undefined)
-	bStyle := tui.SemanticRawStyle("Preview_Theme_StatusBarBorder")
-	if bStyle.GetForeground() == nil && bStyle.GetBackground() == nil {
-		bStyle = hStyle
-	}
-
-	// Border characters (unfocused, since the preview is static)
-	var leftChar, rightChar, bottomChar, bottomLeftChar, bottomRightChar string
-	if s.config.UI.LineCharacters {
-		bottomLeftChar = "╰"
-		bottomRightChar = "╯"
-		leftChar = "│"
-		rightChar = "│"
-		bottomChar = "─"
-	} else {
-		bottomLeftChar = "'"
-		bottomRightChar = "'"
-		leftChar = "|"
-		rightChar = "|"
-		bottomChar = "-"
-	}
-
-	// Header content is width-2 (border chars occupy 1 char each side)
-	innerWidth := width - 2
-
-	// Left: Host
-	leftText := " {{|Preview_Theme_Hostname|}}HOST{{[-]}}"
-	leftRendered := tui.RenderThemeText(leftText, hStyle)
-	leftW := lipgloss.Width(tui.GetPlainText(leftRendered))
-
-	// Center: App Name
-	centerText := "{{|Preview_Theme_ApplicationName|}}" + tui.GetPlainText(themeName) + "{{[-]}}"
-	centerRendered := tui.RenderThemeText(centerText, hStyle)
-	centerW := lipgloss.Width(tui.GetPlainText(centerRendered))
-
-	// Right: Version
-	rightText := "{{|Preview_Theme_ApplicationVersion|}}A:[{{[-]}}{{|Preview_Theme_ApplicationVersion|}}2.1{{[-]}}{{|Preview_Theme_ApplicationVersion|}}]{{[-]}} "
-	rightRendered := tui.RenderThemeText(rightText, hStyle)
-	rightW := lipgloss.Width(tui.GetPlainText(rightRendered))
-
-	// Exact physical alignment like header.go
-	centerX := (innerWidth - centerW) / 2
-	if centerX < 0 {
-		centerX = 0
-	}
-
-	fitsLine1 := true
-	if leftW+1 > centerX {
-		fitsLine1 = false
-	}
-	if centerX+centerW+1+rightW > innerWidth {
-		fitsLine1 = false
-	}
-
-	var headerContent string
-	if fitsLine1 {
-		space1 := centerX - leftW
-		space2 := innerWidth - (centerX + centerW) - rightW
-		fullLine := leftRendered + strutil.Repeat(" ", space1) + centerRendered + strutil.Repeat(" ", space2) + rightRendered
-		headerContent = hStyle.Render(fullLine)
-	} else if leftW+1 <= centerX {
-		// Wrap right side like header.go Wrap Stage 1/2
-		line1 := leftRendered + strutil.Repeat(" ", centerX-leftW) + centerRendered
-		line1 += strutil.Repeat(" ", innerWidth-lipgloss.Width(tui.GetPlainText(line1)))
-		line2 := strutil.Repeat(" ", innerWidth-rightW) + rightRendered
-		headerContent = hStyle.Render(line1) + "\n" + hStyle.Render(line2)
-	} else {
-		// Total stack fallback
-		line1 := leftRendered + strutil.Repeat(" ", innerWidth-leftW)
-		line2 := centerRendered + strutil.Repeat(" ", innerWidth-centerW)
-		line3 := strutil.Repeat(" ", innerWidth-rightW) + rightRendered
-		headerContent = hStyle.Render(line1) + "\n" + hStyle.Render(line2) + "\n" + hStyle.Render(line3)
-	}
-	headerRow := bStyle.Render(leftChar) + headerContent + bStyle.Render(rightChar)
-
-	// Bottom border replaces the old separator line
-	bottomBorderRow := bStyle.Render(bottomLeftChar + strutil.Repeat(bottomChar, width-2) + bottomRightChar)
-
 	bgStyle := tui.SemanticRawStyle("Preview_Theme_Screen")
 	dContent := tui.SemanticRawStyle("Preview_Theme_Dialog")
-
 	dBorder1 := tui.SemanticRawStyle("Preview_Theme_Border")
 	dBorder2 := tui.SemanticRawStyle("Preview_Theme_Border2")
 
@@ -126,7 +31,7 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	} else if s.config.UI.LineCharacters {
 		b = lipgloss.RoundedBorder()
 	} else {
-		b = tui.RoundedAsciiBorder // Use exported variant from tui package
+		b = tui.RoundedAsciiBorder
 	}
 
 	// Build StyleContext for the preview
@@ -160,53 +65,146 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 		DialogTitleAlign:    s.config.UI.DialogTitleAlign,
 		SubmenuTitleAlign:   s.config.UI.SubmenuTitleAlign,
 		LogTitleAlign:       s.config.UI.LogTitleAlign,
+		Prefix:              "Preview_",
+		DrawShadow:          s.config.UI.Shadow,
 	}
 
-	// Backdrop Content (Dialog Simulation)
-	// Shortened strings to prevent overflow in the 44-cell width
+	paddedLine := func(text string, style lipgloss.Style, fallback string, ctx ...tui.StyleContext) string {
+		activeCtx := previewCtx
+		if len(ctx) > 0 {
+			activeCtx = ctx[0]
+		}
+		rendered := tui.RenderThemeTextCtx(text, activeCtx)
+		plain := tui.GetPlainText(rendered)
+		wt := lipgloss.Width(plain)
+		if wt < width {
+			leftPad := (width - wt) / 2
+			rightPad := width - wt - leftPad
+			return style.Render(strutil.Repeat(fallback, leftPad) + rendered + strutil.Repeat(fallback, rightPad))
+		}
+		return style.Render(plain[:width])
+	}
+
+	// --- 1. Header (Status Bar) ---
+	hStyle := tui.SemanticRawStyle("Preview_Theme_StatusBar")
+	headerCtx := previewCtx
+	headerCtx.Dialog = hStyle // Ensure snapping back to StatusBar background
+
+	themeName := s.previewTheme
+
+	// Border style for the status bar frame (falls back to StatusBar if undefined)
+	bStyle := tui.SemanticRawStyle("Preview_Theme_StatusBarBorder")
+	if bStyle.GetForeground() == nil && bStyle.GetBackground() == nil {
+		bStyle = hStyle
+	}
+
+	// Border characters (unfocused, since the preview is static)
+	var leftChar, rightChar, bottomChar, bottomLeftChar, bottomRightChar string
+	if s.config.UI.LineCharacters {
+		bottomLeftChar = "╰"
+		bottomRightChar = "╯"
+		leftChar = "│"
+		rightChar = "│"
+		bottomChar = "─"
+	} else {
+		bottomLeftChar = "'"
+		bottomRightChar = "'"
+		leftChar = "|"
+		rightChar = "|"
+		bottomChar = "-"
+	}
+
+	// Header content is width-2 (border chars occupy 1 char each side)
+	innerWidth := width - 2
+
+	// Left: Host
+	leftText := " {{|Theme_Hostname|}}HOST{{[-]}}"
+	leftRendered := tui.RenderThemeTextCtx(leftText, headerCtx)
+	leftW := lipgloss.Width(tui.GetPlainText(leftRendered))
+
+	// Center: App Name
+	centerText := "{{|Theme_ApplicationName|}}" + tui.GetPlainText(themeName) + "{{[-]}}"
+	centerRendered := tui.RenderThemeTextCtx(centerText, headerCtx)
+	centerW := lipgloss.Width(tui.GetPlainText(centerRendered))
+
+	// Right: Version
+	rightText := "{{|Theme_ApplicationVersion|}}A:[{{[-]}}{{|Theme_ApplicationVersion|}}2.1{{[-]}}{{|Theme_ApplicationVersion|}}]{{[-]}} "
+	rightRendered := tui.RenderThemeTextCtx(rightText, headerCtx)
+	rightW := lipgloss.Width(tui.GetPlainText(rightRendered))
+
+	centerX := (innerWidth - centerW) / 2
+	if centerX < 0 {
+		centerX = 0
+	}
+
+	fitsLine1 := true
+	if leftW+1 > centerX || centerX+centerW+1+rightW > innerWidth {
+		fitsLine1 = false
+	}
+
+	var headerContent string
+	if fitsLine1 {
+		space1 := centerX - leftW
+		space2 := innerWidth - (centerX + centerW) - rightW
+		fullLine := leftRendered + strutil.Repeat(" ", space1) + centerRendered + strutil.Repeat(" ", space2) + rightRendered
+		headerContent = hStyle.Render(fullLine)
+	} else if leftW+1 <= centerX {
+		line1 := leftRendered + strutil.Repeat(" ", centerX-leftW) + centerRendered
+		line1 += strutil.Repeat(" ", innerWidth-lipgloss.Width(tui.GetPlainText(line1)))
+		line2 := strutil.Repeat(" ", innerWidth-rightW) + rightRendered
+		headerContent = hStyle.Render(line1) + "\n" + hStyle.Render(line2)
+	} else {
+		line1 := leftRendered + strutil.Repeat(" ", innerWidth-leftW)
+		line2 := centerRendered + strutil.Repeat(" ", innerWidth-centerW)
+		line3 := strutil.Repeat(" ", innerWidth-rightW) + rightRendered
+		headerContent = hStyle.Render(line1) + "\n" + hStyle.Render(line2) + "\n" + hStyle.Render(line3)
+	}
+	headerRow := bStyle.Render(leftChar) + headerContent + bStyle.Render(rightChar)
+
+	// Bottom border between header and content
+	bottomBorderRow := bStyle.Render(bottomLeftChar + strutil.Repeat(bottomChar, width-2) + bottomRightChar)
+
+	// --- 2. Backdrop Content (Dialog Simulation) ---
 	contentLines := []string{
-		" {{|Preview_Theme_Subtitle|}}A Subtitle Line{{[-]}}",
-		"   {{|Preview_Theme_CommandLine|}}ds2 --theme{{[-]}}",
+		" {{|Theme_Subtitle|}}A Subtitle Line{{[-]}}",
+		"   {{|Theme_CommandLine|}}ds2 --theme{{[-]}}",
 		"",
-		" Heading: {{|Preview_Theme_HeadingValue|}}Value{{[-]}} {{|Preview_Theme_HeadingTag|}}[*Tag*]{{[-]}}",
+		" Heading: {{|Theme_HeadingValue|}}Value{{[-]}} {{|Theme_HeadingTag|}}[*Tag*]{{[-]}}",
 		"",
-		"    Caps: {{|Preview_Theme_KeyCap|}}[up]{{[-]}} {{|Preview_Theme_KeyCap|}}[down]{{[-]}} {{|Preview_Theme_KeyCap|}}[left]{{[-]}} {{|Preview_Theme_KeyCap|}}[right]",
+		"    Caps: {{|Theme_KeyCap|}}[up]{{[-]}} {{|Theme_KeyCap|}}[down]{{[-]}} {{|Theme_KeyCap|}}[left]{{[-]}} {{|Theme_KeyCap|}}[right]",
 		"",
 		" Normal text",
-		" {{|Preview_Theme_Highlight|}}Highlighted text{{[-]}}",
+		" {{|Theme_Highlight|}}Highlighted text{{[-]}}",
 		"",
 		// Menu Items Simulation
-		" {{|Preview_Theme_Item|}}Item 1      Item Description{{[-]}}",
-		" {{|Preview_Theme_Item|}}Item 2      {{|Preview_Theme_ListAppUserDefined|}}User Description{{[-]}}",
+		" {{|Theme_Item|}}Item 1      Item Description{{[-]}}",
+		" {{|Theme_Item|}}Item 2      {{|Theme_ListAppUserDefined|}}User Description{{[-]}}",
 		"",
-		" {{|Preview_Theme_LineHeading|}}*** .env ***{{[-]}}",
-		" {{|Preview_Theme_LineComment|}}### Sample comment{{[-]}}",
-		" {{|Preview_Theme_LineVar|}}Var='Default'{{[-]}}",
-		" {{|Preview_Theme_LineModifiedVar|}}Var='Modified'{{[-]}}",
+		" {{|Theme_LineHeading|}}*** .env ***{{[-]}}",
+		" {{|Theme_LineComment|}}### Sample comment{{[-]}}",
+		" {{|Theme_LineVar|}}Var='Default'{{[-]}}",
+		" {{|Theme_LineModifiedVar|}}Var='Modified'{{[-]}}",
 	}
 
 	for i, l := range contentLines {
-		contentLines[i] = tui.RenderThemeText(l, dContent)
+		contentLines[i] = tui.RenderThemeTextCtx(l, previewCtx)
 	}
 	contentStr := strings.Join(contentLines, "\n")
 
-	// Multi-segment title on the border
 	titleParts := []string{
-		"{{|Preview_Theme_Title|}}Title{{[-]}}",
-		"{{|Preview_Theme_TitleSuccess|}}S{{[-]}}",
-		"{{|Preview_Theme_TitleWarning|}}W{{[-]}}",
-		"{{|Preview_Theme_TitleError|}}E{{[-]}}",
-		"{{|Preview_Theme_TitleQuestion|}}Q{{[-]}}",
+		"{{|Theme_Title|}}Title{{[-]}}",
+		"{{|Theme_TitleSuccess|}}S{{[-]}}",
+		"{{|Theme_TitleWarning|}}W{{[-]}}",
+		"{{|Theme_TitleError|}}E{{[-]}}",
+		"{{|Theme_TitleQuestion|}}Q{{[-]}}",
 	}
-	dTitle := strings.Join(titleParts, " ")
+	dTitle := tui.RenderThemeTextCtx(strings.Join(titleParts, " "), previewCtx)
 
 	layout := tui.GetLayout()
-	// Backdrop - calculate height to fill available space
-	// Structure: headerRow(1) + bottomBorderRow(1) + backdrop + helpRow(1) + logStripRow(1) + outer borders(2)
 	fixedLines := layout.BorderHeight() + 4
 	backdropHeight := targetHeight - fixedLines
 	if backdropHeight < 10 {
-		backdropHeight = 10 // minimum height for content visibility
+		backdropHeight = 10
 	}
 	backdropLines := make([]string, backdropHeight)
 	filler := bgStyle.Render(strutil.Repeat(" ", width))
@@ -215,37 +213,71 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	}
 	backdropBlock := lipgloss.JoinVertical(lipgloss.Left, backdropLines...)
 
-	// Inner dialog mockup (centralized shadowing handles the effect)
-	dialogBox := tui.RenderBorderedBoxCtx(dTitle, contentStr, 38, 0, true, false, previewCtx.DialogTitleAlign, "Preview_Theme_Title", previewCtx)
-	// Backdrop Block with inner dialog overlay
+	dialogBox := tui.RenderBorderedBoxCtx(dTitle, contentStr, 38, 0, true, false, previewCtx.DialogTitleAlign, "Theme_Title", previewCtx)
 	backdropBlock = tui.Overlay(dialogBox, backdropBlock, tui.OverlayCenter, tui.OverlayCenter, 0, 0)
 
+	// --- 3. Help Line ---
 	helpStyle := tui.SemanticRawStyle("Preview_Theme_Helpline")
-	helpRow := paddedLine(" Help: [Tab] Cycle | [Esc] Back", helpStyle, " ")
+	helpCtx := previewCtx
+	helpCtx.Dialog = helpStyle // Ensure snapping back to Helpline background
 
-	// Log Toggle Strip (Border)
-	stripSepChar := "-"
-	if s.config.UI.LineCharacters {
-		stripSepChar = "─"
-	} else {
-		stripSepChar = "-"
-	}
+	// Help line is full width (no side borders)
+	helpRow := paddedLine(" Help: [Tab] Cycle | [Esc] Back", helpStyle, " ", helpCtx)
+
+	// --- 4. Log Toggle Strip ---
+	// Actual UI uses HelpLine background for the strip, but LogBox/LogPanel for the label
+	logBoxStyle := tui.SemanticRawStyle("Preview_Theme_LogBox")
+	logPanelStyle := tui.SemanticRawStyle("Preview_Theme_LogPanel")
+
+	logStripCtx := previewCtx
+	logStripCtx.Dialog = logBoxStyle // Label should have LogBox (Black) background
+
 	marker := "^"
-	label := " " + marker + " Log " + marker + " "
+	label := tui.RenderThemeTextCtx(" "+marker+" Log "+marker+" ", logStripCtx)
+
+	// The strip itself uses HelpLine (Cyan) background
 	stripStyle := lipgloss.NewStyle().
-		Foreground(tui.SemanticRawStyle("Preview_Theme_LogPanel").GetForeground()).
+		Foreground(logPanelStyle.GetForeground()).
 		Background(helpStyle.GetBackground())
 
-	labelW := lipgloss.Width(label)
-	var dashW int
-	if s.config.UI.LogTitleAlign != "left" {
-		dashW = (width - labelW) / 2
+	var leftT, rightT, borderTop, topLeftC, topRightC string
+	if s.config.UI.LineCharacters {
+		leftT = "┤"
+		rightT = "├"
+		borderTop = "─"
+		topLeftC = "┌"
+		topRightC = "┐"
+	} else {
+		leftT = "+"
+		rightT = "+"
+		borderTop = "-"
+		topLeftC = "+"
+		topRightC = "+"
 	}
-	leftDashes := strutil.Repeat(stripSepChar, dashW)
-	rightTotal := width - dashW - labelW
-	rightDashes := strutil.Repeat(stripSepChar, rightTotal)
 
-	logStripRow := stripStyle.Render(leftDashes + label + rightDashes)
+	labelW := lipgloss.Width(tui.GetPlainText(label))
+	titleSectionLen := 1 + 1 + labelW + 1 + 1
+
+	// Strip has side borders/corners in the mockup
+	innerWidthStrip := width - 2
+	var leftPad int
+	if s.config.UI.LogTitleAlign == "left" {
+		leftPad = 0
+	} else {
+		leftPad = (innerWidthStrip - titleSectionLen) / 2
+	}
+	if leftPad < 0 {
+		leftPad = 0
+	}
+
+	leftDashes := strutil.Repeat(borderTop, leftPad)
+	remaining := innerWidthStrip - leftPad - titleSectionLen
+	rightDashes := strutil.Repeat(borderTop, remaining)
+
+	// Render in pieces to prevent inner resets from Clearing the background
+	logStripRow := stripStyle.Render(topLeftC+leftDashes+leftT+" ") +
+		label +
+		stripStyle.Render(" "+rightT+rightDashes+topRightC)
 
 	mockupParts := []string{
 		headerRow,
@@ -262,9 +294,7 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	// Wrap in a standard dialog using the current (active) theme
 	mockupWidth := lipgloss.Width(mockup)
 	// Synchronize preview height with settings dialog
-	preview := tui.RenderBorderedBoxCtx("Preview", mockup, mockupWidth, targetHeight, false, false, tui.GetActiveContext().DialogTitleAlign, "Theme_Title", tui.GetActiveContext())
-
-	return preview
+	return tui.RenderBorderedBoxCtx("Preview", mockup, mockupWidth, targetHeight, false, false, tui.GetActiveContext().DialogTitleAlign, "Theme_Title", tui.GetActiveContext())
 }
 
 // getPreviewShadowColor extracts the shadow color from the preview theme

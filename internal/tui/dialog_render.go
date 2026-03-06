@@ -58,7 +58,7 @@ func RenderDialogWithTypeCtx(title, content string, focused bool, targetHeight i
 			if focused {
 				border = thickAsciiBorder
 			} else {
-				border = asciiBorder
+				border = AsciiBorder
 			}
 		}
 	}
@@ -134,7 +134,7 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 			if focused {
 				border = thickAsciiBorder
 			} else {
-				border = asciiBorder
+				border = AsciiBorder
 			}
 		}
 	}
@@ -152,7 +152,7 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 	}
 
 	// Render title with Dialog background as the base for inheritance
-	renderedTitle := RenderThemeText(rawTitle, lipgloss.NewStyle().Background(ctx.Dialog.GetBackground()))
+	renderedTitle := RenderThemeTextCtx(rawTitle, ctx)
 
 	lines := strings.Split(content, "\n")
 	// Trust the passed contentWidth - don't expand based on line widths
@@ -170,66 +170,88 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 		}
 	}
 
-	var leftT, rightT string
-	if !ctx.DrawBorders {
-		leftT = " "
-		rightT = " "
-	} else if ctx.LineCharacters {
-		if focused {
-			leftT = "┫"
-			rightT = "┣"
-		} else {
-			leftT = "┤"
-			rightT = "├"
-		}
-	} else {
-		if focused {
-			leftT = "H"
-			rightT = "H"
-		} else {
-			leftT = "+"
-			rightT = "+"
-		}
-	}
-
-	titleSectionLen := 1 + 1 + lipgloss.Width(renderedTitle) + 1 + 1
-	var leftPad int
-	if titleAlign == "left" {
-		leftPad = 0
-	} else {
-		leftPad = (actualWidth - titleSectionLen) / 2
-	}
-	rightPad := actualWidth - titleSectionLen - leftPad
-	if rightPad < 0 {
-		rightPad = 0
-	}
-
 	var result strings.Builder
-
 	result.WriteString(borderStyleLight.Render(border.TopLeft))
-	result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, leftPad)))
-	result.WriteString(borderStyleLight.Render(leftT))
-	if focused {
-		if ctx.LineCharacters {
-			result.WriteString(borderStyleLight.Render("▸"))
-		} else {
-			result.WriteString(borderStyleLight.Render(">"))
-		}
+
+	// Only render title section if there is actual text to show
+	if WidthWithoutZones(renderedTitle) == 0 {
+		result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, actualWidth)))
 	} else {
-		result.WriteString(borderStyleLight.Render(" "))
-	}
-	result.WriteString(renderedTitle)
-	if focused {
-		if ctx.LineCharacters {
-			result.WriteString(borderStyleLight.Render("◂"))
+		var leftT, rightT string
+		if !ctx.DrawBorders {
+			leftT = " "
+			rightT = " "
+		} else if ctx.LineCharacters {
+			if focused {
+				leftT = "┫"
+				rightT = "┣"
+			} else {
+				leftT = "┤"
+				rightT = "├"
+			}
 		} else {
-			result.WriteString(borderStyleLight.Render("<"))
+			if focused {
+				leftT = "H"
+				rightT = "H"
+			} else {
+				leftT = "+"
+				rightT = "+"
+			}
 		}
-	} else {
-		result.WriteString(borderStyleLight.Render(" "))
+
+		titleSectionLen := 1 + 1 + lipgloss.Width(renderedTitle) + 1 + 1
+		if titleSectionLen > actualWidth {
+			actualWidth = titleSectionLen
+		}
+
+		var leftPad int
+		if titleAlign == "left" {
+			leftPad = 0
+		} else {
+			leftPad = (actualWidth - titleSectionLen) / 2
+		}
+		rightPad := actualWidth - titleSectionLen - leftPad
+		if rightPad < 0 {
+			rightPad = 0
+		}
+
+		result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, leftPad)))
+		result.WriteString(borderStyleLight.Render(leftT))
+
+		focusTag := "Theme_TitleFocusIndicator"
+
+		if focused {
+			if ctx.LineCharacters {
+				result.WriteString(borderStyleLight.Render(console.ToANSIWithPrefix("{{|"+focusTag+"|}}▸", ctx.Prefix)))
+			} else {
+				result.WriteString(borderStyleLight.Render(console.ToANSIWithPrefix("{{|"+focusTag+"|}}>", ctx.Prefix)))
+			}
+		} else {
+			unfocusTag := "Theme_TitleUnfocusedIndicator"
+			if ctx.LineCharacters {
+				result.WriteString(borderStyleLight.Render(console.ToANSIWithPrefix("{{|"+unfocusTag+"|}} ", ctx.Prefix)))
+			} else {
+				result.WriteString(borderStyleLight.Render(console.ToANSIWithPrefix("{{|"+unfocusTag+"|}} ", ctx.Prefix)))
+			}
+		}
+		result.WriteString(renderedTitle)
+		if focused {
+			if ctx.LineCharacters {
+				result.WriteString(borderStyleLight.Render(console.ToANSIWithPrefix("{{|"+focusTag+"|}}◂", ctx.Prefix)))
+			} else {
+				result.WriteString(borderStyleLight.Render(console.ToANSIWithPrefix("{{|"+focusTag+"|}}<", ctx.Prefix)))
+			}
+		} else {
+			unfocusTag := "Theme_TitleUnfocusedIndicator"
+			if ctx.LineCharacters {
+				result.WriteString(borderStyleLight.Render(console.ToANSIWithPrefix("{{|"+unfocusTag+"|}} ", ctx.Prefix)))
+			} else {
+				result.WriteString(borderStyleLight.Render(console.ToANSIWithPrefix("{{|"+unfocusTag+"|}} ", ctx.Prefix)))
+			}
+		}
+		result.WriteString(borderStyleLight.Render(rightT))
+		result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, rightPad)))
 	}
-	result.WriteString(borderStyleLight.Render(rightT))
-	result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, rightPad)))
 	result.WriteString(borderStyleLight.Render(border.TopRight))
 	result.WriteString("\n")
 

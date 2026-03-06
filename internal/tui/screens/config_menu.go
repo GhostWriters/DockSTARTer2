@@ -1,21 +1,11 @@
 package screens
 
 import (
-	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/tui"
-
-	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 )
 
-// ConfigMenuScreen is the configuration menu screen
-type ConfigMenuScreen struct {
-	menu *tui.MenuModel
-}
-
-// NewConfigMenuScreen creates the configuration menu.
-// isRoot suppresses the Back button when this screen is the entry point.
-func NewConfigMenuScreen(isRoot bool) *ConfigMenuScreen {
+// NewConfigMenuScreen creates the configuration menu as a standalone screen
+func NewConfigMenuScreen() tui.ScreenModel {
 	items := []tui.MenuItem{
 		{
 			Tag:    "Full Setup",
@@ -61,102 +51,14 @@ func NewConfigMenuScreen(isRoot bool) *ConfigMenuScreen {
 		},
 	}
 
-	var backAction tea.Cmd
-	if !isRoot {
-		backAction = navigateBack()
-	}
 	menu := tui.NewMenuModel(
-		"config_menu",
+		tui.IDListPanel,
 		"Configuration",
-		"Setup and configure applications",
+		"Select a configuration task",
 		items,
-		backAction,
+		navigateBack(),
 	)
 
-	return &ConfigMenuScreen{menu: &menu}
-}
-
-// Init implements tea.Model
-func (s *ConfigMenuScreen) Init() tea.Cmd {
-	return s.menu.Init()
-}
-
-// Update implements tea.Model
-func (s *ConfigMenuScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	updated, cmd := s.menu.Update(msg)
-	if menu, ok := updated.(*tui.MenuModel); ok {
-		s.menu = menu
-	}
-	return s, cmd
-}
-
-// ViewString returns the screen content as a string (for compositing)
-func (s *ConfigMenuScreen) ViewString() string {
-	return s.menu.ViewString()
-}
-
-// View implements tea.Model
-func (s *ConfigMenuScreen) View() tea.View {
-	return s.menu.View()
-}
-
-// Title implements ScreenModel
-func (s *ConfigMenuScreen) Title() string {
-	return s.menu.Title()
-}
-
-// HelpText implements ScreenModel
-func (s *ConfigMenuScreen) HelpText() string {
-	return s.menu.HelpText()
-}
-
-// SetSize implements ScreenModel
-func (s *ConfigMenuScreen) SetSize(width, height int) {
-	// config leaves 1 blank line before the helpline.
-	s.menu.SetSize(width, height)
-}
-
-// SetFocused propagates focus state to the inner menu (used by log panel focus)
-func (s *ConfigMenuScreen) SetFocused(f bool) {
-	s.menu.SetFocused(f)
-}
-
-// IsMaximized implements ScreenModel
-func (s *ConfigMenuScreen) IsMaximized() bool {
-	return s.menu.IsMaximized()
-}
-
-// HasDialog implements ScreenModel
-func (s *ConfigMenuScreen) HasDialog() bool {
-	return s.menu.HasDialog()
-}
-
-// MenuName implements ScreenModel
-func (s *ConfigMenuScreen) MenuName() string {
-	return "config"
-}
-
-// Layers implements LayeredView for compositing
-func (s *ConfigMenuScreen) Layers() []*lipgloss.Layer {
-	return s.menu.Layers()
-}
-
-// GetHitRegions implements HitRegionProvider for mouse hit testing
-func (s *ConfigMenuScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegion {
-	return s.menu.GetHitRegions(offsetX, offsetY)
-}
-
-// navigateBack returns a command to go back to the previous screen
-func navigateBack() tea.Cmd {
-	return func() tea.Msg {
-		return tui.NavigateBackMsg{}
-	}
-}
-
-// navigateToAppSelection returns a command to navigate to the app selection screen
-func navigateToAppSelection() tea.Cmd {
-	return func() tea.Msg {
-		conf := config.LoadAppConfig()
-		return tui.NavigateMsg{Screen: NewAppSelectionScreen(conf, false)}
-	}
+	menu.SetMenuName("config")
+	return menu
 }

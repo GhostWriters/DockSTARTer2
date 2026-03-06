@@ -14,6 +14,13 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// the state of the menu, so we must invalidate the render cache.
 	m.InvalidateCache()
 
+	// If a custom interceptor is defined, give it first right of refusal
+	if m.interceptor != nil {
+		if cmd, handled := m.interceptor(msg, m); handled {
+			return m, cmd
+		}
+	}
+
 	switch msg := msg.(type) {
 	case ToggleFocusedMsg:
 		// Middle click triggers toggle on the currently focused item
@@ -29,9 +36,9 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				menuSelectedIndices[m.id] = idx
 				m.focusedItem = FocusList
 
+				// Hover state merely focuses the item.
 				// Middle click is handled by AppModel (global Space mapping)
-				// We just handle the selection here.
-				if msg.Button == tea.MouseMiddle {
+				if msg.Button == HoverButton || msg.Button == tea.MouseMiddle {
 					return m, nil
 				}
 
@@ -47,13 +54,25 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Handle clicks on the menu itself (not a specific item/button)
+		// Handle clicks/hovers on the menu's list background
 		if msg.ID == m.id {
+			m.focusedItem = FocusList
 			return m, nil
 		}
 
-		// Handle button clicks
-		switch msg.ID {
+		// Handle button clicks (matches both direct and prefixed IDs e.g. "menuID.btn-back")
+		buttonID := msg.ID
+		if strings.Contains(buttonID, ".") {
+			parts := strings.Split(buttonID, ".")
+			if parts[0] == m.id {
+				buttonID = parts[1]
+			} else {
+				// Click was for another menu's button
+				return m, nil
+			}
+		}
+
+		switch buttonID {
 		case IDListPanel:
 			// Hover moved back over the list — restore list focus so the wheel scrolls items.
 			m.focusedItem = FocusList
@@ -94,9 +113,20 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if wheelBtn != 0 {
+			// Normalize wheelID (handles "menuID.list_panel")
+			if strings.Contains(wheelID, ".") {
+				parts := strings.Split(wheelID, ".")
+				if parts[0] == m.id {
+					wheelID = parts[1]
+				} else {
+					// Wheel was over another menu
+					return m, nil
+				}
+			}
+
 			// IDListPanel: scroll the list regardless of button focus state.
-			// Mirrors keyboard up/down — button highlight is preserved independently.
-			if wheelID == IDListPanel {
+			if wheelID == IDListPanel || wheelID == m.id {
+				m.focusedItem = FocusList // Reclaim focus for the list so space/middle-click activates list items
 				if wheelBtn == tea.MouseWheelUp {
 					m.list.CursorUp()
 					for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator {
@@ -356,7 +386,6 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	return m, nil
 }
-func (m *MenuModel) View() tea.View { return tea.View{Content: m.ViewString()} }
 
 // nextButtonFocus, prevButtonFocus → menu_buttons.go
 // ViewString, Layers, renderBorderWithTitle, viewSubMenu → menu_render.go
@@ -412,8 +441,12 @@ func (m *MenuModel) handleSpace() (tea.Model, tea.Cmd) {
 	// Always prioritize checkbox toggle if item is one
 	selectedItem := m.list.SelectedItem()
 	if item, ok := selectedItem.(MenuItem); ok {
-		if item.IsCheckbox && item.Selectable {
-			item.Checked = !item.Checked
+		if (item.IsCheckbox || item.IsRadioButton) && item.Selectable {
+			if item.IsRadioButton {
+				item.Checked = true
+			} else {
+				item.Checked = !item.Checked
+			}
 			item.Selected = item.Checked
 			// Update the item in our internal list too so state persists
 			idx := m.list.Index()
@@ -499,20 +532,24 @@ func (m *MenuModel) calculateLayout() {
 		// Submenu: just has its own border, content fills the rest
 		maxListWidth, _ = layout.InnerContentSize(m.width, m.height)
 	} else {
-		// Full dialog: outer border + inner list border + padding
-		// Total overhead = outer border (2) + inner border (2) + padding (2) = 6
-		maxListWidth = m.width - 6
+		// Full dialog: outer border + inner list border + padding (2 sides)
+		// Padding per side = 1 (fixed margin in ViewString)
+		padding := 2
+		maxListWidth = m.width - (layout.DialogBorder + layout.BorderWidth() + padding)
 	}
-	if maxListWidth < 34 {
-		maxListWidth = 34
+
+	// Minimum width to avoid squished buttons
+	const minWidth = 34
+	if maxListWidth < minWidth {
+		maxListWidth = minWidth
 	}
 
 	// If maximized, fill the space. Otherwise, ensure minimum for buttons.
 	if m.maximized {
 		listWidth = maxListWidth
 	} else {
-		if listWidth < 34 {
-			listWidth = 34
+		if listWidth < minWidth {
+			listWidth = minWidth
 		}
 		if listWidth > maxListWidth {
 			listWidth = maxListWidth
@@ -542,14 +579,27 @@ func (m *MenuModel) calculateLayout() {
 	// 4. Vertical Budgeting Logic
 	var listHeight, overhead int
 	var maxListHeight int
+
+	// Measure title if in subMenuMode
+	titleHeight := 0
+	if m.subMenuMode && m.title != "" {
+		titleHeight = 1
+	}
+
+	// Determine vertical spacing for buttons (only if defined)
+	buttonBudget := 0
+	if m.showButtons {
+		buttonBudget = buttonHeight
+	}
+
 	if m.subMenuMode {
-		// Sub-menu overhead is just the subtitle and its own borders (2)
-		overhead = subtitleHeight + layout.BorderHeight()
+		// Sub-menu overhead: title + subtitle + own borders (2) + buttons
+		overhead = titleHeight + subtitleHeight + layout.BorderHeight() + buttonBudget
 		maxListHeight = m.height - overhead
 	} else {
 		// Full dialog overhead: borders, subtitle, buttons, shadow
 		// Vertical budgeting uses DialogContentHeight which handles gaps
-		maxListHeight = layout.DialogContentHeight(m.height, subtitleHeight, true, hasShadow)
+		maxListHeight = layout.DialogContentHeight(m.height, subtitleHeight, m.showButtons, hasShadow)
 		// Account for inner border around the list (Top + Bottom = 2 lines)
 		maxListHeight -= layout.BorderHeight()
 		overhead = m.height - maxListHeight
@@ -576,7 +626,7 @@ func (m *MenuModel) calculateLayout() {
 	m.layout = DialogLayout{
 		Width:          m.width,
 		Height:         m.height,
-		HeaderHeight:   subtitleHeight,
+		HeaderHeight:   overhead - layout.BorderHeight(), // Store the reserved overhead height
 		ViewportHeight: listHeight,
 		ButtonHeight:   buttonHeight,
 		ShadowHeight:   shadowHeight,
@@ -594,11 +644,6 @@ func (m *MenuModel) SetFlowMode(flow bool) {
 // SetHeaderVisibility toggles background/title for sub-menus
 func (m *MenuModel) SetHeaderVisibility(visible bool) {
 	m.list.SetShowTitle(visible)
-}
-
-// Title returns the menu title
-func (m *MenuModel) Title() string {
-	return m.title
 }
 
 // HelpText returns the current item's help text

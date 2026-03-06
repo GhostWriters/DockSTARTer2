@@ -10,38 +10,52 @@ import (
 // Button IDs from menus use the "btn-" prefix; button IDs from screens/dialogs
 // use the "_button" suffix (e.g. "apply_button", "back_button", "exit_button").
 func isButtonHitID(id string) bool {
-	return strings.HasPrefix(id, "btn-") || strings.HasSuffix(id, "_button")
+	return strings.HasPrefix(id, "btn-") ||
+		strings.HasSuffix(id, "_button") ||
+		strings.Contains(id, ".") // Standard pattern for dialog buttons (dialogID.ZoneID)
 }
 
 // hitIDToPanelID converts a hit ID to its parent panel ID for hover-based interactions.
-// Returns the panel that should receive focus when hovering over the given region.
-// For example: "item-theme_list-0" -> "theme_panel", "apply_button" -> "button_panel"
 func hitIDToPanelID(hitID string) string {
-	// Map menu item prefixes to their panel IDs
-	if strings.HasPrefix(hitID, "item-theme_list-") {
-		return IDThemePanel
-	}
-	if strings.HasPrefix(hitID, "item-options_list-") {
-		return IDOptionsPanel
-	}
-	// Any other "item-" hit (regular menu list items) maps to the list panel so
-	// hovering back over the list restores FocusList before the wheel is forwarded.
+	// 1. Map menu item IDs ("item-<panelID>-<index>") to their parent panel IDs.
 	if strings.HasPrefix(hitID, "item-") {
+		parts := strings.Split(hitID, "-")
+		if len(parts) >= 3 {
+			return strings.Join(parts[1:len(parts)-1], "-")
+		}
 		return IDListPanel
 	}
-	// Map all button row IDs (both menu "btn-" buttons and display_options named buttons)
-	// to the button panel so hover+scroll cycles buttons and middle-click activates focused button
-	if strings.HasPrefix(hitID, "btn-") {
+
+	// 2. Normalize prefixed IDs (e.g. "menuID.list_panel" -> "menuID")
+	// For multi-panel focus, we need the parent component ID (e.g. "options_panel")
+	// rather than the generic internal zone ID ("list_panel").
+	effectiveID := hitID
+	if strings.Contains(hitID, ".") {
+		parts := strings.Split(hitID, ".")
+		effectiveID = parts[0]
+	}
+
+	// 3. Map button IDs to the button panel ONLY IF they are panel-level buttons in a sub-menu.
+	// We want global buttons like Apply/Back/Exit to fall through to normal `MouseLeft` routing,
+	// so they don't get caught in the panel-hover -> ToggleFocusedMsg auto-activation branch.
+	if strings.HasPrefix(effectiveID, "btn-") || effectiveID == IDApplyButton || effectiveID == IDBackButton || effectiveID == IDExitButton {
 		return IDButtonPanel
 	}
-	if hitID == IDApplyButton || hitID == IDBackButton || hitID == IDExitButton || hitID == IDButtonPanel {
-		return IDButtonPanel
+
+	// 4. Panel IDs themselves
+	if effectiveID == IDThemePanel || effectiveID == IDOptionsPanel || effectiveID == IDListPanel ||
+		effectiveID == IDLogViewport || effectiveID == IDButtonPanel {
+		return effectiveID
 	}
-	// For panel IDs themselves, return as-is
-	if hitID == IDThemePanel || hitID == IDOptionsPanel {
-		return hitID
+
+	// 5. Base Menu IDs (the background region of a MenuModel).
+	// If the user hovers the background of a menu, we still want the wheel to scroll the list.
+	// Common screen IDs are "main_menu", "config_menu", "options_menu", "app_selection", "global_flags"
+	// Rather than hardcoding every ID, if it's not a known panel/button but has a hit, it's likely a menu background.
+	if hitID != "" && hitID != IDStatusBar && hitID != IDAppVersion && hitID != IDTmplVersion && hitID != IDHeaderFlags && hitID != IDLogPanel && hitID != IDLogToggle && hitID != IDLogResize {
+		return effectiveID
 	}
-	// All other IDs (regular menu items, etc.) don't map to a panel
+
 	return ""
 }
 
@@ -143,6 +157,17 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		// List panel: send a semantic LayerWheelMsg so screens can scroll the list
 		// without changing button focus — mirrors keyboard up/down arrow behaviour.
 		if panelID == IDListPanel {
+			// Trigger focus shift FIRST so the border changes visually
+			focusMsg := LayerHitMsg{ID: IDListPanel, Button: HoverButton} // Use custom HoverButton
+			if m.dialog != nil {
+				m.dialog, _ = m.dialog.Update(focusMsg)
+			} else if m.activeScreen != nil {
+				updated, _ := m.activeScreen.Update(focusMsg)
+				if s, ok := updated.(ScreenModel); ok {
+					m.activeScreen = s
+				}
+			}
+
 			listWheel := LayerWheelMsg{ID: IDListPanel, Button: wheelMsg.Button}
 			var cmd tea.Cmd
 			if m.dialog != nil {
@@ -153,8 +178,8 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 					m.activeScreen = s
 				}
 				cmd = sCmd
+				return m, cmd, true
 			}
-			return m, cmd, true
 		}
 
 		// For other panels (submenus, button row), switch focus to the hovered panel first
@@ -260,8 +285,8 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 					m.activeScreen = s
 				}
 				btnCmd = sCmd
+				return m, btnCmd, true
 			}
-			return m, btnCmd, true
 		}
 
 		// For anything else with no panel and no button mapping, send ToggleFocusedMsg
@@ -356,9 +381,9 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 			}
 		}
 
-		// RETURN FALSE: Allow raw message to fall through for full compatibility
+		// Return handled=true if semantic messages were dispatched to stop raw click fall-through
 		m.updateComponentFocus()
-		return m, tea.Batch(semanticCmd, backdropCmd), false
+		return m, tea.Batch(semanticCmd, backdropCmd), true
 	}
 
 	// 6. MODAL FALLBACK (No hit, but dialog is open)

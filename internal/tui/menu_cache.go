@@ -4,6 +4,7 @@ package tui
 // Call this whenever the MenuModel's state is mutated (e.g. selection change, size change, options toggled).
 func (m *MenuModel) InvalidateCache() {
 	m.cacheValid = false
+	m.lastListView = ""
 }
 
 // CheckCache returns the cached rendered screen if it's still valid.
