@@ -109,9 +109,13 @@ func GetButtonHitRegions(dialogID string, offsetX, offsetY, contentWidth, zOrder
 	return regions
 }
 
-// buttonsFitWithBorders returns true if bordered buttons fit within contentWidth.
+// buttonsFitWithBorders returns true if bordered buttons fit within contentWidth
+// and the button_borders setting is enabled.
 // It renders a sample button to get the exact bordered width, matching the real render path.
 func buttonsFitWithBorders(contentWidth int, ctx StyleContext, buttons []ButtonSpec) bool {
+	if !ctx.ButtonBorders {
+		return false
+	}
 	if len(buttons) == 0 {
 		return true
 	}

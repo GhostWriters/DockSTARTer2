@@ -268,14 +268,15 @@ func (s *DisplayOptionsScreen) applyPreview(themeName string) {
 func (s *DisplayOptionsScreen) syncOptionsMenu() {
 	items := s.optionsMenu.GetItems()
 	items[0].Checked = s.config.UI.Borders
-	items[1].Checked = s.config.UI.LineCharacters
-	items[2].Checked = s.config.UI.Shadow
+	items[1].Checked = s.config.UI.ButtonBorders
+	items[2].Checked = s.config.UI.LineCharacters
+	items[3].Checked = s.config.UI.Shadow
 	// Update dropdown descriptions
-	items[3].Desc = s.dropdownDesc(s.shadowLevelToDesc(s.config.UI.ShadowLevel))
-	items[4].Desc = s.dropdownDesc(s.borderColorToDesc(s.config.UI.BorderColor))
-	items[5].Desc = s.dropdownDesc(titleAlignDesc(s.config.UI.DialogTitleAlign))
-	items[6].Desc = s.dropdownDesc(titleAlignDesc(s.config.UI.SubmenuTitleAlign))
-	items[7].Desc = s.dropdownDesc(titleAlignDesc(s.config.UI.LogTitleAlign))
+	items[4].Desc = s.dropdownDesc(s.shadowLevelToDesc(s.config.UI.ShadowLevel))
+	items[5].Desc = s.dropdownDesc(s.borderColorToDesc(s.config.UI.BorderColor))
+	items[6].Desc = s.dropdownDesc(titleAlignDesc(s.config.UI.DialogTitleAlign))
+	items[7].Desc = s.dropdownDesc(titleAlignDesc(s.config.UI.SubmenuTitleAlign))
+	items[8].Desc = s.dropdownDesc(titleAlignDesc(s.config.UI.LogTitleAlign))
 	s.optionsMenu.SetItems(items)
 }
 

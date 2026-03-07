@@ -77,6 +77,8 @@ var commandTitles = map[string]string{
 	"--theme-no-lines":           "Turned Off Line Drawing",
 	"--theme-borders":            "Turned On Borders",
 	"--theme-no-borders":         "Turned Off Borders",
+	"--theme-button-borders":     "Turned On Button Borders",
+	"--theme-no-button-borders":  "Turned Off Button Borders",
 	"-S":                         "Select Applications",
 	"--select":                   "Select Applications",
 }
@@ -122,6 +124,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			"--config-folder", "--config-compose-folder", "-T", "--theme", "--theme-list",
 			"--theme-lines", "--theme-no-lines", "--theme-line", "--theme-no-line",
 			"--theme-borders", "--theme-no-borders", "--theme-border", "--theme-no-border",
+			"--theme-button-borders", "--theme-no-button-borders",
 			"--theme-shadows", "--theme-no-shadows", "--theme-shadow", "--theme-no-shadow", "--theme-shadow-level",
 			"--theme-scrollbar", "--theme-no-scrollbar", "--theme-border-color", "--theme-table",
 			"--theme-dialog-title", "--theme-submenu-title", "--theme-log-title":
@@ -262,6 +265,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				return handleConfigSettings(subCtx, &group)
 			case "--theme-lines", "--theme-no-lines", "--theme-line", "--theme-no-line",
 				"--theme-borders", "--theme-no-borders", "--theme-border", "--theme-no-border",
+				"--theme-button-borders", "--theme-no-button-borders",
 				"--theme-shadows", "--theme-no-shadows", "--theme-shadow", "--theme-no-shadow", "--theme-shadow-level",
 				"--theme-scrollbar", "--theme-no-scrollbar", "--theme-border-color",
 				"--theme-dialog-title", "--theme-submenu-title", "--theme-log-title":

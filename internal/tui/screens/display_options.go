@@ -108,6 +108,15 @@ func (s *DisplayOptionsScreen) initMenus() {
 			SpaceAction: s.toggleBorders(),
 		},
 		{
+			Tag:         "Button Borders",
+			Desc:        "Show borders on buttons",
+			Help:        "Toggle bordered vs flat button style (Space to toggle)",
+			IsCheckbox:  true,
+			Checked:     s.config.UI.ButtonBorders,
+			Selectable:  true,
+			SpaceAction: s.toggleButtonBorders(),
+		},
+		{
 			Tag:         "Line Characters",
 			Desc:        "Use unicode line drawing characters",
 			Help:        "Use ┌─ instead of +- for borders (Space to toggle)",
@@ -401,6 +410,15 @@ func (s *DisplayOptionsScreen) toggleBorders() tea.Cmd {
 	}
 }
 
+func (s *DisplayOptionsScreen) toggleButtonBorders() tea.Cmd {
+	return func() tea.Msg {
+		newState := !s.config.UI.ButtonBorders
+		return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
+			cfg.UI.ButtonBorders = newState
+		}}
+	}
+}
+
 func (s *DisplayOptionsScreen) toggleLineChars() tea.Cmd {
 	return func() tea.Msg {
 		newState := !s.config.UI.LineCharacters
@@ -452,6 +470,7 @@ func (s *DisplayOptionsScreen) getLiveContext() tui.StyleContext {
 	ctx := tui.GetActiveContext()
 	ctx.LineCharacters = s.config.UI.LineCharacters
 	ctx.DrawBorders = s.config.UI.Borders
+	ctx.ButtonBorders = s.config.UI.ButtonBorders
 	ctx.DrawShadow = s.config.UI.Shadow
 	ctx.ShadowLevel = s.config.UI.ShadowLevel
 	ctx.DialogTitleAlign = s.config.UI.DialogTitleAlign

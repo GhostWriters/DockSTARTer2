@@ -115,6 +115,10 @@ func handleThemeSettings(ctx context.Context, group *CommandGroup) error {
 		conf.UI.Borders = true
 	case "--theme-no-borders", "--theme-no-border":
 		conf.UI.Borders = false
+	case "--theme-button-borders":
+		conf.UI.ButtonBorders = true
+	case "--theme-no-button-borders":
+		conf.UI.ButtonBorders = false
 	case "--theme-shadows", "--theme-shadow":
 		conf.UI.Shadow = true
 	case "--theme-no-shadows", "--theme-no-shadow":

@@ -222,6 +222,7 @@ func resolveThemeValue(raw string, rawValues map[string]string, visiting map[str
 
 type ThemeDefaults struct {
 	Borders          *bool   `toml:"borders"`
+	ButtonBorders    *bool   `toml:"button_borders"`
 	LineCharacters   *bool   `toml:"line_characters"`
 	Shadow           *bool   `toml:"shadow"`
 	ShadowLevel      *int    `toml:"shadow_level"`
@@ -270,6 +271,10 @@ func ApplyThemeDefaults(conf *config.AppConfig, defaults ThemeDefaults) map[stri
 	if defaults.Borders != nil {
 		conf.UI.Borders = *defaults.Borders
 		applied["Borders"] = fmt.Sprintf("%v", conf.UI.Borders)
+	}
+	if defaults.ButtonBorders != nil {
+		conf.UI.ButtonBorders = *defaults.ButtonBorders
+		applied["Button Borders"] = fmt.Sprintf("%v", conf.UI.ButtonBorders)
 	}
 	if defaults.LineCharacters != nil {
 		conf.UI.LineCharacters = *defaults.LineCharacters

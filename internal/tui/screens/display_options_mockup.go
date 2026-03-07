@@ -38,6 +38,7 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	previewCtx := tui.StyleContext{
 		LineCharacters:      s.config.UI.LineCharacters,
 		DrawBorders:         s.config.UI.Borders,
+		ButtonBorders:       s.config.UI.ButtonBorders,
 		Screen:              bgStyle,
 		Dialog:              dContent,
 		DialogTitle:         tui.SemanticRawStyle("Preview_Theme_Title"),
