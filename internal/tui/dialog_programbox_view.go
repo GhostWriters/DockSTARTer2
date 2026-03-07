@@ -242,7 +242,7 @@ func (m *ProgramBoxModel) Layers() []*lipgloss.Layer {
 	// Root dialog layer - just the rendered content
 	// Hit testing is handled by GetHitRegions()
 	viewStr := m.ViewString()
-	root := lipgloss.NewLayer(viewStr).Z(ZDialog)
+	root := lipgloss.NewLayer(viewStr).Z(ZScreen)
 
 	// If sub-dialog is active, aggregate its layers for visual compositing
 	if m.subDialog != nil {

@@ -105,6 +105,15 @@ func (b *baseDialogModel) SetSize(w, h int) {
 
 func (b *baseDialogModel) SetFocused(f bool) { b.focused = f }
 
+// layers returns a single compositor layer for a dialog.
+// All dialog types use ZScreen as the base; the dialog renderer re-positions
+// to the correct modal Z-band, so the base value just needs to be consistent.
+func (b *baseDialogModel) layers(viewFn func() string) []*lipgloss.Layer {
+	return []*lipgloss.Layer{
+		lipgloss.NewLayer(viewFn()).Z(ZScreen).ID(b.id),
+	}
+}
+
 func (b *baseDialogModel) calculateLayout() {
 	if b.width == 0 || b.height == 0 {
 		return

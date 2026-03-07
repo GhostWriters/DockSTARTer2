@@ -133,7 +133,7 @@ func (m *HelpDialogModel) View() tea.View {
 // Layers implements LayeredView
 func (m *HelpDialogModel) Layers() []*lipgloss.Layer {
 	return []*lipgloss.Layer{
-		lipgloss.NewLayer(m.ViewString()).Z(ZDialog + 1).ID("Dialog.Help"),
+		lipgloss.NewLayer(m.ViewString()).Z(ZScreen + 1).ID("Dialog.Help"),
 	}
 }
 

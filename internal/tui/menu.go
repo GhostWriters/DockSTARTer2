@@ -392,7 +392,7 @@ type MenuModel struct {
 	flowMode     bool // Whether to layout items horizontally instead of vertically
 
 	// Dialog positioning
-	isDialog bool // False if it is a full screen (uses ZScreen), True if a popup modal (uses ZDialog)
+	isDialog bool // True when used as a modal dialog — raises hit-region Z priority above screen regions
 
 	// Unified layout (deterministic sizing)
 	layout DialogLayout

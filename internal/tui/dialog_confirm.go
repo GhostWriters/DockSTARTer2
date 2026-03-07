@@ -198,12 +198,7 @@ func (m *confirmDialogModel) View() tea.View {
 	return tea.NewView(m.ViewString())
 }
 
-// Layers returns a single layer with the dialog content for visual compositing
-func (m *confirmDialogModel) Layers() []*lipgloss.Layer {
-	return []*lipgloss.Layer{
-		lipgloss.NewLayer(m.ViewString()).Z(ZDialog).ID(m.id),
-	}
-}
+func (m *confirmDialogModel) Layers() []*lipgloss.Layer { return m.layers(m.ViewString) }
 
 // GetHitRegions implements HitRegionProvider for mouse hit testing
 func (m *confirmDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
