@@ -22,6 +22,11 @@ func (m *MenuModel) ViewString() string {
 		return m.viewSubMenu()
 	}
 
+	// Sections-based layout: stack sub-menus inside the outer border.
+	if len(m.contentSections) > 0 {
+		return m.viewWithSections()
+	}
+
 	if m.flowMode {
 		return m.renderFlow()
 	}
@@ -190,7 +195,8 @@ func (s *MenuModel) viewSubMenu() string {
 	var buttonView string
 	buttons := s.getButtonSpecs()
 	if len(buttons) > 0 {
-		buttonView = RenderCenteredButtons(contentWidth, buttons...)
+		useBorders := s.layout.ButtonHeight == DialogButtonHeight
+		buttonView = renderCenteredButtonsImpl(contentWidth, useBorders, GetActiveContext(), buttons...)
 	}
 
 	// Combine all internal content vertically
@@ -206,4 +212,36 @@ func (s *MenuModel) viewSubMenu() string {
 	// 4. Render the bordered box with embedded title.
 	// We pass 'true' for rounded so submenus use the rounded corner style.
 	return s.renderBorderWithTitle(combined, contentWidth, targetHeight, s.focusedSub, true, "Theme_Title")
+}
+
+// viewWithSections renders an outer dialog that stacks content sections (sub-menus)
+// vertically inside its border, followed by a standard button row.
+// This path is taken when m.contentSections is non-empty and m.subMenuMode is false.
+func (m *MenuModel) viewWithSections() string {
+	layout := GetLayout()
+	// Content width is the space inside the outer border.
+	contentWidth := m.width - layout.BorderWidth()
+	if contentWidth < 1 {
+		contentWidth = 1
+	}
+
+	var parts []string
+
+	// Stack sections directly — each section already renders its own bordered panel.
+	for _, sec := range m.contentSections {
+		v := strings.TrimRight(sec.ViewString(), "\n")
+		if v != "" {
+			parts = append(parts, v)
+		}
+	}
+
+	// Button row at contentWidth (matches what renderSettingsDialog used to do).
+	buttonRow := m.renderSimpleButtons(contentWidth)
+	parts = append(parts, buttonRow)
+
+	content := lipgloss.JoinVertical(lipgloss.Left, parts...)
+
+	return m.SaveCache(
+		m.renderBorderWithTitle(content, contentWidth, m.height, m.focused, false, "Theme_Title"),
+	)
 }

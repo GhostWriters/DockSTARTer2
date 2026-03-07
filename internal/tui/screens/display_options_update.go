@@ -11,6 +11,9 @@ import (
 
 func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
+	if s.outerMenu != nil {
+		s.outerMenu.InvalidateCache()
+	}
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -344,27 +347,13 @@ func (s *DisplayOptionsScreen) SetSize(width, height int) {
 	s.width = width
 	s.height = height
 
-	if s.optionsMenu == nil || s.themeMenu == nil {
+	if s.outerMenu == nil {
 		return
 	}
 
 	dl := s.computePanelLayout(width)
-	layout := tui.GetLayout()
-
-	hasShadow := tui.IsShadowEnabled()
-	optionsContentHeight := layout.DialogContentHeight(height, 0, true, hasShadow)
-	overhead := height - optionsContentHeight
-
-	optionsFlowLines := s.optionsMenu.GetFlowHeight(dl.menuWidth)
-	optionsHeight := optionsFlowLines + layout.BorderHeight()
-
-	themeHeight := s.height - optionsHeight - overhead
-	if themeHeight < 4 {
-		themeHeight = 4
-	}
-
-	s.themeMenu.SetSize(dl.menuWidth, themeHeight)
-	s.optionsMenu.SetSize(dl.menuWidth, optionsHeight)
+	// outerMenu.SetSize propagates to sections via calculateSectionLayout().
+	s.outerMenu.SetSize(dl.settingsDialogWidth, height)
 }
 
 func (s *DisplayOptionsScreen) IsMaximized() bool {

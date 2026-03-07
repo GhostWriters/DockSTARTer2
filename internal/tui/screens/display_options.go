@@ -36,6 +36,8 @@ type DisplayOptionsScreen struct {
 	width  int
 	height int
 
+	outerMenu *tui.MenuModel // outer "Appearance Settings" dialog with sections + buttons
+
 	focused bool // tracks global screen focus (header/log panel interaction)
 
 	baseConfig    config.AppConfig                // Original exact config before previewing
@@ -169,6 +171,18 @@ func (s *DisplayOptionsScreen) initMenus() {
 	s.optionsMenu.SetFlowMode(true)
 	s.optionsMenu.SetMaximized(true) // Fill available width
 
+	// 3. Outer "Appearance Settings" dialog (sections container + buttons)
+	var outerBack tea.Cmd
+	if !s.isRoot {
+		outerBack = navigateBack()
+	}
+	outerMenu := tui.NewMenuModel("appearance_outer", "Appearance Settings", "", nil, outerBack)
+	outerMenu.SetShowExit(true)
+	outerMenu.SetButtonLabels("Apply", "Back", "Exit")
+	outerMenu.AddContentSection(themeMenu)
+	outerMenu.AddContentSection(optionsMenu)
+	s.outerMenu = outerMenu
+
 	// Initial Focus
 	s.focusedPanel = FocusThemes
 	s.updateFocusStates()
@@ -206,6 +220,28 @@ func (s *DisplayOptionsScreen) execFocusedButton() (tea.Model, tea.Cmd) {
 func (s *DisplayOptionsScreen) updateFocusStates() {
 	s.themeMenu.SetSubFocused(s.focused && s.focusedPanel == FocusThemes)
 	s.optionsMenu.SetSubFocused(s.focused && s.focusedPanel == FocusOptions)
+
+	if s.outerMenu == nil {
+		return
+	}
+	s.outerMenu.SetFocused(s.focused)
+	if s.focusedPanel == FocusButtons {
+		switch s.focusedButton {
+		case 0:
+			s.outerMenu.SetFocusedItem(tui.FocusSelectBtn)
+		case 1:
+			if s.isRoot {
+				s.outerMenu.SetFocusedItem(tui.FocusExitBtn)
+			} else {
+				s.outerMenu.SetFocusedItem(tui.FocusBackBtn)
+			}
+		case 2:
+			s.outerMenu.SetFocusedItem(tui.FocusExitBtn)
+		}
+	} else {
+		s.outerMenu.SetFocusedItem(tui.FocusList)
+	}
+	s.outerMenu.InvalidateCache()
 }
 
 // SetFocused updates the global focus state for this screen
