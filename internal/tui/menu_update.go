@@ -579,7 +579,7 @@ func (m *MenuModel) calculateLayout() {
 	// Button height is 3 with borders, or 1 if space is too tight for them.
 	// innerBoxWidth mirrors the width passed to renderSimpleButtons in ViewString.
 	innerBoxWidth := listWidth + GetLayout().BorderWidth()
-	buttonHeight := ButtonRowHeight(innerBoxWidth, m.getButtonSpecs()...)
+	buttonHeight := ButtonRowHeight(innerBoxWidth, 0, m.getButtonSpecs()...)
 	shadowHeight := 0
 	hasShadow := currentConfig.UI.Shadow
 	if hasShadow {
@@ -619,10 +619,10 @@ func (m *MenuModel) calculateLayout() {
 		overhead = m.height - maxListHeight
 	}
 
-	// Height-based border fallback: only drop bordered buttons when they leave no
-	// room at all for list content. Using <= 0 (not a fixed small number) avoids
-	// premature triggering in taller dialogs with submenus or subtitles.
-	if m.showButtons && buttonHeight == DialogButtonHeight && maxListHeight <= 0 {
+	// Height-based border fallback: drop bordered buttons when 2 or fewer list
+	// rows remain — the 2 freed rows are more useful as list space, and this
+	// threshold also prevents bordered buttons from showing just before clipping.
+	if m.showButtons && buttonHeight == DialogButtonHeight && maxListHeight <= 2 {
 		freed := DialogButtonHeight - 1 // reclaim 2 lines
 		buttonHeight = 1
 		buttonBudget = 1
@@ -675,7 +675,7 @@ func (m *MenuModel) calculateSectionLayout() {
 	buttonHeight := DialogButtonHeight
 	buttonBudget := 0
 	if m.showButtons {
-		buttonHeight = ButtonRowHeight(contentWidth, m.getButtonSpecs()...)
+		buttonHeight = ButtonRowHeight(contentWidth, 0, m.getButtonSpecs()...)
 		buttonBudget = buttonHeight
 	}
 

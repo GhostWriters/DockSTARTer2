@@ -44,6 +44,10 @@ type LogPanelModel struct {
 	isDragging        bool
 	dragStartY        int
 	heightAtDragStart int
+
+	// maxHeight is the externally imposed height ceiling (set by AppModel based on active screen).
+	// Zero means "no override" — logPanelMaxHeight() is used as the fallback.
+	maxHeight int
 }
 
 // NewLogPanelModel creates a new log panel in collapsed state.
@@ -71,6 +75,21 @@ func (m LogPanelModel) Height() int {
 	return 1
 }
 
+// SetMaxHeight updates the externally imposed height ceiling.
+// Pass 0 to revert to the default half-screen fallback.
+func (m *LogPanelModel) SetMaxHeight(h int) {
+	m.maxHeight = h
+}
+
+// effectiveMaxHeight returns the ceiling to use for clamping — the external override
+// when set, otherwise the default formula.
+func (m *LogPanelModel) effectiveMaxHeight() int {
+	if m.maxHeight > 0 {
+		return m.maxHeight
+	}
+	return logPanelMaxHeight(m.totalHeight)
+}
+
 // SetSize stores dimensions so the panel can size itself when expanded.
 func (m *LogPanelModel) SetSize(width, totalTermHeight int) {
 	m.width = width
@@ -84,8 +103,9 @@ func (m *LogPanelModel) SetSize(width, totalTermHeight int) {
 		if m.height == 0 {
 			m.height = totalTermHeight / 2
 		}
-		// Ensure height is within bounds (e.g., if terminal shrank)
-		maxH := totalTermHeight - 4 // Leave room for header/footer
+		// Ensure height is within bounds (e.g., if terminal shrank).
+		// Cap so the active screen always has its minimum required height.
+		maxH := m.effectiveMaxHeight()
 		if m.height > maxH {
 			m.height = maxH
 		}
@@ -233,8 +253,8 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			delta := m.dragStartY - msg.Y
 			newHeight := m.heightAtDragStart + delta
 
-			// Clamp height
-			maxH := m.totalHeight - 4 // Leave space for header
+			// Clamp height — cap so the active screen keeps its minimum required height.
+			maxH := m.effectiveMaxHeight()
 			if newHeight > maxH {
 				newHeight = maxH
 			}
@@ -417,6 +437,25 @@ func (m LogPanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	}
 
 	return regions
+}
+
+// logPanelMaxHeight returns the maximum height the log panel may occupy.
+// The log panel is capped at half of the usable vertical space (between top and
+// bottom chrome) so the content area always retains at least the other half for
+// dialogs and screens — including maximized ones like Appearance Settings.
+// headerH is assumed to be 1 (the standard single-line header bar).
+func logPanelMaxHeight(totalTermHeight int) int {
+	layout := GetLayout()
+	shadowH := 0
+	if currentConfig.UI.Shadow {
+		shadowH = layout.ShadowHeight
+	}
+	usable := totalTermHeight - layout.ChromeHeight(1) - layout.BottomChrome() - shadowH
+	maxH := usable / 2
+	if maxH < 2 {
+		maxH = 2
+	}
+	return maxH
 }
 
 // View renders the panel at its current height.

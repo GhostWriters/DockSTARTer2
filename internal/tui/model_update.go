@@ -82,7 +82,9 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.ready = true
 
-		// Update log panel with full dimensions first (so Height() is correct)
+		// Apply screen-aware log panel ceiling first (may snap height down).
+		m.applyLogPanelMax()
+		// Update log panel with full dimensions (so Height() is correct for backdrop)
 		m.logPanel.SetSize(m.width, m.height)
 
 		// Update backdrop with adjusted height so helpline is visible above log panel
@@ -123,6 +125,11 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.activeScreen = msg.Screen
 		if m.activeScreen != nil {
 			CurrentPageName = m.activeScreen.MenuName()
+			// Re-apply log panel ceiling for the new screen; snap if needed.
+			if m.applyLogPanelMax() {
+				m.logPanel.SetSize(m.width, m.height)
+				m.backdrop.SetSize(m.width, m.backdropHeight())
+			}
 			caW, caH := m.getContentArea()
 			m.activeScreen.SetSize(caW, caH)
 			m.backdrop.SetHelpText(m.activeScreen.HelpText())
@@ -137,6 +144,11 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.screenStack = m.screenStack[:len(m.screenStack)-1]
 			if m.activeScreen != nil {
 				CurrentPageName = m.activeScreen.MenuName()
+				// Re-apply log panel ceiling for the restored screen; snap if needed.
+				if m.applyLogPanelMax() {
+					m.logPanel.SetSize(m.width, m.height)
+					m.backdrop.SetSize(m.width, m.backdropHeight())
+				}
 				caW, caH := m.getContentArea()
 				m.activeScreen.SetSize(caW, caH)
 				m.backdrop.SetHelpText(m.activeScreen.HelpText())
@@ -421,6 +433,47 @@ func (m *AppModel) updateComponentFocus() {
 			focusable.SetFocused(mainFocused)
 		}
 	}
+}
+
+// applyLogPanelMax computes the maximum log panel height for the current active screen,
+// updates the log panel's ceiling, and snaps the log panel down if it now exceeds the new max.
+// Returns true if the log panel height changed (caller should resize the active screen/dialog).
+func (m *AppModel) applyLogPanelMax() bool {
+	layout := GetLayout()
+	hasShadow := currentConfig.UI.Shadow
+	headerH := 1
+	if m.backdrop != nil {
+		headerH = m.backdrop.header.Height()
+	}
+	shadowH := 0
+	if hasShadow {
+		shadowH = layout.ShadowHeight
+	}
+
+	// Ask the active screen for its minimum height requirement (optional interface).
+	minContentH := MinDialogHeight
+	if m.activeScreen != nil {
+		if mh, ok := m.activeScreen.(interface{ MinHeight() int }); ok {
+			if h := mh.MinHeight(); h > minContentH {
+				minContentH = h
+			}
+		}
+	}
+
+	maxLogH := m.height - layout.ChromeHeight(headerH) - layout.BottomChrome() - shadowH - minContentH
+	if maxLogH < 2 {
+		maxLogH = 2
+	}
+
+	m.logPanel.SetMaxHeight(maxLogH)
+
+	// Snap down if the current height exceeds the new ceiling.
+	if m.logPanel.expanded && m.logPanel.height > maxLogH {
+		m.logPanel.height = maxLogH
+		m.logPanel.SetSize(m.width, m.height)
+		return true
+	}
+	return false
 }
 
 // backdropHeight returns the height available for the backdrop (terminal minus log panel).
