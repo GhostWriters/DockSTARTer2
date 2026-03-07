@@ -24,35 +24,7 @@ func RenderButton(label string, focused bool) string {
 
 // RenderHotkeyLabel styles the first letter of a label with the theme's hotkey color
 func RenderHotkeyLabel(label string, focused bool) string {
-	styles := GetStyles()
-
-	// Normalize label: remove spacing but keep it for rendering if needed
-	trimmed := strings.TrimSpace(label)
-	if len(trimmed) == 0 {
-		return label
-	}
-
-	// Determine styles
-	var charStyle, restStyle lipgloss.Style
-	if focused {
-		charStyle = styles.TagKeySelected
-		restStyle = styles.ButtonActive
-	} else {
-		charStyle = styles.TagKey
-		restStyle = styles.ButtonInactive
-	}
-
-	// Handle leading spaces if they were trimmed
-	prefix := ""
-	if strings.HasPrefix(label, " ") {
-		prefix = strutil.Repeat(" ", len(label)-len(strings.TrimLeft(label, " ")))
-	}
-
-	// Apply styles
-	firstChar := string(trimmed[0])
-	rest := trimmed[1:]
-
-	return prefix + charStyle.Render(firstChar) + restStyle.Render(rest)
+	return RenderHotkeyLabelCtx(label, focused, GetActiveContext())
 }
 
 // RenderButtonRow renders a row of buttons centered

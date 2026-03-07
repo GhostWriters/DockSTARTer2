@@ -108,24 +108,6 @@ func (m *AppModel) View() (v tea.View) {
 			// Base Z for screens: each screen level is 10 units apart within ZScreen band
 			screenZBase := ZScreen + (i * 10)
 
-			// Centralized Automatic Shadowing:
-			// Apply a shadow to each layer at the base Z level (relative offset == 0).
-			addShadowForLayer := func(l *lipgloss.Layer) {
-				// originalZ == 0 means this is the base content layer, not a sub-layer (hit regions, etc.)
-				originalZ := l.GetZ() - screenZBase
-				if m.config.UI.Shadow && originalZ == 0 {
-					content := l.GetContent()
-					shadowBox := GetShadowBoxCtx(content, GetActiveContext())
-					if shadowBox != "" {
-						// Shadow is placed just below the layer with standard offset
-						comp.AddLayers(lipgloss.NewLayer(shadowBox).
-							X(l.GetX() + 2).
-							Y(l.GetY() + 1).
-							Z(l.GetZ() - 1))
-					}
-				}
-			}
-
 			if lv, ok := s.(LayeredView); ok {
 				for _, l := range lv.Layers() {
 					// Translate layer relative to screen position and stack Z
@@ -133,7 +115,7 @@ func (m *AppModel) View() (v tea.View) {
 					if l.GetZ() > maxZ {
 						maxZ = l.GetZ()
 					}
-					addShadowForLayer(l)
+					compositorAddShadow(comp, l, screenZBase, m.config.UI.Shadow)
 					comp.AddLayers(l)
 				}
 			} else {
@@ -141,7 +123,7 @@ func (m *AppModel) View() (v tea.View) {
 				if l.GetZ() > maxZ {
 					maxZ = l.GetZ()
 				}
-				addShadowForLayer(l)
+				compositorAddShadow(comp, l, screenZBase, m.config.UI.Shadow)
 				comp.AddLayers(l)
 			}
 
@@ -193,33 +175,16 @@ func (m *AppModel) View() (v tea.View) {
 			// Base is maxZ (highest screen layer) + 100
 			modalZBase := maxZ + 100 + (i * 100)
 
-			// Centralized Automatic Shadowing for Dialogs
-			addShadowForDialogLayer := func(l *lipgloss.Layer) {
-				// originalZ == 0 means this is the base content layer for this dialog slot
-				originalZ := l.GetZ() - modalZBase
-				if m.config.UI.Shadow && originalZ == 0 {
-					content := l.GetContent()
-					shadowBox := GetShadowBoxCtx(content, GetActiveContext())
-					if shadowBox != "" {
-						// Shadow is placed just below the layer with standard offset
-						comp.AddLayers(lipgloss.NewLayer(shadowBox).
-							X(l.GetX() + 2).
-							Y(l.GetY() + 1).
-							Z(l.GetZ() - 1))
-					}
-				}
-			}
-
 			if lv, ok := d.(LayeredView); ok {
 				for _, l := range lv.Layers() {
 					// Apply modal offset to ensure it sits above the background content
 					l = l.X(l.GetX() + lx).Y(l.GetY() + ly).Z(l.GetZ() + modalZBase - ZDialog)
-					addShadowForDialogLayer(l)
+					compositorAddShadow(comp, l, modalZBase, m.config.UI.Shadow)
 					comp.AddLayers(l)
 				}
 			} else {
 				l := lipgloss.NewLayer(content).X(lx).Y(ly).Z(modalZBase)
-				addShadowForDialogLayer(l)
+				compositorAddShadow(comp, l, modalZBase, m.config.UI.Shadow)
 				comp.AddLayers(l)
 			}
 
@@ -256,4 +221,19 @@ func (m *AppModel) Backdrop() *BackdropModel {
 // GetLogPanel returns the log panel model
 func (m AppModel) GetLogPanel() LogPanelModel {
 	return m.logPanel
+}
+
+// compositorAddShadow adds a drop-shadow layer behind l in the compositor.
+// It fires only when enabled is true and l is a base content layer (l.GetZ() == baseZ).
+// DialogShadowWidth/Height from dialog.go are used as the canonical offsets.
+func compositorAddShadow(comp *lipgloss.Compositor, l *lipgloss.Layer, baseZ int, enabled bool) {
+	if !enabled || l.GetZ()-baseZ != 0 {
+		return
+	}
+	if shadowBox := GetShadowBoxCtx(l.GetContent(), GetActiveContext()); shadowBox != "" {
+		comp.AddLayers(lipgloss.NewLayer(shadowBox).
+			X(l.GetX() + DialogShadowWidth).
+			Y(l.GetY() + DialogShadowHeight).
+			Z(l.GetZ() - 1))
+	}
 }

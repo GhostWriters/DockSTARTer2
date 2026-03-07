@@ -82,74 +82,69 @@ func (m *messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// titlePrefix returns the icon prefix for this message type.
+func (m *messageDialogModel) titlePrefix() string {
+	switch m.messageType {
+	case MessageSuccess:
+		return "✓ "
+	case MessageWarning:
+		return "⚠ "
+	case MessageError:
+		return "✗ "
+	default:
+		return "ℹ "
+	}
+}
+
+// messageStyle returns the base text style for this message type (without width).
+func (m *messageDialogModel) messageStyle() lipgloss.Style {
+	styles := GetStyles()
+	switch m.messageType {
+	case MessageSuccess:
+		return styles.StatusSuccess.Padding(1, 2)
+	case MessageWarning:
+		return styles.StatusWarn.Padding(1, 2)
+	case MessageError:
+		return styles.StatusError.Bold(true).Padding(1, 2)
+	default:
+		return lipgloss.NewStyle().Foreground(styles.ItemNormal.GetForeground()).Padding(1, 2)
+	}
+}
+
+// contentWidth calculates the ideal dialog inner width.
+func (m *messageDialogModel) contentWidth() int {
+	maxAllowed := m.layout.Width - 2
+	maxW := 0
+	for _, line := range strings.Split(GetPlainText(m.message), "\n") {
+		if w := lipgloss.Width(line); w > maxW {
+			maxW = w
+		}
+	}
+	w := maxW + DialogBodyPadH
+	if minBtn := lipgloss.Width(" OK ") + 4; minBtn > w {
+		w = minBtn
+	}
+	fullTitle := m.titlePrefix() + GetPlainText(m.title)
+	if tw := lipgloss.Width(fullTitle) + 6; tw > w {
+		w = tw
+	}
+	if w > maxAllowed {
+		w = maxAllowed
+	}
+	return w
+}
+
 // ViewString returns the dialog content as a string for compositing
 func (m *messageDialogModel) ViewString() string {
 	if m.width == 0 {
 		return ""
 	}
 
-	styles := GetStyles()
-
-	// Message text style based on type
-	var messageStyle lipgloss.Style
-	var titlePrefix string
-
-	switch m.messageType {
-	case MessageSuccess:
-		messageStyle = styles.StatusSuccess.
-			Padding(1, 2)
-		titlePrefix = "✓ "
-
-	case MessageWarning:
-		messageStyle = styles.StatusWarn.
-			Padding(1, 2)
-		titlePrefix = "⚠ "
-
-	case MessageError:
-		messageStyle = styles.StatusError.
-			Bold(true).
-			Padding(1, 2)
-		titlePrefix = "✗ "
-
-	default: // MessageInfo
-		messageStyle = lipgloss.NewStyle().
-			Foreground(styles.ItemNormal.GetForeground()).
-			Padding(1, 2)
-		titlePrefix = "ℹ "
-	}
-
-	// 1. Calculate ideal content width based on message text
-	strippedMessage := GetPlainText(m.message)
-	msgLines := strings.Split(strippedMessage, "\n")
-	maxMsgWidth := 0
-	for _, line := range msgLines {
-		w := lipgloss.Width(line)
-		if w > maxMsgWidth {
-			maxMsgWidth = w
-		}
-	}
-	contentWidth := maxMsgWidth + 4 // Padding
-
-	// 2. Measure button string requirements
-	minButtonWidth := lipgloss.Width(" OK ") + 4
-	if minButtonWidth > contentWidth {
-		contentWidth = minButtonWidth
-	}
-
-	// 3. Measure title requirements
-	fullTitle := titlePrefix + GetPlainText(m.title)
-	titleW := lipgloss.Width(fullTitle) + 6
-	if titleW > contentWidth {
-		contentWidth = titleW
-	}
-
-	// 4. Constrain to layout
-	if contentWidth > m.layout.Width-2 {
-		contentWidth = m.layout.Width - 2
-	}
+	contentWidth := m.contentWidth()
+	fullTitle := m.titlePrefix() + GetPlainText(m.title)
 
 	// Wrap message text to fit width
-	messageStyle = messageStyle.Width(contentWidth)
+	messageStyle := m.messageStyle().Width(contentWidth)
 	content := messageStyle.Render(m.message)
 
 	// Render OK button with automatic zone marking
@@ -184,50 +179,8 @@ func (m *messageDialogModel) Layers() []*lipgloss.Layer {
 
 // GetHitRegions implements HitRegionProvider for mouse hit testing
 func (m *messageDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
-	styles := GetStyles()
-
-	// Calculate message height to find button position
-	var messageStyle lipgloss.Style
-	switch m.messageType {
-	case MessageSuccess:
-		messageStyle = styles.StatusSuccess.Padding(1, 2)
-	case MessageWarning:
-		messageStyle = styles.StatusWarn.Padding(1, 2)
-	case MessageError:
-		messageStyle = styles.StatusError.Bold(true).Padding(1, 2)
-	default:
-		messageStyle = lipgloss.NewStyle().Foreground(styles.ItemNormal.GetForeground()).Padding(1, 2)
-	}
-
-	// Recalculate content width for hit regions just like ViewString
-	strippedMessage := GetPlainText(m.message)
-	msgLines := strings.Split(strippedMessage, "\n")
-	maxMsgWidth := 0
-	for _, line := range msgLines {
-		w := lipgloss.Width(line)
-		if w > maxMsgWidth {
-			maxMsgWidth = w
-		}
-	}
-	contentWidth := maxMsgWidth + 4
-
-	minButtonWidth := lipgloss.Width(" OK ") + 4
-	if minButtonWidth > contentWidth {
-		contentWidth = minButtonWidth
-	}
-
-	titleTrimmed := GetPlainText(m.title)
-	titleW := lipgloss.Width(titleTrimmed) + 8
-	if titleW > contentWidth {
-		contentWidth = titleW
-	}
-
-	if contentWidth > m.layout.Width-2 {
-		contentWidth = m.layout.Width - 2
-	}
-
-	messageStyle = messageStyle.Width(contentWidth)
-	messageHeight := lipgloss.Height(messageStyle.Render(m.message))
+	contentWidth := m.contentWidth()
+	messageHeight := lipgloss.Height(m.messageStyle().Width(contentWidth).Render(m.message))
 
 	// buttonY: border (1) + message with padding
 	buttonY := 1 + messageHeight

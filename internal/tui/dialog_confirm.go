@@ -143,6 +143,28 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// contentWidth calculates the ideal dialog inner width.
+func (m *confirmDialogModel) contentWidth() int {
+	maxAllowed := m.layout.Width - 2
+	maxQ := 0
+	for _, line := range strings.Split(GetPlainText(m.question), "\n") {
+		if w := lipgloss.Width(line); w > maxQ {
+			maxQ = w
+		}
+	}
+	w := maxQ + DialogBodyPadH
+	if minBtn := lipgloss.Width("Yes") + 4 + lipgloss.Width("No") + 4 + 4; minBtn > w {
+		w = minBtn
+	}
+	if tw := lipgloss.Width(GetPlainText(m.title)) + 6; tw > w {
+		w = tw
+	}
+	if w > maxAllowed {
+		w = maxAllowed
+	}
+	return w
+}
+
 // ViewString returns the dialog content as a string for compositing
 func (m *confirmDialogModel) ViewString() string {
 	if m.width == 0 {
@@ -151,42 +173,7 @@ func (m *confirmDialogModel) ViewString() string {
 
 	ctx := GetActiveContext()
 	borderBG := ctx.Dialog.GetBackground()
-
-	// 1. Calculate ideal content width based on question text and buttons
-	// Strip tags first so they don't incorrectly inflate the width
-	strippedQuestion := GetPlainText(m.question)
-	questionLines := strings.Split(strippedQuestion, "\n")
-	maxQuestionWidth := 0
-	for _, line := range questionLines {
-		w := lipgloss.Width(line)
-		if w > maxQuestionWidth {
-			maxQuestionWidth = w
-		}
-	}
-	// Add padding to question width (matching questionStyle.Padding(1, 2))
-	contentWidth := maxQuestionWidth + 4
-
-	// 2. Measure button requirements
-	// RenderCenteredButtonsCtx uses maxButtonWidth+4 for each button
-	btn1W := lipgloss.Width("Yes") + 4
-	btn2W := lipgloss.Width("No") + 4
-	minButtonWidth := btn1W + btn2W + 4 // Add some gap between buttons
-
-	if minButtonWidth > contentWidth {
-		contentWidth = minButtonWidth
-	}
-
-	// 3. Ensure it's at least as wide as the title
-	titleW := lipgloss.Width(GetPlainText(m.title)) + 6 // Title + connectors + space
-	if titleW > contentWidth {
-		contentWidth = titleW
-	}
-
-	// 4. Constrain by available layout width
-	maxAllowed := m.layout.Width - 2
-	if contentWidth > maxAllowed {
-		contentWidth = maxAllowed
-	}
+	contentWidth := m.contentWidth()
 
 	// Question text style - inherit from ctx.Dialog to get background
 	questionStyle := ctx.Dialog.
@@ -237,40 +224,14 @@ func (m *confirmDialogModel) Layers() []*lipgloss.Layer {
 
 // GetHitRegions implements HitRegionProvider for mouse hit testing
 func (m *confirmDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
-	// Calculate button positions
 	ctx := GetActiveContext()
-	maxAllowed := m.layout.Width - 2
+	contentWidth := m.contentWidth()
 
-	questionStyle := ctx.Dialog.Padding(1, 2).Width(maxAllowed)
+	questionStyle := ctx.Dialog.Padding(1, 2).Width(contentWidth)
 	questionHeight := lipgloss.Height(questionStyle.Render(m.question))
 
 	// buttonY: border (1) + question with padding
 	buttonY := 1 + questionHeight
-
-	// Strip tags first so they don't incorrectly inflate the width
-	strippedQuestion := GetPlainText(m.question)
-	questionLines := strings.Split(strippedQuestion, "\n")
-	maxQuestionWidth := 0
-	for _, line := range questionLines {
-		w := lipgloss.Width(line)
-		if w > maxQuestionWidth {
-			maxQuestionWidth = w
-		}
-	}
-	contentWidth := maxQuestionWidth + 4
-	btn1W := lipgloss.Width("Yes") + 4
-	btn2W := lipgloss.Width("No") + 4
-	minButtonWidth := btn1W + btn2W + 4
-	if minButtonWidth > contentWidth {
-		contentWidth = minButtonWidth
-	}
-	titleW := lipgloss.Width(m.title) + 6
-	if titleW > contentWidth {
-		contentWidth = titleW
-	}
-	if contentWidth > maxAllowed {
-		contentWidth = maxAllowed
-	}
 
 	// Use centralized button hit region helper with dialog ID for disambiguation
 	// Must include Text to properly calculate button width
