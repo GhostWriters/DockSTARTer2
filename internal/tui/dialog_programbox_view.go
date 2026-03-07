@@ -184,8 +184,9 @@ func (m *ProgramBoxModel) ViewString() string {
 
 	// Render OK button
 	if m.done {
-		buttonRow := RenderCenteredButtonsCtx(
+		buttonRow := RenderCenteredButtonsExplicit(
 			contentWidth,
+			m.layout.ButtonHeight == DialogButtonHeight,
 			ctx,
 			ButtonSpec{Text: "OK", Active: m.done},
 		)

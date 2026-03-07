@@ -129,9 +129,18 @@ func buttonsFitWithBorders(contentWidth int, ctx StyleContext, buttons []ButtonS
 	return buttonWidth <= sectionWidth
 }
 
-// ButtonRowHeight returns the rendered height of a button row given the available content width.
-// Returns 3 when bordered buttons fit, or 1 when the width is too tight for borders.
-func ButtonRowHeight(contentWidth int, buttons ...ButtonSpec) int {
+// ButtonRowHeight returns the rendered height of a button row given constraints.
+//
+//   - contentWidth: available horizontal space; bordered buttons are dropped when too narrow.
+//   - availableHeight: vertical rows the button row is allowed to occupy (0 = unconstrained).
+//     If availableHeight is positive but less than DialogButtonHeight (3), flat buttons are
+//     used because there is simply not enough room for the bordered box.
+//
+// Returns 3 (DialogButtonHeight) when both constraints allow it, 1 otherwise.
+func ButtonRowHeight(contentWidth, availableHeight int, buttons ...ButtonSpec) int {
+	if availableHeight > 0 && availableHeight < DialogButtonHeight {
+		return 1
+	}
 	if buttonsFitWithBorders(contentWidth, GetActiveContext(), buttons) {
 		return 3
 	}

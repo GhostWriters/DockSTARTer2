@@ -11,9 +11,6 @@ import (
 
 func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
-	if s.outerMenu != nil {
-		s.outerMenu.InvalidateCache()
-	}
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -236,6 +233,9 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		msg.update(&s.config)
 		msg.update(&s.baseConfig) // User actively changed an option, save it to base config
 		s.syncOptionsMenu()
+		if s.outerMenu != nil {
+			s.outerMenu.InvalidateCache()
+		}
 		return s, nil
 	}
 
@@ -259,6 +259,9 @@ func (s *DisplayOptionsScreen) applyPreview(themeName string) {
 		theme.ApplyThemeDefaults(&s.config, *defaults)
 	}
 	s.syncOptionsMenu()
+	if s.outerMenu != nil {
+		s.outerMenu.InvalidateCache()
+	}
 	tui.ClearSemanticCachePrefix("Preview_Theme_")
 }
 
@@ -369,4 +372,11 @@ func (s *DisplayOptionsScreen) HasDialog() bool {
 
 func (s *DisplayOptionsScreen) MenuName() string {
 	return "appearance"
+}
+
+// MinHeight returns the minimum content-area height needed for the Appearance Settings
+// screen to remain interactive. Used by AppModel to limit log panel expansion.
+// Breakdown: outer border(2) + theme section(5) + options section(4) + bordered buttons(3) = 14.
+func (s *DisplayOptionsScreen) MinHeight() int {
+	return 14
 }

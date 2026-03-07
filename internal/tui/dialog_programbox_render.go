@@ -219,44 +219,44 @@ func (m *ProgramBoxModel) calculateLayout() {
 		return
 	}
 
-	// 1. Shadow (if enabled)
-	if currentConfig.UI.Shadow {
-		// Use DialogShadowHeight constant
+	layout := GetLayout()
+	hasShadow := currentConfig.UI.Shadow
+	contentW := m.width - 2
+	shadowHeight := 0
+	if hasShadow {
+		shadowHeight = DialogShadowHeight
 	}
 
-	// 2. Buttons (if task done)
-	buttons := 0
-	if m.done {
-		buttons = DialogButtonHeight
-	}
+	// 1. Header
+	headerHeight := m.calculateHeaderHeight(contentW)
 
-	// 3. Header
-	headerHeight := m.calculateHeaderHeight(m.width - 2)
-
-	// 4. Command
+	// 2. Command
 	commandLines := 0
 	if m.command != "" {
 		commandLines = 1 + 1 // 1 line for command + 1 line for gap
 	}
 
-	// 5. Total Overhead
-	// Use centralized layout helper for vertical budgeting
-	layout := GetLayout()
-	hasShadow := currentConfig.UI.Shadow
-	shadowHeight := 0
-	if hasShadow {
-		shadowHeight = DialogShadowHeight
-	}
-	// ProgramBox has a subtitle/header AND a command line. Both are "header" overhead.
 	internalOverhead := headerHeight + commandLines
+
+	// 3. Buttons — width and height aware via ButtonRowHeight.
+	// Compute how many rows the button row itself can have after reserving:
+	//   outer borders(2) + overhead + min viewport(2) + viewport borders(2) + shadow.
+	buttons := 0
+	if m.done {
+		const minVpRows = 2
+		availableForButton := m.height - 2 - internalOverhead - minVpRows - 2 - shadowHeight
+		buttons = ButtonRowHeight(contentW, availableForButton, ButtonSpec{Text: "OK"})
+	}
+
+	// 4. Viewport height.
+	// DialogContentHeight always budgets DialogButtonHeight (3) when hasButtons=true;
+	// recover the freed lines when flat buttons (1) are used instead.
 	vpHeight := layout.DialogContentHeight(m.height, internalOverhead, m.done, hasShadow)
-
-	// Adjust for internal viewport borders (ProgramBox uses several)
-	// 1. Top viewport border (+1)
-	// 2. Custom bottom line appended (with scroll %) (+1)
-	// Total internal chrome = 2 lines.
+	if m.done && buttons != DialogButtonHeight {
+		vpHeight += DialogButtonHeight - buttons
+	}
+	// Subtract internal viewport chrome (top border + custom bottom line).
 	vpHeight -= 2
-
 	if vpHeight < 2 {
 		vpHeight = 2
 	}

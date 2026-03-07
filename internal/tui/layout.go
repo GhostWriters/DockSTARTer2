@@ -6,6 +6,11 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+// MinDialogHeight is the minimum content-area height (lines) a dialog needs to remain usable.
+// Enforced by the log panel drag limit so it cannot push dialogs off-screen.
+// Breakdown: top border(1) + title(1) + min content(3) + flat button(1) + bottom border(1) = 7, +1 margin.
+const MinDialogHeight = 8
+
 // DialogMode specifies how a dialog should be positioned
 type DialogMode int
 
