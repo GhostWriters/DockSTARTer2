@@ -43,6 +43,7 @@ const (
 	DialogShadowHeight = 1 // Bottom shadow offset
 	DialogShadowWidth  = 2 // Right shadow offset
 	DialogButtonHeight = 3 // Standard button row
+	DialogBodyPadH     = 4 // Horizontal padding for body text: Padding(1,2) = 2 chars each side
 )
 
 // DialogLayout stores pre-calculated vertical budgeting for a dialog.
@@ -79,27 +80,6 @@ func newStandardDialogLayout(width, height int) DialogLayout {
 		ShadowHeight: shadow,
 		Overhead:     DialogBorderHeight + buttons + shadow,
 	}
-}
-
-// CalculateBaseOverhead returns the overhead lines for a standard dialog without a viewport
-func CalculateBaseOverhead(hasShadow bool, hasButtons bool) int {
-	overhead := DialogBorderHeight
-	if hasShadow {
-		overhead += DialogShadowHeight
-	}
-	if hasButtons {
-		overhead += DialogButtonHeight
-	}
-	return overhead
-}
-
-// CalculateContentHeight returns the remaining vertical budget for content
-func CalculateContentHeight(totalHeight int, overhead int) int {
-	h := totalHeight - overhead
-	if h < 0 {
-		return 0
-	}
-	return h
 }
 
 // EnforceDialogLayout appends a button row (if specified) to the content

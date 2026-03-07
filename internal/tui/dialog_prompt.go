@@ -194,7 +194,7 @@ func (m *promptDialogModel) contentWidth(ctx StyleContext) int {
 			maxQ = w
 		}
 	}
-	w := maxQ + 4 // Padding(1,2) = 2 chars each side
+	w := maxQ + DialogBodyPadH
 
 	// Input field: same Padding(0,1) so same +4 for the inner border
 	if iw := lipgloss.Width(m.input.View()) + 4; iw > w {
