@@ -14,6 +14,13 @@ const (
 	CodeFGReset = "\033[39m" // Reset foreground to default
 	CodeBGReset = "\033[49m" // Reset background to default
 
+	// Hard reset sequences — bypass MaintainBackground interception.
+	// MaintainBackground only matches single-parameter SGR sequences (\x1b[0m, \x1b[39m, \x1b[49m).
+	// These multi-parameter equivalents have the same terminal effect but are not intercepted.
+	CodeHardReset   = "\033[0;39;49m" // Full reset to terminal defaults
+	CodeHardFGReset = "\033[39;39m"   // FG reset to terminal default
+	CodeHardBGReset = "\033[49;49m"   // BG reset to terminal default
+
 	// Modifiers
 	CodeBold          = "\033[1m"
 	CodeDim           = "\033[2m"

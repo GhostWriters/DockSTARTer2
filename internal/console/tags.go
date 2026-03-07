@@ -24,16 +24,26 @@ func init() {
 	rebuildRegexes()
 }
 
+// SetDelimiters updates the global tag delimiters and rebuilds the compiled regex patterns.
+// Call this once at startup before any tag processing if non-standard delimiters are desired.
+// semPre/semSuf wrap semantic tag names (e.g. "{{|" / "|}}").
+// dirPre/dirSuf wrap direct style codes (e.g. "{{[" / "]}}").
+func SetDelimiters(semPre, semSuf, dirPre, dirSuf string) {
+	SemanticPrefix = semPre
+	SemanticSuffix = semSuf
+	DirectPrefix = dirPre
+	DirectSuffix = dirSuf
+	rebuildRegexes()
+}
+
 func rebuildRegexes() {
-	// Re-compile based on static defaults
-	// We use QuoteMeta to be safe, even though we know the defaults.
 	semEscPre := regexp.QuoteMeta(SemanticPrefix)
 	semEscSuf := regexp.QuoteMeta(SemanticSuffix)
 	dirEscPre := regexp.QuoteMeta(DirectPrefix)
 	dirEscSuf := regexp.QuoteMeta(DirectSuffix)
 
 	semanticRegex = regexp.MustCompile(semEscPre + `(?P<content>[A-Za-z0-9_]+)` + semEscSuf)
-	directRegex = regexp.MustCompile(dirEscPre + `(?P<content>[A-Za-z0-9_:\-#;]+)` + dirEscSuf)
+	directRegex = regexp.MustCompile(dirEscPre + `(?P<content>[A-Za-z0-9_:\-#;~]+)` + dirEscSuf)
 }
 
 // GetDelimitedRegex returns the standard regex for both semantic and direct tags.
@@ -44,7 +54,7 @@ func GetDelimitedRegex() *regexp.Regexp {
 	dirEscSuf := regexp.QuoteMeta(DirectSuffix)
 
 	// Group 1: Semantic, Group 2: Direct
-	pattern := fmt.Sprintf(`(?:%s(?P<semantic>[A-Za-z0-9_]+)%s|%s(?P<direct>[A-Za-z0-9_:\-#;]+)%s)`,
+	pattern := fmt.Sprintf(`(?:%s(?P<semantic>[A-Za-z0-9_]+)%s|%s(?P<direct>[A-Za-z0-9_:\-#;~]+)%s)`,
 		semEscPre, semEscSuf, dirEscPre, dirEscSuf)
 	return regexp.MustCompile(pattern)
 }

@@ -140,6 +140,10 @@ func RenderThemeTextCtx(text string, ctx StyleContext) string {
 
 // ApplyStyleCode applies tview-style color codes (fg:bg:flags) to a lipgloss style
 func ApplyStyleCode(style lipgloss.Style, resetStyle lipgloss.Style, styleCode string) lipgloss.Style {
+	// Full hard reset to terminal defaults (bypasses MaintainBackground)
+	if styleCode == "~" {
+		return lipgloss.NewStyle()
+	}
 	// Full reset to base style
 	if styleCode == console.CodeReset || styleCode == "-" {
 		return resetStyle
@@ -157,8 +161,11 @@ func ApplyStyleCode(style lipgloss.Style, resetStyle lipgloss.Style, styleCode s
 
 	// Foreground color
 	if len(parts) > 0 && parts[0] != "" {
-		if parts[0] == "-" {
-			// Reset to default foreground
+		if parts[0] == "~" {
+			// Hard reset: terminal default foreground (not dialog style)
+			style = style.Foreground(lipgloss.Color(""))
+		} else if parts[0] == "-" {
+			// Soft reset: reset to dialog's foreground
 			style = style.Foreground(resetStyle.GetForeground())
 		} else {
 			c := ParseColor(parts[0])
@@ -170,8 +177,11 @@ func ApplyStyleCode(style lipgloss.Style, resetStyle lipgloss.Style, styleCode s
 
 	// Background color
 	if len(parts) > 1 && parts[1] != "" {
-		if parts[1] == "-" {
-			// Reset to default background
+		if parts[1] == "~" {
+			// Hard reset: terminal default background (not dialog style)
+			style = style.Background(lipgloss.Color(""))
+		} else if parts[1] == "-" {
+			// Soft reset: reset to dialog's background
 			style = style.Background(resetStyle.GetBackground())
 		} else {
 			c := ParseColor(parts[1])
