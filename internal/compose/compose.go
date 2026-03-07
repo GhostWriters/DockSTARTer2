@@ -176,11 +176,15 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 		}
 	}
 
+	configFiles := []types.ConfigFile{{Filename: composePath}}
+	overridePath := filepath.Join(conf.ComposeDir, constants.ComposeOverrideFileName)
+	if _, err := os.Stat(overridePath); err == nil {
+		configFiles = append(configFiles, types.ConfigFile{Filename: overridePath})
+	}
+
 	configDetails := types.ConfigDetails{
-		WorkingDir: conf.ComposeDir,
-		ConfigFiles: []types.ConfigFile{
-			{Filename: composePath},
-		},
+		WorkingDir:  conf.ComposeDir,
+		ConfigFiles: configFiles,
 		Environment: envMap,
 	}
 
