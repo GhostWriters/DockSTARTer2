@@ -282,7 +282,7 @@ func GetUsage(target string) string {
 			"	Run tests to check the program",
 		)
 	}
-	if match("-T", "--theme", "--theme-list", "--theme-table", "--theme-lines", "--theme-no-lines", "--theme-borders", "--theme-no-borders", "--theme-shadows", "--theme-no-shadows", "--theme-shadow-level", "--theme-scrollbar", "--theme-no-scrollbar", "--theme-border-color", "--theme-dialog-title", "--theme-submenu-title", "--theme-log-title") {
+	if match("-T", "--theme", "--theme-list", "--theme-table", "--theme-lines", "--theme-no-lines", "--theme-borders", "--theme-no-borders", "--theme-button-borders", "--theme-no-button-borders", "--theme-shadows", "--theme-no-shadows", "--theme-shadow-level", "--theme-scrollbar", "--theme-no-scrollbar", "--theme-border-color", "--theme-dialog-title", "--theme-submenu-title", "--theme-log-title") {
 		printStr(
 			"{{|UsageCommand|}}-T --theme{{[-]}}",
 			"	Shows the current theme",
@@ -298,6 +298,9 @@ func GetUsage(target string) string {
 			"{{|UsageCommand|}}--theme-borders{{[-]}}",
 			"{{|UsageCommand|}}--theme-no-borders{{[-]}}",
 			"	Turn the borders on and off in the GUI",
+			"{{|UsageCommand|}}--theme-button-borders{{[-]}}",
+			"{{|UsageCommand|}}--theme-no-button-borders{{[-]}}",
+			"	Turn bordered button style on or off in the GUI",
 			"{{|UsageCommand|}}--theme-shadows{{[-]}}",
 			"{{|UsageCommand|}}--theme-no-shadows{{[-]}}",
 			"	Turn the shadows on or off in the GUI",

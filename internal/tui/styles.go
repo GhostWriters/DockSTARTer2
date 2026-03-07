@@ -129,6 +129,7 @@ type Styles struct {
 	// Settings
 	LineCharacters    bool
 	DrawBorders       bool
+	ButtonBorders     bool
 	DialogTitleAlign  string
 	SubmenuTitleAlign string
 	LogTitleAlign     string
@@ -147,6 +148,7 @@ type Styles struct {
 type StyleContext struct {
 	LineCharacters      bool
 	DrawBorders         bool
+	ButtonBorders       bool
 	Type                DialogType
 	Screen              lipgloss.Style
 	Dialog              lipgloss.Style
@@ -195,6 +197,7 @@ func GetActiveContext() StyleContext {
 	return StyleContext{
 		LineCharacters:      currentStyles.LineCharacters,
 		DrawBorders:         currentStyles.DrawBorders,
+		ButtonBorders:       currentStyles.ButtonBorders,
 		Type:                DialogTypeInfo, // Default to info
 		Screen:              currentStyles.Screen,
 		Dialog:              currentStyles.Dialog,
@@ -354,8 +357,9 @@ func InitStyles(cfg config.AppConfig) {
 	currentConfig = cfg
 
 	// Store LineCharacters setting for later use
-	currentStyles.LineCharacters = cfg.UI.LineCharacters // Updated: Use cfg.UI.LineCharacters
+	currentStyles.LineCharacters = cfg.UI.LineCharacters
 	currentStyles.DrawBorders = cfg.UI.Borders
+	currentStyles.ButtonBorders = cfg.UI.ButtonBorders
 
 	// Border style based on LineCharacters setting
 	if cfg.UI.LineCharacters { // Updated: Use cfg.UI.LineCharacters

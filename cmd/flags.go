@@ -79,6 +79,8 @@ func InitFlags() {
 	pflag.Bool("theme-no-borders", false, "Turn borders off")
 	pflag.Bool("theme-border", false, "Turn borders on")
 	pflag.Bool("theme-no-border", false, "Turn borders off")
+	pflag.Bool("theme-button-borders", false, "Turn button borders on")
+	pflag.Bool("theme-no-button-borders", false, "Turn button borders off")
 	pflag.Bool("theme-shadows", false, "Turn shadows on")
 	pflag.Bool("theme-no-shadows", false, "Turn shadows off")
 	pflag.Bool("theme-shadow", false, "Turn shadows on")

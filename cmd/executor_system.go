@@ -63,12 +63,13 @@ func handleConfigShow(ctx context.Context, conf *config.AppConfig) error {
 		"{{|UsageCommand|}}Expanded Value{{[-]}}",
 	}
 
-	keys := []string{"ConfigFolder", "ComposeFolder", "Theme", "Borders", "LineCharacters", "Scrollbar", "Shadow", "ShadowLevel", "BorderColor"}
+	keys := []string{"ConfigFolder", "ComposeFolder", "Theme", "Borders", "ButtonBorders", "LineCharacters", "Scrollbar", "Shadow", "ShadowLevel", "BorderColor"}
 	displayNames := map[string]string{
 		"ConfigFolder":   "Config Folder",
 		"ComposeFolder":  "Compose Folder",
 		"Theme":          "Theme",
 		"Borders":        "Borders",
+		"ButtonBorders":  "Button Borders",
 		"LineCharacters": "Line Characters",
 		"Scrollbar":      "Scrollbar",
 		"Shadow":         "Shadow",
@@ -102,6 +103,8 @@ func handleConfigShow(ctx context.Context, conf *config.AppConfig) error {
 			value = conf.UI.Theme
 		case "Borders":
 			value = boolToYesNo(conf.UI.Borders)
+		case "ButtonBorders":
+			value = boolToYesNo(conf.UI.ButtonBorders)
 		case "LineCharacters":
 			value = boolToYesNo(conf.UI.LineCharacters)
 		case "Scrollbar":
