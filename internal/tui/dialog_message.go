@@ -19,32 +19,21 @@ const (
 
 // messageDialogModel represents a message dialog
 type messageDialogModel struct {
+	baseDialogModel
 	title       string
 	message     string
 	messageType MessageType
-	width       int
-	height      int
-	onResult    func() tea.Msg // Optional: Custom message generator for result
-	focused     bool           // tracks global focus
-
-	// Unified layout (deterministic sizing)
-	layout DialogLayout
-	id     string
+	onResult    func() tea.Msg
 }
 
 // newMessageDialog creates a new message dialog
 func newMessageDialog(title, message string, msgType MessageType) *messageDialogModel {
 	return &messageDialogModel{
-		id:          "message_dialog",
-		title:       title,
-		message:     message,
-		messageType: msgType,
-		focused:     true, // Default to focused
+		baseDialogModel: baseDialogModel{id: "message_dialog", focused: true},
+		title:           title,
+		message:         message,
+		messageType:     msgType,
 	}
-}
-
-func (m *messageDialogModel) Init() tea.Cmd {
-	return nil
 }
 
 func (m *messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -68,7 +57,7 @@ func (m *messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Left click on OK button closes
 		// Check for suffixes to support prefixed IDs (e.g., "message_dialog.OK")
 		if msg.Button == tea.MouseLeft {
-			if strings.HasSuffix(msg.ID, ".OK") || msg.ID == "Button.OK" {
+			if buttonIDMatches(msg.ID, "OK") {
 				return m, func() tea.Msg { return CloseDialogMsg{Result: true} }
 			}
 		}
@@ -114,13 +103,7 @@ func (m *messageDialogModel) messageStyle() lipgloss.Style {
 // contentWidth calculates the ideal dialog inner width.
 func (m *messageDialogModel) contentWidth() int {
 	maxAllowed := m.layout.Width - 2
-	maxW := 0
-	for _, line := range strings.Split(GetPlainText(m.message), "\n") {
-		if w := lipgloss.Width(line); w > maxW {
-			maxW = w
-		}
-	}
-	w := maxW + DialogBodyPadH
+	w := maxLineWidth(m.message) + DialogBodyPadH
 	if minBtn := lipgloss.Width(" OK ") + 4; minBtn > w {
 		w = minBtn
 	}
@@ -191,24 +174,6 @@ func (m *messageDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		m.id, offsetX+1, offsetY+buttonY, contentWidth, ZDialog+20,
 		ButtonSpec{Text: "OK", ZoneID: "OK"},
 	)
-}
-
-// SetSize updates the dialog dimensions
-func (m *messageDialogModel) SetSize(w, h int) {
-	m.width = w
-	m.height = h
-	m.calculateLayout()
-}
-
-func (m *messageDialogModel) SetFocused(f bool) {
-	m.focused = f
-}
-
-func (m *messageDialogModel) calculateLayout() {
-	if m.width == 0 || m.height == 0 {
-		return
-	}
-	m.layout = newStandardDialogLayout(m.width, m.height)
 }
 
 // ShowMessageDialog displays a message dialog

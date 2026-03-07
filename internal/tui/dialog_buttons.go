@@ -184,6 +184,12 @@ func RenderHotkeyLabelCtx(label string, focused bool, ctx StyleContext) string {
 	return prefix + charStyle.Render(firstChar) + restStyle.Render(rest)
 }
 
+// buttonIDMatches reports whether a LayerHitMsg ID refers to a button with the given name.
+// Handles both prefixed IDs (e.g. "confirm_dialog.Yes") and bare IDs (e.g. "Button.Yes").
+func buttonIDMatches(id, name string) bool {
+	return strings.HasSuffix(id, "."+name) || id == "Button."+name
+}
+
 // CheckButtonHotkeys checks if a key matches the first letter of any button.
 // Returns button index and true if a match is found.
 // NOTE: In Bubble Tea v2, KeyMsg is now a union type - use tea.KeyPressMsg for key press events.

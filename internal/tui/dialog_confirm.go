@@ -11,19 +11,13 @@ import (
 
 // confirmDialogModel represents a yes/no confirmation dialog
 type confirmDialogModel struct {
+	baseDialogModel
 	title      string
 	question   string
 	defaultYes bool
 	result     bool
 	confirmed  bool
-	width      int
-	height     int
-	onResult   func(bool) tea.Msg // Optional: Custom message generator for result
-	focused    bool               // tracks global focus
-
-	// Unified layout (deterministic sizing)
-	layout DialogLayout
-	id     string
+	onResult   func(bool) tea.Msg
 }
 
 type confirmResultMsg struct {
@@ -33,20 +27,15 @@ type confirmResultMsg struct {
 // newConfirmDialog creates a new confirmation dialog
 func newConfirmDialog(title, question string, defaultYes bool) *confirmDialogModel {
 	return &confirmDialogModel{
-		id:         "confirm_dialog",
-		title:      title,
-		question:   question,
-		defaultYes: defaultYes,
-		result:     defaultYes,
+		baseDialogModel: baseDialogModel{id: "confirm_dialog", focused: true},
+		title:           title,
+		question:        question,
+		defaultYes:      defaultYes,
+		result:          defaultYes,
 		onResult: func(r bool) tea.Msg {
 			return CloseDialogMsg{Result: r}
 		},
-		focused: true, // Default to focused
 	}
-}
-
-func (m *confirmDialogModel) Init() tea.Cmd {
-	return nil
 }
 
 func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -111,12 +100,12 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Left click on buttons triggers action
 		// Check for suffixes to support prefixed IDs (e.g., "confirm_dialog.Yes")
 		if msg.Button == tea.MouseLeft {
-			if strings.HasSuffix(msg.ID, ".Yes") || msg.ID == "Button.Yes" {
+			if buttonIDMatches(msg.ID, "Yes") {
 				m.result = true
 				m.confirmed = true
 				return m, closeWithResult(true)
 			}
-			if strings.HasSuffix(msg.ID, ".No") || msg.ID == "Button.No" {
+			if buttonIDMatches(msg.ID, "No") {
 				m.result = false
 				m.confirmed = true
 				return m, closeWithResult(false)
@@ -146,13 +135,7 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // contentWidth calculates the ideal dialog inner width.
 func (m *confirmDialogModel) contentWidth() int {
 	maxAllowed := m.layout.Width - 2
-	maxQ := 0
-	for _, line := range strings.Split(GetPlainText(m.question), "\n") {
-		if w := lipgloss.Width(line); w > maxQ {
-			maxQ = w
-		}
-	}
-	w := maxQ + DialogBodyPadH
+	w := maxLineWidth(m.question) + DialogBodyPadH
 	if minBtn := lipgloss.Width("Yes") + 4 + lipgloss.Width("No") + 4 + 4; minBtn > w {
 		w = minBtn
 	}
@@ -240,24 +223,6 @@ func (m *confirmDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		ButtonSpec{Text: "Yes", ZoneID: "Yes"},
 		ButtonSpec{Text: "No", ZoneID: "No"},
 	)
-}
-
-// SetSize updates the dialog dimensions
-func (m *confirmDialogModel) SetSize(w, h int) {
-	m.width = w
-	m.height = h
-	m.calculateLayout()
-}
-
-func (m *confirmDialogModel) SetFocused(f bool) {
-	m.focused = f
-}
-
-func (m *confirmDialogModel) calculateLayout() {
-	if m.width == 0 || m.height == 0 {
-		return
-	}
-	m.layout = newStandardDialogLayout(m.width, m.height)
 }
 
 // ShowConfirmDialog displays a confirmation dialog and returns the result

@@ -12,20 +12,14 @@ import (
 
 // promptDialogModel represents a text input prompt dialog
 type promptDialogModel struct {
+	baseDialogModel
 	title       string
 	question    string
 	input       textinput.Model
 	result      string
 	confirmed   bool
-	width       int
-	height      int
 	onResult    func(string, bool) tea.Msg
-	focused     bool
 	focusedItem FocusItem // FocusList=Input, FocusSelectBtn=OK, FocusBackBtn=Cancel
-
-	// Unified layout
-	layout DialogLayout
-	id     string
 }
 
 type promptResultMsg struct {
@@ -54,12 +48,11 @@ func newPromptDialog(title, question string, sensitive bool) *promptDialogModel 
 	ti.SetStyles(tiStyles)
 
 	return &promptDialogModel{
-		id:          "prompt_dialog",
-		title:       title,
-		question:    question,
-		input:       ti,
-		focused:     true,
-		focusedItem: FocusList,
+		baseDialogModel: baseDialogModel{id: "prompt_dialog", focused: true},
+		title:           title,
+		question:        question,
+		input:           ti,
+		focusedItem:     FocusList,
 		onResult: func(res string, val bool) tea.Msg {
 			return CloseDialogMsg{Result: promptResultMsg{result: res, confirmed: val}}
 		},
@@ -162,12 +155,12 @@ func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if msg.Button == tea.MouseLeft {
-			if strings.HasSuffix(msg.ID, ".OK") || msg.ID == "Button.OK" {
+			if buttonIDMatches(msg.ID, "OK") {
 				m.result = m.input.Value()
 				m.confirmed = true
 				return m, closeWithResult(m.result, true)
 			}
-			if strings.HasSuffix(msg.ID, ".Cancel") || msg.ID == "Button.Cancel" {
+			if buttonIDMatches(msg.ID, "Cancel") {
 				return m, closeWithResult("", false)
 			}
 		}
@@ -185,16 +178,7 @@ func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // contentWidth calculates the ideal dialog inner width.
 func (m *promptDialogModel) contentWidth(ctx StyleContext) int {
 	maxAllowed := m.layout.Width - 2
-
-	// Start from the question text width — same as confirm dialog: +4 for Padding(1,2)
-	stripped := GetPlainText(m.question)
-	maxQ := 0
-	for _, line := range strings.Split(stripped, "\n") {
-		if w := lipgloss.Width(line); w > maxQ {
-			maxQ = w
-		}
-	}
-	w := maxQ + DialogBodyPadH
+	w := maxLineWidth(m.question) + DialogBodyPadH
 
 	// Input field: same Padding(0,1) so same +4 for the inner border
 	if iw := lipgloss.Width(m.input.View()) + 4; iw > w {
@@ -306,23 +290,6 @@ func (m *promptDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		ButtonSpec{Text: "OK", ZoneID: "OK"},
 		ButtonSpec{Text: "Cancel", ZoneID: "Cancel"},
 	)
-}
-
-func (m *promptDialogModel) SetSize(w, h int) {
-	m.width = w
-	m.height = h
-	m.calculateLayout()
-}
-
-func (m *promptDialogModel) SetFocused(f bool) {
-	m.focused = f
-}
-
-func (m *promptDialogModel) calculateLayout() {
-	if m.width == 0 || m.height == 0 {
-		return
-	}
-	m.layout = newStandardDialogLayout(m.width, m.height)
 }
 
 // ShowPromptDialog displays a prompt dialog and returns the text and confirmed bool.

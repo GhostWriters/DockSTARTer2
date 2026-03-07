@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
 
@@ -46,6 +47,12 @@ const (
 	DialogBodyPadH     = 4 // Horizontal padding for body text: Padding(1,2) = 2 chars each side
 )
 
+// Modal Z-order constants
+const (
+	ZModalBaseOffset = 100 // Z gap above the highest screen layer for the first modal
+	ZModalStackStep  = 100 // Additional Z gap for each subsequent stacked modal
+)
+
 // DialogLayout stores pre-calculated vertical budgeting for a dialog.
 // This implements the "calculate once, use everywhere" pattern.
 type DialogLayout struct {
@@ -63,6 +70,46 @@ type DialogLayout struct {
 	ListY    int // Y offset to first list item
 	ButtonY  int // Y offset to button row
 	ContentW int // Width of content area (inside borders)
+}
+
+// maxLineWidth returns the maximum lipgloss display width across all lines of text
+// after stripping theme tags. Used by dialog contentWidth() methods.
+func maxLineWidth(text string) int {
+	maxW := 0
+	for _, line := range strings.Split(GetPlainText(text), "\n") {
+		if w := lipgloss.Width(line); w > maxW {
+			maxW = w
+		}
+	}
+	return maxW
+}
+
+// baseDialogModel holds fields and promoted methods shared by the simple dialog types
+// (confirm, message, prompt). View() and Layers() are kept on the outer type because
+// they depend on the outer type's ViewString().
+type baseDialogModel struct {
+	id      string
+	width   int
+	height  int
+	focused bool
+	layout  DialogLayout
+}
+
+func (b *baseDialogModel) Init() tea.Cmd { return nil }
+
+func (b *baseDialogModel) SetSize(w, h int) {
+	b.width = w
+	b.height = h
+	b.calculateLayout()
+}
+
+func (b *baseDialogModel) SetFocused(f bool) { b.focused = f }
+
+func (b *baseDialogModel) calculateLayout() {
+	if b.width == 0 || b.height == 0 {
+		return
+	}
+	b.layout = newStandardDialogLayout(b.width, b.height)
 }
 
 // newStandardDialogLayout builds a DialogLayout for a dialog with borders, buttons, and optional shadow.

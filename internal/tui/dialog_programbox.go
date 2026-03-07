@@ -452,8 +452,7 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case LayerHitMsg:
-		// Check for suffixes to support prefixed IDs (e.g., "programbox_dialog.OK")
-		if m.done && (strings.HasSuffix(msg.ID, ".OK") || msg.ID == "Button.OK") {
+		if m.done && buttonIDMatches(msg.ID, "OK") {
 			return m, func() tea.Msg { return CloseDialogMsg{Result: true} }
 		}
 
