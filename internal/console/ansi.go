@@ -19,6 +19,9 @@ func parseStyleCodeToANSI(content string, profile ...termenv.Profile) string {
 	if content == "-" {
 		return CodeReset
 	}
+	if content == "~" {
+		return CodeHardReset
+	}
 
 	// Split by colons: fg:bg:flags
 	parts := strings.Split(content, ":")
@@ -40,7 +43,11 @@ func parseStyleCodeToANSI(content string, profile ...termenv.Profile) string {
 	}
 
 	// Part 0: Foreground color
-	if len(parts) > 0 && parts[0] != "" && parts[0] != "-" {
+	if len(parts) > 0 && parts[0] == "~" {
+		codes.WriteString(CodeHardFGReset)
+	} else if len(parts) > 0 && parts[0] == "-" {
+		codes.WriteString(CodeFGReset)
+	} else if len(parts) > 0 && parts[0] != "" {
 		colorName := strings.ToLower(parts[0])
 		// Handle high intensity by pretending it's the "bright" variant name if standard
 		if highIntensity {
@@ -97,7 +104,11 @@ func parseStyleCodeToANSI(content string, profile ...termenv.Profile) string {
 FoundFG:
 
 	// Part 1: Background color
-	if len(parts) > 1 && parts[1] != "" && parts[1] != "-" {
+	if len(parts) > 1 && parts[1] == "~" {
+		codes.WriteString(CodeHardBGReset)
+	} else if len(parts) > 1 && parts[1] == "-" {
+		codes.WriteString(CodeBGReset)
+	} else if len(parts) > 1 && parts[1] != "" {
 		colorName := strings.ToLower(parts[1])
 		// Handle high intensity background if needed (though usually flags handle this)
 		if highIntensity {

@@ -125,8 +125,17 @@ func resolveThemeValue(raw string, rawValues map[string]string, visiting map[str
 
 	// Helper to merge a raw style string (fg:bg:flags)
 	mergeStyle := func(styleStr string) {
-		// Strip any delimiters to get raw content
-		inner := console.StripDelimiters(styleStr)
+		// Strip file-specific (or global fallback) delimiters to get raw content
+		inner := styleStr
+		switch {
+		case strings.HasPrefix(inner, dirPre) && strings.HasSuffix(inner, dirSuf):
+			inner = inner[len(dirPre) : len(inner)-len(dirSuf)]
+		case strings.HasPrefix(inner, semPre) && strings.HasSuffix(inner, semSuf):
+			inner = inner[len(semPre) : len(inner)-len(semSuf)]
+		default:
+			// Already raw or uses global delimiters (e.g. result from ExpandTags)
+			inner = console.StripDelimiters(inner)
+		}
 		parts := strings.Split(inner, ":")
 
 		if len(parts) > 0 && parts[0] != "" {
@@ -143,18 +152,35 @@ func resolveThemeValue(raw string, rawValues map[string]string, visiting map[str
 		}
 	}
 
-	// Iterate through the string seeking {{ }}
+	// Iterate through the string seeking the next tag (semantic or direct)
 	cur := raw
 	for {
-		start := strings.Index(cur, "{{")
-		if start == -1 {
+		// Find the nearest occurrence of either file-specific prefix
+		nextSem := strings.Index(cur, semPre)
+		nextDir := strings.Index(cur, dirPre)
+		if nextSem == -1 && nextDir == -1 {
 			break
 		}
-		end := strings.Index(cur[start:], "}}")
+
+		// Determine which prefix comes first and select its matching suffix
+		var start int
+		var closeSuf string
+		switch {
+		case nextSem == -1:
+			start, closeSuf = nextDir, dirSuf
+		case nextDir == -1:
+			start, closeSuf = nextSem, semSuf
+		case nextDir < nextSem:
+			start, closeSuf = nextDir, dirSuf
+		default:
+			start, closeSuf = nextSem, semSuf
+		}
+
+		end := strings.Index(cur[start:], closeSuf)
 		if end == -1 {
 			break
 		}
-		end += start + 2
+		end += start + len(closeSuf)
 
 		tag := cur[start:end]
 
@@ -177,9 +203,12 @@ func resolveThemeValue(raw string, rawValues map[string]string, visiting map[str
 				}
 			}
 
-			// 2. Fallback to global semantic tags (e.g. Notice, Success)
-			expanded := console.ExpandTags(tag)
-			if expanded != tag && expanded != "" {
+			// 2. Fallback to global semantic tags (e.g. Notice, Success).
+			// Re-wrap in global standard delimiters so ExpandTags can resolve it
+			// regardless of the file-specific delimiters in use.
+			standardTag := console.SemanticPrefix + refKey + console.SemanticSuffix
+			expanded := console.ExpandTags(standardTag)
+			if expanded != standardTag && expanded != "" {
 				mergeStyle(expanded)
 			}
 		}

@@ -1,7 +1,6 @@
 package console
 
 import (
-	"reflect"
 	"strings"
 	"sync"
 )
@@ -35,7 +34,8 @@ func ensureMaps() {
 	}
 }
 
-// BuildColorMap initializes the ANSI code mappings and semantic tag definitions.
+// BuildColorMap initializes the ANSI code and attribute name mappings.
+// Default semantic tag registrations are handled separately by RegisterBaseTags.
 func BuildColorMap() {
 	if ansiMap == nil {
 		ansiMap = make(map[string]string)
@@ -132,27 +132,6 @@ func BuildColorMap() {
 	ansiMap["bright-cyanbg"] = CodeBrightCyanBg
 	ansiMap["bright-whitebg"] = CodeBrightWhiteBg
 
-	// Build semantic map from Colors struct
-	val := reflect.ValueOf(Colors)
-	typ := val.Type()
-
-	baseKeys := map[string]bool{
-		"reset": true, "bold": true, "dim": true, "underline": true, "blink": true, "reverse": true,
-		"black": true, "red": true, "green": true, "yellow": true, "blue": true, "magenta": true, "cyan": true, "white": true,
-		"blackbg": true, "redbg": true, "greenbg": true, "yellowbg": true, "bluebg": true, "magentabg": true, "cyanbg": true, "whitebg": true,
-	}
-
-	semanticMu.Lock()
-	for i := 0; i < val.NumField(); i++ {
-		field := typ.Field(i)
-		key := strings.ToLower(field.Name)
-		if !baseKeys[key] {
-			valStr := val.Field(i).String()
-			// Store raw value (strip brackets if present)
-			semanticMap[key] = StripDelimiters(valStr)
-		}
-	}
-	semanticMu.Unlock()
 }
 
 // RegisterSemanticTag registers a semantic tag with its standardized tag value.
@@ -222,13 +201,7 @@ func StripDelimiters(text string) string {
 	if strings.HasPrefix(text, DirectPrefix) && strings.HasSuffix(text, DirectSuffix) {
 		return text[len(DirectPrefix) : len(text)-len(DirectSuffix)]
 	}
-	// Fallback to standard delimiters if they differ
-	if SemanticPrefix != "{{|" {
-		if strings.HasPrefix(text, "{{|") && strings.HasSuffix(text, "|}}") {
-			return text[3 : len(text)-3]
-		}
-	}
-	// Also fallback to the previous legacy semantic delimiter
+	// Fallback to standard delimiters if the globals have been customised
 	if SemanticPrefix != "{{|" {
 		if strings.HasPrefix(text, "{{|") && strings.HasSuffix(text, "|}}") {
 			return text[3 : len(text)-3]
