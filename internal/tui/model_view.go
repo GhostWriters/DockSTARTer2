@@ -176,7 +176,7 @@ func (m *AppModel) View() (v tea.View) {
 			if lv, ok := d.(LayeredView); ok {
 				for _, l := range lv.Layers() {
 					// Apply modal offset to ensure it sits above the background content
-					l = l.X(l.GetX() + lx).Y(l.GetY() + ly).Z(l.GetZ() + modalZBase - ZDialog)
+					l = l.X(l.GetX() + lx).Y(l.GetY() + ly).Z(l.GetZ() + modalZBase - ZScreen)
 					compositorAddShadow(comp, l, modalZBase, m.config.UI.Shadow)
 					comp.AddLayers(l)
 				}

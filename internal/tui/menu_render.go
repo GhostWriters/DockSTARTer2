@@ -136,16 +136,12 @@ func (m *MenuModel) ViewString() string {
 
 // Layers returns a single layer with the menu content for visual compositing
 func (m *MenuModel) Layers() []*lipgloss.Layer {
-	baseZ := ZScreen
-	if m.isDialog {
-		baseZ = ZDialog
-	}
 	return []*lipgloss.Layer{
-		lipgloss.NewLayer(m.ViewString()).Z(baseZ).ID(m.id),
+		lipgloss.NewLayer(m.ViewString()).Z(ZScreen).ID(m.id),
 	}
 }
 
-// SetIsDialog sets whether the menu acts as a modal dialog vs an underlying screen
+// SetIsDialog marks the menu as a modal dialog, raising its hit-region Z priority above screen regions
 func (m *MenuModel) SetIsDialog(isDialog bool) {
 	m.isDialog = isDialog
 }
@@ -158,7 +154,6 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 
 	ctx := GetActiveContext()
 	ctx.Type = m.dialogType
-	ctx.DrawShadow = m.isDialog && IsShadowEnabled()
 	return RenderBorderedBoxCtx(m.title, content, contentWidth, targetHeight, focused, rounded, align, titleTag, ctx)
 }
 

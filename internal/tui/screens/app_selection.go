@@ -38,7 +38,6 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *tui.MenuModel {
 	menu.SetCheckboxMode(true) // Enable checkboxes for app selection
 	menu.SetVariableHeight(true)
 	menu.SetMaximized(true)
-	menu.SetIsDialog(true)     // Enable thick outer border & inner rounded list border
 	menu.SetSubMenuMode(false) // Render natively as a standard standalone screen
 
 	refreshItems := func() {

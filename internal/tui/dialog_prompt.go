@@ -257,11 +257,7 @@ func (m *promptDialogModel) View() tea.View {
 	return tea.NewView(m.ViewString())
 }
 
-func (m *promptDialogModel) Layers() []*lipgloss.Layer {
-	return []*lipgloss.Layer{
-		lipgloss.NewLayer(m.ViewString()).Z(ZDialog).ID(m.id),
-	}
-}
+func (m *promptDialogModel) Layers() []*lipgloss.Layer { return m.layers(m.ViewString) }
 
 func (m *promptDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	ctx := GetActiveContext()
