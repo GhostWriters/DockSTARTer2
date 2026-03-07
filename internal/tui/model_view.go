@@ -171,9 +171,7 @@ func (m *AppModel) View() (v tea.View) {
 
 			lx, ly := layout.DialogPosition(mode, fgWidth, fgHeight, m.width, targetHeight, m.config.UI.Shadow, headerH)
 
-			// Modal Offset: Each dialog in the stack sits 100 Z-units above the previous one
-			// Base is maxZ (highest screen layer) + 100
-			modalZBase := maxZ + 100 + (i * 100)
+			modalZBase := maxZ + ZModalBaseOffset + (i * ZModalStackStep)
 
 			if lv, ok := d.(LayeredView); ok {
 				for _, l := range lv.Layers() {
