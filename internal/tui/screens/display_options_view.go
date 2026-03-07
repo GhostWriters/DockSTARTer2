@@ -3,7 +3,6 @@ package screens
 import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/tui"
-	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -15,22 +14,16 @@ func (s *DisplayOptionsScreen) ViewString() (result string) {
 			result = "(rendering error — theme may still be loading)"
 		}
 	}()
-	if s.optionsMenu == nil || s.themeMenu == nil {
+	if s.outerMenu == nil {
 		return ""
 	}
 	layout := tui.GetLayout()
 
-	// s.width and s.height are already the content area from layout.ContentArea()
-	// which has already subtracted shadow space. Dialog body fits here,
-	// shadow extends past into edge indent area.
-
-	// If dimensions not yet set, use terminal dimensions as fallback
-	// This handles the initial render before WindowSizeMsg arrives
+	// If dimensions not yet set, use terminal dimensions as fallback.
 	width, height := s.width, s.height
 	if width == 0 || height == 0 {
 		termW, termH, _ := console.GetTerminalSize()
 		if termW > 0 && termH > 0 {
-			// Apply content area calculation
 			hasShadow := tui.IsShadowEnabled()
 			header := tui.NewHeaderModel()
 			header.SetWidth(termW - 2)
@@ -40,25 +33,20 @@ func (s *DisplayOptionsScreen) ViewString() (result string) {
 	}
 
 	dl := s.computePanelLayout(width)
+	s.outerMenu.SetSize(dl.settingsDialogWidth, height)
+	settingsDialog := s.outerMenu.ViewString()
 
-	// 1. Render Settings Dialog
-	settingsDialog := s.renderSettingsDialog(dl.settingsDialogWidth, height)
-
-	// If preview doesn't fit, just return the settings dialog
 	if !dl.previewFits {
 		return settingsDialog
 	}
 
-	// 2. Render Preview Dialog
 	settingsHeight := lipgloss.Height(settingsDialog)
 	preview := s.renderPreviewDialog(settingsHeight)
 
-	// 3. Compose combined view (for non-layered fallback)
 	styles := tui.GetStyles()
 	previewW := lipgloss.Width(preview)
 	settingsW := lipgloss.Width(settingsDialog)
 
-	// Real visual gutter calculation for ViewString
 	gutterW := width - settingsW - previewW
 	if gutterW < 1 {
 		gutterW = 1
@@ -67,41 +55,6 @@ func (s *DisplayOptionsScreen) ViewString() (result string) {
 	gutterStr := gutterStyle.Height(settingsHeight).Width(gutterW).Render("")
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, settingsDialog, gutterStr, preview)
-}
-
-func (s *DisplayOptionsScreen) renderSettingsDialog(dialogWidth, height int) string {
-	layout := tui.GetLayout()
-	menuWidth := dialogWidth - layout.BorderWidth()
-	if menuWidth < 40 {
-		menuWidth = 40
-	}
-
-	themeView := s.themeMenu.ViewString()
-	optionsView := s.optionsMenu.ViewString()
-
-	leftColumnParts := []string{themeView, optionsView}
-	for i, p := range leftColumnParts {
-		leftColumnParts[i] = strings.TrimRight(p, "\n")
-	}
-	leftColumn := lipgloss.JoinVertical(lipgloss.Left, leftColumnParts...)
-
-	var buttons []tui.ButtonSpec
-	if s.isRoot {
-		buttons = []tui.ButtonSpec{
-			{Text: "Apply", Active: s.focusedPanel == FocusButtons && s.focusedButton == 0},
-			{Text: "Exit", Active: s.focusedPanel == FocusButtons && s.focusedButton == 1},
-		}
-	} else {
-		buttons = []tui.ButtonSpec{
-			{Text: "Apply", Active: s.focusedPanel == FocusButtons && s.focusedButton == 0},
-			{Text: "Back", Active: s.focusedPanel == FocusButtons && s.focusedButton == 1},
-			{Text: "Exit", Active: s.focusedPanel == FocusButtons && s.focusedButton == 2},
-		}
-	}
-	buttonRow := tui.RenderCenteredButtons(menuWidth, buttons...)
-	settingsContent := lipgloss.JoinVertical(lipgloss.Left, leftColumn, buttonRow)
-
-	return tui.RenderBorderedBoxCtx("Appearance Settings", settingsContent, menuWidth, s.height, s.focused, false, tui.GetActiveContext().DialogTitleAlign, "Theme_Title", tui.GetActiveContext())
 }
 
 func (s *DisplayOptionsScreen) renderPreviewDialog(targetHeight int) string {
@@ -132,17 +85,19 @@ func (s *DisplayOptionsScreen) Layers() []*lipgloss.Layer {
 		previewW := lipgloss.Width(preview)
 		previewX := width - previewW
 
-		// 2. Settings width is derived from actual previewX so it fills the remaining space.
+		// 2. Settings dialog uses the width computed by SetSize (settingsDialogWidth).
+		// Re-size to the exact available space so it fills up to the gutter edge.
 		settingsW := previewX - gutter
-		settingsDialog := s.renderSettingsDialog(settingsW, height)
+		s.outerMenu.SetSize(settingsW, height)
+		settingsDialog := s.outerMenu.ViewString()
 		return []*lipgloss.Layer{
 			lipgloss.NewLayer(settingsDialog).X(0).Y(0).Z(tui.ZScreen),
 			lipgloss.NewLayer(preview).X(previewX).Y(0).Z(tui.ZScreen),
 		}
 	}
 
-	// No preview: settings fills full width (compositor handles shadow independently).
-	settingsDialog := s.renderSettingsDialog(width, height)
+	// No preview: settings fills available width.
+	settingsDialog := s.outerMenu.ViewString()
 	return []*lipgloss.Layer{
 		lipgloss.NewLayer(settingsDialog).X(0).Y(0).Z(tui.ZScreen),
 	}
@@ -195,13 +150,13 @@ func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegi
 	buttonY := 1 + s.themeMenu.Height() + s.optionsMenu.Height()
 	btnRowWidth := dialogContentWidth
 
-	// Button panel background
+	// Button panel background — height matches flat (1) vs bordered (3) from outerMenu layout.
 	regions = append(regions, tui.HitRegion{
 		ID:     tui.IDButtonPanel,
 		X:      offsetX + contentX,
 		Y:      offsetY + buttonY,
 		Width:  btnRowWidth,
-		Height: tui.DialogButtonHeight, // usually 3 to wrap buttons with borders
+		Height: s.outerMenu.GetButtonHeight(),
 		ZOrder: tui.ZScreen + 1,
 	})
 

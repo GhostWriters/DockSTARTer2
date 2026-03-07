@@ -61,7 +61,7 @@ Subtitle = "{{[black:-:-]}}"
 CommandLine = "{{[yellow::-B]}}"
 
 ButtonActive = "{{[white:red:-B]}}"
-ButtonInactive = "{{[black:-:-]}}"
+ButtonInactive = "{{[black:white:-]}}"
 
 Item = "{{[black:-]}}"
 ItemSelected = "{{[black:red:-]}}"

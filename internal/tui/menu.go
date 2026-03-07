@@ -419,6 +419,10 @@ type MenuModel struct {
 	viewStartY     int         // Persistent scroll offset for variable height lists
 
 	menuName string // Name used for --menu or -M to return to this screen
+
+	// Content sections: sub-menus rendered stacked inside the outer border.
+	// When present, replaces the standard list+inner-border rendering.
+	contentSections []*MenuModel
 }
 
 // FocusItem represents which UI element has focus
@@ -546,6 +550,22 @@ func (m *MenuModel) MenuName() string {
 // SetMenuName sets the persistent menu name
 func (m *MenuModel) SetMenuName(name string) {
 	m.menuName = name
+}
+
+// AddContentSection appends a sub-menu as a stacked section rendered inside this menu's border.
+// When sections are present the standard list is not rendered.
+func (m *MenuModel) AddContentSection(section *MenuModel) {
+	m.contentSections = append(m.contentSections, section)
+}
+
+// SetFocusedItem explicitly sets which UI element has focus (list or a button).
+func (m *MenuModel) SetFocusedItem(item FocusItem) {
+	m.focusedItem = item
+}
+
+// GetButtonHeight returns the current button row height (1 = flat, 3 = bordered).
+func (m *MenuModel) GetButtonHeight() int {
+	return m.layout.ButtonHeight
 }
 
 // View implements tea.Model and ScreenModel

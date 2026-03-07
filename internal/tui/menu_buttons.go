@@ -77,12 +77,13 @@ func (m *MenuModel) getButtonSpecs() []ButtonSpec {
 	return specs
 }
 
-// renderSimpleButtons creates a button row with evenly spaced sections
+// renderSimpleButtons creates a button row with evenly spaced sections.
+// Uses the border decision already stored in m.layout.ButtonHeight to avoid
+// re-evaluating width (which would ignore height constraints).
 func (m *MenuModel) renderSimpleButtons(contentWidth int) string {
-	// Build button specs with focus state and explicit zone IDs
 	specs := m.getButtonSpecs()
-
-	return RenderCenteredButtons(contentWidth, specs...)
+	useBorders := m.layout.ButtonHeight == DialogButtonHeight
+	return renderCenteredButtonsImpl(contentWidth, useBorders, GetActiveContext(), specs...)
 }
 
 func (m *MenuModel) renderButtons(contentWidth int) string {

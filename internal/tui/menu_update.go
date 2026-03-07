@@ -493,6 +493,7 @@ func (m *MenuModel) handleSpace() (tea.Model, tea.Cmd) {
 func (m *MenuModel) SetSize(width, height int) {
 	m.width = width
 	m.height = height
+	m.InvalidateCache()
 
 	// If in flow mode, calculate height based on content
 	if m.flowMode {
@@ -517,6 +518,12 @@ func (m *MenuModel) Height() int {
 
 func (m *MenuModel) calculateLayout() {
 	if m.width == 0 || m.height == 0 {
+		return
+	}
+
+	// Sections-based layout: delegate to the specialized calculator.
+	if len(m.contentSections) > 0 {
+		m.calculateSectionLayout()
 		return
 	}
 
@@ -569,7 +576,10 @@ func (m *MenuModel) calculateLayout() {
 	}
 
 	// 3. Button and Shadow Heights
-	buttonHeight := DialogButtonHeight
+	// Button height is 3 with borders, or 1 if space is too tight for them.
+	// innerBoxWidth mirrors the width passed to renderSimpleButtons in ViewString.
+	innerBoxWidth := listWidth + GetLayout().BorderWidth()
+	buttonHeight := ButtonRowHeight(innerBoxWidth, m.getButtonSpecs()...)
 	shadowHeight := 0
 	hasShadow := currentConfig.UI.Shadow
 	if hasShadow {
@@ -597,12 +607,27 @@ func (m *MenuModel) calculateLayout() {
 		overhead = titleHeight + subtitleHeight + layout.BorderHeight() + buttonBudget
 		maxListHeight = m.height - overhead
 	} else {
-		// Full dialog overhead: borders, subtitle, buttons, shadow
-		// Vertical budgeting uses DialogContentHeight which handles gaps
+		// Full dialog overhead: borders, subtitle, buttons, shadow.
+		// DialogContentHeight uses DialogButtonHeight (3) as the constant button budget;
+		// if the width-based check dropped borders (buttonHeight = 1), add back the 2 freed lines.
 		maxListHeight = layout.DialogContentHeight(m.height, subtitleHeight, m.showButtons, hasShadow)
+		if m.showButtons && buttonHeight != DialogButtonHeight {
+			maxListHeight += DialogButtonHeight - buttonHeight
+		}
 		// Account for inner border around the list (Top + Bottom = 2 lines)
 		maxListHeight -= layout.BorderHeight()
 		overhead = m.height - maxListHeight
+	}
+
+	// Height-based border fallback: only drop bordered buttons when they leave no
+	// room at all for list content. Using <= 0 (not a fixed small number) avoids
+	// premature triggering in taller dialogs with submenus or subtitles.
+	if m.showButtons && buttonHeight == DialogButtonHeight && maxListHeight <= 0 {
+		freed := DialogButtonHeight - 1 // reclaim 2 lines
+		buttonHeight = 1
+		buttonBudget = 1
+		maxListHeight += freed
+		overhead -= freed
 	}
 
 	if maxListHeight < 3 {
@@ -634,6 +659,84 @@ func (m *MenuModel) calculateLayout() {
 	}
 
 	m.list.SetSize(listWidth, listHeight)
+}
+
+// calculateSectionLayout distributes available height among content sections.
+// Fixed sections (flowMode) get their intrinsic height; the remaining height goes
+// to expandable sections.  Called by calculateLayout when contentSections is set.
+func (m *MenuModel) calculateSectionLayout() {
+	layout := GetLayout()
+	contentWidth := m.width - layout.BorderWidth()
+	if contentWidth < 1 {
+		contentWidth = 1
+	}
+
+	// Button height — start with the width-based decision.
+	buttonHeight := DialogButtonHeight
+	buttonBudget := 0
+	if m.showButtons {
+		buttonHeight = ButtonRowHeight(contentWidth, m.getButtonSpecs()...)
+		buttonBudget = buttonHeight
+	}
+
+	// Available height inside the outer border.
+	innerHeight := m.height - layout.BorderHeight()
+
+	// Pass 1: measure fixed sections (flow mode = intrinsic height).
+	sectionHeights := make([]int, len(m.contentSections))
+	fixedTotal := 0
+	expandableCount := 0
+	for i, sec := range m.contentSections {
+		if sec.flowMode {
+			flowH := sec.GetFlowHeight(contentWidth)
+			sectionH := flowH + layout.BorderHeight()
+			sectionHeights[i] = sectionH
+			fixedTotal += sectionH
+		} else {
+			expandableCount++
+		}
+	}
+
+	// Remaining height for expandable sections.
+	const minExpandable = 4
+	remaining := innerHeight - fixedTotal - buttonBudget
+
+	// Height-based button border fallback: drop to flat only when expandable
+	// sections would have no room at all.
+	if m.showButtons && buttonHeight == DialogButtonHeight && remaining < minExpandable {
+		buttonHeight = 1
+		buttonBudget = 1
+		remaining = innerHeight - fixedTotal - buttonBudget
+	}
+	if remaining < minExpandable {
+		remaining = minExpandable
+	}
+
+	expandableH := remaining
+	if expandableCount > 1 {
+		expandableH = remaining / expandableCount
+	}
+
+	// Pass 2: size each section.
+	for i, sec := range m.contentSections {
+		h := sectionHeights[i]
+		if h == 0 {
+			h = expandableH
+		}
+		sec.SetSize(contentWidth, h)
+	}
+
+	shadowHeight := 0
+	if currentConfig.UI.Shadow {
+		shadowHeight = DialogShadowHeight
+	}
+
+	m.layout = DialogLayout{
+		Width:        m.width,
+		Height:       m.height,
+		ButtonHeight: buttonHeight,
+		ShadowHeight: shadowHeight,
+	}
 }
 
 // SetFlowMode toggles horizontal flow layout

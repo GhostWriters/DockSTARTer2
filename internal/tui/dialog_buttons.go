@@ -63,10 +63,20 @@ func GetButtonHitRegions(dialogID string, offsetX, offsetY, contentWidth, zOrder
 			maxButtonWidth = width
 		}
 	}
-	buttonContentWidth := maxButtonWidth + 4
-	sampleStyle := ctx.ButtonInactive.Width(buttonContentWidth).Align(lipgloss.Center)
-	sampleStyle = ApplyInnerBorderCtx(sampleStyle, false, ctx)
-	buttonWidth := lipgloss.Width(sampleStyle.Render(strings.Repeat("x", maxButtonWidth)))
+	useBorders := buttonsFitWithBorders(contentWidth, ctx, buttons)
+	var buttonWidth int
+	if useBorders {
+		buttonContentWidth := maxButtonWidth + 4
+		sampleStyle := ctx.ButtonInactive.Width(buttonContentWidth).Align(lipgloss.Center)
+		sampleStyle = ApplyInnerBorderCtx(sampleStyle, false, ctx)
+		buttonWidth = lipgloss.Width(sampleStyle.Render(strings.Repeat("x", maxButtonWidth)))
+	} else {
+		buttonWidth = maxButtonWidth + 2 // "< label >" with interior padding
+	}
+	buttonHeight := 1
+	if useBorders {
+		buttonHeight = 3
+	}
 
 	var regions []HitRegion
 	numButtons := len(buttons)
@@ -91,7 +101,7 @@ func GetButtonHitRegions(dialogID string, offsetX, offsetY, contentWidth, zOrder
 			X:      buttonX,
 			Y:      offsetY,
 			Width:  buttonWidth,
-			Height: 3, // Button border + text + border
+			Height: buttonHeight,
 			ZOrder: zOrder,
 		})
 	}
@@ -99,13 +109,58 @@ func GetButtonHitRegions(dialogID string, offsetX, offsetY, contentWidth, zOrder
 	return regions
 }
 
+// buttonsFitWithBorders returns true if bordered buttons fit within contentWidth.
+// It renders a sample button to get the exact bordered width, matching the real render path.
+func buttonsFitWithBorders(contentWidth int, ctx StyleContext, buttons []ButtonSpec) bool {
+	if len(buttons) == 0 {
+		return true
+	}
+	maxButtonWidth := 0
+	for _, btn := range buttons {
+		if w := lipgloss.Width(btn.Text); w > maxButtonWidth {
+			maxButtonWidth = w
+		}
+	}
+	buttonContentWidth := maxButtonWidth + 4
+	sampleStyle := ctx.ButtonInactive.Width(buttonContentWidth).Align(lipgloss.Center)
+	sampleStyle = ApplyInnerBorderCtx(sampleStyle, false, ctx)
+	buttonWidth := lipgloss.Width(sampleStyle.Render(strings.Repeat(" ", maxButtonWidth)))
+	sectionWidth := contentWidth / len(buttons)
+	return buttonWidth <= sectionWidth
+}
+
+// ButtonRowHeight returns the rendered height of a button row given the available content width.
+// Returns 3 when bordered buttons fit, or 1 when the width is too tight for borders.
+func ButtonRowHeight(contentWidth int, buttons ...ButtonSpec) int {
+	if buttonsFitWithBorders(contentWidth, GetActiveContext(), buttons) {
+		return 3
+	}
+	return 1
+}
+
 // RenderCenteredButtons renders buttons centered in sections
 func RenderCenteredButtons(contentWidth int, buttons ...ButtonSpec) string {
 	return RenderCenteredButtonsCtx(contentWidth, GetActiveContext(), buttons...)
 }
 
-// RenderCenteredButtonsCtx renders buttons centered using a specific context
+// RenderCenteredButtonsCtx renders buttons centered using a specific context.
+// Borders are automatically dropped if the buttons don't fit within contentWidth.
 func RenderCenteredButtonsCtx(contentWidth int, ctx StyleContext, buttons ...ButtonSpec) string {
+	useBorders := buttonsFitWithBorders(contentWidth, ctx, buttons)
+	return renderCenteredButtonsImpl(contentWidth, useBorders, ctx, buttons...)
+}
+
+// RenderCenteredButtonsExplicit renders buttons with an explicit border decision,
+// bypassing the automatic width check. Use when the caller pre-computes border
+// suitability from both width and height constraints (e.g. DisplayOptionsScreen).
+func RenderCenteredButtonsExplicit(contentWidth int, useBorders bool, ctx StyleContext, buttons ...ButtonSpec) string {
+	return renderCenteredButtonsImpl(contentWidth, useBorders, ctx, buttons...)
+}
+
+// renderCenteredButtonsImpl renders buttons with an explicit border decision.
+// Use this when the caller has already determined whether borders should be shown
+// (e.g. from a pre-computed layout.ButtonHeight), bypassing the width re-check.
+func renderCenteredButtonsImpl(contentWidth int, useBorders bool, ctx StyleContext, buttons ...ButtonSpec) string {
 	if len(buttons) == 0 {
 		return ""
 	}
@@ -119,8 +174,13 @@ func RenderCenteredButtonsCtx(contentWidth int, ctx StyleContext, buttons ...But
 		}
 	}
 
-	// Render each button with fixed width and rounded border
+	// buttonContentWidth: bordered buttons use maxWidth + 4 (2 spaces each side inside the box);
+	// flat buttons use maxWidth (brackets are rendered separately in dialog color).
 	buttonContentWidth := maxButtonWidth + 4
+	if !useBorders {
+		buttonContentWidth = maxButtonWidth
+	}
+
 	var renderedButtons []string
 	for _, btn := range buttons {
 		var buttonStyle lipgloss.Style
@@ -131,13 +191,35 @@ func RenderCenteredButtonsCtx(contentWidth int, ctx StyleContext, buttons ...But
 		}
 
 		buttonStyle = buttonStyle.Width(buttonContentWidth).Align(lipgloss.Center)
-		buttonStyle = ApplyInnerBorderCtx(buttonStyle, btn.Active, ctx)
+		if useBorders {
+			buttonStyle = ApplyInnerBorderCtx(buttonStyle, btn.Active, ctx)
+		}
 
-		// RenderHotkeyLabel needs to handle focus too, but it uses GetStyles() inside.
-		// Let's pass the context if we refactor it, or just use the existing one for now.
-		// Actually, RenderHotkeyLabel should also be context-aware.
 		renderedLabel := RenderHotkeyLabelCtx(btn.Text, btn.Active, ctx)
-		renderedButtons = append(renderedButtons, buttonStyle.Render(renderedLabel))
+		var rendered string
+		if useBorders {
+			// Border is the visual delimiter; center the hotkey-highlighted text inside the box.
+			rendered = buttonStyle.Render(renderedLabel)
+		} else {
+			// Flat: pad label to maxButtonWidth so all buttons are the same inner width —
+			// shorter labels get interior spaces (< Back >, < Exit >) while the longest
+			// fills flush (<Select>). Brackets rendered in dialog color (colors only, no width),
+			// text in button style with MaintainBackground to prevent ANSI bleed from hotkey rendering.
+			bracketStyle := lipgloss.NewStyle().
+				Foreground(ctx.Dialog.GetForeground()).
+				Background(ctx.Dialog.GetBackground())
+			pad := maxButtonWidth - lipgloss.Width(btn.Text)
+			leftPad := pad / 2
+			rightPad := pad - leftPad
+			inner := strings.Repeat(" ", leftPad) + renderedLabel + strings.Repeat(" ", rightPad)
+			// Pass a background-only style to MaintainBackground — the full buttonStyle has
+			// Width+Align set, which causes getANSI() to capture leading padding spaces and
+			// inject them after every reset in the text, producing visible extra spaces.
+			bgStyle := lipgloss.NewStyle().Background(buttonStyle.GetBackground())
+			buttonPart := MaintainBackground(buttonStyle.Render(inner), bgStyle)
+			rendered = bracketStyle.Render("<") + buttonPart + bracketStyle.Render(">")
+		}
+		renderedButtons = append(renderedButtons, rendered)
 	}
 
 	numButtons := len(buttons)
