@@ -255,26 +255,7 @@ func (m *messageDialogModel) calculateLayout() {
 	if m.width == 0 || m.height == 0 {
 		return
 	}
-
-	// 1. Shadow
-	shadow := 0
-	if currentConfig.UI.Shadow {
-		shadow = DialogShadowHeight
-	}
-
-	// 2. Button
-	buttons := DialogButtonHeight
-
-	// 3. Overhead
-	overhead := DialogBorderHeight + buttons + shadow
-
-	m.layout = DialogLayout{
-		Width:        m.width,
-		Height:       m.height,
-		ButtonHeight: buttons,
-		ShadowHeight: shadow,
-		Overhead:     overhead,
-	}
+	m.layout = newStandardDialogLayout(m.width, m.height)
 }
 
 // ShowMessageDialog displays a message dialog

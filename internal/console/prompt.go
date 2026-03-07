@@ -48,6 +48,9 @@ func QuestionPrompt(ctx context.Context, printer Printer, title, question string
 	}
 	title = Sprintf("%s", title)
 
+	// Log the question regardless of prompt mode (matches bash notice behavior)
+	printer(ctx, "%s", questionStr)
+
 	// Check if we should use TUI for this prompt
 	if TUIConfirm != nil {
 		defaultYes := strings.EqualFold(defaultValue, "y")
@@ -68,8 +71,6 @@ func QuestionPrompt(ctx context.Context, printer Printer, title, question string
 		ynPrompt = "[yN]"
 	}
 
-	// Print the question (parsing semantic colors)
-	printer(ctx, "%s", questionStr)
 	printer(ctx, "%s", ynPrompt)
 
 	// Switch to raw mode to read a single character
@@ -166,14 +167,15 @@ func TextPrompt(ctx context.Context, printer Printer, title, question string, se
 	}
 	title = Sprintf("%s", title)
 
-	if TUIPrompt != nil {
-		return TUIPrompt(title, questionStr, sensitive)
-	}
-
+	// Log the prompt regardless of mode (matches bash notice behavior)
 	if title != "" {
 		printer(ctx, "%s", title)
 	}
 	printer(ctx, "%s: ", questionStr)
+
+	if TUIPrompt != nil {
+		return TUIPrompt(title, questionStr, sensitive)
+	}
 
 	if sensitive {
 		passwordBytes, err := term.ReadPassword(int(os.Stdin.Fd()))

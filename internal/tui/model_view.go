@@ -74,10 +74,12 @@ func (m *AppModel) View() (v tea.View) {
 	maxX := layout.EdgeIndent
 	maxY := contentYOffset
 
-	// 3. Layer: Screen Stack
-	allScreens := append([]ScreenModel{}, m.screenStack...)
+	// 3. Layer: Active Screen only
+	// The screen stack is navigation history — previous screens must not render through
+	// the active screen's background. Dialogs overlay via the dialog stack below.
+	var allScreens []ScreenModel
 	if m.activeScreen != nil {
-		allScreens = append(allScreens, m.activeScreen)
+		allScreens = []ScreenModel{m.activeScreen}
 	}
 
 	for i, s := range allScreens {
@@ -107,11 +109,11 @@ func (m *AppModel) View() (v tea.View) {
 			screenZBase := ZScreen + (i * 10)
 
 			// Centralized Automatic Shadowing:
-			// Apply a shadow to each layer that is at a main visibility level (ZScreen or ZDialog).
+			// Apply a shadow to each layer at the base Z level (relative offset == 0).
 			addShadowForLayer := func(l *lipgloss.Layer) {
-				// Use relative Z to check if it's a main layer (offset from the screen's base Z)
+				// originalZ == 0 means this is the base content layer, not a sub-layer (hit regions, etc.)
 				originalZ := l.GetZ() - screenZBase
-				if m.config.UI.Shadow && (originalZ == ZScreen || originalZ == ZDialog) {
+				if m.config.UI.Shadow && originalZ == 0 {
 					content := l.GetContent()
 					shadowBox := GetShadowBoxCtx(content, GetActiveContext())
 					if shadowBox != "" {
@@ -193,9 +195,9 @@ func (m *AppModel) View() (v tea.View) {
 
 			// Centralized Automatic Shadowing for Dialogs
 			addShadowForDialogLayer := func(l *lipgloss.Layer) {
-				// Check if the layer's Z (before modal offset) was at a main visibility level
+				// originalZ == 0 means this is the base content layer for this dialog slot
 				originalZ := l.GetZ() - modalZBase
-				if m.config.UI.Shadow && (originalZ == ZDialog || originalZ == ZScreen) {
+				if m.config.UI.Shadow && originalZ == 0 {
 					content := l.GetContent()
 					shadowBox := GetShadowBoxCtx(content, GetActiveContext())
 					if shadowBox != "" {

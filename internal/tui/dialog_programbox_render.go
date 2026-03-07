@@ -341,10 +341,10 @@ func RunProgramBox(ctx context.Context, title, subtitle string, task func(contex
 	// Create Bubble Tea program
 	p := NewProgram(model)
 
-	console.TUIConfirm = PromptConfirm
+	registerCallbacks()
 	defer func() {
 		program = nil
-		console.TUIConfirm = nil
+		deregisterCallbacks()
 	}()
 
 	// Run the program (Init will start the task)

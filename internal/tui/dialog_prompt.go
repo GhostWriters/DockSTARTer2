@@ -322,22 +322,7 @@ func (m *promptDialogModel) calculateLayout() {
 	if m.width == 0 || m.height == 0 {
 		return
 	}
-
-	shadow := 0
-	if currentConfig.UI.Shadow {
-		shadow = DialogShadowHeight
-	}
-
-	buttons := DialogButtonHeight
-	overhead := DialogBorderHeight + buttons + shadow
-
-	m.layout = DialogLayout{
-		Width:        m.width,
-		Height:       m.height,
-		ButtonHeight: buttons,
-		ShadowHeight: shadow,
-		Overhead:     overhead,
-	}
+	m.layout = newStandardDialogLayout(m.width, m.height)
 }
 
 // ShowPromptDialog displays a prompt dialog and returns the text and confirmed bool.

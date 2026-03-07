@@ -214,6 +214,7 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	backdropBlock := lipgloss.JoinVertical(lipgloss.Left, backdropLines...)
 
 	dialogBox := tui.RenderBorderedBoxCtx(dTitle, contentStr, 38, 0, true, false, previewCtx.DialogTitleAlign, "Theme_Title", previewCtx)
+	dialogBox = tui.AddShadowCtx(dialogBox, previewCtx)
 	backdropBlock = tui.Overlay(dialogBox, backdropBlock, tui.OverlayCenter, tui.OverlayCenter, 0, 0)
 
 	// --- 3. Help Line ---

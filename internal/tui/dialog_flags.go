@@ -125,15 +125,10 @@ func (d *FlagsToggleDialog) ViewString() string {
 
 // SetSize implements sizing
 func (d *FlagsToggleDialog) SetSize(width, height int) {
-	layout := GetLayout()
-	// Constrain to available content area
-	w := width
-	if w > 60 { // Don't let it get ridiculously wide
-		w = 60
+	if width > 60 {
+		width = 60
 	}
-	// Subtract borders to get inner width
-	innerW := w - layout.DialogBorder
-	d.menu.SetSize(innerW, height)
+	d.menu.SetSize(width, height)
 }
 
 // IsMaximized lets the AppModel know its size state

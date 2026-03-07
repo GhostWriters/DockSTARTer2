@@ -296,26 +296,7 @@ func (m *confirmDialogModel) calculateLayout() {
 	if m.width == 0 || m.height == 0 {
 		return
 	}
-
-	// 1. Shadow
-	shadow := 0
-	if currentConfig.UI.Shadow {
-		shadow = DialogShadowHeight
-	}
-
-	// 2. Buttons
-	buttons := DialogButtonHeight
-
-	// 3. Overhead
-	overhead := DialogBorderHeight + buttons + shadow
-
-	m.layout = DialogLayout{
-		Width:        m.width,
-		Height:       m.height,
-		ButtonHeight: buttons,
-		ShadowHeight: shadow,
-		Overhead:     overhead,
-	}
+	m.layout = newStandardDialogLayout(m.width, m.height)
 }
 
 // ShowConfirmDialog displays a confirmation dialog and returns the result

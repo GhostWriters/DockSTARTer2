@@ -39,32 +39,13 @@ func (s *DisplayOptionsScreen) ViewString() (result string) {
 		}
 	}
 
-	previewMinWidth := 50
-	minDialogWidth := 40 + layout.BorderWidth()
-	gutter := layout.VisualGutter(tui.IsShadowEnabled())
-
-	// Preview fits if: settings + gutter + preview fits in content area
-	previewFits := width >= minDialogWidth+gutter+previewMinWidth
-
-	// Calculate dialog content width
-	var dialogContentWidth int
-	if previewFits {
-		// Use a fixed width for preview in calculations
-		previewW := 44 + layout.BorderWidth()
-		settingsW := (width - previewW) - gutter
-		dialogContentWidth = settingsW - layout.BorderWidth()
-	} else {
-		dialogContentWidth = width - layout.BorderWidth()
-	}
-	if dialogContentWidth < 40 {
-		dialogContentWidth = 40
-	}
+	dl := s.computePanelLayout(width)
 
 	// 1. Render Settings Dialog
-	settingsDialog := s.renderSettingsDialog(dialogContentWidth, height)
+	settingsDialog := s.renderSettingsDialog(dl.settingsDialogWidth, height)
 
 	// If preview doesn't fit, just return the settings dialog
-	if !previewFits {
+	if !dl.previewFits {
 		return settingsDialog
 	}
 
@@ -140,31 +121,27 @@ func (s *DisplayOptionsScreen) Layers() []*lipgloss.Layer {
 		return nil
 	}
 
-	layout := tui.GetLayout()
-	gutter := layout.VisualGutter(tui.IsShadowEnabled())
-	previewMinWidth := 50
-	previewFits := width >= (40 + layout.BorderWidth() + gutter + previewMinWidth)
+	dl := s.computePanelLayout(width)
 
-	if previewFits {
-		// 1. Render Preview at far right
+	if dl.previewFits {
+		layout := tui.GetLayout()
+		gutter := layout.VisualGutter(tui.IsShadowEnabled())
+
+		// 1. Render Preview at far right; measure actual rendered width for precise positioning.
 		preview := s.renderPreviewDialog(height)
 		previewW := lipgloss.Width(preview)
 		previewX := width - previewW
 
-		// 2. Calculate Settings width to maintain shadow-aware separation
+		// 2. Settings width is derived from actual previewX so it fills the remaining space.
 		settingsW := previewX - gutter
-		dialogContentWidth := settingsW - layout.BorderWidth()
-		if dialogContentWidth < 40 {
-			dialogContentWidth = 40
-		}
-
-		settingsDialog := s.renderSettingsDialog(dialogContentWidth+layout.BorderWidth(), height)
+		settingsDialog := s.renderSettingsDialog(settingsW, height)
 		return []*lipgloss.Layer{
 			lipgloss.NewLayer(settingsDialog).X(0).Y(0).Z(tui.ZScreen),
 			lipgloss.NewLayer(preview).X(previewX).Y(0).Z(tui.ZScreen),
 		}
 	}
 
+	// No preview: settings fills full width (compositor handles shadow independently).
 	settingsDialog := s.renderSettingsDialog(width, height)
 	return []*lipgloss.Layer{
 		lipgloss.NewLayer(settingsDialog).X(0).Y(0).Z(tui.ZScreen),
@@ -174,8 +151,6 @@ func (s *DisplayOptionsScreen) Layers() []*lipgloss.Layer {
 // GetHitRegions implements HitRegionProvider for mouse hit testing
 func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegion {
 	var regions []tui.HitRegion
-
-	layout := tui.GetLayout()
 
 	// Content starts at (1, 1) relative to root because of the outer border
 	const contentX = 1
@@ -196,21 +171,8 @@ func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegi
 	})
 
 	// Width calculations for the main dialog area
-	gutter := layout.VisualGutter(tui.IsShadowEnabled())
-	previewMinWidth := 50
-	previewFits := s.width >= (40 + layout.BorderWidth() + gutter + previewMinWidth)
-
-	var dialogContentWidth int
-	if previewFits {
-		previewW := 44 + layout.BorderWidth()
-		settingsW := (s.width - previewW) - gutter
-		dialogContentWidth = settingsW - layout.BorderWidth()
-	} else {
-		dialogContentWidth = s.width - layout.BorderWidth()
-	}
-	if dialogContentWidth < 40 {
-		dialogContentWidth = 40
-	}
+	dl := s.computePanelLayout(s.width)
+	dialogContentWidth := dl.menuWidth
 
 	// Options menu is rendered directly BELOW the Theme menu
 	optionsY := contentY + s.themeMenu.Height()
@@ -261,7 +223,7 @@ func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegi
 	)...)
 
 	// Preview Mockup Regions (when it fits)
-	if previewFits {
+	if dl.previewFits {
 		// Calculate preview position matching Layers()
 		preview := s.renderPreviewDialog(s.height)
 		previewW := lipgloss.Width(preview)

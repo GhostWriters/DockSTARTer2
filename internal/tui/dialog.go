@@ -64,6 +64,23 @@ type DialogLayout struct {
 	ContentW int // Width of content area (inside borders)
 }
 
+// newStandardDialogLayout builds a DialogLayout for a dialog with borders, buttons, and optional shadow.
+// All three simple dialog types (confirm, message, prompt) share this calculation.
+func newStandardDialogLayout(width, height int) DialogLayout {
+	shadow := 0
+	if currentConfig.UI.Shadow {
+		shadow = DialogShadowHeight
+	}
+	buttons := DialogButtonHeight
+	return DialogLayout{
+		Width:        width,
+		Height:       height,
+		ButtonHeight: buttons,
+		ShadowHeight: shadow,
+		Overhead:     DialogBorderHeight + buttons + shadow,
+	}
+}
+
 // CalculateBaseOverhead returns the overhead lines for a standard dialog without a viewport
 func CalculateBaseOverhead(hasShadow bool, hasButtons bool) int {
 	overhead := DialogBorderHeight

@@ -290,6 +290,56 @@ func (s *DisplayOptionsScreen) HelpText() string {
 	return "Tab to cycle panels, Enter to Apply, Esc to Cancel"
 }
 
+// panelLayout holds the computed split-panel sizing for DisplayOptionsScreen.
+// Used by SetSize, ViewString, Layers, and GetHitRegions to guarantee consistent calculations.
+type panelLayout struct {
+	previewFits         bool
+	settingsDialogWidth int // outer width passed to renderSettingsDialog
+	menuWidth           int // inner content width for sub-menus, buttons, and hit regions
+}
+
+// Panel layout constants — single definition used by all rendering paths.
+const (
+	displayPreviewInnerWidth = 44 // preview inner content width (border added via BorderWidth)
+	displayPreviewMinWidth   = 50 // minimum preview panel width
+	displayMinMenuWidth      = 40 // minimum settings menu inner content width
+)
+
+// computePanelLayout is the single source of truth for the split-panel layout.
+// All rendering paths (SetSize, ViewString, Layers, GetHitRegions) delegate here.
+func (s *DisplayOptionsScreen) computePanelLayout(width int) panelLayout {
+	layout := tui.GetLayout()
+	gutter := layout.VisualGutter(tui.IsShadowEnabled())
+
+	fullPreviewW := displayPreviewInnerWidth + layout.BorderWidth()
+	minSettingsOuterW := displayMinMenuWidth + layout.BorderWidth()
+	previewFits := width >= minSettingsOuterW+gutter+displayPreviewMinWidth
+
+	var settingsDialogWidth int
+	if previewFits {
+		// Subtract shadow space (= BorderWidth) so outer dialog + shadow fits in settingsW.
+		settingsW := (width - fullPreviewW) - gutter
+		settingsDialogWidth = settingsW - layout.BorderWidth()
+	} else {
+		// Reserve shadow space on the right for manual composition in ViewString.
+		settingsDialogWidth = width - layout.BorderWidth()
+	}
+	if settingsDialogWidth < minSettingsOuterW {
+		settingsDialogWidth = minSettingsOuterW
+	}
+
+	menuWidth := settingsDialogWidth - layout.BorderWidth()
+	if menuWidth < displayMinMenuWidth {
+		menuWidth = displayMinMenuWidth
+	}
+
+	return panelLayout{
+		previewFits:         previewFits,
+		settingsDialogWidth: settingsDialogWidth,
+		menuWidth:           menuWidth,
+	}
+}
+
 func (s *DisplayOptionsScreen) SetSize(width, height int) {
 	s.width = width
 	s.height = height
@@ -298,34 +348,14 @@ func (s *DisplayOptionsScreen) SetSize(width, height int) {
 		return
 	}
 
+	dl := s.computePanelLayout(width)
 	layout := tui.GetLayout()
-
-	previewMinWidth := 48
-	minDialogWidth := 44 + layout.BorderWidth()
-	gutter := layout.VisualGutter(tui.IsShadowEnabled())
-	previewFits := width >= minDialogWidth+gutter+previewMinWidth
-
-	var dialogContentWidth int
-	if previewFits {
-		dialogContentWidth = width - gutter - previewMinWidth
-	} else {
-		dialogContentWidth = width
-	}
-
-	menuWidth := dialogContentWidth - layout.BorderWidth()
-	// Ensure menuWidth doesn't exceed the safe content area in case of miscalculation
-	if menuWidth < 40 {
-		menuWidth = 40
-	}
-	if menuWidth > width-layout.BorderWidth() {
-		menuWidth = width - layout.BorderWidth()
-	}
 
 	hasShadow := tui.IsShadowEnabled()
 	optionsContentHeight := layout.DialogContentHeight(height, 0, true, hasShadow)
 	overhead := height - optionsContentHeight
 
-	optionsFlowLines := s.optionsMenu.GetFlowHeight(menuWidth)
+	optionsFlowLines := s.optionsMenu.GetFlowHeight(dl.menuWidth)
 	optionsHeight := optionsFlowLines + layout.BorderHeight()
 
 	themeHeight := s.height - optionsHeight - overhead
@@ -333,8 +363,8 @@ func (s *DisplayOptionsScreen) SetSize(width, height int) {
 		themeHeight = 4
 	}
 
-	s.themeMenu.SetSize(menuWidth, themeHeight)
-	s.optionsMenu.SetSize(menuWidth, optionsHeight)
+	s.themeMenu.SetSize(dl.menuWidth, themeHeight)
+	s.optionsMenu.SetSize(dl.menuWidth, optionsHeight)
 }
 
 func (s *DisplayOptionsScreen) IsMaximized() bool {

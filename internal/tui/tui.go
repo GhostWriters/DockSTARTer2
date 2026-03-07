@@ -42,11 +42,23 @@ var (
 	programExited chan struct{}
 )
 
-// Initialize sets up the TUI without starting the run loop
-func Initialize(ctx context.Context) error {
+// registerCallbacks wires TUI prompt/shutdown handlers into the console package.
+func registerCallbacks() {
 	console.TUIConfirm = PromptConfirm
 	console.TUIPrompt = PromptText
 	console.TUIShutdown = Shutdown
+}
+
+// deregisterCallbacks removes TUI prompt/shutdown handlers from the console package.
+func deregisterCallbacks() {
+	console.TUIConfirm = nil
+	console.TUIPrompt = nil
+	console.TUIShutdown = nil
+}
+
+// Initialize sets up the TUI without starting the run loop
+func Initialize(ctx context.Context) error {
+	registerCallbacks()
 
 	currentConfig = config.LoadAppConfig()
 	if _, err := theme.Load(currentConfig.UI.Theme, ""); err != nil { // Initial theme load
