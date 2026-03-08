@@ -155,6 +155,11 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 	align := GetActiveContext().DialogTitleAlign
 	if m.subMenuMode {
 		align = GetActiveContext().SubmenuTitleAlign
+		if focused {
+			titleTag = "Theme_TitleSubMenuFocused"
+		} else {
+			titleTag = "Theme_TitleSubMenu"
+		}
 	}
 
 	ctx := GetActiveContext()
