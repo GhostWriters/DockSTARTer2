@@ -208,8 +208,8 @@ func (m *confirmDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	questionStyle := ctx.Dialog.Padding(1, 2).Width(contentWidth)
 	questionHeight := lipgloss.Height(questionStyle.Render(m.question))
 
-	// buttonY: border (1) + question with padding
-	buttonY := 1 + questionHeight
+	// buttonY: border (1) + question with padding + spacer (1)
+	buttonY := 1 + questionHeight + 1
 
 	// Use centralized button hit region helper with dialog ID for disambiguation
 	// Must include Text to properly calculate button width
