@@ -64,19 +64,26 @@ func hitIDToPanelID(hitID string) string {
 func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 	// 1. RESIZE DRAG PRIORITY: If log panel is dragging, it intercepts EVERYTHING
 	if m.logPanel.isDragging {
+		prevHeight := m.logPanel.height
 		updated, cmd := m.logPanel.Update(msg)
 		m.logPanel = updated.(LogPanelModel)
 
-		// If height changed, we need to resize other components
-		m.backdrop.SetSize(m.width, m.backdropHeight())
+		// Only resize downstream components when the panel height actually changed.
+		// Mouse motion events fire at pixel resolution but terminal rows span many
+		// pixels, so many consecutive events map to the same row — skipping the
+		// resize avoids invalidating the menu render cache and recomputing shadows
+		// on those no-op frames.
+		if m.logPanel.height != prevHeight {
+			m.backdrop.SetSize(m.width, m.backdropHeight())
 
-		caW, caH := m.getContentArea()
-		if m.activeScreen != nil {
-			m.activeScreen.SetSize(caW, caH)
-		}
-		if m.dialog != nil {
-			if sizable, ok := m.dialog.(interface{ SetSize(int, int) }); ok {
-				sizable.SetSize(caW, caH)
+			caW, caH := m.getContentArea()
+			if m.activeScreen != nil {
+				m.activeScreen.SetSize(caW, caH)
+			}
+			if m.dialog != nil {
+				if sizable, ok := m.dialog.(interface{ SetSize(int, int) }); ok {
+					sizable.SetSize(caW, caH)
+				}
 			}
 		}
 		return m, cmd, true

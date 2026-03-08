@@ -9,6 +9,15 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+// shadowBoxCache caches the most recently computed shadow box.
+// The shadow depends only on the content dimensions and context settings —
+// not the content itself — so we key on (width, height, shadowLevel, lineChars).
+var shadowBoxCache struct {
+	width, height, level int
+	lineChars            bool
+	result               string
+}
+
 // ViewStringer is an interface for models that provide string content for compositing
 type ViewStringer interface {
 	ViewString() string
@@ -224,11 +233,32 @@ func (m AppModel) GetLogPanel() LogPanelModel {
 // compositorAddShadow adds a drop-shadow layer behind l in the compositor.
 // It fires only when enabled is true and l is a base content layer (l.GetZ() == baseZ).
 // DialogShadowWidth/Height from dialog.go are used as the canonical offsets.
+// The shadow box is cached by content dimensions + context settings so it is
+// not recomputed on frames where neither the dialog size nor the theme changed.
 func compositorAddShadow(comp *lipgloss.Compositor, l *lipgloss.Layer, baseZ int, enabled bool) {
 	if !enabled || l.GetZ()-baseZ != 0 {
 		return
 	}
-	if shadowBox := GetShadowBoxCtx(l.GetContent(), GetActiveContext()); shadowBox != "" {
+	content := l.GetContent()
+	w := WidthWithoutZones(content)
+	h := lipgloss.Height(content)
+	if w <= 0 || h <= 0 {
+		return
+	}
+	ctx := GetActiveContext()
+	var shadowBox string
+	if shadowBoxCache.width == w && shadowBoxCache.height == h &&
+		shadowBoxCache.level == ctx.ShadowLevel && shadowBoxCache.lineChars == ctx.LineCharacters {
+		shadowBox = shadowBoxCache.result
+	} else {
+		shadowBox = GetShadowBoxCtx(content, ctx)
+		shadowBoxCache.width = w
+		shadowBoxCache.height = h
+		shadowBoxCache.level = ctx.ShadowLevel
+		shadowBoxCache.lineChars = ctx.LineCharacters
+		shadowBoxCache.result = shadowBox
+	}
+	if shadowBox != "" {
 		comp.AddLayers(lipgloss.NewLayer(shadowBox).
 			X(l.GetX() + DialogShadowWidth).
 			Y(l.GetY() + DialogShadowHeight).
