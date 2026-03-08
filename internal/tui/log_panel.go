@@ -335,8 +335,12 @@ func (m LogPanelModel) ViewString() string {
 			vpH = 1
 		}
 	}
-	m.viewport.SetHeight(vpH)
-	m.viewport.SetWidth(m.width)
+	if m.viewport.Height() != vpH {
+		m.viewport.SetHeight(vpH)
+	}
+	if m.viewport.Width() != m.width {
+		m.viewport.SetWidth(m.width)
+	}
 
 	vpStyle := lipgloss.NewStyle().
 		Width(m.width).
