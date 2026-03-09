@@ -37,6 +37,14 @@ func (m *MenuModel) renderVariableHeightList() string {
 		maxHeight = 1
 	}
 
+	// Reserve the right gutter for the scrollbar when enabled.
+	// Space is always reserved (even when not scrolling) to prevent layout jumps.
+	scrollbar := currentConfig.UI.Scrollbar
+	listContentWidth := maxWidth
+	if scrollbar && listContentWidth > scrollbarGutterWidth+2 {
+		listContentWidth -= scrollbarGutterWidth
+	}
+
 	// Filter items manually to match list state
 	filter := m.list.FilterValue()
 	var visibleItems []MenuItem
@@ -58,7 +66,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 		return lipgloss.NewStyle().
 			Background(dialogBG).
 			Height(maxHeight).
-			Width(maxWidth).
+			Width(listContentWidth).
 			Padding(0, 1).
 			Render("No results found.")
 	}
@@ -95,7 +103,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 			if item.Tag != "" {
 				line = SemanticStyle("{{|Theme_TagKey|}}").Render(item.Tag)
 			} else {
-				line = strutil.Repeat("─", maxWidth)
+				line = strutil.Repeat("─", listContentWidth)
 			}
 			renderedItems = append(renderedItems, neutralStyle.Padding(0, 1).Render(line))
 			itemHeights = append(itemHeights, 1)
@@ -149,7 +157,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 		cbWidth := lipgloss.Width(GetPlainText(checkbox))
 		paddingSpaces := strutil.Repeat(" ", max(0, maxTagLen-lipgloss.Width(GetPlainText(tag))+3))
 		prefixWidth := cbWidth + maxTagLen + 3
-		availableWidth := maxWidth - prefixWidth
+		availableWidth := listContentWidth - prefixWidth
 
 		// The key here is that RenderThemeText must process the raw string *first* so
 		// lipgloss gets real ANSI codes instead of pseudo-brackets `{{ }}` which falsely
@@ -172,9 +180,9 @@ func (m *MenuModel) renderVariableHeightList() string {
 		}
 
 		finalItem := ""
-		// maxWidth represents the inner content width. So the outer Lipgloss Width with left/right padding must be maxWidth + 2
-		// otherwise Lipgloss compresses the box and double-wraps the line, stripping our indentation.
-		rowStyle := neutralStyle.Width(maxWidth+2).Padding(0, 1)
+		// listContentWidth is the inner content width. The outer Lipgloss Width with left/right padding
+		// must be listContentWidth + 2, otherwise Lipgloss compresses the box and double-wraps lines.
+		rowStyle := neutralStyle.Width(listContentWidth+2).Padding(0, 1)
 		for j, l := range renderedItemLines {
 			if j > 0 {
 				finalItem += "\n"
@@ -189,6 +197,25 @@ func (m *MenuModel) renderVariableHeightList() string {
 	totalContentHeight := 0
 	for _, h := range itemHeights {
 		totalContentHeight += h
+	}
+
+	// Helper: build the blank padding line (used in both branches).
+	blankLine := func() string {
+		return neutralStyle.Padding(0, 1).Render(strutil.Repeat(" ", listContentWidth)) + console.CodeReset
+	}
+
+	// appendScrollbar joins each viewLine with its corresponding scrollbar character.
+	appendScrollbar := func(lines []string, total, offset int) []string {
+		if !scrollbar {
+			return lines
+		}
+		col := buildScrollbarColumn(total, maxHeight, offset, len(lines), ctx.LineCharacters, ctx)
+		for i, line := range lines {
+			if i < len(col) {
+				lines[i] = line + col[i]
+			}
+		}
+		return lines
 	}
 
 	if totalContentHeight <= maxHeight {
@@ -208,7 +235,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 						ID:     GetMenuItemID(m.id, actualIndex),
 						X:      0, // Relative to start of list-box inner content
 						Y:      aggY,
-						Width:  maxWidth,
+						Width:  listContentWidth,
 						Height: h,
 					})
 				}
@@ -216,12 +243,20 @@ func (m *MenuModel) renderVariableHeightList() string {
 			aggY += h
 		}
 
-		result := strings.Join(renderedItems, "\n")
-		// Fill remaining height with blank lines
-		paddingLines := maxHeight - totalContentHeight
-		for i := 0; i < paddingLines; i++ {
-			result += "\n" + neutralStyle.Padding(0, 1).Render(strutil.Repeat(" ", maxWidth)) + console.CodeReset
+		// Build viewLines so we can attach the scrollbar column uniformly.
+		var viewLines []string
+		for _, item := range renderedItems {
+			for _, line := range strings.Split(item, "\n") {
+				viewLines = append(viewLines, line)
+			}
 		}
+		for len(viewLines) < maxHeight {
+			viewLines = append(viewLines, blankLine())
+		}
+		// No scrolling — scrollbar column is all blanks/spaces (stable gutter).
+		viewLines = appendScrollbar(viewLines, totalContentHeight, 0)
+
+		result := strings.Join(viewLines, "\n")
 
 		// Save for memoization
 		m.lastListView = result
@@ -292,7 +327,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 						ID:     GetMenuItemID(m.id, actualIndex),
 						X:      0, // Relative to list content
 						Y:      y,
-						Width:  maxWidth,
+						Width:  listContentWidth,
 						Height: itemH,
 					})
 				}
@@ -310,8 +345,11 @@ func (m *MenuModel) renderVariableHeightList() string {
 	}
 
 	for len(viewLines) < maxHeight {
-		viewLines = append(viewLines, neutralStyle.Padding(0, 1).Render(strutil.Repeat(" ", maxWidth))+console.CodeReset)
+		viewLines = append(viewLines, blankLine())
 	}
+
+	// Attach scrollbar column on the right.
+	viewLines = appendScrollbar(viewLines, totalContentHeight, viewStart)
 
 	finalResult := strings.Join(viewLines, "\n")
 
