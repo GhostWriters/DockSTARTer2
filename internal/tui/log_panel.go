@@ -508,16 +508,16 @@ func (m LogPanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 
 // DragScrollbar scrolls the viewport so the thumb at mouseY corresponds to the new position.
 // sbAbsTopY is the absolute screen Y of the first scrollbar row; vpH is the viewport height.
-// Returns a new LogPanelModel with the updated viewport scroll position.
-func (m LogPanelModel) DragScrollbar(mouseY, sbAbsTopY, vpH int) LogPanelModel {
+// Returns the updated LogPanelModel and true if the scroll position changed.
+func (m LogPanelModel) DragScrollbar(mouseY, sbAbsTopY, vpH int) (LogPanelModel, bool) {
 	trackH := vpH - 2
 	if trackH <= 0 {
-		return m
+		return m, false
 	}
 	total := m.viewport.TotalLineCount()
 	visible := m.viewport.Height()
 	if total <= visible {
-		return m
+		return m, false
 	}
 	maxOff := total - visible
 	trackRelY := mouseY - (sbAbsTopY + 1)
@@ -528,9 +528,12 @@ func (m LogPanelModel) DragScrollbar(mouseY, sbAbsTopY, vpH int) LogPanelModel {
 		trackRelY = trackH
 	}
 	newOff := trackRelY * maxOff / trackH
+	if newOff == m.viewport.YOffset() {
+		return m, false
+	}
 	m.viewport.GotoTop()
 	m.viewport.ScrollDown(newOff)
-	return m
+	return m, true
 }
 
 // logPanelMaxHeight returns the maximum height the log panel may occupy.

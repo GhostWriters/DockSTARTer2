@@ -36,8 +36,9 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.MouseMotionMsg:
 		if m.sbDragging {
-			m.scrollbarDragTo(msg.Y)
-			m.InvalidateCache()
+			if m.scrollbarDragTo(msg.Y) {
+				m.InvalidateCache()
+			}
 		}
 		return m, nil
 
@@ -751,10 +752,11 @@ func (m *MenuModel) scrollHalfPageDown() {
 
 // scrollbarDragTo updates the scroll position based on an absolute mouse Y coordinate
 // during a scrollbar thumb drag. It maps the track-relative position to an item offset.
-func (m *MenuModel) scrollbarDragTo(mouseY int) {
+// Returns true if the scroll position changed (cache should be invalidated).
+func (m *MenuModel) scrollbarDragTo(mouseY int) bool {
 	trackH := m.sbInfo.Height - 2 // subtract top and bottom arrows
 	if trackH < 1 {
-		return
+		return false
 	}
 
 	// mouseY relative to the start of the track (row 1, just after the up arrow)
@@ -776,7 +778,7 @@ func (m *MenuModel) scrollbarDragTo(mouseY int) {
 		lineTotal := m.lastScrollTotal
 		maxOff := lineTotal - visible
 		if maxOff <= 0 {
-			return
+			return false
 		}
 		newOff := trackRelY * maxOff / trackH
 		if newOff < 0 {
@@ -784,6 +786,9 @@ func (m *MenuModel) scrollbarDragTo(mouseY int) {
 		}
 		if newOff > maxOff {
 			newOff = maxOff
+		}
+		if newOff == m.viewStartY {
+			return false
 		}
 		m.viewStartY = newOff
 		// Move cursor proportionally so the render auto-scroll aligns with newOff.
@@ -796,12 +801,12 @@ func (m *MenuModel) scrollbarDragTo(mouseY int) {
 			m.cursor = m.list.Index()
 			menuSelectedIndices[m.id] = m.cursor
 		}
-		return
+		return true
 	}
 
 	maxOff := total - visible
 	if maxOff <= 0 {
-		return
+		return false
 	}
 	newOff := trackRelY * maxOff / trackH
 	if newOff < 0 {
@@ -810,9 +815,13 @@ func (m *MenuModel) scrollbarDragTo(mouseY int) {
 	if newOff > maxOff {
 		newOff = maxOff
 	}
+	if newOff == m.list.Index() {
+		return false
+	}
 	m.list.Select(newOff)
 	m.cursor = m.list.Index()
 	menuSelectedIndices[m.id] = m.cursor
+	return true
 }
 
 // calculateSectionLayout distributes available height among content sections.

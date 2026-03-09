@@ -98,7 +98,10 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		}
 		if motion, ok := msg.(tea.MouseMotionMsg); ok {
 			vpH := m.logPanel.Height() - 1
-			m.logPanel = m.logPanel.DragScrollbar(motion.Y, m.logPanelSbAbsTopY, vpH)
+			updated, changed := m.logPanel.DragScrollbar(motion.Y, m.logPanelSbAbsTopY, vpH)
+			if changed {
+				m.logPanel = updated
+			}
 			return m, nil, true
 		}
 		return m, nil, true
