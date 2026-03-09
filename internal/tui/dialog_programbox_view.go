@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"DockSTARTer2/internal/strutil"
-
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
@@ -17,117 +15,29 @@ func (m *ProgramBoxModel) ViewString() string {
 
 	ctx := GetActiveContext()
 
-	// Calculate scroll percentage
-	scrollPercent := m.viewport.ScrollPercent()
-
-	// Add scroll indicator at bottom of viewport content
-	scrollIndicator := ctx.TagKey.
-		Bold(true).
-		Render(fmt.Sprintf("%d%%", int(scrollPercent*100)))
-
-	// Use console background for the spacer row
 	// Apply background maintenance to captured output to prevent resets from bleeding
 	viewportContent := MaintainBackground(m.viewport.View(), ctx.Console)
-	viewportContent = applyScrollbarColumn(viewportContent, m.viewport.TotalLineCount(), m.viewport.VisibleLineCount(), m.viewport.YOffset(), currentConfig.UI.Scrollbar, ctx.LineCharacters, ctx)
+	viewportContent, m.sbInfo = applyScrollbarColumnTracked(viewportContent, m.viewport.TotalLineCount(), m.viewport.VisibleLineCount(), m.viewport.YOffset(), currentConfig.UI.Scrollbar, ctx.LineCharacters, ctx)
 
-	// Wrap viewport in rounded inner border with console background
+	// Wrap viewport in rounded inner border with console background.
+	// Disable the bottom border so we can append a custom one with the scroll indicator.
 	viewportStyle := ctx.Console.
-		Padding(0, 0) // Remove side padding inside inner box for a tighter look
+		Padding(0, 0)
 	viewportStyle = ApplyInnerBorderCtx(viewportStyle, m.focused, ctx)
-
-	// Apply scroll indicator manually to bottom border
-	// We disable the bottom border initially to let us construct it ourselves
 	viewportStyle = viewportStyle.BorderBottom(false)
 
 	borderedViewport := viewportStyle.
 		Height(m.viewport.Height()).
 		Render(viewportContent)
 
-	// Construct custom bottom border with label.
-	// Use border characters matching ApplyInnerBorderCtx focus state.
-	var border lipgloss.Border
-	if ctx.LineCharacters {
-		if m.focused {
-			border = ThickRoundedBorder
-		} else {
-			border = lipgloss.RoundedBorder()
-		}
-	} else {
-		if m.focused {
-			border = RoundedThickAsciiBorder
-		} else {
-			border = RoundedAsciiBorder
-		}
-	}
-	width := m.viewport.Width() + scrollbarGutterWidth + 2 // viewport content + gutter + left/right borders
-	labelWidth := lipgloss.Width(scrollIndicator)
-
-	// Determine T-connectors based on focus and line style
-	var leftT, rightT string
-	if ctx.LineCharacters {
-		if m.focused {
-			leftT = "┫"
-			rightT = "┣"
-		} else {
-			leftT = "┤"
-			rightT = "├"
-		}
-	} else {
-		if m.focused {
-			leftT = "H"
-			rightT = "H"
-		} else {
-			leftT = "+"
-			rightT = "+"
-		}
-	}
-
-	// Calculate padding for label to place it on the right
-	// We want it close to the right corner, e.g., 2 chars padding
-	rightPadCnt := 2
-
-	// Ensure we have enough space
-	totalLabelWidth := 1 + labelWidth + 1 // connector + label + connector
-	if width < totalLabelWidth+rightPadCnt+2 {
-		// Fallback to center if too narrow
-		rightPadCnt = (width - totalLabelWidth) / 2
-	}
-
-	// Correct math for bottom line length:
-	// Corner(1) + LeftPad + Connector(1) + Label + Connector(1) + RightPad + Corner(1) = width
-	// LeftPad + RightPad + Label + 4 = width
-	leftPadCnt := width - labelWidth - 4 - rightPadCnt
-	if leftPadCnt < 0 {
-		leftPadCnt = 0
-		rightPadCnt = width - labelWidth - 4
-		if rightPadCnt < 0 {
-			rightPadCnt = 0
-		}
-	}
-
-	// Style for border segments (match ApplyRoundedBorder logic)
-	borderStyle := lipgloss.NewStyle().
-		Foreground(ctx.Border2Color).
-		Background(ctx.Dialog.GetBackground())
-
-	// Build bottom line parts
-	// Left part: BottomLeftCorner + HorizontalLine...
-	leftPart := borderStyle.Render(border.BottomLeft + strutil.Repeat(border.Bottom, leftPadCnt))
-
-	// Connectors
-	leftConnector := borderStyle.Render(leftT)
-	rightConnector := borderStyle.Render(rightT)
-
-	// Right part: ...HorizontalLine + BottomRightCorner
-	rightPart := borderStyle.Render(strutil.Repeat(border.Bottom, rightPadCnt) + border.BottomRight)
-
-	// Combine parts: Left-----┤100%├--Right
-	bottomLine := lipgloss.JoinHorizontal(lipgloss.Bottom, leftPart, leftConnector, scrollIndicator, rightConnector, rightPart)
-
-	// Append custom bottom line to viewport
-	// Use strings.Join to avoid extra newlines often added by lipgloss.JoinVertical
+	// Append custom bottom border. Only show scroll indicator when content overflows.
+	totalWidth := m.viewport.Width() + scrollbarGutterWidth + 2
 	borderedViewport = strings.TrimSuffix(borderedViewport, "\n")
-	borderedViewport = borderedViewport + "\n" + bottomLine
+	if m.sbInfo.Needed {
+		borderedViewport = borderedViewport + "\n" + buildScrollPercentBottomBorder(totalWidth, m.viewport.ScrollPercent(), m.focused, ctx)
+	} else {
+		borderedViewport = borderedViewport + "\n" + buildPlainBottomBorder(totalWidth, m.focused, ctx)
+	}
 
 	// Calculate content width based on viewport (matches borderedViewport width)
 	// viewport.Width() + border (2) = viewport.Width() + 2
@@ -290,6 +200,44 @@ func (m *ProgramBoxModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 			Height: m.layout.ViewportHeight + 2,
 			ZOrder: ZDialog + 5,
 		})
+
+		// Scrollbar hit regions — inside the inner border, right-most gutter column.
+		// Row 0 of borderedViewport is the inner top border; content (with gutter) starts at row 1.
+		if currentConfig.UI.Scrollbar && m.sbInfo.Needed {
+			// sbX: outer border(1) + inner border(1) + viewport content width
+			sbX := offsetX + 2 + m.viewport.Width()
+			// sbTopY: outer border(1) + header + command + inner top border(1) == viewportY+1
+			sbTopY := offsetY + viewportY + 1
+			m.sbAbsTopY = sbTopY
+
+			info := m.sbInfo
+			regions = append(regions, HitRegion{
+				ID: m.id + ".sb.up", X: sbX, Y: sbTopY,
+				Width: 1, Height: 1, ZOrder: ZDialog + 20,
+			})
+			if aboveH := info.ThumbStart - 1; aboveH > 0 {
+				regions = append(regions, HitRegion{
+					ID: m.id + ".sb.above", X: sbX, Y: sbTopY + 1,
+					Width: 1, Height: aboveH, ZOrder: ZDialog + 20,
+				})
+			}
+			if thumbH := info.ThumbEnd - info.ThumbStart; thumbH > 0 {
+				regions = append(regions, HitRegion{
+					ID: m.id + ".sb.thumb", X: sbX, Y: sbTopY + info.ThumbStart,
+					Width: 1, Height: thumbH, ZOrder: ZDialog + 21,
+				})
+			}
+			if belowH := (info.Height - 1) - info.ThumbEnd; belowH > 0 {
+				regions = append(regions, HitRegion{
+					ID: m.id + ".sb.below", X: sbX, Y: sbTopY + info.ThumbEnd,
+					Width: 1, Height: belowH, ZOrder: ZDialog + 20,
+				})
+			}
+			regions = append(regions, HitRegion{
+				ID: m.id + ".sb.down", X: sbX, Y: sbTopY + info.Height - 1,
+				Width: 1, Height: 1, ZOrder: ZDialog + 20,
+			})
+		}
 	}
 
 	// If done, add OK button hit region using centralized helper

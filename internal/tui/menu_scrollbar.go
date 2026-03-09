@@ -1,7 +1,10 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
+
+	"DockSTARTer2/internal/strutil"
 
 	"charm.land/lipgloss/v2"
 )
@@ -26,15 +29,17 @@ func computeScrollbarInfo(total, visible, offset, height int) ScrollbarInfo {
 	}
 	trackH := height - 2 // rows 1..height-2 are the track; row 0 and height-1 are arrows
 	thumbH := max(1, trackH*visible/total)
-	// thumb start in track-relative coords, then shift by 1 for the top arrow
+	// Map offset linearly over [0, total-visible] → thumbTrackStart over [0, trackH-thumbH]
+	// so the thumb reaches the very bottom when scrolled to the end.
 	thumbTrackStart := 0
-	if total > visible {
-		thumbTrackStart = trackH * offset / total
+	maxOff := total - visible
+	if maxOff > 0 {
+		thumbTrackStart = (trackH - thumbH) * offset / maxOff
+		if thumbTrackStart > trackH-thumbH {
+			thumbTrackStart = trackH - thumbH
+		}
 	}
 	thumbStart := 1 + thumbTrackStart
-	if thumbStart+thumbH > height-1 {
-		thumbStart = height - 1 - thumbH
-	}
 	if thumbStart < 1 {
 		thumbStart = 1
 	}
@@ -137,4 +142,94 @@ func buildScrollbarColumn(info ScrollbarInfo, lineChars bool, ctx StyleContext) 
 		}
 	}
 	return col
+}
+
+// buildPlainBottomBorder constructs a plain bottom border line (no label) matching the inner box style.
+func buildPlainBottomBorder(totalWidth int, focused bool, ctx StyleContext) string {
+	var border lipgloss.Border
+	if ctx.LineCharacters {
+		if focused {
+			border = ThickRoundedBorder
+		} else {
+			border = lipgloss.RoundedBorder()
+		}
+	} else {
+		if focused {
+			border = RoundedThickAsciiBorder
+		} else {
+			border = RoundedAsciiBorder
+		}
+	}
+	borderStyle := lipgloss.NewStyle().
+		Foreground(ctx.Border2Color).
+		Background(ctx.Dialog.GetBackground())
+	inner := strutil.Repeat(border.Bottom, totalWidth-2)
+	return borderStyle.Render(border.BottomLeft + inner + border.BottomRight)
+}
+
+// buildScrollPercentBottomBorder constructs a bottom border line for an inner box
+// with a scroll-percent label on the right, styled identically to the programbox indicator.
+// totalWidth is the full visual width of the bordered box including side border chars.
+// Only call this when a scrollbar is needed (sbInfo.Needed == true).
+func buildScrollPercentBottomBorder(totalWidth int, scrollPct float64, focused bool, ctx StyleContext) string {
+	scrollIndicator := ctx.TagKey.Bold(true).Render(fmt.Sprintf("%d%%", int(scrollPct*100)))
+
+	var border lipgloss.Border
+	if ctx.LineCharacters {
+		if focused {
+			border = ThickRoundedBorder
+		} else {
+			border = lipgloss.RoundedBorder()
+		}
+	} else {
+		if focused {
+			border = RoundedThickAsciiBorder
+		} else {
+			border = RoundedAsciiBorder
+		}
+	}
+
+	var leftT, rightT string
+	if ctx.LineCharacters {
+		if focused {
+			leftT = "┫"
+			rightT = "┣"
+		} else {
+			leftT = "┤"
+			rightT = "├"
+		}
+	} else {
+		if focused {
+			leftT = "H"
+			rightT = "H"
+		} else {
+			leftT = "+"
+			rightT = "+"
+		}
+	}
+
+	borderStyle := lipgloss.NewStyle().
+		Foreground(ctx.Border2Color).
+		Background(ctx.Dialog.GetBackground())
+
+	labelWidth := lipgloss.Width(scrollIndicator)
+	rightPadCnt := 2
+	totalLabelWidth := 1 + labelWidth + 1 // connector + label + connector
+	if totalWidth < totalLabelWidth+rightPadCnt+2 {
+		rightPadCnt = (totalWidth - totalLabelWidth) / 2
+	}
+	leftPadCnt := totalWidth - labelWidth - 4 - rightPadCnt
+	if leftPadCnt < 0 {
+		leftPadCnt = 0
+		rightPadCnt = totalWidth - labelWidth - 4
+		if rightPadCnt < 0 {
+			rightPadCnt = 0
+		}
+	}
+
+	leftPart := borderStyle.Render(border.BottomLeft + strutil.Repeat(border.Bottom, leftPadCnt))
+	leftConnector := borderStyle.Render(leftT)
+	rightConnector := borderStyle.Render(rightT)
+	rightPart := borderStyle.Render(strutil.Repeat(border.Bottom, rightPadCnt) + border.BottomRight)
+	return lipgloss.JoinHorizontal(lipgloss.Bottom, leftPart, leftConnector, scrollIndicator, rightConnector, rightPart)
 }

@@ -532,11 +532,9 @@ func (m *MenuModel) calculateLayout() {
 			listWidth = maxListWidth
 		}
 	}
-	if !m.subMenuMode {
-		listWidth -= scrollbarGutterWidth
-		if listWidth < 1 {
-			listWidth = 1
-		}
+	listWidth -= scrollbarGutterWidth
+	if listWidth < 1 {
+		listWidth = 1
 	}
 
 	// 2. Subtitle Height — measured at the actual render width (listWidth + 4) so
@@ -764,8 +762,8 @@ func (m *MenuModel) scrollbarDragTo(mouseY int) {
 	if trackRelY < 0 {
 		trackRelY = 0
 	}
-	if trackRelY >= trackH {
-		trackRelY = trackH - 1
+	if trackRelY > trackH {
+		trackRelY = trackH
 	}
 
 	total := len(m.items)

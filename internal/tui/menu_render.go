@@ -6,6 +6,27 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+// listScrollPercent returns the current scroll position in [0.0, 1.0] for the list.
+func (m *MenuModel) listScrollPercent() float64 {
+	var offset, total int
+	if m.variableHeight {
+		offset = m.viewStartY
+		total = m.lastScrollTotal
+	} else {
+		offset = m.list.Index()
+		total = len(m.items)
+	}
+	maxOff := total - m.layout.ViewportHeight
+	if maxOff <= 0 {
+		return 1.0
+	}
+	pct := float64(offset) / float64(maxOff)
+	if pct > 1.0 {
+		pct = 1.0
+	}
+	return pct
+}
+
 // ViewString renders the menu content as a string (for compositing)
 func (m *MenuModel) ViewString() string {
 	if m.width == 0 {
@@ -52,8 +73,8 @@ func (m *MenuModel) ViewString() string {
 	// The slot is always reserved by calculateLayout, so this adds exactly one char —
 	// space when off or not needed, track/thumb when on and scrollable.
 	// Store the geometry in m.sbInfo so GetHitRegions can emit accurate hit regions.
+	ctx := GetActiveContext()
 	if !m.subMenuMode {
-		ctx := GetActiveContext()
 		enabled := currentConfig.UI.Scrollbar
 		if m.variableHeight {
 			listView, m.sbInfo = applyScrollbarColumnTracked(listView, m.lastScrollTotal, m.layout.ViewportHeight, m.viewStartY, enabled, ctx.LineCharacters, ctx)
@@ -63,11 +84,19 @@ func (m *MenuModel) ViewString() string {
 	}
 
 	// Wrap list in its own border (no padding, items have their own margins).
-	// Use rounded border when focused for higher visual fidelity.
+	// Disable the bottom so we can append a plain or scroll-indicator bottom border.
 	listStyle := styles.Dialog.
 		Padding(0, 0)
 	listStyle = ApplyInnerBorder(listStyle, m.focused, styles.LineCharacters)
+	listStyle = listStyle.BorderBottom(false)
 	borderedList := listStyle.Render(listView)
+	totalWidth := m.list.Width() + scrollbarGutterWidth + 2
+	borderedList = strings.TrimSuffix(borderedList, "\n")
+	if m.sbInfo.Needed {
+		borderedList = borderedList + "\n" + buildScrollPercentBottomBorder(totalWidth, m.listScrollPercent(), m.focused, ctx)
+	} else {
+		borderedList = borderedList + "\n" + buildPlainBottomBorder(totalWidth, m.focused, ctx)
+	}
 
 	// Determine the target content width (the space inside the outer dialog borders)
 	layout := GetLayout()
@@ -203,11 +232,14 @@ func (s *MenuModel) viewSubMenu() string {
 	}
 
 	// 2. Render List
+	ctx := GetActiveContext()
 	var content string
 	if s.flowMode {
 		content = s.renderFlow()
 	} else {
 		content = MaintainBackground(s.list.View(), styles.Dialog)
+		// Append scrollbar/gutter column (same slot reserved by calculateLayout).
+		content, s.sbInfo = applyScrollbarColumnTracked(content, len(s.items), s.layout.ViewportHeight, s.list.Index(), currentConfig.UI.Scrollbar, ctx.LineCharacters, ctx)
 	}
 
 	// 3. Render Buttons (if any)
@@ -230,7 +262,16 @@ func (s *MenuModel) viewSubMenu() string {
 
 	// 4. Render the bordered box with embedded title.
 	// We pass 'true' for rounded so submenus use the rounded corner style.
-	return s.renderBorderWithTitle(combined, contentWidth, targetHeight, s.focusedSub, true, "Theme_Title")
+	result := s.renderBorderWithTitle(combined, contentWidth, targetHeight, s.focusedSub, true, "Theme_Title")
+
+	// Replace bottom border with scroll-percent variant when content overflows.
+	if !s.flowMode && s.sbInfo.Needed {
+		if lastNL := strings.LastIndex(result, "\n"); lastNL >= 0 {
+			bottomLine := buildScrollPercentBottomBorder(s.width, s.listScrollPercent(), s.focusedSub, ctx)
+			result = result[:lastNL+1] + bottomLine
+		}
+	}
+	return result
 }
 
 // viewWithSections renders an outer dialog that stacks content sections (sub-menus)

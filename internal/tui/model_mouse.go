@@ -89,8 +89,23 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		return m, cmd, true
 	}
 
-	// 2. SCROLLBAR DRAG PRIORITY: If the active screen is dragging a scrollbar thumb it intercepts
-	// all mouse events (motion, release) until the drag ends.
+	// 1b. LOG PANEL SCROLLBAR DRAG PRIORITY: If the log-panel scrollbar thumb is being dragged,
+	// intercept all mouse events for proportional scrolling.
+	if m.logPanelSbDragging {
+		if _, ok := msg.(tea.MouseReleaseMsg); ok {
+			m.logPanelSbDragging = false
+			return m, nil, true
+		}
+		if motion, ok := msg.(tea.MouseMotionMsg); ok {
+			vpH := m.logPanel.Height() - 1
+			m.logPanel = m.logPanel.DragScrollbar(motion.Y, m.logPanelSbAbsTopY, vpH)
+			return m, nil, true
+		}
+		return m, nil, true
+	}
+
+	// 2. SCROLLBAR DRAG PRIORITY: If the active screen or dialog is dragging a scrollbar thumb
+	// it intercepts all mouse events (motion, release) until the drag ends.
 	type sbDragger interface{ IsScrollbarDragging() bool }
 	if m.activeScreen != nil {
 		if d, ok := m.activeScreen.(sbDragger); ok && d.IsScrollbarDragging() {
@@ -98,6 +113,13 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 			if s, ok := updated.(ScreenModel); ok {
 				m.activeScreen = s
 			}
+			return m, cmd, true
+		}
+	}
+	if m.dialog != nil {
+		if d, ok := m.dialog.(sbDragger); ok && d.IsScrollbarDragging() {
+			updated, cmd := m.dialog.Update(msg)
+			m.dialog = updated
 			return m, cmd, true
 		}
 	}
@@ -369,15 +391,41 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 			}
 			return m, nil, true
 		default:
-			// If we hit anything else (dialog, screen, header), ensure logs and header are unfocused
-			m.setLogPanelFocus(false)
-			m.setHeaderFocus(HeaderFocusNone)
+			// Log panel scrollbar hits (IDs are "log_panel.sb.*")
+			if strings.HasPrefix(hitID, IDLogPanel+".sb.") {
+				m.setLogPanelFocus(true)
+				if !strings.HasSuffix(hitID, ".sb.thumb") {
+					// Arrow/track clicks: route LayerHitMsg to log panel and return
+					updated, cmd := m.logPanel.Update(LayerHitMsg{ID: hitID, Button: hitButton})
+					m.logPanel = updated.(LogPanelModel)
+					return m, cmd, true
+				}
+				// .sb.thumb: fall through to B0 to start the drag
+			} else {
+				// If we hit anything else (dialog, screen, header), ensure logs and header are unfocused
+				m.setLogPanelFocus(false)
+				m.setHeaderFocus(HeaderFocusNone)
+			}
 		}
 
-		// B0. Scrollbar thumb drag start — route raw click so MenuModel gets the Y coordinate.
+		// B0. Scrollbar thumb drag start — route raw click so the drag-target gets the Y coordinate.
 		// Other .sb.* IDs (up/down/above/below) are handled normally via LayerHitMsg.
 		if strings.HasSuffix(hitID, ".sb.thumb") {
 			if me, ok := msg.(tea.MouseClickMsg); ok && me.Button == tea.MouseLeft {
+				// Log panel scrollbar thumb
+				if strings.HasPrefix(hitID, IDLogPanel+".sb.") {
+					m.setLogPanelFocus(true)
+					m.logPanelSbDragging = true
+					m.logPanelSbAbsTopY = m.height - m.logPanel.Height() + 1
+					return m, nil, true
+				}
+				// Dialog scrollbar thumb
+				if m.dialog != nil {
+					updated, cmd := m.dialog.Update(msg)
+					m.dialog = updated
+					return m, cmd, true
+				}
+				// Active screen scrollbar thumb
 				if m.activeScreen != nil {
 					updated, cmd := m.activeScreen.Update(msg)
 					if s, ok := updated.(ScreenModel); ok {

@@ -136,8 +136,10 @@ type AppModel struct {
 	backdrop *BackdropModel
 
 	// Slide-up log panel (always present below helpline)
-	logPanel        LogPanelModel
-	logPanelFocused bool
+	logPanel           LogPanelModel
+	logPanelFocused    bool
+	logPanelSbDragging bool // true while the log-panel scrollbar thumb is being dragged
+	logPanelSbAbsTopY  int  // absolute Y of the scrollbar's first row (for drag computation)
 
 	// Modal dialog overlay (nil when no dialog)
 	dialog      tea.Model
