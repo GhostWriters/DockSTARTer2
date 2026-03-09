@@ -36,6 +36,11 @@ func TestResolveThemeValue(t *testing.T) {
 		"ChainC":       "{{|Theme_ChainB|}}{{[::B]}}",    // white:black:B
 		"CircularA":    "{{|Theme_CircularB|}}",
 		"CircularB":    "{{|Theme_CircularA|}}",
+		// Inline modifier syntax: {{|Name:fg:bg:flags|}}
+		"InlineFG":     "{{|Theme_Simple:green|}}",    // override fg -> green:blue:B
+		"InlineBG":     "{{|Theme_Simple::green|}}",   // override bg -> red:green:B
+		"InlineFlag":   "{{|Theme_Simple:::U|}}",      // add flag  -> red:blue:BU
+		"InlineReset":  "{{|Theme_Simple:-:-:-R|}}",   // reset fg+bg, add reverse -> ::R
 	}
 
 	tests := []struct {
@@ -72,6 +77,26 @@ func TestResolveThemeValue(t *testing.T) {
 			name:     "Chained Resolution",
 			key:      "ChainC",
 			expected: "\x1b[37m\x1b[40m" + console.CodeBold, // white fg, black bg, bold
+		},
+		{
+			name:     "Inline FG Override",
+			key:      "InlineFG",
+			expected: "\x1b[32m\x1b[44m" + console.CodeBold, // green fg, blue bg, bold
+		},
+		{
+			name:     "Inline BG Override",
+			key:      "InlineBG",
+			expected: "\x1b[31m\x1b[42m" + console.CodeBold, // red fg, green bg, bold
+		},
+		{
+			name:     "Inline Flag Additive",
+			key:      "InlineFlag",
+			expected: console.CodeBold + console.CodeUnderline, // bold + underline
+		},
+		{
+			name:     "Inline Reset FG+BG",
+			key:      "InlineReset",
+			expected: console.CodeReverse, // reverse only (fg+bg reset)
 		},
 	}
 

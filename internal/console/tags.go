@@ -42,7 +42,7 @@ func rebuildRegexes() {
 	dirEscPre := regexp.QuoteMeta(DirectPrefix)
 	dirEscSuf := regexp.QuoteMeta(DirectSuffix)
 
-	semanticRegex = regexp.MustCompile(semEscPre + `(?P<content>[A-Za-z0-9_]+)` + semEscSuf)
+	semanticRegex = regexp.MustCompile(semEscPre + `(?P<content>[A-Za-z0-9_]+(?::[A-Za-z0-9_:\-#;~]*)?)` + semEscSuf)
 	directRegex = regexp.MustCompile(dirEscPre + `(?P<content>[A-Za-z0-9_:\-#;~]+)` + dirEscSuf)
 }
 
@@ -54,7 +54,7 @@ func GetDelimitedRegex() *regexp.Regexp {
 	dirEscSuf := regexp.QuoteMeta(DirectSuffix)
 
 	// Group 1: Semantic, Group 2: Direct
-	pattern := fmt.Sprintf(`(?:%s(?P<semantic>[A-Za-z0-9_]+)%s|%s(?P<direct>[A-Za-z0-9_:\-#;~]+)%s)`,
+	pattern := fmt.Sprintf(`(?:%s(?P<semantic>[A-Za-z0-9_]+(?::[A-Za-z0-9_:\-#;~]*)?)%s|%s(?P<direct>[A-Za-z0-9_:\-#;~]+)%s)`,
 		semEscPre, semEscSuf, dirEscPre, dirEscSuf)
 	return regexp.MustCompile(pattern)
 }
@@ -93,19 +93,36 @@ func ExpandTagsWithPrefix(text string, prefix string) string {
 		if len(subMatch) <= groupIndex {
 			return ""
 		}
-		content := strings.ToLower(subMatch[groupIndex])
+		fullContent := subMatch[groupIndex]
+
+		// Split semantic name from optional inline modifiers (e.g. "Theme_Title:::R" -> "Theme_Title" + "::R")
+		semanticName := fullContent
+		modifiers := ""
+		if idx := strings.IndexByte(fullContent, ':'); idx >= 0 {
+			semanticName = fullContent[:idx]
+			modifiers = fullContent[idx+1:]
+		}
+		content := strings.ToLower(semanticName)
 
 		// 1. Try with prefix if provided
 		if prefix != "" {
 			prefixed := prefix + content
 			if rawCode, ok := semanticMap[prefixed]; ok {
-				return WrapDirect(rawCode)
+				result := WrapDirect(rawCode)
+				if modifiers != "" {
+					result += WrapDirect(modifiers)
+				}
+				return result
 			}
 		}
 
 		// 2. Try raw name
 		if rawCode, ok := semanticMap[content]; ok {
-			return WrapDirect(rawCode)
+			result := WrapDirect(rawCode)
+			if modifiers != "" {
+				result += WrapDirect(modifiers)
+			}
+			return result
 		}
 
 		return ""

@@ -31,7 +31,7 @@ ApplicationFlags = "{{[-:-:-]}}"
 ApplicationFlagsBrackets = "{{[-:-:-R]}}"
 ApplicationFlagsSpace = "{{|Theme_ApplicationVersionSpace|}}"
 
-ApplicationUpdate = "{{|Theme_StatusBar|}}{{[-:-:-R]}}"
+ApplicationUpdate = "{{|Theme_StatusBar:-:-:-R|}}"
 ApplicationUpdateBrackets = "{{|Theme_ApplicationUpdate|}}"
 
 StatusBarFields = "{{[black:white:-]}}"
@@ -84,7 +84,7 @@ TitleUnfocusedIndicator = "{{[::-B]}}"
 TitleFocusIndicator = "{{[::-B]}}"
 
 TitleSubMenu = "{{|Theme_Title|}}"
-TitleSubMenuFocused = "{{|Theme_Title|}}{{[::R]}}"
+TitleSubMenuFocused = "{{|Theme_Title:::R|}}"
 Program = "{{[white:black]}}"
 
 VersionSelected = "{{|Theme_StatusBar|}}"

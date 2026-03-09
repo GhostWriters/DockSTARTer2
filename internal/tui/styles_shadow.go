@@ -184,9 +184,7 @@ func GetShadowBoxCtx(content string, ctx StyleContext) string {
 		case 3:
 			shadeChar = "#"
 		case 4:
-			// For solid ASCII, we'll use a space and reverse the style
-			// This allows the shadow color to be the effective background
-			// while line 934 blends the "reversed foreground" with the screen.
+			// Solid ASCII: use reverse so ShadowColor becomes the visible cell background.
 			shadowStyle = shadowStyle.Foreground(ctx.ShadowColor).Reverse(true)
 			shadeChar = " "
 		default:
@@ -194,10 +192,7 @@ func GetShadowBoxCtx(content string, ctx StyleContext) string {
 		}
 	}
 
-	// BLENDING FIX: Set the background to match the screen so dither "blends" correctly.
-	// This ensures that dithered characters (░▒▓) carry the background color
-	// of the surface they are overlaying. Using lipgloss directly avoids
-	// trailing background bleeds that string-based MaintainBackground causes.
+	// Set the background to match the screen so dither characters blend correctly.
 	shadowStyle = shadowStyle.Background(ctx.Screen.GetBackground())
 
 	// Create the shadow line
