@@ -211,19 +211,20 @@ func (m *ProgramBoxModel) IsScrollbarDragging() bool {
 }
 
 // scrollbarDragTo scrolls the viewport so the thumb at mouseY maps to the correct position.
-func (m *ProgramBoxModel) scrollbarDragTo(mouseY int) {
+// Returns true if the scroll position changed (caller should invalidate render cache).
+func (m *ProgramBoxModel) scrollbarDragTo(mouseY int) bool {
 	info := m.sbInfo
 	if !info.Needed {
-		return
+		return false
 	}
 	trackH := info.Height - 2
 	if trackH <= 0 {
-		return
+		return false
 	}
 	total := m.viewport.TotalLineCount()
 	visible := m.viewport.VisibleLineCount()
 	if total <= visible {
-		return
+		return false
 	}
 	maxOff := total - visible
 	trackRelY := mouseY - (m.sbAbsTopY + 1)
@@ -234,8 +235,12 @@ func (m *ProgramBoxModel) scrollbarDragTo(mouseY int) {
 		trackRelY = trackH
 	}
 	newOff := trackRelY * maxOff / trackH
+	if newOff == m.viewport.YOffset() {
+		return false
+	}
 	m.viewport.GotoTop()
 	m.viewport.ScrollDown(newOff)
+	return true
 }
 
 // startStreamingOutput reads from the provided reader and sends output lines
@@ -505,7 +510,7 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.MouseMotionMsg:
 		if m.sbDragging {
-			m.scrollbarDragTo(msg.Y)
+			m.scrollbarDragTo(msg.Y) // viewport re-renders on next View(); no explicit cache to invalidate
 		}
 		return m, nil
 
