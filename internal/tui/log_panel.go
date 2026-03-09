@@ -215,6 +215,31 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case LayerHitMsg:
+		// Scrollbar arrow/track clicks (IDs are prefixed with IDLogPanel + ".sb.")
+		if strings.HasSuffix(msg.ID, ".sb.up") {
+			if m.expanded {
+				m.viewport.ScrollUp(1)
+			}
+			return m, nil
+		}
+		if strings.HasSuffix(msg.ID, ".sb.down") {
+			if m.expanded {
+				m.viewport.ScrollDown(1)
+			}
+			return m, nil
+		}
+		if strings.HasSuffix(msg.ID, ".sb.above") {
+			if m.expanded {
+				m.viewport.HalfPageUp()
+			}
+			return m, nil
+		}
+		if strings.HasSuffix(msg.ID, ".sb.below") {
+			if m.expanded {
+				m.viewport.HalfPageDown()
+			}
+			return m, nil
+		}
 		if msg.ID == logPanelZoneID {
 			return m, func() tea.Msg { return toggleLogPanelMsg{} }
 		}
@@ -440,9 +465,72 @@ func (m LogPanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 			Height: vpH,
 			ZOrder: ZLogPanel + 1,
 		})
+
+		// Scrollbar hit regions (within viewport, right-most column)
+		if currentConfig.UI.Scrollbar {
+			sbInfo := computeScrollbarInfo(m.viewport.TotalLineCount(), m.viewport.Height(), m.viewport.YOffset(), vpH)
+			if sbInfo.Needed {
+				sbX := offsetX + m.viewport.Width()
+				sbTopY := offsetY + 1 // +1 for the toggle strip row
+
+				regions = append(regions, HitRegion{
+					ID: IDLogPanel + ".sb.up", X: sbX, Y: sbTopY,
+					Width: 1, Height: 1, ZOrder: ZLogPanel + 2,
+				})
+				if aboveH := sbInfo.ThumbStart - 1; aboveH > 0 {
+					regions = append(regions, HitRegion{
+						ID: IDLogPanel + ".sb.above", X: sbX, Y: sbTopY + 1,
+						Width: 1, Height: aboveH, ZOrder: ZLogPanel + 2,
+					})
+				}
+				if thumbH := sbInfo.ThumbEnd - sbInfo.ThumbStart; thumbH > 0 {
+					regions = append(regions, HitRegion{
+						ID: IDLogPanel + ".sb.thumb", X: sbX, Y: sbTopY + sbInfo.ThumbStart,
+						Width: 1, Height: thumbH, ZOrder: ZLogPanel + 3,
+					})
+				}
+				if belowH := (sbInfo.Height - 1) - sbInfo.ThumbEnd; belowH > 0 {
+					regions = append(regions, HitRegion{
+						ID: IDLogPanel + ".sb.below", X: sbX, Y: sbTopY + sbInfo.ThumbEnd,
+						Width: 1, Height: belowH, ZOrder: ZLogPanel + 2,
+					})
+				}
+				regions = append(regions, HitRegion{
+					ID: IDLogPanel + ".sb.down", X: sbX, Y: sbTopY + sbInfo.Height - 1,
+					Width: 1, Height: 1, ZOrder: ZLogPanel + 2,
+				})
+			}
+		}
 	}
 
 	return regions
+}
+
+// DragScrollbar scrolls the viewport so the thumb at mouseY corresponds to the new position.
+// sbAbsTopY is the absolute screen Y of the first scrollbar row; vpH is the viewport height.
+// Returns a new LogPanelModel with the updated viewport scroll position.
+func (m LogPanelModel) DragScrollbar(mouseY, sbAbsTopY, vpH int) LogPanelModel {
+	trackH := vpH - 2
+	if trackH <= 0 {
+		return m
+	}
+	total := m.viewport.TotalLineCount()
+	visible := m.viewport.Height()
+	if total <= visible {
+		return m
+	}
+	maxOff := total - visible
+	trackRelY := mouseY - (sbAbsTopY + 1)
+	if trackRelY < 0 {
+		trackRelY = 0
+	}
+	if trackRelY > trackH {
+		trackRelY = trackH
+	}
+	newOff := trackRelY * maxOff / trackH
+	m.viewport.GotoTop()
+	m.viewport.ScrollDown(newOff)
+	return m
 }
 
 // logPanelMaxHeight returns the maximum height the log panel may occupy.

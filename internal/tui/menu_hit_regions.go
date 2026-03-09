@@ -200,8 +200,8 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		}
 	}
 
-	// 3b. Scrollbar hit regions (non-subMenu menus only, when scrollbar is active)
-	if !m.subMenuMode && currentConfig.UI.Scrollbar && m.sbInfo.Needed {
+	// 3b. Scrollbar hit regions (when scrollbar is active)
+	if currentConfig.UI.Scrollbar && m.sbInfo.Needed {
 		sbX := offsetX + listX + m.list.Width()
 		sbTopY := offsetY + listY
 		m.sbAbsTopY = sbTopY // store for drag-to computation in scrollbarDragTo

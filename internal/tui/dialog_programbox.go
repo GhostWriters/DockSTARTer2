@@ -68,6 +68,11 @@ type ProgramBoxModel struct {
 	// Unified layout (deterministic sizing)
 	layout DialogLayout
 	id     string
+
+	// Scrollbar drag state
+	sbInfo     ScrollbarInfo
+	sbAbsTopY  int
+	sbDragging bool
 }
 
 // SubDialogMsg signals a request to show a sub-dialog and blocks the task
@@ -198,6 +203,39 @@ func (m *ProgramBoxModel) SetIsDialog(isDialog bool) {
 // SetFocused sets the focus state
 func (m *ProgramBoxModel) SetFocused(focused bool) {
 	m.focused = focused
+}
+
+// IsScrollbarDragging reports whether the viewport scrollbar thumb is being dragged.
+func (m *ProgramBoxModel) IsScrollbarDragging() bool {
+	return m.sbDragging
+}
+
+// scrollbarDragTo scrolls the viewport so the thumb at mouseY maps to the correct position.
+func (m *ProgramBoxModel) scrollbarDragTo(mouseY int) {
+	info := m.sbInfo
+	if !info.Needed {
+		return
+	}
+	trackH := info.Height - 2
+	if trackH <= 0 {
+		return
+	}
+	total := m.viewport.TotalLineCount()
+	visible := m.viewport.VisibleLineCount()
+	if total <= visible {
+		return
+	}
+	maxOff := total - visible
+	trackRelY := mouseY - (m.sbAbsTopY + 1)
+	if trackRelY < 0 {
+		trackRelY = 0
+	}
+	if trackRelY > trackH {
+		trackRelY = trackH
+	}
+	newOff := trackRelY * maxOff / trackH
+	m.viewport.GotoTop()
+	m.viewport.ScrollDown(newOff)
 }
 
 // startStreamingOutput reads from the provided reader and sends output lines
@@ -458,7 +496,43 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+	case tea.MouseClickMsg:
+		// Scrollbar thumb drag start (routed by model_mouse.go section B0).
+		if msg.Button == tea.MouseLeft {
+			m.sbDragging = true
+		}
+		return m, nil
+
+	case tea.MouseMotionMsg:
+		if m.sbDragging {
+			m.scrollbarDragTo(msg.Y)
+		}
+		return m, nil
+
+	case tea.MouseReleaseMsg:
+		if m.sbDragging {
+			m.sbDragging = false
+		}
+		return m, nil
+
 	case LayerHitMsg:
+		// Scrollbar arrow/track clicks
+		if strings.HasSuffix(msg.ID, ".sb.up") {
+			m.viewport.ScrollUp(1)
+			return m, nil
+		}
+		if strings.HasSuffix(msg.ID, ".sb.down") {
+			m.viewport.ScrollDown(1)
+			return m, nil
+		}
+		if strings.HasSuffix(msg.ID, ".sb.above") {
+			m.viewport.HalfPageUp()
+			return m, nil
+		}
+		if strings.HasSuffix(msg.ID, ".sb.below") {
+			m.viewport.HalfPageDown()
+			return m, nil
+		}
 		if m.done && buttonIDMatches(msg.ID, "OK") {
 			return m, func() tea.Msg { return CloseDialogMsg{Result: true} }
 		}

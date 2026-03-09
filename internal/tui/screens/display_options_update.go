@@ -9,12 +9,48 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
+// IsScrollbarDragging reports whether any sub-menu is currently dragging a scrollbar thumb.
+func (s *DisplayOptionsScreen) IsScrollbarDragging() bool {
+	return s.themeMenu.IsScrollbarDragging()
+}
+
 func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
+
+	// Forward raw mouse drag/release events to the dragging sub-menu before the type switch
+	// so the drag continues while AppModel routes events via section-2 priority.
+	if s.themeMenu.IsScrollbarDragging() {
+		if _, ok := msg.(tea.MouseMotionMsg); ok {
+			updated, uCmd := s.themeMenu.Update(msg)
+			if m, ok := updated.(*tui.MenuModel); ok {
+				s.themeMenu = m
+			}
+			return s, uCmd
+		}
+		if _, ok := msg.(tea.MouseReleaseMsg); ok {
+			updated, uCmd := s.themeMenu.Update(msg)
+			if m, ok := updated.(*tui.MenuModel); ok {
+				s.themeMenu = m
+			}
+			return s, uCmd
+		}
+	}
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		s.SetSize(msg.Width, msg.Height)
+		return s, nil
+
+	case tea.MouseClickMsg:
+		// Scrollbar thumb drag initiation routed by model_mouse.go section B0.
+		// Forward the raw click to the focused sub-menu so it can start the drag.
+		if msg.Button == tea.MouseLeft && s.focusedPanel == FocusThemes {
+			updated, uCmd := s.themeMenu.Update(msg)
+			if m, ok := updated.(*tui.MenuModel); ok {
+				s.themeMenu = m
+			}
+			return s, uCmd
+		}
 		return s, nil
 
 	case tea.MouseWheelMsg:
