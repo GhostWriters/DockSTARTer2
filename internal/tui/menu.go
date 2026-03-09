@@ -424,6 +424,17 @@ type MenuModel struct {
 	// Content sections: sub-menus rendered stacked inside the outer border.
 	// When present, replaces the standard list+inner-border rendering.
 	contentSections []*MenuModel
+
+	// Scrollbar interaction state
+	sbInfo     ScrollbarInfo // geometry from last render (set by menu_render.go)
+	sbAbsTopY  int           // absolute screen Y of scrollbar column top (set by GetHitRegions)
+	sbDragging bool          // true while the user is dragging the scrollbar thumb
+}
+
+// IsScrollbarDragging reports whether the menu is currently processing a scrollbar thumb drag.
+// AppModel uses this interface to give the active screen drag priority.
+func (m *MenuModel) IsScrollbarDragging() bool {
+	return m.sbDragging
 }
 
 // FocusItem represents which UI element has focus

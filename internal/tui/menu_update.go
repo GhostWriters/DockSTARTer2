@@ -26,7 +26,51 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Middle click triggers toggle on the currently focused item
 		return m.handleSpace()
 
+	case tea.MouseClickMsg:
+		// Raw left click routed by AppModel to start a scrollbar thumb drag.
+		if msg.Button == tea.MouseLeft {
+			m.sbDragging = true
+			m.InvalidateCache()
+		}
+		return m, nil
+
+	case tea.MouseMotionMsg:
+		if m.sbDragging {
+			m.scrollbarDragTo(msg.Y)
+			m.InvalidateCache()
+		}
+		return m, nil
+
+	case tea.MouseReleaseMsg:
+		if m.sbDragging {
+			m.sbDragging = false
+			m.InvalidateCache()
+		}
+		return m, nil
+
 	case LayerHitMsg:
+		// Scrollbar region clicks
+		if strings.HasSuffix(msg.ID, ".sb.up") {
+			m.scrollLineUp()
+			m.InvalidateCache()
+			return m, nil
+		}
+		if strings.HasSuffix(msg.ID, ".sb.down") {
+			m.scrollLineDown()
+			m.InvalidateCache()
+			return m, nil
+		}
+		if strings.HasSuffix(msg.ID, ".sb.above") {
+			m.scrollPageUp()
+			m.InvalidateCache()
+			return m, nil
+		}
+		if strings.HasSuffix(msg.ID, ".sb.below") {
+			m.scrollPageDown()
+			m.InvalidateCache()
+			return m, nil
+		}
+
 		// Handle specific item clicks
 		if strings.HasPrefix(msg.ID, "item-"+m.id+"-") {
 			indexStr := strings.TrimPrefix(msg.ID, "item-"+m.id+"-")
@@ -188,102 +232,27 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Up / Down: navigate the list (independent of button focus)
 		case key.Matches(keyMsg, Keys.Up):
-			m.list.CursorUp()
-			// Skip separators automatically
-			for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator {
-				m.list.CursorUp()
-				// Safety: if we hit top and it's a separator (unlikely with header), stop or wrap?
-				// Simple safety: if index is 0 and it's a separator, try going down instead?
-				// For now, assume top item isn't a separator or just let bubbles handle bounds.
-				if m.list.Index() == 0 && m.items[0].IsSeparator {
-					break
-				}
-			}
-			m.cursor = m.list.Index()
-			menuSelectedIndices[m.id] = m.cursor
+			m.scrollLineUp()
 			return m, nil
 
 		case key.Matches(keyMsg, Keys.Down):
-			m.list.CursorDown()
-			// Skip separators automatically
-			for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator {
-				m.list.CursorDown()
-				if m.list.Index() == len(m.items)-1 && m.items[len(m.items)-1].IsSeparator {
-					break
-				}
-			}
-			m.cursor = m.list.Index()
-			menuSelectedIndices[m.id] = m.cursor
+			m.scrollLineDown()
 			return m, nil
 
 		case key.Matches(keyMsg, Keys.PageUp):
-			pageHeight := m.list.Height()
-			if pageHeight < 1 {
-				pageHeight = 5 // Fallback
-			}
-			newIndex := m.list.Index() - pageHeight
-			if newIndex < 0 {
-				newIndex = 0
-			}
-			m.list.Select(newIndex)
-			// Skip separators automatically (moving down to find first selectable)
-			for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator && m.list.Index() < len(m.items)-1 {
-				m.list.CursorDown()
-			}
-			m.cursor = m.list.Index()
-			menuSelectedIndices[m.id] = m.cursor
+			m.scrollPageUp()
 			return m, nil
 
 		case key.Matches(keyMsg, Keys.HalfPageUp):
-			pageHeight := m.list.Height() / 2
-			if pageHeight < 1 {
-				pageHeight = 1
-			}
-			newIndex := m.list.Index() - pageHeight
-			if newIndex < 0 {
-				newIndex = 0
-			}
-			m.list.Select(newIndex)
-			for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator && m.list.Index() < len(m.items)-1 {
-				m.list.CursorDown()
-			}
-			m.cursor = m.list.Index()
-			menuSelectedIndices[m.id] = m.cursor
+			m.scrollHalfPageUp()
 			return m, nil
 
 		case key.Matches(keyMsg, Keys.PageDown):
-			pageHeight := m.list.Height()
-			if pageHeight < 1 {
-				pageHeight = 5 // Fallback
-			}
-			newIndex := m.list.Index() + pageHeight
-			if newIndex >= len(m.items) {
-				newIndex = len(m.items) - 1
-			}
-			m.list.Select(newIndex)
-			// Skip separators automatically (moving up to find first selectable)
-			for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator && m.list.Index() > 0 {
-				m.list.CursorUp()
-			}
-			m.cursor = m.list.Index()
-			menuSelectedIndices[m.id] = m.cursor
+			m.scrollPageDown()
 			return m, nil
 
 		case key.Matches(keyMsg, Keys.HalfPageDown):
-			pageHeight := m.list.Height() / 2
-			if pageHeight < 1 {
-				pageHeight = 1
-			}
-			newIndex := m.list.Index() + pageHeight
-			if newIndex >= len(m.items) {
-				newIndex = len(m.items) - 1
-			}
-			m.list.Select(newIndex)
-			for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator && m.list.Index() > 0 {
-				m.list.CursorUp()
-			}
-			m.cursor = m.list.Index()
-			menuSelectedIndices[m.id] = m.cursor
+			m.scrollHalfPageDown()
 			return m, nil
 
 		case key.Matches(keyMsg, Keys.Home):
@@ -666,6 +635,186 @@ func (m *MenuModel) calculateLayout() {
 	}
 
 	m.list.SetSize(listWidth, listHeight)
+}
+
+// ---------------------------------------------------------------------------
+// Scroll helpers — used by both key handlers and scrollbar hit handlers
+// ---------------------------------------------------------------------------
+
+func (m *MenuModel) scrollLineUp() {
+	m.list.CursorUp()
+	for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator {
+		m.list.CursorUp()
+		if m.list.Index() == 0 && m.items[0].IsSeparator {
+			break
+		}
+	}
+	m.cursor = m.list.Index()
+	menuSelectedIndices[m.id] = m.cursor
+}
+
+func (m *MenuModel) scrollLineDown() {
+	m.list.CursorDown()
+	for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator {
+		m.list.CursorDown()
+		if m.list.Index() == len(m.items)-1 && m.items[len(m.items)-1].IsSeparator {
+			break
+		}
+	}
+	m.cursor = m.list.Index()
+	menuSelectedIndices[m.id] = m.cursor
+}
+
+func (m *MenuModel) scrollPageUp() {
+	// Keep cursor at the same visual row: advance one page back, same row within page.
+	perPage := m.list.Paginator.PerPage
+	if perPage < 1 {
+		perPage = m.list.Height()
+		if perPage < 1 {
+			perPage = 5
+		}
+	}
+	currentPage := m.list.Paginator.Page
+	currentRow := m.list.Index() - currentPage*perPage
+	if currentRow < 0 {
+		currentRow = 0
+	}
+	newIndex := (currentPage-1)*perPage + currentRow
+	if newIndex < 0 {
+		newIndex = 0
+	}
+	m.list.Select(newIndex)
+	for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator && m.list.Index() < len(m.items)-1 {
+		m.list.CursorDown()
+	}
+	m.cursor = m.list.Index()
+	menuSelectedIndices[m.id] = m.cursor
+}
+
+func (m *MenuModel) scrollHalfPageUp() {
+	pageHeight := m.list.Height() / 2
+	if pageHeight < 1 {
+		pageHeight = 1
+	}
+	newIndex := m.list.Index() - pageHeight
+	if newIndex < 0 {
+		newIndex = 0
+	}
+	m.list.Select(newIndex)
+	for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator && m.list.Index() < len(m.items)-1 {
+		m.list.CursorDown()
+	}
+	m.cursor = m.list.Index()
+	menuSelectedIndices[m.id] = m.cursor
+}
+
+func (m *MenuModel) scrollPageDown() {
+	// Keep cursor at the same visual row: advance one page forward, same row within page.
+	perPage := m.list.Paginator.PerPage
+	if perPage < 1 {
+		perPage = m.list.Height()
+		if perPage < 1 {
+			perPage = 5
+		}
+	}
+	currentPage := m.list.Paginator.Page
+	currentRow := m.list.Index() - currentPage*perPage
+	if currentRow < 0 {
+		currentRow = 0
+	}
+	newIndex := (currentPage+1)*perPage + currentRow
+	if newIndex >= len(m.items) {
+		newIndex = len(m.items) - 1
+	}
+	m.list.Select(newIndex)
+	for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator && m.list.Index() > 0 {
+		m.list.CursorUp()
+	}
+	m.cursor = m.list.Index()
+	menuSelectedIndices[m.id] = m.cursor
+}
+
+func (m *MenuModel) scrollHalfPageDown() {
+	pageHeight := m.list.Height() / 2
+	if pageHeight < 1 {
+		pageHeight = 1
+	}
+	newIndex := m.list.Index() + pageHeight
+	if newIndex >= len(m.items) {
+		newIndex = len(m.items) - 1
+	}
+	m.list.Select(newIndex)
+	for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator && m.list.Index() > 0 {
+		m.list.CursorUp()
+	}
+	m.cursor = m.list.Index()
+	menuSelectedIndices[m.id] = m.cursor
+}
+
+// scrollbarDragTo updates the scroll position based on an absolute mouse Y coordinate
+// during a scrollbar thumb drag. It maps the track-relative position to an item offset.
+func (m *MenuModel) scrollbarDragTo(mouseY int) {
+	trackH := m.sbInfo.Height - 2 // subtract top and bottom arrows
+	if trackH < 1 {
+		return
+	}
+
+	// mouseY relative to the start of the track (row 1, just after the up arrow)
+	trackRelY := mouseY - (m.sbAbsTopY + 1)
+	if trackRelY < 0 {
+		trackRelY = 0
+	}
+	if trackRelY >= trackH {
+		trackRelY = trackH - 1
+	}
+
+	total := len(m.items)
+	visible := m.layout.ViewportHeight
+
+	if m.variableHeight {
+		// For variable-height items, use line-based total/offset for accurate thumb positioning.
+		// Also move the cursor to approximately the dragged line so renderVariableHeightList
+		// does not snap viewStartY back to the old cursor position.
+		lineTotal := m.lastScrollTotal
+		maxOff := lineTotal - visible
+		if maxOff <= 0 {
+			return
+		}
+		newOff := trackRelY * maxOff / trackH
+		if newOff < 0 {
+			newOff = 0
+		}
+		if newOff > maxOff {
+			newOff = maxOff
+		}
+		m.viewStartY = newOff
+		// Move cursor proportionally so the render auto-scroll aligns with newOff.
+		if total > 0 && lineTotal > 0 {
+			approxIdx := newOff * total / lineTotal
+			if approxIdx >= total {
+				approxIdx = total - 1
+			}
+			m.list.Select(approxIdx)
+			m.cursor = m.list.Index()
+			menuSelectedIndices[m.id] = m.cursor
+		}
+		return
+	}
+
+	maxOff := total - visible
+	if maxOff <= 0 {
+		return
+	}
+	newOff := trackRelY * maxOff / trackH
+	if newOff < 0 {
+		newOff = 0
+	}
+	if newOff > maxOff {
+		newOff = maxOff
+	}
+	m.list.Select(newOff)
+	m.cursor = m.list.Index()
+	menuSelectedIndices[m.id] = m.cursor
 }
 
 // calculateSectionLayout distributes available height among content sections.
