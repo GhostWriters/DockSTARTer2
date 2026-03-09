@@ -41,7 +41,7 @@ TitleUnfocusedIndicator = "{{[::-B]}}"
 TitleFocusIndicator = "{{[::-B]}}"
 
 TitleSubMenu = "{{|Theme_Title|}}"
-TitleSubMenuFocused = "{{|Theme_Title|}}{{[::R]}}"
+TitleSubMenuFocused = "{{|Theme_Title:::R|}}"
 
 CommandLine = "{{[white:black]}}"
 ButtonActive = "{{[white:red:B]}}"

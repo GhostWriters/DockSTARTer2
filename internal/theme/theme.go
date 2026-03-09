@@ -188,16 +188,27 @@ func resolveThemeValue(raw string, rawValues map[string]string, visiting map[str
 			// Direct style tag - extract and merge
 			mergeStyle(tag)
 		} else if strings.HasPrefix(tag, semPre) {
-			// Semantic reference - extract tag name
+			// Semantic reference - extract tag name (may include inline modifiers, e.g. "Theme_Title:::R")
 			refKey := strings.TrimSuffix(strings.TrimPrefix(tag, semPre), semSuf)
 
+			// Split off any inline modifiers after the semantic name
+			semanticRef := refKey
+			modifiers := ""
+			if idx := strings.IndexByte(refKey, ':'); idx >= 0 {
+				semanticRef = refKey[:idx]
+				modifiers = refKey[idx+1:]
+			}
+
 			// 1. Try resolving as internal reference first (with or without 'Theme_' prefix)
-			targetKey := strings.TrimPrefix(refKey, "Theme_")
+			targetKey := strings.TrimPrefix(semanticRef, "Theme_")
 			if _, exists := rawValues[targetKey]; exists {
 				resolvedRef, err := resolveThemeValue(rawValues[targetKey], rawValues, visiting,
 					semPre, semSuf, dirPre, dirSuf)
 				if err == nil {
 					mergeStyle(resolvedRef)
+					if modifiers != "" {
+						mergeStyle(modifiers)
+					}
 					cur = cur[end:]
 					continue
 				}
@@ -206,10 +217,13 @@ func resolveThemeValue(raw string, rawValues map[string]string, visiting map[str
 			// 2. Fallback to global semantic tags (e.g. Notice, Success).
 			// Re-wrap in global standard delimiters so ExpandTags can resolve it
 			// regardless of the file-specific delimiters in use.
-			standardTag := console.SemanticPrefix + refKey + console.SemanticSuffix
+			standardTag := console.SemanticPrefix + semanticRef + console.SemanticSuffix
 			expanded := console.ExpandTags(standardTag)
 			if expanded != standardTag && expanded != "" {
 				mergeStyle(expanded)
+			}
+			if modifiers != "" {
+				mergeStyle(modifiers)
 			}
 		}
 
