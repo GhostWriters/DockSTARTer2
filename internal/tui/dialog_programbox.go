@@ -301,6 +301,13 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					ch <- promptResultMsg{confirmed: false}
 				}
 				close(ch)
+			case chan int:
+				if r, ok := resultMsg.Result.(int); ok {
+					ch <- r
+				} else {
+					ch <- -1
+				}
+				close(ch)
 			}
 			m.subDialogChan = nil
 		}
