@@ -89,7 +89,20 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		return m, cmd, true
 	}
 
-	// 2. FOCUS PRIORITY: If log panel has keyboard focus, it owns the scroll wheel and middle click.
+	// 2. SCROLLBAR DRAG PRIORITY: If the active screen is dragging a scrollbar thumb it intercepts
+	// all mouse events (motion, release) until the drag ends.
+	type sbDragger interface{ IsScrollbarDragging() bool }
+	if m.activeScreen != nil {
+		if d, ok := m.activeScreen.(sbDragger); ok && d.IsScrollbarDragging() {
+			updated, cmd := m.activeScreen.Update(msg)
+			if s, ok := updated.(ScreenModel); ok {
+				m.activeScreen = s
+			}
+			return m, cmd, true
+		}
+	}
+
+	// 3. FOCUS PRIORITY: If log panel has keyboard focus, it owns the scroll wheel and middle click.
 	// We do this BEFORE dialog checks so that if a user tabs to logs and a dialog is behind it,
 	// the wheel still scrolls the logs.
 	if m.logPanelFocused {
@@ -105,7 +118,7 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		}
 	}
 
-	// 3. HELP BLOCKADE: If help is open, ANY click closes it for convenience.
+	// 4. HELP BLOCKADE: If help is open, ANY click closes it for convenience.
 	if m.dialog != nil {
 		if _, ok := m.dialog.(*HelpDialogModel); ok {
 			if _, ok := msg.(tea.MouseClickMsg); ok {
@@ -359,6 +372,20 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 			// If we hit anything else (dialog, screen, header), ensure logs and header are unfocused
 			m.setLogPanelFocus(false)
 			m.setHeaderFocus(HeaderFocusNone)
+		}
+
+		// B0. Scrollbar thumb drag start — route raw click so MenuModel gets the Y coordinate.
+		// Other .sb.* IDs (up/down/above/below) are handled normally via LayerHitMsg.
+		if strings.HasSuffix(hitID, ".sb.thumb") {
+			if me, ok := msg.(tea.MouseClickMsg); ok && me.Button == tea.MouseLeft {
+				if m.activeScreen != nil {
+					updated, cmd := m.activeScreen.Update(msg)
+					if s, ok := updated.(ScreenModel); ok {
+						m.activeScreen = s
+					}
+					return m, cmd, true
+				}
+			}
 		}
 
 		// B. Component-specific Dispatch (Semantic Pre-pass)

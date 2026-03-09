@@ -200,6 +200,71 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		}
 	}
 
+	// 3b. Scrollbar hit regions (non-subMenu menus only, when scrollbar is active)
+	if !m.subMenuMode && currentConfig.UI.Scrollbar && m.sbInfo.Needed {
+		sbX := offsetX + listX + m.list.Width()
+		sbTopY := offsetY + listY
+		m.sbAbsTopY = sbTopY // store for drag-to computation in scrollbarDragTo
+
+		info := m.sbInfo
+
+		// Up arrow (row 0)
+		regions = append(regions, HitRegion{
+			ID:     m.id + ".sb.up",
+			X:      sbX,
+			Y:      sbTopY,
+			Width:  1,
+			Height: 1,
+			ZOrder: baseZ + 20,
+		})
+
+		// Track above thumb (rows 1..ThumbStart-1)
+		if aboveH := info.ThumbStart - 1; aboveH > 0 {
+			regions = append(regions, HitRegion{
+				ID:     m.id + ".sb.above",
+				X:      sbX,
+				Y:      sbTopY + 1,
+				Width:  1,
+				Height: aboveH,
+				ZOrder: baseZ + 20,
+			})
+		}
+
+		// Thumb (rows ThumbStart..ThumbEnd-1)
+		if thumbH := info.ThumbEnd - info.ThumbStart; thumbH > 0 {
+			regions = append(regions, HitRegion{
+				ID:     m.id + ".sb.thumb",
+				X:      sbX,
+				Y:      sbTopY + info.ThumbStart,
+				Width:  1,
+				Height: thumbH,
+				ZOrder: baseZ + 21,
+			})
+		}
+
+		// Track below thumb (rows ThumbEnd..Height-2)
+		if belowH := (info.Height - 1) - info.ThumbEnd; belowH > 0 {
+			regions = append(regions, HitRegion{
+				ID:     m.id + ".sb.below",
+				X:      sbX,
+				Y:      sbTopY + info.ThumbEnd,
+				Width:  1,
+				Height: belowH,
+				ZOrder: baseZ + 20,
+			})
+		}
+
+		// Down arrow (row Height-1)
+		regions = append(regions, HitRegion{
+			ID:     m.id + ".sb.down",
+			X:      sbX,
+			Y:      sbTopY + info.Height - 1,
+			Width:  1,
+			Height: 1,
+			ZOrder: baseZ + 20,
+		})
+	}
+
 	// 4. Button regions
 	specs := m.getButtonSpecs()
 	if len(specs) > 0 {

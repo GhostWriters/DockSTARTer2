@@ -51,13 +51,14 @@ func (m *MenuModel) ViewString() string {
 	// Append the scrollbar/gutter column for all full-dialog menus (non-subMenu).
 	// The slot is always reserved by calculateLayout, so this adds exactly one char —
 	// space when off or not needed, track/thumb when on and scrollable.
+	// Store the geometry in m.sbInfo so GetHitRegions can emit accurate hit regions.
 	if !m.subMenuMode {
 		ctx := GetActiveContext()
 		enabled := currentConfig.UI.Scrollbar
 		if m.variableHeight {
-			listView = applyScrollbarColumn(listView, m.lastScrollTotal, m.layout.ViewportHeight, m.viewStartY, enabled, ctx.LineCharacters, ctx)
+			listView, m.sbInfo = applyScrollbarColumnTracked(listView, m.lastScrollTotal, m.layout.ViewportHeight, m.viewStartY, enabled, ctx.LineCharacters, ctx)
 		} else {
-			listView = applyScrollbarColumn(listView, len(m.items), m.layout.ViewportHeight, m.list.Index(), enabled, ctx.LineCharacters, ctx)
+			listView, m.sbInfo = applyScrollbarColumnTracked(listView, len(m.items), m.layout.ViewportHeight, m.list.Index(), enabled, ctx.LineCharacters, ctx)
 		}
 	}
 
