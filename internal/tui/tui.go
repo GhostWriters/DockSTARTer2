@@ -7,8 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"DockSTARTer2/internal/compose"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/docker"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/update"
@@ -447,6 +449,88 @@ func TriggerUpdate() tea.Cmd {
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
 
+		return ShowDialogMsg{Dialog: dialog}
+	}
+}
+
+// PromptChoice displays a blocking multi-choice sub-dialog over the active ProgramBox.
+// choices are the button labels. Returns the chosen index (0-based), or -1 on cancel/Esc.
+func PromptChoice(title, question string, choices ...string) int {
+	if program == nil {
+		return -1
+	}
+	ch := make(chan int)
+	dialog := newChoiceDialog(title, question, choices)
+	dialog.onResult = func(i int) tea.Msg {
+		return SubDialogResultMsg{Result: i}
+	}
+	program.Send(SubDialogMsg{
+		Model: dialog,
+		Chan:  ch,
+	})
+	return <-ch
+}
+
+// TriggerComposeUpdate returns a tea.Cmd that starts all enabled apps via docker compose update.
+func TriggerComposeUpdate() tea.Cmd {
+	return func() tea.Msg {
+		task := func(ctx context.Context, w io.Writer) error {
+			ctx = console.WithTUIWriter(ctx, w)
+			if err := compose.ExecuteCompose(ctx, console.AssumeYes(), console.Force(), "update"); err != nil {
+				logger.Error(ctx, "%v", err)
+				return err
+			}
+			return nil
+		}
+		dialog := NewProgramBoxModel("{{|Theme_TitleSuccess|}}Docker Compose{{[-]}}", "", "")
+		dialog.SetTask(task)
+		dialog.SetIsDialog(true)
+		return ShowDialogMsg{Dialog: dialog}
+	}
+}
+
+// TriggerComposeStop returns a tea.Cmd that prompts Stop/Down/Cancel then runs the chosen compose op.
+func TriggerComposeStop() tea.Cmd {
+	return func() tea.Msg {
+		question := "Would you like to {{|Theme_Highlight|}}Stop{{[-]}} all containers, or bring all containers {{|Theme_Highlight|}}Down{{[-]}}?\n\n{{|Theme_Highlight|}}Stop{{[-]}} will stop them, {{|Theme_Highlight|}}Down{{[-]}} will stop and remove them."
+		task := func(ctx context.Context, w io.Writer) error {
+			ctx = console.WithTUIWriter(ctx, w)
+			choice := PromptChoice("Docker Compose", question, "Stop", "Down", "Cancel")
+			switch choice {
+			case 0: // Stop
+				if err := compose.ExecuteCompose(ctx, true, console.Force(), "stop"); err != nil {
+					logger.Error(ctx, "%v", err)
+					return err
+				}
+			case 1: // Down
+				if err := compose.ExecuteCompose(ctx, true, console.Force(), "down"); err != nil {
+					logger.Error(ctx, "%v", err)
+					return err
+				}
+			}
+			return nil
+		}
+		dialog := NewProgramBoxModel("{{|Theme_TitleQuestion|}}Docker Compose{{[-]}}", "", "")
+		dialog.SetTask(task)
+		dialog.SetIsDialog(true)
+		return ShowDialogMsg{Dialog: dialog}
+	}
+}
+
+// TriggerDockerPrune returns a tea.Cmd that runs docker system prune.
+func TriggerDockerPrune() tea.Cmd {
+	return func() tea.Msg {
+		task := func(ctx context.Context, w io.Writer) error {
+			ctx = console.WithTUIWriter(ctx, w)
+			if err := docker.Prune(ctx, console.AssumeYes()); err != nil {
+				logger.Error(ctx, "%v", err)
+				return err
+			}
+			return nil
+		}
+		dialog := NewProgramBoxModel("{{|Theme_TitleQuestion|}}Docker Prune{{[-]}}", "", "")
+		dialog.SetTask(task)
+		dialog.SetIsDialog(true)
 		return ShowDialogMsg{Dialog: dialog}
 	}
 }

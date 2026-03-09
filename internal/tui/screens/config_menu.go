@@ -35,19 +35,19 @@ func NewConfigMenuScreen() tui.ScreenModel {
 			Tag:    "Start All Applications",
 			Desc:   "Start enabled applications",
 			Help:   "Run docker compose up for all enabled apps",
-			Action: nil, // Not implemented yet
+			Action: tui.TriggerComposeUpdate(),
 		},
 		{
 			Tag:    "Stop All Applications",
 			Desc:   "Stop all running applications",
-			Help:   "Run docker compose down",
-			Action: nil, // Not implemented yet
+			Help:   "Run docker compose stop or down",
+			Action: tui.TriggerComposeStop(),
 		},
 		{
 			Tag:    "Prune Docker System",
 			Desc:   "Clean up unused Docker resources",
 			Help:   "Remove unused images, containers, and volumes",
-			Action: nil, // Not implemented yet
+			Action: tui.TriggerDockerPrune(),
 		},
 	}
 
