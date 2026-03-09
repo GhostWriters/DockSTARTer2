@@ -276,7 +276,7 @@ func (m *ProgramBoxModel) calculateLayout() {
 	}
 
 	// Update viewport dimensions
-	m.viewport.SetWidth(m.width - 4)
+	m.viewport.SetWidth(m.width - 4 - scrollbarGutterWidth)
 	m.viewport.SetHeight(vpHeight)
 
 	// Refresh content with new word wrap width

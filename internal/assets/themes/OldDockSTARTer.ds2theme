@@ -36,7 +36,9 @@ TitleSuccess = "{{|Theme_Title::green|}}"
 TitleWarning = "{{|Theme_Title::yellow|}}"
 TitleQuestion = "{{|Theme_Title::yellow|}}"
 LogPanel = "{{|Theme_Title|}}"
-
+PositionIndicator = "{{[red]}}"
+Scrollbar = "{{[white]}}"
+ScrollbarZone = "{{[black]}}"
 TitleUnfocusedIndicator = "{{[red::-B]}}"
 TitleFocusIndicator = "{{[red::-B]}}"
 

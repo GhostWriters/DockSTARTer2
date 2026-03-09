@@ -95,8 +95,9 @@ func (m *LogPanelModel) SetSize(width, totalTermHeight int) {
 	m.width = width
 	m.totalHeight = totalTermHeight
 
-	// Always sync viewport width so background log line wrapping is accurate
-	m.viewport.SetWidth(width)
+	// Always sync viewport width so background log line wrapping is accurate.
+	// Reserve one column on the right for the scrollbar gutter.
+	m.viewport.SetWidth(width - scrollbarGutterWidth)
 
 	if m.expanded {
 		// If height is unset (0), default to half screen
@@ -183,7 +184,7 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// If viewport is not yet expanded, use m.width
 			targetWidth := m.viewport.Width()
 			if targetWidth <= 0 && m.width > 0 {
-				targetWidth = m.width
+				targetWidth = m.width - scrollbarGutterWidth
 			}
 			if targetWidth > 0 {
 				rendered = lipgloss.NewStyle().
@@ -338,12 +339,12 @@ func (m LogPanelModel) ViewString() string {
 	if m.viewport.Height() != vpH {
 		m.viewport.SetHeight(vpH)
 	}
-	if m.viewport.Width() != m.width {
-		m.viewport.SetWidth(m.width)
+	if m.viewport.Width() != m.width-scrollbarGutterWidth {
+		m.viewport.SetWidth(m.width - scrollbarGutterWidth)
 	}
 
 	vpStyle := lipgloss.NewStyle().
-		Width(m.width).
+		Width(m.viewport.Width()).
 		Height(vpH).
 		Background(ctx.Console.GetBackground()).
 		Foreground(ctx.Console.GetForeground())
@@ -351,6 +352,7 @@ func (m LogPanelModel) ViewString() string {
 
 	// Use MaintainBackground to ensure console background is preserved through resets
 	vpView := MaintainBackground(m.viewport.View(), ctx.Console)
+	vpView = applyScrollbarColumn(vpView, len(m.lines), m.viewport.Height(), m.viewport.YOffset(), currentConfig.UI.Scrollbar, ctx.LineCharacters, ctx)
 
 	// Restore original theme colors for the strip
 	// LogPanelColor for foreground, HelpLine background for the line itself.

@@ -551,7 +551,8 @@ func (m *MenuModel) calculateLayout() {
 		maxListWidth = minWidth
 	}
 
-	// If maximized, fill the space. Otherwise, ensure minimum for buttons.
+	// Always reserve one column for the scrollbar gutter (space when off, track/thumb when on).
+	// Maximized fills the maximum width; non-maximized is clamped between min and max.
 	if m.maximized {
 		listWidth = maxListWidth
 	} else {
@@ -560,6 +561,12 @@ func (m *MenuModel) calculateLayout() {
 		}
 		if listWidth > maxListWidth {
 			listWidth = maxListWidth
+		}
+	}
+	if !m.subMenuMode {
+		listWidth -= scrollbarGutterWidth
+		if listWidth < 1 {
+			listWidth = 1
 		}
 	}
 

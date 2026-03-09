@@ -48,6 +48,19 @@ func (m *MenuModel) ViewString() string {
 		listView = listViewStyle.Render(listView)
 	}
 
+	// Append the scrollbar/gutter column for all full-dialog menus (non-subMenu).
+	// The slot is always reserved by calculateLayout, so this adds exactly one char —
+	// space when off or not needed, track/thumb when on and scrollable.
+	if !m.subMenuMode {
+		ctx := GetActiveContext()
+		enabled := currentConfig.UI.Scrollbar
+		if m.variableHeight {
+			listView = applyScrollbarColumn(listView, m.lastScrollTotal, m.layout.ViewportHeight, m.viewStartY, enabled, ctx.LineCharacters, ctx)
+		} else {
+			listView = applyScrollbarColumn(listView, len(m.items), m.layout.ViewportHeight, m.list.Index(), enabled, ctx.LineCharacters, ctx)
+		}
+	}
+
 	// Wrap list in its own border (no padding, items have their own margins).
 	// Use rounded border when focused for higher visual fidelity.
 	listStyle := styles.Dialog.

@@ -26,24 +26,25 @@ func (m *MenuModel) renderVariableHeightList() string {
 	styles := GetStyles()
 	dialogBG := styles.Dialog.GetBackground()
 
-	// Available width for content
-	layout := GetLayout()
-	maxWidth, _ := layout.InnerContentSize(m.width, m.height)
-	if maxWidth > 2 {
-		maxWidth -= 2
+	// Use the width already computed by calculateLayout (= m.list.Width()).
+	// Re-deriving from InnerContentSize gives a value 2 chars too wide because it
+	// misses the outer margin padding that the standard list path accounts for.
+	maxWidth := m.list.Width()
+	if maxWidth < 1 {
+		maxWidth = 1
 	}
 	maxHeight := m.layout.ViewportHeight
 	if maxHeight < 1 {
 		maxHeight = 1
 	}
 
-	// Always reserve 1 char on the right for the scrollbar/padding column.
-	// This slot is a space when scrollbar is disabled, and track/thumb chars when enabled.
-	// Keeping it constant prevents layout jumps and fixes description overflow.
-	scrollbar := currentConfig.UI.Scrollbar
-	listContentWidth := maxWidth
-	if listContentWidth > scrollbarGutterWidth+2 {
-		listContentWidth -= scrollbarGutterWidth
+	// listContentWidth: space available for item content inside a row.
+	// One char reserved for left padding (rowStyle); the scrollbar gutter is now
+	// accounted for by calculateLayout reducing m.list.Width() by scrollbarGutterWidth,
+	// so only the left pad is subtracted here.
+	listContentWidth := maxWidth - 1
+	if listContentWidth < 1 {
+		listContentWidth = 1
 	}
 
 	// Filter items manually to match list state
@@ -106,7 +107,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 			} else {
 				line = strutil.Repeat("─", listContentWidth)
 			}
-			renderedItems = append(renderedItems, neutralStyle.Padding(0, 1).Render(line))
+			renderedItems = append(renderedItems, neutralStyle.Padding(0, 0, 0, 1).Render(line))
 			itemHeights = append(itemHeights, 1)
 			continue
 		}
@@ -181,9 +182,8 @@ func (m *MenuModel) renderVariableHeightList() string {
 		}
 
 		finalItem := ""
-		// listContentWidth is the inner content width. The outer Lipgloss Width with left/right padding
-		// must be listContentWidth + 2, otherwise Lipgloss compresses the box and double-wraps lines.
-		rowStyle := neutralStyle.Width(listContentWidth+2).Padding(0, 1)
+		// Width(maxWidth) = m.list.Width(); applyScrollbarColumn in ViewString appends the gutter.
+		rowStyle := neutralStyle.Width(maxWidth).Padding(0, 0, 0, 1)
 		for j, l := range renderedItemLines {
 			if j > 0 {
 				finalItem += "\n"
@@ -199,32 +199,12 @@ func (m *MenuModel) renderVariableHeightList() string {
 	for _, h := range itemHeights {
 		totalContentHeight += h
 	}
+	// Store for applyScrollbarColumn in ViewString (variable-height path).
+	m.lastScrollTotal = totalContentHeight
 
-	// Helper: build the blank padding line (used in both branches).
+	// Helper: build the blank padding line (used in both branches). Width = maxWidth.
 	blankLine := func() string {
-		return neutralStyle.Padding(0, 1).Render(strutil.Repeat(" ", listContentWidth)) + console.CodeReset
-	}
-
-	// appendRightColumn appends the right-edge column to each view line.
-	// When scrollbar is enabled: track/thumb chars (blank when content fits, active when scrolling).
-	// When scrollbar is disabled: a neutral space (right padding).
-	appendRightColumn := func(lines []string, total, offset int) []string {
-		var col []string
-		if scrollbar {
-			col = buildScrollbarColumn(total, maxHeight, offset, len(lines), ctx.LineCharacters, ctx)
-		} else {
-			rightPad := neutralStyle.Render(" ")
-			col = make([]string, len(lines))
-			for i := range col {
-				col[i] = rightPad
-			}
-		}
-		for i, line := range lines {
-			if i < len(col) {
-				lines[i] = line + col[i]
-			}
-		}
-		return lines
+		return neutralStyle.Padding(0, 0, 0, 1).Render(strutil.Repeat(" ", listContentWidth)) + console.CodeReset
 	}
 
 	if totalContentHeight <= maxHeight {
@@ -262,8 +242,6 @@ func (m *MenuModel) renderVariableHeightList() string {
 		for len(viewLines) < maxHeight {
 			viewLines = append(viewLines, blankLine())
 		}
-		// No scrolling — scrollbar column is all blanks/spaces (stable gutter).
-		viewLines = appendRightColumn(viewLines, totalContentHeight, 0)
 
 		result := strings.Join(viewLines, "\n")
 
@@ -356,9 +334,6 @@ func (m *MenuModel) renderVariableHeightList() string {
 	for len(viewLines) < maxHeight {
 		viewLines = append(viewLines, blankLine())
 	}
-
-	// Attach scrollbar column on the right.
-	viewLines = appendRightColumn(viewLines, totalContentHeight, viewStart)
 
 	finalResult := strings.Join(viewLines, "\n")
 
