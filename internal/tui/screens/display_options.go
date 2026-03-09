@@ -135,6 +135,15 @@ func (s *DisplayOptionsScreen) initMenus() {
 			SpaceAction: s.toggleShadow(),
 		},
 		{
+			Tag:         "Scrollbar",
+			Desc:        "Show scrollbar in lists",
+			Help:        "Toggle scrollbar in scrollable lists (Space to toggle)",
+			IsCheckbox:  true,
+			Checked:     s.config.UI.Scrollbar,
+			Selectable:  true,
+			SpaceAction: s.toggleScrollbar(),
+		},
+		{
 			Tag:    "Shadow Level",
 			Desc:   s.dropdownDesc(s.shadowLevelToDesc(s.config.UI.ShadowLevel)),
 			Help:   "Adjust the density of the shadow (Select/Enter for list)",
@@ -433,6 +442,15 @@ func (s *DisplayOptionsScreen) toggleShadow() tea.Cmd {
 		newState := !s.config.UI.Shadow
 		return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
 			cfg.UI.Shadow = newState
+		}}
+	}
+}
+
+func (s *DisplayOptionsScreen) toggleScrollbar() tea.Cmd {
+	return func() tea.Msg {
+		newState := !s.config.UI.Scrollbar
+		return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
+			cfg.UI.Scrollbar = newState
 		}}
 	}
 }

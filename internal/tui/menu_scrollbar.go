@@ -2,8 +2,8 @@ package tui
 
 import "charm.land/lipgloss/v2"
 
-// scrollbarGutterWidth is the number of columns reserved for the right scrollbar gutter.
-// Space is always reserved when scrollbars are enabled, so the layout never jumps.
+// scrollbarGutterWidth is the number of columns reserved for the right scrollbar/padding column.
+// This slot is always reserved (space when scrollbar is off, track/thumb when on).
 const scrollbarGutterWidth = 1
 
 // buildScrollbarColumn returns a slice of height styled single-character strings
@@ -21,7 +21,7 @@ func buildScrollbarColumn(total, visible, offset, height int, lineChars bool, ct
 
 	thumbStyle := lipgloss.NewStyle().
 		Background(bg).
-		Foreground(ctx.TagKey.GetForeground())
+		Foreground(ctx.BorderColor)
 
 	// No scrollbar needed — fill with spaces to hold the gutter width.
 	if total <= visible || height < 1 {
