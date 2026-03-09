@@ -28,12 +28,7 @@ func (m *ProgramBoxModel) ViewString() string {
 	// Use console background for the spacer row
 	// Apply background maintenance to captured output to prevent resets from bleeding
 	viewportContent := MaintainBackground(m.viewport.View(), ctx.Console)
-	// viewportWithScroll := viewportContent + "\n" +
-	// 	lipgloss.NewStyle().
-	// 		Width(m.viewport.Width).
-	// 		Align(lipgloss.Center).
-	// 		Background(styles.Console.GetBackground()).
-	// 		Render(scrollIndicator)
+	viewportContent = applyScrollbarColumn(viewportContent, m.viewport.TotalLineCount(), m.viewport.VisibleLineCount(), m.viewport.YOffset(), currentConfig.UI.Scrollbar, ctx.LineCharacters, ctx)
 
 	// Wrap viewport in rounded inner border with console background
 	viewportStyle := ctx.Console.
@@ -64,7 +59,7 @@ func (m *ProgramBoxModel) ViewString() string {
 			border = RoundedAsciiBorder
 		}
 	}
-	width := m.viewport.Width() + 2 // Add 2 for left/right padding of viewportStyle
+	width := m.viewport.Width() + scrollbarGutterWidth + 2 // viewport content + gutter + left/right borders
 	labelWidth := lipgloss.Width(scrollIndicator)
 
 	// Determine T-connectors based on focus and line style

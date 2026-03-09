@@ -417,6 +417,7 @@ type MenuModel struct {
 	lastLineChars  bool
 	lastHitRegions []HitRegion // Cache for variable height hit regions
 	viewStartY     int         // Persistent scroll offset for variable height lists
+	lastScrollTotal int        // Total content height from last renderVariableHeightList (for scrollbar)
 
 	menuName string // Name used for --menu or -M to return to this screen
 

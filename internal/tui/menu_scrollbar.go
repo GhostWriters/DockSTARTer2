@@ -1,10 +1,43 @@
 package tui
 
-import "charm.land/lipgloss/v2"
+import (
+	"strings"
+
+	"charm.land/lipgloss/v2"
+)
 
 // scrollbarGutterWidth is the number of columns reserved for the right scrollbar/padding column.
 // This slot is always reserved (space when scrollbar is off, track/thumb when on).
 const scrollbarGutterWidth = 1
+
+// applyScrollbarColumn appends one scrollbar/gutter character to the right of every line
+// in content (a newline-joined string). It is the single point of scrollbar application
+// for both the standard list path and the variable-height list path in ViewString.
+//
+// When scrollbar is disabled the gutter is filled with neutral spaces so layout
+// stays identical whether scrollbar is on or off.
+func applyScrollbarColumn(content string, total, visible, offset int, enabled bool, lineChars bool, ctx StyleContext) string {
+	if content == "" {
+		return content
+	}
+	lines := strings.Split(content, "\n")
+	var col []string
+	if enabled {
+		col = buildScrollbarColumn(total, visible, offset, len(lines), lineChars, ctx)
+	} else {
+		blank := lipgloss.NewStyle().Background(ctx.Dialog.GetBackground()).Render(" ")
+		col = make([]string, len(lines))
+		for i := range col {
+			col[i] = blank
+		}
+	}
+	for i, line := range lines {
+		if i < len(col) {
+			lines[i] = line + col[i]
+		}
+	}
+	return strings.Join(lines, "\n")
+}
 
 // buildScrollbarColumn returns a slice of height styled single-character strings
 // representing a vertical scrollbar column.
