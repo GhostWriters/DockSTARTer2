@@ -14,6 +14,13 @@ func navigateToConfigMenu() tea.Cmd {
 	}
 }
 
+// navigateToGlobalVarsEditor returns a command to navigate to the global variables editor
+func navigateToGlobalVarsEditor() tea.Cmd {
+	return func() tea.Msg {
+		return tui.NavigateMsg{Screen: NewGlobalVarsEditorScreen(navigateBack())}
+	}
+}
+
 // navigateToOptionsMenu returns a command to navigate to the options menu
 func navigateToOptionsMenu() tea.Cmd {
 	return func() tea.Msg {

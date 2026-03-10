@@ -17,7 +17,7 @@ func NewConfigMenuScreen() tui.ScreenModel {
 			Tag:    "Edit Global Variables",
 			Desc:   "Configure global settings",
 			Help:   "Edit PUID, PGID, TZ, and other global variables",
-			Action: nil, // Not implemented yet
+			Action: navigateToGlobalVarsEditor(),
 		},
 		{
 			Tag:    "Select Applications",
