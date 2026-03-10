@@ -179,6 +179,7 @@ func SetConsoleOutput(w io.Writer) func() {
 // Colors are auto-stripped by charmbracelet/log when the output is not a TTY.
 func buildConsoleStyles() *charmlog.Styles {
 	st := charmlog.DefaultStyles()
+	st.Timestamp = lipgloss.NewStyle().Faint(true)
 
 	blue := lipgloss.NewStyle().Foreground(lipgloss.Color("4"))
 	green := lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
