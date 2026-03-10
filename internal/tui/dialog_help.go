@@ -18,14 +18,20 @@ type HelpDialogModel struct {
 
 	focused bool // tracks global focus
 
+    keyMap help.KeyMap
+
 	// Unified layout (deterministic sizing)
 	layout DialogLayout
 }
 
 func NewHelpDialogModel() *HelpDialogModel {
+	return NewHelpDialogModelWithMap(Keys)
+}
+
+func NewHelpDialogModelWithMap(km help.KeyMap) *HelpDialogModel {
 	h := help.New()
 	h.ShowAll = true
-	return &HelpDialogModel{help: h, focused: true}
+	return &HelpDialogModel{help: h, focused: true, keyMap: km}
 }
 
 func (m *HelpDialogModel) Init() tea.Cmd { return nil }
@@ -79,7 +85,7 @@ func (m *HelpDialogModel) ViewString() string {
 	m.help.Styles.FullSeparator = sepStyle
 	m.help.Styles.Ellipsis = dimStyle
 
-	content := m.help.View(Keys)
+	content := m.help.View(m.keyMap)
 
 	// Apply dialog background and add 1 space indent on both sides
 	lines := strings.Split(content, "\n")

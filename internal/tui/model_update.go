@@ -4,6 +4,7 @@ import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 
+	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 )
@@ -528,7 +529,17 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		return m, logger.RecoverTUI(m.ctx, func() tea.Msg { return toggleLogPanelMsg{} }), true
 	}
 	if key.Matches(msg, Keys.Help) {
-		return m, logger.RecoverTUI(m.ctx, func() tea.Msg { return ShowDialogMsg{Dialog: NewHelpDialogModel()} }), true
+		var km help.KeyMap = Keys
+		if m.dialog != nil {
+			if h, ok := m.dialog.(help.KeyMap); ok {
+				km = h
+			}
+		} else if m.activeScreen != nil {
+			if h, ok := m.activeScreen.(help.KeyMap); ok {
+				km = h
+			}
+		}
+		return m, logger.RecoverTUI(m.ctx, func() tea.Msg { return ShowDialogMsg{Dialog: NewHelpDialogModelWithMap(km)} }), true
 	}
 	if key.Matches(msg, Keys.ForceQuit) {
 		m.Fatal = true
