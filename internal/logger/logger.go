@@ -3,6 +3,7 @@ package logger
 import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/version"
 	"context"
 	"fmt"
@@ -13,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"charm.land/lipgloss/v2"
 	charmlog "charm.land/log/v2"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/muesli/termenv"
@@ -178,22 +178,19 @@ func SetConsoleOutput(w io.Writer) func() {
 // buildConsoleStyles returns level styles using lipgloss colors.
 // Colors are auto-stripped by charmbracelet/log when the output is not a TTY.
 func buildConsoleStyles() *charmlog.Styles {
+	// Ensure base semantic tags are registered before resolving them.
+	console.RegisterBaseTags()
+
 	st := charmlog.DefaultStyles()
-	st.Timestamp = lipgloss.NewStyle().Faint(true)
+	st.Timestamp = theme.SemanticStyle("{{|timestamp|}}")
 
-	blue := lipgloss.NewStyle().Foreground(lipgloss.Color("4"))
-	green := lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
-	yellow := lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
-	red := lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
-	fatal := lipgloss.NewStyle().Foreground(lipgloss.Color("7")).Background(lipgloss.Color("1"))
-
-	st.Levels[charmlog.Level(LevelTrace)] = blue.SetString("[TRACE ]")
-	st.Levels[charmlog.Level(LevelDebug)] = blue.SetString("[DEBUG ]")
-	st.Levels[charmlog.Level(LevelInfo)] = blue.SetString("[INFO  ]")
-	st.Levels[charmlog.Level(LevelNotice)] = green.SetString("[NOTICE]")
-	st.Levels[charmlog.Level(LevelWarn)] = yellow.SetString("[WARN  ]")
-	st.Levels[charmlog.Level(LevelError)] = red.SetString("[ERROR ]")
-	st.Levels[charmlog.Level(LevelFatal)] = fatal.SetString("[FATAL ]")
+	st.Levels[charmlog.Level(LevelTrace)] = theme.SemanticStyle("{{|trace|}}").SetString("[TRACE ]")
+	st.Levels[charmlog.Level(LevelDebug)] = theme.SemanticStyle("{{|debug|}}").SetString("[DEBUG ]")
+	st.Levels[charmlog.Level(LevelInfo)] = theme.SemanticStyle("{{|info|}}").SetString("[INFO  ]")
+	st.Levels[charmlog.Level(LevelNotice)] = theme.SemanticStyle("{{|notice|}}").SetString("[NOTICE]")
+	st.Levels[charmlog.Level(LevelWarn)] = theme.SemanticStyle("{{|warn|}}").SetString("[WARN  ]")
+	st.Levels[charmlog.Level(LevelError)] = theme.SemanticStyle("{{|error|}}").SetString("[ERROR ]")
+	st.Levels[charmlog.Level(LevelFatal)] = theme.SemanticStyle("{{|fatal|}}").SetString("[FATAL ]")
 
 	return st
 }
