@@ -1,6 +1,7 @@
 package theme
 
 import (
+	"DockSTARTer2/internal/assets" // Added
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/paths"
@@ -67,12 +68,14 @@ func Load(themeName string, prefix string) (*ThemeDefaults, error) {
 	themePath := filepath.Join(themesDir, themeName+".ds2theme")
 
 	if _, err := os.Stat(themePath); os.IsNotExist(err) {
-		// If theme doesn't exist, try falling back to "DockSTARTer"
-		if themeName != "DockSTARTer" {
-			return Load("DockSTARTer", prefix)
+		if _, embErr := assets.GetTheme(themeName); embErr != nil {
+			// If theme doesn't exist, try falling back to "DockSTARTer"
+			if themeName != "DockSTARTer" {
+				return Load("DockSTARTer", prefix)
+			}
+			// If even DockSTARTer doesn't exist, we stay with minimal defaults
+			return nil, nil
 		}
-		// If even DockSTARTer doesn't exist, we stay with minimal defaults
-		return nil, nil
 	}
 
 	// 2. Parse .ds2theme (Overrides defaults)
@@ -269,7 +272,10 @@ func GetThemeFile(themeName string) (ThemeFile, error) {
 	themePath := filepath.Join(paths.GetThemesDir(), themeName+".ds2theme")
 	data, err := os.ReadFile(themePath)
 	if err != nil {
-		return ThemeFile{}, err
+		data, err = assets.GetTheme(themeName)
+		if err != nil {
+			return ThemeFile{}, err
+		}
 	}
 
 	var tf ThemeFile
@@ -329,7 +335,11 @@ func ApplyThemeDefaults(conf *config.AppConfig, defaults ThemeDefaults) map[stri
 func parseThemeTOML(path string, prefix string) (*ThemeDefaults, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		themeName := strings.TrimSuffix(filepath.Base(path), ".ds2theme")
+		data, err = assets.GetTheme(themeName)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	var tf ThemeFile
