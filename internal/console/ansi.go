@@ -2,20 +2,30 @@ package console
 
 import (
 	"fmt"
+	"image/color"
 	"regexp"
 	"strings"
 
+	"charm.land/lipgloss/v2"
 	tcellColor "github.com/gdamore/tcell/v3/color"
-	"github.com/muesli/termenv"
 )
 
-// parseStyleCodeToANSI parses fg:bg:flags format and returns ANSI codes
-// Uses the provided profile for color conversion, or preferredProfile if none given
-func parseStyleCodeToANSI(content string, profile ...termenv.Profile) string {
-	p := preferredProfile
-	if len(profile) > 0 {
-		p = profile[0]
-	}
+// colorToFGSequence returns the ANSI opening sequence for a foreground color,
+// using the lipgloss renderer (profile-aware via Bubble Tea or auto-detected).
+func colorToFGSequence(c color.Color) string {
+	rendered := lipgloss.NewStyle().Foreground(c).Render("")
+	return strings.TrimSuffix(rendered, CodeReset)
+}
+
+// colorToBGSequence returns the ANSI opening sequence for a background color.
+func colorToBGSequence(c color.Color) string {
+	rendered := lipgloss.NewStyle().Background(c).Render("")
+	return strings.TrimSuffix(rendered, CodeReset)
+}
+
+// parseStyleCodeToANSI parses fg:bg:flags format and returns ANSI codes.
+// Uses the lipgloss global renderer (set from colorprofile in profile.go).
+func parseStyleCodeToANSI(content string) string {
 	if content == "-" {
 		return CodeReset
 	}
@@ -49,56 +59,35 @@ func parseStyleCodeToANSI(content string, profile ...termenv.Profile) string {
 		codes.WriteString(CodeFGReset)
 	} else if len(parts) > 0 && parts[0] != "" {
 		colorName := strings.ToLower(parts[0])
-		// Handle high intensity by pretending it's the "bright" variant name if standard
 		if highIntensity {
 			if brightName, ok := getBrightVariant(colorName); ok {
 				colorName = brightName
 			}
 		}
 
+		// Check for non-color attributes (bold, etc.) first
+		if code, ok := attributeMap[colorName]; ok {
+			codes.WriteString(code)
+			goto FoundFG
+		}
+
+		// Check ansiMap for standard colors (direct ANSI codes, max compatibility)
+		if code, ok := ansiMap[colorName]; ok {
+			codes.WriteString(code)
+			goto FoundFG
+		}
+
+		// Extended color: resolve via tcell → hex → lipgloss
 		if strings.HasPrefix(colorName, "#") {
-			// Already Hex: Pass directly to termenv
-			codes.WriteString(wrapSequence(p.Color(colorName).Sequence(false)))
+			codes.WriteString(colorToFGSequence(lipgloss.Color(colorName)))
 		} else {
-			// Check for non-color attributes (bold, etc.) first
-			if code, ok := attributeMap[colorName]; ok {
-				codes.WriteString(code)
-				goto FoundFG
-			}
-
-			// NEW: Check ansiMap for standard colors (max compatibility)
-			if code, ok := ansiMap[colorName]; ok {
-				codes.WriteString(code)
-				goto FoundFG
-			}
-
-			// Color Name Resolution Strategy:
-			// 1. Ask tcell for the color (handles standard "red", extended "orange", and aliases)
-			// 2. Get the Hex value from tcell
-			// 3. Pass Hex to termenv/lipgloss profile to generate correct sequence (or empty if mono)
-
 			tc := ResolveTcellColor(colorName)
-			// tcell.GetColor returns ColorDefault if unknown, or a valid color
-			// It handles "red", "black", "orange", etc.
-
 			if tc != tcellColor.Default {
-				// We have a valid tcell color. Use its Hex value.
-				// For mapped colors (like ColorRed), .Hex() returns the standard hex (e.g. 0xFF0000)
 				hexVal := tc.Hex()
 				if hexVal >= 0 {
-					hexStr := fmt.Sprintf("#%06x", hexVal)
-					if c := p.Color(hexStr); c != nil {
-						codes.WriteString(wrapSequence(c.Sequence(false)))
-					}
-					goto FoundFG
+					codes.WriteString(colorToFGSequence(lipgloss.Color(fmt.Sprintf("#%06x", hexVal))))
 				}
 			}
-
-			// Fallback: Drop unsafe termenv name lookup.
-			// Only hex or tcell-resolved colors are supported for names.
-			// If it's a raw number string (e.g. "235"), termenv might handle it if we passed it?
-			// But for now, strict tcell usage is safer to avoid panics.
-
 		}
 	}
 FoundFG:
@@ -110,44 +99,32 @@ FoundFG:
 		codes.WriteString(CodeBGReset)
 	} else if len(parts) > 1 && parts[1] != "" {
 		colorName := strings.ToLower(parts[1])
-		// Handle high intensity background if needed (though usually flags handle this)
 		if highIntensity {
 			if brightName, ok := getBrightVariant(colorName); ok {
 				colorName = brightName
 			}
 		}
 
+		if code, ok := attributeMap[colorName]; ok {
+			codes.WriteString(code)
+			goto FoundBG
+		}
+
+		if code, ok := ansiMap[colorName+"bg"]; ok {
+			codes.WriteString(code)
+			goto FoundBG
+		}
+
 		if strings.HasPrefix(colorName, "#") {
-			// Hex color
-			if c := p.Color(colorName); c != nil {
-				codes.WriteString(wrapSequence(c.Sequence(true)))
-			}
+			codes.WriteString(colorToBGSequence(lipgloss.Color(colorName)))
 		} else {
-			if code, ok := attributeMap[colorName]; ok {
-				// Attributes acting as background? Rare but possible for some maps
-				codes.WriteString(code)
-				goto FoundBG
-			}
-
-			// NEW: Check ansiMap for standard background colors (max compatibility)
-			if code, ok := ansiMap[colorName+"bg"]; ok {
-				codes.WriteString(code)
-				goto FoundBG
-			}
-
-			// Standard/Extended Color Resolution via tcell
 			tc := ResolveTcellColor(colorName)
 			if tc != tcellColor.Default {
 				hexVal := tc.Hex()
 				if hexVal >= 0 {
-					hexStr := fmt.Sprintf("#%06x", hexVal)
-					if c := p.Color(hexStr); c != nil {
-						codes.WriteString(wrapSequence(c.Sequence(true)))
-					}
-					goto FoundBG
+					codes.WriteString(colorToBGSequence(lipgloss.Color(fmt.Sprintf("#%06x", hexVal))))
 				}
 			}
-			// Or safer: just drop the naive fallback.
 		}
 	}
 FoundBG:
@@ -175,12 +152,10 @@ func StripANSI(text string) string {
 
 // resolveTaggedStyleToANSI converts a standardized tag like "{{[cyan::B]}}" to ANSI codes
 func resolveTaggedStyleToANSI(tag string) string {
-	// Support both "{{[content]}}" and plain "content"
 	content := tag
 	if strings.HasPrefix(tag, DirectPrefix) && strings.HasSuffix(tag, DirectSuffix) {
 		content = tag[len(DirectPrefix) : len(tag)-len(DirectSuffix)]
 	}
-
 	return parseStyleCodeToANSI(content)
 }
 
@@ -189,20 +164,8 @@ func getBrightVariant(name string) (string, bool) {
 	if strings.HasPrefix(name, "bright-") {
 		return name, true
 	}
-	// Check if bright variant exists in ansiMap
 	if _, ok := ansiMap["bright-"+name]; ok {
 		return "bright-" + name, true
 	}
 	return name, false
-}
-
-// wrapSequence ensures a color sequence part is wrapped in CSI delimiters
-func wrapSequence(seq string) string {
-	if seq == "" {
-		return ""
-	}
-	if strings.HasPrefix(seq, "\x1b[") {
-		return seq
-	}
-	return "\033[" + seq + "m"
 }

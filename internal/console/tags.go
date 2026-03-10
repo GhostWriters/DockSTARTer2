@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/muesli/termenv"
+	"github.com/charmbracelet/colorprofile"
 )
 
 var (
@@ -139,22 +139,19 @@ func ToANSI(text string) string {
 }
 
 // ToANSIWithProfile allows specifying a profile (e.g. for TUI vs CLI).
-func ToANSIWithProfile(text string, profile ...termenv.Profile) string {
-	return ToANSIWithPrefix(text, "", profile...)
+func ToANSIWithProfile(text string) string {
+	return ToANSIWithPrefix(text, "")
 }
 
 // ToANSIWithPrefix allows specifying a prefix for namespaced tag resolution and a profile.
-func ToANSIWithPrefix(text string, prefix string, profile ...termenv.Profile) string {
+func ToANSIWithPrefix(text string, prefix string) string {
 	ensureMaps()
 
-	p := preferredProfile
-	if len(profile) > 0 {
-		p = profile[0]
-	} else if !isTTYGlobal && !TUIMode {
+	if !isTTYGlobal && !TUIMode {
 		return Strip(text)
 	}
 
-	if p == termenv.Ascii {
+	if preferredProfile == colorprofile.NoTTY {
 		return Strip(text)
 	}
 
@@ -169,7 +166,7 @@ func ToANSIWithPrefix(text string, prefix string, profile ...termenv.Profile) st
 		if len(subMatch) <= groupIndex {
 			return ""
 		}
-		return parseStyleCodeToANSI(subMatch[groupIndex], p)
+		return parseStyleCodeToANSI(subMatch[groupIndex])
 	})
 }
 

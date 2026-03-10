@@ -1,16 +1,15 @@
 package console
 
 import (
-	"os"
 	"testing"
 
-	"github.com/muesli/termenv"
+	"github.com/charmbracelet/colorprofile"
 )
 
 func TestStrip(t *testing.T) {
 	// Setup style maps via ensureMaps
 	ensureMaps()
-	semanticMap["notice"] = "green"        // RAW value (no brackets)
+	semanticMap["notice"] = "green" // RAW value (no brackets)
 	semanticMap["applicationname"] = "cyan::B"
 	semanticMap["version"] = "cyan"
 
@@ -111,7 +110,7 @@ func TestStripANSI(t *testing.T) {
 
 func TestExpandTags(t *testing.T) {
 	ensureMaps()
-	semanticMap["notice"] = "green"        // RAW value (no brackets)
+	semanticMap["notice"] = "green" // RAW value (no brackets)
 	semanticMap["applicationname"] = "cyan::B"
 	semanticMap["version"] = "cyan"
 
@@ -160,7 +159,7 @@ func TestExpandTags(t *testing.T) {
 func TestToANSI(t *testing.T) {
 	// Setup for TTY mode
 	isTTYGlobal = true
-	SetPreferredProfile(termenv.TrueColor)
+	SetPreferredProfile(colorprofile.TrueColor)
 
 	ensureMaps()
 	BuildColorMap()
@@ -223,10 +222,10 @@ func TestToANSI(t *testing.T) {
 
 func TestBackwardsCompatibility(t *testing.T) {
 	ensureMaps()
-	semanticMap["notice"] = "green"  // RAW value
+	semanticMap["notice"] = "green" // RAW value
 
 	isTTYGlobal = true
-	SetPreferredProfile(termenv.TrueColor)
+	SetPreferredProfile(colorprofile.TrueColor)
 
 	input := "{{|Notice|}}Test{{[-]}}"
 
@@ -285,53 +284,4 @@ func TestSemanticVsDirectDistinction(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestDetectProfile(t *testing.T) {
-	tests := []struct {
-		name      string
-		colorterm string
-		term      string
-		expected  termenv.Profile
-	}{
-		{"TrueColor override", "truecolor", "", termenv.TrueColor},
-		{"24bit override", "24bit", "", termenv.TrueColor},
-		{"8bit override", "8bit", "", termenv.ANSI256},
-		{"256color override", "256color", "", termenv.ANSI256},
-		{"4bit override", "4bit", "", termenv.ANSI},
-		{"16color override", "16color", "", termenv.ANSI},
-		{"1bit override", "1bit", "", termenv.Ascii},
-		{"2color override", "2color", "", termenv.Ascii},
-		{"Mono override", "mono", "", termenv.Ascii},
-		{"False override", "false", "", termenv.Ascii},
-		{"Zero override", "0", "", termenv.Ascii},
-		{"TERM direct override", "", "xterm-direct", termenv.TrueColor},
-		{"TERM 256color override", "", "xterm-256color", termenv.ANSI256},
-		{"TERM 16color override", "", "xterm-16color", termenv.ANSI},
-		{"TERM dumb override", "", "dumb", termenv.Ascii},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Clear env
-			os.Unsetenv("COLORTERM")
-			os.Unsetenv("TERM")
-
-			if tt.colorterm != "" {
-				os.Setenv("COLORTERM", tt.colorterm)
-			}
-			if tt.term != "" {
-				os.Setenv("TERM", tt.term)
-			}
-
-			actual := detectProfile()
-			if actual != tt.expected {
-				t.Errorf("detectProfile() with COLORTERM=%q, TERM=%q = %v; want %v", tt.colorterm, tt.term, actual, tt.expected)
-			}
-		})
-	}
-
-	// Cleanup
-	os.Unsetenv("COLORTERM")
-	os.Unsetenv("TERM")
 }

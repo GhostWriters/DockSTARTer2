@@ -6,7 +6,7 @@ import (
 
 	"DockSTARTer2/internal/console"
 
-	"github.com/muesli/termenv"
+	"github.com/charmbracelet/colorprofile"
 )
 
 func TestResolveThemeValue(t *testing.T) {
@@ -16,7 +16,7 @@ func TestResolveThemeValue(t *testing.T) {
 
 	// Ensure a color-capable profile is active (for CI environments)
 	oldProfile := console.GetPreferredProfile()
-	console.SetPreferredProfile(termenv.TrueColor)
+	console.SetPreferredProfile(colorprofile.TrueColor)
 	defer console.SetPreferredProfile(oldProfile)
 
 	// Setup console maps for resolution
@@ -37,10 +37,10 @@ func TestResolveThemeValue(t *testing.T) {
 		"CircularA":    "{{|Theme_CircularB|}}",
 		"CircularB":    "{{|Theme_CircularA|}}",
 		// Inline modifier syntax: {{|Name:fg:bg:flags|}}
-		"InlineFG":     "{{|Theme_Simple:green|}}",    // override fg -> green:blue:B
-		"InlineBG":     "{{|Theme_Simple::green|}}",   // override bg -> red:green:B
-		"InlineFlag":   "{{|Theme_Simple:::U|}}",      // add flag  -> red:blue:BU
-		"InlineReset":  "{{|Theme_Simple:-:-:-R|}}",   // reset fg+bg, add reverse -> ::R
+		"InlineFG":    "{{|Theme_Simple:green|}}",  // override fg -> green:blue:B
+		"InlineBG":    "{{|Theme_Simple::green|}}", // override bg -> red:green:B
+		"InlineFlag":  "{{|Theme_Simple:::U|}}",    // add flag  -> red:blue:BU
+		"InlineReset": "{{|Theme_Simple:-:-:-R|}}", // reset fg+bg, add reverse -> ::R
 	}
 
 	tests := []struct {
