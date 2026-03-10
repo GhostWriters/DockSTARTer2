@@ -27,6 +27,7 @@ func ClearSemanticCache() {
 }
 
 // ClearSemanticCachePrefix removes only those render cache entries whose key contains
+// ClearSemanticCachePrefix removes cached lipgloss.Style and rendering results that contain
 // the given prefix string.
 func ClearSemanticCachePrefix(prefix string) {
 	cacheMu.Lock()
@@ -36,6 +37,8 @@ func ClearSemanticCachePrefix(prefix string) {
 			delete(renderCache, k)
 		}
 	}
+	// Also clear the semantic style cache in the theme package
+	theme.ClearSemanticCachePrefix(prefix)
 }
 
 // SemanticStyle translates a semantic tag or direct style code into a lipgloss.Style.

@@ -450,3 +450,15 @@ func ClearSemanticCache() {
 	defer cacheMu.Unlock()
 	semanticStyleCache = make(map[string]lipgloss.Style)
 }
+
+// ClearSemanticCachePrefix clears cached lipgloss styles that match a prefix.
+func ClearSemanticCachePrefix(prefix string) {
+	cacheMu.Lock()
+	defer cacheMu.Unlock()
+	for k := range semanticStyleCache {
+		// keys are like "raw:Preview_Theme_Screen" or "Preview_Theme_Screen"
+		if strings.Contains(k, prefix) {
+			delete(semanticStyleCache, k)
+		}
+	}
+}
