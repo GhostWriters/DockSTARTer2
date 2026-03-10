@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"charm.land/lipgloss/v2"
 	"github.com/pelletier/go-toml/v2"
@@ -235,16 +236,16 @@ func resolveThemeValue(raw string, rawValues map[string]string, visiting map[str
 }
 
 type ThemeDefaults struct {
-	Borders          *bool   `toml:"borders"`
-	ButtonBorders    *bool   `toml:"button_borders"`
-	LineCharacters   *bool   `toml:"line_characters"`
-	Shadow           *bool   `toml:"shadow"`
-	ShadowLevel      *int    `toml:"shadow_level"`
-	Scrollbar        *bool   `toml:"scrollbar"`
-	BorderColor      *int    `toml:"border_color"`
-	DialogTitleAlign *string `toml:"dialog_title_align"`
+	Borders           *bool   `toml:"borders"`
+	ButtonBorders     *bool   `toml:"button_borders"`
+	LineCharacters    *bool   `toml:"line_characters"`
+	Shadow            *bool   `toml:"shadow"`
+	ShadowLevel       *int    `toml:"shadow_level"`
+	Scrollbar         *bool   `toml:"scrollbar"`
+	BorderColor       *int    `toml:"border_color"`
+	DialogTitleAlign  *string `toml:"dialog_title_align"`
 	SubmenuTitleAlign *string `toml:"submenu_title_align"`
-	LogTitleAlign    *string `toml:"log_title_align"`
+	LogTitleAlign     *string `toml:"log_title_align"`
 }
 
 type ThemeFile struct {
@@ -379,4 +380,63 @@ func parseThemeTOML(path string, prefix string) (*ThemeDefaults, error) {
 	}
 
 	return tf.Defaults, nil
+}
+
+var (
+	semanticStyleCache = make(map[string]lipgloss.Style)
+	cacheMu            = new(sync.RWMutex)
+)
+
+// SemanticStyle translates a semantic color tag (e.g. {{|notice|}}) or a direct
+// style code (e.g. {{[cyan::B]}}) into a lipgloss.Style.
+// Results are cached; call ClearSemanticCache after a theme reload.
+func SemanticStyle(tag string) lipgloss.Style {
+	cacheMu.RLock()
+	s, ok := semanticStyleCache[tag]
+	cacheMu.RUnlock()
+	if ok {
+		return s
+	}
+
+	var style lipgloss.Style
+	if strings.HasPrefix(tag, console.SemanticPrefix) && strings.HasSuffix(tag, console.SemanticSuffix) {
+		name := tag[len(console.SemanticPrefix) : len(tag)-len(console.SemanticSuffix)]
+		style = SemanticRawStyle(name)
+	} else {
+		style = ApplyTagsToStyle(tag, lipgloss.NewStyle(), lipgloss.NewStyle())
+	}
+
+	cacheMu.Lock()
+	semanticStyleCache[tag] = style
+	cacheMu.Unlock()
+	return style
+}
+
+// SemanticRawStyle translates a raw semantic name (e.g. "notice") into a lipgloss.Style.
+func SemanticRawStyle(name string) lipgloss.Style {
+	cacheKey := "raw:" + name
+	cacheMu.RLock()
+	if s, ok := semanticStyleCache[cacheKey]; ok {
+		cacheMu.RUnlock()
+		return s
+	}
+	cacheMu.RUnlock()
+
+	// Use ExpandTags so composite values like {{[-]}}{{[green]}} are kept as
+	// separate direct tags rather than being collapsed by GetColorDefinition+WrapDirect.
+	expanded := console.ExpandTags(console.WrapSemantic(name))
+	s := ApplyTagsToStyle(expanded, lipgloss.NewStyle(), lipgloss.NewStyle())
+
+	cacheMu.Lock()
+	semanticStyleCache[cacheKey] = s
+	cacheMu.Unlock()
+	return s
+}
+
+// ClearSemanticCache clears the cached lipgloss styles.
+// Call this after loading a new theme.
+func ClearSemanticCache() {
+	cacheMu.Lock()
+	defer cacheMu.Unlock()
+	semanticStyleCache = make(map[string]lipgloss.Style)
 }

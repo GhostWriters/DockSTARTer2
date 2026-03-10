@@ -21,20 +21,45 @@ import (
 // magenta = 5 (#800080 / #ff00ff) (Aliased to Fuchsia)
 // cyan    = 6 (#008080 / #00ffff) (Aliased to Aqua)
 // white   = 7 (#c0c0c0)
+// ansiColorIndex maps standard color names to their ANSI terminal color index strings.
+var ansiColorIndex = map[string]string{
+	"black":          "0",
+	"red":            "1",
+	"green":          "2",
+	"yellow":         "3",
+	"blue":           "4",
+	"magenta":        "5",
+	"cyan":           "6",
+	"white":          "7",
+	"bright-black":   "8",
+	"bright-red":     "9",
+	"bright-green":   "10",
+	"bright-yellow":  "11",
+	"bright-blue":    "12",
+	"bright-magenta": "13",
+	"bright-cyan":    "14",
+	"bright-white":   "15",
+}
+
 func ParseColor(c string) color.Color {
 	c = strings.ToLower(strings.TrimSpace(c))
 
-	// 1. Hex codes - pass directly
+	// 1. Hex codes - pass directly to lipgloss
 	if strings.HasPrefix(c, "#") {
 		return lipgloss.Color(c)
 	}
 
-	// 2. Try resolving with tcell (supports extended names and aliases)
+	// 2. Standard named colors → ANSI index (works at any profile level)
+	if idx, ok := ansiColorIndex[c]; ok {
+		return lipgloss.Color(idx)
+	}
+
+	// 3. Try resolving with tcell for extended/aliased names
 	if hexVal := GetHexForColor(c); hexVal != "" {
 		return lipgloss.Color(hexVal)
 	}
 
-	// 3. Fallback for numeric color codes or unknown colors
+	// 4. Fallback: pass as-is (numeric or unknown)
 	return lipgloss.Color(c)
 }
 

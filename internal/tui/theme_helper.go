@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"image/color"
 	"regexp"
 	"strings"
@@ -19,65 +18,34 @@ var (
 	cacheMu            sync.RWMutex
 )
 
-// ClearSemanticCache clears the semantic style cache.
-// This should be called whenever the theme or styles are re-initialized.
+// ClearSemanticCache clears both the theme-level style cache and the TUI render cache.
 func ClearSemanticCache() {
+	theme.ClearSemanticCache()
 	cacheMu.Lock()
 	defer cacheMu.Unlock()
-	semanticStyleCache = make(map[string]lipgloss.Style)
 	renderCache = make(map[string]string)
 }
 
-// ClearSemanticCachePrefix removes only those cache entries whose key contains
-// the given prefix string. Use this to invalidate a namespaced subset of styles
-// (e.g. "Preview_Theme_") without discarding unrelated cached styles.
+// ClearSemanticCachePrefix removes only those render cache entries whose key contains
+// the given prefix string.
 func ClearSemanticCachePrefix(prefix string) {
 	cacheMu.Lock()
 	defer cacheMu.Unlock()
-	for k := range semanticStyleCache {
+	for k := range renderCache {
 		if strings.Contains(k, prefix) {
-			delete(semanticStyleCache, k)
+			delete(renderCache, k)
 		}
 	}
 }
 
-// SemanticStyle translates a semantic color tag (e.g., {{|Theme_Title|}}) or color code
-// (e.g., {{[black:white:-B]}}) into a lipgloss.Style.
+// SemanticStyle translates a semantic tag or direct style code into a lipgloss.Style.
 func SemanticStyle(tag string) lipgloss.Style {
-	cacheMu.RLock()
-	s, ok := semanticStyleCache[tag]
-	cacheMu.RUnlock()
-	if ok {
-		return s
-	}
-
-	var style lipgloss.Style
-	// If it's a semantic tag, we can try resolving it raw first for efficiency
-	if strings.HasPrefix(tag, console.SemanticPrefix) && strings.HasSuffix(tag, console.SemanticSuffix) {
-		name := tag[len(console.SemanticPrefix) : len(tag)-len(console.SemanticSuffix)]
-		style = SemanticRawStyle(name)
-	} else {
-		style = ApplyTagsToStyle(tag, lipgloss.NewStyle(), lipgloss.NewStyle())
-	}
-
-	cacheMu.Lock()
-	semanticStyleCache[tag] = style
-	cacheMu.Unlock()
-
-	return style
+	return theme.SemanticStyle(tag)
 }
 
-// SemanticRawStyle translates a raw semantic name (e.g., "Theme_Title") into a lipgloss.Style.
+// SemanticRawStyle translates a raw semantic name (e.g. "Theme_Title") into a lipgloss.Style.
 func SemanticRawStyle(name string) lipgloss.Style {
-	cacheKey := "raw:" + name
-	if s, ok := semanticStyleCache[cacheKey]; ok {
-		return s
-	}
-
-	def := console.GetColorDefinition(name)
-	s := ApplyTagsToStyle(def, lipgloss.NewStyle(), lipgloss.NewStyle())
-	semanticStyleCache[cacheKey] = s
-	return s
+	return theme.SemanticRawStyle(name)
 }
 
 // Color parsing now uses tcell/v3/colors for RGB conversion via console.GetHexForColor().
@@ -138,163 +106,24 @@ func RenderThemeTextCtx(text string, ctx StyleContext) string {
 	return final
 }
 
-// ApplyStyleCode applies tview-style color codes (fg:bg:flags) to a lipgloss style
+// ApplyStyleCode applies tview-style color codes (fg:bg:flags) to a lipgloss style.
 func ApplyStyleCode(style lipgloss.Style, resetStyle lipgloss.Style, styleCode string) lipgloss.Style {
-	// Full hard reset to terminal defaults (bypasses MaintainBackground)
-	if styleCode == "~" {
-		return lipgloss.NewStyle()
-	}
-	// Full reset to base style
-	if styleCode == console.CodeReset || styleCode == "-" {
-		return resetStyle
-	}
-
-	parts := strings.Split(styleCode, ":")
-	if len(parts) == 0 {
-		return style
-	}
-
-	// Pre-emptive reset of flags ONLY if they start with '-'
-	if len(parts) > 2 && strings.HasPrefix(parts[2], "-") {
-		style = theme.ResetFlags(style)
-	}
-
-	// Foreground color
-	if len(parts) > 0 && parts[0] != "" {
-		if parts[0] == "~" {
-			// Hard reset: terminal default foreground (not dialog style)
-			style = style.Foreground(lipgloss.Color(""))
-		} else if parts[0] == "-" {
-			// Soft reset: reset to dialog's foreground
-			style = style.Foreground(resetStyle.GetForeground())
-		} else {
-			c := ParseColor(parts[0])
-			if c != nil {
-				style = style.Foreground(c)
-			}
-		}
-	}
-
-	// Background color
-	if len(parts) > 1 && parts[1] != "" {
-		if parts[1] == "~" {
-			// Hard reset: terminal default background (not dialog style)
-			style = style.Background(lipgloss.Color(""))
-		} else if parts[1] == "-" {
-			// Soft reset: reset to dialog's background
-			style = style.Background(resetStyle.GetBackground())
-		} else {
-			c := ParseColor(parts[1])
-			if c != nil {
-				style = style.Background(c)
-			}
-		}
-	}
-
-	// Styles (bold, underline, etc.)
-	if len(parts) > 2 {
-		if strings.HasPrefix(parts[2], "-") {
-			// Reset all supported flags before applying new ones
-			style = theme.ResetFlags(style)
-		}
-		s := strings.TrimPrefix(parts[2], "-")
-		for _, char := range s {
-			switch char {
-			case 'B':
-				style = style.Bold(!style.GetBold())
-			case 'b':
-				style = style.Bold(false)
-			case 'U':
-				style = style.Underline(!style.GetUnderline())
-			case 'u':
-				style = style.Underline(false)
-			case 'I':
-				style = style.Italic(!style.GetItalic())
-			case 'i':
-				style = style.Italic(false)
-			case 'D':
-				style = style.Faint(!style.GetFaint())
-			case 'd':
-				style = style.Faint(false)
-			case 'L':
-				style = style.Blink(!style.GetBlink())
-			case 'l':
-				style = style.Blink(false)
-			case 'R':
-				style = style.Reverse(!style.GetReverse())
-			case 'r':
-				style = style.Reverse(false)
-			case 'S':
-				style = style.Strikethrough(!style.GetStrikethrough())
-			case 's':
-				style = style.Strikethrough(false)
-			case 'H':
-				// High intensity ON: brighten the color
-				if fg := style.GetForeground(); fg != nil {
-					style = style.Foreground(brightenColor(fg))
-				}
-				if bg := style.GetBackground(); bg != nil {
-					style = style.Background(brightenColor(bg))
-				}
-			case 'h':
-				// High intensity OFF (colors remain at base level)
-			}
-		}
-	}
-
-	return style
+	return theme.ApplyStyleCode(style, resetStyle, styleCode)
 }
 
-// ApplyTagsToStyle translates any {{...}} tags and applies them to the given style
+// ApplyTagsToStyle translates any {{...}} tags and applies them to the given style.
 func ApplyTagsToStyle(text string, style lipgloss.Style, resetStyle lipgloss.Style) lipgloss.Style {
-	translated := console.Translate(text)
-	subMatches := themeTagRegex.FindAllStringSubmatch(translated, -1)
-	for _, subMatch := range subMatches {
-		semantic := subMatch[1]
-		direct := subMatch[2]
-
-		if semantic != "" {
-			// This branch is rare after Translate, but good for robustness
-			tagName := strings.Trim(semantic, "_")
-			def := console.GetColorDefinition(tagName)
-			style = ApplyTagsToStyle(def, style, resetStyle)
-		} else if direct != "" {
-			if direct == "|" || direct == "-" {
-				style = resetStyle
-			} else {
-				code := strings.Trim(direct, "|")
-				style = ApplyStyleCode(style, resetStyle, code)
-			}
-		}
-	}
-	return style
+	return theme.ApplyTagsToStyle(text, style, resetStyle)
 }
 
-// ParseColor is a wrapper around console.ParseColor for TUI use
+// ParseColor is a wrapper around console.ParseColor for TUI use.
 func ParseColor(name string) color.Color {
-	return console.ParseColor(name)
+	return theme.ParseColor(name)
 }
 
-// brightenColor attempts to brighten a color by adding 30% of remaining headroom.
-// Used by 'H' flag for high intensity ON.
+// brightenColor delegates to theme.BrightenColor.
 func brightenColor(c color.Color) color.Color {
-	if c == nil {
-		return c
-	}
-
-	// Extract RGBA values (returns 0-65535 range)
-	rr, gg, bb, _ := c.RGBA()
-	// Convert to 0-255 range
-	r := int(rr >> 8)
-	g := int(gg >> 8)
-	b := int(bb >> 8)
-
-	// Brighten by 30% of remaining headroom (capped at 255)
-	r = min(255, r+int(float64(255-r)*0.3))
-	g = min(255, g+int(float64(255-g)*0.3))
-	b = min(255, b+int(float64(255-b)*0.3))
-
-	return lipgloss.Color(fmt.Sprintf("#%02x%02x%02x", r, g, b))
+	return theme.BrightenColor(c)
 }
 
 // GetInitialStyle peeks at the first theme tag in text and returns a style derived from it.
