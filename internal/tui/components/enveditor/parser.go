@@ -13,6 +13,7 @@ func (m *Model) ParseEnv(content string, defaults map[string]string, readOnlyVar
 	m.value = make([][]rune, len(rawLines))
 	m.lineMeta = make([]Line, len(rawLines))
 	
+	inUserDefinedSection := false
 	for i, raw := range rawLines {
 		m.value[i] = []rune(raw)
 		trimmed := strings.TrimSpace(raw)
@@ -22,6 +23,9 @@ func (m *Model) ParseEnv(content string, defaults map[string]string, readOnlyVar
 		// 1. Comments & empty lines are read-only
 		if strings.HasPrefix(trimmed, "#") || trimmed == "" || strings.HasPrefix(trimmed, "***") {
 			l.ReadOnly = true
+			if strings.HasPrefix(trimmed, "###") && strings.Contains(trimmed, "(User Defined") {
+				inUserDefinedSection = true
+			}
 		} else {
 			// 2. Identify variables (KEY=VALUE)
 			parts := strings.SplitN(trimmed, "=", 2)
@@ -40,6 +44,12 @@ func (m *Model) ParseEnv(content string, defaults map[string]string, readOnlyVar
 				if isReadOnly {
 					l.ReadOnly = true
 				} else {
+					// 3. Identify if it's user-defined
+					_, isBuiltin := defaults[key]
+					if inUserDefinedSection || !isBuiltin {
+						l.IsUserDefined = true
+					}
+
 					// Default StartCol is 0, meaning the whole thing could be edited.
 					// But if we want to lock the key for known defaults:
 					if defVal, ok := defaults[key]; ok {
@@ -58,9 +68,9 @@ func (m *Model) ParseEnv(content string, defaults map[string]string, readOnlyVar
 					}
 				}
 			} else {
-                // If it's not a variable or a comment, treat as read-only.
-                l.ReadOnly = true
-            }
+				// If it's not a variable or a comment, treat as read-only.
+				l.ReadOnly = true
+			}
 		}
 		
 		m.lineMeta[i] = l

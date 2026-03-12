@@ -13,7 +13,7 @@ import (
 	"DockSTARTer2/internal/paths"
 )
 
-// --- Parity Timestamp Helpers ---
+// --- Timestamp Helpers ---
 
 // NeedsCreateAll checks if environment variables need to be created/updated.
 // Mirrors needs_appvars_create.sh
@@ -35,7 +35,7 @@ func NeedsCreateAll(ctx context.Context, force bool, added []string, conf config
 		// 2. Check Added Apps List
 		addedAppsFile := filepath.Join(timestampsFolder, "AddedApps")
 		storedApps, err := os.ReadFile(addedAppsFile)
-		// We use current added apps for comparison (parity with app_list_added)
+		// We use current added apps for comparison
 		allAdded, _ := ListAddedApps(ctx, envFile)
 		if err != nil || strings.TrimSpace(string(storedApps)) != strings.TrimSpace(strings.Join(allAdded, "\n")) {
 			return true
@@ -177,7 +177,7 @@ func fileChanged(conf config.AppConfig, path string) bool {
 	}
 
 	if !info.ModTime().Equal(tsInfo.ModTime()) {
-		// Contents comparison parity with cmp -s
+		// Compare file contents
 		if CompareFiles(path, timestampFile) {
 			// Contents are same, sync timestamp to avoid re-check
 			_ = os.Chtimes(timestampFile, info.ModTime(), info.ModTime())

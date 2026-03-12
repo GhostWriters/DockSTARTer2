@@ -150,7 +150,7 @@ func unsetVarInFile(ctx context.Context, varName, file string) error {
 }
 
 // OverrideVarRename renames a variable in the docker-compose.override.yml file.
-// Matches bash parity: global search/replace for variable substitution syntax.
+// Matches variable substitution syntax.
 func OverrideVarRename(ctx context.Context, fromVar, toVar string, conf config.AppConfig) error {
 	overrideFile := filepath.Join(conf.ComposeDir, constants.ComposeOverrideFileName)
 	if _, err := os.Stat(overrideFile); os.IsNotExist(err) {

@@ -149,6 +149,7 @@ type Line struct {
 	Text             string
 	ReadOnly         bool
 	IsVariable       bool // specific formatting for KEY=VALUE
+	IsUserDefined    bool // can be reordered
 	EditableStartCol int
 	DefaultValue     string
 }
@@ -351,6 +352,16 @@ type Model struct {
 
 	// rune sanitizer for input.
 	rsan runeutil.Sanitizer
+
+	// Dragging state for reordering
+	isDragging bool
+	draggedRow int
+
+	// Scrollbar dragging state
+	isScrollbarDragging bool
+
+	// Total visual width set by SetWidth
+	totalWidth int
 }
 
 // New creates a new model with default settings.
@@ -365,7 +376,7 @@ func New() Model {
 		CharLimit:            defaultCharLimit,
 		MaxHeight:            defaultMaxHeight,
 		MaxWidth:             defaultMaxWidth,
-		Prompt:               lipgloss.ThickBorder().Left + " ",
+		Prompt:               " ",
 		styles:               styles,
 		cache:                memoization.NewMemoCache[line, [][]rune](maxLines),
 		EndOfBufferCharacter: ' ',
@@ -792,12 +803,55 @@ func (m *Model) AddVariable(key string, value string) {
 	l := Line{
 		Text:             newLine,
 		IsVariable:       true,
+		IsUserDefined:    true,
 		EditableStartCol: len(key) + 1,
 	}
 	m.value = append(m.value, []rune(newLine))
 	m.lineMeta = append(m.lineMeta, l)
 	m.row = len(m.value) - 1
 	m.col = l.EditableStartCol
+	m.repositionView()
+}
+
+// MoveVariableUp swaps the current row with the row above it if both are not read-only.
+func (m *Model) MoveVariableUp() {
+	if m.row <= 0 || m.row >= len(m.value) {
+		return
+	}
+	if m.lineMeta[m.row].ReadOnly || m.lineMeta[m.row-1].ReadOnly {
+		return
+	}
+	if !m.lineMeta[m.row].IsUserDefined || !m.lineMeta[m.row-1].IsUserDefined {
+		return
+	}
+
+	// Swap value
+	m.value[m.row], m.value[m.row-1] = m.value[m.row-1], m.value[m.row]
+	// Swap meta
+	m.lineMeta[m.row], m.lineMeta[m.row-1] = m.lineMeta[m.row-1], m.lineMeta[m.row]
+
+	m.row--
+	m.repositionView()
+}
+
+// MoveVariableDown swaps the current row with the row below it if both are not read-only.
+func (m *Model) MoveVariableDown() {
+	if m.row >= len(m.value)-1 {
+		return
+	}
+	if m.lineMeta[m.row].ReadOnly || m.lineMeta[m.row+1].ReadOnly {
+		return
+	}
+	if !m.lineMeta[m.row].IsUserDefined || !m.lineMeta[m.row+1].IsUserDefined {
+		return
+	}
+
+	// Swap value
+	m.value[m.row], m.value[m.row+1] = m.value[m.row+1], m.value[m.row]
+	// Swap meta
+	m.lineMeta[m.row], m.lineMeta[m.row+1] = m.lineMeta[m.row+1], m.lineMeta[m.row]
+
+	m.row++
 	m.repositionView()
 }
 
@@ -1142,9 +1196,9 @@ func (m *Model) repositionView() {
 	}
 }
 
-// Width returns the width of the textarea.
+// Width returns the total visual width of the textarea (gutter + text + scrollbar).
 func (m Model) Width() int {
-	return m.width
+	return m.totalWidth
 }
 
 // MoveToBegin moves the cursor to the beginning of the input.
@@ -1234,6 +1288,10 @@ func (m *Model) SetWidth(w int) {
 	// borders, prompt and line numbers, we need to calculate it by subtracting
 	// the reserved width from them.
 
+	// Always reserve 1 column for the scrollbar (or space if no scrollbar)
+	reservedInner += 1
+
+	m.totalWidth = inputWidth
 	m.viewport.SetWidth(inputWidth - reservedOuter)
 	m.width = inputWidth - reservedOuter - reservedInner
 }
@@ -1452,6 +1510,16 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			m.handleMouseClick(msg)
 		}
 
+	case tea.MouseMotionMsg:
+		if m.isDragging {
+			m.handleMouseMotion(msg)
+		}
+
+	case tea.MouseReleaseMsg:
+		if m.isDragging {
+			m.handleMouseRelease(msg)
+		}
+
 	case pasteMsg:
 		if !m.isEditableAtCursor() {
 			break
@@ -1495,9 +1563,60 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) {
 		gutterWidth += digits + 2 // digits + gap (2)
 	}
 
+	total := m.totalDisplayLines()
+	visible := m.height
+	scrollbarX := m.width + gutterWidth
+	
+	// Check if click is on the scrollbar (last column of the viewport area)
+	if total > visible && msg.X >= scrollbarX {
+		trackH := visible
+		thumbH := max(1, trackH*visible/total)
+		maxOff := total - visible
+		
+		offset := m.viewport.YOffset()
+		thumbTrackStart := 0
+		if maxOff > 0 {
+			thumbTrackStart = (trackH - thumbH) * offset / maxOff
+		}
+		thumbEnd := thumbTrackStart + thumbH
+		
+		if msg.Y >= thumbTrackStart && msg.Y < thumbEnd {
+			// Clicked on the thumb
+			m.isScrollbarDragging = true
+		} else {
+			// Clicked on the track, jump to that percentage
+			if trackH > 1 {
+				targetPct := float64(msg.Y) / float64(trackH-1)
+				targetOffset := int(targetPct * float64(maxOff))
+				m.viewport.SetYOffset(clamp(targetOffset, 0, maxOff))
+			}
+		}
+		return
+	}
+
 	// Adjust for viewport scroll
 	targetViewLine := msg.Y + m.viewport.YOffset()
 	targetColX := msg.X - gutterWidth
+
+	// Check if click is in the gutter area (line numbers)
+	if msg.X < gutterWidth {
+		// Find which logical row was clicked
+		currViewLine := 0
+		for l, lineRunes := range m.value {
+			wrappedLines := m.memoizedWrap(lineRunes, m.width)
+			numWrapped := len(wrappedLines)
+			if targetViewLine >= currViewLine && targetViewLine < currViewLine+numWrapped {
+				if m.lineMeta[l].IsUserDefined && !m.lineMeta[l].ReadOnly {
+					m.isDragging = true
+					m.draggedRow = l
+					m.row = l
+					m.CursorStart()
+				}
+				return
+			}
+			currViewLine += numWrapped
+		}
+	}
 
 	// Find logical row and column by iterating through m.value and wrapped lines
 	currViewLine := 0
@@ -1536,6 +1655,79 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) {
 		}
 		currViewLine += numWrapped
 	}
+}
+
+func (m *Model) handleMouseMotion(msg tea.MouseMotionMsg) {
+	if m.isScrollbarDragging {
+		total := m.totalDisplayLines()
+		visible := m.height
+		if total > visible {
+			trackH := visible
+			maxOff := total - visible
+			if trackH > 1 {
+				targetPct := float64(msg.Y) / float64(trackH-1)
+				targetOffset := int(targetPct * float64(maxOff))
+				m.viewport.SetYOffset(clamp(targetOffset, 0, maxOff))
+			}
+		}
+		return
+	}
+
+	if !m.isDragging {
+		return
+	}
+
+	// Gutter width (prompts + line numbers)
+	gutterWidth := m.promptWidth
+	if m.ShowLineNumbers {
+		digits := len(strconv.Itoa(m.MaxHeight))
+		gutterWidth += digits + 2
+	}
+
+	targetViewLine := msg.Y + m.viewport.YOffset()
+
+	// Find which logical row the mouse is over
+	currViewLine := 0
+	for l, lineRunes := range m.value {
+		wrappedLines := m.memoizedWrap(lineRunes, m.width)
+		numWrapped := len(wrappedLines)
+		if targetViewLine >= currViewLine && targetViewLine < currViewLine+numWrapped {
+			if l != m.row {
+				// Attempt to swap
+				if l < m.row {
+					for m.row > l {
+						oldRow := m.row
+						m.MoveVariableUp()
+						if m.row == oldRow {
+							// Stuck (read-only row)
+							break
+						}
+					}
+				} else {
+					for m.row < l {
+						oldRow := m.row
+						m.MoveVariableDown()
+						if m.row == oldRow {
+							// Stuck
+							break
+						}
+					}
+				}
+			}
+			return
+		}
+		currViewLine += numWrapped
+	}
+}
+
+func (m *Model) handleMouseRelease(msg tea.MouseReleaseMsg) {
+	m.isDragging = false
+	m.isScrollbarDragging = false
+}
+
+// IsDragging returns true if the user is currently dragging a line or scrollbar.
+func (m Model) IsDragging() bool {
+	return m.isDragging || m.isScrollbarDragging
 }
 
 // renderRunes formats runes with partial highlighting.
@@ -1646,28 +1838,6 @@ func (m *Model) view() string {
 				s.WriteString(m.renderRunes(wrappedLine, l, charIndex, style))
 			}
 			s.WriteString(style.Render(strings.Repeat(" ", max(0, padding))))
-			
-			// Append scrollbar immediately before the newline
-			total := len(m.value)
-			visible := m.height
-			if total > visible {
-				offset := m.viewport.YOffset()
-				trackH := visible
-				thumbH := max(1, trackH*visible/total)
-				maxOff := total - visible
-				thumbTrackStart := 0
-				if maxOff > 0 {
-					thumbTrackStart = (trackH - thumbH) * offset / maxOff
-				}
-				thumbEnd := thumbTrackStart + thumbH
-				
-				if displayLine-1 >= thumbTrackStart && displayLine-1 < thumbEnd {
-					s.WriteString(m.activeStyle().ScrollbarThumb.Render("█"))
-				} else {
-					s.WriteString(m.activeStyle().ScrollbarTrack.Render("│"))
-				}
-			}
-
 			s.WriteRune('\n')
 			charIndex += len(wrappedLine)
 		}
@@ -1698,8 +1868,46 @@ func (m Model) View() string {
 	// yet to set the content of the viewport.
 	m.viewport.SetContent(m.view())
 	view := m.viewport.View()
+
+	// Fixed scrollbar application
+	lines := strings.Split(view, "\n")
+	total := m.totalDisplayLines()
+	visible := m.height
+	trackH := visible
+	thumbH := max(1, trackH*visible/total)
+	maxOff := total - visible
+	
+	offset := m.viewport.YOffset()
+	thumbTrackStart := 0
+	if maxOff > 0 {
+		thumbTrackStart = (trackH - thumbH) * offset / maxOff
+	}
+	thumbEnd := thumbTrackStart + thumbH
+
+	for i := 0; i < len(lines) && i < visible; i++ {
+		if total > visible {
+			if i >= thumbTrackStart && i < thumbEnd {
+				lines[i] += m.activeStyle().ScrollbarThumb.Render("█")
+			} else {
+				lines[i] += m.activeStyle().ScrollbarTrack.Render("│")
+			}
+		} else {
+			lines[i] += " "
+		}
+	}
+	view = strings.Join(lines, "\n")
+
 	styles := m.activeStyle()
 	return styles.Base.Render(view)
+}
+
+// totalDisplayLines returns the total number of lines including soft wraps.
+func (m Model) totalDisplayLines() int {
+	lines := 0
+	for i := range m.value {
+		lines += len(m.memoizedWrap(m.value[i], m.width))
+	}
+	return lines
 }
 
 // promptView renders a single line of the prompt.

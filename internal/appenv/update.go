@@ -51,66 +51,91 @@ func Update(ctx context.Context, force bool, file string) error {
 	// Variable to accumulate all formatted lines
 	var updatedEnvLines []string
 
-	// Format global .env section
-	// Get current global vars
-	globalVars := AppVarsLines("", allLines)
-
-	// Write to temp file
-	currentLinesFile.Truncate(0)
-	currentLinesFile.Seek(0, 0)
-	for _, line := range globalVars {
-		fmt.Fprintln(currentLinesFile, line)
+	// Determine if we're updating the main .env or an app-specific file
+	isMainEnv := file == composeEnvFile
+	var targetApp string
+	if !isMainEnv {
+		filename := filepath.Base(file)
+		if strings.HasPrefix(filename, constants.AppEnvFileNamePrefix) {
+			targetApp = strings.ToUpper(strings.TrimPrefix(filename, constants.AppEnvFileNamePrefix))
+		}
 	}
-	currentLinesFile.Sync()
 
-	// Get default .env.example path
-	configDir := paths.GetConfigDir()
-	defaultEnvFile := filepath.Join(configDir, constants.EnvExampleFileName)
+	// Format global .env section (only if it's the main .env)
+	if isMainEnv {
+		globalVars := AppVarsLines("", allLines)
+		currentLinesFile.Truncate(0)
+		currentLinesFile.Seek(0, 0)
+		for _, line := range globalVars {
+			fmt.Fprintln(currentLinesFile, line)
+		}
+		currentLinesFile.Sync()
 
-	// Call FormatLines for globals
-	formattedGlobals, err := FormatLines(
-		ctx,
-		currentLinesFile.Name(),
-		defaultEnvFile,
-		"", // empty appName for globals
-		composeEnvFile,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to format global vars: %w", err)
+		configDir := paths.GetConfigDir()
+		defaultEnvFile := filepath.Join(configDir, constants.EnvExampleFileName)
+
+		formattedGlobals, err := FormatLines(
+			ctx,
+			currentLinesFile.Name(),
+			defaultEnvFile,
+			"", // empty appName for globals
+			composeEnvFile,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to format global vars: %w", err)
+		}
+		updatedEnvLines = append(updatedEnvLines, formattedGlobals...)
 	}
-	updatedEnvLines = append(updatedEnvLines, formattedGlobals...)
 
 	// Format app sections
-	if len(appList) > 0 {
-		for _, appName := range appList {
-			// Get app-specific vars
-			appVars := AppVarsLines(appName, allLines)
+	if isMainEnv {
+		// Full update: all referenced apps
+		if len(appList) > 0 {
+			for _, appName := range appList {
+				appVars := AppVarsLines(appName, allLines)
+				currentLinesFile.Truncate(0)
+				currentLinesFile.Seek(0, 0)
+				for _, line := range appVars {
+					fmt.Fprintln(currentLinesFile, line)
+				}
+				currentLinesFile.Sync()
 
-			// Write to temp file
-			currentLinesFile.Truncate(0)
-			currentLinesFile.Seek(0, 0)
-			for _, line := range appVars {
-				fmt.Fprintln(currentLinesFile, line)
+				templatesDir := paths.GetTemplatesDir()
+				formattedApp, err := FormatLinesForApp(
+					ctx,
+					currentLinesFile.Name(),
+					appName,
+					templatesDir,
+					composeEnvFile,
+				)
+				if err != nil {
+					return fmt.Errorf("failed to format %s vars: %w", appName, err)
+				}
+				updatedEnvLines = append(updatedEnvLines, formattedApp...)
 			}
-			currentLinesFile.Sync()
-
-			// Get default app .env file path (will be built by format package)
-			templatesDir := paths.GetTemplatesDir()
-
-			// Call FormatLines for this app
-			// It will determine the default env file internally
-			formattedApp, err := FormatLinesForApp(
-				ctx,
-				currentLinesFile.Name(),
-				appName,
-				templatesDir,
-				composeEnvFile,
-			)
-			if err != nil {
-				return fmt.Errorf("failed to format %s vars: %w", appName, err)
-			}
-			updatedEnvLines = append(updatedEnvLines, formattedApp...)
 		}
+	} else if targetApp != "" {
+		// App-specific update: only the target app
+		appVars := AppVarsLines(targetApp, allLines)
+		currentLinesFile.Truncate(0)
+		currentLinesFile.Seek(0, 0)
+		for _, line := range appVars {
+			fmt.Fprintln(currentLinesFile, line)
+		}
+		currentLinesFile.Sync()
+
+		templatesDir := paths.GetTemplatesDir()
+		formattedApp, err := FormatLinesForApp(
+			ctx,
+			currentLinesFile.Name(),
+			targetApp,
+			templatesDir,
+			composeEnvFile,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to format %s vars: %w", targetApp, err)
+		}
+		updatedEnvLines = append(updatedEnvLines, formattedApp...)
 	}
 
 	// Write to .env file
@@ -119,7 +144,7 @@ func Update(ctx context.Context, force bool, file string) error {
 		contentStr += "\n"
 	}
 
-	// Bash parity: If we reached this point, needs_env_update returned true (or force=true).
+	// If we reached this point, needs_env_update returned true (or force=true).
 	// Bash env_update.sh does NOT check if content changed before writing.
 	// It proceeds to write blindly if needs_env_update was true.
 	logger.Notice(ctx, "Updating '{{|File|}}%s{{[-]}}'.", file)
@@ -127,8 +152,8 @@ func Update(ctx context.Context, force bool, file string) error {
 		return fmt.Errorf("failed to update .env file: %w", err)
 	}
 
-	// Process all referenced .env.app files
-	if len(appList) > 0 {
+	// Process all referenced .env.app files (only if we're updating the main .env)
+	if isMainEnv && len(appList) > 0 {
 		for _, appName := range appList {
 			appUpper := strings.ToUpper(appName)
 			appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf("%s%s", constants.AppEnvFileNamePrefix, strings.ToLower(appName)))
@@ -158,7 +183,7 @@ func Update(ctx context.Context, force bool, file string) error {
 				appContentStr += "\n"
 			}
 
-			// Bash parity: For app files, it also checks needs_env_update inside the loop.
+			// Check if update is needed for each app file.
 			// But we are already inside Update() which is driven by CreateAll or explicit call.
 			// Wait, env_update.sh iterates applist and calls needs_env_update for EACH app file.
 

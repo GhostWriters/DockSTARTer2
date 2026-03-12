@@ -31,7 +31,7 @@ type MenuItem struct {
 	IsSeparator bool // Whether this is a non-selectable header/separator
 
 	// Metadata
-	IsUserDefined bool              // Whether this is a user-defined app (for color parity)
+	IsUserDefined bool              // Whether this is a user-defined app (for coloring)
 	Metadata      map[string]string // Optional extra data (e.g. internal app name)
 }
 
