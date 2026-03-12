@@ -362,6 +362,10 @@ type Model struct {
 
 	// Total visual width set by SetWidth
 	totalWidth int
+
+	// Memoization for expensive rendering
+	lastView   string
+	cacheValid bool // Indicates if lastView is up-to-date with current state
 }
 
 // New creates a new model with default settings.
@@ -832,6 +836,7 @@ func (m *Model) MoveVariableUp() {
 
 	m.row--
 	m.repositionView()
+	m.InvalidateCache()
 }
 
 // MoveVariableDown swaps the current row with the row below it if both are not read-only.
@@ -853,6 +858,7 @@ func (m *Model) MoveVariableDown() {
 
 	m.row++
 	m.repositionView()
+	m.InvalidateCache()
 }
 
 // DeleteCurrentVariable deletes the row under the cursor, if it's not readonly
@@ -870,6 +876,8 @@ func (m *Model) DeleteCurrentVariable() bool {
 	} else {
 		m.col = 0
 	}
+	m.repositionView()
+	m.InvalidateCache()
 	return true
 }
 
@@ -881,6 +889,8 @@ func (m *Model) ResetCurrentVariable() bool {
 	meta := &m.lineMeta[m.row]
 	prefix := string(m.value[m.row][:meta.EditableStartCol])
 	m.value[m.row] = []rune(prefix + meta.DefaultValue)
+	m.repositionView()
+	m.InvalidateCache()
 	return true
 }
 
@@ -1294,6 +1304,7 @@ func (m *Model) SetWidth(w int) {
 	m.totalWidth = inputWidth
 	m.viewport.SetWidth(inputWidth - reservedOuter)
 	m.width = inputWidth - reservedOuter - reservedInner
+	m.InvalidateCache()
 }
 
 // SetPromptFunc supersedes the Prompt field and sets a dynamic prompt instead.
@@ -1323,6 +1334,7 @@ func (m *Model) SetHeight(h int) {
 	}
 
 	m.repositionView()
+	m.InvalidateCache()
 }
 
 // isReadOnlyRow returns true if the current row shouldn't be edited at all
@@ -1361,11 +1373,37 @@ func (m *Model) isBackspaceEditable() bool {
 	return m.col > m.lineMeta[m.row].EditableStartCol
 }
 
+// InvalidateCache clears the rendered view cache.
+func (m *Model) InvalidateCache() {
+	m.cacheValid = false
+}
+
+// CheckCache returns the cached rendered screen if it's still valid.
+func (m *Model) CheckCache() (string, bool) {
+	if m.cacheValid && m.lastView != "" {
+		return m.lastView, true
+	}
+	return "", false
+}
+
+// SaveCache saves the newly generated screen string to the cache and marks it as valid.
+func (m *Model) SaveCache(view string) string {
+	m.lastView = view
+	m.cacheValid = true
+	return view
+}
+
 // Update is the Bubble Tea update loop.
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	if !m.focus {
 		m.virtualCursor.Blur()
 		return m, nil
+	}
+
+	// Keypresses, clicks, and release always invalidate cache as they represent interaction
+	switch msg.(type) {
+	case tea.KeyPressMsg, tea.MouseClickMsg, tea.MouseReleaseMsg, tea.PasteMsg, pasteMsg:
+		m.InvalidateCache()
 	}
 
 	// Used to determine if the cursor should blink.
@@ -1511,13 +1549,15 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		}
 
 	case tea.MouseMotionMsg:
-		if m.isDragging {
+		if m.IsDragging() {
 			m.handleMouseMotion(msg)
+			m.InvalidateCache()
 		}
 
 	case tea.MouseReleaseMsg:
-		if m.isDragging {
+		if m.IsDragging() { // Use public IsDragging to cover both types
 			m.handleMouseRelease(msg)
+			m.InvalidateCache()
 		}
 
 	case pasteMsg:
@@ -1530,9 +1570,8 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		m.Err = msg
 	}
 
-	// Make sure we set the content of the viewport before updating it.
-	view := m.view()
-	m.viewport.SetContent(view)
+	// Handle viewport update without resetting content here. 
+	// repositionView() will handle scrolling the viewport based on cursor movement.
 	vp, cmd := m.viewport.Update(msg)
 	m.viewport = &vp
 	cmds = append(cmds, cmd)
@@ -1584,12 +1623,12 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) {
 			// Clicked on the thumb
 			m.isScrollbarDragging = true
 		} else {
-			// Clicked on the track, jump to that percentage
 			if trackH > 1 {
 				targetPct := float64(msg.Y) / float64(trackH-1)
 				targetOffset := int(targetPct * float64(maxOff))
 				m.viewport.SetYOffset(clamp(targetOffset, 0, maxOff))
 			}
+			m.InvalidateCache()
 		}
 		return
 	}
@@ -1845,9 +1884,8 @@ func (m *Model) view() string {
 
 	// Always show at least `m.Height` lines at all times.
 	// To do this we can simply pad out a few extra new lines in the view.
-	for range m.height {
-		s.WriteString(m.promptView(displayLine))
-		displayLine++
+	for i := displayLine; i < m.height; i++ {
+		s.WriteString(m.promptView(i))
 
 		// Write end of buffer content
 		leftGutter := string(m.EndOfBufferCharacter)
@@ -1857,16 +1895,25 @@ func (m *Model) view() string {
 		s.WriteRune('\n')
 	}
 
+	m.SaveCache(s.String())
 	return s.String()
 }
 
 // View renders the text area in its current state.
 func (m Model) View() string {
+	if cached, ok := m.CheckCache(); ok {
+		return cached
+	}
+
 	// XXX: This is a workaround for the case where the viewport hasn't
 	// been initialized yet like during the initial render. In that case,
 	// we need to render the view again because Update hasn't been called
 	// yet to set the content of the viewport.
+	// We save and restore the YOffset because SetContent resets it to 0.
+	currOffset := m.viewport.YOffset()
 	m.viewport.SetContent(m.view())
+	m.viewport.SetYOffset(currOffset)
+
 	view := m.viewport.View()
 
 	// Fixed scrollbar application

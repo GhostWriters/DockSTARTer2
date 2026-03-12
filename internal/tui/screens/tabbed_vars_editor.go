@@ -428,16 +428,19 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tea.MouseMotionMsg:
 		if m.focus == envFocusEditor && len(m.tabs) > 0 {
-			relX := msg.X - (m.lastOffsetX + 2)
-			relY := msg.Y - (m.lastOffsetY + 2)
-			var cmd tea.Cmd
-			m.tabs[m.activeTab].editor, cmd = m.tabs[m.activeTab].editor.Update(tea.MouseMotionMsg{
-				X: relX,
-				Y: relY,
-				// Button and Modifiers if they exist in v2
-			})
-			return m, cmd
+			editor := m.tabs[m.activeTab].editor
+			if editor.IsDragging() {
+				relX := msg.X - (m.lastOffsetX + 2)
+				relY := msg.Y - (m.lastOffsetY + 2)
+				var cmd tea.Cmd
+				m.tabs[m.activeTab].editor, cmd = editor.Update(tea.MouseMotionMsg{
+					X: relX,
+					Y: relY,
+				})
+				return m, cmd
+			}
 		}
+		return m, nil
 	case tea.MouseReleaseMsg:
 		if m.focus == envFocusEditor && len(m.tabs) > 0 {
 			relX := msg.X - (m.lastOffsetX + 2)
@@ -490,7 +493,9 @@ func (m *TabbedVarsEditorModel) ViewString() string {
 	}
 
 	editor := m.tabs[m.activeTab].editor
-	editorView := editor.View()
+	// Ensure no trailing newlines from the editor, which can cause 1-line overflows
+	// in layout helpers like RenderBorderedBoxCtx or JoinVertical.
+	editorView := strings.TrimRight(editor.View(), "\n")
 	
 	// Create tab rendering for the title
 	var tabTitles []string
@@ -525,22 +530,9 @@ func (m *TabbedVarsEditorModel) ViewString() string {
 	}
 	btnsRendered := tui.RenderCenteredButtonsCtx(totalWidth, ctx, specs...)
 
-	spacer := lipgloss.NewStyle().Width(totalWidth).Background(borderBG).Render("")
+	spacer := lipgloss.NewStyle().Width(totalWidth).Background(borderBG).Render(" ")
 
 	fullContent := lipgloss.JoinVertical(lipgloss.Left, strings.TrimRight(sb.String(), "\n"), spacer, btnsRendered)
-
-	// Pad content to maximize dialog width
-	maxContentWidth := m.width - 2
-	if maxContentWidth > 0 {
-		lines := strings.Split(fullContent, "\n")
-		for i, line := range lines {
-			w := tui.WidthWithoutZones(line)
-			if w < maxContentWidth {
-				lines[i] = line + strings.Repeat(" ", maxContentWidth-w)
-			}
-		}
-		fullContent = strings.Join(lines, "\n")
-	}
 
 	// Wrap in dialog styling
 	dialogBox := tui.RenderDialogWithType(m.title, fullContent, true, m.height, tui.DialogTypeInfo)
@@ -568,12 +560,18 @@ func (m *TabbedVarsEditorModel) SetSize(width, height int) {
 	m.height = height
 	
 	layout := tui.GetLayout()
-	
+
 	// width/height are already the content area dimensions.
-	// We need 2 lines for the outer border, 2 for the inner border, 
-	// 3 lines for buttons, and 1 for spacer.
+	// We use helpers to avoid hardcoding overheads.
+	// availableH is the total interior space of the dialog after outer borders and buttons.
+	// We pass 1 for headerHeight to account for the tab row.
+	availableH := layout.DialogContentHeight(height, 1, true, false)
+
+	// Inner overhead inside the dialog:
+	// - 1 line for the spacer above buttons
+	// - 2 lines for the inner border added by RenderBorderedBoxCtx
+	editorHeight := availableH - 3
 	editorWidth := width - 4
-	editorHeight := height - 4 - layout.ButtonHeight - 1
 
 	if editorWidth < 10 {
 		editorWidth = 10
