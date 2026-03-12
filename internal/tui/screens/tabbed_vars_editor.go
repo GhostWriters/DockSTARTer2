@@ -11,6 +11,7 @@ import (
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/constants"
+	"DockSTARTer2/internal/envutil"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/tui/components/enveditor"
@@ -209,16 +210,17 @@ func (m *TabbedVarsEditorModel) saveEnv() tea.Cmd {
 				defer os.Remove(tmpFile.Name())
 				_ = os.WriteFile(tmpFile.Name(), []byte(content), 0644)
 				
-				vars, err := appenv.ListVars(tmpFile.Name())
-				if err != nil {
-					return tui.ShowMessageDialogMsg{Title: "Save Error", Message: fmt.Sprintf("Failed to parse variables: %v", err), Type: tui.MessageError}
-				}
-				
 				// Surgical apply
-				for k, v := range vars {
-					// We use SetLiteral because the editor shows things like HOME=${DETECTED_HOMEDIR}
-					// and we want to preserve those literals.
-					_ = appenv.SetLiteral(ctx, k, v, envPath)
+				lines, _ := envutil.ReadLines(tmpFile.Name())
+				for _, line := range lines {
+					idx := strings.Index(line, "=")
+					if idx > 0 {
+						k := line[:idx]
+						v := line[idx+1:]
+						// We use SetLiteral because the editor shows things like HOME=${DETECTED_HOMEDIR}
+						// and we want to preserve those literals.
+						_ = appenv.SetLiteral(ctx, k, v, envPath)
+					}
 				}
 				// Run appenv.Update to ensure the file is sorted and formatted correctly
 				// without destroying manually added orphans or comments.
