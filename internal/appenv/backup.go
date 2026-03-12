@@ -14,7 +14,6 @@ import (
 )
 
 // BackupEnv creates a timestamped backup of the environment files.
-// Matches env_backup.sh logic exactly.
 func BackupEnv(ctx context.Context, envFile string, conf config.AppConfig) error {
 	if _, err := os.Stat(envFile); os.IsNotExist(err) {
 		logger.Warn(ctx, "No .env file to back up.")
@@ -67,7 +66,7 @@ func BackupEnv(ctx context.Context, envFile string, conf config.AppConfig) error
 	}
 
 	// info "Taking ownership of '${C["Folder"]}${DOCKER_VOLUME_CONFIG}${NC}' (non-recursive)."
-	// (Non-functional on Windows, but preserved for parity intent)
+	// (Non-functional on Windows, but preserved for intent)
 	system.TakeOwnership(ctx, expandedVolumeConfig)
 
 	// 3. Setup backup paths
@@ -130,7 +129,7 @@ func BackupEnv(ctx context.Context, envFile string, conf config.AppConfig) error
 
 	// info "Removing old compose backups."
 	logger.Info(ctx, "Removing old compose backups.")
-	pruneOldBackupsParity(ctx, composeBackupsFolder, composeFolderName)
+	pruneOldBackups(ctx, composeBackupsFolder, composeFolderName)
 
 	// if [[ -d "${DOCKER_VOLUME_CONFIG}/.env.backups" ]]; then
 	legacyBackupDir := filepath.Join(expandedVolumeConfig, ".env.backups")
@@ -148,7 +147,7 @@ func BackupEnv(ctx context.Context, envFile string, conf config.AppConfig) error
 func shellExpand(val string, ctx map[string]string) string {
 	return os.Expand(val, func(varName string) string {
 		// Strip ? suffix used in `${VAR?}`
-		// In bash, ${VAR?} means "error if not set", but we treat it as a normal expansion for parity intent
+		// In bash, ${VAR?} means "error if not set", but we treat it as a normal expansion for intent
 		cleanName := strings.TrimSuffix(varName, "?")
 
 		// Handle fallback like `${VAR:-DEFAULT}`
@@ -181,7 +180,7 @@ func sanitizePath(val string) string {
 	return val
 }
 
-func pruneOldBackupsParity(ctx context.Context, backupsFolder, prefix string) {
+func pruneOldBackups(ctx context.Context, backupsFolder, prefix string) {
 	files, err := os.ReadDir(backupsFolder)
 	if err != nil {
 		return

@@ -31,7 +31,7 @@ var (
 	// confirmResult is used for synchronous confirmation dialogs
 	confirmResult chan bool
 
-	// CurrentPageName tracks the active menu page for re-execution parity
+	// CurrentPageName tracks the active menu page for re-execution
 	CurrentPageName string
 
 	// isRootSession is true when the TUI was started with a plain -M pagename (no start- prefix).

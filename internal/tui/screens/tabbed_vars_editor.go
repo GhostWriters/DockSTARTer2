@@ -65,6 +65,9 @@ type envAddVarMsg struct {
 	key string
 }
 
+type envSaveSuccessMsg struct{}
+type envLoadDoneMsg struct{}
+
 func NewEnvEditorGlobal(onClose tea.Cmd) *TabbedVarsEditorModel {
 	return NewTabbedVarsEditorScreen(onClose, " Global Variables ", []EnvTabSpec{
 		{Title: ".env", App: "", IsGlobal: true},
@@ -100,26 +103,6 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 	envPath := filepath.Join(cfg.ComposeDir, constants.EnvFileName)
 	defaultGlobalEnvPath := filepath.Join(paths.GetConfigDir(), constants.EnvExampleFileName)
 
-	// Parity with menu_config_vars.sh lines 31-45:
-	builtinDefaults := make(map[string]string)
-	if m.tabs[0].spec.App == "" {
-		// Use existing appenv logic to get defaults for global variables
-		// We can populate builtinDefaults from the same defaultGlobalEnvPath
-		if content, err := os.ReadFile(defaultGlobalEnvPath); err == nil {
-			lines := strings.Split(string(content), "\n")
-			for _, line := range lines {
-				idx := strings.Index(line, "=")
-				if idx > 0 {
-					key := strings.TrimSpace(line[:idx])
-					if strings.HasPrefix(key, "#") {
-						key = strings.TrimSpace(key[1:])
-					}
-					val := strings.TrimSpace(line[idx+1:])
-					builtinDefaults[key] = val
-				}
-			}
-		}
-	}
 	readOnlyVars := []string{"HOME", "DOCKER_CONFIG_FOLDER", "DOCKER_COMPOSE_FOLDER"}
 
 	for i, tab := range m.tabs {
@@ -171,11 +154,28 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 
 		content := strings.Join(formattedLines, "\n")
 
-		// Apply to editor with builtin defaults and read-only vars for global editor
-		var tabBuiltinDefaults map[string]string
+		// Apply to editor with builtin defaults and read-only vars
+		tabBuiltinDefaults := make(map[string]string)
+		if defaultFilePath != "" {
+			if content, err := os.ReadFile(defaultFilePath); err == nil {
+				lines := strings.Split(string(content), "\n")
+				for _, line := range lines {
+					idx := strings.Index(line, "=")
+					if idx > 0 {
+						key := strings.TrimSpace(line[:idx])
+						if strings.HasPrefix(key, "#") {
+							key = strings.TrimPrefix(key, "#")
+							key = strings.TrimSpace(key)
+						}
+						val := strings.TrimSpace(line[idx+1:])
+						tabBuiltinDefaults[key] = val
+					}
+				}
+			}
+		}
+
 		var tabReadOnlyVars []string
 		if tab.spec.IsGlobal && tab.spec.App == "" {
-			tabBuiltinDefaults = builtinDefaults
 			tabReadOnlyVars = readOnlyVars
 		}
 
@@ -187,7 +187,7 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 		m.tabs[m.activeTab].editor.Focus()
 	}
 
-	return nil
+	return envLoadDoneMsg{}
 }
 
 func (m *TabbedVarsEditorModel) saveEnv() tea.Cmd {
@@ -199,10 +199,8 @@ func (m *TabbedVarsEditorModel) saveEnv() tea.Cmd {
 		for _, tab := range m.tabs {
 			if tab.spec.IsGlobal {
 				// Surgical update for global .env file
-				// We parse the editor content to get the literal values as seen by the user
 				content := tab.editor.GetContent()
 				
-				// Use a temporary file to leverage appenv.ListVars for parsing
 				tmpFile, err := os.CreateTemp("", "ds2_vars_edit.*.env")
 				if err != nil {
 					return tui.ShowMessageDialogMsg{Title: "Save Error", Message: fmt.Sprintf("Failed to create temporary file: %v", err), Type: tui.MessageError}
@@ -210,32 +208,29 @@ func (m *TabbedVarsEditorModel) saveEnv() tea.Cmd {
 				defer os.Remove(tmpFile.Name())
 				_ = os.WriteFile(tmpFile.Name(), []byte(content), 0644)
 				
-				// Surgical apply
 				lines, _ := envutil.ReadLines(tmpFile.Name())
 				for _, line := range lines {
 					idx := strings.Index(line, "=")
 					if idx > 0 {
 						k := line[:idx]
 						v := line[idx+1:]
-						// We use SetLiteral because the editor shows things like HOME=${DETECTED_HOMEDIR}
-						// and we want to preserve those literals.
 						_ = appenv.SetLiteral(ctx, k, v, envPath)
 					}
 				}
-				// Run appenv.Update to ensure the file is sorted and formatted correctly
-				// without destroying manually added orphans or comments.
-				_ = appenv.Update(ctx, false, envPath)
-				
 			} else {
-				// Save app specific file (full override is fine for .env.app.*)
+				// Save app specific file
 				instanceDir := paths.GetInstanceDir(tab.spec.App)
 				appEnvPath := filepath.Join(instanceDir, constants.AppEnvFileNamePrefix+tab.spec.App)
 				_ = os.WriteFile(appEnvPath, []byte(tab.editor.GetContent()), 0644)
-				_ = appenv.Update(ctx, true, appEnvPath)
 			}
 		}
 		
-		return tui.ShowMessageDialogMsg{Title: "Success", Message: "Environment variables saved successfully.", Type: tui.MessageInfo}
+		// Run appenv.Update once on the main .env file.
+		// This will properly handle any cascading updates to app-specific files
+		// and ensure global headers/sorting are maintained.
+		_ = appenv.Update(ctx, true, envPath)
+		
+		return envSaveSuccessMsg{}
 	}
 }
 
@@ -281,11 +276,8 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Button clicks
-		if strings.HasPrefix(msg.ID, "btn-") || strings.HasPrefix(msg.ID, "tabbed_vars.btn-") {
-			btnID := msg.ID
-			if strings.HasPrefix(btnID, "tabbed_vars.") {
-				btnID = strings.TrimPrefix(btnID, "tabbed_vars.")
-			}
+		if strings.HasPrefix(msg.ID, "tabbed_vars.btn-") || strings.HasPrefix(msg.ID, "btn-") {
+			btnID := strings.TrimPrefix(msg.ID, "tabbed_vars.")
 			btnIdxStr := strings.TrimPrefix(btnID, "btn-")
 			if idx, err := strconv.Atoi(btnIdxStr); err == nil {
 				m.focus = envFocusButtons
@@ -422,12 +414,57 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.tabs[m.activeTab].editor.ResetCurrentVariable()
 				}
 				return m, nil
+			case "ctrl+up":
+				if len(m.tabs) > 0 {
+					m.tabs[m.activeTab].editor.MoveVariableUp()
+				}
+				return m, nil
+			case "ctrl+down":
+				if len(m.tabs) > 0 {
+					m.tabs[m.activeTab].editor.MoveVariableDown()
+				}
+				return m, nil
 			}
 		}
+	case tea.MouseMotionMsg:
+		if m.focus == envFocusEditor && len(m.tabs) > 0 {
+			relX := msg.X - (m.lastOffsetX + 2)
+			relY := msg.Y - (m.lastOffsetY + 2)
+			var cmd tea.Cmd
+			m.tabs[m.activeTab].editor, cmd = m.tabs[m.activeTab].editor.Update(tea.MouseMotionMsg{
+				X: relX,
+				Y: relY,
+				// Button and Modifiers if they exist in v2
+			})
+			return m, cmd
+		}
+	case tea.MouseReleaseMsg:
+		if m.focus == envFocusEditor && len(m.tabs) > 0 {
+			relX := msg.X - (m.lastOffsetX + 2)
+			relY := msg.Y - (m.lastOffsetY + 2)
+			var cmd tea.Cmd
+			m.tabs[m.activeTab].editor, cmd = m.tabs[m.activeTab].editor.Update(tea.MouseReleaseMsg{
+				X: relX,
+				Y: relY,
+				Button: msg.Button,
+			})
+			return m, cmd
+		}
+	case envSaveSuccessMsg:
+		// Refresh variables to update "user defined" status (e.g. if APP__ENABLED was added)
+		return m, tea.Batch(
+			m.loadEnv,
+			func() tea.Msg {
+				return tui.ShowMessageDialogMsg{Title: "Success", Message: "Environment variables saved successfully.", Type: tui.MessageInfo}
+			},
+		)
 	case envAddVarMsg:
 		if len(m.tabs) > 0 {
 			m.tabs[m.activeTab].editor.AddVariable(msg.key, "")
 		}
+		return m, nil
+	case envLoadDoneMsg:
+		// Just trigger a re-render
 		return m, nil
 	case tea.WindowSizeMsg:
 		m.SetSize(msg.Width, msg.Height)
@@ -472,7 +509,8 @@ func (m *TabbedVarsEditorModel) ViewString() string {
 	tabRow := " " + strings.Join(tabTitles, " | ") + " "
 
 	// Create an inner box using RenderBorderedBoxCtx
-	editorWithBorder := tui.RenderBorderedBoxCtx(tabRow, editorView, editor.Width(), editor.Height()+2, m.focus == envFocusEditor, false, "left", "", ctx)
+	totalWidth := editor.Width() // Use editor.Width() which includes scrollbar space
+	editorWithBorder := tui.RenderBorderedBoxCtx(tabRow, editorView, totalWidth, editor.Height()+2, m.focus == envFocusEditor, false, "left", "", ctx)
 	
 	sb.WriteString(editorWithBorder)
 	sb.WriteString("\n")
@@ -485,12 +523,24 @@ func (m *TabbedVarsEditorModel) ViewString() string {
 			Active: m.focus == envFocusButtons && m.btnIdx == i,
 		})
 	}
-	btnsRendered := tui.RenderCenteredButtonsCtx(editor.Width(), ctx, specs...)
+	btnsRendered := tui.RenderCenteredButtonsCtx(totalWidth, ctx, specs...)
 
-	contentWidth := editor.Width()
-	spacer := lipgloss.NewStyle().Width(contentWidth).Background(borderBG).Render("")
+	spacer := lipgloss.NewStyle().Width(totalWidth).Background(borderBG).Render("")
 
 	fullContent := lipgloss.JoinVertical(lipgloss.Left, strings.TrimRight(sb.String(), "\n"), spacer, btnsRendered)
+
+	// Pad content to maximize dialog width
+	maxContentWidth := m.width - 2
+	if maxContentWidth > 0 {
+		lines := strings.Split(fullContent, "\n")
+		for i, line := range lines {
+			w := tui.WidthWithoutZones(line)
+			if w < maxContentWidth {
+				lines[i] = line + strings.Repeat(" ", maxContentWidth-w)
+			}
+		}
+		fullContent = strings.Join(lines, "\n")
+	}
 
 	// Wrap in dialog styling
 	dialogBox := tui.RenderDialogWithType(m.title, fullContent, true, m.height, tui.DialogTypeInfo)
@@ -601,7 +651,7 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitReg
 	editorW := 10
 	editorH := 10
 	if len(m.tabs) > 0 {
-		editorW = m.tabs[m.activeTab].editor.Width()
+		editorW = m.tabs[m.activeTab].editor.Width() // Use editor.Width()
 		editorH = m.tabs[m.activeTab].editor.Height()
 	}
 
@@ -652,3 +702,10 @@ func (m *TabbedVarsEditorModel) FullHelp() [][]key.Binding {
 	return [][]key.Binding{m.ShortHelp()}
 }
 
+// IsScrollbarDragging returns true if the current editor is dragging a line or a scrollbar.
+func (m *TabbedVarsEditorModel) IsScrollbarDragging() bool {
+	if len(m.tabs) > 0 {
+		return m.tabs[m.activeTab].editor.IsDragging()
+	}
+	return false
+}

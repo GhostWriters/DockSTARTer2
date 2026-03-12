@@ -90,8 +90,7 @@ func CreateApp(ctx context.Context, appNameRaw string, conf config.AppConfig) er
 	appName := strings.ToLower(appNameUpper)
 
 	if IsAppBuiltIn(appName) {
-		// Bash parity: check if update is needed for this specific app
-		// This handles the "precise mode" parity where individual apps are checked.
+		// Check if update is needed for this app.
 		if !NeedsCreateAll(ctx, false, []string{appNameUpper}, conf) {
 			logger.Info(ctx, "Environment variables already created for '{{|App|}}%s{{[-]}}'.", niceName)
 			return nil
@@ -122,7 +121,6 @@ func CreateApp(ctx context.Context, appNameRaw string, conf config.AppConfig) er
 
 		logger.Info(ctx, "Environment variables created for '{{|App|}}%s{{[-]}}'.", niceName)
 
-		// Bash parity: run_script 'unset_needs_appvars_create' "${appname}"
 		UnsetNeedsCreateApp(ctx, appNameUpper, conf)
 
 		return nil

@@ -40,7 +40,7 @@ func AppInstanceFile(ctx context.Context, appName, fileSuffix string) (string, e
 
 	// Check if template folder exists
 	if _, err := os.Stat(templateFolder); os.IsNotExist(err) {
-		// Parity: remove instance folders if template folder is gone
+		// Remove instance folders if template folder is gone
 		system.SetPermissions(ctx, instanceFolder)
 		_ = os.RemoveAll(instanceFolder)
 		return "", nil
@@ -50,7 +50,7 @@ func AppInstanceFile(ctx context.Context, appName, fileSuffix string) (string, e
 	templateContent, err := os.ReadFile(templateFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// Parity: remove instance files if template file is gone
+			// Remove instance files if template file is gone
 			system.SetPermissions(ctx, instanceFile)
 			_ = os.Remove(instanceFile)
 			system.SetPermissions(ctx, instanceOriginalFile)

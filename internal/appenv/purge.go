@@ -44,7 +44,6 @@ func PurgeAppVars(ctx context.Context, appName string, conf config.AppConfig) er
 		return err
 	}
 
-	// Bash parity: run_script 'unset_needs_appvars_create'
 	added, _ := ListAddedApps(ctx, globalEnv)
 	UnsetNeedsCreateAll(ctx, added, conf)
 
