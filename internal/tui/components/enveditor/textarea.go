@@ -1447,6 +1447,11 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			m.insertRunesFromUserInput([]rune(msg.Text))
 		}
 
+	case tea.MouseClickMsg:
+		if msg.Button == tea.MouseLeft {
+			m.handleMouseClick(msg)
+		}
+
 	case pasteMsg:
 		if !m.isEditableAtCursor() {
 			break
@@ -1480,6 +1485,57 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	m.repositionView()
 
 	return m, tea.Batch(cmds...)
+}
+
+func (m *Model) handleMouseClick(msg tea.MouseClickMsg) {
+	// Gutter width (prompts + line numbers)
+	gutterWidth := m.promptWidth
+	if m.ShowLineNumbers {
+		digits := len(strconv.Itoa(m.MaxHeight))
+		gutterWidth += digits + 2 // digits + gap (2)
+	}
+
+	// Adjust for viewport scroll
+	targetViewLine := msg.Y + m.viewport.YOffset()
+	targetColX := msg.X - gutterWidth
+
+	// Find logical row and column by iterating through m.value and wrapped lines
+	currViewLine := 0
+	for l, lineRunes := range m.value {
+		wrappedLines := m.memoizedWrap(lineRunes, m.width)
+		numWrapped := len(wrappedLines)
+
+		if targetViewLine >= currViewLine && targetViewLine < currViewLine+numWrapped {
+			// Click is on this logical line
+			m.row = l
+
+			// Find which wrapped line it is
+			wrappedLineIdx := targetViewLine - currViewLine
+
+			// Find the character index in the logical line
+			charIdx := 0
+			for i := 0; i < wrappedLineIdx; i++ {
+				charIdx += len(wrappedLines[i])
+			}
+
+			// Find the column within the wrapped line
+			clickedWrappedCol := clamp(targetColX, 0, len(wrappedLines[wrappedLineIdx]))
+			m.col = charIdx + clickedWrappedCol
+
+			// Clamp to actual line length
+			if m.col > len(lineRunes) {
+				m.col = len(lineRunes)
+			}
+
+			// Important: Ensure cursor is in editable area if applicable
+			if !m.isEditableAtCursor() {
+				m.CursorStart() // Moves to EditableStartCol if valid
+			}
+
+			return
+		}
+		currViewLine += numWrapped
+	}
 }
 
 // renderRunes formats runes with partial highlighting.

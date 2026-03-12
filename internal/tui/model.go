@@ -107,6 +107,8 @@ type (
 	// LayerHitMsg is sent when a native compositor layer is hit by a mouse event
 	LayerHitMsg struct {
 		ID     string
+		X      int
+		Y      int
 		Button tea.MouseButton
 	}
 

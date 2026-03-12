@@ -29,7 +29,7 @@ func NewConfigMenuScreen() tui.ScreenModel {
 			Tag:    "Configure Applications",
 			Desc:   "Edit application settings",
 			Help:   "Configure ports, volumes, and environment variables",
-			Action: nil, // Not implemented yet
+			Action: navigateToConfigApps(),
 		},
 		{
 			Tag:    "Start All Applications",

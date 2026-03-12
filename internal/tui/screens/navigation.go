@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"strings"
+
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/tui"
 
@@ -17,7 +19,25 @@ func navigateToConfigMenu() tea.Cmd {
 // navigateToGlobalVarsEditor returns a command to navigate to the global variables editor
 func navigateToGlobalVarsEditor() tea.Cmd {
 	return func() tea.Msg {
-		return tui.NavigateMsg{Screen: NewGlobalVarsEditorScreen(navigateBack())}
+		return tui.NavigateMsg{Screen: NewEnvEditorGlobal(navigateBack())}
+	}
+}
+
+// navigateToConfigApps returns a command to navigate to configure applications
+func navigateToConfigApps() tea.Cmd {
+	return func() tea.Msg {
+		return tui.NavigateMsg{Screen: NewConfigAppsMenuScreen()}
+	}
+}
+
+// navigateToAppConfigEditor returns a command to navigate to a specific app's config editor
+func navigateToAppConfigEditor(appName string) tea.Cmd {
+	return func() tea.Msg {
+		specs := []EnvTabSpec{
+			{Title: ".env", App: appName, IsGlobal: true},
+			{Title: ".env.app." + strings.ToLower(appName), App: appName, IsGlobal: false},
+		}
+		return tui.NavigateMsg{Screen: NewTabbedVarsEditorScreen(navigateBack(), "Configure "+appName, specs)}
 	}
 }
 
