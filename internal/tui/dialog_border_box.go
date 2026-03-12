@@ -282,8 +282,16 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 	}
 	result.WriteString(borderStyleLight.Render(border.TopRight))
 	result.WriteString("\n")
-
-	for _, line := range lines {
+	
+	maxLines := len(lines)
+	if targetHeight > 2 {
+		maxLines = targetHeight - 2
+	}
+	
+	for i, line := range lines {
+		if i >= maxLines {
+			break
+		}
 		result.WriteString(borderStyleLight.Render(border.Left))
 		// Use WidthWithoutZones to get accurate visual width (zone markers are invisible)
 		textWidth := WidthWithoutZones(line)
