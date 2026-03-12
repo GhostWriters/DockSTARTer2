@@ -203,7 +203,7 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		// without changing button focus — mirrors keyboard up/down arrow behaviour.
 		if panelID == IDListPanel {
 			// Trigger focus shift FIRST so the border changes visually
-			focusMsg := LayerHitMsg{ID: IDListPanel, Button: HoverButton} // Use custom HoverButton
+			focusMsg := LayerHitMsg{ID: IDListPanel, Button: HoverButton, X: wheelMsg.X, Y: wheelMsg.Y} // Use custom HoverButton
 			if m.dialog != nil {
 				m.dialog, _ = m.dialog.Update(focusMsg)
 			} else if m.activeScreen != nil {
@@ -229,7 +229,7 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 
 		// For other panels (submenus, button row), switch focus to the hovered panel first
 		if panelID != "" {
-			focusMsg := LayerHitMsg{ID: panelID, Button: tea.MouseLeft}
+			focusMsg := LayerHitMsg{ID: panelID, Button: tea.MouseLeft, X: wheelMsg.X, Y: wheelMsg.Y}
 			if m.dialog != nil {
 				m.dialog, _ = m.dialog.Update(focusMsg)
 			} else if m.activeScreen != nil {
@@ -294,7 +294,7 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		// This covers display_options submenus (theme/options) and button row.
 		panelID := hitIDToPanelID(hitID)
 		if panelID != "" {
-			focusMsg := LayerHitMsg{ID: panelID, Button: tea.MouseLeft}
+			focusMsg := LayerHitMsg{ID: panelID, Button: tea.MouseLeft, X: click.X, Y: click.Y}
 			if m.dialog != nil {
 				m.dialog, _ = m.dialog.Update(focusMsg)
 			} else if m.activeScreen != nil {
@@ -320,7 +320,7 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		// Yes/No confirm buttons, OK dismiss buttons), dispatch as a left click so the
 		// button action fires normally.
 		if isButtonHitID(hitID) {
-			layerMsg := LayerHitMsg{ID: hitID, Button: tea.MouseLeft}
+			layerMsg := LayerHitMsg{ID: hitID, Button: tea.MouseLeft, X: click.X, Y: click.Y}
 			var btnCmd tea.Cmd
 			if m.dialog != nil {
 				m.dialog, btnCmd = m.dialog.Update(layerMsg)
@@ -352,14 +352,17 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 	// 5. HIT TESTING & SEMANTIC DISPATCH (for other buttons/wheel)
 	var hitID string
 	var hitButton tea.MouseButton
+	var hitX, hitY int
 
 	switch me := msg.(type) {
 	case tea.MouseClickMsg:
 		hitID = m.hitRegions.FindHit(me.X, me.Y)
 		hitButton = me.Button
+		hitX, hitY = me.X, me.Y
 	case tea.MouseWheelMsg:
 		hitID = m.hitRegions.FindHit(me.X, me.Y)
 		hitButton = me.Button
+		hitX, hitY = me.X, me.Y
 	}
 
 	if hitID != "" {
@@ -368,7 +371,7 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		if _, ok := msg.(tea.MouseWheelMsg); ok {
 			semanticMsg = LayerWheelMsg{ID: hitID, Button: hitButton}
 		} else {
-			semanticMsg = LayerHitMsg{ID: hitID, Button: hitButton}
+			semanticMsg = LayerHitMsg{ID: hitID, Button: hitButton, X: hitX, Y: hitY}
 		}
 
 		// A. AppModel Internal IDs (handled globally)

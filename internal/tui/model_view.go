@@ -106,12 +106,19 @@ func (m *AppModel) View() (v tea.View) {
 			screenX := maxX
 			screenY := maxY
 
-			// Center if smaller than content area
-			if screenW < caW {
-				screenX = maxX + (caW-screenW)/2
+			maximized := false
+			if ms, ok := s.(interface{ IsMaximized() bool }); ok {
+				maximized = ms.IsMaximized()
 			}
-			if screenH < caH {
-				screenY = maxY + (caH-screenH)/2
+
+			if !maximized {
+				// Center if smaller than content area
+				if screenW < caW {
+					screenX = maxX + (caW-screenW)/2
+				}
+				if screenH < caH {
+					screenY = maxY + (caH-screenH)/2
+				}
 			}
 
 			// Base Z for screens: each screen level is 10 units apart within ZScreen band
