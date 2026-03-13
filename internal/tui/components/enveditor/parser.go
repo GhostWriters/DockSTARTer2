@@ -32,7 +32,7 @@ func (m *Model) ParseEnv(content string, defaults map[string]string, readOnlyVar
 			if len(parts) == 2 {
 				l.IsVariable = true
 				key := strings.TrimSpace(parts[0])
-				
+
 				isReadOnly := false
 				for _, ro := range readOnlyVars {
 					if key == ro {
@@ -40,7 +40,7 @@ func (m *Model) ParseEnv(content string, defaults map[string]string, readOnlyVar
 						break
 					}
 				}
-				
+
 				if isReadOnly {
 					l.ReadOnly = true
 				} else {
@@ -50,20 +50,12 @@ func (m *Model) ParseEnv(content string, defaults map[string]string, readOnlyVar
 						l.IsUserDefined = true
 					}
 
-					// Default StartCol is 0, meaning the whole thing could be edited.
-					// But if we want to lock the key for known defaults:
-					if defVal, ok := defaults[key]; ok {
-						// Find the index of the '=' character
-						eqIdx := strings.Index(raw, "=")
-						if eqIdx != -1 {
-							l.EditableStartCol = eqIdx + 1
-							l.DefaultValue = defVal
-						}
-					} else {
-						// For custom variables, we also want to lock the KEY= part so they don't corrupt the env file.
-						eqIdx := strings.Index(raw, "=")
-						if eqIdx != -1 {
-							l.EditableStartCol = eqIdx + 1
+					// Lock the key for ALL variables to prevent corruption
+					eqIdx := strings.Index(raw, "=")
+					if eqIdx != -1 {
+						l.EditableStartCol = eqIdx + 1
+						if isBuiltin {
+							l.DefaultValue = defaults[key]
 						}
 					}
 				}

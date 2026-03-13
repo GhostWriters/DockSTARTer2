@@ -111,8 +111,13 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 		var defaultFilePath string
 
 		if tab.spec.IsGlobal {
-			// Get current lines using existing appenv.ListAppVarLines (mirrors appvars_lines.sh)
-			currentLines, _ = appenv.ListAppVarLines(ctx, tab.spec.App, cfg)
+			if tab.spec.App != "" {
+				// Get current lines for specific app section in global .env
+				currentLines, _ = appenv.ListAppVarLines(ctx, tab.spec.App, cfg)
+			} else {
+				// Pure global editor: load all lines from .env that are not part of an app section
+				currentLines, _ = appenv.ListAppVarLines(ctx, "", cfg)
+			}
 
 			if tab.spec.App != "" {
 				// App-specific variables from global .env
