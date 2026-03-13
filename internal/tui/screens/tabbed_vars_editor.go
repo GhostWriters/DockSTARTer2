@@ -693,9 +693,31 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitReg
 
 	// Tab hit regions
 	if len(m.tabs) > 0 {
-		tabX := offsetX + 5 // approximation for where tabs start
-		for i, tab := range m.tabs {
-			tabWidth := lipgloss.Width("[" + tab.spec.Title + "]")
+		ctx := tui.GetActiveContext()
+		editorWidth := m.tabs[m.activeTab].editor.Width()
+
+		// Calculate total width of all tabs to determine centering offset
+		totalTitleWidth := 0
+		var tabWidths []int
+		for _, tab := range m.tabs {
+			w := tui.WidthOfTitleSegment(tab.spec.Title, true, ctx)
+			tabWidths = append(tabWidths, w)
+			totalTitleWidth += w
+		}
+
+		// Replicate RenderBorderedBoxCtx centering logic
+		actualWidth := editorWidth
+		if totalTitleWidth > actualWidth {
+			actualWidth = totalTitleWidth
+		}
+
+		leftPad := 0
+		if ctx.SubmenuTitleAlign != "left" {
+			leftPad = (actualWidth - totalTitleWidth) / 2
+		}
+
+		tabX := offsetX + 1 + leftPad // start after Border.TopLeft
+		for i, tabWidth := range tabWidths {
 			regions = append(regions, tui.HitRegion{
 				ID:     "tabbed_vars.tab-" + strconv.Itoa(i),
 				X:      tabX,
@@ -704,7 +726,7 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitReg
 				Height: 1,
 				ZOrder: tui.ZDialog + 10,
 			})
-			tabX += tabWidth + 1 // space between tabs
+			tabX += tabWidth
 		}
 	}
 
