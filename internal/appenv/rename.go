@@ -65,7 +65,7 @@ func RenameAppVars(ctx context.Context, fromApp, toApp string, conf config.AppCo
 	}
 
 	// 5. Create variables for the new app (ensures templates are added)
-	if err := CreateApp(ctx, toUpper, conf); err != nil {
+	if err := CreateApp(ctx, toUpper, false, conf); err != nil {
 		logger.Warn(ctx, "Failed to create app variables for %s: %v", toUpper, err)
 	}
 

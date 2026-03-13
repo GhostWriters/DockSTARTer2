@@ -176,7 +176,7 @@ func handleAppVarsCreate(ctx context.Context, group *CommandGroup, state *CmdSta
 	}
 
 	for _, arg := range group.Args {
-		if err := appenv.CreateApp(ctx, arg, conf); err != nil {
+		if err := appenv.CreateApp(ctx, arg, state.Force, conf); err != nil {
 			logger.Error(ctx, "%v", err)
 			return err
 		}
@@ -184,7 +184,11 @@ func handleAppVarsCreate(ctx context.Context, group *CommandGroup, state *CmdSta
 
 	if err := appenv.Update(ctx, state.Force, envFile); err != nil {
 		logger.Warn(ctx, "Failed to update env usage: %v", err)
-		// Not returning error here as it's a warning
+	} else {
+		// Only unset on success as per user feedback
+		for _, arg := range group.Args {
+			appenv.UnsetNeedsCreateApp(ctx, strings.ToUpper(arg), conf)
+		}
 	}
 	return nil
 }

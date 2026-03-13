@@ -214,12 +214,6 @@ func UnsetNeedsUpdate(ctx context.Context, file string) {
 		referencedAppsFile := filepath.Join(timestampsFolder, filename+"_ReferencedApps")
 		apps, _ := ListReferencedApps(ctx, conf)
 		_ = os.WriteFile(referencedAppsFile, []byte(strings.Join(apps, "\n")), 0644)
-
-		for _, appName := range apps {
-			appEnvFile := GetAppEnvFile(appName, conf)
-			UnsetNeedsUpdate(ctx, appEnvFile)
-		}
-
 	} else {
 		// App specific file
 		// Store ENABLED status

@@ -56,7 +56,7 @@ func CreateAll(ctx context.Context, force bool, conf config.AppConfig) error {
 	logger.Notice(ctx, "Creating environment variables for added apps. Please be patient, this can take a while.")
 
 	for _, appNameUpper := range added {
-		if err := CreateApp(ctx, appNameUpper, conf); err != nil {
+		if err := CreateApp(ctx, appNameUpper, force, conf); err != nil {
 			logger.Error(ctx, "Failed to create variables for %s: %v", appNameUpper, err)
 		}
 	}
@@ -72,7 +72,7 @@ func CreateAll(ctx context.Context, force bool, conf config.AppConfig) error {
 
 // CreateApp generates environment variables for a single application.
 // Mirrors appvars_create.sh
-func CreateApp(ctx context.Context, appNameRaw string, conf config.AppConfig) error {
+func CreateApp(ctx context.Context, appNameRaw string, force bool, conf config.AppConfig) error {
 	appNameUpper := strings.TrimSpace(strings.ToUpper(appNameRaw))
 	// Strip colons
 	if strings.HasSuffix(appNameUpper, ":") {
@@ -91,7 +91,7 @@ func CreateApp(ctx context.Context, appNameRaw string, conf config.AppConfig) er
 
 	if IsAppBuiltIn(appName) {
 		// Check if update is needed for this app.
-		if !NeedsCreateAll(ctx, false, []string{appNameUpper}, conf) {
+		if !NeedsCreateAll(ctx, force, []string{appNameUpper}, conf) {
 			logger.Info(ctx, "Environment variables already created for '{{|App|}}%s{{[-]}}'.", niceName)
 			return nil
 		}
@@ -120,9 +120,6 @@ func CreateApp(ctx context.Context, appNameRaw string, conf config.AppConfig) er
 		}
 
 		logger.Info(ctx, "Environment variables created for '{{|App|}}%s{{[-]}}'.", niceName)
-
-		UnsetNeedsCreateApp(ctx, appNameUpper, conf)
-
 		return nil
 	} else {
 		logger.Warn(ctx, "Application '{{|App|}}%s{{[-]}}' does not exist.", niceName)

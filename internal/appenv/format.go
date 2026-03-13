@@ -60,10 +60,14 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 		formattedEnvLines = append(formattedEnvLines, "### "+headingTitle)
 		formattedEnvLines = append(formattedEnvLines, "###")
 		if appDescription != "" {
-			descLines := strings.Split(appDescription, "\n")
+			descLines := wordWrap(appDescription, 75)
 			for _, line := range descLines {
 				trimmed := strings.TrimRight(line, " \r\t")
-				formattedEnvLines = append(formattedEnvLines, "### "+trimmed)
+				if trimmed == "" {
+					formattedEnvLines = append(formattedEnvLines, "###")
+				} else {
+					formattedEnvLines = append(formattedEnvLines, "### "+trimmed)
+				}
 			}
 			formattedEnvLines = append(formattedEnvLines, "###")
 		}
