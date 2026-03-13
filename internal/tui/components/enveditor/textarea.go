@@ -1286,13 +1286,12 @@ func (m *Model) SetWidth(w int) {
 
 	// Add line number width to reserved inner width.
 	if m.ShowLineNumbers {
-		// XXX: this was originally documented as needing "1 cell" but was,
-		// in practice, effectively hardcoded to 2 cells. We can, and should,
-		// reduce this to one gap and update the tests accordingly.
-		const gap = 2
+		// Single character left margin plus number width (min 3 digits) plus 1 cell gap.
+		const margin = 1
+		const gap = 1
+		digits := max(3, numDigits(m.MaxHeight))
 
-		// Number of digits plus 1 cell for the margin.
-		reservedInner += numDigits(m.MaxHeight) + gap
+		reservedInner += margin + digits + gap
 	}
 
 	// Input width must be at least one more than the reserved inner and outer
@@ -1609,8 +1608,8 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) {
 	// Gutter width (prompts + line numbers)
 	gutterWidth := m.promptWidth
 	if m.ShowLineNumbers {
-		digits := len(strconv.Itoa(m.MaxHeight))
-		gutterWidth += digits + 2 // digits + gap (2)
+		digits := max(3, numDigits(m.MaxHeight))
+		gutterWidth += digits + 2 // 1 margin + digits + 1 gap
 	}
 
 	total := m.totalDisplayLines()
@@ -1779,7 +1778,7 @@ func (m *Model) handleMouseMotion(msg tea.MouseMotionMsg) {
 	// Gutter width (prompts + line numbers)
 	gutterWidth := m.promptWidth
 	if m.ShowLineNumbers {
-		digits := len(strconv.Itoa(m.MaxHeight))
+		digits := max(3, numDigits(m.MaxHeight))
 		gutterWidth += digits + 2
 	}
 
@@ -2103,7 +2102,9 @@ func (m Model) lineNumberView(n int, isCursorLine bool) (str string) {
 	}
 
 	// Format line number dynamically based on the maximum number of lines.
-	digits := len(strconv.Itoa(m.MaxHeight))
+	// Minimum of 3 digits for consistent alignment as per user request.
+	digits := max(3, numDigits(m.MaxHeight))
+	// Single character left margin (" ") followed by the number ("%*v ")
 	str = fmt.Sprintf(" %*v ", digits, str)
 
 	return textStyle.Render(lineNumberStyle.Render(str))

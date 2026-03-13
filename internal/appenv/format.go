@@ -1,39 +1,49 @@
 package appenv
 
 import (
+	"DockSTARTer2/internal/assets"
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/envutil"
 	"context"
 	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
 )
 
-// FormatLines formats environment variable lines with proper headers and structure.
+// FormatLines processes environment variable lines to match DockSTARTer formatting.
+// Matches env_format_lines.sh exactly.
 func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, composeEnvFile string) ([]string, error) {
-	const (
-		globalVarsHeading        = "Global Variables"
-		appDeprecatedTag         = " [*DEPRECATED*]"
-		appDisabledTag           = " (Disabled)"
-		appUserDefinedTag        = " (User Defined)"
-		userDefinedVarsTag       = " (User Defined Variables)"
-		userDefinedGlobalVarsTag = " (User Defined)"
-	)
-
 	appUpper := strings.ToUpper(appName)
-	appIsUserDefined := false
-	var appNiceName string
+
+	// Local variables for tags (Parity with env_format_lines.sh lines 15-20)
+	globalVarsHeading := "Global Variables"
+	appDeprecatedTag := " [*DEPRECATED*]"
+	appDisabledTag := " (Disabled)"
+	appUserDefinedTag := " (User Defined)"
+	appUserDefinedVarsTag := " (User Defined Variables)"
+	userDefinedGlobalVarsTag := " (User Defined)"
+
+	// 1. Load CurrentEnvLines (Parity with env_format_lines.sh lines 22-25)
+	var currentEnvLines []string
+	if currentEnvFile != "" {
+		var err error
+		currentEnvLines, err = envutil.ReadLines(currentEnvFile)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	var formattedEnvLines []string
 
+	// 2. Add App Heading if APPNAME is specified (Parity with env_format_lines.sh lines 31-56)
 	if appUpper != "" {
-		if IsAppUserDefined(ctx, appUpper, composeEnvFile) {
-			appIsUserDefined = true
-		}
-		appNiceName = GetNiceName(ctx, appUpper)
+		appIsUserDefined := IsAppUserDefined(ctx, appUpper, composeEnvFile)
+		appNameNice := GetNiceName(ctx, appUpper)
 		appDescription := GetDescription(ctx, appUpper, composeEnvFile)
 
-		headingTitle := appNiceName
+		headingTitle := appNameNice
 		if appIsUserDefined {
 			headingTitle += appUserDefinedTag
 		} else {
@@ -45,42 +55,51 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 			}
 		}
 
-		// Bash heading text: empty, title, empty, description, empty
-		headingLines := []string{
-			"",
-			headingTitle,
-			"",
-		}
-		wrappedDescription := wordWrap(appDescription, 75)
-		headingLines = append(headingLines, wrappedDescription...)
-		headingLines = append(headingLines, "")
-
-		for _, hl := range headingLines {
-			trimmed := strings.TrimRight(hl, " \t")
-			if trimmed == "" {
-				formattedEnvLines = append(formattedEnvLines, "###")
-			} else {
+		formattedEnvLines = append(formattedEnvLines, "###")
+		formattedEnvLines = append(formattedEnvLines, "### "+headingTitle)
+		formattedEnvLines = append(formattedEnvLines, "###")
+		if appDescription != "" {
+			descLines := strings.Split(appDescription, "\n")
+			for _, line := range descLines {
+				trimmed := strings.TrimRight(line, " \r\t")
 				formattedEnvLines = append(formattedEnvLines, "### "+trimmed)
 			}
+			formattedEnvLines = append(formattedEnvLines, "###")
 		}
 	}
 
-	varRe := regexp.MustCompile(`^([A-Za-z0-9_]+)=`)
-
+	// 3. Add Template Contents Verbatim (Parity with env_format_lines.sh lines 57-64)
 	if defaultEnvFile != "" {
-		if info, err := os.Stat(defaultEnvFile); err == nil && !info.IsDir() {
-			content, err := os.ReadFile(defaultEnvFile)
+		var templateLines []string
+		// Use embedded asset for global .env.example
+		if filepath.Base(defaultEnvFile) == constants.EnvExampleFileName {
+			data, err := assets.GetDefaultEnv()
 			if err == nil {
-				lines := strings.Split(strings.TrimRight(string(content), "\n"), "\n")
-				formattedEnvLines = append(formattedEnvLines, lines...)
-				if len(formattedEnvLines) > 0 {
-					formattedEnvLines = append(formattedEnvLines, "")
+				templateLines = strings.Split(string(data), "\n")
+				// readarray -t strips the final newline character from the file
+				if len(templateLines) > 0 && templateLines[len(templateLines)-1] == "" {
+					templateLines = templateLines[:len(templateLines)-1]
+				}
+			}
+		} else {
+			// Read app templates from disk
+			if data, err := os.ReadFile(defaultEnvFile); err == nil {
+				templateLines = strings.Split(string(data), "\n")
+				if len(templateLines) > 0 && templateLines[len(templateLines)-1] == "" {
+					templateLines = templateLines[:len(templateLines)-1]
 				}
 			}
 		}
+
+		if len(templateLines) > 0 {
+			formattedEnvLines = append(formattedEnvLines, templateLines...)
+			// Bash line 62: adds a blank if template was added
+			formattedEnvLines = append(formattedEnvLines, "")
+		}
 	}
 
-	// Indexed mapping of variable names to their line index in formattedEnvLines
+	// 4. Index existing variables in formattedEnvLines (Parity lines 66-78)
+	varRe := regexp.MustCompile(`^([A-Za-z0-9_]+)=`)
 	formattedEnvVarIndex := make(map[string]int)
 	for i, line := range formattedEnvLines {
 		matches := varRe.FindStringSubmatch(line)
@@ -89,127 +108,49 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 		}
 	}
 
-	// Read current environment lines
-	var rawCurrentLines []string
-	if currentEnvFile != "" {
-		var err error
-		rawCurrentLines, err = envutil.ReadLines(currentEnvFile)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// Parity: env_lines.sh strips everything except variables: s/^\s*\([A-Za-z0-9_]*\)\s*=/\1=/p
-	var currentEnvLines []string
-	for _, line := range rawCurrentLines {
-		matches := varRe.FindStringSubmatch(line)
-		if len(matches) > 1 {
-			currentEnvLines = append(currentEnvLines, line)
-		}
-	}
-
-	consumed := make([]bool, len(currentEnvLines))
+	// 5. Update values from CurrentEnvLines (Parity lines 80-91)
 	if len(currentEnvLines) > 0 {
-		// Update values in formattedEnvLines from currentEnvLines
+		consumed := make([]bool, len(currentEnvLines))
 		for i, line := range currentEnvLines {
-			idx := strings.Index(line, "=")
-			if idx > 0 {
-				varName := line[:idx]
-				if lineIndex, exists := formattedEnvVarIndex[varName]; exists {
-					formattedEnvLines[lineIndex] = line
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) > 1 {
+				varName := parts[0]
+				if idx, exists := formattedEnvVarIndex[varName]; exists {
+					formattedEnvLines[idx] = line
 					consumed[i] = true
 				}
 			}
 		}
-	}
 
-	// Filter to remaining currentEnvLines
-	var remainingLines []string
-	for i, line := range currentEnvLines {
-		if !consumed[i] {
-			remainingLines = append(remainingLines, line)
+		// 6. Handle remaining CurrentEnvLines (User Defined) (Parity lines 93-124)
+		var remaining []string
+		for i, line := range currentEnvLines {
+			if !consumed[i] {
+				remaining = append(remaining, line)
+			}
 		}
-	}
 
-	// Filter remainingLines to only those that belong to this context
-	var filteredRemaining []string
-	for _, line := range remainingLines {
-		idx := strings.Index(line, "=")
-		if idx > 0 {
-			// Bash parity: env_format_lines.sh does NOT filter by prefix.
-			// It assumes the caller passed appropriate lines if we are doing a sectional pass.
-			filteredRemaining = append(filteredRemaining, line)
-		}
-	}
-
-	if len(filteredRemaining) > 0 {
-		if appUpper == "" || !appIsUserDefined {
-			// Add the "User Defined" heading
-			var headingTitle string
+		if len(remaining) > 0 {
+			// Add User Defined heading
+			headingTitle := ""
 			if appUpper != "" {
-				headingTitle = appNiceName + userDefinedVarsTag
+				headingTitle = GetNiceName(ctx, appUpper) + appUserDefinedVarsTag
 			} else {
 				headingTitle = globalVarsHeading + userDefinedGlobalVarsTag
 			}
 
-			headingLines := []string{
-				"",
-				headingTitle,
-				"",
-			}
-
-			for _, hl := range headingLines {
-				trimmed := strings.TrimRight(hl, " \t")
-				if trimmed == "" {
-					formattedEnvLines = append(formattedEnvLines, "###")
-				} else {
-					formattedEnvLines = append(formattedEnvLines, "### "+trimmed)
-				}
-			}
+			formattedEnvLines = append(formattedEnvLines, "###")
+			formattedEnvLines = append(formattedEnvLines, "### "+headingTitle)
+			formattedEnvLines = append(formattedEnvLines, "###")
+			formattedEnvLines = append(formattedEnvLines, remaining...)
+			formattedEnvLines = append(formattedEnvLines, "")
 		}
-
-		// Add the user defined variables
-		for _, line := range filteredRemaining {
-			idx := strings.Index(line, "=")
-			if idx > 0 {
-				varName := line[:idx]
-				if lineIndex, exists := formattedEnvVarIndex[varName]; exists {
-					// Variable already exists (from another app perhaps? or previous pass)
-					// Update its value
-					formattedEnvLines[lineIndex] = line
-				} else {
-					// Variable is new, add it
-					formattedEnvLines = append(formattedEnvLines, line)
-					formattedEnvVarIndex[varName] = len(formattedEnvLines) - 1
-				}
-			}
-		}
-		formattedEnvLines = append(formattedEnvLines, "")
-	} else if len(formattedEnvLines) == 0 {
+	} else {
+		// Parity line 126 fallback
 		formattedEnvLines = append(formattedEnvLines, "")
 	}
 
 	return formattedEnvLines, nil
-}
-
-// FormatLinesForApp convenience wrapper.
-func FormatLinesForApp(ctx context.Context, currentEnvFile, appName, templatesDir, composeEnvFile string) ([]string, error) {
-	var defaultEnvFile string
-	appUpper := strings.ToUpper(appName)
-	if !IsAppUserDefined(ctx, appUpper, composeEnvFile) {
-		// We need to know if we are formatting for global .env or app-specific .env.app.appName
-		// FormatLinesForApp is usually called for the global .env sectional pass in env_update logic.
-		// Wait, FormatLinesForApp is also used in Update?
-		// Let's re-examine FormatLinesForApp usage in update.go.
-		// In update.go, it is indeed used in the app sections pass for the GLOBAL .env file.
-		// So it should use ".env" as the suffix.
-
-		processedInstanceFile, err := AppInstanceFile(ctx, appUpper, constants.EnvFileName)
-		if err == nil && processedInstanceFile != "" {
-			defaultEnvFile = processedInstanceFile
-		}
-	}
-	return FormatLines(ctx, currentEnvFile, defaultEnvFile, appUpper, composeEnvFile)
 }
 
 // GetReferencedApps returns a list of apps referenced in the compose env file.
