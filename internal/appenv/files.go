@@ -13,6 +13,7 @@ import (
 )
 
 // AppInstanceFile handles template processing for app instances.
+// Mirrors app_instance_file.sh exactly.
 func AppInstanceFile(ctx context.Context, appName, fileSuffix string) (string, error) {
 	templatesDir := paths.GetTemplatesDir()
 	instancesDir := paths.GetInstancesDir()
@@ -20,66 +21,73 @@ func AppInstanceFile(ctx context.Context, appName, fileSuffix string) (string, e
 	baseApp := strings.ToLower(AppNameToBaseAppName(appName))
 	instance := AppNameToInstanceName(appName)
 
-	// Template paths
+	// Instance paths (Parity lines 31-36)
 	templateFolder := filepath.Join(templatesDir, constants.TemplatesDirName, baseApp)
-	templateFilename := strings.ReplaceAll(fileSuffix, "*", baseApp)
-	templateFile := filepath.Join(templateFolder, templateFilename)
-
-	// Instance paths
+	instanceTemplateFolder := filepath.Join(instancesDir, constants.TemplatesDirName, strings.ToLower(appName))
 	instanceFolder := filepath.Join(instancesDir, strings.ToLower(appName))
-	instanceFilename := strings.ReplaceAll(fileSuffix, "*", strings.ToLower(appName))
-	instanceFile := filepath.Join(instanceFolder, instanceFilename)
-	instanceOriginalFile := instanceFile + ".original"
 
-	// 0. Ensure instances folder exists and have permissions
+	templateFile := filepath.Join(templateFolder, strings.ReplaceAll(fileSuffix, "*", baseApp))
+	instanceTemplateFile := filepath.Join(instanceTemplateFolder, strings.ReplaceAll(fileSuffix, "*", strings.ToLower(appName)))
+	instanceFile := filepath.Join(instanceFolder, strings.ReplaceAll(fileSuffix, "*", strings.ToLower(appName)))
+
+	// Return InstanceFile (Parity line 38: echo "${InstanceFile}")
+	// In Go we proceed with logic but we MUST ensure this path is Returned.
+	// We'll capture the return value and finish the side-effects.
+
+	// 0. Ensure instances folder exists (Parity lines 19-24)
 	if _, err := os.Stat(instancesDir); os.IsNotExist(err) {
 		if err := os.MkdirAll(instancesDir, 0755); err == nil {
 			system.SetPermissions(ctx, instancesDir)
 		}
 	}
 
-	// Check if template folder exists
+	// 1. Template folder check (Parity lines 41-52)
 	if _, err := os.Stat(templateFolder); os.IsNotExist(err) {
 		// Remove instance folders if template folder is gone
-		system.SetPermissions(ctx, instanceFolder)
-		_ = os.RemoveAll(instanceFolder)
-		return "", nil
+		for _, folder := range []string{instanceTemplateFolder, instanceFolder} {
+			if _, err := os.Stat(folder); err == nil {
+				system.SetPermissions(ctx, folder)
+				_ = os.RemoveAll(folder)
+			}
+		}
+		return instanceFile, nil
 	}
 
-	// Check if template file exists
+	// 2. Template file check (Parity lines 54-66)
 	templateContent, err := os.ReadFile(templateFile)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Remove instance files if template file is gone
-			system.SetPermissions(ctx, instanceFile)
-			_ = os.Remove(instanceFile)
-			system.SetPermissions(ctx, instanceOriginalFile)
-			_ = os.Remove(instanceOriginalFile)
-			return "", nil
-		}
-		return "", err
-	}
-
-	// Check if we need to update/recreate
-	// Bash logic (adapted for .original):
-	// Return early ONLY if InstanceFile exists AND Original exists AND Original == Template.
-	if _, err := os.Stat(instanceFile); err == nil {
-		// Instance exists, check original
-		originalContent, err := os.ReadFile(instanceOriginalFile)
-		if err == nil && bytes.Equal(templateContent, originalContent) {
+			for _, file := range []string{instanceTemplateFile, instanceFile} {
+				if _, err := os.Stat(file); err == nil {
+					system.SetPermissions(ctx, file)
+					_ = os.Remove(file)
+				}
+			}
 			return instanceFile, nil
 		}
+		return instanceFile, err
 	}
 
-	// Create instance folder
-	if err := os.MkdirAll(instanceFolder, 0755); err != nil {
-		return "", err
+	// 3. Skip check (Parity lines 68-71)
+	if _, err := os.Stat(instanceFile); err == nil {
+		if _, err := os.Stat(instanceTemplateFile); err == nil {
+			if cmpContent(templateFile, instanceTemplateFile) {
+				return instanceFile, nil
+			}
+		}
 	}
-	system.SetPermissions(ctx, instanceFolder)
 
-	// Process content (replace placeholders)
+	// 4. Create instance folder (Parity lines 76-82)
+	if _, err := os.Stat(instanceFolder); os.IsNotExist(err) {
+		if err := os.MkdirAll(instanceFolder, 0755); err != nil {
+			return instanceFile, err
+		}
+		system.SetPermissions(ctx, instanceFolder)
+	}
+
+	// 5. Create instance file (Parity lines 85-96)
 	content := string(templateContent)
-
 	var __INSTANCE, __Instance, __instance string
 	if instance != "" {
 		__INSTANCE = "__" + strings.ToUpper(instance)
@@ -92,17 +100,37 @@ func AppInstanceFile(ctx context.Context, appName, fileSuffix string) (string, e
 	content = strings.ReplaceAll(content, "<__instance>", __instance)
 
 	if err := os.WriteFile(instanceFile, []byte(content), 0644); err != nil {
-		return "", err
+		return instanceFile, err
 	}
 	system.SetPermissions(ctx, instanceFile)
 
-	// Write Original Template File
-	if err := os.WriteFile(instanceOriginalFile, templateContent, 0644); err != nil {
-		return "", err
+	// 6. Create original template folder and file (Parity lines 98-111)
+	if _, err := os.Stat(instanceTemplateFolder); os.IsNotExist(err) {
+		if err := os.MkdirAll(instanceTemplateFolder, 0755); err != nil {
+			return instanceFile, err
+		}
+		system.SetPermissions(ctx, instanceTemplateFolder)
 	}
-	system.SetPermissions(ctx, instanceOriginalFile)
+
+	if err := os.WriteFile(instanceTemplateFile, templateContent, 0644); err != nil {
+		return instanceFile, err
+	}
+	system.SetPermissions(ctx, instanceTemplateFile)
 
 	return instanceFile, nil
+}
+
+// cmpContent compares two files (equivalent to cmp -s).
+func cmpContent(file1, file2 string) bool {
+	f1, err := os.ReadFile(file1)
+	if err != nil {
+		return false
+	}
+	f2, err := os.ReadFile(file2)
+	if err != nil {
+		return false
+	}
+	return bytes.Equal(f1, f2)
 }
 
 // CopyFile copies a file from src to dst.
