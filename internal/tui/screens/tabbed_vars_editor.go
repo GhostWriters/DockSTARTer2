@@ -219,9 +219,8 @@ func (m *TabbedVarsEditorModel) saveEnv() tea.Cmd {
 					}
 				}
 			} else {
-				// Save app specific file
-				instanceDir := paths.GetInstanceDir(tab.spec.App)
-				appEnvPath := filepath.Join(instanceDir, constants.AppEnvFileNamePrefix+tab.spec.App)
+				// Save app specific file (.env.app.appName) in the compose directory
+				appEnvPath := filepath.Join(cfg.ComposeDir, constants.AppEnvFileNamePrefix+tab.spec.App)
 				_ = os.WriteFile(appEnvPath, []byte(tab.editor.GetContent()), 0644)
 			}
 		}

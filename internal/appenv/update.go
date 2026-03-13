@@ -116,7 +116,8 @@ func Update(ctx context.Context, force bool, file string) error {
 		}
 	} else if targetApp != "" {
 		// App-specific update: only the target app
-		appVars := AppVarsLines(targetApp, allLines)
+		// Parity: env_update.sh uses the whole input file
+		appVars := allLines
 		currentLinesFile.Truncate(0)
 		currentLinesFile.Seek(0, 0)
 		for _, line := range appVars {
@@ -124,12 +125,18 @@ func Update(ctx context.Context, force bool, file string) error {
 		}
 		currentLinesFile.Sync()
 
-		templatesDir := paths.GetTemplatesDir()
-		formattedApp, err := FormatLinesForApp(
+		// Parity: env_update.sh line 97-98 finds the .env.app.* template
+		appDefaultEnvFile, err := AppInstanceFile(ctx, targetApp, fmt.Sprintf("%s*", constants.AppEnvFileNamePrefix))
+		if err != nil {
+			logger.Warn(ctx, "Failed to get default env file for %s: %v", targetApp, err)
+			appDefaultEnvFile = ""
+		}
+
+		formattedApp, err := FormatLines(
 			ctx,
 			currentLinesFile.Name(),
+			appDefaultEnvFile,
 			targetApp,
-			templatesDir,
 			composeEnvFile,
 		)
 		if err != nil {
