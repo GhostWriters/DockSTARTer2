@@ -200,6 +200,13 @@ func (m *ProgramBoxModel) SetIsDialog(isDialog bool) {
 	m.isDialog = isDialog
 }
 
+// SetContext sets a cancelable context to be used for the task
+func (m *ProgramBoxModel) SetContext(ctx context.Context) {
+	if ctx != nil {
+		m.ctx = ctx
+	}
+}
+
 // SetFocused sets the focus state
 func (m *ProgramBoxModel) SetFocused(focused bool) {
 	m.focused = focused
