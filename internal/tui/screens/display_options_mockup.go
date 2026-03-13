@@ -214,7 +214,7 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	}
 	backdropBlock := lipgloss.JoinVertical(lipgloss.Left, backdropLines...)
 
-	dialogBox := tui.RenderBorderedBoxCtx(dTitle, contentStr, 38, 0, true, false, previewCtx.DialogTitleAlign, "Theme_Title", previewCtx)
+	dialogBox := tui.RenderBorderedBoxCtx(dTitle, contentStr, 38, 0, true, true, false, previewCtx.DialogTitleAlign, "Theme_Title", previewCtx)
 	dialogBox = tui.AddShadowCtx(dialogBox, previewCtx)
 	backdropBlock = tui.Overlay(dialogBox, backdropBlock, tui.OverlayCenter, tui.OverlayCenter, 0, 0)
 
@@ -296,7 +296,7 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	// Wrap in a standard dialog using the current (active) theme
 	mockupWidth := lipgloss.Width(mockup)
 	// Synchronize preview height with settings dialog
-	return tui.RenderBorderedBoxCtx("Preview", mockup, mockupWidth, targetHeight, false, false, tui.GetActiveContext().DialogTitleAlign, "Theme_Title", tui.GetActiveContext())
+	return tui.RenderBorderedBoxCtx("Preview", mockup, mockupWidth, targetHeight, false, true, false, tui.GetActiveContext().DialogTitleAlign, "Theme_Title", tui.GetActiveContext())
 }
 
 // getPreviewShadowColor extracts the shadow color from the preview theme

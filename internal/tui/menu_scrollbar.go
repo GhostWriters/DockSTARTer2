@@ -9,9 +9,9 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// scrollbarGutterWidth is the number of columns reserved for the right scrollbar/padding column.
+// ScrollbarGutterWidth is the number of columns reserved for the right scrollbar/padding column.
 // This slot is always reserved (space when scrollbar is off, track/thumb when on).
-const scrollbarGutterWidth = 1
+const ScrollbarGutterWidth = 1
 
 // ScrollbarInfo describes the geometry of a rendered scrollbar column.
 // It is returned by applyScrollbarColumnTracked so callers can compute hit regions.
@@ -22,8 +22,8 @@ type ScrollbarInfo struct {
 	ThumbEnd   int  // exclusive row index of thumb bottom (<= Height-1 because last row is down arrow)
 }
 
-// computeScrollbarInfo computes scrollbar geometry without rendering anything.
-func computeScrollbarInfo(total, visible, offset, height int) ScrollbarInfo {
+// ComputeScrollbarInfo computes scrollbar geometry without rendering anything.
+func ComputeScrollbarInfo(total, visible, offset, height int) ScrollbarInfo {
 	if total <= visible || height < 3 {
 		return ScrollbarInfo{Height: height}
 	}
@@ -51,9 +51,9 @@ func computeScrollbarInfo(total, visible, offset, height int) ScrollbarInfo {
 	}
 }
 
-// applyScrollbarColumnTracked appends one scrollbar/gutter character to the right of every line
+// ApplyScrollbarColumnTracked appends one scrollbar/gutter character to the right of every line
 // in content and returns the rendered string together with the scrollbar geometry.
-func applyScrollbarColumnTracked(content string, total, visible, offset int, enabled bool, lineChars bool, ctx StyleContext) (string, ScrollbarInfo) {
+func ApplyScrollbarColumnTracked(content string, total, visible, offset int, enabled bool, lineChars bool, ctx StyleContext) (string, ScrollbarInfo) {
 	if content == "" {
 		return content, ScrollbarInfo{}
 	}
@@ -64,7 +64,7 @@ func applyScrollbarColumnTracked(content string, total, visible, offset int, ena
 	var info ScrollbarInfo
 
 	if enabled {
-		info = computeScrollbarInfo(total, visible, offset, height)
+		info = ComputeScrollbarInfo(total, visible, offset, height)
 		col = buildScrollbarColumn(info, lineChars, ctx)
 	} else {
 		blank := lipgloss.NewStyle().Background(ctx.Dialog.GetBackground()).Render(" ")
@@ -82,9 +82,9 @@ func applyScrollbarColumnTracked(content string, total, visible, offset int, ena
 	return strings.Join(lines, "\n"), info
 }
 
-// applyScrollbarColumn is the non-tracking variant kept for callers that don't need geometry.
-func applyScrollbarColumn(content string, total, visible, offset int, enabled bool, lineChars bool, ctx StyleContext) string {
-	result, _ := applyScrollbarColumnTracked(content, total, visible, offset, enabled, lineChars, ctx)
+// ApplyScrollbarColumn is the non-tracking variant kept for callers that don't need geometry.
+func ApplyScrollbarColumn(content string, total, visible, offset int, enabled bool, lineChars bool, ctx StyleContext) string {
+	result, _ := ApplyScrollbarColumnTracked(content, total, visible, offset, enabled, lineChars, ctx)
 	return result
 }
 
@@ -144,8 +144,8 @@ func buildScrollbarColumn(info ScrollbarInfo, lineChars bool, ctx StyleContext) 
 	return col
 }
 
-// buildPlainBottomBorder constructs a plain bottom border line (no label) matching the inner box style.
-func buildPlainBottomBorder(totalWidth int, focused bool, ctx StyleContext) string {
+// BuildPlainBottomBorder constructs a plain bottom border line (no label) matching the inner box style.
+func BuildPlainBottomBorder(totalWidth int, focused bool, ctx StyleContext) string {
 	var border lipgloss.Border
 	if ctx.LineCharacters {
 		if focused {
@@ -167,11 +167,11 @@ func buildPlainBottomBorder(totalWidth int, focused bool, ctx StyleContext) stri
 	return borderStyle.Render(border.BottomLeft + inner + border.BottomRight)
 }
 
-// buildScrollPercentBottomBorder constructs a bottom border line for an inner box
+// BuildScrollPercentBottomBorder constructs a bottom border line for an inner box
 // with a scroll-percent label on the right, styled identically to the programbox indicator.
 // totalWidth is the full visual width of the bordered box including side border chars.
 // Only call this when a scrollbar is needed (sbInfo.Needed == true).
-func buildScrollPercentBottomBorder(totalWidth int, scrollPct float64, focused bool, ctx StyleContext) string {
+func BuildScrollPercentBottomBorder(totalWidth int, scrollPct float64, focused bool, ctx StyleContext) string {
 	scrollIndicator := ctx.TagKey.Bold(true).Render(fmt.Sprintf("%d%%", int(scrollPct*100)))
 
 	var border lipgloss.Border

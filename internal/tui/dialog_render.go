@@ -89,9 +89,89 @@ func RenderUniformBlockDialogCtx(title, content string, ctx StyleContext) string
 	return renderDialogWithBorderCtx(title, content, borders.Focused, true, 0, false, false, ctx.DialogTitleHelp, ctx)
 }
 
+// RenderTitleSegmentCtx renders a single title segment with connectors and optional indicators.
+// This is the "title routine" that can be called multiple times for side-by-side titles.
+func RenderTitleSegmentCtx(rawTitle string, borderFocused bool, contentFocused bool, showIndicators bool, titleTag string, ctx StyleContext) string {
+	if titleTag != "" {
+		rawTitle = console.WrapSemantic(titleTag) + rawTitle
+	}
+	renderedTitle := RenderThemeTextCtx(rawTitle, ctx)
+
+	var leftT, rightT string
+	if !ctx.DrawBorders {
+		leftT = " "
+		rightT = " "
+	} else if ctx.LineCharacters {
+		if borderFocused {
+			leftT = "┫"
+			rightT = "┣"
+		} else {
+			leftT = "┤"
+			rightT = "├"
+		}
+	} else {
+		if borderFocused {
+			leftT = "H"
+			rightT = "H"
+		} else {
+			leftT = "+"
+			rightT = "+"
+		}
+	}
+
+	borderBG := ctx.Dialog.GetBackground()
+	borderStyleLight := lipgloss.NewStyle().
+		Foreground(ctx.BorderColor).
+		Background(borderBG)
+
+	var result strings.Builder
+	result.WriteString(borderStyleLight.Render(leftT))
+
+	focusTag := "Theme_TitleFocusIndicator"
+	if showIndicators {
+		if contentFocused {
+			ind := "▸"
+			if !ctx.LineCharacters {
+				ind = ">"
+			}
+			result.WriteString(borderStyleLight.Render(console.ToANSIWithPrefix("{{|"+focusTag+"|}}"+ind+"{{[-]}}", ctx.Prefix)))
+		} else {
+			unfocusTag := "Theme_TitleUnfocusedIndicator"
+			result.WriteString(borderStyleLight.Render(console.ToANSIWithPrefix("{{|"+unfocusTag+"|}} {{[-]}}", ctx.Prefix)))
+		}
+	}
+
+	result.WriteString(renderedTitle)
+
+	if showIndicators {
+		if contentFocused {
+			ind := "◂"
+			if !ctx.LineCharacters {
+				ind = "<"
+			}
+			result.WriteString(borderStyleLight.Render(console.ToANSIWithPrefix("{{|"+focusTag+"|}}"+ind+"{{[-]}}", ctx.Prefix)))
+		} else {
+			unfocusTag := "Theme_TitleUnfocusedIndicator"
+			result.WriteString(borderStyleLight.Render(console.ToANSIWithPrefix("{{|"+unfocusTag+"|}} {{[-]}}", ctx.Prefix)))
+		}
+	}
+
+	result.WriteString(borderStyleLight.Render(rightT))
+	return result.String()
+}
+
+// WidthOfTitleSegment returns the visual width of a title segment including connectors and indicators.
+func WidthOfTitleSegment(rawTitle string, showIndicators bool, ctx StyleContext) int {
+	indicatorLen := 0
+	if showIndicators {
+		indicatorLen = 1
+	}
+	return 1 + indicatorLen + WidthWithoutZones(RenderThemeTextCtx(rawTitle, ctx)) + indicatorLen + 1
+}
+
 // RenderBorderedBoxCtx renders a dialog with title and borders using a specific context.
 // Unlike renderDialogWithBorderCtx, this accepts a known contentWidth instead of measuring content.
-func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeight int, focused bool, rounded bool, titleAlign string, titleTag string, ctx StyleContext) string {
+func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeight int, focused bool, showIndicators bool, rounded bool, titleAlign string, titleTag string, ctx StyleContext) string {
 	var border lipgloss.Border
 	if !ctx.DrawBorders {
 		border = lipgloss.HiddenBorder()
@@ -109,26 +189,12 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 				border = SlantedAsciiBorder
 			}
 		}
-	} else if ctx.LineCharacters {
-		if rounded {
-			if focused {
-				border = ThickRoundedBorder
-			} else {
-				border = lipgloss.RoundedBorder()
-			}
-		} else {
+	} else {
+		if ctx.LineCharacters {
 			if focused {
 				border = lipgloss.ThickBorder()
 			} else {
 				border = lipgloss.NormalBorder()
-			}
-		}
-	} else {
-		if rounded {
-			if focused {
-				border = RoundedThickAsciiBorder
-			} else {
-				border = RoundedAsciiBorder
 			}
 		} else {
 			if focused {
@@ -147,17 +213,7 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 		Foreground(ctx.Border2Color).
 		Background(borderBG)
 
-	if titleTag != "" {
-		rawTitle = console.WrapSemantic(titleTag) + rawTitle
-	}
-
-	// Render title with Dialog background as the base for inheritance
-	renderedTitle := RenderThemeTextCtx(rawTitle, ctx)
-
 	lines := strings.Split(content, "\n")
-	// Trust the passed contentWidth - don't expand based on line widths
-	// Zone markers and other invisible ANSI sequences can inflate lipgloss.Width()
-	// causing incorrect width calculations. The caller knows the correct width.
 	actualWidth := contentWidth
 
 	if targetHeight > 2 {
@@ -174,32 +230,20 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 	result.WriteString(borderStyleLight.Render(border.TopLeft))
 
 	// Only render title section if there is actual text to show
-	if WidthWithoutZones(renderedTitle) == 0 {
+	if GetPlainText(rawTitle) == "" {
 		result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, actualWidth)))
 	} else {
-		var leftT, rightT string
-		if !ctx.DrawBorders {
-			leftT = " "
-			rightT = " "
-		} else if ctx.LineCharacters {
-			if focused {
-				leftT = "┫"
-				rightT = "┣"
-			} else {
-				leftT = "┤"
-				rightT = "├"
-			}
+		var renderedSegment string
+		var titleSectionLen int
+
+		if titleTag == "RAW" {
+			renderedSegment = rawTitle
+			titleSectionLen = WidthWithoutZones(rawTitle)
 		} else {
-			if focused {
-				leftT = "H"
-				rightT = "H"
-			} else {
-				leftT = "+"
-				rightT = "+"
-			}
+			renderedSegment = RenderTitleSegmentCtx(rawTitle, focused, focused, showIndicators, titleTag, ctx)
+			titleSectionLen = WidthOfTitleSegment(rawTitle, showIndicators, ctx)
 		}
 
-		titleSectionLen := 1 + 1 + lipgloss.Width(renderedTitle) + 1 + 1
 		if titleSectionLen > actualWidth {
 			actualWidth = titleSectionLen
 		}
@@ -216,40 +260,7 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 		}
 
 		result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, leftPad)))
-		result.WriteString(borderStyleLight.Render(leftT))
-
-		focusTag := "Theme_TitleFocusIndicator"
-
-		if focused {
-			if ctx.LineCharacters {
-				result.WriteString(borderStyleLight.Render(console.ToANSIWithPrefix("{{|"+focusTag+"|}}▸", ctx.Prefix)))
-			} else {
-				result.WriteString(borderStyleLight.Render(console.ToANSIWithPrefix("{{|"+focusTag+"|}}>", ctx.Prefix)))
-			}
-		} else {
-			unfocusTag := "Theme_TitleUnfocusedIndicator"
-			if ctx.LineCharacters {
-				result.WriteString(borderStyleLight.Render(console.ToANSIWithPrefix("{{|"+unfocusTag+"|}} ", ctx.Prefix)))
-			} else {
-				result.WriteString(borderStyleLight.Render(console.ToANSIWithPrefix("{{|"+unfocusTag+"|}} ", ctx.Prefix)))
-			}
-		}
-		result.WriteString(renderedTitle)
-		if focused {
-			if ctx.LineCharacters {
-				result.WriteString(borderStyleLight.Render(console.ToANSIWithPrefix("{{|"+focusTag+"|}}◂", ctx.Prefix)))
-			} else {
-				result.WriteString(borderStyleLight.Render(console.ToANSIWithPrefix("{{|"+focusTag+"|}}<", ctx.Prefix)))
-			}
-		} else {
-			unfocusTag := "Theme_TitleUnfocusedIndicator"
-			if ctx.LineCharacters {
-				result.WriteString(borderStyleLight.Render(console.ToANSIWithPrefix("{{|"+unfocusTag+"|}} ", ctx.Prefix)))
-			} else {
-				result.WriteString(borderStyleLight.Render(console.ToANSIWithPrefix("{{|"+unfocusTag+"|}} ", ctx.Prefix)))
-			}
-		}
-		result.WriteString(borderStyleLight.Render(rightT))
+		result.WriteString(renderedSegment)
 		result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, rightPad)))
 	}
 	result.WriteString(borderStyleLight.Render(border.TopRight))

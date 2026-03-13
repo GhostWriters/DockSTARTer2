@@ -97,7 +97,7 @@ func (m *LogPanelModel) SetSize(width, totalTermHeight int) {
 
 	// Always sync viewport width so background log line wrapping is accurate.
 	// Reserve one column on the right for the scrollbar gutter.
-	m.viewport.SetWidth(width - scrollbarGutterWidth)
+	m.viewport.SetWidth(width - ScrollbarGutterWidth)
 
 	if m.expanded {
 		// If height is unset (0), default to half screen
@@ -181,10 +181,10 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		for _, line := range newLines {
 			rendered := RenderThemeText(line, styles.Console)
 			// Truncate to viewport width to prevent overflow past borders
-			// If viewport is not yet expanded, use m.width
+			// Calculate inner box width based on full viewport width
 			targetWidth := m.viewport.Width()
 			if targetWidth <= 0 && m.width > 0 {
-				targetWidth = m.width - scrollbarGutterWidth
+				targetWidth = m.width - ScrollbarGutterWidth
 			}
 			if targetWidth > 0 {
 				rendered = lipgloss.NewStyle().
@@ -364,8 +364,8 @@ func (m LogPanelModel) ViewString() string {
 	if m.viewport.Height() != vpH {
 		m.viewport.SetHeight(vpH)
 	}
-	if m.viewport.Width() != m.width-scrollbarGutterWidth {
-		m.viewport.SetWidth(m.width - scrollbarGutterWidth)
+	if m.viewport.Width() != m.width-ScrollbarGutterWidth {
+		m.viewport.SetWidth(m.width - ScrollbarGutterWidth)
 	}
 
 	vpStyle := lipgloss.NewStyle().
@@ -377,7 +377,8 @@ func (m LogPanelModel) ViewString() string {
 
 	// Use MaintainBackground to ensure console background is preserved through resets
 	vpView := MaintainBackground(m.viewport.View(), ctx.Console)
-	vpView = applyScrollbarColumn(vpView, len(m.lines), m.viewport.Height(), m.viewport.YOffset(), currentConfig.UI.Scrollbar, ctx.LineCharacters, ctx)
+	// Sections content plus scrollbar/gutter (right slot)
+	vpView = ApplyScrollbarColumn(vpView, len(m.lines), m.viewport.Height(), m.viewport.YOffset(), currentConfig.UI.Scrollbar, ctx.LineCharacters, ctx)
 
 	// Restore original theme colors for the strip
 	// LogPanelColor for foreground, HelpLine background for the line itself.
@@ -468,7 +469,7 @@ func (m LogPanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 
 		// Scrollbar hit regions (within viewport, right-most column)
 		if currentConfig.UI.Scrollbar {
-			sbInfo := computeScrollbarInfo(m.viewport.TotalLineCount(), m.viewport.Height(), m.viewport.YOffset(), vpH)
+			sbInfo := ComputeScrollbarInfo(m.viewport.TotalLineCount(), m.viewport.Height(), m.viewport.YOffset(), vpH)
 			if sbInfo.Needed {
 				sbX := offsetX + m.viewport.Width()
 				sbTopY := offsetY + 1 // +1 for the toggle strip row

@@ -88,7 +88,7 @@ func DefaultKeyMap() KeyMap {
 		DeleteAfterCursor:       key.NewBinding(key.WithKeys("ctrl+k"), key.WithHelp("ctrl+k", "delete after cursor")),
 		DeleteBeforeCursor:      key.NewBinding(key.WithKeys("ctrl+u"), key.WithHelp("ctrl+u", "delete before cursor")),
 		InsertNewline:           key.NewBinding(key.WithKeys("enter", "ctrl+m"), key.WithHelp("enter", "insert newline")),
-		DeleteCharacterBackward: key.NewBinding(key.WithKeys("backspace", "ctrl+h"), key.WithHelp("backspace", "delete character backward")),
+		DeleteCharacterBackward: key.NewBinding(key.WithKeys("backspace"), key.WithHelp("backspace", "delete character backward")),
 		DeleteCharacterForward:  key.NewBinding(key.WithKeys("delete", "ctrl+d"), key.WithHelp("delete", "delete character forward")),
 		LineStart:               key.NewBinding(key.WithKeys("home", "ctrl+a"), key.WithHelp("home", "line start")),
 		LineEnd:                 key.NewBinding(key.WithKeys("end", "ctrl+e"), key.WithHelp("end", "line end")),
@@ -300,6 +300,10 @@ type Model struct {
 	// MaxWidth is the maximum width of the text area in columns. If 0 or less,
 	// there's no limit.
 	MaxWidth int
+
+	// LineCharacters determines whether to use stylized line-art characters for
+	// scrollbars and other UI elements.
+	LineCharacters bool
 
 	// Styling. Styles are defined in [Styles]. Use [SetStyles] and [GetStyles]
 	// to work with this value publicly.
@@ -1206,6 +1210,13 @@ func (m *Model) repositionView() {
 	}
 }
 
+// SetLineCharacters sets whether the textarea should use stylized line-art
+// characters for its scrollbar.
+func (m *Model) SetLineCharacters(v bool) {
+	m.LineCharacters = v
+	m.InvalidateCache()
+}
+
 // Width returns the total visual width of the textarea (gutter + text + scrollbar).
 func (m Model) Width() int {
 	return m.totalWidth
@@ -1302,7 +1313,7 @@ func (m *Model) SetWidth(w int) {
 	reservedInner += 1
 
 	m.totalWidth = inputWidth
-	m.viewport.SetWidth(inputWidth - reservedOuter)
+	m.viewport.SetWidth(inputWidth - reservedOuter - 1)
 	m.width = inputWidth - reservedOuter - reservedInner
 	m.InvalidateCache()
 }
@@ -1608,27 +1619,65 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) {
 	
 	// Check if click is on the scrollbar (last column of the viewport area)
 	if total > visible && msg.X >= scrollbarX {
-		trackH := visible
-		thumbH := max(1, trackH*visible/total)
-		maxOff := total - visible
-		
-		offset := m.viewport.YOffset()
-		thumbTrackStart := 0
-		if maxOff > 0 {
-			thumbTrackStart = (trackH - thumbH) * offset / maxOff
-		}
-		thumbEnd := thumbTrackStart + thumbH
-		
-		if msg.Y >= thumbTrackStart && msg.Y < thumbEnd {
-			// Clicked on the thumb
-			m.isScrollbarDragging = true
-		} else {
-			if trackH > 1 {
-				targetPct := float64(msg.Y) / float64(trackH-1)
-				targetOffset := int(targetPct * float64(maxOff))
-				m.viewport.SetYOffset(clamp(targetOffset, 0, maxOff))
+		if visible >= 3 {
+			// Check up arrow
+			if msg.Y == 0 {
+				m.viewport.ScrollUp(1)
+				m.InvalidateCache()
+				return
 			}
-			m.InvalidateCache()
+			// Check down arrow
+			if msg.Y == visible-1 {
+				m.viewport.ScrollDown(1)
+				m.InvalidateCache()
+				return
+			}
+
+			trackH := visible - 2
+			maxOff := total - visible
+			thumbH := max(1, trackH*visible/total)
+			offset := m.viewport.YOffset()
+
+			thumbStart := 0
+			if maxOff > 0 {
+				thumbStart = (trackH - thumbH) * offset / maxOff
+			}
+			thumbEnd := thumbStart + thumbH
+
+			trackRelY := msg.Y - 1
+			if trackRelY >= thumbStart && trackRelY < thumbEnd {
+				m.isScrollbarDragging = true
+			} else {
+				if trackH > 1 {
+					targetPct := float64(trackRelY) / float64(trackH-1)
+					targetOffset := int(targetPct * float64(maxOff))
+					m.viewport.SetYOffset(clamp(targetOffset, 0, maxOff))
+				}
+				m.InvalidateCache()
+			}
+		} else {
+			trackH := visible
+			thumbH := max(1, trackH*visible/total)
+			maxOff := total - visible
+
+			offset := m.viewport.YOffset()
+			thumbTrackStart := 0
+			if maxOff > 0 {
+				thumbTrackStart = (trackH - thumbH) * offset / maxOff
+			}
+			thumbEnd := thumbTrackStart + thumbH
+
+			if msg.Y >= thumbTrackStart && msg.Y < thumbEnd {
+				// Clicked on the thumb
+				m.isScrollbarDragging = true
+			} else {
+				if trackH > 1 {
+					targetPct := float64(msg.Y) / float64(trackH-1)
+					targetOffset := int(targetPct * float64(maxOff))
+					m.viewport.SetYOffset(clamp(targetOffset, 0, maxOff))
+				}
+				m.InvalidateCache()
+			}
 		}
 		return
 	}
@@ -1701,12 +1750,23 @@ func (m *Model) handleMouseMotion(msg tea.MouseMotionMsg) {
 		total := m.totalDisplayLines()
 		visible := m.height
 		if total > visible {
-			trackH := visible
-			maxOff := total - visible
-			if trackH > 1 {
-				targetPct := float64(msg.Y) / float64(trackH-1)
-				targetOffset := int(targetPct * float64(maxOff))
-				m.viewport.SetYOffset(clamp(targetOffset, 0, maxOff))
+			if visible >= 3 {
+				trackH := visible - 2
+				maxOff := total - visible
+				trackRelY := msg.Y - 1
+				if trackH > 1 {
+					targetPct := float64(trackRelY) / float64(trackH-1)
+					targetOffset := int(targetPct * float64(maxOff))
+					m.viewport.SetYOffset(clamp(targetOffset, 0, maxOff))
+				}
+			} else {
+				trackH := visible
+				maxOff := total - visible
+				if trackH > 1 {
+					targetPct := float64(msg.Y) / float64(trackH-1)
+					targetOffset := int(targetPct * float64(maxOff))
+					m.viewport.SetYOffset(clamp(targetOffset, 0, maxOff))
+				}
 			}
 		}
 		return
@@ -1916,29 +1976,70 @@ func (m Model) View() string {
 
 	view := m.viewport.View()
 
-	// Fixed scrollbar application
+	// Standardized scrollbar logic
 	lines := strings.Split(view, "\n")
 	total := m.totalDisplayLines()
 	visible := m.height
-	trackH := visible
-	thumbH := max(1, trackH*visible/total)
-	maxOff := total - visible
-	
 	offset := m.viewport.YOffset()
-	thumbTrackStart := 0
-	if maxOff > 0 {
-		thumbTrackStart = (trackH - thumbH) * offset / maxOff
-	}
-	thumbEnd := thumbTrackStart + thumbH
 
-	for i := 0; i < len(lines) && i < visible; i++ {
-		if total > visible {
+	if total > visible && visible >= 3 {
+		trackH := visible - 2 // space for arrows
+		maxOff := total - visible
+		
+		// Use standard tui logic for thumb calculation
+		thumbH := max(1, trackH*visible/total)
+		thumbStart := 0
+		if maxOff > 0 {
+			thumbStart = (trackH - thumbH) * offset / maxOff
+		}
+		thumbEnd := thumbStart + thumbH
+		
+		trackChar := "│"
+		if m.LineCharacters {
+			trackChar = "░"
+		}
+
+		for i := 0; i < len(lines) && i < visible; i++ {
+			char := ""
+			if i == 0 {
+				char = "▴"
+			} else if i == visible-1 {
+				char = "▾"
+			} else {
+				trackPos := i - 1
+				if trackPos >= thumbStart && trackPos < thumbEnd {
+					char = "█"
+				} else {
+					char = trackChar
+				}
+			}
+			
+			if char == "█" {
+				lines[i] += m.activeStyle().ScrollbarThumb.Render(char)
+			} else {
+				lines[i] += m.activeStyle().ScrollbarTrack.Render(char)
+			}
+		}
+	} else if total > visible {
+		// Fallback for small height: simple thumb/track
+		trackH := visible
+		thumbH := max(1, trackH*visible/total)
+		maxOff := total - visible
+		thumbTrackStart := 0
+		if maxOff > 0 {
+			thumbTrackStart = (trackH - thumbH) * offset / maxOff
+		}
+		thumbEnd := thumbTrackStart + thumbH
+
+		for i := 0; i < len(lines) && i < visible; i++ {
 			if i >= thumbTrackStart && i < thumbEnd {
 				lines[i] += m.activeStyle().ScrollbarThumb.Render("█")
 			} else {
 				lines[i] += m.activeStyle().ScrollbarTrack.Render("│")
 			}
-		} else {
+		}
+	} else {
+		for i := 0; i < len(lines) && i < visible; i++ {
 			lines[i] += " "
 		}
 	}
@@ -2239,6 +2340,7 @@ func wrap(runes []rune, width int) [][]rune {
 	)
 
 	// Word wrap the runes
+
 	for _, r := range runes {
 		if unicode.IsSpace(r) {
 			spaces++
