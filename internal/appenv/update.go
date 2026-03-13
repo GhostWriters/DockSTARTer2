@@ -5,6 +5,7 @@ import (
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/system"
 	"context"
 	"fmt"
 	"os"
@@ -86,7 +87,7 @@ func Update(ctx context.Context, force bool, file string) error {
 
 	// 4. Update individual .env.app.* files (Parity with env_update.sh lines 82-121)
 	for _, appName := range appList {
-		appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf("%s%s", constants.AppEnvFileNamePrefix, strings.ToLower(appName)))
+		appEnvFile := GetAppEnvFile(appName, conf)
 		if NeedsUpdate(ctx, force, appEnvFile) {
 			if _, err := os.Stat(appEnvFile); os.IsNotExist(err) {
 				logger.Notice(ctx, "Creating '{{|File|}}%s{{[-]}}'.", appEnvFile)
@@ -98,13 +99,23 @@ func Update(ctx context.Context, force bool, file string) error {
 			formattedAppFile, err := FormatLines(ctx, appEnvFile, appDefaultEnvFile, appName, composeEnvFile)
 			if err == nil {
 				finalAppContent := strings.Join(formattedAppFile, "\n")
+				// Ensure trailing newline
 				if len(formattedAppFile) > 0 && !strings.HasSuffix(finalAppContent, "\n") {
 					finalAppContent += "\n"
 				}
-				if err := os.WriteFile(appEnvFile, []byte(finalAppContent), 0644); err != nil {
+
+				// Parity lines 103-116: uses temp file and copies
+				tmpFile, _ := os.CreateTemp("", "ds2.app_env.*.tmp")
+				os.WriteFile(tmpFile.Name(), []byte(finalAppContent), 0644)
+				tmpFile.Close()
+				defer os.Remove(tmpFile.Name())
+
+				if err := CopyFile(tmpFile.Name(), appEnvFile); err != nil {
 					logger.Warn(ctx, "Failed to update %s: %v", appEnvFile, err)
+				} else {
+					system.SetPermissions(ctx, appEnvFile)
+					UnsetNeedsUpdate(ctx, appEnvFile)
 				}
-				UnsetNeedsUpdate(ctx, appEnvFile)
 			}
 		} else {
 			logger.Info(ctx, "Environment variable file '{{|File|}}%s{{[-]}}' already updated.", appEnvFile)
@@ -112,6 +123,11 @@ func Update(ctx context.Context, force bool, file string) error {
 	}
 
 	return nil
+}
+
+// GetAppEnvFile returns the absolute path to the app-specific env file (.env.app.appname).
+func GetAppEnvFile(appName string, conf config.AppConfig) string {
+	return filepath.Join(conf.ComposeDir, fmt.Sprintf("%s%s", constants.AppEnvFileNamePrefix, strings.ToLower(appName)))
 }
 
 // NeedsUpdate checks if an environment file update is required.
@@ -200,7 +216,7 @@ func UnsetNeedsUpdate(ctx context.Context, file string) {
 		_ = os.WriteFile(referencedAppsFile, []byte(strings.Join(apps, "\n")), 0644)
 
 		for _, appName := range apps {
-			appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf("%s%s", constants.AppEnvFileNamePrefix, strings.ToLower(appName)))
+			appEnvFile := GetAppEnvFile(appName, conf)
 			UnsetNeedsUpdate(ctx, appEnvFile)
 		}
 

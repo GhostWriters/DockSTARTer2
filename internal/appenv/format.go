@@ -55,6 +55,7 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 			}
 		}
 
+		// Parity lines 46-55: Adds ### wrapping including before/after descriptions
 		formattedEnvLines = append(formattedEnvLines, "###")
 		formattedEnvLines = append(formattedEnvLines, "### "+headingTitle)
 		formattedEnvLines = append(formattedEnvLines, "###")
@@ -70,7 +71,9 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 
 	// 3. Add Template Contents Verbatim (Parity with env_format_lines.sh lines 57-64)
 	if defaultEnvFile != "" {
+		processedTemplate := false
 		var templateLines []string
+
 		// Use embedded asset for global .env.example
 		if filepath.Base(defaultEnvFile) == constants.EnvExampleFileName {
 			data, err := assets.GetDefaultEnv()
@@ -80,20 +83,23 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 				if len(templateLines) > 0 && templateLines[len(templateLines)-1] == "" {
 					templateLines = templateLines[:len(templateLines)-1]
 				}
+				formattedEnvLines = append(formattedEnvLines, templateLines...)
+				processedTemplate = true
 			}
-		} else {
-			// Read app templates from disk
+		} else if info, err := os.Stat(defaultEnvFile); err == nil && !info.IsDir() {
+			// Read app templates from disk (matches Bash [[ -f ${DefaultEnvFile} ]])
 			if data, err := os.ReadFile(defaultEnvFile); err == nil {
 				templateLines = strings.Split(string(data), "\n")
 				if len(templateLines) > 0 && templateLines[len(templateLines)-1] == "" {
 					templateLines = templateLines[:len(templateLines)-1]
 				}
+				formattedEnvLines = append(formattedEnvLines, templateLines...)
+				processedTemplate = true
 			}
 		}
 
-		if len(templateLines) > 0 {
-			formattedEnvLines = append(formattedEnvLines, templateLines...)
-			// Bash line 62: adds a blank if template was added
+		// Bash line 62: adds a blank ONLY IF template section was processed/found
+		if processedTemplate && len(formattedEnvLines) > 0 {
 			formattedEnvLines = append(formattedEnvLines, "")
 		}
 	}
@@ -131,18 +137,38 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 		}
 
 		if len(remaining) > 0 {
-			// Add User Defined heading
-			headingTitle := ""
-			if appUpper != "" {
-				headingTitle = GetNiceName(ctx, appUpper) + appUserDefinedVarsTag
-			} else {
-				headingTitle = globalVarsHeading + userDefinedGlobalVarsTag
+			// Add User Defined heading (Parity lines 93-109)
+			appIsUserDefined := IsAppUserDefined(ctx, appUpper, composeEnvFile)
+			if appUpper == "" || !appIsUserDefined {
+				headingTitle := ""
+				if appUpper != "" {
+					headingTitle = GetNiceName(ctx, appUpper) + appUserDefinedVarsTag
+				} else {
+					headingTitle = globalVarsHeading + userDefinedGlobalVarsTag
+				}
+
+				// Parity lines 102-108
+				formattedEnvLines = append(formattedEnvLines, "###")
+				formattedEnvLines = append(formattedEnvLines, "### "+headingTitle)
+				formattedEnvLines = append(formattedEnvLines, "###")
 			}
 
-			formattedEnvLines = append(formattedEnvLines, "###")
-			formattedEnvLines = append(formattedEnvLines, "### "+headingTitle)
-			formattedEnvLines = append(formattedEnvLines, "###")
-			formattedEnvLines = append(formattedEnvLines, remaining...)
+			// Add the remaining variables (Parity lines 111-122)
+			for _, line := range remaining {
+				parts := strings.SplitN(line, "=", 2)
+				if len(parts) > 1 {
+					varName := parts[0]
+					// Parity line 116 check: update if exists (handle duplicates in CurrentEnvLines)
+					if idx, exists := formattedEnvVarIndex[varName]; exists {
+						formattedEnvLines[idx] = line
+					} else {
+						// Variable is new, add it (Parity line 119)
+						formattedEnvLines = append(formattedEnvLines, line)
+						formattedEnvVarIndex[varName] = len(formattedEnvLines) - 1
+					}
+				}
+			}
+			// Parity line 123
 			formattedEnvLines = append(formattedEnvLines, "")
 		}
 	} else {
