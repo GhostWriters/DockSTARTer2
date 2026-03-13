@@ -17,7 +17,8 @@ func (m *ProgramBoxModel) ViewString() string {
 
 	// Apply background maintenance to captured output to prevent resets from bleeding
 	viewportContent := MaintainBackground(m.viewport.View(), ctx.Console)
-	viewportContent, m.sbInfo = applyScrollbarColumnTracked(viewportContent, m.viewport.TotalLineCount(), m.viewport.VisibleLineCount(), m.viewport.YOffset(), currentConfig.UI.Scrollbar, ctx.LineCharacters, ctx)
+	// Sections content plus scrollbar/gutter (right slot)
+	viewportContent, m.sbInfo = ApplyScrollbarColumnTracked(viewportContent, m.viewport.TotalLineCount(), m.viewport.Height(), m.viewport.YOffset(), currentConfig.UI.Scrollbar, GetActiveContext().LineCharacters, GetActiveContext())
 
 	// Wrap viewport in rounded inner border with console background.
 	// Disable the bottom border so we can append a custom one with the scroll indicator.
@@ -31,12 +32,13 @@ func (m *ProgramBoxModel) ViewString() string {
 		Render(viewportContent)
 
 	// Append custom bottom border. Only show scroll indicator when content overflows.
-	totalWidth := m.viewport.Width() + scrollbarGutterWidth + 2
+	// Calculate inner box width based on full viewport width
+	totalWidth := m.viewport.Width() + ScrollbarGutterWidth + 2
 	borderedViewport = strings.TrimSuffix(borderedViewport, "\n")
 	if m.sbInfo.Needed {
-		borderedViewport = borderedViewport + "\n" + buildScrollPercentBottomBorder(totalWidth, m.viewport.ScrollPercent(), m.focused, ctx)
+		borderedViewport = borderedViewport + "\n" + BuildScrollPercentBottomBorder(totalWidth, m.viewport.ScrollPercent(), m.focused, ctx)
 	} else {
-		borderedViewport = borderedViewport + "\n" + buildPlainBottomBorder(totalWidth, m.focused, ctx)
+		borderedViewport = borderedViewport + "\n" + BuildPlainBottomBorder(totalWidth, m.focused, ctx)
 	}
 
 	// Calculate content width based on viewport (matches borderedViewport width)

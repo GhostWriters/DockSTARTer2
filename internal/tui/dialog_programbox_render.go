@@ -276,7 +276,9 @@ func (m *ProgramBoxModel) calculateLayout() {
 	}
 
 	// Update viewport dimensions
-	m.viewport.SetWidth(m.width - 4 - scrollbarGutterWidth)
+	// Sections should fit within contentWidth - padding (2)
+	innerBoxWidth := contentW - ScrollbarGutterWidth - 2
+	m.viewport.SetWidth(innerBoxWidth)
 	m.viewport.SetHeight(vpHeight)
 
 	// Refresh content with new word wrap width

@@ -77,9 +77,9 @@ func (m *MenuModel) ViewString() string {
 	if !m.subMenuMode {
 		enabled := currentConfig.UI.Scrollbar
 		if m.variableHeight {
-			listView, m.sbInfo = applyScrollbarColumnTracked(listView, m.lastScrollTotal, m.layout.ViewportHeight, m.viewStartY, enabled, ctx.LineCharacters, ctx)
+			listView, m.sbInfo = ApplyScrollbarColumnTracked(listView, m.lastScrollTotal, m.layout.ViewportHeight, m.viewStartY, enabled, ctx.LineCharacters, ctx)
 		} else {
-			listView, m.sbInfo = applyScrollbarColumnTracked(listView, len(m.items), m.layout.ViewportHeight, m.list.Index(), enabled, ctx.LineCharacters, ctx)
+			listView, m.sbInfo = ApplyScrollbarColumnTracked(listView, len(m.items), m.layout.ViewportHeight, m.list.Index(), enabled, ctx.LineCharacters, ctx)
 		}
 	}
 
@@ -90,12 +90,12 @@ func (m *MenuModel) ViewString() string {
 	listStyle = ApplyInnerBorder(listStyle, m.focused, styles.LineCharacters)
 	listStyle = listStyle.BorderBottom(false)
 	borderedList := listStyle.Render(listView)
-	totalWidth := m.list.Width() + scrollbarGutterWidth + 2
+	totalWidth := m.list.Width() + ScrollbarGutterWidth + 2
 	borderedList = strings.TrimSuffix(borderedList, "\n")
 	if m.sbInfo.Needed {
-		borderedList = borderedList + "\n" + buildScrollPercentBottomBorder(totalWidth, m.listScrollPercent(), m.focused, ctx)
+		borderedList = borderedList + "\n" + BuildScrollPercentBottomBorder(totalWidth, m.listScrollPercent(), m.focused, ctx)
 	} else {
-		borderedList = borderedList + "\n" + buildPlainBottomBorder(totalWidth, m.focused, ctx)
+		borderedList = borderedList + "\n" + BuildPlainBottomBorder(totalWidth, m.focused, ctx)
 	}
 
 	// Determine the target content width (the space inside the outer dialog borders)
@@ -207,7 +207,7 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 
 	ctx := GetActiveContext()
 	ctx.Type = m.dialogType
-	return RenderBorderedBoxCtx(m.title, content, contentWidth, targetHeight, focused, rounded, align, titleTag, ctx)
+	return RenderBorderedBoxCtx(m.title, content, contentWidth, targetHeight, focused, true, rounded, align, titleTag, ctx)
 }
 
 func (s *MenuModel) viewSubMenu() string {
@@ -239,7 +239,7 @@ func (s *MenuModel) viewSubMenu() string {
 	} else {
 		content = MaintainBackground(s.list.View(), styles.Dialog)
 		// Append scrollbar/gutter column (same slot reserved by calculateLayout).
-		content, s.sbInfo = applyScrollbarColumnTracked(content, len(s.items), s.layout.ViewportHeight, s.list.Index(), currentConfig.UI.Scrollbar, ctx.LineCharacters, ctx)
+		content, s.sbInfo = ApplyScrollbarColumnTracked(content, len(s.items), s.layout.ViewportHeight, s.list.Index(), currentConfig.UI.Scrollbar, ctx.LineCharacters, ctx)
 	}
 
 	// 3. Render Buttons (if any)
@@ -267,7 +267,7 @@ func (s *MenuModel) viewSubMenu() string {
 	// Replace bottom border with scroll-percent variant when content overflows.
 	if !s.flowMode && s.sbInfo.Needed {
 		if lastNL := strings.LastIndex(result, "\n"); lastNL >= 0 {
-			bottomLine := buildScrollPercentBottomBorder(s.width, s.listScrollPercent(), s.focusedSub, ctx)
+			bottomLine := BuildScrollPercentBottomBorder(s.width, s.listScrollPercent(), s.focusedSub, ctx)
 			result = result[:lastNL+1] + bottomLine
 		}
 	}

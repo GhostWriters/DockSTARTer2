@@ -165,7 +165,7 @@ var Keys = KeyMap{
 		key.WithHelp("end", "bottom"),
 	),
 	Help: key.NewBinding(
-		key.WithKeys("?", "ctrl+h", "f1"),
+		key.WithKeys("?", "f1"),
 		key.WithHelp("?/F1", "help"),
 	),
 	ForceQuit: key.NewBinding(

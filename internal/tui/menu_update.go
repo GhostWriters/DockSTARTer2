@@ -533,7 +533,7 @@ func (m *MenuModel) calculateLayout() {
 			listWidth = maxListWidth
 		}
 	}
-	listWidth -= scrollbarGutterWidth
+	listWidth -= ScrollbarGutterWidth
 	if listWidth < 1 {
 		listWidth = 1
 	}
