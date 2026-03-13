@@ -349,6 +349,14 @@ func RunProgramBox(ctx context.Context, title, subtitle string, task func(contex
 		deregisterCallbacks()
 	}()
 
+	// Listen for context cancellation to shutdown program (standalone)
+	go func() {
+		<-ctx.Done()
+		if p != nil {
+			p.Quit()
+		}
+	}()
+
 	// Run the program (Init will start the task)
 	finalModel, err := p.Run()
 

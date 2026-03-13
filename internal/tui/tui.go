@@ -221,6 +221,7 @@ func RunCommand(ctx context.Context, title, subtitle string, task func(context.C
 	// If TUI is already running, show dialog within existing program
 	if program != nil {
 		dialog := NewProgramBoxModel(title, subtitle, "")
+		dialog.SetContext(ctx)
 		dialog.SetTask(wrappedTask)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)

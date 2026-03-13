@@ -14,6 +14,7 @@ import (
 	"DockSTARTer2/internal/assets"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/update"
+	"DockSTARTer2/internal/version"
 )
 
 func main() {
@@ -78,14 +79,25 @@ func run() (exitCode int) {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt)
 	go func() {
-		sig, ok := <-sigChan
-		if ok && sig == os.Interrupt {
-			exitOnce.Do(func() {
-				logger.TUIMode = false
-				logger.Error(ctx, "User aborted via CTRL-C")
-				exitCode = 1
-				cancel()
-			})
+		interruptCount := 0
+		for {
+			sig, ok := <-sigChan
+			if !ok {
+				return
+			}
+			if sig == os.Interrupt {
+				interruptCount++
+				if interruptCount > 1 {
+					fmt.Fprintln(os.Stderr, "\nForced exit.")
+					os.Exit(1)
+				}
+				exitOnce.Do(func() {
+					logger.TUIMode = false
+					logger.Error(ctx, "User aborted via CTRL-C")
+					exitCode = 1
+					cancel()
+				})
+			}
 		}
 	}()
 
@@ -117,6 +129,11 @@ func run() (exitCode int) {
 
 	// Hand off execution to the cmd package
 	exitCode = cmd.Execute(ctx, groups)
+
+	if exitCode != 0 {
+		logger.Display(ctx, "{{|ApplicationName|}}%s{{[-]}} did not finish running successfully.", version.ApplicationName)
+		logger.Display(ctx, "Check logs in '{{|File|}}%s{{[-]}}'.", logger.GetLogFilePath())
+	}
 
 	return exitCode
 }

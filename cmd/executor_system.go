@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -205,7 +206,9 @@ func handleCompose(ctx context.Context, group *CommandGroup, state *CmdState) er
 	}
 
 	if err := compose.ExecuteCompose(ctx, state.Yes, state.Force, operation, appsList...); err != nil {
-		logger.Error(ctx, "Compose failed: %v", err)
+		if !errors.Is(err, console.ErrUserAborted) {
+			logger.Error(ctx, "Compose failed: %v", err)
+		}
 		return err
 	}
 	return nil
