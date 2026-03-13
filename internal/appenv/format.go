@@ -65,6 +65,8 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 		}
 	}
 
+	varRe := regexp.MustCompile(`^([A-Za-z0-9_]+)=`)
+
 	if defaultEnvFile != "" {
 		if info, err := os.Stat(defaultEnvFile); err == nil && !info.IsDir() {
 			content, err := os.ReadFile(defaultEnvFile)
@@ -80,7 +82,6 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 
 	// Indexed mapping of variable names to their line index in formattedEnvLines
 	formattedEnvVarIndex := make(map[string]int)
-	varRe := regexp.MustCompile(`^([A-Za-z0-9_]+)=`)
 	for i, line := range formattedEnvLines {
 		matches := varRe.FindStringSubmatch(line)
 		if len(matches) > 1 {
@@ -89,12 +90,21 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 	}
 
 	// Read current environment lines
-	var currentEnvLines []string
+	var rawCurrentLines []string
 	if currentEnvFile != "" {
 		var err error
-		currentEnvLines, err = envutil.ReadLines(currentEnvFile)
+		rawCurrentLines, err = envutil.ReadLines(currentEnvFile)
 		if err != nil {
 			return nil, err
+		}
+	}
+
+	// Parity: env_lines.sh strips everything except variables: s/^\s*\([A-Za-z0-9_]*\)\s*=/\1=/p
+	var currentEnvLines []string
+	for _, line := range rawCurrentLines {
+		matches := varRe.FindStringSubmatch(line)
+		if len(matches) > 1 {
+			currentEnvLines = append(currentEnvLines, line)
 		}
 	}
 
@@ -126,19 +136,9 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 	for _, line := range remainingLines {
 		idx := strings.Index(line, "=")
 		if idx > 0 {
-			varName := line[:idx]
-			isGlobal := IsGlobalVar(varName)
-			if appUpper == "" {
-				// Global pass: only include global variables
-				if isGlobal {
-					filteredRemaining = append(filteredRemaining, line)
-				}
-			} else {
-				// App pass: only include variables for this app
-				if strings.HasPrefix(strings.ToUpper(varName), appUpper+"__") {
-					filteredRemaining = append(filteredRemaining, line)
-				}
-			}
+			// Bash parity: env_format_lines.sh does NOT filter by prefix.
+			// It assumes the caller passed appropriate lines if we are doing a sectional pass.
+			filteredRemaining = append(filteredRemaining, line)
 		}
 	}
 
