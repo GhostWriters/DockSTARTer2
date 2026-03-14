@@ -71,6 +71,7 @@ type KeyMap struct {
 	CapitalizeWordForward key.Binding
 
 	TransposeCharacterBackward key.Binding
+	InsertLine                 key.Binding
 }
 
 // DefaultKeyMap returns the default set of key bindings for navigating and acting
@@ -103,6 +104,7 @@ func DefaultKeyMap() KeyMap {
 		UppercaseWordForward:  key.NewBinding(key.WithKeys("alt+u"), key.WithHelp("alt+u", "uppercase word forward")),
 
 		TransposeCharacterBackward: key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "transpose character backward")),
+		InsertLine:                 key.NewBinding(key.WithKeys("ctrl+o"), key.WithHelp("ctrl+o", "insert line")),
 	}
 }
 
@@ -209,6 +211,10 @@ type StyleState struct {
 	Prompt           lipgloss.Style
 	ModifiedText     lipgloss.Style
 	ReadOnlyText     lipgloss.Style
+	InvalidText      lipgloss.Style
+	DuplicateText    lipgloss.Style
+	BuiltinText      lipgloss.Style
+	UserDefinedText  lipgloss.Style
 	ScrollbarTrack   lipgloss.Style
 	ScrollbarThumb   lipgloss.Style
 }
@@ -370,6 +376,15 @@ type Model struct {
 	// Memoization for expensive rendering
 	lastView   string
 	cacheValid bool // Indicates if lastView is up-to-date with current state
+
+	// Intelligent variable addition settings.
+	AddPrefix         string
+	ValidationType    string // _GLOBAL_, _BARE_, or APPNAME (actual app name)
+	ValidationAppName string // Actual app name if ValidationType is APPNAME
+	ValidateFunc      func(string, string) bool
+
+	// Theme integration for duplicates
+	duplicateKeys map[string]int
 }
 
 // New creates a new model with default settings.
@@ -423,8 +438,12 @@ func DefaultStyles(isDark bool) Styles {
 		Placeholder:      lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
 		Prompt:           lipgloss.NewStyle().Foreground(lipgloss.Color("7")),
 		Text:             lipgloss.NewStyle(),
-		ModifiedText:     lipgloss.NewStyle().Foreground(lipgloss.Color("3")), // Yellow
+		ModifiedText:     lipgloss.NewStyle().Foreground(lipgloss.Color("3")),   // Yellow
 		ReadOnlyText:     lipgloss.NewStyle().Foreground(lipgloss.Color("240")), // Dark Grey
+		InvalidText:      lipgloss.NewStyle().Foreground(lipgloss.Color("9")),   // Red
+		DuplicateText:    lipgloss.NewStyle().Foreground(lipgloss.Color("13")),  // Magenta
+		BuiltinText:      lipgloss.NewStyle(),                                   // Inherit from text by default
+		UserDefinedText:  lipgloss.NewStyle(),                                   // Inherit from text by default
 		ScrollbarTrack:   lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
 		ScrollbarThumb:   lipgloss.NewStyle().Foreground(lipgloss.Color("7")),
 	}
@@ -439,6 +458,10 @@ func DefaultStyles(isDark bool) Styles {
 		Text:             lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("245"), lipgloss.Color("7"))),
 		ModifiedText:     lipgloss.NewStyle().Foreground(lipgloss.Color("3")),
 		ReadOnlyText:     lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+		InvalidText:      lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
+		DuplicateText:    lipgloss.NewStyle().Foreground(lipgloss.Color("13")),
+		BuiltinText:      lipgloss.NewStyle().Foreground(lipgloss.Color("6")),
+		UserDefinedText:  lipgloss.NewStyle().Foreground(lipgloss.Color("2")),
 		ScrollbarTrack:   lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
 		ScrollbarThumb:   lipgloss.NewStyle().Foreground(lipgloss.Color("7")),
 	}
@@ -469,6 +492,7 @@ func (m Model) Styles() Styles {
 func (m *Model) SetStyles(s Styles) {
 	m.styles = s
 	m.updateVirtualCursorStyle()
+	m.cacheValid = false
 }
 
 // VirtualCursor returns whether or not the virtual cursor is enabled.
@@ -522,10 +546,71 @@ func (m *Model) InsertRune(r rune) {
 
 // insertRunesFromUserInput inserts runes at the current cursor position.
 func (m *Model) insertRunesFromUserInput(runes []rune) {
+	m.insertRunes(runes, false)
+}
+
+func (m *Model) insertRunes(runes []rune, literal bool) {
+	if !literal {
+		// Intelligent Prefix Handling
+		if m.AddPrefix != "" && m.row < len(m.lineMeta) && m.lineMeta[m.row].IsUserDefined && len(m.value[m.row]) == 0 && len(runes) > 0 {
+			// If we're on a fresh user-defined line and start typing, prepend the prefix
+			prefixRunes := []rune(strings.ReplaceAll(m.AddPrefix, "APPNAME", m.ValidationAppName))
+			runes = append(prefixRunes, runes...)
+
+			// Adjust EditableStartCol if we just inserted a prefix
+			m.lineMeta[m.row].EditableStartCol = len(prefixRunes)
+		}
+
+		// Strict Key Validation & = Handling
+		if m.ValidationType != "" && m.row < len(m.lineMeta) && m.lineMeta[m.row].IsUserDefined {
+			meta := &m.lineMeta[m.row]
+
+			// Find if line already has an '='
+			eqIdx := -1
+			for i, cr := range m.value[m.row] {
+				if cr == '=' {
+					eqIdx = i
+					break
+				}
+			}
+
+			// If we are still in the key part (no "=" yet, or cursor is before/at existing "=")
+			if eqIdx == -1 || m.col <= eqIdx {
+				filtered := make([]rune, 0, len(runes))
+				for _, r := range runes {
+					if r == '=' {
+						// Validate the key before allowing "="
+						key := string(m.value[m.row][:m.col])
+						vType := m.ValidationType
+						if vType == "APPNAME" {
+							vType = m.ValidationAppName
+						}
+						if m.ValidateFunc != nil && !m.ValidateFunc(key, vType) {
+							// Block "=" if key is invalid
+							continue
+						}
+						// Valid key, allow "=" and lock it as the prefix point
+						meta.EditableStartCol = m.col + 1
+						meta.IsVariable = true
+					} else if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' {
+						// Block invalid characters in key
+						continue
+					}
+					filtered = append(filtered, r)
+				}
+				runes = filtered
+			}
+		}
+	}
+
 	// Clean up any special characters in the input provided by the
 	// clipboard. This avoids bugs due to e.g. tab characters and
 	// whatnot.
 	runes = m.san().Sanitize(runes)
+
+	if len(runes) == 0 {
+		return
+	}
 
 	if m.CharLimit > 0 {
 		availSpace := m.CharLimit - m.Length()
@@ -637,6 +722,14 @@ func (m *Model) Length() int {
 // LineCount returns the number of lines that are currently in the text input.
 func (m *Model) LineCount() int {
 	return len(m.value)
+}
+
+// SetLineMeta updates the metadata for a specific line.
+func (m *Model) SetLineMeta(row int, l Line) {
+	if row >= 0 && row < len(m.lineMeta) {
+		m.lineMeta[row] = l
+		m.cacheValid = false
+	}
 }
 
 // Line returns the 0-indexed row position of the cursor.
@@ -807,17 +900,37 @@ func (m *Model) CurrentLineMeta() (Line, bool) {
 
 // AddVariable appends a new variable line to the editor
 func (m *Model) AddVariable(key string, value string) {
+	m.insertVariableAt(len(m.value), key, value)
+}
+
+func (m *Model) insertVariableAt(row int, key string, value string) {
 	newLine := key + "=" + value
+	if key == "" && value == "" {
+		newLine = ""
+	}
 	l := Line{
 		Text:             newLine,
-		IsVariable:       true,
+		IsVariable:       key != "",
 		IsUserDefined:    true,
-		EditableStartCol: len(key) + 1,
+		EditableStartCol: 0,
 	}
-	m.value = append(m.value, []rune(newLine))
-	m.lineMeta = append(m.lineMeta, l)
-	m.row = len(m.value) - 1
-	m.col = l.EditableStartCol
+	if key != "" {
+		l.EditableStartCol = len(key) + 1
+	}
+
+	if row >= len(m.value) {
+		m.value = append(m.value, []rune(newLine))
+		m.lineMeta = append(m.lineMeta, l)
+		m.row = len(m.value) - 1
+	} else {
+		m.value = slices.Insert(m.value, row, []rune(newLine))
+		m.lineMeta = slices.Insert(m.lineMeta, row, l)
+		m.row = row
+	}
+	m.col = 0
+	if key != "" {
+		m.col = len(newLine)
+	}
 	m.repositionView()
 }
 
@@ -1363,6 +1476,9 @@ func (m *Model) isEditableAtCursor() bool {
 	if m.lineMeta[m.row].ReadOnly {
 		return false
 	}
+	if m.lineMeta[m.row].IsUserDefined {
+		return true
+	}
 	return m.col >= m.lineMeta[m.row].EditableStartCol
 }
 
@@ -1380,7 +1496,53 @@ func (m *Model) isBackspaceEditable() bool {
 		}
 		return true
 	}
+	if m.lineMeta[m.row].IsUserDefined {
+		return true
+	}
 	return m.col > m.lineMeta[m.row].EditableStartCol
+}
+
+// HasValidationErrors returns true if any variable name in the editor is invalid
+// or if any user-defined line has content but no '=' separator.
+func (m *Model) HasValidationErrors() bool {
+	if m.ValidateFunc == nil || m.ValidationType == "" {
+		return false
+	}
+
+	for i, lineRunes := range m.value {
+		if i >= len(m.lineMeta) {
+			continue
+		}
+		meta := &m.lineMeta[i]
+		if meta.ReadOnly || !meta.IsVariable {
+			continue
+		}
+
+		// Find '=' index
+		eqIdx := -1
+		for j, r := range lineRunes {
+			if r == '=' {
+				eqIdx = j
+				break
+			}
+		}
+
+		if eqIdx > 0 {
+			// Validate key
+			key := string(lineRunes[:eqIdx])
+			vType := m.ValidationType
+			if vType == "APPNAME" {
+				vType = m.ValidationAppName
+			}
+			if !m.ValidateFunc(key, vType) {
+				return true
+			}
+		} else if meta.IsUserDefined && len(lineRunes) > 0 {
+			// User defined line with content but no '=' is an incomplete variable
+			return true
+		}
+	}
+	return false
 }
 
 // InvalidateCache clears the rendered view cache.
@@ -1434,7 +1596,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		if !m.isEditableAtCursor() {
 			break
 		}
-		m.insertRunesFromUserInput([]rune(msg.Content))
+		m.insertRunes([]rune(msg.Content), true)
 	case tea.KeyPressMsg:
 		switch {
 		case key.Matches(msg, m.KeyMap.DeleteAfterCursor):
@@ -1467,6 +1629,9 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				break
 			}
 			if len(m.value[m.row]) > 0 {
+				if m.lineMeta[m.row].IsUserDefined && m.col > 0 && m.value[m.row][m.col-1] == '=' {
+					m.lineMeta[m.row].EditableStartCol = 0
+				}
 				m.value[m.row] = append(m.value[m.row][:max(0, m.col-1)], m.value[m.row][m.col:]...)
 				if m.col > 0 {
 					m.SetCursorColumn(m.col - 1)
@@ -1477,6 +1642,9 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				break
 			}
 			if len(m.value[m.row]) > 0 && m.col < len(m.value[m.row]) {
+				if m.lineMeta[m.row].IsUserDefined && m.value[m.row][m.col] == '=' {
+					m.lineMeta[m.row].EditableStartCol = 0
+				}
 				m.value[m.row] = slices.Delete(m.value[m.row], m.col, m.col+1)
 			}
 			if m.col >= len(m.value[m.row]) {
@@ -1503,14 +1671,23 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			}
 			m.deleteWordRight()
 		case key.Matches(msg, m.KeyMap.InsertNewline):
+			if m.row < len(m.value)-1 {
+				m.CursorDown()
+				m.CursorStart()
+			} else {
+				if m.MaxHeight > 0 && len(m.value) >= m.MaxHeight {
+					return m, nil
+				}
+				m.AddVariable("", "")
+			}
+		case key.Matches(msg, m.KeyMap.InsertLine):
 			if m.isReadOnlyRow() {
 				break
 			}
 			if m.MaxHeight > 0 && len(m.value) >= m.MaxHeight {
 				return m, nil
 			}
-			m.col = clamp(m.col, 0, len(m.value[m.row]))
-			m.splitLine(m.row, m.col)
+			m.insertVariableAt(m.row+1, "", "")
 		case key.Matches(msg, m.KeyMap.LineEnd):
 			m.CursorEnd()
 		case key.Matches(msg, m.KeyMap.LineStart):
@@ -1837,16 +2014,71 @@ func (m *Model) renderRunes(runes []rune, l int, startIdx int, baseStyle lipglos
 	if meta.ReadOnly {
 		return m.activeStyle().ReadOnlyText.Inherit(baseStyle).Render(string(runes))
 	}
-	if meta.DefaultValue == "" || !meta.IsVariable {
+	if !meta.IsVariable && !meta.IsUserDefined {
 		return baseStyle.Render(string(runes))
 	}
 
 	defRunes := []rune(meta.DefaultValue)
-	modStyle := m.activeStyle().ModifiedText.Inherit(baseStyle)
+	// Determine if the current variable name is valid
+	keyIsValid := true
+	keyIsDuplicate := false
+	if (meta.IsVariable || meta.IsUserDefined) && m.ValidateFunc != nil && m.ValidationType != "" {
+		lineRunes := m.value[l]
+		eqIdx := -1
+		for i, r := range lineRunes {
+			if r == '=' {
+				eqIdx = i
+				break
+			}
+		}
+		if eqIdx > 0 {
+			key := strings.TrimSpace(string(lineRunes[:eqIdx]))
+			vType := m.ValidationType
+			if vType == "APPNAME" {
+				vType = m.ValidationAppName
+			}
+			keyIsValid = m.ValidateFunc(key, vType)
+
+			// Duplicate check using the pre-calculated map
+			if m.duplicateKeys != nil && m.duplicateKeys[key] > 1 {
+				keyIsDuplicate = true
+			}
+		} else if meta.IsUserDefined && len(lineRunes) > 0 {
+			// User defined line with content but no '=' is an incomplete variable
+			keyIsValid = false
+		}
+	}
 
 	var b strings.Builder
+	styles := m.activeStyle()
+	modStyle := styles.ModifiedText.Inherit(baseStyle)
+	invalidStyle := styles.InvalidText.Inherit(baseStyle)
+	duplicateStyle := styles.DuplicateText.Inherit(baseStyle)
+	builtinKeyStyle := styles.BuiltinText.Inherit(baseStyle).Inline(true)
+	userKeyStyle := styles.UserDefinedText.Inherit(baseStyle).Inline(true)
+
 	for i, r := range runes {
 		fullIdx := startIdx + i
+
+		// Key part highlighting
+		if fullIdx < meta.EditableStartCol-1 {
+			if !keyIsValid {
+				b.WriteString(invalidStyle.Render(string(r)))
+				continue
+			}
+			if keyIsDuplicate {
+				b.WriteString(duplicateStyle.Render(string(r)))
+				continue
+			}
+			if meta.IsUserDefined {
+				b.WriteString(userKeyStyle.Render(string(r)))
+			} else {
+				b.WriteString(builtinKeyStyle.Render(string(r)))
+			}
+			continue
+		}
+
+		// '=' or following content
 		if fullIdx < meta.EditableStartCol {
 			b.WriteString(baseStyle.Render(string(r)))
 		} else {
@@ -1862,6 +2094,22 @@ func (m *Model) renderRunes(runes []rune, l int, startIdx int, baseStyle lipglos
 }
 
 func (m *Model) view() string {
+	// Pre-calculate duplicates for rendering
+	m.duplicateKeys = make(map[string]int)
+	for _, lineRunes := range m.value {
+		eqIdx := -1
+		for i, r := range lineRunes {
+			if r == '=' {
+				eqIdx = i
+				break
+			}
+		}
+		if eqIdx > 0 {
+			key := strings.TrimSpace(string(lineRunes[:eqIdx]))
+			m.duplicateKeys[key]++
+		}
+	}
+
 	if len(m.Value()) == 0 && m.row == 0 && m.col == 0 && m.Placeholder != "" {
 		return m.placeholderView()
 	}
@@ -2276,6 +2524,9 @@ func (m *Model) mergeLineBelow(row int) {
 	for i := row + 1; i < len(m.value)-1; i++ {
 		m.value[i] = m.value[i+1]
 	}
+	if row+1 < len(m.lineMeta) {
+		m.lineMeta = append(m.lineMeta[:row+1], m.lineMeta[row+2:]...)
+	}
 
 	// And, remove the last line
 	if len(m.value) > 0 {
@@ -2299,6 +2550,9 @@ func (m *Model) mergeLineAbove(row int) {
 	for i := row; i < len(m.value)-1; i++ {
 		m.value[i] = m.value[i+1]
 	}
+	if row < len(m.lineMeta) {
+		m.lineMeta = append(m.lineMeta[:row], m.lineMeta[row+1:]...)
+	}
 
 	// And, remove the last line
 	if len(m.value) > 0 {
@@ -2318,6 +2572,19 @@ func (m *Model) splitLine(row, col int) {
 
 	m.value[row] = head
 	m.value[row+1] = tail
+
+	// Duplicate meta if it exists
+	if row < len(m.lineMeta) {
+		oldMeta := m.lineMeta[row]
+		newMeta := oldMeta
+		if oldMeta.IsUserDefined {
+			// New user-defined line starts fresh for a new key
+			newMeta.EditableStartCol = 0
+			newMeta.IsVariable = true
+			newMeta.DefaultValue = ""
+		}
+		m.lineMeta = append(m.lineMeta[:row+1], append([]Line{newMeta}, m.lineMeta[row+1:]...)...)
+	}
 
 	m.col = 0
 	m.row++

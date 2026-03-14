@@ -41,6 +41,18 @@ func navigateToAppConfigEditor(appName string) tea.Cmd {
 	}
 }
 
+// navigateToAppConfigEditorWithRefresh returns a command to navigate to a specific app's config editor
+// and refresh the apps list when returning.
+func navigateToAppConfigEditorWithRefresh(appName string) tea.Cmd {
+	return func() tea.Msg {
+		specs := []EnvTabSpec{
+			{Title: ".env", App: appName, IsGlobal: true},
+			{Title: ".env.app." + strings.ToLower(appName), App: appName, IsGlobal: false},
+		}
+		return tui.NavigateMsg{Screen: NewTabbedVarsEditorScreen(navigateBackWithRefresh(), "Configure "+appName, specs)}
+	}
+}
+
 // navigateToOptionsMenu returns a command to navigate to the options menu
 func navigateToOptionsMenu() tea.Cmd {
 	return func() tea.Msg {
@@ -61,4 +73,12 @@ func navigateBack() tea.Cmd {
 	return func() tea.Msg {
 		return tui.NavigateBackMsg{}
 	}
+}
+
+// navigateBackWithRefresh returns a command to navigate back and refresh the apps list
+func navigateBackWithRefresh() tea.Cmd {
+	return tea.Batch(
+		navigateBack(),
+		func() tea.Msg { return tui.RefreshAppsListMsg{} },
+	)
 }

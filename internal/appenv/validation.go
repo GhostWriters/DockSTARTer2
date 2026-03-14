@@ -209,8 +209,7 @@ func InstanceNameIsValid(name string) bool {
 
 // IsGlobalVar checks if a variable name is a global variable.
 func IsGlobalVar(varName string) bool {
-	appVarPattern := regexp.MustCompile(`^[A-Z][A-Z0-9]*(__[A-Z0-9]+)+\w+`)
-	return !appVarPattern.MatchString(varName)
+	return VarNameToAppName(varName) == ""
 }
 
 // VarNameIsValid validates if a variable name is valid.

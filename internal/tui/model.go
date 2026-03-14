@@ -61,6 +61,9 @@ type (
 	// UpdateHeaderMsg triggers a header refresh
 	UpdateHeaderMsg struct{}
 
+	// RefreshAppsListMsg requests a refresh of the application configuration menu list
+	RefreshAppsListMsg struct{}
+
 	// QuitMsg requests application exit
 	QuitMsg struct{}
 

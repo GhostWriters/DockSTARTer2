@@ -39,10 +39,19 @@ func VarNameToAppName(varName string) string {
 	if !strings.Contains(varName, "__") {
 		return ""
 	}
-	re := regexp.MustCompile(`^([A-Z][A-Z0-9]*(?:__[A-Z0-9]+)?)__[A-Za-z0-9]`)
+	// Regex matches:
+	// Group 1: The App Name (can be builtin or instance)
+	// __: The separator
+	// Group 2: The starting character of the variable name (can be _ or alphanumeric)
+	// followed by the rest.
+	re := regexp.MustCompile(`^([A-Z][A-Z0-9]*(?:__[A-Z0-9]+)?)__([A-Za-z0-9_].*)`)
 	matches := re.FindStringSubmatch(varName)
-	if len(matches) > 1 {
-		return matches[1]
+	if len(matches) > 2 {
+		suffix := matches[2]
+		// Parity with AppVarsLines: suffix must not contain another __
+		if !strings.Contains(suffix, "__") {
+			return matches[1]
+		}
 	}
 	return ""
 }
@@ -78,10 +87,8 @@ func GetNiceName(ctx context.Context, appName string) string {
 
 // GetDescription returns the description of an application.
 func GetDescription(ctx context.Context, appName string, envFile string) string {
-	// Check if user defined (not built-in)
-	// We use IsAppBuiltIn here because IsAppUserDefined also checks if the app is enabled in .env,
-	// which is incorrect for simple description lookup.
-	if !IsAppBuiltIn(appName) {
+	// Check if user defined (not built-in OR missing ENABLED var)
+	if IsAppUserDefined(ctx, appName, envFile) {
 		return GetNiceName(ctx, appName) + " is a user defined application"
 	}
 
