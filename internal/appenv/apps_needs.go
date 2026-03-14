@@ -49,20 +49,20 @@ func NeedsCreateAll(ctx context.Context, force bool, added []string, conf config
 		}
 		sentinelTime := sentinelInfo.ModTime()
 
-		// Check if ANY template file is newer than our last sync
+		// Check if any added app's template or env file has changed
 		templatesDir := paths.GetTemplatesDir()
-		if IsAnyFileNewer(templatesDir, sentinelTime) {
-			return true
-		}
+		for _, appName := range allAdded {
+			// Check app-specific env file
+			appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf("%s%s", constants.AppEnvFileNamePrefix, strings.ToLower(appName)))
+			if fileChanged(conf, appEnvFile) {
+				return true
+			}
 
-		// Check if ANY app-specific env file in the root is newer than our last sync
-		// find "${COMPOSE_FOLDER}" -maxdepth 1 -name ".env.app.*" -newer "${SentinelFile}"
-		files, _ := filepath.Glob(filepath.Join(conf.ComposeDir, constants.AppEnvFileNamePrefix+"*"))
-		for _, f := range files {
-			if info, err := os.Stat(f); err == nil {
-				if info.ModTime().After(sentinelTime) {
-					return true
-				}
+			// Check app-specific template directory
+			baseAppName := strings.ToLower(AppNameToBaseAppName(appName))
+			appTemplateDir := filepath.Join(templatesDir, constants.TemplatesDirName, baseAppName)
+			if IsAnyFileNewer(appTemplateDir, sentinelTime) {
+				return true
 			}
 		}
 
@@ -122,8 +122,8 @@ func UnsetNeedsCreateAll(ctx context.Context, added []string, conf config.AppCon
 	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
 	recordFileState(conf, envFile)
 
-	// 2. Update AddedApps list record
-	_ = os.WriteFile(filepath.Join(timestampsFolder, "AddedApps"), []byte(strings.Join(added, "\n")), 0644)
+	// 2. Update AddedApps list record (with trailing newline for Bash printf parity)
+	_ = os.WriteFile(filepath.Join(timestampsFolder, "AddedApps"), []byte(strings.Join(added, "\n")+"\n"), 0644)
 
 	// 3. Create bulk LastSynced sentinel
 	f, _ := os.Create(filepath.Join(timestampsFolder, "LastSynced"))
