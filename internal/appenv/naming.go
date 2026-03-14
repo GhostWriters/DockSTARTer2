@@ -44,15 +44,20 @@ func VarNameToAppName(varName string) string {
 	// __: The separator
 	// Group 2: The starting character of the variable name (can be _ or alphanumeric)
 	// followed by the rest.
-	re := regexp.MustCompile(`^([A-Z][A-Z0-9]*(?:__[A-Z0-9]+)?)__([A-Za-z0-9_].*)`)
-	matches := re.FindStringSubmatch(varName)
-	if len(matches) > 2 {
-		suffix := matches[2]
-		// Parity with AppVarsLines: suffix must not contain another __
-		if !strings.Contains(suffix, "__") {
-			return matches[1]
-		}
+	// 1. Try to match APP__INST__VAR
+	re3 := regexp.MustCompile(`^([A-Z][A-Z0-9]*)__([A-Z0-9]+)__([A-Za-z0-9_].*)`)
+	m3 := re3.FindStringSubmatch(varName)
+	if len(m3) > 3 {
+		return m3[1] + "__" + m3[2]
 	}
+
+	// 2. Try to match APP__VAR
+	re2 := regexp.MustCompile(`^([A-Z][A-Z0-9]*)__([A-Za-z0-9_].*)`)
+	m2 := re2.FindStringSubmatch(varName)
+	if len(m2) > 2 {
+		return m2[1]
+	}
+
 	return ""
 }
 

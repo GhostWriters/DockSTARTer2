@@ -351,9 +351,10 @@ func AppVarsLines(appName string, lines []string) []string {
 		if len(matches) > 1 {
 			suffix := matches[1]
 			// Bash: APPNAME__(?![A-Za-z0-9]+__)\w+
-			// This means the suffix should NOT contain another __
-			// (which would indicate an instance of this app, which is a separate app)
-			if !strings.Contains(suffix, "__") {
+			// Use a regex that checks if the suffix starts with another instance-like segment
+			reNext := regexp.MustCompile(`^([A-Z0-9]+)__`)
+			if !reNext.MatchString(suffix) {
+				// No next segment, appName owns it
 				appVars = append(appVars, line)
 			}
 		}
