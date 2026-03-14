@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"DockSTARTer2/internal/strutil"
 )
 
 // FormatLines processes environment variable lines to match DockSTARTer formatting.
@@ -60,7 +62,7 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 		formattedEnvLines = append(formattedEnvLines, "### "+headingTitle)
 		formattedEnvLines = append(formattedEnvLines, "###")
 		if appDescription != "" {
-			descLines := wordWrap(appDescription, 75)
+			descLines := strutil.WordWrap(appDescription, 75)
 			for _, line := range descLines {
 				trimmed := strings.TrimRight(line, " \r\t")
 				if trimmed == "" {
@@ -210,30 +212,4 @@ func GetReferencedApps(composeEnvFile string) ([]string, error) {
 	return result, nil
 }
 
-// wordWrap wraps text at the specified width, breaking on word boundaries.
-func wordWrap(text string, width int) []string {
-	var lines []string
-	words := strings.Fields(text)
 
-	if len(words) == 0 {
-		return lines
-	}
-
-	var currentLine string
-	for _, word := range words {
-		if currentLine == "" {
-			currentLine = word
-		} else if len(currentLine)+1+len(word) <= width {
-			currentLine += " " + word
-		} else {
-			lines = append(lines, currentLine)
-			currentLine = word
-		}
-	}
-
-	if currentLine != "" {
-		lines = append(lines, currentLine)
-	}
-
-	return lines
-}
