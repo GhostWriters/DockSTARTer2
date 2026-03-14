@@ -2,12 +2,12 @@ package strutil
 
 import "strings"
 
-// WordWrap wraps text approximating GNU `fmt` line balancing (e.g., `fmt -w 75 -g 75`).
+// WordWrapToSlice wraps text approximating GNU `fmt` line balancing (e.g., `fmt -w 75 -g 75`).
 // It builds lines greedily, but if a line is close to the goal (within ~10 chars),
 // it looks ahead at the remaining text. If the remaining text is short enough to fit
 // on exactly ONE more line, it finds the break that minimizes the combined penalty.
 // This perfectly achieves the 68/73 split for typical descriptions (e.g., RustDesk).
-func WordWrap(text string, goal int) []string {
+func WordWrapToSlice(text string, goal int) []string {
 	words := strings.Fields(text)
 	if len(words) == 0 {
 		return []string{}
@@ -74,4 +74,11 @@ func WordWrap(text string, goal int) []string {
 	}
 
 	return lines
+}
+
+// WordWrap is a convenience wrapper around WordWrapToSlice that returns the wrapped
+// lines joined by newline characters (\n) as a single string.
+func WordWrap(text string, goal int) string {
+	lines := WordWrapToSlice(text, goal)
+	return strings.Join(lines, "\n")
 }
