@@ -20,14 +20,20 @@ func (m *Model) ParseEnv(content string, defaults map[string]string, readOnlyVar
 		
 		l := Line{Text: raw}
 		
-		// 1. Comments & empty lines are read-only
-		if strings.HasPrefix(trimmed, "#") || trimmed == "" || strings.HasPrefix(trimmed, "***") {
+		// 1. Comments & special markers are read-only.
+		if strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "***") {
 			l.ReadOnly = true
 			if strings.HasPrefix(trimmed, "###") && strings.Contains(trimmed, "(User Defined") {
 				inUserDefinedSection = true
 			}
+		} else if trimmed == "" {
+			// 2. Blank lines are editable and can be user-defined
+			l.ReadOnly = false
+			if inUserDefinedSection {
+				l.IsUserDefined = true
+			}
 		} else {
-			// 2. Identify variables (KEY=VALUE)
+			// 3. Identify variables (KEY=VALUE)
 			parts := strings.SplitN(trimmed, "=", 2)
 			if len(parts) == 2 {
 				l.IsVariable = true
@@ -44,24 +50,30 @@ func (m *Model) ParseEnv(content string, defaults map[string]string, readOnlyVar
 				if isReadOnly {
 					l.ReadOnly = true
 				} else {
-					// 3. Identify if it's user-defined
-					_, isBuiltin := defaults[key]
-					if inUserDefinedSection || !isBuiltin {
-						l.IsUserDefined = true
-					}
-
-					// Lock the key for ALL variables to prevent corruption
-					eqIdx := strings.Index(raw, "=")
-					if eqIdx != -1 {
-						l.EditableStartCol = eqIdx + 1
-						if isBuiltin {
-							l.DefaultValue = defaults[key]
+						// Identify if it's in the User Defined section
+						if inUserDefinedSection {
+							l.IsUserDefined = true
 						}
-					}
+
+						// Lock the key for ALL variables to prevent corruption
+						eqIdx := strings.Index(raw, "=")
+						_, isBuiltin := defaults[key]
+						if eqIdx != -1 {
+							l.EditableStartCol = eqIdx + 1
+							if isBuiltin {
+								l.DefaultValue = defaults[key]
+							}
+						}
 				}
 			} else {
-				// If it's not a variable or a comment, treat as read-only.
-				l.ReadOnly = true
+				// If it's not a variable, comment, or blank:
+				// Only treat as read-only if it's NOT in the user-defined section.
+				// This allows users to start typing new variables without an '=' yet.
+				if !inUserDefinedSection {
+					l.ReadOnly = true
+				} else {
+					l.IsUserDefined = true
+				}
 			}
 		}
 		

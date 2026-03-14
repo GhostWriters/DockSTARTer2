@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -262,25 +263,52 @@ func ListAppVars(ctx context.Context, appName string, conf config.AppConfig) ([]
 
 // ListVars returns a map of all variable keys and values found in the file.
 func ListVars(file string) (map[string]string, error) {
-	vars := make(map[string]string)
 	f, err := os.Open(file)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return vars, nil
+			return make(map[string]string), nil
 		}
 		return nil, err
 	}
 	defer f.Close()
 
-	re := regexp.MustCompile(`^\s*([a-zA-Z_][a-zA-Z0-9_]*)=(.*)`)
+	return ListVarsFromReader(f)
+}
 
-	scanner := bufio.NewScanner(f)
+// ListVarsData returns a map of all variable keys and values found in the data string.
+func ListVarsData(data string) (map[string]string, error) {
+	return ListVarsFromReader(strings.NewReader(data))
+}
+
+// ListVarsLiteralsData returns a map of all variable keys and literal values from the data string.
+func ListVarsLiteralsData(data string) (map[string]string, error) {
+	return ListVarsLiteralsFromReader(strings.NewReader(data))
+}
+
+// ListVarsFromReader returns a map of all variable keys and values (trimmed) from an io.Reader.
+func ListVarsFromReader(r io.Reader) (map[string]string, error) {
+	return listVars(r, true)
+}
+
+// ListVarsLiteralsFromReader returns a map of all variable keys and literal values (raw) from an io.Reader.
+func ListVarsLiteralsFromReader(r io.Reader) (map[string]string, error) {
+	return listVars(r, false)
+}
+
+func listVars(r io.Reader, trim bool) (map[string]string, error) {
+	vars := make(map[string]string)
+	re := regexp.MustCompile(`^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*=(.*)`)
+
+	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
 		line := scanner.Text()
 		matches := re.FindStringSubmatch(line)
 		if matches != nil {
 			key := matches[1]
-			val := strings.Trim(matches[2], `"' `)
+			val := matches[2]
+			if trim {
+				val = strings.Trim(val, `"' `)
+			}
 			vars[key] = val
 		}
 	}

@@ -111,7 +111,7 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 	}
 
 	// 4. Index existing variables in formattedEnvLines (Parity lines 66-78)
-	varRe := regexp.MustCompile(`^([A-Za-z0-9_]+)=`)
+	varRe := regexp.MustCompile(`^([A-Za-z0-9_]+)\s*=`)
 	formattedEnvVarIndex := make(map[string]int)
 	for i, line := range formattedEnvLines {
 		matches := varRe.FindStringSubmatch(line)
@@ -126,7 +126,7 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 		for i, line := range currentEnvLines {
 			parts := strings.SplitN(line, "=", 2)
 			if len(parts) > 1 {
-				varName := parts[0]
+				varName := strings.TrimSpace(parts[0])
 				if idx, exists := formattedEnvVarIndex[varName]; exists {
 					formattedEnvLines[idx] = line
 					consumed[i] = true
@@ -163,7 +163,7 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 			for _, line := range remaining {
 				parts := strings.SplitN(line, "=", 2)
 				if len(parts) > 1 {
-					varName := parts[0]
+					varName := strings.TrimSpace(parts[0])
 					// Parity line 116 check: update if exists (handle duplicates in CurrentEnvLines)
 					if idx, exists := formattedEnvVarIndex[varName]; exists {
 						formattedEnvLines[idx] = line
