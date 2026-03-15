@@ -157,11 +157,11 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, tui.Keys.Esc), key.Matches(msg, tui.Keys.ForceQuit):
 			return m, closeWith(nil)
 
-		case key.Matches(msg, tui.Keys.Tab):
+		case key.Matches(msg, tui.Keys.Tab), key.Matches(msg, tui.Keys.CycleTab):
 			m.cycleFocus(+1)
 			return m, nil
 
-		case key.Matches(msg, tui.Keys.ShiftTab):
+		case key.Matches(msg, tui.Keys.ShiftTab), key.Matches(msg, tui.Keys.CycleShiftTab):
 			m.cycleFocus(-1)
 			return m, nil
 
@@ -207,8 +207,32 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+	case tea.MouseWheelMsg:
+		// Fallback: raw wheel scrolls the list.
+		if msg.Button == tea.MouseWheelDown {
+			m.moveCursor(+1)
+		} else if msg.Button == tea.MouseWheelUp {
+			m.moveCursor(-1)
+		}
+		return m, nil
+
+	case tui.LayerWheelMsg:
+		// Semantic wheel from IDListPanel path — scroll without focus snap.
+		if msg.Button == tea.MouseWheelDown {
+			m.moveCursor(+1)
+		} else if msg.Button == tea.MouseWheelUp {
+			m.moveCursor(-1)
+		}
+		return m, nil
+
 	case tui.LayerHitMsg:
 		if msg.Button == tea.MouseMiddle {
+			return m, nil
+		}
+		// Hover focus from wheel routing: switch focus to list without selecting.
+		if msg.Button == tui.HoverButton && msg.ID == tui.IDListPanel {
+			m.focus = addVarFocusList
+			m.input.Blur()
 			return m, nil
 		}
 		if msg.Button == tea.MouseLeft {
@@ -276,6 +300,7 @@ func (m *addVarDialogModel) selectableItems() []addVarItem {
 }
 
 func (m *addVarDialogModel) moveCursor(delta int) {
+	// Move cursor, skipping separators.
 	for {
 		m.cursor += delta
 		if m.cursor < 0 {
@@ -293,8 +318,37 @@ func (m *addVarDialogModel) moveCursor(delta int) {
 	if m.cursor < m.offset {
 		m.offset = m.cursor
 	}
-	if m.cursor >= m.offset+m.maxVis {
-		m.offset = m.cursor - m.maxVis + 1
+	// Scroll down: check if cursor is beyond the visible row budget from offset.
+	rows := 0
+	lastVisible := m.offset
+	for i := m.offset; i < len(m.items); i++ {
+		r := 1
+		if m.items[i].subLabel != "" {
+			r = 2
+		}
+		if rows+r > m.maxVis {
+			break
+		}
+		rows += r
+		lastVisible = i
+	}
+	if m.cursor > lastVisible {
+		for m.cursor > lastVisible && m.offset < m.cursor {
+			m.offset++
+			rows = 0
+			lastVisible = m.offset
+			for i := m.offset; i < len(m.items); i++ {
+				r := 1
+				if m.items[i].subLabel != "" {
+					r = 2
+				}
+				if rows+r > m.maxVis {
+					break
+				}
+				rows += r
+				lastVisible = i
+			}
+		}
 	}
 }
 
@@ -314,14 +368,16 @@ func (m *addVarDialogModel) SetSize(w, h int) {
 }
 
 func (m *addVarDialogModel) recalc() {
+	ctx := tui.GetActiveContext()
 	contentW := m.innerWidth()
 	headingRaw := FormatMenuHeading(MenuHeadingParams{
 		AppName:        m.appName,
 		AppDescription: m.appDesc,
 	}, contentW)
-	headingH := strings.Count(headingRaw, "\n") + 1
-	// overhead: border(2) + heading padding(2) + headingH + spacer(1) + input(3) + spacer(1) + buttons(1)
-	fixed := 2 + 2 + headingH + 1 + 3 + 1 + 1
+	headingRenderedH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(console.ToANSI(headingRaw)))
+	btnH := tui.ButtonRowHeight(contentW, 0, tui.ButtonSpec{Text: "Create"}, tui.ButtonSpec{Text: "Cancel"})
+	// overhead: outer border(2) + rendered heading + "Variable Name" section(3) + "Available Variables" borders(2) + spacer(1) + buttons
+	fixed := 2 + headingRenderedH + 3 + 2 + 1 + btnH
 	m.maxVis = m.height - fixed
 	if m.maxVis < 2 {
 		m.maxVis = 2
@@ -343,18 +399,28 @@ func (m *addVarDialogModel) itemIndexAt(screenY int) int {
 	contentW := m.innerWidth()
 	headingRaw := FormatMenuHeading(MenuHeadingParams{AppName: m.appName, AppDescription: m.appDesc}, contentW)
 	headingH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(console.ToANSI(headingRaw)))
-	// list starts at: border(1) + headingH + spacer(1) + input(3) + spacer(1)
-	listTop := 1 + headingH + 1 + 3 + 1
+	// list starts at: outer border(1) + headingH + "Variable Name" section(3) + "Available Variables" title border(1)
+	listTop := 1 + headingH + 3 + 1
 	rowY := listTop
-	for i := m.offset; i < len(m.items) && i < m.offset+m.maxVis; i++ {
-		if m.items[i].kind == addVarKindSeparator {
+	rowBudget := m.maxVis
+	for i := m.offset; i < len(m.items) && rowBudget > 0; i++ {
+		item := m.items[i]
+		if item.kind == addVarKindSeparator {
+			if rowBudget < 1 {
+				break
+			}
+			rowBudget--
 			rowY++
 			continue
 		}
 		h := 1
-		if m.items[i].subLabel != "" {
+		if item.subLabel != "" {
 			h = 2
 		}
+		if h > rowBudget {
+			break
+		}
+		rowBudget -= h
 		if screenY >= rowY && screenY < rowY+h {
 			return i
 		}
@@ -369,11 +435,16 @@ func (m *addVarDialogModel) ViewString() string {
 	}
 	ctx := tui.GetActiveContext()
 	contentW := m.innerWidth()
+	sInnerW := contentW - 2 // inner width of each bordered section
 
 	bgStyle := tui.SemanticStyle("{{|Theme_Dialog|}}")
 	normalStyle := tui.SemanticStyle("{{|Theme_Item|}}")
 	selectedStyle := tui.SemanticStyle("{{|Theme_ItemSelected|}}")
 	subLabelStyle := tui.SemanticStyle("{{|Theme_HelpItem|}}")
+	sepChar := "─"
+	if !ctx.LineCharacters {
+		sepChar = "-"
+	}
 
 	// Heading
 	headingRaw := FormatMenuHeading(MenuHeadingParams{
@@ -383,33 +454,76 @@ func (m *addVarDialogModel) ViewString() string {
 	headingText := strings.TrimRight(
 		ctx.Dialog.Padding(1, 2).Width(contentW).Render(console.ToANSI(headingRaw)), "\n")
 
-	// Input
+	// "Variable Name" section — titled bordered box, thick border when focused
 	inputFocused := m.focus == addVarFocusInput
-	borderedInput := tui.ApplyInnerBorderCtx(ctx.Dialog.Padding(0, 1).Width(contentW), inputFocused, ctx)
-	renderedInput := strings.TrimRight(borderedInput.Render("Variable: "+m.input.View()), "\n")
-
-	// List
-	sepChar := "─"
-	if !ctx.LineCharacters {
-		sepChar = "-"
+	inputContent := strings.TrimRight(ctx.Dialog.Padding(0, 1).Width(sInnerW).Render(m.input.View()), "\n")
+	inputTitleTag := "Theme_TitleSubMenu"
+	if inputFocused {
+		inputTitleTag = "Theme_TitleSubMenuFocused"
 	}
+	varNameSection := strings.TrimRight(tui.RenderBorderedBoxCtx(
+		"Variable Name", inputContent, sInnerW, 0, inputFocused, true, true,
+		ctx.SubmenuTitleAlign, inputTitleTag, ctx,
+	), "\n")
+
+	// "Available Variables" section — titled bordered box, thick border when focused
+	listFocused := m.focus == addVarFocusList
+	// Always reserve one column for the scrollbar gutter so width is stable.
+	maxItemW := sInnerW - 3 - tui.ScrollbarGutterWidth // cursor(1) + space(1) + trailing space(1) + gutter
+
+	// Compute scroll metrics for the scrollbar / scroll indicator.
+	totalRows := 0
+	offsetRows := 0
+	for i, item := range m.items {
+		r := 1
+		if item.subLabel != "" {
+			r = 2
+		}
+		if i < m.offset {
+			offsetRows += r
+		}
+		totalRows += r
+	}
+
 	var listLines []string
-	for i := m.offset; i < len(m.items) && i < m.offset+m.maxVis; i++ {
+	rowBudget := m.maxVis
+	for i := m.offset; i < len(m.items) && rowBudget > 0; i++ {
 		item := m.items[i]
 		if item.kind == addVarKindSeparator {
-			listLines = append(listLines, bgStyle.Render(" "+strings.Repeat(sepChar, contentW)+" "))
+			if rowBudget < 1 {
+				break
+			}
+			rowBudget--
+			sepW := sInnerW - tui.ScrollbarGutterWidth - 2
+			if sepW < 0 {
+				sepW = 0
+			}
+			listLines = append(listLines, bgStyle.Render(" "+strings.Repeat(sepChar, sepW)+" "))
 			continue
 		}
-		label := item.label
-		if lipgloss.Width(label) > contentW {
-			label = tui.TruncateRight(label, contentW)
+		itemRows := 1
+		if item.subLabel != "" {
+			itemRows = 2
 		}
-		pad := contentW - lipgloss.Width(label)
+		if itemRows > rowBudget {
+			break
+		}
+		rowBudget -= itemRows
+
+		focused := i == m.cursor && listFocused
+		cursor := " "
+		if focused {
+			cursor = ">"
+		}
+		label := item.label
+		if lipgloss.Width(label) > maxItemW {
+			label = tui.TruncateRight(label, maxItemW)
+		}
+		pad := maxItemW - lipgloss.Width(label)
 		if pad < 0 {
 			pad = 0
 		}
-		line := " " + label + strings.Repeat(" ", pad) + " "
-		focused := i == m.cursor && m.focus == addVarFocusList
+		line := cursor + " " + label + strings.Repeat(" ", pad) + " "
 		if focused {
 			listLines = append(listLines, tui.MaintainBackground(selectedStyle.Render(line), selectedStyle))
 		} else {
@@ -417,14 +531,14 @@ func (m *addVarDialogModel) ViewString() string {
 		}
 		if item.subLabel != "" {
 			sl := item.subLabel
-			if lipgloss.Width(sl) > contentW {
-				sl = tui.TruncateRight(sl, contentW)
+			if lipgloss.Width(sl) > maxItemW {
+				sl = tui.TruncateRight(sl, maxItemW)
 			}
-			slPad := contentW - lipgloss.Width(sl)
+			slPad := maxItemW - lipgloss.Width(sl)
 			if slPad < 0 {
 				slPad = 0
 			}
-			slLine := " " + sl + strings.Repeat(" ", slPad) + " "
+			slLine := "  " + sl + strings.Repeat(" ", slPad) + " "
 			if focused {
 				listLines = append(listLines, tui.MaintainBackground(selectedStyle.Render(slLine), selectedStyle))
 			} else {
@@ -433,19 +547,58 @@ func (m *addVarDialogModel) ViewString() string {
 		}
 	}
 
-	spacer := bgStyle.Width(contentW + 2).Render("")
+	// Apply scrollbar column (always reserves the gutter, shows track+thumb when enabled+needed).
+	listContent, sbInfo := tui.ApplyScrollbarColumnTracked(
+		strings.Join(listLines, "\n"),
+		totalRows, m.maxVis, offsetRows,
+		tui.IsScrollbarEnabled(), ctx.LineCharacters, ctx,
+	)
+
+	listTitleTag := "Theme_TitleSubMenu"
+	if listFocused {
+		listTitleTag = "Theme_TitleSubMenuFocused"
+	}
+	availableSection := strings.TrimRight(tui.RenderBorderedBoxCtx(
+		"Available Variables", listContent, sInnerW, 0, listFocused, true, true,
+		ctx.SubmenuTitleAlign, listTitleTag, ctx,
+	), "\n")
+
+	// Replace bottom border with scroll indicator when list overflows.
+	if sbInfo.Needed {
+		scrollPct := 0.0
+		if totalRows > m.maxVis {
+			scrollPct = float64(offsetRows) / float64(totalRows-m.maxVis)
+			if scrollPct > 1.0 {
+				scrollPct = 1.0
+			}
+		}
+		sectionLines := strings.Split(availableSection, "\n")
+		if len(sectionLines) > 0 {
+			bottomLine := tui.BuildScrollPercentBottomBorder(sInnerW+2, scrollPct, listFocused, ctx)
+			sectionLines[len(sectionLines)-1] = bottomLine
+			availableSection = strings.Join(sectionLines, "\n")
+		}
+	}
+
+	// Buttons
 	buttonRow := strings.TrimRight(tui.RenderCenteredButtonsCtx(
 		contentW, ctx,
 		tui.ButtonSpec{Text: "Create", Active: m.focus == addVarFocusInput || m.focus == addVarFocusCreate},
 		tui.ButtonSpec{Text: "Cancel", Active: m.focus == addVarFocusCancel},
 	), "\n")
 
-	parts := []string{headingText, renderedInput}
-	if len(listLines) > 0 {
-		parts = append(parts, strings.Join(listLines, "\n"))
+	// Dynamic spacer pushes buttons to the bottom.
+	headingRenderedH := lipgloss.Height(headingText)
+	varNameSectionH := lipgloss.Height(varNameSection)
+	availableSectionH := lipgloss.Height(availableSection)
+	buttonRowH := lipgloss.Height(buttonRow)
+	spacerH := m.height - 2 - headingRenderedH - varNameSectionH - availableSectionH - buttonRowH
+	if spacerH < 1 {
+		spacerH = 1
 	}
-	parts = append(parts, spacer, buttonRow)
+	spacer := strings.TrimRight(strings.Repeat(bgStyle.Width(contentW).Render("")+"\n", spacerH), "\n")
 
+	parts := []string{headingText, varNameSection, availableSection, spacer, buttonRow}
 	return tui.RenderDialogWithType("Add Variable", lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused, m.height, tui.DialogTypeInfo)
 }
 
@@ -465,16 +618,22 @@ func (m *addVarDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegion 
 
 	headingRaw := FormatMenuHeading(MenuHeadingParams{AppName: m.appName, AppDescription: m.appDesc}, contentW)
 	headingH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(console.ToANSI(headingRaw)))
-	inputH := 3
-	listTop := 1 + headingH + 1 + inputH + 1
+	// list starts at: outer border(1) + headingH + "Variable Name" section(3) + "Available Variables" title border(1)
+	listTop := 1 + headingH + 3 + 1
 
 	listH := 0
-	for i := m.offset; i < len(m.items) && i < m.offset+m.maxVis; i++ {
-		if m.items[i].kind == addVarKindSeparator || m.items[i].subLabel == "" {
-			listH++
-		} else {
-			listH += 2
+	rowBudget := m.maxVis
+	for i := m.offset; i < len(m.items) && rowBudget > 0; i++ {
+		item := m.items[i]
+		h := 1
+		if item.subLabel != "" {
+			h = 2
 		}
+		if h > rowBudget {
+			break
+		}
+		rowBudget -= h
+		listH += h
 	}
 
 	var regions []tui.HitRegion
@@ -489,7 +648,8 @@ func (m *addVarDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegion 
 		})
 	}
 
-	buttonY := listTop + listH + 1
+	btnH := tui.ButtonRowHeight(contentW, 0, tui.ButtonSpec{Text: "Create"}, tui.ButtonSpec{Text: "Cancel"})
+	buttonY := m.height - 1 - btnH
 	regions = append(regions, tui.GetButtonHitRegions(
 		"addvar_dialog", offsetX+1, offsetY+buttonY, contentW, tui.ZDialog+10,
 		tui.ButtonSpec{Text: "Create", ZoneID: "Create"},

@@ -1336,6 +1336,23 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 			return tui.CloseDialogMsg{Result: ApplyVarValueMsg{VarName: vn2, Value: text}}
 		},
 	})
+	items = append(items, tui.ContextMenuItem{IsSeparator: true})
+	addM := m
+	items = append(items, tui.ContextMenuItem{
+		Label: "Add Variable",
+		Help:  "Add a new variable to this file.",
+		Action: func() tea.Msg {
+			cmd := addM.showAddVarDialog()
+			if cmd == nil {
+				return tui.CloseDialogMsg{}
+			}
+			msg := cmd()
+			if msg == nil {
+				return tui.CloseDialogMsg{}
+			}
+			return tui.CloseDialogMsg{Result: msg}
+		},
+	})
 
 	return func() tea.Msg {
 		return tui.ShowDialogMsg{Dialog: tui.NewContextMenuModel(x, y, m.width, m.height, items)}
