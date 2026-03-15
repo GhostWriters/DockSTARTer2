@@ -110,7 +110,7 @@ func GetAvailableDialogSize(width, height int) (int, int) {
 	header.SetWidth(width - 2)
 	headerH := header.Height()
 
-	availableWidth, availableHeight := layout.ContentArea(width, height, hasShadow, headerH)
+	availableWidth, availableHeight := layout.ContentArea(width, height, hasShadow, headerH, layout.HelplineHeight)
 
 	// Account for log panel if visible
 	availableHeight -= logPanelExtraHeight

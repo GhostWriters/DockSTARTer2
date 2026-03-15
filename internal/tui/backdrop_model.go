@@ -234,5 +234,5 @@ func (m *BackdropModel) GetContentArea() (width, height int) {
 		headerH = m.header.Height()
 	}
 
-	return layout.ContentArea(m.width, m.height, hasShadow, headerH)
+	return layout.ContentArea(m.width, m.height, hasShadow, headerH, layout.HelplineHeight)
 }

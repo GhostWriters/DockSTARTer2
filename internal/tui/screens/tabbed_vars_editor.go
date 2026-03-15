@@ -56,6 +56,10 @@ type TabbedVarsEditorModel struct {
 	// Action buttons
 	buttons []string
 	btnIdx  int
+	buttonHeight  int
+	editorHeight  int
+	contentWidth  int
+	focused       bool
 
 	// Callbacks
 	onClose tea.Cmd
@@ -469,30 +473,34 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Button clicks
-		if strings.HasPrefix(msg.ID, "tabbed_vars.btn-") || strings.HasPrefix(msg.ID, "btn-") {
-			btnID := strings.TrimPrefix(msg.ID, "tabbed_vars.")
-			btnIdxStr := strings.TrimPrefix(btnID, "btn-")
-			if idx, err := strconv.Atoi(btnIdxStr); err == nil {
-				m.focus = envFocusButtons
-				m.btnIdx = idx
-				switch m.btnIdx {
-				case 0: // Save
-					if m.hasErrors() {
-						return m, func() tea.Msg {
-							return tui.ShowMessageDialogMsg{
-								Title:   "Validation Error",
-								Message: "Cannot save while there are invalid variable names (highlighted in red) or incomplete lines.",
-								Type:    tui.MessageError,
-							}
-						}
+		switch msg.ID {
+		case tui.IDSaveButton:
+			m.focus = envFocusButtons
+			m.btnIdx = 0
+			if m.hasErrors() {
+				return m, func() tea.Msg {
+					return tui.ShowMessageDialogMsg{
+						Title:   "Validation Error",
+						Message: "Cannot save while there are invalid variable names (highlighted in red) or incomplete lines.",
+						Type:    tui.MessageError,
 					}
-					return m, m.saveEnv()
-				case 1: // Back
-					return m, m.onClose
-				case 2: // Exit
-					return m, tui.ConfirmExitAction()
 				}
 			}
+			return m, m.saveEnv()
+		case tui.IDBackButton:
+			m.focus = envFocusButtons
+			m.btnIdx = 1
+			if m.hasChanges() {
+				return m, m.promptUnsavedChanges(m.onClose)
+			}
+			return m, m.onClose
+		case tui.IDExitButton:
+			m.focus = envFocusButtons
+			m.btnIdx = 2
+			if m.hasChanges() {
+				return m, m.promptUnsavedChanges(tui.ConfirmExitAction())
+			}
+			return m, tui.ConfirmExitAction()
 		}
 
 	case tui.LayerWheelMsg, tea.MouseWheelMsg:
@@ -520,6 +528,9 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "esc":
+			if m.hasChanges() {
+				return m, m.promptUnsavedChanges(m.onClose)
+			}
 			return m, m.onClose
 		case "ctrl+n", "ctrl+right": // Next Tab
 			if m.focus == envFocusEditor && len(m.tabs) > 1 {
@@ -581,8 +592,14 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					return m, m.saveEnv()
 				case 1: // Back
+					if m.hasChanges() {
+						return m, m.promptUnsavedChanges(m.onClose)
+					}
 					return m, m.onClose
 				case 2: // Exit
+					if m.hasChanges() {
+						return m, m.promptUnsavedChanges(tui.ConfirmExitAction())
+					}
 					return m, tui.ConfirmExitAction()
 				}
 			}
@@ -602,11 +619,6 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					return nil
 				}
-			case "ctrl+r":
-				if len(m.tabs) > 0 {
-					m.tabs[m.activeTab].editor.ResetCurrentVariable()
-				}
-				return m, nil
 			case "ctrl+up":
 				if len(m.tabs) > 0 {
 					m.tabs[m.activeTab].editor.MoveVariableUp()
@@ -687,24 +699,112 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *TabbedVarsEditorModel) ViewString() string {
-	ctx := tui.GetActiveContext()
-	borderBG := ctx.Dialog.GetBackground()
-
-	var sb strings.Builder
-
-	if len(m.tabs) == 0 {
-		return "No tabs available"
+	if m.width == 0 || m.height == 0 {
+		return ""
 	}
 
-	editor := m.tabs[m.activeTab].editor
-	// Ensure no trailing newlines from the editor, which can cause 1-line overflows
-	// in layout helpers like RenderBorderedBoxCtx or JoinVertical.
-	editorView := strings.TrimRight(editor.View(), "\n")
+	if len(m.tabs) == 0 {
+		return "No tabs loaded"
+	}
 
-	// Create tab rendering for the title
-	// Each tab is treated as an independent title segment: ┫ Tab 1 ┣┫ Tab 2 ┣
+	tab := m.tabs[m.activeTab]
+	editor := tab.editor
+	editorView := editor.View()
+
+	ctx := tui.GetActiveContext()
 	focused := m.focus == envFocusEditor
 
+	// 1. Render the tabs row (to be used as the title of the inner border)
+	tabRow := m.renderTabs()
+
+	// 2. Wrap the editor in its own inner border (matching MenuModel list style)
+	// We use m.contentWidth for the inner box width.
+	// Height includes editor + 2 lines for borders.
+	innerBox := tui.RenderBorderedBoxCtx(
+		tabRow,
+		editorView,
+		m.contentWidth,
+		m.editorHeight+2,
+		focused,
+		false, // No focus indicators here
+		false, // Not rounded
+		ctx.SubmenuTitleAlign,
+		"RAW", // Use the pre-rendered tabRow exactly
+		ctx,
+	)
+
+	// 3. Add scroll percentage to the bottom border of the inner box if needed
+	if editor.LineCount() > editor.Height() {
+		lines := strings.Split(innerBox, "\n")
+		if len(lines) > 0 {
+			bottomLine := tui.BuildScrollPercentBottomBorder(m.contentWidth, editor.ScrollPercent(), focused, ctx)
+			lines[len(lines)-1] = bottomLine
+			innerBox = strings.Join(lines, "\n")
+		}
+	}
+
+	// 4. Render buttons
+	buttons := m.renderButtons(m.contentWidth)
+
+	// 5. Join components vertically
+	// We don't have a subtitle currently, but if we did it would go first.
+	parts := []string{
+		innerBox,
+		buttons,
+	}
+
+	// Standardize TrimRight to prevent implicit gaps
+	for i, part := range parts {
+		parts[i] = strings.TrimRight(part, "\n")
+	}
+	fullContent := lipgloss.JoinVertical(lipgloss.Left, parts...)
+
+	// 6. Wrap in the outer dialog border
+	// We pass m.contentWidth to RenderBorderedBoxCtx which will add borders (+2)
+	// resulting in a total width of m.width.
+	return tui.RenderBorderedBoxCtx(
+		m.title,
+		fullContent,
+		m.contentWidth,
+		m.height,
+		m.focused,
+		true, // Show indicators in the main title
+		false,
+		ctx.DialogTitleAlign,
+		"Theme_Title",
+		ctx,
+	)
+}
+
+func (m *TabbedVarsEditorModel) View() tea.View {
+	return tea.View{Content: m.ViewString()}
+}
+
+func (m *TabbedVarsEditorModel) getButtonSpecs() []tui.ButtonSpec {
+	zoneIDs := []string{tui.IDSaveButton, tui.IDBackButton, tui.IDExitButton}
+	var specs []tui.ButtonSpec
+	for i, btn := range m.buttons {
+		zoneID := ""
+		if i < len(zoneIDs) {
+			zoneID = zoneIDs[i]
+		}
+		specs = append(specs, tui.ButtonSpec{
+			Text:   btn,
+			Active: m.focus == envFocusButtons && m.btnIdx == i,
+			ZoneID: zoneID,
+		})
+	}
+	return specs
+}
+
+func (m *TabbedVarsEditorModel) renderButtons(width int) string {
+	specs := m.getButtonSpecs()
+	return tui.RenderCenteredButtonsExplicit(width, m.buttonHeight == tui.DialogButtonHeight, tui.GetActiveContext(), specs...)
+}
+
+func (m *TabbedVarsEditorModel) renderTabs() string {
+	ctx := tui.GetActiveContext()
+	focused := m.focus == envFocusEditor
 	var tabSegments []string
 	for i, tab := range m.tabs {
 		title := tab.spec.Title
@@ -712,106 +812,97 @@ func (m *TabbedVarsEditorModel) ViewString() string {
 		if i == m.activeTab && focused {
 			styleTag = "Theme_TitleSubMenuFocused"
 		}
-		// borderFocused = focused (submenu focus)
-		// contentFocused = (i == m.activeTab && focused) (tab focus)
-		// showIndicators = true (always reserve space for the indicator position)
 		seg := tui.RenderTitleSegmentCtx(title, focused, i == m.activeTab && focused, true, styleTag, ctx)
 		tabSegments = append(tabSegments, seg)
 	}
-
-	// Join segments with zero gap as requested: ┫Tab1┣┫Tab2┣
-	tabRow := strings.Join(tabSegments, "")
-
-	// Create an inner box using RenderBorderedBoxCtx
-	totalWidth := editor.Width()
-	// Pass titleTag="RAW" to use our multi-title row exactly as constructed
-	editorWithBorder := tui.RenderBorderedBoxCtx(tabRow, editorView, totalWidth, editor.Height()+2, focused, false, false, ctx.SubmenuTitleAlign, "RAW", ctx)
-
-	// Replace the bottom border with the scroll-percent variant if the editor content overflows
-	// The editor's totalDisplayLines() vs Height() tells us if it can scroll.
-	if editor.LineCount() > editor.Height() {
-		// RenderBorderedBoxCtx produces content with height (editor.Height() + 2)
-		// We need to replace the last line.
-		lines := strings.Split(editorWithBorder, "\n")
-		if len(lines) > 0 {
-			// Replace the last line of the box (the bottom border)
-			// Total visual width of the box is totalWidth + 2 (borders)
-			bottomLine := tui.BuildScrollPercentBottomBorder(totalWidth+2, editor.ScrollPercent(), focused, ctx)
-			lines[len(lines)-1] = bottomLine
-			editorWithBorder = strings.Join(lines, "\n")
-		}
-	}
-
-	sb.WriteString(editorWithBorder)
-	sb.WriteString("\n")
-
-	// Buttons
-	var specs []tui.ButtonSpec
-	for i, btn := range m.buttons {
-		specs = append(specs, tui.ButtonSpec{
-			Text:   btn,
-			Active: m.focus == envFocusButtons && m.btnIdx == i,
-		})
-	}
-	btnsRendered := tui.RenderCenteredButtonsCtx(totalWidth, ctx, specs...)
-
-	spacer := lipgloss.NewStyle().Width(totalWidth).Background(borderBG).Render(" ")
-
-	fullContent := lipgloss.JoinVertical(lipgloss.Left, strings.TrimRight(sb.String(), "\n"), spacer, btnsRendered)
-
-	// Wrap in dialog styling
-	dialogBox := tui.RenderDialogWithType(m.title, fullContent, true, m.height, tui.DialogTypeInfo)
-
-	return dialogBox
-}
-
-func (m *TabbedVarsEditorModel) View() tea.View {
-	return tea.NewView(m.ViewString())
+	return strings.Join(tabSegments, "")
 }
 
 func (m *TabbedVarsEditorModel) Title() string {
 	return m.title
 }
 
-func (m *TabbedVarsEditorModel) HelpText() string {
-	if len(m.tabs) > 1 {
-		return "Use Ctrl+Left and Ctrl+Right to switch tabs. Edit variables for the selected configuration."
+func (m *TabbedVarsEditorModel) ShortHelp() []key.Binding {
+	if m.focus == envFocusEditor {
+		b := []key.Binding{tui.Keys.EnvRefresh, tui.Keys.EnvAddVar, tui.Keys.EnvDelete, tui.Keys.Esc, tui.Keys.Help}
+		if len(m.tabs) > 1 {
+			b = append(b, tui.Keys.CycleTab)
+		}
+		return b
 	}
-	return "Edit global variables for all containers"
+	return []key.Binding{tui.Keys.Left, tui.Keys.Right, tui.Keys.Enter, tui.Keys.CycleTab, tui.Keys.Esc}
+}
+
+func (m *TabbedVarsEditorModel) FullHelp() [][]key.Binding {
+	nav := []key.Binding{tui.Keys.Up, tui.Keys.Down, tui.Keys.PageUp, tui.Keys.PageDown, tui.Keys.Home, tui.Keys.End}
+	if len(m.tabs) > 1 {
+		nav = append(nav, tui.Keys.CycleTab, tui.Keys.CycleShiftTab)
+	}
+
+	return [][]key.Binding{
+		nav,
+		{tui.Keys.EnvRefresh, tui.Keys.EnvAddVar, tui.Keys.EnvInsert, tui.Keys.EnvDelete, tui.Keys.EnvReorderU, tui.Keys.EnvReorderD},
+		{tui.Keys.Tab, tui.Keys.Enter, tui.Keys.Esc, tui.Keys.ToggleLog, tui.Keys.ForceQuit},
+	}
+}
+
+func (m *TabbedVarsEditorModel) HelpText() string {
+	help := "F5/Ctrl+R: Refresh • Ctrl+O: Insert Row • Ctrl+A: Add Var • Ctrl+D: Delete • Ctrl+Up/Down: Move • Tab: Cycle • Esc: Back"
+	if len(m.tabs) > 1 {
+		help = "Ctrl+Left/Right: Tabs • " + help
+	}
+	return help
 }
 
 func (m *TabbedVarsEditorModel) SetSize(width, height int) {
 	m.width = width
 	m.height = height
 
-	layout := tui.GetLayout()
+	// width and height are the already-computed content area dimensions passed by AppModel.
+	// Use them directly as dialog bounds, just like MenuModel does.
+	// Budget for our internal components using standardized inner width.
+	// Padding = 1 on each side (matches MenuModel's marginStyle).
+	m.contentWidth = m.width - 2
+	if m.contentWidth < 1 {
+		m.contentWidth = 1
+	}
 
-	// width/height are already the content area dimensions.
-	// We use helpers to avoid hardcoding overheads.
-	// availableH is the total interior space of the dialog after outer borders and buttons.
-	// We pass 1 for headerHeight to account for the tab row.
-	availableH := layout.DialogContentHeight(height, 1, true, false)
+	specs := m.getButtonSpecs()
+	// Determine button height based on width availability (bordered=3, flat=1)
+	m.buttonHeight = tui.ButtonRowHeight(m.contentWidth, 0, specs...)
 
-	// Inner overhead inside the dialog:
-	// - 1 line for the spacer above buttons
-	// - 2 lines for the inner border added by RenderBorderedBoxCtx
-	editorHeight := availableH - 3
-	editorWidth := width - 4
+	// Inner vertical space inside dialog borders (dialogHeight - 2)
+	innerH := m.height - 2
 
+	// Available for the editor: total inner height minus button row
+	// And minus 2 for the editor's own borders (tabs are in the top border)
+	m.editorHeight = innerH - m.buttonHeight - 2
+	if m.editorHeight < 1 {
+		m.editorHeight = 1
+	}
+	if m.editorHeight < 3 && m.buttonHeight == 3 {
+		// Fallback: force buttons flat to save 2 lines if editor would be too small
+		m.buttonHeight = 1
+		m.editorHeight = innerH - 1 - 2 // -1 for flat buttons, -2 for editor borders
+	}
+
+	if m.editorHeight < 1 {
+		m.editorHeight = 1
+	}
+
+	editorWidth := m.contentWidth // Editor content width is the same as dialog content width
 	if editorWidth < 10 {
 		editorWidth = 10
-	}
-	if editorHeight < 5 {
-		editorHeight = 5
 	}
 
 	for i := range m.tabs {
 		m.tabs[i].editor.SetWidth(editorWidth)
-		m.tabs[i].editor.SetHeight(editorHeight)
+		m.tabs[i].editor.SetHeight(m.editorHeight)
 	}
 }
 
 func (m *TabbedVarsEditorModel) SetFocused(f bool) {
+	m.focused = f
 	if f {
 		if m.focus == envFocusEditor && len(m.tabs) > 0 {
 			m.tabs[m.activeTab].editor.Focus()
@@ -827,71 +918,25 @@ func (m *TabbedVarsEditorModel) IsMaximized() bool {
 	return true
 }
 
-func (m *TabbedVarsEditorModel) HasDialog() bool {
-	return false
-}
 
 func (m *TabbedVarsEditorModel) MenuName() string {
 	return "tabbed_vars"
 }
 
-func (m *TabbedVarsEditorModel) ShortHelp() []key.Binding {
-	if m.focus == envFocusEditor {
-		b := []key.Binding{
-			key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "buttons")),
-			key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("ctrl+d", "delete var")),
-			key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel")),
-		}
-		if len(m.tabs) > 1 {
-			b = append(b, key.NewBinding(key.WithKeys("ctrl+left/right", "ctrl+p/n"), key.WithHelp("ctrl+←/→", "switch tabs")))
-		}
-		return b
-	}
-	return []key.Binding{
-		key.NewBinding(key.WithKeys("left", "right"), key.WithHelp("←/→", "select")),
-		key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "confirm")),
-		key.NewBinding(key.WithKeys("tab"), key.WithHelp("sh+tab", "editor")),
-		key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel")),
-	}
-}
 
 func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegion {
 	var regions []tui.HitRegion
 
-	viewStr := m.ViewString()
-	dialogW := lipgloss.Width(viewStr)
-	dialogH := lipgloss.Height(viewStr)
+	// The dialog itself has a border of 1 on each side.
+	// The content area starts at offsetX+1, offsetY+1.
+	// The content area has width m.contentWidth and height m.height - 2.
 
 	m.lastOffsetX = offsetX
 	m.lastOffsetY = offsetY
 
-	// Y=0: dialog top border
-	// Y=1: editorWithBorder top border (where tabs are)
-	// Y=2: editor text start
-	contentY := offsetY + 1
-
-	// Editor hit region
-	editorW := 10
-	editorH := 10
-	if len(m.tabs) > 0 {
-		editorW = m.tabs[m.activeTab].editor.Width() // Use editor.Width()
-		editorH = m.tabs[m.activeTab].editor.Height()
-	}
-
-	regions = append(regions, tui.HitRegion{
-		ID:     "tabbed_vars.editor",
-		X:      offsetX + 2,  // inner border left
-		Y:      contentY + 1, // skip the tab row
-		Width:  editorW,
-		Height: editorH,
-		ZOrder: tui.ZDialog + 5,
-	})
-
-	// Tab hit regions
+	// Tabs hit regions
 	if len(m.tabs) > 0 {
 		ctx := tui.GetActiveContext()
-		editorWidth := m.tabs[m.activeTab].editor.Width()
-
 		// Calculate total width of all tabs to determine centering offset
 		totalTitleWidth := 0
 		var tabWidths []int
@@ -901,23 +946,23 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitReg
 			totalTitleWidth += w
 		}
 
-		// Replicate RenderBorderedBoxCtx centering logic
-		actualWidth := editorWidth
+		// Replicate RenderBorderedBoxCtx centering logic for the title/tabs row
+		actualWidth := m.contentWidth
 		if totalTitleWidth > actualWidth {
 			actualWidth = totalTitleWidth
 		}
 
 		leftPad := 0
 		if ctx.SubmenuTitleAlign != "left" {
-			leftPad = (actualWidth - totalTitleWidth) / 2
+			leftPad = (m.width - 2 - totalTitleWidth) / 2
 		}
 
-		tabX := offsetX + 1 + leftPad // start after Border.TopLeft
+		tabX := offsetX + 1 + leftPad // start after dialog Border.TopLeft
 		for i, tabWidth := range tabWidths {
 			regions = append(regions, tui.HitRegion{
 				ID:     "tabbed_vars.tab-" + strconv.Itoa(i),
 				X:      tabX,
-				Y:      contentY,
+				Y:      offsetY + 1, // Tabs are on the first line of the content area
 				Width:  tabWidth,
 				Height: 1,
 				ZOrder: tui.ZDialog + 10,
@@ -926,31 +971,57 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitReg
 		}
 	}
 
-	// Buttons hit regions
-	var buttonSpecs []tui.ButtonSpec
-	for i, btn := range m.buttons {
-		buttonSpecs = append(buttonSpecs, tui.ButtonSpec{
-			Text:   btn,
-			Active: m.focus == envFocusButtons && m.btnIdx == i,
-			ZoneID: "btn-" + strconv.Itoa(i),
-		})
-	}
+	// Editor hit region
+	// Editor starts after the tabs row (1 line)
+	regions = append(regions, tui.HitRegion{
+		ID:     "tabbed_vars.editor",
+		X:      offsetX + 1,  // dialog border (1)
+		Y:      offsetY + 1 + 1, // dialog border (1) + tabs row (1)
+		Width:  m.contentWidth,
+		Height: m.editorHeight,
+		ZOrder: tui.ZDialog + 5,
+	})
 
-	// Buttons are at the bottom of the dialog. One border char at bottom.
-	buttonY := offsetY + dialogH - 4
-	regions = append(regions, tui.GetButtonHitRegions("tabbed_vars", offsetX+1, buttonY, dialogW-2, tui.ZDialog+10, buttonSpecs...)...)
+	// Button regions (standardized width)
+	btnY := m.height - m.buttonHeight - 1
+	regions = append(regions, tui.GetButtonHitRegions("", offsetX+1, offsetY+btnY, m.contentWidth, tui.ZDialog+10, m.getButtonSpecs()...)...)
 
 	return regions
 }
 
-func (m *TabbedVarsEditorModel) FullHelp() [][]key.Binding {
-	return [][]key.Binding{m.ShortHelp()}
-}
 
 // IsScrollbarDragging returns true if the current editor is dragging a line or a scrollbar.
 func (m *TabbedVarsEditorModel) IsScrollbarDragging() bool {
 	if len(m.tabs) > 0 {
 		return m.tabs[m.activeTab].editor.IsDragging()
 	}
+	return false
+}
+
+func (m *TabbedVarsEditorModel) hasChanges() bool {
+	for _, tab := range m.tabs {
+		currentVars, _ := appenv.ListVarsLiteralsData(tab.editor.GetContent())
+		if len(currentVars) != len(tab.initialVars) {
+			return true
+		}
+		for k, v := range currentVars {
+			if initialV, ok := tab.initialVars[k]; !ok || initialV != v {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (m *TabbedVarsEditorModel) promptUnsavedChanges(onConfirm tea.Cmd) tea.Cmd {
+	return func() tea.Msg {
+		if tui.Confirm("Unsaved Changes", "You have unsaved changes. Do you want to leave without saving?", false) {
+			return onConfirm()
+		}
+		return nil
+	}
+}
+
+func (m *TabbedVarsEditorModel) HasDialog() bool {
 	return false
 }

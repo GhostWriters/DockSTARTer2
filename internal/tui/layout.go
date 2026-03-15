@@ -61,7 +61,7 @@ func DefaultLayout() Layout {
 		ButtonHeight:      3,
 		ShadowWidth:       2,
 		ShadowHeight:      1,
-		EdgeIndent:        2, // 2 chars margin on each side of content area
+		EdgeIndent:        1, // 1 char margin on each side of content area
 		GapBeforeHelpline: 1,
 		GutterWidth:       1,
 	}
@@ -88,8 +88,8 @@ func (l Layout) ContentStartY(headerHeight int) int {
 }
 
 // BottomChrome returns total height reserved at bottom (gap + helpline)
-func (l Layout) BottomChrome() int {
-	return l.GapBeforeHelpline + l.HelplineHeight
+func (l Layout) BottomChrome(helplineHeight int) int {
+	return l.GapBeforeHelpline + helplineHeight
 }
 
 // VisualWidth returns the total horizontal space consumed by a box's bounding box AND its shadow.
@@ -122,7 +122,7 @@ func (l Layout) VisualGutter(hasShadow bool) int {
 
 // ContentArea returns the dimensions available for dialogs/screens
 // This is the space between header/separator and helpline
-func (l Layout) ContentArea(screenW, screenH int, hasShadow bool, headerHeight int) (width, height int) {
+func (l Layout) ContentArea(screenW, screenH int, hasShadow bool, headerHeight int, helplineHeight int) (width, height int) {
 	shadowW, shadowH := 0, 0
 	if hasShadow {
 		shadowW, shadowH = l.ShadowWidth, l.ShadowHeight
@@ -134,7 +134,7 @@ func (l Layout) ContentArea(screenW, screenH int, hasShadow bool, headerHeight i
 	// Height: screen minus top chrome, bottom chrome, and shadow
 	// Subtracting shadowH here ensures the dialog + its shadow fits
 	// ABOVE the GapBeforeHelpline, leaving that line blank.
-	height = screenH - l.ChromeHeight(headerHeight) - l.BottomChrome() - shadowH
+	height = screenH - l.ChromeHeight(headerHeight) - l.BottomChrome(helplineHeight) - shadowH
 
 	// Ensure minimums
 	if width < 10 {
@@ -172,7 +172,8 @@ func (l Layout) DialogPosition(mode DialogMode, dialogW, dialogH, screenW, scree
 
 	case DialogCentered:
 		// Center in content area
-		contentW, contentH := l.ContentArea(screenW, screenH, hasShadow, headerHeight)
+		// Use default HelplineHeight (1) for centering if not specified
+		contentW, contentH := l.ContentArea(screenW, screenH, hasShadow, headerHeight, l.HelplineHeight)
 
 		// Center horizontally in content area
 		x = l.EdgeIndent + (contentW-dialogW)/2
@@ -209,8 +210,8 @@ func (l Layout) DialogPosition(mode DialogMode, dialogW, dialogH, screenW, scree
 }
 
 // MaximizedDialogSize returns the dimensions for a maximized dialog
-func (l Layout) MaximizedDialogSize(screenW, screenH int, hasShadow bool, headerHeight int) (width, height int) {
-	return l.ContentArea(screenW, screenH, hasShadow, headerHeight)
+func (l Layout) MaximizedDialogSize(screenW, screenH int, hasShadow bool, headerHeight int, helplineHeight int) (width, height int) {
+	return l.ContentArea(screenW, screenH, hasShadow, headerHeight, helplineHeight)
 }
 
 // -------------------------------------------------------------------

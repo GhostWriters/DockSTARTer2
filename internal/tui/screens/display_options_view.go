@@ -28,7 +28,7 @@ func (s *DisplayOptionsScreen) ViewString() (result string) {
 			header := tui.NewHeaderModel()
 			header.SetWidth(termW - 2)
 			headerH := header.Height()
-			width, height = layout.ContentArea(termW, termH, hasShadow, headerH)
+			width, height = layout.ContentArea(termW, termH, hasShadow, headerH, layout.HelplineHeight)
 		}
 	}
 

@@ -461,7 +461,7 @@ func (m *AppModel) applyLogPanelMax() bool {
 		}
 	}
 
-	maxLogH := m.height - layout.ChromeHeight(headerH) - layout.BottomChrome() - shadowH - minContentH
+	maxLogH := m.height - layout.ChromeHeight(headerH) - layout.BottomChrome(layout.HelplineHeight) - shadowH - minContentH
 	if maxLogH < 2 {
 		maxLogH = 2
 	}
@@ -493,7 +493,7 @@ func (m AppModel) getContentArea() (int, int) {
 		headerH = m.backdrop.header.Height()
 	}
 
-	return layout.ContentArea(m.width, bh, hasShadow, headerH)
+	return layout.ContentArea(m.width, bh, hasShadow, headerH, layout.HelplineHeight)
 }
 
 // getDialogArea returns the dimensions available for a specific dialog.
@@ -506,7 +506,7 @@ func (m AppModel) getDialogArea(d tea.Model) (int, int) {
 		if m.backdrop != nil {
 			headerH = m.backdrop.ChromeHeight() - 1
 		}
-		return layout.ContentArea(m.width, m.height, m.config.UI.Shadow, headerH)
+		return layout.ContentArea(m.width, m.height, m.config.UI.Shadow, headerH, layout.HelplineHeight)
 	}
 	return m.getContentArea()
 }
