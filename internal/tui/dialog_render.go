@@ -189,6 +189,20 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 				border = SlantedAsciiBorder
 			}
 		}
+	} else if rounded {
+		if ctx.LineCharacters {
+			if focused {
+				border = ThickRoundedBorder
+			} else {
+				border = lipgloss.RoundedBorder()
+			}
+		} else {
+			if focused {
+				border = RoundedThickAsciiBorder
+			} else {
+				border = RoundedAsciiBorder
+			}
+		}
 	} else {
 		if ctx.LineCharacters {
 			if focused {

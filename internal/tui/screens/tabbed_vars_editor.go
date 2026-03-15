@@ -20,6 +20,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/atotto/clipboard"
 )
 
 type envFocusArea int
@@ -87,6 +88,15 @@ type TabbedVarsEditorModel struct {
 
 type envAddVarMsg struct {
 	key string
+}
+
+type envAddVarTemplateMsg struct {
+	prefix string
+}
+
+type envAddAllStockMsg struct {
+	vars     []string
+	defaults map[string]string
 }
 
 type envSaveSuccessMsg struct{}
@@ -190,11 +200,14 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 
 		content := strings.Join(formattedLines, "\n")
 
-		// Apply to editor with builtin defaults and read-only vars
+		// Apply to editor with builtin defaults and read-only vars.
+		// Read the template file to discover which keys have defaults, then call
+		// VarDefaultValue for each to get dynamically detected values (e.g.
+		// GLOBAL_LAN_NETWORK, DOCKER_HOSTNAME) rather than static template placeholders.
 		tabBuiltinDefaults := make(map[string]string)
 		if defaultFilePath != "" {
-			if content, err := os.ReadFile(defaultFilePath); err == nil {
-				lines := strings.Split(string(content), "\n")
+			if fileContent, err := os.ReadFile(defaultFilePath); err == nil {
+				lines := strings.Split(string(fileContent), "\n")
 				for _, line := range lines {
 					idx := strings.Index(line, "=")
 					if idx > 0 {
@@ -203,8 +216,7 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 							key = strings.TrimPrefix(key, "#")
 							key = strings.TrimSpace(key)
 						}
-						val := strings.TrimSpace(line[idx+1:])
-						tabBuiltinDefaults[key] = val
+						tabBuiltinDefaults[key] = appenv.VarDefaultValue(ctx, key, cfg)
 					}
 				}
 			}
@@ -217,6 +229,11 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 		m.tabs[i].defaultFilePath = defaultFilePath
 		m.tabs[i].builtinDefaults = tabBuiltinDefaults
 		m.tabs[i].readOnlyVars = tabReadOnlyVars
+
+		capturedCfg := cfg
+		m.tabs[i].editor.DefaultValueFunc = func(varName string) string {
+			return appenv.VarDefaultValue(context.Background(), varName, capturedCfg)
+		}
 
 		m.tabs[i].editor.ParseEnv(content, tabBuiltinDefaults, tabReadOnlyVars)
 
@@ -604,6 +621,14 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "f5", "ctrl+r":
 			return m, m.refreshEnv
+		case "ctrl+ ", "shift+F10": // Keyboard equiv of right-click: open context menu at current cursor
+			if m.focus == envFocusEditor && len(m.tabs) > 0 {
+				editor := m.tabs[m.activeTab].editor
+				editorTopY := m.lastOffsetY + 2 + m.subtitleHeight
+				y := editorTopY + editor.Line() - editor.YOffset()
+				x := m.lastOffsetX + 2
+				return m, m.showContextMenuForClick(x, y)
+			}
 		}
 
 		if m.focus == envFocusButtons {
@@ -652,13 +677,9 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			case "ctrl+a":
-				return m, func() tea.Msg {
-					keyName, err := tui.PromptText("Add Variable", "Enter new variable name:", false)
-					if err == nil && keyName != "" {
-						return envAddVarMsg{key: strings.TrimSpace(keyName)}
-					}
-					return nil
-				}
+				return m, m.showAddVarDialog()
+			case "f2":
+				return m, m.showSetValueDialog()
 			case "ctrl+up":
 				if len(m.tabs) > 0 {
 					m.tabs[m.activeTab].editor.MoveVariableUp()
@@ -711,13 +732,37 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.tabs[m.activeTab].editor.AddVariable(msg.key, "")
 		}
 		return m, nil
+	case envAddVarTemplateMsg:
+		prefix := msg.prefix
+		return m, func() tea.Msg {
+			keyName, err := tui.PromptText("Add Variable", "Enter variable name:", false)
+			if err == nil && keyName != "" {
+				keyName = strings.TrimSpace(strings.ToUpper(keyName))
+				if !strings.HasPrefix(keyName, prefix) {
+					keyName = prefix + keyName
+				}
+				return envAddVarMsg{key: keyName}
+			}
+			return nil
+		}
+	case envAddAllStockMsg:
+		if len(m.tabs) > 0 {
+			for _, key := range msg.vars {
+				m.tabs[m.activeTab].editor.AddVariable(key, msg.defaults[key])
+			}
+		}
+		return m, nil
 	case ApplyVarValueMsg:
 		if len(m.tabs) > 0 {
 			m.tabs[m.activeTab].editor.SetVariableValue(msg.VarName, msg.Value)
 		}
 		return m, nil
 	case envLoadDoneMsg:
-		// Recalculate layout now that heading data (niceName, description) is available
+		// Recalculate layout now that heading data (niceName, description) is available.
+		// Clear undo history — content has been reloaded so prior edits are irrelevant.
+		for i := range m.tabs {
+			m.tabs[i].editor.ClearUndo()
+		}
 		m.SetSize(m.width, m.height)
 		return m, nil
 	case tea.WindowSizeMsg:
@@ -769,11 +814,11 @@ func (m *TabbedVarsEditorModel) ViewString() string {
 	innerBox := tui.RenderBorderedBoxCtx(
 		tabRow,
 		editorView,
-		m.contentWidth,
+		m.contentWidth-2,
 		m.editorHeight+2,
 		focused,
 		false, // No focus indicators here
-		false, // Not rounded
+		true,  // Rounded corners to match submenu style
 		ctx.SubmenuTitleAlign,
 		"RAW", // Use the pre-rendered tabRow exactly
 		ctx,
@@ -880,15 +925,30 @@ func (m *TabbedVarsEditorModel) ShortHelp() []key.Binding {
 }
 
 func (m *TabbedVarsEditorModel) FullHelp() [][]key.Binding {
-	nav := []key.Binding{tui.Keys.Up, tui.Keys.Down, tui.Keys.PageUp, tui.Keys.PageDown, tui.Keys.Home, tui.Keys.End}
+	nav := []key.Binding{
+		key.NewBinding(key.WithKeys("up"), key.WithHelp("↑/↓/←/→", "navigate")),
+		key.NewBinding(key.WithKeys("pgup"), key.WithHelp("PgUp/PgDn", "page up/down")),
+		key.NewBinding(key.WithKeys("home"), key.WithHelp("Home/End", "top/bottom")),
+	}
 	if len(m.tabs) > 1 {
 		nav = append(nav, tui.Keys.CycleTab, tui.Keys.CycleShiftTab)
 	}
 
 	return [][]key.Binding{
 		nav,
-		{tui.Keys.EnvRefresh, tui.Keys.EnvAddVar, tui.Keys.EnvInsert, tui.Keys.EnvDelete, tui.Keys.EnvReorderU, tui.Keys.EnvReorderD},
-		{tui.Keys.Tab, tui.Keys.Enter, tui.Keys.Esc, tui.Keys.ToggleLog, tui.Keys.ForceQuit},
+		{
+			tui.Keys.EnvRefresh,
+			tui.Keys.EnvAddVar,
+			tui.Keys.EnvInsert,
+			tui.Keys.EnvDelete,
+			key.NewBinding(key.WithKeys("ctrl+up"), key.WithHelp("Ctrl+↑/↓", "reorder row")),
+			key.NewBinding(key.WithKeys("ctrl+z"), key.WithHelp("Ctrl+Z/Y", "undo/redo")),
+			key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("Ctrl+C", "copy value/selection")),
+			key.NewBinding(key.WithKeys("shift+left"), key.WithHelp("Shift+←/→/Home/End", "select text")),
+			tui.Keys.EnvEditValue,
+			key.NewBinding(key.WithKeys("ctrl+ "), key.WithHelp("right-click/Ctrl+Space", "value options")),
+		},
+		{tui.Keys.Tab, tui.Keys.Enter, tui.Keys.Esc, tui.Keys.ToggleLog, tui.Keys.Help, tui.Keys.ForceQuit},
 	}
 }
 
@@ -945,7 +1005,7 @@ func (m *TabbedVarsEditorModel) SetSize(width, height int) {
 		m.editorHeight = 1
 	}
 
-	editorWidth := m.contentWidth // Editor content width is the same as dialog content width
+	editorWidth := m.contentWidth - 2 // Editor content width accounts for inner box borders (+2)
 	if editorWidth < 10 {
 		editorWidth = 10
 	}
@@ -1114,18 +1174,25 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitReg
 			totalTitleWidth += w
 		}
 
-		// Replicate RenderBorderedBoxCtx centering logic for the title/tabs row
-		actualWidth := m.contentWidth
+		// Replicate RenderBorderedBoxCtx centering logic for the title/tabs row.
+		// Inner box content width = m.contentWidth - 2 (accounts for inner box borders).
+		innerContentW := m.contentWidth - 2
+		if innerContentW < 1 {
+			innerContentW = 1
+		}
+		actualWidth := innerContentW
 		if totalTitleWidth > actualWidth {
 			actualWidth = totalTitleWidth
 		}
 
 		leftPad := 0
 		if ctx.SubmenuTitleAlign != "left" {
-			leftPad = (m.width - 2 - totalTitleWidth) / 2
+			leftPad = (actualWidth - totalTitleWidth) / 2
 		}
 
-		tabX := offsetX + 1 + leftPad // start after dialog Border.TopLeft
+		// Tabs are in the top border of the inner box.
+		// Inner box starts at offsetX+1 (inside outer border), tabs start after inner TopLeft corner.
+		tabX := offsetX + 2 + leftPad // outer border(1) + inner border TopLeft(1) + leftPad
 		for i, tabWidth := range tabWidths {
 			regions = append(regions, tui.HitRegion{
 				ID:     "tabbed_vars.tab-" + strconv.Itoa(i),
@@ -1140,12 +1207,12 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitReg
 	}
 
 	// Editor hit region
-	// Editor starts after outer border, subtitle, inner border/tabs row
+	// Editor content is inside both outer border and inner border.
 	regions = append(regions, tui.HitRegion{
 		ID:     "tabbed_vars.editor",
-		X:      offsetX + 1,
-		Y:      offsetY + 1 + m.subtitleHeight + 1, // outer border + subtitle + inner border/tabs
-		Width:  m.contentWidth,
+		X:      offsetX + 2,                         // outer border(1) + inner border(1)
+		Y:      offsetY + 1 + m.subtitleHeight + 1,  // outer border + subtitle + inner border/tabs
+		Width:  m.contentWidth - 2,                  // inner box content width
 		Height: m.editorHeight,
 		ZOrder: tui.ZDialog + 5,
 	})
@@ -1186,58 +1253,313 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 		return nil
 	}
 
-	// Determine built-in default, stripping any surrounding quotes so we can
-	// re-quote uniformly when writing back to the editor.
-	rawDefault := tab.builtinDefaults[varName]
-	cleanDefault := strings.Trim(rawDefault, "'\"")
+	// Get current value first so we can offer "Original Value" in the submenu.
+	currentVal := editor.GetVariableValue(varName)
 
-	// Get predefined option list (may include a "Default Value" entry when cleanDefault != "").
-	opts := appenv.GetVarOptions(varName, strings.ToUpper(tab.spec.App), cleanDefault)
-
-	var items []tui.ContextMenuItem
-
-	// One item per predefined option; values are stored unquoted in VarOption so we quote here.
-	for _, opt := range opts {
-		opt := opt // capture for closure
-		vn := varName
-		items = append(items, tui.ContextMenuItem{
-			Label: opt.Display,
-			Help:  opt.Help,
-			Action: func() tea.Msg {
-				return tui.CloseDialogMsg{Result: ApplyVarValueMsg{VarName: vn, Value: "'" + opt.Value + "'"}}
-			},
-		})
-	}
-
-	// Separator before the footer items.
-	if len(items) > 0 {
-		items = append(items, tui.ContextMenuItem{IsSeparator: true})
-	}
-
-	// "Reset to Default" when a built-in default is known.
-	if rawDefault != "" {
-		vn := varName
-		rv := "'" + cleanDefault + "'"
-		items = append(items, tui.ContextMenuItem{
-			Label: "Reset to Default",
-			Help:  "Reset this variable to its built-in default value.",
-			Action: func() tea.Msg {
-				return tui.CloseDialogMsg{Result: ApplyVarValueMsg{VarName: vn, Value: rv}}
-			},
-		})
-	}
-
-	// "Refresh" is always available (equivalent to F5).
-	items = append(items, tui.ContextMenuItem{
-		Label: "Refresh",
-		Help:  "Refresh the variable list (same as F5).",
+	// Build "Set Value" submenu: "Original Value" first, then GetVarOptions presets.
+	opts := appenv.GetVarOptions(varName, strings.ToUpper(tab.spec.App), tab.builtinDefaults[varName])
+	var subItems []tui.ContextMenuItem
+	// Prepend "Original Value" so the user can always revert.
+	origVn := varName
+	origV := currentVal
+	subItems = append(subItems, tui.ContextMenuItem{
+		Label:    "Original Value",
+		SubLabel: origV,
+		Help:     "Keep the current value as-is.",
 		Action: func() tea.Msg {
-			return tui.CloseDialogMsg{Result: tea.Cmd(m.refreshEnv)}
+			return tui.CloseDialogMsg{Result: ApplyVarValueMsg{VarName: origVn, Value: origV}}
+		},
+	})
+	for _, opt := range opts {
+		opt := opt
+		vn := varName
+		subItems = append(subItems, tui.ContextMenuItem{
+			Label:    opt.Display,
+			SubLabel: opt.Value,
+			Help:     opt.Help,
+			Action: func() tea.Msg {
+				return tui.CloseDialogMsg{Result: ApplyVarValueMsg{VarName: vn, Value: opt.Value}}
+			},
+		})
+	}
+
+	// Main menu: Edit Value | Set Value ▶ | Copy | Paste Value
+	var items []tui.ContextMenuItem
+	{
+		evVarName := varName
+		evOrigVal := currentVal
+		evOpts := make([]appenv.VarOption, len(opts)+1)
+		evOpts[0] = appenv.VarOption{Display: "Original Value", Value: evOrigVal, Help: "Restore the value from before editing."}
+		copy(evOpts[1:], opts)
+		evTab := tab
+		items = append(items, tui.ContextMenuItem{
+			Label: "Edit Value",
+			Help:  "Open the value editor for this variable.",
+			Action: func() tea.Msg {
+				dlg := newSetValueDialog(evVarName, evTab.niceName, evTab.description, evOrigVal, evOpts)
+				return tui.CloseDialogMsg{Result: tui.ShowDialogMsg{Dialog: dlg}}
+			},
+		})
+	}
+	items = append(items, tui.ContextMenuItem{
+		Label:    "Set Value",
+		Help:     "Choose or reset this variable's value.",
+		SubItems: subItems,
+	})
+	selectedText := editor.GetSelectedText()
+	copyText := selectedText
+	if copyText == "" {
+		copyText = currentVal
+	}
+	copyLabel := "Copy Value"
+	if selectedText != "" {
+		copyLabel = "Copy Selection"
+	}
+	ct := copyText
+	items = append(items, tui.ContextMenuItem{
+		Label: copyLabel,
+		Help:  "Copy to clipboard.",
+		Action: func() tea.Msg {
+			_ = clipboard.WriteAll(ct)
+			return tui.CloseDialogMsg{}
+		},
+	})
+	vn2 := varName
+	items = append(items, tui.ContextMenuItem{
+		Label: "Paste Value",
+		Help:  "Replace the entire variable value with clipboard text.",
+		Action: func() tea.Msg {
+			text, err := clipboard.ReadAll()
+			if err != nil || text == "" {
+				return tui.CloseDialogMsg{}
+			}
+			return tui.CloseDialogMsg{Result: ApplyVarValueMsg{VarName: vn2, Value: text}}
 		},
 	})
 
 	return func() tea.Msg {
 		return tui.ShowDialogMsg{Dialog: tui.NewContextMenuModel(x, y, m.width, m.height, items)}
+	}
+}
+
+// showAddVarMenu builds and shows an "Add Variable" context menu for the active tab.
+// For app tabs (IsGlobal, non-empty App) it offers template prefixes, stock variables
+// not yet in the editor, and an "Add All" option. For other tabs it falls back to a
+// free-form PromptText dialog.
+func (m *TabbedVarsEditorModel) showAddVarMenu() tea.Cmd {
+	if len(m.tabs) == 0 {
+		return nil
+	}
+	tab := &m.tabs[m.activeTab]
+
+	// Non-app tabs: free-form name prompt.
+	if tab.spec.App == "" || !tab.spec.IsGlobal {
+		return func() tea.Msg {
+			keyName, err := tui.PromptText("Add Variable", "Enter new variable name:", false)
+			if err == nil && keyName != "" {
+				return envAddVarMsg{key: strings.TrimSpace(strings.ToUpper(keyName))}
+			}
+			return nil
+		}
+	}
+
+	appUpper := strings.ToUpper(tab.spec.App)
+	editor := tab.editor
+
+	// --- Template items (prefix + user-completed suffix via PromptText) ---
+	type tpl struct {
+		prefix string
+		label  string
+		help   string
+	}
+	templates := []tpl{
+		{appUpper + "__", appUpper + "__…", "Complete this with any variable name you want."},
+		{appUpper + "__ENVIRONMENT_", appUpper + "__ENVIRONMENT_…", "Complete with a var for the environment: section of your override."},
+		{appUpper + "__PORT_", appUpper + "__PORT_…", "Complete with a port number for the ports: section of your override."},
+		{appUpper + "__VOLUME_", appUpper + "__VOLUME_…", "Complete with a path for the volumes: section of your override."},
+	}
+
+	var items []tui.ContextMenuItem
+	for _, t := range templates {
+		t := t
+		items = append(items, tui.ContextMenuItem{
+			Label: t.label,
+			Help:  t.help,
+			Action: func() tea.Msg {
+				return tui.CloseDialogMsg{Result: envAddVarTemplateMsg{prefix: t.prefix}}
+			},
+		})
+	}
+
+	// --- Stock variables (only those not already present in the editor) ---
+	type stock struct {
+		name string
+		help string
+	}
+	allStock := []stock{
+		{appUpper + "__CONTAINER_NAME", "Used in the container_name: section of your override."},
+		{appUpper + "__HOSTNAME", "Used in the hostname: section of your override."},
+		{appUpper + "__NETWORK_MODE", "Used in the network_mode: section of your override."},
+		{appUpper + "__RESTART", "Used in the restart: section of your override."},
+		{appUpper + "__TAG", "Used in the image: tag section of your override."},
+	}
+
+	// Include ENABLED for builtin apps that don't yet have it.
+	if appenv.IsAppBuiltIn(appUpper) && !editor.HasVariable(appUpper+"__ENABLED") {
+		allStock = append([]stock{{
+			appUpper + "__ENABLED",
+			"Creating this variable causes DockSTARTer to manage this app with no override needed.",
+		}}, allStock...)
+	}
+
+	var missingStock []stock
+	for _, s := range allStock {
+		if !editor.HasVariable(s.name) {
+			missingStock = append(missingStock, s)
+		}
+	}
+
+	if len(missingStock) > 0 {
+		items = append(items, tui.ContextMenuItem{IsSeparator: true})
+
+		// "Add All" option
+		addAllVars := make([]string, 0, len(missingStock))
+		addAllDefaults := make(map[string]string, len(missingStock))
+		for _, s := range missingStock {
+			addAllVars = append(addAllVars, s.name)
+			addAllDefaults[s.name] = tab.builtinDefaults[s.name]
+		}
+		av := addAllVars
+		ad := addAllDefaults
+		items = append(items, tui.ContextMenuItem{
+			Label: "Add All Stock Variables",
+			Help:  "Add all stock variables listed below with their default values.",
+			Action: func() tea.Msg {
+				return tui.CloseDialogMsg{Result: envAddAllStockMsg{vars: av, defaults: ad}}
+			},
+		})
+
+		// Individual stock items
+		for _, s := range missingStock {
+			s := s
+			defVal := tab.builtinDefaults[s.name]
+			items = append(items, tui.ContextMenuItem{
+				Label:    s.name,
+				SubLabel: defVal,
+				Help:     s.help,
+				Action: func() tea.Msg {
+					return tui.CloseDialogMsg{Result: envAddVarMsg{key: s.name}}
+				},
+			})
+		}
+	}
+
+	// Position menu near the editor top-left
+	x := m.lastOffsetX + 2
+	y := m.lastOffsetY + 2 + m.subtitleHeight
+	return func() tea.Msg {
+		return tui.ShowDialogMsg{Dialog: tui.NewContextMenuModel(x, y, m.width, m.height, items)}
+	}
+}
+
+// showAddVarDialog opens the Add Variable dialog (ctrl+a) for the active app tab.
+// Falls back to the free-form PromptText for non-app tabs.
+func (m *TabbedVarsEditorModel) showAddVarDialog() tea.Cmd {
+	if len(m.tabs) == 0 {
+		return nil
+	}
+	tab := &m.tabs[m.activeTab]
+
+	// Non-app tabs: free-form name prompt.
+	if tab.spec.App == "" || !tab.spec.IsGlobal {
+		return func() tea.Msg {
+			keyName, err := tui.PromptText("Add Variable", "Enter new variable name:", false)
+			if err == nil && keyName != "" {
+				return envAddVarMsg{key: strings.TrimSpace(strings.ToUpper(keyName))}
+			}
+			return nil
+		}
+	}
+
+	appUpper := strings.ToUpper(tab.spec.App)
+	editor := tab.editor
+
+	templates := []struct{ prefix, label, help string }{
+		{appUpper + "__", appUpper + "__…", "Complete this with any variable name you want."},
+		{appUpper + "__ENVIRONMENT_", appUpper + "__ENVIRONMENT_…", "Complete with a var for the environment: section of your override."},
+		{appUpper + "__PORT_", appUpper + "__PORT_…", "Complete with a port number for the ports: section of your override."},
+		{appUpper + "__VOLUME_", appUpper + "__VOLUME_…", "Complete with a path for the volumes: section of your override."},
+	}
+
+	type stockDef struct {
+		name string
+		help string
+	}
+	allStock := []stockDef{
+		{appUpper + "__CONTAINER_NAME", "Used in the container_name: section of your override."},
+		{appUpper + "__HOSTNAME", "Used in the hostname: section of your override."},
+		{appUpper + "__NETWORK_MODE", "Used in the network_mode: section of your override."},
+		{appUpper + "__RESTART", "Used in the restart: section of your override."},
+		{appUpper + "__TAG", "Used in the image: tag section of your override."},
+	}
+	if appenv.IsAppBuiltIn(appUpper) && !editor.HasVariable(appUpper+"__ENABLED") {
+		allStock = append([]stockDef{{appUpper + "__ENABLED", "Creating this variable causes DockSTARTer to manage this app with no override needed."}}, allStock...)
+	}
+
+	var stockItems []addVarItem
+	addAllVars := make([]string, 0)
+	addAllDefaults := make(map[string]string)
+	for _, s := range allStock {
+		if !editor.HasVariable(s.name) {
+			defVal := tab.builtinDefaults[s.name]
+			stockItems = append(stockItems, addVarItem{
+				kind:     addVarKindStock,
+				name:     s.name,
+				label:    s.name,
+				subLabel: defVal,
+				help:     s.help,
+			})
+			addAllVars = append(addAllVars, s.name)
+			addAllDefaults[s.name] = defVal
+		}
+	}
+
+	dlg := newAddVarDialog(tab.niceName, tab.description, templates, stockItems, addAllVars, addAllDefaults)
+	return func() tea.Msg {
+		return tui.ShowDialogMsg{Dialog: dlg}
+	}
+}
+
+// showSetValueDialog opens the Set Value dialog (F2) for the current variable row.
+func (m *TabbedVarsEditorModel) showSetValueDialog() tea.Cmd {
+	if len(m.tabs) == 0 {
+		return nil
+	}
+	tab := &m.tabs[m.activeTab]
+	editor := tab.editor
+	meta, ok := editor.CurrentLineMeta()
+	if !ok || !meta.IsVariable {
+		return nil
+	}
+	varName := meta.Text
+	if idx := strings.Index(varName, "="); idx > 0 {
+		varName = strings.TrimSpace(varName[:idx])
+	}
+	if varName == "" {
+		return nil
+	}
+	origVal := editor.GetVariableValue(varName)
+	appUpper := strings.ToUpper(tab.spec.App)
+	opts := appenv.GetVarOptions(varName, appUpper, tab.builtinDefaults[varName])
+	// Always offer "Original Value" first so the user can revert.
+	opts = append([]appenv.VarOption{{
+		Display: "Original Value",
+		Value:   origVal,
+		Help:    "Restore the value from before editing.",
+	}}, opts...)
+	dlg := newSetValueDialog(varName, tab.niceName, tab.description, origVal, opts)
+	return func() tea.Msg {
+		return tui.ShowDialogMsg{Dialog: dlg}
 	}
 }
 

@@ -138,12 +138,20 @@ func (m *HelpDialogModel) ViewString() string {
 		if maxLineWidth > targetWidth {
 			maxLineWidth = targetWidth
 		}
-		// Separator between context and key bindings
 		sepChar := "─"
 		if !GetActiveContext().LineCharacters {
 			sepChar = "-"
 		}
-		contextLines = append(contextLines, sepStyle.Render(strings.Repeat(sepChar, maxLineWidth)))
+		sep := sepStyle.Render(strings.Repeat(sepChar, maxLineWidth))
+
+		// Only add separators (above and below context) when vertical space allows.
+		// Available height: screen height minus halo(2) + border(2) + title(1) = 5 overhead.
+		_, availH := GetAvailableDialogSize(m.width, m.height)
+		totalWithSeps := len(contextLines) + 2 + len(bindingLines)
+		if totalWithSeps <= availH-5 {
+			contextLines = append([]string{sep}, contextLines...)
+		}
+		contextLines = append(contextLines, sep)
 	}
 
 	// Combine: context (if any) then key bindings
