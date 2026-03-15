@@ -729,7 +729,8 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 	case envAddVarMsg:
 		if len(m.tabs) > 0 {
-			m.tabs[m.activeTab].editor.AddVariable(msg.key, "")
+			tab := &m.tabs[m.activeTab]
+			tab.editor.AddVariable(msg.key, tab.builtinDefaults[msg.key])
 		}
 		return m, nil
 	case envAddVarTemplateMsg:
