@@ -50,7 +50,7 @@ func hitIDToPanelID(hitID string) string {
 
 	// 4b. Scrollable list regions in dialogs: map to IDListPanel so wheel uses
 	// hover+LayerWheelMsg routing instead of the focus-snap generic path.
-	if effectiveID == "setvalue_list" {
+	if effectiveID == "setvalue_list" || effectiveID == "addvar_list" {
 		return IDListPanel
 	}
 
