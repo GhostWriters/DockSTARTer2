@@ -287,7 +287,19 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Clear current dialog and try to pop from stack
 		m.dialog = nil
 		if len(m.dialogStack) > 0 {
-			// Pop from stack
+			// If the Result needs to reach the active screen (e.g. ApplyVarValueMsg from a
+			// context submenu), drain the entire stack and forward rather than restoring the
+			// parent dialog, which would swallow the result.
+			if shouldForwardResult(msg.Result) {
+				m.dialogStack = nil
+				if m.activeScreen != nil {
+					fwd := msg.Result
+					return m, func() tea.Msg { return fwd }
+				}
+				return m, nil
+			}
+
+			// Normal case: pop parent dialog from stack
 			m.dialog = m.dialogStack[len(m.dialogStack)-1]
 			m.dialogStack = m.dialogStack[:len(m.dialogStack)-1]
 
@@ -590,8 +602,8 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			m.setHeaderFocus(HeaderFocusFlags)
 			return m, nil, true
 		} else if m.dialog != nil {
-			// Dialog open: Do not allow tab cycling into the header. Focus just stays in dialog.
-			return m, nil, true
+			// Dialog open: pass Tab through to the dialog (not handled here).
+			return m, nil, false
 		} else if m.backdrop.header.GetFocus() == HeaderFocusFlags {
 			m.setHeaderFocus(HeaderFocusApp)
 			return m, nil, true
@@ -624,9 +636,8 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		} else {
 			// From screen to header (tmpl)
 			if m.dialog != nil {
-				// Dialog open: Skip header, go to LogPanel
-				m.setLogPanelFocus(true)
-				return m, nil, true
+				// Dialog open: pass ShiftTab through to the dialog (not handled here).
+				return m, nil, false
 			}
 			m.setHeaderFocus(HeaderFocusTmpl)
 			return m, nil, true
@@ -719,4 +730,21 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	}
 
 	return m, nil, false
+}
+
+// shouldForwardResult reports whether a CloseDialogMsg.Result needs to be
+// forwarded to the active screen rather than silently dropped.
+// Bool and promptResultMsg are consumed internally by pending channel listeners;
+// everything else (e.g. ApplyVarValueMsg from a context menu) must reach the screen.
+func shouldForwardResult(result any) bool {
+	if result == nil {
+		return false
+	}
+	if _, ok := result.(bool); ok {
+		return false
+	}
+	if _, ok := result.(promptResultMsg); ok {
+		return false
+	}
+	return true
 }

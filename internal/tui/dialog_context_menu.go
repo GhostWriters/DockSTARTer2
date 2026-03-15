@@ -10,10 +10,20 @@ import (
 
 // ContextMenuItem is a single entry in a ContextMenuModel.
 type ContextMenuItem struct {
-	Label       string  // Displayed text (ignored when IsSeparator is true)
-	Help        string  // Optional help text (shown in helpline when item is focused)
-	IsSeparator bool    // When true, renders as a horizontal divider and is not selectable
-	Action      tea.Cmd // Executed when the item is selected; should close the dialog itself
+	Label       string            // Displayed text (ignored when IsSeparator is true)
+	SubLabel    string            // Optional second line shown below Label (e.g. the actual value)
+	Help        string            // Optional help text (shown in helpline when item is focused)
+	IsSeparator bool              // When true, renders as a horizontal divider and is not selectable
+	Action      tea.Cmd          // Executed when the item is selected; should close the dialog itself
+	SubItems    []ContextMenuItem // When non-empty, selecting opens a submenu instead of Action
+}
+
+// itemHeight returns the number of display rows an item occupies (2 if it has a SubLabel).
+func itemHeight(item ContextMenuItem) int {
+	if !item.IsSeparator && item.SubLabel != "" {
+		return 2
+	}
+	return 1
 }
 
 // ContextMenuModel is a small positioned popup menu that appears near the cursor.
@@ -81,6 +91,11 @@ func (m *ContextMenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.moveCursor(1)
 		case key.Matches(msg, Keys.Enter):
 			return m, m.executeSelected()
+		case key.Matches(msg, Keys.Right):
+			// Right arrow opens a submenu if the focused item has one.
+			if m.cursor >= 0 && m.cursor < len(m.items) && len(m.items[m.cursor].SubItems) > 0 {
+				return m, m.executeSelected()
+			}
 		case key.Matches(msg, Keys.Esc):
 			return m, func() tea.Msg { return CloseDialogMsg{} }
 		}
@@ -115,9 +130,41 @@ func (m *ContextMenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.scrollBy(-1)
 		}
+
+	case tea.MouseMotionMsg:
+		// Update the highlighted item on mouse hover so HelpText() reflects the
+		// item under the cursor. model_update.go calls h.HelpText() after every
+		// dialog Update(), so the helpline updates automatically.
+		idx := m.itemIndexAt(msg.X, msg.Y)
+		if idx >= 0 && idx < len(m.items) && !m.items[idx].IsSeparator {
+			m.cursor = idx
+			if m.cursor < m.offset {
+				m.offset = m.cursor
+			}
+			if m.cursor >= m.offset+m.maxVisible {
+				m.offset = m.cursor - m.maxVisible + 1
+			}
+		}
 	}
 
 	return m, nil
+}
+
+// itemIndexAt returns the absolute item index at screen coordinates (x, y),
+// or -1 if the coordinates are outside the menu content area.
+func (m *ContextMenuModel) itemIndexAt(x, y int) int {
+	// Content rows begin at menuY+1 (inside the top border).
+	rowY := m.menuY + 1
+	absIdx := m.offset
+	for _, item := range m.visibleItems() {
+		h := itemHeight(item)
+		if y >= rowY && y < rowY+h && x >= m.menuX+1 && x < m.menuX+m.menuW+3 {
+			return absIdx
+		}
+		rowY += h
+		absIdx++
+	}
+	return -1
 }
 
 // ViewString renders the context menu as a string.
@@ -130,6 +177,7 @@ func (m *ContextMenuModel) ViewString() string {
 	bgStyle := SemanticStyle("{{|Theme_Dialog|}}")
 	normalStyle := SemanticStyle("{{|Theme_Item|}}")
 	selectedStyle := SemanticStyle("{{|Theme_ItemSelected|}}")
+	subLabelStyle := SemanticStyle("{{|Theme_HelpItem|}}")
 
 	// Compute which items are visible
 	visible := m.visibleItems()
@@ -149,6 +197,9 @@ func (m *ContextMenuModel) ViewString() string {
 		}
 
 		label := item.Label
+		if len(item.SubItems) > 0 {
+			label += " ▶"
+		}
 		// Truncate if needed
 		if lipgloss.Width(label) > m.menuW {
 			label = TruncateRight(label, m.menuW)
@@ -162,8 +213,30 @@ func (m *ContextMenuModel) ViewString() string {
 
 		if absIdx == m.cursor {
 			lines = append(lines, MaintainBackground(selectedStyle.Render(line), selectedStyle))
+			if item.SubLabel != "" {
+				sl := item.SubLabel
+				if lipgloss.Width(sl) > m.menuW {
+					sl = TruncateRight(sl, m.menuW)
+				}
+				slPad := m.menuW - lipgloss.Width(sl)
+				if slPad < 0 {
+					slPad = 0
+				}
+				lines = append(lines, MaintainBackground(selectedStyle.Render(" "+sl+strings.Repeat(" ", slPad)+" "), selectedStyle))
+			}
 		} else {
 			lines = append(lines, MaintainBackground(normalStyle.Render(line), bgStyle))
+			if item.SubLabel != "" {
+				sl := item.SubLabel
+				if lipgloss.Width(sl) > m.menuW {
+					sl = TruncateRight(sl, m.menuW)
+				}
+				slPad := m.menuW - lipgloss.Width(sl)
+				if slPad < 0 {
+					slPad = 0
+				}
+				lines = append(lines, MaintainBackground(subLabelStyle.Background(bgStyle.GetBackground()).Render(" "+sl+strings.Repeat(" ", slPad)+" "), bgStyle))
+			}
 		}
 		absIdx++
 	}
@@ -228,7 +301,7 @@ func (m *ContextMenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 
 	// The full box (border included) as a background catch-all
 	totalW := m.menuW + 2 + 2 // content + 2 padding + 2 border
-	totalH := m.visibleCount() + 2
+	totalH := m.menuH + 2     // menuH is already in display rows
 	regions = append(regions, HitRegion{
 		ID:     "ctxmenu.bg",
 		X:      m.menuX,
@@ -243,18 +316,19 @@ func (m *ContextMenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	absIdx := m.offset
 	rowY := m.menuY + 1
 	for _, item := range visible {
+		h := itemHeight(item)
 		if !item.IsSeparator {
 			regions = append(regions, HitRegion{
 				ID:     "ctxmenu.item-" + itoa(absIdx),
 				X:      m.menuX + 1,
 				Y:      rowY,
 				Width:  m.menuW + 2, // content + 2 padding spaces
-				Height: 1,
+				Height: h,
 				ZOrder: ZDialog + 10,
 			})
 		}
 		absIdx++
-		rowY++
+		rowY += h
 	}
 	return regions
 }
@@ -270,13 +344,20 @@ func (m *ContextMenuModel) HelpText() string {
 // --- internal helpers ---
 
 func (m *ContextMenuModel) recalculate() {
-	// Compute content width = max label length, capped to screen
+	// Compute content width = max label/sublabel length, capped to screen.
+	// Items with SubItems get a " ▶" suffix (2 extra columns).
 	maxW := 0
 	for _, item := range m.items {
 		if !item.IsSeparator {
 			w := lipgloss.Width(item.Label)
+			if len(item.SubItems) > 0 {
+				w += 2 // " ▶"
+			}
 			if w > maxW {
 				maxW = w
+			}
+			if sw := lipgloss.Width(item.SubLabel); sw > maxW {
+				maxW = sw
 			}
 		}
 	}
@@ -296,15 +377,24 @@ func (m *ContextMenuModel) recalculate() {
 	}
 	m.menuW = maxW
 
-	// Visible item count
-	visible := len(m.items)
-	if visible > m.maxVisible {
-		visible = m.maxVisible
+	// Visible item count (capped to maxVisible items).
+	visibleItems := len(m.items)
+	if visibleItems > m.maxVisible {
+		visibleItems = m.maxVisible
 	}
-	m.menuH = visible
 
-	// Total box height = items + 2 border
-	totalBoxH := visible + 2
+	// Total display rows = sum of itemHeight for each visible item.
+	visibleRows := 0
+	for i, item := range m.items {
+		if i >= visibleItems {
+			break
+		}
+		visibleRows += itemHeight(item)
+	}
+	m.menuH = visibleRows
+
+	// Total box height = rows + 2 border
+	totalBoxH := visibleRows + 2
 
 	// Compute position: prefer right/below click
 	x := m.clickX + 1
@@ -385,10 +475,25 @@ func (m *ContextMenuModel) scrollBy(delta int) {
 }
 
 func (m *ContextMenuModel) executeSelected() tea.Cmd {
-	if m.cursor >= 0 && m.cursor < len(m.items) {
-		if action := m.items[m.cursor].Action; action != nil {
-			return action
+	if m.cursor < 0 || m.cursor >= len(m.items) {
+		return func() tea.Msg { return CloseDialogMsg{} }
+	}
+	item := m.items[m.cursor]
+
+	// Item with sub-items: open a child context menu positioned to the right.
+	if len(item.SubItems) > 0 {
+		subItems := item.SubItems
+		// Position submenu to the right of this menu, aligned with the selected row.
+		subClickX := m.menuX + m.menuW + 3 // right edge of parent box
+		subClickY := m.menuY + (m.cursor - m.offset)
+		sw, sh := m.screenW, m.screenH
+		return func() tea.Msg {
+			return ShowDialogMsg{Dialog: NewContextMenuModel(subClickX, subClickY, sw, sh, subItems)}
 		}
+	}
+
+	if action := item.Action; action != nil {
+		return action
 	}
 	return func() tea.Msg { return CloseDialogMsg{} }
 }

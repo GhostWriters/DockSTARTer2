@@ -62,12 +62,13 @@ type KeyMap struct {
 	MouseWheel key.Binding
 
 	// Environment Editor specific keys (shortcuts defined in textarea and tabbed_vars_editor)
-	EnvRefresh  key.Binding
-	EnvAddVar   key.Binding
-	EnvDelete   key.Binding
-	EnvReorderU key.Binding
-	EnvReorderD key.Binding
-	EnvInsert   key.Binding
+	EnvRefresh    key.Binding
+	EnvAddVar     key.Binding
+	EnvDelete     key.Binding
+	EnvReorderU   key.Binding
+	EnvReorderD   key.Binding
+	EnvInsert     key.Binding
+	EnvEditValue  key.Binding
 }
 
 // ShortHelp returns bindings shown in the compact helpline.
@@ -177,8 +178,8 @@ var Keys = KeyMap{
 		key.WithHelp("?/F1", "help"),
 	),
 	ForceQuit: key.NewBinding(
-		key.WithKeys("ctrl+c"),
-		key.WithHelp("ctrl+c", "force quit"),
+		key.WithKeys("ctrl+\\"),
+		key.WithHelp("ctrl+\\", "force quit"),
 	),
 	ToggleLog: key.NewBinding(
 		key.WithKeys("f10", "ctrl+l"),
@@ -213,5 +214,9 @@ var Keys = KeyMap{
 	EnvInsert: key.NewBinding(
 		key.WithKeys("ctrl+o"),
 		key.WithHelp("ctrl+o", "insert row"),
+	),
+	EnvEditValue: key.NewBinding(
+		key.WithKeys("f2"),
+		key.WithHelp("F2", "edit value"),
 	),
 }

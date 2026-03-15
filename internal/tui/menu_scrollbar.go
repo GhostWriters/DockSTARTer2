@@ -13,6 +13,9 @@ import (
 // This slot is always reserved (space when scrollbar is off, track/thumb when on).
 const ScrollbarGutterWidth = 1
 
+// IsScrollbarEnabled reports whether the scrollbar is enabled in the current config.
+func IsScrollbarEnabled() bool { return currentConfig.UI.Scrollbar }
+
 // ScrollbarInfo describes the geometry of a rendered scrollbar column.
 // It is returned by applyScrollbarColumnTracked so callers can compute hit regions.
 type ScrollbarInfo struct {

@@ -48,6 +48,12 @@ func hitIDToPanelID(hitID string) string {
 		return effectiveID
 	}
 
+	// 4b. Scrollable list regions in dialogs: map to IDListPanel so wheel uses
+	// hover+LayerWheelMsg routing instead of the focus-snap generic path.
+	if effectiveID == "setvalue_list" {
+		return IDListPanel
+	}
+
 	// 5. Base Menu IDs (the background region of a MenuModel).
 	// If the user hovers the background of a menu, we still want the wheel to scroll the list.
 	// Common screen IDs are "main_menu", "config_menu", "options_menu", "app_selection", "global_flags"

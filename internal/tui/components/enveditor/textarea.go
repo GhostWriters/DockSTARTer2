@@ -43,6 +43,13 @@ type (
 	pasteErrMsg struct{ error }
 )
 
+// undoSnapshot captures editor state before a modifying operation.
+type undoSnapshot struct {
+	value    [][]rune
+	lineMeta []Line
+	row, col int
+}
+
 // KeyMap is the key bindings for different actions within the textarea.
 type KeyMap struct {
 	CharacterBackward       key.Binding
@@ -72,6 +79,17 @@ type KeyMap struct {
 
 	TransposeCharacterBackward key.Binding
 	InsertLine                 key.Binding
+	Undo                       key.Binding
+	Redo                       key.Binding
+
+	// Copy selection or value to clipboard
+	Copy key.Binding
+
+	// Keyboard text selection (shift+arrow)
+	SelectLeft  key.Binding
+	SelectRight key.Binding
+	SelectHome  key.Binding
+	SelectEnd   key.Binding
 }
 
 // DefaultKeyMap returns the default set of key bindings for navigating and acting
@@ -105,6 +123,13 @@ func DefaultKeyMap() KeyMap {
 
 		TransposeCharacterBackward: key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "transpose character backward")),
 		InsertLine:                 key.NewBinding(key.WithKeys("ctrl+o"), key.WithHelp("ctrl+o", "insert line")),
+		Undo:                       key.NewBinding(key.WithKeys("ctrl+z"), key.WithHelp("ctrl+z", "undo")),
+		Redo:                       key.NewBinding(key.WithKeys("ctrl+y", "ctrl+shift+z"), key.WithHelp("ctrl+y", "redo")),
+		Copy:                       key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "copy")),
+		SelectLeft:                 key.NewBinding(key.WithKeys("shift+left"), key.WithHelp("shift+left", "select left")),
+		SelectRight:                key.NewBinding(key.WithKeys("shift+right"), key.WithHelp("shift+right", "select right")),
+		SelectHome:                 key.NewBinding(key.WithKeys("shift+home"), key.WithHelp("shift+home", "select to start")),
+		SelectEnd:                  key.NewBinding(key.WithKeys("shift+end"), key.WithHelp("shift+end", "select to end")),
 	}
 }
 
@@ -217,6 +242,7 @@ type StyleState struct {
 	UserDefinedText  lipgloss.Style
 	ScrollbarTrack   lipgloss.Style
 	ScrollbarThumb   lipgloss.Style
+	SelectionText    lipgloss.Style
 }
 
 func (s StyleState) computedCursorLine() lipgloss.Style {
@@ -370,6 +396,23 @@ type Model struct {
 	// Scrollbar dragging state
 	isScrollbarDragging bool
 
+	// Undo/redo history
+	undoStack []undoSnapshot
+	redoStack []undoSnapshot
+
+	// DefaultValueFunc, if set, is called with the variable name when the user
+	// types '=' at the end of a new variable line. If it returns a non-empty
+	// value (not just ''), that value is automatically inserted after '='.
+	DefaultValueFunc func(varName string) string
+
+	// Text selection state (single-row, left-click drag)
+	isSelecting  bool // mouse button held, tracking drag selection
+	selActive    bool // a selection region is active
+	selRow       int  // logical row of selection
+	selAnchorCol int  // col where mouse-down occurred
+	selStartCol  int  // inclusive start col (always <= selEndCol)
+	selEndCol    int  // exclusive end col
+
 	// Total visual width set by SetWidth
 	totalWidth int
 
@@ -446,6 +489,7 @@ func DefaultStyles(isDark bool) Styles {
 		UserDefinedText:  lipgloss.NewStyle(),                                   // Inherit from text by default
 		ScrollbarTrack:   lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
 		ScrollbarThumb:   lipgloss.NewStyle().Foreground(lipgloss.Color("7")),
+		SelectionText:    lipgloss.NewStyle().Reverse(true),
 	}
 	s.Blurred = StyleState{
 		Base:             lipgloss.NewStyle(),
@@ -464,6 +508,7 @@ func DefaultStyles(isDark bool) Styles {
 		UserDefinedText:  lipgloss.NewStyle().Foreground(lipgloss.Color("2")),
 		ScrollbarTrack:   lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
 		ScrollbarThumb:   lipgloss.NewStyle().Foreground(lipgloss.Color("7")),
+		SelectionText:    lipgloss.NewStyle().Reverse(true),
 	}
 	s.Cursor = CursorStyle{
 		Color: lipgloss.Color("7"),
@@ -1044,12 +1089,127 @@ func (m *Model) SetVariableValue(varName, newValue string) bool {
 		if rowKey != varName {
 			continue
 		}
+		m.pushUndoSnapshot()
 		// Update the value portion of the line.
 		prefix := string(m.value[row][:startCol]) // includes '='
 		m.value[row] = []rune(prefix + newValue)
 		m.lineMeta[row].Text = string(m.value[row])
 		m.InvalidateCache()
 		return true
+	}
+	return false
+}
+
+// snapshot returns a deep copy of the current editor state.
+func (m *Model) snapshot() undoSnapshot {
+	valueCopy := make([][]rune, len(m.value))
+	for i, line := range m.value {
+		lc := make([]rune, len(line))
+		copy(lc, line)
+		valueCopy[i] = lc
+	}
+	metaCopy := make([]Line, len(m.lineMeta))
+	copy(metaCopy, m.lineMeta)
+	return undoSnapshot{value: valueCopy, lineMeta: metaCopy, row: m.row, col: m.col}
+}
+
+// restoreSnapshot applies a snapshot and refreshes caches.
+func (m *Model) restoreSnapshot(s undoSnapshot) {
+	m.value = s.value
+	m.lineMeta = s.lineMeta
+	m.row = clamp(s.row, 0, max(0, len(s.value)-1))
+	m.col = clamp(s.col, 0, len(m.value[m.row]))
+	m.cache = memoization.NewMemoCache[line, [][]rune](m.cache.Capacity())
+	m.InvalidateCache()
+}
+
+// pushUndoSnapshot saves a deep copy of the current editor state onto the undo stack.
+// Any new edit clears the redo stack. The stack is capped at 100 entries.
+func (m *Model) pushUndoSnapshot() {
+	m.redoStack = nil // new edit invalidates redo history
+	m.undoStack = append(m.undoStack, m.snapshot())
+	const maxUndoDepth = 100
+	if len(m.undoStack) > maxUndoDepth {
+		m.undoStack = m.undoStack[1:]
+	}
+}
+
+// Undo restores the most recent snapshot from the undo stack.
+// The current state is pushed onto the redo stack so it can be redone.
+// Returns true if a snapshot was available and restored.
+func (m *Model) Undo() bool {
+	if len(m.undoStack) == 0 {
+		return false
+	}
+	m.redoStack = append(m.redoStack, m.snapshot())
+	entry := m.undoStack[len(m.undoStack)-1]
+	m.undoStack = m.undoStack[:len(m.undoStack)-1]
+	m.restoreSnapshot(entry)
+	return true
+}
+
+// Redo reapplies the most recently undone edit.
+// Returns true if a redo snapshot was available and restored.
+func (m *Model) Redo() bool {
+	if len(m.redoStack) == 0 {
+		return false
+	}
+	m.undoStack = append(m.undoStack, m.snapshot())
+	entry := m.redoStack[len(m.redoStack)-1]
+	m.redoStack = m.redoStack[:len(m.redoStack)-1]
+	m.restoreSnapshot(entry)
+	return true
+}
+
+// ClearUndo discards all undo and redo history. Call this after a full content
+// reload (e.g. refresh) to prevent undoing across the reload boundary.
+func (m *Model) ClearUndo() {
+	m.undoStack = nil
+	m.redoStack = nil
+}
+
+// GetSelectedText returns the currently selected text, or "" if no selection is active.
+func (m *Model) GetSelectedText() string {
+	if !m.selActive || m.selRow < 0 || m.selRow >= len(m.value) {
+		return ""
+	}
+	line := m.value[m.selRow]
+	s := clamp(m.selStartCol, 0, len(line))
+	e := clamp(m.selEndCol, 0, len(line))
+	if s >= e {
+		return ""
+	}
+	return string(line[s:e])
+}
+
+// GetVariableValue returns everything after '=' for varName (raw, including any surrounding quotes), or "" if not found.
+func (m *Model) GetVariableValue(varName string) string {
+	for row, meta := range m.lineMeta {
+		if !meta.IsVariable {
+			continue
+		}
+		lineStr := string(m.value[row])
+		if eqIdx := strings.Index(lineStr, "="); eqIdx > 0 {
+			if strings.TrimSpace(lineStr[:eqIdx]) == varName {
+				return lineStr[eqIdx+1:]
+			}
+		}
+	}
+	return ""
+}
+
+// HasVariable returns true if varName exists in the editor (regardless of its value).
+func (m *Model) HasVariable(varName string) bool {
+	for row, meta := range m.lineMeta {
+		if !meta.IsVariable {
+			continue
+		}
+		lineStr := string(m.value[row])
+		if eqIdx := strings.Index(lineStr, "="); eqIdx > 0 {
+			if strings.TrimSpace(lineStr[:eqIdx]) == varName {
+				return true
+			}
+		}
 	}
 	return false
 }
@@ -1639,14 +1799,99 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		if !m.isEditableAtCursor() {
 			break
 		}
+		m.pushUndoSnapshot()
 		m.insertRunes([]rune(msg.Content), true)
 	case tea.KeyPressMsg:
 		switch {
+		case key.Matches(msg, m.KeyMap.Undo):
+			m.Undo()
+		case key.Matches(msg, m.KeyMap.Redo):
+			m.Redo()
+		case key.Matches(msg, m.KeyMap.Copy):
+			if m.selActive {
+				_ = clipboard.WriteAll(m.GetSelectedText())
+			} else if m.row >= 0 && m.row < len(m.value) {
+				lineStr := string(m.value[m.row])
+				if eqIdx := strings.Index(lineStr, "="); eqIdx >= 0 {
+					_ = clipboard.WriteAll(lineStr[eqIdx+1:])
+				} else {
+					_ = clipboard.WriteAll(lineStr)
+				}
+			}
+		case key.Matches(msg, m.KeyMap.SelectRight):
+			if !m.selActive || m.selRow != m.row {
+				m.selRow = m.row
+				m.selAnchorCol = m.col
+			}
+			if m.row == m.selRow && m.col < len(m.value[m.row]) {
+				m.col++
+			}
+			if m.row == m.selRow {
+				start, end := m.selAnchorCol, m.col
+				if start > end {
+					start, end = end, start
+				}
+				m.selStartCol = start
+				m.selEndCol = end
+				m.selActive = start < end
+			}
+		case key.Matches(msg, m.KeyMap.SelectLeft):
+			if !m.selActive || m.selRow != m.row {
+				m.selRow = m.row
+				m.selAnchorCol = m.col
+			}
+			if m.row == m.selRow && m.col > 0 {
+				m.col--
+			}
+			if m.row == m.selRow {
+				start, end := m.selAnchorCol, m.col
+				if start > end {
+					start, end = end, start
+				}
+				m.selStartCol = start
+				m.selEndCol = end
+				m.selActive = start < end
+			}
+		case key.Matches(msg, m.KeyMap.SelectEnd):
+			if !m.selActive || m.selRow != m.row {
+				m.selRow = m.row
+				m.selAnchorCol = m.col
+			}
+			if m.row == m.selRow {
+				m.col = len(m.value[m.row])
+				start, end := m.selAnchorCol, m.col
+				if start > end {
+					start, end = end, start
+				}
+				m.selStartCol = start
+				m.selEndCol = end
+				m.selActive = start < end
+			}
+		case key.Matches(msg, m.KeyMap.SelectHome):
+			if !m.selActive || m.selRow != m.row {
+				m.selRow = m.row
+				m.selAnchorCol = m.col
+			}
+			if m.row == m.selRow {
+				editStart := 0
+				if m.row < len(m.lineMeta) {
+					editStart = m.lineMeta[m.row].EditableStartCol
+				}
+				m.col = editStart
+				start, end := m.selAnchorCol, m.col
+				if start > end {
+					start, end = end, start
+				}
+				m.selStartCol = start
+				m.selEndCol = end
+				m.selActive = start < end
+			}
 		case key.Matches(msg, m.KeyMap.DeleteAfterCursor):
 			if !m.isEditableAtCursor() {
 				break
 			}
 			m.col = clamp(m.col, 0, len(m.value[m.row]))
+			m.pushUndoSnapshot()
 			if m.col >= len(m.value[m.row]) {
 				m.mergeLineBelow(m.row)
 				break
@@ -1657,6 +1902,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				break
 			}
 			m.col = clamp(m.col, 0, len(m.value[m.row]))
+			m.pushUndoSnapshot()
 			if m.col <= 0 {
 				m.mergeLineAbove(m.row)
 				break
@@ -1667,6 +1913,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				break
 			}
 			m.col = clamp(m.col, 0, len(m.value[m.row]))
+			m.pushUndoSnapshot()
 			if m.col <= 0 {
 				m.mergeLineAbove(m.row)
 				break
@@ -1684,6 +1931,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			if !m.isEditableAtCursor() {
 				break
 			}
+			m.pushUndoSnapshot()
 			if len(m.value[m.row]) > 0 && m.col < len(m.value[m.row]) {
 				if m.lineMeta[m.row].IsUserDefined && m.value[m.row][m.col] == '=' {
 					m.lineMeta[m.row].EditableStartCol = 0
@@ -1698,6 +1946,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			if !m.isBackspaceEditable() {
 				break
 			}
+			m.pushUndoSnapshot()
 			if m.col <= 0 {
 				m.mergeLineAbove(m.row)
 				break
@@ -1708,12 +1957,14 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				break
 			}
 			m.col = clamp(m.col, 0, len(m.value[m.row]))
+			m.pushUndoSnapshot()
 			if m.col >= len(m.value[m.row]) {
 				m.mergeLineBelow(m.row)
 				break
 			}
 			m.deleteWordRight()
 		case key.Matches(msg, m.KeyMap.InsertNewline):
+			m.pushUndoSnapshot()
 			if m.row < len(m.value)-1 {
 				m.CursorDown()
 				m.CursorStart()
@@ -1730,47 +1981,80 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			if m.MaxHeight > 0 && len(m.value) >= m.MaxHeight {
 				return m, nil
 			}
+			m.pushUndoSnapshot()
 			m.insertVariableAt(m.row+1, "", "")
 		case key.Matches(msg, m.KeyMap.LineEnd):
+			m.selActive = false
 			m.CursorEnd()
 		case key.Matches(msg, m.KeyMap.LineStart):
+			m.selActive = false
 			m.CursorStart()
 		case key.Matches(msg, m.KeyMap.CharacterForward):
+			m.selActive = false
 			m.characterRight()
 		case key.Matches(msg, m.KeyMap.LineNext):
+			m.selActive = false
 			m.CursorDown()
 		case key.Matches(msg, m.KeyMap.WordForward):
+			m.selActive = false
 			m.wordRight()
 		case key.Matches(msg, m.KeyMap.Paste):
 			return m, Paste
 		case key.Matches(msg, m.KeyMap.CharacterBackward):
+			m.selActive = false
 			m.characterLeft(false /* insideLine */)
 		case key.Matches(msg, m.KeyMap.LinePrevious):
+			m.selActive = false
 			m.CursorUp()
 		case key.Matches(msg, m.KeyMap.WordBackward):
+			m.selActive = false
 			m.wordLeft()
 		case key.Matches(msg, m.KeyMap.InputBegin):
+			m.selActive = false
 			m.MoveToBegin()
 		case key.Matches(msg, m.KeyMap.InputEnd):
+			m.selActive = false
 			m.MoveToEnd()
 		case key.Matches(msg, m.KeyMap.PageUp):
+			m.selActive = false
 			m.PageUp()
 		case key.Matches(msg, m.KeyMap.PageDown):
+			m.selActive = false
 			m.PageDown()
 		case key.Matches(msg, m.KeyMap.LowercaseWordForward):
+			m.pushUndoSnapshot()
 			m.lowercaseRight()
 		case key.Matches(msg, m.KeyMap.UppercaseWordForward):
+			m.pushUndoSnapshot()
 			m.uppercaseRight()
 		case key.Matches(msg, m.KeyMap.CapitalizeWordForward):
+			m.pushUndoSnapshot()
 			m.capitalizeRight()
 		case key.Matches(msg, m.KeyMap.TransposeCharacterBackward):
+			m.pushUndoSnapshot()
 			m.transposeLeft()
 
 		default:
 			if !m.isEditableAtCursor() {
 				break
 			}
+			m.pushUndoSnapshot()
 			m.insertRunesFromUserInput([]rune(msg.Text))
+			// When '=' is typed at the end of a line with no existing value,
+			// auto-fill the default value if one is known.
+			if msg.Text == "=" && m.DefaultValueFunc != nil {
+				lineStr := string(m.value[m.row])
+				eqIdx := strings.Index(lineStr, "=")
+				if eqIdx >= 0 && strings.Count(lineStr, "=") == 1 && len(lineStr) == eqIdx+1 {
+					varName := strings.TrimSpace(lineStr[:eqIdx])
+					if varName != "" {
+						def := m.DefaultValueFunc(varName)
+						if def != "" && def != "''" {
+							m.insertRunesFromUserInput([]rune(def))
+						}
+					}
+				}
+			}
 		}
 
 	case tea.MouseClickMsg:
@@ -1794,6 +2078,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		if !m.isEditableAtCursor() {
 			break
 		}
+		m.pushUndoSnapshot()
 		m.insertRunesFromUserInput([]rune(msg))
 
 	case pasteErrMsg:
@@ -1825,6 +2110,10 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 }
 
 func (m *Model) handleMouseClick(msg tea.MouseClickMsg) {
+	// Every left-click clears any prior text selection.
+	m.selActive = false
+	m.isSelecting = false
+
 	// Gutter width (prompts + line numbers)
 	gutterWidth := m.promptWidth
 	if m.ShowLineNumbers {
@@ -1958,6 +2247,13 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) {
 				m.CursorStart() // Moves to EditableStartCol if valid
 			}
 
+			// Begin text selection anchor at the clicked position.
+			m.isSelecting = true
+			m.selRow = m.row
+			m.selAnchorCol = m.col
+			m.selStartCol = m.col
+			m.selEndCol = m.col
+
 			return
 		}
 		currViewLine += numWrapped
@@ -1987,6 +2283,44 @@ func (m *Model) handleMouseMotion(msg tea.MouseMotionMsg) {
 					m.viewport.SetYOffset(clamp(targetOffset, 0, maxOff))
 				}
 			}
+		}
+		return
+	}
+
+	if m.isSelecting {
+		gutterWidth := m.promptWidth
+		if m.ShowLineNumbers {
+			digits := max(3, numDigits(m.MaxHeight))
+			gutterWidth += digits + 2
+		}
+		targetViewLine := msg.Y + m.viewport.YOffset()
+		targetColX := msg.X - gutterWidth
+		currViewLine := 0
+		for l, lineRunes := range m.value {
+			wrappedLines := m.memoizedWrap(lineRunes, m.width)
+			numWrapped := len(wrappedLines)
+			if targetViewLine >= currViewLine && targetViewLine < currViewLine+numWrapped {
+				if l == m.selRow { // single-row selection only
+					wrappedLineIdx := targetViewLine - currViewLine
+					charIdx := 0
+					for i := 0; i < wrappedLineIdx; i++ {
+						charIdx += len(wrappedLines[i])
+					}
+					curCol := charIdx + clamp(targetColX, 0, len(wrappedLines[wrappedLineIdx]))
+					if curCol > len(lineRunes) {
+						curCol = len(lineRunes)
+					}
+					start, end := m.selAnchorCol, curCol
+					if start > end {
+						start, end = end, start
+					}
+					m.selStartCol = start
+					m.selEndCol = end
+					m.selActive = start < end
+				}
+				return
+			}
+			currViewLine += numWrapped
 		}
 		return
 	}
@@ -2041,11 +2375,13 @@ func (m *Model) handleMouseMotion(msg tea.MouseMotionMsg) {
 func (m *Model) handleMouseRelease(msg tea.MouseReleaseMsg) {
 	m.isDragging = false
 	m.isScrollbarDragging = false
+	m.isSelecting = false
+	// selActive persists — selection remains visible until the next left-click.
 }
 
-// IsDragging returns true if the user is currently dragging a line or scrollbar.
+// IsDragging returns true if the user is currently dragging a line, scrollbar, or text selection.
 func (m Model) IsDragging() bool {
-	return m.isDragging || m.isScrollbarDragging
+	return m.isDragging || m.isScrollbarDragging || m.isSelecting
 }
 
 // renderRunes formats runes with partial highlighting.
@@ -2102,6 +2438,12 @@ func (m *Model) renderRunes(runes []rune, l int, startIdx int, baseStyle lipglos
 
 	for i, r := range runes {
 		fullIdx := startIdx + i
+
+		// Selection highlight takes priority over other styles.
+		if m.selActive && l == m.selRow && fullIdx >= m.selStartCol && fullIdx < m.selEndCol {
+			b.WriteString(m.activeStyle().SelectionText.Inherit(baseStyle).Render(string(r)))
+			continue
+		}
 
 		// Key part highlighting
 		if fullIdx < meta.EditableStartCol-1 {
