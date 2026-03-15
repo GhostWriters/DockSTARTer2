@@ -535,19 +535,29 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	if key.Matches(msg, Keys.Help) {
 		var km help.KeyMap = Keys
 		var contextText string
+		// Compute the content width the help dialog will have so the provider can
+		// word-wrap at the source. Overhead: halo(4) + border(2) + padding(2) = 8.
+		availW, _ := GetAvailableDialogSize(m.width, m.height)
+		helpContentWidth := availW - 8
+		if helpContentWidth < 20 {
+			helpContentWidth = 20
+		}
+		if helpContentWidth > 120 {
+			helpContentWidth = 120
+		}
 		if m.dialog != nil {
 			if h, ok := m.dialog.(help.KeyMap); ok {
 				km = h
 			}
 			if cp, ok := m.dialog.(HelpContextProvider); ok {
-				contextText = cp.HelpContext()
+				contextText = cp.HelpContext(helpContentWidth)
 			}
 		} else if m.activeScreen != nil {
 			if h, ok := m.activeScreen.(help.KeyMap); ok {
 				km = h
 			}
 			if cp, ok := m.activeScreen.(HelpContextProvider); ok {
-				contextText = cp.HelpContext()
+				contextText = cp.HelpContext(helpContentWidth)
 			}
 		}
 		return m, logger.RecoverTUI(m.ctx, func() tea.Msg {

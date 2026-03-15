@@ -12,9 +12,11 @@ import (
 
 // HelpContextProvider is an optional interface that screens and dialogs can
 // implement to inject contextual text at the top of the help dialog.
+// contentWidth is the available display width for the help dialog content area
+// (used so the implementation can word-wrap text correctly at the source).
 // Return an empty string to omit the context section entirely.
 type HelpContextProvider interface {
-	HelpContext() string
+	HelpContext(contentWidth int) string
 }
 
 // HelpDialogModel displays a keyboard shortcut reference dialog.
@@ -77,8 +79,14 @@ func (m *HelpDialogModel) ViewString() string {
 		return ""
 	}
 
-	// Calculate target width for help content. Snugger margins for the halo/shadow.
-	targetWidth := m.layout.Width - 10
+	// Calculate target width for help content.
+	// Overhead: halo(4) + border(2) + per-line padding(2) = 8.
+	// Base on the maximized-dialog available width so we never exceed that bound.
+	availW, _ := GetAvailableDialogSize(m.width, m.height)
+	targetWidth := availW - 8
+	if targetWidth < 20 {
+		targetWidth = 20
+	}
 	if targetWidth > 120 {
 		targetWidth = 120
 	}
@@ -113,18 +121,22 @@ func (m *HelpDialogModel) ViewString() string {
 		}
 	}
 
-	// Build the context section (variable info) if provided
+	// Build the context section (variable info) if provided.
+	// The contextText is already word-wrapped to targetWidth by the HelpContextProvider.
 	var contextLines []string
 	if m.contextText != "" {
 		for _, line := range strings.Split(m.contextText, "\n") {
 			trimmed := strings.TrimRight(line, " ")
 			// Resolve semantic tags to ANSI; let the tags own all coloring.
-			// bgStyle applies the dialog background in the final pass below.
 			processed := console.ToANSI(trimmed)
 			contextLines = append(contextLines, processed)
 			if w := lipgloss.Width(processed); w > maxLineWidth {
 				maxLineWidth = w
 			}
+		}
+		// Cap at targetWidth — long values (e.g. file paths) may still exceed it.
+		if maxLineWidth > targetWidth {
+			maxLineWidth = targetWidth
 		}
 		// Separator between context and key bindings
 		sepChar := "─"
@@ -146,7 +158,7 @@ func (m *HelpDialogModel) ViewString() string {
 		allLines[i] = MaintainBackground(bgStyle.Render(paddedLine), bgStyle)
 	}
 	content := strings.Join(allLines, "\n")
-	content = MaintainBackground(bgStyle.Render(content), bgStyle)
+	// Per-line maintenance above is sufficient — no outer wrap needed
 
 	// Ensure the title is visible on the black border bar.
 	// Use the original themed Dialog background for the title text area.

@@ -29,10 +29,10 @@ const (
 	envFocusButtons
 )
 
-// headingLabelW is the right-aligned width for heading labels,
-// matching the bash menu_heading.sh LabelWidth calculation.
-// Longest label: "Current Value: " = 15 chars.
-const headingLabelW = 15
+// headingLabelW is the fixed label column width, matching bash menu_heading.sh's
+// LabelWidth which is the max across ALL possible labels: "Original Value: " = 16.
+// Using the maximum keeps values aligned at the same column across all screens.
+const headingLabelW = menuLabelW
 
 // headingLabel right-aligns label to headingLabelW (e.g. "    Variable: ").
 func headingLabel(label string) string {
@@ -1180,7 +1180,8 @@ func (m *TabbedVarsEditorModel) HasDialog() bool {
 
 // HelpContext implements tui.HelpContextProvider.
 // Returns heading-style info about the variable under the cursor shown at the top of the help dialog.
-func (m *TabbedVarsEditorModel) HelpContext() string {
+// contentWidth is the available display width (used to word-wrap descriptions).
+func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) string {
 	if m.focus != envFocusEditor || len(m.tabs) == 0 {
 		return ""
 	}
@@ -1198,49 +1199,33 @@ func (m *TabbedVarsEditorModel) HelpContext() string {
 		return ""
 	}
 
-	var lines []string
-
-	// Application block (app variables only)
-	if tab.niceName != "" {
-		appLine := headingLabel("Application: ") + "{{|Theme_HeadingValue|}}" + tab.niceName + "{{[-]}}"
-		if meta.IsUserDefined {
-			appLine += " {{|Theme_HeadingTag|}}(User Defined){{[-]}}"
-		}
-		lines = append(lines, appLine)
-		if tab.description != "" {
-			indent := strings.Repeat(" ", headingLabelW)
-			valueW := max(m.contentWidth-headingLabelW, 10)
-			for _, dl := range subtitleWrapText(tab.description, valueW) {
-				lines = append(lines, indent+"{{|Theme_HeadingAppDescription|}}"+dl+"{{[-]}}")
-			}
-		}
-		lines = append(lines, "")
-	}
-
-	// File
-	if tab.envFilePath != "" {
-		lines = append(lines, headingLabel("File: ")+"{{|Theme_Heading|}}"+tab.envFilePath+"{{[-]}}")
-	}
-
-	// Variable + user-defined tag (for global vars — app vars already tagged above)
-	varLine := headingLabel("Variable: ") + "{{|Theme_Heading|}}" + varName + "{{[-]}}"
-	if meta.IsUserDefined && tab.niceName == "" {
-		varLine += " {{|Theme_HeadingTag|}}(User Defined){{[-]}}"
-	}
-	lines = append(lines, varLine)
-
-	// Current value
+	var currentValue string
 	if idx := strings.Index(meta.Text, "="); idx > 0 {
-		lines = append(lines, headingLabel("Current Value: ")+"{{|Theme_Heading|}}"+meta.Text[idx+1:]+"{{[-]}}")
+		currentValue = meta.Text[idx+1:]
 	}
 
-	// Variable description (from known variable help)
+	// VarIsUserDefined: for app vars the IsUserDefined flag covers the var level;
+	// for global vars it means the var itself is user-defined (not in defaults).
+	varIsUserDefined := meta.IsUserDefined && tab.niceName == ""
+
+	params := MenuHeadingParams{
+		AppName:          tab.niceName,
+		AppDescription:   tab.description,
+		AppIsUserDefined: meta.IsUserDefined && tab.niceName != "",
+		FilePath:         tab.envFilePath,
+		VarName:          varName,
+		VarIsUserDefined: varIsUserDefined,
+		CurrentValue:     currentValue,
+	}
+
+	heading := FormatMenuHeading(params, contentWidth)
+
+	// Append variable description (plain text — word-wrapped at source by FormatMenuHeading
+	// for AppDescription; variable help text is appended as-is and word-wrapped in the
+	// help dialog since it may come from an external source).
 	if desc := appenv.GetVarHelpText(varName); desc != "" {
-		lines = append(lines, "")
-		for _, dl := range strings.Split(desc, "\n") {
-			lines = append(lines, dl)
-		}
+		heading += "\n\n" + desc
 	}
 
-	return strings.Join(lines, "\n")
+	return heading
 }
