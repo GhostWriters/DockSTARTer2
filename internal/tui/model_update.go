@@ -320,9 +320,19 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.backdrop.header.GetFocus() == HeaderFocusNone {
 			m.backdrop.header.SetFocus(HeaderFocusNone) // No-op, but for clarity
 		}
-		// In fact, the user wants focus to return to status bar.
-		// If we opened the flags dialog, HeaderFocusFlags was already set.
-		// So we just return.
+		// Forward any followup message or command piggybacked on Result (e.g. from context menus).
+		// Skip the known confirm (bool) and prompt (promptResultMsg) types already handled above.
+		if msg.Result != nil && m.activeScreen != nil {
+			fwd := msg.Result
+			if cmd, ok := fwd.(tea.Cmd); ok {
+				return m, cmd
+			}
+			if _, isBool := fwd.(bool); !isBool {
+				if _, isPrompt := fwd.(promptResultMsg); !isPrompt {
+					return m, func() tea.Msg { return fwd }
+				}
+			}
+		}
 		return m, nil
 
 	case UpdateHeaderMsg:

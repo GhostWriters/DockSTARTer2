@@ -92,6 +92,12 @@ type envAddVarMsg struct {
 type envSaveSuccessMsg struct{}
 type envLoadDoneMsg struct{}
 
+// ApplyVarValueMsg is dispatched by the context menu to set a variable's value in the active editor.
+type ApplyVarValueMsg struct {
+	VarName string
+	Value   string
+}
+
 func NewEnvEditorGlobal(onClose tea.Cmd) *TabbedVarsEditorModel {
 	return NewTabbedVarsEditorScreen(onClose, "Global Variables", []EnvTabSpec{
 		{Title: ".env", App: "", IsGlobal: true},
@@ -485,6 +491,11 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(m.tabs) > 0 {
 				m.tabs[m.activeTab].editor.Focus()
 
+				// Right-click opens the context menu for the clicked variable row.
+				if msg.Button == tea.MouseRight {
+					return m, m.showContextMenuForClick(msg.X, msg.Y)
+				}
+
 				// Calculate relative coordinates for the editor click
 				// Hit region is at dialogOffsetX + 2, dialogOffsetY + 2 + subtitleHeight
 				relX := msg.X - (m.lastOffsetX + 2)
@@ -698,6 +709,11 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case envAddVarMsg:
 		if len(m.tabs) > 0 {
 			m.tabs[m.activeTab].editor.AddVariable(msg.key, "")
+		}
+		return m, nil
+	case ApplyVarValueMsg:
+		if len(m.tabs) > 0 {
+			m.tabs[m.activeTab].editor.SetVariableValue(msg.VarName, msg.Value)
 		}
 		return m, nil
 	case envLoadDoneMsg:
@@ -1141,6 +1157,89 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitReg
 	return regions
 }
 
+
+// showContextMenuForClick builds and shows a right-click context menu for the variable row
+// at screen position (x, y).  Returns nil (no-op) when the click is outside a variable row.
+func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
+	if len(m.tabs) == 0 {
+		return nil
+	}
+	tab := &m.tabs[m.activeTab]
+	editor := tab.editor
+
+	// Compute which editor row was clicked.
+	// Editor content starts at: outer border (1) + subtitle + inner border/tab row (1) = lastOffsetY + 2 + subtitleHeight
+	editorTopY := m.lastOffsetY + 2 + m.subtitleHeight
+	clickedRow := (y - editorTopY) + editor.YOffset()
+
+	meta, ok := editor.LineMetaAt(clickedRow)
+	if !ok || !meta.IsVariable {
+		return nil
+	}
+
+	// Extract the variable name (everything before '=').
+	varName := meta.Text
+	if idx := strings.Index(varName, "="); idx > 0 {
+		varName = strings.TrimSpace(varName[:idx])
+	}
+	if varName == "" {
+		return nil
+	}
+
+	// Determine built-in default, stripping any surrounding quotes so we can
+	// re-quote uniformly when writing back to the editor.
+	rawDefault := tab.builtinDefaults[varName]
+	cleanDefault := strings.Trim(rawDefault, "'\"")
+
+	// Get predefined option list (may include a "Default Value" entry when cleanDefault != "").
+	opts := appenv.GetVarOptions(varName, strings.ToUpper(tab.spec.App), cleanDefault)
+
+	var items []tui.ContextMenuItem
+
+	// One item per predefined option; values are stored unquoted in VarOption so we quote here.
+	for _, opt := range opts {
+		opt := opt // capture for closure
+		vn := varName
+		items = append(items, tui.ContextMenuItem{
+			Label: opt.Display,
+			Help:  opt.Help,
+			Action: func() tea.Msg {
+				return tui.CloseDialogMsg{Result: ApplyVarValueMsg{VarName: vn, Value: "'" + opt.Value + "'"}}
+			},
+		})
+	}
+
+	// Separator before the footer items.
+	if len(items) > 0 {
+		items = append(items, tui.ContextMenuItem{IsSeparator: true})
+	}
+
+	// "Reset to Default" when a built-in default is known.
+	if rawDefault != "" {
+		vn := varName
+		rv := "'" + cleanDefault + "'"
+		items = append(items, tui.ContextMenuItem{
+			Label: "Reset to Default",
+			Help:  "Reset this variable to its built-in default value.",
+			Action: func() tea.Msg {
+				return tui.CloseDialogMsg{Result: ApplyVarValueMsg{VarName: vn, Value: rv}}
+			},
+		})
+	}
+
+	// "Refresh" is always available (equivalent to F5).
+	items = append(items, tui.ContextMenuItem{
+		Label: "Refresh",
+		Help:  "Refresh the variable list (same as F5).",
+		Action: func() tea.Msg {
+			return tui.CloseDialogMsg{Result: tea.Cmd(m.refreshEnv)}
+		},
+	})
+
+	return func() tea.Msg {
+		return tui.ShowDialogMsg{Dialog: tui.NewContextMenuModel(x, y, m.width, m.height, items)}
+	}
+}
 
 // IsScrollbarDragging returns true if the current editor is dragging a line or a scrollbar.
 func (m *TabbedVarsEditorModel) IsScrollbarDragging() bool {

@@ -1011,6 +1011,49 @@ func (m *Model) ResetCurrentVariable() bool {
 	return true
 }
 
+// LineMetaAt returns the metadata for any row by absolute index.
+// Unlike CurrentLineMeta, this does not require the cursor to be on that row.
+// Returns (Line{}, false) if row is out of range.
+func (m *Model) LineMetaAt(row int) (Line, bool) {
+	if row >= 0 && row < len(m.lineMeta) {
+		return m.lineMeta[row], true
+	}
+	return Line{}, false
+}
+
+// YOffset returns the viewport's current vertical scroll offset (first visible line index).
+func (m *Model) YOffset() int {
+	return m.viewport.YOffset()
+}
+
+// SetVariableValue finds the row for varName, replaces its value, and invalidates the cache.
+// The new value is written as-is after the '=' sign (include quoting if needed by the caller).
+// Returns true if the variable was found and updated. Read-only rows are skipped.
+func (m *Model) SetVariableValue(varName, newValue string) bool {
+	for row, meta := range m.lineMeta {
+		if !meta.IsVariable || meta.ReadOnly {
+			continue
+		}
+		// The editable start column is len(varName)+1 (position after '=').
+		// Verify this row's key matches varName.
+		startCol := meta.EditableStartCol
+		if startCol < 1 || startCol > len(m.value[row]) {
+			continue
+		}
+		rowKey := string(m.value[row][:startCol-1]) // everything before '='
+		if rowKey != varName {
+			continue
+		}
+		// Update the value portion of the line.
+		prefix := string(m.value[row][:startCol]) // includes '='
+		m.value[row] = []rune(prefix + newValue)
+		m.lineMeta[row].Text = string(m.value[row])
+		m.InvalidateCache()
+		return true
+	}
+	return false
+}
+
 // Word returns the word at the cursor position.
 // A word is delimited by spaces or line-breaks.
 func (m *Model) Word() string {
