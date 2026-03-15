@@ -95,7 +95,7 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 		lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(m.Width())
 		var content string
 		if menuItem.Tag != "" {
-			content = SemanticStyle("{{|Theme_TagKey|}}").Render(menuItem.Tag)
+			content = RenderThemeText(menuItem.Tag, SemanticStyle("{{|Theme_TagKey|}}"))
 		} else {
 			content = strutil.Repeat("─", m.Width()-2)
 		}
@@ -233,7 +233,7 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 		lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(m.Width())
 		var content string
 		if menuItem.Tag != "" {
-			content = SemanticStyle("{{|Theme_TagKey|}}").Render(menuItem.Tag)
+			content = RenderThemeText(menuItem.Tag, SemanticStyle("{{|Theme_TagKey|}}"))
 		} else {
 			content = strutil.Repeat("─", max(0, m.Width()-2))
 		}

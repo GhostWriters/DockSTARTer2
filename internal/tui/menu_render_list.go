@@ -103,7 +103,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 		if item.IsSeparator {
 			line := ""
 			if item.Tag != "" {
-				line = SemanticStyle("{{|Theme_TagKey|}}").Render(item.Tag)
+				line = RenderThemeText(item.Tag, SemanticStyle("{{|Theme_TagKey|}}"))
 			} else {
 				line = strutil.Repeat("─", listContentWidth)
 			}

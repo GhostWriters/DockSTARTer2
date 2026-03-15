@@ -150,11 +150,14 @@ func ToANSIWithPrefix(text string, prefix string, profile ...termenv.Profile) st
 	p := preferredProfile
 	if len(profile) > 0 {
 		p = profile[0]
-	} else if !isTTYGlobal && !TUIMode {
+	}
+
+	tuiMode := TUIMode || IsTUIEnabled()
+	if !isTTYGlobal && !tuiMode {
 		return Strip(text)
 	}
 
-	if p == termenv.Ascii {
+	if p == termenv.Ascii && !tuiMode {
 		return Strip(text)
 	}
 

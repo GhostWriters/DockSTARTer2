@@ -14,82 +14,104 @@ import (
 	"strings"
 )
 
+// isThemeFilePath returns true if the argument looks like a file path rather than a theme name.
+func isThemeFilePath(arg string) bool {
+	return strings.HasSuffix(arg, ".ds2theme") || strings.ContainsAny(arg, "/\\")
+}
+
 func handleTheme(ctx context.Context, group *CommandGroup) error {
 	switch group.Command {
 	case "-T", "--theme":
 		conf := config.LoadAppConfig()
-		if len(group.Args) > 0 {
-			newTheme := group.Args[0]
-			// Validate theme existence
-			themesDir := paths.GetThemesDir()
-			themePath := filepath.Join(themesDir, newTheme+".ds2theme")
-			if _, err := os.Stat(themePath); os.IsNotExist(err) {
-				logger.Error(ctx, "Theme '{{|Theme|}}%s{{[-]}}' not found in '{{|Folder|}}%s{{[-]}}'.", newTheme, themesDir)
+		if len(group.Args) == 0 {
+			// No args — show current theme
+			logger.Notice(ctx, "Current theme is: {{|Theme|}}%s{{[-]}}", theme.ThemeDisplayName(conf.UI.Theme))
+			logger.Notice(ctx, "Run '{{|UserCommand|}}%s --theme-list{{[-]}}' to see available themes.", version.CommandName)
+			return nil
+		}
+
+		arg := group.Args[0]
+
+		if isThemeFilePath(arg) {
+			// --- File import ---
+			absPath, err := filepath.Abs(arg)
+			if err != nil {
+				logger.Error(ctx, "Invalid path: %v", err)
 				return err
 			}
-
-			conf.UI.Theme = newTheme
-			// Apply theme defaults if any
-			if tf, err := theme.GetThemeFile(newTheme); err == nil && tf.Defaults != nil {
-				changes := theme.ApplyThemeDefaults(&conf, *tf.Defaults)
-				if len(changes) > 0 {
-					var lines []string
-					for k, v := range changes {
-						status := v
-						if v == "true" {
-							status = "{{|Var|}}ON{{[-]}}"
-						} else if v == "false" {
-							status = "{{|Var|}}OFF{{[-]}}"
-						} else {
-							status = fmt.Sprintf("{{|Var|}}%s{{[-]}}", v)
-						}
-						lines = append(lines, fmt.Sprintf("\t- %s: %s", k, status))
-					}
-					logger.Notice(ctx, "Applying settings from theme file:\n%s", strings.Join(lines, "\n"))
-				}
+			src, err := os.ReadFile(absPath)
+			if err != nil {
+				logger.Error(ctx, "Cannot read theme file '{{|Folder|}}%s{{[-]}}': %v", absPath, err)
+				return err
 			}
-
+			themeName := strings.TrimSuffix(filepath.Base(absPath), ".ds2theme")
+			destDir := paths.GetThemesDir()
+			if err := os.MkdirAll(destDir, 0755); err != nil {
+				logger.Error(ctx, "Failed to create themes directory: %v", err)
+				return err
+			}
+			destPath := filepath.Join(destDir, theme.UserThemeFilename(themeName))
+			if err := os.WriteFile(destPath, src, 0644); err != nil {
+				logger.Error(ctx, "Failed to write theme file: %v", err)
+				return err
+			}
+			configValue := "user://" + themeName
+			conf.UI.Theme = configValue
 			if err := config.SaveAppConfig(conf); err != nil {
 				logger.Error(ctx, "Failed to save theme setting: %v", err)
 				return err
-			} else {
-				logger.Notice(ctx, "Theme updated to: {{|Theme|}}%s{{[-]}}", newTheme)
-				// Reload theme for subsequent commands in the same execution
-				_, _ = theme.Load(newTheme, "")
 			}
-		} else {
-			// No args? Show current theme
-			logger.Notice(ctx, "Current theme is: {{|Theme|}}%s{{[-]}}", conf.UI.Theme)
-			logger.Notice(ctx, "Run '{{|UserCommand|}}%s --theme-list{{[-]}}' to see available themes.", version.CommandName)
+			logger.Notice(ctx, "Theme '{{|Theme|}}%s{{[-]}}' imported and set as active.", themeName)
+			_, _ = theme.Load(configValue, "")
+			return nil
 		}
-	case "--theme-list":
-		themesDir := paths.GetThemesDir()
-		entries, err := os.ReadDir(themesDir)
-		if err != nil {
-			logger.Error(ctx, "Failed to read themes directory: %v", err)
+
+		// --- Named theme (embedded or user://) ---
+		newTheme := arg
+		if _, err := theme.EnsureThemeExtracted(newTheme); err != nil {
+			logger.Error(ctx, "Theme '{{|Theme|}}%s{{[-]}}' not found.", theme.ThemeDisplayName(newTheme))
 			return err
 		}
-
-		var themes []string
-		for _, entry := range entries {
-			if entry.IsDir() {
-				// Basic check: does it have a theme.ini or .dialogrc?
-				themePath := filepath.Join(themesDir, entry.Name())
-				if _, err := os.Stat(filepath.Join(themePath, "theme.ini")); err == nil {
-					themes = append(themes, entry.Name())
-				} else if _, err := os.Stat(filepath.Join(themePath, ".dialogrc")); err == nil {
-					themes = append(themes, entry.Name())
+		conf.UI.Theme = newTheme
+		// Apply theme defaults if any
+		if tf, err := theme.GetThemeFile(newTheme); err == nil && tf.Defaults != nil {
+			changes := theme.ApplyThemeDefaults(&conf, *tf.Defaults)
+			if len(changes) > 0 {
+				var lines []string
+				for k, v := range changes {
+					status := v
+					if v == "true" {
+						status = "{{|Var|}}ON{{[-]}}"
+					} else if v == "false" {
+						status = "{{|Var|}}OFF{{[-]}}"
+					} else {
+						status = fmt.Sprintf("{{|Var|}}%s{{[-]}}", v)
+					}
+					lines = append(lines, fmt.Sprintf("\t- %s: %s", k, status))
 				}
+				logger.Notice(ctx, "Applying settings from theme file:\n%s", strings.Join(lines, "\n"))
 			}
 		}
+		if err := config.SaveAppConfig(conf); err != nil {
+			logger.Error(ctx, "Failed to save theme setting: %v", err)
+			return err
+		}
+		logger.Notice(ctx, "Theme updated to: {{|Theme|}}%s{{[-]}}", theme.ThemeDisplayName(newTheme))
+		_, _ = theme.Load(newTheme, "")
 
-		if len(themes) == 0 {
-			logger.Warn(ctx, "No themes found in '{{|Folder|}}%s{{[-]}}'.", themesDir)
-		} else {
-			logger.Notice(ctx, "Available themes in '{{|Folder|}}%s{{[-]}}':", themesDir)
-			for _, t := range themes {
-				logger.Notice(ctx, "  - %s", t)
+	case "--theme-list":
+		themes, err := theme.List()
+		if err != nil || len(themes) == 0 {
+			logger.Warn(ctx, "No themes found.")
+			return nil
+		}
+		logger.Notice(ctx, "Available themes:")
+		for _, t := range themes {
+			marker := ""
+			if t.IsUserTheme {
+				marker = " [user]"
 			}
+			logger.Notice(ctx, "  - %s%s", t.Name, marker)
 		}
 	}
 	return nil

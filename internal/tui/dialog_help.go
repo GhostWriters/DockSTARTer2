@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/strutil"
 	"strings"
 
@@ -8,6 +9,13 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
+
+// HelpContextProvider is an optional interface that screens and dialogs can
+// implement to inject contextual text at the top of the help dialog.
+// Return an empty string to omit the context section entirely.
+type HelpContextProvider interface {
+	HelpContext() string
+}
 
 // HelpDialogModel displays a keyboard shortcut reference dialog.
 // It integrates with AppModel via ShowDialogMsg/CloseDialogMsg.
@@ -18,7 +26,8 @@ type HelpDialogModel struct {
 
 	focused bool // tracks global focus
 
-    keyMap help.KeyMap
+	keyMap      help.KeyMap
+	contextText string // optional text shown above the key bindings
 
 	// Unified layout (deterministic sizing)
 	layout DialogLayout
@@ -29,9 +38,16 @@ func NewHelpDialogModel() *HelpDialogModel {
 }
 
 func NewHelpDialogModelWithMap(km help.KeyMap) *HelpDialogModel {
+	return NewHelpDialogWithContext(km, "")
+}
+
+// NewHelpDialogWithContext creates a help dialog that shows contextText
+// (e.g. current variable info) above the standard key bindings.
+// Pass an empty string to show only the key bindings.
+func NewHelpDialogWithContext(km help.KeyMap, contextText string) *HelpDialogModel {
 	h := help.New()
 	h.ShowAll = true
-	return &HelpDialogModel{help: h, focused: true, keyMap: km}
+	return &HelpDialogModel{help: h, focused: true, keyMap: km, contextText: contextText}
 }
 
 func (m *HelpDialogModel) Init() tea.Cmd { return nil }
@@ -61,7 +77,7 @@ func (m *HelpDialogModel) ViewString() string {
 		return ""
 	}
 
-	// Calculate target width for help content Snugger margins for the halo/shadow
+	// Calculate target width for help content. Snugger margins for the halo/shadow.
 	targetWidth := m.layout.Width - 10
 	if targetWidth > 120 {
 		targetWidth = 120
@@ -70,10 +86,10 @@ func (m *HelpDialogModel) ViewString() string {
 
 	dialogStyle := SemanticStyle("{{|Theme_Dialog|}}")
 	haloColor := lipgloss.Color("0") // Solid black halo
-	bgStyle := lipgloss.NewStyle().Background(dialogStyle.GetBackground())
+	bgStyle := dialogStyle
 
 	// Apply theme styles to the help component
-	sepStyle := bgStyle.Foreground(dialogStyle.GetForeground())
+	sepStyle := dialogStyle
 	dimStyle := SemanticStyle("{{|Theme_HelpItem|}}")
 	keyStyle := SemanticStyle("{{|Theme_HelpTag|}}")
 
@@ -85,42 +101,62 @@ func (m *HelpDialogModel) ViewString() string {
 	m.help.Styles.FullSeparator = sepStyle
 	m.help.Styles.Ellipsis = dimStyle
 
-	content := m.help.View(m.keyMap)
+	bindingLines := strings.Split(m.help.View(m.keyMap), "\n")
 
-	// Apply dialog background and add 1 space indent on both sides
-	lines := strings.Split(content, "\n")
+	// Compute max line width across both context text and key bindings
 	maxLineWidth := 0
-	for i, line := range lines {
+	for i, line := range bindingLines {
 		trimmed := strings.TrimRight(line, " ")
-		lines[i] = trimmed
-		w := lipgloss.Width(trimmed)
-		if w > maxLineWidth {
+		bindingLines[i] = trimmed
+		if w := lipgloss.Width(trimmed); w > maxLineWidth {
 			maxLineWidth = w
 		}
 	}
 
-	for i, line := range lines {
+	// Build the context section (variable info) if provided
+	var contextLines []string
+	if m.contextText != "" {
+		for _, line := range strings.Split(m.contextText, "\n") {
+			trimmed := strings.TrimRight(line, " ")
+			// Resolve semantic tags to ANSI; let the tags own all coloring.
+			// bgStyle applies the dialog background in the final pass below.
+			processed := console.ToANSI(trimmed)
+			contextLines = append(contextLines, processed)
+			if w := lipgloss.Width(processed); w > maxLineWidth {
+				maxLineWidth = w
+			}
+		}
+		// Separator between context and key bindings
+		sepChar := "─"
+		if !GetActiveContext().LineCharacters {
+			sepChar = "-"
+		}
+		contextLines = append(contextLines, sepStyle.Render(strings.Repeat(sepChar, maxLineWidth)))
+	}
+
+	// Combine: context (if any) then key bindings
+	var allLines []string
+	allLines = append(allLines, contextLines...)
+	allLines = append(allLines, bindingLines...)
+
+	// Apply dialog background with uniform padding on all lines
+	for i, line := range allLines {
 		lineWidth := lipgloss.Width(line)
 		paddedLine := " " + line + strutil.Repeat(" ", maxLineWidth-lineWidth) + " "
-		lines[i] = MaintainBackground(bgStyle.Render(paddedLine), bgStyle)
+		allLines[i] = MaintainBackground(bgStyle.Render(paddedLine), bgStyle)
 	}
-	content = strings.Join(lines, "\n")
+	content := strings.Join(allLines, "\n")
 	content = MaintainBackground(bgStyle.Render(content), bgStyle)
 
-	// Content sizes naturally to its lines - no forced height expansion
-
-	// Ensure the title is visible on the black border bar
-	// We use the original themed Dialog background for the title text area
+	// Ensure the title is visible on the black border bar.
+	// Use the original themed Dialog background for the title text area.
 	ctx := GetActiveContext()
-	ctx.Dialog = ctx.Dialog.Background(haloColor)
 	ctx.DialogTitleHelp = GetStyles().DialogTitleHelp.
 		Background(GetStyles().Dialog.GetBackground()).
 		Foreground(GetStyles().DialogTitleHelp.GetForeground())
 	ctx.BorderColor = haloColor
 	ctx.Border2Color = haloColor
 
-	// Render the dialog with solid block borders
-	// Render the dialog with solid block borders
 	// We pass raw text so it uses the ctx.DialogTitleHelp base style without tag overrides
 	dialogStr := RenderUniformBlockDialogCtx(" Keyboard & Mouse Controls ", content, ctx)
 

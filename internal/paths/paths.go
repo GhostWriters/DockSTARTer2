@@ -155,6 +155,12 @@ func GetTimestampsDir() string {
 	return filepath.Join(GetStateDir(), constants.TimestampsDirName)
 }
 
+// GetActiveThemeFile returns the path to the currently-active theme file in the state directory.
+// This is the single file Load() reads at runtime; it is written by EnsureThemeExtracted.
+func GetActiveThemeFile() string {
+	return filepath.Join(GetStateDir(), "theme.ds2theme")
+}
+
 // GetInstanceDir returns the absolute path to the folder for a specific app instance.
 func GetInstanceDir(appName string) string {
 	return filepath.Join(GetInstancesDir(), appName)

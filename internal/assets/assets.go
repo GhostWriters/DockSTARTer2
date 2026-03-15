@@ -36,6 +36,27 @@ func EnsureAssets(ctx context.Context) error {
 	return nil
 }
 
+// GetTheme reads a theme from the embedded filesystem.
+func GetTheme(name string) ([]byte, error) {
+	// embed.FS always uses forward slashes regardless of OS.
+	return embeddedFS.ReadFile("themes/" + name + ".ds2theme")
+}
+
+// ListThemes returns all themes found in the embedded filesystem.
+func ListThemes() ([]string, error) {
+	entries, err := embeddedFS.ReadDir("themes")
+	if err != nil {
+		return nil, err
+	}
+	var themes []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".ds2theme") {
+			themes = append(themes, strings.TrimSuffix(e.Name(), ".ds2theme"))
+		}
+	}
+	return themes, nil
+}
+
 func extractFolder(ctx context.Context, srcDir, destDir string) error {
 	return fs.WalkDir(embeddedFS, srcDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {

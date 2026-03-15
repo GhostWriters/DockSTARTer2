@@ -219,6 +219,18 @@ func (m *BackdropModel) ChromeHeight() int {
 	return layout.ChromeHeight(headerH)
 }
 
+// HelplineActualHeight returns the actual rendered height of the helpline.
+// This may be > 1 if the helpline text wraps at the current terminal width.
+func (m *BackdropModel) HelplineActualHeight() int {
+	if m.helpline == nil || m.width == 0 {
+		return GetLayout().HelplineHeight
+	}
+	if h := lipgloss.Height(m.helpline.ViewString(m.width)); h > 0 {
+		return h
+	}
+	return GetLayout().HelplineHeight
+}
+
 // GetContentArea returns the dimensions available for overlay content
 // This is the space between the header/separator and the helpline, accounting for shadow
 func (m *BackdropModel) GetContentArea() (width, height int) {
@@ -234,5 +246,5 @@ func (m *BackdropModel) GetContentArea() (width, height int) {
 		headerH = m.header.Height()
 	}
 
-	return layout.ContentArea(m.width, m.height, hasShadow, headerH, layout.HelplineHeight)
+	return layout.ContentArea(m.width, m.height, hasShadow, headerH, m.HelplineActualHeight())
 }

@@ -4,6 +4,7 @@ import (
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/paths"
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -51,33 +52,128 @@ type ThemeConfig struct {
 // Current holds the active theme configuration
 var Current ThemeConfig
 
-// Load theme by name. Returns theme-defined defaults if found.
+// userThemePrefix is the filename prefix for user-owned themes in the config themes dir.
+const userThemePrefix = "user_"
+
+// UserThemeFilename returns the filename used to store a user theme in the config themes dir.
+func UserThemeFilename(name string) string {
+	return userThemePrefix + name + ".ds2theme"
+}
+
+// ThemeDisplayName returns the human-readable theme name from a config value.
+// "user://MyTheme" or "user://MyTheme.ds2theme" → "MyTheme", "DockSTARTer" → "DockSTARTer".
+func ThemeDisplayName(themeNameOrURI string) string {
+	if strings.HasPrefix(themeNameOrURI, "user://") {
+		name := strings.TrimPrefix(themeNameOrURI, "user://")
+		return strings.TrimSuffix(name, ".ds2theme")
+	}
+	return themeNameOrURI
+}
+
+// resolveThemeData reads theme bytes directly from its source without touching the state file.
+// Used for preview loads (prefix != "") to avoid disk writes on every cursor move.
+func resolveThemeData(themeNameOrURI string) ([]byte, error) {
+	if strings.HasPrefix(themeNameOrURI, "user://") {
+		themeName := strings.TrimSuffix(strings.TrimPrefix(themeNameOrURI, "user://"), ".ds2theme")
+		return os.ReadFile(filepath.Join(paths.GetThemesDir(), userThemePrefix+themeName+".ds2theme"))
+	}
+	if EmbeddedThemeReader != nil {
+		return EmbeddedThemeReader(themeNameOrURI)
+	}
+	return nil, fmt.Errorf("embedded theme reader not initialised")
+}
+
+// activeThemeMatchesData returns true if the active state theme file has identical content to data.
+func activeThemeMatchesData(data []byte) bool {
+	existing, err := os.ReadFile(paths.GetActiveThemeFile())
+	if err != nil {
+		return false
+	}
+	return bytes.Equal(existing, data)
+}
+
+// EnsureThemeExtracted ensures the active theme state file is up to date from its source.
+// For embedded themes: compares embedded bytes to state file, updates if different.
+// For user:// themes: compares config themes dir copy to state file, updates if different.
+// Returns the path to the active theme state file.
+func EnsureThemeExtracted(themeNameOrURI string) (string, error) {
+	stateFile := paths.GetActiveThemeFile()
+
+	var sourceData []byte
+	var err error
+
+	if strings.HasPrefix(themeNameOrURI, "user://") {
+		// User theme — source is in the config themes dir
+		themeName := strings.TrimSuffix(strings.TrimPrefix(themeNameOrURI, "user://"), ".ds2theme")
+		sourcePath := filepath.Join(paths.GetThemesDir(), userThemePrefix+themeName+".ds2theme")
+		sourceData, err = os.ReadFile(sourcePath)
+		if err != nil {
+			// Source missing — use existing state copy if available
+			if _, serr := os.Stat(stateFile); serr == nil {
+				return stateFile, nil
+			}
+			return "", fmt.Errorf("user theme not found: %s", themeName)
+		}
+	} else {
+		// Named embedded theme — source is in the binary
+		if EmbeddedThemeReader == nil {
+			return "", fmt.Errorf("embedded theme reader not initialised")
+		}
+		sourceData, err = EmbeddedThemeReader(themeNameOrURI)
+		if err != nil {
+			// Embedded source unavailable — use existing state copy if available
+			if _, serr := os.Stat(stateFile); serr == nil {
+				return stateFile, nil
+			}
+			return "", fmt.Errorf("theme not found: %s", themeNameOrURI)
+		}
+	}
+
+	// Write to state file if missing or content differs
+	if !activeThemeMatchesData(sourceData) {
+		if err := os.MkdirAll(paths.GetStateDir(), 0755); err != nil {
+			return "", fmt.Errorf("failed to create state dir: %w", err)
+		}
+		if err := os.WriteFile(stateFile, sourceData, 0644); err != nil {
+			return "", fmt.Errorf("failed to write active theme: %w", err)
+		}
+	}
+	return stateFile, nil
+}
+
+// Load theme by name or URI. Returns theme-defined defaults if found.
 // If prefix is provided, semantic tags are registered with that prefix (e.g. "Preview_Theme_Screen")
 // without affecting the global active theme (Current).
-func Load(themeName string, prefix string) (*ThemeDefaults, error) {
-	// 1. Initialize with defaults first (Classic colors)
+func Load(themeNameOrURI string, prefix string) (*ThemeDefaults, error) {
+	// Initialize with defaults first
 	Default(prefix)
 
-	// If main load, set Current name
+	var data []byte
+
 	if prefix == "" {
-		Current.Name = themeName
-	}
-
-	themesDir := paths.GetThemesDir()
-	themePath := filepath.Join(themesDir, themeName+".ds2theme")
-
-	if _, err := os.Stat(themePath); os.IsNotExist(err) {
-		// If theme doesn't exist, try falling back to "DockSTARTer"
-		if themeName != "DockSTARTer" {
-			return Load("DockSTARTer", prefix)
+		// Active theme load — update state file, then read from it
+		Current.Name = ThemeDisplayName(themeNameOrURI)
+		statePath, err := EnsureThemeExtracted(themeNameOrURI)
+		if err != nil {
+			if themeNameOrURI != "DockSTARTer" {
+				return Load("DockSTARTer", prefix)
+			}
+			return nil, err
 		}
-		// If even DockSTARTer doesn't exist, we stay with minimal defaults
-		return nil, nil
+		data, err = os.ReadFile(statePath)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// Preview load — read directly from source, no state file writes
+		var err error
+		data, err = resolveThemeData(themeNameOrURI)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	// 2. Parse .ds2theme (Overrides defaults)
-	defaults, err := parseThemeTOML(themePath, prefix)
-	return defaults, err
+	return parseThemeTOMLData(data, prefix)
 }
 
 // Apply updates the global console.Colors with theme-specific tags
@@ -137,6 +233,12 @@ func resolveThemeValue(raw string, rawValues map[string]string, visiting map[str
 			// Already raw or uses global delimiters (e.g. result from ExpandTags)
 			inner = console.StripDelimiters(inner)
 		}
+		// Bare "-" is the full-reset shorthand: treat it as resetting fg, bg, and all flags.
+		// This makes {{[-]}}{{::B}} equivalent to {{[-:-:-B]}} in theme values.
+		if inner == "-" {
+			inner = "-:-:-"
+		}
+
 		parts := strings.Split(inner, ":")
 
 		if len(parts) > 0 && parts[0] != "" {
@@ -266,12 +368,10 @@ type ThemeFile struct {
 
 // GetThemeFile reads a theme file and returns its structured content without applying it.
 func GetThemeFile(themeName string) (ThemeFile, error) {
-	themePath := filepath.Join(paths.GetThemesDir(), themeName+".ds2theme")
-	data, err := os.ReadFile(themePath)
+	data, err := resolveThemeData(themeName)
 	if err != nil {
 		return ThemeFile{}, err
 	}
-
 	var tf ThemeFile
 	if err := toml.Unmarshal(data, &tf); err != nil {
 		return ThemeFile{}, err
@@ -326,12 +426,7 @@ func ApplyThemeDefaults(conf *config.AppConfig, defaults ThemeDefaults) map[stri
 	return applied
 }
 
-func parseThemeTOML(path string, prefix string) (*ThemeDefaults, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
+func parseThemeTOMLData(data []byte, prefix string) (*ThemeDefaults, error) {
 	var tf ThemeFile
 	if err := toml.Unmarshal(data, &tf); err != nil {
 		return nil, err

@@ -348,11 +348,6 @@ func InitStyles(cfg config.AppConfig) {
 	// Clear the semantic style cache to ensure real-time visual updates on theme swap
 	ClearSemanticCache()
 
-	defaults, _ := theme.Load(cfg.UI.Theme, "") // Updated: Use cfg.UI.Theme and get defaults
-	// We no longer apply theme defaults here to respect user overrides in the config file.
-	// Theme defaults are only applied when selecting a theme in the DisplayOptionsScreen.
-	_ = defaults
-
 	// Update the global config so IsShadowEnabled(), GetActiveContext().ShadowLevel,
 	// and any other currentConfig readers see the new values immediately.
 	currentConfig = cfg

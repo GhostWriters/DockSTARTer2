@@ -9,6 +9,7 @@ import (
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/tui/components/enveditor"
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -28,6 +29,16 @@ const (
 	envFocusButtons
 )
 
+// headingLabelW is the right-aligned width for heading labels,
+// matching the bash menu_heading.sh LabelWidth calculation.
+// Longest label: "Current Value: " = 15 chars.
+const headingLabelW = 15
+
+// headingLabel right-aligns label to headingLabelW (e.g. "    Variable: ").
+func headingLabel(label string) string {
+	return fmt.Sprintf("%*s", headingLabelW, label)
+}
+
 type EnvTabSpec struct {
 	Title    string
 	App      string // Empty string for global vars, app name for app-specific vars
@@ -41,6 +52,10 @@ type envTab struct {
 	defaultFilePath string            // Cached for Refresh
 	builtinDefaults map[string]string // Cached for Refresh
 	readOnlyVars    []string          // Cached for Refresh
+	// Cached heading display info (populated during loadEnv)
+	envFilePath string // Actual .env file being edited
+	niceName    string // App nicename (empty for global tabs)
+	description string // App description (empty for global tabs or if unavailable)
 }
 
 type TabbedVarsEditorModel struct {
@@ -57,6 +72,7 @@ type TabbedVarsEditorModel struct {
 	buttons []string
 	btnIdx  int
 	buttonHeight  int
+	subtitleHeight int
 	editorHeight  int
 	contentWidth  int
 	focused       bool
@@ -234,6 +250,19 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 		editorStyles.Blurred.UserDefinedText = tui.SemanticRawStyle("Theme_EnvUser")
 		
 		m.tabs[i].editor.SetStyles(editorStyles)
+
+		// Cache heading display info
+		if tab.spec.App != "" {
+			m.tabs[i].niceName = appenv.GetNiceName(ctx, tab.spec.App)
+			if desc := appenv.GetDescription(ctx, tab.spec.App, envPath); desc != "! Missing description !" {
+				m.tabs[i].description = desc
+			}
+		}
+		if tab.spec.IsGlobal {
+			m.tabs[i].envFilePath = envPath
+		} else {
+			m.tabs[i].envFilePath = appenv.GetAppEnvFile(tab.spec.App, cfg)
+		}
 	}
 
 	// Ensure the active tab editor gets focus if envFocusEditor is set
@@ -457,9 +486,9 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.tabs[m.activeTab].editor.Focus()
 
 				// Calculate relative coordinates for the editor click
-				// Hit region is at dialogOffsetX + 2, dialogOffsetY + 2
+				// Hit region is at dialogOffsetX + 2, dialogOffsetY + 2 + subtitleHeight
 				relX := msg.X - (m.lastOffsetX + 2)
-				relY := msg.Y - (m.lastOffsetY + 2)
+				relY := msg.Y - (m.lastOffsetY + 2 + m.subtitleHeight)
 
 				var cmd tea.Cmd
 				m.tabs[m.activeTab].editor, cmd = m.tabs[m.activeTab].editor.Update(tea.MouseClickMsg{
@@ -636,7 +665,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			editor := m.tabs[m.activeTab].editor
 			if editor.IsDragging() {
 				relX := msg.X - (m.lastOffsetX + 2)
-				relY := msg.Y - (m.lastOffsetY + 2)
+				relY := msg.Y - (m.lastOffsetY + 2 + m.subtitleHeight)
 				var cmd tea.Cmd
 				m.tabs[m.activeTab].editor, cmd = editor.Update(tea.MouseMotionMsg{
 					X: relX,
@@ -649,7 +678,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseReleaseMsg:
 		if m.focus == envFocusEditor && len(m.tabs) > 0 {
 			relX := msg.X - (m.lastOffsetX + 2)
-			relY := msg.Y - (m.lastOffsetY + 2)
+			relY := msg.Y - (m.lastOffsetY + 2 + m.subtitleHeight)
 			var cmd tea.Cmd
 			m.tabs[m.activeTab].editor, cmd = m.tabs[m.activeTab].editor.Update(tea.MouseReleaseMsg{
 				X:      relX,
@@ -672,7 +701,8 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case envLoadDoneMsg:
-		// Just trigger a re-render
+		// Recalculate layout now that heading data (niceName, description) is available
+		m.SetSize(m.width, m.height)
 		return m, nil
 	case tea.WindowSizeMsg:
 		m.SetSize(msg.Width, msg.Height)
@@ -746,12 +776,12 @@ func (m *TabbedVarsEditorModel) ViewString() string {
 	// 4. Render buttons
 	buttons := m.renderButtons(m.contentWidth)
 
-	// 5. Join components vertically
-	// We don't have a subtitle currently, but if we did it would go first.
-	parts := []string{
-		innerBox,
-		buttons,
+	// 5. Join components vertically: subtitle (if any) → editor box → buttons
+	var parts []string
+	if subtitle := m.renderSubtitle(); subtitle != "" {
+		parts = append(parts, subtitle)
 	}
+	parts = append(parts, innerBox, buttons)
 
 	// Standardize TrimRight to prevent implicit gaps
 	for i, part := range parts {
@@ -847,11 +877,18 @@ func (m *TabbedVarsEditorModel) FullHelp() [][]key.Binding {
 }
 
 func (m *TabbedVarsEditorModel) HelpText() string {
-	help := "F5/Ctrl+R: Refresh • Ctrl+O: Insert Row • Ctrl+A: Add Var • Ctrl+D: Delete • Ctrl+Up/Down: Move • Tab: Cycle • Esc: Back"
-	if len(m.tabs) > 1 {
-		help = "Ctrl+Left/Right: Tabs • " + help
+	if m.focus != envFocusEditor || len(m.tabs) == 0 {
+		return ""
 	}
-	return help
+	meta, ok := m.tabs[m.activeTab].editor.CurrentLineMeta()
+	if !ok || !meta.IsVariable {
+		return ""
+	}
+	varName := meta.Text
+	if idx := strings.Index(varName, "="); idx > 0 {
+		varName = strings.TrimSpace(varName[:idx])
+	}
+	return appenv.GetVarHelpText(varName)
 }
 
 func (m *TabbedVarsEditorModel) SetSize(width, height int) {
@@ -871,19 +908,21 @@ func (m *TabbedVarsEditorModel) SetSize(width, height int) {
 	// Determine button height based on width availability (bordered=3, flat=1)
 	m.buttonHeight = tui.ButtonRowHeight(m.contentWidth, 0, specs...)
 
+	// Calculate subtitle height based on active tab heading content
+	m.subtitleHeight = m.calcSubtitleHeight()
+
 	// Inner vertical space inside dialog borders (dialogHeight - 2)
 	innerH := m.height - 2
 
-	// Available for the editor: total inner height minus button row
-	// And minus 2 for the editor's own borders (tabs are in the top border)
-	m.editorHeight = innerH - m.buttonHeight - 2
+	// Available for the editor: total inner height minus button row, subtitle, and editor borders
+	m.editorHeight = innerH - m.buttonHeight - m.subtitleHeight - 2
 	if m.editorHeight < 1 {
 		m.editorHeight = 1
 	}
 	if m.editorHeight < 3 && m.buttonHeight == 3 {
 		// Fallback: force buttons flat to save 2 lines if editor would be too small
 		m.buttonHeight = 1
-		m.editorHeight = innerH - 1 - 2 // -1 for flat buttons, -2 for editor borders
+		m.editorHeight = innerH - 1 - m.subtitleHeight - 2
 	}
 
 	if m.editorHeight < 1 {
@@ -921,6 +960,119 @@ func (m *TabbedVarsEditorModel) IsMaximized() bool {
 
 func (m *TabbedVarsEditorModel) MenuName() string {
 	return "tabbed_vars"
+}
+
+// calcSubtitleHeight returns the number of subtitle lines for the active tab.
+// Global tabs: 1 line (file path). App tabs: 1 line (app name) + wrapped description lines.
+func (m *TabbedVarsEditorModel) calcSubtitleHeight() int {
+	if len(m.tabs) == 0 || m.contentWidth < 4 {
+		return 0
+	}
+	tab := m.tabs[m.activeTab]
+	if tab.niceName == "" {
+		// Global tab: just the file path, 1 line
+		return 1
+	}
+	// App tab: "Application: AppName" (1 line) + word-wrapped description
+	h := 1
+	if tab.description != "" {
+		valueW := m.contentWidth - headingLabelW
+		if valueW < 10 {
+			valueW = 10
+		}
+		h += subtitleWrapLines(tab.description, valueW)
+	}
+	return h
+}
+
+// subtitleWrapLines returns how many lines the text occupies when word-wrapped to maxWidth.
+func subtitleWrapLines(text string, maxWidth int) int {
+	if maxWidth <= 0 || text == "" {
+		return 0
+	}
+	words := strings.Fields(text)
+	lines, lineLen := 1, 0
+	for _, w := range words {
+		wl := len(w)
+		if lineLen == 0 {
+			lineLen = wl
+		} else if lineLen+1+wl > maxWidth {
+			lines++
+			lineLen = wl
+		} else {
+			lineLen += 1 + wl
+		}
+	}
+	return lines
+}
+
+// renderSubtitle renders the heading subtitle for the active tab.
+// Returns a slice of styled lines (each already padded to contentWidth).
+func (m *TabbedVarsEditorModel) renderSubtitle() string {
+	if m.subtitleHeight == 0 || len(m.tabs) == 0 {
+		return ""
+	}
+	tab := m.tabs[m.activeTab]
+	ctx := tui.GetActiveContext()
+	bgStyle := ctx.Dialog
+
+	renderLine := func(raw string) string {
+		processed := console.ToANSI(raw)
+		w := lipgloss.Width(processed)
+		padded := processed + strings.Repeat(" ", m.contentWidth-w)
+		return tui.MaintainBackground(bgStyle.Render(padded), bgStyle)
+	}
+
+	var lines []string
+
+	if tab.niceName == "" {
+		// Global: show file path
+		lines = append(lines, renderLine(headingLabel("File: ")+"{{|Theme_HeadingValue|}}"+tab.envFilePath+"{{[-]}}"))
+	} else {
+		// App: "Application: AppName" on first line
+		appLine := headingLabel("Application: ") + "{{|Theme_HeadingValue|}}" + tab.niceName + "{{[-]}}"
+		lines = append(lines, renderLine(appLine))
+
+		// Word-wrap description onto continuation lines, indented to align with value
+		if tab.description != "" {
+			indent := strings.Repeat(" ", headingLabelW)
+			valueW := m.contentWidth - headingLabelW
+			if valueW < 10 {
+				valueW = 10
+			}
+			for _, dl := range subtitleWrapText(tab.description, valueW) {
+				lines = append(lines, renderLine(indent+"{{|Theme_HeadingAppDescription|}}"+dl+"{{[-]}}"))
+			}
+		}
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// subtitleWrapText word-wraps text to maxWidth, returning a slice of lines.
+func subtitleWrapText(text string, maxWidth int) []string {
+	if maxWidth <= 0 || text == "" {
+		return nil
+	}
+	words := strings.Fields(text)
+	var lines []string
+	var cur strings.Builder
+	for _, w := range words {
+		if cur.Len() == 0 {
+			cur.WriteString(w)
+		} else if cur.Len()+1+len(w) > maxWidth {
+			lines = append(lines, cur.String())
+			cur.Reset()
+			cur.WriteString(w)
+		} else {
+			cur.WriteByte(' ')
+			cur.WriteString(w)
+		}
+	}
+	if cur.Len() > 0 {
+		lines = append(lines, cur.String())
+	}
+	return lines
 }
 
 
@@ -962,7 +1114,7 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitReg
 			regions = append(regions, tui.HitRegion{
 				ID:     "tabbed_vars.tab-" + strconv.Itoa(i),
 				X:      tabX,
-				Y:      offsetY + 1, // Tabs are on the first line of the content area
+				Y:      offsetY + 1 + m.subtitleHeight, // outer border + subtitle + inner border line with tabs
 				Width:  tabWidth,
 				Height: 1,
 				ZOrder: tui.ZDialog + 10,
@@ -972,11 +1124,11 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitReg
 	}
 
 	// Editor hit region
-	// Editor starts after the tabs row (1 line)
+	// Editor starts after outer border, subtitle, inner border/tabs row
 	regions = append(regions, tui.HitRegion{
 		ID:     "tabbed_vars.editor",
-		X:      offsetX + 1,  // dialog border (1)
-		Y:      offsetY + 1 + 1, // dialog border (1) + tabs row (1)
+		X:      offsetX + 1,
+		Y:      offsetY + 1 + m.subtitleHeight + 1, // outer border + subtitle + inner border/tabs
 		Width:  m.contentWidth,
 		Height: m.editorHeight,
 		ZOrder: tui.ZDialog + 5,
@@ -1024,4 +1176,71 @@ func (m *TabbedVarsEditorModel) promptUnsavedChanges(onConfirm tea.Cmd) tea.Cmd 
 
 func (m *TabbedVarsEditorModel) HasDialog() bool {
 	return false
+}
+
+// HelpContext implements tui.HelpContextProvider.
+// Returns heading-style info about the variable under the cursor shown at the top of the help dialog.
+func (m *TabbedVarsEditorModel) HelpContext() string {
+	if m.focus != envFocusEditor || len(m.tabs) == 0 {
+		return ""
+	}
+	tab := m.tabs[m.activeTab]
+	meta, ok := tab.editor.CurrentLineMeta()
+	if !ok || !meta.IsVariable {
+		return ""
+	}
+
+	varName := meta.Text
+	if idx := strings.Index(varName, "="); idx > 0 {
+		varName = strings.TrimSpace(varName[:idx])
+	}
+	if varName == "" {
+		return ""
+	}
+
+	var lines []string
+
+	// Application block (app variables only)
+	if tab.niceName != "" {
+		appLine := headingLabel("Application: ") + "{{|Theme_HeadingValue|}}" + tab.niceName + "{{[-]}}"
+		if meta.IsUserDefined {
+			appLine += " {{|Theme_HeadingTag|}}(User Defined){{[-]}}"
+		}
+		lines = append(lines, appLine)
+		if tab.description != "" {
+			indent := strings.Repeat(" ", headingLabelW)
+			valueW := max(m.contentWidth-headingLabelW, 10)
+			for _, dl := range subtitleWrapText(tab.description, valueW) {
+				lines = append(lines, indent+"{{|Theme_HeadingAppDescription|}}"+dl+"{{[-]}}")
+			}
+		}
+		lines = append(lines, "")
+	}
+
+	// File
+	if tab.envFilePath != "" {
+		lines = append(lines, headingLabel("File: ")+"{{|Theme_Heading|}}"+tab.envFilePath+"{{[-]}}")
+	}
+
+	// Variable + user-defined tag (for global vars — app vars already tagged above)
+	varLine := headingLabel("Variable: ") + "{{|Theme_Heading|}}" + varName + "{{[-]}}"
+	if meta.IsUserDefined && tab.niceName == "" {
+		varLine += " {{|Theme_HeadingTag|}}(User Defined){{[-]}}"
+	}
+	lines = append(lines, varLine)
+
+	// Current value
+	if idx := strings.Index(meta.Text, "="); idx > 0 {
+		lines = append(lines, headingLabel("Current Value: ")+"{{|Theme_Heading|}}"+meta.Text[idx+1:]+"{{[-]}}")
+	}
+
+	// Variable description (from known variable help)
+	if desc := appenv.GetVarHelpText(varName); desc != "" {
+		lines = append(lines, "")
+		for _, dl := range strings.Split(desc, "\n") {
+			lines = append(lines, dl)
+		}
+	}
+
+	return strings.Join(lines, "\n")
 }

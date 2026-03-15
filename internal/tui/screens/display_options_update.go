@@ -9,6 +9,15 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
+// itemConfigValue returns the config value (e.g. "user://MyTheme") for a theme menu item.
+// Falls back to Tag (display name) if no Metadata entry was set.
+func itemConfigValue(item tui.MenuItem) string {
+	if cv, ok := item.Metadata["config_value"]; ok {
+		return cv
+	}
+	return item.Tag
+}
+
 // IsScrollbarDragging reports whether any sub-menu is currently dragging a scrollbar thumb.
 func (s *DisplayOptionsScreen) IsScrollbarDragging() bool {
 	return s.themeMenu.IsScrollbarDragging()
@@ -150,7 +159,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						items[i].Checked = (i == idx)
 					}
 					s.themeMenu.SetItems(items)
-					s.applyPreview(items[idx].Tag)
+					s.applyPreview(itemConfigValue(items[idx]))
 				}
 			}
 			return s, uCmd
@@ -175,7 +184,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					items[i].Checked = (i == idx)
 				}
 				s.themeMenu.SetItems(items)
-				s.applyPreview(items[idx].Tag)
+				s.applyPreview(itemConfigValue(items[idx]))
 			}
 			return s, nil
 		} else if s.focusedPanel == FocusOptions {
@@ -247,7 +256,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						items[i].Checked = (i == cursor)
 					}
 					s.themeMenu.SetItems(items)
-					s.applyPreview(items[cursor].Tag)
+					s.applyPreview(itemConfigValue(items[cursor]))
 					return s, nil
 				}
 			}

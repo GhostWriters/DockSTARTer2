@@ -13,6 +13,7 @@ import (
 	"DockSTARTer2/cmd"
 	"DockSTARTer2/internal/assets"
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/update"
 	"DockSTARTer2/internal/version"
 )
@@ -103,6 +104,10 @@ func run() (exitCode int) {
 
 	// Defer cleanup to ensure it runs even if we return early or panic
 	defer cleanup(ctx)
+
+	// Wire up embedded theme callbacks (breaks theme→assets→logger→theme cycle)
+	theme.EmbeddedThemeLister = assets.ListThemes
+	theme.EmbeddedThemeReader = assets.GetTheme
 
 	// Ensure embedded assets are extracted
 	if err := assets.EnsureAssets(ctx); err != nil {

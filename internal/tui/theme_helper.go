@@ -149,6 +149,8 @@ func GetInitialStyle(text string, base lipgloss.Style) lipgloss.Style {
 
 // MaintainBackground replaces ANSI resets (\x1b[0m, \x1b[m, \x1b[39m, \x1b[49m) with the reset followed by the parent style's codes.
 // This prevents content-level resets from "bleeding" to the terminal default background or clearing attributes.
+// For partial resets (FG-only or BG-only), only the affected channel is restored so that
+// the other channel's color (set by the content) is not overwritten.
 func MaintainBackground(text string, style lipgloss.Style) string {
 	// Extract the full ANSI state from a dummy render
 	getANSI := func(s lipgloss.Style) string {
@@ -161,6 +163,11 @@ func MaintainBackground(text string, style lipgloss.Style) string {
 		return text
 	}
 
+	// Per-channel codes: injecting only the affected channel after a partial reset
+	// prevents overwriting colors set by the content before the reset.
+	fgCode := getANSI(lipgloss.NewStyle().Foreground(style.GetForeground()))
+	bgCode := getANSI(lipgloss.NewStyle().Background(style.GetBackground()))
+
 	// Regex to find:
 	// 1. Full reset: \x1b[0m or \x1b[m
 	// 2. FG reset: \x1b[39m
@@ -168,8 +175,14 @@ func MaintainBackground(text string, style lipgloss.Style) string {
 	re := regexp.MustCompile(`\x1b\[(?:0|39|49)?m`)
 
 	return re.ReplaceAllStringFunc(text, func(match string) string {
-		// Always restore the full parent state after any reset
-		return match + fullCode
+		switch match {
+		case "\x1b[39m":
+			return match + fgCode
+		case "\x1b[49m":
+			return match + bgCode
+		default: // \x1b[0m or \x1b[m — full reset, restore everything
+			return match + fullCode
+		}
 	})
 }
 

@@ -54,12 +54,13 @@ type updateDisplayOptionMsg struct {
 // isRoot suppresses the Back button when this screen is the entry point.
 func NewDisplayOptionsScreen(isRoot bool) *DisplayOptionsScreen {
 	themes, _ := theme.List()
-	current := theme.Current.Name
+	cfg := config.LoadAppConfig()
+	current := cfg.UI.Theme // ConfigValue e.g. "DockSTARTer" or "user://MyTheme"
 
 	s := &DisplayOptionsScreen{
 		isRoot:        isRoot,
-		config:        config.LoadAppConfig(),
-		baseConfig:    config.LoadAppConfig(),
+		config:        cfg,
+		baseConfig:    cfg,
 		themes:        themes,
 		currentTheme:  current,
 		previewTheme:  current,
@@ -80,12 +81,18 @@ func (s *DisplayOptionsScreen) initMenus() {
 		if t.Author != "" {
 			desc += fmt.Sprintf(" [by %s]", t.Author)
 		}
+		descTag := "{{|Theme_ListTheme|}}"
+		if t.IsUserTheme {
+			descTag = "{{|Theme_ListThemeUserDefined|}}"
+		}
 		themeItems[i] = tui.MenuItem{
 			Tag:           t.Name,
-			Desc:          "{{|Theme_ListTheme|}}" + desc,
+			Desc:          descTag + desc,
 			Help:          desc,
 			IsRadioButton: true,
-			Checked:       s.currentTheme == t.Name,
+			Checked:       s.currentTheme == t.ConfigValue,
+			IsUserDefined: t.IsUserTheme,
+			Metadata:      map[string]string{"config_value": t.ConfigValue},
 		}
 	}
 
@@ -461,7 +468,11 @@ func (s *DisplayOptionsScreen) handleApply() tea.Cmd {
 		themeSelected := s.previewTheme
 		for _, item := range s.themeMenu.GetItems() {
 			if item.Checked {
-				themeSelected = item.Tag
+				if cv, ok := item.Metadata["config_value"]; ok {
+					themeSelected = cv
+				} else {
+					themeSelected = item.Tag
+				}
 				break
 			}
 		}

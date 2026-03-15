@@ -68,7 +68,7 @@ func InitFlags() {
 	pflag.Bool("show-config", false, "Show configuration (alias)")
 
 	// Theme
-	pflag.StringP("theme", "T", "", "Theme operations")
+	pflag.StringP("theme", "T", "", "Set theme by name or import a .ds2theme file path")
 	pflag.Bool("theme-list", false, "List themes")
 	pflag.Bool("theme-table", false, "List themes table")
 	pflag.Bool("theme-lines", false, "Turn line drawing characters on")
