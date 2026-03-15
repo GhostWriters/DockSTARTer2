@@ -23,7 +23,7 @@ func (m *ProgramBoxModel) renderHeaderUI(width int) string {
 
 	var b strings.Builder
 	ctx := GetActiveContext()
-	bgStyle := lipgloss.NewStyle().Background(ctx.Dialog.GetBackground())
+	bgStyle := ctx.Dialog
 	hasPrevious := false
 
 	subtitleStyle := bgStyle.Width(width).Padding(0, 2)

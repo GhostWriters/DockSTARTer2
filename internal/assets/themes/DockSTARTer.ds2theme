@@ -71,16 +71,14 @@ TagSelected = "{{|Theme_Tag::red|}}"
 TagKey = "{{|Theme_Tag:red|}}"
 TagKeySelected = "{{|Theme_TagSelected:::-B|}}"
 
-Helpline = "{{[black:cyan]}}"
+Helpline = "{{[black:cyan:-]}}"
 
-Heading = "{{[black:cyan]}}"
-HeadingTag = "{{[white:cyan:-B]}}"
-HeadingValue = "{{[white:cyan:-B]}}"
-HeadingAppDescription = "{{[black:-]}}"
+Heading = "{{[-]}}{{[::R]}}"
+HeadingTag="{{[-]}}{{[white::R]}}"
+HeadingValue = "{{[-]}}{{[::BR]}}"
+HeadingAppDescription = "{{[-]}}{{[::B]}}"
+Highlight = "{{[-]}}{{[yellow::B]}}"
 
-Highlight = "{{[yellow::-B]}}"
-
-LineHeading = "{{[yellow:cyan:-BU]}}"
 LineComment = "{{[gray:cyan:-B]}}"
 LineOther = "{{[gray:cyan:-B]}}"
 LineVar = "{{[black:cyan]}}"

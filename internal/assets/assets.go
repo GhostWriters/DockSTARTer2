@@ -1,10 +1,10 @@
 package assets
 
 import (
+	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"context"
 	"embed"
-
 	"fmt"
 	"io"
 	"io/fs"
@@ -28,12 +28,18 @@ func EnsureAssets(ctx context.Context) error {
 		return fmt.Errorf("failed to extract defaults: %w", err)
 	}
 
+	// 2. Extract themes (to state directory)
+	if err := extractFolder(ctx, "themes", paths.GetThemesDir()); err != nil {
+		return fmt.Errorf("failed to extract themes: %w", err)
+	}
+
 	return nil
 }
 
 // GetTheme reads a theme from the embedded filesystem.
 func GetTheme(name string) ([]byte, error) {
-	return embeddedFS.ReadFile(filepath.Join("themes", name+".ds2theme"))
+	// embed.FS always uses forward slashes regardless of OS.
+	return embeddedFS.ReadFile("themes/" + name + ".ds2theme")
 }
 
 // ListThemes returns all themes found in the embedded filesystem.
@@ -69,13 +75,14 @@ func extractFolder(ctx context.Context, srcDir, destDir string) error {
 			return os.MkdirAll(targetPath, 0755)
 		}
 
-		// Extract file if it doesn't exist
-		if _, err := os.Stat(targetPath); err == nil {
-			// File exists, skip
+		// Extract file if it doesn't exist, OR if it's a theme file (force update for dev)
+		// TODO: implementing a deeper check (hash/version) would be better for prod
+		if _, err := os.Stat(targetPath); err == nil && !strings.Contains(targetPath, "themes") {
+			// File exists, skip (unless it's a theme)
 			return nil
 		}
 
-		fmt.Printf("Extracting asset: %s\n", relPath)
+		logger.Info(ctx, "Extracting asset: %s", relPath)
 
 		// Create parent dir just in case
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {

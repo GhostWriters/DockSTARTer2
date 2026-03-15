@@ -489,11 +489,13 @@ func (m AppModel) getContentArea() (int, int) {
 	layout := GetLayout()
 	hasShadow := currentConfig.UI.Shadow
 	headerH := 1
+	helplineH := layout.HelplineHeight
 	if m.backdrop != nil {
 		headerH = m.backdrop.header.Height()
+		helplineH = m.backdrop.HelplineActualHeight()
 	}
 
-	return layout.ContentArea(m.width, bh, hasShadow, headerH, layout.HelplineHeight)
+	return layout.ContentArea(m.width, bh, hasShadow, headerH, helplineH)
 }
 
 // getDialogArea returns the dimensions available for a specific dialog.
@@ -503,10 +505,12 @@ func (m AppModel) getDialogArea(d tea.Model) (int, int) {
 		// Use Layout helpers directly to get full-screen content area for help
 		layout := GetLayout()
 		headerH := 1
+		helplineH := layout.HelplineHeight
 		if m.backdrop != nil {
 			headerH = m.backdrop.ChromeHeight() - 1
+			helplineH = m.backdrop.HelplineActualHeight()
 		}
-		return layout.ContentArea(m.width, m.height, m.config.UI.Shadow, headerH, layout.HelplineHeight)
+		return layout.ContentArea(m.width, m.height, m.config.UI.Shadow, headerH, helplineH)
 	}
 	return m.getContentArea()
 }
@@ -530,16 +534,25 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	}
 	if key.Matches(msg, Keys.Help) {
 		var km help.KeyMap = Keys
+		var contextText string
 		if m.dialog != nil {
 			if h, ok := m.dialog.(help.KeyMap); ok {
 				km = h
+			}
+			if cp, ok := m.dialog.(HelpContextProvider); ok {
+				contextText = cp.HelpContext()
 			}
 		} else if m.activeScreen != nil {
 			if h, ok := m.activeScreen.(help.KeyMap); ok {
 				km = h
 			}
+			if cp, ok := m.activeScreen.(HelpContextProvider); ok {
+				contextText = cp.HelpContext()
+			}
 		}
-		return m, logger.RecoverTUI(m.ctx, func() tea.Msg { return ShowDialogMsg{Dialog: NewHelpDialogModelWithMap(km)} }), true
+		return m, logger.RecoverTUI(m.ctx, func() tea.Msg {
+			return ShowDialogMsg{Dialog: NewHelpDialogWithContext(km, contextText)}
+		}), true
 	}
 	if key.Matches(msg, Keys.ForceQuit) {
 		m.Fatal = true

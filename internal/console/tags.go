@@ -147,11 +147,12 @@ func ToANSIWithProfile(text string) string {
 func ToANSIWithPrefix(text string, prefix string) string {
 	ensureMaps()
 
-	if !isTTYGlobal && !TUIMode {
+	tuiMode := TUIMode || IsTUIEnabled()
+	if !isTTYGlobal && !tuiMode {
 		return Strip(text)
 	}
 
-	if preferredProfile == colorprofile.NoTTY {
+	if preferredProfile == colorprofile.NoTTY && !tuiMode {
 		return Strip(text)
 	}
 
