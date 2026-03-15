@@ -548,7 +548,7 @@ func logPanelMaxHeight(totalTermHeight int) int {
 	if currentConfig.UI.Shadow {
 		shadowH = layout.ShadowHeight
 	}
-	usable := totalTermHeight - layout.ChromeHeight(1) - layout.BottomChrome() - shadowH
+	usable := totalTermHeight - layout.ChromeHeight(1) - layout.BottomChrome(layout.HelplineHeight) - shadowH
 	maxH := usable / 2
 	if maxH < 2 {
 		maxH = 2
