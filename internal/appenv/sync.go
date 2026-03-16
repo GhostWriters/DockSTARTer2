@@ -2,22 +2,19 @@ package appenv
 
 import (
 	"DockSTARTer2/internal/logger"
-	"DockSTARTer2/internal/system"
 	"context"
 	"fmt"
-	"os"
-	"regexp"
 	"sort"
-	"strings"
 )
 
-// SyncVariables performs a surgical single-pass update of multiple variables in a file.
+// SyncVariables performs a surgical per-variable update of a file.
 // It uses initialVars (state when editor opened) and newVars (current state) to
 // calculate a scoped diff, ensuring only variables in the editor tab are modified.
+// Mirrors the bash approach of calling env_set / env_delete one variable at a time.
 func SyncVariables(ctx context.Context, file string, initialVars, newVars map[string]string) error {
 	// 1. Calculate the diff based on the editor's scope
 	var added, updated, removed []string
-	
+
 	for k, v := range newVars {
 		if initialVal, exists := initialVars[k]; !exists {
 			added = append(added, k)
@@ -60,60 +57,22 @@ func SyncVariables(ctx context.Context, file string, initialVars, newVars map[st
 		}
 	}
 
-	// 3. Process the file surgical-style
-	content, err := os.ReadFile(file)
-	if err != nil && !os.IsNotExist(err) {
-		return err
-	}
-
-	lines := strings.Split(string(content), "\n")
-	var resultLines []string
-	removedMap := make(map[string]bool)
+	// 3. Apply changes one variable at a time (mirrors bash env_delete / env_set_literal)
 	for _, k := range removed {
-		removedMap[k] = true
-	}
-
-	re := regexp.MustCompile(`^\s*([a-zA-Z_][a-zA-Z0-9_]*)=`)
-	processedKeys := make(map[string]bool)
-
-	for _, line := range lines {
-		// Clean up trailing carriage returns if any (from Windows env)
-		line = strings.TrimRight(line, "\r")
-		
-		matches := re.FindStringSubmatch(line)
-		if matches != nil {
-			key := matches[1]
-			if removedMap[key] {
-				// Skip this line (removed)
-				continue
-			}
-			if newVal, exists := newVars[key]; exists {
-				// Replace line with new literal value (includes quotes/comments from editor)
-				resultLines = append(resultLines, fmt.Sprintf("%s=%s", key, newVal))
-				processedKeys[key] = true
-				continue
-			}
+		if err := unsetVarInFile(ctx, k, file); err != nil {
+			return fmt.Errorf("failed to remove %s: %w", k, err)
 		}
-		resultLines = append(resultLines, line)
 	}
-
-	// Append added variables (that weren't already in the file)
+	for _, k := range updated {
+		if err := SetLiteral(ctx, k, newVars[k], file); err != nil {
+			return fmt.Errorf("failed to update %s: %w", k, err)
+		}
+	}
 	for _, k := range added {
-		if !processedKeys[k] {
-			val := newVars[k]
-			resultLines = append(resultLines, fmt.Sprintf("%s=%s", k, val))
+		if err := SetLiteral(ctx, k, newVars[k], file); err != nil {
+			return fmt.Errorf("failed to add %s: %w", k, err)
 		}
 	}
-
-	// 4. Write back
-	// Ensure we don't end up with multiple trailing newlines
-	finalContent := strings.Join(resultLines, "\n")
-	finalContent = strings.TrimRight(finalContent, "\n") + "\n"
-	
-	if err := os.WriteFile(file, []byte(finalContent), 0644); err != nil {
-		return err
-	}
-	system.SetPermissions(ctx, file)
 
 	return nil
 }

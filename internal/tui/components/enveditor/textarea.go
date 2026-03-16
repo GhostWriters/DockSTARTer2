@@ -179,6 +179,9 @@ type Line struct {
 	IsUserDefined    bool // can be reordered
 	EditableStartCol int
 	DefaultValue     string
+	PendingDelete    bool   // marked for deletion on next save; shown with strikethrough
+	InitialLine      string // full line text at load time, used for changed (C) gutter marker
+	IsNewLine        bool   // added by the user after load; shows + in gutter
 }
 
 // CursorStyle is the style for real and virtual cursors.
@@ -234,15 +237,19 @@ type StyleState struct {
 	EndOfBuffer      lipgloss.Style
 	Placeholder      lipgloss.Style
 	Prompt           lipgloss.Style
-	ModifiedText     lipgloss.Style
-	ReadOnlyText     lipgloss.Style
-	InvalidText      lipgloss.Style
-	DuplicateText    lipgloss.Style
-	BuiltinText      lipgloss.Style
-	UserDefinedText  lipgloss.Style
-	ScrollbarTrack   lipgloss.Style
-	ScrollbarThumb   lipgloss.Style
-	SelectionText    lipgloss.Style
+	ModifiedText      lipgloss.Style
+	ReadOnlyText      lipgloss.Style
+	InvalidText       lipgloss.Style
+	DuplicateText     lipgloss.Style
+	BuiltinText       lipgloss.Style
+	UserDefinedText   lipgloss.Style
+	PendingDeleteText lipgloss.Style
+	GutterAdded       lipgloss.Style // + marker for new lines
+	GutterDeleted     lipgloss.Style // - marker for pending-delete lines
+	GutterModified    lipgloss.Style // ~ marker for changed lines
+	ScrollbarTrack    lipgloss.Style
+	ScrollbarThumb    lipgloss.Style
+	SelectionText     lipgloss.Style
 }
 
 func (s StyleState) computedCursorLine() lipgloss.Style {
@@ -485,11 +492,15 @@ func DefaultStyles(isDark bool) Styles {
 		ReadOnlyText:     lipgloss.NewStyle().Foreground(lipgloss.Color("240")), // Dark Grey
 		InvalidText:      lipgloss.NewStyle().Foreground(lipgloss.Color("9")),   // Red
 		DuplicateText:    lipgloss.NewStyle().Foreground(lipgloss.Color("13")),  // Magenta
-		BuiltinText:      lipgloss.NewStyle(),                                   // Inherit from text by default
-		UserDefinedText:  lipgloss.NewStyle(),                                   // Inherit from text by default
-		ScrollbarTrack:   lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
-		ScrollbarThumb:   lipgloss.NewStyle().Foreground(lipgloss.Color("7")),
-		SelectionText:    lipgloss.NewStyle().Reverse(true),
+		BuiltinText:       lipgloss.NewStyle(),                                                                    // Inherit from text by default
+		UserDefinedText:   lipgloss.NewStyle(),                                                                    // Inherit from text by default
+		PendingDeleteText: lipgloss.NewStyle().Strikethrough(true).Foreground(lipgloss.Color("240")),
+		GutterAdded:       lipgloss.NewStyle().Foreground(lipgloss.Color("2")),  // Green
+		GutterDeleted:     lipgloss.NewStyle().Foreground(lipgloss.Color("1")),  // Red
+		GutterModified:    lipgloss.NewStyle().Foreground(lipgloss.Color("3")),  // Yellow
+		ScrollbarTrack:    lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+		ScrollbarThumb:    lipgloss.NewStyle().Foreground(lipgloss.Color("7")),
+		SelectionText:     lipgloss.NewStyle().Reverse(true),
 	}
 	s.Blurred = StyleState{
 		Base:             lipgloss.NewStyle(),
@@ -504,11 +515,15 @@ func DefaultStyles(isDark bool) Styles {
 		ReadOnlyText:     lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
 		InvalidText:      lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
 		DuplicateText:    lipgloss.NewStyle().Foreground(lipgloss.Color("13")),
-		BuiltinText:      lipgloss.NewStyle().Foreground(lipgloss.Color("6")),
-		UserDefinedText:  lipgloss.NewStyle().Foreground(lipgloss.Color("2")),
-		ScrollbarTrack:   lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
-		ScrollbarThumb:   lipgloss.NewStyle().Foreground(lipgloss.Color("7")),
-		SelectionText:    lipgloss.NewStyle().Reverse(true),
+		BuiltinText:       lipgloss.NewStyle().Foreground(lipgloss.Color("6")),
+		UserDefinedText:   lipgloss.NewStyle().Foreground(lipgloss.Color("2")),
+		PendingDeleteText: lipgloss.NewStyle().Strikethrough(true).Foreground(lipgloss.Color("240")),
+		GutterAdded:       lipgloss.NewStyle().Foreground(lipgloss.Color("2")),
+		GutterDeleted:     lipgloss.NewStyle().Foreground(lipgloss.Color("1")),
+		GutterModified:    lipgloss.NewStyle().Foreground(lipgloss.Color("3")),
+		ScrollbarTrack:    lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+		ScrollbarThumb:    lipgloss.NewStyle().Foreground(lipgloss.Color("7")),
+		SelectionText:     lipgloss.NewStyle().Reverse(true),
 	}
 	s.Cursor = CursorStyle{
 		Color: lipgloss.Color("7"),
@@ -921,16 +936,23 @@ func (m *Model) Reset() {
 	m.row = 0
 	m.viewport.GotoTop()
 	m.SetCursorColumn(0)
+	m.InvalidateCache()
 }
 
-// GetContent returns the reconstituted .env file content.
+// GetContent returns the reconstituted .env file content, excluding any lines
+// marked as PendingDelete (those will be removed when the file is saved).
 func (m *Model) GetContent() string {
 	var sb strings.Builder
+	needNewline := false
 	for i, l := range m.value {
-		sb.WriteString(string(l))
-		if i < len(m.value)-1 {
+		if i < len(m.lineMeta) && m.lineMeta[i].PendingDelete {
+			continue
+		}
+		if needNewline {
 			sb.WriteString("\n")
 		}
+		sb.WriteString(string(l))
+		needNewline = true
 	}
 	return sb.String()
 }
@@ -958,6 +980,7 @@ func (m *Model) insertVariableAt(row int, key string, value string) {
 		IsVariable:       key != "",
 		IsUserDefined:    true,
 		EditableStartCol: 0,
+		IsNewLine:        true, // added by user after load
 	}
 	if key != "" {
 		l.EditableStartCol = len(key) + 1
@@ -1023,24 +1046,39 @@ func (m *Model) MoveVariableDown() {
 	m.InvalidateCache()
 }
 
-// DeleteCurrentVariable deletes the row under the cursor, if it's not readonly
+// DeleteCurrentVariable marks the row under the cursor as pending deletion.
+// The line stays visible with strikethrough styling until the file is saved.
+// Ctrl+Z (undo) can restore it. Refresh from disk also clears all pending deletes.
 func (m *Model) DeleteCurrentVariable() bool {
 	if m.row >= len(m.lineMeta) || m.lineMeta[m.row].ReadOnly {
 		return false
 	}
-	m.value = append(m.value[:m.row], m.value[m.row+1:]...)
-	m.lineMeta = append(m.lineMeta[:m.row], m.lineMeta[m.row+1:]...)
-	if m.row >= len(m.value) && m.row > 0 {
-		m.row--
-	}
-	if m.row < len(m.lineMeta) {
-		m.col = m.lineMeta[m.row].EditableStartCol
-	} else {
-		m.col = 0
-	}
-	m.repositionView()
+	m.pushUndoSnapshot()
+	m.lineMeta[m.row].PendingDelete = true
+	m.lineMeta[m.row].ReadOnly = true // prevent editing while pending
 	m.InvalidateCache()
 	return true
+}
+
+// DeleteVariableByName finds the first row containing varName= and deletes it.
+func (m *Model) DeleteVariableByName(varName string) bool {
+	prefix := varName + "="
+	for row, meta := range m.lineMeta {
+		if meta.ReadOnly {
+			continue
+		}
+		line := strings.TrimSpace(string(m.value[row]))
+		if strings.HasPrefix(line, prefix) {
+			saved := m.row
+			m.row = row
+			ok := m.DeleteCurrentVariable()
+			if !ok {
+				m.row = saved
+			}
+			return ok
+		}
+	}
+	return false
 }
 
 // ResetCurrentVariable restores the DefaultValue if the line is a built-in variable
@@ -2390,6 +2428,9 @@ func (m *Model) renderRunes(runes []rune, l int, startIdx int, baseStyle lipglos
 		return baseStyle.Render(string(runes))
 	}
 	meta := &m.lineMeta[l]
+	if meta.PendingDelete {
+		return m.activeStyle().PendingDeleteText.Inherit(baseStyle).Render(string(runes))
+	}
 	if meta.ReadOnly {
 		return m.activeStyle().ReadOnlyText.Inherit(baseStyle).Render(string(runes))
 	}
@@ -2520,7 +2561,11 @@ func (m *Model) view() string {
 
 		charIndex := 0
 		for wl, wrappedLine := range wrappedLines {
-			prompt := m.promptView(displayLine)
+			dataLineIdx := l
+			if wl > 0 {
+				dataLineIdx = -1
+			}
+			prompt := m.promptView(displayLine, dataLineIdx)
 			prompt = styles.computedPrompt().Render(prompt)
 			s.WriteString(style.Render(prompt))
 			displayLine++
@@ -2577,7 +2622,7 @@ func (m *Model) view() string {
 	// Always show at least `m.Height` lines at all times.
 	// To do this we can simply pad out a few extra new lines in the view.
 	for i := displayLine; i < m.height; i++ {
-		s.WriteString(m.promptView(i))
+		s.WriteString(m.promptView(i, -1))
 
 		// Write end of buffer content
 		leftGutter := string(m.EndOfBufferCharacter)
@@ -2691,7 +2736,27 @@ func (m Model) totalDisplayLines() int {
 }
 
 // promptView renders a single line of the prompt.
-func (m Model) promptView(displayLine int) (prompt string) {
+// promptView renders the gutter character for a display line.
+// dataLine is the index into m.value/m.lineMeta for the logical line being rendered;
+// pass -1 for soft-wrap continuation rows and end-of-buffer rows (no marker shown).
+func (m Model) promptView(displayLine, dataLine int) (prompt string) {
+	styles := m.activeStyle()
+
+	// Show diff markers in the gutter for the first row of each logical line.
+	if dataLine >= 0 && dataLine < len(m.lineMeta) {
+		meta := m.lineMeta[dataLine]
+		if meta.PendingDelete {
+			return styles.GutterDeleted.Render("-")
+		}
+		if meta.IsNewLine {
+			return styles.GutterAdded.Render("+")
+		}
+		if meta.IsVariable && !meta.ReadOnly && !meta.IsNewLine &&
+			meta.InitialLine != "" && string(m.value[dataLine]) != meta.InitialLine {
+			return styles.GutterModified.Render("~")
+		}
+	}
+
 	prompt = m.Prompt
 	if m.promptFunc == nil {
 		return prompt
@@ -2705,7 +2770,7 @@ func (m Model) promptView(displayLine int) (prompt string) {
 		prompt = fmt.Sprintf("%*s%s", m.promptWidth-width, "", prompt)
 	}
 
-	return m.activeStyle().computedPrompt().Render(prompt)
+	return styles.computedPrompt().Render(prompt)
 }
 
 // lineNumberView renders the line number.
@@ -2766,7 +2831,7 @@ func (m Model) placeholderView() string {
 		}
 
 		// render prompt
-		prompt := m.promptView(i)
+		prompt := m.promptView(i, -1)
 		prompt = styles.computedPrompt().Render(prompt)
 		s.WriteString(lineStyle.Render(prompt))
 
@@ -2854,7 +2919,7 @@ func (m Model) Cursor() *tea.Cursor {
 	baseStyle := m.activeStyle().Base
 
 	xOffset := lineInfo.CharOffset +
-		w(m.promptView(0)) +
+		w(m.promptView(0, -1)) +
 		w(m.lineNumberView(0, false)) +
 		baseStyle.GetMarginLeft() +
 		baseStyle.GetPaddingLeft() +

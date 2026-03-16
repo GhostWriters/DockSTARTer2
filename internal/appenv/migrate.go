@@ -149,6 +149,41 @@ func unsetVarInFile(ctx context.Context, varName, file string) error {
 	return nil
 }
 
+// MigrateEnabledLines renames old-style APPNAME_ENABLED variables to APPNAME__ENABLED.
+// It mirrors the logic of appvars_migrate_enabled_lines.sh.
+func MigrateEnabledLines(ctx context.Context, conf config.AppConfig) error {
+	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
+	content, err := os.ReadFile(envFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+
+	re := regexp.MustCompile(`(?m)^\s*([A-Z][A-Z0-9]*)_ENABLED\s*=`)
+	matches := re.FindAllSubmatch(content, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]bool)
+	for _, m := range matches {
+		appName := string(m[1])
+		if seen[appName] {
+			continue
+		}
+		seen[appName] = true
+		oldVar := appName + "_ENABLED"
+		newVar := appName + "__ENABLED"
+		logger.Notice(ctx, "Migrating {{|Var|}}%s{{[-]}} to {{|Var|}}%s{{[-]}}.", oldVar, newVar)
+		if err := EnvMigrate(ctx, oldVar, newVar, conf); err != nil {
+			logger.Warn(ctx, "Failed to migrate %s to %s: %v", oldVar, newVar, err)
+		}
+	}
+	return nil
+}
+
 // OverrideVarRename renames a variable in the docker-compose.override.yml file.
 // Matches variable substitution syntax.
 func OverrideVarRename(ctx context.Context, fromVar, toVar string, conf config.AppConfig) error {

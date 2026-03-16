@@ -50,13 +50,21 @@ type envTab struct {
 	spec        EnvTabSpec
 	editor      enveditor.Model
 	initialVars     map[string]string // Captured when loaded, used for scoped syncing on save
-	defaultFilePath string            // Cached for Refresh
-	builtinDefaults map[string]string // Cached for Refresh
-	readOnlyVars    []string          // Cached for Refresh
+	defaultFilePath string   // Cached for Refresh
+	readOnlyVars    []string // Cached for Refresh
 	// Cached heading display info (populated during loadEnv)
 	envFilePath string // Actual .env file being edited
 	niceName    string // App nicename (empty for global tabs)
 	description string // App description (empty for global tabs or if unavailable)
+}
+
+// defaultVal returns the computed default for any variable name via DefaultValueFunc
+// (which calls VarDefaultValue — the single source of truth, same as the bash version).
+func (t *envTab) defaultVal(key string) string {
+	if t.editor.DefaultValueFunc != nil {
+		return t.editor.DefaultValueFunc(key)
+	}
+	return ""
 }
 
 type TabbedVarsEditorModel struct {
@@ -100,12 +108,36 @@ type envAddAllStockMsg struct {
 }
 
 type envSaveSuccessMsg struct{}
-type envLoadDoneMsg struct{}
+
+// envTabData carries the loaded state for a single tab, returned by loadEnv as a message.
+type envTabData struct {
+	index           int
+	content         string
+	defaultFilePath string
+	readOnlyVars    []string
+	initialVars     map[string]string
+	niceName        string
+	description     string
+	envFilePath     string
+	defaultFunc     func(string) string
+	addPrefix       string
+	validationType  string
+	validationApp   string
+}
+
+type envLoadDoneMsg struct {
+	tabs []envTabData
+}
 
 // ApplyVarValueMsg is dispatched by the context menu to set a variable's value in the active editor.
 type ApplyVarValueMsg struct {
 	VarName string
 	Value   string
+}
+
+// deleteVarMsg is dispatched by the context menu to delete a variable line from the active editor.
+type deleteVarMsg struct {
+	VarName string
 }
 
 func NewEnvEditorGlobal(onClose tea.Cmd) *TabbedVarsEditorModel {
@@ -138,162 +170,104 @@ func (m *TabbedVarsEditorModel) Init() tea.Cmd {
 	return m.loadEnv
 }
 
+// loadEnv is a tea.Cmd: reads all data from disk and returns it as envLoadDoneMsg.
+// It must NOT modify model state directly — all changes are applied in Update.
 func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 	ctx := context.Background()
 	cfg := config.LoadAppConfig()
 	envPath := filepath.Join(cfg.ComposeDir, constants.EnvFileName)
 	defaultGlobalEnvPath := filepath.Join(paths.GetConfigDir(), constants.EnvExampleFileName)
 
-	readOnlyVars := []string{"HOME", "DOCKER_CONFIG_FOLDER", "DOCKER_COMPOSE_FOLDER"}
+	globalReadOnlyVars := []string{"HOME", "DOCKER_CONFIG_FOLDER", "DOCKER_COMPOSE_FOLDER"}
 
+	var loaded []envTabData
 	for i, tab := range m.tabs {
 		var currentLines []string
 		var defaultFilePath string
 
 		if tab.spec.IsGlobal {
 			if tab.spec.App != "" {
-				// Get current lines for specific app section in global .env
 				currentLines, _ = appenv.ListAppVarLines(ctx, tab.spec.App, cfg)
-			} else {
-				// Pure global editor: load all lines from .env that are not part of an app section
-				currentLines, _ = appenv.ListAppVarLines(ctx, "", cfg)
-			}
-
-			if tab.spec.App != "" {
-				// App-specific variables from global .env
-				// Bash: DefaultGlobalEnvFile="$(run_script 'app_instance_file' "${APPNAME}" ".env")"
 				if !appenv.IsAppUserDefined(ctx, tab.spec.App, envPath) {
 					defaultFilePath, _ = appenv.AppInstanceFile(ctx, tab.spec.App, ".env")
 				}
 			} else {
-				// Pure global editor
-				// Bash: DefaultGlobalEnvFile="${COMPOSE_ENV_DEFAULT_FILE}"
+				currentLines, _ = appenv.ListAppVarLines(ctx, "", cfg)
 				defaultFilePath = defaultGlobalEnvPath
 			}
 		} else {
-			// App-specific .env (e.g. .env.app.prowlarr)
-			// Use appenv.ListAppVarLines with ":" suffix for app-specific file (mirrors appvars_lines.sh)
 			currentLines, _ = appenv.ListAppVarLines(ctx, tab.spec.App+":", cfg)
-
 			if !appenv.IsAppUserDefined(ctx, tab.spec.App, envPath) {
-				// Bash: DefaultAppEnvFile="$(run_script 'app_instance_file' "${APPNAME}" ".env.app.*")"
 				defaultFilePath, _ = appenv.AppInstanceFile(ctx, tab.spec.App, ".env.app.*")
 			}
 		}
 
-		// Now format the lines using the identified current and default sources
-		// We use a temp file for currentLines to pass to FormatLines (mirrors Bash mktemp usage)
 		currentLinesFile, _ := os.CreateTemp("", "dockstarter2.env_editor_current.*.tmp")
 		for _, line := range currentLines {
 			currentLinesFile.WriteString(line + "\n")
 		}
 		currentLinesFile.Close()
 
-		formattedLines, _ := appenv.FormatLines(
-			ctx,
-			currentLinesFile.Name(),
-			defaultFilePath,
-			tab.spec.App,
-			envPath,
-		)
+		formattedLines, _ := appenv.FormatLines(ctx, currentLinesFile.Name(), defaultFilePath, tab.spec.App, envPath)
 		os.Remove(currentLinesFile.Name())
 
 		content := strings.Join(formattedLines, "\n")
 
-		// Apply to editor with builtin defaults and read-only vars.
-		// Read the template file to discover which keys have defaults, then call
-		// VarDefaultValue for each to get dynamically detected values (e.g.
-		// GLOBAL_LAN_NETWORK, DOCKER_HOSTNAME) rather than static template placeholders.
-		tabBuiltinDefaults := make(map[string]string)
-		if defaultFilePath != "" {
-			if fileContent, err := os.ReadFile(defaultFilePath); err == nil {
-				lines := strings.Split(string(fileContent), "\n")
-				for _, line := range lines {
-					idx := strings.Index(line, "=")
-					if idx > 0 {
-						key := strings.TrimSpace(line[:idx])
-						if strings.HasPrefix(key, "#") {
-							key = strings.TrimPrefix(key, "#")
-							key = strings.TrimSpace(key)
-						}
-						tabBuiltinDefaults[key] = appenv.VarDefaultValue(ctx, key, cfg)
-					}
-				}
-			}
-		}
-
 		var tabReadOnlyVars []string
 		if tab.spec.IsGlobal && tab.spec.App == "" {
-			tabReadOnlyVars = readOnlyVars
+			tabReadOnlyVars = globalReadOnlyVars
 		}
-		m.tabs[i].defaultFilePath = defaultFilePath
-		m.tabs[i].builtinDefaults = tabBuiltinDefaults
-		m.tabs[i].readOnlyVars = tabReadOnlyVars
 
 		capturedCfg := cfg
-		m.tabs[i].editor.DefaultValueFunc = func(varName string) string {
+		defaultFunc := func(varName string) string {
 			return appenv.VarDefaultValue(context.Background(), varName, capturedCfg)
 		}
 
-		m.tabs[i].editor.ParseEnv(content, tabBuiltinDefaults, tabReadOnlyVars)
+		initialVars, _ := appenv.ListVarsLiteralsData(content)
 
-		// Intelligent addition configuration
+		var niceName, description, envFilePath string
+		if tab.spec.App != "" {
+			niceName = appenv.GetNiceName(ctx, tab.spec.App)
+			if desc := appenv.GetDescription(ctx, tab.spec.App, envPath); desc != "! Missing description !" {
+				description = desc
+			}
+		}
+		if tab.spec.IsGlobal {
+			envFilePath = envPath
+		} else {
+			envFilePath = appenv.GetAppEnvFile(tab.spec.App, cfg)
+		}
+
+		addPrefix, validationType, validationApp := "", "", ""
 		if tab.spec.IsGlobal {
 			if tab.spec.App != "" {
-				// App variables inside global .env
-				m.tabs[i].editor.AddPrefix = "APPNAME__"
-				m.tabs[i].editor.ValidationType = "APPNAME"
-				m.tabs[i].editor.ValidationAppName = tab.spec.App
+				addPrefix = "APPNAME__"
+				validationType = "APPNAME"
+				validationApp = tab.spec.App
 			} else {
-				// Pure global variables
-				m.tabs[i].editor.ValidationType = "_GLOBAL_"
+				validationType = "_GLOBAL_"
 			}
 		} else {
-			// App-specific .env file
-			m.tabs[i].editor.ValidationType = "_BARE_"
+			validationType = "_BARE_"
 		}
-		m.tabs[i].editor.ValidateFunc = func(name string, vType string) bool {
-			return appenv.VarNameIsValid(name, vType)
-		}
-		
-		// Recapture initial vars for surgical syncing
-		initialVars, _ := appenv.ListVarsLiteralsData(content)
-		m.tabs[i].initialVars = initialVars
 
-		// Apply theme-aware styles
-		editorStyles := m.tabs[i].editor.Styles()
-		editorStyles.Focused.InvalidText = tui.SemanticRawStyle("Theme_EnvInvalid")
-		editorStyles.Focused.DuplicateText = tui.SemanticRawStyle("Theme_EnvDuplicate")
-		editorStyles.Focused.BuiltinText = tui.SemanticRawStyle("Theme_EnvBuiltin")
-		editorStyles.Focused.UserDefinedText = tui.SemanticRawStyle("Theme_EnvUser")
-		
-		editorStyles.Blurred.InvalidText = tui.SemanticRawStyle("Theme_EnvInvalid")
-		editorStyles.Blurred.DuplicateText = tui.SemanticRawStyle("Theme_EnvDuplicate")
-		editorStyles.Blurred.BuiltinText = tui.SemanticRawStyle("Theme_EnvBuiltin")
-		editorStyles.Blurred.UserDefinedText = tui.SemanticRawStyle("Theme_EnvUser")
-		
-		m.tabs[i].editor.SetStyles(editorStyles)
-
-		// Cache heading display info
-		if tab.spec.App != "" {
-			m.tabs[i].niceName = appenv.GetNiceName(ctx, tab.spec.App)
-			if desc := appenv.GetDescription(ctx, tab.spec.App, envPath); desc != "! Missing description !" {
-				m.tabs[i].description = desc
-			}
-		}
-		if tab.spec.IsGlobal {
-			m.tabs[i].envFilePath = envPath
-		} else {
-			m.tabs[i].envFilePath = appenv.GetAppEnvFile(tab.spec.App, cfg)
-		}
+		loaded = append(loaded, envTabData{
+			index:           i,
+			content:         content,
+			defaultFilePath: defaultFilePath,
+			readOnlyVars:    tabReadOnlyVars,
+			initialVars:     initialVars,
+			niceName:        niceName,
+			description:     description,
+			envFilePath:     envFilePath,
+			defaultFunc:     defaultFunc,
+			addPrefix:       addPrefix,
+			validationType:  validationType,
+			validationApp:   validationApp,
+		})
 	}
 
-	// Ensure the active tab editor gets focus if envFocusEditor is set
-	if m.focus == envFocusEditor && len(m.tabs) > 0 {
-		m.tabs[m.activeTab].editor.Focus()
-	}
-
-	return envLoadDoneMsg{}
+	return envLoadDoneMsg{tabs: loaded}
 }
 
 func (m *TabbedVarsEditorModel) saveEnv() tea.Cmd {
@@ -349,17 +323,18 @@ func (m *TabbedVarsEditorModel) saveEnv() tea.Cmd {
 				}
 			}
 
-			// 2. Sanitize and Update
+			// 2. Migrate old-style APPNAME_ENABLED vars to APPNAME__ENABLED
+			appenv.MigrateEnabledLines(ctx, cfg)
+
+			// 3. Sanitize then CreateAll (re-adds missing template vars; CreateAll calls Update internally)
 			// These already log details which will fan out to the ProgramBox
 			if err := appenv.SanitizeEnv(ctx, envPath, cfg); err != nil {
 				return err
 			}
-			if err := appenv.Update(ctx, true, envPath); err != nil {
+			if err := appenv.CreateAll(ctx, true, cfg); err != nil {
 				return err
 			}
 
-			// Signal completion to the TUI (this will refresh the editor via envSaveSuccessMsg)
-			tui.Send(envSaveSuccessMsg{})
 			return nil
 		}
 
@@ -367,6 +342,7 @@ func (m *TabbedVarsEditorModel) saveEnv() tea.Cmd {
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
+		dialog.SuccessMsg = envSaveSuccessMsg{}
 
 		return tui.ShowDialogMsg{Dialog: dialog}
 	}
@@ -381,107 +357,6 @@ func (m *TabbedVarsEditorModel) hasErrors() bool {
 	return false
 }
 
-func (m *TabbedVarsEditorModel) refreshEnv() tea.Msg {
-	ctx := context.Background()
-
-	// 1. Build a global live variables map from all tabs
-	// and create a master master temp file for header detection.
-	liveEnabled := make(map[string]bool)
-	masterTemp, _ := os.CreateTemp("", "dockstarter2.refresh.master.*.tmp")
-	for _, t := range m.tabs {
-		content := t.editor.GetContent()
-		masterTemp.WriteString(content + "\n")
-		vars, _ := appenv.ListVarsData(content)
-		for k := range vars {
-			trimmedKey := strings.TrimSpace(k)
-			if strings.HasSuffix(trimmedKey, "__ENABLED") {
-				appName := strings.TrimSuffix(trimmedKey, "__ENABLED")
-				liveEnabled[strings.ToUpper(appName)] = true
-			}
-		}
-	}
-	masterTemp.Close()
-	masterPath := masterTemp.Name()
-	defer os.Remove(masterPath)
-
-	for i := range m.tabs {
-		tab := &m.tabs[i]
-		content := tab.editor.GetContent()
-		lines := strings.Split(content, "\n")
-
-		var validLines []string
-		var invalidLines []string
-
-		for _, line := range lines {
-			isInvalid := false
-			eqIdx := strings.Index(line, "=")
-			if eqIdx > 0 {
-				key := strings.TrimSpace(line[:eqIdx])
-				vType := tab.editor.ValidationType
-				if vType == "APPNAME" {
-					vType = tab.editor.ValidationAppName
-				}
-				if tab.editor.ValidateFunc != nil && !tab.editor.ValidateFunc(key, vType) {
-					isInvalid = true
-				}
-			} else if trimmed := strings.TrimSpace(line); trimmed != "" && !strings.HasPrefix(trimmed, "#") {
-				// Content but no '=' - invalid/incomplete
-				isInvalid = true
-			}
-
-			if isInvalid {
-				invalidLines = append(invalidLines, line)
-			} else {
-				validLines = append(validLines, line)
-			}
-		}
-
-		// Format validLines
-		tempFile, _ := os.CreateTemp("", "dockstarter2.refresh.*.tmp")
-		for _, l := range validLines {
-			tempFile.WriteString(l + "\n")
-		}
-		tempFile.Close()
-		defer os.Remove(tempFile.Name())
-
-		// Selective template loading:
-		// If an app's ENABLED variable is missing from ALL tabs, treat it as user-defined.
-		useDefaultFilePath := tab.defaultFilePath
-		useBuiltinDefaults := tab.builtinDefaults
-		if tab.spec.App != "" {
-			if !liveEnabled[strings.ToUpper(tab.spec.App)] {
-				useDefaultFilePath = ""
-				useBuiltinDefaults = nil
-			}
-		}
-
-		formatted, _ := appenv.FormatLines(
-			ctx,
-			tempFile.Name(),
-			useDefaultFilePath,
-			tab.spec.App,
-			masterPath, // Pass the master state here to determine accurate header status
-		)
-
-		// Append invalid lines to the end
-		if len(invalidLines) > 0 {
-			if len(formatted) > 0 && formatted[len(formatted)-1] != "" {
-				formatted = append(formatted, "")
-			}
-			formatted = append(formatted, "### Invalid / Incomplete (To be fixed)")
-			formatted = append(formatted, invalidLines...)
-		}
-
-		newContent := strings.Join(formatted, "\n")
-		tab.editor.ParseEnv(newContent, useBuiltinDefaults, tab.readOnlyVars)
-
-		// Recapture initial vars if we want save to be surgical against the refreshed state
-		initialVars, _ := appenv.ListVarsLiteralsData(newContent)
-		tab.initialVars = initialVars
-	}
-
-	return envLoadDoneMsg{}
-}
 
 func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
@@ -620,7 +495,11 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "f5", "ctrl+r":
-			return m, m.refreshEnv
+			for i := range m.tabs {
+				m.tabs[i].editor.ReclassifyEnv(m.tabs[i].editor.DefaultValueFunc, m.tabs[i].readOnlyVars)
+			}
+			m.SetSize(m.width, m.height)
+			return m, nil
 		case "ctrl+ ", "shift+F10": // Keyboard equiv of right-click: open context menu at current cursor
 			if m.focus == envFocusEditor && len(m.tabs) > 0 {
 				editor := m.tabs[m.activeTab].editor
@@ -720,12 +599,12 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 	case envSaveSuccessMsg:
-		// Refresh variables to update "user defined" status (e.g. if APP__ENABLED was added)
+		// Reload from disk — ParseEnv will fully reset editor state (clears all
+		// gutter markers, removes pending-delete lines, updates InitialLine).
+		// Also refresh the app list so user-defined status reflects the new file.
 		return m, tea.Batch(
+			func() tea.Msg { return tui.RefreshAppsListMsg{} },
 			m.loadEnv,
-			func() tea.Msg {
-				return tui.ShowMessageDialogMsg{Title: "Success", Message: "Environment variables saved successfully.", Type: tui.MessageInfo}
-			},
 		)
 	case envAddVarMsg:
 		if len(m.tabs) > 0 {
@@ -762,10 +641,53 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.tabs[m.activeTab].editor.SetVariableValue(msg.VarName, msg.Value)
 		}
 		return m, nil
+	case deleteVarMsg:
+		if len(m.tabs) > 0 {
+			m.tabs[m.activeTab].editor.DeleteVariableByName(msg.VarName)
+		}
+		return m, nil
 	case envLoadDoneMsg:
-		// Recalculate layout now that heading data (niceName, description) is available.
-		// Clear undo history — content has been reloaded so prior edits are irrelevant.
-		for i := range m.tabs {
+		// Apply loaded data from disk to each tab, then recalculate layout.
+		for _, data := range msg.tabs {
+			i := data.index
+			if i < 0 || i >= len(m.tabs) {
+				continue
+			}
+			// Configure editor settings before parsing
+			m.tabs[i].editor.DefaultValueFunc = data.defaultFunc
+			m.tabs[i].editor.AddPrefix = data.addPrefix
+			m.tabs[i].editor.ValidationType = data.validationType
+			m.tabs[i].editor.ValidationAppName = data.validationApp
+			m.tabs[i].editor.ValidateFunc = appenv.VarNameIsValid
+			// Parse content into editor (resets value + lineMeta, invalidates cache)
+			m.tabs[i].editor.ParseEnv(data.content, data.defaultFunc, data.readOnlyVars)
+			// Apply theme-aware env-specific styles
+			editorStyles := m.tabs[i].editor.Styles()
+			editorStyles.Focused.InvalidText = tui.SemanticRawStyle("Theme_EnvInvalid")
+			editorStyles.Focused.DuplicateText = tui.SemanticRawStyle("Theme_EnvDuplicate")
+			editorStyles.Focused.BuiltinText = tui.SemanticRawStyle("Theme_EnvBuiltin")
+			editorStyles.Focused.UserDefinedText = tui.SemanticRawStyle("Theme_EnvUser")
+			editorStyles.Focused.PendingDeleteText = tui.SemanticRawStyle("Theme_EnvPendingDelete")
+			editorStyles.Focused.GutterAdded = tui.SemanticRawStyle("Theme_GutterAdded")
+			editorStyles.Focused.GutterDeleted = tui.SemanticRawStyle("Theme_GutterDeleted")
+			editorStyles.Focused.GutterModified = tui.SemanticRawStyle("Theme_GutterModified")
+			editorStyles.Blurred.InvalidText = tui.SemanticRawStyle("Theme_EnvInvalid")
+			editorStyles.Blurred.DuplicateText = tui.SemanticRawStyle("Theme_EnvDuplicate")
+			editorStyles.Blurred.BuiltinText = tui.SemanticRawStyle("Theme_EnvBuiltin")
+			editorStyles.Blurred.UserDefinedText = tui.SemanticRawStyle("Theme_EnvUser")
+			editorStyles.Blurred.PendingDeleteText = tui.SemanticRawStyle("Theme_EnvPendingDelete")
+			editorStyles.Blurred.GutterAdded = tui.SemanticRawStyle("Theme_GutterAdded")
+			editorStyles.Blurred.GutterDeleted = tui.SemanticRawStyle("Theme_GutterDeleted")
+			editorStyles.Blurred.GutterModified = tui.SemanticRawStyle("Theme_GutterModified")
+			m.tabs[i].editor.SetStyles(editorStyles)
+			// Update tab metadata used by saveEnv and heading display
+			m.tabs[i].initialVars = data.initialVars
+			m.tabs[i].defaultFilePath = data.defaultFilePath
+			m.tabs[i].readOnlyVars = data.readOnlyVars
+			m.tabs[i].niceName = data.niceName
+			m.tabs[i].description = data.description
+			m.tabs[i].envFilePath = data.envFilePath
+			// Clear undo — content has been reloaded so prior edits are irrelevant
 			m.tabs[i].editor.ClearUndo()
 		}
 		m.SetSize(m.width, m.height)
@@ -1263,11 +1185,16 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 			isVarLine = false
 		} else {
 			currentVal = editor.GetVariableValue(varName)
-			opts = appenv.GetVarOptions(varName, strings.ToUpper(tab.spec.App), tab.builtinDefaults[varName])
+			opts = appenv.GetVarOptions(varName, strings.ToUpper(tab.spec.App), tab.defaultVal(varName))
 		}
 	}
 
 	var items []tui.ContextMenuItem
+
+	if isVarLine {
+		items = append(items, tui.ContextMenuItem{IsHeader: true, Label: varName})
+		items = append(items, tui.ContextMenuItem{IsSeparator: true})
+	}
 
 	if isVarLine {
 		// Set Value ▶ (most-used — first)
@@ -1316,7 +1243,7 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 		})
 	}
 
-	// Copy — always available when there is text to copy.
+	// Copy / Cut / Paste
 	selectedText := editor.GetSelectedText()
 	copyText := selectedText
 	if copyText == "" && isVarLine {
@@ -1324,8 +1251,12 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 	}
 	if copyText != "" {
 		copyLabel := "Copy Value"
+		cutLabel := "Cut Value"
+		cutHelp := "Copy this variable's value to the clipboard and delete the variable."
 		if selectedText != "" {
 			copyLabel = "Copy Selection"
+			cutLabel = "Cut Selection"
+			cutHelp = "Copy selected text to clipboard and delete the selection."
 		}
 		ct := copyText
 		items = append(items, tui.ContextMenuItem{
@@ -1336,6 +1267,22 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 				return tui.CloseDialogMsg{}
 			},
 		})
+		if isVarLine || selectedText != "" {
+			cutVarName := varName
+			hasSelection := selectedText != ""
+			items = append(items, tui.ContextMenuItem{
+				Label: cutLabel,
+				Help:  cutHelp,
+				Action: func() tea.Msg {
+					_ = clipboard.WriteAll(ct)
+					if hasSelection {
+						// Selection cut: just close — editor selection delete not yet wired
+						return tui.CloseDialogMsg{}
+					}
+					return tui.CloseDialogMsg{Result: deleteVarMsg{VarName: cutVarName}}
+				},
+			})
+		}
 	}
 
 	// Paste — only meaningful on a variable row.
@@ -1350,6 +1297,18 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 					return tui.CloseDialogMsg{}
 				}
 				return tui.CloseDialogMsg{Result: ApplyVarValueMsg{VarName: vn2, Value: text}}
+			},
+		})
+	}
+
+	// Delete — only on a variable line.
+	if isVarLine {
+		delVarName := varName
+		items = append(items, tui.ContextMenuItem{
+			Label: "Delete Variable",
+			Help:  "Remove this variable from the file (same as Ctrl+D).",
+			Action: func() tea.Msg {
+				return tui.CloseDialogMsg{Result: deleteVarMsg{VarName: delVarName}}
 			},
 		})
 	}
@@ -1380,7 +1339,7 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 		Label: "Refresh",
 		Help:  "Reload and reformat all variables from disk.",
 		Action: func() tea.Msg {
-			return tui.CloseDialogMsg{Result: refreshM.refreshEnv()}
+			return tui.CloseDialogMsg{Result: refreshM.loadEnv()}
 		},
 	})
 
@@ -1474,7 +1433,7 @@ func (m *TabbedVarsEditorModel) showAddVarMenu() tea.Cmd {
 		addAllDefaults := make(map[string]string, len(missingStock))
 		for _, s := range missingStock {
 			addAllVars = append(addAllVars, s.name)
-			addAllDefaults[s.name] = tab.builtinDefaults[s.name]
+			addAllDefaults[s.name] = tab.defaultVal(s.name)
 		}
 		av := addAllVars
 		ad := addAllDefaults
@@ -1489,7 +1448,7 @@ func (m *TabbedVarsEditorModel) showAddVarMenu() tea.Cmd {
 		// Individual stock items
 		for _, s := range missingStock {
 			s := s
-			defVal := tab.builtinDefaults[s.name]
+			defVal := tab.defaultVal(s.name)
 			items = append(items, tui.ContextMenuItem{
 				Label:    s.name,
 				SubLabel: defVal,
@@ -1558,7 +1517,7 @@ func (m *TabbedVarsEditorModel) showAddVarDialog() tea.Cmd {
 	addAllDefaults := make(map[string]string)
 	for _, s := range allStock {
 		if !editor.HasVariable(s.name) {
-			defVal := tab.builtinDefaults[s.name]
+			defVal := tab.defaultVal(s.name)
 			stockItems = append(stockItems, addVarItem{
 				kind:     addVarKindStock,
 				name:     s.name,
@@ -1597,7 +1556,7 @@ func (m *TabbedVarsEditorModel) showSetValueDialog() tea.Cmd {
 	}
 	origVal := editor.GetVariableValue(varName)
 	appUpper := strings.ToUpper(tab.spec.App)
-	opts := appenv.GetVarOptions(varName, appUpper, tab.builtinDefaults[varName])
+	opts := appenv.GetVarOptions(varName, appUpper, tab.defaultVal(varName))
 	// Always offer "Original Value" first so the user can revert.
 	opts = append([]appenv.VarOption{{
 		Display: "Original Value",
