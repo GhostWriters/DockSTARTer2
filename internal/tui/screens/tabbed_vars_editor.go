@@ -1226,8 +1226,9 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitReg
 }
 
 
-// showContextMenuForClick builds and shows a right-click context menu for the variable row
-// at screen position (x, y).  Returns nil (no-op) when the click is outside a variable row.
+// showContextMenuForClick builds and shows a right-click context menu at screen
+// position (x, y).  Returns nil only when the click is outside any editor line.
+// Variable-specific options are omitted when the clicked line is not a variable.
 func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 	if len(m.tabs) == 0 {
 		return nil
@@ -1241,52 +1242,60 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 	clickedRow := (y - editorTopY) + editor.YOffset()
 
 	meta, ok := editor.LineMetaAt(clickedRow)
-	if !ok || !meta.IsVariable {
-		return nil
+	if !ok {
+		return nil // click is outside all editor lines
 	}
 
-	// Extract the variable name (everything before '=').
-	varName := meta.Text
-	if idx := strings.Index(varName, "="); idx > 0 {
-		varName = strings.TrimSpace(varName[:idx])
-	}
-	if varName == "" {
-		return nil
+	// Determine whether we are on a well-formed variable row.
+	isVarLine := meta.IsVariable
+	var varName, currentVal string
+	var opts []appenv.VarOption
+	if isVarLine {
+		varName = meta.Text
+		if idx := strings.Index(varName, "="); idx > 0 {
+			varName = strings.TrimSpace(varName[:idx])
+		}
+		if varName == "" {
+			isVarLine = false
+		} else {
+			currentVal = editor.GetVariableValue(varName)
+			opts = appenv.GetVarOptions(varName, strings.ToUpper(tab.spec.App), tab.builtinDefaults[varName])
+		}
 	}
 
-	// Get current value first so we can offer "Original Value" in the submenu.
-	currentVal := editor.GetVariableValue(varName)
+	var items []tui.ContextMenuItem
 
-	// Build "Set Value" submenu: "Original Value" first, then GetVarOptions presets.
-	opts := appenv.GetVarOptions(varName, strings.ToUpper(tab.spec.App), tab.builtinDefaults[varName])
-	var subItems []tui.ContextMenuItem
-	// Prepend "Original Value" so the user can always revert.
-	origVn := varName
-	origV := currentVal
-	subItems = append(subItems, tui.ContextMenuItem{
-		Label:    "Original Value",
-		SubLabel: origV,
-		Help:     "Keep the current value as-is.",
-		Action: func() tea.Msg {
-			return tui.CloseDialogMsg{Result: ApplyVarValueMsg{VarName: origVn, Value: origV}}
-		},
-	})
-	for _, opt := range opts {
-		opt := opt
-		vn := varName
+	if isVarLine {
+		// Set Value ▶ (most-used — first)
+		var subItems []tui.ContextMenuItem
+		origVn, origV := varName, currentVal
 		subItems = append(subItems, tui.ContextMenuItem{
-			Label:    opt.Display,
-			SubLabel: opt.Value,
-			Help:     opt.Help,
+			Label:    "Original Value",
+			SubLabel: origV,
+			Help:     "Keep the current value as-is.",
 			Action: func() tea.Msg {
-				return tui.CloseDialogMsg{Result: ApplyVarValueMsg{VarName: vn, Value: opt.Value}}
+				return tui.CloseDialogMsg{Result: ApplyVarValueMsg{VarName: origVn, Value: origV}}
 			},
 		})
-	}
+		for _, opt := range opts {
+			opt := opt
+			vn := varName
+			subItems = append(subItems, tui.ContextMenuItem{
+				Label:    opt.Display,
+				SubLabel: opt.Value,
+				Help:     opt.Help,
+				Action: func() tea.Msg {
+					return tui.CloseDialogMsg{Result: ApplyVarValueMsg{VarName: vn, Value: opt.Value}}
+				},
+			})
+		}
+		items = append(items, tui.ContextMenuItem{
+			Label:    "Set Value",
+			Help:     "Choose or reset this variable's value.",
+			SubItems: subItems,
+		})
 
-	// Main menu: Edit Value | Set Value ▶ | Copy | Paste Value
-	var items []tui.ContextMenuItem
-	{
+		// Edit Value
 		evVarName := varName
 		evOrigVal := currentVal
 		evOpts := make([]appenv.VarOption, len(opts)+1)
@@ -1302,42 +1311,50 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 			},
 		})
 	}
-	items = append(items, tui.ContextMenuItem{
-		Label:    "Set Value",
-		Help:     "Choose or reset this variable's value.",
-		SubItems: subItems,
-	})
+
+	// Copy — always available when there is text to copy.
 	selectedText := editor.GetSelectedText()
 	copyText := selectedText
-	if copyText == "" {
+	if copyText == "" && isVarLine {
 		copyText = currentVal
 	}
-	copyLabel := "Copy Value"
-	if selectedText != "" {
-		copyLabel = "Copy Selection"
-	}
-	ct := copyText
-	items = append(items, tui.ContextMenuItem{
-		Label: copyLabel,
-		Help:  "Copy to clipboard.",
-		Action: func() tea.Msg {
-			_ = clipboard.WriteAll(ct)
-			return tui.CloseDialogMsg{}
-		},
-	})
-	vn2 := varName
-	items = append(items, tui.ContextMenuItem{
-		Label: "Paste Value",
-		Help:  "Replace the entire variable value with clipboard text.",
-		Action: func() tea.Msg {
-			text, err := clipboard.ReadAll()
-			if err != nil || text == "" {
+	if copyText != "" {
+		copyLabel := "Copy Value"
+		if selectedText != "" {
+			copyLabel = "Copy Selection"
+		}
+		ct := copyText
+		items = append(items, tui.ContextMenuItem{
+			Label: copyLabel,
+			Help:  "Copy to clipboard.",
+			Action: func() tea.Msg {
+				_ = clipboard.WriteAll(ct)
 				return tui.CloseDialogMsg{}
-			}
-			return tui.CloseDialogMsg{Result: ApplyVarValueMsg{VarName: vn2, Value: text}}
-		},
-	})
-	items = append(items, tui.ContextMenuItem{IsSeparator: true})
+			},
+		})
+	}
+
+	// Paste — only meaningful on a variable row.
+	if isVarLine {
+		vn2 := varName
+		items = append(items, tui.ContextMenuItem{
+			Label: "Paste Value",
+			Help:  "Replace the entire variable value with clipboard text.",
+			Action: func() tea.Msg {
+				text, err := clipboard.ReadAll()
+				if err != nil || text == "" {
+					return tui.CloseDialogMsg{}
+				}
+				return tui.CloseDialogMsg{Result: ApplyVarValueMsg{VarName: vn2, Value: text}}
+			},
+		})
+	}
+
+	// Separator only when there are variable-specific items above.
+	if len(items) > 0 {
+		items = append(items, tui.ContextMenuItem{IsSeparator: true})
+	}
+
 	addM := m
 	items = append(items, tui.ContextMenuItem{
 		Label: "Add Variable",
@@ -1352,6 +1369,14 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 				return tui.CloseDialogMsg{}
 			}
 			return tui.CloseDialogMsg{Result: msg}
+		},
+	})
+	refreshM := m
+	items = append(items, tui.ContextMenuItem{
+		Label: "Refresh",
+		Help:  "Reload and reformat all variables from disk.",
+		Action: func() tea.Msg {
+			return tui.CloseDialogMsg{Result: refreshM.refreshEnv()}
 		},
 	})
 
