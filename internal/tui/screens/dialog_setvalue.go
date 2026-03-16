@@ -6,6 +6,7 @@ import (
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/tui"
+	"DockSTARTer2/internal/tui/components/sinput"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
@@ -36,7 +37,8 @@ type setValueDialogModel struct {
 	appDesc string
 	origVal string // original value at open time (shown in heading)
 
-	input  textinput.Model
+	input        sinput.Model
+	inputScreenX int // abs screen X of text start; set in GetHitRegions
 	opts   []appenv.VarOption
 	cursor int
 	offset int
@@ -70,7 +72,7 @@ func newSetValueDialog(
 		appName: appName,
 		appDesc: appDesc,
 		origVal: origVal,
-		input:   ti,
+		input:   sinput.New(ti),
 		opts:    opts,
 		focus:   setValueFocusInput,
 		maxVis:  8,
@@ -78,7 +80,7 @@ func newSetValueDialog(
 }
 
 func (m *setValueDialogModel) Init() tea.Cmd {
-	return textinput.Blink
+	return sinput.Blink
 }
 
 func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -200,6 +202,16 @@ func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case tea.MouseMotionMsg:
+		if m.input.IsSelecting() {
+			m.input.HandleDragTo(msg.X)
+		}
+		return m, nil
+
+	case tea.MouseReleaseMsg:
+		m.input.EndDrag()
+		return m, nil
+
 	case tui.LayerHitMsg:
 		if msg.Button == tea.MouseMiddle {
 			return m, nil
@@ -219,6 +231,12 @@ func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if strings.HasSuffix(msg.ID, ".Exit") {
 				return m, confirmExit()
+			}
+			if msg.ID == "setvalue_input" {
+				m.focus = setValueFocusInput
+				m.input.Focus()
+				m.input.HandleClick(msg.X)
+				return m, nil
 			}
 			if msg.ID == "setvalue_list" {
 				idx := m.optIndexAt(msg.Y)
@@ -582,7 +600,21 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 		listH += h
 	}
 
+	// Input hit region: outer_border(1) + headingH + section_top_border(1) = input row Y
+	// Text starts at: outer_border(1) + section_border(1) + padding(1) + promptW
+	inputY := 1 + headingH + 1
+	m.inputScreenX = offsetX + 1 + 1 + 1 + m.input.PromptWidth()
+	m.input.SetScreenTextX(m.inputScreenX)
+
 	var regions []tui.HitRegion
+	regions = append(regions, tui.HitRegion{
+		ID:     "setvalue_input",
+		X:      offsetX + 1,
+		Y:      offsetY + inputY,
+		Width:  contentW,
+		Height: 1,
+		ZOrder: tui.ZDialog + 10,
+	})
 	if listH > 0 {
 		regions = append(regions, tui.HitRegion{
 			ID:     "setvalue_list",

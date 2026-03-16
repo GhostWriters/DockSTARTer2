@@ -4,6 +4,8 @@ import (
 	"DockSTARTer2/internal/console"
 	"strings"
 
+	"DockSTARTer2/internal/tui/components/sinput"
+
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
@@ -15,7 +17,8 @@ type promptDialogModel struct {
 	baseDialogModel
 	title       string
 	question    string
-	input       textinput.Model
+	input        sinput.Model
+	inputScreenX int
 	result      string
 	confirmed   bool
 	onResult    func(string, bool) tea.Msg
@@ -51,7 +54,7 @@ func newPromptDialog(title, question string, sensitive bool) *promptDialogModel 
 		baseDialogModel: baseDialogModel{id: "prompt_dialog", focused: true},
 		title:           title,
 		question:        question,
-		input:           ti,
+		input:           sinput.New(ti),
 		focusedItem:     FocusList,
 		onResult: func(res string, val bool) tea.Msg {
 			return CloseDialogMsg{Result: promptResultMsg{result: res, confirmed: val}}
@@ -60,7 +63,7 @@ func newPromptDialog(title, question string, sensitive bool) *promptDialogModel 
 }
 
 func (m *promptDialogModel) Init() tea.Cmd {
-	return textinput.Blink
+	return sinput.Blink
 }
 
 func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -150,6 +153,16 @@ func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+	case tea.MouseMotionMsg:
+		if m.input.IsSelecting() {
+			m.input.HandleDragTo(msg.X)
+		}
+		return m, nil
+
+	case tea.MouseReleaseMsg:
+		m.input.EndDrag()
+		return m, nil
+
 	case LayerHitMsg:
 		if msg.Button == tea.MouseMiddle {
 			return m, nil
@@ -162,6 +175,12 @@ func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if buttonIDMatches(msg.ID, "Cancel") {
 				return m, closeWithResult("", false)
+			}
+			if buttonIDMatches(msg.ID, "prompt_input") {
+				m.focusedItem = FocusList
+				m.input.Focus()
+				m.input.HandleClick(msg.X)
+				return m, nil
 			}
 		}
 	}
@@ -278,14 +297,29 @@ func (m *promptDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 			ctx.Dialog.Padding(0, 2).Width(maxAllowed).Render("(password will not be logged)"))
 	}
 
+	// Input hit region: outer_border(1) + questionH + inner_border_top(1) = input text row
+	// Text X: outer_border(1) + inner_border(1) + padding(1) + promptW
+	inputTextY := 1 + questionHeight + 1
+	m.inputScreenX = offsetX + 1 + 1 + 1 + m.input.PromptWidth()
+	m.input.SetScreenTextX(m.inputScreenX)
+
 	// buttonY: outer border (1) + question + input + disclaimer + spacer (1)
 	buttonY := 1 + questionHeight + inputHeight + disclaimerHeight + 1
 
-	return GetButtonHitRegions(
+	regions := []HitRegion{{
+		ID:     "prompt_input",
+		X:      offsetX + 1,
+		Y:      offsetY + inputTextY,
+		Width:  maxAllowed,
+		Height: 1,
+		ZOrder: ZDialog + 10,
+	}}
+	regions = append(regions, GetButtonHitRegions(
 		m.id, offsetX+1, offsetY+buttonY, maxAllowed, ZDialog+20,
 		ButtonSpec{Text: "OK", ZoneID: "OK"},
 		ButtonSpec{Text: "Cancel", ZoneID: "Cancel"},
-	)
+	)...)
+	return regions
 }
 
 // ShowPromptDialog displays a prompt dialog and returns the text and confirmed bool.
