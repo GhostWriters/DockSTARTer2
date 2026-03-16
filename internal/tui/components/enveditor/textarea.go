@@ -61,6 +61,7 @@ type KeyMap struct {
 	DeleteWordBackward      key.Binding
 	DeleteWordForward       key.Binding
 	InsertNewline           key.Binding
+	SplitLine               key.Binding
 	LineEnd                 key.Binding
 	LineNext                key.Binding
 	LinePrevious            key.Binding
@@ -107,6 +108,7 @@ func DefaultKeyMap() KeyMap {
 		DeleteAfterCursor:       key.NewBinding(key.WithKeys("ctrl+k"), key.WithHelp("ctrl+k", "delete after cursor")),
 		DeleteBeforeCursor:      key.NewBinding(key.WithKeys("ctrl+u"), key.WithHelp("ctrl+u", "delete before cursor")),
 		InsertNewline:           key.NewBinding(key.WithKeys("enter", "ctrl+m"), key.WithHelp("enter", "insert newline")),
+		SplitLine:               key.NewBinding(key.WithKeys("ctrl+j"), key.WithHelp("ctrl+j", "split line at cursor")),
 		DeleteCharacterBackward: key.NewBinding(key.WithKeys("backspace"), key.WithHelp("backspace", "delete character backward")),
 		DeleteCharacterForward:  key.NewBinding(key.WithKeys("delete", "ctrl+d"), key.WithHelp("delete", "delete character forward")),
 		LineStart:               key.NewBinding(key.WithKeys("home", "ctrl+a"), key.WithHelp("home", "line start")),
@@ -422,6 +424,12 @@ type Model struct {
 	selStartCol  int  // inclusive start col (always <= selEndCol)
 	selEndCol    int  // exclusive end col
 
+	// Multi-click tracking (double/triple/quad click selection)
+	lastClickTime time.Time
+	lastClickRow  int
+	lastClickCol  int
+	clickCount    int
+
 	// Total visual width set by SetWidth
 	totalWidth int
 
@@ -616,8 +624,9 @@ func (m *Model) insertRunesFromUserInput(runes []rune) {
 func (m *Model) insertRunes(runes []rune, literal bool) {
 	if !literal {
 		// Intelligent Prefix Handling
-		if m.AddPrefix != "" && m.row < len(m.lineMeta) && m.lineMeta[m.row].IsUserDefined && len(m.value[m.row]) == 0 && len(runes) > 0 {
-			// If we're on a fresh user-defined line and start typing, prepend the prefix
+		if m.AddPrefix != "" && m.row < len(m.lineMeta) && !m.lineMeta[m.row].ReadOnly && len(m.value[m.row]) == 0 && len(runes) > 0 {
+			// Prepend the app prefix on any blank editable line — works even when
+			// no User Defined section exists yet (IsUserDefined is false in that case).
 			prefixRunes := []rune(strings.ReplaceAll(m.AddPrefix, "APPNAME", m.ValidationAppName))
 			runes = append(prefixRunes, runes...)
 
@@ -625,8 +634,9 @@ func (m *Model) insertRunes(runes []rune, literal bool) {
 			m.lineMeta[m.row].EditableStartCol = len(prefixRunes)
 		}
 
-		// Strict Key Validation & = Handling
-		if m.ValidationType != "" && m.row < len(m.lineMeta) && m.lineMeta[m.row].IsUserDefined {
+		// Strict Key Validation & = Handling — applies to any editable line, not just
+		// those in the user-defined section (a built-in var typed anywhere is still built-in).
+		if m.ValidationType != "" && m.row < len(m.lineMeta) && !m.lineMeta[m.row].ReadOnly {
 			meta := &m.lineMeta[m.row]
 
 			// Find if line already has an '='
@@ -1736,10 +1746,8 @@ func (m *Model) isBackspaceEditable() bool {
 		return false
 	}
 	if m.col == 0 {
-		if m.row > 0 && m.lineMeta[m.row-1].ReadOnly {
-			return false
-		}
-		return true
+		// Never join lines on Backspace — use Delete at end of the previous line instead.
+		return false
 	}
 	if m.lineMeta[m.row].IsUserDefined {
 		return true
@@ -1989,10 +1997,6 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				break
 			}
 			m.pushUndoSnapshot()
-			if m.col <= 0 {
-				m.mergeLineAbove(m.row)
-				break
-			}
 			m.deleteWordLeft()
 		case key.Matches(msg, m.KeyMap.DeleteWordForward):
 			if !m.isEditableAtCursor() {
@@ -2016,6 +2020,15 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				}
 				m.AddVariable("", "")
 			}
+		case key.Matches(msg, m.KeyMap.SplitLine):
+			if m.isReadOnlyRow() {
+				break
+			}
+			if m.MaxHeight > 0 && len(m.value) >= m.MaxHeight {
+				return m, nil
+			}
+			m.pushUndoSnapshot()
+			m.splitLine(m.row, m.col)
 		case key.Matches(msg, m.KeyMap.InsertLine):
 			if m.isReadOnlyRow() {
 				break
@@ -2149,6 +2162,28 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	m.repositionView()
 
 	return m, tea.Batch(cmds...)
+}
+
+// wordBoundsAt returns the [start, end) of the "word" at col in line.
+// Treats '=' and whitespace as word separators so key and value are distinct.
+func wordBoundsAt(line []rune, col int) (start, end int) {
+	n := len(line)
+	if n == 0 || col >= n {
+		return col, col
+	}
+	isSep := func(r rune) bool { return r == '=' || unicode.IsSpace(r) }
+	if isSep(line[col]) {
+		return col, col
+	}
+	start = col
+	for start > 0 && !isSep(line[start-1]) {
+		start--
+	}
+	end = col
+	for end < n && !isSep(line[end]) {
+		end++
+	}
+	return start, end
 }
 
 func (m *Model) handleMouseClick(msg tea.MouseClickMsg) {
@@ -2289,12 +2324,68 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) {
 				m.CursorStart() // Moves to EditableStartCol if valid
 			}
 
-			// Begin text selection anchor at the clicked position.
-			m.isSelecting = true
-			m.selRow = m.row
-			m.selAnchorCol = m.col
-			m.selStartCol = m.col
-			m.selEndCol = m.col
+			// Multi-click detection: same row, same col, within 400 ms.
+			const multiClickWindow = 400 * time.Millisecond
+			now := time.Now()
+			if m.row == m.lastClickRow && m.col == m.lastClickCol &&
+				now.Sub(m.lastClickTime) <= multiClickWindow {
+				m.clickCount++
+			} else {
+				m.clickCount = 1
+			}
+			m.lastClickTime = now
+			m.lastClickRow = m.row
+			m.lastClickCol = m.col
+
+			switch m.clickCount {
+			case 2:
+				// Double-click: select the word at cursor ('=' is a boundary).
+				s, e := wordBoundsAt(lineRunes, m.col)
+				if s < e {
+					m.selRow = m.row
+					m.selStartCol = s
+					m.selEndCol = e
+					m.selAnchorCol = s
+					m.selActive = true
+					m.isSelecting = false // selection complete
+				}
+			case 3:
+				// Triple-click on value side: select entire value (after '=').
+				// On key side: no change — keep the word selection from double-click.
+				eqIdx := -1
+				for i, r := range lineRunes {
+					if r == '=' {
+						eqIdx = i
+						break
+					}
+				}
+				if eqIdx >= 0 && m.col > eqIdx {
+					m.selRow = m.row
+					m.selStartCol = eqIdx + 1
+					m.selEndCol = len(lineRunes)
+					m.selAnchorCol = eqIdx + 1
+					m.selActive = m.selStartCol < m.selEndCol
+					m.isSelecting = false
+				}
+				// On key side: selection stays as-is from double-click.
+			default: // 1 or 4+
+				if m.clickCount >= 4 {
+					// Four clicks: select entire line.
+					m.selRow = m.row
+					m.selStartCol = 0
+					m.selEndCol = len(lineRunes)
+					m.selAnchorCol = 0
+					m.selActive = m.selStartCol < m.selEndCol
+					m.isSelecting = false
+				} else {
+					// Single click: just set anchor for potential drag.
+					m.isSelecting = true
+					m.selRow = m.row
+					m.selAnchorCol = m.col
+					m.selStartCol = m.col
+					m.selEndCol = m.col
+				}
+			}
 
 			return
 		}
