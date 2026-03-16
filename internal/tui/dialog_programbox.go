@@ -52,7 +52,10 @@ type ProgramBoxModel struct {
 	autoCloseDelay time.Duration
 	// AutoExit determines if the dialog should automatically close (and exit app) on success
 	AutoExit bool
-	task     func(context.Context, io.Writer) error
+	// SuccessMsg is forwarded as CloseDialogMsg.Result when the task completes without error
+	// and the user dismisses the dialog.  shouldForwardResult routes it to the active screen.
+	SuccessMsg tea.Msg
+	task       func(context.Context, io.Writer) error
 	focused  bool
 	ctx      context.Context
 
@@ -477,6 +480,9 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch {
 		case key.Matches(msg, Keys.Esc):
 			if m.done {
+				if m.err == nil && m.SuccessMsg != nil {
+					return m, func() tea.Msg { return CloseDialogMsg{Result: m.SuccessMsg} }
+				}
 				return m, closeDialog
 			}
 
@@ -485,7 +491,11 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, Keys.Enter), msg.String() == "o", msg.String() == "O", key.Matches(msg, Keys.Space):
 			if m.done {
-				return m, func() tea.Msg { return CloseDialogMsg{Result: true} }
+				result := tea.Msg(true)
+				if m.err == nil && m.SuccessMsg != nil {
+					result = m.SuccessMsg
+				}
+				return m, func() tea.Msg { return CloseDialogMsg{Result: result} }
 			}
 			// Important: consume these keys even if not done to prevent them from bubbling up
 			// or triggering background elements (like the header)
@@ -546,7 +556,11 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.done && buttonIDMatches(msg.ID, "OK") {
-			return m, func() tea.Msg { return CloseDialogMsg{Result: true} }
+			result := tea.Msg(true)
+			if m.err == nil && m.SuccessMsg != nil {
+				result = m.SuccessMsg
+			}
+			return m, func() tea.Msg { return CloseDialogMsg{Result: result} }
 		}
 
 	case UpdateTaskMsg:

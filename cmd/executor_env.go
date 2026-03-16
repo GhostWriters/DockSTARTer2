@@ -169,6 +169,9 @@ func handleAppVarsCreate(ctx context.Context, group *CommandGroup, state *CmdSta
 		logger.Debug(ctx, "Ensure env file error: %v", err)
 	}
 
+	// Migrate old-style APPNAME_ENABLED vars before creating app vars
+	appenv.MigrateEnabledLines(ctx, conf)
+
 	// Enable the apps first
 	if err := appenv.Enable(ctx, group.Args, conf); err != nil {
 		logger.Error(ctx, "Failed to enable apps: %v", err)

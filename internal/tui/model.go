@@ -45,8 +45,12 @@ type (
 		Screen ScreenModel
 	}
 
-	// NavigateBackMsg requests navigation back to previous screen
-	NavigateBackMsg struct{}
+	// NavigateBackMsg requests navigation back to previous screen.
+	// When Refresh is true, a RefreshAppsListMsg is dispatched to the restored
+	// screen after the stack pop (avoids the batch-ordering race condition).
+	NavigateBackMsg struct {
+		Refresh bool
+	}
 
 	// ShowDialogMsg shows a modal dialog
 	ShowDialogMsg struct {

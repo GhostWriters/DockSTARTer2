@@ -31,6 +31,38 @@ func (m *configAppsMenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+func buildConfigAppItems(ctx context.Context, apps []string, envFile string) []tui.MenuItem {
+	var items []tui.MenuItem
+	for _, appName := range apps {
+		niceName := appenv.GetNiceName(ctx, appName)
+		desc := appenv.GetDescription(ctx, appName, envFile)
+		isUserDefined := appenv.IsAppUserDefined(ctx, appName, envFile)
+
+		descText := desc
+		if isUserDefined {
+			descText = "{{|Theme_ListAppUserDefined|}}" + descText
+		} else {
+			descText = "{{|Theme_ListApp|}}" + descText
+		}
+
+		items = append(items, tui.MenuItem{
+			Tag:    niceName,
+			Desc:   descText,
+			Help:   "Configure environment variables for " + niceName,
+			Action: navigateToAppConfigEditorWithRefresh(appName),
+		})
+	}
+
+	// Add an item to add a new application
+	items = append(items, tui.MenuItem{
+		Tag:    "<ADD APPLICATION>",
+		Desc:   "Add a new application to configure",
+		Help:   "Add a new application",
+		Action: nil,
+	})
+	return items
+}
+
 func (m *configAppsMenuModel) refreshItems() {
 	ctx := context.Background()
 	cfg := config.LoadAppConfig()
@@ -38,37 +70,8 @@ func (m *configAppsMenuModel) refreshItems() {
 	if err != nil {
 		return
 	}
-
 	envFile := filepath.Join(cfg.ComposeDir, constants.EnvFileName)
-	var items []tui.MenuItem
-	for _, appName := range apps {
-		desc := appenv.GetDescription(ctx, appName, envFile)
-		isUserDefined := appenv.IsAppUserDefined(ctx, appName, envFile)
-
-		descText := desc
-		if isUserDefined {
-			descText = tui.RenderThemeText("{{|Theme_ListAppUserDefined|}}" + descText + "{{[-]}}")
-		} else {
-			descText = tui.RenderThemeText("{{|Theme_ListApp|}}" + descText + "{{[-]}}")
-		}
-
-		items = append(items, tui.MenuItem{
-			Tag:    appName,
-			Desc:   descText,
-			Help:   "Configure environment variables for " + appName,
-			Action: navigateToAppConfigEditorWithRefresh(appName),
-		})
-	}
-
-	// Add an item to add a new application
-	items = append(items, tui.MenuItem{
-		Tag:    "<ADD APPLICATION>",
-		Desc:   "Add a new application to configure",
-		Help:   "Add a new application",
-		Action: nil,
-	})
-
-	m.MenuModel.SetItems(items)
+	m.MenuModel.SetItems(buildConfigAppItems(ctx, apps, envFile))
 }
 
 // NewConfigAppsMenuScreen creates the "Configure Applications" menu
@@ -76,50 +79,22 @@ func NewConfigAppsMenuScreen() tui.ScreenModel {
 	ctx := context.Background()
 	cfg := config.LoadAppConfig()
 
-	// Get referenced apps like the legacy script
 	apps, err := appenv.ListReferencedApps(ctx, cfg)
 	if err != nil {
 		apps = []string{}
 	}
 
 	envFile := filepath.Join(cfg.ComposeDir, constants.EnvFileName)
-	var items []tui.MenuItem
-	for _, appName := range apps {
-		desc := appenv.GetDescription(ctx, appName, envFile)
-		isUserDefined := appenv.IsAppUserDefined(ctx, appName, envFile)
-
-		descText := desc
-		if isUserDefined {
-			// Using the same format as bash legacy
-			descText = tui.RenderThemeText("{{|Theme_ListAppUserDefined|}}" + descText + "{{[-]}}")
-		} else {
-			descText = tui.RenderThemeText("{{|Theme_ListApp|}}" + descText + "{{[-]}}")
-		}
-
-		items = append(items, tui.MenuItem{
-			Tag:    appName,
-			Desc:   descText,
-			Help:   "Configure environment variables for " + appName,
-			Action: navigateToAppConfigEditorWithRefresh(appName),
-		})
-	}
-
-	// Add an item to add a new application
-	items = append(items, tui.MenuItem{
-		Tag:    "<ADD APPLICATION>",
-		Desc:   "Add a new application to configure",
-		Help:   "Add a new application",
-		Action: nil,
-	})
 
 	menu := tui.NewMenuModel(
 		tui.IDListPanel,
 		"Configure Applications",
 		"Select the application to configure",
-		items,
+		buildConfigAppItems(ctx, apps, envFile),
 		navigateBack(),
 	)
 
 	menu.SetMenuName("config_apps")
+	menu.SetVariableHeight(true)
 	return &configAppsMenuModel{MenuModel: menu}
 }

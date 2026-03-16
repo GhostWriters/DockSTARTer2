@@ -165,6 +165,9 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.ready && m.activeScreen == nil && m.dialog == nil {
 			return m, ConfirmExitAction()
 		}
+		if msg.Refresh && m.activeScreen != nil {
+			return m, func() tea.Msg { return RefreshAppsListMsg{} }
+		}
 		return m, nil
 	case ShowDialogMsg:
 		// Push current dialog to stack if one exists

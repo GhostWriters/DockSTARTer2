@@ -14,13 +14,14 @@ type ContextMenuItem struct {
 	SubLabel    string            // Optional second line shown below Label (e.g. the actual value)
 	Help        string            // Optional help text (shown in helpline when item is focused)
 	IsSeparator bool              // When true, renders as a horizontal divider and is not selectable
+	IsHeader    bool              // When true, renders Label as a non-selectable title row
 	Action      tea.Cmd          // Executed when the item is selected; should close the dialog itself
 	SubItems    []ContextMenuItem // When non-empty, selecting opens a submenu instead of Action
 }
 
 // itemHeight returns the number of display rows an item occupies (2 if it has a SubLabel).
 func itemHeight(item ContextMenuItem) int {
-	if !item.IsSeparator && item.SubLabel != "" {
+	if !item.IsSeparator && !item.IsHeader && item.SubLabel != "" {
 		return 2
 	}
 	return 1
@@ -109,7 +110,7 @@ func (m *ContextMenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if strings.HasPrefix(msg.ID, "ctxmenu.item-") {
 			idxStr := strings.TrimPrefix(msg.ID, "ctxmenu.item-")
 			idx := parseIntSafe(idxStr)
-			if idx >= 0 && idx < len(m.items) && !m.items[idx].IsSeparator {
+			if idx >= 0 && idx < len(m.items) && !m.items[idx].IsSeparator && !m.items[idx].IsHeader {
 				m.cursor = idx
 				if msg.Button == tea.MouseLeft {
 					return m, m.executeSelected()
@@ -136,7 +137,7 @@ func (m *ContextMenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// item under the cursor. model_update.go calls h.HelpText() after every
 		// dialog Update(), so the helpline updates automatically.
 		idx := m.itemIndexAt(msg.X, msg.Y)
-		if idx >= 0 && idx < len(m.items) && !m.items[idx].IsSeparator {
+		if idx >= 0 && idx < len(m.items) && !m.items[idx].IsSeparator && !m.items[idx].IsHeader {
 			m.cursor = idx
 			if m.cursor < m.offset {
 				m.offset = m.cursor
@@ -192,6 +193,20 @@ func (m *ContextMenuModel) ViewString() string {
 			}
 			sep := bgStyle.Render(" " + strings.Repeat(sepChar, m.menuW) + " ")
 			lines = append(lines, sep)
+			absIdx++
+			continue
+		}
+		if item.IsHeader {
+			headerStyle := SemanticStyle("{{|Theme_EnvBuiltin|}}").Bold(true)
+			lbl := item.Label
+			if lipgloss.Width(lbl) > m.menuW {
+				lbl = TruncateRight(lbl, m.menuW)
+			}
+			pad := m.menuW - lipgloss.Width(lbl)
+			if pad < 0 {
+				pad = 0
+			}
+			lines = append(lines, bgStyle.Render(" ")+headerStyle.Render(lbl)+bgStyle.Render(strings.Repeat(" ", pad)+" "))
 			absIdx++
 			continue
 		}
@@ -317,7 +332,7 @@ func (m *ContextMenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	rowY := m.menuY + 1
 	for _, item := range visible {
 		h := itemHeight(item)
-		if !item.IsSeparator {
+		if !item.IsSeparator && !item.IsHeader {
 			regions = append(regions, HitRegion{
 				ID:     "ctxmenu.item-" + itoa(absIdx),
 				X:      m.menuX + 1,
@@ -420,7 +435,7 @@ func (m *ContextMenuModel) recalculate() {
 
 func (m *ContextMenuModel) firstSelectable() int {
 	for i, item := range m.items {
-		if !item.IsSeparator {
+		if !item.IsSeparator && !item.IsHeader {
 			return i
 		}
 	}
@@ -429,8 +444,8 @@ func (m *ContextMenuModel) firstSelectable() int {
 
 func (m *ContextMenuModel) moveCursor(delta int) {
 	next := m.cursor + delta
-	// Skip separators
-	for next >= 0 && next < len(m.items) && m.items[next].IsSeparator {
+	// Skip separators and headers
+	for next >= 0 && next < len(m.items) && (m.items[next].IsSeparator || m.items[next].IsHeader) {
 		next += delta
 	}
 	if next < 0 || next >= len(m.items) {
@@ -462,13 +477,13 @@ func (m *ContextMenuModel) scrollBy(delta int) {
 	if m.cursor < m.offset {
 		m.cursor = m.offset
 		// Find next selectable from offset
-		for m.cursor < len(m.items) && m.items[m.cursor].IsSeparator {
+		for m.cursor < len(m.items) && (m.items[m.cursor].IsSeparator || m.items[m.cursor].IsHeader) {
 			m.cursor++
 		}
 	}
 	if m.cursor >= m.offset+m.maxVisible {
 		m.cursor = m.offset + m.maxVisible - 1
-		for m.cursor >= 0 && m.items[m.cursor].IsSeparator {
+		for m.cursor >= 0 && (m.items[m.cursor].IsSeparator || m.items[m.cursor].IsHeader) {
 			m.cursor--
 		}
 	}

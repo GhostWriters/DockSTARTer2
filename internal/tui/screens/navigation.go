@@ -75,10 +75,12 @@ func navigateBack() tea.Cmd {
 	}
 }
 
-// navigateBackWithRefresh returns a command to navigate back and refresh the apps list
+// navigateBackWithRefresh returns a command to navigate back and refresh the apps list.
+// The refresh is dispatched by the NavigateBackMsg handler after the screen swap,
+// avoiding a race condition where RefreshAppsListMsg could arrive before back
+// navigation completes and be routed to the wrong screen.
 func navigateBackWithRefresh() tea.Cmd {
-	return tea.Batch(
-		navigateBack(),
-		func() tea.Msg { return tui.RefreshAppsListMsg{} },
-	)
+	return func() tea.Msg {
+		return tui.NavigateBackMsg{Refresh: true}
+	}
 }

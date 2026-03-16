@@ -62,8 +62,11 @@ func Update(ctx context.Context, force bool, file string) error {
 			os.WriteFile(tmpAppFile.Name(), []byte(strings.Join(appVars, "\n")), 0644)
 			defer os.Remove(tmpAppFile.Name())
 
-			// App default file for main .env section
-			appDefaultGlobalFile, _ := AppInstanceFile(ctx, strings.ToUpper(appName), ".env")
+			// App default file for main .env section — only for non-user-defined apps (Parity lines 51-53)
+			appDefaultGlobalFile := ""
+			if !IsAppUserDefined(ctx, appName, composeEnvFile) {
+				appDefaultGlobalFile, _ = AppInstanceFile(ctx, strings.ToUpper(appName), ".env")
+			}
 
 			formattedApp, err := FormatLines(ctx, tmpAppFile.Name(), appDefaultGlobalFile, appName, composeEnvFile)
 			if err == nil {
@@ -95,7 +98,11 @@ func Update(ctx context.Context, force bool, file string) error {
 				logger.Notice(ctx, "Updating '{{|File|}}%s{{[-]}}'.", appEnvFile)
 			}
 
-			appDefaultEnvFile, _ := AppInstanceFile(ctx, strings.ToUpper(appName), ".env.app.*")
+			// Only use template for non-user-defined apps (Parity lines 99-101)
+			appDefaultEnvFile := ""
+			if !IsAppUserDefined(ctx, appName, composeEnvFile) {
+				appDefaultEnvFile, _ = AppInstanceFile(ctx, strings.ToUpper(appName), ".env.app.*")
+			}
 			formattedAppFile, err := FormatLines(ctx, appEnvFile, appDefaultEnvFile, appName, composeEnvFile)
 			if err == nil {
 				finalAppContent := strings.Join(formattedAppFile, "\n")
