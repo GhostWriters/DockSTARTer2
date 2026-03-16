@@ -5,6 +5,7 @@ import (
 
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/tui"
+	"DockSTARTer2/internal/tui/components/sinput"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
@@ -50,7 +51,8 @@ type addVarDialogModel struct {
 	appName string
 	appDesc string
 
-	input  textinput.Model
+	input        sinput.Model
+	inputScreenX int
 	items  []addVarItem
 	cursor int
 	offset int
@@ -110,7 +112,7 @@ func newAddVarDialog(
 	return &addVarDialogModel{
 		appName:        appName,
 		appDesc:        appDesc,
-		input:          ti,
+		input:          sinput.New(ti),
 		items:          items,
 		focus:          addVarFocusInput,
 		addAllVars:     addAllVars,
@@ -120,7 +122,7 @@ func newAddVarDialog(
 }
 
 func (m *addVarDialogModel) Init() tea.Cmd {
-	return textinput.Blink
+	return sinput.Blink
 }
 
 func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -225,6 +227,16 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case tea.MouseMotionMsg:
+		if m.input.IsSelecting() {
+			m.input.HandleDragTo(msg.X)
+		}
+		return m, nil
+
+	case tea.MouseReleaseMsg:
+		m.input.EndDrag()
+		return m, nil
+
 	case tui.LayerHitMsg:
 		if msg.Button == tea.MouseMiddle {
 			return m, nil
@@ -245,6 +257,12 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if strings.HasSuffix(msg.ID, ".Cancel") {
 				return m, closeWith(nil)
+			}
+			if msg.ID == "addvar_input" {
+				m.focus = addVarFocusInput
+				m.input.Focus()
+				m.input.HandleClick(msg.X)
+				return m, nil
 			}
 			if msg.ID == "addvar_list" {
 				idx := m.itemIndexAt(msg.Y)
@@ -636,7 +654,20 @@ func (m *addVarDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegion 
 		listH += h
 	}
 
+	// Input hit region: outer_border(1) + headingH + section_top_border(1)
+	inputY := 1 + headingH + 1
+	m.inputScreenX = offsetX + 1 + 1 + 1 + m.input.PromptWidth()
+	m.input.SetScreenTextX(m.inputScreenX)
+
 	var regions []tui.HitRegion
+	regions = append(regions, tui.HitRegion{
+		ID:     "addvar_input",
+		X:      offsetX + 1,
+		Y:      offsetY + inputY,
+		Width:  contentW,
+		Height: 1,
+		ZOrder: tui.ZDialog + 10,
+	})
 	if listH > 0 {
 		regions = append(regions, tui.HitRegion{
 			ID:     "addvar_list",
