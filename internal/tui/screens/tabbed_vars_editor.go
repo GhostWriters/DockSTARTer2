@@ -870,6 +870,7 @@ func (m *TabbedVarsEditorModel) FullHelp() [][]key.Binding {
 			tui.Keys.EnvRefresh,
 			tui.Keys.EnvAddVar,
 			tui.Keys.EnvInsert,
+			tui.Keys.EnvSplitLine,
 			tui.Keys.EnvDelete,
 			key.NewBinding(key.WithKeys("ctrl+up"), key.WithHelp("Ctrl+↑/↓", "reorder row")),
 			key.NewBinding(key.WithKeys("ctrl+z"), key.WithHelp("Ctrl+Z/Y", "undo/redo")),

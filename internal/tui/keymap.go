@@ -68,6 +68,7 @@ type KeyMap struct {
 	EnvReorderU   key.Binding
 	EnvReorderD   key.Binding
 	EnvInsert     key.Binding
+	EnvSplitLine  key.Binding
 	EnvEditValue  key.Binding
 }
 
@@ -214,6 +215,10 @@ var Keys = KeyMap{
 	EnvInsert: key.NewBinding(
 		key.WithKeys("ctrl+o"),
 		key.WithHelp("ctrl+o", "insert row"),
+	),
+	EnvSplitLine: key.NewBinding(
+		key.WithKeys("ctrl+j"),
+		key.WithHelp("Ctrl+J", "split line at cursor"),
 	),
 	EnvEditValue: key.NewBinding(
 		key.WithKeys("f2"),
