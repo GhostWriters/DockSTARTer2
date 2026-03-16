@@ -92,6 +92,7 @@ EnvPendingDelete = "{{[gray::S]}}"
 GutterAdded = "{{[:green:]}}"
 GutterDeleted = "{{[:red:]}}"
 GutterModified = "{{[:yellow:]}}"
+GutterInvalid = "{{[:red:B]}}"
 
 ListDefault = ""
 ListApp = "{{[black::R]}}"

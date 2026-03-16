@@ -497,6 +497,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "f5", "ctrl+r":
 			for i := range m.tabs {
 				m.tabs[i].editor.ReclassifyEnv(m.tabs[i].editor.DefaultValueFunc, m.tabs[i].readOnlyVars)
+				m.tabs[i].editor.MergeEnv()
 			}
 			m.SetSize(m.width, m.height)
 			return m, nil
@@ -671,6 +672,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			editorStyles.Focused.GutterAdded = tui.SemanticRawStyle("Theme_GutterAdded")
 			editorStyles.Focused.GutterDeleted = tui.SemanticRawStyle("Theme_GutterDeleted")
 			editorStyles.Focused.GutterModified = tui.SemanticRawStyle("Theme_GutterModified")
+			editorStyles.Focused.GutterInvalid = tui.SemanticRawStyle("Theme_GutterInvalid")
 			editorStyles.Blurred.InvalidText = tui.SemanticRawStyle("Theme_EnvInvalid")
 			editorStyles.Blurred.DuplicateText = tui.SemanticRawStyle("Theme_EnvDuplicate")
 			editorStyles.Blurred.BuiltinText = tui.SemanticRawStyle("Theme_EnvBuiltin")
@@ -679,6 +681,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			editorStyles.Blurred.GutterAdded = tui.SemanticRawStyle("Theme_GutterAdded")
 			editorStyles.Blurred.GutterDeleted = tui.SemanticRawStyle("Theme_GutterDeleted")
 			editorStyles.Blurred.GutterModified = tui.SemanticRawStyle("Theme_GutterModified")
+			editorStyles.Blurred.GutterInvalid = tui.SemanticRawStyle("Theme_GutterInvalid")
 			m.tabs[i].editor.SetStyles(editorStyles)
 			// Update tab metadata used by saveEnv and heading display
 			m.tabs[i].initialVars = data.initialVars
