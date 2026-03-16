@@ -49,6 +49,9 @@ func (m *Model) ParseEnv(content string, defaultFunc func(string) string, readOn
 
 				if isReadOnly {
 					l.ReadOnly = true
+					if inUserDefinedSection {
+						l.IsInvalid = true
+					}
 				} else {
 						// Identify if it's in the User Defined section
 						if inUserDefinedSection {
@@ -141,6 +144,9 @@ func (m *Model) ReclassifyEnv(defaultFunc func(string) string, readOnlyVars []st
 
 				if isReadOnly {
 					l.ReadOnly = true
+					if inUserDefinedSection {
+						l.IsInvalid = true
+					}
 				} else {
 					if inUserDefinedSection {
 						l.IsUserDefined = true
@@ -165,6 +171,84 @@ func (m *Model) ReclassifyEnv(defaultFunc func(string) string, readOnlyVars []st
 		m.lineMeta[i] = l
 	}
 	m.InvalidateCache()
+}
+
+// MergeEnv resolves duplicate variable keys in the editor.
+// For each key that appears more than once among editable (non-ReadOnly, non-PendingDelete)
+// variable lines, the last occurrence's value is written to the first occurrence and all
+// subsequent occurrences are marked PendingDelete. Already-deleted lines are excluded from
+// the merge calculation (so they don't contribute their value and aren't double-processed).
+// Returns true if any changes were made.
+// Call after ReclassifyEnv on F5 so deletions are already excluded before value merging.
+func (m *Model) MergeEnv() bool {
+	type occ struct {
+		row   int
+		raw   string
+		value string // everything after '='
+	}
+	byKey := map[string][]occ{}
+	var keyOrder []string // first-seen order preserves file structure
+
+	for i, lineRunes := range m.value {
+		if i >= len(m.lineMeta) {
+			break
+		}
+		meta := m.lineMeta[i]
+		if !meta.IsVariable || meta.ReadOnly || meta.PendingDelete {
+			continue
+		}
+		raw := string(lineRunes)
+		eqIdx := strings.Index(raw, "=")
+		if eqIdx < 0 {
+			continue
+		}
+		key := strings.TrimSpace(raw[:eqIdx])
+		if _, seen := byKey[key]; !seen {
+			keyOrder = append(keyOrder, key)
+		}
+		byKey[key] = append(byKey[key], occ{row: i, raw: raw, value: raw[eqIdx+1:]})
+	}
+
+	// Check whether there's anything to do before touching undo state.
+	hasDuplicates := false
+	for _, occs := range byKey {
+		if len(occs) >= 2 {
+			hasDuplicates = true
+			break
+		}
+	}
+	if !hasDuplicates {
+		return false
+	}
+
+	m.pushUndoSnapshot()
+
+	for _, key := range keyOrder {
+		occs := byKey[key]
+		if len(occs) < 2 {
+			continue
+		}
+		lastVal := occs[len(occs)-1].value
+		first := occs[0]
+
+		// Update first occurrence value if it differs from the last.
+		eqIdx := strings.Index(first.raw, "=")
+		if eqIdx >= 0 {
+			newRaw := first.raw[:eqIdx+1] + lastVal
+			if newRaw != first.raw {
+				m.value[first.row] = []rune(newRaw)
+			}
+		}
+
+		// Mark all subsequent occurrences for deletion.
+		for _, o := range occs[1:] {
+			m.lineMeta[o.row].PendingDelete = true
+			m.lineMeta[o.row].ReadOnly = true
+		}
+	}
+
+	m.InvalidateCache()
+	return true
 }
 
 // AfterSave updates the editor's baseline to match the current saved state:

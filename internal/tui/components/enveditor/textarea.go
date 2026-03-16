@@ -182,6 +182,7 @@ type Line struct {
 	PendingDelete    bool   // marked for deletion on next save; shown with strikethrough
 	InitialLine      string // full line text at load time, used for changed (C) gutter marker
 	IsNewLine        bool   // added by the user after load; shows + in gutter
+	IsInvalid        bool   // in user-defined section but key is in readOnlyVars; shows ! in gutter
 }
 
 // CursorStyle is the style for real and virtual cursors.
@@ -247,6 +248,7 @@ type StyleState struct {
 	GutterAdded       lipgloss.Style // + marker for new lines
 	GutterDeleted     lipgloss.Style // - marker for pending-delete lines
 	GutterModified    lipgloss.Style // ~ marker for changed lines
+	GutterInvalid     lipgloss.Style // ! marker for protected vars entered in user-defined section
 	ScrollbarTrack    lipgloss.Style
 	ScrollbarThumb    lipgloss.Style
 	SelectionText     lipgloss.Style
@@ -498,6 +500,7 @@ func DefaultStyles(isDark bool) Styles {
 		GutterAdded:       lipgloss.NewStyle().Foreground(lipgloss.Color("2")),  // Green
 		GutterDeleted:     lipgloss.NewStyle().Foreground(lipgloss.Color("1")),  // Red
 		GutterModified:    lipgloss.NewStyle().Foreground(lipgloss.Color("3")),  // Yellow
+		GutterInvalid:     lipgloss.NewStyle().Foreground(lipgloss.Color("9")),  // Bright red
 		ScrollbarTrack:    lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
 		ScrollbarThumb:    lipgloss.NewStyle().Foreground(lipgloss.Color("7")),
 		SelectionText:     lipgloss.NewStyle().Reverse(true),
@@ -521,6 +524,7 @@ func DefaultStyles(isDark bool) Styles {
 		GutterAdded:       lipgloss.NewStyle().Foreground(lipgloss.Color("2")),
 		GutterDeleted:     lipgloss.NewStyle().Foreground(lipgloss.Color("1")),
 		GutterModified:    lipgloss.NewStyle().Foreground(lipgloss.Color("3")),
+		GutterInvalid:     lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
 		ScrollbarTrack:    lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
 		ScrollbarThumb:    lipgloss.NewStyle().Foreground(lipgloss.Color("7")),
 		SelectionText:     lipgloss.NewStyle().Reverse(true),
@@ -2748,12 +2752,19 @@ func (m Model) promptView(displayLine, dataLine int) (prompt string) {
 		if meta.PendingDelete {
 			return styles.GutterDeleted.Render("-")
 		}
-		if meta.IsNewLine {
-			return styles.GutterAdded.Render("+")
+		if meta.IsInvalid {
+			return styles.GutterInvalid.Render("!")
 		}
-		if meta.IsVariable && !meta.ReadOnly && !meta.IsNewLine &&
-			meta.InitialLine != "" && string(m.value[dataLine]) != meta.InitialLine {
-			return styles.GutterModified.Render("~")
+		if meta.IsVariable {
+			lineContent := string(m.value[dataLine])
+			// + for lines explicitly flagged as new, or for lines that were blank at
+			// load time and now have content (user typed into a blank line).
+			if meta.IsNewLine || meta.InitialLine == "" {
+				return styles.GutterAdded.Render("+")
+			}
+			if !meta.ReadOnly && meta.InitialLine != "" && lineContent != meta.InitialLine {
+				return styles.GutterModified.Render("~")
+			}
 		}
 	}
 
