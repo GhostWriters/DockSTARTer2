@@ -217,25 +217,25 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case LayerHitMsg:
 		// Scrollbar arrow/track clicks (IDs are prefixed with IDLogPanel + ".sb.")
 		if strings.HasSuffix(msg.ID, ".sb.up") {
-			if m.expanded {
+			if m.expanded && msg.Button != HoverButton {
 				m.viewport.ScrollUp(1)
 			}
 			return m, nil
 		}
 		if strings.HasSuffix(msg.ID, ".sb.down") {
-			if m.expanded {
+			if m.expanded && msg.Button != HoverButton {
 				m.viewport.ScrollDown(1)
 			}
 			return m, nil
 		}
 		if strings.HasSuffix(msg.ID, ".sb.above") {
-			if m.expanded {
+			if m.expanded && msg.Button != HoverButton {
 				m.viewport.HalfPageUp()
 			}
 			return m, nil
 		}
 		if strings.HasSuffix(msg.ID, ".sb.below") {
-			if m.expanded {
+			if m.expanded && msg.Button != HoverButton {
 				m.viewport.HalfPageDown()
 			}
 			return m, nil
