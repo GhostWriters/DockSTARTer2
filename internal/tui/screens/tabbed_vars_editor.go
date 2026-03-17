@@ -1599,9 +1599,12 @@ func (m *TabbedVarsEditorModel) GetInputCursor() (relX, relY int, shape tea.Curs
 	// plus subtitle rows stacked above the inner border.
 	relX = 2 + c.Position.X
 	relY = 2 + m.subtitleHeight + c.Position.Y
-	if editor.IsOverwrite() {
+	switch {
+	case !editor.IsEditableAtCursor():
+		shape = tea.CursorUnderline
+	case editor.IsOverwrite():
 		shape = tea.CursorBlock
-	} else {
+	default:
 		shape = tea.CursorBar
 	}
 	return relX, relY, shape, true

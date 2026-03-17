@@ -578,6 +578,9 @@ func (m *Model) SetStyles(s Styles) {
 // IsOverwrite returns true when the textarea is in overwrite (replace) mode.
 func (m Model) IsOverwrite() bool { return m.Overwrite }
 
+// IsEditableAtCursor returns true when the cursor is on an editable position.
+func (m Model) IsEditableAtCursor() bool { return m.isEditableAtCursor() }
+
 // VirtualCursor returns whether or not the virtual cursor is enabled.
 func (m Model) VirtualCursor() bool {
 	return m.useVirtualCursor
