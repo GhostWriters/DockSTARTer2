@@ -21,7 +21,48 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/atotto/clipboard"
 )
+
+// ─── Message types for context-menu clipboard operations ────────────────────
+
+// PasteMsg inserts Text at the cursor position, replacing any active selection.
+type PasteMsg struct{ Text string }
+
+// CutMsg deletes the active selection (or the entire value) after the caller
+// has already written the text to the OS clipboard.
+type CutMsg struct{}
+
+// SelectAllMsg selects all text in the field.
+type SelectAllMsg struct{}
+
+// ─── KeyMap ──────────────────────────────────────────────────────────────────
+
+// KeyMap holds the keyboard shortcuts used by sinput.
+type KeyMap struct {
+	SelectLeft  key.Binding // shift+left  — extend selection left
+	SelectRight key.Binding // shift+right — extend selection right
+	SelectHome  key.Binding // shift+home  — extend selection to start
+	SelectEnd   key.Binding // shift+end   — extend selection to end
+	SelectAll   key.Binding // ctrl+a      — select all
+	Copy        key.Binding // ctrl+c      — copy to clipboard
+	Cut         key.Binding // ctrl+x      — cut to clipboard
+	Insert      key.Binding // insert      — toggle insert/overwrite mode
+}
+
+// DefaultKeyMap returns the standard key bindings for sinput.
+func DefaultKeyMap() KeyMap {
+	return KeyMap{
+		SelectLeft:  key.NewBinding(key.WithKeys("shift+left"), key.WithHelp("shift+left", "select left")),
+		SelectRight: key.NewBinding(key.WithKeys("shift+right"), key.WithHelp("shift+right", "select right")),
+		SelectHome:  key.NewBinding(key.WithKeys("shift+home"), key.WithHelp("shift+home", "select to start")),
+		SelectEnd:   key.NewBinding(key.WithKeys("shift+end"), key.WithHelp("shift+end", "select to end")),
+		SelectAll:   key.NewBinding(key.WithKeys("ctrl+a"), key.WithHelp("ctrl+a", "select all")),
+		Copy:        key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "copy")),
+		Cut:         key.NewBinding(key.WithKeys("ctrl+x"), key.WithHelp("ctrl+x", "cut")),
+		Insert:      key.NewBinding(key.WithKeys("insert"), key.WithHelp("insert", "toggle insert/overwrite")),
+	}
+}
 
 // Blink re-exports textinput.Blink so callers don't need to import both packages.
 var Blink = textinput.Blink
@@ -31,10 +72,10 @@ type Model struct {
 	textinput.Model
 
 	// Selection state (all in logical rune positions)
-	selActive  bool
-	selStart   int // inclusive
-	selEnd     int // exclusive
-	selAnchor  int
+	selActive   bool
+	selStart    int // inclusive
+	selEnd      int // exclusive
+	selAnchor   int
 	isSelecting bool // left button held, extending selection
 
 	// Click tracking for multi-click
@@ -50,15 +91,28 @@ type Model struct {
 	// screenTextX is the absolute screen X of the first text character
 	// (after border, padding, prompt). Set by SetScreenTextX().
 	screenTextX int
+
+	// KeyMap holds keyboard shortcut bindings.
+	KeyMap KeyMap
+
+	// Overwrite indicates insert (false) vs overwrite (true) mode.
+	Overwrite bool
 }
 
 // New wraps an existing textinput.Model.  Configure the textinput first
 // (CharLimit, Placeholder, EchoMode, Focus, Styles, etc.) then wrap it.
 func New(ti textinput.Model) Model {
-	return Model{
+	m := Model{
 		Model:    ti,
 		SelStyle: lipgloss.NewStyle().Reverse(true),
+		KeyMap:   DefaultKeyMap(),
 	}
+	// Use the hardware cursor (rendered by the terminal) instead of the
+	// virtual cursor (a character rendered inside the view string).  The
+	// hardware cursor supports shape changes (bar vs block) and doesn't
+	// require a Blink command loop.
+	m.Model.SetVirtualCursor(false)
+	return m
 }
 
 // SetScreenTextX records the absolute screen X coordinate of the first text
@@ -71,6 +125,20 @@ func (m Model) PromptWidth() int { return lipgloss.Width(m.Model.Prompt) }
 
 // IsSelecting reports whether a drag-selection is in progress.
 func (m Model) IsSelecting() bool { return m.isSelecting }
+
+// IsOverwrite reports whether the input is in overwrite (OVR) mode.
+func (m Model) IsOverwrite() bool { return m.Overwrite }
+
+// CursorColumn returns the visual X offset of the cursor within the
+// rendered textinput view (i.e. after prompt, within the text width).
+// Returns 0 when the input is not focused.
+func (m Model) CursorColumn() int {
+	c := m.Model.Cursor()
+	if c == nil {
+		return 0
+	}
+	return c.Position.X
+}
 
 // SelectedText returns the currently selected text, or "" if no selection.
 func (m Model) SelectedText() string {
@@ -149,14 +217,113 @@ func (m *Model) EndDrag() { m.isSelecting = false }
 // textinput (which manages cursor movement, typing, paste, etc.) after
 // clearing or acting on any active selection.  Mouse events are handled here.
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
+	var cmd tea.Cmd
+
 	switch msg := msg.(type) {
 	case tea.MouseReleaseMsg:
 		m.isSelecting = false
 		return m, nil
 
+	// ─── Context-menu clipboard messages ─────────────────────────────────────
+	case PasteMsg:
+		if m.selActive {
+			m.deleteSelection()
+			m.clearSelection()
+		}
+		val := []rune(m.Model.Value())
+		pos := m.Model.Position()
+		ins := []rune(msg.Text)
+		newVal := string(append(append(val[:pos:pos], ins...), val[pos:]...))
+		m.Model.SetValue(newVal)
+		m.Model.SetCursor(pos + len(ins))
+		m.syncViewport()
+		return m, nil
+
+	case CutMsg:
+		text := m.SelectedText()
+		if text == "" {
+			text = m.Model.Value()
+			m.Model.SetValue("")
+			m.Model.SetCursor(0)
+		} else {
+			m.deleteSelection()
+			m.clearSelection()
+		}
+		_ = clipboard.WriteAll(text)
+		m.syncViewport()
+		return m, nil
+
+	case SelectAllMsg:
+		val := []rune(m.Model.Value())
+		m.selStart = 0
+		m.selEnd = len(val)
+		m.selAnchor = 0
+		m.selActive = len(val) > 0
+		m.Model.SetCursor(len(val))
+		m.syncViewport()
+		return m, nil
+
 	case tea.KeyPressMsg:
-		// When a selection is active, intercept destructive keys to delete the
-		// selected region, and printable keys to replace it.
+		// ─── Insert key: toggle insert/overwrite mode ─────────────────────────
+		if key.Matches(msg, m.KeyMap.Insert) {
+			m.Overwrite = !m.Overwrite
+			return m, nil
+		}
+
+		// ─── Keyboard selection (shift+arrow/home/end) ────────────────────────
+		if key.Matches(msg, m.KeyMap.SelectLeft, m.KeyMap.SelectRight,
+			m.KeyMap.SelectHome, m.KeyMap.SelectEnd) {
+			if !m.selActive {
+				m.selAnchor = m.Model.Position()
+			}
+			// Strip Shift so textinput moves the cursor without its own logic.
+			stripped := msg
+			stripped.Mod &^= tea.ModShift
+			m.Model, cmd = m.Model.Update(stripped)
+			m.updateSelectionFromAnchor(m.Model.Position())
+			m.syncViewport()
+			return m, cmd
+		}
+
+		// ─── Select all ───────────────────────────────────────────────────────
+		if key.Matches(msg, m.KeyMap.SelectAll) {
+			val := []rune(m.Model.Value())
+			m.selStart = 0
+			m.selEnd = len(val)
+			m.selAnchor = 0
+			m.selActive = len(val) > 0
+			m.Model.SetCursor(len(val))
+			m.syncViewport()
+			return m, nil
+		}
+
+		// ─── Copy ─────────────────────────────────────────────────────────────
+		if key.Matches(msg, m.KeyMap.Copy) {
+			text := m.SelectedText()
+			if text == "" {
+				text = m.Model.Value()
+			}
+			_ = clipboard.WriteAll(text)
+			return m, nil
+		}
+
+		// ─── Cut ──────────────────────────────────────────────────────────────
+		if key.Matches(msg, m.KeyMap.Cut) {
+			text := m.SelectedText()
+			if text == "" {
+				text = m.Model.Value()
+				m.Model.SetValue("")
+				m.Model.SetCursor(0)
+			} else {
+				m.deleteSelection()
+				m.clearSelection()
+			}
+			_ = clipboard.WriteAll(text)
+			m.syncViewport()
+			return m, nil
+		}
+
+		// ─── Selection-aware delete / printable-replace ───────────────────────
 		if m.selActive {
 			km := m.Model.KeyMap
 			isDelete := false
@@ -188,8 +355,31 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		}
 	}
 
+	// ─── Overwrite mode: replace char at cursor instead of inserting ──────
+	if kp, ok := msg.(tea.KeyPressMsg); ok && m.Overwrite && kp.Text != "" {
+		val := []rune(m.Model.Value())
+		pos := m.Model.Position()
+		ins := []rune(kp.Text)
+		var newVal []rune
+		if pos < len(val) {
+			// Replace chars starting at cursor (overwrite)
+			end := pos + len(ins)
+			if end > len(val) {
+				end = len(val)
+			}
+			newVal = append(append([]rune{}, val[:pos]...), ins...)
+			newVal = append(newVal, val[end:]...)
+		} else {
+			// Cursor is at end — just append
+			newVal = append(val, ins...)
+		}
+		m.Model.SetValue(string(newVal))
+		m.Model.SetCursor(pos + len(ins))
+		m.syncViewport()
+		return m, nil
+	}
+
 	// Delegate to the embedded textinput for all other messages.
-	var cmd tea.Cmd
 	m.Model, cmd = m.Model.Update(msg)
 	m.syncViewport()
 	return m, cmd
@@ -247,6 +437,19 @@ func (m Model) View() string {
 func (m *Model) clearSelection() {
 	m.selActive = false
 	m.isSelecting = false
+}
+
+// updateSelectionFromAnchor sets selStart/selEnd based on the relationship
+// between newPos and the stored selAnchor, then updates selActive.
+func (m *Model) updateSelectionFromAnchor(newPos int) {
+	if newPos <= m.selAnchor {
+		m.selStart = newPos
+		m.selEnd = m.selAnchor
+	} else {
+		m.selStart = m.selAnchor
+		m.selEnd = newPos
+	}
+	m.selActive = m.selStart < m.selEnd
 }
 
 func (m *Model) deleteSelection() {

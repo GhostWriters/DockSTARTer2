@@ -15,6 +15,7 @@ type ContextMenuItem struct {
 	Help        string            // Optional help text (shown in helpline when item is focused)
 	IsSeparator bool              // When true, renders as a horizontal divider and is not selectable
 	IsHeader    bool              // When true, renders Label as a non-selectable title row
+	Disabled    bool              // When true, renders dimmed and is not selectable or executable
 	Action      tea.Cmd          // Executed when the item is selected; should close the dialog itself
 	SubItems    []ContextMenuItem // When non-empty, selecting opens a submenu instead of Action
 }
@@ -110,7 +111,7 @@ func (m *ContextMenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if strings.HasPrefix(msg.ID, "ctxmenu.item-") {
 			idxStr := strings.TrimPrefix(msg.ID, "ctxmenu.item-")
 			idx := parseIntSafe(idxStr)
-			if idx >= 0 && idx < len(m.items) && !m.items[idx].IsSeparator && !m.items[idx].IsHeader {
+			if idx >= 0 && idx < len(m.items) && !m.items[idx].IsSeparator && !m.items[idx].IsHeader && !m.items[idx].Disabled {
 				m.cursor = idx
 				if msg.Button == tea.MouseLeft {
 					return m, m.executeSelected()
@@ -137,7 +138,7 @@ func (m *ContextMenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// item under the cursor. model_update.go calls h.HelpText() after every
 		// dialog Update(), so the helpline updates automatically.
 		idx := m.itemIndexAt(msg.X, msg.Y)
-		if idx >= 0 && idx < len(m.items) && !m.items[idx].IsSeparator && !m.items[idx].IsHeader {
+		if idx >= 0 && idx < len(m.items) && !m.items[idx].IsSeparator && !m.items[idx].IsHeader && !m.items[idx].Disabled {
 			m.cursor = idx
 			if m.cursor < m.offset {
 				m.offset = m.cursor
@@ -179,6 +180,7 @@ func (m *ContextMenuModel) ViewString() string {
 	normalStyle := SemanticStyle("{{|Theme_Item|}}")
 	selectedStyle := SemanticStyle("{{|Theme_ItemSelected|}}")
 	subLabelStyle := SemanticStyle("{{|Theme_HelpItem|}}")
+	disabledStyle := normalStyle.Faint(true)
 
 	// Compute which items are visible
 	visible := m.visibleItems()
@@ -226,7 +228,9 @@ func (m *ContextMenuModel) ViewString() string {
 		}
 		line := " " + label + strings.Repeat(" ", pad) + " "
 
-		if absIdx == m.cursor {
+		if item.Disabled {
+			lines = append(lines, MaintainBackground(disabledStyle.Render(line), bgStyle))
+		} else if absIdx == m.cursor {
 			lines = append(lines, MaintainBackground(selectedStyle.Render(line), selectedStyle))
 			if item.SubLabel != "" {
 				sl := item.SubLabel
@@ -435,7 +439,7 @@ func (m *ContextMenuModel) recalculate() {
 
 func (m *ContextMenuModel) firstSelectable() int {
 	for i, item := range m.items {
-		if !item.IsSeparator && !item.IsHeader {
+		if !item.IsSeparator && !item.IsHeader && !item.Disabled {
 			return i
 		}
 	}
@@ -444,8 +448,8 @@ func (m *ContextMenuModel) firstSelectable() int {
 
 func (m *ContextMenuModel) moveCursor(delta int) {
 	next := m.cursor + delta
-	// Skip separators and headers
-	for next >= 0 && next < len(m.items) && (m.items[next].IsSeparator || m.items[next].IsHeader) {
+	// Skip separators, headers, and disabled items
+	for next >= 0 && next < len(m.items) && (m.items[next].IsSeparator || m.items[next].IsHeader || m.items[next].Disabled) {
 		next += delta
 	}
 	if next < 0 || next >= len(m.items) {
@@ -474,16 +478,18 @@ func (m *ContextMenuModel) scrollBy(delta int) {
 		m.offset = maxOff
 	}
 	// Keep cursor within visible range
+	isUnselectable := func(i int) bool {
+		return m.items[i].IsSeparator || m.items[i].IsHeader || m.items[i].Disabled
+	}
 	if m.cursor < m.offset {
 		m.cursor = m.offset
-		// Find next selectable from offset
-		for m.cursor < len(m.items) && (m.items[m.cursor].IsSeparator || m.items[m.cursor].IsHeader) {
+		for m.cursor < len(m.items) && isUnselectable(m.cursor) {
 			m.cursor++
 		}
 	}
 	if m.cursor >= m.offset+m.maxVisible {
 		m.cursor = m.offset + m.maxVisible - 1
-		for m.cursor >= 0 && (m.items[m.cursor].IsSeparator || m.items[m.cursor].IsHeader) {
+		for m.cursor >= 0 && isUnselectable(m.cursor) {
 			m.cursor--
 		}
 	}
@@ -494,6 +500,9 @@ func (m *ContextMenuModel) executeSelected() tea.Cmd {
 		return func() tea.Msg { return CloseDialogMsg{} }
 	}
 	item := m.items[m.cursor]
+	if item.Disabled {
+		return nil
+	}
 
 	// Item with sub-items: open a child context menu positioned to the right.
 	if len(item.SubItems) > 0 {

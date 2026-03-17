@@ -60,6 +60,11 @@ type (
 	// CloseDialogMsg closes the current dialog
 	CloseDialogMsg struct {
 		Result any
+		// ForwardToParent, when true, pops only one dialog level and delivers
+		// Result to the restored parent dialog rather than draining the entire
+		// stack and sending to the active screen.  Use this for results that
+		// belong to a parent dialog (e.g. sinput clipboard operations).
+		ForwardToParent bool
 	}
 
 	// UpdateHeaderMsg triggers a header refresh

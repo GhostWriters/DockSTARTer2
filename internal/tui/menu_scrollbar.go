@@ -170,6 +170,174 @@ func BuildPlainBottomBorder(totalWidth int, focused bool, ctx StyleContext) stri
 	return borderStyle.Render(border.BottomLeft + inner + border.BottomRight)
 }
 
+// BuildLabeledBottomBorderCtx constructs a bottom border line with a short label
+// on the LEFT side (e.g. "INS" or "OVR"), styled to match the box border.
+// totalWidth is the full visual width of the bordered box including side border chars.
+// The function selects border characters based on ctx.Type and ctx.LineCharacters.
+func BuildLabeledBottomBorderCtx(totalWidth int, label string, focused bool, ctx StyleContext) string {
+	var border lipgloss.Border
+	var leftT, rightT string
+
+	if ctx.Type == DialogTypeConfirm {
+		// Slanted border variant used by the prompt dialog input box
+		if ctx.LineCharacters {
+			if focused {
+				border = SlantedThickBorder
+			} else {
+				border = SlantedBorder
+			}
+		} else {
+			if focused {
+				border = SlantedThickAsciiBorder
+			} else {
+				border = SlantedAsciiBorder
+			}
+		}
+		if ctx.LineCharacters {
+			leftT = "┤"
+			rightT = "├"
+		} else {
+			leftT = "+"
+			rightT = "+"
+		}
+	} else {
+		// Rounded border variant used by set-value / add-var input sections
+		if ctx.LineCharacters {
+			if focused {
+				border = ThickRoundedBorder
+			} else {
+				border = lipgloss.RoundedBorder()
+			}
+		} else {
+			if focused {
+				border = RoundedThickAsciiBorder
+			} else {
+				border = RoundedAsciiBorder
+			}
+		}
+		if ctx.LineCharacters {
+			if focused {
+				leftT = "┫"
+				rightT = "┣"
+			} else {
+				leftT = "┤"
+				rightT = "├"
+			}
+		} else {
+			if focused {
+				leftT = "H"
+				rightT = "H"
+			} else {
+				leftT = "+"
+				rightT = "+"
+			}
+		}
+	}
+
+	borderStyle := lipgloss.NewStyle().
+		Foreground(ctx.Border2Color).
+		Background(ctx.Dialog.GetBackground())
+	labelStyle := ctx.TagKey.Bold(true)
+
+	labelWidth := lipgloss.Width(label)
+	leftPadCnt := 1 // one border char before label connector
+	totalLabelWidth := 1 + labelWidth + 1
+	rightPadCnt := totalWidth - 2 - totalLabelWidth - leftPadCnt
+	if rightPadCnt < 0 {
+		rightPadCnt = 0
+	}
+
+	leftPart := borderStyle.Render(border.BottomLeft + strutil.Repeat(border.Bottom, leftPadCnt))
+	leftConnector := borderStyle.Render(leftT)
+	rightConnector := borderStyle.Render(rightT)
+	rightPart := borderStyle.Render(strutil.Repeat(border.Bottom, rightPadCnt) + border.BottomRight)
+	return lipgloss.JoinHorizontal(lipgloss.Bottom, leftPart, leftConnector, labelStyle.Render(label), rightConnector, rightPart)
+}
+
+// BuildDualLabelBottomBorderCtx constructs a bottom border line with a label on the LEFT
+// (e.g. "INS"/"OVR") and an optional label on the RIGHT (e.g. "42%").
+// Pass an empty string for rightLabel when no right label is needed.
+// Uses rounded borders (for editor inner boxes, not confirm-style slanted borders).
+func BuildDualLabelBottomBorderCtx(totalWidth int, leftLabel, rightLabel string, focused bool, ctx StyleContext) string {
+	var border lipgloss.Border
+	if ctx.LineCharacters {
+		if focused {
+			border = ThickRoundedBorder
+		} else {
+			border = lipgloss.RoundedBorder()
+		}
+	} else {
+		if focused {
+			border = RoundedThickAsciiBorder
+		} else {
+			border = RoundedAsciiBorder
+		}
+	}
+
+	var leftT, rightT string
+	if ctx.LineCharacters {
+		if focused {
+			leftT = "┫"
+			rightT = "┣"
+		} else {
+			leftT = "┤"
+			rightT = "├"
+		}
+	} else {
+		if focused {
+			leftT = "H"
+			rightT = "H"
+		} else {
+			leftT = "+"
+			rightT = "+"
+		}
+	}
+
+	borderStyle := lipgloss.NewStyle().
+		Foreground(ctx.Border2Color).
+		Background(ctx.Dialog.GetBackground())
+	labelStyle := ctx.TagKey.Bold(true)
+
+	// Left segment: BottomLeft + 1×bottom + leftT + leftLabel + rightT
+	leftLabelW := lipgloss.Width(leftLabel)
+	leftSegW := 1 + 1 + 1 + leftLabelW + 1 // BottomLeft(1) + bottom(1) + leftT(1) + label + rightT(1)
+
+	// Right segment (optional): leftT + rightLabel + rightT + 1×bottom + BottomRight
+	rightLabelW := 0
+	rightSegW := 0
+	if rightLabel != "" {
+		rightLabelW = lipgloss.Width(rightLabel)
+		rightSegW = 1 + rightLabelW + 1 + 1 + 1 // leftT(1) + label + rightT(1) + bottom(1) + BottomRight(1)
+	} else {
+		rightSegW = 1 // just BottomRight
+	}
+
+	// Middle dashes fill the remaining width
+	middleW := totalWidth - leftSegW - rightSegW
+	if middleW < 0 {
+		middleW = 0
+	}
+
+	parts := []string{
+		borderStyle.Render(border.BottomLeft + strutil.Repeat(border.Bottom, 1)),
+		borderStyle.Render(leftT),
+		labelStyle.Render(leftLabel),
+		borderStyle.Render(rightT),
+		borderStyle.Render(strutil.Repeat(border.Bottom, middleW)),
+	}
+	if rightLabel != "" {
+		parts = append(parts,
+			borderStyle.Render(leftT),
+			labelStyle.Render(rightLabel),
+			borderStyle.Render(rightT),
+			borderStyle.Render(strutil.Repeat(border.Bottom, 1)+border.BottomRight),
+		)
+	} else {
+		parts = append(parts, borderStyle.Render(border.BottomRight))
+	}
+	return lipgloss.JoinHorizontal(lipgloss.Bottom, parts...)
+}
+
 // BuildScrollPercentBottomBorder constructs a bottom border line for an inner box
 // with a scroll-percent label on the right, styled identically to the programbox indicator.
 // totalWidth is the full visual width of the bordered box including side border chars.
