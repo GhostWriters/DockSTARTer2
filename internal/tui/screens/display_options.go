@@ -5,6 +5,7 @@ import (
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/tui"
 	"fmt"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -55,7 +56,7 @@ type updateDisplayOptionMsg struct {
 func NewDisplayOptionsScreen(isRoot bool) *DisplayOptionsScreen {
 	themes, _ := theme.List()
 	cfg := config.LoadAppConfig()
-	current := cfg.UI.Theme // ConfigValue e.g. "DockSTARTer" or "user://MyTheme"
+	current := cfg.UI.Theme // ConfigValue e.g. "DockSTARTer" or "user:MyTheme"
 
 	s := &DisplayOptionsScreen{
 		isRoot:        isRoot,
@@ -76,6 +77,7 @@ func NewDisplayOptionsScreen(isRoot bool) *DisplayOptionsScreen {
 func (s *DisplayOptionsScreen) initMenus() {
 	// 1. Theme Selection Menu
 	themeItems := make([]tui.MenuItem, len(s.themes))
+	foundCurrent := false
 	for i, t := range s.themes {
 		desc := t.Description
 		if t.Author != "" {
@@ -85,15 +87,37 @@ func (s *DisplayOptionsScreen) initMenus() {
 		if t.IsUserTheme {
 			descTag = "{{|Theme_ListThemeUserDefined|}}"
 		}
+		checked := s.currentTheme == t.ConfigValue
+		if checked {
+			foundCurrent = true
+		}
 		themeItems[i] = tui.MenuItem{
 			Tag:           t.Name,
 			Desc:          descTag + desc,
 			Help:          desc,
 			IsRadioButton: true,
-			Checked:       s.currentTheme == t.ConfigValue,
+			Checked:       checked,
 			IsUserDefined: t.IsUserTheme,
 			Metadata:      map[string]string{"config_value": t.ConfigValue},
 		}
+	}
+	// If the configured theme no longer exists on disk, prepend a placeholder so the
+	// user can see what is active and optionally switch away from it.
+	if !foundCurrent && s.currentTheme != "" {
+		shortURI := s.currentTheme
+		if strings.HasPrefix(s.currentTheme, "file:") {
+			shortURI = "file:" + theme.ThemeDisplayName(s.currentTheme)
+		}
+		displayName := "(missing) " + shortURI
+		themeItems = append([]tui.MenuItem{{
+			Tag:           displayName,
+			Desc:          "{{|Theme_ListThemeUserDefined|}}Source file not found — using cached version",
+			Help:          "Theme source file is missing. The cached version remains active until you choose another theme.",
+			IsRadioButton: true,
+			Checked:       true,
+			IsUserDefined: true,
+			Metadata:      map[string]string{"config_value": s.currentTheme},
+		}}, themeItems...)
 	}
 
 	themeMenu := tui.NewMenuModel(tui.IDThemePanel, "Select Theme", "", themeItems, nil)

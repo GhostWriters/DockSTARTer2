@@ -26,10 +26,10 @@ func ClearSemanticCache() {
 	renderCache = make(map[string]string)
 }
 
-// ClearSemanticCachePrefix removes only those render cache entries whose key contains
-// ClearSemanticCachePrefix removes cached lipgloss.Style and rendering results that contain
-// the given prefix string.
+// ClearSemanticCachePrefix removes render cache and style cache entries whose key
+// contains the given prefix string.
 func ClearSemanticCachePrefix(prefix string) {
+	theme.ClearSemanticCachePrefix(prefix)
 	cacheMu.Lock()
 	defer cacheMu.Unlock()
 	for k := range renderCache {

@@ -79,6 +79,8 @@ var commandTitles = map[string]string{
 	"--theme-no-borders":         "Turned Off Borders",
 	"--theme-button-borders":     "Turned On Button Borders",
 	"--theme-no-button-borders":  "Turned Off Button Borders",
+	"--theme-extract":            "Extract Theme",
+	"--theme-extract-all":        "Extract All Themes",
 	"-S":                         "Select Applications",
 	"--select":                   "Select Applications",
 }
@@ -127,7 +129,8 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			"--theme-button-borders", "--theme-no-button-borders",
 			"--theme-shadows", "--theme-no-shadows", "--theme-shadow", "--theme-no-shadow", "--theme-shadow-level",
 			"--theme-scrollbar", "--theme-no-scrollbar", "--theme-border-color", "--theme-table",
-			"--theme-dialog-title", "--theme-submenu-title", "--theme-log-title":
+			"--theme-dialog-title", "--theme-submenu-title", "--theme-log-title",
+			"--theme-extract", "--theme-extract-all":
 			// Skip validation for meta/config commands
 		default:
 			shouldValidate = true
@@ -280,6 +283,9 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			case "--theme-table":
 				ranCommand = true
 				return handleThemeTable(subCtx)
+			case "--theme-extract", "--theme-extract-all":
+				ranCommand = true
+				return handleThemeExtract(subCtx, &group)
 			default:
 				// Custom command logic would be hooked in here.
 				// If we just had flags (group.Command == ""), ranCommand remains false
