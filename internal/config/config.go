@@ -26,17 +26,17 @@ type AppConfig struct {
 
 // UIConfig holds user interface related settings.
 type UIConfig struct {
-	Theme          string `toml:"theme"`
-	Borders        bool   `toml:"borders"`
-	ButtonBorders  bool   `toml:"button_borders"`
-	LineCharacters bool   `toml:"line_characters"`
-	Shadow         bool   `toml:"shadow"`
-	ShadowLevel    int    `toml:"shadow_level"` // 0=off, 1=light(░), 2=medium(▒), 3=dark(▓), 4=solid(█)
-	Scrollbar        bool   `toml:"scrollbar"`
-	BorderColor      int    `toml:"border_color"`      // 1=Border, 2=Border2, 3=Both
-	DialogTitleAlign string `toml:"dialog_title_align"`  // "center" or "left"
+	Theme             string `toml:"theme"`
+	Borders           bool   `toml:"borders"`
+	ButtonBorders     bool   `toml:"button_borders"`
+	LineCharacters    bool   `toml:"line_characters"`
+	Shadow            bool   `toml:"shadow"`
+	ShadowLevel       int    `toml:"shadow_level"` // 0=off, 1=light(░), 2=medium(▒), 3=dark(▓), 4=solid(█)
+	Scrollbar         bool   `toml:"scrollbar"`
+	BorderColor       int    `toml:"border_color"`        // 1=Border, 2=Border2, 3=Both
+	DialogTitleAlign  string `toml:"dialog_title_align"`  // "center" or "left"
 	SubmenuTitleAlign string `toml:"submenu_title_align"` // "center" or "left"
-	LogTitleAlign    string `toml:"log_title_align"`     // "center" or "left"
+	LogTitleAlign     string `toml:"log_title_align"`     // "center" or "left"
 }
 
 // PathConfig holds directory path settings.
@@ -123,8 +123,8 @@ func LoadAppConfig() AppConfig {
 			LogTitleAlign:     "center",
 		},
 		Paths: PathConfig{
-			ConfigFolder:  "${XDG_CONFIG_HOME}/dockstarter2",
-			ComposeFolder: "${XDG_CONFIG_HOME}/dockstarter2/compose",
+			ConfigFolder:  "${XDG_CONFIG_HOME}",
+			ComposeFolder: "${XDG_CONFIG_HOME}/compose",
 		},
 	}
 
