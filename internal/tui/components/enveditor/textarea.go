@@ -663,9 +663,15 @@ func (m *Model) insertRunes(runes []rune, literal bool) {
 							// Block "=" if key is invalid
 							continue
 						}
-						// Valid key, allow "=" and lock it as the prefix point
+						// Valid key, allow "=" and lock it as the prefix point.
+						// Capture locked-builtin state before we modify IsVariable so
+						// that reclassifyCurrentLine's guard doesn't fire on user-typed lines.
+						wasLockedBuiltin := meta.IsVariable && !meta.IsUserDefined && !meta.IsNewLine
 						meta.EditableStartCol = m.col + 1
 						meta.IsVariable = true
+						if !wasLockedBuiltin {
+							meta.IsUserDefined = true
+						}
 					} else if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' {
 						// Block invalid characters in key
 						continue
@@ -1851,6 +1857,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		}
 		m.pushUndoSnapshot()
 		m.insertRunes([]rune(msg.Content), true)
+		m.reclassifyCurrentLine()
 	case tea.KeyPressMsg:
 		switch {
 		case key.Matches(msg, m.KeyMap.Undo):
@@ -1969,13 +1976,23 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				break
 			}
 			if len(m.value[m.row]) > 0 {
-				if m.lineMeta[m.row].IsUserDefined && m.col > 0 && m.value[m.row][m.col-1] == '=' {
-					m.lineMeta[m.row].EditableStartCol = 0
+				// Reverse of auto-prefix: if cursor is right after the app prefix and the
+				// line starts with it, delete the entire prefix in one backspace.
+				if m.AddPrefix != "" && m.row < len(m.lineMeta) && m.lineMeta[m.row].IsUserDefined {
+					prefix := []rune(strings.ReplaceAll(m.AddPrefix, "APPNAME", m.ValidationAppName))
+					if m.col == len(prefix) && len(m.value[m.row]) >= len(prefix) &&
+						string(m.value[m.row][:len(prefix)]) == string(prefix) {
+						m.value[m.row] = m.value[m.row][len(prefix):]
+						m.SetCursorColumn(0)
+						m.reclassifyCurrentLine()
+						break
+					}
 				}
 				m.value[m.row] = append(m.value[m.row][:max(0, m.col-1)], m.value[m.row][m.col:]...)
 				if m.col > 0 {
 					m.SetCursorColumn(m.col - 1)
 				}
+				m.reclassifyCurrentLine()
 			}
 		case key.Matches(msg, m.KeyMap.DeleteCharacterForward):
 			if !m.isEditableAtCursor() {
@@ -1983,10 +2000,8 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			}
 			m.pushUndoSnapshot()
 			if len(m.value[m.row]) > 0 && m.col < len(m.value[m.row]) {
-				if m.lineMeta[m.row].IsUserDefined && m.value[m.row][m.col] == '=' {
-					m.lineMeta[m.row].EditableStartCol = 0
-				}
 				m.value[m.row] = slices.Delete(m.value[m.row], m.col, m.col+1)
+				m.reclassifyCurrentLine()
 			}
 			if m.col >= len(m.value[m.row]) {
 				m.mergeLineBelow(m.row)
@@ -2022,6 +2037,10 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			}
 		case key.Matches(msg, m.KeyMap.SplitLine):
 			if m.isReadOnlyRow() {
+				break
+			}
+			// Block split on built-in variable lines — splitting the key would corrupt it.
+			if m.row < len(m.lineMeta) && m.lineMeta[m.row].IsVariable && !m.lineMeta[m.row].IsUserDefined {
 				break
 			}
 			if m.MaxHeight > 0 && len(m.value) >= m.MaxHeight {
@@ -2095,6 +2114,9 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			}
 			m.pushUndoSnapshot()
 			m.insertRunesFromUserInput([]rune(msg.Text))
+			// Keep lineMeta in sync for user-defined lines as the user types
+			// (updates IsVariable and EditableStartCol when '=' is added/removed).
+			m.reclassifyCurrentLine()
 			// When '=' is typed at the end of a line with no existing value,
 			// auto-fill the default value if one is known.
 			if msg.Text == "=" && m.DefaultValueFunc != nil {
@@ -3109,6 +3131,36 @@ func (m *Model) mergeLineAbove(row int) {
 	// And, remove the last line
 	if len(m.value) > 0 {
 		m.value = m.value[:len(m.value)-1]
+	}
+}
+
+// reclassifyCurrentLine updates IsVariable, EditableStartCol, and IsUserDefined
+// for the current row as the user types. Keeps rendering and key-lock correct
+// without a full ReclassifyEnv pass.
+func (m *Model) reclassifyCurrentLine() {
+	if m.row >= len(m.lineMeta) || m.row >= len(m.value) {
+		return
+	}
+	meta := &m.lineMeta[m.row]
+	// Skip pre-existing built-in variables — their key is locked.
+	if meta.IsVariable && !meta.IsUserDefined && !meta.IsNewLine {
+		return
+	}
+	line := m.value[m.row]
+	eqIdx := -1
+	for i, r := range line {
+		if r == '=' {
+			eqIdx = i
+			break
+		}
+	}
+	if eqIdx >= 0 {
+		meta.IsVariable = true
+		meta.EditableStartCol = eqIdx + 1
+		meta.IsUserDefined = true
+	} else {
+		meta.IsVariable = false
+		meta.EditableStartCol = 0
 	}
 }
 
