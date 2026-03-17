@@ -540,19 +540,27 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case LayerHitMsg:
 		// Scrollbar arrow/track clicks
 		if strings.HasSuffix(msg.ID, ".sb.up") {
-			m.viewport.ScrollUp(1)
+			if msg.Button != HoverButton {
+				m.viewport.ScrollUp(1)
+			}
 			return m, nil
 		}
 		if strings.HasSuffix(msg.ID, ".sb.down") {
-			m.viewport.ScrollDown(1)
+			if msg.Button != HoverButton {
+				m.viewport.ScrollDown(1)
+			}
 			return m, nil
 		}
 		if strings.HasSuffix(msg.ID, ".sb.above") {
-			m.viewport.HalfPageUp()
+			if msg.Button != HoverButton {
+				m.viewport.HalfPageUp()
+			}
 			return m, nil
 		}
 		if strings.HasSuffix(msg.ID, ".sb.below") {
-			m.viewport.HalfPageDown()
+			if msg.Button != HoverButton {
+				m.viewport.HalfPageDown()
+			}
 			return m, nil
 		}
 		if m.done && buttonIDMatches(msg.ID, "OK") {

@@ -52,23 +52,31 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case LayerHitMsg:
 		// Scrollbar region clicks
 		if strings.HasSuffix(msg.ID, ".sb.up") {
-			m.scrollLineUp()
-			m.InvalidateCache()
+			if msg.Button != HoverButton {
+				m.scrollLineUp()
+				m.InvalidateCache()
+			}
 			return m, nil
 		}
 		if strings.HasSuffix(msg.ID, ".sb.down") {
-			m.scrollLineDown()
-			m.InvalidateCache()
+			if msg.Button != HoverButton {
+				m.scrollLineDown()
+				m.InvalidateCache()
+			}
 			return m, nil
 		}
 		if strings.HasSuffix(msg.ID, ".sb.above") {
-			m.scrollPageUp()
-			m.InvalidateCache()
+			if msg.Button != HoverButton {
+				m.scrollPageUp()
+				m.InvalidateCache()
+			}
 			return m, nil
 		}
 		if strings.HasSuffix(msg.ID, ".sb.below") {
-			m.scrollPageDown()
-			m.InvalidateCache()
+			if msg.Button != HoverButton {
+				m.scrollPageDown()
+				m.InvalidateCache()
+			}
 			return m, nil
 		}
 
