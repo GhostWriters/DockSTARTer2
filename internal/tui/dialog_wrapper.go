@@ -92,8 +92,9 @@ func (m DialogWithBackdrop[T]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Update backdrop size
 		m.backdrop.SetSize(wsm.Width, wsm.Height)
 
-		// Resize dialog to fit available space (accounting for header/footer/shadow)
-		availW, availH := GetAvailableDialogSize(wsm.Width, wsm.Height)
+		// Resize dialog to fit available space using the backdrop's actual content area
+		// (which uses the real header height and actual helpline height, not a constant).
+		availW, availH := m.backdrop.GetContentArea()
 		m.dialog.SetSize(availW, availH)
 
 		// Update position if it was centered/topleft

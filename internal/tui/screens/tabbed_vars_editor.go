@@ -825,15 +825,19 @@ func (m *TabbedVarsEditorModel) renderButtons(width int) string {
 
 func (m *TabbedVarsEditorModel) renderTabs() string {
 	ctx := tui.GetActiveContext()
-	focused := m.focus == envFocusEditor
+	editorFocused := m.focus == envFocusEditor
 	var tabSegments []string
 	for i, tab := range m.tabs {
 		title := tab.spec.Title
+		isActive := i == m.activeTab
 		styleTag := "Theme_TitleSubMenu"
-		if i == m.activeTab && focused {
+		if isActive {
 			styleTag = "Theme_TitleSubMenuFocused"
 		}
-		seg := tui.RenderTitleSegmentCtx(title, focused, i == m.activeTab && focused, true, styleTag, ctx)
+		// Pass editorFocused as borderFocused so the tab bar border dims when
+		// buttons have focus, but always mark the active tab as contentFocused
+		// so it remains visually distinguished regardless of which panel is active.
+		seg := tui.RenderTitleSegmentCtx(title, editorFocused, isActive, true, styleTag, ctx)
 		tabSegments = append(tabSegments, seg)
 	}
 	return strings.Join(tabSegments, "")

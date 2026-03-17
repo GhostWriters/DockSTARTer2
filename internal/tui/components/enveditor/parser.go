@@ -150,6 +150,9 @@ func (m *Model) ReclassifyEnv(defaultFunc func(string) string, readOnlyVars []st
 				} else {
 					if inUserDefinedSection {
 						l.IsUserDefined = true
+					} else if existing.IsNewLine || existing.IsUserDefined {
+						// Variable was typed/inserted by the user; preserve user-defined status.
+						l.IsUserDefined = true
 					}
 					eqIdx := strings.Index(raw, "=")
 					if eqIdx != -1 {
