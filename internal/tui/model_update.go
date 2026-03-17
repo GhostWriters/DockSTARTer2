@@ -290,10 +290,9 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Clear current dialog and try to pop from stack
 		m.dialog = nil
 		if len(m.dialogStack) > 0 {
-			// If the Result needs to reach the active screen (e.g. ApplyVarValueMsg from a
-			// context submenu), drain the entire stack and forward rather than restoring the
-			// parent dialog, which would swallow the result.
-			if shouldForwardResult(msg.Result) {
+			if shouldForwardResult(msg.Result) && !msg.ForwardToParent {
+				// Result targets the active screen (e.g. ApplyVarValueMsg from a context
+				// submenu): drain the entire stack so all menus close, then forward.
 				m.dialogStack = nil
 				if m.activeScreen != nil {
 					fwd := msg.Result
@@ -302,7 +301,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
-			// Normal case: pop parent dialog from stack
+			// Pop parent dialog from stack and restore it.
 			m.dialog = m.dialogStack[len(m.dialogStack)-1]
 			m.dialogStack = m.dialogStack[:len(m.dialogStack)-1]
 
@@ -315,6 +314,12 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
 					focusable.SetFocused(true)
 				}
+			}
+
+			// ForwardToParent: deliver Result to the restored parent dialog.
+			if msg.ForwardToParent && shouldForwardResult(msg.Result) {
+				fwd := msg.Result
+				return m, func() tea.Msg { return fwd }
 			}
 			return m, nil
 		}

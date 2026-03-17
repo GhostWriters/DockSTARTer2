@@ -23,6 +23,14 @@ type ViewStringer interface {
 	ViewString() string
 }
 
+// InputCursorProvider is implemented by dialog models that contain a sinput field.
+// AppModel.View() calls this on the topmost dialog to position the hardware cursor.
+type InputCursorProvider interface {
+	// GetInputCursor returns the cursor position relative to the dialog's top-left
+	// corner, the desired cursor shape, and whether to show the cursor at all.
+	GetInputCursor() (relX, relY int, shape tea.CursorShape, ok bool)
+}
+
 // View implements tea.Model
 // Uses backdrop + overlay pattern (same as dialogs)
 func (m *AppModel) View() (v tea.View) {
@@ -91,6 +99,9 @@ func (m *AppModel) View() (v tea.View) {
 		allScreens = []ScreenModel{m.activeScreen}
 	}
 
+	// Track the active screen's rendered position for hardware cursor routing.
+	lastScreenX, lastScreenY := maxX, maxY
+
 	for i, s := range allScreens {
 		var screenContent string
 		if vs, ok := s.(ViewStringer); ok {
@@ -142,6 +153,9 @@ func (m *AppModel) View() (v tea.View) {
 				compositorAddShadow(comp, l, screenZBase, m.config.UI.Shadow)
 				comp.AddLayers(l)
 			}
+
+			// Save screen position for hardware cursor routing below.
+			lastScreenX, lastScreenY = screenX, screenY
 
 			// Collect hit regions from screen with the actual position
 			if hrp, ok := s.(HitRegionProvider); ok {
@@ -219,6 +233,61 @@ func (m *AppModel) View() (v tea.View) {
 	v = tea.NewView(comp.Render())
 	v.MouseMode = tea.MouseModeCellMotion
 	v.AltScreen = true
+
+	// Hardware cursor: ask the topmost dialog for its input cursor position.
+	// allDialogs is built above; the last entry is the topmost (frontmost) dialog.
+	if len(allDialogs) > 0 {
+		topDialog := allDialogs[len(allDialogs)-1]
+		if cp, ok := topDialog.(InputCursorProvider); ok {
+			rx, ry, shape, show := cp.GetInputCursor()
+			if show {
+				// We need the absolute position of this dialog on screen.
+				// Re-derive lx/ly using the same logic as the dialog render loop above.
+				var content string
+				if vs, ok2 := topDialog.(ViewStringer); ok2 {
+					content = vs.ViewString()
+				} else {
+					content = topDialog.View().Content
+				}
+				if content != "" {
+					maximized := false
+					if md, ok2 := topDialog.(interface{ IsMaximized() bool }); ok2 {
+						maximized = md.IsMaximized()
+					}
+					fgWidth := WidthWithoutZones(content)
+					fgHeight := lipgloss.Height(content)
+					mode := DialogAbsoluteCentered
+					targetHeight := m.backdropHeight()
+					if _, ok2 := topDialog.(*HelpDialogModel); ok2 {
+						targetHeight = m.height
+					}
+					if maximized {
+						mode = DialogMaximized
+						targetHeight = m.backdropHeight()
+					}
+					lx, ly := layout.DialogPosition(mode, fgWidth, fgHeight, m.width, targetHeight, m.config.UI.Shadow, headerH)
+					c := tea.NewCursor(lx+rx, ly+ry)
+					c.Shape = shape
+					c.Blink = true
+					v.Cursor = c
+				}
+			}
+		}
+	}
+
+	// If no dialog claimed the cursor, ask the active screen (e.g. the env editor).
+	if v.Cursor == nil && m.activeScreen != nil {
+		if cp, ok := m.activeScreen.(InputCursorProvider); ok {
+			rx, ry, shape, show := cp.GetInputCursor()
+			if show {
+				c := tea.NewCursor(lastScreenX+rx, lastScreenY+ry)
+				c.Shape = shape
+				c.Blink = true
+				v.Cursor = c
+			}
+		}
+	}
+
 	return v
 }
 

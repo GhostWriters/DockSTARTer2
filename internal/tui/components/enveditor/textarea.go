@@ -91,6 +91,9 @@ type KeyMap struct {
 	SelectRight key.Binding
 	SelectHome  key.Binding
 	SelectEnd   key.Binding
+
+	// ToggleInsert switches between insert and overwrite mode.
+	ToggleInsert key.Binding
 }
 
 // DefaultKeyMap returns the default set of key bindings for navigating and acting
@@ -132,6 +135,7 @@ func DefaultKeyMap() KeyMap {
 		SelectRight:                key.NewBinding(key.WithKeys("shift+right"), key.WithHelp("shift+right", "select right")),
 		SelectHome:                 key.NewBinding(key.WithKeys("shift+home"), key.WithHelp("shift+home", "select to start")),
 		SelectEnd:                  key.NewBinding(key.WithKeys("shift+end"), key.WithHelp("shift+end", "select to end")),
+		ToggleInsert:               key.NewBinding(key.WithKeys("insert"), key.WithHelp("insert", "toggle insert/overwrite")),
 	}
 }
 
@@ -379,6 +383,10 @@ type Model struct {
 	// line properties tracking readonly and editable regions
 	lineMeta []Line
 
+	// Overwrite determines whether typing replaces existing characters (overwrite mode)
+	// rather than inserting before the cursor. Toggled by the Insert key.
+	Overwrite bool
+
 	// focus indicates whether user input focus should be on this input
 	// component. When false, ignore keyboard input and hide the cursor.
 	focus bool
@@ -566,6 +574,9 @@ func (m *Model) SetStyles(s Styles) {
 	m.updateVirtualCursorStyle()
 	m.cacheValid = false
 }
+
+// IsOverwrite returns true when the textarea is in overwrite (replace) mode.
+func (m Model) IsOverwrite() bool { return m.Overwrite }
 
 // VirtualCursor returns whether or not the virtual cursor is enabled.
 func (m Model) VirtualCursor() bool {
@@ -2108,11 +2119,19 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			m.pushUndoSnapshot()
 			m.transposeLeft()
 
+		case key.Matches(msg, m.KeyMap.ToggleInsert):
+			m.Overwrite = !m.Overwrite
+
 		default:
 			if !m.isEditableAtCursor() {
 				break
 			}
 			m.pushUndoSnapshot()
+			// In overwrite mode, replace the character at cursor before inserting.
+			if m.Overwrite && msg.Text != "" && m.col < len(m.value[m.row]) {
+				m.value[m.row] = slices.Delete(m.value[m.row], m.col, m.col+1)
+				m.reclassifyCurrentLine()
+			}
 			m.insertRunesFromUserInput([]rune(msg.Text))
 			// Keep lineMeta in sync for user-defined lines as the user types
 			// (updates IsVariable and EditableStartCol when '=' is added/removed).

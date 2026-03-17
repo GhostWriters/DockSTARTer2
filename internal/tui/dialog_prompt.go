@@ -15,14 +15,15 @@ import (
 // promptDialogModel represents a text input prompt dialog
 type promptDialogModel struct {
 	baseDialogModel
-	title       string
-	question    string
+	title        string
+	question     string
 	input        sinput.Model
 	inputScreenX int
-	result      string
-	confirmed   bool
-	onResult    func(string, bool) tea.Msg
-	focusedItem FocusItem // FocusList=Input, FocusSelectBtn=OK, FocusBackBtn=Cancel
+	inputRelY    int // row of the input text within the dialog (for hardware cursor)
+	result       string
+	confirmed    bool
+	onResult     func(string, bool) tea.Msg
+	focusedItem  FocusItem // FocusList=Input, FocusSelectBtn=OK, FocusBackBtn=Cancel
 }
 
 type promptResultMsg struct {
@@ -163,9 +164,17 @@ func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.input.EndDrag()
 		return m, nil
 
+	case sinput.PasteMsg, sinput.CutMsg, sinput.SelectAllMsg:
+		m.input, cmd = m.input.Update(msg)
+		cmds = append(cmds, cmd)
+		return m, tea.Batch(cmds...)
+
 	case LayerHitMsg:
 		if msg.Button == tea.MouseMiddle {
 			return m, nil
+		}
+		if msg.Button == tea.MouseRight && buttonIDMatches(msg.ID, "prompt_input") {
+			return m, ShowInputContextMenu(m.input, msg.X, msg.Y, m.width, m.height)
 		}
 		if msg.Button == tea.MouseLeft {
 			if buttonIDMatches(msg.ID, "OK") {
@@ -221,6 +230,24 @@ func (m *promptDialogModel) contentWidth(ctx StyleContext) int {
 	return w
 }
 
+// GetInputCursor returns the cursor position (relative to dialog top-left),
+// cursor shape, and whether the cursor should be shown.
+// Implements InputCursorProvider for AppModel.View().
+func (m *promptDialogModel) GetInputCursor() (relX, relY int, shape tea.CursorShape, ok bool) {
+	if m.focusedItem != FocusList || !m.input.Focused() {
+		return 0, 0, tea.CursorBar, false
+	}
+	// 1 outer_left + 1 inner_left + 1 pad_left + cursor column within textinput view
+	relX = 3 + m.input.CursorColumn()
+	relY = m.inputRelY
+	if m.input.IsOverwrite() {
+		shape = tea.CursorBlock
+	} else {
+		shape = tea.CursorBar
+	}
+	return relX, relY, shape, true
+}
+
 func (m *promptDialogModel) ViewString() string {
 	if m.width == 0 {
 		return ""
@@ -242,6 +269,17 @@ func (m *promptDialogModel) ViewString() string {
 		ctx.Dialog.Padding(0, 1).Width(contentWidth),
 		inputFocused, ctx)
 	renderedInput := strings.TrimRight(borderedInputStyle.Render(m.input.View()), "\n")
+
+	// Inject INS/OVR label into the bottom-left of the input box border.
+	modeLabel := "INS"
+	if m.input.IsOverwrite() {
+		modeLabel = "OVR"
+	}
+	inputLines := strings.Split(renderedInput, "\n")
+	if len(inputLines) > 0 {
+		inputLines[len(inputLines)-1] = BuildLabeledBottomBorderCtx(contentWidth+2, modeLabel, inputFocused, ctx)
+		renderedInput = strings.Join(inputLines, "\n")
+	}
 
 	// Disclaimer (only for sensitive/password prompts)
 	var disclaimerText string
@@ -300,6 +338,7 @@ func (m *promptDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	// Input hit region: outer_border(1) + questionH + inner_border_top(1) = input text row
 	// Text X: outer_border(1) + inner_border(1) + padding(1) + promptW
 	inputTextY := 1 + questionHeight + 1
+	m.inputRelY = inputTextY
 	m.inputScreenX = offsetX + 1 + 1 + 1 + m.input.PromptWidth()
 	m.input.SetScreenTextX(m.inputScreenX)
 

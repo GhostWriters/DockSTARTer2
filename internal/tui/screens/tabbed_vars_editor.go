@@ -152,6 +152,7 @@ func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec
 		editor := enveditor.New()
 		editor.ShowLineNumbers = true
 		editor.SetLineCharacters(tui.GetActiveContext().LineCharacters)
+		editor.SetVirtualCursor(false)
 		tabs = append(tabs, envTab{spec: spec, editor: editor})
 	}
 
@@ -754,14 +755,19 @@ func (m *TabbedVarsEditorModel) ViewString() string {
 		ctx,
 	)
 
-	// 3. Add scroll percentage to the bottom border of the inner box if needed
+	// 3. Replace the bottom border with INS/OVR label (left) and scroll % (right, if scrolling).
+	modeLabel := "INS"
+	if editor.IsOverwrite() {
+		modeLabel = "OVR"
+	}
+	scrollLabel := ""
 	if editor.LineCount() > editor.Height() {
-		lines := strings.Split(innerBox, "\n")
-		if len(lines) > 0 {
-			bottomLine := tui.BuildScrollPercentBottomBorder(m.contentWidth, editor.ScrollPercent(), focused, ctx)
-			lines[len(lines)-1] = bottomLine
-			innerBox = strings.Join(lines, "\n")
-		}
+		scrollLabel = fmt.Sprintf("%d%%", int(editor.ScrollPercent()*100))
+	}
+	lines := strings.Split(innerBox, "\n")
+	if len(lines) > 0 {
+		lines[len(lines)-1] = tui.BuildDualLabelBottomBorderCtx(m.contentWidth, modeLabel, scrollLabel, focused, ctx)
+		innerBox = strings.Join(lines, "\n")
 	}
 
 	// 4. Render buttons
@@ -1575,6 +1581,30 @@ func (m *TabbedVarsEditorModel) showSetValueDialog() tea.Cmd {
 	return func() tea.Msg {
 		return tui.ShowDialogMsg{Dialog: dlg}
 	}
+}
+
+// GetInputCursor implements tui.InputCursorProvider.
+// It returns the hardware cursor position relative to the screen's top-left corner,
+// allowing AppModel.View() to position the terminal cursor over the active editor.
+func (m *TabbedVarsEditorModel) GetInputCursor() (relX, relY int, shape tea.CursorShape, ok bool) {
+	if m.focus != envFocusEditor || len(m.tabs) == 0 {
+		return 0, 0, tea.CursorBar, false
+	}
+	editor := m.tabs[m.activeTab].editor
+	c := editor.Cursor()
+	if c == nil {
+		return 0, 0, tea.CursorBar, false
+	}
+	// Editor content starts at: outer_border(1) + inner_border/tab_row(1) = 2 cols/rows,
+	// plus subtitle rows stacked above the inner border.
+	relX = 2 + c.Position.X
+	relY = 2 + m.subtitleHeight + c.Position.Y
+	if editor.IsOverwrite() {
+		shape = tea.CursorBlock
+	} else {
+		shape = tea.CursorBar
+	}
+	return relX, relY, shape, true
 }
 
 // IsScrollbarDragging returns true if the current editor is dragging a line or a scrollbar.

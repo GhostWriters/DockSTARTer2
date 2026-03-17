@@ -53,6 +53,7 @@ type addVarDialogModel struct {
 
 	input        sinput.Model
 	inputScreenX int
+	inputRelY    int // row of input text within dialog (for hardware cursor)
 	items  []addVarItem
 	cursor int
 	offset int
@@ -182,10 +183,12 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, tui.Keys.Left), key.Matches(msg, tui.Keys.Right):
 			if m.focus == addVarFocusCreate {
 				m.focus = addVarFocusCancel
+				return m, nil
 			} else if m.focus == addVarFocusCancel {
 				m.focus = addVarFocusCreate
+				return m, nil
 			}
-			return m, nil
+			// When focus is on input, fall through to input routing below
 
 		case key.Matches(msg, tui.Keys.Enter):
 			switch m.focus {
@@ -237,9 +240,17 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.input.EndDrag()
 		return m, nil
 
+	case sinput.PasteMsg, sinput.CutMsg, sinput.SelectAllMsg:
+		var cmd tea.Cmd
+		m.input, cmd = m.input.Update(msg)
+		return m, cmd
+
 	case tui.LayerHitMsg:
 		if msg.Button == tea.MouseMiddle {
 			return m, nil
+		}
+		if msg.Button == tea.MouseRight && msg.ID == "addvar_input" {
+			return m, tui.ShowInputContextMenu(m.input, msg.X, msg.Y, m.width, m.height)
 		}
 		// Hover focus from wheel routing: switch focus to list without selecting.
 		if msg.Button == tui.HoverButton && msg.ID == tui.IDListPanel {
@@ -447,6 +458,22 @@ func (m *addVarDialogModel) itemIndexAt(screenY int) int {
 	return -1
 }
 
+// GetInputCursor returns the hardware cursor position relative to the dialog's
+// top-left corner, cursor shape, and whether to show it.
+func (m *addVarDialogModel) GetInputCursor() (relX, relY int, shape tea.CursorShape, ok bool) {
+	if m.focus != addVarFocusInput || !m.input.Focused() {
+		return 0, 0, tea.CursorBar, false
+	}
+	relX = 3 + m.input.CursorColumn()
+	relY = m.inputRelY
+	if m.input.IsOverwrite() {
+		shape = tea.CursorBlock
+	} else {
+		shape = tea.CursorBar
+	}
+	return relX, relY, shape, true
+}
+
 func (m *addVarDialogModel) ViewString() string {
 	if m.width == 0 {
 		return ""
@@ -483,6 +510,16 @@ func (m *addVarDialogModel) ViewString() string {
 		"Variable Name", inputContent, sInnerW, 0, inputFocused, true, true,
 		ctx.SubmenuTitleAlign, inputTitleTag, ctx,
 	), "\n")
+	// Inject INS/OVR label into the bottom-left of the Variable Name section border.
+	modeLabel := "INS"
+	if m.input.IsOverwrite() {
+		modeLabel = "OVR"
+	}
+	vnLines := strings.Split(varNameSection, "\n")
+	if len(vnLines) > 0 {
+		vnLines[len(vnLines)-1] = tui.BuildLabeledBottomBorderCtx(sInnerW+2, modeLabel, inputFocused, ctx)
+		varNameSection = strings.Join(vnLines, "\n")
+	}
 
 	// "Available Variables" section — titled bordered box, thick border when focused
 	listFocused := m.focus == addVarFocusList
@@ -656,6 +693,7 @@ func (m *addVarDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegion 
 
 	// Input hit region: outer_border(1) + headingH + section_top_border(1)
 	inputY := 1 + headingH + 1
+	m.inputRelY = inputY
 	m.inputScreenX = offsetX + 1 + 1 + 1 + m.input.PromptWidth()
 	m.input.SetScreenTextX(m.inputScreenX)
 
