@@ -282,12 +282,17 @@ func GetUsage(target string) string {
 			"	Run tests to check the program",
 		)
 	}
-	if match("-T", "--theme", "--theme-list", "--theme-table", "--theme-lines", "--theme-no-lines", "--theme-borders", "--theme-no-borders", "--theme-button-borders", "--theme-no-button-borders", "--theme-shadows", "--theme-no-shadows", "--theme-shadow-level", "--theme-scrollbar", "--theme-no-scrollbar", "--theme-border-color", "--theme-dialog-title", "--theme-submenu-title", "--theme-log-title") {
+	if match("-T", "--theme", "--theme-list", "--theme-table", "--theme-lines", "--theme-no-lines", "--theme-borders", "--theme-no-borders", "--theme-button-borders", "--theme-no-button-borders", "--theme-shadows", "--theme-no-shadows", "--theme-shadow-level", "--theme-scrollbar", "--theme-no-scrollbar", "--theme-border-color", "--theme-dialog-title", "--theme-submenu-title", "--theme-log-title", "--theme-extract", "--theme-extract-all") {
 		printStr(
 			"{{|UsageCommand|}}-T --theme{{[-]}}",
 			"	Shows the current theme",
 			"{{|UsageCommand|}}-T --theme{{[-]}} {{|UsageTheme|}}<themename>{{[-]}}",
-			"	Saves and applies the specified theme to the GUI",
+			"	Saves and applies a named embedded theme",
+			"{{|UsageCommand|}}-T --theme{{[-]}} {{|UsageTheme|}}user:<themename>{{[-]}}",
+			"	Saves and applies a user theme from the user themes folder",
+			"{{|UsageCommand|}}-T --theme{{[-]}} {{|UsageTheme|}}<path>.ds2theme{{[-]}}",
+			"{{|UsageCommand|}}-T --theme{{[-]}} {{|UsageTheme|}}file:<path>{{[-]}}",
+			"	Saves and applies a theme from an arbitrary file path",
 			"{{|UsageCommand|}}--theme-list{{[-]}}",
 			"	Lists the available themes",
 			"{{|UsageCommand|}}--theme-table{{[-]}}",
@@ -317,6 +322,10 @@ func GetUsage(target string) string {
 			"	Set submenu title alignment ({{|UsageOption|}}left{{[-]}} or {{|UsageOption|}}center{{[-]}})",
 			"{{|UsageCommand|}}--theme-log-title{{[-]}} {{|UsageOption|}}<align>{{[-]}}",
 			"	Set log panel title alignment ({{|UsageOption|}}left{{[-]}} or {{|UsageOption|}}center{{[-]}})",
+			"{{|UsageCommand|}}--theme-extract{{[-]}} {{|UsageTheme|}}<themename>{{[-]}} {{|UsageOption|}}<destdir>{{[-]}} {{|UsageOption|}}<filename>{{[-]}}",
+			"	Extract a theme to a file (use {{|UsageTheme|}}user:<name>{{[-]}} for user themes; {{|UsageOption|}}user:{{[-]}} as destdir for the user themes folder)",
+			"{{|UsageCommand|}}--theme-extract-all{{[-]}} {{|UsageOption|}}<destdir>{{[-]}}",
+			"	Extract all embedded themes to a directory (use {{|UsageOption|}}user:{{[-]}} for the user themes folder)",
 		)
 	}
 	if match("-u", "--update", "--update-app", "--update-templates") {
