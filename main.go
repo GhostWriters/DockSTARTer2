@@ -13,6 +13,7 @@ import (
 	"DockSTARTer2/cmd"
 	"DockSTARTer2/internal/assets"
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/update"
 	"DockSTARTer2/internal/version"
@@ -109,11 +110,8 @@ func run() (exitCode int) {
 	theme.EmbeddedThemeLister = assets.ListThemes
 	theme.EmbeddedThemeReader = assets.GetTheme
 
-	// Ensure embedded assets are extracted
-	if err := assets.EnsureAssets(ctx); err != nil {
-		logger.Error(ctx, "Failed to ensure assets: %v", err)
-		// We continue, as the app might still work with hardcoded defaults
-	}
+	// Ensure user themes directory exists
+	_ = os.MkdirAll(paths.GetThemesDir(), 0755)
 
 	// Ensure templates are cloned
 	if err := update.EnsureTemplates(ctx); err != nil {
