@@ -1,6 +1,7 @@
 package appenv
 
 import (
+	"DockSTARTer2/internal/assets"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/logger"
 	"context"
@@ -9,8 +10,8 @@ import (
 )
 
 // Create ensures the environment file exists.
-// If not, it copies from the default template.
-func Create(ctx context.Context, file, defaultFile string) error {
+// If not, it creates it from the embedded default template.
+func Create(ctx context.Context, file string) error {
 	dir := filepath.Dir(file)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		logger.FatalWithStack(ctx, "Failed to create folder '{{|Folder|}}%s{{[-]}}'.", dir)
@@ -20,19 +21,14 @@ func Create(ctx context.Context, file, defaultFile string) error {
 		return nil // File exists
 	}
 
-	// Copy from default
-	input, err := os.ReadFile(defaultFile)
+	input, err := assets.GetDefaultEnv()
 	if err != nil {
-		if os.IsNotExist(err) {
-			if err := os.WriteFile(file, []byte{}, 0644); err != nil {
-				logger.FatalWithStack(ctx, "Failed to create empty env file '{{|File|}}%s{{[-]}}'.", file)
-			}
-			return nil
+		if err := os.WriteFile(file, []byte{}, 0644); err != nil {
+			logger.FatalWithStack(ctx, "Failed to create empty env file '{{|File|}}%s{{[-]}}'.", file)
 		}
-		logger.FatalWithStack(ctx, "Failed to read default env '{{|File|}}%s{{[-]}}'.", defaultFile)
+		return nil
 	}
 
-	// Write raw content first
 	if err := os.WriteFile(file, input, 0644); err != nil {
 		logger.FatalWithStack(ctx, "Failed to create env file '{{|File|}}%s{{[-]}}'.", file)
 	}

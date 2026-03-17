@@ -126,7 +126,7 @@ func handleEnvSet(ctx context.Context, group *CommandGroup) error {
 		}
 
 		// Ensure env file exists (create if needed)
-		if err := appenv.Create(ctx, file, filepath.Join(conf.Paths.ConfigFolder, constants.EnvExampleFileName)); err != nil {
+		if err := appenv.Create(ctx, file); err != nil {
 			logger.Debug(ctx, "Ensure env file error: %v", err)
 		}
 
@@ -165,7 +165,7 @@ func handleAppVarsCreate(ctx context.Context, group *CommandGroup, state *CmdSta
 
 	// Ensure env file exists (create if needed)
 	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
-	if err := appenv.Create(ctx, envFile, filepath.Join(conf.Paths.ConfigFolder, constants.EnvExampleFileName)); err != nil {
+	if err := appenv.Create(ctx, envFile); err != nil {
 		logger.Debug(ctx, "Ensure env file error: %v", err)
 	}
 
