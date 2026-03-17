@@ -37,6 +37,8 @@ func ClearSemanticCachePrefix(prefix string) {
 			delete(renderCache, k)
 		}
 	}
+	// Also clear the semantic style cache in the theme package
+	theme.ClearSemanticCachePrefix(prefix)
 }
 
 // SemanticStyle translates a semantic tag or direct style code into a lipgloss.Style.
