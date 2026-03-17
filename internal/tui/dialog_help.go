@@ -138,6 +138,12 @@ func (m *HelpDialogModel) ViewString() string {
 		if maxLineWidth > targetWidth {
 			maxLineWidth = targetWidth
 		}
+		// Center the first context line (e.g. a legend) now that maxLineWidth is known.
+		if len(contextLines) > 0 {
+			if pad := (maxLineWidth - lipgloss.Width(contextLines[0])) / 2; pad > 0 {
+				contextLines[0] = strings.Repeat(" ", pad) + contextLines[0]
+			}
+		}
 		sepChar := "─"
 		if !GetActiveContext().LineCharacters {
 			sepChar = "-"

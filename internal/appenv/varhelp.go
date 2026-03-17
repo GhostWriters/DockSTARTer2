@@ -15,36 +15,36 @@ type varHelpEntry struct {
 // Sourced from DockSTARTer scripts/menu_value_prompt.sh (GLOBAL case).
 var globalVarHelp = map[string]varHelpEntry{
 	"DOCKER_GID": {
-		helpText: "This should be the {{|Theme_Highlight|}}Docker group ID{{[-]}}.\nIf you are unsure, check your system's group configuration.",
-		helpLine: "The Docker group ID on your system.",
+		helpText: "This should be the {{|Theme_Highlight|}}Docker group ID{{[-]}}. If you are unsure, check your system's group configuration.",
+		helpLine: "The {{|Theme_Highlight|}}Docker group ID{{[-]}} on your system.",
 	},
 	"DOCKER_HOSTNAME": {
-		helpText: "This should be your {{|Theme_Highlight|}}system hostname{{[-]}}.\nIf you are unsure, check your system configuration.",
-		helpLine: "Your system hostname.",
+		helpText: "This should be your {{|Theme_Highlight|}}system hostname{{[-]}}. If you are unsure, check your system configuration.",
+		helpLine: "Your {{|Theme_Highlight|}}system hostname{{[-]}}.",
 	},
 	"DOCKER_VOLUME_CONFIG": {
 		helpText: "The path where application {{|Theme_Highlight|}}config data{{[-]}} is stored.",
-		helpLine: "Path to the application config data directory.",
+		helpLine: "Path to the application {{|Theme_Highlight|}}config data{{[-]}} directory.",
 	},
 	"DOCKER_VOLUME_STORAGE": {
 		helpText: "The path where application {{|Theme_Highlight|}}storage data{{[-]}} is stored.",
-		helpLine: "Path to the application storage data directory.",
+		helpLine: "Path to the application {{|Theme_Highlight|}}storage data{{[-]}} directory.",
 	},
 	"GLOBAL_LAN_NETWORK": {
-		helpText: "This is used to define your home LAN network.\nDo NOT confuse this with the IP address of your router or your server —\nthe value for this key defines your {{|Theme_Highlight|}}network{{[-]}}, NOT a single host.\nSee CIDR Notation for more information (e.g. {{|Theme_Highlight|}}192.168.1.0/24{{[-]}}).",
-		helpLine: "Your home LAN network in CIDR notation (e.g. 192.168.1.0/24).",
+		helpText: "This is used to define your home LAN network. Do NOT confuse this with the IP address of your router or your server — the value for this key defines your {{|Theme_Highlight|}}network{{[-]}}, NOT a single host. See CIDR Notation for more information (e.g. {{|Theme_Highlight|}}192.168.1.0/24{{[-]}}).",
+		helpLine: "Your home LAN network in CIDR notation (e.g. {{|Theme_Highlight|}}192.168.1.0/24{{[-]}}).",
 	},
 	"PGID": {
-		helpText: "This should be your {{|Theme_Highlight|}}user group ID{{[-]}}.\nIf you are unsure, check your system's user configuration.",
-		helpLine: "Your user group ID.",
+		helpText: "This should be your {{|Theme_Highlight|}}user group ID{{[-]}}. If you are unsure, check your system's user configuration.",
+		helpLine: "Your {{|Theme_Highlight|}}user group ID{{[-]}}.",
 	},
 	"PUID": {
-		helpText: "This should be your {{|Theme_Highlight|}}user account ID{{[-]}}.\nIf you are unsure, check your system's user configuration.",
-		helpLine: "Your user account ID.",
+		helpText: "This should be your {{|Theme_Highlight|}}user account ID{{[-]}}. If you are unsure, check your system's user configuration.",
+		helpLine: "Your {{|Theme_Highlight|}}user account ID{{[-]}}.",
 	},
 	"TZ": {
 		helpText: "If this is not the correct timezone, please exit and set your {{|Theme_Highlight|}}system timezone{{[-]}} first.",
-		helpLine: "Your system timezone (e.g. America/New_York).",
+		helpLine: "Your {{|Theme_Highlight|}}system timezone{{[-]}} (e.g. {{|Theme_Highlight|}}America/New_York{{[-]}}).",
 	},
 }
 
@@ -53,20 +53,20 @@ var globalVarHelp = map[string]varHelpEntry{
 // Sourced from DockSTARTer scripts/menu_value_prompt.sh (APP case).
 var appVarSuffixHelp = map[string]varHelpEntry{
 	"ENABLED": {
-		helpText: "Used to set the application as enabled or disabled.\nIf this variable is removed, the application will not be controlled by DockSTARTer.\nMust be {{|Theme_Highlight|}}true{{[-]}} or {{|Theme_Highlight|}}false{{[-]}}.",
-		helpLine: "Enable or disable this application (true/false).",
+		helpText: "This is used to set the application as enabled or disabled. If this variable is removed, the application will not be controlled by DockSTARTer. Must be {{|Theme_Highlight|}}true{{[-]}} or {{|Theme_Highlight|}}false{{[-]}}.",
+		helpLine: "Enable or disable this application ({{|Theme_Highlight|}}true{{[-]}}/{{|Theme_Highlight|}}false{{[-]}}).",
 	},
 	"NETWORK_MODE": {
-		helpText: "Network Mode is usually left blank but can also be\n{{|Theme_Highlight|}}bridge{{[-]}}, {{|Theme_Highlight|}}host{{[-]}}, {{|Theme_Highlight|}}none{{[-]}}, {{|Theme_Highlight|}}service:<appname>{{[-]}}, or {{|Theme_Highlight|}}container:<appname>{{[-]}}.",
-		helpLine: "Docker network mode (blank, bridge, host, none, service:X, container:X).",
+		helpText: "Network Mode is usually left blank but can also be {{|Theme_Highlight|}}bridge{{[-]}}, {{|Theme_Highlight|}}host{{[-]}}, {{|Theme_Highlight|}}none{{[-]}}, {{|Theme_Highlight|}}service:<appname>{{[-]}}, or {{|Theme_Highlight|}}container:<appname>{{[-]}}.",
+		helpLine: "Docker network mode (blank, {{|Theme_Highlight|}}bridge{{[-]}}, {{|Theme_Highlight|}}host{{[-]}}, {{|Theme_Highlight|}}none{{[-]}}, {{|Theme_Highlight|}}service:X{{[-]}}, {{|Theme_Highlight|}}container:X{{[-]}}).",
 	},
 	"RESTART": {
-		helpText: "Restart is usually {{|Theme_Highlight|}}unless-stopped{{[-]}} but can also be\n{{|Theme_Highlight|}}no{{[-]}}, {{|Theme_Highlight|}}always{{[-]}}, or {{|Theme_Highlight|}}on-failure{{[-]}}.",
-		helpLine: "Container restart policy (unless-stopped, no, always, on-failure).",
+		helpText: "Restart is usually {{|Theme_Highlight|}}unless-stopped{{[-]}} but can also be {{|Theme_Highlight|}}no{{[-]}}, {{|Theme_Highlight|}}always{{[-]}}, or {{|Theme_Highlight|}}on-failure{{[-]}}.",
+		helpLine: "Container restart policy ({{|Theme_Highlight|}}unless-stopped{{[-]}}, {{|Theme_Highlight|}}no{{[-]}}, {{|Theme_Highlight|}}always{{[-]}}, {{|Theme_Highlight|}}on-failure{{[-]}}).",
 	},
 	"TAG": {
 		helpText: "Tag is usually {{|Theme_Highlight|}}latest{{[-]}} but can also be other values based on the image.",
-		helpLine: "Docker image tag (usually latest).",
+		helpLine: "Docker image tag (usually {{|Theme_Highlight|}}latest{{[-]}}).",
 	},
 }
 
@@ -128,7 +128,7 @@ func lookupVarHelp(varName string) (varHelpEntry, bool) {
 	if portSuffixRe.MatchString(suffix) {
 		return varHelpEntry{
 			helpText: "Must be an unused port between {{|Theme_Highlight|}}0{{[-]}} and {{|Theme_Highlight|}}65535{{[-]}}.",
-			helpLine: "A port number between 0 and 65535.",
+			helpLine: "A port number between {{|Theme_Highlight|}}0{{[-]}} and {{|Theme_Highlight|}}65535{{[-]}}.",
 		}, true
 	}
 

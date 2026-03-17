@@ -6,6 +6,7 @@ import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/tui/components/enveditor"
 	"context"
@@ -905,7 +906,7 @@ func (m *TabbedVarsEditorModel) HelpText() string {
 	if idx := strings.Index(varName, "="); idx > 0 {
 		varName = strings.TrimSpace(varName[:idx])
 	}
-	return appenv.GetVarHelpText(varName)
+	return appenv.GetVarHelpLine(varName)
 }
 
 func (m *TabbedVarsEditorModel) SetSize(width, height int) {
@@ -1653,10 +1654,17 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) string {
 	if m.focus != envFocusEditor || len(m.tabs) == 0 {
 		return ""
 	}
+
+	legend := "Legend: | " +
+		"{{|Theme_GutterAdded|}}+{{[-]}} Added | " +
+		"{{|Theme_GutterDeleted|}}-{{[-]}} Deleted | " +
+		"{{|Theme_GutterModified|}}~{{[-]}} Changed | " +
+		"{{|Theme_GutterInvalid|}}!{{[-]}} Invalid |"
+
 	tab := m.tabs[m.activeTab]
 	meta, ok := tab.editor.CurrentLineMeta()
 	if !ok || !meta.IsVariable {
-		return ""
+		return legend
 	}
 
 	varName := meta.Text
@@ -1664,7 +1672,7 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) string {
 		varName = strings.TrimSpace(varName[:idx])
 	}
 	if varName == "" {
-		return ""
+		return legend
 	}
 
 	var currentValue string
@@ -1686,13 +1694,13 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) string {
 		CurrentValue:     currentValue,
 	}
 
-	heading := FormatMenuHeading(params, contentWidth)
+	heading := legend + "\n\n" + FormatMenuHeading(params, contentWidth)
 
 	// Append variable description (plain text — word-wrapped at source by FormatMenuHeading
 	// for AppDescription; variable help text is appended as-is and word-wrapped in the
 	// help dialog since it may come from an external source).
 	if desc := appenv.GetVarHelpText(varName); desc != "" {
-		heading += "\n\n" + desc
+		heading += "\n\n" + strutil.WordWrap(desc, contentWidth)
 	}
 
 	return heading
