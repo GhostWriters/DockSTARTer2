@@ -15,8 +15,19 @@ import (
 )
 
 // isThemeFilePath returns true if the argument looks like a file path rather than a theme name.
+// Explicit file: prefix, bare .ds2theme extension, or path separators all count.
+// user: URIs are always treated as named themes, never as file paths.
 func isThemeFilePath(arg string) bool {
-	return strings.HasSuffix(arg, ".ds2theme") || strings.ContainsAny(arg, "/\\")
+	if strings.HasPrefix(arg, "user:") {
+		return false
+	}
+	return strings.HasPrefix(arg, "file:") || strings.HasSuffix(arg, ".ds2theme") || strings.ContainsAny(arg, "/\\")
+}
+
+// themeFilePath extracts the filesystem path from a theme file argument.
+// Strips the "file:" prefix if present; otherwise returns the arg as-is.
+func themeFilePath(arg string) string {
+	return strings.TrimPrefix(arg, "file:")
 }
 
 func handleTheme(ctx context.Context, group *CommandGroup) error {
@@ -33,40 +44,28 @@ func handleTheme(ctx context.Context, group *CommandGroup) error {
 		arg := group.Args[0]
 
 		if isThemeFilePath(arg) {
-			// --- File import ---
-			absPath, err := filepath.Abs(arg)
+			// --- File reference: resolve to absolute path, store as file:absPath ---
+			absPath, err := filepath.Abs(themeFilePath(arg))
 			if err != nil {
 				logger.Error(ctx, "Invalid path: %v", err)
 				return err
 			}
-			src, err := os.ReadFile(absPath)
-			if err != nil {
-				logger.Error(ctx, "Cannot read theme file '{{|Folder|}}%s{{[-]}}': %v", absPath, err)
+			if _, err := os.Stat(absPath); err != nil {
+				logger.Error(ctx, "Theme file not found: '{{|Folder|}}%s{{[-]}}'", absPath)
 				return err
 			}
-			themeName := strings.TrimSuffix(filepath.Base(absPath), ".ds2theme")
-			destDir := paths.GetThemesDir()
-			if err := os.MkdirAll(destDir, 0755); err != nil {
-				logger.Error(ctx, "Failed to create themes directory: %v", err)
-				return err
-			}
-			destPath := filepath.Join(destDir, theme.UserThemeFilename(themeName))
-			if err := os.WriteFile(destPath, src, 0644); err != nil {
-				logger.Error(ctx, "Failed to write theme file: %v", err)
-				return err
-			}
-			configValue := "user://" + themeName
+			configValue := "file:" + absPath
 			conf.UI.Theme = configValue
 			if err := config.SaveAppConfig(conf); err != nil {
 				logger.Error(ctx, "Failed to save theme setting: %v", err)
 				return err
 			}
-			logger.Notice(ctx, "Theme '{{|Theme|}}%s{{[-]}}' imported and set as active.", themeName)
+			logger.Notice(ctx, "Theme set to file: {{|Folder|}}%s{{[-]}}", absPath)
 			_, _ = theme.Load(configValue, "")
 			return nil
 		}
 
-		// --- Named theme (embedded or user://) ---
+		// --- Named theme (embedded or user:ThemeName) ---
 		newTheme := arg
 		if _, err := theme.EnsureThemeExtracted(newTheme); err != nil {
 			logger.Error(ctx, "Theme '{{|Theme|}}%s{{[-]}}' not found.", theme.ThemeDisplayName(newTheme))
@@ -103,6 +102,7 @@ func handleTheme(ctx context.Context, group *CommandGroup) error {
 		themes, err := theme.List()
 		if err != nil || len(themes) == 0 {
 			logger.Warn(ctx, "No themes found.")
+			logger.Notice(ctx, "Place user themes (*.ds2theme with 'user_' prefix) in: {{|Folder|}}%s{{[-]}}", paths.GetThemesDir())
 			return nil
 		}
 		logger.Notice(ctx, "Available themes:")
@@ -113,6 +113,8 @@ func handleTheme(ctx context.Context, group *CommandGroup) error {
 			}
 			logger.Notice(ctx, "  - %s%s", t.Name, marker)
 		}
+		logger.Notice(ctx, "User themes directory: {{|Folder|}}%s{{[-]}}", paths.GetThemesDir())
+		logger.Notice(ctx, "Drop any *.ds2theme file there to use it (e.g. GreenScreen.ds2theme → --theme user:GreenScreen)")
 	}
 	return nil
 }
@@ -280,6 +282,98 @@ func handleThemeSettings(ctx context.Context, group *CommandGroup) error {
 		logger.Notice(ctx, "Theme setting updated: %s", group.Command)
 	}
 
+	return nil
+}
+
+// resolveExtractDest returns the destination directory for theme extraction.
+// "user:" → user themes directory; "" → current directory; otherwise the argument is used as-is.
+func resolveExtractDest(arg string) string {
+	if arg == "user:" {
+		return paths.GetThemesDir()
+	}
+	if arg == "" {
+		return "."
+	}
+	return arg
+}
+
+func handleThemeExtract(ctx context.Context, group *CommandGroup) error {
+	switch group.Command {
+	case "--theme-extract":
+		if len(group.Args) == 0 {
+			logger.Error(ctx, "Usage: --theme-extract <ThemeName> [dest] [filename]")
+			return fmt.Errorf("missing theme name")
+		}
+		themeName := group.Args[0]
+		destDir := resolveExtractDest("")
+		if len(group.Args) >= 2 {
+			destDir = resolveExtractDest(group.Args[1])
+		}
+
+		data, err := theme.ResolveThemeData(themeName)
+		if err != nil {
+			logger.Error(ctx, "Theme '{{|Theme|}}%s{{[-]}}' not found: %v", theme.ThemeDisplayName(themeName), err)
+			return err
+		}
+
+		if err := os.MkdirAll(destDir, 0755); err != nil {
+			logger.Error(ctx, "Failed to create directory '{{|Folder|}}%s{{[-]}}': %v", destDir, err)
+			return err
+		}
+
+		outName := theme.FileStemFromURI(themeName) + ".ds2theme"
+		if len(group.Args) >= 3 {
+			outName = group.Args[2]
+			if !strings.HasSuffix(outName, ".ds2theme") {
+				outName += ".ds2theme"
+			}
+		}
+		outPath := filepath.Join(destDir, outName)
+		if err := os.WriteFile(outPath, data, 0644); err != nil {
+			logger.Error(ctx, "Failed to write theme file: %v", err)
+			return err
+		}
+		logger.Notice(ctx, "Theme '{{|Theme|}}%s{{[-]}}' extracted to: {{|Folder|}}%s{{[-]}}", theme.ThemeDisplayName(themeName), outPath)
+
+	case "--theme-extract-all":
+		destDir := resolveExtractDest("")
+		if len(group.Args) >= 1 {
+			destDir = resolveExtractDest(group.Args[0])
+		}
+
+		if theme.EmbeddedThemeLister == nil || theme.EmbeddedThemeReader == nil {
+			logger.Error(ctx, "Embedded theme reader not initialised.")
+			return fmt.Errorf("embedded theme reader not initialised")
+		}
+
+		stems, err := theme.EmbeddedThemeLister()
+		if err != nil || len(stems) == 0 {
+			logger.Warn(ctx, "No embedded themes found.")
+			return nil
+		}
+
+		if err := os.MkdirAll(destDir, 0755); err != nil {
+			logger.Error(ctx, "Failed to create directory '{{|Folder|}}%s{{[-]}}': %v", destDir, err)
+			return err
+		}
+
+		extracted := 0
+		for _, stem := range stems {
+			data, err := theme.EmbeddedThemeReader(stem)
+			if err != nil {
+				logger.Warn(ctx, "Skipping '{{|Theme|}}%s{{[-]}}': %v", stem, err)
+				continue
+			}
+			outPath := filepath.Join(destDir, stem+".ds2theme")
+			if err := os.WriteFile(outPath, data, 0644); err != nil {
+				logger.Warn(ctx, "Failed to write '{{|Folder|}}%s{{[-]}}': %v", outPath, err)
+				continue
+			}
+			logger.Notice(ctx, "  Extracted: {{|Theme|}}%s{{[-]}}", stem+".ds2theme")
+			extracted++
+		}
+		logger.Notice(ctx, "%d theme(s) extracted to: {{|Folder|}}%s{{[-]}}", extracted, destDir)
+	}
 	return nil
 }
 

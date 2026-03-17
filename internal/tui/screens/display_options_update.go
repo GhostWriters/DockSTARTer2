@@ -9,7 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-// itemConfigValue returns the config value (e.g. "user://MyTheme") for a theme menu item.
+// itemConfigValue returns the config value (e.g. "user:MyTheme") for a theme menu item.
 // Falls back to Tag (display name) if no Metadata entry was set.
 func itemConfigValue(item tui.MenuItem) string {
 	if cv, ok := item.Metadata["config_value"]; ok {
@@ -296,7 +296,11 @@ func (s *DisplayOptionsScreen) applyPreview(themeName string) {
 	// Always load to ensure tags are registered in registry
 	defaults, err := theme.Load(themeName, "Preview")
 	if err != nil {
-		s.previewTheme = "ERR: " + err.Error()
+		shortURI := themeName
+		if strings.HasPrefix(themeName, "file:") {
+			shortURI = "file:" + theme.ThemeDisplayName(themeName)
+		}
+		s.previewTheme = "(missing) " + shortURI
 	}
 	s.themeDefaults[themeName] = defaults
 

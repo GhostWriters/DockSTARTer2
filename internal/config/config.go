@@ -139,8 +139,8 @@ func LoadAppConfig() AppConfig {
 			// Save raw (unexpanded) values for display purposes
 			conf.RawPaths = conf.Paths
 			// Expand variables in paths for runtime use
-			conf.Paths.ConfigFolder = ExpandVariables(conf.Paths.ConfigFolder)
-			conf.Paths.ComposeFolder = ExpandVariables(conf.Paths.ComposeFolder)
+			conf.Paths.ConfigFolder = filepath.Clean(ExpandVariables(conf.Paths.ConfigFolder))
+			conf.Paths.ComposeFolder = filepath.Clean(ExpandVariables(conf.Paths.ComposeFolder))
 			conf.ConfigDir = conf.Paths.ConfigFolder
 			conf.ComposeDir = conf.Paths.ComposeFolder
 			return conf
@@ -152,14 +152,16 @@ func LoadAppConfig() AppConfig {
 	// Save raw (unexpanded) values for display purposes
 	conf.RawPaths = conf.Paths
 	// Expand after saving so the on-disk file retains ${XDG_CONFIG_HOME} references
-	conf.Paths.ConfigFolder = ExpandVariables(conf.Paths.ConfigFolder)
-	conf.Paths.ComposeFolder = ExpandVariables(conf.Paths.ComposeFolder)
+	conf.Paths.ConfigFolder = filepath.Clean(ExpandVariables(conf.Paths.ConfigFolder))
+	conf.Paths.ComposeFolder = filepath.Clean(ExpandVariables(conf.Paths.ComposeFolder))
 	conf.ConfigDir = conf.Paths.ConfigFolder
 	conf.ComposeDir = conf.Paths.ComposeFolder
 	return conf
 }
 
 // SaveAppConfig writes the configuration to dockstarter2.toml.
+// Paths are stored in their unexpanded form (e.g. ${XDG_CONFIG_HOME}) so that
+// the file remains portable and variables are resolved fresh on each read.
 func SaveAppConfig(conf AppConfig) error {
 	path := paths.GetConfigFilePath()
 
@@ -167,6 +169,14 @@ func SaveAppConfig(conf AppConfig) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
+	}
+
+	// Restore unexpanded path values for on-disk storage.
+	// After LoadAppConfig, conf.Paths holds runtime-expanded values while
+	// conf.RawPaths holds the original template strings (e.g. ${XDG_CONFIG_HOME}).
+	// Use RawPaths when available so we never write expanded paths to disk.
+	if conf.RawPaths.ConfigFolder != "" || conf.RawPaths.ComposeFolder != "" {
+		conf.Paths = conf.RawPaths
 	}
 
 	data, err := toml.Marshal(conf)

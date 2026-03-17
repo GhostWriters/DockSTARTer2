@@ -131,9 +131,9 @@ func GetConfigDir() string {
 	return filepath.Dir(GetConfigFilePath())
 }
 
-// GetThemesDir returns the absolute path to the themes directory in the state folder.
+// GetThemesDir returns the absolute path to the themes directory in the config folder.
 func GetThemesDir() string {
-	return filepath.Join(GetStateDir(), constants.ThemesDirName)
+	return filepath.Join(GetConfigDir(), constants.ThemesDirName)
 }
 
 // GetStateDir returns the absolute path to the dockstarter2 state directory.

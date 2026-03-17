@@ -52,20 +52,18 @@ type ThemeConfig struct {
 // Current holds the active theme configuration
 var Current ThemeConfig
 
-// userThemePrefix is the filename prefix for user-owned themes in the config themes dir.
-const userThemePrefix = "user_"
-
-// UserThemeFilename returns the filename used to store a user theme in the config themes dir.
-func UserThemeFilename(name string) string {
-	return userThemePrefix + name + ".ds2theme"
-}
-
 // ThemeDisplayName returns the human-readable theme name from a config value.
-// "user://MyTheme" or "user://MyTheme.ds2theme" → "MyTheme", "DockSTARTer" → "DockSTARTer".
+// "user:MyTheme" or "user:MyTheme.ds2theme" → "MyTheme"
+// "file:/path/to/GreenScreen.ds2theme"       → "GreenScreen"
+// "DockSTARTer"                              → "DockSTARTer"
 func ThemeDisplayName(themeNameOrURI string) string {
-	if strings.HasPrefix(themeNameOrURI, "user://") {
-		name := strings.TrimPrefix(themeNameOrURI, "user://")
+	if strings.HasPrefix(themeNameOrURI, "user:") {
+		name := strings.TrimPrefix(themeNameOrURI, "user:")
 		return strings.TrimSuffix(name, ".ds2theme")
+	}
+	if strings.HasPrefix(themeNameOrURI, "file:") {
+		base := filepath.Base(strings.TrimPrefix(themeNameOrURI, "file:"))
+		return strings.TrimSuffix(base, ".ds2theme")
 	}
 	return themeNameOrURI
 }
@@ -73,14 +71,39 @@ func ThemeDisplayName(themeNameOrURI string) string {
 // resolveThemeData reads theme bytes directly from its source without touching the state file.
 // Used for preview loads (prefix != "") to avoid disk writes on every cursor move.
 func resolveThemeData(themeNameOrURI string) ([]byte, error) {
-	if strings.HasPrefix(themeNameOrURI, "user://") {
-		themeName := strings.TrimSuffix(strings.TrimPrefix(themeNameOrURI, "user://"), ".ds2theme")
-		return os.ReadFile(filepath.Join(paths.GetThemesDir(), userThemePrefix+themeName+".ds2theme"))
+	if strings.HasPrefix(themeNameOrURI, "user:") {
+		themeName := strings.TrimSuffix(strings.TrimPrefix(themeNameOrURI, "user:"), ".ds2theme")
+		return os.ReadFile(filepath.Join(paths.GetThemesDir(), themeName+".ds2theme"))
+	}
+	if strings.HasPrefix(themeNameOrURI, "file:") {
+		return os.ReadFile(strings.TrimPrefix(themeNameOrURI, "file:"))
 	}
 	if EmbeddedThemeReader != nil {
 		return EmbeddedThemeReader(themeNameOrURI)
 	}
 	return nil, fmt.Errorf("embedded theme reader not initialised")
+}
+
+// ResolveThemeData reads raw bytes for a theme by name or URI.
+// Exported for use by CLI extract commands.
+func ResolveThemeData(themeNameOrURI string) ([]byte, error) {
+	return resolveThemeData(themeNameOrURI)
+}
+
+// FileStemFromURI returns the file stem (without .ds2theme) for a theme URI.
+// "user:GreenScreen" or "user:GreenScreen.ds2theme" → "GreenScreen"
+// "file:/path/to/GreenScreen.ds2theme"              → "GreenScreen"
+// "DockSTARTer"                                     → "DockSTARTer"
+func FileStemFromURI(themeNameOrURI string) string {
+	if strings.HasPrefix(themeNameOrURI, "user:") {
+		name := strings.TrimPrefix(themeNameOrURI, "user:")
+		return strings.TrimSuffix(name, ".ds2theme")
+	}
+	if strings.HasPrefix(themeNameOrURI, "file:") {
+		base := filepath.Base(strings.TrimPrefix(themeNameOrURI, "file:"))
+		return strings.TrimSuffix(base, ".ds2theme")
+	}
+	return strings.TrimSuffix(themeNameOrURI, ".ds2theme")
 }
 
 // activeThemeMatchesData returns true if the active state theme file has identical content to data.
@@ -94,7 +117,7 @@ func activeThemeMatchesData(data []byte) bool {
 
 // EnsureThemeExtracted ensures the active theme state file is up to date from its source.
 // For embedded themes: compares embedded bytes to state file, updates if different.
-// For user:// themes: compares config themes dir copy to state file, updates if different.
+// For user: themes: compares config themes dir copy to state file, updates if different.
 // Returns the path to the active theme state file.
 func EnsureThemeExtracted(themeNameOrURI string) (string, error) {
 	stateFile := paths.GetActiveThemeFile()
@@ -102,17 +125,28 @@ func EnsureThemeExtracted(themeNameOrURI string) (string, error) {
 	var sourceData []byte
 	var err error
 
-	if strings.HasPrefix(themeNameOrURI, "user://") {
-		// User theme — source is in the config themes dir
-		themeName := strings.TrimSuffix(strings.TrimPrefix(themeNameOrURI, "user://"), ".ds2theme")
-		sourcePath := filepath.Join(paths.GetThemesDir(), userThemePrefix+themeName+".ds2theme")
+	if strings.HasPrefix(themeNameOrURI, "user:") {
+		// User theme — source is in the themes dir
+		themeName := strings.TrimSuffix(strings.TrimPrefix(themeNameOrURI, "user:"), ".ds2theme")
+		sourcePath := filepath.Join(paths.GetThemesDir(), themeName+".ds2theme")
 		sourceData, err = os.ReadFile(sourcePath)
 		if err != nil {
-			// Source missing — use existing state copy if available
-			if _, serr := os.Stat(stateFile); serr == nil {
+			// Source gone — use existing state file if available
+			if _, statErr := os.Stat(stateFile); statErr == nil {
 				return stateFile, nil
 			}
 			return "", fmt.Errorf("user theme not found: %s", themeName)
+		}
+	} else if strings.HasPrefix(themeNameOrURI, "file:") {
+		// File theme — absolute path stored in config
+		sourcePath := strings.TrimPrefix(themeNameOrURI, "file:")
+		sourceData, err = os.ReadFile(sourcePath)
+		if err != nil {
+			// Source gone — use existing state file if available
+			if _, statErr := os.Stat(stateFile); statErr == nil {
+				return stateFile, nil
+			}
+			return "", fmt.Errorf("theme file not found: %s", sourcePath)
 		}
 	} else {
 		// Named embedded theme — source is in the binary
@@ -121,10 +155,6 @@ func EnsureThemeExtracted(themeNameOrURI string) (string, error) {
 		}
 		sourceData, err = EmbeddedThemeReader(themeNameOrURI)
 		if err != nil {
-			// Embedded source unavailable — use existing state copy if available
-			if _, serr := os.Stat(stateFile); serr == nil {
-				return stateFile, nil
-			}
 			return "", fmt.Errorf("theme not found: %s", themeNameOrURI)
 		}
 	}
@@ -534,4 +564,16 @@ func ClearSemanticCache() {
 	cacheMu.Lock()
 	defer cacheMu.Unlock()
 	semanticStyleCache = make(map[string]lipgloss.Style)
+}
+
+// ClearSemanticCachePrefix removes cached styles whose key contains the given prefix.
+// Used to invalidate preview theme styles without discarding the active theme cache.
+func ClearSemanticCachePrefix(prefix string) {
+	cacheMu.Lock()
+	defer cacheMu.Unlock()
+	for k := range semanticStyleCache {
+		if strings.Contains(k, prefix) {
+			delete(semanticStyleCache, k)
+		}
+	}
 }

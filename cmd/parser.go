@@ -275,6 +275,30 @@ func Parse(args []string) ([]CommandGroup, error) {
 				i++
 			}
 
+		// --theme-extract: requires theme name, optional dest, optional filename
+		case "--theme-extract":
+			if i >= len(expandedArgs) || strings.HasPrefix(expandedArgs[i], "-") {
+				return nil, &ParseError{Args: expandedArgs, Index: i - 1, FailingCommand: cmd, Message: fmt.Sprintf("Command %s requires a theme name.", cmd)}
+			}
+			currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
+			i++
+			// Optional dest and filename arguments
+			for count := 0; count < 2; count++ {
+				if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
+					currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
+					i++
+				} else {
+					break
+				}
+			}
+
+		// --theme-extract-all: optional dest only
+		case "--theme-extract-all":
+			if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
+				currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
+				i++
+			}
+
 		// Commands that accept OPTIONAL arguments (Max 2)
 		case "-u", "--update", "--update-app", "--update-templates", "-V", "--version":
 			// Helper to consume up to N args
