@@ -1219,7 +1219,7 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 			isVarLine = false
 		} else {
 			currentVal = editor.GetVariableValue(varName)
-			opts = appenv.GetVarOptions(varName, strings.ToUpper(tab.spec.App), tab.defaultVal(varName))
+			opts = appenv.GetVarOptions(varName, strings.ToUpper(tab.spec.App), tab.defaultVal(varName), tab.appMeta)
 		}
 	}
 
@@ -1590,7 +1590,7 @@ func (m *TabbedVarsEditorModel) showSetValueDialog() tea.Cmd {
 	}
 	origVal := editor.GetVariableValue(varName)
 	appUpper := strings.ToUpper(tab.spec.App)
-	opts := appenv.GetVarOptions(varName, appUpper, tab.defaultVal(varName))
+	opts := appenv.GetVarOptions(varName, appUpper, tab.defaultVal(varName), tab.appMeta)
 	// Always offer "Original Value" first so the user can revert.
 	opts = append([]appenv.VarOption{{
 		Display: "Original Value",

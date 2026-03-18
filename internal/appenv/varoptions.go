@@ -37,11 +37,13 @@ var systemDetectedVars = map[string]bool{
 //
 //	(e.g. "'false'", "'192.168.1.0/24'"). Pass "" when unknown.
 //
+// meta            is optional per-app metadata loaded from appname.meta.toml; pass nil if unavailable.
+//
 // The first returned option (when computedDefault is meaningful) is labelled
 // "Default Value" or "System Value" to match the bash menu_value_prompt.sh wording.
 // Subsequent options are curated alternatives.
 // Returns nil when no options exist (caller should allow free-form editing only).
-func GetVarOptions(varName, appName, computedDefault string) []VarOption {
+func GetVarOptions(varName, appName, computedDefault string, meta *AppMeta) []VarOption {
 	var opts []VarOption
 
 	// --- Prepend Default / System Value option ---
@@ -169,6 +171,17 @@ func GetVarOptions(varName, appName, computedDefault string) []VarOption {
 
 		default:
 			// Other globals: only Default Value (already prepended above)
+		}
+	}
+
+	// Append options from per-app .meta.toml (values must include shell quoting if needed, e.g. "'docker'").
+	if vm, ok := meta.GetVarMeta(varName); ok {
+		for _, o := range vm.Options {
+			opts = append(opts, VarOption{
+				Display: o.Display,
+				Value:   o.Value,
+				Help:    o.Help,
+			})
 		}
 	}
 
