@@ -121,3 +121,35 @@ func GetDescription(ctx context.Context, appName string, envFile string) string 
 
 	return "! Missing description !"
 }
+
+// GetDescriptionFromTemplate returns the description of an application.
+func GetDescriptionFromTemplate(ctx context.Context, appName string, envFile string) string {
+	// Check if user defined (not built-in OR missing ENABLED var)
+	if !IsAppBuiltIn(appName) {
+		return GetNiceName(ctx, appName) + " is a user defined application"
+	}
+
+	// Try to get from labels
+	labelsFile, err := AppInstanceFile(ctx, appName, "*.labels.yml")
+	if err != nil || labelsFile == "" {
+		return "! Missing description !"
+	}
+
+	content, err := os.ReadFile(labelsFile)
+	if err != nil {
+		return "! Missing description !"
+	}
+
+	var labels LabelsFile
+	if err := yaml.Unmarshal(content, &labels); err != nil {
+		return "! Missing description !"
+	}
+
+	for _, service := range labels.Services {
+		if desc, ok := service.Labels["com.dockstarter.appinfo.description"]; ok {
+			return strings.Trim(desc, `"' `)
+		}
+	}
+
+	return "! Missing description !"
+}
