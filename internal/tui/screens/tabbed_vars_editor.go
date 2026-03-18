@@ -238,7 +238,7 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 			}
 			if !tab.spec.IsGlobal {
 				var metaErr error
-				tabAppMeta, metaErr = appenv.LoadAppMeta(tab.spec.App)
+				tabAppMeta, metaErr = appenv.LoadAppMeta(ctx, tab.spec.App)
 				if metaErr != nil {
 					logger.Error(ctx, "Failed to load metadata for %s: %v", tab.spec.App, metaErr)
 				}
