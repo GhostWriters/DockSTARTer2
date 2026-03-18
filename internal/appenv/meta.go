@@ -24,28 +24,35 @@ type AppMeta struct {
 }
 
 // GetVarMeta returns the metadata for a specific variable name.
-// appName is the app prefix (e.g. "ADGUARD") used as a fallback: if no exact
-// match is found, the APPNAME__ prefix is stripped and the lookup is retried.
-// This handles APPNAME__ENVIRONMENT_* variables whose meta keys omit the prefix.
-// Variable names are matched case-insensitively. Returns zero value and false
-// if no metadata exists.
+//
+// Key format in .meta.toml files:
+//   - Variables from .env.app.appname use the "APPNAME:VARNAME" key
+//     (e.g. ["plex:VERSION"] for VERSION in .env.app.plex)
+//   - Variables from the main .env with APPNAME__ prefix use the plain suffix
+//     as the key (e.g. [ENVIRONMENT_SERVERIP] for ADGUARD__ENVIRONMENT_SERVERIP)
+//
+// The correct key is derived automatically from whether varName carries the
+// APPNAME__ prefix. Returns zero value and false if no metadata exists.
 func (m *AppMeta) GetVarMeta(varName, appName string) (VarMeta, bool) {
 	if m == nil {
 		return VarMeta{}, false
 	}
 	upper := strings.ToUpper(varName)
-	if v, ok := m.Variables[upper]; ok {
-		return v, ok
-	}
+	var key string
 	if appName != "" {
 		prefix := strings.ToUpper(appName) + "__"
 		if strings.HasPrefix(upper, prefix) {
-			if v, ok := m.Variables[upper[len(prefix):]]; ok {
-				return v, ok
-			}
+			// Main .env var — strip APPNAME__ prefix, look up plain key
+			key = upper[len(prefix):]
+		} else {
+			// .env.app.appname var — look up as "APPNAME:VARNAME"
+			key = strings.ToUpper(appName) + ":" + upper
 		}
+	} else {
+		key = upper
 	}
-	return VarMeta{}, false
+	v, ok := m.Variables[key]
+	return v, ok
 }
 
 // LoadAppMeta reads the .meta.toml file for the given app from the templates directory.
