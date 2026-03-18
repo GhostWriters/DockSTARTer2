@@ -24,14 +24,28 @@ type AppMeta struct {
 }
 
 // GetVarMeta returns the metadata for a specific variable name.
-// Variable names are matched case-insensitively.
-// Returns zero value and false if no metadata exists.
-func (m *AppMeta) GetVarMeta(varName string) (VarMeta, bool) {
+// appName is the app prefix (e.g. "ADGUARD") used as a fallback: if no exact
+// match is found, the APPNAME__ prefix is stripped and the lookup is retried.
+// This handles APPNAME__ENVIRONMENT_* variables whose meta keys omit the prefix.
+// Variable names are matched case-insensitively. Returns zero value and false
+// if no metadata exists.
+func (m *AppMeta) GetVarMeta(varName, appName string) (VarMeta, bool) {
 	if m == nil {
 		return VarMeta{}, false
 	}
-	v, ok := m.Variables[strings.ToUpper(varName)]
-	return v, ok
+	upper := strings.ToUpper(varName)
+	if v, ok := m.Variables[upper]; ok {
+		return v, ok
+	}
+	if appName != "" {
+		prefix := strings.ToUpper(appName) + "__"
+		if strings.HasPrefix(upper, prefix) {
+			if v, ok := m.Variables[upper[len(prefix):]]; ok {
+				return v, ok
+			}
+		}
+	}
+	return VarMeta{}, false
 }
 
 // LoadAppMeta reads the .meta.toml file for the given app from the templates directory.

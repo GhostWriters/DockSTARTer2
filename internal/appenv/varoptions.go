@@ -175,7 +175,7 @@ func GetVarOptions(varName, appName, computedDefault string, meta *AppMeta) []Va
 	}
 
 	// Append options from per-app .meta.toml (values must include shell quoting if needed, e.g. "'docker'").
-	if vm, ok := meta.GetVarMeta(varName); ok {
+	if vm, ok := meta.GetVarMeta(varName, appName); ok {
 		for _, o := range vm.Options {
 			opts = append(opts, VarOption{
 				Display: o.Display,

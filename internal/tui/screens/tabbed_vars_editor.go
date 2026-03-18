@@ -922,7 +922,7 @@ func (m *TabbedVarsEditorModel) HelpText() string {
 	if line := appenv.GetVarHelpLine(varName); line != "" {
 		return line
 	}
-	if vm, ok := tab.appMeta.GetVarMeta(varName); ok && vm.HelpLine != "" {
+	if vm, ok := tab.appMeta.GetVarMeta(varName, tab.spec.App); ok && vm.HelpLine != "" {
 		return vm.HelpLine
 	}
 	return ""
@@ -1717,7 +1717,7 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) string {
 
 	if desc := appenv.GetVarHelpText(varName); desc != "" {
 		heading += "\n\n" + desc
-	} else if vm, ok := tab.appMeta.GetVarMeta(varName); ok && vm.HelpText != "" {
+	} else if vm, ok := tab.appMeta.GetVarMeta(varName, tab.spec.App); ok && vm.HelpText != "" {
 		heading += "\n\n" + vm.HelpText
 	}
 
