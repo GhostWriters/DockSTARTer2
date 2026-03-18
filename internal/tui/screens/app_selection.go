@@ -83,7 +83,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *tui.MenuModel {
 			}
 
 			niceName := appenv.GetNiceName(ctx, app)
-			desc := appenv.GetDescription(ctx, app, envFile)
+			desc := appenv.GetDescriptionFromTemplate(ctx, app, envFile)
 
 			if appenv.AppNameToInstanceName(app) != "" {
 				desc = "{{|Theme_ListAppUserDefined|}}" + desc
