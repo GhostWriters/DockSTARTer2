@@ -25,34 +25,66 @@ type AppMeta struct {
 
 // GetVarMeta returns the metadata for a specific variable name.
 //
-// Key format in .meta.toml files:
-//   - Variables from .env.app.appname use the "APPNAME:VARNAME" key
-//     (e.g. ["plex:VERSION"] for VERSION in .env.app.plex)
-//   - Variables from the main .env with APPNAME__ prefix use the plain suffix
-//     as the key (e.g. [ENVIRONMENT_SERVERIP] for ADGUARD__ENVIRONMENT_SERVERIP)
+// All .meta.toml keys use the APPNAME<__INSTANCE> pattern where <__INSTANCE>
+// denotes an optional instance suffix. The <__INSTANCE> marker (literal text)
+// acts as a wildcard that matches any instance or no instance at all.
 //
-// The correct key is derived automatically from whether varName carries the
-// APPNAME__ prefix. Returns zero value and false if no metadata exists.
+// App-specific vars (.env.app.appname): "appname<__instance>:VARNAME"
+//   - e.g. ["plex<__instance>:VERSION"], ["adminer<__instance>:ADMINER_DESIGN"]
+//
+// Main .env vars (carry APPNAME__ prefix): "APPNAME<__INSTANCE>__VARNAME"
+//   - e.g. ["ADGUARD<__INSTANCE>__ENVIRONMENT_SERVERIP"]
+//
+// Lookup for main .env vars (varName has APPNAME__ prefix):
+//  1. Exact key: "APPNAME__VARNAME" (no instance — rare override)
+//  2. Instance pattern key: "APPNAME<__INSTANCE>__VARNAME"
+//
+// Lookup for app-specific vars (no APPNAME__ prefix):
+//  1. Exact instance key: "APPNAME__INSTANCE:VARNAME" (instance-specific override)
+//  2. Instance pattern key: "APPNAME<__INSTANCE>:VARNAME" (covers all instances)
+//
+// Returns zero value and false if no metadata exists.
 func (m *AppMeta) GetVarMeta(varName, appName string) (VarMeta, bool) {
 	if m == nil {
 		return VarMeta{}, false
 	}
 	upper := strings.ToUpper(varName)
-	var key string
-	if appName != "" {
-		prefix := strings.ToUpper(appName) + "__"
-		if strings.HasPrefix(upper, prefix) {
-			// Main .env var — strip APPNAME__ prefix, look up plain key
-			key = upper[len(prefix):]
-		} else {
-			// .env.app.appname var — look up as "APPNAME:VARNAME"
-			key = strings.ToUpper(appName) + ":" + upper
+	upperApp := strings.ToUpper(appName)
+
+	// Detect main .env vars: those with an APPNAME__ prefix.
+	baseApp := strings.ToUpper(AppNameToBaseAppName(appName))
+	if prefix := baseApp + "__"; strings.HasPrefix(upper, prefix) {
+		varSuffix := upper[len(prefix):]
+		// Strip any instance segment so varSuffix is the bare variable name.
+		// e.g. ADGUARD__MYINSTANCE__ENVIRONMENT_SERVERIP → ENVIRONMENT_SERVERIP
+		if inst := strings.ToUpper(AppNameToInstanceName(appName)); inst != "" {
+			instPrefix := inst + "__"
+			if strings.HasPrefix(varSuffix, instPrefix) {
+				varSuffix = varSuffix[len(instPrefix):]
+			}
 		}
-	} else {
-		key = upper
+		// 1. Exact key (no instance): "ADGUARD__ENVIRONMENT_SERVERIP"
+		if v, ok := m.Variables[baseApp+"__"+varSuffix]; ok {
+			return v, ok
+		}
+		// 2. Instance pattern key: "ADGUARD<__INSTANCE>__ENVIRONMENT_SERVERIP"
+		if v, ok := m.Variables[baseApp+"<__INSTANCE>__"+varSuffix]; ok {
+			return v, ok
+		}
+		return VarMeta{}, false
 	}
-	v, ok := m.Variables[key]
-	return v, ok
+
+	// App-specific var (from .env.app.appname) — key is "APPNAME<__INSTANCE>:VARNAME".
+	// 1. Exact instance-specific key: "APPNAME__INSTANCE:VARNAME"
+	if v, ok := m.Variables[upperApp+":"+upper]; ok {
+		return v, ok
+	}
+	// 2. Instance pattern key using base app name: "APPNAME<__INSTANCE>:VARNAME"
+	if v, ok := m.Variables[baseApp+"<__INSTANCE>:"+upper]; ok {
+		return v, ok
+	}
+
+	return VarMeta{}, false
 }
 
 // LoadAppMeta reads the .meta.toml file for the given app from the templates directory.
