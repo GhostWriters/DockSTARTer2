@@ -40,6 +40,7 @@ type setValueDialogModel struct {
 	input        sinput.Model
 	inputScreenX int // abs screen X of text start; set in GetHitRegions
 	inputRelY    int // row of input text within dialog (for hardware cursor)
+	listAbsTopY  int // absolute screen Y of first list item; set in GetHitRegions
 	opts   []appenv.VarOption
 	cursor int
 	offset int
@@ -252,8 +253,8 @@ func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if idx >= 0 {
 					selectOpt(idx)
 					m.cursor = idx
-					m.focus = setValueFocusInput
-					m.input.Focus()
+					m.focus = setValueFocusList
+					m.input.Blur()
 				}
 				return m, nil
 			}
@@ -383,16 +384,9 @@ func (m *setValueDialogModel) innerWidth() int {
 }
 
 func (m *setValueDialogModel) optIndexAt(screenY int) int {
-	ctx := tui.GetActiveContext()
-	contentW := m.innerWidth()
-	headingRaw := FormatMenuHeading(MenuHeadingParams{
-		AppName: m.appName, AppDescription: m.appDesc,
-		VarName: m.varName, OriginalValue: m.origVal, CurrentValue: m.input.Value(),
-	}, contentW)
-	headingH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(console.ToANSI(headingRaw)))
-	// outer border(1) + headingH + "Current Value" section(3) + "Presets" title border(1)
-	listTop := 1 + headingH + 3 + 1
-	rowY := listTop
+	// m.listAbsTopY is set by GetHitRegions each frame to the absolute screen Y
+	// of the first visible list item. Use it directly so click coordinates match.
+	rowY := m.listAbsTopY
 	rowBudget := m.maxVis
 	for i := m.offset; i < len(m.opts) && rowBudget > 0; i++ {
 		h := 1
@@ -651,6 +645,7 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 		Height: 1,
 		ZOrder: tui.ZDialog + 10,
 	})
+	m.listAbsTopY = offsetY + listTop
 	if listH > 0 {
 		regions = append(regions, tui.HitRegion{
 			ID:     "setvalue_list",
