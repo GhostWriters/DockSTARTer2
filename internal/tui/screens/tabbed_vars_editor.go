@@ -6,7 +6,6 @@ import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/paths"
-	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/tui/components/enveditor"
 	"context"
@@ -1696,11 +1695,8 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) string {
 
 	heading := legend + "\n\n" + FormatMenuHeading(params, contentWidth)
 
-	// Append variable description (plain text — word-wrapped at source by FormatMenuHeading
-	// for AppDescription; variable help text is appended as-is and word-wrapped in the
-	// help dialog since it may come from an external source).
 	if desc := appenv.GetVarHelpText(varName); desc != "" {
-		heading += "\n\n" + strutil.WordWrap(desc, contentWidth)
+		heading += "\n\n" + desc
 	}
 
 	return heading

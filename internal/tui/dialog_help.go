@@ -5,6 +5,8 @@ import (
 	"DockSTARTer2/internal/strutil"
 	"strings"
 
+	"github.com/charmbracelet/x/ansi"
+
 	"charm.land/bubbles/v2/help"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -127,11 +129,16 @@ func (m *HelpDialogModel) ViewString() string {
 	if m.contextText != "" {
 		for _, line := range strings.Split(m.contextText, "\n") {
 			trimmed := strings.TrimRight(line, " ")
-			// Resolve semantic tags to ANSI; let the tags own all coloring.
-			processed := console.ToANSI(trimmed)
-			contextLines = append(contextLines, processed)
-			if w := lipgloss.Width(processed); w > maxLineWidth {
-				maxLineWidth = w
+			// Resolve semantic tags to ANSI once, then word-wrap the ANSI string
+			// so width measurement is accurate (no invisible tag characters).
+			resolved := console.ToANSI(trimmed)
+			wrapped := ansi.Wordwrap(resolved, targetWidth, "")
+			for _, wl := range strings.Split(wrapped, "\n") {
+				wl = strings.TrimRight(wl, " ")
+				contextLines = append(contextLines, wl)
+				if w := lipgloss.Width(wl); w > maxLineWidth {
+					maxLineWidth = w
+				}
 			}
 		}
 		// Cap at targetWidth — long values (e.g. file paths) may still exceed it.
