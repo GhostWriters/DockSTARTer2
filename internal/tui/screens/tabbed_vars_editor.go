@@ -5,6 +5,7 @@ import (
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/constants"
+	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/tui/components/enveditor"
@@ -53,9 +54,10 @@ type envTab struct {
 	defaultFilePath string   // Cached for Refresh
 	readOnlyVars    []string // Cached for Refresh
 	// Cached heading display info (populated during loadEnv)
-	envFilePath string // Actual .env file being edited
-	niceName    string // App nicename (empty for global tabs)
-	description string // App description (empty for global tabs or if unavailable)
+	envFilePath string          // Actual .env file being edited
+	niceName    string          // App nicename (empty for global tabs)
+	description string          // App description (empty for global tabs or if unavailable)
+	appMeta     *appenv.AppMeta // Optional metadata from appname.meta.toml (nil if not present)
 }
 
 // defaultVal returns the computed default for any variable name via DefaultValueFunc
@@ -123,6 +125,7 @@ type envTabData struct {
 	addPrefix       string
 	validationType  string
 	validationApp   string
+	appMeta         *appenv.AppMeta
 }
 
 type envLoadDoneMsg struct {
@@ -227,10 +230,18 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 		initialVars, _ := appenv.ListVarsLiteralsData(content)
 
 		var niceName, description, envFilePath string
+		var tabAppMeta *appenv.AppMeta
 		if tab.spec.App != "" {
 			niceName = appenv.GetNiceName(ctx, tab.spec.App)
 			if desc := appenv.GetDescription(ctx, tab.spec.App, envPath); desc != "! Missing description !" {
 				description = desc
+			}
+			if !tab.spec.IsGlobal {
+				var metaErr error
+				tabAppMeta, metaErr = appenv.LoadAppMeta(tab.spec.App)
+				if metaErr != nil {
+					logger.Error(ctx, "Failed to load metadata for %s: %v", tab.spec.App, metaErr)
+				}
 			}
 		}
 		if tab.spec.IsGlobal {
@@ -265,6 +276,7 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 			addPrefix:       addPrefix,
 			validationType:  validationType,
 			validationApp:   validationApp,
+			appMeta:         tabAppMeta,
 		})
 	}
 
@@ -691,6 +703,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.tabs[i].niceName = data.niceName
 			m.tabs[i].description = data.description
 			m.tabs[i].envFilePath = data.envFilePath
+			m.tabs[i].appMeta = data.appMeta
 			// Clear undo — content has been reloaded so prior edits are irrelevant
 			m.tabs[i].editor.ClearUndo()
 		}
@@ -897,7 +910,8 @@ func (m *TabbedVarsEditorModel) HelpText() string {
 	if m.focus != envFocusEditor || len(m.tabs) == 0 {
 		return ""
 	}
-	meta, ok := m.tabs[m.activeTab].editor.CurrentLineMeta()
+	tab := m.tabs[m.activeTab]
+	meta, ok := tab.editor.CurrentLineMeta()
 	if !ok || !meta.IsVariable {
 		return ""
 	}
@@ -905,7 +919,13 @@ func (m *TabbedVarsEditorModel) HelpText() string {
 	if idx := strings.Index(varName, "="); idx > 0 {
 		varName = strings.TrimSpace(varName[:idx])
 	}
-	return appenv.GetVarHelpLine(varName)
+	if line := appenv.GetVarHelpLine(varName); line != "" {
+		return line
+	}
+	if vm, ok := tab.appMeta.GetVarMeta(varName); ok && vm.HelpLine != "" {
+		return vm.HelpLine
+	}
+	return ""
 }
 
 func (m *TabbedVarsEditorModel) SetSize(width, height int) {
@@ -1697,6 +1717,8 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) string {
 
 	if desc := appenv.GetVarHelpText(varName); desc != "" {
 		heading += "\n\n" + desc
+	} else if vm, ok := tab.appMeta.GetVarMeta(varName); ok && vm.HelpText != "" {
+		heading += "\n\n" + vm.HelpText
 	}
 
 	return heading

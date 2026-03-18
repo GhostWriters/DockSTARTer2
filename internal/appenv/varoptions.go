@@ -7,10 +7,11 @@ import (
 
 // VarOption represents a single predefined selectable value for a variable,
 // ported from DockSTARTer's menu_value_prompt.sh option tables.
+// TOML tags allow loading options from appname.meta.toml files.
 type VarOption struct {
-	Display string // Human-readable label (e.g. "Enabled")
-	Value   string // Actual value to set, quoted (e.g. "'true'")
-	Help    string // Optional short help text shown in the helpline when focused
+	Display string `toml:"label"`  // Human-readable label (e.g. "Enabled")
+	Value   string `toml:"value"`  // Actual value to set, quoted (e.g. "'true'")
+	Help    string `toml:"help"`   // Optional short help text shown in the helpline when focused
 }
 
 // portRegexp matches variables like APPNAME__PORT_0, APPNAME__PORT_1, etc.
