@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/config"
@@ -32,12 +33,30 @@ func NeedsYMLMerge(ctx context.Context, force bool) bool {
 		return true
 	}
 
-	// Check enabled apps .env files
+	// Check enabled apps .env files and their source templates
 	enabledApps, _ := appenv.ListEnabledApps(conf)
+	templatesDir := paths.GetTemplatesDir()
+	
+	// Use docker-compose.yml marker as reference time for template changes
+	var referenceTime time.Time
+	dcMarker := filepath.Join(paths.GetTimestampsDir(), "yml_merge", constants.ComposeFileName)
+	if info, err := os.Stat(dcMarker); err == nil {
+		referenceTime = info.ModTime()
+	}
+
 	for _, appName := range enabledApps {
 		appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf("%s%s", constants.AppEnvFileNamePrefix, strings.ToLower(appName)))
 		if fileChanged(conf, appEnvFile) {
 			return true
+		}
+
+		// Check app-specific template directory
+		if !referenceTime.IsZero() {
+			baseAppName := strings.ToLower(appenv.AppNameToBaseAppName(appName))
+			appTemplateDir := filepath.Join(templatesDir, constants.TemplatesDirName, baseAppName)
+			if appenv.IsAnyFileNewer(appTemplateDir, referenceTime) {
+				return true
+			}
 		}
 	}
 

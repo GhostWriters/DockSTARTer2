@@ -1,5 +1,7 @@
 package constants
 
+const LegacyApplicationName = "dockstarter"
+
 // Folder Names
 const (
 	TemplatesDirName  = ".apps"
