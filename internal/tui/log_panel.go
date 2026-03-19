@@ -401,6 +401,14 @@ func (m LogPanelModel) Layers() []*lipgloss.Layer {
 func (m LogPanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	var regions []HitRegion
 
+	logHelp := &HelpContext{
+		ScreenName: "Log Panel",
+		PageTitle:  "Viewer",
+		PageText:   "Displays live application logs. Use the toggle button or drag the border to see more.",
+		ItemTitle:  "Controls",
+		ItemText:   "Scroll with the mouse wheel or use Home/End/PgUp/PgDn when focused.",
+	}
+
 	// Calculate layout matching RenderTopBorderBoxCtx logic
 	ctx := GetActiveContext()
 	marker := "^"
@@ -433,6 +441,8 @@ func (m LogPanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		Width:  titleStart,
 		Height: 1,
 		ZOrder: ZLogPanel + 1,
+		Label:  "Log Panel",
+		Help:   logHelp,
 	})
 
 	// Toggle label
@@ -443,6 +453,8 @@ func (m LogPanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		Width:  titleSectionLen,
 		Height: 1,
 		ZOrder: ZLogPanel + 1,
+		Label:  "Log Panel",
+		Help:   logHelp,
 	})
 
 	// Right part (resize handle + percentage)
@@ -453,6 +465,8 @@ func (m LogPanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		Width:  m.width - titleEnd,
 		Height: 1,
 		ZOrder: ZLogPanel + 1,
+		Label:  "Log Panel",
+		Help:   logHelp,
 	})
 
 	// Viewport area (when expanded)
@@ -465,6 +479,8 @@ func (m LogPanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 			Width:  m.width,
 			Height: vpH,
 			ZOrder: ZLogPanel + 1,
+			Label:  "Log Panel",
+			Help:   logHelp,
 		})
 
 		// Scrollbar hit regions (within viewport, right-most column)

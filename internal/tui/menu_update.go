@@ -89,10 +89,9 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				menuSelectedIndices[m.id] = idx
 				m.focusedItem = FocusList
 
-				// Hover state merely focuses the item.
-				// Middle click is handled by AppModel (global Space mapping)
-				if msg.Button == HoverButton || msg.Button == tea.MouseMiddle {
-					return m, nil
+				// Right click on a menu item triggers its context menu
+				if msg.Button == tea.MouseRight {
+					return m, m.showContextMenu(msg.X, msg.Y)
 				}
 
 				// For checkboxes/radio buttons, clicking toggles (Space action)

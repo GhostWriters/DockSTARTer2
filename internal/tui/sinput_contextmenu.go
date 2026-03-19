@@ -2,6 +2,8 @@ package tui
 
 import (
 	"DockSTARTer2/internal/tui/components/sinput"
+	"strings"
+
 	"github.com/atotto/clipboard"
 
 	tea "charm.land/bubbletea/v2"
@@ -33,7 +35,20 @@ func buildInputContextMenuItems(input sinput.Model) []ContextMenuItem {
 		copyHelp = "Copy selected text to clipboard."
 	}
 
-	return []ContextMenuItem{
+	header := strings.TrimSpace(input.Model.Prompt)
+	if header == "" || header == ">" || header == ":" {
+		header = strings.TrimSpace(input.Model.Placeholder)
+	}
+	if header == "" {
+		header = "Input"
+	}
+
+	items := []ContextMenuItem{
+		{IsHeader: true, Label: header},
+		{IsSeparator: true},
+	}
+
+	clipItems := []ContextMenuItem{
 		{
 			Label:    copyLabel,
 			Help:     copyHelp,
@@ -75,4 +90,6 @@ func buildInputContextMenuItems(input sinput.Model) []ContextMenuItem {
 			},
 		},
 	}
+
+	return AppendContextMenuTail(items, clipItems, nil)
 }

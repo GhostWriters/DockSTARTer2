@@ -9,6 +9,7 @@ import (
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/atotto/clipboard"
 )
 
 // MenuItem defines an item in a menu
@@ -787,6 +788,53 @@ func (m *MenuModel) HelpContext(contentWidth int) HelpContext {
 		PageText:   m.subtitle,
 		ItemTitle:  itemTitle,
 		ItemText:   itemHelp,
+	}
+}
+
+// showContextMenu returns a command to show the context menu for the currently selected item.
+func (m *MenuModel) showContextMenu(x, y int) tea.Cmd {
+	idx := m.list.Index()
+	var tag, desc string
+	if idx >= 0 && idx < len(m.items) {
+		tag = m.items[idx].Tag
+		desc = m.items[idx].Desc
+	}
+
+	var items []ContextMenuItem
+	if tag != "" {
+		items = append(items, ContextMenuItem{IsHeader: true, Label: tag})
+		items = append(items, ContextMenuItem{IsSeparator: true})
+	}
+	var clipItems []ContextMenuItem
+
+	if tag != "" {
+		t := tag
+		clipItems = append(clipItems, ContextMenuItem{
+			Label: "Copy Item Title",
+			Help:  "Copy the item's title (tag) to clipboard.",
+			Action: func() tea.Msg {
+				_ = clipboard.WriteAll(t)
+				return CloseDialogMsg{}
+			},
+		})
+	}
+	if desc != "" {
+		d := desc
+		clipItems = append(clipItems, ContextMenuItem{
+			Label: "Copy Item Description",
+			Help:  "Copy the item's description to clipboard.",
+			Action: func() tea.Msg {
+				_ = clipboard.WriteAll(d)
+				return CloseDialogMsg{}
+			},
+		})
+	}
+
+	hCtx := m.HelpContext(40)
+	items = AppendContextMenuTail(items, clipItems, &hCtx)
+
+	return func() tea.Msg {
+		return ShowDialogMsg{Dialog: NewContextMenuModel(x, y, m.width, m.height, items)}
 	}
 }
 

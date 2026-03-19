@@ -564,3 +564,38 @@ func itoa(n int) string {
 	}
 	return string(digits)
 }
+
+// AppendContextMenuTail appends a separator, a Clipboard submenu (if clipItems is non-empty),
+// another separator, and a Help item to the given items slice.
+// If hCtx is provided, it will be used when triggering the Help dialog.
+func AppendContextMenuTail(items []ContextMenuItem, clipItems []ContextMenuItem, hCtx *HelpContext) []ContextMenuItem {
+	// Add separator before tail items if list is not empty and last item isn't a separator
+	if len(items) > 0 && !items[len(items)-1].IsSeparator {
+		items = append(items, ContextMenuItem{IsSeparator: true})
+	}
+
+	// Clipboard Submenu
+	if len(clipItems) > 0 {
+		items = append(items, ContextMenuItem{
+			Label:    "Clipboard",
+			Help:     "Access clipboard operations.",
+			SubItems: clipItems,
+		})
+	}
+
+	// Another separator before Help (if we added Clipboard or had prior items)
+	if len(items) > 0 && !items[len(items)-1].IsSeparator {
+		items = append(items, ContextMenuItem{IsSeparator: true})
+	}
+
+	// Help Item
+	items = append(items, ContextMenuItem{
+		Label: "Help",
+		Help:  "Display keyboard shortcuts and context information (F1 or ?).",
+		Action: func() tea.Msg {
+			return TriggerHelpMsg{CapturedContext: hCtx}
+		},
+	})
+
+	return items
+}
