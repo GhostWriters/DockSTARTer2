@@ -46,13 +46,13 @@ func GetConfigFilePath() string {
 }
 
 // GetTemplatesDir returns the absolute path to the DockSTARTer-Templates repository.
-// It uses xdg.StateHome (e.g., %LOCALAPPDATA% on Windows) with a dockstarter2 subfolder.
+// It uses xdg.StateHome (e.g., %LOCALAPPDATA% on Windows) with a dockstarter subfolder (SHARED WITH BASH).
 func GetTemplatesDir() string {
 	if TemplatesDirOverride != "" {
 		return TemplatesDirOverride
 	}
-	appName := strings.ToLower(version.ApplicationName)
-	return filepath.Join(xdg.StateHome, appName, "templates", "DockSTARTer-Templates") // Note: Repo name is still specific, but subfolders are constants
+	appName := constants.LegacyApplicationName
+	return filepath.Join(xdg.StateHome, appName, "templates", "DockSTARTer-Templates")
 }
 
 // GetTemplatesVersion retrieves the current version of the DockSTARTer-Templates repository.

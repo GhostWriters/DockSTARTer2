@@ -206,9 +206,8 @@ func UpdateTemplates(ctx context.Context, force bool, yes bool, requestedBranch 
 
 	logger.Notice(ctx, "Updated {{|ApplicationName|}}%s{{[-]}} to '{{|Version|}}%s{{[-]}}'", targetName, paths.GetTemplatesVersion())
 
-	// Reset all needs markers
+	// Reset all needs markers (DELETED ResetNeeds in favor of granular detection)
 	system.SetPermissions(ctx, paths.GetTimestampsDir())
-	_ = paths.ResetNeeds()
 
 	return nil
 }
