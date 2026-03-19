@@ -1277,62 +1277,11 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 		})
 	}
 
-	// Copy / Cut / Paste
+	// Copy / Cut / Paste / Delete variables
 	selectedText := editor.GetSelectedText()
 	copyText := selectedText
 	if copyText == "" && isVarLine {
 		copyText = currentVal
-	}
-	if copyText != "" {
-		copyLabel := "Copy Value"
-		cutLabel := "Cut Value"
-		cutHelp := "Copy this variable's value to the clipboard and delete the variable."
-		if selectedText != "" {
-			copyLabel = "Copy Selection"
-			cutLabel = "Cut Selection"
-			cutHelp = "Copy selected text to clipboard and delete the selection."
-		}
-		ct := copyText
-		items = append(items, tui.ContextMenuItem{
-			Label: copyLabel,
-			Help:  "Copy to clipboard.",
-			Action: func() tea.Msg {
-				_ = clipboard.WriteAll(ct)
-				return tui.CloseDialogMsg{}
-			},
-		})
-		if isVarLine || selectedText != "" {
-			cutVarName := varName
-			hasSelection := selectedText != ""
-			items = append(items, tui.ContextMenuItem{
-				Label: cutLabel,
-				Help:  cutHelp,
-				Action: func() tea.Msg {
-					_ = clipboard.WriteAll(ct)
-					if hasSelection {
-						// Selection cut: just close — editor selection delete not yet wired
-						return tui.CloseDialogMsg{}
-					}
-					return tui.CloseDialogMsg{Result: deleteVarMsg{VarName: cutVarName}}
-				},
-			})
-		}
-	}
-
-	// Paste — only meaningful on a variable row.
-	if isVarLine {
-		vn2 := varName
-		items = append(items, tui.ContextMenuItem{
-			Label: "Paste Value",
-			Help:  "Replace the entire variable value with clipboard text.",
-			Action: func() tea.Msg {
-				text, err := clipboard.ReadAll()
-				if err != nil || text == "" {
-					return tui.CloseDialogMsg{}
-				}
-				return tui.CloseDialogMsg{Result: ApplyVarValueMsg{VarName: vn2, Value: text}}
-			},
-		})
 	}
 
 	// Delete — only on a variable line.
@@ -1347,7 +1296,59 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 		})
 	}
 
-	// Separator only when there are variable-specific items above.
+	// Build Clipboard Submenu items
+	var clipItems []tui.ContextMenuItem
+	if copyText != "" {
+		copyLabel := "Copy Value"
+		cutLabel := "Cut Value"
+		cutHelp := "Copy this variable's value to the clipboard and delete the variable."
+		if selectedText != "" {
+			copyLabel = "Copy Selection"
+			cutLabel = "Cut Selection"
+			cutHelp = "Copy selected text to clipboard and delete the selection."
+		}
+		ct := copyText
+		clipItems = append(clipItems, tui.ContextMenuItem{
+			Label: copyLabel,
+			Help:  "Copy to clipboard.",
+			Action: func() tea.Msg {
+				_ = clipboard.WriteAll(ct)
+				return tui.CloseDialogMsg{}
+			},
+		})
+		if isVarLine || selectedText != "" {
+			cutVarName := varName
+			hasSelection := selectedText != ""
+			clipItems = append(clipItems, tui.ContextMenuItem{
+				Label: cutLabel,
+				Help:  cutHelp,
+				Action: func() tea.Msg {
+					_ = clipboard.WriteAll(ct)
+					if hasSelection {
+						return tui.CloseDialogMsg{}
+					}
+					return tui.CloseDialogMsg{Result: deleteVarMsg{VarName: cutVarName}}
+				},
+			})
+		}
+	}
+
+	if isVarLine {
+		vn2 := varName
+		clipItems = append(clipItems, tui.ContextMenuItem{
+			Label: "Paste Value",
+			Help:  "Replace the entire variable value with clipboard text.",
+			Action: func() tea.Msg {
+				text, err := clipboard.ReadAll()
+				if err != nil || text == "" {
+					return tui.CloseDialogMsg{}
+				}
+				return tui.CloseDialogMsg{Result: ApplyVarValueMsg{VarName: vn2, Value: text}}
+			},
+		})
+	}
+
+	// Add static items (Add Variable, Refresh)
 	if len(items) > 0 {
 		items = append(items, tui.ContextMenuItem{IsSeparator: true})
 	}
@@ -1376,6 +1377,12 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 			return tui.CloseDialogMsg{Result: refreshM.loadEnv()}
 		},
 	})
+
+	// Build captured help context for this specific variable
+	capturedCtx := m.getVariableHelpContext(varName, tab, 40)
+
+	// Final tail (Clipboard submenu + Help)
+	items = tui.AppendContextMenuTail(items, clipItems, capturedCtx)
 
 	return func() tea.Msg {
 		return tui.ShowDialogMsg{Dialog: tui.NewContextMenuModel(x, y, m.width, m.height, items)}
@@ -1674,15 +1681,14 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) tui.HelpContext {
 		return tui.HelpContext{}
 	}
 
-	legend := "| " +
-		"{{|Theme_GutterAdded|}}+{{[-]}} Added | " +
-		"{{|Theme_GutterDeleted|}}-{{[-]}} Deleted | " +
-		"{{|Theme_GutterModified|}}~{{[-]}} Changed | " +
-		"{{|Theme_GutterInvalid|}}!{{[-]}} Invalid |"
-
 	tab := m.tabs[m.activeTab]
 	meta, ok := tab.editor.CurrentLineMeta()
 	if !ok || !meta.IsVariable {
+		legend := "| " +
+			"{{|Theme_GutterAdded|}}+{{[-]}} Added | " +
+			"{{|Theme_GutterDeleted|}}-{{[-]}} Deleted | " +
+			"{{|Theme_GutterModified|}}~{{[-]}} Changed | " +
+			"{{|Theme_GutterInvalid|}}!{{[-]}} Invalid |"
 		return tui.HelpContext{
 			ScreenName: m.title,
 			PageTitle:  "Legend",
@@ -1695,6 +1701,11 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) tui.HelpContext {
 		varName = strings.TrimSpace(varName[:idx])
 	}
 	if varName == "" {
+		legend := "| " +
+			"{{|Theme_GutterAdded|}}+{{[-]}} Added | " +
+			"{{|Theme_GutterDeleted|}}-{{[-]}} Deleted | " +
+			"{{|Theme_GutterModified|}}~{{[-]}} Changed | " +
+			"{{|Theme_GutterInvalid|}}!{{[-]}} Invalid |"
 		return tui.HelpContext{
 			ScreenName: m.title,
 			PageTitle:  "Legend",
@@ -1702,19 +1713,37 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) tui.HelpContext {
 		}
 	}
 
+	return *m.getVariableHelpContext(varName, &tab, contentWidth)
+}
+
+// getVariableHelpContext builds a help context for a specific variable in a tab.
+func (m *TabbedVarsEditorModel) getVariableHelpContext(varName string, tab *envTab, contentWidth int) *tui.HelpContext {
+	legend := "| " +
+		"{{|Theme_GutterAdded|}}+{{[-]}} Added | " +
+		"{{|Theme_GutterDeleted|}}-{{[-]}} Deleted | " +
+		"{{|Theme_GutterModified|}}~{{[-]}} Changed | " +
+		"{{|Theme_GutterInvalid|}}!{{[-]}} Invalid |"
+
 	var currentValue string
-	if idx := strings.Index(meta.Text, "="); idx > 0 {
-		currentValue = meta.Text[idx+1:]
+	// Find the current value for this variable from the editor if possible
+	meta, ok := tab.editor.CurrentLineMeta()
+	if ok && meta.IsVariable && strings.HasPrefix(meta.Text, varName+"=") {
+		if idx := strings.Index(meta.Text, "="); idx > 0 {
+			currentValue = meta.Text[idx+1:]
+		}
 	}
 
 	// VarIsUserDefined: for app vars the IsUserDefined flag covers the var level;
 	// for global vars it means the var itself is user-defined (not in defaults).
-	varIsUserDefined := meta.IsUserDefined && tab.niceName == ""
+	varIsUserDefined := false
+	if ok && meta.IsVariable {
+		varIsUserDefined = meta.IsUserDefined && tab.niceName == ""
+	}
 
 	params := MenuHeadingParams{
 		AppName:          tab.niceName,
 		AppDescription:   tab.description,
-		AppIsUserDefined: meta.IsUserDefined && tab.niceName != "",
+		AppIsUserDefined: ok && meta.IsUserDefined && tab.niceName != "",
 		FilePath:         tab.envFilePath,
 		VarName:          varName,
 		VarIsUserDefined: varIsUserDefined,
@@ -1729,7 +1758,7 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) tui.HelpContext {
 		itemText += "\n\n" + vm.HelpText
 	}
 
-	return tui.HelpContext{
+	return &tui.HelpContext{
 		ScreenName: m.title,
 		PageTitle:  "Legend",
 		PageText:   legend,

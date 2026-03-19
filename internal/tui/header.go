@@ -32,7 +32,6 @@ type RefreshHeaderMsg struct{}
 
 // Zone IDs
 const (
-	IDHeaderFlags   = "header_flags"
 	ZoneTmplVersion = "header_tmpl_ver"
 )
 
@@ -396,7 +395,22 @@ func (m *HeaderModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	// Flags start after hostname (hostname length + 1 space)
 	hostnameW := lipgloss.Width(m.hostname)
 	flagsW := leftW - hostnameW - 1
-	regions = append(regions, HitRegion{ID: IDHeaderFlags, X: offsetX + hostnameW + 1, Y: offsetY, Width: flagsW, Height: 1, ZOrder: ZHeader + 1})
+	regions = append(regions, HitRegion{
+		ID:     IDHeaderFlags,
+		X:      offsetX + hostnameW + 1,
+		Y:      offsetY,
+		Width:  flagsW,
+		Height: 1,
+		ZOrder: ZHeader + 1,
+		Label:  "Global Flags",
+		Help: &HelpContext{
+			ScreenName: "Global Flags",
+			PageTitle:  "Status",
+			PageText:   "Shows the currently active global flags (VERBOSE, DEBUG, FORCE, YES).",
+			ItemTitle:  "Action",
+			ItemText:   "Click or press Enter to open the Global Flags toggle dialog.",
+		},
+	})
 
 	centerX := (m.width - centerW) / 2
 	if centerX < 0 {
@@ -406,30 +420,45 @@ func (m *HeaderModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	rightW := appW + tmplW
 	fitsLine1 := leftW+1 <= centerX && centerX+centerW+1+rightW <= m.width
 
+	appHelp := &HelpContext{
+		ScreenName: "App Version",
+		PageTitle:  "Update",
+		PageText:   "The current version of the DockSTARTer2 application.",
+		ItemTitle:  "Action",
+		ItemText:   "Click or press Enter to check for and apply app updates.",
+	}
+	tmplHelp := &HelpContext{
+		ScreenName: "Template Version",
+		PageTitle:  "Update",
+		PageText:   "The current version of the application templates (configs).",
+		ItemTitle:  "Action",
+		ItemText:   "Click or press Enter to check for and apply template updates.",
+	}
+
 	if fitsLine1 {
 		// Line 1: [Left] [Center] [App] [Tmpl]
 		appX := m.width - rightW
 		tmplX := m.width - tmplW
-		regions = append(regions, HitRegion{ID: IDAppVersion, X: offsetX + appX, Y: offsetY, Width: appW, Height: 1, ZOrder: ZHeader + 1})
-		regions = append(regions, HitRegion{ID: IDTmplVersion, X: offsetX + tmplX, Y: offsetY, Width: tmplW, Height: 1, ZOrder: ZHeader + 1})
+		regions = append(regions, HitRegion{ID: IDAppVersion, X: offsetX + appX, Y: offsetY, Width: appW, Height: 1, ZOrder: ZHeader + 1, Label: "App Version", Help: appHelp})
+		regions = append(regions, HitRegion{ID: IDTmplVersion, X: offsetX + tmplX, Y: offsetY, Width: tmplW, Height: 1, ZOrder: ZHeader + 1, Label: "Template Version", Help: tmplHelp})
 	} else {
 		fitsStage1 := leftW+1 <= centerX && centerX+centerW+1+appW <= m.width
 
 		if fitsStage1 {
 			appX := m.width - appW
 			tmplX := m.width - tmplW
-			regions = append(regions, HitRegion{ID: IDAppVersion, X: offsetX + appX, Y: offsetY, Width: appW, Height: 1, ZOrder: ZHeader + 1})
-			regions = append(regions, HitRegion{ID: IDTmplVersion, X: offsetX + tmplX, Y: offsetY + 1, Width: tmplW, Height: 1, ZOrder: ZHeader + 1})
+			regions = append(regions, HitRegion{ID: IDAppVersion, X: offsetX + appX, Y: offsetY, Width: appW, Height: 1, ZOrder: ZHeader + 1, Label: "App Version", Help: appHelp})
+			regions = append(regions, HitRegion{ID: IDTmplVersion, X: offsetX + tmplX, Y: offsetY + 1, Width: tmplW, Height: 1, ZOrder: ZHeader + 1, Label: "Template Version", Help: tmplHelp})
 		} else if leftW+1 <= centerX {
 			appX := m.width - appW
 			tmplX := m.width - tmplW
-			regions = append(regions, HitRegion{ID: IDAppVersion, X: offsetX + appX, Y: offsetY + 1, Width: appW, Height: 1, ZOrder: ZHeader + 1})
-			regions = append(regions, HitRegion{ID: IDTmplVersion, X: offsetX + tmplX, Y: offsetY + 2, Width: tmplW, Height: 1, ZOrder: ZHeader + 1})
+			regions = append(regions, HitRegion{ID: IDAppVersion, X: offsetX + appX, Y: offsetY + 1, Width: appW, Height: 1, ZOrder: ZHeader + 1, Label: "App Version", Help: appHelp})
+			regions = append(regions, HitRegion{ID: IDTmplVersion, X: offsetX + tmplX, Y: offsetY + 2, Width: tmplW, Height: 1, ZOrder: ZHeader + 1, Label: "Template Version", Help: tmplHelp})
 		} else {
 			appX := m.width - appW
 			tmplX := m.width - tmplW
-			regions = append(regions, HitRegion{ID: IDAppVersion, X: offsetX + appX, Y: offsetY + 2, Width: appW, Height: 1, ZOrder: ZHeader + 1})
-			regions = append(regions, HitRegion{ID: IDTmplVersion, X: offsetX + tmplX, Y: offsetY + 3, Width: tmplW, Height: 1, ZOrder: ZHeader + 1})
+			regions = append(regions, HitRegion{ID: IDAppVersion, X: offsetX + appX, Y: offsetY + 2, Width: appW, Height: 1, ZOrder: ZHeader + 1, Label: "App Version", Help: appHelp})
+			regions = append(regions, HitRegion{ID: IDTmplVersion, X: offsetX + tmplX, Y: offsetY + 3, Width: tmplW, Height: 1, ZOrder: ZHeader + 1, Label: "Template Version", Help: tmplHelp})
 		}
 	}
 

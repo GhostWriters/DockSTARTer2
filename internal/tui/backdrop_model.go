@@ -191,12 +191,32 @@ func (m *BackdropModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		Width:  m.width,
 		Height: layout.ChromeHeight(headerH),
 		ZOrder: ZHeader, // Match header layer
+		Label:  "Status Bar",
 	})
 
 	if m.header != nil {
 		// Version click targets are 1 char in from the left border char.
 		regions = append(regions, m.header.GetHitRegions(offsetX+1, offsetY)...)
 	}
+
+	// Helpline
+	helplineH := m.HelplineActualHeight()
+	regions = append(regions, HitRegion{
+		ID:     IDHelpline,
+		X:      offsetX,
+		Y:      offsetY + m.height - helplineH,
+		Width:  m.width,
+		Height: helplineH,
+		ZOrder: ZHelpline,
+		Label:  "Help Line",
+		Help: &HelpContext{
+			ScreenName: "Help Line",
+			PageTitle:  "Navigation Info",
+			PageText:   "Displays keyboard shortcuts and hints relevant to the active screen.",
+			ItemTitle:  "Action",
+			ItemText:   "Right-click for global options or press F1 for detailed help.",
+		},
+	})
 
 	return regions
 }

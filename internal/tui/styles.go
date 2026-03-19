@@ -22,6 +22,8 @@ type HitRegion struct {
 	Width  int
 	Height int
 	ZOrder int // Higher values are checked first (on top)
+	Label  string
+	Help   *HelpContext
 }
 
 // HitRegionProvider is implemented by components that have clickable areas
@@ -32,16 +34,16 @@ type HitRegionProvider interface {
 // HitRegions is a slice of HitRegion that can be sorted by ZOrder
 type HitRegions []HitRegion
 
-// FindHit returns the ID of the topmost region containing the point, or empty string
-func (regions HitRegions) FindHit(x, y int) string {
+// FindHit returns the topmost region containing the point, or nil
+func (regions HitRegions) FindHit(x, y int) *HitRegion {
 	// Check in reverse order (higher ZOrder regions are at the end after sorting)
 	for i := len(regions) - 1; i >= 0; i-- {
-		r := regions[i]
+		r := &regions[i]
 		if x >= r.X && x < r.X+r.Width && y >= r.Y && y < r.Y+r.Height {
-			return r.ID
+			return r
 		}
 	}
-	return ""
+	return nil
 }
 
 // Z-Level constants for layering (used for rendering and hit region ordering)
@@ -77,6 +79,8 @@ const (
 	IDApplyButton  = "apply_button"
 	IDBackButton   = "back_button"
 	IDExitButton   = "exit_button"
+	IDHeaderFlags  = "header_flags"
+	IDHelpline     = "helpline"
 )
 
 // Styles holds all lipgloss styles derived from the theme

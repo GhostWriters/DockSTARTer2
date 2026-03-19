@@ -152,12 +152,43 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 	// 4. HELP BLOCKADE: If help is open, ANY click closes it for convenience.
 	if m.dialog != nil {
 		if _, ok := m.dialog.(*HelpDialogModel); ok {
-			if _, ok := msg.(tea.MouseClickMsg); ok {
+			if click, ok := msg.(tea.MouseClickMsg); ok {
 				var cmd tea.Cmd
 				m.dialog, cmd = m.dialog.Update(msg)
+				// If right-click, we handled closing it — stop here
+				if click.Button == tea.MouseRight {
+					return m, cmd, true
+				}
 				return m, cmd, true
 			}
 		}
+	}
+
+	// 4b. GLOBAL RIGHT-CLICK: Intercept right-click on background or anywhere
+	// if it wasn't intercepted by a modal blockade above.
+	if click, ok := msg.(tea.MouseClickMsg); ok && click.Button == tea.MouseRight {
+		// Don't allow bringing up a new context menu if one is already open.
+		// Standard behavior is to click outside to close the current one.
+		if _, ok := m.dialog.(*ContextMenuModel); ok {
+			return m, nil, true
+		}
+
+		hit := m.hitRegions.FindHit(click.X, click.Y)
+		hitID := ""
+		if hit != nil {
+			hitID = hit.ID
+		}
+
+		// 1. If hitting a context menu already open, let the hit region dispatch it (usually closes)
+		if strings.HasPrefix(hitID, "ctxmenu.") {
+			// Fall through to normal hit dispatch
+		} else if hit == nil || hitID == IDStatusBar || hitID == IDLogPanel || hitID == IDLogViewport || hitID == IDLogToggle || hitID == IDLogResize ||
+			hitID == IDAppVersion || hitID == IDTmplVersion || hitID == IDHeaderFlags {
+			// 2. If hitting background or a global element that doesn't usually have a context menu,
+			// show the global context menu.
+			return m, m.showGlobalContextMenu(click.X, click.Y, hit), true
+		}
+		// 3. Otherwise, fall through to hit region dispatch (to allow sinput/vars-editor right-click menus)
 	}
 
 	// 4. HOVER-AWARE WHEEL AND MIDDLE-CLICK
@@ -166,10 +197,14 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 	// If not hovering over a scrollable area, do nothing.
 	if wheelMsg, isWheel := msg.(tea.MouseWheelMsg); isWheel {
 		// Hit test to find what's under the mouse
-		hitID := m.hitRegions.FindHit(wheelMsg.X, wheelMsg.Y)
+		hit := m.hitRegions.FindHit(wheelMsg.X, wheelMsg.Y)
+		hitID := ""
+		if hit != nil {
+			hitID = hit.ID
+		}
 
 		// No hit = not over a scrollable area, ignore the wheel
-		if hitID == "" {
+		if hit == nil {
 			return m, nil, true
 		}
 
@@ -262,7 +297,11 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 
 	if click, ok := msg.(tea.MouseClickMsg); ok && click.Button == tea.MouseMiddle {
 		// Hit test to find what's under the mouse
-		hitID := m.hitRegions.FindHit(click.X, click.Y)
+		hit := m.hitRegions.FindHit(click.X, click.Y)
+		hitID := ""
+		if hit != nil {
+			hitID = hit.ID
+		}
 
 		// Status bar: middle-click activates the currently focused version item
 		if hitID == IDStatusBar || hitID == IDAppVersion || hitID == IDTmplVersion || hitID == IDHeaderFlags {
@@ -360,15 +399,20 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 	var hitButton tea.MouseButton
 	var hitX, hitY int
 
+	var hit *HitRegion
 	switch me := msg.(type) {
 	case tea.MouseClickMsg:
-		hitID = m.hitRegions.FindHit(me.X, me.Y)
+		hit = m.hitRegions.FindHit(me.X, me.Y)
 		hitButton = me.Button
 		hitX, hitY = me.X, me.Y
 	case tea.MouseWheelMsg:
-		hitID = m.hitRegions.FindHit(me.X, me.Y)
+		hit = m.hitRegions.FindHit(me.X, me.Y)
 		hitButton = me.Button
 		hitX, hitY = me.X, me.Y
+	}
+
+	if hit != nil {
+		hitID = hit.ID
 	}
 
 	if hitID != "" {
@@ -477,6 +521,15 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 
 		// Return handled=true if semantic messages were dispatched to stop raw click fall-through
 		m.updateComponentFocus()
+
+		// Final Fallback for unhandled right-clicks: trigger global context menu
+		if click, ok := msg.(tea.MouseClickMsg); ok && click.Button == tea.MouseRight {
+			// If we didn't show a context menu or handle the click semantically, show global menu.
+			if semanticCmd == nil && backdropCmd == nil {
+				return m, m.showGlobalContextMenu(click.X, click.Y, hit), true
+			}
+		}
+
 		return m, tea.Batch(semanticCmd, backdropCmd), true
 	}
 

@@ -86,6 +86,9 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ShowGlobalFlagsMsg:
 		return m, func() tea.Msg { return ShowDialogMsg{Dialog: NewFlagsToggleDialog()} }
 
+	case TriggerHelpMsg:
+		return m, m.showHelpCmd(msg.CapturedContext)
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -180,7 +183,10 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ShowDialogMsg:
 		// Push current dialog to stack if one exists
 		if m.dialog != nil {
-			m.dialogStack = append(m.dialogStack, m.dialog)
+			// Never push context menus to the stack; they should always be discarded when a new dialog opens.
+			if _, ok := m.dialog.(*ContextMenuModel); !ok {
+				m.dialogStack = append(m.dialogStack, m.dialog)
+			}
 		}
 
 		// Safeguard: Prevent pushing the active screen as its own dialog
@@ -206,7 +212,10 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ShowConfirmDialogMsg:
 		// If a dialog is already open, push it to stack and show the confirm dialog as the new top
 		if m.dialog != nil {
-			m.dialogStack = append(m.dialogStack, m.dialog)
+			// Never push context menus to the stack
+			if _, ok := m.dialog.(*ContextMenuModel); !ok {
+				m.dialogStack = append(m.dialogStack, m.dialog)
+			}
 		}
 
 		// Show it as the main dialog (top of stack)
@@ -223,7 +232,10 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ShowMessageDialogMsg:
 		// If a dialog is already open, push it to stack
 		if m.dialog != nil {
-			m.dialogStack = append(m.dialogStack, m.dialog)
+			// Never push context menus to the stack
+			if _, ok := m.dialog.(*ContextMenuModel); !ok {
+				m.dialogStack = append(m.dialogStack, m.dialog)
+			}
 		}
 
 		// Show message dialog as the main dialog
@@ -239,7 +251,10 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ShowPromptDialogMsg:
 		// If a dialog is already open, push it to stack
 		if m.dialog != nil {
-			m.dialogStack = append(m.dialogStack, m.dialog)
+			// Never push context menus to the stack
+			if _, ok := m.dialog.(*ContextMenuModel); !ok {
+				m.dialogStack = append(m.dialogStack, m.dialog)
+			}
 		}
 
 		// Show prompt dialog as the main dialog
@@ -570,37 +585,8 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	if key.Matches(msg, Keys.ToggleLog) {
 		return m, logger.RecoverTUI(m.ctx, func() tea.Msg { return toggleLogPanelMsg{} }), true
 	}
-	if key.Matches(msg, Keys.Help) {
-		var km help.KeyMap = Keys
-		var contextInfo HelpContext
-		// Compute the content width the help dialog will have so the provider can
-		// word-wrap at the source. Overhead: halo(4) + border(2) + padding(2) = 8.
-		availW, _ := GetAvailableDialogSize(m.width, m.height)
-		helpContentWidth := availW - 8
-		if helpContentWidth < 20 {
-			helpContentWidth = 20
-		}
-		if helpContentWidth > 120 {
-			helpContentWidth = 120
-		}
-		if m.dialog != nil {
-			if h, ok := m.dialog.(help.KeyMap); ok {
-				km = h
-			}
-			if cp, ok := m.dialog.(HelpContextProvider); ok {
-				contextInfo = cp.HelpContext(helpContentWidth)
-			}
-		} else if m.activeScreen != nil {
-			if h, ok := m.activeScreen.(help.KeyMap); ok {
-				km = h
-			}
-			if cp, ok := m.activeScreen.(HelpContextProvider); ok {
-				contextInfo = cp.HelpContext(helpContentWidth)
-			}
-		}
-		return m, logger.RecoverTUI(m.ctx, func() tea.Msg {
-			return ShowDialogMsg{Dialog: NewHelpDialogWithContext(km, contextInfo)}
-		}), true
+	if key.Matches(msg, Keys.Help) || msg.String() == "?" {
+		return m, logger.RecoverTUI(m.ctx, m.showHelpCmd(nil)), true
 	}
 	if key.Matches(msg, Keys.ForceQuit) {
 		m.Fatal = true
@@ -763,4 +749,99 @@ func shouldForwardResult(result any) bool {
 		return false
 	}
 	return true
+}
+
+// showHelpCmd returns a command that builds and shows the context-sensitive help dialog.
+func (m *AppModel) showHelpCmd(capturedCtx *HelpContext) tea.Cmd {
+	var km help.KeyMap = Keys
+	var contextInfo HelpContext
+	// Compute the content width the help dialog will have so the provider can
+	// word-wrap at the source. Overhead: halo(4) + border(2) + padding(2) = 8.
+	availW, availH := GetAvailableDialogSize(m.width, m.height)
+	if availW < 40 || availH < 10 {
+		// Terminal too small for help dialog
+		return nil
+	}
+	helpContentWidth := availW - 8
+	if helpContentWidth < 30 {
+		helpContentWidth = 30
+	}
+	if helpContentWidth > 120 {
+		helpContentWidth = 120
+	}
+
+	if capturedCtx != nil {
+		contextInfo = *capturedCtx
+		// Try to find a keymap from focus anyway, as context captured might not include km
+		if m.dialog != nil {
+			if h, ok := m.dialog.(help.KeyMap); ok {
+				km = h
+			}
+		} else if m.activeScreen != nil {
+			if h, ok := m.activeScreen.(help.KeyMap); ok {
+				km = h
+			}
+		}
+	} else if m.dialog != nil {
+		if h, ok := m.dialog.(help.KeyMap); ok {
+			km = h
+		}
+		if cp, ok := m.dialog.(HelpContextProvider); ok {
+			contextInfo = cp.HelpContext(helpContentWidth)
+		}
+	} else if m.activeScreen != nil {
+		if h, ok := m.activeScreen.(help.KeyMap); ok {
+			km = h
+		}
+		if cp, ok := m.activeScreen.(HelpContextProvider); ok {
+			contextInfo = cp.HelpContext(helpContentWidth)
+		}
+	}
+
+	return func() tea.Msg {
+		return ShowDialogMsg{Dialog: NewHelpDialogWithContext(km, contextInfo)}
+	}
+}
+
+// showGlobalContextMenu shows a context menu with global actions like Help.
+func (m *AppModel) showGlobalContextMenu(x, y int, hit *HitRegion) tea.Cmd {
+	var items []ContextMenuItem
+
+	header := "Main Menu"
+	if hit != nil {
+		if hit.Label != "" {
+			header = hit.Label
+		} else {
+			// Fallback to ID-based labels for regions not yet fully converted to metadata
+			switch hit.ID {
+			case IDAppVersion:
+				header = "App Version"
+			case IDTmplVersion:
+				header = "Template Version"
+			case IDHeaderFlags:
+				header = "Global Flags"
+			case IDStatusBar:
+				header = "Status Bar"
+			case IDLogPanel, IDLogViewport, IDLogToggle, IDLogResize:
+				header = "Log Panel"
+			}
+		}
+	}
+
+	// For now, global menu is primarily for Help.
+	items = append(items, ContextMenuItem{IsHeader: true, Label: header})
+	items = append(items, ContextMenuItem{IsSeparator: true})
+	// You could add "Refresh" or "App Version" here if they are useful as menu items.
+
+	// Use the tail helper to add Clipboard and Help
+	// (clipItems nil for now as global clipboard actions like Paste need a target)
+	var hCtx *HelpContext
+	if hit != nil {
+		hCtx = hit.Help
+	}
+	items = AppendContextMenuTail(items, nil, hCtx)
+
+	return func() tea.Msg {
+		return ShowDialogMsg{Dialog: NewContextMenuModel(x, y, m.width, m.height, items)}
+	}
 }

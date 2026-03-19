@@ -22,16 +22,17 @@ type HelpContext struct {
 	ItemText   string
 }
 
-// HelpContextProvider is an optional interface that screens and dialogs can
-// implement to inject contextual text at the top of the help dialog.
-// contentWidth is the available display width for the help dialog content area
-// (used so the implementation can word-wrap text correctly at the source).
-// Return an empty HelpContext to omit the context sections.
+// HelpContextProvider is implemented by models that can provide structured help content.
 type HelpContextProvider interface {
-	HelpContext(contentWidth int) HelpContext
+	HelpContext(maxWidth int) HelpContext
 }
 
-// HelpDialogModel displays a keyboard shortcut reference dialog.
+// TriggerHelpMsg is a message that tells the app to open the help dialog.
+type TriggerHelpMsg struct {
+	CapturedContext *HelpContext
+}
+
+// HelpContext contains both page-level and item-level help information.
 // It integrates with AppModel via ShowDialogMsg/CloseDialogMsg.
 type HelpDialogModel struct {
 	help   help.Model
@@ -192,12 +193,19 @@ func (m *HelpDialogModel) ViewString() string {
 		var legendLines []string
 		if hasPageCtx {
 			resolved := console.ToANSI(m.contextInfo.PageText)
+			// targetWidth - 2 to allow for 1-char left pad and 1-char gutter (scrollbar space)
+			wrapWidth := targetWidth - 2
+			if wrapWidth < 10 {
+				wrapWidth = 10
+			}
 			for _, line := range strings.Split(resolved, "\n") {
-				wrapped := ansi.Wordwrap(line, targetWidth, "")
+				wrapped := ansi.Wordwrap(line, wrapWidth, "")
 				for _, wl := range strings.Split(wrapped, "\n") {
 					wl = strings.TrimRight(wl, " ")
-					legendLines = append(legendLines, wl)
-					if w := lipgloss.Width(wl); w > maxLineWidth {
+					// Prepend a space for left padding. The 1-char right gutter is added by ApplyScrollbarColumn.
+					paddedLine := " " + wl
+					legendLines = append(legendLines, paddedLine)
+					if w := lipgloss.Width(paddedLine); w > maxLineWidth {
 						maxLineWidth = w
 					}
 				}
@@ -207,12 +215,17 @@ func (m *HelpDialogModel) ViewString() string {
 		var itemLines []string
 		if hasItemCtx {
 			resolved := console.ToANSI(m.contextInfo.ItemText)
+			wrapWidth := targetWidth - 2
+			if wrapWidth < 10 {
+				wrapWidth = 10
+			}
 			for _, line := range strings.Split(resolved, "\n") {
-				wrapped := ansi.Wordwrap(line, targetWidth, "")
+				wrapped := ansi.Wordwrap(line, wrapWidth, "")
 				for _, wl := range strings.Split(wrapped, "\n") {
 					wl = strings.TrimRight(wl, " ")
-					itemLines = append(itemLines, wl)
-					if w := lipgloss.Width(wl); w > maxLineWidth {
+					paddedLine := " " + wl
+					itemLines = append(itemLines, paddedLine)
+					if w := lipgloss.Width(paddedLine); w > maxLineWidth {
 						maxLineWidth = w
 					}
 				}
