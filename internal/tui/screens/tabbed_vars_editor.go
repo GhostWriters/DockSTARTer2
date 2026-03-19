@@ -1669,12 +1669,12 @@ func (m *TabbedVarsEditorModel) HasDialog() bool {
 // HelpContext implements tui.HelpContextProvider.
 // Returns heading-style info about the variable under the cursor shown at the top of the help dialog.
 // contentWidth is the available display width (used to word-wrap descriptions).
-func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) string {
+func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) tui.HelpContext {
 	if m.focus != envFocusEditor || len(m.tabs) == 0 {
-		return ""
+		return tui.HelpContext{}
 	}
 
-	legend := "Legend: | " +
+	legend := "| " +
 		"{{|Theme_GutterAdded|}}+{{[-]}} Added | " +
 		"{{|Theme_GutterDeleted|}}-{{[-]}} Deleted | " +
 		"{{|Theme_GutterModified|}}~{{[-]}} Changed | " +
@@ -1683,7 +1683,11 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) string {
 	tab := m.tabs[m.activeTab]
 	meta, ok := tab.editor.CurrentLineMeta()
 	if !ok || !meta.IsVariable {
-		return legend
+		return tui.HelpContext{
+			ScreenName: m.title,
+			PageTitle:  "Legend",
+			PageText:   legend,
+		}
 	}
 
 	varName := meta.Text
@@ -1691,7 +1695,11 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) string {
 		varName = strings.TrimSpace(varName[:idx])
 	}
 	if varName == "" {
-		return legend
+		return tui.HelpContext{
+			ScreenName: m.title,
+			PageTitle:  "Legend",
+			PageText:   legend,
+		}
 	}
 
 	var currentValue string
@@ -1713,13 +1721,19 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) string {
 		CurrentValue:     currentValue,
 	}
 
-	heading := legend + "\n\n" + FormatMenuHeading(params, contentWidth)
+	itemText := FormatMenuHeading(params, contentWidth)
 
 	if desc := appenv.GetVarHelpText(varName); desc != "" {
-		heading += "\n\n" + desc
+		itemText += "\n\n" + desc
 	} else if vm, ok := tab.appMeta.GetVarMeta(varName, tab.spec.App); ok && vm.HelpText != "" {
-		heading += "\n\n" + vm.HelpText
+		itemText += "\n\n" + vm.HelpText
 	}
 
-	return heading
+	return tui.HelpContext{
+		ScreenName: m.title,
+		PageTitle:  "Legend",
+		PageText:   legend,
+		ItemTitle:  varName,
+		ItemText:   itemText,
+	}
 }

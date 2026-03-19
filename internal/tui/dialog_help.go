@@ -8,17 +8,27 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"charm.land/bubbles/v2/help"
+	keybind "charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
+
+// HelpContext defines the two contextual help panels.
+type HelpContext struct {
+	ScreenName string // e.g., "Main Menu" — used in the title bar: "Help: Main Menu"
+	PageTitle  string // e.g., "Legend" or "Description"
+	PageText   string
+	ItemTitle  string // e.g., variable name or menu item Tag
+	ItemText   string
+}
 
 // HelpContextProvider is an optional interface that screens and dialogs can
 // implement to inject contextual text at the top of the help dialog.
 // contentWidth is the available display width for the help dialog content area
 // (used so the implementation can word-wrap text correctly at the source).
-// Return an empty string to omit the context section entirely.
+// Return an empty HelpContext to omit the context sections.
 type HelpContextProvider interface {
-	HelpContext(contentWidth int) string
+	HelpContext(contentWidth int) HelpContext
 }
 
 // HelpDialogModel displays a keyboard shortcut reference dialog.
@@ -31,7 +41,8 @@ type HelpDialogModel struct {
 	focused bool // tracks global focus
 
 	keyMap      help.KeyMap
-	contextText string // optional text shown above the key bindings
+	contextInfo HelpContext // structured help info
+	contextOffset int // scroll offset for item context text
 
 	// Unified layout (deterministic sizing)
 	layout DialogLayout
@@ -42,16 +53,16 @@ func NewHelpDialogModel() *HelpDialogModel {
 }
 
 func NewHelpDialogModelWithMap(km help.KeyMap) *HelpDialogModel {
-	return NewHelpDialogWithContext(km, "")
+	return NewHelpDialogWithContext(km, HelpContext{})
 }
 
-// NewHelpDialogWithContext creates a help dialog that shows contextText
+// NewHelpDialogWithContext creates a help dialog that shows contextInfo
 // (e.g. current variable info) above the standard key bindings.
-// Pass an empty string to show only the key bindings.
-func NewHelpDialogWithContext(km help.KeyMap, contextText string) *HelpDialogModel {
+// Pass an empty HelpContext to show only the key bindings.
+func NewHelpDialogWithContext(km help.KeyMap, info HelpContext) *HelpDialogModel {
 	h := help.New()
 	h.ShowAll = true
-	return &HelpDialogModel{help: h, focused: true, keyMap: km, contextText: contextText}
+	return &HelpDialogModel{help: h, focused: true, keyMap: km, contextInfo: info}
 }
 
 func (m *HelpDialogModel) Init() tea.Cmd { return nil }
@@ -59,9 +70,42 @@ func (m *HelpDialogModel) Init() tea.Cmd { return nil }
 func (m *HelpDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
-		// Any key closes the help dialog (? toggles it off, Esc also works)
-		_ = msg
+		switch {
+		case keybind.Matches(msg, Keys.Up):
+			m.contextOffset--
+			if m.contextOffset < 0 {
+				m.contextOffset = 0
+			}
+			return m, nil
+		case keybind.Matches(msg, Keys.Down):
+			m.contextOffset++
+			return m, nil
+		case keybind.Matches(msg, Keys.PageUp):
+			m.contextOffset -= 5
+			if m.contextOffset < 0 {
+				m.contextOffset = 0
+			}
+			return m, nil
+		case keybind.Matches(msg, Keys.PageDown):
+			m.contextOffset += 5
+			return m, nil
+		case keybind.Matches(msg, Keys.Home):
+			m.contextOffset = 0
+			return m, nil
+		}
+		// Any other key closes the help dialog (? toggles it off, Esc also works)
 		return m, func() tea.Msg { return CloseDialogMsg{} }
+
+	case tea.MouseWheelMsg:
+		if msg.Button == tea.MouseWheelUp {
+			m.contextOffset--
+			if m.contextOffset < 0 {
+				m.contextOffset = 0
+			}
+		} else if msg.Button == tea.MouseWheelDown {
+			m.contextOffset++
+		}
+		return m, nil
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -77,14 +121,22 @@ func (m *HelpDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // ViewString returns the dialog content as a string for compositing
 func (m *HelpDialogModel) ViewString() string {
-	if m.layout.Width == 0 {
+	if m.width == 0 || m.height == 0 {
 		return ""
 	}
 
 	// Calculate target width for help content.
-	// Overhead: halo(4) + border(2) + per-line padding(2) = 8.
-	// Base on the maximized-dialog available width so we never exceed that bound.
-	availW, _ := GetAvailableDialogSize(m.width, m.height)
+	// We want a consistent width for the help panels relative to the screen.
+	availW, availH := GetAvailableDialogSize(m.width, m.height)
+	
+	// Ensure at least some minimal room
+	if availW < 30 {
+		availW = 30
+	}
+	if availH < 20 {
+		availH = 20
+	}
+
 	targetWidth := availW - 8
 	if targetWidth < 20 {
 		targetWidth = 20
@@ -123,62 +175,213 @@ func (m *HelpDialogModel) ViewString() string {
 		}
 	}
 
+	// Snapping width to even as before
+	if (maxLineWidth+2)%2 != 0 {
+		maxLineWidth++
+	}
+
 	// Build the context section (variable info) if provided.
-	// The contextText is already word-wrapped to targetWidth by the HelpContextProvider.
-	var contextLines []string
-	if m.contextText != "" {
-		for _, line := range strings.Split(m.contextText, "\n") {
-			trimmed := strings.TrimRight(line, " ")
-			// Resolve semantic tags to ANSI once, then word-wrap the ANSI string
-			// so width measurement is accurate (no invisible tag characters).
-			resolved := console.ToANSI(trimmed)
-			wrapped := ansi.Wordwrap(resolved, targetWidth, "")
-			for _, wl := range strings.Split(wrapped, "\n") {
-				wl = strings.TrimRight(wl, " ")
-				contextLines = append(contextLines, wl)
-				if w := lipgloss.Width(wl); w > maxLineWidth {
-					maxLineWidth = w
+	var legendBox string
+	var contextBox string
+
+	hasPageCtx := m.contextInfo.PageText != ""
+	hasItemCtx := m.contextInfo.ItemText != ""
+
+	if hasPageCtx || hasItemCtx {
+		// Resolve and wrap text for both panels
+		var legendLines []string
+		if hasPageCtx {
+			resolved := console.ToANSI(m.contextInfo.PageText)
+			for _, line := range strings.Split(resolved, "\n") {
+				wrapped := ansi.Wordwrap(line, targetWidth, "")
+				for _, wl := range strings.Split(wrapped, "\n") {
+					wl = strings.TrimRight(wl, " ")
+					legendLines = append(legendLines, wl)
+					if w := lipgloss.Width(wl); w > maxLineWidth {
+						maxLineWidth = w
+					}
 				}
 			}
 		}
-		// Cap at targetWidth — long values (e.g. file paths) may still exceed it.
+
+		var itemLines []string
+		if hasItemCtx {
+			resolved := console.ToANSI(m.contextInfo.ItemText)
+			for _, line := range strings.Split(resolved, "\n") {
+				wrapped := ansi.Wordwrap(line, targetWidth, "")
+				for _, wl := range strings.Split(wrapped, "\n") {
+					wl = strings.TrimRight(wl, " ")
+					itemLines = append(itemLines, wl)
+					if w := lipgloss.Width(wl); w > maxLineWidth {
+						maxLineWidth = w
+					}
+				}
+			}
+		}
+
+		// Cap maxLineWidth at targetWidth and ensure minimum
 		if maxLineWidth > targetWidth {
 			maxLineWidth = targetWidth
 		}
-		// Center the first context line (e.g. a legend) now that maxLineWidth is known.
-		if len(contextLines) > 0 {
-			if pad := (maxLineWidth - lipgloss.Width(contextLines[0])) / 2; pad > 0 {
-				contextLines[0] = strings.Repeat(" ", pad) + contextLines[0]
+		if maxLineWidth < 20 {
+			maxLineWidth = 20
+		}
+
+		ctx := GetActiveContext()
+
+		// Render Page Context box (formerly Legend) if content exists
+		if len(legendLines) > 0 {
+			title := m.contextInfo.PageTitle
+			if title == "" {
+				title = "Description"
+			}
+
+			// Apply centering if specified by alignment
+			legendToRender := strings.Join(legendLines, "\n")
+			if ctx.SubmenuTitleAlign == "center" {
+				var centeredLegend []string
+				for _, ll := range legendLines {
+					centeredLegend = append(centeredLegend, CenterText(ll, maxLineWidth))
+				}
+				legendToRender = strings.Join(centeredLegend, "\n")
+			}
+
+			legendBox = RenderBorderedBoxCtx(
+				title,
+				legendToRender,
+				maxLineWidth,
+				len(legendLines)+2,
+				false, // focused: false
+				true,  // showIndicators: true
+				true,
+				ctx.SubmenuTitleAlign,
+				"Theme_TitleSubMenu",
+				ctx,
+			)
+		}
+
+		// Render Item Context box if content exists
+		if len(itemLines) > 0 {
+			title := m.contextInfo.ItemTitle
+			if title == "" {
+				title = "Context Sensitive Help"
+			}
+
+			// Vertical budgeting: account for legend box if present
+			overheadH := 6
+			if legendBox != "" {
+				overheadH += lipgloss.Height(legendBox) + 1
+			}
+
+			_, availH := GetAvailableDialogSize(m.width, m.height)
+			maxContextHeight := availH - overheadH - len(bindingLines)
+			if maxContextHeight < 5 {
+				maxContextHeight = 5
+			}
+
+			// Size box to content
+			if len(itemLines)+2 < maxContextHeight {
+				maxContextHeight = len(itemLines) + 2
+			}
+
+			visibleRows := maxContextHeight - 2
+			if visibleRows < 1 {
+				visibleRows = 1
+			}
+
+			// Clamp offset
+			if m.contextOffset < 0 {
+				m.contextOffset = 0
+			}
+			if m.contextOffset > len(itemLines)-visibleRows {
+				m.contextOffset = len(itemLines) - visibleRows
+			}
+			if m.contextOffset < 0 {
+				m.contextOffset = 0
+			}
+
+			var displayLines []string
+			for i := 0; i < visibleRows && (i+m.contextOffset) < len(itemLines); i++ {
+				displayLines = append(displayLines, itemLines[i+m.contextOffset])
+			}
+
+			contentToRender := strings.Join(displayLines, "\n")
+
+			// Apply scrollbar
+			sbInfo := ScrollbarInfo{}
+			if len(itemLines) > visibleRows {
+				contentToRender, sbInfo = ApplyScrollbarColumnTracked(
+					contentToRender,
+					len(itemLines),
+					visibleRows,
+					m.contextOffset,
+					true,
+					ctx.LineCharacters,
+					ctx,
+				)
+			}
+
+			contextBox = RenderBorderedBoxCtx(
+				title,
+				contentToRender,
+				maxLineWidth,
+				maxContextHeight,
+				true, // focused: true
+				true, // showIndicators: true
+				true,
+				ctx.SubmenuTitleAlign,
+				"Theme_TitleSubMenuFocused",
+				ctx,
+			)
+
+			// Scroll indicator
+			if sbInfo.Needed {
+				// Calculate scroll percentage
+				scrollPct := 1.0
+				if len(itemLines) > visibleRows {
+					scrollPct = float64(m.contextOffset) / float64(len(itemLines)-visibleRows)
+				}
+				if scrollPct > 1.0 {
+					scrollPct = 1.0
+				}
+
+				boxLines := strings.Split(contextBox, "\n")
+				if len(boxLines) > 0 {
+					boxLines[len(boxLines)-1] = BuildScrollPercentBottomBorder(maxLineWidth+2, scrollPct, true, ctx)
+					contextBox = strings.Join(boxLines, "\n")
+				}
 			}
 		}
-		sepChar := "─"
-		if !GetActiveContext().LineCharacters {
-			sepChar = "-"
-		}
-		sep := sepStyle.Render(strings.Repeat(sepChar, maxLineWidth))
-
-		// Only add separators (above and below context) when vertical space allows.
-		// Available height: screen height minus halo(2) + border(2) + title(1) = 5 overhead.
-		_, availH := GetAvailableDialogSize(m.width, m.height)
-		totalWithSeps := len(contextLines) + 2 + len(bindingLines)
-		if totalWithSeps <= availH-5 {
-			contextLines = append([]string{sep}, contextLines...)
-		}
-		contextLines = append(contextLines, sep)
 	}
 
-	// Combine: context (if any) then key bindings
-	var allLines []string
-	allLines = append(allLines, contextLines...)
-	allLines = append(allLines, bindingLines...)
+	// Combine components with original spacing
+	var combinedText string
+	if legendBox != "" {
+		combinedText += legendBox + "\n"
+	}
+	if contextBox != "" {
+		combinedText += contextBox + "\n"
+	}
 
-	// Apply dialog background with uniform padding on all lines
-	for i, line := range allLines {
+	// Use the actual width of the bordered boxes to pad the keyboard reference below.
+	// This prevents the "blank column on the right" issue if a title was wider than the content.
+	actualBoxWidth := maxLineWidth
+	if legendBox != "" {
+		actualBoxWidth = lipgloss.Width(strings.Split(legendBox, "\n")[0]) - 2
+	} else if contextBox != "" {
+		actualBoxWidth = lipgloss.Width(strings.Split(contextBox, "\n")[0]) - 2
+	}
+
+	// Render key bindings with original logic
+	var paddedBindings []string
+	for _, line := range bindingLines {
 		lineWidth := lipgloss.Width(line)
-		paddedLine := " " + line + strutil.Repeat(" ", maxLineWidth-lineWidth) + " "
-		allLines[i] = MaintainBackground(bgStyle.Render(paddedLine), bgStyle)
+		paddedLine := " " + line + strutil.Repeat(" ", actualBoxWidth-lineWidth) + " "
+		paddedBindings = append(paddedBindings, MaintainBackground(bgStyle.Render(paddedLine), bgStyle))
 	}
-	content := strings.Join(allLines, "\n")
+	combinedText += strings.Join(paddedBindings, "\n")
+
+	content := combinedText
 	// Per-line maintenance above is sufficient — no outer wrap needed
 
 	// Ensure the title is visible on the black border bar.
@@ -191,7 +394,11 @@ func (m *HelpDialogModel) ViewString() string {
 	ctx.Border2Color = haloColor
 
 	// We pass raw text so it uses the ctx.DialogTitleHelp base style without tag overrides
-	dialogStr := RenderUniformBlockDialogCtx(" Keyboard & Mouse Controls ", content, ctx)
+	title := "Help"
+	if m.contextInfo.ScreenName != "" {
+		title = "Help: " + m.contextInfo.ScreenName
+	}
+	dialogStr := RenderUniformBlockDialogCtx(title, content, ctx)
 
 	// Add the solid black halo
 	return AddPatternHalo(dialogStr, haloColor)

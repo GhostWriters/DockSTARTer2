@@ -572,7 +572,7 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	}
 	if key.Matches(msg, Keys.Help) {
 		var km help.KeyMap = Keys
-		var contextText string
+		var contextInfo HelpContext
 		// Compute the content width the help dialog will have so the provider can
 		// word-wrap at the source. Overhead: halo(4) + border(2) + padding(2) = 8.
 		availW, _ := GetAvailableDialogSize(m.width, m.height)
@@ -588,18 +588,18 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 				km = h
 			}
 			if cp, ok := m.dialog.(HelpContextProvider); ok {
-				contextText = cp.HelpContext(helpContentWidth)
+				contextInfo = cp.HelpContext(helpContentWidth)
 			}
 		} else if m.activeScreen != nil {
 			if h, ok := m.activeScreen.(help.KeyMap); ok {
 				km = h
 			}
 			if cp, ok := m.activeScreen.(HelpContextProvider); ok {
-				contextText = cp.HelpContext(helpContentWidth)
+				contextInfo = cp.HelpContext(helpContentWidth)
 			}
 		}
 		return m, logger.RecoverTUI(m.ctx, func() tea.Msg {
-			return ShowDialogMsg{Dialog: NewHelpDialogWithContext(km, contextText)}
+			return ShowDialogMsg{Dialog: NewHelpDialogWithContext(km, contextInfo)}
 		}), true
 	}
 	if key.Matches(msg, Keys.ForceQuit) {

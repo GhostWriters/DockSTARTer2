@@ -229,8 +229,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		keyMsg := msg
 		switch {
-		case key.Matches(keyMsg, Keys.Help):
-			return m, func() tea.Msg { return ShowDialogMsg{Dialog: NewHelpDialogModel()} }
+
 
 		// Tab / ShiftTab: switch between screen-level elements
 		// (e.g., menu dialog ↔ header version widget in the future)
