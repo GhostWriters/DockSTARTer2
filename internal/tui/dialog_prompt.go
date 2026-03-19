@@ -352,11 +352,36 @@ func (m *promptDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		Width:  maxAllowed,
 		Height: 1,
 		ZOrder: ZDialog + 10,
+		Label:  "Input Field",
+		Help: &HelpContext{
+			ScreenName: "Prompt",
+			PageTitle:  "Editing",
+			PageText:   m.question,
+			ItemText:   "Type your response and press Enter to confirm, or Esc to cancel.",
+		},
 	}}
+
+	// Dialog background
+	regions = append(regions, HitRegion{
+		ID:     m.id,
+		X:      offsetX,
+		Y:      offsetY,
+		Width:  maxAllowed + 2,
+		Height: buttonY + 2,
+		ZOrder: ZDialog,
+		Label:  "Prompt",
+		Help: &HelpContext{
+			ScreenName: m.title,
+			PageTitle:  "Input Prompt",
+			PageText:   m.question,
+		},
+	})
+
 	regions = append(regions, GetButtonHitRegions(
-		m.id, offsetX+1, offsetY+buttonY, maxAllowed, ZDialog+20,
-		ButtonSpec{Text: "OK", ZoneID: "OK"},
-		ButtonSpec{Text: "Cancel", ZoneID: "Cancel"},
+		HelpContext{ScreenName: m.title, PageTitle: "Input Prompt", PageText: m.question},
+		m.id, offsetX+1, offsetY+buttonY, m.width-2, ZDialog+20,
+		ButtonSpec{Text: "OK", ZoneID: "OK", Help: "Save changes and return."},
+		ButtonSpec{Text: "Cancel", ZoneID: "Cancel", Help: "Discard changes and return."},
 	)...)
 	return regions
 }

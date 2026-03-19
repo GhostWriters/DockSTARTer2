@@ -213,11 +213,30 @@ func (m *confirmDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 
 	// Use centralized button hit region helper with dialog ID for disambiguation
 	// Must include Text to properly calculate button width
-	return GetButtonHitRegions(
+	regions := GetButtonHitRegions(
+		HelpContext{ScreenName: m.title, PageTitle: "Question", PageText: m.question},
 		m.id, offsetX+1, offsetY+buttonY, contentWidth, ZDialog+20,
-		ButtonSpec{Text: "Yes", ZoneID: "Yes"},
-		ButtonSpec{Text: "No", ZoneID: "No"},
+		ButtonSpec{Text: "Yes", ZoneID: "Yes", Help: "Select this option."},
+		ButtonSpec{Text: "No", ZoneID: "No", Help: "Select this option."},
 	)
+
+	// Dialog background
+	regions = append(regions, HitRegion{
+		ID:     m.id,
+		X:      offsetX,
+		Y:      offsetY,
+		Width:  contentWidth + 2,
+		Height: buttonY + 2, // buttonRow (1) + border (1 more)
+		ZOrder: ZDialog,
+		Label:  "Confirm",
+		Help: &HelpContext{
+			ScreenName: m.title,
+			PageTitle:  "Question",
+			PageText:   m.question,
+		},
+	})
+
+	return regions
 }
 
 // ShowConfirmDialog displays a confirmation dialog and returns the result

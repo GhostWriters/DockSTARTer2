@@ -328,6 +328,7 @@ func (m *ContextMenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		Width:  totalW,
 		Height: totalH,
 		ZOrder: ZDialog + 5,
+		Label:  "Context Menu",
 	})
 
 	// Per-item rows (inside border, starting at menuY+1)
@@ -344,6 +345,7 @@ func (m *ContextMenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 				Width:  m.menuW + 2, // content + 2 padding spaces
 				Height: h,
 				ZOrder: ZDialog + 10,
+				Label:  item.Label,
 			})
 		}
 		absIdx++

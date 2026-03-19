@@ -123,6 +123,7 @@ func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegi
 		Width:  s.themeMenu.Width(),
 		Height: s.themeMenu.Height(),
 		ZOrder: tui.ZScreen + 1,
+		Label:  "Theme Selection",
 	})
 
 	// Width calculations for the main dialog area
@@ -143,6 +144,12 @@ func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegi
 		Width:  s.optionsMenu.Width(),
 		Height: s.optionsMenu.Height(),
 		ZOrder: tui.ZScreen + 1,
+		Label:  "Display Options",
+		Help: &tui.HelpContext{
+			ScreenName: s.outerMenu.Title(),
+			PageTitle:  "Description",
+			PageText:   "Configure visual settings for the application.",
+		},
 	})
 
 	// Button row regions
@@ -158,22 +165,45 @@ func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegi
 		Width:  btnRowWidth,
 		Height: s.outerMenu.GetButtonHeight(),
 		ZOrder: tui.ZScreen + 1,
+		Label:  "Actions",
+		Help: &tui.HelpContext{
+			ScreenName: s.outerMenu.Title(),
+			PageTitle:  "Description",
+			PageText:   "Configure visual settings for the application.",
+		},
 	})
 
 	// Individual buttons
 	btnSpecs := []tui.ButtonSpec{
-		{Text: "Apply", ZoneID: tui.IDApplyButton},
+		{Text: "Apply", ZoneID: tui.IDApplyButton, Help: "Save all changed display options to your configuration file."},
 	}
 	if s.isRoot {
-		btnSpecs = append(btnSpecs, tui.ButtonSpec{Text: "Exit", ZoneID: tui.IDExitButton})
+		btnSpecs = append(btnSpecs, tui.ButtonSpec{
+			Text:   "Exit",
+			ZoneID: tui.IDExitButton,
+			Help:   "Exit the application.",
+		})
 	} else {
 		btnSpecs = append(btnSpecs,
-			tui.ButtonSpec{Text: "Back", ZoneID: tui.IDBackButton},
-			tui.ButtonSpec{Text: "Exit", ZoneID: tui.IDExitButton},
+			tui.ButtonSpec{
+				Text:   "Back",
+				ZoneID: tui.IDBackButton,
+				Help:   "Return to the previous screen.",
+			},
+			tui.ButtonSpec{
+				Text:   "Exit",
+				ZoneID: tui.IDExitButton,
+				Help:   "Exit the application.",
+			},
 		)
 	}
 	regions = append(regions, tui.GetButtonHitRegions(
-		"", offsetX+contentX, offsetY+buttonY, btnRowWidth, tui.ZScreen+25,
+		tui.HelpContext{
+			ScreenName: s.outerMenu.Title(),
+			PageTitle:  "Description",
+			PageText:   "Configure visual settings for the application.",
+		},
+		s.outerMenu.ID(), offsetX+contentX, offsetY+buttonY, btnRowWidth, tui.ZScreen+25,
 		btnSpecs...,
 	)...)
 
@@ -203,6 +233,7 @@ func (s *DisplayOptionsScreen) getMockupHitRegions(offsetX, offsetY int) []tui.H
 		Width:  44,
 		Height: 1,
 		ZOrder: tui.ZScreen + 2,
+		Label:  "Preview",
 	})
 	// Add other mockup regions if needed for interactive preview
 	return regions

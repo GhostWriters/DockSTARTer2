@@ -644,6 +644,13 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 		Width:  contentW,
 		Height: 1,
 		ZOrder: tui.ZDialog + 10,
+		Label:  "Value Input",
+		Help: &tui.HelpContext{
+			ScreenName: "Set Value: " + m.varName,
+			PageTitle:  "Editing",
+			PageText:   "Type to enter a custom value for " + m.varName + ".",
+			ItemText:   "Press Enter to save or Esc to cancel.",
+		},
 	})
 	m.listAbsTopY = offsetY + listTop
 	if listH > 0 {
@@ -654,17 +661,53 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 			Width:  contentW + 2,
 			Height: listH,
 			ZOrder: tui.ZDialog + 10,
+			Label:  "Preset Values",
 		})
 	}
+
+	// Dialog background
+	regions = append(regions, tui.HitRegion{
+		ID:     "setvalue_dialog",
+		X:      offsetX,
+		Y:      offsetY,
+		Width:  m.width,
+		Height: m.height,
+		ZOrder: tui.ZDialog,
+		Label:  "Set Value",
+		Help: &tui.HelpContext{
+			ScreenName: "Set Value: " + m.varName,
+			PageTitle:  "Variable Info",
+			PageText:   m.appDesc,
+		},
+	})
 
 	// buttons are at the bottom: outer border(1) + content fills to m.height-2, bottom border at m.height-1
 	btnH := tui.ButtonRowHeight(contentW, 0, tui.ButtonSpec{Text: "Save"}, tui.ButtonSpec{Text: "Cancel"}, tui.ButtonSpec{Text: "Exit"})
 	buttonY := m.height - 1 - btnH
+	regions = append(regions, tui.HitRegion{
+		ID:     "setvalue_buttons",
+		X:      offsetX + 1,
+		Y:      offsetY + buttonY,
+		Width:  contentW,
+		Height: btnH,
+		ZOrder: tui.ZDialog + 5,
+		Label:  "Actions",
+		Help: &tui.HelpContext{
+			ScreenName: "Set Value: " + m.varName,
+			PageTitle:  "Variable Info",
+			PageText:   m.appDesc,
+		},
+	})
 	regions = append(regions, tui.GetButtonHitRegions(
-		"setvalue_dialog", offsetX+1, offsetY+buttonY, contentW, tui.ZDialog+10,
-		tui.ButtonSpec{Text: "Save", ZoneID: "Save"},
-		tui.ButtonSpec{Text: "Cancel", ZoneID: "Cancel"},
-		tui.ButtonSpec{Text: "Exit", ZoneID: "Exit"},
+		tui.HelpContext{
+			ScreenName: "Set Value: " + m.varName,
+			PageTitle:  "Variable Info",
+			PageText:   m.appDesc,
+		},
+		"setvalue_dialog", offsetX+1, offsetY+buttonY, contentW, tui.ZDialog+20,
+		tui.ButtonSpec{Text: "Save", ZoneID: "Save", Help: "Save the current value and return."},
+		tui.ButtonSpec{Text: "Cancel", ZoneID: "Cancel", Help: "Cancel and return to the editor."},
+		tui.ButtonSpec{Text: "Exit", ZoneID: "Exit", Help: "Close the editor and return to the main menu."},
 	)...)
 
 	return regions

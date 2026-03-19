@@ -809,7 +809,11 @@ func (m *AppModel) showGlobalContextMenu(x, y int, hit *HitRegion) tea.Cmd {
 
 	header := "Main Menu"
 	if hit != nil {
-		if hit.Label != "" {
+		if hit.Help != nil && hit.Help.ItemTitle != "" {
+			header = hit.Help.ItemTitle
+		} else if hit.Help != nil && hit.Help.ScreenName != "" {
+			header = hit.Help.ScreenName
+		} else if hit.Label != "" {
 			header = hit.Label
 		} else {
 			// Fallback to ID-based labels for regions not yet fully converted to metadata

@@ -111,34 +111,49 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// 2. Button actions (global buttons not belonging to a sub-menu)
 		switch msg.ID {
 		case tui.IDApplyButton:
-			s.focusedPanel = FocusButtons
-			s.focusedButton = 0
-			s.updateFocusStates()
+			if msg.Button == tea.MouseLeft {
+				s.focusedPanel = FocusButtons
+				s.focusedButton = 0
+				s.updateFocusStates()
+				return s, s.handleApply()
+			}
 			if msg.Button == tui.HoverButton {
+				s.focusedPanel = FocusButtons
+				s.focusedButton = 0
+				s.updateFocusStates()
 				return s, nil
 			}
-			return s, s.handleApply()
 		case tui.IDBackButton:
-			s.focusedPanel = FocusButtons
-			s.focusedButton = 1
-			s.updateFocusStates()
+			if msg.Button == tea.MouseLeft {
+				s.focusedPanel = FocusButtons
+				s.focusedButton = 1
+				s.updateFocusStates()
+				if s.isRoot {
+					return s, nil
+				}
+				theme.Unload("Preview")
+				return s, navigateBack()
+			}
 			if msg.Button == tui.HoverButton {
+				s.focusedPanel = FocusButtons
+				s.focusedButton = 1
+				s.updateFocusStates()
 				return s, nil
 			}
-			if s.isRoot {
-				return s, nil
-			}
-			theme.Unload("Preview")
-			return s, navigateBack()
 		case tui.IDExitButton:
-			s.focusedPanel = FocusButtons
-			s.focusedButton = s.maxFocusedButton()
-			s.updateFocusStates()
+			if msg.Button == tea.MouseLeft {
+				s.focusedPanel = FocusButtons
+				s.focusedButton = s.maxFocusedButton()
+				s.updateFocusStates()
+				theme.Unload("Preview")
+				return s, tui.ConfirmExitAction()
+			}
 			if msg.Button == tui.HoverButton {
+				s.focusedPanel = FocusButtons
+				s.focusedButton = s.maxFocusedButton()
+				s.updateFocusStates()
 				return s, nil
 			}
-			theme.Unload("Preview")
-			return s, tui.ConfirmExitAction()
 		}
 
 		// 3. Delegation to sub-menus (handles items and internal buttons)
@@ -149,8 +164,8 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m, ok := updated.(*tui.MenuModel); ok {
 				s.themeMenu = m
 			}
-			// Hook for theme preview: if theme changed, apply it
-			if strings.HasPrefix(msg.ID, "item-") {
+			// Hook for theme preview: if theme changed (Left Click), apply it
+			if msg.Button == tea.MouseLeft && strings.HasPrefix(msg.ID, "item-") {
 				idx := s.themeMenu.Index()
 				items := s.themeMenu.GetItems()
 				if idx >= 0 && idx < len(items) {

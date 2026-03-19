@@ -791,13 +791,22 @@ func (m *MenuModel) HelpContext(contentWidth int) HelpContext {
 	}
 }
 
-// showContextMenu returns a command to show the context menu for the currently selected item.
-func (m *MenuModel) showContextMenu(x, y int) tea.Cmd {
-	idx := m.list.Index()
+// showContextMenu returns a command to show the context menu for the item at the given index.
+func (m *MenuModel) showContextMenu(idx int, x, y int) tea.Cmd {
 	var tag, desc string
+	var hCtx *HelpContext
+
 	if idx >= 0 && idx < len(m.items) {
-		tag = m.items[idx].Tag
-		desc = m.items[idx].Desc
+		item := m.items[idx]
+		tag = item.Tag
+		desc = item.Desc
+		hCtx = &HelpContext{
+			ScreenName: m.title,
+			PageTitle:  "Description",
+			PageText:   m.subtitle,
+			ItemTitle:  tag,
+			ItemText:   item.Help,
+		}
 	}
 
 	var items []ContextMenuItem
@@ -830,8 +839,7 @@ func (m *MenuModel) showContextMenu(x, y int) tea.Cmd {
 		})
 	}
 
-	hCtx := m.HelpContext(40)
-	items = AppendContextMenuTail(items, clipItems, &hCtx)
+	items = AppendContextMenuTail(items, clipItems, hCtx)
 
 	return func() tea.Msg {
 		return ShowDialogMsg{Dialog: NewContextMenuModel(x, y, m.width, m.height, items)}

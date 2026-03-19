@@ -201,6 +201,13 @@ func (m *ProgramBoxModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 			Width:  m.layout.Width - 2,
 			Height: m.layout.ViewportHeight + 2,
 			ZOrder: ZDialog + 5,
+			Label:  "Program Output",
+			Help: &HelpContext{
+				ScreenName: m.title,
+				PageTitle:  "Output Viewer",
+				PageText:   "Displays the live output of a running command or script.",
+				ItemText:   "Scroll with the mouse wheel or use Home/End/PgUp/PgDn to review output.",
+			},
 		})
 
 		// Scrollbar hit regions — inside the inner border, right-most gutter column.
@@ -216,31 +223,52 @@ func (m *ProgramBoxModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 			regions = append(regions, HitRegion{
 				ID: m.id + ".sb.up", X: sbX, Y: sbTopY,
 				Width: 1, Height: 1, ZOrder: ZDialog + 20,
+				Label: "Scroll Up",
 			})
 			if aboveH := info.ThumbStart - 1; aboveH > 0 {
 				regions = append(regions, HitRegion{
 					ID: m.id + ".sb.above", X: sbX, Y: sbTopY + 1,
 					Width: 1, Height: aboveH, ZOrder: ZDialog + 20,
+					Label: "Page Up",
 				})
 			}
 			if thumbH := info.ThumbEnd - info.ThumbStart; thumbH > 0 {
 				regions = append(regions, HitRegion{
 					ID: m.id + ".sb.thumb", X: sbX, Y: sbTopY + info.ThumbStart,
 					Width: 1, Height: thumbH, ZOrder: ZDialog + 21,
+					Label: "Scroll Thumb",
 				})
 			}
 			if belowH := (info.Height - 1) - info.ThumbEnd; belowH > 0 {
 				regions = append(regions, HitRegion{
 					ID: m.id + ".sb.below", X: sbX, Y: sbTopY + info.ThumbEnd,
 					Width: 1, Height: belowH, ZOrder: ZDialog + 20,
+					Label: "Page Down",
 				})
 			}
 			regions = append(regions, HitRegion{
 				ID: m.id + ".sb.down", X: sbX, Y: sbTopY + info.Height - 1,
 				Width: 1, Height: 1, ZOrder: ZDialog + 20,
+				Label: "Scroll Down",
 			})
 		}
 	}
+
+	// Dialog background
+	regions = append(regions, HitRegion{
+		ID:     m.id,
+		X:      offsetX,
+		Y:      offsetY,
+		Width:  m.layout.Width,
+		Height: m.layout.Height,
+		ZOrder: ZDialog,
+		Label:  m.title,
+		Help: &HelpContext{
+			ScreenName: m.title,
+			PageTitle:  "Task Progress",
+			PageText:   "This dialog shows the progress of a running task. You can view the log output in the viewport below. Click OK when done to return.",
+		},
+	})
 
 	// If done, add OK button hit region using centralized helper
 	if m.done {
@@ -249,9 +277,10 @@ func (m *ProgramBoxModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		contentWidth := m.layout.Width - 2
 
 		regions = append(regions, GetButtonHitRegions(
-			m.id, offsetX+1, offsetY+buttonY, contentWidth, ZDialog+20,
-			ButtonSpec{Text: "OK", ZoneID: "OK"},
-		)...)
+		HelpContext{ScreenName: m.title, PageTitle: "Task Execution", PageText: m.subtitle},
+		"programbox_dialog", offsetX+1, offsetY+buttonY, contentWidth, ZDialog+20,
+		ButtonSpec{Text: "Exit", ZoneID: "Exit", Help: "Close the execution window."},
+	)...)
 	}
 
 	// If sub-dialog is active, collect its hit regions

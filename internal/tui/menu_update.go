@@ -84,15 +84,16 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if strings.HasPrefix(msg.ID, "item-"+m.id+"-") {
 			indexStr := strings.TrimPrefix(msg.ID, "item-"+m.id+"-")
 			if idx, err := strconv.Atoi(indexStr); err == nil {
+				// Right click on a menu item triggers its context menu WITHOUT moving selection
+				if msg.Button == tea.MouseRight {
+					return m, m.showContextMenu(idx, msg.X, msg.Y)
+				}
+
+				// Left click moves the selection and executes
 				m.list.Select(idx)
 				m.cursor = idx
 				menuSelectedIndices[m.id] = idx
 				m.focusedItem = FocusList
-
-				// Right click on a menu item triggers its context menu
-				if msg.Button == tea.MouseRight {
-					return m, m.showContextMenu(msg.X, msg.Y)
-				}
 
 				// For checkboxes/radio buttons, clicking toggles (Space action)
 				// For regular items, clicking executes (Enter action)
@@ -137,15 +138,17 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "btn-select":
-			m.focusedItem = FocusSelectBtn
-			return m.handleEnter()
+			if msg.Button == tea.MouseLeft {
+				m.focusedItem = FocusSelectBtn
+				return m.handleEnter()
+			}
 		case "btn-back":
-			if m.backAction != nil {
+			if msg.Button == tea.MouseLeft && m.backAction != nil {
 				m.focusedItem = FocusBackBtn
 				return m.handleEnter()
 			}
 		case "btn-exit":
-			if m.showExit {
+			if msg.Button == tea.MouseLeft && m.showExit {
 				m.focusedItem = FocusExitBtn
 				return m.handleEnter()
 			}

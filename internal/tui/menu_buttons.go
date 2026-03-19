@@ -54,7 +54,7 @@ func (m *MenuModel) getButtonSpecs() []ButtonSpec {
 	if label == "" {
 		label = "Select"
 	}
-	specs = append(specs, ButtonSpec{Text: label, Active: m.focusedItem == FocusSelectBtn, ZoneID: "btn-select"})
+	specs = append(specs, ButtonSpec{Text: label, Active: m.focusedItem == FocusSelectBtn, ZoneID: "btn-select", Help: "Confirm and execute the selected action."})
 
 	// Back Button
 	if m.backAction != nil {
@@ -62,7 +62,7 @@ func (m *MenuModel) getButtonSpecs() []ButtonSpec {
 		if label == "" {
 			label = "Back"
 		}
-		specs = append(specs, ButtonSpec{Text: label, Active: m.focusedItem == FocusBackBtn, ZoneID: "btn-back"})
+		specs = append(specs, ButtonSpec{Text: label, Active: m.focusedItem == FocusBackBtn, ZoneID: "btn-back", Help: "Return to the previous screen."})
 	}
 
 	// Exit Button
@@ -71,7 +71,7 @@ func (m *MenuModel) getButtonSpecs() []ButtonSpec {
 		if label == "" {
 			label = "Exit"
 		}
-		specs = append(specs, ButtonSpec{Text: label, Active: m.focusedItem == FocusExitBtn, ZoneID: "btn-exit"})
+		specs = append(specs, ButtonSpec{Text: label, Active: m.focusedItem == FocusExitBtn, ZoneID: "btn-exit", Help: "Exit the application immediately."})
 	}
 
 	return specs
