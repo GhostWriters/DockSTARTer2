@@ -1,6 +1,9 @@
 package tui
 
 import (
+	"strconv"
+	"strings"
+
 	"charm.land/lipgloss/v2"
 )
 
@@ -73,6 +76,7 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		Width:  m.list.Width(),
 		Height: m.list.Height(),
 		ZOrder: baseZ + 7, // Below items (+10) but above backdrop (+5)
+		Label:  m.title,
 	})
 
 	// Background region for the whole list — allows hover+scroll over the gaps
@@ -82,7 +86,13 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		Y:      offsetY + listY,
 		Width:  maxWidth,
 		Height: maxHeight,
-		ZOrder: baseZ + 5,
+		ZOrder: baseZ,
+		Label:  m.title,
+		Help: &HelpContext{
+			ScreenName: m.title,
+			PageTitle:  "Description",
+			PageText:   m.subtitle,
+		},
 	})
 
 	// Item regions: vertical list mode vs horizontal flow mode.
@@ -91,6 +101,26 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 			// Variable height list hit testing uses the cached lastHitRegions
 			// which contain coordinates relative to the list's own start.
 			for _, r := range m.lastHitRegions {
+				// Extract itemIndex from the ID (e.g. "app-select.item-42")
+				itemIndex := -1
+				parts := strings.Split(r.ID, "-")
+				if len(parts) > 1 {
+					itemIndex, _ = strconv.Atoi(parts[len(parts)-1])
+				}
+
+				var label string
+				var help *HelpContext
+				if itemIndex >= 0 && itemIndex < len(m.items) {
+					item := m.items[itemIndex]
+					label = GetPlainText(item.Tag)
+					help = &HelpContext{
+						ScreenName: m.title,
+						PageTitle:  "Menu Item",
+						ItemTitle:  GetPlainText(item.Tag),
+						ItemText:   item.Desc,
+					}
+				}
+
 				regions = append(regions, HitRegion{
 					ID:     r.ID,
 					X:      offsetX + listX + r.X,
@@ -98,6 +128,8 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 					Width:  r.Width,
 					Height: r.Height,
 					ZOrder: baseZ + 10,
+					Label:  label,
+					Help:   help,
 				})
 			}
 		} else {
@@ -115,6 +147,7 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 					continue
 				}
 
+				item := m.items[itemIndex]
 				regions = append(regions, HitRegion{
 					ID:     GetMenuItemID(m.id, itemIndex),
 					X:      offsetX + listX,
@@ -122,6 +155,13 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 					Width:  itemWidth,
 					Height: 1,
 					ZOrder: baseZ + 10,
+					Label:  GetPlainText(item.Tag),
+					Help: &HelpContext{
+						ScreenName: m.title,
+						PageTitle:  "Menu Item",
+						ItemTitle:  GetPlainText(item.Tag),
+						ItemText:   item.Desc,
+					},
 				})
 			}
 		}
@@ -196,6 +236,13 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 				Width:  itemWidth,
 				Height: 1,
 				ZOrder: baseZ + 10,
+				Label:  GetPlainText(item.Tag),
+				Help: &HelpContext{
+					ScreenName: m.title,
+					PageTitle:  "Menu Item",
+					ItemTitle:  GetPlainText(item.Tag),
+					ItemText:   item.Desc,
+				},
 			})
 		}
 	}
@@ -216,6 +263,7 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 			Width:  1,
 			Height: 1,
 			ZOrder: baseZ + 20,
+			Label:  "Scroll Up",
 		})
 
 		// Track above thumb (rows 1..ThumbStart-1)
@@ -227,6 +275,7 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 				Width:  1,
 				Height: aboveH,
 				ZOrder: baseZ + 20,
+				Label:  "Page Up",
 			})
 		}
 
@@ -239,6 +288,7 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 				Width:  1,
 				Height: thumbH,
 				ZOrder: baseZ + 21,
+				Label:  "Scroll Thumb",
 			})
 		}
 
@@ -251,6 +301,7 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 				Width:  1,
 				Height: belowH,
 				ZOrder: baseZ + 20,
+				Label:  "Page Down",
 			})
 		}
 
@@ -262,6 +313,7 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 			Width:  1,
 			Height: 1,
 			ZOrder: baseZ + 20,
+			Label:  "Scroll Down",
 		})
 	}
 
@@ -300,10 +352,17 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 			Width:  contentWidth,
 			Height: layout.ButtonHeight,
 			ZOrder: baseZ + 15,
+			Label:  "Actions",
+			Help: &HelpContext{
+				ScreenName: m.title,
+				PageTitle:  "Description",
+				PageText:   m.subtitle,
+			},
 		})
 
 		// Use centralized helper for button hit regions
 		regions = append(regions, GetButtonHitRegions(
+			HelpContext{ScreenName: m.title, PageTitle: "Description", PageText: m.subtitle},
 			m.id, buttonX, offsetY+buttonY, contentWidth, baseZ+20,
 			specs...,
 		)...)

@@ -377,6 +377,12 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tui.LayerHitMsg:
 		if strings.HasPrefix(msg.ID, "tabbed_vars.tab-") {
+			// On right-click, do nothing (allows through hit-testing to global context menu)
+			if msg.Button == tea.MouseRight {
+				return m, nil
+			}
+
+			// Left click (or other) switches tabs
 			tabIdxStr := strings.TrimPrefix(msg.ID, "tabbed_vars.tab-")
 			if idx, err := strconv.Atoi(tabIdxStr); err == nil && idx >= 0 && idx < len(m.tabs) {
 				m.focus = envFocusEditor
@@ -392,14 +398,18 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if msg.ID == "tabbed_vars.editor" {
+			// Right-click opens the context menu for the clicked variable row WITHOUT moving focus/cursor
+			if msg.Button == tea.MouseRight {
+				if len(m.tabs) > 0 {
+					return m, m.showContextMenuForClick(msg.X, msg.Y)
+				}
+				return m, nil
+			}
+
+			// Left click moves focus and cursor
 			m.focus = envFocusEditor
 			if len(m.tabs) > 0 {
 				m.tabs[m.activeTab].editor.Focus()
-
-				// Right-click opens the context menu for the clicked variable row.
-				if msg.Button == tea.MouseRight {
-					return m, m.showContextMenuForClick(msg.X, msg.Y)
-				}
 
 				// Calculate relative coordinates for the editor click
 				// Hit region is at dialogOffsetX + 2, dialogOffsetY + 2 + subtitleHeight
@@ -420,32 +430,38 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Button clicks
 		switch msg.ID {
 		case tui.IDSaveButton:
-			m.focus = envFocusButtons
-			m.btnIdx = 0
-			if m.hasErrors() {
-				return m, func() tea.Msg {
-					return tui.ShowMessageDialogMsg{
-						Title:   "Validation Error",
-						Message: "Cannot save while there are invalid variable names (highlighted in red) or incomplete lines.",
-						Type:    tui.MessageError,
+			if msg.Button == tea.MouseLeft {
+				m.focus = envFocusButtons
+				m.btnIdx = 0
+				if m.hasErrors() {
+					return m, func() tea.Msg {
+						return tui.ShowMessageDialogMsg{
+							Title:   "Validation Error",
+							Message: "Cannot save while there are invalid variable names (highlighted in red) or incomplete lines.",
+							Type:    tui.MessageError,
+						}
 					}
 				}
+				return m, m.saveEnv()
 			}
-			return m, m.saveEnv()
 		case tui.IDBackButton:
-			m.focus = envFocusButtons
-			m.btnIdx = 1
-			if m.hasChanges() {
-				return m, m.promptUnsavedChanges(m.onClose)
+			if msg.Button == tea.MouseLeft {
+				m.focus = envFocusButtons
+				m.btnIdx = 1
+				if m.hasChanges() {
+					return m, m.promptUnsavedChanges(m.onClose)
+				}
+				return m, m.onClose
 			}
-			return m, m.onClose
 		case tui.IDExitButton:
-			m.focus = envFocusButtons
-			m.btnIdx = 2
-			if m.hasChanges() {
-				return m, m.promptUnsavedChanges(tui.ConfirmExitAction())
+			if msg.Button == tea.MouseLeft {
+				m.focus = envFocusButtons
+				m.btnIdx = 2
+				if m.hasChanges() {
+					return m, m.promptUnsavedChanges(tui.ConfirmExitAction())
+				}
+				return m, tui.ConfirmExitAction()
 			}
-			return m, tui.ConfirmExitAction()
 		}
 
 	case tui.LayerWheelMsg, tea.MouseWheelMsg:
@@ -819,19 +835,26 @@ func (m *TabbedVarsEditorModel) ViewString() string {
 func (m *TabbedVarsEditorModel) View() tea.View {
 	return tea.View{Content: m.ViewString()}
 }
-
 func (m *TabbedVarsEditorModel) getButtonSpecs() []tui.ButtonSpec {
 	zoneIDs := []string{tui.IDSaveButton, tui.IDBackButton, tui.IDExitButton}
+	helps := []string{
+		"Save all changes in all tabs to the environment file.",
+		"Discard all changes and return (prompts if unsaved changes exist).",
+		"Discard all changes and exit the application.",
+	}
 	var specs []tui.ButtonSpec
 	for i, btn := range m.buttons {
 		zoneID := ""
+		help := ""
 		if i < len(zoneIDs) {
 			zoneID = zoneIDs[i]
+			help = helps[i]
 		}
 		specs = append(specs, tui.ButtonSpec{
 			Text:   btn,
 			Active: m.focus == envFocusButtons && m.btnIdx == i,
 			ZoneID: zoneID,
+			Help:   help,
 		})
 	}
 	return specs
@@ -1162,6 +1185,12 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitReg
 				Width:  tabWidth,
 				Height: 1,
 				ZOrder: tui.ZDialog + 10,
+				Label:  m.tabs[i].spec.Title,
+				Help: &tui.HelpContext{
+					ScreenName: m.title,
+					ItemTitle:  m.tabs[i].spec.Title,
+					ItemText:   "Tab: " + m.tabs[i].spec.Title + ". Click to switch to this category of variables.",
+				},
 			})
 			tabX += tabWidth
 		}
@@ -1176,11 +1205,25 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitReg
 		Width:  m.contentWidth - 2,                  // inner box content width
 		Height: m.editorHeight,
 		ZOrder: tui.ZDialog + 5,
+		Label:  "Variables Editor",
+		Help: &tui.HelpContext{
+			ScreenName: m.title,
+			PageTitle:  "Variables Editor",
+			PageText:   "Grouped environment variable editor. Right-click any row for specific options.",
+		},
 	})
 
 	// Button regions (standardized width)
 	btnY := m.height - m.buttonHeight - 1
-	regions = append(regions, tui.GetButtonHitRegions("", offsetX+1, offsetY+btnY, m.contentWidth, tui.ZDialog+10, m.getButtonSpecs()...)...)
+	regions = append(regions, tui.GetButtonHitRegions(
+		tui.HelpContext{
+			ScreenName: m.title,
+			PageTitle:  "Variables Editor",
+			PageText:   "Grouped environment variable editor. Right-click any row for specific options.",
+		},
+		"tabbed_vars", offsetX+1, offsetY+btnY, m.width-2, tui.ZDialog+20,
+		m.getButtonSpecs()...,
+	)...)
 
 	return regions
 }

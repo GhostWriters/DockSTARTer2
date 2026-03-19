@@ -443,6 +443,34 @@ func (m *HelpDialogModel) SetFocused(f bool) {
 	m.focused = f
 }
 
+// GetHitRegions implements HitRegionProvider for mouse hit testing
+func (m *HelpDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
+	// Help dialog has a halo (2) and a border (2).
+	// Content area starts at offsetX + 2, offsetY + 2.
+	// We'll use the full width and height for hit testing.
+	
+	// Re-calculate height since HelpDialog is content-driven
+	h := lipgloss.Height(m.ViewString())
+
+	var regions []HitRegion
+	
+	// Close button (anywhere in the dialog for now, or maybe specifically at the bottom)
+	// For help dialog, we usually close on any click, but let's be more specific.
+	// Let's add an "OK" or "Close" label hit region at the bottom.
+	
+	regions = append(regions, HitRegion{
+		ID:     "help_dialog",
+		X:      offsetX,
+		Y:      offsetY,
+		Width:  m.width,
+		Height: h,
+		ZOrder: ZScreen + 1,
+		Label:  "Help",
+	})
+	
+	return regions
+}
+
 func (m *HelpDialogModel) calculateLayout() {
 	if m.width == 0 || m.height == 0 {
 		return

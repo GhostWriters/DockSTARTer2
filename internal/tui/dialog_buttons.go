@@ -37,18 +37,22 @@ type ButtonSpec struct {
 	Text   string
 	Active bool
 	ZoneID string // Optional zone ID for mouse support (empty = no zone marking)
+	Help   string // Help text for right-click context
 }
 
 // GetButtonHitRegions returns hit regions for a row of buttons.
 // Use this when you need clickable buttons - it ensures hit regions
-// match the visual layout from RenderCenteredButtons.
+// GetButtonHitRegions returns a slice of HitRegions for a horizontal row of buttons.
+// The provided hCtx is used as a template for the HelpContext of each button hit region,
+// allowing for both screen-level and button-specific help to be displayed.
 // Parameters:
+//   - hCtx: template for HelpContext, providing ScreenName, PageTitle, PageText
 //   - dialogID: prefix for zone IDs to disambiguate multiple dialogs (can be empty)
 //   - offsetX, offsetY: position of the button row in the dialog
 //   - contentWidth: same width passed to RenderCenteredButtons
-//   - zOrder: z-order for the hit regions (typically ZDialog + 20)
+//   - baseZ: z-order for the hit regions (typically ZDialog + 20)
 //   - buttons: same button specs passed to RenderCenteredButtons
-func GetButtonHitRegions(dialogID string, offsetX, offsetY, contentWidth, zOrder int, buttons ...ButtonSpec) []HitRegion {
+func GetButtonHitRegions(hCtx HelpContext, dialogID string, offsetX, offsetY, contentWidth, baseZ int, buttons ...ButtonSpec) []HitRegion {
 	if len(buttons) == 0 {
 		return nil
 	}
@@ -102,8 +106,19 @@ func GetButtonHitRegions(dialogID string, offsetX, offsetY, contentWidth, zOrder
 			Y:      offsetY,
 			Width:  buttonWidth,
 			Height: buttonHeight,
-			ZOrder: zOrder,
+			ZOrder: baseZ,
+			Label:  btn.Text,
 		})
+		// If button has help text, add rich HelpContext using hCtx as a template
+		if btn.Help != "" {
+			regions[len(regions)-1].Help = &HelpContext{
+				ScreenName: hCtx.ScreenName,
+				PageTitle:  hCtx.PageTitle,
+				PageText:   hCtx.PageText,
+				ItemTitle:  btn.Text + " Button",
+				ItemText:   btn.Help,
+			}
+		}
 	}
 
 	return regions

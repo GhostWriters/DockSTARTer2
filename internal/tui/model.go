@@ -122,12 +122,14 @@ type (
 		X      int
 		Y      int
 		Button tea.MouseButton
+		Hit    *HitRegion
 	}
 
 	// LayerWheelMsg is sent when a native compositor layer is hit by a mouse wheel event
 	LayerWheelMsg struct {
 		ID     string
 		Button tea.MouseButton // MouseWheelUp or MouseWheelDown
+		Hit    *HitRegion
 	}
 )
 

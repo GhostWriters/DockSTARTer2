@@ -165,10 +165,29 @@ func (m *messageDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 
 	// Use centralized button hit region helper with dialog ID for disambiguation
 	// Must include Text to properly calculate button width
-	return GetButtonHitRegions(
+	regions := append([]HitRegion{}, GetButtonHitRegions(
+		HelpContext{ScreenName: m.title, PageTitle: "Information", PageText: m.message},
 		m.id, offsetX+1, offsetY+buttonY, contentWidth, ZDialog+20,
-		ButtonSpec{Text: "OK", ZoneID: "OK"},
-	)
+		ButtonSpec{Text: "OK", ZoneID: "OK", Help: "Dismiss this message."},
+	)...)
+
+	// Dialog background
+	regions = append(regions, HitRegion{
+		ID:     m.id,
+		X:      offsetX,
+		Y:      offsetY,
+		Width:  contentWidth + 2,
+		Height: buttonY + 2, // buttonRow (1) + border (1 more)
+		ZOrder: ZDialog,
+		Label:  "Message",
+		Help: &HelpContext{
+			ScreenName: m.title,
+			PageTitle:  "Information",
+			PageText:   m.message,
+		},
+	})
+
+	return regions
 }
 
 // ShowMessageDialog displays a message dialog

@@ -213,7 +213,6 @@ func (m *BackdropModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 			ScreenName: "Help Line",
 			PageTitle:  "Navigation Info",
 			PageText:   "Displays keyboard shortcuts and hints relevant to the active screen.",
-			ItemTitle:  "Action",
 			ItemText:   "Right-click for global options or press F1 for detailed help.",
 		},
 	})

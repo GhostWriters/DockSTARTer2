@@ -705,6 +705,13 @@ func (m *addVarDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegion 
 		Width:  contentW,
 		Height: 1,
 		ZOrder: tui.ZDialog + 10,
+		Label:  "Variable Name",
+		Help: &tui.HelpContext{
+			ScreenName: "Add Variable",
+			PageTitle:  "Editing",
+			PageText:   "Enter a name for the new environment variable.",
+			ItemText:   "Type the name and press Enter to create, or Esc to cancel.",
+		},
 	})
 	if listH > 0 {
 		regions = append(regions, tui.HitRegion{
@@ -714,15 +721,51 @@ func (m *addVarDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegion 
 			Width:  contentW + 2,
 			Height: listH,
 			ZOrder: tui.ZDialog + 10,
+			Label:  "Available Variables",
 		})
 	}
 
+	// Dialog background
+	regions = append(regions, tui.HitRegion{
+		ID:     "addvar_dialog",
+		X:      offsetX,
+		Y:      offsetY,
+		Width:  m.width,
+		Height: m.height,
+		ZOrder: tui.ZDialog,
+		Label:  "Add Variable",
+		Help: &tui.HelpContext{
+			ScreenName: "Add Variable",
+			PageTitle:  "Description",
+			PageText:   "Enter a name for the new environment variable.",
+		},
+	})
+
 	btnH := tui.ButtonRowHeight(contentW, 0, tui.ButtonSpec{Text: "Create"}, tui.ButtonSpec{Text: "Cancel"})
 	buttonY := m.height - 1 - btnH
+	regions = append(regions, tui.HitRegion{
+		ID:     "addvar_buttons",
+		X:      offsetX + 1,
+		Y:      offsetY + buttonY,
+		Width:  contentW,
+		Height: btnH,
+		ZOrder: tui.ZDialog + 5,
+		Label:  "Actions",
+		Help: &tui.HelpContext{
+			ScreenName: "Add Variable",
+			PageTitle:  "Description",
+			PageText:   "Enter a name for the new environment variable.",
+		},
+	})
 	regions = append(regions, tui.GetButtonHitRegions(
-		"addvar_dialog", offsetX+1, offsetY+buttonY, contentW, tui.ZDialog+10,
-		tui.ButtonSpec{Text: "Create", ZoneID: "Create"},
-		tui.ButtonSpec{Text: "Cancel", ZoneID: "Cancel"},
+		tui.HelpContext{
+			ScreenName: "Add Variable",
+			PageTitle:  "Description",
+			PageText:   "Enter a name for the new environment variable.",
+		},
+		"addvar_dialog", offsetX+1, offsetY+buttonY, contentW, tui.ZDialog+20,
+		tui.ButtonSpec{Text: "Create", ZoneID: "Create", Help: "Create the new variable with the entered name."},
+		tui.ButtonSpec{Text: "Cancel", ZoneID: "Cancel", Help: "Cancel and return to the editor."},
 	)...)
 
 	return regions

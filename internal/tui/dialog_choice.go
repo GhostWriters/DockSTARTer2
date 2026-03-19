@@ -159,9 +159,33 @@ func (m *choiceDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	questionHeight := lipgloss.Height(questionStyle.Render(console.Sprintf("%s", m.question)))
 	buttonY := 1 + questionHeight + 1
 
-	specs := make([]ButtonSpec, len(m.choices))
+	btnSpecs := make([]ButtonSpec, len(m.choices))
 	for i, c := range m.choices {
-		specs[i] = ButtonSpec{Text: c, ZoneID: c}
+		btnSpecs[i] = ButtonSpec{Text: c, ZoneID: c, Help: "Select this option."}
 	}
-	return GetButtonHitRegions(m.id, offsetX+1, offsetY+buttonY, contentWidth, ZDialog+20, specs...)
+
+	var regions []HitRegion
+	regions = append(regions, GetButtonHitRegions(
+		HelpContext{ScreenName: m.title, PageTitle: "Question", PageText: m.question},
+		m.id, offsetX+1, offsetY+buttonY, contentWidth, ZDialog+20,
+		btnSpecs...,
+	)...)
+
+	// Dialog background
+	regions = append(regions, HitRegion{
+		ID:     m.id,
+		X:      offsetX,
+		Y:      offsetY,
+		Width:  contentWidth + 2,
+		Height: buttonY + 2, // buttonRow (1) + border (1 more)
+		ZOrder: ZDialog,
+		Label:  "Choice",
+		Help: &HelpContext{
+			ScreenName: m.title,
+			PageTitle:  "Question",
+			PageText:   m.question,
+		},
+	})
+
+	return regions
 }

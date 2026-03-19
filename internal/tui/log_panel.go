@@ -405,7 +405,6 @@ func (m LogPanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		ScreenName: "Log Panel",
 		PageTitle:  "Viewer",
 		PageText:   "Displays live application logs. Use the toggle button or drag the border to see more.",
-		ItemTitle:  "Controls",
 		ItemText:   "Scroll with the mouse wheel or use Home/End/PgUp/PgDn when focused.",
 	}
 
