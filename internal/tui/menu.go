@@ -769,6 +769,27 @@ func (m *MenuModel) ToggleSelectedItem() {
 	}
 }
 
+// HelpContext implements HelpContextProvider.
+func (m *MenuModel) HelpContext(contentWidth int) HelpContext {
+	itemHelp := ""
+	itemTitle := "Help"
+	idx := m.list.Index()
+	if idx >= 0 && idx < len(m.items) {
+		itemHelp = m.items[idx].Help
+		if m.items[idx].Tag != "" {
+			itemTitle = m.items[idx].Tag
+		}
+	}
+
+	return HelpContext{
+		ScreenName: m.title,
+		PageTitle:  "Description",
+		PageText:   m.subtitle,
+		ItemTitle:  itemTitle,
+		ItemText:   itemHelp,
+	}
+}
+
 // Init implements tea.Model
 func (m *MenuModel) Init() tea.Cmd {
 	return nil
