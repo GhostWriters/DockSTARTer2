@@ -62,3 +62,12 @@ You can monitor the progress of the release using:
 ```powershell
 gh run list --workflow release.yml --limit 5
 ```
+
+## 4. Post-Release
+Always return to `devwork` for continued development:
+
+// turbo
+1. Switch back to `devwork`:
+   ```powershell
+   git checkout devwork
+   ```
