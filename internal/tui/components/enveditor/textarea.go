@@ -23,6 +23,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	rw "github.com/mattn/go-runewidth"
 	"github.com/rivo/uniseg"
+	"github.com/sergi/go-diff/diffmatchpatch"
 )
 
 const (
@@ -444,6 +445,8 @@ type Model struct {
 	// Memoization for expensive rendering
 	lastView   string
 	cacheValid bool // Indicates if lastView is up-to-date with current state
+	dmp        *diffmatchpatch.DiffMatchPatch
+	diffCache  map[int][]bool // row index -> modified mask (true = modified)
 
 	// Intelligent variable addition settings.
 	AddPrefix         string
@@ -483,6 +486,8 @@ func New() Model {
 		row:      0,
 
 		viewport: &vp,
+		dmp:      diffmatchpatch.New(),
+		diffCache: make(map[int][]bool),
 	}
 
 	m.SetHeight(defaultHeight)
@@ -636,6 +641,7 @@ func (m *Model) insertRunesFromUserInput(runes []rune) {
 }
 
 func (m *Model) insertRunes(runes []rune, literal bool) {
+	m.invalidateDiffCache(m.row)
 	if !literal {
 		// Intelligent Prefix Handling
 		if m.AddPrefix != "" && m.row < len(m.lineMeta) && !m.lineMeta[m.row].ReadOnly && len(m.value[m.row]) == 0 && len(runes) > 0 {
@@ -964,6 +970,7 @@ func (m *Model) Blur() {
 
 // Reset sets the input to its default state with no input.
 func (m *Model) Reset() {
+	m.diffCache = make(map[int][]bool)
 	m.value = make([][]rune, minHeight, maxLines)
 	m.lineMeta = make([]Line, minHeight, maxLines)
 	m.col = 0
@@ -1001,10 +1008,12 @@ func (m *Model) CurrentLineMeta() (Line, bool) {
 
 // AddVariable appends a new variable line to the editor
 func (m *Model) AddVariable(key string, value string) {
+	m.diffCache = make(map[int][]bool)
 	m.insertVariableAt(len(m.value), key, value)
 }
 
 func (m *Model) insertVariableAt(row int, key string, value string) {
+	m.diffCache = make(map[int][]bool)
 	newLine := key + "=" + value
 	if key == "" && value == "" {
 		newLine = ""
@@ -1334,6 +1343,7 @@ func (m *Model) san() runeutil.Sanitizer {
 // deleteBeforeCursor deletes all text before the cursor. Returns whether or
 // not the cursor blink should be reset.
 func (m *Model) deleteBeforeCursor() {
+	m.invalidateDiffCache(m.row)
 	startCol := 0
 	if m.row < len(m.lineMeta) {
 		startCol = m.lineMeta[m.row].EditableStartCol
@@ -1349,6 +1359,7 @@ func (m *Model) deleteBeforeCursor() {
 // the cursor blink should be reset. If input is masked delete everything after
 // the cursor so as not to reveal word breaks in the masked input.
 func (m *Model) deleteAfterCursor() {
+	m.invalidateDiffCache(m.row)
 	m.value[m.row] = m.value[m.row][:m.col]
 	m.SetCursorColumn(len(m.value[m.row]))
 }
@@ -1361,6 +1372,7 @@ func (m *Model) transposeLeft() {
 	if m.col == 0 || len(m.value[m.row]) < 2 {
 		return
 	}
+	m.invalidateDiffCache(m.row)
 	if m.col >= len(m.value[m.row]) {
 		m.SetCursorColumn(m.col - 1)
 	}
@@ -1373,6 +1385,7 @@ func (m *Model) transposeLeft() {
 // deleteWordLeft deletes the word left to the cursor. Returns whether or not
 // the cursor blink should be reset.
 func (m *Model) deleteWordLeft() {
+	m.invalidateDiffCache(m.row)
 	startCol := 0
 	if m.row < len(m.lineMeta) {
 		startCol = m.lineMeta[m.row].EditableStartCol
@@ -1419,6 +1432,7 @@ func (m *Model) deleteWordLeft() {
 
 // deleteWordRight deletes the word right to the cursor.
 func (m *Model) deleteWordRight() {
+	m.invalidateDiffCache(m.row)
 	if m.col >= len(m.value[m.row]) || len(m.value[m.row]) == 0 {
 		return
 	}
@@ -1524,6 +1538,7 @@ func (m *Model) doWordRight(fn func(charIdx int, pos int)) {
 
 // uppercaseRight changes the word to the right to uppercase.
 func (m *Model) uppercaseRight() {
+	m.invalidateDiffCache(m.row)
 	m.doWordRight(func(_ int, i int) {
 		m.value[m.row][i] = unicode.ToUpper(m.value[m.row][i])
 	})
@@ -1531,6 +1546,7 @@ func (m *Model) uppercaseRight() {
 
 // lowercaseRight changes the word to the right to lowercase.
 func (m *Model) lowercaseRight() {
+	m.invalidateDiffCache(m.row)
 	m.doWordRight(func(_ int, i int) {
 		m.value[m.row][i] = unicode.ToLower(m.value[m.row][i])
 	})
@@ -1538,6 +1554,7 @@ func (m *Model) lowercaseRight() {
 
 // capitalizeRight changes the word to the right to title case.
 func (m *Model) capitalizeRight() {
+	m.invalidateDiffCache(m.row)
 	m.doWordRight(func(charIdx int, i int) {
 		if charIdx == 0 {
 			m.value[m.row][i] = unicode.ToTitle(m.value[m.row][i])
@@ -1821,6 +1838,7 @@ func (m *Model) HasValidationErrors() bool {
 // InvalidateCache clears the rendered view cache.
 func (m *Model) InvalidateCache() {
 	m.cacheValid = false
+	m.diffCache = make(map[int][]bool)
 }
 
 // CheckCache returns the cached rendered screen if it's still valid.
@@ -1996,12 +2014,14 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 					prefix := []rune(strings.ReplaceAll(m.AddPrefix, "APPNAME", m.ValidationAppName))
 					if m.col == len(prefix) && len(m.value[m.row]) >= len(prefix) &&
 						string(m.value[m.row][:len(prefix)]) == string(prefix) {
+						m.invalidateDiffCache(m.row)
 						m.value[m.row] = m.value[m.row][len(prefix):]
 						m.SetCursorColumn(0)
 						m.reclassifyCurrentLine()
 						break
 					}
 				}
+				m.invalidateDiffCache(m.row)
 				m.value[m.row] = append(m.value[m.row][:max(0, m.col-1)], m.value[m.row][m.col:]...)
 				if m.col > 0 {
 					m.SetCursorColumn(m.col - 1)
@@ -2014,6 +2034,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			}
 			m.pushUndoSnapshot()
 			if len(m.value[m.row]) > 0 && m.col < len(m.value[m.row]) {
+				m.invalidateDiffCache(m.row)
 				m.value[m.row] = slices.Delete(m.value[m.row], m.col, m.col+1)
 				m.reclassifyCurrentLine()
 			}
@@ -2110,15 +2131,19 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			m.selActive = false
 			m.PageDown()
 		case key.Matches(msg, m.KeyMap.LowercaseWordForward):
+			m.invalidateDiffCache(m.row)
 			m.pushUndoSnapshot()
 			m.lowercaseRight()
 		case key.Matches(msg, m.KeyMap.UppercaseWordForward):
+			m.invalidateDiffCache(m.row)
 			m.pushUndoSnapshot()
 			m.uppercaseRight()
 		case key.Matches(msg, m.KeyMap.CapitalizeWordForward):
+			m.invalidateDiffCache(m.row)
 			m.pushUndoSnapshot()
 			m.capitalizeRight()
 		case key.Matches(msg, m.KeyMap.TransposeCharacterBackward):
+			m.invalidateDiffCache(m.row)
 			m.pushUndoSnapshot()
 			m.transposeLeft()
 
@@ -2132,6 +2157,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			m.pushUndoSnapshot()
 			// In overwrite mode, replace the character at cursor before inserting.
 			if m.Overwrite && msg.Text != "" && m.col < len(m.value[m.row]) {
+				m.invalidateDiffCache(m.row)
 				m.value[m.row] = slices.Delete(m.value[m.row], m.col, m.col+1)
 				m.reclassifyCurrentLine()
 			}
@@ -2562,6 +2588,67 @@ func (m Model) IsDragging() bool {
 }
 
 // renderRunes formats runes with partial highlighting.
+func (m *Model) invalidateDiffCache(row int) {
+	if m.diffCache != nil {
+		delete(m.diffCache, row)
+	}
+	m.cacheValid = false
+}
+
+func (m *Model) getDiffMask(row int) []bool {
+	if m.diffCache == nil {
+		m.diffCache = make(map[int][]bool)
+	}
+	if mask, ok := m.diffCache[row]; ok {
+		return mask
+	}
+
+	if row >= len(m.lineMeta) || row >= len(m.value) {
+		return nil
+	}
+	meta := m.lineMeta[row]
+	if meta.DefaultValue == "" {
+		return nil
+	}
+
+	lineRunes := m.value[row]
+	if meta.EditableStartCol >= len(lineRunes) {
+		return nil
+	}
+
+	valuePartRunes := lineRunes[meta.EditableStartCol:]
+	// Filter out trailing newlines for diff purposes
+	for len(valuePartRunes) > 0 && (valuePartRunes[len(valuePartRunes)-1] == '\n' || valuePartRunes[len(valuePartRunes)-1] == '\r') {
+		valuePartRunes = valuePartRunes[:len(valuePartRunes)-1]
+	}
+
+	valuePart := string(valuePartRunes)
+	defValue := meta.DefaultValue
+
+	diffs := m.dmp.DiffMain(defValue, valuePart, false)
+
+	mask := make([]bool, len(valuePartRunes))
+	cursor := 0
+	for _, d := range diffs {
+		switch d.Type {
+		case diffmatchpatch.DiffEqual:
+			cursor += len([]rune(d.Text))
+		case diffmatchpatch.DiffInsert:
+			runes := []rune(d.Text)
+			for i := 0; i < len(runes); i++ {
+				if cursor+i < len(mask) {
+					mask[cursor+i] = true
+				}
+			}
+			cursor += len(runes)
+		case diffmatchpatch.DiffDelete:
+			// Deletions don't occupy space in the buffer
+		}
+	}
+	m.diffCache[row] = mask
+	return mask
+}
+
 func (m *Model) renderRunes(runes []rune, l int, startIdx int, baseStyle lipgloss.Style) string {
 	if l >= len(m.lineMeta) {
 		return baseStyle.Render(string(runes))
@@ -2577,7 +2664,6 @@ func (m *Model) renderRunes(runes []rune, l int, startIdx int, baseStyle lipglos
 		return baseStyle.Render(string(runes))
 	}
 
-	defRunes := []rune(meta.DefaultValue)
 	// Determine if the current variable name is valid
 	keyIsValid := true
 	keyIsDuplicate := false
@@ -2648,15 +2734,17 @@ func (m *Model) renderRunes(runes []rune, l int, startIdx int, baseStyle lipglos
 			b.WriteString(baseStyle.Render(string(r)))
 		} else {
 			valIdx := fullIdx - meta.EditableStartCol
-			isMatch := false
-			if valIdx < len(defRunes) {
-				isMatch = (r == defRunes[valIdx])
-			} else {
-				// If we have extra characters at the end, only flag them if they aren't whitespace
-				isMatch = unicode.IsSpace(r)
+			mask := m.getDiffMask(l)
+
+			isModifiedChar := false
+			if mask != nil && valIdx >= 0 && valIdx < len(mask) {
+				isModifiedChar = mask[valIdx]
 			}
 
-			if meta.DefaultValue == "" || meta.IsUserDefined || meta.IsNewLine || r == '\n' || r == '\r' || isMatch {
+			// Note: We don't use meta.DefaultValue == "" || meta.IsUserDefined || meta.IsNewLine logic here
+			// because localized diffing only applies when we have a default value to compare against.
+			// Variable headers/key/equals are handled above or in caller.
+			if r == '\n' || r == '\r' || !isModifiedChar {
 				b.WriteString(baseStyle.Render(string(r)))
 			} else {
 				b.WriteString(modStyle.Render(string(r)))
@@ -3117,6 +3205,7 @@ func (m Model) cursorLineNumber() int {
 
 // mergeLineBelow merges the current line the cursor is on with the line below.
 func (m *Model) mergeLineBelow(row int) {
+	m.diffCache = make(map[int][]bool)
 	if row >= len(m.value)-1 {
 		return
 	}
@@ -3140,6 +3229,7 @@ func (m *Model) mergeLineBelow(row int) {
 
 // mergeLineAbove merges the current line the cursor is on with the line above.
 func (m *Model) mergeLineAbove(row int) {
+	m.diffCache = make(map[int][]bool)
 	if row <= 0 {
 		return
 	}
@@ -3195,6 +3285,7 @@ func (m *Model) reclassifyCurrentLine() {
 }
 
 func (m *Model) splitLine(row, col int) {
+	m.diffCache = make(map[int][]bool)
 	// To perform a split, take the current line and keep the content before
 	// the cursor, take the content after the cursor and make it the content of
 	// the line underneath, and shift the remaining lines down by one

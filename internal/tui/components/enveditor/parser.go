@@ -10,6 +10,7 @@ func (m *Model) ParseEnv(content string, defaultFunc func(string) string, readOn
 	rawLines := strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
 	
 	m.Reset() // ensures clean state
+	m.diffCache = make(map[int][]bool)
 	m.value = make([][]rune, len(rawLines))
 	m.lineMeta = make([]Line, len(rawLines))
 	
@@ -98,6 +99,7 @@ func (m *Model) ReclassifyEnv(defaultFunc func(string) string, readOnlyVars []st
 	if len(m.value) != len(m.lineMeta) {
 		return
 	}
+	m.diffCache = make(map[int][]bool)
 
 	inUserDefinedSection := false
 	for i, line := range m.value {
@@ -184,6 +186,7 @@ func (m *Model) ReclassifyEnv(defaultFunc func(string) string, readOnlyVars []st
 // Returns true if any changes were made.
 // Call after ReclassifyEnv on F5 so deletions are already excluded before value merging.
 func (m *Model) MergeEnv() bool {
+	m.diffCache = make(map[int][]bool)
 	type occ struct {
 		row   int
 		raw   string
