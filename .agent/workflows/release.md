@@ -14,8 +14,7 @@ Use this for testing changes. It generates a version tag like `v2.YYYYMMDD.N-Pre
 // turbo
 1. Stage and commit changes:
    ```powershell
-   git add .
-   git commit -m "feat/fix: descriptive message"
+   git add . && git commit -m "feat/fix: descriptive message"
    ```
 
 // turbo
@@ -38,8 +37,7 @@ Use this for official releases. It generates a production tag like `v2.YYYYMMDD.
 // turbo
 1. Merge `Prerelease` into `main`:
    ```powershell
-   git checkout main
-   git merge Prerelease
+   git checkout main && git merge Prerelease
    ```
 
 // turbo
