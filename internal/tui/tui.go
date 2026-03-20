@@ -151,8 +151,12 @@ func Start(ctx context.Context, startMenu string) error {
 	// Signal that the program has exited
 	close(programExited)
 
-	// Reset terminal colors on exit to prevent "bleeding" into the shell prompt
-	fmt.Print("\x1b[0m\n")
+	// Reset terminal state on exit:
+	// 1. Reset colors (\x1b[0m)
+	// 2. Disable all mouse modes (1000, 1002, 1003)
+	// 3. Disable SGR mouse mode (1006) - prevents ANSI codes leaking to shell
+	// 4. Exit AltScreen (1049) if still active
+	fmt.Print("\x1b[0m\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1049l\n")
 
 	if err != nil {
 		logger.FatalWithStack(ctx, "TUI Error: %v", err)
