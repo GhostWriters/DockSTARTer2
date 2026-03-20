@@ -175,7 +175,10 @@ func EnsureThemeExtracted(themeNameOrURI string) (string, error) {
 // If prefix is provided, semantic tags are registered with that prefix (e.g. "Preview_Screen")
 // without affecting the global active theme (Current).
 func Load(themeNameOrURI string, prefix string) (*ThemeDefaults, error) {
-	// Initialize with defaults first
+	// 0. Clear previous registration for this namespace to avoid tag leakage
+	Unload(prefix)
+
+	// 1. Initialize with defaults
 	Default(prefix)
 
 	var data []byte
@@ -201,6 +204,13 @@ func Load(themeNameOrURI string, prefix string) (*ThemeDefaults, error) {
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	// Invalidate style cache for this prefix (covers both main and preview)
+	if prefix == "" {
+		ClearSemanticCache()
+	} else {
+		ClearSemanticCachePrefix(prefix)
 	}
 
 	return parseThemeTOMLData(data, prefix)
