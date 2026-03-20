@@ -174,19 +174,19 @@ func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Button == tea.MouseMiddle {
 			return m, nil
 		}
-		if msg.Button == tea.MouseRight && buttonIDMatches(msg.ID, "prompt_input") {
+		if msg.Button == tea.MouseRight && ButtonIDMatches(msg.ID, "prompt_input") {
 			return m, ShowInputContextMenu(m.input, msg.X, msg.Y, m.width, m.height)
 		}
 		if msg.Button == tea.MouseLeft {
-			if buttonIDMatches(msg.ID, "OK") {
+			if ButtonIDMatches(msg.ID, "OK") {
 				m.result = m.input.Value()
 				m.confirmed = true
 				return m, closeWithResult(m.result, true)
 			}
-			if buttonIDMatches(msg.ID, "Cancel") {
+			if ButtonIDMatches(msg.ID, "Cancel") {
 				return m, closeWithResult("", false)
 			}
-			if buttonIDMatches(msg.ID, "prompt_input") {
+			if ButtonIDMatches(msg.ID, "prompt_input") {
 				m.focusedItem = FocusList
 				m.input.Focus()
 				m.input.HandleClick(msg.X)

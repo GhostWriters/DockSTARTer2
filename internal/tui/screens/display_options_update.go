@@ -109,8 +109,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// 2. Button actions (global buttons not belonging to a sub-menu)
-		switch msg.ID {
-		case tui.IDApplyButton:
+		if tui.ButtonIDMatches(msg.ID, tui.IDApplyButton) {
 			if msg.Button == tea.MouseLeft {
 				s.focusedPanel = FocusButtons
 				s.focusedButton = 0
@@ -123,7 +122,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				s.updateFocusStates()
 				return s, nil
 			}
-		case tui.IDBackButton:
+		} else if tui.ButtonIDMatches(msg.ID, tui.IDBackButton) {
 			if msg.Button == tea.MouseLeft {
 				s.focusedPanel = FocusButtons
 				s.focusedButton = 1
@@ -140,7 +139,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				s.updateFocusStates()
 				return s, nil
 			}
-		case tui.IDExitButton:
+		} else if tui.ButtonIDMatches(msg.ID, tui.IDExitButton) {
 			if msg.Button == tea.MouseLeft {
 				s.focusedPanel = FocusButtons
 				s.focusedButton = s.maxFocusedButton()

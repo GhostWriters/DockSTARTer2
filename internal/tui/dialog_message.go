@@ -57,7 +57,7 @@ func (m *messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Left click on OK button closes
 		// Check for suffixes to support prefixed IDs (e.g., "message_dialog.OK")
 		if msg.Button == tea.MouseLeft {
-			if buttonIDMatches(msg.ID, "OK") {
+			if ButtonIDMatches(msg.ID, "OK") {
 				return m, func() tea.Msg { return CloseDialogMsg{Result: true} }
 			}
 		}

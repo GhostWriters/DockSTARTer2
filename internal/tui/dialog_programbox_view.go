@@ -191,17 +191,18 @@ func (m *ProgramBoxModel) Layers() []*lipgloss.Layer {
 func (m *ProgramBoxModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	var regions []HitRegion
 
-	// Viewport hit region so hover+scroll works over the output area
+	// Account for the 1-line spacer after the command display
+	// Viewport hit region (main output area)
+	viewportY := 1 + m.layout.HeaderHeight + m.layout.CommandHeight
 	if m.layout.Width > 2 && m.layout.ViewportHeight > 0 {
-		viewportY := 1 + m.layout.HeaderHeight + m.layout.CommandHeight
 		regions = append(regions, HitRegion{
 			ID:     m.id + ".viewport",
 			X:      offsetX + 1,
-			Y:      offsetY + viewportY,
-			Width:  m.layout.Width - 2,
-			Height: m.layout.ViewportHeight + 2,
-			ZOrder: ZDialog + 5,
-			Label:  "Program Output",
+			Y:      offsetY + viewportY + 1, // +1 for inner top border
+			Width:  m.viewport.Width(),
+			Height: m.viewport.Height(),
+			ZOrder: ZDialog + 10,
+			Label:  "Output Viewport",
 			Help: &HelpContext{
 				ScreenName: m.title,
 				PageTitle:  "Output Viewer",
@@ -210,12 +211,11 @@ func (m *ProgramBoxModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 			},
 		})
 
-		// Scrollbar hit regions — inside the inner border, right-most gutter column.
-		// Row 0 of borderedViewport is the inner top border; content (with gutter) starts at row 1.
+		// Scrollbar Regions
 		if currentConfig.UI.Scrollbar && m.sbInfo.Needed {
 			// sbX: outer border(1) + inner border(1) + viewport content width
 			sbX := offsetX + 2 + m.viewport.Width()
-			// sbTopY: outer border(1) + header + command + inner top border(1) == viewportY+1
+			// sbTopY: outer border(1) + header + command + spacer + inner top border(1) == viewportY+1
 			sbTopY := offsetY + viewportY + 1
 			m.sbAbsTopY = sbTopY
 
@@ -272,15 +272,19 @@ func (m *ProgramBoxModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 
 	// If done, add OK button hit region using centralized helper
 	if m.done {
-		// Y = 1 (border) + headerH + commandH + vpHeight + viewport border (2)
+		// Y = 1 (border) + headerH + commandH + spacerY + vpHeight + viewport border (2)
 		buttonY := 1 + m.layout.HeaderHeight + m.layout.CommandHeight + m.layout.ViewportHeight + 2
 		contentWidth := m.layout.Width - 2
 
+		btnSpecs := []ButtonSpec{
+			{Text: "OK", ZoneID: "ok", Active: true},
+		}
+
 		regions = append(regions, GetButtonHitRegions(
-		HelpContext{ScreenName: m.title, PageTitle: "Task Execution", PageText: m.subtitle},
-		"programbox_dialog", offsetX+1, offsetY+buttonY, contentWidth, ZDialog+20,
-		ButtonSpec{Text: "Exit", ZoneID: "Exit", Help: "Close the execution window."},
-	)...)
+			HelpContext{ScreenName: m.title, PageTitle: "Task Execution", PageText: m.subtitle},
+			"programbox_dialog", offsetX+1, offsetY+buttonY, contentWidth, ZDialog+20,
+			btnSpecs...,
+		)...)
 	}
 
 	// If sub-dialog is active, collect its hit regions

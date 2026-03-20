@@ -429,8 +429,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Button clicks
-		switch msg.ID {
-		case tui.IDSaveButton:
+		if tui.ButtonIDMatches(msg.ID, tui.IDSaveButton) {
 			if msg.Button == tea.MouseLeft {
 				m.focus = envFocusButtons
 				m.btnIdx = 0
@@ -445,7 +444,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, m.saveEnv()
 			}
-		case tui.IDBackButton:
+		} else if tui.ButtonIDMatches(msg.ID, tui.IDBackButton) {
 			if msg.Button == tea.MouseLeft {
 				m.focus = envFocusButtons
 				m.btnIdx = 1
@@ -454,7 +453,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, m.onClose
 			}
-		case tui.IDExitButton:
+		} else if tui.ButtonIDMatches(msg.ID, tui.IDExitButton) {
 			if msg.Button == tea.MouseLeft {
 				m.focus = envFocusButtons
 				m.btnIdx = 2

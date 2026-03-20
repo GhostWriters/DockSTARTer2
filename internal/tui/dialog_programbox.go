@@ -563,7 +563,7 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		if m.done && buttonIDMatches(msg.ID, "OK") && msg.Button == tea.MouseLeft {
+		if m.done && ButtonIDMatches(msg.ID, "OK") && msg.Button == tea.MouseLeft {
 			result := tea.Msg(true)
 			if m.err == nil && m.SuccessMsg != nil {
 				result = m.SuccessMsg
