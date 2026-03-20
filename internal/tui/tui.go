@@ -375,7 +375,7 @@ func TriggerAppUpdate() tea.Cmd {
 			return err
 		}
 
-		dialog := NewProgramBoxModel("{{|Theme_TitleSuccess|}}Updating App{{[-]}}", "Checking for app updates...", "")
+		dialog := NewProgramBoxModel("{{|TitleSuccess|}}Updating App{{[-]}}", "Checking for app updates...", "")
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
@@ -404,7 +404,7 @@ func TriggerTemplateUpdate() tea.Cmd {
 			return err
 		}
 
-		dialog := NewProgramBoxModel("{{|Theme_TitleSuccess|}}Updating Templates{{[-]}}", "Checking for template updates...", "")
+		dialog := NewProgramBoxModel("{{|TitleSuccess|}}Updating Templates{{[-]}}", "Checking for template updates...", "")
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
@@ -445,7 +445,7 @@ func TriggerUpdate() tea.Cmd {
 			return err
 		}
 
-		dialog := NewProgramBoxModel("{{|Theme_TitleSuccess|}}Updating DockSTARTer2{{[-]}}", "Checking for updates...", "")
+		dialog := NewProgramBoxModel("{{|TitleSuccess|}}Updating DockSTARTer2{{[-]}}", "Checking for updates...", "")
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
@@ -483,7 +483,7 @@ func TriggerComposeUpdate() tea.Cmd {
 			}
 			return nil
 		}
-		dialog := NewProgramBoxModel("{{|Theme_TitleSuccess|}}Docker Compose{{[-]}}", "", "")
+		dialog := NewProgramBoxModel("{{|TitleSuccess|}}Docker Compose{{[-]}}", "", "")
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		return ShowDialogMsg{Dialog: dialog}
@@ -493,7 +493,7 @@ func TriggerComposeUpdate() tea.Cmd {
 // TriggerComposeStop returns a tea.Cmd that prompts Stop/Down/Cancel then runs the chosen compose op.
 func TriggerComposeStop() tea.Cmd {
 	return func() tea.Msg {
-		question := "Would you like to {{|Theme_Highlight|}}Stop{{[-]}} all containers, or bring all containers {{|Theme_Highlight|}}Down{{[-]}}?\n\n{{|Theme_Highlight|}}Stop{{[-]}} will stop them, {{|Theme_Highlight|}}Down{{[-]}} will stop and remove them."
+		question := "Would you like to {{|Highlight|}}Stop{{[-]}} all containers, or bring all containers {{|Highlight|}}Down{{[-]}}?\n\n{{|Highlight|}}Stop{{[-]}} will stop them, {{|Highlight|}}Down{{[-]}} will stop and remove them."
 		task := func(ctx context.Context, w io.Writer) error {
 			ctx = console.WithTUIWriter(ctx, w)
 			choice := PromptChoice("Docker Compose", question, "Stop", "Down", "Cancel")
@@ -511,7 +511,7 @@ func TriggerComposeStop() tea.Cmd {
 			}
 			return nil
 		}
-		dialog := NewProgramBoxModel("{{|Theme_TitleQuestion|}}Docker Compose{{[-]}}", "", "")
+		dialog := NewProgramBoxModel("{{|TitleQuestion|}}Docker Compose{{[-]}}", "", "")
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		return ShowDialogMsg{Dialog: dialog}
@@ -529,7 +529,7 @@ func TriggerDockerPrune() tea.Cmd {
 			}
 			return nil
 		}
-		dialog := NewProgramBoxModel("{{|Theme_TitleQuestion|}}Docker Prune{{[-]}}", "", "")
+		dialog := NewProgramBoxModel("{{|TitleQuestion|}}Docker Prune{{[-]}}", "", "")
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		return ShowDialogMsg{Dialog: dialog}

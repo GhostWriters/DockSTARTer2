@@ -2,6 +2,7 @@ package tui
 
 import (
 	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/theme"
 	"strings"
 
 	"DockSTARTer2/internal/tui/components/sinput"
@@ -286,7 +287,7 @@ func (m *promptDialogModel) ViewString() string {
 	if m.input.EchoMode == textinput.EchoPassword {
 		disclaimerText = strings.TrimRight(
 			ctx.Dialog.Padding(0, 2).
-				Foreground(SemanticStyle("{{|Theme_Highlight|}}").GetForeground()).
+				Foreground(theme.ThemeSemanticStyle("{{|Highlight|}}").GetForeground()).
 				Width(contentWidth).
 				Render(console.Sprintf("(password will not be logged)")),
 			"\n")

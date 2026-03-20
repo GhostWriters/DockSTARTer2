@@ -93,10 +93,10 @@ func PrintTable(headers []string, data []string, useLineChars bool) {
 	// 4. Print Table
 
 	// Top Border
-	// We use ToANSI (Parse) directly here since border chars might be colored if we supported it,
+	// We use ToConsoleANSI directly here since border chars might be colored if we supported it,
 	// but currently they are plain. However, for consistency we can print them directly if they don't have tags.
-	// But `ToANSI` is safe.
-	fmt.Println(ToANSI(topBorder.String()))
+	// But `ToConsoleANSI` is safe.
+	fmt.Println(ToConsoleANSI(topBorder.String()))
 
 	// Define helper for row printing
 	printRow := func(rowItems []string) {
@@ -114,15 +114,15 @@ func PrintTable(headers []string, data []string, useLineChars bool) {
 			rowBuilder.WriteString(" ")
 			rowBuilder.WriteString(charSet["Vertical"])
 		}
-		// Here `item` might contain tags, so we definitely want ToANSI for the final string
-		fmt.Println(ToANSI(rowBuilder.String()))
+		// Here `item` might contain tags, so we definitely want ToConsoleANSI for the final string
+		fmt.Println(ToConsoleANSI(rowBuilder.String()))
 	}
 
 	// Headers
 	printRow(headers)
 
 	// Middle Border
-	fmt.Println(ToANSI(middleBorder.String()))
+	fmt.Println(ToConsoleANSI(middleBorder.String()))
 
 	// Data
 	for i := 0; i < len(data); i += cols {
@@ -141,5 +141,5 @@ func PrintTable(headers []string, data []string, useLineChars bool) {
 	}
 
 	// Bottom Border
-	fmt.Println(ToANSI(bottomBorder.String()))
+	fmt.Println(ToConsoleANSI(bottomBorder.String()))
 }

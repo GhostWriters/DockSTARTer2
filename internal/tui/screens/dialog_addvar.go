@@ -3,7 +3,7 @@ package screens
 import (
 	"strings"
 
-	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/tui/components/sinput"
 
@@ -403,7 +403,7 @@ func (m *addVarDialogModel) recalc() {
 		AppName:        m.appName,
 		AppDescription: m.appDesc,
 	}, contentW)
-	headingRenderedH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(console.ToANSI(headingRaw)))
+	headingRenderedH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToThemeANSI(headingRaw)))
 	btnH := tui.ButtonRowHeight(contentW, 0, tui.ButtonSpec{Text: "Create"}, tui.ButtonSpec{Text: "Cancel"})
 	// overhead: outer border(2) + rendered heading + "Variable Name" section(3) + "Available Variables" borders(2) + spacer(1) + buttons
 	fixed := 2 + headingRenderedH + 3 + 2 + 1 + btnH
@@ -427,7 +427,7 @@ func (m *addVarDialogModel) itemIndexAt(screenY int) int {
 	ctx := tui.GetActiveContext()
 	contentW := m.innerWidth()
 	headingRaw := FormatMenuHeading(MenuHeadingParams{AppName: m.appName, AppDescription: m.appDesc}, contentW)
-	headingH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(console.ToANSI(headingRaw)))
+	headingH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToThemeANSI(headingRaw)))
 	// list starts at: outer border(1) + headingH + "Variable Name" section(3) + "Available Variables" title border(1)
 	listTop := 1 + headingH + 3 + 1
 	rowY := listTop
@@ -482,10 +482,10 @@ func (m *addVarDialogModel) ViewString() string {
 	contentW := m.innerWidth()
 	sInnerW := contentW - 2 // inner width of each bordered section
 
-	bgStyle := tui.SemanticStyle("{{|Theme_Dialog|}}")
-	normalStyle := tui.SemanticStyle("{{|Theme_Item|}}")
-	selectedStyle := tui.SemanticStyle("{{|Theme_ItemSelected|}}")
-	subLabelStyle := tui.SemanticStyle("{{|Theme_HelpItem|}}")
+	bgStyle := theme.ThemeSemanticStyle("{{|Dialog|}}")
+	normalStyle := theme.ThemeSemanticStyle("{{|Item|}}")
+	selectedStyle := theme.ThemeSemanticStyle("{{|ItemSelected|}}")
+	subLabelStyle := theme.ThemeSemanticStyle("{{|HelpItem|}}")
 	sepChar := "─"
 	if !ctx.LineCharacters {
 		sepChar = "-"
@@ -497,14 +497,14 @@ func (m *addVarDialogModel) ViewString() string {
 		AppDescription: m.appDesc,
 	}, contentW)
 	headingText := strings.TrimRight(
-		ctx.Dialog.Padding(1, 2).Width(contentW).Render(console.ToANSI(headingRaw)), "\n")
+		ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToThemeANSI(headingRaw)), "\n")
 
 	// "Variable Name" section — titled bordered box, thick border when focused
 	inputFocused := m.focus == addVarFocusInput
 	inputContent := strings.TrimRight(ctx.Dialog.Padding(0, 1).Width(sInnerW).Render(m.input.View()), "\n")
-	inputTitleTag := "Theme_TitleSubMenu"
+	inputTitleTag := "TitleSubMenu"
 	if inputFocused {
-		inputTitleTag = "Theme_TitleSubMenuFocused"
+		inputTitleTag = "TitleSubMenuFocused"
 	}
 	varNameSection := strings.TrimRight(tui.RenderBorderedBoxCtx(
 		"Variable Name", inputContent, sInnerW, 0, inputFocused, true, true,
@@ -609,9 +609,9 @@ func (m *addVarDialogModel) ViewString() string {
 		tui.IsScrollbarEnabled(), ctx.LineCharacters, ctx,
 	)
 
-	listTitleTag := "Theme_TitleSubMenu"
+	listTitleTag := "TitleSubMenu"
 	if listFocused {
-		listTitleTag = "Theme_TitleSubMenuFocused"
+		listTitleTag = "TitleSubMenuFocused"
 	}
 	availableSection := strings.TrimRight(tui.RenderBorderedBoxCtx(
 		"Available Variables", listContent, sInnerW, 0, listFocused, true, true,
@@ -672,7 +672,7 @@ func (m *addVarDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegion 
 	contentW := m.innerWidth()
 
 	headingRaw := FormatMenuHeading(MenuHeadingParams{AppName: m.appName, AppDescription: m.appDesc}, contentW)
-	headingH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(console.ToANSI(headingRaw)))
+	headingH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToThemeANSI(headingRaw)))
 	// list starts at: outer border(1) + headingH + "Variable Name" section(3) + "Available Variables" title border(1)
 	listTop := 1 + headingH + 3 + 1
 

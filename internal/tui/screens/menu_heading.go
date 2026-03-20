@@ -44,7 +44,7 @@ const menuLabelW = 16
 //
 // Colour cascade (matches bash menu_heading.sh behaviour):
 // The highest-priority present field (CurrentValue > OriginalValue > VarName >
-// FilePath > AppName) gets Theme_HeadingValue; all others get Theme_Heading.
+// FilePath > AppName) gets HeadingValue; all others get Heading.
 func FormatMenuHeading(p MenuHeadingParams, contentWidth int) string {
 	labelW := menuLabelW
 
@@ -69,9 +69,9 @@ func FormatMenuHeading(p MenuHeadingParams, contentWidth int) string {
 
 	colorFor := func(field string) string {
 		if field == primaryField {
-			return "{{|Theme_HeadingValue|}}"
+			return "{{|HeadingValue|}}"
 		}
-		return "{{|Theme_Heading|}}"
+		return "{{|Heading|}}"
 	}
 
 	var sb strings.Builder
@@ -83,13 +83,13 @@ func FormatMenuHeading(p MenuHeadingParams, contentWidth int) string {
 		sb.WriteString(p.AppName)
 		sb.WriteString("{{[-]}}")
 		if p.AppIsDeprecated {
-			sb.WriteString(" {{|Theme_HeadingTag|}}[*DEPRECATED*]{{[-]}}")
+			sb.WriteString(" {{|HeadingTag|}}[*DEPRECATED*]{{[-]}}")
 		}
 		if p.AppIsDisabled {
-			sb.WriteString(" {{|Theme_HeadingTag|}}(Disabled){{[-]}}")
+			sb.WriteString(" {{|HeadingTag|}}(Disabled){{[-]}}")
 		}
 		if p.AppIsUserDefined {
-			sb.WriteString(" {{|Theme_HeadingTag|}}(User Defined){{[-]}}")
+			sb.WriteString(" {{|HeadingTag|}}(User Defined){{[-]}}")
 		}
 		sb.WriteString("\n")
 
@@ -100,7 +100,7 @@ func FormatMenuHeading(p MenuHeadingParams, contentWidth int) string {
 			}
 			for _, dl := range strutil.WordWrapToSlice(p.AppDescription, valueW) {
 				sb.WriteString(indent)
-				sb.WriteString("{{|Theme_HeadingAppDescription|}}")
+				sb.WriteString("{{|HeadingAppDescription|}}")
 				sb.WriteString(dl)
 				sb.WriteString("{{[-]}}\n")
 			}
@@ -123,7 +123,7 @@ func FormatMenuHeading(p MenuHeadingParams, contentWidth int) string {
 		sb.WriteString(p.VarName)
 		sb.WriteString("{{[-]}}")
 		if p.VarIsUserDefined {
-			sb.WriteString(" {{|Theme_HeadingTag|}}(User Defined){{[-]}}")
+			sb.WriteString(" {{|HeadingTag|}}(User Defined){{[-]}}")
 		}
 		sb.WriteString("\n")
 	}

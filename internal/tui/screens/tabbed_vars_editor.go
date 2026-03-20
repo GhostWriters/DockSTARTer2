@@ -7,6 +7,7 @@ import (
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/tui/components/enveditor"
 	"context"
@@ -351,7 +352,7 @@ func (m *TabbedVarsEditorModel) saveEnv() tea.Cmd {
 			return nil
 		}
 
-		dialog := tui.NewProgramBoxModel("{{|Theme_TitleSuccess|}}Saving Environment Variables{{[-]}}", "Applying surgical environment updates...", "")
+		dialog := tui.NewProgramBoxModel("{{|TitleSuccess|}}Saving Environment Variables{{[-]}}", "Applying surgical environment updates...", "")
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
@@ -693,24 +694,24 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.tabs[i].editor.ParseEnv(data.content, data.defaultFunc, data.readOnlyVars)
 			// Apply theme-aware env-specific styles
 			editorStyles := m.tabs[i].editor.Styles()
-			editorStyles.Focused.InvalidText = tui.SemanticRawStyle("Theme_EnvInvalid")
-			editorStyles.Focused.DuplicateText = tui.SemanticRawStyle("Theme_EnvDuplicate")
-			editorStyles.Focused.BuiltinText = tui.SemanticRawStyle("Theme_EnvBuiltin")
-			editorStyles.Focused.UserDefinedText = tui.SemanticRawStyle("Theme_EnvUser")
-			editorStyles.Focused.PendingDeleteText = tui.SemanticRawStyle("Theme_EnvPendingDelete")
-			editorStyles.Focused.GutterAdded = tui.SemanticRawStyle("Theme_GutterAdded")
-			editorStyles.Focused.GutterDeleted = tui.SemanticRawStyle("Theme_GutterDeleted")
-			editorStyles.Focused.GutterModified = tui.SemanticRawStyle("Theme_GutterModified")
-			editorStyles.Focused.GutterInvalid = tui.SemanticRawStyle("Theme_GutterInvalid")
-			editorStyles.Blurred.InvalidText = tui.SemanticRawStyle("Theme_EnvInvalid")
-			editorStyles.Blurred.DuplicateText = tui.SemanticRawStyle("Theme_EnvDuplicate")
-			editorStyles.Blurred.BuiltinText = tui.SemanticRawStyle("Theme_EnvBuiltin")
-			editorStyles.Blurred.UserDefinedText = tui.SemanticRawStyle("Theme_EnvUser")
-			editorStyles.Blurred.PendingDeleteText = tui.SemanticRawStyle("Theme_EnvPendingDelete")
-			editorStyles.Blurred.GutterAdded = tui.SemanticRawStyle("Theme_GutterAdded")
-			editorStyles.Blurred.GutterDeleted = tui.SemanticRawStyle("Theme_GutterDeleted")
-			editorStyles.Blurred.GutterModified = tui.SemanticRawStyle("Theme_GutterModified")
-			editorStyles.Blurred.GutterInvalid = tui.SemanticRawStyle("Theme_GutterInvalid")
+			editorStyles.Focused.InvalidText = tui.SemanticRawStyle("EnvInvalid")
+			editorStyles.Focused.DuplicateText = tui.SemanticRawStyle("EnvDuplicate")
+			editorStyles.Focused.BuiltinText = tui.SemanticRawStyle("EnvBuiltin")
+			editorStyles.Focused.UserDefinedText = tui.SemanticRawStyle("EnvUser")
+			editorStyles.Focused.PendingDeleteText = tui.SemanticRawStyle("EnvPendingDelete")
+			editorStyles.Focused.GutterAdded = tui.SemanticRawStyle("GutterAdded")
+			editorStyles.Focused.GutterDeleted = tui.SemanticRawStyle("GutterDeleted")
+			editorStyles.Focused.GutterModified = tui.SemanticRawStyle("GutterModified")
+			editorStyles.Focused.GutterInvalid = tui.SemanticRawStyle("GutterInvalid")
+			editorStyles.Blurred.InvalidText = tui.SemanticRawStyle("EnvInvalid")
+			editorStyles.Blurred.DuplicateText = tui.SemanticRawStyle("EnvDuplicate")
+			editorStyles.Blurred.BuiltinText = tui.SemanticRawStyle("EnvBuiltin")
+			editorStyles.Blurred.UserDefinedText = tui.SemanticRawStyle("EnvUser")
+			editorStyles.Blurred.PendingDeleteText = tui.SemanticRawStyle("EnvPendingDelete")
+			editorStyles.Blurred.GutterAdded = tui.SemanticRawStyle("GutterAdded")
+			editorStyles.Blurred.GutterDeleted = tui.SemanticRawStyle("GutterDeleted")
+			editorStyles.Blurred.GutterModified = tui.SemanticRawStyle("GutterModified")
+			editorStyles.Blurred.GutterInvalid = tui.SemanticRawStyle("GutterInvalid")
 			m.tabs[i].editor.SetStyles(editorStyles)
 			// Update tab metadata used by saveEnv and heading display
 			m.tabs[i].initialVars = data.initialVars
@@ -827,7 +828,7 @@ func (m *TabbedVarsEditorModel) ViewString() string {
 		true, // Show indicators in the main title
 		false,
 		ctx.DialogTitleAlign,
-		"Theme_Title",
+		"Title",
 		ctx,
 	)
 }
@@ -872,9 +873,9 @@ func (m *TabbedVarsEditorModel) renderTabs() string {
 	for i, tab := range m.tabs {
 		title := tab.spec.Title
 		isActive := i == m.activeTab
-		styleTag := "Theme_TitleSubMenu"
+		styleTag := "TitleSubMenu"
 		if isActive {
-			styleTag = "Theme_TitleSubMenuFocused"
+			styleTag = "TitleSubMenuFocused"
 		}
 		// Pass editorFocused as borderFocused so the tab bar border dims when
 		// buttons have focus, but always mark the active tab as contentFocused
@@ -1077,7 +1078,7 @@ func (m *TabbedVarsEditorModel) renderSubtitle() string {
 	bgStyle := ctx.Dialog
 
 	renderLine := func(raw string) string {
-		processed := console.ToANSI(raw)
+		processed := theme.ToThemeANSI(raw)
 		w := lipgloss.Width(processed)
 		padded := processed + strings.Repeat(" ", m.contentWidth-w)
 		return tui.MaintainBackground(bgStyle.Render(padded), bgStyle)
@@ -1085,26 +1086,26 @@ func (m *TabbedVarsEditorModel) renderSubtitle() string {
 
 	var lines []string
 
-	if tab.niceName == "" {
-		// Global: show file path
-		lines = append(lines, renderLine(headingLabel("File: ")+"{{|Theme_HeadingValue|}}"+tab.envFilePath+"{{[-]}}"))
-	} else {
-		// App: "Application: AppName" on first line
-		appLine := headingLabel("Application: ") + "{{|Theme_HeadingValue|}}" + tab.niceName + "{{[-]}}"
-		lines = append(lines, renderLine(appLine))
+		if tab.niceName == "" {
+			// Global: show file path
+			lines = append(lines, renderLine(headingLabel("File: ")+"{{|HeadingValue|}}"+tab.envFilePath+"{{[-]}}"))
+		} else {
+			// App: "Application: AppName" on first line
+			appLine := headingLabel("Application: ") + "{{|HeadingValue|}}" + tab.niceName + "{{[-]}}"
+			lines = append(lines, renderLine(appLine))
 
-		// Word-wrap description onto continuation lines, indented to align with value
-		if tab.description != "" {
-			indent := strings.Repeat(" ", headingLabelW)
-			valueW := m.contentWidth - headingLabelW
-			if valueW < 10 {
-				valueW = 10
-			}
-			for _, dl := range subtitleWrapText(tab.description, valueW) {
-				lines = append(lines, renderLine(indent+"{{|Theme_HeadingAppDescription|}}"+dl+"{{[-]}}"))
+			// Word-wrap description onto continuation lines, indented to align with value
+			if tab.description != "" {
+				indent := strings.Repeat(" ", headingLabelW)
+				valueW := m.contentWidth - headingLabelW
+				if valueW < 10 {
+					valueW = 10
+				}
+				for _, dl := range subtitleWrapText(tab.description, valueW) {
+					lines = append(lines, renderLine(indent+"{{|HeadingAppDescription|}}"+dl+"{{[-]}}"))
+				}
 			}
 		}
-	}
 
 	return strings.Join(lines, "\n")
 }
@@ -1728,10 +1729,10 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) tui.HelpContext {
 	meta, ok := tab.editor.CurrentLineMeta()
 	if !ok || !meta.IsVariable {
 		legend := "| " +
-			"{{|Theme_GutterAdded|}}+{{[-]}} Added | " +
-			"{{|Theme_GutterDeleted|}}-{{[-]}} Deleted | " +
-			"{{|Theme_GutterModified|}}~{{[-]}} Changed | " +
-			"{{|Theme_GutterInvalid|}}!{{[-]}} Invalid |"
+			"{{|GutterAdded|}}+{{[-]}} Added | " +
+			"{{|GutterDeleted|}}-{{[-]}} Deleted | " +
+			"{{|GutterModified|}}~{{[-]}} Changed | " +
+			"{{|GutterInvalid|}}!{{[-]}} Invalid |"
 		return tui.HelpContext{
 			ScreenName: m.title,
 			PageTitle:  "Legend",
@@ -1745,10 +1746,10 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) tui.HelpContext {
 	}
 	if varName == "" {
 		legend := "| " +
-			"{{|Theme_GutterAdded|}}+{{[-]}} Added | " +
-			"{{|Theme_GutterDeleted|}}-{{[-]}} Deleted | " +
-			"{{|Theme_GutterModified|}}~{{[-]}} Changed | " +
-			"{{|Theme_GutterInvalid|}}!{{[-]}} Invalid |"
+			"{{|GutterAdded|}}+{{[-]}} Added | " +
+			"{{|GutterDeleted|}}-{{[-]}} Deleted | " +
+			"{{|GutterModified|}}~{{[-]}} Changed | " +
+			"{{|GutterInvalid|}}!{{[-]}} Invalid |"
 		return tui.HelpContext{
 			ScreenName: m.title,
 			PageTitle:  "Legend",
@@ -1762,10 +1763,10 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) tui.HelpContext {
 // getVariableHelpContext builds a help context for a specific variable in a tab.
 func (m *TabbedVarsEditorModel) getVariableHelpContext(varName string, tab *envTab, contentWidth int) *tui.HelpContext {
 	legend := "| " +
-		"{{|Theme_GutterAdded|}}+{{[-]}} Added | " +
-		"{{|Theme_GutterDeleted|}}-{{[-]}} Deleted | " +
-		"{{|Theme_GutterModified|}}~{{[-]}} Changed | " +
-		"{{|Theme_GutterInvalid|}}!{{[-]}} Invalid |"
+		"{{|GutterAdded|}}+{{[-]}} Added | " +
+		"{{|GutterDeleted|}}-{{[-]}} Deleted | " +
+		"{{|GutterModified|}}~{{[-]}} Changed | " +
+		"{{|GutterInvalid|}}!{{[-]}} Invalid |"
 
 	var currentValue string
 	// Find the current value for this variable from the editor if possible

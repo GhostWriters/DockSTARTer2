@@ -181,6 +181,10 @@ func init() {
 		UsagePage:    "{{[-]}}{{[cyan::B]}}",
 		UsageTheme:   "{{[-]}}{{[cyan]}}",
 		UsageVar:     "{{[-]}}{{[magenta]}}",
+
+		// Viewport Colors
+		ProgramBox: "{{[-]}}{{[white:black]}}",
+		LogBox:     "{{[-]}}{{[white:black]}}",
 	}
 
 	// Register base tags once Colors is populated
@@ -298,6 +302,10 @@ type AppColors struct {
 	UsagePage    string
 	UsageTheme   string
 	UsageVar     string
+
+	// Viewport Colors
+	ProgramBox string
+	LogBox     string
 }
 
 // Colors is the global instance for application output (stdout)
@@ -307,89 +315,93 @@ var Colors AppColors
 // These map semantic names to their tview-format output values
 func RegisterBaseTags() {
 	// Bash-style aliases from main.sh
-	RegisterSemanticTag("NC", "{{[-]}}")
-	RegisterSemanticTag("BD", "{{[::B]}}")
-	RegisterSemanticTag("UL", "{{[::U]}}")
-	RegisterSemanticTag("DM", "{{[::D]}}")
-	RegisterSemanticTag("BL", "{{[::L]}}")
+	RegisterConsoleTag("NC", "{{[-]}}")
+	RegisterConsoleTag("BD", "{{[::B]}}")
+	RegisterConsoleTag("UL", "{{[::U]}}")
+	RegisterConsoleTag("DM", "{{[::D]}}")
+	RegisterConsoleTag("BL", "{{[::L]}}")
 
 	// Existing shorthands
-	RegisterSemanticTag("ul", "{{[::U]}}")
-	RegisterSemanticTag("blink", "{{[::L]}}")
+	RegisterConsoleTag("ul", "{{[::U]}}")
+	RegisterConsoleTag("blink", "{{[::L]}}")
 
 	// Semantic tags from struct fields (auto-registered by BuildColorMap)
 	// Double-register here for explicit visibility and aliasMap access
-	RegisterSemanticTag("applicationname", Colors.ApplicationName)
-	RegisterSemanticTag("version", Colors.Version)
-	RegisterSemanticTag("branch", Colors.Branch)
-	RegisterSemanticTag("usercommand", Colors.UserCommand)
-	RegisterSemanticTag("usercommanderror", Colors.UserCommandError)
-	RegisterSemanticTag("usercommanderrormarker", Colors.UserCommandErrorMarker)
-	RegisterSemanticTag("yes", Colors.Yes)
-	RegisterSemanticTag("no", Colors.No)
+	RegisterConsoleTag("applicationname", Colors.ApplicationName)
+	RegisterConsoleTag("version", Colors.Version)
+	RegisterConsoleTag("branch", Colors.Branch)
+	RegisterConsoleTag("usercommand", Colors.UserCommand)
+	RegisterConsoleTag("usercommanderror", Colors.UserCommandError)
+	RegisterConsoleTag("usercommanderrormarker", Colors.UserCommandErrorMarker)
+	RegisterConsoleTag("yes", Colors.Yes)
+	RegisterConsoleTag("no", Colors.No)
 
 	// Usage Colors
-	RegisterSemanticTag("usagecommand", Colors.UsageCommand)
-	RegisterSemanticTag("usageoption", Colors.UsageOption)
-	RegisterSemanticTag("usageapp", Colors.UsageApp)
-	RegisterSemanticTag("usagebranch", Colors.UsageBranch)
-	RegisterSemanticTag("usagefile", Colors.UsageFile)
-	RegisterSemanticTag("usagepage", Colors.UsagePage)
-	RegisterSemanticTag("usagetheme", Colors.UsageTheme)
-	RegisterSemanticTag("usagevar", Colors.UsageVar)
+	RegisterConsoleTag("usagecommand", Colors.UsageCommand)
+	RegisterConsoleTag("usageoption", Colors.UsageOption)
+	RegisterConsoleTag("usageapp", Colors.UsageApp)
+	RegisterConsoleTag("usagebranch", Colors.UsageBranch)
+	RegisterConsoleTag("usagefile", Colors.UsageFile)
+	RegisterConsoleTag("usagepage", Colors.UsagePage)
+	RegisterConsoleTag("usagetheme", Colors.UsageTheme)
+	RegisterConsoleTag("usagevar", Colors.UsageVar)
+
+	// Viewport Tags
+	RegisterConsoleTag("programbox", Colors.ProgramBox)
+	RegisterConsoleTag("logbox", Colors.LogBox)
 
 	// Log Level Tags
-	RegisterSemanticTag("timestamp", Colors.Timestamp)
-	RegisterSemanticTag("notice", Colors.Notice)
-	RegisterSemanticTag("warn", Colors.Warn)
-	RegisterSemanticTag("error", Colors.Error)
-	RegisterSemanticTag("fatal", Colors.Fatal)
-	RegisterSemanticTag("debug", Colors.Debug)
-	RegisterSemanticTag("info", Colors.Info)
-	RegisterSemanticTag("trace", Colors.Trace)
-	RegisterSemanticTag("url", Colors.URL)
+	RegisterConsoleTag("timestamp", Colors.Timestamp)
+	RegisterConsoleTag("notice", Colors.Notice)
+	RegisterConsoleTag("warn", Colors.Warn)
+	RegisterConsoleTag("error", Colors.Error)
+	RegisterConsoleTag("fatal", Colors.Fatal)
+	RegisterConsoleTag("debug", Colors.Debug)
+	RegisterConsoleTag("info", Colors.Info)
+	RegisterConsoleTag("trace", Colors.Trace)
+	RegisterConsoleTag("url", Colors.URL)
 
 	// Additional Semantic Tags
-	RegisterSemanticTag("app", Colors.App)
-	RegisterSemanticTag("failingcommand", Colors.FailingCommand)
-	RegisterSemanticTag("file", Colors.File)
-	RegisterSemanticTag("folder", Colors.Folder)
-	RegisterSemanticTag("program", Colors.Program)
-	RegisterSemanticTag("runningcommand", Colors.RunningCommand)
-	RegisterSemanticTag("theme", Colors.Theme)
-	RegisterSemanticTag("update", Colors.Update)
-	RegisterSemanticTag("user", Colors.User)
-	RegisterSemanticTag("var", Colors.Var)
+	RegisterConsoleTag("app", Colors.App)
+	RegisterConsoleTag("failingcommand", Colors.FailingCommand)
+	RegisterConsoleTag("file", Colors.File)
+	RegisterConsoleTag("folder", Colors.Folder)
+	RegisterConsoleTag("program", Colors.Program)
+	RegisterConsoleTag("runningcommand", Colors.RunningCommand)
+	RegisterConsoleTag("theme", Colors.Theme)
+	RegisterConsoleTag("update", Colors.Update)
+	RegisterConsoleTag("user", Colors.User)
+	RegisterConsoleTag("var", Colors.Var)
 
 	// Legacy Foreground Colors (F array in main.sh)
-	RegisterSemanticTag("B", Colors.Blue)
-	RegisterSemanticTag("C", Colors.Cyan)
-	RegisterSemanticTag("G", Colors.Green)
-	RegisterSemanticTag("K", Colors.Black)
-	RegisterSemanticTag("M", Colors.Magenta)
-	RegisterSemanticTag("R", Colors.Red)
-	RegisterSemanticTag("W", Colors.White)
-	RegisterSemanticTag("Y", Colors.Yellow)
+	RegisterConsoleTag("B", Colors.Blue)
+	RegisterConsoleTag("C", Colors.Cyan)
+	RegisterConsoleTag("G", Colors.Green)
+	RegisterConsoleTag("K", Colors.Black)
+	RegisterConsoleTag("M", Colors.Magenta)
+	RegisterConsoleTag("R", Colors.Red)
+	RegisterConsoleTag("W", Colors.White)
+	RegisterConsoleTag("Y", Colors.Yellow)
 
 	// Explicit F Array Aliases
-	RegisterSemanticTag("F_B", Colors.Blue)
-	RegisterSemanticTag("F_C", Colors.Cyan)
-	RegisterSemanticTag("F_G", Colors.Green)
-	RegisterSemanticTag("F_K", Colors.Black)
-	RegisterSemanticTag("F_M", Colors.Magenta)
-	RegisterSemanticTag("F_R", Colors.Red)
-	RegisterSemanticTag("F_W", Colors.White)
-	RegisterSemanticTag("F_Y", Colors.Yellow)
+	RegisterConsoleTag("F_B", Colors.Blue)
+	RegisterConsoleTag("F_C", Colors.Cyan)
+	RegisterConsoleTag("F_G", Colors.Green)
+	RegisterConsoleTag("F_K", Colors.Black)
+	RegisterConsoleTag("F_M", Colors.Magenta)
+	RegisterConsoleTag("F_R", Colors.Red)
+	RegisterConsoleTag("F_W", Colors.White)
+	RegisterConsoleTag("F_Y", Colors.Yellow)
 
 	// Legacy Background Colors (B array in main.sh)
-	RegisterSemanticTag("B_B", Colors.BlueBg)
-	RegisterSemanticTag("B_C", Colors.CyanBg)
-	RegisterSemanticTag("B_G", Colors.GreenBg)
-	RegisterSemanticTag("B_K", Colors.BlackBg)
-	RegisterSemanticTag("B_M", Colors.MagentaBg)
-	RegisterSemanticTag("B_R", Colors.RedBg)
-	RegisterSemanticTag("B_W", Colors.WhiteBg)
-	RegisterSemanticTag("B_Y", Colors.YellowBg)
+	RegisterConsoleTag("B_B", Colors.BlueBg)
+	RegisterConsoleTag("B_C", Colors.CyanBg)
+	RegisterConsoleTag("B_G", Colors.GreenBg)
+	RegisterConsoleTag("B_K", Colors.BlackBg)
+	RegisterConsoleTag("B_M", Colors.MagentaBg)
+	RegisterConsoleTag("B_R", Colors.RedBg)
+	RegisterConsoleTag("B_W", Colors.WhiteBg)
+	RegisterConsoleTag("B_Y", Colors.YellowBg)
 	// NOTE: Theme-related tags (ThemeHostname, ThemeTitle, etc.) are registered
 	// by the theme package in theme.go Default() and Apply() functions.
 }

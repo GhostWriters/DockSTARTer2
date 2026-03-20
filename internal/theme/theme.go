@@ -172,7 +172,7 @@ func EnsureThemeExtracted(themeNameOrURI string) (string, error) {
 }
 
 // Load theme by name or URI. Returns theme-defined defaults if found.
-// If prefix is provided, semantic tags are registered with that prefix (e.g. "Preview_Theme_Screen")
+// If prefix is provided, semantic tags are registered with that prefix (e.g. "Preview_Screen")
 // without affecting the global active theme (Current).
 func Load(themeNameOrURI string, prefix string) (*ThemeDefaults, error) {
 	// Initialize with defaults first
@@ -226,9 +226,10 @@ func prefixTag(prefix, name string) string {
 // Unload unregisters all theme-prefixed tags from the console registry.
 func Unload(prefix string) {
 	if prefix == "" {
-		return // Cannot unload main theme
+		console.ClearThemeMap()
+		return
 	}
-	console.UnregisterPrefix(prefixTag(prefix, "Theme_"))
+	console.UnregisterPrefix(prefixTag(prefix, ""))
 }
 
 // Default initializes the Current configuration with standard DockSTARTer colors (Classic)
@@ -321,7 +322,7 @@ func resolveThemeValue(raw string, rawValues map[string]string, visiting map[str
 			// Direct style tag - extract and merge
 			mergeStyle(tag)
 		} else if strings.HasPrefix(tag, semPre) {
-			// Semantic reference - extract tag name (may include inline modifiers, e.g. "Theme_Title:::R")
+			// Semantic reference - extract tag name (may include inline modifiers, e.g. "Title:::R")
 			refKey := strings.TrimSuffix(strings.TrimPrefix(tag, semPre), semSuf)
 
 			// Split off any inline modifiers after the semantic name
@@ -332,8 +333,8 @@ func resolveThemeValue(raw string, rawValues map[string]string, visiting map[str
 				modifiers = refKey[idx+1:]
 			}
 
-			// 1. Try resolving as internal reference first (with or without 'Theme_' prefix)
-			targetKey := strings.TrimPrefix(semanticRef, "Theme_")
+			// 1. Try resolving as internal reference first (with or without '' prefix)
+			targetKey := strings.TrimPrefix(semanticRef, "")
 			if _, exists := rawValues[targetKey]; exists {
 				resolvedRef, err := resolveThemeValue(rawValues[targetKey], rawValues, visiting,
 					semPre, semSuf, dirPre, dirSuf)
@@ -351,7 +352,7 @@ func resolveThemeValue(raw string, rawValues map[string]string, visiting map[str
 			// Re-wrap in global standard delimiters so ExpandTags can resolve it
 			// regardless of the file-specific delimiters in use.
 			standardTag := console.SemanticPrefix + semanticRef + console.SemanticSuffix
-			expanded := console.ExpandTags(standardTag)
+			expanded := console.ExpandConsoleTags(standardTag)
 			if expanded != standardTag && expanded != "" {
 				mergeStyle(expanded)
 			}
@@ -490,11 +491,11 @@ func parseThemeTOMLData(data []byte, prefix string) (*ThemeDefaults, error) {
 		styleValue, err := resolveThemeValue(raw, rawValues, visiting, semPre, semSuf, dirPre, dirSuf)
 		if err != nil {
 			// Fallback to raw expansion for robustness
-			styleValue = console.StripDelimiters(console.ExpandTags(raw))
+			styleValue = console.StripDelimiters(console.ExpandConsoleTags(raw))
 		}
 
 		// Register using raw value (no delimiters)
-		console.RegisterSemanticTagRaw(prefixTag(prefix, "Theme_"+key), styleValue)
+		console.RegisterThemeTagRaw(prefixTag(prefix, key), styleValue)
 
 	}
 
@@ -512,12 +513,30 @@ var (
 	cacheMu            = new(sync.RWMutex)
 )
 
-// SemanticStyle translates a semantic color tag (e.g. {{|notice|}}) or a direct
-// style code (e.g. {{[cyan::B]}}) into a lipgloss.Style.
-// Results are cached; call ClearSemanticCache after a theme reload.
-func SemanticStyle(tag string) lipgloss.Style {
+// ThemeSemanticStyle translates a semantic tag or direct style code strictly using the theme registry.
+func ThemeSemanticStyle(tag string) lipgloss.Style {
+	return ThemeSemanticStyleWithPrefix(tag, "")
+}
+
+// ThemeSemanticStyleWithPrefix translates a semantic tag strictly using the theme registry with a prefix.
+func ThemeSemanticStyleWithPrefix(tag string, prefix string) lipgloss.Style {
+	return SemanticStyleWithRegistry(tag, prefix, false)
+}
+
+// ConsoleSemanticStyle translates a semantic color tag strictly using the console registry.
+func ConsoleSemanticStyle(tag string) lipgloss.Style {
+	return SemanticStyleWithRegistry(tag, "", true)
+}
+
+// SemanticStyleWithRegistry is the internal helper for translating tags.
+func SemanticStyleWithRegistry(tag string, prefix string, useConsole bool) lipgloss.Style {
+	registryKey := "theme"
+	if useConsole {
+		registryKey = "console"
+	}
+	cacheKey := "tag:" + registryKey + ":" + prefix + ":" + tag
 	cacheMu.RLock()
-	s, ok := semanticStyleCache[tag]
+	s, ok := semanticStyleCache[cacheKey]
 	cacheMu.RUnlock()
 	if ok {
 		return s
@@ -526,20 +545,45 @@ func SemanticStyle(tag string) lipgloss.Style {
 	var style lipgloss.Style
 	if strings.HasPrefix(tag, console.SemanticPrefix) && strings.HasSuffix(tag, console.SemanticSuffix) {
 		name := tag[len(console.SemanticPrefix) : len(tag)-len(console.SemanticSuffix)]
-		style = SemanticRawStyle(name)
+		style = SemanticRawStyleWithRegistry(name, prefix, useConsole)
 	} else {
-		style = ApplyTagsToStyle(tag, lipgloss.NewStyle(), lipgloss.NewStyle())
+		var expanded string
+		if useConsole {
+			expanded = console.ExpandConsoleTags(tag)
+		} else {
+			expanded = console.ExpandThemeTags(tag, prefix)
+		}
+		style = ApplyTagsToStyle(expanded, lipgloss.NewStyle(), lipgloss.NewStyle())
 	}
 
 	cacheMu.Lock()
-	semanticStyleCache[tag] = style
+	semanticStyleCache[cacheKey] = style
 	cacheMu.Unlock()
 	return style
 }
 
-// SemanticRawStyle translates a raw semantic name (e.g. "notice") into a lipgloss.Style.
-func SemanticRawStyle(name string) lipgloss.Style {
-	cacheKey := "raw:" + name
+// ThemeSemanticRawStyle translates a raw semantic name strictly using the theme registry.
+func ThemeSemanticRawStyle(name string) lipgloss.Style {
+	return ThemeSemanticRawStyleWithPrefix(name, "")
+}
+
+// ConsoleSemanticRawStyle translates a raw semantic name strictly using the console registry.
+func ConsoleSemanticRawStyle(name string) lipgloss.Style {
+	return SemanticRawStyleWithRegistry(name, "", true)
+}
+
+// ThemeSemanticRawStyleWithPrefix translates a raw semantic name strictly using the theme registry with a prefix.
+func ThemeSemanticRawStyleWithPrefix(name string, prefix string) lipgloss.Style {
+	return SemanticRawStyleWithRegistry(name, prefix, false)
+}
+
+// SemanticRawStyleWithRegistry is the internal helper for translating raw names.
+func SemanticRawStyleWithRegistry(name string, prefix string, useConsole bool) lipgloss.Style {
+	registryKey := "theme"
+	if useConsole {
+		registryKey = "console"
+	}
+	cacheKey := "raw:" + registryKey + ":" + prefix + ":" + name
 	cacheMu.RLock()
 	if s, ok := semanticStyleCache[cacheKey]; ok {
 		cacheMu.RUnlock()
@@ -547,9 +591,12 @@ func SemanticRawStyle(name string) lipgloss.Style {
 	}
 	cacheMu.RUnlock()
 
-	// Use ExpandTags so composite values like {{[-]}}{{[green]}} are kept as
-	// separate direct tags rather than being collapsed by GetColorDefinition+WrapDirect.
-	expanded := console.ExpandTags(console.WrapSemantic(name))
+	var expanded string
+	if useConsole {
+		expanded = console.ExpandConsoleTags(console.WrapSemantic(name))
+	} else {
+		expanded = console.ExpandThemeTags(console.WrapSemantic(name), prefix)
+	}
 	s := ApplyTagsToStyle(expanded, lipgloss.NewStyle(), lipgloss.NewStyle())
 
 	cacheMu.Lock()
@@ -576,4 +623,18 @@ func ClearSemanticCachePrefix(prefix string) {
 			delete(semanticStyleCache, k)
 		}
 	}
+}
+// ToThemeANSI translates text with theme tags into ANSI escape sequences strictly using the theme registry.
+func ToThemeANSI(text string) string {
+	return console.ToThemeANSI(text)
+}
+
+// ToThemeANSIWithPrefix translates text with theme tags and a prefix into ANSI escape sequences.
+func ToThemeANSIWithPrefix(text string, prefix string) string {
+	return console.ToThemeANSIWithPrefix(text, prefix)
+}
+
+// ToConsoleANSI translates text with console tags into ANSI escape sequences strictly using the console registry.
+func ToConsoleANSI(text string) string {
+	return console.ToConsoleANSI(text)
 }

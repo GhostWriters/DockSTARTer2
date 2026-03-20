@@ -27,20 +27,20 @@ func TestResolveThemeValue(t *testing.T) {
 	// Using new delimiter format: {{[direct]}} and {{|semantic|}}
 	themeMap := map[string]string{
 		"Simple":       "{{[red:blue:B]}}",
-		"Reference":    "{{|Theme_Simple|}}",
-		"OverrideFG":   "{{|Theme_Simple|}}{{[green]}}",
-		"OverrideBG":   "{{|Theme_Simple|}}{{[:green]}}",
-		"OverrideFlag": "{{|Theme_Simple|}}{{[::U]}}",
+		"Reference":    "{{|Simple|}}",
+		"OverrideFG":   "{{|Simple|}}{{[green]}}",
+		"OverrideBG":   "{{|Simple|}}{{[:green]}}",
+		"OverrideFlag": "{{|Simple|}}{{[::U]}}",
 		"ChainA":       "{{[white]}}",
-		"ChainB":       "{{|Theme_ChainA|}}{{[:black]}}", // white:black
-		"ChainC":       "{{|Theme_ChainB|}}{{[::B]}}",    // white:black:B
-		"CircularA":    "{{|Theme_CircularB|}}",
-		"CircularB":    "{{|Theme_CircularA|}}",
+		"ChainB":       "{{|ChainA|}}{{[:black]}}", // white:black
+		"ChainC":       "{{|ChainB|}}{{[::B]}}",    // white:black:B
+		"CircularA":    "{{|CircularB|}}",
+		"CircularB":    "{{|CircularA|}}",
 		// Inline modifier syntax: {{|Name:fg:bg:flags|}}
-		"InlineFG":    "{{|Theme_Simple:green|}}",  // override fg -> green:blue:B
-		"InlineBG":    "{{|Theme_Simple::green|}}", // override bg -> red:green:B
-		"InlineFlag":  "{{|Theme_Simple:::U|}}",    // add flag  -> red:blue:BU
-		"InlineReset": "{{|Theme_Simple:-:-:-R|}}", // reset fg+bg, add reverse -> ::R
+		"InlineFG":    "{{|Simple:green|}}",  // override fg -> green:blue:B
+		"InlineBG":    "{{|Simple::green|}}", // override bg -> red:green:B
+		"InlineFlag":  "{{|Simple:::U|}}",    // add flag  -> red:blue:BU
+		"InlineReset": "{{|Simple:-:-:-R|}}", // reset fg+bg, add reverse -> ::R
 	}
 
 	tests := []struct {
@@ -121,7 +121,7 @@ func TestResolveThemeValue(t *testing.T) {
 
 			// Since resolveThemeValue returns a tag string (e.g. {{[red:blue:B]}}),
 			// we must expand it to ANSI to compare with expected ANSI values.
-			gotExpanded := console.ToANSI(console.WrapDirect(got))
+			gotExpanded := console.ToConsoleANSI(console.WrapDirect(got))
 
 			if !strings.Contains(gotExpanded, tt.expected) {
 				t.Errorf("resolveThemeValue() ANSI = %q, want %q (raw: %v)", gotExpanded, tt.expected, got)

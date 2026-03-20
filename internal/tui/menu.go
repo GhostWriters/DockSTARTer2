@@ -2,6 +2,7 @@ package tui
 
 import (
 	"DockSTARTer2/internal/strutil"
+	"DockSTARTer2/internal/theme"
 	"fmt"
 	"io"
 	"strings"
@@ -96,7 +97,7 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 		lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(m.Width())
 		var content string
 		if menuItem.Tag != "" {
-			content = RenderThemeText(menuItem.Tag, SemanticStyle("{{|Theme_TagKey|}}"))
+			content = RenderThemeText(menuItem.Tag, theme.ThemeSemanticStyle("{{|TagKey|}}"))
 		} else {
 			content = strutil.Repeat("─", m.Width()-2)
 		}
@@ -105,14 +106,14 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 	}
 
 	neutralStyle := lipgloss.NewStyle().Background(dialogBG)
-	itemStyle := SemanticStyle("{{|Theme_Item|}}")
-	tagStyle := SemanticStyle("{{|Theme_Tag|}}")
-	keyStyle := SemanticStyle("{{|Theme_TagKey|}}")
+	itemStyle := theme.ThemeSemanticStyle("{{|Item|}}")
+	tagStyle := theme.ThemeSemanticStyle("{{|Tag|}}")
+	keyStyle := theme.ThemeSemanticStyle("{{|TagKey|}}")
 
 	if isSelected {
-		itemStyle = SemanticStyle("{{|Theme_ItemSelected|}}")
-		tagStyle = SemanticStyle("{{|Theme_TagSelected|}}")
-		keyStyle = SemanticStyle("{{|Theme_TagKeySelected|}}")
+		itemStyle = theme.ThemeSemanticStyle("{{|ItemSelected|}}")
+		tagStyle = theme.ThemeSemanticStyle("{{|TagSelected|}}")
+		keyStyle = theme.ThemeSemanticStyle("{{|TagKeySelected|}}")
 	}
 
 	// Render tag with first-letter highlighting (if no semantic tags present)
@@ -234,7 +235,7 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 		lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(m.Width())
 		var content string
 		if menuItem.Tag != "" {
-			content = RenderThemeText(menuItem.Tag, SemanticStyle("{{|Theme_TagKey|}}"))
+			content = RenderThemeText(menuItem.Tag, theme.ThemeSemanticStyle("{{|TagKey|}}"))
 		} else {
 			content = strutil.Repeat("─", max(0, m.Width()-2))
 		}
@@ -244,14 +245,14 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 
 	neutralStyle := lipgloss.NewStyle().Background(dialogBG)
 
-	itemStyle := SemanticStyle("{{|Theme_Item|}}")
-	tagStyle := SemanticStyle("{{|Theme_Tag|}}")
-	keyStyle := SemanticStyle("{{|Theme_TagKey|}}")
+	itemStyle := theme.ThemeSemanticStyle("{{|Item|}}")
+	tagStyle := theme.ThemeSemanticStyle("{{|Tag|}}")
+	keyStyle := theme.ThemeSemanticStyle("{{|TagKey|}}")
 
 	if isSelected {
-		itemStyle = SemanticStyle("{{|Theme_ItemSelected|}}")
-		tagStyle = SemanticStyle("{{|Theme_TagSelected|}}")
-		keyStyle = SemanticStyle("{{|Theme_TagKeySelected|}}")
+		itemStyle = theme.ThemeSemanticStyle("{{|ItemSelected|}}")
+		tagStyle = theme.ThemeSemanticStyle("{{|TagSelected|}}")
+		keyStyle = theme.ThemeSemanticStyle("{{|TagKeySelected|}}")
 	}
 
 	// Render checkbox for selectable items

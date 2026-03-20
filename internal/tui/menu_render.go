@@ -163,7 +163,7 @@ func (m *MenuModel) ViewString() string {
 	// Wrap in bordered dialog with title embedded in border
 	var dialog string
 	if m.title != "" {
-		dialog = m.renderBorderWithTitle(content, contentWidth, targetHeight, m.focused, false, "Theme_Title")
+		dialog = m.renderBorderWithTitle(content, contentWidth, targetHeight, m.focused, false, "Title")
 	} else {
 		// No title: use focus-aware inner rounded border
 		// We must ensure the style width accounts for the layout's actual visual borders
@@ -199,9 +199,9 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 	if m.subMenuMode {
 		align = GetActiveContext().SubmenuTitleAlign
 		if focused {
-			titleTag = "Theme_TitleSubMenuFocused"
+			titleTag = "TitleSubMenuFocused"
 		} else {
-			titleTag = "Theme_TitleSubMenu"
+			titleTag = "TitleSubMenu"
 		}
 	}
 
@@ -262,7 +262,7 @@ func (s *MenuModel) viewSubMenu() string {
 
 	// 4. Render the bordered box with embedded title.
 	// We pass 'true' for rounded so submenus use the rounded corner style.
-	result := s.renderBorderWithTitle(combined, contentWidth, targetHeight, s.focusedSub, true, "Theme_Title")
+	result := s.renderBorderWithTitle(combined, contentWidth, targetHeight, s.focusedSub, true, "Title")
 
 	// Replace bottom border with scroll-percent variant when content overflows.
 	if !s.flowMode && s.sbInfo.Needed {
@@ -302,6 +302,6 @@ func (m *MenuModel) viewWithSections() string {
 	content := lipgloss.JoinVertical(lipgloss.Left, parts...)
 
 	return m.SaveCache(
-		m.renderBorderWithTitle(content, contentWidth, m.height, m.focused, false, "Theme_Title"),
+		m.renderBorderWithTitle(content, contentWidth, m.height, m.focused, false, "Title"),
 	)
 }

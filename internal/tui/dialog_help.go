@@ -1,8 +1,8 @@
 package tui
 
 import (
-	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/strutil"
+	"DockSTARTer2/internal/theme"
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
@@ -147,14 +147,14 @@ func (m *HelpDialogModel) ViewString() string {
 	}
 	m.help.SetWidth(targetWidth)
 
-	dialogStyle := SemanticStyle("{{|Theme_Dialog|}}")
+	dialogStyle := theme.ThemeSemanticStyle("{{|Dialog|}}")
 	haloColor := lipgloss.Color("0") // Solid black halo
 	bgStyle := dialogStyle
 
 	// Apply theme styles to the help component
 	sepStyle := dialogStyle
-	dimStyle := SemanticStyle("{{|Theme_HelpItem|}}")
-	keyStyle := SemanticStyle("{{|Theme_HelpTag|}}")
+	dimStyle := theme.ThemeSemanticStyle("{{|HelpItem|}}")
+	keyStyle := theme.ThemeSemanticStyle("{{|HelpTag|}}")
 
 	m.help.Styles.ShortKey = keyStyle
 	m.help.Styles.ShortDesc = dimStyle
@@ -192,7 +192,7 @@ func (m *HelpDialogModel) ViewString() string {
 		// Resolve and wrap text for both panels
 		var legendLines []string
 		if hasPageCtx {
-			resolved := console.ToANSI(m.contextInfo.PageText)
+			resolved := theme.ToThemeANSI(m.contextInfo.PageText)
 			// targetWidth - 2 to allow for 1-char left pad and 1-char gutter (scrollbar space)
 			wrapWidth := targetWidth - 2
 			if wrapWidth < 10 {
@@ -214,7 +214,7 @@ func (m *HelpDialogModel) ViewString() string {
 
 		var itemLines []string
 		if hasItemCtx {
-			resolved := console.ToANSI(m.contextInfo.ItemText)
+			resolved := theme.ToThemeANSI(m.contextInfo.ItemText)
 			wrapWidth := targetWidth - 2
 			if wrapWidth < 10 {
 				wrapWidth = 10
@@ -268,7 +268,7 @@ func (m *HelpDialogModel) ViewString() string {
 				true,  // showIndicators: true
 				true,
 				ctx.SubmenuTitleAlign,
-				"Theme_TitleSubMenu",
+				"TitleSubMenu",
 				ctx,
 			)
 		}
@@ -343,7 +343,7 @@ func (m *HelpDialogModel) ViewString() string {
 				true, // showIndicators: true
 				true,
 				ctx.SubmenuTitleAlign,
-				"Theme_TitleSubMenuFocused",
+				"TitleSubMenuFocused",
 				ctx,
 			)
 

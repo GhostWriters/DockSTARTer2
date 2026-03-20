@@ -170,7 +170,7 @@ func SudoCommand(ctx context.Context, command string, args ...string) (*exec.Cmd
 	checkCmd := exec.CommandContext(ctx, "sudo", "-n", "true")
 	if err := checkCmd.Run(); err != nil {
 		// Password required. Show the command in the prompt so user knows what's running.
-		promptTitle := "{{|Theme_TitleQuestion|}}Sudo Password Required{{[-]}}"
+		promptTitle := "{{|TitleQuestion|}}Sudo Password Required{{[-]}}"
 
 		// The prompt message will just be the command being executed
 		password, err := console.TextPrompt(ctx, func(context.Context, any, ...any) {}, promptTitle, fullCmd, true)

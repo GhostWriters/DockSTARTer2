@@ -3,6 +3,7 @@ package tui
 import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/strutil"
+	"DockSTARTer2/internal/theme"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -75,13 +76,13 @@ func (m *MenuModel) renderVariableHeightList() string {
 
 	// Styles for items
 	neutralStyle := lipgloss.NewStyle().Background(dialogBG)
-	tagStyleBase := SemanticStyle("{{|Theme_Tag|}}")
-	keyStyleBase := SemanticStyle("{{|Theme_TagKey|}}")
-	itemStyleBase := SemanticStyle("{{|Theme_Item|}}")
+	tagStyleBase := theme.ThemeSemanticStyle("{{|Tag|}}")
+	keyStyleBase := theme.ThemeSemanticStyle("{{|TagKey|}}")
+	itemStyleBase := theme.ThemeSemanticStyle("{{|Item|}}")
 
-	tagStyleSel := SemanticStyle("{{|Theme_TagSelected|}}")
-	keyStyleSel := SemanticStyle("{{|Theme_TagKeySelected|}}")
-	itemStyleSel := SemanticStyle("{{|Theme_ItemSelected|}}")
+	tagStyleSel := theme.ThemeSemanticStyle("{{|TagSelected|}}")
+	keyStyleSel := theme.ThemeSemanticStyle("{{|TagKeySelected|}}")
+	itemStyleSel := theme.ThemeSemanticStyle("{{|ItemSelected|}}")
 
 	var renderedItems []string
 	var itemHeights []int
@@ -103,7 +104,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 		if item.IsSeparator {
 			line := ""
 			if item.Tag != "" {
-				line = RenderThemeText(item.Tag, SemanticStyle("{{|Theme_TagKey|}}"))
+				line = RenderThemeText(item.Tag, theme.ThemeSemanticStyle("{{|TagKey|}}"))
 			} else {
 				line = strutil.Repeat("─", listContentWidth)
 			}

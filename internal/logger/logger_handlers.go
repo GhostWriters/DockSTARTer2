@@ -45,7 +45,7 @@ func (h *TUIHandler) Handle(ctx context.Context, r slog.Record) error {
 	}
 
 	timeLevel := fmt.Sprintf("%s %s[%s]{{[-]}} ", timeStr, levelTag, levelStr)
-	tuiMsg := timeLevel + console.ForTUI(r.Message)
+	tuiMsg := timeLevel + r.Message
 
 	if h.global {
 		// Send to global log channel for TUI log panel
@@ -135,7 +135,7 @@ func (h *TagProcessorHandler) Handle(ctx context.Context, r slog.Record) error {
 	// Process based on mode
 	switch h.mode {
 	case "ansi":
-		msg = console.ToANSI(msg)
+		msg = console.ToConsoleANSI(msg)
 	case "strip":
 		msg = console.Strip(msg)
 	}

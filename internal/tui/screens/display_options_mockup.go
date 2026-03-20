@@ -12,10 +12,10 @@ import (
 func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	width := 44 // Reduced width to fit the screen better
 
-	bgStyle := tui.SemanticRawStyle("Preview_Theme_Screen")
-	dContent := tui.SemanticRawStyle("Preview_Theme_Dialog")
-	dBorder1 := tui.SemanticRawStyle("Preview_Theme_Border")
-	dBorder2 := tui.SemanticRawStyle("Preview_Theme_Border2")
+	bgStyle := tui.SemanticRawStyle("Preview_Screen")
+	dContent := tui.SemanticRawStyle("Preview_Dialog")
+	dBorder1 := tui.SemanticRawStyle("Preview_Border")
+	dBorder2 := tui.SemanticRawStyle("Preview_Border2")
 
 	// Adjust border colors based on setting
 	switch s.config.UI.BorderColor {
@@ -41,28 +41,28 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 		ButtonBorders:       s.config.UI.ButtonBorders,
 		Screen:              bgStyle,
 		Dialog:              dContent,
-		DialogTitle:         tui.SemanticRawStyle("Preview_Theme_Title"),
-		DialogTitleHelp:     tui.SemanticRawStyle("Preview_Theme_TitleHelp"),
-		SubmenuTitle:        tui.SemanticRawStyle("Preview_Theme_TitleSubMenu"),
-		SubmenuTitleFocused: tui.SemanticRawStyle("Preview_Theme_TitleSubMenuFocused"),
+		DialogTitle:         tui.SemanticRawStyle("Preview_Title"),
+		DialogTitleHelp:     tui.SemanticRawStyle("Preview_TitleHelp"),
+		SubmenuTitle:        tui.SemanticRawStyle("Preview_TitleSubMenu"),
+		SubmenuTitleFocused: tui.SemanticRawStyle("Preview_TitleSubMenuFocused"),
 		Border:              b,
 		BorderColor:         dBorder1.GetForeground(),
 		Border2Color:        dBorder2.GetForeground(),
-		ButtonActive:        tui.SemanticRawStyle("Preview_Theme_ButtonActive"),
-		ButtonInactive:      tui.SemanticRawStyle("Preview_Theme_ButtonInactive"),
-		ItemNormal:          tui.SemanticRawStyle("Preview_Theme_Item"),
-		ItemSelected:        tui.SemanticRawStyle("Preview_Theme_ItemSelected"),
-		TagNormal:           tui.SemanticRawStyle("Preview_Theme_Tag"),
-		TagSelected:         tui.SemanticRawStyle("Preview_Theme_TagSelected"),
-		TagKey:              tui.SemanticRawStyle("Preview_Theme_TagKey"),
-		TagKeySelected:      tui.SemanticRawStyle("Preview_Theme_TagKeySelected"),
-		Shadow:              tui.SemanticRawStyle("Preview_Theme_Shadow"),
+		ButtonActive:        tui.SemanticRawStyle("Preview_ButtonActive"),
+		ButtonInactive:      tui.SemanticRawStyle("Preview_ButtonInactive"),
+		ItemNormal:          tui.SemanticRawStyle("Preview_Item"),
+		ItemSelected:        tui.SemanticRawStyle("Preview_ItemSelected"),
+		TagNormal:           tui.SemanticRawStyle("Preview_Tag"),
+		TagSelected:         tui.SemanticRawStyle("Preview_TagSelected"),
+		TagKey:              tui.SemanticRawStyle("Preview_TagKey"),
+		TagKeySelected:      tui.SemanticRawStyle("Preview_TagKeySelected"),
+		Shadow:              tui.SemanticRawStyle("Preview_Shadow"),
 		ShadowColor:         getPreviewShadowColor(),
 		ShadowLevel:         s.config.UI.ShadowLevel,
-		HelpLine:            tui.SemanticRawStyle("Preview_Theme_Helpline"),
-		StatusSuccess:       tui.SemanticRawStyle("Preview_Theme_TitleNotice"),
-		StatusWarn:          tui.SemanticRawStyle("Preview_Theme_TitleWarn"),
-		StatusError:         tui.SemanticRawStyle("Preview_Theme_TitleError"),
+		HelpLine:            tui.SemanticRawStyle("Preview_Helpline"),
+		StatusSuccess:       tui.SemanticRawStyle("Preview_TitleNotice"),
+		StatusWarn:          tui.SemanticRawStyle("Preview_TitleWarn"),
+		StatusError:         tui.SemanticRawStyle("Preview_TitleError"),
 		DialogTitleAlign:    s.config.UI.DialogTitleAlign,
 		SubmenuTitleAlign:   s.config.UI.SubmenuTitleAlign,
 		LogTitleAlign:       s.config.UI.LogTitleAlign,
@@ -87,14 +87,14 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	}
 
 	// --- 1. Header (Status Bar) ---
-	hStyle := tui.SemanticRawStyle("Preview_Theme_StatusBar")
+	hStyle := tui.SemanticRawStyle("Preview_StatusBar")
 	headerCtx := previewCtx
 	headerCtx.Dialog = hStyle // Ensure snapping back to StatusBar background
 
 	themeName := s.previewTheme
 
 	// Border style for the status bar frame (falls back to StatusBar if undefined)
-	bStyle := tui.SemanticRawStyle("Preview_Theme_StatusBarBorder")
+	bStyle := tui.SemanticRawStyle("Preview_StatusBarBorder")
 	if bStyle.GetForeground() == nil && bStyle.GetBackground() == nil {
 		bStyle = hStyle
 	}
@@ -119,17 +119,17 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	innerWidth := width - 2
 
 	// Left: Host
-	leftText := " {{|Theme_Hostname|}}HOST{{[-]}}"
+	leftText := " {{|Hostname|}}HOST{{[-]}}"
 	leftRendered := tui.RenderThemeTextCtx(leftText, headerCtx)
 	leftW := lipgloss.Width(tui.GetPlainText(leftRendered))
 
 	// Center: App Name
-	centerText := "{{|Theme_ApplicationName|}}" + tui.GetPlainText(themeName) + "{{[-]}}"
+	centerText := "{{|ApplicationName|}}" + tui.GetPlainText(themeName) + "{{[-]}}"
 	centerRendered := tui.RenderThemeTextCtx(centerText, headerCtx)
 	centerW := lipgloss.Width(tui.GetPlainText(centerRendered))
 
 	// Right: Version
-	rightText := "{{|Theme_ApplicationVersion|}}A:[{{[-]}}{{|Theme_ApplicationVersion|}}2.1{{[-]}}{{|Theme_ApplicationVersion|}}]{{[-]}} "
+	rightText := "{{|ApplicationVersion|}}A:[{{[-]}}{{|ApplicationVersion|}}2.1{{[-]}}{{|ApplicationVersion|}}]{{[-]}} "
 	rightRendered := tui.RenderThemeTextCtx(rightText, headerCtx)
 	rightW := lipgloss.Width(tui.GetPlainText(rightRendered))
 
@@ -167,24 +167,24 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 
 	// --- 2. Backdrop Content (Dialog Simulation) ---
 	contentLines := []string{
-		" {{|Theme_Subtitle|}}A Subtitle Line{{[-]}}",
-		"   {{|Theme_CommandLine|}}ds2 --theme{{[-]}}",
+		" {{|Subtitle|}}A Subtitle Line{{[-]}}",
+		"   {{|CommandLine|}}ds2 --theme{{[-]}}",
 		"",
-		" Heading: {{|Theme_HeadingValue|}}Value{{[-]}} {{|Theme_HeadingTag|}}[*Tag*]{{[-]}}",
+		" Heading: {{|HeadingValue|}}Value{{[-]}} {{|HeadingTag|}}[*Tag*]{{[-]}}",
 		"",
-		"    Caps: {{|Theme_KeyCap|}}[up]{{[-]}} {{|Theme_KeyCap|}}[down]{{[-]}} {{|Theme_KeyCap|}}[left]{{[-]}} {{|Theme_KeyCap|}}[right]",
+		"    Caps: {{|KeyCap|}}[up]{{[-]}} {{|KeyCap|}}[down]{{[-]}} {{|KeyCap|}}[left]{{[-]}} {{|KeyCap|}}[right]",
 		"",
 		" Normal text",
-		" {{|Theme_Highlight|}}Highlighted text{{[-]}}",
+		" {{|Highlight|}}Highlighted text{{[-]}}",
 		"",
 		// Menu Items Simulation
-		" {{|Theme_Item|}}Item 1      Item Description{{[-]}}",
-		" {{|Theme_Item|}}Item 2      {{|Theme_ListAppUserDefined|}}User Description{{[-]}}",
+		" {{|Item|}}Item 1      Item Description{{[-]}}",
+		" {{|Item|}}Item 2      {{|ListAppUserDefined|}}User Description{{[-]}}",
 		"",
-		" {{|Theme_LineHeading|}}*** .env ***{{[-]}}",
-		" {{|Theme_LineComment|}}### Sample comment{{[-]}}",
-		" {{|Theme_LineVar|}}Var='Default'{{[-]}}",
-		" {{|Theme_LineModifiedVar|}}Var='Modified'{{[-]}}",
+		" {{|LineHeading|}}*** .env ***{{[-]}}",
+		" {{|LineComment|}}### Sample comment{{[-]}}",
+		" {{|LineVar|}}Var='Default'{{[-]}}",
+		" {{|LineModifiedVar|}}Var='Modified'{{[-]}}",
 	}
 
 	for i, l := range contentLines {
@@ -193,11 +193,11 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	contentStr := strings.Join(contentLines, "\n")
 
 	titleParts := []string{
-		"{{|Theme_Title|}}Title{{[-]}}",
-		"{{|Theme_TitleSuccess|}}S{{[-]}}",
-		"{{|Theme_TitleWarning|}}W{{[-]}}",
-		"{{|Theme_TitleError|}}E{{[-]}}",
-		"{{|Theme_TitleQuestion|}}Q{{[-]}}",
+		"{{|Title|}}Title{{[-]}}",
+		"{{|TitleSuccess|}}S{{[-]}}",
+		"{{|TitleWarning|}}W{{[-]}}",
+		"{{|TitleError|}}E{{[-]}}",
+		"{{|TitleQuestion|}}Q{{[-]}}",
 	}
 	dTitle := tui.RenderThemeTextCtx(strings.Join(titleParts, " "), previewCtx)
 
@@ -214,12 +214,12 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	}
 	backdropBlock := lipgloss.JoinVertical(lipgloss.Left, backdropLines...)
 
-	dialogBox := tui.RenderBorderedBoxCtx(dTitle, contentStr, 38, 0, true, true, false, previewCtx.DialogTitleAlign, "Theme_Title", previewCtx)
+	dialogBox := tui.RenderBorderedBoxCtx(dTitle, contentStr, 38, 0, true, true, false, previewCtx.DialogTitleAlign, "Title", previewCtx)
 	dialogBox = tui.AddShadowCtx(dialogBox, previewCtx)
 	backdropBlock = tui.Overlay(dialogBox, backdropBlock, tui.OverlayCenter, tui.OverlayCenter, 0, 0)
 
 	// --- 3. Help Line ---
-	helpStyle := tui.SemanticRawStyle("Preview_Theme_Helpline")
+	helpStyle := tui.SemanticRawStyle("Preview_Helpline")
 	helpCtx := previewCtx
 	helpCtx.Dialog = helpStyle // Ensure snapping back to Helpline background
 
@@ -228,8 +228,8 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 
 	// --- 4. Log Toggle Strip ---
 	// Actual UI uses HelpLine background for the strip, but LogBox/LogPanel for the label
-	logBoxStyle := tui.SemanticRawStyle("Preview_Theme_LogBox")
-	logPanelStyle := tui.SemanticRawStyle("Preview_Theme_LogPanel")
+	logBoxStyle := tui.SemanticRawStyle("Preview_LogBox")
+	logPanelStyle := tui.SemanticRawStyle("Preview_LogPanel")
 
 	logStripCtx := previewCtx
 	logStripCtx.Dialog = logBoxStyle // Label should have LogBox (Black) background
@@ -296,13 +296,13 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	// Wrap in a standard dialog using the current (active) theme
 	mockupWidth := lipgloss.Width(mockup)
 	// Synchronize preview height with settings dialog
-	return tui.RenderBorderedBoxCtx("Preview", mockup, mockupWidth, targetHeight, false, true, false, tui.GetActiveContext().DialogTitleAlign, "Theme_Title", tui.GetActiveContext())
+	return tui.RenderBorderedBoxCtx("Preview", mockup, mockupWidth, targetHeight, false, true, false, tui.GetActiveContext().DialogTitleAlign, "Title", tui.GetActiveContext())
 }
 
 // getPreviewShadowColor extracts the shadow color from the preview theme
 // Prefers foreground (for shade chars), falls back to background
 func getPreviewShadowColor() color.Color {
-	shadowStyle := tui.SemanticRawStyle("Preview_Theme_Shadow")
+	shadowStyle := tui.SemanticRawStyle("Preview_Shadow")
 	if fg := shadowStyle.GetForeground(); fg != nil {
 		return fg
 	}

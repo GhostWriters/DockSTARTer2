@@ -326,7 +326,7 @@ func (s *DisplayOptionsScreen) applyPreview(themeName string) {
 	if s.outerMenu != nil {
 		s.outerMenu.InvalidateCache()
 	}
-	tui.ClearSemanticCachePrefix("Preview_Theme_")
+	tui.ClearSemanticCachePrefix("Preview_")
 }
 
 func (s *DisplayOptionsScreen) syncOptionsMenu() {

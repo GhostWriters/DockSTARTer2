@@ -3,6 +3,7 @@ package tui
 import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/strutil"
+	"DockSTARTer2/internal/theme"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -33,12 +34,12 @@ func (m *MenuModel) renderFlow() string {
 		}
 		isSelected := i == m.cursor && m.IsActive()
 
-		tagStyle := SemanticStyle("{{|Theme_Tag|}}")
-		keyStyle := SemanticStyle("{{|Theme_TagKey|}}")
+		tagStyle := theme.ThemeSemanticStyle("{{|Tag|}}")
+		keyStyle := theme.ThemeSemanticStyle("{{|TagKey|}}")
 
 		if isSelected {
-			tagStyle = SemanticStyle("{{|Theme_TagSelected|}}")
-			keyStyle = SemanticStyle("{{|Theme_TagKeySelected|}}")
+			tagStyle = theme.ThemeSemanticStyle("{{|TagSelected|}}")
+			keyStyle = theme.ThemeSemanticStyle("{{|TagKeySelected|}}")
 		}
 
 		// Checkbox/Radio visual
@@ -95,7 +96,7 @@ func (m *MenuModel) renderFlow() string {
 			desc := item.Desc
 			if isSelected {
 				// Strip OptionValue tag so the value inherits selection colors (e.g. red background)
-				desc = strings.ReplaceAll(desc, "{{|Theme_OptionValue|}}", "")
+				desc = strings.ReplaceAll(desc, "{{|OptionValue|}}", "")
 			}
 			// Include leading space in RenderThemeText so it gets the correct background
 			itemContent += RenderThemeText(" "+desc, tagStyle)

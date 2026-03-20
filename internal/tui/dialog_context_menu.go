@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"DockSTARTer2/internal/theme"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -176,10 +177,10 @@ func (m *ContextMenuModel) ViewString() string {
 	}
 
 	ctx := GetActiveContext()
-	bgStyle := SemanticStyle("{{|Theme_Dialog|}}")
-	normalStyle := SemanticStyle("{{|Theme_Item|}}")
-	selectedStyle := SemanticStyle("{{|Theme_ItemSelected|}}")
-	subLabelStyle := SemanticStyle("{{|Theme_HelpItem|}}")
+	bgStyle := theme.ThemeSemanticStyle("{{|Dialog|}}")
+	normalStyle := theme.ThemeSemanticStyle("{{|Item|}}")
+	selectedStyle := theme.ThemeSemanticStyle("{{|ItemSelected|}}")
+	subLabelStyle := theme.ThemeSemanticStyle("{{|HelpItem|}}")
 	disabledStyle := normalStyle.Faint(true)
 
 	// Compute which items are visible
@@ -199,7 +200,7 @@ func (m *ContextMenuModel) ViewString() string {
 			continue
 		}
 		if item.IsHeader {
-			headerStyle := SemanticStyle("{{|Theme_EnvBuiltin|}}").Bold(true)
+			headerStyle := theme.ThemeSemanticStyle("{{|EnvBuiltin|}}").Bold(true)
 			lbl := item.Label
 			if lipgloss.Width(lbl) > m.menuW {
 				lbl = TruncateRight(lbl, m.menuW)

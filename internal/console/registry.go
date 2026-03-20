@@ -10,8 +10,11 @@ var (
 	// concurrently by theme-loading goroutines and read by the render goroutine.
 	semanticMu sync.RWMutex
 
-	// semanticMap stores semantic tag -> raw style code mappings (e.g., "version" -> "cyan")
-	semanticMap map[string]string
+	// consoleMap stores hardcoded console semantic tag -> raw style code mappings
+	consoleMap map[string]string
+
+	// themeMap stores theme-loaded semantic tag -> raw style code mappings
+	themeMap map[string]string
 
 	// ansiMap stores color/modifier names -> ANSI code mappings
 	ansiMap map[string]string
@@ -22,7 +25,8 @@ var (
 
 func init() {
 	// Initialize maps
-	semanticMap = make(map[string]string)
+	consoleMap = make(map[string]string)
+	themeMap = make(map[string]string)
 	ansiMap = make(map[string]string)
 	attributeMap = make(map[string]string)
 }
@@ -40,8 +44,11 @@ func BuildColorMap() {
 	if ansiMap == nil {
 		ansiMap = make(map[string]string)
 	}
-	if semanticMap == nil {
-		semanticMap = make(map[string]string)
+	if consoleMap == nil {
+		consoleMap = make(map[string]string)
+	}
+	if themeMap == nil {
+		themeMap = make(map[string]string)
 	}
 	if attributeMap == nil {
 		attributeMap = make(map[string]string)
@@ -134,55 +141,102 @@ func BuildColorMap() {
 
 }
 
-// RegisterSemanticTag registers a semantic tag with its standardized tag value.
-// It automatically strips delimiters if present to store the raw value.
-func RegisterSemanticTag(name, taggedValue string) {
-	RegisterSemanticTagRaw(name, StripDelimiters(taggedValue))
+// RegisterConsoleTag registers a semantic tag with its standardized tag value in the console map.
+func RegisterConsoleTag(name, taggedValue string) {
+	RegisterConsoleTagRaw(name, StripDelimiters(taggedValue))
 }
 
-// RegisterSemanticTagRaw registers a semantic tag with a raw style code (no brackets).
-func RegisterSemanticTagRaw(name, rawValue string) {
+// RegisterConsoleTagRaw registers a semantic tag with a raw style code in the console map.
+func RegisterConsoleTagRaw(name, rawValue string) {
 	ensureMaps()
 	semanticMu.Lock()
-	semanticMap[strings.ToLower(name)] = rawValue
+	consoleMap[strings.ToLower(name)] = rawValue
 	semanticMu.Unlock()
 }
 
+// RegisterThemeTag registers a semantic tag with its standardized tag value in the theme map.
+func RegisterThemeTag(name, taggedValue string) {
+	RegisterThemeTagRaw(name, StripDelimiters(taggedValue))
+}
+
+// RegisterThemeTagRaw registers a semantic tag with a raw style code in the theme map.
+func RegisterThemeTagRaw(name, rawValue string) {
+	ensureMaps()
+	semanticMu.Lock()
+	themeMap[strings.ToLower(name)] = rawValue
+	semanticMu.Unlock()
+}
+
+// RegisterSemanticTag is a legacy wrapper that registers to BOTH maps for backward compatibility during transition.
+// TODO: Remove after all calls are migrated.
+func RegisterSemanticTag(name, taggedValue string) {
+	RegisterConsoleTag(name, taggedValue)
+	RegisterThemeTag(name, taggedValue)
+}
+
+// RegisterSemanticTagRaw is a legacy wrapper that registers to BOTH maps for backward compatibility during transition.
+// TODO: Remove after all calls are migrated.
+func RegisterSemanticTagRaw(name, rawValue string) {
+	RegisterConsoleTagRaw(name, rawValue)
+	RegisterThemeTagRaw(name, rawValue)
+}
+
 // GetColorDefinition returns the formatted tag value (with brackets) for a semantic tag.
-// This is used for expansion and backward compatibility.
+// It searches the theme map first, then console map.
 func GetColorDefinition(name string) string {
 	ensureMaps()
 	name = strings.TrimPrefix(name, "_")
 	name = strings.TrimSuffix(name, "_")
+	content := strings.ToLower(name)
+
 	semanticMu.RLock()
-	raw := semanticMap[strings.ToLower(name)]
+	raw, ok := themeMap[content]
+	if !ok {
+		raw = consoleMap[content]
+	}
 	semanticMu.RUnlock()
+
 	if raw == "" {
 		return ""
 	}
 	return WrapDirect(raw)
 }
 
-// UnregisterColor removes a semantic tag
+// UnregisterColor removes a semantic tag from both maps
 func UnregisterColor(name string) {
 	ensureMaps()
 	name = strings.TrimPrefix(name, "_")
 	name = strings.TrimSuffix(name, "_")
+	content := strings.ToLower(name)
+
 	semanticMu.Lock()
-	delete(semanticMap, strings.ToLower(name))
+	delete(consoleMap, content)
+	delete(themeMap, content)
 	semanticMu.Unlock()
 }
 
-// UnregisterPrefix removes all semantic tags that start with the given prefix
+// UnregisterPrefix removes all semantic tags that start with the given prefix from both maps
 func UnregisterPrefix(prefix string) {
 	ensureMaps()
 	searchPrefix := strings.ToLower(strings.TrimSuffix(prefix, "_") + "_")
 	semanticMu.Lock()
-	for key := range semanticMap {
+	for key := range consoleMap {
 		if strings.HasPrefix(key, searchPrefix) {
-			delete(semanticMap, key)
+			delete(consoleMap, key)
 		}
 	}
+	for key := range themeMap {
+		if strings.HasPrefix(key, searchPrefix) {
+			delete(themeMap, key)
+		}
+	}
+	semanticMu.Unlock()
+}
+
+// ClearThemeMap removes all entries from the theme map.
+func ClearThemeMap() {
+	semanticMu.Lock()
+	themeMap = make(map[string]string)
 	semanticMu.Unlock()
 }
 

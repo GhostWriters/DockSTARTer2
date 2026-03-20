@@ -41,13 +41,13 @@ func SyncVariables(ctx context.Context, file string, initialVars, newVars map[st
 	if len(added) > 0 {
 		logger.Notice(ctx, "Adding variables to {{|File|}}%s{{[-]}}:", file)
 		for _, k := range added {
-			logger.Notice(ctx, "\t{{|Var|}}%s{{[-]}}={{|Theme_Highlight|}}%s{{[-]}}", k, newVars[k])
+			logger.Notice(ctx, "\t{{|Var|}}%s{{[-]}}={{|Highlight|}}%s{{[-]}}", k, newVars[k])
 		}
 	}
 	if len(updated) > 0 {
 		logger.Notice(ctx, "Updating variables in {{|File|}}%s{{[-]}}:", file)
 		for _, k := range updated {
-			logger.Notice(ctx, "\t{{|Var|}}%s{{[-]}}={{|Theme_Highlight|}}%s{{[-]}}", k, newVars[k])
+			logger.Notice(ctx, "\t{{|Var|}}%s{{[-]}}={{|Highlight|}}%s{{[-]}}", k, newVars[k])
 		}
 	}
 	if len(removed) > 0 {

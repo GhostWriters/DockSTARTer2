@@ -83,9 +83,9 @@ func (s *DisplayOptionsScreen) initMenus() {
 		if t.Author != "" {
 			desc += fmt.Sprintf(" [by %s]", t.Author)
 		}
-		descTag := "{{|Theme_ListTheme|}}"
+		descTag := "{{|ListTheme|}}"
 		if t.IsUserTheme {
-			descTag = "{{|Theme_ListThemeUserDefined|}}"
+			descTag = "{{|ListThemeUserDefined|}}"
 		}
 		checked := s.currentTheme == t.ConfigValue
 		if checked {
@@ -111,7 +111,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 		displayName := "(missing) " + shortURI
 		themeItems = append([]tui.MenuItem{{
 			Tag:           displayName,
-			Desc:          "{{|Theme_ListThemeUserDefined|}}Source file not found — using cached version",
+			Desc:          "{{|ListThemeUserDefined|}}Source file not found — using cached version",
 			Help:          "Theme source file is missing. The cached version remains active until you choose another theme.",
 			IsRadioButton: true,
 			Checked:       true,
@@ -306,10 +306,10 @@ func (s *DisplayOptionsScreen) shadowLevelToDesc(l int) string {
 	} else {
 		levels = []string{
 			"(Off)",
-			"({{|Theme_Shadow|}}.{{|Theme_OptionValue|}})",
-			"({{|Theme_Shadow|}}:{{|Theme_OptionValue|}})",
-			"({{|Theme_Shadow|}}#{{|Theme_OptionValue|}})",
-			"({{|Theme_OptionValue|}} )",
+			"({{|Shadow|}}.{{|OptionValue|}})",
+			"({{|Shadow|}}:{{|OptionValue|}})",
+			"({{|Shadow|}}#{{|OptionValue|}})",
+			"({{|OptionValue|}} )",
 		}
 	}
 	if l < 0 || l >= len(levels) {
@@ -324,7 +324,7 @@ func (s *DisplayOptionsScreen) borderColorToDesc(c int) string {
 }
 
 func (s *DisplayOptionsScreen) dropdownDesc(val string) string {
-	return fmt.Sprintf("{{|Theme_OptionValue|}}%s▼{{[-]}}", val)
+	return fmt.Sprintf("{{|OptionValue|}}%s▼{{[-]}}", val)
 }
 
 func titleAlignDesc(v string) string {
@@ -369,18 +369,18 @@ func (s *DisplayOptionsScreen) showShadowDropdown() tea.Cmd {
 		if s.config.UI.LineCharacters {
 			levels = []string{
 				"Off",
-				"Light {{|Theme_OptionValue|}}(░){{[-]}}",
-				"Medium {{|Theme_OptionValue|}}(▒){{[-]}}",
-				"Dark {{|Theme_OptionValue|}}(▓){{[-]}}",
-				"Solid {{|Theme_OptionValue|}}(█){{[-]}}",
+				"Light {{|OptionValue|}}(░){{[-]}}",
+				"Medium {{|OptionValue|}}(▒){{[-]}}",
+				"Dark {{|OptionValue|}}(▓){{[-]}}",
+				"Solid {{|OptionValue|}}(█){{[-]}}",
 			}
 		} else {
 			levels = []string{
 				"Off",
-				"Light {{|Theme_OptionValue|}}({{|Theme_Shadow|}}.{{|Theme_OptionValue|}}){{[-]}}",
-				"Medium {{|Theme_OptionValue|}}({{|Theme_Shadow|}}:{{|Theme_OptionValue|}}){{[-]}}",
-				"Dark {{|Theme_OptionValue|}}({{|Theme_Shadow|}}#{{|Theme_OptionValue|}}){{[-]}}",
-				"Solid {{|Theme_OptionValue|}}( ){{[-]}}",
+				"Light {{|OptionValue|}}({{|Shadow|}}.{{|OptionValue|}}){{[-]}}",
+				"Medium {{|OptionValue|}}({{|Shadow|}}:{{|OptionValue|}}){{[-]}}",
+				"Dark {{|OptionValue|}}({{|Shadow|}}#{{|OptionValue|}}){{[-]}}",
+				"Solid {{|OptionValue|}}( ){{[-]}}",
 			}
 		}
 		var items []tui.MenuItem
@@ -412,9 +412,9 @@ func (s *DisplayOptionsScreen) showBorderColorDropdown() tea.Cmd {
 	return func() tea.Msg {
 		modes := []int{1, 2, 3}
 		labels := map[int]string{
-			1: "Border 1 (Theme Focus) {{|Theme_OptionValue|}}(1){{[-]}}",
-			2: "Border 2 (Theme Accent) {{|Theme_OptionValue|}}(2){{[-]}}",
-			3: "Both (3D Effect) {{|Theme_OptionValue|}}(3D){{[-]}}",
+			1: "Border 1 (Theme Focus) {{|OptionValue|}}(1){{[-]}}",
+			2: "Border 2 (Theme Accent) {{|OptionValue|}}(2){{[-]}}",
+			3: "Both (3D Effect) {{|OptionValue|}}(3D){{[-]}}",
 		}
 		var items []tui.MenuItem
 		for _, m := range modes {

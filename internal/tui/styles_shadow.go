@@ -156,9 +156,8 @@ func GetShadowBoxCtx(content string, ctx StyleContext) string {
 		return ""
 	}
 
-	themeStyles := GetStyles()
 	// Ensure the base shadow style has NO background to maintain transparency
-	shadowStyle := themeStyles.Shadow.UnsetBackground()
+	shadowStyle := ctx.Shadow.UnsetBackground()
 	var shadeChar string
 
 	if ctx.LineCharacters {

@@ -108,7 +108,7 @@ func TestStripANSI(t *testing.T) {
 	}
 }
 
-func TestExpandTags(t *testing.T) {
+func TestExpandConsoleTags(t *testing.T) {
 	ensureMaps()
 	semanticMap["notice"] = "green" // RAW value (no brackets)
 	semanticMap["applicationname"] = "cyan::B"
@@ -148,15 +148,15 @@ func TestExpandTags(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actual := ExpandTags(tt.input)
+			actual := ExpandConsoleTags(tt.input)
 			if actual != tt.expected {
-				t.Errorf("ExpandTags(%q) = %q; want %q", tt.input, actual, tt.expected)
+				t.Errorf("ExpandConsoleTags(%q) = %q; want %q", tt.input, actual, tt.expected)
 			}
 		})
 	}
 }
 
-func TestToANSI(t *testing.T) {
+func TestToConsoleANSI(t *testing.T) {
 	// Setup for TTY mode
 	isTTYGlobal = true
 	SetPreferredProfile(colorprofile.TrueColor)
@@ -212,9 +212,9 @@ func TestToANSI(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actual := ToANSI(tt.input)
+			actual := ToConsoleANSI(tt.input)
 			if actual != tt.expected {
-				t.Errorf("ToANSI(%q) = %q; want %q", tt.input, actual, tt.expected)
+				t.Errorf("ToConsoleANSI(%q) = %q; want %q", tt.input, actual, tt.expected)
 			}
 		})
 	}
@@ -231,14 +231,14 @@ func TestBackwardsCompatibility(t *testing.T) {
 
 	// Test Parse alias
 	parseResult := Parse(input)
-	toAnsiResult := ToANSI(input)
+	toAnsiResult := ToConsoleANSI(input)
 	if parseResult != toAnsiResult {
 		t.Errorf("Parse should equal ToANSI: Parse=%q, ToANSI=%q", parseResult, toAnsiResult)
 	}
 
 	// Test Translate alias
 	translateResult := Translate(input)
-	expandResult := ExpandTags(input)
+	expandResult := ExpandConsoleTags(input)
 	if translateResult != expandResult {
 		t.Errorf("Translate should equal ExpandTags: Translate=%q, ExpandTags=%q", translateResult, expandResult)
 	}
@@ -278,9 +278,9 @@ func TestSemanticVsDirectDistinction(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actual := ExpandTags(tt.input)
+			actual := ExpandConsoleTags(tt.input)
 			if actual != tt.expected {
-				t.Errorf("ExpandTags(%q) = %q; want %q", tt.input, actual, tt.expected)
+				t.Errorf("ExpandConsoleTags(%q) = %q; want %q", tt.input, actual, tt.expected)
 			}
 		})
 	}

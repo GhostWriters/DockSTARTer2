@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-
-	"github.com/charmbracelet/colorprofile"
 )
 
 var (
@@ -74,20 +72,28 @@ func WrapDirect(code string) string {
 	return DirectPrefix + code + DirectSuffix
 }
 
-// ExpandTags converts semantic tags to standardized direct format using raw style codes
-func ExpandTags(text string) string {
-	return ExpandTagsWithPrefix(text, "")
+// ExpandConsoleTags converts semantic tags to standardized direct format using only the console map.
+func ExpandConsoleTags(text string) string {
+	return ExpandTagsWithMap(text, consoleMap, true, "")
 }
 
-// ExpandTagsWithPrefix converts semantic tags to standardized direct format,
-// attempting to resolve with the given prefix first (e.g., "Preview_").
-func ExpandTagsWithPrefix(text string, prefix string) string {
+// ExpandThemeTags converts semantic tags to standardized direct format using only the theme map.
+func ExpandThemeTags(text string, prefix string) string {
+	return ExpandTagsWithMap(text, themeMap, true, prefix)
+}
+
+
+// ExpandTagsWithMap is the base routine for expanding semantic tags.
+// If styleMap is nil, it uses themeMap with fallback to consoleMap (Legacy behavior).
+func ExpandTagsWithMap(text string, styleMap map[string]string, stripUnresolvable bool, prefix string) string {
 	ensureMaps()
 	prefix = strings.ToLower(prefix)
 
 	// Process semantic tags
 	semanticMu.RLock()
-	text = semanticRegex.ReplaceAllStringFunc(text, func(match string) string {
+	defer semanticMu.RUnlock()
+
+	return semanticRegex.ReplaceAllStringFunc(text, func(match string) string {
 		groupIndex := semanticRegex.SubexpIndex("content")
 		subMatch := semanticRegex.FindStringSubmatch(match)
 		if len(subMatch) <= groupIndex {
@@ -95,7 +101,7 @@ func ExpandTagsWithPrefix(text string, prefix string) string {
 		}
 		fullContent := subMatch[groupIndex]
 
-		// Split semantic name from optional inline modifiers (e.g. "Theme_Title:::R" -> "Theme_Title" + "::R")
+		// Split semantic name from optional inline modifiers (e.g. "Title:::R")
 		semanticName := fullContent
 		modifiers := ""
 		if idx := strings.IndexByte(fullContent, ':'); idx >= 0 {
@@ -104,20 +110,38 @@ func ExpandTagsWithPrefix(text string, prefix string) string {
 		}
 		content := strings.ToLower(semanticName)
 
-		// 1. Try with prefix if provided
-		if prefix != "" {
-			prefixed := prefix + content
-			if rawCode, ok := semanticMap[prefixed]; ok {
-				result := WrapDirect(rawCode)
-				if modifiers != "" {
-					result += WrapDirect(modifiers)
-				}
-				return result
+		var rawCode string
+		var ok bool
+
+		if styleMap != nil {
+			// Specific map requested (No fallback)
+			// 1. Try with prefix if provided
+			if prefix != "" {
+				prefixed := prefix + content
+				rawCode, ok = styleMap[prefixed]
+			}
+			// 2. Try raw name if prefix failed or wasn't provided
+			if !ok {
+				rawCode, ok = styleMap[content]
+			}
+		} else {
+			// Legacy behavior: Theme preferred, then Console
+			// 1. Try with prefix in Theme
+			if prefix != "" {
+				prefixed := prefix + content
+				rawCode, ok = themeMap[prefixed]
+			}
+			// 2. Try raw in Theme
+			if !ok {
+				rawCode, ok = themeMap[content]
+			}
+			// 3. Try fallback to Console (No prefix for Console colors)
+			if !ok {
+				rawCode, ok = consoleMap[content]
 			}
 		}
 
-		// 2. Try raw name
-		if rawCode, ok := semanticMap[content]; ok {
+		if ok {
 			result := WrapDirect(rawCode)
 			if modifiers != "" {
 				result += WrapDirect(modifiers)
@@ -125,41 +149,43 @@ func ExpandTagsWithPrefix(text string, prefix string) string {
 			return result
 		}
 
-		return ""
+		if stripUnresolvable {
+			return ""
+		}
+		return match
 	})
-	semanticMu.RUnlock()
-
-	return text
 }
 
-// ToANSI converts semantic and direct tags to ANSI escape sequences.
-// It uses the default stdout profile.
-func ToANSI(text string) string {
-	return ToANSIWithProfile(text)
-}
-
-// ToANSIWithProfile allows specifying a profile (e.g. for TUI vs CLI).
-func ToANSIWithProfile(text string) string {
-	return ToANSIWithPrefix(text, "")
-}
-
-// ToANSIWithPrefix allows specifying a prefix for namespaced tag resolution and a profile.
-func ToANSIWithPrefix(text string, prefix string) string {
-	ensureMaps()
-
-	tuiMode := TUIMode || IsTUIEnabled()
-	if !isTTYGlobal && !tuiMode {
+// ToConsoleANSI converts semantic and direct tags to ANSI escape sequences using only console colors.
+func ToConsoleANSI(text string) string {
+	if !isTTYGlobal && !TUIMode && !IsTUIEnabled() {
 		return Strip(text)
 	}
 
-	if preferredProfile == colorprofile.NoTTY && !tuiMode {
-		return Strip(text)
-	}
+	// 1. Expand only console tags
+	text = ExpandConsoleTags(text)
 
-	// 1. Expand all semantic tags (Pass 1)
-	text = ExpandTagsWithPrefix(text, prefix)
+	// 2. Process all direct tags -> ANSI
+	return processDirectTags(text)
+}
 
-	// 2. Process all direct tags -> ANSI (Pass 2)
+// ToThemeANSI converts semantic and direct tags to ANSI escape sequences using only theme colors.
+func ToThemeANSI(text string) string {
+	return ToThemeANSIWithPrefix(text, "")
+}
+
+// ToThemeANSIWithPrefix converts semantic and direct tags to ANSI escape sequences using only theme colors with a prefix.
+func ToThemeANSIWithPrefix(text string, prefix string) string {
+	// Prefix logic is currently handled during registration in theme.go,
+	// so we just expand theme tags.
+	text = ExpandThemeTags(text, prefix)
+
+	// 2. Process all direct tags -> ANSI
+	return processDirectTags(text)
+}
+
+// processDirectTags is a helper to convert direct tags {{[code]}} to ANSI sequences.
+func processDirectTags(text string) string {
 	re := GetDirectRegex()
 	return re.ReplaceAllStringFunc(text, func(match string) string {
 		groupIndex := re.SubexpIndex("content")
@@ -171,6 +197,7 @@ func ToANSIWithPrefix(text string, prefix string) string {
 	})
 }
 
+
 // Strip removes all semantic and direct tags from text, as well as ANSI escape sequences
 func Strip(text string) string {
 	text = semanticRegex.ReplaceAllString(text, "")
@@ -178,19 +205,19 @@ func Strip(text string) string {
 	return StripANSI(text)
 }
 
-// ForTUI prepares text for display with standardized tags
+// ForTUI prepares text for display with standardized theme tags
 func ForTUI(text string) string {
-	return ExpandTags(text)
+	return ExpandThemeTags(text, "")
 }
 
-// Sprintf formats according to a format specifier and returns the string with ANSI codes
+// Sprintf formats according to a format specifier and returns the string with Console ANSI codes
 func Sprintf(format string, a ...any) string {
 	msg := fmt.Sprintf(format, a...)
-	return ToANSI(msg)
+	return ToConsoleANSI(msg)
 }
 
-// Println prints a line with ANSI color codes parsed
+// Println prints a line with Console ANSI color codes parsed
 func Println(a ...any) {
 	msg := fmt.Sprint(a...)
-	fmt.Println(ToANSI(msg))
+	fmt.Println(ToConsoleANSI(msg))
 }

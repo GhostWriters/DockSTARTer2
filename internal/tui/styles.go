@@ -371,33 +371,33 @@ func InitStyles(cfg config.AppConfig) {
 	}
 
 	// Screen background
-	currentStyles.Screen = SemanticRawStyle("Theme_Screen")
+	currentStyles.Screen = SemanticRawStyle("Screen")
 
 	// Dialog
-	currentStyles.Dialog = SemanticRawStyle("Theme_Dialog")
+	currentStyles.Dialog = SemanticRawStyle("Dialog")
 
-	currentStyles.DialogTitle = SemanticRawStyle("Theme_Title")
+	currentStyles.DialogTitle = SemanticRawStyle("Title")
 
-	currentStyles.DialogTitleHelp = SemanticRawStyle("Theme_TitleHelp")
+	currentStyles.DialogTitleHelp = SemanticRawStyle("TitleHelp")
 
 	// Border colors
 	switch cfg.UI.BorderColor {
 	case 1:
-		currentStyles.BorderColor = SemanticRawStyle("Theme_Border").GetForeground()
-		currentStyles.Border2Color = SemanticRawStyle("Theme_Border").GetForeground()
+		currentStyles.BorderColor = SemanticRawStyle("Border").GetForeground()
+		currentStyles.Border2Color = SemanticRawStyle("Border").GetForeground()
 	case 2:
-		currentStyles.BorderColor = SemanticRawStyle("Theme_Border2").GetForeground()
-		currentStyles.Border2Color = SemanticRawStyle("Theme_Border2").GetForeground()
+		currentStyles.BorderColor = SemanticRawStyle("Border2").GetForeground()
+		currentStyles.Border2Color = SemanticRawStyle("Border2").GetForeground()
 	case 3:
 		fallthrough
 	default:
-		currentStyles.BorderColor = SemanticRawStyle("Theme_Border").GetForeground()
-		currentStyles.Border2Color = SemanticRawStyle("Theme_Border2").GetForeground()
+		currentStyles.BorderColor = SemanticRawStyle("Border").GetForeground()
+		currentStyles.Border2Color = SemanticRawStyle("Border2").GetForeground()
 	}
 
 	// Shadow
-	// Theme_Shadow defines the shadow color (foreground is used for shade characters like ░▒▓)
-	shadowDef := SemanticRawStyle("Theme_Shadow")
+	// Shadow defines the shadow color (foreground is used for shade characters like ░▒▓)
+	shadowDef := SemanticRawStyle("Shadow")
 	currentStyles.ShadowColor = shadowDef.GetForeground()
 	if currentStyles.ShadowColor == nil {
 		currentStyles.ShadowColor = shadowDef.GetBackground()
@@ -408,53 +408,53 @@ func InitStyles(cfg config.AppConfig) {
 
 	// Buttons (spacing handled at layout level)
 	// Handle nil (inherit) backgrounds by falling back to DialogBG
-	currentStyles.ButtonActive = SemanticRawStyle("Theme_ButtonActive")
+	currentStyles.ButtonActive = SemanticRawStyle("ButtonActive")
 	if currentStyles.ButtonActive.GetBackground() == nil {
 		currentStyles.ButtonActive = currentStyles.ButtonActive.Background(currentStyles.Dialog.GetBackground())
 	}
 
-	currentStyles.ButtonInactive = SemanticRawStyle("Theme_ButtonInactive")
+	currentStyles.ButtonInactive = SemanticRawStyle("ButtonInactive")
 	if currentStyles.ButtonInactive.GetBackground() == nil {
 		currentStyles.ButtonInactive = currentStyles.ButtonInactive.Background(currentStyles.Dialog.GetBackground())
 	}
 
 	// List items
-	currentStyles.ItemNormal = SemanticRawStyle("Theme_Item")
+	currentStyles.ItemNormal = SemanticRawStyle("Item")
 	if currentStyles.ItemNormal.GetBackground() == nil {
 		currentStyles.ItemNormal = currentStyles.ItemNormal.Background(currentStyles.Dialog.GetBackground())
 	}
 
-	currentStyles.ItemSelected = SemanticRawStyle("Theme_ItemSelected")
+	currentStyles.ItemSelected = SemanticRawStyle("ItemSelected")
 	if currentStyles.ItemSelected.GetBackground() == nil {
 		currentStyles.ItemSelected = currentStyles.ItemSelected.Background(currentStyles.Dialog.GetBackground())
 	}
 
 	// Tags
-	currentStyles.TagNormal = SemanticRawStyle("Theme_Tag")
+	currentStyles.TagNormal = SemanticRawStyle("Tag")
 	if currentStyles.TagNormal.GetBackground() == nil {
 		currentStyles.TagNormal = currentStyles.TagNormal.Background(currentStyles.Dialog.GetBackground())
 	}
 
-	currentStyles.TagSelected = SemanticRawStyle("Theme_TagSelected")
+	currentStyles.TagSelected = SemanticRawStyle("TagSelected")
 	if currentStyles.TagSelected.GetBackground() == nil {
 		currentStyles.TagSelected = currentStyles.TagSelected.Background(currentStyles.Dialog.GetBackground())
 	}
 
-	currentStyles.TagKey = SemanticRawStyle("Theme_TagKey")
+	currentStyles.TagKey = SemanticRawStyle("TagKey")
 	if currentStyles.TagKey.GetBackground() == nil {
 		currentStyles.TagKey = currentStyles.TagKey.Background(currentStyles.Dialog.GetBackground())
 	}
 
-	currentStyles.TagKeySelected = SemanticRawStyle("Theme_TagKeySelected")
+	currentStyles.TagKeySelected = SemanticRawStyle("TagKeySelected")
 	if currentStyles.TagKeySelected.GetBackground() == nil {
 		currentStyles.TagKeySelected = currentStyles.TagKeySelected.Background(currentStyles.Dialog.GetBackground())
 	}
 
 	// Header / Status Bar
-	currentStyles.StatusBar = SemanticRawStyle("Theme_StatusBar")
-	currentStyles.StatusBarSeparator = SemanticRawStyle("Theme_StatusBarSeparator")
-	currentStyles.StatusBarSelected = SemanticRawStyle("Theme_StatusBarSelected")
-	currentStyles.StatusBarBorder = SemanticRawStyle("Theme_StatusBarBorder")
+	currentStyles.StatusBar = SemanticRawStyle("StatusBar")
+	currentStyles.StatusBarSeparator = SemanticRawStyle("StatusBarSeparator")
+	currentStyles.StatusBarSelected = SemanticRawStyle("StatusBarSelected")
+	currentStyles.StatusBarBorder = SemanticRawStyle("StatusBarBorder")
 	if currentStyles.StatusBarBorder.GetForeground() == nil && currentStyles.StatusBarBorder.GetBackground() == nil {
 		// Fallback for themes that don't define StatusBarBorder
 		currentStyles.StatusBarBorder = currentStyles.StatusBar
@@ -462,19 +462,19 @@ func InitStyles(cfg config.AppConfig) {
 	currentStyles.HeaderBG = currentStyles.StatusBar // Backwards compatibility
 
 	// Help line
-	currentStyles.HelpLine = SemanticRawStyle("Theme_Helpline")
+	currentStyles.HelpLine = SemanticRawStyle("Helpline")
 
 	// Submenu Title
-	currentStyles.SubmenuTitle = SemanticRawStyle("Theme_TitleSubMenu")
-	currentStyles.SubmenuTitleFocused = SemanticRawStyle("Theme_TitleSubMenuFocused")
+	currentStyles.SubmenuTitle = SemanticRawStyle("TitleSubMenu")
+	currentStyles.SubmenuTitleFocused = SemanticRawStyle("TitleSubMenuFocused")
 
 	// Initialize semantic styles from console color tags (Theme-specific to avoid log interference)
-	currentStyles.StatusSuccess = SemanticRawStyle("Theme_TitleNotice")
-	currentStyles.StatusWarn = SemanticRawStyle("Theme_TitleWarn")
-	currentStyles.StatusError = SemanticRawStyle("Theme_TitleError")
-	currentStyles.Console = SemanticRawStyle("Theme_ProgramBox")
+	currentStyles.StatusSuccess = SemanticRawStyle("TitleNotice")
+	currentStyles.StatusWarn = SemanticRawStyle("TitleWarn")
+	currentStyles.StatusError = SemanticRawStyle("TitleError")
+	currentStyles.Console = theme.ConsoleSemanticRawStyle("ProgramBox")
 
-	currentStyles.LogPanelColor = SemanticRawStyle("Theme_LogPanel").GetForeground()
+	currentStyles.LogPanelColor = SemanticRawStyle("LogPanel").GetForeground()
 
 	currentStyles.DialogTitleAlign = cfg.UI.DialogTitleAlign
 	currentStyles.SubmenuTitleAlign = cfg.UI.SubmenuTitleAlign

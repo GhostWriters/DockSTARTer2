@@ -57,14 +57,14 @@ func (m *ProgramBoxModel) renderHeaderUI(width int) string {
 				b.WriteString(spacer + "\n")
 			}
 
-			catStyle := SemanticStyle("{{|Theme_ProgressWaiting|}}")
+			catStyle := theme.ThemeSemanticStyle("{{|ProgressWaiting|}}")
 			statusText := " Waiting "
 			switch t.Status {
 			case StatusInProgress:
-				catStyle = SemanticStyle("{{|Theme_ProgressInProgress|}}")
+				catStyle = theme.ThemeSemanticStyle("{{|ProgressInProgress|}}")
 				statusText = " In Progress "
 			case StatusCompleted:
-				catStyle = SemanticStyle("{{|Theme_ProgressCompleted|}}")
+				catStyle = theme.ThemeSemanticStyle("{{|ProgressCompleted|}}")
 				statusText = " Completed "
 			}
 
@@ -87,24 +87,24 @@ func (m *ProgramBoxModel) renderHeaderUI(width int) string {
 
 				foundActive := false
 				for _, app := range t.Apps {
-					appStyle := SemanticStyle("{{|Theme_ProgressWaiting|}}")
+					appStyle := theme.ThemeSemanticStyle("{{|ProgressWaiting|}}")
 					if t.Status == StatusCompleted {
-						appStyle = SemanticStyle("{{|Theme_ProgressCompleted|}}")
+						appStyle = theme.ThemeSemanticStyle("{{|ProgressCompleted|}}")
 					} else if t.Status == StatusInProgress {
 						if t.ActiveApp != "" {
 							if app == t.ActiveApp {
-								appStyle = SemanticStyle("{{|Theme_ProgressInProgress|}}")
+								appStyle = theme.ThemeSemanticStyle("{{|ProgressInProgress|}}")
 								foundActive = true
 							} else if !foundActive {
-								appStyle = SemanticStyle("{{|Theme_ProgressCompleted|}}")
+								appStyle = theme.ThemeSemanticStyle("{{|ProgressCompleted|}}")
 							}
 						} else {
-							appStyle = SemanticStyle("{{|Theme_ProgressInProgress|}}")
+							appStyle = theme.ThemeSemanticStyle("{{|ProgressInProgress|}}")
 						}
 					}
 
 					if app == t.ActiveApp {
-						appParts = append(appParts, SemanticStyle("{{|Theme_Highlight|}}").Render(app))
+						appParts = append(appParts, theme.ThemeSemanticStyle("{{|Highlight|}}").Render(app))
 					} else {
 						appParts = append(appParts, appStyle.Render(app))
 					}

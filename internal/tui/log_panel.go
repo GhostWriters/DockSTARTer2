@@ -179,7 +179,7 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		text := string(msg)
 		newLines := strings.Split(text, "\n")
 		for _, line := range newLines {
-			rendered := RenderThemeText(line, styles.Console)
+			rendered := RenderConsoleText(line, styles.Console)
 			// Truncate to viewport width to prevent overflow past borders
 			// Calculate inner box width based on full viewport width
 			targetWidth := m.viewport.Width()

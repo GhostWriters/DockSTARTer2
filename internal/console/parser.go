@@ -12,24 +12,24 @@ import (
 // - tags.go: Tag parsing and expansion
 // - registry.go: Semantic tag registry management
 
-// Parse is a convenience alias for ToANSI (backwards compatibility)
+// Parse is a convenience alias for ToConsoleANSI (backwards compatibility)
 func Parse(text string) string {
-	return ToANSI(text)
+	return ToConsoleANSI(text)
 }
 
-// Translate is a convenience alias for ExpandTags (backwards compatibility)
+// Translate is a convenience alias for ExpandConsoleTags (backwards compatibility)
 func Translate(text string) string {
-	return ExpandTags(text)
+	return ExpandConsoleTags(text)
 }
 
-// ExpandSemanticTags is a convenience alias for ExpandTags (backwards compatibility)
+// ExpandSemanticTags is a convenience alias for ExpandConsoleTags (backwards compatibility)
 func ExpandSemanticTags(text string) string {
-	return ExpandTags(text)
+	return ExpandConsoleTags(text)
 }
 
-// TranslateToTagged is a convenience alias for ExpandTags
+// TranslateToTagged is a convenience alias for ExpandConsoleTags
 func TranslateToTagged(text string) string {
-	return ExpandTags(text)
+	return ExpandConsoleTags(text)
 }
 
 // RegisterColor is a legacy alias for RegisterSemanticTag

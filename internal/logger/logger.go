@@ -182,15 +182,15 @@ func buildConsoleStyles() *charmlog.Styles {
 	console.RegisterBaseTags()
 
 	st := charmlog.DefaultStyles()
-	st.Timestamp = theme.SemanticStyle("{{|timestamp|}}")
+	st.Timestamp = theme.ConsoleSemanticStyle("{{|timestamp|}}")
 
-	st.Levels[charmlog.Level(LevelTrace)] = theme.SemanticStyle("{{|trace|}}").SetString("[TRACE ]")
-	st.Levels[charmlog.Level(LevelDebug)] = theme.SemanticStyle("{{|debug|}}").SetString("[DEBUG ]")
-	st.Levels[charmlog.Level(LevelInfo)] = theme.SemanticStyle("{{|info|}}").SetString("[INFO  ]")
-	st.Levels[charmlog.Level(LevelNotice)] = theme.SemanticStyle("{{|notice|}}").SetString("[NOTICE]")
-	st.Levels[charmlog.Level(LevelWarn)] = theme.SemanticStyle("{{|warn|}}").SetString("[WARN  ]")
-	st.Levels[charmlog.Level(LevelError)] = theme.SemanticStyle("{{|error|}}").SetString("[ERROR ]")
-	st.Levels[charmlog.Level(LevelFatal)] = theme.SemanticStyle("{{|fatal|}}").SetString("[FATAL ]")
+	st.Levels[charmlog.Level(LevelTrace)] = theme.ConsoleSemanticStyle("{{|trace|}}").SetString("[TRACE ]")
+	st.Levels[charmlog.Level(LevelDebug)] = theme.ConsoleSemanticStyle("{{|debug|}}").SetString("[DEBUG ]")
+	st.Levels[charmlog.Level(LevelInfo)] = theme.ConsoleSemanticStyle("{{|info|}}").SetString("[INFO  ]")
+	st.Levels[charmlog.Level(LevelNotice)] = theme.ConsoleSemanticStyle("{{|notice|}}").SetString("[NOTICE]")
+	st.Levels[charmlog.Level(LevelWarn)] = theme.ConsoleSemanticStyle("{{|warn|}}").SetString("[WARN  ]")
+	st.Levels[charmlog.Level(LevelError)] = theme.ConsoleSemanticStyle("{{|error|}}").SetString("[ERROR ]")
+	st.Levels[charmlog.Level(LevelFatal)] = theme.ConsoleSemanticStyle("{{|fatal|}}").SetString("[FATAL ]")
 
 	return st
 }
@@ -284,15 +284,15 @@ func Display(ctx context.Context, msg any, args ...any) {
 	for _, line := range lines {
 		// Output to TUI if writer is in context
 		if w, ok := ctx.Value(console.TUIWriterKey).(io.Writer); ok {
-			// Use ForTUI to keep styles while removing ANSI
-			fmt.Fprintln(w, console.ForTUI(line))
+			// Pass raw tags to TUI for component-side registry resolution
+			fmt.Fprintln(w, line)
 		}
 
 		// Output directly to terminal (stdout)
 		// IMPORTANT: Always use ToANSI for stdout to get ANSI colors, regardless of TUI mode
 		// Suppress based on TUIMode
 		if !TUIMode {
-			fmt.Println(console.ToANSI(line) + console.CodeReset)
+			fmt.Println(console.ToConsoleANSI(line) + console.CodeReset)
 		}
 	}
 }

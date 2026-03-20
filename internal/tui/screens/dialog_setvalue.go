@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"DockSTARTer2/internal/appenv"
-	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/tui/components/sinput"
 
@@ -363,7 +363,7 @@ func (m *setValueDialogModel) recalc() {
 		CurrentValue:   m.input.Value(),
 	}, contentW)
 	// Use the actual rendered height — Padding+Width can wrap long description lines.
-	headingRenderedH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(console.ToANSI(headingRaw)))
+	headingRenderedH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToThemeANSI(headingRaw)))
 	btnH := tui.ButtonRowHeight(contentW, 0, tui.ButtonSpec{Text: "Save"}, tui.ButtonSpec{Text: "Cancel"}, tui.ButtonSpec{Text: "Exit"})
 	// overhead: outer border(2) + rendered heading + "Current Value" section(3) + "Presets" section borders(2) + spacer(1) + buttons
 	fixed := 2 + headingRenderedH + 3 + 2 + 1 + btnH
@@ -393,14 +393,11 @@ func (m *setValueDialogModel) optIndexAt(screenY int) int {
 		if m.opts[i].Value != "" {
 			h = 2
 		}
-		if h > rowBudget {
-			break
-		}
-		rowBudget -= h
 		if screenY >= rowY && screenY < rowY+h {
 			return i
 		}
 		rowY += h
+		rowBudget -= h
 	}
 	return -1
 }
@@ -429,10 +426,10 @@ func (m *setValueDialogModel) ViewString() string {
 	contentW := m.innerWidth()
 	sInnerW := contentW - 2 // inner width of each section (section border adds 2)
 
-	bgStyle := tui.SemanticStyle("{{|Theme_Dialog|}}")
-	normalStyle := tui.SemanticStyle("{{|Theme_Item|}}")
-	selectedStyle := tui.SemanticStyle("{{|Theme_ItemSelected|}}")
-	subLabelStyle := tui.SemanticStyle("{{|Theme_HelpItem|}}")
+	bgStyle := theme.ThemeSemanticStyle("{{|Dialog|}}")
+	normalStyle := theme.ThemeSemanticStyle("{{|Item|}}")
+	selectedStyle := theme.ThemeSemanticStyle("{{|ItemSelected|}}")
+	subLabelStyle := theme.ThemeSemanticStyle("{{|HelpItem|}}")
 
 	// Heading — CurrentValue updates live as the user types
 	headingRaw := FormatMenuHeading(MenuHeadingParams{
@@ -443,14 +440,14 @@ func (m *setValueDialogModel) ViewString() string {
 		CurrentValue:   m.input.Value(),
 	}, contentW)
 	headingText := strings.TrimRight(
-		ctx.Dialog.Padding(1, 2).Width(contentW).Render(console.ToANSI(headingRaw)), "\n")
+		ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToThemeANSI(headingRaw)), "\n")
 
 	// "Current Value" section — titled bordered box, thick border when focused
 	inputFocused := m.focus == setValueFocusInput
 	inputContent := strings.TrimRight(ctx.Dialog.Padding(0, 1).Width(sInnerW).Render(m.input.View()), "\n")
-	inputTitleTag := "Theme_TitleSubMenu"
+	inputTitleTag := "TitleSubMenu"
 	if inputFocused {
-		inputTitleTag = "Theme_TitleSubMenuFocused"
+		inputTitleTag = "TitleSubMenuFocused"
 	}
 	currentValueSection := strings.TrimRight(tui.RenderBorderedBoxCtx(
 		"Current Value", inputContent, sInnerW, 0, inputFocused, true, true,
@@ -543,9 +540,9 @@ func (m *setValueDialogModel) ViewString() string {
 		tui.IsScrollbarEnabled(), ctx.LineCharacters, ctx,
 	)
 
-	listTitleTag := "Theme_TitleSubMenu"
+	listTitleTag := "TitleSubMenu"
 	if listFocused {
-		listTitleTag = "Theme_TitleSubMenuFocused"
+		listTitleTag = "TitleSubMenuFocused"
 	}
 	presetsSection := strings.TrimRight(tui.RenderBorderedBoxCtx(
 		"Preset Values", listContent, sInnerW, 0, listFocused, true, true,
@@ -611,7 +608,7 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 		AppName: m.appName, AppDescription: m.appDesc,
 		VarName: m.varName, OriginalValue: m.origVal, CurrentValue: m.input.Value(),
 	}, contentW)
-	headingH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(console.ToANSI(headingRaw)))
+	headingH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToThemeANSI(headingRaw)))
 	// outer border(1) + headingH + "Current Value" section(3) + "Presets" title border(1)
 	listTop := 1 + headingH + 3 + 1
 

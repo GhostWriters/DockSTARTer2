@@ -27,7 +27,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *tui.MenuModel {
 	menu := tui.NewMenuModel(
 		"app-select",
 		"Select Applications",
-		"Choose which apps you would like to install:\nUse {{|Theme_KeyCap|}}[up]{{[-]}}, {{|Theme_KeyCap|}}[down]{{[-]}}, and {{|Theme_KeyCap|}}[space]{{[-]}} to select apps, and {{|Theme_KeyCap|}}[tab]{{[-]}} to switch to the buttons at the bottom.",
+		"Choose which apps you would like to install:\nUse {{|KeyCap|}}[up]{{[-]}}, {{|KeyCap|}}[down]{{[-]}}, and {{|KeyCap|}}[space]{{[-]}} to select apps, and {{|KeyCap|}}[tab]{{[-]}} to switch to the buttons at the bottom.",
 		nil, // items will be set by refreshItems
 		backAction,
 	)
@@ -86,9 +86,9 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *tui.MenuModel {
 			desc := appenv.GetDescriptionFromTemplate(ctx, app, envFile)
 
 			if appenv.AppNameToInstanceName(app) != "" {
-				desc = "{{|Theme_ListAppUserDefined|}}" + desc
+				desc = "{{|ListAppUserDefined|}}" + desc
 			} else {
-				desc = "{{|Theme_ListApp|}}" + desc
+				desc = "{{|ListApp|}}" + desc
 			}
 
 			items = append(items, tui.MenuItem{
@@ -145,7 +145,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *tui.MenuModel {
 			toDisableNice = append(toDisableNice, niceNames[app])
 		}
 
-		dialog := tui.NewProgramBoxModel("{{|Theme_TitleSuccess|}}Enabling Selected Applications", "", "")
+		dialog := tui.NewProgramBoxModel("{{|TitleSuccess|}}Enabling Selected Applications", "", "")
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
 		dialog.SetAutoClose(false, 0)

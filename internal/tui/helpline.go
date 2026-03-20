@@ -1,7 +1,7 @@
 package tui
 
 import (
-	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/theme"
 
 	"charm.land/lipgloss/v2"
 )
@@ -27,5 +27,5 @@ func (m *HelplineModel) ViewString(width int) string {
 
 	// Center the help text
 	helpStyle := styles.HelpLine.Width(width).Align(lipgloss.Center)
-	return MaintainBackground(helpStyle.Render(console.ToANSI(m.text)), styles.HelpLine)
+	return MaintainBackground(helpStyle.Render(theme.ToThemeANSI(m.text)), styles.HelpLine)
 }

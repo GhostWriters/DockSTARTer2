@@ -183,7 +183,7 @@ func RenderDialogBoxCtx(title, content string, dialogType DialogType, width, hei
 	case DialogTypeError:
 		titleStyle = titleStyle.Foreground(ctx.StatusError.GetForeground())
 	case DialogTypeConfirm:
-		titleStyle = SemanticRawStyle("Theme_TitleQuestion") // Question style is semantic
+		titleStyle = SemanticRawStyle("TitleQuestion") // Question style is semantic
 	}
 
 	// Render title

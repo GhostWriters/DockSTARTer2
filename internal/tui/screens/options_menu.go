@@ -20,7 +20,7 @@ func NewOptionsMenuScreen(isRoot bool) tui.ScreenModel {
 		},
 		{
 			Tag:    "Trigger Test Panic",
-			Desc:   "{{|Theme_TitleError|}}Test error handling{{[-]}}",
+			Desc:   "{{|TitleError|}}Test error handling{{[-]}}",
 			Help:   "Verify branded recovery and stack trace",
 			Action: func() tea.Msg { panic("Manual verification panic (Test: 123)") },
 		},
@@ -31,7 +31,7 @@ func NewOptionsMenuScreen(isRoot bool) tui.ScreenModel {
 			Action: func() tea.Msg {
 				go func() {
 					// Simulate executing a background task that requires a password
-					console.TextPrompt(context.Background(), func(context.Context, any, ...any) {}, "{{|Theme_TitleQuestion|}}Sudo Password Required{{[-]}}", "sudo run simulated/command.sh", true)
+					console.TextPrompt(context.Background(), func(context.Context, any, ...any) {}, "{{|TitleQuestion|}}Sudo Password Required{{[-]}}", "sudo run simulated/command.sh", true)
 				}()
 				return nil
 			},

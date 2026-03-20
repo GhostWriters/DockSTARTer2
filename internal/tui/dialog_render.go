@@ -5,6 +5,7 @@ import (
 
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/strutil"
+	"DockSTARTer2/internal/theme"
 
 	"charm.land/lipgloss/v2"
 )
@@ -72,7 +73,7 @@ func RenderDialogWithTypeCtx(title, content string, focused bool, targetHeight i
 	case DialogTypeError:
 		titleStyle = titleStyle.Foreground(ctx.StatusError.GetForeground())
 	case DialogTypeConfirm:
-		titleStyle = SemanticRawStyle("Theme_TitleQuestion") // Semantic
+		titleStyle = SemanticRawStyle("TitleQuestion") // Semantic
 	}
 
 	return renderDialogWithBorderCtx(title, content, border, focused, targetHeight, true, true, titleStyle, ctx)
@@ -127,17 +128,17 @@ func RenderTitleSegmentCtx(rawTitle string, borderFocused bool, contentFocused b
 	var result strings.Builder
 	result.WriteString(borderStyleLight.Render(leftT))
 
-	focusTag := "Theme_TitleFocusIndicator"
+	focusTag := "TitleFocusIndicator"
 	if showIndicators {
 		if contentFocused {
 			ind := "▸"
 			if !ctx.LineCharacters {
 				ind = ">"
 			}
-			result.WriteString(borderStyleLight.Render(console.ToANSIWithPrefix("{{|"+focusTag+"|}}"+ind+"{{[-]}}", ctx.Prefix)))
+			result.WriteString(borderStyleLight.Render(theme.ToThemeANSIWithPrefix("{{|"+focusTag+"|}}"+ind+"{{[-]}}", ctx.Prefix)))
 		} else {
-			unfocusTag := "Theme_TitleUnfocusedIndicator"
-			result.WriteString(borderStyleLight.Render(console.ToANSIWithPrefix("{{|"+unfocusTag+"|}} {{[-]}}", ctx.Prefix)))
+			unfocusTag := "TitleUnfocusedIndicator"
+			result.WriteString(borderStyleLight.Render(theme.ToThemeANSIWithPrefix("{{|"+unfocusTag+"|}} {{[-]}}", ctx.Prefix)))
 		}
 	}
 
@@ -149,10 +150,10 @@ func RenderTitleSegmentCtx(rawTitle string, borderFocused bool, contentFocused b
 			if !ctx.LineCharacters {
 				ind = "<"
 			}
-			result.WriteString(borderStyleLight.Render(console.ToANSIWithPrefix("{{|"+focusTag+"|}}"+ind+"{{[-]}}", ctx.Prefix)))
+			result.WriteString(borderStyleLight.Render(theme.ToThemeANSIWithPrefix("{{|"+focusTag+"|}}"+ind+"{{[-]}}", ctx.Prefix)))
 		} else {
-			unfocusTag := "Theme_TitleUnfocusedIndicator"
-			result.WriteString(borderStyleLight.Render(console.ToANSIWithPrefix("{{|"+unfocusTag+"|}} {{[-]}}", ctx.Prefix)))
+			unfocusTag := "TitleUnfocusedIndicator"
+			result.WriteString(borderStyleLight.Render(theme.ToThemeANSIWithPrefix("{{|"+unfocusTag+"|}} {{[-]}}", ctx.Prefix)))
 		}
 	}
 

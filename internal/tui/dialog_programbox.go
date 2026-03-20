@@ -434,7 +434,7 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case outputLineMsg:
 		// Convert semantic theme tags to ANSI colors before displaying
 		styles := GetStyles()
-		rendered := RenderThemeText(msg.line, styles.Console)
+		rendered := RenderConsoleText(msg.line, styles.Console)
 		m.rawLines = append(m.rawLines, rendered)
 
 		// Render with wrapping to viewport width

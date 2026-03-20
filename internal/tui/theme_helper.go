@@ -41,14 +41,14 @@ func ClearSemanticCachePrefix(prefix string) {
 	theme.ClearSemanticCachePrefix(prefix)
 }
 
-// SemanticStyle translates a semantic tag or direct style code into a lipgloss.Style.
+// SemanticStyle translates a semantic tag or direct style code strictly using the theme registry.
 func SemanticStyle(tag string) lipgloss.Style {
-	return theme.SemanticStyle(tag)
+	return theme.ThemeSemanticStyle(tag)
 }
 
-// SemanticRawStyle translates a raw semantic name (e.g. "Theme_Title") into a lipgloss.Style.
+// SemanticRawStyle translates a raw semantic name strictly using the theme registry.
 func SemanticRawStyle(name string) lipgloss.Style {
-	return theme.SemanticRawStyle(name)
+	return theme.ThemeSemanticRawStyle(name)
 }
 
 // Color parsing now uses tcell/v3/colors for RGB conversion via console.GetHexForColor().
@@ -68,6 +68,15 @@ func RenderThemeText(text string, defaultStyle ...lipgloss.Style) string {
 	return RenderThemeTextCtx(text, ctx)
 }
 
+// RenderConsoleText takes text with {{...}} console tags and returns lipgloss-styled text using the console registry.
+func RenderConsoleText(text string, defaultStyle ...lipgloss.Style) string {
+	ctx := GetActiveContext()
+	if len(defaultStyle) > 0 {
+		ctx.Dialog = defaultStyle[0]
+	}
+	return RenderConsoleTextCtx(text, ctx)
+}
+
 // RenderThemeTextCtx renders themed text using properties from a specific context
 func RenderThemeTextCtx(text string, ctx StyleContext) string {
 	if text == "" {
@@ -76,7 +85,7 @@ func RenderThemeTextCtx(text string, ctx StyleContext) string {
 
 	resetStyle := ctx.Dialog
 	// Create a cache key from the text, the style, and the prefix
-	cacheKey := text + "|" + resetStyle.String() + "|" + ctx.Prefix
+	cacheKey := "theme|" + text + "|" + resetStyle.String() + "|" + ctx.Prefix
 
 	cacheMu.RLock()
 	if cached, ok := renderCache[cacheKey]; ok {
@@ -91,15 +100,52 @@ func RenderThemeTextCtx(text string, ctx StyleContext) string {
 		return strings.Split(rendered, "_")[0]
 	}
 
-	// Resolve tags to ANSI using the context's prefix
-	rendered := console.ToANSIWithPrefix(text, ctx.Prefix)
+	// Resolve tags to ANSI using the context's prefix and the isolated theme map
+	rendered := console.ToThemeANSIWithPrefix(text, ctx.Prefix)
 
 	// Combine components and ensure reset at end
 	result := getCodes(resetStyle) + rendered + console.CodeReset
 
 	// Prevent embedded resets from clearing container background or attributes
-	// Important: MaintainBackground must use the SAME style that we used as the base
-	// (resetStyle), NOT necessarily ctx.Dialog if it was overridden.
+	final := MaintainBackground(result, resetStyle)
+
+	cacheMu.Lock()
+	renderCache[cacheKey] = final
+	cacheMu.Unlock()
+
+	return final
+}
+
+// RenderConsoleTextCtx renders console text using properties from a specific context and the console registry.
+func RenderConsoleTextCtx(text string, ctx StyleContext) string {
+	if text == "" {
+		return ""
+	}
+
+	resetStyle := ctx.Dialog
+	// Create a cache key from the text AND the style
+	cacheKey := "console|" + text + "|" + resetStyle.String()
+
+	cacheMu.RLock()
+	if cached, ok := renderCache[cacheKey]; ok {
+		cacheMu.RUnlock()
+		return cached
+	}
+	cacheMu.RUnlock()
+
+	// Ensure the starting text has the correct background/foreground/attributes
+	getCodes := func(s lipgloss.Style) string {
+		rendered := s.Render("_")
+		return strings.Split(rendered, "_")[0]
+	}
+
+	// Resolve tags to ANSI using MUST use the console registry
+	rendered := console.ToConsoleANSI(text)
+
+	// Combine components and ensure reset at end
+	result := getCodes(resetStyle) + rendered + console.CodeReset
+
+	// Prevent embedded resets from clearing container background or attributes
 	final := MaintainBackground(result, resetStyle)
 
 	cacheMu.Lock()
