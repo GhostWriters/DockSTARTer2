@@ -184,7 +184,7 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 		" {{|LineHeading|}}*** .env ***{{[-]}}",
 		" {{|LineComment|}}### Sample comment{{[-]}}",
 		" {{|LineVar|}}Var='Default'{{[-]}}",
-		" {{|LineModifiedVar|}}Var='Modified'{{[-]}}",
+		" {{|ModifiedText|}}Var='Modified'{{[-]}}",
 	}
 
 	for i, l := range contentLines {

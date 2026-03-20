@@ -67,7 +67,7 @@ LineHeading = "{{[white:black:BU]}}"
 LineComment = "{{[gray:black:B]}}"
 LineOther = "{{[gray:black:B]}}"
 LineVar = "{{[white:black]}}"
-LineModifiedVar = "{{[black:white:B]}}"
+ModifiedText = "{{[black:white:B]}}"
 LineAddVariable = "{{[black:white:B]}}"
 EnvBuiltin = "{{[black:cyan]}}"
 EnvUser = "{{[green:cyan]}}"
@@ -100,4 +100,5 @@ border_color = 1
 dialog_title_align = "center"
 submenu_title_align = "left"
 log_title_align = "center"
+
 

@@ -8,23 +8,17 @@ Follow these steps to push changes and trigger a release.
 
 
 
-## 1. Prerelease Branch (Development/Test Release)
-Use this for testing changes. It generates a version tag like `v2.YYYYMMDD.N-Prerelease`.
+## 1. Development (devwork) & Prerelease
+Use this for regular development and staging changes for test releases.
 
 // turbo
-1. Stage and commit changes:
+1. Push to `devwork` and merge to `Prerelease`:
    ```powershell
-   git add . && git commit -m "feat/fix: descriptive message"
+   git add . && git commit -m "feat/fix: descriptive message" && git push origin devwork && git checkout Prerelease && git merge devwork && git push origin Prerelease && git checkout devwork
    ```
 
 // turbo
-2. Push to `Prerelease`:
-   ```powershell
-   git push origin Prerelease
-   ```
-
-// turbo
-3. Trigger the release workflow:
+2. Trigger the release workflow (optional):
    ```powershell
    gh workflow run release.yml --ref Prerelease
    ```

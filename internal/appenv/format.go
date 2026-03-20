@@ -84,7 +84,7 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 		if filepath.Base(defaultEnvFile) == constants.EnvExampleFileName {
 			data, err := assets.GetDefaultEnv()
 			if err == nil {
-				templateLines = strings.Split(string(data), "\n")
+				templateLines = strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n")
 				// readarray -t strips the final newline character from the file
 				if len(templateLines) > 0 && templateLines[len(templateLines)-1] == "" {
 					templateLines = templateLines[:len(templateLines)-1]
@@ -95,7 +95,7 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 		} else if info, err := os.Stat(defaultEnvFile); err == nil && !info.IsDir() {
 			// Read app templates from disk (matches Bash [[ -f ${DefaultEnvFile} ]])
 			if data, err := os.ReadFile(defaultEnvFile); err == nil {
-				templateLines = strings.Split(string(data), "\n")
+				templateLines = strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n")
 				if len(templateLines) > 0 && templateLines[len(templateLines)-1] == "" {
 					templateLines = templateLines[:len(templateLines)-1]
 				}

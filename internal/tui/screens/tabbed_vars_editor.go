@@ -697,20 +697,22 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			editorStyles.Focused.DuplicateText = tui.SemanticRawStyle("EnvDuplicate")
 			editorStyles.Focused.BuiltinText = tui.SemanticRawStyle("EnvBuiltin")
 			editorStyles.Focused.UserDefinedText = tui.SemanticRawStyle("EnvUser")
+			editorStyles.Focused.ModifiedText = tui.SemanticRawStyle("ModifiedText")
 			editorStyles.Focused.PendingDeleteText = tui.SemanticRawStyle("EnvPendingDelete")
-			editorStyles.Focused.GutterAdded = tui.SemanticRawStyle("GutterAdded")
-			editorStyles.Focused.GutterDeleted = tui.SemanticRawStyle("GutterDeleted")
-			editorStyles.Focused.GutterModified = tui.SemanticRawStyle("GutterModified")
-			editorStyles.Focused.GutterInvalid = tui.SemanticRawStyle("GutterInvalid")
+			editorStyles.Focused.GutterAdded = tui.SemanticRawStyle("MarkerAdded")
+			editorStyles.Focused.GutterDeleted = tui.SemanticRawStyle("MarkerDeleted")
+			editorStyles.Focused.GutterModified = tui.SemanticRawStyle("MarkerModified")
+			editorStyles.Focused.GutterInvalid = tui.SemanticRawStyle("MarkerInvalid")
 			editorStyles.Blurred.InvalidText = tui.SemanticRawStyle("EnvInvalid")
 			editorStyles.Blurred.DuplicateText = tui.SemanticRawStyle("EnvDuplicate")
 			editorStyles.Blurred.BuiltinText = tui.SemanticRawStyle("EnvBuiltin")
 			editorStyles.Blurred.UserDefinedText = tui.SemanticRawStyle("EnvUser")
+			editorStyles.Blurred.ModifiedText = tui.SemanticRawStyle("ModifiedText")
 			editorStyles.Blurred.PendingDeleteText = tui.SemanticRawStyle("EnvPendingDelete")
-			editorStyles.Blurred.GutterAdded = tui.SemanticRawStyle("GutterAdded")
-			editorStyles.Blurred.GutterDeleted = tui.SemanticRawStyle("GutterDeleted")
-			editorStyles.Blurred.GutterModified = tui.SemanticRawStyle("GutterModified")
-			editorStyles.Blurred.GutterInvalid = tui.SemanticRawStyle("GutterInvalid")
+			editorStyles.Blurred.GutterAdded = tui.SemanticRawStyle("MarkerAdded")
+			editorStyles.Blurred.GutterDeleted = tui.SemanticRawStyle("MarkerDeleted")
+			editorStyles.Blurred.GutterModified = tui.SemanticRawStyle("MarkerModified")
+			editorStyles.Blurred.GutterInvalid = tui.SemanticRawStyle("MarkerInvalid")
 			m.tabs[i].editor.SetStyles(editorStyles)
 			// Update tab metadata used by saveEnv and heading display
 			m.tabs[i].initialVars = data.initialVars
@@ -1728,10 +1730,10 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) tui.HelpContext {
 	meta, ok := tab.editor.CurrentLineMeta()
 	if !ok || !meta.IsVariable {
 		legend := "| " +
-			"{{|GutterAdded|}}+{{[-]}} Added | " +
-			"{{|GutterDeleted|}}-{{[-]}} Deleted | " +
-			"{{|GutterModified|}}~{{[-]}} Changed | " +
-			"{{|GutterInvalid|}}!{{[-]}} Invalid |"
+			"{{|MarkerAdded|}}+{{[-]}} Added | " +
+			"{{|MarkerDeleted|}}-{{[-]}} Deleted | " +
+			"{{|MarkerModified|}}~{{[-]}} Changed | " +
+			"{{|MarkerInvalid|}}!{{[-]}} Invalid |"
 		return tui.HelpContext{
 			ScreenName: m.title,
 			PageTitle:  "Legend",
@@ -1745,10 +1747,10 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) tui.HelpContext {
 	}
 	if varName == "" {
 		legend := "| " +
-			"{{|GutterAdded|}}+{{[-]}} Added | " +
-			"{{|GutterDeleted|}}-{{[-]}} Deleted | " +
-			"{{|GutterModified|}}~{{[-]}} Changed | " +
-			"{{|GutterInvalid|}}!{{[-]}} Invalid |"
+			"{{|MarkerAdded|}}+{{[-]}} Added | " +
+			"{{|MarkerDeleted|}}-{{[-]}} Deleted | " +
+			"{{|MarkerModified|}}~{{[-]}} Changed | " +
+			"{{|MarkerInvalid|}}!{{[-]}} Invalid |"
 		return tui.HelpContext{
 			ScreenName: m.title,
 			PageTitle:  "Legend",
@@ -1762,10 +1764,10 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) tui.HelpContext {
 // getVariableHelpContext builds a help context for a specific variable in a tab.
 func (m *TabbedVarsEditorModel) getVariableHelpContext(varName string, tab *envTab, contentWidth int) *tui.HelpContext {
 	legend := "| " +
-		"{{|GutterAdded|}}+{{[-]}} Added | " +
-		"{{|GutterDeleted|}}-{{[-]}} Deleted | " +
-		"{{|GutterModified|}}~{{[-]}} Changed | " +
-		"{{|GutterInvalid|}}!{{[-]}} Invalid |"
+		"{{|MarkerAdded|}}+{{[-]}} Added | " +
+		"{{|MarkerDeleted|}}-{{[-]}} Deleted | " +
+		"{{|MarkerModified|}}~{{[-]}} Changed | " +
+		"{{|MarkerInvalid|}}!{{[-]}} Invalid |"
 
 	var currentValue string
 	// Find the current value for this variable from the editor if possible

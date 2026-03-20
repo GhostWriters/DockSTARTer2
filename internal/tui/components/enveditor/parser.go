@@ -64,7 +64,7 @@ func (m *Model) ParseEnv(content string, defaultFunc func(string) string, readOn
 						if eqIdx != -1 {
 							l.EditableStartCol = eqIdx + 1
 							if defaultFunc != nil {
-								l.DefaultValue = defaultFunc(key)
+								l.DefaultValue = strings.TrimSpace(defaultFunc(key))
 							}
 						}
 				}
@@ -158,7 +158,7 @@ func (m *Model) ReclassifyEnv(defaultFunc func(string) string, readOnlyVars []st
 					if eqIdx != -1 {
 						l.EditableStartCol = eqIdx + 1
 						if defaultFunc != nil {
-							l.DefaultValue = defaultFunc(key)
+							l.DefaultValue = strings.TrimSpace(defaultFunc(key))
 						}
 					}
 				}

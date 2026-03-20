@@ -2648,7 +2648,15 @@ func (m *Model) renderRunes(runes []rune, l int, startIdx int, baseStyle lipglos
 			b.WriteString(baseStyle.Render(string(r)))
 		} else {
 			valIdx := fullIdx - meta.EditableStartCol
-			if valIdx < len(defRunes) && r == defRunes[valIdx] {
+			isMatch := false
+			if valIdx < len(defRunes) {
+				isMatch = (r == defRunes[valIdx])
+			} else {
+				// If we have extra characters at the end, only flag them if they aren't whitespace
+				isMatch = unicode.IsSpace(r)
+			}
+
+			if meta.DefaultValue == "" || meta.IsUserDefined || meta.IsNewLine || r == '\n' || r == '\r' || isMatch {
 				b.WriteString(baseStyle.Render(string(r)))
 			} else {
 				b.WriteString(modStyle.Render(string(r)))
