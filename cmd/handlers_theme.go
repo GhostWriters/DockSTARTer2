@@ -100,21 +100,13 @@ func handleTheme(ctx context.Context, group *CommandGroup) error {
 
 	case "--theme-list":
 		themes, err := theme.List()
-		if err != nil || len(themes) == 0 {
-			logger.Warn(ctx, "No themes found.")
-			logger.Notice(ctx, "Place user themes (*.ds2theme with 'user_' prefix) in: {{|Folder|}}%s{{[-]}}", paths.GetThemesDir())
-			return nil
+		if err != nil {
+			return err
 		}
-		logger.Notice(ctx, "Available themes:")
 		for _, t := range themes {
-			marker := ""
-			if t.IsUserTheme {
-				marker = " [user]"
-			}
-			logger.Notice(ctx, "  - %s%s", t.Name, marker)
+			fmt.Println(t.ConfigValue)
 		}
-		logger.Notice(ctx, "User themes directory: {{|Folder|}}%s{{[-]}}", paths.GetThemesDir())
-		logger.Notice(ctx, "Drop any *.ds2theme file there to use it (e.g. GreenScreen.ds2theme → --theme user:GreenScreen)")
+		return nil
 	}
 	return nil
 }
@@ -387,7 +379,7 @@ func handleThemeTable(ctx context.Context) error {
 
 	var data []string
 	for _, t := range themes {
-		data = append(data, t.Name, t.Description, t.Author)
+		data = append(data, t.ConfigValue, t.Description, t.Author)
 	}
 
 	// Default theme info (hardcoded for now as it's built-in)
