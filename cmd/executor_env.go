@@ -45,6 +45,10 @@ func handleEnvGet(ctx context.Context, group *CommandGroup) error {
 	upperCase := !strings.Contains(baseCmd, "-lower")
 
 	for _, arg := range args {
+		if !appenv.VarNameIsValid(arg, "") {
+			logger.Error(ctx, "'{{|Var|}}%s{{[-]}}' is an invalid variable name.", arg)
+			continue
+		}
 		key, file := resolveEnvVar(arg, conf)
 		if upperCase && !strings.Contains(arg, ":") {
 			key = strings.ToUpper(key)
@@ -120,6 +124,10 @@ func handleEnvSet(ctx context.Context, group *CommandGroup) error {
 	isLiteral := strings.Contains(baseCmd, "-literal")
 
 	for _, p := range pairs {
+		if !appenv.VarNameIsValid(p.key, "") {
+			logger.Error(ctx, "'{{|Var|}}%s{{[-]}}' is an invalid variable name.", p.key)
+			continue
+		}
 		varName, file := resolveEnvVar(p.key, conf)
 		if upperCase && !strings.Contains(p.key, ":") {
 			varName = strings.ToUpper(varName)

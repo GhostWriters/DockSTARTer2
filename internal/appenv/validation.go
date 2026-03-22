@@ -217,7 +217,7 @@ func VarNameIsValid(varName string, varType string) bool {
 	varType = strings.ToUpper(varType)
 	switch varType {
 	case "":
-		return VarNameIsValid(varName, "_BARE_") || VarNameIsValid(varName, "_APPNAME_")
+		return VarNameIsValid(varName, "_BARE_") || VarNameIsValid(varName, "_APPNAME_:") || VarNameIsValid(varName, "_APPNAME_")
 	case "_BARE_":
 		return regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`).MatchString(varName)
 	case "_GLOBAL_":
@@ -230,6 +230,12 @@ func VarNameIsValid(varName string, varType string) bool {
 			return false
 		}
 		return VarNameToAppName(varName) != ""
+	case "_APPNAME_:":
+		if !strings.Contains(varName, ":") {
+			return false
+		}
+		parts := strings.SplitN(varName, ":", 2)
+		return IsAppNameValid(parts[0]) && VarNameIsValid(parts[1], "_BARE_")
 	default:
 		if strings.HasSuffix(varType, ":") {
 			if !strings.Contains(varName, ":") {

@@ -51,6 +51,17 @@ func QuestionPrompt(ctx context.Context, printer Printer, title, question string
 	// Log the question regardless of prompt mode (matches bash notice behavior)
 	printer(ctx, "%s", questionStr)
 
+	// Prepare prompt string
+	ynPrompt := "[YN]"
+	if strings.EqualFold(defaultValue, "y") {
+		ynPrompt = "[Yn]"
+	} else if strings.EqualFold(defaultValue, "n") {
+		ynPrompt = "[yN]"
+	}
+
+	// Log the YN prompt regardless of mode (matches bash notice behavior)
+	printer(ctx, "%s", ynPrompt)
+
 	// Check if we should use TUI for this prompt
 	if TUIConfirm != nil {
 		defaultYes := strings.EqualFold(defaultValue, "y")
@@ -62,16 +73,6 @@ func QuestionPrompt(ctx context.Context, printer Printer, title, question string
 		}
 		return answer, nil
 	}
-
-	// Prepare prompt string
-	ynPrompt := "[YN]"
-	if strings.EqualFold(defaultValue, "y") {
-		ynPrompt = "[Yn]"
-	} else if strings.EqualFold(defaultValue, "n") {
-		ynPrompt = "[yN]"
-	}
-
-	printer(ctx, "%s", ynPrompt)
 
 	// Switch to raw mode to read a single character
 	fd := int(os.Stdin.Fd())

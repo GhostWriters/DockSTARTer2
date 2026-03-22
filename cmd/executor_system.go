@@ -29,7 +29,36 @@ func handleList(ctx context.Context, group *CommandGroup) error {
 
 	switch group.Command {
 	case "-l", "--list":
-		result, err = appenv.ListBuiltinApps()
+		apps, err := appenv.ListBuiltinApps()
+		if err != nil {
+			logger.Error(ctx, "List failed: %v", err)
+			return err
+		}
+		headers := []string{
+			"{{|UsageCommand|}}Application{{[-]}}",
+			"{{|UsageCommand|}}Deprecated{{[-]}}",
+			"{{|UsageCommand|}}Added{{[-]}}",
+			"{{|UsageCommand|}}Disabled{{[-]}}",
+		}
+		var data []string
+		for _, app := range apps {
+			nice := appenv.GetNiceName(ctx, app)
+			deprecated := ""
+			if appenv.IsAppDeprecated(ctx, app) {
+				deprecated = "[*DEPRECATED*]"
+			}
+			added := ""
+			disabled := ""
+			if appenv.IsAppAdded(ctx, app, envFile) {
+				added = "*ADDED*"
+				if !appenv.IsAppEnabled(app, envFile) {
+					disabled = "(Disabled)"
+				}
+			}
+			data = append(data, nice, deprecated, added, disabled)
+		}
+		console.PrintTable(headers, data, conf.UI.LineCharacters)
+		return nil
 	case "--list-added":
 		result, err = appenv.ListAddedApps(ctx, envFile)
 	case "--list-builtin":
