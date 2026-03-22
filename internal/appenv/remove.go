@@ -82,7 +82,7 @@ func removeApp(ctx context.Context, appName string, conf config.AppConfig, assum
 	globalVarsToRemove := intersection(currentGlobalVars, defaultGlobalVars)
 	globalLinesToRemove, _ := getVarLines(globalVarsToRemove, envFile)
 
-	currentAppVars, err := listAppVars(appName+":", appEnvFile)
+	currentAppVars, err := listAppVars("", appEnvFile)
 	if err != nil {
 		return err
 	}
@@ -213,7 +213,7 @@ func listDefaultAppVars(ctx context.Context, appName string) ([]string, error) {
 	if processedFile == "" {
 		return []string{}, nil
 	}
-	return listAppVars(strings.ToUpper(appName), processedFile)
+	return listAppVars("", processedFile)
 }
 
 // intersection returns common elements between two slices

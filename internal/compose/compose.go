@@ -324,7 +324,16 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 		if err := srv.Pull(ctx, project, api.PullOptions{}); err != nil {
 			return err
 		}
-		fallthrough
+		logRunning("up", "-d", "--remove-orphans")
+		return srv.Up(ctx, project, api.UpOptions{
+			Create: api.CreateOptions{
+				RemoveOrphans: true,
+			},
+			Start: api.StartOptions{
+				Attach:  nil,
+				Project: project,
+			},
+		})
 	default: // "up" and unknown commands
 		logRunning("up", "-d", "--remove-orphans")
 		return srv.Up(ctx, project, api.UpOptions{
