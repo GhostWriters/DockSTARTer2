@@ -231,10 +231,16 @@ func AddShadowCtx(content string, ctx StyleContext) string {
 	totalW := contentW + 2
 	totalH := contentH + 1
 
+	// Use screen background; fall back to dialog background if screen has no explicit color
+	// (avoids 2-cell "black" artifact at corners of the shadow composite when Screen bg is nil).
+	baseBG := ctx.Screen.GetBackground()
+	if baseBG == nil {
+		baseBG = ctx.Dialog.GetBackground()
+	}
 	base := lipgloss.NewStyle().
 		Width(totalW).
 		Height(totalH).
-		Background(ctx.Screen.GetBackground()).
+		Background(baseBG).
 		Render("")
 
 	return MultiOverlay(

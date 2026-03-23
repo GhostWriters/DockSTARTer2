@@ -407,46 +407,47 @@ func InitStyles(cfg config.AppConfig) {
 	currentStyles.Shadow = lipgloss.NewStyle().Foreground(currentStyles.ShadowColor).UnsetBackground()
 
 	// Buttons (spacing handled at layout level)
-	// Handle nil (inherit) backgrounds by falling back to DialogBG
+	// lipgloss v2 GetBackground() returns NoColor{} (never nil) for unset colors.
+	// Use type assertion to detect truly unset backgrounds and fall back to DialogBG.
 	currentStyles.ButtonActive = SemanticRawStyle("ButtonActive")
-	if currentStyles.ButtonActive.GetBackground() == nil {
+	if _, noBG := currentStyles.ButtonActive.GetBackground().(lipgloss.NoColor); noBG {
 		currentStyles.ButtonActive = currentStyles.ButtonActive.Background(currentStyles.Dialog.GetBackground())
 	}
 
 	currentStyles.ButtonInactive = SemanticRawStyle("ButtonInactive")
-	if currentStyles.ButtonInactive.GetBackground() == nil {
+	if _, noBG := currentStyles.ButtonInactive.GetBackground().(lipgloss.NoColor); noBG {
 		currentStyles.ButtonInactive = currentStyles.ButtonInactive.Background(currentStyles.Dialog.GetBackground())
 	}
 
 	// List items
 	currentStyles.ItemNormal = SemanticRawStyle("Item")
-	if currentStyles.ItemNormal.GetBackground() == nil {
+	if _, noBG := currentStyles.ItemNormal.GetBackground().(lipgloss.NoColor); noBG {
 		currentStyles.ItemNormal = currentStyles.ItemNormal.Background(currentStyles.Dialog.GetBackground())
 	}
 
 	currentStyles.ItemSelected = SemanticRawStyle("ItemSelected")
-	if currentStyles.ItemSelected.GetBackground() == nil {
+	if _, noBG := currentStyles.ItemSelected.GetBackground().(lipgloss.NoColor); noBG {
 		currentStyles.ItemSelected = currentStyles.ItemSelected.Background(currentStyles.Dialog.GetBackground())
 	}
 
 	// Tags
 	currentStyles.TagNormal = SemanticRawStyle("Tag")
-	if currentStyles.TagNormal.GetBackground() == nil {
+	if _, noBG := currentStyles.TagNormal.GetBackground().(lipgloss.NoColor); noBG {
 		currentStyles.TagNormal = currentStyles.TagNormal.Background(currentStyles.Dialog.GetBackground())
 	}
 
 	currentStyles.TagSelected = SemanticRawStyle("TagSelected")
-	if currentStyles.TagSelected.GetBackground() == nil {
+	if _, noBG := currentStyles.TagSelected.GetBackground().(lipgloss.NoColor); noBG {
 		currentStyles.TagSelected = currentStyles.TagSelected.Background(currentStyles.Dialog.GetBackground())
 	}
 
 	currentStyles.TagKey = SemanticRawStyle("TagKey")
-	if currentStyles.TagKey.GetBackground() == nil {
+	if _, noBG := currentStyles.TagKey.GetBackground().(lipgloss.NoColor); noBG {
 		currentStyles.TagKey = currentStyles.TagKey.Background(currentStyles.Dialog.GetBackground())
 	}
 
 	currentStyles.TagKeySelected = SemanticRawStyle("TagKeySelected")
-	if currentStyles.TagKeySelected.GetBackground() == nil {
+	if _, noBG := currentStyles.TagKeySelected.GetBackground().(lipgloss.NoColor); noBG {
 		currentStyles.TagKeySelected = currentStyles.TagKeySelected.Background(currentStyles.Dialog.GetBackground())
 	}
 
@@ -455,9 +456,13 @@ func InitStyles(cfg config.AppConfig) {
 	currentStyles.StatusBarSeparator = SemanticRawStyle("StatusBarSeparator")
 	currentStyles.StatusBarSelected = SemanticRawStyle("StatusBarSelected")
 	currentStyles.StatusBarBorder = SemanticRawStyle("StatusBarBorder")
-	if currentStyles.StatusBarBorder.GetForeground() == nil && currentStyles.StatusBarBorder.GetBackground() == nil {
-		// Fallback for themes that don't define StatusBarBorder
-		currentStyles.StatusBarBorder = currentStyles.StatusBar
+	{
+		// Fallback for themes that don't define StatusBarBorder: use full StatusBar style.
+		_, noFG := currentStyles.StatusBarBorder.GetForeground().(lipgloss.NoColor)
+		_, noBG := currentStyles.StatusBarBorder.GetBackground().(lipgloss.NoColor)
+		if noFG && noBG {
+			currentStyles.StatusBarBorder = currentStyles.StatusBar
+		}
 	}
 	currentStyles.HeaderBG = currentStyles.StatusBar // Backwards compatibility
 

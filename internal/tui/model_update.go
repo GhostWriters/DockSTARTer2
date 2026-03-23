@@ -392,6 +392,10 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		caW, caH := m.getContentArea()
 		if m.activeScreen != nil {
 			m.activeScreen.SetSize(caW, caH)
+			// Forward so screens like DisplayOptionsScreen can reload preview-namespace styles
+			// that were cleared by InitStyles → ClearSemanticCache above.
+			_, cmd := m.activeScreen.Update(msg)
+			return m, cmd
 		}
 		return m, nil
 
