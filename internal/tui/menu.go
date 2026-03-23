@@ -32,6 +32,16 @@ type MenuItem struct {
 	// Layout support
 	IsSeparator bool // Whether this is a non-selectable header/separator
 
+	// Grouped list support (app selection with instances)
+	IsGroupHeader bool   // App name header row; checkbox shows group-enabled state (read-only)
+	IsSubItem     bool   // Indented instance row under a group header
+	IsAddInstance bool   // "[+] Add instance…" action row
+	IsEditing     bool   // Inline text-input row for new instance name entry
+	IsNew         bool   // Newly added this session (not yet saved; used to allow rename)
+	IsReferenced  bool   // Has env vars / compose reference but no __ENABLED; locked from rename
+	WasAdded      bool   // Whether this item was added (present in .env) when the screen loaded (for gutter diff)
+	BaseApp       string // Base app name this row belongs to (sub-items / add-instance / editing)
+
 	// Metadata
 	IsUserDefined bool              // Whether this is a user-defined app (for coloring)
 	Metadata      map[string]string // Optional extra data (e.g. internal app name)
@@ -352,6 +362,192 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 
 }
 
+// groupedItemDelegate renders the hierarchical app-selection list:
+//   - IsGroupHeader rows: app label with read-only group-enabled checkbox + description
+//   - IsSubItem rows:     indented instance checkbox rows
+//   - IsAddInstance rows: indented "[+] Add instance…" action label
+//   - IsEditing rows:     indented inline text-input display (Tag holds current text + cursor)
+//   - IsSeparator rows:   unchanged (letter headers / blank spacers)
+type groupedItemDelegate struct {
+	menuID    string
+	maxTagLen int // max tag width of header rows only
+	focused   bool
+}
+
+func (d groupedItemDelegate) Height() int                             { return 1 }
+func (d groupedItemDelegate) Spacing() int                            { return 0 }
+func (d groupedItemDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
+
+func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+	menuItem, ok := item.(MenuItem)
+	if !ok {
+		return
+	}
+
+	ctx := GetActiveContext()
+	dialogBG := ctx.Dialog.GetBackground()
+	isSelected := index == m.Index()
+
+	// Separator rows (letter headers and blank spacers)
+	if menuItem.IsSeparator {
+		lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(m.Width())
+		var content string
+		if menuItem.Tag != "" {
+			content = RenderThemeText(menuItem.Tag, theme.ThemeSemanticStyle("{{|TagKey|}}"))
+		} else {
+			content = strutil.Repeat("─", max(0, m.Width()-2))
+		}
+		fmt.Fprint(w, lineStyle.Render(content))
+		return
+	}
+
+	neutralStyle := lipgloss.NewStyle().Background(dialogBG)
+	tagStyle := theme.ThemeSemanticStyle("{{|Tag|}}")
+	itemStyle := theme.ThemeSemanticStyle("{{|Item|}}")
+	keyStyle := theme.ThemeSemanticStyle("{{|TagKey|}}")
+	if isSelected {
+		tagStyle = theme.ThemeSemanticStyle("{{|TagSelected|}}")
+		itemStyle = theme.ThemeSemanticStyle("{{|ItemSelected|}}")
+		keyStyle = theme.ThemeSemanticStyle("{{|TagKeySelected|}}")
+	}
+	descStyle := lipgloss.NewStyle().Background(dialogBG)
+	if isSelected {
+		descStyle = itemStyle
+	}
+
+	subIndent := "    " // 4 spaces for sub-items
+
+	// "[+] Add instance…" row — rendered like a standard unchecked sub-item checkbox
+	if menuItem.IsAddInstance {
+		var cb string
+		if ctx.LineCharacters {
+			cb = checkUnselected
+		} else {
+			cb = checkUnselectedAscii
+		}
+		cbStr := tagStyle.Render(cb) + neutralStyle.Render(" ")
+		subTagStr := ""
+		if len(menuItem.Tag) > 0 {
+			runes := []rune(menuItem.Tag)
+			subTagStr = keyStyle.Render(string(runes[0])) + tagStyle.Render(string(runes[1:]))
+		}
+		line := neutralStyle.Render(" ") + neutralStyle.Render(subIndent) + cbStr + subTagStr
+		actualWidth := lipgloss.Width(line)
+		if actualWidth < m.Width()-2 {
+			line += neutralStyle.Render(strutil.Repeat(" ", m.Width()-2-actualWidth))
+		}
+		lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(m.Width())
+		fmt.Fprint(w, lineStyle.Render(line))
+		return
+	}
+
+	// Inline editing row — Tag holds "SUFFIX▌" or "SUFFIX▌ {{|StatusError|}}msg{{[-]}}"
+	if menuItem.IsEditing {
+		cbStr := ""
+		if menuItem.IsCheckbox {
+			var cb string
+			if ctx.LineCharacters {
+				if menuItem.Checked {
+					cb = checkSelected
+				} else {
+					cb = checkUnselected
+				}
+			} else {
+				if menuItem.Checked {
+					cb = checkSelectedAscii
+				} else {
+					cb = checkUnselectedAscii
+				}
+			}
+			cbStr = tagStyle.Render(cb) + neutralStyle.Render(" ")
+		}
+		rendered := RenderThemeText(menuItem.Tag, descStyle)
+		line := neutralStyle.Render(" ") + neutralStyle.Render(subIndent) + cbStr + rendered
+		actualWidth := lipgloss.Width(line)
+		if actualWidth < m.Width()-2 {
+			line += neutralStyle.Render(strutil.Repeat(" ", m.Width()-2-actualWidth))
+		}
+		lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(m.Width())
+		fmt.Fprint(w, lineStyle.Render(line))
+		return
+	}
+
+	// Build glyph: [+] for group headers, checkbox for instance sub-items
+	var checkbox string
+	if menuItem.IsGroupHeader {
+		checkbox = RenderThemeText("{{|KeyCap|}}[+]{{[-]}} ", descStyle)
+	} else if menuItem.IsCheckbox {
+		var cb string
+		if ctx.LineCharacters {
+			if menuItem.Checked {
+				cb = checkSelected
+			} else {
+				cb = checkUnselected
+			}
+		} else {
+			if menuItem.Checked {
+				cb = checkSelectedAscii
+			} else {
+				cb = checkUnselectedAscii
+			}
+		}
+		checkbox = tagStyle.Render(cb) + neutralStyle.Render(" ")
+	}
+
+	cbWidth := lipgloss.Width(GetPlainText(checkbox))
+
+	// IsSubItem: indented instance row, no description column
+	if menuItem.IsSubItem {
+		// Gutter char (1 col): R=referenced-not-added, +=newly-enabled, -=newly-disabled, space otherwise.
+		gutterChar := neutralStyle.Render(" ")
+		if menuItem.IsReferenced && !menuItem.Checked {
+			gutterChar = RenderThemeText("{{|MarkerModified|}}R{{[-]}}", neutralStyle)
+		} else if menuItem.Checked && !menuItem.WasAdded {
+			gutterChar = RenderThemeText("{{|MarkerAdded|}}+{{[-]}}", neutralStyle)
+		} else if !menuItem.Checked && menuItem.WasAdded {
+			gutterChar = RenderThemeText("{{|MarkerDeleted|}}-{{[-]}}", neutralStyle)
+		}
+		tagStr := RenderThemeText(menuItem.Tag, tagStyle)
+		// Use 3-space indent (gutter char occupies the 4th column) to keep checkbox aligned.
+		line := gutterChar + neutralStyle.Render("   ") + checkbox + tagStr
+		actualWidth := lipgloss.Width(line)
+		if actualWidth < m.Width()-2 {
+			line += neutralStyle.Render(strutil.Repeat(" ", m.Width()-2-actualWidth))
+		}
+		lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(m.Width())
+		fmt.Fprint(w, lineStyle.Render(line))
+		return
+	}
+
+	// IsGroupHeader: checkbox + name + description (aligned like checkboxItemDelegate)
+	tag := menuItem.Tag
+	var tagStr string
+	if strings.Contains(tag, "{{") {
+		tagStr = RenderThemeText(tag, tagStyle)
+	} else {
+		firstLetter := string([]rune(tag)[0])
+		rest := string([]rune(tag)[1:])
+		tagStr = keyStyle.Render(firstLetter) + tagStyle.Render(rest)
+	}
+
+	paddingSpaces := strutil.Repeat(" ", max(0, d.maxTagLen-lipgloss.Width(GetPlainText(tag))+3))
+	availableWidth := m.Width() - 2 - (cbWidth + d.maxTagLen + 3)
+	if availableWidth < 0 {
+		availableWidth = 0
+	}
+
+	descStr := RenderThemeText(menuItem.Desc, descStyle)
+	descLine := TruncateRight(descStr, availableWidth)
+
+	line := checkbox + tagStr + neutralStyle.Render(paddingSpaces) + descLine
+	actualWidth := lipgloss.Width(line)
+	if actualWidth < m.Width()-2 {
+		line += neutralStyle.Render(strutil.Repeat(" ", m.Width()-2-actualWidth))
+	}
+	lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(m.Width())
+	fmt.Fprint(w, lineStyle.Render(line))
+}
+
 // MenuModel represents a selectable menu
 type MenuModel struct {
 	id       string // Unique identifier for selection persistence
@@ -391,6 +587,7 @@ type MenuModel struct {
 
 	// Checkbox mode (for app selection)
 	checkboxMode bool
+	groupedMode  bool // Grouped hierarchical mode (app selection with instances)
 	flowMode     bool // Whether to layout items horizontally instead of vertically
 
 	// Dialog positioning
@@ -592,6 +789,7 @@ func (m *MenuModel) View() tea.View {
 func (m *MenuModel) SetFocused(f bool) {
 	m.focused = f
 	m.updateDelegate()
+	m.InvalidateCache()
 }
 
 // SetMaximized sets whether the menu should expand to fill available space
@@ -645,12 +843,31 @@ func (m *MenuModel) IsActive() bool {
 }
 
 // updateDelegate refreshes the list delegate with the current focus state
+// calculateMaxTagLengthForHeaders returns the max tag width among IsGroupHeader items only.
+func calculateMaxTagLengthForHeaders(items []MenuItem) int {
+	maxLen := 0
+	for _, item := range items {
+		if !item.IsGroupHeader {
+			continue
+		}
+		w := lipgloss.Width(GetPlainText(item.Tag))
+		if w > maxLen {
+			maxLen = w
+		}
+	}
+	return maxLen
+}
+
 func (m *MenuModel) updateDelegate() {
 	focused := m.IsActive()
-	maxTagLen := calculateMaxTagLength(m.items)
-	if m.checkboxMode {
+	if m.groupedMode {
+		maxTagLen := calculateMaxTagLengthForHeaders(m.items)
+		m.list.SetDelegate(groupedItemDelegate{menuID: m.id, maxTagLen: maxTagLen, focused: focused})
+	} else if m.checkboxMode {
+		maxTagLen := calculateMaxTagLength(m.items)
 		m.list.SetDelegate(checkboxItemDelegate{menuID: m.id, maxTagLen: maxTagLen, focused: focused, flowMode: m.flowMode})
 	} else {
+		maxTagLen := calculateMaxTagLength(m.items)
 		m.list.SetDelegate(menuItemDelegate{menuID: m.id, maxTagLen: maxTagLen, focused: focused, flowMode: m.flowMode})
 	}
 }
@@ -659,6 +876,23 @@ func (m *MenuModel) updateDelegate() {
 func (m *MenuModel) SetCheckboxMode(enabled bool) {
 	m.checkboxMode = enabled
 	m.updateDelegate()
+}
+
+// SetGroupedMode enables the hierarchical grouped delegate for the app-selection screen.
+// This renders IsGroupHeader, IsSubItem, IsAddInstance, and IsEditing items correctly.
+func (m *MenuModel) SetGroupedMode(enabled bool) {
+	m.groupedMode = enabled
+	m.updateDelegate()
+}
+
+// SetItem updates a single menu item in-place without replacing the whole list.
+// Useful for live updates (e.g. refreshing the inline editing row on each keypress).
+func (m *MenuModel) SetItem(index int, item MenuItem) {
+	if index < 0 || index >= len(m.items) {
+		return
+	}
+	m.items[index] = item
+	m.list.SetItem(index, item)
 }
 
 // SetVariableHeight allows the list viewport to expand instead of forcing pagination

@@ -163,8 +163,9 @@ func (m *confirmDialogModel) ViewString() string {
 		Padding(1, 2).
 		Width(contentWidth)
 
-	// Apply style and wrap
-	questionText := questionStyle.Render(console.Sprintf("%s", m.question))
+	// Process TUI theme tags (using base dialog style for color resets only),
+	// then apply the full questionStyle (padding + width) uniformly to the whole block.
+	questionText := questionStyle.Render(RenderThemeText(m.question, ctx.Dialog))
 
 	// Render buttons using the standard button helper
 	buttonRow := RenderCenteredButtonsCtx(
@@ -206,7 +207,7 @@ func (m *confirmDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	contentWidth := m.contentWidth()
 
 	questionStyle := ctx.Dialog.Padding(1, 2).Width(contentWidth)
-	questionHeight := lipgloss.Height(questionStyle.Render(m.question))
+	questionHeight := lipgloss.Height(questionStyle.Render(GetPlainText(m.question)))
 
 	// buttonY: border (1) + question with padding + spacer (1)
 	buttonY := 1 + questionHeight + 1
