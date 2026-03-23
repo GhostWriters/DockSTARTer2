@@ -93,11 +93,17 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 
 	themeName := s.previewTheme
 
-	// Border style for the status bar frame (falls back to StatusBar if undefined)
+	// Border style for the status bar frame (falls back to StatusBar if undefined).
+	// lipgloss v2 returns NoColor{} (never nil) for unset colors, so use type assertion
+	// to detect truly unset properties and fall back to hStyle colors.
+	// Background is ALWAYS forced to hStyle so the │ chars blend with the status bar
+	// (StatusBarBorder in the theme uses Screen/white bg for the real header's bottom
+	// corners, which would create a visible seam here).
 	bStyle := tui.SemanticRawStyle("Preview_StatusBarBorder")
-	if bStyle.GetForeground() == nil && bStyle.GetBackground() == nil {
-		bStyle = hStyle
+	if _, noFG := bStyle.GetForeground().(lipgloss.NoColor); noFG {
+		bStyle = bStyle.Foreground(hStyle.GetForeground())
 	}
+	bStyle = bStyle.Background(hStyle.GetBackground())
 
 	// Border characters (unfocused, since the preview is static)
 	var leftChar, rightChar, bottomChar, bottomLeftChar, bottomRightChar string
@@ -216,6 +222,21 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 
 	dialogBox := tui.RenderBorderedBoxCtx(dTitle, contentStr, 38, 0, true, true, false, previewCtx.DialogTitleAlign, "Title", previewCtx)
 	dialogBox = tui.AddShadowCtx(dialogBox, previewCtx)
+
+	// Pad dialogBox to full backdrop width with explicit Screen bg chars so no
+	// exposed backdrop positions remain after overlay (avoids ANSI-state artifacts).
+	dialogW := lipgloss.Width(dialogBox)
+	if dialogW < width {
+		padLeft := (width - dialogW) / 2
+		padRight := width - dialogW - padLeft
+		leftPad := bgStyle.Render(strutil.Repeat(" ", padLeft))
+		rightPad := bgStyle.Render(strutil.Repeat(" ", padRight))
+		dLines := strings.Split(dialogBox, "\n")
+		for i, dl := range dLines {
+			dLines[i] = leftPad + dl + rightPad
+		}
+		dialogBox = strings.Join(dLines, "\n")
+	}
 	backdropBlock = tui.Overlay(dialogBox, backdropBlock, tui.OverlayCenter, tui.OverlayCenter, 0, 0)
 
 	// --- 3. Help Line ---
