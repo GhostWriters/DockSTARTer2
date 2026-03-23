@@ -952,6 +952,35 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *tui.MenuModel {
 			}
 		}
 
+		// collapseOtherGroups collapses every expanded group except keepBase,
+		// then re-selects the keepBase item (its index may shift after collapses).
+		collapseOtherGroups := func(keepBase string) {
+			cur := m.GetItems()
+			changed := false
+			seen := map[string]bool{}
+			for _, it := range cur {
+				if it.IsGroupHeader && it.BaseApp != keepBase && !seen[it.BaseApp] {
+					seen[it.BaseApp] = true
+				}
+			}
+			for base := range seen {
+				if newItems, ok := collapseGroupIfNeeded(cur, base); ok {
+					cur = newItems
+					changed = true
+				}
+			}
+			if !changed {
+				return
+			}
+			m.SetItems(cur)
+			for i, it := range cur {
+				if it.BaseApp == keepBase {
+					m.Select(i)
+					return
+				}
+			}
+		}
+
 		// Rebuild list on template update.
 		if _, ok := msg.(tui.TemplateUpdateSuccessMsg); ok {
 			refreshItems()
@@ -1053,6 +1082,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *tui.MenuModel {
 									startEditing(base)
 								}
 							}
+							collapseOtherGroups(base)
 							return nil, true
 						}
 
@@ -1081,6 +1111,10 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *tui.MenuModel {
 					if relX < nameStartCol {
 							// ── Left zone (glyph/checkbox area): toggle checkbox.
 							toggleItem(m, idx)
+							if item.IsCheckbox {
+								collapseOtherGroups(item.BaseApp)
+							}
+							return nil, true
 						} else {
 							// ── Right zone (name area): expand / rename action ──
 							if item.IsSubItem {
@@ -1089,6 +1123,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *tui.MenuModel {
 								}
 							} else if item.IsCheckbox {
 								expandGroup(item.BaseApp)
+								collapseOtherGroups(item.BaseApp)
 							}
 						return nil, true
 						}
