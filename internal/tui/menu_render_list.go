@@ -87,7 +87,17 @@ func (m *MenuModel) renderVariableHeightList() string {
 	var renderedItems []string
 	var itemHeights []int
 
-	maxTagLen := calculateMaxTagLength(visibleItems)
+	// Only measure tags on rows that have a description column (top-level checkboxes,
+	// radio buttons, and group headers). Sub-items, add-instance, and editing rows
+	// render on their own line with no description, so they must not influence the
+	// column position.
+	var mainItems []MenuItem
+	for _, item := range visibleItems {
+		if !item.IsSubItem && !item.IsAddInstance && !item.IsEditing {
+			mainItems = append(mainItems, item)
+		}
+	}
+	maxTagLen := calculateMaxTagLength(mainItems)
 
 	for i, item := range visibleItems {
 		isSelected := i == selectedVisibleIndex && m.IsActive()
@@ -113,8 +123,107 @@ func (m *MenuModel) renderVariableHeightList() string {
 			continue
 		}
 
+		// ── IsAddInstance: rendered identically to an unchecked IsSubItem ──────
+		if item.IsAddInstance {
+			cb := ""
+			if ctx.LineCharacters {
+				cb = checkUnselected
+			} else {
+				cb = checkUnselectedAscii
+			}
+			cbStr := tStyle.Render(cb) + neutralStyle.Render(" ")
+			subTagStr := ""
+			if len(item.Tag) > 0 {
+				runes := []rune(item.Tag)
+				subTagStr = kStyle.Render(string(runes[0])) + tStyle.Render(string(runes[1:]))
+			}
+			line := neutralStyle.Render(" ") + neutralStyle.Render("    ") + cbStr + subTagStr
+			rowStyle := neutralStyle.Width(maxWidth)
+			renderedItems = append(renderedItems, rowStyle.Render(line)+console.CodeReset)
+			itemHeights = append(itemHeights, 1)
+			continue
+		}
+
+		// ── IsEditing: indented inline editing row ──────────────────────
+		if item.IsEditing {
+			cbStr := ""
+			if item.IsCheckbox {
+				cb := ""
+				if ctx.LineCharacters {
+					if item.Checked {
+						cb = checkSelected
+					} else {
+						cb = checkUnselected
+					}
+				} else {
+					if item.Checked {
+						cb = checkSelectedAscii
+					} else {
+						cb = checkUnselectedAscii
+					}
+				}
+				cbStr = tStyle.Render(cb) + neutralStyle.Render(" ")
+			}
+			editStr := RenderThemeText(item.Tag, dStyle)
+			line := neutralStyle.Render(" ") + neutralStyle.Render("    ") + cbStr + editStr
+			rowStyle := neutralStyle.Width(maxWidth)
+			renderedItems = append(renderedItems, rowStyle.Render(line)+console.CodeReset)
+			itemHeights = append(itemHeights, 1)
+			continue
+		}
+
+		// ── IsSubItem: indented instance row with checkbox, no description ──
+		if item.IsSubItem {
+			cb := ""
+			if item.IsCheckbox {
+				if ctx.LineCharacters {
+					if item.Checked {
+						cb = checkSelected
+					} else {
+						cb = checkUnselected
+					}
+				} else {
+					if item.Checked {
+						cb = checkSelectedAscii
+					} else {
+						cb = checkUnselectedAscii
+					}
+				}
+			}
+			cbStr := tStyle.Render(cb) + neutralStyle.Render(" ")
+			subTagStr := ""
+			if len(item.Tag) > 0 {
+				subTagStr = kStyle.Render(string([]rune(item.Tag)[0])) + tStyle.Render(string([]rune(item.Tag)[1:]))
+			}
+			// Gutter: R=referenced (green=pending-add, yellow=not-yet-added), +=newly-enabled, -=newly-disabled, space otherwise.
+			gutterStr := neutralStyle.Render(" ")
+			if item.IsReferenced {
+				if item.Checked {
+					gutterStr = RenderThemeText("{{|MarkerAdded|}}R{{[-]}}", neutralStyle)
+				} else {
+					gutterStr = RenderThemeText("{{|MarkerModified|}}R{{[-]}}", neutralStyle)
+				}
+			} else if item.Checked && !item.WasAdded {
+				gutterStr = RenderThemeText("{{|MarkerAdded|}}+{{[-]}}", neutralStyle)
+			} else if !item.Checked && item.WasAdded {
+				gutterStr = RenderThemeText("{{|MarkerDeleted|}}-{{[-]}}", neutralStyle)
+			}
+			line := gutterStr + neutralStyle.Render("    ") + cbStr + subTagStr
+			rowStyle := neutralStyle.Width(maxWidth)
+			renderedItems = append(renderedItems, rowStyle.Render(line)+console.CodeReset)
+			itemHeights = append(itemHeights, 1)
+			continue
+		}
+
+		// ── Checkbox / radio / group-header glyph ────────────────────────────
 		checkbox := ""
-		if item.IsRadioButton || item.IsCheckbox {
+		if item.IsGroupHeader {
+			if ctx.LineCharacters {
+				checkbox = tStyle.Render(subMenuExpanded) + neutralStyle.Render(" ")
+			} else {
+				checkbox = tStyle.Render(subMenuExpandedAscii) + neutralStyle.Render(" ")
+			}
+		} else if item.IsRadioButton || item.IsCheckbox {
 			cb := ""
 			if item.IsRadioButton {
 				if ctx.LineCharacters {
@@ -182,14 +291,32 @@ func (m *MenuModel) renderVariableHeightList() string {
 			renderedItemLines = append(renderedItemLines, indent+lines[j])
 		}
 
+		// Gutter: R=referenced (green=pending-add, yellow=not-yet-added), +=newly-enabled, -=newly-removed, space otherwise.
+		// Group headers never show gutter markers — sub-items carry that information when expanded.
+		itemGutter := neutralStyle.Render(" ")
+		if item.IsReferenced && !item.IsGroupHeader {
+			if item.Checked {
+				itemGutter = RenderThemeText("{{|MarkerAdded|}}R{{[-]}}", neutralStyle)
+			} else {
+				itemGutter = RenderThemeText("{{|MarkerModified|}}R{{[-]}}", neutralStyle)
+			}
+		} else if item.IsCheckbox && !item.IsGroupHeader {
+			if item.Checked && !item.WasAdded {
+				itemGutter = RenderThemeText("{{|MarkerAdded|}}+{{[-]}}", neutralStyle)
+			} else if !item.Checked && item.WasAdded {
+				itemGutter = RenderThemeText("{{|MarkerDeleted|}}-{{[-]}}", neutralStyle)
+			}
+		}
 		finalItem := ""
 		// Width(maxWidth) = m.list.Width(); applyScrollbarColumn in ViewString appends the gutter.
-		rowStyle := neutralStyle.Width(maxWidth).Padding(0, 0, 0, 1)
+		rowStyle := neutralStyle.Width(maxWidth)
 		for j, l := range renderedItemLines {
 			if j > 0 {
 				finalItem += "\n"
+				finalItem += rowStyle.Render(neutralStyle.Render(" ")+l) + console.CodeReset
+			} else {
+				finalItem += rowStyle.Render(itemGutter+l) + console.CodeReset
 			}
-			finalItem += rowStyle.Render(l) + console.CodeReset
 		}
 
 		renderedItems = append(renderedItems, finalItem)
@@ -211,12 +338,15 @@ func (m *MenuModel) renderVariableHeightList() string {
 	if totalContentHeight <= maxHeight {
 		var newHitRegions []HitRegion
 		aggY := 0
+		searchFrom := 0 // advance past each match to handle items with duplicate Tag+Desc
 		for i, h := range itemHeights {
 			if !visibleItems[i].IsSeparator {
 				actualIndex := -1
-				for actIdx, mi := range m.items {
+				for actIdx := searchFrom; actIdx < len(m.items); actIdx++ {
+					mi := m.items[actIdx]
 					if mi.Tag == visibleItems[i].Tag && mi.Desc == visibleItems[i].Desc {
 						actualIndex = actIdx
+						searchFrom = actIdx + 1
 						break
 					}
 				}
@@ -288,6 +418,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 	var viewLines []string
 	var newHitRegions []HitRegion // Build a new cache corresponding to actual visual lines
 	aggY := 0
+	searchFrom := 0 // advance past each match to handle items with duplicate Tag+Desc
 	for i, item := range renderedItems {
 		h := itemHeights[i]
 		if aggY+h > viewStart && aggY < viewStart+maxHeight {
@@ -304,9 +435,11 @@ func (m *MenuModel) renderVariableHeightList() string {
 				}
 
 				actualIndex := -1
-				for actIdx, mi := range m.items {
+				for actIdx := searchFrom; actIdx < len(m.items); actIdx++ {
+					mi := m.items[actIdx]
 					if mi.Tag == visibleItems[i].Tag && mi.Desc == visibleItems[i].Desc {
 						actualIndex = actIdx
+						searchFrom = actIdx + 1
 						break
 					}
 				}

@@ -14,6 +14,10 @@ const (
 	// checkUnselected (□) - White Square (U+25A1)
 	checkUnselected = "\u25A1"
 
+	// subMenuExpanded (▼) - Black Down-Pointing Triangle (U+25BC) — group header is always expanded
+	subMenuExpanded      = "\u25BC"
+	subMenuExpandedAscii = "[v] "
+
 	// ASCII variants
 	radioSelectedAscii   = "(*) "
 	radioUnselectedAscii = "( ) "
