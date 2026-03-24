@@ -97,18 +97,17 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Left click on buttons triggers action
-		// Check for suffixes to support prefixed IDs (e.g., "confirm_dialog.Yes")
+		// Left click on buttons triggers action via onResult so sub-dialog channels work correctly
 		if msg.Button == tea.MouseLeft {
 			if ButtonIDMatches(msg.ID, "Yes") {
-				return m, func() tea.Msg {
-					return CloseDialogMsg{Result: true}
-				}
+				m.result = true
+				m.confirmed = true
+				return m, closeWithResult(true)
 			}
 			if ButtonIDMatches(msg.ID, "No") {
-				return m, func() tea.Msg {
-					return CloseDialogMsg{Result: false}
-				}
+				m.result = false
+				m.confirmed = true
+				return m, closeWithResult(false)
 			}
 		}
 	}

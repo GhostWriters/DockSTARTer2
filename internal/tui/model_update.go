@@ -317,6 +317,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Result targets the active screen (e.g. ApplyVarValueMsg from a context
 				// submenu): drain the entire stack so all menus close, then forward.
 				m.dialogStack = nil
+				m.updateComponentFocus()
 				if m.activeScreen != nil {
 					fwd := msg.Result
 					return m, func() tea.Msg { return fwd }
@@ -357,7 +358,8 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, ConfirmExitAction()
 		}
 
-		// When returning to screen:
+		// When returning to screen: restore focus to the active screen.
+		m.updateComponentFocus()
 		// If header was already focused (e.g. status bar flags), KEEP it focused.
 		// Only clear header focus if it wasn't already focused.
 		if m.backdrop.header.GetFocus() == HeaderFocusNone {
