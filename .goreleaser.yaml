@@ -9,7 +9,6 @@ builds:
       - CGO_ENABLED=0
     goos:
       - linux
-      - windows
       - darwin
     goarch:
       - amd64
@@ -34,10 +33,6 @@ archives:
     files:
       - README.md
       - LICENSE
-    format_overrides:
-      - goos: windows
-        formats: 
-          - zip
 
 checksum:
   name_template: 'checksums.txt'
