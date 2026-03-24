@@ -1342,6 +1342,17 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *tui.MenuModel {
 			}
 			return nil, false
 
+		default:
+			// Printable key on [+] Add instance row: open editing and pre-fill the character,
+			// preventing the key from falling through to menu_update.go's button hotkeys.
+			if item.IsAddInstance && keyMsg.Text != "" {
+				startEditing(item.BaseApp)
+				editContent = strings.ToUpper(keyMsg.Text)
+				editError = ""
+				refreshEditRow()
+				return nil, true
+			}
+
 		case "ctrl+left":
 			// Ctrl+Left from anywhere in the submenu: jump to header and collapse if no non-base instances.
 			if isSubRow(item) {
