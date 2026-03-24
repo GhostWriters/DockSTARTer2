@@ -83,12 +83,7 @@ func (m *Model) ParseEnv(content string, defaultFunc func(string) string, readOn
 		
 		m.lineMeta[i] = l
 	}
-    m.row = 0
-	if len(m.lineMeta) > 0 {
-		m.col = m.lineMeta[0].EditableStartCol
-	} else {
-        m.col = 0
-    }
+	m.GotoFirstEditable()
 }
 
 // ReclassifyEnv re-runs the section/variable classification pass on the current
