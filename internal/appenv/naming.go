@@ -5,6 +5,8 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
 )
@@ -61,6 +63,19 @@ func VarNameToAppName(varName string) string {
 	return ""
 }
 
+// CapitalizeFirstLetter lowercases s then capitalizes the first Unicode letter,
+// skipping any leading digits or non-letter characters.
+// Examples: "4K" → "4K", "4k" → "4K", "23kkk" → "23Kkk", "abc" → "Abc".
+func CapitalizeFirstLetter(s string) string {
+	s = strings.ToLower(s)
+	for i, r := range s {
+		if unicode.IsLetter(r) {
+			return s[:i] + string(unicode.ToUpper(r)) + s[i+utf8.RuneLen(r):]
+		}
+	}
+	return s
+}
+
 // InstanceDisplayName returns the display label for an instance sub-row.
 // If appName has no instance suffix it returns baseNiceName unchanged;
 // otherwise it appends "__<TitleCasedSuffix>" (e.g. "Radarr__4k").
@@ -69,7 +84,7 @@ func InstanceDisplayName(baseNiceName, appName string) string {
 	if suffix == "" {
 		return baseNiceName
 	}
-	return baseNiceName + "__" + strings.Title(strings.ToLower(suffix))
+	return baseNiceName + "__" + CapitalizeFirstLetter(suffix)
 }
 
 // GetNiceName returns a nicely formatted app name.
@@ -96,7 +111,7 @@ func GetNiceName(ctx context.Context, appName string) string {
 	parts := strings.Split(appUpper, "__")
 	var niceParts []string
 	for _, part := range parts {
-		niceParts = append(niceParts, strings.Title(strings.ToLower(part)))
+		niceParts = append(niceParts, CapitalizeFirstLetter(part))
 	}
 	return strings.Join(niceParts, " ")
 }
