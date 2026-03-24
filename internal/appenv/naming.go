@@ -61,6 +61,17 @@ func VarNameToAppName(varName string) string {
 	return ""
 }
 
+// InstanceDisplayName returns the display label for an instance sub-row.
+// If appName has no instance suffix it returns baseNiceName unchanged;
+// otherwise it appends "__<TitleCasedSuffix>" (e.g. "Radarr__4k").
+func InstanceDisplayName(baseNiceName, appName string) string {
+	suffix := AppNameToInstanceName(appName)
+	if suffix == "" {
+		return baseNiceName
+	}
+	return baseNiceName + "__" + strings.Title(strings.ToLower(suffix))
+}
+
 // GetNiceName returns a nicely formatted app name.
 // Checks template labels first, then falls back to title casing.
 func GetNiceName(ctx context.Context, appName string) string {

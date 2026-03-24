@@ -15,6 +15,20 @@ func GetMenuItemID(menuID string, index int) string {
 	return "item-" + menuID + "-" + strconv.Itoa(index)
 }
 
+// ParseMenuItemIndex parses a menu item ID of the form "item-<menuID>-<index>"
+// and returns the index. Returns (0, false) if the id does not match.
+func ParseMenuItemIndex(id, menuID string) (int, bool) {
+	prefix := "item-" + menuID + "-"
+	if !strings.HasPrefix(id, prefix) {
+		return 0, false
+	}
+	idx, err := strconv.Atoi(strings.TrimPrefix(id, prefix))
+	if err != nil {
+		return 0, false
+	}
+	return idx, true
+}
+
 // HitRegion represents a clickable area for mouse hit testing
 type HitRegion struct {
 	ID     string
