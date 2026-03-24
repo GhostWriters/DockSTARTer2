@@ -1,11 +1,11 @@
 package system
 
 import (
+	dsexec "DockSTARTer2/internal/exec"
 	"DockSTARTer2/internal/logger"
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"os/user"
 	"runtime"
 	"strconv"
@@ -40,12 +40,14 @@ func SetPermissions(ctx context.Context, path string) {
 	puid, pgid := GetIDs()
 	if puid != 0 && pgid != 0 {
 		logger.Info(ctx, "Taking ownership of '{{|Folder|}}%s{{[-]}}' for user '{{|User|}}%d{{[-]}}' and group '{{|User|}}%d{{[-]}}'", path, puid, pgid)
-		cmdChown := exec.Command("sudo", "chown", "-R", fmt.Sprintf("%d:%d", puid, pgid), path)
-		_ = cmdChown.Run()
+		if cmdChown, err := dsexec.SudoCommand(ctx, "chown", "-R", fmt.Sprintf("%d:%d", puid, pgid), path); err == nil {
+			_ = cmdChown.Run()
+		}
 
 		logger.Info(ctx, "Setting file and folder permissions in '{{|Folder|}}%s{{[-]}}'", path)
-		cmdChmod := exec.Command("sudo", "chmod", "-R", "a=,a+rX,u+w,g+w", path)
-		_ = cmdChmod.Run()
+		if cmdChmod, err := dsexec.SudoCommand(ctx, "chmod", "-R", "a=,a+rX,u+w,g+w", path); err == nil {
+			_ = cmdChmod.Run()
+		}
 	}
 }
 
@@ -62,8 +64,9 @@ func TakeOwnership(ctx context.Context, path string) {
 	puid, pgid := GetIDs()
 	if puid != 0 && pgid != 0 {
 		logger.Info(ctx, "Taking ownership of '{{|Folder|}}%s{{[-]}}' (non-recursive).", path)
-		cmd := exec.Command("sudo", "chown", fmt.Sprintf("%d:%d", puid, pgid), path)
-		_ = cmd.Run()
+		if cmd, err := dsexec.SudoCommand(ctx, "chown", fmt.Sprintf("%d:%d", puid, pgid), path); err == nil {
+			_ = cmd.Run()
+		}
 	}
 }
 
