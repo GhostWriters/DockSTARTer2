@@ -942,6 +942,23 @@ func (m *Model) CursorEnd() {
 	m.SetCursorColumn(len(m.value[m.row]))
 }
 
+// GotoFirstEditable moves the cursor to the first editable position in the file
+// (first non-ReadOnly, non-PendingDelete row, at its EditableStartCol).
+// If no such row exists the cursor stays at (0, 0).
+func (m *Model) GotoFirstEditable() {
+	for row, meta := range m.lineMeta {
+		if meta.ReadOnly || meta.PendingDelete {
+			continue
+		}
+		m.row = row
+		m.col = meta.EditableStartCol
+		m.repositionView()
+		return
+	}
+	m.row = 0
+	m.col = 0
+}
+
 // Focused returns the focus state on the model.
 func (m Model) Focused() bool {
 	return m.focus
@@ -2387,11 +2404,6 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) {
 			// Clamp to actual line length
 			if m.col > len(lineRunes) {
 				m.col = len(lineRunes)
-			}
-
-			// Important: Ensure cursor is in editable area if applicable
-			if !m.isEditableAtCursor() {
-				m.CursorStart() // Moves to EditableStartCol if valid
 			}
 
 			// Multi-click detection: same row, same col, within 400 ms.
