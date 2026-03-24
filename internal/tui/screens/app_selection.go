@@ -315,6 +315,32 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *tui.MenuModel {
 		}
 		newItems = refreshGroupHeaders(newItems)
 
+		// When a named instance (suffix != "") was just added (not renamed), remove
+		// the unchecked non-referenced base sub-row — it was never enabled and only
+		// confuses the user by lingering alongside the new named instance.
+		if suffix != "" && !isRenaming {
+			cleaned := newItems[:0:len(newItems)]
+			for _, it := range newItems {
+				if it.IsSubItem && it.BaseApp == base &&
+					it.Metadata["appName"] == base &&
+					!it.Checked && !it.IsReferenced {
+					continue // drop phantom unchecked base sub-row
+				}
+				cleaned = append(cleaned, it)
+			}
+			// Only apply if named instances still exist (don't orphan the group).
+			hasNamed := false
+			for _, it := range cleaned {
+				if it.IsSubItem && it.BaseApp == base && it.Metadata["appName"] != base {
+					hasNamed = true
+					break
+				}
+			}
+			if hasNamed {
+				newItems = cleaned
+			}
+		}
+
 		isEditing = false
 		isRenaming = false
 		convertedFromSimple = false
