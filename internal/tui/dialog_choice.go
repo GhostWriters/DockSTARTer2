@@ -76,11 +76,9 @@ func (m *choiceDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case LayerHitMsg:
 		if msg.Button == tea.MouseLeft {
-			for _, choice := range m.choices {
+			for i, choice := range m.choices {
 				if ButtonIDMatches(msg.ID, choice) {
-					return m, func() tea.Msg {
-						return CloseDialogMsg{Result: choice}
-					}
+					return m, submit(i)
 				}
 			}
 		}

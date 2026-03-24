@@ -383,13 +383,6 @@ func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 				menuSelectedIndices[m.id] = m.cursor
 				return m, item.Action
 			}
-
-			// In checkbox mode, Enter on a list item toggles its state.
-			// Enter on the "Select" (Done) button should NOT toggle; it should fall through to enterAction.
-			if m.checkboxMode && m.focusedItem == FocusList {
-				m.ToggleSelectedItem()
-				return m, nil
-			}
 		}
 
 		// 2. Fall back to model-level enter action (for "Done" buttons on selection screens)
@@ -440,26 +433,20 @@ func (m *MenuModel) handleSpace() (tea.Model, tea.Cmd) {
 		}
 	}
 
-	if m.focusedItem == FocusList {
-		selectedItem := m.list.SelectedItem()
-		if item, ok := selectedItem.(MenuItem); ok {
-			if item.SpaceAction != nil {
-				return m, item.SpaceAction
-			}
-			// Items with only Action (e.g. dropdown selectors) have no SpaceAction.
-			// Fall through to Enter so middle-clicking over the panel activates them.
-			if item.Action != nil {
-				return m.handleEnter()
-			}
+	// Space always acts on the current list item
+	selectedItem = m.list.SelectedItem()
+	if item, ok := selectedItem.(MenuItem); ok {
+		if item.SpaceAction != nil {
+			return m, item.SpaceAction
+		}
+		// Navigation items: Space falls through to Enter (executes the focused button action)
+		if item.Action != nil {
+			return m.handleEnter()
 		}
 	}
 
 	if m.spaceAction != nil {
 		return m, m.spaceAction
-	}
-	// Fallback: activate whichever button is currently focused
-	if m.focusedItem == FocusSelectBtn || m.focusedItem == FocusBackBtn || m.focusedItem == FocusExitBtn {
-		return m.handleEnter()
 	}
 	return m, nil
 }
