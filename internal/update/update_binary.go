@@ -8,10 +8,10 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
+	dsexec "DockSTARTer2/internal/exec"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
@@ -286,14 +286,19 @@ func installUpdate(ctx context.Context, assetURL string) error {
 	// If direct rename fails, attempt with sudo
 	logger.Warn(ctx, "Direct update failed (%v), trying with sudo...", err)
 
-	mvCmd := exec.Command("sudo", "mv", tmpExe, exe)
+	mvCmd, err := dsexec.SudoCommand(ctx, "mv", tmpExe, exe)
+	if err != nil {
+		return fmt.Errorf("sudo update failed: %w", err)
+	}
 	if out, err := mvCmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("sudo update failed: %s: %w", string(out), err)
 	}
 
-	// Restore ownership to root:root if sudo was used?
+	// Restore ownership to root:root if sudo was used.
 	// Usually /usr/local/bin is root owned.
-	exec.Command("sudo", "chown", "root:root", exe).Run()
+	if chownCmd, err := dsexec.SudoCommand(ctx, "chown", "root:root", exe); err == nil {
+		_ = chownCmd.Run()
+	}
 
 	return nil
 }
