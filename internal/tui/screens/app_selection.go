@@ -6,7 +6,6 @@ import (
 	"io"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 
 	"DockSTARTer2/internal/appenv"
@@ -72,27 +71,12 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *tui.MenuModel {
 	var editingIdx int
 	var editContent string
 	var editError string
-	var isRenaming bool           // true when renaming an existing sub-item (vs adding new)
+	var isRenaming bool               // true when renaming an existing sub-item (vs adding new)
 	var renamingOriginal tui.MenuItem // original sub-item being renamed (for cancel restore)
 	// When startEditing converts a simple checkbox row into a group header (because the
 	// app has no non-base instances yet), we record the original so cancelEdit can restore it.
 	var convertedFromSimple bool
 	var convertedSimpleOriginal tui.MenuItem
-
-	// suffixToDisplay converts an uppercase internal suffix to the title-case display form
-	// using the same logic as GetNiceName's fallback: Title(Lower(part)).
-	suffixToDisplay := func(suffix string) string {
-		return strings.Title(strings.ToLower(suffix))
-	}
-
-	// instanceDisplayName returns the label for an instance sub-row.
-	instanceDisplayName := func(baseNiceName, appName string) string {
-		suffix := appenv.AppNameToInstanceName(appName)
-		if suffix == "" {
-			return baseNiceName
-		}
-		return baseNiceName + "__" + suffixToDisplay(suffix)
-	}
 
 	// editingTag builds the display string for the inline editing row.
 	// niceName is the base app's display name (e.g. "Adminer").
@@ -103,7 +87,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *tui.MenuModel {
 		if content == "" {
 			display = niceName // just the base; typing appends __Suffix
 		} else {
-			display = niceName + "__" + suffixToDisplay(content)
+			display = niceName + "__" + strings.Title(strings.ToLower(content))
 		}
 		display += cursor
 		if errMsg != "" {
@@ -286,7 +270,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *tui.MenuModel {
 
 		ctx := context.Background()
 		baseNiceName := appenv.GetNiceName(ctx, base)
-		displayName := instanceDisplayName(baseNiceName, newAppName)
+		displayName := appenv.InstanceDisplayName(baseNiceName, newAppName)
 
 		checkedState := true // new instances default to enabled
 		if isRenaming {
@@ -508,15 +492,15 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *tui.MenuModel {
 		niceName := appenv.GetNiceName(ctx, baseApp)
 		desc := appenv.GetDescriptionFromTemplate(ctx, baseApp, envFile)
 		groupHeader := tui.MenuItem{
-			Tag:          niceName,
-			Desc:         "{{|ListApp|}}" + desc,
-			Help:         fmt.Sprintf("Press Ctrl+Right to manage %s instances. Ctrl+Left to collapse.", niceName),
+			Tag:           niceName,
+			Desc:          "{{|ListApp|}}" + desc,
+			Help:          fmt.Sprintf("Press Ctrl+Right to manage %s instances. Ctrl+Left to collapse.", niceName),
 			IsGroupHeader: true,
-			Checked:      orig.Checked,
-			WasAdded:     orig.WasAdded,
-			IsReferenced: orig.IsReferenced,
-			BaseApp:      baseApp,
-			Metadata:     orig.Metadata,
+			Checked:       orig.Checked,
+			WasAdded:      orig.WasAdded,
+			IsReferenced:  orig.IsReferenced,
+			BaseApp:       baseApp,
+			Metadata:      orig.Metadata,
 		}
 		baseSubRow := tui.MenuItem{
 			Tag:          niceName,
@@ -676,7 +660,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *tui.MenuModel {
 					Help:          fmt.Sprintf("Press Ctrl+Right to manage %s instances", niceName),
 					IsGroupHeader: true,
 					Checked:       anyEnabled,
-				IsReferenced:  referencedBaseSet[base],
+					IsReferenced:  referencedBaseSet[base],
 					BaseApp:       base,
 					Metadata:      map[string]string{"appName": base},
 				})
@@ -698,7 +682,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *tui.MenuModel {
 				})
 
 				for _, ie := range allInsts {
-					displayName := instanceDisplayName(niceName, ie.appName)
+					displayName := appenv.InstanceDisplayName(niceName, ie.appName)
 					if ie.isReferenced {
 						items = append(items, tui.MenuItem{
 							Tag:          displayName,
@@ -716,10 +700,10 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *tui.MenuModel {
 							Tag:        displayName,
 							Help:       fmt.Sprintf("Toggle %s", displayName),
 							IsSubItem:  true,
-							IsCheckbox:  true,
-							Checked:     addedMap[ie.appName],
-							WasAdded:    addedMap[ie.appName],
-							BaseApp:     base,
+							IsCheckbox: true,
+							Checked:    addedMap[ie.appName],
+							WasAdded:   addedMap[ie.appName],
+							BaseApp:    base,
 							Metadata:   map[string]string{"appName": ie.appName},
 						})
 					}
@@ -1049,110 +1033,106 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *tui.MenuModel {
 			if isEditing {
 				return nil, true
 			}
-			prefix := "item-" + m.ID() + "-"
-			if strings.HasPrefix(hitMsg.ID, prefix) {
-				indexStr := strings.TrimPrefix(hitMsg.ID, prefix)
-				if idx, err := strconv.Atoi(indexStr); err == nil {
-					items := m.GetItems()
-					if idx >= 0 && idx < len(items) {
-						item := items[idx]
-						m.Select(idx)
+			if idx, ok := tui.ParseMenuItemIndex(hitMsg.ID, m.ID()); ok {
+				items := m.GetItems()
+				if idx >= 0 && idx < len(items) {
+					item := items[idx]
+					m.Select(idx)
 
-						// Separators and live-editing rows: consume without action.
-						if item.IsSeparator || item.IsEditing {
-							return nil, true
+					// Separators and live-editing rows: consume without action.
+					if item.IsSeparator || item.IsEditing {
+						return nil, true
+					}
+
+					// [+] Add instance: always open editing.
+					if item.IsAddInstance {
+						startEditing(item.BaseApp)
+						return nil, true
+					}
+
+					// Group headers: any click toggles submenu open/closed.
+					// If sub-items are currently visible → collapse (Ctrl+Left behaviour).
+					// If no sub-items are visible → enter submenu / start editing.
+					if item.IsGroupHeader {
+						base := item.BaseApp
+						submenuOpen := false
+						for i := idx + 1; i < len(items); i++ {
+							if items[i].IsGroupHeader {
+								break
+							}
+							if (items[i].IsSubItem || items[i].IsAddInstance) && items[i].BaseApp == base {
+								submenuOpen = true
+								break
+							}
 						}
-
-						// [+] Add instance: always open editing.
-						if item.IsAddInstance {
-							startEditing(item.BaseApp)
-							return nil, true
-						}
-
-						// Group headers: any click toggles submenu open/closed.
-						// If sub-items are currently visible → collapse (Ctrl+Left behaviour).
-						// If no sub-items are visible → enter submenu / start editing.
-						if item.IsGroupHeader {
-							base := item.BaseApp
-							submenuOpen := false
+						if submenuOpen {
+							newItems, collapsed := collapseGroupIfNeeded(items, base)
+							if collapsed {
+								m.SetItems(newItems)
+							}
+							// If can't fully collapse (non-base instances exist), header
+							// is still selected/highlighted — nothing more to do.
+						} else {
+							// Not yet expanded: jump to first sub-item, or start editing.
+							entered := false
 							for i := idx + 1; i < len(items); i++ {
 								if items[i].IsGroupHeader {
 									break
 								}
-								if (items[i].IsSubItem || items[i].IsAddInstance) && items[i].BaseApp == base {
-									submenuOpen = true
+								if items[i].IsSubItem && items[i].BaseApp == base {
+									m.Select(i)
+									entered = true
 									break
 								}
 							}
-							if submenuOpen {
-								newItems, collapsed := collapseGroupIfNeeded(items, base)
-								if collapsed {
-									m.SetItems(newItems)
-								}
-								// If can't fully collapse (non-base instances exist), header
-								// is still selected/highlighted — nothing more to do.
-							} else {
-								// Not yet expanded: jump to first sub-item, or start editing.
-								entered := false
-								for i := idx + 1; i < len(items); i++ {
-									if items[i].IsGroupHeader {
-										break
-									}
-									if items[i].IsSubItem && items[i].BaseApp == base {
-										m.Select(i)
-										entered = true
-										break
-									}
-								}
-								if !entered {
-									startEditing(base)
-								}
+							if !entered {
+								startEditing(base)
 							}
-							collapseOtherGroups(base)
-							return nil, true
 						}
+						collapseOtherGroups(base)
+						return nil, true
+					}
 
-						// Compute the column where the tag text (app name) begins.
-						// Layout: gutter(1) [+ indent(4) for sub-items] + glyph + space
-						// Unicode glyphs are 1 column wide; ASCII glyphs are 4 chars ("[x] ").
-						ctx := tui.GetActiveContext()
-						var nameStartCol int
-						if item.IsSubItem {
-							if ctx.LineCharacters {
-								nameStartCol = 7 // gutter(1) + indent(4) + glyph(1) + space(1)
-							} else {
-								nameStartCol = 10 // gutter(1) + indent(4) + "[x] "(4) + space(1)
-							}
+					// Compute the column where the tag text (app name) begins.
+					// Layout: gutter(1) [+ indent(4) for sub-items] + glyph + space
+					// Unicode glyphs are 1 column wide; ASCII glyphs are 4 chars ("[x] ").
+					ctx := tui.GetActiveContext()
+					var nameStartCol int
+					if item.IsSubItem {
+						if ctx.LineCharacters {
+							nameStartCol = 7 // gutter(1) + indent(4) + glyph(1) + space(1)
 						} else {
-							if ctx.LineCharacters {
-								nameStartCol = 3 // gutter(1) + glyph(1) + space(1)
-							} else {
-								nameStartCol = 6 // gutter(1) + "[x] "(4) + space(1)
-							}
+							nameStartCol = 10 // gutter(1) + indent(4) + "[x] "(4) + space(1)
 						}
+					} else {
+						if ctx.LineCharacters {
+							nameStartCol = 3 // gutter(1) + glyph(1) + space(1)
+						} else {
+							nameStartCol = 6 // gutter(1) + "[x] "(4) + space(1)
+						}
+					}
 
-						// relX is the click column relative to the left edge of the row.
+					// relX is the click column relative to the left edge of the row.
 					// hitMsg.X is absolute screen X; hitMsg.Hit.X is the region's absolute X.
 					relX := hitMsg.X - hitMsg.Hit.X
 					if relX < nameStartCol {
-							// ── Left zone (glyph/checkbox area): toggle checkbox.
-							toggleItem(m, idx)
-							if item.IsCheckbox {
-								collapseOtherGroups(item.BaseApp)
-							}
-							return nil, true
-						} else {
-							// ── Right zone (name area): expand / rename action ──
-							if item.IsSubItem {
-								if !item.IsReferenced {
-									startRenaming(idx)
-								}
-							} else if item.IsCheckbox {
-								expandGroup(item.BaseApp)
-								collapseOtherGroups(item.BaseApp)
-							}
-						return nil, true
+						// ── Left zone (glyph/checkbox area): toggle checkbox.
+						toggleItem(m, idx)
+						if item.IsCheckbox {
+							collapseOtherGroups(item.BaseApp)
 						}
+						return nil, true
+					} else {
+						// ── Right zone (name area): expand / rename action ──
+						if item.IsSubItem {
+							if !item.IsReferenced {
+								startRenaming(idx)
+							}
+						} else if item.IsCheckbox {
+							expandGroup(item.BaseApp)
+							collapseOtherGroups(item.BaseApp)
+						}
+						return nil, true
 					}
 				}
 			}

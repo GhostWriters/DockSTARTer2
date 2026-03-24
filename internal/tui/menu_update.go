@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"strconv"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -81,30 +80,27 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Handle specific item clicks
-		if strings.HasPrefix(msg.ID, "item-"+m.id+"-") {
-			indexStr := strings.TrimPrefix(msg.ID, "item-"+m.id+"-")
-			if idx, err := strconv.Atoi(indexStr); err == nil {
-				// Right click on a menu item triggers its context menu WITHOUT moving selection
-				if msg.Button == tea.MouseRight {
-					return m, m.showContextMenu(idx, msg.X, msg.Y)
-				}
-
-				// Left click moves the selection and executes
-				m.list.Select(idx)
-				m.cursor = idx
-				menuSelectedIndices[m.id] = idx
-				m.focusedItem = FocusList
-
-				// For checkboxes/radio buttons, clicking toggles (Space action)
-				// For regular items, clicking executes (Enter action)
-				if idx >= 0 && idx < len(m.items) {
-					item := m.items[idx]
-					if item.IsCheckbox || item.IsRadioButton || item.Selectable {
-						return m.handleSpace()
-					}
-				}
-				return m.handleEnter()
+		if idx, ok := ParseMenuItemIndex(msg.ID, m.id); ok {
+			// Right click on a menu item triggers its context menu WITHOUT moving selection
+			if msg.Button == tea.MouseRight {
+				return m, m.showContextMenu(idx, msg.X, msg.Y)
 			}
+
+			// Left click moves the selection and executes
+			m.list.Select(idx)
+			m.cursor = idx
+			menuSelectedIndices[m.id] = idx
+			m.focusedItem = FocusList
+
+			// For checkboxes/radio buttons, clicking toggles (Space action)
+			// For regular items, clicking executes (Enter action)
+			if idx >= 0 && idx < len(m.items) {
+				item := m.items[idx]
+				if item.IsCheckbox || item.IsRadioButton || item.Selectable {
+					return m.handleSpace()
+				}
+			}
+			return m.handleEnter()
 		}
 
 		// Handle clicks/hovers on the menu's list background
