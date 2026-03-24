@@ -87,7 +87,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *tui.MenuModel {
 		if content == "" {
 			display = niceName // just the base; typing appends __Suffix
 		} else {
-			display = niceName + "__" + strings.Title(strings.ToLower(content))
+			display = niceName + "__" + appenv.CapitalizeFirstLetter(content)
 		}
 		display += cursor
 		if errMsg != "" {

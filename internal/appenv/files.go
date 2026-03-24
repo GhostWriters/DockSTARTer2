@@ -85,7 +85,7 @@ func AppInstanceFile(ctx context.Context, appName, fileSuffix string) (string, e
 	var __INSTANCE, __Instance, __instance string
 	if instance != "" {
 		__INSTANCE = "__" + strings.ToUpper(instance)
-		__Instance = "__" + strings.Title(strings.ToLower(instance))
+		__Instance = "__" + CapitalizeFirstLetter(instance)
 		__instance = "__" + strings.ToLower(instance)
 	}
 
