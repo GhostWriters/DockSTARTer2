@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
 	"strings"
 
@@ -41,9 +40,14 @@ type HelpDialogModel struct {
 
 	focused bool // tracks global focus
 
-	keyMap      help.KeyMap
-	contextInfo HelpContext // structured help info
-	contextOffset int // scroll offset for item context text
+	keyMap        help.KeyMap
+	contextInfo   HelpContext // structured help info
+	contextOffset int         // scroll offset for item context text
+
+	// Paged mode: when context + bindings don't fit together, cycle between pages.
+	// page 0 = context info, page 1 = keyboard bindings.
+	paged bool
+	page  int
 
 	// Unified layout (deterministic sizing)
 	layout DialogLayout
@@ -71,6 +75,15 @@ func (m *HelpDialogModel) Init() tea.Cmd { return nil }
 func (m *HelpDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
+		// Help key (? / F1) cycles pages when paged, otherwise closes.
+		if keybind.Matches(msg, Keys.Help) {
+			if m.paged {
+				m.page = (m.page + 1) % 2
+				m.contextOffset = 0
+				return m, nil
+			}
+			return m, func() tea.Msg { return CloseDialogMsg{} }
+		}
 		switch {
 		case keybind.Matches(msg, Keys.Up):
 			m.contextOffset--
@@ -94,10 +107,14 @@ func (m *HelpDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.contextOffset = 0
 			return m, nil
 		}
-		// Any other key closes the help dialog (? toggles it off, Esc also works)
+		// Any other key closes the help dialog (Esc also works)
 		return m, func() tea.Msg { return CloseDialogMsg{} }
 
 	case tea.MouseWheelMsg:
+		if m.paged && m.page == 1 {
+			// On bindings page, scrolling does nothing meaningful
+			return m, nil
+		}
 		if msg.Button == tea.MouseWheelUp {
 			m.contextOffset--
 			if m.contextOffset < 0 {
@@ -114,7 +131,12 @@ func (m *HelpDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case LayerHitMsg:
-		// Any click on the help dialog (or its components) closes it
+		// When paged, clicking cycles to the next page instead of closing.
+		if m.paged {
+			m.page = (m.page + 1) % 2
+			m.contextOffset = 0
+			return m, nil
+		}
 		return m, func() tea.Msg { return CloseDialogMsg{} }
 	}
 	return m, nil
@@ -149,7 +171,6 @@ func (m *HelpDialogModel) ViewString() string {
 
 	dialogStyle := theme.ThemeSemanticStyle("{{|Dialog|}}")
 	haloColor := lipgloss.Color("0") // Solid black halo
-	bgStyle := dialogStyle
 
 	// Apply theme styles to the help component
 	sepStyle := dialogStyle
@@ -166,12 +187,13 @@ func (m *HelpDialogModel) ViewString() string {
 
 	bindingLines := strings.Split(m.help.View(m.keyMap), "\n")
 
-	// Compute max line width across both context text and key bindings
+	// Compute max line width across both context text and key bindings.
+	// +1 accounts for the leading space that will be prepended when building the bindings box content.
 	maxLineWidth := 0
 	for i, line := range bindingLines {
 		trimmed := strings.TrimRight(line, " ")
 		bindingLines[i] = trimmed
-		if w := lipgloss.Width(trimmed); w > maxLineWidth {
+		if w := lipgloss.Width(trimmed) + 1; w > maxLineWidth {
 			maxLineWidth = w
 		}
 	}
@@ -188,16 +210,18 @@ func (m *HelpDialogModel) ViewString() string {
 	hasPageCtx := m.contextInfo.PageText != ""
 	hasItemCtx := m.contextInfo.ItemText != ""
 
+	var legendLines []string
+	var itemLines []string
+
 	if hasPageCtx || hasItemCtx {
 		// Resolve and wrap text for both panels
-		var legendLines []string
+		wrapWidth := targetWidth - 2
+		if wrapWidth < 10 {
+			wrapWidth = 10
+		}
+
 		if hasPageCtx {
 			resolved := theme.ToThemeANSI(m.contextInfo.PageText)
-			// targetWidth - 2 to allow for 1-char left pad and 1-char gutter (scrollbar space)
-			wrapWidth := targetWidth - 2
-			if wrapWidth < 10 {
-				wrapWidth = 10
-			}
 			for _, line := range strings.Split(resolved, "\n") {
 				wrapped := ansi.Wordwrap(line, wrapWidth, "")
 				for _, wl := range strings.Split(wrapped, "\n") {
@@ -212,13 +236,8 @@ func (m *HelpDialogModel) ViewString() string {
 			}
 		}
 
-		var itemLines []string
 		if hasItemCtx {
 			resolved := theme.ToThemeANSI(m.contextInfo.ItemText)
-			wrapWidth := targetWidth - 2
-			if wrapWidth < 10 {
-				wrapWidth = 10
-			}
 			for _, line := range strings.Split(resolved, "\n") {
 				wrapped := ansi.Wordwrap(line, wrapWidth, "")
 				for _, wl := range strings.Split(wrapped, "\n") {
@@ -239,9 +258,35 @@ func (m *HelpDialogModel) ViewString() string {
 		if maxLineWidth < 20 {
 			maxLineWidth = 20
 		}
+	}
 
-		ctx := GetActiveContext()
+	// Determine if paging is needed: when item context + bindings together would trigger a scrollbar.
+	// Overhead: outer dialog (6) + legend box height if present.
+	if len(itemLines) > 0 {
+		contextOverhead := 6
+		if len(legendLines) > 0 {
+			contextOverhead += len(legendLines) + 2 + 1 // legend box (border+content) + gap line
+		}
+		visibleWithBindings := availH - contextOverhead - (len(bindingLines) + 2) - 2
+		if visibleWithBindings < 1 {
+			visibleWithBindings = 1
+		}
+		m.paged = len(itemLines) > visibleWithBindings
+	} else {
+		m.paged = false
+	}
 
+	// Clamp page to valid range.
+	if m.page < 0 || !m.paged {
+		m.page = 0
+	}
+
+	showContext := !m.paged || m.page == 0
+	showBindings := !m.paged || m.page == 1
+
+	ctx := GetActiveContext()
+
+	if showContext && (len(legendLines) > 0 || len(itemLines) > 0) {
 		// Render Page Context box (formerly Legend) if content exists
 		if len(legendLines) > 0 {
 			title := m.contextInfo.PageTitle
@@ -249,7 +294,6 @@ func (m *HelpDialogModel) ViewString() string {
 				title = "Description"
 			}
 
-			// Apply centering if specified by alignment
 			legendToRender := strings.Join(legendLines, "\n")
 			if ctx.SubmenuTitleAlign == "center" {
 				var centeredLegend []string
@@ -280,14 +324,17 @@ func (m *HelpDialogModel) ViewString() string {
 				title = "Context Sensitive Help"
 			}
 
-			// Vertical budgeting: account for legend box if present
+			// When paged (page 0): use the full available height minus legend overhead only.
+			// When not paged: subtract bindings from available height too.
 			overheadH := 6
 			if legendBox != "" {
 				overheadH += lipgloss.Height(legendBox) + 1
 			}
-
-			_, availH := GetAvailableDialogSize(m.width, m.height)
-			maxContextHeight := availH - overheadH - len(bindingLines)
+			bindingsH := 0
+			if !m.paged {
+				bindingsH = len(bindingLines) + 2 // +2 for the bindings box border
+			}
+			maxContextHeight := availH - overheadH - bindingsH
 			if maxContextHeight < 5 {
 				maxContextHeight = 5
 			}
@@ -351,7 +398,6 @@ func (m *HelpDialogModel) ViewString() string {
 
 			// Scroll indicator
 			if sbInfo.Needed {
-				// Calculate scroll percentage
 				scrollPct := 1.0
 				if len(itemLines) > visibleRows {
 					scrollPct = float64(m.contextOffset) / float64(len(itemLines)-visibleRows)
@@ -369,39 +415,45 @@ func (m *HelpDialogModel) ViewString() string {
 		}
 	}
 
-	// Combine components with original spacing
-	var combinedText string
+	// Combine sections with "\n" as separator (not suffix) to avoid trailing blank lines.
+	var parts []string
 	if legendBox != "" {
-		combinedText += legendBox + "\n"
+		parts = append(parts, legendBox)
 	}
 	if contextBox != "" {
-		combinedText += contextBox + "\n"
+		parts = append(parts, contextBox)
 	}
-
-	// Use the actual width of the bordered boxes to pad the keyboard reference below.
-	// This prevents the "blank column on the right" issue if a title was wider than the content.
-	actualBoxWidth := maxLineWidth
-	if legendBox != "" {
-		actualBoxWidth = lipgloss.Width(strings.Split(legendBox, "\n")[0]) - 2
-	} else if contextBox != "" {
-		actualBoxWidth = lipgloss.Width(strings.Split(contextBox, "\n")[0]) - 2
+	if showBindings {
+		var bindingContent []string
+		for _, line := range bindingLines {
+			paddedLine := " " + line
+			if w := lipgloss.Width(paddedLine); w < maxLineWidth {
+				paddedLine += strings.Repeat(" ", maxLineWidth-w)
+			}
+			bindingContent = append(bindingContent, paddedLine)
+		}
+		bindingsBox := RenderBorderedBoxCtx(
+			"Keyboard & Mouse Controls",
+			strings.Join(bindingContent, "\n"),
+			maxLineWidth,
+			len(bindingLines)+2,
+			false, // not interactive
+			false, // no scroll indicators
+			true,
+			ctx.SubmenuTitleAlign,
+			"TitleSubMenu",
+			ctx,
+		)
+		parts = append(parts, bindingsBox)
 	}
-
-	// Render key bindings with original logic
-	var paddedBindings []string
-	for _, line := range bindingLines {
-		lineWidth := lipgloss.Width(line)
-		paddedLine := " " + line + strutil.Repeat(" ", actualBoxWidth-lineWidth) + " "
-		paddedBindings = append(paddedBindings, MaintainBackground(bgStyle.Render(paddedLine), bgStyle))
-	}
-	combinedText += strings.Join(paddedBindings, "\n")
+	combinedText := strings.Join(parts, "\n")
 
 	content := combinedText
 	// Per-line maintenance above is sufficient — no outer wrap needed
 
 	// Ensure the title is visible on the black border bar.
 	// Use the original themed Dialog background for the title text area.
-	ctx := GetActiveContext()
+	ctx = GetActiveContext()
 	ctx.DialogTitleHelp = GetStyles().DialogTitleHelp.
 		Background(GetStyles().Dialog.GetBackground()).
 		Foreground(GetStyles().DialogTitleHelp.GetForeground())
