@@ -29,6 +29,7 @@ func (s *AppSelectionScreen) ViewString() string                       { return 
 func (s *AppSelectionScreen) Title() string                            { return s.menu.Title() }
 func (s *AppSelectionScreen) HelpText() string                         { return s.menu.HelpText() }
 func (s *AppSelectionScreen) SetSize(w, h int)                         { s.menu.SetSize(w, h) }
+func (s *AppSelectionScreen) SetFocused(f bool)                        { s.menu.SetFocused(f) }
 func (s *AppSelectionScreen) IsMaximized() bool                        { return s.menu.IsMaximized() }
 func (s *AppSelectionScreen) HasDialog() bool                          { return s.menu.HasDialog() }
 func (s *AppSelectionScreen) MenuName() string                         { return s.menu.MenuName() }

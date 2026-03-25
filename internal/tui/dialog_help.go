@@ -2,6 +2,7 @@ package tui
 
 import (
 	"DockSTARTer2/internal/theme"
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
@@ -11,6 +12,49 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
+
+// subKeyMap implements help.KeyMap with a subset of FullHelp columns for per-page rendering.
+type subKeyMap struct{ cols [][]keybind.Binding }
+
+func (s subKeyMap) ShortHelp() []keybind.Binding  { return nil }
+func (s subKeyMap) FullHelp() [][]keybind.Binding { return s.cols }
+
+// buildBindingPages greedily packs FullHelp columns into pages that each fit within maxW.
+func buildBindingPages(h help.Model, allCols [][]keybind.Binding, maxW int) []subKeyMap {
+	if len(allCols) == 0 {
+		return nil
+	}
+	var pages []subKeyMap
+	remaining := allCols
+	for len(remaining) > 0 {
+		fit := 0
+		for n := 1; n <= len(remaining); n++ {
+			h.SetWidth(9999) // no limit for measurement
+			rendered := h.View(subKeyMap{cols: remaining[:n]})
+			tooWide := false
+			for _, line := range strings.Split(rendered, "\n") {
+				if lipgloss.Width(line)+1 > maxW {
+					tooWide = true
+					break
+				}
+			}
+			if tooWide && n == 1 {
+				fit = 1 // single column too wide: include anyway
+				break
+			}
+			if tooWide {
+				break
+			}
+			fit = n
+		}
+		if fit == 0 {
+			fit = 1
+		}
+		pages = append(pages, subKeyMap{cols: remaining[:fit]})
+		remaining = remaining[fit:]
+	}
+	return pages
+}
 
 // HelpContext defines the two contextual help panels.
 type HelpContext struct {
@@ -44,10 +88,11 @@ type HelpDialogModel struct {
 	contextInfo   HelpContext // structured help info
 	contextOffset int         // scroll offset for item context text
 
-	// Paged mode: when context + bindings don't fit together, cycle between pages.
-	// page 0 = context info, page 1 = keyboard bindings.
-	paged bool
-	page  int
+	// Paged mode: cycles through context page and/or multiple binding column pages.
+	paged        bool
+	contextPaged bool // true when item context overflows and occupies its own page 0
+	page         int
+	numPages     int // total pages; set each ViewString call, used by Update
 
 	// Unified layout (deterministic sizing)
 	layout DialogLayout
@@ -78,7 +123,11 @@ func (m *HelpDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Help key (? / F1) cycles pages when paged, otherwise closes.
 		if keybind.Matches(msg, Keys.Help) {
 			if m.paged {
-				m.page = (m.page + 1) % 2
+				n := m.numPages
+				if n < 2 {
+					n = 2
+				}
+				m.page = (m.page + 1) % n
 				m.contextOffset = 0
 				return m, nil
 			}
@@ -111,8 +160,8 @@ func (m *HelpDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg { return CloseDialogMsg{} }
 
 	case tea.MouseWheelMsg:
-		if m.paged && m.page == 1 {
-			// On bindings page, scrolling does nothing meaningful
+		// On a bindings-only page (context overflowed to its own page), scrolling does nothing.
+		if m.paged && m.contextPaged && m.page != 0 {
 			return m, nil
 		}
 		if msg.Button == tea.MouseWheelUp {
@@ -130,10 +179,14 @@ func (m *HelpDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		return m, nil
 
-	case LayerHitMsg:
-		// When paged, clicking cycles to the next page instead of closing.
+	case tea.MouseClickMsg, LayerHitMsg:
+		// Any direct click (raw or semantic) cycles pages when paged, otherwise closes.
 		if m.paged {
-			m.page = (m.page + 1) % 2
+			n := m.numPages
+			if n < 2 {
+				n = 2
+			}
+			m.page = (m.page + 1) % n
 			m.contextOffset = 0
 			return m, nil
 		}
@@ -260,8 +313,17 @@ func (m *HelpDialogModel) ViewString() string {
 		}
 	}
 
-	// Determine if paging is needed: when item context + bindings together would trigger a scrollbar.
-	// Overhead: outer dialog (6) + legend box height if present.
+	// Build per-page binding column groups (greedy column packing).
+	allCols := m.keyMap.FullHelp()
+	bPages := buildBindingPages(m.help, allCols, maxLineWidth)
+	m.help.SetWidth(targetWidth) // restore after measurement in buildBindingPages
+	if len(bPages) == 0 {
+		bPages = []subKeyMap{{cols: allCols}}
+	}
+
+	// Determine if context paging is needed: when item context + bindings together would
+	// trigger a scrollbar, the context gets its own page 0.
+	contextPaged := false
 	if len(itemLines) > 0 {
 		contextOverhead := 6
 		if len(legendLines) > 0 {
@@ -271,18 +333,39 @@ func (m *HelpDialogModel) ViewString() string {
 		if visibleWithBindings < 1 {
 			visibleWithBindings = 1
 		}
-		m.paged = len(itemLines) > visibleWithBindings
-	} else {
-		m.paged = false
+		contextPaged = len(itemLines) > visibleWithBindings
 	}
 
+	// Total pages: binding pages + 1 if context gets its own page.
+	numPages := len(bPages)
+	if contextPaged {
+		numPages++ // page 0 = context only; pages 1..N = binding pages
+	}
+	m.contextPaged = contextPaged
+	m.numPages = numPages
+	m.paged = numPages > 1
+
 	// Clamp page to valid range.
-	if m.page < 0 || !m.paged {
+	if m.page < 0 || !m.paged || m.page >= m.numPages {
 		m.page = 0
 	}
 
-	showContext := !m.paged || m.page == 0
-	showBindings := !m.paged || m.page == 1
+	// showContext: always shown unless context is paged and we're on a bindings page.
+	showContext := !m.paged || (contextPaged && m.page == 0) || !contextPaged
+	// showBindings: shown on all pages except the context-only page 0.
+	showBindings := !m.paged || !(contextPaged && m.page == 0)
+
+	// Which binding page to render.
+	bindingPageIdx := m.page
+	if contextPaged && m.page > 0 {
+		bindingPageIdx = m.page - 1
+	}
+	if bindingPageIdx >= len(bPages) {
+		bindingPageIdx = len(bPages) - 1
+	}
+	if bindingPageIdx < 0 {
+		bindingPageIdx = 0
+	}
 
 	ctx := GetActiveContext()
 
@@ -424,8 +507,11 @@ func (m *HelpDialogModel) ViewString() string {
 		parts = append(parts, contextBox)
 	}
 	if showBindings {
+		// Render only the columns for the current binding page.
+		pageLines := strings.Split(m.help.View(bPages[bindingPageIdx]), "\n")
 		var bindingContent []string
-		for _, line := range bindingLines {
+		for _, line := range pageLines {
+			line = strings.TrimRight(line, " ")
 			paddedLine := " " + line
 			if w := lipgloss.Width(paddedLine); w < maxLineWidth {
 				paddedLine += strings.Repeat(" ", maxLineWidth-w)
@@ -436,7 +522,7 @@ func (m *HelpDialogModel) ViewString() string {
 			"Keyboard & Mouse Controls",
 			strings.Join(bindingContent, "\n"),
 			maxLineWidth,
-			len(bindingLines)+2,
+			len(pageLines)+2,
 			false, // not interactive
 			false, // no scroll indicators
 			true,
@@ -464,6 +550,9 @@ func (m *HelpDialogModel) ViewString() string {
 	title := "Help"
 	if m.contextInfo.ScreenName != "" {
 		title = "Help: " + m.contextInfo.ScreenName
+	}
+	if m.paged {
+		title += fmt.Sprintf(" [%d/%d]", m.page+1, m.numPages)
 	}
 	dialogStr := RenderUniformBlockDialogCtx(title, content, ctx)
 
