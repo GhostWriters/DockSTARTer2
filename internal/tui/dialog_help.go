@@ -315,24 +315,26 @@ func (m *HelpDialogModel) ViewString() string {
 
 			var displayLines []string
 			for i := 0; i < visibleRows && (i+m.contextOffset) < len(itemLines); i++ {
-				displayLines = append(displayLines, itemLines[i+m.contextOffset])
+				line := itemLines[i+m.contextOffset]
+				// Pad to uniform width so the scrollbar column always appears at the right edge.
+				if w := lipgloss.Width(line); w < maxLineWidth {
+					line += strings.Repeat(" ", maxLineWidth-w)
+				}
+				displayLines = append(displayLines, line)
 			}
 
 			contentToRender := strings.Join(displayLines, "\n")
 
-			// Apply scrollbar
-			sbInfo := ScrollbarInfo{}
-			if len(itemLines) > visibleRows {
-				contentToRender, sbInfo = ApplyScrollbarColumnTracked(
-					contentToRender,
-					len(itemLines),
-					visibleRows,
-					m.contextOffset,
-					true,
-					ctx.LineCharacters,
-					ctx,
-				)
-			}
+			// Apply scrollbar — always reserve the gutter column for consistent width.
+			contentToRender, sbInfo := ApplyScrollbarColumnTracked(
+				contentToRender,
+				len(itemLines),
+				visibleRows,
+				m.contextOffset,
+				IsScrollbarEnabled(),
+				ctx.LineCharacters,
+				ctx,
+			)
 
 			contextBox = RenderBorderedBoxCtx(
 				title,

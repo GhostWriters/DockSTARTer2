@@ -15,11 +15,53 @@ import (
 	"DockSTARTer2/internal/tui"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
+
+// AppSelectionScreen wraps MenuModel to provide a custom Legend help panel.
+type AppSelectionScreen struct {
+	menu *tui.MenuModel
+}
+
+func (s *AppSelectionScreen) Init() tea.Cmd                             { return s.menu.Init() }
+func (s *AppSelectionScreen) View() tea.View                           { return s.menu.View() }
+func (s *AppSelectionScreen) ViewString() string                       { return s.menu.ViewString() }
+func (s *AppSelectionScreen) Title() string                            { return s.menu.Title() }
+func (s *AppSelectionScreen) HelpText() string                         { return s.menu.HelpText() }
+func (s *AppSelectionScreen) SetSize(w, h int)                         { s.menu.SetSize(w, h) }
+func (s *AppSelectionScreen) IsMaximized() bool                        { return s.menu.IsMaximized() }
+func (s *AppSelectionScreen) HasDialog() bool                          { return s.menu.HasDialog() }
+func (s *AppSelectionScreen) MenuName() string                         { return s.menu.MenuName() }
+func (s *AppSelectionScreen) Layers() []*lipgloss.Layer                { return s.menu.Layers() }
+func (s *AppSelectionScreen) GetHitRegions(x, y int) []tui.HitRegion  { return s.menu.GetHitRegions(x, y) }
+
+func (s *AppSelectionScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	m, cmd := s.menu.Update(msg)
+	if mm, ok := m.(*tui.MenuModel); ok {
+		s.menu = mm
+	}
+	return s, cmd
+}
+
+func (s *AppSelectionScreen) HelpContext(maxWidth int) tui.HelpContext {
+	legend := "| " +
+		"{{|MarkerAdded|}}+{{[-]}} Added | " +
+		"{{|MarkerDeleted|}}-{{[-]}} Deleted | " +
+		"{{|MarkerModified|}}r{{[-]}} Referenced | " +
+		"{{|MarkerAdded|}}R{{[-]}} Referenced & Added |"
+	inner := s.menu.HelpContext(maxWidth)
+	return tui.HelpContext{
+		ScreenName: inner.ScreenName,
+		PageTitle:  "Legend",
+		PageText:   legend,
+		ItemTitle:  inner.ItemTitle,
+		ItemText:   inner.ItemText,
+	}
+}
 
 // NewAppSelectionScreen creates the app selection screen.
 // isRoot suppresses the Back button when this is the entry point.
-func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *tui.MenuModel {
+func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScreen {
 	// computeChanges and buildChangeSummary are declared as vars here so that
 	// backAction (needed by NewMenuModel) can close over them before their
 	// implementations are defined below.
@@ -1383,5 +1425,5 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *tui.MenuModel {
 	})
 
 	refreshItems()
-	return menu
+	return &AppSelectionScreen{menu: menu}
 }
