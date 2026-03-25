@@ -160,33 +160,29 @@ func prepareCommand(ctx context.Context, command string, args []string) (*exec.C
 // It checks if sudo requires a password, prompts the user via TUI/CLI if necessary,
 // and securely passes the password to sudo via standard input.
 func SudoCommand(ctx context.Context, command string, args ...string) (*exec.Cmd, error) {
-	// Reconstruct the full intended command for the prompt
-	fullCmd := command
-	if len(args) > 0 {
-		fullCmd += " " + strings.Join(args, " ")
-	}
-
-	// Check if sudo needs a password
-	checkCmd := exec.CommandContext(ctx, "sudo", "-n", "true")
-	if err := checkCmd.Run(); err != nil {
-		// Password required. Show the command in the prompt so user knows what's running.
-		promptTitle := "{{|TitleQuestion|}}Sudo Password Required{{[-]}}"
-
-		// The prompt message will just be the command being executed
-		password, err := console.TextPrompt(ctx, func(context.Context, any, ...any) {}, promptTitle, fullCmd, true)
-		if err != nil {
-			return nil, fmt.Errorf("sudo prompt failed: %w", err)
+	// If TUI is available and sudo needs a password, prompt via TUI dialog and pass via -S.
+	// Otherwise, let sudo prompt natively (no -S, no stdin injection).
+	if console.TUIPrompt != nil {
+		checkCmd := exec.CommandContext(ctx, "sudo", "-n", "true")
+		if err := checkCmd.Run(); err != nil {
+			// Password required — prompt via TUI dialog.
+			fullCmd := command
+			if len(args) > 0 {
+				fullCmd += " " + strings.Join(args, " ")
+			}
+			promptTitle := "{{|TitleQuestion|}}Sudo Password Required{{[-]}}"
+			password, err := console.TextPrompt(ctx, func(context.Context, any, ...any) {}, promptTitle, fullCmd, true)
+			if err != nil {
+				return nil, fmt.Errorf("sudo prompt failed: %w", err)
+			}
+			sudoArgs := append([]string{"-S", command}, args...)
+			cmd := exec.CommandContext(ctx, "sudo", sudoArgs...)
+			cmd.Stdin = strings.NewReader(password + "\n")
+			return cmd, nil
 		}
-
-		// Prepend the target command and -S to args
-		sudoArgs := append([]string{"-S", command}, args...)
-
-		cmd := exec.CommandContext(ctx, "sudo", sudoArgs...)
-		cmd.Stdin = strings.NewReader(password + "\n")
-		return cmd, nil
 	}
 
-	// No password required, just run with sudo natively
+	// No TUI, or no password required — let sudo handle it natively.
 	sudoArgs := append([]string{command}, args...)
 	return exec.CommandContext(ctx, "sudo", sudoArgs...), nil
 }
