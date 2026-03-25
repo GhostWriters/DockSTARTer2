@@ -3062,11 +3062,8 @@ func (m Model) lineNumberView(n int, isCursorLine bool, dataLine int) (str strin
 		str = strconv.Itoa(n)
 	}
 
-	// XXX: is textStyle really necessary here?
-	textStyle := m.activeStyle().computedText()
 	lineNumberStyle := m.activeStyle().computedLineNumber()
 	if isCursorLine {
-		textStyle = m.activeStyle().computedCursorLine()
 		lineNumberStyle = m.activeStyle().computedLineNumberSelected()
 	}
 
@@ -3091,7 +3088,7 @@ func (m Model) lineNumberView(n int, isCursorLine bool, dataLine int) (str strin
 	// Single character left margin (" ") followed by the number ("%*v ")
 	str = fmt.Sprintf(" %*v ", digits, str)
 
-	return textStyle.Render(lineNumberStyle.Render(str))
+	return lineNumberStyle.Render(str)
 }
 
 // placeholderView returns the prompt and placeholder, if any.
