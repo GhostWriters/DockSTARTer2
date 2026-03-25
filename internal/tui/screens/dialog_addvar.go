@@ -38,6 +38,7 @@ const (
 	addVarFocusList
 	addVarFocusCreate
 	addVarFocusCancel
+	addVarFocusExit
 )
 
 // addVarDialogModel is the "Add Variable" dialog that mimics bash menu_add_var.sh.
@@ -60,6 +61,8 @@ type addVarDialogModel struct {
 	maxVis int
 
 	focus addVarFocus
+
+	listAbsTopY    int // absolute screen Y of first list item; set in GetHitRegions
 
 	addAllVars     []string
 	addAllDefaults map[string]string
@@ -130,6 +133,7 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	closeWith := func(result any) tea.Cmd {
 		return func() tea.Msg { return tui.CloseDialogMsg{Result: result} }
 	}
+	confirmExit := tui.ConfirmExitAction
 
 	selectItem := func(idx int) tea.Cmd {
 		if idx < 0 || idx >= len(m.items) {
@@ -185,6 +189,9 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.focus = addVarFocusCancel
 				return m, nil
 			} else if m.focus == addVarFocusCancel {
+				m.focus = addVarFocusExit
+				return m, nil
+			} else if m.focus == addVarFocusExit {
 				m.focus = addVarFocusCreate
 				return m, nil
 			}
@@ -208,6 +215,8 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			case addVarFocusCancel:
 				return m, closeWith(nil)
+			case addVarFocusExit:
+				return m, confirmExit()
 			}
 			return m, nil
 		}
@@ -269,6 +278,9 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if strings.HasSuffix(msg.ID, ".Cancel") {
 				return m, closeWith(nil)
 			}
+			if strings.HasSuffix(msg.ID, ".Exit") {
+				return m, confirmExit()
+			}
 			if msg.ID == "addvar_input" {
 				m.focus = addVarFocusInput
 				m.input.Focus()
@@ -298,7 +310,7 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *addVarDialogModel) cycleFocus(dir int) {
-	order := []addVarFocus{addVarFocusInput, addVarFocusList, addVarFocusCreate, addVarFocusCancel}
+	order := []addVarFocus{addVarFocusInput, addVarFocusList, addVarFocusCreate, addVarFocusCancel, addVarFocusExit}
 	cur := 0
 	for i, f := range order {
 		if f == m.focus {
@@ -404,7 +416,7 @@ func (m *addVarDialogModel) recalc() {
 		AppDescription: m.appDesc,
 	}, contentW)
 	headingRenderedH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToThemeANSI(headingRaw)))
-	btnH := tui.ButtonRowHeight(contentW, 0, tui.ButtonSpec{Text: "Create"}, tui.ButtonSpec{Text: "Cancel"})
+	btnH := tui.ButtonRowHeight(contentW, 0, tui.ButtonSpec{Text: "Create"}, tui.ButtonSpec{Text: "Cancel"}, tui.ButtonSpec{Text: "Exit"})
 	// overhead: outer border(2) + rendered heading + "Variable Name" section(3) + "Available Variables" borders(2) + spacer(1) + buttons
 	fixed := 2 + headingRenderedH + 3 + 2 + 1 + btnH
 	m.maxVis = m.height - fixed
@@ -424,13 +436,9 @@ func (m *addVarDialogModel) innerWidth() int {
 }
 
 func (m *addVarDialogModel) itemIndexAt(screenY int) int {
-	ctx := tui.GetActiveContext()
-	contentW := m.innerWidth()
-	headingRaw := FormatMenuHeading(MenuHeadingParams{AppName: m.appName, AppDescription: m.appDesc}, contentW)
-	headingH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToThemeANSI(headingRaw)))
-	// list starts at: outer border(1) + headingH + "Variable Name" section(3) + "Available Variables" title border(1)
-	listTop := 1 + headingH + 3 + 1
-	rowY := listTop
+	// m.listAbsTopY is set by GetHitRegions each frame to the absolute screen Y
+	// of the first visible list item. Use it directly so click coordinates match.
+	rowY := m.listAbsTopY
 	rowBudget := m.maxVis
 	for i := m.offset; i < len(m.items) && rowBudget > 0; i++ {
 		item := m.items[i]
@@ -640,6 +648,7 @@ func (m *addVarDialogModel) ViewString() string {
 		contentW, ctx,
 		tui.ButtonSpec{Text: "Create", Active: m.focus == addVarFocusInput || m.focus == addVarFocusCreate},
 		tui.ButtonSpec{Text: "Cancel", Active: m.focus == addVarFocusCancel},
+		tui.ButtonSpec{Text: "Exit", Active: m.focus == addVarFocusExit},
 	), "\n")
 
 	// Dynamic spacer pushes buttons to the bottom.
@@ -713,6 +722,7 @@ func (m *addVarDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegion 
 			ItemText:   "Type the name and press Enter to create, or Esc to cancel.",
 		},
 	})
+	m.listAbsTopY = offsetY + listTop
 	if listH > 0 {
 		regions = append(regions, tui.HitRegion{
 			ID:     "addvar_list",
@@ -741,7 +751,7 @@ func (m *addVarDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegion 
 		},
 	})
 
-	btnH := tui.ButtonRowHeight(contentW, 0, tui.ButtonSpec{Text: "Create"}, tui.ButtonSpec{Text: "Cancel"})
+	btnH := tui.ButtonRowHeight(contentW, 0, tui.ButtonSpec{Text: "Create"}, tui.ButtonSpec{Text: "Cancel"}, tui.ButtonSpec{Text: "Exit"})
 	buttonY := m.height - 1 - btnH
 	regions = append(regions, tui.HitRegion{
 		ID:     "addvar_buttons",
@@ -766,6 +776,7 @@ func (m *addVarDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegion 
 		"addvar_dialog", offsetX+1, offsetY+buttonY, contentW, tui.ZDialog+20,
 		tui.ButtonSpec{Text: "Create", ZoneID: "Create", Help: "Create the new variable with the entered name."},
 		tui.ButtonSpec{Text: "Cancel", ZoneID: "Cancel", Help: "Cancel and return to the editor."},
+		tui.ButtonSpec{Text: "Exit", ZoneID: "Exit", Help: "Exit the application."},
 	)...)
 
 	return regions

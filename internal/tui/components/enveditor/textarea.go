@@ -237,11 +237,13 @@ type Styles struct {
 // For an introduction to styling with Lip Gloss see:
 // https://github.com/charmbracelet/lipgloss
 type StyleState struct {
-	Base             lipgloss.Style
-	Text             lipgloss.Style
-	LineNumber       lipgloss.Style
-	CursorLineNumber lipgloss.Style
-	CursorLine       lipgloss.Style
+	Base                     lipgloss.Style
+	Text                     lipgloss.Style
+	LineNumber               lipgloss.Style
+	LineNumberSelected       lipgloss.Style // cursor line
+	LineNumberModified       lipgloss.Style // line differs from default
+	LineNumberModifiedSelected lipgloss.Style // cursor line + differs from default
+	CursorLine               lipgloss.Style
 	EndOfBuffer      lipgloss.Style
 	Placeholder      lipgloss.Style
 	Prompt           lipgloss.Style
@@ -265,8 +267,19 @@ func (s StyleState) computedCursorLine() lipgloss.Style {
 	return s.CursorLine.Inherit(s.Base).Inline(true)
 }
 
-func (s StyleState) computedCursorLineNumber() lipgloss.Style {
-	return s.CursorLineNumber.
+func (s StyleState) computedLineNumberSelected() lipgloss.Style {
+	return s.LineNumberSelected.
+		Inherit(s.CursorLine).
+		Inherit(s.Base).
+		Inline(true)
+}
+
+func (s StyleState) computedLineNumberModified() lipgloss.Style {
+	return s.LineNumberModified.Inherit(s.Base).Inline(true)
+}
+
+func (s StyleState) computedLineNumberModifiedSelected() lipgloss.Style {
+	return s.LineNumberModifiedSelected.
 		Inherit(s.CursorLine).
 		Inherit(s.Base).
 		Inline(true)
@@ -503,11 +516,13 @@ func DefaultStyles(isDark bool) Styles {
 
 	var s Styles
 	s.Focused = StyleState{
-		Base:             lipgloss.NewStyle(),
-		CursorLine:       lipgloss.NewStyle(),
-		CursorLineNumber: lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("240"), lipgloss.Color("240"))),
-		EndOfBuffer:      lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("254"), lipgloss.Color("0"))),
-		LineNumber:       lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("249"), lipgloss.Color("7"))),
+		Base:                       lipgloss.NewStyle(),
+		CursorLine:                 lipgloss.NewStyle(),
+		LineNumber:                 lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("249"), lipgloss.Color("7"))),
+		LineNumberSelected:         lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("240"), lipgloss.Color("240"))),
+		LineNumberModified:         lipgloss.NewStyle().Foreground(lipgloss.Color("3")), // Yellow
+		LineNumberModifiedSelected: lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Bold(true),
+		EndOfBuffer:                lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("254"), lipgloss.Color("0"))),
 		Placeholder:      lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
 		Prompt:           lipgloss.NewStyle().Foreground(lipgloss.Color("7")),
 		Text:             lipgloss.NewStyle(),
@@ -527,11 +542,13 @@ func DefaultStyles(isDark bool) Styles {
 		SelectionText:     lipgloss.NewStyle().Reverse(true),
 	}
 	s.Blurred = StyleState{
-		Base:             lipgloss.NewStyle(),
-		CursorLine:       lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("245"), lipgloss.Color("7"))),
-		CursorLineNumber: lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("249"), lipgloss.Color("7"))),
-		EndOfBuffer:      lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("254"), lipgloss.Color("0"))),
-		LineNumber:       lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("249"), lipgloss.Color("7"))),
+		Base:                       lipgloss.NewStyle(),
+		CursorLine:                 lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("245"), lipgloss.Color("7"))),
+		LineNumber:                 lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("249"), lipgloss.Color("7"))),
+		LineNumberSelected:         lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("249"), lipgloss.Color("7"))),
+		LineNumberModified:         lipgloss.NewStyle().Foreground(lipgloss.Color("3")),
+		LineNumberModifiedSelected: lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Bold(true),
+		EndOfBuffer:                lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("254"), lipgloss.Color("0"))),
 		Placeholder:      lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
 		Prompt:           lipgloss.NewStyle().Foreground(lipgloss.Color("7")),
 		Text:             lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("245"), lipgloss.Color("7"))),
@@ -2821,10 +2838,10 @@ func (m *Model) view() string {
 			if m.ShowLineNumbers {
 				if wl == 0 { // normal line
 					isCursorLine := m.row == l
-					s.WriteString(m.lineNumberView(l+1, isCursorLine))
+					s.WriteString(m.lineNumberView(l+1, isCursorLine, l))
 				} else { // soft wrapped line
 					isCursorLine := m.row == l
-					s.WriteString(m.lineNumberView(-1, isCursorLine))
+					s.WriteString(m.lineNumberView(-1, isCursorLine, -1))
 				}
 			}
 
@@ -3029,12 +3046,12 @@ func (m Model) promptView(displayLine, dataLine int) (prompt string) {
 
 // lineNumberView renders the line number.
 //
-// If the argument is less than 0, a space styled as a line number is returned
+// If n is less than 0, a space styled as a line number is returned
 // instead. Such cases are used for soft-wrapped lines.
 //
-// The second argument indicates whether this line number is for a 'cursorline'
-// line number.
-func (m Model) lineNumberView(n int, isCursorLine bool) (str string) {
+// isCursorLine indicates whether this line number is for a 'cursorline' line.
+// dataLine is the index into m.value/m.lineMeta (-1 if not applicable).
+func (m Model) lineNumberView(n int, isCursorLine bool, dataLine int) (str string) {
 	if !m.ShowLineNumbers {
 		return ""
 	}
@@ -3050,7 +3067,22 @@ func (m Model) lineNumberView(n int, isCursorLine bool) (str string) {
 	lineNumberStyle := m.activeStyle().computedLineNumber()
 	if isCursorLine {
 		textStyle = m.activeStyle().computedCursorLine()
-		lineNumberStyle = m.activeStyle().computedCursorLineNumber()
+		lineNumberStyle = m.activeStyle().computedLineNumberSelected()
+	}
+
+	// Tint line numbers whose value differs from the template default.
+	if n > 0 && dataLine >= 0 {
+		mask := m.getDiffMask(dataLine)
+		for _, changed := range mask {
+			if changed {
+				if isCursorLine {
+					lineNumberStyle = m.activeStyle().computedLineNumberModifiedSelected()
+				} else {
+					lineNumberStyle = m.activeStyle().computedLineNumberModified()
+				}
+				break
+			}
+		}
 	}
 
 	// Format line number dynamically based on the maximum number of lines.
@@ -3101,7 +3133,7 @@ func (m Model) placeholderView() string {
 				ln = i + 1
 				fallthrough
 			case len(plines) > i:
-				s.WriteString(m.lineNumberView(ln, isLineNumber))
+				s.WriteString(m.lineNumberView(ln, isLineNumber, -1))
 			default:
 			}
 		}
@@ -3174,7 +3206,7 @@ func (m Model) Cursor() *tea.Cursor {
 
 	xOffset := lineInfo.CharOffset +
 		w(m.promptView(0, -1)) +
-		w(m.lineNumberView(0, false)) +
+		w(m.lineNumberView(0, false, -1)) +
 		baseStyle.GetMarginLeft() +
 		baseStyle.GetPaddingLeft() +
 		baseStyle.GetBorderLeftSize()

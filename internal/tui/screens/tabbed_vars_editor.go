@@ -224,8 +224,18 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 		}
 
 		capturedCfg := cfg
-		defaultFunc := func(varName string) string {
-			return appenv.VarDefaultValue(context.Background(), varName, capturedCfg)
+		capturedApp := strings.ToUpper(tab.spec.App)
+		var defaultFunc func(string) string
+		if !tab.spec.IsGlobal {
+			// For app-env tabs (.env.app.appname), pass APPNAME:VARNAME so
+			// VarDefaultValue uses the APPENV path (template file lookup).
+			defaultFunc = func(varName string) string {
+				return appenv.VarDefaultValue(context.Background(), capturedApp+":"+varName, capturedCfg)
+			}
+		} else {
+			defaultFunc = func(varName string) string {
+				return appenv.VarDefaultValue(context.Background(), varName, capturedCfg)
+			}
 		}
 
 		initialVars, _ := appenv.ListVarsLiteralsData(content)
@@ -693,6 +703,10 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.tabs[i].editor.ParseEnv(data.content, data.defaultFunc, data.readOnlyVars)
 			// Apply theme-aware env-specific styles
 			editorStyles := m.tabs[i].editor.Styles()
+			editorStyles.Focused.LineNumber = tui.SemanticRawStyle("LineNumber")
+			editorStyles.Focused.LineNumberSelected = tui.SemanticRawStyle("LineNumberSelected")
+			editorStyles.Focused.LineNumberModified = tui.SemanticRawStyle("LineNumberModified")
+			editorStyles.Focused.LineNumberModifiedSelected = tui.SemanticRawStyle("LineNumberModifiedSelected")
 			editorStyles.Focused.InvalidText = tui.SemanticRawStyle("EnvInvalid")
 			editorStyles.Focused.DuplicateText = tui.SemanticRawStyle("EnvDuplicate")
 			editorStyles.Focused.BuiltinText = tui.SemanticRawStyle("EnvBuiltin")
@@ -703,6 +717,10 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			editorStyles.Focused.GutterDeleted = tui.SemanticRawStyle("MarkerDeleted")
 			editorStyles.Focused.GutterModified = tui.SemanticRawStyle("MarkerModified")
 			editorStyles.Focused.GutterInvalid = tui.SemanticRawStyle("MarkerInvalid")
+			editorStyles.Blurred.LineNumber = tui.SemanticRawStyle("LineNumber")
+			editorStyles.Blurred.LineNumberSelected = tui.SemanticRawStyle("LineNumberSelected")
+			editorStyles.Blurred.LineNumberModified = tui.SemanticRawStyle("LineNumberModified")
+			editorStyles.Blurred.LineNumberModifiedSelected = tui.SemanticRawStyle("LineNumberModifiedSelected")
 			editorStyles.Blurred.InvalidText = tui.SemanticRawStyle("EnvInvalid")
 			editorStyles.Blurred.DuplicateText = tui.SemanticRawStyle("EnvDuplicate")
 			editorStyles.Blurred.BuiltinText = tui.SemanticRawStyle("EnvBuiltin")

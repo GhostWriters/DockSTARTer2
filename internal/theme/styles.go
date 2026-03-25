@@ -86,31 +86,31 @@ func ApplyStyleCode(style lipgloss.Style, resetStyle lipgloss.Style, styleCode s
 		for _, char := range s {
 			switch char {
 			case 'B':
-				style = style.Bold(!style.GetBold())
+				style = style.Bold(true)
 			case 'b':
 				style = style.Bold(false)
 			case 'U':
-				style = style.Underline(!style.GetUnderline())
+				style = style.Underline(true)
 			case 'u':
 				style = style.Underline(false)
 			case 'I':
-				style = style.Italic(!style.GetItalic())
+				style = style.Italic(true)
 			case 'i':
 				style = style.Italic(false)
 			case 'D':
-				style = style.Faint(!style.GetFaint())
+				style = style.Faint(true)
 			case 'd':
 				style = style.Faint(false)
 			case 'L':
-				style = style.Blink(!style.GetBlink())
+				style = style.Blink(true)
 			case 'l':
 				style = style.Blink(false)
 			case 'R':
-				style = style.Reverse(!style.GetReverse())
+				style = style.Reverse(true)
 			case 'r':
 				style = style.Reverse(false)
 			case 'S':
-				style = style.Strikethrough(!style.GetStrikethrough())
+				style = style.Strikethrough(true)
 			case 's':
 				style = style.Strikethrough(false)
 			case 'H':

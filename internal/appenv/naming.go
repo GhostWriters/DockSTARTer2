@@ -37,7 +37,13 @@ func AppNameToInstanceName(appName string) string {
 }
 
 // VarNameToAppName returns the DS application name based on the variable name passed.
+// Mirrors varname_to_appname.sh: if the name contains ":", the part before the colon
+// is the app name; otherwise the app name is extracted via the double-underscore pattern.
 func VarNameToAppName(varName string) string {
+	// APPNAME:VARNAME format (used for .env.app.* vars)
+	if idx := strings.Index(varName, ":"); idx > 0 {
+		return strings.ToUpper(varName[:idx])
+	}
 	if !strings.Contains(varName, "__") {
 		return ""
 	}

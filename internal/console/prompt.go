@@ -41,12 +41,13 @@ func QuestionPrompt(ctx context.Context, printer Printer, title, question string
 		return true, nil
 	}
 
-	// Format text for semantic colors
-	questionStr := Sprintf("%s", question)
+	// Normalize title before any processing
 	if title == "" {
 		title = "Confirmation"
 	}
-	title = Sprintf("%s", title)
+
+	// Format text for console output (uses console color registry)
+	questionStr := Sprintf("%s", question)
 
 	// Log the question regardless of prompt mode (matches bash notice behavior)
 	printer(ctx, "%s", questionStr)
@@ -65,7 +66,9 @@ func QuestionPrompt(ctx context.Context, printer Printer, title, question string
 	// Check if we should use TUI for this prompt
 	if TUIConfirm != nil {
 		defaultYes := strings.EqualFold(defaultValue, "y")
-		answer := TUIConfirm(title, questionStr, defaultYes)
+		// Pass raw (unprocessed) strings so the TUI dialog can expand semantic tags
+		// using the active theme instead of the hardcoded console color registry.
+		answer := TUIConfirm(title, question, defaultYes)
 		if answer {
 			printer(ctx, "%s", Sprintf("Answered: {{|Yes|}}Yes{{[-]}}"))
 		} else {
@@ -161,21 +164,25 @@ func QuestionPrompt(ctx context.Context, printer Printer, title, question string
 // TextPrompt prompts the user for string input.
 // If sensitive is true, it attempts to mask the input in standard terminal.
 func TextPrompt(ctx context.Context, printer Printer, title, question string, sensitive bool) (string, error) {
-	// Format text for semantic colors
-	questionStr := Sprintf("%s", question)
+	// Normalize title before any processing
 	if title == "" {
 		title = "Input Required"
 	}
-	title = Sprintf("%s", title)
+
+	// Format text for console output (uses console color registry)
+	questionStr := Sprintf("%s", question)
+	titleStr := Sprintf("%s", title)
 
 	// Log the prompt regardless of mode (matches bash notice behavior)
-	if title != "" {
-		printer(ctx, "%s", title)
+	if titleStr != "" {
+		printer(ctx, "%s", titleStr)
 	}
 	printer(ctx, "%s: ", questionStr)
 
 	if TUIPrompt != nil {
-		return TUIPrompt(title, questionStr, sensitive)
+		// Pass raw (unprocessed) strings so the TUI dialog can expand semantic tags
+		// using the active theme instead of the hardcoded console color registry.
+		return TUIPrompt(title, question, sensitive)
 	}
 
 	if sensitive {

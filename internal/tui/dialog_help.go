@@ -524,7 +524,7 @@ func (m *HelpDialogModel) ViewString() string {
 			maxLineWidth,
 			len(pageLines)+2,
 			false, // not interactive
-			false, // no scroll indicators
+			true,  // showIndicators: true — reserve space to match legend/context title alignment
 			true,
 			ctx.SubmenuTitleAlign,
 			"TitleSubMenu",

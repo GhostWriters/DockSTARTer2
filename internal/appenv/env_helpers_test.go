@@ -4,6 +4,24 @@ import (
 	"testing"
 )
 
+func TestAppNameToBaseAppName(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"RADARR", "RADARR"},
+		{"RADARR__4K", "RADARR"},
+		{"SONARR__ANIME", "SONARR"},
+	}
+
+	for _, test := range tests {
+		result := AppNameToBaseAppName(test.input)
+		if result != test.expected {
+			t.Errorf("AppNameToBaseAppName(%q) = %q; want %q", test.input, result, test.expected)
+		}
+	}
+}
+
 func TestVarNameToAppName(t *testing.T) {
 	tests := []struct {
 		input    string
@@ -26,6 +44,11 @@ func TestVarNameToAppName(t *testing.T) {
 		// These extract successfully, but IsAppNameValid would reject them
 		{"RADARR__ENABLED__FOO", "RADARR__ENABLED"},
 		{"RADARR__TAG__VAR", "RADARR__TAG"},
+
+		// Colon-format (APPNAME:VARNAME) — used for .env.app.* vars
+		{"WATCHTOWER:WATCHTOWER_CLEANUP", "WATCHTOWER"},
+		{"SONARR:PORT_8989", "SONARR"},
+		{"PLEX__4K:PLEX_CLAIM", "PLEX__4K"},
 	}
 
 	for _, test := range tests {
@@ -223,5 +246,96 @@ func TestAppVarsLines(t *testing.T) {
 	sonarrVars := AppVarsLines("SONARR", lines)
 	if len(sonarrVars) != 1 {
 		t.Errorf("AppVarsLines(\"SONARR\") returned %d variables, want 1", len(sonarrVars))
+	}
+}
+
+// TestVarNameIsValid mirrors test_varname_is_valid in varname_is_valid.sh.
+// VarTypes: "", _BARE_, _GLOBAL_, _APPNAME_, _APPNAME_:, <appname>:, <appname>
+func TestVarNameIsValid(t *testing.T) {
+	tests := []struct {
+		varName  string
+		varType  string
+		expected bool
+	}{
+		// VarType="" — accepts any valid variable
+		{"TZ", "", true},
+		{"RADARR__TEST", "", true},
+		{"RADARR_4K", "", true},
+		{"RADARR__TAG", "", true},
+		{"Radarr__TAG", "", true},
+		{"RADARR__4K__TAG", "", true},
+		{"RADARR__4K__tag", "", true},
+		{"RADARR:varname", "", true},  // colon-format
+		{"2TZ", "", false},
+		{"2radarr:radarr", "", false},
+		{"radarr:varname", "", false}, // lowercase appname
+
+		// VarType="_BARE_" — any valid identifier (letters, digits, underscore)
+		{"TZ", "_BARE_", true},
+		{"RADARR__TEST", "_BARE_", true},
+		{"RADARR_4K", "_BARE_", true},
+		{"RADARR__TAG", "_BARE_", true},
+		{"Radarr__TAG", "_BARE_", true},
+		{"RADARR__4K__TAG", "_BARE_", true},
+		{"RADARR__4K__tag", "_BARE_", true},
+		{"2TZ", "_BARE_", false},
+		{"2radarr:radarr", "_BARE_", false},
+		{"radarr:varname", "_BARE_", false},
+
+		// VarType="_GLOBAL_" — bare identifier that is not an app var
+		{"TZ", "_GLOBAL_", true},
+		{"RADARR_4K", "_GLOBAL_", true},
+		{"Radarr__TAG", "_GLOBAL_", true}, // mixed case → VarNameToAppName=""
+		{"RADARR__TEST", "_GLOBAL_", false},
+		{"RADARR__TAG", "_GLOBAL_", false},
+		{"RADARR__4K__TAG", "_GLOBAL_", false},
+		{"RADARR__4K__tag", "_GLOBAL_", false},
+		{"2TZ", "_GLOBAL_", false},
+		{"radarr:varname", "_GLOBAL_", false},
+
+		// VarType="_APPNAME_" — bare identifier that is an app var
+		{"RADARR__TEST", "_APPNAME_", true},
+		{"RADARR__TAG", "_APPNAME_", true},
+		{"RADARR__4K__TAG", "_APPNAME_", true},
+		{"RADARR__4K__tag", "_APPNAME_", true},
+		{"TZ", "_APPNAME_", false},
+		{"RADARR_4K", "_APPNAME_", false},
+		{"Radarr__TAG", "_APPNAME_", false}, // VarNameToAppName=""
+		{"2TZ", "_APPNAME_", false},
+		{"radarr:varname", "_APPNAME_", false},
+
+		// VarType="_APPNAME_:" — colon-format with any valid app name
+		{"RADARR:varname", "_APPNAME_:", true},
+		{"RADARR__4K:varname", "_APPNAME_:", true},
+		{"radarr:varname", "_APPNAME_:", false}, // lowercase appname
+		{"2radarr:radarr", "_APPNAME_:", false},
+		{"RADARR:2var", "_APPNAME_:", false}, // var starts with digit
+		{"TZ", "_APPNAME_:", false},
+		{"RADARR__TEST", "_APPNAME_:", false},
+
+		// VarType="radarr:" — colon-format for specific app (case-insensitive)
+		{"radarr:varname", "radarr:", true},
+		{"RADARR:varname", "radarr:", true},
+		{"SONARR:varname", "radarr:", false},
+		{"2radarr:radarr", "radarr:", false},
+		{"radarr:2var", "radarr:", false},
+		{"TZ", "radarr:", false},
+		{"RADARR__TEST", "radarr:", false},
+
+		// VarType="radarr" — double-underscore var for specific app (case-insensitive)
+		{"RADARR__TEST", "radarr", true},
+		{"RADARR__TAG", "radarr", true},
+		{"RADARR__4K__TAG", "radarr", false}, // appname is RADARR__4K, not RADARR
+		{"SONARR__TEST", "radarr", false},
+		{"TZ", "radarr", false},
+		{"radarr:varname", "radarr", false},
+		{"Radarr__TAG", "radarr", false}, // VarNameToAppName=""
+	}
+
+	for _, test := range tests {
+		result := VarNameIsValid(test.varName, test.varType)
+		if result != test.expected {
+			t.Errorf("VarNameIsValid(%q, %q) = %v; want %v", test.varName, test.varType, result, test.expected)
+		}
 	}
 }
