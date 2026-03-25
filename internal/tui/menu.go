@@ -498,10 +498,12 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 
 	// IsSubItem: indented instance row, no description column
 	if menuItem.IsSubItem {
-		// Gutter char (1 col): R=referenced-not-added, +=newly-enabled, -=newly-disabled, space otherwise.
+		// Gutter char (1 col): R=referenced+added, r=referenced-only, +=newly-enabled, -=newly-disabled.
 		gutterChar := neutralStyle.Render(" ")
-		if menuItem.IsReferenced && !menuItem.Checked {
-			gutterChar = RenderThemeText("{{|MarkerModified|}}R{{[-]}}", neutralStyle)
+		if menuItem.IsReferenced && menuItem.Checked {
+			gutterChar = RenderThemeText("{{|MarkerAdded|}}R{{[-]}}", neutralStyle)
+		} else if menuItem.IsReferenced {
+			gutterChar = RenderThemeText("{{|MarkerModified|}}r{{[-]}}", neutralStyle)
 		} else if menuItem.Checked && !menuItem.WasAdded {
 			gutterChar = RenderThemeText("{{|MarkerAdded|}}+{{[-]}}", neutralStyle)
 		} else if !menuItem.Checked && menuItem.WasAdded {
@@ -531,7 +533,7 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 	}
 
 	paddingSpaces := strutil.Repeat(" ", max(0, d.maxTagLen-lipgloss.Width(GetPlainText(tag))+3))
-	availableWidth := m.Width() - 2 - (cbWidth + d.maxTagLen + 3)
+	availableWidth := m.Width() - 2 - 1 - (cbWidth + d.maxTagLen + 3) // -1 for gutter column
 	if availableWidth < 0 {
 		availableWidth = 0
 	}
@@ -539,7 +541,19 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 	descStr := RenderThemeText(menuItem.Desc, descStyle)
 	descLine := TruncateRight(descStr, availableWidth)
 
-	line := checkbox + tagStr + neutralStyle.Render(paddingSpaces) + descLine
+	// Gutter char (1 col): R=referenced+added, r=referenced-only, +=newly-enabled, -=newly-disabled.
+	gutterChar := neutralStyle.Render(" ")
+	if menuItem.IsReferenced && menuItem.Checked {
+		gutterChar = RenderThemeText("{{|MarkerAdded|}}R{{[-]}}", neutralStyle)
+	} else if menuItem.IsReferenced {
+		gutterChar = RenderThemeText("{{|MarkerModified|}}r{{[-]}}", neutralStyle)
+	} else if menuItem.Checked && !menuItem.WasAdded {
+		gutterChar = RenderThemeText("{{|MarkerAdded|}}+{{[-]}}", neutralStyle)
+	} else if !menuItem.Checked && menuItem.WasAdded {
+		gutterChar = RenderThemeText("{{|MarkerDeleted|}}-{{[-]}}", neutralStyle)
+	}
+
+	line := gutterChar + checkbox + tagStr + neutralStyle.Render(paddingSpaces) + descLine
 	actualWidth := lipgloss.Width(line)
 	if actualWidth < m.Width()-2 {
 		line += neutralStyle.Render(strutil.Repeat(" ", m.Width()-2-actualWidth))
