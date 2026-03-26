@@ -123,6 +123,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 	themeMenu := tui.NewMenuModel(tui.IDThemePanel, "Select Theme", "", themeItems, nil)
 	s.themeMenu = themeMenu
 	s.themeMenu.SetHelpItemPrefix("Theme")
+	s.themeMenu.SetHelpPageText("Configure the visual appearance of the application, including theme selection, borders, shadows, and other display options.")
 	s.themeMenu.SetSubMenuMode(true)
 	s.themeMenu.SetIsDialog(false) // Part of a screen, not a modal
 	s.themeMenu.SetShowExit(false)
@@ -216,6 +217,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 	optionsMenu := tui.NewMenuModel(tui.IDOptionsPanel, "Options", "", optionItems, nil)
 	s.optionsMenu = optionsMenu
 	s.optionsMenu.SetHelpItemPrefix("Option")
+	s.optionsMenu.SetHelpPageText("Configure the visual appearance of the application, including theme selection, borders, shadows, and other display options.")
 	s.optionsMenu.SetSubMenuMode(true)
 	s.optionsMenu.SetIsDialog(false) // Part of a screen, not a modal
 	s.optionsMenu.SetShowExit(false)
