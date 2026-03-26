@@ -1758,8 +1758,7 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) tui.HelpContext {
 	if !ok || !meta.IsVariable {
 		hctx := tui.HelpContext{
 			ScreenName: m.title,
-			PageTitle:  "Legend",
-			PageText:   legend,
+			Legend:     legend,
 		}
 		if tab.spec.App != "" {
 			base := appenv.AppNameToBaseAppName(tab.spec.App)
@@ -1788,8 +1787,7 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) tui.HelpContext {
 	if varName == "" {
 		return tui.HelpContext{
 			ScreenName: m.title,
-			PageTitle:  "Legend",
-			PageText:   legend,
+			Legend:     legend,
 		}
 	}
 
@@ -1836,8 +1834,7 @@ func (m *TabbedVarsEditorModel) getVariableHelpContext(varName string, tab *envT
 
 	return &tui.HelpContext{
 		ScreenName: m.title,
-		PageTitle:  "Legend",
-		PageText:   legend,
+		Legend:     legend,
 		ItemTitle:  "Variable: " + varName,
 		ItemText:   itemText,
 	}
