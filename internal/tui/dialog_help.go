@@ -372,11 +372,6 @@ func (m *HelpDialogModel) ViewString() string {
 	if showContext && (len(legendLines) > 0 || len(itemLines) > 0) {
 		// Render Page Context box (formerly Legend) if content exists
 		if len(legendLines) > 0 {
-			title := m.contextInfo.PageTitle
-			if title == "" {
-				title = "Description"
-			}
-
 			legendToRender := strings.Join(legendLines, "\n")
 			if ctx.SubmenuTitleAlign == "center" {
 				var centeredLegend []string
@@ -387,7 +382,7 @@ func (m *HelpDialogModel) ViewString() string {
 			}
 
 			legendBox = RenderBorderedBoxCtx(
-				title,
+				"",
 				legendToRender,
 				maxLineWidth,
 				len(legendLines)+2,
