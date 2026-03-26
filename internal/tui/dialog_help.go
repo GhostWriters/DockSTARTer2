@@ -61,7 +61,7 @@ type HelpContext struct {
 	ScreenName string // e.g., "Main Menu" — used in the title bar: "Help: Main Menu"
 	PageTitle  string // title for the page context box (e.g. "Description")
 	PageText   string // body text for the page context box
-	Legend     string // single-line legend (e.g. marker key); rendered centered above PageText
+	Legend     string // multi-line legend (newline-separated); rendered centered at the bottom of each page in its own "Legend" box
 	ItemTitle  string // e.g., variable name or menu item Tag
 	ItemText   string
 }
@@ -272,70 +272,69 @@ func (m *HelpDialogModel) ViewString() string {
 	}
 
 	// Build the context section (variable info) if provided.
-	var legendBox string
+	var pageTextBox string
 	var contextBox string
+	var legendBox string
 
 	hasLegend := m.contextInfo.Legend != ""
 	hasPageCtx := m.contextInfo.PageText != ""
 	hasItemCtx := m.contextInfo.ItemText != ""
 
-	var legendLines []string
-	var itemLines []string
+	var pageTextLines []string // word-wrapped PageText lines
+	var itemLines []string     // word-wrapped ItemText lines
+	var legendLines []string   // resolved Legend lines (multi-line, each centered at bottom)
 
-	if hasLegend || hasPageCtx || hasItemCtx {
-		// Resolve and wrap text for both panels
-		wrapWidth := targetWidth - 2
-		if wrapWidth < 10 {
-			wrapWidth = 10
+	wrapWidth := targetWidth - 2
+	if wrapWidth < 10 {
+		wrapWidth = 10
+	}
+
+	if hasPageCtx {
+		resolved := theme.ToThemeANSI(m.contextInfo.PageText)
+		for _, line := range strings.Split(resolved, "\n") {
+			wrapped := ansi.Wordwrap(line, wrapWidth, "")
+			for _, wl := range strings.Split(wrapped, "\n") {
+				wl = strings.TrimRight(wl, " ")
+				paddedLine := " " + wl
+				pageTextLines = append(pageTextLines, paddedLine)
+				if w := lipgloss.Width(paddedLine); w > maxLineWidth {
+					maxLineWidth = w
+				}
+			}
 		}
+	}
 
-		if hasLegend {
-			// Legend line is a single styled line; resolve tags but don't word-wrap.
-			resolved := " " + strings.TrimRight(theme.ToThemeANSI(m.contextInfo.Legend), " ")
+	if hasItemCtx {
+		resolved := theme.ToThemeANSI(m.contextInfo.ItemText)
+		for _, line := range strings.Split(resolved, "\n") {
+			wrapped := ansi.Wordwrap(line, wrapWidth, "")
+			for _, wl := range strings.Split(wrapped, "\n") {
+				wl = strings.TrimRight(wl, " ")
+				paddedLine := " " + wl
+				itemLines = append(itemLines, paddedLine)
+				if w := lipgloss.Width(paddedLine); w > maxLineWidth {
+					maxLineWidth = w
+				}
+			}
+		}
+	}
+
+	if hasLegend {
+		for _, line := range strings.Split(m.contextInfo.Legend, "\n") {
+			resolved := " " + strings.TrimRight(theme.ToThemeANSI(strings.TrimRight(line, " ")), " ")
 			legendLines = append(legendLines, resolved)
 			if w := lipgloss.Width(resolved); w > maxLineWidth {
 				maxLineWidth = w
 			}
 		}
+	}
 
-		if hasPageCtx {
-			resolved := theme.ToThemeANSI(m.contextInfo.PageText)
-			for _, line := range strings.Split(resolved, "\n") {
-				wrapped := ansi.Wordwrap(line, wrapWidth, "")
-				for _, wl := range strings.Split(wrapped, "\n") {
-					wl = strings.TrimRight(wl, " ")
-					// Prepend a space for left padding. The 1-char right gutter is added by ApplyScrollbarColumn.
-					paddedLine := " " + wl
-					legendLines = append(legendLines, paddedLine)
-					if w := lipgloss.Width(paddedLine); w > maxLineWidth {
-						maxLineWidth = w
-					}
-				}
-			}
-		}
-
-		if hasItemCtx {
-			resolved := theme.ToThemeANSI(m.contextInfo.ItemText)
-			for _, line := range strings.Split(resolved, "\n") {
-				wrapped := ansi.Wordwrap(line, wrapWidth, "")
-				for _, wl := range strings.Split(wrapped, "\n") {
-					wl = strings.TrimRight(wl, " ")
-					paddedLine := " " + wl
-					itemLines = append(itemLines, paddedLine)
-					if w := lipgloss.Width(paddedLine); w > maxLineWidth {
-						maxLineWidth = w
-					}
-				}
-			}
-		}
-
-		// Cap maxLineWidth at targetWidth and ensure minimum
-		if maxLineWidth > targetWidth {
-			maxLineWidth = targetWidth
-		}
-		if maxLineWidth < 20 {
-			maxLineWidth = 20
-		}
+	// Cap maxLineWidth at targetWidth and ensure minimum
+	if maxLineWidth > targetWidth {
+		maxLineWidth = targetWidth
+	}
+	if maxLineWidth < 20 {
+		maxLineWidth = 20
 	}
 
 	// Build per-page binding column groups (greedy column packing).
@@ -351,6 +350,9 @@ func (m *HelpDialogModel) ViewString() string {
 	contextPaged := false
 	if len(itemLines) > 0 {
 		contextOverhead := 6
+		if len(pageTextLines) > 0 {
+			contextOverhead += len(pageTextLines) + 2 + 1 // pageText box (border+content) + gap line
+		}
 		if len(legendLines) > 0 {
 			contextOverhead += len(legendLines) + 2 + 1 // legend box (border+content) + gap line
 		}
@@ -394,24 +396,14 @@ func (m *HelpDialogModel) ViewString() string {
 
 	ctx := GetActiveContext()
 
-	if showContext && (len(legendLines) > 0 || len(itemLines) > 0) {
-		// Render Page Context box (formerly Legend) if content exists
-		if len(legendLines) > 0 {
-			var legendToRenderLines []string
-			for i, ll := range legendLines {
-				if i == 0 && hasLegend {
-					legendToRenderLines = append(legendToRenderLines, CenterText(ll, maxLineWidth))
-				} else {
-					legendToRenderLines = append(legendToRenderLines, ll)
-				}
-			}
-			legendToRender := strings.Join(legendToRenderLines, "\n")
-
-			legendBox = RenderBorderedBoxCtx(
-				"",
-				legendToRender,
+	if showContext && (len(pageTextLines) > 0 || len(itemLines) > 0) {
+		// Render Page Context box if content exists
+		if len(pageTextLines) > 0 {
+			pageTextBox = RenderBorderedBoxCtx(
+				m.contextInfo.PageTitle,
+				strings.Join(pageTextLines, "\n"),
 				maxLineWidth,
-				len(legendLines)+2,
+				len(pageTextLines)+2,
 				false, // focused: false
 				true,  // showIndicators: true
 				true,
@@ -428,11 +420,14 @@ func (m *HelpDialogModel) ViewString() string {
 				title = "Context Sensitive Help"
 			}
 
-			// When paged (page 0): use the full available height minus legend overhead only.
+			// When paged (page 0): use the full available height minus page text and legend overhead.
 			// When not paged: subtract bindings from available height too.
 			overheadH := 6
-			if legendBox != "" {
-				overheadH += lipgloss.Height(legendBox) + 1
+			if pageTextBox != "" {
+				overheadH += lipgloss.Height(pageTextBox) + 1
+			}
+			if len(legendLines) > 0 {
+				overheadH += len(legendLines) + 2 + 1 // legend box at bottom
 			}
 			bindingsH := 0
 			if !m.paged {
@@ -519,19 +514,39 @@ func (m *HelpDialogModel) ViewString() string {
 		}
 	}
 
+	// Render Legend box — shown at the bottom of every page when a legend is set.
+	if len(legendLines) > 0 {
+		var centeredLines []string
+		for _, ll := range legendLines {
+			centeredLines = append(centeredLines, CenterText(ll, maxLineWidth))
+		}
+		legendBox = RenderBorderedBoxCtx(
+			"Legend",
+			strings.Join(centeredLines, "\n"),
+			maxLineWidth,
+			len(legendLines)+2,
+			false, // focused: false
+			true,  // showIndicators: true
+			true,
+			ctx.SubmenuTitleAlign,
+			"TitleSubMenu",
+			ctx,
+		)
+	}
+
 	// Combine sections with "\n" as separator (not suffix) to avoid trailing blank lines.
 	var parts []string
-	if legendBox != "" {
-		parts = append(parts, legendBox)
+	if pageTextBox != "" {
+		parts = append(parts, pageTextBox)
 	}
 	if contextBox != "" {
 		parts = append(parts, contextBox)
 	}
 	if showBindings {
 		// Render only the columns for the current binding page.
-		pageLines := strings.Split(m.help.View(bPages[bindingPageIdx]), "\n")
+		bpLines := strings.Split(m.help.View(bPages[bindingPageIdx]), "\n")
 		var bindingContent []string
-		for _, line := range pageLines {
+		for _, line := range bpLines {
 			line = strings.TrimRight(line, " ")
 			paddedLine := " " + line
 			if w := lipgloss.Width(paddedLine); w < maxLineWidth {
@@ -543,7 +558,7 @@ func (m *HelpDialogModel) ViewString() string {
 			"Keyboard & Mouse Controls",
 			strings.Join(bindingContent, "\n"),
 			maxLineWidth,
-			len(pageLines)+2,
+			len(bpLines)+2,
 			false, // not interactive
 			true,  // showIndicators: true — reserve space to match legend/context title alignment
 			true,
@@ -552,6 +567,9 @@ func (m *HelpDialogModel) ViewString() string {
 			ctx,
 		)
 		parts = append(parts, bindingsBox)
+	}
+	if legendBox != "" {
+		parts = append(parts, legendBox)
 	}
 	combinedText := strings.Join(parts, "\n")
 
