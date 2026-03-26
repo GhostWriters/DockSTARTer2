@@ -61,5 +61,6 @@ func NewConfigMenuScreen() tui.ScreenModel {
 
 	menu.SetMenuName("config")
 	menu.SetHelpPageText("Docker and DockSTARTer configuration tasks. Run the full setup wizard, edit environment variables, enable or disable applications, and manage your running containers.")
+	menu.SetHelpItemPrefix("Action")
 	return menu
 }

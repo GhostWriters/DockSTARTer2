@@ -122,6 +122,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 
 	themeMenu := tui.NewMenuModel(tui.IDThemePanel, "Select Theme", "", themeItems, nil)
 	s.themeMenu = themeMenu
+	s.themeMenu.SetHelpItemPrefix("Theme")
 	s.themeMenu.SetSubMenuMode(true)
 	s.themeMenu.SetIsDialog(false) // Part of a screen, not a modal
 	s.themeMenu.SetShowExit(false)
@@ -214,6 +215,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 
 	optionsMenu := tui.NewMenuModel(tui.IDOptionsPanel, "Options", "", optionItems, nil)
 	s.optionsMenu = optionsMenu
+	s.optionsMenu.SetHelpItemPrefix("Option")
 	s.optionsMenu.SetSubMenuMode(true)
 	s.optionsMenu.SetIsDialog(false) // Part of a screen, not a modal
 	s.optionsMenu.SetShowExit(false)

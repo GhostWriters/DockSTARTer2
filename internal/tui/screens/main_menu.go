@@ -37,5 +37,6 @@ func NewMainMenuScreen() tui.ScreenModel {
 
 	menu.SetMenuName("")
 	menu.SetHelpPageText("The main navigation menu for DockSTARTer. Select an action to configure your Docker application stack, apply updates, or adjust settings.")
+	menu.SetHelpItemPrefix("Action")
 	return menu
 }

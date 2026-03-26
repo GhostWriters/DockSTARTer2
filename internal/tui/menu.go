@@ -567,7 +567,8 @@ type MenuModel struct {
 	id       string // Unique identifier for selection persistence
 	title    string // Menu title
 	subtitle     string // Optional subtitle/description shown on-screen
-	helpPageText string // Optional description shown only in the help dialog (overrides subtitle)
+	helpPageText   string // Optional description shown only in the help dialog (overrides subtitle)
+	helpItemPrefix string // Optional prefix for item titles in help dialog, e.g. "App", "Option", "Theme"
 	items    []MenuItem
 	cursor   int // Current selection
 	width    int
@@ -764,6 +765,9 @@ func (m *MenuModel) SetTitle(title string) { m.title = title }
 
 // SetHelpPageText sets a description shown only in the help dialog, overriding the subtitle there.
 func (m *MenuModel) SetHelpPageText(text string) { m.helpPageText = text }
+
+// SetHelpItemPrefix sets a prefix prepended to item titles in the help dialog, e.g. "App", "Option", "Theme".
+func (m *MenuModel) SetHelpItemPrefix(prefix string) { m.helpItemPrefix = prefix }
 
 // ID returns the unique identifier for this menu
 func (m *MenuModel) ID() string { return m.id }
@@ -1038,6 +1042,9 @@ func (m *MenuModel) HelpContext(contentWidth int) HelpContext {
 	pageText := m.helpPageText
 	if pageText == "" {
 		pageText = m.subtitle
+	}
+	if m.helpItemPrefix != "" && itemTitle != "Help" {
+		itemTitle = m.helpItemPrefix + ": " + itemTitle
 	}
 	return HelpContext{
 		ScreenName: m.title,

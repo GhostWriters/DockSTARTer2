@@ -1825,7 +1825,7 @@ func (m *TabbedVarsEditorModel) getVariableHelpContext(varName string, tab *envT
 		ScreenName: m.title,
 		PageTitle:  "Legend",
 		PageText:   legend,
-		ItemTitle:  varName,
+		ItemTitle:  "Variable: " + varName,
 		ItemText:   itemText,
 	}
 }

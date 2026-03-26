@@ -100,6 +100,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 		backAction,
 	)
 	menu.SetMenuName("app-select")
+	menu.SetHelpItemPrefix("App")
 	menu.SetButtonLabels("Done", "Back", "Exit")
 	menu.SetShowExit(true)
 	menu.SetGroupedMode(true)
