@@ -86,7 +86,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 			key.NewBinding(key.WithKeys("ctrl+u"), key.WithHelp("ctrl+u/ctrl+d", "half page up/down")),
 			key.NewBinding(key.WithKeys("home"), key.WithHelp("home/end", "top/bottom")),
 			key.NewBinding(key.WithKeys("left"), key.WithHelp("←/→", "previous/next button")),
-			key.NewBinding(key.WithKeys(">"), key.WithHelp(">/<", "next/previous element")),
+			key.NewBinding(key.WithKeys("ctrl+n"), key.WithHelp("ctrl+n/p", "next/previous element")),
 			k.ChromeFocus,
 		},
 		{
@@ -119,12 +119,12 @@ var Keys = KeyMap{
 		key.WithHelp("→", "next button"),
 	),
 	Tab: key.NewBinding(
-		key.WithKeys(">"),
-		key.WithHelp(">", "next screen element"),
+		key.WithKeys("ctrl+n"),
+		key.WithHelp("ctrl+n", "next screen element"),
 	),
 	ShiftTab: key.NewBinding(
-		key.WithKeys("<"),
-		key.WithHelp("<", "prev screen element"),
+		key.WithKeys("ctrl+p"),
+		key.WithHelp("ctrl+p", "prev screen element"),
 	),
 	CycleTab: key.NewBinding(
 		key.WithKeys("tab", "."),

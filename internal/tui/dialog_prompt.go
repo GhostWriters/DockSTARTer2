@@ -88,7 +88,7 @@ func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, Keys.Esc), key.Matches(msg, Keys.ForceQuit):
 			return m, closeWithResult("", false)
 
-		case key.Matches(msg, Keys.Tab):
+		case key.Matches(msg, Keys.CycleTab):
 			// Cycle: Input -> OK -> Cancel -> Input
 			switch m.focusedItem {
 			case FocusList:
@@ -105,7 +105,7 @@ func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
-		case key.Matches(msg, Keys.ShiftTab):
+		case key.Matches(msg, Keys.CycleShiftTab):
 			// Reverse cycle: Input -> Cancel -> OK -> Input
 			switch m.focusedItem {
 			case FocusList:
@@ -319,21 +319,21 @@ func (m *promptDialogModel) Layers() []*lipgloss.Layer { return m.layers(m.ViewS
 
 func (m *promptDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	ctx := GetActiveContext()
-	maxAllowed := m.layout.Width - 2
+	contentWidth := m.contentWidth(ctx)
 
 	questionHeight := lipgloss.Height(
-		ctx.Dialog.Padding(1, 2).Width(maxAllowed).Render(m.question))
+		ctx.Dialog.Padding(1, 2).Width(contentWidth).Render(m.question))
 
 	inputFocused := m.focusedItem == FocusList
 	borderedInputStyle := ApplyInnerBorderCtx(
-		ctx.Dialog.Padding(0, 1).Width(maxAllowed),
+		ctx.Dialog.Padding(0, 1).Width(contentWidth),
 		inputFocused, ctx)
 	inputHeight := lipgloss.Height(borderedInputStyle.Render(m.input.View()))
 
 	disclaimerHeight := 0
 	if m.input.EchoMode == textinput.EchoPassword {
 		disclaimerHeight = lipgloss.Height(
-			ctx.Dialog.Padding(0, 2).Width(maxAllowed).Render("(password will not be logged)"))
+			ctx.Dialog.Padding(0, 2).Width(contentWidth).Render("(password will not be logged)"))
 	}
 
 	// Input hit region: outer_border(1) + questionH + inner_border_top(1) = input text row
@@ -350,7 +350,7 @@ func (m *promptDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		ID:     "prompt_input",
 		X:      offsetX + 1,
 		Y:      offsetY + inputTextY,
-		Width:  maxAllowed,
+		Width:  contentWidth,
 		Height: 1,
 		ZOrder: ZDialog + 10,
 		Label:  "Input Field",
@@ -367,7 +367,7 @@ func (m *promptDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		ID:     m.id,
 		X:      offsetX,
 		Y:      offsetY,
-		Width:  maxAllowed + 2,
+		Width:  contentWidth + 2,
 		Height: buttonY + 2,
 		ZOrder: ZDialog,
 		Label:  "Prompt",
@@ -380,7 +380,7 @@ func (m *promptDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 
 	regions = append(regions, GetButtonHitRegions(
 		HelpContext{ScreenName: m.title, PageTitle: "Input Prompt", PageText: m.question},
-		m.id, offsetX+1, offsetY+buttonY, m.width-2, ZDialog+20,
+		m.id, offsetX+1, offsetY+buttonY, contentWidth, ZDialog+20,
 		ButtonSpec{Text: "OK", ZoneID: "OK", Help: "Save changes and return."},
 		ButtonSpec{Text: "Cancel", ZoneID: "Cancel", Help: "Discard changes and return."},
 	)...)

@@ -165,20 +165,34 @@ func SudoCommand(ctx context.Context, command string, args ...string) (*exec.Cmd
 	if console.TUIPrompt != nil {
 		checkCmd := exec.CommandContext(ctx, "sudo", "-n", "true")
 		if err := checkCmd.Run(); err != nil {
-			// Password required — prompt via TUI dialog.
+			// Password required — prompt via TUI dialog with retry on wrong password.
 			fullCmd := command
 			if len(args) > 0 {
 				fullCmd += " " + strings.Join(args, " ")
 			}
-			promptTitle := "{{|TitleQuestion|}}Sudo Password Required{{[-]}}"
-			password, err := console.TextPrompt(ctx, func(context.Context, any, ...any) {}, promptTitle, fullCmd, true)
-			if err != nil {
-				return nil, fmt.Errorf("sudo prompt failed: %w", err)
+			const maxAttempts = 3
+			for attempt := 0; attempt < maxAttempts; attempt++ {
+				title := "{{|TitleQuestion|}}Sudo Password Required{{[-]}}"
+				if attempt > 0 {
+					title = "{{|TitleError|}}Incorrect Password — Try Again{{[-]}}"
+				}
+				password, err := console.TextPrompt(ctx, func(context.Context, any, ...any) {}, title, fullCmd, true)
+				if err != nil {
+					return nil, fmt.Errorf("sudo prompt cancelled: %w", err)
+				}
+				// Validate the password before building the real command.
+				validateCmd := exec.CommandContext(ctx, "sudo", "-S", "-v")
+				validateCmd.Stdin = strings.NewReader(password + "\n")
+				var discard bytes.Buffer
+				validateCmd.Stderr = &discard
+				if validateCmd.Run() == nil {
+					sudoArgs := append([]string{"-S", command}, args...)
+					cmd := exec.CommandContext(ctx, "sudo", sudoArgs...)
+					cmd.Stdin = strings.NewReader(password + "\n")
+					return cmd, nil
+				}
 			}
-			sudoArgs := append([]string{"-S", command}, args...)
-			cmd := exec.CommandContext(ctx, "sudo", sudoArgs...)
-			cmd.Stdin = strings.NewReader(password + "\n")
-			return cmd, nil
+			return nil, fmt.Errorf("sudo: authentication failed after %d attempts", maxAttempts)
 		}
 	}
 

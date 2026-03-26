@@ -503,14 +503,14 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.promptUnsavedChanges(m.onClose)
 			}
 			return m, m.onClose
-		case "ctrl+n", "ctrl+right": // Next Tab
+		case "ctrl+right": // Next Tab
 			if m.focus == envFocusEditor && len(m.tabs) > 1 {
 				m.tabs[m.activeTab].editor.Blur()
 				m.activeTab = (m.activeTab + 1) % len(m.tabs)
 				m.tabs[m.activeTab].editor.Focus()
 				return m, nil
 			}
-		case "ctrl+p", "ctrl+left": // Prev Tab
+		case "ctrl+left": // Prev Tab
 			if m.focus == envFocusEditor && len(m.tabs) > 1 {
 				m.tabs[m.activeTab].editor.Blur()
 				m.activeTab--
