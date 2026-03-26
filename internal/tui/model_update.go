@@ -592,7 +592,7 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		return m, logger.RecoverTUI(m.ctx, func() tea.Msg { return toggleLogPanelMsg{} }), true
 	}
 	if key.Matches(msg, Keys.Help) || msg.String() == "?" {
-		return m, logger.RecoverTUI(m.ctx, m.showHelpCmd(nil)), true
+		return m, logger.RecoverTUI(m.ctx, m.showHelpCmd(m.focusedPanelHelpContext())), true
 	}
 	if key.Matches(msg, Keys.ForceQuit) {
 		m.Fatal = true
@@ -758,6 +758,37 @@ func shouldForwardResult(result any) bool {
 }
 
 // showHelpCmd returns a command that builds and shows the context-sensitive help dialog.
+// focusedPanelHelpContext returns the HelpContext for a focused non-screen panel
+// (log panel or header element), or nil so showHelpCmd falls through to the screen/dialog.
+func (m *AppModel) focusedPanelHelpContext() *HelpContext {
+	if m.logPanelFocused {
+		for _, r := range m.logPanel.GetHitRegions(0, 0) {
+			if r.Help != nil {
+				return r.Help
+			}
+		}
+	}
+	focus := m.backdrop.header.GetFocus()
+	if focus == HeaderFocusNone {
+		return nil
+	}
+	var targetID string
+	switch focus {
+	case HeaderFocusFlags:
+		targetID = IDHeaderFlags
+	case HeaderFocusApp:
+		targetID = IDAppVersion
+	case HeaderFocusTmpl:
+		targetID = IDTmplVersion
+	}
+	for _, r := range m.backdrop.header.GetHitRegions(0, 0) {
+		if r.ID == targetID && r.Help != nil {
+			return r.Help
+		}
+	}
+	return nil
+}
+
 func (m *AppModel) showHelpCmd(capturedCtx *HelpContext) tea.Cmd {
 	var km help.KeyMap = Keys
 	var contextInfo HelpContext
