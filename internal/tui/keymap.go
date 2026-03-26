@@ -8,7 +8,6 @@ import (
 // Groups:
 //   - Navigation:   Up, Down (list), Left, Right (buttons)
 //   - Focus:        Tab, ShiftTab (screen-level element cycling)
-//   - Dialog chrome: ChromeFocus (cycles focus to/from title-bar icons like ?, X)
 //   - Action:       Enter (select/confirm), Esc (back/exit)
 //   - Confirm:      Yes, No
 //   - Scroll:       PageUp, PageDown, HalfPageUp, HalfPageDown (viewport)
@@ -29,12 +28,6 @@ type KeyMap struct {
 	// Internal screen cycling (tab/shift-tab)
 	CycleTab      key.Binding
 	CycleShiftTab key.Binding
-
-	// Dialog chrome focus — cycles between title-bar icons (?, X, etc.) and main content.
-	// Title-bar icons are discoverable alternatives to keyboard shortcuts:
-	//   ? icon → same as pressing ?/F1 (help)
-	//   X icon → same as pressing Esc (close)
-	ChromeFocus key.Binding
 
 	// Actions
 	Enter key.Binding
@@ -87,7 +80,6 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 			key.NewBinding(key.WithKeys("home"), key.WithHelp("home/end", "top/bottom")),
 			key.NewBinding(key.WithKeys("left"), key.WithHelp("←/→", "previous/next button")),
 			key.NewBinding(key.WithKeys("ctrl+n"), key.WithHelp("ctrl+n/p", "next/previous element")),
-			k.ChromeFocus,
 		},
 		{
 			key.NewBinding(key.WithKeys("space"), key.WithHelp("space/middle click", "select/toggle")),
@@ -133,10 +125,6 @@ var Keys = KeyMap{
 	CycleShiftTab: key.NewBinding(
 		key.WithKeys("shift+tab", ","),
 		key.WithHelp("shift+tab/,", "prev focus"),
-	),
-	ChromeFocus: key.NewBinding(
-		key.WithKeys("ctrl+ "),
-		key.WithHelp("ctrl+space", "focus title-bar icons"),
 	),
 	Enter: key.NewBinding(
 		key.WithKeys("enter"),
