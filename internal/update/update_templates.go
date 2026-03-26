@@ -28,7 +28,12 @@ func UpdateTemplates(ctx context.Context, force bool, yes bool, requestedBranch 
 	}
 
 	if requestedBranch == "" {
-		requestedBranch = "main"
+		// Default to the branch the templates repo is currently on, not necessarily "main"
+		if head, err := repo.Head(); err == nil && head.Name().IsBranch() {
+			requestedBranch = head.Name().Short()
+		} else {
+			requestedBranch = "main"
+		}
 	}
 
 	// Fetch updates to get remote hash

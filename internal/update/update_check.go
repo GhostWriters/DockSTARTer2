@@ -178,15 +178,21 @@ func checkTmplUpdate(ctx context.Context) (updateAvailable bool, ver string, had
 		return false, "", true
 	}
 
-	// Compare current HEAD with origin/main
+	// Compare current HEAD with the remote tracking branch for the current branch
 	head, err := repo.Head()
 	if err != nil {
 		return false, "", false // Repo issue, not network error
 	}
 
-	remoteHead, err := repo.Reference(plumbing.ReferenceName("refs/remotes/origin/main"), true)
+	// Determine which remote branch to compare against (stay on current branch)
+	currentBranch := "main"
+	if head.Name().IsBranch() {
+		currentBranch = head.Name().Short()
+	}
+
+	remoteHead, err := repo.Reference(plumbing.ReferenceName("refs/remotes/origin/"+currentBranch), true)
 	if err != nil {
-		return false, "", false // Repo issue, not network error
+		return false, "", false // Remote branch not found — not an error
 	}
 
 	if head.Hash() != remoteHead.Hash() {
@@ -210,7 +216,7 @@ func checkTmplUpdate(ctx context.Context) (updateAvailable bool, ver string, had
 		if foundTag != "" {
 			remoteDisplay = foundTag
 		} else {
-			remoteDisplay = fmt.Sprintf("main commit %s", remoteHash)
+			remoteDisplay = fmt.Sprintf("%s commit %s", currentBranch, remoteHash)
 		}
 
 		return true, remoteDisplay, false
