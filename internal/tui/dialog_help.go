@@ -70,6 +70,20 @@ type HelpContextProvider interface {
 	HelpContext(maxWidth int) HelpContext
 }
 
+// HelpContextWidth returns the content width the help dialog will use for word-wrapping,
+// given the current terminal dimensions. Mirrors the calculation in showHelpCmd.
+func HelpContextWidth(termW, termH int) int {
+	availW, _ := GetAvailableDialogSize(termW, termH)
+	w := availW - 8
+	if w < 30 {
+		w = 30
+	}
+	if w > 120 {
+		w = 120
+	}
+	return w
+}
+
 // TriggerHelpMsg is a message that tells the app to open the help dialog.
 type TriggerHelpMsg struct {
 	CapturedContext *HelpContext

@@ -43,6 +43,7 @@ type DisplayOptionsScreen struct {
 
 	baseConfig    config.AppConfig                // Original exact config before previewing
 	themeDefaults map[string]*theme.ThemeDefaults // Cache parsed defaults
+	themeFileCache map[string]theme.ThemeFile     // Cache GetThemeFile results for help text
 }
 
 // updateDisplayOptionMsg is sent when an option is changed in the menu
@@ -59,13 +60,14 @@ func NewDisplayOptionsScreen(isRoot bool) *DisplayOptionsScreen {
 	current := cfg.UI.Theme // ConfigValue e.g. "DockSTARTer" or "user:MyTheme"
 
 	s := &DisplayOptionsScreen{
-		isRoot:        isRoot,
-		config:        cfg,
-		baseConfig:    cfg,
-		themes:        themes,
-		currentTheme:  current,
-		previewTheme:  current,
-		themeDefaults: make(map[string]*theme.ThemeDefaults),
+		isRoot:         isRoot,
+		config:         cfg,
+		baseConfig:     cfg,
+		themes:         themes,
+		currentTheme:   current,
+		previewTheme:   current,
+		themeDefaults:  make(map[string]*theme.ThemeDefaults),
+		themeFileCache: make(map[string]theme.ThemeFile),
 	}
 	s.themeDefaults[current], _ = theme.Load(current, "Preview")
 
@@ -123,6 +125,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 	themeMenu := tui.NewMenuModel(tui.IDThemePanel, "Select Theme", "", themeItems, nil)
 	s.themeMenu = themeMenu
 	s.themeMenu.SetHelpItemPrefix("Theme")
+	s.themeMenu.SetItemHelpFunc(s.buildThemeItemHelp)
 	s.themeMenu.SetHelpPageText("Configure the visual appearance of the application, including theme selection, borders, shadows, and other display options.")
 	s.themeMenu.SetSubMenuMode(true)
 	s.themeMenu.SetIsDialog(false) // Part of a screen, not a modal
@@ -303,6 +306,100 @@ func (s *DisplayOptionsScreen) SetFocused(f bool) {
 	s.updateFocusStates()
 }
 
+// getThemeFile returns a cached ThemeFile for the given config value.
+func (s *DisplayOptionsScreen) getThemeFile(configValue string) theme.ThemeFile {
+	if tf, ok := s.themeFileCache[configValue]; ok {
+		return tf
+	}
+	tf, _ := theme.GetThemeFile(configValue)
+	s.themeFileCache[configValue] = tf
+	return tf
+}
+
+// formatThemeDefaults produces a human-readable list of defaults a theme will apply.
+// Returns an empty string when no defaults are set.
+func formatThemeDefaults(d *theme.ThemeDefaults) string {
+	if d == nil {
+		return ""
+	}
+	boolStr := func(b bool) string {
+		if b {
+			return "on"
+		}
+		return "off"
+	}
+	var lines []string
+	if d.Borders != nil {
+		lines = append(lines, fmt.Sprintf("  Borders: %s", boolStr(*d.Borders)))
+	}
+	if d.ButtonBorders != nil {
+		lines = append(lines, fmt.Sprintf("  Button Borders: %s", boolStr(*d.ButtonBorders)))
+	}
+	if d.LineCharacters != nil {
+		lines = append(lines, fmt.Sprintf("  Line Characters: %s", boolStr(*d.LineCharacters)))
+	}
+	if d.Shadow != nil {
+		lines = append(lines, fmt.Sprintf("  Shadow: %s", boolStr(*d.Shadow)))
+	}
+	if d.ShadowLevel != nil {
+		lines = append(lines, fmt.Sprintf("  Shadow Level: %d", *d.ShadowLevel))
+	}
+	if d.Scrollbar != nil {
+		lines = append(lines, fmt.Sprintf("  Scrollbar: %s", boolStr(*d.Scrollbar)))
+	}
+	if d.BorderColor != nil {
+		lines = append(lines, fmt.Sprintf("  Border Color: %d", *d.BorderColor))
+	}
+	if d.DialogTitleAlign != nil {
+		lines = append(lines, fmt.Sprintf("  Dialog Title: %s", *d.DialogTitleAlign))
+	}
+	if d.SubmenuTitleAlign != nil {
+		lines = append(lines, fmt.Sprintf("  Submenu Title: %s", *d.SubmenuTitleAlign))
+	}
+	if d.LogTitleAlign != nil {
+		lines = append(lines, fmt.Sprintf("  Log Title: %s", *d.LogTitleAlign))
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	return "Defaults applied by this theme:\n" + strings.Join(lines, "\n")
+}
+
+// buildThemeItemHelp returns enriched (itemTitle, itemText) for a theme menu item.
+// Used by itemHelpFunc (right-click) and HelpContext (F1).
+func (s *DisplayOptionsScreen) buildThemeItemHelp(item tui.MenuItem) (itemTitle, itemText string) {
+	cv, ok := item.Metadata["config_value"]
+	if !ok || cv == "" {
+		return "", ""
+	}
+	tf := s.getThemeFile(cv)
+
+	var parts []string
+	desc := tf.Metadata.Description
+	if desc == "" {
+		// Fallback to what was shown in the list (ThemeMetadata.Description)
+		for _, tm := range s.themes {
+			if tm.ConfigValue == cv {
+				desc = tm.Description
+				break
+			}
+		}
+	}
+	if desc != "" {
+		parts = append(parts, desc)
+	}
+	if tf.Metadata.Author != "" {
+		parts = append(parts, "By: "+tf.Metadata.Author)
+	}
+	if defaultsText := formatThemeDefaults(tf.Defaults); defaultsText != "" {
+		parts = append(parts, defaultsText)
+	}
+	if len(parts) == 0 {
+		return "", ""
+	}
+	return item.Tag, strings.Join(parts, "\n\n")
+}
+
 // HelpContext implements tui.HelpContextProvider.
 func (s *DisplayOptionsScreen) HelpContext(maxWidth int) tui.HelpContext {
 	screenName := s.outerMenu.Title()
@@ -312,6 +409,17 @@ func (s *DisplayOptionsScreen) HelpContext(maxWidth int) tui.HelpContext {
 	switch s.focusedPanel {
 	case FocusThemes:
 		inner = s.themeMenu.HelpContext(maxWidth)
+		// Enrich with theme description, author, and defaults
+		items := s.themeMenu.GetItems()
+		idx := s.themeMenu.Index()
+		if idx >= 0 && idx < len(items) {
+			if t, txt := s.buildThemeItemHelp(items[idx]); txt != "" {
+				if t != "" {
+					inner.ItemTitle = t
+				}
+				inner.ItemText = txt
+			}
+		}
 	case FocusOptions:
 		inner = s.optionsMenu.HelpContext(maxWidth)
 	}

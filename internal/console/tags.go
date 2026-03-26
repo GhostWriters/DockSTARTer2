@@ -62,6 +62,13 @@ func GetDirectRegex() *regexp.Regexp {
 	return directRegex
 }
 
+// StripSemanticTags removes all semantic and direct tags from s, returning plain text.
+func StripSemanticTags(s string) string {
+	s = semanticRegex.ReplaceAllString(s, "")
+	s = directRegex.ReplaceAllString(s, "")
+	return s
+}
+
 // WrapSemantic wraps a tag name in standard semantic delimiters
 func WrapSemantic(name string) string {
 	return SemanticPrefix + name + SemanticSuffix

@@ -640,6 +640,11 @@ type MenuModel struct {
 	// When present, replaces the standard list+inner-border rendering.
 	contentSections []*MenuModel
 
+	// Optional hook to enrich the ItemText shown in the help dialog for a menu item.
+	// If set, called by showContextMenu (right-click Help) and HelpContext.
+	// Return ("", "") to keep the default item.Help text.
+	itemHelpFunc func(item MenuItem) (itemTitle, itemText string)
+
 	// Scrollbar interaction state
 	sbInfo     ScrollbarInfo // geometry from last render (set by menu_render.go)
 	sbAbsTopY  int           // absolute screen Y of scrollbar column top (set by GetHitRegions)
@@ -768,6 +773,13 @@ func (m *MenuModel) SetHelpPageText(text string) { m.helpPageText = text }
 
 // SetHelpItemPrefix sets a prefix prepended to item titles in the help dialog, e.g. "App", "Option", "Theme".
 func (m *MenuModel) SetHelpItemPrefix(prefix string) { m.helpItemPrefix = prefix }
+
+// SetItemHelpFunc sets an optional callback that enriches the ItemTitle and ItemText shown in
+// the help dialog for a focused menu item. Used by showContextMenu (right-click Help) and
+// HelpContext. Return ("", "") to keep the default item.Help text.
+func (m *MenuModel) SetItemHelpFunc(f func(item MenuItem) (itemTitle, itemText string)) {
+	m.itemHelpFunc = f
+}
 
 // ID returns the unique identifier for this menu
 func (m *MenuModel) ID() string { return m.id }
@@ -1072,12 +1084,21 @@ func (m *MenuModel) showContextMenu(idx int, x, y int) tea.Cmd {
 		if m.helpItemPrefix != "" && itemTitle != "" {
 			itemTitle = m.helpItemPrefix + ": " + itemTitle
 		}
+		itemText := item.Help
+		if m.itemHelpFunc != nil {
+			if t, txt := m.itemHelpFunc(item); txt != "" {
+				if t != "" {
+					itemTitle = t
+				}
+				itemText = txt
+			}
+		}
 		hCtx = &HelpContext{
 			ScreenName: m.title,
 			PageTitle:  "Description",
 			PageText:   pageText,
 			ItemTitle:  itemTitle,
-			ItemText:   item.Help,
+			ItemText:   itemText,
 		}
 	}
 

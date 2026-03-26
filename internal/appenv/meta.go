@@ -31,10 +31,11 @@ type VarMeta struct {
 
 // AppInfo holds app-level metadata from the [app] section of a .meta.toml file.
 // These are fields that supplement (not duplicate) the labels.yml data.
-// nicename, description, and deprecated remain in labels.yml.
+// nicename and deprecated remain in labels.yml.
 type AppInfo struct {
-	HelpText string `toml:"helptext"` // longer description for the help dialog
-	Website  string `toml:"website"`  // URL to the app's website or documentation
+	Description string `toml:"description"` // short description shown in lists (may contain style tags); overrides labels.yml when set
+	HelpText    string `toml:"helptext"`    // longer description for the help dialog
+	Website     string `toml:"website"`     // URL to the app's website or documentation
 }
 
 // AppMeta holds all metadata loaded from an app's .meta.toml file.

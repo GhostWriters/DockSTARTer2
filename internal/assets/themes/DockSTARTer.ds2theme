@@ -79,11 +79,6 @@ HeadingValue = "{{[-]}}{{[::BR]}}"
 HeadingAppDescription = "{{[-]}}{{[::B]}}"
 Highlight = "{{[-]}}{{[yellow::B]}}"
 RunningCommand = "{{|Highlight|}}"
-Branch = "{{|Highlight|}}"
-Version = "{{|Highlight|}}"
-UserCommand = "{{|Highlight|}}"
-File = "{{|Highlight|}}"
-Folder = "{{|Highlight|}}"
 
 LineComment = "{{[gray:cyan:-B]}}"
 LineOther = "{{[gray:cyan:-B]}}"
@@ -118,6 +113,14 @@ ProgressInProgress = "{{[white:cyan:-B]}}"
 ProgressCompleted = "{{[cyan:black:-B]}}"
 
 VersionSelected = "{{[black:red:-]}}"
+
+App = "{{|Highlight|}}"
+File = "{{|Highlight|}}"
+Folder = "{{|Highlight|}}"
+Branch = "{{|Highlight|}}"
+Version = "{{|Highlight|}}"
+UserCommand = "{{|Highlight|}}"
+URL = "{{|Highlight:::U|}}"
 
 [defaults]
 dialog_title_align = "center"

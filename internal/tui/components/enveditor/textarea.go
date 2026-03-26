@@ -1313,6 +1313,37 @@ func (m *Model) GetVariableValue(varName string) string {
 	return ""
 }
 
+// GetVariableMeta returns the Line metadata for varName, or false if not found.
+func (m *Model) GetVariableMeta(varName string) (Line, bool) {
+	for row, meta := range m.lineMeta {
+		if !meta.IsVariable {
+			continue
+		}
+		lineStr := string(m.value[row])
+		if eqIdx := strings.Index(lineStr, "="); eqIdx > 0 {
+			if strings.TrimSpace(lineStr[:eqIdx]) == varName {
+				return meta, true
+			}
+		}
+	}
+	return Line{}, false
+}
+
+// GetVariableInitialValue returns everything after '=' in InitialLine for varName, or "" if not found.
+func (m *Model) GetVariableInitialValue(varName string) string {
+	for _, meta := range m.lineMeta {
+		if !meta.IsVariable {
+			continue
+		}
+		if eqIdx := strings.Index(meta.InitialLine, "="); eqIdx > 0 {
+			if strings.TrimSpace(meta.InitialLine[:eqIdx]) == varName {
+				return meta.InitialLine[eqIdx+1:]
+			}
+		}
+	}
+	return ""
+}
+
 // HasVariable returns true if varName exists in the editor (regardless of its value).
 func (m *Model) HasVariable(varName string) bool {
 	for row, meta := range m.lineMeta {

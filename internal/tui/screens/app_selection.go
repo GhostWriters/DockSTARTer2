@@ -63,14 +63,11 @@ func (s *AppSelectionScreen) HelpContext(maxWidth int) tui.HelpContext {
 			var parts []string
 			if appMeta != nil && appMeta.App.HelpText != "" {
 				parts = append(parts, appMeta.App.HelpText)
-			} else {
-				// Fall back to labels.yml description (same as shown in the list)
-				if desc := appenv.GetDescriptionFromTemplate(ctx, item.BaseApp, ""); desc != "" {
-					parts = append(parts, desc)
-				}
+			} else if desc := appenv.GetDescriptionFromTemplate(ctx, item.BaseApp, ""); desc != "" {
+				parts = append(parts, desc)
 			}
 			if appMeta != nil && appMeta.App.Website != "" {
-				parts = append(parts, "Website: "+appMeta.App.Website)
+				parts = append(parts, "Website: {{|url|}}"+appMeta.App.Website+"{{[-]}}")
 			}
 			if appenv.IsAppDeprecated(ctx, item.BaseApp) {
 				parts = append(parts, "{{|TitleError|}}⚠ This app is deprecated.{{[-]}}")
@@ -131,6 +128,29 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 	)
 	menu.SetMenuName("app-select")
 	menu.SetHelpItemPrefix("App")
+	menu.SetItemHelpFunc(func(item tui.MenuItem) (itemTitle, itemText string) {
+		if item.BaseApp == "" || item.IsSeparator {
+			return "", ""
+		}
+		ctx := context.Background()
+		appMeta, _ := appenv.LoadAppMeta(ctx, item.BaseApp)
+		var parts []string
+		if appMeta != nil && appMeta.App.HelpText != "" {
+			parts = append(parts, appMeta.App.HelpText)
+		} else if desc := appenv.GetDescriptionFromTemplate(ctx, item.BaseApp, ""); desc != "" {
+			parts = append(parts, desc)
+		}
+		if appMeta != nil && appMeta.App.Website != "" {
+			parts = append(parts, "Website: {{|url|}}"+appMeta.App.Website+"{{[-]}}")
+		}
+		if appenv.IsAppDeprecated(ctx, item.BaseApp) {
+			parts = append(parts, "{{|TitleError|}}⚠ This app is deprecated.{{[-]}}")
+		}
+		if len(parts) == 0 {
+			return "", ""
+		}
+		return item.Tag, strings.Join(parts, "\n\n")
+	})
 	menu.SetButtonLabels("Done", "Back", "Exit")
 	menu.SetShowExit(true)
 	menu.SetGroupedMode(true)
@@ -214,7 +234,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 		ctx := context.Background()
 		envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
 		niceName := appenv.GetNiceName(ctx, base)
-		desc := appenv.GetDescriptionFromTemplate(ctx, base, envFile)
+		desc := tui.GetPlainText(appenv.GetDescriptionFromTemplate(ctx, base, envFile))
 		simpleRow := tui.MenuItem{
 			Tag:          niceName,
 			Desc:         "{{|ListApp|}}" + desc,
@@ -564,7 +584,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 		ctx := context.Background()
 		envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
 		niceName := appenv.GetNiceName(ctx, baseApp)
-		desc := appenv.GetDescriptionFromTemplate(ctx, baseApp, envFile)
+		desc := tui.GetPlainText(appenv.GetDescriptionFromTemplate(ctx, baseApp, envFile))
 		groupHeader := tui.MenuItem{
 			Tag:           niceName,
 			Desc:          "{{|ListApp|}}" + desc,
@@ -689,7 +709,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 			}
 
 			niceName := appenv.GetNiceName(ctx, base)
-			desc := appenv.GetDescriptionFromTemplate(ctx, base, envFile)
+			desc := tui.GetPlainText(appenv.GetDescriptionFromTemplate(ctx, base, envFile))
 
 			instances := addedByBase[base]
 			slices.Sort(instances)

@@ -1121,7 +1121,7 @@ func (m *TabbedVarsEditorModel) renderSubtitle() string {
 				if valueW < 10 {
 					valueW = 10
 				}
-				for _, dl := range subtitleWrapText(tab.description, valueW) {
+				for _, dl := range subtitleWrapText(tui.GetPlainText(tab.description), valueW) {
 					lines = append(lines, renderLine(indent+"{{|HeadingAppDescription|}}"+dl+"{{[-]}}"))
 				}
 			}
@@ -1442,8 +1442,10 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 		},
 	})
 
-	// Build captured help context for this specific variable
-	capturedCtx := m.getVariableHelpContext(varName, tab, 40)
+	// Build captured help context for this specific variable.
+	// Use the same width calculation as showHelpCmd so pre-wrapped text matches the dialog.
+	helpW := tui.HelpContextWidth(m.width, m.height)
+	capturedCtx := m.getVariableHelpContext(varName, tab, helpW)
 
 	// Final tail (Clipboard submenu + Help)
 	items = tui.AppendContextMenuTail(items, clipItems, capturedCtx)
@@ -1762,13 +1764,11 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) tui.HelpContext {
 		if tab.spec.App != "" {
 			base := appenv.AppNameToBaseAppName(tab.spec.App)
 			var parts []string
-			if tab.appMeta != nil && tab.appMeta.App.HelpText != "" {
-				parts = append(parts, tab.appMeta.App.HelpText)
-			} else if tab.description != "" {
+			if tab.description != "" {
 				parts = append(parts, tab.description)
 			}
 			if tab.appMeta != nil && tab.appMeta.App.Website != "" {
-				parts = append(parts, "Website: "+tab.appMeta.App.Website)
+				parts = append(parts, "Website: {{|url|}}"+tab.appMeta.App.Website+"{{[-]}}")
 			}
 			if appenv.IsAppDeprecated(context.Background(), base) {
 				parts = append(parts, "{{|TitleError|}}⚠ This app is deprecated.{{[-]}}")
@@ -1804,15 +1804,10 @@ func (m *TabbedVarsEditorModel) getVariableHelpContext(varName string, tab *envT
 		"{{|MarkerModified|}}~{{[-]}} Changed | " +
 		"{{|MarkerInvalid|}}!{{[-]}} Invalid |"
 
-	var currentValue string
-	// Find the current value for this variable from the editor if possible
-	meta, ok := tab.editor.CurrentLineMeta()
-	if ok && meta.IsVariable && strings.HasPrefix(meta.Text, varName+"=") {
-		if idx := strings.Index(meta.Text, "="); idx > 0 {
-			currentValue = meta.Text[idx+1:]
-		}
-	}
+	meta, ok := tab.editor.GetVariableMeta(varName)
 
+	currentValue := tab.editor.GetVariableValue(varName)
+	originalValue := tab.editor.GetVariableInitialValue(varName)
 	// VarIsUserDefined: for app vars the IsUserDefined flag covers the var level;
 	// for global vars it means the var itself is user-defined (not in defaults).
 	varIsUserDefined := false
@@ -1827,6 +1822,7 @@ func (m *TabbedVarsEditorModel) getVariableHelpContext(varName string, tab *envT
 		FilePath:         tab.envFilePath,
 		VarName:          varName,
 		VarIsUserDefined: varIsUserDefined,
+		OriginalValue:    originalValue,
 		CurrentValue:     currentValue,
 	}
 
