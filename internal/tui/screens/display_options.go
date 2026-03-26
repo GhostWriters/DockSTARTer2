@@ -299,6 +299,28 @@ func (s *DisplayOptionsScreen) SetFocused(f bool) {
 	s.updateFocusStates()
 }
 
+// HelpContext implements tui.HelpContextProvider.
+func (s *DisplayOptionsScreen) HelpContext(maxWidth int) tui.HelpContext {
+	screenName := s.outerMenu.Title()
+	pageText := "Configure the visual appearance of the application, including theme selection, borders, shadows, and other display options."
+
+	var inner tui.HelpContext
+	switch s.focusedPanel {
+	case FocusThemes:
+		inner = s.themeMenu.HelpContext(maxWidth)
+	case FocusOptions:
+		inner = s.optionsMenu.HelpContext(maxWidth)
+	}
+
+	return tui.HelpContext{
+		ScreenName: screenName,
+		PageTitle:  "Description",
+		PageText:   pageText,
+		ItemTitle:  inner.ItemTitle,
+		ItemText:   inner.ItemText,
+	}
+}
+
 func (s *DisplayOptionsScreen) shadowLevelToDesc(l int) string {
 	var levels []string
 	if s.config.UI.LineCharacters {
