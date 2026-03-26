@@ -16,8 +16,17 @@ type VarMeta struct {
 	Options  []VarOption `toml:"options"`
 }
 
-// AppMeta holds all variable metadata loaded from an app's .meta.toml file.
+// AppInfo holds app-level metadata from the [app] section of a .meta.toml file.
+// These are fields that supplement (not duplicate) the labels.yml data.
+// nicename, description, and deprecated remain in labels.yml.
+type AppInfo struct {
+	HelpText string `toml:"helptext"` // longer description for the help dialog
+	Website  string `toml:"website"`  // URL to the app's website or documentation
+}
+
+// AppMeta holds all metadata loaded from an app's .meta.toml file.
 type AppMeta struct {
+	App       AppInfo
 	Variables map[string]VarMeta
 }
 
@@ -79,17 +88,27 @@ func LoadAppMeta(ctx context.Context, appName string) (*AppMeta, error) {
 		return nil, err
 	}
 
-	// Top-level TOML keys are variable names, each mapping to a VarMeta table.
+	// First pass: extract the [app] section.
+	type rawHeader struct {
+		App AppInfo `toml:"app"`
+	}
+	var header rawHeader
+	_ = toml.Unmarshal(data, &header) // best-effort; ignore error
+
+	// Second pass: read all top-level keys as variable metadata.
+	// The [app] key will appear here too, but with zero VarMeta fields — delete it.
 	var raw map[string]VarMeta
 	if err := toml.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", metaFile, err)
 	}
+	delete(raw, "app")
+	delete(raw, "APP")
 
-	// Normalize all keys to uppercase for case-insensitive lookup.
+	// Normalize all variable keys to uppercase for case-insensitive lookup.
 	normalized := make(map[string]VarMeta, len(raw))
 	for k, v := range raw {
 		normalized[strings.ToUpper(k)] = v
 	}
 
-	return &AppMeta{Variables: normalized}, nil
+	return &AppMeta{App: header.App, Variables: normalized}, nil
 }
