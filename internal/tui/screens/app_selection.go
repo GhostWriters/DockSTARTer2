@@ -18,6 +18,12 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+const appSelectionLegend = "| " +
+	"{{|MarkerAdded|}}+{{[-]}} Added | " +
+	"{{|MarkerDeleted|}}-{{[-]}} Deleted | " +
+	"{{|MarkerModified|}}r{{[-]}} Referenced | " +
+	"{{|MarkerAdded|}}R{{[-]}} Referenced & Added |"
+
 // AppSelectionScreen wraps MenuModel to provide a custom Legend help panel.
 type AppSelectionScreen struct {
 	menu *tui.MenuModel
@@ -45,46 +51,7 @@ func (s *AppSelectionScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (s *AppSelectionScreen) HelpContext(maxWidth int) tui.HelpContext {
-	legend := "| " +
-		"{{|MarkerAdded|}}+{{[-]}} Added | " +
-		"{{|MarkerDeleted|}}-{{[-]}} Deleted | " +
-		"{{|MarkerModified|}}r{{[-]}} Referenced | " +
-		"{{|MarkerAdded|}}R{{[-]}} Referenced & Added |"
-	inner := s.menu.HelpContext(maxWidth)
-	itemText := inner.ItemText
-
-	items := s.menu.GetItems()
-	idx := s.menu.Index()
-	if idx >= 0 && idx < len(items) {
-		item := items[idx]
-		if item.BaseApp != "" && !item.IsSeparator {
-			ctx := context.Background()
-			appMeta, _ := appenv.LoadAppMeta(ctx, item.BaseApp)
-			var parts []string
-			if appMeta != nil && appMeta.App.HelpText != "" {
-				parts = append(parts, appMeta.App.HelpText)
-			} else if desc := appenv.GetDescriptionFromTemplate(ctx, item.BaseApp, ""); desc != "" {
-				parts = append(parts, desc)
-			}
-			if appMeta != nil && appMeta.App.Website != "" {
-				parts = append(parts, "Website: {{|url|}}"+appMeta.App.Website+"{{[-]}}")
-			}
-			if appenv.IsAppDeprecated(ctx, item.BaseApp) {
-				parts = append(parts, "{{|TitleError|}}⚠ This app is deprecated.{{[-]}}")
-			}
-			if len(parts) > 0 {
-				itemText = strings.Join(parts, "\n\n")
-			}
-		}
-	}
-
-	return tui.HelpContext{
-		ScreenName: inner.ScreenName,
-		PageTitle:  "Legend",
-		PageText:   legend,
-		ItemTitle:  inner.ItemTitle,
-		ItemText:   itemText,
-	}
+	return s.menu.HelpContext(maxWidth)
 }
 
 // NewAppSelectionScreen creates the app selection screen.
@@ -1476,6 +1443,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 		return nil, false
 	})
 
+	menu.SetHelpLegend(appSelectionLegend)
 	refreshItems()
 	return &AppSelectionScreen{menu: menu}
 }

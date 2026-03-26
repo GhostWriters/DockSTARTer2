@@ -59,8 +59,9 @@ func buildBindingPages(h help.Model, allCols [][]keybind.Binding, maxW int) []su
 // HelpContext defines the two contextual help panels.
 type HelpContext struct {
 	ScreenName string // e.g., "Main Menu" — used in the title bar: "Help: Main Menu"
-	PageTitle  string // e.g., "Legend" or "Description"
-	PageText   string
+	PageTitle  string // title for the page context box (e.g. "Description")
+	PageText   string // body text for the page context box
+	Legend     string // single-line legend (e.g. marker key); rendered centered above PageText
 	ItemTitle  string // e.g., variable name or menu item Tag
 	ItemText   string
 }
@@ -274,17 +275,27 @@ func (m *HelpDialogModel) ViewString() string {
 	var legendBox string
 	var contextBox string
 
+	hasLegend := m.contextInfo.Legend != ""
 	hasPageCtx := m.contextInfo.PageText != ""
 	hasItemCtx := m.contextInfo.ItemText != ""
 
 	var legendLines []string
 	var itemLines []string
 
-	if hasPageCtx || hasItemCtx {
+	if hasLegend || hasPageCtx || hasItemCtx {
 		// Resolve and wrap text for both panels
 		wrapWidth := targetWidth - 2
 		if wrapWidth < 10 {
 			wrapWidth = 10
+		}
+
+		if hasLegend {
+			// Legend line is a single styled line; resolve tags but don't word-wrap.
+			resolved := " " + strings.TrimRight(theme.ToThemeANSI(m.contextInfo.Legend), " ")
+			legendLines = append(legendLines, resolved)
+			if w := lipgloss.Width(resolved); w > maxLineWidth {
+				maxLineWidth = w
+			}
 		}
 
 		if hasPageCtx {
@@ -386,14 +397,15 @@ func (m *HelpDialogModel) ViewString() string {
 	if showContext && (len(legendLines) > 0 || len(itemLines) > 0) {
 		// Render Page Context box (formerly Legend) if content exists
 		if len(legendLines) > 0 {
-			legendToRender := strings.Join(legendLines, "\n")
-			if ctx.SubmenuTitleAlign == "center" {
-				var centeredLegend []string
-				for _, ll := range legendLines {
-					centeredLegend = append(centeredLegend, CenterText(ll, maxLineWidth))
+			var legendToRenderLines []string
+			for i, ll := range legendLines {
+				if i == 0 && hasLegend {
+					legendToRenderLines = append(legendToRenderLines, CenterText(ll, maxLineWidth))
+				} else {
+					legendToRenderLines = append(legendToRenderLines, ll)
 				}
-				legendToRender = strings.Join(centeredLegend, "\n")
 			}
+			legendToRender := strings.Join(legendToRenderLines, "\n")
 
 			legendBox = RenderBorderedBoxCtx(
 				"",

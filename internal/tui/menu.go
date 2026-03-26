@@ -568,6 +568,7 @@ type MenuModel struct {
 	title    string // Menu title
 	subtitle     string // Optional subtitle/description shown on-screen
 	helpPageText   string // Optional description shown only in the help dialog (overrides subtitle)
+	helpLegend     string // Optional legend shown in help dialog with title "Legend" (overrides helpPageText)
 	helpItemPrefix string // Optional prefix for item titles in help dialog, e.g. "App", "Option", "Theme"
 	items    []MenuItem
 	cursor   int // Current selection
@@ -770,6 +771,10 @@ func (m *MenuModel) SetTitle(title string) { m.title = title }
 
 // SetHelpPageText sets a description shown only in the help dialog, overriding the subtitle there.
 func (m *MenuModel) SetHelpPageText(text string) { m.helpPageText = text }
+
+// SetHelpLegend sets a legend shown in the help dialog with the title "Legend".
+// When set, it takes precedence over helpPageText for both F1 and context-menu Help.
+func (m *MenuModel) SetHelpLegend(text string) { m.helpLegend = text }
 
 // SetHelpItemPrefix sets a prefix prepended to item titles in the help dialog, e.g. "App", "Option", "Theme".
 func (m *MenuModel) SetHelpItemPrefix(prefix string) { m.helpItemPrefix = prefix }
@@ -1039,32 +1044,52 @@ func (m *MenuModel) ToggleSelectedItem() {
 	}
 }
 
-// HelpContext implements HelpContextProvider.
-func (m *MenuModel) HelpContext(contentWidth int) HelpContext {
-	itemHelp := ""
+// helpContextForIdx builds a HelpContext for the item at the given index.
+// Both HelpContext (F1) and showContextMenu (right-click Help) call this so the output is identical.
+func (m *MenuModel) helpContextForIdx(idx, contentWidth int) HelpContext {
 	itemTitle := "Help"
-	idx := m.list.Index()
+	itemText := ""
 	if idx >= 0 && idx < len(m.items) {
-		itemHelp = m.items[idx].Help
-		if m.items[idx].Tag != "" {
-			itemTitle = m.items[idx].Tag
+		item := m.items[idx]
+		if item.Tag != "" {
+			itemTitle = item.Tag
 		}
-	}
-
-	pageText := m.helpPageText
-	if pageText == "" {
-		pageText = m.subtitle
+		itemText = item.Help
+		if m.itemHelpFunc != nil {
+			if t, txt := m.itemHelpFunc(item); txt != "" {
+				if t != "" {
+					itemTitle = t
+				}
+				itemText = txt
+			}
+		}
 	}
 	if m.helpItemPrefix != "" && itemTitle != "Help" {
 		itemTitle = m.helpItemPrefix + ": " + itemTitle
 	}
+
+	pageTitle := "Description"
+	pageText := m.helpPageText
+	if pageText == "" {
+		pageText = m.subtitle
+	}
+	if m.helpLegend != "" {
+		pageText = "" // legend takes precedence; suppress the description
+		pageTitle = ""
+	}
 	return HelpContext{
 		ScreenName: m.title,
-		PageTitle:  "Description",
+		PageTitle:  pageTitle,
 		PageText:   pageText,
+		Legend:     m.helpLegend,
 		ItemTitle:  itemTitle,
-		ItemText:   itemHelp,
+		ItemText:   itemText,
 	}
+}
+
+// HelpContext implements HelpContextProvider.
+func (m *MenuModel) HelpContext(contentWidth int) HelpContext {
+	return m.helpContextForIdx(m.list.Index(), contentWidth)
 }
 
 // showContextMenu returns a command to show the context menu for the item at the given index.
@@ -1076,30 +1101,8 @@ func (m *MenuModel) showContextMenu(idx int, x, y int) tea.Cmd {
 		item := m.items[idx]
 		tag = item.Tag
 		desc = item.Desc
-		pageText := m.helpPageText
-		if pageText == "" {
-			pageText = m.subtitle
-		}
-		itemTitle := tag
-		if m.helpItemPrefix != "" && itemTitle != "" {
-			itemTitle = m.helpItemPrefix + ": " + itemTitle
-		}
-		itemText := item.Help
-		if m.itemHelpFunc != nil {
-			if t, txt := m.itemHelpFunc(item); txt != "" {
-				if t != "" {
-					itemTitle = t
-				}
-				itemText = txt
-			}
-		}
-		hCtx = &HelpContext{
-			ScreenName: m.title,
-			PageTitle:  "Description",
-			PageText:   pageText,
-			ItemTitle:  itemTitle,
-			ItemText:   itemText,
-		}
+		ctx := m.helpContextForIdx(idx, 0)
+		hCtx = &ctx
 	}
 
 	var items []ContextMenuItem
