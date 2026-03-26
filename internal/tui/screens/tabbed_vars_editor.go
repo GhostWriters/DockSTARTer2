@@ -962,11 +962,12 @@ func (m *TabbedVarsEditorModel) HelpText() string {
 	if idx := strings.Index(varName, "="); idx > 0 {
 		varName = strings.TrimSpace(varName[:idx])
 	}
-	if line := appenv.GetVarHelpLine(varName); line != "" {
-		return line
-	}
+	// meta.toml takes precedence — allows semantic styles and app-specific overrides.
 	if vm, ok := tab.appMeta.GetVarMeta(varName, tab.spec.App); ok && vm.HelpLine != "" {
 		return vm.HelpLine
+	}
+	if line := appenv.GetVarHelpLine(varName); line != "" {
+		return line
 	}
 	return ""
 }
