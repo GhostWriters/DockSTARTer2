@@ -86,20 +86,23 @@ func (m *configAppsMenuModel) HelpContext(maxWidth int) tui.HelpContext {
 		item := items[idx]
 		if item.BaseApp != "" {
 			ctx := context.Background()
-			if appMeta, err := appenv.LoadAppMeta(ctx, item.BaseApp); err == nil && appMeta != nil {
-				var parts []string
-				if appMeta.App.HelpText != "" {
-					parts = append(parts, appMeta.App.HelpText)
+			appMeta, _ := appenv.LoadAppMeta(ctx, item.BaseApp)
+			var parts []string
+			if appMeta != nil && appMeta.App.HelpText != "" {
+				parts = append(parts, appMeta.App.HelpText)
+			} else {
+				if desc := appenv.GetDescriptionFromTemplate(ctx, item.BaseApp, ""); desc != "" {
+					parts = append(parts, desc)
 				}
-				if appMeta.App.Website != "" {
-					parts = append(parts, "Website: "+appMeta.App.Website)
-				}
-				if appenv.IsAppDeprecated(ctx, item.BaseApp) {
-					parts = append(parts, "{{|TitleError|}}⚠ This app is deprecated.{{[-]}}")
-				}
-				if len(parts) > 0 {
-					itemText = strings.Join(parts, "\n\n")
-				}
+			}
+			if appMeta != nil && appMeta.App.Website != "" {
+				parts = append(parts, "Website: "+appMeta.App.Website)
+			}
+			if appenv.IsAppDeprecated(ctx, item.BaseApp) {
+				parts = append(parts, "{{|TitleError|}}⚠ This app is deprecated.{{[-]}}")
+			}
+			if len(parts) > 0 {
+				itemText = strings.Join(parts, "\n\n")
 			}
 		}
 	}

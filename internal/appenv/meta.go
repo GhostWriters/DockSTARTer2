@@ -5,9 +5,22 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/pelletier/go-toml/v2"
 )
+
+var (
+	appMetaCache   = make(map[string]*AppMeta)
+	appMetaCacheMu sync.RWMutex
+)
+
+// InvalidateAppMetaCache clears the in-memory AppMeta cache (e.g. after a templates update).
+func InvalidateAppMetaCache() {
+	appMetaCacheMu.Lock()
+	appMetaCache = make(map[string]*AppMeta)
+	appMetaCacheMu.Unlock()
+}
 
 // VarMeta holds metadata for a single app-specific variable from a .meta.toml file.
 type VarMeta struct {
@@ -69,11 +82,22 @@ func (m *AppMeta) GetVarMeta(varName, appName string) (VarMeta, bool) {
 // string for the base app). This means the keys in the returned AppMeta are
 // concrete — no wildcard matching is needed in GetVarMeta.
 //
+// Results are cached in memory for the lifetime of the process. Call
+// InvalidateAppMetaCache() after a templates update to clear stale entries.
+//
 // Returns nil (not an error) if no meta file exists for the app.
 func LoadAppMeta(ctx context.Context, appName string) (*AppMeta, error) {
 	if appName == "" {
 		return nil, nil
 	}
+
+	cacheKey := strings.ToLower(appName)
+	appMetaCacheMu.RLock()
+	if cached, ok := appMetaCache[cacheKey]; ok {
+		appMetaCacheMu.RUnlock()
+		return cached, nil
+	}
+	appMetaCacheMu.RUnlock()
 
 	metaFile, err := AppInstanceFile(ctx, appName, "*.meta.toml")
 	if err != nil {
@@ -82,6 +106,9 @@ func LoadAppMeta(ctx context.Context, appName string) (*AppMeta, error) {
 
 	data, err := os.ReadFile(metaFile)
 	if os.IsNotExist(err) {
+		appMetaCacheMu.Lock()
+		appMetaCache[cacheKey] = nil
+		appMetaCacheMu.Unlock()
 		return nil, nil
 	}
 	if err != nil {
@@ -110,5 +137,9 @@ func LoadAppMeta(ctx context.Context, appName string) (*AppMeta, error) {
 		normalized[strings.ToUpper(k)] = v
 	}
 
-	return &AppMeta{App: header.App, Variables: normalized}, nil
+	result := &AppMeta{App: header.App, Variables: normalized}
+	appMetaCacheMu.Lock()
+	appMetaCache[cacheKey] = result
+	appMetaCacheMu.Unlock()
+	return result, nil
 }

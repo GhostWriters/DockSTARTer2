@@ -1759,15 +1759,17 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) tui.HelpContext {
 			PageTitle:  "Legend",
 			PageText:   legend,
 		}
-		if tab.spec.App != "" && tab.appMeta != nil {
+		if tab.spec.App != "" {
+			base := appenv.AppNameToBaseAppName(tab.spec.App)
 			var parts []string
-			if tab.appMeta.App.HelpText != "" {
+			if tab.appMeta != nil && tab.appMeta.App.HelpText != "" {
 				parts = append(parts, tab.appMeta.App.HelpText)
+			} else if tab.description != "" {
+				parts = append(parts, tab.description)
 			}
-			if tab.appMeta.App.Website != "" {
+			if tab.appMeta != nil && tab.appMeta.App.Website != "" {
 				parts = append(parts, "Website: "+tab.appMeta.App.Website)
 			}
-			base := appenv.AppNameToBaseAppName(tab.spec.App)
 			if appenv.IsAppDeprecated(context.Background(), base) {
 				parts = append(parts, "{{|TitleError|}}⚠ This app is deprecated.{{[-]}}")
 			}

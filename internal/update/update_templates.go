@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
@@ -210,6 +211,7 @@ func UpdateTemplates(ctx context.Context, force bool, yes bool, requestedBranch 
 	}
 
 	logger.Notice(ctx, "Updated {{|ApplicationName|}}%s{{[-]}} to '{{|Version|}}%s{{[-]}}'", targetName, paths.GetTemplatesVersion())
+	appenv.InvalidateAppMetaCache()
 
 	// Reset all needs markers (DELETED ResetNeeds in favor of granular detection)
 	system.SetPermissions(ctx, paths.GetTimestampsDir())
