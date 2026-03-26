@@ -120,7 +120,7 @@ Folder = "{{|Highlight|}}"
 Branch = "{{|Highlight|}}"
 Version = "{{|Highlight|}}"
 UserCommand = "{{|Highlight|}}"
-URL = "{{|Highlight:::U|}}"
+URL = "{{[magenta::U]}}"
 
 [defaults]
 dialog_title_align = "center"
