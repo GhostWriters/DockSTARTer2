@@ -407,6 +407,7 @@ func (m *HeaderModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 			ScreenName: "Global Flags",
 			PageTitle:  "Status",
 			PageText:   "Shows the currently active global flags (VERBOSE, DEBUG, FORCE, YES).",
+			ItemTitle:  "Global Flags",
 			ItemText:   "Click or press Enter to open the Global Flags toggle dialog.",
 		},
 	})
@@ -423,12 +424,14 @@ func (m *HeaderModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		ScreenName: "App Version",
 		PageTitle:  "Update",
 		PageText:   "The current version of the DockSTARTer2 application.",
+		ItemTitle:  "App Version",
 		ItemText:   "Click or press Enter to check for and apply app updates.",
 	}
 	tmplHelp := &HelpContext{
 		ScreenName: "Template Version",
 		PageTitle:  "Update",
 		PageText:   "The current version of the application templates (configs).",
+		ItemTitle:  "Template Version",
 		ItemText:   "Click or press Enter to check for and apply template updates.",
 	}
 

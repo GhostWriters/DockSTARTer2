@@ -82,10 +82,13 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 			key.NewBinding(key.WithKeys("home"), key.WithHelp("home/end", "top/bottom")),
 			key.NewBinding(key.WithKeys("left"), key.WithHelp("←/→", "previous/next button")),
 			key.NewBinding(key.WithKeys("ctrl+n"), key.WithHelp("ctrl+n/p", "next/previous element")),
+			k.CycleTab,
+			k.CycleShiftTab,
 		},
 		{
-			key.NewBinding(key.WithKeys("space"), key.WithHelp("space/middle click", "select/toggle")),
-			k.Enter,
+			key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter/left click", "activate button")),
+			key.NewBinding(key.WithKeys("space"), key.WithHelp("space/middle click", "toggle item")),
+			k.MouseRight,
 			k.Esc,
 			k.ToggleLog,
 			k.Help,
@@ -130,11 +133,11 @@ var Keys = KeyMap{
 	),
 	Enter: key.NewBinding(
 		key.WithKeys("enter"),
-		key.WithHelp("enter", "select/confirm"),
+		key.WithHelp("enter", "activate button"),
 	),
 	Space: key.NewBinding(
 		key.WithKeys("space"),
-		key.WithHelp("space", "select/toggle"),
+		key.WithHelp("space", "toggle item"),
 	),
 	Esc: key.NewBinding(
 		key.WithKeys("esc"),
@@ -179,6 +182,9 @@ var Keys = KeyMap{
 	MouseLeft: key.NewBinding(
 		key.WithHelp("left click", "select/confirm"),
 	),
+	MouseRight: key.NewBinding(
+		key.WithHelp("right click", "context menu/help"),
+	),
 	MouseWheel: key.NewBinding(
 		key.WithHelp("scroll wheel", "scroll list/logs"),
 	),
@@ -195,12 +201,12 @@ var Keys = KeyMap{
 		key.WithHelp("ctrl+d", "delete var"),
 	),
 	EnvReorderU: key.NewBinding(
-		key.WithKeys("ctrl+up"),
-		key.WithHelp("ctrl+up", "move up"),
+		key.WithKeys("ctrl+up", "alt+up"),
+		key.WithHelp("ctrl+up/alt+up", "move up"),
 	),
 	EnvReorderD: key.NewBinding(
-		key.WithKeys("ctrl+down"),
-		key.WithHelp("ctrl+down", "move down"),
+		key.WithKeys("ctrl+down", "alt+down"),
+		key.WithHelp("ctrl+down/alt+down", "move down"),
 	),
 	EnvInsert: key.NewBinding(
 		key.WithKeys("ctrl+o"),
