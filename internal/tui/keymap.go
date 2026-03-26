@@ -63,6 +63,8 @@ type KeyMap struct {
 	EnvInsert     key.Binding
 	EnvSplitLine  key.Binding
 	EnvEditValue  key.Binding
+	EnvNextTab    key.Binding
+	EnvPrevTab    key.Binding
 }
 
 // ShortHelp returns bindings shown in the compact helpline.
@@ -211,5 +213,13 @@ var Keys = KeyMap{
 	EnvEditValue: key.NewBinding(
 		key.WithKeys("f2"),
 		key.WithHelp("F2", "edit value"),
+	),
+	EnvNextTab: key.NewBinding(
+		key.WithKeys("ctrl+right", "alt+right"),
+		key.WithHelp("ctrl+→/alt+→", "next tab"),
+	),
+	EnvPrevTab: key.NewBinding(
+		key.WithKeys("ctrl+left", "alt+left"),
+		key.WithHelp("ctrl+←/alt+←", "prev tab"),
 	),
 }

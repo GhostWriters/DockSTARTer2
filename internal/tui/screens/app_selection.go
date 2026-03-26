@@ -95,7 +95,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 	menu := tui.NewMenuModel(
 		"app-select",
 		"Select Applications",
-		"Choose which apps you would like to install:\nUse {{|KeyCap|}}[up]{{[-]}}/{{|KeyCap|}}[down]{{[-]}} and {{|KeyCap|}}[space]{{[-]}} to select; {{|KeyCap|}}[ctrl+right]{{[-]}} to manage instances.",
+		"Choose which apps you would like to install:\nUse {{|KeyCap|}}[up]{{[-]}}/{{|KeyCap|}}[down]{{[-]}} and {{|KeyCap|}}[space]{{[-]}} to select; {{|KeyCap|}}[ctrl+→]{{[-]}}/{{|KeyCap|}}[alt+→]{{[-]}} to manage instances.",
 		nil,
 		backAction,
 	)
@@ -1202,7 +1202,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 					editError = ""
 					refreshEditRow()
 				}
-			case "up", "down", "left", "right", "ctrl+left", "ctrl+right", "tab", "shift+tab":
+			case "up", "down", "left", "right", "ctrl+left", "ctrl+right", "alt+left", "alt+right", "tab", "shift+tab":
 				// Block all navigation while editing.
 			default:
 				if keyMsg.Text != "" {
@@ -1358,7 +1358,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 			}
 			return nil, false
 
-		case "ctrl+right":
+		case "ctrl+right", "alt+right":
 			if item.IsGroupHeader {
 				// Enter submenu: jump to first sub-item, or open editing if none yet.
 				base := item.BaseApp
@@ -1397,7 +1397,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 				return nil, true
 			}
 
-		case "ctrl+left":
+		case "ctrl+left", "alt+left":
 			// Ctrl+Left from anywhere in the submenu: jump to header and collapse if no non-base instances.
 			if isSubRow(item) {
 				headerIdx := findHeader(idx-1, item.BaseApp)

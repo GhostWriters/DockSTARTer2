@@ -503,14 +503,14 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.promptUnsavedChanges(m.onClose)
 			}
 			return m, m.onClose
-		case "ctrl+right": // Next Tab
+		case "ctrl+right", "alt+right": // Next Tab
 			if m.focus == envFocusEditor && len(m.tabs) > 1 {
 				m.tabs[m.activeTab].editor.Blur()
 				m.activeTab = (m.activeTab + 1) % len(m.tabs)
 				m.tabs[m.activeTab].editor.Focus()
 				return m, nil
 			}
-		case "ctrl+left": // Prev Tab
+		case "ctrl+left", "alt+left": // Prev Tab
 			if m.focus == envFocusEditor && len(m.tabs) > 1 {
 				m.tabs[m.activeTab].editor.Blur()
 				m.activeTab--
@@ -913,7 +913,7 @@ func (m *TabbedVarsEditorModel) ShortHelp() []key.Binding {
 	if m.focus == envFocusEditor {
 		b := []key.Binding{tui.Keys.EnvRefresh, tui.Keys.EnvAddVar, tui.Keys.EnvDelete, tui.Keys.Esc, tui.Keys.Help}
 		if len(m.tabs) > 1 {
-			b = append(b, tui.Keys.CycleTab)
+			b = append(b, tui.Keys.EnvNextTab)
 		}
 		return b
 	}
@@ -927,7 +927,7 @@ func (m *TabbedVarsEditorModel) FullHelp() [][]key.Binding {
 		key.NewBinding(key.WithKeys("home"), key.WithHelp("Home/End", "top/bottom")),
 	}
 	if len(m.tabs) > 1 {
-		nav = append(nav, tui.Keys.CycleTab, tui.Keys.CycleShiftTab)
+		nav = append(nav, tui.Keys.EnvNextTab, tui.Keys.EnvPrevTab)
 	}
 
 	return [][]key.Binding{
