@@ -148,7 +148,7 @@ func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegi
 		Help: &tui.HelpContext{
 			ScreenName: s.outerMenu.Title(),
 			PageTitle:  "Description",
-			PageText:   "Configure visual settings for the application.",
+			PageText:   "Configure the visual appearance of the application, including theme selection, borders, shadows, and other display options.",
 		},
 	})
 
@@ -169,7 +169,7 @@ func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegi
 		Help: &tui.HelpContext{
 			ScreenName: s.outerMenu.Title(),
 			PageTitle:  "Description",
-			PageText:   "Configure visual settings for the application.",
+			PageText:   "Configure the visual appearance of the application, including theme selection, borders, shadows, and other display options.",
 		},
 	})
 
@@ -201,7 +201,7 @@ func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegi
 		tui.HelpContext{
 			ScreenName: s.outerMenu.Title(),
 			PageTitle:  "Description",
-			PageText:   "Configure visual settings for the application.",
+			PageText:   "Configure the visual appearance of the application, including theme selection, borders, shadows, and other display options.",
 		},
 		s.outerMenu.ID(), offsetX+contentX, offsetY+buttonY, btnRowWidth, tui.ZScreen+25,
 		btnSpecs...,

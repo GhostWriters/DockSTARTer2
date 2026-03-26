@@ -51,5 +51,6 @@ func NewOptionsMenuScreen(isRoot bool) tui.ScreenModel {
 	)
 
 	menu.SetMenuName("options")
+	menu.SetHelpPageText("Application settings and preferences. Configure the visual theme, UI display options, and other tool behaviors.")
 	return menu
 }

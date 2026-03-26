@@ -35,8 +35,7 @@ func NewMainMenuScreen() tui.ScreenModel {
 		nil, // No back action for main menu
 	)
 
-	// In the new architecture, MenuModel IS the screen.
-	// We just set the name and return it.
 	menu.SetMenuName("")
+	menu.SetHelpPageText("The main navigation menu for DockSTARTer. Select an action to configure your Docker application stack, apply updates, or adjust settings.")
 	return menu
 }

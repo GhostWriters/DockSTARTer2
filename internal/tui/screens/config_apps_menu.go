@@ -96,5 +96,6 @@ func NewConfigAppsMenuScreen() tui.ScreenModel {
 
 	menu.SetMenuName("config_apps")
 	menu.SetVariableHeight(true)
+	menu.SetHelpPageText("Select an application to browse and edit its environment variables. Each application's settings are stored in your .env file.")
 	return &configAppsMenuModel{MenuModel: menu}
 }

@@ -566,7 +566,8 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 type MenuModel struct {
 	id       string // Unique identifier for selection persistence
 	title    string // Menu title
-	subtitle string // Optional subtitle/description
+	subtitle     string // Optional subtitle/description shown on-screen
+	helpPageText string // Optional description shown only in the help dialog (overrides subtitle)
 	items    []MenuItem
 	cursor   int // Current selection
 	width    int
@@ -760,6 +761,9 @@ func (m *MenuModel) Subtitle() string {
 
 // SetTitle sets the menu title
 func (m *MenuModel) SetTitle(title string) { m.title = title }
+
+// SetHelpPageText sets a description shown only in the help dialog, overriding the subtitle there.
+func (m *MenuModel) SetHelpPageText(text string) { m.helpPageText = text }
 
 // ID returns the unique identifier for this menu
 func (m *MenuModel) ID() string { return m.id }
@@ -1031,10 +1035,14 @@ func (m *MenuModel) HelpContext(contentWidth int) HelpContext {
 		}
 	}
 
+	pageText := m.helpPageText
+	if pageText == "" {
+		pageText = m.subtitle
+	}
 	return HelpContext{
 		ScreenName: m.title,
 		PageTitle:  "Description",
-		PageText:   m.subtitle,
+		PageText:   pageText,
 		ItemTitle:  itemTitle,
 		ItemText:   itemHelp,
 	}
