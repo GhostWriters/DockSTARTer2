@@ -8,6 +8,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"DockSTARTer2/internal/console"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -126,7 +128,12 @@ func GetNiceName(ctx context.Context, appName string) string {
 func GetDescription(ctx context.Context, appName string, envFile string) string {
 	// Check if user defined (not built-in OR missing ENABLED var)
 	if IsAppUserDefined(ctx, appName, envFile) {
-		return GetNiceName(ctx, appName) + " is a user defined application"
+		return console.WrapSemantic("App") + GetNiceName(ctx, appName) + console.WrapDirect("-") + " is a user defined application"
+	}
+
+	// Prefer description from .meta.toml (supports style tags) over labels.yml
+	if appMeta, err := LoadAppMeta(ctx, appName); err == nil && appMeta != nil && appMeta.App.Description != "" {
+		return appMeta.App.Description
 	}
 
 	// Try to get from labels
@@ -158,7 +165,12 @@ func GetDescription(ctx context.Context, appName string, envFile string) string 
 func GetDescriptionFromTemplate(ctx context.Context, appName string, envFile string) string {
 	// Check if user defined (not built-in OR missing ENABLED var)
 	if !IsAppBuiltIn(appName) {
-		return GetNiceName(ctx, appName) + " is a user defined application"
+		return console.WrapSemantic("App") + GetNiceName(ctx, appName) + console.WrapDirect("-") + " is a user defined application"
+	}
+
+	// Prefer description from .meta.toml (supports style tags) over labels.yml
+	if appMeta, err := LoadAppMeta(ctx, appName); err == nil && appMeta != nil && appMeta.App.Description != "" {
+		return appMeta.App.Description
 	}
 
 	// Try to get from labels

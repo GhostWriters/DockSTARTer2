@@ -39,7 +39,7 @@ func buildConfigAppItems(ctx context.Context, apps []string, envFile string) []t
 		desc := appenv.GetDescription(ctx, appName, envFile)
 		isUserDefined := appenv.IsAppUserDefined(ctx, appName, envFile)
 
-		descText := desc
+		descText := tui.GetPlainText(desc)
 		if isUserDefined {
 			descText = "{{|ListAppUserDefined|}}" + descText
 		} else {
@@ -47,11 +47,13 @@ func buildConfigAppItems(ctx context.Context, apps []string, envFile string) []t
 		}
 
 		items = append(items, tui.MenuItem{
-			Tag:     niceName,
-			Desc:    descText,
-			Help:    "Configure environment variables for " + niceName,
-			Action:  navigateToAppConfigEditorWithRefresh(appName),
-			BaseApp: appenv.AppNameToBaseAppName(appName),
+			Tag:           niceName,
+			Desc:          descText,
+			Help:          "Configure environment variables for " + niceName,
+			Action:        navigateToAppConfigEditorWithRefresh(appName),
+			BaseApp:       appenv.AppNameToBaseAppName(appName),
+			IsUserDefined: isUserDefined,
+			Metadata:      map[string]string{"rawDesc": desc},
 		})
 	}
 
@@ -76,34 +78,51 @@ func (m *configAppsMenuModel) refreshItems() {
 	m.MenuModel.SetItems(buildConfigAppItems(ctx, apps, envFile))
 }
 
+// configAppItemHelp returns enriched (itemTitle, itemText) for a config app menu item.
+// Returns ("", "") for items without a base app.
+func configAppItemHelp(item tui.MenuItem) (itemTitle, itemText string) {
+	if item.BaseApp == "" {
+		return "", ""
+	}
+	if item.IsUserDefined {
+		if rawDesc := item.Metadata["rawDesc"]; rawDesc != "" {
+			return item.Tag, rawDesc
+		}
+		return item.Tag, "{{|App|}}" + item.Tag + "{{[-]}} is a user defined application"
+	}
+	ctx := context.Background()
+	appMeta, _ := appenv.LoadAppMeta(ctx, item.BaseApp)
+	var parts []string
+	if appMeta != nil && appMeta.App.HelpText != "" {
+		parts = append(parts, appMeta.App.HelpText)
+	} else if desc := appenv.GetDescriptionFromTemplate(ctx, item.BaseApp, ""); desc != "" {
+		parts = append(parts, desc)
+	}
+	if appMeta != nil && appMeta.App.Website != "" {
+		parts = append(parts, "Website: {{|url|}}"+appMeta.App.Website+"{{[-]}}")
+	}
+	if appenv.IsAppDeprecated(ctx, item.BaseApp) {
+		parts = append(parts, "{{|TitleError|}}⚠ This app is deprecated.{{[-]}}")
+	}
+	if len(parts) == 0 {
+		return "", ""
+	}
+	return item.Tag, strings.Join(parts, "\n\n")
+}
+
 func (m *configAppsMenuModel) HelpContext(maxWidth int) tui.HelpContext {
 	inner := m.MenuModel.HelpContext(maxWidth)
+	itemTitle := inner.ItemTitle
 	itemText := inner.ItemText
 
 	items := m.MenuModel.GetItems()
 	idx := m.MenuModel.Index()
 	if idx >= 0 && idx < len(items) {
-		item := items[idx]
-		if item.BaseApp != "" {
-			ctx := context.Background()
-			appMeta, _ := appenv.LoadAppMeta(ctx, item.BaseApp)
-			var parts []string
-			if appMeta != nil && appMeta.App.HelpText != "" {
-				parts = append(parts, appMeta.App.HelpText)
-			} else {
-				if desc := appenv.GetDescriptionFromTemplate(ctx, item.BaseApp, ""); desc != "" {
-					parts = append(parts, desc)
-				}
+		if t, txt := configAppItemHelp(items[idx]); txt != "" {
+			if t != "" {
+				itemTitle = t
 			}
-			if appMeta != nil && appMeta.App.Website != "" {
-				parts = append(parts, "Website: "+appMeta.App.Website)
-			}
-			if appenv.IsAppDeprecated(ctx, item.BaseApp) {
-				parts = append(parts, "{{|TitleError|}}⚠ This app is deprecated.{{[-]}}")
-			}
-			if len(parts) > 0 {
-				itemText = strings.Join(parts, "\n\n")
-			}
+			itemText = txt
 		}
 	}
 
@@ -111,7 +130,7 @@ func (m *configAppsMenuModel) HelpContext(maxWidth int) tui.HelpContext {
 		ScreenName: inner.ScreenName,
 		PageTitle:  inner.PageTitle,
 		PageText:   inner.PageText,
-		ItemTitle:  inner.ItemTitle,
+		ItemTitle:  itemTitle,
 		ItemText:   itemText,
 	}
 }
@@ -140,5 +159,6 @@ func NewConfigAppsMenuScreen() tui.ScreenModel {
 	menu.SetVariableHeight(true)
 	menu.SetHelpPageText("Select an application to browse and edit its environment variables. Each application's settings are stored in your .env file.")
 	menu.SetHelpItemPrefix("App")
+	menu.SetItemHelpFunc(configAppItemHelp)
 	return &configAppsMenuModel{MenuModel: menu}
 }

@@ -2,6 +2,7 @@ package appenv
 
 import (
 	"DockSTARTer2/internal/assets"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/envutil"
 	"context"
@@ -62,7 +63,7 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 		formattedEnvLines = append(formattedEnvLines, "### "+headingTitle)
 		formattedEnvLines = append(formattedEnvLines, "###")
 		if appDescription != "" {
-			descLines := strutil.WordWrapToSlice(appDescription, 75)
+			descLines := strutil.WordWrapToSlice(console.StripSemanticTags(appDescription), 75)
 			for _, line := range descLines {
 				trimmed := strings.TrimRight(line, " \r\t")
 				if trimmed == "" {

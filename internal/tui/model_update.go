@@ -761,20 +761,12 @@ func shouldForwardResult(result any) bool {
 func (m *AppModel) showHelpCmd(capturedCtx *HelpContext) tea.Cmd {
 	var km help.KeyMap = Keys
 	var contextInfo HelpContext
-	// Compute the content width the help dialog will have so the provider can
-	// word-wrap at the source. Overhead: halo(4) + border(2) + padding(2) = 8.
 	availW, availH := GetAvailableDialogSize(m.width, m.height)
 	if availW < 40 || availH < 10 {
 		// Terminal too small for help dialog
 		return nil
 	}
-	helpContentWidth := availW - 8
-	if helpContentWidth < 30 {
-		helpContentWidth = 30
-	}
-	if helpContentWidth > 120 {
-		helpContentWidth = 120
-	}
+	helpContentWidth := HelpContextWidth(m.width, m.height)
 
 	if capturedCtx != nil {
 		contextInfo = *capturedCtx

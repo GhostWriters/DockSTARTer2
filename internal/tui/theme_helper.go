@@ -237,5 +237,5 @@ func MaintainBackground(text string, style lipgloss.Style) string {
 
 // GetPlainText strips all {{...}} theme tags from text
 func GetPlainText(text string) string {
-	return themeTagRegex.ReplaceAllString(text, "")
+	return console.StripSemanticTags(text)
 }
