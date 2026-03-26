@@ -1064,11 +1064,19 @@ func (m *MenuModel) showContextMenu(idx int, x, y int) tea.Cmd {
 		item := m.items[idx]
 		tag = item.Tag
 		desc = item.Desc
+		pageText := m.helpPageText
+		if pageText == "" {
+			pageText = m.subtitle
+		}
+		itemTitle := tag
+		if m.helpItemPrefix != "" && itemTitle != "" {
+			itemTitle = m.helpItemPrefix + ": " + itemTitle
+		}
 		hCtx = &HelpContext{
 			ScreenName: m.title,
 			PageTitle:  "Description",
-			PageText:   m.subtitle,
-			ItemTitle:  tag,
+			PageText:   pageText,
+			ItemTitle:  itemTitle,
 			ItemText:   item.Help,
 		}
 	}
