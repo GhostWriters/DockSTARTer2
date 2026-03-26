@@ -3,6 +3,7 @@ package screens
 import (
 	"context"
 	"path/filepath"
+	"strings"
 
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/config"
@@ -46,10 +47,11 @@ func buildConfigAppItems(ctx context.Context, apps []string, envFile string) []t
 		}
 
 		items = append(items, tui.MenuItem{
-			Tag:    niceName,
-			Desc:   descText,
-			Help:   "Configure environment variables for " + niceName,
-			Action: navigateToAppConfigEditorWithRefresh(appName),
+			Tag:     niceName,
+			Desc:    descText,
+			Help:    "Configure environment variables for " + niceName,
+			Action:  navigateToAppConfigEditorWithRefresh(appName),
+			BaseApp: appenv.AppNameToBaseAppName(appName),
 		})
 	}
 
@@ -72,6 +74,43 @@ func (m *configAppsMenuModel) refreshItems() {
 	}
 	envFile := filepath.Join(cfg.ComposeDir, constants.EnvFileName)
 	m.MenuModel.SetItems(buildConfigAppItems(ctx, apps, envFile))
+}
+
+func (m *configAppsMenuModel) HelpContext(maxWidth int) tui.HelpContext {
+	inner := m.MenuModel.HelpContext(maxWidth)
+	itemText := inner.ItemText
+
+	items := m.MenuModel.GetItems()
+	idx := m.MenuModel.Index()
+	if idx >= 0 && idx < len(items) {
+		item := items[idx]
+		if item.BaseApp != "" {
+			ctx := context.Background()
+			if appMeta, err := appenv.LoadAppMeta(ctx, item.BaseApp); err == nil && appMeta != nil {
+				var parts []string
+				if appMeta.App.HelpText != "" {
+					parts = append(parts, appMeta.App.HelpText)
+				}
+				if appMeta.App.Website != "" {
+					parts = append(parts, "Website: "+appMeta.App.Website)
+				}
+				if appenv.IsAppDeprecated(ctx, item.BaseApp) {
+					parts = append(parts, "{{|TitleError|}}⚠ This app is deprecated.{{[-]}}")
+				}
+				if len(parts) > 0 {
+					itemText = strings.Join(parts, "\n\n")
+				}
+			}
+		}
+	}
+
+	return tui.HelpContext{
+		ScreenName: inner.ScreenName,
+		PageTitle:  inner.PageTitle,
+		PageText:   inner.PageText,
+		ItemTitle:  inner.ItemTitle,
+		ItemText:   itemText,
+	}
 }
 
 // NewConfigAppsMenuScreen creates the "Configure Applications" menu

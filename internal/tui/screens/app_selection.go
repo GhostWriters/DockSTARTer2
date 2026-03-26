@@ -51,12 +51,38 @@ func (s *AppSelectionScreen) HelpContext(maxWidth int) tui.HelpContext {
 		"{{|MarkerModified|}}r{{[-]}} Referenced | " +
 		"{{|MarkerAdded|}}R{{[-]}} Referenced & Added |"
 	inner := s.menu.HelpContext(maxWidth)
+	itemText := inner.ItemText
+
+	items := s.menu.GetItems()
+	idx := s.menu.Index()
+	if idx >= 0 && idx < len(items) {
+		item := items[idx]
+		if item.BaseApp != "" && !item.IsSeparator {
+			ctx := context.Background()
+			if appMeta, err := appenv.LoadAppMeta(ctx, item.BaseApp); err == nil && appMeta != nil {
+				var parts []string
+				if appMeta.App.HelpText != "" {
+					parts = append(parts, appMeta.App.HelpText)
+				}
+				if appMeta.App.Website != "" {
+					parts = append(parts, "Website: "+appMeta.App.Website)
+				}
+				if appenv.IsAppDeprecated(ctx, item.BaseApp) {
+					parts = append(parts, "{{|TitleError|}}⚠ This app is deprecated.{{[-]}}")
+				}
+				if len(parts) > 0 {
+					itemText = strings.Join(parts, "\n\n")
+				}
+			}
+		}
+	}
+
 	return tui.HelpContext{
 		ScreenName: inner.ScreenName,
 		PageTitle:  "Legend",
 		PageText:   legend,
 		ItemTitle:  inner.ItemTitle,
-		ItemText:   inner.ItemText,
+		ItemText:   itemText,
 	}
 }
 

@@ -1746,18 +1746,37 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) tui.HelpContext {
 	}
 
 	tab := m.tabs[m.activeTab]
+	legend := "| " +
+		"{{|MarkerAdded|}}+{{[-]}} Added | " +
+		"{{|MarkerDeleted|}}-{{[-]}} Deleted | " +
+		"{{|MarkerModified|}}~{{[-]}} Changed | " +
+		"{{|MarkerInvalid|}}!{{[-]}} Invalid |"
+
 	meta, ok := tab.editor.CurrentLineMeta()
 	if !ok || !meta.IsVariable {
-		legend := "| " +
-			"{{|MarkerAdded|}}+{{[-]}} Added | " +
-			"{{|MarkerDeleted|}}-{{[-]}} Deleted | " +
-			"{{|MarkerModified|}}~{{[-]}} Changed | " +
-			"{{|MarkerInvalid|}}!{{[-]}} Invalid |"
-		return tui.HelpContext{
+		hctx := tui.HelpContext{
 			ScreenName: m.title,
 			PageTitle:  "Legend",
 			PageText:   legend,
 		}
+		if tab.spec.App != "" && tab.appMeta != nil {
+			var parts []string
+			if tab.appMeta.App.HelpText != "" {
+				parts = append(parts, tab.appMeta.App.HelpText)
+			}
+			if tab.appMeta.App.Website != "" {
+				parts = append(parts, "Website: "+tab.appMeta.App.Website)
+			}
+			base := appenv.AppNameToBaseAppName(tab.spec.App)
+			if appenv.IsAppDeprecated(context.Background(), base) {
+				parts = append(parts, "{{|TitleError|}}⚠ This app is deprecated.{{[-]}}")
+			}
+			if len(parts) > 0 {
+				hctx.ItemTitle = tab.niceName
+				hctx.ItemText = strings.Join(parts, "\n\n")
+			}
+		}
+		return hctx
 	}
 
 	varName := meta.Text
@@ -1765,11 +1784,6 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) tui.HelpContext {
 		varName = strings.TrimSpace(varName[:idx])
 	}
 	if varName == "" {
-		legend := "| " +
-			"{{|MarkerAdded|}}+{{[-]}} Added | " +
-			"{{|MarkerDeleted|}}-{{[-]}} Deleted | " +
-			"{{|MarkerModified|}}~{{[-]}} Changed | " +
-			"{{|MarkerInvalid|}}!{{[-]}} Invalid |"
 		return tui.HelpContext{
 			ScreenName: m.title,
 			PageTitle:  "Legend",
