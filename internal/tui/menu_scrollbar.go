@@ -489,7 +489,7 @@ func BuildAEBottomBorder(totalWidth int, prefixDashes int, focused bool, ctx Sty
 				content = "{{|TitleFocusIndicator|}}>{{[-]}}{{|TitleCheckboxFocused|}}" + char + "{{[-]}}{{|TitleFocusIndicator|}}<{{[-]}}"
 			}
 		} else {
-			content = " {{|TitleCheckboxFocused|}}" + char + "{{[-]}} "
+			content = " {{|TitleCheckbox|}}" + char + "{{[-]}} "
 		}
 		return RenderThemeText(content, borderStyle)
 	}

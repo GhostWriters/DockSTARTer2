@@ -52,7 +52,7 @@ TitleWarning = "{{|Title::yellow|}}"
 TitleQuestion = "{{|Title::yellow|}}"
 LogPanel = "{{|Title|}}"
 TitleCheckbox = ""
-TitleCheckboxFocused = "{{|MarkerAdded|}}"
+TitleCheckboxFocused = "{{[:green]}}"
 
 TitleUnfocusedIndicator = "{{[red::-B]}}"
 TitleFocusIndicator = "{{[red::-B]}}"
