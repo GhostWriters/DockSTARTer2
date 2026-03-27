@@ -20,9 +20,11 @@ import (
 
 const appSelectionLegend = "| " +
 	"{{|MarkerAdded|}}+{{[-]}} Added | " +
-	"{{|MarkerDeleted|}}-{{[-]}} Deleted | " +
+	"{{|MarkerDeleted|}}-{{[-]}} Removed | " +
 	"{{|MarkerModified|}}r{{[-]}} Referenced | " +
-	"{{|MarkerAdded|}}R{{[-]}} Referenced & Added |"
+	"{{|MarkerAdded|}}R{{[-]}} Referenced \u0026 Added | " +
+	"{{|MarkerAdded|}}E{{[-]}} Enabled | " +
+	"{{|MarkerDeleted|}}D{{[-]}} Disabled |"
 
 // AppSelectionScreen wraps MenuModel to provide a custom Legend help panel.
 type AppSelectionScreen struct {
@@ -61,6 +63,8 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 	// backAction (needed by NewMenuModel) can close over them before their
 	// implementations are defined below.
 	type changeSet struct {
+		toAdd     []string
+		toRemove  []string
 		toEnable  []string
 		toDisable []string
 		niceNames map[string]string
@@ -186,16 +190,18 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 			return items, false
 		}
 		// No non-base instances left — collapse to a simple checkbox.
-		// Read WasAdded/IsReferenced from the group header and current Checked from the base sub-row.
-		var wasAdded, checked, isReferenced bool
+		// Read WasAdded/IsReferenced/Enabled from the group header and current Checked from the base sub-row.
+		var wasAdded, checked, isReferenced, enabled, wasEnabled bool
 		for _, item := range items {
 			if item.IsGroupHeader && item.BaseApp == base {
 				wasAdded = item.WasAdded
 				isReferenced = item.IsReferenced
 				checked = item.WasAdded // default to original state
+				wasEnabled = item.WasEnabled
 			}
 			if item.IsSubItem && item.BaseApp == base && appenv.AppNameToInstanceName(item.Metadata["appName"]) == "" {
 				checked = item.Checked // base sub-row carries the toggled state
+				enabled = item.Enabled
 			}
 		}
 		ctx := context.Background()
@@ -203,15 +209,18 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 		niceName := appenv.GetNiceName(ctx, base)
 		desc := tui.GetPlainText(appenv.GetDescriptionFromTemplate(ctx, base, envFile))
 		simpleRow := tui.MenuItem{
-			Tag:          niceName,
-			Desc:         "{{|ListApp|}}" + desc,
-			Help:         fmt.Sprintf("Toggle %s. Press Ctrl+Right to add instances.", niceName),
-			IsCheckbox:   true,
-			Checked:      checked,
-			WasAdded:     wasAdded,
-			IsReferenced: isReferenced,
-			BaseApp:      base,
-			Metadata:     map[string]string{"appName": base},
+			Tag:               niceName,
+			Desc:              "{{|ListApp|}}" + desc,
+			Help:              fmt.Sprintf("Toggle %s. Press Ctrl+Right to add instances.", niceName),
+			IsCheckbox:        true,
+			Checked:           checked,
+			WasAdded:          wasAdded,
+			Enabled:           enabled,
+			WasEnabled:        wasEnabled,
+			ShowEnabledGutter: checked,
+			IsReferenced:      isReferenced,
+			BaseApp:           base,
+			Metadata:          map[string]string{"appName": base},
 		}
 		// Remove header, sub-items, and add-row; insert simple checkbox in their place.
 		newItems := make([]tui.MenuItem, 0, len(items))
@@ -553,26 +562,32 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 		niceName := appenv.GetNiceName(ctx, baseApp)
 		desc := tui.GetPlainText(appenv.GetDescriptionFromTemplate(ctx, baseApp, envFile))
 		groupHeader := tui.MenuItem{
-			Tag:           niceName,
-			Desc:          "{{|ListApp|}}" + desc,
-			Help:          fmt.Sprintf("Press Ctrl+Right to manage %s instances. Ctrl+Left to collapse.", niceName),
-			IsGroupHeader: true,
-			Checked:       orig.Checked,
-			WasAdded:      orig.WasAdded,
-			IsReferenced:  orig.IsReferenced,
-			BaseApp:       baseApp,
-			Metadata:      orig.Metadata,
+			Tag:               niceName,
+			Desc:              "{{|ListApp|}}" + desc,
+			Help:              fmt.Sprintf("Press Ctrl+Right to manage %s instances. Ctrl+Left to collapse.", niceName),
+			IsGroupHeader:     true,
+			Checked:           orig.Checked,
+			WasAdded:          orig.WasAdded,
+			Enabled:           orig.Enabled,
+			WasEnabled:        orig.WasEnabled,
+			ShowEnabledGutter: false,
+			IsReferenced:      orig.IsReferenced,
+			BaseApp:           baseApp,
+			Metadata:          orig.Metadata,
 		}
 		baseSubRow := tui.MenuItem{
-			Tag:          niceName,
-			Help:         fmt.Sprintf("Toggle %s", niceName),
-			IsSubItem:    true,
-			IsCheckbox:   true,
-			Checked:      orig.Checked,
-			WasAdded:     orig.WasAdded,
-			IsReferenced: orig.IsReferenced,
-			BaseApp:      baseApp,
-			Metadata:     orig.Metadata,
+			Tag:               niceName,
+			Help:              fmt.Sprintf("Toggle %s", niceName),
+			IsSubItem:         true,
+			IsCheckbox:        true,
+			Checked:           orig.Checked,
+			WasAdded:          orig.WasAdded,
+			Enabled:           orig.Enabled,
+			WasEnabled:        orig.WasEnabled,
+			ShowEnabledGutter: orig.Checked,
+			IsReferenced:      orig.IsReferenced,
+			BaseApp:           baseApp,
+			Metadata:          orig.Metadata,
 		}
 		addRow := tui.MenuItem{
 			Tag:           "+ Add instance\u2026",
@@ -626,6 +641,11 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 		for _, a := range enabledApps {
 			enabledMap[a] = true
 		}
+
+		// wasEnabledMap: snapshot of enabled state at screen load (for E/D gutter diff).
+		// We use the same enabledMap because refreshItems is called once at load.
+		// (After the user toggles, Enabled/WasEnabled let us diff correctly.)
+		wasEnabledMap := enabledMap
 
 		// addedMap tracks what was present in .env at screen load (for gutter diff).
 		addedMap := make(map[string]bool)
@@ -695,15 +715,18 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 			if nonBaseCount == 0 {
 				// Simple checkbox row — no instances or only the bare base app added.
 				items = append(items, tui.MenuItem{
-					Tag:          niceName,
-					Desc:         "{{|ListApp|}}" + desc,
-					Help:         fmt.Sprintf("Toggle %s. Press Ctrl+Right to add instances.", niceName),
-					IsCheckbox:   true,
-					Checked:      addedMap[base],
-					WasAdded:     addedMap[base],
-					IsReferenced: referencedBaseSet[base],
-					BaseApp:      base,
-					Metadata:     map[string]string{"appName": base},
+					Tag:               niceName,
+					Desc:              "{{|ListApp|}}" + desc,
+					Help:              fmt.Sprintf("Toggle %s. Press Ctrl+Right to add instances.", niceName),
+					IsCheckbox:        true,
+					Checked:           addedMap[base],
+					WasAdded:          addedMap[base],
+					Enabled:           enabledMap[base],
+					WasEnabled:        wasEnabledMap[base],
+					ShowEnabledGutter: addedMap[base],
+					IsReferenced:      referencedBaseSet[base],
+					BaseApp:           base,
+					Metadata:          map[string]string{"appName": base},
 				})
 			} else {
 				// Group header + sub-rows for every explicitly added instance.
@@ -716,14 +739,17 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 				}
 
 				items = append(items, tui.MenuItem{
-					Tag:           niceName,
-					Desc:          "{{|ListApp|}}" + desc,
-					Help:          fmt.Sprintf("Press Ctrl+Right to manage %s instances", niceName),
-					IsGroupHeader: true,
-					Checked:       anyEnabled,
-					IsReferenced:  referencedBaseSet[base],
-					BaseApp:       base,
-					Metadata:      map[string]string{"appName": base},
+					Tag:               niceName,
+					Desc:              "{{|ListApp|}}" + desc,
+					Help:              fmt.Sprintf("Press Ctrl+Right to manage %s instances", niceName),
+					IsGroupHeader:     true,
+					Checked:           anyEnabled,
+					Enabled:           enabledMap[base],
+					WasEnabled:        wasEnabledMap[base],
+					ShowEnabledGutter: false, // group headers don't show E/D
+					IsReferenced:      referencedBaseSet[base],
+					BaseApp:           base,
+					Metadata:          map[string]string{"appName": base},
 				})
 
 				// Merge added and referenced instances, sorted by app name.
@@ -746,26 +772,32 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 					displayName := appenv.InstanceDisplayName(niceName, ie.appName)
 					if ie.isReferenced {
 						items = append(items, tui.MenuItem{
-							Tag:          displayName,
-							Help:         fmt.Sprintf("%s — referenced in config but not added", displayName),
-							IsSubItem:    true,
-							IsCheckbox:   true,
-							IsReferenced: true,
-							Checked:      false,
-							WasAdded:     false,
-							BaseApp:      base,
-							Metadata:     map[string]string{"appName": ie.appName},
+							Tag:               displayName,
+							Help:              fmt.Sprintf("%s — referenced in config but not added", displayName),
+							IsSubItem:         true,
+							IsCheckbox:        true,
+							IsReferenced:      true,
+							Checked:           false,
+							WasAdded:          false,
+							Enabled:           false,
+							WasEnabled:        false,
+							ShowEnabledGutter: false,
+							BaseApp:           base,
+							Metadata:          map[string]string{"appName": ie.appName},
 						})
 					} else {
 						items = append(items, tui.MenuItem{
-							Tag:        displayName,
-							Help:       fmt.Sprintf("Toggle %s", displayName),
-							IsSubItem:  true,
-							IsCheckbox: true,
-							Checked:    addedMap[ie.appName],
-							WasAdded:   addedMap[ie.appName],
-							BaseApp:    base,
-							Metadata:   map[string]string{"appName": ie.appName},
+							Tag:               displayName,
+							Help:              fmt.Sprintf("Toggle %s", displayName),
+							IsSubItem:         true,
+							IsCheckbox:        true,
+							Checked:           addedMap[ie.appName],
+							WasAdded:          addedMap[ie.appName],
+							Enabled:           enabledMap[ie.appName],
+							WasEnabled:        wasEnabledMap[ie.appName],
+							ShowEnabledGutter: addedMap[ie.appName],
+							BaseApp:           base,
+							Metadata:          map[string]string{"appName": ie.appName},
 						})
 					}
 				}
@@ -790,7 +822,12 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 		for _, a := range originalAdded {
 			originalMap[a] = true
 		}
-		var toEnable, toDisable []string
+		originalEnabled, _ := appenv.ListEnabledApps(conf)
+		originalEnabledMap := make(map[string]bool)
+		for _, a := range originalEnabled {
+			originalEnabledMap[a] = true
+		}
+		var toAdd, toRemove, toEnable, toDisable []string
 		for _, item := range menu.GetItems() {
 			if item.IsGroupHeader || item.IsSeparator || item.IsEditing {
 				continue
@@ -800,28 +837,57 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 				continue
 			}
 			niceNames[appName] = item.Tag
+			// Add/Remove
 			if item.Checked && !originalMap[appName] {
-				toEnable = append(toEnable, appName)
+				toAdd = append(toAdd, appName)
 			} else if !item.Checked && originalMap[appName] {
-				toDisable = append(toDisable, appName)
+				toRemove = append(toRemove, appName)
+			}
+			// Enable/Disable (only for added apps)
+			if item.Checked {
+				if item.Enabled && !originalEnabledMap[appName] {
+					toEnable = append(toEnable, appName)
+				} else if !item.Enabled && originalEnabledMap[appName] {
+					toDisable = append(toDisable, appName)
+				}
 			}
 		}
-		return changeSet{toEnable: toEnable, toDisable: toDisable, niceNames: niceNames, envFile: envFile}
+		return changeSet{toAdd: toAdd, toRemove: toRemove, toEnable: toEnable, toDisable: toDisable, niceNames: niceNames, envFile: envFile}
 	}
 
 	// buildChangeSummary returns a human-readable summary of pending changes.
 	buildChangeSummary = func(cs changeSet) string {
-		if len(cs.toEnable) == 0 && len(cs.toDisable) == 0 {
+		if len(cs.toAdd) == 0 && len(cs.toRemove) == 0 && len(cs.toEnable) == 0 && len(cs.toDisable) == 0 {
 			return "No changes pending."
 		}
-		// Align app names under the longest label ("Remove: " = 8 chars).
-		const indent = "        " // 8 spaces — matches "Remove: "
+		// Align app names under the longest label ("Disable: " = 9 chars).
+		const indent = "         " // 9 spaces
 		var lines []string
+		if len(cs.toAdd) > 0 {
+			for i, app := range cs.toAdd {
+				name := "{{|ProgressWaiting|}}" + cs.niceNames[app] + "{{[-]}}"
+				if i == 0 {
+					lines = append(lines, "{{|ProgressWaiting|}}Add:{{[-]}}     "+name)
+				} else {
+					lines = append(lines, indent+name)
+				}
+			}
+		}
+		if len(cs.toRemove) > 0 {
+			for i, app := range cs.toRemove {
+				name := "{{|ProgressWaiting|}}" + cs.niceNames[app] + "{{[-]}}"
+				if i == 0 {
+					lines = append(lines, "{{|ProgressWaiting|}}Remove:{{[-]}}  "+name)
+				} else {
+					lines = append(lines, indent+name)
+				}
+			}
+		}
 		if len(cs.toEnable) > 0 {
 			for i, app := range cs.toEnable {
 				name := "{{|ProgressWaiting|}}" + cs.niceNames[app] + "{{[-]}}"
 				if i == 0 {
-					lines = append(lines, "{{|ProgressWaiting|}}Add:{{[-]}}    "+name)
+					lines = append(lines, "{{|ProgressWaiting|}}Enable:{{[-]}}  "+name)
 				} else {
 					lines = append(lines, indent+name)
 				}
@@ -831,7 +897,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 			for i, app := range cs.toDisable {
 				name := "{{|ProgressWaiting|}}" + cs.niceNames[app] + "{{[-]}}"
 				if i == 0 {
-					lines = append(lines, "{{|ProgressWaiting|}}Remove:{{[-]}} "+name)
+					lines = append(lines, "{{|ProgressWaiting|}}Disable:{{[-]}} "+name)
 				} else {
 					lines = append(lines, indent+name)
 				}
@@ -842,15 +908,25 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 
 	handleSave := func() tea.Msg {
 		cs := computeChanges()
+		toAdd := cs.toAdd
+		toRemove := cs.toRemove
 		toEnable := cs.toEnable
 		toDisable := cs.toDisable
 		niceNames := cs.niceNames
 		envFile := cs.envFile
 
-		if len(toEnable) == 0 && len(toDisable) == 0 {
+		if len(toAdd) == 0 && len(toRemove) == 0 && len(toEnable) == 0 && len(toDisable) == 0 {
 			return tui.NavigateBackMsg{}
 		}
 
+		var toAddNice []string
+		for _, app := range toAdd {
+			toAddNice = append(toAddNice, niceNames[app])
+		}
+		var toRemoveNice []string
+		for _, app := range toRemove {
+			toRemoveNice = append(toRemoveNice, niceNames[app])
+		}
 		var toEnableNice []string
 		for _, app := range toEnable {
 			toEnableNice = append(toEnableNice, niceNames[app])
@@ -860,31 +936,37 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 			toDisableNice = append(toDisableNice, niceNames[app])
 		}
 
-		dialog := tui.NewProgramBoxModel("{{|TitleSuccess|}}Enabling Selected Applications", "", "")
+		dialog := tui.NewProgramBoxModel("{{|TitleSuccess|}}Applying Changes", "", "")
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
 		dialog.SetAutoClose(false, 0)
 
-		if len(toDisable) > 0 {
-			dialog.AddTask("Removing applications", "ds --remove", toDisableNice)
+		if len(toRemove) > 0 {
+			dialog.AddTask("Removing applications", "ds --remove", toRemoveNice)
+		}
+		if len(toAdd) > 0 {
+			dialog.AddTask("Adding applications", "ds --add", toAddNice)
 		}
 		if len(toEnable) > 0 {
-			dialog.AddTask("Adding applications", "ds --add", toEnableNice)
+			dialog.AddTask("Enabling applications", "ds --enable", toEnableNice)
+		}
+		if len(toDisable) > 0 {
+			dialog.AddTask("Disabling applications", "ds --disable", toDisableNice)
 		}
 		dialog.AddTask("Updating variable files", "", nil)
 
 		task := func(ctx context.Context, w io.Writer) error {
 			ctx = console.WithTUIWriter(ctx, w)
-			totalSteps := len(toEnable) + len(toDisable) + 1
+			totalSteps := len(toAdd) + len(toRemove) + len(toEnable) + len(toDisable) + 1
 			completedSteps := 0
 
 			updateProgress := func() {
 				tui.Send(tui.UpdatePercentMsg{Percent: float64(completedSteps) / float64(totalSteps)})
 			}
 
-			if len(toDisable) > 0 {
+			if len(toRemove) > 0 {
 				tui.Send(tui.UpdateTaskMsg{Label: "Removing applications", Status: tui.StatusInProgress, ActiveApp: ""})
-				for _, app := range toDisable {
+				for _, app := range toRemove {
 					tui.Send(tui.UpdateTaskMsg{Label: "Removing applications", Status: tui.StatusInProgress, ActiveApp: niceNames[app]})
 					_ = appenv.Remove(ctx, []string{app}, conf, true)
 					completedSteps++
@@ -893,15 +975,37 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 				tui.Send(tui.UpdateTaskMsg{Label: "Removing applications", Status: tui.StatusCompleted, ActiveApp: ""})
 			}
 
-			if len(toEnable) > 0 {
+			if len(toAdd) > 0 {
 				tui.Send(tui.UpdateTaskMsg{Label: "Adding applications", Status: tui.StatusInProgress, ActiveApp: ""})
-				for _, app := range toEnable {
+				for _, app := range toAdd {
 					tui.Send(tui.UpdateTaskMsg{Label: "Adding applications", Status: tui.StatusInProgress, ActiveApp: niceNames[app]})
 					_ = appenv.Enable(ctx, []string{app}, conf)
 					completedSteps++
 					updateProgress()
 				}
 				tui.Send(tui.UpdateTaskMsg{Label: "Adding applications", Status: tui.StatusCompleted, ActiveApp: ""})
+			}
+
+			if len(toEnable) > 0 {
+				tui.Send(tui.UpdateTaskMsg{Label: "Enabling applications", Status: tui.StatusInProgress, ActiveApp: ""})
+				for _, app := range toEnable {
+					tui.Send(tui.UpdateTaskMsg{Label: "Enabling applications", Status: tui.StatusInProgress, ActiveApp: niceNames[app]})
+					_ = appenv.Enable(ctx, []string{app}, conf)
+					completedSteps++
+					updateProgress()
+				}
+				tui.Send(tui.UpdateTaskMsg{Label: "Enabling applications", Status: tui.StatusCompleted, ActiveApp: ""})
+			}
+
+			if len(toDisable) > 0 {
+				tui.Send(tui.UpdateTaskMsg{Label: "Disabling applications", Status: tui.StatusInProgress, ActiveApp: ""})
+				for _, app := range toDisable {
+					tui.Send(tui.UpdateTaskMsg{Label: "Disabling applications", Status: tui.StatusInProgress, ActiveApp: niceNames[app]})
+					_ = appenv.Disable(ctx, []string{app}, conf)
+					completedSteps++
+					updateProgress()
+				}
+				tui.Send(tui.UpdateTaskMsg{Label: "Disabling applications", Status: tui.StatusCompleted, ActiveApp: ""})
 			}
 
 			tui.Send(tui.UpdateTaskMsg{Label: "Updating variable files", Status: tui.StatusInProgress, ActiveApp: ""})
@@ -956,12 +1060,49 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 				return true
 			}
 			updated := item
-			updated.Checked = !updated.Checked
+			newChecked := !updated.Checked
+			updated.Checked = newChecked
+			// Auto-link: Add ON → enable; Add OFF → disable.
+			if newChecked {
+				updated.Enabled = true
+				updated.ShowEnabledGutter = true
+			} else {
+				updated.Enabled = false
+				updated.ShowEnabledGutter = false
+			}
 			m.SetItem(idx, updated)
 			m.SetItems(refreshGroupHeaders(m.GetItems()))
 			return true
 		}
 		return true // consume separators etc. to prevent button trigger
+	}
+
+	// toggleEnabled toggles only the Enabled state of an item that is already Added (Checked).
+	// If Add is not set, this has no effect.
+	toggleEnabled := func(m *tui.MenuModel, idx int) bool {
+		items := m.GetItems()
+		if idx < 0 || idx >= len(items) {
+			return false
+		}
+		item := items[idx]
+		if !item.IsCheckbox && !item.IsSubItem {
+			return false
+		}
+		if !item.Checked {
+			// Not added — check both Add and Enabled.
+			updated := item
+			updated.Checked = true
+			updated.Enabled = true
+			updated.ShowEnabledGutter = true
+			m.SetItem(idx, updated)
+			m.SetItems(refreshGroupHeaders(m.GetItems()))
+			return true
+		}
+		// Already added — toggle Enabled only.
+		updated := item
+		updated.Enabled = !updated.Enabled
+		m.SetItem(idx, updated)
+		return true
 	}
 
 	menu.SetUpdateInterceptor(func(msg tea.Msg, m *tui.MenuModel) (tea.Cmd, bool) {
@@ -1155,21 +1296,22 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 					}
 
 					// Compute the column where the tag text (app name) begins.
-					// Layout: gutter(1) [+ indent(4) for sub-items] + glyph + space
-					// Unicode glyphs are 1 column wide; ASCII glyphs are 4 chars ("[x] ").
+					// Layout: gutter(2) [+ indent(2) for sub-items] + cb_add + cb_enabled + space
+					// Unicode glyphs are 1 col wide; ASCII glyphs are 4 cols ("[x] ").
+					// cb_enabled: 1 col + 1 space (line art) or 4 cols (ASCII) — same width as cb_add.
 					ctx := tui.GetActiveContext()
 					var nameStartCol int
 					if item.IsSubItem {
 						if ctx.LineCharacters {
-							nameStartCol = 7 // gutter(1) + indent(4) + glyph(1) + space(1)
+							nameStartCol = 9 // gutter(2) + indent(2) + cb_add(2) + cb_enabled(2) + space(1)
 						} else {
-							nameStartCol = 10 // gutter(1) + indent(4) + "[x] "(4) + space(1)
+							nameStartCol = 16 // gutter(2) + indent(2) + "[x] "(4) + "[x] "(4) + space(4?)
 						}
 					} else {
 						if ctx.LineCharacters {
-							nameStartCol = 3 // gutter(1) + glyph(1) + space(1)
+							nameStartCol = 6 // gutter(2) + cb_add(2) + cb_enabled(2)
 						} else {
-							nameStartCol = 6 // gutter(1) + "[x] "(4) + space(1)
+							nameStartCol = 10 // gutter(2) + "[x] "(4) + "[x] "(4)
 						}
 					}
 
@@ -1392,12 +1534,20 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 				return nil, true
 			}
 			if item.IsSubItem {
-				// Ctrl+Right on a sub-item renames it (F2 equivalent).
+				// Ctrl+Right on a sub-item: toggle Enabled if already added, else rename.
+				if item.Checked {
+					toggleEnabled(m, idx)
+					return nil, true
+				}
 				startRenaming(idx)
 				return nil, true
 			}
-			// Simple checkbox: expand group and enter submenu (cursor → base sub-row).
+			// Simple checkbox: if already added, toggle Enabled; else expand group.
 			if item.IsCheckbox {
+				if item.Checked {
+					toggleEnabled(m, idx)
+					return nil, true
+				}
 				expandGroup(item.BaseApp)
 				return nil, true
 			}

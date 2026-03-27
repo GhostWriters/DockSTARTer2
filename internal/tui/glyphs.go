@@ -23,4 +23,8 @@ const (
 	radioUnselectedAscii = "( ) "
 	checkSelectedAscii   = "[x] "
 	checkUnselectedAscii = "[ ] "
+
+	// Enabled/Disabled gutter markers (second gutter column in app-selection)
+	gutterEnabled  = "E"
+	gutterDisabled = "D"
 )

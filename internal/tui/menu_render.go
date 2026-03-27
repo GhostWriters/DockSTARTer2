@@ -92,10 +92,20 @@ func (m *MenuModel) ViewString() string {
 	borderedList := listStyle.Render(listView)
 	totalWidth := m.list.Width() + ScrollbarGutterWidth + 2
 	borderedList = strings.TrimSuffix(borderedList, "\n")
-	if m.sbInfo.Needed {
+
+	if m.groupedMode {
+		borderedList = borderedList + "\n" + BuildAEBottomBorder(totalWidth, 2, m.focused, ctx)
+	} else if m.sbInfo.Needed {
 		borderedList = borderedList + "\n" + BuildScrollPercentBottomBorder(totalWidth, m.listScrollPercent(), m.focused, ctx)
 	} else {
 		borderedList = borderedList + "\n" + BuildPlainBottomBorder(totalWidth, m.focused, ctx)
+	}
+
+	// prefixDashes=2: corner(1)+dash(2)+dash(3)+A(4,5,6) center=5 = g0(1)+g1(2)+" ▣ "(3,4,5) center=5. MATCH.
+	if m.groupedMode {
+		if nl := strings.Index(borderedList, "\n"); nl >= 0 {
+			borderedList = BuildAETopBorder(totalWidth, 2, m.focused, ctx) + borderedList[nl:]
+		}
 	}
 
 	// Determine the target content width (the space inside the outer dialog borders)

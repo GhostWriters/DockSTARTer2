@@ -27,20 +27,26 @@ type MenuItem struct {
 	Selected      bool // Current selection state
 	IsCheckbox    bool // Whether this is a checkbox [ ] / [x]
 	IsRadioButton bool // Whether this is a radio button ( ) / (*)
-	Checked       bool // Current checkbox/radio state
+	Checked       bool // Current checkbox/radio state (= "Added" in app-selection)
+
+	// Enabled state (app-selection): separate from Added (Checked)
+	// Enabled means APP__ENABLED='true' in .env
+	Enabled    bool // Current enabled state
+	WasEnabled bool // Enabled state when the screen loaded (for gutter diff)
 
 	// Layout support
 	IsSeparator bool // Whether this is a non-selectable header/separator
 
 	// Grouped list support (app selection with instances)
-	IsGroupHeader bool   // App name header row; checkbox shows group-enabled state (read-only)
-	IsSubItem     bool   // Indented instance row under a group header
-	IsAddInstance bool   // "[+] Add instance…" action row
-	IsEditing     bool   // Inline text-input row for new instance name entry
-	IsNew         bool   // Newly added this session (not yet saved; used to allow rename)
-	IsReferenced  bool   // Has env vars / compose reference but no __ENABLED; locked from rename
-	WasAdded      bool   // Whether this item was added (present in .env) when the screen loaded (for gutter diff)
-	BaseApp       string // Base app name this row belongs to (sub-items / add-instance / editing)
+	IsGroupHeader  bool   // App name header row; checkbox shows group-enabled state (read-only)
+	IsSubItem      bool   // Indented instance row under a group header
+	IsAddInstance  bool   // "[+] Add instance…" action row
+	IsEditing      bool   // Inline text-input row for new instance name entry
+	IsNew          bool   // Newly added this session (not yet saved; used to allow rename)
+	IsReferenced   bool   // Has env vars / compose reference but no __ENABLED; locked from rename
+	WasAdded       bool   // Whether this item was added (present in .env) when the screen loaded (for gutter diff)
+	ShowEnabledGutter bool // Whether to show the Enabled (E/D) gutter column
+	BaseApp        string // Base app name this row belongs to (sub-items / add-instance / editing)
 
 	// Metadata
 	IsUserDefined bool              // Whether this is a user-defined app (for coloring)
@@ -472,56 +478,96 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 		return
 	}
 
-	// Build glyph: [+] for group headers, checkbox for instance sub-items
-	var checkbox string
-	if menuItem.IsGroupHeader {
-		checkbox = RenderThemeText("{{|KeyCap|}}[+]{{[-]}} ", descStyle)
-	} else if menuItem.IsCheckbox {
-		var cb string
-		if ctx.LineCharacters {
-			if menuItem.Checked {
-				cb = checkSelected
-			} else {
-				cb = checkUnselected
-			}
-		} else {
-			if menuItem.Checked {
-				cb = checkSelectedAscii
-			} else {
-				cb = checkUnselectedAscii
-			}
-		}
-		checkbox = tagStyle.Render(cb) + neutralStyle.Render(" ")
+	// Gutter: 2 chars on left edge.
+	// g0 = Add diff marker (+/-/R/space), g1 = Enabled diff marker (E/D/space, changes only)
+	var g0, g1 string
+	if menuItem.IsReferenced && menuItem.Checked {
+		g0 = RenderThemeText("{{|MarkerAdded|}}R{{[-]}}", neutralStyle)
+	} else if menuItem.IsReferenced {
+		g0 = RenderThemeText("{{|MarkerModified|}}r{{[-]}}", neutralStyle)
+	} else if menuItem.Checked && !menuItem.WasAdded {
+		g0 = RenderThemeText("{{|MarkerAdded|}}+{{[-]}}", neutralStyle)
+	} else if !menuItem.Checked && menuItem.WasAdded {
+		g0 = RenderThemeText("{{|MarkerDeleted|}}-{{[-]}}", neutralStyle)
+	} else {
+		g0 = neutralStyle.Render(" ")
+	}
+	if menuItem.Enabled && !menuItem.WasEnabled {
+		g1 = RenderThemeText("{{|MarkerAdded|}}E{{[-]}}", neutralStyle)
+	} else if !menuItem.Enabled && menuItem.WasEnabled {
+		g1 = RenderThemeText("{{|MarkerDeleted|}}D{{[-]}}", neutralStyle)
+	} else {
+		g1 = neutralStyle.Render(" ")
 	}
 
-	cbWidth := lipgloss.Width(GetPlainText(checkbox))
-
-	// IsSubItem: indented instance row, no description column
-	if menuItem.IsSubItem {
-		// Gutter char (1 col): R=referenced+added, r=referenced-only, +=newly-enabled, -=newly-disabled.
-		gutterChar := neutralStyle.Render(" ")
-		if menuItem.IsReferenced && menuItem.Checked {
-			gutterChar = RenderThemeText("{{|MarkerAdded|}}R{{[-]}}", neutralStyle)
-		} else if menuItem.IsReferenced {
-			gutterChar = RenderThemeText("{{|MarkerModified|}}r{{[-]}}", neutralStyle)
-		} else if menuItem.Checked && !menuItem.WasAdded {
-			gutterChar = RenderThemeText("{{|MarkerAdded|}}+{{[-]}}", neutralStyle)
-		} else if !menuItem.Checked && menuItem.WasAdded {
-			gutterChar = RenderThemeText("{{|MarkerDeleted|}}-{{[-]}}", neutralStyle)
+	// Checkboxes: each is exactly 3 chars wide so they align with " A " and " E " in the border.
+	// ASCII: [ ] or [x] = 3 chars.  Line-art: " □ " or " ▣ " = space+glyph+space = 3 chars.
+	buildCb3 := func(checked bool) string {
+		if ctx.LineCharacters {
+			var g string
+			if checked { g = checkSelected } else { g = checkUnselected }
+			return neutralStyle.Render(" ") + tagStyle.Render(g) + neutralStyle.Render(" ")
 		}
+		if checked {
+			return tagStyle.Render("[x]")
+		}
+		return tagStyle.Render("[ ]")
+	}
+
+	// Group headers never show checkboxes — just the disclosure glyph.
+	// IsSubItem and IsCheckbox rows use the full two-checkbox layout.
+	if menuItem.IsSubItem {
+		cbAdd := buildCb3(menuItem.Checked)
+		cbEnabled := buildCb3(menuItem.Enabled)
 		tagStr := RenderThemeText(menuItem.Tag, tagStyle)
-		// Use 3-space indent (gutter char occupies the 4th column) to keep checkbox aligned.
-		line := gutterChar + neutralStyle.Render("   ") + checkbox + tagStr
+		// Layout: g0+g1(2) + cbAdd(3) + 1sp + cbEnabled(3) + 1sp + tag. Prefix=10.
+		line := g0 + g1 + cbAdd + neutralStyle.Render(" ") + cbEnabled + neutralStyle.Render(" ") + tagStr
 		actualWidth := lipgloss.Width(line)
 		if actualWidth < m.Width()-2 {
 			line += neutralStyle.Render(strutil.Repeat(" ", m.Width()-2-actualWidth))
 		}
-		lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(m.Width())
+		lineStyle := lipgloss.NewStyle().Background(dialogBG).Width(m.Width())
 		fmt.Fprint(w, lineStyle.Render(line))
 		return
 	}
 
-	// IsGroupHeader: checkbox + name + description (aligned like checkboxItemDelegate)
+	// IsGroupHeader: disclosure glyph + name + description.
+	if menuItem.IsGroupHeader {
+		tag := menuItem.Tag
+		var tagStr string
+		if strings.Contains(tag, "{{") {
+			tagStr = RenderThemeText(tag, tagStyle)
+		} else {
+			firstLetter := string([]rune(tag)[0])
+			rest := string([]rune(tag)[1:])
+			tagStr = keyStyle.Render(firstLetter) + tagStyle.Render(rest)
+		}
+		var disclosureGlyph string
+		if ctx.LineCharacters {
+			disclosureGlyph = tagStyle.Render(subMenuExpanded)
+		} else {
+			disclosureGlyph = tagStyle.Render("[v]")
+		}
+		// Prefix width: g0+g1(2) + 1sp + arrowA(3) + 1sp + arrowE(3) + 1sp = 11.
+		paddingSpaces := strutil.Repeat(" ", max(0, d.maxTagLen-lipgloss.Width(GetPlainText(tag))+3))
+		prefixW := 11
+		availableWidth := m.Width() - 2 - prefixW - (d.maxTagLen + 3)
+		if availableWidth < 0 {
+			availableWidth = 0
+		}
+		descStr := RenderThemeText(menuItem.Desc, descStyle)
+		descLine := TruncateRight(descStr, availableWidth)
+		line := g0 + g1 + disclosureGlyph + neutralStyle.Render(" ") + disclosureGlyph + neutralStyle.Render(" ") + tagStr + neutralStyle.Render(paddingSpaces) + descLine
+		actualWidth := lipgloss.Width(line)
+		if actualWidth < m.Width()-2 {
+			line += neutralStyle.Render(strutil.Repeat(" ", m.Width()-2-actualWidth))
+		}
+		lineStyle := lipgloss.NewStyle().Background(dialogBG).Width(m.Width())
+		fmt.Fprint(w, lineStyle.Render(line))
+		return
+	}
+
+	// IsCheckbox simple row: g0 g1  [cb_add]  [cb_enabled]  AppName  Desc
 	tag := menuItem.Tag
 	var tagStr string
 	if strings.Contains(tag, "{{") {
@@ -531,34 +577,24 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 		rest := string([]rune(tag)[1:])
 		tagStr = keyStyle.Render(firstLetter) + tagStyle.Render(rest)
 	}
-
+	cbAdd := buildCb3(menuItem.Checked)
+	cbEnabled := buildCb3(menuItem.Enabled)
+	// Prefix: g0+g1(2) + 1sp + cbA(3) + 1sp + cbE(3) + 1sp = 11 chars. Tag at 12.
+	const rowPrefixW = 11
 	paddingSpaces := strutil.Repeat(" ", max(0, d.maxTagLen-lipgloss.Width(GetPlainText(tag))+3))
-	availableWidth := m.Width() - 2 - 1 - (cbWidth + d.maxTagLen + 3) // -1 for gutter column
+	availableWidth := m.Width() - 2 - rowPrefixW - (d.maxTagLen + 3)
 	if availableWidth < 0 {
 		availableWidth = 0
 	}
-
 	descStr := RenderThemeText(menuItem.Desc, descStyle)
 	descLine := TruncateRight(descStr, availableWidth)
-
-	// Gutter char (1 col): R=referenced+added, r=referenced-only, +=newly-enabled, -=newly-disabled.
-	gutterChar := neutralStyle.Render(" ")
-	if menuItem.IsReferenced && menuItem.Checked {
-		gutterChar = RenderThemeText("{{|MarkerAdded|}}R{{[-]}}", neutralStyle)
-	} else if menuItem.IsReferenced {
-		gutterChar = RenderThemeText("{{|MarkerModified|}}r{{[-]}}", neutralStyle)
-	} else if menuItem.Checked && !menuItem.WasAdded {
-		gutterChar = RenderThemeText("{{|MarkerAdded|}}+{{[-]}}", neutralStyle)
-	} else if !menuItem.Checked && menuItem.WasAdded {
-		gutterChar = RenderThemeText("{{|MarkerDeleted|}}-{{[-]}}", neutralStyle)
-	}
-
-	line := gutterChar + checkbox + tagStr + neutralStyle.Render(paddingSpaces) + descLine
+	// Layout: g0 g1 [cbAdd 3] [1sp] [cbEnabled 3] [1sp] tag paddingSpaces descLine
+	line := g0 + g1 + cbAdd + neutralStyle.Render(" ") + cbEnabled + neutralStyle.Render(" ") + tagStr + neutralStyle.Render(paddingSpaces) + descLine
 	actualWidth := lipgloss.Width(line)
 	if actualWidth < m.Width()-2 {
 		line += neutralStyle.Render(strutil.Repeat(" ", m.Width()-2-actualWidth))
 	}
-	lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(m.Width())
+	lineStyle := lipgloss.NewStyle().Background(dialogBG).Width(m.Width())
 	fmt.Fprint(w, lineStyle.Render(line))
 }
 

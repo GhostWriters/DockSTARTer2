@@ -404,3 +404,106 @@ func BuildScrollPercentBottomBorder(totalWidth int, scrollPct float64, focused b
 	rightPart := borderStyle.Render(strutil.Repeat(border.Bottom, rightPadCnt) + border.BottomRight)
 	return lipgloss.JoinHorizontal(lipgloss.Bottom, leftPart, leftConnector, scrollIndicator, rightConnector, rightPart)
 }
+
+// BuildAETopBorder constructs the top border for the app-selection inner list box.
+// Labels " A " and " E " use MarkerAdded style (green) and are left-positioned to align
+// above the Add and Enabled checkboxes in the row.
+//
+// Row layout:    │ g0 g1 [2sp] [cb_add 3ch] [2sp] [cb_enabled 3ch] [1sp] AppName
+// Border layout: ╭ ─── ├ A ┤├ E ┤ ─────────────────────────────────── ╮
+// 3 prefix dashes = g0(1)+g1(1)+1sp; ├ at position 4 (2nd space in row).
+// " A " at positions 5-7 = cb_add; " E " at positions 10-12 = cb_enabled.
+func BuildAETopBorder(totalWidth int, prefixDashes int, focused bool, ctx StyleContext) string {
+	var border lipgloss.Border
+	if ctx.LineCharacters {
+		if focused {
+			border = ThickRoundedBorder
+		} else {
+			border = lipgloss.RoundedBorder()
+		}
+	} else {
+		if focused {
+			border = RoundedThickAsciiBorder
+		} else {
+			border = RoundedAsciiBorder
+		}
+	}
+	borderStyle := lipgloss.NewStyle().Foreground(ctx.BorderColor).Background(ctx.Dialog.GetBackground())
+
+	// Build 3-character labeled blocks (e.g. "▸A◂" or " A ")
+	// prefixDashes handles the leading dash count from the corner.
+	buildLabel := func(char string) string {
+		var content string
+		if focused {
+			if ctx.LineCharacters {
+				content = "{{|TitleFocusIndicator|}}▸{{[-]}}{{|MarkerAdded|}}" + char + "{{[-]}}{{|TitleFocusIndicator|}}◂{{[-]}}"
+			} else {
+				content = "{{|TitleFocusIndicator|}}>{{[-]}}{{|MarkerAdded|}}" + char + "{{[-]}}{{|TitleFocusIndicator|}}<{{[-]}}"
+			}
+		} else {
+			content = " {{|MarkerAdded|}}" + char + "{{[-]}} "
+		}
+		return RenderThemeText(content, borderStyle)
+	}
+
+	aLabel := buildLabel("A")
+	eLabel := buildLabel("E")
+
+	// Total fixed = corner(1) + dashes + labelA(3) + dash(1) + labelE(3) + corner(1) = 9 + dashes
+	innerWidth := totalWidth - (9 + prefixDashes)
+	if innerWidth < 0 {
+		innerWidth = 0
+	}
+	// Layout follows '─ A - E ─' with ONE dash divider.
+	return lipgloss.JoinHorizontal(lipgloss.Top,
+		borderStyle.Render(border.TopLeft+strutil.Repeat(border.Top, prefixDashes)),
+		aLabel, borderStyle.Render(border.Top), eLabel,
+		borderStyle.Render(strutil.Repeat(border.Top, innerWidth)+border.TopRight),
+	)
+}
+
+// BuildAEBottomBorder constructs the bottom border matching BuildAETopBorder.
+func BuildAEBottomBorder(totalWidth int, prefixDashes int, focused bool, ctx StyleContext) string {
+	var border lipgloss.Border
+	if ctx.LineCharacters {
+		if focused {
+			border = ThickRoundedBorder
+		} else {
+			border = lipgloss.RoundedBorder()
+		}
+	} else {
+		if focused {
+			border = RoundedThickAsciiBorder
+		} else {
+			border = RoundedAsciiBorder
+		}
+	}
+	borderStyle := lipgloss.NewStyle().Foreground(ctx.Border2Color).Background(ctx.Dialog.GetBackground())
+
+	buildLabel := func(char string) string {
+		var content string
+		if focused {
+			if ctx.LineCharacters {
+				content = "{{|TitleFocusIndicator|}}▸{{[-]}}{{|MarkerAdded|}}" + char + "{{[-]}}{{|TitleFocusIndicator|}}◂{{[-]}}"
+			} else {
+				content = "{{|TitleFocusIndicator|}}>{{[-]}}{{|MarkerAdded|}}" + char + "{{[-]}}{{|TitleFocusIndicator|}}<{{[-]}}"
+			}
+		} else {
+			content = " {{|MarkerAdded|}}" + char + "{{[-]}} "
+		}
+		return RenderThemeText(content, borderStyle)
+	}
+
+	aLabel := buildLabel("A")
+	eLabel := buildLabel("E")
+
+	innerWidth := totalWidth - (9 + prefixDashes)
+	if innerWidth < 0 {
+		innerWidth = 0
+	}
+	return lipgloss.JoinHorizontal(lipgloss.Bottom,
+		borderStyle.Render(border.BottomLeft+strutil.Repeat(border.Bottom, prefixDashes)),
+		aLabel, borderStyle.Render(border.Bottom), eLabel,
+		borderStyle.Render(strutil.Repeat(border.Bottom, innerWidth)+border.BottomRight),
+	)
+}
