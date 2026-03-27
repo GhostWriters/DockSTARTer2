@@ -482,9 +482,12 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 		}
 	}
 
-	// Instance Grid: User requested 1stndndndndndndndndndndndndnd-dash prefix before " A ". 
-	// Border corner @ 10 (9 space prefix). Dashboard A @ 12-14 (Center 13).
-	subListWidth := 11 + subGroupTagMaxW
+	// Instance Grid: Indent 10, Dash 1, Left Pad 1, Right Pad 1.
+	// Total width: 1(│) + 1(sp_l) + 10(prefix) + tag + 1(sp_r) + 1(│).
+	// Total width: 2 + 10 + tag + 1 = 13 + tag. No, prefix is already 10.
+	// Prefix = 1(sp_l) + 3(cbA) + 1(sp) + 3(cbE) + 1(sp) = 10.
+	// Total width: 1(│l) + 10(prefix) + maxTag + 1(sp_r) + 1(│r) = 13 + maxTag.
+	subListWidth := 12 + subGroupTagMaxW
 	if subListWidth > maxWidth {
 		subListWidth = maxWidth
 	}
@@ -494,9 +497,9 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 	var resH []int
 	var resM []int
 
-	// 1. Build Top Border with 1 prefix dash.
+	// 1. Build Top Border with 1 dash.
 	topBorder := BuildAETopBorder(subListWidth, 1, subFocused, ctx)
-	resLines = append(resLines, neutralStyle.Render(strutil.Repeat(" ", 9))+topBorder)
+	resLines = append(resLines, neutralStyle.Render(strutil.Repeat(" ", 10))+topBorder)
 	resH = append(resH, 1)
 	resM = append(resM, -1)
 
@@ -553,9 +556,9 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 			tagStr = kStyle.Render(string(item.Tag[0])) + tStyle.Render(item.Tag[1:])
 		}
 
-		// sub-list row: border │ + sp + cbA(3ch) + sp + cbE(3ch) + sp + tag
-		// With prefixDashes=1: corner+dash+A(3ch)+dash+E(3ch)...
-		// Content: vBorderChar=col1, sp=col2, cbA=cols3-5, sp=col6, cbE=cols7-9. A center=4, E center=8. ✅
+		// sub-list row: border │ + 1sp + cbA(3ch) + sp + cbE(3ch) + sp + tag.
+		// Indent(10) + │(11) + Sp(12) + [Sp(13)+Glyph(14)+Sp(15)]. Center 14.
+		// Border with 1 dash: Indent(10) + Cor(11) + Dash(12) + [13,14,15]. Center 14. ✅
 		var checkboxA3, checkboxE3 string
 		if ctx.LineCharacters {
 			checkboxA3 = neutralStyle.Render(" ") + tStyle.Render(checkboxA) + neutralStyle.Render(" ")
@@ -575,16 +578,16 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 		rowContent := vStyle.Render(vBorderChar) + neutralStyle.Render(" ") + checkboxA3 + neutralStyle.Render(" ") + checkboxE3 + neutralStyle.Render(" ") + tagStr
 		rowWidth := subListWidth - 1
 		pContent := rowContent + neutralStyle.Render(strutil.Repeat(" ", max(0, rowWidth-lipgloss.Width(GetPlainText(rowContent)))))
-		line := g0 + g1 + neutralStyle.Render(strutil.Repeat(" ", 7)) + pContent + vStyle.Render(vBorderChar)
+		line := g0 + g1 + neutralStyle.Render(strutil.Repeat(" ", 8)) + pContent + vStyle.Render(vBorderChar)
 
 		resLines = append(resLines, line+console.CodeReset)
 		resH = append(resH, 1)
 		resM = append(resM, visibleIdx)
 	}
 
-	// 3. Build Bottom Border with 1 prefix dash.
+	// 3. Build Bottom Border with 1 dash.
 	bottomBorder := BuildAEBottomBorder(subListWidth, 1, subFocused, ctx)
-	resLines = append(resLines, neutralStyle.Render(strutil.Repeat(" ", 9))+bottomBorder)
+	resLines = append(resLines, neutralStyle.Render(strutil.Repeat(" ", 10))+bottomBorder)
 	resH = append(resH, 1)
 	resM = append(resM, -1)
 
