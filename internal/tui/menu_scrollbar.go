@@ -436,12 +436,12 @@ func BuildAETopBorder(totalWidth int, prefixDashes int, focused bool, ctx StyleC
 		var content string
 		if focused {
 			if ctx.LineCharacters {
-				content = "{{|TitleFocusIndicator|}}▸{{[-]}}{{|MarkerAdded|}}" + char + "{{[-]}}{{|TitleFocusIndicator|}}◂{{[-]}}"
+				content = "{{|TitleFocusIndicator|}}▸{{[-]}}{{|TitleCheckboxFocused|}}" + char + "{{[-]}}{{|TitleFocusIndicator|}}◂{{[-]}}"
 			} else {
-				content = "{{|TitleFocusIndicator|}}>{{[-]}}{{|MarkerAdded|}}" + char + "{{[-]}}{{|TitleFocusIndicator|}}<{{[-]}}"
+				content = "{{|TitleFocusIndicator|}}>{{[-]}}{{|TitleCheckboxFocused|}}" + char + "{{[-]}}{{|TitleFocusIndicator|}}<{{[-]}}"
 			}
 		} else {
-			content = " {{|MarkerAdded|}}" + char + "{{[-]}} "
+			content = " {{|TitleCheckbox|}}" + char + "{{[-]}} "
 		}
 		return RenderThemeText(content, borderStyle)
 	}
@@ -484,12 +484,12 @@ func BuildAEBottomBorder(totalWidth int, prefixDashes int, focused bool, ctx Sty
 		var content string
 		if focused {
 			if ctx.LineCharacters {
-				content = "{{|TitleFocusIndicator|}}▸{{[-]}}{{|MarkerAdded|}}" + char + "{{[-]}}{{|TitleFocusIndicator|}}◂{{[-]}}"
+				content = "{{|TitleFocusIndicator|}}▸{{[-]}}{{|TitleCheckboxFocused|}}" + char + "{{[-]}}{{|TitleFocusIndicator|}}◂{{[-]}}"
 			} else {
-				content = "{{|TitleFocusIndicator|}}>{{[-]}}{{|MarkerAdded|}}" + char + "{{[-]}}{{|TitleFocusIndicator|}}<{{[-]}}"
+				content = "{{|TitleFocusIndicator|}}>{{[-]}}{{|TitleCheckboxFocused|}}" + char + "{{[-]}}{{|TitleFocusIndicator|}}<{{[-]}}"
 			}
 		} else {
-			content = " {{|MarkerAdded|}}" + char + "{{[-]}} "
+			content = " {{|TitleCheckboxFocused|}}" + char + "{{[-]}} "
 		}
 		return RenderThemeText(content, borderStyle)
 	}

@@ -51,6 +51,8 @@ TitleSuccess = "{{|Title::green|}}"
 TitleWarning = "{{|Title::yellow|}}"
 TitleQuestion = "{{|Title::yellow|}}"
 LogPanel = "{{|Title|}}"
+TitleCheckbox = ""
+TitleCheckboxFocused = "{{|MarkerAdded|}}"
 
 TitleUnfocusedIndicator = "{{[red::-B]}}"
 TitleFocusIndicator = "{{[red::-B]}}"
