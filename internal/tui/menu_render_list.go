@@ -273,13 +273,14 @@ func (m *MenuModel) renderVariableHeightList() string {
 			firstLine = cbAdd3 + neutralStyle.Render(" ") + cbEnabled3 + neutralStyle.Render(" ") + tagStr + neutralStyle.Render(paddingSpaces) + lines[0]
 			prefixWidth = 10 // 2(gutter) + 3(cbA) + 1(sp) + 3(cbE) + 1(sp) = 10
 		} else if item.IsGroupHeader {
-			// Same 3-char format for arrows to align under A and E
+			// User requested: only show arrow in the E-position (Enabled) when expanded.
+			// arrowA (Add position) becomes blank 3-char spaces.
 			var arrowA, arrowE string
 			if ctx.LineCharacters {
-				arrowA = neutralStyle.Render(" ") + tStyle.Render(subMenuExpanded) + neutralStyle.Render(" ")
+				arrowA = neutralStyle.Render("   ")
 				arrowE = neutralStyle.Render(" ") + tStyle.Render(subMenuExpanded) + neutralStyle.Render(" ")
 			} else {
-				arrowA = tStyle.Render("[v]")
+				arrowA = neutralStyle.Render("   ")
 				arrowE = tStyle.Render("[v]")
 			}
 			firstLine = arrowA + neutralStyle.Render(" ") + arrowE + neutralStyle.Render(" ") + tagStr + neutralStyle.Render(paddingSpaces) + lines[0]
