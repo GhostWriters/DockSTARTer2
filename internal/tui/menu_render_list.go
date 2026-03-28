@@ -645,7 +645,8 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 	resH = append(resH, 1)
 	resM = append(resM, startVisibleIndex|vIdxBorderFlag) // Flag as border
 
-	vStyle := lipgloss.NewStyle().Foreground(ctx.BorderColor).Background(dialogBG)
+	vStyleLight := lipgloss.NewStyle().Foreground(ctx.BorderColor).Background(dialogBG)
+	vStyleDark := lipgloss.NewStyle().Foreground(ctx.Border2Color).Background(dialogBG)
 	var border lipgloss.Border
 	if ctx.LineCharacters {
 		if subFocused {
@@ -740,10 +741,10 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 			checkboxE3 = neutralStyle.Render("[") + cbStyleE.Render(string(ceA[1])) + neutralStyle.Render("]")
 		}
 
-		rowContent := vStyle.Render(vBorderChar) + neutralStyle.Render(" ") + checkboxA3 + neutralStyle.Render(" ") + checkboxE3 + neutralStyle.Render(" ") + tagStr
+		rowContent := vStyleLight.Render(vBorderChar) + neutralStyle.Render(" ") + checkboxA3 + neutralStyle.Render(" ") + checkboxE3 + neutralStyle.Render(" ") + tagStr
 		rowWidth := subListWidth - 1
 		pContent := rowContent + neutralStyle.Render(strutil.Repeat(" ", max(0, rowWidth-lipgloss.Width(GetPlainText(rowContent)))))
-		line := g0 + g1 + neutralStyle.Render(strutil.Repeat(" ", 8)) + pContent + vStyle.Render(vBorderChar)
+		line := g0 + g1 + neutralStyle.Render(strutil.Repeat(" ", 8)) + pContent + vStyleDark.Render(vBorderChar)
 
 		resLines = append(resLines, line+console.CodeReset)
 		resH = append(resH, 1)

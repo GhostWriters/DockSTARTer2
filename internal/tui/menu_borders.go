@@ -28,7 +28,6 @@ func BuildAETopBorder(totalWidth int, prefixDashes int, focused bool, activeCol 
 		}
 	}
 	borderStyle := lipgloss.NewStyle().Foreground(ctx.BorderColor).Background(ctx.Dialog.GetBackground())
-	borderStyleDark := lipgloss.NewStyle().Foreground(ctx.Border2Color).Background(ctx.Dialog.GetBackground())
 
 	// Build 3-character labeled blocks (e.g. "▸A◂" or " A ")
 	buildLabel := func(char string, targetCol CheckboxColumn) string {
@@ -59,8 +58,7 @@ func BuildAETopBorder(totalWidth int, prefixDashes int, focused bool, activeCol 
 	return lipgloss.JoinHorizontal(lipgloss.Top,
 		borderStyle.Render(border.TopLeft+strutil.Repeat(border.Top, prefixDashes)),
 		aLabel, borderStyle.Render(border.Top), eLabel,
-		borderStyle.Render(strutil.Repeat(border.Top, innerWidth)),
-		borderStyleDark.Render(border.TopRight))
+		borderStyle.Render(strutil.Repeat(border.Top, innerWidth)+border.TopRight))
 }
 
 // BuildAEBottomBorder constructs the AE-compatible bottom border
