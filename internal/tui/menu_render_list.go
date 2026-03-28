@@ -564,7 +564,7 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 
 		if item.Enabled && !item.WasEnabled {
 			g1 = RenderThemeText("{{|MarkerAdded|}}E{{[-]}}", neutralStyle)
-		} else if !item.Enabled && item.WasEnabled {
+		} else if !item.Enabled && item.WasEnabled && !(!item.Checked && item.WasAdded) {
 			g1 = RenderThemeText("{{|MarkerDeleted|}}D{{[-]}}", neutralStyle)
 		} else {
 			g1 = neutralStyle.Render(" ")

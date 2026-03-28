@@ -1205,7 +1205,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 					if item.IsSubItem || item.IsAddInstance || item.IsEditing {
 						addCols = [2]int{15, 18}
 						enableCols = [2]int{19, 22}
-						nameStart = 24
+						nameStart = 23
 					} else {
 						addCols = [2]int{5, 8}
 						enableCols = [2]int{9, 12}
