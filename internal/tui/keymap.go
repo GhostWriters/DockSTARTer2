@@ -88,6 +88,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 		{
 			key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter/left click", "activate button")),
 			key.NewBinding(key.WithKeys("space"), key.WithHelp("space/middle click", "toggle item")),
+			key.NewBinding(key.WithKeys("f2"), key.WithHelp("f2", "edit/rename item")),
 			k.MouseRight,
 			k.Esc,
 			k.ToggleLog,

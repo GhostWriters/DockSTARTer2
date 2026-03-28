@@ -687,8 +687,9 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 type MenuModel struct {
 	id       string // Unique identifier for selection persistence
 	title    string // Menu title
-	subtitle     string // Optional subtitle/description shown on-screen
-	helpPageText   string // Optional description shown only in the help dialog (overrides subtitle)
+	subtitle         string // Optional subtitle/description shown on-screen
+	helpPageTitle    string // Optional title for the description box in the help dialog
+	helpPageText     string // Optional description shown only in the help dialog (overrides subtitle)
 	helpLegend     string // Optional legend shown in help dialog with title "Legend" (overrides helpPageText)
 	helpItemPrefix string // Optional prefix for item titles in help dialog, e.g. "App", "Option", "Theme"
 	items    []MenuItem
@@ -911,6 +912,9 @@ func (m *MenuModel) SetTitle(title string) { m.title = title }
 
 // SetHelpPageText sets a description shown only in the help dialog, overriding the subtitle there.
 func (m *MenuModel) SetHelpPageText(text string) { m.helpPageText = text }
+
+// SetHelpPageTitle sets a title for the description box shown in the help dialog.
+func (m *MenuModel) SetHelpPageTitle(title string) { m.helpPageTitle = title }
 
 // SetHelpLegend sets a legend shown in the help dialog with the title "Legend".
 // When set, it takes precedence over helpPageText for both F1 and context-menu Help.
@@ -1246,14 +1250,16 @@ func (m *MenuModel) helpContextForIdx(idx, contentWidth int) HelpContext {
 		itemTitle = m.helpItemPrefix + ": " + itemTitle
 	}
 
-	pageTitle := "Description"
+	pageTitle := m.helpPageTitle
 	pageText := m.helpPageText
 	if pageText == "" {
 		pageText = m.subtitle
 	}
 	if m.helpLegend != "" {
 		pageText = "" // legend takes precedence; suppress the description
-		pageTitle = ""
+		if pageTitle == "Description" { // Fallback cleanup if previously relied on
+			pageTitle = ""
+		}
 	}
 	return HelpContext{
 		ScreenName: m.title,

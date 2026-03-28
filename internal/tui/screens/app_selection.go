@@ -42,15 +42,7 @@ func getAppSelectionLegend() string {
 	}
 	line2 := strings.Join(parts2, " | ")
 
-	// Line 3: Shortcuts
-	parts3 := []string{
-		"| {{|TitleCheckboxFocused|}}F2{{[-]}} Rename Instance",
-		"{{|TitleCheckboxFocused|}}Ctrl+Left/Right{{[-]}} Switch Column",
-		"{{|TitleCheckboxFocused|}}Right-Click{{[-]}} Options Menu |",
-	}
-	line3 := strings.Join(parts3, " | ")
-
-	return line1 + "\n" + line2 + "\n" + line3
+	return line2 + "\n" + line1
 }
 
 // AppSelectionScreen wraps MenuModel to provide a custom Legend help panel.
