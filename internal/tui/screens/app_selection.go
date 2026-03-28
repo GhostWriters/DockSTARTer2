@@ -42,7 +42,15 @@ func getAppSelectionLegend() string {
 	}
 	line2 := strings.Join(parts2, " | ")
 
-	return line1 + "\n" + line2
+	// Line 3: Shortcuts
+	parts3 := []string{
+		"| {{|TitleCheckboxFocused|}}F2{{[-]}} Rename Instance",
+		"{{|TitleCheckboxFocused|}}Ctrl+Left/Right{{[-]}} Switch Column",
+		"{{|TitleCheckboxFocused|}}Right-Click{{[-]}} Options Menu |",
+	}
+	line3 := strings.Join(parts3, " | ")
+
+	return line1 + "\n" + line2 + "\n" + line3
 }
 
 // AppSelectionScreen wraps MenuModel to provide a custom Legend help panel.
@@ -327,8 +335,14 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 			}
 			item := items[idx]
 
-			// Case: Right click always shows context menu
+			// Case: Right click always focuses the item, column, and shows context menu
 			if hitMsg.Button == tea.MouseRight {
+				m.Select(idx)
+				if suffix == "add" {
+					m.SetActiveColumn(tui.ColAdd)
+				} else if suffix == "enable" {
+					m.SetActiveColumn(tui.ColEnable)
+				}
 				return m.ShowContextMenu(idx, hitMsg.X, hitMsg.Y), true
 			}
 

@@ -94,12 +94,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if idx, ok := ParseMenuItemIndex(id, m.id); ok {
-			// Right click on a menu item triggers its context menu WITHOUT moving selection
-			if msg.Button == tea.MouseRight {
-				return m, m.ShowContextMenu(idx, msg.X, msg.Y)
-			}
-
-			// Left click moves the selection and executes
+			// Move selection and column focus for any click
 			m.list.Select(idx)
 			m.cursor = idx
 			menuSelectedIndices[m.id] = idx
@@ -110,6 +105,11 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.activeColumn = ColAdd
 			} else if suffix == "enable" {
 				m.activeColumn = ColEnable
+			}
+
+			// Right click on a menu item triggers its context menu
+			if msg.Button == tea.MouseRight {
+				return m, m.ShowContextMenu(idx, msg.X, msg.Y)
 			}
 
 			if idx >= 0 && idx < len(m.items) {
