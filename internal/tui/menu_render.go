@@ -93,8 +93,12 @@ func (m *MenuModel) ViewString() string {
 	totalWidth := m.list.Width() + ScrollbarGutterWidth + 2
 	borderedList = strings.TrimSuffix(borderedList, "\n")
 
+	// AE borders only show focus markers when a top-level app is selected.
+	// When navigating instances, the border markers are "unmarked" (unfocused).
+	showAEFocus := m.focused && !m.SelectedItem().IsSubItem && !m.SelectedItem().IsAddInstance && !m.SelectedItem().IsEditing
+
 	if m.groupedMode {
-		borderedList = borderedList + "\n" + BuildAEBottomBorder(totalWidth, 2, m.focused, ctx)
+		borderedList = borderedList + "\n" + BuildAEBottomBorder(totalWidth, 2, showAEFocus, m.activeColumn, ctx)
 	} else if m.sbInfo.Needed {
 		borderedList = borderedList + "\n" + BuildScrollPercentBottomBorder(totalWidth, m.listScrollPercent(), m.focused, ctx)
 	} else {
@@ -102,9 +106,10 @@ func (m *MenuModel) ViewString() string {
 	}
 
 	// prefixDashes=2: corner(1)+dash(2)+dash(3)+A(4,5,6) center=5 = g0(1)+g1(2)+" ▣ "(3,4,5) center=5. MATCH.
+	// AE top border (with individual column focus)
 	if m.groupedMode {
 		if nl := strings.Index(borderedList, "\n"); nl >= 0 {
-			borderedList = BuildAETopBorder(totalWidth, 2, m.focused, ctx) + borderedList[nl:]
+			borderedList = BuildAETopBorder(totalWidth, 2, showAEFocus, m.activeColumn, ctx) + borderedList[nl:]
 		}
 	}
 

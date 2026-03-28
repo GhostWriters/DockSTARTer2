@@ -89,11 +89,20 @@ func (m *MenuModel) renderVariableHeightList() string {
 	for i := 0; i < len(visibleItems); i++ {
 		item := visibleItems[i]
 		isSelected := i == selectedVisibleIndex && m.IsActive()
+		
+		// Highlight the parent header if a child item is selected
+		isParentOfSelected := false
+		if item.IsGroupHeader && selectedVisibleIndex != -1 {
+			selItem := visibleItems[selectedVisibleIndex]
+			if (selItem.IsSubItem || selItem.IsAddInstance || selItem.IsEditing) && selItem.BaseApp == item.BaseApp {
+				isParentOfSelected = true
+			}
+		}
 
 		tStyle := tagStyleBase
 		kStyle := keyStyleBase
 		dStyle := itemStyleBase
-		if isSelected {
+		if isSelected || isParentOfSelected {
 			tStyle = tagStyleSel
 			kStyle = keyStyleSel
 			dStyle = itemStyleSel
@@ -180,28 +189,45 @@ func (m *MenuModel) renderVariableHeightList() string {
 
 		var cbAdd3, cbEnabled3 string
 		if item.IsCheckbox && !item.IsGroupHeader {
+			ca, ce := checkUnselected, checkUnselected
+			if item.Checked {
+				ca = checkSelected
+			}
+			if item.Enabled {
+				ce = checkSelected
+			}
+
+			cbAStyle := tagStyleBase
+			cbEStyle := tagStyleBase
+			if isSelected {
+				if m.activeColumn == ColAdd {
+					cbAStyle = tagStyleSel
+				} else {
+					cbEStyle = tagStyleSel
+				}
+			}
+
 			if ctx.LineCharacters {
 				// Line-art glyphs are 1-char wide; pad to 3 with spaces: " ▣ " to match " A " in border
-				ca, ce := checkUnselected, checkUnselected
-				if item.Checked {
-					ca = checkSelected
-				}
-				if item.Enabled {
-					ce = checkSelected
-				}
-				cbAdd3 = neutralStyle.Render(" ") + tStyle.Render(ca) + neutralStyle.Render(" ")
-				cbEnabled3 = neutralStyle.Render(" ") + tStyle.Render(ce) + neutralStyle.Render(" ")
+				bgA := lipgloss.NewStyle().Background(cbAStyle.GetBackground())
+				cbAdd3 = bgA.Render(" ") + cbAStyle.Render(ca) + bgA.Render(" ")
+
+				bgE := lipgloss.NewStyle().Background(cbEStyle.GetBackground())
+				cbEnabled3 = bgE.Render(" ") + cbEStyle.Render(ce) + bgE.Render(" ")
 			} else {
 				// ASCII: "[ ]" and "[x]" are already 3 chars wide — no extra padding needed
-				ca, ce := checkUnselectedAscii[:3], checkUnselectedAscii[:3]
 				if item.Checked {
 					ca = checkSelectedAscii[:3]
+				} else {
+					ca = checkUnselectedAscii[:3]
 				}
 				if item.Enabled {
 					ce = checkSelectedAscii[:3]
+				} else {
+					ce = checkUnselectedAscii[:3]
 				}
-				cbAdd3 = tStyle.Render(ca)
-				cbEnabled3 = tStyle.Render(ce)
+				cbAdd3 = cbAStyle.Render(ca)
+				cbEnabled3 = cbEStyle.Render(ce)
 			}
 		}
 
@@ -249,10 +275,15 @@ func (m *MenuModel) renderVariableHeightList() string {
 		}
 
 		if !item.IsGroupHeader {
-			if item.Enabled && !item.WasEnabled {
-				g1 = RenderThemeText("{{|MarkerAdded|}}E{{[-]}}", neutralStyle)
-			} else if !item.Enabled && item.WasEnabled {
-				g1 = RenderThemeText("{{|MarkerDeleted|}}D{{[-]}}", neutralStyle)
+			isRemoving := !item.Checked && item.WasAdded
+			if !isRemoving {
+				if item.Enabled && !item.WasEnabled {
+					g1 = RenderThemeText("{{|MarkerAdded|}}E{{[-]}}", neutralStyle)
+				} else if !item.Enabled && item.WasEnabled {
+					g1 = RenderThemeText("{{|MarkerDeleted|}}D{{[-]}}", neutralStyle)
+				} else {
+					g1 = neutralStyle.Render(" ")
+				}
 			} else {
 				g1 = neutralStyle.Render(" ")
 			}
@@ -499,7 +530,7 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 	var resM []int
 
 	// 1. Build Top Border with 1 dash.
-	topBorder := BuildAETopBorder(subListWidth, 1, subFocused, ctx)
+	topBorder := BuildAETopBorder(subListWidth, 1, subFocused, m.activeColumn, ctx)
 	resLines = append(resLines, neutralStyle.Render(strutil.Repeat(" ", 10))+topBorder)
 	resH = append(resH, 1)
 	resM = append(resM, -1)
@@ -543,39 +574,49 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 			g1 = neutralStyle.Render(" ")
 		}
 
-		checkboxA := checkUnselected
-		if item.Checked {
-			checkboxA = checkSelected
-		}
-		checkboxE := checkUnselected
-		if item.Enabled {
-			checkboxE = checkSelected
-		}
-
 		tagStr := ""
 		if len(item.Tag) > 0 {
 			tagStr = kStyle.Render(string(item.Tag[0])) + tStyle.Render(item.Tag[1:])
 		}
 
-		// sub-list row: border │ + 1sp + cbA(3ch) + sp + cbE(3ch) + sp + tag.
-		// Indent(10) + │(11) + Sp(12) + [Sp(13)+Glyph(14)+Sp(15)]. Center 14.
-		// Border with 1 dash: Indent(10) + Cor(11) + Dash(12) + [13,14,15]. Center 14. ✅
+		// Choose checkbox styles individually
+		cbStyleA := tStyle
+		cbStyleE := tStyle
+		if isSelected {
+			if subFocused {
+				if m.activeColumn == ColAdd {
+					cbStyleA = tagStyleSel
+					cbStyleE = tagStyleBase
+				} else {
+					cbStyleE = tagStyleSel
+					cbStyleA = tagStyleBase
+				}
+			} else {
+				// Sub-list not focused: use neutral style for both
+				cbStyleA = tagStyleBase
+				cbStyleE = tagStyleBase
+			}
+		}
+
 		var checkboxA3, checkboxE3 string
 		if ctx.LineCharacters {
-			checkboxA3 = neutralStyle.Render(" ") + tStyle.Render(checkboxA) + neutralStyle.Render(" ")
-			checkboxE3 = neutralStyle.Render(" ") + tStyle.Render(checkboxE) + neutralStyle.Render(" ")
+			cA, cE := checkUnselected, checkUnselected
+			if item.Checked { cA = checkSelected }
+			if item.Enabled { cE = checkSelected }
+			
+			bgA := lipgloss.NewStyle().Background(cbStyleA.GetBackground())
+			checkboxA3 = bgA.Render(" ") + cbStyleA.Render(cA) + bgA.Render(" ")
+			
+			bgE := lipgloss.NewStyle().Background(cbStyleE.GetBackground())
+			checkboxE3 = bgE.Render(" ") + cbStyleE.Render(cE) + bgE.Render(" ")
 		} else {
-			caAscii := checkUnselectedAscii[:3]
-			ceAscii := checkUnselectedAscii[:3]
-			if item.Checked {
-				caAscii = checkSelectedAscii[:3]
-			}
-			if item.Enabled {
-				ceAscii = checkSelectedAscii[:3]
-			}
-			checkboxA3 = tStyle.Render(caAscii)
-			checkboxE3 = tStyle.Render(ceAscii)
+			caA, ceA := "[ ]", "[ ]"
+			if item.Checked { caA = "[x]" }
+			if item.Enabled { ceA = "[x]" }
+			checkboxA3 = cbStyleA.Render(caA)
+			checkboxE3 = cbStyleE.Render(ceA)
 		}
+
 		rowContent := vStyle.Render(vBorderChar) + neutralStyle.Render(" ") + checkboxA3 + neutralStyle.Render(" ") + checkboxE3 + neutralStyle.Render(" ") + tagStr
 		rowWidth := subListWidth - 1
 		pContent := rowContent + neutralStyle.Render(strutil.Repeat(" ", max(0, rowWidth-lipgloss.Width(GetPlainText(rowContent)))))
@@ -587,7 +628,7 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 	}
 
 	// 3. Build Bottom Border with 1 dash.
-	bottomBorder := BuildAEBottomBorder(subListWidth, 1, subFocused, ctx)
+	bottomBorder := BuildAEBottomBorder(subListWidth, 1, subFocused, m.activeColumn, ctx)
 	resLines = append(resLines, neutralStyle.Render(strutil.Repeat(" ", 10))+bottomBorder)
 	resH = append(resH, 1)
 	resM = append(resM, -1)

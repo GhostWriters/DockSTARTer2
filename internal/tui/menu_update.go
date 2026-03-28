@@ -80,7 +80,20 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Handle specific item clicks
-		if idx, ok := ParseMenuItemIndex(msg.ID, m.id); ok {
+		id := msg.ID
+		suffix := ""
+		if strings.HasSuffix(id, "-add") {
+			id = strings.TrimSuffix(id, "-add")
+			suffix = "add"
+		} else if strings.HasSuffix(id, "-enable") {
+			id = strings.TrimSuffix(id, "-enable")
+			suffix = "enable"
+		} else if strings.HasSuffix(id, "-expand") {
+			id = strings.TrimSuffix(id, "-expand")
+			suffix = "expand"
+		}
+
+		if idx, ok := ParseMenuItemIndex(id, m.id); ok {
 			// Right click on a menu item triggers its context menu WITHOUT moving selection
 			if msg.Button == tea.MouseRight {
 				return m, m.showContextMenu(idx, msg.X, msg.Y)
@@ -92,10 +105,22 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			menuSelectedIndices[m.id] = idx
 			m.focusedItem = FocusList
 
+			// Handle column focus based on click region
+			if suffix == "add" {
+				m.activeColumn = ColAdd
+			} else if suffix == "enable" {
+				m.activeColumn = ColEnable
+			}
+
 			// For checkboxes/radio buttons, clicking toggles (Space action)
 			// For regular items, clicking executes (Enter action)
 			if idx >= 0 && idx < len(m.items) {
 				item := m.items[idx]
+				if suffix == "expand" && item.IsGroupHeader {
+					// Expand/Collapse only
+					return m, item.Action
+				}
+
 				if item.IsCheckbox || item.IsRadioButton || item.Selectable {
 					return m.handleSpace()
 				}
@@ -283,12 +308,35 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Right: move to next button (wraps within button row)
 		case key.Matches(keyMsg, Keys.Right):
+			if m.focusedItem == FocusList && (m.groupedMode || m.checkboxMode) {
+				m.activeColumn = ColEnable
+				return m, nil
+			}
 			m.focusedItem = m.nextButtonFocus()
+			m.updateDelegate()
 			return m, nil
 
 		// Left: move to prev button (wraps within button row)
 		case key.Matches(keyMsg, Keys.Left):
+			if m.focusedItem == FocusList && (m.groupedMode || m.checkboxMode) {
+				m.activeColumn = ColAdd
+				return m, nil
+			}
 			m.focusedItem = m.prevButtonFocus()
+			return m, nil
+
+		// Ctrl+Right / Alt+Right: column navigation
+		case key.Matches(keyMsg, Keys.EnvNextTab):
+			m.activeColumn = ColEnable
+			m.focusedItem = FocusList
+			m.updateDelegate()
+			return m, nil
+
+		// Ctrl+Left / Alt+Left: column navigation
+		case key.Matches(keyMsg, Keys.EnvPrevTab):
+			m.activeColumn = ColAdd
+			m.focusedItem = FocusList
+			m.updateDelegate()
 			return m, nil
 
 		// Enter: select/confirm current focused element
@@ -410,16 +458,21 @@ func (m *MenuModel) handleSpace() (tea.Model, tea.Cmd) {
 	selectedItem := m.list.SelectedItem()
 	if item, ok := selectedItem.(MenuItem); ok {
 		if (item.IsCheckbox || item.IsRadioButton) && item.Selectable {
-			if item.IsRadioButton {
-				item.Checked = true
+			if m.groupedMode && m.activeColumn == ColEnable {
+				item.Enabled = !item.Enabled
 			} else {
-				item.Checked = !item.Checked
+				if item.IsRadioButton {
+					item.Checked = true
+				} else {
+					item.Checked = !item.Checked
+				}
+				item.Selected = item.Checked
 			}
-			item.Selected = item.Checked
 			// Update the item in our internal list too so state persists
 			idx := m.list.Index()
 			if idx >= 0 && idx < len(m.items) {
 				m.items[idx].Checked = item.Checked
+				m.items[idx].Enabled = item.Enabled
 				m.items[idx].Selected = item.Selected
 				// Update list.Model internal items to reflect changes immediately
 				m.list.SetItem(idx, item)
@@ -433,14 +486,18 @@ func (m *MenuModel) handleSpace() (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Space always acts on the current list item
+	// Space acts on the current list item
 	selectedItem = m.list.SelectedItem()
 	if item, ok := selectedItem.(MenuItem); ok {
 		if item.SpaceAction != nil {
 			return m, item.SpaceAction
 		}
 		// Navigation items: Space falls through to Enter (executes the focused button action)
-		if item.Action != nil {
+		// But for group headers, only fall through if we aren't specifically toggling a column.
+		if item.Action != nil && !item.IsCheckbox && !item.IsRadioButton {
+			if item.IsGroupHeader && (m.activeColumn == ColAdd || m.activeColumn == ColEnable) {
+				return m, nil
+			}
 			return m.handleEnter()
 		}
 	}

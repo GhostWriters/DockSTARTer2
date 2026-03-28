@@ -378,6 +378,7 @@ type groupedItemDelegate struct {
 	menuID    string
 	maxTagLen int // max tag width of header rows only
 	focused   bool
+	activeCol CheckboxColumn
 }
 
 func (d groupedItemDelegate) Height() int                             { return 1 }
@@ -393,6 +394,18 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 	ctx := GetActiveContext()
 	dialogBG := ctx.Dialog.GetBackground()
 	isSelected := index == m.Index()
+
+	// Highlight the parent header if a child item is selected
+	isParentOfSelected := false
+	if menuItem.IsGroupHeader {
+		if selItemRaw := m.SelectedItem(); selItemRaw != nil {
+			if selItem, ok := selItemRaw.(MenuItem); ok {
+				if (selItem.IsSubItem || selItem.IsAddInstance || selItem.IsEditing) && selItem.BaseApp == menuItem.BaseApp {
+					isParentOfSelected = true
+				}
+			}
+		}
+	}
 
 	// Separator rows (letter headers and blank spacers)
 	if menuItem.IsSeparator {
@@ -411,13 +424,13 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 	tagStyle := theme.ThemeSemanticStyle("{{|Tag|}}")
 	itemStyle := theme.ThemeSemanticStyle("{{|Item|}}")
 	keyStyle := theme.ThemeSemanticStyle("{{|TagKey|}}")
-	if isSelected {
+	if isSelected || isParentOfSelected {
 		tagStyle = theme.ThemeSemanticStyle("{{|TagSelected|}}")
 		itemStyle = theme.ThemeSemanticStyle("{{|ItemSelected|}}")
 		keyStyle = theme.ThemeSemanticStyle("{{|TagKeySelected|}}")
 	}
 	descStyle := lipgloss.NewStyle().Background(dialogBG)
-	if isSelected {
+	if isSelected || isParentOfSelected {
 		descStyle = itemStyle
 	}
 
@@ -500,27 +513,46 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 		g1 = neutralStyle.Render(" ")
 	}
 
-	// Checkboxes: each is exactly 3 chars wide so they align with " A " and " E " in the border.
-	// ASCII: [ ] or [x] = 3 chars.  Line-art: " □ " or " ▣ " = space+glyph+space = 3 chars.
-	buildCb3 := func(checked bool) string {
+	// buildCb3 renders a 3-character wide checkbox block with a fixed style.
+	buildCb3 := func(checked bool, cbStyle lipgloss.Style) string {
 		if ctx.LineCharacters {
-			var g string
-			if checked { g = checkSelected } else { g = checkUnselected }
-			return neutralStyle.Render(" ") + tagStyle.Render(g) + neutralStyle.Render(" ")
+			g := checkUnselected
+			if checked {
+				g = checkSelected
+			}
+			// Draw with the chosen style (Red for focused, Blue for neutral)
+			// Each block is exactly 3 chars: [space][glyph][space]
+			inner := cbStyle.Render(g)
+			// Apply the checkbox's background color to the surrounding spaces
+			bgStyle := lipgloss.NewStyle().Background(cbStyle.GetBackground())
+			return bgStyle.Render(" ") + inner + bgStyle.Render(" ")
 		}
+		
+		content := "[ ]"
 		if checked {
-			return tagStyle.Render("[x]")
+			content = "[x]"
 		}
-		return tagStyle.Render("[ ]")
+		return cbStyle.Render(content)
 	}
+
 
 	// Group headers never show checkboxes — just the disclosure glyph.
 	// IsSubItem and IsCheckbox rows use the full two-checkbox layout.
 	if menuItem.IsSubItem {
-		cbAdd := buildCb3(menuItem.Checked)
-		cbEnabled := buildCb3(menuItem.Enabled)
+		addStyle := neutralStyle
+		enableStyle := neutralStyle
+		if isSelected {
+			if d.activeCol == ColAdd {
+				addStyle = tagStyle
+			} else if d.activeCol == ColEnable {
+				enableStyle = tagStyle
+			}
+		}
+
+		cbAdd := buildCb3(menuItem.Checked, addStyle)
+		cbEnabled := buildCb3(menuItem.Enabled, enableStyle)
 		tagStr := RenderThemeText(menuItem.Tag, tagStyle)
-		// Layout: g0+g1(2) + cbAdd(3) + 1sp + cbEnabled(3) + 1sp + tag. Prefix=10.
+		// Layout matches border: Gutter(2) + cbAdd(3) + Spacer(1) + cbEnabled(3) + Spacer(1) + Tag.
 		line := g0 + g1 + cbAdd + neutralStyle.Render(" ") + cbEnabled + neutralStyle.Render(" ") + tagStr
 		actualWidth := lipgloss.Width(line)
 		if actualWidth < m.Width()-2 {
@@ -531,7 +563,7 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 		return
 	}
 
-	// IsGroupHeader: disclosure glyph + name + description.
+	// IsGroupHeader: expansion arrows + name.
 	if menuItem.IsGroupHeader {
 		tag := menuItem.Tag
 		var tagStr string
@@ -542,13 +574,45 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 			rest := string([]rune(tag)[1:])
 			tagStr = keyStyle.Render(firstLetter) + tagStyle.Render(rest)
 		}
+
+		// Disclosure arrow glyph (▼ or [v])
 		var disclosureGlyph string
 		if ctx.LineCharacters {
-			disclosureGlyph = tagStyle.Render(subMenuExpanded)
+			disclosureGlyph = subMenuExpanded
 		} else {
-			disclosureGlyph = tagStyle.Render("[v]")
+			disclosureGlyph = "[v]"
 		}
-		// Prefix width: g0+g1(2) + 1sp + arrowA(3) + 1sp + arrowE(3) + 1sp = 11.
+
+		// Styled arrows for Add and Enable columns
+		// As per previous Turn, only the arrow in the 'E' column is shown.
+		// However, to support 'Add' toggle on groups if needed, we define both.
+		cbStyle := theme.ThemeSemanticStyle("{{|TitleCheckbox|}}")
+		cbAdd := neutralStyle.Render("   ")
+		if menuItem.IsCheckbox {
+			s := cbStyle
+			if isSelected && d.activeCol == ColAdd {
+				s = tagStyle
+			}
+			if ctx.LineCharacters {
+				cbAdd = neutralStyle.Render(" ") + s.Render(disclosureGlyph) + neutralStyle.Render(" ")
+			} else {
+				cbAdd = s.Render(disclosureGlyph)
+			}
+		}
+
+		cbEnabled := neutralStyle.Render("   ")
+		if menuItem.ShowEnabledGutter {
+			s := cbStyle
+			if isSelected && d.activeCol == ColEnable {
+				s = tagStyle
+			}
+			if ctx.LineCharacters {
+				cbEnabled = neutralStyle.Render(" ") + s.Render(disclosureGlyph) + neutralStyle.Render(" ")
+			} else {
+				cbEnabled = s.Render(disclosureGlyph)
+			}
+		}
+
 		paddingSpaces := strutil.Repeat(" ", max(0, d.maxTagLen-lipgloss.Width(GetPlainText(tag))+3))
 		prefixW := 11
 		availableWidth := m.Width() - 2 - prefixW - (d.maxTagLen + 3)
@@ -557,7 +621,11 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 		}
 		descStr := RenderThemeText(menuItem.Desc, descStyle)
 		descLine := TruncateRight(descStr, availableWidth)
-		line := g0 + g1 + disclosureGlyph + neutralStyle.Render(" ") + disclosureGlyph + neutralStyle.Render(" ") + tagStr + neutralStyle.Render(paddingSpaces) + descLine
+
+		// Layout restores the dual or single arrow look as it was before.
+		// Layout matches border: Gutter(2) + cbAdd(3) + Spacer(1) + cbEnabled(3) + Spacer(1) + Tag.
+		line := g0 + g1 + cbAdd + neutralStyle.Render(" ") + cbEnabled + neutralStyle.Render(" ") + tagStr + neutralStyle.Render(paddingSpaces) + descLine
+		
 		actualWidth := lipgloss.Width(line)
 		if actualWidth < m.Width()-2 {
 			line += neutralStyle.Render(strutil.Repeat(" ", m.Width()-2-actualWidth))
@@ -577,9 +645,22 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 		rest := string([]rune(tag)[1:])
 		tagStr = keyStyle.Render(firstLetter) + tagStyle.Render(rest)
 	}
-	cbAdd := buildCb3(menuItem.Checked)
-	cbEnabled := buildCb3(menuItem.Enabled)
-	// Prefix: g0+g1(2) + 1sp + cbA(3) + 1sp + cbE(3) + 1sp = 11 chars. Tag at 12.
+	addStyle := neutralStyle
+	enableStyle := neutralStyle
+	if isSelected {
+		if d.activeCol == ColAdd {
+			addStyle = tagStyle
+		} else if d.activeCol == ColEnable {
+			enableStyle = tagStyle
+		}
+	}
+
+	cbAdd := buildCb3(menuItem.Checked, addStyle)
+	cbEnabled := buildCb3(menuItem.Enabled, enableStyle)
+
+	// Layout matches border: Gutter(2) + cbAdd(3) + Spacer(1) + cbEnabled(3) + Spacer(1) + Tag.
+	line := g0 + g1 + cbAdd + neutralStyle.Render(" ") + cbEnabled + neutralStyle.Render(" ") + tagStr
+	
 	const rowPrefixW = 11
 	paddingSpaces := strutil.Repeat(" ", max(0, d.maxTagLen-lipgloss.Width(GetPlainText(tag))+3))
 	availableWidth := m.Width() - 2 - rowPrefixW - (d.maxTagLen + 3)
@@ -588,8 +669,8 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 	}
 	descStr := RenderThemeText(menuItem.Desc, descStyle)
 	descLine := TruncateRight(descStr, availableWidth)
-	// Layout: g0 g1 [cbAdd 3] [1sp] [cbEnabled 3] [1sp] tag paddingSpaces descLine
-	line := g0 + g1 + cbAdd + neutralStyle.Render(" ") + cbEnabled + neutralStyle.Render(" ") + tagStr + neutralStyle.Render(paddingSpaces) + descLine
+
+	line = line + neutralStyle.Render(paddingSpaces) + descLine
 	actualWidth := lipgloss.Width(line)
 	if actualWidth < m.Width()-2 {
 		line += neutralStyle.Render(strutil.Repeat(" ", m.Width()-2-actualWidth))
@@ -612,8 +693,9 @@ type MenuModel struct {
 	height   int
 
 	// Focus state
-	focused     bool
-	focusedItem FocusItem // Which element has focus
+	focused      bool
+	focusedItem  FocusItem      // Which element has focus
+	activeColumn CheckboxColumn // Which checkbox column has focus
 
 	// Sub-menu mode (for consolidated screens)
 	subMenuMode bool
@@ -704,6 +786,14 @@ const (
 	FocusExitBtn
 )
 
+// CheckboxColumn represents which column (Add or Enable) has focus in a row
+type CheckboxColumn int
+
+const (
+	ColAdd CheckboxColumn = iota
+	ColEnable
+)
+
 // menuSelectedIndices persists menu selection across visits
 var menuSelectedIndices = make(map[string]int)
 
@@ -786,6 +876,7 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 		backAction:  backAction,
 		focused:     true,
 		focusedItem: FocusSelectBtn,
+		activeColumn: ColAdd,
 		list:        l,
 		showExit:    true, // Default to show Exit button
 		showButtons: true, // Default to show buttons
@@ -937,7 +1028,7 @@ func (m *MenuModel) updateDelegate() {
 	focused := m.IsActive()
 	if m.groupedMode {
 		maxTagLen := calculateMaxTagLengthForHeaders(m.items)
-		m.list.SetDelegate(groupedItemDelegate{menuID: m.id, maxTagLen: maxTagLen, focused: focused})
+		m.list.SetDelegate(groupedItemDelegate{menuID: m.id, maxTagLen: maxTagLen, focused: focused, activeCol: m.activeColumn})
 	} else if m.checkboxMode {
 		maxTagLen := calculateMaxTagLength(m.items)
 		m.list.SetDelegate(checkboxItemDelegate{menuID: m.id, maxTagLen: maxTagLen, focused: focused, flowMode: m.flowMode})
@@ -1054,6 +1145,25 @@ func (m *MenuModel) SetSpaceAction(action tea.Cmd) {
 	m.spaceAction = action
 }
 
+// ActiveColumn returns the currently focused checkbox column (Add or Enable)
+func (m *MenuModel) ActiveColumn() CheckboxColumn {
+	return m.activeColumn
+}
+
+// SelectedItem returns the MenuItem currently under the cursor
+func (m *MenuModel) SelectedItem() MenuItem {
+	idx := m.list.Index()
+	if idx >= 0 && idx < len(m.items) {
+		return m.items[idx]
+	}
+	return MenuItem{}
+}
+// SetActiveColumn sets the focused checkbox column (Add or Enable)
+func (m *MenuModel) SetActiveColumn(col CheckboxColumn) {
+	m.activeColumn = col
+	m.updateDelegate()
+}
+
 // SetButtonLabels sets custom labels for the buttons
 func (m *MenuModel) SetButtonLabels(selectLabel, backLabel, exitLabel string) {
 	m.selectLabel = selectLabel
@@ -1065,8 +1175,12 @@ func (m *MenuModel) SetButtonLabels(selectLabel, backLabel, exitLabel string) {
 func (m *MenuModel) ToggleSelectedItem() {
 	if m.cursor >= 0 && m.cursor < len(m.items) && m.items[m.cursor].Selectable {
 		if m.items[m.cursor].IsCheckbox || m.items[m.cursor].IsRadioButton {
-			m.items[m.cursor].Checked = !m.items[m.cursor].Checked
-			m.items[m.cursor].Selected = m.items[m.cursor].Checked
+			if m.groupedMode && m.activeColumn == ColEnable {
+				m.items[m.cursor].Enabled = !m.items[m.cursor].Enabled
+			} else {
+				m.items[m.cursor].Checked = !m.items[m.cursor].Checked
+				m.items[m.cursor].Selected = m.items[m.cursor].Checked
+			}
 		} else {
 			m.items[m.cursor].Selected = !m.items[m.cursor].Selected
 		}

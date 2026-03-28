@@ -93,7 +93,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 	menu := tui.NewMenuModel(
 		"app-select",
 		"Select Applications",
-		"Choose which apps you would like to install:\nUse {{|KeyCap|}}[up]{{[-]}}/{{|KeyCap|}}[down]{{[-]}} and {{|KeyCap|}}[space]{{[-]}} to select; {{|KeyCap|}}[ctrl+→]{{[-]}}/{{|KeyCap|}}[alt+→]{{[-]}} to manage instances.",
+		"Choose which apps you would like to install:\nUse {{|KeyCap|}}[up]{{[-]}}/{{|KeyCap|}}[down]{{[-]}} and {{|KeyCap|}}[space]{{[-]}} to select; {{|KeyCap|}}[ctrl+←/→]{{[-]}} to move between Add/Enable columns.",
 		nil,
 		backAction,
 	)
@@ -1060,112 +1060,78 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 				return true
 			}
 			updated := item
-			newChecked := !updated.Checked
-			updated.Checked = newChecked
-			// Auto-link: Add ON → enable; Add OFF → disable.
-			if newChecked {
-				updated.Enabled = true
-				updated.ShowEnabledGutter = true
+			if m.ActiveColumn() == tui.ColEnable {
+				// Column-aware: toggling Enable ONLY affects Enabled state.
+				updated.Enabled = !updated.Enabled
+				// If we checked Enable, we MUST also check Add (Checked).
+				if updated.Enabled {
+					updated.Checked = true
+					updated.ShowEnabledGutter = true
+				}
 			} else {
-				updated.Enabled = false
-				updated.ShowEnabledGutter = false
+				// Toggling Add column (the default) toggles Checked and auto-links Enabled.
+				newChecked := !updated.Checked
+				updated.Checked = newChecked
+				// Auto-link: Add ON → enable; Add OFF → disable.
+				if newChecked {
+					updated.Enabled = true
+					updated.ShowEnabledGutter = true
+				} else {
+					updated.Enabled = false
+					updated.ShowEnabledGutter = false
+				}
 			}
 			m.SetItem(idx, updated)
 			m.SetItems(refreshGroupHeaders(m.GetItems()))
 			return true
 		}
-		return true // consume separators etc. to prevent button trigger
-	}
-
-	// toggleEnabled toggles only the Enabled state of an item that is already Added (Checked).
-	// If Add is not set, this has no effect.
-	toggleEnabled := func(m *tui.MenuModel, idx int) bool {
-		items := m.GetItems()
-		if idx < 0 || idx >= len(items) {
-			return false
-		}
-		item := items[idx]
-		if !item.IsCheckbox && !item.IsSubItem {
-			return false
-		}
-		if !item.Checked {
-			// Not added — check both Add and Enabled.
-			updated := item
-			updated.Checked = true
-			updated.Enabled = true
-			updated.ShowEnabledGutter = true
-			m.SetItem(idx, updated)
-			m.SetItems(refreshGroupHeaders(m.GetItems()))
-			return true
-		}
-		// Already added — toggle Enabled only.
-		updated := item
-		updated.Enabled = !updated.Enabled
-		m.SetItem(idx, updated)
-		return true
+		return true // consume separators etc.
 	}
 
 	menu.SetUpdateInterceptor(func(msg tea.Msg, m *tui.MenuModel) (tea.Cmd, bool) {
 		isSubRow := func(it tui.MenuItem) bool {
 			return it.IsSubItem || it.IsAddInstance || it.IsEditing
 		}
-
 		navUp := func() {
 			items := m.GetItems()
 			idx := m.Index()
-			if idx < 0 || idx >= len(items) {
-				return
-			}
+			if idx < 0 || idx >= len(items) { return }
 			item := items[idx]
 			if isSubRow(item) {
-				for i := idx - 1; i >= 0; i-- {
-					if items[i].IsGroupHeader {
-						break
-					}
-					if isSubRow(items[i]) && items[i].BaseApp == item.BaseApp {
-						m.Select(i)
-						return
-					}
-				}
+				if idx > 0 && isSubRow(items[idx-1]) && items[idx-1].BaseApp == item.BaseApp { m.Select(idx - 1) }
 				return
 			}
 			for i := idx - 1; i >= 0; i-- {
-				if !items[i].IsSeparator && !isSubRow(items[i]) {
-					m.Select(i)
-					return
-				}
+				if !items[i].IsSeparator && !isSubRow(items[i]) { m.Select(i); return }
 			}
 		}
-
 		navDown := func() {
 			items := m.GetItems()
 			idx := m.Index()
-			if idx < 0 || idx >= len(items) {
-				return
-			}
+			if idx < 0 || idx >= len(items) { return }
 			item := items[idx]
 			if isSubRow(item) {
-				for i := idx + 1; i < len(items); i++ {
-					if !isSubRow(items[i]) {
-						break
-					}
-					if items[i].BaseApp == item.BaseApp {
-						m.Select(i)
-						return
-					}
-				}
+				if idx+1 < len(items) && isSubRow(items[idx+1]) && items[idx+1].BaseApp == item.BaseApp { m.Select(idx+1) }
 				return
 			}
 			for i := idx + 1; i < len(items); i++ {
-				if !items[i].IsSeparator && !isSubRow(items[i]) {
-					m.Select(i)
-					return
-				}
+				if !items[i].IsSeparator && !isSubRow(items[i]) { m.Select(i); return }
 			}
 		}
 
-		// collapseOtherGroups collapses every expanded group except keepBase,
-		// then re-selects the keepBase item (its index may shift after collapses).
+		if _, ok := msg.(tui.TemplateUpdateSuccessMsg); ok { refreshItems(); return nil, true }
+
+		if wheelMsg, ok := msg.(tui.LayerWheelMsg); ok {
+			if isEditing { return nil, true }
+			if wheelMsg.Button == tea.MouseWheelUp { navUp() } else if wheelMsg.Button == tea.MouseWheelDown { navDown() }
+			return nil, true
+		}
+		if wheelMsg, ok := msg.(tea.MouseWheelMsg); ok {
+			if isEditing { return nil, true }
+			if wheelMsg.Button == tea.MouseWheelUp { navUp() } else if wheelMsg.Button == tea.MouseWheelDown { navDown() }
+			return nil, true
+		}
+
 		collapseOtherGroups := func(keepBase string) {
 			cur := m.GetItems()
 			changed := false
@@ -1193,147 +1159,40 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 			}
 		}
 
-		// Rebuild list on template update.
-		if _, ok := msg.(tui.TemplateUpdateSuccessMsg); ok {
-			refreshItems()
-			return nil, true
-		}
-
-		// Mouse wheel uses the same navigation as up/down arrows.
-		if wheelMsg, ok := msg.(tui.LayerWheelMsg); ok {
-			if isEditing {
-				return nil, true
-			}
-			if wheelMsg.Button == tea.MouseWheelUp {
-				navUp()
-			} else if wheelMsg.Button == tea.MouseWheelDown {
-				navDown()
-			}
-			return nil, true
-		}
-		if wheelMsg, ok := msg.(tea.MouseWheelMsg); ok {
-			if isEditing {
-				return nil, true
-			}
-			if wheelMsg.Button == tea.MouseWheelUp {
-				navUp()
-			} else if wheelMsg.Button == tea.MouseWheelDown {
-				navDown()
-			}
-			return nil, true
-		}
-
-		// Handle mouse left-clicks on list items.
-		// Split-click behaviour:
-		//   Group headers: any click — collapse if submenu is open, else enter/expand.
-		//   Other rows: LEFT of the app name = checkbox toggle; ON/RIGHT = expand/rename.
-		// Without this, clicks fall through to menu_update.go's handleSpace/handleEnter
-		// which doesn't know about our custom toggle rules (IsNew removal, refreshGroupHeaders).
 		if hitMsg, ok := msg.(tui.LayerHitMsg); ok && hitMsg.Button == tea.MouseLeft {
-			// Block all mouse clicks while the user is in inline editing mode.
-			// They must press Enter (confirm) or Esc (cancel) first.
-			if isEditing {
-				return nil, true
-			}
+			if isEditing { return nil, true }
 			if idx, ok := tui.ParseMenuItemIndex(hitMsg.ID, m.ID()); ok {
 				items := m.GetItems()
 				if idx >= 0 && idx < len(items) {
 					item := items[idx]
 					m.Select(idx)
+					if item.IsSeparator || item.IsEditing { return nil, true }
 
-					// Separators and live-editing rows: consume without action.
-					if item.IsSeparator || item.IsEditing {
-						return nil, true
+					var addCols, enableCols [2]int
+					var nameStart int
+					// Accounting for 3-char offset: 1(outer border) + 1(margin) + 1(inner border)
+					addCols = [2]int{5, 8}     // Aligned with content columns 2-5 (+3 offset)
+					enableCols = [2]int{9, 12} // Aligned with content columns 6-9 (+3 offset)
+					nameStart = 14            // Aligned with content column 11 (+3 offset)
+
+					if item.IsAddInstance { startEditing(item.BaseApp); return nil, true }
+					if hitMsg.X >= addCols[0] && hitMsg.X <= addCols[1] && !item.IsGroupHeader {
+						m.SetActiveColumn(tui.ColAdd); toggleItem(m, idx); return nil, true
 					}
-
-					// [+] Add instance: always open editing.
-					if item.IsAddInstance {
-						startEditing(item.BaseApp)
-						return nil, true
+					if hitMsg.X >= enableCols[0] && hitMsg.X <= enableCols[1] {
+						m.SetActiveColumn(tui.ColEnable); toggleItem(m, idx); return nil, true
 					}
-
-					// Group headers: any click toggles submenu open/closed.
-					// If sub-items are currently visible → collapse (Ctrl+Left behaviour).
-					// If no sub-items are visible → enter submenu / start editing.
-					if item.IsGroupHeader {
-						base := item.BaseApp
-						submenuOpen := false
-						for i := idx + 1; i < len(items); i++ {
-							if items[i].IsGroupHeader {
-								break
-							}
-							if (items[i].IsSubItem || items[i].IsAddInstance) && items[i].BaseApp == base {
-								submenuOpen = true
-								break
-							}
-						}
-						if submenuOpen {
-							newItems, collapsed := collapseGroupIfNeeded(items, base)
-							if collapsed {
-								m.SetItems(newItems)
-							}
-							// If can't fully collapse (non-base instances exist), header
-							// is still selected/highlighted — nothing more to do.
-						} else {
-							// Not yet expanded: jump to first sub-item, or start editing.
-							entered := false
-							for i := idx + 1; i < len(items); i++ {
-								if items[i].IsGroupHeader {
-									break
-								}
-								if items[i].IsSubItem && items[i].BaseApp == base {
-									m.Select(i)
-									entered = true
-									break
-								}
-							}
-							if !entered {
-								startEditing(base)
-							}
-						}
-						collapseOtherGroups(base)
-						return nil, true
-					}
-
-					// Compute the column where the tag text (app name) begins.
-					// Layout: gutter(2) [+ indent(2) for sub-items] + cb_add + cb_enabled + space
-					// Unicode glyphs are 1 col wide; ASCII glyphs are 4 cols ("[x] ").
-					// cb_enabled: 1 col + 1 space (line art) or 4 cols (ASCII) — same width as cb_add.
-					ctx := tui.GetActiveContext()
-					var nameStartCol int
-					if item.IsSubItem {
-						if ctx.LineCharacters {
-							nameStartCol = 9 // gutter(2) + indent(2) + cb_add(2) + cb_enabled(2) + space(1)
-						} else {
-							nameStartCol = 16 // gutter(2) + indent(2) + "[x] "(4) + "[x] "(4) + space(4?)
-						}
-					} else {
-						if ctx.LineCharacters {
-							nameStartCol = 6 // gutter(2) + cb_add(2) + cb_enabled(2)
-						} else {
-							nameStartCol = 10 // gutter(2) + "[x] "(4) + "[x] "(4)
-						}
-					}
-
-					// relX is the click column relative to the left edge of the row.
-					// hitMsg.X is absolute screen X; hitMsg.Hit.X is the region's absolute X.
-					relX := hitMsg.X - hitMsg.Hit.X
-					if relX < nameStartCol {
-						// ── Left zone (glyph/checkbox area): toggle checkbox.
-						toggleItem(m, idx)
-						if item.IsCheckbox {
-							collapseOtherGroups(item.BaseApp)
-						}
-						return nil, true
-					} else {
-						// ── Right zone (name area): expand / rename action ──
+					if hitMsg.X >= nameStart {
 						if item.IsSubItem {
-							if !item.IsReferenced {
-								startRenaming(idx)
+							if !item.IsReferenced { startRenaming(idx) }
+						} else {
+							base := item.BaseApp
+							expandGroup(base)
+							collapseOtherGroups(base)
+							newItems := m.GetItems()
+							for i := idx + 1; i < len(newItems); i++ {
+								if newItems[i].IsSubItem && newItems[i].BaseApp == base { m.Select(i); m.SetActiveColumn(tui.ColAdd); break }
 							}
-						} else if item.IsCheckbox {
-							expandGroup(item.BaseApp)
-							collapseOtherGroups(item.BaseApp)
 						}
 						return nil, true
 					}
@@ -1343,17 +1202,12 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 		}
 
 		keyMsg, ok := msg.(tea.KeyPressMsg)
-		if !ok {
-			return nil, false
-		}
+		if !ok { return nil, false }
 
-		// While editing, consume all keys internally — never let them reach the menu.
 		if isEditing {
 			switch keyMsg.String() {
-			case "esc":
-				cancelEdit()
-			case "enter":
-				confirmEdit()
+			case "esc": cancelEdit()
+			case "enter": confirmEdit()
 			case "backspace", "ctrl+h":
 				if len(editContent) > 0 {
 					runes := []rune(editContent)
@@ -1362,234 +1216,112 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 					refreshEditRow()
 				}
 			case "up", "down", "left", "right", "ctrl+left", "ctrl+right", "alt+left", "alt+right", "tab", "shift+tab":
-				// Block all navigation while editing.
 			default:
-				if keyMsg.Text != "" {
-					editContent += strings.ToUpper(keyMsg.Text)
-					editError = ""
-					refreshEditRow()
-				} else {
-					return nil, false // pass through ctrl+c etc.
-				}
+				if keyMsg.Text != "" { editContent += strings.ToUpper(keyMsg.Text); editError = ""; refreshEditRow() } else { return nil, false }
 			}
 			return nil, true
 		}
 
-		// Get the currently focused item.
 		items := m.GetItems()
 		idx := m.Index()
-		if idx < 0 || idx >= len(items) {
-			return nil, false
-		}
+		if idx < 0 || idx >= len(items) { return nil, false }
 		item := items[idx]
 
-		// findHeader returns the index of the group header for baseApp, searching backward from start.
-		findHeader := func(start int, baseApp string) int {
-			for i := start; i >= 0; i-- {
-				if items[i].IsGroupHeader && items[i].BaseApp == baseApp {
-					return i
-				}
-			}
-			return -1
-		}
-
 		switch keyMsg.String() {
-		case "up":
-			navUp()
-			return nil, true
-
-		case "down":
-			navDown()
-			return nil, true
-
-		case "pgup", "ctrl+b", "ctrl+up",
-			"ctrl+u": // half-page up
+		case "up": navUp(); return nil, true
+		case "down": navDown(); return nil, true
+		case "pgup", "ctrl+b", "ctrl+up", "ctrl+u":
 			if isSubRow(item) {
-				// Clamp to first sub-row of this group.
 				first := idx
 				for i := idx - 1; i >= 0; i-- {
-					if items[i].IsGroupHeader {
-						break
-					}
-					if isSubRow(items[i]) && items[i].BaseApp == item.BaseApp {
-						first = i
-					}
+					if items[i].IsGroupHeader { break }
+					if isSubRow(items[i]) && items[i].BaseApp == item.BaseApp { first = i }
 				}
 				m.Select(first)
 			} else {
-				// Main list: step backward through main-list items, skipping sub-rows.
 				const pageSize = 5
 				moved, cur := 0, idx
 				for i := idx - 1; i >= 0 && moved < pageSize; i-- {
-					if !items[i].IsSeparator && !isSubRow(items[i]) {
-						cur = i
-						moved++
-					}
+					if !items[i].IsSeparator && !isSubRow(items[i]) { cur = i; moved++ }
 				}
 				m.Select(cur)
 			}
 			return nil, true
-
-		case "pgdown", "ctrl+f", "ctrl+down",
-			"ctrl+d": // half-page down
+		case "pgdown", "ctrl+f", "ctrl+down", "ctrl+d":
 			if isSubRow(item) {
-				// Clamp to last sub-row of this group.
 				last := idx
 				for i := idx + 1; i < len(items); i++ {
-					if !isSubRow(items[i]) || items[i].BaseApp != item.BaseApp {
-						break
-					}
+					if !isSubRow(items[i]) || items[i].BaseApp != item.BaseApp { break }
 					last = i
 				}
 				m.Select(last)
 			} else {
-				// Main list: step forward through main-list items, skipping sub-rows.
 				const pageSize = 5
 				moved, cur := 0, idx
 				for i := idx + 1; i < len(items) && moved < pageSize; i++ {
-					if !items[i].IsSeparator && !isSubRow(items[i]) {
-						cur = i
-						moved++
-					}
+					if !items[i].IsSeparator && !isSubRow(items[i]) { cur = i; moved++ }
 				}
 				m.Select(cur)
 			}
 			return nil, true
-
 		case "home", "ctrl+home":
 			if isSubRow(item) {
 				first := idx
 				for i := idx - 1; i >= 0; i-- {
-					if items[i].IsGroupHeader {
-						break
-					}
-					if isSubRow(items[i]) && items[i].BaseApp == item.BaseApp {
-						first = i
-					}
+					if items[i].IsGroupHeader { break }
+					if isSubRow(items[i]) && items[i].BaseApp == item.BaseApp { first = i }
 				}
 				m.Select(first)
 			} else {
 				for i := 0; i < len(items); i++ {
-					if !items[i].IsSeparator && !isSubRow(items[i]) {
-						m.Select(i)
-						break
-					}
+					if !items[i].IsSeparator && !isSubRow(items[i]) { m.Select(i); break }
 				}
 			}
 			return nil, true
-
 		case "end", "ctrl+end":
 			if isSubRow(item) {
 				last := idx
 				for i := idx + 1; i < len(items); i++ {
-					if !isSubRow(items[i]) || items[i].BaseApp != item.BaseApp {
-						break
-					}
+					if !isSubRow(items[i]) || items[i].BaseApp != item.BaseApp { break }
 					last = i
 				}
 				m.Select(last)
 			} else {
 				for i := len(items) - 1; i >= 0; i-- {
-					if !items[i].IsSeparator && !isSubRow(items[i]) {
-						m.Select(i)
-						break
-					}
+					if !items[i].IsSeparator && !isSubRow(items[i]) { m.Select(i); break }
 				}
 			}
 			return nil, true
-
-		case "space":
-			// Space always toggles the list item — never fires a button.
-			// "enter" is not intercepted: falls through to menu_update.go → fires focused button.
-			toggleItem(m, idx)
-			return nil, true
-
+		case "space": toggleItem(m, idx); return nil, true
 		case "f2":
-			// F2 on a sub-item renames it.
-			if item.IsSubItem {
-				startRenaming(idx)
-				return nil, true
-			}
-			// F2 on [+] row opens new-instance editing.
-			if item.IsAddInstance {
-				startEditing(item.BaseApp)
-				return nil, true
-			}
+			if item.IsSubItem { startRenaming(idx); return nil, true }
+			if item.IsAddInstance { startEditing(item.BaseApp); return nil, true }
 			return nil, false
-
 		case "ctrl+right", "alt+right":
-			if item.IsGroupHeader {
-				// Enter submenu: jump to first sub-item, or open editing if none yet.
-				base := item.BaseApp
-				for i := idx + 1; i < len(items); i++ {
-					if items[i].IsGroupHeader {
-						break
+			if m.ActiveColumn() == tui.ColEnable {
+				if !item.IsGroupHeader && !item.IsSubItem && item.IsCheckbox {
+					expandGroup(item.BaseApp)
+					newItems := m.GetItems()
+					for i := idx + 1; i < len(newItems); i++ {
+						if newItems[i].IsSubItem && newItems[i].BaseApp == item.BaseApp { m.Select(i); m.SetActiveColumn(tui.ColAdd); break }
 					}
-					if items[i].IsSubItem && items[i].BaseApp == base {
-						m.Select(i)
-						return nil, true
-					}
-				}
-				startEditing(base)
-				return nil, true
-			}
-			if item.IsSubItem {
-				// Ctrl+Right on a sub-item: toggle Enabled if already added, else rename.
-				if item.Checked {
-					toggleEnabled(m, idx)
 					return nil, true
 				}
-				startRenaming(idx)
-				return nil, true
-			}
-			// Simple checkbox: if already added, toggle Enabled; else expand group.
-			if item.IsCheckbox {
-				if item.Checked {
-					toggleEnabled(m, idx)
-					return nil, true
-				}
-				expandGroup(item.BaseApp)
-				return nil, true
+				if item.IsGroupHeader { m.Select(idx + 1); m.SetActiveColumn(tui.ColAdd); return nil, true }
+				if item.IsSubItem && !item.IsReferenced { startRenaming(idx); return nil, true }
+				if item.IsAddInstance { startEditing(item.BaseApp); return nil, true }
 			}
 			return nil, false
-
-		default:
-			// Printable key on [+] Add instance row: open editing and pre-fill the character,
-			// preventing the key from falling through to menu_update.go's button hotkeys.
-			if item.IsAddInstance && keyMsg.Text != "" {
-				startEditing(item.BaseApp)
-				editContent = strings.ToUpper(keyMsg.Text)
-				editError = ""
-				refreshEditRow()
-				return nil, true
-			}
-
 		case "ctrl+left", "alt+left":
-			// Ctrl+Left from anywhere in the submenu: jump to header and collapse if no non-base instances.
-			if isSubRow(item) {
-				headerIdx := findHeader(idx-1, item.BaseApp)
-				if headerIdx >= 0 {
-					newItems, collapsed := collapseGroupIfNeeded(items, item.BaseApp)
-					if collapsed {
-						m.SetItems(newItems)
-						m.Select(headerIdx)
-					} else {
-						m.Select(headerIdx)
+			if m.ActiveColumn() == tui.ColAdd {
+				if item.IsSubItem || item.IsAddInstance {
+					for i := idx - 1; i >= 0; i-- {
+						if items[i].IsGroupHeader && items[i].BaseApp == item.BaseApp { m.Select(i); m.SetActiveColumn(tui.ColEnable); return nil, true }
 					}
 				}
-				return nil, true
-			}
-			// Ctrl+Left on group header: collapse if no non-base instances remain.
-			if item.IsGroupHeader {
-				newItems, collapsed := collapseGroupIfNeeded(items, item.BaseApp)
-				if collapsed {
-					m.SetItems(newItems)
-				}
-				return nil, true
 			}
 			return nil, false
 		}
-
 		return nil, false
 	})
 
