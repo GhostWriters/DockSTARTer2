@@ -178,6 +178,78 @@ func (s *AppSelectionScreen) toggleItem(idx int) {
 	s.menu.SetItems(items)
 }
 
+func (s *AppSelectionScreen) navUp(m *tui.MenuModel, items []tui.MenuItem, idx int, item tui.MenuItem) {
+	isSubRow := func(it tui.MenuItem) bool {
+		return it.IsSubItem || it.IsAddInstance || it.IsEditing
+	}
+	if idx <= 0 {
+		return
+	}
+	prevBase := item.BaseApp
+	if isSubRow(item) {
+		// Constrain to this group
+		if idx > 0 && items[idx-1].BaseApp == prevBase && !items[idx-1].IsSeparator {
+			// Don't go back into header from sub-row via Up
+			if items[idx-1].IsGroupHeader {
+				return
+			}
+			m.Select(idx - 1)
+		}
+		return
+	}
+	// Main list: skip all sub-items and go to previous Header
+	for i := idx - 1; i >= 0; i-- {
+		if !items[i].IsSeparator && !isSubRow(items[i]) {
+			m.Select(i)
+			// Smart Collapse: collapse the group we just left
+			if ni, ok := s.collapseGroupIfNeeded(m.GetItems(), prevBase); ok {
+				m.SetItems(ni)
+				for j, it := range ni {
+					if it.BaseApp == items[i].BaseApp {
+						m.Select(j)
+						break
+					}
+				}
+			}
+			break
+		}
+	}
+}
+
+func (s *AppSelectionScreen) navDown(m *tui.MenuModel, items []tui.MenuItem, idx int, item tui.MenuItem) {
+	isSubRow := func(it tui.MenuItem) bool {
+		return it.IsSubItem || it.IsAddInstance || it.IsEditing
+	}
+	if idx >= len(items)-1 {
+		return
+	}
+	prevBase := item.BaseApp
+	if isSubRow(item) {
+		// Constrain to this group
+		if idx+1 < len(items) && items[idx+1].BaseApp == prevBase && !items[idx+1].IsSeparator {
+			m.Select(idx + 1)
+		}
+		return
+	}
+	// Main list: skip all sub-items and go to next Header
+	for i := idx + 1; i < len(items); i++ {
+		if !items[i].IsSeparator && !isSubRow(items[i]) {
+			m.Select(i)
+			// Smart Collapse: collapse the group we just left
+			if ni, ok := s.collapseGroupIfNeeded(m.GetItems(), prevBase); ok {
+				m.SetItems(ni)
+				for j, it := range ni {
+					if it.BaseApp == items[i].BaseApp {
+						m.Select(j)
+						break
+					}
+				}
+			}
+			break
+		}
+	}
+}
+
 func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (tea.Cmd, bool) {
 	isSubRow := func(it tui.MenuItem) bool {
 		return it.IsSubItem || it.IsAddInstance || it.IsEditing
@@ -252,6 +324,27 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 		return nil, false
 	}
 
+	if wheelMsg, ok := msg.(tea.MouseWheelMsg); ok {
+		if s.isEditing {
+			return nil, true
+		}
+		items := m.GetItems()
+		idx := m.Index()
+		if idx < 0 || idx >= len(items) {
+			return nil, false
+		}
+		item := items[idx]
+
+		// Using the same navigation logic as keys
+		if wheelMsg.Button == tea.MouseWheelUp {
+			s.navUp(m, items, idx, item)
+			return nil, true
+		} else if wheelMsg.Button == tea.MouseWheelDown {
+			s.navDown(m, items, idx, item)
+			return nil, true
+		}
+	}
+
 	keyMsg, ok := msg.(tea.KeyPressMsg)
 	if !ok {
 		return nil, false
@@ -290,78 +383,12 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 	}
 	item := items[idx]
 
-	navUp := func() {
-		if idx <= 0 {
-			return
-		}
-		prevBase := item.BaseApp
-		if isSubRow(item) {
-			// Constrain to this group
-			if idx > 0 && items[idx-1].BaseApp == prevBase && !items[idx-1].IsSeparator {
-				// Don't go back into header from sub-row via Up
-				if items[idx-1].IsGroupHeader {
-					return
-				}
-				m.Select(idx - 1)
-			}
-			return
-		}
-		// Main list: skip all sub-items and go to previous Header
-		for i := idx - 1; i >= 0; i-- {
-			if !items[i].IsSeparator && !isSubRow(items[i]) {
-				m.Select(i)
-				// Smart Collapse: collapse the group we just left
-				if ni, ok := s.collapseGroupIfNeeded(m.GetItems(), prevBase); ok {
-					m.SetItems(ni)
-					for j, it := range ni {
-						if it.BaseApp == items[i].BaseApp {
-							m.Select(j)
-							break
-						}
-					}
-				}
-				break
-			}
-		}
-	}
-
-	navDown := func() {
-		if idx >= len(items)-1 {
-			return
-		}
-		prevBase := item.BaseApp
-		if isSubRow(item) {
-			// Constrain to this group
-			if idx+1 < len(items) && items[idx+1].BaseApp == prevBase && !items[idx+1].IsSeparator {
-				m.Select(idx + 1)
-			}
-			return
-		}
-		// Main list: skip all sub-items and go to next Header
-		for i := idx + 1; i < len(items); i++ {
-			if !items[i].IsSeparator && !isSubRow(items[i]) {
-				m.Select(i)
-				// Smart Collapse: collapse the group we just left
-				if ni, ok := s.collapseGroupIfNeeded(m.GetItems(), prevBase); ok {
-					m.SetItems(ni)
-					for j, it := range ni {
-						if it.BaseApp == items[i].BaseApp {
-							m.Select(j)
-							break
-						}
-					}
-				}
-				break
-			}
-		}
-	}
-
 	switch keyMsg.String() {
 	case "up":
-		navUp()
+		s.navUp(m, items, idx, item)
 		return nil, true
 	case "down":
-		navDown()
+		s.navDown(m, items, idx, item)
 		return nil, true
 	case "pgup", "ctrl+b", "ctrl+up", "ctrl+u":
 		if isSubRow(item) {

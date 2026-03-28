@@ -205,11 +205,8 @@ func (m *MenuModel) renderVariableHeightList() string {
 
 			if ctx.LineCharacters {
 				// Line-art glyphs are 1-char wide; pad to 3 with spaces: " ▣ " to match " A " in border
-				bgA := lipgloss.NewStyle().Background(cbAStyle.GetBackground())
-				cbAdd3 = bgA.Render(" ") + cbAStyle.Render(ca) + bgA.Render(" ")
-
-				bgE := lipgloss.NewStyle().Background(cbEStyle.GetBackground())
-				cbEnabled3 = bgE.Render(" ") + cbEStyle.Render(ce) + bgE.Render(" ")
+				cbAdd3 = neutralStyle.Render(" ") + cbAStyle.Render(ca) + neutralStyle.Render(" ")
+				cbEnabled3 = neutralStyle.Render(" ") + cbEStyle.Render(ce) + neutralStyle.Render(" ")
 			} else {
 				// ASCII: "[ ]" and "[x]" are already 3 chars wide — no extra padding needed
 				if item.Checked {
@@ -222,8 +219,8 @@ func (m *MenuModel) renderVariableHeightList() string {
 				} else {
 					ce = checkUnselectedAscii[:3]
 				}
-				cbAdd3 = cbAStyle.Render(ca)
-				cbEnabled3 = cbEStyle.Render(ce)
+				cbAdd3 = neutralStyle.Render("[") + cbAStyle.Render(string(ca[1])) + neutralStyle.Render("]")
+				cbEnabled3 = neutralStyle.Render("[") + cbEStyle.Render(string(ce[1])) + neutralStyle.Render("]")
 			}
 		}
 
@@ -236,10 +233,38 @@ func (m *MenuModel) renderVariableHeightList() string {
 			tagStr = tStyle.Render(item.Tag[:letterIdx]) + kStyle.Render(string(item.Tag[letterIdx])) + tStyle.Render(item.Tag[letterIdx+1:])
 		}
 
-		// Gutter(2) + sp(1) + cbA(3) + sp(1) + cbE(3) + sp(1) = 11 chars. Tag @ 11.
-		prefixWidth := 11
+		// Dynamically calculate prefix width based on menu type and item features
+		isAppSelect := m.id == "app-select"
+		var prefixWidth int
+		var firstLinePrefix string
+
+		if isAppSelect && (item.IsCheckbox || item.IsGroupHeader) {
+			prefixWidth = 10
+			if item.IsGroupHeader {
+				var arrowA, arrowE string
+				if ctx.LineCharacters {
+					arrowA = neutralStyle.Render("   ")
+					arrowE = neutralStyle.Render(" ") + tStyle.Render(subMenuExpanded) + neutralStyle.Render(" ")
+				} else {
+					arrowA = neutralStyle.Render("   ")
+					arrowE = tStyle.Render("[v]")
+				}
+				firstLinePrefix = arrowA + neutralStyle.Render(" ") + arrowE + neutralStyle.Render(" ")
+			} else {
+				firstLinePrefix = cbAdd3 + neutralStyle.Render(" ") + cbEnabled3 + neutralStyle.Render(" ")
+			}
+		} else {
+			if checkbox != "" {
+				firstLinePrefix = checkbox + neutralStyle.Render(" ")
+				prefixWidth = lipgloss.Width(GetPlainText(firstLinePrefix))
+			} else {
+				firstLinePrefix = ""
+				prefixWidth = 0
+			}
+		}
+
 		paddingSpaces := strutil.Repeat(" ", max(0, maxTagLen-lipgloss.Width(GetPlainText(item.Tag))+3))
-		availableWidth := listContentWidth - prefixWidth - (maxTagLen + 3)
+		availableWidth := listContentWidth - (prefixWidth + 2) - (maxTagLen + 3) // +2 for gutter
 		if availableWidth < 0 {
 			availableWidth = 0
 		}
@@ -288,35 +313,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 		}
 		itemGutter := g0 + g1
 
-		var firstLine string
-		if item.IsCheckbox && !item.IsGroupHeader {
-			// g0(1) g1(2) cbAdd(3,4,5) cbEnabled(6,7,8) tag@9 — no space between cb and E, they're each 3 chars
-			// Wait: g0(1) g1(2) cbAdd(3char) cbEnabled(3char) tag → total prefix=8.
-			// Border: corner─[A(3ch)]─[E(3ch)]... with prefixDashes=1: col1=corner,col2=dash,cols3-5=A,col6=dash,cols7-9=E
-			// Content inside box: g0=col1,g1=col2,cbAdd=cols3-5,cbEnabled=cols6-8... off by 1 on E.
-			// Use 1 space between cbAdd and cbEnabled to get:
-			// g0(1) g1(2) cbAdd(3,4,5) sp(6) cbEnabled(7,8,9) → A center=4, E center=8
-			// Border prefixDashes=1: corner(1) dash(2) A(3,4,5) dash(6) E(7,8,9) → A center=4, E center=8 ✅
-			firstLine = cbAdd3 + neutralStyle.Render(" ") + cbEnabled3 + neutralStyle.Render(" ") + tagStr + neutralStyle.Render(paddingSpaces) + lines[0]
-			prefixWidth = 10 // 2(gutter) + 3(cbA) + 1(sp) + 3(cbE) + 1(sp) = 10
-		} else if item.IsGroupHeader {
-			// User requested: only show arrow in the E-position (Enabled) when expanded.
-			// arrowA (Add position) becomes blank 3-char spaces.
-			var arrowA, arrowE string
-			if ctx.LineCharacters {
-				arrowA = neutralStyle.Render("   ")
-				arrowE = neutralStyle.Render(" ") + tStyle.Render(subMenuExpanded) + neutralStyle.Render(" ")
-			} else {
-				arrowA = neutralStyle.Render("   ")
-				arrowE = tStyle.Render("[v]")
-			}
-			firstLine = arrowA + neutralStyle.Render(" ") + arrowE + neutralStyle.Render(" ") + tagStr + neutralStyle.Render(paddingSpaces) + lines[0]
-			prefixWidth = 10
-		} else {
-			totalPad := 11 - (2 + lipgloss.Width(GetPlainText(checkbox)))
-			firstLine = neutralStyle.Render(strutil.Repeat(" ", totalPad)) + checkbox + tagStr + neutralStyle.Render(paddingSpaces) + lines[0]
-		}
-
+		firstLine := firstLinePrefix + tagStr + neutralStyle.Render(paddingSpaces) + lines[0]
 		indent := neutralStyle.Render(strutil.Repeat(" ", prefixWidth))
 		renderedItemLines := []string{firstLine}
 		for j := 1; j < len(lines); j++ {
@@ -532,10 +529,21 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 	resM = append(resM, -1)
 
 	vStyle := lipgloss.NewStyle().Foreground(ctx.BorderColor).Background(dialogBG)
-	vBorderChar := lipgloss.RoundedBorder().Left
-	if subFocused && ctx.LineCharacters {
-		vBorderChar = ThickRoundedBorder.Left
+	var border lipgloss.Border
+	if ctx.LineCharacters {
+		if subFocused {
+			border = ThickRoundedBorder
+		} else {
+			border = lipgloss.RoundedBorder()
+		}
+	} else {
+		if subFocused {
+			border = RoundedThickAsciiBorder
+		} else {
+			border = RoundedAsciiBorder
+		}
 	}
+	vBorderChar := border.Left
 
 	for i, item := range items {
 		visibleIdx := startVisibleIndex + i
@@ -604,17 +612,14 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 			if item.Checked { cA = checkSelected }
 			if item.Enabled { cE = checkSelected }
 			
-			bgA := lipgloss.NewStyle().Background(cbStyleA.GetBackground())
-			checkboxA3 = bgA.Render(" ") + cbStyleA.Render(cA) + bgA.Render(" ")
-			
-			bgE := lipgloss.NewStyle().Background(cbStyleE.GetBackground())
-			checkboxE3 = bgE.Render(" ") + cbStyleE.Render(cE) + bgE.Render(" ")
+			checkboxA3 = neutralStyle.Render(" ") + cbStyleA.Render(cA) + neutralStyle.Render(" ")
+			checkboxE3 = neutralStyle.Render(" ") + cbStyleE.Render(cE) + neutralStyle.Render(" ")
 		} else {
 			caA, ceA := "[ ]", "[ ]"
 			if item.Checked { caA = "[x]" }
 			if item.Enabled { ceA = "[x]" }
-			checkboxA3 = cbStyleA.Render(caA)
-			checkboxE3 = cbStyleE.Render(ceA)
+			checkboxA3 = neutralStyle.Render("[") + cbStyleA.Render(string(caA[1])) + neutralStyle.Render("]")
+			checkboxE3 = neutralStyle.Render("[") + cbStyleE.Render(string(ceA[1])) + neutralStyle.Render("]")
 		}
 
 		rowContent := vStyle.Render(vBorderChar) + neutralStyle.Render(" ") + checkboxA3 + neutralStyle.Render(" ") + checkboxE3 + neutralStyle.Render(" ") + tagStr
