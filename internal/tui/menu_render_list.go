@@ -9,6 +9,8 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+const vIdxBorderFlag = 0x40000000
+
 // renderVariableHeightList renders items vertically with dynamic heights for word wrapping
 func (m *MenuModel) renderVariableHeightList() string {
 	ctx := GetActiveContext()
@@ -20,7 +22,9 @@ func (m *MenuModel) renderVariableHeightList() string {
 		m.lastIndex == m.list.Index() &&
 		m.lastFilter == m.list.FilterValue() &&
 		m.lastActive == m.IsActive() &&
-		m.lastLineChars == ctx.LineCharacters {
+		m.lastLineChars == ctx.LineCharacters &&
+		m.lastVersion == m.renderVersion &&
+		m.lastColumn == m.ActiveColumn() {
 		return m.lastListView
 	}
 
@@ -226,11 +230,16 @@ func (m *MenuModel) renderVariableHeightList() string {
 
 		tagStr := ""
 		if len(item.Tag) > 0 {
+			runes := []rune(item.Tag)
 			letterIdx := 0
-			if strings.HasPrefix(item.Tag, "[") && len(item.Tag) > 1 {
+			if strings.HasPrefix(item.Tag, "[") && len(runes) > 1 {
 				letterIdx = 1
 			}
-			tagStr = tStyle.Render(item.Tag[:letterIdx]) + kStyle.Render(string(item.Tag[letterIdx])) + tStyle.Render(item.Tag[letterIdx+1:])
+			if letterIdx < len(runes) {
+				tagStr = tStyle.Render(string(runes[:letterIdx])) + kStyle.Render(string(runes[letterIdx])) + tStyle.Render(string(runes[letterIdx+1:]))
+			} else {
+				tagStr = RenderThemeText(item.Tag, tStyle)
+			}
 		}
 
 		// Dynamically calculate prefix width based on menu type and item features
@@ -362,24 +371,76 @@ func (m *MenuModel) renderVariableHeightList() string {
 		searchFrom := 0
 		for i, h := range itemHeights {
 			vIdx := itemMappings[i]
-			if vIdx >= 0 && !visibleItems[vIdx].IsSeparator {
+			isBorder := (vIdx & vIdxBorderFlag) != 0
+			if vIdx >= 0 && vIdx < len(visibleItems) && !visibleItems[vIdx].IsSeparator {
+				cleanVIdx := vIdx & ^vIdxBorderFlag
 				actualIndex := -1
 				for actIdx := searchFrom; actIdx < len(m.items); actIdx++ {
 					mi := m.items[actIdx]
-					if mi.Tag == visibleItems[vIdx].Tag && mi.Desc == visibleItems[vIdx].Desc {
+					if mi.Tag == visibleItems[cleanVIdx].Tag && mi.Desc == visibleItems[cleanVIdx].Desc && mi.BaseApp == visibleItems[cleanVIdx].BaseApp {
 						actualIndex = actIdx
-						searchFrom = actIdx + 1
+						if !isBorder {
+							searchFrom = actIdx + 1
+						}
 						break
 					}
 				}
 				if actualIndex >= 0 {
-					newHitRegions = append(newHitRegions, HitRegion{
-						ID:     GetMenuItemID(m.id, actualIndex),
-						X:      0,
-						Y:      aggY,
-						Width:  listContentWidth,
-						Height: h,
-					})
+					itemID := GetMenuItemID(m.id, actualIndex)
+					if isBorder {
+						itemID += "-parent" // Clicks on group borders jump to parent
+					}
+					item := m.items[actualIndex]
+					if m.groupedMode && (item.IsCheckbox || item.IsSubItem || item.IsGroupHeader || item.IsAddInstance) && !isBorder {
+						// Row Margin Catch-all: Registered FIRST so specific regions on top take priority
+						newHitRegions = append(newHitRegions, HitRegion{
+							ID:     itemID + "-border",
+							X:      0,
+							Y:      aggY,
+							Width:  listContentWidth,
+							Height: h,
+						})
+
+						// Sub-items and add-instance rows are indented by 10 relative to the group header
+						baseShift := 0
+						if item.IsSubItem || item.IsAddInstance || item.IsEditing {
+							baseShift = 10
+						}
+
+						// Specific Regions (Add, Enable, Expand)
+						newHitRegions = append(newHitRegions, HitRegion{
+							ID:     itemID + "-add",
+							X:      baseShift + 2,
+							Y:      aggY,
+							Width:  3,
+							Height: h,
+						})
+						newHitRegions = append(newHitRegions, HitRegion{
+							ID:     itemID + "-enable",
+							X:      baseShift + 6,
+							Y:      aggY,
+							Width:  3,
+							Height: h,
+						})
+						tagX := baseShift + 10
+						tagW := listContentWidth - tagX
+						newHitRegions = append(newHitRegions, HitRegion{
+							ID:     itemID + "-expand",
+							X:      tagX,
+							Y:      aggY,
+							Width:  max(1, tagW),
+							Height: h,
+						})
+					} else {
+						// Standard single-hit region or border hit region
+						newHitRegions = append(newHitRegions, HitRegion{
+							ID:     itemID,
+							X:      0,
+							Y:      aggY,
+							Width:  listContentWidth,
+							Height: h,
+						})
+					}
 				}
 			}
 			aggY += h
@@ -397,6 +458,8 @@ func (m *MenuModel) renderVariableHeightList() string {
 		result := strings.Join(viewLines, "\n")
 		m.lastListView = result
 		m.lastHitRegions = newHitRegions
+		m.lastVersion = m.renderVersion
+		m.lastColumn = m.ActiveColumn()
 		return result
 	}
 
@@ -440,8 +503,10 @@ func (m *MenuModel) renderVariableHeightList() string {
 	for i, item := range renderedItems {
 		h := itemHeights[i]
 		vIdx := itemMappings[i]
+		isBorder := (vIdx & vIdxBorderFlag) != 0
 		if aggY+h > viewStart && aggY < viewStart+maxHeight {
-			if vIdx >= 0 && !visibleItems[vIdx].IsSeparator {
+			if vIdx >= 0 && !visibleItems[vIdx & ^vIdxBorderFlag].IsSeparator {
+				cleanVIdx := vIdx & ^vIdxBorderFlag
 				y := aggY - viewStart
 				itemH := h
 				if aggY < viewStart {
@@ -454,20 +519,70 @@ func (m *MenuModel) renderVariableHeightList() string {
 				actualIndex := -1
 				for actIdx := searchFrom; actIdx < len(m.items); actIdx++ {
 					mi := m.items[actIdx]
-					if mi.Tag == visibleItems[vIdx].Tag && mi.Desc == visibleItems[vIdx].Desc {
+					if mi.Tag == visibleItems[cleanVIdx].Tag && mi.Desc == visibleItems[cleanVIdx].Desc && mi.BaseApp == visibleItems[cleanVIdx].BaseApp {
 						actualIndex = actIdx
-						searchFrom = actIdx + 1
+						if !isBorder {
+							searchFrom = actIdx + 1
+						}
 						break
 					}
 				}
 				if actualIndex >= 0 {
-					newHitRegions = append(newHitRegions, HitRegion{
-						ID:     GetMenuItemID(m.id, actualIndex),
-						X:      0,
-						Y:      y,
-						Width:  listContentWidth,
-						Height: itemH,
-					})
+					itemID := GetMenuItemID(m.id, actualIndex)
+					if isBorder {
+						itemID += "-parent" // Clicks on group borders jump to parent
+					}
+					item := m.items[actualIndex]
+					if m.groupedMode && (item.IsCheckbox || item.IsSubItem || item.IsGroupHeader || item.IsAddInstance) && !isBorder {
+						// Row Margin Catch-all: Registered FIRST so specific regions on top take priority
+						newHitRegions = append(newHitRegions, HitRegion{
+							ID:     itemID + "-border",
+							X:      0,
+							Y:      y,
+							Width:  listContentWidth,
+							Height: itemH,
+						})
+
+						// Sub-items and add-instance rows are indented by 10
+						baseShift := 0
+						if item.IsSubItem || item.IsAddInstance || item.IsEditing {
+							baseShift = 10
+						}
+
+						// Specific Regions (Add, Enable, Expand)
+						newHitRegions = append(newHitRegions, HitRegion{
+							ID:     itemID + "-add",
+							X:      baseShift + 2,
+							Y:      y,
+							Width:  3,
+							Height: itemH,
+						})
+						newHitRegions = append(newHitRegions, HitRegion{
+							ID:     itemID + "-enable",
+							X:      baseShift + 6,
+							Y:      y,
+							Width:  3,
+							Height: itemH,
+						})
+						tagX := baseShift + 10
+						tagW := listContentWidth - tagX
+						newHitRegions = append(newHitRegions, HitRegion{
+							ID:     itemID + "-expand",
+							X:      tagX,
+							Y:      y,
+							Width:  max(1, tagW),
+							Height: itemH,
+						})
+					} else {
+						// Standard single-hit region or border hit region
+						newHitRegions = append(newHitRegions, HitRegion{
+							ID:     itemID,
+							X:      0,
+							Y:      y,
+							Width:  listContentWidth,
+							Height: itemH,
+						})
+					}
 				}
 			}
 			parts := strings.Split(item, "\n")
@@ -486,6 +601,8 @@ func (m *MenuModel) renderVariableHeightList() string {
 	finalResult := strings.Join(viewLines, "\n")
 	m.lastListView = finalResult
 	m.lastHitRegions = newHitRegions
+	m.lastVersion = m.renderVersion
+	m.lastColumn = m.ActiveColumn()
 	return finalResult
 }
 
@@ -526,7 +643,7 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 	topBorder := BuildAETopBorder(subListWidth, 1, subFocused, m.activeColumn, ctx)
 	resLines = append(resLines, neutralStyle.Render(strutil.Repeat(" ", 10))+topBorder)
 	resH = append(resH, 1)
-	resM = append(resM, -1)
+	resM = append(resM, startVisibleIndex|vIdxBorderFlag) // Flag as border
 
 	vStyle := lipgloss.NewStyle().Foreground(ctx.BorderColor).Background(dialogBG)
 	var border lipgloss.Border
@@ -584,7 +701,8 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 			editTag := GetPlainText(item.Tag)
 			tagStr = theme.ThemeSemanticStyle("{{|ItemSelected|}}").Render(editTag)
 		} else if len(item.Tag) > 0 {
-			tagStr = kStyle.Render(string(item.Tag[0])) + tStyle.Render(item.Tag[1:])
+			runes := []rune(item.Tag)
+			tagStr = kStyle.Render(string(runes[0])) + tStyle.Render(string(runes[1:]))
 		}
 
 		// Choose checkbox styles individually
@@ -634,9 +752,9 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 
 	// 3. Build Bottom Border with 1 dash.
 	bottomBorder := BuildAEBottomBorder(subListWidth, 1, subFocused, m.activeColumn, ctx)
-	resLines = append(resLines, neutralStyle.Render(strutil.Repeat(" ", 10))+bottomBorder)
+	resLines = append(resLines, neutralStyle.Render(strutil.Repeat(" ", 10))+bottomBorder+console.CodeReset)
 	resH = append(resH, 1)
-	resM = append(resM, -1)
+	resM = append(resM, startVisibleIndex|vIdxBorderFlag) // Flag as border
 
 	return resLines, resH, resM
 }

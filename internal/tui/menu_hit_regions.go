@@ -152,10 +152,15 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 
 				if m.groupedMode && (item.IsCheckbox || item.IsSubItem || item.IsGroupHeader) {
 					// Split into 3 regions: Add checkbox, Enable checkbox, and the rest (Tag/Expand)
+					baseX := 0
+					if item.IsSubItem || item.IsAddInstance || item.IsEditing {
+						baseX = 10
+					}
+
 					// Offset 2: Add checkbox (3 chars)
 					regions = append(regions, HitRegion{
 						ID:     itemID + "-add",
-						X:      offsetX + listX + 2,
+						X:      offsetX + listX + baseX + 2,
 						Y:      offsetY + listY + i,
 						Width:  3,
 						Height: 1,
@@ -166,7 +171,7 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 					// Offset 6: Enable checkbox (3 chars)
 					regions = append(regions, HitRegion{
 						ID:     itemID + "-enable",
-						X:      offsetX + listX + 6,
+						X:      offsetX + listX + baseX + 6,
 						Y:      offsetY + listY + i,
 						Width:  3,
 						Height: 1,
@@ -175,7 +180,7 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 					})
 
 					// Offset 10+: Tag / Expand region
-					tagX := 10
+					tagX := baseX + 10
 					tagW := itemWidth - tagX
 					if tagW < 1 {
 						tagW = 1

@@ -1,7 +1,10 @@
 package tui
 
 import (
+	"fmt"
+	"runtime/debug"
 	"sort"
+	"strings"
 
 	"DockSTARTer2/internal/logger"
 
@@ -36,10 +39,11 @@ type InputCursorProvider interface {
 func (m *AppModel) View() (v tea.View) {
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Error(m.ctx, "AppModel.View Panic: %v", r)
+			stack := string(debug.Stack())
+			logger.Error(m.ctx, "AppModel.View Panic: %v\n%s", r, stack)
 			// Use plain ANSI only — no theme tags — to prevent a recursive panic
 			// if the theme system itself was the source of the original panic.
-			v = tea.NewView("\x1b[31mRendering Error\x1b[0m\n\nPress any key to continue.")
+			v = tea.NewView(fmt.Sprintf("\x1b[31mRendering Error: %v\x1b[0m\n\n%s\n\nPress any key to continue.", r, TruncateStack(stack, 10)))
 		}
 	}()
 
@@ -340,4 +344,13 @@ func compositorAddShadow(comp *lipgloss.Compositor, l *lipgloss.Layer, baseZ int
 			Y(l.GetY() + DialogShadowHeight).
 			Z(l.GetZ() - 1))
 	}
+}
+
+// TruncateStack returns the first n lines of a stack trace string.
+func TruncateStack(stack string, n int) string {
+	lines := strings.Split(stack, "\n")
+	if len(lines) > n {
+		return strings.Join(lines[:n], "\n") + "\n..."
+	}
+	return stack
 }

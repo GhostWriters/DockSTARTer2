@@ -234,14 +234,16 @@ func (s *AppSelectionScreen) confirmEdit() {
 		checkedState = s.renamingOriginal.Checked
 	}
 	newSubRow := tui.MenuItem{
-		Tag:        displayName,
-		Help:       fmt.Sprintf("Toggle %s", displayName),
-		IsSubItem:  true,
-		IsCheckbox: true,
-		IsNew:      true,
-		Checked:    checkedState,
-		BaseApp:    base,
-		Metadata:   map[string]string{"appName": newAppName},
+		Tag:               displayName,
+		Help:              fmt.Sprintf("Toggle %s", displayName),
+		IsSubItem:         true,
+		IsCheckbox:        true,
+		IsNew:             true,
+		Checked:           checkedState,
+		Enabled:           true,
+		ShowEnabledGutter: true,
+		BaseApp:           base,
+		Metadata:          map[string]string{"appName": newAppName},
 	}
 	newItems := make([]tui.MenuItem, 0, len(items))
 	for i, item := range items {

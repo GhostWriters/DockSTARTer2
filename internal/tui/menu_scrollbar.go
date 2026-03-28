@@ -166,7 +166,7 @@ func BuildPlainBottomBorder(totalWidth int, focused bool, ctx StyleContext) stri
 	borderStyle := lipgloss.NewStyle().
 		Foreground(ctx.Border2Color).
 		Background(ctx.Dialog.GetBackground())
-	inner := strutil.Repeat(border.Bottom, totalWidth-2)
+	inner := strutil.Repeat(border.Bottom, max(0, totalWidth-2))
 	return borderStyle.Render(border.BottomLeft + inner + border.BottomRight)
 }
 
@@ -247,10 +247,10 @@ func BuildLabeledBottomBorderCtx(totalWidth int, label string, focused bool, ctx
 		rightPadCnt = 0
 	}
 
-	leftPart := borderStyle.Render(border.BottomLeft + strutil.Repeat(border.Bottom, leftPadCnt))
+	leftPart := borderStyle.Render(border.BottomLeft + strutil.Repeat(border.Bottom, max(0, leftPadCnt)))
 	leftConnector := borderStyle.Render(leftT)
 	rightConnector := borderStyle.Render(rightT)
-	rightPart := borderStyle.Render(strutil.Repeat(border.Bottom, rightPadCnt) + border.BottomRight)
+	rightPart := borderStyle.Render(strutil.Repeat(border.Bottom, max(0, rightPadCnt)) + border.BottomRight)
 	return lipgloss.JoinHorizontal(lipgloss.Bottom, leftPart, leftConnector, labelStyle.Render(label), rightConnector, rightPart)
 }
 
@@ -323,7 +323,7 @@ func BuildDualLabelBottomBorderCtx(totalWidth int, leftLabel, rightLabel string,
 		borderStyle.Render(leftT),
 		labelStyle.Render(leftLabel),
 		borderStyle.Render(rightT),
-		borderStyle.Render(strutil.Repeat(border.Bottom, middleW)),
+		borderStyle.Render(strutil.Repeat(border.Bottom, max(0, middleW))),
 	}
 	if rightLabel != "" {
 		parts = append(parts,
@@ -398,9 +398,9 @@ func BuildScrollPercentBottomBorder(totalWidth int, scrollPct float64, focused b
 		}
 	}
 
-	leftPart := borderStyle.Render(border.BottomLeft + strutil.Repeat(border.Bottom, leftPadCnt))
+	leftPart := borderStyle.Render(border.BottomLeft + strutil.Repeat(border.Bottom, max(0, leftPadCnt)))
 	leftConnector := borderStyle.Render(leftT)
 	rightConnector := borderStyle.Render(rightT)
-	rightPart := borderStyle.Render(strutil.Repeat(border.Bottom, rightPadCnt) + border.BottomRight)
+	rightPart := borderStyle.Render(strutil.Repeat(border.Bottom, max(0, rightPadCnt)) + border.BottomRight)
 	return lipgloss.JoinHorizontal(lipgloss.Bottom, leftPart, leftConnector, scrollIndicator, rightConnector, rightPart)
 }

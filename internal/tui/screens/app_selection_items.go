@@ -71,8 +71,11 @@ func (s *AppSelectionScreen) refreshItems() {
 	var lastLetter string
 
 	for _, base := range baseApps {
-		letter := strings.ToUpper(base[:1])
-		if letter != lastLetter {
+		letter := ""
+		if len(base) > 0 {
+			letter = strings.ToUpper(base[:1])
+		}
+		if letter != lastLetter && letter != "" {
 			if lastLetter != "" {
 				items = append(items, tui.MenuItem{IsSeparator: true})
 			}
@@ -100,6 +103,7 @@ func (s *AppSelectionScreen) refreshItems() {
 				Tag:               niceName,
 				Desc:              "{{|ListApp|}}" + desc,
 				Help:              fmt.Sprintf("Toggle %s. Press Ctrl+Right to manage instances.", niceName),
+				Selectable:        true,
 				IsCheckbox:        true,
 				Checked:           addedMap[base],
 				WasAdded:          addedMap[base],
@@ -123,6 +127,7 @@ func (s *AppSelectionScreen) refreshItems() {
 				Tag:               niceName,
 				Desc:              "{{|ListApp|}}" + desc,
 				Help:              fmt.Sprintf("Press Ctrl+Right to manage %s instances", niceName),
+				Selectable:        true,
 				IsGroupHeader:     true,
 				Checked:           anyEnabled,
 				Enabled:           enabledMap[base],
@@ -154,6 +159,7 @@ func (s *AppSelectionScreen) refreshItems() {
 					items = append(items, tui.MenuItem{
 						Tag:               displayName,
 						Help:              fmt.Sprintf("%s — referenced in config but not added", displayName),
+						Selectable:        true,
 						IsSubItem:         true,
 						IsCheckbox:        true,
 						IsReferenced:      true,
@@ -169,6 +175,7 @@ func (s *AppSelectionScreen) refreshItems() {
 					items = append(items, tui.MenuItem{
 						Tag:               displayName,
 						Help:              fmt.Sprintf("Toggle %s", displayName),
+						Selectable:        true,
 						IsSubItem:         true,
 						IsCheckbox:        true,
 						Checked:           addedMap[ie.appName],
@@ -222,7 +229,7 @@ func (s *AppSelectionScreen) expandGroup(baseApp string) {
 		WasAdded:          orig.WasAdded,
 		Enabled:           orig.Enabled,
 		WasEnabled:        orig.WasEnabled,
-		ShowEnabledGutter: false,
+		Selectable:        true,
 		IsReferenced:      orig.IsReferenced,
 		BaseApp:           baseApp,
 		Metadata:          orig.Metadata,
@@ -232,6 +239,7 @@ func (s *AppSelectionScreen) expandGroup(baseApp string) {
 		Help:              fmt.Sprintf("Toggle %s", niceName),
 		IsSubItem:         true,
 		IsCheckbox:        true,
+		Selectable:        true,
 		Checked:           orig.Checked,
 		WasAdded:          orig.WasAdded,
 		Enabled:           orig.Enabled,
@@ -245,6 +253,7 @@ func (s *AppSelectionScreen) expandGroup(baseApp string) {
 		Tag:           "+ Add instance\u2026",
 		Help:          fmt.Sprintf("Press Space/Enter or Ctrl+Right to add a %s instance", niceName),
 		IsAddInstance: true,
+		Selectable:    false,
 		BaseApp:       baseApp,
 	}
 	newItems := make([]tui.MenuItem, 0, len(items)+2)
@@ -291,6 +300,7 @@ func (s *AppSelectionScreen) collapseGroupIfNeeded(items []tui.MenuItem, base st
 		Desc:              "{{|ListApp|}}" + desc,
 		Help:              fmt.Sprintf("Toggle %s. Press Ctrl+Right to manage instances.", niceName),
 		IsCheckbox:        true,
+		Selectable:        true,
 		Checked:           checked,
 		WasAdded:          wasAdded,
 		Enabled:           enabled,

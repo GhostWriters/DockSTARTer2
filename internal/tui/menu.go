@@ -140,14 +140,16 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 		if strings.Contains(tag, "{{") {
 			tagStr = RenderThemeText(tag, tagStyle)
 		} else {
+			runes := []rune(tag)
 			letterIdx := 0
-			if strings.HasPrefix(tag, "[") && len(tag) > 1 {
+			if strings.HasPrefix(tag, "[") && len(runes) > 1 {
 				letterIdx = 1
 			}
-			prefix := tag[:letterIdx]
-			firstLetter := string(tag[letterIdx])
-			rest := tag[letterIdx+1:]
-			tagStr = tagStyle.Render(prefix) + keyStyle.Render(firstLetter) + tagStyle.Render(rest)
+			if letterIdx < len(runes) {
+				tagStr = tagStyle.Render(string(runes[:letterIdx])) + keyStyle.Render(string(runes[letterIdx])) + tagStyle.Render(string(runes[letterIdx+1:]))
+			} else {
+				tagStr = RenderThemeText(tag, tagStyle)
+			}
 		}
 	}
 
@@ -315,14 +317,16 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 			if strings.Contains(tag, "{{") {
 				tagStr = RenderThemeText(tag, tagStyle)
 			} else {
+				runes := []rune(tag)
 				letterIdx := 0
-				if strings.HasPrefix(tag, "[") && len(tag) > 1 {
+				if strings.HasPrefix(tag, "[") && len(runes) > 1 {
 					letterIdx = 1
 				}
-				prefix := tag[:letterIdx]
-				firstLetter := string(tag[letterIdx])
-				rest := tag[letterIdx+1:]
-				tagStr = tagStyle.Render(prefix) + keyStyle.Render(firstLetter) + tagStyle.Render(rest)
+				if letterIdx < len(runes) {
+					tagStr = tagStyle.Render(string(runes[:letterIdx])) + keyStyle.Render(string(runes[letterIdx])) + tagStyle.Render(string(runes[letterIdx+1:]))
+				} else {
+					tagStr = RenderThemeText(tag, tagStyle)
+				}
 			}
 		}
 	}
@@ -527,7 +531,7 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 			bgStyle := lipgloss.NewStyle().Background(cbStyle.GetBackground())
 			return bgStyle.Render(" ") + inner + bgStyle.Render(" ")
 		}
-		
+
 		content := "[ ]"
 		if checked {
 			content = "[x]"
@@ -749,10 +753,13 @@ type MenuModel struct {
 	lastFilter     string
 	lastActive     bool
 	lastLineChars  bool
+	lastVersion    int
+	lastColumn     CheckboxColumn
 	lastHitRegions []HitRegion // Cache for variable height hit regions
 	viewStartY     int         // Persistent scroll offset for variable height lists
 	lastScrollTotal int        // Total content height from last renderVariableHeightList (for scrollbar)
 
+	renderVersion  int // Incremented on item changes to invalidate list cache
 	menuName string // Name used for --menu or -M to return to this screen
 
 	// Content sections: sub-menus rendered stacked inside the outer border.
@@ -765,9 +772,10 @@ type MenuModel struct {
 	itemHelpFunc func(item MenuItem) (itemTitle, itemText string)
 
 	// Scrollbar interaction state
-	sbInfo     ScrollbarInfo // geometry from last render (set by menu_render.go)
-	sbAbsTopY  int           // absolute screen Y of scrollbar column top (set by GetHitRegions)
-	sbDragging bool          // true while the user is dragging the scrollbar thumb
+	sbInfo          ScrollbarInfo             // geometry from last render (set by menu_render.go)
+	sbAbsTopY       int                       // absolute screen Y of scrollbar column top (set by GetHitRegions)
+	sbDragging      bool                      // true while the user is dragging the scrollbar thumb
+	contextMenuFunc func(idx int) []ContextMenuItem // hook for screen-specific operations
 }
 
 // IsScrollbarDragging reports whether the menu is currently processing a scrollbar thumb drag.
@@ -793,6 +801,11 @@ const (
 	ColAdd CheckboxColumn = iota
 	ColEnable
 )
+
+// SetContextMenuFunc sets the callback that provides custom context menu items for this menu
+func (m *MenuModel) SetContextMenuFunc(f func(idx int) []ContextMenuItem) {
+	m.contextMenuFunc = f
+}
 
 // menuSelectedIndices persists menu selection across visits
 var menuSelectedIndices = make(map[string]int)
@@ -1059,6 +1072,8 @@ func (m *MenuModel) SetItem(index int, item MenuItem) {
 	}
 	m.items[index] = item
 	m.list.SetItem(index, item)
+	m.renderVersion++
+	m.InvalidateCache()
 }
 
 // SetVariableHeight allows the list viewport to expand instead of forcing pagination
@@ -1126,6 +1141,9 @@ func (m *MenuModel) SetItems(items []MenuItem) {
 	}
 	m.list.SetItems(listItems)
 
+	m.renderVersion++
+	m.InvalidateCache()
+
 	// Update delegate with new max tag length and focus
 	m.updateDelegate()
 }
@@ -1161,6 +1179,7 @@ func (m *MenuModel) SelectedItem() MenuItem {
 // SetActiveColumn sets the focused checkbox column (Add or Enable)
 func (m *MenuModel) SetActiveColumn(col CheckboxColumn) {
 	m.activeColumn = col
+	m.renderVersion++
 	m.updateDelegate()
 }
 
@@ -1173,24 +1192,33 @@ func (m *MenuModel) SetButtonLabels(selectLabel, backLabel, exitLabel string) {
 
 // ToggleSelectedItem toggles the selected state of the current item (for checkbox mode)
 func (m *MenuModel) ToggleSelectedItem() {
-	if m.cursor >= 0 && m.cursor < len(m.items) && m.items[m.cursor].Selectable {
-		if m.items[m.cursor].IsCheckbox || m.items[m.cursor].IsRadioButton {
+	idx := m.list.Index()
+	if idx >= 0 && idx < len(m.items) && m.items[idx].Selectable {
+		if m.items[idx].IsCheckbox || m.items[idx].IsRadioButton {
 			if m.groupedMode && m.activeColumn == ColEnable {
-				m.items[m.cursor].Enabled = !m.items[m.cursor].Enabled
+				m.items[idx].Enabled = !m.items[idx].Enabled
+				if m.items[idx].Enabled {
+					m.items[idx].Checked = true // Auto-add if user enables
+					m.items[idx].ShowEnabledGutter = true
+				}
 			} else {
-				m.items[m.cursor].Checked = !m.items[m.cursor].Checked
-				m.items[m.cursor].Selected = m.items[m.cursor].Checked
+				m.items[idx].Checked = !m.items[idx].Checked
+				m.items[idx].Selected = m.items[idx].Checked
+				if m.items[idx].Checked {
+					m.items[idx].Enabled = true
+					m.items[idx].ShowEnabledGutter = true
+				} else {
+					m.items[idx].Enabled = false
+					m.items[idx].ShowEnabledGutter = false
+				}
 			}
 		} else {
-			m.items[m.cursor].Selected = !m.items[m.cursor].Selected
+			m.items[idx].Selected = !m.items[idx].Selected
 		}
 		// Update the list item too
-		listItems := make([]list.Item, len(m.items))
-		for i, item := range m.items {
-			listItems[i] = item
-		}
-		m.list.SetItems(listItems)
-		m.lastView = "" // Invalidate view cache since checked/selected state changed
+		m.list.SetItem(idx, m.items[idx])
+		m.renderVersion++
+		m.InvalidateCache()
 	}
 }
 
@@ -1242,14 +1270,14 @@ func (m *MenuModel) HelpContext(contentWidth int) HelpContext {
 	return m.helpContextForIdx(m.list.Index(), contentWidth)
 }
 
-// showContextMenu returns a command to show the context menu for the item at the given index.
-func (m *MenuModel) showContextMenu(idx int, x, y int) tea.Cmd {
+// ShowContextMenu returns a command to show the context menu for the item at the given index.
+func (m *MenuModel) ShowContextMenu(idx int, x, y int) tea.Cmd {
 	var tag, desc string
 	var hCtx *HelpContext
 
 	if idx >= 0 && idx < len(m.items) {
 		item := m.items[idx]
-		tag = item.Tag
+		tag = GetPlainText(item.Tag)
 		desc = item.Desc
 		ctx := m.helpContextForIdx(idx, 0)
 		hCtx = &ctx
@@ -1260,6 +1288,16 @@ func (m *MenuModel) showContextMenu(idx int, x, y int) tea.Cmd {
 		items = append(items, ContextMenuItem{IsHeader: true, Label: tag})
 		items = append(items, ContextMenuItem{IsSeparator: true})
 	}
+
+	// NEW: Inject custom operational items from the screen provider
+	if m.contextMenuFunc != nil {
+		customItems := m.contextMenuFunc(idx)
+		if len(customItems) > 0 {
+			items = append(items, customItems...)
+			items = append(items, ContextMenuItem{IsSeparator: true})
+		}
+	}
+
 	var clipItems []ContextMenuItem
 
 	if tag != "" {

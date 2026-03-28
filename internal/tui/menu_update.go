@@ -96,7 +96,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if idx, ok := ParseMenuItemIndex(id, m.id); ok {
 			// Right click on a menu item triggers its context menu WITHOUT moving selection
 			if msg.Button == tea.MouseRight {
-				return m, m.showContextMenu(idx, msg.X, msg.Y)
+				return m, m.ShowContextMenu(idx, msg.X, msg.Y)
 			}
 
 			// Left click moves the selection and executes
@@ -112,8 +112,6 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.activeColumn = ColEnable
 			}
 
-			// For checkboxes/radio buttons, clicking toggles (Space action)
-			// For regular items, clicking executes (Enter action)
 			if idx >= 0 && idx < len(m.items) {
 				item := m.items[idx]
 				if suffix == "expand" && item.IsGroupHeader {
@@ -121,7 +119,15 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, item.Action
 				}
 
+				// For checkboxes, radio buttons, or selectable items, we trigger a toggle.
+				// We MUST check the interceptor first to ensure custom screen logic (like AppSelect) is honored.
 				if item.IsCheckbox || item.IsRadioButton || item.Selectable {
+					if m.interceptor != nil {
+						// We pass a ToggleFocusedMsg to the interceptor to represent a programmatic/mouse-driven toggle
+						if cmd, handled := m.interceptor(ToggleFocusedMsg{}, m); handled {
+							return m, cmd
+						}
+					}
 					return m.handleSpace()
 				}
 			}
@@ -458,8 +464,13 @@ func (m *MenuModel) handleSpace() (tea.Model, tea.Cmd) {
 	selectedItem := m.list.SelectedItem()
 	if item, ok := selectedItem.(MenuItem); ok {
 		if (item.IsCheckbox || item.IsRadioButton) && item.Selectable {
+			idx := m.list.Index()
 			if m.groupedMode && m.activeColumn == ColEnable {
 				item.Enabled = !item.Enabled
+				if item.Enabled {
+					item.Checked = true // Auto-add if user enables
+					item.ShowEnabledGutter = true
+				}
 			} else {
 				if item.IsRadioButton {
 					item.Checked = true
@@ -467,17 +478,22 @@ func (m *MenuModel) handleSpace() (tea.Model, tea.Cmd) {
 					item.Checked = !item.Checked
 				}
 				item.Selected = item.Checked
+				if item.Checked {
+					item.Enabled = true
+					item.ShowEnabledGutter = true
+				} else {
+					item.Enabled = false
+					item.ShowEnabledGutter = false
+				}
 			}
 			// Update the item in our internal list too so state persists
-			idx := m.list.Index()
 			if idx >= 0 && idx < len(m.items) {
-				m.items[idx].Checked = item.Checked
-				m.items[idx].Enabled = item.Enabled
-				m.items[idx].Selected = item.Selected
+				m.items[idx] = item
 				// Update list.Model internal items to reflect changes immediately
 				m.list.SetItem(idx, item)
 			}
-			m.lastView = "" // Invalidate cache
+			m.renderVersion++
+			m.InvalidateCache()
 
 			if item.SpaceAction != nil {
 				return m, item.SpaceAction
