@@ -63,7 +63,6 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 	// backAction (needed by NewMenuModel) can close over them before their
 	// implementations are defined below.
 	type changeSet struct {
-		toAdd     []string
 		toRemove  []string
 		toEnable  []string
 		toDisable []string
@@ -828,7 +827,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 		for _, a := range originalEnabled {
 			originalEnabledMap[a] = true
 		}
-		var toAdd, toRemove, toEnable, toDisable []string
+		var toRemove, toEnable, toDisable []string
 		for _, item := range menu.GetItems() {
 			if item.IsGroupHeader || item.IsSeparator || item.IsEditing {
 				continue
@@ -838,42 +837,33 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 				continue
 			}
 			niceNames[appName] = item.Tag
-			// Add/Remove
-			if item.Checked && !originalMap[appName] {
-				toAdd = append(toAdd, appName)
-			} else if !item.Checked && originalMap[appName] {
+			// Remove logic: was added, now unchecked.
+			if !item.Checked && originalMap[appName] {
 				toRemove = append(toRemove, appName)
 			}
-			// Enable/Disable (only for added apps)
+			// Enable/Disable logic for apps that are "Added" (Checked):
 			if item.Checked {
-				if item.Enabled && !originalEnabledMap[appName] {
-					toEnable = append(toEnable, appName)
-				} else if !item.Enabled && originalEnabledMap[appName] {
-					toDisable = append(toDisable, appName)
+				isNew := !originalMap[appName]
+				if item.Enabled != originalEnabledMap[appName] || isNew {
+					if item.Enabled {
+						toEnable = append(toEnable, appName)
+					} else {
+						toDisable = append(toDisable, appName)
+					}
 				}
 			}
 		}
-		return changeSet{toAdd: toAdd, toRemove: toRemove, toEnable: toEnable, toDisable: toDisable, niceNames: niceNames, envFile: envFile}
+		return changeSet{toRemove: toRemove, toEnable: toEnable, toDisable: toDisable, niceNames: niceNames, envFile: envFile}
 	}
 
 	// buildChangeSummary returns a human-readable summary of pending changes.
 	buildChangeSummary = func(cs changeSet) string {
-		if len(cs.toAdd) == 0 && len(cs.toRemove) == 0 && len(cs.toEnable) == 0 && len(cs.toDisable) == 0 {
+		if len(cs.toRemove) == 0 && len(cs.toEnable) == 0 && len(cs.toDisable) == 0 {
 			return "No changes pending."
 		}
 		// Align app names under the longest label ("Disable: " = 9 chars).
 		const indent = "         " // 9 spaces
 		var lines []string
-		if len(cs.toAdd) > 0 {
-			for i, app := range cs.toAdd {
-				name := "{{|ProgressWaiting|}}" + cs.niceNames[app] + "{{[-]}}"
-				if i == 0 {
-					lines = append(lines, "{{|ProgressWaiting|}}Add:{{[-]}}     "+name)
-				} else {
-					lines = append(lines, indent+name)
-				}
-			}
-		}
 		if len(cs.toRemove) > 0 {
 			for i, app := range cs.toRemove {
 				name := "{{|ProgressWaiting|}}" + cs.niceNames[app] + "{{[-]}}"
@@ -909,21 +899,16 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 
 	handleSave := func() tea.Msg {
 		cs := computeChanges()
-		toAdd := cs.toAdd
 		toRemove := cs.toRemove
 		toEnable := cs.toEnable
 		toDisable := cs.toDisable
 		niceNames := cs.niceNames
 		envFile := cs.envFile
 
-		if len(toAdd) == 0 && len(toRemove) == 0 && len(toEnable) == 0 && len(toDisable) == 0 {
+		if len(toRemove) == 0 && len(toEnable) == 0 && len(toDisable) == 0 {
 			return tui.NavigateBackMsg{}
 		}
 
-		var toAddNice []string
-		for _, app := range toAdd {
-			toAddNice = append(toAddNice, niceNames[app])
-		}
 		var toRemoveNice []string
 		for _, app := range toRemove {
 			toRemoveNice = append(toRemoveNice, niceNames[app])
@@ -945,20 +930,17 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 		if len(toRemove) > 0 {
 			dialog.AddTask("Removing applications", "ds --remove", toRemoveNice)
 		}
-		if len(toAdd) > 0 {
-			dialog.AddTask("Adding applications", "ds --add", toAddNice)
+		if len(toDisable) > 0 {
+			dialog.AddTask("Disabling applications", "ds --disable", toDisableNice)
 		}
 		if len(toEnable) > 0 {
 			dialog.AddTask("Enabling applications", "ds --enable", toEnableNice)
-		}
-		if len(toDisable) > 0 {
-			dialog.AddTask("Disabling applications", "ds --disable", toDisableNice)
 		}
 		dialog.AddTask("Updating variable files", "", nil)
 
 		task := func(ctx context.Context, w io.Writer) error {
 			ctx = console.WithTUIWriter(ctx, w)
-			totalSteps := len(toAdd) + len(toRemove) + len(toEnable) + len(toDisable) + 1
+			totalSteps := len(toRemove) + len(toEnable) + len(toDisable) + 1
 			completedSteps := 0
 
 			updateProgress := func() {
@@ -976,15 +958,15 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 				tui.Send(tui.UpdateTaskMsg{Label: "Removing applications", Status: tui.StatusCompleted, ActiveApp: ""})
 			}
 
-			if len(toAdd) > 0 {
-				tui.Send(tui.UpdateTaskMsg{Label: "Adding applications", Status: tui.StatusInProgress, ActiveApp: ""})
-				for _, app := range toAdd {
-					tui.Send(tui.UpdateTaskMsg{Label: "Adding applications", Status: tui.StatusInProgress, ActiveApp: niceNames[app]})
-					_ = appenv.Enable(ctx, []string{app}, conf)
+			if len(toDisable) > 0 {
+				tui.Send(tui.UpdateTaskMsg{Label: "Disabling applications", Status: tui.StatusInProgress, ActiveApp: ""})
+				for _, app := range toDisable {
+					tui.Send(tui.UpdateTaskMsg{Label: "Disabling applications", Status: tui.StatusInProgress, ActiveApp: niceNames[app]})
+					_ = appenv.Disable(ctx, []string{app}, conf)
 					completedSteps++
 					updateProgress()
 				}
-				tui.Send(tui.UpdateTaskMsg{Label: "Adding applications", Status: tui.StatusCompleted, ActiveApp: ""})
+				tui.Send(tui.UpdateTaskMsg{Label: "Disabling applications", Status: tui.StatusCompleted, ActiveApp: ""})
 			}
 
 			if len(toEnable) > 0 {
@@ -996,17 +978,6 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 					updateProgress()
 				}
 				tui.Send(tui.UpdateTaskMsg{Label: "Enabling applications", Status: tui.StatusCompleted, ActiveApp: ""})
-			}
-
-			if len(toDisable) > 0 {
-				tui.Send(tui.UpdateTaskMsg{Label: "Disabling applications", Status: tui.StatusInProgress, ActiveApp: ""})
-				for _, app := range toDisable {
-					tui.Send(tui.UpdateTaskMsg{Label: "Disabling applications", Status: tui.StatusInProgress, ActiveApp: niceNames[app]})
-					_ = appenv.Disable(ctx, []string{app}, conf)
-					completedSteps++
-					updateProgress()
-				}
-				tui.Send(tui.UpdateTaskMsg{Label: "Disabling applications", Status: tui.StatusCompleted, ActiveApp: ""})
 			}
 
 			tui.Send(tui.UpdateTaskMsg{Label: "Updating variable files", Status: tui.StatusInProgress, ActiveApp: ""})
