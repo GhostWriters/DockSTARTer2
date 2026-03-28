@@ -248,7 +248,6 @@ func (m *MenuModel) renderVariableHeightList() string {
 		var firstLinePrefix string
 
 		if isAppSelect && (item.IsCheckbox || item.IsGroupHeader) {
-			prefixWidth = 10
 			if item.IsGroupHeader {
 				var arrowA, arrowE string
 				if ctx.LineCharacters {
@@ -262,6 +261,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 			} else {
 				firstLinePrefix = cbAdd3 + neutralStyle.Render(" ") + cbEnabled3 + neutralStyle.Render(" ")
 			}
+			prefixWidth = lipgloss.Width(GetPlainText(firstLinePrefix))
 		} else {
 			if checkbox != "" {
 				firstLinePrefix = checkbox + neutralStyle.Render(" ")
@@ -323,7 +323,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 		itemGutter := g0 + g1
 
 		firstLine := firstLinePrefix + tagStr + neutralStyle.Render(paddingSpaces) + lines[0]
-		indent := neutralStyle.Render(strutil.Repeat(" ", prefixWidth))
+		indent := neutralStyle.Render(strutil.Repeat(" ", prefixWidth + maxTagLen + 3))
 		renderedItemLines := []string{firstLine}
 		for j := 1; j < len(lines); j++ {
 			renderedItemLines = append(renderedItemLines, indent+lines[j])
