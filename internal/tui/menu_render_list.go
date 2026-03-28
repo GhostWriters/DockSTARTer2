@@ -121,17 +121,13 @@ func (m *MenuModel) renderVariableHeightList() string {
 				j++
 			}
 
-			subLines, subH, _ := m.renderSubListSequence(subItems, i, selectedVisibleIndex, maxTagLen, maxWidth, listContentWidth, subGroupHasCursor, ctx)
+			subLines, subH, subM := m.renderSubListSequence(subItems, i, selectedVisibleIndex, maxTagLen, maxWidth, listContentWidth, subGroupHasCursor, ctx)
 
-			combined := strings.Join(subLines, "\n")
-			totalH := 0
-			for _, h := range subH {
-				totalH += h
+			for k := 0; k < len(subLines); k++ {
+				renderedItems = append(renderedItems, subLines[k])
+				itemHeights = append(itemHeights, subH[k])
+				itemMappings = append(itemMappings, subM[k])
 			}
-
-			renderedItems = append(renderedItems, combined)
-			itemHeights = append(itemHeights, totalH)
-			itemMappings = append(itemMappings, i)
 
 			i = j - 1
 			continue
@@ -150,7 +146,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 			continue
 		}
 
-		if item.IsEditing {
+		if item.IsEditing && !isActuallySub {
 			cbStr := ""
 			if item.IsCheckbox {
 				cb := checkUnselected
@@ -575,7 +571,11 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 		}
 
 		tagStr := ""
-		if len(item.Tag) > 0 {
+		if item.IsEditing {
+			// Using the standard edit styling (red background/bold)
+			editTag := GetPlainText(item.Tag)
+			tagStr = theme.ThemeSemanticStyle("{{|ItemSelected|}}").Render(editTag)
+		} else if len(item.Tag) > 0 {
 			tagStr = kStyle.Render(string(item.Tag[0])) + tStyle.Render(item.Tag[1:])
 		}
 

@@ -452,11 +452,11 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 			Tag:        editingTag(appenv.GetNiceName(context.Background(), baseApp), "", ""),
 			Help:       "Type instance suffix (blank = base). Enter to confirm, Esc to cancel.",
 			IsEditing:  true,
+			IsSubItem:  true, // keep inside folder borders
 			IsCheckbox: true,
 			Checked:    true, // new instances default to enabled
 			BaseApp:    baseApp,
 		}
-
 		// Promote simple checkbox → group header if needed.
 		workItems := items
 		if simpleIdx >= 0 {
@@ -506,8 +506,8 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 		if subIdx < 0 || subIdx >= len(items) || !items[subIdx].IsSubItem {
 			return
 		}
-		if items[subIdx].IsReferenced {
-			return // referenced items are locked; they have existing config and cannot be renamed
+		if items[subIdx].IsReferenced || items[subIdx].WasAdded {
+			return // pre-existing and referenced items are locked
 		}
 		subItem := items[subIdx]
 		suffix := appenv.AppNameToInstanceName(subItem.Metadata["appName"])
@@ -516,6 +516,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 			Tag:        editingTag(appenv.GetNiceName(context.Background(), subItem.BaseApp), suffix, ""),
 			Help:       "Edit instance name. Enter to confirm, Esc to cancel.",
 			IsEditing:  true,
+			IsSubItem:  true, // keep inside folder borders
 			IsCheckbox: subItem.IsCheckbox,
 			Checked:    subItem.Checked,
 			BaseApp:    subItem.BaseApp,
@@ -1044,6 +1045,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 		}
 		item := items[idx]
 		if item.IsGroupHeader || item.IsAddInstance {
+			if item.IsReferenced && item.IsGroupHeader { return true }
 			startEditing(item.BaseApp)
 			return true
 		}
@@ -1170,21 +1172,32 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 
 					var addCols, enableCols [2]int
 					var nameStart int
-					// Accounting for 3-char offset: 1(outer border) + 1(margin) + 1(inner border)
-					addCols = [2]int{5, 8}     // Aligned with content columns 2-5 (+3 offset)
-					enableCols = [2]int{9, 12} // Aligned with content columns 6-9 (+3 offset)
-					nameStart = 14            // Aligned with content column 11 (+3 offset)
+					
+					// Basic baseline offset of 3 plus 10-char sub-item indentation if applicable.
+					if item.IsSubItem || item.IsAddInstance || item.IsEditing {
+						addCols = [2]int{15, 18}
+						enableCols = [2]int{19, 22}
+						nameStart = 24
+					} else {
+						addCols = [2]int{5, 8}
+						enableCols = [2]int{9, 12}
+						nameStart = 14
+					}
 
 					if item.IsAddInstance { startEditing(item.BaseApp); return nil, true }
 					if hitMsg.X >= addCols[0] && hitMsg.X <= addCols[1] && !item.IsGroupHeader {
-						m.SetActiveColumn(tui.ColAdd); toggleItem(m, idx); return nil, true
+						m.SetActiveColumn(tui.ColAdd)
+						toggleItem(m, idx)
+						return nil, true
 					}
-					if hitMsg.X >= enableCols[0] && hitMsg.X <= enableCols[1] {
-						m.SetActiveColumn(tui.ColEnable); toggleItem(m, idx); return nil, true
+					if hitMsg.X >= enableCols[0] && hitMsg.X <= enableCols[1] && !item.IsGroupHeader {
+						m.SetActiveColumn(tui.ColEnable)
+						toggleItem(m, idx)
+						return nil, true
 					}
 					if hitMsg.X >= nameStart {
 						if item.IsSubItem {
-							if !item.IsReferenced { startRenaming(idx) }
+							if !item.IsReferenced && !item.WasAdded { startRenaming(idx) }
 						} else {
 							base := item.BaseApp
 							expandGroup(base)
