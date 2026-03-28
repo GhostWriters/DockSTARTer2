@@ -1050,17 +1050,6 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 			return true
 		}
 		if item.IsCheckbox || item.IsSubItem {
-			if item.IsSubItem && item.IsNew && item.Checked {
-				newItems := make([]tui.MenuItem, 0, len(items)-1)
-				for i2, it := range items {
-					if i2 != idx {
-						newItems = append(newItems, it)
-					}
-				}
-				newItems, _ = collapseGroupIfNeeded(newItems, item.BaseApp)
-				m.SetItems(refreshGroupHeaders(newItems))
-				return true
-			}
 			updated := item
 			if m.ActiveColumn() == tui.ColEnable {
 				// Column-aware: toggling Enable ONLY affects Enabled state.
@@ -1099,12 +1088,33 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 			idx := m.Index()
 			if idx < 0 || idx >= len(items) { return }
 			item := items[idx]
+			prevBase := item.BaseApp
 			if isSubRow(item) {
-				if idx > 0 && isSubRow(items[idx-1]) && items[idx-1].BaseApp == item.BaseApp { m.Select(idx - 1) }
-				return
+				if idx > 0 && isSubRow(items[idx-1]) && items[idx-1].BaseApp == item.BaseApp {
+					m.Select(idx - 1)
+				} else {
+					for i := idx - 1; i >= 0; i-- {
+						if !items[i].IsSeparator && !isSubRow(items[i]) {
+							m.Select(i)
+							break
+						}
+					}
+				}
+			} else {
+				for i := idx - 1; i >= 0; i-- {
+					if !items[i].IsSeparator && !isSubRow(items[i]) { m.Select(i); break }
+				}
 			}
-			for i := idx - 1; i >= 0; i-- {
-				if !items[i].IsSeparator && !isSubRow(items[i]) { m.Select(i); return }
+			if m.Index() != idx {
+				newItems := m.GetItems()
+				if newIdxIdx := m.Index(); newIdxIdx >= 0 && newIdxIdx < len(newItems) {
+					if newItems[newIdxIdx].BaseApp != prevBase {
+						if itemsAfter, ok := collapseGroupIfNeeded(newItems, prevBase); ok {
+							m.SetItems(itemsAfter)
+							for i, it := range itemsAfter { if it.BaseApp == newItems[newIdxIdx].BaseApp { m.Select(i); break } }
+						}
+					}
+				}
 			}
 		}
 		navDown := func() {
@@ -1112,16 +1122,39 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 			idx := m.Index()
 			if idx < 0 || idx >= len(items) { return }
 			item := items[idx]
+			prevBase := item.BaseApp
 			if isSubRow(item) {
-				if idx+1 < len(items) && isSubRow(items[idx+1]) && items[idx+1].BaseApp == item.BaseApp { m.Select(idx+1) }
-				return
+				if idx+1 < len(items) && isSubRow(items[idx+1]) && items[idx+1].BaseApp == item.BaseApp {
+					m.Select(idx + 1)
+				} else {
+					for i := idx + 1; i < len(items); i++ {
+						if !items[i].IsSeparator && !isSubRow(items[i]) {
+							m.Select(i)
+							break
+						}
+					}
+				}
+			} else {
+				for i := idx + 1; i < len(items); i++ {
+					if !items[i].IsSeparator && !isSubRow(items[i]) { m.Select(i); break }
+				}
 			}
-			for i := idx + 1; i < len(items); i++ {
-				if !items[i].IsSeparator && !isSubRow(items[i]) { m.Select(i); return }
+			if m.Index() != idx {
+				newItems := m.GetItems()
+				if newIdxIdx := m.Index(); newIdxIdx >= 0 && newIdxIdx < len(newItems) {
+					if newItems[newIdxIdx].BaseApp != prevBase {
+						if itemsAfter, ok := collapseGroupIfNeeded(newItems, prevBase); ok {
+							m.SetItems(itemsAfter)
+							for i, it := range itemsAfter { if it.BaseApp == newItems[newIdxIdx].BaseApp { m.Select(i); break } }
+						}
+					}
+				}
 			}
 		}
 
-		if _, ok := msg.(tui.TemplateUpdateSuccessMsg); ok { refreshItems(); return nil, true }
+		if _, ok := msg.(tui.TemplateUpdateSuccessMsg); ok {
+			refreshItems(); return nil, true
+		}
 
 		if wheelMsg, ok := msg.(tui.LayerWheelMsg); ok {
 			if isEditing { return nil, true }
@@ -1134,12 +1167,12 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 			return nil, true
 		}
 
-		collapseOtherGroups := func(keepBase string) {
+		collapseAllEmptyGroups := func(skipBase string) {
 			cur := m.GetItems()
 			changed := false
 			seen := map[string]bool{}
 			for _, it := range cur {
-				if it.IsGroupHeader && it.BaseApp != keepBase && !seen[it.BaseApp] {
+				if it.IsGroupHeader && it.BaseApp != skipBase && !seen[it.BaseApp] {
 					seen[it.BaseApp] = true
 				}
 			}
@@ -1149,15 +1182,10 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 					changed = true
 				}
 			}
-			if !changed {
-				return
-			}
+			if !changed { return }
 			m.SetItems(cur)
-			for i, it := range cur {
-				if it.BaseApp == keepBase {
-					m.Select(i)
-					return
-				}
+			if skipBase != "" {
+				for i, it := range cur { if it.BaseApp == skipBase { m.Select(i); return } }
 			}
 		}
 
@@ -1196,16 +1224,19 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 						return nil, true
 					}
 					if hitMsg.X >= nameStart {
+						base := item.BaseApp
+						m.Select(idx)
 						if item.IsSubItem {
 							if !item.IsReferenced && !item.WasAdded { startRenaming(idx) }
-						} else {
-							base := item.BaseApp
-							expandGroup(base)
-							collapseOtherGroups(base)
-							newItems := m.GetItems()
-							for i := idx + 1; i < len(newItems); i++ {
-								if newItems[i].IsSubItem && newItems[i].BaseApp == base { m.Select(i); m.SetActiveColumn(tui.ColAdd); break }
+						} else if item.IsGroupHeader {
+							if ni, ok := collapseGroupIfNeeded(m.GetItems(), base); ok {
+								m.SetItems(ni)
+								for i, it := range ni { if it.BaseApp == base { m.Select(i); break } }
 							}
+							collapseAllEmptyGroups(base)
+						} else {
+							expandGroup(base)
+							collapseAllEmptyGroups(base)
 						}
 						return nil, true
 					}
