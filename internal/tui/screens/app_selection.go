@@ -87,6 +87,10 @@ func (s *AppSelectionScreen) HelpContext(maxWidth int) tui.HelpContext {
 	return s.menu.HelpContext(maxWidth)
 }
 
+func (s *AppSelectionScreen) isSubRow(it tui.MenuItem) bool {
+	return it.IsSubItem || it.IsAddInstance || it.IsEditing
+}
+
 // NewAppSelectionScreen creates the app selection screen.
 func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScreen {
 	s := &AppSelectionScreen{
@@ -126,9 +130,9 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 			return "", ""
 		}
 		ctx := context.Background()
-		appMeta, _ := appenv.LoadAppMeta(ctx, item.BaseApp)
+		appMeta, err := appenv.LoadAppMeta(ctx, item.BaseApp)
 		var parts []string
-		if appMeta != nil && appMeta.App.HelpText != "" {
+		if err == nil && appMeta != nil && appMeta.App.HelpText != "" {
 			parts = append(parts, appMeta.App.HelpText)
 		} else if desc := appenv.GetDescriptionFromTemplate(ctx, item.BaseApp, ""); desc != "" {
 			parts = append(parts, desc)
@@ -214,14 +218,11 @@ func (s *AppSelectionScreen) toggleItem(idx int) {
 }
 
 func (s *AppSelectionScreen) navUp(m *tui.MenuModel, items []tui.MenuItem, idx int, item tui.MenuItem) {
-	isSubRow := func(it tui.MenuItem) bool {
-		return it.IsSubItem || it.IsAddInstance || it.IsEditing
-	}
 	if idx <= 0 {
 		return
 	}
 	prevBase := item.BaseApp
-	if isSubRow(item) {
+	if s.isSubRow(item) {
 		// Constrain to this group
 		if idx > 0 && items[idx-1].BaseApp == prevBase && !items[idx-1].IsSeparator {
 			// Don't go back into header from sub-row via Up
@@ -234,7 +235,7 @@ func (s *AppSelectionScreen) navUp(m *tui.MenuModel, items []tui.MenuItem, idx i
 	}
 	// Main list: skip all sub-items and go to previous Header
 	for i := idx - 1; i >= 0; i-- {
-		if !items[i].IsSeparator && !isSubRow(items[i]) {
+		if !items[i].IsSeparator && !s.isSubRow(items[i]) {
 			m.Select(i)
 			// Smart Collapse: collapse the group we just left
 			if ni, ok := s.collapseGroupIfNeeded(m.GetItems(), prevBase); ok {
@@ -252,14 +253,11 @@ func (s *AppSelectionScreen) navUp(m *tui.MenuModel, items []tui.MenuItem, idx i
 }
 
 func (s *AppSelectionScreen) navDown(m *tui.MenuModel, items []tui.MenuItem, idx int, item tui.MenuItem) {
-	isSubRow := func(it tui.MenuItem) bool {
-		return it.IsSubItem || it.IsAddInstance || it.IsEditing
-	}
 	if idx >= len(items)-1 {
 		return
 	}
 	prevBase := item.BaseApp
-	if isSubRow(item) {
+	if s.isSubRow(item) {
 		// Constrain to this group
 		if idx+1 < len(items) && items[idx+1].BaseApp == prevBase && !items[idx+1].IsSeparator {
 			m.Select(idx + 1)
@@ -268,7 +266,7 @@ func (s *AppSelectionScreen) navDown(m *tui.MenuModel, items []tui.MenuItem, idx
 	}
 	// Main list: skip all sub-items and go to next Header
 	for i := idx + 1; i < len(items); i++ {
-		if !items[i].IsSeparator && !isSubRow(items[i]) {
+		if !items[i].IsSeparator && !s.isSubRow(items[i]) {
 			m.Select(i)
 			// Smart Collapse: collapse the group we just left
 			if ni, ok := s.collapseGroupIfNeeded(m.GetItems(), prevBase); ok {
@@ -287,9 +285,6 @@ func (s *AppSelectionScreen) navDown(m *tui.MenuModel, items []tui.MenuItem, idx
 
 func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (tea.Cmd, bool) {
 	idx := m.Index()
-	isSubRow := func(it tui.MenuItem) bool {
-		return it.IsSubItem || it.IsAddInstance || it.IsEditing
-	}
 	items := m.GetItems()
 	if idx < 0 || idx >= len(items) {
 		return nil, false
@@ -486,7 +481,7 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 		s.navDown(m, items, idx, item)
 		return nil, true
 	case "pgup", "ctrl+b", "ctrl+up", "ctrl+u":
-		if isSubRow(item) {
+		if s.isSubRow(item) {
 			first := idx
 			for i := idx - 1; i >= 0; i-- {
 				if items[i].BaseApp != item.BaseApp {
@@ -499,7 +494,7 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 			const pageSize = 5
 			moved, cur := 0, idx
 			for i := idx - 1; i >= 0 && moved < pageSize; i-- {
-				if !items[i].IsSeparator && !isSubRow(items[i]) {
+				if !items[i].IsSeparator && !s.isSubRow(items[i]) {
 					cur = i
 					moved++
 				}
@@ -508,7 +503,7 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 		}
 		return nil, true
 	case "pgdown", "ctrl+f", "ctrl+down", "ctrl+d":
-		if isSubRow(item) {
+		if s.isSubRow(item) {
 			last := idx
 			for i := idx + 1; i < len(items); i++ {
 				if items[i].BaseApp != item.BaseApp {
@@ -521,7 +516,7 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 			const pageSize = 5
 			moved, cur := 0, idx
 			for i := idx + 1; i < len(items) && moved < pageSize; i++ {
-				if !items[i].IsSeparator && !isSubRow(items[i]) {
+				if !items[i].IsSeparator && !s.isSubRow(items[i]) {
 					cur = i
 					moved++
 				}
@@ -530,7 +525,7 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 		}
 		return nil, true
 	case "home", "ctrl+home":
-		if isSubRow(item) {
+		if s.isSubRow(item) {
 			first := idx
 			for i := idx - 1; i >= 0; i-- {
 				if items[i].BaseApp != item.BaseApp {
@@ -541,7 +536,7 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 			m.Select(first)
 		} else {
 			for i := 0; i < len(items); i++ {
-				if !items[i].IsSeparator && !isSubRow(items[i]) {
+				if !items[i].IsSeparator && !s.isSubRow(items[i]) {
 					m.Select(i)
 					break
 				}
@@ -549,7 +544,7 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 		}
 		return nil, true
 	case "end", "ctrl+end":
-		if isSubRow(item) {
+		if s.isSubRow(item) {
 			last := idx
 			for i := idx + 1; i < len(items); i++ {
 				if items[i].BaseApp != item.BaseApp {
@@ -560,7 +555,7 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 			m.Select(last)
 		} else {
 			for i := len(items) - 1; i >= 0; i-- {
-				if !items[i].IsSeparator && !isSubRow(items[i]) {
+				if !items[i].IsSeparator && !s.isSubRow(items[i]) {
 					m.Select(i)
 					break
 				}
@@ -568,7 +563,7 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 		}
 		return nil, true
 	case "ctrl+left":
-		if isSubRow(item) && m.ActiveColumn() == tui.ColAdd {
+		if s.isSubRow(item) && m.ActiveColumn() == tui.ColAdd {
 			for i := idx - 1; i >= 0; i-- {
 				if items[i].BaseApp == item.BaseApp && items[i].IsGroupHeader {
 					m.Select(i)

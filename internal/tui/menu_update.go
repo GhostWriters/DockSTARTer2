@@ -362,40 +362,41 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Dynamic Hotkeys
 		default:
-			// In v2, KeyPressMsg has Text field directly
-			if keyMsg.Text != "" {
-				keyRune := strings.ToLower(keyMsg.Text)
+			if keyMsg.Text != "" && len(keyMsg.Text) == 1 {
+				keyChar := strings.ToLower(keyMsg.Text)
 
 				// 1. Check Menu Items first (priority)
-				for i, item := range m.items {
-					// Handle tagged tags like [F] properly
-					tag := strings.Trim(item.Tag, "[]")
-					if len(tag) > 0 {
-						firstChar := strings.ToLower(string(tag[0]))
-						if firstChar == keyRune {
-							m.list.Select(i)
-							m.cursor = i
-							menuSelectedIndices[m.id] = i
-							m.focusedItem = FocusList
-							return m.handleEnter()
+				// Cyclical search: start from the item after the current selection
+				items := m.items
+				if len(items) > 0 {
+					startIdx := (m.list.Index() + 1) % len(items)
+					for i := 0; i < len(items); i++ {
+						idx := (startIdx + i) % len(items)
+						item := items[idx]
+						if item.IsSeparator {
+							continue
+						}
+						// Strip semantic tags and brackets to find the raw first letter
+						displayTag := GetPlainText(item.Tag)
+						tag := strings.TrimLeft(displayTag, " [({")
+						if len(tag) > 0 {
+							firstChar := strings.ToLower(string([]rune(tag)[0]))
+							if firstChar == keyChar {
+								m.list.Select(idx)
+								m.cursor = idx
+								menuSelectedIndices[m.id] = idx
+								m.focusedItem = FocusList
+								m.updateDelegate()
+								// NAVIGATION ONLY: Move cursor, do not execute Action.
+								return m, nil
+							}
 						}
 					}
 				}
 
 				// 2. Check Buttons (if no item matched)
-				// Determine available buttons using shared helper
 				buttons := m.getButtonSpecs()
-
 				if idx, found := CheckButtonHotkeys(keyMsg, buttons); found {
-					// Map index back to FocusItem
-					// Use zone IDs or index to map, assuming standard order
-					// But since we use dynamic buttons, we should map based on the button's intended action
-					// Or just map index if we know the order: Select, [Back], [Exit]
-					// Helper: map button text/zone to FocusItem?
-					// Simpler: iterate known types and check if active in specs?
-					// Because getButtonSpecs builds in order: Select, Back, Exit.
-
-					// Re-derive focus based on index loop
 					focusMap := []FocusItem{FocusSelectBtn}
 					if m.backAction != nil {
 						focusMap = append(focusMap, FocusBackBtn)
@@ -406,8 +407,11 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 					if idx < len(focusMap) {
 						m.focusedItem = focusMap[idx]
+						m.updateDelegate()
 					}
-					return m.handleEnter()
+					// NAVIGATION ONLY: Move focus to button, do not execute Action automatically
+					// for single-character letter keys.
+					return m, nil
 				}
 			}
 		}

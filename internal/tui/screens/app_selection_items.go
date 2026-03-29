@@ -15,8 +15,14 @@ func (s *AppSelectionScreen) refreshItems() {
 	ctx := context.Background()
 	envFile := filepath.Join(s.conf.ComposeDir, constants.EnvFileName)
 
-	nonDeprecated, _ := appenv.ListNonDeprecatedApps(ctx)
-	added, _ := appenv.ListAddedApps(ctx, envFile)
+	nonDeprecated, err := appenv.ListNonDeprecatedApps(ctx)
+	if err != nil {
+		nonDeprecated = []string{}
+	}
+	added, err := appenv.ListAddedApps(ctx, envFile)
+	if err != nil {
+		added = []string{}
+	}
 
 	baseAppsSet := make(map[string]bool)
 	for _, a := range nonDeprecated {
@@ -32,7 +38,10 @@ func (s *AppSelectionScreen) refreshItems() {
 		addedByBase[base] = append(addedByBase[base], a)
 	}
 
-	enabledApps, _ := appenv.ListEnabledApps(s.conf)
+	enabledApps, err := appenv.ListEnabledApps(s.conf)
+	if err != nil {
+		enabledApps = []string{}
+	}
 	enabledMap := make(map[string]bool)
 	for _, a := range enabledApps {
 		enabledMap[a] = true
@@ -44,7 +53,10 @@ func (s *AppSelectionScreen) refreshItems() {
 		addedMap[a] = true
 	}
 
-	referenced, _ := appenv.ListReferencedApps(ctx, s.conf)
+	referenced, err := appenv.ListReferencedApps(ctx, s.conf)
+	if err != nil {
+		referenced = []string{}
+	}
 	referencedByBase := make(map[string][]string)
 	referencedBaseSet := make(map[string]bool)
 	for _, r := range referenced {
@@ -130,6 +142,7 @@ func (s *AppSelectionScreen) refreshItems() {
 				Selectable:        true,
 				IsGroupHeader:     true,
 				Checked:           anyEnabled,
+				IsCheckbox:        false,
 				Enabled:           enabledMap[base],
 				WasEnabled:        wasEnabledMap[base],
 				ShowEnabledGutter: false,
@@ -253,7 +266,7 @@ func (s *AppSelectionScreen) expandGroup(baseApp string) {
 		Tag:           "+ Add instance\u2026",
 		Help:          fmt.Sprintf("Press Space/Enter or Ctrl+Right to add a %s instance", niceName),
 		IsAddInstance: true,
-		Selectable:    false,
+		Selectable:    true,
 		BaseApp:       baseApp,
 	}
 	newItems := make([]tui.MenuItem, 0, len(items)+2)
@@ -268,14 +281,25 @@ func (s *AppSelectionScreen) expandGroup(baseApp string) {
 	s.menu.Select(simpleIdx + 1)
 }
 
+func (s *AppSelectionScreen) isPhantom(it tui.MenuItem) bool {
+	if !it.IsSubItem || it.IsEditing {
+		return false
+	}
+	// Only named instances can be phantoms (the base instance row is preserved)
+	if appenv.AppNameToInstanceName(it.Metadata["appName"]) == "" {
+		return false
+	}
+	return !it.Checked && !it.IsReferenced && !it.WasAdded
+}
+
 func (s *AppSelectionScreen) collapseGroupIfNeeded(items []tui.MenuItem, base string) ([]tui.MenuItem, bool) {
-	var nonBaseCount int
+	var activeNamedCount int
 	for _, item := range items {
-		if item.IsSubItem && item.BaseApp == base && appenv.AppNameToInstanceName(item.Metadata["appName"]) != "" {
-			nonBaseCount++
+		if item.IsSubItem && item.BaseApp == base && !s.isPhantom(item) && appenv.AppNameToInstanceName(item.Metadata["appName"]) != "" {
+			activeNamedCount++
 		}
 	}
-	if nonBaseCount > 0 {
+	if activeNamedCount > 0 {
 		return items, false
 	}
 	var wasAdded, checked, isReferenced, enabled, wasEnabled bool
@@ -327,7 +351,22 @@ func (s *AppSelectionScreen) collapseGroupIfNeeded(items []tui.MenuItem, base st
 
 func (s *AppSelectionScreen) collapseAllEmptyGroups(skipBase string) {
 	cur := s.menu.GetItems()
+
+	// Prune phantoms first
+	pruned := make([]tui.MenuItem, 0, len(cur))
+	for _, it := range cur {
+		if s.isPhantom(it) {
+			continue
+		}
+		pruned = append(pruned, it)
+	}
+	cur = pruned
+
 	changed := false
+	if len(cur) != len(s.menu.GetItems()) {
+		changed = true
+	}
+
 	seen := map[string]bool{}
 	for _, it := range cur {
 		if it.IsGroupHeader && it.BaseApp != skipBase && !seen[it.BaseApp] {

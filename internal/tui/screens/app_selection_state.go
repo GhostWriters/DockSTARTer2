@@ -23,12 +23,18 @@ type changeSet struct {
 func (s *AppSelectionScreen) computeChanges() changeSet {
 	envFile := filepath.Join(s.conf.ComposeDir, constants.EnvFileName)
 	niceNames := make(map[string]string)
-	originalAdded, _ := appenv.ListAddedApps(context.Background(), envFile)
+	originalAdded, err := appenv.ListAddedApps(context.Background(), envFile)
+	if err != nil {
+		originalAdded = []string{}
+	}
 	originalMap := make(map[string]bool)
 	for _, a := range originalAdded {
 		originalMap[a] = true
 	}
-	originalEnabled, _ := appenv.ListEnabledApps(s.conf)
+	originalEnabled, err := appenv.ListEnabledApps(s.conf)
+	if err != nil {
+		originalEnabled = []string{}
+	}
 	originalEnabledMap := make(map[string]bool)
 	for _, a := range originalEnabled {
 		originalEnabledMap[a] = true
