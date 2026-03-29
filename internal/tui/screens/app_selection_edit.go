@@ -75,6 +75,7 @@ func (s *AppSelectionScreen) startEditing(baseApp string) {
 		IsEditing:  true,
 		IsSubItem:  true,
 		IsCheckbox: true,
+		Selectable: true,
 		Checked:    true,
 		BaseApp:    baseApp,
 	}
@@ -135,6 +136,7 @@ func (s *AppSelectionScreen) startRenaming(subIdx int) {
 		IsEditing:  true,
 		IsSubItem:  true,
 		IsCheckbox: subItem.IsCheckbox,
+		Selectable: true,
 		Checked:    subItem.Checked,
 		BaseApp:    subItem.BaseApp,
 	}
@@ -230,18 +232,21 @@ func (s *AppSelectionScreen) confirmEdit() {
 	baseNiceName := appenv.GetNiceName(ctx, base)
 	displayName := appenv.InstanceDisplayName(baseNiceName, newAppName)
 	checkedState := true
+	enabledState := true
 	if s.isRenaming {
 		checkedState = s.renamingOriginal.Checked
+		enabledState = s.renamingOriginal.Enabled
 	}
 	newSubRow := tui.MenuItem{
 		Tag:               displayName,
 		Help:              fmt.Sprintf("Toggle %s", displayName),
 		IsSubItem:         true,
 		IsCheckbox:        true,
+		Selectable:        true,
 		IsNew:             true,
 		Checked:           checkedState,
-		Enabled:           true,
-		ShowEnabledGutter: true,
+		Enabled:           enabledState && checkedState,
+		ShowEnabledGutter: checkedState,
 		BaseApp:           base,
 		Metadata:          map[string]string{"appName": newAppName},
 	}

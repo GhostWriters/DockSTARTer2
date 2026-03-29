@@ -178,7 +178,7 @@ func (s *AppSelectionScreen) toggleItem(idx int) {
 	if !item.Selectable {
 		return
 	}
-	if item.IsSeparator || item.IsEditing {
+	if item.IsSeparator || item.IsEditing || item.IsGroupHeader {
 		return
 	}
 
@@ -198,6 +198,12 @@ func (s *AppSelectionScreen) toggleItem(idx int) {
 			item.Checked = true // Auto-add if user enables
 			item.ShowEnabledGutter = true
 		}
+	}
+
+	// Defensive invariant: Enabled => Checked (Added)
+	if !item.Checked {
+		item.Enabled = false
+		item.ShowEnabledGutter = false
 	}
 
 	items[idx] = item
