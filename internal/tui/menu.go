@@ -189,12 +189,6 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 		checkbox = tagStyle.Render(cb) + neutralStyle.Render(" ")
 	}
 
-	// Highlighting for gap and description
-	// Use itemStyle as base for description so highlight applies, or dialogBG if not selected
-	descStyle := lipgloss.NewStyle().Background(dialogBG)
-	if isSelected {
-		descStyle = itemStyle
-	}
 	// Whitespace (gaps and trailing) should always use neutral background
 	gapStyle := neutralStyle
 
@@ -209,7 +203,7 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 		availableWidth = 0
 	}
 
-	descStr := RenderThemeText(menuItem.Desc, descStyle)
+	descStr := RenderThemeText(menuItem.Desc, itemStyle)
 	// Use TruncateRight for proper truncation instead of MaxWidth which wraps
 	descLine := TruncateRight(descStr, availableWidth)
 
