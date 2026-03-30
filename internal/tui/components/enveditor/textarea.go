@@ -1186,6 +1186,34 @@ func (m *Model) YOffset() int {
 	return m.viewport.YOffset()
 }
 
+// VisualRowToLogical converts a visual (screen) row index to the corresponding
+// logical line index, accounting for wrapped lines. Returns -1 if out of range.
+func (m *Model) VisualRowToLogical(visualRow int) int {
+	curr := 0
+	for l, lineRunes := range m.value {
+		wrapped := m.memoizedWrap(lineRunes, m.width)
+		n := len(wrapped)
+		if visualRow >= curr && visualRow < curr+n {
+			return l
+		}
+		curr += n
+	}
+	return -1
+}
+
+// CursorVisualRow returns the visual (screen) row index of the cursor, accounting
+// for wrapped lines above it.
+func (m *Model) CursorVisualRow() int {
+	curr := 0
+	for l, lineRunes := range m.value {
+		if l == m.row {
+			return curr
+		}
+		curr += len(m.memoizedWrap(lineRunes, m.width))
+	}
+	return curr
+}
+
 // SetVariableValue finds the row for varName, replaces its value, and invalidates the cache.
 // The new value is written as-is after the '=' sign (include quoting if needed by the caller).
 // Returns true if the variable was found and updated. Read-only rows are skipped.

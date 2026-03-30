@@ -107,8 +107,9 @@ func (s *DisplayOptionsScreen) Layers() []*lipgloss.Layer {
 func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegion {
 	var regions []tui.HitRegion
 
-	// Content starts at (1, 1) relative to root because of the outer border
-	const contentX = 1
+	// Content starts at outer border (1) + content side margin (1) from left; 1 from top (outer border).
+	layout := tui.GetLayout()
+	contentX := (layout.BorderWidth() / 2) + layout.ContentSideMargin
 	const contentY = 1
 
 	// Theme menu regions
@@ -155,7 +156,7 @@ func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegi
 	// Button row regions
 	// buttonY = 1 (top border) + themeHeight + optionsHeight
 	buttonY := 1 + s.themeMenu.Height() + s.optionsMenu.Height()
-	btnRowWidth := dialogContentWidth
+	btnRowWidth := dialogContentWidth - layout.ContentMarginWidth()
 
 	// Button panel background — height matches flat (1) vs bordered (3) from outerMenu layout.
 	regions = append(regions, tui.HitRegion{

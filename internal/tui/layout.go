@@ -46,6 +46,7 @@ type Layout struct {
 	// Margins/indents
 	EdgeIndent        int // 1 char indent from screen edge for maximized dialogs
 	GapBeforeHelpline int // 1 line gap before helpline
+	ContentSideMargin int // 1 char margin on each side of content inside dialog border
 
 	// Gutter for side-by-side layouts
 	GutterWidth int // 1 char between panels
@@ -63,6 +64,7 @@ func DefaultLayout() Layout {
 		ShadowHeight:      1,
 		EdgeIndent:        1, // 1 char margin on each side of content area
 		GapBeforeHelpline: 1,
+		ContentSideMargin: 1, // 1 char margin on each side of content inside dialog border
 		GutterWidth:       1,
 	}
 }
@@ -277,6 +279,12 @@ func (l Layout) BorderWidth() int {
 // BorderHeight returns the vertical border overhead (top + bottom)
 func (l Layout) BorderHeight() int {
 	return 2 // 1 line top border + 1 line bottom border
+}
+
+// ContentMarginWidth returns the total horizontal space consumed by the 1-char margins
+// on each side of content inside a dialog (left margin + right margin).
+func (l Layout) ContentMarginWidth() int {
+	return l.ContentSideMargin * 2
 }
 
 // InnerContentSize returns the content size available inside a bordered box

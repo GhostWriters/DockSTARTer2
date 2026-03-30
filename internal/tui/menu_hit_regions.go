@@ -42,7 +42,7 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 			contentWidth = m.GetInnerContentWidth()
 		}
 
-		subtitleStyle := styles.Dialog.Width(contentWidth).Padding(0, 1).Border(lipgloss.Border{})
+		subtitleStyle := styles.Dialog.Width(contentWidth).Padding(0, layout.ContentSideMargin).Border(lipgloss.Border{})
 		subStr := RenderThemeText(m.subtitle, subtitleStyle)
 		listY += lipgloss.Height(subtitleStyle.Render(subStr))
 	}
@@ -388,9 +388,9 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		buttonX := offsetX
 		contentWidth := m.GetInnerContentWidth()
 		if !m.subMenuMode {
-			// Matches innerBoxWidth in ViewString: contentWidth - 2
-			buttonX += (layout.DialogBorder / 2) + 2 // Total 3 char offset
-			contentWidth -= 2                        // Subtract margin padding
+			// Matches innerBoxWidth in ViewString: outer border(1) + margin(ContentSideMargin)
+			buttonX += (layout.DialogBorder / 2) + layout.ContentSideMargin // Total 2 char offset
+			contentWidth -= layout.ContentMarginWidth()                      // Subtract margin padding
 		}
 
 		// Background region covering the whole button row

@@ -902,12 +902,17 @@ func (m *MenuModel) calculateSectionLayout() {
 	if contentWidth < 1 {
 		contentWidth = 1
 	}
+	// Sections are inset by 1-char margin on each side (matching standard menu list padding).
+	sectionWidth := contentWidth - layout.ContentMarginWidth()
+	if sectionWidth < 1 {
+		sectionWidth = 1
+	}
 
-	// Button height — start with the width-based decision.
+	// Button height — width-based decision using the inset section width.
 	buttonHeight := DialogButtonHeight
 	buttonBudget := 0
 	if m.showButtons {
-		buttonHeight = ButtonRowHeight(contentWidth, 0, m.getButtonSpecs()...)
+		buttonHeight = ButtonRowHeight(sectionWidth, 0, m.getButtonSpecs()...)
 		buttonBudget = buttonHeight
 	}
 
@@ -920,7 +925,7 @@ func (m *MenuModel) calculateSectionLayout() {
 	expandableCount := 0
 	for i, sec := range m.contentSections {
 		if sec.flowMode {
-			flowH := sec.GetFlowHeight(contentWidth)
+			flowH := sec.GetFlowHeight(sectionWidth)
 			sectionH := flowH + layout.BorderHeight()
 			sectionHeights[i] = sectionH
 			fixedTotal += sectionH
@@ -949,13 +954,13 @@ func (m *MenuModel) calculateSectionLayout() {
 		expandableH = remaining / expandableCount
 	}
 
-	// Pass 2: size each section.
+	// Pass 2: size each section at the inset width.
 	for i, sec := range m.contentSections {
 		h := sectionHeights[i]
 		if h == 0 {
 			h = expandableH
 		}
-		sec.SetSize(contentWidth, h)
+		sec.SetSize(sectionWidth, h)
 	}
 
 	shadowHeight := 0
