@@ -89,7 +89,7 @@ func (m *MenuModel) ViewString() string {
 		Padding(0, 0)
 	listStyle = ApplyInnerBorder(listStyle, m.focused, styles.LineCharacters)
 	listStyle = listStyle.BorderBottom(false)
-	borderedList := listStyle.Render(listView)
+	borderedList := InjectBorderFlags(listStyle.Render(listView), styles.BorderFlags, styles.Border2Flags, false)
 	totalWidth := m.list.Width() + ScrollbarGutterWidth + 2
 	borderedList = strings.TrimSuffix(borderedList, "\n")
 
@@ -189,7 +189,7 @@ func (m *MenuModel) ViewString() string {
 		if targetHeight > 0 {
 			dialogStyle = dialogStyle.Height(targetHeight)
 		}
-		dialog = dialogStyle.Render(content)
+		dialog = InjectBorderFlags(dialogStyle.Render(content), styles.BorderFlags, styles.Border2Flags, true)
 	}
 
 	// Save to cache before returning

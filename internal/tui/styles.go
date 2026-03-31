@@ -2,6 +2,7 @@ package tui
 
 import (
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/theme"
 	"image/color"
 	"strconv"
@@ -113,6 +114,8 @@ type Styles struct {
 	Border       lipgloss.Border
 	BorderColor  color.Color
 	Border2Color color.Color
+	BorderFlags  theme.StyleFlags
+	Border2Flags theme.StyleFlags
 
 	// Shadow
 	Shadow      lipgloss.Style
@@ -178,6 +181,8 @@ type StyleContext struct {
 	Border              lipgloss.Border
 	BorderColor         color.Color
 	Border2Color        color.Color
+	BorderFlags         theme.StyleFlags
+	Border2Flags        theme.StyleFlags
 	ButtonActive        lipgloss.Style
 	ButtonInactive      lipgloss.Style
 	ItemNormal          lipgloss.Style
@@ -227,6 +232,8 @@ func GetActiveContext() StyleContext {
 		Border:              currentStyles.Border,
 		BorderColor:         currentStyles.BorderColor,
 		Border2Color:        currentStyles.Border2Color,
+		BorderFlags:         currentStyles.BorderFlags,
+		Border2Flags:        currentStyles.Border2Flags,
 		ButtonActive:        currentStyles.ButtonActive,
 		ButtonInactive:      currentStyles.ButtonInactive,
 		ItemNormal:          currentStyles.ItemNormal,
@@ -394,19 +401,25 @@ func InitStyles(cfg config.AppConfig) {
 
 	currentStyles.DialogTitleHelp = SemanticRawStyle("TitleHelp")
 
-	// Border colors
+	// Border colors and flags
 	switch cfg.UI.BorderColor {
 	case 1:
 		currentStyles.BorderColor = SemanticRawStyle("Border").GetForeground()
 		currentStyles.Border2Color = SemanticRawStyle("Border").GetForeground()
+		currentStyles.BorderFlags = theme.StyleFlagsFromCode(console.GetRawTagCode("border"))
+		currentStyles.Border2Flags = currentStyles.BorderFlags
 	case 2:
 		currentStyles.BorderColor = SemanticRawStyle("Border2").GetForeground()
 		currentStyles.Border2Color = SemanticRawStyle("Border2").GetForeground()
+		currentStyles.BorderFlags = theme.StyleFlagsFromCode(console.GetRawTagCode("border2"))
+		currentStyles.Border2Flags = currentStyles.BorderFlags
 	case 3:
 		fallthrough
 	default:
 		currentStyles.BorderColor = SemanticRawStyle("Border").GetForeground()
 		currentStyles.Border2Color = SemanticRawStyle("Border2").GetForeground()
+		currentStyles.BorderFlags = theme.StyleFlagsFromCode(console.GetRawTagCode("border"))
+		currentStyles.Border2Flags = theme.StyleFlagsFromCode(console.GetRawTagCode("border2"))
 	}
 
 	// Shadow

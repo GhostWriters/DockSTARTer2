@@ -31,6 +31,7 @@ func GetBlockBorders(lineCharacters bool) BorderPair {
 
 // RenderTopBorderBoxCtx renders only the top border line with a title (suitable for log panel)
 func RenderTopBorderBoxCtx(title, rightTitle, content string, contentWidth int, focused bool, titleStyle, borderStyle lipgloss.Style, ctx StyleContext) string {
+	borderStyle = ctx.BorderFlags.Apply(borderStyle)
 	var border lipgloss.Border
 	if !ctx.DrawBorders {
 		border = lipgloss.HiddenBorder()
@@ -169,10 +170,10 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 	}
 
 	borderBG := ctx.Dialog.GetBackground()
-	borderStyleLight := lipgloss.NewStyle().
+	borderStyleLight := ctx.BorderFlags.Apply(lipgloss.NewStyle()).
 		Foreground(ctx.BorderColor).
 		Background(borderBG)
-	borderStyleDark := lipgloss.NewStyle().
+	borderStyleDark := ctx.Border2Flags.Apply(lipgloss.NewStyle()).
 		Foreground(ctx.Border2Color).
 		Background(borderBG)
 

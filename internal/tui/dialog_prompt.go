@@ -269,7 +269,9 @@ func (m *promptDialogModel) ViewString() string {
 	borderedInputStyle := ApplyInnerBorderCtx(
 		ctx.Dialog.Padding(0, 1).Width(contentWidth),
 		inputFocused, ctx)
-	renderedInput := strings.TrimRight(borderedInputStyle.Render(m.input.View()), "\n")
+	renderedInput := strings.TrimRight(
+		InjectBorderFlags(borderedInputStyle.Render(m.input.View()), ctx.BorderFlags, ctx.Border2Flags, false),
+		"\n")
 
 	// Inject INS/OVR label into the bottom-left of the input box border.
 	modeLabel := "INS"

@@ -206,7 +206,7 @@ func RenderDialogBoxCtx(title, content string, dialogType DialogType, width, hei
 		Background(ctx.Dialog.GetBackground()).
 		Padding(0, 1)
 	borderStyle = Apply3DBorderCtx(borderStyle, ctx)
-	dialogBox := borderStyle.Render(inner)
+	dialogBox := InjectBorderFlags(borderStyle.Render(inner), ctx.BorderFlags, ctx.Border2Flags, true)
 
 	// Center in container using Overlay for transparency support
 	bg := lipgloss.NewStyle().

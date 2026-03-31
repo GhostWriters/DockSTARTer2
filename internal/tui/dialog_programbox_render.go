@@ -140,7 +140,7 @@ func (m *ProgramBoxModel) renderHeaderUI(width int) string {
 			Background(ctx.Dialog.GetBackground())
 
 		barStyle = ApplyThickBorderCtx(barStyle, ctx)
-		borderedBar := barStyle.Render(barView)
+		borderedBar := InjectBorderFlags(barStyle.Render(barView), ctx.BorderFlags, ctx.Border2Flags, true)
 
 		// Center the multiline bordered bar line consistently
 		centeredBar := lipgloss.NewStyle().

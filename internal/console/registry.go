@@ -167,6 +167,19 @@ func RegisterThemeTagRaw(name, rawValue string) {
 	semanticMu.Unlock()
 }
 
+// GetRawTagCode returns the raw style code (fg:bg:flags) for the given tag name from the theme map.
+// Returns "" if the tag is not registered.
+func GetRawTagCode(name string) string {
+	ensureMaps()
+	semanticMu.RLock()
+	raw := themeMap[strings.ToLower(name)]
+	if raw == "" {
+		raw = consoleMap[strings.ToLower(name)]
+	}
+	semanticMu.RUnlock()
+	return raw
+}
+
 // RegisterSemanticTag is a legacy wrapper that registers to BOTH maps for backward compatibility during transition.
 // TODO: Remove after all calls are migrated.
 func RegisterSemanticTag(name, taggedValue string) {

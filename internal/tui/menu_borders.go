@@ -27,7 +27,7 @@ func BuildAETopBorder(totalWidth int, prefixDashes int, focused bool, activeCol 
 			border = RoundedAsciiBorder
 		}
 	}
-	borderStyle := lipgloss.NewStyle().Foreground(ctx.BorderColor).Background(ctx.Dialog.GetBackground())
+	borderStyle := ctx.BorderFlags.Apply(lipgloss.NewStyle()).Foreground(ctx.BorderColor).Background(ctx.Dialog.GetBackground())
 
 	// Build 3-character labeled blocks (e.g. "▸A◂" or " A ")
 	buildLabel := func(char string, targetCol CheckboxColumn) string {
@@ -78,7 +78,7 @@ func BuildAEBottomBorder(totalWidth int, prefixDashes int, focused bool, activeC
 		}
 	}
 	// Bottom border consistently uses the "dark" color for 3D depth effect.
-	borderStyle := lipgloss.NewStyle().Foreground(ctx.Border2Color).Background(ctx.Dialog.GetBackground())
+	borderStyle := ctx.Border2Flags.Apply(lipgloss.NewStyle()).Foreground(ctx.Border2Color).Background(ctx.Dialog.GetBackground())
 
 	// Build 3-character labeled blocks (e.g. "▸A◂" or " A ") — same logic as top border
 	buildLabel := func(char string, targetCol CheckboxColumn) string {
