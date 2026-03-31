@@ -129,6 +129,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 	s.themeMenu.SetItemHelpFunc(s.buildThemeItemHelp)
 	s.themeMenu.SetHelpPageText("Configure the visual appearance of the application, including theme selection, borders, shadows, and other display options.")
 	s.themeMenu.SetSubMenuMode(true)
+	s.themeMenu.SetVariableHeight(true)
 	s.themeMenu.SetIsDialog(false) // Part of a screen, not a modal
 	s.themeMenu.SetShowExit(false)
 	s.themeMenu.SetMaximized(true) // Fill available width

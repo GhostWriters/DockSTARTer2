@@ -768,7 +768,8 @@ type MenuModel struct {
 	lastVersion    int
 	lastColumn     CheckboxColumn
 	lastHitRegions []HitRegion // Cache for variable height hit regions
-	viewStartY     int         // Persistent scroll offset for variable height lists
+	viewStartY      int         // Persistent scroll offset for variable height lists
+	lastViewStartY  int         // Previous scroll offset for memoization check
 	lastScrollTotal int        // Total content height from last renderVariableHeightList (for scrollbar)
 
 	renderVersion  int // Incremented on item changes to invalidate list cache
@@ -786,6 +787,7 @@ type MenuModel struct {
 	// Scrollbar interaction state
 	sbInfo          ScrollbarInfo             // geometry from last render (set by menu_render.go)
 	sbAbsTopY       int                       // absolute screen Y of scrollbar column top (set by GetHitRegions)
+	sbAbsLeftX      int                       // absolute screen X of scrollbar column (set by GetHitRegions)
 	sbDragging      bool                      // true while the user is dragging the scrollbar thumb
 	contextMenuFunc func(idx int) []ContextMenuItem // hook for screen-specific operations
 }

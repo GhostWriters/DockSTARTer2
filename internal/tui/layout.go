@@ -287,6 +287,68 @@ func (l Layout) ContentMarginWidth() int {
 	return l.ContentSideMargin * 2
 }
 
+// -------------------------------------------------------------------
+// Semantic offset helpers (to avoid magic numbers in coordinate math)
+// -------------------------------------------------------------------
+
+// SingleBorder returns the width/height of a single border line (typically 1).
+func (l Layout) SingleBorder() int {
+	return 1
+}
+
+// SingleMargin returns the width of a single side margin (typically 1).
+func (l Layout) SingleMargin() int {
+	return l.ContentSideMargin
+}
+
+// ContentInset returns the distance from a dialog's edge to its inner content area.
+// (1 char outer border + ContentSideMargin)
+func (l Layout) ContentInset() int {
+	return l.SingleBorder() + l.SingleMargin()
+}
+
+
+// CheckboxWidth returns the width of a standard checkbox [x] (typically 3).
+func (l Layout) CheckboxWidth() int {
+	return 3
+}
+
+// SubItemOffset returns the horizontal indentation for nested/sub-items (typically 10).
+func (l Layout) SubItemOffset() int {
+	return 10
+}
+
+// StatusGutterWidth returns the standard width of the status gutter (typically 2).
+func (l Layout) StatusGutterWidth() int {
+	return 2
+}
+
+// LeftOffset returns the horizontal offset for content inside a dialog's margin.
+// (1 char outer border + ContentSideMargin)
+func (l Layout) LeftOffset() int {
+	return l.ContentInset()
+}
+
+// TopOffset returns the vertical offset for content inside a dialog's top border.
+// (1 line top border)
+func (l Layout) TopOffset() int {
+	return l.SingleBorder()
+}
+
+// NestedLeftOffset returns the horizontal offset for content nested inside both 
+// a dialog margin AND an inner component's border.
+// (1 char outer border + ContentSideMargin + 1 char inner border)
+func (l Layout) NestedLeftOffset() int {
+	return l.LeftOffset() + l.SingleBorder()
+}
+
+// NestedTopOffset returns the vertical offset for content nested inside both
+// a dialog border AND an inner component's border (or tabs).
+// (1 line outer border + 1 line inner border/tabs)
+func (l Layout) NestedTopOffset() int {
+	return l.TopOffset() + l.SingleBorder()
+}
+
 // InnerContentSize returns the content size available inside a bordered box
 // Use this when you have a total box size and need to know how much content fits
 func (l Layout) InnerContentSize(totalW, totalH int) (contentW, contentH int) {

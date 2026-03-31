@@ -2305,8 +2305,12 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 
 	// Handle viewport update without resetting content here. 
 	// repositionView() will handle scrolling the viewport based on cursor movement.
+	oldY, oldX := m.viewport.YOffset(), m.viewport.XOffset()
 	vp, cmd := m.viewport.Update(msg)
 	m.viewport = &vp
+	if m.viewport.YOffset() != oldY || m.viewport.XOffset() != oldX {
+		m.InvalidateCache()
+	}
 	cmds = append(cmds, cmd)
 
 	if m.useVirtualCursor {
@@ -2673,6 +2677,11 @@ func (m *Model) handleMouseRelease(msg tea.MouseReleaseMsg) {
 // IsDragging returns true if the user is currently dragging a line, scrollbar, or text selection.
 func (m Model) IsDragging() bool {
 	return m.isDragging || m.isScrollbarDragging || m.isSelecting
+}
+
+// IsScrollbarDragging reports whether the scrollbar thumb is currently being dragged.
+func (m Model) IsScrollbarDragging() bool {
+	return m.isScrollbarDragging
 }
 
 // renderRunes formats runes with partial highlighting.

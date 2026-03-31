@@ -14,6 +14,7 @@ const vIdxBorderFlag = 0x40000000
 // renderVariableHeightList renders items vertically with dynamic heights for word wrapping
 func (m *MenuModel) renderVariableHeightList() string {
 	ctx := GetActiveContext()
+	layout := GetLayout()
 
 	// Memoization Check
 	if m.lastListView != "" &&
@@ -23,6 +24,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 		m.lastFilter == m.list.FilterValue() &&
 		m.lastActive == m.IsActive() &&
 		m.lastLineChars == ctx.LineCharacters &&
+		m.viewStartY == m.lastViewStartY &&
 		m.lastVersion == m.renderVersion &&
 		m.lastColumn == m.ActiveColumn() {
 		return m.lastListView
@@ -272,8 +274,8 @@ func (m *MenuModel) renderVariableHeightList() string {
 			}
 		}
 
-		paddingSpaces := strutil.Repeat(" ", max(0, maxTagLen-lipgloss.Width(GetPlainText(item.Tag))+3))
-		availableWidth := listContentWidth - (prefixWidth + 2) - (maxTagLen + 3) // +2 for gutter
+		paddingSpaces := strutil.Repeat(" ", max(0, maxTagLen-lipgloss.Width(GetPlainText(item.Tag))+layout.CheckboxWidth()))
+		availableWidth := listContentWidth - (prefixWidth + layout.StatusGutterWidth()) - (maxTagLen + layout.CheckboxWidth()) // status gutter + checkbox padding
 		if availableWidth < 0 {
 			availableWidth = 0
 		}
@@ -323,7 +325,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 		itemGutter := g0 + g1
 
 		firstLine := firstLinePrefix + tagStr + neutralStyle.Render(paddingSpaces) + lines[0]
-		indent := neutralStyle.Render(strutil.Repeat(" ", prefixWidth + maxTagLen + 3))
+		indent := neutralStyle.Render(strutil.Repeat(" ", prefixWidth + maxTagLen + layout.CheckboxWidth()))
 		renderedItemLines := []string{firstLine}
 		for j := 1; j < len(lines); j++ {
 			renderedItemLines = append(renderedItemLines, indent+lines[j])
@@ -334,7 +336,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 		for j, l := range renderedItemLines {
 			if j > 0 {
 				finalItem += "\n"
-				finalItem += rowStyle.Render(neutralStyle.Render("  ")+l) + console.CodeReset
+				finalItem += rowStyle.Render(neutralStyle.Render(strings.Repeat(" ", layout.StatusGutterWidth()))+l) + console.CodeReset
 			} else {
 				finalItem += rowStyle.Render(itemGutter+l) + console.CodeReset
 			}
@@ -349,10 +351,6 @@ func (m *MenuModel) renderVariableHeightList() string {
 		totalContentHeight += h
 	}
 	m.lastScrollTotal = totalContentHeight
-
-	blankLine := func() string {
-		return neutralStyle.Padding(0, 0, 0, 1).Render(strutil.Repeat(" ", listContentWidth)) + console.CodeReset
-	}
 
 	for i, item := range renderedItems {
 		linesRows := strings.Split(item, "\n")
@@ -401,28 +399,28 @@ func (m *MenuModel) renderVariableHeightList() string {
 							Height: h,
 						})
 
-						// Sub-items and add-instance rows are indented by 10 relative to the group header
+						// Sub-items and add-instance rows are indented by SubItemOffset
 						baseShift := 0
 						if item.IsSubItem || item.IsAddInstance || item.IsEditing {
-							baseShift = 10
+							baseShift = layout.SubItemOffset()
 						}
 
 						// Specific Regions (Add, Enable, Expand)
 						newHitRegions = append(newHitRegions, HitRegion{
 							ID:     itemID + "-add",
-							X:      baseShift + 2,
+							X:      baseShift + layout.SingleBorder()*2,
 							Y:      aggY,
-							Width:  3,
+							Width:  layout.CheckboxWidth(),
 							Height: h,
 						})
 						newHitRegions = append(newHitRegions, HitRegion{
 							ID:     itemID + "-enable",
-							X:      baseShift + 6,
+							X:      baseShift + layout.SingleBorder()*6,
 							Y:      aggY,
-							Width:  3,
+							Width:  layout.CheckboxWidth(),
 							Height: h,
 						})
-						tagX := baseShift + 10
+						tagX := baseShift + layout.SingleBorder()*10
 						tagW := listContentWidth - tagX
 						newHitRegions = append(newHitRegions, HitRegion{
 							ID:     itemID + "-expand",
@@ -452,9 +450,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 				viewLines = append(viewLines, line)
 			}
 		}
-		for len(viewLines) < maxHeight {
-			viewLines = append(viewLines, blankLine())
-		}
+		// Concatenate all lines to form the final visible list view
 		result := strings.Join(viewLines, "\n")
 		m.lastListView = result
 		m.lastHitRegions = newHitRegions
@@ -543,28 +539,28 @@ func (m *MenuModel) renderVariableHeightList() string {
 							Height: itemH,
 						})
 
-						// Sub-items and add-instance rows are indented by 10
+						// Sub-items and add-instance rows are indented by SubItemOffset
 						baseShift := 0
 						if item.IsSubItem || item.IsAddInstance || item.IsEditing {
-							baseShift = 10
+							baseShift = layout.SubItemOffset()
 						}
 
 						// Specific Regions (Add, Enable, Expand)
 						newHitRegions = append(newHitRegions, HitRegion{
 							ID:     itemID + "-add",
-							X:      baseShift + 2,
+							X:      baseShift + layout.SingleBorder()*2,
 							Y:      y,
-							Width:  3,
+							Width:  layout.CheckboxWidth(),
 							Height: itemH,
 						})
 						newHitRegions = append(newHitRegions, HitRegion{
 							ID:     itemID + "-enable",
-							X:      baseShift + 6,
+							X:      baseShift + layout.SingleBorder()*6,
 							Y:      y,
-							Width:  3,
+							Width:  layout.CheckboxWidth(),
 							Height: itemH,
 						})
-						tagX := baseShift + 10
+						tagX := baseShift + layout.SingleBorder()*10
 						tagW := listContentWidth - tagX
 						newHitRegions = append(newHitRegions, HitRegion{
 							ID:     itemID + "-expand",
@@ -595,14 +591,13 @@ func (m *MenuModel) renderVariableHeightList() string {
 		}
 		aggY += h
 	}
-	for len(viewLines) < maxHeight {
-		viewLines = append(viewLines, blankLine())
-	}
+	// Concatenate all lines to form the final visible list view
 	finalResult := strings.Join(viewLines, "\n")
 	m.lastListView = finalResult
 	m.lastHitRegions = newHitRegions
 	m.lastVersion = m.renderVersion
 	m.lastColumn = m.ActiveColumn()
+	m.lastViewStartY = m.viewStartY
 	return finalResult
 }
 

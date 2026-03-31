@@ -75,6 +75,7 @@ func (s *AppSelectionScreen) HasDialog() bool                          { return 
 func (s *AppSelectionScreen) MenuName() string                         { return s.menu.MenuName() }
 func (s *AppSelectionScreen) Layers() []*lipgloss.Layer                { return s.menu.Layers() }
 func (s *AppSelectionScreen) GetHitRegions(x, y int) []tui.HitRegion  { return s.menu.GetHitRegions(x, y) }
+func (s *AppSelectionScreen) IsScrollbarDragging() bool       { return s.menu.IsScrollbarDragging() }
 
 func (s *AppSelectionScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m, cmd := s.menu.Update(msg)

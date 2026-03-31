@@ -385,6 +385,21 @@ func (m *TabbedVarsEditorModel) hasErrors() bool {
 func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
+	// Forward raw mouse drag/release events to the editor before the type switch
+	// so the drag continues while AppModel routes events via section-2 priority.
+	if m.IsScrollbarDragging() && len(m.tabs) > 0 {
+		if _, ok := msg.(tea.MouseMotionMsg); ok {
+			var cmd tea.Cmd
+			m.tabs[m.activeTab].editor, cmd = m.tabs[m.activeTab].editor.Update(msg)
+			return m, cmd
+		}
+		if _, ok := msg.(tea.MouseReleaseMsg); ok {
+			var cmd tea.Cmd
+			m.tabs[m.activeTab].editor, cmd = m.tabs[m.activeTab].editor.Update(msg)
+			return m, cmd
+		}
+	}
+
 	switch msg := msg.(type) {
 	case tui.LayerHitMsg:
 		if strings.HasPrefix(msg.ID, "tabbed_vars.tab-") {
@@ -423,9 +438,10 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.tabs[m.activeTab].editor.Focus()
 
 				// Calculate relative coordinates for the editor click
-				// Hit region is at dialogOffsetX + 2, dialogOffsetY + 2 + subtitleHeight
-				relX := msg.X - (m.lastOffsetX + 2)
-				relY := msg.Y - (m.lastOffsetY + 2 + m.subtitleHeight)
+				// Hit region is at NestedLeftOffset, NestedTopOffset + subtitleHeight
+				layout := tui.GetLayout()
+				relX := msg.X - (m.lastOffsetX + layout.NestedLeftOffset())
+				relY := msg.Y - (m.lastOffsetY + layout.NestedTopOffset() + m.subtitleHeight)
 
 				var cmd tea.Cmd
 				m.tabs[m.activeTab].editor, cmd = m.tabs[m.activeTab].editor.Update(tea.MouseClickMsg{
@@ -472,6 +488,24 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, tui.ConfirmExitAction()
 			}
+		}
+		return m, nil
+
+	case tea.MouseClickMsg:
+		// Scrollbar thumb drag initiation routed by model_mouse.go section B0.
+		if msg.Button == tea.MouseLeft && len(m.tabs) > 0 {
+			// Translate coordinates to editor-relative
+			layout := tui.GetLayout()
+			relX := msg.X - (m.lastOffsetX + layout.NestedLeftOffset())
+			relY := msg.Y - (m.lastOffsetY + layout.NestedTopOffset() + m.subtitleHeight)
+
+			var cmd tea.Cmd
+			m.tabs[m.activeTab].editor, cmd = m.tabs[m.activeTab].editor.Update(tea.MouseClickMsg{
+				X:      relX,
+				Y:      relY,
+				Button: msg.Button,
+			})
+			return m, cmd
 		}
 
 	case tui.LayerWheelMsg, tea.MouseWheelMsg:
@@ -1224,11 +1258,11 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitReg
 	}
 
 	// Editor hit region
-	// Editor content is inside outer border + margin + inner border.
+	// Editor content is inside nesting (outer border + margin + inner border).
 	regions = append(regions, tui.HitRegion{
 		ID:     "tabbed_vars.editor",
-		X:      offsetX + 1 + layout.ContentSideMargin + 1, // outer border + margin + inner border
-		Y:      offsetY + 1 + m.subtitleHeight + 1,         // outer border + subtitle + inner border/tabs
+		X:      offsetX + layout.NestedLeftOffset(),
+		Y:      offsetY + layout.NestedTopOffset() + m.subtitleHeight,
 		Width:  m.contentWidth - layout.BorderWidth(),       // inner box content width
 		Height: m.editorHeight,
 		ZOrder: tui.ZDialog + 5,

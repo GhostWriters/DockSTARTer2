@@ -28,7 +28,7 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		// listY = 0 logic here is correct as a base.
 	} else {
 		// Full dialogs start content inside the outer border (1 line)
-		listY = layout.DialogBorder / 2
+		listY = layout.TopOffset()
 	}
 
 	// Account for subtitle if present
@@ -48,15 +48,13 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	}
 
 	// Account for inner border around the list (Top = 1 line)
-	listY += layout.BorderWidth() / 2
+	listY += layout.SingleBorder()
 
 	// 2. Horizontal Positioning (X)
-	// Relative to dialog start: Outer Border (1) + Margin (1) + Inner Border (1) = 3
-	listX := layout.BorderWidth() / 2
+	// Relative to dialog start: Outer Border + Margin + Inner Border
+	listX := layout.SingleBorder()
 	if !m.subMenuMode {
-		// Padding used in ViewString's marginStyle is 1
-		const marginPadding = 1
-		listX = (layout.DialogBorder / 2) + marginPadding + (layout.BorderWidth() / 2)
+		listX = layout.NestedLeftOffset()
 	}
 
 	baseZ := ZScreen
@@ -154,33 +152,33 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 					// Split into 3 regions: Add checkbox, Enable checkbox, and the rest (Tag/Expand)
 					baseX := 0
 					if item.IsSubItem || item.IsAddInstance || item.IsEditing {
-						baseX = 10
+						baseX = layout.SubItemOffset()
 					}
 
-					// Offset 2: Add checkbox (3 chars)
+					// Offset for "Add" checkbox: baseX + spacing
 					regions = append(regions, HitRegion{
 						ID:     itemID + "-add",
-						X:      offsetX + listX + baseX + 2,
+						X:      offsetX + listX + baseX + layout.SingleBorder()*2,
 						Y:      offsetY + listY + i,
-						Width:  3,
+						Width:  layout.CheckboxWidth(),
 						Height: 1,
 						ZOrder: baseZ + 11,
 						Label:  "Toggle Add",
 					})
 
-					// Offset 6: Enable checkbox (3 chars)
+					// Offset for "Enable" checkbox: baseX + spacing
 					regions = append(regions, HitRegion{
 						ID:     itemID + "-enable",
-						X:      offsetX + listX + baseX + 6,
+						X:      offsetX + listX + baseX + layout.SingleBorder()*6,
 						Y:      offsetY + listY + i,
-						Width:  3,
+						Width:  layout.CheckboxWidth(),
 						Height: 1,
 						ZOrder: baseZ + 11,
 						Label:  "Toggle Enable",
 					})
 
-					// Offset 10+: Tag / Expand region
-					tagX := baseX + 10
+					// Detailed Tag / Expand region
+					tagX := baseX + layout.SingleBorder()*10
 					tagW := itemWidth - tagX
 					if tagW < 1 {
 						tagW = 1
@@ -300,7 +298,8 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	if currentConfig.UI.Scrollbar && m.sbInfo.Needed {
 		sbX := offsetX + listX + m.list.Width()
 		sbTopY := offsetY + listY
-		m.sbAbsTopY = sbTopY // store for drag-to computation in scrollbarDragTo
+		m.sbAbsTopY = sbTopY   // store for drag-to computation in scrollbarDragTo
+		m.sbAbsLeftX = sbX     // store for hit testing raw clicks in Update
 
 		info := m.sbInfo
 
@@ -377,8 +376,8 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		buttonY := listY + listHeight
 		if !m.subMenuMode {
 			// In full dialog mode, the list has an inner border (+1 line bottom)
-			// and there is no gap, so buttons start at listY + listHeight + 1
-			buttonY += 1
+			// and there is no gap, so buttons start at listY + listHeight + SingleBorder
+			buttonY += layout.SingleBorder()
 		}
 		// In subMenuMode, there is no inner border around the list, so JoinVertical
 		// puts buttons immediately after the last content line.
@@ -388,8 +387,8 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		buttonX := offsetX
 		contentWidth := m.GetInnerContentWidth()
 		if !m.subMenuMode {
-			// Matches innerBoxWidth in ViewString: outer border(1) + margin(ContentSideMargin)
-			buttonX += (layout.DialogBorder / 2) + layout.ContentSideMargin // Total 2 char offset
+			// Matches innerBoxWidth in ViewString: outer border + margin
+			buttonX += layout.LeftOffset()
 			contentWidth -= layout.ContentMarginWidth()                      // Subtract margin padding
 		}
 
