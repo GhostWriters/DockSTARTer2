@@ -20,7 +20,7 @@ func itemConfigValue(item tui.MenuItem) string {
 
 // IsScrollbarDragging reports whether any sub-menu is currently dragging a scrollbar thumb.
 func (s *DisplayOptionsScreen) IsScrollbarDragging() bool {
-	return s.themeMenu.IsScrollbarDragging()
+	return s.themeMenu.IsScrollbarDragging() || s.optionsMenu.IsScrollbarDragging()
 }
 
 func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -28,18 +28,33 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Forward raw mouse drag/release events to the dragging sub-menu before the type switch
 	// so the drag continues while AppModel routes events via section-2 priority.
-	if s.themeMenu.IsScrollbarDragging() {
+	// Forward raw mouse drag/release events to the dragging sub-menu before the type switch
+	// so the drag continues while AppModel routes events via section-2 priority.
+	if s.IsScrollbarDragging() {
+		target := s.themeMenu
+		if s.optionsMenu.IsScrollbarDragging() {
+			target = s.optionsMenu
+		}
+
 		if _, ok := msg.(tea.MouseMotionMsg); ok {
-			updated, uCmd := s.themeMenu.Update(msg)
+			updated, uCmd := target.Update(msg)
 			if m, ok := updated.(*tui.MenuModel); ok {
-				s.themeMenu = m
+				if target == s.themeMenu {
+					s.themeMenu = m
+				} else {
+					s.optionsMenu = m
+				}
 			}
 			return s, uCmd
 		}
 		if _, ok := msg.(tea.MouseReleaseMsg); ok {
-			updated, uCmd := s.themeMenu.Update(msg)
+			updated, uCmd := target.Update(msg)
 			if m, ok := updated.(*tui.MenuModel); ok {
-				s.themeMenu = m
+				if target == s.themeMenu {
+					s.themeMenu = m
+				} else {
+					s.optionsMenu = m
+				}
 			}
 			return s, uCmd
 		}

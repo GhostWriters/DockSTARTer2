@@ -20,18 +20,22 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// For standard lists, ensure viewStartY follows the cursor
+	if !m.variableHeight {
+		visible := m.layout.ViewportHeight
+		if visible > 0 {
+			if m.list.Index() < m.viewStartY {
+				m.viewStartY = m.list.Index()
+			} else if m.list.Index() >= m.viewStartY+visible {
+				m.viewStartY = m.list.Index() - visible + 1
+			}
+		}
+	}
+
 	switch msg := msg.(type) {
 	case ToggleFocusedMsg:
 		// Middle click triggers toggle on the currently focused item
 		return m.handleSpace()
-
-	case tea.MouseClickMsg:
-		// Raw left click routed by AppModel to start a scrollbar thumb drag.
-		if msg.Button == tea.MouseLeft {
-			m.sbDragging = true
-			m.InvalidateCache()
-		}
-		return m, nil
 
 	case tea.MouseMotionMsg:
 		if m.sbDragging {
@@ -40,6 +44,17 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
+
+	case tea.MouseClickMsg:
+		// Fallback for scrollbar dragging when LayerHitMsg is not dispatched (classic model_mouse logic)
+		if m.sbInfo.Needed && msg.Button == tea.MouseLeft {
+			// Check if click is within scrollbar area using absolute screen coordinates
+			if msg.X == m.sbAbsLeftX && msg.Y >= m.sbAbsTopY + m.sbInfo.ThumbStart && msg.Y < m.sbAbsTopY + m.sbInfo.ThumbEnd {
+				m.sbDragging = true
+				m.InvalidateCache()
+				return m, nil
+			}
+		}
 
 	case tea.MouseReleaseMsg:
 		if m.sbDragging {
@@ -50,6 +65,13 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case LayerHitMsg:
 		// Scrollbar region clicks
+		if strings.HasSuffix(msg.ID, ".sb.thumb") {
+			if msg.Button == tea.MouseLeft {
+				m.sbDragging = true
+				m.InvalidateCache()
+			}
+			return m, nil
+		}
 		if strings.HasSuffix(msg.ID, ".sb.up") {
 			if msg.Button != HoverButton {
 				m.scrollLineUp()
@@ -686,9 +708,13 @@ func (m *MenuModel) calculateLayout() {
 		totalItemHeight += (len(m.items) - 1) * spacing
 	}
 
-	// Final list height is whichever is smaller: intrinsic or maximum
+	// Final list height is whichever is smaller: intrinsic or maximum.
+	// When maximized is true, we only force maxListHeight for primary dialogs;
+	// sub-menus (in sectioned layouts) should shrink-to-fit if their content is smaller.
 	listHeight = totalItemHeight
-	if m.maximized || listHeight > maxListHeight {
+	if listHeight > maxListHeight {
+		listHeight = maxListHeight
+	} else if m.maximized && !m.subMenuMode {
 		listHeight = maxListHeight
 	}
 
@@ -828,8 +854,9 @@ func (m *MenuModel) scrollbarDragTo(mouseY int) bool {
 		return false
 	}
 
-	// mouseY relative to the start of the track (row 1, just after the up arrow)
-	trackRelY := mouseY - (m.sbAbsTopY + 1)
+	// mouseY relative to the start of the track (immediately after the up arrow)
+	layout := GetLayout()
+	trackRelY := mouseY - (m.sbAbsTopY + layout.SingleBorder())
 	if trackRelY < 0 {
 		trackRelY = 0
 	}
@@ -849,7 +876,12 @@ func (m *MenuModel) scrollbarDragTo(mouseY int) bool {
 		if maxOff <= 0 {
 			return false
 		}
-		newOff := trackRelY * maxOff / trackH
+		var newOff int
+		if trackH > 1 {
+			newOff = trackRelY * maxOff / (trackH - 1)
+		} else {
+			newOff = 0
+		}
 		if newOff < 0 {
 			newOff = 0
 		}
@@ -877,18 +909,43 @@ func (m *MenuModel) scrollbarDragTo(mouseY int) bool {
 	if maxOff <= 0 {
 		return false
 	}
-	newOff := trackRelY * maxOff / trackH
+	var newOff int
+	if trackH > 1 {
+		newOff = trackRelY * maxOff / (trackH - 1)
+	} else {
+		newOff = 0
+	}
 	if newOff < 0 {
 		newOff = 0
 	}
 	if newOff > maxOff {
 		newOff = maxOff
 	}
-	if newOff == m.list.Index() {
+	if newOff == m.viewStartY {
 		return false
 	}
-	m.list.Select(newOff)
+
+	// Directional scrolling: select the item that forces the viewport to move
+	// to the desired position.
+	targetIdx := newOff
+	if newOff > m.viewStartY {
+		// Scrolling DOWN: select the item at the bottom of the desired viewport
+		targetIdx = newOff + visible - 1
+	} else {
+		// Scrolling UP: select the item at the top of the desired viewport
+		targetIdx = newOff
+	}
+
+	if targetIdx >= total {
+		targetIdx = total - 1
+	}
+	if targetIdx < 0 {
+		targetIdx = 0
+	}
+
+	m.list.Select(targetIdx)
 	m.cursor = m.list.Index()
+	m.viewStartY = newOff // Sync our tracker
 	menuSelectedIndices[m.id] = m.cursor
 	return true
 }

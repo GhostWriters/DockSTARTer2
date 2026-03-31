@@ -151,6 +151,11 @@ func (d *FlagsToggleDialog) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	return d.menu.GetHitRegions(offsetX, offsetY)
 }
 
+// IsScrollbarDragging contributes to the sbDragger interface for mouse motion forwarding
+func (d *FlagsToggleDialog) IsScrollbarDragging() bool {
+	return d.menu.IsScrollbarDragging()
+}
+
 // HelpText returns help info
 func (d *FlagsToggleDialog) HelpText() string {
 	return d.menu.HelpText()

@@ -228,6 +228,9 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 		Foreground(ctx.Border2Color).
 		Background(borderBG)
 
+	// Trim trailing newline so we don't treat a terminal newline as an extra blank line.
+	// Standard bubbletea components (like list) usually include a trailing newline.
+	content = strings.TrimSuffix(content, "\n")
 	lines := strings.Split(content, "\n")
 	actualWidth := contentWidth
 

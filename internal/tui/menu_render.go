@@ -13,7 +13,7 @@ func (m *MenuModel) listScrollPercent() float64 {
 		offset = m.viewStartY
 		total = m.lastScrollTotal
 	} else {
-		offset = m.list.Index()
+		offset = m.viewStartY
 		total = len(m.items)
 	}
 	maxOff := total - m.layout.ViewportHeight
@@ -79,7 +79,7 @@ func (m *MenuModel) ViewString() string {
 		if m.variableHeight {
 			listView, m.sbInfo = ApplyScrollbarColumnTracked(listView, m.lastScrollTotal, m.layout.ViewportHeight, m.viewStartY, enabled, ctx.LineCharacters, ctx)
 		} else {
-			listView, m.sbInfo = ApplyScrollbarColumnTracked(listView, len(m.items), m.layout.ViewportHeight, m.list.Index(), enabled, ctx.LineCharacters, ctx)
+			listView, m.sbInfo = ApplyScrollbarColumnTracked(listView, len(m.items), m.layout.ViewportHeight, m.viewStartY, enabled, ctx.LineCharacters, ctx)
 		}
 	}
 
@@ -229,7 +229,6 @@ func (s *MenuModel) viewSubMenu() string {
 	layout := GetLayout()
 
 	// The target outer dimensions
-	targetHeight := s.height
 	contentWidth := s.width - layout.BorderWidth()
 
 	// 1. Render Subtitle
@@ -250,9 +249,15 @@ func (s *MenuModel) viewSubMenu() string {
 	var content string
 	if s.flowMode {
 		content = s.renderFlow()
+	} else if s.variableHeight {
+		content = s.renderVariableHeightList()
+		// Apply scrollbar using the accurate viewport offset (viewStartY)
+		content, s.sbInfo = ApplyScrollbarColumnTracked(content, s.lastScrollTotal, s.layout.ViewportHeight, s.viewStartY, currentConfig.UI.Scrollbar, ctx.LineCharacters, ctx)
 	} else {
 		content = MaintainBackground(s.list.View(), styles.Dialog)
 		// Append scrollbar/gutter column (same slot reserved by calculateLayout).
+		// Note: Using list.Index() as offset is a fallback and may be slightly inaccurate
+		// if the selected item is not at the top of the viewport.
 		content, s.sbInfo = ApplyScrollbarColumnTracked(content, len(s.items), s.layout.ViewportHeight, s.list.Index(), currentConfig.UI.Scrollbar, ctx.LineCharacters, ctx)
 	}
 
@@ -276,6 +281,11 @@ func (s *MenuModel) viewSubMenu() string {
 
 	// 4. Render the bordered box with embedded title.
 	// We pass 'true' for rounded so submenus use the rounded corner style.
+	// We calculate targetHeight based on actual content to avoid trailing blank lines.
+	targetHeight := lipgloss.Height(combined) + 2
+	if targetHeight > s.height {
+		targetHeight = s.height
+	}
 	result := s.renderBorderWithTitle(combined, contentWidth, targetHeight, s.focusedSub, true, "Title")
 
 	// Replace bottom border with scroll-percent variant when content overflows.

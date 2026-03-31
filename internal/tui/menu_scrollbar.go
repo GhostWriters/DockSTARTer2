@@ -60,6 +60,9 @@ func ApplyScrollbarColumnTracked(content string, total, visible, offset int, ena
 	if content == "" {
 		return content, ScrollbarInfo{}
 	}
+	// Trim trailing newline to avoid an extra blank line being treated as content.
+	// Standard bubbletea components (like list) usually include a trailing newline.
+	content = strings.TrimSuffix(content, "\n")
 	lines := strings.Split(content, "\n")
 	height := len(lines)
 
