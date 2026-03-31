@@ -27,20 +27,26 @@ type MenuItem struct {
 	Selected      bool // Current selection state
 	IsCheckbox    bool // Whether this is a checkbox [ ] / [x]
 	IsRadioButton bool // Whether this is a radio button ( ) / (*)
-	Checked       bool // Current checkbox/radio state
+	Checked       bool // Current checkbox/radio state (= "Added" in app-selection)
+
+	// Enabled state (app-selection): separate from Added (Checked)
+	// Enabled means APP__ENABLED='true' in .env
+	Enabled    bool // Current enabled state
+	WasEnabled bool // Enabled state when the screen loaded (for gutter diff)
 
 	// Layout support
 	IsSeparator bool // Whether this is a non-selectable header/separator
 
 	// Grouped list support (app selection with instances)
-	IsGroupHeader bool   // App name header row; checkbox shows group-enabled state (read-only)
-	IsSubItem     bool   // Indented instance row under a group header
-	IsAddInstance bool   // "[+] Add instance…" action row
-	IsEditing     bool   // Inline text-input row for new instance name entry
-	IsNew         bool   // Newly added this session (not yet saved; used to allow rename)
-	IsReferenced  bool   // Has env vars / compose reference but no __ENABLED; locked from rename
-	WasAdded      bool   // Whether this item was added (present in .env) when the screen loaded (for gutter diff)
-	BaseApp       string // Base app name this row belongs to (sub-items / add-instance / editing)
+	IsGroupHeader  bool   // App name header row; checkbox shows group-enabled state (read-only)
+	IsSubItem      bool   // Indented instance row under a group header
+	IsAddInstance  bool   // "[+] Add instance…" action row
+	IsEditing      bool   // Inline text-input row for new instance name entry
+	IsNew          bool   // Newly added this session (not yet saved; used to allow rename)
+	IsReferenced   bool   // Has env vars / compose reference but no __ENABLED; locked from rename
+	WasAdded       bool   // Whether this item was added (present in .env) when the screen loaded (for gutter diff)
+	ShowEnabledGutter bool // Whether to show the Enabled (E/D) gutter column
+	BaseApp        string // Base app name this row belongs to (sub-items / add-instance / editing)
 
 	// Metadata
 	IsUserDefined bool              // Whether this is a user-defined app (for coloring)
@@ -134,14 +140,16 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 		if strings.Contains(tag, "{{") {
 			tagStr = RenderThemeText(tag, tagStyle)
 		} else {
+			runes := []rune(tag)
 			letterIdx := 0
-			if strings.HasPrefix(tag, "[") && len(tag) > 1 {
+			if strings.HasPrefix(tag, "[") && len(runes) > 1 {
 				letterIdx = 1
 			}
-			prefix := tag[:letterIdx]
-			firstLetter := string(tag[letterIdx])
-			rest := tag[letterIdx+1:]
-			tagStr = tagStyle.Render(prefix) + keyStyle.Render(firstLetter) + tagStyle.Render(rest)
+			if letterIdx < len(runes) {
+				tagStr = tagStyle.Render(string(runes[:letterIdx])) + keyStyle.Render(string(runes[letterIdx])) + tagStyle.Render(string(runes[letterIdx+1:]))
+			} else {
+				tagStr = RenderThemeText(tag, tagStyle)
+			}
 		}
 	}
 
@@ -181,12 +189,6 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 		checkbox = tagStyle.Render(cb) + neutralStyle.Render(" ")
 	}
 
-	// Highlighting for gap and description
-	// Use itemStyle as base for description so highlight applies, or dialogBG if not selected
-	descStyle := lipgloss.NewStyle().Background(dialogBG)
-	if isSelected {
-		descStyle = itemStyle
-	}
 	// Whitespace (gaps and trailing) should always use neutral background
 	gapStyle := neutralStyle
 
@@ -201,7 +203,7 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 		availableWidth = 0
 	}
 
-	descStr := RenderThemeText(menuItem.Desc, descStyle)
+	descStr := RenderThemeText(menuItem.Desc, itemStyle)
 	// Use TruncateRight for proper truncation instead of MaxWidth which wraps
 	descLine := TruncateRight(descStr, availableWidth)
 
@@ -309,14 +311,16 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 			if strings.Contains(tag, "{{") {
 				tagStr = RenderThemeText(tag, tagStyle)
 			} else {
+				runes := []rune(tag)
 				letterIdx := 0
-				if strings.HasPrefix(tag, "[") && len(tag) > 1 {
+				if strings.HasPrefix(tag, "[") && len(runes) > 1 {
 					letterIdx = 1
 				}
-				prefix := tag[:letterIdx]
-				firstLetter := string(tag[letterIdx])
-				rest := tag[letterIdx+1:]
-				tagStr = tagStyle.Render(prefix) + keyStyle.Render(firstLetter) + tagStyle.Render(rest)
+				if letterIdx < len(runes) {
+					tagStr = tagStyle.Render(string(runes[:letterIdx])) + keyStyle.Render(string(runes[letterIdx])) + tagStyle.Render(string(runes[letterIdx+1:]))
+				} else {
+					tagStr = RenderThemeText(tag, tagStyle)
+				}
 			}
 		}
 	}
@@ -372,6 +376,7 @@ type groupedItemDelegate struct {
 	menuID    string
 	maxTagLen int // max tag width of header rows only
 	focused   bool
+	activeCol CheckboxColumn
 }
 
 func (d groupedItemDelegate) Height() int                             { return 1 }
@@ -387,6 +392,18 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 	ctx := GetActiveContext()
 	dialogBG := ctx.Dialog.GetBackground()
 	isSelected := index == m.Index()
+
+	// Highlight the parent header if a child item is selected
+	isParentOfSelected := false
+	if menuItem.IsGroupHeader {
+		if selItemRaw := m.SelectedItem(); selItemRaw != nil {
+			if selItem, ok := selItemRaw.(MenuItem); ok {
+				if (selItem.IsSubItem || selItem.IsAddInstance || selItem.IsEditing) && selItem.BaseApp == menuItem.BaseApp {
+					isParentOfSelected = true
+				}
+			}
+		}
+	}
 
 	// Separator rows (letter headers and blank spacers)
 	if menuItem.IsSeparator {
@@ -405,13 +422,13 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 	tagStyle := theme.ThemeSemanticStyle("{{|Tag|}}")
 	itemStyle := theme.ThemeSemanticStyle("{{|Item|}}")
 	keyStyle := theme.ThemeSemanticStyle("{{|TagKey|}}")
-	if isSelected {
+	if isSelected || isParentOfSelected {
 		tagStyle = theme.ThemeSemanticStyle("{{|TagSelected|}}")
 		itemStyle = theme.ThemeSemanticStyle("{{|ItemSelected|}}")
 		keyStyle = theme.ThemeSemanticStyle("{{|TagKeySelected|}}")
 	}
 	descStyle := lipgloss.NewStyle().Background(dialogBG)
-	if isSelected {
+	if isSelected || isParentOfSelected {
 		descStyle = itemStyle
 	}
 
@@ -472,56 +489,151 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 		return
 	}
 
-	// Build glyph: [+] for group headers, checkbox for instance sub-items
-	var checkbox string
-	if menuItem.IsGroupHeader {
-		checkbox = RenderThemeText("{{|KeyCap|}}[+]{{[-]}} ", descStyle)
-	} else if menuItem.IsCheckbox {
-		var cb string
-		if ctx.LineCharacters {
-			if menuItem.Checked {
-				cb = checkSelected
-			} else {
-				cb = checkUnselected
-			}
-		} else {
-			if menuItem.Checked {
-				cb = checkSelectedAscii
-			} else {
-				cb = checkUnselectedAscii
-			}
-		}
-		checkbox = tagStyle.Render(cb) + neutralStyle.Render(" ")
+	// Gutter: 2 chars on left edge.
+	// g0 = Add diff marker (+/-/R/space), g1 = Enabled diff marker (E/D/space, changes only)
+	var g0, g1 string
+	if menuItem.IsReferenced && menuItem.Checked {
+		g0 = RenderThemeText("{{|MarkerAdded|}}R{{[-]}}", neutralStyle)
+	} else if menuItem.IsReferenced {
+		g0 = RenderThemeText("{{|MarkerModified|}}r{{[-]}}", neutralStyle)
+	} else if menuItem.Checked && !menuItem.WasAdded {
+		g0 = RenderThemeText("{{|MarkerAdded|}}+{{[-]}}", neutralStyle)
+	} else if !menuItem.Checked && menuItem.WasAdded {
+		g0 = RenderThemeText("{{|MarkerDeleted|}}-{{[-]}}", neutralStyle)
+	} else {
+		g0 = neutralStyle.Render(" ")
+	}
+	if menuItem.Enabled && !menuItem.WasEnabled {
+		g1 = RenderThemeText("{{|MarkerAdded|}}E{{[-]}}", neutralStyle)
+	} else if !menuItem.Enabled && menuItem.WasEnabled {
+		g1 = RenderThemeText("{{|MarkerDeleted|}}D{{[-]}}", neutralStyle)
+	} else {
+		g1 = neutralStyle.Render(" ")
 	}
 
-	cbWidth := lipgloss.Width(GetPlainText(checkbox))
-
-	// IsSubItem: indented instance row, no description column
-	if menuItem.IsSubItem {
-		// Gutter char (1 col): R=referenced+added, r=referenced-only, +=newly-enabled, -=newly-disabled.
-		gutterChar := neutralStyle.Render(" ")
-		if menuItem.IsReferenced && menuItem.Checked {
-			gutterChar = RenderThemeText("{{|MarkerAdded|}}R{{[-]}}", neutralStyle)
-		} else if menuItem.IsReferenced {
-			gutterChar = RenderThemeText("{{|MarkerModified|}}r{{[-]}}", neutralStyle)
-		} else if menuItem.Checked && !menuItem.WasAdded {
-			gutterChar = RenderThemeText("{{|MarkerAdded|}}+{{[-]}}", neutralStyle)
-		} else if !menuItem.Checked && menuItem.WasAdded {
-			gutterChar = RenderThemeText("{{|MarkerDeleted|}}-{{[-]}}", neutralStyle)
+	// buildCb3 renders a 3-character wide checkbox block with a fixed style.
+	buildCb3 := func(checked bool, cbStyle lipgloss.Style) string {
+		if ctx.LineCharacters {
+			g := checkUnselected
+			if checked {
+				g = checkSelected
+			}
+			// Draw with the chosen style (Red for focused, Blue for neutral)
+			// Each block is exactly 3 chars: [space][glyph][space]
+			inner := cbStyle.Render(g)
+			// Apply the checkbox's background color to the surrounding spaces
+			bgStyle := lipgloss.NewStyle().Background(cbStyle.GetBackground())
+			return bgStyle.Render(" ") + inner + bgStyle.Render(" ")
 		}
+
+		content := "[ ]"
+		if checked {
+			content = "[x]"
+		}
+		return cbStyle.Render(content)
+	}
+
+
+	// Group headers never show checkboxes — just the disclosure glyph.
+	// IsSubItem and IsCheckbox rows use the full two-checkbox layout.
+	if menuItem.IsSubItem {
+		addStyle := neutralStyle
+		enableStyle := neutralStyle
+		if isSelected {
+			if d.activeCol == ColAdd {
+				addStyle = tagStyle
+			} else if d.activeCol == ColEnable {
+				enableStyle = tagStyle
+			}
+		}
+
+		cbAdd := buildCb3(menuItem.Checked, addStyle)
+		cbEnabled := buildCb3(menuItem.Enabled, enableStyle)
 		tagStr := RenderThemeText(menuItem.Tag, tagStyle)
-		// Use 3-space indent (gutter char occupies the 4th column) to keep checkbox aligned.
-		line := gutterChar + neutralStyle.Render("   ") + checkbox + tagStr
+		// Layout matches border: Gutter(2) + cbAdd(3) + Spacer(1) + cbEnabled(3) + Spacer(1) + Tag.
+		line := g0 + g1 + cbAdd + neutralStyle.Render(" ") + cbEnabled + neutralStyle.Render(" ") + tagStr
 		actualWidth := lipgloss.Width(line)
 		if actualWidth < m.Width()-2 {
 			line += neutralStyle.Render(strutil.Repeat(" ", m.Width()-2-actualWidth))
 		}
-		lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(m.Width())
+		lineStyle := lipgloss.NewStyle().Background(dialogBG).Width(m.Width())
 		fmt.Fprint(w, lineStyle.Render(line))
 		return
 	}
 
-	// IsGroupHeader: checkbox + name + description (aligned like checkboxItemDelegate)
+	// IsGroupHeader: expansion arrows + name.
+	if menuItem.IsGroupHeader {
+		tag := menuItem.Tag
+		var tagStr string
+		if strings.Contains(tag, "{{") {
+			tagStr = RenderThemeText(tag, tagStyle)
+		} else {
+			firstLetter := string([]rune(tag)[0])
+			rest := string([]rune(tag)[1:])
+			tagStr = keyStyle.Render(firstLetter) + tagStyle.Render(rest)
+		}
+
+		// Disclosure arrow glyph (▼ or [v])
+		var disclosureGlyph string
+		if ctx.LineCharacters {
+			disclosureGlyph = subMenuExpanded
+		} else {
+			disclosureGlyph = "[v]"
+		}
+
+		// Styled arrows for Add and Enable columns
+		// As per previous Turn, only the arrow in the 'E' column is shown.
+		// However, to support 'Add' toggle on groups if needed, we define both.
+		cbStyle := theme.ThemeSemanticStyle("{{|TitleCheckbox|}}")
+		cbAdd := neutralStyle.Render("   ")
+		if menuItem.IsCheckbox {
+			s := cbStyle
+			if isSelected && d.activeCol == ColAdd {
+				s = tagStyle
+			}
+			if ctx.LineCharacters {
+				cbAdd = neutralStyle.Render(" ") + s.Render(disclosureGlyph) + neutralStyle.Render(" ")
+			} else {
+				cbAdd = s.Render(disclosureGlyph)
+			}
+		}
+
+		cbEnabled := neutralStyle.Render("   ")
+		if menuItem.ShowEnabledGutter {
+			s := cbStyle
+			if isSelected && d.activeCol == ColEnable {
+				s = tagStyle
+			}
+			if ctx.LineCharacters {
+				cbEnabled = neutralStyle.Render(" ") + s.Render(disclosureGlyph) + neutralStyle.Render(" ")
+			} else {
+				cbEnabled = s.Render(disclosureGlyph)
+			}
+		}
+
+		paddingSpaces := strutil.Repeat(" ", max(0, d.maxTagLen-lipgloss.Width(GetPlainText(tag))+3))
+		prefixW := 11
+		availableWidth := m.Width() - 2 - prefixW - (d.maxTagLen + 3)
+		if availableWidth < 0 {
+			availableWidth = 0
+		}
+		descStr := RenderThemeText(menuItem.Desc, descStyle)
+		descLine := TruncateRight(descStr, availableWidth)
+
+		// Layout restores the dual or single arrow look as it was before.
+		// Layout matches border: Gutter(2) + cbAdd(3) + Spacer(1) + cbEnabled(3) + Spacer(1) + Tag.
+		line := g0 + g1 + cbAdd + neutralStyle.Render(" ") + cbEnabled + neutralStyle.Render(" ") + tagStr + neutralStyle.Render(paddingSpaces) + descLine
+		
+		actualWidth := lipgloss.Width(line)
+		if actualWidth < m.Width()-2 {
+			line += neutralStyle.Render(strutil.Repeat(" ", m.Width()-2-actualWidth))
+		}
+		lineStyle := lipgloss.NewStyle().Background(dialogBG).Width(m.Width())
+		fmt.Fprint(w, lineStyle.Render(line))
+		return
+	}
+
+	// IsCheckbox simple row: g0 g1  [cb_add]  [cb_enabled]  AppName  Desc
 	tag := menuItem.Tag
 	var tagStr string
 	if strings.Contains(tag, "{{") {
@@ -531,34 +643,37 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 		rest := string([]rune(tag)[1:])
 		tagStr = keyStyle.Render(firstLetter) + tagStyle.Render(rest)
 	}
+	addStyle := neutralStyle
+	enableStyle := neutralStyle
+	if isSelected {
+		if d.activeCol == ColAdd {
+			addStyle = tagStyle
+		} else if d.activeCol == ColEnable {
+			enableStyle = tagStyle
+		}
+	}
 
+	cbAdd := buildCb3(menuItem.Checked, addStyle)
+	cbEnabled := buildCb3(menuItem.Enabled, enableStyle)
+
+	// Layout matches border: Gutter(2) + cbAdd(3) + Spacer(1) + cbEnabled(3) + Spacer(1) + Tag.
+	line := g0 + g1 + cbAdd + neutralStyle.Render(" ") + cbEnabled + neutralStyle.Render(" ") + tagStr
+	
+	const rowPrefixW = 11
 	paddingSpaces := strutil.Repeat(" ", max(0, d.maxTagLen-lipgloss.Width(GetPlainText(tag))+3))
-	availableWidth := m.Width() - 2 - 1 - (cbWidth + d.maxTagLen + 3) // -1 for gutter column
+	availableWidth := m.Width() - 2 - rowPrefixW - (d.maxTagLen + 3)
 	if availableWidth < 0 {
 		availableWidth = 0
 	}
-
 	descStr := RenderThemeText(menuItem.Desc, descStyle)
 	descLine := TruncateRight(descStr, availableWidth)
 
-	// Gutter char (1 col): R=referenced+added, r=referenced-only, +=newly-enabled, -=newly-disabled.
-	gutterChar := neutralStyle.Render(" ")
-	if menuItem.IsReferenced && menuItem.Checked {
-		gutterChar = RenderThemeText("{{|MarkerAdded|}}R{{[-]}}", neutralStyle)
-	} else if menuItem.IsReferenced {
-		gutterChar = RenderThemeText("{{|MarkerModified|}}r{{[-]}}", neutralStyle)
-	} else if menuItem.Checked && !menuItem.WasAdded {
-		gutterChar = RenderThemeText("{{|MarkerAdded|}}+{{[-]}}", neutralStyle)
-	} else if !menuItem.Checked && menuItem.WasAdded {
-		gutterChar = RenderThemeText("{{|MarkerDeleted|}}-{{[-]}}", neutralStyle)
-	}
-
-	line := gutterChar + checkbox + tagStr + neutralStyle.Render(paddingSpaces) + descLine
+	line = line + neutralStyle.Render(paddingSpaces) + descLine
 	actualWidth := lipgloss.Width(line)
 	if actualWidth < m.Width()-2 {
 		line += neutralStyle.Render(strutil.Repeat(" ", m.Width()-2-actualWidth))
 	}
-	lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(m.Width())
+	lineStyle := lipgloss.NewStyle().Background(dialogBG).Width(m.Width())
 	fmt.Fprint(w, lineStyle.Render(line))
 }
 
@@ -566,8 +681,9 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 type MenuModel struct {
 	id       string // Unique identifier for selection persistence
 	title    string // Menu title
-	subtitle     string // Optional subtitle/description shown on-screen
-	helpPageText   string // Optional description shown only in the help dialog (overrides subtitle)
+	subtitle         string // Optional subtitle/description shown on-screen
+	helpPageTitle    string // Optional title for the description box in the help dialog
+	helpPageText     string // Optional description shown only in the help dialog (overrides subtitle)
 	helpLegend     string // Optional legend shown in help dialog with title "Legend" (overrides helpPageText)
 	helpItemPrefix string // Optional prefix for item titles in help dialog, e.g. "App", "Option", "Theme"
 	items    []MenuItem
@@ -576,8 +692,9 @@ type MenuModel struct {
 	height   int
 
 	// Focus state
-	focused     bool
-	focusedItem FocusItem // Which element has focus
+	focused      bool
+	focusedItem  FocusItem      // Which element has focus
+	activeColumn CheckboxColumn // Which checkbox column has focus
 
 	// Sub-menu mode (for consolidated screens)
 	subMenuMode bool
@@ -631,10 +748,13 @@ type MenuModel struct {
 	lastFilter     string
 	lastActive     bool
 	lastLineChars  bool
+	lastVersion    int
+	lastColumn     CheckboxColumn
 	lastHitRegions []HitRegion // Cache for variable height hit regions
 	viewStartY     int         // Persistent scroll offset for variable height lists
 	lastScrollTotal int        // Total content height from last renderVariableHeightList (for scrollbar)
 
+	renderVersion  int // Incremented on item changes to invalidate list cache
 	menuName string // Name used for --menu or -M to return to this screen
 
 	// Content sections: sub-menus rendered stacked inside the outer border.
@@ -647,9 +767,10 @@ type MenuModel struct {
 	itemHelpFunc func(item MenuItem) (itemTitle, itemText string)
 
 	// Scrollbar interaction state
-	sbInfo     ScrollbarInfo // geometry from last render (set by menu_render.go)
-	sbAbsTopY  int           // absolute screen Y of scrollbar column top (set by GetHitRegions)
-	sbDragging bool          // true while the user is dragging the scrollbar thumb
+	sbInfo          ScrollbarInfo             // geometry from last render (set by menu_render.go)
+	sbAbsTopY       int                       // absolute screen Y of scrollbar column top (set by GetHitRegions)
+	sbDragging      bool                      // true while the user is dragging the scrollbar thumb
+	contextMenuFunc func(idx int) []ContextMenuItem // hook for screen-specific operations
 }
 
 // IsScrollbarDragging reports whether the menu is currently processing a scrollbar thumb drag.
@@ -667,6 +788,19 @@ const (
 	FocusBackBtn
 	FocusExitBtn
 )
+
+// CheckboxColumn represents which column (Add or Enable) has focus in a row
+type CheckboxColumn int
+
+const (
+	ColAdd CheckboxColumn = iota
+	ColEnable
+)
+
+// SetContextMenuFunc sets the callback that provides custom context menu items for this menu
+func (m *MenuModel) SetContextMenuFunc(f func(idx int) []ContextMenuItem) {
+	m.contextMenuFunc = f
+}
 
 // menuSelectedIndices persists menu selection across visits
 var menuSelectedIndices = make(map[string]int)
@@ -750,6 +884,7 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 		backAction:  backAction,
 		focused:     true,
 		focusedItem: FocusSelectBtn,
+		activeColumn: ColAdd,
 		list:        l,
 		showExit:    true, // Default to show Exit button
 		showButtons: true, // Default to show buttons
@@ -771,6 +906,9 @@ func (m *MenuModel) SetTitle(title string) { m.title = title }
 
 // SetHelpPageText sets a description shown only in the help dialog, overriding the subtitle there.
 func (m *MenuModel) SetHelpPageText(text string) { m.helpPageText = text }
+
+// SetHelpPageTitle sets a title for the description box shown in the help dialog.
+func (m *MenuModel) SetHelpPageTitle(title string) { m.helpPageTitle = title }
 
 // SetHelpLegend sets a legend shown in the help dialog with the title "Legend".
 // When set, it takes precedence over helpPageText for both F1 and context-menu Help.
@@ -901,7 +1039,7 @@ func (m *MenuModel) updateDelegate() {
 	focused := m.IsActive()
 	if m.groupedMode {
 		maxTagLen := calculateMaxTagLengthForHeaders(m.items)
-		m.list.SetDelegate(groupedItemDelegate{menuID: m.id, maxTagLen: maxTagLen, focused: focused})
+		m.list.SetDelegate(groupedItemDelegate{menuID: m.id, maxTagLen: maxTagLen, focused: focused, activeCol: m.activeColumn})
 	} else if m.checkboxMode {
 		maxTagLen := calculateMaxTagLength(m.items)
 		m.list.SetDelegate(checkboxItemDelegate{menuID: m.id, maxTagLen: maxTagLen, focused: focused, flowMode: m.flowMode})
@@ -932,6 +1070,8 @@ func (m *MenuModel) SetItem(index int, item MenuItem) {
 	}
 	m.items[index] = item
 	m.list.SetItem(index, item)
+	m.renderVersion++
+	m.InvalidateCache()
 }
 
 // SetVariableHeight allows the list viewport to expand instead of forcing pagination
@@ -999,6 +1139,9 @@ func (m *MenuModel) SetItems(items []MenuItem) {
 	}
 	m.list.SetItems(listItems)
 
+	m.renderVersion++
+	m.InvalidateCache()
+
 	// Update delegate with new max tag length and focus
 	m.updateDelegate()
 }
@@ -1018,6 +1161,26 @@ func (m *MenuModel) SetSpaceAction(action tea.Cmd) {
 	m.spaceAction = action
 }
 
+// ActiveColumn returns the currently focused checkbox column (Add or Enable)
+func (m *MenuModel) ActiveColumn() CheckboxColumn {
+	return m.activeColumn
+}
+
+// SelectedItem returns the MenuItem currently under the cursor
+func (m *MenuModel) SelectedItem() MenuItem {
+	idx := m.list.Index()
+	if idx >= 0 && idx < len(m.items) {
+		return m.items[idx]
+	}
+	return MenuItem{}
+}
+// SetActiveColumn sets the focused checkbox column (Add or Enable)
+func (m *MenuModel) SetActiveColumn(col CheckboxColumn) {
+	m.activeColumn = col
+	m.renderVersion++
+	m.updateDelegate()
+}
+
 // SetButtonLabels sets custom labels for the buttons
 func (m *MenuModel) SetButtonLabels(selectLabel, backLabel, exitLabel string) {
 	m.selectLabel = selectLabel
@@ -1027,20 +1190,33 @@ func (m *MenuModel) SetButtonLabels(selectLabel, backLabel, exitLabel string) {
 
 // ToggleSelectedItem toggles the selected state of the current item (for checkbox mode)
 func (m *MenuModel) ToggleSelectedItem() {
-	if m.cursor >= 0 && m.cursor < len(m.items) && m.items[m.cursor].Selectable {
-		if m.items[m.cursor].IsCheckbox || m.items[m.cursor].IsRadioButton {
-			m.items[m.cursor].Checked = !m.items[m.cursor].Checked
-			m.items[m.cursor].Selected = m.items[m.cursor].Checked
+	idx := m.list.Index()
+	if idx >= 0 && idx < len(m.items) && m.items[idx].Selectable {
+		if m.items[idx].IsCheckbox || m.items[idx].IsRadioButton {
+			if m.groupedMode && m.activeColumn == ColEnable {
+				m.items[idx].Enabled = !m.items[idx].Enabled
+				if m.items[idx].Enabled {
+					m.items[idx].Checked = true // Auto-add if user enables
+					m.items[idx].ShowEnabledGutter = true
+				}
+			} else {
+				m.items[idx].Checked = !m.items[idx].Checked
+				m.items[idx].Selected = m.items[idx].Checked
+				if m.items[idx].Checked {
+					m.items[idx].Enabled = true
+					m.items[idx].ShowEnabledGutter = true
+				} else {
+					m.items[idx].Enabled = false
+					m.items[idx].ShowEnabledGutter = false
+				}
+			}
 		} else {
-			m.items[m.cursor].Selected = !m.items[m.cursor].Selected
+			m.items[idx].Selected = !m.items[idx].Selected
 		}
 		// Update the list item too
-		listItems := make([]list.Item, len(m.items))
-		for i, item := range m.items {
-			listItems[i] = item
-		}
-		m.list.SetItems(listItems)
-		m.lastView = "" // Invalidate view cache since checked/selected state changed
+		m.list.SetItem(idx, m.items[idx])
+		m.renderVersion++
+		m.InvalidateCache()
 	}
 }
 
@@ -1068,14 +1244,16 @@ func (m *MenuModel) helpContextForIdx(idx, contentWidth int) HelpContext {
 		itemTitle = m.helpItemPrefix + ": " + itemTitle
 	}
 
-	pageTitle := "Description"
+	pageTitle := m.helpPageTitle
 	pageText := m.helpPageText
 	if pageText == "" {
 		pageText = m.subtitle
 	}
 	if m.helpLegend != "" {
 		pageText = "" // legend takes precedence; suppress the description
-		pageTitle = ""
+		if pageTitle == "Description" { // Fallback cleanup if previously relied on
+			pageTitle = ""
+		}
 	}
 	return HelpContext{
 		ScreenName: m.title,
@@ -1092,14 +1270,14 @@ func (m *MenuModel) HelpContext(contentWidth int) HelpContext {
 	return m.helpContextForIdx(m.list.Index(), contentWidth)
 }
 
-// showContextMenu returns a command to show the context menu for the item at the given index.
-func (m *MenuModel) showContextMenu(idx int, x, y int) tea.Cmd {
+// ShowContextMenu returns a command to show the context menu for the item at the given index.
+func (m *MenuModel) ShowContextMenu(idx int, x, y int) tea.Cmd {
 	var tag, desc string
 	var hCtx *HelpContext
 
 	if idx >= 0 && idx < len(m.items) {
 		item := m.items[idx]
-		tag = item.Tag
+		tag = GetPlainText(item.Tag)
 		desc = item.Desc
 		ctx := m.helpContextForIdx(idx, 0)
 		hCtx = &ctx
@@ -1110,6 +1288,16 @@ func (m *MenuModel) showContextMenu(idx int, x, y int) tea.Cmd {
 		items = append(items, ContextMenuItem{IsHeader: true, Label: tag})
 		items = append(items, ContextMenuItem{IsSeparator: true})
 	}
+
+	// NEW: Inject custom operational items from the screen provider
+	if m.contextMenuFunc != nil {
+		customItems := m.contextMenuFunc(idx)
+		if len(customItems) > 0 {
+			items = append(items, customItems...)
+			items = append(items, ContextMenuItem{IsSeparator: true})
+		}
+	}
+
 	var clipItems []ContextMenuItem
 
 	if tag != "" {

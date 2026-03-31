@@ -80,23 +80,54 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Handle specific item clicks
-		if idx, ok := ParseMenuItemIndex(msg.ID, m.id); ok {
-			// Right click on a menu item triggers its context menu WITHOUT moving selection
-			if msg.Button == tea.MouseRight {
-				return m, m.showContextMenu(idx, msg.X, msg.Y)
-			}
+		id := msg.ID
+		suffix := ""
+		if strings.HasSuffix(id, "-add") {
+			id = strings.TrimSuffix(id, "-add")
+			suffix = "add"
+		} else if strings.HasSuffix(id, "-enable") {
+			id = strings.TrimSuffix(id, "-enable")
+			suffix = "enable"
+		} else if strings.HasSuffix(id, "-expand") {
+			id = strings.TrimSuffix(id, "-expand")
+			suffix = "expand"
+		}
 
-			// Left click moves the selection and executes
+		if idx, ok := ParseMenuItemIndex(id, m.id); ok {
+			// Move selection and column focus for any click
 			m.list.Select(idx)
 			m.cursor = idx
 			menuSelectedIndices[m.id] = idx
 			m.focusedItem = FocusList
 
-			// For checkboxes/radio buttons, clicking toggles (Space action)
-			// For regular items, clicking executes (Enter action)
+			// Handle column focus based on click region
+			if suffix == "add" {
+				m.activeColumn = ColAdd
+			} else if suffix == "enable" {
+				m.activeColumn = ColEnable
+			}
+
+			// Right click on a menu item triggers its context menu
+			if msg.Button == tea.MouseRight {
+				return m, m.ShowContextMenu(idx, msg.X, msg.Y)
+			}
+
 			if idx >= 0 && idx < len(m.items) {
 				item := m.items[idx]
+				if suffix == "expand" && item.IsGroupHeader {
+					// Expand/Collapse only
+					return m, item.Action
+				}
+
+				// For checkboxes, radio buttons, or selectable items, we trigger a toggle.
+				// We MUST check the interceptor first to ensure custom screen logic (like AppSelect) is honored.
 				if item.IsCheckbox || item.IsRadioButton || item.Selectable {
+					if m.interceptor != nil {
+						// We pass a ToggleFocusedMsg to the interceptor to represent a programmatic/mouse-driven toggle
+						if cmd, handled := m.interceptor(ToggleFocusedMsg{}, m); handled {
+							return m, cmd
+						}
+					}
 					return m.handleSpace()
 				}
 			}
@@ -283,12 +314,35 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Right: move to next button (wraps within button row)
 		case key.Matches(keyMsg, Keys.Right):
+			if m.focusedItem == FocusList && (m.groupedMode || m.checkboxMode) {
+				m.activeColumn = ColEnable
+				return m, nil
+			}
 			m.focusedItem = m.nextButtonFocus()
+			m.updateDelegate()
 			return m, nil
 
 		// Left: move to prev button (wraps within button row)
 		case key.Matches(keyMsg, Keys.Left):
+			if m.focusedItem == FocusList && (m.groupedMode || m.checkboxMode) {
+				m.activeColumn = ColAdd
+				return m, nil
+			}
 			m.focusedItem = m.prevButtonFocus()
+			return m, nil
+
+		// Ctrl+Right / Alt+Right: column navigation
+		case key.Matches(keyMsg, Keys.EnvNextTab):
+			m.activeColumn = ColEnable
+			m.focusedItem = FocusList
+			m.updateDelegate()
+			return m, nil
+
+		// Ctrl+Left / Alt+Left: column navigation
+		case key.Matches(keyMsg, Keys.EnvPrevTab):
+			m.activeColumn = ColAdd
+			m.focusedItem = FocusList
+			m.updateDelegate()
 			return m, nil
 
 		// Enter: select/confirm current focused element
@@ -308,40 +362,41 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Dynamic Hotkeys
 		default:
-			// In v2, KeyPressMsg has Text field directly
-			if keyMsg.Text != "" {
-				keyRune := strings.ToLower(keyMsg.Text)
+			if keyMsg.Text != "" && len(keyMsg.Text) == 1 {
+				keyChar := strings.ToLower(keyMsg.Text)
 
 				// 1. Check Menu Items first (priority)
-				for i, item := range m.items {
-					// Handle tagged tags like [F] properly
-					tag := strings.Trim(item.Tag, "[]")
-					if len(tag) > 0 {
-						firstChar := strings.ToLower(string(tag[0]))
-						if firstChar == keyRune {
-							m.list.Select(i)
-							m.cursor = i
-							menuSelectedIndices[m.id] = i
-							m.focusedItem = FocusList
-							return m.handleEnter()
+				// Cyclical search: start from the item after the current selection
+				items := m.items
+				if len(items) > 0 {
+					startIdx := (m.list.Index() + 1) % len(items)
+					for i := 0; i < len(items); i++ {
+						idx := (startIdx + i) % len(items)
+						item := items[idx]
+						if item.IsSeparator {
+							continue
+						}
+						// Strip semantic tags and brackets to find the raw first letter
+						displayTag := GetPlainText(item.Tag)
+						tag := strings.TrimLeft(displayTag, " [({")
+						if len(tag) > 0 {
+							firstChar := strings.ToLower(string([]rune(tag)[0]))
+							if firstChar == keyChar {
+								m.list.Select(idx)
+								m.cursor = idx
+								menuSelectedIndices[m.id] = idx
+								m.focusedItem = FocusList
+								m.updateDelegate()
+								// NAVIGATION ONLY: Move cursor, do not execute Action.
+								return m, nil
+							}
 						}
 					}
 				}
 
 				// 2. Check Buttons (if no item matched)
-				// Determine available buttons using shared helper
 				buttons := m.getButtonSpecs()
-
 				if idx, found := CheckButtonHotkeys(keyMsg, buttons); found {
-					// Map index back to FocusItem
-					// Use zone IDs or index to map, assuming standard order
-					// But since we use dynamic buttons, we should map based on the button's intended action
-					// Or just map index if we know the order: Select, [Back], [Exit]
-					// Helper: map button text/zone to FocusItem?
-					// Simpler: iterate known types and check if active in specs?
-					// Because getButtonSpecs builds in order: Select, Back, Exit.
-
-					// Re-derive focus based on index loop
 					focusMap := []FocusItem{FocusSelectBtn}
 					if m.backAction != nil {
 						focusMap = append(focusMap, FocusBackBtn)
@@ -352,8 +407,11 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 					if idx < len(focusMap) {
 						m.focusedItem = focusMap[idx]
+						m.updateDelegate()
 					}
-					return m.handleEnter()
+					// NAVIGATION ONLY: Move focus to button, do not execute Action automatically
+					// for single-character letter keys.
+					return m, nil
 				}
 			}
 		}
@@ -410,21 +468,36 @@ func (m *MenuModel) handleSpace() (tea.Model, tea.Cmd) {
 	selectedItem := m.list.SelectedItem()
 	if item, ok := selectedItem.(MenuItem); ok {
 		if (item.IsCheckbox || item.IsRadioButton) && item.Selectable {
-			if item.IsRadioButton {
-				item.Checked = true
-			} else {
-				item.Checked = !item.Checked
-			}
-			item.Selected = item.Checked
-			// Update the item in our internal list too so state persists
 			idx := m.list.Index()
+			if m.groupedMode && m.activeColumn == ColEnable {
+				item.Enabled = !item.Enabled
+				if item.Enabled {
+					item.Checked = true // Auto-add if user enables
+					item.ShowEnabledGutter = true
+				}
+			} else {
+				if item.IsRadioButton {
+					item.Checked = true
+				} else {
+					item.Checked = !item.Checked
+				}
+				item.Selected = item.Checked
+				if item.Checked {
+					item.Enabled = true
+					item.ShowEnabledGutter = true
+				} else {
+					item.Enabled = false
+					item.ShowEnabledGutter = false
+				}
+			}
+			// Update the item in our internal list too so state persists
 			if idx >= 0 && idx < len(m.items) {
-				m.items[idx].Checked = item.Checked
-				m.items[idx].Selected = item.Selected
+				m.items[idx] = item
 				// Update list.Model internal items to reflect changes immediately
 				m.list.SetItem(idx, item)
 			}
-			m.lastView = "" // Invalidate cache
+			m.renderVersion++
+			m.InvalidateCache()
 
 			if item.SpaceAction != nil {
 				return m, item.SpaceAction
@@ -433,14 +506,18 @@ func (m *MenuModel) handleSpace() (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Space always acts on the current list item
+	// Space acts on the current list item
 	selectedItem = m.list.SelectedItem()
 	if item, ok := selectedItem.(MenuItem); ok {
 		if item.SpaceAction != nil {
 			return m, item.SpaceAction
 		}
 		// Navigation items: Space falls through to Enter (executes the focused button action)
-		if item.Action != nil {
+		// But for group headers, only fall through if we aren't specifically toggling a column.
+		if item.Action != nil && !item.IsCheckbox && !item.IsRadioButton {
+			if item.IsGroupHeader && (m.activeColumn == ColAdd || m.activeColumn == ColEnable) {
+				return m, nil
+			}
 			return m.handleEnter()
 		}
 	}
@@ -825,12 +902,17 @@ func (m *MenuModel) calculateSectionLayout() {
 	if contentWidth < 1 {
 		contentWidth = 1
 	}
+	// Sections are inset by 1-char margin on each side (matching standard menu list padding).
+	sectionWidth := contentWidth - layout.ContentMarginWidth()
+	if sectionWidth < 1 {
+		sectionWidth = 1
+	}
 
-	// Button height — start with the width-based decision.
+	// Button height — width-based decision using the inset section width.
 	buttonHeight := DialogButtonHeight
 	buttonBudget := 0
 	if m.showButtons {
-		buttonHeight = ButtonRowHeight(contentWidth, 0, m.getButtonSpecs()...)
+		buttonHeight = ButtonRowHeight(sectionWidth, 0, m.getButtonSpecs()...)
 		buttonBudget = buttonHeight
 	}
 
@@ -843,7 +925,7 @@ func (m *MenuModel) calculateSectionLayout() {
 	expandableCount := 0
 	for i, sec := range m.contentSections {
 		if sec.flowMode {
-			flowH := sec.GetFlowHeight(contentWidth)
+			flowH := sec.GetFlowHeight(sectionWidth)
 			sectionH := flowH + layout.BorderHeight()
 			sectionHeights[i] = sectionH
 			fixedTotal += sectionH
@@ -872,13 +954,13 @@ func (m *MenuModel) calculateSectionLayout() {
 		expandableH = remaining / expandableCount
 	}
 
-	// Pass 2: size each section.
+	// Pass 2: size each section at the inset width.
 	for i, sec := range m.contentSections {
 		h := sectionHeights[i]
 		if h == 0 {
 			h = expandableH
 		}
-		sec.SetSize(contentWidth, h)
+		sec.SetSize(sectionWidth, h)
 	}
 
 	shadowHeight := 0

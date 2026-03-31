@@ -544,7 +544,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.focus == envFocusEditor && len(m.tabs) > 0 {
 				editor := m.tabs[m.activeTab].editor
 				editorTopY := m.lastOffsetY + 2 + m.subtitleHeight
-				y := editorTopY + editor.Line() - editor.YOffset()
+				y := editorTopY + editor.CursorVisualRow() - editor.YOffset()
 				x := m.lastOffsetX + 2
 				return m, m.showContextMenuForClick(x, y)
 			}
@@ -833,15 +833,22 @@ func (m *TabbedVarsEditorModel) ViewString() string {
 	for i, part := range parts {
 		parts[i] = strings.TrimRight(part, "\n")
 	}
-	fullContent := lipgloss.JoinVertical(lipgloss.Left, parts...)
+	innerContent := lipgloss.JoinVertical(lipgloss.Left, parts...)
+
+	// Apply 1-char side margin so inner components are inset from the outer border (matching menu dialogs).
+	layout := tui.GetLayout()
+	outerContentWidth := m.contentWidth + layout.ContentMarginWidth()
+	fullContent := lipgloss.NewStyle().
+		Background(ctx.Dialog.GetBackground()).
+		Padding(0, layout.ContentSideMargin).
+		Render(innerContent)
 
 	// 6. Wrap in the outer dialog border
-	// We pass m.contentWidth to RenderBorderedBoxCtx which will add borders (+2)
-	// resulting in a total width of m.width.
+	// outerContentWidth = m.contentWidth + margin = m.width - BorderWidth, so total = m.width.
 	return tui.RenderBorderedBoxCtx(
 		m.title,
 		fullContent,
-		m.contentWidth,
+		outerContentWidth,
 		m.height,
 		m.focused,
 		true, // Show indicators in the main title
@@ -978,9 +985,10 @@ func (m *TabbedVarsEditorModel) SetSize(width, height int) {
 
 	// width and height are the already-computed content area dimensions passed by AppModel.
 	// Use them directly as dialog bounds, just like MenuModel does.
-	// Budget for our internal components using standardized inner width.
-	// Padding = 1 on each side (matches MenuModel's marginStyle).
-	m.contentWidth = m.width - 2
+	// contentWidth is the inner space inside the outer border (border takes 2 chars).
+	// Inner components are further inset by 1-char margin each side (ContentMarginWidth).
+	layout := tui.GetLayout()
+	m.contentWidth = m.width - layout.BorderWidth() - layout.ContentMarginWidth()
 	if m.contentWidth < 1 {
 		m.contentWidth = 1
 	}
@@ -993,24 +1001,24 @@ func (m *TabbedVarsEditorModel) SetSize(width, height int) {
 	m.subtitleHeight = m.calcSubtitleHeight()
 
 	// Inner vertical space inside dialog borders (dialogHeight - 2)
-	innerH := m.height - 2
+	innerH := m.height - layout.BorderHeight()
 
 	// Available for the editor: total inner height minus button row, subtitle, and editor borders
-	m.editorHeight = innerH - m.buttonHeight - m.subtitleHeight - 2
+	m.editorHeight = innerH - m.buttonHeight - m.subtitleHeight - layout.BorderHeight()
 	if m.editorHeight < 1 {
 		m.editorHeight = 1
 	}
 	if m.editorHeight < 3 && m.buttonHeight == 3 {
 		// Fallback: force buttons flat to save 2 lines if editor would be too small
 		m.buttonHeight = 1
-		m.editorHeight = innerH - 1 - m.subtitleHeight - 2
+		m.editorHeight = innerH - 1 - m.subtitleHeight - layout.BorderHeight()
 	}
 
 	if m.editorHeight < 1 {
 		m.editorHeight = 1
 	}
 
-	editorWidth := m.contentWidth - 2 // Editor content width accounts for inner box borders (+2)
+	editorWidth := m.contentWidth - layout.BorderWidth() // Editor content width accounts for inner box borders
 	if editorWidth < 10 {
 		editorWidth = 10
 	}
@@ -1160,12 +1168,10 @@ func subtitleWrapText(text string, maxWidth int) []string {
 func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegion {
 	var regions []tui.HitRegion
 
-	// The dialog itself has a border of 1 on each side.
-	// The content area starts at offsetX+1, offsetY+1.
-	// The content area has width m.contentWidth and height m.height - 2.
-
 	m.lastOffsetX = offsetX
 	m.lastOffsetY = offsetY
+
+	layout := tui.GetLayout()
 
 	// Tabs hit regions
 	if len(m.tabs) > 0 {
@@ -1180,8 +1186,8 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitReg
 		}
 
 		// Replicate RenderBorderedBoxCtx centering logic for the title/tabs row.
-		// Inner box content width = m.contentWidth - 2 (accounts for inner box borders).
-		innerContentW := m.contentWidth - 2
+		// Inner box content width = m.contentWidth - BorderWidth (accounts for inner box borders).
+		innerContentW := m.contentWidth - layout.BorderWidth()
 		if innerContentW < 1 {
 			innerContentW = 1
 		}
@@ -1196,8 +1202,8 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitReg
 		}
 
 		// Tabs are in the top border of the inner box.
-		// Inner box starts at offsetX+1 (inside outer border), tabs start after inner TopLeft corner.
-		tabX := offsetX + 2 + leftPad // outer border(1) + inner border TopLeft(1) + leftPad
+		// Inner box starts at offsetX + outer border(1) + margin; tabs start after inner TopLeft corner(1).
+		tabX := offsetX + 1 + layout.ContentSideMargin + 1 + leftPad // outer border + margin + inner TopLeft + leftPad
 		for i, tabWidth := range tabWidths {
 			regions = append(regions, tui.HitRegion{
 				ID:     "tabbed_vars.tab-" + strconv.Itoa(i),
@@ -1218,12 +1224,12 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitReg
 	}
 
 	// Editor hit region
-	// Editor content is inside both outer border and inner border.
+	// Editor content is inside outer border + margin + inner border.
 	regions = append(regions, tui.HitRegion{
 		ID:     "tabbed_vars.editor",
-		X:      offsetX + 2,                         // outer border(1) + inner border(1)
-		Y:      offsetY + 1 + m.subtitleHeight + 1,  // outer border + subtitle + inner border/tabs
-		Width:  m.contentWidth - 2,                  // inner box content width
+		X:      offsetX + 1 + layout.ContentSideMargin + 1, // outer border + margin + inner border
+		Y:      offsetY + 1 + m.subtitleHeight + 1,         // outer border + subtitle + inner border/tabs
+		Width:  m.contentWidth - layout.BorderWidth(),       // inner box content width
 		Height: m.editorHeight,
 		ZOrder: tui.ZDialog + 5,
 		Label:  "Variables Editor",
@@ -1234,7 +1240,7 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitReg
 		},
 	})
 
-	// Button regions (standardized width)
+	// Button regions (standardized width — matches m.contentWidth which is already margin-reduced)
 	btnY := m.height - m.buttonHeight - 1
 	regions = append(regions, tui.GetButtonHitRegions(
 		tui.HelpContext{
@@ -1242,7 +1248,7 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitReg
 			PageTitle:  "Variables Editor",
 			PageText:   "Grouped environment variable editor. Right-click any row for specific options.",
 		},
-		"tabbed_vars", offsetX+1, offsetY+btnY, m.width-2, tui.ZDialog+20,
+		"tabbed_vars", offsetX+1+layout.ContentSideMargin, offsetY+btnY, m.contentWidth, tui.ZDialog+20,
 		m.getButtonSpecs()...,
 	)...)
 
@@ -1263,7 +1269,13 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 	// Compute which editor row was clicked.
 	// Editor content starts at: outer border (1) + subtitle + inner border/tab row (1) = lastOffsetY + 2 + subtitleHeight
 	editorTopY := m.lastOffsetY + 2 + m.subtitleHeight
-	clickedRow := (y - editorTopY) + editor.YOffset()
+	clickedVisualRow := (y - editorTopY) + editor.YOffset()
+
+	// Convert visual (screen) row to logical line index to handle wrapped lines correctly.
+	clickedRow := editor.VisualRowToLogical(clickedVisualRow)
+	if clickedRow < 0 {
+		return nil
+	}
 
 	meta, ok := editor.LineMetaAt(clickedRow)
 	if !ok {

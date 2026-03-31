@@ -42,7 +42,7 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 			contentWidth = m.GetInnerContentWidth()
 		}
 
-		subtitleStyle := styles.Dialog.Width(contentWidth).Padding(0, 1).Border(lipgloss.Border{})
+		subtitleStyle := styles.Dialog.Width(contentWidth).Padding(0, layout.ContentSideMargin).Border(lipgloss.Border{})
 		subStr := RenderThemeText(m.subtitle, subtitleStyle)
 		listY += lipgloss.Height(subtitleStyle.Render(subStr))
 	}
@@ -148,21 +148,70 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 				}
 
 				item := m.items[itemIndex]
-				regions = append(regions, HitRegion{
-					ID:     GetMenuItemID(m.id, itemIndex),
-					X:      offsetX + listX,
-					Y:      offsetY + listY + i,
-					Width:  itemWidth,
-					Height: 1,
-					ZOrder: baseZ + 10,
-					Label:  GetPlainText(item.Tag),
-					Help: &HelpContext{
-						ScreenName: m.title,
-						PageTitle:  "Menu Item",
-						ItemTitle:  GetPlainText(item.Tag),
-						ItemText:   item.Desc,
-					},
-				})
+				itemID := GetMenuItemID(m.id, itemIndex)
+
+				if m.groupedMode && (item.IsCheckbox || item.IsSubItem || item.IsGroupHeader) {
+					// Split into 3 regions: Add checkbox, Enable checkbox, and the rest (Tag/Expand)
+					baseX := 0
+					if item.IsSubItem || item.IsAddInstance || item.IsEditing {
+						baseX = 10
+					}
+
+					// Offset 2: Add checkbox (3 chars)
+					regions = append(regions, HitRegion{
+						ID:     itemID + "-add",
+						X:      offsetX + listX + baseX + 2,
+						Y:      offsetY + listY + i,
+						Width:  3,
+						Height: 1,
+						ZOrder: baseZ + 11,
+						Label:  "Toggle Add",
+					})
+
+					// Offset 6: Enable checkbox (3 chars)
+					regions = append(regions, HitRegion{
+						ID:     itemID + "-enable",
+						X:      offsetX + listX + baseX + 6,
+						Y:      offsetY + listY + i,
+						Width:  3,
+						Height: 1,
+						ZOrder: baseZ + 11,
+						Label:  "Toggle Enable",
+					})
+
+					// Offset 10+: Tag / Expand region
+					tagX := baseX + 10
+					tagW := itemWidth - tagX
+					if tagW < 1 {
+						tagW = 1
+					}
+					regions = append(regions, HitRegion{
+						ID:     itemID + "-expand",
+						X:      offsetX + listX + tagX,
+						Y:      offsetY + listY + i,
+						Width:  tagW,
+						Height: 1,
+						ZOrder: baseZ + 10,
+						Label:  GetPlainText(item.Tag),
+					})
+				} else {
+					// Standard single-hit region for non-grouped or simple items
+					regions = append(regions, HitRegion{
+						ID:     itemID,
+						X:      offsetX + listX,
+						Y:      offsetY + listY + i,
+						Width:  itemWidth,
+						Height: 1,
+						ZOrder: baseZ + 10,
+						Label:  GetPlainText(item.Tag),
+						Help: &HelpContext{
+							ScreenName: m.title,
+							PageTitle:  "Menu Item",
+							ItemTitle:  GetPlainText(item.Tag),
+							ItemText:   item.Desc,
+						},
+					})
+				}
 			}
 		}
 	} else {
@@ -339,9 +388,9 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		buttonX := offsetX
 		contentWidth := m.GetInnerContentWidth()
 		if !m.subMenuMode {
-			// Matches innerBoxWidth in ViewString: contentWidth - 2
-			buttonX += (layout.DialogBorder / 2) + 2 // Total 3 char offset
-			contentWidth -= 2                        // Subtract margin padding
+			// Matches innerBoxWidth in ViewString: outer border(1) + margin(ContentSideMargin)
+			buttonX += (layout.DialogBorder / 2) + layout.ContentSideMargin // Total 2 char offset
+			contentWidth -= layout.ContentMarginWidth()                      // Subtract margin padding
 		}
 
 		// Background region covering the whole button row

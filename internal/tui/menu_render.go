@@ -92,19 +92,33 @@ func (m *MenuModel) ViewString() string {
 	borderedList := listStyle.Render(listView)
 	totalWidth := m.list.Width() + ScrollbarGutterWidth + 2
 	borderedList = strings.TrimSuffix(borderedList, "\n")
-	if m.sbInfo.Needed {
+
+	// AE borders only show focus markers when a top-level app is selected.
+	// When navigating instances, the border markers are "unmarked" (unfocused).
+	showAEFocus := m.focused && !m.SelectedItem().IsSubItem && !m.SelectedItem().IsAddInstance && !m.SelectedItem().IsEditing
+
+	if m.groupedMode {
+		borderedList = borderedList + "\n" + BuildAEBottomBorder(totalWidth, 2, showAEFocus, m.activeColumn, ctx)
+	} else if m.sbInfo.Needed {
 		borderedList = borderedList + "\n" + BuildScrollPercentBottomBorder(totalWidth, m.listScrollPercent(), m.focused, ctx)
 	} else {
 		borderedList = borderedList + "\n" + BuildPlainBottomBorder(totalWidth, m.focused, ctx)
+	}
+
+	// prefixDashes=2: corner(1)+dash(2)+dash(3)+A(4,5,6) center=5 = g0(1)+g1(2)+" ▣ "(3,4,5) center=5. MATCH.
+	// AE top border (with individual column focus)
+	if m.groupedMode {
+		if nl := strings.Index(borderedList, "\n"); nl >= 0 {
+			borderedList = BuildAETopBorder(totalWidth, 2, showAEFocus, m.activeColumn, ctx) + borderedList[nl:]
+		}
 	}
 
 	// Determine the target content width (the space inside the outer dialog borders)
 	layout := GetLayout()
 	contentWidth := m.GetInnerContentWidth()
 
-	// Inner components (list and button row) should fit within contentWidth - padding (2)
-	// Padding = 1 on each side (fixed margin in marginStyle below)
-	innerBoxWidth := contentWidth - 2
+	// Inner components (list and button row) should fit within contentWidth minus the 1-char margin on each side.
+	innerBoxWidth := contentWidth - layout.ContentMarginWidth()
 
 	// Render buttons to match the exact same width as the list's border box
 	buttonRow := m.renderSimpleButtons(innerBoxWidth)
@@ -113,7 +127,7 @@ func (m *MenuModel) ViewString() string {
 	// Spacing style for both the list and the button box
 	marginStyle := lipgloss.NewStyle().
 		Background(styles.Dialog.GetBackground()).
-		Padding(0, 1)
+		Padding(0, layout.ContentSideMargin)
 
 	paddedList := marginStyle.Render(borderedList)
 	paddedButtons := marginStyle.Width(contentWidth).Render(borderedButtonBox)
@@ -125,7 +139,7 @@ func (m *MenuModel) ViewString() string {
 	if m.subtitle != "" {
 		subtitleStyle := styles.Dialog.
 			Width(contentWidth).
-			Padding(0, 1).
+			Padding(0, layout.ContentSideMargin).
 			Align(lipgloss.Left).
 			Border(lipgloss.Border{})
 
@@ -223,7 +237,7 @@ func (s *MenuModel) viewSubMenu() string {
 	if s.subtitle != "" {
 		subtitleStyle := styles.Dialog.
 			Width(contentWidth).
-			Padding(0, 1). // matches internal padding
+			Padding(0, layout.ContentSideMargin). // matches internal padding
 			Align(lipgloss.Left).
 			Border(lipgloss.Border{})
 
@@ -279,24 +293,31 @@ func (s *MenuModel) viewSubMenu() string {
 // This path is taken when m.contentSections is non-empty and m.subMenuMode is false.
 func (m *MenuModel) viewWithSections() string {
 	layout := GetLayout()
+	styles := GetStyles()
 	// Content width is the space inside the outer border.
 	contentWidth := m.width - layout.BorderWidth()
 	if contentWidth < 1 {
 		contentWidth = 1
 	}
 
+	// Sections are rendered at the inset width; the margin brings them back to contentWidth.
+	marginStyle := lipgloss.NewStyle().
+		Background(styles.Dialog.GetBackground()).
+		Padding(0, layout.ContentSideMargin)
+	sectionWidth := contentWidth - layout.ContentMarginWidth()
+
 	var parts []string
 
-	// Stack sections directly — each section already renders its own bordered panel.
+	// Stack sections with margin — each section already renders its own bordered panel.
 	for _, sec := range m.contentSections {
 		v := strings.TrimRight(sec.ViewString(), "\n")
 		if v != "" {
-			parts = append(parts, v)
+			parts = append(parts, marginStyle.Render(v))
 		}
 	}
 
-	// Button row at contentWidth (matches what renderSettingsDialog used to do).
-	buttonRow := m.renderSimpleButtons(contentWidth)
+	// Button row also inset by the same margin.
+	buttonRow := marginStyle.Render(m.renderSimpleButtons(sectionWidth))
 	parts = append(parts, buttonRow)
 
 	content := lipgloss.JoinVertical(lipgloss.Left, parts...)

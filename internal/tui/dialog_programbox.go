@@ -470,7 +470,11 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// If AutoExit is enabled and no error occurred, close immediately
 		if m.AutoExit && m.err == nil {
-			return m, func() tea.Msg { return CloseDialogMsg{} }
+			result := tea.Msg(true)
+			if m.SuccessMsg != nil {
+				result = m.SuccessMsg
+			}
+			return m, func() tea.Msg { return CloseDialogMsg{Result: result} }
 		}
 
 		return m, nil

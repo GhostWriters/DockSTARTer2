@@ -9,6 +9,8 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+const vIdxBorderFlag = 0x40000000
+
 // renderVariableHeightList renders items vertically with dynamic heights for word wrapping
 func (m *MenuModel) renderVariableHeightList() string {
 	ctx := GetActiveContext()
@@ -20,16 +22,15 @@ func (m *MenuModel) renderVariableHeightList() string {
 		m.lastIndex == m.list.Index() &&
 		m.lastFilter == m.list.FilterValue() &&
 		m.lastActive == m.IsActive() &&
-		m.lastLineChars == ctx.LineCharacters {
+		m.lastLineChars == ctx.LineCharacters &&
+		m.lastVersion == m.renderVersion &&
+		m.lastColumn == m.ActiveColumn() {
 		return m.lastListView
 	}
 
 	styles := GetStyles()
 	dialogBG := styles.Dialog.GetBackground()
 
-	// Use the width already computed by calculateLayout (= m.list.Width()).
-	// Re-deriving from InnerContentSize gives a value 2 chars too wide because it
-	// misses the outer margin padding that the standard list path accounts for.
 	maxWidth := m.list.Width()
 	if maxWidth < 1 {
 		maxWidth = 1
@@ -39,16 +40,11 @@ func (m *MenuModel) renderVariableHeightList() string {
 		maxHeight = 1
 	}
 
-	// listContentWidth: space available for item content inside a row.
-	// One char reserved for left padding (rowStyle); the scrollbar gutter is now
-	// accounted for by calculateLayout reducing m.list.Width() by scrollbarGutterWidth,
-	// so only the left pad is subtracted here.
 	listContentWidth := maxWidth - 1
 	if listContentWidth < 1 {
 		listContentWidth = 1
 	}
 
-	// Filter items manually to match list state
 	filter := m.list.FilterValue()
 	var visibleItems []MenuItem
 	var selectedVisibleIndex int = -1
@@ -74,41 +70,71 @@ func (m *MenuModel) renderVariableHeightList() string {
 			Render("No results found.")
 	}
 
-	// Styles for items
-	neutralStyle := lipgloss.NewStyle().Background(dialogBG)
 	tagStyleBase := theme.ThemeSemanticStyle("{{|Tag|}}")
 	keyStyleBase := theme.ThemeSemanticStyle("{{|TagKey|}}")
 	itemStyleBase := theme.ThemeSemanticStyle("{{|Item|}}")
-
 	tagStyleSel := theme.ThemeSemanticStyle("{{|TagSelected|}}")
 	keyStyleSel := theme.ThemeSemanticStyle("{{|TagKeySelected|}}")
 	itemStyleSel := theme.ThemeSemanticStyle("{{|ItemSelected|}}")
+	neutralStyle := lipgloss.NewStyle().Background(dialogBG)
 
-	var renderedItems []string
-	var itemHeights []int
-
-	// Only measure tags on rows that have a description column (top-level checkboxes,
-	// radio buttons, and group headers). Sub-items, add-instance, and editing rows
-	// render on their own line with no description, so they must not influence the
-	// column position.
 	var mainItems []MenuItem
 	for _, item := range visibleItems {
-		if !item.IsSubItem && !item.IsAddInstance && !item.IsEditing {
+		if !item.IsEditing && !item.IsSeparator {
 			mainItems = append(mainItems, item)
 		}
 	}
 	maxTagLen := calculateMaxTagLength(mainItems)
 
-	for i, item := range visibleItems {
+	var renderedItems []string
+	var itemHeights []int
+	var itemMappings []int
+
+	for i := 0; i < len(visibleItems); i++ {
+		item := visibleItems[i]
 		isSelected := i == selectedVisibleIndex && m.IsActive()
+		
+		// Highlight the parent header if a child item is selected
+		isParentOfSelected := false
+		if item.IsGroupHeader && selectedVisibleIndex != -1 {
+			selItem := visibleItems[selectedVisibleIndex]
+			if (selItem.IsSubItem || selItem.IsAddInstance || selItem.IsEditing) && selItem.BaseApp == item.BaseApp {
+				isParentOfSelected = true
+			}
+		}
 
 		tStyle := tagStyleBase
 		kStyle := keyStyleBase
 		dStyle := itemStyleBase
-		if isSelected {
+		if isSelected || isParentOfSelected {
 			tStyle = tagStyleSel
 			kStyle = keyStyleSel
 			dStyle = itemStyleSel
+		}
+
+		isActuallySub := item.IsSubItem || item.IsAddInstance
+		if isActuallySub {
+			var subItems []MenuItem
+			subGroupHasCursor := false
+			j := i
+			for j < len(visibleItems) && (visibleItems[j].IsSubItem || visibleItems[j].IsAddInstance) {
+				subItems = append(subItems, visibleItems[j])
+				if j == selectedVisibleIndex {
+					subGroupHasCursor = true
+				}
+				j++
+			}
+
+			subLines, subH, subM := m.renderSubListSequence(subItems, i, selectedVisibleIndex, maxTagLen, maxWidth, listContentWidth, subGroupHasCursor, ctx)
+
+			for k := 0; k < len(subLines); k++ {
+				renderedItems = append(renderedItems, subLines[k])
+				itemHeights = append(itemHeights, subH[k])
+				itemMappings = append(itemMappings, subM[k])
+			}
+
+			i = j - 1
+			continue
 		}
 
 		if item.IsSeparator {
@@ -120,250 +146,306 @@ func (m *MenuModel) renderVariableHeightList() string {
 			}
 			renderedItems = append(renderedItems, neutralStyle.Padding(0, 0, 0, 1).Render(line))
 			itemHeights = append(itemHeights, 1)
+			itemMappings = append(itemMappings, i)
 			continue
 		}
 
-		// ── IsAddInstance: rendered identically to an unchecked IsSubItem ──────
-		if item.IsAddInstance {
-			cb := ""
-			if ctx.LineCharacters {
-				cb = checkUnselected
-			} else {
-				cb = checkUnselectedAscii
-			}
-			cbStr := tStyle.Render(cb) + neutralStyle.Render(" ")
-			subTagStr := ""
-			if len(item.Tag) > 0 {
-				runes := []rune(item.Tag)
-				subTagStr = kStyle.Render(string(runes[0])) + tStyle.Render(string(runes[1:]))
-			}
-			line := neutralStyle.Render(" ") + neutralStyle.Render("    ") + cbStr + subTagStr
-			rowStyle := neutralStyle.Width(maxWidth)
-			renderedItems = append(renderedItems, rowStyle.Render(line)+console.CodeReset)
-			itemHeights = append(itemHeights, 1)
-			continue
-		}
-
-		// ── IsEditing: indented inline editing row ──────────────────────
-		if item.IsEditing {
+		if item.IsEditing && !isActuallySub {
 			cbStr := ""
 			if item.IsCheckbox {
-				cb := ""
-				if ctx.LineCharacters {
-					if item.Checked {
-						cb = checkSelected
-					} else {
-						cb = checkUnselected
-					}
-				} else {
-					if item.Checked {
-						cb = checkSelectedAscii
-					} else {
-						cb = checkUnselectedAscii
-					}
+				cb := checkUnselected
+				if item.Checked {
+					cb = checkSelected
 				}
 				cbStr = tStyle.Render(cb) + neutralStyle.Render(" ")
 			}
 			editStr := RenderThemeText(item.Tag, dStyle)
-			line := neutralStyle.Render(" ") + neutralStyle.Render("    ") + cbStr + editStr
+			line := cbStr + editStr
 			rowStyle := neutralStyle.Width(maxWidth)
 			renderedItems = append(renderedItems, rowStyle.Render(line)+console.CodeReset)
 			itemHeights = append(itemHeights, 1)
+			itemMappings = append(itemMappings, i)
 			continue
 		}
 
-		// ── IsSubItem: indented instance row with checkbox, no description ──
-		if item.IsSubItem {
-			cb := ""
-			if item.IsCheckbox {
-				if ctx.LineCharacters {
-					if item.Checked {
-						cb = checkSelected
-					} else {
-						cb = checkUnselected
-					}
-				} else {
-					if item.Checked {
-						cb = checkSelectedAscii
-					} else {
-						cb = checkUnselectedAscii
-					}
-				}
-			}
-			cbStr := tStyle.Render(cb) + neutralStyle.Render(" ")
-			subTagStr := ""
-			if len(item.Tag) > 0 {
-				subTagStr = kStyle.Render(string([]rune(item.Tag)[0])) + tStyle.Render(string([]rune(item.Tag)[1:]))
-			}
-			// Gutter: R=referenced (green=pending-add, yellow=not-yet-added), +=newly-enabled, -=newly-disabled, space otherwise.
-			gutterStr := neutralStyle.Render(" ")
-			if item.IsReferenced {
-				if item.Checked {
-					gutterStr = RenderThemeText("{{|MarkerAdded|}}R{{[-]}}", neutralStyle)
-				} else {
-					gutterStr = RenderThemeText("{{|MarkerModified|}}R{{[-]}}", neutralStyle)
-				}
-			} else if item.Checked && !item.WasAdded {
-				gutterStr = RenderThemeText("{{|MarkerAdded|}}+{{[-]}}", neutralStyle)
-			} else if !item.Checked && item.WasAdded {
-				gutterStr = RenderThemeText("{{|MarkerDeleted|}}-{{[-]}}", neutralStyle)
-			}
-			line := gutterStr + neutralStyle.Render("    ") + cbStr + subTagStr
-			rowStyle := neutralStyle.Width(maxWidth)
-			renderedItems = append(renderedItems, rowStyle.Render(line)+console.CodeReset)
-			itemHeights = append(itemHeights, 1)
-			continue
-		}
-
-		// ── Checkbox / radio / group-header glyph ────────────────────────────
 		checkbox := ""
 		if item.IsGroupHeader {
-			if ctx.LineCharacters {
-				checkbox = tStyle.Render(subMenuExpanded) + neutralStyle.Render(" ")
-			} else {
-				checkbox = tStyle.Render(subMenuExpandedAscii) + neutralStyle.Render(" ")
-			}
+			checkbox = tStyle.Render(subMenuExpanded)
 		} else if item.IsRadioButton || item.IsCheckbox {
 			cb := ""
 			if item.IsRadioButton {
-				if ctx.LineCharacters {
-					cb = radioUnselected
-					if item.Checked {
-						cb = radioSelected
-					}
-				} else {
-					cb = radioUnselectedAscii
-					if item.Checked {
-						cb = radioSelectedAscii
-					}
+				cb = radioUnselected
+				if item.Checked {
+					cb = radioSelected
 				}
 			} else {
-				if ctx.LineCharacters {
-					cb = checkUnselected
-					if item.Checked {
-						cb = checkSelected
-					}
-				} else {
-					cb = checkUnselectedAscii
-					if item.Checked {
-						cb = checkSelectedAscii
-					}
+				cb = checkUnselected
+				if item.Checked {
+					cb = checkSelected
 				}
 			}
-			checkbox = tStyle.Render(cb) + neutralStyle.Render(" ")
+			checkbox = tStyle.Render(cb)
+		}
+
+		var cbAdd3, cbEnabled3 string
+		if item.IsCheckbox && !item.IsGroupHeader {
+			ca, ce := checkUnselected, checkUnselected
+			if item.Checked {
+				ca = checkSelected
+			}
+			if item.Enabled {
+				ce = checkSelected
+			}
+
+			cbAStyle := tagStyleBase
+			cbEStyle := tagStyleBase
+			if isSelected {
+				if m.activeColumn == ColAdd {
+					cbAStyle = tagStyleSel
+				} else {
+					cbEStyle = tagStyleSel
+				}
+			}
+
+			if ctx.LineCharacters {
+				// Line-art glyphs are 1-char wide; pad to 3 with spaces: " ▣ " to match " A " in border
+				cbAdd3 = neutralStyle.Render(" ") + cbAStyle.Render(ca) + neutralStyle.Render(" ")
+				cbEnabled3 = neutralStyle.Render(" ") + cbEStyle.Render(ce) + neutralStyle.Render(" ")
+			} else {
+				// ASCII: "[ ]" and "[x]" are already 3 chars wide — no extra padding needed
+				if item.Checked {
+					ca = checkSelectedAscii[:3]
+				} else {
+					ca = checkUnselectedAscii[:3]
+				}
+				if item.Enabled {
+					ce = checkSelectedAscii[:3]
+				} else {
+					ce = checkUnselectedAscii[:3]
+				}
+				cbAdd3 = neutralStyle.Render("[") + cbAStyle.Render(string(ca[1])) + neutralStyle.Render("]")
+				cbEnabled3 = neutralStyle.Render("[") + cbEStyle.Render(string(ce[1])) + neutralStyle.Render("]")
+			}
 		}
 
 		tagStr := ""
-		tag := item.Tag
-		if len(tag) > 0 {
+		if len(item.Tag) > 0 {
+			runes := []rune(item.Tag)
 			letterIdx := 0
-			if strings.HasPrefix(tag, "[") && len(tag) > 1 {
+			if strings.HasPrefix(item.Tag, "[") && len(runes) > 1 {
 				letterIdx = 1
 			}
-			p := tag[:letterIdx]
-			f := string(tag[letterIdx])
-			r := tag[letterIdx+1:]
-			tagStr = tStyle.Render(p) + kStyle.Render(f) + tStyle.Render(r)
+			if letterIdx < len(runes) {
+				tagStr = tStyle.Render(string(runes[:letterIdx])) + kStyle.Render(string(runes[letterIdx])) + tStyle.Render(string(runes[letterIdx+1:]))
+			} else {
+				tagStr = RenderThemeText(item.Tag, tStyle)
+			}
 		}
 
-		cbWidth := lipgloss.Width(GetPlainText(checkbox))
-		paddingSpaces := strutil.Repeat(" ", max(0, maxTagLen-lipgloss.Width(GetPlainText(tag))+3))
-		prefixWidth := cbWidth + maxTagLen + 3
-		availableWidth := listContentWidth - prefixWidth
+		// Dynamically calculate prefix width based on menu type and item features
+		isAppSelect := m.id == "app-select"
+		var prefixWidth int
+		var firstLinePrefix string
 
-		// The key here is that RenderThemeText must process the raw string *first* so
-		// lipgloss gets real ANSI codes instead of pseudo-brackets `{{ }}` which falsely
-		// inflate the measured width.
+		if isAppSelect && (item.IsCheckbox || item.IsGroupHeader) {
+			if item.IsGroupHeader {
+				var arrowA, arrowE string
+				if ctx.LineCharacters {
+					arrowA = neutralStyle.Render("   ")
+					arrowE = neutralStyle.Render(" ") + tStyle.Render(subMenuExpanded) + neutralStyle.Render(" ")
+				} else {
+					arrowA = neutralStyle.Render("   ")
+					arrowE = tStyle.Render("[v]")
+				}
+				firstLinePrefix = arrowA + neutralStyle.Render(" ") + arrowE + neutralStyle.Render(" ")
+			} else {
+				firstLinePrefix = cbAdd3 + neutralStyle.Render(" ") + cbEnabled3 + neutralStyle.Render(" ")
+			}
+			prefixWidth = lipgloss.Width(GetPlainText(firstLinePrefix))
+		} else {
+			if checkbox != "" {
+				firstLinePrefix = checkbox + neutralStyle.Render(" ")
+				prefixWidth = lipgloss.Width(GetPlainText(firstLinePrefix))
+			} else {
+				firstLinePrefix = ""
+				prefixWidth = 0
+			}
+		}
+
+		paddingSpaces := strutil.Repeat(" ", max(0, maxTagLen-lipgloss.Width(GetPlainText(item.Tag))+3))
+		availableWidth := listContentWidth - (prefixWidth + 2) - (maxTagLen + 3) // +2 for gutter
+		if availableWidth < 0 {
+			availableWidth = 0
+		}
+
 		descStr := RenderThemeText(item.Desc, dStyle)
 		wrapped := lipgloss.NewStyle().Width(availableWidth).Render(descStr)
 		lines := strings.Split(wrapped, "\n")
-
-		// Trim right spaces from trailing wrapping fills so we don't highlight the background
 		for k, l := range lines {
 			lines[k] = strings.TrimRight(l, " ")
 		}
 
-		firstLine := checkbox + tagStr + neutralStyle.Render(paddingSpaces) + lines[0]
+		var g0, g1 string
+		if item.IsReferenced && !item.IsGroupHeader {
+			if item.Checked {
+				g0 = RenderThemeText("{{|MarkerAdded|}}R{{[-]}}", neutralStyle)
+			} else {
+				g0 = RenderThemeText("{{|MarkerModified|}}R{{[-]}}", neutralStyle)
+			}
+		} else if item.IsCheckbox && !item.IsGroupHeader {
+			if item.Checked && !item.WasAdded {
+				g0 = RenderThemeText("{{|MarkerAdded|}}+{{[-]}}", neutralStyle)
+			} else if !item.Checked && item.WasAdded {
+				g0 = RenderThemeText("{{|MarkerDeleted|}}-{{[-]}}", neutralStyle)
+			} else {
+				g0 = neutralStyle.Render(" ")
+			}
+		} else {
+			g0 = neutralStyle.Render(" ")
+		}
 
-		indent := neutralStyle.Render(strutil.Repeat(" ", prefixWidth))
+		if !item.IsGroupHeader {
+			isRemoving := !item.Checked && item.WasAdded
+			if !isRemoving {
+				if item.Enabled && !item.WasEnabled {
+					g1 = RenderThemeText("{{|MarkerAdded|}}E{{[-]}}", neutralStyle)
+				} else if !item.Enabled && item.WasEnabled {
+					g1 = RenderThemeText("{{|MarkerDeleted|}}D{{[-]}}", neutralStyle)
+				} else {
+					g1 = neutralStyle.Render(" ")
+				}
+			} else {
+				g1 = neutralStyle.Render(" ")
+			}
+		} else {
+			g1 = neutralStyle.Render(" ")
+		}
+		itemGutter := g0 + g1
+
+		firstLine := firstLinePrefix + tagStr + neutralStyle.Render(paddingSpaces) + lines[0]
+		indent := neutralStyle.Render(strutil.Repeat(" ", prefixWidth + maxTagLen + 3))
 		renderedItemLines := []string{firstLine}
 		for j := 1; j < len(lines); j++ {
 			renderedItemLines = append(renderedItemLines, indent+lines[j])
 		}
 
-		// Gutter: R=referenced (green=pending-add, yellow=not-yet-added), +=newly-enabled, -=newly-removed, space otherwise.
-		// Group headers never show gutter markers — sub-items carry that information when expanded.
-		itemGutter := neutralStyle.Render(" ")
-		if item.IsReferenced && !item.IsGroupHeader {
-			if item.Checked {
-				itemGutter = RenderThemeText("{{|MarkerAdded|}}R{{[-]}}", neutralStyle)
-			} else {
-				itemGutter = RenderThemeText("{{|MarkerModified|}}R{{[-]}}", neutralStyle)
-			}
-		} else if item.IsCheckbox && !item.IsGroupHeader {
-			if item.Checked && !item.WasAdded {
-				itemGutter = RenderThemeText("{{|MarkerAdded|}}+{{[-]}}", neutralStyle)
-			} else if !item.Checked && item.WasAdded {
-				itemGutter = RenderThemeText("{{|MarkerDeleted|}}-{{[-]}}", neutralStyle)
-			}
-		}
 		finalItem := ""
-		// Width(maxWidth) = m.list.Width(); applyScrollbarColumn in ViewString appends the gutter.
 		rowStyle := neutralStyle.Width(maxWidth)
 		for j, l := range renderedItemLines {
 			if j > 0 {
 				finalItem += "\n"
-				finalItem += rowStyle.Render(neutralStyle.Render(" ")+l) + console.CodeReset
+				finalItem += rowStyle.Render(neutralStyle.Render("  ")+l) + console.CodeReset
 			} else {
 				finalItem += rowStyle.Render(itemGutter+l) + console.CodeReset
 			}
 		}
-
 		renderedItems = append(renderedItems, finalItem)
 		itemHeights = append(itemHeights, len(lines))
+		itemMappings = append(itemMappings, i)
 	}
 
 	totalContentHeight := 0
 	for _, h := range itemHeights {
 		totalContentHeight += h
 	}
-	// Store for applyScrollbarColumn in ViewString (variable-height path).
 	m.lastScrollTotal = totalContentHeight
 
-	// Helper: build the blank padding line (used in both branches). Width = maxWidth.
 	blankLine := func() string {
 		return neutralStyle.Padding(0, 0, 0, 1).Render(strutil.Repeat(" ", listContentWidth)) + console.CodeReset
+	}
+
+	for i, item := range renderedItems {
+		linesRows := strings.Split(item, "\n")
+		for j, line := range linesRows {
+			w := lipgloss.Width(GetPlainText(line))
+			if w < maxWidth {
+				linesRows[j] = line + neutralStyle.Render(strutil.Repeat(" ", maxWidth-w))
+			}
+		}
+		renderedItems[i] = strings.Join(linesRows, "\n")
 	}
 
 	if totalContentHeight <= maxHeight {
 		var newHitRegions []HitRegion
 		aggY := 0
-		searchFrom := 0 // advance past each match to handle items with duplicate Tag+Desc
+		searchFrom := 0
 		for i, h := range itemHeights {
-			if !visibleItems[i].IsSeparator {
+			vIdx := itemMappings[i]
+			isBorder := (vIdx & vIdxBorderFlag) != 0
+			if vIdx >= 0 && vIdx < len(visibleItems) && !visibleItems[vIdx].IsSeparator {
+				cleanVIdx := vIdx & ^vIdxBorderFlag
 				actualIndex := -1
 				for actIdx := searchFrom; actIdx < len(m.items); actIdx++ {
 					mi := m.items[actIdx]
-					if mi.Tag == visibleItems[i].Tag && mi.Desc == visibleItems[i].Desc {
+					if mi.Tag == visibleItems[cleanVIdx].Tag && mi.Desc == visibleItems[cleanVIdx].Desc && mi.BaseApp == visibleItems[cleanVIdx].BaseApp {
 						actualIndex = actIdx
-						searchFrom = actIdx + 1
+						if !isBorder {
+							searchFrom = actIdx + 1
+						}
 						break
 					}
 				}
 				if actualIndex >= 0 {
-					newHitRegions = append(newHitRegions, HitRegion{
-						ID:     GetMenuItemID(m.id, actualIndex),
-						X:      0, // Relative to start of list-box inner content
-						Y:      aggY,
-						Width:  listContentWidth,
-						Height: h,
-					})
+					itemID := GetMenuItemID(m.id, actualIndex)
+					if isBorder {
+						itemID += "-parent" // Clicks on group borders jump to parent
+					}
+					item := m.items[actualIndex]
+					if m.groupedMode && (item.IsCheckbox || item.IsSubItem || item.IsGroupHeader || item.IsAddInstance) && !isBorder {
+						// Row Margin Catch-all: Registered FIRST so specific regions on top take priority
+						newHitRegions = append(newHitRegions, HitRegion{
+							ID:     itemID + "-border",
+							X:      0,
+							Y:      aggY,
+							Width:  listContentWidth,
+							Height: h,
+						})
+
+						// Sub-items and add-instance rows are indented by 10 relative to the group header
+						baseShift := 0
+						if item.IsSubItem || item.IsAddInstance || item.IsEditing {
+							baseShift = 10
+						}
+
+						// Specific Regions (Add, Enable, Expand)
+						newHitRegions = append(newHitRegions, HitRegion{
+							ID:     itemID + "-add",
+							X:      baseShift + 2,
+							Y:      aggY,
+							Width:  3,
+							Height: h,
+						})
+						newHitRegions = append(newHitRegions, HitRegion{
+							ID:     itemID + "-enable",
+							X:      baseShift + 6,
+							Y:      aggY,
+							Width:  3,
+							Height: h,
+						})
+						tagX := baseShift + 10
+						tagW := listContentWidth - tagX
+						newHitRegions = append(newHitRegions, HitRegion{
+							ID:     itemID + "-expand",
+							X:      tagX,
+							Y:      aggY,
+							Width:  max(1, tagW),
+							Height: h,
+						})
+					} else {
+						// Standard single-hit region or border hit region
+						newHitRegions = append(newHitRegions, HitRegion{
+							ID:     itemID,
+							X:      0,
+							Y:      aggY,
+							Width:  listContentWidth,
+							Height: h,
+						})
+					}
 				}
 			}
 			aggY += h
 		}
 
-		// Build viewLines so we can attach the scrollbar column uniformly.
 		var viewLines []string
 		for _, item := range renderedItems {
 			for _, line := range strings.Split(item, "\n") {
@@ -373,39 +455,39 @@ func (m *MenuModel) renderVariableHeightList() string {
 		for len(viewLines) < maxHeight {
 			viewLines = append(viewLines, blankLine())
 		}
-
 		result := strings.Join(viewLines, "\n")
-
-		// Save for memoization
 		m.lastListView = result
-		m.lastWidth = m.width
-		m.lastHeight = m.height
-		m.lastIndex = m.list.Index()
-		m.lastFilter = m.list.FilterValue()
-		m.lastActive = m.IsActive()
-		m.lastLineChars = ctx.LineCharacters
 		m.lastHitRegions = newHitRegions
-
+		m.lastVersion = m.renderVersion
+		m.lastColumn = m.ActiveColumn()
 		return result
 	}
 
 	currentY := 0
-	for i := 0; i < selectedVisibleIndex && i < len(itemHeights); i++ {
-		currentY += itemHeights[i]
+	aggY_scroll := 0
+	selectedY := 0
+	for i, h := range itemHeights {
+		if itemMappings[i] == selectedVisibleIndex {
+			selectedY = aggY_scroll
+			break
+		}
+		aggY_scroll += h
 	}
+	currentY = selectedY
 
 	selectedHeight := 1
-	if selectedVisibleIndex >= 0 && selectedVisibleIndex < len(itemHeights) {
-		selectedHeight = itemHeights[selectedVisibleIndex]
+	for i, h := range itemHeights {
+		if itemMappings[i] == selectedVisibleIndex {
+			selectedHeight = h
+			break
+		}
 	}
 
-	// Bounding box scroll logic: only move viewStart if the selected item is out of bounds
 	if currentY < m.viewStartY {
 		m.viewStartY = currentY
 	} else if currentY+selectedHeight > m.viewStartY+maxHeight {
 		m.viewStartY = currentY + selectedHeight - maxHeight
 	}
-
 	if m.viewStartY < 0 {
 		m.viewStartY = 0
 	}
@@ -414,16 +496,17 @@ func (m *MenuModel) renderVariableHeightList() string {
 	}
 
 	viewStart := m.viewStartY
-
 	var viewLines []string
-	var newHitRegions []HitRegion // Build a new cache corresponding to actual visual lines
+	var newHitRegions []HitRegion
 	aggY := 0
-	searchFrom := 0 // advance past each match to handle items with duplicate Tag+Desc
+	searchFrom := 0
 	for i, item := range renderedItems {
 		h := itemHeights[i]
+		vIdx := itemMappings[i]
+		isBorder := (vIdx & vIdxBorderFlag) != 0
 		if aggY+h > viewStart && aggY < viewStart+maxHeight {
-			// Save the hit region exactly corresponding to the rendered lines
-			if !visibleItems[i].IsSeparator {
+			if vIdx >= 0 && !visibleItems[vIdx & ^vIdxBorderFlag].IsSeparator {
+				cleanVIdx := vIdx & ^vIdxBorderFlag
 				y := aggY - viewStart
 				itemH := h
 				if aggY < viewStart {
@@ -433,27 +516,75 @@ func (m *MenuModel) renderVariableHeightList() string {
 				if aggY+h > viewStart+maxHeight {
 					itemH -= (aggY + h - (viewStart + maxHeight))
 				}
-
 				actualIndex := -1
 				for actIdx := searchFrom; actIdx < len(m.items); actIdx++ {
 					mi := m.items[actIdx]
-					if mi.Tag == visibleItems[i].Tag && mi.Desc == visibleItems[i].Desc {
+					if mi.Tag == visibleItems[cleanVIdx].Tag && mi.Desc == visibleItems[cleanVIdx].Desc && mi.BaseApp == visibleItems[cleanVIdx].BaseApp {
 						actualIndex = actIdx
-						searchFrom = actIdx + 1
+						if !isBorder {
+							searchFrom = actIdx + 1
+						}
 						break
 					}
 				}
 				if actualIndex >= 0 {
-					newHitRegions = append(newHitRegions, HitRegion{
-						ID:     GetMenuItemID(m.id, actualIndex),
-						X:      0, // Relative to list content
-						Y:      y,
-						Width:  listContentWidth,
-						Height: itemH,
-					})
+					itemID := GetMenuItemID(m.id, actualIndex)
+					if isBorder {
+						itemID += "-parent" // Clicks on group borders jump to parent
+					}
+					item := m.items[actualIndex]
+					if m.groupedMode && (item.IsCheckbox || item.IsSubItem || item.IsGroupHeader || item.IsAddInstance) && !isBorder {
+						// Row Margin Catch-all: Registered FIRST so specific regions on top take priority
+						newHitRegions = append(newHitRegions, HitRegion{
+							ID:     itemID + "-border",
+							X:      0,
+							Y:      y,
+							Width:  listContentWidth,
+							Height: itemH,
+						})
+
+						// Sub-items and add-instance rows are indented by 10
+						baseShift := 0
+						if item.IsSubItem || item.IsAddInstance || item.IsEditing {
+							baseShift = 10
+						}
+
+						// Specific Regions (Add, Enable, Expand)
+						newHitRegions = append(newHitRegions, HitRegion{
+							ID:     itemID + "-add",
+							X:      baseShift + 2,
+							Y:      y,
+							Width:  3,
+							Height: itemH,
+						})
+						newHitRegions = append(newHitRegions, HitRegion{
+							ID:     itemID + "-enable",
+							X:      baseShift + 6,
+							Y:      y,
+							Width:  3,
+							Height: itemH,
+						})
+						tagX := baseShift + 10
+						tagW := listContentWidth - tagX
+						newHitRegions = append(newHitRegions, HitRegion{
+							ID:     itemID + "-expand",
+							X:      tagX,
+							Y:      y,
+							Width:  max(1, tagW),
+							Height: itemH,
+						})
+					} else {
+						// Standard single-hit region or border hit region
+						newHitRegions = append(newHitRegions, HitRegion{
+							ID:     itemID,
+							X:      0,
+							Y:      y,
+							Width:  listContentWidth,
+							Height: itemH,
+						})
+					}
 				}
 			}
-
 			parts := strings.Split(item, "\n")
 			for j, p := range parts {
 				lineY := aggY + j
@@ -464,22 +595,167 @@ func (m *MenuModel) renderVariableHeightList() string {
 		}
 		aggY += h
 	}
-
 	for len(viewLines) < maxHeight {
 		viewLines = append(viewLines, blankLine())
 	}
-
 	finalResult := strings.Join(viewLines, "\n")
-
-	// Save for memoization
 	m.lastListView = finalResult
-	m.lastWidth = m.width
-	m.lastHeight = m.height
-	m.lastIndex = m.list.Index()
-	m.lastFilter = m.list.FilterValue()
-	m.lastActive = m.IsActive()
-	m.lastLineChars = ctx.LineCharacters
 	m.lastHitRegions = newHitRegions
-
+	m.lastVersion = m.renderVersion
+	m.lastColumn = m.ActiveColumn()
 	return finalResult
+}
+
+// renderSubListSequence handles a contiguous sequence of sub-items by wrapping them in a border.
+func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex int, selectedVisibleIndex int, maxTagLen int, maxWidth int, listContentWidth int, hasCursor bool, ctx StyleContext) ([]string, []int, []int) {
+	styles := GetStyles()
+	dialogBG := styles.Dialog.GetBackground()
+	neutralStyle := lipgloss.NewStyle().Background(dialogBG)
+	tagStyleBase := theme.ThemeSemanticStyle("{{|Tag|}}")
+	keyStyleBase := theme.ThemeSemanticStyle("{{|TagKey|}}")
+	tagStyleSel := theme.ThemeSemanticStyle("{{|TagSelected|}}")
+	keyStyleSel := theme.ThemeSemanticStyle("{{|TagKeySelected|}}")
+
+	var subGroupTagMaxW int
+	for _, item := range items {
+		w := lipgloss.Width(GetPlainText(item.Tag))
+		if w > subGroupTagMaxW {
+			subGroupTagMaxW = w
+		}
+	}
+
+	// Instance Grid: Indent 10, Dash 1, Left Pad 1, Right Pad 1.
+	// Total width: 1(│) + 1(sp_l) + 10(prefix) + tag + 1(sp_r) + 1(│).
+	// Total width: 2 + 10 + tag + 1 = 13 + tag. No, prefix is already 10.
+	// Prefix = 1(sp_l) + 3(cbA) + 1(sp) + 3(cbE) + 1(sp) = 10.
+	// Total width: 1(│l) + 10(prefix) + maxTag + 1(sp_r) + 1(│r) = 13 + maxTag.
+	subListWidth := 12 + subGroupTagMaxW
+	if subListWidth > maxWidth {
+		subListWidth = maxWidth
+	}
+
+	subFocused := m.IsActive() && hasCursor
+	var resLines []string
+	var resH []int
+	var resM []int
+
+	// 1. Build Top Border with 1 dash.
+	topBorder := BuildAETopBorder(subListWidth, 1, subFocused, m.activeColumn, ctx)
+	resLines = append(resLines, neutralStyle.Render(strutil.Repeat(" ", 10))+topBorder)
+	resH = append(resH, 1)
+	resM = append(resM, startVisibleIndex|vIdxBorderFlag) // Flag as border
+
+	vStyleLight := lipgloss.NewStyle().Foreground(ctx.BorderColor).Background(dialogBG)
+	vStyleDark := lipgloss.NewStyle().Foreground(ctx.Border2Color).Background(dialogBG)
+	var border lipgloss.Border
+	if ctx.LineCharacters {
+		if subFocused {
+			border = ThickRoundedBorder
+		} else {
+			border = lipgloss.RoundedBorder()
+		}
+	} else {
+		if subFocused {
+			border = RoundedThickAsciiBorder
+		} else {
+			border = RoundedAsciiBorder
+		}
+	}
+	vBorderChar := border.Left
+
+	for i, item := range items {
+		visibleIdx := startVisibleIndex + i
+		isSelected := visibleIdx == selectedVisibleIndex && m.IsActive()
+
+		tStyle := tagStyleBase
+		kStyle := keyStyleBase
+		if isSelected {
+			tStyle = tagStyleSel
+			kStyle = keyStyleSel
+		}
+
+		var g0, g1 string
+		if item.IsReferenced {
+			g0 = RenderThemeText("{{|MarkerAdded|}}R{{[-]}}", neutralStyle)
+			if !item.Checked {
+				g0 = RenderThemeText("{{|MarkerModified|}}R{{[-]}}", neutralStyle)
+			}
+		} else if item.Checked && !item.WasAdded {
+			g0 = RenderThemeText("{{|MarkerAdded|}}+{{[-]}}", neutralStyle)
+		} else if !item.Checked && item.WasAdded {
+			g0 = RenderThemeText("{{|MarkerDeleted|}}-{{[-]}}", neutralStyle)
+		} else {
+			g0 = neutralStyle.Render(" ")
+		}
+
+		if item.Enabled && !item.WasEnabled {
+			g1 = RenderThemeText("{{|MarkerAdded|}}E{{[-]}}", neutralStyle)
+		} else if !item.Enabled && item.WasEnabled && !(!item.Checked && item.WasAdded) {
+			g1 = RenderThemeText("{{|MarkerDeleted|}}D{{[-]}}", neutralStyle)
+		} else {
+			g1 = neutralStyle.Render(" ")
+		}
+
+		tagStr := ""
+		if item.IsEditing {
+			// Using the standard edit styling (red background/bold)
+			editTag := GetPlainText(item.Tag)
+			tagStr = theme.ThemeSemanticStyle("{{|ItemSelected|}}").Render(editTag)
+		} else if len(item.Tag) > 0 {
+			runes := []rune(item.Tag)
+			tagStr = kStyle.Render(string(runes[0])) + tStyle.Render(string(runes[1:]))
+		}
+
+		// Choose checkbox styles individually
+		cbStyleA := tStyle
+		cbStyleE := tStyle
+		if isSelected {
+			if subFocused {
+				if m.activeColumn == ColAdd {
+					cbStyleA = tagStyleSel
+					cbStyleE = tagStyleBase
+				} else {
+					cbStyleE = tagStyleSel
+					cbStyleA = tagStyleBase
+				}
+			} else {
+				// Sub-list not focused: use neutral style for both
+				cbStyleA = tagStyleBase
+				cbStyleE = tagStyleBase
+			}
+		}
+
+		var checkboxA3, checkboxE3 string
+		if ctx.LineCharacters {
+			cA, cE := checkUnselected, checkUnselected
+			if item.Checked { cA = checkSelected }
+			if item.Enabled { cE = checkSelected }
+			
+			checkboxA3 = neutralStyle.Render(" ") + cbStyleA.Render(cA) + neutralStyle.Render(" ")
+			checkboxE3 = neutralStyle.Render(" ") + cbStyleE.Render(cE) + neutralStyle.Render(" ")
+		} else {
+			caA, ceA := "[ ]", "[ ]"
+			if item.Checked { caA = "[x]" }
+			if item.Enabled { ceA = "[x]" }
+			checkboxA3 = neutralStyle.Render("[") + cbStyleA.Render(string(caA[1])) + neutralStyle.Render("]")
+			checkboxE3 = neutralStyle.Render("[") + cbStyleE.Render(string(ceA[1])) + neutralStyle.Render("]")
+		}
+
+		rowContent := vStyleLight.Render(vBorderChar) + neutralStyle.Render(" ") + checkboxA3 + neutralStyle.Render(" ") + checkboxE3 + neutralStyle.Render(" ") + tagStr
+		rowWidth := subListWidth - 1
+		pContent := rowContent + neutralStyle.Render(strutil.Repeat(" ", max(0, rowWidth-lipgloss.Width(GetPlainText(rowContent)))))
+		line := g0 + g1 + neutralStyle.Render(strutil.Repeat(" ", 8)) + pContent + vStyleDark.Render(vBorderChar)
+
+		resLines = append(resLines, line+console.CodeReset)
+		resH = append(resH, 1)
+		resM = append(resM, visibleIdx)
+	}
+
+	// 3. Build Bottom Border with 1 dash.
+	bottomBorder := BuildAEBottomBorder(subListWidth, 1, subFocused, m.activeColumn, ctx)
+	resLines = append(resLines, neutralStyle.Render(strutil.Repeat(" ", 10))+bottomBorder+console.CodeReset)
+	resH = append(resH, 1)
+	resM = append(resM, startVisibleIndex|vIdxBorderFlag) // Flag as border
+
+	return resLines, resH, resM
 }

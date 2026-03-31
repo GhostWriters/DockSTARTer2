@@ -68,8 +68,9 @@ func (m *ProgramBoxModel) ViewString() string {
 	// Build dialog content
 	var contentParts []string
 
-	// Calculate content width for inner components
-	contentWidth = m.layout.Width - 2
+	// Content width for inner components: inside outer border and 1-char margin on each side.
+	layout := GetLayout()
+	contentWidth = m.layout.Width - layout.BorderWidth() - layout.ContentMarginWidth()
 
 	// Render Header
 	headerUI := m.renderHeaderUI(contentWidth)
@@ -118,6 +119,12 @@ func (m *ProgramBoxModel) ViewString() string {
 				Render(content)
 		}
 	}
+
+	// Apply 1-char side margin so content is inset from outer border (matching menu dialogs).
+	content = lipgloss.NewStyle().
+		Background(ctx.Dialog.GetBackground()).
+		Padding(0, layout.ContentSideMargin).
+		Render(content)
 
 	// Wrap in border with title embedded (matching menu style)
 	dialogWithTitle := RenderDialog(m.title, content, true, 0)
@@ -191,14 +198,15 @@ func (m *ProgramBoxModel) Layers() []*lipgloss.Layer {
 func (m *ProgramBoxModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	var regions []HitRegion
 
+	layout := GetLayout()
 	// Account for the 1-line spacer after the command display
 	// Viewport hit region (main output area)
 	viewportY := 1 + m.layout.HeaderHeight + m.layout.CommandHeight
 	if m.layout.Width > 2 && m.layout.ViewportHeight > 0 {
 		regions = append(regions, HitRegion{
 			ID:     m.id + ".viewport",
-			X:      offsetX + 1,
-			Y:      offsetY + viewportY + 1, // +1 for inner top border
+			X:      offsetX + layout.ContentSideMargin + 1, // outer border(1) + margin + inner border(1)
+			Y:      offsetY + viewportY + 1,                // +1 for inner top border
 			Width:  m.viewport.Width(),
 			Height: m.viewport.Height(),
 			ZOrder: ZDialog + 10,
@@ -213,8 +221,8 @@ func (m *ProgramBoxModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 
 		// Scrollbar Regions
 		if currentConfig.UI.Scrollbar && m.sbInfo.Needed {
-			// sbX: outer border(1) + inner border(1) + viewport content width
-			sbX := offsetX + 2 + m.viewport.Width()
+			// sbX: outer border(1) + margin + inner border(1) + viewport content width
+			sbX := offsetX + layout.ContentSideMargin + 2 + m.viewport.Width()
 			// sbTopY: outer border(1) + header + command + spacer + inner top border(1) == viewportY+1
 			sbTopY := offsetY + viewportY + 1
 			m.sbAbsTopY = sbTopY
@@ -274,7 +282,7 @@ func (m *ProgramBoxModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	if m.done {
 		// Y = 1 (border) + headerH + commandH + spacerY + vpHeight + viewport border (2)
 		buttonY := 1 + m.layout.HeaderHeight + m.layout.CommandHeight + m.layout.ViewportHeight + 2
-		contentWidth := m.layout.Width - 2
+		contentWidth := m.layout.Width - layout.BorderWidth() - layout.ContentMarginWidth()
 
 		btnSpecs := []ButtonSpec{
 			{Text: "OK", ZoneID: "ok", Active: true},
@@ -282,7 +290,7 @@ func (m *ProgramBoxModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 
 		regions = append(regions, GetButtonHitRegions(
 			HelpContext{ScreenName: m.title, PageTitle: "Task Execution", PageText: m.subtitle},
-			"programbox_dialog", offsetX+1, offsetY+buttonY, contentWidth, ZDialog+20,
+			"programbox_dialog", offsetX+layout.ContentSideMargin+1, offsetY+buttonY, contentWidth, ZDialog+20,
 			btnSpecs...,
 		)...)
 	}

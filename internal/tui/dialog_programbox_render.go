@@ -221,7 +221,8 @@ func (m *ProgramBoxModel) calculateLayout() {
 
 	layout := GetLayout()
 	hasShadow := currentConfig.UI.Shadow
-	contentW := m.width - 2
+	// contentW is the padded content width: inside outer border minus 1-char margin each side.
+	contentW := m.width - layout.BorderWidth() - layout.ContentMarginWidth()
 	shadowHeight := 0
 	if hasShadow {
 		shadowHeight = DialogShadowHeight
@@ -244,7 +245,7 @@ func (m *ProgramBoxModel) calculateLayout() {
 	buttons := 0
 	if m.done {
 		const minVpRows = 2
-		availableForButton := m.height - 2 - internalOverhead - minVpRows - 2 - shadowHeight
+		availableForButton := m.height - layout.BorderHeight() - internalOverhead - minVpRows - layout.BorderHeight() - shadowHeight
 		buttons = ButtonRowHeight(contentW, availableForButton, ButtonSpec{Text: "OK"})
 	}
 
@@ -256,7 +257,7 @@ func (m *ProgramBoxModel) calculateLayout() {
 		vpHeight += DialogButtonHeight - buttons
 	}
 	// Subtract internal viewport chrome (top border + custom bottom line).
-	vpHeight -= 2
+	vpHeight -= layout.BorderHeight()
 	if vpHeight < 2 {
 		vpHeight = 2
 	}
@@ -275,9 +276,8 @@ func (m *ProgramBoxModel) calculateLayout() {
 		Overhead:       overhead,
 	}
 
-	// Update viewport dimensions
-	// Sections should fit within contentWidth - padding (2)
-	innerBoxWidth := contentW - ScrollbarGutterWidth - 2
+	// Update viewport dimensions: contentW already accounts for margins; subtract inner border and scrollbar gutter.
+	innerBoxWidth := contentW - ScrollbarGutterWidth - layout.BorderWidth()
 	m.viewport.SetWidth(innerBoxWidth)
 	m.viewport.SetHeight(vpHeight)
 
