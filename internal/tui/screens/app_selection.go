@@ -478,12 +478,24 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 		switch {
 		case key.Matches(keyMsg, tui.Keys.EnvPrevTab):
 			if s.isSubRow(item) && m.ActiveColumn() == tui.ColAdd {
+				base := item.BaseApp
 				for i := idx - 1; i >= 0; i-- {
-					if items[i].BaseApp == item.BaseApp && items[i].IsGroupHeader {
+					if items[i].BaseApp == base && items[i].IsGroupHeader {
 						m.Select(i)
+						m.SetActiveColumn(tui.ColEnable)
+						// Collapse the group if no active named instances remain
+						if ni, ok := s.collapseGroupIfNeeded(m.GetItems(), base); ok {
+							m.SetItems(ni)
+							for j, it := range ni {
+								if it.BaseApp == base && !s.isSubRow(it) {
+									m.Select(j)
+									break
+								}
+							}
+						}
 						return nil, true
 					}
-					if items[i].BaseApp != item.BaseApp {
+					if items[i].BaseApp != base {
 						break
 					}
 				}
@@ -497,6 +509,12 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 				if item.IsGroupHeader {
 					m.Select(idx + 1)
 					m.SetActiveColumn(tui.ColAdd)
+					return nil, true
+				}
+				if item.IsSubItem && !item.IsEditing {
+					if !item.IsReferenced && !item.WasAdded {
+						s.startRenaming(idx)
+					}
 					return nil, true
 				}
 				if !item.IsSubItem && !item.IsSeparator && !item.IsEditing && item.IsCheckbox {
@@ -522,7 +540,7 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 		if s.isSubRow(item) {
 			first := idx
 			for i := idx - 1; i >= 0; i-- {
-				if items[i].BaseApp != item.BaseApp {
+				if items[i].BaseApp != item.BaseApp || !s.isSubRow(items[i]) {
 					break
 				}
 				first = i
@@ -544,7 +562,7 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 		if s.isSubRow(item) {
 			last := idx
 			for i := idx + 1; i < len(items); i++ {
-				if items[i].BaseApp != item.BaseApp {
+				if items[i].BaseApp != item.BaseApp || !s.isSubRow(items[i]) {
 					break
 				}
 				last = i
@@ -566,7 +584,7 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 		if s.isSubRow(item) {
 			first := idx
 			for i := idx - 1; i >= 0; i-- {
-				if items[i].BaseApp != item.BaseApp {
+				if items[i].BaseApp != item.BaseApp || !s.isSubRow(items[i]) {
 					break
 				}
 				first = i
@@ -585,7 +603,7 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 		if s.isSubRow(item) {
 			last := idx
 			for i := idx + 1; i < len(items); i++ {
-				if items[i].BaseApp != item.BaseApp {
+				if items[i].BaseApp != item.BaseApp || !s.isSubRow(items[i]) {
 					break
 				}
 				last = i
