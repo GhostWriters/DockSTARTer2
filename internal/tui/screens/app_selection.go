@@ -8,6 +8,7 @@ import (
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/tui"
 
+	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
@@ -460,7 +461,7 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 					s.editError = ""
 					s.refreshEditRow()
 				}
-			case "up", "down", "left", "right", "ctrl+left", "ctrl+right", "alt+left", "alt+right", "tab", "shift+tab":
+			case "up", "down", "left", "right", "tab", "shift+tab":
 			default:
 				if keyMsg.Text != "" {
 					s.editContent += strings.ToUpper(keyMsg.Text)
@@ -469,6 +470,43 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 				} else {
 					return nil, false
 				}
+			}
+			return nil, true
+		}
+
+		// Use keymap bindings for keys that have alt+/ctrl+ aliases.
+		switch {
+		case key.Matches(keyMsg, tui.Keys.EnvPrevTab):
+			if s.isSubRow(item) && m.ActiveColumn() == tui.ColAdd {
+				for i := idx - 1; i >= 0; i-- {
+					if items[i].BaseApp == item.BaseApp && items[i].IsGroupHeader {
+						m.Select(i)
+						return nil, true
+					}
+					if items[i].BaseApp != item.BaseApp {
+						break
+					}
+				}
+			}
+			if m.ActiveColumn() == tui.ColEnable {
+				m.SetActiveColumn(tui.ColAdd)
+			}
+			return nil, true
+		case key.Matches(keyMsg, tui.Keys.EnvNextTab):
+			if m.ActiveColumn() == tui.ColEnable {
+				if item.IsGroupHeader {
+					m.Select(idx + 1)
+					m.SetActiveColumn(tui.ColAdd)
+					return nil, true
+				}
+				if !item.IsSubItem && !item.IsSeparator && !item.IsEditing && item.IsCheckbox {
+					s.expandGroup(item.BaseApp)
+					m.SetActiveColumn(tui.ColAdd)
+					return nil, true
+				}
+			}
+			if m.ActiveColumn() == tui.ColAdd {
+				m.SetActiveColumn(tui.ColEnable)
 			}
 			return nil, true
 		}
@@ -560,41 +598,6 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 					break
 				}
 			}
-		}
-		return nil, true
-	case "ctrl+left":
-		if s.isSubRow(item) && m.ActiveColumn() == tui.ColAdd {
-			for i := idx - 1; i >= 0; i-- {
-				if items[i].BaseApp == item.BaseApp && items[i].IsGroupHeader {
-					m.Select(i)
-					return nil, true
-				}
-				if items[i].BaseApp != item.BaseApp {
-					break
-				}
-			}
-		}
-		if m.ActiveColumn() == tui.ColEnable {
-			m.SetActiveColumn(tui.ColAdd)
-		}
-		return nil, true
-	case "ctrl+right":
-		if m.ActiveColumn() == tui.ColEnable {
-			if item.IsGroupHeader {
-				// Already expanded header? Just jump to first sub-item
-				m.Select(idx + 1)
-				m.SetActiveColumn(tui.ColAdd)
-				return nil, true
-			}
-			if !item.IsSubItem && !item.IsSeparator && !item.IsEditing && item.IsCheckbox {
-				// Simple row -> Expand and jump
-				s.expandGroup(item.BaseApp)
-				m.SetActiveColumn(tui.ColAdd)
-				return nil, true
-			}
-		}
-		if m.ActiveColumn() == tui.ColAdd {
-			m.SetActiveColumn(tui.ColEnable)
 		}
 		return nil, true
 	case "space":
@@ -713,7 +716,7 @@ func (s *AppSelectionScreen) contextMenuHandler(idx int) []tui.ContextMenuItem {
 		}
 		res = append(res, tui.ContextMenuItem{
 			Label: label,
-			Help:  "Toggle enabled state (Ctrl+Right on checkbox area).",
+			Help:  "Toggle enabled state (Ctrl/Alt+Right on checkbox area).",
 			Action: func() tea.Msg {
 				s.menu.SetActiveColumn(tui.ColEnable)
 				s.toggleItem(idx)

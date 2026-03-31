@@ -114,7 +114,7 @@ func (s *AppSelectionScreen) refreshItems() {
 			items = append(items, tui.MenuItem{
 				Tag:               niceName,
 				Desc:              "{{|ListApp|}}" + desc,
-				Help:              fmt.Sprintf("Toggle %s. Press Ctrl+Right to manage instances.", niceName),
+				Help:              fmt.Sprintf("Toggle %s. Press Ctrl/Alt+Right to manage instances.", niceName),
 				Selectable:        true,
 				IsCheckbox:        true,
 				Checked:           addedMap[base],
@@ -138,7 +138,7 @@ func (s *AppSelectionScreen) refreshItems() {
 			items = append(items, tui.MenuItem{
 				Tag:               niceName,
 				Desc:              "{{|ListApp|}}" + desc,
-				Help:              fmt.Sprintf("Press Ctrl+Right to manage %s instances", niceName),
+				Help:              fmt.Sprintf("Press Ctrl/Alt+Right to manage %s instances", niceName),
 				Selectable:        true,
 				IsGroupHeader:     true,
 				Checked:           anyEnabled,
@@ -203,7 +203,7 @@ func (s *AppSelectionScreen) refreshItems() {
 			}
 			items = append(items, tui.MenuItem{
 				Tag:           "+ Add instance\u2026",
-				Help:          fmt.Sprintf("Press Space/Enter or Ctrl+Right to add another %s instance", niceName),
+				Help:          fmt.Sprintf("Press Space/Enter or Ctrl/Alt+Right to add another %s instance", niceName),
 				IsAddInstance: true,
 				BaseApp:       base,
 			})
@@ -236,7 +236,7 @@ func (s *AppSelectionScreen) expandGroup(baseApp string) {
 	groupHeader := tui.MenuItem{
 		Tag:               niceName,
 		Desc:              "{{|ListApp|}}" + desc,
-		Help:              fmt.Sprintf("Press Ctrl+Right to manage %s instances. Ctrl+Left to collapse.", niceName),
+		Help:              fmt.Sprintf("Press Ctrl/Alt+Right to manage %s instances. Ctrl/Alt+Left to collapse.", niceName),
 		IsGroupHeader:     true,
 		Checked:           orig.Checked,
 		WasAdded:          orig.WasAdded,
@@ -264,7 +264,7 @@ func (s *AppSelectionScreen) expandGroup(baseApp string) {
 	}
 	addRow := tui.MenuItem{
 		Tag:           "+ Add instance\u2026",
-		Help:          fmt.Sprintf("Press Space/Enter or Ctrl+Right to add a %s instance", niceName),
+		Help:          fmt.Sprintf("Press Space/Enter or Ctrl/Alt+Right to add a %s instance", niceName),
 		IsAddInstance: true,
 		Selectable:    true,
 		BaseApp:       baseApp,
@@ -322,7 +322,7 @@ func (s *AppSelectionScreen) collapseGroupIfNeeded(items []tui.MenuItem, base st
 	simpleRow := tui.MenuItem{
 		Tag:               niceName,
 		Desc:              "{{|ListApp|}}" + desc,
-		Help:              fmt.Sprintf("Toggle %s. Press Ctrl+Right to manage instances.", niceName),
+		Help:              fmt.Sprintf("Toggle %s. Press Ctrl/Alt+Right to manage instances.", niceName),
 		IsCheckbox:        true,
 		Selectable:        true,
 		Checked:           checked,

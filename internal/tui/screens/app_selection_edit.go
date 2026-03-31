@@ -88,7 +88,7 @@ func (s *AppSelectionScreen) startEditing(baseApp string) {
 		promoted := tui.MenuItem{
 			Tag:           orig.Tag,
 			Desc:          orig.Desc,
-			Help:          fmt.Sprintf("Press Ctrl+Right to manage %s instances", niceName),
+			Help:          fmt.Sprintf("Press Ctrl/Alt+Right to manage %s instances", niceName),
 			IsGroupHeader: true,
 			Checked:       orig.Checked,
 			IsReferenced:  orig.IsReferenced,
