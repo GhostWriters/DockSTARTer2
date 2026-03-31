@@ -121,7 +121,7 @@ func RenderTitleSegmentCtx(rawTitle string, borderFocused bool, contentFocused b
 	}
 
 	borderBG := ctx.Dialog.GetBackground()
-	borderStyleLight := lipgloss.NewStyle().
+	borderStyleLight := ctx.BorderFlags.Apply(lipgloss.NewStyle()).
 		Foreground(ctx.BorderColor).
 		Background(borderBG)
 
@@ -221,10 +221,10 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 	}
 
 	borderBG := ctx.Dialog.GetBackground()
-	borderStyleLight := lipgloss.NewStyle().
+	borderStyleLight := ctx.BorderFlags.Apply(lipgloss.NewStyle()).
 		Foreground(ctx.BorderColor).
 		Background(borderBG)
-	borderStyleDark := lipgloss.NewStyle().
+	borderStyleDark := ctx.Border2Flags.Apply(lipgloss.NewStyle()).
 		Foreground(ctx.Border2Color).
 		Background(borderBG)
 

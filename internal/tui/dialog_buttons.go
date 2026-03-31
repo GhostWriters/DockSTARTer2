@@ -227,7 +227,7 @@ func renderCenteredButtonsImpl(contentWidth int, useBorders bool, ctx StyleConte
 		var rendered string
 		if useBorders {
 			// Border is the visual delimiter; center the hotkey-highlighted text inside the box.
-			rendered = buttonStyle.Render(renderedLabel)
+			rendered = InjectBorderFlags(buttonStyle.Render(renderedLabel), ctx.BorderFlags, ctx.Border2Flags, true)
 		} else {
 			// Flat: pad label to maxButtonWidth so all buttons are the same inner width —
 			// shorter labels get interior spaces (< Back >, < Exit >) while the longest

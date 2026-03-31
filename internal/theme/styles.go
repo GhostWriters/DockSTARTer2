@@ -34,6 +34,49 @@ func ApplyTagsToStyle(text string, style lipgloss.Style, resetStyle lipgloss.Sty
 	return style
 }
 
+// StyleFlagsFromCode parses the flags portion of a raw style code (fg:bg:flags) into a StyleFlags struct.
+func StyleFlagsFromCode(rawCode string) StyleFlags {
+	parts := strings.Split(rawCode, ":")
+	if len(parts) < 3 {
+		return StyleFlags{}
+	}
+	s := strings.TrimPrefix(parts[2], "-")
+	var f StyleFlags
+	for _, char := range s {
+		switch char {
+		case 'B':
+			f.Bold = true
+		case 'b':
+			f.Bold = false
+		case 'U':
+			f.Underline = true
+		case 'u':
+			f.Underline = false
+		case 'I':
+			f.Italic = true
+		case 'i':
+			f.Italic = false
+		case 'D':
+			f.Dim = true
+		case 'd':
+			f.Dim = false
+		case 'L':
+			f.Blink = true
+		case 'l':
+			f.Blink = false
+		case 'R':
+			f.Reverse = true
+		case 'r':
+			f.Reverse = false
+		case 'S':
+			f.Strikethrough = true
+		case 's':
+			f.Strikethrough = false
+		}
+	}
+	return f
+}
+
 // ApplyStyleCode applies a fg:bg:flags style code to a lipgloss.Style.
 func ApplyStyleCode(style lipgloss.Style, resetStyle lipgloss.Style, styleCode string) lipgloss.Style {
 	if styleCode == "~" {

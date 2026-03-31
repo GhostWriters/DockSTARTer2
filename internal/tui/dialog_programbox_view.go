@@ -27,9 +27,9 @@ func (m *ProgramBoxModel) ViewString() string {
 	viewportStyle = ApplyInnerBorderCtx(viewportStyle, m.focused, ctx)
 	viewportStyle = viewportStyle.BorderBottom(false)
 
-	borderedViewport := viewportStyle.
-		Height(m.viewport.Height()).
-		Render(viewportContent)
+	borderedViewport := InjectBorderFlags(
+		viewportStyle.Height(m.viewport.Height()).Render(viewportContent),
+		ctx.BorderFlags, ctx.Border2Flags, false)
 
 	// Append custom bottom border. Only show scroll indicator when content overflows.
 	// Calculate inner box width based on full viewport width

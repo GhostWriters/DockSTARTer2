@@ -163,7 +163,7 @@ func BuildPlainBottomBorder(totalWidth int, focused bool, ctx StyleContext) stri
 			border = RoundedAsciiBorder
 		}
 	}
-	borderStyle := lipgloss.NewStyle().
+	borderStyle := ctx.Border2Flags.Apply(lipgloss.NewStyle()).
 		Foreground(ctx.Border2Color).
 		Background(ctx.Dialog.GetBackground())
 	inner := strutil.Repeat(border.Bottom, max(0, totalWidth-2))
@@ -234,7 +234,7 @@ func BuildLabeledBottomBorderCtx(totalWidth int, label string, focused bool, ctx
 		}
 	}
 
-	borderStyle := lipgloss.NewStyle().
+	borderStyle := ctx.Border2Flags.Apply(lipgloss.NewStyle()).
 		Foreground(ctx.Border2Color).
 		Background(ctx.Dialog.GetBackground())
 	labelStyle := ctx.TagKey.Bold(true)
@@ -293,7 +293,7 @@ func BuildDualLabelBottomBorderCtx(totalWidth int, leftLabel, rightLabel string,
 		}
 	}
 
-	borderStyle := lipgloss.NewStyle().
+	borderStyle := ctx.Border2Flags.Apply(lipgloss.NewStyle()).
 		Foreground(ctx.Border2Color).
 		Background(ctx.Dialog.GetBackground())
 	labelStyle := ctx.TagKey.Bold(true)
@@ -379,7 +379,7 @@ func BuildScrollPercentBottomBorder(totalWidth int, scrollPct float64, focused b
 		}
 	}
 
-	borderStyle := lipgloss.NewStyle().
+	borderStyle := ctx.Border2Flags.Apply(lipgloss.NewStyle()).
 		Foreground(ctx.Border2Color).
 		Background(ctx.Dialog.GetBackground())
 
