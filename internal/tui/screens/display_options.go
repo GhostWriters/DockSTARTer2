@@ -99,6 +99,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Help:          desc,
 			IsRadioButton: true,
 			Checked:       checked,
+			IsInvalid:     t.IsInvalid,
 			IsUserDefined: t.IsUserTheme,
 			Metadata:      map[string]string{"config_value": t.ConfigValue},
 		}

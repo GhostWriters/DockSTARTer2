@@ -20,7 +20,8 @@ type ThemeMetadata struct {
 	FileStem    string // file stem, e.g. "GreenScreen"; used in ConfigValue and for disambiguation
 	Description string
 	Author      string
-	IsUserTheme bool   // true if sourced from user: (not an embedded built-in)
+	IsUserTheme bool // true if sourced from user: (not an embedded built-in)
+	IsInvalid   bool // true if theme file is corrupted/unparseable
 	ConfigValue string // raw value for config/Load(), e.g. "user:GreenScreen" or "DockSTARTer"
 }
 
@@ -40,7 +41,7 @@ func List() ([]ThemeMetadata, error) {
 					continue
 				}
 				seenEmbeddedStems[fileStem] = true
-				tf, _ := GetThemeFile(fileStem)
+				tf, err := GetThemeFile(fileStem)
 				displayName := fileStem
 				if tf.Metadata.Name != "" {
 					displayName = tf.Metadata.Name
@@ -51,6 +52,7 @@ func List() ([]ThemeMetadata, error) {
 					Description: tf.Metadata.Description,
 					Author:      tf.Metadata.Author,
 					IsUserTheme: false,
+					IsInvalid:   err != nil,
 					ConfigValue: fileStem,
 				})
 			}
@@ -70,7 +72,7 @@ func List() ([]ThemeMetadata, error) {
 			}
 			seenUserStems[fileStem] = true
 			configValue := "user:" + fileStem
-			tf, _ := GetThemeFile(configValue)
+			tf, err := GetThemeFile(configValue)
 			displayName := fileStem
 			if tf.Metadata.Name != "" {
 				displayName = tf.Metadata.Name
@@ -81,6 +83,7 @@ func List() ([]ThemeMetadata, error) {
 				Description: tf.Metadata.Description,
 				Author:      tf.Metadata.Author,
 				IsUserTheme: true,
+				IsInvalid:   err != nil,
 				ConfigValue: configValue,
 			})
 		}
