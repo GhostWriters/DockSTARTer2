@@ -213,7 +213,24 @@ func Load(themeNameOrURI string, prefix string) (*ThemeDefaults, error) {
 		ClearSemanticCachePrefix(prefix)
 	}
 
-	return parseThemeTOMLData(data, prefix)
+	defaults, err := parseThemeTOMLData(data, prefix)
+	if err != nil {
+		if themeNameOrURI != "DockSTARTer" {
+			// For active theme loads, persist the fallback to config
+			if prefix == "" {
+				conf := config.LoadAppConfig()
+				conf.UI.Theme = "DockSTARTer"
+				_ = config.SaveAppConfig(conf)
+				// Load default theme but still return an error so the caller knows the switch occurred
+				deflts, _ := Load("DockSTARTer", "")
+				return deflts, fmt.Errorf("theme parsing error: falling back to default")
+			}
+			return Load("DockSTARTer", prefix)
+		}
+		return nil, err
+	}
+
+	return defaults, nil
 }
 
 // Apply updates the global console.Colors with theme-specific tags

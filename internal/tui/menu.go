@@ -50,6 +50,7 @@ type MenuItem struct {
 
 	// Metadata
 	IsUserDefined bool              // Whether this is a user-defined app (for coloring)
+	IsInvalid     bool              // Whether this item is invalid (e.g. broken theme)
 	Metadata      map[string]string // Optional extra data (e.g. internal app name)
 }
 
@@ -157,7 +158,15 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 
 	// Checkbox visual [ ] or [x] / Radio visual ( ) or (*)
 	checkbox := ""
-	if menuItem.IsRadioButton {
+	if menuItem.IsInvalid {
+		var cb string
+		if ctx.LineCharacters {
+			cb = invalidMarker
+		} else {
+			cb = invalidMarkerAscii
+		}
+		checkbox = theme.ThemeSemanticStyle("{{|MarkerInvalid|}}").Render(cb) + neutralStyle.Render(" ")
+	} else if menuItem.IsRadioButton {
 		var cb string
 		if ctx.LineCharacters {
 			cb = radioUnselected
@@ -269,7 +278,15 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 
 	// Render checkbox for selectable items
 	var checkbox string
-	if menuItem.IsCheckbox {
+	if menuItem.IsInvalid {
+		var cb string
+		if ctx.LineCharacters {
+			cb = invalidMarker
+		} else {
+			cb = invalidMarkerAscii
+		}
+		checkbox = theme.ThemeSemanticStyle("{{|MarkerInvalid|}}").Render(cb) + neutralStyle.Render(" ")
+	} else if menuItem.IsCheckbox {
 		if ctx.LineCharacters {
 			cbGlyph := checkUnselected
 			if menuItem.Checked {
