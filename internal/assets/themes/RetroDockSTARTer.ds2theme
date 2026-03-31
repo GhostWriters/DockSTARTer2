@@ -88,9 +88,9 @@ LineNumberSelected = "{{|LineNumber::yellow:B|}}"
 LineNumberModified = "{{|ModifiedText|}}"
 LineNumberModifiedSelected = "{{|ModifiedText:yellow::B|}}"
 
-MarkerAdded = "{{[:green:]}}"
-MarkerDeleted = "{{[:red:]}}"
-MarkerModified = "{{[:yellow:]}}"
+MarkerAdded = "{{|Dialog::green|}}"
+MarkerDeleted = "{{|Dialog::red|}}"
+MarkerModified = "{{|Dialog::yellow|}}"
 MarkerInvalid = "{{[white:red:B]}}"
 
 EnvBuiltin = "{{[black:cyan]}}"
