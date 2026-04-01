@@ -23,7 +23,11 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.ID == m.id {
 			m.dragPending = false
 			// Catch up to any position skipped while the render was in flight.
-			if m.sbDragging && m.pendingDragY != m.lastDragY {
+			// Do NOT gate on m.sbDragging: MouseReleaseMsg may have already cleared
+			// it while dragPending was still true, causing the final thumb position
+			// to be silently dropped (visible as "can't drag to the very bottom").
+			// The loop self-terminates once lastDragY == pendingDragY.
+			if m.pendingDragY != m.lastDragY {
 				m.lastDragY = m.pendingDragY
 				if m.scrollbarDragTo(m.pendingDragY) {
 					m.InvalidateCache()
@@ -98,8 +102,10 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Fallback for scrollbar dragging when LayerHitMsg is not dispatched (classic model_mouse logic)
 		if m.sbInfo.Needed && msg.Button == tea.MouseLeft {
 			// Check if click is within scrollbar area using absolute screen coordinates
-			if msg.X == m.sbAbsLeftX && msg.Y >= m.sbAbsTopY + m.sbInfo.ThumbStart && msg.Y < m.sbAbsTopY + m.sbInfo.ThumbEnd {
+			if msg.X == m.sbAbsLeftX && msg.Y >= m.sbAbsTopY+m.sbInfo.ThumbStart && msg.Y < m.sbAbsTopY+m.sbInfo.ThumbEnd {
 				m.sbDragging = true
+				m.dragStartMouseY = msg.Y
+				m.dragStartThumbTop = m.sbAbsTopY + m.sbInfo.ThumbStart
 				m.InvalidateCache()
 				return m, nil
 			}
@@ -896,45 +902,53 @@ func (m *MenuModel) scrollHalfPageDown() {
 }
 
 // scrollbarDragTo updates the scroll position based on an absolute mouse Y coordinate
-// during a scrollbar thumb drag. It maps the track-relative position to an item offset.
+// during a scrollbar thumb drag.
+//
+// Rather than mapping mouseY → list offset directly (which requires knowing grab offset
+// and has geometric edge cases), we move the thumb: compute the new thumb-top position
+// by applying the mouse delta to the thumb position at drag start, clamp within the
+// track, then invert ComputeScrollbarInfo's formula to get the list offset.
+//
 // Returns true if the scroll position changed (cache should be invalidated).
 func (m *MenuModel) scrollbarDragTo(mouseY int) bool {
-	trackH := m.sbInfo.Height - 2 // subtract top and bottom arrows
+	trackH := m.sbInfo.Height - 2 // rows 1..height-2 are the track
 	if trackH < 1 {
 		return false
 	}
 
-	// mouseY relative to the start of the track (immediately after the up arrow)
-	layout := GetLayout()
-	trackRelY := mouseY - (m.sbAbsTopY + layout.SingleBorder())
-	if trackRelY < 0 {
-		trackRelY = 0
-	}
-	if trackRelY > trackH {
-		trackRelY = trackH
+	thumbH := m.sbInfo.ThumbEnd - m.sbInfo.ThumbStart
+	thumbTravel := trackH - thumbH // how far the thumb top can move within the track
+	if thumbTravel < 1 {
+		thumbTravel = 1
 	}
 
+	// Move thumb by the same delta the mouse has moved since drag start.
+	// dragStartThumbTop is the absolute Y of the thumb top at drag start.
+	// Clamped to [sbAbsTopY+1, sbAbsTopY+1+thumbTravel] (track bounds, 1-based).
+	newThumbTopAbs := m.dragStartThumbTop + (mouseY - m.dragStartMouseY)
+	trackTopAbs := m.sbAbsTopY + 1 // row 0 is the up-arrow
+	if newThumbTopAbs < trackTopAbs {
+		newThumbTopAbs = trackTopAbs
+	}
+	if newThumbTopAbs > trackTopAbs+thumbTravel {
+		newThumbTopAbs = trackTopAbs + thumbTravel
+	}
+
+	// thumbTrackStart is 0-based position of thumb top within the track.
+	thumbTrackStart := newThumbTopAbs - trackTopAbs // ∈ [0, thumbTravel]
+
+	// Invert ComputeScrollbarInfo: thumbTrackStart = (trackH-thumbH)*offset/maxOff
+	// → offset = thumbTrackStart * maxOff / thumbTravel
 	total := len(m.items)
 	visible := m.layout.ViewportHeight
 
 	if m.variableHeight {
-		// For variable-height items, use line-based total/offset for accurate thumb positioning.
-		// Also move the cursor to approximately the dragged line so renderVariableHeightList
-		// does not snap viewStartY back to the old cursor position.
 		lineTotal := m.lastScrollTotal
 		maxOff := lineTotal - visible
 		if maxOff <= 0 {
 			return false
 		}
-		var newOff int
-		if trackH > 1 {
-			newOff = trackRelY * maxOff / (trackH - 1)
-		} else {
-			newOff = 0
-		}
-		if newOff < 0 {
-			newOff = 0
-		}
+		newOff := thumbTrackStart * maxOff / thumbTravel
 		if newOff > maxOff {
 			newOff = maxOff
 		}
@@ -942,7 +956,7 @@ func (m *MenuModel) scrollbarDragTo(mouseY int) bool {
 			return false
 		}
 		m.viewStartY = newOff
-		// Move cursor proportionally so the render auto-scroll aligns with newOff.
+		// Move cursor proportionally so keyboard nav stays near the dragged position.
 		if total > 0 && lineTotal > 0 {
 			approxIdx := newOff * total / lineTotal
 			if approxIdx >= total {
@@ -959,15 +973,7 @@ func (m *MenuModel) scrollbarDragTo(mouseY int) bool {
 	if maxOff <= 0 {
 		return false
 	}
-	var newOff int
-	if trackH > 1 {
-		newOff = trackRelY * maxOff / (trackH - 1)
-	} else {
-		newOff = 0
-	}
-	if newOff < 0 {
-		newOff = 0
-	}
+	newOff := thumbTrackStart * maxOff / thumbTravel
 	if newOff > maxOff {
 		newOff = maxOff
 	}
@@ -975,15 +981,10 @@ func (m *MenuModel) scrollbarDragTo(mouseY int) bool {
 		return false
 	}
 
-	// Directional scrolling: select the item that forces the viewport to move
-	// to the desired position.
+	// Select the item that forces the viewport to the desired position.
 	targetIdx := newOff
 	if newOff > m.viewStartY {
-		// Scrolling DOWN: select the item at the bottom of the desired viewport
 		targetIdx = newOff + visible - 1
-	} else {
-		// Scrolling UP: select the item at the top of the desired viewport
-		targetIdx = newOff
 	}
 
 	if targetIdx >= total {

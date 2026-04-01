@@ -788,10 +788,12 @@ type MenuModel struct {
 	sbInfo          ScrollbarInfo             // geometry from last render (set by menu_render.go)
 	sbAbsTopY       int                       // absolute screen Y of scrollbar column top (set by GetHitRegions)
 	sbAbsLeftX      int                       // absolute screen X of scrollbar column (set by GetHitRegions)
-	sbDragging      bool                      // true while the user is dragging the scrollbar thumb
-	dragPending     bool                      // true while a drag render is in flight
-	pendingDragY    int                       // latest Y seen from motion events (always updated, even when coalescing)
-	lastDragY       int                       // Y we last actually rendered at (used to detect skipped positions)
+	sbDragging         bool                      // true while the user is dragging the scrollbar thumb
+	dragStartMouseY    int                       // absolute mouse Y when drag started
+	dragStartThumbTop  int                       // absolute screen Y of thumb top when drag started
+	dragPending        bool                      // true while a drag render is in flight
+	pendingDragY       int                       // latest Y seen from motion events (always updated, even when coalescing)
+	lastDragY          int                       // Y we last actually rendered at (used to detect skipped positions)
 	scrollPending   bool                      // true while a wheel scroll is queued but not yet rendered
 	contextMenuFunc func(idx int) []ContextMenuItem // hook for screen-specific operations
 }
