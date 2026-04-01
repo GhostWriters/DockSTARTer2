@@ -26,8 +26,32 @@ func (s *DisplayOptionsScreen) IsScrollbarDragging() bool {
 func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
-	// Forward raw mouse drag/release events to the dragging sub-menu before the type switch
-	// so the drag continues while AppModel routes events via section-2 priority.
+	// Forward coalescing done-messages to whichever inner menu owns them.
+	// These messages are sent by inner menus' dragDoneCmd/scrollDoneCmd after a render cycle.
+	// Without forwarding, dragPending/scrollPending would be stuck true permanently on inner menus.
+	switch dmsg := msg.(type) {
+	case tui.DragDoneMsg:
+		updated, uCmd := s.themeMenu.Update(dmsg)
+		if m, ok := updated.(*tui.MenuModel); ok {
+			s.themeMenu = m
+		}
+		updated, uCmd2 := s.optionsMenu.Update(dmsg)
+		if m, ok := updated.(*tui.MenuModel); ok {
+			s.optionsMenu = m
+		}
+		return s, tea.Batch(uCmd, uCmd2)
+	case tui.ScrollDoneMsg:
+		updated, uCmd := s.themeMenu.Update(dmsg)
+		if m, ok := updated.(*tui.MenuModel); ok {
+			s.themeMenu = m
+		}
+		updated, uCmd2 := s.optionsMenu.Update(dmsg)
+		if m, ok := updated.(*tui.MenuModel); ok {
+			s.optionsMenu = m
+		}
+		return s, tea.Batch(uCmd, uCmd2)
+	}
+
 	// Forward raw mouse drag/release events to the dragging sub-menu before the type switch
 	// so the drag continues while AppModel routes events via section-2 priority.
 	if s.IsScrollbarDragging() {
