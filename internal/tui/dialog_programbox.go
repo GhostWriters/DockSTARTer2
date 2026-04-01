@@ -73,9 +73,9 @@ type ProgramBoxModel struct {
 	id     string
 
 	// Scrollbar drag state
-	sbInfo     ScrollbarInfo
-	sbAbsTopY  int
-	sbDragging bool
+	sbInfo    ScrollbarInfo
+	sbAbsTopY int
+	sbDrag    ScrollbarDragState
 }
 
 // SubDialogMsg signals a request to show a sub-dialog and blocks the task
@@ -217,7 +217,7 @@ func (m *ProgramBoxModel) SetFocused(focused bool) {
 
 // IsScrollbarDragging reports whether the viewport scrollbar thumb is being dragged.
 func (m *ProgramBoxModel) IsScrollbarDragging() bool {
-	return m.sbDragging
+	return m.sbDrag.Dragging
 }
 
 // scrollbarDragTo scrolls the viewport so the thumb at mouseY maps to the correct position.
@@ -227,24 +227,13 @@ func (m *ProgramBoxModel) scrollbarDragTo(mouseY int) bool {
 	if !info.Needed {
 		return false
 	}
-	trackH := info.Height - 2
-	if trackH <= 0 {
-		return false
-	}
 	total := m.viewport.TotalLineCount()
 	visible := m.viewport.VisibleLineCount()
 	if total <= visible {
 		return false
 	}
 	maxOff := total - visible
-	trackRelY := mouseY - (m.sbAbsTopY + 1)
-	if trackRelY < 0 {
-		trackRelY = 0
-	}
-	if trackRelY > trackH {
-		trackRelY = trackH
-	}
-	newOff := trackRelY * maxOff / trackH
+	newOff, _ := m.sbDrag.ScrollOffset(mouseY, m.sbAbsTopY, maxOff, info)
 	if newOff == m.viewport.YOffset() {
 		return false
 	}
@@ -525,19 +514,19 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseClickMsg:
 		// Scrollbar thumb drag start (routed by model_mouse.go section B0).
 		if msg.Button == tea.MouseLeft {
-			m.sbDragging = true
+			m.sbDrag.StartDrag(msg.Y, m.sbAbsTopY, m.sbInfo)
 		}
 		return m, nil
 
 	case tea.MouseMotionMsg:
-		if m.sbDragging {
+		if m.sbDrag.Dragging {
 			m.scrollbarDragTo(msg.Y) // viewport re-renders on next View(); no explicit cache to invalidate
 		}
 		return m, nil
 
 	case tea.MouseReleaseMsg:
-		if m.sbDragging {
-			m.sbDragging = false
+		if m.sbDrag.Dragging {
+			m.sbDrag.StopDrag()
 		}
 		return m, nil
 

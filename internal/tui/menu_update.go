@@ -41,7 +41,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseMotionMsg:
 		// Motion events are extremely frequent. Handle them here, before the blanket
 		// InvalidateCache(), so non-drag motion exits without any cache churn.
-		if m.sbDragging {
+		if m.sbDrag.Dragging {
 			m.pendingDragY = msg.Y // always record latest position, even if a render is in flight
 			if !m.dragPending {
 				m.lastDragY = msg.Y
@@ -85,7 +85,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleSpace()
 
 	case tea.MouseMotionMsg:
-		if m.sbDragging {
+		if m.sbDrag.Dragging {
 			m.pendingDragY = msg.Y // always record latest position, even if a render is in flight
 			if !m.dragPending {
 				m.lastDragY = msg.Y
@@ -103,17 +103,15 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.sbInfo.Needed && msg.Button == tea.MouseLeft {
 			// Check if click is within scrollbar area using absolute screen coordinates
 			if msg.X == m.sbAbsLeftX && msg.Y >= m.sbAbsTopY+m.sbInfo.ThumbStart && msg.Y < m.sbAbsTopY+m.sbInfo.ThumbEnd {
-				m.sbDragging = true
-				m.dragStartMouseY = msg.Y
-				m.dragStartThumbTop = m.sbAbsTopY + m.sbInfo.ThumbStart
+				m.sbDrag.StartDrag(msg.Y, m.sbAbsTopY, m.sbInfo)
 				m.InvalidateCache()
 				return m, nil
 			}
 		}
 
 	case tea.MouseReleaseMsg:
-		if m.sbDragging {
-			m.sbDragging = false
+		if m.sbDrag.Dragging {
+			m.sbDrag.StopDrag()
 			m.InvalidateCache()
 		}
 		return m, nil
@@ -122,7 +120,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Scrollbar region clicks
 		if strings.HasSuffix(msg.ID, ".sb.thumb") {
 			if msg.Button == tea.MouseLeft {
-				m.sbDragging = true
+				m.sbDrag.Dragging = true
 				m.InvalidateCache()
 			}
 			return m, nil
@@ -922,20 +920,10 @@ func (m *MenuModel) scrollbarDragTo(mouseY int) bool {
 		thumbTravel = 1
 	}
 
-	// Move thumb by the same delta the mouse has moved since drag start.
-	// dragStartThumbTop is the absolute Y of the thumb top at drag start.
-	// Clamped to [sbAbsTopY+1, sbAbsTopY+1+thumbTravel] (track bounds, 1-based).
-	newThumbTopAbs := m.dragStartThumbTop + (mouseY - m.dragStartMouseY)
+	// thumbTrackStart is the 0-based position of the thumb top within the track.
+	// ScrollbarDragState.ThumbTop handles the delta-from-drag-start and clamping.
 	trackTopAbs := m.sbAbsTopY + 1 // row 0 is the up-arrow
-	if newThumbTopAbs < trackTopAbs {
-		newThumbTopAbs = trackTopAbs
-	}
-	if newThumbTopAbs > trackTopAbs+thumbTravel {
-		newThumbTopAbs = trackTopAbs + thumbTravel
-	}
-
-	// thumbTrackStart is 0-based position of thumb top within the track.
-	thumbTrackStart := newThumbTopAbs - trackTopAbs // ∈ [0, thumbTravel]
+	thumbTrackStart := m.sbDrag.ThumbTop(mouseY, trackTopAbs, thumbTravel)
 
 	// Invert ComputeScrollbarInfo: thumbTrackStart = (trackH-thumbH)*offset/maxOff
 	// → offset = thumbTrackStart * maxOff / thumbTravel

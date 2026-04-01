@@ -481,7 +481,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 
 	// When dragging the scrollbar, viewStartY is set explicitly by scrollbarDragTo —
 	// skip the cursor-visibility snap so it doesn't fight the drag position.
-	if !m.sbDragging {
+	if !m.sbDrag.Dragging {
 		if currentY < m.viewStartY {
 			m.viewStartY = currentY
 		} else if currentY+selectedHeight > m.viewStartY+maxHeight {
