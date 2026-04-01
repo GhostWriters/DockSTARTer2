@@ -154,8 +154,9 @@ type AppModel struct {
 	// Slide-up log panel (always present below helpline)
 	logPanel           LogPanelModel
 	logPanelFocused    bool
-	logPanelSbDragging bool // true while the log-panel scrollbar thumb is being dragged
-	logPanelSbAbsTopY  int  // absolute Y of the scrollbar's first row (for drag computation)
+	logPanelSbDrag    ScrollbarDragState // log-panel scrollbar drag tracking state
+	logPanelSbAbsTopY int                // absolute Y of the scrollbar's first row (for drag computation)
+	logPanelSbInfo    ScrollbarInfo      // scrollbar geometry captured at drag start
 
 	// Modal dialog overlay (nil when no dialog)
 	dialog      tea.Model

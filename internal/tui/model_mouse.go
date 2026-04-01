@@ -97,14 +97,13 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 
 	// 1b. LOG PANEL SCROLLBAR DRAG PRIORITY: If the log-panel scrollbar thumb is being dragged,
 	// intercept all mouse events for proportional scrolling.
-	if m.logPanelSbDragging {
+	if m.logPanelSbDrag.Dragging {
 		if _, ok := msg.(tea.MouseReleaseMsg); ok {
-			m.logPanelSbDragging = false
+			m.logPanelSbDrag.StopDrag()
 			return m, nil, true
 		}
 		if motion, ok := msg.(tea.MouseMotionMsg); ok {
-			vpH := m.logPanel.Height() - 1
-			updated, changed := m.logPanel.DragScrollbar(motion.Y, m.logPanelSbAbsTopY, vpH)
+			updated, changed := m.logPanel.DragScrollbar(motion.Y, &m.logPanelSbDrag, m.logPanelSbAbsTopY, m.logPanelSbInfo)
 			if changed {
 				m.logPanel = updated
 			}
@@ -471,8 +470,13 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 				// Log panel scrollbar thumb
 				if strings.HasPrefix(hitID, IDLogPanel+".sb.") {
 					m.setLogPanelFocus(true)
-					m.logPanelSbDragging = true
-					m.logPanelSbAbsTopY = m.height - m.logPanel.Height() + 1
+					sbAbsTopY := m.height - m.logPanel.Height() + 1
+					m.logPanelSbAbsTopY = sbAbsTopY
+					vpH := m.logPanel.Height() - 1
+					total := m.logPanel.viewport.TotalLineCount()
+					visible := m.logPanel.viewport.Height()
+					m.logPanelSbInfo = ComputeScrollbarInfo(total, visible, m.logPanel.viewport.YOffset(), vpH)
+					m.logPanelSbDrag.StartDrag(me.Y, sbAbsTopY, m.logPanelSbInfo)
 					return m, nil, true
 				}
 				// Dialog scrollbar thumb

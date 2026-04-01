@@ -341,6 +341,69 @@ func BuildDualLabelBottomBorderCtx(totalWidth int, leftLabel, rightLabel string,
 	return lipgloss.JoinHorizontal(lipgloss.Bottom, parts...)
 }
 
+// ScrollbarDragState tracks the state needed to drag a scrollbar thumb correctly.
+// Embed this in any model that has a draggable scrollbar.
+type ScrollbarDragState struct {
+	Dragging      bool
+	startMouseY   int // absolute mouse Y when drag started
+	startThumbTop int // absolute screen Y of thumb top when drag started
+}
+
+// StartDrag records the starting positions for a new drag.
+// sbAbsTopY is the absolute Y of the scrollbar column top (row 0 = up arrow).
+// info is the ScrollbarInfo from the last render.
+// clickY is the absolute mouse Y of the click.
+func (s *ScrollbarDragState) StartDrag(clickY, sbAbsTopY int, info ScrollbarInfo) {
+	s.Dragging = true
+	s.startMouseY = clickY
+	s.startThumbTop = sbAbsTopY + info.ThumbStart
+}
+
+// StopDrag clears the drag state.
+func (s *ScrollbarDragState) StopDrag() {
+	s.Dragging = false
+}
+
+// ThumbTop returns the new clamped thumb-top position (0-based within the track)
+// given the current absolute mouse Y.
+// trackTopAbs is sbAbsTopY+1 (first track row, after the up arrow).
+// thumbTravel is trackH - thumbH (max distance the thumb top can move).
+func (s *ScrollbarDragState) ThumbTop(mouseY, trackTopAbs, thumbTravel int) int {
+	newTop := s.startThumbTop + (mouseY - s.startMouseY)
+	if newTop < trackTopAbs {
+		newTop = trackTopAbs
+	}
+	if newTop > trackTopAbs+thumbTravel {
+		newTop = trackTopAbs + thumbTravel
+	}
+	return newTop - trackTopAbs // 0-based within track
+}
+
+// ScrollOffset computes the new scroll offset given current mouse Y,
+// the scrollbar geometry, and the content dimensions.
+// Returns (newOffset, changed).
+func (s *ScrollbarDragState) ScrollOffset(mouseY, sbAbsTopY, maxOff int, info ScrollbarInfo) (int, bool) {
+	trackH := info.Height - 2
+	if trackH < 1 {
+		return 0, false
+	}
+	thumbH := info.ThumbEnd - info.ThumbStart
+	thumbTravel := trackH - thumbH
+	if thumbTravel < 1 {
+		thumbTravel = 1
+	}
+	trackTopAbs := sbAbsTopY + 1
+	thumbTrackStart := s.ThumbTop(mouseY, trackTopAbs, thumbTravel)
+	newOff := thumbTrackStart * maxOff / thumbTravel
+	if newOff < 0 {
+		newOff = 0
+	}
+	if newOff > maxOff {
+		newOff = maxOff
+	}
+	return newOff, true
+}
+
 // BuildScrollPercentBottomBorder constructs a bottom border line for an inner box
 // with a scroll-percent label on the right, styled identically to the programbox indicator.
 // totalWidth is the full visual width of the bordered box including side border chars.
