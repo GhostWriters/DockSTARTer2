@@ -796,20 +796,22 @@ type MenuModel struct {
 	contextMenuFunc func(idx int) []ContextMenuItem // hook for screen-specific operations
 }
 
-// scrollDoneMsg is sent after a wheel scroll is processed to clear the scrollPending flag.
-type scrollDoneMsg struct{ id string }
+// ScrollDoneMsg is sent after a wheel scroll is processed to clear the scrollPending flag.
+// Exported so wrapper screens (e.g. DisplayOptionsScreen) can forward it to inner menus.
+type ScrollDoneMsg struct{ ID string }
 
-// scrollDoneCmd returns a zero-delay Cmd that emits scrollDoneMsg for the given menu ID.
+// scrollDoneCmd returns a zero-delay Cmd that emits ScrollDoneMsg for the given menu ID.
 func scrollDoneCmd(id string) tea.Cmd {
-	return func() tea.Msg { return scrollDoneMsg{id: id} }
+	return func() tea.Msg { return ScrollDoneMsg{ID: id} }
 }
 
-// dragDoneMsg is sent after a drag render completes, so any skipped Y positions can be caught up.
-type dragDoneMsg struct{ id string }
+// DragDoneMsg is sent after a drag render completes, so any skipped Y positions can be caught up.
+// Exported so wrapper screens (e.g. DisplayOptionsScreen) can forward it to inner menus.
+type DragDoneMsg struct{ ID string }
 
-// dragDoneCmd returns a zero-delay Cmd that emits dragDoneMsg for the given menu ID.
+// dragDoneCmd returns a zero-delay Cmd that emits DragDoneMsg for the given menu ID.
 func dragDoneCmd(id string) tea.Cmd {
-	return func() tea.Msg { return dragDoneMsg{id: id} }
+	return func() tea.Msg { return DragDoneMsg{ID: id} }
 }
 
 // ScrollPending reports whether a scroll event is currently queued but not yet rendered.

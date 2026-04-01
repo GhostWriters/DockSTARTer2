@@ -13,14 +13,14 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// These messages carry no visual change themselves — only invalidate when
 	// they trigger a follow-up scroll/drag, avoiding spurious renders on SSH.
 	switch msg := msg.(type) {
-	case scrollDoneMsg:
-		if msg.id == m.id {
+	case ScrollDoneMsg:
+		if msg.ID == m.id {
 			m.scrollPending = false
 		}
 		return m, nil
 
-	case dragDoneMsg:
-		if msg.id == m.id {
+	case DragDoneMsg:
+		if msg.ID == m.id {
 			m.dragPending = false
 			// Catch up to any position skipped while the render was in flight.
 			if m.sbDragging && m.pendingDragY != m.lastDragY {
