@@ -11,11 +11,16 @@ import (
 // BackdropModel represents the shared background for all dialogs
 // It renders the header, fills the middle space, and shows the helpline
 type BackdropModel struct {
-	width    int
-	height   int
-	helpText string
-	header   *HeaderModel
-	helpline *HelplineModel
+	width          int
+	height         int
+	helpText       string
+	header         *HeaderModel
+	helpline       *HelplineModel
+	cacheValid     bool
+	cachedHeader   string
+	cachedHelpline string
+	cachedBg       string
+	helplineHeight int // cached measured height of helpline; 0 = not yet measured
 }
 
 // NewBackdropModel creates a new backdrop model
@@ -27,12 +32,31 @@ func NewBackdropModel(helpText string) *BackdropModel {
 	}
 }
 
-// SetHelpText updates the help text displayed in the helpline
+func (m *BackdropModel) invalidateCache() {
+	m.cacheValid = false
+	m.cachedHeader = ""
+	m.cachedHelpline = ""
+	m.cachedBg = ""
+	m.helplineHeight = 0
+}
+
+// SetHelpText updates the help text displayed in the helpline.
+// No-ops when the text hasn't changed to avoid dirtying the cache unnecessarily.
 func (m *BackdropModel) SetHelpText(text string) {
+	if text == m.helpText {
+		return
+	}
 	m.helpText = text
+	m.invalidateCache()
 	if m.helpline != nil {
 		m.helpline.SetText(text)
 	}
+}
+
+// InvalidateBackdropCache forces a full re-render on the next Layers() call.
+// Call this after a theme change or any other global state change.
+func (m *BackdropModel) InvalidateBackdropCache() {
+	m.invalidateCache()
 }
 
 // Init implements tea.Model
@@ -43,8 +67,12 @@ func (m *BackdropModel) Init() tea.Cmd {
 // Update implements tea.Model
 func (m *BackdropModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.header != nil {
+		prevFocus := m.header.GetFocus()
 		updated, cmd := m.header.Update(msg)
 		m.header = updated.(*HeaderModel)
+		if m.header.GetFocus() != prevFocus {
+			m.invalidateCache()
+		}
 		return m, cmd
 	}
 	return m, nil
@@ -52,9 +80,12 @@ func (m *BackdropModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // SetSize updates the backdrop dimensions
 func (m *BackdropModel) SetSize(width, height int) {
+	if width == m.width && height == m.height {
+		return
+	}
 	m.width = width
 	m.height = height
-	// Header width reduced by 2 for padding left/right
+	m.invalidateCache()
 	if m.header != nil {
 		m.header.SetWidth(width - 2)
 	}
@@ -68,16 +99,22 @@ func (m *BackdropModel) ViewString() string {
 	if m.width == 0 || m.height == 0 {
 		return ""
 	}
-
+	if m.cacheValid && m.cachedBg != "" {
+		return m.cachedBg
+	}
 	styles := GetStyles()
 	bgStyle := lipgloss.NewStyle().Background(styles.Screen.GetBackground())
-	return bgStyle.Width(m.width).Height(m.height).Render("")
+	m.cachedBg = bgStyle.Width(m.width).Height(m.height).Render("")
+	return m.cachedBg
 }
 
-// renderHeader returns the status bar header with its borders
+// renderHeader returns the status bar header with its borders (cached)
 func (m *BackdropModel) renderHeader() string {
 	if m.header == nil {
 		return ""
+	}
+	if m.cacheValid && m.cachedHeader != "" {
+		return m.cachedHeader
 	}
 
 	styles := GetStyles()
@@ -139,16 +176,22 @@ func (m *BackdropModel) renderHeader() string {
 	bottomBorder := borderStyle.Render(bottomLeftChar + strutil.Repeat(bottomChar, m.width-2) + bottomRightChar)
 	b.WriteString(bottomBorder)
 
-	return b.String()
+	m.cachedHeader = b.String()
+	return m.cachedHeader
 }
 
-// renderHelpline returns the help text line positioned at the bottom
+// renderHelpline returns the help text line positioned at the bottom (cached)
 func (m *BackdropModel) renderHelpline() string {
 	if m.helpline == nil {
 		return ""
 	}
+	if m.cacheValid && m.cachedHelpline != "" {
+		return m.cachedHelpline
+	}
 	m.helpline.SetText(m.helpText)
-	return m.helpline.ViewString(m.width)
+	m.cachedHelpline = m.helpline.ViewString(m.width)
+	m.helplineHeight = lipgloss.Height(m.cachedHelpline)
+	return m.cachedHelpline
 }
 
 // Layers returns the backdrop layers for visual compositing:
@@ -165,9 +208,12 @@ func (m *BackdropModel) Layers() []*lipgloss.Layer {
 	}
 
 	if helpStr := m.renderHelpline(); helpStr != "" {
-		helpY := m.height - lipgloss.Height(helpStr)
+		helpY := m.height - m.helplineHeight
 		layers = append(layers, lipgloss.NewLayer(helpStr).X(0).Y(helpY).Z(ZHelpline))
 	}
+
+	// Mark all three sub-renders valid now that Layers() has run through them.
+	m.cacheValid = true
 
 	return layers
 }
@@ -239,12 +285,19 @@ func (m *BackdropModel) ChromeHeight() int {
 }
 
 // HelplineActualHeight returns the actual rendered height of the helpline.
-// This may be > 1 if the helpline text wraps at the current terminal width.
+// Uses a cached value when available to avoid re-rendering just for measurement.
 func (m *BackdropModel) HelplineActualHeight() int {
+	if m.helplineHeight > 0 {
+		return m.helplineHeight
+	}
 	if m.helpline == nil || m.width == 0 {
 		return GetLayout().HelplineHeight
 	}
-	if h := lipgloss.Height(m.helpline.ViewString(m.width)); h > 0 {
+	// Render and cache
+	m.helpline.SetText(m.helpText)
+	m.cachedHelpline = m.helpline.ViewString(m.width)
+	if h := lipgloss.Height(m.cachedHelpline); h > 0 {
+		m.helplineHeight = h
 		return h
 	}
 	return GetLayout().HelplineHeight

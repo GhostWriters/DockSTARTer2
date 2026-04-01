@@ -33,6 +33,22 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
+
+	case tea.MouseMotionMsg:
+		// Motion events are extremely frequent. Handle them here, before the blanket
+		// InvalidateCache(), so non-drag motion exits without any cache churn.
+		if m.sbDragging {
+			m.pendingDragY = msg.Y // always record latest position, even if a render is in flight
+			if !m.dragPending {
+				m.lastDragY = msg.Y
+				if m.scrollbarDragTo(msg.Y) {
+					m.InvalidateCache()
+				}
+				m.dragPending = true
+				return m, dragDoneCmd(m.id)
+			}
+		}
+		return m, nil
 	}
 
 	// Any other incoming message (keypress, mouse event, window size) potentially

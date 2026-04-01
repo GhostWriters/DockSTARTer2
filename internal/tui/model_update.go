@@ -68,13 +68,17 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		resModel, resCmd, handled := m.handleMouseMsg(msg.(tea.MouseMsg))
 		m = resModel.(*AppModel) // Preserve any state changes from handleMouseMsg
 		if handled {
-			// Still update helpline — mouse clicks can change the active row/item
-			if m.dialog != nil {
-				if h, ok := m.dialog.(interface{ HelpText() string }); ok {
-					m.backdrop.SetHelpText(h.HelpText())
+			// Update helpline on click/wheel/release — selection can change.
+			// Skip on motion: hover doesn't change the active item, and motion
+			// events fire at high frequency, making this a hot path over SSH.
+			if _, isMotion := msg.(tea.MouseMotionMsg); !isMotion {
+				if m.dialog != nil {
+					if h, ok := m.dialog.(interface{ HelpText() string }); ok {
+						m.backdrop.SetHelpText(h.HelpText())
+					}
+				} else if m.activeScreen != nil {
+					m.backdrop.SetHelpText(m.activeScreen.HelpText())
 				}
-			} else if m.activeScreen != nil {
-				m.backdrop.SetHelpText(m.activeScreen.HelpText())
 			}
 			return m, resCmd
 		}
