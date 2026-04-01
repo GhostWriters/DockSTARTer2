@@ -9,8 +9,34 @@ import (
 )
 
 func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Any incoming message (keypress, mouse event, window size) potentially changes
-	// the state of the menu, so we must invalidate the render cache.
+	// Handle coalescing done-messages before the blanket cache invalidation.
+	// These messages carry no visual change themselves — only invalidate when
+	// they trigger a follow-up scroll/drag, avoiding spurious renders on SSH.
+	switch msg := msg.(type) {
+	case scrollDoneMsg:
+		if msg.id == m.id {
+			m.scrollPending = false
+		}
+		return m, nil
+
+	case dragDoneMsg:
+		if msg.id == m.id {
+			m.dragPending = false
+			// Catch up to any position skipped while the render was in flight.
+			if m.sbDragging && m.pendingDragY != m.lastDragY {
+				m.lastDragY = m.pendingDragY
+				if m.scrollbarDragTo(m.pendingDragY) {
+					m.InvalidateCache()
+				}
+				m.dragPending = true
+				return m, dragDoneCmd(m.id)
+			}
+		}
+		return m, nil
+	}
+
+	// Any other incoming message (keypress, mouse event, window size) potentially
+	// changes the state of the menu, so we must invalidate the render cache.
 	m.InvalidateCache()
 
 	// If a custom interceptor is defined, give it first right of refusal
@@ -33,11 +59,6 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
-	case scrollDoneMsg:
-		if msg.id == m.id {
-			m.scrollPending = false
-		}
-		return m, nil
 
 	case ToggleFocusedMsg:
 		// Middle click triggers toggle on the currently focused item
@@ -49,21 +70,6 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !m.dragPending {
 				m.lastDragY = msg.Y
 				if m.scrollbarDragTo(msg.Y) {
-					m.InvalidateCache()
-				}
-				m.dragPending = true
-				return m, dragDoneCmd(m.id)
-			}
-		}
-		return m, nil
-
-	case dragDoneMsg:
-		if msg.id == m.id {
-			m.dragPending = false
-			// Catch up to any position skipped while the render was in flight.
-			if m.sbDragging && m.pendingDragY != m.lastDragY {
-				m.lastDragY = m.pendingDragY
-				if m.scrollbarDragTo(m.pendingDragY) {
 					m.InvalidateCache()
 				}
 				m.dragPending = true
