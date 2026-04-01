@@ -431,6 +431,10 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 		if s.isEditing {
 			return nil, true
 		}
+		// Swallow wheel events while a previous scroll is still being processed.
+		if m.ScrollPending() {
+			return nil, true
+		}
 		items := m.GetItems()
 		idx := m.Index()
 		if idx < 0 || idx >= len(items) {
@@ -441,10 +445,10 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 		// Using the same navigation logic as keys
 		if wheelMsg.Button == tea.MouseWheelUp {
 			s.navUp(m, items, idx, item)
-			return nil, true
+			return m.MarkScrollPending(), true
 		} else if wheelMsg.Button == tea.MouseWheelDown {
 			s.navDown(m, items, idx, item)
-			return nil, true
+			return m.MarkScrollPending(), true
 		}
 	}
 

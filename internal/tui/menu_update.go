@@ -33,14 +33,41 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case scrollDoneMsg:
+		if msg.id == m.id {
+			m.scrollPending = false
+		}
+		return m, nil
+
 	case ToggleFocusedMsg:
 		// Middle click triggers toggle on the currently focused item
 		return m.handleSpace()
 
 	case tea.MouseMotionMsg:
 		if m.sbDragging {
-			if m.scrollbarDragTo(msg.Y) {
-				m.InvalidateCache()
+			m.pendingDragY = msg.Y // always record latest position, even if a render is in flight
+			if !m.dragPending {
+				m.lastDragY = msg.Y
+				if m.scrollbarDragTo(msg.Y) {
+					m.InvalidateCache()
+				}
+				m.dragPending = true
+				return m, dragDoneCmd(m.id)
+			}
+		}
+		return m, nil
+
+	case dragDoneMsg:
+		if msg.id == m.id {
+			m.dragPending = false
+			// Catch up to any position skipped while the render was in flight.
+			if m.sbDragging && m.pendingDragY != m.lastDragY {
+				m.lastDragY = m.pendingDragY
+				if m.scrollbarDragTo(m.pendingDragY) {
+					m.InvalidateCache()
+				}
+				m.dragPending = true
+				return m, dragDoneCmd(m.id)
 			}
 		}
 		return m, nil
@@ -206,6 +233,11 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case LayerWheelMsg, tea.MouseWheelMsg:
+		// Swallow wheel events while a previous scroll is still being processed.
+		if m.scrollPending {
+			return m, nil
+		}
+
 		// Handle mouse wheel scrolling (raw or semantic)
 		var wheelBtn tea.MouseButton
 		var wheelID string
@@ -244,7 +276,8 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.cursor = m.list.Index()
 				menuSelectedIndices[m.id] = m.cursor
-				return m, nil
+				m.scrollPending = true
+				return m, scrollDoneCmd(m.id)
 			}
 
 			// When a button is focused (hover+scroll over button row), shift focus
@@ -256,7 +289,8 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else if wheelBtn == tea.MouseWheelDown {
 					m.focusedItem = m.nextButtonFocus()
 				}
-				return m, nil
+				m.scrollPending = true
+				return m, scrollDoneCmd(m.id)
 			}
 
 			if wheelBtn == tea.MouseWheelUp {
@@ -274,7 +308,8 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.cursor = m.list.Index()
 			menuSelectedIndices[m.id] = m.cursor
-			return m, nil
+			m.scrollPending = true
+			return m, scrollDoneCmd(m.id)
 		}
 
 	case tea.KeyPressMsg:
