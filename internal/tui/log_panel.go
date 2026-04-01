@@ -118,7 +118,21 @@ func (m *LogPanelModel) SetSize(width, totalTermHeight int) {
 		if vpH < 1 {
 			vpH = 1
 		}
+		prevH := m.viewport.Height()
 		m.viewport.SetHeight(vpH)
+		if prevH == 0 && vpH > 0 && len(m.lines) > 0 {
+			// Viewport was zero-height while lines accumulated (e.g. panel never
+			// opened). GotoBottom() on a zero-height viewport sets yOffset to
+			// total_lines; SetHeight doesn't re-clamp it. Repopulate now so the
+			// content and yOffset are correct for the real viewport height.
+			content := strings.Join(m.lines, "\n")
+			m.viewport.SetContent(content)
+			m.viewport.GotoBottom()
+		} else if vpH > 0 {
+			// Re-clamp yOffset — SetHeight doesn't do it, so a stale yOffset from
+			// a previous zero-height GotoBottom would show the wrong position.
+			m.viewport.SetYOffset(m.viewport.YOffset())
+		}
 	}
 }
 
@@ -195,7 +209,12 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		content := strings.Join(m.lines, "\n")
 		m.viewport.SetContent(content)
-		m.viewport.GotoBottom()
+		// Only GotoBottom when the viewport has real height — calling it on a
+		// zero-height viewport sets yOffset = totalLines which corrupts position
+		// once a real height is assigned later (SetHeight doesn't re-clamp).
+		if m.viewport.Height() > 0 {
+			m.viewport.GotoBottom()
+		}
 		return m, waitForLogLine()
 
 	case toggleLogPanelMsg:
