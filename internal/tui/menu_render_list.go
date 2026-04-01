@@ -479,10 +479,14 @@ func (m *MenuModel) renderVariableHeightList() string {
 		}
 	}
 
-	if currentY < m.viewStartY {
-		m.viewStartY = currentY
-	} else if currentY+selectedHeight > m.viewStartY+maxHeight {
-		m.viewStartY = currentY + selectedHeight - maxHeight
+	// When dragging the scrollbar, viewStartY is set explicitly by scrollbarDragTo —
+	// skip the cursor-visibility snap so it doesn't fight the drag position.
+	if !m.sbDragging {
+		if currentY < m.viewStartY {
+			m.viewStartY = currentY
+		} else if currentY+selectedHeight > m.viewStartY+maxHeight {
+			m.viewStartY = currentY + selectedHeight - maxHeight
+		}
 	}
 	if m.viewStartY < 0 {
 		m.viewStartY = 0
