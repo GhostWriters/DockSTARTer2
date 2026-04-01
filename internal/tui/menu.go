@@ -789,7 +789,37 @@ type MenuModel struct {
 	sbAbsTopY       int                       // absolute screen Y of scrollbar column top (set by GetHitRegions)
 	sbAbsLeftX      int                       // absolute screen X of scrollbar column (set by GetHitRegions)
 	sbDragging      bool                      // true while the user is dragging the scrollbar thumb
+	dragPending     bool                      // true while a drag render is in flight
+	pendingDragY    int                       // latest Y seen from motion events (always updated, even when coalescing)
+	lastDragY       int                       // Y we last actually rendered at (used to detect skipped positions)
+	scrollPending   bool                      // true while a wheel scroll is queued but not yet rendered
 	contextMenuFunc func(idx int) []ContextMenuItem // hook for screen-specific operations
+}
+
+// scrollDoneMsg is sent after a wheel scroll is processed to clear the scrollPending flag.
+type scrollDoneMsg struct{ id string }
+
+// scrollDoneCmd returns a zero-delay Cmd that emits scrollDoneMsg for the given menu ID.
+func scrollDoneCmd(id string) tea.Cmd {
+	return func() tea.Msg { return scrollDoneMsg{id: id} }
+}
+
+// dragDoneMsg is sent after a drag render completes, so any skipped Y positions can be caught up.
+type dragDoneMsg struct{ id string }
+
+// dragDoneCmd returns a zero-delay Cmd that emits dragDoneMsg for the given menu ID.
+func dragDoneCmd(id string) tea.Cmd {
+	return func() tea.Msg { return dragDoneMsg{id: id} }
+}
+
+// ScrollPending reports whether a scroll event is currently queued but not yet rendered.
+func (m *MenuModel) ScrollPending() bool { return m.scrollPending }
+
+// MarkScrollPending sets the scrollPending flag and returns a Cmd that will clear it
+// after the next render cycle. Call this in interceptors after processing a wheel event.
+func (m *MenuModel) MarkScrollPending() tea.Cmd {
+	m.scrollPending = true
+	return scrollDoneCmd(m.id)
 }
 
 // IsScrollbarDragging reports whether the menu is currently processing a scrollbar thumb drag.
