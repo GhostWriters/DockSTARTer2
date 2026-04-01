@@ -249,16 +249,31 @@ func (s *MenuModel) viewSubMenu() string {
 	var content string
 	if s.flowMode {
 		content = s.renderFlow()
-	} else if s.variableHeight {
-		content = s.renderVariableHeightList()
-		// Apply scrollbar using the accurate viewport offset (viewStartY)
-		content, s.sbInfo = ApplyScrollbarColumnTracked(content, s.lastScrollTotal, s.layout.ViewportHeight, s.viewStartY, currentConfig.UI.Scrollbar, ctx.LineCharacters, ctx)
 	} else {
-		content = MaintainBackground(s.list.View(), styles.Dialog)
-		// Append scrollbar/gutter column (same slot reserved by calculateLayout).
-		// Note: Using list.Index() as offset is a fallback and may be slightly inaccurate
-		// if the selected item is not at the top of the viewport.
-		content, s.sbInfo = ApplyScrollbarColumnTracked(content, len(s.items), s.layout.ViewportHeight, s.list.Index(), currentConfig.UI.Scrollbar, ctx.LineCharacters, ctx)
+		if s.variableHeight {
+			content = s.renderVariableHeightList()
+		} else {
+			content = MaintainBackground(s.list.View(), styles.Dialog)
+		}
+
+		// Ensure content is exactly ViewportHeight lines before applying the scrollbar,
+		// so the gutter column spans the full border box. ApplyScrollbarColumnTracked
+		// strips one trailing \n before splitting, so we add it back here unconditionally.
+		content = strings.TrimSuffix(content, "\n")
+		h := strings.Count(content, "\n") + 1
+		if h < s.layout.ViewportHeight {
+			content += strings.Repeat("\n", s.layout.ViewportHeight-h)
+		}
+
+		// Apply scrollbar using the accurate viewport offset (viewStartY)
+		visibleHeight := s.layout.ViewportHeight
+		offset := s.list.Index()
+		total := len(s.items)
+		if s.variableHeight {
+			total = s.lastScrollTotal
+			offset = s.viewStartY
+		}
+		content, s.sbInfo = ApplyScrollbarColumnTracked(content, total, visibleHeight, offset, currentConfig.UI.Scrollbar, ctx.LineCharacters, ctx)
 	}
 
 	// 3. Render Buttons (if any)
@@ -269,8 +284,9 @@ func (s *MenuModel) viewSubMenu() string {
 		buttonView = renderCenteredButtonsImpl(contentWidth, useBorders, GetActiveContext(), buttons...)
 	}
 
-	// Combine all internal content vertically
-	parts := []string{subtitleView, strings.TrimRight(content, "\n"), buttonView}
+	// Combine all internal content vertically.
+	// We use TrimSuffix here to avoid over-aggressive trimming that could pull the next section up.
+	parts := []string{subtitleView, strings.TrimSuffix(content, "\n"), buttonView}
 	var filteredParts []string
 	for _, p := range parts {
 		if p != "" {
@@ -283,7 +299,9 @@ func (s *MenuModel) viewSubMenu() string {
 	// We pass 'true' for rounded so submenus use the rounded corner style.
 	// We calculate targetHeight based on actual content to avoid trailing blank lines.
 	targetHeight := lipgloss.Height(combined) + 2
-	if targetHeight > s.height {
+	if s.maximized {
+		targetHeight = s.height
+	} else if targetHeight > s.height {
 		targetHeight = s.height
 	}
 	result := s.renderBorderWithTitle(combined, contentWidth, targetHeight, s.focusedSub, true, "Title")

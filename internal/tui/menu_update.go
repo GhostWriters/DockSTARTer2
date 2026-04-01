@@ -656,12 +656,6 @@ func (m *MenuModel) calculateLayout() {
 	var listHeight, overhead int
 	var maxListHeight int
 
-	// Measure title if in subMenuMode
-	titleHeight := 0
-	if m.subMenuMode && m.title != "" {
-		titleHeight = 1
-	}
-
 	// Determine vertical spacing for buttons (only if defined)
 	buttonBudget := 0
 	if m.showButtons {
@@ -669,8 +663,10 @@ func (m *MenuModel) calculateLayout() {
 	}
 
 	if m.subMenuMode {
-		// Sub-menu overhead: title + subtitle + own borders (2) + buttons
-		overhead = titleHeight + subtitleHeight + layout.BorderHeight() + buttonBudget
+		// Sub-menu overhead: subtitle + own borders (2) + buttons.
+		// Title is embedded in the top border line by RenderBorderedBoxCtx, so it does
+		// not consume a content row and is NOT counted here.
+		overhead = subtitleHeight + layout.BorderHeight() + buttonBudget
 		maxListHeight = m.height - overhead
 	} else {
 		// Full dialog overhead: borders, subtitle, buttons, shadow.
@@ -709,12 +705,9 @@ func (m *MenuModel) calculateLayout() {
 	}
 
 	// Final list height is whichever is smaller: intrinsic or maximum.
-	// When maximized is true, we only force maxListHeight for primary dialogs;
-	// sub-menus (in sectioned layouts) should shrink-to-fit if their content is smaller.
+	// When maximized is true, we force the full height.
 	listHeight = totalItemHeight
-	if listHeight > maxListHeight {
-		listHeight = maxListHeight
-	} else if m.maximized && !m.subMenuMode {
+	if listHeight > maxListHeight || m.maximized {
 		listHeight = maxListHeight
 	}
 
@@ -973,8 +966,8 @@ func (m *MenuModel) calculateSectionLayout() {
 		buttonBudget = buttonHeight
 	}
 
-	// Available height inside the outer border.
-	innerHeight := m.height - layout.BorderHeight()
+	// Available height inside the outer border (subtract borders and shadows).
+	innerHeight := m.height - layout.BorderHeight() - m.layout.ShadowHeight
 
 	// Pass 1: measure fixed sections (flow mode = intrinsic height).
 	sectionHeights := make([]int, len(m.contentSections))
@@ -992,6 +985,7 @@ func (m *MenuModel) calculateSectionLayout() {
 	}
 
 	// Remaining height for expandable sections.
+	// Allocate every single remaining row to avoid gaps.
 	const minExpandable = 4
 	remaining := innerHeight - fixedTotal - buttonBudget
 

@@ -282,7 +282,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 
 		descStr := RenderThemeText(item.Desc, dStyle)
 		wrapped := lipgloss.NewStyle().Width(availableWidth).Render(descStr)
-		lines := strings.Split(wrapped, "\n")
+		lines := strings.Split(strings.TrimSuffix(wrapped, "\n"), "\n")
 		for k, l := range lines {
 			lines[k] = strings.TrimRight(l, " ")
 		}
