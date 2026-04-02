@@ -48,7 +48,15 @@ func (m *AppModel) View() (v tea.View) {
 	}()
 
 	if !m.ready {
-		return tea.NewView("Initializing...")
+		// Enable mouse tracking immediately so the terminal receives \x1b[?1002h
+		// before the first WindowSizeMsg is processed. Without this, clicks that
+		// arrive during startup (common on Linux/SSH where there is round-trip
+		// latency between renders) are silently dropped by the terminal because
+		// mouse reporting has not been enabled yet.
+		v := tea.NewView("Initializing...")
+		v.MouseMode = tea.MouseModeCellMotion
+		v.AltScreen = true
+		return v
 	}
 
 	// Use Layout helpers for consistent positioning
