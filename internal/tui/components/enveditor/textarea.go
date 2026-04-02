@@ -366,6 +366,12 @@ type Model struct {
 	// scrollbars and other UI elements.
 	LineCharacters bool
 
+	// ScrollbarFunc, when non-nil, is called to append a scrollbar/gutter column
+	// to the rendered viewport text. It has the same signature as
+	// tui.ApplyScrollbarColumn. When nil the textarea falls back to its built-in
+	// scrollbar renderer.
+	ScrollbarFunc func(content string, total, visible, offset int, enabled bool, lineChars bool) string
+
 	// Styling. Styles are defined in [Styles]. Use [SetStyles] and [GetStyles]
 	// to work with this value publicly.
 	styles Styles
@@ -428,6 +434,12 @@ type Model struct {
 
 	// Scrollbar dragging state
 	isScrollbarDragging bool
+	// sbScrolled is set to true whenever a scrollbar action directly sets the
+	// viewport offset (drag, track click, arrow click). It suppresses the
+	// repositionView() snap at the end of Update() so the user can scroll the
+	// view to see non-editable lines (e.g. comments) without the cursor
+	// snapping the view back.
+	sbScrolled bool
 
 	// Undo/redo history
 	undoStack []undoSnapshot
@@ -1962,8 +1974,14 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		m.InvalidateCache()
 	}
 
+	// Clear per-message scrollbar-scroll flag. Handlers set this when the
+	// scrollbar directly sets the viewport offset so repositionView() is skipped.
+	prevSbScrolled := m.sbScrolled
+	m.sbScrolled = false
+
 	// Used to determine if the cursor should blink.
 	oldRow, oldCol := m.cursorLineNumber(), m.col
+	_ = prevSbScrolled // consumed below
 
 	var cmds []tea.Cmd
 
@@ -2326,7 +2344,12 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	}
 
-	m.repositionView()
+	// Skip repositionView() when the scrollbar directly moved the viewport —
+	// otherwise it would snap the view back to keep the cursor visible, preventing
+	// the user from scrolling to non-editable lines (e.g. comments at the top).
+	if !m.sbScrolled {
+		m.repositionView()
+	}
 
 	return m, tea.Batch(cmds...)
 }
@@ -2375,12 +2398,14 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) {
 			// Check up arrow
 			if msg.Y == 0 {
 				m.viewport.ScrollUp(1)
+				m.sbScrolled = true
 				m.InvalidateCache()
 				return
 			}
 			// Check down arrow
 			if msg.Y == visible-1 {
 				m.viewport.ScrollDown(1)
+				m.sbScrolled = true
 				m.InvalidateCache()
 				return
 			}
@@ -2405,6 +2430,7 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) {
 					targetOffset := int(targetPct * float64(maxOff))
 					m.viewport.SetYOffset(clamp(targetOffset, 0, maxOff))
 				}
+				m.sbScrolled = true
 				m.InvalidateCache()
 			}
 		} else {
@@ -2428,6 +2454,7 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) {
 					targetOffset := int(targetPct * float64(maxOff))
 					m.viewport.SetYOffset(clamp(targetOffset, 0, maxOff))
 				}
+				m.sbScrolled = true
 				m.InvalidateCache()
 			}
 		}
@@ -2578,6 +2605,7 @@ func (m *Model) handleMouseMotion(msg tea.MouseMotionMsg) {
 					m.viewport.SetYOffset(clamp(targetOffset, 0, maxOff))
 				}
 			}
+			m.sbScrolled = true
 		}
 		return
 	}
@@ -2985,74 +3013,57 @@ func (m Model) View() string {
 
 	view := m.viewport.View()
 
-	// Standardized scrollbar logic
-	lines := strings.Split(view, "\n")
+	// Scrollbar column — delegate to injected renderer when available.
 	total := m.totalDisplayLines()
 	visible := m.height
 	offset := m.viewport.YOffset()
+	if m.ScrollbarFunc != nil {
+		view = m.ScrollbarFunc(view, total, visible, offset, true, m.LineCharacters)
+	} else {
+		// Built-in fallback scrollbar (used when no ScrollbarFunc is injected).
+		lines := strings.Split(view, "\n")
+		if total > visible && visible >= 3 {
+			trackH := visible - 2 // rows 1..visible-2 are the track
+			maxOff := total - visible
+			thumbH := max(1, trackH*visible/total)
+			thumbStart := 0
+			if maxOff > 0 {
+				thumbStart = (trackH - thumbH) * offset / maxOff
+			}
+			thumbEnd := thumbStart + thumbH
 
-	if total > visible && visible >= 3 {
-		trackH := visible - 2 // space for arrows
-		maxOff := total - visible
-		
-		// Use standard tui logic for thumb calculation
-		thumbH := max(1, trackH*visible/total)
-		thumbStart := 0
-		if maxOff > 0 {
-			thumbStart = (trackH - thumbH) * offset / maxOff
-		}
-		thumbEnd := thumbStart + thumbH
-		
-		trackChar := "│"
-		if m.LineCharacters {
-			trackChar = "░"
-		}
-
-		for i := 0; i < len(lines) && i < visible; i++ {
-			char := ""
-			if i == 0 {
-				char = "▴"
-			} else if i == visible-1 {
-				char = "▾"
+			var trackChar, thumbChar, upArrow, downArrow string
+			if m.LineCharacters {
+				trackChar, thumbChar, upArrow, downArrow = "░", "█", "▴", "▾"
 			} else {
-				trackPos := i - 1
-				if trackPos >= thumbStart && trackPos < thumbEnd {
-					char = "█"
-				} else {
+				trackChar, thumbChar, upArrow, downArrow = ";", "#", "^", "v"
+			}
+
+			for i := 0; i < len(lines) && i < visible; i++ {
+				var char string
+				switch {
+				case i == 0:
+					char = upArrow
+				case i == visible-1:
+					char = downArrow
+				case i-1 >= thumbStart && i-1 < thumbEnd:
+					char = thumbChar
+				default:
 					char = trackChar
 				}
+				if char == thumbChar || char == upArrow || char == downArrow {
+					lines[i] += m.activeStyle().ScrollbarThumb.Render(char)
+				} else {
+					lines[i] += m.activeStyle().ScrollbarTrack.Render(char)
+				}
 			}
-			
-			if char == "█" {
-				lines[i] += m.activeStyle().ScrollbarThumb.Render(char)
-			} else {
-				lines[i] += m.activeStyle().ScrollbarTrack.Render(char)
-			}
-		}
-	} else if total > visible {
-		// Fallback for small height: simple thumb/track
-		trackH := visible
-		thumbH := max(1, trackH*visible/total)
-		maxOff := total - visible
-		thumbTrackStart := 0
-		if maxOff > 0 {
-			thumbTrackStart = (trackH - thumbH) * offset / maxOff
-		}
-		thumbEnd := thumbTrackStart + thumbH
-
-		for i := 0; i < len(lines) && i < visible; i++ {
-			if i >= thumbTrackStart && i < thumbEnd {
-				lines[i] += m.activeStyle().ScrollbarThumb.Render("█")
-			} else {
-				lines[i] += m.activeStyle().ScrollbarTrack.Render("│")
+		} else {
+			for i := 0; i < len(lines) && i < visible; i++ {
+				lines[i] += " "
 			}
 		}
-	} else {
-		for i := 0; i < len(lines) && i < visible; i++ {
-			lines[i] += " "
-		}
+		view = strings.Join(lines, "\n")
 	}
-	view = strings.Join(lines, "\n")
 
 	styles := m.activeStyle()
 	return styles.Base.Render(view)

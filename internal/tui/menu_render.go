@@ -98,7 +98,11 @@ func (m *MenuModel) ViewString() string {
 	showAEFocus := m.focused && !m.SelectedItem().IsSubItem && !m.SelectedItem().IsAddInstance && !m.SelectedItem().IsEditing
 
 	if m.groupedMode {
-		borderedList = borderedList + "\n" + BuildAEBottomBorder(totalWidth, 2, showAEFocus, m.activeColumn, ctx)
+		pct := -1.0
+		if m.sbInfo.Needed {
+			pct = m.listScrollPercent()
+		}
+		borderedList = borderedList + "\n" + BuildAEBottomBorder(totalWidth, 2, showAEFocus, m.activeColumn, pct, ctx)
 	} else if m.sbInfo.Needed {
 		borderedList = borderedList + "\n" + BuildScrollPercentBottomBorder(totalWidth, m.listScrollPercent(), m.focused, ctx)
 	} else {

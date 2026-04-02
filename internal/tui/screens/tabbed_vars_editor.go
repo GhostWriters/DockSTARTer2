@@ -157,6 +157,9 @@ func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec
 		editor.ShowLineNumbers = true
 		editor.SetLineCharacters(tui.GetActiveContext().LineCharacters)
 		editor.SetVirtualCursor(false)
+		editor.ScrollbarFunc = func(content string, total, visible, offset int, enabled bool, lineChars bool) string {
+			return tui.ApplyScrollbarColumn(content, total, visible, offset, enabled, lineChars, tui.GetActiveContext())
+		}
 		tabs = append(tabs, envTab{spec: spec, editor: editor})
 	}
 
