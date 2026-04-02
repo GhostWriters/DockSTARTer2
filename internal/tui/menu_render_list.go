@@ -751,7 +751,7 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 	}
 
 	// 3. Build Bottom Border with 1 dash.
-	bottomBorder := BuildAEBottomBorder(subListWidth, 1, subFocused, m.activeColumn, ctx)
+	bottomBorder := BuildAEBottomBorder(subListWidth, 1, subFocused, m.activeColumn, -1, ctx)
 	resLines = append(resLines, neutralStyle.Render(strutil.Repeat(" ", 10))+bottomBorder+console.CodeReset)
 	resH = append(resH, 1)
 	resM = append(resM, startVisibleIndex|vIdxBorderFlag) // Flag as border
