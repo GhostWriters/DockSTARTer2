@@ -1737,9 +1737,12 @@ func (m *TabbedVarsEditorModel) GetInputCursor() (relX, relY int, shape tea.Curs
 	if c == nil {
 		return 0, 0, tea.CursorBar, false
 	}
-	// Editor content starts at: outer_border(1) + inner_border/tab_row(1) = 2 cols/rows,
+	// Editor content starts at:
+	//   outer_border(1) + ContentSideMargin(1) + inner_border(1) = 3 cols
+	//   outer_border(1) + inner_border/tab_row(1) = 2 rows
 	// plus subtitle rows stacked above the inner border.
-	relX = 2 + c.Position.X
+	layout := tui.GetLayout()
+	relX = 1 + layout.ContentSideMargin + 1 + c.Position.X
 	relY = 2 + m.subtitleHeight + c.Position.Y
 	switch {
 	case !editor.IsEditableAtCursor():
