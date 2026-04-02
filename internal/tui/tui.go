@@ -151,6 +151,12 @@ func Start(ctx context.Context, startMenu string) error {
 	// Signal that the program has exited
 	close(programExited)
 
+	// Drain any buffered mouse events from stdin before disabling mouse tracking.
+	// When the user clicks to confirm exit, SGR-encoded mouse motion/release events
+	// may already be in the stdin buffer. If not discarded, the shell reads them as
+	// raw text after the program exits (producing visible ANSI garbage).
+	drainStdin()
+
 	// Reset terminal state on exit:
 	// 1. Reset colors (\x1b[0m)
 	// 2. Disable all mouse modes (1000, 1002, 1003)
