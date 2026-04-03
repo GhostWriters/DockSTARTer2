@@ -124,12 +124,12 @@ func buildScrollbarColumn(info ScrollbarInfo, lineChars bool, ctx StyleContext) 
 	var trackChar, thumbChar string
 	var upArrow, downArrow string
 	if lineChars {
-		trackChar = "░"
+		trackChar = "┃"
 		thumbChar = "█"
 		upArrow = "▴"
 		downArrow = "▾"
 	} else {
-		trackChar = ";"
+		trackChar = "|"
 		thumbChar = "#"
 		upArrow = "^"
 		downArrow = "v"
