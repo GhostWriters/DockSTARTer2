@@ -525,8 +525,11 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.tabs[m.activeTab].editor.Focus()
 
 			// Translate wheel to up/down arrows for enveditor
-			keyMsg := tea.KeyPressMsg{Code: tea.KeyUp}
-			if wheelBtn == tea.MouseWheelDown {
+			var keyMsg tea.KeyPressMsg
+			switch wheelBtn {
+			case tea.MouseWheelUp:
+				keyMsg = tea.KeyPressMsg{Code: tea.KeyUp}
+			case tea.MouseWheelDown:
 				keyMsg = tea.KeyPressMsg{Code: tea.KeyDown}
 			}
 			m.tabs[m.activeTab].editor, cmd = m.tabs[m.activeTab].editor.Update(keyMsg)

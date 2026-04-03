@@ -179,12 +179,13 @@ func (m *HelpDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.paged && m.contextPaged && m.page != 0 {
 			return m, nil
 		}
-		if msg.Button == tea.MouseWheelUp {
+		switch msg.Button {
+		case tea.MouseWheelUp:
 			m.contextOffset--
 			if m.contextOffset < 0 {
 				m.contextOffset = 0
 			}
-		} else if msg.Button == tea.MouseWheelDown {
+		case tea.MouseWheelDown:
 			m.contextOffset++
 		}
 		return m, nil

@@ -148,7 +148,7 @@ func NeedsUpdate(ctx context.Context, force bool, file string) bool {
 
 	// Check main file timestamp and content markers
 	if filename == constants.EnvFileName {
-		if updateFileChanged(conf, file, "") {
+		if updateFileChanged(file, "") {
 			return true
 		}
 		// Check ReferencedApps list
@@ -165,13 +165,13 @@ func NeedsUpdate(ctx context.Context, force bool, file string) bool {
 	}
 
 	// Check app-specific files
-	if updateFileChanged(conf, file, "") {
+	if updateFileChanged(file, "") {
 		return true
 	}
 
 	// Check if .env changed relative to app file (dependency check)
 	composeEnv := filepath.Join(conf.ComposeDir, constants.EnvFileName)
-	if updateFileChanged(conf, composeEnv, filename+"_"+filepath.Base(composeEnv)) {
+	if updateFileChanged(composeEnv, filename+"_"+filepath.Base(composeEnv)) {
 		// If main env changed, we check if ENABLED status changed for this app
 		appName := ""
 		if strings.HasPrefix(filename, constants.AppEnvFileNamePrefix) {
@@ -214,7 +214,7 @@ func UnsetNeedsUpdate(ctx context.Context, file string) {
 	filename := filepath.Base(file)
 
 	// Update main timestamp for this file
-	recordUpdateFileState(conf, file, "")
+	recordUpdateFileState(file, "")
 
 	if filename == constants.EnvFileName {
 		// Update ReferencedApps marker
@@ -245,12 +245,12 @@ func UnsetNeedsUpdate(ctx context.Context, file string) {
 			_ = os.WriteFile(enabledMarkerFile, []byte(enabledVal), 0644)
 
 			// Also update the dependency timestamp (main env vs this app)
-			recordUpdateFileState(conf, composeEnv, filename+"_"+filepath.Base(composeEnv))
+			recordUpdateFileState(composeEnv, filename+"_"+filepath.Base(composeEnv))
 		}
 	}
 }
 
-func updateFileChanged(conf config.AppConfig, path string, markerSuffix string) bool {
+func updateFileChanged(path string, markerSuffix string) bool {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return true
 	}
@@ -284,7 +284,7 @@ func updateFileChanged(conf config.AppConfig, path string, markerSuffix string) 
 	return false
 }
 
-func recordUpdateFileState(conf config.AppConfig, path string, markerSuffix string) {
+func recordUpdateFileState(path string, markerSuffix string) {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return
 	}

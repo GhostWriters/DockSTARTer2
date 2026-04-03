@@ -120,9 +120,10 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Scroll wheel selects between Yes (up) and No (down) with clamping — no wrap.
 	if wheelMsg, ok := msg.(tea.MouseWheelMsg); ok {
-		if wheelMsg.Button == tea.MouseWheelUp {
+		switch wheelMsg.Button {
+		case tea.MouseWheelUp:
 			m.result = true // Yes (first option — clamps here on repeated up)
-		} else if wheelMsg.Button == tea.MouseWheelDown {
+		case tea.MouseWheelDown:
 			m.result = false // No (last option — clamps here on repeated down)
 		}
 		return m, nil

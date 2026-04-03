@@ -557,9 +557,10 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 		addStyle := neutralStyle
 		enableStyle := neutralStyle
 		if isSelected {
-			if d.activeCol == ColAdd {
+			switch d.activeCol {
+			case ColAdd:
 				addStyle = tagStyle
-			} else if d.activeCol == ColEnable {
+			case ColEnable:
 				enableStyle = tagStyle
 			}
 		}
@@ -663,9 +664,10 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 	addStyle := neutralStyle
 	enableStyle := neutralStyle
 	if isSelected {
-		if d.activeCol == ColAdd {
+		switch d.activeCol {
+		case ColAdd:
 			addStyle = tagStyle
-		} else if d.activeCol == ColEnable {
+		case ColEnable:
 			enableStyle = tagStyle
 		}
 	}
@@ -1273,7 +1275,7 @@ func (m *MenuModel) ToggleSelectedItem() {
 
 // helpContextForIdx builds a HelpContext for the item at the given index.
 // Both HelpContext (F1) and showContextMenu (right-click Help) call this so the output is identical.
-func (m *MenuModel) helpContextForIdx(idx, contentWidth int) HelpContext {
+func (m *MenuModel) helpContextForIdx(idx int) HelpContext {
 	itemTitle := "Help"
 	itemText := ""
 	if idx >= 0 && idx < len(m.items) {
@@ -1318,7 +1320,7 @@ func (m *MenuModel) helpContextForIdx(idx, contentWidth int) HelpContext {
 
 // HelpContext implements HelpContextProvider.
 func (m *MenuModel) HelpContext(contentWidth int) HelpContext {
-	return m.helpContextForIdx(m.list.Index(), contentWidth)
+	return m.helpContextForIdx(m.list.Index())
 }
 
 // ShowContextMenu returns a command to show the context menu for the item at the given index.
@@ -1330,7 +1332,7 @@ func (m *MenuModel) ShowContextMenu(idx int, x, y int) tea.Cmd {
 		item := m.items[idx]
 		tag = GetPlainText(item.Tag)
 		desc = item.Desc
-		ctx := m.helpContextForIdx(idx, 0)
+		ctx := m.helpContextForIdx(idx)
 		hCtx = &ctx
 	}
 

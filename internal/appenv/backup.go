@@ -129,7 +129,7 @@ func BackupEnv(ctx context.Context, envFile string, conf config.AppConfig) error
 
 	// info "Removing old compose backups."
 	logger.Info(ctx, "Removing old compose backups.")
-	pruneOldBackups(ctx, composeBackupsFolder, composeFolderName)
+	pruneOldBackups(composeBackupsFolder, composeFolderName)
 
 	// if [[ -d "${DOCKER_VOLUME_CONFIG}/.env.backups" ]]; then
 	legacyBackupDir := filepath.Join(expandedVolumeConfig, ".env.backups")
@@ -180,7 +180,7 @@ func sanitizePath(val string) string {
 	return val
 }
 
-func pruneOldBackups(ctx context.Context, backupsFolder, prefix string) {
+func pruneOldBackups(backupsFolder, prefix string) {
 	files, err := os.ReadDir(backupsFolder)
 	if err != nil {
 		return

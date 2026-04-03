@@ -188,18 +188,20 @@ func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.MouseWheelMsg:
 		// Fallback: raw wheel (e.g. keyboard-generated) scrolls the presets list.
-		if msg.Button == tea.MouseWheelDown {
+		switch msg.Button {
+		case tea.MouseWheelDown:
 			m.moveCursor(+1)
-		} else if msg.Button == tea.MouseWheelUp {
+		case tea.MouseWheelUp:
 			m.moveCursor(-1)
 		}
 		return m, nil
 
 	case tui.LayerWheelMsg:
 		// Semantic wheel from model_mouse.go IDListPanel path — scroll without focus snap.
-		if msg.Button == tea.MouseWheelDown {
+		switch msg.Button {
+		case tea.MouseWheelDown:
 			m.moveCursor(+1)
-		} else if msg.Button == tea.MouseWheelUp {
+		case tea.MouseWheelUp:
 			m.moveCursor(-1)
 		}
 		return m, nil

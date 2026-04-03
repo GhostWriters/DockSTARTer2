@@ -190,7 +190,8 @@ func (s *AppSelectionScreen) toggleItem(idx int) {
 
 	col := s.menu.ActiveColumn()
 
-	if col == tui.ColAdd {
+	switch col {
+	case tui.ColAdd:
 		item.Checked = !item.Checked
 		if item.Checked {
 			item.Enabled = true // Auto-enable when adding
@@ -198,7 +199,7 @@ func (s *AppSelectionScreen) toggleItem(idx int) {
 			item.Enabled = false // Auto-disable when removing
 		}
 		item.ShowEnabledGutter = item.Checked
-	} else if col == tui.ColEnable {
+	case tui.ColEnable:
 		item.Enabled = !item.Enabled
 		if item.Enabled {
 			item.Checked = true // Auto-add if user enables
@@ -333,9 +334,10 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 			// Case: Right click always focuses the item, column, and shows context menu
 			if hitMsg.Button == tea.MouseRight {
 				m.Select(idx)
-				if suffix == "add" {
+				switch suffix {
+				case "add":
 					m.SetActiveColumn(tui.ColAdd)
-				} else if suffix == "enable" {
+				case "enable":
 					m.SetActiveColumn(tui.ColEnable)
 				}
 				return m.ShowContextMenu(idx, hitMsg.X, hitMsg.Y), true
@@ -362,7 +364,8 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 			}
 
 			// 1. Process specific region suffixes
-			if suffix == "add" {
+			switch suffix {
+			case "add":
 				m.SetActiveColumn(tui.ColAdd)
 				if !item.IsGroupHeader {
 					s.toggleItem(idx)
@@ -370,13 +373,13 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 					// Fallback: headers can be expanded by clicking the add column area too
 				}
 				return nil, true
-			} else if suffix == "enable" {
+			case "enable":
 				m.SetActiveColumn(tui.ColEnable)
 				if !item.IsGroupHeader {
 					s.toggleItem(idx)
 				}
 				return nil, true
-			} else if suffix == "expand" {
+			case "expand":
 				if item.IsSubItem {
 					if !item.IsReferenced && !item.WasAdded {
 						s.startRenaming(idx)
@@ -390,12 +393,12 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 					s.collapseAllEmptyGroups(item.BaseApp)
 				}
 				return nil, true
-			} else if suffix == "parent" {
+			case "parent":
 				// Clicks on the instance border now "enter" the list by selecting the first instance
 				m.Select(idx)
 				s.collapseAllEmptyGroups(item.BaseApp)
 				return nil, true
-			} else if suffix == "border" {
+			case "border":
 				// Clicks on the instance background or margin select that instance
 				m.Select(idx)
 				s.collapseAllEmptyGroups(item.BaseApp)
@@ -443,10 +446,11 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 		item := items[idx]
 
 		// Using the same navigation logic as keys
-		if wheelMsg.Button == tea.MouseWheelUp {
+		switch wheelMsg.Button {
+		case tea.MouseWheelUp:
 			s.navUp(m, items, idx, item)
 			return m.MarkScrollPending(), true
-		} else if wheelMsg.Button == tea.MouseWheelDown {
+		case tea.MouseWheelDown:
 			s.navDown(m, items, idx, item)
 			return m.MarkScrollPending(), true
 		}
