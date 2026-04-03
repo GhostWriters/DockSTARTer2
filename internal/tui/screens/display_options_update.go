@@ -103,26 +103,28 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.MouseWheelMsg:
 		// ONLY interact with the focused panel, no mouse-over fallback
-		if s.focusedPanel == FocusThemes {
+		switch s.focusedPanel {
+		case FocusThemes:
 			updated, uCmd := s.themeMenu.Update(msg)
 			if m, ok := updated.(*tui.MenuModel); ok {
 				s.themeMenu = m
 			}
 			return s, uCmd
-		} else if s.focusedPanel == FocusOptions {
+		case FocusOptions:
 			updated, uCmd := s.optionsMenu.Update(msg)
 			if m, ok := updated.(*tui.MenuModel); ok {
 				s.optionsMenu = m
 			}
 			return s, uCmd
-		} else if s.focusedPanel == FocusButtons {
+		case FocusButtons:
 			// Scroll wheel cycles the focused button (up=left, down=right) — clamps, no wrap.
 			maxBtn := s.maxFocusedButton()
-			if msg.Button == tea.MouseWheelUp {
+			switch msg.Button {
+			case tea.MouseWheelUp:
 				if s.focusedButton > 0 {
 					s.focusedButton--
 				}
-			} else if msg.Button == tea.MouseWheelDown {
+			case tea.MouseWheelDown:
 				if s.focusedButton < maxBtn {
 					s.focusedButton++
 				}
@@ -133,15 +135,16 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tui.LayerHitMsg:
 		// 1. Focus routing via panel hit
-		if msg.ID == tui.IDThemePanel {
+		switch msg.ID {
+		case tui.IDThemePanel:
 			s.focusedPanel = FocusThemes
 			s.updateFocusStates()
 			return s, nil
-		} else if msg.ID == tui.IDOptionsPanel {
+		case tui.IDOptionsPanel:
 			s.focusedPanel = FocusOptions
 			s.updateFocusStates()
 			return s, nil
-		} else if msg.ID == tui.IDButtonPanel {
+		case tui.IDButtonPanel:
 			s.focusedPanel = FocusButtons
 			s.updateFocusStates()
 			return s, nil
@@ -228,7 +231,8 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tui.ToggleFocusedMsg:
 		// Middle click: activate the currently focused item in the hovered panel
-		if s.focusedPanel == FocusThemes {
+		switch s.focusedPanel {
+		case FocusThemes:
 			// Activate radio item
 			idx := s.themeMenu.Index()
 			items := s.themeMenu.GetItems()
@@ -240,13 +244,13 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				s.applyPreview(itemConfigValue(items[idx]))
 			}
 			return s, nil
-		} else if s.focusedPanel == FocusOptions {
+		case FocusOptions:
 			updated, uCmd := s.optionsMenu.Update(msg)
 			if m, ok := updated.(*tui.MenuModel); ok {
 				s.optionsMenu = m
 			}
 			return s, uCmd
-		} else if s.focusedPanel == FocusButtons {
+		case FocusButtons:
 			return s.execFocusedButton()
 		}
 		return s, nil
@@ -299,7 +303,8 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// 3. Up/Down/Space: Routed to focused panel
-		if s.focusedPanel == FocusThemes {
+		switch s.focusedPanel {
+		case FocusThemes:
 			// Specific radio logic for Space on theme list
 			if key.Matches(msg, tui.Keys.Space) {
 				items := s.themeMenu.GetItems()
@@ -319,7 +324,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				s.themeMenu = m
 			}
 			return s, uCmd
-		} else if s.focusedPanel == FocusOptions {
+		case FocusOptions:
 			updated, uCmd := s.optionsMenu.Update(msg)
 			if m, ok := updated.(*tui.MenuModel); ok {
 				s.optionsMenu = m

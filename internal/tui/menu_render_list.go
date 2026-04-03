@@ -127,7 +127,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 				j++
 			}
 
-			subLines, subH, subM := m.renderSubListSequence(subItems, i, selectedVisibleIndex, maxTagLen, maxWidth, listContentWidth, subGroupHasCursor, ctx)
+			subLines, subH, subM := m.renderSubListSequence(subItems, i, selectedVisibleIndex, maxWidth, subGroupHasCursor, ctx)
 
 			for k := 0; k < len(subLines); k++ {
 				renderedItems = append(renderedItems, subLines[k])
@@ -606,7 +606,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 }
 
 // renderSubListSequence handles a contiguous sequence of sub-items by wrapping them in a border.
-func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex int, selectedVisibleIndex int, maxTagLen int, maxWidth int, listContentWidth int, hasCursor bool, ctx StyleContext) ([]string, []int, []int) {
+func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex int, selectedVisibleIndex int, maxWidth int, hasCursor bool, ctx StyleContext) ([]string, []int, []int) {
 	styles := GetStyles()
 	dialogBG := styles.Dialog.GetBackground()
 	neutralStyle := lipgloss.NewStyle().Background(dialogBG)

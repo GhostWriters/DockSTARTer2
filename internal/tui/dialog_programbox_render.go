@@ -88,9 +88,10 @@ func (m *ProgramBoxModel) renderHeaderUI(width int) string {
 				foundActive := false
 				for _, app := range t.Apps {
 					appStyle := theme.ThemeSemanticStyle("{{|ProgressWaiting|}}")
-					if t.Status == StatusCompleted {
+					switch t.Status {
+					case StatusCompleted:
 						appStyle = theme.ThemeSemanticStyle("{{|ProgressCompleted|}}")
-					} else if t.Status == StatusInProgress {
+					case StatusInProgress:
 						if t.ActiveApp != "" {
 							if app == t.ActiveApp {
 								appStyle = theme.ThemeSemanticStyle("{{|ProgressInProgress|}}")

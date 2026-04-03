@@ -185,13 +185,14 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case key.Matches(msg, tui.Keys.Left), key.Matches(msg, tui.Keys.Right):
-			if m.focus == addVarFocusCreate {
+			switch m.focus {
+			case addVarFocusCreate:
 				m.focus = addVarFocusCancel
 				return m, nil
-			} else if m.focus == addVarFocusCancel {
+			case addVarFocusCancel:
 				m.focus = addVarFocusExit
 				return m, nil
-			} else if m.focus == addVarFocusExit {
+			case addVarFocusExit:
 				m.focus = addVarFocusCreate
 				return m, nil
 			}
@@ -223,18 +224,20 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.MouseWheelMsg:
 		// Fallback: raw wheel scrolls the list.
-		if msg.Button == tea.MouseWheelDown {
+		switch msg.Button {
+		case tea.MouseWheelDown:
 			m.moveCursor(+1)
-		} else if msg.Button == tea.MouseWheelUp {
+		case tea.MouseWheelUp:
 			m.moveCursor(-1)
 		}
 		return m, nil
 
 	case tui.LayerWheelMsg:
 		// Semantic wheel from IDListPanel path — scroll without focus snap.
-		if msg.Button == tea.MouseWheelDown {
+		switch msg.Button {
+		case tea.MouseWheelDown:
 			m.moveCursor(+1)
-		} else if msg.Button == tea.MouseWheelUp {
+		case tea.MouseWheelUp:
 			m.moveCursor(-1)
 		}
 		return m, nil

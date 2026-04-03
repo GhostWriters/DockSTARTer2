@@ -92,14 +92,15 @@ func (m *HeaderModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case LayerWheelMsg:
 		if msg.ID == IDStatusBar {
 			// Scroll wheel cycles between Flags, App version and Tmpl version focus.
-			if msg.Button == tea.MouseWheelUp {
+			switch msg.Button {
+			case tea.MouseWheelUp:
 				switch m.focus {
 				case HeaderFocusNone, HeaderFocusApp:
 					m.focus = HeaderFocusFlags
 				case HeaderFocusTmpl:
 					m.focus = HeaderFocusApp
 				}
-			} else if msg.Button == tea.MouseWheelDown {
+			case tea.MouseWheelDown:
 				switch m.focus {
 				case HeaderFocusNone, HeaderFocusFlags:
 					m.focus = HeaderFocusApp

@@ -26,7 +26,7 @@ func NeedsCreateAll(ctx context.Context, force bool, added []string, conf config
 	timestampsFolder := filepath.Join(paths.GetTimestampsDir(), "appvars_create")
 
 	// 1. Check Global .env
-	if fileChanged(conf, envFile) {
+	if fileChanged(envFile) {
 		return true
 	}
 
@@ -54,7 +54,7 @@ func NeedsCreateAll(ctx context.Context, force bool, added []string, conf config
 		for _, appName := range allAdded {
 			// Check app-specific env file
 			appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf("%s%s", constants.AppEnvFileNamePrefix, strings.ToLower(appName)))
-			if fileChanged(conf, appEnvFile) {
+			if fileChanged(appEnvFile) {
 				return true
 			}
 
@@ -78,7 +78,7 @@ func NeedsCreateAll(ctx context.Context, force bool, added []string, conf config
 		}
 
 		appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf("%s%s", constants.AppEnvFileNamePrefix, strings.ToLower(appName)))
-		if fileChanged(conf, appEnvFile) {
+		if fileChanged(appEnvFile) {
 			return true
 		}
 
@@ -120,7 +120,7 @@ func UnsetNeedsCreateAll(ctx context.Context, added []string, conf config.AppCon
 
 	// 1. Record global .env state
 	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
-	recordFileState(conf, envFile)
+	recordFileState(envFile)
 
 	// 2. Update AddedApps list record (with trailing newline for Bash printf parity)
 	_ = os.WriteFile(filepath.Join(timestampsFolder, "AddedApps"), []byte(strings.Join(added, "\n")+"\n"), 0644)
@@ -154,10 +154,10 @@ func UnsetNeedsCreateApp(ctx context.Context, appNameRaw string, conf config.App
 
 	// 2. Record app-specific .env state
 	appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf("%s%s", constants.AppEnvFileNamePrefix, appLower))
-	recordFileState(conf, appEnvFile)
+	recordFileState(appEnvFile)
 }
 
-func fileChanged(conf config.AppConfig, path string) bool {
+func fileChanged(path string) bool {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return true // File missing -> needs creation (or re-check)
 	}
@@ -189,7 +189,7 @@ func fileChanged(conf config.AppConfig, path string) bool {
 	return false
 }
 
-func recordFileState(conf config.AppConfig, path string) {
+func recordFileState(path string) {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return
 	}

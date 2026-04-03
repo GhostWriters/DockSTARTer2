@@ -176,9 +176,10 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.focusedItem = FocusList
 
 			// Handle column focus based on click region
-			if suffix == "add" {
+			switch suffix {
+			case "add":
 				m.activeColumn = ColAdd
-			} else if suffix == "enable" {
+			case "enable":
 				m.activeColumn = ColEnable
 			}
 
@@ -289,12 +290,13 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// IDListPanel: scroll the list regardless of button focus state.
 			if wheelID == IDListPanel || wheelID == m.id {
 				m.focusedItem = FocusList // Reclaim focus for the list so space/middle-click activates list items
-				if wheelBtn == tea.MouseWheelUp {
+				switch wheelBtn {
+				case tea.MouseWheelUp:
 					m.list.CursorUp()
 					for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator {
 						m.list.CursorUp()
 					}
-				} else if wheelBtn == tea.MouseWheelDown {
+				case tea.MouseWheelDown:
 					m.list.CursorDown()
 					for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator {
 						m.list.CursorDown()
@@ -310,22 +312,24 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// left/right using the clamping helpers — no wrap at either end.
 			// subMenuMode menus never render buttons, so always fall through to list scroll.
 			if !m.subMenuMode && (m.focusedItem == FocusSelectBtn || m.focusedItem == FocusBackBtn || m.focusedItem == FocusExitBtn) {
-				if wheelBtn == tea.MouseWheelUp {
+				switch wheelBtn {
+				case tea.MouseWheelUp:
 					m.focusedItem = m.prevButtonFocus()
-				} else if wheelBtn == tea.MouseWheelDown {
+				case tea.MouseWheelDown:
 					m.focusedItem = m.nextButtonFocus()
 				}
 				m.scrollPending = true
 				return m, scrollDoneCmd(m.id)
 			}
 
-			if wheelBtn == tea.MouseWheelUp {
+			switch wheelBtn {
+			case tea.MouseWheelUp:
 				m.list.CursorUp()
 				// Skip separators automatically
 				for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator {
 					m.list.CursorUp()
 				}
-			} else if wheelBtn == tea.MouseWheelDown {
+			case tea.MouseWheelDown:
 				m.list.CursorDown()
 				// Skip separators automatically
 				for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator {

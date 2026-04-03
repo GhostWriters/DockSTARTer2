@@ -124,10 +124,11 @@ func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, Keys.Left), key.Matches(msg, Keys.Right):
 			// Toggle between OK and Cancel when on the button row
-			if m.focusedItem == FocusSelectBtn {
+			switch m.focusedItem {
+			case FocusSelectBtn:
 				m.focusedItem = FocusBackBtn
 				return m, nil
-			} else if m.focusedItem == FocusBackBtn {
+			case FocusBackBtn:
 				m.focusedItem = FocusSelectBtn
 				return m, nil
 			}
@@ -205,7 +206,7 @@ func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // contentWidth calculates the ideal dialog inner width.
-func (m *promptDialogModel) contentWidth(ctx StyleContext) int {
+func (m *promptDialogModel) contentWidth() int {
 	maxAllowed := m.layout.Width - 2
 	w := maxLineWidth(m.question) + DialogBodyPadH
 
@@ -255,7 +256,7 @@ func (m *promptDialogModel) ViewString() string {
 	}
 
 	ctx := GetActiveContext()
-	contentWidth := m.contentWidth(ctx)
+	contentWidth := m.contentWidth()
 
 	// Question text — matches dialog_confirm.go: Padding(1, 2), Width(contentWidth)
 	questionText := strings.TrimRight(
@@ -321,7 +322,7 @@ func (m *promptDialogModel) Layers() []*lipgloss.Layer { return m.layers(m.ViewS
 
 func (m *promptDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	ctx := GetActiveContext()
-	contentWidth := m.contentWidth(ctx)
+	contentWidth := m.contentWidth()
 
 	questionHeight := lipgloss.Height(
 		ctx.Dialog.Padding(1, 2).Width(contentWidth).Render(m.question))
