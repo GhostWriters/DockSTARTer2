@@ -58,6 +58,13 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.logPanel = updated.(LogPanelModel)
 		return m, logger.RecoverTUI(m.ctx, cmd)
 
+	case DragDoneMsg:
+		if msg.ID == logResizeZoneID {
+			updated, cmd := m.logPanel.Update(msg)
+			m.logPanel = updated.(LogPanelModel)
+			return m, logger.RecoverTUI(m.ctx, cmd)
+		}
+
 	case tea.KeyMsg:
 		if model, cmd, handled := m.handleKeyMsg(msg); handled {
 			return model, cmd

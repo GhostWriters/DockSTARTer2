@@ -44,6 +44,9 @@ type LogPanelModel struct {
 	isDragging        bool
 	dragStartY        int
 	heightAtDragStart int
+	pendingDragY      int // latest Y from motion events (always updated)
+	lastDragY         int // Y last actually applied
+	dragPending       bool // true while a drag render is in-flight
 
 	// maxHeight is the externally imposed height ceiling (set by AppModel based on active screen).
 	// Zero means "no override" — logPanelMaxHeight() is used as the fallback.
@@ -79,6 +82,29 @@ func (m LogPanelModel) Height() int {
 // Pass 0 to revert to the default half-screen fallback.
 func (m *LogPanelModel) SetMaxHeight(h int) {
 	m.maxHeight = h
+}
+
+// applyDragY computes the new panel height from the current mouse Y and updates
+// the viewport height. Only touches height — full SetSize is deferred to release.
+func (m *LogPanelModel) applyDragY(mouseY int) {
+	delta := m.dragStartY - mouseY
+	newHeight := m.heightAtDragStart + delta
+	maxH := m.effectiveMaxHeight()
+	if newHeight > maxH {
+		newHeight = maxH
+	}
+	if newHeight < 2 {
+		newHeight = 2
+	}
+	m.height = newHeight
+	if m.expanded {
+		vpH := m.height - 1
+		if vpH < 1 {
+			vpH = 1
+		}
+		m.viewport.SetHeight(vpH)
+		m.viewport.SetYOffset(m.viewport.YOffset())
+	}
 }
 
 // effectiveMaxHeight returns the ceiling to use for clamping — the external override
@@ -263,12 +289,27 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return toggleLogPanelMsg{} }
 		}
 
+	case DragDoneMsg:
+		if msg.ID == logResizeZoneID {
+			m.dragPending = false
+			// Catch up to any position skipped while the render was in-flight.
+			if m.pendingDragY != m.lastDragY {
+				m.lastDragY = m.pendingDragY
+				m.applyDragY(m.pendingDragY)
+				m.dragPending = true
+				return m, dragDoneCmd(logResizeZoneID)
+			}
+		}
+		return m, nil
+
 	case tea.MouseClickMsg:
 		// Handle drag start on resize zones
 		if msg.Button == tea.MouseLeft {
 			// No direct zone check here, handled by AppModel forwarding
 			m.isDragging = true
 			m.dragStartY = msg.Y
+			m.pendingDragY = msg.Y
+			m.lastDragY = msg.Y
 			m.heightAtDragStart = m.height
 			if !m.expanded {
 				m.expanded = true
@@ -293,31 +334,12 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.MouseMotionMsg:
 		if m.isDragging {
-			// Calculate delta. Y increases downwards.
-			// Dragging UP (smaller Y) means height increases.
-			// Delta = dragStartY - msg.Y
-			delta := m.dragStartY - msg.Y
-			newHeight := m.heightAtDragStart + delta
-
-			// Clamp height — cap so the active screen keeps its minimum required height.
-			maxH := m.effectiveMaxHeight()
-			if newHeight > maxH {
-				newHeight = maxH
-			}
-			if newHeight < 2 {
-				newHeight = 2 // Minimum 1 line content + 1 line strip
-			}
-
-			m.height = newHeight
-			if m.expanded {
-				// During drag only the viewport height changes — skip the full
-				// SetSize (which re-sets width, re-wraps content, etc.) to avoid lag.
-				vpH := m.height - 1
-				if vpH < 1 {
-					vpH = 1
-				}
-				m.viewport.SetHeight(vpH)
-				m.viewport.SetYOffset(m.viewport.YOffset()) // re-clamp
+			m.pendingDragY = msg.Y // always record latest, even if render in-flight
+			if !m.dragPending {
+				m.lastDragY = msg.Y
+				m.applyDragY(msg.Y)
+				m.dragPending = true
+				return m, dragDoneCmd(logResizeZoneID)
 			}
 			return m, nil
 		}
