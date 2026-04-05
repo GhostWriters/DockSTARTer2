@@ -287,6 +287,7 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseReleaseMsg:
 		if m.isDragging {
 			m.isDragging = false
+			m.SetSize(m.width, m.totalHeight) // Full reconcile on release
 			return m, nil
 		}
 
@@ -309,7 +310,14 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			m.height = newHeight
 			if m.expanded {
-				m.SetSize(m.width, m.totalHeight) // Refresh viewport
+				// During drag only the viewport height changes — skip the full
+				// SetSize (which re-sets width, re-wraps content, etc.) to avoid lag.
+				vpH := m.height - 1
+				if vpH < 1 {
+					vpH = 1
+				}
+				m.viewport.SetHeight(vpH)
+				m.viewport.SetYOffset(m.viewport.YOffset()) // re-clamp
 			}
 			return m, nil
 		}
