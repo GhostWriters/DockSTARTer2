@@ -62,6 +62,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.ID == logResizeZoneID {
 			updated, cmd := m.logPanel.Update(msg)
 			m.logPanel = updated.(LogPanelModel)
+			m.backdrop.SetSize(m.width, m.backdropHeight())
 			return m, logger.RecoverTUI(m.ctx, cmd)
 		}
 
