@@ -198,10 +198,6 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 		}
 	}
 
-	if actualWidth%2 != 0 {
-		actualWidth++
-	}
-
 	if targetHeight > 2 {
 		contentHeight := len(lines)
 		neededPadding := (targetHeight - 2) - contentHeight
