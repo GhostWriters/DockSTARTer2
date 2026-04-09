@@ -220,6 +220,11 @@ func MergeYML(ctx context.Context, force bool) error {
 		return fmt.Errorf("failed to load compose configurations: %w", err)
 	}
 
+	for i, service := range project.Services {
+		service.EnvFiles = nil
+		project.Services[i] = service
+	}
+
 	marshaledProject, err := project.MarshalYAML()
 	if err != nil {
 		logger.Error(ctx, "Failed to marshal merged compose configuration: %v", err)
