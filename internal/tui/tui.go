@@ -307,6 +307,11 @@ func StartVarEditor(ctx context.Context, appName, varName string) error {
 
 	conf := config.LoadAppConfig()
 
+	// Auto-detect app name from variable prefix if not provided (e.g. PLEX__RESTART → PLEX)
+	if appName == "" {
+		appName = appenv.VarNameToAppName(varName)
+	}
+
 	// Resolve env file path
 	var file string
 	if appName == "" {
