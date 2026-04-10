@@ -277,13 +277,15 @@ func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.input.HandleClick(msg.X)
 				return m, nil
 			}
-			if msg.ID == "setvalue_list" {
+			if msg.ID == "setvalue_list" || msg.ID == "setvalue_preset_box" {
+				// Always focus the list on any click within the presets area (including borders).
+				m.focus = setValueFocusList
+				m.input.Blur()
+				// Only select an item when the click lands on an actual option row.
 				idx := m.optIndexAt(msg.Y)
 				if idx >= 0 {
 					selectOpt(idx)
 					m.cursor = idx
-					m.focus = setValueFocusList
-					m.input.Blur()
 				}
 				return m, nil
 			}
@@ -331,37 +333,15 @@ func (m *setValueDialogModel) moveCursor(delta int) {
 	if m.cursor < m.offset {
 		m.offset = m.cursor
 	}
-	// Scroll down: check if cursor is beyond the visible row budget from offset.
-	rows := 0
-	lastVisible := m.offset
-	for i := m.offset; i < len(m.opts); i++ {
-		r := 1
-		if m.opts[i].Value != "" {
-			r = 2
-		}
-		if rows+r > m.maxVis {
-			break
-		}
-		rows += r
-		lastVisible = i
+	// Scroll down: check if cursor is beyond the visible window.
+	lastVisible := m.offset + m.maxVis - 1
+	if lastVisible >= len(m.opts) {
+		lastVisible = len(m.opts) - 1
 	}
 	if m.cursor > lastVisible {
-		// Scroll offset forward until cursor is within the visible window.
-		for m.cursor > lastVisible && m.offset < m.cursor {
-			m.offset++
-			rows = 0
-			lastVisible = m.offset
-			for i := m.offset; i < len(m.opts); i++ {
-				r := 1
-				if m.opts[i].Value != "" {
-					r = 2
-				}
-				if rows+r > m.maxVis {
-					break
-				}
-				rows += r
-				lastVisible = i
-			}
+		m.offset = m.cursor - m.maxVis + 1
+		if m.offset < 0 {
+			m.offset = 0
 		}
 	}
 }
@@ -395,8 +375,8 @@ func (m *setValueDialogModel) recalc() {
 	// Use the actual rendered height — Padding+Width can wrap long description lines.
 	headingRenderedH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToThemeANSI(headingRaw)))
 	btnH := tui.ButtonRowHeight(contentW, 0, tui.ButtonSpec{Text: "Save"}, tui.ButtonSpec{Text: "Cancel"}, tui.ButtonSpec{Text: "Exit"})
-	// overhead: outer border(2) + rendered heading + "Current Value" section(3) + "Presets" section borders(2) + spacer(1) + buttons
-	fixed := 2 + headingRenderedH + 3 + 2 + 1 + btnH
+	// overhead: outer border(2) + rendered heading + "Current Value" section(3) + "Presets" section borders(2) + buttons
+	fixed := 2 + headingRenderedH + 3 + 2 + btnH
 	m.maxVis = m.height - fixed
 	if m.maxVis < 2 {
 		m.maxVis = 2
@@ -421,20 +401,15 @@ func (m *setValueDialogModel) innerWidth() int {
 func (m *setValueDialogModel) optIndexAt(screenY int) int {
 	// m.listAbsTopY is set by GetHitRegions each frame to the absolute screen Y
 	// of the first visible list item. Use it directly so click coordinates match.
-	rowY := m.listAbsTopY
-	rowBudget := m.maxVis
-	for i := m.offset; i < len(m.opts) && rowBudget > 0; i++ {
-		h := 1
-		if m.opts[i].Value != "" {
-			h = 2
-		}
-		if screenY >= rowY && screenY < rowY+h {
-			return i
-		}
-		rowY += h
-		rowBudget -= h
+	idx := screenY - m.listAbsTopY
+	if idx < 0 || idx >= m.maxVis {
+		return -1
 	}
-	return -1
+	i := m.offset + idx
+	if i >= len(m.opts) {
+		return -1
+	}
+	return i
 }
 
 // GetInputCursor returns the hardware cursor position relative to the dialog's
@@ -462,9 +437,8 @@ func (m *setValueDialogModel) ViewString() string {
 	sInnerW := contentW - 2 // inner width of each section (section border adds 2)
 
 	bgStyle := theme.ThemeSemanticStyle("{{|Dialog|}}")
-	normalStyle := theme.ThemeSemanticStyle("{{|Item|}}")
-	selectedStyle := theme.ThemeSemanticStyle("{{|ItemSelected|}}")
-	subLabelStyle := theme.ThemeSemanticStyle("{{|HelpItem|}}")
+	normalValStyle := theme.ThemeSemanticStyle("{{|Item|}}")
+	selectedValStyle := theme.ThemeSemanticStyle("{{|ItemSelected|}}")
 
 	// Heading — CurrentValue updates live as the user types
 	headingRaw := FormatMenuHeading(MenuHeadingParams{
@@ -505,74 +479,88 @@ func (m *setValueDialogModel) ViewString() string {
 	// Always reserve one column for the scrollbar gutter so width is stable.
 	maxItemW := sInnerW - 3 - tui.ScrollbarGutterWidth // cursor(1) + space(1) + trailing space(1) + gutter
 
-	// Compute scroll metrics for the scrollbar / scroll indicator.
-	totalRows := 0
-	offsetRows := 0
-	for i, opt := range m.opts {
-		r := 1
-		if opt.Value != "" {
-			r = 2
+	// Scroll metrics — each option is always 1 row.
+	totalRows := len(m.opts)
+	offsetRows := m.offset
+
+	// Compute max label width across all options for column alignment
+	maxLabelW := 0
+	for _, opt := range m.opts {
+		if w := lipgloss.Width(opt.Display); w > maxLabelW {
+			maxLabelW = w
 		}
-		if i < m.offset {
-			offsetRows += r
-		}
-		totalRows += r
+	}
+	// Cap so label+gap+value fits within maxItemW
+	if maxLabelW > maxItemW-4 {
+		maxLabelW = maxItemW - 4
 	}
 
-	var listLines []string
-	rowBudget := m.maxVis // m.maxVis is a row budget, not an item count
-	for i := m.offset; i < len(m.opts) && rowBudget > 0; i++ {
-		opt := m.opts[i]
-		itemRows := 1
-		if opt.Value != "" {
-			itemRows = 2
-		}
-		if itemRows > rowBudget {
-			break
-		}
-		rowBudget -= itemRows
+	presetContentRows := m.maxVis
 
+	neutralStyle := lipgloss.NewStyle().Background(bgStyle.GetBackground())
+
+	var listLines []string
+	end := m.offset + presetContentRows
+	if end > len(m.opts) {
+		end = len(m.opts)
+	}
+	for i := m.offset; i < end; i++ {
+		opt := m.opts[i]
 		focused := i == m.cursor && listFocused
 		cursor := " "
 		if focused {
 			cursor = ">"
 		}
-		label := opt.Display
-		if lipgloss.Width(label) > maxItemW {
-			label = tui.TruncateRight(label, maxItemW)
-		}
-		pad := maxItemW - lipgloss.Width(label)
-		if pad < 0 {
-			pad = 0
-		}
-		line := cursor + " " + label + strings.Repeat(" ", pad) + " "
+
+		valStyle := normalValStyle
 		if focused {
-			listLines = append(listLines, tui.MaintainBackground(selectedStyle.Render(line), selectedStyle))
-		} else {
-			listLines = append(listLines, tui.MaintainBackground(normalStyle.Background(bgStyle.GetBackground()).Render(line), bgStyle))
+			valStyle = selectedValStyle
 		}
-		if opt.Value != "" {
-			sl := opt.Value
-			if lipgloss.Width(sl) > maxItemW {
-				sl = tui.TruncateRight(sl, maxItemW)
+
+		label := opt.Display
+		val := opt.Value
+
+		if lipgloss.Width(label) > maxLabelW {
+			label = tui.TruncateRight(label, maxLabelW)
+		}
+		labelW := lipgloss.Width(label)
+		pad := maxLabelW - labelW // pad to align value column
+
+		cursorStr := neutralStyle.Render(cursor + " ")
+		labelStr := tui.RenderHotkeyLabelCtx(label, focused, ctx)
+		paddingStr := neutralStyle.Render(strings.Repeat(" ", pad+2)) // pad + 2-space gap
+
+		if val != "" {
+			valW := lipgloss.Width(val)
+			remaining := maxItemW - maxLabelW - 2
+			if remaining < 0 {
+				remaining = 0
 			}
-			slPad := maxItemW - lipgloss.Width(sl)
-			if slPad < 0 {
-				slPad = 0
+			if valW > remaining {
+				val = tui.TruncateRight(val, remaining)
+				valW = remaining
 			}
-			slLine := "  " + sl + strings.Repeat(" ", slPad) + " "
-			if focused {
-				listLines = append(listLines, tui.MaintainBackground(selectedStyle.Render(slLine), selectedStyle))
-			} else {
-				listLines = append(listLines, tui.MaintainBackground(subLabelStyle.Background(bgStyle.GetBackground()).Render(slLine), bgStyle))
+			trailW := maxItemW + 1 - 2 - maxLabelW - 2 - valW
+			if trailW < 0 {
+				trailW = 0
 			}
+			valStr := valStyle.Render(val)
+			trailStr := neutralStyle.Render(strings.Repeat(" ", trailW))
+			listLines = append(listLines, cursorStr+labelStr+paddingStr+valStr+trailStr)
+		} else {
+			trailW := maxItemW + 1 - 2 - labelW
+			if trailW < 0 {
+				trailW = 0
+			}
+			trailStr := neutralStyle.Render(strings.Repeat(" ", trailW))
+			listLines = append(listLines, cursorStr+labelStr+trailStr)
 		}
 	}
 
 	// Apply scrollbar column (always reserves the gutter, shows track+thumb when enabled+needed).
 	listContent, sbInfo := tui.ApplyScrollbarColumnTracked(
 		strings.Join(listLines, "\n"),
-		totalRows, m.maxVis, offsetRows,
+		totalRows, presetContentRows, offsetRows,
 		tui.IsScrollbarEnabled(), ctx.LineCharacters, ctx,
 	)
 
@@ -581,15 +569,15 @@ func (m *setValueDialogModel) ViewString() string {
 		listTitleTag = "TitleSubMenuFocused"
 	}
 	presetsSection := strings.TrimRight(tui.RenderBorderedBoxCtx(
-		"Preset Values", listContent, sInnerW, 0, listFocused, true, true,
+		"Preset Values", listContent, sInnerW, presetContentRows, listFocused, true, true,
 		ctx.SubmenuTitleAlign, listTitleTag, ctx,
 	), "\n")
 
 	// Replace bottom border with scroll indicator when list overflows.
 	if sbInfo.Needed {
 		scrollPct := 0.0
-		if totalRows > m.maxVis {
-			scrollPct = float64(offsetRows) / float64(totalRows-m.maxVis)
+		if totalRows > presetContentRows {
+			scrollPct = float64(offsetRows) / float64(totalRows-presetContentRows)
 			if scrollPct > 1.0 {
 				scrollPct = 1.0
 			}
@@ -602,24 +590,23 @@ func (m *setValueDialogModel) ViewString() string {
 		}
 	}
 
-	// Render buttons first so we know the actual height (1 flat or 3 bordered).
-	buttonRow := strings.TrimRight(tui.RenderCenteredButtonsCtx(
-		contentW, ctx,
-		tui.ButtonSpec{Text: "Save", Active: m.focus == setValueFocusInput || m.focus == setValueFocusSave},
-		tui.ButtonSpec{Text: "Cancel", Active: m.focus == setValueFocusCancel},
-		tui.ButtonSpec{Text: "Exit", Active: m.focus == setValueFocusExit},
+	// Button row
+	buttonRow := strings.TrimRight(tui.RenderCenteredButtonsCtx(contentW, ctx,
+		tui.ButtonSpec{Text: "Save", Active: m.focus == setValueFocusSave, ZoneID: "Save"},
+		tui.ButtonSpec{Text: "Cancel", Active: m.focus == setValueFocusCancel, ZoneID: "Cancel"},
+		tui.ButtonSpec{Text: "Exit", Active: m.focus == setValueFocusExit, ZoneID: "Exit"},
 	), "\n")
 
-	// Dynamic spacer pushes buttons to the bottom.
-	headingRenderedH := lipgloss.Height(headingText)
-	currentValueSectionH := lipgloss.Height(currentValueSection)
-	presetsSectionH := lipgloss.Height(presetsSection)
+	// Spacer to fill remaining vertical space
+	headingRenderedH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToThemeANSI(headingRaw)))
+	currentValueSectionH := lipgloss.Height(currentValueSection) + 1
+	presetsSectionH := lipgloss.Height(presetsSection) + 1
 	buttonRowH := lipgloss.Height(buttonRow)
 	spacerH := m.height - 2 - headingRenderedH - currentValueSectionH - presetsSectionH - buttonRowH
-	if spacerH < 1 {
-		spacerH = 1
+	if spacerH < 0 {
+		spacerH = 0
 	}
-	spacer := strings.TrimRight(strings.Repeat(bgStyle.Width(contentW).Render("")+"\n", spacerH), "\n")
+	spacer := ctx.Dialog.Width(contentW).Height(spacerH).Render("")
 
 	title := "Set Value: " + m.varName
 	parts := []string{headingText, currentValueSection, presetsSection, spacer, buttonRow}
@@ -649,18 +636,11 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 	// outer border(1) + headingH + "Current Value" section(3) + "Presets" title border(1)
 	listTop := 1 + headingH + 3 + 1
 
-	listH := 0
-	rowBudget := m.maxVis
-	for i := m.offset; i < len(m.opts) && rowBudget > 0; i++ {
-		h := 1
-		if m.opts[i].Value != "" {
-			h = 2
-		}
-		if h > rowBudget {
-			break
-		}
-		rowBudget -= h
-		listH += h
+	// Cover the full preset content area (including blank rows) so clicking
+	// anywhere in the box focuses the list.
+	listH := m.maxVis
+	if listH < 0 {
+		listH = 0
 	}
 
 	// Input hit region: outer_border(1) + headingH + section_top_border(1) = input row Y
@@ -687,6 +667,17 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 		},
 	})
 	m.listAbsTopY = offsetY + listTop
+	// Region covering the entire presets bordered box (title border row + content + bottom border row).
+	// Lower z-order so border/empty-area clicks focus the list without selecting an item.
+	regions = append(regions, tui.HitRegion{
+		ID:     "setvalue_preset_box",
+		X:      offsetX + 1,
+		Y:      offsetY + listTop - 1, // include title border row
+		Width:  contentW + 2,
+		Height: listH + 2, // content + top border + bottom border
+		ZOrder: tui.ZDialog + 5,
+		Label:  "Preset Values",
+	})
 	if listH > 0 {
 		regions = append(regions, tui.HitRegion{
 			ID:     "setvalue_list",
