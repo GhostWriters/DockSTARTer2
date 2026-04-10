@@ -339,7 +339,7 @@ func StartVarEditor(ctx context.Context, appName, varName, file string) error {
 	}}, opts...)
 
 	onSave := func(val string) tea.Cmd {
-		if err := appenv.Set(ctx, varName, val, file); err != nil {
+		if err := appenv.SetLiteral(ctx, varName, val, file); err != nil {
 			logger.Error(ctx, "Failed to set %s: %v", varName, err)
 		}
 		return tea.Quit
