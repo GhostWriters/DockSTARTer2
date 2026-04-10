@@ -373,6 +373,11 @@ func (m *setValueDialogModel) recalc() {
 	if m.maxVis < 2 {
 		m.maxVis = 2
 	}
+	// Re-validate cursor/offset against the new row budget so the scrollbar
+	// thumb is correct immediately after a terminal resize.
+	if len(m.opts) > 0 {
+		m.moveCursor(0)
+	}
 }
 
 func (m *setValueDialogModel) IsMaximized() bool { return true }
