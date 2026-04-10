@@ -32,10 +32,11 @@ type setValueDialogModel struct {
 	height  int
 	focused bool
 
-	varName string
-	appName string
-	appDesc string
-	origVal string // original value at open time (shown in heading)
+	varName  string
+	appName  string
+	appDesc  string
+	filePath string // shown in heading; empty = omit
+	origVal  string // original value at open time (shown in heading)
 
 	input        sinput.Model
 	inputScreenX int // abs screen X of text start; set in GetHitRegions
@@ -56,7 +57,7 @@ type setValueDialogModel struct {
 // In standalone CLI mode, onSave writes the value to the env file and quits;
 // onCancel is tea.Quit so Cancel/Esc exits the TUI instead of returning to a parent screen.
 func newSetValueDialog(
-	varName, appName, appDesc, origVal string,
+	varName, appName, appDesc, filePath, origVal string,
 	opts []appenv.VarOption,
 	onSave func(string) tea.Cmd,
 	onCancel tea.Cmd,
@@ -80,6 +81,7 @@ func newSetValueDialog(
 		varName:  varName,
 		appName:  appName,
 		appDesc:  appDesc,
+		filePath: filePath,
 		origVal:  origVal,
 		input:    sinput.New(ti),
 		opts:     opts,
@@ -385,6 +387,7 @@ func (m *setValueDialogModel) recalc() {
 	headingRaw := FormatMenuHeading(MenuHeadingParams{
 		AppName:        m.appName,
 		AppDescription: m.appDesc,
+		FilePath:       m.filePath,
 		VarName:        m.varName,
 		OriginalValue:  m.origVal,
 		CurrentValue:   m.input.Value(),
@@ -467,6 +470,7 @@ func (m *setValueDialogModel) ViewString() string {
 	headingRaw := FormatMenuHeading(MenuHeadingParams{
 		AppName:        m.appName,
 		AppDescription: m.appDesc,
+		FilePath:       m.filePath,
 		VarName:        m.varName,
 		OriginalValue:  m.origVal,
 		CurrentValue:   m.input.Value(),
@@ -638,6 +642,7 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 
 	headingRaw := FormatMenuHeading(MenuHeadingParams{
 		AppName: m.appName, AppDescription: m.appDesc,
+		FilePath: m.filePath,
 		VarName: m.varName, OriginalValue: m.origVal, CurrentValue: m.input.Value(),
 	}, contentW)
 	headingH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToThemeANSI(headingRaw)))
