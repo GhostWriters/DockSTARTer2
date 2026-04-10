@@ -24,6 +24,14 @@ import (
 	composev5 "github.com/docker/compose/v5/pkg/compose"
 )
 
+// setPullPolicy sets the pull policy on all services in the project.
+func setPullPolicy(project *types.Project, policy string) {
+	for name, svc := range project.Services {
+		svc.PullPolicy = policy
+		project.Services[name] = svc
+	}
+}
+
 // ExecuteCompose executes Docker Compose commands
 func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, appNames ...string) error {
 	conf := config.LoadAppConfig()
@@ -319,31 +327,25 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 		}
 		return srv.UnPause(ctx, project.Name, unpauseOpts)
 	case "update":
-		// Pull first, then up
-		logRunning("pull", "--include-deps")
-		if err := srv.Pull(ctx, project, api.PullOptions{}); err != nil {
-			return err
-		}
-		logRunning("up", "-d", "--remove-orphans")
+		logRunning("up", "-d", "--remove-orphans", "--pull", "always")
+		setPullPolicy(project, types.PullPolicyAlways)
 		return srv.Up(ctx, project, api.UpOptions{
-			Create: api.CreateOptions{
-				RemoveOrphans: true,
-			},
-			Start: api.StartOptions{
-				Attach:  nil,
-				Project: project,
-			},
+			Create: api.CreateOptions{RemoveOrphans: true},
+			Start:  api.StartOptions{Attach: nil, Project: project},
 		})
-	default: // "up" and unknown commands
-		logRunning("up", "-d", "--remove-orphans")
+	case "up":
+		logRunning("up", "-d", "--remove-orphans", "--pull", "missing")
+		setPullPolicy(project, types.PullPolicyMissing)
 		return srv.Up(ctx, project, api.UpOptions{
-			Create: api.CreateOptions{
-				RemoveOrphans: true,
-			},
-			Start: api.StartOptions{
-				Attach:  nil,
-				Project: project,
-			},
+			Create: api.CreateOptions{RemoveOrphans: true},
+			Start:  api.StartOptions{Attach: nil, Project: project},
+		})
+	default: // unknown commands
+		logRunning("up", "-d", "--remove-orphans", "--pull", "always")
+		setPullPolicy(project, types.PullPolicyAlways)
+		return srv.Up(ctx, project, api.UpOptions{
+			Create: api.CreateOptions{RemoveOrphans: true},
+			Start:  api.StartOptions{Attach: nil, Project: project},
 		})
 	}
 }
