@@ -231,11 +231,6 @@ func (l Layout) DialogContentHeight(dialogH int, headerHeight int, hasButtons bo
 	if hasButtons {
 		overhead += l.ButtonHeight
 	}
-	if hasShadow {
-		// NOTE: Shadow height is NOT subtracted here because the total height
-		// provided (dialogH) from ContentArea already excludes it to reserve space.
-		// If we subtract it again, the dialog will be too short.
-	}
 
 	h := dialogH - overhead
 

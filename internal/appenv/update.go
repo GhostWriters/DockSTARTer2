@@ -46,7 +46,9 @@ func Update(ctx context.Context, force bool, file string) error {
 		// a) Format global section (Parity lines 38-45)
 		globalVars := AppVarsLines("", allLines)
 		tmpGlobalFile, _ := os.CreateTemp("", "ds2.global.*.tmp")
-		os.WriteFile(tmpGlobalFile.Name(), []byte(strings.Join(globalVars, "\n")), 0644)
+		if err := os.WriteFile(tmpGlobalFile.Name(), []byte(strings.Join(globalVars, "\n")), 0644); err != nil {
+			return err
+		}
 		defer os.Remove(tmpGlobalFile.Name())
 
 		defaultEnvFile := filepath.Join(configDir, constants.EnvExampleFileName)
@@ -59,7 +61,9 @@ func Update(ctx context.Context, force bool, file string) error {
 		for _, appName := range appList {
 			appVars := AppVarsLines(appName, allLines)
 			tmpAppFile, _ := os.CreateTemp("", "ds2.app_main.*.tmp")
-			os.WriteFile(tmpAppFile.Name(), []byte(strings.Join(appVars, "\n")), 0644)
+			if err := os.WriteFile(tmpAppFile.Name(), []byte(strings.Join(appVars, "\n")), 0644); err != nil {
+				return err
+			}
 			defer os.Remove(tmpAppFile.Name())
 
 			// App default file for main .env section — only for non-user-defined apps (Parity lines 51-53)
@@ -113,7 +117,9 @@ func Update(ctx context.Context, force bool, file string) error {
 
 				// Parity lines 103-116: uses temp file and copies
 				tmpFile, _ := os.CreateTemp("", "ds2.app_env.*.tmp")
-				os.WriteFile(tmpFile.Name(), []byte(finalAppContent), 0644)
+				if err := os.WriteFile(tmpFile.Name(), []byte(finalAppContent), 0644); err != nil {
+					return err
+				}
 				tmpFile.Close()
 				defer os.Remove(tmpFile.Name())
 

@@ -21,7 +21,9 @@ func TestConfigMigration(t *testing.T) {
 
 	// 1. Create a legacy .ini file
 	configDir := filepath.Join(tempDir, "dockstarter2")
-	os.MkdirAll(configDir, 0755)
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	// We need to override paths.GetConfigDir() logic partially or just place it where paths thinks it should be.
 	// paths.GetConfigFilePath() uses xdg.ConfigHome. We might need to override that too if possible,

@@ -752,7 +752,6 @@ func (m *MenuModel) calculateLayout() {
 	if m.showButtons && buttonHeight == DialogButtonHeight && maxListHeight <= 2 {
 		freed := DialogButtonHeight - 1 // reclaim 2 lines
 		buttonHeight = 1
-		buttonBudget = 1
 		maxListHeight += freed
 		overhead -= freed
 	}

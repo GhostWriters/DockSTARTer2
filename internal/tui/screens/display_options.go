@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 )
 
 // DisplayOptionsFocus defines which area of the screen has focus
@@ -644,7 +643,7 @@ func (s *DisplayOptionsScreen) handleApply() tea.Cmd {
 		}
 
 		// 2. Save Config
-		config.SaveAppConfig(s.config)
+		_ = config.SaveAppConfig(s.config)
 
 		// 3. Trigger synchronized style update
 		return tui.ConfigChangedMsg{Config: s.config}
@@ -655,23 +654,3 @@ func (s *DisplayOptionsScreen) Init() tea.Cmd {
 	return tea.Batch(s.themeMenu.Init(), s.optionsMenu.Init())
 }
 
-func (s *DisplayOptionsScreen) getLiveContext() tui.StyleContext {
-	ctx := tui.GetActiveContext()
-	ctx.LineCharacters = s.config.UI.LineCharacters
-	ctx.DrawBorders = s.config.UI.Borders
-	ctx.ButtonBorders = s.config.UI.ButtonBorders
-	ctx.DrawShadow = s.config.UI.Shadow
-	ctx.ShadowLevel = s.config.UI.ShadowLevel
-	ctx.DialogTitleAlign = s.config.UI.DialogTitleAlign
-	ctx.SubmenuTitleAlign = s.config.UI.SubmenuTitleAlign
-	ctx.LogTitleAlign = s.config.UI.LogTitleAlign
-
-	// Re-evaluate border style if LineCharacters changed
-	if ctx.LineCharacters {
-		ctx.Border = lipgloss.RoundedBorder()
-	} else {
-		ctx.Border = tui.AsciiBorder
-	}
-
-	return ctx
-}

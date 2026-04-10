@@ -13,10 +13,7 @@ func Recover(ctx context.Context) {
 	if r := recover(); r != nil {
 		// Suppress further panics during recovery
 		defer func() {
-			if recover() != nil {
-				// If we panic again during recovery, just exit
-				// This prevents infinite loops
-			}
+			_ = recover()
 		}()
 
 		// Restore terminal if TUI was running
@@ -47,7 +44,7 @@ func RecoverTUI(ctx context.Context, cmd tea.Cmd) tea.Cmd {
 		defer func() {
 			if r := recover(); r != nil {
 				// Suppress further panics during recovery
-				defer func() { recover() }()
+				defer func() { _ = recover() }()
 
 				// Restore terminal and log the panic
 				if console.TUIShutdown != nil {

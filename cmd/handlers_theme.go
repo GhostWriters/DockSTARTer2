@@ -78,12 +78,13 @@ func handleTheme(ctx context.Context, group *CommandGroup) error {
 			if len(changes) > 0 {
 				var lines []string
 				for k, v := range changes {
-					status := v
-					if v == "true" {
+					var status string
+					switch v {
+					case "true":
 						status = "{{|Var|}}ON{{[-]}}"
-					} else if v == "false" {
+					case "false":
 						status = "{{|Var|}}OFF{{[-]}}"
-					} else {
+					default:
 						status = fmt.Sprintf("{{|Var|}}%s{{[-]}}", v)
 					}
 					lines = append(lines, fmt.Sprintf("\t- %s: %s", k, status))

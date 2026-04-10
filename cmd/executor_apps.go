@@ -127,9 +127,10 @@ func handleStatusChange(ctx context.Context, group *CommandGroup) error {
 	}
 
 	var err error
-	if group.Command == "--status-enable" {
+	switch group.Command {
+	case "--status-enable":
 		err = appenv.Enable(ctx, group.Args, conf)
-	} else if group.Command == "--status-disable" {
+	case "--status-disable":
 		err = appenv.Disable(ctx, group.Args, conf)
 	}
 

@@ -254,17 +254,29 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 			}
 
 			listWheel := LayerWheelMsg{ID: IDListPanel, Button: wheelMsg.Button, Hit: hit}
-			var cmd tea.Cmd
+			var listCmd tea.Cmd
 			if m.dialog != nil {
-				m.dialog, cmd = m.dialog.Update(listWheel)
+				m.dialog, listCmd = m.dialog.Update(listWheel)
 			} else if m.activeScreen != nil {
 				updated, sCmd := m.activeScreen.Update(listWheel)
 				if s, ok := updated.(ScreenModel); ok {
 					m.activeScreen = s
 				}
-				cmd = sCmd
-				return m, cmd, true
+				listCmd = sCmd
 			}
+
+			// For the wheel event itself, forward it too
+			var scrollCmd tea.Cmd
+			if m.dialog != nil {
+				m.dialog, scrollCmd = m.dialog.Update(msg)
+			} else if m.activeScreen != nil {
+				updated, sCmd := m.activeScreen.Update(msg)
+				if s, ok := updated.(ScreenModel); ok {
+					m.activeScreen = s
+				}
+				scrollCmd = sCmd
+			}
+			return m, tea.Batch(listCmd, scrollCmd), true
 		}
 
 		// For other panels (submenus, button row), switch focus to the hovered panel first
@@ -368,6 +380,7 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 			var btnCmd tea.Cmd
 			if m.dialog != nil {
 				m.dialog, btnCmd = m.dialog.Update(layerMsg)
+				return m, btnCmd, true
 			} else if m.activeScreen != nil {
 				updated, sCmd := m.activeScreen.Update(layerMsg)
 				if s, ok := updated.(ScreenModel); ok {

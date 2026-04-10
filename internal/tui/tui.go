@@ -28,8 +28,6 @@ var (
 	// currentConfig holds the loaded app configuration
 	currentConfig config.AppConfig
 
-	// confirmResult is used for synchronous confirmation dialogs
-	confirmResult chan bool
 
 	// CurrentPageName tracks the active menu page for re-execution
 	CurrentPageName string

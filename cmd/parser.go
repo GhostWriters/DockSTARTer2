@@ -268,7 +268,7 @@ func Parse(args []string) ([]CommandGroup, error) {
 					"config-app-select": true, "app-select": true, "select": true,
 				}
 				bare := strings.TrimPrefix(sub, "start-")
-				if !validSubs[sub] && !(strings.HasPrefix(sub, "start-") && validSubs[bare]) {
+				if !validSubs[sub] && (!strings.HasPrefix(sub, "start-") || !validSubs[bare]) {
 					return nil, &ParseError{Args: expandedArgs, Index: i, FailingCommand: cmd, Message: "Invalid option %o"}
 				}
 				currentGroup.Args = append(currentGroup.Args, sub)

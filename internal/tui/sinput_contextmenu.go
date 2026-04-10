@@ -21,7 +21,7 @@ func ShowInputContextMenu(input sinput.Model, x, y, screenW, screenH int) tea.Cm
 
 func buildInputContextMenuItems(input sinput.Model) []ContextMenuItem {
 	sel := input.SelectedText()
-	hasValue := input.Model.Value() != ""
+	hasValue := input.Value() != ""
 	hasClip := false
 	if clip, err := clipboard.ReadAll(); err == nil && clip != "" {
 		hasClip = true
@@ -35,9 +35,9 @@ func buildInputContextMenuItems(input sinput.Model) []ContextMenuItem {
 		copyHelp = "Copy selected text to clipboard."
 	}
 
-	header := strings.TrimSpace(input.Model.Prompt)
+	header := strings.TrimSpace(input.Prompt)
 	if header == "" || header == ">" || header == ":" {
-		header = strings.TrimSpace(input.Model.Placeholder)
+		header = strings.TrimSpace(input.Placeholder)
 	}
 	if header == "" {
 		header = "Input"
@@ -56,7 +56,7 @@ func buildInputContextMenuItems(input sinput.Model) []ContextMenuItem {
 			Action: func() tea.Msg {
 				text := sel
 				if text == "" {
-					text = input.Model.Value()
+					text = input.Value()
 				}
 				_ = clipboard.WriteAll(text)
 				return CloseDialogMsg{}

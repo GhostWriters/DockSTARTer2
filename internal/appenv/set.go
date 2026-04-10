@@ -82,7 +82,7 @@ func writeLines(ctx context.Context, lines []string, file string) error {
 	writer := bufio.NewWriter(f)
 
 	for _, line := range lines {
-		writer.WriteString(line + "\n")
+		_, _ = writer.WriteString(line + "\n")
 	}
 	if err := writer.Flush(); err != nil {
 		return err

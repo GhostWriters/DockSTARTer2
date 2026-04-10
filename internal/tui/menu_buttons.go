@@ -86,58 +86,6 @@ func (m *MenuModel) renderSimpleButtons(contentWidth int) string {
 	return renderCenteredButtonsImpl(contentWidth, useBorders, GetActiveContext(), specs...)
 }
 
-func (m *MenuModel) renderButtons(contentWidth int) string {
-	styles := GetStyles()
-
-	// Select button
-	selectStyle := styles.ButtonInactive
-	if m.focusedItem == FocusSelectBtn {
-		selectStyle = styles.ButtonActive
-	}
-	selectBtn := selectStyle.Render("<Select>")
-
-	// Back button (optional)
-	var backBtn string
-	if m.backAction != nil {
-		backStyle := styles.ButtonInactive
-		if m.focusedItem == FocusBackBtn {
-			backStyle = styles.ButtonActive
-		}
-		backBtn = backStyle.Render("<Back>")
-	}
-
-	// Exit button
-	exitStyle := styles.ButtonInactive
-	if m.focusedItem == FocusExitBtn {
-		exitStyle = styles.ButtonActive
-	}
-	exitBtn := exitStyle.Render("<Exit>")
-
-	// Collect all buttons
-	var buttonStrs []string
-	buttonStrs = append(buttonStrs, selectBtn)
-	if m.backAction != nil {
-		buttonStrs = append(buttonStrs, backBtn)
-	}
-	buttonStrs = append(buttonStrs, exitBtn)
-
-	// Divide available width into equal sections (one per button)
-	numButtons := len(buttonStrs)
-	sectionWidth := contentWidth / numButtons
-
-	// Center each button in its section
-	var sections []string
-	for _, btn := range buttonStrs {
-		centeredBtn := lipgloss.NewStyle().
-			Width(sectionWidth).
-			Align(lipgloss.Center).
-			Background(styles.Dialog.GetBackground()).
-			Render(btn)
-		sections = append(sections, centeredBtn)
-	}
-
-	return lipgloss.JoinHorizontal(lipgloss.Top, sections...)
-}
 
 func (m *MenuModel) renderButtonBox(buttons string, contentWidth int) string {
 	styles := GetStyles()

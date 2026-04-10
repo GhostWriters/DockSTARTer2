@@ -228,36 +228,36 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 	return RenderBorderedBoxCtx(m.title, content, contentWidth, targetHeight, focused, true, rounded, align, titleTag, ctx)
 }
 
-func (s *MenuModel) viewSubMenu() string {
+func (m *MenuModel) viewSubMenu() string {
 	styles := GetStyles()
 	layout := GetLayout()
 
 	// The target outer dimensions
-	contentWidth := s.width - layout.BorderWidth()
+	contentWidth := m.width - layout.BorderWidth()
 
 	// 1. Render Subtitle
 	var subtitleView string
-	if s.subtitle != "" {
+	if m.subtitle != "" {
 		subtitleStyle := styles.Dialog.
 			Width(contentWidth).
 			Padding(0, layout.ContentSideMargin). // matches internal padding
 			Align(lipgloss.Left).
 			Border(lipgloss.Border{})
 
-		subStr := RenderThemeText(s.subtitle, subtitleStyle)
+		subStr := RenderThemeText(m.subtitle, subtitleStyle)
 		subtitleView = subtitleStyle.Render(subStr)
 	}
 
 	// 2. Render List
 	ctx := GetActiveContext()
 	var content string
-	if s.flowMode {
-		content = s.renderFlow()
+	if m.flowMode {
+		content = m.renderFlow()
 	} else {
-		if s.variableHeight {
-			content = s.renderVariableHeightList()
+		if m.variableHeight {
+			content = m.renderVariableHeightList()
 		} else {
-			content = MaintainBackground(s.list.View(), styles.Dialog)
+			content = MaintainBackground(m.list.View(), styles.Dialog)
 		}
 
 		// Ensure content is exactly ViewportHeight lines before applying the scrollbar,
@@ -265,26 +265,26 @@ func (s *MenuModel) viewSubMenu() string {
 		// strips one trailing \n before splitting, so we add it back here unconditionally.
 		content = strings.TrimSuffix(content, "\n")
 		h := strings.Count(content, "\n") + 1
-		if h < s.layout.ViewportHeight {
-			content += strings.Repeat("\n", s.layout.ViewportHeight-h)
+		if h < m.layout.ViewportHeight {
+			content += strings.Repeat("\n", m.layout.ViewportHeight-h)
 		}
 
 		// Apply scrollbar using the accurate viewport offset (viewStartY)
-		visibleHeight := s.layout.ViewportHeight
-		offset := s.list.Index()
-		total := len(s.items)
-		if s.variableHeight {
-			total = s.lastScrollTotal
-			offset = s.viewStartY
+		visibleHeight := m.layout.ViewportHeight
+		offset := m.list.Index()
+		total := len(m.items)
+		if m.variableHeight {
+			total = m.lastScrollTotal
+			offset = m.viewStartY
 		}
-		content, s.sbInfo = ApplyScrollbarColumnTracked(content, total, visibleHeight, offset, currentConfig.UI.Scrollbar, ctx.LineCharacters, ctx)
+		content, m.sbInfo = ApplyScrollbarColumnTracked(content, total, visibleHeight, offset, currentConfig.UI.Scrollbar, ctx.LineCharacters, ctx)
 	}
 
 	// 3. Render Buttons (if any)
 	var buttonView string
-	buttons := s.getButtonSpecs()
+	buttons := m.getButtonSpecs()
 	if len(buttons) > 0 {
-		useBorders := s.layout.ButtonHeight == DialogButtonHeight
+		useBorders := m.layout.ButtonHeight == DialogButtonHeight
 		buttonView = renderCenteredButtonsImpl(contentWidth, useBorders, GetActiveContext(), buttons...)
 	}
 
@@ -303,17 +303,17 @@ func (s *MenuModel) viewSubMenu() string {
 	// We pass 'true' for rounded so submenus use the rounded corner style.
 	// We calculate targetHeight based on actual content to avoid trailing blank lines.
 	targetHeight := lipgloss.Height(combined) + 2
-	if s.maximized {
-		targetHeight = s.height
-	} else if targetHeight > s.height {
-		targetHeight = s.height
+	if m.maximized {
+		targetHeight = m.height
+	} else if targetHeight > m.height {
+		targetHeight = m.height
 	}
-	result := s.renderBorderWithTitle(combined, contentWidth, targetHeight, s.focusedSub, true, "Title")
+	result := m.renderBorderWithTitle(combined, contentWidth, targetHeight, m.focusedSub, true, "Title")
 
 	// Replace bottom border with scroll-percent variant when content overflows.
-	if !s.flowMode && s.sbInfo.Needed {
+	if !m.flowMode && m.sbInfo.Needed {
 		if lastNL := strings.LastIndex(result, "\n"); lastNL >= 0 {
-			bottomLine := BuildScrollPercentBottomBorder(s.width, s.listScrollPercent(), s.focusedSub, ctx)
+			bottomLine := BuildScrollPercentBottomBorder(m.width, m.listScrollPercent(), m.focusedSub, ctx)
 			result = result[:lastNL+1] + bottomLine
 		}
 	}

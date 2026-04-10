@@ -13,7 +13,9 @@ func TestListReferencedApps_Comments(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	envFile := filepath.Join(tmpDir, ".env")
-	os.WriteFile(envFile, []byte(""), 0644)
+	if err := os.WriteFile(envFile, []byte(""), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	// Override file with mixed content
 	overrideContent := `version: "3.7"
@@ -65,7 +67,9 @@ func TestListReferencedApps_InvalidYAML(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	envFile := filepath.Join(tmpDir, ".env")
-	os.WriteFile(envFile, []byte(""), 0644)
+	if err := os.WriteFile(envFile, []byte(""), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	// Invalid YAML content (tab indentation is illegal in YAML, or just garbage)
 	overrideContent := `version: "3.7"

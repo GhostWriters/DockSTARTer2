@@ -1,9 +1,7 @@
 package tui
 
-const (
-	// vs15 (U+FE0E) forces the preceding character to be monochrome text style.
-	vs15 = "\uFE0E"
 
+const (
 	// radioSelected (◉) - Fisheye (U+25C9)
 	radioSelected = "\u25C9"
 	// radioUnselected (○) - White Circle (U+25CB)
@@ -25,8 +23,4 @@ const (
 	checkUnselectedAscii = "[ ] "
 	invalidMarker        = "!"
 	invalidMarkerAscii   = "!"
-
-	// Enabled/Disabled gutter markers (second gutter column in app-selection)
-	gutterEnabled  = "E"
-	gutterDisabled = "D"
 )

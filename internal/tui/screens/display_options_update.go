@@ -345,7 +345,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// InitStyles (triggered by AppModel) clears the full semantic cache including "Preview_*"
 		// styles. Re-establish the preview namespace so the mockup renders correctly.
 		if s.previewTheme != "" {
-			theme.Load(s.previewTheme, "Preview")
+			_, _ = theme.Load(s.previewTheme, "Preview")
 			tui.ClearSemanticCachePrefix("Preview_")
 		}
 		if s.outerMenu != nil {

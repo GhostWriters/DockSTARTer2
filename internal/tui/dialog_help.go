@@ -220,7 +220,7 @@ func (m *HelpDialogModel) ViewString() string {
 	// Calculate target width for help content.
 	// We want a consistent width for the help panels relative to the screen.
 	availW, availH := GetAvailableDialogSize(m.width, m.height)
-	
+
 	// Ensure at least some minimal room
 	if availW < 30 {
 		availW = 30
@@ -381,7 +381,7 @@ func (m *HelpDialogModel) ViewString() string {
 	// showContext: always shown unless context is paged and we're on a bindings page.
 	showContext := !m.paged || (contextPaged && m.page == 0) || !contextPaged
 	// showBindings: shown on all pages except the context-only page 0.
-	showBindings := !m.paged || !(contextPaged && m.page == 0)
+	showBindings := !m.paged || (!contextPaged || m.page != 0)
 
 	// Which binding page to render.
 	bindingPageIdx := m.page
@@ -631,16 +631,16 @@ func (m *HelpDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	// Help dialog has a halo (2) and a border (2).
 	// Content area starts at offsetX + 2, offsetY + 2.
 	// We'll use the full width and height for hit testing.
-	
+
 	// Re-calculate height since HelpDialog is content-driven
 	h := lipgloss.Height(m.ViewString())
 
 	var regions []HitRegion
-	
+
 	// Close button (anywhere in the dialog for now, or maybe specifically at the bottom)
 	// For help dialog, we usually close on any click, but let's be more specific.
 	// Let's add an "OK" or "Close" label hit region at the bottom.
-	
+
 	regions = append(regions, HitRegion{
 		ID:     "help_dialog",
 		X:      offsetX,
@@ -650,7 +650,7 @@ func (m *HelpDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		ZOrder: ZScreen + 1,
 		Label:  "Help",
 	})
-	
+
 	return regions
 }
 

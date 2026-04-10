@@ -536,9 +536,6 @@ func (m *ContextMenuModel) visibleItems() []ContextMenuItem {
 	return m.items[m.offset:end]
 }
 
-func (m *ContextMenuModel) visibleCount() int {
-	return len(m.visibleItems())
-}
 
 // parseIntSafe parses an integer string, returning -1 on failure.
 func parseIntSafe(s string) int {

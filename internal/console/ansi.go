@@ -150,14 +150,6 @@ func StripANSI(text string) string {
 	return ansiRegex.ReplaceAllString(text, "")
 }
 
-// resolveTaggedStyleToANSI converts a standardized tag like "{{[cyan::B]}}" to ANSI codes
-func resolveTaggedStyleToANSI(tag string) string {
-	content := tag
-	if strings.HasPrefix(tag, DirectPrefix) && strings.HasSuffix(tag, DirectSuffix) {
-		content = tag[len(DirectPrefix) : len(tag)-len(DirectSuffix)]
-	}
-	return parseStyleCodeToANSI(content)
-}
 
 // getBrightVariant attempts to get the bright variant of a color name
 func getBrightVariant(name string) (string, bool) {
