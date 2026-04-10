@@ -630,6 +630,23 @@ func (m *MenuModel) SetSize(width, height int) {
 	} else {
 		m.calculateLayout()
 	}
+
+	// After layout recalculation, clamp viewStartY so the scrollbar thumb
+	// renders at the correct position immediately on resize (before the next
+	// Update call would otherwise correct it). Variable-height lists clamp
+	// inside renderVariableHeightList, so only standard lists need this here.
+	if !m.variableHeight && m.layout.ViewportHeight > 0 {
+		maxOff := len(m.items) - m.layout.ViewportHeight
+		if maxOff < 0 {
+			maxOff = 0
+		}
+		if m.viewStartY > maxOff {
+			m.viewStartY = maxOff
+		}
+		if m.viewStartY < 0 {
+			m.viewStartY = 0
+		}
+	}
 }
 
 // Width returns the menu's width
