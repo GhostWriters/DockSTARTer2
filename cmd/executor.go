@@ -214,6 +214,9 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			case "--edit-global", "--start-edit-global", "--edit-app", "--start-edit-app":
 				ranCommand = true
 				return handleEditVars(subCtx, &group)
+			case "--env-edit", "--env-edit-lower":
+				ranCommand = true
+				return handleEnvEdit(subCtx, &group)
 			case "-M", "--menu":
 				ranCommand = true
 				return handleMenu(subCtx, &group)
