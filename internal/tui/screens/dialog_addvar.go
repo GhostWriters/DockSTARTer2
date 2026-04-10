@@ -3,6 +3,8 @@ package screens
 import (
 	"strings"
 
+	"DockSTARTer2/internal/strutil"
+
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/tui/components/sinput"
@@ -668,7 +670,7 @@ func (m *addVarDialogModel) ViewString() string {
 	if spacerH < 1 {
 		spacerH = 1
 	}
-	spacer := strings.TrimRight(strings.Repeat(bgStyle.Width(contentW).Render("")+"\n", spacerH), "\n")
+	spacer := strings.TrimRight(strutil.Repeat(bgStyle.Width(contentW).Render("")+"\n", spacerH), "\n")
 
 	parts := []string{headingText, varNameSection, availableSection, spacer, buttonRow}
 	return tui.RenderDialogWithType("Add Variable", lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused, m.height, tui.DialogTypeInfo)

@@ -569,7 +569,7 @@ func (m *setValueDialogModel) ViewString() string {
 		listTitleTag = "TitleSubMenuFocused"
 	}
 	presetsSection := strings.TrimRight(tui.RenderBorderedBoxCtx(
-		"Preset Values", listContent, sInnerW, presetContentRows, listFocused, true, true,
+		"Preset Values", listContent, sInnerW, presetContentRows+2, listFocused, true, true,
 		ctx.SubmenuTitleAlign, listTitleTag, ctx,
 	), "\n")
 
@@ -597,19 +597,13 @@ func (m *setValueDialogModel) ViewString() string {
 		tui.ButtonSpec{Text: "Exit", Active: m.focus == setValueFocusExit, ZoneID: "Exit"},
 	), "\n")
 
-	// Spacer to fill remaining vertical space
-	headingRenderedH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToThemeANSI(headingRaw)))
-	currentValueSectionH := lipgloss.Height(currentValueSection) + 1
-	presetsSectionH := lipgloss.Height(presetsSection) + 1
-	buttonRowH := lipgloss.Height(buttonRow)
-	spacerH := m.height - 2 - headingRenderedH - currentValueSectionH - presetsSectionH - buttonRowH
-	if spacerH < 0 {
-		spacerH = 0
-	}
-	spacer := ctx.Dialog.Width(contentW).Height(spacerH).Render("")
-
+	// Fill pre-button content to exactly (m.height - 2 - buttonRowH) lines so that
+	// buttons land flush at the bottom with no gap above or below them.
+	// This mirrors MenuModel's height-budget approach: Height() pads the content area,
+	// then the button row is appended, giving renderDialogWithBorderCtx exactly the
+	// right number of lines and no extra padding to add.
 	title := "Set Value: " + m.varName
-	parts := []string{headingText, currentValueSection, presetsSection, spacer, buttonRow}
+	parts := []string{headingText, currentValueSection, presetsSection, buttonRow}
 	return tui.RenderDialogWithType(title, lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused, m.height, tui.DialogTypeInfo)
 }
 
