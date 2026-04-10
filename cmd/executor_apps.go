@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/config"
@@ -98,6 +99,15 @@ func handleEditVars(ctx context.Context, group *CommandGroup) error {
 		if len(group.Args) > 0 {
 			appName = group.Args[0]
 		}
+	}
+	if appName != "" {
+		upper := strings.ToUpper(appName)
+		conf := config.LoadAppConfig()
+		if !appenv.IsAppReferenced(ctx, upper, conf) {
+			logger.Warn(ctx, "Application '{{|App|}}%s{{[-]}}' is not installed.", upper)
+			return fmt.Errorf("application not installed: %s", upper)
+		}
+		appName = upper
 	}
 	isRoot := group.Command == "--edit-global" || group.Command == "--edit-app"
 	if err := tui.StartEditor(ctx, appName, isRoot); err != nil {

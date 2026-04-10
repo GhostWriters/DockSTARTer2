@@ -177,16 +177,30 @@ func handleAppVarsCreate(ctx context.Context, group *CommandGroup, state *CmdSta
 		logger.Debug(ctx, "Ensure env file error: %v", err)
 	}
 
+	// Validate all apps upfront — warn once per unknown app and skip it.
+	var validArgs []string
+	for _, arg := range group.Args {
+		upper := strings.ToUpper(strings.TrimSpace(arg))
+		if !appenv.IsAppBuiltIn(upper) {
+			logger.Warn(ctx, "Application '{{|App|}}%s{{[-]}}' does not exist.", appenv.GetNiceName(ctx, upper))
+			continue
+		}
+		validArgs = append(validArgs, arg)
+	}
+	if len(validArgs) == 0 {
+		return nil
+	}
+
 	// Migrate old-style APPNAME_ENABLED vars before creating app vars
 	_ = appenv.MigrateEnabledLines(ctx, conf)
 
 	// Enable the apps first
-	if err := appenv.Enable(ctx, group.Args, conf); err != nil {
+	if err := appenv.Enable(ctx, validArgs, conf); err != nil {
 		logger.Error(ctx, "Failed to enable apps: %v", err)
 		return err
 	}
 
-	for _, arg := range group.Args {
+	for _, arg := range validArgs {
 		if err := appenv.CreateApp(ctx, arg, state.Force, conf); err != nil {
 			logger.Error(ctx, "%v", err)
 			return err
