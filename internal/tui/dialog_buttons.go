@@ -57,61 +57,29 @@ func GetButtonHitRegions(hCtx HelpContext, dialogID string, offsetX, offsetY, co
 		return nil
 	}
 
-	// Measure the exact rendered button width by using the same render path
-	// as RenderCenteredButtonsCtx, so hit regions match visually precisely.
-	ctx := GetActiveContext()
-	maxButtonWidth := 0
-	for _, btn := range buttons {
-		width := lipgloss.Width(btn.Text)
-		if width > maxButtonWidth {
-			maxButtonWidth = width
-		}
-	}
-	useBorders := buttonsFitWithBorders(contentWidth, ctx, buttons)
-	var buttonWidth int
-	if useBorders {
-		buttonContentWidth := maxButtonWidth + 4
-		sampleStyle := ctx.ButtonInactive.Width(buttonContentWidth).Align(lipgloss.Center)
-		sampleStyle = ApplyInnerBorderCtx(sampleStyle, false, ctx)
-		buttonWidth = lipgloss.Width(sampleStyle.Render(strings.Repeat("x", maxButtonWidth)))
-	} else {
-		buttonWidth = maxButtonWidth + 2 // "< label >" with interior padding
-	}
-	buttonHeight := 1
-	if useBorders {
-		buttonHeight = 3
-	}
+	layout := ComputeButtonLayout(contentWidth, GetActiveContext(), buttons)
 
 	var regions []HitRegion
-	numButtons := len(buttons)
-	sectionWidth := contentWidth / numButtons
-
 	for i, btn := range buttons {
 		if btn.ZoneID == "" {
 			continue
 		}
-		// Prepend dialog ID if provided for disambiguation
 		id := btn.ZoneID
 		if dialogID != "" {
 			id = dialogID + "." + btn.ZoneID
 		}
 
-		// Calculate precise starting X for this section's button
-		// Centering logic: (section_start) + (half of unused space in section)
-		buttonX := offsetX + (i * sectionWidth) + (sectionWidth-buttonWidth)/2
-
-		regions = append(regions, HitRegion{
+		region := HitRegion{
 			ID:     id,
-			X:      buttonX,
+			X:      offsetX + layout.Offsets[i],
 			Y:      offsetY,
-			Width:  buttonWidth,
-			Height: buttonHeight,
+			Width:  layout.ButtonWidth,
+			Height: layout.ButtonHeight,
 			ZOrder: baseZ,
 			Label:  btn.Text,
-		})
-		// If button has help text, add rich HelpContext using hCtx as a template
+		}
 		if btn.Help != "" {
-			regions[len(regions)-1].Help = &HelpContext{
+			region.Help = &HelpContext{
 				ScreenName: hCtx.ScreenName,
 				PageTitle:  hCtx.PageTitle,
 				PageText:   hCtx.PageText,
@@ -119,9 +87,71 @@ func GetButtonHitRegions(hCtx HelpContext, dialogID string, offsetX, offsetY, co
 				ItemText:   btn.Help,
 			}
 		}
+		regions = append(regions, region)
 	}
 
 	return regions
+}
+
+// ButtonLayout holds the pre-computed geometry for a row of buttons.
+// Both the render path and the hit-region path derive from this single value,
+// guaranteeing they can never disagree.
+type ButtonLayout struct {
+	SectionWidth int   // contentWidth / numButtons
+	ButtonWidth  int   // visual width of each button (all buttons are the same width)
+	ButtonHeight int   // 1 (flat) or 3 (bordered)
+	UseBorders   bool
+	// Offsets[i] is the X offset of button i relative to the offsetX passed to the caller.
+	Offsets []int
+}
+
+// ComputeButtonLayout calculates the shared geometry for a button row,
+// auto-detecting whether borders fit within contentWidth.
+// Pass the same contentWidth that will be given to RenderCenteredButtonsCtx /
+// GetButtonHitRegions so that render and hit regions are derived from identical values.
+func ComputeButtonLayout(contentWidth int, ctx StyleContext, buttons []ButtonSpec) ButtonLayout {
+	return computeButtonLayoutExplicit(contentWidth, buttonsFitWithBorders(contentWidth, ctx, buttons), ctx, buttons)
+}
+
+// computeButtonLayoutExplicit is the same as ComputeButtonLayout but accepts an
+// explicit useBorders decision, used when the caller has already determined border
+// suitability from constraints other than width (e.g. available height).
+func computeButtonLayoutExplicit(contentWidth int, useBorders bool, ctx StyleContext, buttons []ButtonSpec) ButtonLayout {
+	if len(buttons) == 0 {
+		return ButtonLayout{}
+	}
+	maxButtonWidth := 0
+	for _, btn := range buttons {
+		if w := lipgloss.Width(btn.Text); w > maxButtonWidth {
+			maxButtonWidth = w
+		}
+	}
+	var buttonWidth int
+	if useBorders {
+		buttonContentWidth := maxButtonWidth + 4
+		sampleStyle := ctx.ButtonInactive.Width(buttonContentWidth).Align(lipgloss.Center)
+		sampleStyle = ApplyInnerBorderCtx(sampleStyle, false, ctx)
+		buttonWidth = lipgloss.Width(sampleStyle.Render(strings.Repeat("x", maxButtonWidth)))
+	} else {
+		buttonWidth = maxButtonWidth + 2 // "< label >"
+	}
+	buttonHeight := 1
+	if useBorders {
+		buttonHeight = 3
+	}
+	numButtons := len(buttons)
+	sectionWidth := contentWidth / numButtons
+	offsets := make([]int, numButtons)
+	for i := range buttons {
+		offsets[i] = i*sectionWidth + (sectionWidth-buttonWidth)/2
+	}
+	return ButtonLayout{
+		SectionWidth: sectionWidth,
+		ButtonWidth:  buttonWidth,
+		ButtonHeight: buttonHeight,
+		UseBorders:   useBorders,
+		Offsets:      offsets,
+	}
 }
 
 // buttonsFitWithBorders returns true if bordered buttons fit within contentWidth
@@ -193,19 +223,16 @@ func renderCenteredButtonsImpl(contentWidth int, useBorders bool, ctx StyleConte
 		return ""
 	}
 
-	// Find the maximum button text width
+	layout := computeButtonLayoutExplicit(contentWidth, useBorders, ctx, buttons)
+
 	maxButtonWidth := 0
 	for _, btn := range buttons {
-		width := lipgloss.Width(btn.Text)
-		if width > maxButtonWidth {
-			maxButtonWidth = width
+		if w := lipgloss.Width(btn.Text); w > maxButtonWidth {
+			maxButtonWidth = w
 		}
 	}
-
-	// buttonContentWidth: bordered buttons use maxWidth + 4 (2 spaces each side inside the box);
-	// flat buttons use maxWidth (brackets are rendered separately in dialog color).
 	buttonContentWidth := maxButtonWidth + 4
-	if !useBorders {
+	if !layout.UseBorders {
 		buttonContentWidth = maxButtonWidth
 	}
 
@@ -219,20 +246,15 @@ func renderCenteredButtonsImpl(contentWidth int, useBorders bool, ctx StyleConte
 		}
 
 		buttonStyle = buttonStyle.Width(buttonContentWidth).Align(lipgloss.Center)
-		if useBorders {
+		if layout.UseBorders {
 			buttonStyle = ApplyInnerBorderCtx(buttonStyle, btn.Active, ctx)
 		}
 
 		renderedLabel := RenderHotkeyLabelCtx(btn.Text, btn.Active, ctx)
 		var rendered string
-		if useBorders {
-			// Border is the visual delimiter; center the hotkey-highlighted text inside the box.
+		if layout.UseBorders {
 			rendered = InjectBorderFlags(buttonStyle.Render(renderedLabel), ctx.BorderFlags, ctx.Border2Flags, true)
 		} else {
-			// Flat: pad label to maxButtonWidth so all buttons are the same inner width —
-			// shorter labels get interior spaces (< Back >, < Exit >) while the longest
-			// fills flush (<Select>). Brackets rendered in dialog color (colors only, no width),
-			// text in button style with MaintainBackground to prevent ANSI bleed from hotkey rendering.
 			bracketStyle := lipgloss.NewStyle().
 				Foreground(ctx.Dialog.GetForeground()).
 				Background(ctx.Dialog.GetBackground())
@@ -240,9 +262,6 @@ func renderCenteredButtonsImpl(contentWidth int, useBorders bool, ctx StyleConte
 			leftPad := pad / 2
 			rightPad := pad - leftPad
 			inner := strings.Repeat(" ", leftPad) + renderedLabel + strings.Repeat(" ", rightPad)
-			// Pass a background-only style to MaintainBackground — the full buttonStyle has
-			// Width+Align set, which causes getANSI() to capture leading padding spaces and
-			// inject them after every reset in the text, producing visible extra spaces.
 			bgStyle := lipgloss.NewStyle().Background(buttonStyle.GetBackground())
 			buttonPart := MaintainBackground(buttonStyle.Render(inner), bgStyle)
 			rendered = bracketStyle.Render("<") + buttonPart + bracketStyle.Render(">")
@@ -250,17 +269,13 @@ func renderCenteredButtonsImpl(contentWidth int, useBorders bool, ctx StyleConte
 		renderedButtons = append(renderedButtons, rendered)
 	}
 
-	numButtons := len(buttons)
-	sectionWidth := contentWidth / numButtons
-
 	var sections []string
 	for _, btn := range renderedButtons {
 		centeredBtn := lipgloss.NewStyle().
-			Width(sectionWidth).
+			Width(layout.SectionWidth).
 			Align(lipgloss.Center).
 			Background(ctx.Dialog.GetBackground()).
 			Render(btn)
-
 		sections = append(sections, centeredBtn)
 	}
 
