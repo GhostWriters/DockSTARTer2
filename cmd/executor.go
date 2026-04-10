@@ -8,6 +8,7 @@ import (
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/tui"
 	_ "DockSTARTer2/internal/tui/screens" // Register screen creators
+	"DockSTARTer2/internal/update"
 	"DockSTARTer2/internal/version"
 	"context"
 	"errors"
@@ -316,6 +317,12 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				}
 				// Logic for non-abort errors if needed, but usually task handles its own logging
 			}
+		}
+
+		// If a re-exec was scheduled (e.g. self-update), stop processing further
+		// groups — they are already included in the re-exec args.
+		if update.PendingReExec != nil {
+			break
 		}
 
 	}
