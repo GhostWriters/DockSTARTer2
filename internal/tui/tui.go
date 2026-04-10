@@ -344,8 +344,16 @@ func resolveMenuTarget(startMenu string) (pageName string, isRoot bool) {
 // reExecMenuArg returns the --menu sub-command value to use when re-executing after a self-update.
 // Root sessions (started with "-M pagename") re-exec to the same plain pagename so they remain
 // root. Non-root sessions use the "start-" prefix so the navigation stack is restored.
+// Pages that are not registered as valid -M targets (e.g. transient dialogs, tabbed editors)
+// fall back to "" so the re-exec lands on the main menu rather than failing to parse.
 func reExecMenuArg() string {
 	if CurrentPageName == "" {
+		return ""
+	}
+	// Only pages that exist in the screen registry are valid -M targets.
+	// Transient screens (e.g. tabbed vars editor) are not registered and would
+	// cause a CLI parse error if passed to -M after re-exec.
+	if _, ok := screenRegistry[CurrentPageName]; !ok {
 		return ""
 	}
 	if isRootSession {
