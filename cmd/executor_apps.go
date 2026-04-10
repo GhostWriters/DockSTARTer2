@@ -92,6 +92,23 @@ func handleMenu(ctx context.Context, group *CommandGroup) error {
 	return nil
 }
 
+func handleEditVars(ctx context.Context, group *CommandGroup) error {
+	appName := ""
+	if group.Command == "--edit-app" || group.Command == "--start-edit-app" {
+		if len(group.Args) > 0 {
+			appName = group.Args[0]
+		}
+	}
+	isRoot := group.Command == "--edit-global" || group.Command == "--edit-app"
+	if err := tui.StartEditor(ctx, appName, isRoot); err != nil {
+		if !errors.Is(err, tui.ErrUserAborted) {
+			logger.Error(ctx, "TUI Error: %v", err)
+		}
+		return err
+	}
+	return nil
+}
+
 func handleAppSelect(ctx context.Context, group *CommandGroup) error {
 	// -S / --select always opens the app selection menu
 	if err := tui.Start(ctx, "app-select"); err != nil {

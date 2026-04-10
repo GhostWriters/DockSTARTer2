@@ -19,6 +19,7 @@ func navigateToConfigMenu() tea.Cmd {
 // navigateToGlobalVarsEditor returns a command to navigate to the global variables editor
 func navigateToGlobalVarsEditor() tea.Cmd {
 	return func() tea.Msg {
+		tui.CurrentEditorApp = ""
 		return tui.NavigateMsg{Screen: NewEnvEditorGlobal(navigateBack())}
 	}
 }
@@ -35,6 +36,7 @@ func navigateToConfigApps() tea.Cmd {
 // and refresh the apps list when returning.
 func navigateToAppConfigEditorWithRefresh(appName string) tea.Cmd {
 	return func() tea.Msg {
+		tui.CurrentEditorApp = appName
 		specs := []EnvTabSpec{
 			{Title: ".env", App: appName, IsGlobal: true},
 			{Title: ".env.app." + strings.ToLower(appName), App: appName, IsGlobal: false},

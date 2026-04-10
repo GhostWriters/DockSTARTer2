@@ -243,7 +243,8 @@ func Parse(args []string) ([]CommandGroup, error) {
 			}
 
 		// Commands that require exactly ONE argument
-		case "-t", "--test", "--config-pm", "--config-folder", "--config-compose-folder", "--theme-border-color":
+		case "-t", "--test", "--config-pm", "--config-folder", "--config-compose-folder", "--theme-border-color",
+			"--edit-app", "--start-edit-app":
 			if i >= len(expandedArgs) || strings.HasPrefix(expandedArgs[i], "-") {
 				return nil, &ParseError{Args: expandedArgs, Index: i - 1, FailingCommand: cmd, Message: fmt.Sprintf("Command %s requires an argument.", cmd)}
 			}
@@ -325,6 +326,7 @@ func Parse(args []string) ([]CommandGroup, error) {
 			"-p", "--prune",
 			"-R", "--reset",
 			"-e", "--env",
+			"--edit-global", "--start-edit-global",
 			"-l", "--list", "--list-added", "--list-builtin", "--list-deprecated", "--list-enabled", "--list-disabled", "--list-nondeprecated", "--list-referenced",
 			"--config-pm-list", "--config-pm-table", "--config-pm-existing-list", "--config-pm-existing-table",
 			"--config-show", "--show-config",

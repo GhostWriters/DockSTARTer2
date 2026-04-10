@@ -1,11 +1,27 @@
 package screens
 
 import (
+	"strings"
+
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/tui"
+
+	tea "charm.land/bubbletea/v2"
 )
 
 func init() {
+	// Register the editor factory so tui.StartEditor can create editor screens
+	// without importing the screens package (which would be circular).
+	tui.RegisterEditorFactory(func(appName string, onClose tea.Cmd) tui.ScreenModel {
+		if appName == "" {
+			return NewEnvEditorGlobal(onClose)
+		}
+		specs := []EnvTabSpec{
+			{Title: ".env", App: appName, IsGlobal: true},
+			{Title: ".env.app." + strings.ToLower(appName), App: appName, IsGlobal: false},
+		}
+		return NewTabbedVarsEditorScreen(onClose, "Configure "+appName, specs)
+	})
 	// Register each screen with its canonical page name, creator, and parent stack.
 	// Parents are ordered outermost-first and define the navigation stack that is
 	// pre-populated when the screen is started via "-M start-<name>".
