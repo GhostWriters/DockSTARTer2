@@ -14,7 +14,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	defer func() {
 		if r := recover(); r != nil {
 			// Suppress further panics during recovery
-			defer func() { recover() }()
+			defer func() { _ = recover() }()
 
 			// Restore terminal
 			Shutdown()

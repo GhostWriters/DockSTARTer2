@@ -89,11 +89,6 @@ type SubDialogResultMsg struct {
 	Result any
 }
 
-// programBoxModel is an alias for backward compatibility
-type programBoxModel = ProgramBoxModel
-
-// autoCloseMsg signals that the auto-close delay is over
-type autoCloseMsg struct{}
 
 // outputLineMsg carries a new line of output
 type outputLineMsg struct {
@@ -242,41 +237,6 @@ func (m *ProgramBoxModel) scrollbarDragTo(mouseY int) bool {
 	return true
 }
 
-// startStreamingOutput reads from the provided reader and sends output lines
-func startStreamingOutput(reader io.Reader) tea.Cmd {
-	return func() tea.Msg {
-		scanner := bufio.NewScanner(reader)
-		for scanner.Scan() {
-			line := scanner.Text()
-			// Send line message immediately
-			// Note: In Bubble Tea, we can't send multiple messages from one Cmd
-			// So we'll batch them or use a different approach
-			return outputLineMsg{line: line}
-		}
-
-		if err := scanner.Err(); err != nil {
-			return outputDoneMsg{err: err}
-		}
-
-		return outputDoneMsg{}
-	}
-}
-
-// streamReader creates a command that continuously reads from the reader
-func (m *programBoxModel) streamReader(reader io.Reader) tea.Cmd {
-	return func() tea.Msg {
-		scanner := bufio.NewScanner(reader)
-		if scanner.Scan() {
-			return outputLineMsg{line: scanner.Text()}
-		}
-
-		if err := scanner.Err(); err != nil {
-			return outputDoneMsg{err: err}
-		}
-
-		return outputDoneMsg{}
-	}
-}
 
 func (m *ProgramBoxModel) Init() tea.Cmd {
 	// If a task function was set (dialog mode), start it now
@@ -357,20 +317,19 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	var subCmd tea.Cmd
 	// Handle sub-dialog updates if active
 	if m.subDialog != nil {
-		var cmd tea.Cmd
-
 		// Special case: WindowSizeMsg goes to both to ensure ProgramBox stays sized correctly
 		if wsm, ok := msg.(tea.WindowSizeMsg); ok {
 			m.width = wsm.Width
 			m.height = wsm.Height
-			m.subDialog, cmd = m.subDialog.Update(msg)
+			m.subDialog, subCmd = m.subDialog.Update(msg)
 			// We fall through to let ProgramBox also handle the resize (viewport mainly)
 		} else {
 			// Exclusive delegations for interaction
-			m.subDialog, cmd = m.subDialog.Update(msg)
-			return m, cmd
+			m.subDialog, subCmd = m.subDialog.Update(msg)
+			return m, subCmd
 		}
 	}
 
@@ -385,7 +344,7 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.calculateLayout()
-		return m, nil
+		return m, subCmd
 
 	case SubDialogMsg:
 		m.subDialog = msg.Model

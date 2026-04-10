@@ -369,8 +369,6 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 				m.SetActiveColumn(tui.ColAdd)
 				if !item.IsGroupHeader {
 					s.toggleItem(idx)
-				} else {
-					// Fallback: headers can be expanded by clicking the add column area too
 				}
 				return nil, true
 			case "enable":

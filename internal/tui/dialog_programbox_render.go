@@ -42,7 +42,6 @@ func (m *ProgramBoxModel) renderHeaderUI(width int) string {
 		if hasPrevious {
 			b.WriteString(spacer + "\n") // Gap after subtitle
 		}
-		hasPrevious = true
 
 		maxLabelLen := 0
 		for _, t := range m.Tasks {
@@ -172,7 +171,6 @@ func (m *ProgramBoxModel) calculateHeaderHeight(width int) int {
 		if hasPrevious {
 			headerHeight++ // Gap after subtitle
 		}
-		hasPrevious = true
 
 		for i, t := range m.Tasks {
 			if i > 0 && t.Label != m.Tasks[i-1].Label {

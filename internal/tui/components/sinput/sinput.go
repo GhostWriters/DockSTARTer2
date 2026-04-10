@@ -111,7 +111,7 @@ func New(ti textinput.Model) Model {
 	// virtual cursor (a character rendered inside the view string).  The
 	// hardware cursor supports shape changes (bar vs block) and doesn't
 	// require a Blink command loop.
-	m.Model.SetVirtualCursor(false)
+	m.SetVirtualCursor(false)
 	return m
 }
 
@@ -121,7 +121,7 @@ func New(ti textinput.Model) Model {
 func (m *Model) SetScreenTextX(x int) { m.screenTextX = x }
 
 // PromptWidth returns the visual width of the prompt string.
-func (m Model) PromptWidth() int { return lipgloss.Width(m.Model.Prompt) }
+func (m Model) PromptWidth() int { return lipgloss.Width(m.Prompt) }
 
 // IsSelecting reports whether a drag-selection is in progress.
 func (m Model) IsSelecting() bool { return m.isSelecting }
@@ -133,11 +133,11 @@ func (m Model) IsOverwrite() bool { return m.Overwrite }
 // rendered textinput view (i.e. after prompt, within the text width).
 // Returns 0 when the input is not focused.
 func (m Model) CursorColumn() int {
-	c := m.Model.Cursor()
+	c := m.Cursor()
 	if c == nil {
 		return 0
 	}
-	return c.Position.X
+	return c.X
 }
 
 // SelectedText returns the currently selected text, or "" if no selection.
@@ -145,7 +145,7 @@ func (m Model) SelectedText() string {
 	if !m.selActive {
 		return ""
 	}
-	value := []rune(m.Model.Value())
+	value := []rune(m.Value())
 	s := clamp(m.selStart, 0, len(value))
 	e := clamp(m.selEnd, 0, len(value))
 	if s >= e {
@@ -157,7 +157,7 @@ func (m Model) SelectedText() string {
 // HandleClick processes a left-click at absolute screen X (absX).
 // Implements multi-click: 1=move cursor, 2=word, 3+=select all.
 func (m *Model) HandleClick(absX int) {
-	value := []rune(m.Model.Value())
+	value := []rune(m.Value())
 	relX := absX - m.screenTextX
 	col := clamp(relX+m.viewOffset, 0, len(value))
 
@@ -180,7 +180,7 @@ func (m *Model) HandleClick(absX int) {
 		m.isSelecting = false
 	default:
 		// Single click: move cursor, start potential drag
-		m.Model.SetCursor(col)
+		m.SetCursor(col)
 		m.clearSelection()
 		m.isSelecting = true
 		m.selAnchor = col
@@ -193,7 +193,7 @@ func (m *Model) HandleDragTo(absX int) {
 	if !m.isSelecting {
 		return
 	}
-	value := []rune(m.Model.Value())
+	value := []rune(m.Value())
 	relX := absX - m.screenTextX
 	col := clamp(relX+m.viewOffset, 0, len(value))
 
@@ -206,7 +206,7 @@ func (m *Model) HandleDragTo(absX int) {
 		m.selEnd = col
 	}
 	m.selActive = m.selStart < m.selEnd
-	m.Model.SetCursor(col)
+	m.SetCursor(col)
 	m.syncViewport()
 }
 
@@ -230,21 +230,21 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			m.deleteSelection()
 			m.clearSelection()
 		}
-		val := []rune(m.Model.Value())
-		pos := m.Model.Position()
+		val := []rune(m.Value())
+		pos := m.Position()
 		ins := []rune(msg.Text)
 		newVal := string(append(append(val[:pos:pos], ins...), val[pos:]...))
-		m.Model.SetValue(newVal)
-		m.Model.SetCursor(pos + len(ins))
+		m.SetValue(newVal)
+		m.SetCursor(pos + len(ins))
 		m.syncViewport()
 		return m, nil
 
 	case CutMsg:
 		text := m.SelectedText()
 		if text == "" {
-			text = m.Model.Value()
-			m.Model.SetValue("")
-			m.Model.SetCursor(0)
+			text = m.Value()
+			m.SetValue("")
+			m.SetCursor(0)
 		} else {
 			m.deleteSelection()
 			m.clearSelection()
@@ -254,12 +254,12 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		return m, nil
 
 	case SelectAllMsg:
-		val := []rune(m.Model.Value())
+		val := []rune(m.Value())
 		m.selStart = 0
 		m.selEnd = len(val)
 		m.selAnchor = 0
 		m.selActive = len(val) > 0
-		m.Model.SetCursor(len(val))
+		m.SetCursor(len(val))
 		m.syncViewport()
 		return m, nil
 
@@ -274,25 +274,25 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		if key.Matches(msg, m.KeyMap.SelectLeft, m.KeyMap.SelectRight,
 			m.KeyMap.SelectHome, m.KeyMap.SelectEnd) {
 			if !m.selActive {
-				m.selAnchor = m.Model.Position()
+				m.selAnchor = m.Position()
 			}
 			// Strip Shift so textinput moves the cursor without its own logic.
 			stripped := msg
 			stripped.Mod &^= tea.ModShift
 			m.Model, cmd = m.Model.Update(stripped)
-			m.updateSelectionFromAnchor(m.Model.Position())
+			m.updateSelectionFromAnchor(m.Position())
 			m.syncViewport()
 			return m, cmd
 		}
 
 		// ─── Select all ───────────────────────────────────────────────────────
 		if key.Matches(msg, m.KeyMap.SelectAll) {
-			val := []rune(m.Model.Value())
+			val := []rune(m.Value())
 			m.selStart = 0
 			m.selEnd = len(val)
 			m.selAnchor = 0
 			m.selActive = len(val) > 0
-			m.Model.SetCursor(len(val))
+			m.SetCursor(len(val))
 			m.syncViewport()
 			return m, nil
 		}
@@ -301,7 +301,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		if key.Matches(msg, m.KeyMap.Copy) {
 			text := m.SelectedText()
 			if text == "" {
-				text = m.Model.Value()
+				text = m.Value()
 			}
 			_ = clipboard.WriteAll(text)
 			return m, nil
@@ -311,9 +311,9 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		if key.Matches(msg, m.KeyMap.Cut) {
 			text := m.SelectedText()
 			if text == "" {
-				text = m.Model.Value()
-				m.Model.SetValue("")
-				m.Model.SetCursor(0)
+				text = m.Value()
+				m.SetValue("")
+				m.SetCursor(0)
 			} else {
 				m.deleteSelection()
 				m.clearSelection()
@@ -357,8 +357,8 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 
 	// ─── Overwrite mode: replace char at cursor instead of inserting ──────
 	if kp, ok := msg.(tea.KeyPressMsg); ok && m.Overwrite && kp.Text != "" {
-		val := []rune(m.Model.Value())
-		pos := m.Model.Position()
+		val := []rune(m.Value())
+		pos := m.Position()
 		ins := []rune(kp.Text)
 		var newVal []rune
 		if pos < len(val) {
@@ -373,8 +373,8 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			// Cursor is at end — just append
 			newVal = append(val, ins...)
 		}
-		m.Model.SetValue(string(newVal))
-		m.Model.SetCursor(pos + len(ins))
+		m.SetValue(string(newVal))
+		m.SetCursor(pos + len(ins))
 		m.syncViewport()
 		return m, nil
 	}
@@ -392,9 +392,9 @@ func (m Model) View() string {
 		return m.Model.View()
 	}
 
-	value := []rune(m.Model.Value())
+	value := []rune(m.Value())
 	n := len(value)
-	w := m.Model.Width()
+	w := m.Width()
 
 	// Compute visible window
 	off := m.viewOffset
@@ -408,9 +408,9 @@ func (m Model) View() string {
 	selS := clamp(m.selStart-off, 0, len(visible))
 	selE := clamp(m.selEnd-off, 0, len(visible))
 
-	styles := m.Model.Styles()
+	styles := m.Styles()
 	var st textinput.StyleState
-	if m.Model.Focused() {
+	if m.Focused() {
 		st = styles.Focused
 	} else {
 		st = styles.Blurred
@@ -419,7 +419,7 @@ func (m Model) View() string {
 	promptSt := st.Prompt.Inline(true)
 
 	var sb strings.Builder
-	sb.WriteString(promptSt.Render(m.Model.Prompt))
+	sb.WriteString(promptSt.Render(m.Prompt))
 	if selS > 0 {
 		sb.WriteString(textSt.Render(string(visible[:selS])))
 	}
@@ -456,23 +456,23 @@ func (m *Model) deleteSelection() {
 	if !m.selActive {
 		return
 	}
-	value := []rune(m.Model.Value())
+	value := []rune(m.Value())
 	s := clamp(m.selStart, 0, len(value))
 	e := clamp(m.selEnd, 0, len(value))
 	if s >= e {
 		return
 	}
 	newVal := string(value[:s]) + string(value[e:])
-	m.Model.SetValue(newVal)
-	m.Model.SetCursor(s)
+	m.SetValue(newVal)
+	m.SetCursor(s)
 }
 
 // syncViewport keeps m.viewOffset consistent with the textinput cursor so that
 // the cursor stays within the visible window for our custom rendering path.
 func (m *Model) syncViewport() {
-	pos := m.Model.Position()
-	n := len([]rune(m.Model.Value()))
-	w := m.Model.Width()
+	pos := m.Position()
+	n := len([]rune(m.Value()))
+	w := m.Width()
 	if w <= 0 || n <= w {
 		m.viewOffset = 0
 		return

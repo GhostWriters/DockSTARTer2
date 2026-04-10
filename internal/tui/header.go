@@ -219,10 +219,8 @@ func (m *HeaderModel) ViewString() string {
 	// - Center doesn't collide with Right (min 1 space)
 	// - Right fits in terminal
 	rightW := appW + tmplW
-	fitsLine1 := true
-	if leftW+1 > centerX {
-		fitsLine1 = false
-	}
+	fitsLine1 := leftW+1 <= centerX
+
 	if centerX+centerW+1+rightW > m.width {
 		fitsLine1 = false
 	}
@@ -234,10 +232,8 @@ func (m *HeaderModel) ViewString() string {
 
 	// 2. Wrap Stage 1: [Left] [Center] [App] on Line 1, [Tmpl] on Line 2
 	// Verify if Line 1 fits
-	fitsStage1 := true
-	if leftW+1 > centerX {
-		fitsStage1 = false
-	}
+	fitsStage1 := leftW+1 <= centerX
+
 	if centerX+centerW+1+appW > m.width {
 		fitsStage1 = false
 	}
@@ -466,8 +462,3 @@ func (m *HeaderModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	return regions
 }
 
-// renderRight returns both versions combined (for backwards compatibility)
-func (m HeaderModel) renderRight() string {
-	appText, tmplText := m.renderVersions()
-	return lipgloss.JoinHorizontal(lipgloss.Top, appText, tmplText)
-}

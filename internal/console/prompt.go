@@ -84,7 +84,7 @@ func QuestionPrompt(ctx context.Context, printer Printer, title, question string
 		var err error
 		oldState, err = term.MakeRaw(fd)
 		if err == nil {
-			defer term.Restore(fd, oldState)
+			defer func() { _ = term.Restore(fd, oldState) }()
 		}
 	}
 
@@ -101,7 +101,6 @@ func QuestionPrompt(ctx context.Context, printer Printer, title, question string
 			} else {
 				answer = false
 			}
-			answered = true
 			break
 		}
 
@@ -122,11 +121,9 @@ func QuestionPrompt(ctx context.Context, printer Printer, title, question string
 		if input == "\r" || input == "\n" {
 			if strings.EqualFold(defaultValue, "y") {
 				answer = true
-				answered = true
 				break
 			} else if strings.EqualFold(defaultValue, "n") {
 				answer = false
-				answered = true
 				break
 			}
 			// If no default (defaultValue == ""), ignore Enter
@@ -136,12 +133,10 @@ func QuestionPrompt(ctx context.Context, printer Printer, title, question string
 		lower := strings.ToLower(input)
 		if lower == "y" {
 			answer = true
-			answered = true
 			break
 		}
 		if lower == "n" {
 			answer = false
-			answered = true
 			break
 		}
 		// Ignore other keys

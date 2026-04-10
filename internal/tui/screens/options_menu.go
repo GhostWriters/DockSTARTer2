@@ -31,7 +31,7 @@ func NewOptionsMenuScreen(isRoot bool) tui.ScreenModel {
 			Action: func() tea.Msg {
 				go func() {
 					// Simulate executing a background task that requires a password
-					console.TextPrompt(context.Background(), func(context.Context, any, ...any) {}, "{{|TitleQuestion|}}Sudo Password Required{{[-]}}", "sudo run simulated/command.sh", true)
+					_, _ = console.TextPrompt(context.Background(), func(context.Context, any, ...any) {}, "{{|TitleQuestion|}}Sudo Password Required{{[-]}}", "sudo run simulated/command.sh", true)
 				}()
 				return nil
 			},

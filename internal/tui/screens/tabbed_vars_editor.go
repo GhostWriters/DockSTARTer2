@@ -49,11 +49,11 @@ type EnvTabSpec struct {
 }
 
 type envTab struct {
-	spec        EnvTabSpec
-	editor      enveditor.Model
+	spec            EnvTabSpec
+	editor          enveditor.Model
 	initialVars     map[string]string // Captured when loaded, used for scoped syncing on save
-	defaultFilePath string   // Cached for Refresh
-	readOnlyVars    []string // Cached for Refresh
+	defaultFilePath string            // Cached for Refresh
+	readOnlyVars    []string          // Cached for Refresh
 	// Cached heading display info (populated during loadEnv)
 	envFilePath string          // Actual .env file being edited
 	niceName    string          // App nicename (empty for global tabs)
@@ -81,13 +81,13 @@ type TabbedVarsEditorModel struct {
 	focus envFocusArea
 
 	// Action buttons
-	buttons []string
-	btnIdx  int
-	buttonHeight  int
+	buttons        []string
+	btnIdx         int
+	buttonHeight   int
 	subtitleHeight int
-	editorHeight  int
-	contentWidth  int
-	focused       bool
+	editorHeight   int
+	contentWidth   int
+	focused        bool
 
 	// Callbacks
 	onClose tea.Cmd
@@ -212,7 +212,7 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 
 		currentLinesFile, _ := os.CreateTemp("", "dockstarter2.env_editor_current.*.tmp")
 		for _, line := range currentLines {
-			currentLinesFile.WriteString(line + "\n")
+			_, _ = currentLinesFile.WriteString(line + "\n")
 		}
 		currentLinesFile.Close()
 
@@ -351,7 +351,7 @@ func (m *TabbedVarsEditorModel) saveEnv() tea.Cmd {
 			}
 
 			// 2. Migrate old-style APPNAME_ENABLED vars to APPNAME__ENABLED
-			appenv.MigrateEnabledLines(ctx, cfg)
+			_ = appenv.MigrateEnabledLines(ctx, cfg)
 
 			// 3. Sanitize then CreateAll (re-adds missing template vars; CreateAll calls Update internally)
 			// These already log details which will fan out to the ProgramBox
@@ -383,7 +383,6 @@ func (m *TabbedVarsEditorModel) hasErrors() bool {
 	}
 	return false
 }
-
 
 func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
@@ -1086,7 +1085,6 @@ func (m *TabbedVarsEditorModel) IsMaximized() bool {
 	return true
 }
 
-
 func (m *TabbedVarsEditorModel) MenuName() string {
 	return "tabbed_vars"
 }
@@ -1154,26 +1152,26 @@ func (m *TabbedVarsEditorModel) renderSubtitle() string {
 
 	var lines []string
 
-		if tab.niceName == "" {
-			// Global: show file path
-			lines = append(lines, renderLine(headingLabel("File: ")+"{{|HeadingValue|}}"+tab.envFilePath+"{{[-]}}"))
-		} else {
-			// App: "Application: AppName" on first line
-			appLine := headingLabel("Application: ") + "{{|HeadingValue|}}" + tab.niceName + "{{[-]}}"
-			lines = append(lines, renderLine(appLine))
+	if tab.niceName == "" {
+		// Global: show file path
+		lines = append(lines, renderLine(headingLabel("File: ")+"{{|HeadingValue|}}"+tab.envFilePath+"{{[-]}}"))
+	} else {
+		// App: "Application: AppName" on first line
+		appLine := headingLabel("Application: ") + "{{|HeadingValue|}}" + tab.niceName + "{{[-]}}"
+		lines = append(lines, renderLine(appLine))
 
-			// Word-wrap description onto continuation lines, indented to align with value
-			if tab.description != "" {
-				indent := strings.Repeat(" ", headingLabelW)
-				valueW := m.contentWidth - headingLabelW
-				if valueW < 10 {
-					valueW = 10
-				}
-				for _, dl := range subtitleWrapText(tui.GetPlainText(tab.description), valueW) {
-					lines = append(lines, renderLine(indent+"{{|HeadingAppDescription|}}"+dl+"{{[-]}}"))
-				}
+		// Word-wrap description onto continuation lines, indented to align with value
+		if tab.description != "" {
+			indent := strings.Repeat(" ", headingLabelW)
+			valueW := m.contentWidth - headingLabelW
+			if valueW < 10 {
+				valueW = 10
+			}
+			for _, dl := range subtitleWrapText(tui.GetPlainText(tab.description), valueW) {
+				lines = append(lines, renderLine(indent+"{{|HeadingAppDescription|}}"+dl+"{{[-]}}"))
 			}
 		}
+	}
 
 	return strings.Join(lines, "\n")
 }
@@ -1203,7 +1201,6 @@ func subtitleWrapText(text string, maxWidth int) []string {
 	}
 	return lines
 }
-
 
 func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegion {
 	var regions []tui.HitRegion
@@ -1269,7 +1266,7 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitReg
 		ID:     "tabbed_vars.editor",
 		X:      offsetX + layout.NestedLeftOffset(),
 		Y:      offsetY + layout.NestedTopOffset() + m.subtitleHeight,
-		Width:  m.contentWidth - layout.BorderWidth(),       // inner box content width
+		Width:  m.contentWidth - layout.BorderWidth(), // inner box content width
 		Height: m.editorHeight,
 		ZOrder: tui.ZDialog + 5,
 		Label:  "Variables Editor",
@@ -1294,7 +1291,6 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitReg
 
 	return regions
 }
-
 
 // showContextMenuForClick builds and shows a right-click context menu at screen
 // position (x, y).  Returns nil only when the click is outside any editor line.
@@ -1507,125 +1503,6 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 	}
 }
 
-// showAddVarMenu builds and shows an "Add Variable" context menu for the active tab.
-// For app tabs (IsGlobal, non-empty App) it offers template prefixes, stock variables
-// not yet in the editor, and an "Add All" option. For other tabs it falls back to a
-// free-form PromptText dialog.
-func (m *TabbedVarsEditorModel) showAddVarMenu() tea.Cmd {
-	if len(m.tabs) == 0 {
-		return nil
-	}
-	tab := &m.tabs[m.activeTab]
-
-	// Non-app tabs: free-form name prompt.
-	if tab.spec.App == "" || !tab.spec.IsGlobal {
-		return func() tea.Msg {
-			keyName, err := tui.PromptText("Add Variable", "Enter new variable name:", false)
-			if err == nil && keyName != "" {
-				return envAddVarMsg{key: strings.TrimSpace(strings.ToUpper(keyName))}
-			}
-			return nil
-		}
-	}
-
-	appUpper := strings.ToUpper(tab.spec.App)
-	editor := tab.editor
-
-	// --- Template items (prefix + user-completed suffix via PromptText) ---
-	type tpl struct {
-		prefix string
-		label  string
-		help   string
-	}
-	templates := []tpl{
-		{appUpper + "__", appUpper + "__…", "Complete this with any variable name you want."},
-		{appUpper + "__ENVIRONMENT_", appUpper + "__ENVIRONMENT_…", "Complete with a var for the environment: section of your override."},
-		{appUpper + "__PORT_", appUpper + "__PORT_…", "Complete with a port number for the ports: section of your override."},
-		{appUpper + "__VOLUME_", appUpper + "__VOLUME_…", "Complete with a path for the volumes: section of your override."},
-	}
-
-	var items []tui.ContextMenuItem
-	for _, t := range templates {
-		t := t
-		items = append(items, tui.ContextMenuItem{
-			Label: t.label,
-			Help:  t.help,
-			Action: func() tea.Msg {
-				return tui.CloseDialogMsg{Result: envAddVarTemplateMsg{prefix: t.prefix}}
-			},
-		})
-	}
-
-	// --- Stock variables (only those not already present in the editor) ---
-	type stock struct {
-		name string
-		help string
-	}
-	allStock := []stock{
-		{appUpper + "__CONTAINER_NAME", "Used in the container_name: section of your override."},
-		{appUpper + "__HOSTNAME", "Used in the hostname: section of your override."},
-		{appUpper + "__NETWORK_MODE", "Used in the network_mode: section of your override."},
-		{appUpper + "__RESTART", "Used in the restart: section of your override."},
-		{appUpper + "__TAG", "Used in the image: tag section of your override."},
-	}
-
-	// Include ENABLED for builtin apps that don't yet have it.
-	if appenv.IsAppBuiltIn(appUpper) && !editor.HasVariable(appUpper+"__ENABLED") {
-		allStock = append([]stock{{
-			appUpper + "__ENABLED",
-			"Creating this variable causes DockSTARTer to manage this app with no override needed.",
-		}}, allStock...)
-	}
-
-	var missingStock []stock
-	for _, s := range allStock {
-		if !editor.HasVariable(s.name) {
-			missingStock = append(missingStock, s)
-		}
-	}
-
-	if len(missingStock) > 0 {
-		items = append(items, tui.ContextMenuItem{IsSeparator: true})
-
-		// "Add All" option
-		addAllVars := make([]string, 0, len(missingStock))
-		addAllDefaults := make(map[string]string, len(missingStock))
-		for _, s := range missingStock {
-			addAllVars = append(addAllVars, s.name)
-			addAllDefaults[s.name] = tab.defaultVal(s.name)
-		}
-		av := addAllVars
-		ad := addAllDefaults
-		items = append(items, tui.ContextMenuItem{
-			Label: "Add All Stock Variables",
-			Help:  "Add all stock variables listed below with their default values.",
-			Action: func() tea.Msg {
-				return tui.CloseDialogMsg{Result: envAddAllStockMsg{vars: av, defaults: ad}}
-			},
-		})
-
-		// Individual stock items
-		for _, s := range missingStock {
-			s := s
-			defVal := tab.defaultVal(s.name)
-			items = append(items, tui.ContextMenuItem{
-				Label:    s.name,
-				SubLabel: defVal,
-				Help:     s.help,
-				Action: func() tea.Msg {
-					return tui.CloseDialogMsg{Result: envAddVarMsg{key: s.name}}
-				},
-			})
-		}
-	}
-
-	// Position menu near the editor top-left
-	x := m.lastOffsetX + 2
-	y := m.lastOffsetY + 2 + m.subtitleHeight
-	return func() tea.Msg {
-		return tui.ShowDialogMsg{Dialog: tui.NewContextMenuModel(x, y, m.width, m.height, items)}
-	}
-}
 
 // showAddVarDialog opens the Add Variable dialog (ctrl+a) for the active app tab.
 // Falls back to the free-form PromptText for non-app tabs.
@@ -1745,8 +1622,8 @@ func (m *TabbedVarsEditorModel) GetInputCursor() (relX, relY int, shape tea.Curs
 	//   outer_border(1) + inner_border/tab_row(1) = 2 rows
 	// plus subtitle rows stacked above the inner border.
 	layout := tui.GetLayout()
-	relX = 1 + layout.ContentSideMargin + 1 + c.Position.X
-	relY = 2 + m.subtitleHeight + c.Position.Y
+	relX = 1 + layout.ContentSideMargin + 1 + c.X
+	relY = 2 + m.subtitleHeight + c.Y
 	switch {
 	case !editor.IsEditableAtCursor():
 		shape = tea.CursorUnderline

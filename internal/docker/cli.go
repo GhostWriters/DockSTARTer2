@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 )
@@ -57,7 +58,7 @@ func GetContainerStatus(ctx context.Context, containerID string) (string, error)
 
 	inspect, err := cli.ContainerInspect(ctx, containerID)
 	if err != nil {
-		if client.IsErrNotFound(err) {
+		if errdefs.IsNotFound(err) {
 			return "not found", nil
 		}
 		return "", err

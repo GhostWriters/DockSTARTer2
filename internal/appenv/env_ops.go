@@ -322,7 +322,9 @@ func SanitizeEnv(ctx context.Context, file string, conf config.AppConfig) error 
 		for _, key := range updatedVars {
 			val := updates[key]
 			logger.Notice(ctx, "\t{{|Var|}}%s=%s{{[-]}}", key, val)
-			SetLiteral(ctx, key, val, file)
+			if err := SetLiteral(ctx, key, val, file); err != nil {
+				return err
+			}
 		}
 	}
 

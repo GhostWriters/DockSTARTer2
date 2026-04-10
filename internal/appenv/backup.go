@@ -48,7 +48,7 @@ func BackupEnv(ctx context.Context, envFile string, conf config.AppConfig) error
 	}
 
 	if dockerVolumeConfig == "" {
-		return fmt.Errorf("Variable '{{|Var|}}DOCKER_VOLUME_CONFIG{{[-]}}' is not set in the '{{|File|}}.env{{[-]}}' file")
+		return fmt.Errorf("Variable '{{|Var|}}DOCKER_VOLUME_CONFIG{{[-]}}' is not set in the '{{|File|}}.env{{[-]}}' file.")
 	}
 
 	// Sanitize/Expand DOCKER_VOLUME_CONFIG
@@ -62,7 +62,7 @@ func BackupEnv(ctx context.Context, envFile string, conf config.AppConfig) error
 	expandedVolumeConfig = filepath.Clean(expandedVolumeConfig)
 
 	if expandedVolumeConfig == "" {
-		return fmt.Errorf("DOCKER_VOLUME_CONFIG is not set and could not be determined")
+		return fmt.Errorf("DOCKER_VOLUME_CONFIG is not set and could not be determined.")
 	}
 
 	// info "Taking ownership of '${C["Folder"]}${DOCKER_VOLUME_CONFIG}${NC}' (non-recursive)."

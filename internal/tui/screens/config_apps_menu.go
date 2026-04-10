@@ -75,7 +75,7 @@ func (m *configAppsMenuModel) refreshItems() {
 		return
 	}
 	envFile := filepath.Join(cfg.ComposeDir, constants.EnvFileName)
-	m.MenuModel.SetItems(buildConfigAppItems(ctx, apps, envFile))
+	m.SetItems(buildConfigAppItems(ctx, apps, envFile))
 }
 
 // configAppItemHelp returns enriched (itemTitle, itemText) for a config app menu item.
@@ -115,8 +115,8 @@ func (m *configAppsMenuModel) HelpContext(maxWidth int) tui.HelpContext {
 	itemTitle := inner.ItemTitle
 	itemText := inner.ItemText
 
-	items := m.MenuModel.GetItems()
-	idx := m.MenuModel.Index()
+	items := m.GetItems()
+	idx := m.Index()
 	if idx >= 0 && idx < len(items) {
 		if t, txt := configAppItemHelp(items[idx]); txt != "" {
 			if t != "" {

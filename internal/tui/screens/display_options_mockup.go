@@ -144,10 +144,7 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 		centerX = 0
 	}
 
-	fitsLine1 := true
-	if leftW+1 > centerX || centerX+centerW+1+rightW > innerWidth {
-		fitsLine1 = false
-	}
+	fitsLine1 := leftW+1 <= centerX && centerX+centerW+1+rightW <= innerWidth
 
 	var headerContent string
 	if fitsLine1 {

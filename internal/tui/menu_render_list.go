@@ -49,7 +49,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 
 	filter := m.list.FilterValue()
 	var visibleItems []MenuItem
-	var selectedVisibleIndex int = -1
+	var selectedVisibleIndex = -1
 
 	filteredCount := 0
 	for _, item := range m.items {
@@ -95,7 +95,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 	for i := 0; i < len(visibleItems); i++ {
 		item := visibleItems[i]
 		isSelected := i == selectedVisibleIndex && m.IsActive()
-		
+
 		// Highlight the parent header if a child item is selected
 		isParentOfSelected := false
 		if item.IsGroupHeader && selectedVisibleIndex != -1 {
@@ -325,7 +325,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 		itemGutter := g0 + g1
 
 		firstLine := firstLinePrefix + tagStr + neutralStyle.Render(paddingSpaces) + lines[0]
-		indent := neutralStyle.Render(strutil.Repeat(" ", prefixWidth + maxTagLen + layout.CheckboxWidth()))
+		indent := neutralStyle.Render(strutil.Repeat(" ", prefixWidth+maxTagLen+layout.CheckboxWidth()))
 		renderedItemLines := []string{firstLine}
 		for j := 1; j < len(lines); j++ {
 			renderedItemLines = append(renderedItemLines, indent+lines[j])
@@ -446,9 +446,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 
 		var viewLines []string
 		for _, item := range renderedItems {
-			for _, line := range strings.Split(item, "\n") {
-				viewLines = append(viewLines, line)
-			}
+			viewLines = append(viewLines, strings.Split(item, "\n")...)
 		}
 		// Concatenate all lines to form the final visible list view
 		result := strings.Join(viewLines, "\n")
@@ -689,7 +687,7 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 
 		if item.Enabled && !item.WasEnabled {
 			g1 = RenderThemeText("{{|MarkerAdded|}}E{{[-]}}", neutralStyle)
-		} else if !item.Enabled && item.WasEnabled && !(!item.Checked && item.WasAdded) {
+		} else if !item.Enabled && item.WasEnabled && (item.Checked || !item.WasAdded) {
 			g1 = RenderThemeText("{{|MarkerDeleted|}}D{{[-]}}", neutralStyle)
 		} else {
 			g1 = neutralStyle.Render(" ")
@@ -727,15 +725,23 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 		var checkboxA3, checkboxE3 string
 		if ctx.LineCharacters {
 			cA, cE := checkUnselected, checkUnselected
-			if item.Checked { cA = checkSelected }
-			if item.Enabled { cE = checkSelected }
-			
+			if item.Checked {
+				cA = checkSelected
+			}
+			if item.Enabled {
+				cE = checkSelected
+			}
+
 			checkboxA3 = neutralStyle.Render(" ") + cbStyleA.Render(cA) + neutralStyle.Render(" ")
 			checkboxE3 = neutralStyle.Render(" ") + cbStyleE.Render(cE) + neutralStyle.Render(" ")
 		} else {
 			caA, ceA := "[ ]", "[ ]"
-			if item.Checked { caA = "[x]" }
-			if item.Enabled { ceA = "[x]" }
+			if item.Checked {
+				caA = "[x]"
+			}
+			if item.Enabled {
+				ceA = "[x]"
+			}
 			checkboxA3 = neutralStyle.Render("[") + cbStyleA.Render(string(caA[1])) + neutralStyle.Render("]")
 			checkboxE3 = neutralStyle.Render("[") + cbStyleE.Render(string(ceA[1])) + neutralStyle.Render("]")
 		}

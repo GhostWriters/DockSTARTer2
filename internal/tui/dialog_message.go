@@ -23,7 +23,6 @@ type messageDialogModel struct {
 	title       string
 	message     string
 	messageType MessageType
-	onResult    func() tea.Msg
 }
 
 // newMessageDialog creates a new message dialog

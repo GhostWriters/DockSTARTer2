@@ -85,11 +85,6 @@ func purgeFromFile(ctx context.Context, appName string, file string) error {
 		}
 
 		output := strings.Join(newLines, "\n")
-		// Ensure trailing newline if file had any lines
-		if len(newLines) > 0 && !strings.HasSuffix(output, "\n") {
-			// output = output + "\n" // Join already adds \n between lines, but if last line was empty...?
-			// Actually strings.Split and Join handles it.
-		}
 
 		if err := os.WriteFile(file, []byte(output), 0644); err != nil {
 			return err

@@ -234,18 +234,18 @@ func (s *AppSelectionScreen) expandGroup(baseApp string) {
 	niceName := appenv.GetNiceName(ctx, baseApp)
 	desc := tui.GetPlainText(appenv.GetDescriptionFromTemplate(ctx, baseApp, envFile))
 	groupHeader := tui.MenuItem{
-		Tag:               niceName,
-		Desc:              "{{|ListApp|}}" + desc,
-		Help:              fmt.Sprintf("Press Ctrl/Alt+Right to manage %s instances. Ctrl/Alt+Left to collapse.", niceName),
-		IsGroupHeader:     true,
-		Checked:           orig.Checked,
-		WasAdded:          orig.WasAdded,
-		Enabled:           orig.Enabled,
-		WasEnabled:        orig.WasEnabled,
-		Selectable:        true,
-		IsReferenced:      orig.IsReferenced,
-		BaseApp:           baseApp,
-		Metadata:          orig.Metadata,
+		Tag:           niceName,
+		Desc:          "{{|ListApp|}}" + desc,
+		Help:          fmt.Sprintf("Press Ctrl/Alt+Right to manage %s instances. Ctrl/Alt+Left to collapse.", niceName),
+		IsGroupHeader: true,
+		Checked:       orig.Checked,
+		WasAdded:      orig.WasAdded,
+		Enabled:       orig.Enabled,
+		WasEnabled:    orig.WasEnabled,
+		Selectable:    true,
+		IsReferenced:  orig.IsReferenced,
+		BaseApp:       baseApp,
+		Metadata:      orig.Metadata,
 	}
 	baseSubRow := tui.MenuItem{
 		Tag:               niceName,
@@ -362,10 +362,7 @@ func (s *AppSelectionScreen) collapseAllEmptyGroups(skipBase string) {
 	}
 	cur = pruned
 
-	changed := false
-	if len(cur) != len(s.menu.GetItems()) {
-		changed = true
-	}
+	changed := len(cur) != len(s.menu.GetItems())
 
 	seen := map[string]bool{}
 	for _, it := range cur {

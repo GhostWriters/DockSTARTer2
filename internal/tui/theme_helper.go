@@ -13,9 +13,8 @@ import (
 )
 
 var (
-	semanticStyleCache = make(map[string]lipgloss.Style)
-	renderCache        = make(map[string]string)
-	cacheMu            sync.RWMutex
+	renderCache = make(map[string]string)
+	cacheMu     sync.RWMutex
 )
 
 // ClearSemanticCache clears both the theme-level style cache and the TUI render cache.

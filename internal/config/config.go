@@ -148,7 +148,7 @@ func LoadAppConfig() AppConfig {
 	}
 
 	// No config found; save defaults to TOML (with template variables, not expanded)
-	SaveAppConfig(conf)
+	_ = SaveAppConfig(conf)
 	// Save raw (unexpanded) values for display purposes
 	conf.RawPaths = conf.Paths
 	// Expand after saving so the on-disk file retains ${XDG_CONFIG_HOME} references

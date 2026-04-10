@@ -126,11 +126,15 @@ VAR_D='TargetD'
 `
 	src, _ := os.CreateTemp("", "src.env")
 	defer os.Remove(src.Name())
-	os.WriteFile(src.Name(), []byte(sourceContent), 0644)
+	if err := os.WriteFile(src.Name(), []byte(sourceContent), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	tgt, _ := os.CreateTemp("", "tgt.env")
 	defer os.Remove(tgt.Name())
-	os.WriteFile(tgt.Name(), []byte(targetContent), 0644)
+	if err := os.WriteFile(tgt.Name(), []byte(targetContent), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	added, err := MergeNewOnly(ctx, tgt.Name(), src.Name())
 	if err != nil {
@@ -163,7 +167,9 @@ OTHER='Val'
 `
 	tmp, _ := os.CreateTemp("", "regex.env")
 	defer os.Remove(tmp.Name())
-	os.WriteFile(tmp.Name(), []byte(testContent), 0644)
+	if err := os.WriteFile(tmp.Name(), []byte(testContent), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	lines, err := GetLineRegex("VAR_.*", tmp.Name())
 	if err != nil {

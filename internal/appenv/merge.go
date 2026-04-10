@@ -103,13 +103,13 @@ func MergeNewOnly(ctx context.Context, targetFile, sourceFile string) ([]string,
 		writer := bufio.NewWriter(fTarget)
 		targetContent, _ := os.ReadFile(targetFile)
 		if len(targetContent) > 0 && targetContent[len(targetContent)-1] != '\n' {
-			writer.WriteString("\n")
+			_, _ = writer.WriteString("\n")
 		} else if len(targetContent) > 0 {
-			writer.WriteString("\n")
+			_, _ = writer.WriteString("\n")
 		}
 
 		for _, line := range newLines {
-			writer.WriteString(line + "\n")
+			_, _ = writer.WriteString(line + "\n")
 		}
 		if err := writer.Flush(); err != nil {
 			return nil, err

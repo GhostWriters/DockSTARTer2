@@ -43,7 +43,7 @@ func CreateAll(ctx context.Context, force bool, conf config.AppConfig) error {
 	}
 
 	// 3. Migrate old-style APPNAME_ENABLED vars to APPNAME__ENABLED (parity with appvars_migrate_enabled_lines.sh)
-	MigrateEnabledLines(ctx, conf)
+	_ = MigrateEnabledLines(ctx, conf)
 
 	// Re-verify added apps after EnvCreate (which might have sanitized it)
 	added, err := ListAddedApps(ctx, envFile)

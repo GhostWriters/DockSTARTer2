@@ -2652,12 +2652,6 @@ func (m *Model) handleMouseMotion(msg tea.MouseMotionMsg) {
 		return
 	}
 
-	// Gutter width (prompts + line numbers)
-	gutterWidth := m.promptWidth
-	if m.ShowLineNumbers {
-		digits := max(3, numDigits(m.MaxHeight))
-		gutterWidth += digits + 2
-	}
 
 	targetViewLine := msg.Y + m.viewport.YOffset()
 
