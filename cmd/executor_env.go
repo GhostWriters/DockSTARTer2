@@ -270,26 +270,28 @@ func handleEnvEdit(ctx context.Context, group *CommandGroup) error {
 
 	upperCase := !strings.Contains(group.Command, "-lower")
 	arg := group.Args[0]
-
-	var appName, varName string
-	if strings.Contains(arg, ":") {
+	if upperCase && !strings.Contains(arg, ":") {
+		arg = strings.ToUpper(arg)
+	} else if upperCase && strings.Contains(arg, ":") {
 		parts := strings.SplitN(arg, ":", 2)
-		appName = strings.ToUpper(parts[0])
-		varName = parts[1]
-	} else {
-		varName = arg
+		arg = parts[0] + ":" + strings.ToUpper(parts[1])
 	}
 
-	if upperCase {
-		varName = strings.ToUpper(varName)
-	}
+	conf := config.LoadAppConfig()
+	varName, file := resolveEnvVar(arg, conf)
 
 	if !appenv.VarNameIsValid(varName, "") {
 		logger.Error(ctx, "'{{|Var|}}%s{{[-]}}' is an invalid variable name.", varName)
 		return fmt.Errorf("invalid variable name: %s", varName)
 	}
 
-	if err := tui.StartVarEditor(ctx, appName, varName); err != nil {
+	// appName is only set when APP:VAR syntax was used (variable lives in app file)
+	appName := ""
+	if strings.Contains(arg, ":") {
+		appName = strings.ToUpper(strings.SplitN(arg, ":", 2)[0])
+	}
+
+	if err := tui.StartVarEditor(ctx, appName, varName, file); err != nil {
 		if !errors.Is(err, tui.ErrUserAborted) {
 			logger.Error(ctx, "TUI Error: %v", err)
 		}
@@ -297,3 +299,4 @@ func handleEnvEdit(ctx context.Context, group *CommandGroup) error {
 	}
 	return nil
 }
+

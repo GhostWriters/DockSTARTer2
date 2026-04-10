@@ -11,7 +11,6 @@ import (
 	"DockSTARTer2/internal/compose"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/docker"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/theme"
@@ -270,7 +269,7 @@ func StartEditor(ctx context.Context, appName string, isRoot bool) error {
 // VarEditorFactory creates a standalone Set Value screen for a single variable.
 // Called by screens/init.go to avoid a circular import.
 type VarEditorFactory func(
-	varName, appName, appDesc, origVal string,
+	varName, appName, appDesc, filePath, origVal string,
 	opts []appenv.VarOption,
 	onSave func(string) tea.Cmd,
 	onCancel tea.Cmd,
@@ -285,9 +284,10 @@ func RegisterVarEditorFactory(f VarEditorFactory) {
 }
 
 // StartVarEditor launches the TUI with the standalone Set Value dialog for a single variable.
-// appName is "" for the global .env file, or an app name for .env.app.<appname>.
+// appName is "" for the global .env file, or an app name (from APP:VAR syntax) for .env.app.<appname>.
 // varName is the variable to edit (upper-cased by the caller).
-func StartVarEditor(ctx context.Context, appName, varName string) error {
+// file is the pre-resolved env file path (from resolveEnvVar).
+func StartVarEditor(ctx context.Context, appName, varName, file string) error {
 	console.SetTUIEnabled(true)
 	defer console.SetTUIEnabled(false)
 
@@ -305,14 +305,11 @@ func StartVarEditor(ctx context.Context, appName, varName string) error {
 		return err
 	}
 
-	conf := config.LoadAppConfig()
-
-	// Resolve env file path
-	var file string
-	if appName == "" {
-		file = strings.Join([]string{conf.ComposeDir, constants.EnvFileName}, "/")
-	} else {
-		file = conf.ComposeDir + "/" + constants.AppEnvFileNamePrefix + strings.ToLower(appName)
+	// file is pre-resolved by the caller (resolveEnvVar).
+	// Derive app name for metadata/display from APP:VAR syntax or APPNAME__ prefix.
+	metaAppName := appName
+	if metaAppName == "" {
+		metaAppName = appenv.VarNameToAppName(varName)
 	}
 
 	// Get current value
@@ -320,20 +317,20 @@ func StartVarEditor(ctx context.Context, appName, varName string) error {
 
 	// Load app metadata for description and preset options
 	var meta *appenv.AppMeta
-	if appName != "" {
-		if m, err := appenv.LoadAppMeta(ctx, appName); err == nil {
+	if metaAppName != "" {
+		if m, err := appenv.LoadAppMeta(ctx, metaAppName); err == nil {
 			meta = m
 		}
 	}
 
 	appDesc := ""
-	if meta != nil {
-		if vm, ok := meta.GetVarMeta(varName, appName); ok {
-			appDesc = vm.HelpText
+	if metaAppName != "" {
+		if desc := appenv.GetDescription(ctx, metaAppName, file); desc != "! Missing description !" {
+			appDesc = desc
 		}
 	}
 
-	opts := appenv.GetVarOptions(varName, strings.ToUpper(appName), origVal, meta)
+	opts := appenv.GetVarOptions(varName, strings.ToUpper(metaAppName), origVal, meta)
 	// Prepend "Original Value" so the user can revert easily
 	opts = append([]appenv.VarOption{{
 		Display: "Original Value",
@@ -348,7 +345,9 @@ func StartVarEditor(ctx context.Context, appName, varName string) error {
 		return tea.Quit
 	}
 
-	startScreen := varEditorFactory(varName, appName, appDesc, origVal, opts, onSave, tea.Quit)
+	// Use the display-friendly app name (e.g. "Plex" not "PLEX") to match the tabbed editor
+	displayAppName := appenv.GetNiceName(ctx, metaAppName)
+	startScreen := varEditorFactory(varName, displayAppName, appDesc, file, origVal, opts, onSave, tea.Quit)
 
 	model := NewAppModel(ctx, currentConfig, startScreen)
 	p := NewProgram(model)

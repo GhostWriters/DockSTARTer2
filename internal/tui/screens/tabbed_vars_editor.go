@@ -1383,7 +1383,7 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 			Label: "Edit Value",
 			Help:  "Open the value editor for this variable.",
 			Action: func() tea.Msg {
-				dlg := newSetValueDialog(evVarName, evTab.niceName, evTab.description, evOrigVal, evOpts, nil, nil)
+				dlg := newSetValueDialog(evVarName, evTab.niceName, evTab.description, "", evOrigVal, evOpts, nil, nil)
 				return tui.CloseDialogMsg{Result: tui.ShowDialogMsg{Dialog: dlg}}
 			},
 		})
@@ -1599,7 +1599,7 @@ func (m *TabbedVarsEditorModel) showSetValueDialog() tea.Cmd {
 		Value:   origVal,
 		Help:    "Restore the value from before editing.",
 	}}, opts...)
-	dlg := newSetValueDialog(varName, tab.niceName, tab.description, origVal, opts, nil, nil)
+	dlg := newSetValueDialog(varName, tab.niceName, tab.description, tab.envFilePath, origVal, opts, nil, nil)
 	return func() tea.Msg {
 		return tui.ShowDialogMsg{Dialog: dlg}
 	}
