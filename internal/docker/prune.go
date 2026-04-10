@@ -33,7 +33,7 @@ func Prune(ctx context.Context, assumeYes bool) error {
 	}
 
 	logger.Notice(ctx, yesNotice)
-	logger.Notice(ctx, "Running: {{|RunningCommand|}}docker system prune -af --volumes{{[-]}}")
+	logger.Notice(ctx, "Running: {{|RunningCommand|}}docker system prune --all --force --volumes{{[-]}}")
 
 	cli, err := GetClient()
 	if err != nil {
