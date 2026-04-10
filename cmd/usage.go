@@ -362,6 +362,22 @@ func GetUsage(target string) string {
 	}
 
 	// Menu Commands
+	if match("--edit-global", "--start-edit-global") {
+		printStr(
+			"{{|UsageCommand|}}--edit-global{{[-]}}",
+			"	Open the global environment variables editor (root session).",
+			"{{|UsageCommand|}}--start-edit-global{{[-]}}",
+			"	Open the global environment variables editor (restore nav stack).",
+		)
+	}
+	if match("--edit-app", "--start-edit-app") {
+		printStr(
+			"{{|UsageCommand|}}--edit-app{{[-]}} {{|UsageApp|}}<app>{{[-]}}",
+			"	Open the environment variables editor for the specified app (root session).",
+			"{{|UsageCommand|}}--start-edit-app{{[-]}} {{|UsageApp|}}<app>{{[-]}}",
+			"	Open the environment variables editor for the specified app (restore nav stack).",
+		)
+	}
 	if match("-M", "--menu") {
 		printStr(
 			"{{|UsageCommand|}}-M --menu{{[-]}}",

@@ -163,6 +163,9 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case NavigateBackMsg:
 		// Pop from stack and return to previous screen
+		if CurrentPageName == "tabbed_vars" {
+			CurrentEditorApp = ""
+		}
 		if len(m.screenStack) > 0 {
 			m.activeScreen = m.screenStack[len(m.screenStack)-1]
 			m.screenStack = m.screenStack[:len(m.screenStack)-1]

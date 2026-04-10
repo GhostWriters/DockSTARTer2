@@ -211,6 +211,9 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			case "-u", "--update", "--update-app", "--update-templates":
 				ranCommand = true
 				return handleUpdate(subCtx, &group, &state, restArgs)
+			case "--edit-global", "--start-edit-global", "--edit-app", "--start-edit-app":
+				ranCommand = true
+				return handleEditVars(subCtx, &group)
 			case "-M", "--menu":
 				ranCommand = true
 				return handleMenu(subCtx, &group)

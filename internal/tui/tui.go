@@ -32,6 +32,11 @@ var (
 	// CurrentPageName tracks the active menu page for re-execution
 	CurrentPageName string
 
+	// CurrentEditorApp tracks which app is being edited in the tabbed vars editor.
+	// Empty string means the global vars editor is active.
+	// Only meaningful when CurrentPageName == "tabbed_vars".
+	CurrentEditorApp string
+
 	// isRootSession is true when the TUI was started with a plain -M pagename (no start- prefix).
 	// Root sessions suppress the Back button on the entry screen and re-exec to the same plain
 	// pagename after a self-update. Non-root sessions re-exec with the "start-" prefix so the
@@ -167,6 +172,90 @@ func Start(ctx context.Context, startMenu string) error {
 	}
 
 	// Check if the model exited via ForceQuit (ctrl-c)
+	if m, ok := finalModel.(*AppModel); ok && m.Fatal {
+		logger.TUIMode = false
+		console.AbortHandler(ctx)
+		return ErrUserAborted
+	}
+
+	return nil
+}
+
+// EditorFactory creates a tabbed vars editor screen.
+// appName is empty for the global vars editor, or an app name for the app-specific editor.
+// onClose is the Cmd to fire when the user navigates back/exits the editor.
+type EditorFactory func(appName string, onClose tea.Cmd) ScreenModel
+
+// editorFactory is registered by the screens package to avoid a circular import.
+var editorFactory EditorFactory
+
+// RegisterEditorFactory stores the factory function for use by StartEditor.
+// Called from screens/init.go during package initialization.
+func RegisterEditorFactory(f EditorFactory) {
+	editorFactory = f
+}
+
+// StartEditor launches the TUI with the tabbed vars editor as the entry screen.
+// appName is empty for the global vars editor, or an app name for the app-specific editor.
+// isRoot controls whether Back navigation exits immediately (true) or uses a pre-populated stack (false).
+func StartEditor(ctx context.Context, appName string, isRoot bool) error {
+	console.SetTUIEnabled(true)
+	defer console.SetTUIEnabled(false)
+
+	logger.TUIMode = true
+	defer func() { logger.TUIMode = false }()
+
+	defer func() {
+		if r := recover(); r != nil {
+			Shutdown()
+			logger.FatalWithStack(ctx, "TUI Panic: %v", r)
+		}
+	}()
+
+	if err := Initialize(ctx); err != nil {
+		return err
+	}
+
+	isRootSession = isRoot
+
+	onClose := func() tea.Msg { return NavigateBackMsg{} }
+	startScreen := editorFactory(appName, onClose)
+
+	// For non-root sessions, pre-populate the navigation stack so Back returns naturally.
+	// Global editor: main → config
+	// App editor:    main → config → app-select
+	var initialStack []ScreenModel
+	if !isRoot {
+		parentNames := []string{"main", "config"}
+		if appName != "" {
+			parentNames = append(parentNames, "app-select")
+		}
+		for _, name := range parentNames {
+			if entry, ok := screenRegistry[name]; ok {
+				initialStack = append(initialStack, entry.create(false))
+			}
+		}
+	}
+
+	model := NewAppModel(ctx, currentConfig, startScreen, initialStack...)
+	p := NewProgram(model)
+	programExited = make(chan struct{})
+
+	go startUpdateChecker(ctx)
+	go func() {
+		<-ctx.Done()
+		Shutdown()
+	}()
+
+	finalModel, err := p.Run()
+	close(programExited)
+	drainStdin()
+	fmt.Print("\x1b[0m\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1049l\n")
+
+	if err != nil {
+		logger.FatalWithStack(ctx, "TUI Error: %v", err)
+	}
+
 	if m, ok := finalModel.(*AppModel); ok && m.Fatal {
 		logger.TUIMode = false
 		console.AbortHandler(ctx)
@@ -374,12 +463,20 @@ func TriggerAppUpdate() tea.Cmd {
 			yes := console.AssumeYes()
 
 			// Re-exec args restore the active screen after update.
-			// Root sessions re-exec to the same plain pagename; non-root sessions
-			// use the "start-" prefix so the navigation stack is rebuilt.
 			reExecArgs := append([]string{}, console.CurrentFlags...)
-			reExecArgs = append(reExecArgs, "--menu")
-			if menuArg := reExecMenuArg(); menuArg != "" {
-				reExecArgs = append(reExecArgs, menuArg)
+			if CurrentPageName == "tabbed_vars" {
+				// Restore the vars editor directly, preserving which app was being edited.
+				if CurrentEditorApp == "" {
+					reExecArgs = append(reExecArgs, "--start-edit-global")
+				} else {
+					reExecArgs = append(reExecArgs, "--start-edit-app", CurrentEditorApp)
+				}
+			} else {
+				// Restore the active menu screen (root or non-root).
+				reExecArgs = append(reExecArgs, "--menu")
+				if menuArg := reExecMenuArg(); menuArg != "" {
+					reExecArgs = append(reExecArgs, menuArg)
+				}
 			}
 			reExecArgs = append(reExecArgs, console.RestArgs...)
 			err := update.SelfUpdate(ctx, force, yes, "", reExecArgs)

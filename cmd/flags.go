@@ -58,6 +58,12 @@ func InitFlags() {
 	pflag.String("env-set-lower", "", "Set variable value (lowercase)")
 	pflag.String("env-set-lower-literal", "", "Set variable literal value (lowercase)")
 
+	// Editor
+	pflag.Bool("edit-global", false, "Open the global environment variables editor")
+	pflag.Bool("start-edit-global", false, "Open the global environment variables editor (restore nav stack)")
+	pflag.String("edit-app", "", "Open the environment variables editor for a specific app")
+	pflag.String("start-edit-app", "", "Open the environment variables editor for a specific app (restore nav stack)")
+
 	// Configuration / Menu
 	pflag.StringP("menu", "M", "", "Show menu (main, config, options, etc.)")
 	pflag.String("config-pm", "", "Config package manager")
