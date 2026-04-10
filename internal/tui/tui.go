@@ -599,6 +599,7 @@ func TriggerComposeUpdate() tea.Cmd {
 		dialog := NewProgramBoxModel("{{|TitleSuccess|}}Docker Compose{{[-]}}", "", "")
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
+		dialog.SetMaximized(true)
 		return ShowDialogMsg{Dialog: dialog}
 	}
 }
@@ -627,6 +628,7 @@ func TriggerComposeStop() tea.Cmd {
 		dialog := NewProgramBoxModel("{{|TitleQuestion|}}Docker Compose{{[-]}}", "", "")
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
+		dialog.SetMaximized(true)
 		return ShowDialogMsg{Dialog: dialog}
 	}
 }
@@ -645,6 +647,7 @@ func TriggerDockerPrune() tea.Cmd {
 		dialog := NewProgramBoxModel("{{|TitleQuestion|}}Docker Prune{{[-]}}", "", "")
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
+		dialog.SetMaximized(true)
 		return ShowDialogMsg{Dialog: dialog}
 	}
 }
