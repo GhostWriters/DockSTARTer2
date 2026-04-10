@@ -101,13 +101,7 @@ func handleEditVars(ctx context.Context, group *CommandGroup) error {
 		}
 	}
 	if appName != "" {
-		upper := strings.ToUpper(appName)
-		conf := config.LoadAppConfig()
-		if !appenv.IsAppReferenced(ctx, upper, conf) {
-			logger.Warn(ctx, "Application '{{|App|}}%s{{[-]}}' is not installed.", upper)
-			return fmt.Errorf("application not installed: %s", upper)
-		}
-		appName = upper
+		appName = strings.ToUpper(appName)
 	}
 	isRoot := group.Command == "--edit-global" || group.Command == "--edit-app"
 	if err := tui.StartEditor(ctx, appName, isRoot); err != nil {
