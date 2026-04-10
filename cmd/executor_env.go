@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/tui"
 )
 
 // Helper to resolve VAR and FILE from argument
@@ -256,6 +258,42 @@ func handleEnvAppVarsLines(ctx context.Context, group *CommandGroup) error {
 		for _, l := range lines {
 			logger.Display(ctx, l)
 		}
+	}
+	return nil
+}
+
+func handleEnvEdit(ctx context.Context, group *CommandGroup) error {
+	if len(group.Args) == 0 {
+		logger.Error(ctx, "The '{{|UserCommand|}}%s{{[-]}}' command requires a variable name.", group.Command)
+		return fmt.Errorf("no variable name provided")
+	}
+
+	upperCase := !strings.Contains(group.Command, "-lower")
+	arg := group.Args[0]
+
+	var appName, varName string
+	if strings.Contains(arg, ":") {
+		parts := strings.SplitN(arg, ":", 2)
+		appName = strings.ToUpper(parts[0])
+		varName = parts[1]
+	} else {
+		varName = arg
+	}
+
+	if upperCase {
+		varName = strings.ToUpper(varName)
+	}
+
+	if !appenv.VarNameIsValid(varName, "") {
+		logger.Error(ctx, "'{{|Var|}}%s{{[-]}}' is an invalid variable name.", varName)
+		return fmt.Errorf("invalid variable name: %s", varName)
+	}
+
+	if err := tui.StartVarEditor(ctx, appName, varName); err != nil {
+		if !errors.Is(err, tui.ErrUserAborted) {
+			logger.Error(ctx, "TUI Error: %v", err)
+		}
+		return err
 	}
 	return nil
 }

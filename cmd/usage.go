@@ -212,6 +212,16 @@ func GetUsage(target string) string {
 			"	Set the {{|UsageVar|}}<val>{{[-]}}ue of a {{|UsageVar|}}<var>{{[-]}}iable",
 		)
 	}
+	if match("--env-edit", "--env-edit-lower") {
+		printStr(
+			"{{|UsageCommand|}}--env-edit{{[-]}} {{|UsageVar|}}<var>{{[-]}}",
+			"{{|UsageCommand|}}--env-edit{{[-]}} {{|UsageVar|}}<app>:<var>{{[-]}}",
+			"	Open the value picker TUI for a {{|UsageVar|}}<var>{{[-]}}iable (upper-cased)",
+			"{{|UsageCommand|}}--env-edit-lower{{[-]}} {{|UsageVar|}}<var>{{[-]}}",
+			"{{|UsageCommand|}}--env-edit-lower{{[-]}} {{|UsageVar|}}<app>:<var>{{[-]}}",
+			"	Open the value picker TUI for a {{|UsageVar|}}<var>{{[-]}}iable (preserve case)",
+		)
+	}
 	if match("-l", "--list", "--list-added", "--list-builtin", "--list-deprecated", "--list-enabled", "--list-disabled", "--list-nondeprecated", "--list-referenced") {
 		printStr(
 			"{{|UsageCommand|}}-l --list{{[-]}}",

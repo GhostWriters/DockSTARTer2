@@ -46,13 +46,20 @@ type setValueDialogModel struct {
 	offset int
 	maxVis int
 
-	focus setValueFocus
+	focus    setValueFocus
+	onSave   func(string) tea.Cmd // non-nil in standalone mode: write value directly
+	onCancel tea.Cmd              // non-nil in standalone mode: quit instead of CloseDialogMsg{}
 }
 
 // newSetValueDialog constructs the Set Value dialog.
+// onSave and onCancel are nil in normal (tabbed editor) mode.
+// In standalone CLI mode, onSave writes the value to the env file and quits;
+// onCancel is tea.Quit so Cancel/Esc exits the TUI instead of returning to a parent screen.
 func newSetValueDialog(
 	varName, appName, appDesc, origVal string,
 	opts []appenv.VarOption,
+	onSave func(string) tea.Cmd,
+	onCancel tea.Cmd,
 ) *setValueDialogModel {
 	ti := textinput.New()
 	ti.SetValue(origVal)
@@ -70,16 +77,27 @@ func newSetValueDialog(
 	ti.SetStyles(tiStyles)
 
 	return &setValueDialogModel{
-		varName: varName,
-		appName: appName,
-		appDesc: appDesc,
-		origVal: origVal,
-		input:   sinput.New(ti),
-		opts:    opts,
-		focus:   setValueFocusInput,
-		maxVis:  8,
+		varName:  varName,
+		appName:  appName,
+		appDesc:  appDesc,
+		origVal:  origVal,
+		input:    sinput.New(ti),
+		opts:     opts,
+		focus:    setValueFocusInput,
+		maxVis:   8,
+		onSave:   onSave,
+		onCancel: onCancel,
 	}
 }
+
+// Title implements tui.ScreenModel for standalone use.
+func (m *setValueDialogModel) Title() string { return "Set Value: " + m.varName }
+
+// MenuName implements tui.ScreenModel; the standalone var editor has no menu alias.
+func (m *setValueDialogModel) MenuName() string { return "" }
+
+// HasDialog implements tui.ScreenModel.
+func (m *setValueDialogModel) HasDialog() bool { return false }
 
 func (m *setValueDialogModel) Init() tea.Cmd {
 	return sinput.Blink
@@ -90,7 +108,11 @@ func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return func() tea.Msg { return tui.CloseDialogMsg{Result: result} }
 	}
 	submit := func() tea.Cmd {
-		return closeWith(ApplyVarValueMsg{VarName: m.varName, Value: m.input.Value()})
+		val := m.input.Value()
+		if m.onSave != nil {
+			return m.onSave(val)
+		}
+		return closeWith(ApplyVarValueMsg{VarName: m.varName, Value: val})
 	}
 	selectOpt := func(idx int) {
 		if idx >= 0 && idx < len(m.opts) {
@@ -105,6 +127,9 @@ func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return func() tea.Msg {
 			if hasChanges() && !tui.Confirm("Discard Changes", "Discard changes to "+m.varName+"?", false) {
 				return nil
+			}
+			if m.onCancel != nil {
+				return m.onCancel()
 			}
 			return tui.CloseDialogMsg{}
 		}

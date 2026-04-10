@@ -7,9 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/compose"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/docker"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/theme"
@@ -238,6 +240,117 @@ func StartEditor(ctx context.Context, appName string, isRoot bool) error {
 	}
 
 	model := NewAppModel(ctx, currentConfig, startScreen, initialStack...)
+	p := NewProgram(model)
+	programExited = make(chan struct{})
+
+	go startUpdateChecker(ctx)
+	go func() {
+		<-ctx.Done()
+		Shutdown()
+	}()
+
+	finalModel, err := p.Run()
+	close(programExited)
+	drainStdin()
+	fmt.Print("\x1b[0m\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1049l\n")
+
+	if err != nil {
+		logger.FatalWithStack(ctx, "TUI Error: %v", err)
+	}
+
+	if m, ok := finalModel.(*AppModel); ok && m.Fatal {
+		logger.TUIMode = false
+		console.AbortHandler(ctx)
+		return ErrUserAborted
+	}
+
+	return nil
+}
+
+// VarEditorFactory creates a standalone Set Value screen for a single variable.
+// Called by screens/init.go to avoid a circular import.
+type VarEditorFactory func(
+	varName, appName, appDesc, origVal string,
+	opts []appenv.VarOption,
+	onSave func(string) tea.Cmd,
+	onCancel tea.Cmd,
+) ScreenModel
+
+var varEditorFactory VarEditorFactory
+
+// RegisterVarEditorFactory stores the factory for use by StartVarEditor.
+// Called from screens/init.go during package initialization.
+func RegisterVarEditorFactory(f VarEditorFactory) {
+	varEditorFactory = f
+}
+
+// StartVarEditor launches the TUI with the standalone Set Value dialog for a single variable.
+// appName is "" for the global .env file, or an app name for .env.app.<appname>.
+// varName is the variable to edit (upper-cased by the caller).
+func StartVarEditor(ctx context.Context, appName, varName string) error {
+	console.SetTUIEnabled(true)
+	defer console.SetTUIEnabled(false)
+
+	logger.TUIMode = true
+	defer func() { logger.TUIMode = false }()
+
+	defer func() {
+		if r := recover(); r != nil {
+			Shutdown()
+			logger.FatalWithStack(ctx, "TUI Panic: %v", r)
+		}
+	}()
+
+	if err := Initialize(ctx); err != nil {
+		return err
+	}
+
+	conf := config.LoadAppConfig()
+
+	// Resolve env file path
+	var file string
+	if appName == "" {
+		file = strings.Join([]string{conf.ComposeDir, constants.EnvFileName}, "/")
+	} else {
+		file = conf.ComposeDir + "/" + constants.AppEnvFileNamePrefix + strings.ToLower(appName)
+	}
+
+	// Get current value
+	origVal, _ := appenv.Get(varName, file)
+
+	// Load app metadata for description and preset options
+	var meta *appenv.AppMeta
+	if appName != "" {
+		if m, err := appenv.LoadAppMeta(ctx, appName); err == nil {
+			meta = m
+		}
+	}
+
+	appDesc := ""
+	if meta != nil {
+		if vm, ok := meta.GetVarMeta(varName, appName); ok {
+			appDesc = vm.HelpText
+		}
+	}
+
+	opts := appenv.GetVarOptions(varName, strings.ToUpper(appName), origVal, meta)
+	// Prepend "Original Value" so the user can revert easily
+	opts = append([]appenv.VarOption{{
+		Display: "Original Value",
+		Value:   origVal,
+		Help:    "Restore the value that was set before editing.",
+	}}, opts...)
+
+	onSave := func(val string) tea.Cmd {
+		if err := appenv.Set(ctx, varName, val, file); err != nil {
+			logger.Error(ctx, "Failed to set %s: %v", varName, err)
+		}
+		return tea.Quit
+	}
+
+	startScreen := varEditorFactory(varName, appName, appDesc, origVal, opts, onSave, tea.Quit)
+
+	model := NewAppModel(ctx, currentConfig, startScreen)
 	p := NewProgram(model)
 	programExited = make(chan struct{})
 

@@ -3,6 +3,7 @@ package screens
 import (
 	"strings"
 
+	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/tui"
 
@@ -10,6 +11,17 @@ import (
 )
 
 func init() {
+	// Register the standalone var editor factory so tui.StartVarEditor can create
+	// a Set Value screen without importing the screens package (circular import).
+	tui.RegisterVarEditorFactory(func(
+		varName, appName, appDesc, origVal string,
+		opts []appenv.VarOption,
+		onSave func(string) tea.Cmd,
+		onCancel tea.Cmd,
+	) tui.ScreenModel {
+		return newSetValueDialog(varName, appName, appDesc, origVal, opts, onSave, onCancel)
+	})
+
 	// Register the editor factory so tui.StartEditor can create editor screens
 	// without importing the screens package (which would be circular).
 	tui.RegisterEditorFactory(func(appName string, onClose tea.Cmd) tui.ScreenModel {

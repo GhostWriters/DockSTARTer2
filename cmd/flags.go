@@ -58,6 +58,9 @@ func InitFlags() {
 	pflag.String("env-set-lower", "", "Set variable value (lowercase)")
 	pflag.String("env-set-lower-literal", "", "Set variable literal value (lowercase)")
 
+	pflag.String("env-edit", "", "Open the value picker TUI for a variable (APP:VAR or VAR)")
+	pflag.String("env-edit-lower", "", "Open the value picker TUI for a variable (preserve case)")
+
 	// Editor
 	pflag.Bool("edit-global", false, "Open the global environment variables editor")
 	pflag.Bool("start-edit-global", false, "Open the global environment variables editor (restore nav stack)")
