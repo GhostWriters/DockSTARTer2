@@ -3200,10 +3200,13 @@ func (m Model) lineNumberView(n int, isCursorLine bool, dataLine int) (str strin
 	// Format line number dynamically based on the maximum number of lines.
 	// Minimum of 3 digits for consistent alignment as per user request.
 	digits := max(3, numDigits(m.MaxHeight))
-	// Single character left margin (" ") followed by the number ("%*v ")
-	str = fmt.Sprintf(" %*v ", digits, str)
-
-	return lineNumberStyle.Render(str)
+	
+	// Apply line number style ONLY to the digits themselves.
+	// The outer right spacing is rendered natively so it inherits 
+	// the dialogue base background color rather than the line number background.
+	formattedNum := fmt.Sprintf("%*v", digits, str)
+	
+	return lineNumberStyle.Render(formattedNum) + " "
 }
 
 // placeholderView returns the prompt and placeholder, if any.

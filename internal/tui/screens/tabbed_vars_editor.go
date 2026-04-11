@@ -690,8 +690,8 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg {
 			keyName, err := tui.PromptText("Add Variable", "Enter variable name:", false)
 			if err == nil && keyName != "" {
-				keyName = strings.TrimSpace(strings.ToUpper(keyName))
-				if !strings.HasPrefix(keyName, prefix) {
+				keyName = strings.TrimSpace(keyName)
+				if !strings.HasPrefix(strings.ToUpper(keyName), strings.ToUpper(prefix)) {
 					keyName = prefix + keyName
 				}
 				return envAddVarMsg{key: keyName}
@@ -1370,11 +1370,19 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 		evOpts[0] = appenv.VarOption{Display: "Original Value", Value: evOrigVal, Help: "Restore the value from before editing."}
 		copy(evOpts[1:], opts)
 		evTab := tab
+		
+		varHelp := ""
+		if desc := appenv.GetVarHelpText(evVarName); desc != "" {
+			varHelp = desc
+		} else if vm, ok := evTab.appMeta.GetVarMeta(evVarName, evTab.spec.App); ok && vm.HelpText != "" {
+			varHelp = vm.HelpText
+		}
+		
 		items = append(items, tui.ContextMenuItem{
 			Label: "Edit Value",
 			Help:  "Open the value editor for this variable.",
 			Action: func() tea.Msg {
-				dlg := newSetValueDialog(evVarName, evTab.niceName, evTab.description, "", evOrigVal, evOpts, nil, nil)
+				dlg := newSetValueDialog(evVarName, evTab.niceName, evTab.description, evTab.envFilePath, evOrigVal, evOpts, varHelp, nil, nil)
 				return tui.CloseDialogMsg{Result: tui.ShowDialogMsg{Dialog: dlg}}
 			},
 		})
@@ -1508,7 +1516,7 @@ func (m *TabbedVarsEditorModel) showAddVarDialog() tea.Cmd {
 		return func() tea.Msg {
 			keyName, err := tui.PromptText("Add Variable", "Enter new variable name:", false)
 			if err == nil && keyName != "" {
-				return envAddVarMsg{key: strings.TrimSpace(strings.ToUpper(keyName))}
+				return envAddVarMsg{key: strings.TrimSpace(keyName)}
 			}
 			return nil
 		}
@@ -1590,7 +1598,14 @@ func (m *TabbedVarsEditorModel) showSetValueDialog() tea.Cmd {
 		Value:   origVal,
 		Help:    "Restore the value from before editing.",
 	}}, opts...)
-	dlg := newSetValueDialog(varName, tab.niceName, tab.description, tab.envFilePath, origVal, opts, nil, nil)
+	varHelp := ""
+	if desc := appenv.GetVarHelpText(varName); desc != "" {
+		varHelp = desc
+	} else if vm, ok := tab.appMeta.GetVarMeta(varName, tab.spec.App); ok && vm.HelpText != "" {
+		varHelp = vm.HelpText
+	}
+
+	dlg := newSetValueDialog(varName, tab.niceName, tab.description, tab.envFilePath, origVal, opts, varHelp, nil, nil)
 	return func() tea.Msg {
 		return tui.ShowDialogMsg{Dialog: dlg}
 	}

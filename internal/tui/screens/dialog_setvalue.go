@@ -37,6 +37,7 @@ type setValueDialogModel struct {
 	appDesc  string
 	filePath string // shown in heading; empty = omit
 	origVal  string // original value at open time (shown in heading)
+	varHelp  string
 
 	input        sinput.Model
 	inputScreenX int // abs screen X of text start; set in GetHitRegions
@@ -61,6 +62,7 @@ type setValueDialogModel struct {
 func newSetValueDialog(
 	varName, appName, appDesc, filePath, origVal string,
 	opts []appenv.VarOption,
+	helpText string,
 	onSave func(string) tea.Cmd,
 	onCancel tea.Cmd,
 ) *setValueDialogModel {
@@ -85,6 +87,7 @@ func newSetValueDialog(
 		appDesc:  appDesc,
 		filePath: filePath,
 		origVal:  origVal,
+		varHelp:  helpText,
 		input:    sinput.New(ti),
 		opts:     opts,
 		focus:    setValueFocusInput,
@@ -621,8 +624,8 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 		VarName: m.varName, OriginalValue: m.origVal, CurrentValue: m.input.Value(),
 	}, contentW)
 	headingH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToThemeANSI(headingRaw)))
-	// outer border(1) + padding(1) + headingH + "Current Value" section(3)
-	listTop := 1 + 1 + headingH + 3
+	// outer border(1) + headingH + "Current Value" section(3) (headingH includes padding natively)
+	listTop := 1 + headingH + 3
 
 	// Cover the full preset content area (including blank rows) so clicking
 	// anywhere in the box focuses the list.
@@ -678,6 +681,14 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 		nil,
 	)...)
 
+	pageText := m.appDesc
+	if m.varHelp != "" {
+		if pageText != "" {
+			pageText += "\n\n"
+		}
+		pageText += m.varHelp
+	}
+
 	// Dialog background
 	regions = append(regions, tui.HitRegion{
 		ID:     "setvalue_dialog",
@@ -690,7 +701,7 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 		Help: &tui.HelpContext{
 			ScreenName: "Set Value: " + m.varName,
 			PageTitle:  "Variable Info",
-			PageText:   m.appDesc,
+			PageText:   pageText,
 		},
 	})
 
@@ -708,14 +719,14 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 		Help: &tui.HelpContext{
 			ScreenName: "Set Value: " + m.varName,
 			PageTitle:  "Variable Info",
-			PageText:   m.appDesc,
+			PageText:   pageText,
 		},
 	})
 	regions = append(regions, tui.GetButtonHitRegions(
 		tui.HelpContext{
 			ScreenName: "Set Value: " + m.varName,
 			PageTitle:  "Variable Info",
-			PageText:   m.appDesc,
+			PageText:   pageText,
 		},
 		"setvalue_dialog", offsetX+1, offsetY+buttonY, contentW, tui.ZDialog+20,
 		tui.ButtonSpec{Text: "Save", ZoneID: "Save", Help: "Save the current value and return."},

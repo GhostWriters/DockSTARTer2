@@ -271,6 +271,7 @@ func StartEditor(ctx context.Context, appName string, isRoot bool) error {
 type VarEditorFactory func(
 	varName, appName, appDesc, filePath, origVal string,
 	opts []appenv.VarOption,
+	helpText string,
 	onSave func(string) tea.Cmd,
 	onCancel tea.Cmd,
 ) ScreenModel
@@ -312,8 +313,8 @@ func StartVarEditor(ctx context.Context, appName, varName, file string) error {
 		metaAppName = appenv.VarNameToAppName(varName)
 	}
 
-	// Get current value
-	origVal, _ := appenv.Get(varName, file)
+	// Get current value (preserve literal quotes/spacing)
+	origVal, _ := appenv.GetLiteral(varName, file)
 
 	// Load app metadata for description and preset options
 	var meta *appenv.AppMeta
@@ -338,6 +339,15 @@ func StartVarEditor(ctx context.Context, appName, varName, file string) error {
 		Help:    "Restore the value that was set before editing.",
 	}}, opts...)
 
+	helpText := ""
+	if desc := appenv.GetVarHelpText(varName); desc != "" {
+		helpText = desc
+	} else if meta != nil {
+		if vm, ok := meta.GetVarMeta(varName, strings.ToUpper(metaAppName)); ok && vm.HelpText != "" {
+			helpText = vm.HelpText
+		}
+	}
+
 	onSave := func(val string) tea.Cmd {
 		if err := appenv.SetLiteral(ctx, varName, val, file); err != nil {
 			logger.Error(ctx, "Failed to set %s: %v", varName, err)
@@ -347,7 +357,7 @@ func StartVarEditor(ctx context.Context, appName, varName, file string) error {
 
 	// Use the display-friendly app name (e.g. "Plex" not "PLEX") to match the tabbed editor
 	displayAppName := appenv.GetNiceName(ctx, metaAppName)
-	startScreen := varEditorFactory(varName, displayAppName, appDesc, file, origVal, opts, onSave, tea.Quit)
+	startScreen := varEditorFactory(varName, displayAppName, appDesc, file, origVal, opts, helpText, onSave, tea.Quit)
 
 	model := NewAppModel(ctx, currentConfig, startScreen)
 	p := NewProgram(model)
