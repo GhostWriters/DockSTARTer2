@@ -196,6 +196,55 @@ func IsTrue(val string) bool {
 	return val == "true" || val == "yes" || val == "1" || val == "on"
 }
 
+// GetFromLines returns the last value for key found in lines, and whether it was found.
+// Lines is a slice of raw KEY=value strings (comments and blanks are skipped).
+// Uses the last occurrence so duplicate keys behave like MergeEnv/save.
+func GetFromLines(key string, lines []string) (string, bool) {
+	key = strings.TrimSpace(key)
+	found := false
+	val := ""
+	for _, l := range lines {
+		eqIdx := strings.Index(l, "=")
+		if eqIdx <= 0 {
+			continue
+		}
+		if strings.TrimSpace(l[:eqIdx]) == key {
+			raw := strings.TrimSpace(l[eqIdx+1:])
+			// Strip surrounding quotes to match the behaviour of the file-based Get function.
+			if len(raw) >= 2 && (raw[0] == '\'' || raw[0] == '"') && raw[len(raw)-1] == raw[0] {
+				raw = raw[1 : len(raw)-1]
+			}
+			val = raw
+			found = true
+			// no break — last value wins
+		}
+	}
+	return val, found
+}
+
+// IsAppUserDefinedFromLines reports whether the app is user-defined according to the
+// provided staged env lines (instead of reading from disk).
+// An app is user-defined when it is not built-in, or when APPNAME__ENABLED is absent.
+func IsAppUserDefinedFromLines(ctx context.Context, appName string, lines []string) bool {
+	appUpper := strings.ToUpper(appName)
+	if !IsAppBuiltIn(appUpper) {
+		return true
+	}
+	_, exists := GetFromLines(appUpper+"__ENABLED", lines)
+	return !exists
+}
+
+// IsAppEnabledFromLines reports whether the app is enabled according to the
+// provided staged env lines (instead of reading from disk).
+func IsAppEnabledFromLines(appName string, lines []string) bool {
+	appUpper := strings.ToUpper(appName)
+	if !IsAppBuiltIn(appUpper) {
+		return false
+	}
+	val, exists := GetFromLines(appUpper+"__ENABLED", lines)
+	return exists && IsTrue(val)
+}
+
 // InstanceNameIsValid checks if an instance name is allowed.
 func InstanceNameIsValid(name string) bool {
 	invalidNames := map[string]bool{

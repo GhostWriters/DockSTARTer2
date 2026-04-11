@@ -1044,6 +1044,18 @@ func (m *Model) GetContent() string {
 	return sb.String()
 }
 
+// ActiveLines returns the buffer as a []string with PendingDelete lines excluded.
+func (m *Model) ActiveLines() []string {
+	out := make([]string, 0, len(m.value))
+	for i, l := range m.value {
+		if i < len(m.lineMeta) && m.lineMeta[i].PendingDelete {
+			continue
+		}
+		out = append(out, string(l))
+	}
+	return out
+}
+
 // CurrentLineMeta returns the meta information of the current line
 func (m *Model) CurrentLineMeta() (Line, bool) {
 	if m.row < len(m.lineMeta) {
@@ -1096,10 +1108,12 @@ func (m *Model) MoveVariableUp() {
 	if m.row <= 0 || m.row >= len(m.value) {
 		return
 	}
-	if m.lineMeta[m.row].ReadOnly || m.lineMeta[m.row-1].ReadOnly {
+	// Allow pending-delete lines to move (they can be restored); block truly read-only lines.
+	cur, prev := m.lineMeta[m.row], m.lineMeta[m.row-1]
+	if (cur.ReadOnly && !cur.PendingDelete) || (prev.ReadOnly && !prev.PendingDelete) {
 		return
 	}
-	if !m.lineMeta[m.row].IsUserDefined || !m.lineMeta[m.row-1].IsUserDefined {
+	if !cur.IsUserDefined || !prev.IsUserDefined {
 		return
 	}
 
@@ -1118,10 +1132,12 @@ func (m *Model) MoveVariableDown() {
 	if m.row >= len(m.value)-1 {
 		return
 	}
-	if m.lineMeta[m.row].ReadOnly || m.lineMeta[m.row+1].ReadOnly {
+	// Allow pending-delete lines to move (they can be restored); block truly read-only lines.
+	cur, next := m.lineMeta[m.row], m.lineMeta[m.row+1]
+	if (cur.ReadOnly && !cur.PendingDelete) || (next.ReadOnly && !next.PendingDelete) {
 		return
 	}
-	if !m.lineMeta[m.row].IsUserDefined || !m.lineMeta[m.row+1].IsUserDefined {
+	if !cur.IsUserDefined || !next.IsUserDefined {
 		return
 	}
 
@@ -1147,6 +1163,40 @@ func (m *Model) DeleteCurrentVariable() bool {
 	m.lineMeta[m.row].ReadOnly = true // prevent editing while pending
 	m.InvalidateCache()
 	return true
+}
+
+// UndeleteCurrentVariable clears the PendingDelete flag on the current line,
+// restoring it to its pre-deletion state.
+func (m *Model) UndeleteCurrentVariable() bool {
+	if m.row >= len(m.lineMeta) || !m.lineMeta[m.row].PendingDelete {
+		return false
+	}
+	m.pushUndoSnapshot()
+	m.lineMeta[m.row].PendingDelete = false
+	m.lineMeta[m.row].ReadOnly = false
+	m.InvalidateCache()
+	return true
+}
+
+// UndeleteVariableByName finds the first PendingDelete row containing varName= and restores it.
+func (m *Model) UndeleteVariableByName(varName string) bool {
+	prefix := varName + "="
+	for row, meta := range m.lineMeta {
+		if !meta.PendingDelete {
+			continue
+		}
+		line := strings.TrimSpace(string(m.value[row]))
+		if strings.HasPrefix(line, prefix) {
+			saved := m.row
+			m.row = row
+			ok := m.UndeleteCurrentVariable()
+			if !ok {
+				m.row = saved
+			}
+			return ok
+		}
+	}
+	return false
 }
 
 // DeleteVariableByName finds the first row containing varName= and deletes it.
@@ -2491,7 +2541,8 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) {
 			wrappedLines := m.memoizedWrap(lineRunes, m.width)
 			numWrapped := len(wrappedLines)
 			if targetViewLine >= currViewLine && targetViewLine < currViewLine+numWrapped {
-				if m.lineMeta[l].IsUserDefined && !m.lineMeta[l].ReadOnly {
+				lm := m.lineMeta[l]
+				if lm.IsUserDefined && (!lm.ReadOnly || lm.PendingDelete) {
 					m.isDragging = true
 					m.draggedRow = l
 					m.row = l

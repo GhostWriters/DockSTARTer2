@@ -99,6 +99,7 @@ func (m *Model) ReclassifyEnv(defaultFunc func(string) string, readOnlyVars []st
 	m.diffCache = make(map[int][]bool)
 
 	inUserDefinedSection := false
+	inDisabledSection := false
 	for i, line := range m.value {
 		existing := m.lineMeta[i]
 
@@ -119,12 +120,18 @@ func (m *Model) ReclassifyEnv(defaultFunc func(string) string, readOnlyVars []st
 
 		if strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "***") {
 			l.ReadOnly = true
-			if strings.HasPrefix(trimmed, "###") && strings.Contains(trimmed, "(User Defined") {
-				inUserDefinedSection = true
+			if strings.HasPrefix(trimmed, "###") {
+				if strings.Contains(trimmed, "(User Defined") {
+					inUserDefinedSection = true
+					inDisabledSection = false
+				} else if strings.Contains(trimmed, "(Disabled)") {
+					inDisabledSection = true
+					inUserDefinedSection = false
+				}
 			}
 		} else if trimmed == "" {
 			l.ReadOnly = false
-			if inUserDefinedSection {
+			if inUserDefinedSection || inDisabledSection {
 				l.IsUserDefined = true
 			}
 		} else {
@@ -143,11 +150,11 @@ func (m *Model) ReclassifyEnv(defaultFunc func(string) string, readOnlyVars []st
 
 				if isReadOnly {
 					l.ReadOnly = true
-					if inUserDefinedSection {
+					if inUserDefinedSection || inDisabledSection {
 						l.IsInvalid = true
 					}
 				} else {
-					if inUserDefinedSection {
+					if inUserDefinedSection || inDisabledSection {
 						l.IsUserDefined = true
 					} else if existing.IsNewLine || existing.IsUserDefined {
 						// Variable was typed/inserted by the user; preserve user-defined status.
@@ -162,7 +169,7 @@ func (m *Model) ReclassifyEnv(defaultFunc func(string) string, readOnlyVars []st
 					}
 				}
 			} else {
-				if !inUserDefinedSection {
+				if !inUserDefinedSection && !inDisabledSection {
 					l.ReadOnly = true
 				} else {
 					l.IsUserDefined = true
@@ -252,6 +259,158 @@ func (m *Model) MergeEnv() bool {
 
 	m.InvalidateCache()
 	return true
+}
+
+// GetVarValue returns the current staged value for the given variable key,
+// and whether the key was found in the buffer.
+func (m *Model) GetVarValue(key string) (string, bool) {
+	key = strings.TrimSpace(key)
+	for i, meta := range m.lineMeta {
+		if !meta.IsVariable || meta.PendingDelete {
+			continue
+		}
+		line := string(m.value[i])
+		eqIdx := strings.Index(line, "=")
+		if eqIdx < 0 {
+			continue
+		}
+		if strings.TrimSpace(line[:eqIdx]) == key {
+			return line[eqIdx+1:], true
+		}
+	}
+	return "", false
+}
+
+// ReformatEnv replaces the buffer by calling formatFunc on the staged variable lines,
+// then re-parsing the result. Diff-tracking fields (InitialLine, IsNewLine, PendingDelete)
+// are preserved by variable key so markers survive the reformat. Lines with no valid
+// KEY=value (incomplete user edits) are preserved at the end of the buffer.
+func (m *Model) ReformatEnv(defaultFunc func(string) string, readOnlyVars []string, formatFunc func([]string) []string) {
+	if formatFunc == nil {
+		return
+	}
+
+	// Snapshot cursor position by variable key and column offset so we can restore
+	// it after the buffer is rebuilt (the line number will change but the key won't).
+	cursorKey := ""
+	cursorCol := m.col
+	if m.row < len(m.value) && m.row < len(m.lineMeta) {
+		line := string(m.value[m.row])
+		if eqIdx := strings.Index(line, "="); eqIdx > 0 {
+			cursorKey = strings.TrimSpace(line[:eqIdx])
+		}
+	}
+
+	// Snapshot diff metadata by key for all complete variable lines.
+	type diffSnap struct {
+		InitialLine   string
+		IsNewLine     bool
+		PendingDelete bool
+	}
+	snapshot := make(map[string]diffSnap)
+	deletedKeys := make(map[string]bool) // keys staged for deletion — must not re-appear after reformat
+
+	// Collect complete lines (valid KEY=value, non-PendingDelete) and incomplete lines.
+	type incLine struct {
+		value []rune
+		meta  Line
+	}
+	var completeLines []string
+	var incompleteLines []incLine
+
+	for i, meta := range m.lineMeta {
+		if !meta.IsVariable {
+			continue
+		}
+		line := string(m.value[i])
+		eqIdx := strings.Index(line, "=")
+		if eqIdx > 0 {
+			key := strings.TrimSpace(line[:eqIdx])
+			if key != "" {
+				if meta.PendingDelete {
+					deletedKeys[key] = true
+				} else {
+					snapshot[key] = diffSnap{
+						InitialLine:   meta.InitialLine,
+						IsNewLine:     meta.IsNewLine,
+						PendingDelete: false,
+					}
+				}
+				completeLines = append(completeLines, line)
+				continue
+			}
+		}
+		// Incomplete line (no valid key yet) — preserve if it's a user-added line.
+		if meta.IsNewLine && !meta.PendingDelete {
+			incompleteLines = append(incompleteLines, incLine{value: m.value[i], meta: meta})
+		}
+	}
+
+	// Call the format function with the staged variable lines.
+	formatted := formatFunc(completeLines)
+	if len(formatted) == 0 {
+		return
+	}
+
+	// Re-parse the formatted result.
+	m.ParseEnv(strings.Join(formatted, "\n"), defaultFunc, readOnlyVars)
+
+	// Restore diff markers by key. For keys that were pending-delete, re-apply that
+	// status even if FormatLinesCore re-introduced them from the template — they will
+	// be correctly positioned in the buffer and still show the `-` delete marker.
+	for i, meta := range m.lineMeta {
+		if !meta.IsVariable {
+			continue
+		}
+		line := string(m.value[i])
+		eqIdx := strings.Index(line, "=")
+		if eqIdx <= 0 {
+			continue
+		}
+		key := strings.TrimSpace(line[:eqIdx])
+		if deletedKeys[key] {
+			m.lineMeta[i].PendingDelete = true
+			m.lineMeta[i].ReadOnly = true
+		} else if snap, ok := snapshot[key]; ok {
+			m.lineMeta[i].InitialLine = snap.InitialLine
+			m.lineMeta[i].IsNewLine = snap.IsNewLine
+			m.lineMeta[i].PendingDelete = snap.PendingDelete
+		}
+	}
+
+	// Append incomplete lines (user edits without a valid key yet).
+	for _, il := range incompleteLines {
+		m.value = append(m.value, il.value)
+		m.lineMeta = append(m.lineMeta, il.meta)
+	}
+
+	// Restore cursor to the same variable key and column offset if still present.
+	// Fall back to the original row number (clamped) if the key is gone.
+	savedRow := m.row
+	restored := false
+	if cursorKey != "" {
+		for i, meta := range m.lineMeta {
+			if !meta.IsVariable {
+				continue
+			}
+			line := string(m.value[i])
+			if eqIdx := strings.Index(line, "="); eqIdx > 0 {
+				if strings.TrimSpace(line[:eqIdx]) == cursorKey {
+					m.row = i
+					m.col = min(cursorCol, len(m.value[i]))
+					restored = true
+					break
+				}
+			}
+		}
+	}
+	if !restored {
+		m.row = min(savedRow, max(0, len(m.value)-1))
+		m.col = min(cursorCol, len(m.value[m.row]))
+	}
+
+	m.diffCache = make(map[int][]bool)
+	m.InvalidateCache()
 }
 
 // AfterSave updates the editor's baseline to match the current saved state:
