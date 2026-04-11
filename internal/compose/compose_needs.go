@@ -24,12 +24,12 @@ func NeedsYMLMerge(ctx context.Context, force bool) bool {
 
 	// Check main files
 	dockerCompose := filepath.Join(conf.ComposeDir, constants.ComposeFileName)
-	if fileChanged(conf, dockerCompose) {
+	if fileChanged(dockerCompose) {
 		return true
 	}
 
 	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
-	if fileChanged(conf, envFile) {
+	if fileChanged(envFile) {
 		return true
 	}
 
@@ -46,7 +46,7 @@ func NeedsYMLMerge(ctx context.Context, force bool) bool {
 
 	for _, appName := range enabledApps {
 		appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf("%s%s", constants.AppEnvFileNamePrefix, strings.ToLower(appName)))
-		if fileChanged(conf, appEnvFile) {
+		if fileChanged(appEnvFile) {
 			return true
 		}
 
@@ -74,22 +74,22 @@ func UnsetNeedsYMLMerge(ctx context.Context) {
 	_ = os.MkdirAll(timestampsFolder, 0755)
 
 	dockerCompose := filepath.Join(conf.ComposeDir, constants.ComposeFileName)
-	updateTimestamp(ctx, conf, dockerCompose)
+	updateTimestamp(dockerCompose)
 
 	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
-	updateTimestamp(ctx, conf, envFile)
+	updateTimestamp(envFile)
 
 	enabledApps, _ := appenv.ListEnabledApps(conf)
 	for _, appName := range enabledApps {
 		appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf("%s%s", constants.AppEnvFileNamePrefix, strings.ToLower(appName)))
-		updateTimestamp(ctx, conf, appEnvFile)
+		updateTimestamp(appEnvFile)
 	}
 
 }
 
 // Helper functions
 
-func fileChanged(conf config.AppConfig, path string) bool {
+func fileChanged(path string) bool {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return true
 	}
@@ -119,7 +119,7 @@ func fileChanged(conf config.AppConfig, path string) bool {
 	return false
 }
 
-func updateTimestamp(ctx context.Context, conf config.AppConfig, path string) {
+func updateTimestamp(path string) {
 	if !fileExists(path) {
 		return
 	}

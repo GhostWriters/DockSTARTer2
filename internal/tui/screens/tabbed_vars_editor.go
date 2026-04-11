@@ -387,21 +387,6 @@ func (m *TabbedVarsEditorModel) hasErrors() bool {
 func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
-	// Forward raw mouse drag/release events to the editor before the type switch
-	// so the drag continues while AppModel routes events via section-2 priority.
-	if m.IsScrollbarDragging() && len(m.tabs) > 0 {
-		if _, ok := msg.(tea.MouseMotionMsg); ok {
-			var cmd tea.Cmd
-			m.tabs[m.activeTab].editor, cmd = m.tabs[m.activeTab].editor.Update(msg)
-			return m, cmd
-		}
-		if _, ok := msg.(tea.MouseReleaseMsg); ok {
-			var cmd tea.Cmd
-			m.tabs[m.activeTab].editor, cmd = m.tabs[m.activeTab].editor.Update(msg)
-			return m, cmd
-		}
-	}
-
 	switch msg := msg.(type) {
 	case tui.LayerHitMsg:
 		if strings.HasPrefix(msg.ID, "tabbed_vars.tab-") {
@@ -510,6 +495,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
+
 	case tui.LayerWheelMsg, tea.MouseWheelMsg:
 		var wheelBtn tea.MouseButton
 		if mwMsg, ok := msg.(tea.MouseWheelMsg); ok {
@@ -547,6 +533,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.tabs[m.activeTab].editor.Blur()
 				m.activeTab = (m.activeTab + 1) % len(m.tabs)
 				m.tabs[m.activeTab].editor.Focus()
+				m.SetSize(m.width, m.height)
 				return m, nil
 			}
 		case "ctrl+left", "alt+left": // Prev Tab
@@ -557,6 +544,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.activeTab = len(m.tabs) - 1
 				}
 				m.tabs[m.activeTab].editor.Focus()
+				m.SetSize(m.width, m.height)
 				return m, nil
 			}
 		case "tab", "shift+tab":
@@ -582,9 +570,9 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+ ", "shift+F10": // Keyboard equiv of right-click: open context menu at current cursor
 			if m.focus == envFocusEditor && len(m.tabs) > 0 {
 				editor := m.tabs[m.activeTab].editor
-				editorTopY := m.lastOffsetY + 2 + m.subtitleHeight
-				y := editorTopY + editor.CursorVisualRow() - editor.YOffset()
-				x := m.lastOffsetX + 2
+				layout := tui.GetLayout()
+				y := m.lastOffsetY + layout.NestedTopOffset() + m.subtitleHeight + editor.CursorVisualRow() - editor.YOffset()
+				x := m.lastOffsetX + layout.NestedLeftOffset()
 				return m, m.showContextMenuForClick(x, y)
 			}
 		}
@@ -654,8 +642,9 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.focus == envFocusEditor && len(m.tabs) > 0 {
 			editor := m.tabs[m.activeTab].editor
 			if editor.IsDragging() {
-				relX := msg.X - (m.lastOffsetX + 2)
-				relY := msg.Y - (m.lastOffsetY + 2 + m.subtitleHeight)
+				layout := tui.GetLayout()
+				relX := msg.X - (m.lastOffsetX + layout.NestedLeftOffset())
+				relY := msg.Y - (m.lastOffsetY + layout.NestedTopOffset() + m.subtitleHeight)
 				var cmd tea.Cmd
 				m.tabs[m.activeTab].editor, cmd = editor.Update(tea.MouseMotionMsg{
 					X: relX,
@@ -667,8 +656,9 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.MouseReleaseMsg:
 		if m.focus == envFocusEditor && len(m.tabs) > 0 {
-			relX := msg.X - (m.lastOffsetX + 2)
-			relY := msg.Y - (m.lastOffsetY + 2 + m.subtitleHeight)
+			layout := tui.GetLayout()
+			relX := msg.X - (m.lastOffsetX + layout.NestedLeftOffset())
+			relY := msg.Y - (m.lastOffsetY + layout.NestedTopOffset() + m.subtitleHeight)
 			var cmd tea.Cmd
 			m.tabs[m.activeTab].editor, cmd = m.tabs[m.activeTab].editor.Update(tea.MouseReleaseMsg{
 				X:      relX,
@@ -1302,9 +1292,10 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 	tab := &m.tabs[m.activeTab]
 	editor := tab.editor
 
+	layout := tui.GetLayout()
 	// Compute which editor row was clicked.
-	// Editor content starts at: outer border (1) + subtitle + inner border/tab row (1) = lastOffsetY + 2 + subtitleHeight
-	editorTopY := m.lastOffsetY + 2 + m.subtitleHeight
+	// Editor content starts at: lastOffsetY + layout.NestedTopOffset() + m.subtitleHeight
+	editorTopY := m.lastOffsetY + layout.NestedTopOffset() + m.subtitleHeight
 	clickedVisualRow := (y - editorTopY) + editor.YOffset()
 
 	// Convert visual (screen) row to logical line index to handle wrapped lines correctly.

@@ -21,35 +21,33 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case DragDoneMsg:
 		if msg.ID == m.id {
-			m.dragPending = false
+			m.sbDrag.DragPending = false
 			// Catch up to any position skipped while the render was in flight.
-			// Do NOT gate on m.sbDragging: MouseReleaseMsg may have already cleared
-			// it while dragPending was still true, causing the final thumb position
-			// to be silently dropped (visible as "can't drag to the very bottom").
-			// The loop self-terminates once lastDragY == pendingDragY.
-			if m.pendingDragY != m.lastDragY {
-				m.lastDragY = m.pendingDragY
-				if m.scrollbarDragTo(m.pendingDragY) {
+			if m.sbDrag.PendingDragY != m.sbDrag.LastDragY {
+				lastY := m.sbDrag.PendingDragY
+				if m.scrollbarDragTo(lastY) {
+					m.sbDrag.LastDragY = lastY
 					m.InvalidateCache()
+					m.sbDrag.DragPending = true
+					return m, DragDoneCmd(m.id)
 				}
-				m.dragPending = true
-				return m, dragDoneCmd(m.id)
+				// If no row change occurred on catch-up, we still update LastDragY
+				// to avoid a permanent mismatch that would keep the loop alive.
+				m.sbDrag.LastDragY = lastY
 			}
 		}
 		return m, nil
 
 	case tea.MouseMotionMsg:
-		// Motion events are extremely frequent. Handle them here, before the blanket
-		// InvalidateCache(), so non-drag motion exits without any cache churn.
 		if m.sbDrag.Dragging {
-			m.pendingDragY = msg.Y // always record latest position, even if a render is in flight
-			if !m.dragPending {
-				m.lastDragY = msg.Y
+			m.sbDrag.PendingDragY = msg.Y // always record latest position, even if a render is in flight
+			if !m.sbDrag.DragPending {
 				if m.scrollbarDragTo(msg.Y) {
+					m.sbDrag.LastDragY = msg.Y
 					m.InvalidateCache()
+					m.sbDrag.DragPending = true
+					return m, DragDoneCmd(m.id)
 				}
-				m.dragPending = true
-				return m, dragDoneCmd(m.id)
 			}
 		}
 		return m, nil
@@ -84,19 +82,6 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Middle click triggers toggle on the currently focused item
 		return m.handleSpace()
 
-	case tea.MouseMotionMsg:
-		if m.sbDrag.Dragging {
-			m.pendingDragY = msg.Y // always record latest position, even if a render is in flight
-			if !m.dragPending {
-				m.lastDragY = msg.Y
-				if m.scrollbarDragTo(msg.Y) {
-					m.InvalidateCache()
-				}
-				m.dragPending = true
-				return m, dragDoneCmd(m.id)
-			}
-		}
-		return m, nil
 
 	case tea.MouseClickMsg:
 		// Fallback for scrollbar dragging when LayerHitMsg is not dispatched (classic model_mouse logic)
@@ -120,7 +105,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Scrollbar region clicks
 		if strings.HasSuffix(msg.ID, ".sb.thumb") {
 			if msg.Button == tea.MouseLeft {
-				m.sbDrag.Dragging = true
+				m.sbDrag.StartDrag(msg.Y, m.sbAbsTopY, m.sbInfo)
 				m.InvalidateCache()
 			}
 			return m, nil

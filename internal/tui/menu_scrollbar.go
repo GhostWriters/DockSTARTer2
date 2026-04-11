@@ -6,8 +6,22 @@ import (
 
 	"DockSTARTer2/internal/strutil"
 
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
+
+// DragDoneMsg signals that a drag-induced render has completed, allowing
+// the next throttled motion event to be processed.
+type DragDoneMsg struct {
+	ID string
+}
+
+// DragDoneCmd returns a command that sends a DragDoneMsg for the given ID.
+func DragDoneCmd(id string) tea.Cmd {
+	return func() tea.Msg {
+		return DragDoneMsg{ID: id}
+	}
+}
 
 // ScrollbarGutterWidth is the number of columns reserved for the right scrollbar/padding column.
 // This slot is always reserved (space when scrollbar is off, track/thumb when on).
@@ -57,27 +71,43 @@ func ComputeScrollbarInfo(total, visible, offset, height int) ScrollbarInfo {
 // ApplyScrollbarColumnTracked appends one scrollbar/gutter character to the right of every line
 // in content and returns the rendered string together with the scrollbar geometry.
 func ApplyScrollbarColumnTracked(content string, total, visible, offset int, enabled bool, lineChars bool, ctx StyleContext) (string, ScrollbarInfo) {
-	if content == "" {
+	if content == "" && visible <= 0 {
 		return content, ScrollbarInfo{}
 	}
 	// Trim trailing newline to avoid an extra blank line being treated as content.
-	// Standard bubbletea components (like list) usually include a trailing newline.
 	content = strings.TrimSuffix(content, "\n")
 	lines := strings.Split(content, "\n")
-	height := len(lines)
+	if content == "" {
+		lines = nil
+	}
+	contentH := len(lines)
+
+	// Ensure the gutter column spans the full visible height even if content is shorter.
+	// This fixes visual artifacts ("blank line" under scrollbar) and ensures hit regions
+	// for dragging cover the full container.
+	sbHeight := contentH
+	if visible > contentH {
+		sbHeight = visible
+	}
 
 	var col []string
 	var info ScrollbarInfo
 
 	if enabled {
-		info = ComputeScrollbarInfo(total, visible, offset, height)
+		info = ComputeScrollbarInfo(total, visible, offset, sbHeight)
 		col = buildScrollbarColumn(info, lineChars, ctx)
 	} else {
 		blank := lipgloss.NewStyle().Background(ctx.Dialog.GetBackground()).Render(" ")
-		col = make([]string, height)
+		col = make([]string, sbHeight)
 		for i := range col {
 			col[i] = blank
 		}
+		info = ScrollbarInfo{Needed: false, Height: sbHeight}
+	}
+
+	// Pad lines to sbHeight with empty strings so they only receive the gutter character.
+	for len(lines) < sbHeight {
+		lines = append(lines, "")
 	}
 
 	for i, line := range lines {
@@ -341,27 +371,36 @@ func BuildDualLabelBottomBorderCtx(totalWidth int, leftLabel, rightLabel string,
 	return lipgloss.JoinHorizontal(lipgloss.Bottom, parts...)
 }
 
-// ScrollbarDragState tracks the state needed to drag a scrollbar thumb correctly.
+// ScrollbarDragState tracks the state needed to drag a scrollbar thumb correctly with throttling.
 // Embed this in any model that has a draggable scrollbar.
 type ScrollbarDragState struct {
 	Dragging      bool
-	startMouseY   int // absolute mouse Y when drag started
-	startThumbTop int // absolute screen Y of thumb top when drag started
+	StartMouseY   int // absolute mouse Y when drag started
+	StartThumbTop int // absolute screen Y of thumb top when drag started
+
+	// Throttling state
+	PendingDragY int  // latest Y from motion events (always updated)
+	LastDragY    int  // Y last actually applied
+	DragPending  bool // true while a drag render is in-flight
 }
 
-// StartDrag records the starting positions for a new drag.
+// StartDrag records the starting positions for a new drag and resets throttling.
 // sbAbsTopY is the absolute Y of the scrollbar column top (row 0 = up arrow).
 // info is the ScrollbarInfo from the last render.
 // clickY is the absolute mouse Y of the click.
 func (s *ScrollbarDragState) StartDrag(clickY, sbAbsTopY int, info ScrollbarInfo) {
 	s.Dragging = true
-	s.startMouseY = clickY
-	s.startThumbTop = sbAbsTopY + info.ThumbStart
+	s.StartMouseY = clickY
+	s.StartThumbTop = sbAbsTopY + info.ThumbStart
+	s.LastDragY = clickY
+	s.PendingDragY = clickY
+	s.DragPending = false
 }
 
-// StopDrag clears the drag state.
+// StopDrag clears the drag state and throttling flags.
 func (s *ScrollbarDragState) StopDrag() {
 	s.Dragging = false
+	s.DragPending = false
 }
 
 // ThumbTop returns the new clamped thumb-top position (0-based within the track)
@@ -369,7 +408,7 @@ func (s *ScrollbarDragState) StopDrag() {
 // trackTopAbs is sbAbsTopY+1 (first track row, after the up arrow).
 // thumbTravel is trackH - thumbH (max distance the thumb top can move).
 func (s *ScrollbarDragState) ThumbTop(mouseY, trackTopAbs, thumbTravel int) int {
-	newTop := s.startThumbTop + (mouseY - s.startMouseY)
+	newTop := s.StartThumbTop + (mouseY - s.StartMouseY)
 	if newTop < trackTopAbs {
 		newTop = trackTopAbs
 	}
@@ -469,4 +508,76 @@ func BuildScrollPercentBottomBorder(totalWidth int, scrollPct float64, focused b
 	rightConnector := borderStyle.Render(rightT)
 	rightPart := borderStyle.Render(strutil.Repeat(border.Bottom, max(0, rightPadCnt)) + border.BottomRight)
 	return lipgloss.JoinHorizontal(lipgloss.Bottom, leftPart, leftConnector, scrollIndicator, rightConnector, rightPart)
+}// ScrollbarHitRegions returns a slice of granular hit regions for a scrollbar column.
+// baseID is the prefix for hit IDs (e.g. "my-list").
+// sbX, sbAbsTopY: absolute screen coordinates of the top-left of the scrollbar column.
+// info: the ScrollbarInfo describing the geometry of the scrollbar.
+func ScrollbarHitRegions(baseID string, sbX, sbAbsTopY int, info ScrollbarInfo, baseZ int, label string) []HitRegion {
+	var regions []HitRegion
+	if !info.Needed || info.Height < 1 {
+		return regions
+	}
+
+	// Up arrow (row 0)
+	regions = append(regions, HitRegion{
+		ID:     baseID + ".sb.up",
+		X:      sbX,
+		Y:      sbAbsTopY,
+		Width:  1,
+		Height: 1,
+		ZOrder: baseZ + 10,
+		Label:  label + " Scroll Up",
+	})
+
+	// Track above thumb (rows 1..ThumbStart-1)
+	if aboveH := info.ThumbStart - 1; aboveH > 0 {
+		regions = append(regions, HitRegion{
+			ID:     baseID + ".sb.above",
+			X:      sbX,
+			Y:      sbAbsTopY + 1,
+			Width:  1,
+			Height: aboveH,
+			ZOrder: baseZ + 10,
+			Label:  label + " Page Up",
+		})
+	}
+
+	// Thumb (rows ThumbStart..ThumbEnd-1)
+	if thumbH := info.ThumbEnd - info.ThumbStart; thumbH > 0 {
+		regions = append(regions, HitRegion{
+			ID:     baseID + ".sb.thumb",
+			X:      sbX,
+			Y:      sbAbsTopY + info.ThumbStart,
+			Width:  1,
+			Height: thumbH,
+			ZOrder: baseZ + 11,
+			Label:  label + " Scroll Thumb",
+		})
+	}
+
+	// Track below thumb (rows ThumbEnd..Height-2)
+	if belowH := (info.Height - 1) - info.ThumbEnd; belowH > 0 {
+		regions = append(regions, HitRegion{
+			ID:     baseID + ".sb.below",
+			X:      sbX,
+			Y:      sbAbsTopY + info.ThumbEnd,
+			Width:  1,
+			Height: belowH,
+			ZOrder: baseZ + 10,
+			Label:  label + " Page Down",
+		})
+	}
+
+	// Down arrow (row Height-1)
+	regions = append(regions, HitRegion{
+		ID:     baseID + ".sb.down",
+		X:      sbX,
+		Y:      sbAbsTopY + info.Height - 1,
+		Width:  1,
+		Height: 1,
+		ZOrder: baseZ + 10,
+		Label:  label + " Scroll Down",
+	})
+
+	return regions
 }
