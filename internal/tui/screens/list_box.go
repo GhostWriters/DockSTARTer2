@@ -85,10 +85,16 @@ func RenderListInBorderedBox(
 	sInnerW, targetH int,
 	focused bool,
 	ctx tui.StyleContext,
-) string {
+) (string, tui.ScrollbarInfo) {
+	// Use the actual physical inner height (targetH - 2) for scrollbar geometry
+	// and padding, ensuring the gutter column always spans the full box.
+	innerH := targetH - 2
+	if innerH < 1 {
+		innerH = 1
+	}
 	listContent, sbInfo := tui.ApplyScrollbarColumnTracked(
 		strings.Join(listLines, "\n"),
-		totalRows, visRows, offsetRows,
+		totalRows, innerH, offsetRows,
 		tui.IsScrollbarEnabled(), ctx.LineCharacters, ctx,
 	)
 
@@ -117,39 +123,37 @@ func RenderListInBorderedBox(
 		}
 	}
 
-	return section
+	return section, sbInfo
 }
 
-// ListBoxHitRegions returns the two hit regions used by every scrollable list box:
+// ListBoxHitRegions returns the hit regions used by scrollable list boxes.
 //
 //  1. Outer box region (boxID) at z=baseZ — covers entire bordered box including
-//     title border and bottom border; clicking here focuses the list without
-//     selecting an item.
+//     borders; clicking here focuses the list without selecting an item.
 //
 //  2. Inner content region (contentID) at z=baseZ+5 — covers only the content
-//     rows; clicking here focuses AND selects the item under the cursor.
+//     rows excluding the scrollbar; clicking here focuses AND selects the item.
 //
-// listTop is the dialog-relative Y of the first content row (title border row + 1).
-// listH is the visible content row count (m.maxVis equivalent — not the box height).
-// contentW = sInnerW + 2 (matches the width of the outer border).
+// boxX, boxY: top-left of the bordered box (at the top-left border character).
+// boxW: total width of the box including borders (sInnerW + 2).
+// contentH: visible content row count (m.maxVis).
 func ListBoxHitRegions(
 	boxID, contentID string,
-	offsetX, offsetY int,
-	contentW int,
-	listTop, listH int,
+	boxX, boxY, boxW, contentH int,
 	baseZ int,
 	label string,
+	info tui.ScrollbarInfo,
 	help *tui.HelpContext,
 ) []tui.HitRegion {
 	var regions []tui.HitRegion
 
-	// Outer box: title border row + content rows + bottom border row = listH + 2.
+	// Outer box: covers borders and content. Total height = contentH + 2.
 	box := tui.HitRegion{
 		ID:     boxID,
-		X:      offsetX + 1,
-		Y:      offsetY + listTop - 1, // include title border row
-		Width:  contentW,
-		Height: listH + 2,
+		X:      boxX,
+		Y:      boxY,
+		Width:  boxW,
+		Height: contentH + 2,
 		ZOrder: baseZ,
 		Label:  label,
 	}
@@ -157,28 +161,34 @@ func ListBoxHitRegions(
 		box.Help = help
 	}
 	regions = append(regions, box)
+	if contentH <= 0 {
+		return regions
+	}
 
-	// Inner content rows (excluding scrollbar column).
-	// contentW = sInnerW + 2; scrollbar is the last column of sInnerW, i.e. at
-	// offset (contentW - 2) from the section left border.  We cover only columns
-	// [offsetX+1 .. offsetX+contentW-2] so the scrollbar column is not included.
-	if listH > 0 {
-		regions = append(regions, tui.HitRegion{
-			ID:     contentID,
-			X:      offsetX + 1,
-			Y:      offsetY + listTop,
-			Width:  contentW - 1, // excludes the rightmost scrollbar column
-			Height: listH,
-			ZOrder: baseZ + 5,
-			Label:  label,
-		})
-		// Scrollbar column: same ID as the box so clicks here only focus, never select.
+	// Inner content rows (excluding left border and scrollbar column).
+	// contentW = boxW - 2. Scrollbar is the last column of content.
+	regions = append(regions, tui.HitRegion{
+		ID:     contentID,
+		X:      boxX + 1,
+		Y:      boxY + 1,
+		Width:  boxW - 3, // excludes borders and the 1-char scrollbar
+		Height: contentH,
+		ZOrder: baseZ + 5,
+		Label:  label,
+	})
+
+	// Scrollbar hits (detailed targets for up/down/track/thumb)
+	if info.Needed {
+		sbX := boxX + boxW - 2 // column inside the right border
+		regions = append(regions, tui.ScrollbarHitRegions(boxID, sbX, boxY+1, info, baseZ, label)...)
+	} else {
+		// Generic fallback if scrollbar is not needed or not yet computed
 		regions = append(regions, tui.HitRegion{
 			ID:     boxID,
-			X:      offsetX + contentW - 1, // rightmost column of section content
-			Y:      offsetY + listTop,
+			X:      boxX + boxW - 2,
+			Y:      boxY + 1,
 			Width:  1,
-			Height: listH,
+			Height: contentH,
 			ZOrder: baseZ + 8,
 			Label:  label,
 		})

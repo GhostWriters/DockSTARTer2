@@ -433,7 +433,8 @@ type Model struct {
 	draggedRow int
 
 	// Scrollbar dragging state
-	isScrollbarDragging bool
+	isScrollbarDragging  bool
+	sbDragMouseOffsetY   int // relative offset of mouse within thumb when drag started
 	// sbScrolled is set to true whenever a scrollbar action directly sets the
 	// viewport offset (drag, track click, arrow click). It suppresses the
 	// repositionView() snap at the end of Update() so the user can scroll the
@@ -1720,6 +1721,18 @@ func (m *Model) repositionView() {
 	}
 }
 
+// constrainCursorToView moves the cursor so it is within the visible viewport.
+// It is used during free scrolling to prevent snap-back.
+func (m *Model) constrainCursorToView() {
+	minimum := m.viewport.YOffset()
+	maximum := minimum + m.viewport.Height() - 1
+	if row := m.cursorLineNumber(); row < minimum {
+		m.setCursorLineRelative(minimum - row)
+	} else if row > maximum {
+		m.setCursorLineRelative(maximum - row)
+	}
+}
+
 // SetLineCharacters sets whether the textarea should use stylized line-art
 // characters for its scrollbar.
 func (m *Model) SetLineCharacters(v bool) {
@@ -2377,16 +2390,16 @@ func wordBoundsAt(line []rune, col int) (start, end int) {
 }
 
 func (m *Model) handleMouseClick(msg tea.MouseClickMsg) {
+	styles := m.activeStyle()
+	msg.X -= styles.Base.GetMarginLeft() + styles.Base.GetPaddingLeft() + styles.Base.GetBorderLeftSize()
+	msg.Y -= styles.Base.GetMarginTop() + styles.Base.GetPaddingTop() + styles.Base.GetBorderTopSize()
+
 	// Every left-click clears any prior text selection.
 	m.selActive = false
 	m.isSelecting = false
 
 	// Gutter width (prompts + line numbers)
-	gutterWidth := m.promptWidth
-	if m.ShowLineNumbers {
-		digits := max(3, numDigits(m.MaxHeight))
-		gutterWidth += digits + 2 // 1 margin + digits + 1 gap
-	}
+	gutterWidth := lipgloss.Width(m.promptView(0, -1)) + lipgloss.Width(m.lineNumberView(0, false, -1))
 
 	total := m.totalDisplayLines()
 	visible := m.height
@@ -2398,6 +2411,7 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) {
 			// Check up arrow
 			if msg.Y == 0 {
 				m.viewport.ScrollUp(1)
+				m.constrainCursorToView()
 				m.sbScrolled = true
 				m.InvalidateCache()
 				return
@@ -2405,6 +2419,7 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) {
 			// Check down arrow
 			if msg.Y == visible-1 {
 				m.viewport.ScrollDown(1)
+				m.constrainCursorToView()
 				m.sbScrolled = true
 				m.InvalidateCache()
 				return
@@ -2424,12 +2439,14 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) {
 			trackRelY := msg.Y - 1
 			if trackRelY >= thumbStart && trackRelY < thumbEnd {
 				m.isScrollbarDragging = true
+				m.sbDragMouseOffsetY = trackRelY - thumbStart
 			} else {
 				if trackH > 1 {
 					targetPct := float64(trackRelY) / float64(trackH-1)
 					targetOffset := int(targetPct * float64(maxOff))
 					m.viewport.SetYOffset(clamp(targetOffset, 0, maxOff))
 				}
+				m.constrainCursorToView()
 				m.sbScrolled = true
 				m.InvalidateCache()
 			}
@@ -2448,12 +2465,14 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) {
 			if msg.Y >= thumbTrackStart && msg.Y < thumbEnd {
 				// Clicked on the thumb
 				m.isScrollbarDragging = true
+				m.sbDragMouseOffsetY = msg.Y - thumbTrackStart
 			} else {
 				if trackH > 1 {
 					targetPct := float64(msg.Y) / float64(trackH-1)
 					targetOffset := int(targetPct * float64(maxOff))
 					m.viewport.SetYOffset(clamp(targetOffset, 0, maxOff))
 				}
+				m.constrainCursorToView()
 				m.sbScrolled = true
 				m.InvalidateCache()
 			}
@@ -2583,6 +2602,10 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) {
 }
 
 func (m *Model) handleMouseMotion(msg tea.MouseMotionMsg) {
+	styles := m.activeStyle()
+	msg.X -= styles.Base.GetMarginLeft() + styles.Base.GetPaddingLeft() + styles.Base.GetBorderLeftSize()
+	msg.Y -= styles.Base.GetMarginTop() + styles.Base.GetPaddingTop() + styles.Base.GetBorderTopSize()
+
 	if m.isScrollbarDragging {
 		total := m.totalDisplayLines()
 		visible := m.height
@@ -2590,32 +2613,51 @@ func (m *Model) handleMouseMotion(msg tea.MouseMotionMsg) {
 			if visible >= 3 {
 				trackH := visible - 2
 				maxOff := total - visible
-				trackRelY := msg.Y - 1
-				if trackH > 1 {
-					targetPct := float64(trackRelY) / float64(trackH-1)
-					targetOffset := int(targetPct * float64(maxOff))
-					m.viewport.SetYOffset(clamp(targetOffset, 0, maxOff))
+				thumbH := max(1, trackH*visible/total)
+				thumbTravel := trackH - thumbH
+				if thumbTravel < 1 {
+					thumbTravel = 1
 				}
+
+				trackRelY := msg.Y - 1
+				thumbTrackStart := trackRelY - m.sbDragMouseOffsetY
+				if thumbTrackStart < 0 {
+					thumbTrackStart = 0
+				}
+				if thumbTrackStart > thumbTravel {
+					thumbTrackStart = thumbTravel
+				}
+
+				newOff := thumbTrackStart * maxOff / thumbTravel
+				m.viewport.SetYOffset(clamp(newOff, 0, maxOff))
 			} else {
 				trackH := visible
 				maxOff := total - visible
-				if trackH > 1 {
-					targetPct := float64(msg.Y) / float64(trackH-1)
-					targetOffset := int(targetPct * float64(maxOff))
-					m.viewport.SetYOffset(clamp(targetOffset, 0, maxOff))
+				thumbH := max(1, trackH*visible/total)
+				thumbTravel := trackH - thumbH
+				if thumbTravel < 1 {
+					thumbTravel = 1
 				}
+
+				thumbTrackStart := msg.Y - m.sbDragMouseOffsetY
+				if thumbTrackStart < 0 {
+					thumbTrackStart = 0
+				}
+				if thumbTrackStart > thumbTravel {
+					thumbTrackStart = thumbTravel
+				}
+
+				newOff := thumbTrackStart * maxOff / thumbTravel
+				m.viewport.SetYOffset(clamp(newOff, 0, maxOff))
 			}
+			m.constrainCursorToView()
 			m.sbScrolled = true
 		}
 		return
 	}
 
 	if m.isSelecting {
-		gutterWidth := m.promptWidth
-		if m.ShowLineNumbers {
-			digits := max(3, numDigits(m.MaxHeight))
-			gutterWidth += digits + 2
-		}
+		gutterWidth := lipgloss.Width(m.promptView(0, -1)) + lipgloss.Width(m.lineNumberView(0, false, -1))
 		targetViewLine := msg.Y + m.viewport.YOffset()
 		targetColX := msg.X - gutterWidth
 		currViewLine := 0

@@ -63,7 +63,9 @@ type addVarDialogModel struct {
 
 	focus addVarFocus
 
-	listAbsTopY    int // absolute screen Y of first list item; set in GetHitRegions
+	sbAbsTopY  int // absolute screen Y of scrollbar top (up arrow); set in GetHitRegions
+	sbDrag     tui.ScrollbarDragState
+	lastSbInfo tui.ScrollbarInfo
 
 	addAllVars     []string
 	addAllDefaults map[string]string
@@ -135,28 +137,6 @@ func (m *addVarDialogModel) Init() tea.Cmd {
 }
 
 func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	closeWith := func(result any) tea.Cmd {
-		return func() tea.Msg { return tui.CloseDialogMsg{Result: result} }
-	}
-	confirmExit := tui.ConfirmExitAction
-
-	selectItem := func(idx int) tea.Cmd {
-		if idx < 0 || idx >= len(m.items) {
-			return nil
-		}
-		item := m.items[idx]
-		switch item.kind {
-		case addVarKindTemplate, addVarKindStock:
-			m.input.SetValue(item.name)
-			m.input.CursorEnd()
-			m.focus = addVarFocusInput
-			m.input.Focus()
-		case addVarKindAddAll:
-			return closeWith(envAddAllStockMsg{vars: m.addAllVars, defaults: m.addAllDefaults})
-		}
-		return nil
-	}
-
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -167,7 +147,7 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		switch {
 		case key.Matches(msg, tui.Keys.Esc), key.Matches(msg, tui.Keys.ForceQuit):
-			return m, closeWith(nil)
+			return m, m.closeWith(nil)
 
 		case key.Matches(msg, tui.Keys.Tab), key.Matches(msg, tui.Keys.CycleTab):
 			m.cycleFocus(+1)
@@ -205,32 +185,40 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case msg.String() == "space" && m.focus == addVarFocusList:
 			// Space copies the selected template into the input and switches focus.
-			selectItem(m.cursor)
+			m.selectItem(m.cursor)
 			return m, nil
 
 		case key.Matches(msg, tui.Keys.Enter):
 			switch m.focus {
 			case addVarFocusInput:
-				v := strings.TrimSpace(m.input.Value())
-				if v != "" {
-					return m, closeWith(envAddVarMsg{key: strings.ToUpper(v)})
-				}
+				return m, m.submit()
 			case addVarFocusList:
-				// Enter on list copies to input (same as Space) — use Create button to submit.
-				selectItem(m.cursor)
 				return m, nil
 			case addVarFocusCreate:
-				v := strings.TrimSpace(m.input.Value())
-				if v != "" {
-					return m, closeWith(envAddVarMsg{key: strings.ToUpper(v)})
-				}
+				return m, m.submit()
 			case addVarFocusCancel:
-				return m, closeWith(nil)
+				return m, m.closeWith(nil)
 			case addVarFocusExit:
-				return m, confirmExit()
+				return m, m.confirmExit()
 			}
 			return m, nil
 		}
+
+	case tui.DragDoneMsg:
+		if m.sbDrag.Dragging && msg.ID == "addvar_list_box" {
+			m.sbDrag.DragPending = false
+			// Catch up to any position skipped while the render was in-flight.
+			if m.sbDrag.PendingDragY != m.sbDrag.LastDragY {
+				lastY := m.sbDrag.PendingDragY
+				if m.applySbDrag(lastY) {
+					m.sbDrag.LastDragY = lastY
+					m.sbDrag.DragPending = true
+					return m, tui.DragDoneCmd("addvar_list_box")
+				}
+				m.sbDrag.LastDragY = lastY
+			}
+		}
+		return m, nil
 
 	case tea.MouseWheelMsg:
 		// Fallback: raw wheel scrolls the list.
@@ -253,12 +241,26 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.MouseMotionMsg:
+		if m.sbDrag.Dragging {
+			m.sbDrag.PendingDragY = msg.Y // always record latest, even if render in-flight
+			if !m.sbDrag.DragPending {
+				if m.applySbDrag(msg.Y) {
+					m.sbDrag.LastDragY = msg.Y
+					m.sbDrag.DragPending = true
+					return m, tui.DragDoneCmd("addvar_list_box")
+				}
+			}
+		}
 		if m.input.IsSelecting() {
 			m.input.HandleDragTo(msg.X)
 		}
 		return m, nil
 
 	case tea.MouseReleaseMsg:
+		if m.sbDrag.Dragging {
+			m.sbDrag.StopDrag()
+			return m, nil
+		}
 		m.input.EndDrag()
 		return m, nil
 
@@ -282,17 +284,13 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.Button == tea.MouseLeft {
 			if strings.HasSuffix(msg.ID, ".Create") {
-				v := strings.TrimSpace(m.input.Value())
-				if v != "" {
-					return m, closeWith(envAddVarMsg{key: strings.ToUpper(v)})
-				}
-				return m, nil
+				return m, m.submit()
 			}
 			if strings.HasSuffix(msg.ID, ".Cancel") {
-				return m, closeWith(nil)
+				return m, m.closeWith(nil)
 			}
 			if strings.HasSuffix(msg.ID, ".Exit") {
-				return m, confirmExit()
+				return m, m.confirmExit()
 			}
 			if msg.ID == "addvar_input" {
 				m.focus = addVarFocusInput
@@ -300,17 +298,45 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.input.HandleClick(msg.X)
 				return m, nil
 			}
-			if msg.ID == "addvar_list" || msg.ID == "addvar_list_box" {
-				// Always focus the list on any click within the list area (including borders).
+			if msg.ID == "addvar_list" {
+				// Focus the list AND trigger selection on an actual item row.
 				m.focus = addVarFocusList
 				m.input.Blur()
-				// Only select an item when the click lands on an actual item row.
 				idx := m.itemIndexAt(msg.Y)
 				if idx >= 0 {
-					if cmd := selectItem(idx); cmd != nil {
-						return m, cmd
-					}
+					m.selectItem(idx)
 					m.cursor = idx
+				}
+				return m, nil
+			}
+			if msg.ID == "addvar_list_box" {
+				// Clicks on the border that are NOT on the scrollbar: focus only.
+				m.focus = addVarFocusList
+				m.input.Blur()
+				return m, nil
+			}
+
+			// Granular scrollbar interaction:
+			if strings.HasPrefix(msg.ID, "addvar_list_box.sb.") {
+				m.focus = addVarFocusList
+				m.input.Blur()
+				switch strings.TrimPrefix(msg.ID, "addvar_list_box.sb.") {
+				case "up":
+					m.moveCursor(-1)
+				case "down":
+					m.moveCursor(1)
+				case "above":
+					// Page Up
+					for i := 0; i < m.maxVis; i++ {
+						m.moveCursor(-1)
+					}
+				case "below":
+					// Page Down
+					for i := 0; i < m.maxVis; i++ {
+						m.moveCursor(1)
+					}
+				case "thumb":
+					m.sbDrag.StartDrag(msg.Y, m.sbAbsTopY, m.lastSbInfo)
 				}
 				return m, nil
 			}
@@ -373,6 +399,10 @@ func (m *addVarDialogModel) moveCursor(delta int) {
 			break
 		}
 	}
+	m.clampScroll()
+}
+
+func (m *addVarDialogModel) clampScroll() {
 	if m.cursor < m.offset {
 		m.offset = m.cursor
 	}
@@ -410,6 +440,39 @@ func (m *addVarDialogModel) moveCursor(delta int) {
 	}
 }
 
+func (m *addVarDialogModel) closeWith(result any) tea.Cmd {
+	return func() tea.Msg { return tui.CloseDialogMsg{Result: result} }
+}
+
+func (m *addVarDialogModel) submit() tea.Cmd {
+	val := strings.TrimSpace(m.input.Value())
+	if val == "" {
+		return nil
+	}
+	return m.closeWith(envAddVarMsg{key: strings.ToUpper(val)})
+}
+
+func (m *addVarDialogModel) confirmExit() tea.Cmd {
+	return func() tea.Msg { return tui.QuitMsg{} }
+}
+
+func (m *addVarDialogModel) selectItem(idx int) tea.Cmd {
+	if idx < 0 || idx >= len(m.items) {
+		return nil
+	}
+	item := m.items[idx]
+	switch item.kind {
+	case addVarKindTemplate, addVarKindStock:
+		m.input.SetValue(item.name)
+		m.input.CursorEnd()
+		m.focus = addVarFocusInput
+		m.input.Focus()
+	case addVarKindAddAll:
+		return m.closeWith(envAddAllStockMsg{vars: m.addAllVars, defaults: m.addAllDefaults})
+	}
+	return nil
+}
+
 func (m *addVarDialogModel) HelpText() string {
 	if m.focus == addVarFocusList && m.cursor >= 0 && m.cursor < len(m.items) {
 		return m.items[m.cursor].help
@@ -418,6 +481,46 @@ func (m *addVarDialogModel) HelpText() string {
 }
 
 func (m *addVarDialogModel) SetFocused(f bool) { m.focused = f }
+
+func (m *addVarDialogModel) IsScrollbarDragging() bool { return m.sbDrag.Dragging }
+
+func (m *addVarDialogModel) applySbDrag(mouseY int) bool {
+	totalRows := 0
+	for _, item := range m.items {
+		totalRows++
+		if item.subLabel != "" {
+			totalRows++
+		}
+	}
+	if totalRows <= m.maxVis {
+		return false
+	}
+	maxOffRows := totalRows - m.maxVis
+
+	newOffRows, _ := m.sbDrag.ScrollOffset(mouseY, m.sbAbsTopY, maxOffRows, m.lastSbInfo)
+
+	// Map newOffRows back to item index (offset)
+	rows := 0
+	newIdx := 0
+	for i := range m.items {
+		if rows >= newOffRows {
+			newIdx = i
+			break
+		}
+		rows++
+		if m.items[i].subLabel != "" {
+			rows++
+		}
+	}
+
+	if newIdx == m.offset {
+		return false
+	}
+
+	m.offset = newIdx
+	m.clampScroll()
+	return true
+}
 
 func (m *addVarDialogModel) SetSize(w, h int) {
 	m.width = w
@@ -428,22 +531,39 @@ func (m *addVarDialogModel) SetSize(w, h int) {
 func (m *addVarDialogModel) recalc() {
 	ctx := tui.GetActiveContext()
 	contentW := m.innerWidth()
+
+	// Robust layout calculation: Render components at the current width to get their true heights.
 	headingRaw := FormatMenuHeading(MenuHeadingParams{
 		AppName:        m.appName,
 		AppDescription: m.appDesc,
 	}, contentW)
-	headingRenderedH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToThemeANSI(headingRaw)))
+	headingStyle := ctx.Dialog.Padding(1, 2).Width(contentW).Border(lipgloss.Border{})
+	headingH := lipgloss.Height(headingStyle.Render(theme.ToThemeANSI(headingRaw)))
+
+	// "Variable Name" section height (Bordered box with title and labeled bottom border)
+	// Top border(1) + InputRow(1) + Bottom border(1) = 3
+	varNameH := 3
+
+	// Buttons height
 	btnH := tui.ButtonRowHeight(contentW, 0, tui.ButtonSpec{Text: "Create"}, tui.ButtonSpec{Text: "Cancel"}, tui.ButtonSpec{Text: "Exit"})
-	// overhead: outer border(2) + rendered heading + "Variable Name" section(3) + "Available Variables" borders(2) + spacer(1) + buttons
-	fixed := 2 + headingRenderedH + 3 + 2 + 1 + btnH
-	m.maxVis = m.height - fixed
+
+	// Total overhead:
+	// - outer dialog border top + bottom: 2
+	// - rendered heading: headingH
+	// - "Variable Name" input section: varNameH
+	// - "Available Variables" list box borders: 2
+	// - spacing/margin: 1
+	// - buttons: btnH
+	overhead := 2 + headingH + varNameH + 2 + 1 + btnH
+	m.maxVis = m.height - overhead
 	if m.maxVis < 2 {
 		m.maxVis = 2
 	}
+
 	// Re-validate cursor/offset against the new row budget so the scrollbar
 	// thumb is correct immediately after a terminal resize.
 	if len(m.items) > 0 {
-		m.moveCursor(0)
+		m.clampScroll()
 	}
 }
 
@@ -458,9 +578,9 @@ func (m *addVarDialogModel) innerWidth() int {
 }
 
 func (m *addVarDialogModel) itemIndexAt(screenY int) int {
-	// m.listAbsTopY is set by GetHitRegions each frame to the absolute screen Y
+	// m.sbAbsTopY is set by GetHitRegions each frame to the absolute screen Y
 	// of the first visible list item. Use it directly so click coordinates match.
-	rowY := m.listAbsTopY
+	rowY := m.sbAbsTopY
 	rowBudget := m.maxVis
 	for i := m.offset; i < len(m.items) && rowBudget > 0; i++ {
 		item := m.items[i]
@@ -487,6 +607,7 @@ func (m *addVarDialogModel) itemIndexAt(screenY int) int {
 	}
 	return -1
 }
+
 
 // GetInputCursor returns the hardware cursor position relative to the dialog's
 // top-left corner, cursor shape, and whether to show it.
@@ -594,9 +715,17 @@ func (m *addVarDialogModel) ViewString() string {
 	buttonRowH := lipgloss.Height(buttonRow)
 	headingH := lipgloss.Height(headingText)
 	varNameH := lipgloss.Height(varNameSection)
+	// Sync with recalc() logic:
+	// availableTargetH is the total physical height of the "Available Variables" box.
+	// We subtract outer borders (2), heading, var name box, and buttons.
 	availableTargetH := m.height - 2 - headingH - varNameH - buttonRowH
 	if availableTargetH < 3 {
 		availableTargetH = 3
+	}
+	// The logical item budget (m.maxVis) should always be exactly inner physical height.
+	m.maxVis = availableTargetH - 2
+	if m.maxVis < 1 {
+		m.maxVis = 1
 	}
 
 	var listLines []string
@@ -650,11 +779,13 @@ func (m *addVarDialogModel) ViewString() string {
 		}
 	}
 
-	availableSection := RenderListInBorderedBox(
+	var sbInfo tui.ScrollbarInfo
+	availableSection, sbInfo := RenderListInBorderedBox(
 		"Available Variables", listLines,
 		totalRows, m.maxVis, offsetRows,
 		sInnerW, availableTargetH, listFocused, ctx,
 	)
+	m.lastSbInfo = sbInfo
 
 	parts := []string{headingText, varNameSection, availableSection, buttonRow}
 	return tui.RenderDialogWithType("Add Variable", lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused, m.height, tui.DialogTypeInfo)
@@ -676,16 +807,19 @@ func (m *addVarDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegion 
 
 	headingRaw := FormatMenuHeading(MenuHeadingParams{AppName: m.appName, AppDescription: m.appDesc}, contentW)
 	headingH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToThemeANSI(headingRaw)))
-	// list starts at: outer border(1) + headingH + "Variable Name" section(3) + "Available Variables" title border(1)
-	listTop := 1 + headingH + 3 + 1
+	// list starts at: outer border(1) + padding(1) + headingH + "Variable Name" section(3)
+	listTop := 1 + 1 + headingH + 3
 
 	listH := 0
 	rowBudget := m.maxVis
-	for i := m.offset; i < len(m.items) && rowBudget > 0; i++ {
-		item := m.items[i]
+	offsetRows := 0
+	for i, item := range m.items {
 		h := 1
 		if item.subLabel != "" {
 			h = 2
+		}
+		if i < m.offset {
+			offsetRows += h
 		}
 		if h > rowBudget {
 			break
@@ -699,6 +833,28 @@ func (m *addVarDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegion 
 	m.inputRelY = inputY
 	m.inputScreenX = offsetX + 1 + 1 + 1 + m.input.PromptWidth()
 	m.input.SetScreenTextX(m.inputScreenX)
+
+	// Re-compute scrollbar info for hit regions so it matches exactly what was rendered.
+	totalRows := 0
+	for _, item := range m.items {
+		totalRows++
+		if item.subLabel != "" {
+			totalRows++
+		}
+	}
+	buttonRowH := tui.ButtonRowHeight(contentW, 0, tui.ButtonSpec{Text: "Create"}, tui.ButtonSpec{Text: "Cancel"}, tui.ButtonSpec{Text: "Exit"})
+	// Use exactly the same layout math as ViewString()
+	availableTargetH := m.height - 2 - headingH - 3 - buttonRowH
+
+	// Physical inner height: availableTargetH - 2 (borders)
+	innerH := availableTargetH - 2
+	if innerH < 1 {
+		innerH = 1
+	}
+	m.sbAbsTopY = offsetY + listTop + 1
+	// Use the physical inner height for hit regions to match ApplyScrollbarColumnTracked padding.
+	sbInfo := tui.ComputeScrollbarInfo(totalRows, innerH, offsetRows, innerH)
+	m.lastSbInfo = sbInfo
 
 	var regions []tui.HitRegion
 	regions = append(regions, tui.HitRegion{
@@ -716,14 +872,14 @@ func (m *addVarDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegion 
 			ItemText:   "Type the name and press Enter to create, or Esc to cancel.",
 		},
 	})
-	m.listAbsTopY = offsetY + listTop
 	regions = append(regions, ListBoxHitRegions(
 		"addvar_list_box", "addvar_list",
-		offsetX, offsetY,
-		contentW+2,
-		listTop, listH,
+		offsetX+1, offsetY+listTop,
+		contentW, innerH,
 		tui.ZDialog+5,
-		"Available Variables", nil,
+		"Available Variables",
+		sbInfo,
+		nil,
 	)...)
 
 	// Dialog background

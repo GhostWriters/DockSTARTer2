@@ -69,7 +69,7 @@ func hitIDToPanelID(hitID string) string {
 // Returns (model, cmd, handled) where handled indicates if the event was consumed.
 func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 	// 1. RESIZE DRAG PRIORITY: If log panel is dragging, it intercepts EVERYTHING
-	if m.logPanel.isDragging {
+	if m.logPanel.resizeDrag.Dragging {
 		prevHeight := m.logPanel.height
 		updated, cmd := m.logPanel.Update(msg)
 		m.logPanel = updated.(LogPanelModel)
@@ -557,7 +557,9 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 	}
 
 	// 7. DROP UNHANDLED HOVER: Stop unhandled MouseMotion events from falling
-	// through and triggering full-frame UI redrawing up to 120 times a second
+	// through and triggering full-frame UI redrawing up to 120 times a second.
+	// However, if we're in a drag (or might be), we need these events.
+	// We've already let them fall through to dialogs/screens above if they are open.
 	if _, ok := msg.(tea.MouseMotionMsg); ok {
 		return m, nil, true
 	}

@@ -41,12 +41,7 @@ type LogPanelModel struct {
 	height int
 
 	// Resizing state
-	isDragging        bool
-	dragStartY        int
-	heightAtDragStart int
-	pendingDragY      int // latest Y from motion events (always updated)
-	lastDragY         int // Y last actually applied
-	dragPending       bool // true while a drag render is in-flight
+	resizeDrag ScrollbarDragState // resize drag tracking state (includes throttling)
 
 	// maxHeight is the externally imposed height ceiling (set by AppModel based on active screen).
 	// Zero means "no override" — logPanelMaxHeight() is used as the fallback.
@@ -87,8 +82,8 @@ func (m *LogPanelModel) SetMaxHeight(h int) {
 // applyDragY computes the new panel height from the current mouse Y and updates
 // the viewport height. Only touches height — full SetSize is deferred to release.
 func (m *LogPanelModel) applyDragY(mouseY int) {
-	delta := m.dragStartY - mouseY
-	newHeight := m.heightAtDragStart + delta
+	delta := m.resizeDrag.StartMouseY - mouseY
+	newHeight := m.resizeDrag.StartThumbTop + delta
 	maxH := m.effectiveMaxHeight()
 	if newHeight > maxH {
 		newHeight = maxH
@@ -291,13 +286,13 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case DragDoneMsg:
 		if msg.ID == logResizeZoneID {
-			m.dragPending = false
+			m.resizeDrag.DragPending = false
 			// Catch up to any position skipped while the render was in-flight.
-			if m.pendingDragY != m.lastDragY {
-				m.lastDragY = m.pendingDragY
-				m.applyDragY(m.pendingDragY)
-				m.dragPending = true
-				return m, dragDoneCmd(logResizeZoneID)
+			if m.resizeDrag.PendingDragY != m.resizeDrag.LastDragY {
+				m.resizeDrag.LastDragY = m.resizeDrag.PendingDragY
+				m.applyDragY(m.resizeDrag.PendingDragY)
+				m.resizeDrag.DragPending = true
+				return m, DragDoneCmd(logResizeZoneID)
 			}
 		}
 		return m, nil
@@ -306,16 +301,12 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Handle drag start on resize zones
 		if msg.Button == tea.MouseLeft {
 			// No direct zone check here, handled by AppModel forwarding
-			m.isDragging = true
-			m.dragStartY = msg.Y
-			m.pendingDragY = msg.Y
-			m.lastDragY = msg.Y
-			m.heightAtDragStart = m.height
+			m.resizeDrag.StartDrag(msg.Y, m.height, ScrollbarInfo{})
 			if !m.expanded {
 				m.expanded = true
 				m.height = 1
 				m.SetSize(m.width, m.totalHeight)
-				m.heightAtDragStart = 1
+				m.resizeDrag.StartThumbTop = 1 // height at start was effectively 1 (collapsed)
 
 				// Repopulate content when opening via drag
 				content := strings.Join(m.lines, "\n")
@@ -326,20 +317,20 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.MouseReleaseMsg:
-		if m.isDragging {
-			m.isDragging = false
+		if m.resizeDrag.Dragging {
+			m.resizeDrag.StopDrag()
 			m.SetSize(m.width, m.totalHeight) // Full reconcile on release
 			return m, nil
 		}
 
 	case tea.MouseMotionMsg:
-		if m.isDragging {
-			m.pendingDragY = msg.Y // always record latest, even if render in-flight
-			if !m.dragPending {
-				m.lastDragY = msg.Y
+		if m.resizeDrag.Dragging {
+			m.resizeDrag.PendingDragY = msg.Y // always record latest, even if render in-flight
+			if !m.resizeDrag.DragPending {
+				m.resizeDrag.LastDragY = msg.Y
 				m.applyDragY(msg.Y)
-				m.dragPending = true
-				return m, dragDoneCmd(logResizeZoneID)
+				m.resizeDrag.DragPending = true
+				return m, DragDoneCmd(logResizeZoneID)
 			}
 			return m, nil
 		}
@@ -424,10 +415,10 @@ func (m LogPanelModel) ViewString() string {
 		Foreground(ctx.Console.GetForeground())
 	m.viewport.Style = vpStyle
 
-	// Use MaintainBackground to ensure console background is preserved through resets
+	// MaintainBackground console colors while applying scrollbar
 	vpView := MaintainBackground(m.viewport.View(), ctx.Console)
-	// Sections content plus scrollbar/gutter (right slot)
-	vpView = ApplyScrollbarColumn(vpView, len(m.lines), m.viewport.Height(), m.viewport.YOffset(), currentConfig.UI.Scrollbar, ctx.LineCharacters, ctx)
+	// Apply scrollbar using the physical viewport height to ensure the gutter spans the full box.
+	vpView = ApplyScrollbarColumn(vpView, len(m.lines), vpH, m.viewport.YOffset(), currentConfig.UI.Scrollbar, ctx.LineCharacters, ctx)
 
 	// Restore original theme colors for the strip
 	// LogPanelColor for foreground, HelpLine background for the line itself.

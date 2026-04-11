@@ -41,11 +41,13 @@ type setValueDialogModel struct {
 	input        sinput.Model
 	inputScreenX int // abs screen X of text start; set in GetHitRegions
 	inputRelY    int // row of input text within dialog (for hardware cursor)
-	listAbsTopY  int // absolute screen Y of first list item; set in GetHitRegions
-	opts   []appenv.VarOption
-	cursor int
-	offset int
-	maxVis int
+	sbAbsTopY    int // absolute screen Y of scrollbar top (up arrow); set in GetHitRegions
+	sbDrag       tui.ScrollbarDragState
+	lastSbInfo   tui.ScrollbarInfo
+	opts         []appenv.VarOption
+	cursor       int
+	offset       int
+	maxVis       int
 
 	focus    setValueFocus
 	onSave   func(string) tea.Cmd // non-nil in standalone mode: write value directly
@@ -106,38 +108,6 @@ func (m *setValueDialogModel) Init() tea.Cmd {
 }
 
 func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	closeWith := func(result any) tea.Cmd {
-		return func() tea.Msg { return tui.CloseDialogMsg{Result: result} }
-	}
-	submit := func() tea.Cmd {
-		val := m.input.Value()
-		if m.onSave != nil {
-			return m.onSave(val)
-		}
-		return closeWith(ApplyVarValueMsg{VarName: m.varName, Value: val})
-	}
-	selectOpt := func(idx int) {
-		if idx >= 0 && idx < len(m.opts) {
-			m.input.SetValue(m.opts[idx].Value)
-			m.input.CursorEnd()
-		}
-	}
-	hasChanges := func() bool {
-		return m.input.Value() != m.origVal
-	}
-	cancelOrConfirm := func() tea.Cmd {
-		return func() tea.Msg {
-			if hasChanges() && !tui.Confirm("Discard Changes", "Discard changes to "+m.varName+"?", false) {
-				return nil
-			}
-			if m.onCancel != nil {
-				return m.onCancel()
-			}
-			return tui.CloseDialogMsg{}
-		}
-	}
-	confirmExit := tui.ConfirmExitAction
-
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -148,7 +118,7 @@ func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		switch {
 		case key.Matches(msg, tui.Keys.Esc), key.Matches(msg, tui.Keys.ForceQuit):
-			return m, cancelOrConfirm()
+			return m, m.cancelOrConfirm()
 
 		case key.Matches(msg, tui.Keys.Tab), key.Matches(msg, tui.Keys.CycleTab):
 			m.cycleFocus(+1)
@@ -195,23 +165,38 @@ func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, tui.Keys.Enter):
 			switch m.focus {
 			case setValueFocusInput:
-				return m, submit()
+				return m, m.submit()
 			case setValueFocusList:
-				// Enter on list does nothing — use Space to copy preset, buttons to submit
 				return m, nil
 			case setValueFocusSave:
-				return m, submit()
+				return m, m.submit()
 			case setValueFocusCancel:
-				return m, cancelOrConfirm()
+				return m, m.cancelOrConfirm()
 			case setValueFocusExit:
-				return m, confirmExit()
+				return m, m.confirmExit()
 			}
 
 		case msg.String() == "space" && m.focus == setValueFocusList:
 			// Space: copy preset to input but stay on list for more browsing
-			selectOpt(m.cursor)
+			m.selectOpt(m.cursor)
 			return m, nil
 		}
+
+	case tui.DragDoneMsg:
+		if m.sbDrag.Dragging && msg.ID == "setvalue_preset_box" {
+			m.sbDrag.DragPending = false
+			// Catch up to any position skipped while the render was in-flight.
+			if m.sbDrag.PendingDragY != m.sbDrag.LastDragY {
+				lastY := m.sbDrag.PendingDragY
+				if m.applySbDrag(lastY) {
+					m.sbDrag.LastDragY = lastY
+					m.sbDrag.DragPending = true
+					return m, tui.DragDoneCmd("setvalue_preset_box")
+				}
+				m.sbDrag.LastDragY = lastY
+			}
+		}
+		return m, nil
 
 	case tea.MouseWheelMsg:
 		// Fallback: raw wheel (e.g. keyboard-generated) scrolls the presets list.
@@ -234,12 +219,26 @@ func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.MouseMotionMsg:
+		if m.sbDrag.Dragging {
+			m.sbDrag.PendingDragY = msg.Y // always record latest, even if render in-flight
+			if !m.sbDrag.DragPending {
+				if m.applySbDrag(msg.Y) {
+					m.sbDrag.LastDragY = msg.Y
+					m.sbDrag.DragPending = true
+					return m, tui.DragDoneCmd("setvalue_preset_box")
+				}
+			}
+		}
 		if m.input.IsSelecting() {
 			m.input.HandleDragTo(msg.X)
 		}
 		return m, nil
 
 	case tea.MouseReleaseMsg:
+		if m.sbDrag.Dragging {
+			m.sbDrag.StopDrag()
+			return m, nil
+		}
 		m.input.EndDrag()
 		return m, nil
 
@@ -263,13 +262,13 @@ func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.Button == tea.MouseLeft {
 			if strings.HasSuffix(msg.ID, ".Save") {
-				return m, submit()
+				return m, m.submit()
 			}
 			if strings.HasSuffix(msg.ID, ".Cancel") {
-				return m, cancelOrConfirm()
+				return m, m.cancelOrConfirm()
 			}
 			if strings.HasSuffix(msg.ID, ".Exit") {
-				return m, confirmExit()
+				return m, m.confirmExit()
 			}
 			if msg.ID == "setvalue_input" {
 				m.focus = setValueFocusInput
@@ -277,15 +276,43 @@ func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.input.HandleClick(msg.X)
 				return m, nil
 			}
-			if msg.ID == "setvalue_list" || msg.ID == "setvalue_preset_box" {
-				// Always focus the list on any click within the presets area (including borders).
+			if msg.ID == "setvalue_list" {
 				m.focus = setValueFocusList
 				m.input.Blur()
-				// Only select an item when the click lands on an actual option row.
 				idx := m.optIndexAt(msg.Y)
 				if idx >= 0 {
-					selectOpt(idx)
 					m.cursor = idx
+					m.selectOpt(idx)
+				}
+				return m, nil
+			}
+			if msg.ID == "setvalue_preset_box" {
+				m.focus = setValueFocusList
+				m.input.Blur()
+				return m, nil
+			}
+
+			// Granular scrollbar interaction:
+			if strings.HasPrefix(msg.ID, "setvalue_preset_box.sb.") {
+				m.focus = setValueFocusList
+				m.input.Blur()
+				switch strings.TrimPrefix(msg.ID, "setvalue_preset_box.sb.") {
+				case "up":
+					m.moveCursor(-1)
+				case "down":
+					m.moveCursor(1)
+				case "above":
+					// Page Up
+					for i := 0; i < m.maxVis; i++ {
+						m.moveCursor(-1)
+					}
+				case "below":
+					// Page Down
+					for i := 0; i < m.maxVis; i++ {
+						m.moveCursor(1)
+					}
+				case "thumb":
+					m.sbDrag.StartDrag(msg.Y, m.sbAbsTopY, m.lastSbInfo)
 				}
 				return m, nil
 			}
@@ -355,6 +382,23 @@ func (m *setValueDialogModel) HelpText() string {
 
 func (m *setValueDialogModel) SetFocused(f bool) { m.focused = f }
 
+func (m *setValueDialogModel) IsScrollbarDragging() bool { return m.sbDrag.Dragging }
+
+func (m *setValueDialogModel) applySbDrag(mouseY int) bool {
+	total := len(m.opts)
+	visible := m.maxVis
+	maxOff := total - visible
+	if maxOff < 0 {
+		maxOff = 0
+	}
+	newOff, _ := m.sbDrag.ScrollOffset(mouseY, m.sbAbsTopY, maxOff, m.lastSbInfo)
+	if newOff == m.offset {
+		return false
+	}
+	m.offset = newOff
+	return true
+}
+
 func (m *setValueDialogModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
@@ -364,6 +408,8 @@ func (m *setValueDialogModel) SetSize(w, h int) {
 func (m *setValueDialogModel) recalc() {
 	ctx := tui.GetActiveContext()
 	contentW := m.innerWidth()
+
+	// Robust layout calculation: Render components at the current width to get their true heights.
 	headingRaw := FormatMenuHeading(MenuHeadingParams{
 		AppName:        m.appName,
 		AppDescription: m.appDesc,
@@ -372,12 +418,24 @@ func (m *setValueDialogModel) recalc() {
 		OriginalValue:  m.origVal,
 		CurrentValue:   m.input.Value(),
 	}, contentW)
-	// Use the actual rendered height — Padding+Width can wrap long description lines.
-	headingRenderedH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToThemeANSI(headingRaw)))
+	headingStyle := ctx.Dialog.Padding(1, 2).Width(contentW).Border(lipgloss.Border{})
+	headingH := lipgloss.Height(headingStyle.Render(theme.ToThemeANSI(headingRaw)))
+
+	// "Current Value" input section height
+	// Top border(1) + InputRow(1) + Bottom border(1) = 3
+	currentValueH := 3
+
+	// Buttons height
 	btnH := tui.ButtonRowHeight(contentW, 0, tui.ButtonSpec{Text: "Save"}, tui.ButtonSpec{Text: "Cancel"}, tui.ButtonSpec{Text: "Exit"})
-	// overhead: outer border(2) + rendered heading + "Current Value" section(3) + "Presets" section borders(2) + buttons
-	fixed := 2 + headingRenderedH + 3 + 2 + btnH
-	m.maxVis = m.height - fixed
+
+	// Total overhead:
+	// - outer dialog border top + bottom: 2
+	// - rendered heading: headingH
+	// - "Current Value" input section: currentValueH
+	// - "Presets" section borders: 2
+	// - buttons: btnH
+	overhead := 2 + headingH + currentValueH + 2 + btnH
+	m.maxVis = m.height - overhead
 	if m.maxVis < 2 {
 		m.maxVis = 2
 	}
@@ -399,9 +457,9 @@ func (m *setValueDialogModel) innerWidth() int {
 }
 
 func (m *setValueDialogModel) optIndexAt(screenY int) int {
-	// m.listAbsTopY is set by GetHitRegions each frame to the absolute screen Y
+	// m.sbAbsTopY is set by GetHitRegions each frame to the absolute screen Y
 	// of the first visible list item. Use it directly so click coordinates match.
-	idx := screenY - m.listAbsTopY
+	idx := screenY - m.sbAbsTopY
 	if idx < 0 || idx >= m.maxVis {
 		return -1
 	}
@@ -502,9 +560,17 @@ func (m *setValueDialogModel) ViewString() string {
 	buttonRowH := lipgloss.Height(buttonRow)
 	headingH := lipgloss.Height(headingText)
 	currentValueH := lipgloss.Height(currentValueSection)
+	// Sync with recalc() logic:
+	// presetTargetH is the total physical height of the "Preset Values" box.
+	// We subtract outer borders (2), heading, current value box, and buttons.
 	presetTargetH := m.height - 2 - headingH - currentValueH - buttonRowH
 	if presetTargetH < 3 {
 		presetTargetH = 3
+	}
+	// The logical item budget (m.maxVis) should always be exactly inner physical height.
+	m.maxVis = presetTargetH - 2
+	if m.maxVis < 1 {
+		m.maxVis = 1
 	}
 
 	var listLines []string
@@ -522,11 +588,13 @@ func (m *setValueDialogModel) ViewString() string {
 		))
 	}
 
-	presetsSection := RenderListInBorderedBox(
+	var sbInfo tui.ScrollbarInfo
+	presetsSection, sbInfo := RenderListInBorderedBox(
 		"Preset Values", listLines,
 		totalRows, m.maxVis, offsetRows,
 		sInnerW, presetTargetH, listFocused, ctx,
 	)
+	m.lastSbInfo = sbInfo
 
 	title := "Set Value: " + m.varName
 	parts := []string{headingText, currentValueSection, presetsSection, buttonRow}
@@ -553,8 +621,8 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 		VarName: m.varName, OriginalValue: m.origVal, CurrentValue: m.input.Value(),
 	}, contentW)
 	headingH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToThemeANSI(headingRaw)))
-	// outer border(1) + headingH + "Current Value" section(3) + "Presets" title border(1)
-	listTop := 1 + headingH + 3 + 1
+	// outer border(1) + padding(1) + headingH + "Current Value" section(3)
+	listTop := 1 + 1 + headingH + 3
 
 	// Cover the full preset content area (including blank rows) so clicking
 	// anywhere in the box focuses the list.
@@ -586,14 +654,28 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 			ItemText:   "Press Enter to save or Esc to cancel.",
 		},
 	})
-	m.listAbsTopY = offsetY + listTop
+	btnH := tui.ButtonRowHeight(contentW, 0, tui.ButtonSpec{Text: "Save"}, tui.ButtonSpec{Text: "Cancel"}, tui.ButtonSpec{Text: "Exit"})
+	// Use exactly the same layout math as ViewString()
+	presetTargetH := m.height - 2 - headingH - 3 - btnH
+
+	// Physical inner height: presetTargetH - 2 (borders)
+	innerH := presetTargetH - 2
+	if innerH < 1 {
+		innerH = 1
+	}
+	m.sbAbsTopY = offsetY + listTop + 1
+	// Use the physical inner height for hit regions to match ApplyScrollbarColumnTracked padding.
+	sbInfo := tui.ComputeScrollbarInfo(len(m.opts), innerH, m.offset, innerH)
+	m.lastSbInfo = sbInfo
+
 	regions = append(regions, ListBoxHitRegions(
 		"setvalue_preset_box", "setvalue_list",
-		offsetX, offsetY,
-		contentW+2,
-		listTop, listH,
+		offsetX+1, offsetY+listTop,
+		contentW, innerH,
 		tui.ZDialog+5,
-		"Preset Values", nil,
+		"Preset Values",
+		sbInfo,
+		nil,
 	)...)
 
 	// Dialog background
@@ -613,7 +695,7 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 	})
 
 	// buttons are at the bottom: outer border(1) + content fills to m.height-2, bottom border at m.height-1
-	btnH := tui.ButtonRowHeight(contentW, 0, tui.ButtonSpec{Text: "Save"}, tui.ButtonSpec{Text: "Cancel"}, tui.ButtonSpec{Text: "Exit"})
+	btnH = tui.ButtonRowHeight(contentW, 0, tui.ButtonSpec{Text: "Save"}, tui.ButtonSpec{Text: "Cancel"}, tui.ButtonSpec{Text: "Exit"})
 	buttonY := m.height - 1 - btnH
 	regions = append(regions, tui.HitRegion{
 		ID:     "setvalue_buttons",
@@ -642,4 +724,44 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 	)...)
 
 	return regions
+}
+
+func (m *setValueDialogModel) closeWith(result any) tea.Cmd {
+	return func() tea.Msg { return tui.CloseDialogMsg{Result: result} }
+}
+
+func (m *setValueDialogModel) submit() tea.Cmd {
+	val := m.input.Value()
+	if m.onSave != nil {
+		return m.onSave(val)
+	}
+	return m.closeWith(ApplyVarValueMsg{VarName: m.varName, Value: val})
+}
+
+func (m *setValueDialogModel) cancelOrConfirm() tea.Cmd {
+	return func() tea.Msg {
+		if m.hasChanges() && !tui.Confirm("Discard Changes", "Discard changes to "+m.varName+"?", false) {
+			return nil
+		}
+		if m.onCancel != nil {
+			return m.onCancel()
+		}
+		return tui.CloseDialogMsg{}
+	}
+}
+
+func (m *setValueDialogModel) confirmExit() tea.Cmd {
+	return tui.ConfirmExitAction()
+}
+
+
+func (m *setValueDialogModel) selectOpt(idx int) {
+	if idx >= 0 && idx < len(m.opts) {
+		m.input.SetValue(m.opts[idx].Value)
+		m.input.CursorEnd()
+	}
+}
+
+func (m *setValueDialogModel) hasChanges() bool {
+	return m.input.Value() != m.origVal
 }

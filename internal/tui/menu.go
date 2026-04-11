@@ -790,10 +790,7 @@ type MenuModel struct {
 	sbInfo          ScrollbarInfo             // geometry from last render (set by menu_render.go)
 	sbAbsTopY       int                       // absolute screen Y of scrollbar column top (set by GetHitRegions)
 	sbAbsLeftX      int                       // absolute screen X of scrollbar column (set by GetHitRegions)
-	sbDrag      ScrollbarDragState        // scrollbar drag tracking state
-	dragPending bool                      // true while a drag render is in flight
-	pendingDragY       int                       // latest Y seen from motion events (always updated, even when coalescing)
-	lastDragY          int                       // Y we last actually rendered at (used to detect skipped positions)
+	sbDrag          ScrollbarDragState        // scrollbar drag tracking state (includes throttling fields)
 	scrollPending   bool                      // true while a wheel scroll is queued but not yet rendered
 	contextMenuFunc func(idx int) []ContextMenuItem // hook for screen-specific operations
 }
@@ -805,15 +802,6 @@ type ScrollDoneMsg struct{ ID string }
 // scrollDoneCmd returns a zero-delay Cmd that emits ScrollDoneMsg for the given menu ID.
 func scrollDoneCmd(id string) tea.Cmd {
 	return func() tea.Msg { return ScrollDoneMsg{ID: id} }
-}
-
-// DragDoneMsg is sent after a drag render completes, so any skipped Y positions can be caught up.
-// Exported so wrapper screens (e.g. DisplayOptionsScreen) can forward it to inner menus.
-type DragDoneMsg struct{ ID string }
-
-// dragDoneCmd returns a zero-delay Cmd that emits DragDoneMsg for the given menu ID.
-func dragDoneCmd(id string) tea.Cmd {
-	return func() tea.Msg { return DragDoneMsg{ID: id} }
 }
 
 // ScrollPending reports whether a scroll event is currently queued but not yet rendered.
