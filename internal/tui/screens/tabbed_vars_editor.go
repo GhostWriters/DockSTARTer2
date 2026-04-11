@@ -739,7 +739,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			editorStyles.Focused.InvalidText = tui.SemanticRawStyle("EnvInvalid")
 			editorStyles.Focused.DuplicateText = tui.SemanticRawStyle("EnvDuplicate")
 			editorStyles.Focused.BuiltinText = tui.SemanticRawStyle("EnvBuiltin")
-			editorStyles.Focused.UserDefinedText = tui.SemanticRawStyle("EnvUser")
+
 			editorStyles.Focused.ModifiedText = tui.SemanticRawStyle("ModifiedText")
 			editorStyles.Focused.PendingDeleteText = tui.SemanticRawStyle("EnvPendingDelete")
 			editorStyles.Focused.GutterAdded = tui.SemanticRawStyle("MarkerAdded")
@@ -753,7 +753,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			editorStyles.Blurred.InvalidText = tui.SemanticRawStyle("EnvInvalid")
 			editorStyles.Blurred.DuplicateText = tui.SemanticRawStyle("EnvDuplicate")
 			editorStyles.Blurred.BuiltinText = tui.SemanticRawStyle("EnvBuiltin")
-			editorStyles.Blurred.UserDefinedText = tui.SemanticRawStyle("EnvUser")
+
 			editorStyles.Blurred.ModifiedText = tui.SemanticRawStyle("ModifiedText")
 			editorStyles.Blurred.PendingDeleteText = tui.SemanticRawStyle("EnvPendingDelete")
 			editorStyles.Blurred.GutterAdded = tui.SemanticRawStyle("MarkerAdded")

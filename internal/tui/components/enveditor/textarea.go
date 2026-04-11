@@ -252,7 +252,7 @@ type StyleState struct {
 	InvalidText       lipgloss.Style
 	DuplicateText     lipgloss.Style
 	BuiltinText       lipgloss.Style
-	UserDefinedText   lipgloss.Style
+	// UserDefinedText removed — user-defined var keys now use ModifiedText
 	PendingDeleteText lipgloss.Style
 	GutterAdded       lipgloss.Style // + marker for new lines
 	GutterDeleted     lipgloss.Style // - marker for pending-delete lines
@@ -471,8 +471,9 @@ type Model struct {
 	// Memoization for expensive rendering
 	lastView   string
 	cacheValid bool // Indicates if lastView is up-to-date with current state
-	dmp        *diffmatchpatch.DiffMatchPatch
-	diffCache  map[int][]bool // row index -> modified mask (true = modified)
+	dmp         *diffmatchpatch.DiffMatchPatch
+	diffCache   map[int][]bool        // row index -> modified mask (true = modified)
+	defaultFunc func(string) string   // stored at ParseEnv/ReclassifyEnv time; resolves defaults for new vars
 
 	// Intelligent variable addition settings.
 	AddPrefix         string
@@ -544,7 +545,6 @@ func DefaultStyles(isDark bool) Styles {
 		InvalidText:      lipgloss.NewStyle().Foreground(lipgloss.Color("9")),   // Red
 		DuplicateText:    lipgloss.NewStyle().Foreground(lipgloss.Color("13")),  // Magenta
 		BuiltinText:       lipgloss.NewStyle(),                                                                    // Inherit from text by default
-		UserDefinedText:   lipgloss.NewStyle(),                                                                    // Inherit from text by default
 		PendingDeleteText: lipgloss.NewStyle().Strikethrough(true).Foreground(lipgloss.Color("240")),
 		GutterAdded:       lipgloss.NewStyle().Foreground(lipgloss.Color("2")),  // Green
 		GutterDeleted:     lipgloss.NewStyle().Foreground(lipgloss.Color("1")),  // Red
@@ -570,7 +570,6 @@ func DefaultStyles(isDark bool) Styles {
 		InvalidText:      lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
 		DuplicateText:    lipgloss.NewStyle().Foreground(lipgloss.Color("13")),
 		BuiltinText:       lipgloss.NewStyle().Foreground(lipgloss.Color("6")),
-		UserDefinedText:   lipgloss.NewStyle().Foreground(lipgloss.Color("2")),
 		PendingDeleteText: lipgloss.NewStyle().Strikethrough(true).Foreground(lipgloss.Color("240")),
 		GutterAdded:       lipgloss.NewStyle().Foreground(lipgloss.Color("2")),
 		GutterDeleted:     lipgloss.NewStyle().Foreground(lipgloss.Color("1")),
@@ -2861,7 +2860,6 @@ func (m *Model) renderRunes(runes []rune, l int, startIdx int, baseStyle lipglos
 	invalidStyle := styles.InvalidText.Inherit(baseStyle)
 	duplicateStyle := styles.DuplicateText.Inherit(baseStyle)
 	builtinKeyStyle := styles.BuiltinText.Inherit(baseStyle).Inline(true)
-	userKeyStyle := styles.UserDefinedText.Inherit(baseStyle).Inline(true)
 
 	for i, r := range runes {
 		fullIdx := startIdx + i
@@ -2883,7 +2881,7 @@ func (m *Model) renderRunes(runes []rune, l int, startIdx int, baseStyle lipglos
 				continue
 			}
 			if meta.IsUserDefined {
-				b.WriteString(userKeyStyle.Render(string(r)))
+				b.WriteString(modStyle.Render(string(r)))
 			} else {
 				b.WriteString(builtinKeyStyle.Render(string(r)))
 			}
@@ -3183,6 +3181,16 @@ func (m Model) lineNumberView(n int, isCursorLine bool, dataLine int) (str strin
 	}
 
 	// Tint line numbers whose value differs from the template default.
+	// User-defined lines with no known default are entirely new — always tint.
+	if n > 0 && dataLine >= 0 && dataLine < len(m.lineMeta) {
+		if dl := m.lineMeta[dataLine]; dl.IsUserDefined && dl.IsVariable && dl.DefaultValue == "" {
+			if isCursorLine {
+				lineNumberStyle = m.activeStyle().computedLineNumberModifiedSelected()
+			} else {
+				lineNumberStyle = m.activeStyle().computedLineNumberModified()
+			}
+		}
+	}
 	if n > 0 && dataLine >= 0 {
 		mask := m.getDiffMask(dataLine)
 		for _, changed := range mask {
@@ -3437,6 +3445,16 @@ func (m *Model) reclassifyCurrentLine() {
 		meta.IsVariable = true
 		meta.EditableStartCol = eqIdx + 1
 		meta.IsUserDefined = true
+		// Resolve default for this user-defined key so value diffs work normally.
+		if m.defaultFunc != nil && meta.DefaultValue == "" {
+			key := strings.TrimSpace(string(line[:eqIdx]))
+			if key != "" {
+				meta.DefaultValue = strings.TrimSpace(m.defaultFunc(key))
+				if meta.DefaultValue != "" {
+					delete(m.diffCache, m.row)
+				}
+			}
+		}
 	} else {
 		meta.IsVariable = false
 		meta.EditableStartCol = 0

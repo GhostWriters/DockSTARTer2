@@ -10,6 +10,7 @@ func (m *Model) ParseEnv(content string, defaultFunc func(string) string, readOn
 	rawLines := strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
 	
 	m.Reset() // ensures clean state
+	m.defaultFunc = defaultFunc
 	m.diffCache = make(map[int][]bool)
 	m.value = make([][]rune, len(rawLines))
 	m.lineMeta = make([]Line, len(rawLines))
@@ -94,6 +95,7 @@ func (m *Model) ReclassifyEnv(defaultFunc func(string) string, readOnlyVars []st
 	if len(m.value) != len(m.lineMeta) {
 		return
 	}
+	m.defaultFunc = defaultFunc
 	m.diffCache = make(map[int][]bool)
 
 	inUserDefinedSection := false
