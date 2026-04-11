@@ -449,7 +449,7 @@ func (m *addVarDialogModel) submit() tea.Cmd {
 	if val == "" {
 		return nil
 	}
-	return m.closeWith(envAddVarMsg{key: strings.ToUpper(val)})
+	return m.closeWith(envAddVarMsg{key: val})
 }
 
 func (m *addVarDialogModel) confirmExit() tea.Cmd {
@@ -807,8 +807,8 @@ func (m *addVarDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegion 
 
 	headingRaw := FormatMenuHeading(MenuHeadingParams{AppName: m.appName, AppDescription: m.appDesc}, contentW)
 	headingH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToThemeANSI(headingRaw)))
-	// list starts at: outer border(1) + padding(1) + headingH + "Variable Name" section(3)
-	listTop := 1 + 1 + headingH + 3
+	// list starts at: outer border(1) + headingH + "Variable Name" section(3) (headingH includes padding natively)
+	listTop := 1 + headingH + 3
 
 	listH := 0
 	rowBudget := m.maxVis

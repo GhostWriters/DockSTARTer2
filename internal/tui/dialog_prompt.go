@@ -263,16 +263,19 @@ func (m *promptDialogModel) ViewString() string {
 		ctx.Dialog.Padding(1, 2).Width(contentWidth).Render(console.Sprintf("%s", m.question)),
 		"\n")
 
-	// Input field with inner border — use same Padding(0, 1).Width(contentWidth) as base
-	// so total row width matches questionText. ApplyInnerBorderCtx adds the border on top.
+	// Input field with inner border
 	inputFocused := m.focusedItem == FocusList
 	borderBG := ctx.Dialog.GetBackground()
-	borderedInputStyle := ApplyInnerBorderCtx(
-		ctx.Dialog.Padding(0, 1).Width(contentWidth),
-		inputFocused, ctx)
-	renderedInput := strings.TrimRight(
-		InjectBorderFlags(borderedInputStyle.Render(m.input.View()), ctx.BorderFlags, ctx.Border2Flags, false),
-		"\n")
+	sInnerW := contentWidth - 2
+	if sInnerW < 1 {
+		sInnerW = 1
+	}
+
+	inputContent := strings.TrimRight(ctx.Dialog.Padding(0, 1).Width(sInnerW).Render(m.input.View()), "\n")
+	renderedInput := strings.TrimRight(RenderBorderedBoxCtx(
+		"", inputContent, sInnerW, 0, inputFocused, true, true,
+		ctx.SubmenuTitleAlign, "", ctx,
+	), "\n")
 
 	// Inject INS/OVR label into the bottom-left of the input box border.
 	modeLabel := "INS"
@@ -281,7 +284,7 @@ func (m *promptDialogModel) ViewString() string {
 	}
 	inputLines := strings.Split(renderedInput, "\n")
 	if len(inputLines) > 0 {
-		inputLines[len(inputLines)-1] = BuildLabeledBottomBorderCtx(contentWidth+2, modeLabel, inputFocused, ctx)
+		inputLines[len(inputLines)-1] = BuildLabeledBottomBorderCtx(contentWidth, modeLabel, inputFocused, ctx)
 		renderedInput = strings.Join(inputLines, "\n")
 	}
 
