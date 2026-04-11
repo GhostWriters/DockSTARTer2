@@ -27,6 +27,7 @@ type addVarItem struct {
 	kind     addVarItemKind
 	name     string // full var name or prefix (no "…")
 	label    string // display text (includes "…" for templates)
+	tag      string // short category tag shown on the right (e.g. "Port", "Volume")
 	subLabel string // shown below label (default value for stock)
 	help     string
 }
@@ -71,14 +72,17 @@ type addVarDialogModel struct {
 // newAddVarDialog constructs the Add Variable dialog.
 func newAddVarDialog(
 	appName, appDesc string,
-	templates []struct{ prefix, label, help string },
+	templates []struct{ prefix, label, tag, help string },
 	stockItems []addVarItem,
 	addAllVars []string,
 	addAllDefaults map[string]string,
 ) *addVarDialogModel {
 	ti := textinput.New()
 	if len(appName) > 0 {
-		ti.Placeholder = strings.ToUpper(appName) + "__"
+		prefix := strings.ToUpper(appName) + "__"
+		ti.Placeholder = prefix
+		ti.SetValue(prefix)
+		ti.CursorEnd()
 	}
 	ti.CharLimit = 256
 	ti.Focus()
@@ -98,6 +102,7 @@ func newAddVarDialog(
 			kind:  addVarKindTemplate,
 			name:  t.prefix,
 			label: t.label,
+			tag:   t.tag,
 			help:  t.help,
 		})
 	}
@@ -198,6 +203,11 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// When focus is on input, fall through to input routing below
 
+		case msg.String() == "space" && m.focus == addVarFocusList:
+			// Space copies the selected template into the input and switches focus.
+			selectItem(m.cursor)
+			return m, nil
+
 		case key.Matches(msg, tui.Keys.Enter):
 			switch m.focus {
 			case addVarFocusInput:
@@ -206,9 +216,9 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, closeWith(envAddVarMsg{key: strings.ToUpper(v)})
 				}
 			case addVarFocusList:
-				if cmd := selectItem(m.cursor); cmd != nil {
-					return m, cmd
-				}
+				// Enter on list copies to input (same as Space) — use Create button to submit.
+				selectItem(m.cursor)
+				return m, nil
 			case addVarFocusCreate:
 				v := strings.TrimSpace(m.input.Value())
 				if v != "" {
@@ -290,7 +300,11 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.input.HandleClick(msg.X)
 				return m, nil
 			}
-			if msg.ID == "addvar_list" {
+			if msg.ID == "addvar_list" || msg.ID == "addvar_list_box" {
+				// Always focus the list on any click within the list area (including borders).
+				m.focus = addVarFocusList
+				m.input.Blur()
+				// Only select an item when the click lands on an actual item row.
 				idx := m.itemIndexAt(msg.Y)
 				if idx >= 0 {
 					if cmd := selectItem(idx); cmd != nil {
@@ -499,7 +513,6 @@ func (m *addVarDialogModel) ViewString() string {
 	sInnerW := contentW - 2 // inner width of each bordered section
 
 	bgStyle := theme.ThemeSemanticStyle("{{|Dialog|}}")
-	normalStyle := theme.ThemeSemanticStyle("{{|Item|}}")
 	selectedStyle := theme.ThemeSemanticStyle("{{|ItemSelected|}}")
 	subLabelStyle := theme.ThemeSemanticStyle("{{|HelpItem|}}")
 	sepChar := "─"
@@ -540,7 +553,20 @@ func (m *addVarDialogModel) ViewString() string {
 	// "Available Variables" section — titled bordered box, thick border when focused
 	listFocused := m.focus == addVarFocusList
 	// Always reserve one column for the scrollbar gutter so width is stable.
-	maxItemW := sInnerW - 3 - tui.ScrollbarGutterWidth // cursor(1) + space(1) + trailing space(1) + gutter
+	maxItemW := sInnerW - 2 // cursor(1) + space(1) + scrollbar appended by ApplyScrollbarColumnTracked(1)
+
+	// Compute max tag width for column alignment (tagged items only).
+	maxLabelW := 0
+	for _, item := range m.items {
+		if item.tag != "" {
+			if w := lipgloss.Width(item.tag); w > maxLabelW {
+				maxLabelW = w
+			}
+		}
+	}
+	if maxLabelW > maxItemW-4 {
+		maxLabelW = maxItemW - 4
+	}
 
 	// Compute scroll metrics for the scrollbar / scroll indicator.
 	totalRows := 0
@@ -556,14 +582,28 @@ func (m *addVarDialogModel) ViewString() string {
 		totalRows += r
 	}
 
+	// Button row rendered first so we can derive the available section height budget.
+	buttonRow := strings.TrimRight(tui.RenderCenteredButtonsCtx(
+		contentW, ctx,
+		tui.ButtonSpec{Text: "Create", Active: m.focus == addVarFocusInput || m.focus == addVarFocusCreate},
+		tui.ButtonSpec{Text: "Cancel", Active: m.focus == addVarFocusCancel},
+		tui.ButtonSpec{Text: "Exit", Active: m.focus == addVarFocusExit},
+	), "\n")
+
+	// Size the available section to fill all remaining space above the buttons.
+	buttonRowH := lipgloss.Height(buttonRow)
+	headingH := lipgloss.Height(headingText)
+	varNameH := lipgloss.Height(varNameSection)
+	availableTargetH := m.height - 2 - headingH - varNameH - buttonRowH
+	if availableTargetH < 3 {
+		availableTargetH = 3
+	}
+
 	var listLines []string
 	rowBudget := m.maxVis
 	for i := m.offset; i < len(m.items) && rowBudget > 0; i++ {
 		item := m.items[i]
 		if item.kind == addVarKindSeparator {
-			if rowBudget < 1 {
-				break
-			}
 			rowBudget--
 			sepW := sInnerW - tui.ScrollbarGutterWidth - 2
 			if sepW < 0 {
@@ -582,24 +622,16 @@ func (m *addVarDialogModel) ViewString() string {
 		rowBudget -= itemRows
 
 		focused := i == m.cursor && listFocused
-		cursor := " "
-		if focused {
-			cursor = ">"
+		// tag as label column, item.label as value column; fall back to label-only when no tag.
+		label, value := item.tag, item.label
+		if item.tag == "" {
+			label, value = item.label, ""
 		}
-		label := item.label
-		if lipgloss.Width(label) > maxItemW {
-			label = tui.TruncateRight(label, maxItemW)
-		}
-		pad := maxItemW - lipgloss.Width(label)
-		if pad < 0 {
-			pad = 0
-		}
-		line := cursor + " " + label + strings.Repeat(" ", pad) + " "
-		if focused {
-			listLines = append(listLines, tui.MaintainBackground(selectedStyle.Render(line), selectedStyle))
-		} else {
-			listLines = append(listLines, tui.MaintainBackground(normalStyle.Background(bgStyle.GetBackground()).Render(line), bgStyle))
-		}
+		listLines = append(listLines, RenderTwoColumnRow(
+			label, value,
+			i == m.cursor, focused,
+			maxLabelW, maxItemW, ctx,
+		))
 		if item.subLabel != "" {
 			sl := item.subLabel
 			if lipgloss.Width(sl) > maxItemW {
@@ -618,55 +650,11 @@ func (m *addVarDialogModel) ViewString() string {
 		}
 	}
 
-	// Apply scrollbar column (always reserves the gutter, shows track+thumb when enabled+needed).
-	listContent, sbInfo := tui.ApplyScrollbarColumnTracked(
-		strings.Join(listLines, "\n"),
+	availableSection := RenderListInBorderedBox(
+		"Available Variables", listLines,
 		totalRows, m.maxVis, offsetRows,
-		tui.IsScrollbarEnabled(), ctx.LineCharacters, ctx,
+		sInnerW, availableTargetH, listFocused, ctx,
 	)
-
-	listTitleTag := "TitleSubMenu"
-	if listFocused {
-		listTitleTag = "TitleSubMenuFocused"
-	}
-	// Button row rendered first so we can derive the available section height budget.
-	buttonRow := strings.TrimRight(tui.RenderCenteredButtonsCtx(
-		contentW, ctx,
-		tui.ButtonSpec{Text: "Create", Active: m.focus == addVarFocusInput || m.focus == addVarFocusCreate},
-		tui.ButtonSpec{Text: "Cancel", Active: m.focus == addVarFocusCancel},
-		tui.ButtonSpec{Text: "Exit", Active: m.focus == addVarFocusExit},
-	), "\n")
-
-	// Size the available section to fill all remaining space above the buttons.
-	buttonRowH := lipgloss.Height(buttonRow)
-	headingH := lipgloss.Height(headingText)
-	varNameH := lipgloss.Height(varNameSection)
-	availableTargetH := m.height - 2 - headingH - varNameH - buttonRowH
-	if availableTargetH < 3 {
-		availableTargetH = 3
-	}
-
-	availableSection := strings.TrimRight(tui.RenderBorderedBoxCtx(
-		"Available Variables", listContent, sInnerW, availableTargetH, listFocused, true, true,
-		ctx.SubmenuTitleAlign, listTitleTag, ctx,
-	), "\n")
-
-	// Replace bottom border with scroll indicator when list overflows.
-	if sbInfo.Needed {
-		scrollPct := 0.0
-		if totalRows > m.maxVis {
-			scrollPct = float64(offsetRows) / float64(totalRows-m.maxVis)
-			if scrollPct > 1.0 {
-				scrollPct = 1.0
-			}
-		}
-		sectionLines := strings.Split(availableSection, "\n")
-		if len(sectionLines) > 0 {
-			bottomLine := tui.BuildScrollPercentBottomBorder(sInnerW+2, scrollPct, listFocused, ctx)
-			sectionLines[len(sectionLines)-1] = bottomLine
-			availableSection = strings.Join(sectionLines, "\n")
-		}
-	}
 
 	parts := []string{headingText, varNameSection, availableSection, buttonRow}
 	return tui.RenderDialogWithType("Add Variable", lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused, m.height, tui.DialogTypeInfo)
@@ -729,17 +717,14 @@ func (m *addVarDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegion 
 		},
 	})
 	m.listAbsTopY = offsetY + listTop
-	if listH > 0 {
-		regions = append(regions, tui.HitRegion{
-			ID:     "addvar_list",
-			X:      offsetX + 1,
-			Y:      offsetY + listTop,
-			Width:  contentW + 2,
-			Height: listH,
-			ZOrder: tui.ZDialog + 10,
-			Label:  "Available Variables",
-		})
-	}
+	regions = append(regions, ListBoxHitRegions(
+		"addvar_list_box", "addvar_list",
+		offsetX, offsetY,
+		contentW+2,
+		listTop, listH,
+		tui.ZDialog+5,
+		"Available Variables", nil,
+	)...)
 
 	// Dialog background
 	regions = append(regions, tui.HitRegion{
