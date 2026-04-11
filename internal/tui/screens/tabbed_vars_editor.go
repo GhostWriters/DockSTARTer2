@@ -1526,11 +1526,11 @@ func (m *TabbedVarsEditorModel) showAddVarDialog() tea.Cmd {
 	appUpper := strings.ToUpper(tab.spec.App)
 	editor := tab.editor
 
-	templates := []struct{ prefix, label, help string }{
-		{appUpper + "__", appUpper + "__…", "Complete this with any variable name you want."},
-		{appUpper + "__ENVIRONMENT_", appUpper + "__ENVIRONMENT_…", "Complete with a var for the environment: section of your override."},
-		{appUpper + "__PORT_", appUpper + "__PORT_…", "Complete with a port number for the ports: section of your override."},
-		{appUpper + "__VOLUME_", appUpper + "__VOLUME_…", "Complete with a path for the volumes: section of your override."},
+	templates := []struct{ prefix, label, tag, help string }{
+		{appUpper + "__", appUpper + "__", "Generic", "Complete this with any variable name you want."},
+		{appUpper + "__ENVIRONMENT_", appUpper + "__ENVIRONMENT_", "Environment", "Complete with a var for the environment: section of your override."},
+		{appUpper + "__PORT_", appUpper + "__PORT_", "Port", "Complete with a port number for the ports: section of your override."},
+		{appUpper + "__VOLUME_", appUpper + "__VOLUME_", "Volume", "Complete with a path for the volumes: section of your override."},
 	}
 
 	type stockDef struct {
