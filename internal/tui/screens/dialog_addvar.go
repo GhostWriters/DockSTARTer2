@@ -3,8 +3,6 @@ package screens
 import (
 	"strings"
 
-	"DockSTARTer2/internal/strutil"
-
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/tui/components/sinput"
@@ -631,8 +629,25 @@ func (m *addVarDialogModel) ViewString() string {
 	if listFocused {
 		listTitleTag = "TitleSubMenuFocused"
 	}
+	// Button row rendered first so we can derive the available section height budget.
+	buttonRow := strings.TrimRight(tui.RenderCenteredButtonsCtx(
+		contentW, ctx,
+		tui.ButtonSpec{Text: "Create", Active: m.focus == addVarFocusInput || m.focus == addVarFocusCreate},
+		tui.ButtonSpec{Text: "Cancel", Active: m.focus == addVarFocusCancel},
+		tui.ButtonSpec{Text: "Exit", Active: m.focus == addVarFocusExit},
+	), "\n")
+
+	// Size the available section to fill all remaining space above the buttons.
+	buttonRowH := lipgloss.Height(buttonRow)
+	headingH := lipgloss.Height(headingText)
+	varNameH := lipgloss.Height(varNameSection)
+	availableTargetH := m.height - 2 - headingH - varNameH - buttonRowH
+	if availableTargetH < 3 {
+		availableTargetH = 3
+	}
+
 	availableSection := strings.TrimRight(tui.RenderBorderedBoxCtx(
-		"Available Variables", listContent, sInnerW, 0, listFocused, true, true,
+		"Available Variables", listContent, sInnerW, availableTargetH, listFocused, true, true,
 		ctx.SubmenuTitleAlign, listTitleTag, ctx,
 	), "\n")
 
@@ -653,26 +668,7 @@ func (m *addVarDialogModel) ViewString() string {
 		}
 	}
 
-	// Buttons
-	buttonRow := strings.TrimRight(tui.RenderCenteredButtonsCtx(
-		contentW, ctx,
-		tui.ButtonSpec{Text: "Create", Active: m.focus == addVarFocusInput || m.focus == addVarFocusCreate},
-		tui.ButtonSpec{Text: "Cancel", Active: m.focus == addVarFocusCancel},
-		tui.ButtonSpec{Text: "Exit", Active: m.focus == addVarFocusExit},
-	), "\n")
-
-	// Dynamic spacer pushes buttons to the bottom.
-	headingRenderedH := lipgloss.Height(headingText)
-	varNameSectionH := lipgloss.Height(varNameSection)
-	availableSectionH := lipgloss.Height(availableSection)
-	buttonRowH := lipgloss.Height(buttonRow)
-	spacerH := m.height - 2 - headingRenderedH - varNameSectionH - availableSectionH - buttonRowH
-	if spacerH < 1 {
-		spacerH = 1
-	}
-	spacer := strings.TrimRight(strutil.Repeat(bgStyle.Width(contentW).Render("")+"\n", spacerH), "\n")
-
-	parts := []string{headingText, varNameSection, availableSection, spacer, buttonRow}
+	parts := []string{headingText, varNameSection, availableSection, buttonRow}
 	return tui.RenderDialogWithType("Add Variable", lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused, m.height, tui.DialogTypeInfo)
 }
 
