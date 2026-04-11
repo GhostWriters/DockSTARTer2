@@ -568,8 +568,25 @@ func (m *setValueDialogModel) ViewString() string {
 	if listFocused {
 		listTitleTag = "TitleSubMenuFocused"
 	}
+	// Button row — rendered before presets so we can derive the presets height budget.
+	buttonRow := strings.TrimRight(tui.RenderCenteredButtonsCtx(contentW, ctx,
+		tui.ButtonSpec{Text: "Save", Active: m.focus == setValueFocusSave, ZoneID: "Save"},
+		tui.ButtonSpec{Text: "Cancel", Active: m.focus == setValueFocusCancel, ZoneID: "Cancel"},
+		tui.ButtonSpec{Text: "Exit", Active: m.focus == setValueFocusExit, ZoneID: "Exit"},
+	), "\n")
+
+	// Size the presets box to fill all remaining space above the buttons.
+	// Derived from actual rendered heights — no hardcoded +2 border offset.
+	buttonRowH := lipgloss.Height(buttonRow)
+	headingH := lipgloss.Height(headingText)
+	currentValueH := lipgloss.Height(currentValueSection)
+	presetTargetH := m.height - 2 - headingH - currentValueH - buttonRowH
+	if presetTargetH < 3 {
+		presetTargetH = 3
+	}
+
 	presetsSection := strings.TrimRight(tui.RenderBorderedBoxCtx(
-		"Preset Values", listContent, sInnerW, presetContentRows+2, listFocused, true, true,
+		"Preset Values", listContent, sInnerW, presetTargetH, listFocused, true, true,
 		ctx.SubmenuTitleAlign, listTitleTag, ctx,
 	), "\n")
 
@@ -590,18 +607,6 @@ func (m *setValueDialogModel) ViewString() string {
 		}
 	}
 
-	// Button row
-	buttonRow := strings.TrimRight(tui.RenderCenteredButtonsCtx(contentW, ctx,
-		tui.ButtonSpec{Text: "Save", Active: m.focus == setValueFocusSave, ZoneID: "Save"},
-		tui.ButtonSpec{Text: "Cancel", Active: m.focus == setValueFocusCancel, ZoneID: "Cancel"},
-		tui.ButtonSpec{Text: "Exit", Active: m.focus == setValueFocusExit, ZoneID: "Exit"},
-	), "\n")
-
-	// Fill pre-button content to exactly (m.height - 2 - buttonRowH) lines so that
-	// buttons land flush at the bottom with no gap above or below them.
-	// This mirrors MenuModel's height-budget approach: Height() pads the content area,
-	// then the button row is appended, giving renderDialogWithBorderCtx exactly the
-	// right number of lines and no extra padding to add.
 	title := "Set Value: " + m.varName
 	parts := []string{headingText, currentValueSection, presetsSection, buttonRow}
 	return tui.RenderDialogWithType(title, lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused, m.height, tui.DialogTypeInfo)
