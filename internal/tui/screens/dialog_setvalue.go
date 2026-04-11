@@ -436,10 +436,6 @@ func (m *setValueDialogModel) ViewString() string {
 	contentW := m.innerWidth()
 	sInnerW := contentW - 2 // inner width of each section (section border adds 2)
 
-	bgStyle := theme.ThemeSemanticStyle("{{|Dialog|}}")
-	normalValStyle := theme.ThemeSemanticStyle("{{|Item|}}")
-	selectedValStyle := theme.ThemeSemanticStyle("{{|ItemSelected|}}")
-
 	// Heading — CurrentValue updates live as the user types
 	headingRaw := FormatMenuHeading(MenuHeadingParams{
 		AppName:        m.appName,
@@ -477,7 +473,7 @@ func (m *setValueDialogModel) ViewString() string {
 	// "Preset Values" section — titled bordered box, thick border when focused
 	listFocused := m.focus == setValueFocusList
 	// Always reserve one column for the scrollbar gutter so width is stable.
-	maxItemW := sInnerW - 3 - tui.ScrollbarGutterWidth // cursor(1) + space(1) + trailing space(1) + gutter
+	maxItemW := sInnerW - 2 // cursor(1) + space(1) + scrollbar appended by ApplyScrollbarColumnTracked(1)
 
 	// Scroll metrics — each option is always 1 row.
 	totalRows := len(m.opts)
@@ -495,79 +491,6 @@ func (m *setValueDialogModel) ViewString() string {
 		maxLabelW = maxItemW - 4
 	}
 
-	presetContentRows := m.maxVis
-
-	neutralStyle := lipgloss.NewStyle().Background(bgStyle.GetBackground())
-
-	var listLines []string
-	end := m.offset + presetContentRows
-	if end > len(m.opts) {
-		end = len(m.opts)
-	}
-	for i := m.offset; i < end; i++ {
-		opt := m.opts[i]
-		focused := i == m.cursor && listFocused
-		cursor := " "
-		if focused {
-			cursor = ">"
-		}
-
-		valStyle := normalValStyle
-		if focused {
-			valStyle = selectedValStyle
-		}
-
-		label := opt.Display
-		val := opt.Value
-
-		if lipgloss.Width(label) > maxLabelW {
-			label = tui.TruncateRight(label, maxLabelW)
-		}
-		labelW := lipgloss.Width(label)
-		pad := maxLabelW - labelW // pad to align value column
-
-		cursorStr := neutralStyle.Render(cursor + " ")
-		labelStr := tui.RenderHotkeyLabelCtx(label, focused, ctx)
-		paddingStr := neutralStyle.Render(strings.Repeat(" ", pad+2)) // pad + 2-space gap
-
-		if val != "" {
-			valW := lipgloss.Width(val)
-			remaining := maxItemW - maxLabelW - 2
-			if remaining < 0 {
-				remaining = 0
-			}
-			if valW > remaining {
-				val = tui.TruncateRight(val, remaining)
-				valW = remaining
-			}
-			trailW := maxItemW + 1 - 2 - maxLabelW - 2 - valW
-			if trailW < 0 {
-				trailW = 0
-			}
-			valStr := valStyle.Render(val)
-			trailStr := neutralStyle.Render(strings.Repeat(" ", trailW))
-			listLines = append(listLines, cursorStr+labelStr+paddingStr+valStr+trailStr)
-		} else {
-			trailW := maxItemW + 1 - 2 - labelW
-			if trailW < 0 {
-				trailW = 0
-			}
-			trailStr := neutralStyle.Render(strings.Repeat(" ", trailW))
-			listLines = append(listLines, cursorStr+labelStr+trailStr)
-		}
-	}
-
-	// Apply scrollbar column (always reserves the gutter, shows track+thumb when enabled+needed).
-	listContent, sbInfo := tui.ApplyScrollbarColumnTracked(
-		strings.Join(listLines, "\n"),
-		totalRows, presetContentRows, offsetRows,
-		tui.IsScrollbarEnabled(), ctx.LineCharacters, ctx,
-	)
-
-	listTitleTag := "TitleSubMenu"
-	if listFocused {
-		listTitleTag = "TitleSubMenuFocused"
-	}
 	// Button row — rendered before presets so we can derive the presets height budget.
 	buttonRow := strings.TrimRight(tui.RenderCenteredButtonsCtx(contentW, ctx,
 		tui.ButtonSpec{Text: "Save", Active: m.focus == setValueFocusSave, ZoneID: "Save"},
@@ -576,7 +499,6 @@ func (m *setValueDialogModel) ViewString() string {
 	), "\n")
 
 	// Size the presets box to fill all remaining space above the buttons.
-	// Derived from actual rendered heights — no hardcoded +2 border offset.
 	buttonRowH := lipgloss.Height(buttonRow)
 	headingH := lipgloss.Height(headingText)
 	currentValueH := lipgloss.Height(currentValueSection)
@@ -585,27 +507,26 @@ func (m *setValueDialogModel) ViewString() string {
 		presetTargetH = 3
 	}
 
-	presetsSection := strings.TrimRight(tui.RenderBorderedBoxCtx(
-		"Preset Values", listContent, sInnerW, presetTargetH, listFocused, true, true,
-		ctx.SubmenuTitleAlign, listTitleTag, ctx,
-	), "\n")
-
-	// Replace bottom border with scroll indicator when list overflows.
-	if sbInfo.Needed {
-		scrollPct := 0.0
-		if totalRows > presetContentRows {
-			scrollPct = float64(offsetRows) / float64(totalRows-presetContentRows)
-			if scrollPct > 1.0 {
-				scrollPct = 1.0
-			}
-		}
-		presetLines := strings.Split(presetsSection, "\n")
-		if len(presetLines) > 0 {
-			bottomLine := tui.BuildScrollPercentBottomBorder(sInnerW+2, scrollPct, listFocused, ctx)
-			presetLines[len(presetLines)-1] = bottomLine
-			presetsSection = strings.Join(presetLines, "\n")
-		}
+	var listLines []string
+	end := m.offset + m.maxVis
+	if end > len(m.opts) {
+		end = len(m.opts)
 	}
+	for i := m.offset; i < end; i++ {
+		opt := m.opts[i]
+		focused := i == m.cursor && listFocused
+		listLines = append(listLines, RenderTwoColumnRow(
+			opt.Display, opt.Value,
+			i == m.cursor, focused,
+			maxLabelW, maxItemW, ctx,
+		))
+	}
+
+	presetsSection := RenderListInBorderedBox(
+		"Preset Values", listLines,
+		totalRows, m.maxVis, offsetRows,
+		sInnerW, presetTargetH, listFocused, ctx,
+	)
 
 	title := "Set Value: " + m.varName
 	parts := []string{headingText, currentValueSection, presetsSection, buttonRow}
@@ -666,28 +587,14 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 		},
 	})
 	m.listAbsTopY = offsetY + listTop
-	// Region covering the entire presets bordered box (title border row + content + bottom border row).
-	// Lower z-order so border/empty-area clicks focus the list without selecting an item.
-	regions = append(regions, tui.HitRegion{
-		ID:     "setvalue_preset_box",
-		X:      offsetX + 1,
-		Y:      offsetY + listTop - 1, // include title border row
-		Width:  contentW + 2,
-		Height: listH + 2, // content + top border + bottom border
-		ZOrder: tui.ZDialog + 5,
-		Label:  "Preset Values",
-	})
-	if listH > 0 {
-		regions = append(regions, tui.HitRegion{
-			ID:     "setvalue_list",
-			X:      offsetX + 1,
-			Y:      offsetY + listTop,
-			Width:  contentW + 2,
-			Height: listH,
-			ZOrder: tui.ZDialog + 10,
-			Label:  "Preset Values",
-		})
-	}
+	regions = append(regions, ListBoxHitRegions(
+		"setvalue_preset_box", "setvalue_list",
+		offsetX, offsetY,
+		contentW+2,
+		listTop, listH,
+		tui.ZDialog+5,
+		"Preset Values", nil,
+	)...)
 
 	// Dialog background
 	regions = append(regions, tui.HitRegion{
