@@ -2,6 +2,7 @@ package screens
 
 import (
 	"DockSTARTer2/internal/appenv"
+	"DockSTARTer2/internal/envutil"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/constants"
@@ -13,7 +14,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -53,6 +53,8 @@ type envTab struct {
 	editor          enveditor.Model
 	initialVars     map[string]string // Captured when loaded, used for scoped syncing on save
 	defaultFilePath string            // Cached for Refresh
+	defaultLines    []string          // Template lines cached in memory (avoids re-reading on F5)
+	composeEnvPath  string            // Path to the main .env file (for metadata lookups on F5)
 	readOnlyVars    []string          // Cached for Refresh
 	// Cached heading display info (populated during loadEnv)
 	envFilePath string          // Actual .env file being edited
@@ -117,6 +119,8 @@ type envTabData struct {
 	index           int
 	content         string
 	defaultFilePath string
+	defaultLines    []string
+	composeEnvPath  string
 	readOnlyVars    []string
 	initialVars     map[string]string
 	niceName        string
@@ -143,6 +147,14 @@ type ApplyVarValueMsg struct {
 type deleteVarMsg struct {
 	VarName string
 }
+
+// restoreVarMsg is dispatched by the context menu or keyboard shortcut to undelete a pending-delete line.
+type restoreVarMsg struct {
+	VarName string
+}
+
+// envRefreshMsg triggers the same staged reformat as F5.
+type envRefreshMsg struct{}
 
 func NewEnvEditorGlobal(onClose tea.Cmd) *TabbedVarsEditorModel {
 	return NewTabbedVarsEditorScreen(onClose, "Global Variables", []EnvTabSpec{
@@ -188,6 +200,11 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 
 	globalReadOnlyVars := []string{"HOME", "DOCKER_CONFIG_FOLDER", "DOCKER_COMPOSE_FOLDER"}
 
+	// Read the main .env file into a slice once — used as envLines for all tabs
+	// so staged-state lookups (IsAppEnabled, IsAppUserDefined, etc.) always use
+	// in-memory slices rather than re-reading disk per call.
+	envLines, _ := envutil.ReadLines(envPath)
+
 	var loaded []envTabData
 	for i, tab := range m.tabs {
 		var currentLines []string
@@ -210,14 +227,8 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 			}
 		}
 
-		currentLinesFile, _ := os.CreateTemp("", "dockstarter2.env_editor_current.*.tmp")
-		for _, line := range currentLines {
-			_, _ = currentLinesFile.WriteString(line + "\n")
-		}
-		currentLinesFile.Close()
-
-		formattedLines, _ := appenv.FormatLines(ctx, currentLinesFile.Name(), defaultFilePath, tab.spec.App, envPath)
-		os.Remove(currentLinesFile.Name())
+		defaultLines := appenv.ReadDefaultLines(defaultFilePath)
+		formattedLines := appenv.FormatLinesCore(ctx, currentLines, defaultLines, envLines, tab.spec.App, envPath)
 
 		content := strings.Join(formattedLines, "\n")
 
@@ -281,6 +292,8 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 			index:           i,
 			content:         content,
 			defaultFilePath: defaultFilePath,
+			defaultLines:    defaultLines,
+			composeEnvPath:  envPath,
 			readOnlyVars:    tabReadOnlyVars,
 			initialVars:     initialVars,
 			niceName:        niceName,
@@ -470,10 +483,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.Button == tea.MouseLeft {
 				m.focus = envFocusButtons
 				m.btnIdx = 2
-				if m.hasChanges() {
-					return m, m.promptUnsavedChanges(tui.ConfirmExitAction())
-				}
-				return m, tui.ConfirmExitAction()
+				return m, m.confirmExitAction()
 			}
 		}
 		return m, nil
@@ -561,12 +571,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "f5", "ctrl+r":
-			for i := range m.tabs {
-				m.tabs[i].editor.ReclassifyEnv(m.tabs[i].editor.DefaultValueFunc, m.tabs[i].readOnlyVars)
-				m.tabs[i].editor.MergeEnv()
-			}
-			m.SetSize(m.width, m.height)
-			return m, nil
+			return m, func() tea.Msg { return envRefreshMsg{} }
 		case "ctrl+ ", "shift+F10": // Keyboard equiv of right-click: open context menu at current cursor
 			if m.focus == envFocusEditor && len(m.tabs) > 0 {
 				editor := m.tabs[m.activeTab].editor
@@ -608,10 +613,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					return m, m.onClose
 				case 2: // Exit
-					if m.hasChanges() {
-						return m, m.promptUnsavedChanges(tui.ConfirmExitAction())
-					}
-					return m, tui.ConfirmExitAction()
+					return m, m.confirmExitAction()
 				}
 			}
 		} else {
@@ -620,6 +622,11 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "ctrl+d", "alt+backspace":
 				if len(m.tabs) > 0 {
 					m.tabs[m.activeTab].editor.DeleteCurrentVariable()
+				}
+				return m, nil
+			case "ctrl+u":
+				if len(m.tabs) > 0 {
+					m.tabs[m.activeTab].editor.UndeleteCurrentVariable()
 				}
 				return m, nil
 			case "ctrl+a":
@@ -707,6 +714,8 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case ApplyVarValueMsg:
 		if len(m.tabs) > 0 {
+			// If the variable is pending deletion, restore it first — editing implies intent to keep it.
+			m.tabs[m.activeTab].editor.UndeleteVariableByName(msg.VarName)
 			m.tabs[m.activeTab].editor.SetVariableValue(msg.VarName, msg.Value)
 		}
 		return m, nil
@@ -714,6 +723,37 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if len(m.tabs) > 0 {
 			m.tabs[m.activeTab].editor.DeleteVariableByName(msg.VarName)
 		}
+		return m, nil
+	case restoreVarMsg:
+		if len(m.tabs) > 0 {
+			m.tabs[m.activeTab].editor.UndeleteVariableByName(msg.VarName)
+		}
+		return m, nil
+	case envRefreshMsg:
+		ctx := context.Background()
+		globalLines := make(map[string][]string)
+		for i := range m.tabs {
+			if m.tabs[i].spec.IsGlobal {
+				content := m.tabs[i].editor.GetContent()
+				globalLines[strings.ToUpper(m.tabs[i].spec.App)] = strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
+			}
+		}
+		for i := range m.tabs {
+			tab := &m.tabs[i]
+			capturedDefaultLines := tab.defaultLines
+			capturedComposeEnvPath := tab.composeEnvPath
+			capturedApp := tab.spec.App
+			appUpper := strings.ToUpper(capturedApp)
+			envLines := globalLines[appUpper]
+			if envLines == nil {
+				envLines = globalLines[""]
+			}
+			capturedEnvLines := envLines
+			tab.editor.ReformatEnv(tab.editor.DefaultValueFunc, tab.readOnlyVars, func(currentLines []string) []string {
+				return appenv.FormatLinesCore(ctx, currentLines, capturedDefaultLines, capturedEnvLines, capturedApp, capturedComposeEnvPath)
+			})
+		}
+		m.SetSize(m.width, m.height)
 		return m, nil
 	case envLoadDoneMsg:
 		// Apply loaded data from disk to each tab, then recalculate layout.
@@ -739,7 +779,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			editorStyles.Focused.InvalidText = tui.SemanticRawStyle("EnvInvalid")
 			editorStyles.Focused.DuplicateText = tui.SemanticRawStyle("EnvDuplicate")
 			editorStyles.Focused.BuiltinText = tui.SemanticRawStyle("EnvBuiltin")
-			editorStyles.Focused.UserDefinedText = tui.SemanticRawStyle("EnvUser")
+
 			editorStyles.Focused.ModifiedText = tui.SemanticRawStyle("ModifiedText")
 			editorStyles.Focused.PendingDeleteText = tui.SemanticRawStyle("EnvPendingDelete")
 			editorStyles.Focused.GutterAdded = tui.SemanticRawStyle("MarkerAdded")
@@ -753,7 +793,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			editorStyles.Blurred.InvalidText = tui.SemanticRawStyle("EnvInvalid")
 			editorStyles.Blurred.DuplicateText = tui.SemanticRawStyle("EnvDuplicate")
 			editorStyles.Blurred.BuiltinText = tui.SemanticRawStyle("EnvBuiltin")
-			editorStyles.Blurred.UserDefinedText = tui.SemanticRawStyle("EnvUser")
+
 			editorStyles.Blurred.ModifiedText = tui.SemanticRawStyle("ModifiedText")
 			editorStyles.Blurred.PendingDeleteText = tui.SemanticRawStyle("EnvPendingDelete")
 			editorStyles.Blurred.GutterAdded = tui.SemanticRawStyle("MarkerAdded")
@@ -764,6 +804,8 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Update tab metadata used by saveEnv and heading display
 			m.tabs[i].initialVars = data.initialVars
 			m.tabs[i].defaultFilePath = data.defaultFilePath
+			m.tabs[i].defaultLines = data.defaultLines
+			m.tabs[i].composeEnvPath = data.composeEnvPath
 			m.tabs[i].readOnlyVars = data.readOnlyVars
 			m.tabs[i].niceName = data.niceName
 			m.tabs[i].description = data.description
@@ -1395,16 +1437,27 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 		copyText = currentVal
 	}
 
-	// Delete — only on a variable line.
+	// Delete / Restore — only on a variable line.
 	if isVarLine {
-		delVarName := varName
-		items = append(items, tui.ContextMenuItem{
-			Label: "Delete Variable",
-			Help:  "Remove this variable from the file (same as Ctrl+D).",
-			Action: func() tea.Msg {
-				return tui.CloseDialogMsg{Result: deleteVarMsg{VarName: delVarName}}
-			},
-		})
+		if meta.PendingDelete {
+			restVarName := varName
+			items = append(items, tui.ContextMenuItem{
+				Label: "Restore Variable",
+				Help:  "Cancel the pending deletion of this variable (same as Ctrl+U).",
+				Action: func() tea.Msg {
+					return tui.CloseDialogMsg{Result: restoreVarMsg{VarName: restVarName}}
+				},
+			})
+		} else {
+			delVarName := varName
+			items = append(items, tui.ContextMenuItem{
+				Label: "Delete Variable",
+				Help:  "Remove this variable from the file (same as Ctrl+D).",
+				Action: func() tea.Msg {
+					return tui.CloseDialogMsg{Result: deleteVarMsg{VarName: delVarName}}
+				},
+			})
+		}
 	}
 
 	// Build Clipboard Submenu items
@@ -1480,12 +1533,11 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 			return tui.CloseDialogMsg{Result: msg}
 		},
 	})
-	refreshM := m
 	items = append(items, tui.ContextMenuItem{
 		Label: "Refresh",
-		Help:  "Reload and reformat all variables from disk.",
+		Help:  "Reformat all variables based on current staged state (same as F5).",
 		Action: func() tea.Msg {
-			return tui.CloseDialogMsg{Result: refreshM.loadEnv()}
+			return tui.CloseDialogMsg{Result: envRefreshMsg{}}
 		},
 	})
 
@@ -1668,6 +1720,25 @@ func (m *TabbedVarsEditorModel) promptUnsavedChanges(onConfirm tea.Cmd) tea.Cmd 
 	return func() tea.Msg {
 		if tui.Confirm("Unsaved Changes", "You have unsaved changes. Do you want to leave without saving?", false) {
 			return onConfirm()
+		}
+		return nil
+	}
+}
+
+// confirmExitAction returns a Cmd that exits DockSTARTer, combining the two prompts into one.
+// If there are unsaved changes: "Discard changes and exit?" — one prompt, exits on yes.
+// If no unsaved changes: "Exit DockSTARTer?" — standard exit prompt.
+func (m *TabbedVarsEditorModel) confirmExitAction() tea.Cmd {
+	hasChanges := m.hasChanges()
+	return func() tea.Msg {
+		if hasChanges {
+			if tui.Confirm("Exit DockSTARTer", "You have unsaved changes. Discard changes and exit DockSTARTer?", false) {
+				return tea.Quit()
+			}
+			return nil
+		}
+		if tui.Confirm("Exit DockSTARTer", "Do you want to exit DockSTARTer?", true) {
+			return tea.Quit()
 		}
 		return nil
 	}

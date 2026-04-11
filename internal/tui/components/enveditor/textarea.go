@@ -252,7 +252,7 @@ type StyleState struct {
 	InvalidText       lipgloss.Style
 	DuplicateText     lipgloss.Style
 	BuiltinText       lipgloss.Style
-	UserDefinedText   lipgloss.Style
+	// UserDefinedText removed — user-defined var keys now use ModifiedText
 	PendingDeleteText lipgloss.Style
 	GutterAdded       lipgloss.Style // + marker for new lines
 	GutterDeleted     lipgloss.Style // - marker for pending-delete lines
@@ -471,8 +471,9 @@ type Model struct {
 	// Memoization for expensive rendering
 	lastView   string
 	cacheValid bool // Indicates if lastView is up-to-date with current state
-	dmp        *diffmatchpatch.DiffMatchPatch
-	diffCache  map[int][]bool // row index -> modified mask (true = modified)
+	dmp         *diffmatchpatch.DiffMatchPatch
+	diffCache   map[int][]bool        // row index -> modified mask (true = modified)
+	defaultFunc func(string) string   // stored at ParseEnv/ReclassifyEnv time; resolves defaults for new vars
 
 	// Intelligent variable addition settings.
 	AddPrefix         string
@@ -544,7 +545,6 @@ func DefaultStyles(isDark bool) Styles {
 		InvalidText:      lipgloss.NewStyle().Foreground(lipgloss.Color("9")),   // Red
 		DuplicateText:    lipgloss.NewStyle().Foreground(lipgloss.Color("13")),  // Magenta
 		BuiltinText:       lipgloss.NewStyle(),                                                                    // Inherit from text by default
-		UserDefinedText:   lipgloss.NewStyle(),                                                                    // Inherit from text by default
 		PendingDeleteText: lipgloss.NewStyle().Strikethrough(true).Foreground(lipgloss.Color("240")),
 		GutterAdded:       lipgloss.NewStyle().Foreground(lipgloss.Color("2")),  // Green
 		GutterDeleted:     lipgloss.NewStyle().Foreground(lipgloss.Color("1")),  // Red
@@ -570,7 +570,6 @@ func DefaultStyles(isDark bool) Styles {
 		InvalidText:      lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
 		DuplicateText:    lipgloss.NewStyle().Foreground(lipgloss.Color("13")),
 		BuiltinText:       lipgloss.NewStyle().Foreground(lipgloss.Color("6")),
-		UserDefinedText:   lipgloss.NewStyle().Foreground(lipgloss.Color("2")),
 		PendingDeleteText: lipgloss.NewStyle().Strikethrough(true).Foreground(lipgloss.Color("240")),
 		GutterAdded:       lipgloss.NewStyle().Foreground(lipgloss.Color("2")),
 		GutterDeleted:     lipgloss.NewStyle().Foreground(lipgloss.Color("1")),
@@ -1045,6 +1044,18 @@ func (m *Model) GetContent() string {
 	return sb.String()
 }
 
+// ActiveLines returns the buffer as a []string with PendingDelete lines excluded.
+func (m *Model) ActiveLines() []string {
+	out := make([]string, 0, len(m.value))
+	for i, l := range m.value {
+		if i < len(m.lineMeta) && m.lineMeta[i].PendingDelete {
+			continue
+		}
+		out = append(out, string(l))
+	}
+	return out
+}
+
 // CurrentLineMeta returns the meta information of the current line
 func (m *Model) CurrentLineMeta() (Line, bool) {
 	if m.row < len(m.lineMeta) {
@@ -1097,10 +1108,12 @@ func (m *Model) MoveVariableUp() {
 	if m.row <= 0 || m.row >= len(m.value) {
 		return
 	}
-	if m.lineMeta[m.row].ReadOnly || m.lineMeta[m.row-1].ReadOnly {
+	// Allow pending-delete lines to move (they can be restored); block truly read-only lines.
+	cur, prev := m.lineMeta[m.row], m.lineMeta[m.row-1]
+	if (cur.ReadOnly && !cur.PendingDelete) || (prev.ReadOnly && !prev.PendingDelete) {
 		return
 	}
-	if !m.lineMeta[m.row].IsUserDefined || !m.lineMeta[m.row-1].IsUserDefined {
+	if !cur.IsUserDefined || !prev.IsUserDefined {
 		return
 	}
 
@@ -1119,10 +1132,12 @@ func (m *Model) MoveVariableDown() {
 	if m.row >= len(m.value)-1 {
 		return
 	}
-	if m.lineMeta[m.row].ReadOnly || m.lineMeta[m.row+1].ReadOnly {
+	// Allow pending-delete lines to move (they can be restored); block truly read-only lines.
+	cur, next := m.lineMeta[m.row], m.lineMeta[m.row+1]
+	if (cur.ReadOnly && !cur.PendingDelete) || (next.ReadOnly && !next.PendingDelete) {
 		return
 	}
-	if !m.lineMeta[m.row].IsUserDefined || !m.lineMeta[m.row+1].IsUserDefined {
+	if !cur.IsUserDefined || !next.IsUserDefined {
 		return
 	}
 
@@ -1148,6 +1163,40 @@ func (m *Model) DeleteCurrentVariable() bool {
 	m.lineMeta[m.row].ReadOnly = true // prevent editing while pending
 	m.InvalidateCache()
 	return true
+}
+
+// UndeleteCurrentVariable clears the PendingDelete flag on the current line,
+// restoring it to its pre-deletion state.
+func (m *Model) UndeleteCurrentVariable() bool {
+	if m.row >= len(m.lineMeta) || !m.lineMeta[m.row].PendingDelete {
+		return false
+	}
+	m.pushUndoSnapshot()
+	m.lineMeta[m.row].PendingDelete = false
+	m.lineMeta[m.row].ReadOnly = false
+	m.InvalidateCache()
+	return true
+}
+
+// UndeleteVariableByName finds the first PendingDelete row containing varName= and restores it.
+func (m *Model) UndeleteVariableByName(varName string) bool {
+	prefix := varName + "="
+	for row, meta := range m.lineMeta {
+		if !meta.PendingDelete {
+			continue
+		}
+		line := strings.TrimSpace(string(m.value[row]))
+		if strings.HasPrefix(line, prefix) {
+			saved := m.row
+			m.row = row
+			ok := m.UndeleteCurrentVariable()
+			if !ok {
+				m.row = saved
+			}
+			return ok
+		}
+	}
+	return false
 }
 
 // DeleteVariableByName finds the first row containing varName= and deletes it.
@@ -2492,7 +2541,8 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) {
 			wrappedLines := m.memoizedWrap(lineRunes, m.width)
 			numWrapped := len(wrappedLines)
 			if targetViewLine >= currViewLine && targetViewLine < currViewLine+numWrapped {
-				if m.lineMeta[l].IsUserDefined && !m.lineMeta[l].ReadOnly {
+				lm := m.lineMeta[l]
+				if lm.IsUserDefined && (!lm.ReadOnly || lm.PendingDelete) {
 					m.isDragging = true
 					m.draggedRow = l
 					m.row = l
@@ -2861,7 +2911,6 @@ func (m *Model) renderRunes(runes []rune, l int, startIdx int, baseStyle lipglos
 	invalidStyle := styles.InvalidText.Inherit(baseStyle)
 	duplicateStyle := styles.DuplicateText.Inherit(baseStyle)
 	builtinKeyStyle := styles.BuiltinText.Inherit(baseStyle).Inline(true)
-	userKeyStyle := styles.UserDefinedText.Inherit(baseStyle).Inline(true)
 
 	for i, r := range runes {
 		fullIdx := startIdx + i
@@ -2883,7 +2932,7 @@ func (m *Model) renderRunes(runes []rune, l int, startIdx int, baseStyle lipglos
 				continue
 			}
 			if meta.IsUserDefined {
-				b.WriteString(userKeyStyle.Render(string(r)))
+				b.WriteString(modStyle.Render(string(r)))
 			} else {
 				b.WriteString(builtinKeyStyle.Render(string(r)))
 			}
@@ -3183,6 +3232,16 @@ func (m Model) lineNumberView(n int, isCursorLine bool, dataLine int) (str strin
 	}
 
 	// Tint line numbers whose value differs from the template default.
+	// User-defined lines with no known default are entirely new — always tint.
+	if n > 0 && dataLine >= 0 && dataLine < len(m.lineMeta) {
+		if dl := m.lineMeta[dataLine]; dl.IsUserDefined && dl.IsVariable && dl.DefaultValue == "" {
+			if isCursorLine {
+				lineNumberStyle = m.activeStyle().computedLineNumberModifiedSelected()
+			} else {
+				lineNumberStyle = m.activeStyle().computedLineNumberModified()
+			}
+		}
+	}
 	if n > 0 && dataLine >= 0 {
 		mask := m.getDiffMask(dataLine)
 		for _, changed := range mask {
@@ -3437,6 +3496,16 @@ func (m *Model) reclassifyCurrentLine() {
 		meta.IsVariable = true
 		meta.EditableStartCol = eqIdx + 1
 		meta.IsUserDefined = true
+		// Resolve default for this user-defined key so value diffs work normally.
+		if m.defaultFunc != nil && meta.DefaultValue == "" {
+			key := strings.TrimSpace(string(line[:eqIdx]))
+			if key != "" {
+				meta.DefaultValue = strings.TrimSpace(m.defaultFunc(key))
+				if meta.DefaultValue != "" {
+					delete(m.diffCache, m.row)
+				}
+			}
+		}
 	} else {
 		meta.IsVariable = false
 		meta.EditableStartCol = 0

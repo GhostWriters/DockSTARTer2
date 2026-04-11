@@ -15,9 +15,14 @@ import (
 	"DockSTARTer2/internal/strutil"
 )
 
-// FormatLines processes environment variable lines to match DockSTARTer formatting.
-// Matches env_format_lines.sh exactly.
-func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, composeEnvFile string) ([]string, error) {
+// FormatLinesCore processes environment variable lines to match DockSTARTer formatting.
+// currentLines contains the staged variable values (already in memory).
+// defaultLines contains the template lines (nil = no template).
+// envLines, when non-nil, is scanned for APPNAME__ENABLED to determine the heading.
+// When envLines is nil, composeEnvFile is read from disk instead (non-editor callers).
+// For the global .env tab, pass currentLines as envLines.
+// For the .env.app.appname tab, pass the global tab's staged lines as envLines.
+func FormatLinesCore(ctx context.Context, currentLines, defaultLines, envLines []string, appName, composeEnvFile string) []string {
 	appUpper := strings.ToUpper(appName)
 
 	// Local variables for tags (Parity with env_format_lines.sh lines 15-20)
@@ -28,23 +33,26 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 	appUserDefinedVarsTag := " (User Defined Variables)"
 	userDefinedGlobalVarsTag := " (User Defined)"
 
-	// 1. Load CurrentEnvLines (Parity with env_format_lines.sh lines 22-25)
-	var currentEnvLines []string
-	if currentEnvFile != "" {
-		var err error
-		currentEnvLines, err = envutil.ReadLines(currentEnvFile)
-		if err != nil {
-			return nil, err
+	var formattedEnvLines []string
+
+	// Resolve app status once — used by both the heading block and template inclusion.
+	var appIsUserDefined, appEnabled bool
+	var appDescription string
+	if appUpper != "" {
+		if envLines != nil {
+			appIsUserDefined = IsAppUserDefinedFromLines(ctx, appUpper, envLines)
+			appEnabled = IsAppEnabledFromLines(appUpper, envLines)
+			appDescription = GetDescriptionFromLines(ctx, appUpper, envLines)
+		} else {
+			appIsUserDefined = IsAppUserDefined(ctx, appUpper, composeEnvFile)
+			appEnabled = IsAppEnabled(appUpper, composeEnvFile)
+			appDescription = GetDescription(ctx, appUpper, composeEnvFile)
 		}
 	}
 
-	var formattedEnvLines []string
-
 	// 2. Add App Heading if APPNAME is specified (Parity with env_format_lines.sh lines 31-56)
 	if appUpper != "" {
-		appIsUserDefined := IsAppUserDefined(ctx, appUpper, composeEnvFile)
 		appNameNice := GetNiceName(ctx, appUpper)
-		appDescription := GetDescription(ctx, appUpper, composeEnvFile)
 
 		headingTitle := appNameNice
 		if appIsUserDefined {
@@ -53,16 +61,17 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 			if IsAppDeprecated(ctx, appUpper) {
 				headingTitle += appDeprecatedTag
 			}
-			if !IsAppEnabled(appUpper, composeEnvFile) {
+			if !appEnabled {
 				headingTitle += appDisabledTag
 			}
 		}
 
-		// Parity lines 46-55: Adds ### wrapping including before/after descriptions
+		// Parity lines 46-55: Adds ### wrapping including before/after descriptions.
+		// Description is only shown for built-in apps (not user-defined).
 		formattedEnvLines = append(formattedEnvLines, "###")
 		formattedEnvLines = append(formattedEnvLines, "### "+headingTitle)
 		formattedEnvLines = append(formattedEnvLines, "###")
-		if appDescription != "" {
+		if appDescription != "" && !appIsUserDefined {
 			descLines := strutil.WordWrapToSlice(console.StripSemanticTags(appDescription), 75)
 			for _, line := range descLines {
 				trimmed := strings.TrimRight(line, " \r\t")
@@ -77,38 +86,16 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 	}
 
 	// 3. Add Template Contents Verbatim (Parity with env_format_lines.sh lines 57-64)
-	if defaultEnvFile != "" {
-		processedTemplate := false
-		var templateLines []string
+	// Skip the template when the app is user-defined — it has no built-in template structure.
+	processedTemplate := false
+	if len(defaultLines) > 0 && !appIsUserDefined {
+		formattedEnvLines = append(formattedEnvLines, defaultLines...)
+		processedTemplate = true
+	}
 
-		// Use embedded asset for global .env.example
-		if filepath.Base(defaultEnvFile) == constants.EnvExampleFileName {
-			data, err := assets.GetDefaultEnv()
-			if err == nil {
-				templateLines = strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n")
-				// readarray -t strips the final newline character from the file
-				if len(templateLines) > 0 && templateLines[len(templateLines)-1] == "" {
-					templateLines = templateLines[:len(templateLines)-1]
-				}
-				formattedEnvLines = append(formattedEnvLines, templateLines...)
-				processedTemplate = true
-			}
-		} else if info, err := os.Stat(defaultEnvFile); err == nil && !info.IsDir() {
-			// Read app templates from disk (matches Bash [[ -f ${DefaultEnvFile} ]])
-			if data, err := os.ReadFile(defaultEnvFile); err == nil {
-				templateLines = strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n")
-				if len(templateLines) > 0 && templateLines[len(templateLines)-1] == "" {
-					templateLines = templateLines[:len(templateLines)-1]
-				}
-				formattedEnvLines = append(formattedEnvLines, templateLines...)
-				processedTemplate = true
-			}
-		}
-
-		// Bash line 62: adds a blank ONLY IF template section was processed/found
-		if processedTemplate && len(formattedEnvLines) > 0 {
-			formattedEnvLines = append(formattedEnvLines, "")
-		}
+	// Bash line 62: adds a blank ONLY IF template section was processed/found
+	if processedTemplate && len(formattedEnvLines) > 0 {
+		formattedEnvLines = append(formattedEnvLines, "")
 	}
 
 	// 4. Index existing variables in formattedEnvLines (Parity lines 66-78)
@@ -121,10 +108,10 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 		}
 	}
 
-	// 5. Update values from CurrentEnvLines (Parity lines 80-91)
-	if len(currentEnvLines) > 0 {
-		consumed := make([]bool, len(currentEnvLines))
-		for i, line := range currentEnvLines {
+	// 5. Update values from currentLines (Parity lines 80-91)
+	if len(currentLines) > 0 {
+		consumed := make([]bool, len(currentLines))
+		for i, line := range currentLines {
 			parts := strings.SplitN(line, "=", 2)
 			if len(parts) > 1 {
 				varName := strings.TrimSpace(parts[0])
@@ -135,9 +122,9 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 			}
 		}
 
-		// 6. Handle remaining CurrentEnvLines (User Defined) (Parity lines 93-124)
+		// 6. Handle remaining currentLines (User Defined) (Parity lines 93-124)
 		var remaining []string
-		for i, line := range currentEnvLines {
+		for i, line := range currentLines {
 			if !consumed[i] {
 				remaining = append(remaining, line)
 			}
@@ -145,8 +132,13 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 
 		if len(remaining) > 0 {
 			// Add User Defined heading (Parity lines 93-109)
-			appIsUserDefined := IsAppUserDefined(ctx, appUpper, composeEnvFile)
-			if appUpper == "" || !appIsUserDefined {
+			var appIsUserDefined2 bool
+			if envLines != nil {
+				appIsUserDefined2 = IsAppUserDefinedFromLines(ctx, appUpper, envLines)
+			} else {
+				appIsUserDefined2 = IsAppUserDefined(ctx, appUpper, composeEnvFile)
+			}
+			if appUpper == "" || !appIsUserDefined2 {
 				headingTitle := ""
 				if appUpper != "" {
 					headingTitle = GetNiceName(ctx, appUpper) + appUserDefinedVarsTag
@@ -165,7 +157,7 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 				parts := strings.SplitN(line, "=", 2)
 				if len(parts) > 1 {
 					varName := strings.TrimSpace(parts[0])
-					// Parity line 116 check: update if exists (handle duplicates in CurrentEnvLines)
+					// Parity line 116 check: update if exists (handle duplicates in currentLines)
 					if idx, exists := formattedEnvVarIndex[varName]; exists {
 						formattedEnvLines[idx] = line
 					} else {
@@ -183,7 +175,54 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 		formattedEnvLines = append(formattedEnvLines, "")
 	}
 
-	return formattedEnvLines, nil
+	return formattedEnvLines
+}
+
+// ReadDefaultLines loads the default/template lines for the given file path.
+// Returns nil if the file is not found or cannot be read.
+func ReadDefaultLines(defaultEnvFile string) []string {
+	if defaultEnvFile == "" {
+		return nil
+	}
+	if filepath.Base(defaultEnvFile) == constants.EnvExampleFileName {
+		data, err := assets.GetDefaultEnv()
+		if err != nil {
+			return nil
+		}
+		lines := strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n")
+		// readarray -t strips the final newline character from the file
+		if len(lines) > 0 && lines[len(lines)-1] == "" {
+			lines = lines[:len(lines)-1]
+		}
+		return lines
+	}
+	if info, err := os.Stat(defaultEnvFile); err != nil || info.IsDir() {
+		return nil
+	}
+	data, err := os.ReadFile(defaultEnvFile)
+	if err != nil {
+		return nil
+	}
+	lines := strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n")
+	if len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return lines
+}
+
+// FormatLines processes environment variable lines to match DockSTARTer formatting.
+// Matches env_format_lines.sh exactly. Reads files from disk and delegates to FormatLinesCore.
+func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, composeEnvFile string) ([]string, error) {
+	var currentLines []string
+	if currentEnvFile != "" {
+		var err error
+		currentLines, err = envutil.ReadLines(currentEnvFile)
+		if err != nil {
+			return nil, err
+		}
+	}
+	defaultLines := ReadDefaultLines(defaultEnvFile)
+	return FormatLinesCore(ctx, currentLines, defaultLines, nil, appName, composeEnvFile), nil
 }
 
 // GetReferencedApps returns a list of apps referenced in the compose env file.
@@ -212,5 +251,3 @@ func GetReferencedApps(composeEnvFile string) ([]string, error) {
 	slices.Sort(result)
 	return result, nil
 }
-
-

@@ -161,6 +161,36 @@ func GetDescription(ctx context.Context, appName string, envFile string) string 
 	return "! Missing description !"
 }
 
+// GetDescriptionFromLines returns the description using staged env lines to determine
+// user-defined status, instead of reading from disk.
+func GetDescriptionFromLines(ctx context.Context, appName string, lines []string) string {
+	if IsAppUserDefinedFromLines(ctx, appName, lines) {
+		return console.WrapSemantic("App") + GetNiceName(ctx, appName) + console.WrapDirect("-") + " is a user defined application"
+	}
+	// Fall through to the same metadata/labels lookup as GetDescription.
+	if appMeta, err := LoadAppMeta(ctx, appName); err == nil && appMeta != nil && appMeta.App.Description != "" {
+		return appMeta.App.Description
+	}
+	labelsFile, err := AppInstanceFile(ctx, appName, "*.labels.yml")
+	if err != nil || labelsFile == "" {
+		return "! Missing description !"
+	}
+	content, err := os.ReadFile(labelsFile)
+	if err != nil {
+		return "! Missing description !"
+	}
+	var labels LabelsFile
+	if err := yaml.Unmarshal(content, &labels); err != nil {
+		return "! Missing description !"
+	}
+	for _, service := range labels.Services {
+		if desc, ok := service.Labels["com.dockstarter.appinfo.description"]; ok {
+			return strings.Trim(desc, `"' `)
+		}
+	}
+	return "! Missing description !"
+}
+
 // GetDescriptionFromTemplate returns the description of an application.
 func GetDescriptionFromTemplate(ctx context.Context, appName string, envFile string) string {
 	// Check if user defined (not built-in OR missing ENABLED var)
