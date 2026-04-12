@@ -419,6 +419,9 @@ func Shutdown() {
 // EmergencyShutdown forcefully restores the terminal using raw ANSI escape codes.
 // This is used during panic recovery where a standard Shutdown() might deadlock.
 func EmergencyShutdown() {
+	// Signal that the TUI is dying to silence the background renderer
+	console.SetTUIDying(true)
+
 	// Forcefully restore both Input and Output TTY states
 	if initialInputState != nil {
 		_ = term.Restore(int(os.Stdin.Fd()), initialInputState)
@@ -428,15 +431,13 @@ func EmergencyShutdown() {
 	}
 
 	// Comprehensive ANSI reset block:
-	// \x1b[0m      - Color Reset
-	// \x1b[?1000l  - Disable basic mouse
-	// \x1b[?1002l  - Disable cell motion mouse
-	// \x1b[?1003l  - Disable all motion mouse
-	// \x1b[?1006l  - Disable SGR mouse
-	// \x1b[?1049l  - Exit Alternate Screen
-	// \x1b[?25h    - Show Cursor
-	// \r           - Carriage Return to far left
-	os.Stdout.WriteString("\x1b[0m\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1049l\x1b[?25h\r")
+	// \x1b[2J\x1b[H - Clear Screen and Home
+	// \x1b[0m       - All Colors Reset
+	// \x1b[?1000..  - All Mouse Modes Disabled (Standard Reset)
+	// \x1b[?1049l   - Exit Alternate Screen
+	// \x1b[?25h      - Show Cursor
+	// \r\n          - Carriage Return and Newline
+	os.Stdout.WriteString("\x1b[2J\x1b[H\x1b[0m\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1049l\x1b[?25h\r\n")
 	os.Stdout.Sync()
 
 	// Ensure TUI flag and mode are off so we print directly to terminal
