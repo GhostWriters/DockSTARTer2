@@ -206,7 +206,9 @@ func FatalWithStackSkip(ctx context.Context, skip int, msg any, args ...any) {
 	// Write to fatal log file
 	writeFatalLog(ctx, now, output, args...)
 
-	panic(FatalError{})
+	// Brief sleep to allow stdout/stderr to flush before exit
+	time.Sleep(100 * time.Millisecond)
+	os.Exit(1)
 }
 
 // FatalNoTrace logs a message at FatalLevel without stack trace and exits
@@ -222,7 +224,9 @@ func Fatal(ctx context.Context, msg any, args ...any) {
 	// Write to fatal log file
 	writeFatalLog(ctx, now, output, args...)
 
-	panic(FatalError{})
+	// Brief sleep to allow stdout/stderr to flush before exit
+	time.Sleep(100 * time.Millisecond)
+	os.Exit(1)
 }
 
 // writeFatalLog writes the resolved message to a separate fatal log file

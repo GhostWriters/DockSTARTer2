@@ -131,6 +131,8 @@ type (
 		Button tea.MouseButton // MouseWheelUp or MouseWheelDown
 		Hit    *HitRegion
 	}
+	// TriggerViewPanicMsg triggers a nil pointer dereference in the View() loop for testing
+	TriggerViewPanicMsg struct{}
 )
 
 const HoverButton tea.MouseButton = 99
@@ -176,6 +178,9 @@ type AppModel struct {
 
 	// Hit regions for mouse click detection (simpler than compositor hit testing)
 	hitRegions HitRegions
+
+	// testViewPanic triggers a nil pointer dereference in View() when true
+	testViewPanic bool
 }
 
 // NewAppModel creates a new application model.

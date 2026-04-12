@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 
 	"charm.land/bubbles/v2/help"
@@ -13,19 +12,10 @@ import (
 func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	defer func() {
 		if r := recover(); r != nil {
-			// Suppress further panics during recovery
-			defer func() { _ = recover() }()
+			// Restore terminal immediately
+			EmergencyShutdown()
 
-			// Restore terminal
-			Shutdown()
-			console.SetTUIEnabled(false)
-
-			// Check if it's already a FatalError
-			if _, ok := r.(logger.FatalError); ok {
-				return
-			}
-
-			// Report as fatal
+			// Log and exit
 			logger.FatalWithStackSkip(m.ctx, 2, "TUI Update Panic: %v", r)
 		}
 	}()
@@ -97,6 +87,10 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ShowGlobalFlagsMsg:
 		return m, m.wrap(func() tea.Msg { return ShowDialogMsg{Dialog: NewFlagsToggleDialog()} })
+
+	case TriggerViewPanicMsg:
+		m.testViewPanic = true
+		return m, nil
 
 	case TriggerHelpMsg:
 		return m, m.showHelpCmd(msg.CapturedContext)
