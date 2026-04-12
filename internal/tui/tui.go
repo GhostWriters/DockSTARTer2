@@ -185,7 +185,8 @@ func Start(ctx context.Context, startMenu string) error {
 // EditorFactory creates a tabbed vars editor screen.
 // appName is empty for the global vars editor, or an app name for the app-specific editor.
 // onClose is the Cmd to fire when the user navigates back/exits the editor.
-type EditorFactory func(appName string, onClose tea.Cmd) ScreenModel
+// showBack controls whether the Back button is shown (false when launched as root session).
+type EditorFactory func(appName string, onClose tea.Cmd, showBack bool) ScreenModel
 
 // editorFactory is registered by the screens package to avoid a circular import.
 var editorFactory EditorFactory
@@ -220,7 +221,7 @@ func StartEditor(ctx context.Context, appName string, isRoot bool) error {
 	isRootSession = isRoot
 
 	onClose := func() tea.Msg { return NavigateBackMsg{} }
-	startScreen := editorFactory(appName, onClose)
+	startScreen := editorFactory(appName, onClose, !isRoot)
 
 	// For non-root sessions, pre-populate the navigation stack so Back returns naturally.
 	// Global editor: main → config

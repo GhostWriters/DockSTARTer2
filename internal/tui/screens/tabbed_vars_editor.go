@@ -57,10 +57,11 @@ type envTab struct {
 	composeEnvPath  string            // Path to the main .env file (for metadata lookups on F5)
 	readOnlyVars    []string          // Cached for Refresh
 	// Cached heading display info (populated during loadEnv)
-	envFilePath string          // Actual .env file being edited
-	niceName    string          // App nicename (empty for global tabs)
-	description string          // App description (empty for global tabs or if unavailable)
-	appMeta     *appenv.AppMeta // Optional metadata from appname.meta.toml (nil if not present)
+	envFilePath      string          // Actual .env file being edited
+	niceName         string          // App nicename (empty for global tabs)
+	description      string          // App description (empty for global tabs or if unavailable)
+	appMeta          *appenv.AppMeta // Optional metadata from appname.meta.toml (nil if not present)
+	lastEnabledState string          // "active", "disabled", or "absent" — triggers auto-refresh on change
 }
 
 // defaultVal returns the computed default for any variable name via DefaultValueFunc
@@ -156,13 +157,13 @@ type restoreVarMsg struct {
 // envRefreshMsg triggers the same staged reformat as F5.
 type envRefreshMsg struct{}
 
-func NewEnvEditorGlobal(onClose tea.Cmd) *TabbedVarsEditorModel {
+func NewEnvEditorGlobal(onClose tea.Cmd, showBack bool) *TabbedVarsEditorModel {
 	return NewTabbedVarsEditorScreen(onClose, "Global Variables", []EnvTabSpec{
 		{Title: ".env", App: "", IsGlobal: true},
-	})
+	}, showBack)
 }
 
-func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec) *TabbedVarsEditorModel {
+func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec, showBack bool) *TabbedVarsEditorModel {
 	var tabs []envTab
 	for _, spec := range specs {
 		editor := enveditor.New()
@@ -175,11 +176,16 @@ func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec
 		tabs = append(tabs, envTab{spec: spec, editor: editor})
 	}
 
+	buttons := []string{"Save", "Back", "Exit"}
+	if !showBack {
+		buttons = []string{"Save", "Exit"}
+	}
+
 	return &TabbedVarsEditorModel{
 		tabs:      tabs,
 		activeTab: 0,
 		title:     title,
-		buttons:   []string{"Save", "Back", "Exit"},
+		buttons:   buttons,
 		btnIdx:    0,
 		focus:     envFocusEditor,
 		onClose:   onClose,
@@ -397,6 +403,66 @@ func (m *TabbedVarsEditorModel) hasErrors() bool {
 	return false
 }
 
+// enabledStateForApp computes the tri-state enabled status for the given app
+// from the global tab's active (non-pending-delete) lines.
+// Returns "active", "disabled", or "absent".
+func (m *TabbedVarsEditorModel) enabledStateForApp(appUpper string) string {
+	for i := range m.tabs {
+		if m.tabs[i].spec.IsGlobal && strings.ToUpper(m.tabs[i].spec.App) == appUpper {
+			lines := m.tabs[i].editor.ActiveLines()
+			_, exists := appenv.GetFromLines(appUpper+"__ENABLED", lines)
+			if !exists {
+				return "absent"
+			}
+			if appenv.IsAppEnabledFromLines(appUpper, lines) {
+				return "active"
+			}
+			return "disabled"
+		}
+	}
+	return "absent"
+}
+
+// checkEnabledChangedForKey finds the global tab whose APPNAME__ENABLED key
+// matches the given varName and calls checkEnabledChanged on it. Used by
+// ApplyVarValueMsg, deleteVarMsg, and restoreVarMsg to trigger an immediate
+// refresh when an ENABLED variable is set, deleted, or restored.
+func (m *TabbedVarsEditorModel) checkEnabledChangedForKey(varName string) tea.Cmd {
+	upper := strings.ToUpper(varName)
+	for i := range m.tabs {
+		if !m.tabs[i].spec.IsGlobal || m.tabs[i].spec.App == "" {
+			continue
+		}
+		// Exact match only: APPNAME__ENABLED — vars like APPNAME__FOO__ENABLED are unrelated.
+		if upper == strings.ToUpper(m.tabs[i].spec.App)+"__ENABLED" {
+			return m.checkEnabledChanged(i)
+		}
+	}
+	return nil
+}
+
+// checkEnabledChanged computes the current enabled state for the app on the
+// given global tab and, if it differs from lastEnabledState, updates it and
+// returns a cmd that dispatches envRefreshMsg{}.
+// No-ops for non-global tabs, apps with no name, or apps that are not built-in
+// (user-defined apps have no template sections to reorganize).
+func (m *TabbedVarsEditorModel) checkEnabledChanged(tabIdx int) tea.Cmd {
+	tab := &m.tabs[tabIdx]
+	if !tab.spec.IsGlobal || tab.spec.App == "" {
+		return nil
+	}
+	appUpper := strings.ToUpper(tab.spec.App)
+	if !appenv.IsAppBuiltIn(appUpper) {
+		return nil
+	}
+	newState := m.enabledStateForApp(appUpper)
+	if newState == tab.lastEnabledState {
+		return nil
+	}
+	tab.lastEnabledState = newState
+	return func() tea.Msg { return envRefreshMsg{} }
+}
+
 func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
@@ -473,7 +539,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if tui.ButtonIDMatches(msg.ID, tui.IDBackButton) {
 			if msg.Button == tea.MouseLeft {
 				m.focus = envFocusButtons
-				m.btnIdx = 1
+				m.btnIdx = m.buttonIndex("Back")
 				if m.hasChanges() {
 					return m, m.promptUnsavedChanges(m.onClose)
 				}
@@ -482,7 +548,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if tui.ButtonIDMatches(msg.ID, tui.IDExitButton) {
 			if msg.Button == tea.MouseLeft {
 				m.focus = envFocusButtons
-				m.btnIdx = 2
+				m.btnIdx = m.buttonIndex("Exit")
 				return m, m.confirmExitAction()
 			}
 		}
@@ -595,25 +661,27 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.btnIdx = 0
 				}
 			case "enter":
-				switch m.btnIdx {
-				case 0: // Save
-					if m.hasErrors() {
-						return m, func() tea.Msg {
-							return tui.ShowMessageDialogMsg{
-								Title:   "Validation Error",
-								Message: "Cannot save while there are invalid variable names (highlighted in red) or incomplete lines.",
-								Type:    tui.MessageError,
+				if m.btnIdx >= 0 && m.btnIdx < len(m.buttons) {
+					switch m.buttons[m.btnIdx] {
+					case "Save":
+						if m.hasErrors() {
+							return m, func() tea.Msg {
+								return tui.ShowMessageDialogMsg{
+									Title:   "Validation Error",
+									Message: "Cannot save while there are invalid variable names (highlighted in red) or incomplete lines.",
+									Type:    tui.MessageError,
+								}
 							}
 						}
+						return m, m.saveEnv()
+					case "Back":
+						if m.hasChanges() {
+							return m, m.promptUnsavedChanges(m.onClose)
+						}
+						return m, m.onClose
+					case "Exit":
+						return m, m.confirmExitAction()
 					}
-					return m, m.saveEnv()
-				case 1: // Back
-					if m.hasChanges() {
-						return m, m.promptUnsavedChanges(m.onClose)
-					}
-					return m, m.onClose
-				case 2: // Exit
-					return m, m.confirmExitAction()
 				}
 			}
 		} else {
@@ -621,12 +689,16 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.String() {
 			case "ctrl+d", "alt+backspace":
 				if len(m.tabs) > 0 {
+					varName := m.tabs[m.activeTab].editor.CurrentVariableName()
 					m.tabs[m.activeTab].editor.DeleteCurrentVariable()
+					return m, m.checkEnabledChangedForKey(varName)
 				}
 				return m, nil
 			case "ctrl+u":
 				if len(m.tabs) > 0 {
+					varName := m.tabs[m.activeTab].editor.CurrentVariableName()
 					m.tabs[m.activeTab].editor.UndeleteCurrentVariable()
+					return m, m.checkEnabledChangedForKey(varName)
 				}
 				return m, nil
 			case "ctrl+a":
@@ -718,17 +790,17 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.tabs[m.activeTab].editor.UndeleteVariableByName(msg.VarName)
 			m.tabs[m.activeTab].editor.SetVariableValue(msg.VarName, msg.Value)
 		}
-		return m, nil
+		return m, m.checkEnabledChangedForKey(msg.VarName)
 	case deleteVarMsg:
 		if len(m.tabs) > 0 {
 			m.tabs[m.activeTab].editor.DeleteVariableByName(msg.VarName)
 		}
-		return m, nil
+		return m, m.checkEnabledChangedForKey(msg.VarName)
 	case restoreVarMsg:
 		if len(m.tabs) > 0 {
 			m.tabs[m.activeTab].editor.UndeleteVariableByName(msg.VarName)
 		}
-		return m, nil
+		return m, m.checkEnabledChangedForKey(msg.VarName)
 	case envRefreshMsg:
 		ctx := context.Background()
 		globalLines := make(map[string][]string)
@@ -813,6 +885,11 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.tabs[i].appMeta = data.appMeta
 			// Clear undo — content has been reloaded so prior edits are irrelevant
 			m.tabs[i].editor.ClearUndo()
+			// Seed lastEnabledState so the first edit is compared against the loaded state.
+			if m.tabs[i].spec.IsGlobal && m.tabs[i].spec.App != "" {
+				appUpper := strings.ToUpper(m.tabs[i].spec.App)
+				m.tabs[i].lastEnabledState = m.enabledStateForApp(appUpper)
+			}
 		}
 		m.SetSize(m.width, m.height)
 		return m, nil
@@ -831,9 +908,31 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if !isMouse {
+			// Before passing the key to the editor, snapshot the cursor row and the
+			// line content so we can detect when the cursor leaves an ENABLED line.
+			tab := &m.tabs[m.activeTab]
+			prevRow := tab.editor.Line()
+			prevLine := ""
+			if tab.spec.IsGlobal && tab.spec.App != "" && appenv.IsAppBuiltIn(strings.ToUpper(tab.spec.App)) {
+				if lm, ok := tab.editor.LineMetaAt(prevRow); ok && lm.IsVariable {
+					prevLine = tab.editor.LineAt(prevRow)
+				}
+			}
+
 			var cmd tea.Cmd
 			m.tabs[m.activeTab].editor, cmd = m.tabs[m.activeTab].editor.Update(msg)
 			cmds = append(cmds, cmd)
+
+			// If cursor moved off a line that contained APPNAME__ENABLED, check state.
+			if prevLine != "" && tab.editor.Line() != prevRow {
+				appUpper := strings.ToUpper(tab.spec.App)
+				eqIdx := strings.Index(prevLine, "=")
+				if eqIdx > 0 && strings.TrimSpace(prevLine[:eqIdx]) == appUpper+"__ENABLED" {
+					if refreshCmd := m.checkEnabledChanged(m.activeTab); refreshCmd != nil {
+						cmds = append(cmds, refreshCmd)
+					}
+				}
+			}
 		}
 	}
 
@@ -933,26 +1032,33 @@ func (m *TabbedVarsEditorModel) ViewString() string {
 func (m *TabbedVarsEditorModel) View() tea.View {
 	return tea.View{Content: m.ViewString()}
 }
+func (m *TabbedVarsEditorModel) buttonIndex(name string) int {
+	for i, btn := range m.buttons {
+		if btn == name {
+			return i
+		}
+	}
+	return 0
+}
+
 func (m *TabbedVarsEditorModel) getButtonSpecs() []tui.ButtonSpec {
-	zoneIDs := []string{tui.IDSaveButton, tui.IDBackButton, tui.IDExitButton}
-	helps := []string{
-		"Save all changes in all tabs to the environment file.",
-		"Discard all changes and return (prompts if unsaved changes exist).",
-		"Discard all changes and exit the application.",
+	zoneByName := map[string]string{
+		"Save": tui.IDSaveButton,
+		"Back": tui.IDBackButton,
+		"Exit": tui.IDExitButton,
+	}
+	helpByName := map[string]string{
+		"Save": "Save all changes in all tabs to the environment file.",
+		"Back": "Discard all changes and return (prompts if unsaved changes exist).",
+		"Exit": "Discard all changes and exit the application.",
 	}
 	var specs []tui.ButtonSpec
 	for i, btn := range m.buttons {
-		zoneID := ""
-		help := ""
-		if i < len(zoneIDs) {
-			zoneID = zoneIDs[i]
-			help = helps[i]
-		}
 		specs = append(specs, tui.ButtonSpec{
 			Text:   btn,
 			Active: m.focus == envFocusButtons && m.btnIdx == i,
-			ZoneID: zoneID,
-			Help:   help,
+			ZoneID: zoneByName[btn],
+			Help:   helpByName[btn],
 		})
 	}
 	return specs

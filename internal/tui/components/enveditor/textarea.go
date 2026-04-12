@@ -866,6 +866,30 @@ func (m Model) Line() int {
 	return m.row
 }
 
+// CurrentVariableName returns the variable key on the current cursor line, or "" if none.
+func (m Model) CurrentVariableName() string {
+	if m.row >= len(m.value) || m.row >= len(m.lineMeta) {
+		return ""
+	}
+	if !m.lineMeta[m.row].IsVariable {
+		return ""
+	}
+	line := string(m.value[m.row])
+	eqIdx := strings.Index(line, "=")
+	if eqIdx <= 0 {
+		return ""
+	}
+	return strings.TrimSpace(line[:eqIdx])
+}
+
+// LineAt returns the raw string content of the given row, or "" if out of range.
+func (m Model) LineAt(row int) string {
+	if row < 0 || row >= len(m.value) {
+		return ""
+	}
+	return string(m.value[row])
+}
+
 // Column returns the 0-indexed column position of the cursor.
 func (m Model) Column() int {
 	return m.col
@@ -3006,12 +3030,13 @@ func (m *Model) view() string {
 
 		charIndex := 0
 		for wl, wrappedLine := range wrappedLines {
-			dataLineIdx := l
-			if wl > 0 {
-				dataLineIdx = -1
+			var prompt string
+			if wl == 0 {
+				prompt = m.promptView(displayLine, l)
+				prompt = styles.computedPrompt().Render(prompt)
+			} else {
+				prompt = m.promptContinuationView(l)
 			}
-			prompt := m.promptView(displayLine, dataLineIdx)
-			prompt = styles.computedPrompt().Render(prompt)
 			s.WriteString(style.Render(prompt))
 			displayLine++
 
@@ -3022,7 +3047,7 @@ func (m *Model) view() string {
 					s.WriteString(m.lineNumberView(l+1, isCursorLine, l))
 				} else { // soft wrapped line
 					isCursorLine := m.row == l
-					s.WriteString(m.lineNumberView(-1, isCursorLine, -1))
+					s.WriteString(m.lineNumberView(-1, isCursorLine, l))
 				}
 			}
 
@@ -3167,28 +3192,61 @@ func (m Model) totalDisplayLines() int {
 // promptView renders the gutter character for a display line.
 // dataLine is the index into m.value/m.lineMeta for the logical line being rendered;
 // pass -1 for soft-wrap continuation rows and end-of-buffer rows (no marker shown).
+// gutterStyleFor returns the lipgloss style that should be used for the gutter
+// of the given data line, and whether the line has a non-default marker.
+// Used by both promptView (renders the marker char) and promptContinuationView
+// (renders a blank space in the same style).
+func (m Model) gutterStyleFor(dataLine int) (style lipgloss.Style, hasMarker bool) {
+	if dataLine < 0 || dataLine >= len(m.lineMeta) {
+		return m.activeStyle().computedPrompt(), false
+	}
+	styles := m.activeStyle()
+	meta := m.lineMeta[dataLine]
+	if meta.PendingDelete {
+		return styles.GutterDeleted, true
+	}
+	if meta.IsInvalid {
+		return styles.GutterInvalid, true
+	}
+	if meta.IsVariable {
+		lineContent := string(m.value[dataLine])
+		if meta.IsNewLine || meta.InitialLine == "" {
+			return styles.GutterAdded, true
+		}
+		if !meta.ReadOnly && meta.InitialLine != "" && lineContent != meta.InitialLine {
+			return styles.GutterModified, true
+		}
+	}
+	return m.activeStyle().computedPrompt(), false
+}
+
+// promptContinuationView renders a blank gutter cell for soft-wrapped continuation
+// rows, styled to match the marker style of the logical line's first row.
+func (m Model) promptContinuationView(dataLine int) string {
+	style, _ := m.gutterStyleFor(dataLine)
+	return style.Render(" ")
+}
+
 func (m Model) promptView(displayLine, dataLine int) (prompt string) {
 	styles := m.activeStyle()
 
 	// Show diff markers in the gutter for the first row of each logical line.
 	if dataLine >= 0 && dataLine < len(m.lineMeta) {
-		meta := m.lineMeta[dataLine]
-		if meta.PendingDelete {
-			return styles.GutterDeleted.Render("-")
-		}
-		if meta.IsInvalid {
-			return styles.GutterInvalid.Render("!")
-		}
-		if meta.IsVariable {
-			lineContent := string(m.value[dataLine])
-			// + for lines explicitly flagged as new, or for lines that were blank at
-			// load time and now have content (user typed into a blank line).
-			if meta.IsNewLine || meta.InitialLine == "" {
-				return styles.GutterAdded.Render("+")
+		gutterStyle, hasMarker := m.gutterStyleFor(dataLine)
+		if hasMarker {
+			meta := m.lineMeta[dataLine]
+			var char string
+			switch {
+			case meta.PendingDelete:
+				char = "-"
+			case meta.IsInvalid:
+				char = "!"
+			case meta.IsNewLine || meta.InitialLine == "":
+				char = "+"
+			default:
+				char = "~"
 			}
-			if !meta.ReadOnly && meta.InitialLine != "" && lineContent != meta.InitialLine {
-				return styles.GutterModified.Render("~")
-			}
+			return gutterStyle.Render(char)
 		}
 	}
 
@@ -3233,7 +3291,9 @@ func (m Model) lineNumberView(n int, isCursorLine bool, dataLine int) (str strin
 
 	// Tint line numbers whose value differs from the template default.
 	// User-defined lines with no known default are entirely new — always tint.
-	if n > 0 && dataLine >= 0 && dataLine < len(m.lineMeta) {
+	// Applied to both the numbered first segment and blank continuation segments
+	// of soft-wrapped lines (dataLine >= 0 for both cases).
+	if dataLine >= 0 && dataLine < len(m.lineMeta) {
 		if dl := m.lineMeta[dataLine]; dl.IsUserDefined && dl.IsVariable && dl.DefaultValue == "" {
 			if isCursorLine {
 				lineNumberStyle = m.activeStyle().computedLineNumberModifiedSelected()
@@ -3242,7 +3302,7 @@ func (m Model) lineNumberView(n int, isCursorLine bool, dataLine int) (str strin
 			}
 		}
 	}
-	if n > 0 && dataLine >= 0 {
+	if dataLine >= 0 {
 		mask := m.getDiffMask(dataLine)
 		for _, changed := range mask {
 			if changed {

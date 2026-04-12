@@ -25,15 +25,15 @@ func init() {
 
 	// Register the editor factory so tui.StartEditor can create editor screens
 	// without importing the screens package (which would be circular).
-	tui.RegisterEditorFactory(func(appName string, onClose tea.Cmd) tui.ScreenModel {
+	tui.RegisterEditorFactory(func(appName string, onClose tea.Cmd, showBack bool) tui.ScreenModel {
 		if appName == "" {
-			return NewEnvEditorGlobal(onClose)
+			return NewEnvEditorGlobal(onClose, showBack)
 		}
 		specs := []EnvTabSpec{
 			{Title: ".env", App: appName, IsGlobal: true},
 			{Title: ".env.app." + strings.ToLower(appName), App: appName, IsGlobal: false},
 		}
-		return NewTabbedVarsEditorScreen(onClose, "Configure "+appName, specs)
+		return NewTabbedVarsEditorScreen(onClose, "Configure "+appName, specs, showBack)
 	})
 	// Register each screen with its canonical page name, creator, and parent stack.
 	// Parents are ordered outermost-first and define the navigation stack that is

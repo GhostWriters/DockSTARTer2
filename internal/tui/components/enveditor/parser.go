@@ -308,7 +308,7 @@ func (m *Model) ReformatEnv(defaultFunc func(string) string, readOnlyVars []stri
 		PendingDelete bool
 	}
 	snapshot := make(map[string]diffSnap)
-	deletedKeys := make(map[string]bool) // keys staged for deletion — must not re-appear after reformat
+	deletedInitial := make(map[string]string) // key → InitialLine of the deleted original
 
 	// Collect complete lines (valid KEY=value, non-PendingDelete) and incomplete lines.
 	type incLine struct {
@@ -328,8 +328,12 @@ func (m *Model) ReformatEnv(defaultFunc func(string) string, readOnlyVars []stri
 			key := strings.TrimSpace(line[:eqIdx])
 			if key != "" {
 				if meta.PendingDelete {
-					deletedKeys[key] = true
-				} else {
+					if _, seen := deletedInitial[key]; !seen {
+						deletedInitial[key] = meta.InitialLine
+					}
+				} else if _, exists := snapshot[key]; !exists {
+					// First occurrence wins — it's the original line whose diff markers
+					// should survive after duplicates are collapsed by the formatter.
 					snapshot[key] = diffSnap{
 						InitialLine:   meta.InitialLine,
 						IsNewLine:     meta.IsNewLine,
@@ -368,13 +372,28 @@ func (m *Model) ReformatEnv(defaultFunc func(string) string, readOnlyVars []stri
 			continue
 		}
 		key := strings.TrimSpace(line[:eqIdx])
-		if deletedKeys[key] {
-			m.lineMeta[i].PendingDelete = true
-			m.lineMeta[i].ReadOnly = true
-		} else if snap, ok := snapshot[key]; ok {
-			m.lineMeta[i].InitialLine = snap.InitialLine
-			m.lineMeta[i].IsNewLine = snap.IsNewLine
-			m.lineMeta[i].PendingDelete = snap.PendingDelete
+		if snap, ok := snapshot[key]; ok {
+			// Live replacement exists — not deleted.
+			origInitial, wasDeleted := deletedInitial[key]
+			if wasDeleted && origInitial != "" {
+				// Original was deleted and replaced: diff the replacement against the
+				// original's on-disk value so it shows as modified, not brand-new.
+				m.lineMeta[i].InitialLine = origInitial
+				m.lineMeta[i].IsNewLine = false
+			} else {
+				m.lineMeta[i].InitialLine = snap.InitialLine
+				m.lineMeta[i].IsNewLine = snap.IsNewLine
+			}
+			m.lineMeta[i].PendingDelete = false
+		} else if origInitial, wasDeleted := deletedInitial[key]; wasDeleted {
+			// Key was pending-delete with no live replacement.
+			// Built-in vars are re-introduced by the template — restore them to their
+			// template default and clear the delete marker so the diff shows the change.
+			// User-defined vars have no template entry so they won't appear here anyway.
+			m.lineMeta[i].InitialLine = origInitial
+			m.lineMeta[i].IsNewLine = false
+			m.lineMeta[i].PendingDelete = false
+			m.lineMeta[i].ReadOnly = false
 		}
 	}
 
