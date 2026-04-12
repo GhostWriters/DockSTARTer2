@@ -4,6 +4,7 @@ import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/tui"
 	"context"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 )
@@ -22,7 +23,7 @@ func NewOptionsMenuScreen(isRoot bool) tui.ScreenModel {
 			Tag:    "Trigger Test Panic",
 			Desc:   "{{|TitleError|}}Test error handling{{[-]}}",
 			Help:   "Verify branded recovery and stack trace",
-			Action: func() tea.Msg { panic("Manual verification panic (Test: 123)") },
+			Action: func() tea.Msg { return tea.Msg(strings.Repeat("runtime-panic-test", -1)) },
 		},
 		{
 			Tag:  "Simulate Sudo Prompt",
