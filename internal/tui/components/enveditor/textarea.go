@@ -1121,6 +1121,23 @@ func (m *Model) insertVariableAt(row int, key string, value string) {
 		EditableStartCol: 0,
 		IsNewLine:        true, // added by user after load
 	}
+
+	if key != "" && m.ValidateFunc != nil {
+		vType := m.ValidationType
+		if vType == "APPNAME" {
+			vType = m.ValidationAppName
+		}
+		vKey := key
+		if !m.ValidationIsGlobal && vType != "" && vType != "_GLOBAL_" && vType != "_BARE_" {
+			if strings.HasSuffix(vType, ":") {
+				vKey = vType + key
+			} else {
+				vKey = vType + ":" + key
+			}
+		}
+		l.IsInvalid = !m.ValidateFunc(vKey, vType)
+	}
+
 	if key != "" {
 		l.EditableStartCol = len(key) + 1
 	}
@@ -2009,41 +2026,53 @@ func (m *Model) HasValidationErrors() bool {
 			continue
 		}
 		meta := &m.lineMeta[i]
-		if meta.ReadOnly || !meta.IsVariable {
+
+		// Skip comments and truly read-only lines
+		if meta.ReadOnly || meta.IsComment {
 			continue
 		}
 
-		// Find '=' index
-		eqIdx := -1
-		for j, r := range lineRunes {
-			if r == '=' {
-				eqIdx = j
-				break
-			}
+		// Check for the pre-calculated IsInvalid flag derived from reclassifyCurrentLine
+		if meta.IsInvalid {
+			return true
 		}
 
-		if eqIdx > 0 {
-			// Validate key
-			key := string(lineRunes[:eqIdx])
-			vType := m.ValidationType
-			if vType == "APPNAME" {
-				vType = m.ValidationAppName
-			}
-			// Internally prepend app prefix for validation if we're in an app-specific tab (bare names)
-			vKey := key
-			if !m.ValidationIsGlobal && vType != "" && vType != "_GLOBAL_" && vType != "_BARE_" {
-				if strings.HasSuffix(vType, ":") {
-					vKey = vType + key
-				} else {
-					vKey = vType + ":" + key
+		// Check for "incomplete" lines: user-defined content that is NOT yet a variable (no '=')
+		if meta.IsUserDefined && len(lineRunes) > 0 && !meta.IsVariable {
+			return true
+		}
+
+		// Validation check for variables
+		if meta.IsVariable {
+			// Find '=' index
+			eqIdx := -1
+			for j, r := range lineRunes {
+				if r == '=' {
+					eqIdx = j
+					break
 				}
 			}
-			if !m.ValidateFunc(vKey, vType) {
-				return true
+
+			if eqIdx > 0 {
+				// Validate key
+				key := string(lineRunes[:eqIdx])
+				vType := m.ValidationType
+				if vType == "APPNAME" {
+					vType = m.ValidationAppName
+				}
+				// Internally prepend app prefix for validation if we're in an app-specific tab (bare names)
+				vKey := key
+				if !m.ValidationIsGlobal && vType != "" && vType != "_GLOBAL_" && vType != "_BARE_" {
+					if strings.HasSuffix(vType, ":") {
+						vKey = vType + key
+					} else {
+						vKey = vType + ":" + key
+					}
+				}
+				if !m.ValidateFunc(vKey, vType) {
+					return true
+				}
 			}
-		} else if meta.IsUserDefined && len(lineRunes) > 0 {
-			// User defined line with content but no '=' is an incomplete variable
-			return true
 		}
 	}
 	return false
@@ -2928,9 +2957,9 @@ func (m *Model) renderRunes(runes []rune, l int, startIdx int, baseStyle lipglos
 	// Determine if the current variable name is valid
 	keyIsValid := true
 	keyIsDuplicate := false
+	eqIdx := -1
 	if (meta.IsVariable || meta.IsUserDefined) && m.ValidateFunc != nil && m.ValidationType != "" {
 		lineRunes := m.value[l]
-		eqIdx := -1
 		for i, r := range lineRunes {
 			if r == '=' {
 				eqIdx = i
@@ -2958,9 +2987,22 @@ func (m *Model) renderRunes(runes []rune, l int, startIdx int, baseStyle lipglos
 			if m.duplicateKeys != nil && m.duplicateKeys[key] > 1 {
 				keyIsDuplicate = true
 			}
-		} else if meta.IsUserDefined && len(lineRunes) > 0 {
-			// User defined line with content but no '=' is an incomplete variable
-			keyIsValid = false
+		} else if len(lineRunes) > 0 {
+			// Early validation: check if the partial key is valid in this context
+			key := strings.TrimSpace(string(lineRunes))
+			vType := m.ValidationType
+			if vType == "APPNAME" {
+				vType = m.ValidationAppName
+			}
+			vKey := key
+			if !m.ValidationIsGlobal && vType != "" && vType != "_GLOBAL_" && vType != "_BARE_" {
+				if strings.HasSuffix(vType, ":") {
+					vKey = vType + key
+				} else {
+					vKey = vType + ":" + key
+				}
+			}
+			keyIsValid = m.ValidateFunc(vKey, vType)
 		}
 	}
 
@@ -2981,7 +3023,7 @@ func (m *Model) renderRunes(runes []rune, l int, startIdx int, baseStyle lipglos
 		}
 
 		// Key part highlighting
-		if fullIdx < meta.EditableStartCol-1 {
+		if (eqIdx >= 0 && fullIdx < meta.EditableStartCol-1) || (eqIdx == -1 && (meta.IsVariable || meta.IsUserDefined)) {
 			if !keyIsValid {
 				b.WriteString(invalidStyle.Render(string(r)))
 				continue
@@ -3337,16 +3379,32 @@ func (m Model) lineNumberView(n int, isCursorLine bool, dataLine int) (str strin
 			}
 		}
 	}
-	if dataLine >= 0 {
-		mask := m.getDiffMask(dataLine)
-		for _, changed := range mask {
-			if changed {
-				if isCursorLine {
-					lineNumberStyle = m.activeStyle().computedLineNumberModifiedSelected()
-				} else {
-					lineNumberStyle = m.activeStyle().computedLineNumberModified()
+	if dataLine >= 0 && dataLine < len(m.lineMeta) {
+		meta := &m.lineMeta[dataLine]
+		isModified := false
+
+		// Check if the entire line differs from the one initially loaded from file.
+		// This captures key changes, which getDiffMask (focused on values) skips.
+		if meta.InitialLine != "" && string(m.value[dataLine]) != meta.InitialLine {
+			isModified = true
+		}
+
+		// Supplement with value-part diff against template default.
+		if !isModified {
+			mask := m.getDiffMask(dataLine)
+			for _, changed := range mask {
+				if changed {
+					isModified = true
+					break
 				}
-				break
+			}
+		}
+
+		if isModified {
+			if isCursorLine {
+				lineNumberStyle = m.activeStyle().computedLineNumberModifiedSelected()
+			} else {
+				lineNumberStyle = m.activeStyle().computedLineNumberModified()
 			}
 		}
 	}
@@ -3591,9 +3649,26 @@ func (m *Model) reclassifyCurrentLine() {
 		meta.IsVariable = true
 		meta.EditableStartCol = eqIdx + 1
 		meta.IsUserDefined = true
+
+		key := strings.TrimSpace(string(line[:eqIdx]))
+		vType := m.ValidationType
+		if vType == "APPNAME" {
+			vType = m.ValidationAppName
+		}
+		vKey := key
+		if !m.ValidationIsGlobal && vType != "" && vType != "_GLOBAL_" && vType != "_BARE_" {
+			if strings.HasSuffix(vType, ":") {
+				vKey = vType + key
+			} else {
+				vKey = vType + ":" + key
+			}
+		}
+		if m.ValidateFunc != nil {
+			meta.IsInvalid = !m.ValidateFunc(vKey, vType)
+		}
+
 		// Resolve default for this user-defined key so value diffs work normally.
 		if m.defaultFunc != nil && meta.DefaultValue == "" {
-			key := strings.TrimSpace(string(line[:eqIdx]))
 			if key != "" {
 				meta.DefaultValue = strings.TrimSpace(m.defaultFunc(key))
 				if meta.DefaultValue != "" {
@@ -3604,6 +3679,17 @@ func (m *Model) reclassifyCurrentLine() {
 	} else {
 		meta.IsVariable = false
 		meta.EditableStartCol = 0
+
+		if len(line) > 0 {
+			meta.IsUserDefined = true
+			if m.ValidateFunc != nil {
+				// Incomplete lines (no '=') are always considered invalid for the gutter marker and saving
+				meta.IsInvalid = true
+			}
+		} else {
+			meta.IsUserDefined = false
+			meta.IsInvalid = false
+		}
 	}
 }
 

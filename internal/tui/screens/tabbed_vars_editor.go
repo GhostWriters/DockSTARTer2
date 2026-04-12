@@ -507,7 +507,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, func() tea.Msg {
 						return tui.ShowMessageDialogMsg{
 							Title:   "Validation Error",
-							Message: "Cannot save while there are invalid variable names (highlighted in red) or incomplete lines.",
+							Message: "Cannot save while there are invalid variable names or incomplete lines.",
 							Type:    tui.MessageError,
 						}
 					}
@@ -646,7 +646,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							return m, func() tea.Msg {
 								return tui.ShowMessageDialogMsg{
 									Title:   "Validation Error",
-									Message: "Cannot save while there are invalid variable names (highlighted in red) or incomplete lines.",
+									Message: "Cannot save while there are invalid variable names or incomplete lines.",
 									Type:    tui.MessageError,
 								}
 							}

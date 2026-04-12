@@ -84,6 +84,16 @@ func (m *messageDialogModel) titlePrefix() string {
 	}
 }
 
+// titleSuffix returns the icon suffix for this message type.
+func (m *messageDialogModel) titleSuffix() string {
+	switch m.messageType {
+	case MessageError:
+		return " ✗"
+	default:
+		return ""
+	}
+}
+
 // messageStyle returns the base text style for this message type (without width).
 func (m *messageDialogModel) messageStyle() lipgloss.Style {
 	styles := GetStyles()
@@ -93,9 +103,9 @@ func (m *messageDialogModel) messageStyle() lipgloss.Style {
 	case MessageWarning:
 		return styles.StatusWarn.Padding(1, 2)
 	case MessageError:
-		return styles.StatusError.Bold(true).Padding(1, 2)
+		return styles.ItemNormal.Padding(1, 2)
 	default:
-		return lipgloss.NewStyle().Foreground(styles.ItemNormal.GetForeground()).Padding(1, 2)
+		return styles.ItemNormal.Padding(1, 2)
 	}
 }
 
@@ -106,7 +116,7 @@ func (m *messageDialogModel) contentWidth() int {
 	if minBtn := lipgloss.Width(" OK ") + 4; minBtn > w {
 		w = minBtn
 	}
-	fullTitle := m.titlePrefix() + GetPlainText(m.title)
+	fullTitle := m.titlePrefix() + GetPlainText(m.title) + m.titleSuffix()
 	if tw := lipgloss.Width(fullTitle) + 6; tw > w {
 		w = tw
 	}
@@ -123,7 +133,7 @@ func (m *messageDialogModel) ViewString() string {
 	}
 
 	contentWidth := m.contentWidth()
-	fullTitle := m.titlePrefix() + GetPlainText(m.title)
+	fullTitle := m.titlePrefix() + GetPlainText(m.title) + m.titleSuffix()
 
 	// Wrap message text to fit width
 	messageStyle := m.messageStyle().Width(contentWidth)
@@ -141,8 +151,12 @@ func (m *messageDialogModel) ViewString() string {
 	buttonRow = strings.TrimRight(buttonRow, "\n")
 	fullContent := lipgloss.JoinVertical(lipgloss.Left, content, buttonRow)
 
-	// Add title with prefix and wrap in border
-	dialogWithTitle := RenderDialog(fullTitle, fullContent, m.focused, 0)
+	// Add title with prefix/suffix and wrap in border
+	dialogType := DialogTypeInfo
+	if m.messageType == MessageError {
+		dialogType = DialogTypeError
+	}
+	dialogWithTitle := RenderDialogWithType(fullTitle, fullContent, m.focused, 0, dialogType)
 
 	return dialogWithTitle
 }
