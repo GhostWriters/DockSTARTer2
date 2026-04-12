@@ -17,11 +17,11 @@ func Recover(ctx context.Context) {
 		}()
 
 		// Restore terminal if TUI was running
-		if console.TUIShutdown != nil {
+		if console.TUIEmergencyShutdown != nil {
+			console.TUIEmergencyShutdown()
+		} else if console.TUIShutdown != nil {
 			console.TUIShutdown()
 		}
-
-		// Ensure TUI flag is off so we print directly to terminal
 		console.SetTUIEnabled(false)
 
 		// Check if it's already a FatalError (intentional panic)
@@ -47,7 +47,9 @@ func RecoverTUI(ctx context.Context, cmd tea.Cmd) tea.Cmd {
 				defer func() { _ = recover() }()
 
 				// Restore terminal and log the panic
-				if console.TUIShutdown != nil {
+				if console.TUIEmergencyShutdown != nil {
+					console.TUIEmergencyShutdown()
+				} else if console.TUIShutdown != nil {
 					console.TUIShutdown()
 				}
 				console.SetTUIEnabled(false)

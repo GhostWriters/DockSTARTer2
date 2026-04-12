@@ -30,6 +30,7 @@ var TUIPrompt func(title, question string, sensitive bool) (string, error)
 // TUIShutdown is a function that can be registered by the tui package
 // to allow the application to cleanly exit the TUI before re-execution.
 var TUIShutdown func()
+var TUIEmergencyShutdown func()
 
 // GlobalYes is set to true when the -y/--yes flag is passed to the application.
 // QuestionPrompt prompts the user with a Yes/No question.

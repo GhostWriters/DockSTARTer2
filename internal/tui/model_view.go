@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"DockSTARTer2/internal/logger"
 	"sort"
 	"strings"
 
@@ -33,6 +34,20 @@ type InputCursorProvider interface {
 // View implements tea.Model
 // Uses backdrop + overlay pattern (same as dialogs)
 func (m *AppModel) View() (v tea.View) {
+	defer func() {
+		if r := recover(); r != nil {
+			// Restore terminal immediately
+			EmergencyShutdown()
+
+			// Log and exit
+			logger.FatalWithStackSkip(m.ctx, 2, "TUI View Panic: %v", r)
+		}
+	}()
+
+	if m.testViewPanic {
+		var x *int
+		_ = *x
+	}
 	if !m.ready {
 		// Enable mouse tracking immediately so the terminal receives \x1b[?1002h
 		// before the first WindowSizeMsg is processed. Without this, clicks that

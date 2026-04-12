@@ -26,6 +26,12 @@ func NewOptionsMenuScreen(isRoot bool) tui.ScreenModel {
 			Action: func() tea.Msg { return tea.Msg(strings.Repeat("runtime-panic-test", -1)) },
 		},
 		{
+			Tag:    "Trigger View Panic",
+			Desc:   "{{|TitleError|}}Test low-level View panic{{[-]}}",
+			Help:   "Verify recovery for crashes in the main UI thread",
+			Action: func() tea.Msg { return tui.TriggerViewPanicMsg{} },
+		},
+		{
 			Tag:  "Simulate Sudo Prompt",
 			Desc: "Test universal text prompt",
 			Help: "Show what a sudo password request looks like",
