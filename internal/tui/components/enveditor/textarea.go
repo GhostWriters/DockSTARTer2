@@ -3079,13 +3079,13 @@ func (m *Model) view() string {
 			}
 			if m.row == l && lineInfo.RowOffset == wl {
 				s.WriteString(m.renderRunes(wrappedLine[:lineInfo.ColumnOffset], l, charIndex, style))
-				if m.col >= len(line) && lineInfo.CharOffset >= m.width {
-					m.virtualCursor.SetChar(" ")
-					s.WriteString(m.virtualCursor.View())
-				} else {
+				if lineInfo.ColumnOffset < len(wrappedLine) {
 					m.virtualCursor.SetChar(string(wrappedLine[lineInfo.ColumnOffset]))
 					s.WriteString(style.Render(m.virtualCursor.View()))
 					s.WriteString(m.renderRunes(wrappedLine[lineInfo.ColumnOffset+1:], l, charIndex+lineInfo.ColumnOffset+1, style))
+				} else {
+					m.virtualCursor.SetChar(" ")
+					s.WriteString(m.virtualCursor.View())
 				}
 			} else {
 				s.WriteString(m.renderRunes(wrappedLine, l, charIndex, style))
