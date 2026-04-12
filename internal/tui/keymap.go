@@ -200,7 +200,7 @@ var Keys = KeyMap{
 		key.WithHelp("ctrl+a", "add var"),
 	),
 	EnvDelete: key.NewBinding(
-		key.WithKeys("ctrl+d", "alt+backspace"),
+		key.WithKeys("ctrl+d", "alt+backspace", "alt+ctrl+h"),
 		key.WithHelp("ctrl+d", "delete var"),
 	),
 	EnvReorderU: key.NewBinding(
