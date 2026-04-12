@@ -139,7 +139,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.backdrop.SetHelpText(m.activeScreen.HelpText())
 		}
-		return m, m.wrap(cmds...)
+		return m, m.wrap(cmds)
 
 	case NavigateMsg:
 		// Push current screen to stack and switch to new screen
@@ -159,7 +159,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.backdrop.SetHelpText(m.activeScreen.HelpText())
 			cmds = append(cmds, m.activeScreen.Init())
 		}
-		return m, m.wrap(cmds...)
+		return m, m.wrap(cmds)
 
 	case NavigateBackMsg:
 		// Pop from stack and return to previous screen
@@ -222,7 +222,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateComponentFocus()
 			cmds = append(cmds, m.dialog.Init())
 		}
-		return m, m.wrap(cmds...)
+		return m, m.wrap(cmds)
 
 	case ShowConfirmDialogMsg:
 		// If a dialog is already open, push it to stack and show the confirm dialog as the new top
@@ -302,7 +302,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateComponentFocus()
 			cmds = append(cmds, m.dialog.Init())
 		}
-		return m, m.wrap(cmds...)
+		return m, m.wrap(cmds)
 
 	case CloseDialogMsg:
 		// If we're waiting for a confirmation, send the result
@@ -411,12 +411,13 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.activeScreen.SetSize(caW, caH)
 			// Forward so screens like DisplayOptionsScreen can reload preview-namespace styles
 			// that were cleared by InitStyles → ClearSemanticCache above.
+			_, cmd := m.activeScreen.Update(msg)
 			return m, m.wrap(cmd)
 		}
 		return m, nil
 
 	case QuitMsg:
-		return m, tea.Quit
+		return m, m.wrap(tea.Quit)
 	}
 
 	// Update backdrop
@@ -470,10 +471,10 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		for _, c := range cmds {
 			allCmds = append(allCmds, c)
 		}
-		return m, m.wrap(allCmds...)
+		return m, m.wrap(allCmds)
 	}
 
-	return m, m.wrap(cmds...)
+	return m, m.wrap(cmds)
 }
 
 // wrap is a helper to apply BatchRecoverTUI to all commands returned to Bubble Tea.
@@ -489,6 +490,17 @@ func (m *AppModel) wrap(cmds ...any) tea.Cmd {
 		case tea.Msg:
 			msg := v
 			finalCmds = append(finalCmds, func() tea.Msg { return msg })
+		case []tea.Cmd:
+			finalCmds = append(finalCmds, v...)
+		case []any:
+			for _, item := range v {
+				if c, ok := item.(tea.Cmd); ok {
+					finalCmds = append(finalCmds, c)
+				} else if m, ok := item.(tea.Msg); ok {
+					msg := m
+					finalCmds = append(finalCmds, func() tea.Msg { return msg })
+				}
+			}
 		}
 	}
 	if len(finalCmds) == 0 {
