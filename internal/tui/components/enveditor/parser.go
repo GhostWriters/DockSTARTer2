@@ -328,9 +328,13 @@ func (m *Model) ReformatEnv(defaultFunc func(string) string, readOnlyVars []stri
 			key := strings.TrimSpace(line[:eqIdx])
 			if key != "" {
 				if meta.PendingDelete {
+					// Record the original InitialLine for diff purposes only.
+					// Do NOT pass deleted lines to the formatter — built-in vars will
+					// be re-introduced from the template at their default values.
 					if _, seen := deletedInitial[key]; !seen {
 						deletedInitial[key] = meta.InitialLine
 					}
+					continue
 				} else if _, exists := snapshot[key]; !exists {
 					// First occurrence wins — it's the original line whose diff markers
 					// should survive after duplicates are collapsed by the formatter.
