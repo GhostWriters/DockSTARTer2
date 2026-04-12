@@ -20,7 +20,7 @@ func navigateToConfigMenu() tea.Cmd {
 func navigateToGlobalVarsEditor() tea.Cmd {
 	return func() tea.Msg {
 		tui.CurrentEditorApp = ""
-		return tui.NavigateMsg{Screen: NewEnvEditorGlobal(navigateBack())}
+		return tui.NavigateMsg{Screen: NewEnvEditorGlobal(navigateBack(), true)}
 	}
 }
 
@@ -41,7 +41,7 @@ func navigateToAppConfigEditorWithRefresh(appName string) tea.Cmd {
 			{Title: ".env", App: appName, IsGlobal: true},
 			{Title: ".env.app." + strings.ToLower(appName), App: appName, IsGlobal: false},
 		}
-		return tui.NavigateMsg{Screen: NewTabbedVarsEditorScreen(navigateBackWithRefresh(), "Configure "+appName, specs)}
+		return tui.NavigateMsg{Screen: NewTabbedVarsEditorScreen(navigateBackWithRefresh(), "Configure "+appName, specs, true)}
 	}
 }
 
