@@ -2453,7 +2453,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			break
 		}
 		m.pushUndoSnapshot()
-		m.insertRunesFromUserInput([]rune(msg))
+		m.insertRunes([]rune(msg), true)
 
 	case pasteErrMsg:
 		m.Err = msg
