@@ -176,7 +176,8 @@ type (
 		AddPrefix       string
 		ValidationType  string
 		ValidationApp   string
-		AppMeta         *appenv.AppMeta
+		IsGlobal        bool
+		AppMeta          *appenv.AppMeta
 	}
 
 	// UniversalPromptMsg is a generic message for triggering a prompt

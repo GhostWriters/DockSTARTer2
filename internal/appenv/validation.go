@@ -16,8 +16,8 @@ import (
 
 // IsAppNameValid checks if an app name is valid according to DS rules.
 func IsAppNameValid(appName string) bool {
-	// 1. Strip leading/trailing colons
-	name := strings.TrimSpace(appName)
+	// 1. Strip leading/trailing colons and uppercase
+	name := strings.ToUpper(strings.TrimSpace(appName))
 	if strings.HasSuffix(name, ":") {
 		name = name[:len(name)-1]
 	} else if strings.HasPrefix(name, ":") {

@@ -263,7 +263,12 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 		if tab.spec.App != "" {
 			addPrefix = tab.spec.App + "__"
 			validationType = tab.spec.App
+			if !tab.spec.IsGlobal {
+				validationType += ":"
+			}
 			validationApp = tab.spec.App
+		} else if tab.spec.IsGlobal {
+			validationType = "_GLOBAL_"
 		}
 
 		loaded = append(loaded, tui.EnvTabData{
@@ -281,6 +286,7 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 			AddPrefix:       addPrefix,
 			ValidationType:  validationType,
 			ValidationApp:   validationApp,
+			IsGlobal:        tab.spec.IsGlobal,
 			AppMeta:         tabAppMeta,
 		})
 	}
@@ -810,6 +816,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.tabs[i].editor.AddPrefix = data.AddPrefix
 			m.tabs[i].editor.ValidationType = data.ValidationType
 			m.tabs[i].editor.ValidationAppName = data.ValidationApp
+			m.tabs[i].editor.ValidationIsGlobal = data.IsGlobal
 			m.tabs[i].editor.ValidateFunc = appenv.VarNameIsValid
 			// Parse content into editor (resets value + lineMeta, invalidates cache)
 			m.tabs[i].editor.ParseEnv(data.Content, data.DefaultFunc, data.ReadOnlyVars)

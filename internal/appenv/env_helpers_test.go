@@ -83,13 +83,11 @@ func TestIsAppNameValid(t *testing.T) {
 		input    string
 		expected bool
 	}{
-		// Valid app names
+		// Valid app names (case-insensitive)
 		{"SONARR", true},
+		{"Sonarr", true},
 		{"RADARR__4K", true},
 		{"RADARR__ANIME", true},
-
-		// Invalid patterns
-		{"Sonarr", false},    // Lowercase
 		{"SONARR_4K", false}, // Single underscore
 		{"SONARR 4K", false}, // Space
 		{"4SONARR", false},   // Starts with number
@@ -268,7 +266,7 @@ func TestVarNameIsValid(t *testing.T) {
 		{"RADARR:varname", "", true},  // colon-format
 		{"2TZ", "", false},
 		{"2radarr:radarr", "", false},
-		{"radarr:varname", "", false}, // lowercase appname
+		{"radarr:varname", "", true}, // case-insensitive appname
 
 		// VarType="_BARE_" — any valid identifier (letters, digits, underscore)
 		{"TZ", "_BARE_", true},
@@ -307,7 +305,7 @@ func TestVarNameIsValid(t *testing.T) {
 		// VarType="_APPNAME_:" — colon-format with any valid app name
 		{"RADARR:varname", "_APPNAME_:", true},
 		{"RADARR__4K:varname", "_APPNAME_:", true},
-		{"radarr:varname", "_APPNAME_:", false}, // lowercase appname
+		{"radarr:varname", "_APPNAME_:", true}, // case-insensitive appname
 		{"2radarr:radarr", "_APPNAME_:", false},
 		{"RADARR:2var", "_APPNAME_:", false}, // var starts with digit
 		{"TZ", "_APPNAME_:", false},
@@ -328,8 +326,9 @@ func TestVarNameIsValid(t *testing.T) {
 		{"RADARR__4K__TAG", "radarr", false}, // appname is RADARR__4K, not RADARR
 		{"SONARR__TEST", "radarr", false},
 		{"TZ", "radarr", false},
-		{"radarr:varname", "radarr", false},
-		{"Radarr__TAG", "radarr", false}, // VarNameToAppName=""
+		{"radarr:varname", "radarr", false}, // Matching Bash behavior: APPNAME (no colon) requires __ prefix
+		{"radarr:varname", "radarr:", true}, // Matching Bash behavior: APPNAME: (with colon) requires : separator
+		{"Radarr__TAG", "radarr", false},    // VarNameToAppName=""
 	}
 
 	for _, test := range tests {

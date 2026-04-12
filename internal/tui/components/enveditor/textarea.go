@@ -481,6 +481,7 @@ type Model struct {
 	AddPrefix         string
 	ValidationType    string // _GLOBAL_, _BARE_, or APPNAME (actual app name)
 	ValidationAppName string // Actual app name if ValidationType is APPNAME
+	ValidationIsGlobal bool   // If true, the editor is showing the full .env names; if false, it shows bare names that need prefixing for validation
 	ValidateFunc      func(string, string) bool
 
 	// Theme integration for duplicates
@@ -712,7 +713,16 @@ func (m *Model) insertRunes(runes []rune, literal bool) {
 						if vType == "APPNAME" {
 							vType = m.ValidationAppName
 						}
-						if m.ValidateFunc != nil && !m.ValidateFunc(key, vType) {
+						// Internally prepend app prefix for validation if we're in an app-specific tab (bare names)
+						vKey := key
+						if !m.ValidationIsGlobal && vType != "" && vType != "_GLOBAL_" && vType != "_BARE_" {
+							if strings.HasSuffix(vType, ":") {
+								vKey = vType + key
+							} else {
+								vKey = vType + ":" + key
+							}
+						}
+						if m.ValidateFunc != nil && !m.ValidateFunc(vKey, vType) {
 							// Block "=" if key is invalid
 							continue
 						}
@@ -2019,7 +2029,16 @@ func (m *Model) HasValidationErrors() bool {
 			if vType == "APPNAME" {
 				vType = m.ValidationAppName
 			}
-			if !m.ValidateFunc(key, vType) {
+			// Internally prepend app prefix for validation if we're in an app-specific tab (bare names)
+			vKey := key
+			if !m.ValidationIsGlobal && vType != "" && vType != "_GLOBAL_" && vType != "_BARE_" {
+				if strings.HasSuffix(vType, ":") {
+					vKey = vType + key
+				} else {
+					vKey = vType + ":" + key
+				}
+			}
+			if !m.ValidateFunc(vKey, vType) {
 				return true
 			}
 		} else if meta.IsUserDefined && len(lineRunes) > 0 {
@@ -2924,7 +2943,16 @@ func (m *Model) renderRunes(runes []rune, l int, startIdx int, baseStyle lipglos
 			if vType == "APPNAME" {
 				vType = m.ValidationAppName
 			}
-			keyIsValid = m.ValidateFunc(key, vType)
+			// Internally prepend app prefix for validation if we're in an app-specific tab (bare names)
+			vKey := key
+			if !m.ValidationIsGlobal && vType != "" && vType != "_GLOBAL_" && vType != "_BARE_" {
+				if strings.HasSuffix(vType, ":") {
+					vKey = vType + key
+				} else {
+					vKey = vType + ":" + key
+				}
+			}
+			keyIsValid = m.ValidateFunc(vKey, vType)
 
 			// Duplicate check using the pre-calculated map
 			if m.duplicateKeys != nil && m.duplicateKeys[key] > 1 {
