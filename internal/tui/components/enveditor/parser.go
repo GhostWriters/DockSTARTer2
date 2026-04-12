@@ -390,15 +390,60 @@ func (m *Model) ReformatEnv(defaultFunc func(string) string, readOnlyVars []stri
 			}
 			m.lineMeta[i].PendingDelete = false
 		} else if origInitial, wasDeleted := deletedInitial[key]; wasDeleted {
-			// Key was pending-delete with no live replacement.
-			// Built-in vars are re-introduced by the template — restore them to their
-			// template default and clear the delete marker so the diff shows the change.
-			// User-defined vars have no template entry so they won't appear here anyway.
+			// Key was pending-delete — re-introduced by the template.
+			// Keep it marked as pending-delete so the user sees their staged deletion.
 			m.lineMeta[i].InitialLine = origInitial
 			m.lineMeta[i].IsNewLine = false
-			m.lineMeta[i].PendingDelete = false
-			m.lineMeta[i].ReadOnly = false
+			m.lineMeta[i].PendingDelete = true
+			m.lineMeta[i].ReadOnly = true
 		}
+	}
+
+	// Re-insert any deleted keys that the formatter didn't re-introduce.
+	// This happens when the app became user-defined (no ENABLED in envLines)
+	// and FormatLinesCore skipped the template. We still want the user to see
+	// their staged deletions as pending-delete lines.
+	presentKeys := make(map[string]bool)
+	for i, meta := range m.lineMeta {
+		if !meta.IsVariable {
+			continue
+		}
+		line := string(m.value[i])
+		if eqIdx := strings.Index(line, "="); eqIdx > 0 {
+			presentKeys[strings.TrimSpace(line[:eqIdx])] = true
+		}
+	}
+	for key, origInitial := range deletedInitial {
+		if presentKeys[key] {
+			continue
+		}
+		// Reconstruct the line using the default value if available, else blank.
+		val := ""
+		hasDefault := false
+		if defaultFunc != nil {
+			val = defaultFunc(key)
+			hasDefault = val != ""
+		}
+		lineStr := key + "=" + val
+		newLine := Line{
+			Text:          lineStr,
+			IsVariable:    true,
+			IsUserDefined: !hasDefault,
+			PendingDelete: true,
+			ReadOnly:      true,
+			InitialLine:   origInitial,
+		}
+		// Insert before the first variable line so it appears at the top of the
+		// variable list rather than orphaned at the bottom.
+		insertAt := len(m.value)
+		for j, lm := range m.lineMeta {
+			if lm.IsVariable {
+				insertAt = j
+				break
+			}
+		}
+		m.value = append(m.value[:insertAt], append([][]rune{[]rune(lineStr)}, m.value[insertAt:]...)...)
+		m.lineMeta = append(m.lineMeta[:insertAt], append([]Line{newLine}, m.lineMeta[insertAt:]...)...)
 	}
 
 	// Append incomplete lines (user edits without a valid key yet).
