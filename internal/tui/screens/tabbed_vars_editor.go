@@ -132,7 +132,12 @@ type restoreVarMsg struct {
 }
 
 // envRefreshMsg triggers the same staged reformat as F5.
-type envRefreshMsg struct{}
+// preservePendingDeletes keeps staged deletions intact — used for auto-refresh
+// triggered by ENABLED changes so the user doesn't lose staged deletions silently.
+// Manual F5 and context-menu Refresh set it false (explicit re-sync).
+type envRefreshMsg struct {
+	preservePendingDeletes bool
+}
 
 func NewEnvEditorGlobal(onClose tea.Cmd, showBack bool) *TabbedVarsEditorModel {
 	return NewTabbedVarsEditorScreen(onClose, "Global Variables", []EnvTabSpec{
@@ -438,7 +443,7 @@ func (m *TabbedVarsEditorModel) checkEnabledChanged(tabIdx int) tea.Cmd {
 		return nil
 	}
 	tab.lastEnabledState = newState
-	return func() tea.Msg { return envRefreshMsg{} }
+	return func() tea.Msg { return envRefreshMsg{preservePendingDeletes: true} }
 }
 
 func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -814,7 +819,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-			tab.editor.ReformatEnv(tab.editor.DefaultValueFunc, tab.readOnlyVars, func(currentLines []string) []string {
+			tab.editor.ReformatEnv(tab.editor.DefaultValueFunc, tab.readOnlyVars, msg.preservePendingDeletes, func(currentLines []string) []string {
 				return appenv.FormatLinesCore(ctx, currentLines, capturedDefaultLines, capturedEnvLines, capturedApp, capturedComposeEnvPath)
 			})
 		}
