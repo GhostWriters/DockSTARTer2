@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"DockSTARTer2/internal/console"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -254,28 +253,4 @@ func ShowConfirmDialog(title, question string, defaultYes bool) bool {
 	}
 
 	return finalDialog.result
-}
-
-// PromptConfirm displays a blocking confirmation dialog over the active ProgramBox.
-// It is used by the console package via callback to prompt during background tasks.
-func PromptConfirm(title, question string, defaultYes bool) bool {
-	if console.GlobalYes {
-		return true
-	}
-	if program == nil {
-		return defaultYes
-	}
-
-	ch := make(chan bool)
-	dialog := newConfirmDialog(title, question, defaultYes)
-	dialog.onResult = func(r bool) tea.Msg {
-		return SubDialogResultMsg{Result: r}
-	}
-
-	program.Send(SubDialogMsg{
-		Model: dialog,
-		Chan:  ch,
-	})
-
-	return <-ch
 }

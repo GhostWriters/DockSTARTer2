@@ -36,7 +36,10 @@ type InputCursorProvider interface {
 // Uses backdrop + overlay pattern (same as dialogs)
 func (m *AppModel) View() (v tea.View) {
 	if console.IsTUIDying() {
-		return tea.View{}
+		// Silence the renderer by blocking this goroutine forever.
+		// This prevents Bubble Tea from rendering a final "empty" frame
+		// which would hide the cursor after we've already restored it.
+		select {}
 	}
 	defer func() {
 		if r := recover(); r != nil {

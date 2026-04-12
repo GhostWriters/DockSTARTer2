@@ -89,17 +89,23 @@ func Initialize(ctx context.Context) error {
 // NewProgram creates a new Bubble Tea program with standardized options.
 // It also sets the global program variable for cross-component communication.
 func NewProgram(model tea.Model) *tea.Program {
-	p := tea.NewProgram(model, tea.WithoutCatchPanics())
+	p := tea.NewProgram(model, tea.WithOutput(os.Stdout), tea.WithoutCatchPanics())
 	program = p
 	return p
 }
 
 // Start launches the TUI application
 func Start(ctx context.Context, startMenu string) error {
+	// Enable Virtual Terminal Processing (ANSI) on Windows early so color detection works
+	console.EnableVirtualTerminalProcessing()
+
 	// Capture initial terminal states for emergency restoration
 	// We do this first to ensure we catch the terminal in its "Clean" state.
 	initialInputState, _ = term.GetState(int(os.Stdin.Fd()))
 	initialOutputState, _ = term.GetState(int(os.Stdout.Fd()))
+
+	// Ensure the TUI is active and un-frozen
+	console.SetTUIDying(false)
 
 	console.SetTUIEnabled(true)
 	defer console.SetTUIEnabled(false)
@@ -216,10 +222,16 @@ func RegisterEditorFactory(f EditorFactory) {
 // appName is empty for the global vars editor, or an app name for the app-specific editor.
 // isRoot controls whether Back navigation exits immediately (true) or uses a pre-populated stack (false).
 func StartEditor(ctx context.Context, appName string, isRoot bool) error {
+	// Enable Virtual Terminal Processing (ANSI) on Windows early so color detection works
+	console.EnableVirtualTerminalProcessing()
+
 	// Capture initial terminal states for emergency restoration
 	// We do this first to ensure we catch the terminal in its "Clean" state.
 	initialInputState, _ = term.GetState(int(os.Stdin.Fd()))
 	initialOutputState, _ = term.GetState(int(os.Stdout.Fd()))
+
+	// Ensure the TUI is active and un-frozen
+	console.SetTUIDying(false)
 
 	console.SetTUIEnabled(true)
 	defer console.SetTUIEnabled(false)
@@ -422,8 +434,11 @@ func Shutdown() {
 // EmergencyShutdown forcefully restores the terminal using raw ANSI escape codes.
 // This is used during panic recovery where a standard Shutdown() might deadlock.
 func EmergencyShutdown() {
-	// Signal that the TUI is dying to silence the background renderer
+	// Signal that the TUI is dying to freeze the renderer goroutine
 	console.SetTUIDying(true)
+
+	// Short settle time to let the terminal's internal buffers catch up
+	time.Sleep(50 * time.Millisecond)
 
 	// Forcefully restore both Input and Output TTY states
 	if initialInputState != nil {
@@ -508,11 +523,12 @@ func RunCommand(ctx context.Context, title, subtitle string, task func(context.C
 func Confirm(title, question string, defaultYes bool) bool {
 	if program != nil {
 		resultChan := make(chan bool)
-		program.Send(ShowConfirmDialogMsg{
+		program.Send(UniversalPromptMsg{
 			Title:      title,
 			Question:   question,
 			DefaultYes: defaultYes,
 			ResultChan: resultChan,
+			Type:       PromptTypeConfirm,
 		})
 		return <-resultChan
 	}
@@ -580,6 +596,37 @@ var screenAliases = map[string]string{
 // when the screen is started via "-M start-<name>" so that Back navigates naturally.
 func RegisterScreen(name string, create func(isRoot bool) ScreenModel, parents []string) {
 	screenRegistry[name] = &screenEntry{create: create, parents: parents}
+}
+
+// PromptConfirm displays a blocking confirmation dialog.
+// It is used by the console package via callback.
+func PromptConfirm(title, question string, defaultYes bool) bool {
+	return Confirm(title, question, defaultYes)
+}
+
+// PromptText displays a blocking text prompt dialog.
+// It is used by the console package via callback.
+func PromptText(title, question string, sensitive bool) (string, error) {
+	if program != nil {
+		resultChan := make(chan promptResultMsg)
+		program.Send(UniversalPromptMsg{
+			Title:      title,
+			Question:   question,
+			Sensitive:  sensitive,
+			ResultChan: resultChan,
+			Type:       PromptTypeText,
+		})
+		res := <-resultChan
+		if !res.confirmed {
+			return "", console.ErrUserAborted
+		}
+		return res.result, nil
+	}
+	res, confirmed := ShowPromptDialog(title, question, sensitive)
+	if !confirmed {
+		return "", console.ErrUserAborted
+	}
+	return res, nil
 }
 
 // resolveMenuTarget normalises a -M sub-command value into a canonical page name

@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 
+	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/logger"
 
@@ -133,6 +134,68 @@ type (
 	}
 	// TriggerViewPanicMsg triggers a nil pointer dereference in the View() loop for testing
 	TriggerViewPanicMsg struct{}
+
+	// SubDialogMsg signals a request to show a sub-dialog and blocks the task
+	SubDialogMsg struct {
+		Model tea.Model
+		Chan  any
+	}
+
+	// SubDialogResultMsg signals the completion of a sub-dialog
+	SubDialogResultMsg struct {
+		Result any
+	}
+
+	// outputLinesMsg carries one or more lines of output
+	outputLinesMsg struct {
+		lines []string
+	}
+
+	// outputDoneMsg signals that output is complete
+	outputDoneMsg struct {
+		err error
+	}
+
+	// EnvLoadDoneMsg is a message sent when environment metadata and variables have been loaded.
+	EnvLoadDoneMsg struct {
+		Tabs []EnvTabData
+	}
+
+	EnvTabData struct {
+		Index           int
+		Content         string
+		DefaultFilePath string
+		DefaultLines    []string
+		ComposeEnvPath  string
+		ReadOnlyVars    []string
+		InitialVars     map[string]string
+		NiceName        string
+		Description     string
+		EnvFilePath     string
+		DefaultFunc     func(string) string
+		AddPrefix       string
+		ValidationType  string
+		ValidationApp   string
+		AppMeta         *appenv.AppMeta
+	}
+
+	// UniversalPromptMsg is a generic message for triggering a prompt
+	// that can be routing to either a global dialog or a sub-dialog.
+	UniversalPromptMsg struct {
+		Title      string
+		Question   string
+		DefaultYes bool                  // For Confirm
+		Sensitive  bool                  // For Prompt
+		ResultChan any                   // chan bool or chan promptResultMsg
+		Type       UniversalPromptType
+	}
+)
+
+type UniversalPromptType int
+
+const (
+	PromptTypeConfirm UniversalPromptType = iota
+	PromptTypeText
 )
 
 const HoverButton tea.MouseButton = 99

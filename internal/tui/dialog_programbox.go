@@ -78,28 +78,6 @@ type ProgramBoxModel struct {
 	sbDrag    ScrollbarDragState
 }
 
-// SubDialogMsg signals a request to show a sub-dialog and blocks the task
-type SubDialogMsg struct {
-	Model tea.Model
-	Chan  any
-}
-
-// SubDialogResultMsg signals the completion of a sub-dialog
-type SubDialogResultMsg struct {
-	Result any
-}
-
-
-// outputLineMsg carries a new line of output
-type outputLineMsg struct {
-	line string
-}
-
-// outputDoneMsg signals that output is complete
-type outputDoneMsg struct {
-	err error
-}
-
 // UpdateTaskMsg updates a task's status or active app
 type UpdateTaskMsg struct {
 	Label     string
@@ -251,10 +229,42 @@ func (m *ProgramBoxModel) Init() tea.Cmd {
 
 			// Start reading output in a goroutine — sends lines to the viewport
 			go func() {
-				scanner := bufio.NewScanner(reader)
-				for scanner.Scan() {
-					if program != nil {
-						program.Send(outputLineMsg{line: scanner.Text()})
+				ticker := time.NewTicker(100 * time.Millisecond)
+				defer ticker.Stop()
+
+				var lines []string
+				lineChan := make(chan string, 100)
+
+				// Separate goroutine to scan and feed the aggregator channel
+				go func() {
+					scanner := bufio.NewScanner(reader)
+					for scanner.Scan() {
+						lineChan <- scanner.Text()
+					}
+					close(lineChan)
+				}()
+
+				for {
+					select {
+					case line, ok := <-lineChan:
+						if !ok {
+							// Flush remaining lines before exiting
+							if len(lines) > 0 && program != nil {
+								program.Send(outputLinesMsg{lines: lines})
+							}
+							return
+						}
+						lines = append(lines, line)
+						// Auto-flush if buffer is large to keep it responsive
+						if len(lines) >= 50 && program != nil {
+							program.Send(outputLinesMsg{lines: lines})
+							lines = nil
+						}
+					case <-ticker.C:
+						if len(lines) > 0 && program != nil {
+							program.Send(outputLinesMsg{lines: lines})
+							lines = nil
+						}
 					}
 				}
 			}()
@@ -357,33 +367,27 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case CloseDialogMsg:
 		if m.subDialog != nil {
-			if m.subDialogChan != nil {
-				// Handle result based on channel type
-				switch ch := m.subDialogChan.(type) {
-				case chan bool:
-					if r, ok := msg.Result.(bool); ok {
-						ch <- r
-					} else {
-						ch <- false // Default/cancel
-					}
-				case chan promptResultMsg:
-					if r, ok := msg.Result.(promptResultMsg); ok {
-						ch <- r
-					} else {
-						ch <- promptResultMsg{confirmed: false}
-					}
-				}
-			}
+			m.satisfySubDialogChan(msg.Result)
 			m.subDialog = nil
 			m.subDialogChan = nil
 			return m, nil
 		}
 
-	case outputLineMsg:
+	case SubDialogResultMsg:
+		if m.subDialog != nil {
+			m.satisfySubDialogChan(msg.Result)
+			m.subDialog = nil
+			m.subDialogChan = nil
+		}
+		return m, nil
+
+	case outputLinesMsg:
 		// Convert semantic theme tags to ANSI colors before displaying
 		styles := GetStyles()
-		rendered := RenderConsoleText(msg.line, styles.Console)
-		m.rawLines = append(m.rawLines, rendered)
+		for _, line := range msg.lines {
+			rendered := RenderConsoleText(line, styles.Console)
+			m.rawLines = append(m.rawLines, rendered)
+		}
 
 		// Render with wrapping to viewport width
 		if m.viewport.Width() > 0 {
@@ -557,4 +561,25 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, cmd
+}
+
+func (m *ProgramBoxModel) satisfySubDialogChan(result any) {
+	if m.subDialogChan == nil {
+		return
+	}
+	// Handle result based on channel type
+	switch ch := m.subDialogChan.(type) {
+	case chan bool:
+		if r, ok := result.(bool); ok {
+			ch <- r
+		} else {
+			ch <- false // Default/cancel
+		}
+	case chan promptResultMsg:
+		if r, ok := result.(promptResultMsg); ok {
+			ch <- r
+		} else {
+			ch <- promptResultMsg{confirmed: false}
+		}
+	}
 }
