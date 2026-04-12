@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"sort"
 	"strings"
@@ -34,6 +35,9 @@ type InputCursorProvider interface {
 // View implements tea.Model
 // Uses backdrop + overlay pattern (same as dialogs)
 func (m *AppModel) View() (v tea.View) {
+	if console.IsTUIDying() {
+		return tea.View{}
+	}
 	defer func() {
 		if r := recover(); r != nil {
 			// Restore terminal immediately
