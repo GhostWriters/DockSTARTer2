@@ -190,6 +190,7 @@ type Line struct {
 	InitialLine      string // full line text at load time, used for changed (C) gutter marker
 	IsNewLine        bool   // added by the user after load; shows + in gutter
 	IsInvalid        bool   // in user-defined section but key is in readOnlyVars; shows ! in gutter
+	IsComment        bool   // line is a comment (# or ***)
 }
 
 // CursorStyle is the style for real and virtual cursors.
@@ -249,6 +250,7 @@ type StyleState struct {
 	Prompt           lipgloss.Style
 	ModifiedText      lipgloss.Style
 	ReadOnlyText      lipgloss.Style
+	CommentText       lipgloss.Style
 	InvalidText       lipgloss.Style
 	DuplicateText     lipgloss.Style
 	BuiltinText       lipgloss.Style
@@ -542,6 +544,7 @@ func DefaultStyles(isDark bool) Styles {
 		Text:             lipgloss.NewStyle(),
 		ModifiedText:     lipgloss.NewStyle().Foreground(lipgloss.Color("3")),   // Yellow
 		ReadOnlyText:     lipgloss.NewStyle().Foreground(lipgloss.Color("240")), // Dark Grey
+		CommentText:      lipgloss.NewStyle().Foreground(lipgloss.Color("240")), // Default to same as ReadOnly
 		InvalidText:      lipgloss.NewStyle().Foreground(lipgloss.Color("9")),   // Red
 		DuplicateText:    lipgloss.NewStyle().Foreground(lipgloss.Color("13")),  // Magenta
 		BuiltinText:       lipgloss.NewStyle(),                                                                    // Inherit from text by default
@@ -567,6 +570,7 @@ func DefaultStyles(isDark bool) Styles {
 		Text:             lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("245"), lipgloss.Color("7"))),
 		ModifiedText:     lipgloss.NewStyle().Foreground(lipgloss.Color("3")),
 		ReadOnlyText:     lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+		CommentText:      lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
 		InvalidText:      lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
 		DuplicateText:    lipgloss.NewStyle().Foreground(lipgloss.Color("13")),
 		BuiltinText:       lipgloss.NewStyle().Foreground(lipgloss.Color("6")),
@@ -2893,6 +2897,9 @@ func (m *Model) renderRunes(runes []rune, l int, startIdx int, baseStyle lipglos
 		return m.activeStyle().PendingDeleteText.Inherit(baseStyle).Render(string(runes))
 	}
 	if meta.ReadOnly {
+		if meta.IsComment {
+			return m.activeStyle().CommentText.Inherit(baseStyle).Render(string(runes))
+		}
 		return m.activeStyle().ReadOnlyText.Inherit(baseStyle).Render(string(runes))
 	}
 	if !meta.IsVariable && !meta.IsUserDefined {
