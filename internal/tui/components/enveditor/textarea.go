@@ -2281,16 +2281,13 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			if !m.isEditableAtCursor() {
 				break
 			}
-			m.pushUndoSnapshot()
 			if len(m.value[m.row]) > 0 && m.col < len(m.value[m.row]) {
+				m.pushUndoSnapshot()
 				m.invalidateDiffCache(m.row)
 				m.value[m.row] = slices.Delete(m.value[m.row], m.col, m.col+1)
 				m.reclassifyCurrentLine()
 			}
-			if m.col >= len(m.value[m.row]) {
-				m.mergeLineBelow(m.row)
-				break
-			}
+			// At end of line: do nothing — joining lines via Del is too easy to do accidentally.
 		case key.Matches(msg, m.KeyMap.DeleteWordBackward):
 			if !m.isBackspaceEditable() {
 				break
@@ -2302,11 +2299,11 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				break
 			}
 			m.col = clamp(m.col, 0, len(m.value[m.row]))
-			m.pushUndoSnapshot()
 			if m.col >= len(m.value[m.row]) {
-				m.mergeLineBelow(m.row)
+				// At end of line: do nothing — joining lines is not supported yet.
 				break
 			}
+			m.pushUndoSnapshot()
 			m.deleteWordRight()
 		case key.Matches(msg, m.KeyMap.InsertNewline):
 			m.pushUndoSnapshot()

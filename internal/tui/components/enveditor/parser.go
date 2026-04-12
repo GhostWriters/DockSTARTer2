@@ -287,7 +287,15 @@ func (m *Model) GetVarValue(key string) (string, bool) {
 // then re-parsing the result. Diff-tracking fields (InitialLine, IsNewLine, PendingDelete)
 // are preserved by variable key so markers survive the reformat. Lines with no valid
 // KEY=value (incomplete user edits) are preserved at the end of the buffer.
-func (m *Model) ReformatEnv(defaultFunc func(string) string, readOnlyVars []string, formatFunc func([]string) []string) {
+//
+// preservePendingDeletes controls how pending-deleted lines are handled:
+//   - true (auto-refresh, e.g. ENABLED changed): pending-delete lines are passed to the
+//     formatter so they keep their user-set values and their deletion state is restored
+//     afterward via snapshot. The user's staged deletions survive the refresh.
+//   - false (manual F5): pending-delete lines are filtered out. Built-in vars are
+//     re-introduced by the formatter at their template default values; user-defined vars
+//     that were pending-deleted are gone (the deletion is confirmed).
+func (m *Model) ReformatEnv(defaultFunc func(string) string, readOnlyVars []string, preservePendingDeletes bool, formatFunc func([]string) []string) {
 	if formatFunc == nil {
 		return
 	}
@@ -303,16 +311,17 @@ func (m *Model) ReformatEnv(defaultFunc func(string) string, readOnlyVars []stri
 		}
 	}
 
-	// Snapshot diff metadata by key for all complete variable lines.
+	// Snapshot diff metadata by key for all variable lines that will be passed to
+	// the formatter. For auto-refresh, pending-delete lines are included so their
+	// state can be restored afterward.
 	type diffSnap struct {
 		InitialLine   string
 		IsNewLine     bool
 		PendingDelete bool
 	}
 	snapshot := make(map[string]diffSnap)
-	deletedInitial := make(map[string]string) // key → InitialLine of the deleted original
 
-	// Collect complete lines (valid KEY=value, non-PendingDelete) and incomplete lines.
+	// Collect complete lines (valid KEY=value) and incomplete lines.
 	type incLine struct {
 		value []rune
 		meta  Line
@@ -329,21 +338,18 @@ func (m *Model) ReformatEnv(defaultFunc func(string) string, readOnlyVars []stri
 		if eqIdx > 0 {
 			key := strings.TrimSpace(line[:eqIdx])
 			if key != "" {
-				if meta.PendingDelete {
-					// Record the original InitialLine for diff purposes only.
-					// Do NOT pass deleted lines to the formatter — built-in vars will
-					// be re-introduced from the template at their default values.
-					if _, seen := deletedInitial[key]; !seen {
-						deletedInitial[key] = meta.InitialLine
-					}
+				if meta.PendingDelete && !preservePendingDeletes {
+					// Manual F5: drop pending-delete lines — built-in vars will be
+					// re-introduced from the template at their default values.
 					continue
-				} else if _, exists := snapshot[key]; !exists {
+				}
+				if _, exists := snapshot[key]; !exists {
 					// First occurrence wins — it's the original line whose diff markers
 					// should survive after duplicates are collapsed by the formatter.
 					snapshot[key] = diffSnap{
 						InitialLine:   meta.InitialLine,
 						IsNewLine:     meta.IsNewLine,
-						PendingDelete: false,
+						PendingDelete: meta.PendingDelete,
 					}
 				}
 				completeLines = append(completeLines, line)
@@ -365,9 +371,7 @@ func (m *Model) ReformatEnv(defaultFunc func(string) string, readOnlyVars []stri
 	// Re-parse the formatted result.
 	m.ParseEnv(strings.Join(formatted, "\n"), defaultFunc, readOnlyVars)
 
-	// Restore diff markers by key. For keys that were pending-delete, re-apply that
-	// status even if FormatLinesCore re-introduced them from the template — they will
-	// be correctly positioned in the buffer and still show the `-` delete marker.
+	// Restore diff markers by key.
 	for i, meta := range m.lineMeta {
 		if !meta.IsVariable {
 			continue
@@ -379,73 +383,18 @@ func (m *Model) ReformatEnv(defaultFunc func(string) string, readOnlyVars []stri
 		}
 		key := strings.TrimSpace(line[:eqIdx])
 		if snap, ok := snapshot[key]; ok {
-			// Live replacement exists — not deleted.
-			origInitial, wasDeleted := deletedInitial[key]
-			if wasDeleted && origInitial != "" {
-				// Original was deleted and replaced: diff the replacement against the
-				// original's on-disk value so it shows as modified, not brand-new.
-				m.lineMeta[i].InitialLine = origInitial
-				m.lineMeta[i].IsNewLine = false
-			} else {
-				m.lineMeta[i].InitialLine = snap.InitialLine
-				m.lineMeta[i].IsNewLine = snap.IsNewLine
+			m.lineMeta[i].InitialLine = snap.InitialLine
+			m.lineMeta[i].IsNewLine = snap.IsNewLine
+			m.lineMeta[i].PendingDelete = snap.PendingDelete
+			if snap.PendingDelete {
+				m.lineMeta[i].ReadOnly = true
 			}
-			m.lineMeta[i].PendingDelete = false
-		} else if origInitial, wasDeleted := deletedInitial[key]; wasDeleted {
-			// Key was pending-delete — re-introduced by the template.
-			// Keep it marked as pending-delete so the user sees their staged deletion.
-			m.lineMeta[i].InitialLine = origInitial
+		} else {
+			// Key is new — injected by the template for the first time (e.g. app just
+			// became "added"). Clear InitialLine so it shows the + new-line gutter marker.
+			m.lineMeta[i].InitialLine = ""
 			m.lineMeta[i].IsNewLine = false
-			m.lineMeta[i].PendingDelete = true
-			m.lineMeta[i].ReadOnly = true
 		}
-	}
-
-	// Re-insert any deleted keys that the formatter didn't re-introduce.
-	// This happens when the app became user-defined (no ENABLED in envLines)
-	// and FormatLinesCore skipped the template. We still want the user to see
-	// their staged deletions as pending-delete lines.
-	presentKeys := make(map[string]bool)
-	for i, meta := range m.lineMeta {
-		if !meta.IsVariable {
-			continue
-		}
-		line := string(m.value[i])
-		if eqIdx := strings.Index(line, "="); eqIdx > 0 {
-			presentKeys[strings.TrimSpace(line[:eqIdx])] = true
-		}
-	}
-	for key, origInitial := range deletedInitial {
-		if presentKeys[key] {
-			continue
-		}
-		// Reconstruct the line using the default value if available, else blank.
-		val := ""
-		hasDefault := false
-		if defaultFunc != nil {
-			val = defaultFunc(key)
-			hasDefault = val != ""
-		}
-		lineStr := key + "=" + val
-		newLine := Line{
-			Text:          lineStr,
-			IsVariable:    true,
-			IsUserDefined: !hasDefault,
-			PendingDelete: true,
-			ReadOnly:      true,
-			InitialLine:   origInitial,
-		}
-		// Insert before the first variable line so it appears at the top of the
-		// variable list rather than orphaned at the bottom.
-		insertAt := len(m.value)
-		for j, lm := range m.lineMeta {
-			if lm.IsVariable {
-				insertAt = j
-				break
-			}
-		}
-		m.value = append(m.value[:insertAt], append([][]rune{[]rune(lineStr)}, m.value[insertAt:]...)...)
-		m.lineMeta = append(m.lineMeta[:insertAt], append([]Line{newLine}, m.lineMeta[insertAt:]...)...)
 	}
 
 	// Append incomplete lines (user edits without a valid key yet).
