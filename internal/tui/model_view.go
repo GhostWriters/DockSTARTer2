@@ -1,12 +1,8 @@
 package tui
 
 import (
-	"fmt"
-	"runtime/debug"
 	"sort"
 	"strings"
-
-	"DockSTARTer2/internal/logger"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -37,16 +33,6 @@ type InputCursorProvider interface {
 // View implements tea.Model
 // Uses backdrop + overlay pattern (same as dialogs)
 func (m *AppModel) View() (v tea.View) {
-	defer func() {
-		if r := recover(); r != nil {
-			stack := string(debug.Stack())
-			logger.Error(m.ctx, "AppModel.View Panic: %v\n%s", r, stack)
-			// Use plain ANSI only — no theme tags — to prevent a recursive panic
-			// if the theme system itself was the source of the original panic.
-			v = tea.NewView(fmt.Sprintf("\x1b[31mRendering Error: %v\x1b[0m\n\n%s\n\nPress any key to continue.", r, TruncateStack(stack, 10)))
-		}
-	}()
-
 	if !m.ready {
 		// Enable mouse tracking immediately so the terminal receives \x1b[?1002h
 		// before the first WindowSizeMsg is processed. Without this, clicks that
