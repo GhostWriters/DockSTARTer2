@@ -25,6 +25,7 @@ func (m *Model) ParseEnv(content string, defaultFunc func(string) string, readOn
 		// 1. Comments & special markers are read-only.
 		if strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "***") {
 			l.ReadOnly = true
+			l.IsComment = true
 			if strings.HasPrefix(trimmed, "###") && strings.Contains(trimmed, "(User Defined") {
 				inUserDefinedSection = true
 			}
@@ -120,6 +121,7 @@ func (m *Model) ReclassifyEnv(defaultFunc func(string) string, readOnlyVars []st
 
 		if strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "***") {
 			l.ReadOnly = true
+			l.IsComment = true
 			if strings.HasPrefix(trimmed, "###") {
 				if strings.Contains(trimmed, "(User Defined") {
 					inUserDefinedSection = true
