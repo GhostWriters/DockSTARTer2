@@ -96,6 +96,11 @@ func NewProgram(model tea.Model) *tea.Program {
 
 // Start launches the TUI application
 func Start(ctx context.Context, startMenu string) error {
+	// Capture initial terminal states for emergency restoration
+	// We do this first to ensure we catch the terminal in its "Clean" state.
+	initialInputState, _ = term.GetState(int(os.Stdin.Fd()))
+	initialOutputState, _ = term.GetState(int(os.Stdout.Fd()))
+
 	console.SetTUIEnabled(true)
 	defer console.SetTUIEnabled(false)
 
@@ -149,9 +154,6 @@ func Start(ctx context.Context, startMenu string) error {
 	// Initialize re-execution sync
 	programExited = make(chan struct{})
 
-	// Capture initial terminal states for emergency restoration
-	initialInputState, _ = term.GetState(int(os.Stdin.Fd()))
-	initialOutputState, _ = term.GetState(int(os.Stdout.Fd()))
 
 	// Start background update checker
 	go startUpdateChecker(ctx)
@@ -214,6 +216,11 @@ func RegisterEditorFactory(f EditorFactory) {
 // appName is empty for the global vars editor, or an app name for the app-specific editor.
 // isRoot controls whether Back navigation exits immediately (true) or uses a pre-populated stack (false).
 func StartEditor(ctx context.Context, appName string, isRoot bool) error {
+	// Capture initial terminal states for emergency restoration
+	// We do this first to ensure we catch the terminal in its "Clean" state.
+	initialInputState, _ = term.GetState(int(os.Stdin.Fd()))
+	initialOutputState, _ = term.GetState(int(os.Stdout.Fd()))
+
 	console.SetTUIEnabled(true)
 	defer console.SetTUIEnabled(false)
 
@@ -255,10 +262,6 @@ func StartEditor(ctx context.Context, appName string, isRoot bool) error {
 	model := NewAppModel(ctx, currentConfig, startScreen, initialStack...)
 	p := NewProgram(model)
 	programExited = make(chan struct{})
-
-	// Capture initial terminal states for emergency restoration
-	initialInputState, _ = term.GetState(int(os.Stdin.Fd()))
-	initialOutputState, _ = term.GetState(int(os.Stdout.Fd()))
 
 	go startUpdateChecker(ctx)
 	go func() {
@@ -431,13 +434,14 @@ func EmergencyShutdown() {
 	}
 
 	// Comprehensive ANSI reset block:
+	// \x1b[!p       - DECSTR (Soft Terminal Reset)
 	// \x1b[2J\x1b[H - Clear Screen and Home
 	// \x1b[0m       - All Colors Reset
 	// \x1b[?1000..  - All Mouse Modes Disabled (Standard Reset)
 	// \x1b[?1049l   - Exit Alternate Screen
 	// \x1b[?25h      - Show Cursor
 	// \r\n          - Carriage Return and Newline
-	os.Stdout.WriteString("\x1b[2J\x1b[H\x1b[0m\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1049l\x1b[?25h\r\n")
+	os.Stdout.WriteString("\x1b[!p\x1b[2J\x1b[H\x1b[0m\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1049l\x1b[?25h\r\n")
 	os.Stdout.Sync()
 
 	// Ensure TUI flag and mode are off so we print directly to terminal
