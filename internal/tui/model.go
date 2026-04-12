@@ -225,5 +225,5 @@ func (m *AppModel) Init() tea.Cmd {
 	if m.dialog != nil {
 		cmds = append(cmds, m.dialog.Init())
 	}
-	return logger.RecoverTUI(m.ctx, tea.Batch(cmds...))
+	return logger.BatchRecoverTUI(m.ctx, cmds...)
 }

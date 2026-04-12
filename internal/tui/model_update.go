@@ -139,7 +139,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.backdrop.SetHelpText(m.activeScreen.HelpText())
 		}
-		return m, logger.RecoverTUI(m.ctx, tea.Batch(cmds...))
+		return m, logger.BatchRecoverTUI(m.ctx, cmds...)
 
 	case NavigateMsg:
 		// Push current screen to stack and switch to new screen
@@ -159,7 +159,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.backdrop.SetHelpText(m.activeScreen.HelpText())
 			cmds = append(cmds, m.activeScreen.Init())
 		}
-		return m, logger.RecoverTUI(m.ctx, tea.Batch(cmds...))
+		return m, logger.BatchRecoverTUI(m.ctx, cmds...)
 
 	case NavigateBackMsg:
 		// Pop from stack and return to previous screen
@@ -302,7 +302,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateComponentFocus()
 			cmds = append(cmds, m.dialog.Init())
 		}
-		return m, tea.Batch(cmds...)
+		return m, logger.BatchRecoverTUI(m.ctx, cmds...)
 
 	case CloseDialogMsg:
 		// If we're waiting for a confirmation, send the result
@@ -466,10 +466,11 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// This happens when NavigateBack is used on the "root" screen.
 	// We wait until the end of Update to handle batches (e.g. ShowDialog + NavigateBack)
 	if m.ready && m.activeScreen == nil && m.dialog == nil {
-		return m, logger.RecoverTUI(m.ctx, tea.Batch(ConfirmExitAction(), tea.Batch(cmds...)))
+		allCmds := append([]tea.Cmd{ConfirmExitAction()}, cmds...)
+		return m, logger.BatchRecoverTUI(m.ctx, allCmds...)
 	}
 
-	return m, logger.RecoverTUI(m.ctx, tea.Batch(cmds...))
+	return m, logger.BatchRecoverTUI(m.ctx, cmds...)
 }
 
 // setLogPanelFocus updates logPanelFocused and tells the active screen to
