@@ -54,24 +54,24 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				sizable.SetSize(dW, dH)
 			}
 		}
-		return m, cmd
+		return m, logger.BatchRecoverTUI(m.ctx, cmd)
 
 	case logLineMsg:
 		updated, cmd := m.logPanel.Update(msg)
 		m.logPanel = updated.(LogPanelModel)
-		return m, cmd
+		return m, logger.BatchRecoverTUI(m.ctx, cmd)
 
 	case DragDoneMsg:
 		if msg.ID == logResizeZoneID {
 			updated, cmd := m.logPanel.Update(msg)
 			m.logPanel = updated.(LogPanelModel)
 			m.backdrop.SetSize(m.width, m.backdropHeight())
-			return m, cmd
+			return m, logger.BatchRecoverTUI(m.ctx, cmd)
 		}
 
 	case tea.KeyMsg:
 		if model, cmd, handled := m.handleKeyMsg(msg); handled {
-			return model, cmd
+			return model, logger.BatchRecoverTUI(m.ctx, cmd)
 		}
 
 	case tea.MouseClickMsg, tea.MouseWheelMsg, tea.MouseMotionMsg, tea.MouseReleaseMsg:
@@ -91,7 +91,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.backdrop.SetHelpText(m.activeScreen.HelpText())
 				}
 			}
-			return m, resCmd
+			return m, logger.BatchRecoverTUI(m.ctx, resCmd)
 		}
 		if resCmd != nil {
 			cmds = append(cmds, resCmd)
@@ -133,7 +133,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var dialogCmd tea.Cmd
 			m.dialog, dialogCmd = m.dialog.Update(contentSizeMsg)
 			if dialogCmd != nil {
-				cmds = append(cmds, dialogCmd)
+				cmds = append(cmds, logger.BatchRecoverTUI(m.ctx, dialogCmd))
 			}
 		} else if m.activeScreen != nil {
 			m.activeScreen.SetSize(caW, caH)
@@ -142,11 +142,11 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.activeScreen = screen
 			}
 			if screenCmd != nil {
-				cmds = append(cmds, screenCmd)
+				cmds = append(cmds, logger.BatchRecoverTUI(m.ctx, screenCmd))
 			}
 			m.backdrop.SetHelpText(m.activeScreen.HelpText())
 		}
-		return m, tea.Batch(cmds...)
+		return m, logger.BatchRecoverTUI(m.ctx, cmds...)
 
 	case NavigateMsg:
 		// Push current screen to stack and switch to new screen
@@ -164,9 +164,9 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			caW, caH := m.getContentArea()
 			m.activeScreen.SetSize(caW, caH)
 			m.backdrop.SetHelpText(m.activeScreen.HelpText())
-			cmds = append(cmds, m.activeScreen.Init())
+			cmds = append(cmds, logger.BatchRecoverTUI(m.ctx, m.activeScreen.Init()))
 		}
-		return m, tea.Batch(cmds...)
+		return m, logger.BatchRecoverTUI(m.ctx, cmds...)
 
 	case NavigateBackMsg:
 		// Pop from stack and return to previous screen
@@ -227,9 +227,9 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				sizable.SetSize(dW, dH)
 			}
 			m.updateComponentFocus()
-			cmds = append(cmds, m.dialog.Init())
+			cmds = append(cmds, logger.BatchRecoverTUI(m.ctx, m.dialog.Init()))
 		}
-		return m, tea.Batch(cmds...)
+		return m, logger.BatchRecoverTUI(m.ctx, cmds...)
 
 	case ShowConfirmDialogMsg:
 		// If a dialog is already open, push it to stack and show the confirm dialog as the new top
@@ -268,7 +268,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.dialog = dialog
 		m.updateComponentFocus()
-		return m, m.dialog.Init()
+		return m, logger.BatchRecoverTUI(m.ctx, m.dialog.Init())
 
 	case ShowPromptDialogMsg:
 		// If a dialog is already open, push it to stack
@@ -337,7 +337,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.dialog != nil {
 			var cmd tea.Cmd
 			m.dialog, cmd = m.dialog.Update(msg)
-			return m, cmd
+			return m, logger.BatchRecoverTUI(m.ctx, cmd)
 		}
 		return m, nil
 
@@ -358,9 +358,9 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				sizable.SetSize(dW, dH)
 			}
 			m.updateComponentFocus()
-			cmds = append(cmds, m.dialog.Init())
+			cmds = append(cmds, logger.BatchRecoverTUI(m.ctx, m.dialog.Init()))
 		}
-		return m, tea.Batch(cmds...)
+		return m, logger.BatchRecoverTUI(m.ctx, cmds...)
 
 	case CloseDialogMsg:
 		// If we're waiting for a confirmation, send the result
@@ -388,7 +388,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if pb, ok := m.dialog.(*ProgramBoxModel); ok && pb.subDialog != nil {
 			var cmd tea.Cmd
 			m.dialog, cmd = m.dialog.Update(msg)
-			return m, cmd
+			return m, logger.BatchRecoverTUI(m.ctx, cmd)
 		}
 
 		// Clear current dialog and try to pop from stack
@@ -478,7 +478,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Forward so screens like DisplayOptionsScreen can reload preview-namespace styles
 			// that were cleared by InitStyles → ClearSemanticCache above.
 			_, cmd := m.activeScreen.Update(msg)
-			return m, cmd
+			return m, logger.BatchRecoverTUI(m.ctx, cmd)
 		}
 		return m, nil
 
@@ -507,7 +507,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var dialogCmd tea.Cmd
 		m.dialog, dialogCmd = m.dialog.Update(msg)
 		if dialogCmd != nil {
-			cmds = append(cmds, dialogCmd)
+			cmds = append(cmds, logger.BatchRecoverTUI(m.ctx, dialogCmd))
 		}
 		// If dialog supports help text, update backdrop
 		if h, ok := m.dialog.(interface{ HelpText() string }); ok {
@@ -520,7 +520,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.activeScreen = screen
 		}
 		if screenCmd != nil {
-			cmds = append(cmds, screenCmd)
+			cmds = append(cmds, logger.BatchRecoverTUI(m.ctx, screenCmd))
 		}
 		// Update helpline from screen
 		m.backdrop.SetHelpText(m.activeScreen.HelpText())
@@ -533,10 +533,10 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		allCmds := make([]tea.Cmd, 0, len(cmds)+1)
 		allCmds = append(allCmds, ConfirmExitAction())
 		allCmds = append(allCmds, cmds...)
-		return m, tea.Batch(allCmds...)
+		return m, logger.BatchRecoverTUI(m.ctx, allCmds...)
 	}
 
-	return m, tea.Batch(cmds...)
+	return m, logger.BatchRecoverTUI(m.ctx, cmds...)
 }
 
 
@@ -666,7 +666,7 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		if _, ok := m.dialog.(*HelpDialogModel); ok {
 			var cmd tea.Cmd
 			m.dialog, cmd = m.dialog.Update(msg)
-			return m, cmd, true
+			return m, logger.BatchRecoverTUI(m.ctx, cmd), true
 		}
 	}
 
@@ -795,7 +795,7 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		// All other keys go to the panel viewport
 		updated, cmd := m.logPanel.Update(msg)
 		m.logPanel = updated.(LogPanelModel)
-		return m, cmd, true
+		return m, logger.BatchRecoverTUI(m.ctx, cmd), true
 	}
 
 	// Modal Dialog Support
@@ -806,7 +806,7 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		if h, ok := m.dialog.(interface{ HelpText() string }); ok {
 			m.backdrop.SetHelpText(h.HelpText())
 		}
-		return m, cmd, true
+		return m, logger.BatchRecoverTUI(m.ctx, cmd), true
 	}
 
 	// Active Screen Support (fallback)
@@ -817,7 +817,7 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		}
 		// Ensure helpline reflects current state after update
 		m.backdrop.SetHelpText(m.activeScreen.HelpText())
-		return m, cmd, true
+		return m, logger.BatchRecoverTUI(m.ctx, cmd), true
 	}
 
 	return m, nil, false
