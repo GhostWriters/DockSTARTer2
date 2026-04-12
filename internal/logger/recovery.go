@@ -64,3 +64,22 @@ func RecoverTUI(ctx context.Context, cmd tea.Cmd) tea.Cmd {
 		return cmd()
 	}
 }
+
+// BatchRecoverTUI wraps multiple tea.Cmd in a batch where each individual
+// command is individually protected by RecoverTUI. This ensures background
+// panics in any batched command trigger a clean terminal shutdown.
+func BatchRecoverTUI(ctx context.Context, cmds ...tea.Cmd) tea.Cmd {
+	if len(cmds) == 0 {
+		return nil
+	}
+	wrapped := make([]tea.Cmd, 0, len(cmds))
+	for _, cmd := range cmds {
+		if cmd != nil {
+			wrapped = append(wrapped, RecoverTUI(ctx, cmd))
+		}
+	}
+	if len(wrapped) == 0 {
+		return nil
+	}
+	return tea.Batch(wrapped...)
+}
