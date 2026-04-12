@@ -789,7 +789,6 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		for i := range m.tabs {
 			tab := &m.tabs[i]
-			capturedDefaultLines := tab.defaultLines
 			capturedComposeEnvPath := tab.composeEnvPath
 			capturedApp := tab.spec.App
 			appUpper := strings.ToUpper(capturedApp)
@@ -798,6 +797,23 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				envLines = globalLines[""]
 			}
 			capturedEnvLines := envLines
+
+			// Re-derive defaultLines using staged envLines so a newly-typed APPNAME__ENABLED
+			// causes the template to be loaded on refresh (mirrors loadEnv logic but uses
+			// IsAppUserDefinedFromLines instead of the disk-based IsAppUserDefined).
+			var capturedDefaultLines []string
+			if capturedApp != "" && !appenv.IsAppUserDefinedFromLines(ctx, capturedApp, capturedEnvLines) {
+				var fileSuffix string
+				if tab.spec.IsGlobal {
+					fileSuffix = ".env"
+				} else {
+					fileSuffix = ".env.app.*"
+				}
+				if defaultFilePath, err := appenv.AppInstanceFile(ctx, capturedApp, fileSuffix); err == nil {
+					capturedDefaultLines = appenv.ReadDefaultLines(defaultFilePath)
+				}
+			}
+
 			tab.editor.ReformatEnv(tab.editor.DefaultValueFunc, tab.readOnlyVars, func(currentLines []string) []string {
 				return appenv.FormatLinesCore(ctx, currentLines, capturedDefaultLines, capturedEnvLines, capturedApp, capturedComposeEnvPath)
 			})
@@ -1019,7 +1035,20 @@ func (m *TabbedVarsEditorModel) ViewString() string {
 }
 
 func (m *TabbedVarsEditorModel) View() tea.View {
-	return tea.View{Content: m.ViewString()}
+	v := tea.View{Content: m.ViewString()}
+
+	if m.focus == envFocusEditor && len(m.tabs) > 0 {
+		c := m.tabs[m.activeTab].editor.Cursor()
+		if c != nil {
+			layout := tui.GetLayout()
+			// Coordinate translation: adjust for outer dialog offsets, subtitle, and inner nesting.
+			c.Position.X += m.lastOffsetX + layout.NestedLeftOffset()
+			c.Position.Y += m.lastOffsetY + layout.NestedTopOffset() + m.subtitleHeight
+			v.Cursor = c
+		}
+	}
+
+	return v
 }
 func (m *TabbedVarsEditorModel) buttonIndex(name string) int {
 	for i, btn := range m.buttons {
