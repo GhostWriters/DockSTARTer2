@@ -97,6 +97,7 @@ EnvBuiltin = "{{[black:cyan]}}"
 EnvUser = "{{[green:cyan]}}"
 EnvInvalid = "{{[red:cyan]}}"
 EnvDuplicate = "{{[magenta:cyan]}}"
+EnvPendingDelete = "{{|Dialog:::DS|}}"
 
 ListDefault = "{{[black]}}"
 ListApp = ""
