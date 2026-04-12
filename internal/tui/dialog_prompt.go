@@ -409,25 +409,3 @@ func ShowPromptDialog(title, question string, sensitive bool) (string, bool) {
 
 	return finalDialog.result, finalDialog.confirmed
 }
-
-// PromptText displays a blocking prompt dialog over the active ProgramBox.
-// It is used by the console package via callback to ask for text during background tasks.
-func PromptText(title, question string, sensitive bool) (string, error) {
-	if program == nil {
-		return "", console.ErrUserAborted
-	}
-
-	ch := make(chan promptResultMsg)
-	program.Send(ShowPromptDialogMsg{
-		Title:      title,
-		Question:   question,
-		Sensitive:  sensitive,
-		ResultChan: ch,
-	})
-
-	result := <-ch
-	if !result.confirmed {
-		return "", console.ErrUserAborted
-	}
-	return result.result, nil
-}

@@ -115,29 +115,6 @@ type envAddAllStockMsg struct {
 
 type envSaveSuccessMsg struct{}
 
-// envTabData carries the loaded state for a single tab, returned by loadEnv as a message.
-type envTabData struct {
-	index           int
-	content         string
-	defaultFilePath string
-	defaultLines    []string
-	composeEnvPath  string
-	readOnlyVars    []string
-	initialVars     map[string]string
-	niceName        string
-	description     string
-	envFilePath     string
-	defaultFunc     func(string) string
-	addPrefix       string
-	validationType  string
-	validationApp   string
-	appMeta         *appenv.AppMeta
-}
-
-type envLoadDoneMsg struct {
-	tabs []envTabData
-}
-
 // ApplyVarValueMsg is dispatched by the context menu to set a variable's value in the active editor.
 type ApplyVarValueMsg struct {
 	VarName string
@@ -211,7 +188,7 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 	// in-memory slices rather than re-reading disk per call.
 	envLines, _ := envutil.ReadLines(envPath)
 
-	var loaded []envTabData
+	var loaded []tui.EnvTabData
 	for i, tab := range m.tabs {
 		var currentLines []string
 		var defaultFilePath string
@@ -237,6 +214,7 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 		formattedLines := appenv.FormatLinesCore(ctx, currentLines, defaultLines, envLines, tab.spec.App, envPath)
 
 		content := strings.Join(formattedLines, "\n")
+		logger.Debug(ctx, "Loaded tab %d (%s). File: %s, Lines: %d, ContentLen: %d", i, tab.spec.App, envPath, len(formattedLines), len(content))
 
 		var tabReadOnlyVars []string
 		if tab.spec.IsGlobal && tab.spec.App == "" {
@@ -282,38 +260,32 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 		}
 
 		addPrefix, validationType, validationApp := "", "", ""
-		if tab.spec.IsGlobal {
-			if tab.spec.App != "" {
-				addPrefix = "APPNAME__"
-				validationType = "APPNAME"
-				validationApp = tab.spec.App
-			} else {
-				validationType = "_GLOBAL_"
-			}
-		} else {
-			validationType = "_BARE_"
+		if tab.spec.App != "" {
+			addPrefix = tab.spec.App + "__"
+			validationType = tab.spec.App
+			validationApp = tab.spec.App
 		}
 
-		loaded = append(loaded, envTabData{
-			index:           i,
-			content:         content,
-			defaultFilePath: defaultFilePath,
-			defaultLines:    defaultLines,
-			composeEnvPath:  envPath,
-			readOnlyVars:    tabReadOnlyVars,
-			initialVars:     initialVars,
-			niceName:        niceName,
-			description:     description,
-			envFilePath:     envFilePath,
-			defaultFunc:     defaultFunc,
-			addPrefix:       addPrefix,
-			validationType:  validationType,
-			validationApp:   validationApp,
-			appMeta:         tabAppMeta,
+		loaded = append(loaded, tui.EnvTabData{
+			Index:           i,
+			Content:         content,
+			DefaultFilePath: defaultFilePath,
+			DefaultLines:    defaultLines,
+			ComposeEnvPath:  envPath,
+			ReadOnlyVars:    tabReadOnlyVars,
+			InitialVars:     initialVars,
+			NiceName:        niceName,
+			Description:     description,
+			EnvFilePath:     envFilePath,
+			DefaultFunc:     defaultFunc,
+			AddPrefix:       addPrefix,
+			ValidationType:  validationType,
+			ValidationApp:   validationApp,
+			AppMeta:         tabAppMeta,
 		})
 	}
 
-	return envLoadDoneMsg{tabs: loaded}
+	return tui.EnvLoadDoneMsg{Tabs: loaded}
 }
 
 func (m *TabbedVarsEditorModel) saveEnv() tea.Cmd {
@@ -826,21 +798,31 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.SetSize(m.width, m.height)
 		return m, nil
-	case envLoadDoneMsg:
-		// Apply loaded data from disk to each tab, then recalculate layout.
-		for _, data := range msg.tabs {
-			i := data.index
+	case tui.EnvLoadDoneMsg:
+		logger.Debug(context.Background(), "Received EnvLoadDoneMsg with %d tabs", len(msg.Tabs))
+		for _, data := range msg.Tabs {
+			i := data.Index
 			if i < 0 || i >= len(m.tabs) {
 				continue
 			}
 			// Configure editor settings before parsing
-			m.tabs[i].editor.DefaultValueFunc = data.defaultFunc
-			m.tabs[i].editor.AddPrefix = data.addPrefix
-			m.tabs[i].editor.ValidationType = data.validationType
-			m.tabs[i].editor.ValidationAppName = data.validationApp
+			m.tabs[i].editor.DefaultValueFunc = data.DefaultFunc
+			m.tabs[i].editor.AddPrefix = data.AddPrefix
+			m.tabs[i].editor.ValidationType = data.ValidationType
+			m.tabs[i].editor.ValidationAppName = data.ValidationApp
 			m.tabs[i].editor.ValidateFunc = appenv.VarNameIsValid
 			// Parse content into editor (resets value + lineMeta, invalidates cache)
-			m.tabs[i].editor.ParseEnv(data.content, data.defaultFunc, data.readOnlyVars)
+			m.tabs[i].editor.ParseEnv(data.Content, data.DefaultFunc, data.ReadOnlyVars)
+			if m.focused && m.activeTab == i && m.focus == envFocusEditor {
+				m.tabs[i].editor.Focus()
+			} else {
+				m.tabs[i].editor.Blur()
+			}
+			m.tabs[i].editor.ScrollbarFunc = func(content string, total, visible, offset int, enabled bool, lineChars bool) string {
+				return tui.ApplyScrollbarColumn(content, total, visible, offset, enabled, lineChars, tui.GetActiveContext())
+			}
+			m.tabs[i].editor.SetLineCharacters(tui.GetActiveContext().LineCharacters)
+
 			// Apply theme-aware env-specific styles
 			editorStyles := m.tabs[i].editor.Styles()
 			editorStyles.Focused.LineNumber = tui.SemanticRawStyle("LineNumber")
@@ -874,15 +856,15 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			editorStyles.Blurred.GutterInvalid = tui.SemanticRawStyle("MarkerInvalid")
 			m.tabs[i].editor.SetStyles(editorStyles)
 			// Update tab metadata used by saveEnv and heading display
-			m.tabs[i].initialVars = data.initialVars
-			m.tabs[i].defaultFilePath = data.defaultFilePath
-			m.tabs[i].defaultLines = data.defaultLines
-			m.tabs[i].composeEnvPath = data.composeEnvPath
-			m.tabs[i].readOnlyVars = data.readOnlyVars
-			m.tabs[i].niceName = data.niceName
-			m.tabs[i].description = data.description
-			m.tabs[i].envFilePath = data.envFilePath
-			m.tabs[i].appMeta = data.appMeta
+			m.tabs[i].initialVars = data.InitialVars
+			m.tabs[i].defaultFilePath = data.DefaultFilePath
+			m.tabs[i].defaultLines = data.DefaultLines
+			m.tabs[i].composeEnvPath = data.ComposeEnvPath
+			m.tabs[i].readOnlyVars = data.ReadOnlyVars
+			m.tabs[i].niceName = data.NiceName
+			m.tabs[i].description = data.Description
+			m.tabs[i].envFilePath = data.EnvFilePath
+			m.tabs[i].appMeta = data.AppMeta
 			// Clear undo — content has been reloaded so prior edits are irrelevant
 			m.tabs[i].editor.ClearUndo()
 			// Seed lastEnabledState so the first edit is compared against the loaded state.
