@@ -2809,7 +2809,7 @@ func (m *Model) handleMouseMotion(msg tea.MouseMotionMsg) {
 	}
 }
 
-func (m *Model) handleMouseRelease(msg tea.MouseReleaseMsg) {
+func (m *Model) handleMouseRelease(_ tea.MouseReleaseMsg) {
 	m.isDragging = false
 	m.isScrollbarDragging = false
 	m.isSelecting = false
