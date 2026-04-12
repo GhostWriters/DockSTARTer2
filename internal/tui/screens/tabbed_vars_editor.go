@@ -806,8 +806,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		globalLines := make(map[string][]string)
 		for i := range m.tabs {
 			if m.tabs[i].spec.IsGlobal {
-				content := m.tabs[i].editor.GetContent()
-				globalLines[strings.ToUpper(m.tabs[i].spec.App)] = strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
+				globalLines[strings.ToUpper(m.tabs[i].spec.App)] = m.tabs[i].editor.ActiveLines()
 			}
 		}
 		for i := range m.tabs {
