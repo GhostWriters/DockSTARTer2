@@ -2934,6 +2934,11 @@ func (m *Model) getDiffMask(row int) []bool {
 }
 
 func (m *Model) renderRunes(runes []rune, l int, startIdx int, baseStyle lipgloss.Style) string {
+	// Strip trailing newline so it is never included in a styled Render call —
+	// styled newlines appear as a trailing coloured/reversed block in the terminal.
+	for len(runes) > 0 && (runes[len(runes)-1] == '\n' || runes[len(runes)-1] == '\r') {
+		runes = runes[:len(runes)-1]
+	}
 	if l >= len(m.lineMeta) {
 		return baseStyle.Render(string(runes))
 	}
