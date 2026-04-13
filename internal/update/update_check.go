@@ -96,6 +96,9 @@ func CheckUpdates(ctx context.Context) {
 		} else {
 			logger.Info(ctx, GetTmplVersionDisplay())
 		}
+
+		// Docker Compose SDK
+		logger.Info(ctx, GetComposeSdkVersionDisplay())
 	}
 }
 
@@ -113,6 +116,14 @@ func GetAppVersionDisplay() string {
 func GetTmplVersionDisplay() string {
 	name := "DockSTARTer-Templates"
 	ver := paths.GetTemplatesVersion()
+
+	return fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} [{{|Version|}}%s{{[-]}}]", name, ver)
+}
+
+// GetComposeSdkVersionDisplay returns a formatted version string for the Docker Compose SDK.
+func GetComposeSdkVersionDisplay() string {
+	name := "Docker Compose SDK"
+	ver := version.GetComposeSdkVersion()
 
 	return fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} [{{|Version|}}%s{{[-]}}]", name, ver)
 }

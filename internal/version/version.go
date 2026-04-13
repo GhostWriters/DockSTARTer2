@@ -3,6 +3,7 @@ package version
 import (
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 )
 
@@ -36,4 +37,18 @@ func init() {
 	if strings.EqualFold(CommandName, ApplicationName) || strings.EqualFold(CommandName, "main") {
 		CommandName = "ds2"
 	}
+}
+
+// GetComposeSdkVersion returns the version of the Docker Compose SDK dependency.
+func GetComposeSdkVersion() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "unknown"
+	}
+	for _, dep := range info.Deps {
+		if dep.Path == "github.com/docker/compose/v5" {
+			return dep.Version
+		}
+	}
+	return "unknown"
 }
