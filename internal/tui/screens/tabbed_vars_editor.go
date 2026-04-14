@@ -152,8 +152,8 @@ func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec
 		editor.ShowLineNumbers = true
 		editor.SetLineCharacters(tui.GetActiveContext().LineCharacters)
 		editor.SetVirtualCursor(false)
-		editor.ScrollbarFunc = func(content string, total, visible, offset int, enabled bool, lineChars bool) string {
-			return tui.ApplyScrollbarColumn(content, total, visible, offset, enabled, lineChars, tui.GetActiveContext())
+		editor.ScrollbarFunc = func(content string, total, visible, offset int, lineChars bool) string {
+			return tui.ApplyScrollbarColumn(content, total, visible, offset, lineChars, tui.GetActiveContext())
 		}
 		tabs = append(tabs, envTab{spec: spec, editor: editor})
 	}
@@ -846,8 +846,8 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				m.tabs[i].editor.Blur()
 			}
-			m.tabs[i].editor.ScrollbarFunc = func(content string, total, visible, offset int, enabled bool, lineChars bool) string {
-				return tui.ApplyScrollbarColumn(content, total, visible, offset, enabled, lineChars, tui.GetActiveContext())
+			m.tabs[i].editor.ScrollbarFunc = func(content string, total, visible, offset int, lineChars bool) string {
+				return tui.ApplyScrollbarColumn(content, total, visible, offset, lineChars, tui.GetActiveContext())
 			}
 			m.tabs[i].editor.SetLineCharacters(tui.GetActiveContext().LineCharacters)
 
@@ -1046,7 +1046,6 @@ func (m *TabbedVarsEditorModel) View() tea.View {
 		c := m.tabs[m.activeTab].editor.Cursor()
 		if c != nil {
 			layout := tui.GetLayout()
-			// Coordinate translation: adjust for outer dialog offsets, subtitle, and inner nesting.
 			c.Position.X += m.lastOffsetX + layout.NestedLeftOffset()
 			c.Position.Y += m.lastOffsetY + layout.NestedTopOffset() + m.subtitleHeight
 			v.Cursor = c
@@ -1200,18 +1199,16 @@ func (m *TabbedVarsEditorModel) SetSize(width, height int) {
 	// Calculate subtitle height based on active tab heading content
 	m.subtitleHeight = m.calcSubtitleHeight()
 
-	// Inner vertical space inside dialog borders (dialogHeight - 2)
-	innerH := m.height - layout.BorderHeight()
-
 	// Available for the editor: total inner height minus button row, subtitle, and editor borders
-	m.editorHeight = innerH - m.buttonHeight - m.subtitleHeight - layout.BorderHeight()
+	m.editorHeight = m.height - layout.BorderHeight() - m.buttonHeight - m.subtitleHeight - layout.BorderHeight()
 	if m.editorHeight < 1 {
 		m.editorHeight = 1
 	}
 	if m.editorHeight < 3 && m.buttonHeight == 3 {
 		// Fallback: force buttons flat to save 2 lines if editor would be too small
 		m.buttonHeight = 1
-		m.editorHeight = innerH - 1 - m.subtitleHeight - layout.BorderHeight()
+		overhead := layout.BorderHeight() + 1 + m.subtitleHeight + layout.BorderHeight()
+		m.editorHeight = m.height - overhead
 	}
 
 	if m.editorHeight < 1 {
@@ -1553,7 +1550,18 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 			Label: "Edit Value",
 			Help:  "Open the value editor for this variable.",
 			Action: func() tea.Msg {
-				dlg := newSetValueDialog(evVarName, evTab.niceName, evTab.description, evTab.envFilePath, evOrigVal, evOpts, varHelp, nil, nil)
+				docMarkdown, docAppName := "", ""
+				if evTab.spec.App != "" {
+					ctx := context.Background()
+					if !appenv.IsAppUserDefined(ctx, evTab.spec.App, evTab.composeEnvPath) {
+						doc, err := appenv.GetAppMarkdown(ctx, evTab.spec.App)
+						if err == nil {
+							docMarkdown = doc
+							docAppName = evTab.niceName
+						}
+					}
+				}
+				dlg := newSetValueDialog(evVarName, evTab.niceName, evTab.description, evTab.envFilePath, evOrigVal, evOpts, varHelp, docMarkdown, docAppName, nil, nil)
 				return tui.CloseDialogMsg{Result: tui.ShowDialogMsg{Dialog: dlg}}
 			},
 		})
@@ -1786,7 +1794,19 @@ func (m *TabbedVarsEditorModel) showSetValueDialog() tea.Cmd {
 		varHelp = vm.HelpText
 	}
 
-	dlg := newSetValueDialog(varName, tab.niceName, tab.description, tab.envFilePath, origVal, opts, varHelp, nil, nil)
+	docMarkdown, docAppName := "", ""
+	if tab.spec.App != "" {
+		ctx := context.Background()
+		if !appenv.IsAppUserDefined(ctx, tab.spec.App, tab.composeEnvPath) {
+			doc, err := appenv.GetAppMarkdown(ctx, tab.spec.App)
+			if err == nil {
+				docMarkdown = doc
+				docAppName = tab.niceName
+			}
+		}
+	}
+
+	dlg := newSetValueDialog(varName, tab.niceName, tab.description, tab.envFilePath, origVal, opts, varHelp, docMarkdown, docAppName, nil, nil)
 	return func() tea.Msg {
 		return tui.ShowDialogMsg{Dialog: dlg}
 	}
@@ -1914,6 +1934,14 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) tui.HelpContext {
 				hctx.ItemTitle = tab.niceName
 				hctx.ItemText = strings.Join(parts, "\n\n")
 			}
+			if tab.spec.App != "" {
+				doc, err := appenv.GetAppMarkdown(context.Background(), tab.spec.App)
+				if err == nil {
+					hctx.DocMarkdown = doc
+					hctx.DocAppName = tab.niceName
+				}
+			}
+			return hctx
 		}
 		return hctx
 	}
@@ -1970,10 +1998,23 @@ func (m *TabbedVarsEditorModel) getVariableHelpContext(varName string, tab *envT
 		itemText += "\n\n" + vm.HelpText
 	}
 
-	return &tui.HelpContext{
+	h := tui.HelpContext{
 		ScreenName: m.title,
 		Legend:     legend,
 		ItemTitle:  "Variable: " + varName,
 		ItemText:   itemText,
 	}
+
+	if tab.spec.App != "" {
+		ctx := context.Background()
+		if !appenv.IsAppUserDefined(ctx, tab.spec.App, tab.composeEnvPath) {
+			doc, err := appenv.GetAppMarkdown(ctx, tab.spec.App)
+			if err == nil {
+				h.DocMarkdown = doc
+				h.DocAppName = tab.niceName
+			}
+		}
+	}
+
+	return &h
 }

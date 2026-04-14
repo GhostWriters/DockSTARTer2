@@ -105,6 +105,7 @@ type Styles struct {
 
 	// Dialog
 	Dialog              lipgloss.Style
+	ContentBackground   lipgloss.Style
 	DialogTitle         lipgloss.Style
 	DialogTitleHelp     lipgloss.Style
 	SubmenuTitle        lipgloss.Style
@@ -174,6 +175,7 @@ type StyleContext struct {
 	Type                DialogType
 	Screen              lipgloss.Style
 	Dialog              lipgloss.Style
+	ContentBackground   lipgloss.Style
 	DialogTitle         lipgloss.Style
 	DialogTitleHelp     lipgloss.Style
 	SubmenuTitle        lipgloss.Style
@@ -225,6 +227,7 @@ func GetActiveContext() StyleContext {
 		Type:                DialogTypeInfo, // Default to info
 		Screen:              currentStyles.Screen,
 		Dialog:              currentStyles.Dialog,
+		ContentBackground:   currentStyles.ContentBackground,
 		DialogTitle:         currentStyles.DialogTitle,
 		DialogTitleHelp:     currentStyles.DialogTitleHelp,
 		SubmenuTitle:        currentStyles.SubmenuTitle,
@@ -396,6 +399,7 @@ func InitStyles(cfg config.AppConfig) {
 
 	// Dialog
 	currentStyles.Dialog = SemanticRawStyle("Dialog")
+	currentStyles.ContentBackground = currentStyles.Dialog
 
 	currentStyles.DialogTitle = SemanticRawStyle("Title")
 

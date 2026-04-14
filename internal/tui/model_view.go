@@ -3,6 +3,7 @@ package tui
 import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
+	"image/color"
 	"sort"
 	"strings"
 
@@ -52,8 +53,7 @@ func (m *AppModel) View() (v tea.View) {
 	}()
 
 	if m.testViewPanic {
-		var x *int
-		_ = *x
+		panic("Testing View Panic")
 	}
 	if !m.ready {
 		// Enable mouse tracking immediately so the terminal receives \x1b[?1002h
@@ -210,6 +210,11 @@ func (m *AppModel) View() (v tea.View) {
 			mode := DialogAbsoluteCentered
 			targetHeight := m.backdropHeight()
 
+			hasHalo := false
+			if hp, ok := d.(HaloProvider); ok {
+				hasHalo = hp.HasHalo()
+			}
+
 			if _, ok := d.(*HelpDialogModel); ok {
 				targetHeight = m.height
 			}
@@ -219,7 +224,7 @@ func (m *AppModel) View() (v tea.View) {
 				targetHeight = m.backdropHeight()
 			}
 
-			lx, ly := layout.DialogPosition(mode, fgWidth, fgHeight, m.width, targetHeight, m.config.UI.Shadow, headerH)
+			lx, ly := layout.DialogPosition(mode, fgWidth, fgHeight, m.width, targetHeight, m.config.UI.Shadow, hasHalo, headerH)
 
 			modalZBase := maxZ + ZModalBaseOffset + (i * ZModalStackStep)
 
@@ -227,18 +232,30 @@ func (m *AppModel) View() (v tea.View) {
 				for _, l := range lv.Layers() {
 					// Apply modal offset to ensure it sits above the background content
 					l = l.X(l.GetX() + lx).Y(l.GetY() + ly).Z(l.GetZ() + modalZBase - ZScreen)
-					compositorAddShadow(comp, l, modalZBase, m.config.UI.Shadow)
+					if hasHalo {
+						compositorAddHalo(comp, l, modalZBase, d.(HaloProvider).HaloColor())
+					} else {
+						compositorAddShadow(comp, l, modalZBase, m.config.UI.Shadow)
+					}
 					comp.AddLayers(l)
 				}
 			} else {
 				l := lipgloss.NewLayer(content).X(lx).Y(ly).Z(modalZBase)
+				if hasHalo {
+					compositorAddHalo(comp, l, modalZBase, d.(HaloProvider).HaloColor())
+				}
 				compositorAddShadow(comp, l, modalZBase, m.config.UI.Shadow)
 				comp.AddLayers(l)
 			}
 
-			// Collect hit regions from dialog
+			// Collect hit regions from dialog.
+			// Shift their ZOrder so they track with the visual modal stack.
 			if hrp, ok := d.(HitRegionProvider); ok {
-				m.hitRegions = append(m.hitRegions, hrp.GetHitRegions(lx, ly)...)
+				regions := hrp.GetHitRegions(lx, ly)
+				for j := range regions {
+					regions[j].ZOrder += modalZBase - ZScreen
+				}
+				m.hitRegions = append(m.hitRegions, regions...)
 			}
 		}
 	}
@@ -285,7 +302,11 @@ func (m *AppModel) View() (v tea.View) {
 						mode = DialogMaximized
 						targetHeight = m.backdropHeight()
 					}
-					lx, ly := layout.DialogPosition(mode, fgWidth, fgHeight, m.width, targetHeight, m.config.UI.Shadow, headerH)
+					hasHalo := false
+					if hp, ok := topDialog.(HaloProvider); ok {
+						hasHalo = hp.HasHalo()
+					}
+					lx, ly := layout.DialogPosition(mode, fgWidth, fgHeight, m.width, targetHeight, m.config.UI.Shadow, hasHalo, headerH)
 					c := tea.NewCursor(lx+rx, ly+ry)
 					c.Shape = shape
 					c.Blink = true
@@ -359,6 +380,33 @@ func compositorAddShadow(comp *lipgloss.Compositor, l *lipgloss.Layer, baseZ int
 			X(l.GetX() + DialogShadowWidth).
 			Y(l.GetY() + DialogShadowHeight).
 			Z(l.GetZ() - 1))
+	}
+}
+
+// compositorAddHalo adds a background halo layer behind l in the compositor.
+// Halo is 2 chars wider on each side and 1 line taller on top and bottom.
+func compositorAddHalo(comp *lipgloss.Compositor, l *lipgloss.Layer, baseZ int, haloColor color.Color) {
+	if haloColor == nil || l.GetZ()-baseZ != 0 {
+		return
+	}
+	content := l.GetContent()
+	w := WidthWithoutZones(content)
+	h := lipgloss.Height(content)
+	if w <= 0 || h <= 0 {
+		return
+	}
+
+	layout := GetLayout()
+	haloW := w + layout.HaloWidth
+	haloH := h + layout.HaloHeight
+
+	// Use existing GetSolidBoxCtx if possible, otherwise build manual string
+	haloBox := GetSolidBoxCtx(haloW, haloH, haloColor)
+	if haloBox != "" {
+		comp.AddLayers(lipgloss.NewLayer(haloBox).
+			X(l.GetX() - (layout.HaloWidth / 2)).
+			Y(l.GetY() - (layout.HaloHeight / 2)).
+			Z(l.GetZ() - 2)) // Below shadow (shadow is at Z-1)
 	}
 }
 

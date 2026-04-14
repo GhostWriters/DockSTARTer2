@@ -90,15 +90,10 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return s, nil
 
 	case tea.MouseClickMsg:
-		// Scrollbar thumb drag initiation routed by model_mouse.go section B0.
-		// Forward the raw click to the focused sub-menu so it can start the drag.
-		if msg.Button == tea.MouseLeft && s.focusedPanel == FocusThemes {
-			updated, uCmd := s.themeMenu.Update(msg)
-			if m, ok := updated.(*tui.MenuModel); ok {
-				s.themeMenu = m
-			}
-			return s, uCmd
-		}
+		// Regular clicks are handled by hit regions (LayerHitMsg).
+		// For cases not covered by hit regions (e.g., clicking the background to focus),
+		// we rely on AppModel's hover+click focus logic which will send a ToggleFocusedMsg
+		// or focus the panel.
 		return s, nil
 
 	case tea.MouseWheelMsg:

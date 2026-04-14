@@ -96,7 +96,7 @@ var logPanelExtraHeight int
 
 // GetAvailableDialogSize returns the maximum size for dialog content
 // accounting for header, separator, helpline, shadow, and log panel.
-func GetAvailableDialogSize(width, height int) (int, int) {
+func GetAvailableDialogSize(width, height int, hasHalo bool) (int, int) {
 	if width == 0 || height == 0 {
 		return 0, 0
 	}
@@ -110,7 +110,7 @@ func GetAvailableDialogSize(width, height int) (int, int) {
 	header.SetWidth(width - 2)
 	headerH := header.Height()
 
-	availableWidth, availableHeight := layout.ContentArea(width, height, hasShadow, headerH, layout.HelplineHeight)
+	availableWidth, availableHeight := layout.ContentArea(width, height, hasShadow, hasHalo, headerH, layout.HelplineHeight)
 
 	// Account for log panel if visible
 	availableHeight -= logPanelExtraHeight

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"image/color"
 
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/config"
@@ -37,6 +38,14 @@ type ScreenModel interface {
 // LayeredView is an interface for models that provide multiple visual layers
 type LayeredView interface {
 	Layers() []*lipgloss.Layer
+}
+
+// HaloProvider is an interface for models that require a background halo decoration.
+// When a model implements this, AppModel.View() will add a background halo layer
+// using the specified color.
+type HaloProvider interface {
+	HasHalo() bool
+	HaloColor() color.Color
 }
 
 // Navigation messages

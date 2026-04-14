@@ -244,18 +244,17 @@ func (m *ProgramBoxModel) calculateLayout() {
 	buttons := 0
 	if m.done {
 		const minVpRows = 2
-		availableForButton := m.height - layout.BorderHeight() - internalOverhead - minVpRows - layout.BorderHeight() - shadowHeight
+		availableForButton := m.height - layout.BorderHeight() - internalOverhead - minVpRows - layout.BorderHeight()
 		buttons = ButtonRowHeight(contentW, availableForButton, ButtonSpec{Text: "OK"})
 	}
 
 	// 4. Viewport height.
-	// DialogContentHeight always budgets DialogButtonHeight (3) when hasButtons=true;
-	// recover the freed lines when flat buttons (1) are used instead.
-	vpHeight := layout.DialogContentHeight(m.height, internalOverhead, m.done, hasShadow)
+	// DialogContentHeight budgets for outer margins and outer borders.
+	vpHeight := layout.DialogContentHeight(m.height, internalOverhead, m.done, false)
 	if m.done && buttons != DialogButtonHeight {
 		vpHeight += DialogButtonHeight - buttons
 	}
-	// Subtract internal viewport chrome (top border + custom bottom line).
+	// Subtract internal viewport chrome (top inner border + bottom inner border/indicator).
 	vpHeight -= layout.BorderHeight()
 	if vpHeight < 2 {
 		vpHeight = 2

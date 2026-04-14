@@ -106,4 +106,5 @@ func InitFlags() {
 
 	// Testing
 	pflag.StringP("test", "t", "", "Run test script")
+	pflag.String("man", "", "Show documentation for application")
 }

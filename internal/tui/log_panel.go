@@ -418,7 +418,7 @@ func (m LogPanelModel) ViewString() string {
 	// MaintainBackground console colors while applying scrollbar
 	vpView := MaintainBackground(m.viewport.View(), ctx.Console)
 	// Apply scrollbar using the physical viewport height to ensure the gutter spans the full box.
-	vpView = ApplyScrollbarColumn(vpView, len(m.lines), vpH, m.viewport.YOffset(), currentConfig.UI.Scrollbar, ctx.LineCharacters, ctx)
+	vpView = ApplyScrollbarColumn(vpView, len(m.lines), vpH, m.viewport.YOffset(), ctx.LineCharacters, ctx)
 
 	// Restore original theme colors for the strip
 	// LogPanelColor for foreground, HelpLine background for the line itself.

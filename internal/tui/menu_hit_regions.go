@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"strconv"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -20,41 +19,37 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	styles := GetStyles()
 
 	// 1. Vertical Positioning (Y)
-	// Base vertical offset depends on whether we are in a sub-menu or a full dialog
-	listY := 0
-	if m.subMenuMode {
-		// Sub-menus use RenderBorderedBoxCtx which puts the title IN the top border (line 0).
-		// Thus content always starts at line 1 relative to the box's top-left.
-		// listY = 0 logic here is correct as a base.
-	} else {
-		// Full dialogs start content inside the outer border (1 line)
-		listY = layout.TopOffset()
-	}
+	// All menus start inside an outer Top Border (1 line).
+	listY := layout.SingleBorder()
 
-	// Account for subtitle if present
+	// Account for subtitle if present (positioned above the list content)
+	subtitleH := 0
 	if m.subtitle != "" {
-		// Subtitle width matches the content area (inside borders)
 		contentWidth := m.width
 		if m.subMenuMode {
 			contentWidth -= layout.BorderWidth()
 		} else {
-			// Matches innerParts logic: contentWidth - 2 (left/right margin)
 			contentWidth = m.GetInnerContentWidth()
 		}
 
 		subtitleStyle := styles.Dialog.Width(contentWidth).Padding(0, layout.ContentSideMargin).Border(lipgloss.Border{})
 		subStr := RenderThemeText(m.subtitle, subtitleStyle)
-		listY += lipgloss.Height(subtitleStyle.Render(subStr))
+		subtitleH = lipgloss.Height(subtitleStyle.Render(subStr))
+		listY += subtitleH
 	}
 
-	// Account for inner border around the list (Top = 1 line)
-	listY += layout.SingleBorder()
+	// Full dialogs have a NESTED inner border around the list (1 line).
+	// Sub-menus only have the one outer border.
+	if !m.subMenuMode {
+		listY += layout.SingleBorder()
+	}
 
 	// 2. Horizontal Positioning (X)
-	// Relative to dialog start: Outer Border + Margin + Inner Border
+	// Outer Border (1) + optional Margin (1) + optional Inner Border (1)
 	listX := layout.SingleBorder()
 	if !m.subMenuMode {
-		listX = layout.NestedLeftOffset()
+		// Full dialogs have a 1-char content margin + 1-char inner list border
+		listX += layout.ContentSideMargin + layout.SingleBorder()
 	}
 
 	baseZ := ZScreen
@@ -95,122 +90,44 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 
 	// Item regions: vertical list mode vs horizontal flow mode.
 	if !m.flowMode {
-		if m.variableHeight {
-			// Variable height list hit testing uses the cached lastHitRegions
-			// which contain coordinates relative to the list's own start.
-			for _, r := range m.lastHitRegions {
-				// Extract itemIndex from the ID (e.g. "app-select.item-42")
-				itemIndex := -1
-				parts := strings.Split(r.ID, "-")
-				if len(parts) > 1 {
-					itemIndex, _ = strconv.Atoi(parts[len(parts)-1])
-				}
-
-				var label string
-				var help *HelpContext
-				if itemIndex >= 0 && itemIndex < len(m.items) {
-					item := m.items[itemIndex]
-					label = GetPlainText(item.Tag)
-					help = &HelpContext{
-						ScreenName: m.title,
-						PageTitle:  "Menu Item",
-						ItemTitle:  GetPlainText(item.Tag),
-						ItemText:   item.Desc,
-					}
-				}
-
-				regions = append(regions, HitRegion{
-					ID:     r.ID,
-					X:      offsetX + listX + r.X,
-					Y:      offsetY + listY + r.Y,
-					Width:  r.Width,
-					Height: r.Height,
-					ZOrder: baseZ + 10,
-					Label:  label,
-					Help:   help,
-				})
+		// All vertical lists (uniform and variable) now use our custom layout engine.
+		// We use the cached lastHitRegions generated during the render pass.
+		for _, r := range m.lastHitRegions {
+			// Robustly identify the item index using the shared helper.
+			// This handles IDs with various prefixes and suffixes (e.g. -border, -expand).
+			itemID := r.ID
+			for _, sfx := range []string{"-add", "-enable", "-expand", "-border", "-parent"} {
+				itemID = strings.TrimSuffix(itemID, sfx)
 			}
-		} else {
-			// Standard height list items
-			visibleItems := m.list.VisibleItems()
-			startIndex := m.list.Paginator.Page * m.list.Paginator.PerPage
-			itemWidth := m.list.Width()
 
-			for i := 0; i < len(visibleItems); i++ {
-				itemIndex := startIndex + i
-				if itemIndex >= len(m.items) {
-					break
-				}
-				if m.items[itemIndex].IsSeparator {
-					continue
-				}
+			itemIndex, ok := ParseMenuItemIndex(itemID, m.id)
+			if !ok {
+				continue
+			}
 
+			var label string
+			var help *HelpContext
+			if itemIndex >= 0 && itemIndex < len(m.items) {
 				item := m.items[itemIndex]
-				itemID := GetMenuItemID(m.id, itemIndex)
-
-				if m.groupedMode && (item.IsCheckbox || item.IsSubItem || item.IsGroupHeader) {
-					// Split into 3 regions: Add checkbox, Enable checkbox, and the rest (Tag/Expand)
-					baseX := 0
-					if item.IsSubItem || item.IsAddInstance || item.IsEditing {
-						baseX = layout.SubItemOffset()
-					}
-
-					// Offset for "Add" checkbox: baseX + spacing
-					regions = append(regions, HitRegion{
-						ID:     itemID + "-add",
-						X:      offsetX + listX + baseX + layout.SingleBorder()*2,
-						Y:      offsetY + listY + i,
-						Width:  layout.CheckboxWidth(),
-						Height: 1,
-						ZOrder: baseZ + 11,
-						Label:  "Toggle Add",
-					})
-
-					// Offset for "Enable" checkbox: baseX + spacing
-					regions = append(regions, HitRegion{
-						ID:     itemID + "-enable",
-						X:      offsetX + listX + baseX + layout.SingleBorder()*6,
-						Y:      offsetY + listY + i,
-						Width:  layout.CheckboxWidth(),
-						Height: 1,
-						ZOrder: baseZ + 11,
-						Label:  "Toggle Enable",
-					})
-
-					// Detailed Tag / Expand region
-					tagX := baseX + layout.SingleBorder()*10
-					tagW := itemWidth - tagX
-					if tagW < 1 {
-						tagW = 1
-					}
-					regions = append(regions, HitRegion{
-						ID:     itemID + "-expand",
-						X:      offsetX + listX + tagX,
-						Y:      offsetY + listY + i,
-						Width:  tagW,
-						Height: 1,
-						ZOrder: baseZ + 10,
-						Label:  GetPlainText(item.Tag),
-					})
-				} else {
-					// Standard single-hit region for non-grouped or simple items
-					regions = append(regions, HitRegion{
-						ID:     itemID,
-						X:      offsetX + listX,
-						Y:      offsetY + listY + i,
-						Width:  itemWidth,
-						Height: 1,
-						ZOrder: baseZ + 10,
-						Label:  GetPlainText(item.Tag),
-						Help: &HelpContext{
-							ScreenName: m.title,
-							PageTitle:  "Menu Item",
-							ItemTitle:  GetPlainText(item.Tag),
-							ItemText:   item.Desc,
-						},
-					})
+				label = GetPlainText(item.Tag)
+				help = &HelpContext{
+					ScreenName: m.title,
+					PageTitle:  "Menu Item",
+					ItemTitle:  GetPlainText(item.Tag),
+					ItemText:   item.Desc,
 				}
 			}
+
+			regions = append(regions, HitRegion{
+				ID:     r.ID,
+				X:      offsetX + listX + r.X,
+				Y:      offsetY + listY + r.Y,
+				Width:  r.Width,
+				Height: r.Height,
+				ZOrder: baseZ + 10,
+				Label:  label,
+				Help:   help,
+			})
 		}
 	} else {
 		// Flow mode: items are arranged horizontally across multiple lines.
@@ -295,75 +212,11 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	}
 
 	// 3b. Scrollbar hit regions (when scrollbar is active)
-	if currentConfig.UI.Scrollbar && m.sbInfo.Needed {
+	if currentConfig.UI.Scrollbar && m.Scroll.Info.Needed {
 		sbX := offsetX + listX + m.list.Width()
-		sbTopY := offsetY + listY
-		m.sbAbsTopY = sbTopY   // store for drag-to computation in scrollbarDragTo
-		m.sbAbsLeftX = sbX     // store for hit testing raw clicks in Update
-
-		info := m.sbInfo
-
-		// Up arrow (row 0)
-		regions = append(regions, HitRegion{
-			ID:     m.id + ".sb.up",
-			X:      sbX,
-			Y:      sbTopY,
-			Width:  1,
-			Height: 1,
-			ZOrder: baseZ + 20,
-			Label:  "Scroll Up",
-		})
-
-		// Track above thumb (rows 1..ThumbStart-1)
-		if aboveH := info.ThumbStart - 1; aboveH > 0 {
-			regions = append(regions, HitRegion{
-				ID:     m.id + ".sb.above",
-				X:      sbX,
-				Y:      sbTopY + 1,
-				Width:  1,
-				Height: aboveH,
-				ZOrder: baseZ + 20,
-				Label:  "Page Up",
-			})
-		}
-
-		// Thumb (rows ThumbStart..ThumbEnd-1)
-		if thumbH := info.ThumbEnd - info.ThumbStart; thumbH > 0 {
-			regions = append(regions, HitRegion{
-				ID:     m.id + ".sb.thumb",
-				X:      sbX,
-				Y:      sbTopY + info.ThumbStart,
-				Width:  1,
-				Height: thumbH,
-				ZOrder: baseZ + 21,
-				Label:  "Scroll Thumb",
-			})
-		}
-
-		// Track below thumb (rows ThumbEnd..Height-2)
-		if belowH := (info.Height - 1) - info.ThumbEnd; belowH > 0 {
-			regions = append(regions, HitRegion{
-				ID:     m.id + ".sb.below",
-				X:      sbX,
-				Y:      sbTopY + info.ThumbEnd,
-				Width:  1,
-				Height: belowH,
-				ZOrder: baseZ + 20,
-				Label:  "Page Down",
-			})
-		}
-
-		// Down arrow (row Height-1)
-		regions = append(regions, HitRegion{
-			ID:     m.id + ".sb.down",
-			X:      sbX,
-			Y:      sbTopY + info.Height - 1,
-			Width:  1,
-			Height: 1,
-			ZOrder: baseZ + 20,
-			Label:  "Scroll Down",
-		})
+		regions = append(regions, m.Scroll.HitRegions(sbX, offsetY+listY, baseZ, m.title)...)
 	}
+
 
 	// 4. Button regions
 	specs := m.getButtonSpecs()

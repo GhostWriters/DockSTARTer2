@@ -16,11 +16,11 @@ func init() {
 	tui.RegisterVarEditorFactory(func(
 		varName, appName, appDesc, filePath, origVal string,
 		opts []appenv.VarOption,
-		helpText string,
+		helpText, docMarkdown, docAppName string,
 		onSave func(string) tea.Cmd,
 		onCancel tea.Cmd,
 	) tui.ScreenModel {
-		return newSetValueDialog(varName, appName, appDesc, filePath, origVal, opts, helpText, onSave, onCancel)
+		return newSetValueDialog(varName, appName, appDesc, filePath, origVal, opts, helpText, docMarkdown, docAppName, onSave, onCancel)
 	})
 
 	// Register the editor factory so tui.StartEditor can create editor screens

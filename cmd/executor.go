@@ -82,6 +82,7 @@ var commandTitles = map[string]string{
 	"--theme-no-button-borders":  "Turned Off Button Borders",
 	"--theme-extract":            "Extract Theme",
 	"--theme-extract-all":        "Extract All Themes",
+	"--man":                      "Application Documentation",
 	"-S":                         "Select Applications",
 	"--select":                   "Select Applications",
 }
@@ -131,7 +132,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			"--theme-shadows", "--theme-no-shadows", "--theme-shadow", "--theme-no-shadow", "--theme-shadow-level",
 			"--theme-scrollbar", "--theme-no-scrollbar", "--theme-border-color", "--theme-table",
 			"--theme-dialog-title", "--theme-submenu-title", "--theme-log-title",
-			"--theme-extract", "--theme-extract-all":
+			"--theme-extract", "--theme-extract-all", "--man":
 			// Skip validation for meta/config commands
 		default:
 			shouldValidate = true
@@ -205,6 +206,9 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			case "-V", "--version":
 				ranCommand = true
 				return handleVersion(subCtx)
+			case "--man":
+				ranCommand = true
+				return handleMan(subCtx, &group)
 			case "-i", "--install":
 				ranCommand = true
 				return handleInstall(subCtx, &group, &state)

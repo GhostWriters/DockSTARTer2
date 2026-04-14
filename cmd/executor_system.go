@@ -199,7 +199,7 @@ func handleReset(ctx context.Context) error {
 	return nil
 }
 
-func handleTest(ctx context.Context, group *CommandGroup) error {
+func handleTest(_ctx context.Context, group *CommandGroup) error {
 	args := []string{"test", "-v", "./..."}
 	if len(group.Args) > 0 {
 		args = append(args, "-run", strings.Join(group.Args, "|"))

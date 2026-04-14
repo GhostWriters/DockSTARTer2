@@ -372,7 +372,7 @@ type Model struct {
 	// to the rendered viewport text. It has the same signature as
 	// tui.ApplyScrollbarColumn. When nil the textarea falls back to its built-in
 	// scrollbar renderer.
-	ScrollbarFunc func(content string, total, visible, offset int, enabled bool, lineChars bool) string
+	ScrollbarFunc func(content string, total, visible, offset int, lineChars bool) string
 
 	// Styling. Styles are defined in [Styles]. Use [SetStyles] and [GetStyles]
 	// to work with this value publicly.
@@ -2479,10 +2479,11 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	}
 
-	// Skip repositionView() when the scrollbar directly moved the viewport —
-	// otherwise it would snap the view back to keep the cursor visible, preventing
-	// the user from scrolling to non-editable lines (e.g. comments at the top).
-	if !m.sbScrolled {
+	// If the scrollbar moved the viewport, constrain the cursor so it remains on screen.
+	// Otherwise, reposition the viewport to follow the cursor (standard typing behavior).
+	if m.sbScrolled {
+		m.constrainCursorToView()
+	} else {
 		m.repositionView()
 	}
 
@@ -3207,7 +3208,7 @@ func (m Model) View() string {
 	visible := m.height
 	offset := m.viewport.YOffset()
 	if m.ScrollbarFunc != nil {
-		view = m.ScrollbarFunc(view, total, visible, offset, true, m.LineCharacters)
+		view = m.ScrollbarFunc(view, total, visible, offset, m.LineCharacters)
 	} else {
 		// Built-in fallback scrollbar (used when no ScrollbarFunc is injected).
 		lines := strings.Split(view, "\n")

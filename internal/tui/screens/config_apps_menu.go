@@ -112,27 +112,18 @@ func configAppItemHelp(item tui.MenuItem) (itemTitle, itemText string) {
 
 func (m *configAppsMenuModel) HelpContext(maxWidth int) tui.HelpContext {
 	inner := m.MenuModel.HelpContext(maxWidth)
-	itemTitle := inner.ItemTitle
-	itemText := inner.ItemText
-
 	items := m.GetItems()
 	idx := m.Index()
 	if idx >= 0 && idx < len(items) {
 		if t, txt := configAppItemHelp(items[idx]); txt != "" {
 			if t != "" {
-				itemTitle = t
+				inner.ItemTitle = t
 			}
-			itemText = txt
+			inner.ItemText = txt
 		}
 	}
 
-	return tui.HelpContext{
-		ScreenName: inner.ScreenName,
-		PageTitle:  inner.PageTitle,
-		PageText:   inner.PageText,
-		ItemTitle:  itemTitle,
-		ItemText:   itemText,
-	}
+	return inner
 }
 
 // NewConfigAppsMenuScreen creates the "Configure Applications" menu
@@ -160,5 +151,15 @@ func NewConfigAppsMenuScreen() tui.ScreenModel {
 	menu.SetHelpPageText("Select an application to browse and edit its environment variables. Each application's settings are stored in your .env file.")
 	menu.SetHelpItemPrefix("App")
 	menu.SetItemHelpFunc(configAppItemHelp)
+	menu.SetItemDocFunc(func(item tui.MenuItem) (docMarkdown, docAppName string) {
+		if item.BaseApp == "" || item.IsUserDefined {
+			return "", ""
+		}
+		doc, err := appenv.GetAppMarkdown(context.Background(), item.BaseApp)
+		if err != nil {
+			return "", ""
+		}
+		return doc, item.Tag
+	})
 	return &configAppsMenuModel{MenuModel: menu}
 }

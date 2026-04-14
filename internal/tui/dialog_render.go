@@ -297,17 +297,18 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 		// Use WidthWithoutZones to get accurate visual width (zone markers are invisible)
 		textWidth := WidthWithoutZones(line)
 
+		contentBG := ctx.ContentBackground.GetBackground()
 		var fullLine string
 		if textWidth > actualWidth {
 			// Truncate lines that are too wide to prevent bleeding
 			truncated := TruncateRight(line, actualWidth)
-			fullLine = MaintainBackground(truncated, ctx.Dialog)
+			fullLine = MaintainBackground(truncated, ctx.ContentBackground)
 		} else if textWidth < actualWidth {
 			// Pad lines that are too narrow
-			padding := lipgloss.NewStyle().Background(borderBG).Render(strutil.Repeat(" ", actualWidth-textWidth))
-			fullLine = MaintainBackground(line+padding, ctx.Dialog)
+			padding := lipgloss.NewStyle().Background(contentBG).Render(strutil.Repeat(" ", actualWidth-textWidth))
+			fullLine = MaintainBackground(line+padding, ctx.ContentBackground)
 		} else {
-			fullLine = MaintainBackground(line, ctx.Dialog)
+			fullLine = MaintainBackground(line, ctx.ContentBackground)
 		}
 
 		result.WriteString(fullLine)

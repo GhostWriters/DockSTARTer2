@@ -114,7 +114,7 @@ func handleEditVars(ctx context.Context, group *CommandGroup) error {
 	return nil
 }
 
-func handleAppSelect(ctx context.Context, group *CommandGroup) error {
+func handleAppSelect(ctx context.Context, _group *CommandGroup) error {
 	// -S / --select always opens the app selection menu
 	if err := tui.Start(ctx, "app-select"); err != nil {
 		if !errors.Is(err, tui.ErrUserAborted) {

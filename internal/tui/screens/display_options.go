@@ -128,7 +128,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 	s.themeMenu.SetItemHelpFunc(s.buildThemeItemHelp)
 	s.themeMenu.SetHelpPageText("Configure the visual appearance of the application, including theme selection, borders, shadows, and other display options.")
 	s.themeMenu.SetSubMenuMode(true)
-	s.themeMenu.SetVariableHeight(true)
+	s.themeMenu.SetVariableHeight(false)
 	s.themeMenu.SetIsDialog(false) // Part of a screen, not a modal
 	s.themeMenu.SetShowExit(false)
 	s.themeMenu.SetMaximized(true) // Fill available width
@@ -425,13 +425,11 @@ func (s *DisplayOptionsScreen) HelpContext(maxWidth int) tui.HelpContext {
 		inner = s.optionsMenu.HelpContext(maxWidth)
 	}
 
-	return tui.HelpContext{
-		ScreenName: screenName,
-		PageTitle:  "Description",
-		PageText:   pageText,
-		ItemTitle:  inner.ItemTitle,
-		ItemText:   inner.ItemText,
-	}
+	inner.ScreenName = screenName
+	inner.PageTitle = "Description"
+	inner.PageText = pageText
+
+	return inner
 }
 
 func (s *DisplayOptionsScreen) shadowLevelToDesc(l int) string {

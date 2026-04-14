@@ -38,6 +38,8 @@ type setValueDialogModel struct {
 	filePath string // shown in heading; empty = omit
 	origVal  string // original value at open time (shown in heading)
 	varHelp  string
+	docMarkdown string
+	docAppName  string
 
 	input        sinput.Model
 	inputScreenX int // abs screen X of text start; set in GetHitRegions
@@ -62,7 +64,7 @@ type setValueDialogModel struct {
 func newSetValueDialog(
 	varName, appName, appDesc, filePath, origVal string,
 	opts []appenv.VarOption,
-	helpText string,
+	helpText, docMarkdown, docAppName string,
 	onSave func(string) tea.Cmd,
 	onCancel tea.Cmd,
 ) *setValueDialogModel {
@@ -88,6 +90,8 @@ func newSetValueDialog(
 		filePath: filePath,
 		origVal:  origVal,
 		varHelp:  helpText,
+		docMarkdown: docMarkdown,
+		docAppName:  docAppName,
 		input:    sinput.New(ti),
 		opts:     opts,
 		focus:    setValueFocusInput,
@@ -296,27 +300,17 @@ func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			// Granular scrollbar interaction:
-			if strings.HasPrefix(msg.ID, "setvalue_preset_box.sb.") {
+			newOff, changed := tui.HandleScrollbarLayerHit("setvalue_preset_box", msg, m.offset, len(m.opts), m.maxVis)
+			if changed {
 				m.focus = setValueFocusList
 				m.input.Blur()
-				switch strings.TrimPrefix(msg.ID, "setvalue_preset_box.sb.") {
-				case "up":
-					m.moveCursor(-1)
-				case "down":
-					m.moveCursor(1)
-				case "above":
-					// Page Up
-					for i := 0; i < m.maxVis; i++ {
-						m.moveCursor(-1)
-					}
-				case "below":
-					// Page Down
-					for i := 0; i < m.maxVis; i++ {
-						m.moveCursor(1)
-					}
-				case "thumb":
-					m.sbDrag.StartDrag(msg.Y, m.sbAbsTopY, m.lastSbInfo)
-				}
+				m.offset = newOff
+				return m, nil
+			}
+			if strings.HasSuffix(msg.ID, ".sb.thumb") && strings.HasPrefix(msg.ID, "setvalue_preset_box") {
+				m.focus = setValueFocusList
+				m.input.Blur()
+				m.sbDrag.StartDrag(msg.Y, m.sbAbsTopY, m.lastSbInfo)
 				return m, nil
 			}
 		}
@@ -383,6 +377,48 @@ func (m *setValueDialogModel) HelpText() string {
 	return ""
 }
 
+func (m *setValueDialogModel) HelpContext(maxWidth int) tui.HelpContext {
+	pageText := m.appDesc
+	if m.varHelp != "" {
+		if pageText != "" {
+			pageText += "\n\n"
+		}
+		pageText += m.varHelp
+	}
+
+	h := tui.HelpContext{
+		ScreenName:  "Set Value: " + m.varName,
+		PageTitle:   "Variable Info",
+		PageText:    pageText,
+		Legend:      "| {{|MarkerAdded|}}+{{[-]}} Added | {{|MarkerDeleted|}}-{{[-]}} Deleted | {{|MarkerModified|}}~{{[-]}} Changed | {{|MarkerInvalid|}}!{{[-]}} Invalid |",
+		DocMarkdown: m.docMarkdown,
+		DocAppName:  m.docAppName,
+	}
+
+	switch m.focus {
+	case setValueFocusInput:
+		h.PageTitle = "Editing"
+		h.PageText = "Type to enter a custom value for " + m.varName + "."
+		h.ItemText = "Press Enter to save or Esc to cancel."
+	case setValueFocusList:
+		h.ItemTitle = "Preset Values"
+		if m.cursor >= 0 && m.cursor < len(m.opts) {
+			h.ItemText = "Selected: " + m.opts[m.cursor].Display + "\n\n" + m.opts[m.cursor].Help
+		}
+	case setValueFocusSave:
+		h.ItemTitle = "Save"
+		h.ItemText = "Save the current value and return."
+	case setValueFocusCancel:
+		h.ItemTitle = "Cancel"
+		h.ItemText = "Cancel and return to the editor."
+	case setValueFocusExit:
+		h.ItemTitle = "Exit"
+		h.ItemText = "Close the editor and return to the main menu."
+	}
+
+	return h
+}
+
 func (m *setValueDialogModel) SetFocused(f bool) { m.focused = f }
 
 func (m *setValueDialogModel) IsScrollbarDragging() bool { return m.sbDrag.Dragging }
@@ -395,10 +431,17 @@ func (m *setValueDialogModel) applySbDrag(mouseY int) bool {
 		maxOff = 0
 	}
 	newOff, _ := m.sbDrag.ScrollOffset(mouseY, m.sbAbsTopY, maxOff, m.lastSbInfo)
-	if newOff == m.offset {
-		return false
-	}
 	m.offset = newOff
+	// Sync selection (cursor) to stay within the new visible range
+	maxIdx := len(m.opts) - 1
+	if m.cursor < m.offset {
+		m.cursor = m.offset
+	} else if m.cursor >= m.offset+m.maxVis {
+		m.cursor = m.offset + m.maxVis - 1
+		if m.cursor > maxIdx {
+			m.cursor = maxIdx
+		}
+	}
 	return true
 }
 
@@ -655,6 +698,8 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 			PageTitle:  "Editing",
 			PageText:   "Type to enter a custom value for " + m.varName + ".",
 			ItemText:   "Press Enter to save or Esc to cancel.",
+			DocMarkdown: m.docMarkdown,
+			DocAppName:  m.docAppName,
 		},
 	})
 	btnH := tui.ButtonRowHeight(contentW, 0, tui.ButtonSpec{Text: "Save"}, tui.ButtonSpec{Text: "Cancel"}, tui.ButtonSpec{Text: "Exit"})
@@ -671,16 +716,6 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 	sbInfo := tui.ComputeScrollbarInfo(len(m.opts), innerH, m.offset, innerH)
 	m.lastSbInfo = sbInfo
 
-	regions = append(regions, ListBoxHitRegions(
-		"setvalue_preset_box", "setvalue_list",
-		offsetX+1, offsetY+listTop,
-		contentW, innerH,
-		tui.ZDialog+5,
-		"Preset Values",
-		sbInfo,
-		nil,
-	)...)
-
 	pageText := m.appDesc
 	if m.varHelp != "" {
 		if pageText != "" {
@@ -688,6 +723,22 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 		}
 		pageText += m.varHelp
 	}
+
+	regions = append(regions, ListBoxHitRegions(
+		"setvalue_preset_box", "setvalue_list",
+		offsetX+1, offsetY+listTop,
+		contentW, innerH,
+		tui.ZDialog+5,
+		"Preset Values",
+		sbInfo,
+		&tui.HelpContext{
+			ScreenName:  "Set Value: " + m.varName,
+			PageTitle:   "Variable Info",
+			PageText:    pageText,
+			DocMarkdown: m.docMarkdown,
+			DocAppName:  m.docAppName,
+		},
+	)...)
 
 	// Dialog background
 	regions = append(regions, tui.HitRegion{
@@ -699,9 +750,11 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 		ZOrder: tui.ZDialog,
 		Label:  "Set Value",
 		Help: &tui.HelpContext{
-			ScreenName: "Set Value: " + m.varName,
-			PageTitle:  "Variable Info",
-			PageText:   pageText,
+			ScreenName:  "Set Value: " + m.varName,
+			PageTitle:   "Variable Info",
+			PageText:    pageText,
+			DocMarkdown: m.docMarkdown,
+			DocAppName:  m.docAppName,
 		},
 	})
 
@@ -717,16 +770,20 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 		ZOrder: tui.ZDialog + 5,
 		Label:  "Actions",
 		Help: &tui.HelpContext{
-			ScreenName: "Set Value: " + m.varName,
-			PageTitle:  "Variable Info",
-			PageText:   pageText,
+			ScreenName:  "Set Value: " + m.varName,
+			PageTitle:   "Variable Info",
+			PageText:    pageText,
+			DocMarkdown: m.docMarkdown,
+			DocAppName:  m.docAppName,
 		},
 	})
 	regions = append(regions, tui.GetButtonHitRegions(
 		tui.HelpContext{
-			ScreenName: "Set Value: " + m.varName,
-			PageTitle:  "Variable Info",
-			PageText:   pageText,
+			ScreenName:  "Set Value: " + m.varName,
+			PageTitle:   "Variable Info",
+			PageText:    pageText,
+			DocMarkdown: m.docMarkdown,
+			DocAppName:  m.docAppName,
 		},
 		"setvalue_dialog", offsetX+1, offsetY+buttonY, contentW, tui.ZDialog+20,
 		tui.ButtonSpec{Text: "Save", ZoneID: "Save", Help: "Save the current value and return."},

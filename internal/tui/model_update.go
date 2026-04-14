@@ -637,7 +637,7 @@ func (m AppModel) getContentArea() (int, int) {
 		helplineH = m.backdrop.HelplineActualHeight()
 	}
 
-	return layout.ContentArea(m.width, bh, hasShadow, headerH, helplineH)
+	return layout.ContentArea(m.width, bh, hasShadow, false, headerH, helplineH)
 }
 
 // getDialogArea returns the dimensions available for a specific dialog.
@@ -652,7 +652,7 @@ func (m AppModel) getDialogArea(d tea.Model) (int, int) {
 			headerH = m.backdrop.ChromeHeight() - 1
 			helplineH = m.backdrop.HelplineActualHeight()
 		}
-		return layout.ContentArea(m.width, m.height, m.config.UI.Shadow, headerH, helplineH)
+		return layout.ContentArea(m.width, m.height, m.config.UI.Shadow, true, headerH, helplineH)
 	}
 	return m.getContentArea()
 }
@@ -875,7 +875,7 @@ func (m *AppModel) focusedPanelHelpContext() *HelpContext {
 func (m *AppModel) showHelpCmd(capturedCtx *HelpContext) tea.Cmd {
 	var km help.KeyMap = Keys
 	var contextInfo HelpContext
-	availW, availH := GetAvailableDialogSize(m.width, m.height)
+	availW, availH := GetAvailableDialogSize(m.width, m.height, true)
 	if availW < 40 || availH < 10 {
 		// Terminal too small for help dialog
 		return nil

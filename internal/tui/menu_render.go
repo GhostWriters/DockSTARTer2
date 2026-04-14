@@ -53,82 +53,49 @@ func (m *MenuModel) ViewString() string {
 	}
 
 	styles := GetStyles()
-
-	var listView string
-	if m.variableHeight {
-		listView = m.renderVariableHeightList()
-	} else {
-		listView = m.list.View()
-		// Wrap with dialog background to eliminate black space
-		listViewStyle := lipgloss.NewStyle().
-			Background(styles.Dialog.GetBackground())
-		if m.maximized {
-			// Only force height when maximized — ensures list fills the full dialog.
-			listViewStyle = listViewStyle.Height(m.list.Height())
-		}
-		listView = listViewStyle.Render(listView)
-	}
-
-	// Append the scrollbar/gutter column for all full-dialog menus (non-subMenu).
-	// The slot is always reserved by calculateLayout, so this adds exactly one char —
-	// space when off or not needed, track/thumb when on and scrollable.
-	// Store the geometry in m.sbInfo so GetHitRegions can emit accurate hit regions.
 	ctx := GetActiveContext()
-	if !m.subMenuMode {
-		enabled := currentConfig.UI.Scrollbar
-		if m.variableHeight {
-			listView, m.sbInfo = ApplyScrollbarColumnTracked(listView, m.lastScrollTotal, m.layout.ViewportHeight, m.viewStartY, enabled, ctx.LineCharacters, ctx)
-		} else {
-			listView, m.sbInfo = ApplyScrollbarColumnTracked(listView, len(m.items), m.layout.ViewportHeight, m.viewStartY, enabled, ctx.LineCharacters, ctx)
-		}
-	}
 
-	// Wrap list in its own border (no padding, items have their own margins).
-	// Disable the bottom so we can append a plain or scroll-indicator bottom border.
-	listStyle := styles.Dialog.
-		Padding(0, 0)
-	listStyle = ApplyInnerBorder(listStyle, m.focused, styles.LineCharacters)
+	// 1. Render core list content with scrollbar
+	listView := m.renderVerticalListBlock(ctx)
+
+	// 2. Wrap list in its own inner border (only for non-subMenu mode)
+	// Full dialogs use a nested "border-in-border" look.
+	listStyle := styles.Dialog.Padding(0, 0)
+	listStyle = ApplyInnerBorder(listStyle, m.focused, ctx.LineCharacters)
 	listStyle = listStyle.BorderBottom(false)
 	borderedList := InjectBorderFlags(listStyle.Render(listView), styles.BorderFlags, styles.Border2Flags, false)
 	totalWidth := m.list.Width() + ScrollbarGutterWidth + 2
 	borderedList = strings.TrimSuffix(borderedList, "\n")
 
-	// AE borders only show focus markers when a top-level app is selected.
-	// When navigating instances, the border markers are "unmarked" (unfocused).
+	// 3. Add bottom border (AE or Scroll Percent)
 	showAEFocus := m.focused && !m.SelectedItem().IsSubItem && !m.SelectedItem().IsAddInstance && !m.SelectedItem().IsEditing
-
 	if m.groupedMode {
 		pct := -1.0
-		if m.sbInfo.Needed {
+		if m.Scroll.Info.Needed {
 			pct = m.listScrollPercent()
 		}
 		borderedList = borderedList + "\n" + BuildAEBottomBorder(totalWidth, 2, showAEFocus, m.activeColumn, pct, ctx)
-	} else if m.sbInfo.Needed {
+	} else if m.Scroll.Info.Needed {
 		borderedList = borderedList + "\n" + BuildScrollPercentBottomBorder(totalWidth, m.listScrollPercent(), m.focused, ctx)
 	} else {
 		borderedList = borderedList + "\n" + BuildPlainBottomBorder(totalWidth, m.focused, ctx)
 	}
 
-	// prefixDashes=2: corner(1)+dash(2)+dash(3)+A(4,5,6) center=5 = g0(1)+g1(2)+" ▣ "(3,4,5) center=5. MATCH.
-	// AE top border (with individual column focus)
+	// 4. Add AE top border
 	if m.groupedMode {
 		if nl := strings.Index(borderedList, "\n"); nl >= 0 {
 			borderedList = BuildAETopBorder(totalWidth, 2, showAEFocus, m.activeColumn, ctx) + borderedList[nl:]
 		}
 	}
 
-	// Determine the target content width (the space inside the outer dialog borders)
+	// 5. Build Content Area
 	layout := GetLayout()
 	contentWidth := m.GetInnerContentWidth()
-
-	// Inner components (list and button row) should fit within contentWidth minus the 1-char margin on each side.
 	innerBoxWidth := contentWidth - layout.ContentMarginWidth()
 
-	// Render buttons to match the exact same width as the list's border box
 	buttonRow := m.renderSimpleButtons(innerBoxWidth)
 	borderedButtonBox := m.renderButtonBox(buttonRow, innerBoxWidth)
 
-	// Spacing style for both the list and the button box
 	marginStyle := lipgloss.NewStyle().
 		Background(styles.Dialog.GetBackground()).
 		Padding(0, layout.ContentSideMargin)
@@ -136,10 +103,7 @@ func (m *MenuModel) ViewString() string {
 	paddedList := marginStyle.Render(borderedList)
 	paddedButtons := marginStyle.Width(contentWidth).Render(borderedButtonBox)
 
-	// Build inner content parts
 	var innerParts []string
-
-	// Add subtitle if present (always left-aligned)
 	if m.subtitle != "" {
 		subtitleStyle := styles.Dialog.
 			Width(contentWidth).
@@ -150,20 +114,16 @@ func (m *MenuModel) ViewString() string {
 		subStr := RenderThemeText(m.subtitle, subtitleStyle)
 		innerParts = append(innerParts, subtitleStyle.Render(subStr))
 	}
-
 	innerParts = append(innerParts, paddedList)
 	innerParts = append(innerParts, paddedButtons)
 
-	// Combine all parts and standardize TrimRight to prevent implicit gaps
-	for i, part := range innerParts {
-		innerParts[i] = strings.TrimRight(part, "\n")
-	}
+	// Combine all parts
 	content := lipgloss.JoinVertical(lipgloss.Left, innerParts...)
 
 	// Force total content height to match the calculated budget
 	// only if maximized. Otherwise it should have its intrinsic height.
 	if m.maximized {
-		heightBudget := m.layout.Height - layout.BorderHeight() - m.layout.ShadowHeight
+		heightBudget := m.layout.Height - layout.BorderHeight()
 		if heightBudget > 0 {
 			content = lipgloss.NewStyle().
 				Height(heightBudget).
@@ -231,77 +191,39 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 func (m *MenuModel) viewSubMenu() string {
 	styles := GetStyles()
 	layout := GetLayout()
+	ctx := GetActiveContext()
 
 	// The target outer dimensions
 	contentWidth := m.width - layout.BorderWidth()
 
-	// 1. Render Subtitle
-	var subtitleView string
+	// 1. Build inner content components
+	var innerParts []string
 	if m.subtitle != "" {
 		subtitleStyle := styles.Dialog.
 			Width(contentWidth).
-			Padding(0, layout.ContentSideMargin). // matches internal padding
+			Padding(0, layout.ContentSideMargin).
 			Align(lipgloss.Left).
 			Border(lipgloss.Border{})
 
 		subStr := RenderThemeText(m.subtitle, subtitleStyle)
-		subtitleView = subtitleStyle.Render(subStr)
+		innerParts = append(innerParts, subtitleStyle.Render(subStr))
 	}
 
-	// 2. Render List
-	ctx := GetActiveContext()
-	var content string
-	if m.flowMode {
-		content = m.renderFlow()
-	} else {
-		if m.variableHeight {
-			content = m.renderVariableHeightList()
-		} else {
-			content = MaintainBackground(m.list.View(), styles.Dialog)
-		}
+	// Render core list with scrollbar
+	content := m.renderVerticalListBlock(ctx)
+	innerParts = append(innerParts, content)
 
-		// Ensure content is exactly ViewportHeight lines before applying the scrollbar,
-		// so the gutter column spans the full border box. ApplyScrollbarColumnTracked
-		// strips one trailing \n before splitting, so we add it back here unconditionally.
-		content = strings.TrimSuffix(content, "\n")
-		h := strings.Count(content, "\n") + 1
-		if h < m.layout.ViewportHeight {
-			content += strings.Repeat("\n", m.layout.ViewportHeight-h)
-		}
-
-		// Apply scrollbar using the accurate viewport offset (viewStartY)
-		visibleHeight := m.layout.ViewportHeight
-		offset := m.list.Index()
-		total := len(m.items)
-		if m.variableHeight {
-			total = m.lastScrollTotal
-			offset = m.viewStartY
-		}
-		content, m.sbInfo = ApplyScrollbarColumnTracked(content, total, visibleHeight, offset, currentConfig.UI.Scrollbar, ctx.LineCharacters, ctx)
-	}
-
-	// 3. Render Buttons (if any)
-	var buttonView string
+	// Render buttons (if any)
 	buttons := m.getButtonSpecs()
 	if len(buttons) > 0 {
 		useBorders := m.layout.ButtonHeight == DialogButtonHeight
-		buttonView = renderCenteredButtonsImpl(contentWidth, useBorders, GetActiveContext(), buttons...)
+		buttonView := renderCenteredButtonsImpl(contentWidth, useBorders, ctx, buttons...)
+		innerParts = append(innerParts, buttonView)
 	}
 
-	// Combine all internal content vertically.
-	// We use TrimSuffix here to avoid over-aggressive trimming that could pull the next section up.
-	parts := []string{subtitleView, strings.TrimSuffix(content, "\n"), buttonView}
-	var filteredParts []string
-	for _, p := range parts {
-		if p != "" {
-			filteredParts = append(filteredParts, p)
-		}
-	}
-	combined := lipgloss.JoinVertical(lipgloss.Left, filteredParts...)
+	combined := lipgloss.JoinVertical(lipgloss.Left, innerParts...)
 
-	// 4. Render the bordered box with embedded title.
-	// We pass 'true' for rounded so submenus use the rounded corner style.
-	// We calculate targetHeight based on actual content to avoid trailing blank lines.
+	// 2. Wrap in bordered dialog
 	targetHeight := lipgloss.Height(combined) + 2
 	if m.maximized {
 		targetHeight = m.height
@@ -310,14 +232,34 @@ func (m *MenuModel) viewSubMenu() string {
 	}
 	result := m.renderBorderWithTitle(combined, contentWidth, targetHeight, m.focusedSub, true, "Title")
 
-	// Replace bottom border with scroll-percent variant when content overflows.
-	if !m.flowMode && m.sbInfo.Needed {
+	// 3. Replace bottom border with scroll-percent indicator if needed
+	if !m.flowMode && m.Scroll.Info.Needed {
 		if lastNL := strings.LastIndex(result, "\n"); lastNL >= 0 {
 			bottomLine := BuildScrollPercentBottomBorder(m.width, m.listScrollPercent(), m.focusedSub, ctx)
 			result = result[:lastNL+1] + bottomLine
 		}
 	}
 	return result
+}
+
+// renderVerticalListBlock renders the core list content and applies the scrollbar.
+// This is the single source of truth for list viewport rendering.
+func (m *MenuModel) renderVerticalListBlock(ctx StyleContext) string {
+	content := m.renderVariableHeightList()
+
+	// Ensure content is exactly ViewportHeight lines before applying the scrollbar,
+	// so the gutter column spans the full border box.
+	content = strings.TrimSuffix(content, "\n")
+	h := strings.Count(content, "\n") + 1
+	if h < m.layout.ViewportHeight {
+		content += strings.Repeat("\n", m.layout.ViewportHeight-h)
+	}
+
+	total := len(m.items)
+	if m.variableHeight {
+		total = m.lastScrollTotal
+	}
+	return ApplyScrollbar(&m.Scroll, content, total, m.layout.ViewportHeight, m.viewStartY, ctx.LineCharacters, ctx)
 }
 
 // viewWithSections renders an outer dialog that stacks content sections (sub-menus)
@@ -342,14 +284,22 @@ func (m *MenuModel) viewWithSections() string {
 
 	// Stack sections with margin — each section already renders its own bordered panel.
 	for _, sec := range m.contentSections {
-		v := strings.TrimRight(sec.ViewString(), "\n")
+		// Use the rendered string without trimming trailing newlines that are part of the height budget.
+		v := sec.ViewString()
 		if v != "" {
 			parts = append(parts, marginStyle.Render(v))
 		}
 	}
 
 	// Button row also inset by the same margin.
-	buttonRow := marginStyle.Render(m.renderSimpleButtons(sectionWidth))
+	buttonRowRaw := m.renderSimpleButtons(sectionWidth)
+	if m.layout.ButtonHeight > 1 {
+		buttonRowRaw = lipgloss.NewStyle().
+			Height(m.layout.ButtonHeight).
+			Align(lipgloss.Center, lipgloss.Center).
+			Render(buttonRowRaw)
+	}
+	buttonRow := marginStyle.Render(buttonRowRaw)
 	parts = append(parts, buttonRow)
 
 	content := lipgloss.JoinVertical(lipgloss.Left, parts...)

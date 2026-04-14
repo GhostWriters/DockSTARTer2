@@ -186,7 +186,7 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 	}
 
 	title = RenderThemeText(title, titleStyle)
-	content = RenderThemeText(content, ctx.Dialog)
+	content = RenderThemeText(content, ctx.ContentBackground)
 
 	lines := strings.Split(content, "\n")
 	actualWidth := 0
@@ -293,10 +293,11 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 		// Use WidthWithoutZones to get accurate visual width (zone markers are invisible)
 		textWidth := WidthWithoutZones(line)
 		padding := ""
+		contentBG := ctx.ContentBackground.GetBackground()
 		if textWidth < actualWidth {
-			padding = lipgloss.NewStyle().Background(borderBG).Render(strutil.Repeat(" ", actualWidth-textWidth))
+			padding = lipgloss.NewStyle().Background(contentBG).Render(strutil.Repeat(" ", actualWidth-textWidth))
 		}
-		fullLine := MaintainBackground(line+padding, ctx.Dialog)
+		fullLine := MaintainBackground(line+padding, ctx.ContentBackground)
 		result.WriteString(fullLine)
 		result.WriteString(borderStyleDark.Render(border.Right))
 		result.WriteString("\n")

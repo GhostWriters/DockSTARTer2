@@ -2,14 +2,19 @@ package tui
 
 import (
 	"DockSTARTer2/internal/theme"
+	"context"
 	"fmt"
+	"image/color"
 	"strings"
+
+	"DockSTARTer2/internal/logger"
 
 	"github.com/charmbracelet/x/ansi"
 
 	"charm.land/bubbles/v2/help"
 	keybind "charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/glamour/v2"
 	"charm.land/lipgloss/v2"
 )
 
@@ -64,6 +69,9 @@ type HelpContext struct {
 	Legend     string // multi-line legend (newline-separated); rendered centered at the bottom of each page in its own "Legend" box
 	ItemTitle  string // e.g., variable name or menu item Tag
 	ItemText   string
+
+	DocMarkdown string // Markdown documentation content
+	DocAppName  string // Name of the application for the documentation
 }
 
 // HelpContextProvider is implemented by models that can provide structured help content.
@@ -74,7 +82,7 @@ type HelpContextProvider interface {
 // HelpContextWidth returns the content width the help dialog will use for word-wrapping,
 // given the current terminal dimensions. Mirrors the calculation in showHelpCmd.
 func HelpContextWidth(termW, termH int) int {
-	availW, _ := GetAvailableDialogSize(termW, termH)
+	availW, _ := GetAvailableDialogSize(termW, termH, true)
 	w := availW - 8
 	if w < 30 {
 		w = 30
@@ -111,6 +119,65 @@ type HelpDialogModel struct {
 
 	// Unified layout (deterministic sizing)
 	layout DialogLayout
+
+	// Markdown cache
+	renderedMarkdown      string
+	renderedMarkdownWidth int
+
+	// Scrollbar component
+	Scroll Scrollbar
+
+	// Geometry cache for hit regions (set by ViewString)
+	lastDocBoxX int
+	lastDocBoxY int
+	lastDocBoxW int
+	lastDocBoxH int
+}
+
+// getRenderedMarkdown renders DocMarkdown via glamour at the given column width,
+// caching the result so repeated ViewString calls are cheap.
+func (m *HelpDialogModel) getRenderedMarkdown(width int) string {
+	if m.contextInfo.DocMarkdown == "" {
+		return ""
+	}
+	if m.renderedMarkdown != "" && m.renderedMarkdownWidth == width {
+		return m.renderedMarkdown
+	}
+	r, err := glamour.NewTermRenderer(
+		glamour.WithStylePath("dark"),
+		glamour.WithWordWrap(width),
+	)
+	if err != nil {
+		m.renderedMarkdown = m.contextInfo.DocMarkdown
+		m.renderedMarkdownWidth = width
+		return m.renderedMarkdown
+	}
+	out, err := r.Render(m.contextInfo.DocMarkdown)
+	if err != nil {
+		m.renderedMarkdown = m.contextInfo.DocMarkdown
+	} else {
+		m.renderedMarkdown = strings.TrimRight(out, "\n")
+	}
+	m.renderedMarkdownWidth = width
+	return m.renderedMarkdown
+}
+
+// getDocLines returns the rendered markdown split into individual lines.
+func (m *HelpDialogModel) getDocLines(width int) []string {
+	raw := m.getRenderedMarkdown(width)
+	if raw == "" {
+		return nil
+	}
+	return strings.Split(raw, "\n")
+}
+
+// getDocPageIdx returns the page index for the markdown doc page, or -1 if not present.
+func (m *HelpDialogModel) getDocPageIdx() int {
+	if m.contextInfo.DocMarkdown == "" {
+		return -1
+	}
+	// Doc page is always the last page.
+	return m.numPages - 1
 }
 
 func NewHelpDialogModel() *HelpDialogModel {
@@ -127,12 +194,18 @@ func NewHelpDialogModelWithMap(km help.KeyMap) *HelpDialogModel {
 func NewHelpDialogWithContext(km help.KeyMap, info HelpContext) *HelpDialogModel {
 	h := help.New()
 	h.ShowAll = true
-	return &HelpDialogModel{help: h, focused: true, keyMap: km, contextInfo: info}
+	return &HelpDialogModel{help: h, focused: true, keyMap: km, contextInfo: info, Scroll: Scrollbar{ID: "help-dialog"}}
 }
 
 func (m *HelpDialogModel) Init() tea.Cmd { return nil }
 
 func (m *HelpDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	totalDocLines, visibleDocRows := m.docInfo()
+	if newOff, cmd, changed := m.Scroll.Update(msg, m.contextOffset, totalDocLines, visibleDocRows); changed {
+		m.contextOffset = newOff
+		return m, cmd
+	}
+
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		// Help key (? / F1) cycles pages when paged, otherwise closes.
@@ -179,15 +252,7 @@ func (m *HelpDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.paged && m.contextPaged && m.page != 0 {
 			return m, nil
 		}
-		switch msg.Button {
-		case tea.MouseWheelUp:
-			m.contextOffset--
-			if m.contextOffset < 0 {
-				m.contextOffset = 0
-			}
-		case tea.MouseWheelDown:
-			m.contextOffset++
-		}
+		// Logic previously here is now in HandleScrollbarUpdate above.
 		return m, nil
 
 	case tea.WindowSizeMsg:
@@ -195,8 +260,24 @@ func (m *HelpDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		return m, nil
 
-	case tea.MouseClickMsg, LayerHitMsg:
-		// Any direct click (raw or semantic) cycles pages when paged, otherwise closes.
+	case tea.MouseMotionMsg:
+		// Logic previously here is now in HandleScrollbarUpdate above.
+		return m, nil
+
+	case tea.MouseClickMsg:
+		// Logic handled in m.Scroll.Update at top of function.
+		return m, nil
+
+	case tea.MouseReleaseMsg:
+		// Logic handled in m.Scroll.Update at top of function.
+		return m, nil
+
+	case LayerHitMsg:
+		// Non-scrollbar click: cycle pages when paged, otherwise close.
+		// Only handle this if the click was actually on the help dialog background.
+		if msg.ID != "help_dialog" {
+			return m, nil
+		}
 		if m.paged {
 			n := m.numPages
 			if n < 2 {
@@ -207,9 +288,12 @@ func (m *HelpDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m, func() tea.Msg { return CloseDialogMsg{} }
+
 	}
 	return m, nil
 }
+
+
 
 // ViewString returns the dialog content as a string for compositing
 func (m *HelpDialogModel) ViewString() string {
@@ -217,9 +301,12 @@ func (m *HelpDialogModel) ViewString() string {
 		return ""
 	}
 
+	hasDocPage := m.contextInfo.DocMarkdown != ""
+	isDoc := hasDocPage && m.page == m.getDocPageIdx()
+
 	// Calculate target width for help content.
 	// We want a consistent width for the help panels relative to the screen.
-	availW, availH := GetAvailableDialogSize(m.width, m.height)
+	availW, availH := GetAvailableDialogSize(m.width, m.height, true)
 
 	// Ensure at least some minimal room
 	if availW < 30 {
@@ -230,10 +317,16 @@ func (m *HelpDialogModel) ViewString() string {
 	}
 
 	targetWidth := availW - 8
+	if isDoc {
+		// Documentation page is allowed to fill the full usable width.
+		targetWidth = availW
+	}
+
 	if targetWidth < 20 {
 		targetWidth = 20
 	}
-	if targetWidth > 120 {
+	// For non-doc pages, keep a reasonable cap for readability.
+	if !isDoc && targetWidth > 120 {
 		targetWidth = 120
 	}
 	m.help.SetWidth(targetWidth)
@@ -274,7 +367,6 @@ func (m *HelpDialogModel) ViewString() string {
 
 	// Build the context section (variable info) if provided.
 	var pageTextBox string
-	var contextBox string
 	var legendBox string
 
 	hasLegend := m.contextInfo.Legend != ""
@@ -364,10 +456,12 @@ func (m *HelpDialogModel) ViewString() string {
 		contextPaged = len(itemLines) > visibleWithBindings
 	}
 
-	// Total pages: binding pages + 1 if context gets its own page.
 	numPages := len(bPages)
 	if contextPaged {
 		numPages++ // page 0 = context only; pages 1..N = binding pages
+	}
+	if hasDocPage {
+		numPages++ // last page = markdown documentation
 	}
 	m.contextPaged = contextPaged
 	m.numPages = numPages
@@ -378,10 +472,12 @@ func (m *HelpDialogModel) ViewString() string {
 		m.page = 0
 	}
 
-	// showContext: always shown unless context is paged and we're on a bindings page.
-	showContext := !m.paged || (contextPaged && m.page == 0) || !contextPaged
-	// showBindings: shown on all pages except the context-only page 0.
-	showBindings := !m.paged || (!contextPaged || m.page != 0)
+	// showContext: only shown when NOT on the doc page, and only on context/binding pages.
+	showContext := !hasDocPage || m.page != m.getDocPageIdx()
+	showContext = showContext && (!m.paged || (contextPaged && m.page == 0) || !contextPaged)
+	// showBindings: not shown on the doc page or the context-only page 0.
+	showBindings := !hasDocPage || m.page != m.getDocPageIdx()
+	showBindings = showBindings && (!m.paged || (!contextPaged || m.page != 0))
 
 	// Which binding page to render.
 	bindingPageIdx := m.page
@@ -413,118 +509,151 @@ func (m *HelpDialogModel) ViewString() string {
 				ctx,
 			)
 		}
+	}
 
-		// Render Item Context box if content exists
-		if len(itemLines) > 0 {
-			title := m.contextInfo.ItemTitle
-			if title == "" {
-				title = "Context Sensitive Help"
-			}
+	// 2. Render Context or Documentation box
+	// We handle these as mutually exclusive primary content boxes.
+	var scrollBox string
+	var boxTitle string
+	var boxContent string
+	var boxTargetW int
+	var boxTargetH int
+	var boxTotalLines int
+	var boxOffset int
 
-			// When paged (page 0): use the full available height minus page text and legend overhead.
-			// When not paged: subtract bindings from available height too.
-			overheadH := 6
-			if pageTextBox != "" {
-				overheadH += lipgloss.Height(pageTextBox) + 1
-			}
-			if len(legendLines) > 0 {
-				overheadH += len(legendLines) + 2 + 1 // legend box at bottom
-			}
-			bindingsH := 0
-			if !m.paged {
-				bindingsH = len(bindingLines) + 2 // +2 for the bindings box border
-			}
-			maxContextHeight := availH - overheadH - bindingsH
-			if maxContextHeight < 5 {
-				maxContextHeight = 5
-			}
+	if isDoc {
+		boxTitle = "Documentation"
+		if m.contextInfo.DocAppName != "" {
+			boxTitle = m.contextInfo.DocAppName + " Documentation"
+		}
+		docTextW := targetWidth - 1
+		docLines := m.getDocLines(docTextW)
+		boxTotalLines = len(docLines)
+		boxTargetW = targetWidth
+		// Forced expansion for Docs page: Use the full available height.
+		boxTargetH = availH
+		if len(legendLines) > 0 {
+			// Subtract space for legend: border(2) + content + gap(1)
+			boxTargetH -= (len(legendLines) + 2 + 1)
+		}
+		if boxTargetH < 5 {
+			boxTargetH = 5
+		}
+		
+		var displayLines []string
+		visibleRows := boxTargetH - 2
+		if visibleRows < 1 { visibleRows = 1 }
+		
+		// Clamp offset
+		if m.contextOffset < 0 { m.contextOffset = 0 }
+		if boxTotalLines > 0 && m.contextOffset > boxTotalLines-visibleRows {
+			m.contextOffset = boxTotalLines - visibleRows
+		}
+		if m.contextOffset < 0 { m.contextOffset = 0 }
+		boxOffset = m.contextOffset
 
-			// Size box to content
-			if len(itemLines)+2 < maxContextHeight {
-				maxContextHeight = len(itemLines) + 2
+		for i := 0; i < visibleRows && (i+boxOffset) < boxTotalLines; i++ {
+			line := docLines[i+boxOffset]
+			if lw := lipgloss.Width(line); lw > docTextW {
+				line = TruncateRight(line, docTextW)
+			} else if lw < docTextW {
+				line += strings.Repeat(" ", docTextW-lw)
 			}
+			displayLines = append(displayLines, line)
+		}
+		boxContent = strings.Join(displayLines, "\n")
+	} else if showContext && len(itemLines) > 0 {
+		boxTitle = m.contextInfo.ItemTitle
+		if boxTitle == "" {
+			boxTitle = "Context Sensitive Help"
+		}
+		boxTotalLines = len(itemLines)
+		boxTargetW = targetWidth
+		
+		maxCtxH := availH - 4
+		if maxCtxH < 5 { maxCtxH = 5 }
+		boxTargetH = boxTotalLines + 2
+		if boxTargetH < 3 { boxTargetH = 3 }
+		if boxTargetH > maxCtxH { boxTargetH = maxCtxH }
+		
+		visibleRows := boxTargetH - 2
+		if visibleRows < 1 { visibleRows = 1 }
+		
+		// Clamp offset
+		if m.contextOffset < 0 { m.contextOffset = 0 }
+		if boxTotalLines > 0 && m.contextOffset > boxTotalLines-visibleRows {
+			m.contextOffset = boxTotalLines - visibleRows
+		}
+		if m.contextOffset < 0 { m.contextOffset = 0 }
+		boxOffset = m.contextOffset
 
-			visibleRows := maxContextHeight - 2
-			if visibleRows < 1 {
-				visibleRows = 1
+		var displayLines []string
+		for i := 0; i < visibleRows && (i+boxOffset) < boxTotalLines; i++ {
+			line := itemLines[i+boxOffset]
+			// itemLines are already padded/wrapped in the loop above
+			displayLines = append(displayLines, line)
+		}
+		boxContent = strings.Join(displayLines, "\n")
+	}
+
+	if boxContent != "" {
+		// Use white-on-black ONLY for the documentation page.
+		// Standard context boxes should match the outer dialog theme.
+		scrollCtx := ctx
+		if isDoc {
+			scrollCtx.ContentBackground = lipgloss.NewStyle().
+				Background(lipgloss.Color("0")).
+				Foreground(lipgloss.Color("15"))
+		}
+
+		boxContent = ApplyScrollbar(
+			&m.Scroll,
+			boxContent,
+			boxTotalLines,
+			boxTargetH-2,
+			boxOffset,
+			ctx.LineCharacters,
+			scrollCtx,
+		)
+
+		scrollBox = RenderBorderedBoxCtx(
+			boxTitle,
+			boxContent,
+			boxTargetW,
+			boxTargetH,
+			true,
+			true,
+			true,
+			ctx.SubmenuTitleAlign,
+			"TitleSubMenuFocused",
+			scrollCtx,
+		)
+
+		if m.Scroll.Info.Needed {
+			scrollPct := 0.0
+			visibleRows := boxTargetH - 2
+			if boxTotalLines > visibleRows {
+				scrollPct = float64(boxOffset) / float64(boxTotalLines-visibleRows)
+				if scrollPct > 1.0 { scrollPct = 1.0 }
 			}
-
-			// Clamp offset
-			if m.contextOffset < 0 {
-				m.contextOffset = 0
-			}
-			if m.contextOffset > len(itemLines)-visibleRows {
-				m.contextOffset = len(itemLines) - visibleRows
-			}
-			if m.contextOffset < 0 {
-				m.contextOffset = 0
-			}
-
-			var displayLines []string
-			for i := 0; i < visibleRows && (i+m.contextOffset) < len(itemLines); i++ {
-				line := itemLines[i+m.contextOffset]
-				// Pad to uniform width so the scrollbar column always appears at the right edge.
-				if w := lipgloss.Width(line); w < maxLineWidth {
-					line += strings.Repeat(" ", maxLineWidth-w)
-				}
-				displayLines = append(displayLines, line)
-			}
-
-			contentToRender := strings.Join(displayLines, "\n")
-
-			// Apply scrollbar — always reserve the gutter column for consistent width.
-			contentToRender, sbInfo := ApplyScrollbarColumnTracked(
-				contentToRender,
-				len(itemLines),
-				visibleRows,
-				m.contextOffset,
-				IsScrollbarEnabled(),
-				ctx.LineCharacters,
-				ctx,
-			)
-
-			contextBox = RenderBorderedBoxCtx(
-				title,
-				contentToRender,
-				maxLineWidth,
-				maxContextHeight,
-				true, // focused: true
-				true, // showIndicators: true
-				true,
-				ctx.SubmenuTitleAlign,
-				"TitleSubMenuFocused",
-				ctx,
-			)
-
-			// Scroll indicator
-			if sbInfo.Needed {
-				scrollPct := 1.0
-				if len(itemLines) > visibleRows {
-					scrollPct = float64(m.contextOffset) / float64(len(itemLines)-visibleRows)
-				}
-				if scrollPct > 1.0 {
-					scrollPct = 1.0
-				}
-
-				boxLines := strings.Split(contextBox, "\n")
-				if len(boxLines) > 0 {
-					boxLines[len(boxLines)-1] = BuildScrollPercentBottomBorder(maxLineWidth+2, scrollPct, true, ctx)
-					contextBox = strings.Join(boxLines, "\n")
-				}
+			boxLines := strings.Split(scrollBox, "\n")
+			if len(boxLines) > 0 {
+				boxLines[len(boxLines)-1] = BuildScrollPercentBottomBorder(boxTargetW+2, scrollPct, true, ctx)
+				scrollBox = strings.Join(boxLines, "\n")
 			}
 		}
 	}
 
-	// Render Legend box — shown at the bottom of every page when a legend is set.
+	// Render Legend box — shown at the bottom when a legend is set.
 	if len(legendLines) > 0 {
 		var centeredLines []string
 		for _, ll := range legendLines {
-			centeredLines = append(centeredLines, CenterText(ll, maxLineWidth))
+			centeredLines = append(centeredLines, CenterText(ll, targetWidth))
 		}
 		legendBox = RenderBorderedBoxCtx(
 			"Legend",
 			strings.Join(centeredLines, "\n"),
-			maxLineWidth,
+			targetWidth,
 			len(legendLines)+2,
 			false, // focused: false
 			true,  // showIndicators: true
@@ -540,8 +669,8 @@ func (m *HelpDialogModel) ViewString() string {
 	if pageTextBox != "" {
 		parts = append(parts, pageTextBox)
 	}
-	if contextBox != "" {
-		parts = append(parts, contextBox)
+	if scrollBox != "" {
+		parts = append(parts, scrollBox)
 	}
 	if showBindings {
 		// Render only the columns for the current binding page.
@@ -550,15 +679,15 @@ func (m *HelpDialogModel) ViewString() string {
 		for _, line := range bpLines {
 			line = strings.TrimRight(line, " ")
 			paddedLine := " " + line
-			if w := lipgloss.Width(paddedLine); w < maxLineWidth {
-				paddedLine += strings.Repeat(" ", maxLineWidth-w)
+			if w := lipgloss.Width(paddedLine); w < targetWidth {
+				paddedLine += strings.Repeat(" ", targetWidth-w)
 			}
 			bindingContent = append(bindingContent, paddedLine)
 		}
 		bindingsBox := RenderBorderedBoxCtx(
 			"Keyboard & Mouse Controls",
 			strings.Join(bindingContent, "\n"),
-			maxLineWidth,
+			targetWidth,
 			len(bpLines)+2,
 			false, // not interactive
 			true,  // showIndicators: true — reserve space to match legend/context title alignment
@@ -573,6 +702,25 @@ func (m *HelpDialogModel) ViewString() string {
 		parts = append(parts, legendBox)
 	}
 	combinedText := strings.Join(parts, "\n")
+
+	// Calculate relative position of the scrollBox for hit regions.
+	layout := GetLayout()
+	// All dialogs start inside an outer halo(2) and outer border(1).
+	// But ViewString returns the content that will be wrapped by a border and halo later.
+	// We calculate relative positions INSIDE the dialog content area.
+	// Content is padded by layout.ContentSideMargin (1) inside the outer border.
+	relativeX := layout.ContentSideMargin
+	relativeY := 0 // Relative to the start of the joined parts
+	for _, p := range parts {
+		if scrollBox != "" && p == scrollBox {
+			m.lastDocBoxX = relativeX
+			m.lastDocBoxY = relativeY
+			m.lastDocBoxW = lipgloss.Width(p)
+			m.lastDocBoxH = lipgloss.Height(p)
+		}
+		h := lipgloss.Height(p)
+		relativeY += h
+	}
 
 	content := combinedText
 	// Per-line maintenance above is sufficient — no outer wrap needed
@@ -594,10 +742,20 @@ func (m *HelpDialogModel) ViewString() string {
 	if m.paged {
 		title += fmt.Sprintf(" [%d/%d]", m.page+1, m.numPages)
 	}
-	dialogStr := RenderUniformBlockDialogCtx(title, content, ctx)
+	// Add the title and outer dialog frame.
+	// We no longer add the halo here; it is now managed by the central compositor
+	// via the HaloProvider interface.
+	return RenderUniformBlockDialogCtx(title, content, ctx)
+}
 
-	// Add the solid black halo
-	return AddPatternHalo(dialogStr, haloColor)
+// HasHalo implements HaloProvider
+func (m *HelpDialogModel) HasHalo() bool {
+	return true
+}
+
+// HaloColor implements HaloProvider
+func (m *HelpDialogModel) HaloColor() color.Color {
+	return lipgloss.Color("0") // Solid black halo
 }
 
 // View implements tea.Model
@@ -611,7 +769,7 @@ func (m *HelpDialogModel) View() tea.View {
 // Layers implements LayeredView
 func (m *HelpDialogModel) Layers() []*lipgloss.Layer {
 	return []*lipgloss.Layer{
-		lipgloss.NewLayer(m.ViewString()).Z(ZScreen + 1).ID("Dialog.Help"),
+		lipgloss.NewLayer(m.ViewString()).Z(ZScreen).ID("Dialog.Help"),
 	}
 }
 
@@ -628,30 +786,90 @@ func (m *HelpDialogModel) SetFocused(f bool) {
 
 // GetHitRegions implements HitRegionProvider for mouse hit testing
 func (m *HelpDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
-	// Help dialog has a halo (2) and a border (2).
-	// Content area starts at offsetX + 2, offsetY + 2.
-	// We'll use the full width and height for hit testing.
-
-	// Re-calculate height since HelpDialog is content-driven
+	// Make sure geometry from ViewString is fresh.
 	h := lipgloss.Height(m.ViewString())
 
 	var regions []HitRegion
 
-	// Close button (anywhere in the dialog for now, or maybe specifically at the bottom)
-	// For help dialog, we usually close on any click, but let's be more specific.
-	// Let's add an "OK" or "Close" label hit region at the bottom.
-
+	// Background catch-all for the entire dialog (lowest Z, absorbs unmatched clicks).
 	regions = append(regions, HitRegion{
 		ID:     "help_dialog",
 		X:      offsetX,
 		Y:      offsetY,
 		Width:  m.width,
 		Height: h,
-		ZOrder: ZScreen + 1,
+		ZOrder: ZScreen,
 		Label:  "Help",
 	})
+	
+	layout := GetLayout()
+	// Using offsetX (border) + 1 (border width) + SideMargin (1) = offsetX + 2.
+	// This covers the interactive area where text is displayed.
+	docBoxX := offsetX + layout.SingleBorder() + m.lastDocBoxX
+	docBoxY := offsetY + layout.SingleBorder() + m.lastDocBoxY + layout.SingleBorder()
+
+	// Restore X-axis trial adjustment to resolve reported horizontal drift.
+	docBoxX -= 1
+
+	regions = append(regions, HitRegion{
+		ID:     "help_doc_viewport",
+		X:      docBoxX,
+		Y:      docBoxY,
+		Width:  m.lastDocBoxW,
+		Height: m.lastDocBoxH,
+		ZOrder: ZScreen + 5, // Above dialog background, below scrollbar
+		Label:  "Doc Viewport",
+	})
+	
+	logger.Debug(context.Background(), "Help HitRegions: BorderRoot=(%d,%d) DocBox=(%d,%d) BoxW=%d BoxH=%d", 
+		offsetX, offsetY, docBoxX, docBoxY, m.lastDocBoxW, m.lastDocBoxH)
+
+	// 3. Scrollbar hit regions
+	if m.Scroll.Info.Needed && IsScrollbarEnabled() {
+		// The scrollbar column is the last column of the doc box content area.
+		// If docBoxX is the left border, scrollbar is at docBoxX + width - 2.
+		regions = append(regions, m.Scroll.HitRegions(docBoxX+m.lastDocBoxW-2, docBoxY, ZScreen+10, "Doc")...)
+	}
 
 	return regions
+}
+
+func (m *HelpDialogModel) docInfo() (total int, visible int) {
+	if m.contextInfo.DocMarkdown == "" {
+		return 0, 0
+	}
+
+	// Calculate target width for help content exactly matching ViewString.
+	availW, availH := GetAvailableDialogSize(m.width, m.height, true)
+	if availW < 30 {
+		availW = 30
+	}
+	targetWidth := availW - 8
+	if targetWidth < 20 {
+		targetWidth = 20
+	}
+	if targetWidth > availW {
+		targetWidth = availW
+	}
+
+	// Use rendered lines (wrapped) for accurate scrollbar math.
+	docTextW := targetWidth - 1
+	docLines := m.getDocLines(docTextW)
+	total = len(docLines)
+
+	// Available height for the doc box matching ViewString: availH - halo/outer border overhead (4)
+	maxDocBoxH := availH - 4
+	if maxDocBoxH < 5 {
+		maxDocBoxH = 5
+	}
+	visible = total
+	if visible > maxDocBoxH-2 { // -2 for top/bottom borders of the doc box itself
+		visible = maxDocBoxH - 2
+	}
+	if visible < 1 {
+		visible = 1
+	}
+	return total, visible
 }
 
 func (m *HelpDialogModel) calculateLayout() {
@@ -663,8 +881,8 @@ func (m *HelpDialogModel) calculateLayout() {
 	overhead := 4
 
 	m.layout = DialogLayout{
-		Width:    m.width,
-		Height:   0, // height is content-driven, not forced
+		Width:    0, // content-driven
+		Height:   0, // content-driven
 		Overhead: overhead,
 	}
 }

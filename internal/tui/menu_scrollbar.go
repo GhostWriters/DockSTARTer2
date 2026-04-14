@@ -37,6 +37,13 @@ type ScrollbarInfo struct {
 	Height     int  // total column height (== number of lines in content)
 	ThumbStart int  // row index of thumb top (>= 1 because row 0 is the up arrow)
 	ThumbEnd   int  // exclusive row index of thumb bottom (<= Height-1 because last row is down arrow)
+	// TotalItems and VisibleItems are the original values passed to the scrollbar compute.
+	// They are stored here so callers can compute maxOff = TotalItems - VisibleItems.
+	TotalItems   int
+	VisibleItems int
+	// HitRegions contains granular relative hit targets for the scrollbar components,
+	// anchored to the top-left of the scrollbar column itself (X=0, Y=0).
+	HitRegions []HitRegion
 }
 
 // ComputeScrollbarInfo computes scrollbar geometry without rendering anything.
@@ -61,18 +68,23 @@ func ComputeScrollbarInfo(total, visible, offset, height int) ScrollbarInfo {
 		thumbStart = 1
 	}
 	return ScrollbarInfo{
-		Needed:     true,
-		Height:     height,
-		ThumbStart: thumbStart,
-		ThumbEnd:   thumbStart + thumbH,
+		Needed:       true,
+		Height:       height,
+		ThumbStart:   thumbStart,
+		ThumbEnd:     thumbStart + thumbH,
+		TotalItems:   total,
+		VisibleItems: visible,
 	}
 }
 
-// ApplyScrollbarColumnTracked appends one scrollbar/gutter character to the right of every line
-// in content and returns the rendered string together with the scrollbar geometry.
-func ApplyScrollbarColumnTracked(content string, total, visible, offset int, enabled bool, lineChars bool, ctx StyleContext) (string, ScrollbarInfo) {
+// ApplyScrollbar appends one scrollbar/gutter character to the right of every line
+// in content and updates the provided Scrollbar's geometry and info.
+func ApplyScrollbar(sb *Scrollbar, content string, total, visible, offset int, lineChars bool, ctx StyleContext) string {
 	if content == "" && visible <= 0 {
-		return content, ScrollbarInfo{}
+		if sb != nil {
+			sb.Info = ScrollbarInfo{}
+		}
+		return content
 	}
 	// Trim trailing newline to avoid an extra blank line being treated as content.
 	content = strings.TrimSuffix(content, "\n")
@@ -83,48 +95,46 @@ func ApplyScrollbarColumnTracked(content string, total, visible, offset int, ena
 	contentH := len(lines)
 
 	// Ensure the gutter column spans the full visible height even if content is shorter.
-	// This fixes visual artifacts ("blank line" under scrollbar) and ensures hit regions
-	// for dragging cover the full container.
 	sbHeight := contentH
 	if visible > contentH {
 		sbHeight = visible
 	}
 
-	var col []string
-	var info ScrollbarInfo
+	info := ComputeScrollbarInfo(total, visible, offset, sbHeight)
+	if sb != nil {
+		sb.Info = info
+	}
 
-	if enabled {
-		info = ComputeScrollbarInfo(total, visible, offset, sbHeight)
-		col = buildScrollbarColumn(info, lineChars, ctx)
-	} else {
-		blank := lipgloss.NewStyle().Background(ctx.Dialog.GetBackground()).Render(" ")
-		col = make([]string, sbHeight)
-		for i := range col {
-			col[i] = blank
+	if !IsScrollbarEnabled() {
+		info.Needed = false
+	}
+
+	sbLines := buildScrollbarColumn(info, lineChars, ctx)
+
+	// Append each scrollbar char to each content line
+	var linesOut []string
+	for i := 0; i < sbHeight; i++ {
+		row := ""
+		if i < contentH {
+			row = lines[i]
 		}
-		info = ScrollbarInfo{Needed: false, Height: sbHeight}
+		linesOut = append(linesOut, row+sbLines[i])
 	}
 
-	// Pad lines to sbHeight with empty strings so they only receive the gutter character.
-	for len(lines) < sbHeight {
-		lines = append(lines, "")
-	}
-
-	for i, line := range lines {
-		if i < len(col) {
-			lines[i] = line + col[i]
-		}
-	}
-	return strings.Join(lines, "\n"), info
+	return strings.Join(linesOut, "\n")
 }
 
 // ApplyScrollbarColumn is the non-tracking variant kept for callers that don't need geometry.
-func ApplyScrollbarColumn(content string, total, visible, offset int, enabled bool, lineChars bool, ctx StyleContext) string {
-	result, _ := ApplyScrollbarColumnTracked(content, total, visible, offset, enabled, lineChars, ctx)
-	return result
+func ApplyScrollbarColumn(content string, total, visible, offset int, lineChars bool, ctx StyleContext) string {
+	return ApplyScrollbar(nil, content, total, visible, offset, lineChars, ctx)
 }
 
-// buildScrollbarColumn returns a slice of height styled single-character strings
+// ApplyScrollbarColumnTracked is a backward-compatibility shim for the new ApplyScrollbar helper.
+func ApplyScrollbarColumnTracked(content string, total, visible, offset int, lineChars bool, ctx StyleContext) (string, ScrollbarInfo) {
+	var sb Scrollbar
+	res := ApplyScrollbar(&sb, content, total, visible, offset, lineChars, ctx)
+	return res, sb.Info
+}
 // representing a vertical scrollbar column, given pre-computed geometry.
 //
 // When info.Needed is false the column is filled with blank styled spaces.
@@ -132,7 +142,7 @@ func buildScrollbarColumn(info ScrollbarInfo, lineChars bool, ctx StyleContext) 
 	height := info.Height
 	col := make([]string, height)
 
-	bg := ctx.Dialog.GetBackground()
+	bg := ctx.ContentBackground.GetBackground()
 	trackStyle := lipgloss.NewStyle().
 		Background(bg).
 		Foreground(ctx.Border2Color)
@@ -518,12 +528,15 @@ func ScrollbarHitRegions(baseID string, sbX, sbAbsTopY int, info ScrollbarInfo, 
 		return regions
 	}
 
+	hitX := sbX
+	hitW := 1
+
 	// Up arrow (row 0)
 	regions = append(regions, HitRegion{
 		ID:     baseID + ".sb.up",
-		X:      sbX,
+		X:      hitX,
 		Y:      sbAbsTopY,
-		Width:  1,
+		Width:  hitW,
 		Height: 1,
 		ZOrder: baseZ + 10,
 		Label:  label + " Scroll Up",
@@ -533,9 +546,9 @@ func ScrollbarHitRegions(baseID string, sbX, sbAbsTopY int, info ScrollbarInfo, 
 	if aboveH := info.ThumbStart - 1; aboveH > 0 {
 		regions = append(regions, HitRegion{
 			ID:     baseID + ".sb.above",
-			X:      sbX,
+			X:      hitX,
 			Y:      sbAbsTopY + 1,
-			Width:  1,
+			Width:  hitW,
 			Height: aboveH,
 			ZOrder: baseZ + 10,
 			Label:  label + " Page Up",
@@ -546,9 +559,9 @@ func ScrollbarHitRegions(baseID string, sbX, sbAbsTopY int, info ScrollbarInfo, 
 	if thumbH := info.ThumbEnd - info.ThumbStart; thumbH > 0 {
 		regions = append(regions, HitRegion{
 			ID:     baseID + ".sb.thumb",
-			X:      sbX,
+			X:      hitX,
 			Y:      sbAbsTopY + info.ThumbStart,
-			Width:  1,
+			Width:  hitW,
 			Height: thumbH,
 			ZOrder: baseZ + 11,
 			Label:  label + " Scroll Thumb",
@@ -559,9 +572,9 @@ func ScrollbarHitRegions(baseID string, sbX, sbAbsTopY int, info ScrollbarInfo, 
 	if belowH := (info.Height - 1) - info.ThumbEnd; belowH > 0 {
 		regions = append(regions, HitRegion{
 			ID:     baseID + ".sb.below",
-			X:      sbX,
+			X:      hitX,
 			Y:      sbAbsTopY + info.ThumbEnd,
-			Width:  1,
+			Width:  hitW,
 			Height: belowH,
 			ZOrder: baseZ + 10,
 			Label:  label + " Page Down",
@@ -571,9 +584,9 @@ func ScrollbarHitRegions(baseID string, sbX, sbAbsTopY int, info ScrollbarInfo, 
 	// Down arrow (row Height-1)
 	regions = append(regions, HitRegion{
 		ID:     baseID + ".sb.down",
-		X:      sbX,
+		X:      hitX,
 		Y:      sbAbsTopY + info.Height - 1,
-		Width:  1,
+		Width:  hitW,
 		Height: 1,
 		ZOrder: baseZ + 10,
 		Label:  label + " Scroll Down",
@@ -581,3 +594,185 @@ func ScrollbarHitRegions(baseID string, sbX, sbAbsTopY int, info ScrollbarInfo, 
 
 	return regions
 }
+
+// Scrollbar handles all state, rendering, and interaction logic for a vertical scrollbar.
+type Scrollbar struct {
+	ID string
+
+	// Geometry and state
+	Info    ScrollbarInfo
+	Drag    ScrollbarDragState
+	Pending bool // true while a wheel scroll is queued but not yet rendered
+
+	// Absolute screen coordinates (set during Render/HitRegions)
+	AbsTopY  int
+	AbsLeftX int
+}
+
+// Update processes any message that affects the scrollbar (clicks, drags, wheel).
+// Returns (newOffset, cmd, changed).
+func (s *Scrollbar) Update(msg tea.Msg, currentOffset, totalItems, visibleItems int) (int, tea.Cmd, bool) {
+	if !IsScrollbarEnabled() || totalItems <= visibleItems {
+		return currentOffset, nil, false
+	}
+	maxOff := totalItems - visibleItems
+
+	switch msg := msg.(type) {
+	case ScrollDoneMsg:
+		if msg.ID == s.ID {
+			s.Pending = false
+		}
+		return currentOffset, nil, false
+
+	case DragDoneMsg:
+		if msg.ID == s.ID {
+			s.Drag.DragPending = false
+			// Catch up to any position skipped while the render was in flight.
+			if s.Drag.PendingDragY != s.Drag.LastDragY {
+				lastY := s.Drag.PendingDragY
+				newOff, changed := s.Drag.ScrollOffset(lastY, s.AbsTopY, maxOff, s.Info)
+				if changed {
+					s.Drag.LastDragY = lastY
+					s.Drag.DragPending = true
+					return newOff, DragDoneCmd(s.ID), true
+				}
+				s.Drag.LastDragY = lastY
+			}
+		}
+		return currentOffset, nil, false
+
+	case LayerHitMsg:
+		// Component clicks (arrows and track)
+		newOff, changed := HandleScrollbarLayerHit(s.ID, msg, currentOffset, totalItems, visibleItems)
+		if changed {
+			return newOff, nil, true
+		}
+		// Drag start via hit-region
+		if strings.HasSuffix(msg.ID, ".sb.thumb") && msg.Button == tea.MouseLeft {
+			s.Drag.StartDrag(msg.Y, s.AbsTopY, s.Info)
+			return currentOffset, nil, true
+		}
+
+	case tea.MouseWheelMsg:
+		if s.Pending {
+			return currentOffset, nil, false
+		}
+		switch msg.Button {
+		case tea.MouseWheelUp:
+			newOff := currentOffset - 3
+			if newOff < 0 {
+				newOff = 0
+			}
+			if newOff != currentOffset {
+				s.Pending = true
+				return newOff, scrollDoneCmd(s.ID), true
+			}
+		case tea.MouseWheelDown:
+			newOff := currentOffset + 3
+			if newOff > maxOff {
+				newOff = maxOff
+			}
+			if newOff != currentOffset {
+				s.Pending = true
+				return newOff, scrollDoneCmd(s.ID), true
+			}
+		}
+
+	case tea.MouseMotionMsg:
+		if s.Drag.Dragging {
+			s.Drag.PendingDragY = msg.Y
+			if !s.Drag.DragPending {
+				newOff, changed := s.Drag.ScrollOffset(msg.Y, s.AbsTopY, maxOff, s.Info)
+				if changed {
+					s.Drag.LastDragY = msg.Y
+					s.Drag.DragPending = true
+					return newOff, DragDoneCmd(s.ID), true
+				}
+			}
+		}
+
+	case tea.MouseReleaseMsg:
+		if s.Drag.Dragging {
+			s.Drag.StopDrag()
+			return currentOffset, nil, true
+		}
+	}
+
+	return currentOffset, nil, false
+}
+
+// Render returns the styled scrollbar column string after updating geometry.
+func (s *Scrollbar) Render(height, total, visible, offset int, lineChars bool, ctx StyleContext) string {
+	s.Info = ComputeScrollbarInfo(total, visible, offset, height)
+	lines := buildScrollbarColumn(s.Info, lineChars, ctx)
+	return strings.Join(lines, "\n")
+}
+
+// HitRegions returns the granular hit regions for the scrollbar.
+func (s *Scrollbar) HitRegions(x, y int, baseZ int, label string) []HitRegion {
+	if !IsScrollbarEnabled() {
+		return nil
+	}
+	s.AbsLeftX = x
+	s.AbsTopY = y
+	return ScrollbarHitRegions(s.ID, x, y, s.Info, baseZ, label)
+}
+
+// HandleScrollbarLayerHit provides a centralized routine for updating a scroll offset
+// based on a LayerHitMsg from a scrollbar component.
+// It handles up/down arrows and page up/down (clicking the track above/below the thumb).
+// Returns (newOffset, changed).
+func HandleScrollbarLayerHit(baseID string, msg LayerHitMsg, currentOffset, totalItems, visibleItems int) (int, bool) {
+	if !strings.HasPrefix(msg.ID, baseID+".sb.") {
+		return currentOffset, false
+	}
+
+	maxOff := totalItems - visibleItems
+	if maxOff < 0 {
+		maxOff = 0
+	}
+
+	newOffset := currentOffset
+	changed := false
+
+	// Component behavior: arrows move by 1 line; track clicks move by a page.
+	// (Mouse wheel is handled separately by the model using CursorUp/Down or similar).
+	switch {
+	case strings.HasSuffix(msg.ID, ".sb.up"):
+		if msg.Button != HoverButton {
+			newOffset--
+			changed = true
+		}
+	case strings.HasSuffix(msg.ID, ".sb.down"):
+		if msg.Button != HoverButton {
+			newOffset++
+			changed = true
+		}
+	case strings.HasSuffix(msg.ID, ".sb.above"):
+		if msg.Button != HoverButton {
+			newOffset -= visibleItems
+			if newOffset < 0 {
+				newOffset = 0
+			}
+			changed = true
+		}
+	case strings.HasSuffix(msg.ID, ".sb.below"):
+		if msg.Button != HoverButton {
+			newOffset += visibleItems
+			if newOffset > maxOff {
+				newOffset = maxOff
+			}
+			changed = true
+		}
+	}
+
+	if newOffset < 0 {
+		newOffset = 0
+	}
+	if newOffset > maxOff {
+		newOffset = maxOff
+	}
+
+	return newOffset, changed
+}
+
