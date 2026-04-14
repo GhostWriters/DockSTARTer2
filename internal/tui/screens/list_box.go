@@ -95,7 +95,7 @@ func RenderListInBorderedBox(
 	listContent, sbInfo := tui.ApplyScrollbarColumnTracked(
 		strings.Join(listLines, "\n"),
 		totalRows, innerH, offsetRows,
-		tui.IsScrollbarEnabled(), ctx.LineCharacters, ctx,
+		ctx.LineCharacters, ctx,
 	)
 
 	titleTag := "TitleSubMenu"
@@ -175,6 +175,7 @@ func ListBoxHitRegions(
 		Height: contentH,
 		ZOrder: baseZ + 5,
 		Label:  label,
+		Help:   help,
 	})
 
 	// Scrollbar hits (detailed targets for up/down/track/thumb)

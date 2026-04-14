@@ -786,13 +786,14 @@ type MenuModel struct {
 	// Return ("", "") to keep the default item.Help text.
 	itemHelpFunc func(item MenuItem) (itemTitle, itemText string)
 
-	// Scrollbar interaction state
-	sbInfo          ScrollbarInfo             // geometry from last render (set by menu_render.go)
-	sbAbsTopY       int                       // absolute screen Y of scrollbar column top (set by GetHitRegions)
-	sbAbsLeftX      int                       // absolute screen X of scrollbar column (set by GetHitRegions)
-	sbDrag          ScrollbarDragState        // scrollbar drag tracking state (includes throttling fields)
-	scrollPending   bool                      // true while a wheel scroll is queued but not yet rendered
+	// Scrollbar component
+	Scroll Scrollbar
+
 	contextMenuFunc func(idx int) []ContextMenuItem // hook for screen-specific operations
+
+	// Optional hook to provide markdown documentation for a menu item.
+	// If set, called by HelpContext to populate docMarkdown and docAppName.
+	itemDocFunc func(item MenuItem) (docMarkdown, docAppName string)
 }
 
 // ScrollDoneMsg is sent after a wheel scroll is processed to clear the scrollPending flag.
@@ -805,20 +806,29 @@ func scrollDoneCmd(id string) tea.Cmd {
 }
 
 // ScrollPending reports whether a scroll event is currently queued but not yet rendered.
-func (m *MenuModel) ScrollPending() bool { return m.scrollPending }
+func (m *MenuModel) ScrollPending() bool { return m.Scroll.Pending }
 
 // MarkScrollPending sets the scrollPending flag and returns a Cmd that will clear it
 // after the next render cycle. Call this in interceptors after processing a wheel event.
 func (m *MenuModel) MarkScrollPending() tea.Cmd {
-	m.scrollPending = true
+	m.Scroll.Pending = true
 	return scrollDoneCmd(m.id)
 }
 
 // IsScrollbarDragging reports whether the menu is currently processing a scrollbar thumb drag.
 // AppModel uses this interface to give the active screen drag priority.
 func (m *MenuModel) IsScrollbarDragging() bool {
-	return m.sbDrag.Dragging
+	return m.Scroll.Drag.Dragging
 }
+
+// ScrollTotal returns the total scrollable units (lines or items).
+func (m *MenuModel) ScrollTotal() int {
+	if m.variableHeight {
+		return m.lastScrollTotal
+	}
+	return len(m.items)
+}
+
 
 // FocusItem represents which UI element has focus
 type FocusItem int
@@ -880,7 +890,7 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 
 	// Calculate initial width based on actual content
 	// Width = tag + spacing(2) + desc + margins(2)
-	initialWidth := maxTagLen + 2 + maxDescLen + 2
+	initialWidth := maxTagLen + 2 + maxDescLen + 2 + ScrollbarGutterWidth
 
 	// Create bubbles list
 
@@ -929,6 +939,7 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 		list:        l,
 		showExit:    true, // Default to show Exit button
 		showButtons: true, // Default to show buttons
+		Scroll:      Scrollbar{ID: id},
 	}
 }
 
@@ -963,6 +974,11 @@ func (m *MenuModel) SetHelpItemPrefix(prefix string) { m.helpItemPrefix = prefix
 // HelpContext. Return ("", "") to keep the default item.Help text.
 func (m *MenuModel) SetItemHelpFunc(f func(item MenuItem) (itemTitle, itemText string)) {
 	m.itemHelpFunc = f
+}
+
+// SetItemDocFunc sets the hook for providing markdown documentation in the help dialog.
+func (m *MenuModel) SetItemDocFunc(f func(item MenuItem) (docMarkdown, docAppName string)) {
+	m.itemDocFunc = f
 }
 
 // ID returns the unique identifier for this menu
@@ -1296,7 +1312,7 @@ func (m *MenuModel) helpContextForIdx(idx int) HelpContext {
 			pageTitle = ""
 		}
 	}
-	return HelpContext{
+	h := HelpContext{
 		ScreenName: m.title,
 		PageTitle:  pageTitle,
 		PageText:   pageText,
@@ -1304,6 +1320,12 @@ func (m *MenuModel) helpContextForIdx(idx int) HelpContext {
 		ItemTitle:  itemTitle,
 		ItemText:   itemText,
 	}
+
+	if idx >= 0 && idx < len(m.items) && m.itemDocFunc != nil {
+		h.DocMarkdown, h.DocAppName = m.itemDocFunc(m.items[idx])
+	}
+
+	return h
 }
 
 // HelpContext implements HelpContextProvider.

@@ -287,6 +287,12 @@ func (m *MenuModel) renderVariableHeightList() string {
 			lines[k] = strings.TrimRight(l, " ")
 		}
 
+		// When VariableHeight is false (Uniform mode), strictly enforce 1-line per item.
+		// This keeps the scrollbar math (which uses item indices) in sync with the renderer.
+		if !m.variableHeight {
+			lines = lines[:1]
+		}
+
 		var g0, g1 string
 		if item.IsReferenced && !item.IsGroupHeader {
 			if item.Checked {
@@ -342,7 +348,11 @@ func (m *MenuModel) renderVariableHeightList() string {
 			}
 		}
 		renderedItems = append(renderedItems, finalItem)
-		itemHeights = append(itemHeights, len(lines))
+		if m.variableHeight {
+			itemHeights = append(itemHeights, len(lines))
+		} else {
+			itemHeights = append(itemHeights, 1)
+		}
 		itemMappings = append(itemMappings, i)
 	}
 
@@ -477,9 +487,9 @@ func (m *MenuModel) renderVariableHeightList() string {
 		}
 	}
 
-	// When dragging the scrollbar, viewStartY is set explicitly by scrollbarDragTo —
+	// When dragging the scrollbar, viewStartY is set explicitly by Scrollbar.Update —
 	// skip the cursor-visibility snap so it doesn't fight the drag position.
-	if !m.sbDrag.Dragging {
+	if !m.Scroll.Drag.Dragging {
 		if currentY < m.viewStartY {
 			m.viewStartY = currentY
 		} else if currentY+selectedHeight > m.viewStartY+maxHeight {

@@ -43,6 +43,10 @@ type Layout struct {
 	ShadowWidth  int // 2 chars to the right
 	ShadowHeight int // 1 line at the bottom
 
+	// Halo (when enabled)
+	HaloWidth  int // 4 chars (2 on each side)
+	HaloHeight int // 2 lines (1 on each side)
+
 	// Margins/indents
 	EdgeIndent        int // 1 char indent from screen edge for maximized dialogs
 	GapBeforeHelpline int // 1 line gap before helpline
@@ -62,6 +66,8 @@ func DefaultLayout() Layout {
 		ButtonHeight:      3,
 		ShadowWidth:       2,
 		ShadowHeight:      1,
+		HaloWidth:         4,
+		HaloHeight:        2,
 		EdgeIndent:        1, // 1 char margin on each side of content area
 		GapBeforeHelpline: 1,
 		ContentSideMargin: 1, // 1 char margin on each side of content inside dialog border
@@ -124,19 +130,23 @@ func (l Layout) VisualGutter(hasShadow bool) int {
 
 // ContentArea returns the dimensions available for dialogs/screens
 // This is the space between header/separator and helpline
-func (l Layout) ContentArea(screenW, screenH int, hasShadow bool, headerHeight int, helplineHeight int) (width, height int) {
+func (l Layout) ContentArea(screenW, screenH int, hasShadow bool, hasHalo bool, headerHeight int, helplineHeight int) (width, height int) {
 	shadowW, shadowH := 0, 0
 	if hasShadow {
 		shadowW, shadowH = l.ShadowWidth, l.ShadowHeight
 	}
 
-	// Width: screen minus edge indents and shadow
-	width = screenW - (l.EdgeIndent * 2) - shadowW
+	haloW, haloH := 0, 0
+	if hasHalo {
+		haloW, haloH = l.HaloWidth, l.HaloHeight
+	}
 
-	// Height: screen minus top chrome, bottom chrome, and shadow
-	// Subtracting shadowH here ensures the dialog + its shadow fits
-	// ABOVE the GapBeforeHelpline, leaving that line blank.
-	height = screenH - l.ChromeHeight(headerHeight) - l.BottomChrome(helplineHeight) - shadowH
+	// Width: screen minus edge indents, shadow, and halo.
+	// We account for both though they are typically mutually exclusive.
+	width = screenW - (l.EdgeIndent * 2) - shadowW - haloW
+
+	// Height: screen minus top chrome, bottom chrome, shadow, and halo.
+	height = screenH - l.ChromeHeight(headerHeight) - l.BottomChrome(helplineHeight) - shadowH - haloH
 
 	// Ensure minimums
 	if width < 10 {
@@ -150,70 +160,78 @@ func (l Layout) ContentArea(screenW, screenH int, hasShadow bool, headerHeight i
 }
 
 // DialogPosition returns the X, Y coordinates for a dialog based on mode
-func (l Layout) DialogPosition(mode DialogMode, dialogW, dialogH, screenW, screenH int, hasShadow bool, headerHeight int) (x, y int) {
+func (l Layout) DialogPosition(mode DialogMode, dialogW, dialogH, screenW, screenH int, hasShadow bool, hasHalo bool, headerHeight int) (x, y int) {
 	contentStartY := l.ContentStartY(headerHeight)
 	shadowW, _ := 0, 0
 	if hasShadow {
 		shadowW, _ = l.ShadowWidth, l.ShadowHeight
 	}
 
+	haloW, haloHOffset := 0, 0
+	if hasHalo {
+		haloW = l.HaloWidth
+		haloHOffset = l.HaloHeight / 2 // 1 line on top
+	}
+
 	switch mode {
 	case DialogMaximized:
-		// X: edge indent from left
-		// Y: just under separator
-		return l.EdgeIndent, contentStartY
+		// X: edge indent + halo_offset
+		// Y: just under separator + halo_offset
+		return l.EdgeIndent + (haloW / 2), contentStartY + haloHOffset
 
 	case DialogVerticalMaximized:
-		// X: centered horizontally (accounting for shadow)
+		// X: centered horizontally (accounting for shadow and halo)
 		// Y: just under separator
-		x = (screenW - dialogW - shadowW) / 2
+		x = (screenW - dialogW - shadowW - haloW) / 2
 		if x < l.EdgeIndent {
 			x = l.EdgeIndent
 		}
-		return x, contentStartY
+		return x + (haloW / 2), contentStartY + haloHOffset
 
 	case DialogCentered:
 		// Center in content area
 		// Use default HelplineHeight (1) for centering if not specified
-		contentW, contentH := l.ContentArea(screenW, screenH, hasShadow, headerHeight, l.HelplineHeight)
+		contentW, contentH := l.ContentArea(screenW, screenH, hasShadow, false, headerHeight, l.HelplineHeight)
 
-		// Center horizontally in content area
-		x = l.EdgeIndent + (contentW-dialogW)/2
+		// Center horizontally in content area (accounting for halo)
+		x = l.EdgeIndent + (contentW-dialogW-haloW)/2
 		if x < l.EdgeIndent {
 			x = l.EdgeIndent
 		}
 
 		// Center vertically in content area with an optical bias (+1)
-		// Since contentH already subtracted shadowH, we don't subtract it again here.
+		// Since contentH already subtracted shadowH and haloH, we don't subtract it again here.
 		y = contentStartY + (contentH-dialogH+1)/2
 		if y < contentStartY {
 			y = contentStartY
 		}
-		return x, y
+		return x + (haloW / 2), y + haloHOffset
 
 	case DialogAbsoluteCentered:
 		// Center horizontally and vertically within the provided screenW/H
-		// Width: screen minus edge indents and shadow
-		contentW := screenW - (l.EdgeIndent * 2) - shadowW
-		x = l.EdgeIndent + (contentW-dialogW)/2
+		// Width: screen minus edge indents, shadow, and halo
+		contentWAbsolute := screenW - (l.EdgeIndent * 2) - shadowW - haloW
+		x = l.EdgeIndent + (contentWAbsolute-dialogW)/2
 		if x < l.EdgeIndent {
 			x = l.EdgeIndent
 		}
 
-		// Center vertically in screenH with an optical bias (+1)
-		y = (screenH - dialogH + 1) / 2
+		// Center vertically in screenH with an optical bias (+1) (accounting for halo top)
+		y = (screenH - dialogH - l.HaloHeight + 1) / 2
 		if y < 0 {
 			y = 0
 		}
-		return x, y
+
+		// Return the border position (lx, ly)
+		return x + (haloW / 2), y + haloHOffset
 	}
 
 	return l.EdgeIndent, contentStartY
 }
 
 // MaximizedDialogSize returns the dimensions for a maximized dialog
-func (l Layout) MaximizedDialogSize(screenW, screenH int, hasShadow bool, headerHeight int, helplineHeight int) (width, height int) {
-	return l.ContentArea(screenW, screenH, hasShadow, headerHeight, helplineHeight)
+func (l Layout) MaximizedDialogSize(screenW, screenH int, hasShadow bool, hasHalo bool, headerHeight int, helplineHeight int) (width, height int) {
+	return l.ContentArea(screenW, screenH, hasShadow, hasHalo, headerHeight, helplineHeight)
 }
 
 // -------------------------------------------------------------------
@@ -389,11 +407,11 @@ func (l Layout) ConstrainWidth(content string, maxWidth int) string {
 // -------------------------------------------------------------------
 
 // PlaceDialog returns a LayerSpec for a dialog with computed position
-func (l Layout) PlaceDialog(content string, screenW, screenH int, mode DialogMode, hasShadow bool, zIndex int, headerHeight int) LayerSpec {
+func (l Layout) PlaceDialog(content string, screenW, screenH int, mode DialogMode, hasShadow bool, hasHalo bool, zIndex int, headerHeight int) LayerSpec {
 	dialogW := lipgloss.Width(content)
 	dialogH := lipgloss.Height(content)
 
-	x, y := l.DialogPosition(mode, dialogW, dialogH, screenW, screenH, hasShadow, headerHeight)
+	x, y := l.DialogPosition(mode, dialogW, dialogH, screenW, screenH, hasShadow, hasHalo, headerHeight)
 
 	return LayerSpec{
 		Content: content,

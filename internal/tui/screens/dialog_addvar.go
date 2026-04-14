@@ -317,27 +317,18 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			// Granular scrollbar interaction:
-			if strings.HasPrefix(msg.ID, "addvar_list_box.sb.") {
+			newOff, changed := tui.HandleScrollbarLayerHit("addvar_list_box", msg, m.offset, len(m.items), m.maxVis)
+			if changed {
 				m.focus = addVarFocusList
 				m.input.Blur()
-				switch strings.TrimPrefix(msg.ID, "addvar_list_box.sb.") {
-				case "up":
-					m.moveCursor(-1)
-				case "down":
-					m.moveCursor(1)
-				case "above":
-					// Page Up
-					for i := 0; i < m.maxVis; i++ {
-						m.moveCursor(-1)
-					}
-				case "below":
-					// Page Down
-					for i := 0; i < m.maxVis; i++ {
-						m.moveCursor(1)
-					}
-				case "thumb":
-					m.sbDrag.StartDrag(msg.Y, m.sbAbsTopY, m.lastSbInfo)
-				}
+				m.offset = newOff
+				m.clampScroll()
+				return m, nil
+			}
+			if strings.HasSuffix(msg.ID, ".sb.thumb") && strings.HasPrefix(msg.ID, "addvar_list_box") {
+				m.focus = addVarFocusList
+				m.input.Blur()
+				m.sbDrag.StartDrag(msg.Y, m.sbAbsTopY, m.lastSbInfo)
 				return m, nil
 			}
 		}
@@ -518,6 +509,38 @@ func (m *addVarDialogModel) applySbDrag(mouseY int) bool {
 	}
 
 	m.offset = newIdx
+	// Sync selection (cursor) to stay within the new visible range
+	maxIdx := len(m.items) - 1
+	if m.cursor < m.offset {
+		m.cursor = m.offset
+		// Skip separators (moving down)
+		for m.cursor < maxIdx && m.items[m.cursor].kind == addVarKindSeparator {
+			m.cursor++
+		}
+	} else {
+		// Calculate last visible item index
+		lastVisibleIdx := m.offset
+		r := 0
+		for i := m.offset; i < len(m.items); i++ {
+			h := 1
+			if m.items[i].subLabel != "" {
+				h = 2
+			}
+			if r+h > m.maxVis {
+				break
+			}
+			r += h
+			lastVisibleIdx = i
+		}
+		if m.cursor > lastVisibleIdx {
+			m.cursor = lastVisibleIdx
+			// Skip separators (moving up)
+			for m.cursor > 0 && m.items[m.cursor].kind == addVarKindSeparator {
+				m.cursor--
+			}
+		}
+	}
+
 	m.clampScroll()
 	return true
 }
@@ -554,7 +577,7 @@ func (m *addVarDialogModel) recalc() {
 	// - "Available Variables" list box borders: 2
 	// - spacing/margin: 1
 	// - buttons: btnH
-	overhead := 2 + headingH + varNameH + 2 + 1 + btnH
+	overhead := 2 + headingH + varNameH + 2 + btnH
 	m.maxVis = m.height - overhead
 	if m.maxVis < 2 {
 		m.maxVis = 2

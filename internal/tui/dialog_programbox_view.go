@@ -18,7 +18,7 @@ func (m *ProgramBoxModel) ViewString() string {
 	// Apply background maintenance to captured output to prevent resets from bleeding
 	viewportContent := MaintainBackground(m.viewport.View(), ctx.Console)
 	// Sections content plus scrollbar/gutter (right slot)
-	viewportContent, m.sbInfo = ApplyScrollbarColumnTracked(viewportContent, m.viewport.TotalLineCount(), m.viewport.Height(), m.viewport.YOffset(), currentConfig.UI.Scrollbar, GetActiveContext().LineCharacters, GetActiveContext())
+	viewportContent = ApplyScrollbar(&m.Scroll, viewportContent, m.viewport.TotalLineCount(), m.viewport.Height(), m.viewport.YOffset(), GetActiveContext().LineCharacters, GetActiveContext())
 
 	// Wrap viewport in rounded inner border with console background.
 	// Disable the bottom border so we can append a custom one with the scroll indicator.
@@ -32,10 +32,9 @@ func (m *ProgramBoxModel) ViewString() string {
 		ctx.BorderFlags, ctx.Border2Flags, false)
 
 	// Append custom bottom border. Only show scroll indicator when content overflows.
-	// Calculate inner box width based on full viewport width
 	totalWidth := m.viewport.Width() + ScrollbarGutterWidth + 2
 	borderedViewport = strings.TrimSuffix(borderedViewport, "\n")
-	if m.sbInfo.Needed {
+	if m.Scroll.Info.Needed {
 		borderedViewport = borderedViewport + "\n" + BuildScrollPercentBottomBorder(totalWidth, m.viewport.ScrollPercent(), m.focused, ctx)
 	} else {
 		borderedViewport = borderedViewport + "\n" + BuildPlainBottomBorder(totalWidth, m.focused, ctx)
@@ -102,16 +101,16 @@ func (m *ProgramBoxModel) ViewString() string {
 	}
 
 	// Use JoinVertical to ensure all parts are correctly combined with their heights
-	// Trim trailing newlines from each part to avoid implicit extra lines in JoinVertical
+	// Trim trailing newlines and spaces from each part to avoid implicit extra lines in JoinVertical
 	for i, part := range contentParts {
-		contentParts[i] = strings.TrimRight(part, "\n")
+		contentParts[i] = strings.TrimRight(part, "\n ")
 	}
 	content := lipgloss.JoinVertical(lipgloss.Left, contentParts...)
 
 	// Force total content height to match the calculated budget (Total - Outer Borders - Shadow)
 	// only if maximized. Otherwise it should have its intrinsic height.
 	if m.maximized {
-		heightBudget := m.layout.Height - DialogBorderHeight - m.layout.ShadowHeight
+		heightBudget := m.layout.Height - DialogBorderHeight
 		if heightBudget > 0 {
 			content = lipgloss.NewStyle().
 				Height(heightBudget).
@@ -120,14 +119,19 @@ func (m *ProgramBoxModel) ViewString() string {
 		}
 	}
 
-	// Apply 1-char side margin so content is inset from outer border (matching menu dialogs).
+	// 6. Apply 1-char side margin so content is inset from outer border (matching menu dialogs).
 	content = lipgloss.NewStyle().
 		Background(ctx.Dialog.GetBackground()).
 		Padding(0, layout.ContentSideMargin).
 		Render(content)
 
 	// Wrap in border with title embedded (matching menu style)
-	dialogWithTitle := RenderDialog(m.title, content, true, 0)
+	// targetHeight is determined by maximization state
+	targetHeight := 0
+	if m.maximized {
+		targetHeight = m.height
+	}
+	dialogWithTitle := RenderDialog(m.title, content, true, targetHeight)
 
 	// If sub-dialog is active, overlay it
 	if m.subDialog != nil {
@@ -199,13 +203,21 @@ func (m *ProgramBoxModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	var regions []HitRegion
 
 	layout := GetLayout()
-	// Account for the 1-line spacer after the command display
-	// Viewport hit region (main output area)
-	viewportY := 1 + m.layout.HeaderHeight + m.layout.CommandHeight
+	// All dialogs start inside an outer Top Border (1 line).
+	currentY := layout.SingleBorder()
+
+	// 1. Header Area (Subtitle + Tasks + Progress)
+	headerH := m.layout.HeaderHeight
+	// 2. Command Area (Command row + Gap)
+	commandH := m.layout.CommandHeight
+
+	// viewportY is where the inner border of the viewport starts
+	viewportY := currentY + headerH + commandH
+
 	if m.layout.Width > 2 && m.layout.ViewportHeight > 0 {
 		regions = append(regions, HitRegion{
 			ID:     m.id + ".viewport",
-			X:      offsetX + layout.ContentSideMargin + 1, // outer border(1) + margin + inner border(1)
+			X:      offsetX + layout.ContentSideMargin + 1, // outer(1) + margin + inner border(1)
 			Y:      offsetY + viewportY + 1,                // +1 for inner top border
 			Width:  m.viewport.Width(),
 			Height: m.viewport.Height(),
@@ -220,45 +232,12 @@ func (m *ProgramBoxModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		})
 
 		// Scrollbar Regions
-		if currentConfig.UI.Scrollbar && m.sbInfo.Needed {
+		if currentConfig.UI.Scrollbar && m.Scroll.Info.Needed {
 			// sbX: outer border(1) + margin + inner border(1) + viewport content width
 			sbX := offsetX + layout.ContentSideMargin + 2 + m.viewport.Width()
 			// sbTopY: outer border(1) + header + command + spacer + inner top border(1) == viewportY+1
 			sbTopY := offsetY + viewportY + 1
-			m.sbAbsTopY = sbTopY
-
-			info := m.sbInfo
-			regions = append(regions, HitRegion{
-				ID: m.id + ".sb.up", X: sbX, Y: sbTopY,
-				Width: 1, Height: 1, ZOrder: ZDialog + 20,
-				Label: "Scroll Up",
-			})
-			if aboveH := info.ThumbStart - 1; aboveH > 0 {
-				regions = append(regions, HitRegion{
-					ID: m.id + ".sb.above", X: sbX, Y: sbTopY + 1,
-					Width: 1, Height: aboveH, ZOrder: ZDialog + 20,
-					Label: "Page Up",
-				})
-			}
-			if thumbH := info.ThumbEnd - info.ThumbStart; thumbH > 0 {
-				regions = append(regions, HitRegion{
-					ID: m.id + ".sb.thumb", X: sbX, Y: sbTopY + info.ThumbStart,
-					Width: 1, Height: thumbH, ZOrder: ZDialog + 21,
-					Label: "Scroll Thumb",
-				})
-			}
-			if belowH := (info.Height - 1) - info.ThumbEnd; belowH > 0 {
-				regions = append(regions, HitRegion{
-					ID: m.id + ".sb.below", X: sbX, Y: sbTopY + info.ThumbEnd,
-					Width: 1, Height: belowH, ZOrder: ZDialog + 20,
-					Label: "Page Down",
-				})
-			}
-			regions = append(regions, HitRegion{
-				ID: m.id + ".sb.down", X: sbX, Y: sbTopY + info.Height - 1,
-				Width: 1, Height: 1, ZOrder: ZDialog + 20,
-				Label: "Scroll Down",
-			})
+			regions = append(regions, m.Scroll.HitRegions(sbX, sbTopY, ZDialog+20, "Output")...)
 		}
 	}
 
@@ -280,8 +259,8 @@ func (m *ProgramBoxModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 
 	// If done, add OK button hit region using centralized helper
 	if m.done {
-		// Y = 1 (border) + headerH + commandH + spacerY + vpHeight + viewport border (2)
-		buttonY := 1 + m.layout.HeaderHeight + m.layout.CommandHeight + m.layout.ViewportHeight + 2
+		// buttonY starts after viewport + borders
+		buttonY := viewportY + m.layout.ViewportHeight + layout.BorderHeight()
 		contentWidth := m.layout.Width - layout.BorderWidth() - layout.ContentMarginWidth()
 
 		btnSpecs := []ButtonSpec{

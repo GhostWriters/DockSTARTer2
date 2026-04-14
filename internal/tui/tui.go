@@ -304,7 +304,7 @@ func StartEditor(ctx context.Context, appName string, isRoot bool) error {
 type VarEditorFactory func(
 	varName, appName, appDesc, filePath, origVal string,
 	opts []appenv.VarOption,
-	helpText string,
+	helpText, docMarkdown, docAppName string,
 	onSave func(string) tea.Cmd,
 	onCancel tea.Cmd,
 ) ScreenModel
@@ -390,7 +390,20 @@ func StartVarEditor(ctx context.Context, appName, varName, file string) error {
 
 	// Use the display-friendly app name (e.g. "Plex" not "PLEX") to match the tabbed editor
 	displayAppName := appenv.GetNiceName(ctx, metaAppName)
-	startScreen := varEditorFactory(varName, displayAppName, appDesc, file, origVal, opts, helpText, onSave, tea.Quit)
+
+	// Fetch documentation if manageable
+	docMarkdown, docAppName := "", ""
+	if metaAppName != "" {
+		if !appenv.IsAppUserDefined(ctx, metaAppName, file) {
+			doc, err := appenv.GetAppMarkdown(ctx, metaAppName)
+			if err == nil {
+				docMarkdown = doc
+				docAppName = displayAppName
+			}
+		}
+	}
+
+	startScreen := varEditorFactory(varName, displayAppName, appDesc, file, origVal, opts, helpText, docMarkdown, docAppName, onSave, tea.Quit)
 
 	model := NewAppModel(ctx, currentConfig, startScreen)
 	p := NewProgram(model)

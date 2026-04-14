@@ -150,6 +150,16 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 		}
 		return tui.GetPlainText(item.Tag), strings.Join(parts, "\n\n")
 	})
+	menu.SetItemDocFunc(func(item tui.MenuItem) (docMarkdown, docAppName string) {
+		if item.BaseApp == "" || item.IsSeparator {
+			return "", ""
+		}
+		doc, err := appenv.GetAppMarkdown(context.Background(), item.BaseApp)
+		if err != nil {
+			return "", ""
+		}
+		return doc, item.Tag
+	})
 	menu.SetButtonLabels("Done", "Back", "Exit")
 	menu.SetShowExit(true)
 	menu.SetGroupedMode(true)

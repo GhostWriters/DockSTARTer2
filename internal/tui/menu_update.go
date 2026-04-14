@@ -9,48 +9,12 @@ import (
 )
 
 func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Handle coalescing done-messages before the blanket cache invalidation.
-	// These messages carry no visual change themselves — only invalidate when
-	// they trigger a follow-up scroll/drag, avoiding spurious renders on SSH.
-	switch msg := msg.(type) {
-	case ScrollDoneMsg:
-		if msg.ID == m.id {
-			m.scrollPending = false
-		}
-		return m, nil
-
-	case DragDoneMsg:
-		if msg.ID == m.id {
-			m.sbDrag.DragPending = false
-			// Catch up to any position skipped while the render was in flight.
-			if m.sbDrag.PendingDragY != m.sbDrag.LastDragY {
-				lastY := m.sbDrag.PendingDragY
-				if m.scrollbarDragTo(lastY) {
-					m.sbDrag.LastDragY = lastY
-					m.InvalidateCache()
-					m.sbDrag.DragPending = true
-					return m, DragDoneCmd(m.id)
-				}
-				// If no row change occurred on catch-up, we still update LastDragY
-				// to avoid a permanent mismatch that would keep the loop alive.
-				m.sbDrag.LastDragY = lastY
-			}
-		}
-		return m, nil
-
-	case tea.MouseMotionMsg:
-		if m.sbDrag.Dragging {
-			m.sbDrag.PendingDragY = msg.Y // always record latest position, even if a render is in flight
-			if !m.sbDrag.DragPending {
-				if m.scrollbarDragTo(msg.Y) {
-					m.sbDrag.LastDragY = msg.Y
-					m.InvalidateCache()
-					m.sbDrag.DragPending = true
-					return m, DragDoneCmd(m.id)
-				}
-			}
-		}
-		return m, nil
+	// 1. Centralized scrollbar processing (Throttling, Clicks, Dragging)
+	if newOff, cmd, changed := m.Scroll.Update(msg, m.viewStartY, m.ScrollTotal(), m.layout.ViewportHeight); changed {
+		m.viewStartY = newOff
+		m.syncSelectionToViewport() // Ensure selection follows the manual scroll
+		m.InvalidateCache()
+		return m, cmd
 	}
 
 	// Any other incoming message (keypress, mouse event, window size) potentially
@@ -84,60 +48,14 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 
 	case tea.MouseClickMsg:
-		// Fallback for scrollbar dragging when LayerHitMsg is not dispatched (classic model_mouse logic)
-		if m.sbInfo.Needed && msg.Button == tea.MouseLeft {
-			// Check if click is within scrollbar area using absolute screen coordinates
-			if msg.X == m.sbAbsLeftX && msg.Y >= m.sbAbsTopY+m.sbInfo.ThumbStart && msg.Y < m.sbAbsTopY+m.sbInfo.ThumbEnd {
-				m.sbDrag.StartDrag(msg.Y, m.sbAbsTopY, m.sbInfo)
-				m.InvalidateCache()
-				return m, nil
-			}
-		}
 
 	case tea.MouseReleaseMsg:
-		if m.sbDrag.Dragging {
-			m.sbDrag.StopDrag()
-			m.InvalidateCache()
-		}
+		// Released is now handled by m.Scroll.Update above.
 		return m, nil
 
 	case LayerHitMsg:
-		// Scrollbar region clicks
-		if strings.HasSuffix(msg.ID, ".sb.thumb") {
-			if msg.Button == tea.MouseLeft {
-				m.sbDrag.StartDrag(msg.Y, m.sbAbsTopY, m.sbInfo)
-				m.InvalidateCache()
-			}
-			return m, nil
-		}
-		if strings.HasSuffix(msg.ID, ".sb.up") {
-			if msg.Button != HoverButton {
-				m.scrollLineUp()
-				m.InvalidateCache()
-			}
-			return m, nil
-		}
-		if strings.HasSuffix(msg.ID, ".sb.down") {
-			if msg.Button != HoverButton {
-				m.scrollLineDown()
-				m.InvalidateCache()
-			}
-			return m, nil
-		}
-		if strings.HasSuffix(msg.ID, ".sb.above") {
-			if msg.Button != HoverButton {
-				m.scrollPageUp()
-				m.InvalidateCache()
-			}
-			return m, nil
-		}
-		if strings.HasSuffix(msg.ID, ".sb.below") {
-			if msg.Button != HoverButton {
-				m.scrollPageDown()
-				m.InvalidateCache()
-			}
-			return m, nil
-		}
+
+
 
 		// Handle specific item clicks
 		id := msg.ID
@@ -243,10 +161,9 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		return m, nil
-
 	case LayerWheelMsg, tea.MouseWheelMsg:
 		// Swallow wheel events while a previous scroll is still being processed.
-		if m.scrollPending {
+		if m.ScrollPending() {
 			return m, nil
 		}
 
@@ -289,8 +206,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.cursor = m.list.Index()
 				menuSelectedIndices[m.id] = m.cursor
-				m.scrollPending = true
-				return m, scrollDoneCmd(m.id)
+				return m, m.MarkScrollPending()
 			}
 
 			// When a button is focused (hover+scroll over button row), shift focus
@@ -303,8 +219,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case tea.MouseWheelDown:
 					m.focusedItem = m.nextButtonFocus()
 				}
-				m.scrollPending = true
-				return m, scrollDoneCmd(m.id)
+				return m, m.MarkScrollPending()
 			}
 
 			switch wheelBtn {
@@ -323,8 +238,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.cursor = m.list.Index()
 			menuSelectedIndices[m.id] = m.cursor
-			m.scrollPending = true
-			return m, scrollDoneCmd(m.id)
+			return m, m.MarkScrollPending()
 		}
 
 	case tea.KeyPressMsg:
@@ -739,7 +653,7 @@ func (m *MenuModel) calculateLayout() {
 		// Full dialog overhead: borders, subtitle, buttons, shadow.
 		// DialogContentHeight uses DialogButtonHeight (3) as the constant button budget;
 		// if the width-based check dropped borders (buttonHeight = 1), add back the 2 freed lines.
-		maxListHeight = layout.DialogContentHeight(m.height, subtitleHeight, m.showButtons, hasShadow)
+		maxListHeight = layout.DialogContentHeight(m.height, subtitleHeight, m.showButtons, false) // Do not subtract shadow from inner box
 		if m.showButtons && buttonHeight != DialogButtonHeight {
 			maxListHeight += DialogButtonHeight - buttonHeight
 		}
@@ -904,95 +818,6 @@ func (m *MenuModel) scrollHalfPageDown() {
 	menuSelectedIndices[m.id] = m.cursor
 }
 
-// scrollbarDragTo updates the scroll position based on an absolute mouse Y coordinate
-// during a scrollbar thumb drag.
-//
-// Rather than mapping mouseY → list offset directly (which requires knowing grab offset
-// and has geometric edge cases), we move the thumb: compute the new thumb-top position
-// by applying the mouse delta to the thumb position at drag start, clamp within the
-// track, then invert ComputeScrollbarInfo's formula to get the list offset.
-//
-// Returns true if the scroll position changed (cache should be invalidated).
-func (m *MenuModel) scrollbarDragTo(mouseY int) bool {
-	trackH := m.sbInfo.Height - 2 // rows 1..height-2 are the track
-	if trackH < 1 {
-		return false
-	}
-
-	thumbH := m.sbInfo.ThumbEnd - m.sbInfo.ThumbStart
-	thumbTravel := trackH - thumbH // how far the thumb top can move within the track
-	if thumbTravel < 1 {
-		thumbTravel = 1
-	}
-
-	// thumbTrackStart is the 0-based position of the thumb top within the track.
-	// ScrollbarDragState.ThumbTop handles the delta-from-drag-start and clamping.
-	trackTopAbs := m.sbAbsTopY + 1 // row 0 is the up-arrow
-	thumbTrackStart := m.sbDrag.ThumbTop(mouseY, trackTopAbs, thumbTravel)
-
-	// Invert ComputeScrollbarInfo: thumbTrackStart = (trackH-thumbH)*offset/maxOff
-	// → offset = thumbTrackStart * maxOff / thumbTravel
-	total := len(m.items)
-	visible := m.layout.ViewportHeight
-
-	if m.variableHeight {
-		lineTotal := m.lastScrollTotal
-		maxOff := lineTotal - visible
-		if maxOff <= 0 {
-			return false
-		}
-		newOff := thumbTrackStart * maxOff / thumbTravel
-		if newOff > maxOff {
-			newOff = maxOff
-		}
-		if newOff == m.viewStartY {
-			return false
-		}
-		m.viewStartY = newOff
-		// Move cursor proportionally so keyboard nav stays near the dragged position.
-		if total > 0 && lineTotal > 0 {
-			approxIdx := newOff * total / lineTotal
-			if approxIdx >= total {
-				approxIdx = total - 1
-			}
-			m.list.Select(approxIdx)
-			m.cursor = m.list.Index()
-			menuSelectedIndices[m.id] = m.cursor
-		}
-		return true
-	}
-
-	maxOff := total - visible
-	if maxOff <= 0 {
-		return false
-	}
-	newOff := thumbTrackStart * maxOff / thumbTravel
-	if newOff > maxOff {
-		newOff = maxOff
-	}
-	if newOff == m.viewStartY {
-		return false
-	}
-
-	// Select the item that forces the viewport to the desired position.
-	targetIdx := newOff
-	if newOff > m.viewStartY {
-		targetIdx = newOff + visible - 1
-	}
-
-	if targetIdx >= total {
-		targetIdx = total - 1
-	}
-	if targetIdx < 0 {
-		targetIdx = 0
-	}
-
-	m.list.Select(targetIdx)
-	m.cursor = m.list.Index()
-	m.viewStartY = newOff // Sync our tracker
-	menuSelectedIndices[m.id] = m.cursor
-	return true
-}
 
 // calculateSectionLayout distributes available height among content sections.
 // Fixed sections (flowMode) get their intrinsic height; the remaining height goes
@@ -1017,8 +842,9 @@ func (m *MenuModel) calculateSectionLayout() {
 		buttonBudget = buttonHeight
 	}
 
-	// Available height inside the outer border (subtract borders and shadows).
-	innerHeight := m.height - layout.BorderHeight() - m.layout.ShadowHeight
+	// Available height inside the outer border (subtract only borders).
+	// Shadow space is handled by the outer renderer; we use all inner rows for content.
+	innerHeight := m.height - layout.BorderHeight()
 
 	// Pass 1: measure fixed sections (flow mode = intrinsic height).
 	sectionHeights := make([]int, len(m.contentSections))
@@ -1051,9 +877,11 @@ func (m *MenuModel) calculateSectionLayout() {
 		remaining = minExpandable
 	}
 
-	expandableH := remaining
-	if expandableCount > 1 {
+	expandableH := 0
+	remainder := 0
+	if expandableCount > 0 {
 		expandableH = remaining / expandableCount
+		remainder = remaining % expandableCount
 	}
 
 	// Pass 2: size each section at the inset width.
@@ -1061,6 +889,10 @@ func (m *MenuModel) calculateSectionLayout() {
 		h := sectionHeights[i]
 		if h == 0 {
 			h = expandableH
+			if remainder > 0 {
+				h++
+				remainder--
+			}
 		}
 		sec.SetSize(sectionWidth, h)
 	}
@@ -1099,4 +931,41 @@ func (m *MenuModel) HelpText() string {
 // Cursor returns the current selection index
 func (m *MenuModel) Cursor() int {
 	return m.cursor
+}
+
+// syncSelectionToViewport ensures the current selection index (m.cursor) is within
+// the visible range of the viewport [m.viewStartY, m.viewStartY + visible - 1].
+// It is called after manual scroll events (scrollbar drag, mouse wheel) to
+// satisfy the "Selection follows scroll" requirement.
+func (m *MenuModel) syncSelectionToViewport() {
+	visible := m.layout.ViewportHeight
+	if visible <= 0 || len(m.items) == 0 {
+		return
+	}
+
+	maxIdx := len(m.items) - 1
+
+	// Range [low, high]
+	low := m.viewStartY
+	high := m.viewStartY + visible - 1
+	if high > maxIdx {
+		high = maxIdx
+	}
+
+	if m.list.Index() < low {
+		m.list.Select(low)
+		// Skip separators (moving down)
+		for m.list.Index() < maxIdx && m.items[m.list.Index()].IsSeparator {
+			m.list.CursorDown()
+		}
+	} else if m.list.Index() > high {
+		m.list.Select(high)
+		// Skip separators (moving up)
+		for m.list.Index() > 0 && m.items[m.list.Index()].IsSeparator {
+			m.list.CursorUp()
+		}
+	}
+
+	m.cursor = m.list.Index()
+	menuSelectedIndices[m.id] = m.cursor
 }

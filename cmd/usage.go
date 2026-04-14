@@ -250,6 +250,12 @@ func GetUsage(target string) string {
 			"	Show the usage of the specified option",
 		)
 	}
+	if match("--man") {
+		printStr(
+			"{{|UsageCommand|}}--man{{[-]}} {{|UsageApp|}}<app>{{[-]}}",
+			"	Show documentation for the app specified",
+		)
+	}
 
 	if match("-p", "--prune") {
 		printStr(

@@ -148,21 +148,6 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		}
 	}
 
-	// 4. HELP BLOCKADE: If help is open, ANY click closes it for convenience.
-	if m.dialog != nil {
-		if _, ok := m.dialog.(*HelpDialogModel); ok {
-			if click, ok := msg.(tea.MouseClickMsg); ok {
-				var cmd tea.Cmd
-				m.dialog, cmd = m.dialog.Update(msg)
-				// If right-click, we handled closing it — stop here
-				if click.Button == tea.MouseRight {
-					return m, cmd, true
-				}
-				return m, cmd, true
-			}
-		}
-	}
-
 	// 4b. GLOBAL RIGHT-CLICK: Intercept right-click on background or anywhere
 	// if it wasn't intercepted by a modal blockade above.
 	if click, ok := msg.(tea.MouseClickMsg); ok && click.Button == tea.MouseRight {
@@ -494,13 +479,13 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 				}
 				// Dialog scrollbar thumb
 				if m.dialog != nil {
-					updated, cmd := m.dialog.Update(msg)
+					updated, cmd := m.dialog.Update(semanticMsg)
 					m.dialog = updated
 					return m, cmd, true
 				}
 				// Active screen scrollbar thumb
 				if m.activeScreen != nil {
-					updated, cmd := m.activeScreen.Update(msg)
+					updated, cmd := m.activeScreen.Update(semanticMsg)
 					if s, ok := updated.(ScreenModel); ok {
 						m.activeScreen = s
 					}
