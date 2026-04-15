@@ -831,6 +831,9 @@ func (m *HelpDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		regions = append(regions, m.Scroll.HitRegions(docBoxX+m.lastDocBoxW-2, docBoxY, ZScreen+10, "Doc")...)
 	}
 
+	// 4. Hyperlink hit regions
+	regions = append(regions, ScanForHyperlinks(m.ViewString(), offsetX, offsetY, ZScreen)...)
+
 	return regions
 }
 
