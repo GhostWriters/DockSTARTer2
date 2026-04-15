@@ -1,13 +1,13 @@
 package tui
 
 import (
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/theme"
 	"context"
 	"fmt"
 	"image/color"
 	"strings"
-
-	"DockSTARTer2/internal/logger"
 
 	"github.com/charmbracelet/x/ansi"
 
@@ -646,6 +646,11 @@ func (m *HelpDialogModel) ViewString() string {
 
 	// Render Legend box — shown at the bottom when a legend is set.
 	if len(legendLines) > 0 {
+		var footer string
+		footer = theme.ToThemeANSIWithPrefix("{{|Legend|}} Legend " + strings.Join(legendLines, " | ") + " {{|LegendReset|}} ", "HelpDialog")
+		if console.IsRemoteSession() {
+			footer += theme.ToThemeANSI("{{|Notice|}}(SSH: use Ctrl+Click for links){{[-]}} ")
+		}
 		var centeredLines []string
 		for _, ll := range legendLines {
 			centeredLines = append(centeredLines, CenterText(ll, targetWidth))
