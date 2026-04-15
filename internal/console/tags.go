@@ -174,7 +174,7 @@ func processHyperlinks(text string) string {
 	dirEscPre := regexp.QuoteMeta(DirectPrefix)
 	dirEscSuf := regexp.QuoteMeta(DirectSuffix)
 
-	pattern := fmt.Sprintf(`(%sURL%s)(.*?)(%s-%s|%sreset%s|%s-%s)`,
+	pattern := fmt.Sprintf(`((?i)%sURL%s)(.*?)(%s-%s|%sreset%s|%s-%s)`,
 		semEscPre, semEscSuf,
 		dirEscPre, dirEscSuf,
 		semEscPre, semEscSuf,
@@ -193,8 +193,8 @@ func processHyperlinks(text string) string {
 		// Group 3: The terminator (e.g., {{[-]}})
 
 		content := subMatch[2]
-		// The URL used for the link destination should have tags stripped
-		urlDestination := StripSemanticTags(content)
+		// The URL used for the link destination should have ALL tags stripped (semantic and direct)
+		urlDestination := Strip(content)
 
 		// Wrap the entire block (including style tags) in a hyperlink style
 		linkStyle := lipgloss.NewStyle().Hyperlink(urlDestination)

@@ -269,5 +269,8 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		)...)
 	}
 
+	// 5. Hyperlink hit regions
+	regions = append(regions, ScanForHyperlinks(m.ViewString(), offsetX, offsetY, baseZ)...)
+
 	return regions
 }

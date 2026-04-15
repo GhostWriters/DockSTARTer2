@@ -5,6 +5,7 @@ import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/theme"
 	"image/color"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -59,6 +60,46 @@ func (regions HitRegions) FindHit(x, y int) *HitRegion {
 		}
 	}
 	return nil
+}
+
+// ScanForHyperlinks scans a rendered string for OSC 8 hyperlinks and returns hit regions for them.
+// offsetX and offsetY are the absolute screen coordinates of the top-left of the rendered block.
+// Z is the base ZOrder for the new regions.
+func ScanForHyperlinks(rendered string, offsetX, offsetY, baseZ int) []HitRegion {
+	var regions []HitRegion
+	lines := strings.Split(rendered, "\n")
+
+	// OSC 8 Regex: \x1b]8;[params];[url]\a[content]\x1b]8;;\a
+	// We support both \x07 (BEL) and \x1b\\ (ST) as terminators.
+	re := regexp.MustCompile(`\x1b\]8;.*?;(.*?)(?:\x07|\x1b\\)(.*?)\x1b\]8;;(?:\x07|\x1b\\)`)
+
+	for y, line := range lines {
+		matches := re.FindAllStringSubmatchIndex(line, -1)
+		for _, match := range matches {
+			if len(match) < 6 {
+				continue
+			}
+			url := line[match[2]:match[3]]
+			content := line[match[4]:match[5]]
+
+			prefix := line[:match[0]]
+			// Use lipgloss.Width on prefix to get the visual X offset.
+			// Lipgloss internally handles stripping ANSI for width calculation.
+			visualX := lipgloss.Width(prefix)
+			visualW := lipgloss.Width(content)
+
+			regions = append(regions, HitRegion{
+				ID:     "link:" + url,
+				X:      offsetX + visualX,
+				Y:      offsetY + y,
+				Width:  visualW,
+				Height: 1,
+				ZOrder: baseZ + 50, // Top priority
+				Label:  "Link: " + url,
+			})
+		}
+	}
+	return regions
 }
 
 // Z-Level constants for layering (used for rendering and hit region ordering)

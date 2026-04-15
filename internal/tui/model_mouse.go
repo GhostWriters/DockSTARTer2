@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"DockSTARTer2/internal/console"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -444,6 +445,17 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 			}
 			return m, nil, true
 		default:
+			// Hyperlinks (IDs are "link:<URL>")
+			if strings.HasPrefix(hitID, "link:") {
+				if me, ok := msg.(tea.MouseClickMsg); ok && me.Button == tea.MouseLeft {
+					url := strings.TrimPrefix(hitID, "link:")
+					return m, func() tea.Msg {
+						_ = console.OpenURL(m.ctx, url)
+						return nil
+					}, true
+				}
+			}
+
 			// Log panel scrollbar hits (IDs are "log_panel.sb.*")
 			if strings.HasPrefix(hitID, IDLogPanel+".sb.") {
 				m.setLogPanelFocus(true)
