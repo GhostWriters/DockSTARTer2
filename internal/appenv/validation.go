@@ -79,10 +79,10 @@ func IsAppDeprecated(ctx context.Context, appName string) bool {
 
 // IsAppUserDefined checks if an app is user-defined (not built-in OR missing ENABLED var).
 func IsAppUserDefined(ctx context.Context, appName string, envFile string) bool {
-	appUpper := strings.ToUpper(appName)
-	if !IsAppBuiltIn(appUpper) {
+	if !IsAppBuiltIn(appName) {
 		return true
 	}
+	appUpper := strings.ToUpper(appName)
 	exists, _ := EnvVarExists(ctx, appUpper+"__ENABLED", envFile)
 	return !exists
 }
@@ -226,10 +226,10 @@ func GetFromLines(key string, lines []string) (string, bool) {
 // provided staged env lines (instead of reading from disk).
 // An app is user-defined when it is not built-in, or when APPNAME__ENABLED is absent.
 func IsAppUserDefinedFromLines(ctx context.Context, appName string, lines []string) bool {
-	appUpper := strings.ToUpper(appName)
-	if !IsAppBuiltIn(appUpper) {
+	if !IsAppBuiltIn(appName) {
 		return true
 	}
+	appUpper := strings.ToUpper(appName)
 	_, exists := GetFromLines(appUpper+"__ENABLED", lines)
 	return !exists
 }
