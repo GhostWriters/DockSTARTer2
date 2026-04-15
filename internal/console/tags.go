@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-
-	"charm.land/lipgloss/v2"
 )
 
 var (
@@ -196,9 +194,11 @@ func processHyperlinks(text string) string {
 		// The URL used for the link destination should have ALL tags stripped (semantic and direct)
 		urlDestination := Strip(content)
 
-		// Wrap the entire block (including style tags) in a hyperlink style
-		linkStyle := lipgloss.NewStyle().Hyperlink(urlDestination)
-		return linkStyle.Render(match)
+		// Manual OSC 8 sequence construction to bypass lipgloss capability detection.
+		// This ensures hyperlinks work over SSH environments where detection often fails.
+		// We use the Bell (\x07) terminator to ensure compatibility with our stable layout regex.
+		// Format: \x1b]8;[params];[url]\x07[content]\x1b]8;;\x07
+		return fmt.Sprintf("\x1b]8;;%s\x07%s\x1b]8;;\x07", urlDestination, match)
 	})
 }
 
