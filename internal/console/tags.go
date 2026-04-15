@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"charm.land/lipgloss/v2"
 )
 
 var (
@@ -163,11 +165,52 @@ func ExpandTagsWithMap(text string, styleMap map[string]string, stripUnresolvabl
 	})
 }
 
+// processHyperlinks detects {{|URL|}} blocks and wraps them in terminal hyperlink sequences.
+func processHyperlinks(text string) string {
+	// Pattern to find {{|URL|}} ... {{[-]}} or {{|-|}}
+	// We handle {{|URL|}} as a start marker and {{[-]}}, {{|reset|}}, or {{|-|}} as the end marker.
+	semEscPre := regexp.QuoteMeta(SemanticPrefix)
+	semEscSuf := regexp.QuoteMeta(SemanticSuffix)
+	dirEscPre := regexp.QuoteMeta(DirectPrefix)
+	dirEscSuf := regexp.QuoteMeta(DirectSuffix)
+
+	pattern := fmt.Sprintf(`(%sURL%s)(.*?)(%s-%s|%sreset%s|%s-%s)`,
+		semEscPre, semEscSuf,
+		dirEscPre, dirEscSuf,
+		semEscPre, semEscSuf,
+		semEscPre, semEscSuf)
+
+	re := regexp.MustCompile(pattern)
+
+	return re.ReplaceAllStringFunc(text, func(match string) string {
+		subMatch := re.FindStringSubmatch(match)
+		if len(subMatch) < 4 {
+			return match
+		}
+
+		// Group 1: {{|URL|}}
+		// Group 2: The content to wrap
+		// Group 3: The terminator (e.g., {{[-]}})
+
+		content := subMatch[2]
+		// The URL used for the link destination should have tags stripped
+		urlDestination := StripSemanticTags(content)
+
+		// Wrap the entire block (including style tags) in a hyperlink style
+		linkStyle := lipgloss.NewStyle().Hyperlink(urlDestination)
+		return linkStyle.Render(match)
+	})
+}
+
+
 // ToConsoleANSI converts semantic and direct tags to ANSI escape sequences using only console colors.
 func ToConsoleANSI(text string) string {
 	if !isTTYGlobal && !TUIMode && !IsTUIEnabled() {
 		return Strip(text)
 	}
+
+	// 0. Process Hyperlinks
+	text = processHyperlinks(text)
 
 	// 1. Expand only console tags
 	text = ExpandConsoleTags(text)
@@ -183,8 +226,10 @@ func ToThemeANSI(text string) string {
 
 // ToThemeANSIWithPrefix converts semantic and direct tags to ANSI escape sequences using only theme colors with a prefix.
 func ToThemeANSIWithPrefix(text string, prefix string) string {
-	// Prefix logic is currently handled during registration in theme.go,
-	// so we just expand theme tags.
+	// 0. Process Hyperlinks
+	text = processHyperlinks(text)
+
+	// 1. Expand theme tags
 	text = ExpandThemeTags(text, prefix)
 
 	// 2. Process all direct tags -> ANSI
