@@ -9,26 +9,24 @@ import (
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/tui"
 
-	"golang.org/x/net/websocket"
+	"github.com/coder/websocket"
 )
 
 // sessionBusyWebMsg is sent to a browser when a primary session is already active.
 const sessionBusyWebMsg = "A DockSTARTer2 session is already active.\r\nUse 'ds2 --disconnect' on the host to force-release the session.\r\n"
 
-// handleWebSocket is called for each incoming WebSocket connection.
+// handleWebSocket is called for each accepted WebSocket connection.
 // It enforces session locking and then runs the DS2 TUI over the WebSocket.
-func handleWebSocket(ctx context.Context, ws *websocket.Conn, cfg config.ServerConfig) {
-	clientAddr := ws.Request().RemoteAddr
+func handleWebSocket(ctx context.Context, conn *websocket.Conn, clientAddr string, cfg config.ServerConfig) {
+	defer conn.CloseNow()
 
 	if err := Sessions.AcquirePrimary(clientAddr); err != nil {
 		logger.Info(ctx, "Web connection rejected: session already active")
-		_ = websocket.Message.Send(ws, sessionBusyWebMsg)
-		ws.Close()
+		_ = conn.Write(ctx, websocket.MessageText, []byte(sessionBusyWebMsg))
 		return
 	}
 	defer Sessions.ReleasePrimary()
 
-	// Build a cancelable context for this session's lifetime.
 	sessCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -54,16 +52,11 @@ func handleWebSocket(ctx context.Context, ws *websocket.Conn, cfg config.ServerC
 		}
 	}()
 
-	rw := newWSReadWriter(ws)
-
-	// Start reading from the WebSocket in the background.
-	// This feeds terminal input into rw's pipe and resize events into rw.resizeCh.
+	rw := newWSReadWriter(conn)
 	go rw.readLoop(sessCtx)
 
-	// Wait for the browser's initial resize message so we know the terminal
-	// dimensions before the TUI renders its first frame. Without this, bubbletea
-	// uses a small default size and the layout appears wrong until the first
-	// window-size message arrives. Fall back to 80×24 after a short timeout.
+	// Wait for the browser's initial resize so we know terminal dimensions
+	// before the TUI renders its first frame.
 	var initialSize tui.WindowSizeEvent
 	select {
 	case sz := <-rw.resizeCh:
@@ -74,8 +67,6 @@ func handleWebSocket(ctx context.Context, ws *websocket.Conn, cfg config.ServerC
 		return
 	}
 
-	// Use xterm-256color + truecolor so bubbletea's color profile detection
-	// produces the correct result for a browser xterm.js session.
 	opts := tui.ProgramOptions{
 		Input:         rw,
 		Output:        rw,
@@ -90,7 +81,7 @@ func handleWebSocket(ctx context.Context, ws *websocket.Conn, cfg config.ServerC
 
 	if err := tui.Start(sessCtx, "", opts); err != nil {
 		logger.Error(ctx, "Web TUI session error: %v", err)
-		_ = websocket.Message.Send(ws, fmt.Sprintf("\r\nSession error: %v\r\n", err))
+		_ = conn.Write(ctx, websocket.MessageText, []byte(fmt.Sprintf("\r\nSession error: %v\r\n", err)))
 		return
 	}
 

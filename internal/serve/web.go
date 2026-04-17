@@ -15,7 +15,7 @@ import (
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/tui"
 
-	"golang.org/x/net/websocket"
+	"github.com/coder/websocket"
 )
 
 //go:embed web_static
@@ -38,14 +38,10 @@ func StartWebServer(ctx context.Context, cfg config.ServerConfig) error {
 	}
 
 	mux := http.NewServeMux()
-
-	// Serve static files (index.html, etc.)
 	mux.Handle("/", http.FileServer(http.FS(staticRoot)))
-
-	// WebSocket endpoint
-	mux.Handle("/ws", authMiddleware(cfg, websocket.Handler(func(ws *websocket.Conn) {
-		handleWebSocket(ctx, ws, cfg)
-	})))
+	mux.HandleFunc("/ws", authMiddleware(cfg, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleWebSocketHTTP(ctx, w, r, cfg)
+	})).ServeHTTP)
 
 	addr := fmt.Sprintf(":%d", cfg.Web.Port)
 	srv := &http.Server{
@@ -55,7 +51,6 @@ func StartWebServer(ctx context.Context, cfg config.ServerConfig) error {
 
 	logger.Info(ctx, "Web server listening on http://localhost%s", addr)
 
-	// Shut down when context is cancelled.
 	go func() {
 		<-ctx.Done()
 		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -70,8 +65,7 @@ func StartWebServer(ctx context.Context, cfg config.ServerConfig) error {
 }
 
 // authMiddleware wraps a handler with HTTP Basic Auth when the server auth
-// mode is "password". For "pubkey" mode it also uses password Basic Auth
-// (the stored bcrypt hash). For "none" it passes through.
+// mode is "password" or "pubkey". For "none" it passes through.
 func authMiddleware(cfg config.ServerConfig, next http.Handler) http.Handler {
 	switch cfg.Auth.Mode {
 	case "password", "pubkey":
@@ -86,9 +80,26 @@ func authMiddleware(cfg config.ServerConfig, next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	default:
-		// "none" — no auth
 		return next
 	}
+}
+
+// handleWebSocketHTTP upgrades an HTTP request to a WebSocket connection using
+// github.com/coder/websocket, which correctly handles permessage-deflate
+// negotiation and concurrent reads/writes.
+func handleWebSocketHTTP(ctx context.Context, w http.ResponseWriter, r *http.Request, cfg config.ServerConfig) {
+	clientAddr := r.RemoteAddr
+	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+		// Disable compression: our output is already-encoded ANSI byte streams
+		// that don't compress well and must not be mangled by the text codec.
+		CompressionMode: websocket.CompressionDisabled,
+	})
+	if err != nil {
+		logger.Error(ctx, "WebSocket upgrade failed: %v", err)
+		return
+	}
+	conn.SetReadLimit(1 << 20) // 1 MiB
+	handleWebSocket(ctx, conn, clientAddr, cfg)
 }
 
 // resizeMsg is the JSON structure the browser sends for terminal resize events.
@@ -98,21 +109,21 @@ type resizeMsg struct {
 	Rows int    `json:"rows"`
 }
 
-// wsReadWriter wraps a websocket.Conn as an io.ReadWriter for the TUI.
+// wsReadWriter wraps a *websocket.Conn as an io.ReadWriter for the TUI.
 // Reads come from an internal pipe fed by the WebSocket read loop.
 // Writes go directly to the WebSocket as binary frames.
 type wsReadWriter struct {
-	ws      *websocket.Conn
-	mu      sync.Mutex
-	pr      *io.PipeReader
-	pw      *io.PipeWriter
+	conn     *websocket.Conn
+	mu       sync.Mutex
+	pr       *io.PipeReader
+	pw       *io.PipeWriter
 	resizeCh chan tui.WindowSizeEvent
 }
 
-func newWSReadWriter(ws *websocket.Conn) *wsReadWriter {
+func newWSReadWriter(conn *websocket.Conn) *wsReadWriter {
 	pr, pw := io.Pipe()
 	return &wsReadWriter{
-		ws:       ws,
+		conn:     conn,
 		pr:       pr,
 		pw:       pw,
 		resizeCh: make(chan tui.WindowSizeEvent, 4),
@@ -126,48 +137,44 @@ func (w *wsReadWriter) Read(p []byte) (int, error) {
 func (w *wsReadWriter) Write(p []byte) (int, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	// Send as a binary frame so raw ANSI/UTF-8 bytes are never re-encoded
-	// by the text codec. The browser receives these as ArrayBuffer and passes
-	// them directly to xterm.js which handles the byte stream correctly.
-	buf := make([]byte, len(p))
-	copy(buf, p)
-	if err := websocket.Message.Send(w.ws, buf); err != nil {
+	// Send as a binary frame so raw ANSI/UTF-8 bytes are never re-encoded.
+	// The browser receives these as Blob/ArrayBuffer and passes them directly
+	// to xterm.js which handles the byte stream correctly.
+	err := w.conn.Write(context.Background(), websocket.MessageBinary, p)
+	if err != nil {
 		return 0, err
 	}
 	return len(p), nil
 }
 
-// readLoop pumps WebSocket messages into the pipe (terminal input) or resize channel.
-// Runs until the WebSocket closes or ctx is cancelled.
+// readLoop pumps WebSocket messages into the pipe (terminal input) or resize
+// channel. Runs until the WebSocket closes or ctx is cancelled.
 func (w *wsReadWriter) readLoop(ctx context.Context) {
 	defer w.pw.Close()
 	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-
-		var msg string
-		if err := websocket.Message.Receive(w.ws, &msg); err != nil {
+		msgType, data, err := w.conn.Read(ctx)
+		if err != nil {
 			return
 		}
 
-		// Detect resize JSON message
-		if len(msg) > 0 && msg[0] == '{' {
-			var rm resizeMsg
-			if json.Unmarshal([]byte(msg), &rm) == nil && rm.Type == "resize" && rm.Cols > 0 && rm.Rows > 0 {
-				select {
-				case w.resizeCh <- tui.WindowSizeEvent{Width: rm.Cols, Height: rm.Rows}:
-				default:
-					// Drop if channel is full — next resize will arrive shortly
+		// Text frames from the browser are either:
+		//   • JSON resize messages  {"type":"resize","cols":N,"rows":N}
+		//   • Terminal input (from xterm.js onData, always text)
+		if msgType == websocket.MessageText {
+			if len(data) > 0 && data[0] == '{' {
+				var rm resizeMsg
+				if json.Unmarshal(data, &rm) == nil && rm.Type == "resize" && rm.Cols > 0 && rm.Rows > 0 {
+					select {
+					case w.resizeCh <- tui.WindowSizeEvent{Width: rm.Cols, Height: rm.Rows}:
+					default:
+					}
+					continue
 				}
-				continue
 			}
 		}
 
-		// Terminal input — write to pipe
-		if _, err := w.pw.Write([]byte(msg)); err != nil {
+		// Everything else is terminal input bytes → pipe to TUI.
+		if _, err := w.pw.Write(data); err != nil {
 			return
 		}
 	}
