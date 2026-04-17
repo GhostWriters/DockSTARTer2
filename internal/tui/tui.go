@@ -18,7 +18,6 @@ import (
 	"DockSTARTer2/internal/update"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/charmbracelet/colorprofile"
 	"golang.org/x/term"
 )
 
@@ -108,11 +107,6 @@ type ProgramOptions struct {
 	// and terminal type are correctly detected for SSH and web sessions.
 	Environ []string
 
-	// ForceColors, when true, sets the color profile to TrueColor regardless of
-	// what the output writer reports. Required for SSH and web sessions where the
-	// output is a pipe/socket and auto-detection always returns no-color.
-	ForceColors bool
-
 	// InitialWidth and InitialHeight set the starting terminal dimensions before
 	// the first resize event arrives. Zero values are ignored.
 	InitialWidth  int
@@ -131,10 +125,21 @@ func NewProgram(model tea.Model, opts ProgramOptions) *tea.Program {
 		teaOpts = append(teaOpts, tea.WithInput(opts.Input))
 	}
 	if len(opts.Environ) > 0 {
-		teaOpts = append(teaOpts, tea.WithEnvironment(opts.Environ))
-	}
-	if opts.ForceColors {
-		teaOpts = append(teaOpts, tea.WithColorProfile(colorprofile.TrueColor))
+		// Default to TrueColor if COLORTERM is absent. This covers Windows SSH
+		// clients (e.g. Windows Terminal) that support TrueColor but don't set
+		// the COLORTERM variable, which is a Linux/Mac convention.
+		env := opts.Environ
+		hasColorterm := false
+		for _, e := range env {
+			if len(e) >= 9 && e[:9] == "COLORTERM" {
+				hasColorterm = true
+				break
+			}
+		}
+		if !hasColorterm {
+			env = append(env, "COLORTERM=truecolor")
+		}
+		teaOpts = append(teaOpts, tea.WithEnvironment(env))
 	}
 	if opts.InitialWidth > 0 && opts.InitialHeight > 0 {
 		teaOpts = append(teaOpts, tea.WithWindowSize(opts.InitialWidth, opts.InitialHeight))

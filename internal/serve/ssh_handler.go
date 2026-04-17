@@ -73,14 +73,18 @@ func tuiMiddleware(mgr *SessionManager) wish.Middleware {
 			// Pass the session environment so bubbletea picks up TERM,
 			// COLORTERM, etc. from the connecting client — this is how the
 			// wish bubbletea middleware achieves color support.
+			// Build the environment from what the client sent, ensuring TERM
+			// is set. We do NOT force a color profile — colorprofile will
+			// auto-detect from the client's COLORTERM/TERM values, so a
+			// 256-color client gets 256 colors and a TrueColor client gets
+			// TrueColor automatically.
 			envs := s.Environ()
 			envs = append(envs, "TERM="+ptyReq.Term)
 			opts := tui.ProgramOptions{
-				Input:         s,
-				Output:        s,
-				WindowSize:    makeWindowSizeChan(ptyReq, windowCh, sessCtx),
-				Environ:       envs,
-				ForceColors:   true,
+				Input:        s,
+				Output:       s,
+				WindowSize:   makeWindowSizeChan(ptyReq, windowCh, sessCtx),
+				Environ:      envs,
 				InitialWidth:  ptyReq.Window.Width,
 				InitialHeight: ptyReq.Window.Height,
 			}
