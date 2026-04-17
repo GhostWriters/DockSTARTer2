@@ -34,17 +34,13 @@ func handleServer(ctx context.Context, group *CommandGroup, state *CmdState, con
 	case "disconnect":
 		return handleServerDisconnect(ctx, state)
 	case "install":
-		logger.Warn(ctx, "Server service installation is not yet implemented.")
-		return nil
+		return handleServerInstall(ctx)
 	case "uninstall":
-		logger.Warn(ctx, "Server service uninstallation is not yet implemented.")
-		return nil
+		return handleServerUninstall(ctx)
 	case "enable":
-		logger.Warn(ctx, "Server service enable is not yet implemented.")
-		return nil
+		return handleServerEnable(ctx)
 	case "disable":
-		logger.Warn(ctx, "Server service disable is not yet implemented.")
-		return nil
+		return handleServerDisable(ctx)
 	default:
 		return fmt.Errorf("unknown server subcommand %q", sub)
 	}
@@ -126,4 +122,52 @@ func handleServerStop(ctx context.Context, state *CmdState) error {
 // handleServerDisconnect requests a graceful disconnect of the active session.
 func handleServerDisconnect(ctx context.Context, state *CmdState) error {
 	return serve.Disconnect(ctx, state.Force)
+}
+
+// handleServerInstall writes the OS service unit for the server daemon.
+func handleServerInstall(ctx context.Context) error {
+	execPath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("finding executable path: %w", err)
+	}
+	if err := serve.InstallService(execPath); err != nil {
+		return err
+	}
+	logger.Notice(ctx, "Service installed. Run 'ds2 --server enable' to start it at login.")
+	return nil
+}
+
+// handleServerUninstall removes the OS service unit for the server daemon.
+func handleServerUninstall(ctx context.Context) error {
+	if err := serve.UninstallService(); err != nil {
+		return err
+	}
+	logger.Notice(ctx, "Service uninstalled.")
+	return nil
+}
+
+// handleServerEnable enables and starts the OS service.
+func handleServerEnable(ctx context.Context) error {
+	installed, err := serve.ServiceInstalled()
+	if err != nil {
+		return err
+	}
+	if !installed {
+		logger.Warn(ctx, "Service is not installed. Run 'ds2 --server install' first.")
+		return nil
+	}
+	if err := serve.EnableService(); err != nil {
+		return err
+	}
+	logger.Notice(ctx, "Service enabled — the server will start automatically at login.")
+	return nil
+}
+
+// handleServerDisable disables (but does not uninstall) the OS service.
+func handleServerDisable(ctx context.Context) error {
+	if err := serve.DisableService(); err != nil {
+		return err
+	}
+	logger.Notice(ctx, "Service disabled — the server will no longer start automatically at login.")
+	return nil
 }
