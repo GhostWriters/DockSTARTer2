@@ -6,8 +6,8 @@ import (
 	"os"
 )
 
-// processExists reports whether a process with the given PID is running.
-func processExists(pid int) bool {
+// ProcessExists reports whether a process with the given PID is running.
+func ProcessExists(pid int) bool {
 	p, err := os.FindProcess(pid)
 	if err != nil {
 		return false

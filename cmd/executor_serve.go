@@ -92,14 +92,9 @@ func handleServeDaemon(ctx context.Context, conf *config.AppConfig) error {
 	return serve.StartSSHServer(ctx, conf.Server)
 }
 
-// handleServerStop requests a graceful shutdown of the running server.
+// handleServerStop signals the server daemon to shut down.
 func handleServerStop(ctx context.Context, state *CmdState) error {
-	info := serve.Sessions.ReadServerInfo()
-	if info.PID == 0 {
-		logger.Notice(ctx, "Server is not running.")
-		return nil
-	}
-	return serve.Disconnect(ctx, state.Force)
+	return serve.StopServer(ctx, state.Force)
 }
 
 // handleServerDisconnect requests a graceful disconnect of the active session.

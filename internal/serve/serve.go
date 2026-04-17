@@ -146,6 +146,50 @@ func StartSSHServer(ctx context.Context, cfg config.ServerConfig) error { //noli
 	return nil
 }
 
+// StopServer signals the running server daemon to shut down gracefully.
+// If force is true it kills the process immediately and clears the PID file.
+func StopServer(ctx context.Context, force bool) error {
+	info := Sessions.ReadServerInfo()
+	if info.PID == 0 || !ProcessExists(info.PID) {
+		Sessions.ReleaseServer()
+		logger.Info(ctx, "Server is not running.")
+		return nil
+	}
+
+	proc, err := os.FindProcess(info.PID)
+	if err != nil {
+		return fmt.Errorf("finding server process (PID %d): %w", info.PID, err)
+	}
+
+	if force {
+		logger.Info(ctx, "Forcing server stop (PID %d)...", info.PID)
+		_ = proc.Kill()
+		Sessions.ReleaseServer()
+		Sessions.ForceRelease()
+		Sessions.ClearDisconnectRequest()
+		logger.Notice(ctx, "Server stopped.")
+		return nil
+	}
+
+	logger.Info(ctx, "Requesting graceful server stop (PID %d)...", info.PID)
+	if err := signalProcess(proc); err != nil {
+		return fmt.Errorf("signalling server process: %w", err)
+	}
+
+	// Wait up to 10 seconds for the server PID file to be removed.
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		time.Sleep(250 * time.Millisecond)
+		if !ProcessExists(info.PID) {
+			logger.Notice(ctx, "Server stopped.")
+			return nil
+		}
+	}
+
+	logger.Warn(ctx, "Server did not stop within 10s. Use '--force --server stop' to force.")
+	return nil
+}
+
 // Disconnect requests a graceful disconnect of the active SSH session.
 // It writes a disconnect request file that the session handler watches for,
 // then waits up to 10 seconds for the session to close cleanly.

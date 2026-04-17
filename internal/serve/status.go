@@ -12,7 +12,7 @@ import (
 // so the user is aware of any running server/session before executing commands.
 func CheckStartupStatus(ctx context.Context) {
 	serverInfo := Sessions.ReadServerInfo()
-	if serverInfo.PID != 0 && processExists(serverInfo.PID) {
+	if serverInfo.PID != 0 && ProcessExists(serverInfo.PID) {
 		if serverInfo.Port > 0 {
 			logger.Warn(ctx, "SSH server is running on port {{|Highlight|}}%d{{[-]}} (PID %d).", serverInfo.Port, serverInfo.PID)
 		} else {
@@ -20,7 +20,7 @@ func CheckStartupStatus(ctx context.Context) {
 		}
 
 		sessionInfo := Sessions.ReadSessionInfo()
-		if sessionInfo.PID != 0 && processExists(sessionInfo.PID) {
+		if sessionInfo.PID != 0 && ProcessExists(sessionInfo.PID) {
 			ip := formatIP(sessionInfo.ClientIP)
 			logger.Warn(ctx, "Active SSH session connected from {{|Highlight|}}%s{{[-]}}.", ip)
 		}
@@ -30,7 +30,7 @@ func CheckStartupStatus(ctx context.Context) {
 // PrintServerStatus prints the current server and session state to the logger.
 func PrintServerStatus(ctx context.Context) {
 	serverInfo := Sessions.ReadServerInfo()
-	if serverInfo.PID == 0 || !processExists(serverInfo.PID) {
+	if serverInfo.PID == 0 || !ProcessExists(serverInfo.PID) {
 		logger.Notice(ctx, "Server: {{|Highlight|}}not running{{[-]}}")
 		return
 	}
@@ -42,7 +42,7 @@ func PrintServerStatus(ctx context.Context) {
 	}
 
 	sessionInfo := Sessions.ReadSessionInfo()
-	if sessionInfo.PID != 0 && processExists(sessionInfo.PID) {
+	if sessionInfo.PID != 0 && ProcessExists(sessionInfo.PID) {
 		ip := formatIP(sessionInfo.ClientIP)
 		logger.Notice(ctx, "Session: {{|Highlight|}}active{{[-]}} — connected from %s (PID %d)", ip, sessionInfo.PID)
 	} else {

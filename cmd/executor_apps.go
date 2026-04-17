@@ -12,6 +12,9 @@ import (
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
+	"os"
+
+	"DockSTARTer2/internal/serve"
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/update"
 	"DockSTARTer2/internal/version"
@@ -47,6 +50,28 @@ func handleConfigPm(ctx context.Context, group *CommandGroup) error {
 }
 
 func handleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, restArgs []string) error {
+	// If the server daemon is running, stop it before updating so the binary
+	// is not locked (critical on Windows) and restart it afterward with the
+	// new binary. Capture the executable path before the update replaces it.
+	serverInfo := serve.Sessions.ReadServerInfo()
+	wasServerRunning := serverInfo.PID != 0 && serve.ProcessExists(serverInfo.PID)
+
+	execPath, execErr := os.Executable()
+
+	if wasServerRunning {
+		// If we are currently connected via SSH or web, stopping the daemon
+		// will drop this session. Warn the user so they know to reconnect.
+		if serve.Sessions.IsPrimaryActive() {
+			logger.Warn(ctx, "This session is connected via the server. The server will restart after the update — "+
+				"your connection will be dropped. Reconnect once the update completes.")
+		}
+		logger.Notice(ctx, "Stopping server before update...")
+		if err := serve.StopServer(ctx, false); err != nil {
+			logger.Warn(ctx, "Could not stop server: %v — proceeding with update anyway.", err)
+		}
+	}
+
+	var updateErr error
 	switch group.Command {
 	case "-u", "--update":
 		appVer := ""
@@ -58,13 +83,13 @@ func handleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, res
 			templBranch = group.Args[1]
 		}
 		_ = update.UpdateTemplates(ctx, state.Force, state.Yes, templBranch)
-		_ = update.SelfUpdate(ctx, state.Force, state.Yes, appVer, restArgs)
+		updateErr = update.SelfUpdate(ctx, state.Force, state.Yes, appVer, restArgs)
 	case "--update-app":
 		appVer := ""
 		if len(group.Args) > 0 {
 			appVer = group.Args[0]
 		}
-		_ = update.SelfUpdate(ctx, state.Force, state.Yes, appVer, restArgs)
+		updateErr = update.SelfUpdate(ctx, state.Force, state.Yes, appVer, restArgs)
 	case "--update-templates":
 		templBranch := ""
 		if len(group.Args) > 0 {
@@ -72,6 +97,21 @@ func handleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, res
 		}
 		_ = update.UpdateTemplates(ctx, state.Force, state.Yes, templBranch)
 	}
+
+	// Restart the server daemon with the new binary if it was running before
+	// and the self-update succeeded.
+	if wasServerRunning && updateErr == nil && execErr == nil {
+		logger.Notice(ctx, "Restarting server with new binary...")
+		proc, err := serve.SpawnDaemon(execPath, nil)
+		if err != nil {
+			logger.Warn(ctx, "Failed to restart server: %v — run 'ds2 --server start' manually.", err)
+		} else {
+			logger.Notice(ctx, "Server restarted (PID %d).", proc.Pid)
+		}
+	} else if wasServerRunning && updateErr != nil {
+		logger.Warn(ctx, "Update failed — run 'ds2 --server start' to restart the server manually.")
+	}
+
 	return nil
 }
 

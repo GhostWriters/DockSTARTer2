@@ -125,7 +125,7 @@ func (m *SessionManager) ForceRelease() {
 func (m *SessionManager) cleanStaleLocks() {
 	for _, p := range []string{m.sessionLockPath, m.serverPIDPath} {
 		info, _ := readInfoFile(p)
-		if info.pid != 0 && !processExists(info.pid) {
+		if info.pid != 0 && !ProcessExists(info.pid) {
 			_ = os.Remove(p)
 		}
 	}

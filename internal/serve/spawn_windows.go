@@ -20,8 +20,8 @@ func SpawnDaemon(execPath string, extraArgs []string) (*os.Process, error) {
 		CreationFlags: detachedProcess | syscall.CREATE_NEW_PROCESS_GROUP,
 	}
 	cmd.Stdin = nil
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = nil
+	cmd.Stderr = nil
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
