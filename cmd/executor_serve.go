@@ -48,8 +48,8 @@ func handleServer(ctx context.Context, group *CommandGroup, state *CmdState, con
 }
 
 // handleServerStatus prints the current server and session state.
-func handleServerStatus(ctx context.Context, _ *config.AppConfig) error {
-	serve.PrintServerStatus(ctx)
+func handleServerStatus(ctx context.Context, conf *config.AppConfig) error {
+	serve.PrintServerStatus(ctx, conf.Server)
 	return nil
 }
 

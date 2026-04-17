@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 
+	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/logger"
 )
 
@@ -29,7 +30,7 @@ func CheckStartupStatus(ctx context.Context) {
 }
 
 // PrintServerStatus prints the current server and session state to stdout.
-func PrintServerStatus(_ context.Context) {
+func PrintServerStatus(_ context.Context, cfg config.ServerConfig) {
 	// ── Service ──────────────────────────────────────────────────────────────
 	installed, _ := ServiceInstalled()
 	if installed {
@@ -45,22 +46,27 @@ func PrintServerStatus(_ context.Context) {
 
 	// ── Server ───────────────────────────────────────────────────────────────
 	serverInfo := Sessions.ReadServerInfo()
-	if serverInfo.PID == 0 || !ProcessExists(serverInfo.PID) {
-		fmt.Println("Server:   not running")
-		fmt.Println("Session:  none")
-		return
+	serverRunning := serverInfo.PID != 0 && ProcessExists(serverInfo.PID)
+
+	if serverRunning {
+		fmt.Printf("Server:   running — SSH port %d (PID %d)\n", serverInfo.Port, serverInfo.PID)
+	} else if cfg.SSH.Port > 0 {
+		fmt.Printf("Server:   not running (configured port %d)\n", cfg.SSH.Port)
+	} else {
+		fmt.Println("Server:   not running (no port configured)")
 	}
 
-	if serverInfo.Port > 0 {
-		fmt.Printf("Server:   running — SSH port %d (PID %d)\n", serverInfo.Port, serverInfo.PID)
-	} else {
-		fmt.Printf("Server:   running (PID %d)\n", serverInfo.PID)
-	}
-	if serverInfo.WebPort > 0 {
+	if serverRunning && serverInfo.WebPort > 0 {
 		fmt.Printf("Web:      running — port %d\n", serverInfo.WebPort)
+	} else if cfg.Web.Port > 0 {
+		fmt.Printf("Web:      not running (configured port %d)\n", cfg.Web.Port)
 	}
 
 	// ── Session ───────────────────────────────────────────────────────────────
+	if !serverRunning {
+		fmt.Println("Session:  none")
+		return
+	}
 	sessionInfo := Sessions.ReadSessionInfo()
 	if sessionInfo.PID != 0 && ProcessExists(sessionInfo.PID) {
 		ip := formatIP(sessionInfo.ClientIP)

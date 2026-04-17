@@ -23,6 +23,7 @@ type SessionManager struct {
 	sessionLockPath    string // $STATE/session.lock        — active TUI session (PID\nCLIENT_IP\nCONN_TYPE)
 	serverPIDPath      string // $STATE/server.pid          — SSH server running (PID\nSSH_PORT\nWEB_PORT)
 	disconnectReqPath  string // $STATE/disconnect.request  — graceful disconnect signal
+	stopReqPath        string // $STATE/stop.request        — graceful server stop signal
 }
 
 // SessionInfo holds the details read from a session lock file.
@@ -47,6 +48,7 @@ func NewSessionManager() *SessionManager {
 		sessionLockPath:   filepath.Join(stateDir, "session.lock"),
 		serverPIDPath:     filepath.Join(stateDir, "server.pid"),
 		disconnectReqPath: filepath.Join(stateDir, "disconnect.request"),
+		stopReqPath:       filepath.Join(stateDir, "stop.request"),
 	}
 	m.cleanStaleLocks()
 	return m
@@ -175,6 +177,23 @@ func (m *SessionManager) ClearDisconnectRequest() {
 // IsDisconnectRequested reports whether a graceful disconnect has been requested.
 func (m *SessionManager) IsDisconnectRequested() bool {
 	_, err := os.Stat(m.disconnectReqPath)
+	return err == nil
+}
+
+// RequestStop writes the graceful stop request file.
+// The server watcher goroutine will close active sessions then cancel the server context.
+func (m *SessionManager) RequestStop() error {
+	return os.WriteFile(m.stopReqPath, []byte{}, 0644)
+}
+
+// ClearStopRequest removes the stop request file.
+func (m *SessionManager) ClearStopRequest() {
+	_ = os.Remove(m.stopReqPath)
+}
+
+// IsStopRequested reports whether a graceful stop has been requested.
+func (m *SessionManager) IsStopRequested() bool {
+	_, err := os.Stat(m.stopReqPath)
 	return err == nil
 }
 

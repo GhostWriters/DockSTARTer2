@@ -143,10 +143,33 @@ func StartSSHServer(ctx context.Context, cfg config.ServerConfig, startMenu stri
 		}()
 	}
 
+	// Watch for a file-based stop request (written by `ds2 --server stop`).
+	// On receipt: close any active session, then cancel the server context.
+	// This is more reliable than SIGTERM, which wish may intercept.
+	go func() {
+		ticker := time.NewTicker(500 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if Sessions.IsStopRequested() {
+					Sessions.ClearStopRequest()
+					Sessions.RequestDisconnect()
+					cancelInner()
+					return
+				}
+			}
+		}
+	}()
+
 	// Shut down gracefully when context is cancelled.
 	go func() {
 		<-ctx.Done()
-		_ = srv.Shutdown(context.Background())
+		shutCtx, shutCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer shutCancel()
+		_ = srv.Shutdown(shutCtx)
 	}()
 
 	if err := srv.ListenAndServe(); err != nil {
@@ -185,8 +208,8 @@ func StopServer(ctx context.Context, force bool) error {
 	}
 
 	logger.Info(ctx, "Requesting graceful server stop (PID %d)...", info.PID)
-	if err := signalProcess(proc); err != nil {
-		return fmt.Errorf("signalling server process: %w", err)
+	if err := Sessions.RequestStop(); err != nil {
+		return fmt.Errorf("writing stop request: %w", err)
 	}
 
 	// Wait up to 10 seconds for the server PID file to be removed.
