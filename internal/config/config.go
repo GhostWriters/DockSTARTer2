@@ -1,16 +1,21 @@
 package config
 
 import (
-	"DockSTARTer2/internal/paths"
+	_ "embed"
 	"os"
 	"os/user"
 	"path/filepath"
 	"runtime"
 	"strings"
 
+	"DockSTARTer2/internal/paths"
+
 	"github.com/adrg/xdg"
 	toml "github.com/pelletier/go-toml/v2"
 )
+
+//go:embed defaults/dockstarter2.toml
+var defaultsToml []byte
 
 // AppConfig holds the application configuration settings.
 type AppConfig struct {
@@ -136,31 +141,13 @@ func ExpandVariables(val string) string {
 }
 
 // LoadAppConfig reads the configuration file and returns the configuration.
+// defaults.toml (embedded) is always unmarshalled first; the user's file is
+// overlaid on top, so keys present in the user's file override the defaults
+// and keys absent from the user's file fall back to the embedded defaults.
 func LoadAppConfig() AppConfig {
-	conf := AppConfig{
-		UI: UIConfig{
-			Theme:             "DockSTARTer",
-			Borders:           true,
-			ButtonBorders:     true,
-			LineCharacters:    true,
-			Shadow:            true,
-			ShadowLevel:       2, // Default: medium (▒)
-			Scrollbar:         true,
-			BorderColor:       3,
-			DialogTitleAlign:  "center",
-			SubmenuTitleAlign: "left",
-			LogTitleAlign:     "center",
-		},
-		Paths: PathConfig{
-			ConfigFolder:  "${XDG_CONFIG_HOME}",
-			ComposeFolder: "${XDG_CONFIG_HOME}/compose",
-		},
-		Server: ServerConfig{
-			SSH:  SSHConfig{Port: 0},
-			Web:  WebConfig{Port: 0},
-			Auth: AuthConfig{Mode: "none"},
-		},
-	}
+	var conf AppConfig
+	// Start from embedded defaults so every key has a known baseline value.
+	_ = toml.Unmarshal(defaultsToml, &conf)
 
 	// Set architecture (runtime only)
 	conf.Arch = getArch()
@@ -168,11 +155,12 @@ func LoadAppConfig() AppConfig {
 	path := paths.GetConfigFilePath()
 	data, err := os.ReadFile(path)
 	if err == nil {
-		// Found TOML config
+		// Overlay user config on top of defaults.
 		if err := toml.Unmarshal(data, &conf); err == nil {
-			// Save raw (unexpanded) values for display purposes
+			// Write back the merged config so any keys missing from the user's
+			// file (e.g. added in a newer version) are filled in automatically.
+			_ = SaveAppConfig(conf)
 			conf.RawPaths = conf.Paths
-			// Expand variables in paths for runtime use
 			conf.Paths.ConfigFolder = filepath.Clean(ExpandVariables(conf.Paths.ConfigFolder))
 			conf.Paths.ComposeFolder = filepath.Clean(ExpandVariables(conf.Paths.ComposeFolder))
 			conf.ConfigDir = conf.Paths.ConfigFolder
@@ -181,11 +169,12 @@ func LoadAppConfig() AppConfig {
 		}
 	}
 
-	// No config found; save defaults to TOML (with template variables, not expanded)
-	_ = SaveAppConfig(conf)
-	// Save raw (unexpanded) values for display purposes
+	// No user config found; write the embedded defaults to disk (preserving comments).
+	cfgPath := paths.GetConfigFilePath()
+	if err := os.MkdirAll(filepath.Dir(cfgPath), 0755); err == nil {
+		_ = os.WriteFile(cfgPath, defaultsToml, 0644)
+	}
 	conf.RawPaths = conf.Paths
-	// Expand after saving so the on-disk file retains ${XDG_CONFIG_HOME} references
 	conf.Paths.ConfigFolder = filepath.Clean(ExpandVariables(conf.Paths.ConfigFolder))
 	conf.Paths.ComposeFolder = filepath.Clean(ExpandVariables(conf.Paths.ComposeFolder))
 	conf.ConfigDir = conf.Paths.ConfigFolder
