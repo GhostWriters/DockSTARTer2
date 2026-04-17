@@ -23,3 +23,7 @@ func DisableService() error {
 func ServiceInstalled() (bool, error) {
 	return false, nil
 }
+
+func ServiceEnabled() (bool, error) {
+	return false, nil
+}

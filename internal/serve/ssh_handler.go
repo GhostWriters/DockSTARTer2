@@ -26,7 +26,11 @@ func tuiMiddleware(mgr *SessionManager, startMenu string) wish.Middleware {
 			ctx := s.Context()
 
 			clientIP := s.RemoteAddr().String()
-			if err := mgr.AcquirePrimary(clientIP); err != nil {
+			connType := "ssh"
+			if s.User() == "web" {
+				connType = "web"
+			}
+			if err := mgr.AcquirePrimary(clientIP, connType); err != nil {
 				logger.Info(ctx, "SSH connection rejected: session already active")
 				fmt.Fprint(s, sessionBusyMsg)
 				_ = s.Exit(1)

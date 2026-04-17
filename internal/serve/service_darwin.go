@@ -98,6 +98,16 @@ func ServiceInstalled() (bool, error) {
 	return err == nil, err
 }
 
+// ServiceEnabled checks whether the launch agent is currently loaded.
+func ServiceEnabled() (bool, error) {
+	plistPath, err := launchAgentPath()
+	if err != nil {
+		return false, err
+	}
+	_, statErr := os.Stat(plistPath)
+	return statErr == nil, nil
+}
+
 func launchctl(args ...string) error {
 	out, err := exec.Command("launchctl", args...).CombinedOutput()
 	if err != nil {

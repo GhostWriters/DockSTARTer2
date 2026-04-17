@@ -29,24 +29,47 @@ func CheckStartupStatus(ctx context.Context) {
 
 // PrintServerStatus prints the current server and session state to the logger.
 func PrintServerStatus(ctx context.Context) {
+	// ── Service ──────────────────────────────────────────────────────────────
+	installed, _ := ServiceInstalled()
+	if installed {
+		enabled, _ := ServiceEnabled()
+		if enabled {
+			logger.Notice(ctx, "Service:  {{|Success|}}installed{{[-]}} and {{|Success|}}enabled{{[-]}} (starts at login)")
+		} else {
+			logger.Notice(ctx, "Service:  {{|Highlight|}}installed{{[-]}} but {{|Highlight|}}disabled{{[-]}} (won't start at login)")
+		}
+	} else {
+		logger.Notice(ctx, "Service:  not installed")
+	}
+
+	// ── Server ───────────────────────────────────────────────────────────────
 	serverInfo := Sessions.ReadServerInfo()
 	if serverInfo.PID == 0 || !ProcessExists(serverInfo.PID) {
-		logger.Notice(ctx, "Server: {{|Highlight|}}not running{{[-]}}")
+		logger.Notice(ctx, "Server:   {{|Highlight|}}not running{{[-]}}")
+		logger.Notice(ctx, "Session:  none")
 		return
 	}
 
 	if serverInfo.Port > 0 {
-		logger.Notice(ctx, "Server: {{|Success|}}running{{[-]}} — SSH port {{|Highlight|}}%d{{[-]}} (PID %d)", serverInfo.Port, serverInfo.PID)
+		logger.Notice(ctx, "Server:   {{|Success|}}running{{[-]}} — SSH port {{|Highlight|}}%d{{[-]}} (PID %d)", serverInfo.Port, serverInfo.PID)
 	} else {
-		logger.Notice(ctx, "Server: {{|Success|}}running{{[-]}} (PID %d)", serverInfo.PID)
+		logger.Notice(ctx, "Server:   {{|Success|}}running{{[-]}} (PID %d)", serverInfo.PID)
+	}
+	if serverInfo.WebPort > 0 {
+		logger.Notice(ctx, "Web:      {{|Success|}}running{{[-]}} — port {{|Highlight|}}%d{{[-]}}", serverInfo.WebPort)
 	}
 
+	// ── Session ───────────────────────────────────────────────────────────────
 	sessionInfo := Sessions.ReadSessionInfo()
 	if sessionInfo.PID != 0 && ProcessExists(sessionInfo.PID) {
 		ip := formatIP(sessionInfo.ClientIP)
-		logger.Notice(ctx, "Session: {{|Highlight|}}active{{[-]}} — connected from %s (PID %d)", ip, sessionInfo.PID)
+		connType := sessionInfo.ConnType
+		if connType == "" {
+			connType = "ssh"
+		}
+		logger.Notice(ctx, "Session:  {{|Highlight|}}active{{[-]}} — %s connection from {{|Highlight|}}%s{{[-]}} (PID %d)", connType, ip, sessionInfo.PID)
 	} else {
-		logger.Notice(ctx, "Session: no active session")
+		logger.Notice(ctx, "Session:  none")
 	}
 }
 

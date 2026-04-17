@@ -116,7 +116,11 @@ func StartSSHServer(ctx context.Context, cfg config.ServerConfig, startMenu stri
 
 	logger.Info(ctx, "SSH server listening on %s", addr)
 
-	if err := Sessions.AcquireServer(cfg.SSH.Port); err != nil {
+	webPort := 0
+	if cfg.Web.Port > 0 {
+		webPort = cfg.Web.Port
+	}
+	if err := Sessions.AcquireServer(cfg.SSH.Port, webPort); err != nil {
 		logger.Warn(ctx, "Could not write server PID file: %v", err)
 	}
 	defer Sessions.ReleaseServer()

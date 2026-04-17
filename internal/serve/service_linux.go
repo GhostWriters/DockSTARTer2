@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"text/template"
 )
 
@@ -83,6 +84,14 @@ func ServiceInstalled() (bool, error) {
 		return false, nil
 	}
 	return err == nil, err
+}
+
+func ServiceEnabled() (bool, error) {
+	out, err := exec.Command("systemctl", "--user", "is-enabled", systemdUnitName).Output()
+	if err != nil {
+		return false, nil // not-found or disabled both return non-zero
+	}
+	return strings.TrimSpace(string(out)) == "enabled", nil
 }
 
 func systemctlUser(args ...string) error {

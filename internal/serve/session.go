@@ -20,8 +20,8 @@ type SessionManager struct {
 	mu            sync.Mutex
 	primaryActive bool
 
-	sessionLockPath    string // $STATE/session.lock        — active TUI session (PID\nCLIENT_IP)
-	serverPIDPath      string // $STATE/server.pid          — SSH server running (PID\nPORT)
+	sessionLockPath    string // $STATE/session.lock        — active TUI session (PID\nCLIENT_IP\nCONN_TYPE)
+	serverPIDPath      string // $STATE/server.pid          — SSH server running (PID\nSSH_PORT\nWEB_PORT)
 	disconnectReqPath  string // $STATE/disconnect.request  — graceful disconnect signal
 }
 
@@ -29,12 +29,14 @@ type SessionManager struct {
 type SessionInfo struct {
 	PID      int
 	ClientIP string // empty if not available
+	ConnType string // "ssh" or "web"
 }
 
 // ServerInfo holds the details read from a server PID file.
 type ServerInfo struct {
-	PID  int
-	Port int
+	PID     int
+	Port    int // SSH port
+	WebPort int // web port (0 if web server not running)
 }
 
 // NewSessionManager creates a SessionManager and cleans up any stale lock
@@ -58,16 +60,16 @@ func (m *SessionManager) IsPrimaryActive() bool {
 }
 
 // AcquirePrimary marks a primary session as active and writes the session
-// lock file including the client IP address.
+// lock file including the client IP and connection type ("ssh" or "web").
 // Returns an error if a session is already active.
-func (m *SessionManager) AcquirePrimary(clientIP string) error {
+func (m *SessionManager) AcquirePrimary(clientIP, connType string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.primaryActive {
 		return fmt.Errorf("a session is already active")
 	}
 	m.primaryActive = true
-	return writeInfoFile(m.sessionLockPath, os.Getpid(), clientIP)
+	return writeInfoFile(m.sessionLockPath, os.Getpid(), clientIP, connType)
 }
 
 // ReleasePrimary clears the primary session flag and removes the lock file.
@@ -78,10 +80,10 @@ func (m *SessionManager) ReleasePrimary() {
 	_ = os.Remove(m.sessionLockPath)
 }
 
-// AcquireServer writes the server PID file with the listening port.
+// AcquireServer writes the server PID file with the SSH and web listening ports.
 // Called when the SSH server starts successfully.
-func (m *SessionManager) AcquireServer(port int) error {
-	return writeInfoFile(m.serverPIDPath, os.Getpid(), strconv.Itoa(port))
+func (m *SessionManager) AcquireServer(sshPort, webPort int) error {
+	return writeInfoFile(m.serverPIDPath, os.Getpid(), strconv.Itoa(sshPort), strconv.Itoa(webPort))
 }
 
 // ReleaseServer removes the server PID file.
@@ -100,16 +102,29 @@ func (m *SessionManager) SessionLockPID() int {
 // ReadSessionInfo returns the session info from the lock file.
 // Returns zero-value SessionInfo if no session is active.
 func (m *SessionManager) ReadSessionInfo() SessionInfo {
-	info, extra := readInfoFile(m.sessionLockPath)
-	return SessionInfo{PID: info.pid, ClientIP: extra}
+	info, fields := readInfoFile(m.sessionLockPath)
+	si := SessionInfo{PID: info.pid}
+	if len(fields) > 0 {
+		si.ClientIP = fields[0]
+	}
+	if len(fields) > 1 {
+		si.ConnType = fields[1]
+	}
+	return si
 }
 
 // ReadServerInfo returns the server info from the PID file.
 // Returns zero-value ServerInfo if the server is not running.
 func (m *SessionManager) ReadServerInfo() ServerInfo {
-	info, extra := readInfoFile(m.serverPIDPath)
-	port, _ := strconv.Atoi(extra)
-	return ServerInfo{PID: info.pid, Port: port}
+	info, fields := readInfoFile(m.serverPIDPath)
+	si := ServerInfo{PID: info.pid}
+	if len(fields) > 0 {
+		si.Port, _ = strconv.Atoi(fields[0])
+	}
+	if len(fields) > 1 {
+		si.WebPort, _ = strconv.Atoi(fields[1])
+	}
+	return si
 }
 
 // ForceRelease removes the session lock file regardless of state.
@@ -136,12 +151,12 @@ type infoFile struct {
 	pid int
 }
 
-// writeInfoFile writes a two-line file: PID on line 1, extra on line 2.
-func writeInfoFile(path string, pid int, extra string) error {
+// writeInfoFile writes a file: PID on line 1, each extra field on subsequent lines.
+func writeInfoFile(path string, pid int, extras ...string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
-	content := strconv.Itoa(pid) + "\n" + extra + "\n"
+	content := strconv.Itoa(pid) + "\n" + strings.Join(extras, "\n") + "\n"
 	return os.WriteFile(path, []byte(content), 0644)
 }
 
@@ -163,20 +178,20 @@ func (m *SessionManager) IsDisconnectRequested() bool {
 	return err == nil
 }
 
-// readInfoFile parses a two-line lock file. Returns pid and extra string.
-func readInfoFile(path string) (infoFile, string) {
+// readInfoFile parses a lock file. Returns pid and all extra fields as a slice.
+func readInfoFile(path string) (infoFile, []string) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return infoFile{}, ""
+		return infoFile{}, nil
 	}
-	lines := strings.SplitN(strings.TrimRight(string(data), "\n"), "\n", 2)
+	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
 	pid, err := strconv.Atoi(strings.TrimSpace(lines[0]))
 	if err != nil {
-		return infoFile{}, ""
+		return infoFile{}, nil
 	}
-	extra := ""
-	if len(lines) > 1 {
-		extra = strings.TrimSpace(lines[1])
+	var extras []string
+	for _, l := range lines[1:] {
+		extras = append(extras, strings.TrimSpace(l))
 	}
-	return infoFile{pid: pid}, extra
+	return infoFile{pid: pid}, extras
 }
