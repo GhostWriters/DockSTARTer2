@@ -175,7 +175,7 @@ func RunDialogWithBackdrop[T DialogModel](dialog T, helpText string, position Di
 
 	wrapper := NewDialogWithBackdrop(dialog, helpText).WithPosition(position)
 
-	p := NewProgram(wrapper)
+	p := NewProgram(wrapper, ProgramOptions{})
 	finalModel, err := p.Run()
 
 	// Reset terminal colors on exit to prevent "bleeding" into the shell prompt

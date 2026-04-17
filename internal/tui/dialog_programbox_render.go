@@ -339,7 +339,7 @@ func RunProgramBox(ctx context.Context, title, subtitle string, task func(contex
 	model := NewAppModelStandalone(ctx, currentConfig, dialogModel)
 
 	// Create Bubble Tea program
-	p := NewProgram(model)
+	p := NewProgram(model, ProgramOptions{})
 
 	registerCallbacks()
 	defer func() {

@@ -107,4 +107,8 @@ func InitFlags() {
 	// Testing
 	pflag.StringP("test", "t", "", "Run test script")
 	pflag.String("man", "", "Show documentation for application")
+
+	// Server
+	pflag.Bool("serve", false, "Start SSH server (uses settings from dockstarter2.toml)")
+	pflag.Bool("disconnect", false, "Disconnect the active remote session and release the session lock")
 }

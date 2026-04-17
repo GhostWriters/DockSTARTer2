@@ -14,14 +14,40 @@ import (
 
 // AppConfig holds the application configuration settings.
 type AppConfig struct {
-	UI    UIConfig   `toml:"ui"`
-	Paths PathConfig `toml:"paths"`
+	UI     UIConfig     `toml:"ui"`
+	Paths  PathConfig   `toml:"paths"`
+	Server ServerConfig `toml:"server"`
 
 	// These are helper fields for runtime use, not saved to TOML
 	Arch       string     `toml:"-"`
 	ConfigDir  string     `toml:"-"`
 	ComposeDir string     `toml:"-"`
 	RawPaths   PathConfig `toml:"-"` // Unexpanded values as read from TOML
+}
+
+// ServerConfig holds SSH and web server settings.
+// The server is disabled by default; the user must explicitly enable it and
+// choose ports to avoid conflicts with apps DS2 manages.
+type ServerConfig struct {
+	Enabled  bool      `toml:"enabled"`   // Master switch; false = no server at all
+	SSHPort  int       `toml:"ssh_port"`  // TCP port for the SSH server (0 = not set)
+	Web      WebConfig `toml:"web"`
+	Auth     AuthConfig `toml:"auth"`
+	HostKey  string    `toml:"host_key"`  // Path to persistent host key file
+}
+
+// WebConfig holds settings for the optional xterm.js web frontend.
+type WebConfig struct {
+	Enabled bool `toml:"enabled"`  // Requires Server.Enabled = true
+	Port    int  `toml:"port"`     // TCP port for the HTTP/WebSocket server (0 = not set)
+}
+
+// AuthConfig holds authentication settings for the SSH server.
+type AuthConfig struct {
+	// Mode: "password", "pubkey", or "none" (none prints a warning on startup)
+	Mode         string `toml:"mode"`
+	Password     string `toml:"password"`      // bcrypt hash of the password
+	AuthKeysFile string `toml:"auth_keys_file"` // Path to authorized_keys file
 }
 
 // UIConfig holds user interface related settings.

@@ -20,6 +20,12 @@ func NewOptionsMenuScreen(isRoot bool) tui.ScreenModel {
 			Action: func() tea.Msg { return tui.NavigateMsg{Screen: NewDisplayOptionsScreen(false)} },
 		},
 		{
+			Tag:    "Server",
+			Desc:   "SSH and Web Server Settings",
+			Help:   "Configure remote access to the DS2 TUI via SSH or browser",
+			Action: func() tea.Msg { return tui.NavigateMsg{Screen: NewServerOptionsScreen(false)} },
+		},
+		{
 			Tag:    "Trigger Test Panic",
 			Desc:   "{{|TitleError|}}Test error handling{{[-]}}",
 			Help:   "Verify branded recovery and stack trace",
