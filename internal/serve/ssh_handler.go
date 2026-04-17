@@ -80,6 +80,7 @@ func tuiMiddleware(mgr *SessionManager) wish.Middleware {
 				Output:        s,
 				WindowSize:    makeWindowSizeChan(ptyReq, windowCh, sessCtx),
 				Environ:       envs,
+				ForceColors:   true,
 				InitialWidth:  ptyReq.Window.Width,
 				InitialHeight: ptyReq.Window.Height,
 			}

@@ -81,6 +81,7 @@ func handleWebSocket(ctx context.Context, ws *websocket.Conn, cfg config.ServerC
 		Output:        rw,
 		WindowSize:    rw.resizeCh,
 		Environ:       []string{"TERM=xterm-256color", "COLORTERM=truecolor"},
+		ForceColors:   true,
 		InitialWidth:  initialSize.Width,
 		InitialHeight: initialSize.Height,
 	}
