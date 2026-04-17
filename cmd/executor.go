@@ -68,6 +68,7 @@ var commandDefs = map[string]commandDef{
 	"--theme-extract":            {title: "Extract Theme"},
 	"--theme-extract-all":        {title: "Extract All Themes"},
 	"--server":                   {title: "Server Management"},
+	"--server-daemon":            {title: "Server Daemon"},
 
 	// ── Session-locked (modifies env files / shared state) ───────────────────
 	"-a":                         {title: "Add Application",             sessionLocked: true},
@@ -350,6 +351,9 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			case "--server":
 				ranCommand = true
 				return handleServer(subCtx, &group, &state, &conf)
+			case "--server-daemon":
+				ranCommand = true
+				return handleServeDaemon(subCtx, &conf)
 			default:
 				// Custom command logic would be hooked in here.
 				// If we just had flags (group.Command == ""), ranCommand remains false

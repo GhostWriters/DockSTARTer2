@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/logger"
@@ -55,7 +56,7 @@ func handleServerStatus(ctx context.Context, _ *config.AppConfig) error {
 	return nil
 }
 
-// handleServerStart spawns the server as a background process.
+// handleServerStart spawns the server as a background daemon process.
 // It validates the config before attempting to start.
 func handleServerStart(ctx context.Context, conf *config.AppConfig) error {
 	if !conf.Server.Enabled {
@@ -74,9 +75,25 @@ func handleServerStart(ctx context.Context, conf *config.AppConfig) error {
 		return nil
 	}
 
+	execPath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("finding executable path: %w", err)
+	}
+
 	logger.Notice(ctx, "Starting server in the background...")
-	logger.Warn(ctx, "Background server start is not yet implemented — coming in Stage 3.")
+	proc, err := serve.SpawnDaemon(execPath, nil)
+	if err != nil {
+		return fmt.Errorf("spawning server daemon: %w", err)
+	}
+	logger.Notice(ctx, "Server started (PID %d).", proc.Pid)
 	return nil
+}
+
+// handleServeDaemon is the internal handler for --server-daemon.
+// It runs the blocking SSH (and web) server loop. Never called directly by
+// the user — only invoked when --server start re-execs the binary.
+func handleServeDaemon(ctx context.Context, conf *config.AppConfig) error {
+	return serve.StartSSHServer(ctx, conf.Server)
 }
 
 // handleServerStop requests a graceful shutdown of the running server.

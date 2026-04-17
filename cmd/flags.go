@@ -110,4 +110,9 @@ func InitFlags() {
 
 	// Server
 	pflag.String("server", "", "Server management (status, start, stop, restart, disconnect, install, uninstall, enable, disable)")
+
+	// Internal — used by --server start to re-exec as a background daemon.
+	// Not shown in help output.
+	pflag.Bool("server-daemon", false, "")
+	_ = pflag.CommandLine.MarkHidden("server-daemon")
 }
