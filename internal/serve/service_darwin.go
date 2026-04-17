@@ -87,6 +87,11 @@ func buildDaemonData(execPath string) (launchDaemonData, error) {
 		{"XDG_STATE_HOME", xdg.StateHome},
 		{"XDG_CACHE_HOME", xdg.CacheHome},
 	}
+	for _, key := range []string{"PATH", "DOCKER_HOST", "XDG_RUNTIME_DIR", "LANG", "LC_ALL"} {
+		if val := os.Getenv(key); val != "" {
+			envPairs = append(envPairs, envPair{key, val})
+		}
+	}
 
 	return launchDaemonData{
 		Label:    launchDaemonLabel,
