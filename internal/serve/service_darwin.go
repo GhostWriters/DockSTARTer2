@@ -3,21 +3,41 @@
 package serve
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"os"
-	"os/exec"
+	"os/user"
 	"path/filepath"
+	"strings"
 	"text/template"
+
+	dsexec "DockSTARTer2/internal/exec"
+	"github.com/adrg/xdg"
 )
 
-const launchAgentLabel = "com.dockstarter2.server"
+const launchDaemonLabel = "com.dockstarter2.server"
+const launchDaemonDir = "/Library/LaunchDaemons"
 
-var launchAgentTemplate = template.Must(template.New("plist").Parse(`<?xml version="1.0" encoding="UTF-8"?>
+var launchDaemonTemplate = template.Must(template.New("plist").Parse(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
 	<key>Label</key>
 	<string>{{.Label}}</string>
+	<key>UserName</key>
+	<string>{{.Username}}</string>
+	<key>GroupName</key>
+	<string>{{.Group}}</string>
+	<key>WorkingDirectory</key>
+	<string>{{.HomeDir}}</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		{{- range .Env}}
+		<key>{{.Key}}</key>
+		<string>{{.Value}}</string>
+		{{- end}}
+	</dict>
 	<key>ProgramArguments</key>
 	<array>
 		<string>{{.ExecPath}}</string>
@@ -31,86 +51,144 @@ var launchAgentTemplate = template.Must(template.New("plist").Parse(`<?xml versi
 </plist>
 `))
 
-func launchAgentPath() (string, error) {
-	home, err := os.UserHomeDir()
+type envPair struct {
+	Key   string
+	Value string
+}
+
+type launchDaemonData struct {
+	Label    string
+	Username string
+	Group    string
+	HomeDir  string
+	Env      []envPair
+	ExecPath string
+}
+
+func launchDaemonPath() string {
+	return filepath.Join(launchDaemonDir, launchDaemonLabel+".plist")
+}
+
+func buildDaemonData(execPath string) (launchDaemonData, error) {
+	u, err := user.Current()
 	if err != nil {
-		return "", fmt.Errorf("finding home directory: %w", err)
+		return launchDaemonData{}, fmt.Errorf("getting current user: %w", err)
 	}
-	return filepath.Join(home, "Library", "LaunchAgents", launchAgentLabel+".plist"), nil
+	grp, err := user.LookupGroupId(u.Gid)
+	groupName := u.Gid
+	if err == nil {
+		groupName = grp.Name
+	}
+
+	envPairs := []envPair{
+		{"HOME", u.HomeDir},
+		{"XDG_CONFIG_HOME", xdg.ConfigHome},
+		{"XDG_DATA_HOME", xdg.DataHome},
+		{"XDG_STATE_HOME", xdg.StateHome},
+		{"XDG_CACHE_HOME", xdg.CacheHome},
+	}
+
+	return launchDaemonData{
+		Label:    launchDaemonLabel,
+		Username: u.Username,
+		Group:    groupName,
+		HomeDir:  u.HomeDir,
+		Env:      envPairs,
+		ExecPath: execPath,
+	}, nil
+}
+
+func writePlistFile(ctx context.Context, plistPath string, data launchDaemonData) error {
+	var buf bytes.Buffer
+	if err := launchDaemonTemplate.Execute(&buf, data); err != nil {
+		return fmt.Errorf("rendering plist: %w", err)
+	}
+	tmp, err := os.CreateTemp("", "ds2-plist-*.plist")
+	if err != nil {
+		return fmt.Errorf("creating temp file: %w", err)
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	if _, err := tmp.Write(buf.Bytes()); err != nil {
+		tmp.Close()
+		return fmt.Errorf("writing temp file: %w", err)
+	}
+	tmp.Close()
+
+	mvCmd, err := dsexec.SudoCommand(ctx, "mv", tmpPath, plistPath)
+	if err != nil {
+		return fmt.Errorf("preparing sudo mv: %w", err)
+	}
+	if out, err := mvCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("installing plist: %w\n%s", err, out)
+	}
+	return nil
 }
 
 func InstallService(execPath string) error {
-	plistPath, err := launchAgentPath()
+	ctx := context.Background()
+	data, err := buildDaemonData(execPath)
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(plistPath), 0755); err != nil {
-		return fmt.Errorf("creating LaunchAgents directory: %w", err)
-	}
-	f, err := os.Create(plistPath)
+	mkdirCmd, err := dsexec.SudoCommand(ctx, "mkdir", "-p", launchDaemonDir)
 	if err != nil {
-		return fmt.Errorf("writing plist: %w", err)
+		return fmt.Errorf("preparing sudo mkdir: %w", err)
 	}
-	defer f.Close()
-	return launchAgentTemplate.Execute(f, struct {
-		Label    string
-		ExecPath string
-	}{launchAgentLabel, execPath})
+	if out, err := mkdirCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("creating LaunchDaemons directory: %w\n%s", err, out)
+	}
+	return writePlistFile(ctx, launchDaemonPath(), data)
 }
 
 func UninstallService() error {
-	plistPath, err := launchAgentPath()
+	ctx := context.Background()
+	_ = sudoLaunchctl(ctx, "unload", launchDaemonPath())
+	rmCmd, err := dsexec.SudoCommand(ctx, "rm", "-f", launchDaemonPath())
 	if err != nil {
-		return err
+		return fmt.Errorf("preparing sudo rm: %w", err)
 	}
-	_ = launchctl("unload", plistPath)
-	if err := os.Remove(plistPath); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("removing plist: %w", err)
+	if out, err := rmCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("removing plist: %w\n%s", err, out)
 	}
 	return nil
 }
 
 func EnableService() error {
-	plistPath, err := launchAgentPath()
-	if err != nil {
-		return err
-	}
-	return launchctl("load", plistPath)
+	return sudoLaunchctl(context.Background(), "load", launchDaemonPath())
 }
 
 func DisableService() error {
-	plistPath, err := launchAgentPath()
-	if err != nil {
-		return err
-	}
-	return launchctl("unload", plistPath)
+	return sudoLaunchctl(context.Background(), "unload", launchDaemonPath())
 }
 
 func ServiceInstalled() (bool, error) {
-	plistPath, err := launchAgentPath()
-	if err != nil {
-		return false, err
-	}
-	_, err = os.Stat(plistPath)
+	_, err := os.Stat(launchDaemonPath())
 	if os.IsNotExist(err) {
 		return false, nil
 	}
 	return err == nil, err
 }
 
-// ServiceEnabled checks whether the launch agent is currently loaded.
 func ServiceEnabled() (bool, error) {
-	plistPath, err := launchAgentPath()
+	ctx := context.Background()
+	cmd, err := dsexec.SudoCommand(ctx, "launchctl", "list", launchDaemonLabel)
 	if err != nil {
-		return false, err
+		return false, nil
 	}
-	_, statErr := os.Stat(plistPath)
-	return statErr == nil, nil
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return false, nil
+	}
+	return strings.Contains(string(out), launchDaemonLabel), nil
 }
 
-func launchctl(args ...string) error {
-	out, err := exec.Command("launchctl", args...).CombinedOutput()
+func sudoLaunchctl(ctx context.Context, args ...string) error {
+	cmd, err := dsexec.SudoCommand(ctx, "launchctl", args...)
 	if err != nil {
+		return fmt.Errorf("preparing launchctl: %w", err)
+	}
+	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("launchctl %v: %w\n%s", args, err, out)
 	}
 	return nil
