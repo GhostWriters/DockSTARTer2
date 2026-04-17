@@ -135,7 +135,7 @@ func handleServerInstall(ctx context.Context) error {
 	if err := serve.InstallService(execPath); err != nil {
 		return err
 	}
-	logger.Notice(ctx, "Service installed. Run 'ds2 --server enable' to start it at login.")
+	logger.Notice(ctx, "Service installed. Run 'ds2 --server enable' to start it at boot.")
 	return nil
 }
 
@@ -155,13 +155,15 @@ func handleServerEnable(ctx context.Context) error {
 		return err
 	}
 	if !installed {
-		logger.Warn(ctx, "Service is not installed. Run 'ds2 --server install' first.")
-		return nil
+		logger.Notice(ctx, "Service is not installed — installing first...")
+		if err := handleServerInstall(ctx); err != nil {
+			return err
+		}
 	}
 	if err := serve.EnableService(); err != nil {
 		return err
 	}
-	logger.Notice(ctx, "Service enabled — the server will start automatically at login.")
+	logger.Notice(ctx, "Service enabled — the server will start automatically at boot.")
 	return nil
 }
 
