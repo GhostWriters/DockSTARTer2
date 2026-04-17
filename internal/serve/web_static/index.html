@@ -17,6 +17,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5/lib/xterm.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10/lib/addon-fit.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-unicode11@0.8/lib/addon-unicode11.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-webgl@0.18/lib/addon-webgl.min.js"></script>
 
   <script>
     const term = new Terminal({
@@ -37,6 +38,19 @@
     const fitAddon = new FitAddon.FitAddon();
     term.loadAddon(fitAddon);
     term.open(document.getElementById('terminal'));
+
+    // Use the WebGL renderer for pixel-accurate box-drawing character rendering.
+    // Falls back to the default canvas renderer if WebGL is unavailable.
+    try {
+      const webglAddon = new WebglAddon.WebglAddon();
+      webglAddon.onContextLoss(function() {
+        webglAddon.dispose();
+      });
+      term.loadAddon(webglAddon);
+    } catch (e) {
+      console.warn('WebGL renderer unavailable, falling back to canvas:', e);
+    }
+
     fitAddon.fit();
 
     // Connect WebSocket
@@ -96,6 +110,6 @@
     document.getElementById('terminal').addEventListener('contextmenu', function(e) {
       e.preventDefault();
     });
-</script>
+  </script>
 </body>
 </html>
