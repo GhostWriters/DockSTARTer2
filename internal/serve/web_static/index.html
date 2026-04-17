@@ -90,6 +90,12 @@
     window.addEventListener('resize', function() {
       fitAddon.fit();
     });
-  </script>
+
+    // Prevent the browser context menu from appearing on right-click inside
+    // the terminal so right-click can be handled by the TUI application.
+    document.getElementById('terminal').addEventListener('contextmenu', function(e) {
+      e.preventDefault();
+    });
+</script>
 </body>
 </html>
