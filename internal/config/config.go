@@ -29,11 +29,16 @@ type AppConfig struct {
 // The server is disabled by default; the user must explicitly enable it and
 // choose ports to avoid conflicts with apps DS2 manages.
 type ServerConfig struct {
-	Enabled  bool      `toml:"enabled"`   // Master switch; false = no server at all
-	SSHPort  int       `toml:"ssh_port"`  // TCP port for the SSH server (0 = not set)
-	Web      WebConfig `toml:"web"`
-	Auth     AuthConfig `toml:"auth"`
-	HostKey  string    `toml:"host_key"`  // Path to persistent host key file
+	Enabled bool      `toml:"enabled"` // Master switch; false = no server at all
+	SSH     SSHConfig `toml:"ssh"`
+	Web     WebConfig `toml:"web"`
+	Auth    AuthConfig `toml:"auth"`
+	HostKey string    `toml:"host_key"` // Path to persistent host key file
+}
+
+// SSHConfig holds settings for the SSH server.
+type SSHConfig struct {
+	Port int `toml:"port"` // TCP port for the SSH server (0 = not set)
 }
 
 // WebConfig holds settings for the optional xterm.js web frontend.
@@ -154,7 +159,7 @@ func LoadAppConfig() AppConfig {
 		},
 		Server: ServerConfig{
 			Enabled: false, // Opt-in only
-			SSHPort: 2222,
+			SSH:     SSHConfig{Port: 2222},
 			Web: WebConfig{
 				Enabled: false,
 				Port:    8080,

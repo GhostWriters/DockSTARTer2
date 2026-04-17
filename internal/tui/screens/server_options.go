@@ -109,7 +109,7 @@ func (s *ServerOptionsScreen) buildSettingsMenu() *tui.MenuModel {
 		},
 		{
 			Tag:    "SSH Port",
-			Desc:   fmt.Sprintf("{{|OptionValue|}}%d{{[-]}}", s.config.Server.SSHPort),
+			Desc:   fmt.Sprintf("{{|OptionValue|}}%d{{[-]}}", s.config.Server.SSH.Port),
 			Help:   "TCP port the SSH server listens on (Enter to change)",
 			Action: s.promptSSHPort(),
 		},
@@ -252,7 +252,7 @@ func (s *ServerOptionsScreen) syncSettingsMenu() {
 	// indices: 0=heading, 1=enable SSH, 2=SSH port, 3=auth mode, 4=password, 5=authkeys file,
 	//           6=heading, 7=enable web, 8=web port
 	items[1].Checked = s.config.Server.Enabled
-	items[2].Desc = fmt.Sprintf("{{|OptionValue|}}%d{{[-]}}", s.config.Server.SSHPort)
+	items[2].Desc = fmt.Sprintf("{{|OptionValue|}}%d{{[-]}}", s.config.Server.SSH.Port)
 	items[3].Desc = s.dropdownDesc(s.authModeLabel())
 	items[4].Desc = s.passwordDesc()
 	items[5].Desc = s.truncatePath(s.config.Server.Auth.AuthKeysFile)
@@ -331,7 +331,7 @@ func (s *ServerOptionsScreen) promptSSHPort() tea.Cmd {
 			}
 		}
 		return updateServerOptionMsg{func(cfg *config.AppConfig) {
-			cfg.Server.SSHPort = port
+			cfg.Server.SSH.Port = port
 		}}
 	}
 }

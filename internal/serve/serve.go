@@ -30,8 +30,8 @@ func StartSSHServer(ctx context.Context, cfg config.ServerConfig) error {
 	if !cfg.Enabled {
 		return fmt.Errorf("server is disabled in dockstarter2.toml (set server.enabled = true to enable)")
 	}
-	if cfg.SSHPort == 0 {
-		return fmt.Errorf("server.ssh_port is not set in dockstarter2.toml")
+	if cfg.SSH.Port == 0 {
+		return fmt.Errorf("server.ssh.port is not set in dockstarter2.toml")
 	}
 
 	if cfg.Auth.Mode == "none" {
@@ -47,7 +47,7 @@ func StartSSHServer(ctx context.Context, cfg config.ServerConfig) error {
 		return fmt.Errorf("creating host key directory: %w", err)
 	}
 
-	addr := fmt.Sprintf(":%d", cfg.SSHPort)
+	addr := fmt.Sprintf(":%d", cfg.SSH.Port)
 
 	opts := []ssh.Option{
 		wish.WithAddress(addr),
@@ -88,7 +88,7 @@ func StartSSHServer(ctx context.Context, cfg config.ServerConfig) error {
 
 	logger.Info(ctx, "SSH server listening on %s", addr)
 
-	if err := Sessions.AcquireServer(cfg.SSHPort); err != nil {
+	if err := Sessions.AcquireServer(cfg.SSH.Port); err != nil {
 		logger.Warn(ctx, "Could not write server PID file: %v", err)
 	}
 	defer Sessions.ReleaseServer()

@@ -14,7 +14,7 @@ import (
 func handleServe(ctx context.Context, conf *config.AppConfig) error {
 	if !conf.Server.Enabled {
 		return fmt.Errorf(
-			"server is disabled in dockstarter2.toml — set [server] enabled = true and ssh_port = <port> to enable",
+			"server is disabled in dockstarter2.toml — set [server] enabled = true and [server.ssh] port = <port> to enable",
 		)
 	}
 	return serve.StartSSHServer(ctx, conf.Server)
