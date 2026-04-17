@@ -1,6 +1,6 @@
-// Package serve implements the optional SSH (and future web) server that
-// allows remote access to the DS2 TUI. All server functionality is disabled
-// by default and must be explicitly enabled in dockstarter2.toml.
+// Package serve implements the optional SSH and web servers that allow remote
+// access to the DS2 TUI. All server functionality is disabled by default and
+// must be explicitly enabled in dockstarter2.toml.
 package serve
 
 import (
@@ -92,6 +92,15 @@ func StartSSHServer(ctx context.Context, cfg config.ServerConfig) error {
 		logger.Warn(ctx, "Could not write server PID file: %v", err)
 	}
 	defer Sessions.ReleaseServer()
+
+	// Start web server alongside SSH if configured.
+	if cfg.Web.Enabled && cfg.Web.Port > 0 {
+		go func() {
+			if err := StartWebServer(ctx, cfg); err != nil {
+				logger.Error(ctx, "Web server stopped: %v", err)
+			}
+		}()
+	}
 
 	// Shut down gracefully when context is cancelled.
 	go func() {

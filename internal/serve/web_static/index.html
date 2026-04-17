@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DockSTARTer2</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5/css/xterm.min.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+    #terminal { width: 100%; height: 100%; }
+  </style>
+</head>
+<body>
+  <div id="terminal"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8/lib/xterm-addon-fit.min.js"></script>
+
+  <script>
+    const term = new Terminal({
+      cursorBlink: true,
+      allowProposedApi: true,
+      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+      fontSize: 14,
+    });
+    const fitAddon = new FitAddon.FitAddon();
+    term.loadAddon(fitAddon);
+    term.open(document.getElementById('terminal'));
+    fitAddon.fit();
+
+    // Connect WebSocket
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(proto + '//' + location.host + '/ws');
+    ws.binaryType = 'arraybuffer';
+
+    ws.onopen = function() {
+      // Send initial terminal size
+      sendResize();
+    };
+
+    ws.onmessage = function(evt) {
+      // All server→browser messages are terminal output (binary)
+      if (evt.data instanceof ArrayBuffer) {
+        term.write(new Uint8Array(evt.data));
+      } else {
+        term.write(evt.data);
+      }
+    };
+
+    ws.onclose = function() {
+      term.writeln('\r\n\r\n\x1b[33mConnection closed.\x1b[0m');
+    };
+
+    ws.onerror = function() {
+      term.writeln('\r\n\r\n\x1b[31mWebSocket error — connection lost.\x1b[0m');
+    };
+
+    // Terminal input → WebSocket (text frame)
+    term.onData(function(data) {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(data);
+      }
+    });
+
+    // Terminal resize → WebSocket (JSON text frame)
+    function sendResize() {
+      if (ws.readyState === WebSocket.OPEN) {
+        fitAddon.fit();
+        ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+      }
+    }
+
+    term.onResize(function(size) {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'resize', cols: size.cols, rows: size.rows }));
+      }
+    });
+
+    window.addEventListener('resize', function() {
+      fitAddon.fit();
+    });
+  </script>
+</body>
+</html>
