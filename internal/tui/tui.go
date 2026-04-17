@@ -815,7 +815,13 @@ func TriggerAppUpdate() tea.Cmd {
 			yes := console.AssumeYes()
 
 			// Re-exec args restore the active screen after update.
-			reExecArgs := append([]string{}, console.CurrentFlags...)
+			// When running inside a daemon, re-exec must restart as a daemon.
+			var reExecArgs []string
+			if console.IsDaemon {
+				reExecArgs = append(reExecArgs, "--server-daemon")
+			} else {
+				reExecArgs = append(reExecArgs, console.CurrentFlags...)
+			}
 			if CurrentPageName == "tabbed_vars" {
 				// Restore the vars editor directly, preserving which app was being edited.
 				if CurrentEditorApp == "" {
@@ -830,7 +836,9 @@ func TriggerAppUpdate() tea.Cmd {
 					reExecArgs = append(reExecArgs, menuArg)
 				}
 			}
-			reExecArgs = append(reExecArgs, console.RestArgs...)
+			if !console.IsDaemon {
+				reExecArgs = append(reExecArgs, console.RestArgs...)
+			}
 			err := update.SelfUpdate(ctx, force, yes, "", reExecArgs)
 			if err == nil {
 				// Refresh update status and UI
@@ -894,12 +902,19 @@ func TriggerUpdate() tea.Cmd {
 			}
 
 			// Re-exec args restore the active screen after update.
-			reExecArgs := append([]string{}, console.CurrentFlags...)
+			var reExecArgs []string
+			if console.IsDaemon {
+				reExecArgs = append(reExecArgs, "--server-daemon")
+			} else {
+				reExecArgs = append(reExecArgs, console.CurrentFlags...)
+			}
 			reExecArgs = append(reExecArgs, "--menu")
 			if menuArg := reExecMenuArg(); menuArg != "" {
 				reExecArgs = append(reExecArgs, menuArg)
 			}
-			reExecArgs = append(reExecArgs, console.RestArgs...)
+			if !console.IsDaemon {
+				reExecArgs = append(reExecArgs, console.RestArgs...)
+			}
 			err := update.SelfUpdate(ctx, force, yes, "", reExecArgs)
 			if err == nil {
 				// Refresh update status and UI

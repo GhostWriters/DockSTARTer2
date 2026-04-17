@@ -32,6 +32,15 @@ var TUIPrompt func(title, question string, sensitive bool) (string, error)
 var TUIShutdown func()
 var TUIEmergencyShutdown func()
 
+// DaemonShutdown is registered by the serve package when running as a daemon.
+// Calling it cancels the server context so StartSSHServer returns and main()
+// can pick up PendingReExec to exec the new binary.
+var DaemonShutdown func()
+
+// IsDaemon is true when the process was started with --server-daemon.
+// Used by the update path to ensure re-exec restarts as a daemon.
+var IsDaemon bool
+
 // GlobalYes is set to true when the -y/--yes flag is passed to the application.
 // QuestionPrompt prompts the user with a Yes/No question.
 // It returns true if the user answers Yes, false otherwise.

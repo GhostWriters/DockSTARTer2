@@ -199,6 +199,12 @@ func ReExec(ctx context.Context, exePath string, args []string) error {
 		console.TUIShutdown()
 	}
 
+	// If running inside a daemon, cancel the server context so StartSSHServer
+	// returns and main() can pick up PendingReExec to exec the new binary.
+	if console.DaemonShutdown != nil {
+		console.DaemonShutdown()
+	}
+
 	return nil
 }
 

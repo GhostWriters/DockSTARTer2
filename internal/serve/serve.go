@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 
@@ -27,6 +28,14 @@ var Sessions = NewSessionManager()
 // It blocks until ctx is cancelled. Returns an error if the server cannot
 // be started (e.g. port already in use, bad config).
 func StartSSHServer(ctx context.Context, cfg config.ServerConfig, startMenu string) error { //nolint:cyclop
+	// Register a shutdown hook so that when an update is applied from within a
+	// TUI session running inside this daemon, ReExec can cancel the server
+	// context and allow main() to pick up PendingReExec and exec the new binary.
+	innerCtx, cancelInner := context.WithCancel(ctx)
+	defer cancelInner()
+	console.DaemonShutdown = cancelInner
+	defer func() { console.DaemonShutdown = nil }()
+	ctx = innerCtx
 	if cfg.SSH.Port == 0 {
 		return fmt.Errorf("server.ssh.port is not set in dockstarter2.toml")
 	}

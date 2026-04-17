@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/serve"
 )
@@ -89,6 +90,7 @@ func handleServerStart(ctx context.Context, conf *config.AppConfig) error {
 // ["--start-edit-app", "plex"] that were appended by SpawnDaemon so the
 // daemon can restore navigation state for reconnecting web/SSH sessions.
 func handleServeDaemon(ctx context.Context, group *CommandGroup, conf *config.AppConfig) error {
+	console.IsDaemon = true
 	startMenu := extractNavArg(group.Args)
 	return serve.StartSSHServer(ctx, conf.Server, startMenu)
 }
