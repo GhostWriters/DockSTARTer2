@@ -59,10 +59,6 @@ func handleServerStatus(ctx context.Context, _ *config.AppConfig) error {
 // handleServerStart spawns the server as a background daemon process.
 // It validates the config before attempting to start.
 func handleServerStart(ctx context.Context, conf *config.AppConfig) error {
-	if !conf.Server.Enabled {
-		logger.Warn(ctx, "Server is disabled in dockstarter2.toml — set [server] enabled = true to enable.")
-		return nil
-	}
 	if conf.Server.SSH.Port == 0 {
 		logger.Warn(ctx, "server.ssh.port is not set in dockstarter2.toml — cannot start server.")
 		return nil

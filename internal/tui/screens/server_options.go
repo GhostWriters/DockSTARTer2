@@ -99,18 +99,9 @@ func (s *ServerOptionsScreen) buildSettingsMenu() *tui.MenuModel {
 			Selectable: false,
 		},
 		{
-			Tag:         "Enable SSH Server",
-			Desc:        "Allow remote access to DS2 via SSH",
-			Help:        "Toggle SSH server on/off (Space to toggle)",
-			IsCheckbox:  true,
-			Checked:     s.config.Server.Enabled,
-			Selectable:  true,
-			SpaceAction: s.toggleSSHEnabled(),
-		},
-		{
 			Tag:    "SSH Port",
 			Desc:   fmt.Sprintf("{{|OptionValue|}}%d{{[-]}}", s.config.Server.SSH.Port),
-			Help:   "TCP port the SSH server listens on (Enter to change)",
+			Help:   "TCP port the SSH server listens on. Set to 0 to disable. (Enter to change)",
 			Action: s.promptSSHPort(),
 		},
 		{
@@ -138,18 +129,9 @@ func (s *ServerOptionsScreen) buildSettingsMenu() *tui.MenuModel {
 			Selectable: false,
 		},
 		{
-			Tag:         "Enable Web Server",
-			Desc:        "Serve DS2 TUI in a browser via xterm.js (requires SSH)",
-			Help:        "Toggle web server on/off (Space to toggle)",
-			IsCheckbox:  true,
-			Checked:     s.config.Server.Web.Enabled,
-			Selectable:  true,
-			SpaceAction: s.toggleWebEnabled(),
-		},
-		{
 			Tag:    "Web Port",
 			Desc:   fmt.Sprintf("{{|OptionValue|}}%d{{[-]}}", s.config.Server.Web.Port),
-			Help:   "TCP port the web server listens on (Enter to change)",
+			Help:   "TCP port the web server listens on. Set to 0 to disable. (Enter to change)",
 			Action: s.promptWebPort(),
 		},
 	}
@@ -249,15 +231,13 @@ func (s *ServerOptionsScreen) refreshStatus() {
 func (s *ServerOptionsScreen) syncSettingsMenu() {
 	items := s.settingsMenu.GetItems()
 
-	// indices: 0=heading, 1=enable SSH, 2=SSH port, 3=auth mode, 4=password, 5=authkeys file,
-	//           6=heading, 7=enable web, 8=web port
-	items[1].Checked = s.config.Server.Enabled
-	items[2].Desc = fmt.Sprintf("{{|OptionValue|}}%d{{[-]}}", s.config.Server.SSH.Port)
-	items[3].Desc = s.dropdownDesc(s.authModeLabel())
-	items[4].Desc = s.passwordDesc()
-	items[5].Desc = s.truncatePath(s.config.Server.Auth.AuthKeysFile)
-	items[7].Checked = s.config.Server.Web.Enabled
-	items[8].Desc = fmt.Sprintf("{{|OptionValue|}}%d{{[-]}}", s.config.Server.Web.Port)
+	// indices: 0=heading, 1=SSH port, 2=auth mode, 3=password, 4=authkeys file,
+	//           5=heading, 6=web port
+	items[1].Desc = fmt.Sprintf("{{|OptionValue|}}%d{{[-]}}", s.config.Server.SSH.Port)
+	items[2].Desc = s.dropdownDesc(s.authModeLabel())
+	items[3].Desc = s.passwordDesc()
+	items[4].Desc = s.truncatePath(s.config.Server.Auth.AuthKeysFile)
+	items[6].Desc = fmt.Sprintf("{{|OptionValue|}}%d{{[-]}}", s.config.Server.Web.Port)
 
 	s.settingsMenu.SetItems(items)
 }
@@ -293,24 +273,6 @@ func (s *ServerOptionsScreen) truncatePath(p string) string {
 		return "…" + p[len(p)-maxLen+1:]
 	}
 	return p
-}
-
-// ── Toggle Actions ──────────────────────────────────────────────────────────
-
-func (s *ServerOptionsScreen) toggleSSHEnabled() tea.Cmd {
-	return func() tea.Msg {
-		return updateServerOptionMsg{func(cfg *config.AppConfig) {
-			cfg.Server.Enabled = !cfg.Server.Enabled
-		}}
-	}
-}
-
-func (s *ServerOptionsScreen) toggleWebEnabled() tea.Cmd {
-	return func() tea.Msg {
-		return updateServerOptionMsg{func(cfg *config.AppConfig) {
-			cfg.Server.Web.Enabled = !cfg.Server.Web.Enabled
-		}}
-	}
 }
 
 // ── Prompt Actions ──────────────────────────────────────────────────────────

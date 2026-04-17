@@ -27,9 +27,6 @@ var Sessions = NewSessionManager()
 // It blocks until ctx is cancelled. Returns an error if the server cannot
 // be started (e.g. port already in use, bad config).
 func StartSSHServer(ctx context.Context, cfg config.ServerConfig) error { //nolint:cyclop
-	if !cfg.Enabled {
-		return fmt.Errorf("server is disabled in dockstarter2.toml (set server.enabled = true to enable)")
-	}
 	if cfg.SSH.Port == 0 {
 		return fmt.Errorf("server.ssh.port is not set in dockstarter2.toml")
 	}
@@ -125,7 +122,7 @@ func StartSSHServer(ctx context.Context, cfg config.ServerConfig) error { //noli
 	defer Sessions.ReleaseServer()
 
 	// Start web server alongside SSH if configured.
-	if cfg.Web.Enabled && cfg.Web.Port > 0 {
+	if cfg.Web.Port > 0 {
 		go func() {
 			if err := StartWebServer(ctx, cfg, internalKey.Signer); err != nil {
 				logger.Error(ctx, "Web server stopped: %v", err)

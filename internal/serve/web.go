@@ -22,9 +22,6 @@ var webStaticFS embed.FS
 // It blocks until ctx is cancelled. The signer is the ephemeral internal key
 // used by the web proxy to authenticate with the local SSH server.
 func StartWebServer(ctx context.Context, cfg config.ServerConfig, signer gossh.Signer) error {
-	if !cfg.Web.Enabled {
-		return fmt.Errorf("web server is not enabled in dockstarter2.toml")
-	}
 	if cfg.Web.Port == 0 {
 		return fmt.Errorf("server.web.port is not set in dockstarter2.toml")
 	}

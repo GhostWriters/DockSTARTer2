@@ -26,25 +26,23 @@ type AppConfig struct {
 }
 
 // ServerConfig holds SSH and web server settings.
-// The server is disabled by default; the user must explicitly enable it and
-// choose ports to avoid conflicts with apps DS2 manages.
+// The server is active when ssh.port > 0. Set ssh.port = 0 (or omit it) to
+// disable. There is no separate enabled flag — the port is the intent signal.
 type ServerConfig struct {
-	Enabled bool      `toml:"enabled"` // Master switch; false = no server at all
-	SSH     SSHConfig `toml:"ssh"`
-	Web     WebConfig `toml:"web"`
+	SSH     SSHConfig  `toml:"ssh"`
+	Web     WebConfig  `toml:"web"`
 	Auth    AuthConfig `toml:"auth"`
-	HostKey string    `toml:"host_key"` // Path to persistent host key file
+	HostKey string     `toml:"host_key"` // Path to persistent host key file
 }
 
 // SSHConfig holds settings for the SSH server.
 type SSHConfig struct {
-	Port int `toml:"port"` // TCP port for the SSH server (0 = not set)
+	Port int `toml:"port"` // TCP port for the SSH server (0 = disabled)
 }
 
 // WebConfig holds settings for the optional xterm.js web frontend.
 type WebConfig struct {
-	Enabled bool `toml:"enabled"`  // Requires Server.Enabled = true
-	Port    int  `toml:"port"`     // TCP port for the HTTP/WebSocket server (0 = not set)
+	Port int `toml:"port"` // TCP port for the HTTP/WebSocket server (0 = disabled)
 }
 
 // AuthConfig holds authentication settings for the SSH server.
@@ -158,15 +156,9 @@ func LoadAppConfig() AppConfig {
 			ComposeFolder: "${XDG_CONFIG_HOME}/compose",
 		},
 		Server: ServerConfig{
-			Enabled: false, // Opt-in only
-			SSH:     SSHConfig{Port: 2222},
-			Web: WebConfig{
-				Enabled: false,
-				Port:    8080,
-			},
-			Auth: AuthConfig{
-				Mode: "none",
-			},
+			SSH:  SSHConfig{Port: 0},
+			Web:  WebConfig{Port: 0},
+			Auth: AuthConfig{Mode: "none"},
 		},
 	}
 
