@@ -18,6 +18,7 @@ import (
 	"DockSTARTer2/internal/update"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/colorprofile"
 	"golang.org/x/term"
 )
 
@@ -125,21 +126,14 @@ func NewProgram(model tea.Model, opts ProgramOptions) *tea.Program {
 		teaOpts = append(teaOpts, tea.WithInput(opts.Input))
 	}
 	if len(opts.Environ) > 0 {
-		// Default to TrueColor if COLORTERM is absent. This covers Windows SSH
-		// clients (e.g. Windows Terminal) that support TrueColor but don't set
-		// the COLORTERM variable, which is a Linux/Mac convention.
-		env := opts.Environ
-		hasColorterm := false
-		for _, e := range env {
-			if len(e) >= 9 && e[:9] == "COLORTERM" {
-				hasColorterm = true
-				break
-			}
-		}
-		if !hasColorterm {
-			env = append(env, "COLORTERM=truecolor")
-		}
-		teaOpts = append(teaOpts, tea.WithEnvironment(env))
+		// Remote sessions (SSH, web) are never real TTYs, so colorprofile's
+		// TTY detection always returns no-color regardless of COLORTERM. Force
+		// TrueColor explicitly so lipgloss renders full color over the network.
+		// We still pass the environment so TERM and other vars are available.
+		teaOpts = append(teaOpts,
+			tea.WithEnvironment(opts.Environ),
+			tea.WithColorProfile(colorprofile.TrueColor),
+		)
 	}
 	if opts.InitialWidth > 0 && opts.InitialHeight > 0 {
 		teaOpts = append(teaOpts, tea.WithWindowSize(opts.InitialWidth, opts.InitialHeight))
