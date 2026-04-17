@@ -126,7 +126,12 @@ func (w *wsReadWriter) Read(p []byte) (int, error) {
 func (w *wsReadWriter) Write(p []byte) (int, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if err := websocket.Message.Send(w.ws, p); err != nil {
+	// Send as a binary frame so raw ANSI/UTF-8 bytes are never re-encoded
+	// by the text codec. The browser receives these as ArrayBuffer and passes
+	// them directly to xterm.js which handles the byte stream correctly.
+	buf := make([]byte, len(p))
+	copy(buf, p)
+	if err := websocket.Message.Send(w.ws, buf); err != nil {
 		return 0, err
 	}
 	return len(p), nil

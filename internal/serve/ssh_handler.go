@@ -69,10 +69,19 @@ func tuiMiddleware(mgr *SessionManager) wish.Middleware {
 			// Wire up window resize events: SSH sends window-change requests
 			// rather than SIGWINCH, so we forward them to the TUI via a
 			// goroutine that watches the channel wish provides.
+			//
+			// Pass the session environment so bubbletea picks up TERM,
+			// COLORTERM, etc. from the connecting client — this is how the
+			// wish bubbletea middleware achieves color support.
+			envs := s.Environ()
+			envs = append(envs, "TERM="+ptyReq.Term)
 			opts := tui.ProgramOptions{
-				Input:      s,
-				Output:     s,
-				WindowSize: makeWindowSizeChan(ptyReq, windowCh, sessCtx),
+				Input:         s,
+				Output:        s,
+				WindowSize:    makeWindowSizeChan(ptyReq, windowCh, sessCtx),
+				Environ:       envs,
+				InitialWidth:  ptyReq.Window.Width,
+				InitialHeight: ptyReq.Window.Height,
 			}
 
 			logger.Info(ctx, "SSH session started from %s", s.RemoteAddr())

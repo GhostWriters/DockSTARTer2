@@ -152,6 +152,17 @@ func LoadAppConfig() AppConfig {
 			ConfigFolder:  "${XDG_CONFIG_HOME}",
 			ComposeFolder: "${XDG_CONFIG_HOME}/compose",
 		},
+		Server: ServerConfig{
+			Enabled: false, // Opt-in only
+			SSHPort: 2222,
+			Web: WebConfig{
+				Enabled: false,
+				Port:    8080,
+			},
+			Auth: AuthConfig{
+				Mode: "none",
+			},
+		},
 	}
 
 	// Set architecture (runtime only)

@@ -101,6 +101,16 @@ type ProgramOptions struct {
 	Input      io.Reader
 	Output     io.Writer
 	WindowSize <-chan WindowSizeEvent
+
+	// Environ is the remote session's environment (e.g. []string{"TERM=xterm-256color",
+	// "COLORTERM=truecolor"}). Passed to tea.WithEnvironment so that color profile
+	// and terminal type are correctly detected for SSH and web sessions.
+	Environ []string
+
+	// InitialWidth and InitialHeight set the starting terminal dimensions before
+	// the first resize event arrives. Zero values are ignored.
+	InitialWidth  int
+	InitialHeight int
 }
 
 // NewProgram creates a new Bubble Tea program with standardized options.
@@ -113,6 +123,12 @@ func NewProgram(model tea.Model, opts ProgramOptions) *tea.Program {
 	teaOpts := []tea.ProgramOption{tea.WithOutput(out), tea.WithoutCatchPanics()}
 	if opts.Input != nil {
 		teaOpts = append(teaOpts, tea.WithInput(opts.Input))
+	}
+	if len(opts.Environ) > 0 {
+		teaOpts = append(teaOpts, tea.WithEnvironment(opts.Environ))
+	}
+	if opts.InitialWidth > 0 && opts.InitialHeight > 0 {
+		teaOpts = append(teaOpts, tea.WithWindowSize(opts.InitialWidth, opts.InitialHeight))
 	}
 	p := tea.NewProgram(model, teaOpts...)
 	program = p

@@ -60,14 +60,32 @@ func handleWebSocket(ctx context.Context, ws *websocket.Conn, cfg config.ServerC
 	// This feeds terminal input into rw's pipe and resize events into rw.resizeCh.
 	go rw.readLoop(sessCtx)
 
-	// Wire the WebSocket I/O into ProgramOptions.
-	opts := tui.ProgramOptions{
-		Input:      rw,
-		Output:     rw,
-		WindowSize: rw.resizeCh,
+	// Wait for the browser's initial resize message so we know the terminal
+	// dimensions before the TUI renders its first frame. Without this, bubbletea
+	// uses a small default size and the layout appears wrong until the first
+	// window-size message arrives. Fall back to 80×24 after a short timeout.
+	var initialSize tui.WindowSizeEvent
+	select {
+	case sz := <-rw.resizeCh:
+		initialSize = sz
+	case <-time.After(2 * time.Second):
+		initialSize = tui.WindowSizeEvent{Width: 80, Height: 24}
+	case <-sessCtx.Done():
+		return
 	}
 
-	logger.Info(ctx, "Web session started from %s", clientAddr)
+	// Use xterm-256color + truecolor so bubbletea's color profile detection
+	// produces the correct result for a browser xterm.js session.
+	opts := tui.ProgramOptions{
+		Input:         rw,
+		Output:        rw,
+		WindowSize:    rw.resizeCh,
+		Environ:       []string{"TERM=xterm-256color", "COLORTERM=truecolor"},
+		InitialWidth:  initialSize.Width,
+		InitialHeight: initialSize.Height,
+	}
+
+	logger.Info(ctx, "Web session started from %s (%dx%d)", clientAddr, initialSize.Width, initialSize.Height)
 
 	if err := tui.Start(sessCtx, "", opts); err != nil {
 		logger.Error(ctx, "Web TUI session error: %v", err)
