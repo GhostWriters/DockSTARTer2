@@ -67,7 +67,7 @@ var commandDefs = map[string]commandDef{
 	"--theme-table":              {title: "List Themes"},
 	"--theme-extract":            {title: "Extract Theme"},
 	"--theme-extract-all":        {title: "Extract All Themes"},
-	"--disconnect":               {title: "Disconnect Session"},
+	"--server":                   {title: "Server Management"},
 
 	// ── Session-locked (modifies env files / shared state) ───────────────────
 	"-a":                         {title: "Add Application",             sessionLocked: true},
@@ -135,7 +135,6 @@ var commandDefs = map[string]commandDef{
 	"--theme-dialog-title":       {title: "Set Dialog Title Align",      sessionLocked: true},
 	"--theme-submenu-title":      {title: "Set Submenu Title Align",     sessionLocked: true},
 	"--theme-log-title":          {title: "Set Log Title Align",         sessionLocked: true},
-	"--serve":                    {title: "Start SSH Server"},
 }
 
 func handleConfigSettings(ctx context.Context, group *CommandGroup) error {
@@ -348,12 +347,9 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			case "--theme-extract", "--theme-extract-all":
 				ranCommand = true
 				return handleThemeExtract(subCtx, &group)
-			case "--serve":
+			case "--server":
 				ranCommand = true
-				return handleServe(subCtx, &conf)
-			case "--disconnect":
-				ranCommand = true
-				return handleDisconnect(subCtx, &state)
+				return handleServer(subCtx, &group, &state, &conf)
 			default:
 				// Custom command logic would be hooked in here.
 				// If we just had flags (group.Command == ""), ranCommand remains false
@@ -365,7 +361,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		def := commandDefs[group.Command]
 		if def.sessionLocked && serve.Sessions.IsPrimaryActive() {
 			logger.Error(ctx, "Cannot run '%s' while a DockSTARTer2 session is active. "+
-				"Use '--disconnect' to force-release the session.", group.Command)
+				"Use '--server disconnect' to force-release the session.", group.Command)
 			return 1
 		}
 

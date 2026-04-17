@@ -27,6 +27,29 @@ func CheckStartupStatus(ctx context.Context) {
 	}
 }
 
+// PrintServerStatus prints the current server and session state to the logger.
+func PrintServerStatus(ctx context.Context) {
+	serverInfo := Sessions.ReadServerInfo()
+	if serverInfo.PID == 0 || !processExists(serverInfo.PID) {
+		logger.Notice(ctx, "Server: {{|Highlight|}}not running{{[-]}}")
+		return
+	}
+
+	if serverInfo.Port > 0 {
+		logger.Notice(ctx, "Server: {{|Success|}}running{{[-]}} — SSH port {{|Highlight|}}%d{{[-]}} (PID %d)", serverInfo.Port, serverInfo.PID)
+	} else {
+		logger.Notice(ctx, "Server: {{|Success|}}running{{[-]}} (PID %d)", serverInfo.PID)
+	}
+
+	sessionInfo := Sessions.ReadSessionInfo()
+	if sessionInfo.PID != 0 && processExists(sessionInfo.PID) {
+		ip := formatIP(sessionInfo.ClientIP)
+		logger.Notice(ctx, "Session: {{|Highlight|}}active{{[-]}} — connected from %s (PID %d)", ip, sessionInfo.PID)
+	} else {
+		logger.Notice(ctx, "Session: no active session")
+	}
+}
+
 // formatIP strips the port from an addr string like "192.168.1.10:54321"
 // and returns just the IP. Falls back to the raw string on parse failure.
 func formatIP(addr string) string {

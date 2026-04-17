@@ -277,6 +277,21 @@ func Parse(args []string) ([]CommandGroup, error) {
 				i++
 			}
 
+		case "--server":
+			if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
+				sub := expandedArgs[i]
+				validSubs := map[string]bool{
+					"status": true, "start": true, "stop": true, "restart": true,
+					"disconnect": true, "install": true, "uninstall": true,
+					"enable": true, "disable": true,
+				}
+				if !validSubs[sub] {
+					return nil, &ParseError{Args: expandedArgs, Index: i, FailingCommand: cmd, Message: "Invalid option %o"}
+				}
+				currentGroup.Args = append(currentGroup.Args, sub)
+				i++
+			}
+
 		// --theme-extract: requires theme name, optional dest, optional filename
 		case "--theme-extract":
 			if i >= len(expandedArgs) || strings.HasPrefix(expandedArgs[i], "-") {
