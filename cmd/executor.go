@@ -353,7 +353,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				return handleServer(subCtx, &group, &state, &conf)
 			case "--server-daemon":
 				ranCommand = true
-				return handleServeDaemon(subCtx, &conf)
+				return handleServeDaemon(subCtx, &group, &conf)
 			default:
 				// Custom command logic would be hooked in here.
 				// If we just had flags (group.Command == ""), ranCommand remains false

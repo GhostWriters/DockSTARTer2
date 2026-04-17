@@ -88,8 +88,34 @@ func handleServerStart(ctx context.Context, conf *config.AppConfig) error {
 // handleServeDaemon is the internal handler for --server-daemon.
 // It runs the blocking SSH (and web) server loop. Never called directly by
 // the user — only invoked when --server start re-execs the binary.
-func handleServeDaemon(ctx context.Context, conf *config.AppConfig) error {
-	return serve.StartSSHServer(ctx, conf.Server)
+//
+// group.Args may contain nav args such as ["--menu", "start-options"] or
+// ["--start-edit-app", "plex"] that were appended by SpawnDaemon so the
+// daemon can restore navigation state for reconnecting web/SSH sessions.
+func handleServeDaemon(ctx context.Context, group *CommandGroup, conf *config.AppConfig) error {
+	startMenu := extractNavArg(group.Args)
+	return serve.StartSSHServer(ctx, conf.Server, startMenu)
+}
+
+// extractNavArg parses nav args appended after --server-daemon and returns
+// the startMenu string to pass to the TUI (e.g. "start-options", "plex").
+// Returns "" if no nav arg is found.
+func extractNavArg(args []string) string {
+	for i, arg := range args {
+		switch arg {
+		case "--menu", "-M":
+			if i+1 < len(args) {
+				return args[i+1]
+			}
+		case "--start-edit-global":
+			return "edit-global"
+		case "--start-edit-app":
+			if i+1 < len(args) {
+				return "edit-app:" + args[i+1]
+			}
+		}
+	}
+	return ""
 }
 
 // handleServerStop signals the server daemon to shut down.

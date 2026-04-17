@@ -102,7 +102,7 @@ func handleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, res
 	// and the self-update succeeded.
 	if wasServerRunning && updateErr == nil && execErr == nil {
 		logger.Notice(ctx, "Restarting server with new binary...")
-		proc, err := serve.SpawnDaemon(execPath, nil)
+		proc, err := serve.SpawnDaemon(execPath, tui.GetNavArgs())
 		if err != nil {
 			logger.Warn(ctx, "Failed to restart server: %v — run 'ds2 --server start' manually.", err)
 		} else {

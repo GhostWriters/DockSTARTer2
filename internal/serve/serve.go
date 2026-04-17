@@ -26,7 +26,7 @@ var Sessions = NewSessionManager()
 // StartSSHServer starts the wish SSH server using settings from cfg.
 // It blocks until ctx is cancelled. Returns an error if the server cannot
 // be started (e.g. port already in use, bad config).
-func StartSSHServer(ctx context.Context, cfg config.ServerConfig) error { //nolint:cyclop
+func StartSSHServer(ctx context.Context, cfg config.ServerConfig, startMenu string) error { //nolint:cyclop
 	if cfg.SSH.Port == 0 {
 		return fmt.Errorf("server.ssh.port is not set in dockstarter2.toml")
 	}
@@ -57,7 +57,7 @@ func StartSSHServer(ctx context.Context, cfg config.ServerConfig) error { //noli
 		wish.WithAddress(addr),
 		wish.WithHostKeyPath(hostKeyPath),
 		wish.WithMiddleware(
-			tuiMiddleware(Sessions),
+			tuiMiddleware(Sessions, startMenu),
 			logging.Middleware(),
 		),
 	}

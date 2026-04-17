@@ -337,6 +337,13 @@ func Parse(args []string) ([]CommandGroup, error) {
 				i++
 			}
 
+		// --server-daemon: internal flag; consumes ALL remaining tokens as nav args
+		// (e.g. --server-daemon --menu start-options). The daemon never returns,
+		// so remaining groups would never execute — store them as args instead.
+		case "--server-daemon":
+			currentGroup.Args = append(currentGroup.Args, expandedArgs[i:]...)
+			i = len(expandedArgs)
+
 		// Commands that take NO arguments (Explicitly logic is same as default, but listed for clarity)
 		case "-i", "--install",
 			"-p", "--prune",

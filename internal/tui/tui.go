@@ -787,6 +787,22 @@ func reExecMenuArg() string {
 	return "start-" + CurrentPageName
 }
 
+// GetNavArgs returns the navigation args that should be appended when spawning
+// a daemon (or re-exec) to restore the current screen. Returns nil if no
+// page is active or the active page has no valid nav arg.
+func GetNavArgs() []string {
+	if CurrentPageName == "tabbed_vars" {
+		if CurrentEditorApp == "" {
+			return []string{"--start-edit-global"}
+		}
+		return []string{"--start-edit-app", CurrentEditorApp}
+	}
+	if menuArg := reExecMenuArg(); menuArg != "" {
+		return []string{"--menu", menuArg}
+	}
+	return nil
+}
+
 // TriggerAppUpdate returns a tea.Cmd that performs the application update.
 // It detects the currently active screen to support sticky restarts (using --menu pagename).
 func TriggerAppUpdate() tea.Cmd {

@@ -20,7 +20,7 @@ const sessionBusyMsg = "\r\nA DockSTARTer2 session is already active.\r\n" +
 // tuiMiddleware returns a wish middleware that runs the DS2 TUI for each
 // incoming SSH session. If a session is already active the connection is
 // rejected with a clear message.
-func tuiMiddleware(mgr *SessionManager) wish.Middleware {
+func tuiMiddleware(mgr *SessionManager, startMenu string) wish.Middleware {
 	return func(next ssh.Handler) ssh.Handler {
 		return func(s ssh.Session) {
 			ctx := s.Context()
@@ -91,7 +91,7 @@ func tuiMiddleware(mgr *SessionManager) wish.Middleware {
 
 			logger.Info(ctx, "SSH session started from %s", s.RemoteAddr())
 
-			if err := tui.Start(sessCtx, "", opts); err != nil {
+			if err := tui.Start(sessCtx, startMenu, opts); err != nil {
 				logger.Error(ctx, "SSH TUI session error: %v", err)
 				_ = s.Exit(1)
 				return
