@@ -93,7 +93,11 @@ func handleConfigShow(ctx context.Context, conf *config.AppConfig) error {
 		"{{|UsageCommand|}}Expanded Value{{[-]}}",
 	}
 
-	keys := []string{"ConfigFolder", "ComposeFolder", "Theme", "Borders", "ButtonBorders", "LineCharacters", "Scrollbar", "Shadow", "ShadowLevel", "BorderColor"}
+	keys := []string{
+		"ConfigFolder", "ComposeFolder",
+		"Theme", "Borders", "ButtonBorders", "LineCharacters", "Scrollbar", "Shadow", "ShadowLevel", "BorderColor",
+		"SSHPort", "WebPort", "AuthMode",
+	}
 	displayNames := map[string]string{
 		"ConfigFolder":   "Config Folder",
 		"ComposeFolder":  "Compose Folder",
@@ -105,6 +109,9 @@ func handleConfigShow(ctx context.Context, conf *config.AppConfig) error {
 		"Shadow":         "Shadow",
 		"ShadowLevel":    "Shadow Level",
 		"BorderColor":    "Border Color",
+		"SSHPort":        "SSH Port",
+		"WebPort":        "Web Port",
+		"AuthMode":       "Auth Mode",
 	}
 
 	var data []string
@@ -145,6 +152,20 @@ func handleConfigShow(ctx context.Context, conf *config.AppConfig) error {
 			value = fmt.Sprintf("{{|Var|}}%d{{[-]}}", conf.UI.ShadowLevel)
 		case "BorderColor":
 			value = fmt.Sprintf("{{|Var|}}%d{{[-]}}", conf.UI.BorderColor)
+		case "SSHPort":
+			if conf.Server.SSH.Port > 0 {
+				value = fmt.Sprintf("{{|Var|}}%d{{[-]}}", conf.Server.SSH.Port)
+			} else {
+				value = "{{|Var|}}not set{{[-]}}"
+			}
+		case "WebPort":
+			if conf.Server.Web.Port > 0 {
+				value = fmt.Sprintf("{{|Var|}}%d{{[-]}}", conf.Server.Web.Port)
+			} else {
+				value = "{{|Var|}}not set{{[-]}}"
+			}
+		case "AuthMode":
+			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.Server.Auth.Mode)
 		}
 
 		colorTag := "{{|Var|}}"
