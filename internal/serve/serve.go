@@ -26,7 +26,7 @@ var Sessions = NewSessionManager()
 // StartSSHServer starts the wish SSH server using settings from cfg.
 // It blocks until ctx is cancelled. Returns an error if the server cannot
 // be started (e.g. port already in use, bad config).
-func StartSSHServer(ctx context.Context, cfg config.ServerConfig) error {
+func StartSSHServer(ctx context.Context, cfg config.ServerConfig) error { //nolint:cyclop
 	if !cfg.Enabled {
 		return fmt.Errorf("server is disabled in dockstarter2.toml (set server.enabled = true to enable)")
 	}
@@ -37,6 +37,13 @@ func StartSSHServer(ctx context.Context, cfg config.ServerConfig) error {
 	if cfg.Auth.Mode == "none" {
 		logger.Warn(ctx, "SSH server is running with no authentication (server.auth.mode = \"none\"). "+
 			"This is insecure — anyone on the network can connect.")
+	}
+
+	// Generate an ephemeral key pair for the internal web proxy client.
+	// This key is never written to disk; it is regenerated each startup.
+	internalKey, err := generateInternalKey()
+	if err != nil {
+		return fmt.Errorf("generating internal key: %w", err)
 	}
 
 	hostKeyPath := cfg.HostKey
@@ -58,22 +65,46 @@ func StartSSHServer(ctx context.Context, cfg config.ServerConfig) error {
 		),
 	}
 
-	// Configure authentication
+	// isInternalKey checks whether a presented public key is our ephemeral
+	// web-proxy key. Used as the fast-path in combined public-key handlers.
+	isInternalKey := func(key ssh.PublicKey) bool {
+		return ssh.KeysEqual(key, internalKey.PublicKey)
+	}
+
+	// Configure authentication. Every branch must register exactly one
+	// PublicKeyHandler (wish.WithPublicKeyAuth / wish.WithAuthorizedKeys each
+	// set the same underlying field, so two calls would overwrite each other).
+	// We therefore build a combined handler wherever needed.
 	switch cfg.Auth.Mode {
 	case "pubkey":
 		if cfg.Auth.AuthKeysFile == "" {
 			return fmt.Errorf("server.auth.auth_keys_file must be set when auth mode is \"pubkey\"")
 		}
-		opts = append(opts, wish.WithAuthorizedKeys(cfg.Auth.AuthKeysFile))
+		authKeysFile := cfg.Auth.AuthKeysFile
+		opts = append(opts, wish.WithPublicKeyAuth(func(_ ssh.Context, key ssh.PublicKey) bool {
+			// Accept the internal web-proxy key OR any key in the authorized_keys file.
+			if isInternalKey(key) {
+				return true
+			}
+			return authorizedKeysContains(authKeysFile, key)
+		}))
 	case "password":
 		if cfg.Auth.Password == "" {
 			return fmt.Errorf("server.auth.password must be set when auth mode is \"password\"")
 		}
-		opts = append(opts, wish.WithPasswordAuth(func(_ ssh.Context, password string) bool {
-			return checkPassword(password, cfg.Auth.Password)
-		}))
+		opts = append(opts,
+			wish.WithPasswordAuth(func(_ ssh.Context, password string) bool {
+				return checkPassword(password, cfg.Auth.Password)
+			}),
+			// Also accept the internal key via public-key auth so the web proxy
+			// can connect without a password.
+			wish.WithPublicKeyAuth(func(_ ssh.Context, key ssh.PublicKey) bool {
+				return isInternalKey(key)
+			}),
+		)
 	case "none", "":
-		// No auth — allow all connections (warning already logged above)
+		// No auth — allow all connections (warning already logged above).
+		// The internal key is implicitly accepted since we allow everything.
 		opts = append(opts, wish.WithPublicKeyAuth(func(_ ssh.Context, _ ssh.PublicKey) bool {
 			return true
 		}))
@@ -96,7 +127,7 @@ func StartSSHServer(ctx context.Context, cfg config.ServerConfig) error {
 	// Start web server alongside SSH if configured.
 	if cfg.Web.Enabled && cfg.Web.Port > 0 {
 		go func() {
-			if err := StartWebServer(ctx, cfg); err != nil {
+			if err := StartWebServer(ctx, cfg, internalKey.Signer); err != nil {
 				logger.Error(ctx, "Web server stopped: %v", err)
 			}
 		}()
