@@ -184,7 +184,7 @@ func init() {
 
 		// Viewport Colors
 		ProgramBox: "{{[-]}}{{[white:black]}}",
-		LogBox:     "{{[-]}}{{[white:black]}}",
+		ConsoleBox:     "{{[-]}}{{[white:black]}}",
 	}
 
 	// Register base tags once Colors is populated
@@ -305,7 +305,7 @@ type AppColors struct {
 
 	// Viewport Colors
 	ProgramBox string
-	LogBox     string
+	ConsoleBox     string
 }
 
 // Colors is the global instance for application output (stdout)
@@ -348,7 +348,7 @@ func RegisterBaseTags() {
 
 	// Viewport Tags
 	RegisterConsoleTag("programbox", Colors.ProgramBox)
-	RegisterConsoleTag("logbox", Colors.LogBox)
+	RegisterConsoleTag("consolebox", Colors.ConsoleBox)
 
 	// Log Level Tags
 	RegisterConsoleTag("timestamp", Colors.Timestamp)
