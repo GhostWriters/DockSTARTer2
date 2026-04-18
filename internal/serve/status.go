@@ -36,12 +36,12 @@ func PrintServerStatus(_ context.Context, cfg config.ServerConfig) {
 	if installed {
 		enabled, _ := ServiceEnabled()
 		if enabled {
-			fmt.Println("Service:  installed, enabled (starts at boot)")
+			fmt.Println("Service:     installed, enabled (starts at boot)")
 		} else {
-			fmt.Println("Service:  installed, disabled (won't start at boot)")
+			fmt.Println("Service:     installed, disabled (won't start at boot)")
 		}
 	} else {
-		fmt.Println("Service:  not installed")
+		fmt.Println("Service:     not installed")
 	}
 
 	// ── Server ───────────────────────────────────────────────────────────────
@@ -76,7 +76,7 @@ func PrintServerStatus(_ context.Context, cfg config.ServerConfig) {
 
 	// ── Session ───────────────────────────────────────────────────────────────
 	if !serverRunning {
-		fmt.Println("Session:  none")
+		fmt.Println("Session:     not connected")
 		return
 	}
 	sessionInfo := Sessions.ReadSessionInfo()
