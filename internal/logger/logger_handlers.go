@@ -48,7 +48,11 @@ func (h *TUIHandler) Handle(ctx context.Context, r slog.Record) error {
 	tuiMsg := timeLevel + r.Message
 
 	if h.global {
-		// Send to global log channel for TUI log panel
+		// Skip global log channel when a local TUI writer is active (console command
+		// mode) — the non-global handler will send output to the pipe instead.
+		if _, hasWriter := ctx.Value(console.TUIWriterKey).(io.Writer); hasWriter {
+			return nil
+		}
 		select {
 		case logLineCh <- tuiMsg:
 		default:
