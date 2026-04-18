@@ -11,17 +11,21 @@ import (
 
 // renderFlow renders items in a horizontal flow layout for compact menus
 func (m *MenuModel) renderFlow() string {
-	ctx := GetActiveContext()
-	styles := GetStyles()
-	dialogBG := styles.Dialog.GetBackground()
-
-	// Use Layout helpers for consistent border calculations
 	layout := GetLayout()
 	maxWidth, _ := layout.InnerContentSize(m.width, m.height)
 	// Subtract 2 for internal 1-char margin on each side (matching standard list menus)
 	if maxWidth > 2 {
 		maxWidth -= 2
 	}
+	return m.renderFlowContent(maxWidth)
+}
+
+// renderFlowContent renders the flow items at the given content width.
+// Used by both renderFlow (standalone) and viewSubMenu (subMenu+flow combination).
+func (m *MenuModel) renderFlowContent(maxWidth int) string {
+	ctx := GetActiveContext()
+	styles := GetStyles()
+	dialogBG := styles.Dialog.GetBackground()
 
 	var lines []string
 	var currentLine []string
@@ -42,36 +46,38 @@ func (m *MenuModel) renderFlow() string {
 			keyStyle = theme.ThemeSemanticStyle("{{|TagKeySelected|}}")
 		}
 
+		neutralStyle := lipgloss.NewStyle().Background(dialogBG)
+
 		// Checkbox/Radio visual
 		prefix := ""
 		if item.IsRadioButton {
 			var cb string
 			if ctx.LineCharacters {
-				cb = radioUnselected + " "
+				cb = radioUnselected
 				if item.Checked {
-					cb = radioSelected + " "
+					cb = radioSelected
 				}
 			} else {
-				cb = radioUnselectedAscii
+				cb = strings.TrimRight(radioUnselectedAscii, " ")
 				if item.Checked {
-					cb = radioSelectedAscii
+					cb = strings.TrimRight(radioSelectedAscii, " ")
 				}
 			}
-			prefix = tagStyle.Render(cb)
+			prefix = tagStyle.Render(cb) + neutralStyle.Render(" ")
 		} else if item.IsCheckbox {
 			var cb string
 			if ctx.LineCharacters {
-				cb = checkUnselected + " "
+				cb = checkUnselected
 				if item.Checked {
-					cb = checkSelected + " "
+					cb = checkSelected
 				}
 			} else {
-				cb = checkUnselectedAscii
+				cb = strings.TrimRight(checkUnselectedAscii, " ")
 				if item.Checked {
-					cb = checkSelectedAscii
+					cb = strings.TrimRight(checkSelectedAscii, " ")
 				}
 			}
-			prefix = tagStyle.Render(cb)
+			prefix = tagStyle.Render(cb) + neutralStyle.Render(" ")
 		}
 
 		// Tag with first-letter shortcut
@@ -90,16 +96,15 @@ func (m *MenuModel) renderFlow() string {
 
 		itemContent := prefix + tagStr
 
-		// For non-checkbox/non-radio items (e.g. dropdowns), append
-		// the Desc inline so the current value is visible without clicking.
+		// For non-checkbox/non-radio items (e.g. dropdowns), append the value inline.
+		// Neutral space (dialogBG) breaks the selection background color in the gap only.
 		if !item.IsCheckbox && !item.IsRadioButton && item.Desc != "" {
-			desc := item.Desc
 			if isSelected {
-				// Strip OptionValue tag so the value inherits selection colors (e.g. red background)
-				desc = strings.ReplaceAll(desc, "{{|OptionValue|}}", "")
+				// Strip theme tags so OptionValue color doesn't override tagStyle (selection).
+				itemContent += neutralStyle.Render(" ") + tagStyle.Render(GetPlainText(item.Desc))
+			} else {
+				itemContent += RenderThemeText(" "+item.Desc, tagStyle)
 			}
-			// Include leading space in RenderThemeText so it gets the correct background
-			itemContent += RenderThemeText(" "+desc, tagStyle)
 		}
 
 		// Hard reset after each element to ensure background colors (like selection)

@@ -238,7 +238,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 				letterIdx = 1
 			}
 			if letterIdx < len(runes) {
-				tagStr = tStyle.Render(string(runes[:letterIdx])) + kStyle.Render(string(runes[letterIdx])) + tStyle.Render(string(runes[letterIdx+1:]))
+				tagStr = tStyle.Render(string(runes[:letterIdx])) + kStyle.Render(string(runes[letterIdx])) + RenderThemeText(string(runes[letterIdx+1:]), tStyle)
 			} else {
 				tagStr = RenderThemeText(item.Tag, tStyle)
 			}
@@ -280,7 +280,12 @@ func (m *MenuModel) renderVariableHeightList() string {
 			availableWidth = 0
 		}
 
-		descStr := RenderThemeText(item.Desc, dStyle)
+		var descStr string
+		if isSelected && item.Desc != "" {
+			descStr = dStyle.Render(GetPlainText(item.Desc))
+		} else {
+			descStr = RenderThemeText(item.Desc, dStyle)
+		}
 		wrapped := lipgloss.NewStyle().Width(availableWidth).Render(descStr)
 		lines := strings.Split(strings.TrimSuffix(wrapped, "\n"), "\n")
 		for k, l := range lines {

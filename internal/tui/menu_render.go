@@ -209,9 +209,13 @@ func (m *MenuModel) viewSubMenu() string {
 		innerParts = append(innerParts, subtitleStyle.Render(subStr))
 	}
 
-	// Render core list with scrollbar
-	content := m.renderVerticalListBlock(ctx)
-	innerParts = append(innerParts, content)
+	// Render core list with scrollbar (or flow layout if flowMode is set)
+	if m.flowMode {
+		innerParts = append(innerParts, m.renderFlowContent(contentWidth))
+	} else {
+		content := m.renderVerticalListBlock(ctx)
+		innerParts = append(innerParts, content)
+	}
 
 	// Render buttons (if any)
 	buttons := m.getButtonSpecs()
