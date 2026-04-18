@@ -487,6 +487,9 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.config = msg.Config
 		InitStyles(m.config)
 		m.backdrop.header.SyncFlags()
+		m.backdrop.InvalidateBackdropCache()
+		updated, _ := m.logPanel.Update(msg)
+		m.logPanel = updated.(LogPanelModel)
 
 		// Manually trigger sizing to avoid the complexities of tea.WindowSizeMsg re-triggering
 		m.backdrop.SetSize(m.width, m.backdropHeight())

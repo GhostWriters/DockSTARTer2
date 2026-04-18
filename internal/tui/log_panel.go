@@ -78,11 +78,25 @@ type LogPanelModel struct {
 	historyDraft string   // saved in-progress text when navigating up
 
 	// Running console command state
-	consoleScanner *bufio.Scanner
-	consoleCancel  context.CancelFunc
+	consoleScanner       *bufio.Scanner
+	consoleCancel        context.CancelFunc
+	consoleConfigChanged bool
+	consoleAppsChanged   bool
 
 	// sessionActive locks the input bar while a TUI screen is busy.
 	sessionActive bool
+}
+
+// applyInputStyles updates the sinput colours from the current theme.
+func (m *LogPanelModel) applyInputStyles() {
+	styles := GetStyles()
+	bg := styles.Dialog.GetBackground()
+	tiStyles := textinput.DefaultStyles(true)
+	tiStyles.Focused.Prompt = styles.ItemNormal.Background(bg)
+	tiStyles.Focused.Text = styles.ItemNormal.Background(bg)
+	tiStyles.Blurred.Prompt = styles.ItemNormal.Background(bg)
+	tiStyles.Blurred.Text = styles.ItemNormal.Background(bg)
+	m.input.SetStyles(tiStyles)
 }
 
 // NewLogPanelModel creates a new console panel in collapsed state.
@@ -91,21 +105,15 @@ func NewLogPanelModel() LogPanelModel {
 
 	ti := textinput.New()
 	ti.Prompt = "> "
-	styles := GetStyles()
-	bg := styles.Dialog.GetBackground()
-	tiStyles := textinput.DefaultStyles(true)
-	tiStyles.Focused.Prompt = styles.ItemNormal.Background(bg)
-	tiStyles.Focused.Text = styles.ItemNormal.Background(bg)
-	tiStyles.Blurred.Prompt = styles.ItemNormal.Background(bg)
-	tiStyles.Blurred.Text = styles.ItemNormal.Background(bg)
-	ti.SetStyles(tiStyles)
 	inp := sinput.New(ti)
 
-	return LogPanelModel{
+	m := LogPanelModel{
 		viewport:   vp,
 		input:      inp,
 		historyIdx: -1,
 	}
+	m.applyInputStyles()
+	return m
 }
 
 // CollapsedHeight returns the height the panel always occupies (the toggle strip).
@@ -338,6 +346,8 @@ func (m *LogPanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 
 		sc := bufio.NewScanner(pr)
 		m.consoleScanner = sc
+		m.consoleConfigChanged = configChanged
+		m.consoleAppsChanged = appsChanged
 		return readConsoleBatchWithFlag(sc, cancel, configChanged, appsChanged)
 	}
 
@@ -390,13 +400,17 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case ConfigChangedMsg:
+		m.applyInputStyles()
+		return m, nil
+
 	case logLineMsg:
 		m.appendConsoleLines(strings.Split(string(msg), "\n"))
 		return m, waitForLogLine()
 
 	case consoleLinesMsg:
 		m.appendConsoleLines(msg.lines)
-		return m, readConsoleBatch(m.consoleScanner, m.consoleCancel)
+		return m, readConsoleBatchWithFlag(m.consoleScanner, m.consoleCancel, m.consoleConfigChanged, m.consoleAppsChanged)
 
 	case consoleDoneMsg:
 		m.consoleScanner = nil
