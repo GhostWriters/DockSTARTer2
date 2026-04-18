@@ -116,10 +116,11 @@ const (
 
 // Global Layer IDs for hit testing
 const (
-	IDLogPanel    = "log_panel"
-	IDLogToggle   = "log_toggle"
-	IDLogResize   = "log_resize"
-	IDLogViewport = "log_viewport"
+	IDLogPanel      = "log_panel"
+	IDLogToggle     = "log_toggle"
+	IDLogResize     = "log_resize"
+	IDLogViewport   = "log_viewport"
+	IDConsoleInput  = "console_input"
 	IDAppVersion  = "app_version"
 	IDTmplVersion = "tmpl_version"
 

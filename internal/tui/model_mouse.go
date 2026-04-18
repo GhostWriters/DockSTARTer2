@@ -167,7 +167,7 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		// 1. If hitting a context menu already open, let the hit region dispatch it (usually closes)
 		if strings.HasPrefix(hitID, "ctxmenu.") {
 			// Fall through to normal hit dispatch
-		} else if hit == nil || hitID == IDStatusBar || hitID == IDLogPanel || hitID == IDLogViewport || hitID == IDLogToggle || hitID == IDLogResize ||
+		} else if hit == nil || hitID == IDStatusBar || hitID == IDLogPanel || hitID == IDLogViewport || hitID == IDLogToggle || hitID == IDLogResize || hitID == IDConsoleInput ||
 			hitID == IDAppVersion || hitID == IDTmplVersion || hitID == IDHeaderFlags {
 			// 2. If hitting background or a global element that doesn't usually have a context menu,
 			// show the global context menu.
@@ -436,8 +436,26 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 				m.setLogPanelFocus(true)
 				return m, cmd, true
 			}
+		case IDConsoleInput:
+			if me, ok := msg.(tea.MouseClickMsg); ok {
+				m.setLogPanelFocus(true)
+				if me.Button == tea.MouseLeft {
+					blinkCmd := m.logPanel.FocusInput()
+					m.logPanel.input.HandleClick(me.X)
+					return m, blinkCmd, true
+				}
+				if me.Button == tea.MouseRight {
+					updated, cmd := m.logPanel.Update(LayerHitMsg{ID: IDConsoleInput, Button: tea.MouseRight, X: me.X, Y: me.Y, Hit: hit})
+					m.logPanel = updated.(LogPanelModel)
+					return m, cmd, true
+				}
+			}
 		case IDLogPanel, IDLogViewport:
 			m.setLogPanelFocus(true)
+			if m.logPanel.inputFocused {
+				m.logPanel.input.Blur()
+				m.logPanel.inputFocused = false
+			}
 			if _, ok := msg.(tea.MouseWheelMsg); ok {
 				updated, cmd := m.logPanel.Update(msg)
 				m.logPanel = updated.(LogPanelModel)
