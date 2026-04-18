@@ -1,0 +1,38 @@
+# DockSTARTer2 configuration file
+# Edit this file to customise your installation.
+
+[ui]
+theme              = "DockSTARTer"
+borders            = true
+button_borders     = true
+line_characters    = true
+shadow             = true
+shadow_level       = 2        # 0=off 1=light(░) 2=medium(▒) 3=dark(▓) 4=solid(█)
+scrollbar          = true
+border_color       = 3        # 1=primary border colour, 2=secondary, 3=both
+dialog_title_align  = "center" # "center" or "left"
+submenu_title_align = "left"   # "center" or "left"
+log_title_align     = "center" # "center" or "left"
+
+[paths]
+config_folder  = "${XDG_CONFIG_HOME}"
+compose_folder = "${XDG_CONFIG_HOME}/compose"
+
+# ── Remote access ─────────────────────────────────────────────────────────────
+# Set server.ssh.port to a non-zero value to enable the SSH server.
+# Set server.web.port to a non-zero value to also expose a browser-based terminal.
+# Ports 0 (default) mean the server is disabled.
+
+[server.ssh]
+port = 2222              # e.g. 2222
+
+[server.web]
+port = 8080              # e.g. 8080
+
+[server.auth]
+mode          = "none"   # "none", "password", or "pubkey"
+password      = ""       # bcrypt hash; set via the TUI settings screen
+auth_keys_file = ""      # path to authorized_keys file (pubkey mode)
+
+[server]
+host_key = ""            # path to persistent host key file; auto-generated if empty

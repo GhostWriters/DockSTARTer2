@@ -12,6 +12,10 @@ import (
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
+	"os"
+
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/serve"
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/update"
 	"DockSTARTer2/internal/version"
@@ -47,6 +51,11 @@ func handleConfigPm(ctx context.Context, group *CommandGroup) error {
 }
 
 func handleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, restArgs []string) error {
+	// Capture server state and executable path before the update replaces the binary.
+	serverInfo := serve.Sessions.ReadServerInfo()
+	wasServerRunning := serverInfo.PID != 0 && serve.ProcessExists(serverInfo.PID)
+	execPath, execErr := os.Executable()
+
 	switch group.Command {
 	case "-u", "--update":
 		appVer := ""
@@ -72,6 +81,25 @@ func handleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, res
 		}
 		_ = update.UpdateTemplates(ctx, state.Force, state.Yes, templBranch)
 	}
+
+	// PendingReExec is only set when the binary was actually replaced.
+	// Stop the external server process and spawn a new one with the updated binary.
+	// (When updating from inside the daemon, ReExec already called ServerDisconnect
+	// and DaemonShutdown — the daemon restarts itself via the re-exec mechanism.)
+	if len(update.PendingReExec) > 0 && wasServerRunning && !console.IsDaemon && execErr == nil {
+		logger.Notice(ctx, "Stopping server before restart...")
+		if err := serve.StopServer(ctx, false); err != nil {
+			logger.Warn(ctx, "Could not stop server: %v", err)
+		}
+		logger.Notice(ctx, "Restarting server with new binary...")
+		proc, err := serve.SpawnDaemon(execPath, tui.GetNavArgs())
+		if err != nil {
+			logger.Warn(ctx, "Failed to restart server: %v — run 'ds2 --server start' manually.", err)
+		} else {
+			logger.Notice(ctx, "Server restarted (PID %d).", proc.Pid)
+		}
+	}
+
 	return nil
 }
 

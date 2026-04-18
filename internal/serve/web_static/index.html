@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DockSTARTer2</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5/css/xterm.min.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+    #terminal { width: 100%; height: 100%; }
+  </style>
+</head>
+<body>
+  <div id="terminal"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10/lib/addon-fit.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-unicode11@0.8/lib/addon-unicode11.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-webgl@0.18/lib/addon-webgl.min.js"></script>
+
+  <script>
+    const term = new Terminal({
+      cursorBlink: true,
+      allowProposedApi: true,
+      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+      fontSize: 14,
+      lineHeight: 1.0,
+      letterSpacing: 0,
+    });
+
+    // Treat Unicode ambiguous-width characters (░▒▓ etc.) as single-cell so
+    // they match the width the server-side TUI renderer assumes.
+    const unicode11Addon = new Unicode11Addon.Unicode11Addon();
+    term.loadAddon(unicode11Addon);
+    term.unicode.activeVersion = '11';
+
+    const fitAddon = new FitAddon.FitAddon();
+    term.loadAddon(fitAddon);
+    term.open(document.getElementById('terminal'));
+
+    // Use the WebGL renderer for pixel-accurate box-drawing character rendering.
+    // Falls back to the default canvas renderer if WebGL is unavailable.
+    try {
+      const webglAddon = new WebglAddon.WebglAddon();
+      webglAddon.onContextLoss(function() {
+        webglAddon.dispose();
+      });
+      term.loadAddon(webglAddon);
+    } catch (e) {
+      console.warn('WebGL renderer unavailable, falling back to canvas:', e);
+    }
+
+    fitAddon.fit();
+
+    // WebSocket connection with automatic reconnect on unexpected close.
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    let ws = null;
+    let reconnectDelay = 1000;  // ms, doubles each attempt up to maxDelay
+    const maxDelay = 30000;
+    let intentionalClose = false;
+
+    function connect() {
+      intentionalClose = false;
+      ws = new WebSocket(proto + '//' + location.host + '/ws');
+      ws.binaryType = 'arraybuffer';
+
+      ws.onopen = function() {
+        reconnectDelay = 1000;
+        sendResize();
+      };
+
+      ws.onmessage = function(evt) {
+        if (evt.data instanceof ArrayBuffer) {
+          term.write(new Uint8Array(evt.data));
+        } else {
+          term.write(evt.data);
+        }
+      };
+
+      ws.onclose = function() {
+        if (intentionalClose) {
+          term.writeln('\r\n\r\n\x1b[33mConnection closed.\x1b[0m');
+          return;
+        }
+        const secs = Math.round(reconnectDelay / 1000);
+        term.writeln('\r\n\r\n\x1b[33mConnection lost. Reconnecting in ' + secs + 's...\x1b[0m');
+        setTimeout(function() {
+          term.writeln('\x1b[33mReconnecting...\x1b[0m');
+          connect();
+        }, reconnectDelay);
+        reconnectDelay = Math.min(reconnectDelay * 2, maxDelay);
+      };
+
+      ws.onerror = function() {
+        // onclose fires after onerror, so reconnect logic is handled there.
+      };
+    }
+
+    connect();
+
+    // Terminal input → WebSocket (text frame)
+    term.onData(function(data) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(data);
+      }
+    });
+
+    // Terminal resize → WebSocket (JSON text frame)
+    function sendResize() {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        fitAddon.fit();
+        ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+      }
+    }
+
+    term.onResize(function(size) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'resize', cols: size.cols, rows: size.rows }));
+      }
+    });
+
+    window.addEventListener('resize', function() {
+      fitAddon.fit();
+    });
+
+    // Prevent the browser context menu from appearing on right-click inside
+    // the terminal so right-click can be handled by the TUI application.
+    document.getElementById('terminal').addEventListener('contextmenu', function(e) {
+      e.preventDefault();
+    });
+  </script>
+</body>
+</html>

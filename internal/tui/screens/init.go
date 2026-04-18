@@ -54,6 +54,10 @@ func init() {
 		func(isRoot bool) tui.ScreenModel { return NewDisplayOptionsScreen(isRoot) },
 		[]string{"main", "options"})
 
+	tui.RegisterScreen("server",
+		func(isRoot bool) tui.ScreenModel { return NewServerOptionsScreen(isRoot) },
+		[]string{"main", "options"})
+
 	tui.RegisterScreen("app-select",
 		func(isRoot bool) tui.ScreenModel { return NewAppSelectionScreen(config.LoadAppConfig(), isRoot) },
 		[]string{"main", "config"})

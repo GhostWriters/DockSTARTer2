@@ -18,6 +18,7 @@ import (
 	"DockSTARTer2/internal/update"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/colorprofile"
 	"golang.org/x/term"
 )
 
@@ -86,23 +87,100 @@ func Initialize(ctx context.Context) error {
 	return nil
 }
 
+// WindowSizeEvent carries a terminal resize notification from a remote session.
+type WindowSizeEvent struct {
+	Width  int
+	Height int
+}
+
+// ProgramOptions controls the I/O streams used by a Bubble Tea program.
+// Nil fields fall back to os.Stdin / os.Stdout (local terminal behaviour).
+// Set Input and Output when running over SSH or another non-TTY transport.
+// WindowSize, when non-nil, is read by a goroutine in Start/StartEditor/
+// StartVarEditor that forwards resize events to the running program.
+type ProgramOptions struct {
+	Input      io.Reader
+	Output     io.Writer
+	WindowSize <-chan WindowSizeEvent
+
+	// Environ is the remote session's environment (e.g. []string{"TERM=xterm-256color",
+	// "COLORTERM=truecolor"}). Passed to tea.WithEnvironment so that color profile
+	// and terminal type are correctly detected for SSH and web sessions.
+	Environ []string
+
+	// InitialWidth and InitialHeight set the starting terminal dimensions before
+	// the first resize event arrives. Zero values are ignored.
+	InitialWidth  int
+	InitialHeight int
+}
+
 // NewProgram creates a new Bubble Tea program with standardized options.
 // It also sets the global program variable for cross-component communication.
-func NewProgram(model tea.Model) *tea.Program {
-	p := tea.NewProgram(model, tea.WithOutput(os.Stdout), tea.WithoutCatchPanics())
+func NewProgram(model tea.Model, opts ProgramOptions) *tea.Program {
+	out := opts.Output
+	if out == nil {
+		out = os.Stdout
+	}
+	teaOpts := []tea.ProgramOption{tea.WithOutput(out), tea.WithoutCatchPanics()}
+	if opts.Input != nil {
+		teaOpts = append(teaOpts, tea.WithInput(opts.Input))
+	}
+	if len(opts.Environ) > 0 {
+		// Remote sessions (SSH, web) are never real TTYs, so colorprofile's
+		// TTY detection always returns no-color regardless of COLORTERM. Force
+		// TrueColor explicitly so lipgloss renders full color over the network.
+		// We still pass the environment so TERM and other vars are available.
+		teaOpts = append(teaOpts,
+			tea.WithEnvironment(opts.Environ),
+			tea.WithColorProfile(colorprofile.TrueColor),
+		)
+	}
+	if opts.InitialWidth > 0 && opts.InitialHeight > 0 {
+		teaOpts = append(teaOpts, tea.WithWindowSize(opts.InitialWidth, opts.InitialHeight))
+	}
+	p := tea.NewProgram(model, teaOpts...)
 	program = p
 	return p
 }
 
+// startWindowSizeForwarder launches a goroutine that reads from opts.WindowSize
+// and sends tea.WindowSizeMsg to the program. The goroutine exits when ctx is
+// cancelled or the channel is closed.
+func startWindowSizeForwarder(ctx context.Context, p *tea.Program, opts ProgramOptions) {
+	if opts.WindowSize == nil {
+		return
+	}
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case ev, ok := <-opts.WindowSize:
+				if !ok {
+					return
+				}
+				p.Send(tea.WindowSizeMsg{Width: ev.Width, Height: ev.Height})
+			}
+		}
+	}()
+}
+
 // Start launches the TUI application
-func Start(ctx context.Context, startMenu string) error {
+func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error {
+	var pOpts ProgramOptions
+	if len(opts) > 0 {
+		pOpts = opts[0]
+	}
+	isSSH := pOpts.Input != nil
+
 	// Enable Virtual Terminal Processing (ANSI) on Windows early so color detection works
 	console.EnableVirtualTerminalProcessing()
 
-	// Capture initial terminal states for emergency restoration
-	// We do this first to ensure we catch the terminal in its "Clean" state.
-	initialInputState, _ = term.GetState(int(os.Stdin.Fd()))
-	initialOutputState, _ = term.GetState(int(os.Stdout.Fd()))
+	// Capture initial terminal states for emergency restoration (local terminal only)
+	if !isSSH {
+		initialInputState, _ = term.GetState(int(os.Stdin.Fd()))
+		initialOutputState, _ = term.GetState(int(os.Stdout.Fd()))
+	}
 
 	// Ensure the TUI is active and un-frozen
 	console.SetTUIDying(false)
@@ -155,11 +233,13 @@ func Start(ctx context.Context, startMenu string) error {
 
 	// Create and run the Bubble Tea program
 	// Note: AltScreen is set via View().AltScreen in v2
-	p := NewProgram(model)
+	p := NewProgram(model, pOpts)
 
 	// Initialize re-execution sync
 	programExited = make(chan struct{})
 
+	// Forward window resize events from remote sessions (no-op for local terminal)
+	startWindowSizeForwarder(ctx, p, pOpts)
 
 	// Start background update checker
 	go startUpdateChecker(ctx)
@@ -176,18 +256,20 @@ func Start(ctx context.Context, startMenu string) error {
 	// Signal that the program has exited
 	close(programExited)
 
-	// Drain any buffered mouse events from stdin before disabling mouse tracking.
-	// When the user clicks to confirm exit, SGR-encoded mouse motion/release events
-	// may already be in the stdin buffer. If not discarded, the shell reads them as
-	// raw text after the program exits (producing visible ANSI garbage).
-	drainStdin()
+	if !isSSH {
+		// Drain any buffered mouse events from stdin before disabling mouse tracking.
+		// When the user clicks to confirm exit, SGR-encoded mouse motion/release events
+		// may already be in the stdin buffer. If not discarded, the shell reads them as
+		// raw text after the program exits (producing visible ANSI garbage).
+		drainStdin()
 
-	// Reset terminal state on exit:
-	// 1. Reset colors (\x1b[0m)
-	// 2. Disable all mouse modes (1000, 1002, 1003)
-	// 3. Disable SGR mouse mode (1006) - prevents ANSI codes leaking to shell
-	// 4. Exit AltScreen (1049) if still active
-	fmt.Print("\x1b[0m\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1049l\n")
+		// Reset terminal state on exit:
+		// 1. Reset colors (\x1b[0m)
+		// 2. Disable all mouse modes (1000, 1002, 1003)
+		// 3. Disable SGR mouse mode (1006) - prevents ANSI codes leaking to shell
+		// 4. Exit AltScreen (1049) if still active
+		fmt.Print("\x1b[0m\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1049l\n")
+	}
 
 	if err != nil {
 		logger.FatalWithStack(ctx, "TUI Error: %v", err)
@@ -221,14 +303,21 @@ func RegisterEditorFactory(f EditorFactory) {
 // StartEditor launches the TUI with the tabbed vars editor as the entry screen.
 // appName is empty for the global vars editor, or an app name for the app-specific editor.
 // isRoot controls whether Back navigation exits immediately (true) or uses a pre-populated stack (false).
-func StartEditor(ctx context.Context, appName string, isRoot bool) error {
+func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...ProgramOptions) error {
+	var pOpts ProgramOptions
+	if len(opts) > 0 {
+		pOpts = opts[0]
+	}
+	isSSH := pOpts.Input != nil
+
 	// Enable Virtual Terminal Processing (ANSI) on Windows early so color detection works
 	console.EnableVirtualTerminalProcessing()
 
-	// Capture initial terminal states for emergency restoration
-	// We do this first to ensure we catch the terminal in its "Clean" state.
-	initialInputState, _ = term.GetState(int(os.Stdin.Fd()))
-	initialOutputState, _ = term.GetState(int(os.Stdout.Fd()))
+	// Capture initial terminal states for emergency restoration (local terminal only)
+	if !isSSH {
+		initialInputState, _ = term.GetState(int(os.Stdin.Fd()))
+		initialOutputState, _ = term.GetState(int(os.Stdout.Fd()))
+	}
 
 	// Ensure the TUI is active and un-frozen
 	console.SetTUIDying(false)
@@ -272,8 +361,10 @@ func StartEditor(ctx context.Context, appName string, isRoot bool) error {
 	}
 
 	model := NewAppModel(ctx, currentConfig, startScreen, initialStack...)
-	p := NewProgram(model)
+	p := NewProgram(model, pOpts)
 	programExited = make(chan struct{})
+
+	startWindowSizeForwarder(ctx, p, pOpts)
 
 	go startUpdateChecker(ctx)
 	go func() {
@@ -283,8 +374,10 @@ func StartEditor(ctx context.Context, appName string, isRoot bool) error {
 
 	finalModel, err := p.Run()
 	close(programExited)
-	drainStdin()
-	fmt.Print("\x1b[0m\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1049l\n")
+	if !isSSH {
+		drainStdin()
+		fmt.Print("\x1b[0m\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1049l\n")
+	}
 
 	if err != nil {
 		logger.FatalWithStack(ctx, "TUI Error: %v", err)
@@ -321,7 +414,13 @@ func RegisterVarEditorFactory(f VarEditorFactory) {
 // appName is "" for the global .env file, or an app name (from APP:VAR syntax) for .env.app.<appname>.
 // varName is the variable to edit (upper-cased by the caller).
 // file is the pre-resolved env file path (from resolveEnvVar).
-func StartVarEditor(ctx context.Context, appName, varName, file string) error {
+func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts ...ProgramOptions) error {
+	var pOpts ProgramOptions
+	if len(progOpts) > 0 {
+		pOpts = progOpts[0]
+	}
+	isSSH := pOpts.Input != nil
+
 	console.SetTUIEnabled(true)
 	defer console.SetTUIEnabled(false)
 
@@ -406,8 +505,10 @@ func StartVarEditor(ctx context.Context, appName, varName, file string) error {
 	startScreen := varEditorFactory(varName, displayAppName, appDesc, file, origVal, opts, helpText, docMarkdown, docAppName, onSave, tea.Quit)
 
 	model := NewAppModel(ctx, currentConfig, startScreen)
-	p := NewProgram(model)
+	p := NewProgram(model, pOpts)
 	programExited = make(chan struct{})
+
+	startWindowSizeForwarder(ctx, p, pOpts)
 
 	go startUpdateChecker(ctx)
 	go func() {
@@ -417,8 +518,10 @@ func StartVarEditor(ctx context.Context, appName, varName, file string) error {
 
 	finalModel, err := p.Run()
 	close(programExited)
-	drainStdin()
-	fmt.Print("\x1b[0m\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1049l\n")
+	if !isSSH {
+		drainStdin()
+		fmt.Print("\x1b[0m\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1049l\n")
+	}
 
 	if err != nil {
 		logger.FatalWithStack(ctx, "TUI Error: %v", err)
@@ -684,6 +787,22 @@ func reExecMenuArg() string {
 	return "start-" + CurrentPageName
 }
 
+// GetNavArgs returns the navigation args that should be appended when spawning
+// a daemon (or re-exec) to restore the current screen. Returns nil if no
+// page is active or the active page has no valid nav arg.
+func GetNavArgs() []string {
+	if CurrentPageName == "tabbed_vars" {
+		if CurrentEditorApp == "" {
+			return []string{"--start-edit-global"}
+		}
+		return []string{"--start-edit-app", CurrentEditorApp}
+	}
+	if menuArg := reExecMenuArg(); menuArg != "" {
+		return []string{"--menu", menuArg}
+	}
+	return nil
+}
+
 // TriggerAppUpdate returns a tea.Cmd that performs the application update.
 // It detects the currently active screen to support sticky restarts (using --menu pagename).
 func TriggerAppUpdate() tea.Cmd {
@@ -696,7 +815,13 @@ func TriggerAppUpdate() tea.Cmd {
 			yes := console.AssumeYes()
 
 			// Re-exec args restore the active screen after update.
-			reExecArgs := append([]string{}, console.CurrentFlags...)
+			// When running inside a daemon, re-exec must restart as a daemon.
+			var reExecArgs []string
+			if console.IsDaemon {
+				reExecArgs = append(reExecArgs, "--server-daemon")
+			} else {
+				reExecArgs = append(reExecArgs, console.CurrentFlags...)
+			}
 			if CurrentPageName == "tabbed_vars" {
 				// Restore the vars editor directly, preserving which app was being edited.
 				if CurrentEditorApp == "" {
@@ -711,7 +836,9 @@ func TriggerAppUpdate() tea.Cmd {
 					reExecArgs = append(reExecArgs, menuArg)
 				}
 			}
-			reExecArgs = append(reExecArgs, console.RestArgs...)
+			if !console.IsDaemon {
+				reExecArgs = append(reExecArgs, console.RestArgs...)
+			}
 			err := update.SelfUpdate(ctx, force, yes, "", reExecArgs)
 			if err == nil {
 				// Refresh update status and UI
@@ -775,12 +902,19 @@ func TriggerUpdate() tea.Cmd {
 			}
 
 			// Re-exec args restore the active screen after update.
-			reExecArgs := append([]string{}, console.CurrentFlags...)
+			var reExecArgs []string
+			if console.IsDaemon {
+				reExecArgs = append(reExecArgs, "--server-daemon")
+			} else {
+				reExecArgs = append(reExecArgs, console.CurrentFlags...)
+			}
 			reExecArgs = append(reExecArgs, "--menu")
 			if menuArg := reExecMenuArg(); menuArg != "" {
 				reExecArgs = append(reExecArgs, menuArg)
 			}
-			reExecArgs = append(reExecArgs, console.RestArgs...)
+			if !console.IsDaemon {
+				reExecArgs = append(reExecArgs, console.RestArgs...)
+			}
 			err := update.SelfUpdate(ctx, force, yes, "", reExecArgs)
 			if err == nil {
 				// Refresh update status and UI

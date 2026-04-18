@@ -5,6 +5,7 @@ import (
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/serve"
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/tui"
 	_ "DockSTARTer2/internal/tui/screens" // Register screen creators
@@ -22,69 +23,119 @@ type CmdState struct {
 	Yes   bool
 }
 
-// commandTitles maps command flags to display titles for the TUI dialog
-var commandTitles = map[string]string{
-	"-a":                         "Add Application",
-	"--add":                      "Add Application",
-	"-c":                         "Docker Compose",
-	"--compose":                  "Docker Compose",
-	"--config-pm":                "Select Package Manager",
-	"--config-pm-auto":           "Select Package Manager",
-	"--config-pm-list":           "List Known Package Managers",
-	"--config-pm-table":          "List Known Package Managers",
-	"--config-pm-existing-list":  "List Existing Package Managers",
-	"--config-pm-existing-table": "List Existing Package Managers",
-	"--config-show":              "Show Configuration",
-	"--show-config":              "Show Configuration",
-	"-e":                         "Creating Environment Variables",
-	"--env":                      "Creating Environment Variables",
-	"--env-appvars":              "Variables for Application",
-	"--env-appvars-lines":        "Variable Lines for Application",
-	"--env-get":                  "Get Value of Variable",
-	"--env-get-lower":            "Get Value of Variable",
-	"--env-get-line":             "Get Line of Variable",
-	"--env-get-lower-line":       "Get Line of Variable",
-	"--env-get-literal":          "Get Literal Value of Variable",
-	"--env-get-lower-literal":    "Get Literal Value of Variable",
-	"--env-set":                  "Set Value of Variable",
-	"--env-set-lower":            "Set Value of Variable",
-	"-l":                         "List All Applications",
-	"--list":                     "List All Applications",
-	"--list-builtin":             "List Builtin Applications",
-	"--list-deprecated":          "List Deprecated Applications",
-	"--list-nondeprecated":       "List Non-Deprecated Applications",
-	"--list-added":               "List Added Applications",
-	"--list-enabled":             "List Enabled Applications",
-	"--list-disabled":            "List Disabled Applications",
-	"--list-referenced":          "List Referenced Applications",
-	"-p":                         "Docker Prune",
-	"--prune":                    "Docker Prune",
-	"-r":                         "Remove Application",
-	"--remove":                   "Remove Application",
-	"-R":                         "Reset Actions",
-	"--reset":                    "Reset Actions",
-	"-s":                         "Application Status",
-	"--status":                   "Application Status",
-	"--status-enable":            "Enable Application",
-	"--status-disable":           "Disable Application",
-	"--theme-list":               "List Themes",
-	"--theme-table":              "List Themes",
-	"--theme-shadows":            "Turned On Shadows",
-	"--theme-no-shadows":         "Turned Off Shadows",
-	"--theme-shadow-level":       "Set Shadow Level",
-	"--theme-scrollbar":          "Turned On Scrollbars",
-	"--theme-no-scrollbar":       "Turned Off Scrollbars",
-	"--theme-lines":              "Turned On Line Drawing",
-	"--theme-no-lines":           "Turned Off Line Drawing",
-	"--theme-borders":            "Turned On Borders",
-	"--theme-no-borders":         "Turned Off Borders",
-	"--theme-button-borders":     "Turned On Button Borders",
-	"--theme-no-button-borders":  "Turned Off Button Borders",
-	"--theme-extract":            "Extract Theme",
-	"--theme-extract-all":        "Extract All Themes",
-	"--man":                      "Application Documentation",
-	"-S":                         "Select Applications",
-	"--select":                   "Select Applications",
+// commandDef holds metadata for a CLI command.
+// sessionLocked: true means the command modifies shared state (env files,
+// compose config, etc.) and must be blocked when a TUI session is active.
+// Add new commands here — the executor enforces sessionLocked automatically.
+type commandDef struct {
+	title         string
+	sessionLocked bool
+}
+
+// commandDefs is the single registry of all CLI commands and their properties.
+// Modelled after the bash version's CommandScript/CommandEnvBackup associative
+// arrays in DockSTARTer/includes/cmdline.sh.
+var commandDefs = map[string]commandDef{
+	// ── Read-only ────────────────────────────────────────────────────────────
+	"-h":                         {title: "Help"},
+	"--help":                     {title: "Help"},
+	"-V":                         {title: "Version"},
+	"--version":                  {title: "Version"},
+	"--man":                      {title: "Application Documentation"},
+	"-l":                         {title: "List All Applications"},
+	"--list":                     {title: "List All Applications"},
+	"--list-builtin":             {title: "List Builtin Applications"},
+	"--list-deprecated":          {title: "List Deprecated Applications"},
+	"--list-nondeprecated":       {title: "List Non-Deprecated Applications"},
+	"--list-added":               {title: "List Added Applications"},
+	"--list-enabled":             {title: "List Enabled Applications"},
+	"--list-disabled":            {title: "List Disabled Applications"},
+	"--list-referenced":          {title: "List Referenced Applications"},
+	"-s":                         {title: "Application Status"},
+	"--status":                   {title: "Application Status"},
+	"--env-appvars":              {title: "Variables for Application"},
+	"--env-appvars-lines":        {title: "Variable Lines for Application"},
+	"--env-get":                  {title: "Get Value of Variable"},
+	"--env-get-lower":            {title: "Get Value of Variable"},
+	"--env-get-line":             {title: "Get Line of Variable"},
+	"--env-get-lower-line":       {title: "Get Line of Variable"},
+	"--env-get-literal":          {title: "Get Literal Value of Variable"},
+	"--env-get-lower-literal":    {title: "Get Literal Value of Variable"},
+	"--config-show":              {title: "Show Configuration"},
+	"--show-config":              {title: "Show Configuration"},
+	"--theme-list":               {title: "List Themes"},
+	"--theme-table":              {title: "List Themes"},
+	"--theme-extract":            {title: "Extract Theme"},
+	"--theme-extract-all":        {title: "Extract All Themes"},
+	"--server":                   {title: "Server Management"},
+	"--server-daemon":            {title: "Server Daemon"},
+
+	// ── Session-locked (modifies env files / shared state) ───────────────────
+	"-a":                         {title: "Add Application",             sessionLocked: true},
+	"--add":                      {title: "Add Application",             sessionLocked: true},
+	"-r":                         {title: "Remove Application",          sessionLocked: true},
+	"--remove":                   {title: "Remove Application",          sessionLocked: true},
+	"-e":                         {title: "Creating Environment Variables", sessionLocked: true},
+	"--env":                      {title: "Creating Environment Variables", sessionLocked: true},
+	"--env-set":                  {title: "Set Value of Variable",       sessionLocked: true},
+	"--env-set-lower":            {title: "Set Value of Variable",       sessionLocked: true},
+	"--env-set-literal":          {title: "Set Value of Variable",       sessionLocked: true},
+	"--env-set-lower-literal":    {title: "Set Value of Variable",       sessionLocked: true},
+	"--env-edit":                 {title: "Edit Variable",               sessionLocked: true},
+	"--env-edit-lower":           {title: "Edit Variable",               sessionLocked: true},
+	"--status-enable":            {title: "Enable Application",          sessionLocked: true},
+	"--status-disable":           {title: "Disable Application",         sessionLocked: true},
+	"-c":                         {title: "Docker Compose",              sessionLocked: true},
+	"--compose":                  {title: "Docker Compose",              sessionLocked: true},
+	"-p":                         {title: "Docker Prune",                sessionLocked: true},
+	"--prune":                    {title: "Docker Prune",                sessionLocked: true},
+	"-i":                         {title: "Install",                     sessionLocked: true},
+	"--install":                  {title: "Install",                     sessionLocked: true},
+	"-u":                         {title: "Update",                      sessionLocked: true},
+	"--update":                   {title: "Update",                      sessionLocked: true},
+	"--update-app":               {title: "Update App",                  sessionLocked: true},
+	"--update-templates":         {title: "Update Templates",            sessionLocked: true},
+	"-R":                         {title: "Reset Actions",               sessionLocked: true},
+	"--reset":                    {title: "Reset Actions",               sessionLocked: true},
+	"-S":                         {title: "Select Applications",         sessionLocked: true},
+	"--select":                   {title: "Select Applications",         sessionLocked: true},
+	"-M":                         {title: "Menu",                        sessionLocked: true},
+	"--menu":                     {title: "Menu",                        sessionLocked: true},
+	"--edit-global":              {title: "Edit Global Variables",       sessionLocked: true},
+	"--start-edit-global":        {title: "Edit Global Variables",       sessionLocked: true},
+	"--edit-app":                 {title: "Edit App Variables",          sessionLocked: true},
+	"--start-edit-app":           {title: "Edit App Variables",          sessionLocked: true},
+	"--config-pm":                {title: "Select Package Manager",      sessionLocked: true},
+	"--config-pm-auto":           {title: "Select Package Manager",      sessionLocked: true},
+	"--config-pm-list":           {title: "List Known Package Managers", sessionLocked: true},
+	"--config-pm-table":          {title: "List Known Package Managers", sessionLocked: true},
+	"--config-pm-existing-list":  {title: "List Existing Package Managers", sessionLocked: true},
+	"--config-pm-existing-table": {title: "List Existing Package Managers", sessionLocked: true},
+	"--config-folder":            {title: "Set Config Folder",           sessionLocked: true},
+	"--config-compose-folder":    {title: "Set Compose Folder",          sessionLocked: true},
+	"-T":                         {title: "Set Theme",                   sessionLocked: true},
+	"--theme":                    {title: "Set Theme",                   sessionLocked: true},
+	"--theme-shadows":            {title: "Turned On Shadows",           sessionLocked: true},
+	"--theme-no-shadows":         {title: "Turned Off Shadows",          sessionLocked: true},
+	"--theme-shadow":             {title: "Turned On Shadows",           sessionLocked: true},
+	"--theme-no-shadow":          {title: "Turned Off Shadows",          sessionLocked: true},
+	"--theme-shadow-level":       {title: "Set Shadow Level",            sessionLocked: true},
+	"--theme-scrollbar":          {title: "Turned On Scrollbars",        sessionLocked: true},
+	"--theme-no-scrollbar":       {title: "Turned Off Scrollbars",       sessionLocked: true},
+	"--theme-lines":              {title: "Turned On Line Drawing",      sessionLocked: true},
+	"--theme-no-lines":           {title: "Turned Off Line Drawing",     sessionLocked: true},
+	"--theme-line":               {title: "Turned On Line Drawing",      sessionLocked: true},
+	"--theme-no-line":            {title: "Turned Off Line Drawing",     sessionLocked: true},
+	"--theme-borders":            {title: "Turned On Borders",           sessionLocked: true},
+	"--theme-no-borders":         {title: "Turned Off Borders",          sessionLocked: true},
+	"--theme-border":             {title: "Turned On Borders",           sessionLocked: true},
+	"--theme-no-border":          {title: "Turned Off Borders",          sessionLocked: true},
+	"--theme-button-borders":     {title: "Turned On Button Borders",    sessionLocked: true},
+	"--theme-no-button-borders":  {title: "Turned Off Button Borders",   sessionLocked: true},
+	"--theme-border-color":       {title: "Set Border Color",            sessionLocked: true},
+	"--theme-dialog-title":       {title: "Set Dialog Title Align",      sessionLocked: true},
+	"--theme-submenu-title":      {title: "Set Submenu Title Align",     sessionLocked: true},
+	"--theme-log-title":          {title: "Set Log Title Align",         sessionLocked: true},
 }
 
 func handleConfigSettings(ctx context.Context, group *CommandGroup) error {
@@ -297,6 +348,12 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			case "--theme-extract", "--theme-extract-all":
 				ranCommand = true
 				return handleThemeExtract(subCtx, &group)
+			case "--server":
+				ranCommand = true
+				return handleServer(subCtx, &group, &state, &conf)
+			case "--server-daemon":
+				ranCommand = true
+				return handleServeDaemon(subCtx, &group, &conf)
 			default:
 				// Custom command logic would be hooked in here.
 				// If we just had flags (group.Command == ""), ranCommand remains false
@@ -304,9 +361,16 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			return nil
 		}
 
+		// Block session-locked commands when a TUI session is active.
+		def := commandDefs[group.Command]
+		if def.sessionLocked && serve.Sessions.IsPrimaryActive() {
+			logger.Error(ctx, "Cannot run '%s' while a DockSTARTer2 session is active. "+
+				"Use '--server disconnect' to force-release the session.", group.Command)
+			return 1
+		}
+
 		if state.GUI && group.Command != "" && group.Command != "-M" && group.Command != "--menu" {
-			// Look up display title for this command
-			title := commandTitles[group.Command]
+			title := def.title
 			if title == "" {
 				title = "Running Command"
 			}

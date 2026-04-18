@@ -14,6 +14,7 @@ import (
 	"DockSTARTer2/internal/assets"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/serve"
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/update"
 	"DockSTARTer2/internal/version"
@@ -123,6 +124,8 @@ func run() (exitCode int) {
 	_ = update.CheckCurrentStatus(ctx)
 	// Check for application and template updates
 	update.CheckUpdates(ctx)
+	// Warn if an SSH server or active session is running
+	serve.CheckStartupStatus(ctx)
 	// Parse command line arguments
 	groups, err := cmd.Parse(os.Args[1:])
 	if err != nil {
