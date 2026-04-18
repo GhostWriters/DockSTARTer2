@@ -37,6 +37,11 @@ var TUIEmergencyShutdown func()
 // can pick up PendingReExec to exec the new binary.
 var DaemonShutdown func()
 
+// ServerDisconnect is registered by the serve package when running as a daemon.
+// Calling it disconnects all active SSH/web sessions before shutdown, preventing
+// active sessions from blocking the server context from cancelling.
+var ServerDisconnect func()
+
 // IsDaemon is true when the process was started with --server-daemon.
 // Used by the update path to ensure re-exec restarts as a daemon.
 var IsDaemon bool

@@ -35,6 +35,8 @@ func StartSSHServer(ctx context.Context, cfg config.ServerConfig, startMenu stri
 	defer cancelInner()
 	console.DaemonShutdown = cancelInner
 	defer func() { console.DaemonShutdown = nil }()
+	console.ServerDisconnect = func() { _ = Sessions.RequestDisconnect() }
+	defer func() { console.ServerDisconnect = nil }()
 	ctx = innerCtx
 	if cfg.SSH.Port == 0 {
 		return fmt.Errorf("server.ssh.port is not set in dockstarter2.toml")
