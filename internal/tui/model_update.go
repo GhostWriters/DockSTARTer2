@@ -61,6 +61,11 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.logPanel = updated.(LogPanelModel)
 		return m, logger.BatchRecoverTUI(m.ctx, cmd)
 
+	case consoleLinesMsg, consoleDoneMsg:
+		updated, cmd := m.logPanel.Update(msg)
+		m.logPanel = updated.(LogPanelModel)
+		return m, logger.BatchRecoverTUI(m.ctx, cmd)
+
 	case DragDoneMsg:
 		if msg.ID == logResizeZoneID {
 			updated, cmd := m.logPanel.Update(msg)
@@ -682,11 +687,15 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		return m, tea.Quit, true
 	}
 
-	// Cycle: Screen -> LogPanel -> Header(Flags) -> Header(App) -> Header(Tmpl) -> Screen
+	// Cycle: Screen -> LogPanel -> Input bar -> Header(Flags) -> Header(App) -> Header(Tmpl) -> Screen
 	if key.Matches(msg, Keys.Tab) {
 		if m.logPanelFocused {
+			// If panel is expanded and input not yet focused, Tab → input bar.
+			if m.logPanel.expanded && !m.logPanel.inputFocused && !m.logPanel.sessionActive {
+				return m, m.logPanel.FocusInput(), true
+			}
+			// Viewport focused (inputFocused already handled above): Tab → exit panel to header / dialog.
 			if m.dialog != nil {
-				// Dialog open: Skip header, return focus to dialog
 				m.setLogPanelFocus(false)
 				return m, nil, true
 			}
@@ -780,19 +789,44 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	}
 
 	// Focused Log Panel Actions
-	// When log panel is focused, it gets all scroll/navigation keys exclusively
+	// When log panel is focused, it gets all scroll/navigation keys exclusively.
 	// We handle this AFTER global cycling (Tab/ShiftTab) so we don't trap those keys.
 	if m.logPanelFocused {
-		// Esc unfocuses the panel and returns focus to the screen/dialog
+		if m.logPanel.inputFocused {
+			// Physical Tab/Shift+Tab only (not "."/","): cycle back to viewport.
+			if kp, ok := msg.(tea.KeyPressMsg); ok && (kp.String() == "tab" || kp.String() == "shift+tab") {
+				m.logPanel.input.Blur()
+				m.logPanel.inputFocused = false
+				return m, nil, true
+			}
+			// Input bar has focus: forward all keys (Esc handled inside the panel).
+			updated, cmd := m.logPanel.Update(msg)
+			m.logPanel = updated.(LogPanelModel)
+			return m, logger.BatchRecoverTUI(m.ctx, cmd), true
+		}
+		// Viewport-focused: Esc unfocuses the panel.
 		if key.Matches(msg, Keys.Esc) {
 			m.setLogPanelFocus(false)
 			return m, nil, true
 		}
-		// Enter or Space toggles the panel open/closed
-		if key.Matches(msg, Keys.Enter) || msg.String() == " " {
+		// Tab/Shift+Tab: cycle to input bar (two-section dialog cycle).
+		if key.Matches(msg, Keys.CycleTab) || key.Matches(msg, Keys.CycleShiftTab) {
+			if m.logPanel.expanded && !m.logPanel.sessionActive {
+				return m, m.logPanel.FocusInput(), true
+			}
+		}
+		// Enter focuses the input bar (if panel is expanded and not session-locked).
+		if key.Matches(msg, Keys.Enter) {
+			if m.logPanel.expanded && !m.logPanel.sessionActive {
+				return m, m.logPanel.FocusInput(), true
+			}
 			return m, func() tea.Msg { return toggleLogPanelMsg{} }, true
 		}
-		// All other keys go to the panel viewport
+		// Space toggles the panel open/closed.
+		if msg.String() == " " {
+			return m, func() tea.Msg { return toggleLogPanelMsg{} }, true
+		}
+		// All other keys go to the panel viewport.
 		updated, cmd := m.logPanel.Update(msg)
 		m.logPanel = updated.(LogPanelModel)
 		return m, logger.BatchRecoverTUI(m.ctx, cmd), true

@@ -1,16 +1,33 @@
 package console
 
 import (
-	"DockSTARTer2/internal/strutil"
+	"context"
 	"fmt"
+	"io"
 	"strings"
 	"unicode/utf8"
+
+	"DockSTARTer2/internal/strutil"
 )
 
 // PrintTable prints a table with the given headers and data.
 // data should be a flat list of strings, length must be a multiple of len(headers).
 // useLineChars determines if Unicode box drawing characters are used.
+// If ctx contains a TUI writer, output is sent there instead of stdout.
 func PrintTable(headers []string, data []string, useLineChars bool) {
+	PrintTableCtx(context.Background(), headers, data, useLineChars)
+}
+
+// PrintTableCtx is like PrintTable but routes output through the TUI writer in ctx when present.
+func PrintTableCtx(ctx context.Context, headers []string, data []string, useLineChars bool) {
+	var w io.Writer
+	if tw := GetTUIWriter(ctx); tw != nil {
+		w = tw
+	}
+	printTableTo(w, headers, data, useLineChars)
+}
+
+func printTableTo(w io.Writer, headers []string, data []string, useLineChars bool) {
 	cols := len(headers)
 	if cols == 0 {
 		return
@@ -92,11 +109,16 @@ func PrintTable(headers []string, data []string, useLineChars bool) {
 
 	// 4. Print Table
 
-	// Top Border
-	// We use ToConsoleANSI directly here since border chars might be colored if we supported it,
-	// but currently they are plain. However, for consistency we can print them directly if they don't have tags.
-	// But `ToConsoleANSI` is safe.
-	fmt.Println(ToConsoleANSI(topBorder.String()))
+	printLine := func(s string) {
+		line := ToConsoleANSI(s)
+		if w != nil {
+			fmt.Fprintln(w, line)
+		} else {
+			fmt.Println(line)
+		}
+	}
+
+	printLine(topBorder.String())
 
 	// Define helper for row printing
 	printRow := func(rowItems []string) {
@@ -114,15 +136,14 @@ func PrintTable(headers []string, data []string, useLineChars bool) {
 			rowBuilder.WriteString(" ")
 			rowBuilder.WriteString(charSet["Vertical"])
 		}
-		// Here `item` might contain tags, so we definitely want ToConsoleANSI for the final string
-		fmt.Println(ToConsoleANSI(rowBuilder.String()))
+		printLine(rowBuilder.String())
 	}
 
 	// Headers
 	printRow(headers)
 
 	// Middle Border
-	fmt.Println(ToConsoleANSI(middleBorder.String()))
+	printLine(middleBorder.String())
 
 	// Data
 	for i := 0; i < len(data); i += cols {
@@ -141,5 +162,5 @@ func PrintTable(headers []string, data []string, useLineChars bool) {
 	}
 
 	// Bottom Border
-	fmt.Println(ToConsoleANSI(bottomBorder.String()))
+	printLine(bottomBorder.String())
 }
