@@ -199,23 +199,17 @@ func StopServer(ctx context.Context, force bool) error {
 		return fmt.Errorf("finding server process (PID %d): %w", info.PID, err)
 	}
 
-	if force {
-		logger.Info(ctx, "Forcing server stop (PID %d)...", info.PID)
-		_ = proc.Kill()
-		Sessions.ReleaseServer()
-		Sessions.ForceRelease()
-		Sessions.ClearDisconnectRequest()
-		logger.Notice(ctx, "Server stopped.")
-		return nil
-	}
-
 	logger.Info(ctx, "Requesting graceful server stop (PID %d)...", info.PID)
 	if err := Sessions.RequestStop(); err != nil {
 		return fmt.Errorf("writing stop request: %w", err)
 	}
 
-	// Wait up to 10 seconds for the server PID file to be removed.
-	deadline := time.Now().Add(10 * time.Second)
+	timeout := 10 * time.Second
+	if force {
+		timeout = 5 * time.Second
+	}
+
+	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		time.Sleep(250 * time.Millisecond)
 		if !ProcessExists(info.PID) {
@@ -224,7 +218,17 @@ func StopServer(ctx context.Context, force bool) error {
 		}
 	}
 
-	logger.Warn(ctx, "Server did not stop within 10s. Use '--force --server stop' to force.")
+	if !force {
+		logger.Warn(ctx, "Server did not stop within 10s. Use '--force --server stop' to force.")
+		return nil
+	}
+
+	logger.Warn(ctx, "Server did not stop gracefully — forcing stop (PID %d).", info.PID)
+	_ = proc.Kill()
+	Sessions.ReleaseServer()
+	Sessions.ForceRelease()
+	Sessions.ClearDisconnectRequest()
+	logger.Notice(ctx, "Server stopped.")
 	return nil
 }
 
