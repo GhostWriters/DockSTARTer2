@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/logger"
 
 	"charm.land/bubbles/v2/help"
@@ -61,9 +62,21 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.logPanel = updated.(LogPanelModel)
 		return m, logger.BatchRecoverTUI(m.ctx, cmd)
 
-	case consoleLinesMsg, consoleDoneMsg:
+	case consoleLinesMsg:
 		updated, cmd := m.logPanel.Update(msg)
 		m.logPanel = updated.(LogPanelModel)
+		return m, logger.BatchRecoverTUI(m.ctx, cmd)
+
+	case consoleDoneMsg:
+		updated, cmd := m.logPanel.Update(msg)
+		m.logPanel = updated.(LogPanelModel)
+		if msg.configChanged {
+			conf := config.LoadAppConfig()
+			cmd = tea.Batch(cmd, func() tea.Msg { return ConfigChangedMsg{Config: conf} })
+		}
+		if msg.appsChanged {
+			cmd = tea.Batch(cmd, func() tea.Msg { return RefreshAppsListMsg{} })
+		}
 		return m, logger.BatchRecoverTUI(m.ctx, cmd)
 
 	case DragDoneMsg:

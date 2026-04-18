@@ -41,7 +41,11 @@ type toggleLogPanelMsg struct{}
 type consoleLinesMsg struct{ lines []string }
 
 // consoleDoneMsg signals that a console command has finished.
-type consoleDoneMsg struct{ err error }
+type consoleDoneMsg struct {
+	err           error
+	configChanged bool // reload TUI styles (ConfigChangedMsg)
+	appsChanged   bool // refresh app list (RefreshAppsListMsg)
+}
 
 // ─── Model ───────────────────────────────────────────────────────────────────
 
@@ -264,6 +268,12 @@ func runShellCmd(ctx context.Context, cmdStr string, w io.Writer) error {
 // readConsoleBatch reads up to 50 lines from the scanner and returns them as a
 // consoleLinesMsg, or consoleDoneMsg on EOF.
 func readConsoleBatch(sc *bufio.Scanner, cancel context.CancelFunc) tea.Cmd {
+	return readConsoleBatchWithFlag(sc, cancel, false, false)
+}
+
+// readConsoleBatchWithFlag is like readConsoleBatch but carries post-execution
+// flags so AppModel can trigger config reload and/or app list refresh.
+func readConsoleBatchWithFlag(sc *bufio.Scanner, cancel context.CancelFunc, configChanged, appsChanged bool) tea.Cmd {
 	return func() tea.Msg {
 		var batch []string
 		for i := 0; i < 50 && sc.Scan(); i++ {
@@ -273,7 +283,7 @@ func readConsoleBatch(sc *bufio.Scanner, cancel context.CancelFunc) tea.Cmd {
 			return consoleLinesMsg{lines: batch}
 		}
 		cancel()
-		return consoleDoneMsg{err: sc.Err()}
+		return consoleDoneMsg{err: sc.Err(), configChanged: configChanged, appsChanged: appsChanged}
 	}
 }
 
@@ -284,6 +294,7 @@ func isDS2Prefix(tok string) bool {
 	cmdName := strings.ToLower(version.CommandName)
 	return lower == cmdName || lower == "ds2" || lower == "ds"
 }
+
 
 // submitConsoleCommand parses and runs cmdStr.
 // ds2 commands (starting with - or prefixed with "ds2") are executed internally
@@ -312,6 +323,9 @@ func (m *LogPanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 			return func() tea.Msg { return consoleDoneMsg{} }
 		}
 
+		configChanged := commands.GroupsNeedConfigReload(groups)
+		appsChanged := commands.GroupsNeedAppsRefresh(groups)
+
 		ctx, cancel := context.WithCancel(context.Background())
 		m.consoleCancel = cancel
 		pr, pw := io.Pipe()
@@ -324,7 +338,7 @@ func (m *LogPanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 
 		sc := bufio.NewScanner(pr)
 		m.consoleScanner = sc
-		return readConsoleBatch(sc, cancel)
+		return readConsoleBatchWithFlag(sc, cancel, configChanged, appsChanged)
 	}
 
 	// Shell command
