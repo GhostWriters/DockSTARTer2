@@ -86,9 +86,9 @@ func PrintServerStatus(_ context.Context, cfg config.ServerConfig) {
 		if connType == "" {
 			connType = "ssh"
 		}
-		fmt.Printf("Session:  active — %s from %s (PID %d)\n", connType, ip, sessionInfo.PID)
+		fmt.Printf("Session:     %s from %s\n", connType, ip)
 	} else {
-		fmt.Println("Session:  none")
+		fmt.Println("Session:     not connected")
 	}
 }
 
