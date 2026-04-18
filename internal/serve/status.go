@@ -49,17 +49,17 @@ func PrintServerStatus(_ context.Context, cfg config.ServerConfig) {
 	serverRunning := serverInfo.PID != 0 && ProcessExists(serverInfo.PID)
 
 	if serverRunning {
-		fmt.Printf("Server:   running — SSH port %d (PID %d)\n", serverInfo.Port, serverInfo.PID)
+		fmt.Printf("SSH Server:  running — port %d (PID %d)\n", serverInfo.Port, serverInfo.PID)
 	} else if cfg.SSH.Port > 0 {
-		fmt.Printf("Server:   not running (configured port %d)\n", cfg.SSH.Port)
+		fmt.Printf("SSH Server:  not running (configured port %d)\n", cfg.SSH.Port)
 	} else {
-		fmt.Println("Server:   not running (no port configured)")
+		fmt.Println("SSH Server:  not running (no port configured)")
 	}
 
 	if serverRunning && serverInfo.WebPort > 0 {
-		fmt.Printf("Web:      running — port %d\n", serverInfo.WebPort)
+		fmt.Printf("Web Server:  running — port %d\n", serverInfo.WebPort)
 	} else if cfg.Web.Port > 0 {
-		fmt.Printf("Web:      not running (configured port %d)\n", cfg.Web.Port)
+		fmt.Printf("Web Server:  not running (configured port %d)\n", cfg.Web.Port)
 	}
 
 	// ── Session ───────────────────────────────────────────────────────────────

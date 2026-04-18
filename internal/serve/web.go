@@ -43,7 +43,7 @@ func StartWebServer(ctx context.Context, cfg config.ServerConfig, signer gossh.S
 		Handler: mux,
 	}
 
-	logger.Info(ctx, "Web server listening on http://localhost%s", addr)
+	logger.Notice(ctx, "Web server started on port %d", cfg.Web.Port)
 
 	go func() {
 		<-ctx.Done()

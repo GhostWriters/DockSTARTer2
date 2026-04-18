@@ -125,7 +125,7 @@ func StartSSHServer(ctx context.Context, cfg config.ServerConfig, startMenu stri
 		return fmt.Errorf("creating SSH server: %w", err)
 	}
 
-	logger.Info(ctx, "SSH server listening on %s", addr)
+	logger.Notice(ctx, "SSH server started on port %d", cfg.SSH.Port)
 
 	webPort := 0
 	if cfg.Web.Port > 0 {
