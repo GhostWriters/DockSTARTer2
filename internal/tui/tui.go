@@ -244,6 +244,9 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	// Start background update checker
 	go startUpdateChecker(ctx)
 
+	// Watch config file for external changes (e.g. ds2 CLI or web server)
+	startConfigWatcher(ctx, p)
+
 	// Listen for context cancellation to shutdown program
 	go func() {
 		<-ctx.Done()

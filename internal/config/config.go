@@ -182,6 +182,30 @@ func LoadAppConfig() AppConfig {
 	return conf
 }
 
+// TryLoadAppConfig loads and validates the config file strictly, returning an
+// error if the file cannot be read or parsed. Unlike LoadAppConfig it does not
+// fall back to defaults or write anything to disk, making it safe to call from
+// a file watcher to gate whether a change should be applied.
+func TryLoadAppConfig() (AppConfig, error) {
+	var conf AppConfig
+	_ = toml.Unmarshal(defaultsToml, &conf)
+	conf.Arch = getArch()
+
+	data, err := os.ReadFile(paths.GetConfigFilePath())
+	if err != nil {
+		return AppConfig{}, err
+	}
+	if err := toml.Unmarshal(data, &conf); err != nil {
+		return AppConfig{}, err
+	}
+	conf.RawPaths = conf.Paths
+	conf.Paths.ConfigFolder = filepath.Clean(ExpandVariables(conf.Paths.ConfigFolder))
+	conf.Paths.ComposeFolder = filepath.Clean(ExpandVariables(conf.Paths.ComposeFolder))
+	conf.ConfigDir = conf.Paths.ConfigFolder
+	conf.ComposeDir = conf.Paths.ComposeFolder
+	return conf, nil
+}
+
 // SaveAppConfig writes the configuration to dockstarter2.toml.
 // Paths are stored in their unexpanded form (e.g. ${XDG_CONFIG_HOME}) so that
 // the file remains portable and variables are resolved fresh on each read.
