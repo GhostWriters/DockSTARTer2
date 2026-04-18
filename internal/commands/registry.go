@@ -5,10 +5,14 @@ package commands
 // Def holds metadata for a single CLI command flag.
 // SessionLocked: blocks the command when a TUI session is active.
 // ConsoleSafe: the command can be run from the console panel input bar.
+// ConfigChanging: after running, the TUI should reload config/styles (ConfigChangedMsg).
+// AppsChanging: after running, the TUI should refresh the app list (RefreshAppsListMsg).
 type Def struct {
 	Title         string
 	SessionLocked bool
 	ConsoleSafe   bool
+	ConfigChanging bool
+	AppsChanging   bool
 }
 
 // Registry maps CLI flag strings to their definitions.
@@ -50,10 +54,10 @@ var Registry = map[string]Def{
 	"--server-daemon":            {Title: "Server Daemon"},           // launches daemon — not console-safe
 
 	// ── Session-locked (modifies env files / shared state) ────────────────────
-	"-a":                         {Title: "Add Application",              SessionLocked: true, ConsoleSafe: true},
-	"--add":                      {Title: "Add Application",              SessionLocked: true, ConsoleSafe: true},
-	"-r":                         {Title: "Remove Application",           SessionLocked: true, ConsoleSafe: true},
-	"--remove":                   {Title: "Remove Application",           SessionLocked: true, ConsoleSafe: true},
+	"-a":                         {Title: "Add Application",              SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
+	"--add":                      {Title: "Add Application",              SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
+	"-r":                         {Title: "Remove Application",           SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
+	"--remove":                   {Title: "Remove Application",           SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
 	"-e":                         {Title: "Creating Environment Variables", SessionLocked: true}, // launches TUI editor
 	"--env":                      {Title: "Creating Environment Variables", SessionLocked: true}, // launches TUI editor
 	"--env-set":                  {Title: "Set Value of Variable",        SessionLocked: true, ConsoleSafe: true},
@@ -62,20 +66,20 @@ var Registry = map[string]Def{
 	"--env-set-lower-literal":    {Title: "Set Value of Variable",        SessionLocked: true, ConsoleSafe: true},
 	"--env-edit":                 {Title: "Edit Variable",                SessionLocked: true}, // launches TUI editor
 	"--env-edit-lower":           {Title: "Edit Variable",                SessionLocked: true}, // launches TUI editor
-	"--status-enable":            {Title: "Enable Application",           SessionLocked: true, ConsoleSafe: true},
-	"--status-disable":           {Title: "Disable Application",          SessionLocked: true, ConsoleSafe: true},
+	"--status-enable":            {Title: "Enable Application",           SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
+	"--status-disable":           {Title: "Disable Application",          SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
 	"-c":                         {Title: "Docker Compose",               SessionLocked: true, ConsoleSafe: true},
 	"--compose":                  {Title: "Docker Compose",               SessionLocked: true, ConsoleSafe: true},
 	"-p":                         {Title: "Docker Prune",                 SessionLocked: true, ConsoleSafe: true},
 	"--prune":                    {Title: "Docker Prune",                 SessionLocked: true, ConsoleSafe: true},
 	"-i":                         {Title: "Install",                      SessionLocked: true, ConsoleSafe: true},
 	"--install":                  {Title: "Install",                      SessionLocked: true, ConsoleSafe: true},
-	"-u":                         {Title: "Update",                       SessionLocked: true, ConsoleSafe: true},
-	"--update":                   {Title: "Update",                       SessionLocked: true, ConsoleSafe: true},
-	"--update-app":               {Title: "Update App",                   SessionLocked: true, ConsoleSafe: true},
-	"--update-templates":         {Title: "Update Templates",             SessionLocked: true, ConsoleSafe: true},
-	"-R":                         {Title: "Reset Actions",                SessionLocked: true, ConsoleSafe: true},
-	"--reset":                    {Title: "Reset Actions",                SessionLocked: true, ConsoleSafe: true},
+	"-u":                         {Title: "Update",                       SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
+	"--update":                   {Title: "Update",                       SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
+	"--update-app":               {Title: "Update App",                   SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
+	"--update-templates":         {Title: "Update Templates",             SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
+	"-R":                         {Title: "Reset Actions",                SessionLocked: true, ConsoleSafe: true, AppsChanging: true, ConfigChanging: true},
+	"--reset":                    {Title: "Reset Actions",                SessionLocked: true, ConsoleSafe: true, AppsChanging: true, ConfigChanging: true},
 	"-S":                         {Title: "Select Applications",          SessionLocked: true}, // launches TUI
 	"--select":                   {Title: "Select Applications",          SessionLocked: true}, // launches TUI
 	"-M":                         {Title: "Menu",                         SessionLocked: true}, // launches TUI
@@ -90,31 +94,31 @@ var Registry = map[string]Def{
 	"--config-pm-table":          {Title: "List Known Package Managers",  SessionLocked: true, ConsoleSafe: true},
 	"--config-pm-existing-list":  {Title: "List Existing Package Managers", SessionLocked: true, ConsoleSafe: true},
 	"--config-pm-existing-table": {Title: "List Existing Package Managers", SessionLocked: true, ConsoleSafe: true},
-	"--config-folder":            {Title: "Set Config Folder",            SessionLocked: true, ConsoleSafe: true},
-	"--config-compose-folder":    {Title: "Set Compose Folder",           SessionLocked: true, ConsoleSafe: true},
-	"-T":                         {Title: "Set Theme",                    SessionLocked: true, ConsoleSafe: true},
-	"--theme":                    {Title: "Set Theme",                    SessionLocked: true, ConsoleSafe: true},
-	"--theme-shadows":            {Title: "Turned On Shadows",            SessionLocked: true, ConsoleSafe: true},
-	"--theme-no-shadows":         {Title: "Turned Off Shadows",           SessionLocked: true, ConsoleSafe: true},
-	"--theme-shadow":             {Title: "Turned On Shadows",            SessionLocked: true, ConsoleSafe: true},
-	"--theme-no-shadow":          {Title: "Turned Off Shadows",           SessionLocked: true, ConsoleSafe: true},
-	"--theme-shadow-level":       {Title: "Set Shadow Level",             SessionLocked: true, ConsoleSafe: true},
-	"--theme-scrollbar":          {Title: "Turned On Scrollbars",         SessionLocked: true, ConsoleSafe: true},
-	"--theme-no-scrollbar":       {Title: "Turned Off Scrollbars",        SessionLocked: true, ConsoleSafe: true},
-	"--theme-lines":              {Title: "Turned On Line Drawing",       SessionLocked: true, ConsoleSafe: true},
-	"--theme-no-lines":           {Title: "Turned Off Line Drawing",      SessionLocked: true, ConsoleSafe: true},
-	"--theme-line":               {Title: "Turned On Line Drawing",       SessionLocked: true, ConsoleSafe: true},
-	"--theme-no-line":            {Title: "Turned Off Line Drawing",      SessionLocked: true, ConsoleSafe: true},
-	"--theme-borders":            {Title: "Turned On Borders",            SessionLocked: true, ConsoleSafe: true},
-	"--theme-no-borders":         {Title: "Turned Off Borders",           SessionLocked: true, ConsoleSafe: true},
-	"--theme-border":             {Title: "Turned On Borders",            SessionLocked: true, ConsoleSafe: true},
-	"--theme-no-border":          {Title: "Turned Off Borders",           SessionLocked: true, ConsoleSafe: true},
-	"--theme-button-borders":     {Title: "Turned On Button Borders",     SessionLocked: true, ConsoleSafe: true},
-	"--theme-no-button-borders":  {Title: "Turned Off Button Borders",    SessionLocked: true, ConsoleSafe: true},
-	"--theme-border-color":       {Title: "Set Border Color",             SessionLocked: true, ConsoleSafe: true},
-	"--theme-dialog-title":       {Title: "Set Dialog Title Align",       SessionLocked: true, ConsoleSafe: true},
-	"--theme-submenu-title":      {Title: "Set Submenu Title Align",      SessionLocked: true, ConsoleSafe: true},
-	"--theme-log-title":          {Title: "Set Log Title Align",          SessionLocked: true, ConsoleSafe: true},
+	"--config-folder":            {Title: "Set Config Folder",            SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
+	"--config-compose-folder":    {Title: "Set Compose Folder",           SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
+	"-T":                         {Title: "Set Theme",                    SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
+	"--theme":                    {Title: "Set Theme",                    SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-shadows":            {Title: "Turned On Shadows",            SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-no-shadows":         {Title: "Turned Off Shadows",           SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-shadow":             {Title: "Turned On Shadows",            SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-no-shadow":          {Title: "Turned Off Shadows",           SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-shadow-level":       {Title: "Set Shadow Level",             SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-scrollbar":          {Title: "Turned On Scrollbars",         SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-no-scrollbar":       {Title: "Turned Off Scrollbars",        SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-lines":              {Title: "Turned On Line Drawing",       SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-no-lines":           {Title: "Turned Off Line Drawing",      SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-line":               {Title: "Turned On Line Drawing",       SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-no-line":            {Title: "Turned Off Line Drawing",      SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-borders":            {Title: "Turned On Borders",            SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-no-borders":         {Title: "Turned Off Borders",           SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-border":             {Title: "Turned On Borders",            SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-no-border":          {Title: "Turned Off Borders",           SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-button-borders":     {Title: "Turned On Button Borders",     SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-no-button-borders":  {Title: "Turned Off Button Borders",    SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-border-color":       {Title: "Set Border Color",             SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-dialog-title":       {Title: "Set Dialog Title Align",       SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-submenu-title":      {Title: "Set Submenu Title Align",      SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-log-title":          {Title: "Set Log Title Align",          SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
 }
 
 // IsConsoleSafe reports whether a command flag is safe to run from the console panel.
@@ -125,4 +129,26 @@ func IsConsoleSafe(flag string) bool {
 // IsSessionLocked reports whether a command flag requires an inactive TUI session.
 func IsSessionLocked(flag string) bool {
 	return Registry[flag].SessionLocked
+}
+
+// GroupsNeedConfigReload reports whether any group in groups has ConfigChanging set,
+// meaning the TUI should reload config/styles after execution.
+func GroupsNeedConfigReload(groups []CommandGroup) bool {
+	for _, g := range groups {
+		if Registry[g.Command].ConfigChanging {
+			return true
+		}
+	}
+	return false
+}
+
+// GroupsNeedAppsRefresh reports whether any group in groups has AppsChanging set,
+// meaning the TUI should refresh the app list after execution.
+func GroupsNeedAppsRefresh(groups []CommandGroup) bool {
+	for _, g := range groups {
+		if Registry[g.Command].AppsChanging {
+			return true
+		}
+	}
+	return false
 }
