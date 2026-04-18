@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"path/filepath"
 	"time"
 
 	"DockSTARTer2/internal/config"
@@ -17,8 +18,14 @@ import (
 // On a valid change it sends ConfigChangedMsg to the running program.
 // Invalid TOML files are silently ignored so a mid-write partial file does not
 // flash bad state into the UI.
+//
+// We watch the parent directory rather than the file itself because many
+// editors and os.WriteFile use atomic rename-based writes, which cause the
+// file watcher to lose track of the inode after the first write.
 func startConfigWatcher(ctx context.Context, p *tea.Program) {
 	cfgPath := paths.GetConfigFilePath()
+	cfgDir := filepath.Dir(cfgPath)
+	cfgBase := filepath.Base(cfgPath)
 
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -26,9 +33,8 @@ func startConfigWatcher(ctx context.Context, p *tea.Program) {
 		return
 	}
 
-	if err := watcher.Add(cfgPath); err != nil {
-		// File may not exist yet; not fatal.
-		logger.Debug(ctx, "config watcher: cannot watch %s: %v", cfgPath, err)
+	if err := watcher.Add(cfgDir); err != nil {
+		logger.Debug(ctx, "config watcher: cannot watch %s: %v", cfgDir, err)
 		watcher.Close()
 		return
 	}
@@ -48,7 +54,11 @@ func startConfigWatcher(ctx context.Context, p *tea.Program) {
 				if !ok {
 					return
 				}
-				if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) {
+				// Filter to only the config file.
+				if filepath.Base(event.Name) != cfgBase {
+					continue
+				}
+				if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) || event.Has(fsnotify.Rename) {
 					if timer != nil {
 						timer.Stop()
 					}
