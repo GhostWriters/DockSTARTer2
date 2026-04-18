@@ -48,18 +48,30 @@ func PrintServerStatus(_ context.Context, cfg config.ServerConfig) {
 	serverInfo := Sessions.ReadServerInfo()
 	serverRunning := serverInfo.PID != 0 && ProcessExists(serverInfo.PID)
 
-	if serverRunning {
-		fmt.Printf("SSH Server:  running — port %d (PID %d)\n", serverInfo.Port, serverInfo.PID)
-	} else if cfg.SSH.Port > 0 {
-		fmt.Printf("SSH Server:  not running (configured port %d)\n", cfg.SSH.Port)
+	sshPort := serverInfo.Port
+	if sshPort == 0 {
+		sshPort = cfg.SSH.Port
+	}
+	if sshPort > 0 {
+		if serverRunning {
+			fmt.Printf("SSH Server:  port %d (running, PID %d)\n", sshPort, serverInfo.PID)
+		} else {
+			fmt.Printf("SSH Server:  port %d (stopped)\n", sshPort)
+		}
 	} else {
-		fmt.Println("SSH Server:  not running (no port configured)")
+		fmt.Println("SSH Server:  not configured")
 	}
 
-	if serverRunning && serverInfo.WebPort > 0 {
-		fmt.Printf("Web Server:  running — port %d\n", serverInfo.WebPort)
-	} else if cfg.Web.Port > 0 {
-		fmt.Printf("Web Server:  not running (configured port %d)\n", cfg.Web.Port)
+	webPort := serverInfo.WebPort
+	if webPort == 0 {
+		webPort = cfg.Web.Port
+	}
+	if webPort > 0 {
+		if serverRunning && serverInfo.WebPort > 0 {
+			fmt.Printf("Web Server:  port %d (running)\n", webPort)
+		} else {
+			fmt.Printf("Web Server:  port %d (stopped)\n", webPort)
+		}
 	}
 
 	// ── Session ───────────────────────────────────────────────────────────────
