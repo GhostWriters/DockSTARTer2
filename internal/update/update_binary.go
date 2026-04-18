@@ -78,15 +78,23 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 		// Specific version requested
 		latest, found, err = updater.DetectVersion(ctx, repo, requestedVersion)
 	} else {
-		// Default latest for the channel (filtered by channel in getUpdater)
-		latest, found, err = updater.DetectLatest(ctx, repo)
+		// Find the latest tag for this specific channel, then detect that version.
+		// This avoids DetectLatest returning a release from a different channel.
+		channelTag, tagErr := latestChannelTag(requestedVersion)
+		if tagErr != nil {
+			logger.Debug(ctx, "Channel tag lookup failed: %v (falling back to DetectLatest)", tagErr)
+			latest, found, err = updater.DetectLatest(ctx, repo)
+		} else if channelTag == "" {
+			found = false
+		} else {
+			latest, found, err = updater.DetectVersion(ctx, repo, channelTag)
+		}
 	}
 
 	if err != nil {
 		return fmt.Errorf("failed to detect latest version: %w", err)
 	}
 	if !found {
-		// Show warning for channels with no releases (e.g., dev)
 		msg := []string{
 			fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} channel '{{|Branch|}}%s{{[-]}}' appears to no longer exist (no releases found).", version.ApplicationName, requestedVersion),
 			fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} is currently on version '{{|Version|}}%s{{[-]}}'.", version.ApplicationName, version.Version),
@@ -98,14 +106,6 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 
 	remoteVersion := latest.Version()
 	currentVersion := version.Version
-	// Strict channel matching (except when a specific version was requested)
-	if !strings.HasPrefix(requestedVersion, "v") {
-		remoteChannel := GetChannelFromVersion(remoteVersion)
-		if !strings.EqualFold(remoteChannel, currentChannel) && !strings.EqualFold(requestedVersion, remoteChannel) {
-			logger.Warn(ctx, "{{|ApplicationName|}}%s{{[-]}} is on channel '{{|Branch|}}%s{{[-]}}', but latest release is on channel '{{|Branch|}}%s{{[-]}}'. Ignoring.", version.ApplicationName, currentChannel, remoteChannel)
-			return nil
-		}
-	}
 
 	// Ensure versions start with 'v' for consistent display
 	if !strings.HasPrefix(remoteVersion, "v") {

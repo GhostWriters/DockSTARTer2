@@ -147,19 +147,17 @@ func checkAppUpdate(ctx context.Context) (updateAvailable bool, ver string, hadE
 		return false, "", true
 	}
 
-	latest, found, err := updater.DetectLatest(ctx, repo)
+	channelTag, err := latestChannelTag(channel)
+	if err != nil || channelTag == "" {
+		return false, "", false
+	}
+
+	latest, found, err := updater.DetectVersion(ctx, repo, channelTag)
 	if err != nil || !found {
 		return false, "", true
 	}
 
-	remoteVersion := latest.Version()
-	remoteChannel := GetChannelFromVersion(remoteVersion)
-	if !strings.EqualFold(remoteChannel, channel) {
-		// Not the same channel, ignore
-		return false, "", false
-	}
-
-	if compareVersions(remoteVersion, version.Version) > 0 {
+	if compareVersions(latest.Version(), version.Version) > 0 {
 		return true, latest.Version(), false
 	}
 
@@ -337,6 +335,17 @@ func getUpdater(ctx context.Context, channel string) (*selfupdate.Updater, error
 // hasChannelTags checks if any tags matching the channel exist on GitHub.
 // This uses git ls-remote to avoid hitting the GitHub releases API unnecessarily.
 func hasChannelTags(ctx context.Context, channel string) (bool, error) {
+	tag, err := latestChannelTag(channel)
+	if err != nil {
+		return false, err
+	}
+	return tag != "", nil
+}
+
+// latestChannelTag returns the most recent tag for the given channel by
+// listing remote tags and picking the lexicographically greatest match.
+// Version tags sort correctly lexicographically (v2.YYYYMMDD.N[-suffix]).
+func latestChannelTag(channel string) (string, error) {
 	remote := git.NewRemote(nil, &gitConfig.RemoteConfig{
 		Name: "origin",
 		URLs: []string{"https://github.com/GhostWriters/DockSTARTer2.git"},
@@ -344,24 +353,23 @@ func hasChannelTags(ctx context.Context, channel string) (bool, error) {
 
 	refs, err := remote.List(&git.ListOptions{})
 	if err != nil {
-		return false, err
+		return "", err
 	}
 
-	// Look for tags matching the channel pattern
+	latest := ""
 	for _, ref := range refs {
 		if !ref.Name().IsTag() {
 			continue
 		}
 		tagName := ref.Name().Short()
-
-		// Check if this tag matches the channel
-		tagChannel := GetChannelFromVersion(tagName)
-		if strings.EqualFold(tagChannel, channel) {
-			return true, nil
+		if !strings.EqualFold(GetChannelFromVersion(tagName), channel) {
+			continue
+		}
+		if tagName > latest {
+			latest = tagName
 		}
 	}
-
-	return false, nil
+	return latest, nil
 }
 
 // GetCurrentChannel returns the update channel based on the current version string.
