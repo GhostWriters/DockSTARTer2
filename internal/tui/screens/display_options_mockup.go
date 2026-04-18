@@ -41,6 +41,7 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 		ButtonBorders:       s.config.UI.ButtonBorders,
 		Screen:              bgStyle,
 		Dialog:              dContent,
+		ContentBackground:   dContent,
 		DialogTitle:         tui.SemanticRawStyle("Preview_Title"),
 		DialogTitleHelp:     tui.SemanticRawStyle("Preview_TitleHelp"),
 		SubmenuTitle:        tui.SemanticRawStyle("Preview_TitleSubMenu"),
@@ -244,21 +245,13 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	// Help line is full width (no side borders)
 	helpRow := paddedLine(" Help: [Tab] Cycle | [Esc] Back", helpStyle, " ", helpCtx)
 
-	// --- 4. Log Toggle Strip ---
-	// Actual UI uses HelpLine background for the strip, but LogBox/LogPanel for the label
-	logBoxStyle := tui.SemanticRawStyle("Preview_LogBox")
-	logPanelStyle := tui.SemanticRawStyle("Preview_LogPanel")
-
-	logStripCtx := previewCtx
-	logStripCtx.Dialog = logBoxStyle // Label should have LogBox (Black) background
+	// --- 4. Console Toggle Strip ---
+	// Both strip and label: ConsoleTitle fg on ConsoleBox bg.
+	consoleTitleStyle := tui.SemanticRawStyle("Preview_ConsoleTitle")
+	consoleBorderStyle := tui.SemanticRawStyle("Preview_ConsoleBorder")
 
 	marker := "^"
-	label := tui.RenderThemeTextCtx(" "+marker+" Log "+marker+" ", logStripCtx)
-
-	// The strip itself uses HelpLine (Cyan) background
-	stripStyle := lipgloss.NewStyle().
-		Foreground(logPanelStyle.GetForeground()).
-		Background(helpStyle.GetBackground())
+	label := consoleTitleStyle.Render(" " + marker + " Console " + marker + " ")
 
 	var leftT, rightT, borderTop, topLeftC, topRightC string
 	if s.config.UI.LineCharacters {
@@ -295,9 +288,9 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	rightDashes := strutil.Repeat(borderTop, remaining)
 
 	// Render in pieces to prevent inner resets from Clearing the background
-	logStripRow := stripStyle.Render(topLeftC+leftDashes+leftT+" ") +
+	logStripRow := consoleBorderStyle.Render(topLeftC+leftDashes+leftT+" ") +
 		label +
-		stripStyle.Render(" "+rightT+rightDashes+topRightC)
+		consoleBorderStyle.Render(" "+rightT+rightDashes+topRightC)
 
 	mockupParts := []string{
 		headerRow,

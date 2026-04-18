@@ -696,11 +696,10 @@ func (m LogPanelModel) ViewString() string {
 
 	combined := vpView + "\n" + inputBox
 
-	stripStyle := lipgloss.NewStyle().
-		Foreground(ctx.LogPanelColor).
-		Background(ctx.HelpLine.GetBackground())
+	consoleTitleStyle := SemanticRawStyle("ConsoleTitle")
+	consoleBorderStyle := SemanticRawStyle("ConsoleBorder")
 
-	return RenderTopBorderBoxCtx(title, rightTitle, combined, m.width, m.focused, stripStyle, stripStyle, ctx)
+	return RenderTopBorderBoxCtx(title, rightTitle, combined, m.width, m.focused, consoleTitleStyle, consoleBorderStyle, ctx)
 }
 
 // Layers returns a single layer with the panel content for visual compositing.

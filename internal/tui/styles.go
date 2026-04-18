@@ -205,8 +205,8 @@ type Styles struct {
 	StatusError   lipgloss.Style
 	Console       lipgloss.Style
 
-	// Log panel border/strip color
-	LogPanelColor color.Color
+	// Console panel title color
+	ConsoleTitleColor color.Color
 }
 
 // StyleContext holds a subset of Styles for decoupled rendering
@@ -244,7 +244,7 @@ type StyleContext struct {
 	StatusError         lipgloss.Style
 	Console             lipgloss.Style
 	StatusBarSelected   lipgloss.Style
-	LogPanelColor       color.Color
+	ConsoleTitleColor       color.Color
 	DialogTitleAlign    string
 	SubmenuTitleAlign   string
 	LogTitleAlign       string
@@ -296,7 +296,7 @@ func GetActiveContext() StyleContext {
 		StatusError:         currentStyles.StatusError,
 		Console:             currentStyles.Console,
 		StatusBarSelected:   currentStyles.StatusBarSelected,
-		LogPanelColor:       currentStyles.LogPanelColor,
+		ConsoleTitleColor:       currentStyles.ConsoleTitleColor,
 		DialogTitleAlign:    currentStyles.DialogTitleAlign,
 		SubmenuTitleAlign:   currentStyles.SubmenuTitleAlign,
 		LogTitleAlign:       currentStyles.LogTitleAlign,
@@ -552,7 +552,7 @@ func InitStyles(cfg config.AppConfig) {
 	currentStyles.StatusError = SemanticRawStyle("TitleError")
 	currentStyles.Console = theme.ConsoleSemanticRawStyle("ProgramBox")
 
-	currentStyles.LogPanelColor = SemanticRawStyle("LogPanel").GetForeground()
+	currentStyles.ConsoleTitleColor = SemanticRawStyle("ConsoleTitle").GetForeground()
 
 	currentStyles.DialogTitleAlign = cfg.UI.DialogTitleAlign
 	currentStyles.SubmenuTitleAlign = cfg.UI.SubmenuTitleAlign
