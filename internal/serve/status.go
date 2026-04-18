@@ -24,7 +24,11 @@ func CheckStartupStatus(ctx context.Context) {
 		sessionInfo := Sessions.ReadSessionInfo()
 		if sessionInfo.PID != 0 && ProcessExists(sessionInfo.PID) {
 			ip := formatIP(sessionInfo.ClientIP)
-			logger.Warn(ctx, "Active SSH session connected from {{|Highlight|}}%s{{[-]}}.", ip)
+			connType := "SSH"
+			if sessionInfo.ConnType == "web" {
+				connType = "web"
+			}
+			logger.Warn(ctx, "Active %s session connected from {{|Highlight|}}%s{{[-]}}.", connType, ip)
 		}
 	}
 }
