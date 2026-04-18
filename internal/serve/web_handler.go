@@ -74,6 +74,9 @@ func handleWebSocket(ctx context.Context, conn *websocket.Conn, clientAddr strin
 	}
 	defer sshSess.Close()
 
+	// Forward the real browser IP so the SSH handler can record it instead of 127.0.0.1.
+	_ = sshSess.Setenv("DS2_CLIENT_IP", clientAddr)
+
 	// Request a PTY with the dimensions the browser reported.
 	if err := sshSess.RequestPty("xterm-256color", initialRows, initialCols, gossh.TerminalModes{}); err != nil {
 		logger.Error(ctx, "Web proxy: PTY request failed: %v", err)

@@ -3,6 +3,7 @@ package serve
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"DockSTARTer2/internal/logger"
@@ -29,6 +30,14 @@ func tuiMiddleware(mgr *SessionManager, startMenu string) wish.Middleware {
 			connType := "ssh"
 			if s.User() == "web" {
 				connType = "web"
+				// The web proxy connects from loopback; read the real browser IP
+				// forwarded via the DS2_CLIENT_IP environment variable.
+				for _, env := range s.Environ() {
+					if strings.HasPrefix(env, "DS2_CLIENT_IP=") {
+						clientIP = strings.TrimPrefix(env, "DS2_CLIENT_IP=")
+						break
+					}
+				}
 			}
 			if err := mgr.AcquirePrimary(clientIP, connType); err != nil {
 				logger.Info(ctx, "SSH connection rejected: session already active")
