@@ -172,6 +172,6 @@ func handleServerDisable(ctx context.Context) error {
 	if err := serve.DisableService(); err != nil {
 		return err
 	}
-	logger.Notice(ctx, "Service disabled — the server will no longer start automatically at login.")
+	logger.Notice(ctx, "Service disabled — the server will no longer start automatically at boot.")
 	return nil
 }

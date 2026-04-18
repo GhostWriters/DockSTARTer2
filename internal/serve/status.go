@@ -36,9 +36,9 @@ func PrintServerStatus(_ context.Context, cfg config.ServerConfig) {
 	if installed {
 		enabled, _ := ServiceEnabled()
 		if enabled {
-			fmt.Println("Service:  installed, enabled (starts at login)")
+			fmt.Println("Service:  installed, enabled (starts at boot)")
 		} else {
-			fmt.Println("Service:  installed, disabled (won't start at login)")
+			fmt.Println("Service:  installed, disabled (won't start at boot)")
 		}
 	} else {
 		fmt.Println("Service:  not installed")
