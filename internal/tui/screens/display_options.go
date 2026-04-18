@@ -498,30 +498,32 @@ func (s *DisplayOptionsScreen) showTitleAlignDropdown(menuName, label string, ge
 
 func (s *DisplayOptionsScreen) showShadowDropdown() tea.Cmd {
 	return func() tea.Msg {
-		var levels []string
+		type shadowEntry struct{ label, value string }
+		var entries []shadowEntry
 		if s.config.UI.LineCharacters {
-			levels = []string{
-				"Off",
-				"Light {{|OptionValue|}}(░){{[-]}}",
-				"Medium {{|OptionValue|}}(▒){{[-]}}",
-				"Dark {{|OptionValue|}}(▓){{[-]}}",
-				"Solid {{|OptionValue|}}(█){{[-]}}",
+			entries = []shadowEntry{
+				{"Off", ""},
+				{"Light", "{{|OptionValue|}}(░){{[-]}}"},
+				{"Medium", "{{|OptionValue|}}(▒){{[-]}}"},
+				{"Dark", "{{|OptionValue|}}(▓){{[-]}}"},
+				{"Solid", "{{|OptionValue|}}(█){{[-]}}"},
 			}
 		} else {
-			levels = []string{
-				"Off",
-				"Light {{|OptionValue|}}({{|Shadow|}}.{{|OptionValue|}}){{[-]}}",
-				"Medium {{|OptionValue|}}({{|Shadow|}}:{{|OptionValue|}}){{[-]}}",
-				"Dark {{|OptionValue|}}({{|Shadow|}}#{{|OptionValue|}}){{[-]}}",
-				"Solid {{|OptionValue|}}( ){{[-]}}",
+			entries = []shadowEntry{
+				{"Off", ""},
+				{"Light", "{{|OptionValue|}}({{|Shadow|}}.{{|OptionValue|}}){{[-]}}"},
+				{"Medium", "{{|OptionValue|}}({{|Shadow|}}:{{|OptionValue|}}){{[-]}}"},
+				{"Dark", "{{|OptionValue|}}({{|Shadow|}}#{{|OptionValue|}}){{[-]}}"},
+				{"Solid", "{{|OptionValue|}}( ){{[-]}}"},
 			}
 		}
 		var items []tui.MenuItem
-		for i, label := range levels {
+		for i, e := range entries {
 			level := i
 			items = append(items, tui.MenuItem{
-				Tag:  label,
-				Help: fmt.Sprintf("Set shadow to %s", label),
+				Tag:  e.label,
+				Desc: e.value,
+				Help: fmt.Sprintf("Set shadow to %s", e.label),
 				Action: func() tea.Msg {
 					return tea.Batch(
 						func() tea.Msg {
@@ -543,18 +545,22 @@ func (s *DisplayOptionsScreen) showShadowDropdown() tea.Cmd {
 
 func (s *DisplayOptionsScreen) showBorderColorDropdown() tea.Cmd {
 	return func() tea.Msg {
-		modes := []int{1, 2, 3}
-		labels := map[int]string{
-			1: "Border 1 (Theme Focus) {{|OptionValue|}}(1){{[-]}}",
-			2: "Border 2 (Theme Accent) {{|OptionValue|}}(2){{[-]}}",
-			3: "Both (3D Effect) {{|OptionValue|}}(3D){{[-]}}",
+		type borderEntry struct {
+			mode        int
+			label, value string
+		}
+		entries := []borderEntry{
+			{1, "Border 1 (Theme Focus)", "{{|OptionValue|}}(1){{[-]}}"},
+			{2, "Border 2 (Theme Accent)", "{{|OptionValue|}}(2){{[-]}}"},
+			{3, "Both (3D Effect)", "{{|OptionValue|}}(3D){{[-]}}"},
 		}
 		var items []tui.MenuItem
-		for _, m := range modes {
-			mode := m
+		for _, e := range entries {
+			mode := e.mode
 			items = append(items, tui.MenuItem{
-				Tag:  labels[mode],
-				Help: fmt.Sprintf("Set border coloring to %s", labels[mode]),
+				Tag:  e.label,
+				Desc: e.value,
+				Help: fmt.Sprintf("Set border coloring to %s", e.label),
 				Action: func() tea.Msg {
 					return tea.Batch(
 						func() tea.Msg {
