@@ -1450,3 +1450,15 @@ func (m *MenuModel) ShowContextMenu(idx int, x, y int) tea.Cmd {
 func (m *MenuModel) Init() tea.Cmd {
 	return nil
 }
+
+// AnyLocked returns true if any item in the menu is marked as Locked.
+func (m *MenuModel) AnyLocked() bool {
+	for _, item := range m.items {
+		if item.Locked {
+			return true
+		}
+	}
+	return false
+}
+
+

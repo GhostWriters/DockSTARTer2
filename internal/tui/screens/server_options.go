@@ -97,30 +97,35 @@ func (s *ServerOptionsScreen) buildSettingsMenu() *tui.MenuModel {
 			Desc:   fmt.Sprintf("{{|OptionValue|}}%d{{[-]}}", s.config.Server.SSH.Port),
 			Help:   "TCP port the SSH server listens on. Set to 0 to disable. (Enter to change)",
 			Action: s.promptSSHPort(),
+			IsDestructive: true,
 		},
 		{
 			Tag:    "Web Port",
 			Desc:   fmt.Sprintf("{{|OptionValue|}}%d{{[-]}}", s.config.Server.Web.Port),
 			Help:   "TCP port the web server listens on. Set to 0 to disable. (Enter to change)",
 			Action: s.promptWebPort(),
+			IsDestructive: true,
 		},
 		{
 			Tag:    "Auth Mode",
 			Desc:   s.dropdownDesc(authModeDesc()),
 			Help:   "Authentication mode for incoming SSH connections (Enter for options)",
 			Action: s.showAuthModeDropdown(),
+			IsDestructive: true,
 		},
 		{
 			Tag:    "Password",
 			Desc:   s.passwordDesc(),
 			Help:   "Password for SSH auth (Enter to change). Stored as bcrypt hash.",
 			Action: s.promptPassword(),
+			IsDestructive: true,
 		},
 		{
 			Tag:    "Authorized Keys File",
 			Desc:   s.truncatePath(s.config.Server.Auth.AuthKeysFile),
 			Help:   "Path to authorized_keys file for public-key auth (Enter to change)",
 			Action: s.promptAuthKeysFile(),
+			IsDestructive: true,
 		},
 	}
 
@@ -428,6 +433,9 @@ func (s *ServerOptionsScreen) disconnectAction(force bool, enabled bool) tea.Cmd
 
 func (s *ServerOptionsScreen) handleApply() tea.Cmd {
 	return func() tea.Msg {
+		if s.settingsMenu.AnyLocked() {
+			return nil
+		}
 		serverInfo := sessionlocks.Sessions.ReadServerInfo()
 		if serverInfo.PID != 0 && sessionlocks.ProcessExists(serverInfo.PID) {
 			if !tui.Confirm("Server Is Running",
@@ -536,7 +544,7 @@ func (s *ServerOptionsScreen) MenuName() string {
 }
 
 func (s *ServerOptionsScreen) IsDestructive() bool {
-	return true
+	return false
 }
 
 // MinHeight: outer border(2) + settings section(5) + status section(4) + buttons(3) = 14.

@@ -100,6 +100,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Checked:       checked,
 			IsInvalid:     t.IsInvalid,
 			IsUserDefined: t.IsUserTheme,
+			IsDestructive: true,
 			Metadata:      map[string]string{"config_value": t.ConfigValue},
 		}
 	}
@@ -143,6 +144,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Checked:     s.config.UI.Borders,
 			Selectable:  true,
 			SpaceAction: s.toggleBorders(),
+			IsDestructive: true,
 		},
 		{
 			Tag:         "Button Borders",
@@ -152,6 +154,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Checked:     s.config.UI.ButtonBorders,
 			Selectable:  true,
 			SpaceAction: s.toggleButtonBorders(),
+			IsDestructive: true,
 		},
 		{
 			Tag:         "Line Characters",
@@ -161,6 +164,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Checked:     s.config.UI.LineCharacters,
 			Selectable:  true,
 			SpaceAction: s.toggleLineChars(),
+			IsDestructive: true,
 		},
 		{
 			Tag:         "Shadow",
@@ -170,6 +174,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Checked:     s.config.UI.Shadow,
 			Selectable:  true,
 			SpaceAction: s.toggleShadow(),
+			IsDestructive: true,
 		},
 		{
 			Tag:         "Scrollbar",
@@ -179,18 +184,21 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Checked:     s.config.UI.Scrollbar,
 			Selectable:  true,
 			SpaceAction: s.toggleScrollbar(),
+			IsDestructive: true,
 		},
 		{
 			Tag:    "Shadow Level",
 			Desc:   s.dropdownDesc(s.shadowLevelToDesc(s.config.UI.ShadowLevel)),
 			Help:   "Adjust the density of the shadow (Select/Enter for list)",
 			Action: s.showShadowDropdown(),
+			IsDestructive: true,
 		},
 		{
 			Tag:    "Border Color",
 			Desc:   s.dropdownDesc(s.borderColorToDesc(s.config.UI.BorderColor)),
 			Help:   "Choose theme colors for borders (Select/Enter for list)",
 			Action: s.showBorderColorDropdown(),
+			IsDestructive: true,
 		},
 		{
 			Tag:  "Dialog Title",
@@ -199,6 +207,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Action: s.showTitleAlignDropdown("dialog_title_align", "Dialog Title Align",
 				func() string { return s.config.UI.DialogTitleAlign },
 				func(cfg *config.AppConfig, v string) { cfg.UI.DialogTitleAlign = v }),
+			IsDestructive: true,
 		},
 		{
 			Tag:  "Submenu Title",
@@ -207,6 +216,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Action: s.showTitleAlignDropdown("submenu_title_align", "Submenu Title Align",
 				func() string { return s.config.UI.SubmenuTitleAlign },
 				func(cfg *config.AppConfig, v string) { cfg.UI.SubmenuTitleAlign = v }),
+			IsDestructive: true,
 		},
 		{
 			Tag:  "Log Title",
@@ -215,6 +225,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Action: s.showTitleAlignDropdown("log_title_align", "Log Title Align",
 				func() string { return s.config.UI.LogTitleAlign },
 				func(cfg *config.AppConfig, v string) { cfg.UI.LogTitleAlign = v }),
+			IsDestructive: true,
 		},
 	}
 
@@ -627,6 +638,10 @@ func (s *DisplayOptionsScreen) toggleScrollbar() tea.Cmd {
 
 func (s *DisplayOptionsScreen) handleApply() tea.Cmd {
 	return func() tea.Msg {
+		// Do not apply if any destructive settings are locked
+		if s.optionsMenu.AnyLocked() || s.themeMenu.AnyLocked() {
+			return nil
+		}
 		// 1. Apply Theme (Find the actually checked radio option)
 		themeSelected := s.previewTheme
 		for _, item := range s.themeMenu.GetItems() {
@@ -659,7 +674,7 @@ func (s *DisplayOptionsScreen) MenuName() string {
 }
 
 func (s *DisplayOptionsScreen) IsDestructive() bool {
-	return true
+	return false
 }
 
 func (s *DisplayOptionsScreen) Init() tea.Cmd {

@@ -15,14 +15,12 @@ func NewOptionsMenuScreen(isRoot bool) tui.ScreenModel {
 			Desc:   "Themes and Display Options",
 			Help:   "Configure color scheme, borders, and effects",
 			Action: func() tea.Msg { return tui.NavigateMsg{Screen: NewDisplayOptionsScreen(false)} },
-			IsDestructive: true,
 		},
 		{
 			Tag:    "Server",
 			Desc:   "SSH and Web Server Settings",
 			Help:   "Configure remote access to the DS2 TUI via SSH or browser",
 			Action: func() tea.Msg { return tui.NavigateMsg{Screen: NewServerOptionsScreen(false)} },
-			IsDestructive: true,
 		},
 	}
 

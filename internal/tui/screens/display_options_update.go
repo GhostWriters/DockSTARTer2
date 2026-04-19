@@ -347,6 +347,17 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			s.outerMenu.InvalidateCache()
 		}
 		return s, nil
+
+	case tui.LockStateChangedMsg:
+		updated, uCmd := s.themeMenu.Update(msg)
+		if m, ok := updated.(*tui.MenuModel); ok {
+			s.themeMenu = m
+		}
+		updated, uCmd2 := s.optionsMenu.Update(msg)
+		if m, ok := updated.(*tui.MenuModel); ok {
+			s.optionsMenu = m
+		}
+		return s, tea.Batch(uCmd, uCmd2)
 	}
 
 	return s, cmd

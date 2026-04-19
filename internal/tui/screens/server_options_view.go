@@ -280,6 +280,17 @@ func (s *ServerOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			s.outerMenu.InvalidateCache()
 		}
 		return s, nil
+
+	case tui.LockStateChangedMsg:
+		updated, c1 := s.settingsMenu.Update(msg)
+		if m, ok := updated.(*tui.MenuModel); ok {
+			s.settingsMenu = m
+		}
+		updated, c2 := s.statusMenu.Update(msg)
+		if m, ok := updated.(*tui.MenuModel); ok {
+			s.statusMenu = m
+		}
+		return s, tea.Batch(c1, c2)
 	}
 
 	return s, cmd
