@@ -827,13 +827,20 @@ type MenuModel struct {
 // SetLockedByOthers updates the Locked status of all destructive menu items.
 func (m *MenuModel) SetLockedByOthers(locked bool) {
 	changed := false
+	for i, item := range m.items {
+		if item.IsDestructive && item.Locked != locked {
+			item.Locked = locked
+			m.items[i] = item
+			changed = true
+		}
+	}
+	// Also sync to the bubbletea list model
 	items := m.list.Items()
 	for i, it := range items {
 		if item, ok := it.(MenuItem); ok {
 			if item.IsDestructive && item.Locked != locked {
 				item.Locked = locked
 				items[i] = item
-				changed = true
 			}
 		}
 	}
