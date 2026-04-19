@@ -687,7 +687,7 @@ func (m LogPanelModel) ViewString() string {
 		inputBoxWidth,
 		3,
 		m.inputFocused,
-		false,
+		true,
 		true,
 		ctx.SubmenuTitleAlign,
 		inputTitleTag,
