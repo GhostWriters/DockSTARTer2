@@ -96,9 +96,9 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 
 		lockMarker := ""
 		if item.Locked {
-			lockMarker = RenderThemeText("{{|MarkerDestructive|}}!{{[-]}} ", lipgloss.NewStyle().Background(dialogBG))
+			lockMarker = RenderThemeText("{{|MarkerDestructive|}}!{{[-]}}", lipgloss.NewStyle().Background(dialogBG))
 		} else {
-			lockMarker = lipgloss.NewStyle().Background(dialogBG).Render("  ")
+			lockMarker = lipgloss.NewStyle().Background(dialogBG).Render(" ")
 		}
 
 		itemContent := lockMarker + prefix + tagStr
