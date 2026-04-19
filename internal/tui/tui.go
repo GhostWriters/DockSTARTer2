@@ -14,6 +14,7 @@ import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/docker"
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/update"
 
