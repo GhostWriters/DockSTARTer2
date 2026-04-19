@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"DockSTARTer2/internal/paths"
 	"github.com/gofrs/flock"
@@ -96,32 +97,48 @@ func (m *SessionManager) IsPrimaryActive() bool {
 func (m *SessionManager) AcquirePrimary(clientIP, connType string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.primaryActive {
 		return fmt.Errorf("a session is already active")
 	}
 
-	if m.primaryFlock == nil {
-		m.primaryFlock = flock.New(m.sessionLockPath)
-	}
+	// Try to acquire the lock with a few retries to handle rapid reconnect races.
+	var err error
+	for i := 0; i < 3; i++ {
+		if m.primaryFlock == nil {
+			m.primaryFlock = flock.New(m.sessionLockPath)
+		}
 
-	locked, err := m.primaryFlock.TryLock()
-	if err != nil {
-		// If we get a permission error, the file might be a stale lock owned by another user (e.g. root).
-		// Attempt to remove it and try one more time.
-		if os.IsPermission(err) {
+		var locked bool
+		locked, err = m.primaryFlock.TryLock()
+		if err == nil && locked {
+			// Success! Record the activity and write the info file.
+			m.primaryActive = true
+			return writeInfoFile(m.sessionLockPath, os.Getpid(), clientIP, connType)
+		}
+
+		// Handle stale file permission issues (e.g. root-owned).
+		if err != nil && os.IsPermission(err) {
 			_ = os.Remove(m.sessionLockPath)
-			locked, err = m.primaryFlock.TryLock()
+			m.primaryFlock = nil // Reset so it recreates with a new FD on next attempt
 		}
-		if err != nil {
-			return fmt.Errorf("failed to acquire session lock: %v", err)
+
+		// If we know it's locked by another process, or if we failed our retries, wait a bit.
+		if i < 2 {
+			m.mu.Unlock()
+			time.Sleep(150 * time.Millisecond)
+			m.mu.Lock()
+			// Check again if someone else took it while we were sleeping.
+			if m.primaryActive {
+				return fmt.Errorf("a session is already active")
+			}
 		}
-	}
-	if !locked {
-		return fmt.Errorf("a session is already active (locked by another process)")
 	}
 
-	m.primaryActive = true
-	return writeInfoFile(m.sessionLockPath, os.Getpid(), clientIP, connType)
+	if err != nil {
+		return fmt.Errorf("failed to acquire session lock: %v", err)
+	}
+	return fmt.Errorf("a session is already active (locked by another process)")
 }
 
 // ReleasePrimary clears the primary session flag and removes the lock file.
