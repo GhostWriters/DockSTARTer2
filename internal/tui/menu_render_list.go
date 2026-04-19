@@ -231,6 +231,9 @@ func (m *MenuModel) renderVariableHeightList() string {
 		}
 
 		tagStr := ""
+		if item.Locked {
+			tagStr = RenderThemeText("{{|MarkerDestructive|}}!{{[-]}} ", neutralStyle)
+		}
 		if len(item.Tag) > 0 {
 			runes := []rune(item.Tag)
 			letterIdx := 0
@@ -238,9 +241,9 @@ func (m *MenuModel) renderVariableHeightList() string {
 				letterIdx = 1
 			}
 			if letterIdx < len(runes) {
-				tagStr = tStyle.Render(string(runes[:letterIdx])) + kStyle.Render(string(runes[letterIdx])) + RenderThemeText(string(runes[letterIdx+1:]), tStyle)
+				tagStr += tStyle.Render(string(runes[:letterIdx])) + kStyle.Render(string(runes[letterIdx])) + RenderThemeText(string(runes[letterIdx+1:]), tStyle)
 			} else {
-				tagStr = RenderThemeText(item.Tag, tStyle)
+				tagStr += RenderThemeText(item.Tag, tStyle)
 			}
 		}
 
@@ -709,13 +712,16 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 		}
 
 		tagStr := ""
+		if item.Locked {
+			tagStr = RenderThemeText("{{|MarkerDestructive|}}!{{[-]}} ", neutralStyle)
+		}
 		if item.IsEditing {
 			// Using the standard edit styling (red background/bold)
 			editTag := GetPlainText(item.Tag)
-			tagStr = theme.ThemeSemanticStyle("{{|ItemSelected|}}").Render(editTag)
+			tagStr += theme.ThemeSemanticStyle("{{|ItemSelected|}}").Render(editTag)
 		} else if len(item.Tag) > 0 {
 			runes := []rune(item.Tag)
-			tagStr = kStyle.Render(string(runes[0])) + tStyle.Render(string(runes[1:]))
+			tagStr += kStyle.Render(string(runes[0])) + tStyle.Render(string(runes[1:]))
 		}
 
 		// Choose checkbox styles individually

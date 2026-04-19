@@ -83,6 +83,9 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 		// Tag with first-letter shortcut
 		tag := item.Tag
 		tagStr := ""
+		if item.Locked {
+			tagStr = RenderThemeText("{{|MarkerDestructive|}}!{{[-]}} ", lipgloss.NewStyle().Background(styles.Dialog.GetBackground()))
+		}
 		if len(tag) > 0 {
 			letterIdx := 0
 			if strings.HasPrefix(tag, "[") && len(tag) > 1 {
@@ -91,7 +94,7 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 			p := tag[:letterIdx]
 			f := string(tag[letterIdx])
 			r := tag[letterIdx+1:]
-			tagStr = tagStyle.Render(p) + keyStyle.Render(f) + tagStyle.Render(r)
+			tagStr += tagStyle.Render(p) + keyStyle.Render(f) + tagStyle.Render(r)
 		}
 
 		itemContent := prefix + tagStr
