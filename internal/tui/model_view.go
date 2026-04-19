@@ -20,6 +20,16 @@ var shadowBoxCache struct {
 	result               string
 }
 
+// invalidateShadowCache clears the shadow box cache so it is recomputed on
+// the next render. Call this whenever theme or shadow settings change.
+func invalidateShadowCache() {
+	shadowBoxCache = struct {
+		width, height, level int
+		lineChars            bool
+		result               string
+	}{}
+}
+
 // ViewStringer is an interface for models that provide string content for compositing
 type ViewStringer interface {
 	ViewString() string

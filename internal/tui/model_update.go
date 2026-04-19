@@ -487,9 +487,8 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ConfigChangedMsg:
 		m.config = msg.Config
 		_, _ = theme.Load(m.config.UI.Theme, "")
-		InitStyles(m.config)
+		m.invalidateAllCaches()
 		m.backdrop.header.SyncFlags()
-		m.backdrop.InvalidateBackdropCache()
 		updated, _ := m.logPanel.Update(msg)
 		m.logPanel = updated.(LogPanelModel)
 
@@ -599,6 +598,14 @@ func (m *AppModel) updateComponentFocus() {
 			focusable.SetFocused(mainFocused)
 		}
 	}
+}
+
+// invalidateAllCaches clears every render cache in the TUI so a full redraw
+// occurs on the next frame. Call this before InitStyles on any config change.
+func (m *AppModel) invalidateAllCaches() {
+	InitStyles(m.config)
+	invalidateShadowCache()
+	m.backdrop.InvalidateBackdropCache()
 }
 
 // applyLogPanelMax computes the maximum log panel height for the current active screen,
