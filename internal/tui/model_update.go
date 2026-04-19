@@ -208,6 +208,11 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.activeScreen.SetSize(caW, caH)
 			m.backdrop.SetHelpText(m.activeScreen.HelpText())
 			cmds = append(cmds, logger.BatchRecoverTUI(m.ctx, m.activeScreen.Init()))
+
+			// Sync current lock state to the new screen immediately
+			if m.lockedByOthers {
+				cmds = append(cmds, func() tea.Msg { return LockStateChangedMsg{LockedByOthers: true} })
+			}
 		}
 		return m, logger.BatchRecoverTUI(m.ctx, cmds...)
 
@@ -233,6 +238,11 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				caW, caH := m.getContentArea()
 				m.activeScreen.SetSize(caW, caH)
 				m.backdrop.SetHelpText(m.activeScreen.HelpText())
+
+				// Sync current lock state to the restored screen immediately
+				if m.lockedByOthers {
+					cmds = append(cmds, func() tea.Msg { return LockStateChangedMsg{LockedByOthers: true} })
+				}
 			}
 		} else {
 			// If stack is empty, we "go back" to nothing (which triggers quit at the bottom)

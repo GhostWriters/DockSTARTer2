@@ -438,6 +438,9 @@ func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 		selectedItem := m.list.SelectedItem()
 		if item, ok := selectedItem.(MenuItem); ok {
 			if item.Action != nil {
+				if item.Locked {
+					return m, nil
+				}
 				// Update cursor for persistence
 				m.cursor = m.list.Index()
 				menuSelectedIndices[m.id] = m.cursor
@@ -470,6 +473,9 @@ func (m *MenuModel) handleSpace() (tea.Model, tea.Cmd) {
 	selectedItem := m.list.SelectedItem()
 	if item, ok := selectedItem.(MenuItem); ok {
 		if (item.IsCheckbox || item.IsRadioButton) && item.Selectable {
+			if item.Locked {
+				return m, nil
+			}
 			idx := m.list.Index()
 			if m.groupedMode && m.activeColumn == ColEnable {
 				item.Enabled = !item.Enabled
