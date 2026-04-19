@@ -6,7 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"DockSTARTer2/internal/lockfile"
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/tui"
 
 	"github.com/charmbracelet/ssh"
@@ -46,6 +48,8 @@ func tuiMiddleware(mgr *SessionManager, startMenu string) wish.Middleware {
 				return
 			}
 			defer mgr.ReleasePrimary()
+			_ = lockfile.Acquire(paths.GetRemoteLockPath())
+			defer lockfile.Release(paths.GetRemoteLockPath())
 
 			ptyReq, windowCh, isPTY := s.Pty()
 			if !isPTY {

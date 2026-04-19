@@ -40,6 +40,15 @@ type toggleLogPanelMsg struct{}
 // consoleLinesMsg carries a batch of lines from a running console command.
 type consoleLinesMsg struct{ lines []string }
 
+// ConsoleLockMsg is sent by any long-running operation to lock or unlock the
+// console input bar. ID must be a unique identifier for the operation (e.g. a
+// UUID or stable name). Send Locked:true when starting, Locked:false when done.
+// The input bar unlocks only when all registered lockers have released.
+type ConsoleLockMsg struct {
+	ID     string
+	Locked bool
+}
+
 // consoleDoneMsg signals that a console command has finished.
 type consoleDoneMsg struct {
 	err           error
@@ -83,8 +92,8 @@ type LogPanelModel struct {
 	consoleConfigChanged bool
 	consoleAppsChanged   bool
 
-	// sessionActive locks the input bar while a TUI screen is busy.
-	sessionActive bool
+	// sessionLockers tracks active locks by ID. Input is locked when non-empty.
+	sessionLockers map[string]struct{}
 }
 
 // applyInputStyles updates the sinput colours from the current theme.
@@ -135,14 +144,29 @@ func (m LogPanelModel) Height() int {
 // SetMaxHeight updates the externally imposed height ceiling. Pass 0 to revert to default.
 func (m *LogPanelModel) SetMaxHeight(h int) { m.maxHeight = h }
 
-// SetSessionActive locks or unlocks the input bar.
-func (m *LogPanelModel) SetSessionActive(active bool) {
-	if active && m.inputFocused {
-		m.input.Blur()
-		m.inputFocused = false
+// lockSession adds or removes a locker by ID.
+// The input bar is locked while any lockers are registered.
+func (m *LogPanelModel) lockSession(id string, lock bool) {
+	if lock {
+		if m.sessionLockers == nil {
+			m.sessionLockers = make(map[string]struct{})
+		}
+		m.sessionLockers[id] = struct{}{}
+		if m.inputFocused {
+			m.input.Blur()
+			m.inputFocused = false
+		}
+	} else {
+		delete(m.sessionLockers, id)
 	}
-	m.sessionActive = active
 }
+
+// SetSessionActive is kept for compatibility; uses a fixed ID.
+func (m *LogPanelModel) SetSessionActive(active bool) {
+	m.lockSession("__session__", active)
+}
+
+func (m *LogPanelModel) sessionActive() bool { return len(m.sessionLockers) > 0 }
 
 // applyDragY computes the new panel height from the current mouse Y.
 func (m *LogPanelModel) applyDragY(mouseY int) {
@@ -400,6 +424,10 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case ConsoleLockMsg:
+		m.lockSession(msg.ID, msg.Locked)
+		return m, nil
+
 	case ConfigChangedMsg:
 		m.applyInputStyles()
 		return m, nil
@@ -415,7 +443,7 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case consoleDoneMsg:
 		m.consoleScanner = nil
 		m.consoleCancel = nil
-		if !m.sessionActive {
+		if !m.sessionActive() {
 			m.inputFocused = true
 			cmd := m.input.Focus()
 			return m, tea.Batch(cmd, sinput.Blink)
@@ -613,7 +641,7 @@ func (m LogPanelModel) updateInputFocused(msg tea.KeyPressMsg) (tea.Model, tea.C
 // FocusInput transitions the panel to input-focused state (called from AppModel).
 // Returns the Blink command needed to activate the hardware cursor.
 func (m *LogPanelModel) FocusInput() tea.Cmd {
-	if m.sessionActive || !m.expanded {
+	if m.sessionActive() || !m.expanded {
 		return nil
 	}
 	m.inputFocused = true
@@ -668,7 +696,7 @@ func (m LogPanelModel) ViewString() string {
 	// Input box — bordered with submenu styling.
 	inputBoxWidth := m.width - 2 // inner content width (outer panel has no side borders)
 	m.input.SetWidth(inputBoxWidth - 2)
-	if m.sessionActive {
+	if m.sessionActive() {
 		m.input.Placeholder = "Session active — input locked"
 	} else {
 		m.input.Placeholder = ""

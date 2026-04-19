@@ -155,6 +155,18 @@ func GetTimestampsDir() string {
 	return filepath.Join(GetStateDir(), constants.TimestampsDirName)
 }
 
+// GetLocalLockPath returns the path to the local-side operation lock file.
+// Written by the local TUI/CLI while a destructive operation is in progress.
+func GetLocalLockPath() string {
+	return filepath.Join(GetStateDir(), "local.lock")
+}
+
+// GetRemoteLockPath returns the path to the remote-side operation lock file.
+// Written by the SSH/web server session while a destructive operation is in progress.
+func GetRemoteLockPath() string {
+	return filepath.Join(GetStateDir(), "remote.lock")
+}
+
 // GetActiveThemeFile returns the path to the currently-active theme file in the state directory.
 // This is the single file Load() reads at runtime; it is written by EnsureThemeExtracted.
 func GetActiveThemeFile() string {

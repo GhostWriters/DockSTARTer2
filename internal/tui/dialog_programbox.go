@@ -3,6 +3,7 @@ package tui
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"io"
 	"strings"
 	"time"
@@ -175,6 +176,7 @@ func (m *ProgramBoxModel) SetIsDialog(isDialog bool) {
 	m.isDialog = isDialog
 }
 
+
 // SetContext sets a cancelable context to be used for the task
 func (m *ProgramBoxModel) SetContext(ctx context.Context) {
 	if ctx != nil {
@@ -200,74 +202,74 @@ func (m *ProgramBoxModel) Init() tea.Cmd {
 		task := m.task
 		m.task = nil // Prevent double-start
 
-		return func() tea.Msg {
-			reader, writer := io.Pipe()
+		lockID := fmt.Sprintf("programbox-%p", m)
+		return tea.Batch(
+			func() tea.Msg { return ConsoleLockMsg{ID: lockID, Locked: true} },
+			func() tea.Msg {
+				reader, writer := io.Pipe()
 
-			errChan := make(chan error, 1)
+				errChan := make(chan error, 1)
 
-			// Start reading output in a goroutine — sends lines to the viewport
-			go func() {
-				ticker := time.NewTicker(100 * time.Millisecond)
-				defer ticker.Stop()
-
-				var lines []string
-				lineChan := make(chan string, 100)
-
-				// Separate goroutine to scan and feed the aggregator channel
+				// Start reading output in a goroutine — sends lines to the viewport
 				go func() {
-					scanner := bufio.NewScanner(reader)
-					for scanner.Scan() {
-						lineChan <- scanner.Text()
-					}
-					close(lineChan)
-				}()
+					ticker := time.NewTicker(100 * time.Millisecond)
+					defer ticker.Stop()
 
-				for {
-					select {
-					case line, ok := <-lineChan:
-						if !ok {
-							// Flush remaining lines before exiting
+					var lines []string
+					lineChan := make(chan string, 100)
+
+					// Separate goroutine to scan and feed the aggregator channel
+					go func() {
+						scanner := bufio.NewScanner(reader)
+						for scanner.Scan() {
+							lineChan <- scanner.Text()
+						}
+						close(lineChan)
+					}()
+
+					for {
+						select {
+						case line, ok := <-lineChan:
+							if !ok {
+								// Flush remaining lines before exiting
+								if len(lines) > 0 && program != nil {
+									program.Send(outputLinesMsg{lines: lines})
+								}
+								return
+							}
+							lines = append(lines, line)
+							// Auto-flush if buffer is large to keep it responsive
+							if len(lines) >= 50 && program != nil {
+								program.Send(outputLinesMsg{lines: lines})
+								lines = nil
+							}
+						case <-ticker.C:
 							if len(lines) > 0 && program != nil {
 								program.Send(outputLinesMsg{lines: lines})
+								lines = nil
 							}
-							return
-						}
-						lines = append(lines, line)
-						// Auto-flush if buffer is large to keep it responsive
-						if len(lines) >= 50 && program != nil {
-							program.Send(outputLinesMsg{lines: lines})
-							lines = nil
-						}
-					case <-ticker.C:
-						if len(lines) > 0 && program != nil {
-							program.Send(outputLinesMsg{lines: lines})
-							lines = nil
 						}
 					}
-				}
-			}()
+				}()
 
-			// Run the task in a goroutine
-			go func() {
-				defer writer.Close()
-				ctx := m.ctx
-				// task is already wrapped with WithTUIWriter if coming from RunCommand
-				errChan <- task(ctx, writer)
-			}()
+				// Run the task in a goroutine
+				go func() {
+					defer writer.Close()
+					ctx := m.ctx
+					// task is already wrapped with WithTUIWriter if coming from RunCommand
+					errChan <- task(ctx, writer)
+				}()
 
-			// Log completion happens via errChan if we were using it for sync,
-			// but here we just need to send the Done msg.
-			// Wait, we need to wait for task to finish to send Done.
-			// The goroutine above sends to errChan. We should wait for it.
-			go func() {
-				err := <-errChan
-				if program != nil {
-					program.Send(outputDoneMsg{err: err})
-				}
-			}()
+				go func() {
+					err := <-errChan
+					if program != nil {
+						program.Send(outputDoneMsg{err: err})
+					}
+				}()
 
-			return nil
-		}
+				return nil
+			},
+		)
 	}
 	return nil
 }
@@ -350,6 +352,7 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case outputDoneMsg:
 		m.done = true
+		lockID := fmt.Sprintf("programbox-%p", m)
 		m.err = msg.err
 		m.SetSize(m.width, m.height)
 		if m.viewport.Width() > 0 {
@@ -359,14 +362,15 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport.SetContent(content)
 		}
 		m.viewport.GotoBottom()
+		unlockCmd := func() tea.Msg { return ConsoleLockMsg{ID: lockID, Locked: false} }
 		if m.AutoExit && m.err == nil {
 			result := tea.Msg(true)
 			if m.SuccessMsg != nil {
 				result = m.SuccessMsg
 			}
-			return m, func() tea.Msg { return CloseDialogMsg{Result: result} }
+			return m, tea.Batch(unlockCmd, func() tea.Msg { return CloseDialogMsg{Result: result} })
 		}
-		return m, nil
+		return m, unlockCmd
 
 	case tea.KeyPressMsg:
 		closeDialog := func() tea.Msg { return CloseDialogMsg{} }

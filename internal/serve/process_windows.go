@@ -2,18 +2,9 @@
 
 package serve
 
-import (
-	"os"
-)
+import "DockSTARTer2/internal/process"
 
 // ProcessExists reports whether a process with the given PID is running.
 func ProcessExists(pid int) bool {
-	p, err := os.FindProcess(pid)
-	if err != nil {
-		return false
-	}
-	// On Windows, FindProcess only finds the process if it exists.
-	// A non-nil result with no error means the process is running.
-	_ = p
-	return true
+	return process.Exists(pid)
 }

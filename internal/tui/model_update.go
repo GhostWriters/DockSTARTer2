@@ -508,6 +508,10 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case QuitMsg:
 		return m, tea.Quit
+
+	case ConsoleLockMsg:
+		m.logPanel.lockSession(msg.ID, msg.Locked)
+		return m, nil
 	}
 
 	backdropMsg := msg
@@ -603,6 +607,7 @@ func (m *AppModel) updateComponentFocus() {
 			focusable.SetFocused(mainFocused)
 		}
 	}
+
 }
 
 // invalidateAllCaches clears every render cache in the TUI so a full redraw
@@ -721,7 +726,7 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	if key.Matches(msg, Keys.Tab) {
 		if m.logPanelFocused {
 			// If panel is expanded and input not yet focused, Tab → input bar.
-			if m.logPanel.expanded && !m.logPanel.inputFocused && !m.logPanel.sessionActive {
+			if m.logPanel.expanded && !m.logPanel.inputFocused && !m.logPanel.sessionActive() {
 				return m, m.logPanel.FocusInput(), true
 			}
 			// Viewport focused (inputFocused already handled above): Tab → exit panel to header / dialog.
@@ -841,13 +846,13 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		}
 		// Tab/Shift+Tab: cycle to input bar (two-section dialog cycle).
 		if key.Matches(msg, Keys.CycleTab) || key.Matches(msg, Keys.CycleShiftTab) {
-			if m.logPanel.expanded && !m.logPanel.sessionActive {
+			if m.logPanel.expanded && !m.logPanel.sessionActive() {
 				return m, m.logPanel.FocusInput(), true
 			}
 		}
 		// Enter focuses the input bar (if panel is expanded and not session-locked).
 		if key.Matches(msg, Keys.Enter) {
-			if m.logPanel.expanded && !m.logPanel.sessionActive {
+			if m.logPanel.expanded && !m.logPanel.sessionActive() {
 				return m, m.logPanel.FocusInput(), true
 			}
 			return m, func() tea.Msg { return toggleLogPanelMsg{} }, true

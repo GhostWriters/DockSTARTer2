@@ -6,6 +6,7 @@ import (
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/constants"
+	"DockSTARTer2/internal/lockfile"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/theme"
@@ -344,6 +345,8 @@ func (m *TabbedVarsEditorModel) saveEnv() tea.Cmd {
 		task := func(ctx context.Context, w io.Writer) error {
 			// Wrap context with the TUI writer so all logs in this task fan out to the ProgramBox
 			ctx = console.WithTUIWriter(ctx, w)
+			_ = lockfile.Acquire(paths.GetLocalLockPath())
+			defer lockfile.Release(paths.GetLocalLockPath())
 
 			// 1. Surgical Sync for each tab
 			for _, u := range updates {

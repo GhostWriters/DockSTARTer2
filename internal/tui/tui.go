@@ -247,6 +247,9 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	// Watch config file for external changes (e.g. ds2 CLI or web server)
 	startConfigWatcher(ctx, p)
 
+	// Watch remote.lock so the console input bar locks when an SSH/web session is active
+	startLockFileWatcher(ctx, p)
+
 	// Listen for context cancellation to shutdown program
 	go func() {
 		<-ctx.Done()
