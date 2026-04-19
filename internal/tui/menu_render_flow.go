@@ -31,7 +31,6 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 	var currentLine []string
 	currentLineWidth := 0
 	itemSpacing := 3
-	anyLocked := m.AnyLocked()
 
 	for i, item := range m.items {
 		if item.IsSeparator {
@@ -98,7 +97,7 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 		lockMarker := ""
 		if item.Locked {
 			lockMarker = RenderThemeText("{{|MarkerDestructive|}}!{{[-]}} ", lipgloss.NewStyle().Background(dialogBG))
-		} else if anyLocked {
+		} else {
 			lockMarker = lipgloss.NewStyle().Background(dialogBG).Render("  ")
 		}
 

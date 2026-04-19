@@ -87,7 +87,6 @@ func (m *MenuModel) renderVariableHeightList() string {
 		}
 	}
 	maxTagLen := calculateMaxTagLength(mainItems)
-	anyLocked := m.AnyLocked()
 
 	var renderedItems []string
 	var itemHeights []int
@@ -231,27 +230,6 @@ func (m *MenuModel) renderVariableHeightList() string {
 			}
 		}
 
-		} else {
-			if checkbox != "" {
-				firstLinePrefix = checkbox + neutralStyle.Render(" ")
-				prefixWidth = lipgloss.Width(GetPlainText(firstLinePrefix))
-			} else {
-				firstLinePrefix = ""
-				prefixWidth = 0
-			}
-		}
-
-		lockMarker := ""
-		if item.Locked {
-			lockMarker = RenderThemeText("{{|MarkerDestructive|}}!{{[-]}} ", neutralStyle)
-		} else if anyLocked {
-			lockMarker = neutralStyle.Render("  ")
-		}
-		if lockMarker != "" {
-			firstLinePrefix = lockMarker + firstLinePrefix
-			prefixWidth += 2 // "!" and "  " are visually 2 chars wide
-		}
-
 		tagStr := ""
 		if len(item.Tag) > 0 {
 			runes := []rune(item.Tag)
@@ -260,9 +238,9 @@ func (m *MenuModel) renderVariableHeightList() string {
 				letterIdx = 1
 			}
 			if letterIdx < len(runes) {
-				tagStr += tStyle.Render(string(runes[:letterIdx])) + kStyle.Render(string(runes[letterIdx])) + RenderThemeText(string(runes[letterIdx+1:]), tStyle)
+				tagStr = tStyle.Render(string(runes[:letterIdx])) + kStyle.Render(string(runes[letterIdx])) + RenderThemeText(string(runes[letterIdx+1:]), tStyle)
 			} else {
-				tagStr += RenderThemeText(item.Tag, tStyle)
+				tagStr = RenderThemeText(item.Tag, tStyle)
 			}
 		}
 
@@ -294,6 +272,17 @@ func (m *MenuModel) renderVariableHeightList() string {
 				firstLinePrefix = ""
 				prefixWidth = 0
 			}
+		}
+
+		lockMarker := ""
+		if item.Locked {
+			lockMarker = RenderThemeText("{{|MarkerDestructive|}}!{{[-]}} ", neutralStyle)
+		} else {
+			lockMarker = neutralStyle.Render("  ")
+		}
+		if lockMarker != "" {
+			firstLinePrefix = lockMarker + firstLinePrefix
+			prefixWidth += 2 // "!" and "  " are visually 2 chars wide
 		}
 
 		// (The previously moved lock marker injection now replaces the tagStr edits)
