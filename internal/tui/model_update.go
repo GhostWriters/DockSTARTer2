@@ -459,12 +459,9 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// When returning to screen: restore focus to the active screen.
+		// Clear header focus so version numbers don't stay selected after a dialog closes.
+		m.setHeaderFocus(HeaderFocusNone)
 		m.updateComponentFocus()
-		// If header was already focused (e.g. status bar flags), KEEP it focused.
-		// Only clear header focus if it wasn't already focused.
-		if m.backdrop.header.GetFocus() == HeaderFocusNone {
-			m.backdrop.header.SetFocus(HeaderFocusNone) // No-op, but for clarity
-		}
 		// Forward any followup message or command piggybacked on Result (e.g. from context menus).
 		// Skip the known confirm (bool) and prompt (promptResultMsg) types already handled above.
 		if msg.Result != nil && m.activeScreen != nil {
@@ -569,6 +566,9 @@ func (m *AppModel) setLogPanelFocus(focused bool) {
 	m.logPanel.focused = focused
 	if focused {
 		m.backdrop.header.SetFocus(HeaderFocusNone)
+	} else {
+		m.logPanel.input.Blur()
+		m.logPanel.inputFocused = false
 	}
 	m.updateComponentFocus()
 }
