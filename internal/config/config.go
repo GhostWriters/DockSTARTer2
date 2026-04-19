@@ -157,9 +157,14 @@ func LoadAppConfig() AppConfig {
 	if err == nil {
 		// Overlay user config on top of defaults.
 		if err := toml.Unmarshal(data, &conf); err == nil {
-			// Write back the merged config so any keys missing from the user's
-			// file (e.g. added in a newer version) are filled in automatically.
-			_ = SaveAppConfig(conf)
+			// Write back only if the merged config differs from what was on disk
+			// (e.g. new keys added in a newer version). Avoids a pointless write
+			// on every load which would also trigger any file watchers.
+			if merged, err := toml.Marshal(conf); err == nil {
+				if string(merged) != string(data) {
+					_ = SaveAppConfig(conf)
+				}
+			}
 			conf.RawPaths = conf.Paths
 			conf.Paths.ConfigFolder = filepath.Clean(ExpandVariables(conf.Paths.ConfigFolder))
 			conf.Paths.ComposeFolder = filepath.Clean(ExpandVariables(conf.Paths.ComposeFolder))
