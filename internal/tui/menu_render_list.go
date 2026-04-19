@@ -284,7 +284,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 		}
 		if lockMarker != "" {
 			firstLinePrefix = lockMarker + firstLinePrefix
-			prefixWidth += 2 // " !" and "  " are visually 2 chars wide
+			prefixWidth += 1 // Lock marker replaces the 1-char gutter space
 		}
 
 		// (The previously moved lock marker injection now replaces the tagStr edits)
@@ -775,18 +775,14 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 			checkboxE3 = neutralStyle.Render("[") + cbStyleE.Render(string(ceA[1])) + neutralStyle.Render("]")
 		}
 
-		rowContent := vStyleLight.Render(vBorderChar) + neutralStyle.Render(" ") + checkboxA3 + neutralStyle.Render(" ") + checkboxE3 + neutralStyle.Render(" ") + tagStr
+		lockMarker := neutralStyle.Render(" ")
+		if item.Locked {
+			lockMarker = RenderThemeText("{{|MarkerDestructive|}}!{{[-]}}", neutralStyle)
+		}
+
+		rowContent := vStyleLight.Render(vBorderChar) + lockMarker + checkboxA3 + neutralStyle.Render(" ") + checkboxE3 + neutralStyle.Render(" ") + tagStr
 		rowWidth := subListWidth - 1
 		pContent := rowContent + neutralStyle.Render(strutil.Repeat(" ", max(0, rowWidth-lipgloss.Width(GetPlainText(rowContent)))))
-		
-		lockMarker := ""
-		if item.Locked {
-			lockMarker = RenderThemeText("{{|MarkerDestructive|}}!{{[-]}} ", neutralStyle)
-		} else {
-			// Sub-items don't strictly align with external items without lock, but we can pad within the sub box if needed.
-			// Actually, if we just want the sub-item to show ! without changing its grid width, we can just replace the left indent.
-			// But for simplicity, we just inject it into the raw line prefix. Yes, this will widen the sub-menu if an item inside is locked.
-		}
 		
 		line := g0 + g1 + lockMarker + neutralStyle.Render(strutil.Repeat(" ", max(0, 8-lipgloss.Width(GetPlainText(lockMarker))))) + pContent + vStyleDark.Render(vBorderChar)
 
