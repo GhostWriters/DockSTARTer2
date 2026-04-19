@@ -24,10 +24,10 @@ compose_folder = "${XDG_CONFIG_HOME}/compose"
 # Ports 0 (default) mean the server is disabled.
 
 [server.ssh]
-port = 2222              # e.g. 2222
+port = 40022              # e.g. 22
 
 [server.web]
-port = 8080              # e.g. 8080
+port = 40080              # e.g. 80
 
 [server.auth]
 mode          = "none"   # "none", "password", or "pubkey"
