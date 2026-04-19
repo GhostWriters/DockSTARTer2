@@ -20,6 +20,9 @@ func CheckStartupStatus(ctx context.Context) {
 		} else {
 			logger.Warn(ctx, "SSH server is running (PID %d).", serverInfo.PID)
 		}
+		if serverInfo.WebPort > 0 {
+			logger.Warn(ctx, "Web server is running on port {{|Highlight|}}%d{{[-]}}.", serverInfo.WebPort)
+		}
 
 		sessionInfo := Sessions.ReadSessionInfo()
 		if sessionInfo.PID != 0 && ProcessExists(sessionInfo.PID) {
