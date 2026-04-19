@@ -45,10 +45,11 @@ type ServerInfo struct {
 // NewSessionManager creates a SessionManager and cleans up any stale lock
 // files left by a previous crashed process.
 func NewSessionManager() *SessionManager {
+	locksDir := paths.GetLocksDir()
 	stateDir := paths.GetStateDir()
 	m := &SessionManager{
-		sessionLockPath:   filepath.Join(stateDir, "session.lock"),
-		serverPIDPath:     filepath.Join(stateDir, "server.pid"),
+		sessionLockPath:   filepath.Join(locksDir, "session.lock"),
+		serverPIDPath:     filepath.Join(locksDir, "server.pid"),
 		disconnectReqPath: filepath.Join(stateDir, "disconnect.request"),
 		stopReqPath:       filepath.Join(stateDir, "stop.request"),
 	}
