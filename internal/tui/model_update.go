@@ -3,6 +3,7 @@ package tui
 import (
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/theme"
 
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
@@ -485,6 +486,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ConfigChangedMsg:
 		m.config = msg.Config
+		_, _ = theme.Load(m.config.UI.Theme, "")
 		InitStyles(m.config)
 		m.backdrop.header.SyncFlags()
 		m.backdrop.InvalidateBackdropCache()
