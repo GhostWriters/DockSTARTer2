@@ -212,6 +212,7 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	defer func() { logger.TUIMode = false }()
 
 	logger.Info(ctx, "TUI Starting...")
+	defer sessionlocks.Sessions.ReleaseEditLock()
 
 	// Global panic recovery
 	defer func() {
@@ -360,6 +361,7 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 			logger.FatalWithStack(ctx, "TUI Panic: %v", r)
 		}
 	}()
+	defer sessionlocks.Sessions.ReleaseEditLock()
 
 	if err := Initialize(ctx); err != nil {
 		return err
@@ -460,6 +462,7 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 			logger.FatalWithStack(ctx, "TUI Panic: %v", r)
 		}
 	}()
+	defer sessionlocks.Sessions.ReleaseEditLock()
 
 	if err := Initialize(ctx); err != nil {
 		return err
@@ -573,11 +576,14 @@ func Shutdown() {
 			<-programExited
 		}
 	}
+	sessionlocks.Sessions.ReleaseEditLock()
 }
 
 // EmergencyShutdown forcefully restores the terminal using raw ANSI escape codes.
 // This is used during panic recovery where a standard Shutdown() might deadlock.
 func EmergencyShutdown() {
+	sessionlocks.Sessions.ReleaseEditLock()
+
 	// Signal that the TUI is dying to freeze the renderer goroutine
 	console.SetTUIDying(true)
 
