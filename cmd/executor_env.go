@@ -157,7 +157,7 @@ func handleEnvSet(ctx context.Context, group *CommandGroup) error {
 	return retErr
 }
 
-func handleAppVarsCreateAll(ctx context.Context, _group *CommandGroup, state *CmdState) error {
+func handleAppVarsCreateAll(ctx context.Context, _ *CommandGroup, state *CmdState) error {
 	conf := config.LoadAppConfig()
 	if err := appenv.CreateAll(ctx, state.Force, conf); err != nil {
 		logger.Error(ctx, "Failed to create app variables: %v", err)
