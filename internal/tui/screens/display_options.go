@@ -654,7 +654,14 @@ func (s *DisplayOptionsScreen) handleApply() tea.Cmd {
 	}
 }
 
+func (s *DisplayOptionsScreen) MenuName() string {
+	return "appearance"
+}
+
+func (s *DisplayOptionsScreen) IsDestructive() bool {
+	return true
+}
+
 func (s *DisplayOptionsScreen) Init() tea.Cmd {
 	return tea.Batch(s.themeMenu.Init(), s.optionsMenu.Init())
 }
-

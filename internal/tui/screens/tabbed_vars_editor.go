@@ -1250,6 +1250,10 @@ func (m *TabbedVarsEditorModel) MenuName() string {
 	return "tabbed_vars"
 }
 
+func (m *TabbedVarsEditorModel) IsDestructive() bool {
+	return true
+}
+
 // calcSubtitleHeight returns the number of subtitle lines for the active tab.
 // Global tabs: 1 line (file path). App tabs: 1 line (app name) + wrapped description lines.
 func (m *TabbedVarsEditorModel) calcSubtitleHeight() int {

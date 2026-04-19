@@ -7,14 +7,15 @@ import (
 
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/sessionlocks"
 )
 
 // CheckStartupStatus logs warnings if an SSH server or active session is
 // detected from a previous or concurrent process. Called during DS2 startup
 // so the user is aware of any running server/session before executing commands.
 func CheckStartupStatus(ctx context.Context) {
-	serverInfo := Sessions.ReadServerInfo()
-	if serverInfo.PID != 0 && ProcessExists(serverInfo.PID) {
+	serverInfo := sessionlocks.Sessions.ReadServerInfo()
+	if serverInfo.PID != 0 && sessionlocks.ProcessExists(serverInfo.PID) {
 		if serverInfo.Port > 0 {
 			logger.Warn(ctx, "SSH server is running on port {{|Highlight|}}%d{{[-]}} (PID %d).", serverInfo.Port, serverInfo.PID)
 		} else {
@@ -24,14 +25,14 @@ func CheckStartupStatus(ctx context.Context) {
 			logger.Warn(ctx, "Web server is running on port {{|Highlight|}}%d{{[-]}}.", serverInfo.WebPort)
 		}
 
-		if Sessions.IsPrimaryActive() {
-			sessionInfo := Sessions.ReadSessionInfo()
-			ip := formatIP(sessionInfo.ClientIP)
+		if sessionlocks.Sessions.IsEditLocked() {
+			editInfo := sessionlocks.Sessions.ReadEditInfo()
+			ip := formatIP(editInfo.ClientIP)
 			connType := "SSH"
-			if sessionInfo.ConnType == "web" {
+			if editInfo.ConnType == "web" {
 				connType = "web"
 			}
-			logger.Warn(ctx, "Active %s session connected from {{|Highlight|}}%s{{[-]}}.", connType, ip)
+			logger.Warn(ctx, "Configuration is being edited by %s session from {{|Highlight|}}%s{{[-]}}.", connType, ip)
 		}
 	}
 }
@@ -52,8 +53,8 @@ func PrintServerStatus(_ context.Context, cfg config.ServerConfig) {
 	}
 
 	// ── Server ───────────────────────────────────────────────────────────────
-	serverInfo := Sessions.ReadServerInfo()
-	serverRunning := serverInfo.PID != 0 && ProcessExists(serverInfo.PID)
+	serverInfo := sessionlocks.Sessions.ReadServerInfo()
+	serverRunning := serverInfo.PID != 0 && sessionlocks.ProcessExists(serverInfo.PID)
 
 	sshPort := serverInfo.Port
 	if sshPort == 0 {
@@ -83,19 +84,19 @@ func PrintServerStatus(_ context.Context, cfg config.ServerConfig) {
 
 	// ── Session ───────────────────────────────────────────────────────────────
 	if !serverRunning {
-		fmt.Println("Session:     not connected")
+		fmt.Println("Editing:     no active editor")
 		return
 	}
-	if Sessions.IsPrimaryActive() {
-		sessionInfo := Sessions.ReadSessionInfo()
-		ip := formatIP(sessionInfo.ClientIP)
-		connType := sessionInfo.ConnType
+	if sessionlocks.Sessions.IsEditLocked() {
+		editInfo := sessionlocks.Sessions.ReadEditInfo()
+		ip := formatIP(editInfo.ClientIP)
+		connType := editInfo.ConnType
 		if connType == "" {
 			connType = "ssh"
 		}
-		fmt.Printf("Session:     %s from %s\n", connType, ip)
+		fmt.Printf("Editing:     %s from %s\n", connType, ip)
 	} else {
-		fmt.Println("Session:     not connected")
+		fmt.Println("Editing:     no active editor")
 	}
 }
 

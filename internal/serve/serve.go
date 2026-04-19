@@ -8,21 +8,18 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
-
-	"time"
+	"DockSTARTer2/internal/sessionlocks"
 
 	"github.com/charmbracelet/ssh"
 	"charm.land/wish/v2"
 	"charm.land/wish/v2/logging"
 )
-
-// Global session manager — one per process lifetime.
-var Sessions = NewSessionManager()
 
 // StartSSHServer starts the wish SSH server using settings from cfg.
 // It blocks until ctx is cancelled. Returns an error if the server cannot
@@ -35,7 +32,7 @@ func StartSSHServer(ctx context.Context, cfg config.ServerConfig, startMenu stri
 	defer cancelInner()
 	console.DaemonShutdown = cancelInner
 	defer func() { console.DaemonShutdown = nil }()
-	console.ServerDisconnect = func() { _ = Sessions.RequestDisconnect() }
+	console.ServerDisconnect = func() { _ = sessionlocks.Sessions.RequestDisconnect() }
 	defer func() { console.ServerDisconnect = nil }()
 	ctx = innerCtx
 	if cfg.SSH.Port == 0 {
@@ -68,7 +65,7 @@ func StartSSHServer(ctx context.Context, cfg config.ServerConfig, startMenu stri
 		wish.WithAddress(addr),
 		wish.WithHostKeyPath(hostKeyPath),
 		wish.WithMiddleware(
-			tuiMiddleware(Sessions, startMenu),
+			tuiMiddleware(startMenu),
 			logging.Middleware(),
 		),
 	}
@@ -131,10 +128,10 @@ func StartSSHServer(ctx context.Context, cfg config.ServerConfig, startMenu stri
 	if cfg.Web.Port > 0 {
 		webPort = cfg.Web.Port
 	}
-	if err := Sessions.AcquireServer(cfg.SSH.Port, webPort); err != nil {
+	if err := sessionlocks.Sessions.AcquireServer(cfg.SSH.Port, webPort); err != nil {
 		logger.Warn(ctx, "Could not write server PID file: %v", err)
 	}
-	defer Sessions.ReleaseServer()
+	defer sessionlocks.Sessions.ReleaseServer()
 
 	// Start web server alongside SSH if configured.
 	if cfg.Web.Port > 0 {
@@ -156,9 +153,9 @@ func StartSSHServer(ctx context.Context, cfg config.ServerConfig, startMenu stri
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				if Sessions.IsStopRequested() {
-					Sessions.ClearStopRequest()
-					Sessions.RequestDisconnect()
+				if sessionlocks.Sessions.IsStopRequested() {
+					sessionlocks.Sessions.ClearStopRequest()
+					sessionlocks.Sessions.RequestDisconnect()
 					cancelInner()
 					return
 				}
@@ -187,9 +184,9 @@ func StartSSHServer(ctx context.Context, cfg config.ServerConfig, startMenu stri
 // StopServer signals the running server daemon to shut down gracefully.
 // If force is true it kills the process immediately and clears the PID file.
 func StopServer(ctx context.Context, force bool) error {
-	info := Sessions.ReadServerInfo()
-	if info.PID == 0 || !ProcessExists(info.PID) {
-		Sessions.ReleaseServer()
+	info := sessionlocks.Sessions.ReadServerInfo()
+	if info.PID == 0 || !sessionlocks.ProcessExists(info.PID) {
+		sessionlocks.Sessions.ReleaseServer()
 		logger.Info(ctx, "Server is not running.")
 		return nil
 	}
@@ -200,7 +197,7 @@ func StopServer(ctx context.Context, force bool) error {
 	}
 
 	logger.Info(ctx, "Requesting graceful server stop (PID %d)...", info.PID)
-	if err := Sessions.RequestStop(); err != nil {
+	if err := sessionlocks.Sessions.RequestStop(); err != nil {
 		return fmt.Errorf("writing stop request: %w", err)
 	}
 
@@ -212,7 +209,7 @@ func StopServer(ctx context.Context, force bool) error {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		time.Sleep(250 * time.Millisecond)
-		if !ProcessExists(info.PID) {
+		if !sessionlocks.ProcessExists(info.PID) {
 			logger.Notice(ctx, "Server stopped.")
 			return nil
 		}
@@ -225,56 +222,44 @@ func StopServer(ctx context.Context, force bool) error {
 
 	logger.Warn(ctx, "Server did not stop gracefully — forcing stop (PID %d).", info.PID)
 	_ = proc.Kill()
-	Sessions.ReleaseServer()
-	Sessions.ForceRelease()
-	Sessions.ClearDisconnectRequest()
+	sessionlocks.Sessions.ReleaseServer()
+	sessionlocks.Sessions.ForceRelease()
+	sessionlocks.Sessions.ClearDisconnectRequest()
 	logger.Notice(ctx, "Server stopped.")
 	return nil
 }
 
-// Disconnect requests a graceful disconnect of the active SSH session.
+// Disconnect requests a graceful disconnect of the active editor session.
 // It writes a disconnect request file that the session handler watches for,
 // then waits up to 10 seconds for the session to close cleanly.
 // If force is true, it skips the graceful path and kills immediately.
 func Disconnect(ctx context.Context, force bool) error {
-	pid := Sessions.SessionLockPID()
+	pid := sessionlocks.Sessions.EditLockPID()
 	if pid == 0 {
-		logger.Info(ctx, "No active session found.")
+		logger.Info(ctx, "No active editor session found.")
 		return nil
 	}
 
 	if force {
-		return forceDisconnect(ctx, pid)
+		logger.Info(ctx, "Forcing disconnect of session (PID %d)...", pid)
+	} else {
+		logger.Info(ctx, "Requesting graceful disconnect (PID %d)...", pid)
 	}
 
-	logger.Info(ctx, "Requesting graceful disconnect (PID %d)...", pid)
-	if err := Sessions.RequestDisconnect(); err != nil {
-		return fmt.Errorf("writing disconnect request: %w", err)
+	err := sessionlocks.Sessions.Disconnect(ctx, force)
+	if err != nil {
+		return err
 	}
 
-	// Wait up to 10 seconds for the session to release the lock.
-	deadline := time.Now().Add(10 * time.Second)
-	for time.Now().Before(deadline) {
-		time.Sleep(250 * time.Millisecond)
-		if Sessions.SessionLockPID() == 0 {
+	if sessionlocks.Sessions.EditLockPID() == 0 {
+		if force {
+			logger.Info(ctx, "Session forcibly disconnected.")
+		} else {
 			logger.Info(ctx, "Session disconnected successfully.")
-			return nil
 		}
+	} else if !force {
+		logger.Warn(ctx, "Session did not close within 10s. Use '--force --disconnect' to forcibly disconnect.")
 	}
 
-	logger.Warn(ctx, "Session did not close within 10s. Use '--force --disconnect' to forcibly disconnect.")
-	return nil
-}
-
-// forceDisconnect immediately signals the session process and clears lock files.
-func forceDisconnect(ctx context.Context, pid int) error {
-	logger.Info(ctx, "Forcing disconnect of session (PID %d)...", pid)
-	proc, err := os.FindProcess(pid)
-	if err == nil {
-		_ = signalProcess(proc)
-	}
-	Sessions.ForceRelease()
-	Sessions.ClearDisconnectRequest()
-	logger.Info(ctx, "Session forcibly disconnected.")
 	return nil
 }

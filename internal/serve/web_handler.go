@@ -8,6 +8,7 @@ import (
 
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/sessionlocks"
 
 	"github.com/coder/websocket"
 	gossh "golang.org/x/crypto/ssh"
@@ -158,8 +159,8 @@ func handleWebSocket(ctx context.Context, conn *websocket.Conn, clientAddr strin
 			case <-proxyCtx.Done():
 				return
 			case <-ticker.C:
-				if Sessions.IsDisconnectRequested() {
-					Sessions.ClearDisconnectRequest()
+				if sessionlocks.Sessions.IsDisconnectRequested() {
+					sessionlocks.Sessions.ClearDisconnectRequest()
 					logger.Info(ctx, "Graceful disconnect requested — closing web session from %s", clientAddr)
 					cancel()
 					return

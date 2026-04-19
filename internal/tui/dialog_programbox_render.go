@@ -336,7 +336,7 @@ func RunProgramBox(ctx context.Context, title, subtitle string, task func(contex
 	}
 
 	// Create full app model with standalone dialog to include log panel and backdrop
-	model := NewAppModelStandalone(ctx, currentConfig, dialogModel)
+	model := NewAppModelStandalone(ctx, currentConfig, "local", "cli", dialogModel)
 
 	// Create Bubble Tea program
 	p := NewProgram(model, ProgramOptions{})

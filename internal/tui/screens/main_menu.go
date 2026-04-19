@@ -12,6 +12,7 @@ func NewMainMenuScreen() tui.ScreenModel {
 			Desc:   "Setup and start applications",
 			Help:   "Configure applications and services",
 			Action: navigateToConfigMenu(),
+			IsDestructive: true,
 		},
 		{
 			Tag:    "Update",
@@ -24,6 +25,7 @@ func NewMainMenuScreen() tui.ScreenModel {
 			Desc:   "Customize settings",
 			Help:   "Theme, display options, and more",
 			Action: navigateToOptionsMenu(),
+			IsDestructive: true,
 		},
 	}
 

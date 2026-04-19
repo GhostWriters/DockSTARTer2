@@ -15,16 +15,6 @@ func checkPassword(plaintext, hash string) bool {
 	return err == nil
 }
 
-// HashPassword returns a bcrypt hash of the plaintext password for storage
-// in dockstarter2.toml. Used by future "set server password" TUI flow.
-func HashPassword(plaintext string) (string, error) {
-	b, err := bcrypt.GenerateFromPassword([]byte(plaintext), bcrypt.DefaultCost)
-	if err != nil {
-		return "", err
-	}
-	return string(b), nil
-}
-
 // authorizedKeysContains reports whether the given public key appears in the
 // OpenSSH authorized_keys file at path. Lines that fail to parse are skipped.
 func authorizedKeysContains(path string, key ssh.PublicKey) bool {

@@ -41,6 +41,22 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case LockStateChangedMsg:
+		m.SetLockedByOthers(msg.LockedByOthers)
+		return m, nil
+
+	case tea.KeyPressMsg:
+		switch {
+		case key.Matches(msg, Keys.Enter), key.Matches(msg, Keys.Space):
+			if sel := m.list.SelectedItem(); sel != nil {
+				if item, ok := sel.(MenuItem); ok && item.Locked {
+					return m, nil // Block interaction for locked items
+				}
+			}
+		}
+	}
+
+	switch msg := msg.(type) {
 
 	case ToggleFocusedMsg:
 		// Middle click triggers toggle on the currently focused item

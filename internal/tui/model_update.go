@@ -1,8 +1,10 @@
 package tui
 
 import (
+	"fmt"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/theme"
 
 	"charm.land/bubbles/v2/help"
@@ -173,6 +175,23 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, logger.BatchRecoverTUI(m.ctx, cmds...)
 
 	case NavigateMsg:
+		if msg.Screen != nil && msg.Screen.IsDestructive() {
+			if !sessionlocks.Sessions.AcquireEditLock(m.clientIP, m.connType) {
+				info := sessionlocks.Sessions.ReadEditInfo()
+				busyMsg := "Configuration is currently being edited by another session."
+				if info.ClientIP != "" {
+					busyMsg = fmt.Sprintf("Configuration is currently being edited by {{|TitleError|}}%s{{[-]}} from {{|TitleQuestion|}}%s{{[-]}}.", info.ConnType, info.ClientIP)
+				}
+				return m, func() tea.Msg {
+					return ShowMessageDialogMsg{
+						Title:   "Resource Busy",
+						Message: busyMsg,
+						Type:    MessageError,
+					}
+				}
+			}
+		}
+
 		// Push current screen to stack and switch to new screen
 		if m.activeScreen != nil {
 			m.screenStack = append(m.screenStack, m.activeScreen)
@@ -193,6 +212,10 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, logger.BatchRecoverTUI(m.ctx, cmds...)
 
 	case NavigateBackMsg:
+		if m.activeScreen != nil && m.activeScreen.IsDestructive() {
+			sessionlocks.Sessions.ReleaseEditLock()
+		}
+
 		// Pop from stack and return to previous screen
 		if CurrentPageName == "tabbed_vars" {
 			CurrentEditorApp = ""
@@ -510,6 +533,26 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 
 	case ConsoleLockMsg:
+		// remote.lock never locks the local console bar (it just indicates session presence)
+		if msg.ID == "remote.lock" {
+			return m, nil
+		}
+
+		// edit.lock state sync
+		if msg.ID == "edit.lock" {
+			lockedByOthers := msg.Locked && !sessionlocks.Sessions.HoldEditLockLocal()
+			if lockedByOthers != m.lockedByOthers {
+				m.lockedByOthers = lockedByOthers
+				// Relay the change to the active screen for Menu '!' indicators
+				cmds = append(cmds, func() tea.Msg { return LockStateChangedMsg{LockedByOthers: lockedByOthers} })
+			}
+			// But for the Console Panel, we lock for ANY edit activity (local or remote)
+			// to prevent the user from running a CLI command while in a destructive menu.
+			m.logPanel.lockSession(msg.ID, msg.Locked)
+			return m, logger.BatchRecoverTUI(m.ctx, cmds...)
+		}
+
+		// Standard behavioral lock (e.g. from internal console commands)
 		m.logPanel.lockSession(msg.ID, msg.Locked)
 		return m, nil
 	}

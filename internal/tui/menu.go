@@ -51,6 +51,8 @@ type MenuItem struct {
 	// Metadata
 	IsUserDefined bool              // Whether this is a user-defined app (for coloring)
 	IsInvalid     bool              // Whether this item is invalid (e.g. broken theme)
+	Locked        bool              // Whether this item is locked by another session
+	IsDestructive bool              // Whether this item leads to configuration changes
 	Metadata      map[string]string // Optional extra data (e.g. internal app name)
 }
 
@@ -158,7 +160,16 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 
 	// Checkbox visual [ ] or [x] / Radio visual ( ) or (*)
 	checkbox := ""
-	if menuItem.IsInvalid {
+	if menuItem.Locked {
+		var cb string
+		if ctx.LineCharacters {
+			cb = invalidMarker
+		} else {
+			cb = invalidMarkerAscii
+		}
+		// Render with tagStyle for consistency with other markers, and add a neutral space after it
+		checkbox = tagStyle.Render(cb) + neutralStyle.Render(" ")
+	} else if menuItem.IsInvalid {
 		var cb string
 		if ctx.LineCharacters {
 			cb = invalidMarker
@@ -278,7 +289,15 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 
 	// Render checkbox for selectable items
 	var checkbox string
-	if menuItem.IsInvalid {
+	if menuItem.Locked {
+		var cb string
+		if ctx.LineCharacters {
+			cb = invalidMarker
+		} else {
+			cb = invalidMarkerAscii
+		}
+		checkbox = tagStyle.Render(cb) + neutralStyle.Render(" ")
+	} else if menuItem.IsInvalid {
 		var cb string
 		if ctx.LineCharacters {
 			cb = invalidMarker
@@ -509,7 +528,16 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 	// Gutter: 2 chars on left edge.
 	// g0 = Add diff marker (+/-/R/space), g1 = Enabled diff marker (E/D/space, changes only)
 	var g0, g1 string
-	if menuItem.IsReferenced && menuItem.Checked {
+	if menuItem.Locked {
+		var cb string
+		if ctx.LineCharacters {
+			cb = invalidMarker
+		} else {
+			cb = invalidMarkerAscii
+		}
+		g0 = tagStyle.Render(cb)
+		g1 = neutralStyle.Render(" ")
+	} else if menuItem.IsReferenced && menuItem.Checked {
 		g0 = RenderThemeText("{{|MarkerAdded|}}R{{[-]}}", neutralStyle)
 	} else if menuItem.IsReferenced {
 		g0 = RenderThemeText("{{|MarkerModified|}}r{{[-]}}", neutralStyle)
@@ -794,6 +822,31 @@ type MenuModel struct {
 	// Optional hook to provide markdown documentation for a menu item.
 	// If set, called by HelpContext to populate docMarkdown and docAppName.
 	itemDocFunc func(item MenuItem) (docMarkdown, docAppName string)
+}
+
+// SetLockedByOthers updates the Locked status of all destructive menu items.
+func (m *MenuModel) SetLockedByOthers(locked bool) {
+	changed := false
+	items := m.list.Items()
+	for i, it := range items {
+		if item, ok := it.(MenuItem); ok {
+			if item.IsDestructive && item.Locked != locked {
+				item.Locked = locked
+				items[i] = item
+				changed = true
+			}
+		}
+	}
+	if changed {
+		m.list.SetItems(items)
+		m.renderVersion++
+		m.cacheValid = false
+	}
+
+	// Propagate to sub-menus
+	for _, sub := range m.contentSections {
+		sub.SetLockedByOthers(locked)
+	}
 }
 
 // ScrollDoneMsg is sent after a wheel scroll is processed to clear the scrollPending flag.
