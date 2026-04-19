@@ -275,10 +275,12 @@ func (m *MenuModel) renderVariableHeightList() string {
 		}
 
 		lockMarker := ""
-		if item.Locked {
-			lockMarker = RenderThemeText(" {{|MarkerDestructive|}}!{{[-]}}", neutralStyle)
-		} else {
-			lockMarker = neutralStyle.Render("  ")
+		if m.id != "app-select" {
+			if item.Locked {
+				lockMarker = RenderThemeText("{{|MarkerDestructive|}}!{{[-]}} ", neutralStyle)
+			} else {
+				lockMarker = neutralStyle.Render("  ")
+			}
 		}
 		if lockMarker != "" {
 			firstLinePrefix = lockMarker + firstLinePrefix
@@ -779,7 +781,7 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 		
 		lockMarker := ""
 		if item.Locked {
-			lockMarker = RenderThemeText(" {{|MarkerDestructive|}}!{{[-]}}", neutralStyle)
+			lockMarker = RenderThemeText("{{|MarkerDestructive|}}!{{[-]}} ", neutralStyle)
 		} else {
 			// Sub-items don't strictly align with external items without lock, but we can pad within the sub box if needed.
 			// Actually, if we just want the sub-item to show ! without changing its grid width, we can just replace the left indent.
