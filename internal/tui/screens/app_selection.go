@@ -73,7 +73,7 @@ func (s *AppSelectionScreen) SetFocused(f bool)                        { s.menu.
 func (s *AppSelectionScreen) IsMaximized() bool                        { return s.menu.IsMaximized() }
 func (s *AppSelectionScreen) HasDialog() bool                          { return s.menu.HasDialog() }
 func (s *AppSelectionScreen) MenuName() string                         { return s.menu.MenuName() }
-func (s *AppSelectionScreen) IsDestructive() bool                      { return false }
+func (s *AppSelectionScreen) IsDestructive() bool                      { return true }
 func (s *AppSelectionScreen) Layers() []*lipgloss.Layer                { return s.menu.Layers() }
 func (s *AppSelectionScreen) GetHitRegions(x, y int) []tui.HitRegion  { return s.menu.GetHitRegions(x, y) }
 func (s *AppSelectionScreen) IsScrollbarDragging() bool       { return s.menu.IsScrollbarDragging() }

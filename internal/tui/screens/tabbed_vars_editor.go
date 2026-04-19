@@ -1263,7 +1263,7 @@ func (m *TabbedVarsEditorModel) MenuName() string {
 }
 
 func (m *TabbedVarsEditorModel) IsDestructive() bool {
-	return false
+	return true
 }
 
 // calcSubtitleHeight returns the number of subtitle lines for the active tab.
