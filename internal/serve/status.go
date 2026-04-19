@@ -24,8 +24,8 @@ func CheckStartupStatus(ctx context.Context) {
 			logger.Warn(ctx, "Web server is running on port {{|Highlight|}}%d{{[-]}}.", serverInfo.WebPort)
 		}
 
-		sessionInfo := Sessions.ReadSessionInfo()
-		if sessionInfo.PID != 0 && ProcessExists(sessionInfo.PID) {
+		if Sessions.IsPrimaryActive() {
+			sessionInfo := Sessions.ReadSessionInfo()
 			ip := formatIP(sessionInfo.ClientIP)
 			connType := "SSH"
 			if sessionInfo.ConnType == "web" {
@@ -86,8 +86,8 @@ func PrintServerStatus(_ context.Context, cfg config.ServerConfig) {
 		fmt.Println("Session:     not connected")
 		return
 	}
-	sessionInfo := Sessions.ReadSessionInfo()
-	if sessionInfo.PID != 0 && ProcessExists(sessionInfo.PID) {
+	if Sessions.IsPrimaryActive() {
+		sessionInfo := Sessions.ReadSessionInfo()
 		ip := formatIP(sessionInfo.ClientIP)
 		connType := sessionInfo.ConnType
 		if connType == "" {

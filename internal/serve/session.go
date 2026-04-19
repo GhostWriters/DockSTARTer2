@@ -97,7 +97,15 @@ func (m *SessionManager) AcquirePrimary(clientIP, connType string) error {
 
 	locked, err := m.primaryFlock.TryLock()
 	if err != nil {
-		return fmt.Errorf("failed to acquire session lock: %v", err)
+		// If we get a permission error, the file might be a stale lock owned by another user (e.g. root).
+		// Attempt to remove it and try one more time.
+		if os.IsPermission(err) {
+			_ = os.Remove(m.sessionLockPath)
+			locked, err = m.primaryFlock.TryLock()
+		}
+		if err != nil {
+			return fmt.Errorf("failed to acquire session lock: %v", err)
+		}
 	}
 	if !locked {
 		return fmt.Errorf("a session is already active (locked by another process)")
@@ -176,11 +184,19 @@ func (m *SessionManager) ForceRelease() {
 
 // cleanStaleLocks removes lock files left by processes that no longer exist.
 func (m *SessionManager) cleanStaleLocks() {
-	for _, p := range []string{m.sessionLockPath, m.serverPIDPath} {
-		info, _ := readInfoFile(p)
-		if info.pid != 0 && !ProcessExists(info.pid) {
-			_ = os.Remove(p)
-		}
+	// 1. Session lock: Use flock to check if any process actually holds it.
+	f := flock.New(m.sessionLockPath)
+	locked, err := f.TryLock()
+	if err == nil && locked {
+		// We got the lock, so any existing file content is stale.
+		_ = f.Unlock()
+		_ = os.Remove(m.sessionLockPath)
+	}
+
+	// 2. Server PID lock: Use PID existence check (daemon doesn't use flock yet).
+	info, _ := readInfoFile(m.serverPIDPath)
+	if info.pid != 0 && !ProcessExists(info.pid) {
+		_ = os.Remove(m.serverPIDPath)
 	}
 }
 
