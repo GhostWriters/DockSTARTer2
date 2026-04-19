@@ -101,6 +101,7 @@ MarkerAdded = "{{[:green:]}}"
 MarkerDeleted = "{{[:red:]}}"
 MarkerModified = "{{[:yellow:]}}"
 MarkerInvalid = "{{[white:red:B]}}"
+MarkerDestructive = "{{|MarkerInvalid|}}"
 
 ListDefault = ""
 ListApp = "{{[black::R]}}"

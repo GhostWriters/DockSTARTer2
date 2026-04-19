@@ -698,8 +698,10 @@ func (m LogPanelModel) ViewString() string {
 	m.input.SetWidth(inputBoxWidth - 2)
 	if m.sessionActive() {
 		m.input.Placeholder = "Session active — input locked"
+		m.input.Prompt = RenderThemeText("{{|MarkerDestructive|}}!{{[-]}} ", ctx.Dialog)
 	} else {
 		m.input.Placeholder = ""
+		m.input.Prompt = "> "
 	}
 	inputTitleTag := "TitleSubMenu"
 	if m.inputFocused {

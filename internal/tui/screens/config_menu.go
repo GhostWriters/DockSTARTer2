@@ -12,27 +12,25 @@ func NewConfigMenuScreen() tui.ScreenModel {
 			Desc:   "Run complete setup wizard",
 			Help:   "Guided setup for all applications",
 			Action: nil, // Not implemented yet
+			IsDestructive: true,
 		},
 		{
 			Tag:    "Edit Global Variables",
 			Desc:   "Configure global settings",
 			Help:   "Edit PUID, PGID, TZ, and other global variables",
 			Action: navigateToGlobalVarsEditor(),
-			IsDestructive: true,
 		},
 		{
 			Tag:    "Select Applications",
 			Desc:   "Choose which apps to enable",
 			Help:   "Enable or disable applications",
 			Action: navigateToAppSelection(),
-			IsDestructive: true,
 		},
 		{
 			Tag:    "Configure Applications",
 			Desc:   "Edit application settings",
 			Help:   "Configure ports, volumes, and environment variables",
 			Action: navigateToConfigApps(),
-			IsDestructive: true,
 		},
 		{
 			Tag:    "Start All Applications",

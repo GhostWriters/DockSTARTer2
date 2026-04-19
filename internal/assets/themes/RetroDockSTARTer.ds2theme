@@ -93,6 +93,7 @@ MarkerAdded = "{{|Dialog::green|}}"
 MarkerDeleted = "{{|Dialog::red|}}"
 MarkerModified = "{{|Dialog::yellow|}}"
 MarkerInvalid = "{{[white:red:B]}}"
+MarkerDestructive = "{{|MarkerInvalid|}}"
 
 EnvBuiltin = "{{[black:cyan]}}"
 EnvUser = "{{[green:cyan]}}"
