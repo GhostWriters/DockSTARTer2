@@ -32,15 +32,15 @@ func startLockFileWatcher(ctx context.Context, p *tea.Program) {
 		return
 	}
 
-	// Initial state check
-	if lockfile.IsLocked(paths.GetRemoteLockPath()) {
-		p.Send(ConsoleLockMsg{ID: "remote.lock", Locked: true})
-	}
-	if lockfile.IsLocked(filepath.Join(locksDir, editLockBase)) {
-		p.Send(ConsoleLockMsg{ID: "edit.lock", Locked: true})
-	}
-
 	go func() {
+		// Initial state check - moved into goroutine to avoid blocking TUI startup
+		if lockfile.IsLocked(paths.GetRemoteLockPath()) {
+			p.Send(ConsoleLockMsg{ID: "remote.lock", Locked: true})
+		}
+		if lockfile.IsLocked(filepath.Join(locksDir, editLockBase)) {
+			p.Send(ConsoleLockMsg{ID: "edit.lock", Locked: true})
+		}
+
 		defer watcher.Close()
 		for {
 			select {
