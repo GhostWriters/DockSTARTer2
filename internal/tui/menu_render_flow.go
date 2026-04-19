@@ -31,6 +31,7 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 	var currentLine []string
 	currentLineWidth := 0
 	itemSpacing := 3
+	anyLocked := m.AnyLocked()
 
 	for i, item := range m.items {
 		if item.IsSeparator {
@@ -83,9 +84,6 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 		// Tag with first-letter shortcut
 		tag := item.Tag
 		tagStr := ""
-		if item.Locked {
-			tagStr = RenderThemeText("{{|MarkerDestructive|}}!{{[-]}} ", lipgloss.NewStyle().Background(styles.Dialog.GetBackground()))
-		}
 		if len(tag) > 0 {
 			letterIdx := 0
 			if strings.HasPrefix(tag, "[") && len(tag) > 1 {
@@ -94,10 +92,17 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 			p := tag[:letterIdx]
 			f := string(tag[letterIdx])
 			r := tag[letterIdx+1:]
-			tagStr += tagStyle.Render(p) + keyStyle.Render(f) + tagStyle.Render(r)
+			tagStr = tagStyle.Render(p) + keyStyle.Render(f) + tagStyle.Render(r)
 		}
 
-		itemContent := prefix + tagStr
+		lockMarker := ""
+		if item.Locked {
+			lockMarker = RenderThemeText("{{|MarkerDestructive|}}!{{[-]}} ", lipgloss.NewStyle().Background(dialogBG))
+		} else if anyLocked {
+			lockMarker = lipgloss.NewStyle().Background(dialogBG).Render("  ")
+		}
+
+		itemContent := lockMarker + prefix + tagStr
 
 		// For non-checkbox/non-radio items (e.g. dropdowns), append the value inline.
 		// Neutral space (dialogBG) breaks the selection background color in the gap only.

@@ -87,6 +87,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 		}
 	}
 	maxTagLen := calculateMaxTagLength(mainItems)
+	anyLocked := m.AnyLocked()
 
 	var renderedItems []string
 	var itemHeights []int
@@ -230,10 +231,28 @@ func (m *MenuModel) renderVariableHeightList() string {
 			}
 		}
 
-		tagStr := ""
-		if item.Locked {
-			tagStr = RenderThemeText("{{|MarkerDestructive|}}!{{[-]}} ", neutralStyle)
+		} else {
+			if checkbox != "" {
+				firstLinePrefix = checkbox + neutralStyle.Render(" ")
+				prefixWidth = lipgloss.Width(GetPlainText(firstLinePrefix))
+			} else {
+				firstLinePrefix = ""
+				prefixWidth = 0
+			}
 		}
+
+		lockMarker := ""
+		if item.Locked {
+			lockMarker = RenderThemeText("{{|MarkerDestructive|}}!{{[-]}} ", neutralStyle)
+		} else if anyLocked {
+			lockMarker = neutralStyle.Render("  ")
+		}
+		if lockMarker != "" {
+			firstLinePrefix = lockMarker + firstLinePrefix
+			prefixWidth += 2 // "!" and "  " are visually 2 chars wide
+		}
+
+		tagStr := ""
 		if len(item.Tag) > 0 {
 			runes := []rune(item.Tag)
 			letterIdx := 0
@@ -277,6 +296,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 			}
 		}
 
+		// (The previously moved lock marker injection now replaces the tagStr edits)
 		paddingSpaces := strutil.Repeat(" ", max(0, maxTagLen-lipgloss.Width(GetPlainText(item.Tag))+layout.CheckboxWidth()))
 		availableWidth := listContentWidth - (prefixWidth + layout.StatusGutterWidth()) - (maxTagLen + layout.CheckboxWidth()) // status gutter + checkbox padding
 		if availableWidth < 0 {
@@ -712,9 +732,6 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 		}
 
 		tagStr := ""
-		if item.Locked {
-			tagStr = RenderThemeText("{{|MarkerDestructive|}}!{{[-]}} ", neutralStyle)
-		}
 		if item.IsEditing {
 			// Using the standard edit styling (red background/bold)
 			editTag := GetPlainText(item.Tag)
@@ -770,7 +787,17 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 		rowContent := vStyleLight.Render(vBorderChar) + neutralStyle.Render(" ") + checkboxA3 + neutralStyle.Render(" ") + checkboxE3 + neutralStyle.Render(" ") + tagStr
 		rowWidth := subListWidth - 1
 		pContent := rowContent + neutralStyle.Render(strutil.Repeat(" ", max(0, rowWidth-lipgloss.Width(GetPlainText(rowContent)))))
-		line := g0 + g1 + neutralStyle.Render(strutil.Repeat(" ", 8)) + pContent + vStyleDark.Render(vBorderChar)
+		
+		lockMarker := ""
+		if item.Locked {
+			lockMarker = RenderThemeText("{{|MarkerDestructive|}}!{{[-]}} ", neutralStyle)
+		} else {
+			// Sub-items don't strictly align with external items without lock, but we can pad within the sub box if needed.
+			// Actually, if we just want the sub-item to show ! without changing its grid width, we can just replace the left indent.
+			// But for simplicity, we just inject it into the raw line prefix. Yes, this will widen the sub-menu if an item inside is locked.
+		}
+		
+		line := g0 + g1 + lockMarker + neutralStyle.Render(strutil.Repeat(" ", max(0, 8-lipgloss.Width(GetPlainText(lockMarker))))) + pContent + vStyleDark.Render(vBorderChar)
 
 		resLines = append(resLines, line+console.CodeReset)
 		resH = append(resH, 1)
