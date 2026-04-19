@@ -36,6 +36,11 @@ func TestCompareVersions(t *testing.T) {
 
 		// Branches/Pre-releases
 		{"2024.01.20.1-feat", "2024.01.20.1", -1},
+
+		// Prerelease build numbers (the bug: "9" vs "13" must use numeric comparison)
+		{"v2.20260419.13-Prerelease", "v2.20260419.9-Prerelease", 1},
+		{"v2.20260419.9-Prerelease", "v2.20260419.13-Prerelease", -1},
+		{"v2.20260419.13-Prerelease", "v2.20260419.13-Prerelease", 0},
 	}
 
 	var cases []testutils.TestCase
