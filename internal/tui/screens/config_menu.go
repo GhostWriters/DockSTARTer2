@@ -25,6 +25,7 @@ func NewConfigMenuScreen() tui.ScreenModel {
 			Desc:   "Choose which apps to enable",
 			Help:   "Enable or disable applications",
 			Action: navigateToAppSelection(),
+			IsDestructive: true,
 		},
 		{
 			Tag:    "Configure Applications",
