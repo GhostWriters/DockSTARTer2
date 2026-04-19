@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"DockSTARTer2/internal/paths"
+	"github.com/gofrs/flock"
 )
 
 // SessionManager tracks the active session state and manages lock files.
@@ -19,6 +20,7 @@ import (
 type SessionManager struct {
 	mu            sync.Mutex
 	primaryActive bool
+	primaryFlock  *flock.Flock
 
 	sessionLockPath    string // $STATE/session.lock        — active TUI session (PID\nCLIENT_IP\nCONN_TYPE)
 	serverPIDPath      string // $STATE/server.pid          — SSH server running (PID\nSSH_PORT\nWEB_PORT)
@@ -58,7 +60,25 @@ func NewSessionManager() *SessionManager {
 func (m *SessionManager) IsPrimaryActive() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.primaryActive
+
+	// 1. If we are the primary session (process-local), we know it's active.
+	if m.primaryActive {
+		return true
+	}
+
+	// 2. Otherwise, check the lock file on disk using a non-blocking flock.
+	f := flock.New(m.sessionLockPath)
+	locked, err := f.TryLock()
+	if err != nil {
+		// If we can't try-lock, assume it's locked by someone else.
+		return true
+	}
+	if locked {
+		// We were able to get the lock, so NO ONE else has it.
+		_ = f.Unlock()
+		return false
+	}
+	return true
 }
 
 // AcquirePrimary marks a primary session as active and writes the session
@@ -70,6 +90,19 @@ func (m *SessionManager) AcquirePrimary(clientIP, connType string) error {
 	if m.primaryActive {
 		return fmt.Errorf("a session is already active")
 	}
+
+	if m.primaryFlock == nil {
+		m.primaryFlock = flock.New(m.sessionLockPath)
+	}
+
+	locked, err := m.primaryFlock.TryLock()
+	if err != nil {
+		return fmt.Errorf("failed to acquire session lock: %v", err)
+	}
+	if !locked {
+		return fmt.Errorf("a session is already active (locked by another process)")
+	}
+
 	m.primaryActive = true
 	return writeInfoFile(m.sessionLockPath, os.Getpid(), clientIP, connType)
 }
@@ -79,6 +112,9 @@ func (m *SessionManager) ReleasePrimary() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.primaryActive = false
+	if m.primaryFlock != nil {
+		_ = m.primaryFlock.Unlock()
+	}
 	_ = os.Remove(m.sessionLockPath)
 }
 

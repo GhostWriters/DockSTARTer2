@@ -14,5 +14,6 @@ func Exists(pid int) bool {
 		return false
 	}
 	// On Unix, FindProcess always succeeds; signal 0 checks existence.
-	return p.Signal(syscall.Signal(0)) == nil
+	err = p.Signal(syscall.Signal(0))
+	return err == nil || err == syscall.EPERM
 }

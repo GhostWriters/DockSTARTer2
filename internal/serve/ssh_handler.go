@@ -48,8 +48,10 @@ func tuiMiddleware(mgr *SessionManager, startMenu string) wish.Middleware {
 				return
 			}
 			defer mgr.ReleasePrimary()
-			_ = lockfile.Acquire(paths.GetRemoteLockPath())
-			defer lockfile.Release(paths.GetRemoteLockPath())
+			rlock, _ := lockfile.AcquireShared(paths.GetRemoteLockPath())
+			if rlock != nil {
+				defer rlock.Release()
+			}
 
 			ptyReq, windowCh, isPTY := s.Pty()
 			if !isPTY {

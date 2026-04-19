@@ -4,35 +4,90 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
 
-	"DockSTARTer2/internal/process"
+	"github.com/gofrs/flock"
 )
 
-// Acquire writes a lock file at path containing the current PID.
+// Lock represents an advisory file lock.
+type Lock struct {
+	f    *flock.Flock
+	path string
+}
+
+// AcquireShared acquires a shared (read) lock on the file at path.
+// Multiple processes can hold a shared lock simultaneously.
 // The caller must call Release when done.
-func Acquire(path string) error {
+func AcquireShared(path string) (*Lock, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return err
+		return nil, err
 	}
-	return os.WriteFile(path, []byte(fmt.Sprintf("%d\n", os.Getpid())), 0644)
-}
-
-// Release removes the lock file at path.
-func Release(path string) {
-	_ = os.Remove(path)
-}
-
-// IsLocked returns true if a valid, non-stale lock file exists at path.
-func IsLocked(path string) bool {
-	data, err := os.ReadFile(path)
+	f := flock.New(path)
+	locked, err := f.TryRLock() // Shared lock
 	if err != nil {
+		return nil, err
+	}
+	if !locked {
+		return nil, fmt.Errorf("failed to acquire shared lock (exclusive lock held by another process)")
+	}
+	// Note: We don't write the PID here because multiple processes might share this lock.
+	// If you need PIDs, you'd need a different mechanism (like a lock directory).
+	return &Lock{f: f, path: path}, nil
+}
+
+// AcquireExclusive acquires an exclusive (write) lock on the file at path.
+// Only one process can hold an exclusive lock at a time.
+// The caller must call Release when done.
+func AcquireExclusive(path string) (*Lock, error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return nil, err
+	}
+	f := flock.New(path)
+	locked, err := f.TryLock() // Exclusive lock
+	if err != nil {
+		return nil, err
+	}
+	if !locked {
+		return nil, fmt.Errorf("file is already locked")
+	}
+	// We can write the PID for exclusive locks if desired.
+	_ = os.WriteFile(path, []byte(fmt.Sprintf("%d\n", os.Getpid())), 0644)
+	return &Lock{f: f, path: path}, nil
+}
+
+// Release releases the lock and optionally removes the file if it was exclusive.
+func (l *Lock) Release() {
+	if l.f != nil {
+		_ = l.f.Unlock()
+	}
+}
+
+// IsLocked reports whether any lock (shared or exclusive) is held on the file at path.
+func IsLocked(path string) bool {
+	f := flock.New(path)
+	// To check if ANY lock is held, we try to take an Exclusive lock.
+	// If it fails, someone else has a lock (shared or exclusive).
+	locked, err := f.TryLock()
+	if err != nil {
+		return true // Assume locked on error
+	}
+	if locked {
+		_ = f.Unlock()
 		return false
 	}
-	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
-	if err != nil || pid == 0 {
-		return false
-	}
-	return process.Exists(pid)
+	return true
+}
+
+// Deprecated logic: Compatibility wrappers that don't hold the lock properly.
+// These are kept to avoid immediate compilation errors in old callers,
+// but should be replaced by the Lock-returning methods.
+
+func Acquire(path string) error {
+	_, err := AcquireShared(path)
+	return err
+}
+
+func Release(path string) {
+	// This legacy method cannot release a flock held by a previous call to Acquire
+	// because the flock object is lost. Callers MUST move to the new API.
+	_ = os.Remove(path)
 }
