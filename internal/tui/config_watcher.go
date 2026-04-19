@@ -39,8 +39,6 @@ func startConfigWatcher(ctx context.Context, p *tea.Program) {
 		return
 	}
 
-	logger.Info(ctx, "config watcher: watching %s for changes to %s", cfgDir, cfgBase)
-
 	go func() {
 		defer watcher.Close()
 
@@ -56,23 +54,18 @@ func startConfigWatcher(ctx context.Context, p *tea.Program) {
 				if !ok {
 					return
 				}
-				logger.Debug(ctx, "config watcher: event %s on %s (base=%s)", event.Op, event.Name, filepath.Base(event.Name))
-				// Filter to only the config file.
 				if filepath.Base(event.Name) != cfgBase {
 					continue
 				}
 				if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) || event.Has(fsnotify.Rename) {
-					logger.Info(ctx, "config watcher: queuing reload after debounce")
 					if timer != nil {
 						timer.Stop()
 					}
 					timer = time.AfterFunc(debounce, func() {
 						conf, err := config.TryLoadAppConfig()
 						if err != nil {
-							logger.Info(ctx, "config watcher: reload skipped (invalid config): %v", err)
 							return
 						}
-						logger.Info(ctx, "config watcher: sending ConfigChangedMsg")
 						p.Send(ConfigChangedMsg{Config: conf})
 					})
 				}
