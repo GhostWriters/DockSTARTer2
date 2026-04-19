@@ -92,17 +92,17 @@ func (s *ServerOptionsScreen) buildSettingsMenu() *tui.MenuModel {
 	}
 
 	items := []tui.MenuItem{
-		// SSH Server section heading
-		{
-			Tag:        "── SSH Server ──",
-			Desc:       "",
-			Selectable: false,
-		},
 		{
 			Tag:    "SSH Port",
 			Desc:   fmt.Sprintf("{{|OptionValue|}}%d{{[-]}}", s.config.Server.SSH.Port),
 			Help:   "TCP port the SSH server listens on. Set to 0 to disable. (Enter to change)",
 			Action: s.promptSSHPort(),
+		},
+		{
+			Tag:    "Web Port",
+			Desc:   fmt.Sprintf("{{|OptionValue|}}%d{{[-]}}", s.config.Server.Web.Port),
+			Help:   "TCP port the web server listens on. Set to 0 to disable. (Enter to change)",
+			Action: s.promptWebPort(),
 		},
 		{
 			Tag:    "Auth Mode",
@@ -121,18 +121,6 @@ func (s *ServerOptionsScreen) buildSettingsMenu() *tui.MenuModel {
 			Desc:   s.truncatePath(s.config.Server.Auth.AuthKeysFile),
 			Help:   "Path to authorized_keys file for public-key auth (Enter to change)",
 			Action: s.promptAuthKeysFile(),
-		},
-		// Web Server section heading
-		{
-			Tag:        "── Web Server ──",
-			Desc:       "",
-			Selectable: false,
-		},
-		{
-			Tag:    "Web Port",
-			Desc:   fmt.Sprintf("{{|OptionValue|}}%d{{[-]}}", s.config.Server.Web.Port),
-			Help:   "TCP port the web server listens on. Set to 0 to disable. (Enter to change)",
-			Action: s.promptWebPort(),
 		},
 	}
 
@@ -229,13 +217,12 @@ func (s *ServerOptionsScreen) refreshStatus() {
 func (s *ServerOptionsScreen) syncSettingsMenu() {
 	items := s.settingsMenu.GetItems()
 
-	// indices: 0=heading, 1=SSH port, 2=auth mode, 3=password, 4=authkeys file,
-	//           5=heading, 6=web port
-	items[1].Desc = fmt.Sprintf("{{|OptionValue|}}%d{{[-]}}", s.config.Server.SSH.Port)
+	// indices: 0=SSH port, 1=web port, 2=auth mode, 3=password, 4=authkeys file
+	items[0].Desc = fmt.Sprintf("{{|OptionValue|}}%d{{[-]}}", s.config.Server.SSH.Port)
+	items[1].Desc = fmt.Sprintf("{{|OptionValue|}}%d{{[-]}}", s.config.Server.Web.Port)
 	items[2].Desc = s.dropdownDesc(s.authModeLabel())
 	items[3].Desc = s.passwordDesc()
 	items[4].Desc = s.truncatePath(s.config.Server.Auth.AuthKeysFile)
-	items[6].Desc = fmt.Sprintf("{{|OptionValue|}}%d{{[-]}}", s.config.Server.Web.Port)
 
 	s.settingsMenu.SetItems(items)
 }
