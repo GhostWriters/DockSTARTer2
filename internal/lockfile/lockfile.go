@@ -68,7 +68,12 @@ func IsLocked(path string) bool {
 	// If it fails, someone else has a lock (shared or exclusive).
 	locked, err := f.TryLock()
 	if err != nil {
-		return true // Assume locked on error
+		// If the file or its parent directory doesn't exist, it's definitely not locked.
+		if os.IsNotExist(err) || (err != nil && (strings.Contains(err.Error(), "no such file or directory") || strings.Contains(err.Error(), "The system cannot find the path specified"))) {
+			return false
+		}
+		// Any other error (like Permission Denied on an active file) likely means it's locked.
+		return true
 	}
 	if locked {
 		_ = f.Unlock()

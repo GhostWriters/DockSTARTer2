@@ -47,6 +47,10 @@ type ServerInfo struct {
 func NewSessionManager() *SessionManager {
 	locksDir := paths.GetLocksDir()
 	stateDir := paths.GetStateDir()
+
+	// Ensure the locks directory exists so flock operations don't fail.
+	_ = os.MkdirAll(locksDir, 0755)
+
 	m := &SessionManager{
 		sessionLockPath:   filepath.Join(locksDir, "session.lock"),
 		serverPIDPath:     filepath.Join(locksDir, "server.pid"),
@@ -71,7 +75,11 @@ func (m *SessionManager) IsPrimaryActive() bool {
 	f := flock.New(m.sessionLockPath)
 	locked, err := f.TryLock()
 	if err != nil {
-		// If we can't try-lock, assume it's locked by someone else.
+		// If the file or its parent directory doesn't exist, it's definitely not locked.
+		if os.IsNotExist(err) || strings.Contains(err.Error(), "no such file or directory") {
+			return false
+		}
+		// Any other error (like Permission Denied on an active file) likely means it's locked.
 		return true
 	}
 	if locked {
