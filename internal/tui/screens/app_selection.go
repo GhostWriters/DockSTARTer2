@@ -167,6 +167,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 	menu.SetVariableHeight(true)
 	menu.SetMaximized(true)
 	menu.SetSubMenuMode(false)
+	menu.SetShowLockGutter(false)
 	menu.SetFocusedItem(tui.FocusSelectBtn)
 
 	menu.SetEnterAction(func() tea.Msg {

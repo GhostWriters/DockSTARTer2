@@ -133,6 +133,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 	s.themeMenu.SetIsDialog(false) // Part of a screen, not a modal
 	s.themeMenu.SetShowExit(false)
 	s.themeMenu.SetMaximized(true) // Fill available width
+	s.themeMenu.SetShowLockGutter(false)
 
 	// 2. Options Menu
 	optionItems := []tui.MenuItem{
@@ -238,6 +239,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 	s.optionsMenu.SetShowExit(false)
 	s.optionsMenu.SetFlowMode(true)
 	s.optionsMenu.SetMaximized(true) // Fill available width
+	s.optionsMenu.SetShowLockGutter(false)
 
 	// 3. Outer "Appearance Settings" dialog (sections container + buttons)
 	var outerBack tea.Cmd

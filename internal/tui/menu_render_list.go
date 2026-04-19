@@ -265,26 +265,22 @@ func (m *MenuModel) renderVariableHeightList() string {
 			}
 			prefixWidth = lipgloss.Width(GetPlainText(firstLinePrefix))
 		} else {
+		lockMarker := ""
+		if m.showLockGutter {
+			if item.Locked {
+				lockMarker = RenderThemeText("{{|MarkerDestructive|}}!{{[-]}}", neutralStyle)
+			} else {
+				lockMarker = neutralStyle.Render(" ")
+			}
+			firstLinePrefix = lockMarker + checkbox
+		} else {
 			if checkbox != "" {
 				firstLinePrefix = checkbox + neutralStyle.Render(" ")
-				prefixWidth = lipgloss.Width(GetPlainText(firstLinePrefix))
 			} else {
 				firstLinePrefix = ""
-				prefixWidth = 0
 			}
 		}
-
-		lockMarker := ""
-		if m.id != "app-select" {
-			if item.Locked {
-				lockMarker = RenderThemeText("{{|MarkerDestructive|}}!{{[-]}} ", neutralStyle)
-			} else {
-				lockMarker = neutralStyle.Render("  ")
-			}
-		}
-		if lockMarker != "" {
-			firstLinePrefix = lockMarker + firstLinePrefix
-			prefixWidth += 1 // Lock marker replaces the 1-char gutter space
+		prefixWidth = lipgloss.Width(GetPlainText(firstLinePrefix))
 		}
 
 		// (The previously moved lock marker injection now replaces the tagStr edits)
@@ -775,16 +771,16 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 			checkboxE3 = neutralStyle.Render("[") + cbStyleE.Render(string(ceA[1])) + neutralStyle.Render("]")
 		}
 
-		lockMarker := neutralStyle.Render(" ")
-		if item.Locked {
-			lockMarker = RenderThemeText("{{|MarkerDestructive|}}!{{[-]}}", neutralStyle)
-		}
-
-		rowContent := vStyleLight.Render(vBorderChar) + lockMarker + checkboxA3 + neutralStyle.Render(" ") + checkboxE3 + neutralStyle.Render(" ") + tagStr
+		// Sub-menus require a 10-character indent to align with the top/bottom borders.
+		// Indent consists of: g0(1) + g1(1) + 8 spaces.
+		indent := neutralStyle.Render(strutil.Repeat(" ", 8))
+		
+		// The rowContent starts with the left border, followed by a mandatory internal space.
+		rowContent := vStyleLight.Render(vBorderChar) + neutralStyle.Render(" ") + checkboxA3 + neutralStyle.Render(" ") + checkboxE3 + neutralStyle.Render(" ") + tagStr
 		rowWidth := subListWidth - 1
 		pContent := rowContent + neutralStyle.Render(strutil.Repeat(" ", max(0, rowWidth-lipgloss.Width(GetPlainText(rowContent)))))
 		
-		line := g0 + g1 + lockMarker + neutralStyle.Render(strutil.Repeat(" ", max(0, 8-lipgloss.Width(GetPlainText(lockMarker))))) + pContent + vStyleDark.Render(vBorderChar)
+		line := g0 + g1 + indent + pContent + vStyleDark.Render(vBorderChar)
 
 		resLines = append(resLines, line+console.CodeReset)
 		resH = append(resH, 1)

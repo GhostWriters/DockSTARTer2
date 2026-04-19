@@ -803,7 +803,8 @@ type MenuModel struct {
 	lastScrollTotal int        // Total content height from last renderVariableHeightList (for scrollbar)
 
 	renderVersion  int // Incremented on item changes to invalidate list cache
-	menuName string // Name used for --menu or -M to return to this screen
+	showLockGutter bool
+	menuName       string // Name used for --menu or -M to return to this screen
 
 	// Content sections: sub-menus rendered stacked inside the outer border.
 	// When present, replaces the standard list+inner-border rendering.
@@ -999,8 +1000,15 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 		list:        l,
 		showExit:    true, // Default to show Exit button
 		showButtons: true, // Default to show buttons
-		Scroll:      Scrollbar{ID: id},
+		Scroll:         Scrollbar{ID: id},
+		showLockGutter: true,
 	}
+}
+
+// SetShowLockGutter enables or disables the lock indicator gutter.
+func (m *MenuModel) SetShowLockGutter(show bool) {
+	m.showLockGutter = show
+	m.renderVersion++
 }
 
 // Title returns the menu title
