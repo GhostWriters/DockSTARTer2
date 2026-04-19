@@ -45,13 +45,13 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 		requestedVersion = "stable"
 	}
 
-	// Quick check using git ls-remote to see if tags for this channel exist
-	// This avoids hitting the GitHub releases API unnecessarily
+	// Quick check using git ls-remote to see if tags for this channel exist.
+	// This avoids hitting the GitHub releases API unnecessarily.
 	if !strings.HasPrefix(requestedVersion, "v") {
-		hasTags, err := hasChannelTags(ctx, requestedVersion)
+		tag, err := latestChannelTag(requestedVersion)
 		if err != nil {
 			logger.Debug(ctx, "Git tag check failed: %v (will fall back to API)", err)
-		} else if !hasTags {
+		} else if tag == "" {
 			// No tags found for this channel - show warning and return early
 			msg := []string{
 				fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} channel '{{|Branch|}}%s{{[-]}}' appears to no longer exist (no releases found).", version.ApplicationName, requestedVersion),

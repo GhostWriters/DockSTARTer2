@@ -134,22 +134,19 @@ func checkAppUpdate(ctx context.Context) (updateAvailable bool, ver string, hadE
 
 	channel := GetCurrentChannel()
 
-	// Quick check using git ls-remote to see if tags for this channel exist
-	// This avoids hitting the GitHub releases API unnecessarily
-	hasTags, err := hasChannelTags(ctx, channel)
-	if err == nil && !hasTags {
-		// No tags found for this channel - not an error, just no updates
+	// Quick check using git ls-remote to see if tags for this channel exist.
+	// This avoids hitting the GitHub releases API unnecessarily.
+	channelTag, err := latestChannelTag(channel)
+	if err != nil {
+		return false, "", true
+	}
+	if channelTag == "" {
 		return false, "", false
 	}
 
 	updater, err := getUpdater(ctx, channel)
 	if err != nil {
 		return false, "", true
-	}
-
-	channelTag, err := latestChannelTag(channel)
-	if err != nil || channelTag == "" {
-		return false, "", false
 	}
 
 	latest, found, err := updater.DetectVersion(ctx, repo, channelTag)
@@ -343,16 +340,6 @@ func getUpdater(ctx context.Context, channel string) (*selfupdate.Updater, error
 		cfg.Prerelease = false
 	}
 	return selfupdate.NewUpdater(cfg)
-}
-
-// hasChannelTags checks if any tags matching the channel exist on GitHub.
-// This uses git ls-remote to avoid hitting the GitHub releases API unnecessarily.
-func hasChannelTags(ctx context.Context, channel string) (bool, error) {
-	tag, err := latestChannelTag(channel)
-	if err != nil {
-		return false, err
-	}
-	return tag != "", nil
 }
 
 // latestChannelTag returns the most recent tag for the given channel by
