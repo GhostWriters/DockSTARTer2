@@ -263,23 +263,36 @@ func compareVersions(v1, v2 string) int {
 			continue
 		}
 
-		// Handle suffixes (e.g. "1.0.0-beta" vs "1.0.0")
-		// If one has a suffix and the other doesn't, and they are otherwise equal:
-		// the one without a suffix is GREATER (stable > pre-release)
+		// Handle suffixes (e.g. "9-Prerelease" vs "13-Prerelease")
+		// Split off the suffix and compare the numeric part first.
 		h1 := strings.Contains(s1, "-")
 		h2 := strings.Contains(s2, "-")
 		if h1 || h2 {
-			if h1 != h2 {
-				if h1 {
-					return -1 // s1 has suffix, s2 doesn't -> s1 < s2
+			n1str, sfx1, _ := strings.Cut(s1, "-")
+			n2str, sfx2, _ := strings.Cut(s2, "-")
+			n1, e1 := strconv.Atoi(n1str)
+			n2, e2 := strconv.Atoi(n2str)
+			if e1 == nil && e2 == nil && n1 != n2 {
+				if n1 > n2 {
+					return 1
 				}
-				return 1 // s2 has suffix, s1 doesn't -> s1 > s2
+				return -1
 			}
-			// Both have suffixes, just string compare
-			if s1 > s2 {
+			// Numeric parts equal (or non-numeric): compare suffixes.
+			// No suffix > has suffix (stable > pre-release).
+			if sfx1 == "" && sfx2 != "" {
 				return 1
 			}
-			return -1
+			if sfx1 != "" && sfx2 == "" {
+				return -1
+			}
+			if sfx1 > sfx2 {
+				return 1
+			}
+			if sfx1 < sfx2 {
+				return -1
+			}
+			continue
 		}
 
 		// Try numeric comparison
@@ -365,7 +378,7 @@ func latestChannelTag(channel string) (string, error) {
 		if !strings.EqualFold(GetChannelFromVersion(tagName), channel) {
 			continue
 		}
-		if tagName > latest {
+		if compareVersions(tagName, latest) > 0 {
 			latest = tagName
 		}
 	}
