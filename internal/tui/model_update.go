@@ -80,6 +80,15 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, logger.BatchRecoverTUI(m.ctx, cmd)
 
+	case ScrollDoneMsg:
+		if m.activeScreen != nil {
+			updated, cmd := m.activeScreen.Update(msg)
+			if s, ok := updated.(ScreenModel); ok {
+				m.activeScreen = s
+			}
+			return m, logger.BatchRecoverTUI(m.ctx, cmd)
+		}
+
 	case DragDoneMsg:
 		if msg.ID == logResizeZoneID {
 			updated, cmd := m.logPanel.Update(msg)
