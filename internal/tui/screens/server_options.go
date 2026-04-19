@@ -142,7 +142,6 @@ func (s *ServerOptionsScreen) buildSettingsMenu() *tui.MenuModel {
 	menu.SetSubMenuMode(true)
 	menu.SetIsDialog(false)
 	menu.SetShowExit(false)
-	menu.SetFlowMode(true)
 	menu.SetMaximized(true)
 	return menu
 }
@@ -200,7 +199,6 @@ func (s *ServerOptionsScreen) buildStatusMenu() *tui.MenuModel {
 	menu.SetSubMenuMode(true)
 	menu.SetIsDialog(false)
 	menu.SetShowExit(false)
-	menu.SetFlowMode(true)
 	menu.SetMaximized(true)
 	return menu
 }
@@ -443,6 +441,14 @@ func (s *ServerOptionsScreen) disconnectAction(force bool, enabled bool) tea.Cmd
 
 func (s *ServerOptionsScreen) handleApply() tea.Cmd {
 	return func() tea.Msg {
+		serverInfo := serve.Sessions.ReadServerInfo()
+		if serverInfo.PID != 0 && serve.ProcessExists(serverInfo.PID) {
+			if !tui.Confirm("Server Is Running",
+				"Changing server settings while the server is running may disconnect active remote sessions.\n\nApply anyway?",
+				false) {
+				return nil
+			}
+		}
 		if err := config.SaveAppConfig(s.config); err != nil {
 			return tui.ShowMessageDialogMsg{
 				Title:   "Save Failed",
