@@ -1244,7 +1244,7 @@ func (m *MenuModel) GetInnerContentWidth() int {
 	if m.maximized {
 		contentWidth, _ = layout.InnerContentSize(m.width, m.height)
 	} else {
-		contentWidth = m.list.Width() + layout.BorderWidth() + 2
+		contentWidth = m.list.Width() + ScrollbarGutterWidth + layout.BorderWidth() + layout.ContentMarginWidth()
 		maxWidth, _ := layout.InnerContentSize(m.width, m.height)
 		if contentWidth > maxWidth {
 			contentWidth = maxWidth

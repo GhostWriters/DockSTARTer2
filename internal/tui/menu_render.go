@@ -100,7 +100,7 @@ func (m *MenuModel) ViewString() string {
 		Background(styles.Dialog.GetBackground()).
 		Padding(0, layout.ContentSideMargin)
 
-	paddedList := marginStyle.Render(borderedList)
+	paddedList := marginStyle.Width(contentWidth).Render(borderedList)
 	paddedButtons := marginStyle.Width(contentWidth).Render(borderedButtonBox)
 
 	var innerParts []string
@@ -214,7 +214,11 @@ func (m *MenuModel) viewSubMenu() string {
 		innerParts = append(innerParts, m.renderFlowContent(contentWidth))
 	} else {
 		content := m.renderVerticalListBlock(ctx)
-		innerParts = append(innerParts, content)
+		paddedContent := lipgloss.NewStyle().
+			Padding(0, layout.ContentSideMargin).
+			Width(contentWidth).
+			Render(content)
+		innerParts = append(innerParts, paddedContent)
 	}
 
 	// Render buttons (if any)

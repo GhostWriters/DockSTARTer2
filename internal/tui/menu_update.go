@@ -602,11 +602,10 @@ func (m *MenuModel) calculateLayout() {
 	if m.subMenuMode {
 		// Submenu: just has its own border, content fills the rest
 		maxListWidth, _ = layout.InnerContentSize(m.width, m.height)
+		maxListWidth -= layout.ContentMarginWidth()
 	} else {
-		// Full dialog: outer border + inner list border + padding (2 sides)
-		// Padding per side = 1 (fixed margin in ViewString)
-		padding := 2
-		maxListWidth = m.width - (layout.DialogBorder + layout.BorderWidth() + padding)
+		// Full dialog: Outer Border (2) + Margins (2) + Inner Border (2)
+		maxListWidth = m.width - (layout.BorderWidth() + layout.ContentMarginWidth() + layout.BorderWidth())
 	}
 
 	// Minimum width to avoid squished buttons
