@@ -544,7 +544,7 @@ func (s *ServerOptionsScreen) MenuName() string {
 }
 
 func (s *ServerOptionsScreen) IsDestructive() bool {
-	return false
+	return true
 }
 
 // MinHeight: outer border(2) + settings section(5) + status section(4) + buttons(3) = 14.

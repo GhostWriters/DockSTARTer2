@@ -21,6 +21,7 @@ func NewOptionsMenuScreen(isRoot bool) tui.ScreenModel {
 			Desc:   "SSH and Web Server Settings",
 			Help:   "Configure remote access to the DS2 TUI via SSH or browser",
 			Action: func() tea.Msg { return tui.NavigateMsg{Screen: NewServerOptionsScreen(false)} },
+			IsDestructive: true,
 		},
 	}
 

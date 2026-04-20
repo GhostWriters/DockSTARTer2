@@ -13,8 +13,8 @@ import (
 	"DockSTARTer2/internal/commands"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
-	"DockSTARTer2/internal/version"
 	"DockSTARTer2/internal/tui/components/sinput"
+	"DockSTARTer2/internal/version"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
@@ -326,7 +326,6 @@ func isDS2Prefix(tok string) bool {
 	cmdName := strings.ToLower(version.CommandName)
 	return lower == cmdName || lower == "ds2" || lower == "ds"
 }
-
 
 // submitConsoleCommand parses and runs cmdStr.
 // ds2 commands (starting with - or prefixed with "ds2") are executed internally
@@ -698,7 +697,7 @@ func (m LogPanelModel) ViewString() string {
 	m.input.SetWidth(inputBoxWidth - 2)
 	if m.sessionActive() {
 		m.input.Placeholder = "Session active — input locked"
-		m.input.Prompt = RenderThemeText("{{|MarkerDestructive|}}!{{[-]}} ", ctx.Dialog)
+		m.input.Prompt = RenderThemeText("{{|MarkerLocked|}}!{{[-]}} ", ctx.Dialog)
 	} else {
 		m.input.Placeholder = ""
 		m.input.Prompt = "> "

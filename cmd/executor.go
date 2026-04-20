@@ -254,7 +254,17 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		def := commandDefs[group.Command]
 		if def.SessionLocked {
 			if !sessionlocks.Sessions.AcquireEditLock("local", "CLI") {
-				logger.Error(ctx, "Cannot run '%s' while the configuration is being edited in another session.", group.Command)
+				info := sessionlocks.Sessions.ReadEditInfo()
+				ip := info.ClientIP
+				if ip == "" || ip == "local" {
+					ip = "the local console"
+				}
+				conn := info.ConnType
+				if conn == "" {
+					conn = "SSH"
+				}
+				logger.Error(ctx, "Cannot run '%s' while the configuration is being edited by a %s session from {{|Highlight|}}%s{{[-]}}.", group.Command, conn, ip)
+				logger.Notice(ctx, "Use '{{|UserCommand|}}ds2 --server disconnect{{[-]}}' to force-release the lock.")
 				return 1
 			}
 		}

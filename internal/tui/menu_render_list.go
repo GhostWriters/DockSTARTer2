@@ -244,7 +244,8 @@ func (m *MenuModel) renderVariableHeightList() string {
 			}
 		}
 
-		// Dynamically calculate prefix width based on menu type and item features
+		// Prefix width calculation (Left of the Tag)
+		gutterWidth := m.StatusGutterWidth()
 		isAppSelect := m.id == "app-select"
 		var prefixWidth int
 		var firstLinePrefix string
@@ -265,27 +266,27 @@ func (m *MenuModel) renderVariableHeightList() string {
 			}
 			prefixWidth = lipgloss.Width(GetPlainText(firstLinePrefix))
 		} else {
-		lockMarker := ""
-		if m.showLockGutter {
-			if item.Locked {
-				lockMarker = RenderThemeText("{{|MarkerDestructive|}}!{{[-]}}", neutralStyle)
+			lockMarker := ""
+			if m.showLockGutter {
+				if item.Locked {
+					lockMarker = RenderThemeText("{{|MarkerLocked|}}!{{[-]}}", neutralStyle)
+				} else {
+					lockMarker = neutralStyle.Render(" ")
+				}
+				firstLinePrefix = lockMarker + checkbox
 			} else {
-				lockMarker = neutralStyle.Render(" ")
+				if checkbox != "" {
+					firstLinePrefix = checkbox + neutralStyle.Render(" ")
+				} else {
+					firstLinePrefix = ""
+				}
 			}
-			firstLinePrefix = lockMarker + checkbox
-		} else {
-			if checkbox != "" {
-				firstLinePrefix = checkbox + neutralStyle.Render(" ")
-			} else {
-				firstLinePrefix = ""
-			}
-		}
-		prefixWidth = lipgloss.Width(GetPlainText(firstLinePrefix))
+			prefixWidth = lipgloss.Width(GetPlainText(firstLinePrefix))
 		}
 
 		// (The previously moved lock marker injection now replaces the tagStr edits)
 		paddingSpaces := strutil.Repeat(" ", max(0, maxTagLen-lipgloss.Width(GetPlainText(item.Tag))+layout.CheckboxWidth()))
-		availableWidth := listContentWidth - (prefixWidth + layout.StatusGutterWidth()) - (maxTagLen + layout.CheckboxWidth()) // status gutter + checkbox padding
+		availableWidth := listContentWidth - (prefixWidth + gutterWidth) - (maxTagLen + layout.CheckboxWidth()) // status gutter + checkbox padding
 		if availableWidth < 0 {
 			availableWidth = 0
 		}
@@ -343,7 +344,13 @@ func (m *MenuModel) renderVariableHeightList() string {
 		} else {
 			g1 = neutralStyle.Render(" ")
 		}
-		itemGutter := g0 + g1
+
+		itemGutter := ""
+		if gutterWidth == 1 {
+			itemGutter = g0
+		} else {
+			itemGutter = g0 + g1
+		}
 
 		firstLine := firstLinePrefix + tagStr + neutralStyle.Render(paddingSpaces) + lines[0]
 		indent := neutralStyle.Render(strutil.Repeat(" ", prefixWidth+maxTagLen+layout.CheckboxWidth()))
@@ -357,7 +364,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 		for j, l := range renderedItemLines {
 			if j > 0 {
 				finalItem += "\n"
-				finalItem += rowStyle.Render(neutralStyle.Render(strings.Repeat(" ", layout.StatusGutterWidth()))+l) + console.CodeReset
+				finalItem += rowStyle.Render(neutralStyle.Render(strings.Repeat(" ", gutterWidth))+l) + console.CodeReset
 			} else {
 				finalItem += rowStyle.Render(itemGutter+l) + console.CodeReset
 			}
@@ -774,12 +781,12 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 		// Sub-menus require a 10-character indent to align with the top/bottom borders.
 		// Indent consists of: g0(1) + g1(1) + 8 spaces.
 		indent := neutralStyle.Render(strutil.Repeat(" ", 8))
-		
+
 		// The rowContent starts with the left border, followed by a mandatory internal space.
 		rowContent := vStyleLight.Render(vBorderChar) + neutralStyle.Render(" ") + checkboxA3 + neutralStyle.Render(" ") + checkboxE3 + neutralStyle.Render(" ") + tagStr
 		rowWidth := subListWidth - 1
 		pContent := rowContent + neutralStyle.Render(strutil.Repeat(" ", max(0, rowWidth-lipgloss.Width(GetPlainText(rowContent)))))
-		
+
 		line := g0 + g1 + indent + pContent + vStyleDark.Render(vBorderChar)
 
 		resLines = append(resLines, line+console.CodeReset)

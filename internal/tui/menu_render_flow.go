@@ -95,11 +95,12 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 		}
 
 		lockMarker := ""
+		gutterWidth := m.StatusGutterWidth()
 		if m.showLockGutter {
 			if item.Locked {
-				lockMarker = RenderThemeText("{{|MarkerDestructive|}}!{{[-]}}", lipgloss.NewStyle().Background(dialogBG))
+				lockMarker = RenderThemeText("{{|MarkerLocked|}}!{{[-]}}", lipgloss.NewStyle().Background(dialogBG))
 			} else {
-				lockMarker = lipgloss.NewStyle().Background(dialogBG).Render(" ")
+				lockMarker = lipgloss.NewStyle().Background(dialogBG).Render(strings.Repeat(" ", gutterWidth))
 			}
 		}
 
@@ -192,7 +193,12 @@ func (m *MenuModel) GetFlowHeight(width int) int {
 			cbWidth = lipgloss.Width(glyph)
 		}
 
-		itemWidth := cbWidth + lipgloss.Width(GetPlainText(item.Tag))
+		lockMarkerWidth := 0
+		if m.showLockGutter {
+			lockMarkerWidth = m.StatusGutterWidth()
+		}
+
+		itemWidth := lockMarkerWidth + cbWidth + lipgloss.Width(GetPlainText(item.Tag))
 
 		// For non-checkbox/non-radio items, include the Desc width
 		// to match renderFlow which appends Desc inline

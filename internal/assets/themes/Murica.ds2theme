@@ -85,7 +85,7 @@ MarkerAdded = "{{|Marker::green|}}"
 MarkerDeleted = "{{|Marker::red|}}"
 MarkerModified = "{{|Marker::yellow|}}"
 MarkerInvalid = "{{[white:red:B]}}"
-MarkerDestructive = "{{|MarkerInvalid|}}"
+MarkerLocked = "{{|MarkerInvalid|}}"
 
 EnvBuiltin = "{{[black:cyan]}}"
 EnvUser = "{{[green:cyan]}}"

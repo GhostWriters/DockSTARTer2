@@ -90,11 +90,12 @@ func calculateMaxTagAndDescLength(items []MenuItem) (maxTagLen, maxDescLen int) 
 
 // menuItemDelegate implements list.ItemDelegate for standard navigation menus
 type menuItemDelegate struct {
-	menuID         string
-	maxTagLen      int
-	focused        bool
-	flowMode       bool
-	showLockGutter bool
+	menuID            string
+	maxTagLen         int
+	focused           bool
+	flowMode          bool
+	showLockGutter    bool
+	statusGutterWidth int
 }
 
 func (d menuItemDelegate) Height() int                             { return 1 }
@@ -244,11 +245,12 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 
 // checkboxItemDelegate implements specialized styling for app selection screens
 type checkboxItemDelegate struct {
-	menuID         string
-	maxTagLen      int
-	focused        bool
-	flowMode       bool
-	showLockGutter bool
+	menuID            string
+	maxTagLen         int
+	focused           bool
+	flowMode          bool
+	showLockGutter    bool
+	statusGutterWidth int
 }
 
 func (d checkboxItemDelegate) Height() int                             { return 1 }
@@ -411,11 +413,12 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 //   - IsEditing rows:     indented inline text-input display (Tag holds current text + cursor)
 //   - IsSeparator rows:   unchanged (letter headers / blank spacers)
 type groupedItemDelegate struct {
-	menuID         string
-	maxTagLen      int // max tag width of header rows only
-	focused        bool
-	activeCol      CheckboxColumn
-	showLockGutter bool
+	menuID            string
+	maxTagLen         int // max tag width of header rows only
+	focused           bool
+	activeCol         CheckboxColumn
+	showLockGutter    bool
+	statusGutterWidth int
 }
 
 func (d groupedItemDelegate) Height() int                             { return 1 }
@@ -805,6 +808,7 @@ type MenuModel struct {
 
 	renderVersion  int // Incremented on item changes to invalidate list cache
 	showLockGutter bool
+	statusGutterWidth int
 	menuName       string // Name used for --menu or -M to return to this screen
 
 	// Content sections: sub-menus rendered stacked inside the outer border.
@@ -1167,7 +1171,6 @@ func (m *MenuModel) updateDelegate() {
 	if m.groupedMode {
 		maxTagLen := calculateMaxTagLengthForHeaders(m.items)
 		m.list.SetDelegate(groupedItemDelegate{
-			menuID:         m.id,
 			maxTagLen:      maxTagLen,
 			focused:        focused,
 			activeCol:      m.activeColumn,
@@ -1209,6 +1212,21 @@ func (m *MenuModel) SetGroupedMode(enabled bool) {
 
 // SetItem updates a single menu item in-place without replacing the whole list.
 // Useful for live updates (e.g. refreshing the inline editing row on each keypress).
+// SetStatusGutterWidth sets the number of columns to reserve for the status gutter on the left.
+func (m *MenuModel) SetStatusGutterWidth(width int) {
+	m.statusGutterWidth = width
+	m.updateDelegate()
+}
+
+// StatusGutterWidth returns the currently configured gutter width for this menu.
+func (m *MenuModel) StatusGutterWidth() int {
+	if m.statusGutterWidth > 0 {
+		return m.statusGutterWidth
+	}
+	// Default to 1 for the lock indicator if not explicitly set.
+	return 1
+}
+
 func (m *MenuModel) SetItem(index int, item MenuItem) {
 	if index < 0 || index >= len(m.items) {
 		return
