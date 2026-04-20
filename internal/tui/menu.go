@@ -90,10 +90,11 @@ func calculateMaxTagAndDescLength(items []MenuItem) (maxTagLen, maxDescLen int) 
 
 // menuItemDelegate implements list.ItemDelegate for standard navigation menus
 type menuItemDelegate struct {
-	menuID    string
-	maxTagLen int
-	focused   bool
-	flowMode  bool
+	menuID         string
+	maxTagLen      int
+	focused        bool
+	flowMode       bool
+	showLockGutter bool
 }
 
 func (d menuItemDelegate) Height() int                             { return 1 }
@@ -243,10 +244,11 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 
 // checkboxItemDelegate implements specialized styling for app selection screens
 type checkboxItemDelegate struct {
-	menuID    string
-	maxTagLen int
-	focused   bool
-	flowMode  bool
+	menuID         string
+	maxTagLen      int
+	focused        bool
+	flowMode       bool
+	showLockGutter bool
 }
 
 func (d checkboxItemDelegate) Height() int                             { return 1 }
@@ -409,10 +411,11 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 //   - IsEditing rows:     indented inline text-input display (Tag holds current text + cursor)
 //   - IsSeparator rows:   unchanged (letter headers / blank spacers)
 type groupedItemDelegate struct {
-	menuID    string
-	maxTagLen int // max tag width of header rows only
-	focused   bool
-	activeCol CheckboxColumn
+	menuID         string
+	maxTagLen      int // max tag width of header rows only
+	focused        bool
+	activeCol      CheckboxColumn
+	showLockGutter bool
 }
 
 func (d groupedItemDelegate) Height() int                             { return 1 }
@@ -548,12 +551,10 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 	} else {
 		g0 = neutralStyle.Render(" ")
 	}
-	if menuItem.Enabled && !menuItem.WasEnabled {
-		g1 = RenderThemeText("{{|MarkerAdded|}}E{{[-]}}", neutralStyle)
-	} else if !menuItem.Enabled && menuItem.WasEnabled {
-		g1 = RenderThemeText("{{|MarkerDeleted|}}D{{[-]}}", neutralStyle)
-	} else {
-		g1 = neutralStyle.Render(" ")
+	if d.showLockGutter {
+		if menuItem.Locked {
+			g1 = theme.ThemeSemanticStyle("{{|ItemError|}}").Render("!")
+		}
 	}
 
 	// buildCb3 renders a 3-character wide checkbox block with a fixed style.
@@ -849,6 +850,7 @@ func (m *MenuModel) SetLockedByOthers(locked bool) {
 		m.list.SetItems(items)
 		m.renderVersion++
 		m.cacheValid = false
+		m.showLockGutter = locked
 	}
 
 	// Propagate to sub-menus
@@ -1164,13 +1166,31 @@ func (m *MenuModel) updateDelegate() {
 	focused := m.IsActive()
 	if m.groupedMode {
 		maxTagLen := calculateMaxTagLengthForHeaders(m.items)
-		m.list.SetDelegate(groupedItemDelegate{menuID: m.id, maxTagLen: maxTagLen, focused: focused, activeCol: m.activeColumn})
+		m.list.SetDelegate(groupedItemDelegate{
+			menuID:         m.id,
+			maxTagLen:      maxTagLen,
+			focused:        focused,
+			activeCol:      m.activeColumn,
+			showLockGutter: m.showLockGutter,
+		})
 	} else if m.checkboxMode {
 		maxTagLen := calculateMaxTagLength(m.items)
-		m.list.SetDelegate(checkboxItemDelegate{menuID: m.id, maxTagLen: maxTagLen, focused: focused, flowMode: m.flowMode})
+		m.list.SetDelegate(checkboxItemDelegate{
+			menuID:         m.id,
+			maxTagLen:      maxTagLen,
+			focused:        focused,
+			flowMode:       m.flowMode,
+			showLockGutter: m.showLockGutter,
+		})
 	} else {
 		maxTagLen := calculateMaxTagLength(m.items)
-		m.list.SetDelegate(menuItemDelegate{menuID: m.id, maxTagLen: maxTagLen, focused: focused, flowMode: m.flowMode})
+		m.list.SetDelegate(menuItemDelegate{
+			menuID:         m.id,
+			maxTagLen:      maxTagLen,
+			focused:        focused,
+			flowMode:       m.flowMode,
+			showLockGutter: m.showLockGutter,
+		})
 	}
 }
 
