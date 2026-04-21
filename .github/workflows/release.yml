@@ -1,6 +1,7 @@
+---
 name: Release
 
-on:
+"on":
   workflow_dispatch:
     inputs:
       force_release:
@@ -40,11 +41,11 @@ jobs:
         id: decide
         run: |
           set -euo pipefail
-          
+
           # Harvesting inputs
           FORCE_CHANGES=$(echo "${{ github.event.inputs.force_release }}" | tr '[:upper:]' '[:lower:]')
           SUFFIX="${{ steps.suffix.outputs.value }}"
-          
+
           echo "Force Release (Changes): $FORCE_CHANGES"
           echo "Channel Suffix: $SUFFIX"
 
@@ -136,7 +137,7 @@ jobs:
         run: |
           TEST_RESULT="${{ needs.test.result }}"
           IGNORE_FAILURES=$(echo "${{ github.event.inputs.ignore_test_failures }}" | tr '[:upper:]' '[:lower:]')
-          
+
           echo "Test Job Result: $TEST_RESULT"
           echo "Ignore Test Failures: $IGNORE_FAILURES"
 
@@ -157,15 +158,15 @@ jobs:
           set -euo pipefail
           SUFFIX="${{ needs.check.outputs.suffix }}"
           TODAY_INT=$(date -u +'%Y%m%d')
-          
+
           # Find highest sequence number (N) for today in this channel
           LAST_N=$(git tag -l "v2.$TODAY_INT.*$SUFFIX" | sed "s/v2.$TODAY_INT.//" | sed "s/$SUFFIX//" | sort -n | tail -n 1)
           NEW_N=$(( ${LAST_N:-0} + 1 ))
           NEW_TAG="v2.$TODAY_INT.$NEW_N$SUFFIX"
-          
+
           echo "New tag: $NEW_TAG"
           echo "tag=$NEW_TAG" >> $GITHUB_OUTPUT
-          
+
           git tag "$NEW_TAG"
           git push origin "$NEW_TAG"
 
