@@ -60,7 +60,7 @@ func (m *MenuModel) ViewString() string {
 
 	// 2. Wrap list in its own inner border (only for non-subMenu mode)
 	// Full dialogs use a nested "border-in-border" look.
-	listStyle := styles.Dialog.Padding(0, 0)
+	listStyle := styles.Dialog.Padding(0, 0, 0, 0)
 	listStyle = ApplyInnerBorder(listStyle, m.focused, ctx.LineCharacters)
 	listStyle = listStyle.BorderBottom(false)
 	borderedList := InjectBorderFlags(listStyle.Render(listView), styles.BorderFlags, styles.Border2Flags, false)

@@ -90,12 +90,13 @@ func calculateMaxTagAndDescLength(items []MenuItem) (maxTagLen, maxDescLen int) 
 
 // menuItemDelegate implements list.ItemDelegate for standard navigation menus
 type menuItemDelegate struct {
-	menuID            string
-	maxTagLen         int
-	focused           bool
-	flowMode          bool
-	showLockGutter    bool
-	statusGutterWidth int
+	menuID              string
+	maxTagLen           int
+	focused             bool
+	flowMode            bool
+	showLockGutter      bool
+	activityGutterWidth int
+	paddingWidth        int
 }
 
 func (d menuItemDelegate) Height() int                             { return 1 }
@@ -114,13 +115,14 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 
 	// Handle separator items
 	if menuItem.IsSeparator {
-		// Set width to exactly m.Width() so inner text of m.Width()-2 plus 2 chars padding fits perfectly without wrapping
-		lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(m.Width())
+		// Set width to exactly m.Width() so inner text of m.Width()-1 plus 1 char right padding fits perfectly
+		lineStyle := lipgloss.NewStyle().Background(dialogBG).PaddingLeft(0).PaddingRight(1).Width(m.Width())
 		var content string
 		if menuItem.Tag != "" {
 			content = RenderThemeText(menuItem.Tag, theme.ThemeSemanticStyle("{{|TagKey|}}"))
 		} else {
-			content = strutil.Repeat("─", m.Width()-2)
+			// -1 for right padding
+			content = strutil.Repeat("─", m.Width()-1)
 		}
 		fmt.Fprint(w, lineStyle.Render(content))
 		return
@@ -158,9 +160,17 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 		}
 	}
 
-	// tagWidth removed as it was unused
+	// Whitespace (gaps and trailing) should always use neutral background
+	gapStyle := neutralStyle
 
-	// Checkbox visual [ ] or [x] / Radio visual ( ) or (*)
+	// Construct fixed-width gutter
+	lockChar := " "
+	if d.showLockGutter && menuItem.Locked {
+		lockChar = RenderThemeText("{{|MarkerLocked|}}!{{[-]}}", neutralStyle)
+	}
+	activityGutter := neutralStyle.Render(strutil.Repeat(" ", d.activityGutterWidth))
+	itemGutter := lockChar + activityGutter
+	paddingStr := neutralStyle.Render(strutil.Repeat(" ", d.paddingWidth))
 	checkbox := ""
 	if menuItem.Locked {
 		var cb string
@@ -212,15 +222,15 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 	}
 
 	// Whitespace (gaps and trailing) should always use neutral background
-	gapStyle := neutralStyle
+	gapStyle = neutralStyle
 
 	paddingSpaces := strutil.Repeat(" ", max(0, d.maxTagLen-lipgloss.Width(GetPlainText(tag))+3))
 
 	// Calculate checkbox/radio width dynamically
-	cbWidth := lipgloss.Width(GetPlainText(checkbox))
+	cbWidth := lipgloss.Width(GetPlainText(checkbox)) + lipgloss.Width(GetPlainText(itemGutter)) + d.paddingWidth
 
-	// Available width: list width - outer padding(2) - (cbWidth + maxTagLen + 3)
-	availableWidth := m.Width() - 2 - (cbWidth + d.maxTagLen + 3)
+	// Available width: list width - right padding(1) - (cbWidth + maxTagLen + 3)
+	availableWidth := m.Width() - 1 - (cbWidth + d.maxTagLen + 3)
 	if availableWidth < 0 {
 		availableWidth = 0
 	}
@@ -230,14 +240,15 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 	descLine := TruncateRight(descStr, availableWidth)
 
 	// Build the line
-	line := checkbox + tagStr + gapStyle.Render(paddingSpaces) + descLine
+	line := itemGutter + paddingStr + checkbox + tagStr + gapStyle.Render(paddingSpaces) + descLine
 
 	actualWidth := lipgloss.Width(line)
-	if actualWidth < m.Width()-2 {
-		line += gapStyle.Render(strutil.Repeat(" ", m.Width()-2-actualWidth))
+	// -1 for right padding
+	if actualWidth < m.Width()-1 {
+		line += gapStyle.Render(strutil.Repeat(" ", m.Width()-1-actualWidth))
 	}
 
-	lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(m.Width())
+	lineStyle := lipgloss.NewStyle().Background(dialogBG).PaddingLeft(0).PaddingRight(1).Width(m.Width())
 	line = lineStyle.Render(line)
 	fmt.Fprint(w, line)
 
@@ -245,12 +256,13 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 
 // checkboxItemDelegate implements specialized styling for app selection screens
 type checkboxItemDelegate struct {
-	menuID            string
-	maxTagLen         int
-	focused           bool
-	flowMode          bool
-	showLockGutter    bool
-	statusGutterWidth int
+	menuID              string
+	maxTagLen           int
+	focused             bool
+	flowMode            bool
+	showLockGutter      bool
+	activityGutterWidth int
+	paddingWidth        int
 }
 
 func (d checkboxItemDelegate) Height() int                             { return 1 }
@@ -268,18 +280,27 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 	isSelected := index == m.Index()
 
 	if menuItem.IsSeparator {
-		lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(m.Width())
+		lineStyle := lipgloss.NewStyle().Background(dialogBG).PaddingLeft(0).PaddingRight(1).Width(m.Width())
 		var content string
 		if menuItem.Tag != "" {
 			content = RenderThemeText(menuItem.Tag, theme.ThemeSemanticStyle("{{|TagKey|}}"))
 		} else {
-			content = strutil.Repeat("─", max(0, m.Width()-2))
+			content = strutil.Repeat("─", max(0, m.Width()-1))
 		}
 		fmt.Fprint(w, lineStyle.Render(content))
 		return
 	}
 
 	neutralStyle := lipgloss.NewStyle().Background(dialogBG)
+
+	// Construct fixed-width gutter (standard columns: [LockChar][ActivityChar1][ActivityChar2])
+	lockChar := " "
+	if d.showLockGutter && menuItem.Locked {
+		lockChar = RenderThemeText("{{|MarkerLocked|}}!{{[-]}}", neutralStyle)
+	}
+	activityGutter := neutralStyle.Render(strutil.Repeat(" ", d.activityGutterWidth))
+	itemGutter := lockChar + activityGutter
+	paddingStr := neutralStyle.Render(strutil.Repeat(" ", d.paddingWidth))
 
 	itemStyle := theme.ThemeSemanticStyle("{{|Item|}}")
 	tagStyle := theme.ThemeSemanticStyle("{{|Tag|}}")
@@ -377,13 +398,11 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 	gapStyle := neutralStyle
 
 	paddingSpaces := strutil.Repeat(" ", max(0, d.maxTagLen-lipgloss.Width(GetPlainText(tag))+3))
-	// Available width: list width - outer padding(2) - (cbWidth + maxTagLen + 3)
-	// For checkboxItemDelegate, we assume cbWidth is 2 ([ ]) or 4 ([ ] ) depending on characters
-	cbWidth := 2
-	if !ctx.LineCharacters {
-		cbWidth = 4
-	}
-	availableWidth := m.Width() - 2 - (cbWidth + d.maxTagLen + 3)
+	// Calculate checkbox/radio width dynamically
+	cbWidth := lipgloss.Width(GetPlainText(checkbox)) + lipgloss.Width(GetPlainText(itemGutter)) + d.paddingWidth
+
+	// Available width: list width - right padding(1) - (cbWidth + maxTagLen + 3)
+	availableWidth := m.Width() - 1 - (cbWidth + d.maxTagLen + 3)
 	if availableWidth < 0 {
 		availableWidth = 0
 	}
@@ -393,14 +412,15 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 	descLine := TruncateRight(descStr, availableWidth)
 
 	// Build the line
-	line := checkbox + tagStr + gapStyle.Render(paddingSpaces) + descLine
+	line := itemGutter + paddingStr + checkbox + tagStr + gapStyle.Render(paddingSpaces) + descLine
 
 	actualWidth := lipgloss.Width(line)
-	if actualWidth < m.Width()-2 {
-		line += gapStyle.Render(strutil.Repeat(" ", m.Width()-2-actualWidth))
+	// -1 for right padding
+	if actualWidth < m.Width()-1 {
+		line += gapStyle.Render(strutil.Repeat(" ", m.Width()-1-actualWidth))
 	}
 
-	lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(m.Width())
+	lineStyle := lipgloss.NewStyle().Background(dialogBG).PaddingLeft(0).PaddingRight(1).Width(m.Width())
 	line = lineStyle.Render(line)
 	fmt.Fprint(w, line)
 
@@ -419,6 +439,7 @@ type groupedItemDelegate struct {
 	activeCol         CheckboxColumn
 	showLockGutter    bool
 	statusGutterWidth int
+	activityGutterWidth int
 }
 
 func (d groupedItemDelegate) Height() int                             { return 1 }
@@ -628,7 +649,7 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 		if ctx.LineCharacters {
 			disclosureGlyph = subMenuExpanded
 		} else {
-			disclosureGlyph = "[v]"
+			disclosureGlyph = subMenuExpandedAscii
 		}
 
 		// Styled arrows for Add and Enable columns
@@ -809,6 +830,8 @@ type MenuModel struct {
 	renderVersion  int // Incremented on item changes to invalidate list cache
 	showLockGutter bool
 	statusGutterWidth int
+	activityGutterWidth int
+	itemPaddingWidth int // Optional padding after getters
 	menuName       string // Name used for --menu or -M to return to this screen
 
 	// Content sections: sub-menus rendered stacked inside the outer border.
@@ -1008,7 +1031,15 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 		showButtons: true, // Default to show buttons
 		Scroll:         Scrollbar{ID: id},
 		showLockGutter: true,
+		activityGutterWidth: 0,
+		itemPaddingWidth: 1, // Default 1 char padding after marker gutter
 	}
+}
+
+// SetItemPaddingWidth sets the optional padding width after the gutters.
+func (m *MenuModel) SetItemPaddingWidth(width int) {
+	m.itemPaddingWidth = width
+	m.renderVersion++
 }
 
 // SetShowLockGutter enables or disables the lock indicator gutter.
@@ -1175,6 +1206,7 @@ func (m *MenuModel) updateDelegate() {
 			focused:        focused,
 			activeCol:      m.activeColumn,
 			showLockGutter: m.showLockGutter,
+			activityGutterWidth: m.activityGutterWidth,
 		})
 	} else if m.checkboxMode {
 		maxTagLen := calculateMaxTagLength(m.items)
@@ -1184,6 +1216,8 @@ func (m *MenuModel) updateDelegate() {
 			focused:        focused,
 			flowMode:       m.flowMode,
 			showLockGutter: m.showLockGutter,
+			activityGutterWidth: m.activityGutterWidth,
+			paddingWidth:   m.itemPaddingWidth,
 		})
 	} else {
 		maxTagLen := calculateMaxTagLength(m.items)
@@ -1193,6 +1227,8 @@ func (m *MenuModel) updateDelegate() {
 			focused:        focused,
 			flowMode:       m.flowMode,
 			showLockGutter: m.showLockGutter,
+			activityGutterWidth: m.activityGutterWidth,
+			paddingWidth:   m.itemPaddingWidth,
 		})
 	}
 }
@@ -1218,13 +1254,21 @@ func (m *MenuModel) SetStatusGutterWidth(width int) {
 	m.updateDelegate()
 }
 
+// SetActivityGutterWidth sets the number of columns to reserve for activity markers (typically 1 or 2).
+func (m *MenuModel) SetActivityGutterWidth(width int) {
+	m.activityGutterWidth = width
+	m.updateDelegate()
+}
+
 // StatusGutterWidth returns the currently configured gutter width for this menu.
 func (m *MenuModel) StatusGutterWidth() int {
-	if m.statusGutterWidth > 0 {
-		return m.statusGutterWidth
+	lockWidth := 0
+	if m.showLockGutter {
+		lockWidth = 1
 	}
-	// Default to 1 for the lock indicator if not explicitly set.
-	return 1
+
+	activityWidth := m.activityGutterWidth
+	return lockWidth + activityWidth
 }
 
 func (m *MenuModel) SetItem(index int, item MenuItem) {

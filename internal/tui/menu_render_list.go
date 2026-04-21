@@ -94,10 +94,12 @@ func (m *MenuModel) renderVariableHeightList() string {
 
 	for i := 0; i < len(visibleItems); i++ {
 		item := visibleItems[i]
+		isAppSelect := m.id == "app-select"
 		isSelected := i == selectedVisibleIndex && m.IsActive()
 
 		// Highlight the parent header if a child item is selected
 		isParentOfSelected := false
+		paddingStr := neutralStyle.Render(strutil.Repeat(" ", m.itemPaddingWidth))
 		if item.IsGroupHeader && selectedVisibleIndex != -1 {
 			selItem := visibleItems[selectedVisibleIndex]
 			if (selItem.IsSubItem || selItem.IsAddInstance || selItem.IsEditing) && selItem.BaseApp == item.BaseApp {
@@ -146,7 +148,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 			} else {
 				line = strutil.Repeat("─", listContentWidth)
 			}
-			renderedItems = append(renderedItems, neutralStyle.Padding(0, 0, 0, 1).Render(line))
+			renderedItems = append(renderedItems, neutralStyle.PaddingLeft(0).Render(line))
 			itemHeights = append(itemHeights, 1)
 			itemMappings = append(itemMappings, i)
 			continue
@@ -172,33 +174,43 @@ func (m *MenuModel) renderVariableHeightList() string {
 
 		checkbox := ""
 		if item.IsGroupHeader {
-			checkbox = tStyle.Render(subMenuExpanded)
+			cb := subMenuExpanded
+			if !ctx.LineCharacters {
+				cb = subMenuExpandedAscii
+			}
+			checkbox = tStyle.Render(cb)
 		} else if item.IsRadioButton || item.IsCheckbox {
 			cb := ""
-			if item.IsRadioButton {
-				cb = radioUnselected
-				if item.Checked {
-					cb = radioSelected
+			if !ctx.LineCharacters {
+				if item.IsRadioButton {
+					cb = radioUnselectedAscii
+					if item.Checked {
+						cb = radioSelectedAscii
+					}
+				} else {
+					cb = checkUnselectedAscii
+					if item.Checked {
+						cb = checkSelectedAscii
+					}
 				}
 			} else {
-				cb = checkUnselected
-				if item.Checked {
-					cb = checkSelected
+				if item.IsRadioButton {
+					cb = radioUnselected
+					if item.Checked {
+						cb = radioSelected
+					}
+				} else {
+					cb = checkUnselected
+					if item.Checked {
+						cb = checkSelected
+					}
 				}
 			}
 			checkbox = tStyle.Render(cb)
 		}
 
 		var cbAdd3, cbEnabled3 string
-		if item.IsCheckbox && !item.IsGroupHeader {
-			ca, ce := checkUnselected, checkUnselected
-			if item.Checked {
-				ca = checkSelected
-			}
-			if item.Enabled {
-				ce = checkSelected
-			}
-
+		if isAppSelect && (item.IsCheckbox || item.IsGroupHeader) {
 			cbAStyle := tagStyleBase
 			cbEStyle := tagStyleBase
 			if isSelected {
@@ -210,23 +222,42 @@ func (m *MenuModel) renderVariableHeightList() string {
 			}
 
 			if ctx.LineCharacters {
-				// Line-art glyphs are 1-char wide; pad to 3 with spaces: " ▣ " to match " A " in border
+				ca, ce := checkUnselected, checkUnselected
+				if item.IsGroupHeader {
+					ca = " "
+					ce = subMenuExpanded
+				} else {
+					if item.Checked {
+						ca = checkSelected
+					}
+					if item.Enabled {
+						ce = checkSelected
+					}
+				}
+				// Line-art glyphs are 1-char wide; pad to 3 with styled spaces: " ▣ "
+				// Result is always exactly 3 chars wide.
 				cbAdd3 = neutralStyle.Render(" ") + cbAStyle.Render(ca) + neutralStyle.Render(" ")
 				cbEnabled3 = neutralStyle.Render(" ") + cbEStyle.Render(ce) + neutralStyle.Render(" ")
 			} else {
-				// ASCII: "[ ]" and "[x]" are already 3 chars wide — no extra padding needed
-				if item.Checked {
-					ca = checkSelectedAscii[:3]
+				// ASCII: Use explicit 3-character variants
+				caText, ceText := "   ", "   "
+				if item.IsGroupHeader {
+					// Expansion arrow always goes in the second slot (Enabled track)
+					ceText = subMenuExpandedAscii
 				} else {
-					ca = checkUnselectedAscii[:3]
+					if item.Checked {
+						caText = checkSelectedAscii
+					} else {
+						caText = checkUnselectedAscii
+					}
+					if item.Enabled {
+						ceText = checkSelectedAscii
+					} else {
+						ceText = checkUnselectedAscii
+					}
 				}
-				if item.Enabled {
-					ce = checkSelectedAscii[:3]
-				} else {
-					ce = checkUnselectedAscii[:3]
-				}
-				cbAdd3 = neutralStyle.Render("[") + cbAStyle.Render(string(ca[1])) + neutralStyle.Render("]")
-				cbEnabled3 = neutralStyle.Render("[") + cbEStyle.Render(string(ce[1])) + neutralStyle.Render("]")
+				cbAdd3 = cbAStyle.Render(caText)
+				cbEnabled3 = cbEStyle.Render(ceText)
 			}
 		}
 
@@ -246,9 +277,23 @@ func (m *MenuModel) renderVariableHeightList() string {
 
 		// Prefix width calculation (Left of the Tag)
 		gutterWidth := m.StatusGutterWidth()
-		isAppSelect := m.id == "app-select"
-		var prefixWidth int
 		var firstLinePrefix string
+
+		hasAnyCheckboxes := false
+		for _, it := range visibleItems {
+			if it.IsCheckbox || it.IsRadioButton || it.IsGroupHeader {
+				hasAnyCheckboxes = true
+				break
+			}
+		}
+
+		menuPrefixWidth := 0
+		if isAppSelect {
+			menuPrefixWidth = 8 // cbAdd(3) + sp(1) + cbEnabled(3) + sp(1)
+		} else if hasAnyCheckboxes {
+			menuPrefixWidth = layout.CheckboxWidth()
+		}
+		minGap := 3
 
 		if isAppSelect && (item.IsCheckbox || item.IsGroupHeader) {
 			if item.IsGroupHeader {
@@ -264,7 +309,6 @@ func (m *MenuModel) renderVariableHeightList() string {
 			} else {
 				firstLinePrefix = cbAdd3 + neutralStyle.Render(" ") + cbEnabled3 + neutralStyle.Render(" ")
 			}
-			prefixWidth = lipgloss.Width(GetPlainText(firstLinePrefix))
 		} else {
 			lockMarker := ""
 			if m.showLockGutter {
@@ -281,12 +325,13 @@ func (m *MenuModel) renderVariableHeightList() string {
 					firstLinePrefix = ""
 				}
 			}
-			prefixWidth = lipgloss.Width(GetPlainText(firstLinePrefix))
+			lipgloss.Width(GetPlainText(firstLinePrefix))
 		}
-
-		// (The previously moved lock marker injection now replaces the tagStr edits)
-		paddingSpaces := strutil.Repeat(" ", max(0, maxTagLen-lipgloss.Width(GetPlainText(item.Tag))+layout.CheckboxWidth()))
-		availableWidth := listContentWidth - (prefixWidth + gutterWidth) - (maxTagLen + layout.CheckboxWidth()) // status gutter + checkbox padding
+		// Gutter width is already lock + activity, which firstLinePrefix partially duplicates.
+		// We use StatusGutterWidth() as the definitive source.
+		totalGutterWidth := gutterWidth + m.itemPaddingWidth
+		paddingSpaces := strutil.Repeat(" ", max(0, maxTagLen-lipgloss.Width(GetPlainText(item.Tag))+minGap))
+		availableWidth := listContentWidth - totalGutterWidth - menuPrefixWidth - (maxTagLen + minGap)
 		if availableWidth < 0 {
 			availableWidth = 0
 		}
@@ -309,64 +354,102 @@ func (m *MenuModel) renderVariableHeightList() string {
 			lines = lines[:1]
 		}
 
-		var g0, g1 string
+		lockMarker := ""
+		if m.showLockGutter {
+			if item.Locked {
+				lockMarker = RenderThemeText("{{|MarkerLocked|}}!{{[-]}}", neutralStyle)
+			} else {
+				lockMarker = neutralStyle.Render(" ")
+			}
+		}
+
+		var g0 string
 		if item.IsReferenced && !item.IsGroupHeader {
 			if item.Checked {
 				g0 = RenderThemeText("{{|MarkerAdded|}}R{{[-]}}", neutralStyle)
 			} else {
-				g0 = RenderThemeText("{{|MarkerModified|}}R{{[-]}}", neutralStyle)
+				g0 = RenderThemeText("{{|MarkerModified|}}r{{[-]}}", neutralStyle)
 			}
 		} else if item.IsCheckbox && !item.IsGroupHeader {
 			if item.Checked && !item.WasAdded {
 				g0 = RenderThemeText("{{|MarkerAdded|}}+{{[-]}}", neutralStyle)
 			} else if !item.Checked && item.WasAdded {
 				g0 = RenderThemeText("{{|MarkerDeleted|}}-{{[-]}}", neutralStyle)
-			} else {
+			} else if m.activityGutterWidth >= 1 {
 				g0 = neutralStyle.Render(" ")
-			}
-		} else {
-			g0 = neutralStyle.Render(" ")
-		}
-
-		if !item.IsGroupHeader {
-			isRemoving := !item.Checked && item.WasAdded
-			if !isRemoving {
-				if item.Enabled && !item.WasEnabled {
-					g1 = RenderThemeText("{{|MarkerAdded|}}E{{[-]}}", neutralStyle)
-				} else if !item.Enabled && item.WasEnabled {
-					g1 = RenderThemeText("{{|MarkerDeleted|}}D{{[-]}}", neutralStyle)
-				} else {
-					g1 = neutralStyle.Render(" ")
-				}
 			} else {
-				g1 = neutralStyle.Render(" ")
+				g0 = ""
 			}
+		} else if m.activityGutterWidth >= 1 {
+			// Pad with space if this row isn't a checkbox but others have markers
+			g0 = neutralStyle.Render(" ")
 		} else {
-			g1 = neutralStyle.Render(" ")
+			g0 = ""
 		}
 
-		itemGutter := ""
-		if gutterWidth == 1 {
-			itemGutter = g0
-		} else {
-			itemGutter = g0 + g1
+		var g1 string
+		if m.activityGutterWidth >= 2 {
+			g1 = neutralStyle.Render(" ") // Default to empty slot
+			if !item.IsGroupHeader {
+				isRemoving := !item.Checked && item.WasAdded
+				if !isRemoving {
+					if item.Enabled && !item.WasEnabled {
+						g1 = RenderThemeText("{{|MarkerAdded|}}E{{[-]}}", neutralStyle)
+					} else if !item.Enabled && item.WasEnabled {
+						g1 = RenderThemeText("{{|MarkerDeleted|}}D{{[-]}}", neutralStyle)
+					}
+				}
+			}
 		}
 
-		firstLine := firstLinePrefix + tagStr + neutralStyle.Render(paddingSpaces) + lines[0]
-		indent := neutralStyle.Render(strutil.Repeat(" ", prefixWidth+maxTagLen+layout.CheckboxWidth()))
+		itemGutter := lockMarker + g0
+		if m.activityGutterWidth >= 2 {
+			itemGutter += g1
+		}
+
+		prefixPadding := ""
+		prefixWidth := 0
+		if item.IsCheckbox || item.IsRadioButton || item.IsGroupHeader {
+			if isAppSelect && (item.IsCheckbox || item.IsGroupHeader) {
+				// Slot1(3) + Space(1) + Slot2(3) + Space(1) = 8 characters
+				// This MUST be exactly 8 characters to align with standard app-select rows.
+				prefixPadding = cbAdd3 + neutralStyle.Render(" ") + cbEnabled3 + neutralStyle.Render(" ")
+			} else {
+				// Standard menus or Radio buttons: indicator followed by one space
+				prefixPadding = checkbox + neutralStyle.Render(" ")
+			}
+		}
+		prefixWidth = lipgloss.Width(GetPlainText(prefixPadding))
+
+		// Padding spaces are AFTER the tag to reach the description column.
+		// Alignment column for descriptions: menuGutterWidth(2) + menuPrefixWidth + maxTagLen + minGap(3)
+		gapWidth := (maxTagLen - lipgloss.Width(GetPlainText(item.Tag))) + (menuPrefixWidth - prefixWidth) + minGap
+		paddingSpaces = strutil.Repeat(" ", max(0, gapWidth))
+
+		firstLine := prefixPadding + tagStr + neutralStyle.Render(paddingSpaces) + lines[0]
+		indent := neutralStyle.Render(strutil.Repeat(" ", menuPrefixWidth+maxTagLen+minGap))
 		renderedItemLines := []string{firstLine}
 		for j := 1; j < len(lines); j++ {
 			renderedItemLines = append(renderedItemLines, indent+lines[j])
 		}
 
 		finalItem := ""
+		// m.itemPaddingWidth is typically 1. gutterWidth(1) + 1 = 2 indent.
+		// This results in the requested "|! Tag" or "|! X Tag" layout.
 		rowStyle := neutralStyle.Width(maxWidth)
+		gutterSpaces := neutralStyle.Render(strings.Repeat(" ", m.StatusGutterWidth()))
+		
 		for j, l := range renderedItemLines {
+			sep := paddingStr
+			if isAppSelect {
+				sep = ""
+			}
+
 			if j > 0 {
 				finalItem += "\n"
-				finalItem += rowStyle.Render(neutralStyle.Render(strings.Repeat(" ", gutterWidth))+l) + console.CodeReset
+				finalItem += rowStyle.Render(gutterSpaces+sep+l) + console.CodeReset
 			} else {
-				finalItem += rowStyle.Render(itemGutter+l) + console.CodeReset
+				finalItem += rowStyle.Render(itemGutter+sep+l) + console.CodeReset
 			}
 		}
 		renderedItems = append(renderedItems, finalItem)
@@ -703,11 +786,21 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 			kStyle = keyStyleSel
 		}
 
+		lockMarker := ""
+		if m.showLockGutter {
+			if item.Locked {
+				lockMarker = RenderThemeText("{{|MarkerLocked|}}!{{[-]}}", neutralStyle)
+			} else {
+				lockMarker = neutralStyle.Render(" ")
+			}
+		}
+
 		var g0, g1 string
 		if item.IsReferenced {
-			g0 = RenderThemeText("{{|MarkerAdded|}}R{{[-]}}", neutralStyle)
-			if !item.Checked {
-				g0 = RenderThemeText("{{|MarkerModified|}}R{{[-]}}", neutralStyle)
+			if item.Checked {
+				g0 = RenderThemeText("{{|MarkerAdded|}}R{{[-]}}", neutralStyle)
+			} else {
+				g0 = RenderThemeText("{{|MarkerModified|}}r{{[-]}}", neutralStyle)
 			}
 		} else if item.Checked && !item.WasAdded {
 			g0 = RenderThemeText("{{|MarkerAdded|}}+{{[-]}}", neutralStyle)
@@ -717,12 +810,14 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 			g0 = neutralStyle.Render(" ")
 		}
 
-		if item.Enabled && !item.WasEnabled {
-			g1 = RenderThemeText("{{|MarkerAdded|}}E{{[-]}}", neutralStyle)
-		} else if !item.Enabled && item.WasEnabled && (item.Checked || !item.WasAdded) {
-			g1 = RenderThemeText("{{|MarkerDeleted|}}D{{[-]}}", neutralStyle)
-		} else {
-			g1 = neutralStyle.Render(" ")
+		if m.activityGutterWidth >= 2 {
+			if item.Enabled && !item.WasEnabled {
+				g1 = RenderThemeText("{{|MarkerAdded|}}E{{[-]}}", neutralStyle)
+			} else if !item.Enabled && item.WasEnabled && (item.Checked || !item.WasAdded) {
+				g1 = RenderThemeText("{{|MarkerDeleted|}}D{{[-]}}", neutralStyle)
+			} else {
+				g1 = neutralStyle.Render(" ")
+			}
 		}
 
 		tagStr := ""
@@ -787,7 +882,11 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 		rowWidth := subListWidth - 1
 		pContent := rowContent + neutralStyle.Render(strutil.Repeat(" ", max(0, rowWidth-lipgloss.Width(GetPlainText(rowContent)))))
 
-		line := g0 + g1 + indent + pContent + vStyleDark.Render(vBorderChar)
+		itemGutter := lockMarker + g0
+		if m.activityGutterWidth >= 2 {
+			itemGutter += g1
+		}
+		line := itemGutter + indent + pContent + vStyleDark.Render(vBorderChar)
 
 		resLines = append(resLines, line+console.CodeReset)
 		resH = append(resH, 1)

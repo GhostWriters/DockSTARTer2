@@ -58,9 +58,9 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 					cb = radioSelected
 				}
 			} else {
-				cb = strings.TrimRight(radioUnselectedAscii, " ")
+				cb = radioUnselectedAscii
 				if item.Checked {
-					cb = strings.TrimRight(radioSelectedAscii, " ")
+					cb = radioSelectedAscii
 				}
 			}
 			prefix = tagStyle.Render(cb) + neutralStyle.Render(" ")
@@ -72,9 +72,9 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 					cb = checkSelected
 				}
 			} else {
-				cb = strings.TrimRight(checkUnselectedAscii, " ")
+				cb = checkUnselectedAscii
 				if item.Checked {
-					cb = strings.TrimRight(checkSelectedAscii, " ")
+					cb = checkSelectedAscii
 				}
 			}
 			prefix = tagStyle.Render(cb) + neutralStyle.Render(" ")
@@ -94,17 +94,23 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 			tagStr = tagStyle.Render(p) + keyStyle.Render(f) + tagStyle.Render(r)
 		}
 
-		lockMarker := ""
-		gutterWidth := m.StatusGutterWidth()
+		itemGutter := ""
 		if m.showLockGutter {
+			lockChar := ""
 			if item.Locked {
-				lockMarker = RenderThemeText("{{|MarkerLocked|}}!{{[-]}}", lipgloss.NewStyle().Background(dialogBG))
+				lockChar = RenderThemeText("{{|MarkerLocked|}}!{{[-]}}", neutralStyle)
 			} else {
-				lockMarker = lipgloss.NewStyle().Background(dialogBG).Render(strings.Repeat(" ", gutterWidth))
+				lockChar = neutralStyle.Render(" ")
 			}
+			itemGutter = lockChar
 		}
 
-		itemContent := lockMarker + prefix + tagStr
+		if m.activityGutterWidth >= 1 {
+			// For flow menus, we reserve space for activity but dont typically show it
+			itemGutter += neutralStyle.Render(strutil.Repeat(" ", m.activityGutterWidth))
+		}
+
+		itemContent := itemGutter + prefix + tagStr
 
 		// For non-checkbox/non-radio items (e.g. dropdowns), append the value inline.
 		// Neutral space (dialogBG) breaks the selection background color in the gap only.
