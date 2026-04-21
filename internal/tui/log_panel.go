@@ -697,7 +697,11 @@ func (m LogPanelModel) ViewString() string {
 	m.input.SetWidth(inputBoxWidth - 2)
 	if m.sessionActive() {
 		m.input.Placeholder = "Session active — input locked"
-		m.input.Prompt = RenderThemeText("{{|MarkerLocked|}}!{{[-]}} ", ctx.Dialog)
+		marker := lockedMarker
+		if !ctx.LineCharacters {
+			marker = lockedMarkerAscii
+		}
+		m.input.Prompt = RenderThemeText("{{|MarkerLocked|}}"+marker+"{{[-]}} ", ctx.Dialog)
 	} else {
 		m.input.Placeholder = ""
 		m.input.Prompt = "> "

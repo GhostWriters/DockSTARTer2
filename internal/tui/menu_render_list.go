@@ -277,7 +277,6 @@ func (m *MenuModel) renderVariableHeightList() string {
 
 		// Prefix width calculation (Left of the Tag)
 		gutterWidth := m.StatusGutterWidth()
-		var firstLinePrefix string
 
 		hasAnyCheckboxes := false
 		for _, it := range visibleItems {
@@ -295,42 +294,10 @@ func (m *MenuModel) renderVariableHeightList() string {
 		}
 		minGap := 3
 
-		if isAppSelect && (item.IsCheckbox || item.IsGroupHeader) {
-			if item.IsGroupHeader {
-				var arrowA, arrowE string
-				if ctx.LineCharacters {
-					arrowA = neutralStyle.Render("   ")
-					arrowE = neutralStyle.Render(" ") + tStyle.Render(subMenuExpanded) + neutralStyle.Render(" ")
-				} else {
-					arrowA = neutralStyle.Render("   ")
-					arrowE = tStyle.Render("[v]")
-				}
-				firstLinePrefix = arrowA + neutralStyle.Render(" ") + arrowE + neutralStyle.Render(" ")
-			} else {
-				firstLinePrefix = cbAdd3 + neutralStyle.Render(" ") + cbEnabled3 + neutralStyle.Render(" ")
-			}
-		} else {
-			lockMarker := ""
-			if m.showLockGutter {
-				if item.Locked {
-					lockMarker = RenderThemeText("{{|MarkerLocked|}}!{{[-]}}", neutralStyle)
-				} else {
-					lockMarker = neutralStyle.Render(" ")
-				}
-				firstLinePrefix = lockMarker + checkbox
-			} else {
-				if checkbox != "" {
-					firstLinePrefix = checkbox + neutralStyle.Render(" ")
-				} else {
-					firstLinePrefix = ""
-				}
-			}
-			lipgloss.Width(GetPlainText(firstLinePrefix))
-		}
-		// Gutter width is already lock + activity, which firstLinePrefix partially duplicates.
+		// Gutter width is already lock + activity.
 		// We use StatusGutterWidth() as the definitive source.
+		gutterWidth = m.StatusGutterWidth()
 		totalGutterWidth := gutterWidth + m.itemPaddingWidth
-		paddingSpaces := strutil.Repeat(" ", max(0, maxTagLen-lipgloss.Width(GetPlainText(item.Tag))+minGap))
 		availableWidth := listContentWidth - totalGutterWidth - menuPrefixWidth - (maxTagLen + minGap)
 		if availableWidth < 0 {
 			availableWidth = 0
@@ -354,58 +321,8 @@ func (m *MenuModel) renderVariableHeightList() string {
 			lines = lines[:1]
 		}
 
-		lockMarker := ""
-		if m.showLockGutter {
-			if item.Locked {
-				lockMarker = RenderThemeText("{{|MarkerLocked|}}!{{[-]}}", neutralStyle)
-			} else {
-				lockMarker = neutralStyle.Render(" ")
-			}
-		}
-
-		var g0 string
-		if m.activityGutterWidth >= 1 {
-			if item.IsReferenced && !item.IsGroupHeader {
-				if item.Checked {
-					g0 = RenderThemeText("{{|MarkerAdded|}}R{{[-]}}", neutralStyle)
-				} else {
-					g0 = RenderThemeText("{{|MarkerModified|}}r{{[-]}}", neutralStyle)
-				}
-			} else if item.IsCheckbox && !item.IsGroupHeader {
-				if item.Checked && !item.WasAdded {
-					g0 = RenderThemeText("{{|MarkerAdded|}}+{{[-]}}", neutralStyle)
-				} else if !item.Checked && item.WasAdded {
-					g0 = RenderThemeText("{{|MarkerDeleted|}}-{{[-]}}", neutralStyle)
-				} else {
-					g0 = neutralStyle.Render(" ")
-				}
-			} else {
-				// Pad with space if this row isn't a checkbox/referenced but others have markers
-				g0 = neutralStyle.Render(" ")
-			}
-		} else {
-			g0 = ""
-		}
-
-		var g1 string
-		if m.activityGutterWidth >= 2 {
-			g1 = neutralStyle.Render(" ") // Default to empty slot
-			if !item.IsGroupHeader {
-				isRemoving := !item.Checked && item.WasAdded
-				if !isRemoving {
-					if item.Enabled && !item.WasEnabled {
-						g1 = RenderThemeText("{{|MarkerAdded|}}E{{[-]}}", neutralStyle)
-					} else if !item.Enabled && item.WasEnabled {
-						g1 = RenderThemeText("{{|MarkerDeleted|}}D{{[-]}}", neutralStyle)
-					}
-				}
-			}
-		}
-
-		itemGutter := lockMarker + g0
-		if m.activityGutterWidth >= 2 {
-			itemGutter += g1
-		}
+		// Gutter: Use unified helper which respects StatusGutterWidth
+		itemGutter := m.RenderItemGutter(item, neutralStyle)
 
 		prefixPadding := ""
 		prefixWidth := 0
@@ -424,7 +341,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 		// Padding spaces are AFTER the tag to reach the description column.
 		// Alignment column for descriptions: menuGutterWidth(2) + menuPrefixWidth + maxTagLen + minGap(3)
 		gapWidth := (maxTagLen - lipgloss.Width(GetPlainText(item.Tag))) + (menuPrefixWidth - prefixWidth) + minGap
-		paddingSpaces = strutil.Repeat(" ", max(0, gapWidth))
+		paddingSpaces := strutil.Repeat(" ", max(0, gapWidth))
 
 		firstLine := prefixPadding + tagStr + neutralStyle.Render(paddingSpaces) + lines[0]
 		indent := neutralStyle.Render(strutil.Repeat(" ", menuPrefixWidth+maxTagLen+minGap))

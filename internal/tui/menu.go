@@ -164,12 +164,7 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 	gapStyle := neutralStyle
 
 	// Construct fixed-width gutter
-	lockChar := " "
-	if d.showLockGutter && menuItem.Locked {
-		lockChar = RenderThemeText("{{|MarkerLocked|}}!{{[-]}}", neutralStyle)
-	}
-	activityGutter := neutralStyle.Render(strutil.Repeat(" ", d.activityGutterWidth))
-	itemGutter := lockChar + activityGutter
+	itemGutter := RenderMenuGutter(menuItem, d.showLockGutter, d.activityGutterWidth, neutralStyle)
 	paddingStr := neutralStyle.Render(strutil.Repeat(" ", d.paddingWidth))
 	checkbox := ""
 	if menuItem.Locked {
@@ -294,12 +289,7 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 	neutralStyle := lipgloss.NewStyle().Background(dialogBG)
 
 	// Construct fixed-width gutter (standard columns: [LockChar][ActivityChar1][ActivityChar2])
-	lockChar := " "
-	if d.showLockGutter && menuItem.Locked {
-		lockChar = RenderThemeText("{{|MarkerLocked|}}!{{[-]}}", neutralStyle)
-	}
-	activityGutter := neutralStyle.Render(strutil.Repeat(" ", d.activityGutterWidth))
-	itemGutter := lockChar + activityGutter
+	itemGutter := RenderMenuGutter(menuItem, d.showLockGutter, d.activityGutterWidth, neutralStyle)
 	paddingStr := neutralStyle.Render(strutil.Repeat(" ", d.paddingWidth))
 
 	itemStyle := theme.ThemeSemanticStyle("{{|Item|}}")
@@ -553,33 +543,8 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 	}
 
 	// Gutter: 2 chars on left edge.
-	// g0 = Add diff marker (+/-/R/space), g1 = Enabled diff marker (E/D/space, changes only)
-	var g0, g1 string
-	if menuItem.Locked {
-		var cb string
-		if ctx.LineCharacters {
-			cb = invalidMarker
-		} else {
-			cb = invalidMarkerAscii
-		}
-		g0 = tagStyle.Render(cb)
-		g1 = neutralStyle.Render(" ")
-	} else if menuItem.IsReferenced && menuItem.Checked {
-		g0 = RenderThemeText("{{|MarkerAdded|}}R{{[-]}}", neutralStyle)
-	} else if menuItem.IsReferenced {
-		g0 = RenderThemeText("{{|MarkerModified|}}r{{[-]}}", neutralStyle)
-	} else if menuItem.Checked && !menuItem.WasAdded {
-		g0 = RenderThemeText("{{|MarkerAdded|}}+{{[-]}}", neutralStyle)
-	} else if !menuItem.Checked && menuItem.WasAdded {
-		g0 = RenderThemeText("{{|MarkerDeleted|}}-{{[-]}}", neutralStyle)
-	} else {
-		g0 = neutralStyle.Render(" ")
-	}
-	if d.showLockGutter {
-		if menuItem.Locked {
-			g1 = theme.ThemeSemanticStyle("{{|ItemError|}}").Render("!")
-		}
-	}
+	// Render using the unified helper which respects StatusGutterWidth
+	itemGutter := RenderMenuGutter(menuItem, d.showLockGutter, d.activityGutterWidth, neutralStyle)
 
 	// buildCb3 renders a 3-character wide checkbox block with a fixed style.
 	buildCb3 := func(checked bool, cbStyle lipgloss.Style) string {
@@ -622,7 +587,7 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 		cbEnabled := buildCb3(menuItem.Enabled, enableStyle)
 		tagStr := RenderThemeText(menuItem.Tag, tagStyle)
 		// Layout matches border: Gutter(2) + cbAdd(3) + Spacer(1) + cbEnabled(3) + Spacer(1) + Tag.
-		line := g0 + g1 + cbAdd + neutralStyle.Render(" ") + cbEnabled + neutralStyle.Render(" ") + tagStr
+		line := itemGutter + cbAdd + neutralStyle.Render(" ") + cbEnabled + neutralStyle.Render(" ") + tagStr
 		actualWidth := lipgloss.Width(line)
 		if actualWidth < m.Width()-2 {
 			line += neutralStyle.Render(strutil.Repeat(" ", m.Width()-2-actualWidth))
@@ -693,7 +658,7 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 
 		// Layout restores the dual or single arrow look as it was before.
 		// Layout matches border: Gutter(2) + cbAdd(3) + Spacer(1) + cbEnabled(3) + Spacer(1) + Tag.
-		line := g0 + g1 + cbAdd + neutralStyle.Render(" ") + cbEnabled + neutralStyle.Render(" ") + tagStr + neutralStyle.Render(paddingSpaces) + descLine
+		line := itemGutter + cbAdd + neutralStyle.Render(" ") + cbEnabled + neutralStyle.Render(" ") + tagStr + neutralStyle.Render(paddingSpaces) + descLine
 		
 		actualWidth := lipgloss.Width(line)
 		if actualWidth < m.Width()-2 {
@@ -729,7 +694,7 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 	cbEnabled := buildCb3(menuItem.Enabled, enableStyle)
 
 	// Layout matches border: Gutter(2) + cbAdd(3) + Spacer(1) + cbEnabled(3) + Spacer(1) + Tag.
-	line := g0 + g1 + cbAdd + neutralStyle.Render(" ") + cbEnabled + neutralStyle.Render(" ") + tagStr
+	line := itemGutter + cbAdd + neutralStyle.Render(" ") + cbEnabled + neutralStyle.Render(" ") + tagStr
 	
 	const rowPrefixW = 11
 	paddingSpaces := strutil.Repeat(" ", max(0, d.maxTagLen-lipgloss.Width(GetPlainText(tag))+3))
@@ -1269,6 +1234,71 @@ func (m *MenuModel) StatusGutterWidth() int {
 
 	activityWidth := m.activityGutterWidth
 	return lockWidth + activityWidth
+}
+
+// RenderItemGutter returns the consistent gutter string (markers) for a menu item.
+// It strictly reserves the width defined by m.StatusGutterWidth().
+func (m *MenuModel) RenderItemGutter(item MenuItem, neutralStyle lipgloss.Style) string {
+	return RenderMenuGutter(item, m.showLockGutter, m.activityGutterWidth, neutralStyle)
+}
+
+// RenderMenuGutter is a standalone helper that returns the consistent gutter string (markers) for a menu item.
+func RenderMenuGutter(item MenuItem, showLockGutter bool, activityGutterWidth int, neutralStyle lipgloss.Style) string {
+	res := ""
+
+	// 1. Lock Gutter (1 char)
+	if showLockGutter {
+		if item.Locked {
+			marker := lockedMarker
+			if !GetActiveContext().LineCharacters {
+				marker = lockedMarkerAscii
+			}
+			res += RenderThemeText("{{|MarkerLocked|}}"+marker+"{{[-]}}", neutralStyle)
+		} else {
+			res += neutralStyle.Render(" ")
+		}
+	}
+
+	// 2. Activity Gutter 0 (1 char)
+	if activityGutterWidth >= 1 {
+		g0 := ""
+		if item.IsReferenced && !item.IsGroupHeader {
+			if item.Checked {
+				g0 = RenderThemeText("{{|MarkerAdded|}}R{{[-]}}", neutralStyle)
+			} else {
+				g0 = RenderThemeText("{{|MarkerModified|}}r{{[-]}}", neutralStyle)
+			}
+		} else if item.IsCheckbox && !item.IsGroupHeader {
+			if item.Checked && !item.WasAdded {
+				g0 = RenderThemeText("{{|MarkerAdded|}}+{{[-]}}", neutralStyle)
+			} else if !item.Checked && item.WasAdded {
+				g0 = RenderThemeText("{{|MarkerDeleted|}}-{{[-]}}", neutralStyle)
+			} else {
+				g0 = neutralStyle.Render(" ")
+			}
+		} else {
+			g0 = neutralStyle.Render(" ")
+		}
+		res += g0
+	}
+
+	// 3. Activity Gutter 1 (1 char, for Enabled state)
+	if activityGutterWidth >= 2 {
+		g1 := neutralStyle.Render(" ")
+		if !item.IsGroupHeader {
+			isRemoving := !item.Checked && item.WasAdded
+			if !isRemoving {
+				if item.Enabled && !item.WasEnabled {
+					g1 = RenderThemeText("{{|MarkerAdded|}}E{{[-]}}", neutralStyle)
+				} else if !item.Enabled && item.WasEnabled {
+					g1 = RenderThemeText("{{|MarkerDeleted|}}D{{[-]}}", neutralStyle)
+				}
+			}
+		}
+		res += g1
+	}
+
+	return res
 }
 
 func (m *MenuModel) SetItem(index int, item MenuItem) {
