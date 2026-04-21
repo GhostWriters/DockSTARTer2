@@ -577,14 +577,9 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Relay the change to the active screen for Menu '!' indicators
 				cmds = append(cmds, func() tea.Msg { return LockStateChangedMsg{LockedByOthers: lockedByOthers} })
 			}
-			// But for the Console Panel, we lock for ANY edit activity (local or remote)
-			// to prevent the user from running a CLI command while in a destructive menu.
-			m.logPanel.lockSession(msg.ID, msg.Locked)
 			return m, logger.BatchRecoverTUI(m.ctx, cmds...)
 		}
 
-		// Standard behavioral lock (e.g. from internal console commands)
-		m.logPanel.lockSession(msg.ID, msg.Locked)
 		return m, nil
 	}
 
