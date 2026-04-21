@@ -72,6 +72,8 @@ type SessionManager struct {
 	serverPIDPath     string // $STATE/locks/server.pid
 	disconnectReqPath  string // $STATE/disconnect.request
 	stopReqPath        string // $STATE/stop.request
+
+	localOwner string // tracks which part of the current process holds the lock (e.g. "Menu", "Console")
 }
 
 // SessionInfo holds the details read from a session lock file.
@@ -143,7 +145,7 @@ func (m *SessionManager) AcquireEditLock(clientIP, connType string) bool {
 	defer m.mu.Unlock()
 
 	if m.editActive {
-		return true
+		return m.localOwner == connType
 	}
 
 	for i := 0; i < 3; i++ {
@@ -154,6 +156,7 @@ func (m *SessionManager) AcquireEditLock(clientIP, connType string) bool {
 		locked, err := m.editFlock.TryLock()
 		if err == nil && locked {
 			m.editActive = true
+			m.localOwner = connType
 			_ = writeInfoFile(m.editLockPath, os.Getpid(), clientIP, connType)
 			return true
 		}
@@ -180,6 +183,7 @@ func (m *SessionManager) ReleaseEditLock() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.editActive = false
+	m.localOwner = ""
 	if m.editFlock != nil {
 		_ = m.editFlock.Unlock()
 	}
@@ -241,6 +245,7 @@ func (m *SessionManager) ForceRelease() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.editActive = false
+	m.localOwner = ""
 	if m.editFlock != nil {
 		_ = m.editFlock.Unlock()
 	}

@@ -194,7 +194,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case NavigateMsg:
 		if msg.Screen != nil && msg.Screen.IsDestructive() {
-			if !sessionlocks.Sessions.AcquireEditLock(m.clientIP, m.connType) {
+			if !sessionlocks.Sessions.AcquireEditLock(m.clientIP, "Menu") {
 				info := sessionlocks.Sessions.ReadEditInfo()
 				busyMsg := "Configuration is currently being edited by another session."
 				if info.ClientIP != "" {
