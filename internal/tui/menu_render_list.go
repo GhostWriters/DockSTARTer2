@@ -364,25 +364,25 @@ func (m *MenuModel) renderVariableHeightList() string {
 		}
 
 		var g0 string
-		if item.IsReferenced && !item.IsGroupHeader {
-			if item.Checked {
-				g0 = RenderThemeText("{{|MarkerAdded|}}R{{[-]}}", neutralStyle)
+		if m.activityGutterWidth >= 1 {
+			if item.IsReferenced && !item.IsGroupHeader {
+				if item.Checked {
+					g0 = RenderThemeText("{{|MarkerAdded|}}R{{[-]}}", neutralStyle)
+				} else {
+					g0 = RenderThemeText("{{|MarkerModified|}}r{{[-]}}", neutralStyle)
+				}
+			} else if item.IsCheckbox && !item.IsGroupHeader {
+				if item.Checked && !item.WasAdded {
+					g0 = RenderThemeText("{{|MarkerAdded|}}+{{[-]}}", neutralStyle)
+				} else if !item.Checked && item.WasAdded {
+					g0 = RenderThemeText("{{|MarkerDeleted|}}-{{[-]}}", neutralStyle)
+				} else {
+					g0 = neutralStyle.Render(" ")
+				}
 			} else {
-				g0 = RenderThemeText("{{|MarkerModified|}}r{{[-]}}", neutralStyle)
-			}
-		} else if item.IsCheckbox && !item.IsGroupHeader {
-			if item.Checked && !item.WasAdded {
-				g0 = RenderThemeText("{{|MarkerAdded|}}+{{[-]}}", neutralStyle)
-			} else if !item.Checked && item.WasAdded {
-				g0 = RenderThemeText("{{|MarkerDeleted|}}-{{[-]}}", neutralStyle)
-			} else if m.activityGutterWidth >= 1 {
+				// Pad with space if this row isn't a checkbox/referenced but others have markers
 				g0 = neutralStyle.Render(" ")
-			} else {
-				g0 = ""
 			}
-		} else if m.activityGutterWidth >= 1 {
-			// Pad with space if this row isn't a checkbox but others have markers
-			g0 = neutralStyle.Render(" ")
 		} else {
 			g0 = ""
 		}
