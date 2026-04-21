@@ -34,7 +34,7 @@ func StartWebServer(ctx context.Context, cfg config.ServerConfig, signer gossh.S
 	mux := http.NewServeMux()
 	mux.Handle("/", http.FileServer(http.FS(staticRoot)))
 	mux.HandleFunc("/ws", authMiddleware(cfg, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleWebSocketHTTP(ctx, w, r, cfg, signer)
+		handleWebSocketHTTP(r.Context(), w, r, cfg, signer)
 	})).ServeHTTP)
 
 	addr := fmt.Sprintf(":%d", cfg.Web.Port)

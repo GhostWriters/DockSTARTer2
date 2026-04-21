@@ -6,7 +6,7 @@ import (
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
-	"DockSTARTer2/internal/serve"
+	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/tui"
 	_ "DockSTARTer2/internal/tui/screens" // Register screen creators
@@ -250,12 +250,23 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			return nil
 		}
 
-		// Block session-locked commands when a TUI session is active.
+		// Block action commands when someone else is currently editing the configuration.
 		def := commandDefs[group.Command]
-		if def.SessionLocked && serve.Sessions.IsPrimaryActive() {
-			logger.Error(ctx, "Cannot run '%s' while a DockSTARTer2 session is active. "+
-				"Use '--server disconnect' to force-release the session.", group.Command)
-			return 1
+		if def.SessionLocked {
+			if !sessionlocks.Sessions.AcquireEditLock("local", "CLI") {
+				info := sessionlocks.Sessions.ReadEditInfo()
+				ip := info.ClientIP
+				if ip == "" || ip == "local" {
+					ip = "the local console"
+				}
+				conn := info.ConnType
+				if conn == "" {
+					conn = "SSH"
+				}
+				logger.Error(ctx, "Cannot run '%s' while the configuration is being edited by a %s session from {{|Highlight|}}%s{{[-]}}.", group.Command, conn, ip)
+				logger.Notice(ctx, "Use '{{|UserCommand|}}ds2 --server disconnect{{[-]}}' to force-release the lock.")
+				return 1
+			}
 		}
 
 		if state.GUI && group.Command != "" && group.Command != "-M" && group.Command != "--menu" {
@@ -285,9 +296,15 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		// If a re-exec was scheduled (e.g. self-update), stop processing further
 		// groups — they are already included in the re-exec args.
 		if update.PendingReExec != nil {
+			if def.SessionLocked {
+				sessionlocks.Sessions.ReleaseEditLock()
+			}
 			break
 		}
 
+		if def.SessionLocked {
+			sessionlocks.Sessions.ReleaseEditLock()
+		}
 	}
 
 	// If no commands matched (or groups empty), launch TUI

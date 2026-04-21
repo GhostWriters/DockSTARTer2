@@ -9,6 +9,7 @@ import (
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/update"
 	"DockSTARTer2/internal/version"
@@ -99,6 +100,24 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		}
 		logger.Notice(context.Background(), fmt.Sprintf("DockSTARTer2 Console command: '{{|UserCommand|}}%s{{[-]}}'", cmdStr))
 
+		// Block action commands when someone else is currently editing the configuration.
+		if def.SessionLocked {
+			if !sessionlocks.Sessions.AcquireEditLock("local", "Console") {
+				info := sessionlocks.Sessions.ReadEditInfo()
+				ip := info.ClientIP
+				if ip == "" || ip == "local" {
+					ip = "the local console"
+				}
+				conn := info.ConnType
+				if conn == "" {
+					conn = "SSH"
+				}
+				logger.Error(ctx, "Cannot run '%s' while the configuration is being edited by a %s session from {{|Highlight|}}%s{{[-]}}.", group.Command, conn, ip)
+				logger.Notice(ctx, "Use '{{|UserCommand|}}ds2 --server disconnect{{[-]}}' to force-release the lock.")
+				return 1
+			}
+		}
+
 		var err error
 		switch group.Command {
 		case "-h", "--help":
@@ -165,6 +184,10 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			if errors.Is(err, console.ErrUserAborted) {
 				return exitCode
 			}
+		}
+
+		if def.SessionLocked {
+			sessionlocks.Sessions.ReleaseEditLock()
 		}
 
 		if update.PendingReExec != nil {

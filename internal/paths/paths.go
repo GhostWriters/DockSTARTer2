@@ -145,6 +145,11 @@ func GetStateDir() string {
 	return filepath.Join(xdg.StateHome, appName)
 }
 
+// GetLocksDir returns the absolute path to the dockstarter2 locks directory.
+func GetLocksDir() string {
+	return filepath.Join(GetStateDir(), "locks")
+}
+
 // GetInstancesDir returns the absolute path to the dockstarter2 instances directory.
 func GetInstancesDir() string {
 	return filepath.Join(GetStateDir(), constants.InstancesDirName)
@@ -153,6 +158,18 @@ func GetInstancesDir() string {
 // GetTimestampsDir returns the absolute path to the dockstarter2 timestamps directory.
 func GetTimestampsDir() string {
 	return filepath.Join(GetStateDir(), constants.TimestampsDirName)
+}
+
+// GetLocalLockPath returns the path to the local-side operation lock file.
+// Written by the local TUI/CLI while a destructive operation is in progress.
+func GetLocalLockPath() string {
+	return filepath.Join(GetLocksDir(), "local.lock")
+}
+
+// GetRemoteLockPath returns the path to the remote-side operation lock file.
+// Written by the SSH/web server session while a destructive operation is in progress.
+func GetRemoteLockPath() string {
+	return filepath.Join(GetLocksDir(), "remote.lock")
 }
 
 // GetActiveThemeFile returns the path to the currently-active theme file in the state directory.

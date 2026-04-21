@@ -125,6 +125,10 @@ func (m *ProgramBoxModel) ViewString() string {
 		Padding(0, layout.ContentSideMargin).
 		Render(content)
 
+	// Trim trailing newline — Padding/Height Render calls can add one, which causes
+	// renderDialogWithBorderCtx to split into an extra empty line and clip the button row.
+	content = strings.TrimSuffix(content, "\n")
+
 	// Wrap in border with title embedded (matching menu style)
 	// targetHeight is determined by maximization state
 	targetHeight := 0

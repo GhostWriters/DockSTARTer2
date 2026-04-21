@@ -124,6 +124,7 @@ func (s *AppSelectionScreen) refreshItems() {
 				ShowEnabledGutter: addedMap[base],
 				IsReferenced:      referencedBaseSet[base],
 				BaseApp:           base,
+				IsDestructive:     true,
 				Metadata:          map[string]string{"appName": base},
 			})
 		} else {
@@ -148,6 +149,7 @@ func (s *AppSelectionScreen) refreshItems() {
 				ShowEnabledGutter: false,
 				IsReferenced:      referencedBaseSet[base],
 				BaseApp:           base,
+				IsDestructive:     true,
 				Metadata:          map[string]string{"appName": base},
 			})
 
@@ -182,6 +184,7 @@ func (s *AppSelectionScreen) refreshItems() {
 						WasEnabled:        false,
 						ShowEnabledGutter: false,
 						BaseApp:           base,
+						IsDestructive:     true,
 						Metadata:          map[string]string{"appName": ie.appName},
 					})
 				} else {
@@ -197,6 +200,7 @@ func (s *AppSelectionScreen) refreshItems() {
 						WasEnabled:        wasEnabledMap[ie.appName],
 						ShowEnabledGutter: addedMap[ie.appName],
 						BaseApp:           base,
+						IsDestructive:     true,
 						Metadata:          map[string]string{"appName": ie.appName},
 					})
 				}
@@ -205,6 +209,7 @@ func (s *AppSelectionScreen) refreshItems() {
 				Tag:           "+ Add instance\u2026",
 				Help:          fmt.Sprintf("Press Space/Enter or Ctrl/Alt+Right to add another %s instance", niceName),
 				IsAddInstance: true,
+				IsDestructive: true,
 				BaseApp:       base,
 			})
 		}
@@ -245,6 +250,7 @@ func (s *AppSelectionScreen) expandGroup(baseApp string) {
 		Selectable:    true,
 		IsReferenced:  orig.IsReferenced,
 		BaseApp:       baseApp,
+		IsDestructive: true,
 		Metadata:      orig.Metadata,
 	}
 	baseSubRow := tui.MenuItem{
@@ -260,6 +266,7 @@ func (s *AppSelectionScreen) expandGroup(baseApp string) {
 		ShowEnabledGutter: orig.Checked,
 		IsReferenced:      orig.IsReferenced,
 		BaseApp:           baseApp,
+		IsDestructive:     true,
 		Metadata:          orig.Metadata,
 	}
 	addRow := tui.MenuItem{
@@ -267,6 +274,7 @@ func (s *AppSelectionScreen) expandGroup(baseApp string) {
 		Help:          fmt.Sprintf("Press Space/Enter or Ctrl/Alt+Right to add a %s instance", niceName),
 		IsAddInstance: true,
 		Selectable:    true,
+		IsDestructive: true,
 		BaseApp:       baseApp,
 	}
 	newItems := make([]tui.MenuItem, 0, len(items)+2)
@@ -332,6 +340,7 @@ func (s *AppSelectionScreen) collapseGroupIfNeeded(items []tui.MenuItem, base st
 		ShowEnabledGutter: checked,
 		IsReferenced:      isReferenced,
 		BaseApp:           base,
+		IsDestructive:     true,
 		Metadata:          map[string]string{"appName": base},
 	}
 	newItems := make([]tui.MenuItem, 0, len(items))

@@ -6,6 +6,7 @@ import (
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/constants"
+	"DockSTARTer2/internal/lockfile"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/theme"
@@ -98,6 +99,8 @@ type TabbedVarsEditorModel struct {
 	// Last hit region offsets for coordinate translation
 	lastOffsetX int
 	lastOffsetY int
+
+	lockedByOthers bool
 }
 
 type envAddVarMsg struct {
@@ -301,6 +304,9 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 
 func (m *TabbedVarsEditorModel) saveEnv() tea.Cmd {
 	return func() tea.Msg {
+		if m.lockedByOthers {
+			return nil
+		}
 		cfg := config.LoadAppConfig()
 		envPath := filepath.Join(cfg.ComposeDir, constants.EnvFileName)
 
@@ -344,6 +350,8 @@ func (m *TabbedVarsEditorModel) saveEnv() tea.Cmd {
 		task := func(ctx context.Context, w io.Writer) error {
 			// Wrap context with the TUI writer so all logs in this task fan out to the ProgramBox
 			ctx = console.WithTUIWriter(ctx, w)
+			_ = lockfile.Acquire(paths.GetLocalLockPath())
+			defer lockfile.Release(paths.GetLocalLockPath())
 
 			// 1. Surgical Sync for each tab
 			for _, u := range updates {
@@ -450,6 +458,10 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
+	case tui.LockStateChangedMsg:
+		m.lockedByOthers = msg.LockedByOthers
+		return m, nil
+
 	case tui.LayerHitMsg:
 		if strings.HasPrefix(msg.ID, "tabbed_vars.tab-") {
 			// On right-click, do nothing (allows through hit-testing to global context menu)
@@ -508,6 +520,9 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.Button == tea.MouseLeft {
 				m.focus = envFocusButtons
 				m.btnIdx = 0
+				if m.lockedByOthers {
+					return m, nil
+				}
 				if m.hasErrors() {
 					return m, func() tea.Msg {
 						return tui.ShowMessageDialogMsg{
@@ -1245,6 +1260,10 @@ func (m *TabbedVarsEditorModel) IsMaximized() bool {
 
 func (m *TabbedVarsEditorModel) MenuName() string {
 	return "tabbed_vars"
+}
+
+func (m *TabbedVarsEditorModel) IsDestructive() bool {
+	return true
 }
 
 // calcSubtitleHeight returns the number of subtitle lines for the active tab.

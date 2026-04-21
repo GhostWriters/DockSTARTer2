@@ -58,8 +58,8 @@ var Registry = map[string]Def{
 	"--add":                      {Title: "Add Application",              SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
 	"-r":                         {Title: "Remove Application",           SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
 	"--remove":                   {Title: "Remove Application",           SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
-	"-e":                         {Title: "Creating Environment Variables", SessionLocked: true}, // launches TUI editor
-	"--env":                      {Title: "Creating Environment Variables", SessionLocked: true}, // launches TUI editor
+	"-e":                         {Title: "Creating Environment Variables", SessionLocked: true, ConsoleSafe: true},
+	"--env":                      {Title: "Creating Environment Variables", SessionLocked: true, ConsoleSafe: true},
 	"--env-set":                  {Title: "Set Value of Variable",        SessionLocked: true, ConsoleSafe: true},
 	"--env-set-lower":            {Title: "Set Value of Variable",        SessionLocked: true, ConsoleSafe: true},
 	"--env-set-literal":          {Title: "Set Value of Variable",        SessionLocked: true, ConsoleSafe: true},
@@ -88,7 +88,7 @@ var Registry = map[string]Def{
 	"--start-edit-global":        {Title: "Edit Global Variables",        SessionLocked: true}, // launches TUI
 	"--edit-app":                 {Title: "Edit App Variables",           SessionLocked: true}, // launches TUI
 	"--start-edit-app":           {Title: "Edit App Variables",           SessionLocked: true}, // launches TUI
-	"--config-pm":                {Title: "Select Package Manager",       SessionLocked: true}, // launches TUI
+	"--config-pm":                {Title: "Select Package Manager",       SessionLocked: true, ConsoleSafe: true},
 	"--config-pm-auto":           {Title: "Select Package Manager",       SessionLocked: true, ConsoleSafe: true},
 	"--config-pm-list":           {Title: "List Known Package Managers",  SessionLocked: true, ConsoleSafe: true},
 	"--config-pm-table":          {Title: "List Known Package Managers",  SessionLocked: true, ConsoleSafe: true},

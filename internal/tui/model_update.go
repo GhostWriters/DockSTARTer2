@@ -1,8 +1,10 @@
 package tui
 
 import (
+	"fmt"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/theme"
 
 	"charm.land/bubbles/v2/help"
@@ -38,6 +40,24 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case LockStateChangedMsg:
+		// Broadcast lock changes to both the active screen and any open dialog
+		// to ensure background items update even if a dialog has focus.
+		if m.activeScreen != nil {
+			_, cmd := m.activeScreen.Update(msg)
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		if m.dialog != nil {
+			var cmd tea.Cmd
+			m.dialog, cmd = m.dialog.Update(msg)
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		return m, logger.BatchRecoverTUI(m.ctx, cmds...)
+
 	case toggleLogPanelMsg:
 		updated, cmd := m.logPanel.Update(msg)
 		m.logPanel = updated.(LogPanelModel)
@@ -173,6 +193,23 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, logger.BatchRecoverTUI(m.ctx, cmds...)
 
 	case NavigateMsg:
+		if msg.Screen != nil && msg.Screen.IsDestructive() {
+			if !sessionlocks.Sessions.AcquireEditLock(m.clientIP, "Menu") {
+				info := sessionlocks.Sessions.ReadEditInfo()
+				busyMsg := "Configuration is currently being edited by another session."
+				if info.ClientIP != "" {
+					busyMsg = fmt.Sprintf("Configuration is currently being edited by {{|TitleError|}}%s{{[-]}} from {{|TitleQuestion|}}%s{{[-]}}.", info.ConnType, info.ClientIP)
+				}
+				return m, func() tea.Msg {
+					return ShowMessageDialogMsg{
+						Title:   "Resource Busy",
+						Message: busyMsg,
+						Type:    MessageError,
+					}
+				}
+			}
+		}
+
 		// Push current screen to stack and switch to new screen
 		if m.activeScreen != nil {
 			m.screenStack = append(m.screenStack, m.activeScreen)
@@ -189,10 +226,19 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.activeScreen.SetSize(caW, caH)
 			m.backdrop.SetHelpText(m.activeScreen.HelpText())
 			cmds = append(cmds, logger.BatchRecoverTUI(m.ctx, m.activeScreen.Init()))
+
+			// Sync current lock state to the new screen immediately
+			if m.lockedByOthers {
+				cmds = append(cmds, func() tea.Msg { return LockStateChangedMsg{LockedByOthers: true} })
+			}
 		}
 		return m, logger.BatchRecoverTUI(m.ctx, cmds...)
 
 	case NavigateBackMsg:
+		if m.activeScreen != nil && m.activeScreen.IsDestructive() {
+			sessionlocks.Sessions.ReleaseEditLock()
+		}
+
 		// Pop from stack and return to previous screen
 		if CurrentPageName == "tabbed_vars" {
 			CurrentEditorApp = ""
@@ -210,6 +256,11 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				caW, caH := m.getContentArea()
 				m.activeScreen.SetSize(caW, caH)
 				m.backdrop.SetHelpText(m.activeScreen.HelpText())
+
+				// Sync current lock state to the restored screen immediately
+				if m.lockedByOthers {
+					cmds = append(cmds, func() tea.Msg { return LockStateChangedMsg{LockedByOthers: true} })
+				}
 			}
 		} else {
 			// If stack is empty, we "go back" to nothing (which triggers quit at the bottom)
@@ -508,6 +559,28 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case QuitMsg:
 		return m, tea.Quit
+
+	case ConsoleLockMsg:
+		// remote.lock never locks the local console bar (it just indicates session presence)
+		if msg.ID == "remote.lock" {
+			return m, nil
+		}
+
+		// edit.lock state sync
+		if msg.ID == "edit.lock" {
+			info := sessionlocks.Sessions.ReadEditInfo()
+			// If locked locally by the Console, we still treat it as "other" for the menu items
+			// to ensure destructive options are restricted while the console command runs.
+			lockedByOthers := msg.Locked && (!sessionlocks.Sessions.HoldEditLockLocal() || info.ConnType == "Console")
+			if lockedByOthers != m.lockedByOthers {
+				m.lockedByOthers = lockedByOthers
+				// Relay the change to the active screen for Menu '!' indicators
+				cmds = append(cmds, func() tea.Msg { return LockStateChangedMsg{LockedByOthers: lockedByOthers} })
+			}
+			return m, logger.BatchRecoverTUI(m.ctx, cmds...)
+		}
+
+		return m, nil
 	}
 
 	backdropMsg := msg
@@ -603,6 +676,7 @@ func (m *AppModel) updateComponentFocus() {
 			focusable.SetFocused(mainFocused)
 		}
 	}
+
 }
 
 // invalidateAllCaches clears every render cache in the TUI so a full redraw
@@ -721,7 +795,7 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	if key.Matches(msg, Keys.Tab) {
 		if m.logPanelFocused {
 			// If panel is expanded and input not yet focused, Tab → input bar.
-			if m.logPanel.expanded && !m.logPanel.inputFocused && !m.logPanel.sessionActive {
+			if m.logPanel.expanded && !m.logPanel.inputFocused && !m.logPanel.sessionActive() {
 				return m, m.logPanel.FocusInput(), true
 			}
 			// Viewport focused (inputFocused already handled above): Tab → exit panel to header / dialog.
@@ -841,13 +915,13 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		}
 		// Tab/Shift+Tab: cycle to input bar (two-section dialog cycle).
 		if key.Matches(msg, Keys.CycleTab) || key.Matches(msg, Keys.CycleShiftTab) {
-			if m.logPanel.expanded && !m.logPanel.sessionActive {
+			if m.logPanel.expanded && !m.logPanel.sessionActive() {
 				return m, m.logPanel.FocusInput(), true
 			}
 		}
 		// Enter focuses the input bar (if panel is expanded and not session-locked).
 		if key.Matches(msg, Keys.Enter) {
-			if m.logPanel.expanded && !m.logPanel.sessionActive {
+			if m.logPanel.expanded && !m.logPanel.sessionActive() {
 				return m, m.logPanel.FocusInput(), true
 			}
 			return m, func() tea.Msg { return toggleLogPanelMsg{} }, true

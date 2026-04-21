@@ -60,7 +60,7 @@ func (m *MenuModel) ViewString() string {
 
 	// 2. Wrap list in its own inner border (only for non-subMenu mode)
 	// Full dialogs use a nested "border-in-border" look.
-	listStyle := styles.Dialog.Padding(0, 0)
+	listStyle := styles.Dialog.Padding(0, 0, 0, 0)
 	listStyle = ApplyInnerBorder(listStyle, m.focused, ctx.LineCharacters)
 	listStyle = listStyle.BorderBottom(false)
 	borderedList := InjectBorderFlags(listStyle.Render(listView), styles.BorderFlags, styles.Border2Flags, false)
@@ -100,7 +100,7 @@ func (m *MenuModel) ViewString() string {
 		Background(styles.Dialog.GetBackground()).
 		Padding(0, layout.ContentSideMargin)
 
-	paddedList := marginStyle.Render(borderedList)
+	paddedList := marginStyle.Width(contentWidth).Render(borderedList)
 	paddedButtons := marginStyle.Width(contentWidth).Render(borderedButtonBox)
 
 	var innerParts []string
@@ -214,7 +214,11 @@ func (m *MenuModel) viewSubMenu() string {
 		innerParts = append(innerParts, m.renderFlowContent(contentWidth))
 	} else {
 		content := m.renderVerticalListBlock(ctx)
-		innerParts = append(innerParts, content)
+		paddedContent := lipgloss.NewStyle().
+			Padding(0, layout.ContentSideMargin).
+			Width(contentWidth).
+			Render(content)
+		innerParts = append(innerParts, paddedContent)
 	}
 
 	// Render buttons (if any)

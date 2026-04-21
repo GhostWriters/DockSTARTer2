@@ -18,6 +18,7 @@ func NewMainMenuScreen() tui.ScreenModel {
 			Desc:   "Update DockSTARTer2",
 			Help:   "Check for and install updates",
 			Action: tui.TriggerUpdate(),
+			IsDestructive: true,
 		},
 		{
 			Tag:    "Options",

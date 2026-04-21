@@ -8,7 +8,7 @@ import (
 
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/serve"
+	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/tui"
 
 	tea "charm.land/bubbletea/v2"
@@ -97,30 +97,35 @@ func (s *ServerOptionsScreen) buildSettingsMenu() *tui.MenuModel {
 			Desc:   fmt.Sprintf("{{|OptionValue|}}%d{{[-]}}", s.config.Server.SSH.Port),
 			Help:   "TCP port the SSH server listens on. Set to 0 to disable. (Enter to change)",
 			Action: s.promptSSHPort(),
+			IsDestructive: true,
 		},
 		{
 			Tag:    "Web Port",
 			Desc:   fmt.Sprintf("{{|OptionValue|}}%d{{[-]}}", s.config.Server.Web.Port),
 			Help:   "TCP port the web server listens on. Set to 0 to disable. (Enter to change)",
 			Action: s.promptWebPort(),
+			IsDestructive: true,
 		},
 		{
 			Tag:    "Auth Mode",
 			Desc:   s.dropdownDesc(authModeDesc()),
 			Help:   "Authentication mode for incoming SSH connections (Enter for options)",
 			Action: s.showAuthModeDropdown(),
+			IsDestructive: true,
 		},
 		{
 			Tag:    "Password",
 			Desc:   s.passwordDesc(),
 			Help:   "Password for SSH auth (Enter to change). Stored as bcrypt hash.",
 			Action: s.promptPassword(),
+			IsDestructive: true,
 		},
 		{
 			Tag:    "Authorized Keys File",
 			Desc:   s.truncatePath(s.config.Server.Auth.AuthKeysFile),
 			Help:   "Path to authorized_keys file for public-key auth (Enter to change)",
 			Action: s.promptAuthKeysFile(),
+			IsDestructive: true,
 		},
 	}
 
@@ -135,22 +140,22 @@ func (s *ServerOptionsScreen) buildSettingsMenu() *tui.MenuModel {
 }
 
 func (s *ServerOptionsScreen) buildStatusMenu() *tui.MenuModel {
-	serverInfo := serve.Sessions.ReadServerInfo()
-	sessionInfo := serve.Sessions.ReadSessionInfo()
+	serverInfo := sessionlocks.Sessions.ReadServerInfo()
+	editInfo := sessionlocks.Sessions.ReadEditInfo()
 
 	serverStatus := "{{|TitleError|}}Not running{{[-]}}"
-	if serverInfo.PID != 0 {
+	if serverInfo.PID != 0 && sessionlocks.ProcessExists(serverInfo.PID) {
 		serverStatus = fmt.Sprintf("{{|Yes|}}Running{{[-]}} (PID %d, port %d)", serverInfo.PID, serverInfo.Port)
 	}
 
 	sessionStatus := "None"
 	disconnectEnabled := false
-	if sessionInfo.PID != 0 {
-		ip := sessionInfo.ClientIP
+	if editInfo.PID != 0 && sessionlocks.ProcessExists(editInfo.PID) {
+		ip := editInfo.ClientIP
 		if ip == "" {
-			ip = "unknown"
+			ip = "local"
 		}
-		sessionStatus = fmt.Sprintf("{{|TitleQuestion|}}Active{{[-]}} — %s (PID %d)", ip, sessionInfo.PID)
+		sessionStatus = fmt.Sprintf("{{|TitleQuestion|}}Editing{{[-]}} — %s (PID %d)", ip, editInfo.PID)
 		disconnectEnabled = true
 	}
 
@@ -315,7 +320,7 @@ func (s *ServerOptionsScreen) promptPassword() tea.Cmd {
 		if pw == "" {
 			return nil
 		}
-		hash, err := serve.HashPassword(pw)
+		hash, err := sessionlocks.HashPassword(pw)
 		if err != nil {
 			return tui.ShowMessageDialogMsg{
 				Title:   "Password Error",
@@ -418,7 +423,7 @@ func (s *ServerOptionsScreen) disconnectAction(force bool, enabled bool) tea.Cmd
 	}
 	return func() tea.Msg {
 		go func() {
-			_ = serve.Disconnect(context.Background(), force)
+			_ = sessionlocks.Sessions.Disconnect(context.Background(), force)
 		}()
 		return serverStatusRefreshMsg{}
 	}
@@ -428,8 +433,11 @@ func (s *ServerOptionsScreen) disconnectAction(force bool, enabled bool) tea.Cmd
 
 func (s *ServerOptionsScreen) handleApply() tea.Cmd {
 	return func() tea.Msg {
-		serverInfo := serve.Sessions.ReadServerInfo()
-		if serverInfo.PID != 0 && serve.ProcessExists(serverInfo.PID) {
+		if s.settingsMenu.AnyLocked() {
+			return nil
+		}
+		serverInfo := sessionlocks.Sessions.ReadServerInfo()
+		if serverInfo.PID != 0 && sessionlocks.ProcessExists(serverInfo.PID) {
 			if !tui.Confirm("Server Is Running",
 				"Changing server settings while the server is running may disconnect active remote sessions.\n\nApply anyway?",
 				false) {
@@ -533,6 +541,10 @@ func (s *ServerOptionsScreen) IsMaximized() bool {
 
 func (s *ServerOptionsScreen) MenuName() string {
 	return "server"
+}
+
+func (s *ServerOptionsScreen) IsDestructive() bool {
+	return true
 }
 
 // MinHeight: outer border(2) + settings section(5) + status section(4) + buttons(3) = 14.

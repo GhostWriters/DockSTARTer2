@@ -13,8 +13,8 @@ import (
 	"DockSTARTer2/internal/commands"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
-	"DockSTARTer2/internal/version"
 	"DockSTARTer2/internal/tui/components/sinput"
+	"DockSTARTer2/internal/version"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
@@ -39,6 +39,15 @@ type toggleLogPanelMsg struct{}
 
 // consoleLinesMsg carries a batch of lines from a running console command.
 type consoleLinesMsg struct{ lines []string }
+
+// ConsoleLockMsg is sent by any long-running operation to lock or unlock the
+// console input bar. ID must be a unique identifier for the operation (e.g. a
+// UUID or stable name). Send Locked:true when starting, Locked:false when done.
+// The input bar unlocks only when all registered lockers have released.
+type ConsoleLockMsg struct {
+	ID     string
+	Locked bool
+}
 
 // consoleDoneMsg signals that a console command has finished.
 type consoleDoneMsg struct {
@@ -83,8 +92,8 @@ type LogPanelModel struct {
 	consoleConfigChanged bool
 	consoleAppsChanged   bool
 
-	// sessionActive locks the input bar while a TUI screen is busy.
-	sessionActive bool
+	// sessionLockers tracks active locks by ID. Input is locked when non-empty.
+	sessionLockers map[string]struct{}
 }
 
 // applyInputStyles updates the sinput colours from the current theme.
@@ -135,14 +144,29 @@ func (m LogPanelModel) Height() int {
 // SetMaxHeight updates the externally imposed height ceiling. Pass 0 to revert to default.
 func (m *LogPanelModel) SetMaxHeight(h int) { m.maxHeight = h }
 
-// SetSessionActive locks or unlocks the input bar.
-func (m *LogPanelModel) SetSessionActive(active bool) {
-	if active && m.inputFocused {
-		m.input.Blur()
-		m.inputFocused = false
+// lockSession adds or removes a locker by ID.
+// The input bar is locked while any lockers are registered.
+func (m *LogPanelModel) lockSession(id string, lock bool) {
+	if lock {
+		if m.sessionLockers == nil {
+			m.sessionLockers = make(map[string]struct{})
+		}
+		m.sessionLockers[id] = struct{}{}
+		if m.inputFocused {
+			m.input.Blur()
+			m.inputFocused = false
+		}
+	} else {
+		delete(m.sessionLockers, id)
 	}
-	m.sessionActive = active
 }
+
+// SetSessionActive is kept for compatibility; uses a fixed ID.
+func (m *LogPanelModel) SetSessionActive(active bool) {
+	m.lockSession("__session__", active)
+}
+
+func (m *LogPanelModel) sessionActive() bool { return len(m.sessionLockers) > 0 }
 
 // applyDragY computes the new panel height from the current mouse Y.
 func (m *LogPanelModel) applyDragY(mouseY int) {
@@ -303,7 +327,6 @@ func isDS2Prefix(tok string) bool {
 	return lower == cmdName || lower == "ds2" || lower == "ds"
 }
 
-
 // submitConsoleCommand parses and runs cmdStr.
 // ds2 commands (starting with - or prefixed with "ds2") are executed internally
 // via commands.Parse + commands.Execute; output flows through the logger subscription.
@@ -400,6 +423,10 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case ConsoleLockMsg:
+		m.lockSession(msg.ID, msg.Locked)
+		return m, nil
+
 	case ConfigChangedMsg:
 		m.applyInputStyles()
 		return m, nil
@@ -415,7 +442,7 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case consoleDoneMsg:
 		m.consoleScanner = nil
 		m.consoleCancel = nil
-		if !m.sessionActive {
+		if !m.sessionActive() {
 			m.inputFocused = true
 			cmd := m.input.Focus()
 			return m, tea.Batch(cmd, sinput.Blink)
@@ -613,7 +640,7 @@ func (m LogPanelModel) updateInputFocused(msg tea.KeyPressMsg) (tea.Model, tea.C
 // FocusInput transitions the panel to input-focused state (called from AppModel).
 // Returns the Blink command needed to activate the hardware cursor.
 func (m *LogPanelModel) FocusInput() tea.Cmd {
-	if m.sessionActive || !m.expanded {
+	if m.sessionActive() || !m.expanded {
 		return nil
 	}
 	m.inputFocused = true
@@ -668,10 +695,25 @@ func (m LogPanelModel) ViewString() string {
 	// Input box — bordered with submenu styling.
 	inputBoxWidth := m.width - 2 // inner content width (outer panel has no side borders)
 	m.input.SetWidth(inputBoxWidth - 2)
-	if m.sessionActive {
-		m.input.Placeholder = "Session active — input locked"
+	if m.sessionActive() {
+		m.input.Placeholder = ""
+		st := m.input.Styles()
+		st.Focused.Placeholder = SemanticRawStyle("MarkerLocked")
+		st.Blurred.Placeholder = SemanticRawStyle("MarkerLocked")
+		m.input.SetStyles(st)
+		marker := lockedMarker
+		if !ctx.LineCharacters {
+			marker = lockedMarkerAscii
+		}
+		// Consolidated lock marker and message into the Prompt for reliable styling
+		m.input.Prompt = RenderThemeText("{{|MarkerLocked|}}"+marker+" Session active — input locked{{[-]}} ", ctx.Dialog)
 	} else {
 		m.input.Placeholder = ""
+		st := m.input.Styles()
+		st.Focused.Placeholder = lipgloss.NewStyle()
+		st.Blurred.Placeholder = lipgloss.NewStyle()
+		m.input.SetStyles(st)
+		m.input.Prompt = "> "
 	}
 	inputTitleTag := "TitleSubMenu"
 	if m.inputFocused {
@@ -684,7 +726,7 @@ func (m LogPanelModel) ViewString() string {
 	inputBox := RenderBorderedBoxCtx(
 		"{{|"+inputTitleTag+"|}}Command{{[-]}}",
 		inputContent,
-		inputBoxWidth,
+		inputBoxWidth-2,
 		3,
 		m.inputFocused,
 		true,
@@ -693,6 +735,17 @@ func (m LogPanelModel) ViewString() string {
 		inputTitleTag,
 		ctx,
 	)
+
+	// Inject INS/OVR label into the bottom-left of the Command section border.
+	modeLabel := "INS"
+	if m.input.IsOverwrite() {
+		modeLabel = "OVR"
+	}
+	ibLines := strings.Split(inputBox, "\n")
+	if len(ibLines) > 0 {
+		ibLines[len(ibLines)-1] = BuildLabeledBottomBorderCtx(inputBoxWidth, modeLabel, m.inputFocused, ctx)
+		inputBox = strings.Join(ibLines, "\n")
+	}
 
 	combined := vpView + "\n" + inputBox
 
@@ -847,6 +900,25 @@ func (m LogPanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	}
 
 	return regions
+}
+
+// GetInputCursor returns the hardware cursor position relative to the panel's
+// top-left corner, cursor shape, and whether to show it.
+func (m LogPanelModel) GetInputCursor() (relX, relY int, shape tea.CursorShape, ok bool) {
+	if !m.expanded || !m.inputFocused || !m.input.Focused() {
+		return 0, 0, tea.CursorBar, false
+	}
+	// Vertical offset: 1 (top border) + viewport height + 1 (input top border)
+	vpH := m.height - 4
+	relY = vpH + 2
+	// Horizontal offset: 1 (outer border) + input cursor column (which includes prompt)
+	relX = 1 + m.input.CursorColumn()
+	if m.input.IsOverwrite() {
+		shape = tea.CursorBlock
+	} else {
+		shape = tea.CursorBar
+	}
+	return relX, relY, shape, true
 }
 
 // DragScrollbar scrolls the viewport to match the dragged thumb position.

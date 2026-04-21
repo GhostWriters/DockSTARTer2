@@ -32,7 +32,8 @@ type ScreenModel interface {
 	SetSize(width, height int)
 	IsMaximized() bool
 	HasDialog() bool
-	MenuName() string // Returns the name used for --menu or -M to return to this screen
+	MenuName() string      // Returns the name used for --menu or -M to return to this screen
+	IsDestructive() bool   // Returns true if this screen modifies data and needs an edit lock
 }
 
 // LayeredView is an interface for models that provide multiple visual layers
@@ -97,6 +98,11 @@ type (
 	// ToggleFocusedMsg requests toggling/activating the currently focused item
 	// This is triggered by middle mouse click and acts like pressing Space
 	ToggleFocusedMsg struct{}
+
+	// LockStateChangedMsg is sent when the global configuration lock state changes
+	LockStateChangedMsg struct {
+		LockedByOthers bool
+	}
 
 	// FinalizeSelectionMsg combines navigation and dialog display for atomic transitions
 	FinalizeSelectionMsg struct {
@@ -209,8 +215,13 @@ const HoverButton tea.MouseButton = 99
 
 // AppModel is the root Bubble Tea model
 type AppModel struct {
-	ctx    context.Context
-	config config.AppConfig
+	ctx      context.Context
+	config   config.AppConfig
+	clientIP string
+	connType string
+
+	// lockedByOthers indicates if the configuration is locked by another session
+	lockedByOthers bool
 
 	// Terminal dimensions
 	width  int
@@ -254,7 +265,7 @@ type AppModel struct {
 // NewAppModel creates a new application model.
 // initialStack is optional; pass parent screens (outermost first) to pre-populate
 // the navigation stack so that Back navigates to the parent rather than quitting.
-func NewAppModel(ctx context.Context, cfg config.AppConfig, startScreen ScreenModel, initialStack ...ScreenModel) *AppModel {
+func NewAppModel(ctx context.Context, cfg config.AppConfig, clientIP, connType string, startScreen ScreenModel, initialStack ...ScreenModel) *AppModel {
 	// Get initial help text from screen if available
 	helpText := ""
 	if startScreen != nil {
@@ -268,6 +279,8 @@ func NewAppModel(ctx context.Context, cfg config.AppConfig, startScreen ScreenMo
 	return &AppModel{
 		ctx:          ctx,
 		config:       cfg,
+		clientIP:     clientIP,
+		connType:     connType,
 		activeScreen: startScreen,
 		screenStack:  stack,
 		backdrop:     NewBackdropModel(helpText),
@@ -276,10 +289,12 @@ func NewAppModel(ctx context.Context, cfg config.AppConfig, startScreen ScreenMo
 }
 
 // NewAppModelStandalone creates a new application model that starts with a modal dialog only
-func NewAppModelStandalone(ctx context.Context, cfg config.AppConfig, dialog tea.Model) *AppModel {
+func NewAppModelStandalone(ctx context.Context, cfg config.AppConfig, clientIP, connType string, dialog tea.Model) *AppModel {
 	return &AppModel{
 		ctx:      ctx,
 		config:   cfg,
+		clientIP: clientIP,
+		connType: connType,
 		backdrop: NewBackdropModel(""),
 		logPanel: NewLogPanelModel(),
 		dialog:   dialog,

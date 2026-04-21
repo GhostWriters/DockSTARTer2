@@ -347,6 +347,17 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			s.outerMenu.InvalidateCache()
 		}
 		return s, nil
+
+	case tui.LockStateChangedMsg:
+		updated, uCmd := s.themeMenu.Update(msg)
+		if m, ok := updated.(*tui.MenuModel); ok {
+			s.themeMenu = m
+		}
+		updated, uCmd2 := s.optionsMenu.Update(msg)
+		if m, ok := updated.(*tui.MenuModel); ok {
+			s.optionsMenu = m
+		}
+		return s, tea.Batch(uCmd, uCmd2)
 	}
 
 	return s, cmd
@@ -486,9 +497,6 @@ func (s *DisplayOptionsScreen) HasDialog() bool {
 	return s.themeMenu.HasDialog() || s.optionsMenu.HasDialog()
 }
 
-func (s *DisplayOptionsScreen) MenuName() string {
-	return "appearance"
-}
 
 // MinHeight returns the minimum content-area height needed for the Appearance Settings
 // screen to remain interactive. Used by AppModel to limit log panel expansion.

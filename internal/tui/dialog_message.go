@@ -113,7 +113,7 @@ func (m *messageDialogModel) messageStyle() lipgloss.Style {
 func (m *messageDialogModel) contentWidth() int {
 	maxAllowed := m.layout.Width - 2
 	w := maxLineWidth(m.message) + DialogBodyPadH
-	if minBtn := lipgloss.Width(" OK ") + 4; minBtn > w {
+	if minBtn := lipgloss.Width(" OK ") + 4 + DialogBodyPadH; minBtn > w {
 		w = minBtn
 	}
 	fullTitle := m.titlePrefix() + GetPlainText(m.title) + m.titleSuffix()

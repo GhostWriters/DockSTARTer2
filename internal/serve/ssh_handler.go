@@ -6,30 +6,29 @@ import (
 	"strings"
 	"time"
 
+	"DockSTARTer2/internal/lockfile"
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/tui"
 
 	"github.com/charmbracelet/ssh"
 	"charm.land/wish/v2"
 )
 
-// sessionBusyMsg is sent to a connecting client when a primary session is
-// already active and the server is not configured to allow observers.
+// sessionBusyMsg is kept for potential future use or legacy compatibility.
 const sessionBusyMsg = "\r\nA DockSTARTer2 session is already active.\r\n" +
 	"Use 'ds2 --disconnect' on the host to force-release the session.\r\n\r\n"
 
 // tuiMiddleware returns a wish middleware that runs the DS2 TUI for each
-// incoming SSH session. If a session is already active the connection is
-// rejected with a clear message.
-func tuiMiddleware(mgr *SessionManager, startMenu string) wish.Middleware {
+// incoming SSH session.
+func tuiMiddleware(startMenu string) wish.Middleware {
 	return func(next ssh.Handler) ssh.Handler {
 		return func(s ssh.Session) {
 			ctx := s.Context()
 
 			clientIP := s.RemoteAddr().String()
-			connType := "ssh"
 			if s.User() == "web" {
-				connType = "web"
 				// The web proxy connects from loopback; read the real browser IP
 				// forwarded via the DS2_CLIENT_IP environment variable.
 				for _, env := range s.Environ() {
@@ -39,13 +38,14 @@ func tuiMiddleware(mgr *SessionManager, startMenu string) wish.Middleware {
 					}
 				}
 			}
-			if err := mgr.AcquirePrimary(clientIP, connType); err != nil {
-				logger.Info(ctx, "SSH connection rejected: session already active")
-				fmt.Fprint(s, sessionBusyMsg)
-				_ = s.Exit(1)
-				return
+
+			// We no longer block connections at the SSH level.
+			// Multiple sessions (local and remote) can coexist.
+			// We only use the remote lock to signal activity to the local TUI.
+			rlock, _ := lockfile.AcquireShared(paths.GetRemoteLockPath())
+			if rlock != nil {
+				defer rlock.Release()
 			}
-			defer mgr.ReleasePrimary()
 
 			ptyReq, windowCh, isPTY := s.Pty()
 			if !isPTY {
@@ -69,8 +69,8 @@ func tuiMiddleware(mgr *SessionManager, startMenu string) wish.Middleware {
 					case <-sessCtx.Done():
 						return
 					case <-ticker.C:
-						if mgr.IsDisconnectRequested() {
-							mgr.ClearDisconnectRequest()
+						if sessionlocks.Sessions.IsDisconnectRequested() {
+							sessionlocks.Sessions.ClearDisconnectRequest()
 							logger.Info(ctx, "Graceful disconnect requested — closing SSH session from %s", s.RemoteAddr())
 							cancel()
 							return
@@ -79,25 +79,14 @@ func tuiMiddleware(mgr *SessionManager, startMenu string) wish.Middleware {
 				}
 			}()
 
-			// Wire up window resize events: SSH sends window-change requests
-			// rather than SIGWINCH, so we forward them to the TUI via a
-			// goroutine that watches the channel wish provides.
-			//
-			// Pass the session environment so bubbletea picks up TERM,
-			// COLORTERM, etc. from the connecting client — this is how the
-			// wish bubbletea middleware achieves color support.
-			// Build the environment from what the client sent, ensuring TERM
-			// is set. We do NOT force a color profile — colorprofile will
-			// auto-detect from the client's COLORTERM/TERM values, so a
-			// 256-color client gets 256 colors and a TrueColor client gets
-			// TrueColor automatically.
 			envs := s.Environ()
 			envs = append(envs, "TERM="+ptyReq.Term)
+			envs = append(envs, "DS2_CLIENT_IP="+clientIP)
 			opts := tui.ProgramOptions{
-				Input:        s,
-				Output:       s,
-				WindowSize:   makeWindowSizeChan(ptyReq, windowCh, sessCtx),
-				Environ:      envs,
+				Input:         s,
+				Output:        s,
+				WindowSize:    makeWindowSizeChan(ptyReq, windowCh, sessCtx),
+				Environ:       envs,
 				InitialWidth:  ptyReq.Window.Width,
 				InitialHeight: ptyReq.Window.Height,
 			}

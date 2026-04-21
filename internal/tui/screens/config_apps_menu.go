@@ -53,16 +53,18 @@ func buildConfigAppItems(ctx context.Context, apps []string, envFile string) []t
 			Action:        navigateToAppConfigEditorWithRefresh(appName),
 			BaseApp:       appenv.AppNameToBaseAppName(appName),
 			IsUserDefined: isUserDefined,
+			IsDestructive: true,
 			Metadata:      map[string]string{"rawDesc": desc},
 		})
 	}
 
 	// Add an item to add a new application
 	items = append(items, tui.MenuItem{
-		Tag:    "<ADD APPLICATION>",
-		Desc:   "Add a new application to configure",
-		Help:   "Add a new application",
-		Action: nil,
+		Tag:           "<ADD APPLICATION>",
+		Desc:          "Add a new application to configure",
+		Help:          "Add a new application",
+		IsDestructive: true,
+		Action:        nil,
 	})
 	return items
 }

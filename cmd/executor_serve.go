@@ -9,6 +9,7 @@ import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/serve"
+	"DockSTARTer2/internal/sessionlocks"
 )
 
 // handleServer routes --server [subcommand] to the appropriate handler.
@@ -62,7 +63,7 @@ func handleServerStart(ctx context.Context, conf *config.AppConfig) error {
 	}
 
 	// Check if already running.
-	info := serve.Sessions.ReadServerInfo()
+	info := sessionlocks.Sessions.ReadServerInfo()
 	if info.PID != 0 {
 		logger.Notice(ctx, "Server is already running (PID %d, port %d).", info.PID, info.Port)
 		return nil
