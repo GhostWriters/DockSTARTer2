@@ -1,4 +1,4 @@
----
+---\n---
 extends: default
 rules:
   comments:
@@ -7,5 +7,4 @@ rules:
     present: false
   line-length: disable
   truthy:
-    check-keys: false
-
+    check-keys: false\n
