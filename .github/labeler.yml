@@ -1,4 +1,4 @@
----
+---\n---
 apps:
   - changed-files:
       - any-glob-to-any-file: ["compose/*", "compose/**/*"]
@@ -26,5 +26,4 @@ repo:
             '"!./*.md"',
             '"!./*.sh"',
             '"!.github/workflows/*"',
-          ]
-
+          ]\n

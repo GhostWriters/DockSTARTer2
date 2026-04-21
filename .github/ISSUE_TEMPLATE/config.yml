@@ -1,7 +1,6 @@
----
+---\n---
 blank_issues_enabled: false
 contact_links:
   - name: Support via Discord
     url: https://dockstarter.com/discord
-    about: Chat with users and devs on support and setup related topics.
-
+    about: Chat with users and devs on support and setup related topics.\n
