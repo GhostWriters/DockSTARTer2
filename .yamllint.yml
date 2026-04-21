@@ -1,10 +1,10 @@
----\n---
+---
 extends: default
 rules:
   comments:
     min-spaces-from-content: 1
-  document-start:
-    present: false
+  empty-lines:
+    max: 0
   line-length: disable
   truthy:
-    check-keys: false\n
+    check-keys: false
