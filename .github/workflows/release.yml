@@ -31,7 +31,7 @@ jobs:
     needs: test
     if: |
       always() &&
-      (needs.test.result == 'success' || inputs.force_release == true)
+      (needs.test.result == 'success' || github.event.inputs.force_release == 'true' || github.event.inputs.force_release == true)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -48,7 +48,8 @@ jobs:
         id: check
         run: |
           set -euo pipefail
-          FORCE="${{ inputs.force_release }}"
+          # Using github.event.inputs for workflow_dispatch and converting to lowercase for robustness
+          FORCE=$(echo "${{ github.event.inputs.force_release }}" | tr '[:upper:]' '[:lower:]')
           echo "Force Release: $FORCE"
 
           if [ "$FORCE" == "true" ]; then
