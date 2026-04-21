@@ -13,20 +13,20 @@ jobs:
   golangci-lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version-file: 'go.mod'
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
+          version: v1.64.8
           args: --timeout=5m
 
   markdownlint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@v4
       - name: markdownlint
         uses: davidanson/markdownlint-cli2-action@v16
         with:
@@ -35,7 +35,7 @@ jobs:
   yamllint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@v4
       - name: yamllint
         uses: ibiqlik/action-yamllint@v3
         with:
@@ -44,6 +44,6 @@ jobs:
   editorconfig-checker:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@v4
       - name: editorconfig-checker
         uses: editorconfig-checker/action-editorconfig-checker@v2
