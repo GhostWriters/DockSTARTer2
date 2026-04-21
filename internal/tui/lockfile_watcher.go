@@ -12,13 +12,13 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-// startLockFileWatcher watches for remote.lock create/delete events and sends
-// ConsoleLockMsg to the running program so the console input bar locks/unlocks
-// in response to an active SSH/web session on the server side.
+// startLockFileWatcher watches for lock file events in the locks directory
+// and sends ConsoleLockMsg to the running program so the console input bar
+// locks/unlocks in response to activity (SSH sessions or Edit modes).
 func startLockFileWatcher(ctx context.Context, p *tea.Program) {
-	lockPath := paths.GetRemoteLockPath()
-	stateDir := filepath.Dir(lockPath)
-	lockBase := filepath.Base(lockPath)
+	locksDir := paths.GetLocksDir()
+	remoteLockBase := filepath.Base(paths.GetRemoteLockPath())
+	editLockBase := "edit.lock"
 
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -26,18 +26,21 @@ func startLockFileWatcher(ctx context.Context, p *tea.Program) {
 		return
 	}
 
-	if err := watcher.Add(stateDir); err != nil {
-		logger.Debug(ctx, "lockfile watcher: cannot watch %s: %v", stateDir, err)
+	if err := watcher.Add(locksDir); err != nil {
+		logger.Debug(ctx, "lockfile watcher: cannot watch %s: %v", locksDir, err)
 		watcher.Close()
 		return
 	}
 
-	// Send initial state in case remote.lock already exists when TUI starts.
-	if lockfile.IsLocked(lockPath) {
-		p.Send(ConsoleLockMsg{ID: "remote.lock", Locked: true})
-	}
-
 	go func() {
+		// Initial state check - moved into goroutine to avoid blocking TUI startup
+		if lockfile.IsLocked(paths.GetRemoteLockPath()) {
+			p.Send(ConsoleLockMsg{ID: "remote.lock", Locked: true})
+		}
+		if lockfile.IsLocked(filepath.Join(locksDir, editLockBase)) {
+			p.Send(ConsoleLockMsg{ID: "edit.lock", Locked: true})
+		}
+
 		defer watcher.Close()
 		for {
 			select {
@@ -48,15 +51,16 @@ func startLockFileWatcher(ctx context.Context, p *tea.Program) {
 				if !ok {
 					return
 				}
-				if filepath.Base(event.Name) != lockBase {
+				base := filepath.Base(event.Name)
+				isRemote := base == remoteLockBase
+				isEdit := base == editLockBase
+				if !isRemote && !isEdit {
 					continue
 				}
-				switch {
-				case event.Has(fsnotify.Create) || event.Has(fsnotify.Write):
-					p.Send(ConsoleLockMsg{ID: "remote.lock", Locked: true})
-				case event.Has(fsnotify.Remove) || event.Has(fsnotify.Rename):
-					p.Send(ConsoleLockMsg{ID: "remote.lock", Locked: false})
-				}
+
+				lockID := base
+				locked := lockfile.IsLocked(event.Name)
+				p.Send(ConsoleLockMsg{ID: lockID, Locked: locked})
 
 			case err, ok := <-watcher.Errors:
 				if !ok {

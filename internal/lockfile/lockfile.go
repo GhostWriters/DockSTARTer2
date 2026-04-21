@@ -64,6 +64,13 @@ func (l *Lock) Release() {
 
 // IsLocked reports whether any lock (shared or exclusive) is held on the file at path.
 func IsLocked(path string) bool {
+	// If the file doesn't exist, it definitely isn't locked.
+	// This also prevents us from inadvertently creating the file on Windows
+	// just by checking its status.
+	if _, err := os.Stat(path); err != nil {
+		return false
+	}
+
 	f := flock.New(path)
 	// To check if ANY lock is held, we try to take an Exclusive lock.
 	// If it fails, someone else has a lock (shared or exclusive).

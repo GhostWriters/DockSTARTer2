@@ -91,6 +91,7 @@ MarkerAdded = "{{|Marker|}}"
 MarkerDeleted = "{{|Marker|}}"
 MarkerModified = "{{|Marker|}}"
 MarkerInvalid = "{{|Marker:::B|}}"
+MarkerLocked = "{{|MarkerInvalid|}}"
 
 EnvBuiltin = "{{|Dialog|}}"
 EnvUser = "{{|Dialog:::B|}}"

@@ -58,9 +58,9 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 					cb = radioSelected
 				}
 			} else {
-				cb = strings.TrimRight(radioUnselectedAscii, " ")
+				cb = radioUnselectedAscii
 				if item.Checked {
-					cb = strings.TrimRight(radioSelectedAscii, " ")
+					cb = radioSelectedAscii
 				}
 			}
 			prefix = tagStyle.Render(cb) + neutralStyle.Render(" ")
@@ -72,9 +72,9 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 					cb = checkSelected
 				}
 			} else {
-				cb = strings.TrimRight(checkUnselectedAscii, " ")
+				cb = checkUnselectedAscii
 				if item.Checked {
-					cb = strings.TrimRight(checkSelectedAscii, " ")
+					cb = checkSelectedAscii
 				}
 			}
 			prefix = tagStyle.Render(cb) + neutralStyle.Render(" ")
@@ -94,7 +94,23 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 			tagStr = tagStyle.Render(p) + keyStyle.Render(f) + tagStyle.Render(r)
 		}
 
-		itemContent := prefix + tagStr
+		itemGutter := ""
+		if m.showLockGutter {
+			lockChar := ""
+			if item.Locked {
+				lockChar = RenderThemeText("{{|MarkerLocked|}}!{{[-]}}", neutralStyle)
+			} else {
+				lockChar = neutralStyle.Render(" ")
+			}
+			itemGutter = lockChar
+		}
+
+		if m.activityGutterWidth >= 1 {
+			// For flow menus, we reserve space for activity but dont typically show it
+			itemGutter += neutralStyle.Render(strutil.Repeat(" ", m.activityGutterWidth))
+		}
+
+		itemContent := itemGutter + prefix + tagStr
 
 		// For non-checkbox/non-radio items (e.g. dropdowns), append the value inline.
 		// Neutral space (dialogBG) breaks the selection background color in the gap only.
@@ -183,7 +199,12 @@ func (m *MenuModel) GetFlowHeight(width int) int {
 			cbWidth = lipgloss.Width(glyph)
 		}
 
-		itemWidth := cbWidth + lipgloss.Width(GetPlainText(item.Tag))
+		lockMarkerWidth := 0
+		if m.showLockGutter {
+			lockMarkerWidth = m.StatusGutterWidth()
+		}
+
+		itemWidth := lockMarkerWidth + cbWidth + lipgloss.Width(GetPlainText(item.Tag))
 
 		// For non-checkbox/non-radio items, include the Desc width
 		// to match renderFlow which appends Desc inline

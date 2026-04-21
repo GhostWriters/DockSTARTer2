@@ -13,8 +13,8 @@ import (
 	"DockSTARTer2/internal/commands"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
-	"DockSTARTer2/internal/version"
 	"DockSTARTer2/internal/tui/components/sinput"
+	"DockSTARTer2/internal/version"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
@@ -326,7 +326,6 @@ func isDS2Prefix(tok string) bool {
 	cmdName := strings.ToLower(version.CommandName)
 	return lower == cmdName || lower == "ds2" || lower == "ds"
 }
-
 
 // submitConsoleCommand parses and runs cmdStr.
 // ds2 commands (starting with - or prefixed with "ds2") are executed internally
@@ -697,9 +696,24 @@ func (m LogPanelModel) ViewString() string {
 	inputBoxWidth := m.width - 2 // inner content width (outer panel has no side borders)
 	m.input.SetWidth(inputBoxWidth - 2)
 	if m.sessionActive() {
-		m.input.Placeholder = "Session active — input locked"
+		m.input.Placeholder = ""
+		st := m.input.Styles()
+		st.Focused.Placeholder = SemanticRawStyle("MarkerLocked")
+		st.Blurred.Placeholder = SemanticRawStyle("MarkerLocked")
+		m.input.SetStyles(st)
+		marker := lockedMarker
+		if !ctx.LineCharacters {
+			marker = lockedMarkerAscii
+		}
+		// Consolidated lock marker and message into the Prompt for reliable styling
+		m.input.Prompt = RenderThemeText("{{|MarkerLocked|}}"+marker+" Session active — input locked{{[-]}} ", ctx.Dialog)
 	} else {
 		m.input.Placeholder = ""
+		st := m.input.Styles()
+		st.Focused.Placeholder = lipgloss.NewStyle()
+		st.Blurred.Placeholder = lipgloss.NewStyle()
+		m.input.SetStyles(st)
+		m.input.Prompt = "> "
 	}
 	inputTitleTag := "TitleSubMenu"
 	if m.inputFocused {
@@ -712,7 +726,7 @@ func (m LogPanelModel) ViewString() string {
 	inputBox := RenderBorderedBoxCtx(
 		"{{|"+inputTitleTag+"|}}Command{{[-]}}",
 		inputContent,
-		inputBoxWidth,
+		inputBoxWidth-2,
 		3,
 		m.inputFocused,
 		true,
@@ -721,6 +735,17 @@ func (m LogPanelModel) ViewString() string {
 		inputTitleTag,
 		ctx,
 	)
+
+	// Inject INS/OVR label into the bottom-left of the Command section border.
+	modeLabel := "INS"
+	if m.input.IsOverwrite() {
+		modeLabel = "OVR"
+	}
+	ibLines := strings.Split(inputBox, "\n")
+	if len(ibLines) > 0 {
+		ibLines[len(ibLines)-1] = BuildLabeledBottomBorderCtx(inputBoxWidth, modeLabel, m.inputFocused, ctx)
+		inputBox = strings.Join(ibLines, "\n")
+	}
 
 	combined := vpView + "\n" + inputBox
 
@@ -875,6 +900,25 @@ func (m LogPanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	}
 
 	return regions
+}
+
+// GetInputCursor returns the hardware cursor position relative to the panel's
+// top-left corner, cursor shape, and whether to show it.
+func (m LogPanelModel) GetInputCursor() (relX, relY int, shape tea.CursorShape, ok bool) {
+	if !m.expanded || !m.inputFocused || !m.input.Focused() {
+		return 0, 0, tea.CursorBar, false
+	}
+	// Vertical offset: 1 (top border) + viewport height + 1 (input top border)
+	vpH := m.height - 4
+	relY = vpH + 2
+	// Horizontal offset: 1 (outer border) + input cursor column (which includes prompt)
+	relX = 1 + m.input.CursorColumn()
+	if m.input.IsOverwrite() {
+		shape = tea.CursorBlock
+	} else {
+		shape = tea.CursorBar
+	}
+	return relX, relY, shape, true
 }
 
 // DragScrollbar scrolls the viewport to match the dragged thumb position.

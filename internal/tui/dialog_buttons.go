@@ -69,9 +69,12 @@ func GetButtonHitRegions(hCtx HelpContext, dialogID string, offsetX, offsetY, co
 			id = dialogID + "." + btn.ZoneID
 		}
 
+		// Center the button within its calculated section
+		btnX := layout.Offsets[i] + (layout.Widths[i]-layout.ButtonWidth)/2
+
 		region := HitRegion{
 			ID:     id,
-			X:      offsetX + layout.Offsets[i],
+			X:      offsetX + btnX,
 			Y:      offsetY,
 			Width:  layout.ButtonWidth,
 			Height: layout.ButtonHeight,
@@ -97,12 +100,14 @@ func GetButtonHitRegions(hCtx HelpContext, dialogID string, offsetX, offsetY, co
 // Both the render path and the hit-region path derive from this single value,
 // guaranteeing they can never disagree.
 type ButtonLayout struct {
-	SectionWidth int   // contentWidth / numButtons
+	SectionWidth int   // Base width (contentWidth / numButtons)
 	ButtonWidth  int   // visual width of each button (all buttons are the same width)
 	ButtonHeight int   // 1 (flat) or 3 (bordered)
 	UseBorders   bool
-	// Offsets[i] is the X offset of button i relative to the offsetX passed to the caller.
+	// Offsets[i] is the X offset of the START of section i.
 	Offsets []int
+	// Widths[i] is the width of section i.
+	Widths []int
 }
 
 // ComputeButtonLayout calculates the shared geometry for a button row,
@@ -140,17 +145,22 @@ func computeButtonLayoutExplicit(contentWidth int, useBorders bool, ctx StyleCon
 		buttonHeight = 3
 	}
 	numButtons := len(buttons)
-	sectionWidth := contentWidth / numButtons
 	offsets := make([]int, numButtons)
-	for i := range buttons {
-		offsets[i] = i*sectionWidth + (sectionWidth-buttonWidth)/2
+	widths := make([]int, numButtons)
+	for i := 0; i < numButtons; i++ {
+		start := i * contentWidth / numButtons
+		end := (i + 1) * contentWidth / numButtons
+		offsets[i] = start
+		widths[i] = end - start
 	}
+
 	return ButtonLayout{
-		SectionWidth: sectionWidth,
+		SectionWidth: contentWidth / numButtons,
 		ButtonWidth:  buttonWidth,
 		ButtonHeight: buttonHeight,
 		UseBorders:   useBorders,
 		Offsets:      offsets,
+		Widths:       widths,
 	}
 }
 
@@ -270,9 +280,9 @@ func renderCenteredButtonsImpl(contentWidth int, useBorders bool, ctx StyleConte
 	}
 
 	var sections []string
-	for _, btn := range renderedButtons {
+	for i, btn := range renderedButtons {
 		centeredBtn := lipgloss.NewStyle().
-			Width(layout.SectionWidth).
+			Width(layout.Widths[i]).
 			Align(lipgloss.Center).
 			Background(ctx.Dialog.GetBackground()).
 			Render(btn)

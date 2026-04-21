@@ -16,6 +16,7 @@ import (
 
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/serve"
+	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/update"
 	"DockSTARTer2/internal/version"
@@ -52,8 +53,8 @@ func handleConfigPm(ctx context.Context, group *CommandGroup) error {
 
 func handleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, restArgs []string) error {
 	// Capture server state and executable path before the update replaces the binary.
-	serverInfo := serve.Sessions.ReadServerInfo()
-	wasServerRunning := serverInfo.PID != 0 && serve.ProcessExists(serverInfo.PID)
+	serverInfo := sessionlocks.Sessions.ReadServerInfo()
+	wasServerRunning := serverInfo.PID != 0 && sessionlocks.ProcessExists(serverInfo.PID)
 	execPath, execErr := os.Executable()
 
 	switch group.Command {

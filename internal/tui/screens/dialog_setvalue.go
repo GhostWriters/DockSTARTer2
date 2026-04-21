@@ -110,6 +110,10 @@ func (m *setValueDialogModel) MenuName() string { return "" }
 // HasDialog implements tui.ScreenModel.
 func (m *setValueDialogModel) HasDialog() bool { return false }
 
+func (m *setValueDialogModel) IsDestructive() bool {
+	return true
+}
+
 func (m *setValueDialogModel) Init() tea.Cmd {
 	return sinput.Blink
 }

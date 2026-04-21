@@ -14,6 +14,7 @@ import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/docker"
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/update"
 
@@ -143,6 +144,22 @@ func NewProgram(model tea.Model, opts ProgramOptions) *tea.Program {
 	return p
 }
 
+// parseClientInfo extracts IP and connection type from environment strings.
+func parseClientInfo(environ []string) (string, string) {
+	clientIP := "local"
+	connType := "cli"
+	for _, env := range environ {
+		if strings.HasPrefix(env, "DS2_CLIENT_IP=") {
+			clientIP = strings.TrimPrefix(env, "DS2_CLIENT_IP=")
+			connType = "web"
+		}
+		if strings.HasPrefix(env, "SSH_CONNECTION=") {
+			connType = "ssh"
+		}
+	}
+	return clientIP, connType
+}
+
 // startWindowSizeForwarder launches a goroutine that reads from opts.WindowSize
 // and sends tea.WindowSizeMsg to the program. The goroutine exits when ctx is
 // cancelled or the channel is closed.
@@ -164,6 +181,9 @@ func startWindowSizeForwarder(ctx context.Context, p *tea.Program, opts ProgramO
 		}
 	}()
 }
+// IsDestructive reports whether this menu can modify data.
+// Default for MenuModel is false (read-only navigation).
+func (m *MenuModel) IsDestructive() bool { return false }
 
 // Start launches the TUI application
 func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error {
@@ -171,6 +191,7 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	if len(opts) > 0 {
 		pOpts = opts[0]
 	}
+	clientIP, connType := parseClientInfo(pOpts.Environ)
 	isSSH := pOpts.Input != nil
 
 	// Enable Virtual Terminal Processing (ANSI) on Windows early so color detection works
@@ -192,6 +213,7 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	defer func() { logger.TUIMode = false }()
 
 	logger.Info(ctx, "TUI Starting...")
+	defer sessionlocks.Sessions.ReleaseEditLock()
 
 	// Global panic recovery
 	defer func() {
@@ -229,7 +251,7 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	}
 
 	// Create the app model
-	model := NewAppModel(ctx, currentConfig, startScreen, initialStack...)
+	model := NewAppModel(ctx, currentConfig, clientIP, connType, startScreen, initialStack...)
 
 	// Create and run the Bubble Tea program
 	// Note: AltScreen is set via View().AltScreen in v2
@@ -340,6 +362,7 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 			logger.FatalWithStack(ctx, "TUI Panic: %v", r)
 		}
 	}()
+	defer sessionlocks.Sessions.ReleaseEditLock()
 
 	if err := Initialize(ctx); err != nil {
 		return err
@@ -366,7 +389,8 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 		}
 	}
 
-	model := NewAppModel(ctx, currentConfig, startScreen, initialStack...)
+	ip, ctype := parseClientInfo(pOpts.Environ)
+	model := NewAppModel(ctx, currentConfig, ip, ctype, startScreen, initialStack...)
 	p := NewProgram(model, pOpts)
 	programExited = make(chan struct{})
 
@@ -439,6 +463,7 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 			logger.FatalWithStack(ctx, "TUI Panic: %v", r)
 		}
 	}()
+	defer sessionlocks.Sessions.ReleaseEditLock()
 
 	if err := Initialize(ctx); err != nil {
 		return err
@@ -510,7 +535,8 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 
 	startScreen := varEditorFactory(varName, displayAppName, appDesc, file, origVal, opts, helpText, docMarkdown, docAppName, onSave, tea.Quit)
 
-	model := NewAppModel(ctx, currentConfig, startScreen)
+	ip, ctype := parseClientInfo(pOpts.Environ)
+	model := NewAppModel(ctx, currentConfig, ip, ctype, startScreen)
 	p := NewProgram(model, pOpts)
 	programExited = make(chan struct{})
 
@@ -551,11 +577,14 @@ func Shutdown() {
 			<-programExited
 		}
 	}
+	sessionlocks.Sessions.ReleaseEditLock()
 }
 
 // EmergencyShutdown forcefully restores the terminal using raw ANSI escape codes.
 // This is used during panic recovery where a standard Shutdown() might deadlock.
 func EmergencyShutdown() {
+	sessionlocks.Sessions.ReleaseEditLock()
+
 	// Signal that the TUI is dying to freeze the renderer goroutine
 	console.SetTUIDying(true)
 

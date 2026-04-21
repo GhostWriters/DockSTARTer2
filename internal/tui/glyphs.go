@@ -1,6 +1,5 @@
 package tui
 
-
 const (
 	// radioSelected (◉) - Fisheye (U+25C9)
 	radioSelected = "\u25C9"
@@ -14,13 +13,18 @@ const (
 
 	// subMenuExpanded (▼) - Black Down-Pointing Triangle (U+25BC) — group header is always expanded
 	subMenuExpanded      = "\u25BC"
-	subMenuExpandedAscii = "[v] "
+	subMenuExpandedAscii = "[v]"
 
 	// ASCII variants
-	radioSelectedAscii   = "(*) "
-	radioUnselectedAscii = "( ) "
-	checkSelectedAscii   = "[x] "
-	checkUnselectedAscii = "[ ] "
+	radioSelectedAscii   = "(*)"
+	radioUnselectedAscii = "( )"
+	checkSelectedAscii   = "[x]"
+	checkUnselectedAscii = "[ ]"
+
 	invalidMarker        = "!"
 	invalidMarkerAscii   = "!"
+
+	// lockedMarker (✗) - Ballot X (U+2717) + VS15 (\uFE0E) for text style
+	lockedMarker      = "\u2717\uFE0E"
+	lockedMarkerAscii = "!"
 )

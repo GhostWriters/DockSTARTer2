@@ -41,6 +41,22 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case LockStateChangedMsg:
+		m.SetLockedByOthers(msg.LockedByOthers)
+		return m, nil
+
+	case tea.KeyPressMsg:
+		switch {
+		case key.Matches(msg, Keys.Enter), key.Matches(msg, Keys.Space):
+			if sel := m.list.SelectedItem(); sel != nil {
+				if item, ok := sel.(MenuItem); ok && item.Locked {
+					return m, nil // Block interaction for locked items
+				}
+			}
+		}
+	}
+
+	switch msg := msg.(type) {
 
 	case ToggleFocusedMsg:
 		// Middle click triggers toggle on the currently focused item
@@ -422,6 +438,9 @@ func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 		selectedItem := m.list.SelectedItem()
 		if item, ok := selectedItem.(MenuItem); ok {
 			if item.Action != nil {
+				if item.Locked {
+					return m, nil
+				}
 				// Update cursor for persistence
 				m.cursor = m.list.Index()
 				menuSelectedIndices[m.id] = m.cursor
@@ -454,6 +473,9 @@ func (m *MenuModel) handleSpace() (tea.Model, tea.Cmd) {
 	selectedItem := m.list.SelectedItem()
 	if item, ok := selectedItem.(MenuItem); ok {
 		if (item.IsCheckbox || item.IsRadioButton) && item.Selectable {
+			if item.Locked {
+				return m, nil
+			}
 			idx := m.list.Index()
 			if m.groupedMode && m.activeColumn == ColEnable {
 				item.Enabled = !item.Enabled
@@ -580,11 +602,10 @@ func (m *MenuModel) calculateLayout() {
 	if m.subMenuMode {
 		// Submenu: just has its own border, content fills the rest
 		maxListWidth, _ = layout.InnerContentSize(m.width, m.height)
+		maxListWidth -= layout.ContentMarginWidth()
 	} else {
-		// Full dialog: outer border + inner list border + padding (2 sides)
-		// Padding per side = 1 (fixed margin in ViewString)
-		padding := 2
-		maxListWidth = m.width - (layout.DialogBorder + layout.BorderWidth() + padding)
+		// Full dialog: Outer Border (2) + Margins (2) + Inner Border (2)
+		maxListWidth = m.width - (layout.BorderWidth() + layout.ContentMarginWidth() + layout.BorderWidth())
 	}
 
 	// Minimum width to avoid squished buttons

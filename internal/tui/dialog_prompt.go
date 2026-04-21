@@ -211,12 +211,12 @@ func (m *promptDialogModel) contentWidth() int {
 	w := maxLineWidth(m.question) + DialogBodyPadH
 
 	// Input field: same Padding(0,1) so same +4 for the inner border
-	if iw := lipgloss.Width(m.input.View()) + 4; iw > w {
+	if iw := lipgloss.Width(m.input.View()) + 4 + DialogBodyPadH; iw > w {
 		w = iw
 	}
 
 	// Buttons
-	minBtn := lipgloss.Width("OK") + 4 + lipgloss.Width("Cancel") + 4 + 4
+	minBtn := lipgloss.Width("OK") + 4 + lipgloss.Width("Cancel") + 4 + 4 + DialogBodyPadH
 	if minBtn > w {
 		w = minBtn
 	}

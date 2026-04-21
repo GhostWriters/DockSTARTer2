@@ -132,7 +132,7 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *confirmDialogModel) contentWidth() int {
 	maxAllowed := m.layout.Width - 2
 	w := maxLineWidth(m.question) + DialogBodyPadH
-	if minBtn := lipgloss.Width("Yes") + 4 + lipgloss.Width("No") + 4 + 4; minBtn > w {
+	if minBtn := lipgloss.Width("Yes") + 4 + lipgloss.Width("No") + 4 + 4 + DialogBodyPadH; minBtn > w {
 		w = minBtn
 	}
 	if tw := lipgloss.Width(GetPlainText(m.title)) + 6; tw > w {
