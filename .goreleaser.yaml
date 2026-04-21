@@ -1,3 +1,4 @@
+---
 version: 2
 
 project_name: ds2
@@ -20,15 +21,16 @@ builds:
       - -X DockSTARTer2/internal/version.BuildDate={{.Date}}
 
 archives:
-  - format: tar.gz
+
+  - formats:
+      - tar.gz
     # this name template makes the OS and Arch compatible with the results of uname.
     name_template: >-
       {{ .ProjectName }}_
       {{- .Version }}_
       {{- .Os }}_
       {{- .Arch }}
-    builds:
-      - ds2
+    # builds: [ds2] # Removed (deprecated)
     files:
       - README.md
       - LICENSE
@@ -52,3 +54,4 @@ release:
   draft: false
   replace_existing_draft: true
   replace_existing_artifacts: true
+
