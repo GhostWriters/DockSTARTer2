@@ -336,6 +336,20 @@ func (m *AppModel) View() (v tea.View) {
 		}
 	}
 
+	// If no dialog or screen claimed the cursor, ask the log panel (the console).
+	if v.Cursor == nil {
+		if cp, ok := interface{}(m.logPanel).(InputCursorProvider); ok {
+			rx, ry, shape, show := cp.GetInputCursor()
+			if show {
+				logY := m.height - m.logPanel.Height()
+				c := tea.NewCursor(rx, logY+ry)
+				c.Shape = shape
+				c.Blink = true
+				v.Cursor = c
+			}
+		}
+	}
+
 	return v
 }
 

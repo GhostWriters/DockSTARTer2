@@ -842,7 +842,6 @@ func (m *MenuModel) SetLockedByOthers(locked bool) {
 		m.list.SetItems(items)
 		m.renderVersion++
 		m.cacheValid = false
-		m.showLockGutter = locked
 	}
 
 	// Propagate to sub-menus
