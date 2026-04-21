@@ -195,7 +195,18 @@ func (m *SessionManager) ReleaseServer() {
 }
 
 func (m *SessionManager) ReadEditInfo() SessionInfo {
-	pid, fields := readInfoFile(m.editLockPath)
+	// Robust read with retries to handle Windows file-sharing races where fsnotify triggers
+	// before the file is fully written or the handle released.
+	var pid int
+	var fields []string
+	for i := 0; i < 5; i++ {
+		pid, fields = readInfoFile(m.editLockPath)
+		if pid != 0 && len(fields) >= 2 {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
 	si := SessionInfo{PID: pid}
 	if len(fields) > 0 {
 		si.ClientIP = fields[0]

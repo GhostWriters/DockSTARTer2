@@ -40,6 +40,24 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case LockStateChangedMsg:
+		// Broadcast lock changes to both the active screen and any open dialog
+		// to ensure background items update even if a dialog has focus.
+		if m.activeScreen != nil {
+			_, cmd := m.activeScreen.Update(msg)
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		if m.dialog != nil {
+			var cmd tea.Cmd
+			m.dialog, cmd = m.dialog.Update(msg)
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		return m, logger.BatchRecoverTUI(m.ctx, cmds...)
+
 	case toggleLogPanelMsg:
 		updated, cmd := m.logPanel.Update(msg)
 		m.logPanel = updated.(LogPanelModel)
@@ -550,7 +568,10 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// edit.lock state sync
 		if msg.ID == "edit.lock" {
-			lockedByOthers := msg.Locked && !sessionlocks.Sessions.HoldEditLockLocal()
+			info := sessionlocks.Sessions.ReadEditInfo()
+			// If locked locally by the Console, we still treat it as "other" for the menu items
+			// to ensure destructive options are restricted while the console command runs.
+			lockedByOthers := msg.Locked && (!sessionlocks.Sessions.HoldEditLockLocal() || info.ConnType == "Console")
 			if lockedByOthers != m.lockedByOthers {
 				m.lockedByOthers = lockedByOthers
 				// Relay the change to the active screen for Menu '!' indicators
