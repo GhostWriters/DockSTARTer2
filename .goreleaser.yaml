@@ -1,65 +1,47 @@
----
-version: 2
-
-project_name: ds2
-
-before:
-  hooks:
-    - go mod tidy
-    - go generate ./...
-
 builds:
-  - env:
+  - id: ds2
+    binary: ds2
+    env:
       - CGO_ENABLED=0
     goos:
       - linux
       - darwin
-      - windows
     goarch:
       - amd64
-      - arm
       - arm64
-    goarm:
-      - "6"
-      - "7"
-    binary: ds2
+    ldflags:
+      - -s -w
+      - -X DockSTARTer2/internal/version.Version={{.Tag}}
+      - -X DockSTARTer2/internal/version.Commit={{.Commit}}
+      - -X DockSTARTer2/internal/version.BuildDate={{.Date}}
 
 archives:
   - format: tar.gz
+    # this name template makes the OS and Arch compatible with the results of uname.
     name_template: >-
       {{ .ProjectName }}_
+      {{- .Version }}_
       {{- .Os }}_
       {{- .Arch }}
-      {{- if .Arm }}v{{ .Arm }}{{ end }}
-    format_overrides:
-      - goos: windows
-        format: zip
+    builds:
+      - ds2
+    files: []
 
-nfpms:
-  - maintainer: nemchik <nemchik@gmail.com>
-    description: DockSTARTer - easiest way to get started with Docker
-    homepage: https://dockstarter.com
-    license: MIT
-    formats:
-      - deb
-      - rpm
-    overrides:
-      deb:
-        file_name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Arch }}"
-      rpm:
-        file_name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Arch }}"
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: "{{ .Tag }}-next"
 
 changelog:
   sort: asc
   filters:
     exclude:
-      - "^docs:"
-      - "^test:"
+      - '^docs:'
+      - '^test:'
 
 release:
-  github:
-    owner: GhostWriters
-    name: DockSTARTer2
+  # IF the version has a hyphen (e.g. v2024.01.20.1-feature), it's a prerelease.
   prerelease: auto
   draft: false
   replace_existing_draft: true
