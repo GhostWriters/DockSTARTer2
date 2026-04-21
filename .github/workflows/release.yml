@@ -8,12 +8,80 @@ on:
         type: boolean
         required: false
         default: false
-
-permissions:
-  contents: write
+      ignore_test_failures:
+        description: 'Allow release even if tests/lints fail'
+        type: boolean
+        required: false
+        default: false
 
 jobs:
+  check:
+    name: Check for Changes
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.decide.outputs.should_run }}
+      suffix: ${{ steps.suffix.outputs.value }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine Suffix
+        id: suffix
+        run: |
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
+            echo "value=" >> $GITHUB_OUTPUT
+          else
+            echo "value=-${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Detection Logic
+        id: decide
+        run: |
+          set -euo pipefail
+          
+          # Harvesting inputs
+          FORCE_CHANGES=$(echo "${{ github.event.inputs.force_release }}" | tr '[:upper:]' '[:lower:]')
+          SUFFIX="${{ steps.suffix.outputs.value }}"
+          
+          echo "Force Release (Changes): $FORCE_CHANGES"
+          echo "Channel Suffix: $SUFFIX"
+
+          if [[ "$FORCE_CHANGES" == "true" ]]; then
+            echo "Release forced by user input."
+            echo "should_run=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Find the last tag specifically for this channel
+          # If no tag found, we assume a first-time release for this channel and run
+          LAST_TAG=$(git describe --tags --abbrev=0 --match "v2.*$SUFFIX" 2>/dev/null || echo "")
+          echo "Last tag for channel [$SUFFIX]: ${LAST_TAG:-NONE}"
+
+          if [[ -z "$LAST_TAG" ]]; then
+            echo "No previous tag found for this channel. Proceeding with initial release."
+            echo "should_run=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Get changed files since last channel tag
+          CHANGED=$(git diff --name-only "$LAST_TAG" HEAD)
+          echo "Changed files:"
+          echo "$CHANGED"
+
+          if echo "$CHANGED" | grep -Eqv '^(docs/|\.github/|\.gitignore|\.editorconfig|README\.md|LICENSE)'; then
+            echo "Meaningful changes detected."
+            echo "should_run=true" >> $GITHUB_OUTPUT
+          else
+            echo "No meaningful changes detected for this channel."
+            echo "should_run=false" >> $GITHUB_OUTPUT
+          fi
+
   test:
+    name: Run Tests
+    needs: [check]
+    if: needs.check.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -22,16 +90,41 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: 'go.mod'
+          go-version: '1.24'
+          cache: true
 
-      - name: Run Unit Tests
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Run Linter
+        id: lint
+        # Continue on error if user requested it, but we still mark it as failed for the release job's logic
+        continue-on-error: true
+        run: |
+          if [ -f .golangci.yml ]; then
+            go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+            golangci-lint run ./...
+          else
+            go vet ./...
+          fi
+
+      - name: Run Tests
+        id: unit_tests
+        continue-on-error: true
         run: go test -v ./...
 
+      - name: Final Test Status
+        run: |
+          if [[ "${{ steps.lint.outcome }}" == "failure" || "${{ steps.unit_tests.outcome }}" == "failure" ]]; then
+            echo "Tests failed."
+            exit 1
+          fi
+
   release:
-    needs: test
-    if: |
-      always() &&
-      (needs.test.result == 'success' || github.event.inputs.force_release == 'true' || github.event.inputs.force_release == true)
+    name: Execute Release
+    needs: [check, test]
+    # Always run if check passed, so we can decide based on force flags if test failed
+    if: always() && needs.check.result == 'success' && needs.check.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -39,142 +132,49 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Validate Release Eligibility
+        run: |
+          TEST_RESULT="${{ needs.test.result }}"
+          IGNORE_FAILURES=$(echo "${{ github.event.inputs.ignore_test_failures }}" | tr '[:upper:]' '[:lower:]')
+          
+          echo "Test Job Result: $TEST_RESULT"
+          echo "Ignore Test Failures: $IGNORE_FAILURES"
+
+          if [[ "$TEST_RESULT" != "success" && "$IGNORE_FAILURES" != "true" ]]; then
+            echo "Tests failed and 'ignore_test_failures' is NOT set. Aborting release."
+            exit 1
+          fi
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: 'go.mod'
-
-      - name: Check for Changes
-        id: check
-        run: |
-          set -euo pipefail
-          # Using github.event.inputs for workflow_dispatch and converting to lowercase for robustness
-          FORCE=$(echo "${{ github.event.inputs.force_release }}" | tr '[:upper:]' '[:lower:]')
-          echo "Force Release: $FORCE"
-
-          if [ "$FORCE" == "true" ]; then
-            echo "Release forced by user."
-            echo "skip=false" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          git fetch --tags --force
-
-          # Check if current commit is already tagged
-          TAG_AT_HEAD=$(git tag --points-at HEAD)
-
-          if [ -n "$TAG_AT_HEAD" ]; then
-            echo "Current commit is manually tagged ($TAG_AT_HEAD). Comparing against previous tag."
-            LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-          else
-            LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          fi
-
-          if [ -z "$LAST_TAG" ]; then
-            echo "No tags found. Assuming first release."
-            echo "skip=false" >> $GITHUB_OUTPUT
-          else
-            echo "Last tag: $LAST_TAG"
-            CHANGED=$(git diff --name-only "$LAST_TAG" HEAD)
-
-            if [ -z "$CHANGED" ]; then
-              echo "No file changes found."
-              echo "skip=true" >> $GITHUB_OUTPUT
-            else
-              echo "Changed files:"
-              echo "$CHANGED"
-
-              # Check for non-ignored files
-              # returns 0 if matches found (meaningful changes)
-              if echo "$CHANGED" | grep -Eqv '^(docs/|\.github/|\.gitignore|\.editorconfig|README\.md|LICENSE)'; then
-                echo "Meaningful changes detected."
-                echo "skip=false" >> $GITHUB_OUTPUT
-              else
-                echo "No meaningful changes detected."
-                echo "skip=true" >> $GITHUB_OUTPUT
-              fi
-            fi
-          fi
+          go-version: '1.24'
+          cache: true
 
       - name: Generate Version Tag
-        if: steps.check.outputs.skip == 'false'
         id: tag
         run: |
           set -euo pipefail
-          # Versioning Scheme: v2.YYYYMMDD.N[-Suffix]
-          # Major: 2
-          # Minor: YYYYMMDD
-          # Patch: N (Daily build counter)
-
-          # Example: v2.20260121.1
-
+          SUFFIX="${{ needs.check.outputs.suffix }}"
           TODAY_INT=$(date -u +'%Y%m%d')
-          PREFIX="v2.${TODAY_INT}"
-
-          git fetch --tags --force
-
-          if [[ "${{ github.ref_name }}" == "main" ]]; then
-            SUFFIX=""
-            # Match v2.YYYYMMDD.N
-            REGEX="^${PREFIX}\.[0-9]+$"
-          else
-            SAFE_BRANCH=$(echo "${{ github.ref_name }}" | sed 's/[^a-zA-Z0-9]/-/g')
-            SUFFIX="-${SAFE_BRANCH}"
-            # Match v2.YYYYMMDD.N-branch
-            REGEX="^${PREFIX}\.[0-9]+${SUFFIX}$"
-          fi
-
-          echo "Scope: ${{ github.ref_name }}"
-          echo "Suffix: '$SUFFIX'"
-          echo "Regex: '$REGEX'"
-
-          MAX_N="-1"
-
-          # Get all tags for this "Minor" version (v2.YYYYMMDD.*)
-          TAGS=$(git tag -l "${PREFIX}*")
-
-          for tag in $TAGS; do
-            if [[ "$tag" =~ $REGEX ]]; then
-              # Strip suffix: v2.YYYYMMDD.N
-              base="${tag%$SUFFIX}"
-              # Extract Patch (N): Remove v2.YYYYMMDD.
-              n="${base#$PREFIX.}"
-
-              # Ensure n is numeric
-              if [[ "$n" =~ ^[0-9]+$ ]]; then
-                if (( n > MAX_N )); then
-                  MAX_N=$n
-                fi
-              fi
-            fi
-          done
-
-          if [ "$MAX_N" == "-1" ]; then
-            NEXT_N=1
-          else
-            NEXT_N=$((MAX_N + 1))
-          fi
-
-          FINAL_VER="${PREFIX}.${NEXT_N}${SUFFIX}"
-
-          echo "Generated Version: $FINAL_VER"
-          echo "version=$FINAL_VER" >> $GITHUB_OUTPUT
-
-      - name: Tag Commit
-        if: steps.check.outputs.skip == 'false'
-        run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git tag -a "${{ steps.tag.outputs.version }}" -m "Release ${{ steps.tag.outputs.version }}"
-          git push origin "${{ steps.tag.outputs.version }}"
+          
+          # Find highest sequence number (N) for today in this channel
+          LAST_N=$(git tag -l "v2.$TODAY_INT.*$SUFFIX" | sed "s/v2.$TODAY_INT.//" | sed "s/$SUFFIX//" | sort -n | tail -n 1)
+          NEW_N=$(( ${LAST_N:-0} + 1 ))
+          NEW_TAG="v2.$TODAY_INT.$NEW_N$SUFFIX"
+          
+          echo "New tag: $NEW_TAG"
+          echo "tag=$NEW_TAG" >> $GITHUB_OUTPUT
+          
+          git tag "$NEW_TAG"
+          git push origin "$NEW_TAG"
 
       - name: Run GoReleaser
-        if: steps.check.outputs.skip == 'false'
-        uses: goreleaser/goreleaser-action@v5
+        uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
-          version: '~> v2'
+          version: latest
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GORELEASER_CURRENT_TAG: ${{ steps.tag.outputs.version }}
+          GORELEASER_CURRENT_TAG: ${{ steps.tag.outputs.tag }}
