@@ -365,13 +365,6 @@ func (m *LogPanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 		args = tokens[1:]
 	}
 
-	// Log the raw input line first, distinguishing by the current panel mode.
-	if m.panelMode == "system" {
-		logger.Notice(context.Background(), "System Console command: '{{|UserCommand|}}%s{{[-]}}'", cmdStr)
-	} else {
-		logger.Notice(context.Background(), "Console command: '{{|UserCommand|}}%s{{[-]}}'", cmdStr)
-	}
-
 	// In restricted console mode, only ds2 commands are allowed — shell is blocked.
 	if m.panelMode == "console" && !isDS2 && !(len(args) > 0 && strings.HasPrefix(args[0], "-")) {
 		logger.Error(context.Background(), "Only ds2 commands are allowed in Console mode. Switch to 'System Console' for full shell access.")
@@ -414,6 +407,13 @@ func (m *LogPanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 		cmdCtx := console.WithTUIWriter(ctx, pw)
 
 		go func() {
+			// Log the command header into the pipe first
+			if m.panelMode == "system" {
+				logger.Notice(cmdCtx, "System Console command: '{{|UserCommand|}}%s{{[-]}}'", cmdStr)
+			} else {
+				logger.Notice(cmdCtx, "Console command: '{{|UserCommand|}}%s{{[-]}}'", cmdStr)
+			}
+
 			commands.Execute(cmdCtx, groups)
 			pw.Close()
 		}()
@@ -426,7 +426,6 @@ func (m *LogPanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 	}
 
 	// Shell command
-	logger.Notice(context.Background(), "System command: '{{|UserCommand|}}%s{{[-]}}'", cmdStr)
 	ctx, cancel := context.WithCancel(context.Background())
 	m.consoleCancel = cancel
 
@@ -460,7 +459,10 @@ func (m *LogPanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 
 			// 2. Run the user's original command line exactly as typed.
 			pr, pw := io.Pipe()
+			cmdCtx := console.WithTUIWriter(ctx, pw)
 			go func() {
+				// Log the command header into the pipe first
+				logger.Notice(cmdCtx, "System Console command: '{{|UserCommand|}}%s{{[-]}}'", cmdStr)
 				err := runShellCmd(ctx, cmdStr, pw, "")
 				pw.CloseWithError(err)
 			}()
@@ -472,7 +474,14 @@ func (m *LogPanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 	}
 
 	pr, pw := io.Pipe()
+	cmdCtx := console.WithTUIWriter(ctx, pw)
 	go func() {
+		// Log the command header into the pipe first
+		if m.panelMode == "system" {
+			logger.Notice(cmdCtx, "System Console command: '{{|UserCommand|}}%s{{[-]}}'", cmdStr)
+		} else {
+			logger.Notice(cmdCtx, "Console command: '{{|UserCommand|}}%s{{[-]}}'", cmdStr)
+		}
 		err := runShellCmd(ctx, cmdStr, pw, "")
 		pw.CloseWithError(err)
 	}()
