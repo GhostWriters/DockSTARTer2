@@ -59,13 +59,8 @@ func (h *TUIHandler) Handle(ctx context.Context, r slog.Record) error {
 			// Drop if full to prevent blocking
 		}
 	} else {
-		// Output to specific TUI writer if present in context (LOCAL command output)
-		// We use a goroutine to ensure that logging never blocks the execution of the task.
-		// This prevents deadlocks if the TUI is busy or its message queue is full.
 		if w, ok := ctx.Value(console.TUIWriterKey).(io.Writer); ok {
-			go func() {
-				fmt.Fprintln(w, tuiMsg)
-			}()
+			fmt.Fprintln(w, tuiMsg)
 		}
 	}
 
