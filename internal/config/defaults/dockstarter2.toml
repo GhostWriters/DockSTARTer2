@@ -7,14 +7,14 @@ borders            = true
 button_borders     = true
 line_characters    = true
 shadow             = true
-shadow_level       = 2        # 0=off 1=light(░) 2=medium(▒) 3=dark(▓) 4=solid(█)
+shadow_level       = 2          # 0=off 1=light(░) 2=medium(▒) 3=dark(▓) 4=solid(█)
 scrollbar          = true
-border_color       = 3        # 1=primary border colour, 2=secondary, 3=both
-dialog_title_align  = "center" # "center" or "left"
-submenu_title_align = "left"   # "center" or "left"
-log_title_align     = "center" # "center" or "left"
-panel_local         = "console" # "log", "console", or "none" (for local sessions)
-panel_remote        = "log"     # "log", "console", or "none" (for ssh/web sessions)
+border_color       = 3          # 1=primary border colour, 2=secondary, 3=both
+dialog_title_align  = "center"  # "center" or "left"
+submenu_title_align = "left"    # "center" or "left"
+log_title_align     = "center"  # "center" or "left"
+panel_local         = "console" # "none", "log", "console", or "system" (for local sessions)
+panel_remote        = "console" # "none", "log", "console", or "system" (for ssh/web sessions)
 
 [paths]
 config_folder  = "${XDG_CONFIG_HOME}"

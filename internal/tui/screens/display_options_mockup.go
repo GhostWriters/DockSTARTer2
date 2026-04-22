@@ -258,8 +258,11 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 
 	marker := "^"
 	titleText := "Console"
-	if pMode == "log" {
+	switch pMode {
+	case "log":
 		titleText = "Log"
+	case "system":
+		titleText = "System Console"
 	}
 	label := consoleTitleStyle.Render(" " + marker + " " + titleText + " " + marker + " ")
 

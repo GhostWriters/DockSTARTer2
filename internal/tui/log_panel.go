@@ -56,6 +56,9 @@ type consoleDoneMsg struct {
 	appsChanged   bool // refresh app list (RefreshAppsListMsg)
 }
 
+// sudoSuccessMsg signals that the user successfully authenticated via sudo.
+type sudoSuccessMsg struct{}
+
 // ─── Model ───────────────────────────────────────────────────────────────────
 
 // LogPanelModel is the slide-up console panel that lives below the helpline.
@@ -97,8 +100,9 @@ type LogPanelModel struct {
 
 	rawLines []string // un-wrapped, themed lines
 
-	panelMode string // "log", "console", or "none"
+	panelMode string // "log", "console", "system", or "none"
 	connType  string // "local", "ssh", or "web"
+	elevated  bool   // true if session was elevated via sudo
 }
 
 // applyInputStyles updates the sinput colours from the current theme.
@@ -356,12 +360,69 @@ func (m *LogPanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 		return nil
 	}
 
-	logger.Notice(context.Background(), "Console command: '{{|UserCommand|}}%s{{[-]}}'", cmdStr)
+	// sudo command: attempt to elevate the current session to System Console
+	if strings.ToLower(strings.TrimSpace(cmdStr)) == "sudo" {
+		logger.Notice(context.Background(), "Console command: '{{|UserCommand|}}sudo{{[-]}}'")
+		return func() tea.Msg {
+			pass, err := PromptText("Sudo Authentication", "Password:", true)
+			if err != nil {
+				// Don't show error if they just hit Esc/Cancel
+				if err == console.ErrUserAborted {
+					return consoleDoneMsg{}
+				}
+				return consoleDoneMsg{err: err}
+			}
+
+			// Validate password via sudo -S -v (updates sudo timestamp, does nothing else)
+			cmd := exec.Command("sudo", "-S", "-v")
+			cmd.Stdin = strings.NewReader(pass + "\n")
+			if err := cmd.Run(); err != nil {
+				// Check if the command itself was missing
+				if execErr, ok := err.(*exec.Error); ok && execErr.Err == exec.ErrNotFound {
+					return consoleDoneMsg{err: fmt.Errorf("sudo command not found on this system")}
+				}
+				return consoleDoneMsg{err: fmt.Errorf("sudo: authentication failed")}
+			}
+
+			return sudoSuccessMsg{}
+		}
+	}
 
 	isDS2 := isDS2Prefix(tokens[0])
 	args := tokens
 	if isDS2 {
 		args = tokens[1:]
+	}
+
+	// Log the raw input line first, distinguishing by the current panel mode.
+	if m.panelMode == "system" {
+		logger.Notice(context.Background(), "System Console command: '{{|UserCommand|}}%s{{[-]}}'", cmdStr)
+	} else {
+		logger.Notice(context.Background(), "Console command: '{{|UserCommand|}}%s{{[-]}}'", cmdStr)
+	}
+
+	// In restricted console mode, only ds2 commands are allowed — shell is blocked.
+	if m.panelMode == "console" && !isDS2 && !(len(args) > 0 && strings.HasPrefix(args[0], "-")) {
+		logger.Error(context.Background(), "Only ds2 commands are allowed in Console mode. Switch to 'System Console' for full shell access.")
+		return func() tea.Msg { return consoleDoneMsg{} }
+	}
+
+	// In restricted console mode, enforce ConsoleSafe flag from the command registry.
+	// This blocks privileged commands like --config-panel, --server, etc. even when
+	// typed as ds2 commands — preventing a remote user from self-upgrading their access.
+	if m.panelMode == "console" {
+		if isDS2 || (len(args) > 0 && strings.HasPrefix(args[0], "-")) {
+			groups, err := commands.Parse(args)
+			if err == nil {
+				for _, g := range groups {
+					if !commands.IsConsoleSafe(g.Command) {
+						logger.Error(context.Background(),
+							"Command '{{|UserCommand|}}%s{{[-]}}' is not permitted in Console mode.", g.Command)
+						return func() tea.Msg { return consoleDoneMsg{} }
+					}
+				}
+			}
+		}
 	}
 
 	// ds2 command: prefixed with ds/ds2/executable, or first token starts with -
@@ -394,6 +455,7 @@ func (m *LogPanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 	}
 
 	// Shell command
+	logger.Notice(context.Background(), "System command: '{{|UserCommand|}}%s{{[-]}}'", cmdStr)
 	ctx, cancel := context.WithCancel(context.Background())
 	m.consoleCancel = cancel
 
@@ -487,11 +549,24 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ConfigChangedMsg:
 		m.panelMode = EffectivePanelMode(msg.Config, m.connType)
+		// Preserve elevation: if we were elevated and the new config says "console",
+		// keep us at "system" level.
+		if m.elevated && m.panelMode == "console" {
+			m.panelMode = "system"
+		}
 		if m.panelMode == "none" {
 			m.expanded = false
 		}
 		m.SetSize(m.width, m.totalHeight)
 		m.applyInputStyles()
+		return m, nil
+
+	case sudoSuccessMsg:
+		m.elevated = true
+		if m.panelMode == "console" {
+			m.panelMode = "system"
+		}
+		m.appendConsoleLines([]string{"Session elevated to System Console."})
 		return m, nil
 
 	case logLineMsg:
@@ -703,7 +778,8 @@ func (m LogPanelModel) updateInputFocused(msg tea.KeyPressMsg) (tea.Model, tea.C
 // FocusInput transitions the panel to input-focused state (called from AppModel).
 // Returns the Blink command needed to activate the hardware cursor.
 func (m *LogPanelModel) FocusInput() tea.Cmd {
-	if m.panelMode != "console" || m.sessionActive() || !m.expanded {
+	hasInput := m.panelMode == "console" || m.panelMode == "system"
+	if !hasInput || m.sessionActive() || !m.expanded {
 		return nil
 	}
 	m.inputFocused = true
@@ -724,8 +800,11 @@ func (m LogPanelModel) ViewString() string {
 		marker = "v"
 	}
 	titleText := "Console"
-	if m.panelMode == "log" {
+	switch m.panelMode {
+	case "log":
 		titleText = "Log"
+	case "system":
+		titleText = "System Console"
 	}
 	title := marker + " " + titleText + " " + marker
 
@@ -736,14 +815,15 @@ func (m LogPanelModel) ViewString() string {
 	}
 
 	// Input box occupies 3 rows (top border + 1 content + bottom border).
+	hasInput := m.panelMode == "console" || m.panelMode == "system"
 	vpH := m.height - 1
-	if m.panelMode == "console" {
+	if hasInput {
 		vpH -= 3
 	}
 	if vpH < 1 {
 		if m.totalHeight > 0 {
 			fullH := (m.totalHeight / 2) - 1
-			if m.panelMode == "console" {
+			if hasInput {
 				fullH -= 3
 			}
 			vpH = fullH
@@ -825,7 +905,7 @@ func (m LogPanelModel) ViewString() string {
 	}
 
 	combined := vpView
-	if m.panelMode == "console" {
+	if hasInput {
 		combined += "\n" + inputBox
 	}
 
