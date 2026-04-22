@@ -1,20 +1,26 @@
 package tui
 
 import (
-	"DockSTARTer2/internal/theme"
+	"bytes"
 	"context"
 	"fmt"
 	"image/color"
 	"strings"
 
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/theme"
 
 	"github.com/charmbracelet/x/ansi"
+	"github.com/pgavlin/goldmark"
+	"github.com/pgavlin/goldmark/renderer"
+	"github.com/pgavlin/goldmark/text"
+	"github.com/pgavlin/goldmark/util"
+	kit_renderer "github.com/pgavlin/markdown-kit/renderer"
+	"github.com/pgavlin/markdown-kit/styles"
 
 	"charm.land/bubbles/v2/help"
 	keybind "charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
-	"charm.land/glamour/v2"
 	"charm.land/lipgloss/v2"
 )
 
@@ -134,7 +140,7 @@ type HelpDialogModel struct {
 	lastDocBoxH int
 }
 
-// getRenderedMarkdown renders DocMarkdown via glamour at the given column width,
+// getRenderedMarkdown renders DocMarkdown via markdown-kit at the given column width,
 // caching the result so repeated ViewString calls are cheap.
 func (m *HelpDialogModel) getRenderedMarkdown(width int) string {
 	if m.contextInfo.DocMarkdown == "" {
@@ -143,21 +149,32 @@ func (m *HelpDialogModel) getRenderedMarkdown(width int) string {
 	if m.renderedMarkdown != "" && m.renderedMarkdownWidth == width {
 		return m.renderedMarkdown
 	}
-	r, err := glamour.NewTermRenderer(
-		glamour.WithStylePath("dark"),
-		glamour.WithWordWrap(width),
+
+	source := []byte(m.contextInfo.DocMarkdown)
+
+	// Initialize the terminal-optimized NodeRenderer from markdown-kit
+	kitR := kit_renderer.New(
+		kit_renderer.WithTheme(styles.GlamourDark),
+		kit_renderer.WithWordWrap(width),
+		kit_renderer.WithImages(true, width, ""), // Default to no specific content root
+		kit_renderer.WithImageEncoder(kit_renderer.KittyGraphicsEncoder()),
 	)
-	if err != nil {
+
+	// Create a goldmark renderer and register our terminal NodeRenderer
+	mainR := renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(kitR, 100)))
+
+	// Parse the markdown into an AST
+	parser := goldmark.DefaultParser()
+	doc := parser.Parse(text.NewReader(source))
+
+	var buf bytes.Buffer
+	if err := mainR.Render(&buf, source, doc); err != nil {
 		m.renderedMarkdown = m.contextInfo.DocMarkdown
 		m.renderedMarkdownWidth = width
 		return m.renderedMarkdown
 	}
-	out, err := r.Render(m.contextInfo.DocMarkdown)
-	if err != nil {
-		m.renderedMarkdown = m.contextInfo.DocMarkdown
-	} else {
-		m.renderedMarkdown = strings.TrimRight(out, "\n")
-	}
+
+	m.renderedMarkdown = strings.TrimRight(buf.String(), "\n")
 	m.renderedMarkdownWidth = width
 	return m.renderedMarkdown
 }
