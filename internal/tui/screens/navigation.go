@@ -10,53 +10,53 @@ import (
 )
 
 // navigateToConfigMenu returns a command to navigate to the config menu
-func navigateToConfigMenu() tea.Cmd {
+func navigateToConfigMenu(connType string) tea.Cmd {
 	return func() tea.Msg {
-		return tui.NavigateMsg{Screen: NewConfigMenuScreen()}
+		return tui.NavigateMsg{Screen: NewConfigMenuScreen(connType)}
 	}
 }
 
 // navigateToGlobalVarsEditor returns a command to navigate to the global variables editor
-func navigateToGlobalVarsEditor() tea.Cmd {
+func navigateToGlobalVarsEditor(connType string) tea.Cmd {
 	return func() tea.Msg {
 		tui.CurrentEditorApp = ""
-		return tui.NavigateMsg{Screen: NewEnvEditorGlobal(navigateBack(), true)}
+		return tui.NavigateMsg{Screen: NewEnvEditorGlobal(navigateBack(), true, connType)}
 	}
 }
 
 // navigateToConfigApps returns a command to navigate to configure applications
-func navigateToConfigApps() tea.Cmd {
+func navigateToConfigApps(connType string) tea.Cmd {
 	return func() tea.Msg {
-		return tui.NavigateMsg{Screen: NewConfigAppsMenuScreen()}
+		return tui.NavigateMsg{Screen: NewConfigAppsMenuScreen(connType)}
 	}
 }
 
 
 // navigateToAppConfigEditorWithRefresh returns a command to navigate to a specific app's config editor
 // and refresh the apps list when returning.
-func navigateToAppConfigEditorWithRefresh(appName string) tea.Cmd {
+func navigateToAppConfigEditorWithRefresh(appName string, connType string) tea.Cmd {
 	return func() tea.Msg {
 		tui.CurrentEditorApp = appName
 		specs := []EnvTabSpec{
 			{Title: ".env", App: appName, IsGlobal: true},
 			{Title: ".env.app." + strings.ToLower(appName), App: appName, IsGlobal: false},
 		}
-		return tui.NavigateMsg{Screen: NewTabbedVarsEditorScreen(navigateBackWithRefresh(), "Configure "+appName, specs, true)}
+		return tui.NavigateMsg{Screen: NewTabbedVarsEditorScreen(navigateBackWithRefresh(), "Configure "+appName, specs, true, connType)}
 	}
 }
 
 // navigateToOptionsMenu returns a command to navigate to the options menu
-func navigateToOptionsMenu() tea.Cmd {
+func navigateToOptionsMenu(connType string) tea.Cmd {
 	return func() tea.Msg {
-		return tui.NavigateMsg{Screen: NewOptionsMenuScreen(false)}
+		return tui.NavigateMsg{Screen: NewOptionsMenuScreen(false, connType)}
 	}
 }
 
 // navigateToAppSelection returns a command to navigate to app selection
-func navigateToAppSelection() tea.Cmd {
+func navigateToAppSelection(connType string) tea.Cmd {
 	return func() tea.Msg {
 		cfg := config.LoadAppConfig()
-		return tui.NavigateMsg{Screen: NewAppSelectionScreen(cfg, false)}
+		return tui.NavigateMsg{Screen: NewAppSelectionScreen(cfg, false, connType)}
 	}
 }
 

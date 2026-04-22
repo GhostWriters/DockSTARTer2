@@ -5,7 +5,7 @@ import (
 )
 
 // NewConfigMenuScreen creates the configuration menu as a standalone screen
-func NewConfigMenuScreen() tui.ScreenModel {
+func NewConfigMenuScreen(connType string) tui.ScreenModel {
 	items := []tui.MenuItem{
 		{
 			Tag:    "Full Setup",
@@ -18,21 +18,21 @@ func NewConfigMenuScreen() tui.ScreenModel {
 			Tag:    "Edit Global Variables",
 			Desc:   "Configure global settings",
 			Help:   "Edit PUID, PGID, TZ, and other global variables",
-			Action: navigateToGlobalVarsEditor(),
+			Action: navigateToGlobalVarsEditor(connType),
 			IsDestructive: true,
 		},
 		{
 			Tag:    "Select Applications",
 			Desc:   "Choose which apps to enable",
 			Help:   "Enable or disable applications",
-			Action: navigateToAppSelection(),
+			Action: navigateToAppSelection(connType),
 			IsDestructive: true,
 		},
 		{
 			Tag:    "Configure Applications",
 			Desc:   "Edit application settings",
 			Help:   "Configure ports, volumes, and environment variables",
-			Action: navigateToConfigApps(),
+			Action: navigateToConfigApps(connType),
 		},
 		{
 			Tag:    "Start All Applications",
@@ -66,6 +66,7 @@ func NewConfigMenuScreen() tui.ScreenModel {
 	)
 
 	menu.SetMenuName("config")
+	menu.SetConnType(connType)
 	menu.SetHelpPageText("Docker and DockSTARTer configuration tasks. Run the full setup wizard, edit environment variables, enable or disable applications, and manage your running containers.")
 	menu.SetHelpItemPrefix("Action")
 	return menu

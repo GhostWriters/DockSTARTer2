@@ -34,6 +34,7 @@ type ServerOptionsScreen struct {
 	isRoot        bool
 
 	config config.AppConfig
+	connType string
 
 	width  int
 	height int
@@ -49,12 +50,13 @@ type updateServerOptionMsg struct {
 type serverStatusRefreshMsg struct{}
 
 // NewServerOptionsScreen creates a new server settings screen.
-func NewServerOptionsScreen(isRoot bool) *ServerOptionsScreen {
+func NewServerOptionsScreen(isRoot bool, connType string) *ServerOptionsScreen {
 	cfg := config.LoadAppConfig()
 	s := &ServerOptionsScreen{
-		isRoot:  isRoot,
-		config:  cfg,
-		focused: true,
+		isRoot:   isRoot,
+		config:   cfg,
+		connType: connType,
+		focused:  true,
 	}
 	s.initMenus()
 	return s
@@ -70,6 +72,7 @@ func (s *ServerOptionsScreen) initMenus() {
 	}
 	outerMenu := tui.NewMenuModel("server_outer", "Server Settings", "", nil, outerBack)
 	outerMenu.SetShowExit(true)
+	outerMenu.SetConnType(s.connType)
 	outerMenu.SetButtonLabels("Apply", "Back", "Exit")
 	outerMenu.AddContentSection(s.settingsMenu)
 	outerMenu.AddContentSection(s.statusMenu)
@@ -130,6 +133,7 @@ func (s *ServerOptionsScreen) buildSettingsMenu() *tui.MenuModel {
 	}
 
 	menu := tui.NewMenuModel("server_settings", "Configuration", "", items, nil)
+	menu.SetConnType(s.connType)
 	menu.SetHelpItemPrefix("Setting")
 	menu.SetHelpPageText("Configure remote access to the DS2 TUI. SSH must be enabled and configured before the web server can be used.")
 	menu.SetSubMenuMode(true)
@@ -187,6 +191,7 @@ func (s *ServerOptionsScreen) buildStatusMenu() *tui.MenuModel {
 	}
 
 	menu := tui.NewMenuModel("server_status", "Live Status", "", items, nil)
+	menu.SetConnType(s.connType)
 	menu.SetHelpItemPrefix("Status")
 	menu.SetHelpPageText("Live status of the SSH server and any active remote session. Use Disconnect to gracefully close a session.")
 	menu.SetSubMenuMode(true)
@@ -207,6 +212,7 @@ func (s *ServerOptionsScreen) refreshStatus() {
 	}
 	outer := tui.NewMenuModel("server_outer", "Server Settings", "", nil, outerBack)
 	outer.SetShowExit(true)
+	outer.SetConnType(s.connType)
 	outer.SetButtonLabels("Apply", "Back", "Exit")
 	outer.AddContentSection(s.settingsMenu)
 	outer.AddContentSection(s.statusMenu)

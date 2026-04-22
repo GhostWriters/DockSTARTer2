@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/version"
 )
 
@@ -13,13 +14,13 @@ import (
 // If target is empty, prints global usage.
 // If target is specified, prints usage for that specific flag/command.
 func PrintHelp(ctx context.Context, target string) {
-	logger.Display(ctx, GetUsage(target))
+	logger.Display(ctx, GetUsage(target, false))
 }
 
 // GetUsage returns usage information as a string.
 // If target is empty, returns global usage.
 // If target is specified, returns usage for that specific flag/command.
-func GetUsage(target string) string {
+func GetUsage(target string, noHeading bool) string {
 	var sb strings.Builder
 	printStr := func(lines ...string) {
 		for _, s := range lines {
@@ -31,16 +32,20 @@ func GetUsage(target string) string {
 	appName := version.ApplicationName
 	appCmd := version.CommandName
 
+	// Track if we found a match for a specific target
+	found := false
+
 	// If target is empty, print intro
-	if target == "" {
+	if !noHeading {
 		// Mimic the header section
 		printStr(
 			fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} [{{|Version|}}%s{{[-]}}]", appName, version.Version),
-			"{{|ApplicationName|}}DockSTARTer-Templates{{[-]}} [{{|Version|}}Unknown Version{{[-]}}]",
+			fmt.Sprintf("{{|ApplicationName|}}DockSTARTer-Templates{{[-]}} [{{|Version|}}%s{{[-]}}]", paths.GetTemplatesVersion()),
+			fmt.Sprintf("{{|ApplicationName|}}Docker Compose SDK{{[-]}} [{{|Version|}}%s{{[-]}}]", version.GetComposeSdkVersion()),
 			"",
 			fmt.Sprintf("Usage: {{|UsageCommand|}}%s{{[-]}} [{{|UsageCommand|}}<Flags>{{[-]}}] [{{|UsageCommand|}}<Command>{{[-]}}] ...", appCmd),
 			"",
-			fmt.Sprintf("This is the main {{|ApplicationName|}}%s{{[-]}} script.", appName),
+			fmt.Sprintf("This is the main {{|ApplicationName|}}%s{{[-]}} application.", appName),
 			"For regular usage you can run without providing any options.",
 			"",
 			"You may include multiple commands on the command-line, and they will be executed in",
@@ -52,9 +57,13 @@ func GetUsage(target string) string {
 			"will instead refer to the variable '{{|UsageVar|}}<var>{{[-]}}' in '{{|UsageFile|}}.env.app.<app>{{[-]}}'.  Some commands",
 			"that take app names can use the form '{{|UsageApp|}}app:{{[-]}}' to refer to the same file.",
 			"",
-			"Flags:",
-			"",
 		)
+		if target == "" {
+			printStr(
+				"Flags:",
+				"",
+			)
+		}
 	}
 
 	// Flags section and Command section.
@@ -66,6 +75,7 @@ func GetUsage(target string) string {
 		}
 		for _, o := range opts {
 			if o == target {
+				found = true
 				return true
 			}
 		}
@@ -104,7 +114,7 @@ func GetUsage(target string) string {
 		)
 	}
 
-	if showAll {
+	if showAll && !noHeading {
 		printStr(
 			"",
 			"CLI Commands:",
@@ -371,7 +381,7 @@ func GetUsage(target string) string {
 		)
 	}
 
-	if showAll {
+	if showAll && !noHeading {
 		printStr(
 			"",
 			"Menu Commands:",
@@ -414,6 +424,12 @@ func GetUsage(target string) string {
 		printStr(
 			"{{|UsageCommand|}}-S --select{{[-]}}",
 			"	Load the {{|UsagePage|}}Application Selection{{[-]}} page in the menu.",
+		)
+	}
+
+	if target != "" && !found {
+		printStr(
+			fmt.Sprintf("Unknown option '{{|UsageCommand|}}%s{{[-]}}'.", target),
 		)
 	}
 

@@ -15,7 +15,7 @@ import (
 	"DockSTARTer2/internal/version"
 )
 
-func handleHelp(ctx context.Context, group *CommandGroup) error {
+func HandleHelp(ctx context.Context, group *CommandGroup) error {
 	target := ""
 	if len(group.Args) > 0 {
 		target = group.Args[0]
@@ -24,14 +24,14 @@ func handleHelp(ctx context.Context, group *CommandGroup) error {
 	return nil
 }
 
-func handleVersion(ctx context.Context) error {
+func HandleVersion(ctx context.Context) error {
 	logger.Display(ctx, fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} [{{|Version|}}%s{{[-]}}]", version.ApplicationName, version.Version))
 	logger.Display(ctx, fmt.Sprintf("{{|ApplicationName|}}DockSTARTer-Templates{{[-]}} [{{|Version|}}%s{{[-]}}]", paths.GetTemplatesVersion()))
 	logger.Display(ctx, fmt.Sprintf("{{|ApplicationName|}}Docker Compose SDK{{[-]}} [{{|Version|}}%s{{[-]}}]", version.GetComposeSdkVersion()))
 	return nil
 }
 
-func handleInstall(ctx context.Context, group *CommandGroup, state *CmdState) error {
+func HandleInstall(ctx context.Context, group *CommandGroup, state *CmdState) error {
 	logger.Warn(ctx, fmt.Sprintf("The '{{|UserCommand|}}%s{{[-]}}' command is deprecated. The only dependency is '{{|UserCommand|}}docker{{[-]}}'.", group.Command))
 	if state.Force {
 		logger.Notice(ctx, "Force flag ignored.")
@@ -39,12 +39,12 @@ func handleInstall(ctx context.Context, group *CommandGroup, state *CmdState) er
 	return nil
 }
 
-func handleConfigPm(ctx context.Context, group *CommandGroup) error {
+func HandleConfigPm(ctx context.Context, group *CommandGroup) error {
 	logger.Warn(ctx, fmt.Sprintf("The '{{|UserCommand|}}%s{{[-]}}' command is deprecated. Package manager configuration is no longer needed.", group.Command))
 	return nil
 }
 
-func handleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, restArgs []string) error {
+func HandleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, restArgs []string) error {
 	switch group.Command {
 	case "-u", "--update":
 		appVer := ""
@@ -74,7 +74,7 @@ func handleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, res
 	return nil
 }
 
-func handleStatus(ctx context.Context, group *CommandGroup) error {
+func HandleStatus(ctx context.Context, group *CommandGroup) error {
 	conf := config.LoadAppConfig()
 	if len(group.Args) == 0 {
 		logger.Error(ctx, "The '{{|UserCommand|}}%s{{[-]}}' command requires at least one application name.", group.Command)
@@ -88,7 +88,7 @@ func handleStatus(ctx context.Context, group *CommandGroup) error {
 	return nil
 }
 
-func handleStatusChange(ctx context.Context, group *CommandGroup) error {
+func HandleStatusChange(ctx context.Context, group *CommandGroup) error {
 	conf := config.LoadAppConfig()
 	if len(group.Args) == 0 {
 		logger.Error(ctx, "The '{{|UserCommand|}}%s{{[-]}}' command requires at least one application name.", group.Command)
@@ -113,7 +113,7 @@ func handleStatusChange(ctx context.Context, group *CommandGroup) error {
 	return nil
 }
 
-func handleRemove(ctx context.Context, group *CommandGroup, state *CmdState) error {
+func HandleRemove(ctx context.Context, group *CommandGroup, state *CmdState) error {
 	conf := config.LoadAppConfig()
 
 	err := appenv.Remove(ctx, group.Args, conf, state.Yes)
@@ -128,7 +128,7 @@ func handleRemove(ctx context.Context, group *CommandGroup, state *CmdState) err
 	return nil
 }
 
-func handleAppVarsCreate(ctx context.Context, group *CommandGroup, state *CmdState) error {
+func HandleAppVarsCreate(ctx context.Context, group *CommandGroup, state *CmdState) error {
 	conf := config.LoadAppConfig()
 	if len(group.Args) == 0 {
 		logger.Error(ctx, "The '{{|UserCommand|}}%s{{[-]}}' command requires at least one application name.", group.Command)
@@ -177,7 +177,7 @@ func handleAppVarsCreate(ctx context.Context, group *CommandGroup, state *CmdSta
 	return nil
 }
 
-func handleAppVarsCreateAll(ctx context.Context, _group *CommandGroup, state *CmdState) error {
+func HandleAppVarsCreateAll(ctx context.Context, _group *CommandGroup, state *CmdState) error {
 	conf := config.LoadAppConfig()
 	if err := appenv.CreateAll(ctx, state.Force, conf); err != nil {
 		logger.Error(ctx, "Failed to create app variables: %v", err)

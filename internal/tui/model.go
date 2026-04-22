@@ -284,7 +284,7 @@ func NewAppModel(ctx context.Context, cfg config.AppConfig, clientIP, connType s
 		activeScreen: startScreen,
 		screenStack:  stack,
 		backdrop:     NewBackdropModel(helpText),
-		logPanel:     NewLogPanelModel(),
+		logPanel:     NewLogPanelModel(EffectivePanelMode(cfg, connType), connType),
 	}
 }
 
@@ -296,7 +296,7 @@ func NewAppModelStandalone(ctx context.Context, cfg config.AppConfig, clientIP, 
 		clientIP: clientIP,
 		connType: connType,
 		backdrop: NewBackdropModel(""),
-		logPanel: NewLogPanelModel(),
+		logPanel: NewLogPanelModel(EffectivePanelMode(cfg, connType), connType),
 		dialog:   dialog,
 	}
 }

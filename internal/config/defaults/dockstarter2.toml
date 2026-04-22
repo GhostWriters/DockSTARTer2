@@ -13,6 +13,8 @@ border_color       = 3        # 1=primary border colour, 2=secondary, 3=both
 dialog_title_align  = "center" # "center" or "left"
 submenu_title_align = "left"   # "center" or "left"
 log_title_align     = "center" # "center" or "left"
+panel_local         = "console" # "log", "console", or "none" (for local sessions)
+panel_remote        = "log"     # "log", "console", or "none" (for ssh/web sessions)
 
 [paths]
 config_folder  = "${XDG_CONFIG_HOME}"

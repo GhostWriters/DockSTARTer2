@@ -67,7 +67,7 @@ func (e *ParseError) Error() string {
 
 	if e.FailingCommand != "" {
 		out += fmt.Sprintf("\n%sUsage is:\n", indent)
-		usageStr := GetUsage(e.FailingCommand)
+		usageStr := GetUsage(e.FailingCommand, true)
 		lines := strings.Split(usageStr, "\n")
 		for _, line := range lines {
 			out += fmt.Sprintf("%s%s\n", indent, line)

@@ -13,9 +13,9 @@ import (
 	"DockSTARTer2/internal/logger"
 )
 
-// resolveEnvVar resolves VAR and FILE from an argument.
+// ResolveEnvVar resolves VAR and FILE from an argument.
 // Arg can be "VAR" (uses default file) or "APP:VAR" (uses app file).
-func resolveEnvVar(arg string, conf config.AppConfig) (string, string) {
+func ResolveEnvVar(arg string, conf config.AppConfig) (string, string) {
 	if strings.Contains(arg, ":") {
 		parts := strings.SplitN(arg, ":", 2)
 		appName := strings.ToLower(parts[0])
@@ -26,7 +26,7 @@ func resolveEnvVar(arg string, conf config.AppConfig) (string, string) {
 	return arg, filepath.Join(conf.ComposeDir, constants.EnvFileName)
 }
 
-func handleEnvGet(ctx context.Context, group *CommandGroup) error {
+func HandleEnvGet(ctx context.Context, group *CommandGroup) error {
 	conf := config.LoadAppConfig()
 
 	var args []string
@@ -45,7 +45,7 @@ func handleEnvGet(ctx context.Context, group *CommandGroup) error {
 			logger.Error(ctx, "'{{|Var|}}%s{{[-]}}' is an invalid variable name.", arg)
 			continue
 		}
-		key, file := resolveEnvVar(arg, conf)
+		key, file := ResolveEnvVar(arg, conf)
 		if upperCase && !strings.Contains(arg, ":") {
 			key = strings.ToUpper(key)
 		}
@@ -80,7 +80,7 @@ func handleEnvGet(ctx context.Context, group *CommandGroup) error {
 	return nil
 }
 
-func handleEnvSet(ctx context.Context, group *CommandGroup) error {
+func HandleEnvSet(ctx context.Context, group *CommandGroup) error {
 	conf := config.LoadAppConfig()
 
 	type kv struct {
@@ -120,7 +120,7 @@ func handleEnvSet(ctx context.Context, group *CommandGroup) error {
 			logger.Error(ctx, "'{{|Var|}}%s{{[-]}}' is an invalid variable name.", p.key)
 			continue
 		}
-		varName, file := resolveEnvVar(p.key, conf)
+		varName, file := ResolveEnvVar(p.key, conf)
 		if upperCase && !strings.Contains(p.key, ":") {
 			varName = strings.ToUpper(varName)
 		}
@@ -146,7 +146,7 @@ func handleEnvSet(ctx context.Context, group *CommandGroup) error {
 	return retErr
 }
 
-func handleEnvAppVars(ctx context.Context, group *CommandGroup) error {
+func HandleEnvAppVars(ctx context.Context, group *CommandGroup) error {
 	conf := config.LoadAppConfig()
 	args := group.Args
 	if len(args) == 0 {
@@ -167,7 +167,7 @@ func handleEnvAppVars(ctx context.Context, group *CommandGroup) error {
 	return nil
 }
 
-func handleEnvAppVarsLines(ctx context.Context, group *CommandGroup) error {
+func HandleEnvAppVarsLines(ctx context.Context, group *CommandGroup) error {
 	conf := config.LoadAppConfig()
 	args := group.Args
 	if len(args) == 0 {

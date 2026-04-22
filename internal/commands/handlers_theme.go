@@ -26,7 +26,7 @@ func themeFilePath(arg string) string {
 	return strings.TrimPrefix(arg, "file:")
 }
 
-func handleTheme(ctx context.Context, group *CommandGroup) error {
+func HandleTheme(ctx context.Context, group *CommandGroup) error {
 	switch group.Command {
 	case "-T", "--theme":
 		conf := config.LoadAppConfig()
@@ -113,7 +113,7 @@ func parseTitleAlign(ctx context.Context, arg, label string) (string, error) {
 	return "", fmt.Errorf("invalid %s alignment", label)
 }
 
-func handleThemeSettings(ctx context.Context, group *CommandGroup) error {
+func HandleThemeSettings(ctx context.Context, group *CommandGroup) error {
 	conf := config.LoadAppConfig()
 	switch group.Command {
 	case "--theme-lines", "--theme-line":
@@ -276,7 +276,7 @@ func resolveExtractDest(arg string) string {
 	return arg
 }
 
-func handleThemeExtract(ctx context.Context, group *CommandGroup) error {
+func HandleThemeExtract(ctx context.Context, group *CommandGroup) error {
 	switch group.Command {
 	case "--theme-extract":
 		if len(group.Args) == 0 {
@@ -356,7 +356,7 @@ func handleThemeExtract(ctx context.Context, group *CommandGroup) error {
 	return nil
 }
 
-func handleThemeTable(ctx context.Context) error {
+func HandleThemeTable(ctx context.Context) error {
 	headers := []string{"Theme", "Description", "Author"}
 	themes, err := theme.List()
 	if err != nil {

@@ -329,7 +329,9 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case updateDisplayOptionMsg:
 		msg.update(&s.config)
-		msg.update(&s.baseConfig) // User actively changed an option, save it to base config
+		// Do NOT update baseConfig here; manual changes are staged in s.config
+		// and will be lost if the user switches themes (which resets s.config to s.baseConfig).
+		// This is consistent with how other options in this screen work.
 		s.syncOptionsMenu()
 		if s.outerMenu != nil {
 			s.outerMenu.InvalidateCache()
@@ -366,6 +368,11 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (s *DisplayOptionsScreen) applyPreview(themeName string) {
 	s.previewTheme = themeName
 
+	// Preserve all staged UI options the user has changed interactively.
+	// We only reset s.config to baseConfig so that theme defaults get a clean
+	// base, then we re-apply the user's staged choices on top.
+	staged := s.config.UI
+
 	// Reset to base configs
 	s.config = s.baseConfig
 
@@ -383,6 +390,23 @@ func (s *DisplayOptionsScreen) applyPreview(themeName string) {
 	if defaults != nil {
 		theme.ApplyThemeDefaults(&s.config, *defaults)
 	}
+
+	// Re-apply staged UI options on top of theme defaults.
+	// This preserves choices like PanelLocal/PanelRemote, Borders, Shadow, etc.
+	// that the user has changed since opening this screen.
+	s.config.UI.Borders = staged.Borders
+	s.config.UI.ButtonBorders = staged.ButtonBorders
+	s.config.UI.LineCharacters = staged.LineCharacters
+	s.config.UI.Shadow = staged.Shadow
+	s.config.UI.ShadowLevel = staged.ShadowLevel
+	s.config.UI.Scrollbar = staged.Scrollbar
+	s.config.UI.BorderColor = staged.BorderColor
+	s.config.UI.DialogTitleAlign = staged.DialogTitleAlign
+	s.config.UI.SubmenuTitleAlign = staged.SubmenuTitleAlign
+	s.config.UI.LogTitleAlign = staged.LogTitleAlign
+	s.config.UI.PanelLocal = staged.PanelLocal
+	s.config.UI.PanelRemote = staged.PanelRemote
+
 	s.syncOptionsMenu()
 	if s.outerMenu != nil {
 		s.outerMenu.InvalidateCache()
@@ -392,17 +416,34 @@ func (s *DisplayOptionsScreen) applyPreview(themeName string) {
 
 func (s *DisplayOptionsScreen) syncOptionsMenu() {
 	items := s.optionsMenu.GetItems()
-	items[0].Checked = s.config.UI.Borders
-	items[1].Checked = s.config.UI.ButtonBorders
-	items[2].Checked = s.config.UI.LineCharacters
-	items[3].Checked = s.config.UI.Shadow
-	items[4].Checked = s.config.UI.Scrollbar
-	// Update dropdown descriptions
-	items[5].Desc = s.dropdownDesc(s.shadowLevelToDesc(s.config.UI.ShadowLevel))
-	items[6].Desc = s.dropdownDesc(s.borderColorToDesc(s.config.UI.BorderColor))
-	items[7].Desc = s.dropdownDesc(titleAlignDesc(s.config.UI.DialogTitleAlign))
-	items[8].Desc = s.dropdownDesc(titleAlignDesc(s.config.UI.SubmenuTitleAlign))
-	items[9].Desc = s.dropdownDesc(titleAlignDesc(s.config.UI.LogTitleAlign))
+	for i := range items {
+		switch items[i].Tag {
+		case "Borders":
+			items[i].Checked = s.config.UI.Borders
+		case "Button Borders":
+			items[i].Checked = s.config.UI.ButtonBorders
+		case "Line Characters":
+			items[i].Checked = s.config.UI.LineCharacters
+		case "Shadow":
+			items[i].Checked = s.config.UI.Shadow
+		case "Scrollbar":
+			items[i].Checked = s.config.UI.Scrollbar
+		case "Shadow Level":
+			items[i].Desc = s.dropdownDesc(s.shadowLevelToDesc(s.config.UI.ShadowLevel))
+		case "Border Color":
+			items[i].Desc = s.dropdownDesc(s.borderColorToDesc(s.config.UI.BorderColor))
+		case "Dialog Title":
+			items[i].Desc = s.dropdownDesc(titleAlignDesc(s.config.UI.DialogTitleAlign))
+		case "Submenu Title":
+			items[i].Desc = s.dropdownDesc(titleAlignDesc(s.config.UI.SubmenuTitleAlign))
+		case "Log Title":
+			items[i].Desc = s.dropdownDesc(titleAlignDesc(s.config.UI.LogTitleAlign))
+		case "Local Panel Mode":
+			items[i].Desc = s.dropdownDesc(s.panelModeToDesc(s.config.UI.PanelLocal))
+		case "Remote Panel Mode":
+			items[i].Desc = s.dropdownDesc(s.panelModeToDesc(s.config.UI.PanelRemote))
+		}
+	}
 	s.optionsMenu.SetItems(items)
 }
 
