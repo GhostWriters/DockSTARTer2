@@ -56,9 +56,6 @@ type consoleDoneMsg struct {
 	appsChanged   bool // refresh app list (RefreshAppsListMsg)
 }
 
-// sudoSuccessMsg signals that the user successfully authenticated via sudo.
-type sudoSuccessMsg struct{}
-
 // ─── Model ───────────────────────────────────────────────────────────────────
 
 // LogPanelModel is the slide-up console panel that lives below the helpline.
@@ -102,7 +99,6 @@ type LogPanelModel struct {
 
 	panelMode string // "log", "console", "system", or "none"
 	connType  string // "local", "ssh", or "web"
-	elevated  bool   // true if session was elevated via sudo
 }
 
 // applyInputStyles updates the sinput colours from the current theme.
@@ -308,7 +304,8 @@ func waitForLogLine() tea.Cmd {
 // ─── Command execution ────────────────────────────────────────────────────────
 
 // runShellCmd runs cmdStr as a shell command, streaming output to w.
-func runShellCmd(ctx context.Context, cmdStr string, w io.Writer) error {
+// If stdinContent is provided, it is piped to the command's stdin.
+func runShellCmd(ctx context.Context, cmdStr string, w io.Writer, stdinContent string) error {
 	var shellCmd *exec.Cmd
 	if runtime.GOOS == "windows" {
 		shellCmd = exec.CommandContext(ctx, "cmd", "/c", cmdStr)
@@ -317,6 +314,9 @@ func runShellCmd(ctx context.Context, cmdStr string, w io.Writer) error {
 	}
 	shellCmd.Stdout = w
 	shellCmd.Stderr = w
+	if stdinContent != "" {
+		shellCmd.Stdin = strings.NewReader(stdinContent + "\n")
+	}
 	return shellCmd.Run()
 }
 
@@ -359,35 +359,6 @@ func (m *LogPanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 	if len(tokens) == 0 {
 		return nil
 	}
-
-	// sudo command: attempt to elevate the current session to System Console
-	if strings.ToLower(strings.TrimSpace(cmdStr)) == "sudo" {
-		logger.Notice(context.Background(), "Console command: '{{|UserCommand|}}sudo{{[-]}}'")
-		return func() tea.Msg {
-			pass, err := PromptText("Sudo Authentication", "Password:", true)
-			if err != nil {
-				// Don't show error if they just hit Esc/Cancel
-				if err == console.ErrUserAborted {
-					return consoleDoneMsg{}
-				}
-				return consoleDoneMsg{err: err}
-			}
-
-			// Validate password via sudo -S -v (updates sudo timestamp, does nothing else)
-			cmd := exec.Command("sudo", "-S", "-v")
-			cmd.Stdin = strings.NewReader(pass + "\n")
-			if err := cmd.Run(); err != nil {
-				// Check if the command itself was missing
-				if execErr, ok := err.(*exec.Error); ok && execErr.Err == exec.ErrNotFound {
-					return consoleDoneMsg{err: fmt.Errorf("sudo command not found on this system")}
-				}
-				return consoleDoneMsg{err: fmt.Errorf("sudo: authentication failed")}
-			}
-
-			return sudoSuccessMsg{}
-		}
-	}
-
 	isDS2 := isDS2Prefix(tokens[0])
 	args := tokens
 	if isDS2 {
@@ -459,9 +430,50 @@ func (m *LogPanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 	ctx, cancel := context.WithCancel(context.Background())
 	m.consoleCancel = cancel
 
+	// If the command contains sudo, intercept it and prime the sudo credential cache.
+	var containsSudo bool
+	for _, t := range tokens {
+		if t == "sudo" {
+			containsSudo = true
+			break
+		}
+	}
+
+	if containsSudo && m.panelMode == "system" {
+		return func() tea.Msg {
+			pass, err := PromptText("Sudo Password", "Password for '"+cmdStr+"':", true)
+			if err != nil {
+				if err == console.ErrUserAborted {
+					return consoleDoneMsg{}
+				}
+				return consoleDoneMsg{err: err}
+			}
+
+			// 1. Prime the sudo cache by running sudo -S -v with the password.
+			// This updates the sudo timestamp so subsequent sudo calls in the user's
+			// command can run without a prompt.
+			primeCmd := exec.Command("sudo", "-S", "-v")
+			primeCmd.Stdin = strings.NewReader(pass + "\n")
+			if err := primeCmd.Run(); err != nil {
+				return consoleDoneMsg{err: fmt.Errorf("sudo: authentication failed")}
+			}
+
+			// 2. Run the user's original command line exactly as typed.
+			pr, pw := io.Pipe()
+			go func() {
+				err := runShellCmd(ctx, cmdStr, pw, "")
+				pw.CloseWithError(err)
+			}()
+
+			sc := bufio.NewScanner(pr)
+			m.consoleScanner = sc
+			return readConsoleBatch(sc, cancel)
+		}
+	}
+
 	pr, pw := io.Pipe()
 	go func() {
-		err := runShellCmd(ctx, cmdStr, pw)
+		err := runShellCmd(ctx, cmdStr, pw, "")
 		pw.CloseWithError(err)
 	}()
 
@@ -549,24 +561,11 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ConfigChangedMsg:
 		m.panelMode = EffectivePanelMode(msg.Config, m.connType)
-		// Preserve elevation: if we were elevated and the new config says "console",
-		// keep us at "system" level.
-		if m.elevated && m.panelMode == "console" {
-			m.panelMode = "system"
-		}
 		if m.panelMode == "none" {
 			m.expanded = false
 		}
 		m.SetSize(m.width, m.totalHeight)
 		m.applyInputStyles()
-		return m, nil
-
-	case sudoSuccessMsg:
-		m.elevated = true
-		if m.panelMode == "console" {
-			m.panelMode = "system"
-		}
-		m.appendConsoleLines([]string{"Session elevated to System Console."})
 		return m, nil
 
 	case logLineMsg:
