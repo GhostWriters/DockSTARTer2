@@ -2,9 +2,11 @@ package screens
 
 import (
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/tui"
 	"fmt"
+	"os/exec"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -620,33 +622,57 @@ func (s *DisplayOptionsScreen) showPanelDropdown(isLocalSetting bool) tea.Cmd {
 		})
 
 		// System Console: full shell access.
-		// For remote panel: only show if the current session is local (admin),
-		// or if the saved config already has "system" (allows revert before Apply).
-		originallySystem := strings.ToLower(s.baseConfig.UI.PanelRemote) == "system"
-		if isLocalSetting {
-			originallySystem = strings.ToLower(s.baseConfig.UI.PanelLocal) == "system"
-		}
-		if isLocalSetting || s.connType == "local" || originallySystem {
-			systemAction := func() tea.Msg {
-				// Warn when enabling System Console for remote sessions.
-				if !isLocalSetting {
-					title := "Enable Remote System Console?"
-					msg := "System Console grants full interactive shell access to all authenticated SSH and web users. Any command, including destructive ones, can be run.\n\nAre you sure you want to proceed?"
-					onConfirm := func() tea.Msg {
+		// Always show in the dropdown, but require sudo auth if remote.
+		systemAction := func() tea.Msg {
+			// Warn and require sudo when enabling System Console for remote sessions.
+			if !isLocalSetting && s.connType != "local" {
+				title := "Enable Remote System Console?"
+				msg := "System Console grants full interactive shell access to all authenticated SSH and web users. Any command, including destructive ones, can be run.\n\nAre you sure you want to proceed?"
+				onConfirm := func() tea.Msg {
+					// After confirmation, ask for sudo password
+					return func() tea.Msg {
+						pass, err := tui.PromptText("Sudo Authentication", "Password required to enable System Console:", true)
+						if err != nil {
+							if err == console.ErrUserAborted {
+								return tui.CloseDialog()()
+							}
+							return tui.ShowMessageDialogMsg{
+								Title:   "Authentication Error",
+								Message: err.Error(),
+								Type:    tui.MessageError,
+							}
+						}
+
+						// Validate via sudo -S -v
+						cmd := exec.Command("sudo", "-S", "-v")
+						cmd.Stdin = strings.NewReader(pass + "\n")
+						if err := cmd.Run(); err != nil {
+							errMsg := "sudo: authentication failed"
+							if execErr, ok := err.(*exec.Error); ok && execErr.Err == exec.ErrNotFound {
+								errMsg = "sudo command not found on this system"
+							}
+							return tui.ShowMessageDialogMsg{
+								Title:   "Authentication Failed",
+								Message: errMsg,
+								Type:    tui.MessageError,
+							}
+						}
+
+						// Success: Apply the change persistently and close dialog
 						return tea.Batch(applyChange("system"), tui.CloseDialog())()
-					}
-					confirm := tui.NewConfirmModel(title, msg, false, onConfirm, tui.CloseDialog())
-					return tui.ShowDialogMsg{Dialog: confirm}
+					}()
 				}
-				return applyChange("system")()
+				confirm := tui.NewConfirmModel(title, msg, false, onConfirm, tui.CloseDialog())
+				return tui.ShowDialogMsg{Dialog: confirm}
 			}
-			items = append(items, tui.MenuItem{
-				Tag:  "System Console",
-				Desc: "Full shell access",
-				Help: "Passes commands directly to the OS shell. Use with caution for remote sessions.",
-				Action: systemAction,
-			})
+			return applyChange("system")()
 		}
+		items = append(items, tui.MenuItem{
+			Tag:  "System Console",
+			Desc: "Full shell access",
+			Help: "Passes commands directly to the OS shell. Use with caution for remote sessions.",
+			Action: systemAction,
+		})
 
 
 		title := "Remote Panel Mode"
