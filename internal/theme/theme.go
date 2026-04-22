@@ -485,15 +485,16 @@ func ApplyThemeDefaults(conf *config.AppConfig, defaults ThemeDefaults) map[stri
 		conf.UI.LogTitleAlign = *defaults.LogTitleAlign
 		applied["Log Title Align"] = conf.UI.LogTitleAlign
 	}
-	// PanelLocal: no restrictions — local sessions may use any mode including "console".
+	// PanelLocal: no restrictions — local sessions may use any mode.
 	if defaults.PanelLocal != nil {
 		conf.UI.PanelLocal = *defaults.PanelLocal
 		applied["Panel Local"] = conf.UI.PanelLocal
 	}
-	// PanelRemote: clamp "console" → "log" — themes must never grant console access to remote users.
+	// PanelRemote: clamp "system" → "log" — themes must never grant full shell access to remote users.
+	// "console" (ds2-only, ConsoleSafe-enforced) is permitted remotely.
 	if defaults.PanelRemote != nil {
 		v := *defaults.PanelRemote
-		if strings.ToLower(v) == "console" {
+		if strings.ToLower(v) == "system" {
 			v = "log"
 		}
 		conf.UI.PanelRemote = v

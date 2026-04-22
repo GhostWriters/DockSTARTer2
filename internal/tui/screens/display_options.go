@@ -514,6 +514,8 @@ func (s *DisplayOptionsScreen) panelModeToDesc(v string) string {
 		return "Log"
 	case "console":
 		return "Console"
+	case "system":
+		return "System Console"
 	default:
 		return "Default"
 	}
@@ -554,7 +556,6 @@ func (s *DisplayOptionsScreen) showPanelDropdown(isLocalSetting bool) tea.Cmd {
 		if isLocalSetting {
 			currentMode = s.config.UI.PanelLocal
 		}
-		isConsole := strings.ToLower(currentMode) == "console"
 
 		applyChange := func(mode string) tea.Cmd {
 			return func() tea.Msg {
@@ -573,67 +574,25 @@ func (s *DisplayOptionsScreen) showPanelDropdown(isLocalSetting bool) tea.Cmd {
 			}
 		}
 
+		// confirmChange: only warn for remote sessions currently in system/console
+		// mode switching to log/none (would lose interactive access).
+		isInteractive := strings.ToLower(currentMode) == "system" || strings.ToLower(currentMode) == "console"
 		confirmChange := func(mode string) tea.Cmd {
 			return func() tea.Msg {
-				// Only show confirmation if we are CURRENTLY in a remote session (SSH/Web)
-				// AND the user is disabling the console.
-				// For local sessions, the console is always easy to re-enable, so no warning needed.
-				if s.connType == "local" || !isConsole {
+				if s.connType == "local" || !isInteractive {
 					return applyChange(mode)()
 				}
-				// Launch confirmation dialog
-				title := "Disable Console?"
-				msg := "You are disabling the interactive console. This will remove the command input bar, and you will only be able to re-enable it from a real terminal session.\n\nAre you sure you want to proceed?"
-
+				title := "Disable Interactive Panel?"
+				msg := "You are removing the interactive panel. You will only be able to re-enable it from a local terminal session.\n\nAre you sure you want to proceed?"
 				onConfirm := func() tea.Msg {
 					return tea.Batch(applyChange(mode), tui.CloseDialog())()
 				}
-
 				confirm := tui.NewConfirmModel(title, msg, false, onConfirm, tui.CloseDialog())
 				return tui.ShowDialogMsg{Dialog: confirm}
 			}
 		}
 
 		var items []tui.MenuItem
-		// Console option is available when:
-		//   - This is the Local Panel Mode setting (always allowed), OR
-		//   - The current user session is local (a local admin can configure remote sessions), OR
-		//   - The saved config already has Console enabled (allows a remote user to revert before Apply).
-		originallyConsole := strings.ToLower(s.baseConfig.UI.PanelRemote) == "console"
-		if isLocalSetting {
-			originallyConsole = strings.ToLower(s.baseConfig.UI.PanelLocal) == "console"
-		}
-
-		if isLocalSetting || s.connType == "local" || originallyConsole {
-			consoleAction := func() tea.Msg {
-				// Warn when enabling console for the remote panel — it grants full shell
-				// access to any authenticated SSH/web user. Local panel changes need no warning.
-				if !isLocalSetting {
-					title := "Enable Remote Console?"
-					msg := "Enabling the console for remote sessions grants full interactive shell access to all authenticated SSH and web users.\n\nAre you sure you want to proceed?"
-					onConfirm := func() tea.Msg {
-						return tea.Batch(applyChange("console"), tui.CloseDialog())()
-					}
-					confirm := tui.NewConfirmModel(title, msg, false, onConfirm, tui.CloseDialog())
-					return tui.ShowDialogMsg{Dialog: confirm}
-				}
-				return applyChange("console")()
-			}
-			items = append(items, tui.MenuItem{
-				Tag:  "Console",
-				Desc: "Show interactive command console",
-				Help: "Full CLI access within the TUI panel. Only works in local terminal sessions.",
-				Action: consoleAction,
-			})
-		}
-
-		// Log option: always available
-		items = append(items, tui.MenuItem{
-			Tag:  "Log",
-			Desc: "Show read-only log viewer",
-			Help: "Displays application logs but hides the command input bar.",
-			Action: func() tea.Msg { return confirmChange("log")() },
-		})
 
 		// None option: always available
 		items = append(items, tui.MenuItem{
@@ -643,6 +602,53 @@ func (s *DisplayOptionsScreen) showPanelDropdown(isLocalSetting bool) tea.Cmd {
 			Action: func() tea.Msg { return confirmChange("none")() },
 		})
 
+		// Log option: always available
+		items = append(items, tui.MenuItem{
+			Tag:  "Log",
+			Desc: "Show read-only log viewer",
+			Help: "Displays application logs but hides the command input bar.",
+			Action: func() tea.Msg { return confirmChange("log")() },
+		})
+
+		// Console (ds2-only): always available for both local and remote —
+		// it only accepts ds2 subcommands so it is safe in all session types.
+		items = append(items, tui.MenuItem{
+			Tag:  "Console",
+			Desc: "ds2 commands only",
+			Help: "Accepts ds2 subcommands only. Safe for remote sessions.",
+			Action: func() tea.Msg { return applyChange("console")() },
+		})
+
+		// System Console: full shell access.
+		// For remote panel: only show if the current session is local (admin),
+		// or if the saved config already has "system" (allows revert before Apply).
+		originallySystem := strings.ToLower(s.baseConfig.UI.PanelRemote) == "system"
+		if isLocalSetting {
+			originallySystem = strings.ToLower(s.baseConfig.UI.PanelLocal) == "system"
+		}
+		if isLocalSetting || s.connType == "local" || originallySystem {
+			systemAction := func() tea.Msg {
+				// Warn when enabling System Console for remote sessions.
+				if !isLocalSetting {
+					title := "Enable Remote System Console?"
+					msg := "System Console grants full interactive shell access to all authenticated SSH and web users. Any command, including destructive ones, can be run.\n\nAre you sure you want to proceed?"
+					onConfirm := func() tea.Msg {
+						return tea.Batch(applyChange("system"), tui.CloseDialog())()
+					}
+					confirm := tui.NewConfirmModel(title, msg, false, onConfirm, tui.CloseDialog())
+					return tui.ShowDialogMsg{Dialog: confirm}
+				}
+				return applyChange("system")()
+			}
+			items = append(items, tui.MenuItem{
+				Tag:  "System Console",
+				Desc: "Full shell access",
+				Help: "Passes commands directly to the OS shell. Use with caution for remote sessions.",
+				Action: systemAction,
+			})
+		}
+
+
 		title := "Remote Panel Mode"
 		if isLocalSetting {
 			title = "Local Panel Mode"
@@ -650,7 +656,7 @@ func (s *DisplayOptionsScreen) showPanelDropdown(isLocalSetting bool) tea.Cmd {
 		menu := tui.NewMenuModel("panel_dropdown", title, "Choose layout", items, tui.CloseDialog())
 		menu.SetShowExit(false)
 
-		// Set initial selection
+		// Set initial selection — "system" maps to tag "System Console"
 		current := strings.ToLower(currentMode)
 		for i, item := range items {
 			if strings.ToLower(item.Tag) == current {
