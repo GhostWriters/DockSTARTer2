@@ -4,16 +4,23 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"image/color"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
+	"os"
 
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/logger"
 
+	"github.com/eliukblau/pixterm/pkg/ansimage"
 	"github.com/pgavlin/goldmark"
 	"github.com/pgavlin/goldmark/renderer"
 	"github.com/pgavlin/goldmark/text"
 	"github.com/pgavlin/goldmark/util"
 	kit_renderer "github.com/pgavlin/markdown-kit/renderer"
 	"github.com/pgavlin/markdown-kit/styles"
+	_ "github.com/pgavlin/svg2"
 )
 
 func HandleMan(ctx context.Context, group *CommandGroup) error {
@@ -28,12 +35,23 @@ func HandleMan(ctx context.Context, group *CommandGroup) error {
 		return err
 	}
 
+	// Determine the best image encoder for the current terminal
+	supportsKitty := os.Getenv("TERM") == "xterm-kitty" || os.Getenv("KITTY_WINDOW_ID") != ""
+	var encoder kit_renderer.ImageEncoder
+	if supportsKitty {
+		encoder = kit_renderer.KittyGraphicsEncoder()
+	} else {
+		// ANSI blocks fallback for terminals that don't support Kitty (like Windows Terminal)
+		encoder = kit_renderer.ANSIGraphicsEncoder(color.Transparent, ansimage.DitheringWithChars)
+	}
+
 	// Use markdown-kit renderer with auto-detected theme
 	kitR := kit_renderer.New(
 		kit_renderer.WithTheme(styles.AutoTheme()),
 		kit_renderer.WithWordWrap(0), // Let the terminal handle wrapping or use 0 as requested
 		kit_renderer.WithImages(true, 0, ""),
-		kit_renderer.WithImageEncoder(kit_renderer.KittyGraphicsEncoder()),
+		kit_renderer.WithImageEncoder(encoder),
+		kit_renderer.WithHyperlinks(true),
 	)
 
 	// Create a goldmark renderer and register our terminal NodeRenderer

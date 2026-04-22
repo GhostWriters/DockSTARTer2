@@ -5,18 +5,24 @@ import (
 	"context"
 	"fmt"
 	"image/color"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
+	"os"
 	"strings"
 
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/theme"
 
 	"github.com/charmbracelet/x/ansi"
+	"github.com/eliukblau/pixterm/pkg/ansimage"
 	"github.com/pgavlin/goldmark"
 	"github.com/pgavlin/goldmark/renderer"
 	"github.com/pgavlin/goldmark/text"
 	"github.com/pgavlin/goldmark/util"
 	kit_renderer "github.com/pgavlin/markdown-kit/renderer"
 	"github.com/pgavlin/markdown-kit/styles"
+	_ "github.com/pgavlin/svg2"
 
 	"charm.land/bubbles/v2/help"
 	keybind "charm.land/bubbles/v2/key"
@@ -152,12 +158,23 @@ func (m *HelpDialogModel) getRenderedMarkdown(width int) string {
 
 	source := []byte(m.contextInfo.DocMarkdown)
 
+	// Determine the best image encoder for the current terminal
+	supportsKitty := os.Getenv("TERM") == "xterm-kitty" || os.Getenv("KITTY_WINDOW_ID") != ""
+	var encoder kit_renderer.ImageEncoder
+	if supportsKitty {
+		encoder = kit_renderer.KittyGraphicsEncoder()
+	} else {
+		// ANSI blocks fallback for terminals that don't support Kitty (like Windows Terminal)
+		encoder = kit_renderer.ANSIGraphicsEncoder(color.Transparent, ansimage.DitheringWithChars)
+	}
+
 	// Initialize the terminal-optimized NodeRenderer from markdown-kit
 	kitR := kit_renderer.New(
 		kit_renderer.WithTheme(styles.GlamourDark),
 		kit_renderer.WithWordWrap(width),
-		kit_renderer.WithImages(true, width, ""), // Default to no specific content root
-		kit_renderer.WithImageEncoder(kit_renderer.KittyGraphicsEncoder()),
+		kit_renderer.WithImages(true, width, ""),
+		kit_renderer.WithImageEncoder(encoder),
+		kit_renderer.WithHyperlinks(true), // Enable hyperlinks for better fallbacks
 	)
 
 	// Create a goldmark renderer and register our terminal NodeRenderer
