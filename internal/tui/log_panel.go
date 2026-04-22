@@ -696,7 +696,7 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.KeyPressMsg:
-		if m.inputFocused {
+		if m.focused && m.inputFocused {
 			return m.updateInputFocused(msg)
 		}
 		if m.expanded {

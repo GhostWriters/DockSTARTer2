@@ -661,22 +661,25 @@ func (m *AppModel) setHeaderFocus(focus HeaderFocus) {
 }
 
 func (m *AppModel) updateComponentFocus() {
-	// Screen/Dialog is focused ONLY if neither log panel nor header have focus
-	mainFocused := !m.logPanelFocused && m.backdrop.header.GetFocus() == HeaderFocusNone
 	dialogOpen := m.dialog != nil
+	headerFocused := m.backdrop.header.GetFocus() != HeaderFocusNone
 
+	// Log panel only keeps its "internal" focus state if no dialog is blocking it.
+	m.logPanel.focused = m.logPanelFocused && !dialogOpen
+
+	// Screen is focused only if no dialog is open AND neither log panel nor header have focus.
 	if m.activeScreen != nil {
 		if focusable, ok := m.activeScreen.(interface{ SetFocused(bool) }); ok {
-			// Screen is focused only if main area is focused AND no dialog is open
-			focusable.SetFocused(mainFocused && !dialogOpen)
-		}
-	}
-	if m.dialog != nil {
-		if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
-			focusable.SetFocused(mainFocused)
+			focusable.SetFocused(!dialogOpen && !m.logPanelFocused && !headerFocused)
 		}
 	}
 
+	// Dialog is ALWAYS focused if it exists.
+	if m.dialog != nil {
+		if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
+			focusable.SetFocused(true)
+		}
+	}
 }
 
 // invalidateAllCaches clears every render cache in the TUI so a full redraw
