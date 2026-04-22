@@ -5,13 +5,13 @@ import (
 )
 
 // NewMainMenuScreen creates the main menu as a standalone screen
-func NewMainMenuScreen() tui.ScreenModel {
+func NewMainMenuScreen(connType string) tui.ScreenModel {
 	items := []tui.MenuItem{
 		{
 			Tag:    "Configuration",
 			Desc:   "Setup and start applications",
 			Help:   "Configure applications and services",
-			Action: navigateToConfigMenu(),
+			Action: navigateToConfigMenu(connType),
 		},
 		{
 			Tag:    "Update",
@@ -24,7 +24,7 @@ func NewMainMenuScreen() tui.ScreenModel {
 			Tag:    "Options",
 			Desc:   "Customize settings",
 			Help:   "Theme, display options, and more",
-			Action: navigateToOptionsMenu(),
+			Action: navigateToOptionsMenu(connType),
 		},
 	}
 
@@ -37,6 +37,7 @@ func NewMainMenuScreen() tui.ScreenModel {
 	)
 
 	menu.SetMenuName("")
+	menu.SetConnType(connType)
 	menu.SetHelpPageText("The main navigation menu for DockSTARTer. Select an action to configure your Docker application stack, apply updates, or adjust settings.")
 	menu.SetHelpItemPrefix("Action")
 	return menu

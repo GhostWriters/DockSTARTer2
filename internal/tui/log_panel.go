@@ -94,6 +94,11 @@ type LogPanelModel struct {
 
 	// sessionLockers tracks active locks by ID. Input is locked when non-empty.
 	sessionLockers map[string]struct{}
+
+	rawLines []string // un-wrapped, themed lines
+
+	panelMode string // "log", "console", or "none"
+	connType  string // "local", "ssh", or "web"
 }
 
 // applyInputStyles updates the sinput colours from the current theme.
@@ -108,8 +113,8 @@ func (m *LogPanelModel) applyInputStyles() {
 	m.input.SetStyles(tiStyles)
 }
 
-// NewLogPanelModel creates a new console panel in collapsed state.
-func NewLogPanelModel() LogPanelModel {
+// NewLogPanelModel creates a new console panel in the requested state.
+func NewLogPanelModel(panelMode string, connType string) LogPanelModel {
 	vp := viewport.New()
 
 	ti := textinput.New()
@@ -120,6 +125,9 @@ func NewLogPanelModel() LogPanelModel {
 		viewport:   vp,
 		input:      inp,
 		historyIdx: -1,
+		panelMode:  panelMode,
+		connType:   connType,
+		expanded:   false,
 	}
 	m.applyInputStyles()
 	return m
@@ -137,6 +145,9 @@ func (m LogPanelModel) Height() int {
 		if m.totalHeight > 2 {
 			return m.totalHeight / 2
 		}
+	}
+	if m.panelMode == "none" {
+		return 0
 	}
 	return 1
 }
@@ -200,8 +211,13 @@ func (m *LogPanelModel) effectiveMaxHeight() int {
 
 // SetSize stores dimensions and adjusts the viewport and input bar.
 func (m *LogPanelModel) SetSize(width, totalTermHeight int) {
+	oldWidth := m.width
 	m.width = width
 	m.totalHeight = totalTermHeight
+
+	if oldWidth != width && width > 0 {
+		m.reRenderLines()
+	}
 
 	m.viewport.SetWidth(width - ScrollbarGutterWidth)
 	// Input box inner width: outer panel width - 2 (outer box) - 2 (inner border)
@@ -219,7 +235,10 @@ func (m *LogPanelModel) SetSize(width, totalTermHeight int) {
 			m.height = 5
 		}
 
-		vpH := m.height - 4 // subtract toggle strip + 3-row input box
+		vpH := m.height - 1
+		if m.panelMode == "console" {
+			vpH -= 3 // subtract 3-row input box
+		}
 		if vpH < 1 {
 			vpH = 1
 		}
@@ -397,12 +416,51 @@ func (m *LogPanelModel) appendConsoleLines(lines []string) {
 		targetWidth = m.width - ScrollbarGutterWidth
 	}
 	for _, line := range lines {
+		m.rawLines = append(m.rawLines, line)
 		rendered := RenderConsoleText(line, styles.Console)
 		if targetWidth > 0 {
 			rendered = lipgloss.NewStyle().MaxWidth(targetWidth).Render(rendered)
 		}
 		m.lines = append(m.lines, rendered)
 	}
+
+	// Limit history to 5000 lines
+	maxHistory := 5000
+	if len(m.rawLines) > maxHistory {
+		m.rawLines = m.rawLines[len(m.rawLines)-maxHistory:]
+		m.lines = m.lines[len(m.lines)-maxHistory:]
+	}
+
+	content := strings.Join(m.lines, "\n")
+	m.viewport.SetContent(content)
+	if m.viewport.Height() > 0 {
+		m.viewport.GotoBottom()
+	}
+}
+
+// reRenderLines re-wraps all stored raw lines for the current width.
+func (m *LogPanelModel) reRenderLines() {
+	styles := GetStyles()
+	targetWidth := m.width - ScrollbarGutterWidth
+	if targetWidth <= 0 {
+		return
+	}
+
+	m.lines = make([]string, 0, len(m.rawLines))
+	style := lipgloss.NewStyle().MaxWidth(targetWidth)
+	for _, line := range m.rawLines {
+		rendered := RenderConsoleText(line, styles.Console)
+		rendered = style.Render(rendered)
+		m.lines = append(m.lines, rendered)
+	}
+
+	// Limit history to 5000 lines
+	maxHistory := 5000
+	if len(m.rawLines) > maxHistory {
+		m.rawLines = m.rawLines[len(m.rawLines)-maxHistory:]
+		m.lines = m.lines[len(m.lines)-maxHistory:]
+	}
+
 	content := strings.Join(m.lines, "\n")
 	m.viewport.SetContent(content)
 	if m.viewport.Height() > 0 {
@@ -428,6 +486,11 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case ConfigChangedMsg:
+		m.panelMode = EffectivePanelMode(msg.Config, m.connType)
+		if m.panelMode == "none" {
+			m.expanded = false
+		}
+		m.SetSize(m.width, m.totalHeight)
 		m.applyInputStyles()
 		return m, nil
 
@@ -640,7 +703,7 @@ func (m LogPanelModel) updateInputFocused(msg tea.KeyPressMsg) (tea.Model, tea.C
 // FocusInput transitions the panel to input-focused state (called from AppModel).
 // Returns the Blink command needed to activate the hardware cursor.
 func (m *LogPanelModel) FocusInput() tea.Cmd {
-	if m.sessionActive() || !m.expanded {
+	if m.panelMode != "console" || m.sessionActive() || !m.expanded {
 		return nil
 	}
 	m.inputFocused = true
@@ -651,13 +714,20 @@ func (m *LogPanelModel) FocusInput() tea.Cmd {
 // ─── View ─────────────────────────────────────────────────────────────────────
 
 func (m LogPanelModel) ViewString() string {
+	if m.Height() <= 0 {
+		return ""
+	}
 	ctx := GetActiveContext()
 
 	marker := "^"
 	if m.expanded {
 		marker = "v"
 	}
-	title := marker + " Console " + marker
+	titleText := "Console"
+	if m.panelMode == "log" {
+		titleText = "Log"
+	}
+	title := marker + " " + titleText + " " + marker
 
 	rightTitle := ""
 	if m.focused && m.expanded && !m.inputFocused {
@@ -666,10 +736,17 @@ func (m LogPanelModel) ViewString() string {
 	}
 
 	// Input box occupies 3 rows (top border + 1 content + bottom border).
-	vpH := m.height - 4
+	vpH := m.height - 1
+	if m.panelMode == "console" {
+		vpH -= 3
+	}
 	if vpH < 1 {
 		if m.totalHeight > 0 {
-			vpH = (m.totalHeight / 2) - 4
+			fullH := (m.totalHeight / 2) - 1
+			if m.panelMode == "console" {
+				fullH -= 3
+			}
+			vpH = fullH
 		}
 		if vpH < 1 {
 			vpH = 1
@@ -747,7 +824,10 @@ func (m LogPanelModel) ViewString() string {
 		inputBox = strings.Join(ibLines, "\n")
 	}
 
-	combined := vpView + "\n" + inputBox
+	combined := vpView
+	if m.panelMode == "console" {
+		combined += "\n" + inputBox
+	}
 
 	consoleTitleStyle := SemanticRawStyle("ConsoleTitle")
 	consoleBorderStyle := SemanticRawStyle("ConsoleBorder")

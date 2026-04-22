@@ -61,6 +61,7 @@ type AppSelectionScreen struct {
 	renamingOriginal        tui.MenuItem
 	convertedFromSimple     bool
 	convertedSimpleOriginal tui.MenuItem
+	connType                string
 }
 
 func (s *AppSelectionScreen) Init() tea.Cmd                             { return s.menu.Init() }
@@ -95,9 +96,10 @@ func (s *AppSelectionScreen) isSubRow(it tui.MenuItem) bool {
 }
 
 // NewAppSelectionScreen creates the app selection screen.
-func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScreen {
+func NewAppSelectionScreen(conf config.AppConfig, isRoot bool, connType string) *AppSelectionScreen {
 	s := &AppSelectionScreen{
-		conf: conf,
+		conf:     conf,
+		connType: connType,
 	}
 
 	var backAction tea.Cmd
@@ -127,6 +129,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool) *AppSelectionScre
 	s.menu = menu
 
 	menu.SetMenuName("app-select")
+	menu.SetConnType(connType)
 	menu.SetHelpItemPrefix("App")
 	menu.SetItemHelpFunc(func(item tui.MenuItem) (itemTitle, itemText string) {
 		if item.BaseApp == "" || item.IsSeparator {

@@ -147,7 +147,7 @@ func NewProgram(model tea.Model, opts ProgramOptions) *tea.Program {
 // parseClientInfo extracts IP and connection type from environment strings.
 func parseClientInfo(environ []string) (string, string) {
 	clientIP := "local"
-	connType := "cli"
+	connType := "local"
 	for _, env := range environ {
 		if strings.HasPrefix(env, "DS2_CLIENT_IP=") {
 			clientIP = strings.TrimPrefix(env, "DS2_CLIENT_IP=")
@@ -230,6 +230,7 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	// Resolve the menu target to a canonical page name and root-session flag.
 	pageName, isRoot := resolveMenuTarget(startMenu)
 	isRootSession = isRoot
+	activeConnType = connType
 
 	// Look up the screen entry; fall back to "main" if unrecognised.
 	entry, ok := screenRegistry[pageName]
@@ -237,7 +238,7 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 		entry = screenRegistry["main"]
 	}
 
-	startScreen := entry.create(isRoot)
+	startScreen := entry.create(isRoot, connType)
 
 	// For non-root (start-*) sessions, push the canonical parent screens onto the
 	// navigation stack so that Back navigates naturally rather than quitting.
@@ -245,7 +246,7 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	if !isRoot {
 		for _, parentName := range entry.parents {
 			if parentEntry, ok := screenRegistry[parentName]; ok {
-				initialStack = append(initialStack, parentEntry.create(false))
+				initialStack = append(initialStack, parentEntry.create(false, connType))
 			}
 		}
 	}
@@ -317,7 +318,7 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 // appName is empty for the global vars editor, or an app name for the app-specific editor.
 // onClose is the Cmd to fire when the user navigates back/exits the editor.
 // showBack controls whether the Back button is shown (false when launched as root session).
-type EditorFactory func(appName string, onClose tea.Cmd, showBack bool) ScreenModel
+type EditorFactory func(appName string, onClose tea.Cmd, showBack bool, connType string) ScreenModel
 
 // editorFactory is registered by the screens package to avoid a circular import.
 var editorFactory EditorFactory
@@ -369,9 +370,11 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 	}
 
 	isRootSession = isRoot
+	ip, ctype := parseClientInfo(pOpts.Environ)
+	activeConnType = ctype
 
 	onClose := func() tea.Msg { return NavigateBackMsg{} }
-	startScreen := editorFactory(appName, onClose, !isRoot)
+	startScreen := editorFactory(appName, onClose, !isRoot, ctype)
 
 	// For non-root sessions, pre-populate the navigation stack so Back returns naturally.
 	// Global editor: main → config
@@ -384,12 +387,11 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 		}
 		for _, name := range parentNames {
 			if entry, ok := screenRegistry[name]; ok {
-				initialStack = append(initialStack, entry.create(false))
+				initialStack = append(initialStack, entry.create(false, ctype))
 			}
 		}
 	}
 
-	ip, ctype := parseClientInfo(pOpts.Environ)
 	model := NewAppModel(ctx, currentConfig, ip, ctype, startScreen, initialStack...)
 	p := NewProgram(model, pOpts)
 	programExited = make(chan struct{})
@@ -397,6 +399,8 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 	startWindowSizeForwarder(ctx, p, pOpts)
 
 	go startUpdateChecker(ctx)
+	startConfigWatcher(ctx, p)
+	startLockFileWatcher(ctx, p)
 	go func() {
 		<-ctx.Done()
 		Shutdown()
@@ -543,6 +547,8 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 	startWindowSizeForwarder(ctx, p, pOpts)
 
 	go startUpdateChecker(ctx)
+	startConfigWatcher(ctx, p)
+	startLockFileWatcher(ctx, p)
 	go func() {
 		<-ctx.Done()
 		Shutdown()
@@ -720,7 +726,7 @@ func Error(title, message string) {
 // screenEntry holds a screen's creator function and its canonical parent stack.
 // parents is ordered outermost-first (e.g. ["main", "options"] for the appearance screen).
 type screenEntry struct {
-	create  func(isRoot bool) ScreenModel
+	create  func(isRoot bool, connType string) ScreenModel
 	parents []string
 }
 
@@ -742,10 +748,10 @@ var screenAliases = map[string]string{
 }
 
 // RegisterScreen registers a screen with its canonical page name, a creator function
-// that accepts isRoot, and an optional ordered list of parent page names.
+// that accepts isRoot and connType, and an optional ordered list of parent page names.
 // parents should be outermost-first; they are pushed onto the navigation stack
 // when the screen is started via "-M start-<name>" so that Back navigates naturally.
-func RegisterScreen(name string, create func(isRoot bool) ScreenModel, parents []string) {
+func RegisterScreen(name string, create func(isRoot bool, connType string) ScreenModel, parents []string) {
 	screenRegistry[name] = &screenEntry{create: create, parents: parents}
 }
 
@@ -1080,3 +1086,21 @@ func CloseDialogWithResult(result any) tea.Cmd {
 		return CloseDialogMsg{Result: result}
 	}
 }
+// GetConnType returns the connection type of the active session.
+func GetConnType() string {
+	if program == nil {
+		return "local"
+	}
+	// We can't easily reach into the model from here, but we can track it globally.
+	return activeConnType
+}
+
+// EffectivePanelMode returns the correct panel mode (log, console, none) for the current session.
+func EffectivePanelMode(cfg config.AppConfig, connType string) string {
+	if connType == "local" {
+		return cfg.UI.PanelLocal
+	}
+	return cfg.UI.PanelRemote
+}
+
+var activeConnType = "local"

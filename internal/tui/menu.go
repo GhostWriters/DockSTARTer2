@@ -798,6 +798,7 @@ type MenuModel struct {
 	activityGutterWidth int
 	itemPaddingWidth int // Optional padding after getters
 	menuName       string // Name used for --menu or -M to return to this screen
+	connType       string // "local", "ssh", or "web"
 
 	// Content sections: sub-menus rendered stacked inside the outer border.
 	// When present, replaces the standard list+inner-border rendering.
@@ -987,6 +988,7 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 		items:       items,
 		cursor:      cursor,
 		backAction:  backAction,
+		connType:    "local", // default
 		focused:     true,
 		focusedItem: FocusSelectBtn,
 		activeColumn: ColAdd,
@@ -998,6 +1000,11 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 		activityGutterWidth: 0,
 		itemPaddingWidth: 1, // Default 1 char padding after marker gutter
 	}
+}
+
+// SetConnType updates the connection type for the menu.
+func (m *MenuModel) SetConnType(connType string) {
+	m.connType = connType
 }
 
 // SetItemPaddingWidth sets the optional padding width after the gutters.

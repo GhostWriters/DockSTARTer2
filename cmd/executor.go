@@ -17,12 +17,8 @@ import (
 	"fmt"
 )
 
-// CmdState holds the state of flags for a single command group.
-type CmdState struct {
-	Force bool
-	GUI   bool
-	Yes   bool
-}
+// CmdState aliases the shared state struct in internal/commands.
+type CmdState = commands.CmdState
 
 // commandDefs aliases the shared registry. All entries live in internal/commands/registry.go.
 var commandDefs = commands.Registry
@@ -65,7 +61,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 	for _, g := range groups {
 		switch g.Command {
 		case "-h", "--help", "-V", "--version", "--config-show", "--show-config",
-			"--config-folder", "--config-compose-folder", "-T", "--theme", "--theme-list",
+			"--config-folder", "--config-compose-folder", "--config-panel", "-T", "--theme", "--theme-list",
 			"--theme-lines", "--theme-no-lines", "--theme-line", "--theme-no-line",
 			"--theme-borders", "--theme-no-borders", "--theme-border", "--theme-no-border",
 			"--theme-button-borders", "--theme-no-button-borders",
@@ -112,9 +108,11 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		for _, flag := range flags {
 			switch flag {
 			case "-v", "--verbose":
+				state.Verbose = true
 				logger.SetLevel(logger.LevelInfo)
 				console.GlobalVerbose = true
 			case "-x", "--debug":
+				state.Debug = true
 				logger.SetLevel(logger.LevelDebug)
 				console.GlobalDebug = true
 			case "-f", "--force":
@@ -142,19 +140,24 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			switch group.Command {
 			case "-h", "--help":
 				ranCommand = true
-				return handleHelp(&group)
+				target := ""
+				if len(group.Args) > 0 {
+					target = group.Args[0]
+				}
+				commands.PrintHelp(subCtx, target)
+				return nil
 			case "-V", "--version":
 				ranCommand = true
-				return handleVersion(subCtx)
+				return commands.HandleVersion(subCtx)
 			case "--man":
 				ranCommand = true
-				return handleMan(subCtx, &group)
+				return commands.HandleMan(subCtx, &group)
 			case "-i", "--install":
 				ranCommand = true
-				return handleInstall(subCtx, &group, &state)
+				return commands.HandleInstall(subCtx, &group, &state)
 			case "-u", "--update", "--update-app", "--update-templates":
 				ranCommand = true
-				return handleUpdate(subCtx, &group, &state, restArgs)
+				return commands.HandleUpdate(subCtx, &group, &state, restArgs)
 			case "--edit-global", "--start-edit-global", "--edit-app", "--start-edit-app":
 				ranCommand = true
 				return handleEditVars(subCtx, &group)
@@ -171,52 +174,52 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			case "-a", "--add":
 				// appvars_create (single)
 				ranCommand = true
-				return handleAppVarsCreate(subCtx, &group, &state)
+				return commands.HandleAppVarsCreate(subCtx, &group, &state)
 			case "-c", "--compose":
 				ranCommand = true
-				return handleCompose(subCtx, &group, &state)
+				return commands.HandleCompose(subCtx, &group, &state)
 			case "-e", "--env":
 				ranCommand = true
-				return handleAppVarsCreateAll(subCtx, &group, &state)
+				return commands.HandleAppVarsCreateAll(subCtx, &group, &state)
 			case "-l", "--list", "--list-added", "--list-builtin", "--list-deprecated", "--list-enabled", "--list-disabled", "--list-nondeprecated", "--list-referenced":
 				ranCommand = true
-				return handleList(subCtx, &group)
+				return commands.HandleList(subCtx, &group)
 			case "-s", "--status":
 				ranCommand = true
-				return handleStatus(subCtx, &group)
+				return commands.HandleStatus(subCtx, &group)
 			case "--config-pm", "--config-pm-auto", "--config-pm-list", "--config-pm-table", "--config-pm-existing-list", "--config-pm-existing-table":
 				ranCommand = true
-				return handleConfigPm(subCtx, &group)
+				return commands.HandleConfigPm(subCtx, &group)
 			case "--status-enable", "--status-disable":
 				ranCommand = true
-				return handleStatusChange(subCtx, &group)
+				return commands.HandleStatusChange(subCtx, &group)
 			case "-r", "--remove":
 				ranCommand = true
-				return handleRemove(subCtx, &group, &state)
+				return commands.HandleRemove(subCtx, &group, &state)
 			case "-S", "--select", "--menu-config-app-select", "--menu-app-select":
 				ranCommand = true
 				return handleAppSelect(subCtx, &group)
 			case "-t", "--test":
 				ranCommand = true
-				return handleTest(subCtx, &group)
+				return commands.HandleTest(subCtx, &group)
 			case "--env-appvars":
 				ranCommand = true
-				return handleEnvAppVars(subCtx, &group)
+				return commands.HandleEnvAppVars(subCtx, &group)
 			case "--env-appvars-lines":
 				ranCommand = true
-				return handleEnvAppVarsLines(subCtx, &group)
+				return commands.HandleEnvAppVarsLines(subCtx, &group)
 			case "--env-get", "--env-get-line", "--env-get-literal", "--env-get-lower", "--env-get-lower-line", "--env-get-lower-literal":
 				ranCommand = true
-				return handleEnvGet(subCtx, &group)
+				return commands.HandleEnvGet(subCtx, &group)
 			case "--env-set", "--env-set-lower", "--env-set-literal", "--env-set-lower-literal":
 				ranCommand = true
-				return handleEnvSet(subCtx, &group)
+				return commands.HandleEnvSet(subCtx, &group)
 			case "--config-show", "--show-config":
 				ranCommand = true
-				return handleConfigShow(subCtx, &conf)
+				return commands.HandleConfigShow(subCtx, &conf)
 			case "--config-folder", "--config-compose-folder":
 				ranCommand = true
-				return handleConfigSettings(subCtx, &group)
+				return commands.HandleConfigSettings(subCtx, &group)
 			case "--theme-lines", "--theme-no-lines", "--theme-line", "--theme-no-line",
 				"--theme-borders", "--theme-no-borders", "--theme-border", "--theme-no-border",
 				"--theme-button-borders", "--theme-no-button-borders",
@@ -224,19 +227,22 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				"--theme-scrollbar", "--theme-no-scrollbar", "--theme-border-color",
 				"--theme-dialog-title", "--theme-submenu-title", "--theme-log-title":
 				ranCommand = true
-				return handleThemeSettings(subCtx, &group)
+				return commands.HandleThemeSettings(subCtx, &group)
 			case "-p", "--prune":
 				ranCommand = true
-				return handlePrune(subCtx, &state)
+				return commands.HandlePrune(subCtx, &state)
 			case "-R", "--reset":
 				ranCommand = true
-				return handleReset(subCtx)
+				return commands.HandleReset(subCtx)
 			case "--theme-table":
 				ranCommand = true
-				return handleThemeTable(subCtx)
+				return commands.HandleThemeTable(subCtx)
 			case "--theme-extract", "--theme-extract-all":
 				ranCommand = true
-				return handleThemeExtract(subCtx, &group)
+				return commands.HandleThemeExtract(subCtx, &group)
+			case "--config-panel":
+				ranCommand = true
+				return commands.HandleConfigPanel(subCtx, &group)
 			case "--server":
 				ranCommand = true
 				return handleServer(subCtx, &group, &state, &conf)

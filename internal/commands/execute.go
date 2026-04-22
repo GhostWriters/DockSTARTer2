@@ -17,15 +17,42 @@ import (
 
 // CmdState holds per-group flag state.
 type CmdState struct {
-	Force bool
-	GUI   bool
-	Yes   bool
+	Force   bool
+	GUI     bool
+	Yes     bool
+	Verbose bool
+	Debug   bool
+}
+
+// UIProvider defines an interface for commands to request UI interactions.
+type UIProvider interface {
+	Prompt(ctx context.Context, title, message string, defaultVal bool) (bool, error)
+	AppSelect(ctx context.Context) error
+	ValueEdit(ctx context.Context, appName, varName, file, mode string) error
+	RunCommand(ctx context.Context, title, subtitle string, task func(context.Context) error) error
+	Navigate(ctx context.Context, target string) error
+}
+
+var GlobalUIProvider UIProvider
+
+func SetUIProvider(p UIProvider) {
+	GlobalUIProvider = p
 }
 
 // Execute runs a sequence of command groups in console mode (no TUI, no GUI wrapping).
 // Non-consoleSafe commands are rejected with a warning line.
 // Returns the exit code (0 = success).
 func Execute(ctx context.Context, groups []CommandGroup) int {
+	// Ensure globals are reset on exit so console flags don't leak into the TUI.
+	defer func() {
+		console.GlobalYes = false
+		console.GlobalForce = false
+		console.GlobalGUI = false
+		console.GlobalVerbose = false
+		console.GlobalDebug = false
+		logger.SetLevel(logger.LevelNotice)
+	}()
+
 	conf := config.LoadAppConfig()
 	_, _ = theme.Load(conf.UI.Theme, "")
 	exitCode := 0
@@ -63,14 +90,14 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		}
 
 		// Reset global state.
-		console.GlobalYes = true // console path always auto-confirms
+		console.GlobalYes = false
 		console.GlobalForce = false
 		console.GlobalGUI = false
 		console.GlobalVerbose = false
 		console.GlobalDebug = false
 		logger.SetLevel(logger.LevelNotice)
 
-		state := CmdState{Yes: true}
+		state := CmdState{}
 
 		flags := group.Flags
 		restArgs := Flatten(groups[i+1:])
@@ -80,9 +107,11 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		for _, flag := range flags {
 			switch flag {
 			case "-v", "--verbose":
+				state.Verbose = true
 				logger.SetLevel(logger.LevelInfo)
 				console.GlobalVerbose = true
 			case "-x", "--debug":
+				state.Debug = true
 				logger.SetLevel(logger.LevelDebug)
 				console.GlobalDebug = true
 			case "-f", "--force":
@@ -91,6 +120,9 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			case "-y", "--yes":
 				state.Yes = true
 				console.GlobalYes = true
+			case "-g", "--gui":
+				state.GUI = true
+				console.GlobalGUI = true
 			}
 		}
 
@@ -98,7 +130,23 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		for _, part := range group.FullSlice() {
 			cmdStr += " " + part
 		}
-		logger.Notice(context.Background(), fmt.Sprintf("DockSTARTer2 Console command: '{{|UserCommand|}}%s{{[-]}}'", cmdStr))
+		logger.Notice(ctx, fmt.Sprintf("DockSTARTer2 Console command: '{{|UserCommand|}}%s{{[-]}}'", cmdStr))
+
+		// Apply final state to globals
+		console.GlobalYes = state.Yes
+		console.GlobalForce = state.Force
+		console.GlobalGUI = state.GUI
+		console.GlobalVerbose = state.Verbose
+		console.GlobalDebug = state.Debug
+
+		// Sync logger level
+		if console.GlobalDebug {
+			logger.SetLevel(logger.LevelDebug)
+		} else if console.GlobalVerbose {
+			logger.SetLevel(logger.LevelInfo)
+		} else {
+			logger.SetLevel(logger.LevelNotice)
+		}
 
 		// Block action commands when someone else is currently editing the configuration.
 		if def.SessionLocked {
@@ -118,65 +166,113 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			}
 		}
 
+		// Execute logic
+		runWithUI := func(innerCtx context.Context) error {
+			switch group.Command {
+			case "-h", "--help":
+				return HandleHelp(innerCtx, &group)
+			case "-V", "--version":
+				return HandleVersion(innerCtx)
+			case "--man":
+				return HandleMan(innerCtx, &group)
+			case "-i", "--install":
+				return HandleInstall(innerCtx, &group, &state)
+			case "-u", "--update", "--update-app", "--update-templates":
+				return HandleUpdate(innerCtx, &group, &state, restArgs)
+			case "-a", "--add":
+				return HandleAppVarsCreate(innerCtx, &group, &state)
+			case "-S", "--select":
+				if GlobalUIProvider != nil {
+					return GlobalUIProvider.AppSelect(innerCtx)
+				}
+				return nil
+			case "-M", "--menu":
+				if GlobalUIProvider != nil {
+					target := ""
+					if len(group.Args) > 0 {
+						target = group.Args[0]
+					}
+					return GlobalUIProvider.Navigate(innerCtx, target)
+				}
+				return nil
+			case "--env-edit", "--env-edit-lower":
+				if GlobalUIProvider != nil {
+					arg := ""
+					if len(group.Args) > 0 {
+						arg = group.Args[0]
+					}
+					return GlobalUIProvider.ValueEdit(innerCtx, "", arg, "", "")
+				}
+				return nil
+			case "--edit-global", "--start-edit-global":
+				if GlobalUIProvider != nil {
+					return GlobalUIProvider.ValueEdit(innerCtx, "", "", "", "global")
+				}
+				return nil
+			case "--edit-app", "--start-edit-app":
+				if GlobalUIProvider != nil {
+					arg := ""
+					if len(group.Args) > 0 {
+						arg = group.Args[0]
+					}
+					return GlobalUIProvider.ValueEdit(innerCtx, arg, "", "", "app")
+				}
+				return nil
+			case "-e", "--env":
+				return HandleAppVarsCreateAll(innerCtx, &group, &state)
+			case "-l", "--list", "--list-added", "--list-builtin", "--list-deprecated", "--list-enabled", "--list-disabled", "--list-nondeprecated", "--list-referenced":
+				return HandleList(innerCtx, &group)
+			case "-s", "--status":
+				return HandleStatus(innerCtx, &group)
+			case "--config-pm", "--config-pm-auto", "--config-pm-list", "--config-pm-table", "--config-pm-existing-list", "--config-pm-existing-table":
+				return HandleConfigPm(innerCtx, &group)
+			case "--status-enable", "--status-disable":
+				return HandleStatusChange(innerCtx, &group)
+			case "-r", "--remove":
+				return HandleRemove(innerCtx, &group, &state)
+			case "-t", "--test":
+				return HandleTest(innerCtx, &group)
+			case "--env-appvars":
+				return HandleEnvAppVars(innerCtx, &group)
+			case "--env-appvars-lines":
+				return HandleEnvAppVarsLines(innerCtx, &group)
+			case "--env-get", "--env-get-line", "--env-get-literal", "--env-get-lower", "--env-get-lower-line", "--env-get-lower-literal":
+				return HandleEnvGet(innerCtx, &group)
+			case "--env-set", "--env-set-lower", "--env-set-literal", "--env-set-lower-literal":
+				return HandleEnvSet(innerCtx, &group)
+			case "--config-show", "--show-config":
+				return HandleConfigShow(innerCtx, &conf)
+			case "--config-folder", "--config-compose-folder":
+				return HandleConfigSettings(innerCtx, &group)
+			case "-T", "--theme", "--theme-list":
+				return HandleTheme(innerCtx, &group)
+			case "--theme-lines", "--theme-no-lines", "--theme-line", "--theme-no-line",
+				"--theme-borders", "--theme-no-borders", "--theme-border", "--theme-no-border",
+				"--theme-button-borders", "--theme-no-button-borders",
+				"--theme-shadows", "--theme-no-shadows", "--theme-shadow", "--theme-no-shadow", "--theme-shadow-level",
+				"--theme-scrollbar", "--theme-no-scrollbar", "--theme-border-color",
+				"--theme-dialog-title", "--theme-submenu-title", "--theme-log-title":
+				return HandleThemeSettings(innerCtx, &group)
+			case "-c", "--compose":
+				return HandleCompose(innerCtx, &group, &state)
+			case "-p", "--prune":
+				return HandlePrune(innerCtx, &state)
+			case "-R", "--reset":
+				return HandleReset(innerCtx)
+			case "--theme-table":
+				return HandleThemeTable(innerCtx)
+			case "--theme-extract", "--theme-extract-all":
+				return HandleThemeExtract(innerCtx, &group)
+			}
+			return nil
+		}
+
 		var err error
-		switch group.Command {
-		case "-h", "--help":
-			err = handleHelp(ctx, &group)
-		case "-V", "--version":
-			err = handleVersion(ctx)
-		case "--man":
-			err = handleMan(ctx, &group)
-		case "-i", "--install":
-			err = handleInstall(ctx, &group, &state)
-		case "-u", "--update", "--update-app", "--update-templates":
-			err = handleUpdate(ctx, &group, &state, restArgs)
-		case "-a", "--add":
-			err = handleAppVarsCreate(ctx, &group, &state)
-		case "-e", "--env":
-			err = handleAppVarsCreateAll(ctx, &group, &state)
-		case "-l", "--list", "--list-added", "--list-builtin", "--list-deprecated", "--list-enabled", "--list-disabled", "--list-nondeprecated", "--list-referenced":
-			err = handleList(ctx, &group)
-		case "-s", "--status":
-			err = handleStatus(ctx, &group)
-		case "--config-pm", "--config-pm-auto", "--config-pm-list", "--config-pm-table", "--config-pm-existing-list", "--config-pm-existing-table":
-			err = handleConfigPm(ctx, &group)
-		case "--status-enable", "--status-disable":
-			err = handleStatusChange(ctx, &group)
-		case "-r", "--remove":
-			err = handleRemove(ctx, &group, &state)
-		case "-t", "--test":
-			err = handleTest(ctx, &group)
-		case "--env-appvars":
-			err = handleEnvAppVars(ctx, &group)
-		case "--env-appvars-lines":
-			err = handleEnvAppVarsLines(ctx, &group)
-		case "--env-get", "--env-get-line", "--env-get-literal", "--env-get-lower", "--env-get-lower-line", "--env-get-lower-literal":
-			err = handleEnvGet(ctx, &group)
-		case "--env-set", "--env-set-lower", "--env-set-literal", "--env-set-lower-literal":
-			err = handleEnvSet(ctx, &group)
-		case "--config-show", "--show-config":
-			err = handleConfigShow(ctx, &conf)
-		case "--config-folder", "--config-compose-folder":
-			err = handleConfigSettings(ctx, &group)
-		case "-T", "--theme", "--theme-list":
-			err = handleTheme(ctx, &group)
-		case "--theme-lines", "--theme-no-lines", "--theme-line", "--theme-no-line",
-			"--theme-borders", "--theme-no-borders", "--theme-border", "--theme-no-border",
-			"--theme-button-borders", "--theme-no-button-borders",
-			"--theme-shadows", "--theme-no-shadows", "--theme-shadow", "--theme-no-shadow", "--theme-shadow-level",
-			"--theme-scrollbar", "--theme-no-scrollbar", "--theme-border-color",
-			"--theme-dialog-title", "--theme-submenu-title", "--theme-log-title":
-			err = handleThemeSettings(ctx, &group)
-		case "-c", "--compose":
-			err = handleCompose(ctx, &group, &state)
-		case "-p", "--prune":
-			err = handlePrune(ctx, &state)
-		case "-R", "--reset":
-			err = handleReset(ctx)
-		case "--theme-table":
-			err = handleThemeTable(ctx)
-		case "--theme-extract", "--theme-extract-all":
-			err = handleThemeExtract(ctx, &group)
+		if state.GUI && GlobalUIProvider != nil && group.Command != "" && group.Command != "-h" && group.Command != "--help" {
+			// Wrap in Program Box
+			err = GlobalUIProvider.RunCommand(ctx, "Console Command", cmdStr, runWithUI)
+		} else {
+			err = runWithUI(ctx)
 		}
 
 		if err != nil {

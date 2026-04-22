@@ -34,6 +34,26 @@ func newConfirmDialog(title, question string, defaultYes bool) *confirmDialogMod
 	}
 }
 
+// NewConfirmModel creates a public confirmation dialog with custom callbacks.
+func NewConfirmModel(title, question string, defaultYes bool, onConfirm, onCancel func() tea.Msg) tea.Model {
+	return &confirmDialogModel{
+		baseDialogModel: baseDialogModel{id: "confirm_dialog", focused: true},
+		title:           title,
+		question:        question,
+		defaultYes:      defaultYes,
+		result:          defaultYes,
+		onResult: func(r bool) tea.Msg {
+			if r && onConfirm != nil {
+				return onConfirm()
+			}
+			if !r && onCancel != nil {
+				return onCancel()
+			}
+			return CloseDialogMsg{Result: r}
+		},
+	}
+}
+
 func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Helper to close dialog with result
 	closeWithResult := func(result bool) tea.Cmd {

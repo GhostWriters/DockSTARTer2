@@ -21,7 +21,7 @@ import (
 	"DockSTARTer2/internal/version"
 )
 
-func handleList(ctx context.Context, group *CommandGroup) error {
+func HandleList(ctx context.Context, group *CommandGroup) error {
 	conf := config.LoadAppConfig()
 	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
 	var result []string
@@ -86,7 +86,7 @@ func handleList(ctx context.Context, group *CommandGroup) error {
 	return nil
 }
 
-func handleConfigShow(ctx context.Context, conf *config.AppConfig) error {
+func HandleConfigShow(ctx context.Context, conf *config.AppConfig) error {
 	headers := []string{
 		"{{|UsageCommand|}}Option{{[-]}}",
 		"{{|UsageCommand|}}Value{{[-]}}",
@@ -193,7 +193,7 @@ func handleConfigShow(ctx context.Context, conf *config.AppConfig) error {
 	return nil
 }
 
-func handlePrune(ctx context.Context, state *CmdState) error {
+func HandlePrune(ctx context.Context, state *CmdState) error {
 	if err := docker.Prune(ctx, state.Yes); err != nil {
 		logger.Error(ctx, "Prune failed: %v", err)
 		return err
@@ -201,7 +201,7 @@ func handlePrune(ctx context.Context, state *CmdState) error {
 	return nil
 }
 
-func handleReset(ctx context.Context) error {
+func HandleReset(ctx context.Context) error {
 	logger.Notice(ctx, "Resetting {{|ApplicationName|}}%s{{[-]}} to process all actions.", version.ApplicationName)
 	system.SetPermissions(ctx, paths.GetTimestampsDir())
 	if err := paths.ResetNeeds(); err != nil {
@@ -211,7 +211,7 @@ func handleReset(ctx context.Context) error {
 	return nil
 }
 
-func handleTest(_ctx context.Context, group *CommandGroup) error {
+func HandleTest(ctx context.Context, group *CommandGroup) error {
 	args := []string{"test", "-v", "./..."}
 	if len(group.Args) > 0 {
 		args = append(args, "-run", strings.Join(group.Args, "|"))
@@ -228,7 +228,7 @@ func handleTest(_ctx context.Context, group *CommandGroup) error {
 	return nil
 }
 
-func handleCompose(ctx context.Context, group *CommandGroup, state *CmdState) error {
+func HandleCompose(ctx context.Context, group *CommandGroup, state *CmdState) error {
 	operation := ""
 	var appsList []string
 
@@ -249,5 +249,23 @@ func handleCompose(ctx context.Context, group *CommandGroup, state *CmdState) er
 		}
 		return err
 	}
+	return nil
+}
+func HandleConfigPanel(ctx context.Context, group *CommandGroup) error {
+	if len(group.Args) == 0 {
+		return errors.New("missing panel mode (log, console, none)")
+	}
+	mode := strings.ToLower(group.Args[0])
+	if mode != "log" && mode != "console" && mode != "none" {
+		return fmt.Errorf("invalid panel mode: %s (use log, console, or none)", mode)
+	}
+
+	conf := config.LoadAppConfig()
+	conf.UI.Panel = mode
+	if err := config.SaveAppConfig(conf); err != nil {
+		return err
+	}
+
+	logger.Notice(ctx, "Panel mode set to: {{|Var|}}%s{{[-]}}", mode)
 	return nil
 }

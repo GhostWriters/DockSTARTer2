@@ -14,6 +14,7 @@ import (
 
 type configAppsMenuModel struct {
 	*tui.MenuModel
+	connType string
 }
 
 func (m *configAppsMenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -32,7 +33,7 @@ func (m *configAppsMenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func buildConfigAppItems(ctx context.Context, apps []string, envFile string) []tui.MenuItem {
+func buildConfigAppItems(ctx context.Context, apps []string, envFile string, connType string) []tui.MenuItem {
 	var items []tui.MenuItem
 	for _, appName := range apps {
 		niceName := appenv.GetNiceName(ctx, appName)
@@ -50,7 +51,7 @@ func buildConfigAppItems(ctx context.Context, apps []string, envFile string) []t
 			Tag:           niceName,
 			Desc:          descText,
 			Help:          "Configure environment variables for " + niceName,
-			Action:        navigateToAppConfigEditorWithRefresh(appName),
+			Action:        navigateToAppConfigEditorWithRefresh(appName, connType),
 			BaseApp:       appenv.AppNameToBaseAppName(appName),
 			IsUserDefined: isUserDefined,
 			IsDestructive: true,
@@ -77,7 +78,7 @@ func (m *configAppsMenuModel) refreshItems() {
 		return
 	}
 	envFile := filepath.Join(cfg.ComposeDir, constants.EnvFileName)
-	m.SetItems(buildConfigAppItems(ctx, apps, envFile))
+	m.SetItems(buildConfigAppItems(ctx, apps, envFile, m.connType))
 }
 
 // configAppItemHelp returns enriched (itemTitle, itemText) for a config app menu item.
@@ -129,7 +130,7 @@ func (m *configAppsMenuModel) HelpContext(maxWidth int) tui.HelpContext {
 }
 
 // NewConfigAppsMenuScreen creates the "Configure Applications" menu
-func NewConfigAppsMenuScreen() tui.ScreenModel {
+func NewConfigAppsMenuScreen(connType string) tui.ScreenModel {
 	ctx := context.Background()
 	cfg := config.LoadAppConfig()
 
@@ -139,16 +140,16 @@ func NewConfigAppsMenuScreen() tui.ScreenModel {
 	}
 
 	envFile := filepath.Join(cfg.ComposeDir, constants.EnvFileName)
-
 	menu := tui.NewMenuModel(
 		tui.IDListPanel,
 		"Configure Applications",
 		"Select the application to configure",
-		buildConfigAppItems(ctx, apps, envFile),
+		buildConfigAppItems(ctx, apps, envFile, connType),
 		navigateBack(),
 	)
 
 	menu.SetMenuName("config_apps")
+	menu.SetConnType(connType)
 	menu.SetVariableHeight(true)
 	menu.SetHelpPageText("Select an application to browse and edit its environment variables. Each application's settings are stored in your .env file.")
 	menu.SetHelpItemPrefix("App")
@@ -163,5 +164,5 @@ func NewConfigAppsMenuScreen() tui.ScreenModel {
 		}
 		return doc, item.Tag
 	})
-	return &configAppsMenuModel{MenuModel: menu}
+	return &configAppsMenuModel{MenuModel: menu, connType: connType}
 }

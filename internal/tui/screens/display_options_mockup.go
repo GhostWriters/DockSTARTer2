@@ -17,6 +17,9 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	dBorder1 := tui.SemanticRawStyle("Preview_Border")
 	dBorder2 := tui.SemanticRawStyle("Preview_Border2")
 
+	pMode := tui.EffectivePanelMode(s.config, s.connType)
+	showStrip := pMode != "none"
+
 	// Adjust border colors based on setting
 	switch s.config.UI.BorderColor {
 	case 1:
@@ -206,7 +209,10 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	dTitle := tui.RenderThemeTextCtx(strings.Join(titleParts, " "), previewCtx)
 
 	layout := tui.GetLayout()
-	fixedLines := layout.BorderHeight() + 4
+	fixedLines := layout.BorderHeight() + 3 // headerRow + bottomBorderRow + helpRow
+	if showStrip {
+		fixedLines++ // logStripRow
+	}
 	backdropHeight := targetHeight - fixedLines
 	if backdropHeight < 10 {
 		backdropHeight = 10
@@ -251,7 +257,11 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	consoleBorderStyle := tui.SemanticRawStyle("Preview_ConsoleBorder")
 
 	marker := "^"
-	label := consoleTitleStyle.Render(" " + marker + " Console " + marker + " ")
+	titleText := "Console"
+	if pMode == "log" {
+		titleText = "Log"
+	}
+	label := consoleTitleStyle.Render(" " + marker + " " + titleText + " " + marker + " ")
 
 	var leftT, rightT, borderTop, topLeftC, topRightC string
 	if s.config.UI.LineCharacters {
@@ -297,7 +307,9 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 		bottomBorderRow,
 		backdropBlock,
 		helpRow,
-		logStripRow,
+	}
+	if showStrip {
+		mockupParts = append(mockupParts, logStripRow)
 	}
 	for i, p := range mockupParts {
 		mockupParts[i] = strings.TrimRight(p, "\n")

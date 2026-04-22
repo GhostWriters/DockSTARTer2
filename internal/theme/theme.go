@@ -406,6 +406,10 @@ type ThemeDefaults struct {
 	DialogTitleAlign  *string `toml:"dialog_title_align"`
 	SubmenuTitleAlign *string `toml:"submenu_title_align"`
 	LogTitleAlign     *string `toml:"log_title_align"`
+	// Panel modes: themes may suggest "log" or "none" but never "console".
+	// Any attempt to set "console" via a theme is silently clamped to "log".
+	PanelLocal  *string `toml:"panel_local"`
+	PanelRemote *string `toml:"panel_remote"`
 }
 
 type ThemeFile struct {
@@ -480,6 +484,20 @@ func ApplyThemeDefaults(conf *config.AppConfig, defaults ThemeDefaults) map[stri
 	if defaults.LogTitleAlign != nil {
 		conf.UI.LogTitleAlign = *defaults.LogTitleAlign
 		applied["Log Title Align"] = conf.UI.LogTitleAlign
+	}
+	// PanelLocal: no restrictions — local sessions may use any mode including "console".
+	if defaults.PanelLocal != nil {
+		conf.UI.PanelLocal = *defaults.PanelLocal
+		applied["Panel Local"] = conf.UI.PanelLocal
+	}
+	// PanelRemote: clamp "console" → "log" — themes must never grant console access to remote users.
+	if defaults.PanelRemote != nil {
+		v := *defaults.PanelRemote
+		if strings.ToLower(v) == "console" {
+			v = "log"
+		}
+		conf.UI.PanelRemote = v
+		applied["Panel Remote"] = conf.UI.PanelRemote
 	}
 	return applied
 }

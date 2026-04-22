@@ -101,6 +101,7 @@ type TabbedVarsEditorModel struct {
 	lastOffsetY int
 
 	lockedByOthers bool
+	connType       string
 }
 
 type envAddVarMsg struct {
@@ -142,13 +143,13 @@ type envRefreshMsg struct {
 	preservePendingDeletes bool
 }
 
-func NewEnvEditorGlobal(onClose tea.Cmd, showBack bool) *TabbedVarsEditorModel {
+func NewEnvEditorGlobal(onClose tea.Cmd, showBack bool, connType string) *TabbedVarsEditorModel {
 	return NewTabbedVarsEditorScreen(onClose, "Global Variables", []EnvTabSpec{
 		{Title: ".env", App: "", IsGlobal: true},
-	}, showBack)
+	}, showBack, connType)
 }
 
-func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec, showBack bool) *TabbedVarsEditorModel {
+func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec, showBack bool, connType string) *TabbedVarsEditorModel {
 	var tabs []envTab
 	for _, spec := range specs {
 		editor := enveditor.New()
@@ -174,6 +175,7 @@ func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec
 		btnIdx:    0,
 		focus:     envFocusEditor,
 		onClose:   onClose,
+		connType:  connType,
 	}
 }
 

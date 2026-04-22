@@ -64,8 +64,8 @@ var Registry = map[string]Def{
 	"--env-set-lower":            {Title: "Set Value of Variable",        SessionLocked: true, ConsoleSafe: true},
 	"--env-set-literal":          {Title: "Set Value of Variable",        SessionLocked: true, ConsoleSafe: true},
 	"--env-set-lower-literal":    {Title: "Set Value of Variable",        SessionLocked: true, ConsoleSafe: true},
-	"--env-edit":                 {Title: "Edit Variable",                SessionLocked: true}, // launches TUI editor
-	"--env-edit-lower":           {Title: "Edit Variable",                SessionLocked: true}, // launches TUI editor
+	"--env-edit":                 {Title: "Edit Variable",                SessionLocked: true, ConsoleSafe: true}, // launches TUI editor
+	"--env-edit-lower":           {Title: "Edit Variable",                SessionLocked: true, ConsoleSafe: true}, // launches TUI editor
 	"--status-enable":            {Title: "Enable Application",           SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
 	"--status-disable":           {Title: "Disable Application",          SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
 	"-c":                         {Title: "Docker Compose",               SessionLocked: true, ConsoleSafe: true},
@@ -80,14 +80,14 @@ var Registry = map[string]Def{
 	"--update-templates":         {Title: "Update Templates",             SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
 	"-R":                         {Title: "Reset Actions",                SessionLocked: true, ConsoleSafe: true, AppsChanging: true, ConfigChanging: true},
 	"--reset":                    {Title: "Reset Actions",                SessionLocked: true, ConsoleSafe: true, AppsChanging: true, ConfigChanging: true},
-	"-S":                         {Title: "Select Applications",          SessionLocked: true}, // launches TUI
-	"--select":                   {Title: "Select Applications",          SessionLocked: true}, // launches TUI
-	"-M":                         {Title: "Menu",                         SessionLocked: true}, // launches TUI
-	"--menu":                     {Title: "Menu",                         SessionLocked: true}, // launches TUI
-	"--edit-global":              {Title: "Edit Global Variables",        SessionLocked: true}, // launches TUI
-	"--start-edit-global":        {Title: "Edit Global Variables",        SessionLocked: true}, // launches TUI
-	"--edit-app":                 {Title: "Edit App Variables",           SessionLocked: true}, // launches TUI
-	"--start-edit-app":           {Title: "Edit App Variables",           SessionLocked: true}, // launches TUI
+	"-S":                         {Title: "Select Applications",          SessionLocked: true, ConsoleSafe: true}, // launches TUI
+	"--select":                   {Title: "Select Applications",          SessionLocked: true, ConsoleSafe: true}, // launches TUI
+	"-M":                         {Title: "Menu",                         SessionLocked: true, ConsoleSafe: true}, // launches TUI
+	"--menu":                     {Title: "Menu",                         SessionLocked: true, ConsoleSafe: true}, // launches TUI
+	"--edit-global":              {Title: "Edit Global Variables",        SessionLocked: true, ConsoleSafe: true}, // launches TUI
+	"--start-edit-global":        {Title: "Edit Global Variables",        SessionLocked: true, ConsoleSafe: true}, // launches TUI
+	"--edit-app":                 {Title: "Edit App Variables",           SessionLocked: true, ConsoleSafe: true}, // launches TUI
+	"--start-edit-app":           {Title: "Edit App Variables",           SessionLocked: true, ConsoleSafe: true}, // launches TUI
 	"--config-pm":                {Title: "Select Package Manager",       SessionLocked: true, ConsoleSafe: true},
 	"--config-pm-auto":           {Title: "Select Package Manager",       SessionLocked: true, ConsoleSafe: true},
 	"--config-pm-list":           {Title: "List Known Package Managers",  SessionLocked: true, ConsoleSafe: true},
@@ -119,6 +119,7 @@ var Registry = map[string]Def{
 	"--theme-dialog-title":       {Title: "Set Dialog Title Align",       SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
 	"--theme-submenu-title":      {Title: "Set Submenu Title Align",      SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
 	"--theme-log-title":          {Title: "Set Log Title Align",          SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
+	"--config-panel":             {Title: "Set Panel Mode",               SessionLocked: true, ConfigChanging: true},
 }
 
 // IsConsoleSafe reports whether a command flag is safe to run from the console panel.

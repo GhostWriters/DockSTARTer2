@@ -12,7 +12,7 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-func handleMan(ctx context.Context, group *CommandGroup) error {
+func HandleMan(ctx context.Context, group *CommandGroup) error {
 	if len(group.Args) == 0 {
 		logger.Error(ctx, "The '{{|UserCommand|}}%s{{[-]}}' command requires an application name.", group.Command)
 		return fmt.Errorf("no application name provided")

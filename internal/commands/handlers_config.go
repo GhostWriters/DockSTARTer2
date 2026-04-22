@@ -7,7 +7,7 @@ import (
 	"DockSTARTer2/internal/logger"
 )
 
-func handleConfigSettings(ctx context.Context, group *CommandGroup) error {
+func HandleConfigSettings(ctx context.Context, group *CommandGroup) error {
 	conf := config.LoadAppConfig()
 	switch group.Command {
 	case "--config-folder":
