@@ -164,6 +164,8 @@ func (m *HelpDialogModel) getRenderedMarkdown(width int) string {
 
 	source := []byte(m.contextInfo.DocMarkdown)
 
+	// Use smart graphics detection for high-fidelity on Linux and clean links on Windows
+	canDisplay := graphics.CanDisplayGraphics()
 	// Use Sixel encoder for high-fidelity web terminal support
 	encoder := graphics.SixelGraphicsEncoder()
 
@@ -171,15 +173,16 @@ func (m *HelpDialogModel) getRenderedMarkdown(width int) string {
 	kitR := kit_renderer.New(
 		kit_renderer.WithTheme(styles.GlamourDark),
 		kit_renderer.WithWordWrap(width),
-		kit_renderer.WithImages(true, width, ""),
+		kit_renderer.WithImages(canDisplay, width, ""),
 		kit_renderer.WithImageEncoder(encoder),
 		kit_renderer.WithHyperlinks(true), // Enable hyperlinks for better fallbacks
 	)
 
 	// Custom image renderer struct to fix SVG issues
 	fixer := &imageFixerRenderer{
-		kitR:    kitR,
-		encoder: encoder,
+		kitR:       kitR,
+		encoder:    encoder,
+		canDisplay: canDisplay,
 	}
 
 	// Create a goldmark renderer and register our terminal NodeRenderer
@@ -933,8 +936,9 @@ func (m *HelpDialogModel) calculateLayout() {
 }
 
 type imageFixerRenderer struct {
-	kitR    *kit_renderer.Renderer
-	encoder kit_renderer.ImageEncoder
+	kitR       *kit_renderer.Renderer
+	encoder    kit_renderer.ImageEncoder
+	canDisplay bool
 }
 
 func (r *imageFixerRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
@@ -942,8 +946,8 @@ func (r *imageFixerRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegister
 }
 
 func (r *imageFixerRenderer) renderImage(w util.BufWriter, source []byte, node ast.Node, enter bool) (ast.WalkStatus, error) {
-	if !enter {
-		return ast.WalkContinue, nil
+	if !enter || !r.canDisplay {
+		return r.kitR.RenderImage(w, source, node, enter)
 	}
 
 	img := node.(*ast.Image)

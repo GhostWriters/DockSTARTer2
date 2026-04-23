@@ -39,22 +39,24 @@ func handleMan(ctx context.Context, group *CommandGroup) error {
 		return err
 	}
 
-	// Use Sixel encoder for high-fidelity web terminal support
+	// Use smart graphics detection for high-fidelity on Linux and clean links on Windows
+	canDisplay := graphics.CanDisplayGraphics()
 	encoder := graphics.SixelGraphicsEncoder()
 
 	// Use markdown-kit renderer with auto-detected theme
 	kitR := kit_renderer.New(
 		kit_renderer.WithTheme(styles.AutoTheme()),
 		kit_renderer.WithWordWrap(0), // Let the terminal handle wrapping
-		kit_renderer.WithImages(true, 0, ""),
+		kit_renderer.WithImages(canDisplay, 0, ""),
 		kit_renderer.WithImageEncoder(encoder),
 		kit_renderer.WithHyperlinks(true),
 	)
 
 	// Custom image renderer struct to fix SVG issues
 	fixer := &imageFixerRenderer{
-		kitR:    kitR,
-		encoder: encoder,
+		kitR:       kitR,
+		encoder:    encoder,
+		canDisplay: canDisplay,
 	}
 
 	// Create a goldmark renderer and register our terminal NodeRenderer
@@ -78,17 +80,18 @@ func handleMan(ctx context.Context, group *CommandGroup) error {
 }
 
 type imageFixerRenderer struct {
-	kitR    *kit_renderer.Renderer
-	encoder kit_renderer.ImageEncoder
+	kitR       *kit_renderer.Renderer
+	encoder    kit_renderer.ImageEncoder
+	canDisplay bool
 }
 
 func (r *imageFixerRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
-	reg.Register(ast.KindImage, r.renderImage)
+	reg.Register(ast.KindImage, r.RenderImage)
 }
 
-func (r *imageFixerRenderer) renderImage(w util.BufWriter, source []byte, node ast.Node, enter bool) (ast.WalkStatus, error) {
-	if !enter {
-		return ast.WalkContinue, nil
+func (r *imageFixerRenderer) RenderImage(w util.BufWriter, source []byte, node ast.Node, enter bool) (ast.WalkStatus, error) {
+	if !enter || !r.canDisplay {
+		return r.kitR.RenderImage(w, source, node, enter)
 	}
 
 	img := node.(*ast.Image)
