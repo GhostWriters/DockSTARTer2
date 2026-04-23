@@ -102,7 +102,8 @@ func (r *imageFixerRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegister
 
 func (r *imageFixerRenderer) RenderImage(w util.BufWriter, source []byte, node ast.Node, enter bool) (ast.WalkStatus, error) {
 	if !enter || !r.canDisplay {
-		return r.kitR.RenderImage(w, source, node, enter)
+		_, err := r.kitR.RenderImage(w, source, node, enter)
+		return ast.WalkSkipChildren, err
 	}
 
 	img := node.(*ast.Image)
