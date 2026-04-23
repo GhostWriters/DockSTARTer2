@@ -15,6 +15,7 @@ import (
 	// "os"
 	"strings"
 
+	"DockSTARTer2/internal/graphics"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/theme"
 
@@ -163,8 +164,8 @@ func (m *HelpDialogModel) getRenderedMarkdown(width int) string {
 
 	source := []byte(m.contextInfo.DocMarkdown)
 
-	// Force Kitty encoder for testing
-	encoder := kit_renderer.KittyGraphicsEncoder()
+	// Use Sixel encoder for high-fidelity web terminal support
+	encoder := graphics.SixelGraphicsEncoder()
 
 	// Initialize the terminal-optimized NodeRenderer from markdown-kit
 	kitR := kit_renderer.New(

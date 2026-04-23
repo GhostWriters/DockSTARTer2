@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"DockSTARTer2/internal/appenv"
+	"DockSTARTer2/internal/graphics"
 	"DockSTARTer2/internal/logger"
 	"bytes"
 	"context"
@@ -38,8 +39,8 @@ func handleMan(ctx context.Context, group *CommandGroup) error {
 		return err
 	}
 
-	// Force Kitty encoder for Linux/Web terminal support
-	encoder := kit_renderer.KittyGraphicsEncoder()
+	// Use Sixel encoder for high-fidelity web terminal support
+	encoder := graphics.SixelGraphicsEncoder()
 
 	// Use markdown-kit renderer with auto-detected theme
 	kitR := kit_renderer.New(

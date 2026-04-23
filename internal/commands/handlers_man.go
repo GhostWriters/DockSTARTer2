@@ -14,6 +14,7 @@ import (
 	"regexp"
 
 	"DockSTARTer2/internal/appenv"
+	"DockSTARTer2/internal/graphics"
 	"DockSTARTer2/internal/logger"
 
 	// "github.com/eliukblau/pixterm/pkg/ansimage"
@@ -40,8 +41,8 @@ func HandleMan(ctx context.Context, group *CommandGroup) error {
 	}
 
 
-	// Force Kitty encoder for Linux/Web terminal support
-	encoder := kit_renderer.KittyGraphicsEncoder()
+	// Use Sixel encoder for high-fidelity web terminal support
+	encoder := graphics.SixelGraphicsEncoder()
 
 	// Use markdown-kit renderer with auto-detected theme
 	kitR := kit_renderer.New(
