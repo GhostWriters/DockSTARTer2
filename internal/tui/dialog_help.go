@@ -4,25 +4,30 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"image"
 	"image/color"
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
-	"os"
+	"io"
+	"net/http"
+	"regexp"
+	// "os"
 	"strings"
 
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/theme"
 
 	"github.com/charmbracelet/x/ansi"
-	"github.com/eliukblau/pixterm/pkg/ansimage"
+	// "github.com/eliukblau/pixterm/pkg/ansimage"
 	"github.com/pgavlin/goldmark"
 	"github.com/pgavlin/goldmark/renderer"
 	"github.com/pgavlin/goldmark/text"
 	"github.com/pgavlin/goldmark/util"
+	"github.com/pgavlin/goldmark/ast"
 	kit_renderer "github.com/pgavlin/markdown-kit/renderer"
 	"github.com/pgavlin/markdown-kit/styles"
-	_ "github.com/pgavlin/svg2"
+	_ "github.com/gen2brain/svg"
 
 	"charm.land/bubbles/v2/help"
 	keybind "charm.land/bubbles/v2/key"
@@ -158,15 +163,8 @@ func (m *HelpDialogModel) getRenderedMarkdown(width int) string {
 
 	source := []byte(m.contextInfo.DocMarkdown)
 
-	// Determine the best image encoder for the current terminal
-	supportsKitty := os.Getenv("TERM") == "xterm-kitty" || os.Getenv("KITTY_WINDOW_ID") != ""
-	var encoder kit_renderer.ImageEncoder
-	if supportsKitty {
-		encoder = kit_renderer.KittyGraphicsEncoder()
-	} else {
-		// ANSI blocks fallback for terminals that don't support Kitty (like Windows Terminal)
-		encoder = kit_renderer.ANSIGraphicsEncoder(color.Transparent, ansimage.DitheringWithChars)
-	}
+	// Force Kitty encoder for testing
+	encoder := kit_renderer.KittyGraphicsEncoder()
 
 	// Initialize the terminal-optimized NodeRenderer from markdown-kit
 	kitR := kit_renderer.New(
@@ -177,8 +175,17 @@ func (m *HelpDialogModel) getRenderedMarkdown(width int) string {
 		kit_renderer.WithHyperlinks(true), // Enable hyperlinks for better fallbacks
 	)
 
+	// Custom image renderer struct to fix SVG issues
+	fixer := &imageFixerRenderer{
+		kitR:    kitR,
+		encoder: encoder,
+	}
+
 	// Create a goldmark renderer and register our terminal NodeRenderer
-	mainR := renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(kitR, 100)))
+	mainR := renderer.NewRenderer(renderer.WithNodeRenderers(
+		util.Prioritized(kitR, 100),
+		util.Prioritized(fixer, 0),
+	))
 
 	// Parse the markdown into an AST
 	parser := goldmark.DefaultParser()
@@ -922,4 +929,74 @@ func (m *HelpDialogModel) calculateLayout() {
 		Height:   0, // content-driven
 		Overhead: overhead,
 	}
+}
+
+type imageFixerRenderer struct {
+	kitR    *kit_renderer.Renderer
+	encoder kit_renderer.ImageEncoder
+}
+
+func (r *imageFixerRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
+	reg.Register(ast.KindImage, r.renderImage)
+}
+
+func (r *imageFixerRenderer) renderImage(w util.BufWriter, source []byte, node ast.Node, enter bool) (ast.WalkStatus, error) {
+	if !enter {
+		return ast.WalkContinue, nil
+	}
+
+	img := node.(*ast.Image)
+	dest := string(img.Destination)
+
+	// 1. Fetch the image data manually so we can clean it
+	resp, err := http.Get(dest)
+	if err != nil {
+		return r.kitR.RenderImage(w, source, node, enter) // Fallback to standard
+	}
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return r.kitR.RenderImage(w, source, node, enter)
+	}
+
+	// 2. Fix shorthand decimal points in SVGs (e.g., .1 -> 0.1) which break the decoder
+	if bytes.Contains(data, []byte("<svg")) {
+		// Fix leading dots: (.1) -> (0.1),  .1 ->  0.1, etc.
+		reLeading := regexp.MustCompile(`(^|[^0-9.])\.([0-9])`)
+		data = reLeading.ReplaceAll(data, []byte(`${1}0.${2}`))
+
+		// Fix stuck dots: 1.2.3 -> 1.2 0.3 (common in SVG paths)
+		reStuck := regexp.MustCompile(`([0-9]+\.[0-9]+)\.([0-9])`)
+		for reStuck.Match(data) {
+			data = reStuck.ReplaceAll(data, []byte(`${1} 0.${2}`))
+		}
+
+		// Strip embedded icons (<image> tags) because ok-svg doesn't support nested SVGs
+		reImage := regexp.MustCompile(`(?s)<image\b[^>]*/>`)
+		data = reImage.ReplaceAll(data, []byte(""))
+
+		// Strip links (<a> tags) because ok-svg doesn't support them
+		reLinkOpen := regexp.MustCompile(`(?i)<a\b[^>]*>`)
+		data = reLinkOpen.ReplaceAll(data, []byte(""))
+		reLinkClose := regexp.MustCompile(`(?i)</a>`)
+		data = reLinkClose.ReplaceAll(data, []byte(""))
+
+		// Replace rgba(...,0) with none because ok-svg doesn't support rgba
+		reRGBA := regexp.MustCompile(`rgba\([^)]*,0\)`)
+		data = reRGBA.ReplaceAll(data, []byte("none"))
+	}
+
+	// 3. Decode the cleaned image
+	imgObj, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return r.kitR.RenderImage(w, source, node, enter)
+	}
+
+	// 4. Encode using Kitty
+	if _, err := r.encoder(w, imgObj, r.kitR); err != nil {
+		return r.kitR.RenderImage(w, source, node, enter)
+	}
+
+	return ast.WalkSkipChildren, nil
 }
