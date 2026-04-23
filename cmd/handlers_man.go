@@ -15,9 +15,11 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"golang.org/x/term"
 
-	// "github.com/eliukblau/pixterm/pkg/ansimage"
 	"github.com/pgavlin/goldmark"
+	"github.com/pgavlin/goldmark/extension"
+	goldmark_parser "github.com/pgavlin/goldmark/parser"
 	"github.com/pgavlin/goldmark/renderer"
 	"github.com/pgavlin/goldmark/text"
 	"github.com/pgavlin/goldmark/util"
@@ -39,6 +41,13 @@ func handleMan(ctx context.Context, group *CommandGroup) error {
 		return err
 	}
 
+	// Detect terminal width for proper wrapping and soft-break handling
+	width := 0
+	if w, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil {
+		width = w
+	}
+	// logger.Debug(ctx, "Detected terminal width: %d", width)
+
 	// Use smart graphics detection for high-fidelity on Linux and clean links on Windows
 	canDisplay := graphics.CanDisplayGraphics()
 	encoder := graphics.SixelGraphicsEncoder()
@@ -46,7 +55,8 @@ func handleMan(ctx context.Context, group *CommandGroup) error {
 	// Use markdown-kit renderer with auto-detected theme
 	kitR := kit_renderer.New(
 		kit_renderer.WithTheme(styles.AutoTheme()),
-		kit_renderer.WithWordWrap(0), // Let the terminal handle wrapping
+		kit_renderer.WithWordWrap(width),
+		kit_renderer.WithSoftBreak(width != 0),
 		kit_renderer.WithImages(canDisplay, 0, ""),
 		kit_renderer.WithImageEncoder(encoder),
 		kit_renderer.WithHyperlinks(true),
@@ -68,6 +78,9 @@ func handleMan(ctx context.Context, group *CommandGroup) error {
 	// Parse the markdown into an AST
 	source := []byte(out)
 	parser := goldmark.DefaultParser()
+	parser.AddOptions(goldmark_parser.WithParagraphTransformers(
+		util.Prioritized(extension.NewTableParagraphTransformer(), 200),
+	))
 	doc := parser.Parse(text.NewReader(source))
 
 	var buf bytes.Buffer

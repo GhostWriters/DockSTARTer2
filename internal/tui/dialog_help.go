@@ -20,11 +20,13 @@ import (
 	"DockSTARTer2/internal/theme"
 
 	"github.com/charmbracelet/x/ansi"
-	// "github.com/eliukblau/pixterm/pkg/ansimage"
 	"github.com/pgavlin/goldmark"
+	"github.com/pgavlin/goldmark/extension"
+	goldmark_parser "github.com/pgavlin/goldmark/parser"
 	"github.com/pgavlin/goldmark/renderer"
 	"github.com/pgavlin/goldmark/text"
 	"github.com/pgavlin/goldmark/util"
+	"golang.org/x/term"
 	"github.com/pgavlin/goldmark/ast"
 	kit_renderer "github.com/pgavlin/markdown-kit/renderer"
 	"github.com/pgavlin/markdown-kit/styles"
@@ -169,10 +171,11 @@ func (m *HelpDialogModel) getRenderedMarkdown(width int) string {
 	// Use Sixel encoder for high-fidelity web terminal support
 	encoder := graphics.SixelGraphicsEncoder()
 
-	// Initialize the terminal-optimized NodeRenderer from markdown-kit
+	// Initialize the terminal-optimized NodeRenderer // Use markdown-kit renderer with auto-detected theme
 	kitR := kit_renderer.New(
 		kit_renderer.WithTheme(styles.GlamourDark),
 		kit_renderer.WithWordWrap(width),
+		kit_renderer.WithSoftBreak(width != 0),
 		kit_renderer.WithImages(canDisplay, width, ""),
 		kit_renderer.WithImageEncoder(encoder),
 		kit_renderer.WithHyperlinks(true), // Enable hyperlinks for better fallbacks
@@ -193,6 +196,9 @@ func (m *HelpDialogModel) getRenderedMarkdown(width int) string {
 
 	// Parse the markdown into an AST
 	parser := goldmark.DefaultParser()
+	parser.AddOptions(goldmark_parser.WithParagraphTransformers(
+		util.Prioritized(extension.NewTableParagraphTransformer(), 200),
+	))
 	doc := parser.Parse(text.NewReader(source))
 
 	var buf bytes.Buffer

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"golang.org/x/term"
 
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/graphics"
@@ -41,6 +42,12 @@ func HandleMan(ctx context.Context, group *CommandGroup) error {
 	}
 
 
+	// Detect terminal width for proper wrapping and soft-break handling
+	width := 0
+	if w, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil {
+		width = w
+	}
+
 	// Use smart graphics detection for high-fidelity on Linux and clean links on Windows
 	canDisplay := graphics.CanDisplayGraphics()
 	encoder := graphics.SixelGraphicsEncoder()
@@ -48,7 +55,8 @@ func HandleMan(ctx context.Context, group *CommandGroup) error {
 	// Use markdown-kit renderer with auto-detected theme
 	kitR := kit_renderer.New(
 		kit_renderer.WithTheme(styles.AutoTheme()),
-		kit_renderer.WithWordWrap(0), // Let the terminal handle wrapping
+		kit_renderer.WithWordWrap(width),
+		kit_renderer.WithSoftBreak(width != 0),
 		kit_renderer.WithImages(canDisplay, 0, ""),
 		kit_renderer.WithImageEncoder(encoder),
 		kit_renderer.WithHyperlinks(true),
