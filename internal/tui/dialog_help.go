@@ -26,7 +26,7 @@ import (
 	"github.com/pgavlin/goldmark/renderer"
 	"github.com/pgavlin/goldmark/text"
 	"github.com/pgavlin/goldmark/util"
-	"golang.org/x/term"
+	// "golang.org/x/term"
 	"github.com/pgavlin/goldmark/ast"
 	kit_renderer "github.com/pgavlin/markdown-kit/renderer"
 	"github.com/pgavlin/markdown-kit/styles"
@@ -190,8 +190,8 @@ func (m *HelpDialogModel) getRenderedMarkdown(width int) string {
 
 	// Create a goldmark renderer and register our terminal NodeRenderer
 	mainR := renderer.NewRenderer(renderer.WithNodeRenderers(
-		util.Prioritized(kitR, 100),
-		util.Prioritized(fixer, 0),
+		util.Prioritized(fixer, 100),
+		util.Prioritized(kitR, 0),
 	))
 
 	// Parse the markdown into an AST

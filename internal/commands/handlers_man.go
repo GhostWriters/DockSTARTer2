@@ -71,8 +71,8 @@ func HandleMan(ctx context.Context, group *CommandGroup) error {
 
 	// Create a goldmark renderer and register our terminal NodeRenderer
 	mainR := renderer.NewRenderer(renderer.WithNodeRenderers(
-		util.Prioritized(kitR, 100),
-		util.Prioritized(fixer, 0),
+		util.Prioritized(fixer, 100),
+		util.Prioritized(kitR, 0),
 	))
 
 	// Parse the markdown into an AST
