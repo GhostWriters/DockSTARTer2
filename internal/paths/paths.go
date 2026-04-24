@@ -225,8 +225,7 @@ func GetBashScriptFolder() string {
 		}
 	}
 
-	// 3. Fallback to XDG_CONFIG_HOME if no legacy folder found
-	return xdg.ConfigHome
+	return ""
 }
 
 // GetLegacyIniPaths returns a slice of potential paths for legacy .ini configuration files.
@@ -257,6 +256,9 @@ func GetLegacyIniPaths() []string {
 // ResolvePath resolves legacy variables like ${ScriptFolder}, ${HOME}, and ${XDG_CONFIG_HOME}.
 func ResolvePath(path string) string {
 	bashFolder := GetBashScriptFolder()
+	if bashFolder == "" {
+		bashFolder = xdg.ConfigHome
+	}
 	home, _ := os.UserHomeDir()
 
 	r := strings.NewReplacer(
