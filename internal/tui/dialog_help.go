@@ -861,10 +861,6 @@ func (m *HelpDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		ZOrder: ZScreen + 5, // Above dialog background, below scrollbar
 		Label:  "Doc Viewport",
 	})
-	
-	logger.Debug(context.Background(), "Help HitRegions: BorderRoot=(%d,%d) DocBox=(%d,%d) BoxW=%d BoxH=%d", 
-		offsetX, offsetY, docBoxX, docBoxY, m.lastDocBoxW, m.lastDocBoxH)
-
 	// 3. Scrollbar hit regions
 	if m.Scroll.Info.Needed && IsScrollbarEnabled() {
 		// The scrollbar column is the last column of the doc box content area.

@@ -224,7 +224,6 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 		formattedLines := appenv.FormatLinesCore(ctx, currentLines, defaultLines, envLines, tab.spec.App, envPath)
 
 		content := strings.Join(formattedLines, "\n")
-		logger.Debug(ctx, "Loaded tab %d (%s). File: %s, Lines: %d, ContentLen: %d", i, tab.spec.App, envPath, len(formattedLines), len(content))
 
 		var tabReadOnlyVars []string
 		if tab.spec.IsGlobal && tab.spec.App == "" {
@@ -843,7 +842,6 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.SetSize(m.width, m.height)
 		return m, nil
 	case tui.EnvLoadDoneMsg:
-		logger.Debug(context.Background(), "Received EnvLoadDoneMsg with %d tabs", len(msg.Tabs))
 		for _, data := range msg.Tabs {
 			i := data.Index
 			if i < 0 || i >= len(m.tabs) {
