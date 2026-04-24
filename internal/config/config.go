@@ -214,6 +214,13 @@ func LoadAppConfig() AppConfig {
 		// No config file found. Attempt migration from legacy.
 		if migrated, ok := MigrateFromLegacy(); ok {
 			conf = migrated
+			// Ensure paths are fully initialized for immediate display
+			conf.RawPaths = conf.Paths
+			conf.Paths.ConfigFolder = filepath.Clean(ExpandVariables(conf.Paths.ConfigFolder))
+			conf.Paths.ComposeFolder = filepath.Clean(ExpandVariables(conf.Paths.ComposeFolder))
+			conf.ConfigDir = conf.Paths.ConfigFolder
+			conf.ComposeDir = conf.Paths.ComposeFolder
+
 			// Save the migrated config so we don't migrate again next time
 			_ = SaveAppConfig(conf)
 			// Show the config after migration, matching bash version behavior
