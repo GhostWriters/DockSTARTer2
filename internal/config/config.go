@@ -10,7 +10,9 @@ import (
 	"regexp"
 	"log/slog"
 	"context"
+	"fmt"
 
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/paths"
 
 	"github.com/adrg/xdg"
@@ -215,6 +217,8 @@ func LoadAppConfig() AppConfig {
 			conf = migrated
 			// Save the migrated config so we don't migrate again next time
 			_ = SaveAppConfig(conf)
+			// Show the config after migration, matching bash version behavior
+			ShowAppConfig(context.Background(), &conf)
 		}
 	} else {
 		// Overlay user config on top of defaults.
@@ -468,4 +472,111 @@ func MigrateFromLegacy() (AppConfig, bool) {
 
 	slog.Info("Legacy migration complete.")
 	return conf, true
+}
+
+// ShowAppConfig prints a summary table of the current configuration.
+func ShowAppConfig(ctx context.Context, conf *AppConfig) {
+	headers := []string{
+		"{{|UsageCommand|}}Option{{[-]}}",
+		"{{|UsageCommand|}}Value{{[-]}}",
+		"{{|UsageCommand|}}Expanded Value{{[-]}}",
+	}
+
+	keys := []string{
+		"ConfigFolder", "ComposeFolder",
+		"Theme", "Borders", "ButtonBorders", "LineCharacters", "Scrollbar", "Shadow", "ShadowLevel", "BorderColor",
+		"SSHPort", "WebPort", "AuthMode",
+	}
+	displayNames := map[string]string{
+		"ConfigFolder":   "Config Folder",
+		"ComposeFolder":  "Compose Folder",
+		"Theme":          "Theme",
+		"Borders":        "Borders",
+		"ButtonBorders":  "Button Borders",
+		"LineCharacters": "Line Characters",
+		"Scrollbar":      "Scrollbar",
+		"Shadow":         "Shadow",
+		"ShadowLevel":    "Shadow Level",
+		"BorderColor":    "Border Color",
+		"SSHPort":        "SSH Port",
+		"WebPort":        "Web Port",
+		"AuthMode":       "Auth Mode",
+	}
+
+	var data []string
+
+	boolToYesNo := func(val bool) string {
+		if val {
+			return "{{|Var|}}yes{{[-]}}"
+		}
+		return "{{|Var|}}no{{[-]}}"
+	}
+
+	for _, key := range keys {
+		var value, expandedValue string
+		var useFolderColor bool
+
+		switch key {
+		case "ConfigFolder":
+			value = conf.RawPaths.ConfigFolder
+			expandedValue = conf.ConfigDir
+			useFolderColor = true
+		case "ComposeFolder":
+			value = conf.RawPaths.ComposeFolder
+			expandedValue = conf.ComposeDir
+			useFolderColor = true
+		case "Theme":
+			value = conf.UI.Theme
+		case "Borders":
+			value = boolToYesNo(conf.UI.Borders)
+		case "ButtonBorders":
+			value = boolToYesNo(conf.UI.ButtonBorders)
+		case "LineCharacters":
+			value = boolToYesNo(conf.UI.LineCharacters)
+		case "Scrollbar":
+			value = boolToYesNo(conf.UI.Scrollbar)
+		case "Shadow":
+			value = boolToYesNo(conf.UI.Shadow)
+		case "ShadowLevel":
+			value = fmt.Sprintf("{{|Var|}}%d{{[-]}}", conf.UI.ShadowLevel)
+		case "BorderColor":
+			value = fmt.Sprintf("{{|Var|}}%d{{[-]}}", conf.UI.BorderColor)
+		case "SSHPort":
+			if conf.Server.SSH.Port > 0 {
+				value = fmt.Sprintf("{{|Var|}}%d{{[-]}}", conf.Server.SSH.Port)
+			} else {
+				value = "{{|Var|}}not set{{[-]}}"
+			}
+		case "WebPort":
+			if conf.Server.Web.Port > 0 {
+				value = fmt.Sprintf("{{|Var|}}%d{{[-]}}", conf.Server.Web.Port)
+			} else {
+				value = "{{|Var|}}not set{{[-]}}"
+			}
+		case "AuthMode":
+			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.Server.Auth.Mode)
+		}
+
+		colorTag := "{{|Var|}}"
+		if useFolderColor {
+			colorTag = "{{|Folder|}}"
+		}
+
+		data = append(data, displayNames[key])
+
+		if useFolderColor || key == "Theme" {
+			data = append(data, fmt.Sprintf("%s%s{{[-]}}", colorTag, value))
+		} else {
+			data = append(data, value)
+		}
+
+		if expandedValue != "" {
+			data = append(data, fmt.Sprintf("%s%s{{[-]}}", colorTag, expandedValue))
+		} else {
+			data = append(data, "")
+		}
+	}
+
+	slog.Info("Configuration options stored in '{{|File|}}"+paths.GetConfigFilePath()+"{{[-]}}':")
+	console.PrintTableCtx(ctx, headers, data, conf.UI.LineCharacters)
 }
