@@ -1,16 +1,16 @@
 package config
 
 import (
+	"context"
 	_ "embed"
+	"fmt"
+	"log/slog"
 	"os"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
-	"regexp"
-	"log/slog"
-	"context"
-	"fmt"
 
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/paths"
@@ -61,7 +61,7 @@ type WebConfig struct {
 type AuthConfig struct {
 	// Mode: "password", "pubkey", or "none" (none prints a warning on startup)
 	Mode         string `toml:"mode"`
-	Password     string `toml:"password"`      // bcrypt hash of the password
+	Password     string `toml:"password"`       // bcrypt hash of the password
 	AuthKeysFile string `toml:"auth_keys_file"` // Path to authorized_keys file
 }
 
@@ -78,8 +78,8 @@ type UIConfig struct {
 	DialogTitleAlign  string `toml:"dialog_title_align"`  // "center" or "left"
 	SubmenuTitleAlign string `toml:"submenu_title_align"` // "center" or "left"
 	LogTitleAlign     string `toml:"log_title_align"`     // "center" or "left"
-	PanelLocal        string `toml:"panel_local"`        // "log", "console", or "none" (for local sessions)
-	PanelRemote       string `toml:"panel_remote"`       // "log", "console", or "none" (for ssh/web sessions)
+	PanelLocal        string `toml:"panel_local"`         // "log", "console", or "none" (for local sessions)
+	PanelRemote       string `toml:"panel_remote"`        // "log", "console", or "none" (for ssh/web sessions)
 }
 
 // PathConfig holds directory path settings.
@@ -424,7 +424,7 @@ func MigrateFromLegacy() (AppConfig, bool) {
 	if bashFolder := paths.GetBashScriptFolder(); bashFolder != "" {
 		legacyToml := filepath.Join(bashFolder, "dockstarter.toml")
 		if data, err := os.ReadFile(legacyToml); err == nil {
-			slog.Log(ctx, slog.LevelInfo, "Migrating legacy TOML configuration from '{{|File|}}"+legacyToml+"{{[-]}}'...")
+			slog.Log(ctx, slog.LevelInfo, "Migrating legacy configuration from '{{|File|}}"+legacyToml+"{{[-]}}'...")
 			// Use Robust unmarshaling to handle Bash's loose typing
 			if err := UnmarshalRobust(data, &conf); err == nil {
 				foundLegacy = true
@@ -556,6 +556,6 @@ func ShowAppConfig(ctx context.Context, conf *AppConfig) {
 		}
 	}
 
-	slog.Info("Configuration options stored in '{{|File|}}"+paths.GetConfigFilePath()+"{{[-]}}':")
+	slog.Info("Configuration options stored in '{{|File|}}" + paths.GetConfigFilePath() + "{{[-]}}':")
 	console.PrintTableCtx(ctx, headers, data, conf.UI.LineCharacters)
 }
