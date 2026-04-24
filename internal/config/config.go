@@ -556,6 +556,6 @@ func ShowAppConfig(ctx context.Context, conf *AppConfig) {
 		}
 	}
 
-	slog.Info("Configuration options stored in '{{|File|}}" + paths.GetConfigFilePath() + "{{[-]}}':")
+	fmt.Println(console.ToConsoleANSI("Configuration options stored in '{{|File|}}" + paths.GetConfigFilePath() + "{{[-]}}':"))
 	console.PrintTableCtx(ctx, headers, data, conf.UI.LineCharacters)
 }
