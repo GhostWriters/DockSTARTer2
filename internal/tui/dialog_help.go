@@ -2,16 +2,12 @@ package tui
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"image/color"
-	// "os"
-	// "os"
 	"regexp"
 	"strings"
 
 	"DockSTARTer2/internal/graphics"
-	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/theme"
 
 	"github.com/charmbracelet/x/ansi"
