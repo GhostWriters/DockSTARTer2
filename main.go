@@ -45,7 +45,7 @@ func main() {
 		err := syscall.Exec(exePath, update.PendingReExec, envv)
 		if err != nil {
 			// Fallback for Windows or other failures
-			logger.Debug(context.Background(), "syscall.Exec failed: %v. Attempting exec.Command...", err)
+			logger.Debug(context.Background(), "syscall.Exec failed: %v. Attempting exec.Command.", err)
 
 			cmd := exec.Command(exePath, args...)
 			cmd.Stdin = os.Stdin
@@ -145,6 +145,6 @@ func run() (exitCode int) {
 }
 
 func cleanup(ctx context.Context) {
-	logger.Info(ctx, "Cleaning up...")
+	logger.Info(ctx, "Cleaning up.")
 	logger.Cleanup()
 }

@@ -5,24 +5,26 @@ import (
 	"context"
 	"fmt"
 	"image/color"
-	_ "image/gif"
-	_ "image/jpeg"
-	_ "image/png"
-	"os"
+	// "os"
+	// "os"
+	"regexp"
 	"strings"
 
+	"DockSTARTer2/internal/graphics"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/theme"
 
 	"github.com/charmbracelet/x/ansi"
-	"github.com/eliukblau/pixterm/pkg/ansimage"
 	"github.com/pgavlin/goldmark"
+	"github.com/pgavlin/goldmark/extension"
+	goldmark_parser "github.com/pgavlin/goldmark/parser"
 	"github.com/pgavlin/goldmark/renderer"
 	"github.com/pgavlin/goldmark/text"
 	"github.com/pgavlin/goldmark/util"
+	// "golang.org/x/term"
 	kit_renderer "github.com/pgavlin/markdown-kit/renderer"
 	"github.com/pgavlin/markdown-kit/styles"
-	_ "github.com/pgavlin/svg2"
+	_ "github.com/gen2brain/svg"
 
 	"charm.land/bubbles/v2/help"
 	keybind "charm.land/bubbles/v2/key"
@@ -158,30 +160,35 @@ func (m *HelpDialogModel) getRenderedMarkdown(width int) string {
 
 	source := []byte(m.contextInfo.DocMarkdown)
 
-	// Determine the best image encoder for the current terminal
-	supportsKitty := os.Getenv("TERM") == "xterm-kitty" || os.Getenv("KITTY_WINDOW_ID") != ""
-	var encoder kit_renderer.ImageEncoder
-	if supportsKitty {
-		encoder = kit_renderer.KittyGraphicsEncoder()
-	} else {
-		// ANSI blocks fallback for terminals that don't support Kitty (like Windows Terminal)
-		encoder = kit_renderer.ANSIGraphicsEncoder(color.Transparent, ansimage.DitheringWithChars)
-	}
+	// Use smart graphics detection for high-fidelity on Linux and clean links on Windows
+	canDisplay := graphics.CanDisplayGraphics()
+	// Use Sixel encoder for high-fidelity web terminal support
+	encoder := graphics.SixelGraphicsEncoder()
 
-	// Initialize the terminal-optimized NodeRenderer from markdown-kit
+	// Initialize the terminal-optimized NodeRenderer // Use markdown-kit renderer with auto-detected theme
 	kitR := kit_renderer.New(
 		kit_renderer.WithTheme(styles.GlamourDark),
 		kit_renderer.WithWordWrap(width),
-		kit_renderer.WithImages(true, width, ""),
+		kit_renderer.WithSoftBreak(width != 0),
+		kit_renderer.WithImages(canDisplay, width, ""),
 		kit_renderer.WithImageEncoder(encoder),
 		kit_renderer.WithHyperlinks(true), // Enable hyperlinks for better fallbacks
 	)
 
 	// Create a goldmark renderer and register our terminal NodeRenderer
-	mainR := renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(kitR, 100)))
+	mainR := renderer.NewRenderer(renderer.WithNodeRenderers(
+		util.Prioritized(kitR, 100),
+	))
 
 	// Parse the markdown into an AST
+	// Pre-process: convert Shields.io images to links to ensure visibility/clickability
+	reBadge := regexp.MustCompile(`!\[([^\]]*)\]\(([^)]*shields\.io[^)]*)\)`)
+	source = reBadge.ReplaceAll(source, []byte(`[$1]($2)`))
+
 	parser := goldmark.DefaultParser()
+	parser.AddOptions(goldmark_parser.WithParagraphTransformers(
+		util.Prioritized(extension.NewTableParagraphTransformer(), 200),
+	))
 	doc := parser.Parse(text.NewReader(source))
 
 	var buf bytes.Buffer
@@ -923,3 +930,4 @@ func (m *HelpDialogModel) calculateLayout() {
 		Overhead: overhead,
 	}
 }
+

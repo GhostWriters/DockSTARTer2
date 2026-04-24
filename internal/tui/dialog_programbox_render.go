@@ -303,7 +303,7 @@ func (m *ProgramBoxModel) GetHelpText() string {
 		}
 		return "Complete" + scrollInfo + " | Press Enter or Esc to close | PgUp/PgDn to scroll"
 	}
-	return "Running..." + scrollInfo + " | Press Ctrl+C to cancel | PgUp/PgDn to scroll"
+	return "Running." + scrollInfo + " | Press Ctrl+C to cancel | PgUp/PgDn to scroll"
 }
 
 // RunProgramBox displays a program box dialog that shows command output

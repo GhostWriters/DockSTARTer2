@@ -69,7 +69,7 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 		StatusError:         tui.SemanticRawStyle("Preview_TitleError"),
 		DialogTitleAlign:    s.config.UI.DialogTitleAlign,
 		SubmenuTitleAlign:   s.config.UI.SubmenuTitleAlign,
-		LogTitleAlign:       s.config.UI.LogTitleAlign,
+		PanelTitleAlign:       s.config.UI.PanelTitleAlign,
 		Prefix:              "Preview_",
 		DrawShadow:          s.config.UI.Shadow,
 	}
@@ -287,7 +287,7 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	// Strip has side borders/corners in the mockup
 	innerWidthStrip := width - 2
 	var leftPad int
-	if s.config.UI.LogTitleAlign == "left" {
+	if s.config.UI.PanelTitleAlign == "left" {
 		leftPad = 0
 	} else {
 		leftPad = (innerWidthStrip - titleSectionLen) / 2

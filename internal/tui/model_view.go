@@ -68,7 +68,7 @@ func (m *AppModel) View() (v tea.View) {
 		// arrive during startup (common on Linux/SSH where there is round-trip
 		// latency between renders) are silently dropped by the terminal because
 		// mouse reporting has not been enabled yet.
-		v := tea.NewView("Initializing...")
+		v := tea.NewView("Initializing.")
 		v.MouseMode = tea.MouseModeCellMotion
 		v.AltScreen = true
 		return v
@@ -100,19 +100,19 @@ func (m *AppModel) View() (v tea.View) {
 	}
 
 	// 2. Layer: Log panel
-	logY := m.height - m.logPanel.Height()
-	if lv, ok := interface{}(m.logPanel).(LayeredView); ok {
+	logY := m.height - m.panel.Height()
+	if lv, ok := interface{}(m.panel).(LayeredView); ok {
 		for _, l := range lv.Layers() {
 			comp.AddLayers(l.Y(l.GetY() + logY))
 		}
-	} else if vs, ok := interface{}(m.logPanel).(ViewStringer); ok {
+	} else if vs, ok := interface{}(m.panel).(ViewStringer); ok {
 		if logContent := vs.ViewString(); logContent != "" {
 			comp.AddLayers(lipgloss.NewLayer(logContent).
-				X(0).Y(logY).Z(ZLogPanel).ID(IDLogPanel))
+				X(0).Y(logY).Z(ZPanel).ID(IDPanel))
 		}
 	}
 	// Collect hit regions from log panel
-	m.hitRegions = append(m.hitRegions, m.logPanel.GetHitRegions(0, logY)...)
+	m.hitRegions = append(m.hitRegions, m.panel.GetHitRegions(0, logY)...)
 
 	// Base coordinates for maximized elements (edge indent from left, content start from top)
 	maxX := layout.EdgeIndent
@@ -338,10 +338,10 @@ func (m *AppModel) View() (v tea.View) {
 
 	// If no dialog or screen claimed the cursor, ask the log panel (the console).
 	if v.Cursor == nil {
-		if cp, ok := interface{}(m.logPanel).(InputCursorProvider); ok {
+		if cp, ok := interface{}(m.panel).(InputCursorProvider); ok {
 			rx, ry, shape, show := cp.GetInputCursor()
 			if show {
-				logY := m.height - m.logPanel.Height()
+				logY := m.height - m.panel.Height()
 				c := tea.NewCursor(rx, logY+ry)
 				c.Shape = shape
 				c.Blink = true
@@ -363,9 +363,9 @@ func (m *AppModel) Backdrop() *BackdropModel {
 	return m.backdrop
 }
 
-// GetLogPanel returns the log panel model
-func (m AppModel) GetLogPanel() LogPanelModel {
-	return m.logPanel
+// GetPanel returns the log panel model
+func (m AppModel) GetPanel() PanelModel {
+	return m.panel
 }
 
 // compositorAddShadow adds a drop-shadow layer behind l in the compositor.
@@ -435,7 +435,7 @@ func compositorAddHalo(comp *lipgloss.Compositor, l *lipgloss.Layer, baseZ int, 
 func TruncateStack(stack string, n int) string {
 	lines := strings.Split(stack, "\n")
 	if len(lines) > n {
-		return strings.Join(lines[:n], "\n") + "\n..."
+		return strings.Join(lines[:n], "\n") + "\n."
 	}
 	return stack
 }

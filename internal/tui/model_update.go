@@ -58,11 +58,11 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, logger.BatchRecoverTUI(m.ctx, cmds...)
 
-	case toggleLogPanelMsg:
-		updated, cmd := m.logPanel.Update(msg)
-		m.logPanel = updated.(LogPanelModel)
+	case togglePanelMsg:
+		updated, cmd := m.panel.Update(msg)
+		m.panel = updated.(PanelModel)
 		// Sync focus with expansion state
-		m.setLogPanelFocus(m.logPanel.expanded)
+		m.setPanelFocus(m.panel.expanded)
 		// Resize backdrop, screen, and dialog to match new panel height
 		m.backdrop.SetSize(m.width, m.backdropHeight())
 
@@ -78,19 +78,19 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, logger.BatchRecoverTUI(m.ctx, cmd)
 
-	case logLineMsg:
-		updated, cmd := m.logPanel.Update(msg)
-		m.logPanel = updated.(LogPanelModel)
+	case panelLineMsg:
+		updated, cmd := m.panel.Update(msg)
+		m.panel = updated.(PanelModel)
 		return m, logger.BatchRecoverTUI(m.ctx, cmd)
 
 	case consoleLinesMsg:
-		updated, cmd := m.logPanel.Update(msg)
-		m.logPanel = updated.(LogPanelModel)
+		updated, cmd := m.panel.Update(msg)
+		m.panel = updated.(PanelModel)
 		return m, logger.BatchRecoverTUI(m.ctx, cmd)
 
 	case consoleDoneMsg:
-		updated, cmd := m.logPanel.Update(msg)
-		m.logPanel = updated.(LogPanelModel)
+		updated, cmd := m.panel.Update(msg)
+		m.panel = updated.(PanelModel)
 		if msg.configChanged {
 			conf := config.LoadAppConfig()
 			cmd = tea.Batch(cmd, func() tea.Msg { return ConfigChangedMsg{Config: conf} })
@@ -110,9 +110,9 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case DragDoneMsg:
-		if msg.ID == logResizeZoneID {
-			updated, cmd := m.logPanel.Update(msg)
-			m.logPanel = updated.(LogPanelModel)
+		if msg.ID == resizeZoneID {
+			updated, cmd := m.panel.Update(msg)
+			m.panel = updated.(PanelModel)
 			m.backdrop.SetSize(m.width, m.backdropHeight())
 			return m, logger.BatchRecoverTUI(m.ctx, cmd)
 		}
@@ -158,9 +158,9 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ready = true
 
 		// Apply screen-aware log panel ceiling first (may snap height down).
-		m.applyLogPanelMax()
+		m.applyPanelMax()
 		// Update log panel with full dimensions (so Height() is correct for backdrop)
-		m.logPanel.SetSize(m.width, m.height)
+		m.panel.SetSize(m.width, m.height)
 
 		// Update backdrop with adjusted height so helpline is visible above log panel
 		m.backdrop.SetSize(m.width, m.backdropHeight())
@@ -218,8 +218,8 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.activeScreen != nil {
 			CurrentPageName = m.activeScreen.MenuName()
 			// Re-apply log panel ceiling for the new screen; snap if needed.
-			if m.applyLogPanelMax() {
-				m.logPanel.SetSize(m.width, m.height)
+			if m.applyPanelMax() {
+				m.panel.SetSize(m.width, m.height)
 				m.backdrop.SetSize(m.width, m.backdropHeight())
 			}
 			caW, caH := m.getContentArea()
@@ -249,8 +249,8 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.activeScreen != nil {
 				CurrentPageName = m.activeScreen.MenuName()
 				// Re-apply log panel ceiling for the restored screen; snap if needed.
-				if m.applyLogPanelMax() {
-					m.logPanel.SetSize(m.width, m.height)
+				if m.applyPanelMax() {
+					m.panel.SetSize(m.width, m.height)
 					m.backdrop.SetSize(m.width, m.backdropHeight())
 				}
 				caW, caH := m.getContentArea()
@@ -542,8 +542,8 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		_, _ = theme.Load(m.config.UI.Theme, "")
 		m.invalidateAllCaches()
 		m.backdrop.header.SyncFlags()
-		updated, _ := m.logPanel.Update(msg)
-		m.logPanel = updated.(LogPanelModel)
+		updated, _ := m.panel.Update(msg)
+		m.panel = updated.(PanelModel)
 
 		// Manually trigger sizing to avoid the complexities of tea.WindowSizeMsg re-triggering
 		m.backdrop.SetSize(m.width, m.backdropHeight())
@@ -637,16 +637,16 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 
-// setLogPanelFocus updates logPanelFocused and tells the active screen to
+// setPanelFocus updates panelFocused and tells the active screen to
 // unfocus/refocus its border accordingly (if it supports the interface).
-func (m *AppModel) setLogPanelFocus(focused bool) {
-	m.logPanelFocused = focused
-	m.logPanel.focused = focused
+func (m *AppModel) setPanelFocus(focused bool) {
+	m.panelFocused = focused
+	m.panel.focused = focused
 	if focused {
 		m.backdrop.header.SetFocus(HeaderFocusNone)
 	} else {
-		m.logPanel.input.Blur()
-		m.logPanel.inputFocused = false
+		m.panel.input.Blur()
+		m.panel.inputFocused = false
 	}
 	m.updateComponentFocus()
 }
@@ -654,8 +654,8 @@ func (m *AppModel) setLogPanelFocus(focused bool) {
 func (m *AppModel) setHeaderFocus(focus HeaderFocus) {
 	m.backdrop.header.SetFocus(focus)
 	if focus != HeaderFocusNone {
-		m.logPanelFocused = false
-		m.logPanel.focused = false
+		m.panelFocused = false
+		m.panel.focused = false
 	}
 	m.updateComponentFocus()
 }
@@ -665,12 +665,12 @@ func (m *AppModel) updateComponentFocus() {
 	headerFocused := m.backdrop.header.GetFocus() != HeaderFocusNone
 
 	// Log panel only keeps its "internal" focus state if no dialog is blocking it.
-	m.logPanel.focused = m.logPanelFocused && !dialogOpen
+	m.panel.focused = m.panelFocused && !dialogOpen
 
 	// Screen is focused only if no dialog is open AND neither log panel nor header have focus.
 	if m.activeScreen != nil {
 		if focusable, ok := m.activeScreen.(interface{ SetFocused(bool) }); ok {
-			focusable.SetFocused(!dialogOpen && !m.logPanelFocused && !headerFocused)
+			focusable.SetFocused(!dialogOpen && !m.panelFocused && !headerFocused)
 		}
 	}
 
@@ -690,10 +690,10 @@ func (m *AppModel) invalidateAllCaches() {
 	m.backdrop.InvalidateBackdropCache()
 }
 
-// applyLogPanelMax computes the maximum log panel height for the current active screen,
+// applyPanelMax computes the maximum log panel height for the current active screen,
 // updates the log panel's ceiling, and snaps the log panel down if it now exceeds the new max.
 // Returns true if the log panel height changed (caller should resize the active screen/dialog).
-func (m *AppModel) applyLogPanelMax() bool {
+func (m *AppModel) applyPanelMax() bool {
 	layout := GetLayout()
 	hasShadow := currentConfig.UI.Shadow
 	headerH := 1
@@ -720,12 +720,12 @@ func (m *AppModel) applyLogPanelMax() bool {
 		maxLogH = 2
 	}
 
-	m.logPanel.SetMaxHeight(maxLogH)
+	m.panel.SetMaxHeight(maxLogH)
 
 	// Snap down if the current height exceeds the new ceiling.
-	if m.logPanel.expanded && m.logPanel.height > maxLogH {
-		m.logPanel.height = maxLogH
-		m.logPanel.SetSize(m.width, m.height)
+	if m.panel.expanded && m.panel.height > maxLogH {
+		m.panel.height = maxLogH
+		m.panel.SetSize(m.width, m.height)
 		return true
 	}
 	return false
@@ -733,7 +733,7 @@ func (m *AppModel) applyLogPanelMax() bool {
 
 // backdropHeight returns the height available for the backdrop (terminal minus log panel).
 func (m AppModel) backdropHeight() int {
-	return m.height - m.logPanel.Height()
+	return m.height - m.panel.Height()
 }
 
 // getContentArea returns the dimensions available for screens and dialogs.
@@ -784,7 +784,7 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 
 	// Global Priority Actions (always work, regardless of focus)
 	if key.Matches(msg, Keys.ToggleLog) {
-		return m, func() tea.Msg { return toggleLogPanelMsg{} }, true
+		return m, func() tea.Msg { return togglePanelMsg{} }, true
 	}
 	if key.Matches(msg, Keys.Help) || msg.String() == "?" {
 		return m, m.showHelpCmd(m.focusedPanelHelpContext()), true
@@ -794,16 +794,16 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		return m, tea.Quit, true
 	}
 
-	// Cycle: Screen -> LogPanel -> Input bar -> Header(Flags) -> Header(App) -> Header(Tmpl) -> Screen
+	// Cycle: Screen -> panel -> Input bar -> Header(Flags) -> Header(App) -> Header(Tmpl) -> Screen
 	if key.Matches(msg, Keys.Tab) {
-		if m.logPanelFocused {
+		if m.panelFocused {
 			// If panel is expanded and input not yet focused, Tab → input bar.
-			if m.logPanel.expanded && !m.logPanel.inputFocused && !m.logPanel.sessionActive() {
-				return m, m.logPanel.FocusInput(), true
+			if m.panel.expanded && !m.panel.inputFocused && !m.panel.sessionActive() {
+				return m, m.panel.FocusInput(), true
 			}
 			// Viewport focused (inputFocused already handled above): Tab → exit panel to header / dialog.
 			if m.dialog != nil {
-				m.setLogPanelFocus(false)
+				m.setPanelFocus(false)
 				return m, nil, true
 			}
 			m.setHeaderFocus(HeaderFocusFlags)
@@ -822,17 +822,17 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			return m, nil, true
 		} else {
 			// From screen to log panel
-			m.setLogPanelFocus(true)
+			m.setPanelFocus(true)
 			return m, nil, true
 		}
 	}
 
 	if key.Matches(msg, Keys.ShiftTab) {
-		if m.logPanelFocused {
-			m.setLogPanelFocus(false)
+		if m.panelFocused {
+			m.setPanelFocus(false)
 			return m, nil, true
 		} else if m.backdrop.header.GetFocus() == HeaderFocusFlags {
-			m.setLogPanelFocus(true)
+			m.setPanelFocus(true)
 			return m, nil, true
 		} else if m.backdrop.header.GetFocus() == HeaderFocusApp {
 			m.setHeaderFocus(HeaderFocusFlags)
@@ -898,44 +898,44 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	// Focused Log Panel Actions
 	// When log panel is focused, it gets all scroll/navigation keys exclusively.
 	// We handle this AFTER global cycling (Tab/ShiftTab) so we don't trap those keys.
-	if m.logPanelFocused {
-		if m.logPanel.inputFocused {
+	if m.panelFocused {
+		if m.panel.inputFocused {
 			// Physical Tab/Shift+Tab only (not "."/","): cycle back to viewport.
 			if kp, ok := msg.(tea.KeyPressMsg); ok && (kp.String() == "tab" || kp.String() == "shift+tab") {
-				m.logPanel.input.Blur()
-				m.logPanel.inputFocused = false
+				m.panel.input.Blur()
+				m.panel.inputFocused = false
 				return m, nil, true
 			}
 			// Input bar has focus: forward all keys (Esc handled inside the panel).
-			updated, cmd := m.logPanel.Update(msg)
-			m.logPanel = updated.(LogPanelModel)
+			updated, cmd := m.panel.Update(msg)
+			m.panel = updated.(PanelModel)
 			return m, logger.BatchRecoverTUI(m.ctx, cmd), true
 		}
 		// Viewport-focused: Esc unfocuses the panel.
 		if key.Matches(msg, Keys.Esc) {
-			m.setLogPanelFocus(false)
+			m.setPanelFocus(false)
 			return m, nil, true
 		}
 		// Tab/Shift+Tab: cycle to input bar (two-section dialog cycle).
 		if key.Matches(msg, Keys.CycleTab) || key.Matches(msg, Keys.CycleShiftTab) {
-			if m.logPanel.expanded && !m.logPanel.sessionActive() {
-				return m, m.logPanel.FocusInput(), true
+			if m.panel.expanded && !m.panel.sessionActive() {
+				return m, m.panel.FocusInput(), true
 			}
 		}
 		// Enter focuses the input bar (if panel is expanded and not session-locked).
 		if key.Matches(msg, Keys.Enter) {
-			if m.logPanel.expanded && !m.logPanel.sessionActive() {
-				return m, m.logPanel.FocusInput(), true
+			if m.panel.expanded && !m.panel.sessionActive() {
+				return m, m.panel.FocusInput(), true
 			}
-			return m, func() tea.Msg { return toggleLogPanelMsg{} }, true
+			return m, func() tea.Msg { return togglePanelMsg{} }, true
 		}
 		// Space toggles the panel open/closed.
 		if msg.String() == " " {
-			return m, func() tea.Msg { return toggleLogPanelMsg{} }, true
+			return m, func() tea.Msg { return togglePanelMsg{} }, true
 		}
 		// All other keys go to the panel viewport.
-		updated, cmd := m.logPanel.Update(msg)
-		m.logPanel = updated.(LogPanelModel)
+		updated, cmd := m.panel.Update(msg)
+		m.panel = updated.(PanelModel)
 		return m, logger.BatchRecoverTUI(m.ctx, cmd), true
 	}
 
@@ -985,8 +985,8 @@ func shouldForwardResult(result any) bool {
 // focusedPanelHelpContext returns the HelpContext for a focused non-screen panel
 // (log panel or header element), or nil so showHelpCmd falls through to the screen/dialog.
 func (m *AppModel) focusedPanelHelpContext() *HelpContext {
-	if m.logPanelFocused {
-		for _, r := range m.logPanel.GetHitRegions(0, 0) {
+	if m.panelFocused {
+		for _, r := range m.panel.GetHitRegions(0, 0) {
 			if r.Help != nil {
 				return r.Help
 			}
@@ -1079,7 +1079,7 @@ func (m *AppModel) showGlobalContextMenu(x, y int, hit *HitRegion) tea.Cmd {
 				header = "Global Flags"
 			case IDStatusBar:
 				header = "Status Bar"
-			case IDLogPanel, IDLogViewport, IDLogToggle, IDLogResize:
+			case IDPanel, IDPanelViewport, IDPanelToggle, IDPanelResize:
 				header = "Log Panel"
 			}
 		}

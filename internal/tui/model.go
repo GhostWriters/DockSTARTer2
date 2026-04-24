@@ -235,11 +235,11 @@ type AppModel struct {
 	backdrop *BackdropModel
 
 	// Slide-up log panel (always present below helpline)
-	logPanel           LogPanelModel
-	logPanelFocused    bool
-	logPanelSbDrag    ScrollbarDragState // log-panel scrollbar drag tracking state
-	logPanelSbAbsTopY int                // absolute Y of the scrollbar's first row (for drag computation)
-	logPanelSbInfo    ScrollbarInfo      // scrollbar geometry captured at drag start
+	panel           PanelModel
+	panelFocused    bool
+	panelSbDrag    ScrollbarDragState // log-panel scrollbar drag tracking state
+	panelSbAbsTopY int                // absolute Y of the scrollbar's first row (for drag computation)
+	panelSbInfo    ScrollbarInfo      // scrollbar geometry captured at drag start
 
 	// Modal dialog overlay (nil when no dialog)
 	dialog      tea.Model
@@ -284,7 +284,7 @@ func NewAppModel(ctx context.Context, cfg config.AppConfig, clientIP, connType s
 		activeScreen: startScreen,
 		screenStack:  stack,
 		backdrop:     NewBackdropModel(helpText),
-		logPanel:     NewLogPanelModel(EffectivePanelMode(cfg, connType), connType),
+		panel:     NewPanelModel(EffectivePanelMode(cfg, connType), connType),
 	}
 }
 
@@ -296,7 +296,7 @@ func NewAppModelStandalone(ctx context.Context, cfg config.AppConfig, clientIP, 
 		clientIP: clientIP,
 		connType: connType,
 		backdrop: NewBackdropModel(""),
-		logPanel: NewLogPanelModel(EffectivePanelMode(cfg, connType), connType),
+		panel: NewPanelModel(EffectivePanelMode(cfg, connType), connType),
 		dialog:   dialog,
 	}
 }
@@ -305,7 +305,7 @@ func NewAppModelStandalone(ctx context.Context, cfg config.AppConfig, clientIP, 
 func (m *AppModel) Init() tea.Cmd {
 	cmds := []tea.Cmd{
 		m.backdrop.Init(),
-		m.logPanel.Init(),
+		m.panel.Init(),
 	}
 	if m.activeScreen != nil {
 		cmds = append(cmds, m.activeScreen.Init())

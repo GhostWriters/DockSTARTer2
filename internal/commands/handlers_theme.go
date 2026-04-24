@@ -224,15 +224,15 @@ func HandleThemeSettings(ctx context.Context, group *CommandGroup) error {
 			logger.Display(ctx, "Current submenu title alignment: %s", conf.UI.SubmenuTitleAlign)
 			return nil
 		}
-	case "--theme-log-title":
+	case "--theme-panel-title":
 		if len(group.Args) > 0 {
 			v, err := parseTitleAlign(ctx, group.Args[0], "log title")
 			if err != nil {
 				return err
 			}
-			conf.UI.LogTitleAlign = v
+			conf.UI.PanelTitleAlign = v
 		} else {
-			logger.Display(ctx, "Current log title alignment: %s", conf.UI.LogTitleAlign)
+			logger.Display(ctx, "Current panel title alignment: %s", conf.UI.PanelTitleAlign)
 			return nil
 		}
 	}

@@ -12,7 +12,7 @@ scrollbar          = true
 border_color       = 3          # 1=primary border colour, 2=secondary, 3=both
 dialog_title_align  = "center"  # "center" or "left"
 submenu_title_align = "left"    # "center" or "left"
-log_title_align     = "center"  # "center" or "left"
+panel_title_align   = "center"  # "center" or "left"
 panel_local         = "console" # "none", "log", "console", or "system" (for local sessions)
 panel_remote        = "console" # "none", "log", "console", or "system" (for ssh/web sessions)
 
