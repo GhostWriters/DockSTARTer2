@@ -423,9 +423,6 @@ func MigrateFromLegacy() (AppConfig, bool) {
 
 	// 2. Check for late-stage DS1 .toml file
 	var tomlPaths []string
-	if bashFolder := paths.GetBashScriptFolder(); bashFolder != "" {
-		tomlPaths = append(tomlPaths, filepath.Join(bashFolder, "dockstarter.toml"))
-	}
 	tomlPaths = append(tomlPaths, filepath.Join(xdg.ConfigHome, "dockstarter", "dockstarter.toml"))
 
 	for _, legacyToml := range tomlPaths {
