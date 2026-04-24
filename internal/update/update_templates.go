@@ -241,7 +241,7 @@ func EnsureTemplates(ctx context.Context) error {
 	branch := "main" // Default branch
 
 	logger.Notice(ctx, "Running: {{|RunningCommand|}}git clone -b %s %s %s{{[-]}}", branch, url, templatesDir)
-	logger.Notice(ctx, "{{|RunningCommand|}}git:{{[-]}} Cloning into '%s'...", templatesDir)
+	logger.Notice(ctx, "{{|RunningCommand|}}git:{{[-]}} Cloning into '%s'.", templatesDir)
 
 	_, err := git.PlainClone(templatesDir, false, &git.CloneOptions{
 		URL:           url,

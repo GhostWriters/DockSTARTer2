@@ -74,7 +74,7 @@ func handleServerStart(ctx context.Context, conf *config.AppConfig) error {
 		return fmt.Errorf("finding executable path: %w", err)
 	}
 
-	logger.Notice(ctx, "Starting server in the background...")
+	logger.Notice(ctx, "Starting server in the background.")
 	proc, err := serve.SpawnDaemon(execPath, nil)
 	if err != nil {
 		return fmt.Errorf("spawning server daemon: %w", err)
@@ -156,7 +156,7 @@ func handleServerEnable(ctx context.Context) error {
 		return err
 	}
 	if !installed {
-		logger.Notice(ctx, "Service is not installed — installing first...")
+		logger.Notice(ctx, "Service is not installed — installing first.")
 		if err := handleServerInstall(ctx); err != nil {
 			return err
 		}

@@ -68,7 +68,7 @@ func (m *AppModel) View() (v tea.View) {
 		// arrive during startup (common on Linux/SSH where there is round-trip
 		// latency between renders) are silently dropped by the terminal because
 		// mouse reporting has not been enabled yet.
-		v := tea.NewView("Initializing...")
+		v := tea.NewView("Initializing.")
 		v.MouseMode = tea.MouseModeCellMotion
 		v.AltScreen = true
 		return v
@@ -435,7 +435,7 @@ func compositorAddHalo(comp *lipgloss.Compositor, l *lipgloss.Layer, baseZ int, 
 func TruncateStack(stack string, n int) string {
 	lines := strings.Split(stack, "\n")
 	if len(lines) > n {
-		return strings.Join(lines[:n], "\n") + "\n..."
+		return strings.Join(lines[:n], "\n") + "\n."
 	}
 	return stack
 }

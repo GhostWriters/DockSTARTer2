@@ -212,7 +212,7 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	logger.TUIMode = true
 	defer func() { logger.TUIMode = false }()
 
-	logger.Info(ctx, "TUI Starting...")
+	logger.Info(ctx, "TUI Starting.")
 	defer sessionlocks.Sessions.ReleaseEditLock()
 
 	// Global panic recovery
@@ -889,7 +889,7 @@ func TriggerAppUpdate() tea.Cmd {
 			return err
 		}
 
-		dialog := NewProgramBoxModel("{{|TitleSuccess|}}Updating App{{[-]}}", "Checking for app updates...", "")
+		dialog := NewProgramBoxModel("{{|TitleSuccess|}}Updating App{{[-]}}", "Checking for app updates.", "")
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
@@ -918,7 +918,7 @@ func TriggerTemplateUpdate() tea.Cmd {
 			return err
 		}
 
-		dialog := NewProgramBoxModel("{{|TitleSuccess|}}Updating Templates{{[-]}}", "Checking for template updates...", "")
+		dialog := NewProgramBoxModel("{{|TitleSuccess|}}Updating Templates{{[-]}}", "Checking for template updates.", "")
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
@@ -966,7 +966,7 @@ func TriggerUpdate() tea.Cmd {
 			return err
 		}
 
-		dialog := NewProgramBoxModel("{{|TitleSuccess|}}Updating DockSTARTer2{{[-]}}", "Checking for updates...", "")
+		dialog := NewProgramBoxModel("{{|TitleSuccess|}}Updating DockSTARTer2{{[-]}}", "Checking for updates.", "")
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)

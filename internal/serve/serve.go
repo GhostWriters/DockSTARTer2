@@ -196,7 +196,7 @@ func StopServer(ctx context.Context, force bool) error {
 		return fmt.Errorf("finding server process (PID %d): %w", info.PID, err)
 	}
 
-	logger.Info(ctx, "Requesting graceful server stop (PID %d)...", info.PID)
+	logger.Info(ctx, "Requesting graceful server stop (PID %d).", info.PID)
 	if err := sessionlocks.Sessions.RequestStop(); err != nil {
 		return fmt.Errorf("writing stop request: %w", err)
 	}
@@ -241,9 +241,9 @@ func Disconnect(ctx context.Context, force bool) error {
 	}
 
 	if force {
-		logger.Info(ctx, "Forcing disconnect of session (PID %d)...", pid)
+		logger.Info(ctx, "Forcing disconnect of session (PID %d).", pid)
 	} else {
-		logger.Info(ctx, "Requesting graceful disconnect (PID %d)...", pid)
+		logger.Info(ctx, "Requesting graceful disconnect (PID %d).", pid)
 	}
 
 	err := sessionlocks.Sessions.Disconnect(ctx, force)

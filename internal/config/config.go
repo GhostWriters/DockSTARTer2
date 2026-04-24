@@ -415,7 +415,7 @@ func MigrateFromLegacy() (AppConfig, bool) {
 	for i := len(iniPaths) - 1; i >= 0; i-- { // Process in reverse so prioritized paths overwrite
 		path := iniPaths[i]
 		if data, err := os.ReadFile(path); err == nil {
-			slog.Log(ctx, slog.LevelInfo, "Migrating legacy configuration from '{{|File|}}"+path+"{{[-]}}'...")
+			slog.Log(ctx, slog.LevelInfo, "Migrating legacy configuration from '{{|File|}}"+path+"{{[-]}}'.")
 			if err := UnmarshalLegacyIni(data, &conf); err == nil {
 				foundLegacy = true
 			}
@@ -428,7 +428,7 @@ func MigrateFromLegacy() (AppConfig, bool) {
 
 	for _, legacyToml := range tomlPaths {
 		if data, err := os.ReadFile(legacyToml); err == nil {
-			slog.Log(ctx, slog.LevelInfo, "Migrating legacy configuration from '{{|File|}}"+legacyToml+"{{[-]}}'...")
+			slog.Log(ctx, slog.LevelInfo, "Migrating legacy configuration from '{{|File|}}"+legacyToml+"{{[-]}}'.")
 			// Use Robust unmarshaling to handle Bash's loose typing
 			if err := UnmarshalRobust(data, &conf); err == nil {
 				foundLegacy = true
@@ -446,7 +446,7 @@ func MigrateFromLegacy() (AppConfig, bool) {
 	// 3. Detect Compose Folder
 	detection := paths.DetectComposeFolder(conf.Paths.ComposeFolder)
 	if detection.LegacyExists && !detection.CurrentExists {
-		slog.Log(ctx, slog.LevelInfo, "Legacy compose folder found at '{{|Folder|}}"+detection.LegacyPath+"{{[-]}}'. Auto-migrating...")
+		slog.Log(ctx, slog.LevelInfo, "Legacy compose folder found at '{{|Folder|}}"+detection.LegacyPath+"{{[-]}}'. Auto-migrating.")
 		// Auto-migrate if legacy has files and current is empty/missing.
 		// We set it to the absolute path so SaveAppConfig can collapse it to ${HOME} or XDG variables
 		// instead of keeping the legacy ${ScriptFolder} variable.

@@ -31,11 +31,11 @@ func handleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, res
 	// (When updating from inside the daemon, ReExec already called ServerDisconnect
 	// and DaemonShutdown — the daemon restarts itself via the re-exec mechanism.)
 	if len(update.PendingReExec) > 0 && wasServerRunning && !console.IsDaemon && execErr == nil {
-		logger.Notice(ctx, "Stopping server before restart...")
+		logger.Notice(ctx, "Stopping server before restart.")
 		if err := serve.StopServer(ctx, false); err != nil {
 			logger.Warn(ctx, "Could not stop server: %v", err)
 		}
-		logger.Notice(ctx, "Restarting server with new binary...")
+		logger.Notice(ctx, "Restarting server with new binary.")
 		proc, err := serve.SpawnDaemon(execPath, tui.GetNavArgs())
 		if err != nil {
 			logger.Warn(ctx, "Failed to restart server: %v — run 'ds2 --server start' manually.", err)

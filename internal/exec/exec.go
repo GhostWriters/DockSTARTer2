@@ -17,7 +17,7 @@ import (
 //
 // Parameters:
 //   - ctx: Context for the command execution
-//   - runningNoticeType: Notice type for logging the "Running: ..." message ("notice", "info", etc.). Empty string to skip.
+//   - runningNoticeType: Notice type for logging the "Running:" message ("notice", "info", etc.). Empty string to skip.
 //   - outputNoticeType: Notice type for logging output. Can include prefix like "git:info" or "docker:notice". Empty string to skip.
 //   - errorNoticeType: Notice type for logging errors ("error", "warn", etc.). Empty string to skip.
 //   - errorMessage: Message to log on error
