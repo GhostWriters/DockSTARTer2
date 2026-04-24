@@ -218,6 +218,7 @@ func LoadAppConfig() AppConfig {
 			_ = SaveAppConfig(conf)
 			// Show the config after migration, matching bash version behavior
 			ShowAppConfig(context.Background(), &conf)
+			return conf
 		}
 	} else {
 		// Overlay user config on top of defaults.
@@ -420,9 +421,14 @@ func MigrateFromLegacy() (AppConfig, bool) {
 		}
 	}
 
-	// 2. Check for late-stage DS1 .toml file in the script folder
+	// 2. Check for late-stage DS1 .toml file
+	var tomlPaths []string
 	if bashFolder := paths.GetBashScriptFolder(); bashFolder != "" {
-		legacyToml := filepath.Join(bashFolder, "dockstarter.toml")
+		tomlPaths = append(tomlPaths, filepath.Join(bashFolder, "dockstarter.toml"))
+	}
+	tomlPaths = append(tomlPaths, filepath.Join(xdg.ConfigHome, "dockstarter", "dockstarter.toml"))
+
+	for _, legacyToml := range tomlPaths {
 		if data, err := os.ReadFile(legacyToml); err == nil {
 			slog.Log(ctx, slog.LevelInfo, "Migrating legacy configuration from '{{|File|}}"+legacyToml+"{{[-]}}'...")
 			// Use Robust unmarshaling to handle Bash's loose typing
