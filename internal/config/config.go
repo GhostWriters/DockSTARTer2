@@ -80,7 +80,6 @@ type UIConfig struct {
 	LogTitleAlign     string `toml:"log_title_align"`     // "center" or "left"
 	PanelLocal        string `toml:"panel_local"`        // "log", "console", or "none" (for local sessions)
 	PanelRemote       string `toml:"panel_remote"`       // "log", "console", or "none" (for ssh/web sessions)
-	Panel             string `toml:"panel,omitempty"`    // Legacy fallback
 }
 
 // PathConfig holds directory path settings.
@@ -224,16 +223,6 @@ func LoadAppConfig() AppConfig {
 		// Overlay user config on top of defaults.
 		// Use Robust unmarshaling to handle any loose types from manual edits
 		if err := UnmarshalRobust(data, &conf); err == nil {
-			// Migration: if legacy 'panel' exists, use it for both local and remote if they weren't explicitly set by user
-			if conf.UI.Panel != "" {
-				if conf.UI.PanelLocal == "console" && conf.UI.Panel != "console" { // Default from defaultsToml is console
-					conf.UI.PanelLocal = conf.UI.Panel
-				}
-				if conf.UI.PanelRemote == "log" && conf.UI.Panel != "log" { // Default from defaultsToml is log
-					conf.UI.PanelRemote = conf.UI.Panel
-				}
-				conf.UI.Panel = "" // Clear legacy field
-			}
 			// Write back only if the merged config differs from what was on disk
 			// (e.g. new keys added in a newer version). Avoids a pointless write
 			// on every load which would also trigger any file watchers.
@@ -279,16 +268,6 @@ func TryLoadAppConfig() (AppConfig, error) {
 	}
 	if err := toml.Unmarshal(data, &conf); err != nil {
 		return AppConfig{}, err
-	}
-	// Migration: if legacy 'panel' exists, use it for both local and remote if they weren't explicitly set by user
-	if conf.UI.Panel != "" {
-		if conf.UI.PanelLocal == "console" && conf.UI.Panel != "console" {
-			conf.UI.PanelLocal = conf.UI.Panel
-		}
-		if conf.UI.PanelRemote == "log" && conf.UI.Panel != "log" {
-			conf.UI.PanelRemote = conf.UI.Panel
-		}
-		conf.UI.Panel = ""
 	}
 	conf.RawPaths = conf.Paths
 	conf.Paths.ConfigFolder = filepath.Clean(ExpandVariables(conf.Paths.ConfigFolder))

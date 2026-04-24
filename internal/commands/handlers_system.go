@@ -159,7 +159,8 @@ func HandleConfigPanel(ctx context.Context, group *CommandGroup) error {
 	}
 
 	conf := config.LoadAppConfig()
-	conf.UI.Panel = mode
+	conf.UI.PanelLocal = mode
+	conf.UI.PanelRemote = mode
 	if err := config.SaveAppConfig(conf); err != nil {
 		return err
 	}
