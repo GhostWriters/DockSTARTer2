@@ -282,13 +282,14 @@ func DetectComposeFolder(currentConfiguredPath string) DetectComposeFolderResult
 	res.LegacyPath = ResolvePath("${ScriptFolder}/compose")
 	if res.LegacyPath != "" {
 		if info, err := os.Stat(res.LegacyPath); err == nil && info.IsDir() {
+			// A folder exists, now check if it's not empty (matches bash folder_is_empty)
 			if entries, err := os.ReadDir(res.LegacyPath); err == nil && len(entries) > 0 {
 				res.LegacyExists = true
 			}
 		}
 	}
 
-	// 2. Resolve Current Configured Path
+	// 2. Resolve Current Configured Path (e.g. from TOML)
 	res.CurrentPath = ResolvePath(currentConfiguredPath)
 	if res.CurrentPath != "" {
 		if info, err := os.Stat(res.CurrentPath); err == nil && info.IsDir() {

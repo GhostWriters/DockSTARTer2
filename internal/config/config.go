@@ -439,18 +439,35 @@ func MigrateFromLegacy() (AppConfig, bool) {
 		}
 	}
 
-	if !foundLegacy {
-		return conf, false
+	configNotice := func(ctx context.Context, msg any, args ...any) {
+		msgStr := fmt.Sprint(msg)
+		if len(args) > 0 && strings.Contains(msgStr, "%") {
+			msgStr = fmt.Sprintf(msgStr, args...)
+		}
+		slog.Log(ctx, slog.LevelInfo, msgStr)
 	}
 
 	// 3. Detect Compose Folder
 	detection := paths.DetectComposeFolder(conf.Paths.ComposeFolder)
-	if detection.LegacyExists && !detection.CurrentExists {
-		slog.Log(ctx, slog.LevelInfo, "Legacy compose folder found at '{{|Folder|}}"+detection.LegacyPath+"{{[-]}}'. Auto-migrating.")
-		// Auto-migrate if legacy has files and current is empty/missing.
-		// We set it to the absolute path so SaveAppConfig can collapse it to ${HOME} or XDG variables
-		// instead of keeping the legacy ${ScriptFolder} variable.
+	foundComposeMigration := false
+	if detection.LegacyExists && detection.CurrentExists && detection.LegacyPath != detection.CurrentPath {
+		promptMsg := fmt.Sprintf("Existing docker compose folders found in multiple locations.\n   Legacy:  '{{|Folder|}}%s{{[-]}}'\n   Default: '{{|Folder|}}%s{{[-]}}'\n\nWould you like to use the Legacy location?", detection.LegacyPath, detection.CurrentPath)
+		useLegacy, err := console.QuestionPrompt(ctx, configNotice, "Multiple Compose Folders Detected", promptMsg, "Y", false)
+		if err == nil && useLegacy {
+			configNotice(ctx, "Chose the Legacy compose folder location: '{{|Folder|}}%s{{[-]}}'", detection.LegacyPath)
+			conf.Paths.ComposeFolder = detection.LegacyPath
+			foundComposeMigration = true
+		} else if err == nil {
+			configNotice(ctx, "Chose the Default compose folder location: '{{|Folder|}}%s{{[-]}}'", detection.CurrentPath)
+		}
+	} else if detection.LegacyExists && !detection.CurrentExists {
+		configNotice(ctx, "Legacy compose folder found at '{{|Folder|}}%s{{[-]}}'. Auto-migrating.", detection.LegacyPath)
 		conf.Paths.ComposeFolder = detection.LegacyPath
+		foundComposeMigration = true
+	}
+
+	if !foundLegacy && !foundComposeMigration {
+		return conf, false
 	}
 
 	slog.Info("Legacy migration complete.")
