@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"strings"
 	"regexp"
+	"log/slog"
+	"context"
 
 	"DockSTARTer2/internal/paths"
 
@@ -421,12 +423,14 @@ func MigrateFromLegacy() (AppConfig, bool) {
 	}
 
 	foundLegacy := false
+	ctx := context.Background()
 
 	// 1. Check for legacy .ini files (Priority: Modern XDG -> Old XDG -> Local)
 	iniPaths := paths.GetLegacyIniPaths()
 	for i := len(iniPaths) - 1; i >= 0; i-- { // Process in reverse so prioritized paths overwrite
 		path := iniPaths[i]
 		if data, err := os.ReadFile(path); err == nil {
+			slog.Log(ctx, slog.LevelInfo, "Found legacy configuration at '{{|File|}}"+path+"{{[-]}}'. Migrating...")
 			if err := UnmarshalLegacyIni(data, &conf); err == nil {
 				foundLegacy = true
 			}
@@ -437,6 +441,7 @@ func MigrateFromLegacy() (AppConfig, bool) {
 	if bashFolder := paths.GetBashScriptFolder(); bashFolder != "" {
 		legacyToml := filepath.Join(bashFolder, "dockstarter.toml")
 		if data, err := os.ReadFile(legacyToml); err == nil {
+			slog.Log(ctx, slog.LevelInfo, "Found legacy TOML configuration at '{{|File|}}"+legacyToml+"{{[-]}}'. Migrating...")
 			// Use Robust unmarshaling to handle Bash's loose typing
 			if err := UnmarshalRobust(data, &conf); err == nil {
 				foundLegacy = true
@@ -454,11 +459,13 @@ func MigrateFromLegacy() (AppConfig, bool) {
 	// 3. Detect Compose Folder
 	detection := paths.DetectComposeFolder(conf.Paths.ComposeFolder)
 	if detection.LegacyExists && !detection.CurrentExists {
+		slog.Log(ctx, slog.LevelInfo, "Legacy compose folder found at '{{|Folder|}}"+detection.LegacyPath+"{{[-]}}'. Auto-migrating...")
 		// Auto-migrate if legacy has files and current is empty/missing.
 		// We set it to the absolute path so SaveAppConfig can collapse it to ${HOME} or XDG variables
 		// instead of keeping the legacy ${ScriptFolder} variable.
 		conf.Paths.ComposeFolder = detection.LegacyPath
 	}
 
+	slog.Info("Legacy migration completed successfully.")
 	return conf, true
 }
