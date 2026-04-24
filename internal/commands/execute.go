@@ -67,7 +67,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			"--theme-button-borders", "--theme-no-button-borders",
 			"--theme-shadows", "--theme-no-shadows", "--theme-shadow", "--theme-no-shadow", "--theme-shadow-level",
 			"--theme-scrollbar", "--theme-no-scrollbar", "--theme-border-color", "--theme-table",
-			"--theme-dialog-title", "--theme-submenu-title", "--theme-log-title",
+			"--theme-dialog-title", "--theme-submenu-title", "--theme-panel-title",
 			"--theme-extract", "--theme-extract-all", "--man":
 		default:
 			shouldValidate = true
@@ -251,7 +251,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				"--theme-button-borders", "--theme-no-button-borders",
 				"--theme-shadows", "--theme-no-shadows", "--theme-shadow", "--theme-no-shadow", "--theme-shadow-level",
 				"--theme-scrollbar", "--theme-no-scrollbar", "--theme-border-color",
-				"--theme-dialog-title", "--theme-submenu-title", "--theme-log-title":
+				"--theme-dialog-title", "--theme-submenu-title", "--theme-panel-title":
 				return HandleThemeSettings(innerCtx, &group)
 			case "-c", "--compose":
 				return HandleCompose(innerCtx, &group, &state)

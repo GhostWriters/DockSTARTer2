@@ -45,7 +45,7 @@ func hitIDToPanelID(hitID string) string {
 
 	// 4. Panel IDs themselves
 	if effectiveID == IDThemePanel || effectiveID == IDOptionsPanel || effectiveID == IDListPanel ||
-		effectiveID == IDLogViewport || effectiveID == IDButtonPanel {
+		effectiveID == IDPanelViewport || effectiveID == IDButtonPanel {
 		return effectiveID
 	}
 
@@ -59,7 +59,7 @@ func hitIDToPanelID(hitID string) string {
 	// If the user hovers the background of a menu, we still want the wheel to scroll the list.
 	// Common screen IDs are "main_menu", "config_menu", "options_menu", "app_selection", "global_flags"
 	// Rather than hardcoding every ID, if it's not a known panel/button but has a hit, it's likely a menu background.
-	if hitID != "" && hitID != IDStatusBar && hitID != IDAppVersion && hitID != IDTmplVersion && hitID != IDHeaderFlags && hitID != IDLogPanel && hitID != IDLogToggle && hitID != IDLogResize {
+	if hitID != "" && hitID != IDStatusBar && hitID != IDAppVersion && hitID != IDTmplVersion && hitID != IDHeaderFlags && hitID != IDPanel && hitID != IDPanelToggle && hitID != IDPanelResize {
 		return effectiveID
 	}
 
@@ -70,17 +70,17 @@ func hitIDToPanelID(hitID string) string {
 // Returns (model, cmd, handled) where handled indicates if the event was consumed.
 func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 	// 1. RESIZE DRAG PRIORITY: If log panel is dragging, it intercepts EVERYTHING
-	if m.logPanel.resizeDrag.Dragging {
-		prevHeight := m.logPanel.height
-		updated, cmd := m.logPanel.Update(msg)
-		m.logPanel = updated.(LogPanelModel)
+	if m.panel.resizeDrag.Dragging {
+		prevHeight := m.panel.height
+		updated, cmd := m.panel.Update(msg)
+		m.panel = updated.(PanelModel)
 
 		// Only resize downstream components when the panel height actually changed.
 		// Mouse motion events fire at pixel resolution but terminal rows span many
 		// pixels, so many consecutive events map to the same row — skipping the
 		// resize avoids invalidating the menu render cache and recomputing shadows
 		// on those no-op frames.
-		if m.logPanel.height != prevHeight {
+		if m.panel.height != prevHeight {
 			m.backdrop.SetSize(m.width, m.backdropHeight())
 
 			caW, caH := m.getContentArea()
@@ -98,15 +98,15 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 
 	// 1b. LOG PANEL SCROLLBAR DRAG PRIORITY: If the log-panel scrollbar thumb is being dragged,
 	// intercept all mouse events for proportional scrolling.
-	if m.logPanelSbDrag.Dragging {
+	if m.panelSbDrag.Dragging {
 		if _, ok := msg.(tea.MouseReleaseMsg); ok {
-			m.logPanelSbDrag.StopDrag()
+			m.panelSbDrag.StopDrag()
 			return m, nil, true
 		}
 		if motion, ok := msg.(tea.MouseMotionMsg); ok {
-			updated, changed := m.logPanel.DragScrollbar(motion.Y, &m.logPanelSbDrag, m.logPanelSbAbsTopY, m.logPanelSbInfo)
+			updated, changed := m.panel.DragScrollbar(motion.Y, &m.panelSbDrag, m.panelSbAbsTopY, m.panelSbInfo)
 			if changed {
-				m.logPanel = updated
+				m.panel = updated
 			}
 			return m, nil, true
 		}
@@ -136,15 +136,15 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 	// 3. FOCUS PRIORITY: If log panel has keyboard focus, it owns the scroll wheel and middle click.
 	// We do this BEFORE dialog checks so that if a user tabs to logs and a dialog is behind it,
 	// the wheel still scrolls the logs.
-	if m.logPanelFocused {
+	if m.panelFocused {
 		if _, ok := msg.(tea.MouseWheelMsg); ok {
-			updated, cmd := m.logPanel.Update(msg)
-			m.logPanel = updated.(LogPanelModel)
+			updated, cmd := m.panel.Update(msg)
+			m.panel = updated.(PanelModel)
 			return m, cmd, true
 		}
 		if click, ok := msg.(tea.MouseClickMsg); ok && click.Button == tea.MouseMiddle {
-			updated, cmd := m.logPanel.Update(msg)
-			m.logPanel = updated.(LogPanelModel)
+			updated, cmd := m.panel.Update(msg)
+			m.panel = updated.(PanelModel)
 			return m, cmd, true
 		}
 	}
@@ -167,7 +167,7 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		// 1. If hitting a context menu already open, let the hit region dispatch it (usually closes)
 		if strings.HasPrefix(hitID, "ctxmenu.") {
 			// Fall through to normal hit dispatch
-		} else if hit == nil || hitID == IDStatusBar || hitID == IDLogPanel || hitID == IDLogViewport || hitID == IDLogToggle || hitID == IDLogResize || hitID == IDConsoleInput ||
+		} else if hit == nil || hitID == IDStatusBar || hitID == IDPanel || hitID == IDPanelViewport || hitID == IDPanelToggle || hitID == IDPanelResize || hitID == IDConsoleInput ||
 			hitID == IDAppVersion || hitID == IDTmplVersion || hitID == IDHeaderFlags {
 			// 2. If hitting background or a global element that doesn't usually have a context menu,
 			// show the global context menu.
@@ -210,15 +210,15 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		}
 
 		// Check if hovering over log panel - if so, focus and scroll it
-		if hitID == IDLogPanel || hitID == IDLogViewport {
-			m.setLogPanelFocus(true)
-			updated, cmd := m.logPanel.Update(msg)
-			m.logPanel = updated.(LogPanelModel)
+		if hitID == IDPanel || hitID == IDPanelViewport {
+			m.setPanelFocus(true)
+			updated, cmd := m.panel.Update(msg)
+			m.panel = updated.(PanelModel)
 			return m, cmd, true
 		}
 
 		// Unfocus log panel since we're over something else
-		m.setLogPanelFocus(false)
+		m.setPanelFocus(false)
 
 		// Clear header focus — wheel moved away from the status bar
 		m.setHeaderFocus(HeaderFocusNone)
@@ -317,15 +317,15 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		}
 
 		// Check if hovering over log panel - focus it and send toggle
-		if hitID == IDLogPanel || hitID == IDLogViewport {
-			m.setLogPanelFocus(true)
-			updated, cmd := m.logPanel.Update(ToggleFocusedMsg{})
-			m.logPanel = updated.(LogPanelModel)
+		if hitID == IDPanel || hitID == IDPanelViewport {
+			m.setPanelFocus(true)
+			updated, cmd := m.panel.Update(ToggleFocusedMsg{})
+			m.panel = updated.(PanelModel)
 			return m, cmd, true
 		}
 
 		// Unfocus log panel
-		m.setLogPanelFocus(false)
+		m.setPanelFocus(false)
 
 		// Clear header focus — middle-click landed away from the status bar
 		m.setHeaderFocus(HeaderFocusNone)
@@ -424,41 +424,41 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 
 		// A. AppModel Internal IDs (handled globally)
 		switch hitID {
-		case IDLogToggle:
+		case IDPanelToggle:
 			if me, ok := msg.(tea.MouseClickMsg); ok && me.Button == tea.MouseLeft {
-				return m, func() tea.Msg { return toggleLogPanelMsg{} }, true
+				return m, func() tea.Msg { return togglePanelMsg{} }, true
 			}
-		case IDLogResize:
+		case IDPanelResize:
 			if me, ok := msg.(tea.MouseClickMsg); ok && me.Button == tea.MouseLeft {
 				// Correctly deliver raw msg to start dragging
-				updated, cmd := m.logPanel.Update(msg)
-				m.logPanel = updated.(LogPanelModel)
-				m.setLogPanelFocus(true)
+				updated, cmd := m.panel.Update(msg)
+				m.panel = updated.(PanelModel)
+				m.setPanelFocus(true)
 				return m, cmd, true
 			}
 		case IDConsoleInput:
 			if me, ok := msg.(tea.MouseClickMsg); ok {
-				m.setLogPanelFocus(true)
+				m.setPanelFocus(true)
 				if me.Button == tea.MouseLeft {
-					blinkCmd := m.logPanel.FocusInput()
-					m.logPanel.input.HandleClick(me.X)
+					blinkCmd := m.panel.FocusInput()
+					m.panel.input.HandleClick(me.X)
 					return m, blinkCmd, true
 				}
 				if me.Button == tea.MouseRight {
-					updated, cmd := m.logPanel.Update(LayerHitMsg{ID: IDConsoleInput, Button: tea.MouseRight, X: me.X, Y: me.Y, Hit: hit})
-					m.logPanel = updated.(LogPanelModel)
+					updated, cmd := m.panel.Update(LayerHitMsg{ID: IDConsoleInput, Button: tea.MouseRight, X: me.X, Y: me.Y, Hit: hit})
+					m.panel = updated.(PanelModel)
 					return m, cmd, true
 				}
 			}
-		case IDLogPanel, IDLogViewport:
-			m.setLogPanelFocus(true)
-			if m.logPanel.inputFocused {
-				m.logPanel.input.Blur()
-				m.logPanel.inputFocused = false
+		case IDPanel, IDPanelViewport:
+			m.setPanelFocus(true)
+			if m.panel.inputFocused {
+				m.panel.input.Blur()
+				m.panel.inputFocused = false
 			}
 			if _, ok := msg.(tea.MouseWheelMsg); ok {
-				updated, cmd := m.logPanel.Update(msg)
-				m.logPanel = updated.(LogPanelModel)
+				updated, cmd := m.panel.Update(msg)
+				m.panel = updated.(PanelModel)
 				return m, cmd, true
 			}
 			return m, nil, true
@@ -474,19 +474,19 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 				}
 			}
 
-			// Log panel scrollbar hits (IDs are "log_panel.sb.*")
-			if strings.HasPrefix(hitID, IDLogPanel+".sb.") {
-				m.setLogPanelFocus(true)
+			// Log panel scrollbar hits (IDs are "panel.sb.*")
+			if strings.HasPrefix(hitID, IDPanel+".sb.") {
+				m.setPanelFocus(true)
 				if !strings.HasSuffix(hitID, ".sb.thumb") {
 					// Arrow/track clicks: route LayerHitMsg to log panel and return
-					updated, cmd := m.logPanel.Update(LayerHitMsg{ID: hitID, Button: hitButton, Hit: hit})
-					m.logPanel = updated.(LogPanelModel)
+					updated, cmd := m.panel.Update(LayerHitMsg{ID: hitID, Button: hitButton, Hit: hit})
+					m.panel = updated.(PanelModel)
 					return m, cmd, true
 				}
 				// .sb.thumb: fall through to B0 to start the drag
 			} else {
 				// If we hit anything else (dialog, screen, header), ensure logs and header are unfocused
-				m.setLogPanelFocus(false)
+				m.setPanelFocus(false)
 				m.setHeaderFocus(HeaderFocusNone)
 			}
 		}
@@ -496,15 +496,15 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		if strings.HasSuffix(hitID, ".sb.thumb") {
 			if me, ok := msg.(tea.MouseClickMsg); ok && me.Button == tea.MouseLeft {
 				// Log panel scrollbar thumb
-				if strings.HasPrefix(hitID, IDLogPanel+".sb.") {
-					m.setLogPanelFocus(true)
-					sbAbsTopY := m.height - m.logPanel.Height() + 1
-					m.logPanelSbAbsTopY = sbAbsTopY
-					vpH := m.logPanel.Height() - 1
-					total := m.logPanel.viewport.TotalLineCount()
-					visible := m.logPanel.viewport.Height()
-					m.logPanelSbInfo = ComputeScrollbarInfo(total, visible, m.logPanel.viewport.YOffset(), vpH)
-					m.logPanelSbDrag.StartDrag(me.Y, sbAbsTopY, m.logPanelSbInfo)
+				if strings.HasPrefix(hitID, IDPanel+".sb.") {
+					m.setPanelFocus(true)
+					sbAbsTopY := m.height - m.panel.Height() + 1
+					m.panelSbAbsTopY = sbAbsTopY
+					vpH := m.panel.Height() - 1
+					total := m.panel.viewport.TotalLineCount()
+					visible := m.panel.viewport.Height()
+					m.panelSbInfo = ComputeScrollbarInfo(total, visible, m.panel.viewport.YOffset(), vpH)
+					m.panelSbDrag.StartDrag(me.Y, sbAbsTopY, m.panelSbInfo)
 					return m, nil, true
 				}
 				// Dialog scrollbar thumb
@@ -567,7 +567,7 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 
 	// 6. MODAL FALLBACK (No hit, but dialog is open)
 	if m.dialog != nil {
-		m.setLogPanelFocus(false)
+		m.setPanelFocus(false)
 		return m, nil, false // Let raw msg fall through to dialog in standard loop
 	}
 

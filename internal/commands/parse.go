@@ -232,7 +232,7 @@ func Parse(args []string) ([]CommandGroup, error) {
 			i++
 
 		case "-T", "--theme", "-S", "--select", "--menu-config-app-select", "--menu-app-select", "--theme-shadow-level",
-			"--theme-dialog-title", "--theme-submenu-title", "--theme-log-title":
+			"--theme-dialog-title", "--theme-submenu-title", "--theme-panel-title":
 			if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
 				currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
 				i++

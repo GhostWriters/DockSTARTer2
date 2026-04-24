@@ -24,18 +24,18 @@ import (
 )
 
 const (
-	logPanelZoneID    = IDLogToggle
-	logResizeZoneID   = IDLogResize
-	logViewportZoneID = IDLogViewport
+	panelZoneID    = IDPanelToggle
+	resizeZoneID   = IDPanelResize
+	viewportZoneID = IDPanelViewport
 )
 
 // ─── Message types ────────────────────────────────────────────────────────────
 
-// logLineMsg carries a new log line from the subscription channel.
-type logLineMsg string
+// panelLineMsg carries a new log line from the subscription channel.
+type panelLineMsg string
 
-// toggleLogPanelMsg requests the log panel to expand or collapse.
-type toggleLogPanelMsg struct{}
+// togglePanelMsg requests the log panel to expand or collapse.
+type togglePanelMsg struct{}
 
 // consoleLinesMsg carries a batch of lines from a running console command.
 type consoleLinesMsg struct{ lines []string }
@@ -58,10 +58,10 @@ type consoleDoneMsg struct {
 
 // ─── Model ───────────────────────────────────────────────────────────────────
 
-// LogPanelModel is the slide-up console panel that lives below the helpline.
+// PanelModel is the slide-up console panel that lives below the helpline.
 // When collapsed it shows only a 1-line toggle strip (^).
 // When expanded it shows a log/output viewport and a single-line input bar.
-type LogPanelModel struct {
+type PanelModel struct {
 	expanded bool
 	focused  bool
 	viewport viewport.Model
@@ -76,7 +76,7 @@ type LogPanelModel struct {
 	resizeDrag ScrollbarDragState
 
 	// maxHeight is the externally imposed height ceiling (set by AppModel).
-	// Zero means "no override" — logPanelMaxHeight() is used as the fallback.
+	// Zero means "no override" — panelMaxHeight() is used as the fallback.
 	maxHeight int
 
 	// Console input bar
@@ -102,7 +102,7 @@ type LogPanelModel struct {
 }
 
 // applyInputStyles updates the sinput colours from the current theme.
-func (m *LogPanelModel) applyInputStyles() {
+func (m *PanelModel) applyInputStyles() {
 	styles := GetStyles()
 	bg := styles.Dialog.GetBackground()
 	tiStyles := textinput.DefaultStyles(true)
@@ -113,15 +113,15 @@ func (m *LogPanelModel) applyInputStyles() {
 	m.input.SetStyles(tiStyles)
 }
 
-// NewLogPanelModel creates a new console panel in the requested state.
-func NewLogPanelModel(panelMode string, connType string) LogPanelModel {
+// NewPanelModel creates a new console panel in the requested state.
+func NewPanelModel(panelMode string, connType string) PanelModel {
 	vp := viewport.New()
 
 	ti := textinput.New()
 	ti.Prompt = "> "
 	inp := sinput.New(ti)
 
-	m := LogPanelModel{
+	m := PanelModel{
 		viewport:   vp,
 		input:      inp,
 		historyIdx: -1,
@@ -134,10 +134,10 @@ func NewLogPanelModel(panelMode string, connType string) LogPanelModel {
 }
 
 // CollapsedHeight returns the height the panel always occupies (the toggle strip).
-func (m LogPanelModel) CollapsedHeight() int { return 1 }
+func (m PanelModel) CollapsedHeight() int { return 1 }
 
 // Height returns the current rendered height of the panel.
-func (m LogPanelModel) Height() int {
+func (m PanelModel) Height() int {
 	if m.expanded {
 		if m.height > 2 {
 			return m.height
@@ -153,11 +153,11 @@ func (m LogPanelModel) Height() int {
 }
 
 // SetMaxHeight updates the externally imposed height ceiling. Pass 0 to revert to default.
-func (m *LogPanelModel) SetMaxHeight(h int) { m.maxHeight = h }
+func (m *PanelModel) SetMaxHeight(h int) { m.maxHeight = h }
 
 // lockSession adds or removes a locker by ID.
 // The input bar is locked while any lockers are registered.
-func (m *LogPanelModel) lockSession(id string, lock bool) {
+func (m *PanelModel) lockSession(id string, lock bool) {
 	if lock {
 		if m.sessionLockers == nil {
 			m.sessionLockers = make(map[string]struct{})
@@ -173,14 +173,14 @@ func (m *LogPanelModel) lockSession(id string, lock bool) {
 }
 
 // SetSessionActive is kept for compatibility; uses a fixed ID.
-func (m *LogPanelModel) SetSessionActive(active bool) {
+func (m *PanelModel) SetSessionActive(active bool) {
 	m.lockSession("__session__", active)
 }
 
-func (m *LogPanelModel) sessionActive() bool { return len(m.sessionLockers) > 0 }
+func (m *PanelModel) sessionActive() bool { return len(m.sessionLockers) > 0 }
 
 // applyDragY computes the new panel height from the current mouse Y.
-func (m *LogPanelModel) applyDragY(mouseY int) {
+func (m *PanelModel) applyDragY(mouseY int) {
 	delta := m.resizeDrag.StartMouseY - mouseY
 	newHeight := m.resizeDrag.StartThumbTop + delta
 	maxH := m.effectiveMaxHeight()
@@ -202,15 +202,15 @@ func (m *LogPanelModel) applyDragY(mouseY int) {
 }
 
 // effectiveMaxHeight returns the ceiling used for clamping.
-func (m *LogPanelModel) effectiveMaxHeight() int {
+func (m *PanelModel) effectiveMaxHeight() int {
 	if m.maxHeight > 0 {
 		return m.maxHeight
 	}
-	return logPanelMaxHeight(m.totalHeight)
+	return panelMaxHeight(m.totalHeight)
 }
 
 // SetSize stores dimensions and adjusts the viewport and input bar.
-func (m *LogPanelModel) SetSize(width, totalTermHeight int) {
+func (m *PanelModel) SetSize(width, totalTermHeight int) {
 	oldWidth := m.width
 	m.width = width
 	m.totalHeight = totalTermHeight
@@ -255,15 +255,15 @@ func (m *LogPanelModel) SetSize(width, totalTermHeight int) {
 }
 
 // Init preloads the log file and starts the live subscription.
-func (m LogPanelModel) Init() tea.Cmd {
+func (m PanelModel) Init() tea.Cmd {
 	return tea.Batch(
-		func() tea.Msg { return preloadLogFile() },
-		waitForLogLine(),
+		func() tea.Msg { return preloadPanelLog() },
+		waitForPanelLine(),
 	)
 }
 
-// preloadLogFile reads the last 200 lines of the log file.
-func preloadLogFile() tea.Msg {
+// preloadPanelLog reads the last 200 lines of the log file.
+func preloadPanelLog() tea.Msg {
 	path := logger.GetLogFilePath()
 	if path == "" {
 		return nil
@@ -287,17 +287,17 @@ func preloadLogFile() tea.Msg {
 	if len(all) == 0 {
 		return nil
 	}
-	return logLineMsg(strings.Join(all, "\n"))
+	return panelLineMsg(strings.Join(all, "\n"))
 }
 
-// waitForLogLine blocks until the logger sends a line, then returns it as a message.
-func waitForLogLine() tea.Cmd {
+// waitForPanelLine blocks until the logger sends a line, then returns it as a message.
+func waitForPanelLine() tea.Cmd {
 	return func() tea.Msg {
 		line, ok := <-logger.SubscribeLogLines()
 		if !ok {
 			return nil
 		}
-		return logLineMsg(line)
+		return panelLineMsg(line)
 	}
 }
 
@@ -354,7 +354,7 @@ func isDS2Prefix(tok string) bool {
 // ds2 commands (starting with - or prefixed with "ds2") are executed internally
 // via commands.Parse + commands.Execute; output flows through the logger subscription.
 // Everything else is run as a shell command and streamed via the pipe/scanner path.
-func (m *LogPanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
+func (m *PanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 	tokens := strings.Fields(cmdStr)
 	if len(tokens) == 0 {
 		return nil
@@ -492,7 +492,7 @@ func (m *LogPanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 }
 
 // appendConsoleLines adds rendered lines to the scrollback.
-func (m *LogPanelModel) appendConsoleLines(lines []string) {
+func (m *PanelModel) appendConsoleLines(lines []string) {
 	styles := GetStyles()
 	targetWidth := m.viewport.Width()
 	if targetWidth <= 0 && m.width > 0 {
@@ -522,7 +522,7 @@ func (m *LogPanelModel) appendConsoleLines(lines []string) {
 }
 
 // reRenderLines re-wraps all stored raw lines for the current width.
-func (m *LogPanelModel) reRenderLines() {
+func (m *PanelModel) reRenderLines() {
 	styles := GetStyles()
 	targetWidth := m.width - ScrollbarGutterWidth
 	if targetWidth <= 0 {
@@ -553,7 +553,7 @@ func (m *LogPanelModel) reRenderLines() {
 
 // ─── Update ───────────────────────────────────────────────────────────────────
 
-func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
 	case sinput.PasteMsg, sinput.CutMsg, sinput.SelectAllMsg:
@@ -577,9 +577,9 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.applyInputStyles()
 		return m, nil
 
-	case logLineMsg:
+	case panelLineMsg:
 		m.appendConsoleLines(strings.Split(string(msg), "\n"))
-		return m, waitForLogLine()
+		return m, waitForPanelLine()
 
 	case consoleLinesMsg:
 		m.appendConsoleLines(msg.lines)
@@ -595,7 +595,7 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case toggleLogPanelMsg:
+	case togglePanelMsg:
 		m.expanded = !m.expanded
 		if m.expanded {
 			m.SetSize(m.width, m.totalHeight)
@@ -633,18 +633,18 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.ID == IDConsoleInput && msg.Button == tea.MouseRight {
 			return m, ShowInputContextMenu(m.input, msg.X, msg.Y, m.width, m.totalHeight)
 		}
-		if msg.ID == logPanelZoneID {
-			return m, func() tea.Msg { return toggleLogPanelMsg{} }
+		if msg.ID == panelZoneID {
+			return m, func() tea.Msg { return togglePanelMsg{} }
 		}
 
 	case DragDoneMsg:
-		if msg.ID == logResizeZoneID {
+		if msg.ID == resizeZoneID {
 			m.resizeDrag.DragPending = false
 			if m.resizeDrag.PendingDragY != m.resizeDrag.LastDragY {
 				m.resizeDrag.LastDragY = m.resizeDrag.PendingDragY
 				m.applyDragY(m.resizeDrag.PendingDragY)
 				m.resizeDrag.DragPending = true
-				return m, DragDoneCmd(logResizeZoneID)
+				return m, DragDoneCmd(resizeZoneID)
 			}
 		}
 		return m, nil
@@ -678,7 +678,7 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.resizeDrag.LastDragY = msg.Y
 				m.applyDragY(msg.Y)
 				m.resizeDrag.DragPending = true
-				return m, DragDoneCmd(logResizeZoneID)
+				return m, DragDoneCmd(resizeZoneID)
 			}
 			return m, nil
 		}
@@ -725,7 +725,7 @@ func (m LogPanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // updateInputFocused handles key events when the input bar has focus.
-func (m LogPanelModel) updateInputFocused(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+func (m PanelModel) updateInputFocused(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, Keys.Esc):
 		m.input.Blur()
@@ -785,7 +785,7 @@ func (m LogPanelModel) updateInputFocused(msg tea.KeyPressMsg) (tea.Model, tea.C
 
 // FocusInput transitions the panel to input-focused state (called from AppModel).
 // Returns the Blink command needed to activate the hardware cursor.
-func (m *LogPanelModel) FocusInput() tea.Cmd {
+func (m *PanelModel) FocusInput() tea.Cmd {
 	hasInput := m.panelMode == "console" || m.panelMode == "system"
 	if !hasInput || m.sessionActive() || !m.expanded {
 		return nil
@@ -797,7 +797,7 @@ func (m *LogPanelModel) FocusInput() tea.Cmd {
 
 // ─── View ─────────────────────────────────────────────────────────────────────
 
-func (m LogPanelModel) ViewString() string {
+func (m PanelModel) ViewString() string {
 	if m.Height() <= 0 {
 		return ""
 	}
@@ -924,14 +924,14 @@ func (m LogPanelModel) ViewString() string {
 }
 
 // Layers returns a single layer with the panel content for visual compositing.
-func (m LogPanelModel) Layers() []*lipgloss.Layer {
+func (m PanelModel) Layers() []*lipgloss.Layer {
 	return []*lipgloss.Layer{
-		lipgloss.NewLayer(m.ViewString()).Z(ZLogPanel).ID(IDLogPanel),
+		lipgloss.NewLayer(m.ViewString()).Z(ZPanel).ID(IDPanel),
 	}
 }
 
 // GetHitRegions implements HitRegionProvider for mouse hit testing.
-func (m LogPanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
+func (m PanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	var regions []HitRegion
 
 	panelHelp := &HelpContext{
@@ -960,7 +960,7 @@ func (m LogPanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	titleSectionLen := 1 + 1 + titleWidth + 1 + 1
 	actualWidth := m.width - 2
 	var leftPad int
-	if ctx.LogTitleAlign == "left" {
+	if ctx.PanelTitleAlign == "left" {
 		leftPad = 0
 	} else {
 		leftPad = (actualWidth - titleSectionLen) / 2
@@ -973,32 +973,32 @@ func (m LogPanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	titleEnd := titleStart + titleSectionLen
 
 	regions = append(regions, HitRegion{
-		ID:     IDLogResize,
+		ID:     IDPanelResize,
 		X:      offsetX,
 		Y:      offsetY,
 		Width:  titleStart,
 		Height: 1,
-		ZOrder: ZLogPanel + 1,
+		ZOrder: ZPanel + 1,
 		Label:  "Console Panel",
 		Help:   panelHelp,
 	})
 	regions = append(regions, HitRegion{
-		ID:     IDLogToggle,
+		ID:     IDPanelToggle,
 		X:      offsetX + titleStart,
 		Y:      offsetY,
 		Width:  titleSectionLen,
 		Height: 1,
-		ZOrder: ZLogPanel + 1,
+		ZOrder: ZPanel + 1,
 		Label:  "Console Panel",
 		Help:   panelHelp,
 	})
 	regions = append(regions, HitRegion{
-		ID:     IDLogResize,
+		ID:     IDPanelResize,
 		X:      offsetX + titleEnd,
 		Y:      offsetY,
 		Width:  m.width - titleEnd,
 		Height: 1,
-		ZOrder: ZLogPanel + 1,
+		ZOrder: ZPanel + 1,
 		Label:  "Console Panel",
 		Help:   panelHelp,
 	})
@@ -1006,12 +1006,12 @@ func (m LogPanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	if m.expanded {
 		vpH := m.height - 4
 		regions = append(regions, HitRegion{
-			ID:     IDLogViewport,
+			ID:     IDPanelViewport,
 			X:      offsetX,
 			Y:      offsetY + 1,
 			Width:  m.width,
 			Height: vpH,
-			ZOrder: ZLogPanel + 1,
+			ZOrder: ZPanel + 1,
 			Label:  "Console Panel",
 			Help:   panelHelp,
 		})
@@ -1025,7 +1025,7 @@ func (m LogPanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 			Y:      offsetY + 1 + vpH,
 			Width:  m.width,
 			Height: 3,
-			ZOrder: ZLogPanel + 1,
+			ZOrder: ZPanel + 1,
 			Label:  "Console Input",
 			Help:   inputHelp,
 		})
@@ -1038,30 +1038,30 @@ func (m LogPanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 				sbTopY := offsetY + 1
 
 				regions = append(regions, HitRegion{
-					ID: IDLogPanel + ".sb.up", X: sbX, Y: sbTopY,
-					Width: 1, Height: 1, ZOrder: ZLogPanel + 2,
+					ID: IDPanel + ".sb.up", X: sbX, Y: sbTopY,
+					Width: 1, Height: 1, ZOrder: ZPanel + 2,
 				})
 				if aboveH := sbInfo.ThumbStart - 1; aboveH > 0 {
 					regions = append(regions, HitRegion{
-						ID: IDLogPanel + ".sb.above", X: sbX, Y: sbTopY + 1,
-						Width: 1, Height: aboveH, ZOrder: ZLogPanel + 2,
+						ID: IDPanel + ".sb.above", X: sbX, Y: sbTopY + 1,
+						Width: 1, Height: aboveH, ZOrder: ZPanel + 2,
 					})
 				}
 				if thumbH := sbInfo.ThumbEnd - sbInfo.ThumbStart; thumbH > 0 {
 					regions = append(regions, HitRegion{
-						ID: IDLogPanel + ".sb.thumb", X: sbX, Y: sbTopY + sbInfo.ThumbStart,
-						Width: 1, Height: thumbH, ZOrder: ZLogPanel + 3,
+						ID: IDPanel + ".sb.thumb", X: sbX, Y: sbTopY + sbInfo.ThumbStart,
+						Width: 1, Height: thumbH, ZOrder: ZPanel + 3,
 					})
 				}
 				if belowH := (sbInfo.Height - 1) - sbInfo.ThumbEnd; belowH > 0 {
 					regions = append(regions, HitRegion{
-						ID: IDLogPanel + ".sb.below", X: sbX, Y: sbTopY + sbInfo.ThumbEnd,
-						Width: 1, Height: belowH, ZOrder: ZLogPanel + 2,
+						ID: IDPanel + ".sb.below", X: sbX, Y: sbTopY + sbInfo.ThumbEnd,
+						Width: 1, Height: belowH, ZOrder: ZPanel + 2,
 					})
 				}
 				regions = append(regions, HitRegion{
-					ID: IDLogPanel + ".sb.down", X: sbX, Y: sbTopY + sbInfo.Height - 1,
-					Width: 1, Height: 1, ZOrder: ZLogPanel + 2,
+					ID: IDPanel + ".sb.down", X: sbX, Y: sbTopY + sbInfo.Height - 1,
+					Width: 1, Height: 1, ZOrder: ZPanel + 2,
 				})
 			}
 		}
@@ -1072,7 +1072,7 @@ func (m LogPanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 
 // GetInputCursor returns the hardware cursor position relative to the panel's
 // top-left corner, cursor shape, and whether to show it.
-func (m LogPanelModel) GetInputCursor() (relX, relY int, shape tea.CursorShape, ok bool) {
+func (m PanelModel) GetInputCursor() (relX, relY int, shape tea.CursorShape, ok bool) {
 	if !m.expanded || !m.inputFocused || !m.input.Focused() {
 		return 0, 0, tea.CursorBar, false
 	}
@@ -1090,7 +1090,7 @@ func (m LogPanelModel) GetInputCursor() (relX, relY int, shape tea.CursorShape, 
 }
 
 // DragScrollbar scrolls the viewport to match the dragged thumb position.
-func (m LogPanelModel) DragScrollbar(mouseY int, drag *ScrollbarDragState, sbAbsTopY int, info ScrollbarInfo) (LogPanelModel, bool) {
+func (m PanelModel) DragScrollbar(mouseY int, drag *ScrollbarDragState, sbAbsTopY int, info ScrollbarInfo) (PanelModel, bool) {
 	total := m.viewport.TotalLineCount()
 	visible := m.viewport.Height()
 	if total <= visible {
@@ -1106,8 +1106,8 @@ func (m LogPanelModel) DragScrollbar(mouseY int, drag *ScrollbarDragState, sbAbs
 	return m, true
 }
 
-// logPanelMaxHeight returns the maximum height the console panel may occupy.
-func logPanelMaxHeight(totalTermHeight int) int {
+// panelMaxHeight returns the maximum height the console panel may occupy.
+func panelMaxHeight(totalTermHeight int) int {
 	layout := GetLayout()
 	shadowH := 0
 	if currentConfig.UI.Shadow {
@@ -1122,6 +1122,6 @@ func logPanelMaxHeight(totalTermHeight int) int {
 }
 
 // View renders the panel at its current height.
-func (m LogPanelModel) View() tea.View {
+func (m PanelModel) View() tea.View {
 	return tea.NewView(m.ViewString())
 }

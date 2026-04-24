@@ -224,12 +224,12 @@ func (s *DisplayOptionsScreen) initMenus() {
 			IsDestructive: true,
 		},
 		{
-			Tag:  "Log Title",
-			Desc: s.dropdownDesc(titleAlignDesc(s.config.UI.LogTitleAlign)),
-			Help: "Alignment of the log panel strip label (Enter for options)",
-			Action: s.showTitleAlignDropdown("log_title_align", "Log Title Align",
-				func() string { return s.config.UI.LogTitleAlign },
-				func(cfg *config.AppConfig, v string) { cfg.UI.LogTitleAlign = v }),
+			Tag:  "Panel Title",
+			Desc: s.dropdownDesc(titleAlignDesc(s.config.UI.PanelTitleAlign)),
+			Help: "Alignment of the panel strip label (Enter for options)",
+			Action: s.showTitleAlignDropdown("panel_title_align", "Panel Title Align",
+				func() string { return s.config.UI.PanelTitleAlign },
+				func(cfg *config.AppConfig, v string) { cfg.UI.PanelTitleAlign = v }),
 			IsDestructive: true,
 		},
 	}
@@ -398,8 +398,8 @@ func formatThemeDefaults(d *theme.ThemeDefaults) string {
 	if d.SubmenuTitleAlign != nil {
 		lines = append(lines, fmt.Sprintf("  Submenu Title: %s", *d.SubmenuTitleAlign))
 	}
-	if d.LogTitleAlign != nil {
-		lines = append(lines, fmt.Sprintf("  Log Title: %s", *d.LogTitleAlign))
+	if d.PanelTitleAlign != nil {
+		lines = append(lines, fmt.Sprintf("  Log Title: %s", *d.PanelTitleAlign))
 	}
 	if len(lines) == 0 {
 		return ""

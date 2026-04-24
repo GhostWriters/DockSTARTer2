@@ -310,7 +310,7 @@ func GetUsage(target string, noHeading bool) string {
 			"	Run tests to check the program",
 		)
 	}
-	if match("-T", "--theme", "--theme-list", "--theme-table", "--theme-lines", "--theme-no-lines", "--theme-borders", "--theme-no-borders", "--theme-button-borders", "--theme-no-button-borders", "--theme-shadows", "--theme-no-shadows", "--theme-shadow-level", "--theme-scrollbar", "--theme-no-scrollbar", "--theme-border-color", "--theme-dialog-title", "--theme-submenu-title", "--theme-log-title", "--theme-extract", "--theme-extract-all") {
+	if match("-T", "--theme", "--theme-list", "--theme-table", "--theme-lines", "--theme-no-lines", "--theme-borders", "--theme-no-borders", "--theme-button-borders", "--theme-no-button-borders", "--theme-shadows", "--theme-no-shadows", "--theme-shadow-level", "--theme-scrollbar", "--theme-no-scrollbar", "--theme-border-color", "--theme-dialog-title", "--theme-submenu-title", "--theme-panel-title", "--theme-extract", "--theme-extract-all") {
 		printStr(
 			"{{|UsageCommand|}}-T --theme{{[-]}}",
 			"	Shows the current theme",
@@ -348,7 +348,7 @@ func GetUsage(target string, noHeading bool) string {
 			"	Set dialog title alignment ({{|UsageOption|}}left{{[-]}} or {{|UsageOption|}}center{{[-]}})",
 			"{{|UsageCommand|}}--theme-submenu-title{{[-]}} {{|UsageOption|}}<align>{{[-]}}",
 			"	Set submenu title alignment ({{|UsageOption|}}left{{[-]}} or {{|UsageOption|}}center{{[-]}})",
-			"{{|UsageCommand|}}--theme-log-title{{[-]}} {{|UsageOption|}}<align>{{[-]}}",
+			"{{|UsageCommand|}}--theme-panel-title{{[-]}} {{|UsageOption|}}<align>{{[-]}}",
 			"	Set log panel title alignment ({{|UsageOption|}}left{{[-]}} or {{|UsageOption|}}center{{[-]}})",
 			"{{|UsageCommand|}}--theme-extract{{[-]}} {{|UsageTheme|}}<themename>{{[-]}} {{|UsageOption|}}<destdir>{{[-]}} {{|UsageOption|}}<filename>{{[-]}}",
 			"	Extract a theme to a file (use {{|UsageTheme|}}user:<name>{{[-]}} for user themes; {{|UsageOption|}}user:{{[-]}} as destdir for the user themes folder)",

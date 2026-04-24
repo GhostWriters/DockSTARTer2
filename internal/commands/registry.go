@@ -118,7 +118,7 @@ var Registry = map[string]Def{
 	"--theme-border-color":       {Title: "Set Border Color",             SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
 	"--theme-dialog-title":       {Title: "Set Dialog Title Align",       SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
 	"--theme-submenu-title":      {Title: "Set Submenu Title Align",      SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
-	"--theme-log-title":          {Title: "Set Log Title Align",          SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-panel-title":        {Title: "Set Panel Title Align",        SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
 	"--config-panel":             {Title: "Set Panel Mode",               SessionLocked: true, ConfigChanging: true},
 }
 

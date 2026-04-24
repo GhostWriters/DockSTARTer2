@@ -77,7 +77,7 @@ type UIConfig struct {
 	BorderColor       int    `toml:"border_color"`        // 1=Border, 2=Border2, 3=Both
 	DialogTitleAlign  string `toml:"dialog_title_align"`  // "center" or "left"
 	SubmenuTitleAlign string `toml:"submenu_title_align"` // "center" or "left"
-	LogTitleAlign     string `toml:"log_title_align"`     // "center" or "left"
+	PanelTitleAlign   string `toml:"panel_title_align"`   // "center" or "left"
 	PanelLocal        string `toml:"panel_local"`         // "log", "console", or "none" (for local sessions)
 	PanelRemote       string `toml:"panel_remote"`        // "log", "console", or "none" (for ssh/web sessions)
 }
@@ -464,6 +464,7 @@ func ShowAppConfig(ctx context.Context, conf *AppConfig) {
 	keys := []string{
 		"ConfigFolder", "ComposeFolder",
 		"Theme", "Borders", "ButtonBorders", "LineCharacters", "Scrollbar", "Shadow", "ShadowLevel", "BorderColor",
+		"DialogTitleAlign", "SubmenuTitleAlign", "PanelTitleAlign", "PanelLocal", "PanelRemote",
 		"SSHPort", "WebPort", "AuthMode",
 	}
 	displayNames := map[string]string{
@@ -477,6 +478,11 @@ func ShowAppConfig(ctx context.Context, conf *AppConfig) {
 		"Shadow":         "Shadow",
 		"ShadowLevel":    "Shadow Level",
 		"BorderColor":    "Border Color",
+		"DialogTitleAlign":  "Dialog Title Align",
+		"SubmenuTitleAlign": "Submenu Title Align",
+		"PanelTitleAlign":   "Panel Title Align",
+		"PanelLocal":        "Panel Local",
+		"PanelRemote":       "Panel Remote",
 		"SSHPort":        "SSH Port",
 		"WebPort":        "Web Port",
 		"AuthMode":       "Auth Mode",
@@ -520,6 +526,16 @@ func ShowAppConfig(ctx context.Context, conf *AppConfig) {
 			value = fmt.Sprintf("{{|Var|}}%d{{[-]}}", conf.UI.ShadowLevel)
 		case "BorderColor":
 			value = fmt.Sprintf("{{|Var|}}%d{{[-]}}", conf.UI.BorderColor)
+		case "DialogTitleAlign":
+			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.DialogTitleAlign)
+		case "SubmenuTitleAlign":
+			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.SubmenuTitleAlign)
+		case "PanelTitleAlign":
+			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.PanelTitleAlign)
+		case "PanelLocal":
+			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.PanelLocal)
+		case "PanelRemote":
+			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.PanelRemote)
 		case "SSHPort":
 			if conf.Server.SSH.Port > 0 {
 				value = fmt.Sprintf("{{|Var|}}%d{{[-]}}", conf.Server.SSH.Port)

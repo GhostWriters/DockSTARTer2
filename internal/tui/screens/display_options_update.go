@@ -403,7 +403,7 @@ func (s *DisplayOptionsScreen) applyPreview(themeName string) {
 	s.config.UI.BorderColor = staged.BorderColor
 	s.config.UI.DialogTitleAlign = staged.DialogTitleAlign
 	s.config.UI.SubmenuTitleAlign = staged.SubmenuTitleAlign
-	s.config.UI.LogTitleAlign = staged.LogTitleAlign
+	s.config.UI.PanelTitleAlign = staged.PanelTitleAlign
 	s.config.UI.PanelLocal = staged.PanelLocal
 	s.config.UI.PanelRemote = staged.PanelRemote
 
@@ -437,7 +437,7 @@ func (s *DisplayOptionsScreen) syncOptionsMenu() {
 		case "Submenu Title":
 			items[i].Desc = s.dropdownDesc(titleAlignDesc(s.config.UI.SubmenuTitleAlign))
 		case "Log Title":
-			items[i].Desc = s.dropdownDesc(titleAlignDesc(s.config.UI.LogTitleAlign))
+			items[i].Desc = s.dropdownDesc(titleAlignDesc(s.config.UI.PanelTitleAlign))
 		case "Local Panel Mode":
 			items[i].Desc = s.dropdownDesc(s.panelModeToDesc(s.config.UI.PanelLocal))
 		case "Remote Panel Mode":

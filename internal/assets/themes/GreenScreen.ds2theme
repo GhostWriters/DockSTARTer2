@@ -112,6 +112,6 @@ VersionSelected = "{{[black:green:B]}}"
 [defaults]
 dialog_title_align = "center"
 submenu_title_align = "left"
-log_title_align = "center"
+panel_title_align = "center"
 
 

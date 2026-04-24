@@ -405,7 +405,7 @@ type ThemeDefaults struct {
 	BorderColor       *int    `toml:"border_color"`
 	DialogTitleAlign  *string `toml:"dialog_title_align"`
 	SubmenuTitleAlign *string `toml:"submenu_title_align"`
-	LogTitleAlign     *string `toml:"log_title_align"`
+	PanelTitleAlign     *string `toml:"panel_title_align"`
 	// Panel modes: themes may suggest "log" or "none" but never "console".
 	// Any attempt to set "console" via a theme is silently clamped to "log".
 	PanelLocal  *string `toml:"panel_local"`
@@ -481,9 +481,9 @@ func ApplyThemeDefaults(conf *config.AppConfig, defaults ThemeDefaults) map[stri
 		conf.UI.SubmenuTitleAlign = *defaults.SubmenuTitleAlign
 		applied["Submenu Title Align"] = conf.UI.SubmenuTitleAlign
 	}
-	if defaults.LogTitleAlign != nil {
-		conf.UI.LogTitleAlign = *defaults.LogTitleAlign
-		applied["Log Title Align"] = conf.UI.LogTitleAlign
+	if defaults.PanelTitleAlign != nil {
+		conf.UI.PanelTitleAlign = *defaults.PanelTitleAlign
+		applied["Panel Title Align"] = conf.UI.PanelTitleAlign
 	}
 	// PanelLocal: no restrictions — local sessions may use any mode.
 	if defaults.PanelLocal != nil {

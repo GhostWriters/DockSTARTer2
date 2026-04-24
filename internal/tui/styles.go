@@ -108,7 +108,7 @@ const (
 	ZHeader   = 2
 	ZHelpline = 4
 	ZScreen   = 10
-	ZLogPanel = 20
+	ZPanel = 20
 	ZDialog   = 30
 	ZHalo     = 35
 	ZOverlay  = 40
@@ -116,10 +116,10 @@ const (
 
 // Global Layer IDs for hit testing
 const (
-	IDLogPanel      = "log_panel"
-	IDLogToggle     = "log_toggle"
-	IDLogResize     = "log_resize"
-	IDLogViewport   = "log_viewport"
+	IDPanel      = "panel"
+	IDPanelToggle     = "panel_toggle"
+	IDPanelResize     = "panel_resize"
+	IDPanelViewport   = "panel_viewport"
 	IDConsoleInput  = "console_input"
 	IDAppVersion  = "app_version"
 	IDTmplVersion = "tmpl_version"
@@ -197,7 +197,7 @@ type Styles struct {
 	ButtonBorders     bool
 	DialogTitleAlign  string
 	SubmenuTitleAlign string
-	LogTitleAlign     string
+	PanelTitleAlign     string
 
 	// Semantic styles derived from theme tags
 	StatusSuccess lipgloss.Style
@@ -247,7 +247,7 @@ type StyleContext struct {
 	ConsoleTitleColor       color.Color
 	DialogTitleAlign    string
 	SubmenuTitleAlign   string
-	LogTitleAlign       string
+	PanelTitleAlign       string
 	Prefix              string // Prefix for semantic tag remapping (e.g. "Preview_")
 	DrawShadow          bool   // Whether to draw shadows for this context
 }
@@ -299,7 +299,7 @@ func GetActiveContext() StyleContext {
 		ConsoleTitleColor:       currentStyles.ConsoleTitleColor,
 		DialogTitleAlign:    currentStyles.DialogTitleAlign,
 		SubmenuTitleAlign:   currentStyles.SubmenuTitleAlign,
-		LogTitleAlign:       currentStyles.LogTitleAlign,
+		PanelTitleAlign:       currentStyles.PanelTitleAlign,
 		Prefix:              "", // Global context has no prefix
 		DrawShadow:          currentConfig.UI.Shadow,
 	}
@@ -556,7 +556,7 @@ func InitStyles(cfg config.AppConfig) {
 
 	currentStyles.DialogTitleAlign = cfg.UI.DialogTitleAlign
 	currentStyles.SubmenuTitleAlign = cfg.UI.SubmenuTitleAlign
-	currentStyles.LogTitleAlign = cfg.UI.LogTitleAlign
+	currentStyles.PanelTitleAlign = cfg.UI.PanelTitleAlign
 }
 
 // ApplyFlags applies ANSI style modifiers to a lipgloss.Style

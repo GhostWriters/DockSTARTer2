@@ -101,7 +101,7 @@ func RenderTopBorderBoxCtx(title, rightTitle, content string, contentWidth int, 
 
 	titleSectionLen := 1 + 1 + WidthWithoutZones(renderedTitle) + 1 + 1
 	var leftPad int
-	if ctx.LogTitleAlign == "left" {
+	if ctx.PanelTitleAlign == "left" {
 		leftPad = 0
 	} else {
 		leftPad = (actualWidth - titleSectionLen) / 2
