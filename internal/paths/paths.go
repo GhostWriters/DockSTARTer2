@@ -5,6 +5,7 @@ import (
 	"DockSTARTer2/internal/version"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -199,4 +200,103 @@ func ResetNeeds() error {
 		return os.RemoveAll(timestampDir)
 	}
 	return nil
+}
+
+// GetBashScriptFolder attempts to find the installation directory of the legacy Bash version of DockSTARTer.
+// It mimics the logic in main.sh by finding the 'ds' command and following symlinks to its source.
+func GetBashScriptFolder() string {
+	// 1. Try to find the 'ds' command in the system path
+	dsPath, err := exec.LookPath("ds")
+	if err == nil {
+		// Resolve all symlinks to find the canonical path (equivalent to the while loop in main.sh)
+		if realPath, err := filepath.EvalSymlinks(dsPath); err == nil {
+			return filepath.Dir(realPath)
+		}
+	}
+
+	// 2. Fallback to default locations (~/.docker then ~/.dockstarter)
+	home, err := os.UserHomeDir()
+	if err == nil {
+		for _, name := range []string{".dockstarter", ".docker"} {
+			legacyPath := filepath.Join(home, name)
+			if info, err := os.Stat(legacyPath); err == nil && info.IsDir() {
+				return legacyPath
+			}
+		}
+	}
+
+	return ""
+}
+
+// GetLegacyIniPaths returns a slice of potential paths for legacy .ini configuration files.
+func GetLegacyIniPaths() []string {
+	var paths []string
+
+	// 1. Check XDG Config Home (Modern nested first, then older root)
+	paths = append(paths, filepath.Join(xdg.ConfigHome, "dockstarter", "dockstarter.ini"))
+	paths = append(paths, filepath.Join(xdg.ConfigHome, "dockstarter.ini"))
+
+	// 2. Check Legacy Script Folder locations
+	if bashFolder := GetBashScriptFolder(); bashFolder != "" {
+		paths = append(paths, filepath.Join(bashFolder, "dockstarter.ini"))
+		paths = append(paths, filepath.Join(bashFolder, "menu.ini"))
+	}
+
+	// Return only paths that actually exist
+	var existing []string
+	for _, p := range paths {
+		if _, err := os.Stat(p); err == nil {
+			existing = append(existing, p)
+		}
+	}
+
+	return existing
+}
+
+// ResolvePath resolves legacy variables like ${ScriptFolder}, ${HOME}, and ${XDG_CONFIG_HOME}.
+func ResolvePath(path string) string {
+	bashFolder := GetBashScriptFolder()
+	home, _ := os.UserHomeDir()
+
+	r := strings.NewReplacer(
+		"${ScriptFolder}", bashFolder,
+		"${HOME}", home,
+		"${XDG_CONFIG_HOME}", xdg.ConfigHome,
+	)
+	return r.Replace(path)
+}
+
+// DetectComposeFolderResult holds the results of the compose folder detection.
+type DetectComposeFolderResult struct {
+	LegacyPath    string
+	CurrentPath   string
+	LegacyExists  bool
+	CurrentExists bool
+}
+
+// DetectComposeFolder replicates the detection logic from config_create.sh.
+func DetectComposeFolder(currentConfiguredPath string) DetectComposeFolderResult {
+	res := DetectComposeFolderResult{}
+
+	// 1. Resolve Legacy Path (${ScriptFolder}/compose)
+	res.LegacyPath = ResolvePath("${ScriptFolder}/compose")
+	if res.LegacyPath != "" {
+		if info, err := os.Stat(res.LegacyPath); err == nil && info.IsDir() {
+			if entries, err := os.ReadDir(res.LegacyPath); err == nil && len(entries) > 0 {
+				res.LegacyExists = true
+			}
+		}
+	}
+
+	// 2. Resolve Current Configured Path
+	res.CurrentPath = ResolvePath(currentConfiguredPath)
+	if res.CurrentPath != "" {
+		if info, err := os.Stat(res.CurrentPath); err == nil && info.IsDir() {
+			if entries, err := os.ReadDir(res.CurrentPath); err == nil && len(entries) > 0 {
+				res.CurrentExists = true
+			}
+		}
+	}
+
+	return res
 }

@@ -7,11 +7,14 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"regexp"
 
 	"DockSTARTer2/internal/paths"
 
 	"github.com/adrg/xdg"
+	"github.com/go-viper/mapstructure/v2"
 	toml "github.com/pelletier/go-toml/v2"
+	"gopkg.in/ini.v1"
 )
 
 //go:embed defaults/dockstarter2.toml
@@ -106,6 +109,11 @@ func getArch() string {
 // - ~/...              -> home-relative path (tilde expansion)
 // - ${ANY}             -> os.Getenv("ANY") fallback for unrecognised variables
 func ExpandVariables(val string) string {
+	// Support legacy ${VAR?} syntax by normalizing it to ${VAR}
+	// Use regex to be precise: find ${...?} and replace with ${...}
+	re := regexp.MustCompile(`\$\{([^}]+)\?\}`)
+	val = re.ReplaceAllString(val, `${$1}`)
+
 	// Tilde expansion: ~/... or bare ~
 	if val == "~" || strings.HasPrefix(val, "~/") {
 		home, err := os.UserHomeDir()
@@ -136,11 +144,53 @@ func ExpandVariables(val string) string {
 				return os.Getenv("USERNAME") // Fallback for Windows
 			}
 			return u.Username
+		case "ScriptFolder":
+			return paths.GetBashScriptFolder()
 		}
 		// Fall back to the real environment for any unrecognised variable
 		return os.Getenv(varName)
 	}
 	return os.Expand(val, mapper)
+}
+
+// CollapseVariables replaces absolute paths with their environment variable equivalents.
+// It specifically EXCLUDES ${ScriptFolder} from reverse resolution.
+func CollapseVariables(path string) string {
+	if path == "" {
+		return ""
+	}
+
+	// Order matters: more specific paths first
+	path = filepath.Clean(path)
+	home, _ := os.UserHomeDir()
+	home = filepath.Clean(home)
+
+	// Use a slice of pairs to ensure deterministic order
+	type pair struct {
+		abs    string
+		envVar string
+	}
+	vars := []pair{
+		{filepath.Clean(xdg.ConfigHome), "${XDG_CONFIG_HOME}"},
+		{filepath.Clean(xdg.DataHome), "${XDG_DATA_HOME}"},
+		{filepath.Clean(xdg.StateHome), "${XDG_STATE_HOME}"},
+		{filepath.Clean(xdg.CacheHome), "${XDG_CACHE_HOME}"},
+		{home, "${HOME}"},
+	}
+
+	for _, v := range vars {
+		if v.abs != "" {
+			// Check if the path is exactly the variable's value or if it's a sub-path
+			if path == v.abs {
+				return v.envVar
+			}
+			if strings.HasPrefix(path, v.abs+string(os.PathSeparator)) {
+				return v.envVar + strings.TrimPrefix(path, v.abs)
+			}
+		}
+	}
+
+	return path
 }
 
 // LoadAppConfig reads the configuration file and returns the configuration.
@@ -157,9 +207,17 @@ func LoadAppConfig() AppConfig {
 
 	path := paths.GetConfigFilePath()
 	data, err := os.ReadFile(path)
-	if err == nil {
+	if err != nil {
+		// No config file found. Attempt migration from legacy.
+		if migrated, ok := MigrateFromLegacy(); ok {
+			conf = migrated
+			// Save the migrated config so we don't migrate again next time
+			_ = SaveAppConfig(conf)
+		}
+	} else {
 		// Overlay user config on top of defaults.
-		if err := toml.Unmarshal(data, &conf); err == nil {
+		// Use Robust unmarshaling to handle any loose types from manual edits
+		if err := UnmarshalRobust(data, &conf); err == nil {
 			// Migration: if legacy 'panel' exists, use it for both local and remote if they weren't explicitly set by user
 			if conf.UI.Panel != "" {
 				if conf.UI.PanelLocal == "console" && conf.UI.Panel != "console" { // Default from defaultsToml is console
@@ -235,6 +293,7 @@ func TryLoadAppConfig() (AppConfig, error) {
 }
 
 // SaveAppConfig writes the configuration to dockstarter2.toml.
+// SaveAppConfig writes the configuration to the application configuration file.
 // Paths are stored in their unexpanded form (e.g. ${XDG_CONFIG_HOME}) so that
 // the file remains portable and variables are resolved fresh on each read.
 func SaveAppConfig(conf AppConfig) error {
@@ -246,12 +305,18 @@ func SaveAppConfig(conf AppConfig) error {
 		return err
 	}
 
-	// Restore unexpanded path values for on-disk storage.
-	// After LoadAppConfig, conf.Paths holds runtime-expanded values while
-	// conf.RawPaths holds the original template strings (e.g. ${XDG_CONFIG_HOME}).
-	// Use RawPaths when available so we never write expanded paths to disk.
-	if conf.RawPaths.ConfigFolder != "" || conf.RawPaths.ComposeFolder != "" {
-		conf.Paths = conf.RawPaths
+	// 1. If RawPaths was set (e.g. from a recent Load), prioritize those original strings
+	if conf.RawPaths.ConfigFolder != "" {
+		conf.Paths.ConfigFolder = conf.RawPaths.ConfigFolder
+	} else {
+		// 2. Otherwise, auto-collapse absolute paths to variables (XDG, HOME, etc.)
+		conf.Paths.ConfigFolder = CollapseVariables(conf.Paths.ConfigFolder)
+	}
+
+	if conf.RawPaths.ComposeFolder != "" {
+		conf.Paths.ComposeFolder = conf.RawPaths.ComposeFolder
+	} else {
+		conf.Paths.ComposeFolder = CollapseVariables(conf.Paths.ComposeFolder)
 	}
 
 	data, err := toml.Marshal(conf)
@@ -260,4 +325,140 @@ func SaveAppConfig(conf AppConfig) error {
 	}
 
 	return os.WriteFile(path, data, 0644)
+}
+
+// UnmarshalRobust unmarshals TOML data into a struct using mapstructure
+// to allow for "weak" type conversion (e.g., string "true" to boolean true).
+// This is primarily intended for migrating configuration from legacy versions
+// that may have stored boolean values as quoted strings.
+func UnmarshalRobust(data []byte, v any) error {
+	var raw map[string]any
+	if err := toml.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		WeaklyTypedInput: true,
+		Result:           v,
+		TagName:          "toml",
+	})
+	if err != nil {
+		return err
+	}
+
+	return decoder.Decode(raw)
+}
+
+// UnmarshalLegacyIni parses a legacy .ini configuration file and maps it to AppConfig.
+func UnmarshalLegacyIni(data []byte, v *AppConfig) error {
+	cfg, err := ini.Load(data)
+	if err != nil {
+		return err
+	}
+
+	// Default section or [DockSTARTer]
+	ds := cfg.Section("DockSTARTer")
+	if ds == nil {
+		ds = cfg.Section(ini.DefaultSection)
+	}
+
+	// Mapping Paths
+	if val := ds.Key("ConfigFolder").String(); val != "" {
+		v.Paths.ConfigFolder = ExpandVariables(val)
+	}
+	if val := ds.Key("ComposeFolder").String(); val != "" {
+		v.Paths.ComposeFolder = ExpandVariables(val)
+	}
+
+	// Mapping UI (often in [Theme] section or default)
+	theme := cfg.Section("Theme")
+	if theme == nil {
+		theme = ds
+	}
+	if val := theme.Key("Theme").String(); val != "" {
+		v.UI.Theme = val
+	}
+
+	// Permissive boolean parsing (matching legacy is_true)
+	isTrue := func(s string) bool {
+		s = strings.ToUpper(strings.TrimSpace(s))
+		return s == "TRUE" || s == "1" || s == "ON" || s == "YES"
+	}
+
+	if theme.HasKey("Scrollbars") {
+		v.UI.Scrollbar = isTrue(theme.Key("Scrollbars").String())
+	} else if theme.HasKey("Scrollbar") {
+		v.UI.Scrollbar = isTrue(theme.Key("Scrollbar").String())
+	}
+
+	if theme.HasKey("Shadows") {
+		v.UI.Shadow = isTrue(theme.Key("Shadows").String())
+	} else if theme.HasKey("Shadow") {
+		v.UI.Shadow = isTrue(theme.Key("Shadow").String())
+	}
+
+	if theme.HasKey("Borders") {
+		v.UI.Borders = isTrue(theme.Key("Borders").String())
+	} else if theme.HasKey("LineCharacters") {
+		v.UI.Borders = isTrue(theme.Key("LineCharacters").String())
+	}
+
+	if theme.HasKey("LineCharacters") {
+		v.UI.LineCharacters = isTrue(theme.Key("LineCharacters").String())
+	}
+
+	return nil
+}
+
+// MigrateFromLegacy coordinates the discovery and ingestion of legacy configuration.
+// It returns the migrated configuration and true if any legacy data was found.
+func MigrateFromLegacy() (AppConfig, bool) {
+	conf := AppConfig{}
+	// Load defaults first
+	if err := toml.Unmarshal(defaultsToml, &conf); err != nil {
+		// This should never happen as defaults are embedded
+		return conf, false
+	}
+
+	foundLegacy := false
+
+	// 1. Check for legacy .ini files (Priority: Modern XDG -> Old XDG -> Local)
+	iniPaths := paths.GetLegacyIniPaths()
+	for i := len(iniPaths) - 1; i >= 0; i-- { // Process in reverse so prioritized paths overwrite
+		path := iniPaths[i]
+		if data, err := os.ReadFile(path); err == nil {
+			if err := UnmarshalLegacyIni(data, &conf); err == nil {
+				foundLegacy = true
+			}
+		}
+	}
+
+	// 2. Check for late-stage DS1 .toml file in the script folder
+	if bashFolder := paths.GetBashScriptFolder(); bashFolder != "" {
+		legacyToml := filepath.Join(bashFolder, "dockstarter.toml")
+		if data, err := os.ReadFile(legacyToml); err == nil {
+			// Use Robust unmarshaling to handle Bash's loose typing
+			if err := UnmarshalRobust(data, &conf); err == nil {
+				foundLegacy = true
+				// Ensure any legacy variables are expanded so they can be re-collapsed to standard ones
+				conf.Paths.ConfigFolder = ExpandVariables(conf.Paths.ConfigFolder)
+				conf.Paths.ComposeFolder = ExpandVariables(conf.Paths.ComposeFolder)
+			}
+		}
+	}
+
+	if !foundLegacy {
+		return conf, false
+	}
+
+	// 3. Detect Compose Folder
+	detection := paths.DetectComposeFolder(conf.Paths.ComposeFolder)
+	if detection.LegacyExists && !detection.CurrentExists {
+		// Auto-migrate if legacy has files and current is empty/missing.
+		// We set it to the absolute path so SaveAppConfig can collapse it to ${HOME} or XDG variables
+		// instead of keeping the legacy ${ScriptFolder} variable.
+		conf.Paths.ComposeFolder = detection.LegacyPath
+	}
+
+	return conf, true
 }
