@@ -430,7 +430,7 @@ func MigrateFromLegacy() (AppConfig, bool) {
 	for i := len(iniPaths) - 1; i >= 0; i-- { // Process in reverse so prioritized paths overwrite
 		path := iniPaths[i]
 		if data, err := os.ReadFile(path); err == nil {
-			slog.Log(ctx, slog.LevelInfo, "Found legacy configuration at '{{|File|}}"+path+"{{[-]}}'. Migrating...")
+			slog.Log(ctx, slog.LevelInfo, "Migrating legacy configuration from '{{|File|}}"+path+"{{[-]}}'...")
 			if err := UnmarshalLegacyIni(data, &conf); err == nil {
 				foundLegacy = true
 			}
@@ -441,7 +441,7 @@ func MigrateFromLegacy() (AppConfig, bool) {
 	if bashFolder := paths.GetBashScriptFolder(); bashFolder != "" {
 		legacyToml := filepath.Join(bashFolder, "dockstarter.toml")
 		if data, err := os.ReadFile(legacyToml); err == nil {
-			slog.Log(ctx, slog.LevelInfo, "Found legacy TOML configuration at '{{|File|}}"+legacyToml+"{{[-]}}'. Migrating...")
+			slog.Log(ctx, slog.LevelInfo, "Migrating legacy TOML configuration from '{{|File|}}"+legacyToml+"{{[-]}}'...")
 			// Use Robust unmarshaling to handle Bash's loose typing
 			if err := UnmarshalRobust(data, &conf); err == nil {
 				foundLegacy = true
@@ -466,6 +466,6 @@ func MigrateFromLegacy() (AppConfig, bool) {
 		conf.Paths.ComposeFolder = detection.LegacyPath
 	}
 
-	slog.Info("Legacy migration completed successfully.")
+	slog.Info("Legacy migration complete.")
 	return conf, true
 }
