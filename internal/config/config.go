@@ -397,19 +397,9 @@ func UnmarshalRobust(data []byte, v any) (map[string]bool, error) {
 	return present, decoder.Decode(raw)
 }
 
-// UnmarshalLegacyIni parses a legacy .ini configuration file and maps it to AppConfig.
-// It matches the Bash implementation by being section-agnostic and taking the last match.
-func UnmarshalLegacyIni(data []byte, v *AppConfig) (map[string]bool, error) {
-	present := make(map[string]bool)
+// ReadLegacyMap parses a legacy .ini configuration file and returns a map of raw key-value pairs.
+func ReadLegacyMap(data []byte) map[string]string {
 	raw := make(map[string]string)
-
-	// Permissive boolean parsing (matching legacy is_true)
-	isTrue := func(s string) bool {
-		s = strings.Trim(strings.TrimSpace(s), "'\"")
-		s = strings.ToUpper(s)
-		return s == "TRUE" || s == "1" || s == "ON" || s == "YES"
-	}
-
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -422,6 +412,20 @@ func UnmarshalLegacyIni(data []byte, v *AppConfig) (map[string]bool, error) {
 			val := strings.Trim(strings.TrimSpace(parts[1]), "'\"")
 			raw[key] = val
 		}
+	}
+	return raw
+}
+
+// UnmarshalLegacyIni parses a legacy .ini configuration file and maps it to AppConfig.
+func UnmarshalLegacyIni(data []byte, v *AppConfig) (map[string]bool, error) {
+	present := make(map[string]bool)
+	raw := ReadLegacyMap(data)
+
+	// Permissive boolean parsing (matching legacy is_true)
+	isTrue := func(s string) bool {
+		s = strings.Trim(strings.TrimSpace(s), "'\"")
+		s = strings.ToUpper(s)
+		return s == "TRUE" || s == "1" || s == "ON" || s == "YES"
 	}
 
 	if val, ok := raw["ConfigFolder"]; ok {
@@ -457,7 +461,6 @@ func UnmarshalLegacyIni(data []byte, v *AppConfig) (map[string]bool, error) {
 		v.UI.Borders = isTrue(val)
 		present["Borders"] = true
 	} else if val, ok := raw["LineCharacters"]; ok {
-		// Old INI files used LineCharacters for the Borders property
 		v.UI.Borders = isTrue(val)
 		present["Borders"] = true
 	}
@@ -478,9 +481,7 @@ func MigrateFromLegacy(ctx context.Context) (AppConfig, bool) {
 
 	// 1. Build priority list of legacy files (matches Bash pattern)
 	var legacyFiles []string
-	// Priority 1: Late-stage DS1 .toml file
-	legacyFiles = append(legacyFiles, filepath.Join(xdg.ConfigHome, "dockstarter", "dockstarter.toml"))
-	// Priority 2-N: Legacy .ini files (XDG then script folder)
+	// Priority 1-N: Legacy .ini files (XDG then script folder)
 	legacyFiles = append(legacyFiles, paths.GetLegacyIniPaths()...)
 
 	for _, path := range legacyFiles {
@@ -488,21 +489,65 @@ func MigrateFromLegacy(ctx context.Context) (AppConfig, bool) {
 		if err != nil {
 			continue // Try next file
 		}
-		logNotice(ctx, "Detected legacy config file at '{{|File|}}%s{{[-]}}'.", path)
-		var oldConf AppConfig // Clean config for display (no defaults merged)
-		var present map[string]bool
-		var unmarshalErr error
-
-		if strings.HasSuffix(path, ".toml") {
-			present, unmarshalErr = UnmarshalRobust(data, &oldConf)
-		} else {
-			present, unmarshalErr = UnmarshalLegacyIni(data, &oldConf)
-		}
-
-		if unmarshalErr == nil {
+		raw := ReadLegacyMap(data)
+		if len(raw) > 0 {
+			logNotice(ctx, "Detected legacy config file at '{{|File|}}%s{{[-]}}'.", path)
 			heading := fmt.Sprintf("Configuration options in legacy config file '{{|File|}}%s{{[-]}}':", path)
 			logNotice(ctx, " ")
-			ShowAppConfigWithTitleAndPresent(ctx, &oldConf, heading, present)
+
+			headers := []string{
+				"{{|UsageCommand|}}Option{{[-]}}",
+				"{{|UsageCommand|}}Value{{[-]}}",
+				"{{|UsageCommand|}}Expanded Value{{[-]}}",
+			}
+			var tableData []string
+			// Map legacy keys to display names and format values (matching DS2 table style)
+			legacyMapping := []struct {
+				key   string
+				name  string
+				isDir bool
+			}{
+				{"ConfigFolder", "Config Folder", true},
+				{"ComposeFolder", "Compose Folder", true},
+				{"Theme", "Theme", false},
+				{"Borders", "Borders", false},
+				{"Scrollbar", "Scrollbar", false},
+				{"Shadow", "Shadow", false},
+				{"LineCharacters", "Line Characters", false},
+			}
+
+			for _, m := range legacyMapping {
+				val, ok := raw[m.key]
+				if !ok {
+					// Check aliases
+					if m.key == "ConfigFolder" {
+						val, ok = raw["DOCKER_CONFIG_FOLDER"]
+					} else if m.key == "Scrollbar" {
+						val, ok = raw["Scrollbars"]
+					} else if m.key == "Shadow" {
+						val, ok = raw["Shadows"]
+					}
+				}
+				if ok {
+					tableData = append(tableData, m.name)
+					colorTag := "{{|Var|}}"
+					if m.isDir {
+						colorTag = "{{|Folder|}}"
+					}
+					tableData = append(tableData, fmt.Sprintf("%s%s{{[-]}}", colorTag, val))
+					if m.isDir {
+						tableData = append(tableData, fmt.Sprintf("%s%s{{[-]}}", colorTag, ExpandVariables(val)))
+					} else {
+						tableData = append(tableData, "")
+					}
+				}
+			}
+
+			logNotice(ctx, heading)
+			var sb strings.Builder
+			console.PrintTableCtx(console.WithTUIWriter(ctx, &sb), headers, tableData, false) // Force ASCII borders
+			logNotice(ctx, strings.TrimSuffix(sb.String(), "\n"))
+
 			logNotice(ctx, " ")
 			logNotice(ctx, "Migrating '{{|File|}}%s{{[-]}}' to '{{|File|}}%s{{[-]}}'.", path, paths.GetConfigFilePath())
 
@@ -510,14 +555,7 @@ func MigrateFromLegacy(ctx context.Context) (AppConfig, bool) {
 			_ = toml.Unmarshal(defaultsToml, &conf)
 
 			// Apply to the actual merged config
-			if strings.HasSuffix(path, ".toml") {
-				_, _ = UnmarshalRobust(data, &conf)
-				// Ensure any legacy variables are expanded so they can be re-collapsed to standard ones
-				conf.Paths.ConfigFolder = ExpandVariables(conf.Paths.ConfigFolder)
-				conf.Paths.ComposeFolder = ExpandVariables(conf.Paths.ComposeFolder)
-			} else {
-				_, _ = UnmarshalLegacyIni(data, &conf)
-			}
+			_, _ = UnmarshalLegacyIni(data, &conf)
 			foundLegacy = true
 			break // STOP after the first successful migration source is processed
 		}
