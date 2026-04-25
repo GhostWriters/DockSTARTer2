@@ -220,9 +220,9 @@ func LoadAppConfig() AppConfig {
 			// Re-load to ensure all paths and late-stage initializations are performed correctly
 			conf = LoadAppConfig()
 			// Show the config after migration, matching bash version behavior
-			logNotice(migrationCtx, "")
+			logNotice(migrationCtx, " ")
 			ShowAppConfig(migrationCtx, &conf)
-			logNotice(migrationCtx, "")
+			logNotice(migrationCtx, " ")
 			return conf
 		}
 	} else {
@@ -508,8 +508,9 @@ func MigrateFromLegacy(ctx context.Context) (AppConfig, bool) {
 
 		if unmarshalErr == nil {
 			heading := fmt.Sprintf("Configuration options in legacy config file '{{|File|}}%s{{[-]}}':", path)
-			logNotice(ctx, "")
+			logNotice(ctx, " ")
 			ShowAppConfigWithTitleAndPresent(ctx, &oldConf, heading, present)
+			logNotice(ctx, " ")
 			logNotice(ctx, "Migrating '{{|File|}}%s{{[-]}}' to '{{|File|}}%s{{[-]}}'.", path, paths.GetConfigFilePath())
 			// Apply to the actual merged config
 			if strings.HasSuffix(path, ".toml") {
