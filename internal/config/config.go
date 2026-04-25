@@ -219,7 +219,9 @@ func LoadAppConfig() AppConfig {
 			// Re-load to ensure all paths and late-stage initializations are performed correctly
 			conf = LoadAppConfig()
 			// Show the config after migration, matching bash version behavior
+			logNotice(migrationCtx, "")
 			ShowAppConfig(migrationCtx, &conf)
+			logNotice(migrationCtx, "")
 			return conf
 		}
 	} else {
@@ -509,6 +511,7 @@ func MigrateFromLegacy(ctx context.Context) (AppConfig, bool) {
 
 		if unmarshalErr == nil {
 			heading := fmt.Sprintf("Configuration options in old config file '{{|File|}}%s{{[-]}}':", path)
+			logNotice(ctx, "")
 			ShowAppConfigWithTitleAndPresent(ctx, &oldConf, heading, present)
 
 			// Apply to the actual merged config
@@ -690,19 +693,15 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 	}
 
 	if val, ok := ctx.Value("migration_mode").(bool); ok && val {
-		logNotice(ctx, "")
 		logNotice(ctx, title)
 		var sb strings.Builder
 		console.PrintTableCtx(console.WithTUIWriter(ctx, &sb), headers, data, conf.UI.LineCharacters)
-		logNotice(ctx, sb.String())
-		logNotice(ctx, "")
+		logNotice(ctx, strings.TrimSuffix(sb.String(), "\n"))
 	} else {
-		fmt.Println("")
 		fmt.Println(console.ToConsoleANSI(title))
 		var sb strings.Builder
 		console.PrintTableCtx(console.WithTUIWriter(ctx, &sb), headers, data, conf.UI.LineCharacters)
 		fmt.Println(console.ToConsoleANSI(sb.String()))
-		fmt.Println("")
 	}
 }
 
