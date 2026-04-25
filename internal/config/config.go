@@ -494,7 +494,6 @@ func MigrateFromLegacy(ctx context.Context) (AppConfig, bool) {
 		if err != nil {
 			continue // Try next file
 		}
-		logNotice(ctx, "")
 		logNotice(ctx, "Detected legacy config file at '{{|File|}}%s{{[-]}}'.", path)
 		var oldConf AppConfig // Clean config for display (no defaults merged)
 		var present map[string]bool
