@@ -397,12 +397,10 @@ func UnmarshalRobust(data []byte, v any) (map[string]bool, error) {
 }
 
 // UnmarshalLegacyIni parses a legacy .ini configuration file and maps it to AppConfig.
+// It matches the Bash implementation by being section-agnostic and taking the last match.
 func UnmarshalLegacyIni(data []byte, v *AppConfig) (map[string]bool, error) {
 	present := make(map[string]bool)
-	cfg, err := ini.Load(data)
-	if err != nil {
-		return nil, err
-	}
+	raw := make(map[string]string)
 
 	// Permissive boolean parsing (matching legacy is_true)
 	isTrue := func(s string) bool {
@@ -411,65 +409,61 @@ func UnmarshalLegacyIni(data []byte, v *AppConfig) (map[string]bool, error) {
 		return s == "TRUE" || s == "1" || s == "ON" || s == "YES"
 	}
 
-	// Try to find configuration in [DockSTARTer], [Theme], or the default section
-	// We check all of them because legacy files vary in structure.
-	sections := []*ini.Section{
-		cfg.Section("DockSTARTer"),
-		cfg.Section("Theme"),
-		cfg.Section(ini.DefaultSection),
-	}
-
-	for _, s := range sections {
-		if s == nil {
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
 
-		if s.HasKey("ConfigFolder") && !present["ConfigFolder"] {
-			val := strings.Trim(s.Key("ConfigFolder").String(), "'\"")
-			v.Paths.ConfigFolder = ExpandVariables(val)
-			present["ConfigFolder"] = true
+		if parts := strings.SplitN(line, "=", 2); len(parts) == 2 {
+			key := strings.TrimSpace(parts[0])
+			val := strings.Trim(strings.TrimSpace(parts[1]), "'\"")
+			raw[key] = val
 		}
-		if s.HasKey("ComposeFolder") && !present["ComposeFolder"] {
-			val := strings.Trim(s.Key("ComposeFolder").String(), "'\"")
-			v.Paths.ComposeFolder = ExpandVariables(val)
-			present["ComposeFolder"] = true
-		}
-		if s.HasKey("Theme") && !present["Theme"] {
-			v.UI.Theme = strings.Trim(s.Key("Theme").String(), "'\"")
-			present["Theme"] = true
-		}
+	}
 
-		if (s.HasKey("Scrollbars") || s.HasKey("Scrollbar")) && !present["Scrollbar"] {
-			key := "Scrollbar"
-			if s.HasKey("Scrollbars") {
-				key = "Scrollbars"
-			}
-			v.UI.Scrollbar = isTrue(s.Key(key).String())
-			present["Scrollbar"] = true
-		}
+	if val, ok := raw["ConfigFolder"]; ok {
+		v.Paths.ConfigFolder = ExpandVariables(val)
+		present["ConfigFolder"] = true
+	}
+	if val, ok := raw["ComposeFolder"]; ok {
+		v.Paths.ComposeFolder = ExpandVariables(val)
+		present["ComposeFolder"] = true
+	}
+	if val, ok := raw["Theme"]; ok {
+		v.UI.Theme = val
+		present["Theme"] = true
+	}
 
-		if (s.HasKey("Shadows") || s.HasKey("Shadow")) && !present["Shadow"] {
-			key := "Shadow"
-			if s.HasKey("Shadows") {
-				key = "Shadows"
-			}
-			v.UI.Shadow = isTrue(s.Key(key).String())
-			present["Shadow"] = true
-		}
+	if val, ok := raw["Scrollbar"]; ok {
+		v.UI.Scrollbar = isTrue(val)
+		present["Scrollbar"] = true
+	} else if val, ok := raw["Scrollbars"]; ok {
+		v.UI.Scrollbar = isTrue(val)
+		present["Scrollbar"] = true
+	}
 
-		if (s.HasKey("Borders") || s.HasKey("LineCharacters")) && !present["Borders"] {
-			key := "Borders"
-			if s.HasKey("LineCharacters") {
-				key = "LineCharacters"
-			}
-			v.UI.Borders = isTrue(s.Key(key).String())
-			present["Borders"] = true
-		}
+	if val, ok := raw["Shadow"]; ok {
+		v.UI.Shadow = isTrue(val)
+		present["Shadow"] = true
+	} else if val, ok := raw["Shadows"]; ok {
+		v.UI.Shadow = isTrue(val)
+		present["Shadow"] = true
+	}
 
-		if s.HasKey("LineCharacters") && !present["LineCharacters"] {
-			v.UI.LineCharacters = isTrue(s.Key("LineCharacters").String())
-			present["LineCharacters"] = true
-		}
+	if val, ok := raw["Borders"]; ok {
+		v.UI.Borders = isTrue(val)
+		present["Borders"] = true
+	} else if val, ok := raw["LineCharacters"]; ok {
+		// Old INI files used LineCharacters for the Borders property
+		v.UI.Borders = isTrue(val)
+		present["Borders"] = true
+	}
+
+	if val, ok := raw["LineCharacters"]; ok {
+		v.UI.LineCharacters = isTrue(val)
+		present["LineCharacters"] = true
 	}
 
 	return present, nil
