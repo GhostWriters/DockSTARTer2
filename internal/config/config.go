@@ -505,6 +505,10 @@ func MigrateFromLegacy(ctx context.Context) (AppConfig, bool) {
 			ShowAppConfigWithTitleAndPresent(ctx, &oldConf, heading, present)
 			logNotice(ctx, " ")
 			logNotice(ctx, "Migrating '{{|File|}}%s{{[-]}}' to '{{|File|}}%s{{[-]}}'.", path, paths.GetConfigFilePath())
+
+			// Start with defaults so the final saved file is complete
+			_ = toml.Unmarshal(defaultsToml, &conf)
+
 			// Apply to the actual merged config
 			if strings.HasSuffix(path, ".toml") {
 				_, _ = UnmarshalRobust(data, &conf)
