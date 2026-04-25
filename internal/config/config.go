@@ -474,12 +474,6 @@ func UnmarshalLegacyIni(data []byte, v *AppConfig) (map[string]bool, error) {
 // It returns the migrated configuration and true if any legacy data was found.
 func MigrateFromLegacy(ctx context.Context) (AppConfig, bool) {
 	conf := AppConfig{}
-	// Load defaults first
-	if err := toml.Unmarshal(defaultsToml, &conf); err != nil {
-		// This should never happen as defaults are embedded
-		return conf, false
-	}
-
 	foundLegacy := false
 
 	// 1. Build priority list of legacy files (matches Bash pattern)
