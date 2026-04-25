@@ -225,7 +225,7 @@ func LoadAppConfig() AppConfig {
 	} else {
 		// Overlay user config on top of defaults.
 		// Use Robust unmarshaling to handle any loose types from manual edits
-		if err := UnmarshalRobust(data, &conf); err == nil {
+		if _, err := UnmarshalRobust(data, &conf); err == nil {
 			// Write back only if the merged config differs from what was on disk
 			// (e.g. new keys added in a newer version). Avoids a pointless write
 			// on every load which would also trigger any file watchers.
@@ -319,13 +319,68 @@ func SaveAppConfig(conf AppConfig) error {
 
 // UnmarshalRobust unmarshals TOML data into a struct using mapstructure
 // to allow for "weak" type conversion (e.g., string "true" to boolean true).
-// This is primarily intended for migrating configuration from legacy versions
-// that may have stored boolean values as quoted strings.
-func UnmarshalRobust(data []byte, v any) error {
+func UnmarshalRobust(data []byte, v any) (map[string]bool, error) {
+	present := make(map[string]bool)
 	var raw map[string]any
 	if err := toml.Unmarshal(data, &raw); err != nil {
-		return err
+		return nil, err
 	}
+
+	// Helper to track present keys in the flat namespace of AppConfig
+	var trackKeys func(m map[string]any, prefix string)
+	trackKeys = func(m map[string]any, prefix string) {
+		for k, val := range m {
+			fullKey := k
+			if prefix != "" {
+				fullKey = prefix + "." + k
+			}
+
+			// Special case: map the TOML structure to the flat keys used in ShowAppConfig
+			switch fullKey {
+			case "paths.config_folder":
+				present["ConfigFolder"] = true
+			case "paths.compose_folder":
+				present["ComposeFolder"] = true
+			case "ui.theme":
+				present["Theme"] = true
+			case "ui.borders":
+				present["Borders"] = true
+			case "ui.button_borders":
+				present["ButtonBorders"] = true
+			case "ui.line_characters":
+				present["LineCharacters"] = true
+			case "ui.scrollbar":
+				present["Scrollbar"] = true
+			case "ui.shadow":
+				present["Shadow"] = true
+			case "ui.shadow_level":
+				present["ShadowLevel"] = true
+			case "ui.border_color":
+				present["BorderColor"] = true
+			case "ui.dialog_title_align":
+				present["DialogTitleAlign"] = true
+			case "ui.submenu_title_align":
+				present["SubmenuTitleAlign"] = true
+			case "ui.panel_title_align":
+				present["PanelTitleAlign"] = true
+			case "ui.panel_local":
+				present["PanelLocal"] = true
+			case "ui.panel_remote":
+				present["PanelRemote"] = true
+			case "server.ssh.port":
+				present["SSHPort"] = true
+			case "server.web.port":
+				present["WebPort"] = true
+			case "server.auth.mode":
+				present["AuthMode"] = true
+			}
+
+			if subMap, ok := val.(map[string]any); ok {
+				trackKeys(subMap, fullKey)
+			}
+		}
+	}
+	trackKeys(raw, "")
 
 	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
 		WeaklyTypedInput: true,
@@ -333,17 +388,18 @@ func UnmarshalRobust(data []byte, v any) error {
 		TagName:          "toml",
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return decoder.Decode(raw)
+	return present, decoder.Decode(raw)
 }
 
 // UnmarshalLegacyIni parses a legacy .ini configuration file and maps it to AppConfig.
-func UnmarshalLegacyIni(data []byte, v *AppConfig) error {
+func UnmarshalLegacyIni(data []byte, v *AppConfig) (map[string]bool, error) {
+	present := make(map[string]bool)
 	cfg, err := ini.Load(data)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Default section or [DockSTARTer]
@@ -353,11 +409,15 @@ func UnmarshalLegacyIni(data []byte, v *AppConfig) error {
 	}
 
 	// Mapping Paths
-	if val := ds.Key("ConfigFolder").String(); val != "" {
+	if ds.HasKey("ConfigFolder") {
+		val := ds.Key("ConfigFolder").String()
 		v.Paths.ConfigFolder = ExpandVariables(val)
+		present["ConfigFolder"] = true
 	}
-	if val := ds.Key("ComposeFolder").String(); val != "" {
+	if ds.HasKey("ComposeFolder") {
+		val := ds.Key("ComposeFolder").String()
 		v.Paths.ComposeFolder = ExpandVariables(val)
+		present["ComposeFolder"] = true
 	}
 
 	// Mapping UI (often in [Theme] section or default)
@@ -365,8 +425,9 @@ func UnmarshalLegacyIni(data []byte, v *AppConfig) error {
 	if theme == nil {
 		theme = ds
 	}
-	if val := theme.Key("Theme").String(); val != "" {
-		v.UI.Theme = val
+	if theme.HasKey("Theme") {
+		v.UI.Theme = theme.Key("Theme").String()
+		present["Theme"] = true
 	}
 
 	// Permissive boolean parsing (matching legacy is_true)
@@ -375,29 +436,39 @@ func UnmarshalLegacyIni(data []byte, v *AppConfig) error {
 		return s == "TRUE" || s == "1" || s == "ON" || s == "YES"
 	}
 
-	if theme.HasKey("Scrollbars") {
-		v.UI.Scrollbar = isTrue(theme.Key("Scrollbars").String())
-	} else if theme.HasKey("Scrollbar") {
-		v.UI.Scrollbar = isTrue(theme.Key("Scrollbar").String())
+	if theme.HasKey("Scrollbars") || theme.HasKey("Scrollbar") {
+		key := "Scrollbar"
+		if theme.HasKey("Scrollbars") {
+			key = "Scrollbars"
+		}
+		v.UI.Scrollbar = isTrue(theme.Key(key).String())
+		present["Scrollbar"] = true
 	}
 
-	if theme.HasKey("Shadows") {
-		v.UI.Shadow = isTrue(theme.Key("Shadows").String())
-	} else if theme.HasKey("Shadow") {
-		v.UI.Shadow = isTrue(theme.Key("Shadow").String())
+	if theme.HasKey("Shadows") || theme.HasKey("Shadow") {
+		key := "Shadow"
+		if theme.HasKey("Shadows") {
+			key = "Shadows"
+		}
+		v.UI.Shadow = isTrue(theme.Key(key).String())
+		present["Shadow"] = true
 	}
 
-	if theme.HasKey("Borders") {
-		v.UI.Borders = isTrue(theme.Key("Borders").String())
-	} else if theme.HasKey("LineCharacters") {
-		v.UI.Borders = isTrue(theme.Key("LineCharacters").String())
+	if theme.HasKey("Borders") || theme.HasKey("LineCharacters") {
+		key := "Borders"
+		if theme.HasKey("LineCharacters") {
+			key = "LineCharacters"
+		}
+		v.UI.Borders = isTrue(theme.Key(key).String())
+		present["Borders"] = true
 	}
 
 	if theme.HasKey("LineCharacters") {
 		v.UI.LineCharacters = isTrue(theme.Key("LineCharacters").String())
+		present["LineCharacters"] = true
 	}
 
-	return nil
+	return present, nil
 }
 
 // MigrateFromLegacy coordinates the discovery and ingestion of legacy configuration.
@@ -412,45 +483,45 @@ func MigrateFromLegacy(ctx context.Context) (AppConfig, bool) {
 
 	foundLegacy := false
 
-	// 1. Check for legacy .ini files (Priority: Modern XDG -> Old XDG -> Local)
-	iniPaths := paths.GetLegacyIniPaths()
-	for i := len(iniPaths) - 1; i >= 0; i-- { // Process in reverse so prioritized paths overwrite
-		path := iniPaths[i]
-		if data, err := os.ReadFile(path); err == nil {
-			logNotice(ctx, "Migrating '{{|File|}}%s{{[-]}}' to '{{|File|}}%s{{[-]}}'.", path, paths.GetConfigFilePath())
-			var oldConf AppConfig
-			_ = toml.Unmarshal(defaultsToml, &oldConf)
-			if err := UnmarshalLegacyIni(data, &oldConf); err == nil {
-				heading := fmt.Sprintf("Configuration options in old config file '{{|File|}}%s{{[-]}}':", path)
-				ShowAppConfigWithTitle(ctx, &oldConf, heading)
+	// 1. Build priority list of legacy files (matches Bash pattern)
+	var legacyFiles []string
+	// Priority 1: Late-stage DS1 .toml file
+	legacyFiles = append(legacyFiles, filepath.Join(xdg.ConfigHome, "dockstarter", "dockstarter.toml"))
+	// Priority 2-N: Legacy .ini files (XDG then script folder)
+	legacyFiles = append(legacyFiles, paths.GetLegacyIniPaths()...)
 
-				// Apply to the merged config
-				_ = UnmarshalLegacyIni(data, &conf)
-				foundLegacy = true
-			}
+	for _, path := range legacyFiles {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue // Try next file
 		}
-	}
 
-	// 2. Check for late-stage DS1 .toml file
-	var tomlPaths []string
-	tomlPaths = append(tomlPaths, filepath.Join(xdg.ConfigHome, "dockstarter", "dockstarter.toml"))
+		logNotice(ctx, "Migrating '{{|File|}}%s{{[-]}}' to '{{|File|}}%s{{[-]}}'.", path, paths.GetConfigFilePath())
+		var oldConf AppConfig // Clean config for display (no defaults merged)
+		var present map[string]bool
+		var unmarshalErr error
 
-	for _, legacyToml := range tomlPaths {
-		if data, err := os.ReadFile(legacyToml); err == nil {
-			logNotice(ctx, "Migrating '{{|File|}}%s{{[-]}}' to '{{|File|}}%s{{[-]}}'.", legacyToml, paths.GetConfigFilePath())
-			var oldConf AppConfig
-			_ = toml.Unmarshal(defaultsToml, &oldConf)
-			if err := UnmarshalRobust(data, &oldConf); err == nil {
-				heading := fmt.Sprintf("Configuration options in old config file '{{|File|}}%s{{[-]}}':", legacyToml)
-				ShowAppConfigWithTitle(ctx, &oldConf, heading)
+		if strings.HasSuffix(path, ".toml") {
+			present, unmarshalErr = UnmarshalRobust(data, &oldConf)
+		} else {
+			present, unmarshalErr = UnmarshalLegacyIni(data, &oldConf)
+		}
 
-				// Apply to the merged config
-				_ = UnmarshalRobust(data, &conf)
-				foundLegacy = true
+		if unmarshalErr == nil {
+			heading := fmt.Sprintf("Configuration options in old config file '{{|File|}}%s{{[-]}}':", path)
+			ShowAppConfigWithTitleAndPresent(ctx, &oldConf, heading, present)
+
+			// Apply to the actual merged config
+			if strings.HasSuffix(path, ".toml") {
+				_, _ = UnmarshalRobust(data, &conf)
 				// Ensure any legacy variables are expanded so they can be re-collapsed to standard ones
 				conf.Paths.ConfigFolder = ExpandVariables(conf.Paths.ConfigFolder)
 				conf.Paths.ComposeFolder = ExpandVariables(conf.Paths.ComposeFolder)
+			} else {
+				_, _ = UnmarshalLegacyIni(data, &conf)
 			}
+			foundLegacy = true
+			break // STOP after the first successful migration source is processed
 		}
 	}
 
@@ -487,6 +558,11 @@ func ShowAppConfig(ctx context.Context, conf *AppConfig) {
 
 // ShowAppConfigWithTitle prints a summary table with a custom title.
 func ShowAppConfigWithTitle(ctx context.Context, conf *AppConfig, title string) {
+	ShowAppConfigWithTitleAndPresent(ctx, conf, title, nil)
+}
+
+// ShowAppConfigWithTitleAndPresent prints a summary table with a custom title, optionally filtering by present keys.
+func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, title string, presentKeys map[string]bool) {
 	headers := []string{
 		"{{|UsageCommand|}}Option{{[-]}}",
 		"{{|UsageCommand|}}Value{{[-]}}",
@@ -530,6 +606,11 @@ func ShowAppConfigWithTitle(ctx context.Context, conf *AppConfig, title string) 
 	}
 
 	for _, key := range keys {
+		// Filter out keys not present in the legacy file if presentKeys is provided
+		if presentKeys != nil && !presentKeys[key] {
+			continue
+		}
+
 		var value, expandedValue string
 		var useFolderColor bool
 
