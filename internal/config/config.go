@@ -495,7 +495,7 @@ func MigrateFromLegacy(ctx context.Context) (AppConfig, bool) {
 			continue // Try next file
 		}
 
-		logNotice(ctx, "Migrating '{{|File|}}%s{{[-]}}' to '{{|File|}}%s{{[-]}}'.", path, paths.GetConfigFilePath())
+		logNotice(ctx, "Detected legacy config file at '{{|File|}}%s{{[-]}}'.", path)
 		var oldConf AppConfig // Clean config for display (no defaults merged)
 		var present map[string]bool
 		var unmarshalErr error
@@ -507,10 +507,10 @@ func MigrateFromLegacy(ctx context.Context) (AppConfig, bool) {
 		}
 
 		if unmarshalErr == nil {
-			heading := fmt.Sprintf("Configuration options in old config file '{{|File|}}%s{{[-]}}':", path)
+			heading := fmt.Sprintf("Configuration options in legacy config file '{{|File|}}%s{{[-]}}':", path)
 			logNotice(ctx, "")
 			ShowAppConfigWithTitleAndPresent(ctx, &oldConf, heading, present)
-
+			logNotice(ctx, "Migrating '{{|File|}}%s{{[-]}}' to '{{|File|}}%s{{[-]}}'.", path, paths.GetConfigFilePath())
 			// Apply to the actual merged config
 			if strings.HasSuffix(path, ".toml") {
 				_, _ = UnmarshalRobust(data, &conf)
@@ -529,7 +529,7 @@ func MigrateFromLegacy(ctx context.Context) (AppConfig, bool) {
 	detection := paths.DetectComposeFolder(conf.Paths.ComposeFolder)
 	foundComposeMigration := false
 	if detection.LegacyExists && detection.CurrentExists && detection.LegacyPath != detection.CurrentPath {
-		promptMsg := fmt.Sprintf("Existing docker compose folders found in multiple locations.\n   Legacy:  '{{|Folder|}}%s{{[-]}}'\n   Default: '{{|Folder|}}%s{{[-]}}'\n\nWould you like to use the Legacy location?", detection.LegacyPath, detection.CurrentPath)
+		promptMsg := fmt.Sprintf("Detected compose folders in multiple locations.\n   Legacy:  '{{|Folder|}}%s{{[-]}}'\n   Default: '{{|Folder|}}%s{{[-]}}'\n\nWould you like to use the Legacy location?", detection.LegacyPath, detection.CurrentPath)
 		useLegacy, err := console.QuestionPrompt(ctx, logNotice, "Multiple Compose Folders Detected", promptMsg, "Y", false)
 		if err == nil && useLegacy {
 			logNotice(ctx, "Chose the Legacy compose folder location:\n   '{{|Folder|}}%s{{[-]}}'", detection.LegacyPath)
@@ -539,7 +539,7 @@ func MigrateFromLegacy(ctx context.Context) (AppConfig, bool) {
 			logNotice(ctx, "Chose the Default compose folder location:\n   '{{|Folder|}}%s{{[-]}}'", detection.CurrentPath)
 		}
 	} else if detection.LegacyExists && !detection.CurrentExists {
-		logNotice(ctx, "Legacy compose folder found at '{{|Folder|}}%s{{[-]}}'. Auto-migrating.", detection.LegacyPath)
+		logNotice(ctx, "Detected compose folder at '{{|Folder|}}%s{{[-]}}'.", detection.LegacyPath)
 		conf.Paths.ComposeFolder = detection.LegacyPath
 		foundComposeMigration = true
 	}
