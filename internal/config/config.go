@@ -1,6 +1,8 @@
 package config
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	_ "embed"
 	"fmt"
@@ -18,7 +20,6 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/go-viper/mapstructure/v2"
 	toml "github.com/pelletier/go-toml/v2"
-	"gopkg.in/ini.v1"
 )
 
 //go:embed defaults/dockstarter2.toml
