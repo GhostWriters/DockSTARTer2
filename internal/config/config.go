@@ -404,70 +404,72 @@ func UnmarshalLegacyIni(data []byte, v *AppConfig) (map[string]bool, error) {
 		return nil, err
 	}
 
-	// Default section or [DockSTARTer]
-	ds := cfg.Section("DockSTARTer")
-	if ds == nil {
-		ds = cfg.Section(ini.DefaultSection)
-	}
-
-	// Mapping Paths
-	if ds.HasKey("ConfigFolder") {
-		val := ds.Key("ConfigFolder").String()
-		v.Paths.ConfigFolder = ExpandVariables(val)
-		present["ConfigFolder"] = true
-	}
-	if ds.HasKey("ComposeFolder") {
-		val := ds.Key("ComposeFolder").String()
-		v.Paths.ComposeFolder = ExpandVariables(val)
-		present["ComposeFolder"] = true
-	}
-
-	// Mapping UI (often in [Theme] section or default)
-	theme := cfg.Section("Theme")
-	if theme == nil {
-		theme = ds
-	}
-	if theme.HasKey("Theme") {
-		v.UI.Theme = theme.Key("Theme").String()
-		present["Theme"] = true
-	}
-
 	// Permissive boolean parsing (matching legacy is_true)
 	isTrue := func(s string) bool {
-		s = strings.ToUpper(strings.TrimSpace(s))
+		s = strings.Trim(strings.TrimSpace(s), "'\"")
+		s = strings.ToUpper(s)
 		return s == "TRUE" || s == "1" || s == "ON" || s == "YES"
 	}
 
-	if theme.HasKey("Scrollbars") || theme.HasKey("Scrollbar") {
-		key := "Scrollbar"
-		if theme.HasKey("Scrollbars") {
-			key = "Scrollbars"
-		}
-		v.UI.Scrollbar = isTrue(theme.Key(key).String())
-		present["Scrollbar"] = true
+	// Try to find configuration in [DockSTARTer], [Theme], or the default section
+	// We check all of them because legacy files vary in structure.
+	sections := []*ini.Section{
+		cfg.Section("DockSTARTer"),
+		cfg.Section("Theme"),
+		cfg.Section(ini.DefaultSection),
 	}
 
-	if theme.HasKey("Shadows") || theme.HasKey("Shadow") {
-		key := "Shadow"
-		if theme.HasKey("Shadows") {
-			key = "Shadows"
+	for _, s := range sections {
+		if s == nil {
+			continue
 		}
-		v.UI.Shadow = isTrue(theme.Key(key).String())
-		present["Shadow"] = true
-	}
 
-	if theme.HasKey("Borders") || theme.HasKey("LineCharacters") {
-		key := "Borders"
-		if theme.HasKey("LineCharacters") {
-			key = "LineCharacters"
+		if s.HasKey("ConfigFolder") && !present["ConfigFolder"] {
+			val := strings.Trim(s.Key("ConfigFolder").String(), "'\"")
+			v.Paths.ConfigFolder = ExpandVariables(val)
+			present["ConfigFolder"] = true
 		}
-		v.UI.Borders = isTrue(theme.Key(key).String())
-		present["Borders"] = true
-	}
+		if s.HasKey("ComposeFolder") && !present["ComposeFolder"] {
+			val := strings.Trim(s.Key("ComposeFolder").String(), "'\"")
+			v.Paths.ComposeFolder = ExpandVariables(val)
+			present["ComposeFolder"] = true
+		}
+		if s.HasKey("Theme") && !present["Theme"] {
+			v.UI.Theme = strings.Trim(s.Key("Theme").String(), "'\"")
+			present["Theme"] = true
+		}
 
-	if theme.HasKey("LineCharacters") {
-		v.UI.LineCharacters = isTrue(theme.Key("LineCharacters").String())
-		present["LineCharacters"] = true
+		if (s.HasKey("Scrollbars") || s.HasKey("Scrollbar")) && !present["Scrollbar"] {
+			key := "Scrollbar"
+			if s.HasKey("Scrollbars") {
+				key = "Scrollbars"
+			}
+			v.UI.Scrollbar = isTrue(s.Key(key).String())
+			present["Scrollbar"] = true
+		}
+
+		if (s.HasKey("Shadows") || s.HasKey("Shadow")) && !present["Shadow"] {
+			key := "Shadow"
+			if s.HasKey("Shadows") {
+				key = "Shadows"
+			}
+			v.UI.Shadow = isTrue(s.Key(key).String())
+			present["Shadow"] = true
+		}
+
+		if (s.HasKey("Borders") || s.HasKey("LineCharacters")) && !present["Borders"] {
+			key := "Borders"
+			if s.HasKey("LineCharacters") {
+				key = "LineCharacters"
+			}
+			v.UI.Borders = isTrue(s.Key(key).String())
+			present["Borders"] = true
+		}
+
+		if s.HasKey("LineCharacters") && !present["LineCharacters"] {
+			v.UI.LineCharacters = isTrue(s.Key("LineCharacters").String())
+			present["LineCharacters"] = true
+		}
 	}
 
 	return present, nil
