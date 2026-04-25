@@ -212,13 +212,14 @@ func LoadAppConfig() AppConfig {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		// No config file found. Attempt migration from legacy.
-		if migrated, ok := MigrateFromLegacy(); ok {
+		migrationCtx := context.WithValue(context.Background(), "migration_mode", true)
+		if migrated, ok := MigrateFromLegacy(migrationCtx); ok {
 			// Save the migrated config so we don't migrate again next time
 			_ = SaveAppConfig(migrated)
 			// Re-load to ensure all paths and late-stage initializations are performed correctly
 			conf = LoadAppConfig()
 			// Show the config after migration, matching bash version behavior
-			ShowAppConfig(context.Background(), &conf)
+			ShowAppConfig(migrationCtx, &conf)
 			return conf
 		}
 	} else {
@@ -245,7 +246,9 @@ func LoadAppConfig() AppConfig {
 	// No user config found; write the embedded defaults to disk (preserving comments).
 	cfgPath := paths.GetConfigFilePath()
 	if err := os.MkdirAll(filepath.Dir(cfgPath), 0755); err == nil {
+		logNotice(context.Background(), "Creating '{{|Folder|}}%s{{[-]}}'.", filepath.Dir(cfgPath))
 		_ = os.WriteFile(cfgPath, defaultsToml, 0644)
+		logNotice(context.Background(), "Copying '{{|File|}}%s{{[-]}}' to '{{|File|}}%s{{[-]}}'.", "embedded defaults", cfgPath)
 	}
 	conf.RawPaths = conf.Paths
 	conf.Paths.ConfigFolder = filepath.Clean(ExpandVariables(conf.Paths.ConfigFolder))
@@ -399,7 +402,7 @@ func UnmarshalLegacyIni(data []byte, v *AppConfig) error {
 
 // MigrateFromLegacy coordinates the discovery and ingestion of legacy configuration.
 // It returns the migrated configuration and true if any legacy data was found.
-func MigrateFromLegacy() (AppConfig, bool) {
+func MigrateFromLegacy(ctx context.Context) (AppConfig, bool) {
 	conf := AppConfig{}
 	// Load defaults first
 	if err := toml.Unmarshal(defaultsToml, &conf); err != nil {
@@ -408,15 +411,21 @@ func MigrateFromLegacy() (AppConfig, bool) {
 	}
 
 	foundLegacy := false
-	ctx := context.Background()
 
 	// 1. Check for legacy .ini files (Priority: Modern XDG -> Old XDG -> Local)
 	iniPaths := paths.GetLegacyIniPaths()
 	for i := len(iniPaths) - 1; i >= 0; i-- { // Process in reverse so prioritized paths overwrite
 		path := iniPaths[i]
 		if data, err := os.ReadFile(path); err == nil {
-			slog.Log(ctx, slog.LevelInfo, "Migrating legacy configuration from '{{|File|}}"+path+"{{[-]}}'.")
-			if err := UnmarshalLegacyIni(data, &conf); err == nil {
+			logNotice(ctx, "Migrating '{{|File|}}%s{{[-]}}' to '{{|File|}}%s{{[-]}}'.", path, paths.GetConfigFilePath())
+			var oldConf AppConfig
+			_ = toml.Unmarshal(defaultsToml, &oldConf)
+			if err := UnmarshalLegacyIni(data, &oldConf); err == nil {
+				heading := fmt.Sprintf("Configuration options in old config file '{{|File|}}%s{{[-]}}':", path)
+				ShowAppConfigWithTitle(ctx, &oldConf, heading)
+
+				// Apply to the merged config
+				_ = UnmarshalLegacyIni(data, &conf)
 				foundLegacy = true
 			}
 		}
@@ -428,9 +437,15 @@ func MigrateFromLegacy() (AppConfig, bool) {
 
 	for _, legacyToml := range tomlPaths {
 		if data, err := os.ReadFile(legacyToml); err == nil {
-			slog.Log(ctx, slog.LevelInfo, "Migrating legacy configuration from '{{|File|}}"+legacyToml+"{{[-]}}'.")
-			// Use Robust unmarshaling to handle Bash's loose typing
-			if err := UnmarshalRobust(data, &conf); err == nil {
+			logNotice(ctx, "Migrating '{{|File|}}%s{{[-]}}' to '{{|File|}}%s{{[-]}}'.", legacyToml, paths.GetConfigFilePath())
+			var oldConf AppConfig
+			_ = toml.Unmarshal(defaultsToml, &oldConf)
+			if err := UnmarshalRobust(data, &oldConf); err == nil {
+				heading := fmt.Sprintf("Configuration options in old config file '{{|File|}}%s{{[-]}}':", legacyToml)
+				ShowAppConfigWithTitle(ctx, &oldConf, heading)
+
+				// Apply to the merged config
+				_ = UnmarshalRobust(data, &conf)
 				foundLegacy = true
 				// Ensure any legacy variables are expanded so they can be re-collapsed to standard ones
 				conf.Paths.ConfigFolder = ExpandVariables(conf.Paths.ConfigFolder)
@@ -439,29 +454,21 @@ func MigrateFromLegacy() (AppConfig, bool) {
 		}
 	}
 
-	configNotice := func(ctx context.Context, msg any, args ...any) {
-		msgStr := fmt.Sprint(msg)
-		if len(args) > 0 && strings.Contains(msgStr, "%") {
-			msgStr = fmt.Sprintf(msgStr, args...)
-		}
-		slog.Log(ctx, slog.LevelInfo, msgStr)
-	}
-
 	// 3. Detect Compose Folder
 	detection := paths.DetectComposeFolder(conf.Paths.ComposeFolder)
 	foundComposeMigration := false
 	if detection.LegacyExists && detection.CurrentExists && detection.LegacyPath != detection.CurrentPath {
 		promptMsg := fmt.Sprintf("Existing docker compose folders found in multiple locations.\n   Legacy:  '{{|Folder|}}%s{{[-]}}'\n   Default: '{{|Folder|}}%s{{[-]}}'\n\nWould you like to use the Legacy location?", detection.LegacyPath, detection.CurrentPath)
-		useLegacy, err := console.QuestionPrompt(ctx, configNotice, "Multiple Compose Folders Detected", promptMsg, "Y", false)
+		useLegacy, err := console.QuestionPrompt(ctx, logNotice, "Multiple Compose Folders Detected", promptMsg, "Y", false)
 		if err == nil && useLegacy {
-			configNotice(ctx, "Chose the Legacy compose folder location: '{{|Folder|}}%s{{[-]}}'", detection.LegacyPath)
+			logNotice(ctx, "Chose the Legacy compose folder location:\n   '{{|Folder|}}%s{{[-]}}'", detection.LegacyPath)
 			conf.Paths.ComposeFolder = detection.LegacyPath
 			foundComposeMigration = true
 		} else if err == nil {
-			configNotice(ctx, "Chose the Default compose folder location: '{{|Folder|}}%s{{[-]}}'", detection.CurrentPath)
+			logNotice(ctx, "Chose the Default compose folder location:\n   '{{|Folder|}}%s{{[-]}}'", detection.CurrentPath)
 		}
 	} else if detection.LegacyExists && !detection.CurrentExists {
-		configNotice(ctx, "Legacy compose folder found at '{{|Folder|}}%s{{[-]}}'. Auto-migrating.", detection.LegacyPath)
+		logNotice(ctx, "Legacy compose folder found at '{{|Folder|}}%s{{[-]}}'. Auto-migrating.", detection.LegacyPath)
 		conf.Paths.ComposeFolder = detection.LegacyPath
 		foundComposeMigration = true
 	}
@@ -470,12 +477,16 @@ func MigrateFromLegacy() (AppConfig, bool) {
 		return conf, false
 	}
 
-	slog.Info("Legacy migration complete.")
 	return conf, true
 }
 
 // ShowAppConfig prints a summary table of the current configuration.
 func ShowAppConfig(ctx context.Context, conf *AppConfig) {
+	ShowAppConfigWithTitle(ctx, conf, "")
+}
+
+// ShowAppConfigWithTitle prints a summary table with a custom title.
+func ShowAppConfigWithTitle(ctx context.Context, conf *AppConfig, title string) {
 	headers := []string{
 		"{{|UsageCommand|}}Option{{[-]}}",
 		"{{|UsageCommand|}}Value{{[-]}}",
@@ -489,24 +500,24 @@ func ShowAppConfig(ctx context.Context, conf *AppConfig) {
 		"SSHPort", "WebPort", "AuthMode",
 	}
 	displayNames := map[string]string{
-		"ConfigFolder":   "Config Folder",
-		"ComposeFolder":  "Compose Folder",
-		"Theme":          "Theme",
-		"Borders":        "Borders",
-		"ButtonBorders":  "Button Borders",
-		"LineCharacters": "Line Characters",
-		"Scrollbar":      "Scrollbar",
-		"Shadow":         "Shadow",
-		"ShadowLevel":    "Shadow Level",
-		"BorderColor":    "Border Color",
+		"ConfigFolder":      "Config Folder",
+		"ComposeFolder":     "Compose Folder",
+		"Theme":             "Theme",
+		"Borders":           "Borders",
+		"ButtonBorders":     "Button Borders",
+		"LineCharacters":    "Line Characters",
+		"Scrollbar":         "Scrollbar",
+		"Shadow":            "Shadow",
+		"ShadowLevel":       "Shadow Level",
+		"BorderColor":       "Border Color",
 		"DialogTitleAlign":  "Dialog Title Align",
 		"SubmenuTitleAlign": "Submenu Title Align",
 		"PanelTitleAlign":   "Panel Title Align",
 		"PanelLocal":        "Panel Local",
 		"PanelRemote":       "Panel Remote",
-		"SSHPort":        "SSH Port",
-		"WebPort":        "Web Port",
-		"AuthMode":       "Auth Mode",
+		"SSHPort":           "SSH Port",
+		"WebPort":           "Web Port",
+		"AuthMode":          "Auth Mode",
 	}
 
 	var data []string
@@ -593,6 +604,38 @@ func ShowAppConfig(ctx context.Context, conf *AppConfig) {
 		}
 	}
 
-	fmt.Println(console.ToConsoleANSI("Configuration options stored in '{{|File|}}" + paths.GetConfigFilePath() + "{{[-]}}':"))
-	console.PrintTableCtx(ctx, headers, data, conf.UI.LineCharacters)
+	if title == "" {
+		title = "Configuration options stored in '{{|File|}}" + paths.GetConfigFilePath() + "{{[-]}}':"
+	}
+
+	if val, ok := ctx.Value("migration_mode").(bool); ok && val {
+		logNotice(ctx, "")
+		logNotice(ctx, title)
+		var sb strings.Builder
+		console.PrintTableCtx(console.WithTUIWriter(ctx, &sb), headers, data, conf.UI.LineCharacters)
+		logNotice(ctx, sb.String())
+		logNotice(ctx, "")
+	} else {
+		fmt.Println("")
+		fmt.Println(console.ToConsoleANSI(title))
+		var sb strings.Builder
+		console.PrintTableCtx(console.WithTUIWriter(ctx, &sb), headers, data, conf.UI.LineCharacters)
+		fmt.Println(console.ToConsoleANSI(sb.String()))
+		fmt.Println("")
+	}
+}
+
+// logNotice logs a notice message, splitting multi-line messages and logging each separately.
+// It uses slog.LevelInfo which is mapped to LevelNotice in the application logger.
+func logNotice(ctx context.Context, msg any, args ...any) {
+	msgStr := fmt.Sprint(msg)
+	if len(args) > 0 && strings.Contains(msgStr, "%") {
+		msgStr = fmt.Sprintf(msgStr, args...)
+	} else if len(args) > 0 {
+		msgStr = fmt.Sprint(append([]any{msgStr}, args...)...)
+	}
+	lines := strings.Split(msgStr, "\n")
+	for _, line := range lines {
+		slog.Log(ctx, slog.LevelInfo, line)
+	}
 }
