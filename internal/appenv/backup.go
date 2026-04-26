@@ -16,7 +16,6 @@ import (
 // BackupEnv creates a timestamped backup of the environment files.
 func BackupEnv(ctx context.Context, envFile string, conf config.AppConfig) error {
 	composeFolder := filepath.Dir(envFile)
-	envFileName := filepath.Base(envFile)
 
 	// Check if we should backup at all
 	hasEnv := false
@@ -77,7 +76,6 @@ func BackupEnv(ctx context.Context, envFile string, conf config.AppConfig) error
 	composeBackupsFolder := filepath.Join(expandedVolumeConfig, ".compose.backups")
 	backupTime := time.Now().Format("20060102.15.04.05")
 
-	composeFolder := filepath.Dir(envFile)
 	composeFolderName := filepath.Base(composeFolder)
 	backupFolder := filepath.Join(composeBackupsFolder, fmt.Sprintf("%s.%s", composeFolderName, backupTime))
 

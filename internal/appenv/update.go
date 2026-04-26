@@ -35,7 +35,7 @@ func Update(ctx context.Context, force bool, file string) error {
 
 	// 3. Update main .env file (Parity with env_update.sh lines 33-80)
 	if NeedsUpdate(ctx, force, composeEnvFile) {
-		logger.Notice(ctx, "Updating '{{|File|}}%s{{[-]}}'.", composeEnvFile)
+		logger.Notice(ctx, "Updating variable file '{{|File|}}%s{{[-]}}'.", composeEnvFile)
 
 		// Read current .env file content
 		input, _ := os.ReadFile(composeEnvFile)
@@ -89,7 +89,7 @@ func Update(ctx context.Context, force bool, file string) error {
 		}
 		UnsetNeedsUpdate(ctx, composeEnvFile)
 	} else {
-		logger.Info(ctx, "Environment variable file '{{|File|}}%s{{[-]}}' already updated.", composeEnvFile)
+		logger.Info(ctx, "Var file '{{|File|}}%s{{[-]}}' already updated.", composeEnvFile)
 	}
 
 	// 4. Update individual .env.app.* files (Parity with env_update.sh lines 82-121)
