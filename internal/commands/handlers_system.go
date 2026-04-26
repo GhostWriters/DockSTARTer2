@@ -112,6 +112,9 @@ func HandleReset(ctx context.Context) error {
 func HandleTest(ctx context.Context, group *CommandGroup) error {
 	args := []string{"test", "-v", "./..."}
 	if len(group.Args) > 0 {
+		if strings.ToLower(group.Args[0]) == "panic" {
+			logger.FatalWithStack(ctx, "SIMULATED PANIC: This is a test of the stack trace colorization.")
+		}
 		args = append(args, "-run", strings.Join(group.Args, "|"))
 	}
 

@@ -360,6 +360,15 @@ func RegisterBaseTags() {
 	RegisterConsoleTag("info", Colors.Info)
 	RegisterConsoleTag("trace", Colors.Trace)
 	RegisterConsoleTag("url", Colors.URL)
+	RegisterConsoleTag("traceheader", Colors.TraceHeader)
+	RegisterConsoleTag("tracefooter", Colors.TraceFooter)
+	RegisterConsoleTag("traceframenumber", Colors.TraceFrameNumber)
+	RegisterConsoleTag("traceframelines", Colors.TraceFrameLines)
+	RegisterConsoleTag("tracesourcefile", Colors.TraceSourceFile)
+	RegisterConsoleTag("tracelinenumber", Colors.TraceLineNumber)
+	RegisterConsoleTag("tracefunction", Colors.TraceFunction)
+	RegisterConsoleTag("tracecmd", Colors.TraceCmd)
+	RegisterConsoleTag("tracecmdargs", Colors.TraceCmdArgs)
 
 	// Additional Semantic Tags
 	RegisterConsoleTag("app", Colors.App)
@@ -402,6 +411,10 @@ func RegisterBaseTags() {
 	RegisterConsoleTag("B_R", Colors.RedBg)
 	RegisterConsoleTag("B_W", Colors.WhiteBg)
 	RegisterConsoleTag("B_Y", Colors.YellowBg)
+
+	RegisterConsoleTag("unittestpass", Colors.UnitTestPass)
+	RegisterConsoleTag("unittestfail", Colors.UnitTestFail)
+	RegisterConsoleTag("unittestfailarrow", Colors.UnitTestFailArrow)
 	// NOTE: Theme-related tags (ThemeHostname, ThemeTitle, etc.) are registered
 	// by the theme package in theme.go Default() and Apply() functions.
 }
