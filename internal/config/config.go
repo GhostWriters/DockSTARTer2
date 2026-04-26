@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 
 	"github.com/adrg/xdg"
@@ -214,6 +215,7 @@ func LoadAppConfig() AppConfig {
 	if err != nil {
 		// No config file found. Attempt migration from legacy.
 		migrationCtx := context.WithValue(context.Background(), "migration_mode", true)
+		logNotice(migrationCtx, "No {{|ApplicationName|}}%s{{[-]}} config file detected. Performing initial configuration.", "DockSTARTer2")
 		if migrated, ok := MigrateFromLegacy(migrationCtx); ok {
 			// Save the migrated config so we don't migrate again next time
 			_ = SaveAppConfig(migrated)
@@ -248,11 +250,28 @@ func LoadAppConfig() AppConfig {
 
 	// No user config found; write the embedded defaults to disk (preserving comments).
 	cfgPath := paths.GetConfigFilePath()
-	if err := os.MkdirAll(filepath.Dir(cfgPath), 0755); err == nil {
-		logNotice(context.Background(), "Creating '{{|Folder|}}%s{{[-]}}'.", filepath.Dir(cfgPath))
-		_ = os.WriteFile(cfgPath, defaultsToml, 0644)
-		logNotice(context.Background(), "Copying '{{|File|}}%s{{[-]}}' to '{{|File|}}%s{{[-]}}'.", "embedded defaults", cfgPath)
+	dir := filepath.Dir(cfgPath)
+	if info, err := os.Stat(dir); err == nil && !info.IsDir() {
+		logger.Info(context.Background(), "Removing existing file '{{|File|}}%s{{[-]}}' before folder can be created.", dir)
+		if err := os.Remove(dir); err != nil {
+			logger.FatalWithStack(context.Background(), []string{
+				"Failed to remove existing file.",
+				"Failing command: {{|FailingCommand|}}rm -f \"%s\"{{[-]}}",
+			}, dir)
+		}
 	}
+
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		logNotice(context.Background(), "Creating '{{|Folder|}}%s{{[-]}}'.", dir)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			logger.FatalWithStack(context.Background(), []string{
+				"Failed to create config folder.",
+				"Failing command: {{|FailingCommand|}}mkdir -p \"%s\"{{[-]}}",
+			}, dir)
+		}
+	}
+	_ = os.WriteFile(cfgPath, defaultsToml, 0644)
+	logNotice(context.Background(), "Copying '{{|File|}}%s{{[-]}}' to '{{|File|}}%s{{[-]}}'.", "embedded defaults", cfgPath)
 	conf.RawPaths = conf.Paths
 	conf.Paths.ConfigFolder = filepath.Clean(ExpandVariables(conf.Paths.ConfigFolder))
 	conf.Paths.ComposeFolder = filepath.Clean(ExpandVariables(conf.Paths.ComposeFolder))
@@ -294,8 +313,25 @@ func SaveAppConfig(conf AppConfig) error {
 
 	// Create directory if it doesn't exist
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return err
+	if info, err := os.Stat(dir); err == nil && !info.IsDir() {
+		logger.Info(context.Background(), "Removing existing file '{{|File|}}%s{{[-]}}' before folder can be created.", dir)
+		if err := os.Remove(dir); err != nil {
+			logger.FatalWithStack(context.Background(), []string{
+				"Failed to remove existing file.",
+				"Failing command: {{|FailingCommand|}}rm -f \"%s\"{{[-]}}",
+			}, dir)
+		}
+	}
+
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		logNotice(context.Background(), "Creating '{{|Folder|}}%s{{[-]}}'.", dir)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			logger.FatalWithStack(context.Background(), []string{
+				"Failed to create config folder.",
+				"Failing command: {{|FailingCommand|}}mkdir -p \"%s\"{{[-]}}",
+			}, dir)
+			return err
+		}
 	}
 
 	// 1. If RawPaths was set (e.g. from a recent Load), prioritize those original strings
@@ -520,11 +556,12 @@ func MigrateFromLegacy(ctx context.Context) (AppConfig, bool) {
 				val, ok := raw[m.key]
 				if !ok {
 					// Check aliases
-					if m.key == "ConfigFolder" {
+					switch m.key {
+					case "ConfigFolder":
 						val, ok = raw["DOCKER_CONFIG_FOLDER"]
-					} else if m.key == "Scrollbar" {
+					case "Scrollbar":
 						val, ok = raw["Scrollbars"]
-					} else if m.key == "Shadow" {
+					case "Shadow":
 						val, ok = raw["Shadows"]
 					}
 				}

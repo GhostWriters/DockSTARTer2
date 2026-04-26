@@ -41,12 +41,22 @@ func SetPermissions(ctx context.Context, path string) {
 	if puid != 0 && pgid != 0 {
 		logger.Info(ctx, "Taking ownership of '{{|Folder|}}%s{{[-]}}' for user '{{|User|}}%d{{[-]}}' and group '{{|User|}}%d{{[-]}}'", path, puid, pgid)
 		if cmdChown, err := dsexec.SudoCommand(ctx, "chown", "-R", fmt.Sprintf("%d:%d", puid, pgid), path); err == nil {
-			_ = cmdChown.Run()
+			if err := cmdChown.Run(); err != nil {
+				logger.FatalWithStack(ctx, []string{
+					"Failed to set ownership of folder.",
+					"Failing command: {{|FailingCommand|}}sudo chown -R \"%d:%d\" \"%s\"{{[-]}}",
+				}, puid, pgid, path)
+			}
 		}
 
 		logger.Info(ctx, "Setting file and folder permissions in '{{|Folder|}}%s{{[-]}}'", path)
 		if cmdChmod, err := dsexec.SudoCommand(ctx, "chmod", "-R", "a=,a+rX,u+w,g+w", path); err == nil {
-			_ = cmdChmod.Run()
+			if err := cmdChmod.Run(); err != nil {
+				logger.FatalWithStack(ctx, []string{
+					"Failed to set permissions of folder.",
+					"Failing command: {{|FailingCommand|}}sudo chmod -R \"a=,a+rX,u+w,g+w\" \"%s\"{{[-]}}",
+				}, path)
+			}
 		}
 	}
 }
@@ -65,7 +75,12 @@ func TakeOwnership(ctx context.Context, path string) {
 	if puid != 0 && pgid != 0 {
 		logger.Info(ctx, "Taking ownership of '{{|Folder|}}%s{{[-]}}' (non-recursive).", path)
 		if cmd, err := dsexec.SudoCommand(ctx, "chown", fmt.Sprintf("%d:%d", puid, pgid), path); err == nil {
-			_ = cmd.Run()
+			if err := cmd.Run(); err != nil {
+				logger.FatalWithStack(ctx, []string{
+					"Failed to set ownership of folder.",
+					"Failing command: {{|FailingCommand|}}sudo chown \"%d:%d\" \"%s\"{{[-]}}",
+				}, puid, pgid, path)
+			}
 		}
 	}
 }

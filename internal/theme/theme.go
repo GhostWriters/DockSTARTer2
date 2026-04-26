@@ -3,8 +3,10 @@ package theme
 import (
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -158,11 +160,25 @@ func EnsureThemeExtracted(themeNameOrURI string) (string, error) {
 			return "", fmt.Errorf("theme not found: %s", themeNameOrURI)
 		}
 	}
-
 	// Write to state file if missing or content differs
 	if !activeThemeMatchesData(sourceData) {
-		if err := os.MkdirAll(paths.GetStateDir(), 0755); err != nil {
-			return "", fmt.Errorf("failed to create state dir: %w", err)
+		if info, err := os.Stat(paths.GetStateDir()); err == nil && !info.IsDir() {
+			logger.Info(context.Background(), "Removing existing file '{{|File|}}%s{{[-]}}' before folder can be created.", paths.GetStateDir())
+			if err := os.Remove(paths.GetStateDir()); err != nil {
+				logger.FatalWithStack(context.Background(), []string{
+					"Failed to remove existing file.",
+					"Failing command: {{|FailingCommand|}}rm -f \"%s\"{{[-]}}",
+				}, paths.GetStateDir())
+			}
+		}
+		if _, err := os.Stat(paths.GetStateDir()); os.IsNotExist(err) {
+			logger.Info(context.Background(), "Creating folder '{{|Folder|}}%s{{[-]}}'.", paths.GetStateDir())
+			if err := os.MkdirAll(paths.GetStateDir(), 0755); err != nil {
+				logger.FatalWithStack(context.Background(), []string{
+					"Failed to create folder.",
+					"Failing command: {{|FailingCommand|}}mkdir -p \"%s\"{{[-]}}",
+				}, paths.GetStateDir())
+			}
 		}
 		if err := os.WriteFile(stateFile, sourceData, 0644); err != nil {
 			return "", fmt.Errorf("failed to write active theme: %w", err)

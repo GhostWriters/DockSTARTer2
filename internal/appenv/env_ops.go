@@ -30,10 +30,22 @@ import (
 // Returns an error if critical operations like folder creation or file writing fail.
 func EnvCreate(ctx context.Context, conf config.AppConfig) error {
 	// 1. Ensure ComposeFolder exists
+	if info, err := os.Stat(conf.Paths.ComposeFolder); err == nil && !info.IsDir() {
+		logger.Info(ctx, "Removing existing file '{{|File|}}%s{{[-]}}' before folder can be created.", conf.Paths.ComposeFolder)
+		if err := os.Remove(conf.Paths.ComposeFolder); err != nil {
+			logger.FatalWithStack(ctx, []string{
+				"Failed to remove existing file.",
+				"Failing command: {{|FailingCommand|}}rm -f \"%s\"{{[-]}}",
+			}, conf.Paths.ComposeFolder)
+		}
+	}
 	if _, err := os.Stat(conf.Paths.ComposeFolder); os.IsNotExist(err) {
 		logger.Notice(ctx, "Creating folder '{{|Folder|}}%s{{[-]}}'.", conf.Paths.ComposeFolder)
 		if err := os.MkdirAll(conf.Paths.ComposeFolder, 0755); err != nil {
-			logger.Fatal(ctx, "Failed to create compose folder: %v", err)
+			logger.FatalWithStack(ctx, []string{
+				"Failed to create folder.",
+				"Failing command: {{|FailingCommand|}}mkdir -p \"%s\"{{[-]}}",
+			}, conf.Paths.ComposeFolder)
 		}
 		system.SetPermissions(ctx, conf.Paths.ComposeFolder)
 	} else if err != nil {

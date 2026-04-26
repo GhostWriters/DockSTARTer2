@@ -204,7 +204,7 @@ func FatalWithStackSkip(ctx context.Context, skip int, msg any, args ...any) {
 	logAt(ctx, now, LevelFatal, output, args...)
 
 	// Write to fatal log file
-	writeFatalLog(ctx, now, output, args...)
+	writeFatalLog(output, args...)
 
 	// Brief sleep to allow stdout/stderr to flush before exit
 	time.Sleep(100 * time.Millisecond)
@@ -222,7 +222,7 @@ func Fatal(ctx context.Context, msg any, args ...any) {
 	logAt(ctx, now, LevelFatal, output, args...)
 
 	// Write to fatal log file
-	writeFatalLog(ctx, now, output, args...)
+	writeFatalLog(output, args...)
 
 	// Brief sleep to allow stdout/stderr to flush before exit
 	time.Sleep(100 * time.Millisecond)
@@ -230,7 +230,7 @@ func Fatal(ctx context.Context, msg any, args ...any) {
 }
 
 // writeFatalLog writes the resolved message to a separate fatal log file
-func writeFatalLog(ctx context.Context, t time.Time, msg any, args ...any) {
+func writeFatalLog(msg any, args ...any) {
 	stateDir := paths.GetStateDir()
 	if err := os.MkdirAll(stateDir, 0755); err != nil {
 		return

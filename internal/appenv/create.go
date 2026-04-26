@@ -13,8 +13,23 @@ import (
 // If not, it creates it from the embedded default template.
 func Create(ctx context.Context, file string) error {
 	dir := filepath.Dir(file)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		logger.FatalWithStack(ctx, "Failed to create folder '{{|Folder|}}%s{{[-]}}'.", dir)
+	if info, err := os.Stat(dir); err == nil && !info.IsDir() {
+		logger.Info(ctx, "Removing existing file '{{|File|}}%s{{[-]}}' before folder can be created.", dir)
+		if err := os.Remove(dir); err != nil {
+			logger.FatalWithStack(ctx, []string{
+				"Failed to remove existing file.",
+				"Failing command: {{|FailingCommand|}}rm -f \"%s\"{{[-]}}",
+			}, dir)
+		}
+	}
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		logger.Notice(ctx, "Creating folder '{{|Folder|}}%s{{[-]}}'.", dir)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			logger.FatalWithStack(ctx, []string{
+				"Failed to create folder.",
+				"Failing command: {{|FailingCommand|}}mkdir -p \"%s\"{{[-]}}",
+			}, dir)
+		}
 	}
 
 	if _, err := os.Stat(file); err == nil {

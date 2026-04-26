@@ -82,8 +82,23 @@ func BackupEnv(ctx context.Context, envFile string, conf config.AppConfig) error
 	logger.Info(ctx, "Copying '{{|File|}}.env{{[-]}}' file to '{{|Folder|}}%s/.env{{[-]}}'", backupFolder)
 
 	// 4. Create backup folder
-	if err := os.MkdirAll(backupFolder, 0755); err != nil {
-		return fmt.Errorf("Failed to make directory '{{|Folder|}}%s{{[-]}}': %v", backupFolder, err)
+	if info, err := os.Stat(backupFolder); err == nil && !info.IsDir() {
+		logger.Info(ctx, "Removing existing file '{{|File|}}%s{{[-]}}' before folder can be created.", backupFolder)
+		if err := os.Remove(backupFolder); err != nil {
+			logger.FatalWithStack(ctx, []string{
+				"Failed to remove existing file.",
+				"Failing command: {{|FailingCommand|}}rm -f \"%s\"{{[-]}}",
+			}, backupFolder)
+		}
+	}
+	if _, err := os.Stat(backupFolder); os.IsNotExist(err) {
+		logger.Notice(ctx, "Creating folder '{{|Folder|}}%s{{[-]}}'.", backupFolder)
+		if err := os.MkdirAll(backupFolder, 0755); err != nil {
+			logger.FatalWithStack(ctx, []string{
+				"Failed to create folder.",
+				"Failing command: {{|FailingCommand|}}mkdir -p \"%s\"{{[-]}}",
+			}, backupFolder)
+		}
 	}
 
 	// 5. Copy files
@@ -218,8 +233,20 @@ func copyDir(src, dst string) error {
 		return err
 	}
 
+	if info, err := os.Stat(dst); err == nil && !info.IsDir() {
+		logger.Info(context.Background(), "Removing existing file '{{|File|}}%s{{[-]}}' before folder can be created.", dst)
+		if err := os.Remove(dst); err != nil {
+			logger.FatalWithStack(context.Background(), []string{
+				"Failed to remove existing file.",
+				"Failing command: {{|FailingCommand|}}rm -f \"%s\"{{[-]}}",
+			}, dst)
+		}
+	}
 	if err := os.MkdirAll(dst, info.Mode()); err != nil {
-		return err
+		logger.FatalWithStack(context.Background(), []string{
+			"Failed to create folder.",
+			"Failing command: {{|FailingCommand|}}mkdir -p \"%s\"{{[-]}}",
+		}, dst)
 	}
 
 	files, err := os.ReadDir(src)

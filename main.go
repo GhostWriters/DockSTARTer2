@@ -12,6 +12,7 @@ import (
 
 	"DockSTARTer2/cmd"
 	"DockSTARTer2/internal/assets"
+	"charm.land/lipgloss/v2"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/serve"
@@ -69,6 +70,15 @@ func main() {
 }
 
 func run() (exitCode int) {
+	// Initialize logger level styles to avoid import cycle (logger -> theme -> config -> logger)
+	logger.LevelStyleFunc = func(tag string, label string) lipgloss.Style {
+		s := theme.ConsoleSemanticStyle(tag)
+		if label != "" {
+			return s.SetString(label)
+		}
+		return s
+	}
+
 	slog.SetDefault(logger.NewLogger())
 
 	// Create a cancelable context
@@ -112,7 +122,16 @@ func run() (exitCode int) {
 	theme.EmbeddedThemeReader = assets.GetTheme
 
 	// Ensure user themes directory exists
-	_ = os.MkdirAll(paths.GetThemesDir(), 0755)
+	themesDir := paths.GetThemesDir()
+	if _, err := os.Stat(themesDir); os.IsNotExist(err) {
+		logger.Info(ctx, "Creating folder '{{|Folder|}}%s{{[-]}}'.", themesDir)
+		if err := os.MkdirAll(themesDir, 0755); err != nil {
+			logger.FatalWithStack(ctx, []string{
+				"Failed to create folder.",
+				"Failing command: {{|FailingCommand|}}mkdir -p \"%s\"{{[-]}}",
+			}, themesDir)
+		}
+	}
 
 	// Ensure templates are cloned
 	if err := update.EnsureTemplates(ctx); err != nil {
