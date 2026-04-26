@@ -15,9 +15,13 @@ import (
 
 // BackupEnv creates a timestamped backup of the environment files.
 func BackupEnv(ctx context.Context, envFile string, conf config.AppConfig) error {
-	if _, err := os.Stat(envFile); os.IsNotExist(err) {
-		logger.Warn(ctx, "No .env file to back up.")
-		return nil
+	composeFolder := filepath.Dir(envFile)
+	envFileName := filepath.Base(envFile)
+
+	// Check if we should backup at all
+	hasEnv := false
+	if _, err := os.Stat(envFile); err == nil {
+		hasEnv = true
 	}
 
 	// 1. Get DOCKER_CONFIG_FOLDER
@@ -43,12 +47,12 @@ func BackupEnv(ctx context.Context, envFile string, conf config.AppConfig) error
 	}
 	if dockerVolumeConfig == "" {
 		dockerVolumeConfig = VarDefaultValue(ctx, "DOCKER_VOLUME_CONFIG", conf)
-		_ = SetLiteral(ctx, "DOCKER_VOLUME_CONFIG", dockerVolumeConfig, envFile)
-		dockerVolumeConfig, _ = Get("DOCKER_VOLUME_CONFIG", envFile)
+		// Strip quotes from default value (Read-only, no SetLiteral)
+		dockerVolumeConfig = strings.Trim(dockerVolumeConfig, "'\"")
 	}
 
 	if dockerVolumeConfig == "" {
-		return fmt.Errorf("Variable '{{|Var|}}DOCKER_VOLUME_CONFIG{{[-]}}' is not set in the '{{|File|}}.env{{[-]}}' file.")
+		return fmt.Errorf("Variable '{{|Var|}}DOCKER_VOLUME_CONFIG{{[-]}}' is not set.")
 	}
 
 	// Sanitize/Expand DOCKER_VOLUME_CONFIG
@@ -77,22 +81,11 @@ func BackupEnv(ctx context.Context, envFile string, conf config.AppConfig) error
 	composeFolderName := filepath.Base(composeFolder)
 	backupFolder := filepath.Join(composeBackupsFolder, fmt.Sprintf("%s.%s", composeFolderName, backupTime))
 
-	// info "Copying '${C["File"]}.env${NC}' file to '${C["Folder"]}${BACKUP_FOLDER}/.env${NC}'"
-	// Note: the second .env in the path is inferred from the bash copy command
-	logger.Info(ctx, "Copying '{{|File|}}.env{{[-]}}' file to '{{|Folder|}}%s/.env{{[-]}}'", backupFolder)
-
 	// 4. Create backup folder
-	if info, err := os.Stat(backupFolder); err == nil && !info.IsDir() {
-		logger.Info(ctx, "Removing existing file '{{|File|}}%s{{[-]}}' before folder can be created.", backupFolder)
-		if err := os.Remove(backupFolder); err != nil {
-			logger.FatalWithStack(ctx, []string{
-				"Failed to remove existing file.",
-				"Failing command: {{|FailingCommand|}}rm -f \"%s\"{{[-]}}",
-			}, backupFolder)
-		}
-	}
 	if _, err := os.Stat(backupFolder); os.IsNotExist(err) {
-		logger.Notice(ctx, "Creating folder '{{|Folder|}}%s{{[-]}}'.", backupFolder)
+		logger.Notice(ctx, "Backing up user files to folder:")
+		logger.Notice(ctx, "\t'{{|Folder|}}%s{{[-]}}'", backupFolder)
+		logger.Info(ctx, "Creating folder '{{|Folder|}}%s{{[-]}}'.", backupFolder)
 		if err := os.MkdirAll(backupFolder, 0755); err != nil {
 			logger.FatalWithStack(ctx, []string{
 				"Failed to create folder.",
@@ -101,41 +94,48 @@ func BackupEnv(ctx context.Context, envFile string, conf config.AppConfig) error
 		}
 	}
 
-	// 5. Copy files
+	// 5. Gather and Copy files
+	var backupList []string
 
-	// cp "${COMPOSE_ENV}" "${BACKUP_FOLDER}/"
-	if err := CopyFile(envFile, filepath.Join(backupFolder, constants.EnvFileName)); err != nil {
-		return fmt.Errorf("Failed to copy backup.")
+	// Main .env
+	if hasEnv {
+		backupList = append(backupList, envFile)
 	}
 
-	// if [[ -n $(${FIND} "${COMPOSE_FOLDER}" -type f -maxdepth 1 -name ".env.app.*" 2> /dev/null) ]]; then
+	// .env.app.*
 	files, _ := os.ReadDir(composeFolder)
 	for _, f := range files {
 		if !f.IsDir() && strings.HasPrefix(f.Name(), constants.AppEnvFileNamePrefix) {
-			src := filepath.Join(composeFolder, f.Name())
-			dst := filepath.Join(backupFolder, f.Name())
-			if err := CopyFile(src, dst); err != nil {
-				return fmt.Errorf("Failed to copy backup.")
-			}
+			backupList = append(backupList, filepath.Join(composeFolder, f.Name()))
 		}
 	}
 
-	// if [[ -d ${APP_ENV_FOLDER} ]]; then
-	// app_env_folder is env_files
+	// legacy application env folder (env_files)
 	appEnvFolder := filepath.Join(composeFolder, constants.EnvFilesDirName)
 	if info, err := os.Stat(appEnvFolder); err == nil && info.IsDir() {
-		logger.Info(ctx, "Copying appplication env folder to '{{|Folder|}}%s/%s{{[-]}}'", backupFolder, constants.EnvFilesDirName)
-		if err := copyDir(appEnvFolder, filepath.Join(backupFolder, constants.EnvFilesDirName)); err != nil {
-			return fmt.Errorf("Failed to copy backup.")
-		}
+		backupList = append(backupList, appEnvFolder)
 	}
 
-	// if [[ -f ${COMPOSE_OVERRIDE} ]]; then
+	// docker-compose.override.yml
 	composeOverride := filepath.Join(composeFolder, constants.ComposeOverrideFileName)
 	if _, err := os.Stat(composeOverride); err == nil {
-		logger.Info(ctx, "Copying override file to '{{|Folder|}}%s/%s{{[-]}}'", backupFolder, constants.ComposeOverrideFileName)
-		if err := CopyFile(composeOverride, filepath.Join(backupFolder, constants.ComposeOverrideFileName)); err != nil {
-			return fmt.Errorf("Failed to copy backup.")
+		backupList = append(backupList, composeOverride)
+	}
+
+	if len(backupList) > 0 {
+		logger.Info(ctx, "Backing up files:")
+		for _, item := range backupList {
+			logger.Info(ctx, "\t'{{|File|}}%s{{[-]}}'", item)
+			dst := filepath.Join(backupFolder, filepath.Base(item))
+			if info, err := os.Stat(item); err == nil && info.IsDir() {
+				if err := copyDir(item, dst); err != nil {
+					return fmt.Errorf("Failed to copy directory: %w", err)
+				}
+			} else {
+				if err := CopyFile(item, dst); err != nil {
+					return fmt.Errorf("Failed to copy file: %w", err)
+				}
+			}
 		}
 	}
 

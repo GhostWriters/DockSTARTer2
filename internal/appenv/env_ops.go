@@ -54,9 +54,14 @@ func EnvCreate(ctx context.Context, conf config.AppConfig) error {
 
 	mainEnvPath := filepath.Join(conf.Paths.ComposeFolder, constants.EnvFileName)
 
-	// 2. Initialize .env file if missing
+	// 2. Backup pre-existing state (smartly)
+	if err := BackupEnv(ctx, mainEnvPath, conf); err != nil {
+		logger.Warn(ctx, "Failed to backup environment: %v", err)
+	}
+
+	// 3. Initialize .env file if missing
 	if _, err := os.Stat(mainEnvPath); os.IsNotExist(err) {
-		logger.Warn(ctx, "File '{{|File|}}%s{{[-]}}' not found. Copying example template.", mainEnvPath)
+		logger.Notice(ctx, "File '{{|File|}}%s{{[-]}}' not found. Copying example template.", mainEnvPath)
 
 		defaultContent, err := assets.GetDefaultEnv()
 		if err != nil {
@@ -67,11 +72,6 @@ func EnvCreate(ctx context.Context, conf config.AppConfig) error {
 			logger.Fatal(ctx, "Failed to create default env file: %v", err)
 		}
 		system.SetPermissions(ctx, mainEnvPath)
-	} else {
-		// 3. Backup if existing
-		if err := BackupEnv(ctx, mainEnvPath, conf); err != nil {
-			logger.Warn(ctx, "Failed to backup .env: %v", err)
-		}
 	}
 
 	// 4. Sanitize (ensures required variables like HOME, Docker paths, etc. are set)
