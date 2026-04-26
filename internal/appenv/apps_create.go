@@ -52,7 +52,7 @@ func CreateAll(ctx context.Context, force bool, conf config.AppConfig) error {
 	}
 
 	if len(added) == 0 {
-		logger.Notice(ctx, "Var file '{{|File|}}%s{{[-]}}' does not contain any added apps.", envFile)
+		logger.Notice(ctx, "File '{{|File|}}%s{{[-]}}' does not contain any added apps.", envFile)
 		return nil
 	}
 

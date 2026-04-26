@@ -89,7 +89,7 @@ func Update(ctx context.Context, force bool, file string) error {
 		}
 		UnsetNeedsUpdate(ctx, composeEnvFile)
 	} else {
-		logger.Info(ctx, "Var file '{{|File|}}%s{{[-]}}' already updated.", composeEnvFile)
+		logger.Info(ctx, "File '{{|File|}}%s{{[-]}}' already updated.", composeEnvFile)
 	}
 
 	// 4. Update individual .env.app.* files (Parity with env_update.sh lines 82-121)

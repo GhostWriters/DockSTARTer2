@@ -42,7 +42,7 @@ func removeAllDisabled(ctx context.Context, conf config.AppConfig, assumeYes boo
 	}
 
 	if len(disabledApps) == 0 {
-		logger.Notice(ctx, "Var file '{{|File|}}%s{{[-]}}' does not contain any disabled apps.", envFile)
+		logger.Notice(ctx, "File '{{|File|}}%s{{[-]}}' does not contain any disabled apps.", envFile)
 		return nil
 	}
 
