@@ -49,7 +49,9 @@ func Update(ctx context.Context, force bool, file string) error {
 		globalVars := AppVarsLines("", allLines)
 		tmpGlobalFile, _ := os.CreateTemp("", "ds2.global.*.tmp")
 		if err := os.WriteFile(tmpGlobalFile.Name(), []byte(strings.Join(globalVars, "\n")), 0644); err != nil {
-			return err
+			logger.FatalWithStack(ctx, []string{
+				"Failed to write temporary '{{|File|}}.env{{[-]}}' update file.",
+			})
 		}
 		defer os.Remove(tmpGlobalFile.Name())
 
@@ -64,7 +66,9 @@ func Update(ctx context.Context, force bool, file string) error {
 			appVars := AppVarsLines(appName, allLines)
 			tmpAppFile, _ := os.CreateTemp("", "ds2.app_main.*.tmp")
 			if err := os.WriteFile(tmpAppFile.Name(), []byte(strings.Join(appVars, "\n")), 0644); err != nil {
-				return err
+				logger.FatalWithStack(ctx, []string{
+					"Failed to write temporary '{{|File|}}.env{{[-]}}' update file.",
+				})
 			}
 			defer os.Remove(tmpAppFile.Name())
 
@@ -89,7 +93,10 @@ func Update(ctx context.Context, force bool, file string) error {
 		existing, _ := os.ReadFile(composeEnvFile)
 		if !bytes.Equal(existing, []byte(finalContent)) {
 			if err := os.WriteFile(composeEnvFile, []byte(finalContent), 0644); err != nil {
-				return fmt.Errorf("failed to update main .env: %w", err)
+				logger.FatalWithStack(ctx, []string{
+					"Failed to copy file.",
+					"Failing command: {{|FailingCommand|}}cp -f \"<tmp>\" \"" + composeEnvFile + "\"{{[-]}}",
+				})
 			}
 		}
 		UnsetNeedsUpdate(ctx, composeEnvFile)
@@ -123,7 +130,9 @@ func Update(ctx context.Context, force bool, file string) error {
 				// Parity lines 103-116: uses temp file and copies
 				tmpFile, _ := os.CreateTemp("", "ds2.app_env.*.tmp")
 				if err := os.WriteFile(tmpFile.Name(), []byte(finalAppContent), 0644); err != nil {
-					return err
+					logger.FatalWithStack(ctx, []string{
+						"Failed to write temporary '{{|File|}}.env.app." + appName + "{{[-]}}' update file.",
+					})
 				}
 				tmpFile.Close()
 				defer os.Remove(tmpFile.Name())
@@ -135,7 +144,10 @@ func Update(ctx context.Context, force bool, file string) error {
 					continue
 				}
 				if err := CopyFile(tmpFile.Name(), appEnvFile); err != nil {
-					logger.Warn(ctx, "Failed to update %s: %v", appEnvFile, err)
+					logger.FatalWithStack(ctx, []string{
+						"Failed to copy file.",
+						"Failing command: {{|FailingCommand|}}cp -f \"" + tmpFile.Name() + "\" \"" + appEnvFile + "\"{{[-]}}",
+					})
 				} else {
 					system.SetPermissions(ctx, appEnvFile)
 					UnsetNeedsUpdate(ctx, appEnvFile)

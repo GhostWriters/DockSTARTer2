@@ -235,7 +235,10 @@ func MergeYML(ctx context.Context, force bool) error {
 	existing, _ := os.ReadFile(composePath)
 	if !bytes.Equal(existing, marshaledProject) {
 		if err := os.WriteFile(composePath, marshaledProject, 0644); err != nil {
-			return fmt.Errorf("failed to write docker-compose.yml: %w", err)
+			logger.FatalWithStack(ctx, []string{
+				"Failed to copy file.",
+				"Failing command: {{|FailingCommand|}}cp -f \"<tmp>\" \"" + composePath + "\"{{[-]}}",
+			})
 		}
 	}
 
