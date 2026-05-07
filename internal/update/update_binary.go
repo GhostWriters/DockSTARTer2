@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	dsexec "DockSTARTer2/internal/exec"
 	"DockSTARTer2/internal/console"
+	dsexec "DockSTARTer2/internal/exec"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/system"

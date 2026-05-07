@@ -320,7 +320,6 @@ func (l Layout) ContentInset() int {
 	return l.SingleBorder() + l.SingleMargin()
 }
 
-
 // CheckboxWidth returns the width of a standard checkbox [x] (typically 3).
 func (l Layout) CheckboxWidth() int {
 	return 3
@@ -348,7 +347,7 @@ func (l Layout) TopOffset() int {
 	return l.SingleBorder()
 }
 
-// NestedLeftOffset returns the horizontal offset for content nested inside both 
+// NestedLeftOffset returns the horizontal offset for content nested inside both
 // a dialog margin AND an inner component's border.
 // (1 char outer border + ContentSideMargin + 1 char inner border)
 func (l Layout) NestedLeftOffset() int {

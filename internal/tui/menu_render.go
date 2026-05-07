@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"DockSTARTer2/internal/strutil"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -260,7 +261,7 @@ func (m *MenuModel) renderVerticalListBlock(ctx StyleContext) string {
 	content = strings.TrimSuffix(content, "\n")
 	h := strings.Count(content, "\n") + 1
 	if h < m.layout.ViewportHeight {
-		content += strings.Repeat("\n", m.layout.ViewportHeight-h)
+		content += strutil.Repeat("\n", m.layout.ViewportHeight-h)
 	}
 
 	total := len(m.items)

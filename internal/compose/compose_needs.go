@@ -36,7 +36,7 @@ func NeedsYMLMerge(ctx context.Context, force bool) bool {
 	// Check enabled apps .env files and their source templates
 	enabledApps, _ := appenv.ListEnabledApps(conf)
 	templatesDir := paths.GetTemplatesDir()
-	
+
 	// Use docker-compose.yml marker as reference time for template changes
 	var referenceTime time.Time
 	dcMarker := filepath.Join(paths.GetTimestampsDir(), "yml_merge", constants.ComposeFileName)

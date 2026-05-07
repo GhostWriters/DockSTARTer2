@@ -354,8 +354,8 @@ func (m *MenuModel) renderVariableHeightList() string {
 		// m.itemPaddingWidth is typically 1. gutterWidth(1) + 1 = 2 indent.
 		// This results in the requested "|! Tag" or "|! X Tag" layout.
 		rowStyle := neutralStyle.Width(maxWidth)
-		gutterSpaces := neutralStyle.Render(strings.Repeat(" ", m.StatusGutterWidth()))
-		
+		gutterSpaces := neutralStyle.Render(strutil.Repeat(" ", m.StatusGutterWidth()))
+
 		for j, l := range renderedItemLines {
 			sep := paddingStr
 			if isAppSelect {

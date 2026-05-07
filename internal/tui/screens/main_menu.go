@@ -14,10 +14,10 @@ func NewMainMenuScreen(connType string) tui.ScreenModel {
 			Action: navigateToConfigMenu(connType),
 		},
 		{
-			Tag:    "Update",
-			Desc:   "Update DockSTARTer2",
-			Help:   "Check for and install updates",
-			Action: tui.TriggerUpdate(),
+			Tag:           "Update",
+			Desc:          "Update DockSTARTer2",
+			Help:          "Check for and install updates",
+			Action:        tui.TriggerUpdate(),
 			IsDestructive: true,
 		},
 		{

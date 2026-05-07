@@ -100,9 +100,9 @@ func GetButtonHitRegions(hCtx HelpContext, dialogID string, offsetX, offsetY, co
 // Both the render path and the hit-region path derive from this single value,
 // guaranteeing they can never disagree.
 type ButtonLayout struct {
-	SectionWidth int   // Base width (contentWidth / numButtons)
-	ButtonWidth  int   // visual width of each button (all buttons are the same width)
-	ButtonHeight int   // 1 (flat) or 3 (bordered)
+	SectionWidth int // Base width (contentWidth / numButtons)
+	ButtonWidth  int // visual width of each button (all buttons are the same width)
+	ButtonHeight int // 1 (flat) or 3 (bordered)
 	UseBorders   bool
 	// Offsets[i] is the X offset of the START of section i.
 	Offsets []int
@@ -136,7 +136,7 @@ func computeButtonLayoutExplicit(contentWidth int, useBorders bool, ctx StyleCon
 		buttonContentWidth := maxButtonWidth + 4
 		sampleStyle := ctx.ButtonInactive.Width(buttonContentWidth).Align(lipgloss.Center)
 		sampleStyle = ApplyInnerBorderCtx(sampleStyle, false, ctx)
-		buttonWidth = lipgloss.Width(sampleStyle.Render(strings.Repeat("x", maxButtonWidth)))
+		buttonWidth = lipgloss.Width(sampleStyle.Render(strutil.Repeat("x", maxButtonWidth)))
 	} else {
 		buttonWidth = maxButtonWidth + 2 // "< label >"
 	}
@@ -183,7 +183,7 @@ func buttonsFitWithBorders(contentWidth int, ctx StyleContext, buttons []ButtonS
 	buttonContentWidth := maxButtonWidth + 4
 	sampleStyle := ctx.ButtonInactive.Width(buttonContentWidth).Align(lipgloss.Center)
 	sampleStyle = ApplyInnerBorderCtx(sampleStyle, false, ctx)
-	buttonWidth := lipgloss.Width(sampleStyle.Render(strings.Repeat(" ", maxButtonWidth)))
+	buttonWidth := lipgloss.Width(sampleStyle.Render(strutil.Repeat(" ", maxButtonWidth)))
 	sectionWidth := contentWidth / len(buttons)
 	return buttonWidth <= sectionWidth
 }
@@ -271,7 +271,7 @@ func renderCenteredButtonsImpl(contentWidth int, useBorders bool, ctx StyleConte
 			pad := maxButtonWidth - lipgloss.Width(btn.Text)
 			leftPad := pad / 2
 			rightPad := pad - leftPad
-			inner := strings.Repeat(" ", leftPad) + renderedLabel + strings.Repeat(" ", rightPad)
+			inner := strutil.Repeat(" ", leftPad) + renderedLabel + strutil.Repeat(" ", rightPad)
 			bgStyle := lipgloss.NewStyle().Background(buttonStyle.GetBackground())
 			buttonPart := MaintainBackground(buttonStyle.Render(inner), bgStyle)
 			rendered = bracketStyle.Render("<") + buttonPart + bracketStyle.Render(">")

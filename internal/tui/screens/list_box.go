@@ -3,6 +3,7 @@ package screens
 import (
 	"strings"
 
+	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/tui"
 
 	"charm.land/lipgloss/v2"
@@ -42,12 +43,12 @@ func RenderTwoColumnRow(label, value string, cursor, focused bool, maxLabelW, ma
 		if trailW < 0 {
 			trailW = 0
 		}
-		return cursorRendered + labelStr + neutralStyle.Render(strings.Repeat(" ", trailW))
+		return cursorRendered + labelStr + neutralStyle.Render(strutil.Repeat(" ", trailW))
 	}
 
 	// Two-column row.
 	pad := maxLabelW - labelW
-	paddingStr := neutralStyle.Render(strings.Repeat(" ", pad+2)) // align + 2-space gap
+	paddingStr := neutralStyle.Render(strutil.Repeat(" ", pad+2)) // align + 2-space gap
 
 	valW := lipgloss.Width(value)
 	remaining := maxItemW - maxLabelW - 2
@@ -62,7 +63,7 @@ func RenderTwoColumnRow(label, value string, cursor, focused bool, maxLabelW, ma
 	if trailW < 0 {
 		trailW = 0
 	}
-	return cursorRendered + labelStr + paddingStr + valStyle.Render(value) + neutralStyle.Render(strings.Repeat(" ", trailW))
+	return cursorRendered + labelStr + paddingStr + valStyle.Render(value) + neutralStyle.Render(strutil.Repeat(" ", trailW))
 }
 
 // RenderListInBorderedBox wraps pre-built list rows in a scrollbar column and a

@@ -12,8 +12,8 @@ import (
 	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/tui"
 
-	"github.com/charmbracelet/ssh"
 	"charm.land/wish/v2"
+	"github.com/charmbracelet/ssh"
 )
 
 // sessionBusyMsg is kept for potential future use or legacy compatibility.

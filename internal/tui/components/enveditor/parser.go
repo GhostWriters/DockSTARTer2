@@ -8,20 +8,20 @@ import (
 // default value for a given variable name, and populates the Model's value and line metadata.
 func (m *Model) ParseEnv(content string, defaultFunc func(string) string, readOnlyVars []string) {
 	rawLines := strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
-	
+
 	m.Reset() // ensures clean state
 	m.defaultFunc = defaultFunc
 	m.diffCache = make(map[int][]bool)
 	m.value = make([][]rune, len(rawLines))
 	m.lineMeta = make([]Line, len(rawLines))
-	
+
 	inUserDefinedSection := false
 	for i, raw := range rawLines {
 		m.value[i] = []rune(raw)
 		trimmed := strings.TrimSpace(raw)
-		
+
 		l := Line{Text: raw, InitialLine: raw}
-		
+
 		// 1. Comments & special markers are read-only.
 		if strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "***") {
 			l.ReadOnly = true
@@ -56,20 +56,20 @@ func (m *Model) ParseEnv(content string, defaultFunc func(string) string, readOn
 						l.IsInvalid = true
 					}
 				} else {
-						// Identify if it's in the User Defined section
-						if inUserDefinedSection {
-							l.IsUserDefined = true
-						}
+					// Identify if it's in the User Defined section
+					if inUserDefinedSection {
+						l.IsUserDefined = true
+					}
 
-						// Lock the key for ALL variables to prevent corruption
-						eqIdx := strings.Index(raw, "=")
+					// Lock the key for ALL variables to prevent corruption
+					eqIdx := strings.Index(raw, "=")
 
-						if eqIdx != -1 {
-							l.EditableStartCol = eqIdx + 1
-							if defaultFunc != nil {
-								l.DefaultValue = strings.TrimSpace(defaultFunc(key))
-							}
+					if eqIdx != -1 {
+						l.EditableStartCol = eqIdx + 1
+						if defaultFunc != nil {
+							l.DefaultValue = strings.TrimSpace(defaultFunc(key))
 						}
+					}
 				}
 			} else {
 				// If it's not a variable, comment, or blank:
@@ -82,7 +82,7 @@ func (m *Model) ParseEnv(content string, defaultFunc func(string) string, readOn
 				}
 			}
 		}
-		
+
 		m.lineMeta[i] = l
 	}
 	m.GotoFirstEditable()

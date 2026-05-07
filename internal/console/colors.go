@@ -184,7 +184,7 @@ func init() {
 
 		// Viewport Colors
 		ProgramBox: "{{[-]}}{{[white:black]}}",
-		ConsoleBox:     "{{[-]}}{{[white:black]}}",
+		ConsoleBox: "{{[-]}}{{[white:black]}}",
 	}
 
 	// Register base tags once Colors is populated
@@ -305,7 +305,7 @@ type AppColors struct {
 
 	// Viewport Colors
 	ProgramBox string
-	ConsoleBox     string
+	ConsoleBox string
 }
 
 // Colors is the global instance for application output (stdout)

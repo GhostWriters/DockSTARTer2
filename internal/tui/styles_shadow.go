@@ -88,7 +88,7 @@ func GetSolidBoxCtx(width, height int, bgColor color.Color) string {
 		return ""
 	}
 	style := lipgloss.NewStyle().Background(bgColor)
-	line := style.Render(strings.Repeat(" ", width))
+	line := style.Render(strutil.Repeat(" ", width))
 	var sb strings.Builder
 	for i := 0; i < height; i++ {
 		if i > 0 {
@@ -195,7 +195,7 @@ func GetShadowBoxCtx(content string, ctx StyleContext) string {
 	shadowStyle = shadowStyle.Background(ctx.Screen.GetBackground())
 
 	// Create the shadow line
-	shadowLine := shadowStyle.Render(strings.Repeat(shadeChar, contentWidth))
+	shadowLine := shadowStyle.Render(strutil.Repeat(shadeChar, contentWidth))
 
 	var sb strings.Builder
 	for i := 0; i < contentHeight; i++ {

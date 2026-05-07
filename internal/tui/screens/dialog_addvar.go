@@ -3,6 +3,7 @@ package screens
 import (
 	"strings"
 
+	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/tui/components/sinput"
@@ -18,9 +19,9 @@ type addVarItemKind int
 
 const (
 	addVarKindTemplate  addVarItemKind = iota // prefix template — fills input on select
-	addVarKindSeparator                        // non-selectable divider
-	addVarKindAddAll                           // "Add All Stock Variables" action
-	addVarKindStock                            // individual stock variable
+	addVarKindSeparator                       // non-selectable divider
+	addVarKindAddAll                          // "Add All Stock Variables" action
+	addVarKindStock                           // individual stock variable
 )
 
 type addVarItem struct {
@@ -35,7 +36,7 @@ type addVarItem struct {
 type addVarFocus int
 
 const (
-	addVarFocusInput  addVarFocus = iota
+	addVarFocusInput addVarFocus = iota
 	addVarFocusList
 	addVarFocusCreate
 	addVarFocusCancel
@@ -56,10 +57,10 @@ type addVarDialogModel struct {
 	input        sinput.Model
 	inputScreenX int
 	inputRelY    int // row of input text within dialog (for hardware cursor)
-	items  []addVarItem
-	cursor int
-	offset int
-	maxVis int
+	items        []addVarItem
+	cursor       int
+	offset       int
+	maxVis       int
 
 	focus addVarFocus
 
@@ -631,7 +632,6 @@ func (m *addVarDialogModel) itemIndexAt(screenY int) int {
 	return -1
 }
 
-
 // GetInputCursor returns the hardware cursor position relative to the dialog's
 // top-left corner, cursor shape, and whether to show it.
 func (m *addVarDialogModel) GetInputCursor() (relX, relY int, shape tea.CursorShape, ok bool) {
@@ -761,7 +761,7 @@ func (m *addVarDialogModel) ViewString() string {
 			if sepW < 0 {
 				sepW = 0
 			}
-			listLines = append(listLines, bgStyle.Render(" "+strings.Repeat(sepChar, sepW)+" "))
+			listLines = append(listLines, bgStyle.Render(" "+strutil.Repeat(sepChar, sepW)+" "))
 			continue
 		}
 		itemRows := 1
@@ -793,7 +793,7 @@ func (m *addVarDialogModel) ViewString() string {
 			if slPad < 0 {
 				slPad = 0
 			}
-			slLine := "  " + sl + strings.Repeat(" ", slPad) + " "
+			slLine := "  " + sl + strutil.Repeat(" ", slPad) + " "
 			if focused {
 				listLines = append(listLines, tui.MaintainBackground(selectedStyle.Render(slLine), selectedStyle))
 			} else {

@@ -33,11 +33,11 @@ type ServerOptionsScreen struct {
 	focusedButton int
 	isRoot        bool
 
-	config config.AppConfig
+	config   config.AppConfig
 	connType string
 
-	width  int
-	height int
+	width   int
+	height  int
 	focused bool
 }
 
@@ -96,38 +96,38 @@ func (s *ServerOptionsScreen) buildSettingsMenu() *tui.MenuModel {
 
 	items := []tui.MenuItem{
 		{
-			Tag:    "SSH Port",
-			Desc:   fmt.Sprintf("{{|OptionValue|}}%d{{[-]}}", s.config.Server.SSH.Port),
-			Help:   "TCP port the SSH server listens on. Set to 0 to disable. (Enter to change)",
-			Action: s.promptSSHPort(),
+			Tag:           "SSH Port",
+			Desc:          fmt.Sprintf("{{|OptionValue|}}%d{{[-]}}", s.config.Server.SSH.Port),
+			Help:          "TCP port the SSH server listens on. Set to 0 to disable. (Enter to change)",
+			Action:        s.promptSSHPort(),
 			IsDestructive: true,
 		},
 		{
-			Tag:    "Web Port",
-			Desc:   fmt.Sprintf("{{|OptionValue|}}%d{{[-]}}", s.config.Server.Web.Port),
-			Help:   "TCP port the web server listens on. Set to 0 to disable. (Enter to change)",
-			Action: s.promptWebPort(),
+			Tag:           "Web Port",
+			Desc:          fmt.Sprintf("{{|OptionValue|}}%d{{[-]}}", s.config.Server.Web.Port),
+			Help:          "TCP port the web server listens on. Set to 0 to disable. (Enter to change)",
+			Action:        s.promptWebPort(),
 			IsDestructive: true,
 		},
 		{
-			Tag:    "Auth Mode",
-			Desc:   s.dropdownDesc(authModeDesc()),
-			Help:   "Authentication mode for incoming SSH connections (Enter for options)",
-			Action: s.showAuthModeDropdown(),
+			Tag:           "Auth Mode",
+			Desc:          s.dropdownDesc(authModeDesc()),
+			Help:          "Authentication mode for incoming SSH connections (Enter for options)",
+			Action:        s.showAuthModeDropdown(),
 			IsDestructive: true,
 		},
 		{
-			Tag:    "Password",
-			Desc:   s.passwordDesc(),
-			Help:   "Password for SSH auth (Enter to change). Stored as bcrypt hash.",
-			Action: s.promptPassword(),
+			Tag:           "Password",
+			Desc:          s.passwordDesc(),
+			Help:          "Password for SSH auth (Enter to change). Stored as bcrypt hash.",
+			Action:        s.promptPassword(),
 			IsDestructive: true,
 		},
 		{
-			Tag:    "Authorized Keys File",
-			Desc:   s.truncatePath(s.config.Server.Auth.AuthKeysFile),
-			Help:   "Path to authorized_keys file for public-key auth (Enter to change)",
-			Action: s.promptAuthKeysFile(),
+			Tag:           "Authorized Keys File",
+			Desc:          s.truncatePath(s.config.Server.Auth.AuthKeysFile),
+			Help:          "Path to authorized_keys file for public-key auth (Enter to change)",
+			Action:        s.promptAuthKeysFile(),
 			IsDestructive: true,
 		},
 	}

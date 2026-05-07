@@ -32,8 +32,8 @@ type ScreenModel interface {
 	SetSize(width, height int)
 	IsMaximized() bool
 	HasDialog() bool
-	MenuName() string      // Returns the name used for --menu or -M to return to this screen
-	IsDestructive() bool   // Returns true if this screen modifies data and needs an edit lock
+	MenuName() string    // Returns the name used for --menu or -M to return to this screen
+	IsDestructive() bool // Returns true if this screen modifies data and needs an edit lock
 }
 
 // LayeredView is an interface for models that provide multiple visual layers
@@ -189,7 +189,7 @@ type (
 		ValidationType  string
 		ValidationApp   string
 		IsGlobal        bool
-		AppMeta          *appenv.AppMeta
+		AppMeta         *appenv.AppMeta
 	}
 
 	// UniversalPromptMsg is a generic message for triggering a prompt
@@ -197,9 +197,9 @@ type (
 	UniversalPromptMsg struct {
 		Title      string
 		Question   string
-		DefaultYes bool                  // For Confirm
-		Sensitive  bool                  // For Prompt
-		ResultChan any                   // chan bool or chan promptResultMsg
+		DefaultYes bool // For Confirm
+		Sensitive  bool // For Prompt
+		ResultChan any  // chan bool or chan promptResultMsg
 		Type       UniversalPromptType
 	}
 )
@@ -235,8 +235,8 @@ type AppModel struct {
 	backdrop *BackdropModel
 
 	// Slide-up log panel (always present below helpline)
-	panel           PanelModel
-	panelFocused    bool
+	panel          PanelModel
+	panelFocused   bool
 	panelSbDrag    ScrollbarDragState // log-panel scrollbar drag tracking state
 	panelSbAbsTopY int                // absolute Y of the scrollbar's first row (for drag computation)
 	panelSbInfo    ScrollbarInfo      // scrollbar geometry captured at drag start
@@ -259,7 +259,6 @@ type AppModel struct {
 
 	// Hit regions for mouse click detection (simpler than compositor hit testing)
 	hitRegions HitRegions
-
 }
 
 // NewAppModel creates a new application model.
@@ -284,7 +283,7 @@ func NewAppModel(ctx context.Context, cfg config.AppConfig, clientIP, connType s
 		activeScreen: startScreen,
 		screenStack:  stack,
 		backdrop:     NewBackdropModel(helpText),
-		panel:     NewPanelModel(EffectivePanelMode(cfg, connType), connType),
+		panel:        NewPanelModel(EffectivePanelMode(cfg, connType), connType),
 	}
 }
 
@@ -296,7 +295,7 @@ func NewAppModelStandalone(ctx context.Context, cfg config.AppConfig, clientIP, 
 		clientIP: clientIP,
 		connType: connType,
 		backdrop: NewBackdropModel(""),
-		panel: NewPanelModel(EffectivePanelMode(cfg, connType), connType),
+		panel:    NewPanelModel(EffectivePanelMode(cfg, connType), connType),
 		dialog:   dialog,
 	}
 }

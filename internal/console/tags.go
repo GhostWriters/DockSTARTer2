@@ -91,7 +91,6 @@ func ExpandThemeTags(text string, prefix string) string {
 	return ExpandTagsWithMap(text, themeMap, true, prefix)
 }
 
-
 // ExpandTagsWithMap is the base routine for expanding semantic tags.
 // If styleMap is nil, it uses themeMap with fallback to consoleMap (Legacy behavior).
 func ExpandTagsWithMap(text string, styleMap map[string]string, stripUnresolvable bool, prefix string) string {
@@ -202,7 +201,6 @@ func processHyperlinks(text string) string {
 	})
 }
 
-
 // ToConsoleANSI converts semantic and direct tags to ANSI escape sequences using only console colors.
 func ToConsoleANSI(text string) string {
 	if !isTTYGlobal && !TUIMode && !IsTUIEnabled() {
@@ -248,7 +246,6 @@ func processDirectTags(text string) string {
 		return parseStyleCodeToANSI(subMatch[groupIndex])
 	})
 }
-
 
 // Strip removes all semantic and direct tags from text, as well as ANSI escape sequences
 func Strip(text string) string {

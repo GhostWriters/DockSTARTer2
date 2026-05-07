@@ -20,8 +20,8 @@ type ThemeMetadata struct {
 	FileStem    string // file stem, e.g. "GreenScreen"; used in ConfigValue and for disambiguation
 	Description string
 	Author      string
-	IsUserTheme bool // true if sourced from user: (not an embedded built-in)
-	IsInvalid   bool // true if theme file is corrupted/unparseable
+	IsUserTheme bool   // true if sourced from user: (not an embedded built-in)
+	IsInvalid   bool   // true if theme file is corrupted/unparseable
 	ConfigValue string // raw value for config/Load(), e.g. "user:GreenScreen" or "DockSTARTer"
 }
 

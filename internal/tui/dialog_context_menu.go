@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
 	"strings"
 
@@ -17,7 +18,7 @@ type ContextMenuItem struct {
 	IsSeparator bool              // When true, renders as a horizontal divider and is not selectable
 	IsHeader    bool              // When true, renders Label as a non-selectable title row
 	Disabled    bool              // When true, renders dimmed and is not selectable or executable
-	Action      tea.Cmd          // Executed when the item is selected; should close the dialog itself
+	Action      tea.Cmd           // Executed when the item is selected; should close the dialog itself
 	SubItems    []ContextMenuItem // When non-empty, selecting opens a submenu instead of Action
 }
 
@@ -36,12 +37,12 @@ func itemHeight(item ContextMenuItem) int {
 // IsMaximized() returns true so model_view.go uses DialogMaximized mode, giving
 // lx=1, ly=2. The Layers() method compensates with layer.X = menuX-1, layer.Y = menuY-2.
 type ContextMenuModel struct {
-	items      []ContextMenuItem
-	cursor     int // currently highlighted item index
-	clickX     int // original right-click screen position
-	clickY     int
-	screenW    int
-	screenH    int
+	items   []ContextMenuItem
+	cursor  int // currently highlighted item index
+	clickX  int // original right-click screen position
+	clickY  int
+	screenW int
+	screenH int
 
 	// Computed positions (set in recalculate)
 	menuX int
@@ -194,7 +195,7 @@ func (m *ContextMenuModel) ViewString() string {
 			if !ctx.LineCharacters {
 				sepChar = "-"
 			}
-			sep := bgStyle.Render(" " + strings.Repeat(sepChar, m.menuW) + " ")
+			sep := bgStyle.Render(" " + strutil.Repeat(sepChar, m.menuW) + " ")
 			lines = append(lines, sep)
 			absIdx++
 			continue
@@ -209,7 +210,7 @@ func (m *ContextMenuModel) ViewString() string {
 			if pad < 0 {
 				pad = 0
 			}
-			lines = append(lines, bgStyle.Render(" ")+headerStyle.Render(lbl)+bgStyle.Render(strings.Repeat(" ", pad)+" "))
+			lines = append(lines, bgStyle.Render(" ")+headerStyle.Render(lbl)+bgStyle.Render(strutil.Repeat(" ", pad)+" "))
 			absIdx++
 			continue
 		}
@@ -227,7 +228,7 @@ func (m *ContextMenuModel) ViewString() string {
 		if pad < 0 {
 			pad = 0
 		}
-		line := " " + label + strings.Repeat(" ", pad) + " "
+		line := " " + label + strutil.Repeat(" ", pad) + " "
 
 		if item.Disabled {
 			lines = append(lines, MaintainBackground(disabledStyle.Render(line), bgStyle))
@@ -242,7 +243,7 @@ func (m *ContextMenuModel) ViewString() string {
 				if slPad < 0 {
 					slPad = 0
 				}
-				lines = append(lines, MaintainBackground(selectedStyle.Render(" "+sl+strings.Repeat(" ", slPad)+" "), selectedStyle))
+				lines = append(lines, MaintainBackground(selectedStyle.Render(" "+sl+strutil.Repeat(" ", slPad)+" "), selectedStyle))
 			}
 		} else {
 			lines = append(lines, MaintainBackground(normalStyle.Render(line), bgStyle))
@@ -255,7 +256,7 @@ func (m *ContextMenuModel) ViewString() string {
 				if slPad < 0 {
 					slPad = 0
 				}
-				lines = append(lines, MaintainBackground(subLabelStyle.Background(bgStyle.GetBackground()).Render(" "+sl+strings.Repeat(" ", slPad)+" "), bgStyle))
+				lines = append(lines, MaintainBackground(subLabelStyle.Background(bgStyle.GetBackground()).Render(" "+sl+strutil.Repeat(" ", slPad)+" "), bgStyle))
 			}
 		}
 		absIdx++
@@ -535,7 +536,6 @@ func (m *ContextMenuModel) visibleItems() []ContextMenuItem {
 	}
 	return m.items[m.offset:end]
 }
-
 
 // parseIntSafe parses an integer string, returning -1 on failure.
 func parseIntSafe(s string) int {

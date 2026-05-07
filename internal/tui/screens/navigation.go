@@ -31,7 +31,6 @@ func navigateToConfigApps(connType string) tea.Cmd {
 	}
 }
 
-
 // navigateToAppConfigEditorWithRefresh returns a command to navigate to a specific app's config editor
 // and refresh the apps list when returning.
 func navigateToAppConfigEditorWithRefresh(appName string, connType string) tea.Cmd {

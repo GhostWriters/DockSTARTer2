@@ -57,8 +57,8 @@ type ProgramBoxModel struct {
 	// and the user dismisses the dialog.  shouldForwardResult routes it to the active screen.
 	SuccessMsg tea.Msg
 	task       func(context.Context, io.Writer) error
-	focused  bool
-	ctx      context.Context
+	focused    bool
+	ctx        context.Context
 
 	// Overlay prompts (for blocking prompts during task)
 	subDialog     tea.Model
@@ -176,7 +176,6 @@ func (m *ProgramBoxModel) SetIsDialog(isDialog bool) {
 	m.isDialog = isDialog
 }
 
-
 // SetContext sets a cancelable context to be used for the task
 func (m *ProgramBoxModel) SetContext(ctx context.Context) {
 	if ctx != nil {
@@ -193,8 +192,6 @@ func (m *ProgramBoxModel) SetFocused(focused bool) {
 func (m *ProgramBoxModel) IsScrollbarDragging() bool {
 	return m.Scroll.Drag.Dragging
 }
-
-
 
 func (m *ProgramBoxModel) Init() tea.Cmd {
 	// If a task function was set (dialog mode), start it now
@@ -440,9 +437,6 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.viewport, cmd = m.viewport.Update(msg)
 	return m, cmd
 }
-
-
-
 
 func (m *ProgramBoxModel) satisfySubDialogChan(result any) {
 	if m.subDialogChan == nil {

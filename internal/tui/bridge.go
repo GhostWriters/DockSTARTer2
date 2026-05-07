@@ -1,10 +1,10 @@
 package tui
 
 import (
-	"context"
-	"fmt"
 	"DockSTARTer2/internal/commands"
 	tea "charm.land/bubbletea/v2"
+	"context"
+	"fmt"
 )
 
 // TUIBridge implements commands.UIProvider to allow the TUI Console
@@ -51,7 +51,7 @@ func (b *TUIBridge) ValueEdit(ctx context.Context, appName, varName, file, mode 
 	}
 
 	onClose := func() tea.Msg { return NavigateBackMsg{} }
-	
+
 	// If mode is "global", jump to global editor.
 	// If appName is set, jump to that app's editor.
 	if mode == "global" {
@@ -86,7 +86,7 @@ func (b *TUIBridge) Navigate(ctx context.Context, target string) error {
 		return fmt.Errorf("screen '%s' not found", target)
 	}
 
-	// create(false) ensures we get a Back button. 
+	// create(false) ensures we get a Back button.
 	// NavigateMsg ensures the current screen is pushed to the stack.
 	program.Send(NavigateMsg{Screen: entry.create(false, GetConnType())})
 	return nil

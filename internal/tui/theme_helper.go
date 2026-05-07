@@ -197,7 +197,7 @@ func GetInitialStyle(text string, base lipgloss.Style) lipgloss.Style {
 
 // MaintainBackground replaces ANSI resets (\x1b[0m, \x1b[m, \x1b[39m, \x1b[49m) with the reset followed by the parent style's codes.
 // This prevents content-level resets from "bleeding" to the terminal default background or clearing attributes.
-// It also ensures that the string starts with the parent's full ANSI code to provide a "Base-Layer" background 
+// It also ensures that the string starts with the parent's full ANSI code to provide a "Base-Layer" background
 // for unstyled or plain text.
 func MaintainBackground(text string, style lipgloss.Style) string {
 	// Extract the full ANSI state from a dummy render

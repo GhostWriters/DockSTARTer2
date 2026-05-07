@@ -31,7 +31,7 @@ func WordWrapToSlice(text string, goal int) []string {
 		// `fold -s` conceptually measures: len(currentLine) + len(space) + len(word).
 		// If that exceeds the goal, the space becomes the break point.
 		if len(currentLine)+1+len(word) > goal {
-			// In `fold -s`, the space would be kept at the end of currentLine, 
+			// In `fold -s`, the space would be kept at the end of currentLine,
 			// and then stripped by `strip_trailing_spaces`. So we just push currentLine.
 			lines = append(lines, currentLine)
 			currentLine = word

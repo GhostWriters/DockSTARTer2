@@ -283,12 +283,12 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 	}
 	result.WriteString(borderStyleLight.Render(border.TopRight))
 	result.WriteString("\n")
-	
+
 	maxLines := len(lines)
 	if targetHeight > 2 {
 		maxLines = targetHeight - 2
 	}
- 
+
 	for i, line := range lines {
 		if i >= maxLines {
 			break

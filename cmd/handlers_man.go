@@ -7,13 +7,14 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"golang.org/x/term"
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
 	"os"
 	"regexp"
-	"golang.org/x/term"
 
+	_ "github.com/gen2brain/svg"
 	"github.com/pgavlin/goldmark"
 	"github.com/pgavlin/goldmark/extension"
 	goldmark_parser "github.com/pgavlin/goldmark/parser"
@@ -22,7 +23,6 @@ import (
 	"github.com/pgavlin/goldmark/util"
 	kit_renderer "github.com/pgavlin/markdown-kit/renderer"
 	"github.com/pgavlin/markdown-kit/styles"
-	_ "github.com/gen2brain/svg"
 )
 
 func handleMan(ctx context.Context, group *CommandGroup) error {
@@ -84,4 +84,3 @@ func handleMan(ctx context.Context, group *CommandGroup) error {
 	os.Stdout.Write(buf.Bytes())
 	return nil
 }
-

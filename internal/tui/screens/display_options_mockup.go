@@ -69,7 +69,7 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 		StatusError:         tui.SemanticRawStyle("Preview_TitleError"),
 		DialogTitleAlign:    s.config.UI.DialogTitleAlign,
 		SubmenuTitleAlign:   s.config.UI.SubmenuTitleAlign,
-		PanelTitleAlign:       s.config.UI.PanelTitleAlign,
+		PanelTitleAlign:     s.config.UI.PanelTitleAlign,
 		Prefix:              "Preview_",
 		DrawShadow:          s.config.UI.Shadow,
 	}

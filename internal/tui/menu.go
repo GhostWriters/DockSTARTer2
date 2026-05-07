@@ -38,15 +38,15 @@ type MenuItem struct {
 	IsSeparator bool // Whether this is a non-selectable header/separator
 
 	// Grouped list support (app selection with instances)
-	IsGroupHeader  bool   // App name header row; checkbox shows group-enabled state (read-only)
-	IsSubItem      bool   // Indented instance row under a group header
-	IsAddInstance  bool   // "[+] Add instance…" action row
-	IsEditing      bool   // Inline text-input row for new instance name entry
-	IsNew          bool   // Newly added this session (not yet saved; used to allow rename)
-	IsReferenced   bool   // Has env vars / compose reference but no __ENABLED; locked from rename
-	WasAdded       bool   // Whether this item was added (present in .env) when the screen loaded (for gutter diff)
-	ShowEnabledGutter bool // Whether to show the Enabled (E/D) gutter column
-	BaseApp        string // Base app name this row belongs to (sub-items / add-instance / editing)
+	IsGroupHeader     bool   // App name header row; checkbox shows group-enabled state (read-only)
+	IsSubItem         bool   // Indented instance row under a group header
+	IsAddInstance     bool   // "[+] Add instance…" action row
+	IsEditing         bool   // Inline text-input row for new instance name entry
+	IsNew             bool   // Newly added this session (not yet saved; used to allow rename)
+	IsReferenced      bool   // Has env vars / compose reference but no __ENABLED; locked from rename
+	WasAdded          bool   // Whether this item was added (present in .env) when the screen loaded (for gutter diff)
+	ShowEnabledGutter bool   // Whether to show the Enabled (E/D) gutter column
+	BaseApp           string // Base app name this row belongs to (sub-items / add-instance / editing)
 
 	// Metadata
 	IsUserDefined bool              // Whether this is a user-defined app (for coloring)
@@ -423,12 +423,12 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 //   - IsEditing rows:     indented inline text-input display (Tag holds current text + cursor)
 //   - IsSeparator rows:   unchanged (letter headers / blank spacers)
 type groupedItemDelegate struct {
-	menuID            string
-	maxTagLen         int // max tag width of header rows only
-	focused           bool
-	activeCol         CheckboxColumn
-	showLockGutter    bool
-	statusGutterWidth int
+	menuID              string
+	maxTagLen           int // max tag width of header rows only
+	focused             bool
+	activeCol           CheckboxColumn
+	showLockGutter      bool
+	statusGutterWidth   int
 	activityGutterWidth int
 }
 
@@ -568,7 +568,6 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 		return cbStyle.Render(content)
 	}
 
-
 	// Group headers never show checkboxes — just the disclosure glyph.
 	// IsSubItem and IsCheckbox rows use the full two-checkbox layout.
 	if menuItem.IsSubItem {
@@ -659,7 +658,7 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 		// Layout restores the dual or single arrow look as it was before.
 		// Layout matches border: Gutter(2) + cbAdd(3) + Spacer(1) + cbEnabled(3) + Spacer(1) + Tag.
 		line := itemGutter + cbAdd + neutralStyle.Render(" ") + cbEnabled + neutralStyle.Render(" ") + tagStr + neutralStyle.Render(paddingSpaces) + descLine
-		
+
 		actualWidth := lipgloss.Width(line)
 		if actualWidth < m.Width()-2 {
 			line += neutralStyle.Render(strutil.Repeat(" ", m.Width()-2-actualWidth))
@@ -695,7 +694,7 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 
 	// Layout matches border: Gutter(2) + cbAdd(3) + Spacer(1) + cbEnabled(3) + Spacer(1) + Tag.
 	line := itemGutter + cbAdd + neutralStyle.Render(" ") + cbEnabled + neutralStyle.Render(" ") + tagStr
-	
+
 	const rowPrefixW = 11
 	paddingSpaces := strutil.Repeat(" ", max(0, d.maxTagLen-lipgloss.Width(GetPlainText(tag))+3))
 	availableWidth := m.Width() - 2 - rowPrefixW - (d.maxTagLen + 3)
@@ -716,17 +715,17 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 
 // MenuModel represents a selectable menu
 type MenuModel struct {
-	id       string // Unique identifier for selection persistence
-	title    string // Menu title
-	subtitle         string // Optional subtitle/description shown on-screen
-	helpPageTitle    string // Optional title for the description box in the help dialog
-	helpPageText     string // Optional description shown only in the help dialog (overrides subtitle)
+	id             string // Unique identifier for selection persistence
+	title          string // Menu title
+	subtitle       string // Optional subtitle/description shown on-screen
+	helpPageTitle  string // Optional title for the description box in the help dialog
+	helpPageText   string // Optional description shown only in the help dialog (overrides subtitle)
 	helpLegend     string // Optional legend shown in help dialog with title "Legend" (overrides helpPageText)
 	helpItemPrefix string // Optional prefix for item titles in help dialog, e.g. "App", "Option", "Theme"
-	items    []MenuItem
-	cursor   int // Current selection
-	width    int
-	height   int
+	items          []MenuItem
+	cursor         int // Current selection
+	width          int
+	height         int
 
 	// Focus state
 	focused      bool
@@ -778,27 +777,27 @@ type MenuModel struct {
 	cacheValid bool // Indicates if lastView is up-to-date with current state
 
 	// Memoization specifically for the variable-height list (separated to avoid border recursion loops)
-	lastListView   string
-	lastWidth      int
-	lastHeight     int
-	lastIndex      int
-	lastFilter     string
-	lastActive     bool
-	lastLineChars  bool
-	lastVersion    int
-	lastColumn     CheckboxColumn
-	lastHitRegions []HitRegion // Cache for variable height hit regions
+	lastListView    string
+	lastWidth       int
+	lastHeight      int
+	lastIndex       int
+	lastFilter      string
+	lastActive      bool
+	lastLineChars   bool
+	lastVersion     int
+	lastColumn      CheckboxColumn
+	lastHitRegions  []HitRegion // Cache for variable height hit regions
 	viewStartY      int         // Persistent scroll offset for variable height lists
 	lastViewStartY  int         // Previous scroll offset for memoization check
-	lastScrollTotal int        // Total content height from last renderVariableHeightList (for scrollbar)
+	lastScrollTotal int         // Total content height from last renderVariableHeightList (for scrollbar)
 
-	renderVersion  int // Incremented on item changes to invalidate list cache
-	showLockGutter bool
-	statusGutterWidth int
+	renderVersion       int // Incremented on item changes to invalidate list cache
+	showLockGutter      bool
+	statusGutterWidth   int
 	activityGutterWidth int
-	itemPaddingWidth int // Optional padding after getters
-	menuName       string // Name used for --menu or -M to return to this screen
-	connType       string // "local", "ssh", or "web"
+	itemPaddingWidth    int    // Optional padding after getters
+	menuName            string // Name used for --menu or -M to return to this screen
+	connType            string // "local", "ssh", or "web"
 
 	// Content sections: sub-menus rendered stacked inside the outer border.
 	// When present, replaces the standard list+inner-border rendering.
@@ -883,7 +882,6 @@ func (m *MenuModel) ScrollTotal() int {
 	}
 	return len(m.items)
 }
-
 
 // FocusItem represents which UI element has focus
 type FocusItem int
@@ -982,23 +980,23 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 	}
 
 	return &MenuModel{
-		id:          id,
-		title:       title,
-		subtitle:    subtitle,
-		items:       items,
-		cursor:      cursor,
-		backAction:  backAction,
-		connType:    "local", // default
-		focused:     true,
-		focusedItem: FocusSelectBtn,
-		activeColumn: ColAdd,
-		list:        l,
-		showExit:    true, // Default to show Exit button
-		showButtons: true, // Default to show buttons
-		Scroll:         Scrollbar{ID: id},
-		showLockGutter: true,
+		id:                  id,
+		title:               title,
+		subtitle:            subtitle,
+		items:               items,
+		cursor:              cursor,
+		backAction:          backAction,
+		connType:            "local", // default
+		focused:             true,
+		focusedItem:         FocusSelectBtn,
+		activeColumn:        ColAdd,
+		list:                l,
+		showExit:            true, // Default to show Exit button
+		showButtons:         true, // Default to show buttons
+		Scroll:              Scrollbar{ID: id},
+		showLockGutter:      true,
 		activityGutterWidth: 0,
-		itemPaddingWidth: 1, // Default 1 char padding after marker gutter
+		itemPaddingWidth:    1, // Default 1 char padding after marker gutter
 	}
 }
 
@@ -1173,33 +1171,33 @@ func (m *MenuModel) updateDelegate() {
 	if m.groupedMode {
 		maxTagLen := calculateMaxTagLengthForHeaders(m.items)
 		m.list.SetDelegate(groupedItemDelegate{
-			maxTagLen:      maxTagLen,
-			focused:        focused,
-			activeCol:      m.activeColumn,
-			showLockGutter: m.showLockGutter,
+			maxTagLen:           maxTagLen,
+			focused:             focused,
+			activeCol:           m.activeColumn,
+			showLockGutter:      m.showLockGutter,
 			activityGutterWidth: m.activityGutterWidth,
 		})
 	} else if m.checkboxMode {
 		maxTagLen := calculateMaxTagLength(m.items)
 		m.list.SetDelegate(checkboxItemDelegate{
-			menuID:         m.id,
-			maxTagLen:      maxTagLen,
-			focused:        focused,
-			flowMode:       m.flowMode,
-			showLockGutter: m.showLockGutter,
+			menuID:              m.id,
+			maxTagLen:           maxTagLen,
+			focused:             focused,
+			flowMode:            m.flowMode,
+			showLockGutter:      m.showLockGutter,
 			activityGutterWidth: m.activityGutterWidth,
-			paddingWidth:   m.itemPaddingWidth,
+			paddingWidth:        m.itemPaddingWidth,
 		})
 	} else {
 		maxTagLen := calculateMaxTagLength(m.items)
 		m.list.SetDelegate(menuItemDelegate{
-			menuID:         m.id,
-			maxTagLen:      maxTagLen,
-			focused:        focused,
-			flowMode:       m.flowMode,
-			showLockGutter: m.showLockGutter,
+			menuID:              m.id,
+			maxTagLen:           maxTagLen,
+			focused:             focused,
+			flowMode:            m.flowMode,
+			showLockGutter:      m.showLockGutter,
 			activityGutterWidth: m.activityGutterWidth,
-			paddingWidth:   m.itemPaddingWidth,
+			paddingWidth:        m.itemPaddingWidth,
 		})
 	}
 }
@@ -1417,6 +1415,7 @@ func (m *MenuModel) SelectedItem() MenuItem {
 	}
 	return MenuItem{}
 }
+
 // SetActiveColumn sets the focused checkbox column (Add or Enable)
 func (m *MenuModel) SetActiveColumn(col CheckboxColumn) {
 	m.activeColumn = col
@@ -1493,7 +1492,7 @@ func (m *MenuModel) helpContextForIdx(idx int) HelpContext {
 		pageText = m.subtitle
 	}
 	if m.helpLegend != "" {
-		pageText = "" // legend takes precedence; suppress the description
+		pageText = ""                   // legend takes precedence; suppress the description
 		if pageTitle == "Description" { // Fallback cleanup if previously relied on
 			pageTitle = ""
 		}
@@ -1593,5 +1592,3 @@ func (m *MenuModel) AnyLocked() bool {
 	}
 	return false
 }
-
-

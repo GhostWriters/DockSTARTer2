@@ -17,7 +17,7 @@ import (
 type setValueFocus int
 
 const (
-	setValueFocusInput  setValueFocus = iota
+	setValueFocusInput setValueFocus = iota
 	setValueFocusList
 	setValueFocusSave
 	setValueFocusCancel
@@ -32,12 +32,12 @@ type setValueDialogModel struct {
 	height  int
 	focused bool
 
-	varName  string
-	appName  string
-	appDesc  string
-	filePath string // shown in heading; empty = omit
-	origVal  string // original value at open time (shown in heading)
-	varHelp  string
+	varName     string
+	appName     string
+	appDesc     string
+	filePath    string // shown in heading; empty = omit
+	origVal     string // original value at open time (shown in heading)
+	varHelp     string
 	docMarkdown string
 	docAppName  string
 
@@ -84,20 +84,20 @@ func newSetValueDialog(
 	ti.SetStyles(tiStyles)
 
 	return &setValueDialogModel{
-		varName:  varName,
-		appName:  appName,
-		appDesc:  appDesc,
-		filePath: filePath,
-		origVal:  origVal,
-		varHelp:  helpText,
+		varName:     varName,
+		appName:     appName,
+		appDesc:     appDesc,
+		filePath:    filePath,
+		origVal:     origVal,
+		varHelp:     helpText,
 		docMarkdown: docMarkdown,
 		docAppName:  docAppName,
-		input:    sinput.New(ti),
-		opts:     opts,
-		focus:    setValueFocusInput,
-		maxVis:   8,
-		onSave:   onSave,
-		onCancel: onCancel,
+		input:       sinput.New(ti),
+		opts:        opts,
+		focus:       setValueFocusInput,
+		maxVis:      8,
+		onSave:      onSave,
+		onCancel:    onCancel,
 	}
 }
 
@@ -668,7 +668,7 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 	headingRaw := FormatMenuHeading(MenuHeadingParams{
 		AppName: m.appName, AppDescription: m.appDesc,
 		FilePath: m.filePath,
-		VarName: m.varName, OriginalValue: m.origVal, CurrentValue: m.input.Value(),
+		VarName:  m.varName, OriginalValue: m.origVal, CurrentValue: m.input.Value(),
 	}, contentW)
 	headingH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToThemeANSI(headingRaw)))
 	// outer border(1) + headingH + "Current Value" section(3) (headingH includes padding natively)
@@ -698,10 +698,10 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 		ZOrder: tui.ZDialog + 10,
 		Label:  "Value Input",
 		Help: &tui.HelpContext{
-			ScreenName: "Set Value: " + m.varName,
-			PageTitle:  "Editing",
-			PageText:   "Type to enter a custom value for " + m.varName + ".",
-			ItemText:   "Press Enter to save or Esc to cancel.",
+			ScreenName:  "Set Value: " + m.varName,
+			PageTitle:   "Editing",
+			PageText:    "Type to enter a custom value for " + m.varName + ".",
+			ItemText:    "Press Enter to save or Esc to cancel.",
 			DocMarkdown: m.docMarkdown,
 			DocAppName:  m.docAppName,
 		},
@@ -825,7 +825,6 @@ func (m *setValueDialogModel) cancelOrConfirm() tea.Cmd {
 func (m *setValueDialogModel) confirmExit() tea.Cmd {
 	return tui.ConfirmExitAction()
 }
-
 
 func (m *setValueDialogModel) selectOpt(idx int) {
 	if idx >= 0 && idx < len(m.opts) {

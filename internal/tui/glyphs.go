@@ -21,8 +21,8 @@ const (
 	checkSelectedAscii   = "[x]"
 	checkUnselectedAscii = "[ ]"
 
-	invalidMarker        = "!"
-	invalidMarkerAscii   = "!"
+	invalidMarker      = "!"
+	invalidMarkerAscii = "!"
 
 	// lockedMarker (✗) - Ballot X (U+2717) + VS15 (\uFE0E) for text style
 	lockedMarker      = "\u2717\uFE0E"

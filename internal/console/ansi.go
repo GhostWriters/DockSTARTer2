@@ -150,7 +150,6 @@ func StripANSI(text string) string {
 	return ansiRegex.ReplaceAllString(text, "")
 }
 
-
 // getBrightVariant attempts to get the bright variant of a color name
 func getBrightVariant(name string) (string, bool) {
 	if strings.HasPrefix(name, "bright-") {

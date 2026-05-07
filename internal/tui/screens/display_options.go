@@ -42,9 +42,9 @@ type DisplayOptionsScreen struct {
 
 	focused bool // tracks global screen focus (header/log panel interaction)
 
-	baseConfig    config.AppConfig                // Original exact config before previewing
-	themeDefaults map[string]*theme.ThemeDefaults // Cache parsed defaults
-	themeFileCache map[string]theme.ThemeFile     // Cache GetThemeFile results for help text
+	baseConfig     config.AppConfig                // Original exact config before previewing
+	themeDefaults  map[string]*theme.ThemeDefaults // Cache parsed defaults
+	themeFileCache map[string]theme.ThemeFile      // Cache GetThemeFile results for help text
 
 	connType string // "local", "ssh", or "web"
 }
@@ -142,67 +142,67 @@ func (s *DisplayOptionsScreen) initMenus() {
 	// 2. Options Menu
 	optionItems := []tui.MenuItem{
 		{
-			Tag:         "Borders",
-			Desc:        "Show borders on all dialogs",
-			Help:        "Toggle border visibility (Space to toggle)",
-			IsCheckbox:  true,
-			Checked:     s.config.UI.Borders,
-			Selectable:  true,
-			SpaceAction: s.toggleBorders(),
+			Tag:           "Borders",
+			Desc:          "Show borders on all dialogs",
+			Help:          "Toggle border visibility (Space to toggle)",
+			IsCheckbox:    true,
+			Checked:       s.config.UI.Borders,
+			Selectable:    true,
+			SpaceAction:   s.toggleBorders(),
 			IsDestructive: true,
 		},
 		{
-			Tag:         "Button Borders",
-			Desc:        "Show borders on buttons",
-			Help:        "Toggle bordered vs flat button style (Space to toggle)",
-			IsCheckbox:  true,
-			Checked:     s.config.UI.ButtonBorders,
-			Selectable:  true,
-			SpaceAction: s.toggleButtonBorders(),
+			Tag:           "Button Borders",
+			Desc:          "Show borders on buttons",
+			Help:          "Toggle bordered vs flat button style (Space to toggle)",
+			IsCheckbox:    true,
+			Checked:       s.config.UI.ButtonBorders,
+			Selectable:    true,
+			SpaceAction:   s.toggleButtonBorders(),
 			IsDestructive: true,
 		},
 		{
-			Tag:         "Line Characters",
-			Desc:        "Use unicode line drawing characters",
-			Help:        "Use ┌─ instead of +- for borders (Space to toggle)",
-			IsCheckbox:  true,
-			Checked:     s.config.UI.LineCharacters,
-			Selectable:  true,
-			SpaceAction: s.toggleLineChars(),
+			Tag:           "Line Characters",
+			Desc:          "Use unicode line drawing characters",
+			Help:          "Use ┌─ instead of +- for borders (Space to toggle)",
+			IsCheckbox:    true,
+			Checked:       s.config.UI.LineCharacters,
+			Selectable:    true,
+			SpaceAction:   s.toggleLineChars(),
 			IsDestructive: true,
 		},
 		{
-			Tag:         "Shadow",
-			Desc:        "Enable drop shadows",
-			Help:        "Toggle drop shadow effect (Space to toggle)",
-			IsCheckbox:  true,
-			Checked:     s.config.UI.Shadow,
-			Selectable:  true,
-			SpaceAction: s.toggleShadow(),
+			Tag:           "Shadow",
+			Desc:          "Enable drop shadows",
+			Help:          "Toggle drop shadow effect (Space to toggle)",
+			IsCheckbox:    true,
+			Checked:       s.config.UI.Shadow,
+			Selectable:    true,
+			SpaceAction:   s.toggleShadow(),
 			IsDestructive: true,
 		},
 		{
-			Tag:         "Scrollbar",
-			Desc:        "Show scrollbar in lists",
-			Help:        "Toggle scrollbar in scrollable lists (Space to toggle)",
-			IsCheckbox:  true,
-			Checked:     s.config.UI.Scrollbar,
-			Selectable:  true,
-			SpaceAction: s.toggleScrollbar(),
+			Tag:           "Scrollbar",
+			Desc:          "Show scrollbar in lists",
+			Help:          "Toggle scrollbar in scrollable lists (Space to toggle)",
+			IsCheckbox:    true,
+			Checked:       s.config.UI.Scrollbar,
+			Selectable:    true,
+			SpaceAction:   s.toggleScrollbar(),
 			IsDestructive: true,
 		},
 		{
-			Tag:    "Shadow Level",
-			Desc:   s.dropdownDesc(s.shadowLevelToDesc(s.config.UI.ShadowLevel)),
-			Help:   "Adjust the density of the shadow (Select/Enter for list)",
-			Action: s.showShadowDropdown(),
+			Tag:           "Shadow Level",
+			Desc:          s.dropdownDesc(s.shadowLevelToDesc(s.config.UI.ShadowLevel)),
+			Help:          "Adjust the density of the shadow (Select/Enter for list)",
+			Action:        s.showShadowDropdown(),
 			IsDestructive: true,
 		},
 		{
-			Tag:    "Border Color",
-			Desc:   s.dropdownDesc(s.borderColorToDesc(s.config.UI.BorderColor)),
-			Help:   "Choose theme colors for borders (Select/Enter for list)",
-			Action: s.showBorderColorDropdown(),
+			Tag:           "Border Color",
+			Desc:          s.dropdownDesc(s.borderColorToDesc(s.config.UI.BorderColor)),
+			Help:          "Choose theme colors for borders (Select/Enter for list)",
+			Action:        s.showBorderColorDropdown(),
 			IsDestructive: true,
 		},
 		{
@@ -598,26 +598,26 @@ func (s *DisplayOptionsScreen) showPanelDropdown(isLocalSetting bool) tea.Cmd {
 
 		// None option: always available
 		items = append(items, tui.MenuItem{
-			Tag:  "None",
-			Desc: "Hide the panel entirely",
-			Help: "Removes the panel and stretches content to the bottom of the screen.",
+			Tag:    "None",
+			Desc:   "Hide the panel entirely",
+			Help:   "Removes the panel and stretches content to the bottom of the screen.",
 			Action: func() tea.Msg { return confirmChange("none")() },
 		})
 
 		// Log option: always available
 		items = append(items, tui.MenuItem{
-			Tag:  "Log",
-			Desc: "Show read-only log viewer",
-			Help: "Displays application logs but hides the command input bar.",
+			Tag:    "Log",
+			Desc:   "Show read-only log viewer",
+			Help:   "Displays application logs but hides the command input bar.",
 			Action: func() tea.Msg { return confirmChange("log")() },
 		})
 
 		// Console (ds2-only): always available for both local and remote —
 		// it only accepts ds2 subcommands so it is safe in all session types.
 		items = append(items, tui.MenuItem{
-			Tag:  "Console",
-			Desc: "ds2 commands only",
-			Help: "Accepts ds2 subcommands only. Safe for remote sessions.",
+			Tag:    "Console",
+			Desc:   "ds2 commands only",
+			Help:   "Accepts ds2 subcommands only. Safe for remote sessions.",
 			Action: func() tea.Msg { return applyChange("console")() },
 		})
 
@@ -668,12 +668,11 @@ func (s *DisplayOptionsScreen) showPanelDropdown(isLocalSetting bool) tea.Cmd {
 			return applyChange("system")()
 		}
 		items = append(items, tui.MenuItem{
-			Tag:  "System Console",
-			Desc: "Full shell access",
-			Help: "Passes commands directly to the OS shell. Use with caution for remote sessions.",
+			Tag:    "System Console",
+			Desc:   "Full shell access",
+			Help:   "Passes commands directly to the OS shell. Use with caution for remote sessions.",
 			Action: systemAction,
 		})
-
 
 		title := "Remote Panel Mode"
 		if isLocalSetting {
@@ -745,7 +744,7 @@ func (s *DisplayOptionsScreen) showShadowDropdown() tea.Cmd {
 func (s *DisplayOptionsScreen) showBorderColorDropdown() tea.Cmd {
 	return func() tea.Msg {
 		type borderEntry struct {
-			mode        int
+			mode         int
 			label, value string
 		}
 		entries := []borderEntry{

@@ -12,9 +12,11 @@ import (
 	"time"
 	"unicode"
 
-	"charm.land/bubbles/v2/cursor"
+	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/tui/components/enveditor/memoization"
 	"DockSTARTer2/internal/tui/components/enveditor/runeutil"
+
+	"charm.land/bubbles/v2/cursor"
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
@@ -238,22 +240,22 @@ type Styles struct {
 // For an introduction to styling with Lip Gloss see:
 // https://github.com/charmbracelet/lipgloss
 type StyleState struct {
-	Base                     lipgloss.Style
-	Text                     lipgloss.Style
-	LineNumber               lipgloss.Style
-	LineNumberSelected       lipgloss.Style // cursor line
-	LineNumberModified       lipgloss.Style // line differs from default
+	Base                       lipgloss.Style
+	Text                       lipgloss.Style
+	LineNumber                 lipgloss.Style
+	LineNumberSelected         lipgloss.Style // cursor line
+	LineNumberModified         lipgloss.Style // line differs from default
 	LineNumberModifiedSelected lipgloss.Style // cursor line + differs from default
-	CursorLine               lipgloss.Style
-	EndOfBuffer      lipgloss.Style
-	Placeholder      lipgloss.Style
-	Prompt           lipgloss.Style
-	ModifiedText      lipgloss.Style
-	ReadOnlyText      lipgloss.Style
-	CommentText       lipgloss.Style
-	InvalidText       lipgloss.Style
-	DuplicateText     lipgloss.Style
-	BuiltinText       lipgloss.Style
+	CursorLine                 lipgloss.Style
+	EndOfBuffer                lipgloss.Style
+	Placeholder                lipgloss.Style
+	Prompt                     lipgloss.Style
+	ModifiedText               lipgloss.Style
+	ReadOnlyText               lipgloss.Style
+	CommentText                lipgloss.Style
+	InvalidText                lipgloss.Style
+	DuplicateText              lipgloss.Style
+	BuiltinText                lipgloss.Style
 	// UserDefinedText removed — user-defined var keys now use ModifiedText
 	PendingDeleteText lipgloss.Style
 	GutterAdded       lipgloss.Style // + marker for new lines
@@ -435,8 +437,8 @@ type Model struct {
 	draggedRow int
 
 	// Scrollbar dragging state
-	isScrollbarDragging  bool
-	sbDragMouseOffsetY   int // relative offset of mouse within thumb when drag started
+	isScrollbarDragging bool
+	sbDragMouseOffsetY  int // relative offset of mouse within thumb when drag started
 	// sbScrolled is set to true whenever a scrollbar action directly sets the
 	// viewport offset (drag, track click, arrow click). It suppresses the
 	// repositionView() snap at the end of Update() so the user can scroll the
@@ -471,18 +473,18 @@ type Model struct {
 	totalWidth int
 
 	// Memoization for expensive rendering
-	lastView   string
-	cacheValid bool // Indicates if lastView is up-to-date with current state
+	lastView    string
+	cacheValid  bool // Indicates if lastView is up-to-date with current state
 	dmp         *diffmatchpatch.DiffMatchPatch
-	diffCache   map[int][]bool        // row index -> modified mask (true = modified)
-	defaultFunc func(string) string   // stored at ParseEnv/ReclassifyEnv time; resolves defaults for new vars
+	diffCache   map[int][]bool      // row index -> modified mask (true = modified)
+	defaultFunc func(string) string // stored at ParseEnv/ReclassifyEnv time; resolves defaults for new vars
 
 	// Intelligent variable addition settings.
-	AddPrefix         string
-	ValidationType    string // _GLOBAL_, _BARE_, or APPNAME (actual app name)
-	ValidationAppName string // Actual app name if ValidationType is APPNAME
+	AddPrefix          string
+	ValidationType     string // _GLOBAL_, _BARE_, or APPNAME (actual app name)
+	ValidationAppName  string // Actual app name if ValidationType is APPNAME
 	ValidationIsGlobal bool   // If true, the editor is showing the full .env names; if false, it shows bare names that need prefixing for validation
-	ValidateFunc      func(string, string) bool
+	ValidateFunc       func(string, string) bool
 
 	// Theme integration for duplicates
 	duplicateKeys map[string]int
@@ -515,8 +517,8 @@ func New() Model {
 		col:      0,
 		row:      0,
 
-		viewport: &vp,
-		dmp:      diffmatchpatch.New(),
+		viewport:  &vp,
+		dmp:       diffmatchpatch.New(),
 		diffCache: make(map[int][]bool),
 	}
 
@@ -540,23 +542,23 @@ func DefaultStyles(isDark bool) Styles {
 		LineNumberModified:         lipgloss.NewStyle().Foreground(lipgloss.Color("3")), // Yellow
 		LineNumberModifiedSelected: lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Bold(true),
 		EndOfBuffer:                lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("254"), lipgloss.Color("0"))),
-		Placeholder:      lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
-		Prompt:           lipgloss.NewStyle().Foreground(lipgloss.Color("7")),
-		Text:             lipgloss.NewStyle(),
-		ModifiedText:     lipgloss.NewStyle().Foreground(lipgloss.Color("3")),   // Yellow
-		ReadOnlyText:     lipgloss.NewStyle().Foreground(lipgloss.Color("240")), // Dark Grey
-		CommentText:      lipgloss.NewStyle().Foreground(lipgloss.Color("240")), // Default to same as ReadOnly
-		InvalidText:      lipgloss.NewStyle().Foreground(lipgloss.Color("9")),   // Red
-		DuplicateText:    lipgloss.NewStyle().Foreground(lipgloss.Color("13")),  // Magenta
-		BuiltinText:       lipgloss.NewStyle(),                                                                    // Inherit from text by default
-		PendingDeleteText: lipgloss.NewStyle().Strikethrough(true).Foreground(lipgloss.Color("240")),
-		GutterAdded:       lipgloss.NewStyle().Foreground(lipgloss.Color("2")),  // Green
-		GutterDeleted:     lipgloss.NewStyle().Foreground(lipgloss.Color("1")),  // Red
-		GutterModified:    lipgloss.NewStyle().Foreground(lipgloss.Color("3")),  // Yellow
-		GutterInvalid:     lipgloss.NewStyle().Foreground(lipgloss.Color("9")),  // Bright red
-		ScrollbarTrack:    lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
-		ScrollbarThumb:    lipgloss.NewStyle().Foreground(lipgloss.Color("7")),
-		SelectionText:     lipgloss.NewStyle().Reverse(true),
+		Placeholder:                lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+		Prompt:                     lipgloss.NewStyle().Foreground(lipgloss.Color("7")),
+		Text:                       lipgloss.NewStyle(),
+		ModifiedText:               lipgloss.NewStyle().Foreground(lipgloss.Color("3")),   // Yellow
+		ReadOnlyText:               lipgloss.NewStyle().Foreground(lipgloss.Color("240")), // Dark Grey
+		CommentText:                lipgloss.NewStyle().Foreground(lipgloss.Color("240")), // Default to same as ReadOnly
+		InvalidText:                lipgloss.NewStyle().Foreground(lipgloss.Color("9")),   // Red
+		DuplicateText:              lipgloss.NewStyle().Foreground(lipgloss.Color("13")),  // Magenta
+		BuiltinText:                lipgloss.NewStyle(),                                   // Inherit from text by default
+		PendingDeleteText:          lipgloss.NewStyle().Strikethrough(true).Foreground(lipgloss.Color("240")),
+		GutterAdded:                lipgloss.NewStyle().Foreground(lipgloss.Color("2")), // Green
+		GutterDeleted:              lipgloss.NewStyle().Foreground(lipgloss.Color("1")), // Red
+		GutterModified:             lipgloss.NewStyle().Foreground(lipgloss.Color("3")), // Yellow
+		GutterInvalid:              lipgloss.NewStyle().Foreground(lipgloss.Color("9")), // Bright red
+		ScrollbarTrack:             lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+		ScrollbarThumb:             lipgloss.NewStyle().Foreground(lipgloss.Color("7")),
+		SelectionText:              lipgloss.NewStyle().Reverse(true),
 	}
 	s.Blurred = StyleState{
 		Base:                       lipgloss.NewStyle(),
@@ -566,23 +568,23 @@ func DefaultStyles(isDark bool) Styles {
 		LineNumberModified:         lipgloss.NewStyle().Foreground(lipgloss.Color("3")),
 		LineNumberModifiedSelected: lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Bold(true),
 		EndOfBuffer:                lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("254"), lipgloss.Color("0"))),
-		Placeholder:      lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
-		Prompt:           lipgloss.NewStyle().Foreground(lipgloss.Color("7")),
-		Text:             lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("245"), lipgloss.Color("7"))),
-		ModifiedText:     lipgloss.NewStyle().Foreground(lipgloss.Color("3")),
-		ReadOnlyText:     lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
-		CommentText:      lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
-		InvalidText:      lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
-		DuplicateText:    lipgloss.NewStyle().Foreground(lipgloss.Color("13")),
-		BuiltinText:       lipgloss.NewStyle().Foreground(lipgloss.Color("6")),
-		PendingDeleteText: lipgloss.NewStyle().Strikethrough(true).Foreground(lipgloss.Color("240")),
-		GutterAdded:       lipgloss.NewStyle().Foreground(lipgloss.Color("2")),
-		GutterDeleted:     lipgloss.NewStyle().Foreground(lipgloss.Color("1")),
-		GutterModified:    lipgloss.NewStyle().Foreground(lipgloss.Color("3")),
-		GutterInvalid:     lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
-		ScrollbarTrack:    lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
-		ScrollbarThumb:    lipgloss.NewStyle().Foreground(lipgloss.Color("7")),
-		SelectionText:     lipgloss.NewStyle().Reverse(true),
+		Placeholder:                lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+		Prompt:                     lipgloss.NewStyle().Foreground(lipgloss.Color("7")),
+		Text:                       lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("245"), lipgloss.Color("7"))),
+		ModifiedText:               lipgloss.NewStyle().Foreground(lipgloss.Color("3")),
+		ReadOnlyText:               lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+		CommentText:                lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+		InvalidText:                lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
+		DuplicateText:              lipgloss.NewStyle().Foreground(lipgloss.Color("13")),
+		BuiltinText:                lipgloss.NewStyle().Foreground(lipgloss.Color("6")),
+		PendingDeleteText:          lipgloss.NewStyle().Strikethrough(true).Foreground(lipgloss.Color("240")),
+		GutterAdded:                lipgloss.NewStyle().Foreground(lipgloss.Color("2")),
+		GutterDeleted:              lipgloss.NewStyle().Foreground(lipgloss.Color("1")),
+		GutterModified:             lipgloss.NewStyle().Foreground(lipgloss.Color("3")),
+		GutterInvalid:              lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
+		ScrollbarTrack:             lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+		ScrollbarThumb:             lipgloss.NewStyle().Foreground(lipgloss.Color("7")),
+		SelectionText:              lipgloss.NewStyle().Reverse(true),
 	}
 	s.Cursor = CursorStyle{
 		Color: lipgloss.Color("7"),
@@ -2456,7 +2458,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		m.Err = msg
 	}
 
-	// Handle viewport update without resetting content here. 
+	// Handle viewport update without resetting content here.
 	// repositionView() will handle scrolling the viewport based on cursor movement.
 	oldY, oldX := m.viewport.YOffset(), m.viewport.XOffset()
 	vp, cmd := m.viewport.Update(msg)
@@ -2527,7 +2529,7 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) {
 	total := m.totalDisplayLines()
 	visible := m.height
 	scrollbarX := m.width + gutterWidth
-	
+
 	// Check if click is on the scrollbar (last column of the viewport area)
 	if total > visible && msg.X >= scrollbarX {
 		if visible >= 3 {
@@ -2817,7 +2819,6 @@ func (m *Model) handleMouseMotion(msg tea.MouseMotionMsg) {
 	if !m.isDragging {
 		return
 	}
-
 
 	targetViewLine := msg.Y + m.viewport.YOffset()
 
@@ -3163,7 +3164,7 @@ func (m *Model) view() string {
 			} else {
 				s.WriteString(m.renderRunes(wrappedLine, l, charIndex, style))
 			}
-			s.WriteString(style.Render(strings.Repeat(" ", max(0, padding))))
+			s.WriteString(style.Render(strutil.Repeat(" ", max(0, padding))))
 			s.WriteRune('\n')
 			charIndex += len(wrappedLine)
 		}
@@ -3177,7 +3178,7 @@ func (m *Model) view() string {
 		// Write end of buffer content
 		leftGutter := string(m.EndOfBufferCharacter)
 		rightGapWidth := m.Width() - uniseg.StringWidth(leftGutter) + widestLineNumber
-		rightGap := strings.Repeat(" ", max(0, rightGapWidth))
+		rightGap := strutil.Repeat(" ", max(0, rightGapWidth))
 		s.WriteString(styles.computedEndOfBuffer().Render(leftGutter + rightGap))
 		s.WriteRune('\n')
 	}
@@ -3415,12 +3416,12 @@ func (m Model) lineNumberView(n int, isCursorLine bool, dataLine int) (str strin
 	// Format line number dynamically based on the maximum number of lines.
 	// Minimum of 3 digits for consistent alignment as per user request.
 	digits := max(3, numDigits(m.MaxHeight))
-	
+
 	// Apply line number style ONLY to the digits themselves.
-	// The outer right spacing is rendered natively so it inherits 
+	// The outer right spacing is rendered natively so it inherits
 	// the dialogue base background color rather than the line number background.
 	formattedNum := fmt.Sprintf("%*v", digits, str)
-	
+
 	return lineNumberStyle.Render(formattedNum) + " "
 }
 
@@ -3483,14 +3484,14 @@ func (m Model) placeholderView() string {
 
 			// extend the first line with spaces to fill the width, so that
 			// the entire line is filled when cursorline is enabled.
-			gap := strings.Repeat(" ", max(0, m.width-lipgloss.Width(plines[0])))
+			gap := strutil.Repeat(" ", max(0, m.width-lipgloss.Width(plines[0])))
 			s.WriteString(lineStyle.Render(gap))
 		// remaining lines
 		case len(plines) > i:
 			// current line placeholder text
 			if len(plines) > i {
 				placeholderLine := plines[i]
-				gap := strings.Repeat(" ", max(0, m.width-uniseg.StringWidth(plines[i])))
+				gap := strutil.Repeat(" ", max(0, m.width-uniseg.StringWidth(plines[i])))
 				s.WriteString(lineStyle.Render(placeholderLine + gap))
 			}
 		default:
@@ -3803,7 +3804,7 @@ func wrap(runes []rune, width int) [][]rune {
 }
 
 func repeatSpaces(n int) []rune {
-	return []rune(strings.Repeat(string(' '), n))
+	return []rune(strutil.Repeat(string(' '), n))
 }
 
 // numDigits returns the number of digits in an integer.

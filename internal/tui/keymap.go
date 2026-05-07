@@ -55,16 +55,16 @@ type KeyMap struct {
 	MouseWheel key.Binding
 
 	// Environment Editor specific keys (shortcuts defined in textarea and tabbed_vars_editor)
-	EnvRefresh    key.Binding
-	EnvAddVar     key.Binding
-	EnvDelete     key.Binding
-	EnvReorderU   key.Binding
-	EnvReorderD   key.Binding
-	EnvInsert     key.Binding
-	EnvSplitLine  key.Binding
-	EnvEditValue  key.Binding
-	EnvNextTab    key.Binding
-	EnvPrevTab    key.Binding
+	EnvRefresh   key.Binding
+	EnvAddVar    key.Binding
+	EnvDelete    key.Binding
+	EnvReorderU  key.Binding
+	EnvReorderD  key.Binding
+	EnvInsert    key.Binding
+	EnvSplitLine key.Binding
+	EnvEditValue key.Binding
+	EnvNextTab   key.Binding
+	EnvPrevTab   key.Binding
 }
 
 // ShortHelp returns bindings shown in the compact helpline.

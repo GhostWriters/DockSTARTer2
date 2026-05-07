@@ -2,13 +2,14 @@ package screens
 
 import (
 	"DockSTARTer2/internal/appenv"
-	"DockSTARTer2/internal/envutil"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/constants"
+	"DockSTARTer2/internal/envutil"
 	"DockSTARTer2/internal/lockfile"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/tui/components/enveditor"
@@ -570,7 +571,6 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
-
 	case tui.LayerWheelMsg, tea.MouseWheelMsg:
 		var wheelBtn tea.MouseButton
 		if mwMsg, ok := msg.(tea.MouseWheelMsg); ok {
@@ -882,7 +882,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			editorStyles.Focused.GutterDeleted = tui.SemanticRawStyle("MarkerDeleted")
 			editorStyles.Focused.GutterModified = tui.SemanticRawStyle("MarkerModified")
 			editorStyles.Focused.GutterInvalid = tui.SemanticRawStyle("MarkerInvalid")
-			
+
 			editorStyles.Blurred.LineNumber = tui.SemanticRawStyle("LineNumber")
 			editorStyles.Blurred.LineNumberSelected = tui.SemanticRawStyle("LineNumberSelected")
 			editorStyles.Blurred.LineNumberModified = tui.SemanticRawStyle("LineNumberModified")
@@ -1323,7 +1323,7 @@ func (m *TabbedVarsEditorModel) renderSubtitle() string {
 	renderLine := func(raw string) string {
 		processed := theme.ToThemeANSI(raw)
 		w := lipgloss.Width(processed)
-		padded := processed + strings.Repeat(" ", m.contentWidth-w)
+		padded := processed + strutil.Repeat(" ", m.contentWidth-w)
 		return tui.MaintainBackground(bgStyle.Render(padded), bgStyle)
 	}
 
@@ -1339,7 +1339,7 @@ func (m *TabbedVarsEditorModel) renderSubtitle() string {
 
 		// Word-wrap description onto continuation lines, indented to align with value
 		if tab.description != "" {
-			indent := strings.Repeat(" ", headingLabelW)
+			indent := strutil.Repeat(" ", headingLabelW)
 			valueW := m.contentWidth - headingLabelW
 			if valueW < 10 {
 				valueW = 10
@@ -1557,14 +1557,14 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 		evOpts[0] = appenv.VarOption{Display: "Original Value", Value: evOrigVal, Help: "Restore the value from before editing."}
 		copy(evOpts[1:], opts)
 		evTab := tab
-		
+
 		varHelp := ""
 		if desc := appenv.GetVarHelpText(evVarName); desc != "" {
 			varHelp = desc
 		} else if vm, ok := evTab.appMeta.GetVarMeta(evVarName, evTab.spec.App); ok && vm.HelpText != "" {
 			varHelp = vm.HelpText
 		}
-		
+
 		items = append(items, tui.ContextMenuItem{
 			Label: "Edit Value",
 			Help:  "Open the value editor for this variable.",
@@ -1709,7 +1709,6 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 		return tui.ShowDialogMsg{Dialog: tui.NewContextMenuModel(x, y, m.width, m.height, items)}
 	}
 }
-
 
 // showAddVarDialog opens the Add Variable dialog (ctrl+a) for the active app tab.
 // Falls back to the free-form PromptText for non-app tabs.

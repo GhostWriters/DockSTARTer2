@@ -114,7 +114,7 @@ func Overlay(foreground, background string, hPos, vPos OverlayPosition, xOffset,
 		x = 0
 	}
 	if y < 0 {
-		pad := strings.Repeat(strings.Repeat(" ", bgWidth)+"\n", -y)
+		pad := strutil.Repeat(strutil.Repeat(" ", bgWidth)+"\n", -y)
 		background = pad + background
 		y = 0
 	}
@@ -330,13 +330,13 @@ func padToSize(content string, width, height int) string {
 	for i, line := range lines {
 		lineW := lipgloss.Width(line)
 		if lineW < width {
-			lines[i] = line + strings.Repeat(" ", width-lineW)
+			lines[i] = line + strutil.Repeat(" ", width-lineW)
 		}
 	}
 
 	// Add empty lines to reach height
 	for len(lines) < height {
-		lines = append(lines, strings.Repeat(" ", width))
+		lines = append(lines, strutil.Repeat(" ", width))
 	}
 
 	return strings.Join(lines, "\n")

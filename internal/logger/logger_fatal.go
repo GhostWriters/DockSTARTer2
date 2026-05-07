@@ -3,6 +3,7 @@ package logger
 import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/version"
 	"context"
 	"fmt"
@@ -161,7 +162,7 @@ func FatalWithStackSkip(ctx context.Context, skip int, msg any, args ...any) {
 			nextFrame := allFrames[i-1]
 			callPrefix := "{{|TraceFrameLines|}}│{{[-]}}"
 			// Calculate indent for the call line (FrameNumber + 2 + arrowIndent length)
-			callLineIndent := strings.Repeat(" ", width+2+len(indent))
+			callLineIndent := strutil.Repeat(" ", width+2+len(indent))
 
 			// Look up arguments for the function being CALLED (nextFrame)
 			args := "(...)"

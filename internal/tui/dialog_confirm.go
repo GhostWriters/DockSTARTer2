@@ -19,7 +19,6 @@ type confirmDialogModel struct {
 	onResult   func(bool) tea.Msg
 }
 
-
 // newConfirmDialog creates a new confirmation dialog
 func newConfirmDialog(title, question string, defaultYes bool) *confirmDialogModel {
 	return &confirmDialogModel{

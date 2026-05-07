@@ -217,7 +217,6 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		regions = append(regions, m.Scroll.HitRegions(sbX, offsetY+listY, baseZ, m.title)...)
 	}
 
-
 	// 4. Button regions
 	specs := m.getButtonSpecs()
 	if len(specs) > 0 {
@@ -242,7 +241,7 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		if !m.subMenuMode {
 			// Matches innerBoxWidth in ViewString: outer border + margin
 			buttonX += layout.LeftOffset()
-			contentWidth -= layout.ContentMarginWidth()                      // Subtract margin padding
+			contentWidth -= layout.ContentMarginWidth() // Subtract margin padding
 		}
 
 		// Background region covering the whole button row

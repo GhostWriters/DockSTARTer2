@@ -200,7 +200,7 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 			}
 			var cmd tea.Cmd
 			if m.backdrop != nil {
-			updated, bCmd := m.backdrop.Update(LayerWheelMsg{ID: IDStatusBar, Button: wheelMsg.Button, Hit: hit})
+				updated, bCmd := m.backdrop.Update(LayerWheelMsg{ID: IDStatusBar, Button: wheelMsg.Button, Hit: hit})
 				if backdrop, ok := updated.(*BackdropModel); ok {
 					m.backdrop = backdrop
 				}

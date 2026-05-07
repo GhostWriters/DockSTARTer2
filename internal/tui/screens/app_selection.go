@@ -19,7 +19,7 @@ func getAppSelectionLegend() string {
 	cbChecked, cbUnchecked := "[{{|TagSelected|}}x{{[-]}}]", "[{{|TagSelected|}} {{[-]}}]"
 	if ctx.LineCharacters {
 		l, r = "▸", "◂"
-		cbChecked = "{{|TagSelected|}}\u25A3{{[-]}}" // checkSelected (▣)
+		cbChecked = "{{|TagSelected|}}\u25A3{{[-]}}"   // checkSelected (▣)
 		cbUnchecked = "{{|TagSelected|}}\u25A1{{[-]}}" // checkUnselected (□)
 	}
 
@@ -64,20 +64,22 @@ type AppSelectionScreen struct {
 	connType                string
 }
 
-func (s *AppSelectionScreen) Init() tea.Cmd                             { return s.menu.Init() }
-func (s *AppSelectionScreen) View() tea.View                           { return s.menu.View() }
-func (s *AppSelectionScreen) ViewString() string                       { return s.menu.ViewString() }
-func (s *AppSelectionScreen) Title() string                            { return s.menu.Title() }
-func (s *AppSelectionScreen) HelpText() string                         { return s.menu.HelpText() }
-func (s *AppSelectionScreen) SetSize(w, h int)                         { s.menu.SetSize(w, h) }
-func (s *AppSelectionScreen) SetFocused(f bool)                        { s.menu.SetFocused(f) }
-func (s *AppSelectionScreen) IsMaximized() bool                        { return s.menu.IsMaximized() }
-func (s *AppSelectionScreen) HasDialog() bool                          { return s.menu.HasDialog() }
-func (s *AppSelectionScreen) MenuName() string                         { return s.menu.MenuName() }
-func (s *AppSelectionScreen) IsDestructive() bool                      { return true }
-func (s *AppSelectionScreen) Layers() []*lipgloss.Layer                { return s.menu.Layers() }
-func (s *AppSelectionScreen) GetHitRegions(x, y int) []tui.HitRegion  { return s.menu.GetHitRegions(x, y) }
-func (s *AppSelectionScreen) IsScrollbarDragging() bool       { return s.menu.IsScrollbarDragging() }
+func (s *AppSelectionScreen) Init() tea.Cmd             { return s.menu.Init() }
+func (s *AppSelectionScreen) View() tea.View            { return s.menu.View() }
+func (s *AppSelectionScreen) ViewString() string        { return s.menu.ViewString() }
+func (s *AppSelectionScreen) Title() string             { return s.menu.Title() }
+func (s *AppSelectionScreen) HelpText() string          { return s.menu.HelpText() }
+func (s *AppSelectionScreen) SetSize(w, h int)          { s.menu.SetSize(w, h) }
+func (s *AppSelectionScreen) SetFocused(f bool)         { s.menu.SetFocused(f) }
+func (s *AppSelectionScreen) IsMaximized() bool         { return s.menu.IsMaximized() }
+func (s *AppSelectionScreen) HasDialog() bool           { return s.menu.HasDialog() }
+func (s *AppSelectionScreen) MenuName() string          { return s.menu.MenuName() }
+func (s *AppSelectionScreen) IsDestructive() bool       { return true }
+func (s *AppSelectionScreen) Layers() []*lipgloss.Layer { return s.menu.Layers() }
+func (s *AppSelectionScreen) GetHitRegions(x, y int) []tui.HitRegion {
+	return s.menu.GetHitRegions(x, y)
+}
+func (s *AppSelectionScreen) IsScrollbarDragging() bool { return s.menu.IsScrollbarDragging() }
 
 func (s *AppSelectionScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m, cmd := s.menu.Update(msg)
@@ -553,124 +555,124 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 		}
 
 		switch keyMsg.String() {
-	case "up":
-		s.navUp(m, items, idx, item)
-		return nil, true
-	case "down":
-		s.navDown(m, items, idx, item)
-		return nil, true
-	case "pgup", "ctrl+b", "ctrl+up", "ctrl+u":
-		if s.isSubRow(item) {
-			first := idx
-			for i := idx - 1; i >= 0; i-- {
-				if items[i].BaseApp != item.BaseApp || !s.isSubRow(items[i]) {
-					break
-				}
-				first = i
-			}
-			m.Select(first)
-		} else {
-			const pageSize = 5
-			moved, cur := 0, idx
-			for i := idx - 1; i >= 0 && moved < pageSize; i-- {
-				if !items[i].IsSeparator && !s.isSubRow(items[i]) {
-					cur = i
-					moved++
-				}
-			}
-			m.Select(cur)
-		}
-		return nil, true
-	case "pgdown", "ctrl+f", "ctrl+down", "ctrl+d":
-		if s.isSubRow(item) {
-			last := idx
-			for i := idx + 1; i < len(items); i++ {
-				if items[i].BaseApp != item.BaseApp || !s.isSubRow(items[i]) {
-					break
-				}
-				last = i
-			}
-			m.Select(last)
-		} else {
-			const pageSize = 5
-			moved, cur := 0, idx
-			for i := idx + 1; i < len(items) && moved < pageSize; i++ {
-				if !items[i].IsSeparator && !s.isSubRow(items[i]) {
-					cur = i
-					moved++
-				}
-			}
-			m.Select(cur)
-		}
-		return nil, true
-	case "home", "ctrl+home":
-		if s.isSubRow(item) {
-			first := idx
-			for i := idx - 1; i >= 0; i-- {
-				if items[i].BaseApp != item.BaseApp || !s.isSubRow(items[i]) {
-					break
-				}
-				first = i
-			}
-			m.Select(first)
-		} else {
-			for i := 0; i < len(items); i++ {
-				if !items[i].IsSeparator && !s.isSubRow(items[i]) {
-					m.Select(i)
-					break
-				}
-			}
-		}
-		return nil, true
-	case "end", "ctrl+end":
-		if s.isSubRow(item) {
-			last := idx
-			for i := idx + 1; i < len(items); i++ {
-				if items[i].BaseApp != item.BaseApp || !s.isSubRow(items[i]) {
-					break
-				}
-				last = i
-			}
-			m.Select(last)
-		} else {
-			for i := len(items) - 1; i >= 0; i-- {
-				if !items[i].IsSeparator && !s.isSubRow(items[i]) {
-					m.Select(i)
-					break
-				}
-			}
-		}
-		return nil, true
-	case "space":
-		s.toggleItem(idx)
-		return nil, true
-	case "f2":
-		if item.IsSubItem {
-			s.startRenaming(idx)
+		case "up":
+			s.navUp(m, items, idx, item)
 			return nil, true
-		}
-		if item.IsAddInstance {
-			s.startEditing(item.BaseApp)
+		case "down":
+			s.navDown(m, items, idx, item)
 			return nil, true
-		}
-		if !item.IsGroupHeader && !item.IsSeparator && !item.IsEditing && item.IsCheckbox {
-			// Fast-Rename: Expand and immediately rename base instance
-			s.expandGroup(item.BaseApp)
-			s.collapseAllEmptyGroups(item.BaseApp)
-			
-			// Find the newly expanded base instance row
-			newItems := m.GetItems()
-			for i, it := range newItems {
-				if it.IsSubItem && it.BaseApp == item.BaseApp && it.Metadata["appName"] == item.BaseApp {
-					m.Select(i)
-					if !it.IsReferenced && !it.WasAdded {
-						s.startRenaming(i)
+		case "pgup", "ctrl+b", "ctrl+up", "ctrl+u":
+			if s.isSubRow(item) {
+				first := idx
+				for i := idx - 1; i >= 0; i-- {
+					if items[i].BaseApp != item.BaseApp || !s.isSubRow(items[i]) {
+						break
 					}
-					break
+					first = i
+				}
+				m.Select(first)
+			} else {
+				const pageSize = 5
+				moved, cur := 0, idx
+				for i := idx - 1; i >= 0 && moved < pageSize; i-- {
+					if !items[i].IsSeparator && !s.isSubRow(items[i]) {
+						cur = i
+						moved++
+					}
+				}
+				m.Select(cur)
+			}
+			return nil, true
+		case "pgdown", "ctrl+f", "ctrl+down", "ctrl+d":
+			if s.isSubRow(item) {
+				last := idx
+				for i := idx + 1; i < len(items); i++ {
+					if items[i].BaseApp != item.BaseApp || !s.isSubRow(items[i]) {
+						break
+					}
+					last = i
+				}
+				m.Select(last)
+			} else {
+				const pageSize = 5
+				moved, cur := 0, idx
+				for i := idx + 1; i < len(items) && moved < pageSize; i++ {
+					if !items[i].IsSeparator && !s.isSubRow(items[i]) {
+						cur = i
+						moved++
+					}
+				}
+				m.Select(cur)
+			}
+			return nil, true
+		case "home", "ctrl+home":
+			if s.isSubRow(item) {
+				first := idx
+				for i := idx - 1; i >= 0; i-- {
+					if items[i].BaseApp != item.BaseApp || !s.isSubRow(items[i]) {
+						break
+					}
+					first = i
+				}
+				m.Select(first)
+			} else {
+				for i := 0; i < len(items); i++ {
+					if !items[i].IsSeparator && !s.isSubRow(items[i]) {
+						m.Select(i)
+						break
+					}
 				}
 			}
 			return nil, true
-		}
+		case "end", "ctrl+end":
+			if s.isSubRow(item) {
+				last := idx
+				for i := idx + 1; i < len(items); i++ {
+					if items[i].BaseApp != item.BaseApp || !s.isSubRow(items[i]) {
+						break
+					}
+					last = i
+				}
+				m.Select(last)
+			} else {
+				for i := len(items) - 1; i >= 0; i-- {
+					if !items[i].IsSeparator && !s.isSubRow(items[i]) {
+						m.Select(i)
+						break
+					}
+				}
+			}
+			return nil, true
+		case "space":
+			s.toggleItem(idx)
+			return nil, true
+		case "f2":
+			if item.IsSubItem {
+				s.startRenaming(idx)
+				return nil, true
+			}
+			if item.IsAddInstance {
+				s.startEditing(item.BaseApp)
+				return nil, true
+			}
+			if !item.IsGroupHeader && !item.IsSeparator && !item.IsEditing && item.IsCheckbox {
+				// Fast-Rename: Expand and immediately rename base instance
+				s.expandGroup(item.BaseApp)
+				s.collapseAllEmptyGroups(item.BaseApp)
+
+				// Find the newly expanded base instance row
+				newItems := m.GetItems()
+				for i, it := range newItems {
+					if it.IsSubItem && it.BaseApp == item.BaseApp && it.Metadata["appName"] == item.BaseApp {
+						m.Select(i)
+						if !it.IsReferenced && !it.WasAdded {
+							s.startRenaming(i)
+						}
+						break
+					}
+				}
+				return nil, true
+			}
 		}
 	}
 

@@ -16,9 +16,9 @@ import (
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/sessionlocks"
 
-	"github.com/charmbracelet/ssh"
 	"charm.land/wish/v2"
 	"charm.land/wish/v2/logging"
+	"github.com/charmbracelet/ssh"
 )
 
 // StartSSHServer starts the wish SSH server using settings from cfg.

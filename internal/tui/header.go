@@ -461,4 +461,3 @@ func (m *HeaderModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 
 	return regions
 }
-

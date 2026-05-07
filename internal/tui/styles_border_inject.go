@@ -14,13 +14,27 @@ var ansiSeqRe = regexp.MustCompile(`\x1b\[[\d;]*m`)
 // Returns "" if no flags are set.
 func ansiCodeFromFlags(f theme.StyleFlags) string {
 	var codes []string
-	if f.Bold          { codes = append(codes, "1") }
-	if f.Dim           { codes = append(codes, "2") }
-	if f.Italic        { codes = append(codes, "3") }
-	if f.Underline     { codes = append(codes, "4") }
-	if f.Blink         { codes = append(codes, "5") }
-	if f.Reverse       { codes = append(codes, "7") }
-	if f.Strikethrough { codes = append(codes, "9") }
+	if f.Bold {
+		codes = append(codes, "1")
+	}
+	if f.Dim {
+		codes = append(codes, "2")
+	}
+	if f.Italic {
+		codes = append(codes, "3")
+	}
+	if f.Underline {
+		codes = append(codes, "4")
+	}
+	if f.Blink {
+		codes = append(codes, "5")
+	}
+	if f.Reverse {
+		codes = append(codes, "7")
+	}
+	if f.Strikethrough {
+		codes = append(codes, "9")
+	}
 	if len(codes) == 0 {
 		return ""
 	}

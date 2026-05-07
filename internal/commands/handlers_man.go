@@ -4,22 +4,22 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"golang.org/x/term"
 	"os"
 	"regexp"
-	"golang.org/x/term"
 
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/graphics"
 	"DockSTARTer2/internal/logger"
 
 	// "github.com/eliukblau/pixterm/pkg/ansimage"
+	_ "github.com/gen2brain/svg"
 	"github.com/pgavlin/goldmark"
 	"github.com/pgavlin/goldmark/renderer"
 	"github.com/pgavlin/goldmark/text"
 	"github.com/pgavlin/goldmark/util"
 	kit_renderer "github.com/pgavlin/markdown-kit/renderer"
 	"github.com/pgavlin/markdown-kit/styles"
-	_ "github.com/gen2brain/svg"
 )
 
 func HandleMan(ctx context.Context, group *CommandGroup) error {
@@ -33,7 +33,6 @@ func HandleMan(ctx context.Context, group *CommandGroup) error {
 		logger.Error(ctx, "%v", err)
 		return err
 	}
-
 
 	// Detect terminal width for proper wrapping and soft-break handling
 	width := 0
@@ -70,7 +69,6 @@ func HandleMan(ctx context.Context, group *CommandGroup) error {
 	parser := goldmark.DefaultParser()
 	doc := parser.Parse(text.NewReader(source))
 
-
 	var buf bytes.Buffer
 	if err := mainR.Render(&buf, source, doc); err != nil {
 		return err
@@ -79,4 +77,3 @@ func HandleMan(ctx context.Context, group *CommandGroup) error {
 	os.Stdout.Write(buf.Bytes())
 	return nil
 }
-

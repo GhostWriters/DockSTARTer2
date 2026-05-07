@@ -62,7 +62,6 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Middle click triggers toggle on the currently focused item
 		return m.handleSpace()
 
-
 	case tea.MouseClickMsg:
 
 	case tea.MouseReleaseMsg:
@@ -70,8 +69,6 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case LayerHitMsg:
-
-
 
 		// Handle specific item clicks
 		id := msg.ID
@@ -260,7 +257,6 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		keyMsg := msg
 		switch {
-
 
 		// Tab / ShiftTab: switch between screen-level elements
 		// (e.g., menu dialog ↔ header version widget in the future)
@@ -838,7 +834,6 @@ func (m *MenuModel) scrollHalfPageDown() {
 	m.cursor = m.list.Index()
 	menuSelectedIndices[m.id] = m.cursor
 }
-
 
 // calculateSectionLayout distributes available height among content sections.
 // Fixed sections (flowMode) get their intrinsic height; the remaining height goes

@@ -86,7 +86,6 @@ func (m *MenuModel) renderSimpleButtons(contentWidth int) string {
 	return renderCenteredButtonsImpl(contentWidth, useBorders, GetActiveContext(), specs...)
 }
 
-
 func (m *MenuModel) renderButtonBox(buttons string, contentWidth int) string {
 	styles := GetStyles()
 

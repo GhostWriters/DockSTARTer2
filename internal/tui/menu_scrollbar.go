@@ -135,6 +135,7 @@ func ApplyScrollbarColumnTracked(content string, total, visible, offset int, lin
 	res := ApplyScrollbar(&sb, content, total, visible, offset, lineChars, ctx)
 	return res, sb.Info
 }
+
 // representing a vertical scrollbar column, given pre-computed geometry.
 //
 // When info.Needed is false the column is filled with blank styled spaces.
@@ -518,7 +519,7 @@ func BuildScrollPercentBottomBorder(totalWidth int, scrollPct float64, focused b
 	rightConnector := borderStyle.Render(rightT)
 	rightPart := borderStyle.Render(strutil.Repeat(border.Bottom, max(0, rightPadCnt)) + border.BottomRight)
 	return lipgloss.JoinHorizontal(lipgloss.Bottom, leftPart, leftConnector, scrollIndicator, rightConnector, rightPart)
-}// ScrollbarHitRegions returns a slice of granular hit regions for a scrollbar column.
+} // ScrollbarHitRegions returns a slice of granular hit regions for a scrollbar column.
 // baseID is the prefix for hit IDs (e.g. "my-list").
 // sbX, sbAbsTopY: absolute screen coordinates of the top-left of the scrollbar column.
 // info: the ScrollbarInfo describing the geometry of the scrollbar.
@@ -775,4 +776,3 @@ func HandleScrollbarLayerHit(baseID string, msg LayerHitMsg, currentOffset, tota
 
 	return newOffset, changed
 }
-

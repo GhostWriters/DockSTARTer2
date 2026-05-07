@@ -538,7 +538,6 @@ func (s *DisplayOptionsScreen) HasDialog() bool {
 	return s.themeMenu.HasDialog() || s.optionsMenu.HasDialog()
 }
 
-
 // MinHeight returns the minimum content-area height needed for the Appearance Settings
 // screen to remain interactive. Used by AppModel to limit log panel expansion.
 // Breakdown: outer border(2) + theme section(5) + options section(4) + bordered buttons(3) = 14.

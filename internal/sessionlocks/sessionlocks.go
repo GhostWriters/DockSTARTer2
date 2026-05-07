@@ -1,13 +1,13 @@
 package sessionlocks
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-	"context"
 
 	"DockSTARTer2/internal/paths"
 	"github.com/gofrs/flock"
@@ -70,8 +70,8 @@ type SessionManager struct {
 
 	editLockPath      string // $STATE/locks/edit.lock
 	serverPIDPath     string // $STATE/locks/server.pid
-	disconnectReqPath  string // $STATE/disconnect.request
-	stopReqPath        string // $STATE/stop.request
+	disconnectReqPath string // $STATE/disconnect.request
+	stopReqPath       string // $STATE/stop.request
 
 	localOwner string // tracks which part of the current process holds the lock (e.g. "Menu", "Console")
 }

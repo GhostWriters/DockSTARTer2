@@ -17,10 +17,10 @@ func NewOptionsMenuScreen(isRoot bool, connType string) tui.ScreenModel {
 			Action: func() tea.Msg { return tui.NavigateMsg{Screen: NewDisplayOptionsScreen(false, connType)} },
 		},
 		{
-			Tag:    "Server",
-			Desc:   "SSH and Web Server Settings",
-			Help:   "Configure remote access to the DS2 TUI via SSH or browser",
-			Action: func() tea.Msg { return tui.NavigateMsg{Screen: NewServerOptionsScreen(false, connType)} },
+			Tag:           "Server",
+			Desc:          "SSH and Web Server Settings",
+			Help:          "Configure remote access to the DS2 TUI via SSH or browser",
+			Action:        func() tea.Msg { return tui.NavigateMsg{Screen: NewServerOptionsScreen(false, connType)} },
 			IsDestructive: true,
 		},
 	}

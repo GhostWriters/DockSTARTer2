@@ -59,6 +59,8 @@ func init() {
 		[]string{"main", "options"})
 
 	tui.RegisterScreen("app-select",
-		func(isRoot bool, connType string) tui.ScreenModel { return NewAppSelectionScreen(config.LoadAppConfig(), isRoot, connType) },
+		func(isRoot bool, connType string) tui.ScreenModel {
+			return NewAppSelectionScreen(config.LoadAppConfig(), isRoot, connType)
+		},
 		[]string{"main", "config"})
 }

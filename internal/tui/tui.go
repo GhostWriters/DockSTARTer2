@@ -33,7 +33,6 @@ var (
 	// currentConfig holds the loaded app configuration
 	currentConfig config.AppConfig
 
-
 	// CurrentPageName tracks the active menu page for re-execution
 	CurrentPageName string
 
@@ -181,6 +180,7 @@ func startWindowSizeForwarder(ctx context.Context, p *tea.Program, opts ProgramO
 		}
 	}()
 }
+
 // IsDestructive reports whether this menu can modify data.
 // Default for MenuModel is false (read-only navigation).
 func (m *MenuModel) IsDestructive() bool { return false }
@@ -1086,6 +1086,7 @@ func CloseDialogWithResult(result any) tea.Cmd {
 		return CloseDialogMsg{Result: result}
 	}
 }
+
 // GetConnType returns the connection type of the active session.
 func GetConnType() string {
 	if program == nil {

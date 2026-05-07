@@ -12,13 +12,13 @@ import (
 
 	"DockSTARTer2/cmd"
 	"DockSTARTer2/internal/assets"
-	"charm.land/lipgloss/v2"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/serve"
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/update"
 	"DockSTARTer2/internal/version"
+	"charm.land/lipgloss/v2"
 )
 
 func main() {

@@ -421,7 +421,7 @@ type ThemeDefaults struct {
 	BorderColor       *int    `toml:"border_color"`
 	DialogTitleAlign  *string `toml:"dialog_title_align"`
 	SubmenuTitleAlign *string `toml:"submenu_title_align"`
-	PanelTitleAlign     *string `toml:"panel_title_align"`
+	PanelTitleAlign   *string `toml:"panel_title_align"`
 	// Panel modes: themes may suggest "log" or "none" but never "console".
 	// Any attempt to set "console" via a theme is silently clamped to "log".
 	PanelLocal  *string `toml:"panel_local"`
@@ -686,6 +686,7 @@ func ClearSemanticCachePrefix(prefix string) {
 		}
 	}
 }
+
 // ToThemeANSI translates text with theme tags into ANSI escape sequences strictly using the theme registry.
 func ToThemeANSI(text string) string {
 	return console.ToThemeANSI(text)

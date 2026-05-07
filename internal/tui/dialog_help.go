@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"DockSTARTer2/internal/graphics"
+	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
 
 	"github.com/charmbracelet/x/ansi"
@@ -17,10 +18,11 @@ import (
 	"github.com/pgavlin/goldmark/renderer"
 	"github.com/pgavlin/goldmark/text"
 	"github.com/pgavlin/goldmark/util"
+
 	// "golang.org/x/term"
+	_ "github.com/gen2brain/svg"
 	kit_renderer "github.com/pgavlin/markdown-kit/renderer"
 	"github.com/pgavlin/markdown-kit/styles"
-	_ "github.com/gen2brain/svg"
 
 	"charm.land/bubbles/v2/help"
 	keybind "charm.land/bubbles/v2/key"
@@ -330,8 +332,6 @@ func (m *HelpDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-
-
 // ViewString returns the dialog content as a string for compositing
 func (m *HelpDialogModel) ViewString() string {
 	if m.width == 0 || m.height == 0 {
@@ -576,17 +576,23 @@ func (m *HelpDialogModel) ViewString() string {
 		if boxTargetH < 5 {
 			boxTargetH = 5
 		}
-		
+
 		var displayLines []string
 		visibleRows := boxTargetH - 2
-		if visibleRows < 1 { visibleRows = 1 }
-		
+		if visibleRows < 1 {
+			visibleRows = 1
+		}
+
 		// Clamp offset
-		if m.contextOffset < 0 { m.contextOffset = 0 }
+		if m.contextOffset < 0 {
+			m.contextOffset = 0
+		}
 		if boxTotalLines > 0 && m.contextOffset > boxTotalLines-visibleRows {
 			m.contextOffset = boxTotalLines - visibleRows
 		}
-		if m.contextOffset < 0 { m.contextOffset = 0 }
+		if m.contextOffset < 0 {
+			m.contextOffset = 0
+		}
 		boxOffset = m.contextOffset
 
 		for i := 0; i < visibleRows && (i+boxOffset) < boxTotalLines; i++ {
@@ -594,7 +600,7 @@ func (m *HelpDialogModel) ViewString() string {
 			if lw := lipgloss.Width(line); lw > docTextW {
 				line = TruncateRight(line, docTextW)
 			} else if lw < docTextW {
-				line += strings.Repeat(" ", docTextW-lw)
+				line += strutil.Repeat(" ", docTextW-lw)
 			}
 			displayLines = append(displayLines, line)
 		}
@@ -606,22 +612,34 @@ func (m *HelpDialogModel) ViewString() string {
 		}
 		boxTotalLines = len(itemLines)
 		boxTargetW = targetWidth
-		
+
 		maxCtxH := availH - 4
-		if maxCtxH < 5 { maxCtxH = 5 }
+		if maxCtxH < 5 {
+			maxCtxH = 5
+		}
 		boxTargetH = boxTotalLines + 2
-		if boxTargetH < 3 { boxTargetH = 3 }
-		if boxTargetH > maxCtxH { boxTargetH = maxCtxH }
-		
+		if boxTargetH < 3 {
+			boxTargetH = 3
+		}
+		if boxTargetH > maxCtxH {
+			boxTargetH = maxCtxH
+		}
+
 		visibleRows := boxTargetH - 2
-		if visibleRows < 1 { visibleRows = 1 }
-		
+		if visibleRows < 1 {
+			visibleRows = 1
+		}
+
 		// Clamp offset
-		if m.contextOffset < 0 { m.contextOffset = 0 }
+		if m.contextOffset < 0 {
+			m.contextOffset = 0
+		}
 		if boxTotalLines > 0 && m.contextOffset > boxTotalLines-visibleRows {
 			m.contextOffset = boxTotalLines - visibleRows
 		}
-		if m.contextOffset < 0 { m.contextOffset = 0 }
+		if m.contextOffset < 0 {
+			m.contextOffset = 0
+		}
 		boxOffset = m.contextOffset
 
 		var displayLines []string
@@ -671,7 +689,9 @@ func (m *HelpDialogModel) ViewString() string {
 			visibleRows := boxTargetH - 2
 			if boxTotalLines > visibleRows {
 				scrollPct = float64(boxOffset) / float64(boxTotalLines-visibleRows)
-				if scrollPct > 1.0 { scrollPct = 1.0 }
+				if scrollPct > 1.0 {
+					scrollPct = 1.0
+				}
 			}
 			boxLines := strings.Split(scrollBox, "\n")
 			if len(boxLines) > 0 {
@@ -717,7 +737,7 @@ func (m *HelpDialogModel) ViewString() string {
 			line = strings.TrimRight(line, " ")
 			paddedLine := " " + line
 			if w := lipgloss.Width(paddedLine); w < targetWidth {
-				paddedLine += strings.Repeat(" ", targetWidth-w)
+				paddedLine += strutil.Repeat(" ", targetWidth-w)
 			}
 			bindingContent = append(bindingContent, paddedLine)
 		}
@@ -838,7 +858,7 @@ func (m *HelpDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		ZOrder: ZScreen,
 		Label:  "Help",
 	})
-	
+
 	layout := GetLayout()
 	// Using offsetX (border) + 1 (border width) + SideMargin (1) = offsetX + 2.
 	// This covers the interactive area where text is displayed.
@@ -922,4 +942,3 @@ func (m *HelpDialogModel) calculateLayout() {
 		Overhead: overhead,
 	}
 }
-

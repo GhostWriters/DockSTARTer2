@@ -12,17 +12,17 @@ import (
 // instead of the bash :AppName / AppName: string conventions.
 type MenuHeadingParams struct {
 	// Application block (omitted when AppName is empty)
-	AppName         string
-	AppDescription  string // Word-wrapped to contentWidth - labelW
-	AppIsDeprecated bool
-	AppIsDisabled   bool
+	AppName          string
+	AppDescription   string // Word-wrapped to contentWidth - labelW
+	AppIsDeprecated  bool
+	AppIsDisabled    bool
 	AppIsUserDefined bool
 
 	// File line (omitted when FilePath is empty)
 	FilePath string
 
 	// Variable line (omitted when VarName is empty)
-	VarName         string
+	VarName          string
 	VarIsUserDefined bool
 
 	// Value lines (omitted when empty)
@@ -49,7 +49,7 @@ func FormatMenuHeading(p MenuHeadingParams, contentWidth int) string {
 	labelW := menuLabelW
 
 	label := func(s string) string { return fmt.Sprintf("%*s", labelW, s) }
-	indent := strings.Repeat(" ", labelW)
+	indent := strutil.Repeat(" ", labelW)
 
 	// Determine which field is "primary" (HeadingValue).
 	// Priority order matches bash: CurrentValue first, AppName last.

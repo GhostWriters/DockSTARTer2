@@ -1,11 +1,11 @@
 package tui
 
 import (
-	"fmt"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/theme"
+	"fmt"
 
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
@@ -376,7 +376,9 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				subModel = confirm
 			} else {
 				prompt := newPromptDialog(msg.Title, msg.Question, msg.Sensitive)
-				prompt.onResult = func(r string, c bool) tea.Msg { return SubDialogResultMsg{Result: promptResultMsg{result: r, confirmed: c}} }
+				prompt.onResult = func(r string, c bool) tea.Msg {
+					return SubDialogResultMsg{Result: promptResultMsg{result: r, confirmed: c}}
+				}
 				subModel = prompt
 			}
 			return m, func() tea.Msg {
@@ -635,7 +637,6 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	return m, logger.BatchRecoverTUI(m.ctx, cmds...)
 }
-
 
 // setPanelFocus updates panelFocused and tells the active screen to
 // unfocus/refocus its border accordingly (if it supports the interface).

@@ -263,7 +263,7 @@ func TestVarNameIsValid(t *testing.T) {
 		{"Radarr__TAG", "", true},
 		{"RADARR__4K__TAG", "", true},
 		{"RADARR__4K__tag", "", true},
-		{"RADARR:varname", "", true},  // colon-format
+		{"RADARR:varname", "", true}, // colon-format
 		{"2TZ", "", false},
 		{"2radarr:radarr", "", false},
 		{"radarr:varname", "", true}, // case-insensitive appname
