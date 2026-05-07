@@ -22,6 +22,10 @@ func SetPermissions(ctx context.Context, path string) {
 		return
 	}
 
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return
+	}
+
 	// 1. System path check
 	if isSystemPath(path) {
 		logger.Error(ctx, "Skipping permissions on '{{|Folder|}}%s{{[-]}}' because it is a system path.", path)
@@ -68,6 +72,10 @@ func TakeOwnership(ctx context.Context, path string) {
 	}
 
 	if path == "" {
+		return
+	}
+
+	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return
 	}
 
