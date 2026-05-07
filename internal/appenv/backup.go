@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -74,25 +75,19 @@ func BackupEnv(ctx context.Context, envFile string, conf config.AppConfig) error
 
 	// 3. Setup backup paths
 	composeBackupsFolder := filepath.Join(expandedVolumeConfig, ".compose.backups")
-	backupTime := time.Now().Format("20060102.15.04.05")
-
 	composeFolderName := filepath.Base(composeFolder)
-	backupFolder := filepath.Join(composeBackupsFolder, fmt.Sprintf("%s.%s", composeFolderName, backupTime))
 
-	// 4. Create backup folder
-	if _, err := os.Stat(backupFolder); os.IsNotExist(err) {
-		logger.Notice(ctx, "Backing up user files to folder:")
-		logger.Notice(ctx, "\t'{{|Folder|}}%s{{[-]}}'", backupFolder)
-		logger.Info(ctx, "Creating folder '{{|Folder|}}%s{{[-]}}'.", backupFolder)
-		if err := os.MkdirAll(backupFolder, 0755); err != nil {
-			logger.FatalWithStack(ctx, []string{
-				"Failed to create folder.",
-				"Failing command: {{|FailingCommand|}}mkdir -p \"%s\"{{[-]}}",
-			}, backupFolder)
+	// Retry until we find a folder name that doesn't already exist.
+	var backupFolder string
+	for {
+		backupFolder = filepath.Join(composeBackupsFolder, fmt.Sprintf("%s.%s", composeFolderName, time.Now().Format("20060102.15.04.05")))
+		if _, err := os.Stat(backupFolder); os.IsNotExist(err) {
+			break
 		}
+		time.Sleep(time.Second)
 	}
 
-	// 5. Gather and Copy files
+	// 4. Gather and Copy files
 	var backupList []string
 
 	// Main .env
@@ -120,7 +115,18 @@ func BackupEnv(ctx context.Context, envFile string, conf config.AppConfig) error
 		backupList = append(backupList, composeOverride)
 	}
 
+	sort.Strings(backupList)
+
 	if len(backupList) > 0 {
+		logger.Notice(ctx, "Backing up user files to folder:")
+		logger.Notice(ctx, "\t'{{|Folder|}}%s{{[-]}}'", backupFolder)
+		logger.Info(ctx, "Creating folder '{{|Folder|}}%s{{[-]}}'.", backupFolder)
+		if err := os.MkdirAll(backupFolder, 0755); err != nil {
+			logger.FatalWithStack(ctx, []string{
+				"Failed to create folder.",
+				"Failing command: {{|FailingCommand|}}mkdir -p \"%s\"{{[-]}}",
+			}, backupFolder)
+		}
 		logger.Info(ctx, "Backing up files:")
 		for _, item := range backupList {
 			logger.Info(ctx, "\t'{{|File|}}%s{{[-]}}'", item)
@@ -135,6 +141,8 @@ func BackupEnv(ctx context.Context, envFile string, conf config.AppConfig) error
 				}
 			}
 		}
+	} else {
+		logger.Info(ctx, "No files to backup.")
 	}
 
 	// run_script 'set_permissions' "${COMPOSE_BACKUPS_FOLDER}"
@@ -142,7 +150,7 @@ func BackupEnv(ctx context.Context, envFile string, conf config.AppConfig) error
 
 	// info "Removing old compose backups."
 	logger.Info(ctx, "Removing old compose backups.")
-	pruneOldBackups(composeBackupsFolder, composeFolderName)
+	pruneOldBackups(ctx, composeBackupsFolder, composeFolderName)
 
 	// if [[ -d "${DOCKER_VOLUME_CONFIG}/.env.backups" ]]; then
 	legacyBackupDir := filepath.Join(expandedVolumeConfig, ".env.backups")
@@ -193,13 +201,15 @@ func sanitizePath(val string) string {
 	return val
 }
 
-func pruneOldBackups(backupsFolder, prefix string) {
+func pruneOldBackups(ctx context.Context, backupsFolder, prefix string) {
 	files, err := os.ReadDir(backupsFolder)
 	if err != nil {
 		return
 	}
 
 	threshold := time.Now().AddDate(0, 0, -3)
+	envPruneOk := true
+	composePruneOk := true
 
 	for _, f := range files {
 		fullPath := filepath.Join(backupsFolder, f.Name())
@@ -211,16 +221,27 @@ func pruneOldBackups(backupsFolder, prefix string) {
 		// find "${COMPOSE_BACKUPS_FOLDER}" -type f -name ".env.*" -mtime +3 -delete
 		if !f.IsDir() && strings.HasPrefix(f.Name(), ".env.") {
 			if info.ModTime().Before(threshold) {
-				_ = os.Remove(fullPath)
+				if err := os.Remove(fullPath); err != nil {
+					envPruneOk = false
+				}
 			}
 		}
 
 		// find "${COMPOSE_BACKUPS_FOLDER}" -type d -name "${COMPOSE_FOLDER_NAME}.*" -mtime +3 -prune -exec rm -rf {} +
 		if f.IsDir() && strings.HasPrefix(f.Name(), prefix+".") {
 			if info.ModTime().Before(threshold) {
-				_ = os.RemoveAll(fullPath)
+				if err := os.RemoveAll(fullPath); err != nil {
+					composePruneOk = false
+				}
 			}
 		}
+	}
+
+	if !envPruneOk {
+		logger.Warn(ctx, "Old .env backups not removed.")
+	}
+	if !composePruneOk {
+		logger.Warn(ctx, "Old compose backups not removed.")
 	}
 }
 
