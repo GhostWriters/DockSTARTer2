@@ -6,6 +6,7 @@ import (
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/system"
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -85,8 +86,11 @@ func Update(ctx context.Context, force bool, file string) error {
 		if len(updatedEnvLines) > 0 && !strings.HasSuffix(finalContent, "\n") {
 			finalContent += "\n"
 		}
-		if err := os.WriteFile(composeEnvFile, []byte(finalContent), 0644); err != nil {
-			return fmt.Errorf("failed to update main .env: %w", err)
+		existing, _ := os.ReadFile(composeEnvFile)
+		if !bytes.Equal(existing, []byte(finalContent)) {
+			if err := os.WriteFile(composeEnvFile, []byte(finalContent), 0644); err != nil {
+				return fmt.Errorf("failed to update main .env: %w", err)
+			}
 		}
 		UnsetNeedsUpdate(ctx, composeEnvFile)
 	} else {
@@ -124,6 +128,12 @@ func Update(ctx context.Context, force bool, file string) error {
 				tmpFile.Close()
 				defer os.Remove(tmpFile.Name())
 
+				existing, _ := os.ReadFile(appEnvFile)
+				if bytes.Equal(existing, []byte(finalAppContent)) {
+					system.SetPermissions(ctx, appEnvFile)
+					UnsetNeedsUpdate(ctx, appEnvFile)
+					continue
+				}
 				if err := CopyFile(tmpFile.Name(), appEnvFile); err != nil {
 					logger.Warn(ctx, "Failed to update %s: %v", appEnvFile, err)
 				} else {

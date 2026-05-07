@@ -1,6 +1,7 @@
 package compose
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -231,8 +232,11 @@ func MergeYML(ctx context.Context, force bool) error {
 		return fmt.Errorf("failed to marshal merged compose configuration: %w", err)
 	}
 
-	if err := os.WriteFile(composePath, marshaledProject, 0644); err != nil {
-		return fmt.Errorf("failed to write docker-compose.yml: %w", err)
+	existing, _ := os.ReadFile(composePath)
+	if !bytes.Equal(existing, marshaledProject) {
+		if err := os.WriteFile(composePath, marshaledProject, 0644); err != nil {
+			return fmt.Errorf("failed to write docker-compose.yml: %w", err)
+		}
 	}
 
 	logger.Info(ctx, "Merging '{{|File|}}docker-compose.yml{{[-]}}' complete.")
