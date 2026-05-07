@@ -96,6 +96,8 @@ func MergeYML(ctx context.Context, force bool) error {
 			}
 			if hostnameFile != "" && fileExists(hostnameFile) {
 				composeFiles = append(composeFiles, hostnameFile)
+			} else if hostnameFile != "" {
+				logger.Info(ctx, "File '{{|File|}}%s{{[-]}}' does not exist.", hostnameFile)
 			}
 
 			// Add ports file if exists
@@ -105,6 +107,8 @@ func MergeYML(ctx context.Context, force bool) error {
 			}
 			if portsFile != "" && fileExists(portsFile) {
 				composeFiles = append(composeFiles, portsFile)
+			} else if portsFile != "" {
+				logger.Info(ctx, "File '{{|File|}}%s{{[-]}}' does not exist.", portsFile)
 			}
 		} else if netMode != "" {
 			// Add netmode file if exists
@@ -114,6 +118,8 @@ func MergeYML(ctx context.Context, force bool) error {
 			}
 			if netmodeFile != "" && fileExists(netmodeFile) {
 				composeFiles = append(composeFiles, netmodeFile)
+			} else if netmodeFile != "" {
+				logger.Info(ctx, "File '{{|File|}}%s{{[-]}}' does not exist.", netmodeFile)
 			}
 		}
 

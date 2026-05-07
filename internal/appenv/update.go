@@ -35,6 +35,7 @@ func Update(ctx context.Context, force bool, file string) error {
 	}
 
 	// 3. Update main .env file (Parity with env_update.sh lines 33-80)
+	// Unconditional — users need immediate feedback since the check can take a while.
 	logger.Notice(ctx, "Updating environment variable files.")
 	if NeedsUpdate(ctx, force, composeEnvFile) {
 		logger.Notice(ctx, "Updating '{{|File|}}%s{{[-]}}'.", composeEnvFile)
@@ -158,6 +159,7 @@ func Update(ctx context.Context, force bool, file string) error {
 		}
 	}
 
+	logger.Info(ctx, "Environment variable files update complete.")
 	return nil
 }
 

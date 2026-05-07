@@ -85,6 +85,7 @@ func CreateApp(ctx context.Context, appNameRaw string, force bool, conf config.A
 
 	niceName := GetNiceName(ctx, appNameUpper)
 	if !IsAppNameValid(appNameUpper) {
+		logger.Error(ctx, "'{{|App|}}%s{{[-]}}' is not a valid application name.", niceName)
 		return fmt.Errorf("'{{|App|}}%s{{[-]}}' is not a valid application name", niceName)
 	}
 
@@ -94,7 +95,7 @@ func CreateApp(ctx context.Context, appNameRaw string, force bool, conf config.A
 	if IsAppBuiltIn(appName) {
 		// Check if update is needed for this app.
 		if !NeedsCreateAll(ctx, force, []string{appNameUpper}, conf) {
-			logger.Info(ctx, "Environment variables already created for '{{|App|}}%s{{[-]}}'.", niceName)
+			logger.Notice(ctx, "Environment variables already created for '{{|App|}}%s{{[-]}}'.", niceName)
 			return nil
 		}
 
