@@ -34,8 +34,9 @@ func Update(ctx context.Context, force bool, file string) error {
 	}
 
 	// 3. Update main .env file (Parity with env_update.sh lines 33-80)
+	logger.Notice(ctx, "Updating environment variable files.")
 	if NeedsUpdate(ctx, force, composeEnvFile) {
-		logger.Notice(ctx, "Updating variable file '{{|File|}}%s{{[-]}}'.", composeEnvFile)
+		logger.Notice(ctx, "Updating '{{|File|}}%s{{[-]}}'.", composeEnvFile)
 
 		// Read current .env file content
 		input, _ := os.ReadFile(composeEnvFile)
