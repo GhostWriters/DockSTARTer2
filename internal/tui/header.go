@@ -279,7 +279,7 @@ func (m HeaderModel) renderLeft() string {
 	isFocused := m.focus == HeaderFocusFlags
 
 	// 1. Hostname
-	leftText := "{{|Hostname|}}" + m.hostname + "{{[-]}} "
+	leftText := "{{|StatusHostname|}}" + m.hostname + "{{[-]}} "
 
 	// 2. Start selection if focused
 	if isFocused {
@@ -288,7 +288,7 @@ func (m HeaderModel) renderLeft() string {
 
 	// 3. Open bracket for flags
 	if !isFocused {
-		leftText += "{{|ApplicationFlagsBrackets|}}"
+		leftText += "{{|StatusFlagsBrackets|}}"
 	}
 	leftText += "|"
 
@@ -300,10 +300,10 @@ func (m HeaderModel) renderLeft() string {
 				if isFocused {
 					leftText += "|"
 				} else {
-					leftText += "{{|ApplicationFlagsBrackets|}}|{{|ApplicationFlags|}}"
+					leftText += "{{|StatusFlagsBrackets|}}|{{|StatusFlags|}}"
 				}
 			} else if !isFocused {
-				leftText += "{{|ApplicationFlags|}}"
+				leftText += "{{|StatusFlags|}}"
 			}
 			leftText += flag
 		}
@@ -311,7 +311,7 @@ func (m HeaderModel) renderLeft() string {
 
 	// 5. Close bracket for flags
 	if !isFocused {
-		leftText += "{{|ApplicationFlagsBrackets|}}"
+		leftText += "{{|StatusFlagsBrackets|}}"
 	}
 	leftText += "|"
 
@@ -324,7 +324,7 @@ func (m HeaderModel) renderLeft() string {
 
 func (m HeaderModel) renderCenter() string {
 	styles := GetStyles()
-	centerText := "{{|ApplicationName|}}" + version.ApplicationName + "{{[-]}}"
+	centerText := "{{|StatusName|}}" + version.ApplicationName + "{{[-]}}"
 	return MaintainBackground(RenderThemeText(centerText, styles.HeaderBG), styles.HeaderBG)
 }
 
@@ -341,29 +341,29 @@ func (m HeaderModel) renderVersions() (appText, tmplText string) {
 
 		// 1. Status Icon / Prefix
 		if isError {
-			text += "{{|ApplicationUpdate|}}?{{|StatusBar|}}"
+			text += "{{|StatusUpdate|}}?{{|StatusBar|}}"
 		} else if isAvailable {
-			text += "{{|ApplicationUpdate|}}*{{|StatusBar|}}"
+			text += "{{|StatusUpdate|}}*{{|StatusBar|}}"
 		} else {
 			text += " "
 		}
 
 		// 2. Label + Open Bracket (Standard or Update color)
-		text += "{{|ApplicationVersion|}}" + label + ":[{{|StatusBar|}}"
+		text += "{{|StatusVersion|}}" + label + ":[{{|StatusBar|}}"
 
 		// 3. Version Number (The Interactive Part)
 		var verStyled string
 		if isFocused {
 			verStyled = "{{|StatusBarSelected|}}" + ver + "{{|StatusBar|}}"
 		} else if isError || isAvailable {
-			verStyled = "{{|ApplicationUpdate|}}" + ver + "{{|StatusBar|}}"
+			verStyled = "{{|StatusUpdate|}}" + ver + "{{|StatusBar|}}"
 		} else {
-			verStyled = "{{|ApplicationVersion|}}" + ver + "{{|StatusBar|}}"
+			verStyled = "{{|StatusVersion|}}" + ver + "{{|StatusBar|}}"
 		}
 		text += verStyled
 
 		// 4. Close Bracket
-		text += "{{|ApplicationVersion|}}]{{|StatusBar|}}"
+		text += "{{|StatusVersion|}}]{{|StatusBar|}}"
 
 		return MaintainBackground(RenderThemeText(text, styles.HeaderBG), styles.HeaderBG)
 	}
