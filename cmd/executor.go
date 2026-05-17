@@ -23,33 +23,6 @@ type CmdState = commands.CmdState
 // commandDefs aliases the shared registry. All entries live in internal/commands/registry.go.
 var commandDefs = commands.Registry
 
-//nolint:unused
-func handleConfigSettings(ctx context.Context, group *CommandGroup) error {
-	conf := config.LoadAppConfig()
-	switch group.Command {
-	case "--config-folder":
-		if len(group.Args) > 0 {
-			conf.Paths.ConfigFolder = group.Args[0]
-		} else {
-			logger.Display(ctx, "Current config folder: {{|Folder|}}%s{{[-]}}", conf.Paths.ConfigFolder)
-			return nil
-		}
-	case "--config-compose-folder":
-		if len(group.Args) > 0 {
-			conf.Paths.ComposeFolder = group.Args[0]
-		} else {
-			logger.Display(ctx, "Current compose folder: {{|Folder|}}%s{{[-]}}", conf.Paths.ComposeFolder)
-			return nil
-		}
-	}
-	if err := config.SaveAppConfig(conf); err != nil {
-		logger.Error(ctx, "Failed to save configuration: %v", err)
-		return err
-	}
-	logger.Notice(ctx, "Configuration updated successfully.")
-	return nil
-}
-
 // Execute runs the logic for a sequence of command groups.
 // It handles flag application, command switching, and state resetting.
 func Execute(ctx context.Context, groups []CommandGroup) int {
@@ -170,7 +143,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				return handleMenu(subCtx, &group)
 			case "-T", "--theme", "--theme-list":
 				ranCommand = true
-				return handleTheme(subCtx, &group)
+				return commands.HandleTheme(subCtx, &group)
 
 			case "-a", "--add":
 				// appvars_create (single)
