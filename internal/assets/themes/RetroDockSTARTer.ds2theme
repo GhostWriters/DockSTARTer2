@@ -42,7 +42,7 @@ TitleSuccess = "{{[black:green]}}"
 TitleWarning = "{{[black:yellow]}}"
 TitleQuestion = "{{[black:yellow]}}"
 ConsoleTitle = "{{|ConsoleBorder|}}"
-TitleCheckbox = "{{|TitleSubMenu|}}"
+TitleCheckbox = ""
 TitleCheckboxFocused = "{{|TitleSubMenuFocused|}}"
 
 TitleUnfocusedIndicator = "{{[magenta:-B]}}"
