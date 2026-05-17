@@ -94,6 +94,7 @@ MarkerAdded = "{{|Dialog::green|}}"
 MarkerDeleted = "{{|Dialog::red|}}"
 MarkerModified = "{{|Dialog::yellow|}}"
 MarkerInvalid = "{{[white:red:B]}}"
+TextCursor = "{{[:white:]}}"
 MarkerLocked = "{{|MarkerInvalid|}}"
 
 EnvBuiltin = "{{[black:cyan]}}"

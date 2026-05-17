@@ -440,6 +440,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			editorStyles.Focused.GutterDeleted = tui.SemanticRawStyle("MarkerDeleted")
 			editorStyles.Focused.GutterModified = tui.SemanticRawStyle("MarkerModified")
 			editorStyles.Focused.GutterInvalid = tui.SemanticRawStyle("MarkerInvalid")
+			editorStyles.Cursor.Color = tui.TextCursorColor()
 
 			editorStyles.Blurred.LineNumber = tui.SemanticRawStyle("LineNumber")
 			editorStyles.Blurred.LineNumberSelected = tui.SemanticRawStyle("LineNumberSelected")

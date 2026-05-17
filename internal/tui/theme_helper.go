@@ -50,6 +50,12 @@ func SemanticRawStyle(name string) lipgloss.Style {
 	return theme.ThemeSemanticRawStyle(name)
 }
 
+// TextCursorColor returns the foreground color defined by the TextCursor theme entry.
+// Used to set the cursor color on textinput and enveditor models.
+func TextCursorColor() color.Color {
+	return SemanticRawStyle("TextCursor").GetForeground()
+}
+
 // Color parsing now uses tcell/v3/colors for RGB conversion via console.GetHexForColor().
 // This ensures all colors are resolved to RGB/hex values, allowing proper color profile
 // downgrading for terminals with limited color support.

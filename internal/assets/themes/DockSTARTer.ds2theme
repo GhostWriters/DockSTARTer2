@@ -101,6 +101,7 @@ MarkerAdded = "{{[:green:]}}"
 MarkerDeleted = "{{[:red:]}}"
 MarkerModified = "{{[:yellow:]}}"
 MarkerInvalid = "{{[white:red:B]}}"
+TextCursor = "{{[:white:]}}"
 MarkerLocked = "{{|MarkerInvalid|}}"
 
 ListDefault = ""

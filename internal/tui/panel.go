@@ -110,6 +110,7 @@ func (m *PanelModel) applyInputStyles() {
 	tiStyles.Focused.Text = styles.ItemNormal.Background(bg)
 	tiStyles.Blurred.Prompt = styles.ItemNormal.Background(bg)
 	tiStyles.Blurred.Text = styles.ItemNormal.Background(bg)
+	tiStyles.Cursor.Color = TextCursorColor()
 	m.input.SetStyles(tiStyles)
 }
 
