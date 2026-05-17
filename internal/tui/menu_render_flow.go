@@ -40,10 +40,12 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 
 		tagStyle := theme.ThemeSemanticStyle("{{|Tag|}}")
 		keyStyle := theme.ThemeSemanticStyle("{{|TagKey|}}")
+		checkboxStyle := theme.ThemeSemanticStyle("{{|Checkbox|}}")
 
 		if isSelected {
 			tagStyle = theme.ThemeSemanticStyle("{{|TagSelected|}}")
 			keyStyle = theme.ThemeSemanticStyle("{{|TagKeySelected|}}")
+			checkboxStyle = theme.ThemeSemanticStyle("{{|CheckboxSelected|}}")
 		}
 
 		neutralStyle := lipgloss.NewStyle().Background(dialogBG)
@@ -63,7 +65,7 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 					cb = radioSelectedAscii
 				}
 			}
-			prefix = tagStyle.Render(cb) + neutralStyle.Render(" ")
+			prefix = checkboxStyle.Render(cb) + neutralStyle.Render(" ")
 		} else if item.IsCheckbox {
 			var cb string
 			if ctx.LineCharacters {
@@ -77,7 +79,7 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 					cb = checkSelectedAscii
 				}
 			}
-			prefix = tagStyle.Render(cb) + neutralStyle.Render(" ")
+			prefix = checkboxStyle.Render(cb) + neutralStyle.Render(" ")
 		}
 
 		// Tag with first-letter shortcut

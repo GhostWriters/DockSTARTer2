@@ -78,6 +78,8 @@ func (m *MenuModel) renderVariableHeightList() string {
 	tagStyleSel := theme.ThemeSemanticStyle("{{|TagSelected|}}")
 	keyStyleSel := theme.ThemeSemanticStyle("{{|TagKeySelected|}}")
 	itemStyleSel := theme.ThemeSemanticStyle("{{|ItemSelected|}}")
+	checkboxStyleBase := theme.ThemeSemanticStyle("{{|Checkbox|}}")
+	checkboxStyleSel := theme.ThemeSemanticStyle("{{|CheckboxSelected|}}")
 	neutralStyle := lipgloss.NewStyle().Background(dialogBG)
 
 	var mainItems []MenuItem
@@ -110,10 +112,12 @@ func (m *MenuModel) renderVariableHeightList() string {
 		tStyle := tagStyleBase
 		kStyle := keyStyleBase
 		dStyle := itemStyleBase
+		cbStyle := checkboxStyleBase
 		if isSelected || isParentOfSelected {
 			tStyle = tagStyleSel
 			kStyle = keyStyleSel
 			dStyle = itemStyleSel
+			cbStyle = checkboxStyleSel
 		}
 
 		isActuallySub := item.IsSubItem || item.IsAddInstance
@@ -161,7 +165,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 				if item.Checked {
 					cb = checkSelected
 				}
-				cbStr = tStyle.Render(cb) + neutralStyle.Render(" ")
+				cbStr = cbStyle.Render(cb) + neutralStyle.Render(" ")
 			}
 			editStr := RenderThemeText(item.Tag, dStyle)
 			line := cbStr + editStr
@@ -206,13 +210,13 @@ func (m *MenuModel) renderVariableHeightList() string {
 					}
 				}
 			}
-			checkbox = tStyle.Render(cb)
+			checkbox = cbStyle.Render(cb)
 		}
 
 		var cbAdd3, cbEnabled3 string
 		if isAppSelect && (item.IsCheckbox || item.IsGroupHeader) {
-			cbAStyle := tagStyleBase
-			cbEStyle := tagStyleBase
+			cbAStyle := checkboxStyleBase
+			cbEStyle := checkboxStyleBase
 			if isSelected {
 				if m.activeColumn == ColAdd {
 					cbAStyle = tagStyleSel
