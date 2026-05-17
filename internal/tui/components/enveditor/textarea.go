@@ -3387,14 +3387,9 @@ func (m Model) lineNumberView(n int, isCursorLine bool, dataLine int) (str strin
 		meta := &m.lineMeta[dataLine]
 		isModified := false
 
-		// Pending-delete lines are a staged change — highlight the line number.
-		if meta.PendingDelete {
-			isModified = true
-		}
-
 		// Check if the entire line differs from the one initially loaded from file.
 		// This captures key changes, which getDiffMask (focused on values) skips.
-		if !isModified && meta.InitialLine != "" && string(m.value[dataLine]) != meta.InitialLine {
+		if meta.InitialLine != "" && string(m.value[dataLine]) != meta.InitialLine {
 			isModified = true
 		}
 
