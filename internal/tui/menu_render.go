@@ -112,7 +112,7 @@ func (m *MenuModel) ViewString() string {
 			Align(lipgloss.Left).
 			Border(lipgloss.Border{})
 
-		subStr := RenderThemeText(m.subtitle, subtitleStyle)
+		subStr := RenderThemeText(m.subtitle, styles.Dialog)
 		innerParts = append(innerParts, subtitleStyle.Render(subStr))
 	}
 	innerParts = append(innerParts, paddedList)
@@ -206,7 +206,7 @@ func (m *MenuModel) viewSubMenu() string {
 			Align(lipgloss.Left).
 			Border(lipgloss.Border{})
 
-		subStr := RenderThemeText(m.subtitle, subtitleStyle)
+		subStr := RenderThemeText(m.subtitle, styles.Dialog)
 		innerParts = append(innerParts, subtitleStyle.Render(subStr))
 	}
 
