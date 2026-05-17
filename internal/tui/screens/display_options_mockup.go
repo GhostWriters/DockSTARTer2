@@ -129,7 +129,7 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	innerWidth := width - 2
 
 	// Left: Host
-	leftText := " {{|Hostname|}}HOST{{[-]}}"
+	leftText := " {{|StatusHostname|}}HOST{{[-]}}"
 	leftRendered := tui.RenderThemeTextCtx(leftText, headerCtx)
 	leftW := lipgloss.Width(tui.GetPlainText(leftRendered))
 
