@@ -833,6 +833,10 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if defaultFilePath, err := appenv.AppInstanceFile(ctx, capturedApp, fileSuffix); err == nil {
 					capturedDefaultLines = appenv.ReadDefaultLines(defaultFilePath)
 				}
+			} else if capturedApp == "" {
+				// Global .env tab: use cached template lines so variables defined in the
+				// template are not incorrectly classified as user-defined on refresh.
+				capturedDefaultLines = tab.defaultLines
 			}
 
 			tab.editor.ReformatEnv(tab.editor.DefaultValueFunc, tab.readOnlyVars, msg.preservePendingDeletes, func(currentLines []string) []string {
