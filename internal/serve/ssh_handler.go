@@ -16,10 +16,6 @@ import (
 	"github.com/charmbracelet/ssh"
 )
 
-// sessionBusyMsg is kept for potential future use or legacy compatibility.
-const sessionBusyMsg = "\r\nA DockSTARTer2 session is already active.\r\n" +
-	"Use 'ds2 --disconnect' on the host to force-release the session.\r\n\r\n"
-
 // tuiMiddleware returns a wish middleware that runs the DS2 TUI for each
 // incoming SSH session.
 func tuiMiddleware(startMenu string) wish.Middleware {

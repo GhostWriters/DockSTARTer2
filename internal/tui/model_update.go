@@ -276,7 +276,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Refresh && m.activeScreen != nil {
 			return m, func() tea.Msg { return RefreshAppsListMsg{} }
 		}
-		return m, nil
+		return m, logger.BatchRecoverTUI(m.ctx, cmds...)
 	case ShowDialogMsg:
 		// Push current dialog to stack if one exists
 		if m.dialog != nil {

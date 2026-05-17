@@ -16,6 +16,8 @@ import (
 )
 
 // handleUpdate is a wrapper that calls the shared logic and then restarts the server if needed.
+//
+//nolint:unused
 func handleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, restArgs []string) error {
 	// Capture server state and executable path before the update replaces the binary.
 	serverInfo := sessionlocks.Sessions.ReadServerInfo()

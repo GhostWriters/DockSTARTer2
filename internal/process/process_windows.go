@@ -21,6 +21,6 @@ func Exists(pid int) bool {
 		// Any other error besides "invalid parameter" (which means PID is gone) implies existence.
 		return err == windows.ERROR_ACCESS_DENIED
 	}
-	defer windows.CloseHandle(handle)
+	defer func() { _ = windows.CloseHandle(handle) }()
 	return true
 }

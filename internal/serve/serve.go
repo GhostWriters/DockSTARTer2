@@ -155,7 +155,7 @@ func StartSSHServer(ctx context.Context, cfg config.ServerConfig, startMenu stri
 			case <-ticker.C:
 				if sessionlocks.Sessions.IsStopRequested() {
 					sessionlocks.Sessions.ClearStopRequest()
-					sessionlocks.Sessions.RequestDisconnect()
+					_ = sessionlocks.Sessions.RequestDisconnect()
 					cancelInner()
 					return
 				}

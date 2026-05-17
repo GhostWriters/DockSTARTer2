@@ -29,5 +29,5 @@ func EnableVirtualTerminalProcessing() {
 	}
 
 	mode |= enableVirtualTerminalProcessing
-	procSetConsoleMode.Call(stdout, uintptr(mode))
+	_, _, _ = procSetConsoleMode.Call(stdout, uintptr(mode))
 }

@@ -676,11 +676,6 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 
 	// Cover the full preset content area (including blank rows) so clicking
 	// anywhere in the box focuses the list.
-	listH := m.maxVis
-	if listH < 0 {
-		listH = 0
-	}
-
 	// Input hit region: outer_border(1) + headingH + section_top_border(1) = input row Y
 	// Text starts at: outer_border(1) + section_border(1) + padding(1) + promptW
 	inputY := 1 + headingH + 1
