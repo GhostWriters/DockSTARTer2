@@ -67,6 +67,7 @@ HeadingValue = "{{[white:black:BU]}}"
 HeadingAppDescription = "{{[white:black]}}"
 
 Highlight = "{{[white:black:B]}}"
+ApplicationName = "{{|Highlight|}}"
 RunningCommand = "{{|Highlight|}}"
 FailingCommand = "{{|TitleError|}}"
 UserCommand = "{{|Highlight|}}"
