@@ -279,7 +279,7 @@ func (m HeaderModel) renderLeft() string {
 	isFocused := m.focus == HeaderFocusFlags
 
 	// 1. Hostname
-	leftText := "{{|Hostname|}}" + m.hostname + "{{[-]}} "
+	leftText := "{{|StatusHostname|}}" + m.hostname + "{{[-]}} "
 
 	// 2. Start selection if focused
 	if isFocused {

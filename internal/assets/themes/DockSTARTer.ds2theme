@@ -30,7 +30,7 @@ StatusFlagsBrackets = "{{[cyan:black:-B]}}"
 StatusFlagsSpace = "{{|StatusVersionSpace|}}"
 StatusUpdate = "{{[-:-:-R]}}"
 StatusUpdateBrackets = "{{|StatusUpdate|}}"
-Hostname = "{{|StatusFields|}}"
+StatusHostname = "{{|StatusFields|}}"
 
 Title = "{{[black:-:-U]}}"
 TitleHelp = "{{|Title|}}"
