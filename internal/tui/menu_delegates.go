@@ -57,10 +57,12 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 	tagStyle := theme.ThemeSemanticStyle("{{|Tag|}}")
 	keyStyle := theme.ThemeSemanticStyle("{{|TagKey|}}")
 
+	checkboxStyle := theme.ThemeSemanticStyle("{{|Checkbox|}}")
 	if isSelected {
 		itemStyle = theme.ThemeSemanticStyle("{{|ItemSelected|}}")
 		tagStyle = theme.ThemeSemanticStyle("{{|TagSelected|}}")
 		keyStyle = theme.ThemeSemanticStyle("{{|TagKeySelected|}}")
+		checkboxStyle = theme.ThemeSemanticStyle("{{|CheckboxSelected|}}")
 	}
 
 	// Render tag with first-letter highlighting (if no semantic tags present)
@@ -121,8 +123,8 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 				cb = radioSelectedAscii
 			}
 		}
-		// Render just the glyph with tagStyle, and add a neutral space after it
-		checkbox = tagStyle.Render(cb) + neutralStyle.Render(" ")
+		// Render just the glyph with checkboxStyle, and add a neutral space after it
+		checkbox = checkboxStyle.Render(cb) + neutralStyle.Render(" ")
 	} else if menuItem.IsCheckbox {
 		var cb string
 		if ctx.LineCharacters {
@@ -136,8 +138,8 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 				cb = checkSelectedAscii
 			}
 		}
-		// Render just the glyph with tagStyle, and add a neutral space after it
-		checkbox = tagStyle.Render(cb) + neutralStyle.Render(" ")
+		// Render just the glyph with checkboxStyle, and add a neutral space after it
+		checkbox = checkboxStyle.Render(cb) + neutralStyle.Render(" ")
 	}
 
 	// Whitespace (gaps and trailing) should always use neutral background
@@ -220,10 +222,12 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 	tagStyle := theme.ThemeSemanticStyle("{{|Tag|}}")
 	keyStyle := theme.ThemeSemanticStyle("{{|TagKey|}}")
 
+	checkboxStyle := theme.ThemeSemanticStyle("{{|Checkbox|}}")
 	if isSelected {
 		itemStyle = theme.ThemeSemanticStyle("{{|ItemSelected|}}")
 		tagStyle = theme.ThemeSemanticStyle("{{|TagSelected|}}")
 		keyStyle = theme.ThemeSemanticStyle("{{|TagKeySelected|}}")
+		checkboxStyle = theme.ThemeSemanticStyle("{{|CheckboxSelected|}}")
 	}
 
 	// Render checkbox for selectable items
@@ -250,16 +254,13 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 			if menuItem.Checked {
 				cbGlyph = checkSelected
 			}
-			// Use tag style for checkbox to match user request
-			// Render just the glyph with tagStyle, and add a neutral space after it
-			checkbox = tagStyle.Render(cbGlyph) + neutralStyle.Render(" ")
+			checkbox = checkboxStyle.Render(cbGlyph) + neutralStyle.Render(" ")
 		} else {
 			cbContent := checkUnselectedAscii
 			if menuItem.Checked {
 				cbContent = checkSelectedAscii
 			}
-			// Use tag style for checkbox to match user request
-			checkbox = tagStyle.Render(cbContent) + neutralStyle.Render(" ")
+			checkbox = checkboxStyle.Render(cbContent) + neutralStyle.Render(" ")
 		}
 	} else if menuItem.IsRadioButton {
 		if ctx.LineCharacters {
@@ -267,13 +268,13 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 			if menuItem.Checked {
 				cbGlyph = radioSelected
 			}
-			checkbox = tagStyle.Render(cbGlyph) + neutralStyle.Render(" ")
+			checkbox = checkboxStyle.Render(cbGlyph) + neutralStyle.Render(" ")
 		} else {
 			cbContent := radioUnselectedAscii
 			if menuItem.Checked {
 				cbContent = radioSelectedAscii
 			}
-			checkbox = tagStyle.Render(cbContent) + neutralStyle.Render(" ")
+			checkbox = checkboxStyle.Render(cbContent) + neutralStyle.Render(" ")
 		}
 	}
 
@@ -397,10 +398,12 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 	tagStyle := theme.ThemeSemanticStyle("{{|Tag|}}")
 	itemStyle := theme.ThemeSemanticStyle("{{|Item|}}")
 	keyStyle := theme.ThemeSemanticStyle("{{|TagKey|}}")
+	checkboxStyle := theme.ThemeSemanticStyle("{{|Checkbox|}}")
 	if isSelected || isParentOfSelected {
 		tagStyle = theme.ThemeSemanticStyle("{{|TagSelected|}}")
 		itemStyle = theme.ThemeSemanticStyle("{{|ItemSelected|}}")
 		keyStyle = theme.ThemeSemanticStyle("{{|TagKeySelected|}}")
+		checkboxStyle = theme.ThemeSemanticStyle("{{|CheckboxSelected|}}")
 	}
 	descStyle := lipgloss.NewStyle().Background(dialogBG)
 	if isSelected || isParentOfSelected {
@@ -417,7 +420,7 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 		} else {
 			cb = checkUnselectedAscii
 		}
-		cbStr := tagStyle.Render(cb) + neutralStyle.Render(" ")
+		cbStr := checkboxStyle.Render(cb) + neutralStyle.Render(" ")
 		subTagStr := ""
 		if len(menuItem.Tag) > 0 {
 			runes := []rune(menuItem.Tag)
@@ -451,7 +454,7 @@ func (d groupedItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 					cb = checkUnselectedAscii
 				}
 			}
-			cbStr = tagStyle.Render(cb) + neutralStyle.Render(" ")
+			cbStr = checkboxStyle.Render(cb) + neutralStyle.Render(" ")
 		}
 		rendered := RenderThemeText(menuItem.Tag, descStyle)
 		line := neutralStyle.Render(" ") + neutralStyle.Render(subIndent) + cbStr + rendered

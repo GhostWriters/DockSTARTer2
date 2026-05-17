@@ -102,6 +102,8 @@ MarkerDeleted = "{{[:red:]}}"
 MarkerModified = "{{[:yellow:]}}"
 MarkerInvalid = "{{[white:red:B]}}"
 TextCursor = "{{[:white:]}}"
+Checkbox = "{{|Dialog|}}"
+CheckboxSelected = "{{|Dialog|}}"
 MarkerLocked = "{{|MarkerInvalid|}}"
 
 ListDefault = ""
