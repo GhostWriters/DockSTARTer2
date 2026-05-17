@@ -119,7 +119,8 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 				// Strip theme tags so OptionValue color doesn't override tagStyle (selection).
 				itemContent += neutralStyle.Render(" ") + tagStyle.Render(GetPlainText(item.Desc))
 			} else {
-				itemContent += RenderThemeText(" "+item.Desc, tagStyle)
+				// Neutral space breaks the tag background before the value color starts.
+				itemContent += neutralStyle.Render(" ") + RenderThemeText(item.Desc, neutralStyle)
 			}
 		}
 
