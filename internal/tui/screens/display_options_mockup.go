@@ -134,12 +134,12 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	leftW := lipgloss.Width(tui.GetPlainText(leftRendered))
 
 	// Center: App Name
-	centerText := "{{|ApplicationName|}}" + tui.GetPlainText(themeName) + "{{[-]}}"
+	centerText := "{{|StatusName|}}" + tui.GetPlainText(themeName) + "{{[-]}}"
 	centerRendered := tui.RenderThemeTextCtx(centerText, headerCtx)
 	centerW := lipgloss.Width(tui.GetPlainText(centerRendered))
 
 	// Right: Version
-	rightText := "{{|ApplicationVersion|}}A:[{{[-]}}{{|ApplicationVersion|}}2.1{{[-]}}{{|ApplicationVersion|}}]{{[-]}} "
+	rightText := "{{|StatusVersion|}}A:[{{[-]}}{{|StatusVersion|}}2.1{{[-]}}{{|StatusVersion|}}]{{[-]}} "
 	rightRendered := tui.RenderThemeTextCtx(rightText, headerCtx)
 	rightW := lipgloss.Width(tui.GetPlainText(rightRendered))
 
