@@ -3,18 +3,14 @@ name = "DockSTARTer"
 description = "The default DockSTARTer theme"
 author = "CLHatch"
 
-[syntax]
-semantic_prefix = "{{|"
-semantic_suffix = "|}}"
-direct_prefix = "{{["
-direct_suffix = "]}}"
-
 [colors]
+
 Screen = "{{[black:white:-]}}"
 StatusBar = "{{[black:cyan:-]}}"
 StatusBarBorder = "{{|Screen|}}"
 StatusBarSeparator = "{{|Screen|}}"
 StatusBarSelected = "{{|TagSelected|}}"
+
 Dialog = "{{[black:cyan:-]}}"
 Border = "{{[white:-:-]}}"
 Border2 = "{{[black:-:-]}}"
@@ -24,26 +20,20 @@ ProgramBox = "{{[white:black:-]}}"
 ConsoleBox = "{{|ProgramBox|}}"
 ConsoleBorder = "{{|Helpline|}}"
 
-ApplicationFlagsBrackets = "{{[cyan:black:-B]}}"
-ApplicationFlags = "{{[black:cyan:-]}}"
-
 StatusBarFields = "{{[blue:white:-BR]}}"
-Hostname = "{{|StatusBarFields|}}"
-
 ApplicationName = "{{|StatusBarFields|}}"
 ApplicationVersion = "{{|StatusBarFields|}}"
 ApplicationVersionBrackets = "{{|StatusBarFields|}}"
-
 ApplicationVersionSpace = "{{[-]}}"
+ApplicationFlags = "{{[black:cyan:-]}}"
+ApplicationFlagsBrackets = "{{[cyan:black:-B]}}"
 ApplicationFlagsSpace = "{{|ApplicationVersionSpace|}}"
 ApplicationUpdate = "{{[-:-:-R]}}"
 ApplicationUpdateBrackets = "{{|ApplicationUpdate|}}"
-
-HelpTag = "{{[black:red]}}"
-HelpItem = "{{[black]}}"
-TitleHelp = "{{|Title|}}"
+Hostname = "{{|StatusBarFields|}}"
 
 Title = "{{[black:-:-U]}}"
+TitleHelp = "{{|Title|}}"
 TitleNotice = "{{[white:green:B]}}"
 OptionValue = "{{[white:green:B]}}"
 TitleWarn = "{{|Title::yellow|}}"
@@ -61,28 +51,35 @@ TitleFocusIndicator = "{{[red::-B]}}"
 TitleSubMenu = "{{|Title|}}"
 TitleSubMenuFocused = "{{|Title:::R|}}"
 
-Subtitle = "{{[black:-:-]}}"
 CommandLine = "{{[yellow::-B]}}"
-
 ButtonActive = "{{[white:red:-B]}}"
 ButtonInactive = "{{[black:white:-]}}"
-
 Item = "{{[black:-]}}"
 ItemSelected = "{{[black:red:-]}}"
 Tag = "{{[black:-:-b]}}"
 TagSelected = "{{|Tag::red|}}"
 TagKey = "{{|Tag:red|}}"
 TagKeySelected = "{{|TagSelected:::-B|}}"
-
 Helpline = "{{[black:cyan:-]}}"
-
+HelpTag = "{{[black:red]}}"
+HelpItem = "{{[black]}}"
+Subtitle = "{{[black:-:-]}}"
 Heading = "{{[-]}}{{[::R]}}"
-HeadingTag="{{[-]}}{{[white::R]}}"
+HeadingTag = "{{[-]}}{{[white::R]}}"
 HeadingValue = "{{[-]}}{{[::BR]}}"
 HeadingAppDescription = "{{[-]}}{{[::B]}}"
+
 Highlight = "{{[-]}}{{[yellow::B]}}"
 RunningCommand = "{{|Highlight|}}"
+Branch = "{{|Highlight|}}"
+Version = "{{|Highlight|}}"
+UserCommand = "{{|Highlight|}}"
+File = "{{|Highlight|}}"
+Folder = "{{|Highlight|}}"
+App = "{{|Highlight|}}"
+URL = "{{[magenta::U]}}"
 
+LineHeading = "{{|Dialog:::BU|}}"
 LineComment = "{{|Dialog:::RB|}}"
 LineOther = "{{|Dialog:::R|}}"
 LineVar = "{{|Dialog:::R|}}"
@@ -92,11 +89,7 @@ LineNumberSelected = "{{|Dialog::white|}}"
 LineNumberModified = "{{|ModifiedText|}}"
 LineNumberModifiedSelected = "{{|ModifiedText:white|}}"
 LineAddVariable = "{{|Dialog:::R|}}"
-EnvBuiltin = "{{[black:cyan:R]}}"
-EnvUser = "{{[black:cyan:-b]}}"
-EnvInvalid = "{{|TitleError|}}"
-EnvDuplicate = "{{|TitleWarn|}}"
-EnvPendingDelete = "{{|Dialog:::DS|}}"
+
 MarkerAdded = "{{[:green:]}}"
 MarkerDeleted = "{{[:red:]}}"
 MarkerModified = "{{[:yellow:]}}"
@@ -106,32 +99,27 @@ Checkbox = "{{|Dialog|}}"
 CheckboxSelected = "{{|Dialog|}}"
 MarkerLocked = "{{|MarkerInvalid|}}"
 
+EnvBuiltin = "{{[black:cyan:R]}}"
+EnvUser = "{{[black:cyan:-b]}}"
+EnvInvalid = "{{|TitleError|}}"
+EnvDuplicate = "{{|TitleWarn|}}"
+EnvPendingDelete = "{{|Dialog:::DS|}}"
+
 ListDefault = ""
 ListApp = "{{[black::R]}}"
 ListAppUserDefined = "{{[blue::R]}}"
-ListTheme="{{|ListApp|}}"
-ListThemeUserDefined="{{|ListAppUserDefined|}}"
+ListTheme = "{{|ListApp|}}"
+ListThemeUserDefined = "{{|ListAppUserDefined|}}"
 
 KeyCap = "{{[::-R]}}"
 AppPending = "{{[cyan::B]}}"
-
 ProgressWaiting = "{{[black:white:-B]}}"
 ProgressInProgress = "{{[white:cyan:-B]}}"
 ProgressCompleted = "{{[cyan:black:-B]}}"
 
 VersionSelected = "{{[black:red:-]}}"
 
-App = "{{|Highlight|}}"
-File = "{{|Highlight|}}"
-Folder = "{{|Highlight|}}"
-Branch = "{{|Highlight|}}"
-Version = "{{|Highlight|}}"
-UserCommand = "{{|Highlight|}}"
-URL = "{{[magenta::U]}}"
-
 [defaults]
 dialog_title_align = "center"
 submenu_title_align = "left"
 panel_title_align = "center"
-
-

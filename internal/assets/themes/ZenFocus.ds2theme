@@ -3,18 +3,14 @@ name = "ZenFocus"
 description = "Dockstarter2 Zen Focus theme"
 author = "Gemini AI"
 
-[syntax]
-semantic_prefix = "{{|"
-semantic_suffix = "|}}"
-direct_prefix = "{{["
-direct_suffix = "]}}"
-
 [colors]
+
 Screen = "{{[black:white:B]}}"
 StatusBar = "{{[white:black:B]}}"
 StatusBarBorder = "{{|StatusBar|}}"
 StatusBarSeparator = "{{|StatusBar|}}"
 StatusBarSelected = "{{|TagSelected|}}"
+
 Dialog = "{{[white:black]}}"
 Border = "{{[white:black:B]}}"
 Border2 = "{{[grey:black:B]}}"
@@ -23,23 +19,20 @@ BoxTitle = "{{[white:black]}}"
 ProgramBox = "{{[white:black:-]}}"
 ConsoleBox = "{{|ProgramBox|}}"
 ConsoleBorder = "{{|Helpline|}}"
+
+StatusBarFields = "{{[black:white:-]}}"
 ApplicationName = "{{|StatusBarFields|}}"
 ApplicationVersion = "{{|StatusBarFields|}}"
 ApplicationVersionBrackets = "{{|StatusBarFields|}}"
 ApplicationVersionSpace = "{{[-:-:-]}}"
-
 ApplicationFlags = "{{[-:-:-]}}"
 ApplicationFlagsBrackets = "{{[-:-:-R]}}"
 ApplicationFlagsSpace = "{{|ApplicationVersionSpace|}}"
-
 ApplicationUpdate = "{{|StatusBar:-:-:-R|}}"
 ApplicationUpdateBrackets = "{{|ApplicationUpdate|}}"
-
-StatusBarFields = "{{[black:white:-]}}"
 Hostname = "{{|StatusBarFields|}}"
+
 Title = "{{|BoxTitle|}}"
-TitleQuestion = "{{[white:black:B]}}"
-CommandLine = "{{|Screen|}}"
 TitleHelp = "{{|Helpline|}}"
 TitleNotice = "{{[white:green:B]}}"
 OptionValue = "{{[black:yellow:B]}}"
@@ -47,6 +40,16 @@ TitleWarn = "{{[black:white:B]}}"
 TitleError = "{{[white:black:BU]}}"
 TitleSuccess = "{{[black:white]}}"
 TitleWarning = "{{[black:white:B]}}"
+TitleQuestion = "{{[white:black:B]}}"
+ConsoleTitle = "{{|ConsoleBorder|}}"
+
+TitleUnfocusedIndicator = "{{[::-B]}}"
+TitleFocusIndicator = "{{[::-B]}}"
+
+TitleSubMenu = "{{|Title|}}"
+TitleSubMenuFocused = "{{|Title:::R|}}"
+
+CommandLine = "{{|Screen|}}"
 ButtonActive = "{{[black:white:B]}}"
 ButtonInactive = "{{[white:black]}}"
 Item = "{{[white:black]}}"
@@ -63,6 +66,7 @@ Heading = "{{[white:black:B]}}"
 HeadingTag = "{{[black:white:B]}}"
 HeadingValue = "{{[black:white:BU]}}"
 HeadingAppDescription = "{{[white:black]}}"
+
 Highlight = "{{[black:white:B]}}"
 RunningCommand = "{{|Highlight|}}"
 Branch = "{{|Highlight|}}"
@@ -70,6 +74,9 @@ Version = "{{|Highlight|}}"
 UserCommand = "{{|Highlight|}}"
 File = "{{|Highlight|}}"
 Folder = "{{|Highlight|}}"
+App = "{{|Highlight|}}"
+URL = "{{|Highlight:::U|}}"
+
 LineHeading = "{{[white:black:BU]}}"
 LineComment = "{{|Dialog:::RB|}}"
 LineOther = "{{|Dialog:::R|}}"
@@ -80,6 +87,7 @@ LineNumberSelected = "{{[black:yellow]}}"
 LineNumberModified = "{{|ModifiedText|}}"
 LineNumberModifiedSelected = "{{[black:yellow:B]}}"
 LineAddVariable = "{{|Dialog:::R|}}"
+
 MarkerAdded = "{{[:green:]}}"
 MarkerDeleted = "{{[:red:]}}"
 MarkerModified = "{{[:yellow:]}}"
@@ -88,27 +96,24 @@ TextCursor = "{{[:yellow:]}}"
 Checkbox = "{{|Dialog|}}"
 CheckboxSelected = "{{|Dialog|}}"
 MarkerLocked = "{{|MarkerInvalid|}}"
+
 EnvBuiltin = "{{[black:cyan]}}"
 EnvUser = "{{[green:cyan]}}"
 EnvInvalid = "{{[red:cyan]}}"
 EnvDuplicate = "{{[magenta:cyan]}}"
+EnvPendingDelete = "{{|Dialog:::DS|}}"
+
 ListDefault = ""
 ListApp = ""
 ListAppUserDefined = "{{[black:white:B]}}"
-ListTheme="{{|ListApp|}}"
-ListThemeUserDefined="{{|ListAppUserDefined|}}"
+ListTheme = "{{|ListApp|}}"
+ListThemeUserDefined = "{{|ListAppUserDefined|}}"
+
 KeyCap = "{{[::-R]}}"
 AppPending = "{{[black:white:B]}}"
 ProgressWaiting = "{{[black:white:B]}}"
 ProgressInProgress = "{{[white:black:B]}}"
 ProgressCompleted = "{{[black:white:B]}}"
-ConsoleTitle = "{{|ConsoleBorder|}}"
-
-TitleUnfocusedIndicator = "{{[::-B]}}"
-TitleFocusIndicator = "{{[::-B]}}"
-
-TitleSubMenu = "{{|Title|}}"
-TitleSubMenuFocused = "{{|Title:::R|}}"
 
 VersionSelected = "{{|StatusBar|}}"
 
@@ -120,5 +125,3 @@ border_color = 1
 dialog_title_align = "center"
 submenu_title_align = "left"
 panel_title_align = "center"
-
-
