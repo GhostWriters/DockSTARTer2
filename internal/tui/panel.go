@@ -366,7 +366,7 @@ func (m *PanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 	}
 
 	// In restricted console mode, only ds2 commands are allowed — shell is blocked.
-	if m.panelMode == "console" && !isDS2 && !(len(args) > 0 && strings.HasPrefix(args[0], "-")) {
+	if m.panelMode == "console" && !isDS2 && (len(args) == 0 || !strings.HasPrefix(args[0], "-")) {
 		logger.Error(context.Background(), "Only ds2 commands are allowed in Console mode. Switch to 'System Console' for full shell access.")
 		return func() tea.Msg { return consoleDoneMsg{} }
 	}

@@ -240,7 +240,8 @@ func (m *MenuModel) renderVariableHeightList() string {
 				cbEnabled3 = neutralStyle.Render(" ") + cbEStyle.Render(ce) + neutralStyle.Render(" ")
 			} else {
 				// ASCII: Use explicit 3-character variants
-				caText, ceText := "   ", "   "
+				caText := "   "
+				var ceText string
 				if item.IsGroupHeader {
 					// Expansion arrow always goes in the second slot (Enabled track)
 					ceText = subMenuExpandedAscii
@@ -276,7 +277,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 		}
 
 		// Prefix width calculation (Left of the Tag)
-		gutterWidth := m.StatusGutterWidth()
+		var gutterWidth int
 
 		hasAnyCheckboxes := false
 		for _, it := range visibleItems {

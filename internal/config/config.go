@@ -26,6 +26,8 @@ import (
 //go:embed defaults/dockstarter2.toml
 var defaultsToml []byte
 
+type migrationModeKey struct{}
+
 // AppConfig holds the application configuration settings.
 type AppConfig struct {
 	UI     UIConfig     `toml:"ui"`
@@ -214,7 +216,7 @@ func LoadAppConfig() AppConfig {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		// No config file found. Attempt migration from legacy.
-		migrationCtx := context.WithValue(context.Background(), "migration_mode", true)
+		migrationCtx := context.WithValue(context.Background(), migrationModeKey{}, true)
 		logNotice(migrationCtx, "No {{|ApplicationName|}}%s{{[-]}} config file detected. Performing initial configuration.", "DockSTARTer2")
 		if migrated, ok := MigrateFromLegacy(migrationCtx); ok {
 			// Save the migrated config so we don't migrate again next time

@@ -1065,8 +1065,8 @@ func (m *TabbedVarsEditorModel) View() tea.View {
 		c := m.tabs[m.activeTab].editor.Cursor()
 		if c != nil {
 			layout := tui.GetLayout()
-			c.Position.X += m.lastOffsetX + layout.NestedLeftOffset()
-			c.Position.Y += m.lastOffsetY + layout.NestedTopOffset() + m.subtitleHeight
+			c.X += m.lastOffsetX + layout.NestedLeftOffset()
+			c.Y += m.lastOffsetY + layout.NestedTopOffset() + m.subtitleHeight
 			v.Cursor = c
 		}
 	}

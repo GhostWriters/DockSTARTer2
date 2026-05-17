@@ -25,6 +25,7 @@ import (
 	"github.com/pgavlin/markdown-kit/styles"
 )
 
+//nolint:unused
 func handleMan(ctx context.Context, group *CommandGroup) error {
 	if len(group.Args) == 0 {
 		logger.Error(ctx, "The '{{|UserCommand|}}%s{{[-]}}' command requires an application name.", group.Command)

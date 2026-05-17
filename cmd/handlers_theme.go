@@ -112,6 +112,7 @@ func handleTheme(ctx context.Context, group *CommandGroup) error {
 	return nil
 }
 
+//nolint:unused
 func parseTitleAlign(ctx context.Context, arg, label string) (string, error) {
 	switch strings.ToLower(arg) {
 	case "left", "center":
@@ -121,6 +122,7 @@ func parseTitleAlign(ctx context.Context, arg, label string) (string, error) {
 	return "", fmt.Errorf("invalid %s alignment", label)
 }
 
+//nolint:unused
 func handleThemeSettings(ctx context.Context, group *CommandGroup) error {
 	conf := config.LoadAppConfig()
 	switch group.Command {
@@ -280,6 +282,8 @@ func handleThemeSettings(ctx context.Context, group *CommandGroup) error {
 
 // resolveExtractDest returns the destination directory for theme extraction.
 // "user:" → user themes directory; "" → current directory; otherwise the argument is used as-is.
+//
+//nolint:unused
 func resolveExtractDest(arg string) string {
 	if arg == "user:" {
 		return paths.GetThemesDir()
@@ -290,6 +294,7 @@ func resolveExtractDest(arg string) string {
 	return arg
 }
 
+//nolint:unused
 func handleThemeExtract(ctx context.Context, group *CommandGroup) error {
 	switch group.Command {
 	case "--theme-extract":
@@ -370,6 +375,7 @@ func handleThemeExtract(ctx context.Context, group *CommandGroup) error {
 	return nil
 }
 
+//nolint:unused
 func handleThemeTable(ctx context.Context) error {
 	headers := []string{"Theme", "Description", "Author"}
 	themes, err := theme.List()

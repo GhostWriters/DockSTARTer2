@@ -423,12 +423,10 @@ func (d checkboxItemDelegate) Render(w io.Writer, m list.Model, index int, item 
 //   - IsEditing rows:     indented inline text-input display (Tag holds current text + cursor)
 //   - IsSeparator rows:   unchanged (letter headers / blank spacers)
 type groupedItemDelegate struct {
-	menuID              string
 	maxTagLen           int // max tag width of header rows only
 	focused             bool
 	activeCol           CheckboxColumn
 	showLockGutter      bool
-	statusGutterWidth   int
 	activityGutterWidth int
 }
 

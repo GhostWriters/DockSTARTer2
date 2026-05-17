@@ -14,9 +14,6 @@ import (
 	gossh "golang.org/x/crypto/ssh"
 )
 
-// sessionBusyWebMsg is sent to a browser when a primary session is already active.
-const sessionBusyWebMsg = "A DockSTARTer2 session is already active.\r\nUse 'ds2 --disconnect' on the host to force-release the session.\r\n"
-
 // resizeMsg is the JSON structure the browser sends for terminal resize events.
 type resizeMsg struct {
 	Type string `json:"type"`
@@ -29,7 +26,7 @@ type resizeMsg struct {
 // are translated into SSH window-change requests so bubbletea receives proper
 // tea.WindowSizeMsg messages via the normal SSH path.
 func handleWebSocket(ctx context.Context, conn *websocket.Conn, clientAddr string, cfg config.ServerConfig, signer gossh.Signer) {
-	defer conn.CloseNow()
+	defer func() { _ = conn.CloseNow() }()
 
 	// Wait for the browser's initial resize so we can set the PTY size before
 	// the first frame is rendered.

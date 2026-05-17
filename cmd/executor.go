@@ -23,6 +23,7 @@ type CmdState = commands.CmdState
 // commandDefs aliases the shared registry. All entries live in internal/commands/registry.go.
 var commandDefs = commands.Registry
 
+//nolint:unused
 func handleConfigSettings(ctx context.Context, group *CommandGroup) error {
 	conf := config.LoadAppConfig()
 	switch group.Command {
