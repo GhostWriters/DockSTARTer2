@@ -50,6 +50,7 @@ func newPromptDialog(title, question string, sensitive bool) *promptDialogModel 
 	tiStyles.Focused.Text = styles.ItemNormal.Background(bg)
 	tiStyles.Blurred.Prompt = styles.ItemNormal.Background(bg)
 	tiStyles.Blurred.Text = styles.ItemNormal.Background(bg)
+	tiStyles.Cursor.Color = TextCursorColor()
 	ti.SetStyles(tiStyles)
 
 	return &promptDialogModel{

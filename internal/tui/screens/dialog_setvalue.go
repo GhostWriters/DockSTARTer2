@@ -81,6 +81,7 @@ func newSetValueDialog(
 	tiStyles.Focused.Text = styles.ItemNormal.Background(bg)
 	tiStyles.Blurred.Prompt = styles.ItemNormal.Background(bg)
 	tiStyles.Blurred.Text = styles.ItemNormal.Background(bg)
+	tiStyles.Cursor.Color = tui.TextCursorColor()
 	ti.SetStyles(tiStyles)
 
 	return &setValueDialogModel{
