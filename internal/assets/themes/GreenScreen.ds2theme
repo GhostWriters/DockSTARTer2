@@ -87,6 +87,8 @@ MarkerDeleted = "{{|Marker|}}"
 MarkerModified = "{{|Marker|}}"
 MarkerInvalid = "{{|Marker:::B|}}"
 TextCursor = "{{[:white:]}}"
+Checkbox = "{{|Dialog|}}"
+CheckboxSelected = "{{|Dialog|}}"
 MarkerLocked = "{{|MarkerInvalid|}}"
 
 EnvBuiltin = "{{|Dialog|}}"
