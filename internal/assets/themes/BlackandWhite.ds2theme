@@ -105,7 +105,7 @@ ListAppUserDefined = "{{[black:white]}}"
 ListTheme="{{|ListApp|}}"
 ListThemeUserDefined="{{|ListAppUserDefined|}}"
 
-KeyCap = "{{[black:white]}}"
+KeyCap = "{{[::-R]}}"
 AppPending = "{{[::BI]}}"
 ProgressWaiting = "{{[white:black]}}"
 ProgressInProgress = "{{[white:black:B]}}"
