@@ -420,7 +420,7 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) tui.HelpContext {
 				parts = append(parts, tab.description)
 			}
 			if tab.appMeta != nil && tab.appMeta.App.Website != "" {
-				parts = append(parts, "Website: {{|url|}}"+tab.appMeta.App.Website+"{{[-]}}")
+				parts = append(parts, "Website: {{|URL|}}"+tab.appMeta.App.Website+"{{[-]}}")
 			}
 			if appenv.IsAppDeprecated(context.Background(), base) {
 				parts = append(parts, "{{|TitleError|}}⚠ This app is deprecated.{{[-]}}")

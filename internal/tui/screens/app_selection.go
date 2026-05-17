@@ -146,7 +146,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool, connType string) 
 			parts = append(parts, desc)
 		}
 		if appMeta != nil && appMeta.App.Website != "" {
-			parts = append(parts, "Website: {{|url|}}"+appMeta.App.Website+"{{[-]}}")
+			parts = append(parts, "Website: {{|URL|}}"+appMeta.App.Website+"{{[-]}}")
 		}
 		if appenv.IsAppDeprecated(ctx, item.BaseApp) {
 			parts = append(parts, "{{|TitleError|}}⚠ This app is deprecated.{{[-]}}")
