@@ -145,7 +145,7 @@ ProgressInProgress = "{{[white:black:B]}}"
 ProgressCompleted = "{{[black:white]}}"
 
 # Version picker
-VersionSelected = "{{[white:black:B]}}"
+StatusVersionSelected = "{{[white:black:B]}}"
 
 [defaults]
 dialog_title_align = "center"
