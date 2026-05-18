@@ -83,6 +83,8 @@ Heading = "{{[white:black:B]}}"
 HeadingTag = "{{[black:white:B]}}"
 HeadingValue = "{{[black:white:BU]}}"
 HeadingAppDescription = "{{[white:black]}}"
+Checkbox = "{{|Dialog|}}"
+CheckboxSelected = "{{|Dialog|}}"
 
 # Inline text highlights
 Highlight = "{{[black:white:B]}}"
@@ -121,8 +123,6 @@ MarkerDeleted = "{{|Marker::red|}}"
 MarkerModified = "{{|Marker::yellow|}}"
 MarkerInvalid = "{{[white:red:B]}}"
 TextCursor = "{{[:yellow:]}}"
-Checkbox = "{{|Dialog|}}"
-CheckboxSelected = "{{|Dialog|}}"
 MarkerLocked = "{{|MarkerInvalid|}}"
 
 # Env variable types
@@ -154,3 +154,4 @@ border_color = 1
 dialog_title_align = "center"
 submenu_title_align = "left"
 panel_title_align = "center"
+
