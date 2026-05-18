@@ -71,7 +71,8 @@ func (m PanelModel) ViewString() string {
 	vpView = ApplyScrollbarColumn(vpView, len(m.lines), vpH, m.viewport.YOffset(), ctx.LineCharacters, ctx)
 
 	// Input box — bordered with submenu styling.
-	inputBoxWidth := m.width - 2 // inner content width (outer panel has no side borders)
+	// RenderTopBorderBoxCtx appends content without side borders, so full m.width is available.
+	inputBoxWidth := m.width
 	m.input.SetWidth(inputBoxWidth - 2)
 	if m.sessionActive() {
 		m.input.Placeholder = ""
