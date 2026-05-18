@@ -14,7 +14,6 @@ direct_suffix   = "]}}"
 Screen = "{{[cyan:blue:B]}}"
 StatusBar = "{{|Screen|}}"
 StatusBarBorder = "{{|StatusBar|}}"
-StatusBarSeparator = "{{|StatusBar|}}"
 
 # Dialogs and panels
 Dialog = "{{[black:white]}}"
