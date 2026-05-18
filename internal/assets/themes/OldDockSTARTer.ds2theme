@@ -117,9 +117,10 @@ LineNumberModifiedSelected = "{{|ModifiedText:white|}}"
 LineAddVariable = "{{|Dialog|}}"
 
 # Markers and cursor
-MarkerAdded = "{{[:green:]}}"
-MarkerDeleted = "{{[:red:]}}"
-MarkerModified = "{{[:yellow:]}}"
+Marker = ""
+MarkerAdded = "{{|Marker::green|}}"
+MarkerDeleted = "{{|Marker::red|}}"
+MarkerModified = "{{|Marker::yellow|}}"
 MarkerInvalid = "{{[white:red:B]}}"
 TextCursor = "{{[:white:]}}"
 Checkbox = "{{|Dialog|}}"
