@@ -289,6 +289,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 
 	// If no commands matched (or groups empty), launch TUI
 	if !ranCommand {
+		logger.Notice(ctx, fmt.Sprintf("%s command: '{{|UserCommand|}}%s{{[-]}}'", version.ApplicationName, version.CommandName))
 		if err := tui.Start(ctx, ""); err != nil {
 			exitCode = 1
 			if errors.Is(err, tui.ErrUserAborted) {
