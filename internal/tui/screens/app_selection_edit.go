@@ -17,7 +17,7 @@ func (s *AppSelectionScreen) editingTag(niceName, content, errMsg string) string
 	}
 	display += cursor
 	if errMsg != "" {
-		display += "  {{|StatusError|}}" + errMsg + "{{[-]}}"
+		display += "  {{|TitleError|}}" + errMsg + "{{[-]}}"
 	}
 	return display
 }

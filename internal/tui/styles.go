@@ -203,7 +203,6 @@ type Styles struct {
 	// Semantic styles derived from theme tags
 	StatusSuccess lipgloss.Style
 	StatusWarn    lipgloss.Style
-	StatusError   lipgloss.Style
 	Console       lipgloss.Style
 
 	// Console panel title color
@@ -242,7 +241,6 @@ type StyleContext struct {
 	HelpLine            lipgloss.Style
 	StatusSuccess       lipgloss.Style
 	StatusWarn          lipgloss.Style
-	StatusError         lipgloss.Style
 	Console             lipgloss.Style
 	StatusBarSelected   lipgloss.Style
 	ConsoleTitleColor   color.Color
@@ -294,7 +292,6 @@ func GetActiveContext() StyleContext {
 		HelpLine:            currentStyles.HelpLine,
 		StatusSuccess:       currentStyles.StatusSuccess,
 		StatusWarn:          currentStyles.StatusWarn,
-		StatusError:         currentStyles.StatusError,
 		Console:             currentStyles.Console,
 		StatusBarSelected:   currentStyles.StatusBarSelected,
 		ConsoleTitleColor:   currentStyles.ConsoleTitleColor,
@@ -550,7 +547,6 @@ func InitStyles(cfg config.AppConfig) {
 	// Initialize semantic styles from console color tags (Theme-specific to avoid log interference)
 	currentStyles.StatusSuccess = SemanticRawStyle("TitleNotice")
 	currentStyles.StatusWarn = SemanticRawStyle("TitleWarn")
-	currentStyles.StatusError = SemanticRawStyle("TitleError")
 	currentStyles.Console = theme.ConsoleSemanticRawStyle("ProgramBox")
 
 	currentStyles.ConsoleTitleColor = SemanticRawStyle("ConsoleTitle").GetForeground()
