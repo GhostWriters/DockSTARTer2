@@ -3,6 +3,12 @@ name = "GreenScreen"
 description = "Dockstarter Green Screen theme"
 author = "Westlin"
 
+[syntax]
+semantic_prefix = "{{|"
+semantic_suffix = "|}}"
+direct_prefix   = "{{["
+direct_suffix   = "]}}"
+
 [colors]
 
 Screen = "{{[black:green:B]}}"

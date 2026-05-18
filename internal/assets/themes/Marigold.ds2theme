@@ -3,6 +3,12 @@ name = "Marigold"
 description = "Dockstarter Marigold theme"
 author = "Westlin"
 
+[syntax]
+semantic_prefix = "{{|"
+semantic_suffix = "|}}"
+direct_prefix   = "{{["
+direct_suffix   = "]}}"
+
 [colors]
 
 Screen = "{{[black:yellow:B]}}"

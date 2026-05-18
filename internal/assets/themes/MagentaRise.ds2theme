@@ -3,6 +3,12 @@ name = "Magenta Rise"
 description = "Dockstarter Magenta Rise theme"
 author = "Westlin"
 
+[syntax]
+semantic_prefix = "{{|"
+semantic_suffix = "|}}"
+direct_prefix   = "{{["
+direct_suffix   = "]}}"
+
 [colors]
 
 Screen = "{{[magenta:black:B]}}"
