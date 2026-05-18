@@ -10,7 +10,6 @@ direct_prefix   = "{{["
 direct_suffix   = "]}}"
 
 [colors]
-
 # Backdrop
 Screen = "{{[magenta:black:B]}}"
 StatusBar = "{{|Screen|}}"
