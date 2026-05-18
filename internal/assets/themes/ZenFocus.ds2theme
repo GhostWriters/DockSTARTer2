@@ -45,7 +45,6 @@ StatusHostname = "{{|StatusFields|}}"
 Title = "{{|BoxTitle|}}"
 TitleHelp = "{{|Helpline|}}"
 TitleNotice = "{{[white:green:B]}}"
-OptionValue = "{{[black:yellow:B]}}"
 TitleWarn = "{{[black:white:B]}}"
 TitleError = "{{[white:black:BU]}}"
 TitleSuccess = "{{[black:white]}}"
@@ -81,6 +80,7 @@ Heading = "{{[white:black:B]}}"
 HeadingTag = "{{[black:white:B]}}"
 HeadingValue = "{{[black:white:BU]}}"
 HeadingAppDescription = "{{[white:black]}}"
+OptionValue = "{{[black:yellow:B]}}"
 Checkbox = "{{|Dialog|}}"
 CheckboxSelected = "{{|Dialog|}}"
 
@@ -152,4 +152,5 @@ border_color = 1
 dialog_title_align = "center"
 submenu_title_align = "left"
 panel_title_align = "center"
+
 
