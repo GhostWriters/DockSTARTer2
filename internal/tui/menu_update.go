@@ -596,9 +596,10 @@ func (m *MenuModel) calculateLayout() {
 	// Constrain width to fit within terminal dialog area using Layout helpers
 	var maxListWidth int
 	if m.subMenuMode {
-		// Submenu: just has its own border, content fills the rest
+		// Submenu: scrollbar sits flush against the right border (no right margin),
+		// so only subtract the left margin, not both.
 		maxListWidth, _ = layout.InnerContentSize(m.width, m.height)
-		maxListWidth -= layout.ContentMarginWidth()
+		maxListWidth -= layout.ContentSideMargin
 	} else {
 		// Full dialog: Outer Border (2) + Margins (2) + Inner Border (2)
 		maxListWidth = m.width - (layout.BorderWidth() + layout.ContentMarginWidth() + layout.BorderWidth())
