@@ -11,12 +11,14 @@ direct_suffix   = "]}}"
 
 [colors]
 
+# Backdrop
 Screen = "{{[black:white:B]}}"
 StatusBar = "{{[white:black:B]}}"
 StatusBarBorder = "{{|StatusBar|}}"
 StatusBarSeparator = "{{|StatusBar|}}"
 StatusBarSelected = "{{|TagSelected|}}"
 
+# Dialogs and panels
 Dialog = "{{[white:black]}}"
 Border = "{{[white:black:B]}}"
 Border2 = "{{[grey:black:B]}}"
@@ -26,6 +28,7 @@ ProgramBox = "{{[white:black:-]}}"
 ConsoleBox = "{{|ProgramBox|}}"
 ConsoleBorder = "{{|Helpline|}}"
 
+# Header bar
 StatusFields = "{{[black:white:-]}}"
 StatusName = "{{|StatusFields|}}"
 StatusVersion = "{{|StatusFields|}}"
@@ -38,6 +41,7 @@ StatusUpdate = "{{|StatusBar:-:-:-R|}}"
 StatusUpdateBrackets = "{{|StatusUpdate|}}"
 StatusHostname = "{{|StatusFields|}}"
 
+# Titles and messages
 Title = "{{|BoxTitle|}}"
 TitleHelp = "{{|Helpline|}}"
 TitleNotice = "{{[white:green:B]}}"
@@ -52,12 +56,15 @@ ConsoleTitle = "{{|ConsoleBorder|}}"
 TitleCheckbox = ""
 TitleCheckboxFocused = "{{|TitleSubMenuFocused|}}"
 
+# Focus indicators
 TitleUnfocusedIndicator = "{{[::-B]}}"
 TitleFocusIndicator = "{{[::-B]}}"
 
+# Submenu titles
 TitleSubMenu = "{{|Title|}}"
 TitleSubMenuFocused = "{{|Title:::R|}}"
 
+# Menu, buttons, and help
 CommandLine = "{{|Screen|}}"
 ButtonActive = "{{[black:white:B]}}"
 ButtonInactive = "{{[white:black]}}"
@@ -76,6 +83,7 @@ HeadingTag = "{{[black:white:B]}}"
 HeadingValue = "{{[black:white:BU]}}"
 HeadingAppDescription = "{{[white:black]}}"
 
+# Inline text highlights
 Highlight = "{{[black:white:B]}}"
 ApplicationName = "{{|Highlight|}}"
 RunningCommand = "{{|Highlight|}}"
@@ -93,6 +101,7 @@ Theme = "{{|Highlight|}}"
 Yes = "{{|TitleSuccess|}}"
 No = "{{|TitleError|}}"
 
+# Env editor
 LineHeading = "{{[white:black:BU]}}"
 LineComment = "{{|Dialog:::RB|}}"
 LineOther = "{{|Dialog:::R|}}"
@@ -104,6 +113,7 @@ LineNumberModified = "{{|ModifiedText|}}"
 LineNumberModifiedSelected = "{{[black:yellow:B]}}"
 LineAddVariable = "{{|Dialog:::R|}}"
 
+# Markers and cursor
 MarkerAdded = "{{[:green:]}}"
 MarkerDeleted = "{{[:red:]}}"
 MarkerModified = "{{[:yellow:]}}"
@@ -113,24 +123,28 @@ Checkbox = "{{|Dialog|}}"
 CheckboxSelected = "{{|Dialog|}}"
 MarkerLocked = "{{|MarkerInvalid|}}"
 
+# Env variable types
 EnvBuiltin = "{{[black:cyan]}}"
 EnvUser = "{{[green:cyan]}}"
 EnvInvalid = "{{[red:cyan]}}"
 EnvDuplicate = "{{[magenta:cyan]}}"
 EnvPendingDelete = "{{|Dialog:::DS|}}"
 
+# List item overrides
 ListDefault = ""
 ListApp = ""
 ListAppUserDefined = "{{[black:white:B]}}"
 ListTheme = "{{|ListApp|}}"
 ListThemeUserDefined = "{{|ListAppUserDefined|}}"
 
+# Keys, progress, and indicators
 KeyCap = "{{[::-R]}}"
 AppPending = "{{[black:white:B]}}"
 ProgressWaiting = "{{[black:white:B]}}"
 ProgressInProgress = "{{[white:black:B]}}"
 ProgressCompleted = "{{[black:white:B]}}"
 
+# Version picker
 VersionSelected = "{{|StatusBar|}}"
 
 [defaults]
