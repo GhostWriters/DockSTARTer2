@@ -99,7 +99,9 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 		itemGutter := ""
 		if m.showLockGutter {
 			lockChar := ""
-			if item.Locked {
+			if item.IsInvalid {
+				lockChar = RenderThemeText("{{|MarkerInvalid|}}"+invalidMarker+"{{[-]}}", neutralStyle)
+			} else if item.Locked {
 				lockChar = RenderThemeText("{{|MarkerLocked|}}!{{[-]}}", neutralStyle)
 			} else {
 				lockChar = neutralStyle.Render(" ")
