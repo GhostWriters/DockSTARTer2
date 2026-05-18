@@ -29,9 +29,9 @@ func RenderWithBackdrop(dialogContent string, helpText string, width, height int
 	b.WriteString(headerStyle.Render(headerContent))
 	b.WriteString("\n")
 
-	// Separator: Fill with StatusBarSeparator background, then draw separator chars
+	// Separator: draw separator chars using the border style
 	sep := strutil.Repeat(styles.SepChar, width-2)
-	sepStyle := styles.StatusBarSeparator.
+	sepStyle := styles.StatusBarBorder.
 		Width(width).
 		Padding(0, 1) // 1-char padding left/right
 	b.WriteString(sepStyle.Render(sep))

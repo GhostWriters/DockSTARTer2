@@ -183,7 +183,6 @@ type Styles struct {
 	HeaderBG           lipgloss.Style
 	StatusBar          lipgloss.Style
 	StatusBarBorder    lipgloss.Style
-	StatusBarSeparator lipgloss.Style
 	StatusBarSelected  lipgloss.Style
 
 	// Help line
@@ -524,7 +523,6 @@ func InitStyles(cfg config.AppConfig) {
 
 	// Header / Status Bar
 	currentStyles.StatusBar = SemanticRawStyle("StatusBar")
-	currentStyles.StatusBarSeparator = SemanticRawStyle("StatusBarSeparator")
 	currentStyles.StatusBarSelected = SemanticRawStyle("StatusBarSelected")
 	currentStyles.StatusBarBorder = SemanticRawStyle("StatusBarBorder")
 	{
