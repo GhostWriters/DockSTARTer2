@@ -29,9 +29,10 @@ Scrollbar = "{{[white]}}"
 ScrollbarZone = "{{[black]}}"
 
 # Header bar
-StatusName = "{{[black:blue:B]}}"
-StatusVersion = "{{|StatusName|}}"
-StatusVersionBrackets = "{{|StatusVersion|}}"
+StatusFields = "{{[black:blue:B]}}"
+StatusName = "{{|StatusFields|}}"
+StatusVersion = "{{|StatusFields|}}"
+StatusVersionBrackets = "{{|StatusFields|}}"
 StatusVersionSpace = "{{[-]}}"
 StatusVersionSelected = "{{[black:cyan:B]}}"
 StatusFlags = "{{[-]}}"
@@ -39,7 +40,7 @@ StatusFlagsBrackets = "{{[black:white]}}"
 StatusFlagsSpace = "{{[black:white]}}"
 StatusUpdate = "{{[black:white]}}"
 StatusUpdateBrackets = "{{[black:white]}}"
-StatusHostname = "{{[black:blue:B]}}"
+StatusHostname = "{{|StatusFields|}}"
 StatusBarSelected = "{{|TagSelected|}}"
 
 # Titles and messages
