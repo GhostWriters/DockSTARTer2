@@ -15,6 +15,7 @@ import (
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/tui/components/enveditor/memoization"
 	"DockSTARTer2/internal/tui/components/enveditor/runeutil"
+	"DockSTARTer2/internal/tui/glyphs"
 
 	"charm.land/bubbles/v2/cursor"
 	"charm.land/bubbles/v2/key"
@@ -2077,7 +2078,7 @@ func (m Model) promptView(displayLine, dataLine int) (prompt string) {
 			case meta.PendingDelete:
 				char = "-"
 			case meta.IsInvalid:
-				char = "!"
+				char = glyphs.InvalidMarker
 			case meta.IsNewLine || meta.InitialLine == "":
 				char = "+"
 			default:
