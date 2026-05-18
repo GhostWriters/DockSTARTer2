@@ -7,6 +7,7 @@ import (
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/tui"
+	"DockSTARTer2/internal/tui/glyphs"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
@@ -19,8 +20,8 @@ func getAppSelectionLegend() string {
 	cbChecked, cbUnchecked := "[{{|TagSelected|}}x{{[-]}}]", "[{{|TagSelected|}} {{[-]}}]"
 	if ctx.LineCharacters {
 		l, r = "▸", "◂"
-		cbChecked = "{{|TagSelected|}}\u25A3{{[-]}}"   // checkSelected (▣)
-		cbUnchecked = "{{|TagSelected|}}\u25A1{{[-]}}" // checkUnselected (□)
+		cbChecked = "{{|TagSelected|}}" + glyphs.CheckSelected + "{{[-]}}"
+		cbUnchecked = "{{|TagSelected|}}" + glyphs.CheckUnselected + "{{[-]}}"
 	}
 
 	// Line 1: Gutter markers

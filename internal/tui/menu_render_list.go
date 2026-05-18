@@ -786,12 +786,12 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 			checkboxA3 = neutralStyle.Render(" ") + cbStyleA.Render(cA) + neutralStyle.Render(" ")
 			checkboxE3 = neutralStyle.Render(" ") + cbStyleE.Render(cE) + neutralStyle.Render(" ")
 		} else {
-			caA, ceA := "[ ]", "[ ]"
+			caA, ceA := checkUnselectedAscii, checkUnselectedAscii
 			if item.Checked {
-				caA = "[x]"
+				caA = checkSelectedAscii
 			}
 			if item.Enabled {
-				ceA = "[x]"
+				ceA = checkSelectedAscii
 			}
 			checkboxA3 = neutralStyle.Render("[") + cbStyleA.Render(string(caA[1])) + neutralStyle.Render("]")
 			checkboxE3 = neutralStyle.Render("[") + cbStyleE.Render(string(ceA[1])) + neutralStyle.Render("]")

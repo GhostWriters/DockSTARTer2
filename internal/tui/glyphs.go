@@ -1,31 +1,21 @@
 package tui
 
+import "DockSTARTer2/internal/tui/glyphs"
+
+// Package-level aliases so existing tui code continues to use the short lowercase names.
 const (
-	// radioSelected (◉) - Fisheye (U+25C9)
-	radioSelected = "◉"
-	// radioUnselected (○) - White Circle (U+25CB)
-	radioUnselected = "○"
-
-	// checkSelected (▣) - White Square Containing Black Small Square (U+25A3)
-	checkSelected = "▣"
-	// checkUnselected (□) - White Square (U+25A1)
-	checkUnselected = "□"
-
-	// subMenuExpanded (▼) - Black Down-Pointing Triangle (U+25BC) — group header is always expanded
-	subMenuExpanded      = "▼"
-	subMenuExpandedAscii = "[v]"
-
-	// ASCII variants
-	radioSelectedAscii   = "(*)"
-	radioUnselectedAscii = "( )"
-	checkSelectedAscii   = "[x]"
-	checkUnselectedAscii = "[ ]"
-
-	// invalidMarker (!) - marks a menu item whose backing file could not be parsed
-	invalidMarker      = "!"
-	invalidMarkerAscii = "!"
-
-	// lockedMarker (✗) - Ballot X (U+2717) + VS15 (︎) for text style
-	lockedMarker      = "✗︎"
-	lockedMarkerAscii = "!"
+	radioSelected        = glyphs.RadioSelected
+	radioUnselected      = glyphs.RadioUnselected
+	checkSelected        = glyphs.CheckSelected
+	checkUnselected      = glyphs.CheckUnselected
+	subMenuExpanded      = glyphs.SubMenuExpanded
+	subMenuExpandedAscii = glyphs.SubMenuExpandedAscii
+	radioSelectedAscii   = glyphs.RadioSelectedAscii
+	radioUnselectedAscii = glyphs.RadioUnselectedAscii
+	checkSelectedAscii   = glyphs.CheckSelectedAscii
+	checkUnselectedAscii = glyphs.CheckUnselectedAscii
+	invalidMarker        = glyphs.InvalidMarker
+	invalidMarkerAscii   = glyphs.InvalidMarkerAscii
+	lockedMarker         = glyphs.LockedMarker
+	lockedMarkerAscii    = glyphs.LockedMarkerAscii
 )
