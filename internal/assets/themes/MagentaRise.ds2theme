@@ -33,6 +33,7 @@ StatusName = "{{[black:white]}}"
 StatusVersion = "{{[black:white]}}"
 StatusVersionBrackets = "{{[black:white]}}"
 StatusVersionSpace = "{{[white:black]}}"
+StatusVersionSelected = "{{[black:magenta:B]}}"
 StatusFlags = "{{[white:black]}}"
 StatusFlagsBrackets = "{{[black:white]}}"
 StatusFlagsSpace = "{{[black:white]}}"
@@ -143,9 +144,6 @@ AppPending = "{{[magenta:black:B]}}"
 ProgressWaiting = "{{[white:black]}}"
 ProgressInProgress = "{{[white:black:B]}}"
 ProgressCompleted = "{{[black:white]}}"
-
-# Version picker
-StatusVersionSelected = "{{[black:magenta:B]}}"
 
 [defaults]
 dialog_title_align = "center"
