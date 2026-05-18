@@ -216,7 +216,7 @@ func (m *MenuModel) viewSubMenu() string {
 	} else {
 		content := m.renderVerticalListBlock(ctx)
 		paddedContent := lipgloss.NewStyle().
-			Padding(0, layout.ContentSideMargin).
+			Padding(0, 0, 0, layout.ContentSideMargin).
 			Width(contentWidth).
 			Render(content)
 		innerParts = append(innerParts, paddedContent)
