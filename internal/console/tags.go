@@ -42,7 +42,8 @@ func rebuildRegexes() {
 	dirEscPre := regexp.QuoteMeta(DirectPrefix)
 	dirEscSuf := regexp.QuoteMeta(DirectSuffix)
 
-	semanticRegex = regexp.MustCompile(semEscPre + `(?P<content>[A-Za-z0-9_]+(?::[A-Za-z0-9_:\-#;~]*)?)` + semEscSuf)
+	// Allow either a named tag (optionally with modifiers) or bare modifiers with no name (e.g. {{|:red:black:B|}})
+	semanticRegex = regexp.MustCompile(semEscPre + `(?P<content>[A-Za-z0-9_]+(?::[A-Za-z0-9_:\-#;~]*)?|:[A-Za-z0-9_:\-#;~]+)` + semEscSuf)
 	directRegex = regexp.MustCompile(dirEscPre + `(?P<content>[A-Za-z0-9_:\-#;~]+)` + dirEscSuf)
 }
 
@@ -157,6 +158,11 @@ func ExpandTagsWithMap(text string, styleMap map[string]string, stripUnresolvabl
 			return result
 		}
 
+		// Name didn't resolve (or was empty) — if modifiers are present, emit them as a
+		// direct tag so {{|:fg:bg:flags|}} and {{|Unknown:fg:bg:flags|}} still apply styling.
+		if modifiers != "" {
+			return WrapDirect(modifiers)
+		}
 		if stripUnresolvable {
 			return ""
 		}
