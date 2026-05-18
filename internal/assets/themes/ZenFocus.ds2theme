@@ -145,7 +145,7 @@ ProgressInProgress = "{{[white:black:B]}}"
 ProgressCompleted = "{{[black:white:B]}}"
 
 # Version picker
-VersionSelected = "{{|StatusBar|}}"
+StatusVersionSelected = "{{|StatusBar|}}"
 
 [defaults]
 borders = true
