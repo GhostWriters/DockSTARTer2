@@ -13,6 +13,11 @@ func GetDefaultEnv() ([]byte, error) {
 	return embeddedFS.ReadFile("defaults/.env.example")
 }
 
+// GetDefaultConfig returns the content of the default dockstarter2.toml file.
+func GetDefaultConfig() ([]byte, error) {
+	return embeddedFS.ReadFile("defaults/dockstarter2.toml")
+}
+
 // GetTheme reads a theme from the embedded filesystem.
 func GetTheme(name string) ([]byte, error) {
 	// embed.FS always uses forward slashes regardless of OS.

@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	_ "embed"
 	"fmt"
 	"log/slog"
 	"os"
@@ -14,6 +13,7 @@ import (
 	"runtime"
 	"strings"
 
+	"DockSTARTer2/internal/assets"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
@@ -23,8 +23,11 @@ import (
 	toml "github.com/pelletier/go-toml/v2"
 )
 
-//go:embed defaults/dockstarter2.toml
-var defaultsToml []byte
+
+func defaultConfigBytes() []byte {
+	b, _ := assets.GetDefaultConfig()
+	return b
+}
 
 type migrationModeKey struct{}
 
@@ -207,7 +210,7 @@ func CollapseVariables(path string) string {
 func LoadAppConfig() AppConfig {
 	var conf AppConfig
 	// Start from embedded defaults so every key has a known baseline value.
-	_ = toml.Unmarshal(defaultsToml, &conf)
+	_ = toml.Unmarshal(defaultConfigBytes(), &conf)
 
 	// Set architecture (runtime only)
 	conf.Arch = getArch()
@@ -272,7 +275,7 @@ func LoadAppConfig() AppConfig {
 			}, dir)
 		}
 	}
-	_ = os.WriteFile(cfgPath, defaultsToml, 0644)
+	_ = os.WriteFile(cfgPath, defaultConfigBytes(), 0644)
 	logNotice(context.Background(), "Copying '{{|File|}}%s{{[-]}}' to '{{|File|}}%s{{[-]}}'.", "embedded defaults", cfgPath)
 	conf.RawPaths = conf.Paths
 	conf.Paths.ConfigFolder = filepath.Clean(ExpandVariables(conf.Paths.ConfigFolder))
@@ -288,7 +291,7 @@ func LoadAppConfig() AppConfig {
 // a file watcher to gate whether a change should be applied.
 func TryLoadAppConfig() (AppConfig, error) {
 	var conf AppConfig
-	_ = toml.Unmarshal(defaultsToml, &conf)
+	_ = toml.Unmarshal(defaultConfigBytes(), &conf)
 	conf.Arch = getArch()
 
 	data, err := os.ReadFile(paths.GetConfigFilePath())
@@ -591,7 +594,7 @@ func MigrateFromLegacy(ctx context.Context) (AppConfig, bool) {
 			logNotice(ctx, "Migrating '{{|File|}}%s{{[-]}}' to '{{|File|}}%s{{[-]}}'.", path, paths.GetConfigFilePath())
 
 			// Start with defaults so the final saved file is complete
-			_ = toml.Unmarshal(defaultsToml, &conf)
+			_ = toml.Unmarshal(defaultConfigBytes(), &conf)
 
 			// Apply to the actual merged config
 			_, _ = UnmarshalLegacyIni(data, &conf)
