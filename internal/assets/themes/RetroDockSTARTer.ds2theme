@@ -3,6 +3,12 @@ name = "RetroDockSTARTer"
 description = "The retro DockSTARTer theme"
 author = "CLHatch"
 
+[syntax]
+semantic_prefix = "{{|"
+semantic_suffix = "|}}"
+direct_prefix   = "{{["
+direct_suffix   = "]}}"
+
 [colors]
 
 Screen = "{{[black:magenta]}}"

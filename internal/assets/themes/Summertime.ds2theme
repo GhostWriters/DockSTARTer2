@@ -3,6 +3,12 @@ name = "Summertime"
 description = "Dockstarter Summertime theme"
 author = "Westlin"
 
+[syntax]
+semantic_prefix = "{{|"
+semantic_suffix = "|}}"
+direct_prefix   = "{{["
+direct_suffix   = "]}}"
+
 [colors]
 
 Screen = "{{[yellow:blue:B]}}"

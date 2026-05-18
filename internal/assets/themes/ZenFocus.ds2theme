@@ -3,6 +3,12 @@ name = "ZenFocus"
 description = "Dockstarter2 Zen Focus theme"
 author = "Gemini AI"
 
+[syntax]
+semantic_prefix = "{{|"
+semantic_suffix = "|}}"
+direct_prefix   = "{{["
+direct_suffix   = "]}}"
+
 [colors]
 
 Screen = "{{[black:white:B]}}"

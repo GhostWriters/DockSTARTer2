@@ -3,6 +3,12 @@ name = "Murica"
 description = "Dockstarter Murica Heck Yea! theme"
 author = "Westlin"
 
+[syntax]
+semantic_prefix = "{{|"
+semantic_suffix = "|}}"
+direct_prefix   = "{{["
+direct_suffix   = "]}}"
+
 [colors]
 
 Screen = "{{[white:blue:B]}}"

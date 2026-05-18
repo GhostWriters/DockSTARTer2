@@ -3,6 +3,12 @@ name = "Debian"
 description = "Debian colors"
 author = "CLHatch"
 
+[syntax]
+semantic_prefix = "{{|"
+semantic_suffix = "|}}"
+direct_prefix   = "{{["
+direct_suffix   = "]}}"
+
 [colors]
 
 Screen = "{{[cyan:blue:B]}}"

@@ -3,6 +3,12 @@ name = "Firehouse"
 description = "Dockstarter Firehouse theme"
 author = "Westlin"
 
+[syntax]
+semantic_prefix = "{{|"
+semantic_suffix = "|}}"
+direct_prefix   = "{{["
+direct_suffix   = "]}}"
+
 [colors]
 
 Screen = "{{[red:black:B]}}"
