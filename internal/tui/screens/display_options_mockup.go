@@ -66,7 +66,6 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 		HelpLine:            tui.SemanticRawStyle("Preview_Helpline"),
 		StatusSuccess:       tui.SemanticRawStyle("Preview_TitleNotice"),
 		StatusWarn:          tui.SemanticRawStyle("Preview_TitleWarn"),
-		StatusError:         tui.SemanticRawStyle("Preview_TitleError"),
 		DialogTitleAlign:    s.config.UI.DialogTitleAlign,
 		SubmenuTitleAlign:   s.config.UI.SubmenuTitleAlign,
 		PanelTitleAlign:     s.config.UI.PanelTitleAlign,
