@@ -18,7 +18,7 @@ StatusBarBorder = "{{|StatusBar|}}"
 # Dialogs and panels
 Dialog = "{{[white:black]}}"
 Border = "{{[white:black:B]}}"
-Border2 = "{{[grey:black:B]}}"
+Border2 = "{{[white:black:D]}}"
 Shadow = "{{[black]}}"
 BoxTitle = "{{[white:black]}}"
 ProgramBox = "{{[white:black:-]}}"
