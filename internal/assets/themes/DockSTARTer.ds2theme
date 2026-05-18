@@ -15,7 +15,6 @@ Screen = "{{[black:white:-]}}"
 StatusBar = "{{[black:cyan:-]}}"
 StatusBarBorder = "{{|Screen|}}"
 StatusBarSeparator = "{{|Screen|}}"
-StatusBarSelected = "{{|TagSelected|}}"
 
 # Dialogs and panels
 Dialog = "{{[black:cyan:-]}}"
@@ -40,6 +39,7 @@ StatusFlagsSpace = "{{|StatusVersionSpace|}}"
 StatusUpdate = "{{[-:-:-R]}}"
 StatusUpdateBrackets = "{{|StatusUpdate|}}"
 StatusHostname = "{{|StatusFields|}}"
+StatusBarSelected = "{{|TagSelected|}}"
 
 # Titles and messages
 Title = "{{[black:-:-U]}}"
@@ -148,5 +148,6 @@ ProgressCompleted = "{{[cyan:black:-B]}}"
 dialog_title_align = "center"
 submenu_title_align = "left"
 panel_title_align = "center"
+
 
 
