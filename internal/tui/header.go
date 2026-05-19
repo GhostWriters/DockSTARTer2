@@ -303,7 +303,7 @@ func (m HeaderModel) renderLeft() string {
 					leftText += "{{|StatusFlagsBrackets|}}|{{[-]}}{{|StatusFlags|}}"
 				}
 			} else if !isFocused {
-				leftText += "{{|StatusFlags|}}"
+				leftText += "{{[-]}}{{|StatusFlags|}}"
 			}
 			leftText += flag
 		}
@@ -311,7 +311,7 @@ func (m HeaderModel) renderLeft() string {
 
 	// 5. Close bracket for flags
 	if !isFocused {
-		leftText += "{{|StatusFlagsBrackets|}}"
+		leftText += "{{[-]}}{{|StatusFlagsBrackets|}}"
 	}
 	leftText += "|"
 
@@ -341,15 +341,15 @@ func (m HeaderModel) renderVersions() (appText, tmplText string) {
 
 		// 1. Status Icon / Prefix
 		if isError {
-			text += "{{|StatusUpdate|}}?{{|StatusBar|}}"
+			text += "{{|StatusUpdate|}}?{{[-]}}{{|StatusBar|}}"
 		} else if isAvailable {
-			text += "{{|StatusUpdate|}}*{{|StatusBar|}}"
+			text += "{{|StatusUpdate|}}*{{[-]}}{{|StatusBar|}}"
 		} else {
 			text += " "
 		}
 
 		// 2. Label + Open Bracket (Standard or Update color)
-		text += "{{|StatusVersion|}}" + label + ":[{{|StatusBar|}}"
+		text += "{{|StatusVersion|}}" + label + ":[{{[-]}}{{|StatusBar|}}"
 
 		// 3. Version Number (The Interactive Part)
 		var verStyled string
@@ -358,12 +358,12 @@ func (m HeaderModel) renderVersions() (appText, tmplText string) {
 		} else if isError || isAvailable {
 			verStyled = "{{|StatusUpdate|}}" + ver + "{{[-]}}{{|StatusBar|}}"
 		} else {
-			verStyled = "{{|StatusVersion|}}" + ver + "{{|StatusBar|}}"
+			verStyled = "{{|StatusVersion|}}" + ver + "{{[-]}}{{|StatusBar|}}"
 		}
 		text += verStyled
 
 		// 4. Close Bracket
-		text += "{{|StatusVersion|}}]{{|StatusBar|}}"
+		text += "{{|StatusVersion|}}]{{[-]}}{{|StatusBar|}}"
 
 		return MaintainBackground(RenderThemeText(text, styles.HeaderBG), styles.HeaderBG)
 	}
