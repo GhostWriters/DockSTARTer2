@@ -11,9 +11,9 @@ direct_suffix   = "]}}"
 
 [colors]
 # Backdrop
-Screen = "{{[magenta:black:B]}}"
-StatusBar = "{{|Screen|}}"
-StatusBarBorder = "{{|StatusBar|}}"
+Screen = "{{[magenta:black]}}"
+StatusBar = "{{[black:magenta]}}"
+StatusBarBorder = "{{|Screen|}}"
 
 # Dialogs and panels
 Dialog = "{{[magenta:black]}}"
@@ -26,17 +26,17 @@ ConsoleBox = "{{|ProgramBox|}}"
 ConsoleBorder = "{{|Helpline|}}"
 
 # Header bar
-StatusFields = "{{[black:white]}}"
+StatusFields = "{{[magenta:black]}}"
 StatusName = "{{|StatusFields|}}"
 StatusVersion = "{{|StatusFields|}}"
 StatusVersionBrackets = "{{|StatusFields|}}"
-StatusVersionSpace = "{{[white:black]}}"
-StatusVersionSelected = "{{[black:magenta:B]}}"
+StatusVersionSpace = "{{|StatusFields|}}"
+StatusVersionSelected = "{{|StatusVersion:::R|}}"
 StatusFlags = "{{[white:black]}}"
 StatusFlagsBrackets = "{{|StatusFields|}}"
 StatusFlagsSpace = "{{|StatusFields|}}"
-StatusUpdate = "{{[white:black]}}"
-StatusUpdateBrackets = "{{[white:black]}}"
+StatusUpdate = "{{|StatusVersion:::BU|}}"
+StatusUpdateBrackets = "{{|StatusUpdate|}}"
 StatusHostname = "{{|StatusFields|}}"
 StatusBarSelected = "{{|TagSelected|}}"
 
