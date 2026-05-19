@@ -354,7 +354,7 @@ func (m HeaderModel) renderVersions() (appText, tmplText string) {
 		// 3. Version Number (The Interactive Part)
 		var verStyled string
 		if isFocused {
-			verStyled = "{{|StatusBarSelected|}}" + ver + "{{|StatusBar|}}"
+			verStyled = "{{|StatusVersionSelected|}}" + ver + "{{|StatusBar|}}"
 		} else if isError || isAvailable {
 			verStyled = "{{|StatusUpdate|}}" + ver + "{{|StatusBar|}}"
 		} else {
