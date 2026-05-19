@@ -300,7 +300,7 @@ func (m HeaderModel) renderLeft() string {
 				if isFocused {
 					leftText += "|"
 				} else {
-					leftText += "{{|StatusFlagsBrackets|}}|{{|StatusFlags|}}"
+					leftText += "{{|StatusFlagsBrackets|}}|{{[-]}}{{|StatusFlags|}}"
 				}
 			} else if !isFocused {
 				leftText += "{{|StatusFlags|}}"
@@ -356,7 +356,7 @@ func (m HeaderModel) renderVersions() (appText, tmplText string) {
 		if isFocused {
 			verStyled = "{{|StatusVersionSelected|}}" + ver + "{{[-]}}{{|StatusBar|}}"
 		} else if isError || isAvailable {
-			verStyled = "{{|StatusUpdate|}}" + ver + "{{|StatusBar|}}"
+			verStyled = "{{|StatusUpdate|}}" + ver + "{{[-]}}{{|StatusBar|}}"
 		} else {
 			verStyled = "{{|StatusVersion|}}" + ver + "{{|StatusBar|}}"
 		}
