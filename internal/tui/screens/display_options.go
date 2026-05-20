@@ -137,7 +137,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 	s.themeMenu.SetIsDialog(false) // Part of a screen, not a modal
 	s.themeMenu.SetShowExit(false)
 	s.themeMenu.SetMaximized(true) // Fill available width
-	s.themeMenu.SetShowLockGutter(false)
+	s.themeMenu.SetShowLockGutter(true)
 
 	// 2. Options Menu
 	optionItems := []tui.MenuItem{
