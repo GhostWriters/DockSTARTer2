@@ -215,8 +215,12 @@ func (m *MenuModel) viewSubMenu() string {
 		innerParts = append(innerParts, m.renderFlowContent(contentWidth))
 	} else {
 		content := m.renderVerticalListBlock(ctx)
+		leftPad := layout.ContentSideMargin
+		if m.noLeftMargin {
+			leftPad = 0
+		}
 		paddedContent := lipgloss.NewStyle().
-			Padding(0, 0, 0, layout.ContentSideMargin).
+			Padding(0, 0, 0, leftPad).
 			Width(contentWidth).
 			Render(content)
 		innerParts = append(innerParts, paddedContent)
