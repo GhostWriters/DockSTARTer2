@@ -451,6 +451,37 @@ type ThemeFile struct {
 }
 
 // GetThemeFile reads a theme file and returns its structured content without applying it.
+// resolveThemeColors resolves all color values in tf, returning the resolved map or an error
+// (e.g. on circular reference). The returned map is keyed the same as tf.Colors.
+func resolveThemeColors(tf ThemeFile) (map[string]string, error) {
+	semPre, semSuf := console.SemanticPrefix, console.SemanticSuffix
+	dirPre, dirSuf := console.DirectPrefix, console.DirectSuffix
+	if tf.Syntax != nil {
+		if tf.Syntax.SemanticPrefix != "" {
+			semPre = tf.Syntax.SemanticPrefix
+		}
+		if tf.Syntax.SemanticSuffix != "" {
+			semSuf = tf.Syntax.SemanticSuffix
+		}
+		if tf.Syntax.DirectPrefix != "" {
+			dirPre = tf.Syntax.DirectPrefix
+		}
+		if tf.Syntax.DirectSuffix != "" {
+			dirSuf = tf.Syntax.DirectSuffix
+		}
+	}
+	resolved := make(map[string]string, len(tf.Colors))
+	for key, raw := range tf.Colors {
+		visiting := make(map[string]bool)
+		styleValue, err := resolveThemeValue(raw, tf.Colors, visiting, semPre, semSuf, dirPre, dirSuf)
+		if err != nil {
+			return nil, fmt.Errorf("theme key %q: %w", key, err)
+		}
+		resolved[key] = styleValue
+	}
+	return resolved, nil
+}
+
 func GetThemeFile(themeName string) (ThemeFile, error) {
 	data, err := resolveThemeData(themeName)
 	if err != nil {
@@ -460,26 +491,8 @@ func GetThemeFile(themeName string) (ThemeFile, error) {
 	if err := toml.Unmarshal(data, &tf); err != nil {
 		return ThemeFile{}, err
 	}
-	// Validate color references without registering — catches circular refs and bad keys.
-	semPre, semSuf := "{{|", "|}}"
-	dirPre, dirSuf := "{{[", "]}}"
-	if tf.Syntax.SemanticPrefix != "" {
-		semPre = tf.Syntax.SemanticPrefix
-	}
-	if tf.Syntax.SemanticSuffix != "" {
-		semSuf = tf.Syntax.SemanticSuffix
-	}
-	if tf.Syntax.DirectPrefix != "" {
-		dirPre = tf.Syntax.DirectPrefix
-	}
-	if tf.Syntax.DirectSuffix != "" {
-		dirSuf = tf.Syntax.DirectSuffix
-	}
-	for key, raw := range tf.Colors {
-		visiting := make(map[string]bool)
-		if _, err := resolveThemeValue(raw, tf.Colors, visiting, semPre, semSuf, dirPre, dirSuf); err != nil {
-			return tf, fmt.Errorf("theme key %q: %w", key, err)
-		}
+	if _, err := resolveThemeColors(tf); err != nil {
+		return tf, err
 	}
 	return tf, nil
 }
@@ -552,39 +565,13 @@ func parseThemeTOMLData(data []byte, prefix string) (*ThemeDefaults, error) {
 		return nil, err
 	}
 
-	// Get file-specific delimiters (or use code defaults)
-	semPre, semSuf := console.SemanticPrefix, console.SemanticSuffix
-	dirPre, dirSuf := console.DirectPrefix, console.DirectSuffix
-	if tf.Syntax != nil {
-		if tf.Syntax.SemanticPrefix != "" {
-			semPre = tf.Syntax.SemanticPrefix
-		}
-		if tf.Syntax.SemanticSuffix != "" {
-			semSuf = tf.Syntax.SemanticSuffix
-		}
-		if tf.Syntax.DirectPrefix != "" {
-			dirPre = tf.Syntax.DirectPrefix
-		}
-		if tf.Syntax.DirectSuffix != "" {
-			dirSuf = tf.Syntax.DirectSuffix
-		}
-	}
-
 	// 1. Resolve values and register/apply them
-	// We need to resolve references (e.g., TitleSuccess -> Title) before parsing colors
-	rawValues := tf.Colors
-
-	// Maintains consistent registration/mapping logic from INI version
-	for key, raw := range rawValues {
-		visiting := make(map[string]bool) // fresh per key to avoid false cycle detection across chains
-		styleValue, err := resolveThemeValue(raw, rawValues, visiting, semPre, semSuf, dirPre, dirSuf)
-		if err != nil {
-			return nil, fmt.Errorf("theme key %q: %w", key, err)
-		}
-
-		// Register using raw value (no delimiters)
+	resolved, err := resolveThemeColors(tf)
+	if err != nil {
+		return nil, err
+	}
+	for key, styleValue := range resolved {
 		console.RegisterThemeTagRaw(prefixTag(prefix, key), styleValue)
-
 	}
 
 	// 2. Re-apply tags if loading main theme

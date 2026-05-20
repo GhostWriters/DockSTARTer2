@@ -58,6 +58,11 @@ func (s *DisplayOptionsScreen) ViewString() (result string) {
 }
 
 func (s *DisplayOptionsScreen) renderPreviewDialog(targetHeight int) string {
+	for _, t := range s.themes {
+		if t.ConfigValue == s.previewTheme && t.IsInvalid {
+			return tui.RenderBorderedBoxCtx("Preview", "  Invalid theme", 13, targetHeight, false, true, false, tui.GetActiveContext().DialogTitleAlign, "Title", tui.GetActiveContext())
+		}
+	}
 	return s.renderMockup(targetHeight)
 }
 
