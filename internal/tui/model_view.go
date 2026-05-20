@@ -78,11 +78,11 @@ func (m *AppModel) View() (v tea.View) {
 	layout := GetLayout()
 	// Query the backdrop for the actual rendered chrome height (header + bottom border).
 	// This avoids hardcoding a constant and correctly handles multi-line headers.
-	contentYOffset := 2 // fallback: 1-line header + 1 bottom border
-	headerH := 1        // header content height, needed by layout functions
+	contentYOffset := layout.ContentStartY(1) // fallback: 1-line header
+	headerH := 1                               // header content height, needed by layout functions
 	if m.backdrop != nil {
-		contentYOffset = m.backdrop.ChromeHeight()
-		headerH = contentYOffset - 1
+		headerH = m.backdrop.ChromeHeight() - 1
+		contentYOffset = layout.ContentStartY(headerH)
 	}
 
 	// Create native compositor for rendering

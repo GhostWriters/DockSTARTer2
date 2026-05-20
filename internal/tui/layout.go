@@ -49,6 +49,7 @@ type Layout struct {
 
 	// Margins/indents
 	EdgeIndent        int // 1 char indent from screen edge for maximized dialogs
+	GapAfterSeparator int // 1 line gap after separator (mirrors GapBeforeHelpline)
 	GapBeforeHelpline int // 1 line gap before helpline
 	ContentSideMargin int // 1 char margin on each side of content inside dialog border
 
@@ -69,6 +70,7 @@ func DefaultLayout() Layout {
 		HaloWidth:         4,
 		HaloHeight:        2,
 		EdgeIndent:        1, // 1 char margin on each side of content area
+		GapAfterSeparator: 1,
 		GapBeforeHelpline: 1,
 		ContentSideMargin: 1, // 1 char margin on each side of content inside dialog border
 		GutterWidth:       1,
@@ -90,9 +92,9 @@ func (l Layout) ChromeHeight(headerHeight int) int {
 	return headerHeight + l.SeparatorHeight
 }
 
-// ContentStartY returns the Y coordinate where content area begins (just under separator)
+// ContentStartY returns the Y coordinate where content area begins (one line below separator)
 func (l Layout) ContentStartY(headerHeight int) int {
-	return l.ChromeHeight(headerHeight)
+	return l.ChromeHeight(headerHeight) + l.GapAfterSeparator
 }
 
 // BottomChrome returns total height reserved at bottom (gap + helpline)
@@ -145,8 +147,8 @@ func (l Layout) ContentArea(screenW, screenH int, hasShadow bool, hasHalo bool, 
 	// We account for both though they are typically mutually exclusive.
 	width = screenW - (l.EdgeIndent * 2) - shadowW - haloW
 
-	// Height: screen minus top chrome, bottom chrome, shadow, and halo.
-	height = screenH - l.ChromeHeight(headerHeight) - l.BottomChrome(helplineHeight) - shadowH - haloH
+	// Height: screen minus top chrome, gap, bottom chrome, shadow, and halo.
+	height = screenH - l.ChromeHeight(headerHeight) - l.GapAfterSeparator - l.BottomChrome(helplineHeight) - shadowH - haloH
 
 	// Ensure minimums
 	if width < 10 {
