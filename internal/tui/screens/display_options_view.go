@@ -3,6 +3,7 @@ package screens
 import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/tui"
+	"DockSTARTer2/internal/strutil"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -69,11 +70,11 @@ func (s *DisplayOptionsScreen) renderPreviewDialog(targetHeight int) string {
 			label := "Invalid theme"
 			leftPad := (contentWidth - len(label)) / 2
 			rightPad := contentWidth - len(label) - leftPad
-			centeredLine := strings.Repeat(" ", leftPad) + label + strings.Repeat(" ", rightPad)
+			centeredLine := strutil.Repeat(" ", leftPad) + label + strutil.Repeat(" ", rightPad)
 			topBlanks := (contentHeight - 1) / 2
 			lines := make([]string, contentHeight)
 			for i := range lines {
-				lines[i] = strings.Repeat(" ", contentWidth)
+				lines[i] = strutil.Repeat(" ", contentWidth)
 			}
 			lines[topBlanks] = centeredLine
 			ctx := tui.GetActiveContext()
