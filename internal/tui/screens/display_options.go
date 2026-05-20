@@ -138,6 +138,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 	s.themeMenu.SetShowExit(false)
 	s.themeMenu.SetMaximized(true) // Fill available width
 	s.themeMenu.SetShowLockGutter(true)
+	s.themeMenu.SetNoLeftMargin(true)
 
 	// 2. Options Menu
 	optionItems := []tui.MenuItem{

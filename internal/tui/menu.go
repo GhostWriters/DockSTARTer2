@@ -162,6 +162,7 @@ type MenuModel struct {
 
 	renderVersion       int // Incremented on item changes to invalidate list cache
 	showLockGutter      bool
+	noLeftMargin        bool
 	statusGutterWidth   int
 	activityGutterWidth int
 	itemPaddingWidth    int    // Optional padding after getters
@@ -383,6 +384,13 @@ func (m *MenuModel) SetItemPaddingWidth(width int) {
 // SetShowLockGutter enables or disables the lock indicator gutter.
 func (m *MenuModel) SetShowLockGutter(show bool) {
 	m.showLockGutter = show
+	m.renderVersion++
+}
+
+// SetNoLeftMargin removes the ContentSideMargin left indent from the list in subMenuMode.
+// Use when the gutter should sit flush against the sub-panel's left border.
+func (m *MenuModel) SetNoLeftMargin(v bool) {
+	m.noLeftMargin = v
 	m.renderVersion++
 }
 
