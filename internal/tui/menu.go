@@ -621,7 +621,9 @@ func RenderMenuGutter(item MenuItem, showLockGutter bool, activityGutterWidth in
 
 	// 1. Lock Gutter (1 char)
 	if showLockGutter {
-		if item.Locked {
+		if item.IsInvalid {
+			res += RenderThemeText("{{|MarkerInvalid|}}"+invalidMarker+"{{[-]}}", neutralStyle)
+		} else if item.Locked {
 			marker := lockedMarker
 			if !GetActiveContext().LineCharacters {
 				marker = lockedMarkerAscii
