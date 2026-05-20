@@ -62,7 +62,7 @@ TitleSubMenu = "{{|Title|}}"
 TitleSubMenuFocused = "{{|Title:::R|}}"
 
 # Menu, buttons, and help
-CommandLine = "{{[white:black]}}"
+CommandLine = "{{[-]}}"
 ButtonActive = "{{[white:red:B]}}"
 ButtonInactive = "{{|Dialog|}}"
 Item = "{{[yellow:blue]}}"

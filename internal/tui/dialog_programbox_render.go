@@ -26,12 +26,12 @@ func (m *ProgramBoxModel) renderHeaderUI(width int) string {
 	bgStyle := ctx.Dialog
 	hasPrevious := false
 
-	subtitleStyle := bgStyle.Width(width).Padding(0, 2)
+	subtitleStyle := bgStyle.Width(width)
 	spacer := bgStyle.Width(width).Render("")
 
 	// Subtitle (rendered as a heading)
 	if m.subtitle != "" {
-		subtitle := RenderThemeText(m.subtitle, ctx.Dialog)
+		subtitle := RenderThemeText("{{|Subtitle|}}"+m.subtitle, ctx.Dialog)
 		renderedSubtitle := subtitleStyle.Render(subtitle)
 		b.WriteString(renderedSubtitle + "\n")
 		hasPrevious = true

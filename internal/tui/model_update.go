@@ -654,6 +654,7 @@ func (m *AppModel) setPanelFocus(focused bool) {
 
 func (m *AppModel) setHeaderFocus(focus HeaderFocus) {
 	m.backdrop.header.SetFocus(focus)
+	m.backdrop.InvalidateBackdropCache()
 	if focus != HeaderFocusNone {
 		m.panelFocused = false
 		m.panel.focused = false

@@ -132,7 +132,7 @@ func (s *AppSelectionScreen) handleSave() tea.Msg {
 		toDisableNice = append(toDisableNice, niceNames[app])
 	}
 
-	dialog := tui.NewProgramBoxModel("{{|TitleSuccess|}}Applying Changes", "", "")
+	dialog := tui.NewProgramBoxModel("{{|TitleSuccess|}}Applying Changes", "Installing or updating all DockSTARTer2 dependencies.\n"+tui.CmdLine("--install"), "")
 	dialog.SetIsDialog(true)
 	dialog.SetMaximized(true)
 	dialog.SetAutoClose(false, 0)

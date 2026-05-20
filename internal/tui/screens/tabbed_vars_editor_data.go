@@ -212,7 +212,7 @@ func (m *TabbedVarsEditorModel) saveEnv() tea.Cmd {
 			return nil
 		}
 
-		dialog := tui.NewProgramBoxModel("{{|TitleSuccess|}}Saving Environment Variables{{[-]}}", "Applying surgical environment updates.", "")
+		dialog := tui.NewProgramBoxModel("{{|TitleSuccess|}}Saving Environment Variables{{[-]}}", "Please be patient, this can take a while.\n"+tui.CmdLine("--env"), "")
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)

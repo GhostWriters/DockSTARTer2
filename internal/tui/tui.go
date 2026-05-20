@@ -12,6 +12,7 @@ import (
 	"DockSTARTer2/internal/compose"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/version"
 	"DockSTARTer2/internal/docker"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/sessionlocks"
@@ -844,6 +845,13 @@ func GetNavArgs() []string {
 	return nil
 }
 
+// CmdLine builds a styled command string for program box subtitles.
+func CmdLine(args ...string) string {
+	parts := append([]string{version.CommandName}, console.CurrentFlags...)
+	parts = append(parts, args...)
+	return "{{[-]}} {{|CommandLine|}}" + strings.Join(parts, " ") + "{{[-]}}"
+}
+
 // TriggerAppUpdate returns a tea.Cmd that performs the application update.
 // It detects the currently active screen to support sticky restarts (using --menu pagename).
 func TriggerAppUpdate() tea.Cmd {
@@ -889,7 +897,7 @@ func TriggerAppUpdate() tea.Cmd {
 			return err
 		}
 
-		dialog := NewProgramBoxModel("{{|TitleSuccess|}}Updating App{{[-]}}", "Checking for app updates.", "")
+		dialog := NewProgramBoxModel("{{|TitleSuccess|}}Updating App{{[-]}}", CmdLine("--update-app"), "")
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
@@ -918,7 +926,7 @@ func TriggerTemplateUpdate() tea.Cmd {
 			return err
 		}
 
-		dialog := NewProgramBoxModel("{{|TitleSuccess|}}Updating Templates{{[-]}}", "Checking for template updates.", "")
+		dialog := NewProgramBoxModel("{{|TitleSuccess|}}Updating Templates{{[-]}}", CmdLine("--update-templates"), "")
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
@@ -966,7 +974,7 @@ func TriggerUpdate() tea.Cmd {
 			return err
 		}
 
-		dialog := NewProgramBoxModel("{{|TitleSuccess|}}Updating DockSTARTer2{{[-]}}", "Checking for updates.", "")
+		dialog := NewProgramBoxModel("{{|TitleSuccess|}}Updating DockSTARTer2{{[-]}}", CmdLine("--update"), "")
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
@@ -1004,7 +1012,7 @@ func TriggerComposeUpdate() tea.Cmd {
 			}
 			return nil
 		}
-		dialog := NewProgramBoxModel("{{|TitleSuccess|}}Docker Compose{{[-]}}", "", "")
+		dialog := NewProgramBoxModel("{{|TitleSuccess|}}Docker Compose{{[-]}}", "Updating and starting containers for all enabled services.\n"+CmdLine("--compose", "update"), "")
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
@@ -1033,7 +1041,7 @@ func TriggerComposeStop() tea.Cmd {
 			}
 			return nil
 		}
-		dialog := NewProgramBoxModel("{{|TitleSuccess|}}Docker Compose{{[-]}}", "", "")
+		dialog := NewProgramBoxModel("{{|TitleSuccess|}}Docker Compose{{[-]}}", "Stopping or removing running containers.\n"+CmdLine("--compose"), "")
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
@@ -1052,7 +1060,7 @@ func TriggerDockerPrune() tea.Cmd {
 			}
 			return nil
 		}
-		dialog := NewProgramBoxModel("{{|TitleSuccess|}}Docker Prune{{[-]}}", "", "")
+		dialog := NewProgramBoxModel("{{|TitleSuccess|}}Docker Prune{{[-]}}", "Removing unused docker resources.\n"+CmdLine("--prune"), "")
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
