@@ -9,7 +9,8 @@ before:
     - go generate ./...
 
 builds:
-  - env:
+  - id: default
+    env:
       - CGO_ENABLED=0
     goos:
       - linux
@@ -20,12 +21,22 @@ builds:
       - arm
       - arm64
     goarm:
-      - "6"
       - "7"
+    binary: ds2
+  - id: armv6
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - arm
+    goarm:
+      - "6"
     binary: ds2
 
 archives:
-  - format: tar.gz
+  - formats:
+      - tar.gz
     name_template: >-
       {{ .ProjectName }}_
       {{- .Os }}_
@@ -33,10 +44,13 @@ archives:
       {{- if .Arm }}v{{ .Arm }}{{ end }}
     format_overrides:
       - goos: windows
-        format: zip
+        formats:
+          - zip
 
 nfpms:
-  - maintainer: nemchik <nemchik@gmail.com>
+  - ids:
+      - default
+    maintainer: nemchik <nemchik@gmail.com>
     description: DockSTARTer - easiest way to get started with Docker
     homepage: https://dockstarter.com
     license: MIT
