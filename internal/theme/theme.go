@@ -379,16 +379,22 @@ func resolveThemeValue(raw string, rawValues map[string]string, visiting map[str
 			// 1. Try resolving as internal reference first (with or without '' prefix)
 			targetKey := strings.TrimPrefix(semanticRef, "")
 			if _, exists := rawValues[targetKey]; exists {
+				if visiting[targetKey] {
+					return "", fmt.Errorf("circular reference to %q in theme", targetKey)
+				}
+				visiting[targetKey] = true
 				resolvedRef, err := resolveThemeValue(rawValues[targetKey], rawValues, visiting,
 					semPre, semSuf, dirPre, dirSuf)
-				if err == nil {
-					mergeStyle(resolvedRef)
-					if modifiers != "" {
-						mergeStyle(modifiers)
-					}
-					cur = cur[end:]
-					continue
+				delete(visiting, targetKey)
+				if err != nil {
+					return "", err
 				}
+				mergeStyle(resolvedRef)
+				if modifiers != "" {
+					mergeStyle(modifiers)
+				}
+				cur = cur[end:]
+				continue
 			}
 
 			// 2. Fallback to global semantic tags (e.g. Notice, Success).
@@ -453,6 +459,27 @@ func GetThemeFile(themeName string) (ThemeFile, error) {
 	var tf ThemeFile
 	if err := toml.Unmarshal(data, &tf); err != nil {
 		return ThemeFile{}, err
+	}
+	// Validate color references without registering — catches circular refs and bad keys.
+	semPre, semSuf := "{{|", "|}}"
+	dirPre, dirSuf := "{{[", "]}}"
+	if tf.Syntax.SemanticPrefix != "" {
+		semPre = tf.Syntax.SemanticPrefix
+	}
+	if tf.Syntax.SemanticSuffix != "" {
+		semSuf = tf.Syntax.SemanticSuffix
+	}
+	if tf.Syntax.DirectPrefix != "" {
+		dirPre = tf.Syntax.DirectPrefix
+	}
+	if tf.Syntax.DirectSuffix != "" {
+		dirSuf = tf.Syntax.DirectSuffix
+	}
+	for key, raw := range tf.Colors {
+		visiting := make(map[string]bool)
+		if _, err := resolveThemeValue(raw, tf.Colors, visiting, semPre, semSuf, dirPre, dirSuf); err != nil {
+			return tf, fmt.Errorf("theme key %q: %w", key, err)
+		}
 	}
 	return tf, nil
 }
@@ -546,14 +573,13 @@ func parseThemeTOMLData(data []byte, prefix string) (*ThemeDefaults, error) {
 	// 1. Resolve values and register/apply them
 	// We need to resolve references (e.g., TitleSuccess -> Title) before parsing colors
 	rawValues := tf.Colors
-	visiting := make(map[string]bool)
 
 	// Maintains consistent registration/mapping logic from INI version
 	for key, raw := range rawValues {
+		visiting := make(map[string]bool) // fresh per key to avoid false cycle detection across chains
 		styleValue, err := resolveThemeValue(raw, rawValues, visiting, semPre, semSuf, dirPre, dirSuf)
 		if err != nil {
-			// Fallback to raw expansion for robustness
-			styleValue = console.StripDelimiters(console.ExpandConsoleTags(raw))
+			return nil, fmt.Errorf("theme key %q: %w", key, err)
 		}
 
 		// Register using raw value (no delimiters)
