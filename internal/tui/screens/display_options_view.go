@@ -3,6 +3,7 @@ package screens
 import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/tui"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -60,7 +61,23 @@ func (s *DisplayOptionsScreen) ViewString() (result string) {
 func (s *DisplayOptionsScreen) renderPreviewDialog(targetHeight int) string {
 	for _, t := range s.themes {
 		if t.ConfigValue == s.previewTheme && t.IsInvalid {
-			return tui.RenderBorderedBoxCtx("Preview", "  Invalid theme", 13, targetHeight, false, true, false, tui.GetActiveContext().DialogTitleAlign, "Title", tui.GetActiveContext())
+			const contentWidth = 44 // matches renderMockup width
+			contentHeight := targetHeight - 2
+			if contentHeight < 1 {
+				contentHeight = 1
+			}
+			label := "Invalid theme"
+			leftPad := (contentWidth - len(label)) / 2
+			rightPad := contentWidth - len(label) - leftPad
+			centeredLine := strings.Repeat(" ", leftPad) + label + strings.Repeat(" ", rightPad)
+			topBlanks := (contentHeight - 1) / 2
+			lines := make([]string, contentHeight)
+			for i := range lines {
+				lines[i] = strings.Repeat(" ", contentWidth)
+			}
+			lines[topBlanks] = centeredLine
+			ctx := tui.GetActiveContext()
+			return tui.RenderBorderedBoxCtx("Preview", strings.Join(lines, "\n"), contentWidth, targetHeight, false, true, false, ctx.DialogTitleAlign, "Title", ctx)
 		}
 	}
 	return s.renderMockup(targetHeight)
