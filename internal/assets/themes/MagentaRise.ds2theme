@@ -13,7 +13,7 @@ direct_suffix   = "]}}"
 # Backdrop
 Screen = "{{[magenta:black]}}"
 StatusBar = "{{[black:magenta]}}"
-StatusBarBorder = "{{|Screen|}}"
+StatusBarBorder = "{{|StatusBar|}}"
 
 # Dialogs and panels
 Dialog = "{{|Screen|}}"
