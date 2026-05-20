@@ -300,7 +300,7 @@ func (m HeaderModel) renderLeft() string {
 				if isFocused {
 					leftText += "|"
 				} else {
-					leftText += "{{|StatusFlagsBrackets|}}|{{[-]}}{{|StatusFlags|}}"
+					leftText += "{{[-]}}{{|StatusFlagsBrackets|}}|{{[-]}}{{|StatusFlags|}}"
 				}
 			} else if !isFocused {
 				leftText += "{{[-]}}{{|StatusFlags|}}"
