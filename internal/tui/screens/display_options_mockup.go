@@ -187,9 +187,8 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 		" {{|Item|}}Item 1      Item Description{{[-]}}",
 		" {{|Item|}}Item 2      {{|ListItemUserDefined|}}User Description{{[-]}}",
 		"",
-		" {{|LineHeading|}}*** .env ***{{[-]}}",
 		" {{|LineComment|}}### Sample comment{{[-]}}",
-		" {{|LineVar|}}Var='Default'{{[-]}}",
+		" Var='Default'",
 		" {{|ModifiedText|}}Var='Modified'{{[-]}}",
 	}
 

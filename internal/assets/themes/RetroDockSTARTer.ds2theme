@@ -19,10 +19,8 @@ StatusBarBorder = "{{|Screen|}}"
 Dialog = "{{[black:white]}}"
 Border = "{{[magenta:white]}}"
 Border2 = "{{[black:white]}}"
-Shadow = "{{[black:black:B]}}"
-BoxTitle = "{{[white:black]}}"
+Shadow = "{{|Screen:::D|}}"
 ProgramBox = "{{[white:black:-]}}"
-ConsoleBox = "{{|ProgramBox|}}"
 ConsoleBorder = "{{|Helpline|}}"
 
 # Header bar
@@ -54,7 +52,6 @@ TitleCheckbox = ""
 TitleCheckboxFocused = "{{|TitleSubMenuFocused|}}"
 
 # Focus indicators
-TitleUnfocusedIndicator = "{{[magenta:-B]}}"
 TitleFocusIndicator = "{{[magenta:-B]}}"
 
 # Submenu titles
@@ -65,23 +62,25 @@ TitleSubMenuFocused = "{{|Title:::R|}}"
 CommandLine = "{{[-]}}{{[::B]}}"
 ButtonActive = "{{[white:red:B]}}"
 ButtonInactive = "{{|Dialog|}}"
-Item = "{{[black:magenta]}}"
-ItemSelected = "{{[white:red]}}"
-Tag = "{{|Dialog|}}"
-TagSelected = "{{[white:red]}}"
 TagKey = "{{[red:white:B]}}"
+Tag = "{{|Dialog|}}"
+Item = "{{[black:magenta]}}"
+OptionValue = "{{[white:magenta:B]}}"
 TagKeySelected = "{{[white:red:B]}}"
+TagSelected = "{{[white:red]}}"
+ItemSelected = "{{[white:red]}}"
+OptionValueSelected = "{{|OptionValue:::R|}}"
 Helpline = "{{[black:cyan]}}"
 HelpTag = "{{|Tag|}}"
 HelpItem = "{{[black:cyan]}}"
 Subtitle = "{{[-:-:RB]}}"
-Heading = "{{[black:white]}}"
+Heading = "{{[white:black:B]}}"
 HeadingTag = "{{[black:white]}}"
-HeadingValue = "{{[black:white:B]}}"
-HeadingAppDescription = "{{[white:black:B]}}"
-OptionValue = "{{[white:magenta:B]}}"
+HeadingValue = "{{[-:-:-RB]}}"
+HeadingAppDescription = "{{[-:-:-B]}}"
 Checkbox = "{{|Dialog|}}"
-CheckboxSelected = "{{|Dialog|}}"
+CheckboxSelected = "{{|TagSelected|}}"
+
 
 # Inline text highlights
 Highlight = "{{[white:black:B]}}"
@@ -102,16 +101,12 @@ Yes = "{{|TitleSuccess|}}"
 No = "{{|TitleError|}}"
 
 # Env editor
-LineHeading = "{{[white:-:-BU]}}"
 LineComment = "{{|Dialog:::RB|}}"
-LineOther = "{{|Dialog:::R|}}"
-LineVar = "{{|Dialog:::R|}}"
 ModifiedText = "{{[white:black]}}"
 LineNumber = "{{|Dialog|}}"
 LineNumberSelected = "{{|LineNumber::yellow:B|}}"
 LineNumberModified = "{{|ModifiedText|}}"
 LineNumberModifiedSelected = "{{|ModifiedText:yellow::B|}}"
-LineAddVariable = "{{|Dialog:::R|}}"
 
 # Markers and cursor
 Marker = "{{|Dialog|}}"
@@ -124,7 +119,6 @@ MarkerLocked = "{{|MarkerInvalid|}}"
 
 # Env variable types
 EnvBuiltin = "{{[black:cyan]}}"
-EnvUser = "{{[green:cyan]}}"
 EnvInvalid = "{{[red:cyan]}}"
 EnvDuplicate = "{{[magenta:cyan]}}"
 EnvPendingDelete = "{{|Dialog:::DS|}}"
@@ -135,7 +129,6 @@ ListItemUserDefined = "{{[black::R]}}"
 
 # Keys, progress, and indicators
 KeyCap = "{{[::-R]}}"
-AppPending = "{{[red:white:B]}}"
 ProgressWaiting = "{{[white:black:B]}}"
 ProgressInProgress = "{{[black:white]}}"
 ProgressCompleted = "{{[black:white:B]}}"
