@@ -9,34 +9,20 @@ before:
     - go generate ./...
 
 builds:
-  - id: default
-    <<: &build_defaults
-      env:
-        - CGO_ENABLED=0
-      binary: ds2
-      ldflags:
-        - -s -w
-        - -X DockSTARTer2/internal/version.Version={{.Version}}
-        - -X DockSTARTer2/internal/version.Commit={{.Commit}}
-        - -X DockSTARTer2/internal/version.BuildDate={{.Date}}
+  - env:
+      - CGO_ENABLED=0
     goos:
       - linux
       - darwin
-      - windows
     goarch:
       - amd64
-      - arm
       - arm64
-    goarm:
-      - "7"
-  - id: armv6
-    <<: *build_defaults
-    goos:
-      - linux
-    goarch:
-      - arm
-    goarm:
-      - "6"
+    binary: ds2
+    ldflags:
+      - -s -w
+      - -X DockSTARTer2/internal/version.Version={{.Version}}
+      - -X DockSTARTer2/internal/version.Commit={{.Commit}}
+      - -X DockSTARTer2/internal/version.BuildDate={{.Date}}
 
 archives:
   - formats:
@@ -46,12 +32,6 @@ archives:
       {{- .Version }}_
       {{- .Os }}_
       {{- .Arch }}
-      {{- if .Arm }}v{{ .Arm }}{{ end }}
-    format_overrides:
-      - goos: windows
-        formats:
-          - zip
-
 
 changelog:
   sort: asc
