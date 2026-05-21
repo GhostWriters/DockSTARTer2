@@ -42,9 +42,9 @@ func buildConfigAppItems(ctx context.Context, apps []string, envFile string, con
 
 		descText := tui.GetPlainText(desc)
 		if isUserDefined {
-			descText = "{{|ListAppUserDefined|}}" + descText
+			descText = "{{|ListItemUserDefined|}}" + descText
 		} else {
-			descText = "{{|ListApp|}}" + descText
+			descText = "{{|ListItem|}}" + descText
 		}
 
 		items = append(items, tui.MenuItem{
