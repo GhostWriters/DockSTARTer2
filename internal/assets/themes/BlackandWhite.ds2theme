@@ -118,8 +118,8 @@ TextCursor = "{{[:white:]}}"
 MarkerLocked = "{{|MarkerInvalid|}}"
 
 # Env variable types
-EnvBuiltin = "{{|Dialog|}}"
-EnvInvalid = "{{|Dialog:::RBL|}}"
+EnvBuiltin = "{{|Dialog:::B|}}"
+EnvInvalid = "{{|Dialog:::RB|}}"
 EnvDuplicate = "{{|Dialog:::RD|}}"
 EnvPendingDelete = "{{|Dialog:::DS|}}"
 

@@ -83,7 +83,7 @@ CheckboxSelected = "{{|TagSelected|}}"
 
 
 # Inline text highlights
-Highlight = "{{[white:black:B]}}"
+Highlight = "{{|Dialog:blue:::B|}}"
 ApplicationName = "{{|Highlight|}}"
 RunningCommand = "{{|Highlight|}}"
 FailingCommand = "{{|TitleError|}}"
@@ -102,11 +102,11 @@ No = "{{|TitleError|}}"
 
 # Env editor
 LineComment = "{{|Dialog:::RB|}}"
-ModifiedText = "{{[black:red]}}"
-LineNumber = "{{|Dialog|}}"
-LineNumberSelected = "{{|Dialog:blue|}}"
-LineNumberModified = "{{|ModifiedText|}}"
-LineNumberModifiedSelected = "{{|LineNumberModified:blue|}}"
+ModifiedText = "{{[white:blue:-B]}}"
+LineNumber = "{{|Dialog:::-D|}}"
+LineNumberSelected = "{{|Dialog:blue:::-B|}}"
+LineNumberModified = "{{|ModifiedText:::-B|}}"
+LineNumberModifiedSelected = "{{|LineNumberModified:red::-B|}}"
 
 # Markers and cursor
 Marker = "{{[black:white:-]}}"
@@ -118,9 +118,9 @@ TextCursor = "{{[:white:]}}"
 MarkerLocked = "{{|MarkerInvalid|}}"
 
 # Env variable types
-EnvBuiltin = "{{[black:cyan]}}"
-EnvInvalid = "{{[red:cyan]}}"
-EnvDuplicate = "{{[magenta:cyan]}}"
+EnvBuiltin = "{{[blue:white:-B]}}"
+EnvInvalid = "{{[blue:red:-B]}}"
+EnvDuplicate = "{{[blue:red:-]}}"
 EnvPendingDelete = "{{|Dialog:::DS|}}"
 
 # List item overrides
