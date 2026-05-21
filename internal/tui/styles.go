@@ -199,6 +199,9 @@ type Styles struct {
 	SubmenuTitleAlign string
 	PanelTitleAlign   string
 
+	// Option value (dropdown/inline value in flow menus)
+	OptionValueSelected lipgloss.Style
+
 	// Semantic styles derived from theme tags
 	StatusSuccess lipgloss.Style
 	StatusWarn    lipgloss.Style
@@ -241,6 +244,7 @@ type StyleContext struct {
 	StatusSuccess       lipgloss.Style
 	StatusWarn          lipgloss.Style
 	Console             lipgloss.Style
+	OptionValueSelected lipgloss.Style
 	StatusBarSelected   lipgloss.Style
 	ConsoleTitleColor   color.Color
 	DialogTitleAlign    string
@@ -292,6 +296,7 @@ func GetActiveContext() StyleContext {
 		StatusSuccess:       currentStyles.StatusSuccess,
 		StatusWarn:          currentStyles.StatusWarn,
 		Console:             currentStyles.Console,
+		OptionValueSelected: currentStyles.OptionValueSelected,
 		StatusBarSelected:   currentStyles.StatusBarSelected,
 		ConsoleTitleColor:   currentStyles.ConsoleTitleColor,
 		DialogTitleAlign:    currentStyles.DialogTitleAlign,
@@ -465,16 +470,13 @@ func InitStyles(cfg config.AppConfig) {
 		currentStyles.Border2Flags = theme.StyleFlagsFromCode(console.GetRawTagCode("border2"))
 	}
 
-	// Shadow
-	// Shadow defines the shadow color (foreground is used for shade characters like ░▒▓)
+	// Shadow defines the shadow color and any attributes (e.g. dim, bold) for shade characters.
 	shadowDef := SemanticRawStyle("Shadow")
 	currentStyles.ShadowColor = shadowDef.GetForeground()
 	if currentStyles.ShadowColor == nil {
 		currentStyles.ShadowColor = shadowDef.GetBackground()
 	}
-	// Create shadow style with just the foreground color for shade chars
-	// Explicitly unset background to ensure it is clear/transparent.
-	currentStyles.Shadow = lipgloss.NewStyle().Foreground(currentStyles.ShadowColor).UnsetBackground()
+	currentStyles.Shadow = shadowDef.UnsetBackground()
 
 	// Buttons (spacing handled at layout level)
 	// lipgloss v2 GetBackground() returns NoColor{} (never nil) for unset colors.
@@ -498,6 +500,11 @@ func InitStyles(cfg config.AppConfig) {
 	currentStyles.ItemSelected = SemanticRawStyle("ItemSelected")
 	if _, noBG := currentStyles.ItemSelected.GetBackground().(lipgloss.NoColor); noBG {
 		currentStyles.ItemSelected = currentStyles.ItemSelected.Background(currentStyles.Dialog.GetBackground())
+	}
+
+	currentStyles.OptionValueSelected = SemanticRawStyle("OptionValueSelected")
+	if _, noBG := currentStyles.OptionValueSelected.GetBackground().(lipgloss.NoColor); noBG {
+		currentStyles.OptionValueSelected = currentStyles.OptionValueSelected.Background(currentStyles.Dialog.GetBackground())
 	}
 
 	// Tags

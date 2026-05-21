@@ -120,8 +120,7 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 		// Neutral space (dialogBG) breaks the selection background color in the gap only.
 		if !item.IsCheckbox && !item.IsRadioButton && item.Desc != "" {
 			if isSelected {
-				// Strip theme tags so OptionValue color doesn't override tagStyle (selection).
-				itemContent += neutralStyle.Render(" ") + tagStyle.Render(GetPlainText(item.Desc))
+				itemContent += neutralStyle.Render(" ") + ctx.OptionValueSelected.Render(GetPlainText(item.Desc))
 			} else {
 				// Neutral space breaks the tag background before the value color starts.
 				itemContent += neutralStyle.Render(" ") + RenderThemeText(item.Desc, neutralStyle)

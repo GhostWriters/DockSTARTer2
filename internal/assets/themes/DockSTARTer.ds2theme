@@ -19,10 +19,8 @@ StatusBarBorder = "{{|StatusBar|}}"
 Dialog = "{{[black:cyan:-]}}"
 Border = "{{[white:-:-]}}"
 Border2 = "{{[black:-:-]}}"
-Shadow = "{{[black::]}}"
-BoxTitle = "{{|Dialog|}}"
+Shadow = "{{|Screen:::D|}}"
 ProgramBox = "{{[white:black:-]}}"
-ConsoleBox = "{{|ProgramBox|}}"
 ConsoleBorder = "{{|Helpline|}}"
 
 # Header bar
@@ -54,7 +52,6 @@ TitleCheckbox = ""
 TitleCheckboxFocused = "{{[:green]}}"
 
 # Focus indicators
-TitleUnfocusedIndicator = "{{[red::-B]}}"
 TitleFocusIndicator = "{{[red::-B]}}"
 
 # Submenu titles
@@ -65,12 +62,14 @@ TitleSubMenuFocused = "{{|Title:::R|}}"
 CommandLine = "{{[-]}}{{[yellow::B]}}"
 ButtonActive = "{{[white:red:-B]}}"
 ButtonInactive = "{{[black:white:-]}}"
-Item = "{{[black:-]}}"
-ItemSelected = "{{[black:red:-]}}"
-Tag = "{{[black:-:-b]}}"
-TagSelected = "{{|Tag::red|}}"
 TagKey = "{{|Tag:red|}}"
+Tag = "{{[black:-:-b]}}"
+Item = "{{[black:-]}}"
+OptionValue = "{{[white:green:B]}}"
 TagKeySelected = "{{|TagSelected:::-B|}}"
+TagSelected = "{{|Tag::red|}}"
+ItemSelected = "{{[black:red:-]}}"
+OptionValueSelected = "{{|OptionValue:::-|}}"
 Helpline = "{{|Dialog|}}"
 HelpTag = "{{[black:red]}}"
 HelpItem = "{{[black]}}"
@@ -79,9 +78,9 @@ Heading = "{{[-]}}{{[::R]}}"
 HeadingTag = "{{[-]}}{{[white::R]}}"
 HeadingValue = "{{[-]}}{{[::BR]}}"
 HeadingAppDescription = "{{[-]}}{{[::B]}}"
-OptionValue = "{{[white:green:B]}}"
 Checkbox = "{{|Dialog|}}"
-CheckboxSelected = "{{|Dialog|}}"
+CheckboxSelected = "{{|TagSelected|}}"
+
 
 # Inline text highlights
 Highlight = "{{[-]}}{{[yellow::B]}}"
@@ -102,16 +101,12 @@ Yes = "{{|TitleSuccess|}}"
 No = "{{|TitleError|}}"
 
 # Env editor
-LineHeading = "{{|Dialog:::BU|}}"
 LineComment = "{{|Dialog:::RB|}}"
-LineOther = "{{|Dialog:::R|}}"
-LineVar = "{{|Dialog:::R|}}"
 ModifiedText = "{{[blue::R]}}"
 LineNumber = "{{|Dialog|}}"
 LineNumberSelected = "{{|Dialog::white|}}"
 LineNumberModified = "{{|ModifiedText|}}"
 LineNumberModifiedSelected = "{{|ModifiedText:white|}}"
-LineAddVariable = "{{|Dialog:::R|}}"
 
 # Markers and cursor
 Marker = ""
@@ -124,21 +119,16 @@ MarkerLocked = "{{|MarkerInvalid|}}"
 
 # Env variable types
 EnvBuiltin = "{{|Dialog:::R|}}"
-EnvUser = "{{|Dialog:::-b|}}"
 EnvInvalid = "{{|TitleError|}}"
 EnvDuplicate = "{{|TitleWarn|}}"
 EnvPendingDelete = "{{|Dialog:::DS|}}"
 
 # List item overrides
-ListDefault = ""
-ListApp = "{{[black::R]}}"
-ListAppUserDefined = "{{[blue::R]}}"
-ListTheme = "{{|ListApp|}}"
-ListThemeUserDefined = "{{|ListAppUserDefined|}}"
+ListItem = "{{[black::R]}}"
+ListItemUserDefined = "{{[blue::R]}}"
 
 # Keys, progress, and indicators
 KeyCap = "{{[::-R]}}"
-AppPending = "{{[cyan::B]}}"
 ProgressWaiting = "{{[black:white:-B]}}"
 ProgressInProgress = "{{[white:cyan:-B]}}"
 ProgressCompleted = "{{[cyan:black:-B]}}"

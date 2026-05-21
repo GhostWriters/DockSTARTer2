@@ -9,59 +9,29 @@ before:
     - go generate ./...
 
 builds:
-  - id: default
-    env:
+  - env:
       - CGO_ENABLED=0
     goos:
       - linux
       - darwin
-      - windows
     goarch:
       - amd64
-      - arm
       - arm64
-    goarm:
-      - "7"
     binary: ds2
-  - id: armv6
-    env:
-      - CGO_ENABLED=0
-    goos:
-      - linux
-    goarch:
-      - arm
-    goarm:
-      - "6"
-    binary: ds2
+    ldflags:
+      - -s -w
+      - -X DockSTARTer2/internal/version.Version={{.Version}}
+      - -X DockSTARTer2/internal/version.Commit={{.Commit}}
+      - -X DockSTARTer2/internal/version.BuildDate={{.Date}}
 
 archives:
   - formats:
       - tar.gz
     name_template: >-
       {{ .ProjectName }}_
+      {{- .Version }}_
       {{- .Os }}_
       {{- .Arch }}
-      {{- if .Arm }}v{{ .Arm }}{{ end }}
-    format_overrides:
-      - goos: windows
-        formats:
-          - zip
-
-nfpms:
-  - ids:
-      - default
-    maintainer: nemchik <nemchik@gmail.com>
-    description: DockSTARTer - easiest way to get started with Docker
-    homepage: https://dockstarter.com
-    license: MIT
-    formats:
-      - deb
-      - rpm
-    overrides:
-      deb:
-        file_name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Arch }}"
-      rpm:
-        file_name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Arch }}"
 
 changelog:
   sort: asc

@@ -219,9 +219,9 @@ func (m *MenuModel) renderVariableHeightList() string {
 			cbEStyle := checkboxStyleBase
 			if isSelected {
 				if m.activeColumn == ColAdd {
-					cbAStyle = tagStyleSel
+					cbAStyle = checkboxStyleSel
 				} else {
-					cbEStyle = tagStyleSel
+					cbEStyle = checkboxStyleSel
 				}
 			}
 
