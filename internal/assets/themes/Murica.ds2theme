@@ -130,11 +130,8 @@ EnvDuplicate = "{{[magenta:cyan]}}"
 EnvPendingDelete = "{{|Dialog:::DS|}}"
 
 # List item overrides
-ListDefault = ""
-ListApp = ""
-ListAppUserDefined = "{{|ListApp:::R|}}"
-ListTheme = "{{|ListApp|}}"
-ListThemeUserDefined = "{{|ListAppUserDefined|}}"
+ListItem = ""
+ListItemUserDefined = "{{|ListItem:::R|}}"
 
 # Keys, progress, and indicators
 KeyCap = "{{[::-R]}}"

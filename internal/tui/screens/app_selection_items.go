@@ -113,7 +113,7 @@ func (s *AppSelectionScreen) refreshItems() {
 		if nonBaseCount == 0 {
 			items = append(items, tui.MenuItem{
 				Tag:               niceName,
-				Desc:              "{{|ListApp|}}" + desc,
+				Desc:              "{{|ListItem|}}" + desc,
 				Help:              fmt.Sprintf("Toggle %s. Press Ctrl/Alt+Right to manage instances.", niceName),
 				Selectable:        true,
 				IsCheckbox:        true,
@@ -138,7 +138,7 @@ func (s *AppSelectionScreen) refreshItems() {
 
 			items = append(items, tui.MenuItem{
 				Tag:               niceName,
-				Desc:              "{{|ListApp|}}" + desc,
+				Desc:              "{{|ListItem|}}" + desc,
 				Help:              fmt.Sprintf("Press Ctrl/Alt+Right to manage %s instances", niceName),
 				Selectable:        true,
 				IsGroupHeader:     true,
@@ -240,7 +240,7 @@ func (s *AppSelectionScreen) expandGroup(baseApp string) {
 	desc := tui.GetPlainText(appenv.GetDescriptionFromTemplate(ctx, baseApp, envFile))
 	groupHeader := tui.MenuItem{
 		Tag:           niceName,
-		Desc:          "{{|ListApp|}}" + desc,
+		Desc:          "{{|ListItem|}}" + desc,
 		Help:          fmt.Sprintf("Press Ctrl/Alt+Right to manage %s instances. Ctrl/Alt+Left to collapse.", niceName),
 		IsGroupHeader: true,
 		Checked:       orig.Checked,
@@ -329,7 +329,7 @@ func (s *AppSelectionScreen) collapseGroupIfNeeded(items []tui.MenuItem, base st
 	desc := tui.GetPlainText(appenv.GetDescriptionFromTemplate(ctx, base, envFile))
 	simpleRow := tui.MenuItem{
 		Tag:               niceName,
-		Desc:              "{{|ListApp|}}" + desc,
+		Desc:              "{{|ListItem|}}" + desc,
 		Help:              fmt.Sprintf("Toggle %s. Press Ctrl/Alt+Right to manage instances.", niceName),
 		IsCheckbox:        true,
 		Selectable:        true,
