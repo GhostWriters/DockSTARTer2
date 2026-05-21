@@ -2,7 +2,7 @@
 
 # 1. Configuration
 REPO_SLUG="GhostWriters/DockSTARTer2"
-TARGET_LIST="/usr/local/bin:/usr/bin:${HOME}/bin:${HOME}/.local/bin"
+TARGET_LIST="${HOME}/.local/bin:${HOME}/bin:/usr/local/bin:/usr/bin"
 CHANNEL="$1"
 CUSTOM_DEST="$2"
 FILE_NAME="ds2"
