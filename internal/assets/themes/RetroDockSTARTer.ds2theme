@@ -9,7 +9,7 @@ semantic_suffix = "|}}"
 direct_prefix   = "{{["
 direct_suffix   = "]}}"
 
-[colors]
+[styles]
 # Backdrop
 Screen = "{{[black:magenta]}}"
 StatusBar = "{{|Dialog|}}"

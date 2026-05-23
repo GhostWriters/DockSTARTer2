@@ -9,7 +9,7 @@ semantic_suffix = "|}}"
 direct_prefix   = "{{["
 direct_suffix   = "]}}"
 
-[colors]
+[styles]
 # Backdrop
 Screen = "{{[black:yellow]}}"
 StatusBar = "{{[yellow:black]}}"
@@ -34,7 +34,7 @@ StatusFlags = "{{|StatusFields:::RB|}}"
 StatusFlagsBrackets = "{{|StatusFields|}}"
 StatusFlagsSpace = "{{|StatusFields|}}"
 StatusUpdate = "{{|StatusVersion:::BU|}}"
-StatusUpdateBrackets = "{{|StatusUpdate|}}"
+StatusUpdateBrackets = "{{|StatusVersionBrackets|}}"
 StatusUpdateMarker = "{{|StatusUpdate|}}"
 StatusHostname = "{{|StatusFields|}}"
 StatusBarSelected = "{{|TagSelected|}}"
