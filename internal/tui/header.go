@@ -349,7 +349,11 @@ func (m HeaderModel) renderVersions() (appText, tmplText string) {
 		}
 
 		// 2. Label + Open Bracket (Standard or Update color)
-		text += "{{|StatusVersion|}}" + label + ":[{{[-]}}{{|StatusBar|}}"
+		if isError || isAvailable {
+			text += "{{|StatusUpdate|}}" + label + ":{{|StatusUpdateBrackets|}}[{{[-]}}{{|StatusBar|}}"
+		} else {
+			text += "{{|StatusVersion|}}" + label + ":{{|StatusVersionBrackets|}}[{{[-]}}{{|StatusBar|}}"
+		}
 
 		// 3. Version Number (The Interactive Part)
 		var verStyled string
@@ -363,7 +367,11 @@ func (m HeaderModel) renderVersions() (appText, tmplText string) {
 		text += verStyled
 
 		// 4. Close Bracket
-		text += "{{|StatusVersion|}}]{{[-]}}{{|StatusBar|}}"
+		if isError || isAvailable {
+			text += "{{|StatusUpdateBrackets|}}]{{[-]}}{{|StatusBar|}}"
+		} else {
+			text += "{{|StatusVersionBrackets|}}]{{[-]}}{{|StatusBar|}}"
+		}
 
 		return MaintainBackground(RenderThemeText(text, styles.HeaderBG), styles.HeaderBG)
 	}
