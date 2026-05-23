@@ -447,12 +447,44 @@ type ThemeFile struct {
 		DirectSuffix   string `toml:"direct_suffix"`
 	} `toml:"syntax"`
 	Defaults *ThemeDefaults    `toml:"defaults"`
-	Colors   map[string]string `toml:"colors"`
+	Palette  map[string]string `toml:"palette"`
+	Styles   map[string]string `toml:"styles"`
+}
+
+// substitutePaletteVars replaces $varname tokens in s with values from palette.
+func substitutePaletteVars(s string, palette map[string]string) string {
+	if !strings.ContainsRune(s, '$') {
+		return s
+	}
+	var b strings.Builder
+	i := 0
+	for i < len(s) {
+		if s[i] != '$' {
+			b.WriteByte(s[i])
+			i++
+			continue
+		}
+		j := i + 1
+		for j < len(s) && (s[j] == '_' || (s[j] >= 'A' && s[j] <= 'Z') || (s[j] >= 'a' && s[j] <= 'z') || (j > i+1 && s[j] >= '0' && s[j] <= '9')) {
+			j++
+		}
+		if j > i+1 {
+			name := s[i+1 : j]
+			if val, ok := palette[name]; ok {
+				b.WriteString(val)
+				i = j
+				continue
+			}
+		}
+		b.WriteByte(s[i])
+		i++
+	}
+	return b.String()
 }
 
 // GetThemeFile reads a theme file and returns its structured content without applying it.
 // resolveThemeColors resolves all color values in tf, returning the resolved map or an error
-// (e.g. on circular reference). The returned map is keyed the same as tf.Colors.
+// (e.g. on circular reference). The returned map is keyed the same as tf.Styles.
 func resolveThemeColors(tf ThemeFile) (map[string]string, error) {
 	semPre, semSuf := console.SemanticPrefix, console.SemanticSuffix
 	dirPre, dirSuf := console.DirectPrefix, console.DirectSuffix
@@ -470,10 +502,19 @@ func resolveThemeColors(tf ThemeFile) (map[string]string, error) {
 			dirSuf = tf.Syntax.DirectSuffix
 		}
 	}
-	resolved := make(map[string]string, len(tf.Colors))
-	for key, raw := range tf.Colors {
+	// Substitute palette variables ($varname) in color strings before semantic resolution
+	colors := tf.Styles
+	if len(tf.Palette) > 0 {
+		colors = make(map[string]string, len(tf.Styles))
+		for key, raw := range tf.Styles {
+			colors[key] = substitutePaletteVars(raw, tf.Palette)
+		}
+	}
+
+	resolved := make(map[string]string, len(colors))
+	for key, raw := range colors {
 		visiting := make(map[string]bool)
-		styleValue, err := resolveThemeValue(raw, tf.Colors, visiting, semPre, semSuf, dirPre, dirSuf)
+		styleValue, err := resolveThemeValue(raw, colors, visiting, semPre, semSuf, dirPre, dirSuf)
 		if err != nil {
 			return nil, fmt.Errorf("theme key %q: %w", key, err)
 		}

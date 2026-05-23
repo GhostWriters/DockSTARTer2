@@ -9,10 +9,14 @@ semantic_suffix = "|}}"
 direct_prefix   = "{{["
 direct_suffix   = "]}}"
 
-[colors]
+[palette]
+primary = "magenta"
+secondary = "black"
+
+[styles]
 # Backdrop
-Screen = "{{[magenta:black]}}"
-StatusBar = "{{[black:magenta]}}"
+Screen = "{{[$primary:$secondary]}}"
+StatusBar = "{{[$secondary:$primary]}}"
 StatusBarBorder = "{{|StatusBar|}}"
 
 # Dialogs and panels
@@ -35,7 +39,7 @@ StatusFlags = "{{|StatusFields:::RB|}}"
 StatusFlagsBrackets = "{{|StatusFields|}}"
 StatusFlagsSpace = "{{|StatusFields|}}"
 StatusUpdate = "{{|StatusVersion:::BU|}}"
-StatusUpdateBrackets = "{{|StatusUpdate|}}"
+StatusUpdateBrackets = "{{|StatusVersionBrackets|}}"
 StatusUpdateMarker = "{{|StatusUpdate|}}"
 StatusHostname = "{{|StatusFields|}}"
 StatusBarSelected = "{{|TagSelected|}}"
@@ -72,9 +76,9 @@ TagKeySelected = "{{|Dialog:::B|}}"
 TagSelected = "{{|Dialog:::B|}}"
 ItemSelected = "{{|Dialog:::B|}}"
 OptionValueSelected = "{{|OptionValue:::B|}}"
-Helpline = "{{[black:magenta]}}"
+Helpline = "{{[$secondary:$primary]}}"
 HelpTag = "{{|Tag|}}"
-HelpItem = "{{[black:magenta]}}"
+HelpItem = "{{[$secondary:$primary]}}"
 Subtitle = "{{[-:-:R]}}"
 Heading = "{{[-:-:-R]}}"
 HeadingTag = "{{[-:-:-B]}}"
@@ -111,7 +115,7 @@ LineNumberModified = "{{|ModifiedText|}}"
 LineNumberModifiedSelected = "{{|LineNumberModified:::B|}}"
 
 # Markers and cursor
-Marker = "{{[black:magenta:-]}}"
+Marker = "{{[$secondary:$primary:-]}}"
 MarkerAdded = "{{|Marker|}}"
 MarkerDeleted = "{{|Marker|}}"
 MarkerModified = "{{|Marker|}}"
@@ -127,7 +131,7 @@ EnvPendingDelete = "{{|Dialog:::DS|}}"
 
 # List item overrides
 ListItem = ""
-ListItemUserDefined = "{{[black:magenta]}}"
+ListItemUserDefined = "{{[$secondary:$primary]}}"
 
 # Keys, progress, and indicators
 KeyCap = "{{[::-R]}}"

@@ -9,16 +9,20 @@ semantic_suffix = "|}}"
 direct_prefix   = "{{["
 direct_suffix   = "]}}"
 
-[colors]
+[palette]
+primary = "white"
+secondary = "black"
+
+[styles]
 # Backdrop
-Screen = "{{[black:white]}}"
-StatusBar = "{{[white:black]}}"
+Screen = "{{[$secondary:$primary]}}"
+StatusBar = "{{[$primary:$secondary]}}"
 StatusBarBorder = "{{|StatusBar|}}"
 
 # Dialogs and panels
-Dialog = "{{[white:black]}}"
-Border = "{{[white:black]}}"
-Border2 = "{{[white:black:D]}}"
+Dialog = "{{[$primary:$secondary]}}"
+Border = "{{[$primary:$secondary]}}"
+Border2 = "{{[$primary:$secondary:D]}}"
 Shadow = "{{|Screen:::D|}}"
 ProgramBox = "{{[white:black:-]}}"
 ConsoleBorder = "{{|Helpline|}}"
@@ -34,7 +38,7 @@ StatusFlags = "{{|StatusFields:::RB|}}"
 StatusFlagsBrackets = "{{|StatusFields|}}"
 StatusFlagsSpace = "{{|StatusFields|}}"
 StatusUpdate = "{{|StatusVersion:::BU|}}"
-StatusUpdateBrackets = "{{|StatusUpdate|}}"
+StatusUpdateBrackets = "{{|StatusVersionBrackets|}}"
 StatusUpdateMarker = "{{|StatusUpdate|}}"
 StatusHostname = "{{|StatusFields|}}"
 StatusBarSelected = "{{|TagSelected|}}"
@@ -43,11 +47,11 @@ StatusBarSelected = "{{|TagSelected|}}"
 Title = "{{[white::-U]}}"
 TitleHelp = "{{|Title|}}"
 TitleNotice = "{{[white:green:B]}}"
-TitleWarn = "{{[black:white]}}"
-TitleError = "{{[black:white:B]}}"
-TitleSuccess = "{{[black:white]}}"
-TitleWarning = "{{[black:white]}}"
-TitleQuestion = "{{[black:white]}}"
+TitleWarn = "{{[$secondary:$primary]}}"
+TitleError = "{{[$secondary:$primary:B]}}"
+TitleSuccess = "{{[$secondary:$primary]}}"
+TitleWarning = "{{[$secondary:$primary]}}"
+TitleQuestion = "{{[$secondary:$primary]}}"
 ConsoleTitle = "{{|ConsoleBorder|}}"
 TitleCheckbox = ""
 TitleCheckboxFocused = "{{|TitleSubMenuFocused|}}"
@@ -61,15 +65,15 @@ TitleSubMenuFocused = "{{|Title:::R|}}"
 
 # Menu, buttons, and help
 CommandLine = "{{[-]}}"
-ButtonActive = "{{[white:black:BR]}}"
+ButtonActive = "{{[$primary:$secondary:BR]}}"
 ButtonInactive = "{{|Dialog|}}"
 TagKey = "{{|Dialog:::-B|}}"
 Tag = "{{|Dialog:::D|}}"
 Item = "{{|Dialog|}}"
 OptionValue = "{{|Dialog:::RB|}}"
-TagKeySelected = "{{[white:black:-BR]}}"
-TagSelected = "{{[white:black:-BR]}}"
-ItemSelected = "{{[white:black:B]}}"
+TagKeySelected = "{{[$primary:$secondary:-BR]}}"
+TagSelected = "{{[$primary:$secondary:-BR]}}"
+ItemSelected = "{{[$primary:$secondary:B]}}"
 OptionValueSelected = "{{|OptionValue:::B|}}"
 Helpline = "{{|Dialog|}}"
 HelpTag = "{{|Tag|}}"
@@ -84,7 +88,7 @@ CheckboxSelected = "{{|TagSelected|}}"
 
 
 # Inline text highlights
-Highlight = "{{[white:black:B]}}"
+Highlight = "{{[$primary:$secondary:B]}}"
 ApplicationName = "{{|Highlight|}}"
 RunningCommand = "{{|Highlight|}}"
 FailingCommand = "{{|TitleError|}}"
@@ -103,14 +107,14 @@ No = "{{|TitleError|}}"
 
 # Env editor
 LineComment = "{{|Dialog:::RB|}}"
-ModifiedText = "{{[black:white]}}"
+ModifiedText = "{{[$secondary:$primary]}}"
 LineNumber = "{{|Dialog|}}"
 LineNumberSelected = "{{|Dialog:::B|}}"
 LineNumberModified = "{{|ModifiedText|}}"
 LineNumberModifiedSelected = "{{|LineNumberModified:::B|}}"
 
 # Markers and cursor
-Marker = "{{[black:white:-]}}"
+Marker = "{{[$secondary:$primary:-]}}"
 MarkerAdded = "{{|Marker|}}"
 MarkerDeleted = "{{|Marker|}}"
 MarkerModified = "{{|Marker|}}"
@@ -126,13 +130,13 @@ EnvPendingDelete = "{{|Dialog:::DS|}}"
 
 # List item overrides
 ListItem = ""
-ListItemUserDefined = "{{[black:white]}}"
+ListItemUserDefined = "{{[$secondary:$primary]}}"
 
 # Keys, progress, and indicators
 KeyCap = "{{[::-R]}}"
-ProgressWaiting = "{{[white:black]}}"
-ProgressInProgress = "{{[white:black:B]}}"
-ProgressCompleted = "{{[black:white]}}"
+ProgressWaiting = "{{[$primary:$secondary]}}"
+ProgressInProgress = "{{[$primary:$secondary:B]}}"
+ProgressCompleted = "{{[$secondary:$primary]}}"
 
 [defaults]
 dialog_title_align = "center"

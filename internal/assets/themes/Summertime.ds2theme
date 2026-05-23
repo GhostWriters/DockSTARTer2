@@ -9,10 +9,10 @@ semantic_suffix = "|}}"
 direct_prefix   = "{{["
 direct_suffix   = "]}}"
 
-[colors]
+[styles]
 # Backdrop
-Screen = "{{[yellow:blue:B]}}"
-StatusBar = "{{|Screen|}}"
+Screen = "{{[yellow:cyan:-]}}"
+StatusBar = "{{|Dialog|}}"
 StatusBarBorder = "{{|StatusBar|}}"
 
 # Dialogs and panels
@@ -24,17 +24,17 @@ ProgramBox = "{{[white:black:-]}}"
 ConsoleBorder = "{{|Helpline|}}"
 
 # Header bar
-StatusFields = "{{[black:white]}}"
-StatusName = "{{|StatusFields|}}"
+StatusFields = "{{|Screen|}}"
+StatusName = "{{|StatusFields:::B|}}"
 StatusVersion = "{{|StatusFields|}}"
 StatusVersionBrackets = "{{|StatusFields|}}"
-StatusVersionSpace = "{{[white:black]}}"
-StatusVersionSelected = "{{[yellow:blue:B]}}"
-StatusFlags = "{{[white:black]}}"
+StatusVersionSpace = "{{|StatusFields|}}"
+StatusVersionSelected = "{{|StatusVersion:::R|}}"
+StatusFlags = "{{|StatusFields:::RB|}}"
 StatusFlagsBrackets = "{{|StatusFields|}}"
 StatusFlagsSpace = "{{|StatusFields|}}"
-StatusUpdate = "{{[white:black]}}"
-StatusUpdateBrackets = "{{[white:black]}}"
+StatusUpdate = "{{|StatusVersion:::BU|}}"
+StatusUpdateBrackets = "{{|StatusVersionBrackets|}}"
 StatusUpdateMarker = "{{|StatusUpdate|}}"
 StatusHostname = "{{|StatusFields|}}"
 StatusBarSelected = "{{|TagSelected|}}"

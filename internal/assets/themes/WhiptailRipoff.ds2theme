@@ -9,10 +9,10 @@ semantic_suffix = "|}}"
 direct_prefix   = "{{["
 direct_suffix   = "]}}"
 
-[colors]
+[styles]
 # Backdrop
 Screen = "{{[yellow:blue:B]}}"
-StatusBar = "{{|Screen|}}"
+StatusBar = "{{|Dialog|}}"
 StatusBarBorder = "{{|StatusBar|}}"
 
 # Dialogs and panels
@@ -72,9 +72,9 @@ TagKeySelected = "{{|MenuItemsBase:::B|}}"
 TagSelected = "{{|MenuItemsBase|}}"
 ItemSelected = "{{|MenuItemsBase:::B|}}"
 OptionValueSelected = "{{|OptionValue:::B|}}"
-Helpline = "{{[white:blue]}}"
+Helpline = "{{|Dialog|}}"
 HelpTag = "{{|Tag|}}"
-HelpItem = "{{[white:blue]}}"
+HelpItem = "{{|Dialog|}}"
 Subtitle = "{{[-:-:R]}}"
 Heading = "{{[-:-:-R]}}"
 HeadingTag = "{{[-:-:-B]}}"

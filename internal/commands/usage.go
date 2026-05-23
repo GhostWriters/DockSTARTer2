@@ -304,6 +304,31 @@ func GetUsage(target string, noHeading bool) string {
 			"	Enable the app specified",
 		)
 	}
+	if match("--server") {
+		printStr(
+			"{{|UsageCommand|}}--server{{[-]}}",
+			"	Show the server status (default when no subcommand is given).",
+			"{{|UsageCommand|}}--server{{[-]}} {{|UsageOption|}}start{{[-]}}",
+			"	Start the server daemon in the background.",
+			"{{|UsageCommand|}}--server{{[-]}} {{|UsageOption|}}stop{{[-]}}",
+			"	Stop the running server daemon.",
+			"{{|UsageCommand|}}--server{{[-]}} {{|UsageOption|}}restart{{[-]}}",
+			"	Stop and restart the server daemon.",
+			"{{|UsageCommand|}}--server{{[-]}} {{|UsageOption|}}disconnect{{[-]}}",
+			"	Disconnect the active remote session.",
+			"{{|UsageCommand|}}--server{{[-]}} {{|UsageOption|}}install{{[-]}}",
+			"	Install the OS service unit for the server daemon.",
+			"{{|UsageCommand|}}--server{{[-]}} {{|UsageOption|}}uninstall{{[-]}}",
+			"	Remove the OS service unit for the server daemon.",
+			"{{|UsageCommand|}}--server{{[-]}} {{|UsageOption|}}enable{{[-]}}",
+			"	Install (if needed) and enable the server to start at boot.",
+			"{{|UsageCommand|}}--server{{[-]}} {{|UsageOption|}}disable{{[-]}}",
+			"	Disable the server from starting at boot (keeps it installed).",
+			"{{|UsageCommand|}}--server-daemon{{[-]}}",
+			"	Run the server daemon directly in the foreground (blocking). Useful if you",
+			"	want to manage the process yourself rather than using '{{|UsageOption|}}--server start{{[-]}}'.",
+		)
+	}
 	if match("-t", "--test") {
 		printStr(
 			"{{|UsageCommand|}}-t --test{{[-]}} {{|UsageFile|}}<test_name>{{[-]}}",
