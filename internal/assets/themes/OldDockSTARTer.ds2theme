@@ -38,6 +38,7 @@ StatusFlagsBrackets = "{{[black:white]}}"
 StatusFlagsSpace = "{{[black:white]}}"
 StatusUpdate = "{{[black:white]}}"
 StatusUpdateBrackets = "{{[black:white]}}"
+StatusUpdateMarker = "{{|StatusUpdate|}}"
 StatusHostname = "{{|StatusFields|}}"
 StatusBarSelected = "{{|TagSelected|}}"
 

@@ -36,6 +36,7 @@ StatusFlagsBrackets = "{{|StatusFields|}}"
 StatusFlagsSpace = "{{|StatusFields|}}"
 StatusUpdate = "{{|StatusVersion:::BU|}}"
 StatusUpdateBrackets = "{{|StatusUpdate|}}"
+StatusUpdateMarker = "{{|StatusUpdate|}}"
 StatusHostname = "{{|StatusFields|}}"
 StatusBarSelected = "{{|TagSelected|}}"
 
