@@ -324,6 +324,9 @@ func GetUsage(target string, noHeading bool) string {
 			"	Install (if needed) and enable the server to start at boot.",
 			"{{|UsageCommand|}}--server{{[-]}} {{|UsageOption|}}disable{{[-]}}",
 			"	Disable the server from starting at boot (keeps it installed).",
+			"{{|UsageCommand|}}--server-daemon{{[-]}}",
+			"	Run the server daemon directly in the foreground (blocking). Useful if you",
+			"	want to manage the process yourself rather than using '{{|UsageOption|}}--server start{{[-]}}'.",
 		)
 	}
 	if match("-t", "--test") {
