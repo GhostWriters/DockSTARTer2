@@ -336,23 +336,25 @@ func (m HeaderModel) renderVersions() (appText, tmplText string) {
 
 	// Helper to render version blocks
 	// format: [StatusIcon] [Label][ [Version] ]
-	renderVersionBlock := func(ver string, label string, isAvailable bool, isError bool, isFocused bool) string {
+	renderVersionBlock := func(ver string, label string, isAvailable bool, isError bool, isFocused bool, isFirst bool) string {
 		var text string
 
 		// 1. Status Icon / Prefix
 		if isError {
-			text += "{{|StatusUpdate|}}?{{[-]}}{{|StatusBar|}}"
+			text += "{{|StatusUpdateMarker|}}?{{[-]}}{{|StatusBar|}}"
 		} else if isAvailable {
-			text += "{{|StatusUpdate|}}*{{[-]}}{{|StatusBar|}}"
-		} else {
+			text += "{{|StatusUpdateMarker|}}*{{[-]}}{{|StatusBar|}}"
+		} else if isFirst {
 			text += " "
+		} else {
+			text += "{{|StatusVersionSpace|}} {{[-]}}{{|StatusBar|}}"
 		}
 
 		// 2. Label + Open Bracket (Standard or Update color)
 		if isError || isAvailable {
-			text += "{{|StatusUpdate|}}" + label + ":{{|StatusUpdateBrackets|}}[{{[-]}}{{|StatusBar|}}"
+			text += "{{|StatusUpdateBrackets|}}" + label + ":[{{[-]}}{{|StatusBar|}}"
 		} else {
-			text += "{{|StatusVersion|}}" + label + ":{{|StatusVersionBrackets|}}[{{[-]}}{{|StatusBar|}}"
+			text += "{{|StatusVersionBrackets|}}" + label + ":[{{[-]}}{{|StatusBar|}}"
 		}
 
 		// 3. Version Number (The Interactive Part)
@@ -376,8 +378,8 @@ func (m HeaderModel) renderVersions() (appText, tmplText string) {
 		return MaintainBackground(RenderThemeText(text, styles.HeaderBG), styles.HeaderBG)
 	}
 
-	appText = renderVersionBlock(appVer, "A", update.AppUpdateAvailable, update.UpdateCheckError, m.focus == HeaderFocusApp)
-	tmplText = renderVersionBlock(tmplVer, "T", update.TmplUpdateAvailable, update.UpdateCheckError, m.focus == HeaderFocusTmpl)
+	appText = renderVersionBlock(appVer, "A", update.AppUpdateAvailable, update.UpdateCheckError, m.focus == HeaderFocusApp, true)
+	tmplText = renderVersionBlock(tmplVer, "T", update.TmplUpdateAvailable, update.UpdateCheckError, m.focus == HeaderFocusTmpl, false)
 
 	return appText, tmplText
 }
