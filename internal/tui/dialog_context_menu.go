@@ -30,7 +30,8 @@ func itemHeight(item ContextMenuItem) int {
 //
 // Positioning: the model stores the raw right-click coordinates (clickX, clickY).
 // IsMaximized() returns true so model_view.go uses DialogMaximized mode, giving
-// lx=1, ly=2. The Layers() method compensates with layer.X = menuX-1, layer.Y = menuY-2.
+// lx=EdgeIndent(1), ly=ContentStartY(1)=3. The Layers() method compensates with
+// layer.X = menuX-lx, layer.Y = menuY-ly so the menu lands at exactly (menuX, menuY).
 type ContextMenuModel struct {
 	items   []ContextMenuItem
 	cursor  int // currently highlighted item index
@@ -67,8 +68,8 @@ func NewContextMenuModel(clickX, clickY, screenW, screenH int, items []ContextMe
 }
 
 // IsMaximized satisfies the interface checked by model_view.go.
-// Returning true makes model_view.go use DialogMaximized positioning:
-// lx=EdgeIndent=1, ly=ContentStartY=2. Our Layers() compensates.
+// Returning true makes model_view.go use DialogMaximized positioning.
+// Our Layers() compensates using the same layout values.
 func (m *ContextMenuModel) IsMaximized() bool { return true }
 
 // Init implements tea.Model.

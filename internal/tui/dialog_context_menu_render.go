@@ -135,15 +135,16 @@ func (m *ContextMenuModel) View() tea.View {
 }
 
 // Layers implements LayeredView.
-// model_view.go adds lx=1, ly=2 to our layer X/Y (DialogMaximized offsets).
+// model_view.go adds lx, ly (DialogMaximized offsets) to our layer X/Y.
 // We compensate so the menu lands at exactly (menuX, menuY) in screen coordinates.
 func (m *ContextMenuModel) Layers() []*lipgloss.Layer {
 	content := m.ViewString()
 	if content == "" {
 		return nil
 	}
-	// lx=EdgeIndent=1, ly=ContentStartY=headerH(1)+SeparatorHeight(1)=2 for DialogMaximized
-	const lx, ly = 1, 2
+	layout := GetLayout()
+	lx := layout.EdgeIndent
+	ly := layout.ContentStartY(1) // 1-line header: headerH(1) + separator(1) + gap(1) = 3
 	layerX := m.menuX - lx
 	layerY := m.menuY - ly
 	return []*lipgloss.Layer{
