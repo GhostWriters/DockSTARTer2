@@ -29,6 +29,39 @@ func (b *baseDialogModel) buildTitleBarWidgets(ctx StyleContext) string {
 	return buildDialogTitleWidgets(b.titleBarFocused, b.titleBarWidget, ctx)
 }
 
+// minWidthForWidgets returns the minimum content width required so that right-side
+// widgets fit after the title is positioned (accounting for centering).
+// w is the starting content width candidate; the return value is >= w.
+func minWidthForWidgets(w int, titleText, titleAlign string, widgets string) int {
+	if widgets == "" {
+		return w
+	}
+	widgetWidth := WidthWithoutZones(widgets)
+	if widgetWidth == 0 {
+		return w
+	}
+	// titleSectionLen: leftT + indicator + title + indicator + rightT
+	titleSection := lipgloss.Width(titleText) + 4
+	needed := widgetWidth + 1 // widget + 1 trailing dash minimum
+	for {
+		lp := 0
+		if titleAlign != "left" {
+			lp = (w - titleSection) / 2
+		}
+		if w-titleSection-lp >= needed {
+			break
+		}
+		w++
+	}
+	return w
+}
+
+// BuildInactiveTitleWidgets builds the [?]─[×] widget string using inactive styles only.
+// Used by callers that display widgets but don't manage title bar keyboard focus.
+func BuildInactiveTitleWidgets(ctx StyleContext) string {
+	return buildDialogTitleWidgets(false, 0, ctx)
+}
+
 // buildDialogTitleWidgets is the shared renderer for the [?]─[×] title bar widgets.
 // focused/activeWidget are the title bar state; use false/0 for always-inactive output.
 func buildDialogTitleWidgets(focused bool, activeWidget int, ctx StyleContext) string {

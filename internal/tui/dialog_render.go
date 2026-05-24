@@ -365,3 +365,179 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 
 	return result.String()
 }
+
+// renderDialogWithBorderCtx handles internal shared rendering logic using a specific context.
+func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, focused bool, targetHeight int, threeD bool, useConnectors bool, titleStyle lipgloss.Style, ctx StyleContext, rightWidget string) string {
+	if title != "" && !strings.HasSuffix(title, "{{[-]}}") {
+		title += "{{[-]}}"
+	}
+
+	borderBG := ctx.Dialog.GetBackground()
+	borderStyleLight := ctx.BorderFlags.Apply(lipgloss.NewStyle()).
+		Foreground(ctx.BorderColor).
+		Background(borderBG)
+	borderStyleDark := ctx.Border2Flags.Apply(lipgloss.NewStyle()).
+		Foreground(ctx.Border2Color).
+		Background(borderBG)
+
+	if !threeD {
+		borderStyleLight = borderStyleDark
+	}
+
+	if !hasExplicitBackground(titleStyle) {
+		titleStyle = titleStyle.Background(borderBG)
+	}
+
+	title = RenderThemeText(title, titleStyle)
+	content = RenderThemeText(content, ctx.ContentBackground)
+
+	lines := strings.Split(content, "\n")
+	actualWidth := 0
+	for _, line := range lines {
+		// Use WidthWithoutZones to avoid zone markers inflating width
+		w := WidthWithoutZones(line)
+		if w > actualWidth {
+			actualWidth = w
+		}
+	}
+
+	if targetHeight > 2 {
+		contentHeight := len(lines)
+		neededPadding := (targetHeight - 2) - contentHeight
+		if neededPadding > 0 {
+			for i := 0; i < neededPadding; i++ {
+				lines = append(lines, "")
+			}
+		}
+	}
+
+	var result strings.Builder
+
+	result.WriteString(borderStyleLight.Render(border.TopLeft))
+	if title == "" {
+		result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, actualWidth)))
+	} else {
+		var leftT, rightT string
+		if useConnectors {
+			if ctx.LineCharacters {
+				if focused {
+					leftT = "┫"
+					rightT = "┣"
+				} else {
+					leftT = "┤"
+					rightT = "├"
+				}
+			} else {
+				if focused {
+					leftT = "H"
+					rightT = "H"
+				} else {
+					leftT = "|"
+					rightT = "|"
+				}
+			}
+		} else {
+			leftT = border.Top
+			rightT = border.Top
+		}
+
+		titleSectionLen := 1 + 1 + lipgloss.Width(title) + 1 + 1
+		if titleSectionLen > actualWidth {
+			actualWidth = titleSectionLen
+		}
+		rightWidgetWidth := WidthWithoutZones(rightWidget)
+		if rightWidget != "" {
+			// Grow actualWidth until the right side (after centering) fits the widget + 1 end dash.
+			needed := rightWidgetWidth + 1
+			for {
+				lp := 0
+				if ctx.DialogTitleAlign != "left" {
+					lp = (actualWidth - titleSectionLen) / 2
+				}
+				if actualWidth-titleSectionLen-lp >= needed {
+					break
+				}
+				actualWidth++
+			}
+		}
+
+		var leftPad int
+		if ctx.DialogTitleAlign == "left" {
+			leftPad = 0
+		} else {
+			leftPad = (actualWidth - titleSectionLen) / 2
+		}
+		rightPad := actualWidth - titleSectionLen - leftPad
+		var rightPadMid, rightPadEnd int
+		if rightWidget != "" {
+			rightPadEnd = 1
+			rightPadMid = rightPad - rightWidgetWidth - rightPadEnd
+			if rightPadMid < 0 {
+				rightPadMid = 0
+			}
+		} else {
+			rightPadMid = rightPad
+			if rightPadMid < 0 {
+				rightPadMid = 0
+			}
+		}
+		result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, leftPad)))
+		result.WriteString(borderStyleLight.Render(leftT))
+		if focused {
+			if ctx.LineCharacters {
+				result.WriteString(borderStyleLight.Render(theme.ToThemeANSI("{{|TitleFocusIndicator|}}▸")))
+			} else {
+				result.WriteString(borderStyleLight.Render(theme.ToThemeANSI("{{|TitleFocusIndicator|}}>")))
+			}
+		} else {
+			result.WriteString(borderStyleLight.Render(" "))
+		}
+		result.WriteString(title)
+		if focused {
+			if ctx.LineCharacters {
+				result.WriteString(borderStyleLight.Render(theme.ToThemeANSI("{{|TitleFocusIndicator|}}◂")))
+			} else {
+				result.WriteString(borderStyleLight.Render(theme.ToThemeANSI("{{|TitleFocusIndicator|}}<")))
+			}
+		} else {
+			result.WriteString(borderStyleLight.Render(" "))
+		}
+		result.WriteString(borderStyleLight.Render(rightT))
+		result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, rightPadMid)))
+		if rightWidget != "" {
+			result.WriteString(rightWidget)
+			result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, rightPadEnd)))
+		}
+	}
+	result.WriteString(borderStyleLight.Render(border.TopRight))
+	result.WriteString("\n")
+
+	maxLines := len(lines)
+	if targetHeight > 2 {
+		maxLines = targetHeight - 2
+	}
+
+	for i, line := range lines {
+		if i >= maxLines {
+			break
+		}
+		result.WriteString(borderStyleLight.Render(border.Left))
+		// Use WidthWithoutZones to get accurate visual width (zone markers are invisible)
+		textWidth := WidthWithoutZones(line)
+		padding := ""
+		contentBG := ctx.ContentBackground.GetBackground()
+		if textWidth < actualWidth {
+			padding = lipgloss.NewStyle().Background(contentBG).Render(strutil.Repeat(" ", actualWidth-textWidth))
+		}
+		fullLine := MaintainBackground(line+padding, ctx.ContentBackground)
+		result.WriteString(fullLine)
+		result.WriteString(borderStyleDark.Render(border.Right))
+		result.WriteString("\n")
+	}
+
+	result.WriteString(borderStyleDark.Render(border.BottomLeft))
+	result.WriteString(borderStyleDark.Render(strutil.Repeat(border.Bottom, actualWidth)))
+	result.WriteString(borderStyleDark.Render(border.BottomRight))
+
+	return result.String()
+}
