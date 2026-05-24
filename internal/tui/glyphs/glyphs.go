@@ -28,4 +28,15 @@ const (
 	// LockedMarker (×) - Multiplication Sign (U+00D7)
 	LockedMarker      = "×"
 	LockedMarkerAscii = "!"
+
+	// Title bar widgets
+	HelpWidget       = "?"
+	CloseWidget      = "×" // Multiplication Sign (U+00D7)
+	CloseWidgetAscii = "X"
+
+	// Panel resize widgets
+	ResizeUpWidget      = "▲" // Black Up-Pointing Triangle (U+25B2)
+	ResizeUpWidgetAscii = "^"
+	ResizeDnWidget      = "▼" // Black Down-Pointing Triangle (U+25BC)
+	ResizeDnWidgetAscii = "v"
 )

@@ -186,7 +186,38 @@ type MenuModel struct {
 	// Optional hook to provide markdown documentation for a menu item.
 	// If set, called by HelpContext to populate docMarkdown and docAppName.
 	itemDocFunc func(item MenuItem) (docMarkdown, docAppName string)
+
+	// Title bar widget focus (keyboard navigation of ? and × widgets)
+	titleBarFocused bool
+	titleBarWidget  int // titleBarWidgetHelp or titleBarWidgetClose
 }
+
+// Title bar widget constants.
+const (
+	titleBarWidgetClose = 1
+	titleBarWidgetHelp  = 2
+)
+
+// TitleBarFocusable is implemented by models whose title bar can receive keyboard focus.
+type TitleBarFocusable interface {
+	FocusTitleBar()
+	BlurTitleBar()
+	TitleBarFocused() bool
+}
+
+func (m *MenuModel) FocusTitleBar() {
+	m.titleBarFocused = true
+	m.titleBarWidget = titleBarWidgetClose
+	m.InvalidateCache()
+}
+
+func (m *MenuModel) BlurTitleBar() {
+	m.titleBarFocused = false
+	m.titleBarWidget = 0
+	m.InvalidateCache()
+}
+
+func (m *MenuModel) TitleBarFocused() bool { return m.titleBarFocused }
 
 // SetLockedByOthers updates the Locked status of all destructive menu items.
 func (m *MenuModel) SetLockedByOthers(locked bool) {
@@ -732,6 +763,10 @@ func (m *MenuModel) GetItems() []MenuItem {
 func (m *MenuModel) GetInnerContentWidth() int {
 	layout := GetLayout()
 	if m.subMenuMode {
+		return m.width - layout.BorderWidth()
+	}
+	// Section-based menus always render at m.width (viewWithSections uses m.width directly).
+	if len(m.contentSections) > 0 {
 		return m.width - layout.BorderWidth()
 	}
 

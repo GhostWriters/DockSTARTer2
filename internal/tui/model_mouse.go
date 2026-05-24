@@ -59,7 +59,7 @@ func hitIDToPanelID(hitID string) string {
 	// If the user hovers the background of a menu, we still want the wheel to scroll the list.
 	// Common screen IDs are "main_menu", "config_menu", "options_menu", "app_selection", "global_flags"
 	// Rather than hardcoding every ID, if it's not a known panel/button but has a hit, it's likely a menu background.
-	if hitID != "" && hitID != IDStatusBar && hitID != IDAppVersion && hitID != IDTmplVersion && hitID != IDHeaderFlags && hitID != IDPanel && hitID != IDPanelToggle && hitID != IDPanelResize {
+	if hitID != "" && hitID != IDStatusBar && hitID != IDAppVersion && hitID != IDTmplVersion && hitID != IDHeaderFlags && hitID != IDPanel && hitID != IDPanelToggle && hitID != IDPanelResize && hitID != IDPanelResizeUp && hitID != IDPanelResizeDn {
 		return effectiveID
 	}
 
@@ -167,7 +167,7 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		// 1. If hitting a context menu already open, let the hit region dispatch it (usually closes)
 		if strings.HasPrefix(hitID, "ctxmenu.") {
 			// Fall through to normal hit dispatch
-		} else if hit == nil || hitID == IDStatusBar || hitID == IDPanel || hitID == IDPanelViewport || hitID == IDPanelToggle || hitID == IDPanelResize || hitID == IDConsoleInput ||
+		} else if hit == nil || hitID == IDStatusBar || hitID == IDPanel || hitID == IDPanelViewport || hitID == IDPanelToggle || hitID == IDPanelResize || hitID == IDPanelResizeUp || hitID == IDPanelResizeDn || hitID == IDConsoleInput ||
 			hitID == IDAppVersion || hitID == IDTmplVersion || hitID == IDHeaderFlags {
 			// 2. If hitting background or a global element that doesn't usually have a context menu,
 			// show the global context menu.
@@ -450,6 +450,24 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 					return m, cmd, true
 				}
 			}
+		case IDPanelResizeUp:
+			if _, ok := msg.(tea.MouseClickMsg); ok {
+				if m.panel.expanded {
+					m.panel.ResizeBy(1)
+					m.applyPanelMax()
+					m.refreshPanelLayout()
+				}
+			}
+			return m, nil, true
+		case IDPanelResizeDn:
+			if _, ok := msg.(tea.MouseClickMsg); ok {
+				if m.panel.expanded {
+					m.panel.ResizeBy(-1)
+					m.applyPanelMax()
+					m.refreshPanelLayout()
+				}
+			}
+			return m, nil, true
 		case IDPanel, IDPanelViewport:
 			m.setPanelFocus(true)
 			if m.panel.inputFocused {
@@ -463,6 +481,24 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 			}
 			return m, nil, true
 		default:
+			// Title bar widget clicks: IDs are "menuID.title_widget_help" / "menuID.title_widget_close"
+			if me, ok := msg.(tea.MouseClickMsg); ok && me.Button == tea.MouseLeft {
+				if strings.HasSuffix(hitID, "."+IDTitleWidgetHelp) {
+					return m, m.showHelpCmd(nil, true), true
+				}
+				if strings.HasSuffix(hitID, "."+IDTitleWidgetClose) {
+					if m.dialog != nil {
+						if ea, ok := m.dialog.(EscapeActioner); ok {
+							return m, ea.EscapeAction(), true
+						}
+						return m, func() tea.Msg { return CloseDialogMsg{} }, true
+					}
+					if ea, ok := m.activeScreen.(EscapeActioner); ok {
+						return m, ea.EscapeAction(), true
+					}
+					return m, ConfirmExitAction(), true
+				}
+			}
 			// Hyperlinks (IDs are "link:<URL>")
 			if strings.HasPrefix(hitID, "link:") {
 				if me, ok := msg.(tea.MouseClickMsg); ok && me.Button == tea.MouseLeft {
@@ -568,6 +604,7 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 	// 6. MODAL FALLBACK (No hit, but dialog is open)
 	if m.dialog != nil {
 		m.setPanelFocus(false)
+		m.setHeaderFocus(HeaderFocusNone)
 		return m, nil, false // Let raw msg fall through to dialog in standard loop
 	}
 

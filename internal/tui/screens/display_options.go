@@ -866,6 +866,22 @@ func (s *DisplayOptionsScreen) IsDestructive() bool {
 	return false
 }
 
+func (s *DisplayOptionsScreen) FocusTitleBar() {
+	if s.outerMenu != nil {
+		s.outerMenu.FocusTitleBar()
+	}
+}
+
+func (s *DisplayOptionsScreen) BlurTitleBar() {
+	if s.outerMenu != nil {
+		s.outerMenu.BlurTitleBar()
+	}
+}
+
+func (s *DisplayOptionsScreen) TitleBarFocused() bool {
+	return s.outerMenu != nil && s.outerMenu.TitleBarFocused()
+}
+
 func (s *DisplayOptionsScreen) Init() tea.Cmd {
 	return tea.Batch(s.themeMenu.Init(), s.optionsMenu.Init())
 }

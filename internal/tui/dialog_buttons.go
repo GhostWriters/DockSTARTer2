@@ -301,10 +301,10 @@ func RenderHotkeyLabelCtx(label string, focused bool, ctx StyleContext) string {
 
 	var charStyle, restStyle lipgloss.Style
 	if focused {
-		charStyle = ctx.TagKeySelected
+		charStyle = ctx.ButtonKeyActive
 		restStyle = ctx.ButtonActive
 	} else {
-		charStyle = ctx.TagKey
+		charStyle = ctx.ButtonKeyInactive
 		restStyle = ctx.ButtonInactive
 	}
 

@@ -98,6 +98,27 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitReg
 		m.getButtonSpecs()...,
 	)...)
 
+	// Title widget regions
+	const widgetTotalWidth = 7
+	const endPad = 1
+	widgetsStartX := offsetX + m.width - 1 - endPad - widgetTotalWidth
+	regions = append(regions,
+		tui.HitRegion{
+			ID: "tabbed_vars." + tui.IDTitleWidgetHelp,
+			X: widgetsStartX, Y: offsetY, Width: 3, Height: 1,
+			ZOrder: tui.ZDialog + 25,
+			Label:  "Help",
+			Help:   &tui.HelpContext{ScreenName: m.title, PageTitle: "Help", PageText: "Open help for this dialog."},
+		},
+		tui.HitRegion{
+			ID: "tabbed_vars." + tui.IDTitleWidgetClose,
+			X: widgetsStartX + 4, Y: offsetY, Width: 3, Height: 1,
+			ZOrder: tui.ZDialog + 25,
+			Label:  "Close",
+			Help:   &tui.HelpContext{ScreenName: m.title, PageTitle: "Close", PageText: "Close this dialog."},
+		},
+	)
+
 	return regions
 }
 

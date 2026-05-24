@@ -241,10 +241,7 @@ func (s *ServerOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if key.Matches(msg, tui.Keys.Esc) {
-			if s.isRoot {
-				return s, tui.ConfirmExitAction()
-			}
-			return s, navigateBack()
+			return s, s.EscapeAction()
 		}
 
 		// Up/Down/Space: route to focused panel

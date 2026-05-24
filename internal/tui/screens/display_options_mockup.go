@@ -54,6 +54,12 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 		Border2Color:        dBorder2.GetForeground(),
 		ButtonActive:        tui.SemanticRawStyle("Preview_ButtonActive"),
 		ButtonInactive:      tui.SemanticRawStyle("Preview_ButtonInactive"),
+		ButtonKeyActive:     tui.SemanticRawStyle("Preview_ButtonKeyActive"),
+		ButtonKeyInactive:   tui.SemanticRawStyle("Preview_ButtonKeyInactive"),
+		IconActive:          tui.SemanticRawStyle("Preview_IconActive"),
+		IconInactive:        tui.SemanticRawStyle("Preview_IconInactive"),
+		HelpIconInactive:    tui.SemanticRawStyle("Preview_HelpIconInactive"),
+		ExitIconInactive:    tui.SemanticRawStyle("Preview_ExitIconInactive"),
 		ItemNormal:          tui.SemanticRawStyle("Preview_Item"),
 		ItemSelected:        tui.SemanticRawStyle("Preview_ItemSelected"),
 		TagNormal:           tui.SemanticRawStyle("Preview_Tag"),
@@ -222,7 +228,10 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	}
 	backdropBlock := lipgloss.JoinVertical(lipgloss.Left, backdropLines...)
 
-	dialogBox := tui.RenderBorderedBoxCtx(dTitle, contentStr, 38, 0, true, true, false, previewCtx.DialogTitleAlign, "Title", previewCtx)
+	// Build title bar widgets ([?]─[×]) to demonstrate icon styles
+	titleWidgets := tui.BuildInactiveTitleWidgets(previewCtx)
+
+	dialogBox := tui.RenderBorderedBoxCtx(dTitle, contentStr, 38, 0, true, true, false, previewCtx.DialogTitleAlign, "Title", previewCtx, titleWidgets)
 	dialogBox = tui.AddShadowCtx(dialogBox, previewCtx)
 
 	// Pad dialogBox to full backdrop width with explicit Screen bg chars so no

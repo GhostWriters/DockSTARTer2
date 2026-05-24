@@ -148,7 +148,7 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		switch {
 		case key.Matches(msg, tui.Keys.Esc), key.Matches(msg, tui.Keys.ForceQuit):
-			return m, m.closeWith(nil)
+			return m, m.cancelOrConfirm()
 
 		case key.Matches(msg, tui.Keys.Tab), key.Matches(msg, tui.Keys.CycleTab):
 			m.cycleFocus(+1)
@@ -198,7 +198,7 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case addVarFocusCreate:
 				return m, m.submit()
 			case addVarFocusCancel:
-				return m, m.closeWith(nil)
+				return m, m.cancelOrConfirm()
 			case addVarFocusExit:
 				return m, m.confirmExit()
 			}
@@ -288,7 +288,7 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.submit()
 			}
 			if strings.HasSuffix(msg.ID, ".Cancel") {
-				return m, m.closeWith(nil)
+				return m, m.cancelOrConfirm()
 			}
 			if strings.HasSuffix(msg.ID, ".Exit") {
 				return m, m.confirmExit()
@@ -434,6 +434,20 @@ func (m *addVarDialogModel) clampScroll() {
 
 func (m *addVarDialogModel) closeWith(result any) tea.Cmd {
 	return func() tea.Msg { return tui.CloseDialogMsg{Result: result} }
+}
+
+func (m *addVarDialogModel) cancelOrConfirm() tea.Cmd {
+	return func() tea.Msg {
+		if m.input.Value() != "" && !tui.Confirm("Discard Input", "Discard the variable name you entered?", false) {
+			return nil
+		}
+		return tui.CloseDialogMsg{}
+	}
+}
+
+// EscapeAction implements tui.EscapeActioner: same as clicking Cancel.
+func (m *addVarDialogModel) EscapeAction() tea.Cmd {
+	return m.cancelOrConfirm()
 }
 
 func (m *addVarDialogModel) submit() tea.Cmd {
@@ -948,6 +962,27 @@ func (m *addVarDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegion 
 		tui.ButtonSpec{Text: "Cancel", ZoneID: "Cancel", Help: "Cancel and return to the editor."},
 		tui.ButtonSpec{Text: "Exit", ZoneID: "Exit", Help: "Exit the application."},
 	)...)
+
+	// Title widget regions
+	const widgetTotalWidth = 7
+	const endPad = 1
+	widgetsStartX := offsetX + m.width - 1 - endPad - widgetTotalWidth
+	regions = append(regions,
+		tui.HitRegion{
+			ID: "addvar_dialog." + tui.IDTitleWidgetHelp,
+			X: widgetsStartX, Y: offsetY, Width: 3, Height: 1,
+			ZOrder: tui.ZDialog + 25,
+			Label:  "Help",
+			Help:   &tui.HelpContext{ScreenName: "Add Variable", PageTitle: "Help", PageText: "Open help for this dialog."},
+		},
+		tui.HitRegion{
+			ID: "addvar_dialog." + tui.IDTitleWidgetClose,
+			X: widgetsStartX + 4, Y: offsetY, Width: 3, Height: 1,
+			ZOrder: tui.ZDialog + 25,
+			Label:  "Close",
+			Help:   &tui.HelpContext{ScreenName: "Add Variable", PageTitle: "Close", PageText: "Close this dialog."},
+		},
+	)
 
 	return regions
 }

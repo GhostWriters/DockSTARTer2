@@ -791,6 +791,27 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 		tui.ButtonSpec{Text: "Exit", ZoneID: "Exit", Help: "Close the editor and return to the main menu."},
 	)...)
 
+	// Title widget regions
+	const widgetTotalWidth = 7
+	const endPad = 1
+	widgetsStartX := offsetX + m.width - 1 - endPad - widgetTotalWidth
+	regions = append(regions,
+		tui.HitRegion{
+			ID: "setvalue_dialog." + tui.IDTitleWidgetHelp,
+			X: widgetsStartX, Y: offsetY, Width: 3, Height: 1,
+			ZOrder: tui.ZDialog + 25,
+			Label:  "Help",
+			Help:   &tui.HelpContext{ScreenName: "Set Value: " + m.varName, PageTitle: "Help", PageText: "Open help for this dialog."},
+		},
+		tui.HitRegion{
+			ID: "setvalue_dialog." + tui.IDTitleWidgetClose,
+			X: widgetsStartX + 4, Y: offsetY, Width: 3, Height: 1,
+			ZOrder: tui.ZDialog + 25,
+			Label:  "Close",
+			Help:   &tui.HelpContext{ScreenName: "Set Value: " + m.varName, PageTitle: "Close", PageText: "Close this dialog."},
+		},
+	)
+
 	return regions
 }
 
@@ -804,6 +825,11 @@ func (m *setValueDialogModel) submit() tea.Cmd {
 		return m.onSave(val)
 	}
 	return m.closeWith(ApplyVarValueMsg{VarName: m.varName, Value: val})
+}
+
+// EscapeAction implements tui.EscapeActioner: same as clicking Cancel.
+func (m *setValueDialogModel) EscapeAction() tea.Cmd {
+	return m.cancelOrConfirm()
 }
 
 func (m *setValueDialogModel) cancelOrConfirm() tea.Cmd {

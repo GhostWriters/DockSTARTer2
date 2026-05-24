@@ -74,6 +74,10 @@ type PanelModel struct {
 	historyIdx   int      // -1 = new command; >=0 = navigating history
 	historyDraft string   // saved in-progress text when navigating up
 
+	// Title bar focus state (for keyboard resize)
+	titleBarFocused bool
+	titleBarWidget  int // panelWidgetUp or panelWidgetDn
+
 	// Running console command state
 	consoleScanner       *bufio.Scanner
 	consoleCancel        context.CancelFunc
@@ -88,6 +92,11 @@ type PanelModel struct {
 	panelMode string // "log", "console", "system", or "none"
 	connType  string // "local", "ssh", or "web"
 }
+
+const (
+	panelWidgetUp = 1
+	panelWidgetDn = 2
+)
 
 // applyInputStyles updates the sinput colours from the current theme.
 func (m *PanelModel) applyInputStyles() {
@@ -143,6 +152,44 @@ func (m PanelModel) Height() int {
 
 // SetMaxHeight updates the externally imposed height ceiling. Pass 0 to revert to default.
 func (m *PanelModel) SetMaxHeight(h int) { m.maxHeight = h }
+
+// ResizeBy adjusts the panel height by delta lines (positive = taller, negative = shorter).
+// Returns true if the height actually changed.
+func (m *PanelModel) ResizeBy(delta int) bool {
+	if !m.expanded {
+		return false
+	}
+	current := m.height
+	if current == 0 {
+		if m.totalHeight > 0 {
+			current = m.totalHeight / 2
+		} else {
+			current = 10
+		}
+	}
+	newHeight := current + delta
+	maxH := m.effectiveMaxHeight()
+	if newHeight > maxH {
+		newHeight = maxH
+	}
+	if newHeight < 5 {
+		newHeight = 5
+	}
+	if newHeight == m.height {
+		return false
+	}
+	m.height = newHeight
+	vpH := m.height - 1
+	if m.panelMode == "console" || m.panelMode == "system" {
+		vpH -= 3
+	}
+	if vpH < 1 {
+		vpH = 1
+	}
+	m.viewport.SetHeight(vpH)
+	m.viewport.SetYOffset(m.viewport.YOffset())
+	return true
+}
 
 // lockSession adds or removes a locker by ID.
 // The input bar is locked while any lockers are registered.

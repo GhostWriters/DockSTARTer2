@@ -46,6 +46,29 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
+		// Title bar focus: intercept all keys before normal list handling.
+		if m.titleBarFocused {
+			switch {
+			case key.Matches(msg, Keys.Esc):
+				m.BlurTitleBar()
+				return m, nil
+			case key.Matches(msg, Keys.Left):
+				if m.titleBarWidget != titleBarWidgetHelp {
+					m.titleBarWidget = titleBarWidgetHelp
+					m.InvalidateCache()
+				}
+				return m, nil
+			case key.Matches(msg, Keys.Right):
+				if m.titleBarWidget != titleBarWidgetClose {
+					m.titleBarWidget = titleBarWidgetClose
+					m.InvalidateCache()
+				}
+				return m, nil
+			case key.Matches(msg, Keys.Enter), key.Matches(msg, Keys.Space):
+				return m, m.activateTitleBarWidget()
+			}
+			return m, nil
+		}
 		switch {
 		case key.Matches(msg, Keys.Enter), key.Matches(msg, Keys.Space):
 			if sel := m.list.SelectedItem(); sel != nil {
@@ -145,6 +168,18 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		switch buttonID {
+		case IDTitleWidgetHelp:
+			if msg.Button == tea.MouseLeft {
+				return m, func() tea.Msg { return TriggerHelpMsg{} }
+			}
+		case IDTitleWidgetClose:
+			if msg.Button == tea.MouseLeft {
+				m.BlurTitleBar()
+				if m.backAction != nil {
+					return m, m.backAction
+				}
+				return m, ConfirmExitAction()
+			}
 		case IDListPanel:
 			// Hover moved back over the list — restore list focus so the wheel scrolls items.
 			m.focusedItem = FocusList
@@ -353,10 +388,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Esc: back if available, else exit
 		case key.Matches(keyMsg, Keys.Esc):
-			if m.backAction != nil {
-				return m, m.backAction
-			}
-			return m, ConfirmExitAction()
+			return m, m.EscapeAction()
 
 		// Dynamic Hotkeys
 		default:
@@ -424,6 +456,22 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // GetHitRegions → menu_hit_regions.go
 // renderFlow, GetFlowHeight → menu_render_flow.go
 // renderVariableHeightList → menu_render_list.go
+
+// activateTitleBarWidget executes the currently focused title bar widget action.
+func (m *MenuModel) activateTitleBarWidget() tea.Cmd {
+	switch m.titleBarWidget {
+	case titleBarWidgetHelp:
+		m.BlurTitleBar()
+		return func() tea.Msg { return TriggerHelpMsg{ScreenLevelOnly: true} }
+	case titleBarWidgetClose:
+		m.BlurTitleBar()
+		if m.backAction != nil {
+			return m.backAction
+		}
+		return ConfirmExitAction()
+	}
+	return nil
+}
 
 func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 	switch m.focusedItem {
@@ -930,6 +978,14 @@ func (m *MenuModel) calculateSectionLayout() {
 // SetFlowMode toggles horizontal flow layout
 func (m *MenuModel) SetFlowMode(flow bool) {
 	m.flowMode = flow
+}
+
+// EscapeAction implements EscapeActioner: runs backAction if set, otherwise prompts to exit.
+func (m *MenuModel) EscapeAction() tea.Cmd {
+	if m.backAction != nil {
+		return m.backAction
+	}
+	return ConfirmExitAction()
 }
 
 // SetHeaderVisibility toggles background/title for sub-menus

@@ -29,10 +29,15 @@ func (m PanelModel) ViewString() string {
 	}
 	title := marker + " " + titleText + " " + marker
 
-	rightTitle := ""
-	if m.focused && m.expanded && !m.inputFocused {
-		pct := int(m.viewport.ScrollPercent() * 100)
-		rightTitle = fmt.Sprintf(" %d%% ", pct)
+	upGlyph, dnGlyph := resizeUpWidget, resizeDnWidget
+	if !ctx.LineCharacters {
+		upGlyph, dnGlyph = resizeUpWidgetAscii, resizeDnWidgetAscii
+	}
+	consoleBorderStyle := SemanticRawStyle("ConsoleBorder")
+	baseStyle := ctx.BorderFlags.Apply(consoleBorderStyle)
+	lineChar := "─"
+	if !ctx.LineCharacters {
+		lineChar = "-"
 	}
 
 	// Input box occupies 3 rows (top border + 1 content + bottom border).
@@ -132,9 +137,33 @@ func (m PanelModel) ViewString() string {
 	}
 
 	consoleTitleStyle := SemanticRawStyle("ConsoleTitle")
-	consoleBorderStyle := SemanticRawStyle("ConsoleBorder")
 
-	return RenderTopBorderBoxCtx(title, rightTitle, combined, m.width, m.focused, consoleTitleStyle, consoleBorderStyle, ctx)
+	// Sep between resize widgets uses the console border color, not the dialog border color.
+	lineChar = "─"
+	if !ctx.LineCharacters {
+		lineChar = "-"
+	}
+	rightTitle := ""
+	rightSuffix := ""
+	if m.expanded {
+		upTag, dnTag := "ResizeUpIconInactive", "ResizeDnIconInactive"
+		if m.titleBarFocused {
+			if m.titleBarWidget == panelWidgetUp {
+				upTag = "IconActive"
+			} else {
+				dnTag = "IconActive"
+			}
+		}
+		iconStr := lineChar +
+			"{{|" + upTag + "|}}[" + upGlyph + "]{{[-]}}" +
+			lineChar +
+			"{{|" + dnTag + "|}}[" + dnGlyph + "]{{[-]}}"
+		pct := int(m.viewport.ScrollPercent() * 100)
+		rightTitle = fmt.Sprintf(" %d%% ", pct)
+		rightSuffix = RenderThemeText(iconStr, baseStyle)
+	}
+
+	return RenderTopBorderBoxCtx(title, rightTitle, rightSuffix, combined, m.width, m.titleBarFocused, consoleTitleStyle, consoleBorderStyle, ctx)
 }
 
 // Layers returns a single layer with the panel content for visual compositing.

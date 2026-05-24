@@ -76,7 +76,8 @@ func RenderDialogWithTypeCtx(title, content string, focused bool, targetHeight i
 		titleStyle = SemanticRawStyle("TitleQuestion") // Semantic
 	}
 
-	return renderDialogWithBorderCtx(title, content, border, focused, targetHeight, true, true, titleStyle, ctx)
+	widgets := BuildInactiveTitleWidgets(ctx)
+	return renderDialogWithBorderCtx(title, content, border, focused, targetHeight, true, true, titleStyle, ctx, widgets)
 }
 
 // RenderUniformBlockDialog renders a dialog with block borders and uniform dark colors
@@ -87,7 +88,7 @@ func RenderUniformBlockDialog(title, content string) string {
 // RenderUniformBlockDialogCtx renders a uniform block dialog using specific context
 func RenderUniformBlockDialogCtx(title, content string, ctx StyleContext) string {
 	borders := GetBlockBorders(ctx.LineCharacters)
-	return renderDialogWithBorderCtx(title, content, borders.Focused, true, 0, false, false, ctx.DialogTitleHelp, ctx)
+	return renderDialogWithBorderCtx(title, content, borders.Focused, true, 0, false, false, ctx.DialogTitleHelp, ctx, "")
 }
 
 // RenderTitleSegmentCtx renders a single title segment with connectors and optional indicators.
@@ -172,7 +173,7 @@ func WidthOfTitleSegment(rawTitle string, showIndicators bool, ctx StyleContext)
 
 // RenderBorderedBoxCtx renders a dialog with title and borders using a specific context.
 // Unlike renderDialogWithBorderCtx, this accepts a known contentWidth instead of measuring content.
-func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeight int, focused bool, showIndicators bool, rounded bool, titleAlign string, titleTag string, ctx StyleContext) string {
+func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeight int, focused bool, showIndicators bool, rounded bool, titleAlign string, titleTag string, ctx StyleContext, rightWidgets ...string) string {
 	var border lipgloss.Border
 	if !ctx.DrawBorders {
 		border = lipgloss.HiddenBorder()
@@ -272,14 +273,35 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 		} else {
 			leftPad = (actualWidth - titleSectionLen) / 2
 		}
-		rightPad := actualWidth - titleSectionLen - leftPad
-		if rightPad < 0 {
-			rightPad = 0
+
+		rightWidget := ""
+		if len(rightWidgets) > 0 {
+			rightWidget = rightWidgets[0]
+		}
+		rightWidgetWidth := WidthWithoutZones(rightWidget)
+
+		remaining := actualWidth - titleSectionLen - leftPad
+		var rightPadMid, rightPadEnd int
+		if rightWidget != "" {
+			rightPadEnd = 1
+			rightPadMid = remaining - rightWidgetWidth - rightPadEnd
+			if rightPadMid < 0 {
+				rightPadMid = 0
+			}
+		} else {
+			rightPadMid = remaining
+			if rightPadMid < 0 {
+				rightPadMid = 0
+			}
 		}
 
 		result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, leftPad)))
 		result.WriteString(renderedSegment)
-		result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, rightPad)))
+		result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, rightPadMid)))
+		if rightWidget != "" {
+			result.WriteString(rightWidget)
+			result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, rightPadEnd)))
+		}
 	}
 	result.WriteString(borderStyleLight.Render(border.TopRight))
 	result.WriteString("\n")

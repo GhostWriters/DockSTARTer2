@@ -209,6 +209,59 @@ func (m *MenuModel) SetIsDialog(isDialog bool) {
 	m.isDialog = isDialog
 }
 
+// BuildInactiveTitleWidgets builds the [?]─[×] widget string using inactive styles only.
+// Used by dialogs that display widgets but don't support keyboard focus on them.
+func BuildInactiveTitleWidgets(ctx StyleContext) string {
+	helpGlyph := helpWidget
+	closeGlyph := closeWidget
+	lineChar := "─"
+	if !ctx.LineCharacters {
+		closeGlyph = closeWidgetAscii
+		lineChar = "-"
+	}
+	borderBase := ctx.BorderFlags.Apply(lipgloss.NewStyle()).
+		Foreground(ctx.BorderColor).
+		Background(ctx.Dialog.GetBackground())
+	iconStr := "{{|HelpIconInactive|}}[" + helpGlyph + "]{{[-]}}" +
+		lineChar +
+		"{{|ExitIconInactive|}}[" + closeGlyph + "]{{[-]}}"
+	ctx.Dialog = borderBase
+	return RenderThemeTextCtx(iconStr, ctx)
+}
+
+// renderTitleBarWidgets builds the pre-styled widget string for the title bar right side.
+// Returns an empty string when there is no title (sub-menu mode without title has no outer border).
+func (m *MenuModel) renderTitleBarWidgets(ctx StyleContext) string {
+	if m.title == "" || m.subMenuMode {
+		return ""
+	}
+	helpGlyph := helpWidget
+	closeGlyph := closeWidget
+	lineChar := "─"
+	if !ctx.LineCharacters {
+		closeGlyph = closeWidgetAscii
+		lineChar = "-"
+	}
+
+	borderBase := ctx.BorderFlags.Apply(lipgloss.NewStyle()).
+		Foreground(ctx.BorderColor).
+		Background(ctx.Dialog.GetBackground())
+
+	helpTag, closeTag := "HelpIconInactive", "ExitIconInactive"
+	if m.titleBarFocused {
+		if m.titleBarWidget == titleBarWidgetHelp {
+			helpTag = "IconActive"
+		} else if m.titleBarWidget == titleBarWidgetClose {
+			closeTag = "IconActive"
+		}
+	}
+	iconStr := "{{|" + helpTag + "|}}[" + helpGlyph + "]{{[-]}}" +
+		lineChar +
+		"{{|" + closeTag + "|}}[" + closeGlyph + "]{{[-]}}"
+	ctx.Dialog = borderBase
+	return RenderThemeTextCtx(iconStr, ctx)
+}
+
 func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targetHeight int, focused bool, rounded bool, titleTag string) string {
 	align := GetActiveContext().DialogTitleAlign
 	if m.subMenuMode {
@@ -222,7 +275,8 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 
 	ctx := GetActiveContext()
 	ctx.Type = m.dialogType
-	return RenderBorderedBoxCtx(m.title, content, contentWidth, targetHeight, focused, true, rounded, align, titleTag, ctx)
+	widgets := m.renderTitleBarWidgets(ctx)
+	return RenderBorderedBoxCtx(m.title, content, contentWidth, targetHeight, focused || m.titleBarFocused, true, rounded, align, titleTag, ctx, widgets)
 }
 
 func (m *MenuModel) viewSubMenu() string {
