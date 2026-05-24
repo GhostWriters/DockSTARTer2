@@ -209,11 +209,6 @@ func (m *MenuModel) SetIsDialog(isDialog bool) {
 	m.isDialog = isDialog
 }
 
-// BuildInactiveTitleWidgets builds the [?]─[×] widget string using inactive styles only.
-// Used by dialogs that display widgets but don't support keyboard focus on them.
-func BuildInactiveTitleWidgets(ctx StyleContext) string {
-	return buildDialogTitleWidgets(false, 0, ctx)
-}
 
 // renderTitleBarWidgets builds the pre-styled widget string for the title bar right side.
 // Returns an empty string when there is no title (sub-menu mode without title has no outer border).
