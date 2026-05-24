@@ -15,6 +15,16 @@ import (
 	"DockSTARTer2/internal/strutil"
 )
 
+// Heading and tag strings used in formatted env output.
+const (
+	globalVarsHeading        = "Global Variables"
+	appDeprecatedTag         = " [*DEPRECATED*]"
+	appDisabledTag           = " (Disabled)"
+	appUserDefinedTag        = " (User Defined)"
+	appUserDefinedVarsTag    = " (User Defined Variables)"
+	userDefinedGlobalVarsTag = " (User Defined)"
+)
+
 // FormatLinesCore processes environment variable lines to match DockSTARTer formatting.
 // currentLines contains the staged variable values (already in memory).
 // defaultLines contains the template lines (nil = no template).
@@ -24,14 +34,6 @@ import (
 // For the .env.app.appname tab, pass the global tab's staged lines as envLines.
 func FormatLinesCore(ctx context.Context, currentLines, defaultLines, envLines []string, appName, composeEnvFile string) []string {
 	appUpper := strings.ToUpper(appName)
-
-	// Local variables for tags (Parity with env_format_lines.sh lines 15-20)
-	globalVarsHeading := "Global Variables"
-	appDeprecatedTag := " [*DEPRECATED*]"
-	appDisabledTag := " (Disabled)"
-	appUserDefinedTag := " (User Defined)"
-	appUserDefinedVarsTag := " (User Defined Variables)"
-	userDefinedGlobalVarsTag := " (User Defined)"
 
 	var formattedEnvLines []string
 
