@@ -161,11 +161,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 		if item.IsEditing && !isActuallySub {
 			cbStr := ""
 			if item.IsCheckbox {
-				cb := checkUnselected
-				if item.Checked {
-					cb = checkSelected
-				}
-				cbStr = cbStyle.Render(cb) + neutralStyle.Render(" ")
+				cbStr = renderCheckbox(false, item.Checked, ctx.LineCharacters, cbStyle, neutralStyle) + neutralStyle.Render(" ")
 			}
 			editStr := RenderThemeText(item.Tag, dStyle)
 			line := cbStr + editStr
@@ -184,33 +180,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 			}
 			checkbox = tStyle.Render(cb)
 		} else if item.IsRadioButton || item.IsCheckbox {
-			cb := ""
-			if !ctx.LineCharacters {
-				if item.IsRadioButton {
-					cb = radioUnselectedAscii
-					if item.Checked {
-						cb = radioSelectedAscii
-					}
-				} else {
-					cb = checkUnselectedAscii
-					if item.Checked {
-						cb = checkSelectedAscii
-					}
-				}
-			} else {
-				if item.IsRadioButton {
-					cb = radioUnselected
-					if item.Checked {
-						cb = radioSelected
-					}
-				} else {
-					cb = checkUnselected
-					if item.Checked {
-						cb = checkSelected
-					}
-				}
-			}
-			checkbox = cbStyle.Render(cb)
+			checkbox = renderCheckbox(item.IsRadioButton, item.Checked, ctx.LineCharacters, cbStyle, neutralStyle)
 		}
 
 		var cbAdd3, cbEnabled3 string

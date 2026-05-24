@@ -7,6 +7,48 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+// renderCheckboxGlyph renders a checkbox/radio glyph with cbStyle applied only to the
+// middle character. For single-rune glyphs (Unicode), the whole rune gets cbStyle.
+// For 3-rune ASCII glyphs like "[x]" or "(*)", only the middle rune is styled.
+func renderCheckboxGlyph(cb string, cbStyle lipgloss.Style, neutralStyle lipgloss.Style) string {
+	runes := []rune(cb)
+	if len(runes) == 3 {
+		return neutralStyle.Render(string(runes[0])) + cbStyle.Render(string(runes[1])) + neutralStyle.Render(string(runes[2]))
+	}
+	return cbStyle.Render(cb)
+}
+
+// renderCheckbox selects the correct glyph for a checkbox or radio button and renders it.
+func renderCheckbox(isRadio, checked, lineChars bool, cbStyle, neutralStyle lipgloss.Style) string {
+	var cb string
+	if lineChars {
+		if isRadio {
+			cb = radioUnselected
+			if checked {
+				cb = radioSelected
+			}
+		} else {
+			cb = checkUnselected
+			if checked {
+				cb = checkSelected
+			}
+		}
+	} else {
+		if isRadio {
+			cb = radioUnselectedAscii
+			if checked {
+				cb = radioSelectedAscii
+			}
+		} else {
+			cb = checkUnselectedAscii
+			if checked {
+				cb = checkSelectedAscii
+			}
+		}
+	}
+	return renderCheckboxGlyph(cb, cbStyle, neutralStyle)
+}
+
 // listScrollPercent returns the current scroll position in [0.0, 1.0] for the list.
 func (m *MenuModel) listScrollPercent() float64 {
 	var offset, total int

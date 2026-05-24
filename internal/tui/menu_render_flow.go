@@ -52,34 +52,8 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 
 		// Checkbox/Radio visual
 		prefix := ""
-		if item.IsRadioButton {
-			var cb string
-			if ctx.LineCharacters {
-				cb = radioUnselected
-				if item.Checked {
-					cb = radioSelected
-				}
-			} else {
-				cb = radioUnselectedAscii
-				if item.Checked {
-					cb = radioSelectedAscii
-				}
-			}
-			prefix = checkboxStyle.Render(cb) + neutralStyle.Render(" ")
-		} else if item.IsCheckbox {
-			var cb string
-			if ctx.LineCharacters {
-				cb = checkUnselected
-				if item.Checked {
-					cb = checkSelected
-				}
-			} else {
-				cb = checkUnselectedAscii
-				if item.Checked {
-					cb = checkSelectedAscii
-				}
-			}
-			prefix = checkboxStyle.Render(cb) + neutralStyle.Render(" ")
+		if item.IsRadioButton || item.IsCheckbox {
+			prefix = renderCheckbox(item.IsRadioButton, item.Checked, ctx.LineCharacters, checkboxStyle, neutralStyle) + neutralStyle.Render(" ")
 		}
 
 		// Tag with first-letter shortcut
