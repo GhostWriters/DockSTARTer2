@@ -229,13 +229,7 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	backdropBlock := lipgloss.JoinVertical(lipgloss.Left, backdropLines...)
 
 	// Build title bar widgets ([?]─[×]) to demonstrate icon styles
-	helpGlyph, closeGlyph, lineChar := "[?]", "[x]", "-"
-	if s.config.UI.LineCharacters {
-		closeGlyph = "[×]"
-		lineChar = "─"
-	}
-	sepStyle := lipgloss.NewStyle().Foreground(previewCtx.BorderColor).Background(previewCtx.Dialog.GetBackground())
-	titleWidgets := previewCtx.HelpIconInactive.Render(helpGlyph) + sepStyle.Render(lineChar) + previewCtx.ExitIconInactive.Render(closeGlyph)
+	titleWidgets := tui.BuildInactiveTitleWidgets(previewCtx)
 
 	dialogBox := tui.RenderBorderedBoxCtx(dTitle, contentStr, 38, 0, true, true, false, previewCtx.DialogTitleAlign, "Title", previewCtx, titleWidgets)
 	dialogBox = tui.AddShadowCtx(dialogBox, previewCtx)

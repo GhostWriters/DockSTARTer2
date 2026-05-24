@@ -62,43 +62,44 @@ func (m PanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		Label:  "Console Panel",
 		Help:   panelHelp,
 	})
-	// Right side of title bar: resize widgets [▲] [▼] at far right, rest is drag-resize.
-	// Widget layout: "[▲] [▼]" = 7 chars + 1 end pad before TopRight corner.
-	const widgetTotalWidth = 7
-	const endPad = 1
-	widgetsStartX := m.width - 1 - endPad - widgetTotalWidth
-	resizeUpX := widgetsStartX       // [▲] starts here
-	resizeDnX := widgetsStartX + 4   // "[▲] " = 4 chars before [▼]
-	dragWidth := widgetsStartX - titleEnd
-	if dragWidth < 0 {
-		dragWidth = 0
+	// Right side of title bar: resize widgets [▲] [▼] only when expanded.
+	if m.expanded {
+		const widgetTotalWidth = 7
+		const endPad = 1
+		widgetsStartX := m.width - 1 - endPad - widgetTotalWidth
+		resizeUpX := widgetsStartX     // [▲] starts here
+		resizeDnX := widgetsStartX + 4 // "[▲] " = 4 chars before [▼]
+		dragWidth := widgetsStartX - titleEnd
+		if dragWidth < 0 {
+			dragWidth = 0
+		}
+		if dragWidth > 0 {
+			regions = append(regions, HitRegion{
+				ID:     IDPanelResize,
+				X:      offsetX + titleEnd,
+				Y:      offsetY,
+				Width:  dragWidth,
+				Height: 1,
+				ZOrder: ZPanel + 1,
+				Label:  "Console Panel",
+				Help:   panelHelp,
+			})
+		}
+		regions = append(regions,
+			HitRegion{
+				ID: IDPanelResizeUp, X: offsetX + resizeUpX, Y: offsetY,
+				Width: 3, Height: 1, ZOrder: ZPanel + 2,
+				Label: "Grow panel",
+				Help:  &HelpContext{ScreenName: "Console Panel", PageTitle: "Resize", PageText: "Click to grow the panel by one line."},
+			},
+			HitRegion{
+				ID: IDPanelResizeDn, X: offsetX + resizeDnX, Y: offsetY,
+				Width: 3, Height: 1, ZOrder: ZPanel + 2,
+				Label: "Shrink panel",
+				Help:  &HelpContext{ScreenName: "Console Panel", PageTitle: "Resize", PageText: "Click to shrink the panel by one line."},
+			},
+		)
 	}
-	if dragWidth > 0 {
-		regions = append(regions, HitRegion{
-			ID:     IDPanelResize,
-			X:      offsetX + titleEnd,
-			Y:      offsetY,
-			Width:  dragWidth,
-			Height: 1,
-			ZOrder: ZPanel + 1,
-			Label:  "Console Panel",
-			Help:   panelHelp,
-		})
-	}
-	regions = append(regions,
-		HitRegion{
-			ID: IDPanelResizeUp, X: offsetX + resizeUpX, Y: offsetY,
-			Width: 3, Height: 1, ZOrder: ZPanel + 2,
-			Label: "Grow panel",
-			Help:  &HelpContext{ScreenName: "Console Panel", PageTitle: "Resize", PageText: "Click to grow the panel by one line."},
-		},
-		HitRegion{
-			ID: IDPanelResizeDn, X: offsetX + resizeDnX, Y: offsetY,
-			Width: 3, Height: 1, ZOrder: ZPanel + 2,
-			Label: "Shrink panel",
-			Help:  &HelpContext{ScreenName: "Console Panel", PageTitle: "Resize", PageText: "Click to shrink the panel by one line."},
-		},
-	)
 
 	if m.expanded {
 		vpH := m.height - 4

@@ -658,6 +658,7 @@ func (m *AppModel) setPanelTitleFocus(focused bool) {
 	m.panelTitleFocused = focused
 	m.panel.titleBarFocused = focused
 	if focused {
+		m.panel.titleBarWidget = panelWidgetUp // default to [▲]
 		m.panelFocused = false
 		m.panel.focused = false
 		m.panel.input.Blur()
@@ -687,11 +688,10 @@ func (m *AppModel) updateComponentFocus() {
 	m.panel.focused = m.panelFocused && !dialogOpen
 	m.panel.titleBarFocused = m.panelTitleFocused && !dialogOpen
 
-	// Screen is focused only if no dialog is open AND neither panel viewport nor header have focus.
-	// Panel TITLE BAR focus is additive — it does not steal focus from the active screen.
+	// Screen is focused only if no dialog is open AND neither panel nor header have focus.
 	if m.activeScreen != nil {
 		if focusable, ok := m.activeScreen.(interface{ SetFocused(bool) }); ok {
-			focusable.SetFocused(!dialogOpen && !m.panelFocused && !headerFocused)
+			focusable.SetFocused(!dialogOpen && !m.panelFocused && !m.panelTitleFocused && !headerFocused)
 		}
 	}
 
@@ -835,16 +835,17 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 				}
 				return m, nil, true
 			}
-		} else if m.panelFocused && m.panel.panelMode != "none" {
-			// Panel is focused — toggle panel title bar before checking active screen.
+		} else if (m.panelFocused || m.panelTitleFocused) && m.panel.panelMode != "none" {
+			// Panel is focused (or its title bar is) — toggle panel title bar.
 			if m.panelTitleFocused {
 				m.setPanelTitleFocus(false)
+				m.setPanelFocus(true)
 			} else {
 				m.setPanelTitleFocus(true)
 			}
 			return m, nil, true
-		} else if m.activeScreen != nil {
-			// No dialog or focused panel: toggle active screen title bar.
+		} else if m.activeScreen != nil && m.backdrop.header.GetFocus() == HeaderFocusNone {
+			// No dialog, no focused panel, no header focus: toggle active screen title bar.
 			if tb, ok := m.activeScreen.(TitleBarFocusable); ok {
 				if tb.TitleBarFocused() {
 					tb.BlurTitleBar()
@@ -971,8 +972,23 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			m.setPanelTitleFocus(false)
 			return m, nil, true
 		}
+		if key.Matches(msg, Keys.Left) {
+			m.panel.titleBarWidget = panelWidgetUp
+			return m, nil, true
+		}
+		if key.Matches(msg, Keys.Right) {
+			m.panel.titleBarWidget = panelWidgetDn
+			return m, nil, true
+		}
 		if key.Matches(msg, Keys.Enter) || msg.String() == " " {
-			return m, func() tea.Msg { return togglePanelMsg{} }, true
+			if m.panel.titleBarWidget == panelWidgetDn {
+				m.panel.ResizeBy(-1)
+			} else {
+				m.panel.ResizeBy(1)
+			}
+			m.applyPanelMax()
+			m.refreshPanelLayout()
+			return m, nil, true
 		}
 		const coarseDelta = 5
 		switch {

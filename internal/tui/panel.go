@@ -76,6 +76,7 @@ type PanelModel struct {
 
 	// Title bar focus state (for keyboard resize)
 	titleBarFocused bool
+	titleBarWidget  int // panelWidgetUp or panelWidgetDn
 
 	// Running console command state
 	consoleScanner       *bufio.Scanner
@@ -91,6 +92,11 @@ type PanelModel struct {
 	panelMode string // "log", "console", "system", or "none"
 	connType  string // "local", "ssh", or "web"
 }
+
+const (
+	panelWidgetUp = 1
+	panelWidgetDn = 2
+)
 
 // applyInputStyles updates the sinput colours from the current theme.
 func (m *PanelModel) applyInputStyles() {

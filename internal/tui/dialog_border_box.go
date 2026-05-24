@@ -29,8 +29,10 @@ func GetBlockBorders(lineCharacters bool) BorderPair {
 	return BorderPair{Focused: block, Unfocused: block}
 }
 
-// RenderTopBorderBoxCtx renders only the top border line with a title (suitable for log panel)
-func RenderTopBorderBoxCtx(title, rightTitle, content string, contentWidth int, focused bool, titleStyle, borderStyle lipgloss.Style, ctx StyleContext) string {
+// RenderTopBorderBoxCtx renders only the top border line with a title (suitable for log panel).
+// rightTitle is wrapped in T-bar connectors (like the left title). rightSuffix is appended after
+// the T-bar section without additional styling (use it for pre-rendered icon strings).
+func RenderTopBorderBoxCtx(title, rightTitle, rightSuffix, content string, contentWidth int, focused bool, titleStyle, borderStyle lipgloss.Style, ctx StyleContext) string {
 	borderStyle = ctx.BorderFlags.Apply(borderStyle)
 	var border lipgloss.Border
 	if !ctx.DrawBorders {
@@ -110,13 +112,21 @@ func RenderTopBorderBoxCtx(title, rightTitle, content string, contentWidth int, 
 		leftPad = 0
 	}
 
-	// Calculate right padding, accounting for rightTitle
+	// Calculate right padding, accounting for rightTitle (T-bar wrapped) and rightSuffix
 	remainingWidth := actualWidth - titleSectionLen - leftPad
 	var rightPadMid, rightPadEnd int
+	rightSuffixWidth := WidthWithoutZones(rightSuffix)
 	if rightTitle != "" {
 		rightTitleWidth := WidthWithoutZones(renderedRightTitle)
-		rightPadEnd = 1 // One dash minimum after right title
-		rightPadMid = remainingWidth - rightTitleWidth - rightPadEnd
+		rightPadEnd = 1 // One dash minimum after suffix
+		// +2 for the T-bar connectors on each side of rightTitle
+		rightPadMid = remainingWidth - 2 - rightTitleWidth - rightSuffixWidth - rightPadEnd
+		if rightPadMid < 0 {
+			rightPadMid = 0
+		}
+	} else if rightSuffix != "" {
+		rightPadEnd = 1
+		rightPadMid = remainingWidth - rightSuffixWidth - rightPadEnd
 		if rightPadMid < 0 {
 			rightPadMid = 0
 		}
@@ -151,7 +161,12 @@ func RenderTopBorderBoxCtx(title, rightTitle, content string, contentWidth int, 
 	result.WriteString(borderStyle.Render(rightT))
 	result.WriteString(borderStyle.Render(strutil.Repeat(border.Top, rightPadMid)))
 	if rightTitle != "" {
+		result.WriteString(borderStyle.Render(leftT))
 		result.WriteString(renderedRightTitle)
+		result.WriteString(borderStyle.Render(rightT))
+	}
+	if rightSuffix != "" || rightTitle != "" {
+		result.WriteString(rightSuffix)
 		result.WriteString(borderStyle.Render(strutil.Repeat(border.Top, rightPadEnd)))
 	}
 	result.WriteString(borderStyle.Render(border.TopRight))

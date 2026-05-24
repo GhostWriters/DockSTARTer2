@@ -57,6 +57,34 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		baseZ = ZDialog
 	}
 
+	// Outer frame catch-all: covers the full dialog including border, title bar, and subtitle.
+	// Placed at baseZ-1 so all specific item/button/widget regions take priority via higher Z.
+	// This ensures clicks on non-item areas still register as a hit, allowing header/panel focus
+	// to be cleared and the dialog's previously focused items to be restored.
+	if !m.subMenuMode && m.title != "" {
+		frameW := m.GetInnerContentWidth() + GetLayout().BorderWidth()
+		frameH := m.layout.Height
+		if frameH <= 0 {
+			frameH = m.height
+		}
+		if frameW > 0 && frameH > 0 {
+			regions = append(regions, HitRegion{
+				ID:     m.id + ".frame",
+				X:      offsetX,
+				Y:      offsetY,
+				Width:  frameW,
+				Height: frameH,
+				ZOrder: baseZ - 1,
+				Label:  m.title,
+				Help: &HelpContext{
+					ScreenName: m.title,
+					PageTitle:  "Description",
+					PageText:   m.subtitle,
+				},
+			})
+		}
+	}
+
 	// Calculate inner dimensions for the background list region
 	maxWidth := m.list.Width()
 	maxHeight := m.layout.ViewportHeight

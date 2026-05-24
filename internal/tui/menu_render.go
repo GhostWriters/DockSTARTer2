@@ -219,11 +219,14 @@ func BuildInactiveTitleWidgets(ctx StyleContext) string {
 		closeGlyph = closeWidgetAscii
 		lineChar = "-"
 	}
-	sepStyle := ctx.BorderFlags.Apply(lipgloss.NewStyle()).
+	borderBase := ctx.BorderFlags.Apply(lipgloss.NewStyle()).
 		Foreground(ctx.BorderColor).
 		Background(ctx.Dialog.GetBackground())
-	sep := sepStyle.Render(lineChar)
-	return ctx.HelpIconInactive.Render("["+helpGlyph+"]") + sep + ctx.ExitIconInactive.Render("["+closeGlyph+"]")
+	iconStr := "{{|HelpIconInactive|}}[" + helpGlyph + "]{{[-]}}" +
+		lineChar +
+		"{{|ExitIconInactive|}}[" + closeGlyph + "]{{[-]}}"
+	ctx.Dialog = borderBase
+	return RenderThemeTextCtx(iconStr, ctx)
 }
 
 // renderTitleBarWidgets builds the pre-styled widget string for the title bar right side.
@@ -232,7 +235,6 @@ func (m *MenuModel) renderTitleBarWidgets(ctx StyleContext) string {
 	if m.title == "" || m.subMenuMode {
 		return ""
 	}
-	styles := GetStyles()
 	helpGlyph := helpWidget
 	closeGlyph := closeWidget
 	lineChar := "─"
@@ -241,32 +243,23 @@ func (m *MenuModel) renderTitleBarWidgets(ctx StyleContext) string {
 		lineChar = "-"
 	}
 
-	activeStyle := styles.IconActive
-	helpInactiveStyle := styles.HelpIconInactive
-	exitInactiveStyle := styles.ExitIconInactive
-
-	// Separator uses the same style as the title bar border line.
-	sepStyle := ctx.BorderFlags.Apply(lipgloss.NewStyle()).
+	borderBase := ctx.BorderFlags.Apply(lipgloss.NewStyle()).
 		Foreground(ctx.BorderColor).
 		Background(ctx.Dialog.GetBackground())
-	sep := sepStyle.Render(lineChar)
 
-	helpStr := "[" + helpGlyph + "]"
-	closeStr := "[" + closeGlyph + "]"
-
-	var renderedHelp, renderedClose string
-	if m.titleBarFocused && m.titleBarWidget == titleBarWidgetHelp {
-		renderedHelp = activeStyle.Render(helpStr)
-		renderedClose = exitInactiveStyle.Render(closeStr)
-	} else if m.titleBarFocused && m.titleBarWidget == titleBarWidgetClose {
-		renderedHelp = helpInactiveStyle.Render(helpStr)
-		renderedClose = activeStyle.Render(closeStr)
-	} else {
-		renderedHelp = helpInactiveStyle.Render(helpStr)
-		renderedClose = exitInactiveStyle.Render(closeStr)
+	helpTag, closeTag := "HelpIconInactive", "ExitIconInactive"
+	if m.titleBarFocused {
+		if m.titleBarWidget == titleBarWidgetHelp {
+			helpTag = "IconActive"
+		} else if m.titleBarWidget == titleBarWidgetClose {
+			closeTag = "IconActive"
+		}
 	}
-
-	return renderedHelp + sep + renderedClose
+	iconStr := "{{|" + helpTag + "|}}[" + helpGlyph + "]{{[-]}}" +
+		lineChar +
+		"{{|" + closeTag + "|}}[" + closeGlyph + "]{{[-]}}"
+	ctx.Dialog = borderBase
+	return RenderThemeTextCtx(iconStr, ctx)
 }
 
 func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targetHeight int, focused bool, rounded bool, titleTag string) string {

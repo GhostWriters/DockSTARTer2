@@ -29,18 +29,12 @@ func (m PanelModel) ViewString() string {
 	}
 	title := marker + " " + titleText + " " + marker
 
-	styles := GetStyles()
 	upGlyph, dnGlyph := resizeUpWidget, resizeDnWidget
 	if !ctx.LineCharacters {
 		upGlyph, dnGlyph = resizeUpWidgetAscii, resizeDnWidgetAscii
 	}
-	activeStyle := styles.IconActive
-	upInactiveStyle := styles.ResizeUpIconInactive
-	dnInactiveStyle := styles.ResizeDnIconInactive
-	upStyle, dnStyle := upInactiveStyle, dnInactiveStyle
-	if m.titleBarFocused {
-		upStyle, dnStyle = activeStyle, activeStyle
-	}
+	consoleBorderStyle := SemanticRawStyle("ConsoleBorder")
+	baseStyle := ctx.BorderFlags.Apply(consoleBorderStyle)
 	lineChar := "─"
 	if !ctx.LineCharacters {
 		lineChar = "-"
@@ -143,27 +137,33 @@ func (m PanelModel) ViewString() string {
 	}
 
 	consoleTitleStyle := SemanticRawStyle("ConsoleTitle")
-	consoleBorderStyle := SemanticRawStyle("ConsoleBorder")
 
 	// Sep between resize widgets uses the console border color, not the dialog border color.
 	lineChar = "─"
 	if !ctx.LineCharacters {
 		lineChar = "-"
 	}
-	consoleSepStyle := ctx.BorderFlags.Apply(lipgloss.NewStyle()).
-		Foreground(consoleBorderStyle.GetForeground()).
-		Background(consoleBorderStyle.GetBackground())
-	sep := consoleSepStyle.Render(lineChar)
-	icons := upInactiveStyle.Render("[") + upStyle.Render(upGlyph) + upInactiveStyle.Render("]") +
-		sep +
-		dnInactiveStyle.Render("[") + dnStyle.Render(dnGlyph) + dnInactiveStyle.Render("]")
-	rightTitle := icons
+	rightTitle := ""
+	rightSuffix := ""
 	if m.expanded {
+		upTag, dnTag := "ResizeUpIconInactive", "ResizeDnIconInactive"
+		if m.titleBarFocused {
+			if m.titleBarWidget == panelWidgetUp {
+				upTag = "IconActive"
+			} else {
+				dnTag = "IconActive"
+			}
+		}
+		iconStr := lineChar +
+			"{{|" + upTag + "|}}[" + upGlyph + "]{{[-]}}" +
+			lineChar +
+			"{{|" + dnTag + "|}}[" + dnGlyph + "]{{[-]}}"
 		pct := int(m.viewport.ScrollPercent() * 100)
-		rightTitle = fmt.Sprintf(" %d%% ", pct) + icons
+		rightTitle = fmt.Sprintf(" %d%% ", pct)
+		rightSuffix = RenderThemeText(iconStr, baseStyle)
 	}
 
-	return RenderTopBorderBoxCtx(title, rightTitle, combined, m.width, m.titleBarFocused, consoleTitleStyle, consoleBorderStyle, ctx)
+	return RenderTopBorderBoxCtx(title, rightTitle, rightSuffix, combined, m.width, m.titleBarFocused, consoleTitleStyle, consoleBorderStyle, ctx)
 }
 
 // Layers returns a single layer with the panel content for visual compositing.

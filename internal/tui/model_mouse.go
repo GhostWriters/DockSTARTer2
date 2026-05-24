@@ -604,6 +604,7 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 	// 6. MODAL FALLBACK (No hit, but dialog is open)
 	if m.dialog != nil {
 		m.setPanelFocus(false)
+		m.setHeaderFocus(HeaderFocusNone)
 		return m, nil, false // Let raw msg fall through to dialog in standard loop
 	}
 
