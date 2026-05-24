@@ -9,16 +9,22 @@ semantic_suffix = "|}}"
 direct_prefix   = "{{["
 direct_suffix   = "]}}"
 
+[palette]
+fg = "yellow"
+bg = "blue"
+screen_bg = "cyan"
+accent = "red"
+
 [styles]
 # Backdrop
-Screen = "{{[yellow:cyan:-]}}"
+Screen = "{{[$fg:$screen_bg:-]}}"
 StatusBar = "{{|Dialog|}}"
 StatusBarBorder = "{{|StatusBar|}}"
 
 # Dialogs and panels
-Dialog = "{{[yellow:blue]}}"
-Border = "{{[yellow:blue:B]}}"
-Border2 = "{{[yellow:blue]}}"
+Dialog = "{{[$fg:$bg]}}"
+Border = "{{[$fg:$bg:B]}}"
+Border2 = "{{[$fg:$bg]}}"
 Shadow = "{{|Screen:::D|}}"
 ProgramBox = "{{[white:black:-]}}"
 ConsoleBorder = "{{|Helpline|}}"
@@ -61,15 +67,15 @@ TitleSubMenuFocused = "{{|Title:::R|}}"
 
 # Menu, buttons, and help
 CommandLine = "{{[-]}}"
-ButtonActive = "{{[yellow:blue:B]}}"
+ButtonActive = "{{[$fg:$bg:B]}}"
 ButtonInactive = "{{|Dialog|}}"
 TagKey = "{{|Dialog|}}"
 Tag = "{{|Dialog:::B|}}"
 Item = "{{|Dialog|}}"
 OptionValue = "{{[white:green:B]}}"
-TagKeySelected = "{{[yellow:red:B]}}"
-TagSelected = "{{[yellow:red:B]}}"
-ItemSelected = "{{[yellow:blue:B]}}"
+TagKeySelected = "{{[$fg:$accent:B]}}"
+TagSelected = "{{[$fg:$accent:B]}}"
+ItemSelected = "{{[$fg:$bg:B]}}"
 OptionValueSelected = "{{|OptionValue:::B|}}"
 Helpline = "{{|Dialog|}}"
 HelpTag = "{{|Tag|}}"

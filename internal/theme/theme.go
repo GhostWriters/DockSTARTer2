@@ -238,7 +238,10 @@ func Load(themeNameOrURI string, prefix string) (*ThemeDefaults, error) {
 				conf.UI.Theme = "DockSTARTer"
 				_ = config.SaveAppConfig(conf)
 				// Load default theme but still return an error so the caller knows the switch occurred
-				deflts, _ := Load("DockSTARTer", "")
+				deflts, defaultErr := Load("DockSTARTer", "")
+				if defaultErr != nil {
+					return nil, fmt.Errorf("theme '%s' failed: %w; default theme also failed: %v", themeNameOrURI, err, defaultErr)
+				}
 				return deflts, fmt.Errorf("theme parsing error: falling back to default")
 			}
 			return Load("DockSTARTer", prefix)
@@ -502,12 +505,30 @@ func resolveThemeColors(tf ThemeFile) (map[string]string, error) {
 			dirSuf = tf.Syntax.DirectSuffix
 		}
 	}
-	// Substitute palette variables ($varname) in color strings before semantic resolution
+	// Substitute palette variables ($varname) in color strings before semantic resolution.
+	// First resolve palette entries against each other (handles chains like accent → bg → dialog).
+	// Iterate until stable or len(palette) passes to avoid infinite loops on circular refs.
 	colors := tf.Styles
 	if len(tf.Palette) > 0 {
+		resolved := make(map[string]string, len(tf.Palette))
+		for k, v := range tf.Palette {
+			resolved[k] = v
+		}
+		for range len(tf.Palette) {
+			changed := false
+			for k, v := range resolved {
+				if s := substitutePaletteVars(v, resolved); s != v {
+					resolved[k] = s
+					changed = true
+				}
+			}
+			if !changed {
+				break
+			}
+		}
 		colors = make(map[string]string, len(tf.Styles))
 		for key, raw := range tf.Styles {
-			colors[key] = substitutePaletteVars(raw, tf.Palette)
+			colors[key] = substitutePaletteVars(raw, resolved)
 		}
 	}
 
