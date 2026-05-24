@@ -1,0 +1,134 @@
+package tui
+
+import (
+	"strings"
+
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+)
+
+// Title bar widget state fields shared by all simple dialog types.
+// Embedded in baseDialogModel so dialogs get TitleBarFocusable for free.
+
+func (b *baseDialogModel) FocusTitleBar() {
+	b.titleBarFocused = true
+	b.titleBarWidget = titleBarWidgetClose
+}
+
+func (b *baseDialogModel) BlurTitleBar() {
+	b.titleBarFocused = false
+	b.titleBarWidget = 0
+}
+
+func (b *baseDialogModel) TitleBarFocused() bool { return b.titleBarFocused }
+
+// buildTitleBarWidgets returns the rendered [?]─[×] widget string for this dialog,
+// with the correct active/inactive styling based on current title bar focus state.
+func (b *baseDialogModel) buildTitleBarWidgets(ctx StyleContext) string {
+	return buildDialogTitleWidgets(b.titleBarFocused, b.titleBarWidget, ctx)
+}
+
+// buildDialogTitleWidgets is the shared renderer for the [?]─[×] title bar widgets.
+// focused/activeWidget are the title bar state; use false/0 for always-inactive output.
+func buildDialogTitleWidgets(focused bool, activeWidget int, ctx StyleContext) string {
+	helpGlyph := helpWidget
+	closeGlyph := closeWidget
+	lineChar := "─"
+	if !ctx.LineCharacters {
+		closeGlyph = closeWidgetAscii
+		lineChar = "-"
+	}
+	borderBase := ctx.BorderFlags.Apply(lipgloss.NewStyle()).
+		Foreground(ctx.BorderColor).
+		Background(ctx.Dialog.GetBackground())
+	helpTag, closeTag := "HelpIconInactive", "ExitIconInactive"
+	if focused {
+		switch activeWidget {
+		case titleBarWidgetHelp:
+			helpTag = "IconActive"
+		case titleBarWidgetClose:
+			closeTag = "IconActive"
+		}
+	}
+	iconStr := "{{|" + helpTag + "|}}[" + helpGlyph + "]{{[-]}}" +
+		lineChar +
+		"{{|" + closeTag + "|}}[" + closeGlyph + "]{{[-]}}"
+	ctx.Dialog = borderBase
+	return RenderThemeTextCtx(iconStr, ctx)
+}
+
+// handleTitleBarHit handles LayerHitMsg for the [?] and [×] widgets.
+// closeCmd is the dialog-specific command to run when [×] is clicked.
+// Returns (true, cmd) if the hit was consumed, (false, nil) otherwise.
+func (b *baseDialogModel) handleTitleBarHit(msg LayerHitMsg, closeCmd tea.Cmd) (handled bool, cmd tea.Cmd) {
+	if msg.Button != tea.MouseLeft {
+		return false, nil
+	}
+	if strings.HasSuffix(msg.ID, "."+IDTitleWidgetClose) {
+		b.BlurTitleBar()
+		return true, closeCmd
+	}
+	if strings.HasSuffix(msg.ID, "."+IDTitleWidgetHelp) {
+		b.BlurTitleBar()
+		return true, func() tea.Msg { return TriggerHelpMsg{ScreenLevelOnly: true} }
+	}
+	return false, nil
+}
+
+// handleTitleBarKey intercepts key events when the title bar has focus.
+// closeCmd is the dialog-specific command to run when [×] is activated.
+// Returns (true, cmd) if the key was consumed, (false, nil) otherwise.
+func (b *baseDialogModel) handleTitleBarKey(msg tea.KeyPressMsg, closeCmd tea.Cmd) (handled bool, cmd tea.Cmd) {
+	if !b.titleBarFocused {
+		return false, nil
+	}
+	switch {
+	case key.Matches(msg, Keys.Esc):
+		b.BlurTitleBar()
+	case key.Matches(msg, Keys.Left):
+		b.titleBarWidget = titleBarWidgetHelp
+	case key.Matches(msg, Keys.Right):
+		b.titleBarWidget = titleBarWidgetClose
+	case key.Matches(msg, Keys.Enter), key.Matches(msg, Keys.Space):
+		switch b.titleBarWidget {
+		case titleBarWidgetHelp:
+			b.BlurTitleBar()
+			cmd = func() tea.Msg { return TriggerHelpMsg{ScreenLevelOnly: true} }
+		case titleBarWidgetClose:
+			b.BlurTitleBar()
+			cmd = closeCmd
+		}
+	}
+	return true, cmd
+}
+
+// titleBarHitRegions returns hit regions for the [?] and [×] widgets in the title bar.
+func (b *baseDialogModel) titleBarHitRegions(offsetX, offsetY, contentWidth, baseZ int) []HitRegion {
+	ctx := GetActiveContext()
+	widgetWidth := WidthWithoutZones(b.buildTitleBarWidgets(ctx))
+	if widgetWidth == 0 {
+		return nil
+	}
+	dialogWidth := contentWidth + 2
+	endPad := 1
+	widgetsStartX := offsetX + dialogWidth - 1 - endPad - widgetWidth
+	helpWidgetX := widgetsStartX
+	closeWidgetX := widgetsStartX + 4 // "[?]─" = 4 chars before [×]
+	return []HitRegion{
+		{
+			ID:     b.id + "." + IDTitleWidgetHelp,
+			X:      helpWidgetX, Y: offsetY, Width: 3, Height: 1,
+			ZOrder: baseZ + 25,
+			Label:  "Help",
+			Help:   &HelpContext{PageTitle: "Help", PageText: "Open help for this dialog."},
+		},
+		{
+			ID:     b.id + "." + IDTitleWidgetClose,
+			X:      closeWidgetX, Y: offsetY, Width: 3, Height: 1,
+			ZOrder: baseZ + 25,
+			Label:  "Close",
+			Help:   &HelpContext{PageTitle: "Close", PageText: "Close this dialog."},
+		},
+	}
+}

@@ -257,6 +257,21 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 		if titleSectionLen > actualWidth {
 			actualWidth = titleSectionLen
 		}
+		rightWidgetWidth := WidthWithoutZones(rightWidget)
+		if rightWidget != "" {
+			// Grow actualWidth until the right side (after centering) fits the widget + 1 end dash.
+			needed := rightWidgetWidth + 1
+			for {
+				lp := 0
+				if ctx.DialogTitleAlign != "left" {
+					lp = (actualWidth - titleSectionLen) / 2
+				}
+				if actualWidth-titleSectionLen-lp >= needed {
+					break
+				}
+				actualWidth++
+			}
+		}
 
 		var leftPad int
 		if ctx.DialogTitleAlign == "left" {
@@ -264,7 +279,6 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 		} else {
 			leftPad = (actualWidth - titleSectionLen) / 2
 		}
-		rightWidgetWidth := WidthWithoutZones(rightWidget)
 		rightPad := actualWidth - titleSectionLen - leftPad
 		var rightPadMid, rightPadEnd int
 		if rightWidget != "" {
