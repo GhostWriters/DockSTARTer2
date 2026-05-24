@@ -53,7 +53,7 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 		// Checkbox/Radio visual
 		prefix := ""
 		if item.IsRadioButton || item.IsCheckbox {
-			prefix = renderCheckbox(item.IsRadioButton, item.Checked, ctx.LineCharacters, checkboxStyle, neutralStyle) + neutralStyle.Render(" ")
+			prefix = renderCheckbox(item.IsRadioButton, item.Checked, ctx.LineCharacters, checkboxStyle) + neutralStyle.Render(" ")
 		}
 
 		// Tag with first-letter shortcut

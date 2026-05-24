@@ -161,7 +161,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 		if item.IsEditing && !isActuallySub {
 			cbStr := ""
 			if item.IsCheckbox {
-				cbStr = renderCheckbox(false, item.Checked, ctx.LineCharacters, cbStyle, neutralStyle) + neutralStyle.Render(" ")
+				cbStr = renderCheckbox(false, item.Checked, ctx.LineCharacters, cbStyle) + neutralStyle.Render(" ")
 			}
 			editStr := RenderThemeText(item.Tag, dStyle)
 			line := cbStr + editStr
@@ -180,7 +180,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 			}
 			checkbox = tStyle.Render(cb)
 		} else if item.IsRadioButton || item.IsCheckbox {
-			checkbox = renderCheckbox(item.IsRadioButton, item.Checked, ctx.LineCharacters, cbStyle, neutralStyle)
+			checkbox = renderCheckbox(item.IsRadioButton, item.Checked, ctx.LineCharacters, cbStyle)
 		}
 
 		var cbAdd3, cbEnabled3 string
@@ -208,8 +208,8 @@ func (m *MenuModel) renderVariableHeightList() string {
 					if item.Enabled {
 						ce = checkSelected
 					}
-					cbAdd3 = renderCheckboxGlyph(ca, cbAStyle, neutralStyle)
-					cbEnabled3 = renderCheckboxGlyph(ce, cbEStyle, neutralStyle)
+					cbAdd3 = renderCheckboxGlyph(ca, cbAStyle)
+					cbEnabled3 = renderCheckboxGlyph(ce, cbEStyle)
 				}
 			} else {
 				if item.IsGroupHeader {
@@ -226,8 +226,8 @@ func (m *MenuModel) renderVariableHeightList() string {
 					if item.Enabled {
 						ceText = checkSelectedAscii
 					}
-					cbAdd3 = renderCheckboxGlyph(caText, cbAStyle, neutralStyle)
-					cbEnabled3 = renderCheckboxGlyph(ceText, cbEStyle, neutralStyle)
+					cbAdd3 = renderCheckboxGlyph(caText, cbAStyle)
+					cbEnabled3 = renderCheckboxGlyph(ceText, cbEStyle)
 				}
 			}
 		}
@@ -748,8 +748,8 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 			if item.Enabled {
 				cE = checkSelected
 			}
-			checkboxA3 = renderCheckboxGlyph(cA, cbStyleA, neutralStyle)
-			checkboxE3 = renderCheckboxGlyph(cE, cbStyleE, neutralStyle)
+			checkboxA3 = renderCheckboxGlyph(cA, cbStyleA)
+			checkboxE3 = renderCheckboxGlyph(cE, cbStyleE)
 		} else {
 			caA, ceA := checkUnselectedAscii, checkUnselectedAscii
 			if item.Checked {
