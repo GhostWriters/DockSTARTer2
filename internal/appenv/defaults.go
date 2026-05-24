@@ -15,6 +15,13 @@ import (
 	"sync"
 )
 
+// Variable type strings used in VarDefaultValue.
+const (
+	varTypeApp    = "APP"
+	varTypeAppEnv = "APPENV"
+	varTypeGlobal = "GLOBAL"
+)
+
 // VarDefaultValue returns the default value for a given variable.
 // It mirrors the logic of var_default_value.sh.
 func VarDefaultValue(ctx context.Context, key string, conf config.AppConfig) string {
@@ -24,20 +31,20 @@ func VarDefaultValue(ctx context.Context, key string, conf config.AppConfig) str
 	if derivedAppName != "" {
 		appName = derivedAppName
 		if strings.Contains(key, ":") {
-			varType = "APPENV"
+			varType = varTypeAppEnv
 			parts := strings.SplitN(key, ":", 2)
 			cleanVarName = parts[1]
 		} else {
-			varType = "APP"
+			varType = varTypeApp
 			cleanVarName = key
 		}
 	} else {
-		varType = "GLOBAL"
+		varType = varTypeGlobal
 		cleanVarName = key
 	}
 
 	switch varType {
-	case "APP":
+	case varTypeApp:
 		defFile, _ := AppInstanceFile(ctx, appName, constants.EnvFileName)
 		if defFile != "" {
 			exists, _ := EnvVarExists(ctx, cleanVarName, defFile)
@@ -75,7 +82,7 @@ func VarDefaultValue(ctx context.Context, key string, conf config.AppConfig) str
 			return "''"
 		}
 
-	case "APPENV":
+	case varTypeAppEnv:
 		defFile, _ := AppInstanceFile(ctx, appName, fmt.Sprintf("%s*", constants.AppEnvFileNamePrefix))
 		if defFile != "" {
 			exists, _ := EnvVarExists(ctx, cleanVarName, defFile)
@@ -86,7 +93,7 @@ func VarDefaultValue(ctx context.Context, key string, conf config.AppConfig) str
 		}
 		return "''"
 
-	case "GLOBAL":
+	case varTypeGlobal:
 		switch cleanVarName {
 		case "DOCKER_COMPOSE_FOLDER":
 			return conf.Paths.ComposeFolder
