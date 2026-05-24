@@ -47,7 +47,8 @@ type KeyMap struct {
 	ForceQuit key.Binding
 
 	// Log panel
-	ToggleLog key.Binding
+	ToggleLog        key.Binding
+	FocusPanelTitle  key.Binding
 
 	// Mouse (Mock bindings for help display)
 	MouseLeft  key.Binding
@@ -94,6 +95,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 			k.CycleShiftTab,
 			k.Esc,
 			k.ToggleLog,
+			k.FocusPanelTitle,
 			k.Help,
 			k.ForceQuit,
 		},
@@ -181,6 +183,10 @@ var Keys = KeyMap{
 	ToggleLog: key.NewBinding(
 		key.WithKeys("f10", "ctrl+l"),
 		key.WithHelp("f10/ctrl+l", "toggle log panel"),
+	),
+	FocusPanelTitle: key.NewBinding(
+		key.WithKeys("f9", "ctrl+t"),
+		key.WithHelp("f9/ctrl+t", "focus panel title bar"),
 	),
 	MouseLeft: key.NewBinding(
 		key.WithHelp("left click", "select/confirm"),

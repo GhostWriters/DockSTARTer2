@@ -81,6 +81,10 @@ func (s *AppSelectionScreen) GetHitRegions(x, y int) []tui.HitRegion {
 	return s.menu.GetHitRegions(x, y)
 }
 func (s *AppSelectionScreen) IsScrollbarDragging() bool { return s.menu.IsScrollbarDragging() }
+func (s *AppSelectionScreen) FocusTitleBar()            { s.menu.FocusTitleBar() }
+func (s *AppSelectionScreen) BlurTitleBar()             { s.menu.BlurTitleBar() }
+func (s *AppSelectionScreen) TitleBarFocused() bool     { return s.menu.TitleBarFocused() }
+func (s *AppSelectionScreen) EscapeAction() tea.Cmd     { return s.menu.EscapeAction() }
 
 func (s *AppSelectionScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m, cmd := s.menu.Update(msg)

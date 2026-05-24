@@ -167,6 +167,14 @@ func (m *TabbedVarsEditorModel) Init() tea.Cmd {
 	return m.loadEnv
 }
 
+// EscapeAction implements tui.EscapeActioner: prompts for unsaved changes if needed.
+func (m *TabbedVarsEditorModel) EscapeAction() tea.Cmd {
+	if m.hasChanges() {
+		return m.promptUnsavedChanges(m.onClose)
+	}
+	return m.onClose
+}
+
 func (m *TabbedVarsEditorModel) hasErrors() bool {
 	for _, tab := range m.tabs {
 		if tab.editor.HasValidationErrors() {

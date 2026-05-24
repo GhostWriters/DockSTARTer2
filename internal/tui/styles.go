@@ -139,6 +139,14 @@ const (
 	IDExitButton   = "exit_button"
 	IDHeaderFlags  = "header_flags"
 	IDHelpline     = "helpline"
+
+	// Title bar widget IDs (suffix appended to menu ID)
+	IDTitleWidgetHelp  = "title_widget_help"
+	IDTitleWidgetClose = "title_widget_close"
+
+	// Panel resize widget IDs
+	IDPanelResizeUp = "panel_resize_up"
+	IDPanelResizeDn = "panel_resize_dn"
 )
 
 // Styles holds all lipgloss styles derived from the theme
@@ -168,6 +176,16 @@ type Styles struct {
 	// Buttons
 	ButtonActive   lipgloss.Style
 	ButtonInactive lipgloss.Style
+
+	// Title bar icon widgets
+	IconActive           lipgloss.Style
+	IconInactive         lipgloss.Style
+	HelpIconInactive     lipgloss.Style
+	ExitIconInactive     lipgloss.Style
+	ResizeUpIconInactive lipgloss.Style
+	ResizeDnIconInactive lipgloss.Style
+	ButtonKeyActive      lipgloss.Style
+	ButtonKeyInactive    lipgloss.Style
 
 	// List items
 	ItemNormal   lipgloss.Style
@@ -231,7 +249,15 @@ type StyleContext struct {
 	Border2Flags        theme.StyleFlags
 	ButtonActive        lipgloss.Style
 	ButtonInactive      lipgloss.Style
-	ItemNormal          lipgloss.Style
+	IconActive             lipgloss.Style
+	IconInactive           lipgloss.Style
+	HelpIconInactive       lipgloss.Style
+	ExitIconInactive       lipgloss.Style
+	ResizeUpIconInactive   lipgloss.Style
+	ResizeDnIconInactive   lipgloss.Style
+	ButtonKeyActive        lipgloss.Style
+	ButtonKeyInactive      lipgloss.Style
+	ItemNormal             lipgloss.Style
 	ItemSelected        lipgloss.Style
 	TagNormal           lipgloss.Style
 	TagSelected         lipgloss.Style
@@ -283,7 +309,15 @@ func GetActiveContext() StyleContext {
 		Border2Flags:        currentStyles.Border2Flags,
 		ButtonActive:        currentStyles.ButtonActive,
 		ButtonInactive:      currentStyles.ButtonInactive,
-		ItemNormal:          currentStyles.ItemNormal,
+		IconActive:             currentStyles.IconActive,
+		IconInactive:           currentStyles.IconInactive,
+		HelpIconInactive:       currentStyles.HelpIconInactive,
+		ExitIconInactive:       currentStyles.ExitIconInactive,
+		ResizeUpIconInactive:   currentStyles.ResizeUpIconInactive,
+		ResizeDnIconInactive:   currentStyles.ResizeDnIconInactive,
+		ButtonKeyActive:        currentStyles.ButtonKeyActive,
+		ButtonKeyInactive:      currentStyles.ButtonKeyInactive,
+		ItemNormal:             currentStyles.ItemNormal,
 		ItemSelected:        currentStyles.ItemSelected,
 		TagNormal:           currentStyles.TagNormal,
 		TagSelected:         currentStyles.TagSelected,
@@ -489,6 +523,40 @@ func InitStyles(cfg config.AppConfig) {
 	currentStyles.ButtonInactive = SemanticRawStyle("ButtonInactive")
 	if _, noBG := currentStyles.ButtonInactive.GetBackground().(lipgloss.NoColor); noBG {
 		currentStyles.ButtonInactive = currentStyles.ButtonInactive.Background(currentStyles.Dialog.GetBackground())
+	}
+
+	// Title bar icon widgets
+	currentStyles.IconActive = SemanticRawStyle("IconActive")
+	if _, noBG := currentStyles.IconActive.GetBackground().(lipgloss.NoColor); noBG {
+		currentStyles.IconActive = currentStyles.IconActive.Background(currentStyles.Dialog.GetBackground())
+	}
+	currentStyles.IconInactive = SemanticRawStyle("IconInactive")
+	if _, noBG := currentStyles.IconInactive.GetBackground().(lipgloss.NoColor); noBG {
+		currentStyles.IconInactive = currentStyles.IconInactive.Background(currentStyles.Dialog.GetBackground())
+	}
+	currentStyles.HelpIconInactive = SemanticRawStyle("HelpIconInactive")
+	if _, noBG := currentStyles.HelpIconInactive.GetBackground().(lipgloss.NoColor); noBG {
+		currentStyles.HelpIconInactive = currentStyles.HelpIconInactive.Background(currentStyles.Dialog.GetBackground())
+	}
+	currentStyles.ExitIconInactive = SemanticRawStyle("ExitIconInactive")
+	if _, noBG := currentStyles.ExitIconInactive.GetBackground().(lipgloss.NoColor); noBG {
+		currentStyles.ExitIconInactive = currentStyles.ExitIconInactive.Background(currentStyles.Dialog.GetBackground())
+	}
+	currentStyles.ResizeUpIconInactive = SemanticRawStyle("ResizeUpIconInactive")
+	if _, noBG := currentStyles.ResizeUpIconInactive.GetBackground().(lipgloss.NoColor); noBG {
+		currentStyles.ResizeUpIconInactive = currentStyles.ResizeUpIconInactive.Background(currentStyles.Dialog.GetBackground())
+	}
+	currentStyles.ResizeDnIconInactive = SemanticRawStyle("ResizeDnIconInactive")
+	if _, noBG := currentStyles.ResizeDnIconInactive.GetBackground().(lipgloss.NoColor); noBG {
+		currentStyles.ResizeDnIconInactive = currentStyles.ResizeDnIconInactive.Background(currentStyles.Dialog.GetBackground())
+	}
+	currentStyles.ButtonKeyActive = SemanticRawStyle("ButtonKeyActive")
+	if _, noBG := currentStyles.ButtonKeyActive.GetBackground().(lipgloss.NoColor); noBG {
+		currentStyles.ButtonKeyActive = currentStyles.ButtonKeyActive.Background(currentStyles.ButtonActive.GetBackground())
+	}
+	currentStyles.ButtonKeyInactive = SemanticRawStyle("ButtonKeyInactive")
+	if _, noBG := currentStyles.ButtonKeyInactive.GetBackground().(lipgloss.NoColor); noBG {
+		currentStyles.ButtonKeyInactive = currentStyles.ButtonKeyInactive.Background(currentStyles.ButtonInactive.GetBackground())
 	}
 
 	// List items

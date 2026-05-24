@@ -18,4 +18,11 @@ const (
 	invalidMarkerAscii   = glyphs.InvalidMarkerAscii
 	lockedMarker         = glyphs.LockedMarker
 	lockedMarkerAscii    = glyphs.LockedMarkerAscii
+	helpWidget           = glyphs.HelpWidget
+	closeWidget          = glyphs.CloseWidget
+	closeWidgetAscii     = glyphs.CloseWidgetAscii
+	resizeUpWidget       = glyphs.ResizeUpWidget
+	resizeUpWidgetAscii  = glyphs.ResizeUpWidgetAscii
+	resizeDnWidget       = glyphs.ResizeDnWidget
+	resizeDnWidgetAscii  = glyphs.ResizeDnWidgetAscii
 )

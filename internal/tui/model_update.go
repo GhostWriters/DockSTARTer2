@@ -150,7 +150,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg { return ShowDialogMsg{Dialog: NewFlagsToggleDialog()} }
 
 	case TriggerHelpMsg:
-		return m, m.showHelpCmd(msg.CapturedContext)
+		return m, m.showHelpCmd(msg.CapturedContext, msg.ScreenLevelOnly)
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -642,12 +642,27 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // unfocus/refocus its border accordingly (if it supports the interface).
 func (m *AppModel) setPanelFocus(focused bool) {
 	m.panelFocused = focused
+	m.panelTitleFocused = false
 	m.panel.focused = focused
+	m.panel.titleBarFocused = false
 	if focused {
 		m.backdrop.header.SetFocus(HeaderFocusNone)
 	} else {
 		m.panel.input.Blur()
 		m.panel.inputFocused = false
+	}
+	m.updateComponentFocus()
+}
+
+func (m *AppModel) setPanelTitleFocus(focused bool) {
+	m.panelTitleFocused = focused
+	m.panel.titleBarFocused = focused
+	if focused {
+		m.panelFocused = false
+		m.panel.focused = false
+		m.panel.input.Blur()
+		m.panel.inputFocused = false
+		m.backdrop.header.SetFocus(HeaderFocusNone)
 	}
 	m.updateComponentFocus()
 }
@@ -658,6 +673,8 @@ func (m *AppModel) setHeaderFocus(focus HeaderFocus) {
 	if focus != HeaderFocusNone {
 		m.panelFocused = false
 		m.panel.focused = false
+		m.panelTitleFocused = false
+		m.panel.titleBarFocused = false
 	}
 	m.updateComponentFocus()
 }
@@ -668,8 +685,10 @@ func (m *AppModel) updateComponentFocus() {
 
 	// Log panel only keeps its "internal" focus state if no dialog is blocking it.
 	m.panel.focused = m.panelFocused && !dialogOpen
+	m.panel.titleBarFocused = m.panelTitleFocused && !dialogOpen
 
-	// Screen is focused only if no dialog is open AND neither log panel nor header have focus.
+	// Screen is focused only if no dialog is open AND neither panel viewport nor header have focus.
+	// Panel TITLE BAR focus is additive — it does not steal focus from the active screen.
 	if m.activeScreen != nil {
 		if focusable, ok := m.activeScreen.(interface{ SetFocused(bool) }); ok {
 			focusable.SetFocused(!dialogOpen && !m.panelFocused && !headerFocused)
@@ -738,6 +757,22 @@ func (m AppModel) backdropHeight() int {
 	return m.height - m.panel.Height()
 }
 
+// refreshPanelLayout updates the backdrop and active screen/dialog after the panel height changes.
+// Call this after any ResizeBy() + applyPanelMax() sequence.
+func (m *AppModel) refreshPanelLayout() {
+	m.panel.SetSize(m.width, m.height)
+	m.backdrop.SetSize(m.width, m.backdropHeight())
+	caW, caH := m.getContentArea()
+	if m.dialog != nil {
+		if sizable, ok := m.dialog.(interface{ SetSize(int, int) }); ok {
+			dW, dH := m.getDialogArea(m.dialog)
+			sizable.SetSize(dW, dH)
+		}
+	} else if m.activeScreen != nil {
+		m.activeScreen.SetSize(caW, caH)
+	}
+}
+
 // getContentArea returns the dimensions available for screens and dialogs.
 func (m AppModel) getContentArea() (int, int) {
 	// Use backdropHeight() to account for log panel
@@ -788,15 +823,48 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	if key.Matches(msg, Keys.ToggleLog) {
 		return m, func() tea.Msg { return togglePanelMsg{} }, true
 	}
+	if key.Matches(msg, Keys.FocusPanelTitle) {
+		// Focus the title bar of whatever currently has focus — never silently fall through.
+		if m.dialog != nil {
+			// A dialog is open: toggle its title bar.
+			if tb, ok := m.dialog.(TitleBarFocusable); ok {
+				if tb.TitleBarFocused() {
+					tb.BlurTitleBar()
+				} else {
+					tb.FocusTitleBar()
+				}
+				return m, nil, true
+			}
+		} else if m.panelFocused && m.panel.panelMode != "none" {
+			// Panel is focused — toggle panel title bar before checking active screen.
+			if m.panelTitleFocused {
+				m.setPanelTitleFocus(false)
+			} else {
+				m.setPanelTitleFocus(true)
+			}
+			return m, nil, true
+		} else if m.activeScreen != nil {
+			// No dialog or focused panel: toggle active screen title bar.
+			if tb, ok := m.activeScreen.(TitleBarFocusable); ok {
+				if tb.TitleBarFocused() {
+					tb.BlurTitleBar()
+				} else {
+					tb.FocusTitleBar()
+				}
+				return m, nil, true
+			}
+		}
+		// No TitleBarFocusable target found — ignore.
+	}
 	if key.Matches(msg, Keys.Help) || msg.String() == "?" {
-		return m, m.showHelpCmd(m.focusedPanelHelpContext()), true
+		return m, m.showHelpCmd(m.focusedPanelHelpContext(), false), true
 	}
 	if key.Matches(msg, Keys.ForceQuit) {
 		m.Fatal = true
 		return m, tea.Quit, true
 	}
 
-	// Cycle: Screen -> panel -> Input bar -> Header(Flags) -> Header(App) -> Header(Tmpl) -> Screen
+	// Cycle: Screen -> panel viewport -> Input bar -> Header(Flags) -> Header(App) -> Header(Tmpl) -> Screen
 	if key.Matches(msg, Keys.Tab) {
 		if m.panelFocused {
 			// If panel is expanded and input not yet focused, Tab → input bar.
@@ -823,7 +891,7 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			m.setHeaderFocus(HeaderFocusNone)
 			return m, nil, true
 		} else {
-			// From screen to log panel
+			// From screen to panel viewport
 			m.setPanelFocus(true)
 			return m, nil, true
 		}
@@ -895,6 +963,41 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		case HeaderFocusTmpl:
 			return m, TriggerTemplateUpdate(), true
 		}
+	}
+
+	// Panel Title Bar Focus: keyboard resize actions.
+	if m.panelTitleFocused {
+		if key.Matches(msg, Keys.Esc) {
+			m.setPanelTitleFocus(false)
+			return m, nil, true
+		}
+		if key.Matches(msg, Keys.Enter) || msg.String() == " " {
+			return m, func() tea.Msg { return togglePanelMsg{} }, true
+		}
+		const coarseDelta = 5
+		switch {
+		case key.Matches(msg, Keys.Up):
+			m.panel.ResizeBy(1)
+			m.applyPanelMax()
+			m.refreshPanelLayout()
+			return m, nil, true
+		case key.Matches(msg, Keys.Down):
+			m.panel.ResizeBy(-1)
+			m.applyPanelMax()
+			m.refreshPanelLayout()
+			return m, nil, true
+		case key.Matches(msg, Keys.PageUp) || msg.String() == "alt+up":
+			m.panel.ResizeBy(coarseDelta)
+			m.applyPanelMax()
+			m.refreshPanelLayout()
+			return m, nil, true
+		case key.Matches(msg, Keys.PageDown) || msg.String() == "alt+down":
+			m.panel.ResizeBy(-coarseDelta)
+			m.applyPanelMax()
+			m.refreshPanelLayout()
+			return m, nil, true
+		}
+		return m, nil, true
 	}
 
 	// Focused Log Panel Actions
@@ -1015,7 +1118,7 @@ func (m *AppModel) focusedPanelHelpContext() *HelpContext {
 	return nil
 }
 
-func (m *AppModel) showHelpCmd(capturedCtx *HelpContext) tea.Cmd {
+func (m *AppModel) showHelpCmd(capturedCtx *HelpContext, screenLevelOnly bool) tea.Cmd {
 	var km help.KeyMap = Keys
 	var contextInfo HelpContext
 	availW, availH := GetAvailableDialogSize(m.width, m.height, true)
@@ -1051,6 +1154,13 @@ func (m *AppModel) showHelpCmd(capturedCtx *HelpContext) tea.Cmd {
 		if cp, ok := m.activeScreen.(HelpContextProvider); ok {
 			contextInfo = cp.HelpContext(helpContentWidth)
 		}
+	}
+
+	if screenLevelOnly {
+		contextInfo.ItemTitle = ""
+		contextInfo.ItemText = ""
+		contextInfo.DocMarkdown = ""
+		contextInfo.DocAppName = ""
 	}
 
 	return func() tea.Msg {

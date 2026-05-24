@@ -558,6 +558,14 @@ func (s *ServerOptionsScreen) MinHeight() int {
 	return 14
 }
 
+// EscapeAction implements tui.EscapeActioner: mirrors the Esc key handler.
+func (s *ServerOptionsScreen) EscapeAction() tea.Cmd {
+	if s.isRoot {
+		return tui.ConfirmExitAction()
+	}
+	return navigateBack()
+}
+
 func (s *ServerOptionsScreen) HasDialog() bool {
 	if s.settingsMenu == nil || s.statusMenu == nil {
 		return false
