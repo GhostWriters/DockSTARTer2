@@ -67,6 +67,9 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
+		if handled, cmd := m.handleTitleBarKey(msg, closeWithResult(false)); handled {
+			return m, cmd
+		}
 		switch {
 		case key.Matches(msg, Keys.Esc):
 			m.result = false
@@ -110,6 +113,9 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Middle click is handled by AppModel (global Space mapping)
 		if msg.Button == tea.MouseMiddle {
 			return m, nil
+		}
+		if handled, cmd := m.handleTitleBarHit(msg, closeWithResult(false)); handled {
+			return m, cmd
 		}
 
 		// Left click on buttons triggers action via onResult so sub-dialog channels work correctly
@@ -157,6 +163,8 @@ func (m *confirmDialogModel) contentWidth() int {
 	if tw := lipgloss.Width(GetPlainText(m.title)) + 6; tw > w {
 		w = tw
 	}
+	ctx := GetActiveContext()
+	w = minWidthForWidgets(w, GetPlainText(m.title), ctx.DialogTitleAlign, BuildInactiveTitleWidgets(ctx))
 	if w > maxAllowed {
 		w = maxAllowed
 	}
@@ -203,10 +211,9 @@ func (m *confirmDialogModel) ViewString() string {
 
 	fullContent := lipgloss.JoinVertical(lipgloss.Left, questionText, spacer, buttonRow)
 
-	// Wrap in border with title embedded (matching menu style) using confirm styling
-	dialogWithTitle := RenderDialogWithType(m.title, fullContent, m.focused, 0, DialogTypeConfirm)
-
-	return dialogWithTitle
+	ctx2 := GetActiveContext()
+	widgets := m.buildTitleBarWidgets(ctx2)
+	return renderDialogWithTypeAndWidgets(m.title, fullContent, m.focused || m.titleBarFocused, 0, DialogTypeConfirm, ctx2, widgets)
 }
 
 // View implements tea.Model
@@ -252,6 +259,7 @@ func (m *confirmDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		},
 	})
 
+	regions = append(regions, m.titleBarHitRegions(offsetX, offsetY, contentWidth, ZDialog)...)
 	return regions
 }
 

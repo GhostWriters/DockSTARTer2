@@ -36,6 +36,8 @@ func newMessageDialog(title, message string, msgType MessageType) *messageDialog
 }
 
 func (m *messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	closeCmd := func() tea.Msg { return CloseDialogMsg{Result: true} }
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -44,14 +46,20 @@ func (m *messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
+		if handled, cmd := m.handleTitleBarKey(msg, closeCmd); handled {
+			return m, cmd
+		}
 		// Any key press closes the dialog
 		// Use CloseDialogMsg so AppModel can handle it when running within existing TUI
-		return m, func() tea.Msg { return CloseDialogMsg{Result: true} }
+		return m, closeCmd
 
 	case LayerHitMsg:
 		// Middle click is handled by AppModel (global Space mapping)
 		if msg.Button == tea.MouseMiddle {
 			return m, nil
+		}
+		if handled, cmd := m.handleTitleBarHit(msg, closeCmd); handled {
+			return m, cmd
 		}
 		// Left click on OK button closes
 		// Check for suffixes to support prefixed IDs (e.g., "message_dialog.OK")
@@ -120,6 +128,8 @@ func (m *messageDialogModel) contentWidth() int {
 	if tw := lipgloss.Width(fullTitle) + 6; tw > w {
 		w = tw
 	}
+	ctx := GetActiveContext()
+	w = minWidthForWidgets(w, fullTitle, ctx.DialogTitleAlign, BuildInactiveTitleWidgets(ctx))
 	if w > maxAllowed {
 		w = maxAllowed
 	}
@@ -156,9 +166,9 @@ func (m *messageDialogModel) ViewString() string {
 	if m.messageType == MessageError {
 		dialogType = DialogTypeError
 	}
-	dialogWithTitle := RenderDialogWithType(fullTitle, fullContent, m.focused, 0, dialogType)
-
-	return dialogWithTitle
+	ctx := GetActiveContext()
+	widgets := m.buildTitleBarWidgets(ctx)
+	return renderDialogWithTypeAndWidgets(fullTitle, fullContent, m.focused || m.titleBarFocused, 0, dialogType, ctx, widgets)
 }
 
 // View implements tea.Model
@@ -200,6 +210,7 @@ func (m *messageDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		},
 	})
 
+	regions = append(regions, m.titleBarHitRegions(offsetX, offsetY, contentWidth, ZDialog)...)
 	return regions
 }
 

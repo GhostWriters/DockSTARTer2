@@ -482,21 +482,23 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 			return m, nil, true
 		default:
 			// Title bar widget clicks: IDs are "menuID.title_widget_help" / "menuID.title_widget_close"
-			if me, ok := msg.(tea.MouseClickMsg); ok && me.Button == tea.MouseLeft {
-				if strings.HasSuffix(hitID, "."+IDTitleWidgetHelp) {
-					return m, m.showHelpCmd(nil, true), true
-				}
-				if strings.HasSuffix(hitID, "."+IDTitleWidgetClose) {
+			if _, ok := msg.(tea.MouseClickMsg); ok && hitButton == tea.MouseLeft {
+				if strings.HasSuffix(hitID, "."+IDTitleWidgetHelp) || strings.HasSuffix(hitID, "."+IDTitleWidgetClose) {
+					// Route the LayerHitMsg (with the ID) through the active dialog/screen
+					// so sub-dialogs (e.g. confirm inside a programbox) receive and handle
+					// the click in their own Update().
 					if m.dialog != nil {
-						if ea, ok := m.dialog.(EscapeActioner); ok {
-							return m, ea.EscapeAction(), true
+						updated, cmd := m.dialog.Update(semanticMsg)
+						m.dialog = updated
+						return m, cmd, true
+					}
+					if m.activeScreen != nil {
+						updated, cmd := m.activeScreen.Update(semanticMsg)
+						if sm, ok := updated.(ScreenModel); ok {
+							m.activeScreen = sm
 						}
-						return m, func() tea.Msg { return CloseDialogMsg{} }, true
+						return m, cmd, true
 					}
-					if ea, ok := m.activeScreen.(EscapeActioner); ok {
-						return m, ea.EscapeAction(), true
-					}
-					return m, ConfirmExitAction(), true
 				}
 			}
 			// Hyperlinks (IDs are "link:<URL>")

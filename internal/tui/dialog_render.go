@@ -27,6 +27,14 @@ func RenderDialogWithType(title, content string, focused bool, targetHeight int,
 
 // RenderDialogWithTypeCtx renders a dialog with a specific type using a specific context
 func RenderDialogWithTypeCtx(title, content string, focused bool, targetHeight int, dialogType DialogType, ctx StyleContext, borders ...BorderPair) string {
+	widgets := BuildInactiveTitleWidgets(ctx)
+	return renderDialogWithTypeAndWidgets(title, content, focused, targetHeight, dialogType, ctx, widgets, borders...)
+}
+
+// renderDialogWithTypeAndWidgets is the internal implementation used by both
+// RenderDialogWithTypeCtx (inactive widgets) and dialogs that manage title bar focus
+// (active/inactive widgets based on state).
+func renderDialogWithTypeAndWidgets(title, content string, focused bool, targetHeight int, dialogType DialogType, ctx StyleContext, widgets string, borders ...BorderPair) string {
 	var border lipgloss.Border
 	if len(borders) > 0 {
 		if focused {
@@ -76,7 +84,6 @@ func RenderDialogWithTypeCtx(title, content string, focused bool, targetHeight i
 		titleStyle = SemanticRawStyle("TitleQuestion") // Semantic
 	}
 
-	widgets := BuildInactiveTitleWidgets(ctx)
 	return renderDialogWithBorderCtx(title, content, border, focused, targetHeight, true, true, titleStyle, ctx, widgets)
 }
 
@@ -267,18 +274,32 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 			actualWidth = titleSectionLen
 		}
 
+		rightWidget := ""
+		if len(rightWidgets) > 0 {
+			rightWidget = rightWidgets[0]
+		}
+		rightWidgetWidth := WidthWithoutZones(rightWidget)
+		if rightWidget != "" {
+			// Grow actualWidth until the right side (after centering) fits the widget + 1 end dash.
+			needed := rightWidgetWidth + 1
+			for {
+				lp := 0
+				if titleAlign != "left" {
+					lp = (actualWidth - titleSectionLen) / 2
+				}
+				if actualWidth-titleSectionLen-lp >= needed {
+					break
+				}
+				actualWidth++
+			}
+		}
+
 		var leftPad int
 		if titleAlign == "left" {
 			leftPad = 0
 		} else {
 			leftPad = (actualWidth - titleSectionLen) / 2
 		}
-
-		rightWidget := ""
-		if len(rightWidgets) > 0 {
-			rightWidget = rightWidgets[0]
-		}
-		rightWidgetWidth := WidthWithoutZones(rightWidget)
 
 		remaining := actualWidth - titleSectionLen - leftPad
 		var rightPadMid, rightPadEnd int

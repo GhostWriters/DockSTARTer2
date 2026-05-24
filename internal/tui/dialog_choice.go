@@ -47,6 +47,9 @@ func (m *choiceDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
+		if handled, cmd := m.handleTitleBarKey(msg, submit(-1)); handled {
+			return m, cmd
+		}
 		switch {
 		case key.Matches(msg, Keys.Esc):
 			return m, submit(-1)
@@ -75,6 +78,9 @@ func (m *choiceDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case LayerHitMsg:
+		if handled, cmd := m.handleTitleBarHit(msg, submit(-1)); handled {
+			return m, cmd
+		}
 		if msg.Button == tea.MouseLeft {
 			for i, choice := range m.choices {
 				if ButtonIDMatches(msg.ID, choice) {
@@ -115,6 +121,8 @@ func (m *choiceDialogModel) contentWidth() int {
 	if tw := lipgloss.Width(GetPlainText(m.title)) + 6; tw > w {
 		w = tw
 	}
+	ctx := GetActiveContext()
+	w = minWidthForWidgets(w, GetPlainText(m.title), ctx.DialogTitleAlign, BuildInactiveTitleWidgets(ctx))
 	if w > maxAllowed {
 		w = maxAllowed
 	}
@@ -142,7 +150,8 @@ func (m *choiceDialogModel) ViewString() string {
 	spacer := lipgloss.NewStyle().Width(contentWidth).Background(borderBG).Render("")
 	fullContent := lipgloss.JoinVertical(lipgloss.Left, questionText, spacer, buttonRow)
 
-	return RenderDialogWithType(m.title, fullContent, m.focused >= 0, 0, DialogTypeConfirm)
+	widgets := m.buildTitleBarWidgets(ctx)
+	return renderDialogWithTypeAndWidgets(m.title, fullContent, m.baseDialogModel.focused || m.titleBarFocused, 0, DialogTypeConfirm, ctx, widgets)
 }
 
 func (m *choiceDialogModel) View() tea.View {
@@ -187,5 +196,6 @@ func (m *choiceDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		},
 	})
 
+	regions = append(regions, m.titleBarHitRegions(offsetX, offsetY, contentWidth, ZDialog)...)
 	return regions
 }

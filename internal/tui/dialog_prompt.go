@@ -85,6 +85,9 @@ func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
+		if handled, cmd := m.handleTitleBarKey(msg, closeWithResult("", false)); handled {
+			return m, cmd
+		}
 		switch {
 		case key.Matches(msg, Keys.Esc), key.Matches(msg, Keys.ForceQuit):
 			return m, closeWithResult("", false)
@@ -176,6 +179,9 @@ func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Button == tea.MouseMiddle {
 			return m, nil
 		}
+		if handled, cmd := m.handleTitleBarHit(msg, closeWithResult("", false)); handled {
+			return m, cmd
+		}
 		if msg.Button == tea.MouseRight && ButtonIDMatches(msg.ID, "prompt_input") {
 			return m, ShowInputContextMenu(m.input, msg.X, msg.Y, m.width, m.height)
 		}
@@ -226,7 +232,8 @@ func (m *promptDialogModel) contentWidth() int {
 	if tw := lipgloss.Width(GetPlainText(m.title)) + 6; tw > w {
 		w = tw
 	}
-
+	ctx := GetActiveContext()
+	w = minWidthForWidgets(w, GetPlainText(m.title), ctx.DialogTitleAlign, BuildInactiveTitleWidgets(ctx))
 	if w > maxAllowed {
 		w = maxAllowed
 	}
@@ -315,7 +322,9 @@ func (m *promptDialogModel) ViewString() string {
 	}
 	parts = append(parts, spacer, buttonRow)
 
-	return RenderDialogWithType(m.title, lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused, 0, DialogTypeConfirm)
+	ctx2 := GetActiveContext()
+	widgets := m.buildTitleBarWidgets(ctx2)
+	return renderDialogWithTypeAndWidgets(m.title, lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused || m.titleBarFocused, 0, DialogTypeConfirm, ctx2, widgets)
 }
 
 func (m *promptDialogModel) View() tea.View {
@@ -391,6 +400,7 @@ func (m *promptDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		ButtonSpec{Text: "OK", ZoneID: "OK", Help: "Save changes and return."},
 		ButtonSpec{Text: "Cancel", ZoneID: "Cancel", Help: "Discard changes and return."},
 	)...)
+	regions = append(regions, m.titleBarHitRegions(offsetX, offsetY, contentWidth, ZDialog)...)
 	return regions
 }
 
