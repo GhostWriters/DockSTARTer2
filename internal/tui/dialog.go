@@ -47,12 +47,6 @@ const (
 	DialogBodyPadH     = 4 // Horizontal padding for body text: Padding(1,2) = 2 chars each side
 )
 
-// Modal Z-order constants
-const (
-	ZModalBaseOffset = 100 // Z gap above the highest screen layer for the first modal
-	ZModalStackStep  = 100 // Additional Z gap for each subsequent stacked modal
-)
-
 // DialogLayout stores pre-calculated vertical budgeting for a dialog.
 // This implements the "calculate once, use everywhere" pattern.
 type DialogLayout struct {
