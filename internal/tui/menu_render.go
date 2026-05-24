@@ -8,12 +8,12 @@ import (
 )
 
 // renderCheckboxGlyph renders a checkbox/radio glyph with cbStyle applied to the entire string.
-func renderCheckboxGlyph(cb string, cbStyle lipgloss.Style, neutralStyle lipgloss.Style) string {
+func renderCheckboxGlyph(cb string, cbStyle lipgloss.Style) string {
 	return cbStyle.Render(cb)
 }
 
 // renderCheckbox selects the correct glyph for a checkbox or radio button and renders it.
-func renderCheckbox(isRadio, checked, lineChars bool, cbStyle, neutralStyle lipgloss.Style) string {
+func renderCheckbox(isRadio, checked, lineChars bool, cbStyle lipgloss.Style) string {
 	var cb string
 	if lineChars {
 		if isRadio {
@@ -40,7 +40,7 @@ func renderCheckbox(isRadio, checked, lineChars bool, cbStyle, neutralStyle lipg
 			}
 		}
 	}
-	return renderCheckboxGlyph(cb, cbStyle, neutralStyle)
+	return renderCheckboxGlyph(cb, cbStyle)
 }
 
 // listScrollPercent returns the current scroll position in [0.0, 1.0] for the list.
