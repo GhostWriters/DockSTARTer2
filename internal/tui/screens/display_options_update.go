@@ -251,6 +251,15 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return s, nil
 
 	case tea.KeyPressMsg:
+		// Title bar focus: delegate all keys to outer menu when its title bar is focused.
+		if s.outerMenu != nil && s.outerMenu.TitleBarFocused() {
+			updated, uCmd := s.outerMenu.Update(msg)
+			if m, ok := updated.(*tui.MenuModel); ok {
+				s.outerMenu = m
+			}
+			return s, uCmd
+		}
+
 		// 1. Panel Cycling (Tab / Shift-Tab) - Themes <-> Options only
 		if key.Matches(msg, tui.Keys.CycleTab) || key.Matches(msg, tui.Keys.CycleShiftTab) {
 			if s.focusedPanel == FocusThemes {
@@ -290,11 +299,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Esc: Cancel — navigate back or quit if root
 		if key.Matches(msg, tui.Keys.Esc) {
-			theme.Unload("Preview")
-			if s.isRoot {
-				return s, tui.ConfirmExitAction()
-			}
-			return s, navigateBack()
+			return s, s.EscapeAction()
 		}
 
 		// 3. Up/Down/Space: Routed to focused panel
@@ -529,6 +534,15 @@ func (s *DisplayOptionsScreen) SetSize(width, height int) {
 
 func (s *DisplayOptionsScreen) IsMaximized() bool {
 	return true
+}
+
+// EscapeAction implements tui.EscapeActioner: mirrors the Esc key handler.
+func (s *DisplayOptionsScreen) EscapeAction() tea.Cmd {
+	theme.Unload("Preview")
+	if s.isRoot {
+		return tui.ConfirmExitAction()
+	}
+	return navigateBack()
 }
 
 func (s *DisplayOptionsScreen) HasDialog() bool {

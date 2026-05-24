@@ -9,6 +9,9 @@ semantic_suffix = "|}}"
 direct_prefix   = "{{["
 direct_suffix   = "]}}"
 
+[palette]
+accent = "red"
+
 [styles]
 # Backdrop
 Screen = "{{[black:white:-]}}"
@@ -66,6 +69,14 @@ TitleSubMenuFocused = "{{|Title:::R|}}"
 CommandLine = "{{[-]}}{{[yellow::B]}}"
 ButtonActive = "{{[white:red:-B]}}"
 ButtonInactive = "{{[black:blue:-]}}"
+ButtonKeyActive = "{{|ButtonActive|}}"
+ButtonKeyInactive = "{{|ButtonInactive:$accent|}}"
+IconActive = "{{|ButtonActive|}}"
+IconInactive = "{{|Border|}}"
+HelpIconInactive = "{{|IconInactive|}}"
+ExitIconInactive = "{{|Border:::R|}}"
+ResizeUpIconInactive = "{{|ConsoleBorder|}}"
+ResizeDnIconInactive = "{{|ConsoleBorder|}}"
 TagKey = "{{[red:blue:-]}}"
 Tag = "{{[black:blue:-]}}"
 Item = "{{[black:cyan:-]}}"

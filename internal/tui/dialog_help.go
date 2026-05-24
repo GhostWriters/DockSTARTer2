@@ -88,6 +88,9 @@ func HelpContextWidth(termW, termH int) int {
 // TriggerHelpMsg is a message that tells the app to open the help dialog.
 type TriggerHelpMsg struct {
 	CapturedContext *HelpContext
+	// ScreenLevelOnly strips item-specific fields so help shows screen/page context only.
+	// Used when [?] is activated from the title bar widget.
+	ScreenLevelOnly bool
 }
 
 // HelpContext contains both page-level and item-level help information.

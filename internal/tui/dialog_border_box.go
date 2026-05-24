@@ -164,7 +164,7 @@ func RenderTopBorderBoxCtx(title, rightTitle, content string, contentWidth int, 
 }
 
 // renderDialogWithBorderCtx handles internal shared rendering logic using a specific context
-func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, focused bool, targetHeight int, threeD bool, useConnectors bool, titleStyle lipgloss.Style, ctx StyleContext) string {
+func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, focused bool, targetHeight int, threeD bool, useConnectors bool, titleStyle lipgloss.Style, ctx StyleContext, rightWidget string) string {
 	if title != "" && !strings.HasSuffix(title, "{{[-]}}") {
 		title += "{{[-]}}"
 	}
@@ -249,9 +249,20 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 		} else {
 			leftPad = (actualWidth - titleSectionLen) / 2
 		}
+		rightWidgetWidth := WidthWithoutZones(rightWidget)
 		rightPad := actualWidth - titleSectionLen - leftPad
-		if rightPad < 0 {
-			rightPad = 0
+		var rightPadMid, rightPadEnd int
+		if rightWidget != "" {
+			rightPadEnd = 1
+			rightPadMid = rightPad - rightWidgetWidth - rightPadEnd
+			if rightPadMid < 0 {
+				rightPadMid = 0
+			}
+		} else {
+			rightPadMid = rightPad
+			if rightPadMid < 0 {
+				rightPadMid = 0
+			}
 		}
 		result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, leftPad)))
 		result.WriteString(borderStyleLight.Render(leftT))
@@ -275,7 +286,11 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 			result.WriteString(borderStyleLight.Render(" "))
 		}
 		result.WriteString(borderStyleLight.Render(rightT))
-		result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, rightPad)))
+		result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, rightPadMid)))
+		if rightWidget != "" {
+			result.WriteString(rightWidget)
+			result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, rightPadEnd)))
+		}
 	}
 	result.WriteString(borderStyleLight.Render(border.TopRight))
 	result.WriteString("\n")

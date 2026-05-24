@@ -29,10 +29,21 @@ func (m PanelModel) ViewString() string {
 	}
 	title := marker + " " + titleText + " " + marker
 
-	rightTitle := ""
-	if m.focused && m.expanded && !m.inputFocused {
-		pct := int(m.viewport.ScrollPercent() * 100)
-		rightTitle = fmt.Sprintf(" %d%% ", pct)
+	styles := GetStyles()
+	upGlyph, dnGlyph := resizeUpWidget, resizeDnWidget
+	if !ctx.LineCharacters {
+		upGlyph, dnGlyph = resizeUpWidgetAscii, resizeDnWidgetAscii
+	}
+	activeStyle := styles.IconActive
+	upInactiveStyle := styles.ResizeUpIconInactive
+	dnInactiveStyle := styles.ResizeDnIconInactive
+	upStyle, dnStyle := upInactiveStyle, dnInactiveStyle
+	if m.titleBarFocused {
+		upStyle, dnStyle = activeStyle, activeStyle
+	}
+	lineChar := "─"
+	if !ctx.LineCharacters {
+		lineChar = "-"
 	}
 
 	// Input box occupies 3 rows (top border + 1 content + bottom border).
@@ -134,7 +145,25 @@ func (m PanelModel) ViewString() string {
 	consoleTitleStyle := SemanticRawStyle("ConsoleTitle")
 	consoleBorderStyle := SemanticRawStyle("ConsoleBorder")
 
-	return RenderTopBorderBoxCtx(title, rightTitle, combined, m.width, m.focused, consoleTitleStyle, consoleBorderStyle, ctx)
+	// Sep between resize widgets uses the console border color, not the dialog border color.
+	lineChar = "─"
+	if !ctx.LineCharacters {
+		lineChar = "-"
+	}
+	consoleSepStyle := ctx.BorderFlags.Apply(lipgloss.NewStyle()).
+		Foreground(consoleBorderStyle.GetForeground()).
+		Background(consoleBorderStyle.GetBackground())
+	sep := consoleSepStyle.Render(lineChar)
+	icons := upInactiveStyle.Render("[") + upStyle.Render(upGlyph) + upInactiveStyle.Render("]") +
+		sep +
+		dnInactiveStyle.Render("[") + dnStyle.Render(dnGlyph) + dnInactiveStyle.Render("]")
+	rightTitle := icons
+	if m.expanded {
+		pct := int(m.viewport.ScrollPercent() * 100)
+		rightTitle = fmt.Sprintf(" %d%% ", pct) + icons
+	}
+
+	return RenderTopBorderBoxCtx(title, rightTitle, combined, m.width, m.titleBarFocused, consoleTitleStyle, consoleBorderStyle, ctx)
 }
 
 // Layers returns a single layer with the panel content for visual compositing.

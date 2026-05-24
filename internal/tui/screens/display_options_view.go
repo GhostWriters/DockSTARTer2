@@ -231,6 +231,15 @@ func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegi
 		btnSpecs...,
 	)...)
 
+	// Title widget regions — delegate to outerMenu and filter for title widget IDs.
+	if s.outerMenu != nil {
+		for _, r := range s.outerMenu.GetHitRegions(offsetX, offsetY) {
+			if strings.HasSuffix(r.ID, "."+tui.IDTitleWidgetHelp) || strings.HasSuffix(r.ID, "."+tui.IDTitleWidgetClose) {
+				regions = append(regions, r)
+			}
+		}
+	}
+
 	// Preview Mockup Regions (when it fits)
 	if dl.previewFits {
 		// Calculate preview position matching Layers()

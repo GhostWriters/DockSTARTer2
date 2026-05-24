@@ -153,10 +153,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "esc":
-			if m.hasChanges() {
-				return m, m.promptUnsavedChanges(m.onClose)
-			}
-			return m, m.onClose
+			return m, m.EscapeAction()
 		case "ctrl+right", "alt+right": // Next Tab
 			if m.focus == envFocusEditor && len(m.tabs) > 1 {
 				m.tabs[m.activeTab].editor.Blur()

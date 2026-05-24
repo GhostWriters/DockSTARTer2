@@ -271,5 +271,37 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	// 5. Hyperlink hit regions
 	regions = append(regions, ScanForHyperlinks(m.ViewString(), offsetX, offsetY, baseZ)...)
 
+	// 6. Title bar widget hit regions ([?] and [×]/[X])
+	// Widget layout in title bar: "[?] [×]" = 7 chars + 1 end pad before TopRight corner.
+	// Widgets appear at the right of the title bar (row 0). Sub-menus never get widgets.
+	if m.title != "" && !m.subMenuMode {
+		const widgetTotalWidth = 7 // "[?] [×]" or "[?] [X]"
+		const endPad = 1
+		// Use actual rendered dialog width, not m.width — non-maximized menus render
+		// narrower than m.width based on content, so the widget X must match.
+		dialogWidth := m.GetInnerContentWidth() + GetLayout().BorderWidth()
+		widgetsStartX := offsetX + dialogWidth - 1 - endPad - widgetTotalWidth
+		// [?] occupies chars 0-2 of the widget string (after leading space... actually no leading space)
+		// Widget string from renderTitleBarWidgets: "[?]" + " " + "[×]"
+		helpWidgetX := widgetsStartX
+		closeWidgetX := widgetsStartX + 4 // "[?] " = 4 chars
+		regions = append(regions,
+			HitRegion{
+				ID:     m.id + "." + IDTitleWidgetHelp,
+				X:      helpWidgetX, Y: offsetY, Width: 3, Height: 1,
+				ZOrder: baseZ + 25,
+				Label:  "Help",
+				Help:   &HelpContext{ScreenName: m.title, PageTitle: "Help", PageText: "Open help for this dialog."},
+			},
+			HitRegion{
+				ID:     m.id + "." + IDTitleWidgetClose,
+				X:      closeWidgetX, Y: offsetY, Width: 3, Height: 1,
+				ZOrder: baseZ + 25,
+				Label:  "Close",
+				Help:   &HelpContext{ScreenName: m.title, PageTitle: "Close", PageText: "Close this dialog."},
+			},
+		)
+	}
+
 	return regions
 }

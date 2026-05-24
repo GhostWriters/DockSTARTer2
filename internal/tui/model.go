@@ -41,6 +41,12 @@ type LayeredView interface {
 	Layers() []*lipgloss.Layer
 }
 
+// EscapeActioner is implemented by screens that have a back/cancel action.
+// The close widget [×] uses this to follow the same path as pressing Esc.
+type EscapeActioner interface {
+	EscapeAction() tea.Cmd
+}
+
 // HaloProvider is an interface for models that require a background halo decoration.
 // When a model implements this, AppModel.View() will add a background halo layer
 // using the specified color.
@@ -235,8 +241,9 @@ type AppModel struct {
 	backdrop *BackdropModel
 
 	// Slide-up log panel (always present below helpline)
-	panel          PanelModel
-	panelFocused   bool
+	panel               PanelModel
+	panelFocused        bool
+	panelTitleFocused   bool
 	panelSbDrag    ScrollbarDragState // log-panel scrollbar drag tracking state
 	panelSbAbsTopY int                // absolute Y of the scrollbar's first row (for drag computation)
 	panelSbInfo    ScrollbarInfo      // scrollbar geometry captured at drag start
