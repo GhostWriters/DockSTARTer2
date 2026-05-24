@@ -114,8 +114,8 @@ func BuildAEBottomBorder(totalWidth int, prefixDashes int, focused bool, activeC
 			leftT = "H"
 			rightT = "H"
 		} else {
-			leftT = "+"
-			rightT = "+"
+			leftT = "|"
+			rightT = "|"
 		}
 	}
 

@@ -115,8 +115,8 @@ func RenderTitleSegmentCtx(rawTitle string, borderFocused bool, contentFocused b
 			leftT = "H"
 			rightT = "H"
 		} else {
-			leftT = "+"
-			rightT = "+"
+			leftT = "|"
+			rightT = "|"
 		}
 	}
 

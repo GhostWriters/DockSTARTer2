@@ -94,8 +94,8 @@ func RenderTopBorderBoxCtx(title, rightTitle, content string, contentWidth int, 
 			leftT = "H"
 			rightT = "H"
 		} else {
-			leftT = "+"
-			rightT = "+"
+			leftT = "|"
+			rightT = "|"
 		}
 	}
 

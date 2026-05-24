@@ -241,8 +241,8 @@ func BuildLabeledBottomBorderCtx(totalWidth int, label string, focused bool, ctx
 			leftT = "┤"
 			rightT = "├"
 		} else {
-			leftT = "+"
-			rightT = "+"
+			leftT = "|"
+			rightT = "|"
 		}
 	} else {
 		// Rounded border variant used by set-value / add-var input sections
@@ -332,8 +332,8 @@ func BuildDualLabelBottomBorderCtx(totalWidth int, leftLabel, rightLabel string,
 			leftT = "H"
 			rightT = "H"
 		} else {
-			leftT = "+"
-			rightT = "+"
+			leftT = "|"
+			rightT = "|"
 		}
 	}
 
@@ -490,8 +490,8 @@ func BuildScrollPercentBottomBorder(totalWidth int, scrollPct float64, focused b
 			leftT = "H"
 			rightT = "H"
 		} else {
-			leftT = "+"
-			rightT = "+"
+			leftT = "|"
+			rightT = "|"
 		}
 	}
 
