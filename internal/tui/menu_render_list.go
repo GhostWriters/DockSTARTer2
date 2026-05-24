@@ -231,8 +231,8 @@ func (m *MenuModel) renderVariableHeightList() string {
 						ceText = checkUnselectedAscii
 					}
 				}
-				cbAdd3 = cbAStyle.Render(caText)
-				cbEnabled3 = cbEStyle.Render(ceText)
+				cbAdd3 = renderCheckboxGlyph(caText, cbAStyle, neutralStyle)
+				cbEnabled3 = renderCheckboxGlyph(ceText, cbEStyle, neutralStyle)
 			}
 		}
 
