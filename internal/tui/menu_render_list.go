@@ -196,22 +196,21 @@ func (m *MenuModel) renderVariableHeightList() string {
 			}
 
 			if ctx.LineCharacters {
-				ca, ce := checkUnselected, checkUnselected
 				if item.IsGroupHeader {
-					ca = " "
-					ce = subMenuExpanded
+					// Expansion arrow is single-width; pad to 3 manually
+					cbAdd3 = neutralStyle.Render("   ")
+					cbEnabled3 = neutralStyle.Render(" ") + cbEStyle.Render(subMenuExpanded) + neutralStyle.Render(" ")
 				} else {
+					ca, ce := checkUnselected, checkUnselected
 					if item.Checked {
 						ca = checkSelected
 					}
 					if item.Enabled {
 						ce = checkSelected
 					}
+					cbAdd3 = renderCheckboxGlyph(ca, cbAStyle, neutralStyle)
+					cbEnabled3 = renderCheckboxGlyph(ce, cbEStyle, neutralStyle)
 				}
-				// Line-art glyphs are 1-char wide; pad to 3 with styled spaces: " ▣ "
-				// Result is always exactly 3 chars wide.
-				cbAdd3 = neutralStyle.Render(" ") + cbAStyle.Render(ca) + neutralStyle.Render(" ")
-				cbEnabled3 = neutralStyle.Render(" ") + cbEStyle.Render(ce) + neutralStyle.Render(" ")
 			} else {
 				// ASCII: Use explicit 3-character variants
 				caText := "   "
@@ -752,9 +751,8 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 			if item.Enabled {
 				cE = checkSelected
 			}
-
-			checkboxA3 = neutralStyle.Render(" ") + cbStyleA.Render(cA) + neutralStyle.Render(" ")
-			checkboxE3 = neutralStyle.Render(" ") + cbStyleE.Render(cE) + neutralStyle.Render(" ")
+			checkboxA3 = renderCheckboxGlyph(cA, cbStyleA, neutralStyle)
+			checkboxE3 = renderCheckboxGlyph(cE, cbStyleE, neutralStyle)
 		} else {
 			caA, ceA := checkUnselectedAscii, checkUnselectedAscii
 			if item.Checked {
