@@ -272,8 +272,8 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 		topLeftC = "┌"
 		topRightC = "┐"
 	} else {
-		leftT = "+"
-		rightT = "+"
+		leftT = "|"
+		rightT = "|"
 		borderTop = "-"
 		topLeftC = "+"
 		topRightC = "+"
