@@ -212,26 +212,23 @@ func (m *MenuModel) renderVariableHeightList() string {
 					cbEnabled3 = renderCheckboxGlyph(ce, cbEStyle, neutralStyle)
 				}
 			} else {
-				// ASCII: Use explicit 3-character variants
-				caText := "   "
-				var ceText string
 				if item.IsGroupHeader {
-					// Expansion arrow always goes in the second slot (Enabled track)
-					ceText = subMenuExpandedAscii
+					// Expansion arrow is single-width; pad to 3 manually
+					cbAdd3 = neutralStyle.Render("   ")
+					cbEnabled3 = neutralStyle.Render(" ") + cbEStyle.Render(subMenuExpandedAscii) + neutralStyle.Render(" ")
 				} else {
+					// ASCII: 3-character variants
+					caText := checkUnselectedAscii
+					ceText := checkUnselectedAscii
 					if item.Checked {
 						caText = checkSelectedAscii
-					} else {
-						caText = checkUnselectedAscii
 					}
 					if item.Enabled {
 						ceText = checkSelectedAscii
-					} else {
-						ceText = checkUnselectedAscii
 					}
+					cbAdd3 = renderCheckboxGlyph(caText, cbAStyle, neutralStyle)
+					cbEnabled3 = renderCheckboxGlyph(ceText, cbEStyle, neutralStyle)
 				}
-				cbAdd3 = renderCheckboxGlyph(caText, cbAStyle, neutralStyle)
-				cbEnabled3 = renderCheckboxGlyph(ceText, cbEStyle, neutralStyle)
 			}
 		}
 

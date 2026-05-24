@@ -7,14 +7,8 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// renderCheckboxGlyph renders a checkbox/radio glyph with cbStyle applied only to the
-// middle character. For single-rune glyphs (Unicode), the whole rune gets cbStyle.
-// For 3-rune ASCII glyphs like "[x]" or "(*)", only the middle rune is styled.
+// renderCheckboxGlyph renders a checkbox/radio glyph with cbStyle applied to the entire string.
 func renderCheckboxGlyph(cb string, cbStyle lipgloss.Style, neutralStyle lipgloss.Style) string {
-	runes := []rune(cb)
-	if len(runes) == 3 {
-		return neutralStyle.Render(string(runes[0])) + cbStyle.Render(string(runes[1])) + neutralStyle.Render(string(runes[2]))
-	}
 	return cbStyle.Render(cb)
 }
 

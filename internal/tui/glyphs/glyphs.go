@@ -13,7 +13,7 @@ const (
 
 	// SubMenuExpanded (▼) - Black Down-Pointing Triangle (U+25BC) — group header is always expanded
 	SubMenuExpanded      = "▼"
-	SubMenuExpandedAscii = "[v]"
+	SubMenuExpandedAscii = "v"
 
 	// ASCII variants
 	RadioSelectedAscii   = "(*)"
