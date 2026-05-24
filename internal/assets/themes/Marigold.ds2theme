@@ -9,16 +9,20 @@ semantic_suffix = "|}}"
 direct_prefix   = "{{["
 direct_suffix   = "]}}"
 
+[palette]
+fg = "yellow"
+bg = "black"
+
 [styles]
 # Backdrop
-Screen = "{{[black:yellow]}}"
-StatusBar = "{{[yellow:black]}}"
+Screen = "{{[$bg:$fg]}}"
+StatusBar = "{{[$fg:$bg]}}"
 StatusBarBorder = "{{|StatusBar|}}"
 
 # Dialogs and panels
-Dialog = "{{[yellow:black]}}"
-Border = "{{[yellow:black]}}"
-Border2 = "{{[yellow:black:D]}}"
+Dialog = "{{[$fg:$bg]}}"
+Border = "{{[$fg:$bg]}}"
+Border2 = "{{[$fg:$bg:D]}}"
 Shadow = "{{|Screen:::D|}}"
 ProgramBox = "{{[white:black:-]}}"
 ConsoleBorder = "{{|Helpline|}}"
@@ -61,15 +65,15 @@ TitleSubMenuFocused = "{{|Title:::R|}}"
 
 # Menu, buttons, and help
 CommandLine = "{{[-]}}"
-ButtonActive = "{{[yellow:black:B]}}"
+ButtonActive = "{{[$fg:$bg:B]}}"
 ButtonInactive = "{{|Dialog|}}"
 TagKey = "{{|Dialog:::B|}}"
 Tag = "{{|Dialog|}}"
 Item = "{{|Dialog|}}"
 OptionValue = "{{|Dialog:::RB|}}"
-TagKeySelected = "{{[black:yellow:B]}}"
-TagSelected = "{{[black:yellow]}}"
-ItemSelected = "{{[yellow:black:B]}}"
+TagKeySelected = "{{[$bg:$fg:B]}}"
+TagSelected = "{{[$bg:$fg]}}"
+ItemSelected = "{{[$fg:$bg:B]}}"
 OptionValueSelected = "{{|OptionValue:::B|}}"
 Helpline = "{{|Dialog|}}"
 HelpTag = "{{|Tag|}}"
@@ -110,7 +114,7 @@ LineNumberModified = "{{|ModifiedText|}}"
 LineNumberModifiedSelected = "{{|LineNumberModified:::B|}}"
 
 # Markers and cursor
-Marker = "{{[black:yellow:-]}}"
+Marker = "{{[$bg:$fg:-]}}"
 MarkerAdded = "{{|Marker|}}"
 MarkerDeleted = "{{|Marker|}}"
 MarkerModified = "{{|Marker|}}"

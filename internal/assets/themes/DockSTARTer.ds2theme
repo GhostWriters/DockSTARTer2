@@ -9,14 +9,21 @@ semantic_suffix = "|}}"
 direct_prefix   = "{{["
 direct_suffix   = "]}}"
 
+[palette]
+primary = "black"
+secondary = "white"
+screen_fg = "$primary"
+screen_bg = "$secondary"
+accent = "cyan"
+
 [styles]
 # Backdrop
-Screen = "{{[black:white:-]}}"
-StatusBar = "{{[black:cyan:-]}}"
+Screen = "{{[$primary:$secondary:-]}}"
+StatusBar = "{{[black:$accent:-]}}"
 StatusBarBorder = "{{|StatusBar|}}"
 
 # Dialogs and panels
-Dialog = "{{[black:cyan:-]}}"
+Dialog = "{{[black:$accent:-]}}"
 Border = "{{[white:-:-]}}"
 Border2 = "{{[black:-:-]}}"
 Shadow = "{{|Screen:::D|}}"
@@ -31,7 +38,7 @@ StatusVersionBrackets = "{{|StatusFields|}}"
 StatusVersionSpace = "{{[-]}}"
 StatusVersionSelected = "{{[black:red:-]}}"
 StatusFlags = "{{|Dialog|}}"
-StatusFlagsBrackets = "{{[cyan:black:-B]}}"
+StatusFlagsBrackets = "{{[$accent:black:-B]}}"
 StatusFlagsSpace = "{{|StatusVersionSpace|}}"
 StatusUpdate = "{{[-:-:-R]}}"
 StatusUpdateBrackets = "{{|StatusVersionBrackets|}}"
@@ -62,7 +69,7 @@ TitleSubMenuFocused = "{{|Title:::R|}}"
 # Menu, buttons, and help
 CommandLine = "{{[-]}}{{[yellow::B]}}"
 ButtonActive = "{{[white:red:-B]}}"
-ButtonInactive = "{{[black:white:-]}}"
+ButtonInactive = "{{[$primary:$secondary:-]}}"
 TagKey = "{{|Tag:red|}}"
 Tag = "{{[black:-:-b]}}"
 Item = "{{[black:-]}}"
@@ -130,9 +137,9 @@ ListItemUserDefined = "{{[blue::R]}}"
 
 # Keys, progress, and indicators
 KeyCap = "{{[::-R]}}"
-ProgressWaiting = "{{[black:white:-B]}}"
-ProgressInProgress = "{{[white:cyan:-B]}}"
-ProgressCompleted = "{{[cyan:black:-B]}}"
+ProgressWaiting = "{{[$primary:$secondary:-B]}}"
+ProgressInProgress = "{{[white:$accent:-B]}}"
+ProgressCompleted = "{{[$accent:black:-B]}}"
 
 [defaults]
 dialog_title_align = "center"

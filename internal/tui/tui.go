@@ -78,8 +78,13 @@ func Initialize(ctx context.Context) error {
 	registerCallbacks()
 
 	currentConfig = config.LoadAppConfig()
-	if _, err := theme.Load(currentConfig.UI.Theme, ""); err != nil { // Initial theme load
-		return fmt.Errorf("failed to load theme: %w", err)
+	if deflts, err := theme.Load(currentConfig.UI.Theme, ""); err != nil {
+		if deflts == nil {
+			// Default theme itself failed to parse — unrecoverable
+			logger.FatalWithStack(ctx, "failed to load default theme: %v", err)
+		}
+		// Non-default theme fell back to default — log warning and continue
+		logger.Warn(ctx, "failed to load theme '%s', fell back to default: %v", currentConfig.UI.Theme, err)
 	}
 
 	// Initialize styles from theme
