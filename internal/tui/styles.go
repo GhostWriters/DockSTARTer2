@@ -113,6 +113,9 @@ const (
 	ZDialog   = 30
 	ZHalo     = 35
 	ZOverlay  = 40
+
+	ZModalBaseOffset = 100 // Z gap above the highest screen layer for the first modal
+	ZModalStackStep  = 100 // Additional Z gap for each subsequent stacked modal
 )
 
 // Global Layer IDs for hit testing

@@ -8,6 +8,12 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+// Title bar widget constants.
+const (
+	titleBarWidgetClose = 1
+	titleBarWidgetHelp  = 2
+)
+
 // Title bar widget state fields shared by all simple dialog types.
 // Embedded in baseDialogModel so dialogs get TitleBarFocusable for free.
 

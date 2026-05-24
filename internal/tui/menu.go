@@ -192,12 +192,6 @@ type MenuModel struct {
 	titleBarWidget  int // titleBarWidgetHelp or titleBarWidgetClose
 }
 
-// Title bar widget constants.
-const (
-	titleBarWidgetClose = 1
-	titleBarWidgetHelp  = 2
-)
-
 // TitleBarFocusable is implemented by models whose title bar can receive keyboard focus.
 type TitleBarFocusable interface {
 	FocusTitleBar()
