@@ -35,10 +35,6 @@ func (m PanelModel) ViewString() string {
 	}
 	consoleBorderStyle := SemanticRawStyle("ConsoleBorder")
 	baseStyle := ctx.BorderFlags.Apply(consoleBorderStyle)
-	lineChar := "─"
-	if !ctx.LineCharacters {
-		lineChar = "-"
-	}
 
 	// Input box occupies 3 rows (top border + 1 content + bottom border).
 	hasInput := m.panelMode == "console" || m.panelMode == "system"
@@ -139,7 +135,7 @@ func (m PanelModel) ViewString() string {
 	consoleTitleStyle := SemanticRawStyle("ConsoleTitle")
 
 	// Sep between resize widgets uses the console border color, not the dialog border color.
-	lineChar = "─"
+	lineChar := "─"
 	if !ctx.LineCharacters {
 		lineChar = "-"
 	}

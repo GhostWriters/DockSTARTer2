@@ -249,9 +249,10 @@ func (m *MenuModel) renderTitleBarWidgets(ctx StyleContext) string {
 
 	helpTag, closeTag := "HelpIconInactive", "ExitIconInactive"
 	if m.titleBarFocused {
-		if m.titleBarWidget == titleBarWidgetHelp {
+		switch m.titleBarWidget {
+		case titleBarWidgetHelp:
 			helpTag = "IconActive"
-		} else if m.titleBarWidget == titleBarWidgetClose {
+		case titleBarWidgetClose:
 			closeTag = "IconActive"
 		}
 	}
