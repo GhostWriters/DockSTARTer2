@@ -21,6 +21,9 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	// 1. Vertical Positioning (Y)
 	// All menus start inside an outer Top Border (1 line).
 	listY := layout.SingleBorder()
+	if m.layout.LargeTitleBar {
+		listY += LargeTitleBarOverhead
+	}
 
 	// Account for subtitle if present (positioned above the list content)
 	subtitleH := 0
@@ -313,17 +316,22 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		// Widget string from renderTitleBarWidgets: "[?]" + " " + "[×]"
 		helpWidgetX := widgetsStartX
 		closeWidgetX := widgetsStartX + 4 // "[?] " = 4 chars
+		// Large titlebar: widgets are on the title row (row 1), not the top border (row 0).
+		widgetY := offsetY
+		if m.layout.LargeTitleBar {
+			widgetY++
+		}
 		regions = append(regions,
 			HitRegion{
 				ID:     m.id + "." + IDTitleWidgetHelp,
-				X:      helpWidgetX, Y: offsetY, Width: 3, Height: 1,
+				X:      helpWidgetX, Y: widgetY, Width: 3, Height: 1,
 				ZOrder: baseZ + 25,
 				Label:  "Help",
 				Help:   &HelpContext{ScreenName: m.title, PageTitle: "Help", PageText: "Open help for this dialog."},
 			},
 			HitRegion{
 				ID:     m.id + "." + IDTitleWidgetClose,
-				X:      closeWidgetX, Y: offsetY, Width: 3, Height: 1,
+				X:      closeWidgetX, Y: widgetY, Width: 3, Height: 1,
 				ZOrder: baseZ + 25,
 				Label:  "Close",
 				Help:   &HelpContext{ScreenName: m.title, PageTitle: "Close", PageText: "Close this dialog."},

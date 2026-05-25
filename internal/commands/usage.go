@@ -335,7 +335,7 @@ func GetUsage(target string, noHeading bool) string {
 			"	Run tests to check the program",
 		)
 	}
-	if match("-T", "--theme", "--theme-list", "--theme-table", "--theme-lines", "--theme-no-lines", "--theme-borders", "--theme-no-borders", "--theme-button-borders", "--theme-no-button-borders", "--theme-shadows", "--theme-no-shadows", "--theme-shadow-level", "--theme-scrollbar", "--theme-no-scrollbar", "--theme-border-color", "--theme-dialog-title", "--theme-submenu-title", "--theme-panel-title", "--theme-extract", "--theme-extract-all") {
+	if match("-T", "--theme", "--theme-list", "--theme-table", "--theme-lines", "--theme-no-lines", "--theme-borders", "--theme-no-borders", "--theme-large-buttons", "--theme-no-large-buttons", "--theme-shadows", "--theme-no-shadows", "--theme-shadow-level", "--theme-scrollbar", "--theme-no-scrollbar", "--theme-border-color", "--theme-dialog-title", "--theme-submenu-title", "--theme-panel-title", "--theme-extract", "--theme-extract-all") {
 		printStr(
 			"{{|UsageCommand|}}-T --theme{{[-]}}",
 			"	Shows the current theme",
@@ -356,9 +356,9 @@ func GetUsage(target string, noHeading bool) string {
 			"{{|UsageCommand|}}--theme-borders{{[-]}}",
 			"{{|UsageCommand|}}--theme-no-borders{{[-]}}",
 			"	Turn the borders on and off in the GUI",
-			"{{|UsageCommand|}}--theme-button-borders{{[-]}}",
-			"{{|UsageCommand|}}--theme-no-button-borders{{[-]}}",
-			"	Turn bordered button style on or off in the GUI",
+			"{{|UsageCommand|}}--theme-large-buttons{{[-]}}",
+			"{{|UsageCommand|}}--theme-no-large-buttons{{[-]}}",
+			"	Turn large (bordered) button style on or off in the GUI",
 			"{{|UsageCommand|}}--theme-shadows{{[-]}}",
 			"{{|UsageCommand|}}--theme-no-shadows{{[-]}}",
 			"	Turn the shadows on or off in the GUI",

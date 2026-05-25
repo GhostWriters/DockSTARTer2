@@ -41,7 +41,9 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	previewCtx := tui.StyleContext{
 		LineCharacters:      s.config.UI.LineCharacters,
 		DrawBorders:         s.config.UI.Borders,
-		ButtonBorders:       s.config.UI.ButtonBorders,
+		LargeButtons:        s.config.UI.LargeButtons,
+		LargeTitleBars:      s.config.UI.LargeTitleBars,
+		LargeTitleArea:      tui.SemanticRawStyle("LargeTitleArea"),
 		Screen:              bgStyle,
 		Dialog:              dContent,
 		ContentBackground:   dContent,
@@ -202,6 +204,14 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 		contentLines[i] = tui.RenderThemeTextCtx(l, previewCtx)
 	}
 	contentStr := strings.Join(contentLines, "\n")
+
+	// Add a button row so large vs flat buttons are visible in the preview.
+	buttonRow := tui.RenderCenteredButtonsCtx(38, previewCtx,
+		tui.ButtonSpec{Text: "OK"},
+		tui.ButtonSpec{Text: "Cancel"},
+	)
+	buttonRow = strings.TrimSuffix(buttonRow, "\n")
+	contentStr = strings.TrimSuffix(contentStr, "\n") + "\n" + buttonRow
 
 	titleParts := []string{
 		"{{|Title|}}Title{{[-]}}",

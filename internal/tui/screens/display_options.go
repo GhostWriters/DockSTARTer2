@@ -153,13 +153,23 @@ func (s *DisplayOptionsScreen) initMenus() {
 			IsDestructive: true,
 		},
 		{
-			Tag:           "Button Borders",
-			Desc:          "Show borders on buttons",
-			Help:          "Toggle bordered vs flat button style (Space to toggle)",
+			Tag:           "Large Buttons",
+			Desc:          "Show large (bordered) buttons",
+			Help:          "Toggle large (bordered) vs flat button style (Space to toggle)",
 			IsCheckbox:    true,
-			Checked:       s.config.UI.ButtonBorders,
+			Checked:       s.config.UI.LargeButtons,
 			Selectable:    true,
-			SpaceAction:   s.toggleButtonBorders(),
+			SpaceAction:   s.toggleLargeButtons(),
+			IsDestructive: true,
+		},
+		{
+			Tag:           "Large Title Bars",
+			Desc:          "Show title in a separate row above content",
+			Help:          "Toggle large title bar style (Space to toggle)",
+			IsCheckbox:    true,
+			Checked:       s.config.UI.LargeTitleBars,
+			Selectable:    true,
+			SpaceAction:   s.toggleLargeTitleBars(),
 			IsDestructive: true,
 		},
 		{
@@ -375,8 +385,11 @@ func formatThemeDefaults(d *theme.ThemeDefaults) string {
 	if d.Borders != nil {
 		lines = append(lines, fmt.Sprintf("  Borders: %s", boolStr(*d.Borders)))
 	}
-	if d.ButtonBorders != nil {
-		lines = append(lines, fmt.Sprintf("  Button Borders: %s", boolStr(*d.ButtonBorders)))
+	if d.LargeButtons != nil {
+		lines = append(lines, fmt.Sprintf("  Large Buttons: %s", boolStr(*d.LargeButtons)))
+	}
+	if d.LargeTitleBars != nil {
+		lines = append(lines, fmt.Sprintf("  Large Title Bars: %s", boolStr(*d.LargeTitleBars)))
 	}
 	if d.LineCharacters != nil {
 		lines = append(lines, fmt.Sprintf("  Line Characters: %s", boolStr(*d.LineCharacters)))
@@ -788,11 +801,20 @@ func (s *DisplayOptionsScreen) toggleBorders() tea.Cmd {
 	}
 }
 
-func (s *DisplayOptionsScreen) toggleButtonBorders() tea.Cmd {
+func (s *DisplayOptionsScreen) toggleLargeButtons() tea.Cmd {
 	return func() tea.Msg {
-		newState := !s.config.UI.ButtonBorders
+		newState := !s.config.UI.LargeButtons
 		return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
-			cfg.UI.ButtonBorders = newState
+			cfg.UI.LargeButtons = newState
+		}}
+	}
+}
+
+func (s *DisplayOptionsScreen) toggleLargeTitleBars() tea.Cmd {
+	return func() tea.Msg {
+		newState := !s.config.UI.LargeTitleBars
+		return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
+			cfg.UI.LargeTitleBars = newState
 		}}
 	}
 }

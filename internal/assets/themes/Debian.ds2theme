@@ -149,3 +149,20 @@ panel_title_align = "center"
 
 
 
+
+# Large Title Bar
+LargeTitleArea = "{{|Dialog|}}"
+LargeTitle = "{{|Title|}}"
+LargeTitleHelp = "{{|LargeTitle|}}"
+LargeTitleNotice = "{{|TitleNotice|}}"
+LargeTitleWarn = "{{|TitleWarn|}}"
+LargeTitleWarning = "{{|TitleWarning|}}"
+LargeTitleError = "{{|TitleError|}}"
+LargeTitleSuccess = "{{|TitleSuccess|}}"
+LargeTitleQuestion = "{{|TitleQuestion|}}"
+LargeTitleFocusIndicator = "{{|TitleFocusIndicator|}}"
+LargeTitleSubMenu = "{{|TitleSubMenu|}}"
+LargeTitleSubMenuFocused = "{{|TitleSubMenuFocused|}}"
+LargeIconActive = "{{|IconActive|}}"
+LargeHelpIconInactive = "{{|HelpIconInactive|}}"
+LargeExitIconInactive = "{{|ExitIconInactive|}}"

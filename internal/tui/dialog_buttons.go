@@ -165,10 +165,10 @@ func computeButtonLayoutExplicit(contentWidth int, useBorders bool, ctx StyleCon
 }
 
 // buttonsFitWithBorders returns true if bordered buttons fit within contentWidth
-// and the button_borders setting is enabled.
+// and the large_buttons setting is enabled.
 // It renders a sample button to get the exact bordered width, matching the real render path.
 func buttonsFitWithBorders(contentWidth int, ctx StyleContext, buttons []ButtonSpec) bool {
-	if !ctx.ButtonBorders {
+	if !ctx.LargeButtons {
 		return false
 	}
 	if len(buttons) == 0 {

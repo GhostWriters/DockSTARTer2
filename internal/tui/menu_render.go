@@ -216,6 +216,9 @@ func (m *MenuModel) renderTitleBarWidgets(ctx StyleContext) string {
 	if m.title == "" || m.subMenuMode {
 		return ""
 	}
+	if ctx.LargeTitleBars {
+		return buildLargeTitleBarWidgets(m.titleBarFocused, m.titleBarWidget, ctx)
+	}
 	return buildDialogTitleWidgets(m.titleBarFocused, m.titleBarWidget, ctx)
 }
 
@@ -232,6 +235,8 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 
 	ctx := GetActiveContext()
 	ctx.Type = m.dialogType
+	// Use pre-computed layout decision; submenus always use small titlebar.
+	ctx.LargeTitleBars = m.layout.LargeTitleBar
 	widgets := m.renderTitleBarWidgets(ctx)
 	return RenderBorderedBoxCtx(m.title, content, contentWidth, targetHeight, focused || m.titleBarFocused, true, rounded, align, titleTag, ctx, widgets)
 }
