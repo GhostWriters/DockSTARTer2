@@ -224,6 +224,15 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, uCmd
 		}
 
+		// Title widget clicks — delegate to outerMenu
+		if s.outerMenu != nil && (strings.HasSuffix(msg.ID, "."+tui.IDTitleWidgetHelp) || strings.HasSuffix(msg.ID, "."+tui.IDTitleWidgetClose)) {
+			updated, uCmd := s.outerMenu.Update(msg)
+			if m, ok := updated.(*tui.MenuModel); ok {
+				s.outerMenu = m
+			}
+			return s, uCmd
+		}
+
 	case tui.ToggleFocusedMsg:
 		// Middle click: activate the currently focused item in the hovered panel
 		switch s.focusedPanel {

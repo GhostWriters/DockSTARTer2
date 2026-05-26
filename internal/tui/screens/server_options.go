@@ -573,6 +573,22 @@ func (s *ServerOptionsScreen) HasDialog() bool {
 	return s.settingsMenu.HasDialog() || s.statusMenu.HasDialog()
 }
 
+func (s *ServerOptionsScreen) FocusTitleBar() {
+	if s.outerMenu != nil {
+		s.outerMenu.FocusTitleBar()
+	}
+}
+
+func (s *ServerOptionsScreen) BlurTitleBar() {
+	if s.outerMenu != nil {
+		s.outerMenu.BlurTitleBar()
+	}
+}
+
+func (s *ServerOptionsScreen) TitleBarFocused() bool {
+	return s.outerMenu != nil && s.outerMenu.TitleBarFocused()
+}
+
 func (s *ServerOptionsScreen) IsScrollbarDragging() bool {
 	return s.settingsMenu.IsScrollbarDragging() || s.statusMenu.IsScrollbarDragging()
 }

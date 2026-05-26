@@ -184,6 +184,15 @@ func (s *ServerOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, uCmd
 		}
 
+		// Title widget clicks — delegate to outerMenu
+		if s.outerMenu != nil && (strings.HasSuffix(msg.ID, "."+tui.IDTitleWidgetHelp) || strings.HasSuffix(msg.ID, "."+tui.IDTitleWidgetClose)) {
+			updated, uCmd := s.outerMenu.Update(msg)
+			if m, ok := updated.(*tui.MenuModel); ok {
+				s.outerMenu = m
+			}
+			return s, uCmd
+		}
+
 	case tui.ToggleFocusedMsg:
 		switch s.focusedPanel {
 		case FocusServerSettings:
@@ -204,6 +213,15 @@ func (s *ServerOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return s, nil
 
 	case tea.KeyPressMsg:
+		// Title bar focus: delegate all keys to outer menu when its title bar is focused.
+		if s.outerMenu != nil && s.outerMenu.TitleBarFocused() {
+			updated, uCmd := s.outerMenu.Update(msg)
+			if m, ok := updated.(*tui.MenuModel); ok {
+				s.outerMenu = m
+			}
+			return s, uCmd
+		}
+
 		// Tab / Shift-Tab: cycle between panels
 		if key.Matches(msg, tui.Keys.CycleTab) || key.Matches(msg, tui.Keys.CycleShiftTab) {
 			switch s.focusedPanel {
@@ -332,7 +350,12 @@ func (s *ServerOptionsScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 
 	layout := tui.GetLayout()
 	contentX := (layout.BorderWidth() / 2) + layout.ContentSideMargin
-	const contentY = 1
+
+	largeTitleOffset := 0
+	if s.outerMenu != nil && s.outerMenu.HasLargeTitleBar() {
+		largeTitleOffset = tui.LargeTitleBarOverhead
+	}
+	contentY := 1 + largeTitleOffset
 
 	// Settings menu regions
 	settingsRegions := s.settingsMenu.GetHitRegions(offsetX+contentX, offsetY+contentY)
@@ -368,7 +391,7 @@ func (s *ServerOptionsScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 
 	// Button row
 	menuWidth := s.width - layout.BorderWidth()
-	buttonY := 1 + s.settingsMenu.Height() + s.statusMenu.Height()
+	buttonY := 1 + largeTitleOffset + s.settingsMenu.Height() + s.statusMenu.Height()
 	btnRowWidth := menuWidth - layout.ContentMarginWidth()
 
 	regions = append(regions, tui.HitRegion{
@@ -402,6 +425,15 @@ func (s *ServerOptionsScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 		s.outerMenu.ID(), offsetX+contentX, offsetY+buttonY, btnRowWidth, tui.ZScreen+25,
 		btnSpecs...,
 	)...)
+
+	// Title widget regions — delegate to outerMenu and filter for title widget IDs.
+	if s.outerMenu != nil {
+		for _, r := range s.outerMenu.GetHitRegions(offsetX, offsetY) {
+			if strings.HasSuffix(r.ID, "."+tui.IDTitleWidgetHelp) || strings.HasSuffix(r.ID, "."+tui.IDTitleWidgetClose) {
+				regions = append(regions, r)
+			}
+		}
+	}
 
 	return regions
 }
