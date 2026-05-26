@@ -60,7 +60,7 @@ TitleCheckbox = ""
 TitleCheckboxFocused = "{{|TitleSubMenuFocused|}}"
 
 # Focus indicators
-TitleFocusIndicator = "{{[::-B]}}"
+TitleFocusIndicator = "{{[yellow::-B]}}"
 
 # Submenu titles
 TitleSubMenu = "{{|Title|}}"
