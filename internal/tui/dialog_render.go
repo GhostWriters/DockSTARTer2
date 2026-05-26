@@ -572,7 +572,7 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 			result.WriteString(renderedSegment)
 			result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, rightPadMid)))
 			if rightWidget != "" {
-				result.WriteString(rightWidget)
+				result.WriteString(RenderThemeTextCtx(rightWidget, ctx))
 				result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, rightPadEnd)))
 			}
 		}
@@ -787,7 +787,7 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 		result.WriteString(borderStyleLight.Render(rightT))
 		result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, rightPadMid)))
 		if rightWidget != "" {
-			result.WriteString(rightWidget)
+			result.WriteString(RenderThemeTextCtx(rightWidget, ctx))
 			result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, rightPadEnd)))
 		}
 	}

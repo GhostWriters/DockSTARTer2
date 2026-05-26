@@ -111,6 +111,9 @@ func (m *ProgramBoxModel) ViewString() string {
 	// only if maximized. Otherwise it should have its intrinsic height.
 	if m.maximized {
 		heightBudget := m.layout.Height - DialogBorderHeight
+		if m.layout.LargeTitleBar {
+			heightBudget -= LargeTitleBarOverhead
+		}
 		if heightBudget > 0 {
 			content = lipgloss.NewStyle().
 				Height(heightBudget).
