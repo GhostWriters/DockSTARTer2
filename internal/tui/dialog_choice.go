@@ -167,6 +167,9 @@ func (m *choiceDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	questionStyle := ctx.Dialog.Padding(1, 2).Width(contentWidth)
 	questionHeight := lipgloss.Height(questionStyle.Render(console.Sprintf("%s", m.question)))
 	buttonY := 1 + questionHeight + 1
+	if m.layout.LargeTitleBar {
+		buttonY += LargeTitleBarOverhead
+	}
 
 	btnSpecs := make([]ButtonSpec, len(m.choices))
 	for i, c := range m.choices {

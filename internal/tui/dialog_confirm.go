@@ -233,6 +233,9 @@ func (m *confirmDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 
 	// buttonY: border (1) + question with padding + spacer (1)
 	buttonY := 1 + questionHeight + 1
+	if m.layout.LargeTitleBar {
+		buttonY += LargeTitleBarOverhead
+	}
 
 	// Use centralized button hit region helper with dialog ID for disambiguation
 	// Must include Text to properly calculate button width

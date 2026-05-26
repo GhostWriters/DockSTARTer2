@@ -352,15 +352,20 @@ func (m *promptDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 			ctx.Dialog.Padding(0, 2).Width(contentWidth).Render("(password will not be logged)"))
 	}
 
+	largeTitleOffset := 0
+	if m.layout.LargeTitleBar {
+		largeTitleOffset = LargeTitleBarOverhead
+	}
+
 	// Input hit region: outer_border(1) + questionH + inner_border_top(1) = input text row
 	// Text X: outer_border(1) + inner_border(1) + padding(1) + promptW
-	inputTextY := 1 + questionHeight + 1
+	inputTextY := 1 + largeTitleOffset + questionHeight + 1
 	m.inputRelY = inputTextY
 	m.inputScreenX = offsetX + 1 + 1 + 1 + m.input.PromptWidth()
 	m.input.SetScreenTextX(m.inputScreenX)
 
 	// buttonY: outer border (1) + question + input + disclaimer + spacer (1)
-	buttonY := 1 + questionHeight + inputHeight + disclaimerHeight + 1
+	buttonY := 1 + largeTitleOffset + questionHeight + inputHeight + disclaimerHeight + 1
 
 	regions := []HitRegion{{
 		ID:     "prompt_input",

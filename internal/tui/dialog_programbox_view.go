@@ -209,6 +209,9 @@ func (m *ProgramBoxModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	layout := GetLayout()
 	// All dialogs start inside an outer Top Border (1 line).
 	currentY := layout.SingleBorder()
+	if m.layout.LargeTitleBar {
+		currentY += LargeTitleBarOverhead
+	}
 
 	// 1. Header Area (Subtitle + Tasks + Progress)
 	headerH := m.layout.HeaderHeight

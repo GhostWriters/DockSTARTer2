@@ -489,6 +489,11 @@ func (m *MenuModel) GetButtonHeight() int {
 	return m.layout.ButtonHeight
 }
 
+// HasLargeTitleBar reports whether the current layout uses a large title bar.
+func (m *MenuModel) HasLargeTitleBar() bool {
+	return m.layout.LargeTitleBar
+}
+
 // View implements tea.Model and ScreenModel
 func (m *MenuModel) View() tea.View {
 	return tea.View{Content: m.ViewString()}
