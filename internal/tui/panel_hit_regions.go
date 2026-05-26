@@ -42,13 +42,19 @@ func (m PanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	titleStart := 1 + leftPad
 	titleEnd := titleStart + titleSectionLen
 
+	// ZPanelHeader: the panel title bar (drag handle) must beat any non-modal screen or dialog
+	// content so it remains clickable when dragged up to overlap the bottom of the active screen.
+	// Non-modal max is ZDialog+25=55; modals start at ZModalBaseOffset=100.
+	// ZDialog+30=60 sits above all non-modal content and below modals (which should trap input).
+	const ZPanelHeader = ZDialog + 30
+
 	regions = append(regions, HitRegion{
 		ID:     IDPanelResize,
 		X:      offsetX,
 		Y:      offsetY,
 		Width:  titleStart,
 		Height: 1,
-		ZOrder: ZPanel + 1,
+		ZOrder: ZPanelHeader,
 		Label:  "Console Panel",
 		Help:   panelHelp,
 	})
@@ -58,7 +64,7 @@ func (m PanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		Y:      offsetY,
 		Width:  titleSectionLen,
 		Height: 1,
-		ZOrder: ZPanel + 1,
+		ZOrder: ZPanelHeader,
 		Label:  "Console Panel",
 		Help:   panelHelp,
 	})
@@ -80,7 +86,7 @@ func (m PanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 				Y:      offsetY,
 				Width:  dragWidth,
 				Height: 1,
-				ZOrder: ZPanel + 1,
+				ZOrder: ZPanelHeader,
 				Label:  "Console Panel",
 				Help:   panelHelp,
 			})
@@ -88,13 +94,13 @@ func (m PanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		regions = append(regions,
 			HitRegion{
 				ID: IDPanelResizeUp, X: offsetX + resizeUpX, Y: offsetY,
-				Width: 3, Height: 1, ZOrder: ZPanel + 2,
+				Width: 3, Height: 1, ZOrder: ZPanelHeader + 1,
 				Label: "Grow panel",
 				Help:  &HelpContext{ScreenName: "Console Panel", PageTitle: "Resize", PageText: "Click to grow the panel by one line."},
 			},
 			HitRegion{
 				ID: IDPanelResizeDn, X: offsetX + resizeDnX, Y: offsetY,
-				Width: 3, Height: 1, ZOrder: ZPanel + 2,
+				Width: 3, Height: 1, ZOrder: ZPanelHeader + 1,
 				Label: "Shrink panel",
 				Help:  &HelpContext{ScreenName: "Console Panel", PageTitle: "Resize", PageText: "Click to shrink the panel by one line."},
 			},

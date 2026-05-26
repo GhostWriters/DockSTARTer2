@@ -73,6 +73,7 @@ func (s *AppSelectionScreen) HelpText() string          { return s.menu.HelpText
 func (s *AppSelectionScreen) SetSize(w, h int)          { s.menu.SetSize(w, h) }
 func (s *AppSelectionScreen) SetFocused(f bool)         { s.menu.SetFocused(f) }
 func (s *AppSelectionScreen) IsMaximized() bool         { return s.menu.IsMaximized() }
+func (s *AppSelectionScreen) MinHeight() int            { return s.menu.MinHeight() }
 func (s *AppSelectionScreen) HasDialog() bool           { return s.menu.HasDialog() }
 func (s *AppSelectionScreen) MenuName() string          { return s.menu.MenuName() }
 func (s *AppSelectionScreen) IsDestructive() bool       { return true }

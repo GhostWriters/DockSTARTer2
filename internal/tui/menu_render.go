@@ -212,6 +212,34 @@ func (m *MenuModel) SetIsDialog(isDialog bool) {
 	m.isDialog = isDialog
 }
 
+// MinHeight returns the minimum content-area height for this menu to remain usable
+// (buttons visible, at least 1 list item visible). Only meaningful for maximized menus;
+// returns 0 for non-maximized so the generic MinDialogHeight floor applies instead.
+// Used by AppModel to limit log panel expansion.
+func (m *MenuModel) MinHeight() int {
+	if !m.maximized {
+		return 0
+	}
+	layout := GetLayout()
+	ctx := GetActiveContext()
+	btnH := m.layout.ButtonHeight
+	if btnH == 0 {
+		btnH = 1 // safe default before first calculateLayout
+	}
+	subtitleLines := 0
+	if m.subtitle != "" {
+		// Subtitle always has at least 1 visible line; AppSelectionScreen has an explicit
+		// newline so 2 is the realistic minimum, but 1 is enough for a conservative floor.
+		subtitleLines = 1
+	}
+	// outer border(2) + subtitle + list min(inner border(2) + 1 item) + buttons
+	base := layout.BorderHeight() + subtitleLines + layout.BorderHeight() + 1 + btnH
+	if ctx.LargeTitleBars && m.layout.LargeTitleBar {
+		base += LargeTitleBarOverhead
+	}
+	return base
+}
+
 
 func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targetHeight int, focused bool, rounded bool, titleTag string) string {
 	align := GetActiveContext().DialogTitleAlign
