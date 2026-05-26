@@ -839,8 +839,13 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			// Panel is focused (or its title bar is) — toggle panel title bar.
 			if m.panelTitleFocused {
 				m.setPanelTitleFocus(false)
+				if m.panelInputWasFocused {
+					m.panelInputWasFocused = false
+					return m, m.panel.FocusInput(), true
+				}
 				m.setPanelFocus(true)
 			} else {
+				m.panelInputWasFocused = m.panel.inputFocused
 				m.setPanelTitleFocus(true)
 			}
 			return m, nil, true

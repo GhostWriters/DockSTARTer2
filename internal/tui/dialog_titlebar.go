@@ -46,7 +46,7 @@ func minWidthForWidgets(w int, titleText, titleAlign string, widgets string) int
 	if widgets == "" {
 		return w
 	}
-	widgetWidth := WidthWithoutZones(widgets)
+	widgetWidth := lipgloss.Width(GetPlainText(widgets))
 	if widgetWidth == 0 {
 		return w
 	}
@@ -80,32 +80,34 @@ func BuildInactiveLargeTitleWidgets(ctx StyleContext) string {
 	return buildLargeTitleBarWidgets(false, 0, ctx)
 }
 
-// buildLargeTitleBarWidgets renders the [?]─[×] widgets using LargeXxx theme styles
-// so they appear correctly against the LargeTitleArea background.
+// buildLargeTitleBarWidgets returns the raw theme-tag string for the [?] [×] widgets.
+// It is NOT pre-rendered — callers must render it via RenderThemeTextCtx in the correct
+// area context so it picks up the type-specific LargeTitleArea* background.
 func buildLargeTitleBarWidgets(focused bool, activeWidget int, ctx StyleContext) string {
 	helpGlyph := helpWidget
 	closeGlyph := closeWidget
 	if !ctx.LineCharacters {
 		closeGlyph = closeWidgetAscii
 	}
-	areaBase := lipgloss.NewStyle().
-		Background(ctx.LargeTitleArea.GetBackground()).
-		Foreground(ctx.LargeTitleArea.GetForeground())
-	helpTag, closeTag := "LargeHelpIconInactive", "LargeExitIconInactive"
+	helpActive, closeActive := false, false
 	if focused {
 		switch activeWidget {
 		case titleBarWidgetHelp:
-			helpTag = "LargeIconActive"
+			helpActive = true
 		case titleBarWidgetClose:
-			closeTag = "LargeIconActive"
+			closeActive = true
 		}
 	}
-	// Space separator instead of a border line character — the widgets float on the
-	// title area background, not on a border line.
-	iconStr := "{{|" + helpTag + "|}}[" + helpGlyph + "]{{[-]}} " +
-		"{{|" + closeTag + "|}}[" + closeGlyph + "]{{[-]}}"
-	ctx.Dialog = areaBase
-	return RenderThemeTextCtx(iconStr, ctx)
+	helpPrefix := "{{|LargeHelpIconInactive|}}"
+	if helpActive {
+		helpPrefix += "{{|LargeIconActive|}}"
+	}
+	closePrefix := "{{|LargeExitIconInactive|}}"
+	if closeActive {
+		closePrefix += "{{|LargeIconActive|}}"
+	}
+	return helpPrefix + "[" + helpGlyph + "]{{[-]}} " +
+		closePrefix + "[" + closeGlyph + "]{{[-]}}"
 }
 
 // buildDialogTitleWidgets is the shared renderer for the [?]─[×] title bar widgets.
@@ -121,18 +123,26 @@ func buildDialogTitleWidgets(focused bool, activeWidget int, ctx StyleContext) s
 	borderBase := ctx.BorderFlags.Apply(lipgloss.NewStyle()).
 		Foreground(ctx.BorderColor).
 		Background(ctx.Dialog.GetBackground())
-	helpTag, closeTag := "HelpIconInactive", "ExitIconInactive"
+	helpActive, closeActive := false, false
 	if focused {
 		switch activeWidget {
 		case titleBarWidgetHelp:
-			helpTag = "IconActive"
+			helpActive = true
 		case titleBarWidgetClose:
-			closeTag = "IconActive"
+			closeActive = true
 		}
 	}
-	iconStr := "{{|" + helpTag + "|}}[" + helpGlyph + "]{{[-]}}" +
+	helpPrefix := "{{|HelpIconInactive|}}"
+	if helpActive {
+		helpPrefix += "{{|IconActive|}}"
+	}
+	closePrefix := "{{|ExitIconInactive|}}"
+	if closeActive {
+		closePrefix += "{{|IconActive|}}"
+	}
+	iconStr := helpPrefix + "[" + helpGlyph + "]{{[-]}}" +
 		lineChar +
-		"{{|" + closeTag + "|}}[" + closeGlyph + "]{{[-]}}"
+		closePrefix + "[" + closeGlyph + "]{{[-]}}"
 	ctx.Dialog = borderBase
 	return RenderThemeTextCtx(iconStr, ctx)
 }
@@ -185,7 +195,8 @@ func (b *baseDialogModel) handleTitleBarKey(msg tea.KeyPressMsg, closeCmd tea.Cm
 // titleBarHitRegions returns hit regions for the [?] and [×] widgets in the title bar.
 func (b *baseDialogModel) titleBarHitRegions(offsetX, offsetY, contentWidth, baseZ int) []HitRegion {
 	ctx := GetActiveContext()
-	widgetWidth := WidthWithoutZones(b.buildTitleBarWidgets(ctx))
+	// Use GetPlainText to strip theme tags before measuring (large titlebar widgets are raw tags).
+	widgetWidth := lipgloss.Width(GetPlainText(b.buildTitleBarWidgets(ctx)))
 	if widgetWidth == 0 {
 		return nil
 	}
@@ -193,7 +204,8 @@ func (b *baseDialogModel) titleBarHitRegions(offsetX, offsetY, contentWidth, bas
 	endPad := 1
 	widgetsStartX := offsetX + dialogWidth - 1 - endPad - widgetWidth
 	helpWidgetX := widgetsStartX
-	closeWidgetX := widgetsStartX + 4 // "[?]─" = 4 chars before [×]
+	// Small titlebar: "[?]─" = 4 chars; large titlebar: "[?] " = 4 chars. Both are +4.
+	closeWidgetX := widgetsStartX + 4
 	// Large titlebar: widgets are on the title row (row 1), not the top border (row 0).
 	widgetY := offsetY
 	if b.layout.LargeTitleBar {

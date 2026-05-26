@@ -15,7 +15,7 @@ const LargeTitleBarOverhead = 2
 
 // largeTitleSepConnectors returns the left/right T-junction characters for the separator line
 // that sits between the large titlebar row and the dialog content.
-func largeTitleSepConnectors(border lipgloss.Border, focused bool, lineChars bool) (left, right string) {
+func largeTitleSepConnectors(border lipgloss.Border, lineChars bool) (left, right string) {
 	if !lineChars {
 		return "+", "+"
 	}
@@ -63,8 +63,14 @@ func renderLargeTitleRow(rawTitle string, actualWidth int, focused bool, showInd
 	}
 	titleSectionWidth := indWidth + titleWidth + indWidth
 
-	// Right widget
-	rightWidgetWidth := WidthWithoutZones(rightWidget)
+	// Right widget — render in titleCtx so it picks up the type-specific area background,
+	// same as the title text. Width measured after rendering (lipgloss strips ANSI).
+	renderedWidget := ""
+	rightWidgetWidth := 0
+	if rightWidget != "" {
+		renderedWidget = RenderThemeTextCtx(rightWidget, titleCtx)
+		rightWidgetWidth = lipgloss.Width(renderedWidget)
+	}
 
 	// Center the title in the full inner width; widget floats to the right.
 	innerWidth := actualWidth
@@ -111,7 +117,7 @@ func renderLargeTitleRow(rawTitle string, actualWidth int, focused bool, showInd
 	inner.WriteString(indR)
 	inner.WriteString(pad(rightPadMid))
 	if rightWidget != "" {
-		inner.WriteString(rightWidget)
+		inner.WriteString(renderedWidget)
 		inner.WriteString(pad(rightPadEnd))
 	}
 
@@ -122,7 +128,7 @@ func renderLargeTitleRow(rawTitle string, actualWidth int, focused bool, showInd
 	row.WriteString("\n")
 
 	// Separator: left connector light (left side), dashes + right connector dark (bottom-right side).
-	sepL, sepR := largeTitleSepConnectors(border, focused, ctx.LineCharacters)
+	sepL, sepR := largeTitleSepConnectors(border, ctx.LineCharacters)
 	row.WriteString(borderStyleLight.Render(sepL))
 	row.WriteString(borderStyleDark.Render(strutil.Repeat(border.Top, actualWidth)))
 	row.WriteString(borderStyleDark.Render(sepR))
@@ -159,7 +165,14 @@ func renderLargeTitleRowFromRendered(renderedTitle string, actualWidth int, focu
 	}
 
 	titleSectionWidth := 1 + titleWidth + 1
-	rightWidgetWidth := WidthWithoutZones(rightWidget)
+
+	// Right widget — render in titleCtx so it picks up the type-specific area background.
+	renderedWidget := ""
+	rightWidgetWidth := 0
+	if rightWidget != "" {
+		renderedWidget = RenderThemeTextCtx(rightWidget, titleCtx)
+		rightWidgetWidth = lipgloss.Width(renderedWidget)
+	}
 
 	// Center the title in the full inner width; widget floats to the right.
 	var leftPad, rightPadMid, rightPadEnd int
@@ -204,7 +217,7 @@ func renderLargeTitleRowFromRendered(renderedTitle string, actualWidth int, focu
 	inner.WriteString(indR)
 	inner.WriteString(pad(rightPadMid))
 	if rightWidget != "" {
-		inner.WriteString(rightWidget)
+		inner.WriteString(renderedWidget)
 		inner.WriteString(pad(rightPadEnd))
 	}
 
@@ -215,7 +228,7 @@ func renderLargeTitleRowFromRendered(renderedTitle string, actualWidth int, focu
 	row.WriteString("\n")
 
 	// Separator: left connector light (left side), dashes + right connector dark (bottom-right side).
-	sepL, sepR := largeTitleSepConnectors(border, focused, ctx.LineCharacters)
+	sepL, sepR := largeTitleSepConnectors(border, ctx.LineCharacters)
 	row.WriteString(borderStyleLight.Render(sepL))
 	row.WriteString(borderStyleDark.Render(strutil.Repeat(border.Top, actualWidth)))
 	row.WriteString(borderStyleDark.Render(sepR))

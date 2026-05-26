@@ -93,12 +93,15 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	maxHeight := m.layout.ViewportHeight
 
 	// 3. List panel region (covers only the list items, for scroll focus)
+	// Use m.layout.ViewportHeight, not m.list.Height(): flow mode menus never call
+	// m.list.SetSize so m.list.Height() stays at the initial item count and would
+	// extend the region far below the visible section into adjacent panels.
 	regions = append(regions, HitRegion{
 		ID:     m.id + "." + IDListPanel,
 		X:      offsetX + listX,
 		Y:      offsetY + listY,
 		Width:  m.list.Width(),
-		Height: m.list.Height(),
+		Height: m.layout.ViewportHeight,
 		ZOrder: baseZ + 7, // Below items (+10) but above backdrop (+5)
 		Label:  m.title,
 	})
@@ -162,16 +165,22 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		}
 	} else {
 		// Flow mode: items are arranged horizontally across multiple lines.
-		// Replicate the layout logic from renderFlow() to compute per-item positions.
-		// In flow mode, available width is the inner width minus 2 (for side padding)
-		maxWidth, _ := layout.InnerContentSize(m.width, m.height)
-		if maxWidth > 2 {
-			maxWidth -= 2
+		// Replicate the layout logic from the renderer to compute per-item positions.
+		// subMenuMode: viewSubMenu calls renderFlowContent(m.width - BorderWidth())
+		// non-subMenuMode: renderFlow calls renderFlowContent(InnerContentSize - 2)
+		var maxWidth int
+		if m.subMenuMode {
+			maxWidth = m.width - layout.BorderWidth()
+		} else {
+			maxWidth, _ = layout.InnerContentSize(m.width, m.height)
+			if maxWidth > 2 {
+				maxWidth -= 2
+			}
 		}
 
 		ctx := GetActiveContext()
 		const itemSpacing = 3
-		// lineContentX: items start 1 char past listX because renderFlow applies
+		// lineContentX: items start 1 char past listX because renderFlowContent applies
 		// lineStyle.Padding(0, 1) which adds a 1-char left margin.
 		lineContentX := listX + 1
 
