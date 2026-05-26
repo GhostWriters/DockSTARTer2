@@ -481,11 +481,16 @@ func (m *setValueDialogModel) recalc() {
 
 	// Total overhead:
 	// - outer dialog border top + bottom: 2
+	// - large titlebar extra rows (when enabled): LargeTitleBarOverhead
 	// - rendered heading: headingH
 	// - "Current Value" input section: currentValueH
 	// - "Presets" section borders: 2
 	// - buttons: btnH
-	overhead := 2 + headingH + currentValueH + 2 + btnH
+	largeTitleOverhead := 0
+	if ctx.LargeTitleBars {
+		largeTitleOverhead = tui.LargeTitleBarOverhead
+	}
+	overhead := 2 + largeTitleOverhead + headingH + currentValueH + 2 + btnH
 	m.maxVis = m.height - overhead
 	if m.maxVis < 2 {
 		m.maxVis = 2
@@ -611,10 +616,14 @@ func (m *setValueDialogModel) ViewString() string {
 	buttonRowH := lipgloss.Height(buttonRow)
 	headingH := lipgloss.Height(headingText)
 	currentValueH := lipgloss.Height(currentValueSection)
+	largeTitleOverhead := 0
+	if ctx.LargeTitleBars {
+		largeTitleOverhead = tui.LargeTitleBarOverhead
+	}
 	// Sync with recalc() logic:
 	// presetTargetH is the total physical height of the "Preset Values" box.
-	// We subtract outer borders (2), heading, current value box, and buttons.
-	presetTargetH := m.height - 2 - headingH - currentValueH - buttonRowH
+	// We subtract outer borders (2), large titlebar extra rows, heading, current value box, and buttons.
+	presetTargetH := m.height - 2 - largeTitleOverhead - headingH - currentValueH - buttonRowH
 	if presetTargetH < 3 {
 		presetTargetH = 3
 	}

@@ -587,12 +587,17 @@ func (m *addVarDialogModel) recalc() {
 
 	// Total overhead:
 	// - outer dialog border top + bottom: 2
+	// - large titlebar extra rows (when enabled): LargeTitleBarOverhead
 	// - rendered heading: headingH
 	// - "Variable Name" input section: varNameH
 	// - "Available Variables" list box borders: 2
 	// - spacing/margin: 1
 	// - buttons: btnH
-	overhead := 2 + headingH + varNameH + 2 + btnH
+	largeTitleOverhead := 0
+	if ctx.LargeTitleBars {
+		largeTitleOverhead = tui.LargeTitleBarOverhead
+	}
+	overhead := 2 + largeTitleOverhead + headingH + varNameH + 2 + btnH
 	m.maxVis = m.height - overhead
 	if m.maxVis < 2 {
 		m.maxVis = 2
@@ -752,10 +757,14 @@ func (m *addVarDialogModel) ViewString() string {
 	buttonRowH := lipgloss.Height(buttonRow)
 	headingH := lipgloss.Height(headingText)
 	varNameH := lipgloss.Height(varNameSection)
+	largeTitleOverhead := 0
+	if ctx.LargeTitleBars {
+		largeTitleOverhead = tui.LargeTitleBarOverhead
+	}
 	// Sync with recalc() logic:
 	// availableTargetH is the total physical height of the "Available Variables" box.
-	// We subtract outer borders (2), heading, var name box, and buttons.
-	availableTargetH := m.height - 2 - headingH - varNameH - buttonRowH
+	// We subtract outer borders (2), large titlebar extra rows, heading, var name box, and buttons.
+	availableTargetH := m.height - 2 - largeTitleOverhead - headingH - varNameH - buttonRowH
 	if availableTargetH < 3 {
 		availableTargetH = 3
 	}

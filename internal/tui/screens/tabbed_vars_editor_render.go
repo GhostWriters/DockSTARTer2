@@ -253,15 +253,21 @@ func (m *TabbedVarsEditorModel) SetSize(width, height int) {
 	// Calculate subtitle height based on active tab heading content
 	m.subtitleHeight = m.calcSubtitleHeight()
 
-	// Available for the editor: total inner height minus button row, subtitle, and editor borders
-	m.editorHeight = m.height - layout.BorderHeight() - m.buttonHeight - m.subtitleHeight - layout.BorderHeight()
+	ctx := tui.GetActiveContext()
+	largeTitleOverhead := 0
+	if ctx.LargeTitleBars {
+		largeTitleOverhead = tui.LargeTitleBarOverhead
+	}
+
+	// Available for the editor: total inner height minus button row, subtitle, editor borders, and large titlebar rows
+	m.editorHeight = m.height - layout.BorderHeight() - largeTitleOverhead - m.buttonHeight - m.subtitleHeight - layout.BorderHeight()
 	if m.editorHeight < 1 {
 		m.editorHeight = 1
 	}
 	if m.editorHeight < 3 && m.buttonHeight == 3 {
 		// Fallback: force buttons flat to save 2 lines if editor would be too small
 		m.buttonHeight = 1
-		overhead := layout.BorderHeight() + 1 + m.subtitleHeight + layout.BorderHeight()
+		overhead := layout.BorderHeight() + largeTitleOverhead + 1 + m.subtitleHeight + layout.BorderHeight()
 		m.editorHeight = m.height - overhead
 	}
 
