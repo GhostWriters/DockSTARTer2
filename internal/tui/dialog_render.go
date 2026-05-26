@@ -481,6 +481,12 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 		// Fall back if there isn't room for the extra 2 lines.
 		if len(lines)+LargeTitleBarOverhead+2 > targetHeight {
 			useLarge = false
+			// Rebuild rightWidgets with small styles to match the small titlebar path.
+			if len(rightWidgets) > 0 && rightWidgets[0] != "" {
+				smallCtx := ctx
+				smallCtx.LargeTitleBars = false
+				rightWidgets[0] = BuildInactiveTitleWidgets(smallCtx)
+			}
 		}
 	}
 
@@ -664,6 +670,12 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 	if useLargeInner && targetHeight > 0 {
 		if len(lines)+LargeTitleBarOverhead+2 > targetHeight {
 			useLargeInner = false
+			// Rebuild rightWidget with small styles to match the small titlebar path.
+			if rightWidget != "" {
+				smallCtx := ctx
+				smallCtx.LargeTitleBars = false
+				rightWidget = BuildInactiveTitleWidgets(smallCtx)
+			}
 		}
 	}
 	innerOverhead := 2
