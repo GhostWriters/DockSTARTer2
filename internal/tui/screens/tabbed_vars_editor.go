@@ -274,6 +274,17 @@ func (m *TabbedVarsEditorModel) IsMaximized() bool {
 	return true
 }
 
+// MinHeight returns the minimum content-area height for the tabbed vars editor.
+// Breakdown: outer border(2) + subtitle min(1) + inner editor border(2) + editor min(3) + flat buttons(1) = 9.
+// Increases by LargeTitleBarOverhead when large titlebars are enabled.
+func (m *TabbedVarsEditorModel) MinHeight() int {
+	base := 9
+	if tui.GetActiveContext().LargeTitleBars {
+		base += tui.LargeTitleBarOverhead
+	}
+	return base
+}
+
 func (m *TabbedVarsEditorModel) MenuName() string {
 	return "tabbed_vars"
 }

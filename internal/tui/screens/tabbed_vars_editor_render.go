@@ -257,6 +257,11 @@ func (m *TabbedVarsEditorModel) SetSize(width, height int) {
 	largeTitleOverhead := 0
 	if ctx.LargeTitleBars {
 		largeTitleOverhead = tui.LargeTitleBarOverhead
+		// Adaptive fallback: revert to small titlebar if the editor would have fewer than 3 lines
+		editorBudget := m.height - layout.BorderHeight() - largeTitleOverhead - m.buttonHeight - m.subtitleHeight - layout.BorderHeight()
+		if editorBudget < 3 {
+			largeTitleOverhead = 0
+		}
 	}
 
 	// Available for the editor: total inner height minus button row, subtitle, editor borders, and large titlebar rows

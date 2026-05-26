@@ -596,6 +596,10 @@ func (m *addVarDialogModel) recalc() {
 	largeTitleOverhead := 0
 	if ctx.LargeTitleBars {
 		largeTitleOverhead = tui.LargeTitleBarOverhead
+		// Adaptive fallback: revert to small titlebar if the list would have fewer than 3 visible rows
+		if m.height-2-largeTitleOverhead-headingH-varNameH-2-btnH < 3 {
+			largeTitleOverhead = 0
+		}
 	}
 	overhead := 2 + largeTitleOverhead + headingH + varNameH + 2 + btnH
 	m.maxVis = m.height - overhead
@@ -611,6 +615,17 @@ func (m *addVarDialogModel) recalc() {
 }
 
 func (m *addVarDialogModel) IsMaximized() bool { return true }
+
+// MinHeight returns the minimum content-area height for the Add Variable dialog.
+// Breakdown: outer border(2) + heading min(3) + varName box(3) + list min(5: border+3 items+border) + flat buttons(1) = 14.
+// Increases by LargeTitleBarOverhead when large titlebars are enabled.
+func (m *addVarDialogModel) MinHeight() int {
+	base := 14
+	if tui.GetActiveContext().LargeTitleBars {
+		base += tui.LargeTitleBarOverhead
+	}
+	return base
+}
 
 func (m *addVarDialogModel) innerWidth() int {
 	w := m.width - 2
@@ -760,6 +775,10 @@ func (m *addVarDialogModel) ViewString() string {
 	largeTitleOverhead := 0
 	if ctx.LargeTitleBars {
 		largeTitleOverhead = tui.LargeTitleBarOverhead
+		// Adaptive fallback: revert to small titlebar if the list would have fewer than 3 visible rows
+		if m.height-2-largeTitleOverhead-headingH-varNameH-buttonRowH-2 < 3 {
+			largeTitleOverhead = 0
+		}
 	}
 	// Sync with recalc() logic:
 	// availableTargetH is the total physical height of the "Available Variables" box.
