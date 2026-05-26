@@ -31,6 +31,18 @@ func titleTagFromAreaName(areaStyleName string) string {
 	return "Title" + suffix
 }
 
+// semanticRawStyleCtx looks up a theme style, using ctx.Prefix when set so that contexts
+// like the appearance-settings preview (Prefix="Preview_") resolve styles from the correct
+// theme namespace rather than the currently active theme.
+func semanticRawStyleCtx(name string, ctx StyleContext) lipgloss.Style {
+	if ctx.Prefix != "" {
+		if s := SemanticRawStyle(ctx.Prefix + name); hasExplicitBackground(s) {
+			return s
+		}
+	}
+	return SemanticRawStyle(name)
+}
+
 // largeTitleSepConnectors returns the left/right T-junction characters for the separator line
 // that sits between the large titlebar row and the dialog content.
 func largeTitleSepConnectors(border lipgloss.Border, lineChars bool) (left, right string) {
@@ -48,9 +60,9 @@ func largeTitleSepConnectors(border lipgloss.Border, lineChars bool) (left, righ
 // Returns two lines (no trailing newline on the second): the title row and the separator.
 func renderLargeTitleRow(rawTitle string, actualWidth int, focused bool, showIndicators bool, titleTag string, titleAlign string, tbs TitleBarState, borderStyleLight, borderStyleDark lipgloss.Style, border lipgloss.Border, ctx StyleContext) string {
 	areaStyleName := "LargeTitleArea" + strings.TrimPrefix(titleTag, "Title")
-	areaStyle := SemanticRawStyle(areaStyleName)
+	areaStyle := semanticRawStyleCtx(areaStyleName, ctx)
 	if !hasExplicitBackground(areaStyle) {
-		areaStyle = SemanticRawStyle("LargeTitleArea")
+		areaStyle = semanticRawStyleCtx("LargeTitleArea", ctx)
 		if !hasExplicitBackground(areaStyle) {
 			areaStyle = areaStyle.Background(ctx.Dialog.GetBackground())
 		}
@@ -158,9 +170,9 @@ func renderLargeTitleRow(rawTitle string, actualWidth int, focused bool, showInd
 // title string (already styled) instead of a raw title + tag. Used by renderDialogWithBorderCtx
 // where the title has already been passed through RenderThemeText.
 func renderLargeTitleRowFromRendered(renderedTitle string, actualWidth int, focused bool, titleAlign string, tbs TitleBarState, borderStyleLight, borderStyleDark lipgloss.Style, border lipgloss.Border, ctx StyleContext, areaStyleName string) string {
-	areaStyle := SemanticRawStyle(areaStyleName)
+	areaStyle := semanticRawStyleCtx(areaStyleName, ctx)
 	if !hasExplicitBackground(areaStyle) {
-		areaStyle = SemanticRawStyle("LargeTitleArea")
+		areaStyle = semanticRawStyleCtx("LargeTitleArea", ctx)
 		if !hasExplicitBackground(areaStyle) {
 			areaStyle = areaStyle.Background(ctx.Dialog.GetBackground())
 		}

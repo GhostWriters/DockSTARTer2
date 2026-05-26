@@ -43,7 +43,7 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 		DrawBorders:         s.config.UI.Borders,
 		LargeButtons:        s.config.UI.LargeButtons,
 		LargeTitleBars:      s.config.UI.LargeTitleBars,
-		LargeTitleArea:      tui.SemanticRawStyle("LargeTitleArea"),
+		LargeTitleArea:      tui.SemanticRawStyle("Preview_LargeTitleArea"),
 		Screen:              bgStyle,
 		Dialog:              dContent,
 		ContentBackground:   dContent,
