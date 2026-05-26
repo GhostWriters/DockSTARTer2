@@ -682,8 +682,7 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 		}
 	}
 
-	// Determine large title bar mode. Height check happens here so titleStyle background
-	// is set correctly for the final path (large uses LargeTitleArea bg, small uses dialog bg).
+	// Determine large title bar mode.
 	useLargeInner := ctx.LargeTitleBars && title != ""
 	if useLargeInner && targetHeight > 0 {
 		if len(lines)+LargeTitleBarOverhead+2 > targetHeight {
@@ -691,15 +690,15 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 		}
 	}
 
-	// Set title background based on final path decision, then render title.
-	if !hasExplicitBackground(titleStyle) {
-		titleBG := borderBG
-		if useLargeInner && hasExplicitBackground(ctx.LargeTitleArea) {
-			titleBG = ctx.LargeTitleArea.GetBackground()
+	// Save raw title for the large path (renderLargeTitleRow handles its own styling).
+	// For the small path, apply titleStyle background and pre-render.
+	rawTitle := strings.TrimSuffix(title, "{{[-]}}")
+	if !useLargeInner {
+		if !hasExplicitBackground(titleStyle) {
+			titleStyle = titleStyle.Background(borderBG)
 		}
-		titleStyle = titleStyle.Background(titleBG)
+		title = RenderThemeText(title, titleStyle)
 	}
-	title = RenderThemeText(title, titleStyle)
 
 	innerOverhead := 2
 	if useLargeInner {
@@ -719,12 +718,13 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 	var result strings.Builder
 
 	if useLargeInner {
-		// Large titlebar: renderLargeTitleRowFromRendered builds large widgets from tbs internally.
+		// Large titlebar: use renderLargeTitleRow with raw title and LargeTitle* styles,
+		// matching the menu/RenderBorderedBoxCtx path exactly.
 		result.WriteString(borderStyleLight.Render(border.TopLeft))
 		result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, actualWidth)))
 		result.WriteString(borderStyleLight.Render(border.TopRight))
 		result.WriteString("\n")
-		result.WriteString(renderLargeTitleRowFromRendered(title, actualWidth, focused, ctx.DialogTitleAlign, tbs, borderStyleLight, borderStyleDark, border, ctx, areaStyleName))
+		result.WriteString(renderLargeTitleRow(rawTitle, actualWidth, focused, true, titleTagFromAreaName(areaStyleName), ctx.DialogTitleAlign, tbs, borderStyleLight, borderStyleDark, border, ctx))
 		result.WriteString("\n")
 	} else {
 		// Small titlebar: build small-style widgets from tbs.
