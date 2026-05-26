@@ -150,8 +150,7 @@ func (m *choiceDialogModel) ViewString() string {
 	spacer := lipgloss.NewStyle().Width(contentWidth).Background(borderBG).Render("")
 	fullContent := lipgloss.JoinVertical(lipgloss.Left, questionText, spacer, buttonRow)
 
-	widgets := m.buildTitleBarWidgets(ctx)
-	return renderDialogWithTypeAndWidgets(m.title, fullContent, m.baseDialogModel.focused || m.titleBarFocused, 0, DialogTypeConfirm, ctx, widgets)
+	return renderDialogWithTypeAndWidgets(m.title, fullContent, m.baseDialogModel.focused || m.titleBarFocused, 0, DialogTypeConfirm, ctx, TitleBarState{Show: true, Focused: m.titleBarFocused, ActiveWidget: m.titleBarWidget})
 }
 
 func (m *choiceDialogModel) View() tea.View {

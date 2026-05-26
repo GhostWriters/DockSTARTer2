@@ -212,8 +212,7 @@ func (m *confirmDialogModel) ViewString() string {
 	fullContent := lipgloss.JoinVertical(lipgloss.Left, questionText, spacer, buttonRow)
 
 	ctx2 := GetActiveContext()
-	widgets := m.buildTitleBarWidgets(ctx2)
-	return renderDialogWithTypeAndWidgets(m.title, fullContent, m.focused || m.titleBarFocused, 0, DialogTypeConfirm, ctx2, widgets)
+	return renderDialogWithTypeAndWidgets(m.title, fullContent, m.focused || m.titleBarFocused, 0, DialogTypeConfirm, ctx2, TitleBarState{Show: true, Focused: m.titleBarFocused, ActiveWidget: m.titleBarWidget})
 }
 
 // View implements tea.Model

@@ -13,6 +13,24 @@ import (
 // LargeTitleBarOverhead is the extra lines a large titlebar adds over a small one (title row + separator).
 const LargeTitleBarOverhead = 2
 
+// TitleBarState carries the state needed to render title bar widgets ([?]/[×]).
+// The zero value means "no widgets shown".
+type TitleBarState struct {
+	Show         bool // Whether to render the [?]─[×] widgets
+	Focused      bool // Whether the title bar has keyboard focus
+	ActiveWidget int  // Which widget has focus (titleBarWidgetClose or titleBarWidgetHelp)
+}
+
+// titleTagFromAreaName derives the small-titlebar titleTag from a LargeTitleArea style name.
+// e.g. "LargeTitleAreaQuestion" → "TitleQuestion", "LargeTitleArea" → "Title"
+func titleTagFromAreaName(areaStyleName string) string {
+	suffix := strings.TrimPrefix(areaStyleName, "LargeTitleArea")
+	if suffix == "" {
+		return "Title"
+	}
+	return "Title" + suffix
+}
+
 // largeTitleSepConnectors returns the left/right T-junction characters for the separator line
 // that sits between the large titlebar row and the dialog content.
 func largeTitleSepConnectors(border lipgloss.Border, lineChars bool) (left, right string) {
@@ -28,7 +46,7 @@ func largeTitleSepConnectors(border lipgloss.Border, lineChars bool) (left, righ
 
 // renderLargeTitleRow renders the title row and separator line for the large titlebar style.
 // Returns two lines (no trailing newline on the second): the title row and the separator.
-func renderLargeTitleRow(rawTitle string, actualWidth int, focused bool, showIndicators bool, titleTag string, titleAlign string, rightWidget string, borderStyleLight, borderStyleDark lipgloss.Style, border lipgloss.Border, ctx StyleContext) string {
+func renderLargeTitleRow(rawTitle string, actualWidth int, focused bool, showIndicators bool, titleTag string, titleAlign string, tbs TitleBarState, borderStyleLight, borderStyleDark lipgloss.Style, border lipgloss.Border, ctx StyleContext) string {
 	areaStyleName := "LargeTitleArea" + strings.TrimPrefix(titleTag, "Title")
 	areaStyle := SemanticRawStyle(areaStyleName)
 	if !hasExplicitBackground(areaStyle) {
@@ -63,12 +81,12 @@ func renderLargeTitleRow(rawTitle string, actualWidth int, focused bool, showInd
 	}
 	titleSectionWidth := indWidth + titleWidth + indWidth
 
-	// Right widget — render in titleCtx so it picks up the type-specific area background,
-	// same as the title text. Width measured after rendering (lipgloss strips ANSI).
+	// Right widget — built from TitleBarState so large styles are always used in this path.
 	renderedWidget := ""
 	rightWidgetWidth := 0
-	if rightWidget != "" {
-		renderedWidget = RenderThemeTextCtx(rightWidget, titleCtx)
+	if tbs.Show {
+		rawWidget := buildLargeTitleBarWidgets(tbs.Focused, tbs.ActiveWidget, ctx)
+		renderedWidget = RenderThemeTextCtx(rawWidget, titleCtx)
 		rightWidgetWidth = lipgloss.Width(renderedWidget)
 	}
 
@@ -83,7 +101,7 @@ func renderLargeTitleRow(rawTitle string, actualWidth int, focused bool, showInd
 			leftPad = 0
 		}
 	}
-	if rightWidget != "" {
+	if tbs.Show {
 		rightPadEnd = 1
 		rightPadMid = innerWidth - leftPad - titleSectionWidth - rightWidgetWidth - rightPadEnd
 		if rightPadMid < 0 {
@@ -116,7 +134,7 @@ func renderLargeTitleRow(rawTitle string, actualWidth int, focused bool, showInd
 	inner.WriteString(renderedTitle)
 	inner.WriteString(indR)
 	inner.WriteString(pad(rightPadMid))
-	if rightWidget != "" {
+	if tbs.Show {
 		inner.WriteString(renderedWidget)
 		inner.WriteString(pad(rightPadEnd))
 	}
@@ -139,7 +157,7 @@ func renderLargeTitleRow(rawTitle string, actualWidth int, focused bool, showInd
 // renderLargeTitleRowFromRendered is like renderLargeTitleRow but takes a pre-rendered
 // title string (already styled) instead of a raw title + tag. Used by renderDialogWithBorderCtx
 // where the title has already been passed through RenderThemeText.
-func renderLargeTitleRowFromRendered(renderedTitle string, actualWidth int, focused bool, titleAlign string, rightWidget string, borderStyleLight, borderStyleDark lipgloss.Style, border lipgloss.Border, ctx StyleContext, areaStyleName string) string {
+func renderLargeTitleRowFromRendered(renderedTitle string, actualWidth int, focused bool, titleAlign string, tbs TitleBarState, borderStyleLight, borderStyleDark lipgloss.Style, border lipgloss.Border, ctx StyleContext, areaStyleName string) string {
 	areaStyle := SemanticRawStyle(areaStyleName)
 	if !hasExplicitBackground(areaStyle) {
 		areaStyle = SemanticRawStyle("LargeTitleArea")
@@ -166,11 +184,12 @@ func renderLargeTitleRowFromRendered(renderedTitle string, actualWidth int, focu
 
 	titleSectionWidth := 1 + titleWidth + 1
 
-	// Right widget — render in titleCtx so it picks up the type-specific area background.
+	// Right widget — built from TitleBarState so large styles are always used in this path.
 	renderedWidget := ""
 	rightWidgetWidth := 0
-	if rightWidget != "" {
-		renderedWidget = RenderThemeTextCtx(rightWidget, titleCtx)
+	if tbs.Show {
+		rawWidget := buildLargeTitleBarWidgets(tbs.Focused, tbs.ActiveWidget, ctx)
+		renderedWidget = RenderThemeTextCtx(rawWidget, titleCtx)
 		rightWidgetWidth = lipgloss.Width(renderedWidget)
 	}
 
@@ -184,7 +203,7 @@ func renderLargeTitleRowFromRendered(renderedTitle string, actualWidth int, focu
 			leftPad = 0
 		}
 	}
-	if rightWidget != "" {
+	if tbs.Show {
 		rightPadEnd = 1
 		rightPadMid = actualWidth - leftPad - titleSectionWidth - rightWidgetWidth - rightPadEnd
 		if rightPadMid < 0 {
@@ -216,7 +235,7 @@ func renderLargeTitleRowFromRendered(renderedTitle string, actualWidth int, focu
 	inner.WriteString(renderedTitle)
 	inner.WriteString(indR)
 	inner.WriteString(pad(rightPadMid))
-	if rightWidget != "" {
+	if tbs.Show {
 		inner.WriteString(renderedWidget)
 		inner.WriteString(pad(rightPadEnd))
 	}
@@ -253,14 +272,13 @@ func RenderDialogWithType(title, content string, focused bool, targetHeight int,
 
 // RenderDialogWithTypeCtx renders a dialog with a specific type using a specific context
 func RenderDialogWithTypeCtx(title, content string, focused bool, targetHeight int, dialogType DialogType, ctx StyleContext, borders ...BorderPair) string {
-	widgets := BuildInactiveTitleWidgets(ctx)
-	return renderDialogWithTypeAndWidgets(title, content, focused, targetHeight, dialogType, ctx, widgets, borders...)
+	return renderDialogWithTypeAndWidgets(title, content, focused, targetHeight, dialogType, ctx, TitleBarState{Show: true}, borders...)
 }
 
 // renderDialogWithTypeAndWidgets is the internal implementation used by both
 // RenderDialogWithTypeCtx (inactive widgets) and dialogs that manage title bar focus
 // (active/inactive widgets based on state).
-func renderDialogWithTypeAndWidgets(title, content string, focused bool, targetHeight int, dialogType DialogType, ctx StyleContext, widgets string, borders ...BorderPair) string {
+func renderDialogWithTypeAndWidgets(title, content string, focused bool, targetHeight int, dialogType DialogType, ctx StyleContext, tbs TitleBarState, borders ...BorderPair) string {
 	var border lipgloss.Border
 	if len(borders) > 0 {
 		if focused {
@@ -315,7 +333,7 @@ func renderDialogWithTypeAndWidgets(title, content string, focused bool, targetH
 		areaStyleName = "LargeTitleAreaQuestion"
 	}
 
-	return renderDialogWithBorderCtx(title, content, border, focused, targetHeight, true, true, titleStyle, ctx, widgets, areaStyleName)
+	return renderDialogWithBorderCtx(title, content, border, focused, targetHeight, true, true, titleStyle, ctx, tbs, areaStyleName)
 }
 
 // RenderUniformBlockDialog renders a dialog with block borders and uniform dark colors
@@ -326,7 +344,7 @@ func RenderUniformBlockDialog(title, content string) string {
 // RenderUniformBlockDialogCtx renders a uniform block dialog using specific context
 func RenderUniformBlockDialogCtx(title, content string, ctx StyleContext) string {
 	borders := GetBlockBorders(ctx.LineCharacters)
-	return renderDialogWithBorderCtx(title, content, borders.Focused, true, 0, false, false, ctx.DialogTitleHelp, ctx, "", "LargeTitleArea")
+	return renderDialogWithBorderCtx(title, content, borders.Focused, true, 0, false, false, ctx.DialogTitleHelp, ctx, TitleBarState{}, "LargeTitleArea")
 }
 
 // RenderTitleSegmentCtx renders a single title segment with connectors and optional indicators.
@@ -411,7 +429,7 @@ func WidthOfTitleSegment(rawTitle string, showIndicators bool, ctx StyleContext)
 
 // RenderBorderedBoxCtx renders a dialog with title and borders using a specific context.
 // Unlike renderDialogWithBorderCtx, this accepts a known contentWidth instead of measuring content.
-func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeight int, focused bool, showIndicators bool, rounded bool, titleAlign string, titleTag string, ctx StyleContext, rightWidgets ...string) string {
+func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeight int, focused bool, showIndicators bool, rounded bool, titleAlign string, titleTag string, ctx StyleContext, tbs ...TitleBarState) string {
 	var border lipgloss.Border
 	if !ctx.DrawBorders {
 		border = lipgloss.HiddenBorder()
@@ -476,17 +494,17 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 	// Decide useLarge BEFORE padding so the line-count check uses the original content height.
 	// Large requires a title, is not used for submenus (caller sets LargeTitleBars=false),
 	// and falls back to small when height is constrained.
+	// Extract the single optional TitleBarState (zero value = no widgets).
+	var tbsState TitleBarState
+	if len(tbs) > 0 {
+		tbsState = tbs[0]
+	}
+
 	useLarge := ctx.LargeTitleBars && GetPlainText(rawTitle) != "" && titleTag != "RAW"
 	if useLarge && targetHeight > 0 {
 		// Fall back if there isn't room for the extra 2 lines.
 		if len(lines)+LargeTitleBarOverhead+2 > targetHeight {
 			useLarge = false
-			// Rebuild rightWidgets with small styles to match the small titlebar path.
-			if len(rightWidgets) > 0 && rightWidgets[0] != "" {
-				smallCtx := ctx
-				smallCtx.LargeTitleBars = false
-				rightWidgets[0] = BuildInactiveTitleWidgets(smallCtx)
-			}
 		}
 	}
 
@@ -509,15 +527,12 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 
 	if useLarge {
 		// Large titlebar: plain top border, then title row + separator.
+		// renderLargeTitleRow builds large widgets internally from tbsState.
 		result.WriteString(borderStyleLight.Render(border.TopLeft))
 		result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, actualWidth)))
 		result.WriteString(borderStyleLight.Render(border.TopRight))
 		result.WriteString("\n")
-		rightWidget := ""
-		if len(rightWidgets) > 0 {
-			rightWidget = rightWidgets[0]
-		}
-		result.WriteString(renderLargeTitleRow(rawTitle, actualWidth, focused, showIndicators, titleTag, titleAlign, rightWidget, borderStyleLight, borderStyleDark, border, ctx))
+		result.WriteString(renderLargeTitleRow(rawTitle, actualWidth, focused, showIndicators, titleTag, titleAlign, tbsState, borderStyleLight, borderStyleDark, border, ctx))
 		result.WriteString("\n")
 	} else {
 		result.WriteString(borderStyleLight.Render(border.TopLeft))
@@ -536,9 +551,10 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 			if titleSectionLen > actualWidth {
 				actualWidth = titleSectionLen
 			}
+			// Small titlebar: build small-style widgets from tbsState.
 			rightWidget := ""
-			if len(rightWidgets) > 0 {
-				rightWidget = rightWidgets[0]
+			if tbsState.Show {
+				rightWidget = buildDialogTitleWidgets(tbsState.Focused, tbsState.ActiveWidget, ctx)
 			}
 			rightWidgetWidth := WidthWithoutZones(rightWidget)
 			if rightWidget != "" {
@@ -578,7 +594,7 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 			result.WriteString(renderedSegment)
 			result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, rightPadMid)))
 			if rightWidget != "" {
-				result.WriteString(RenderThemeTextCtx(rightWidget, ctx))
+				result.WriteString(rightWidget)
 				result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, rightPadEnd)))
 			}
 		}
@@ -626,7 +642,7 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 }
 
 // renderDialogWithBorderCtx handles internal shared rendering logic using a specific context.
-func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, focused bool, targetHeight int, threeD bool, useConnectors bool, titleStyle lipgloss.Style, ctx StyleContext, rightWidget string, areaStyleName string) string {
+func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, focused bool, targetHeight int, threeD bool, useConnectors bool, titleStyle lipgloss.Style, ctx StyleContext, tbs TitleBarState, areaStyleName string) string {
 	if title != "" && !strings.HasSuffix(title, "{{[-]}}") {
 		title += "{{[-]}}"
 	}
@@ -643,10 +659,27 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 		borderStyleLight = borderStyleDark
 	}
 
-	// Determine large title bar mode before rendering the title so the title
-	// is rendered with the LargeTitleArea background, not the dialog background.
-	useLargeInner := ctx.LargeTitleBars && title != ""
+	// Render content first to measure actual width (used by both large and small paths).
+	content = RenderThemeText(content, ctx.ContentBackground)
+	lines := strings.Split(content, "\n")
+	actualWidth := 0
+	for _, line := range lines {
+		w := WidthWithoutZones(line)
+		if w > actualWidth {
+			actualWidth = w
+		}
+	}
 
+	// Determine large title bar mode. Height check happens here so titleStyle background
+	// is set correctly for the final path (large uses LargeTitleArea bg, small uses dialog bg).
+	useLargeInner := ctx.LargeTitleBars && title != ""
+	if useLargeInner && targetHeight > 0 {
+		if len(lines)+LargeTitleBarOverhead+2 > targetHeight {
+			useLargeInner = false
+		}
+	}
+
+	// Set title background based on final path decision, then render title.
 	if !hasExplicitBackground(titleStyle) {
 		titleBG := borderBG
 		if useLargeInner && hasExplicitBackground(ctx.LargeTitleArea) {
@@ -654,30 +687,8 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 		}
 		titleStyle = titleStyle.Background(titleBG)
 	}
-
 	title = RenderThemeText(title, titleStyle)
-	content = RenderThemeText(content, ctx.ContentBackground)
 
-	lines := strings.Split(content, "\n")
-	actualWidth := 0
-	for _, line := range lines {
-		// Use WidthWithoutZones to avoid zone markers inflating width
-		w := WidthWithoutZones(line)
-		if w > actualWidth {
-			actualWidth = w
-		}
-	}
-	if useLargeInner && targetHeight > 0 {
-		if len(lines)+LargeTitleBarOverhead+2 > targetHeight {
-			useLargeInner = false
-			// Rebuild rightWidget with small styles to match the small titlebar path.
-			if rightWidget != "" {
-				smallCtx := ctx
-				smallCtx.LargeTitleBars = false
-				rightWidget = BuildInactiveTitleWidgets(smallCtx)
-			}
-		}
-	}
 	innerOverhead := 2
 	if useLargeInner {
 		innerOverhead += LargeTitleBarOverhead
@@ -696,116 +707,117 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 	var result strings.Builder
 
 	if useLargeInner {
+		// Large titlebar: renderLargeTitleRowFromRendered builds large widgets from tbs internally.
 		result.WriteString(borderStyleLight.Render(border.TopLeft))
 		result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, actualWidth)))
 		result.WriteString(borderStyleLight.Render(border.TopRight))
 		result.WriteString("\n")
-		largeWidget := ""
-		if rightWidget != "" {
-			largeWidget = buildLargeTitleBarWidgets(false, 0, ctx)
-		}
-		result.WriteString(renderLargeTitleRowFromRendered(title, actualWidth, focused, ctx.DialogTitleAlign, largeWidget, borderStyleLight, borderStyleDark, border, ctx, areaStyleName))
+		result.WriteString(renderLargeTitleRowFromRendered(title, actualWidth, focused, ctx.DialogTitleAlign, tbs, borderStyleLight, borderStyleDark, border, ctx, areaStyleName))
 		result.WriteString("\n")
 	} else {
-	result.WriteString(borderStyleLight.Render(border.TopLeft))
-	if title == "" {
-		result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, actualWidth)))
-	} else {
-		var leftT, rightT string
-		if useConnectors {
-			if ctx.LineCharacters {
-				if focused {
-					leftT = "┫"
-					rightT = "┣"
+		// Small titlebar: build small-style widgets from tbs.
+		rightWidget := ""
+		if tbs.Show {
+			rightWidget = buildDialogTitleWidgets(tbs.Focused, tbs.ActiveWidget, ctx)
+		}
+		result.WriteString(borderStyleLight.Render(border.TopLeft))
+		if title == "" {
+			result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, actualWidth)))
+		} else {
+			var leftT, rightT string
+			if useConnectors {
+				if ctx.LineCharacters {
+					if focused {
+						leftT = "┫"
+						rightT = "┣"
+					} else {
+						leftT = "┤"
+						rightT = "├"
+					}
 				} else {
-					leftT = "┤"
-					rightT = "├"
+					if focused {
+						leftT = "H"
+						rightT = "H"
+					} else {
+						leftT = "|"
+						rightT = "|"
+					}
 				}
 			} else {
-				if focused {
-					leftT = "H"
-					rightT = "H"
+				leftT = border.Top
+				rightT = border.Top
+			}
+
+			titleSectionLen := 1 + 1 + lipgloss.Width(title) + 1 + 1
+			if titleSectionLen > actualWidth {
+				actualWidth = titleSectionLen
+			}
+			rightWidgetWidth := WidthWithoutZones(rightWidget)
+			if rightWidget != "" {
+				needed := rightWidgetWidth + 1
+				for {
+					lp := 0
+					if ctx.DialogTitleAlign != "left" {
+						lp = (actualWidth - titleSectionLen) / 2
+					}
+					if actualWidth-titleSectionLen-lp >= needed {
+						break
+					}
+					actualWidth++
+				}
+			}
+
+			var leftPad int
+			if ctx.DialogTitleAlign == "left" {
+				leftPad = 0
+			} else {
+				leftPad = (actualWidth - titleSectionLen) / 2
+			}
+			rightPad := actualWidth - titleSectionLen - leftPad
+			var rightPadMid, rightPadEnd int
+			if rightWidget != "" {
+				rightPadEnd = 1
+				rightPadMid = rightPad - rightWidgetWidth - rightPadEnd
+				if rightPadMid < 0 {
+					rightPadMid = 0
+				}
+			} else {
+				rightPadMid = rightPad
+				if rightPadMid < 0 {
+					rightPadMid = 0
+				}
+			}
+			result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, leftPad)))
+			result.WriteString(borderStyleLight.Render(leftT))
+			if focused {
+				if ctx.LineCharacters {
+					result.WriteString(borderStyleLight.Render(theme.ToThemeANSI("{{|TitleFocusIndicator|}}▸")))
 				} else {
-					leftT = "|"
-					rightT = "|"
+					result.WriteString(borderStyleLight.Render(theme.ToThemeANSI("{{|TitleFocusIndicator|}}>")))
 				}
-			}
-		} else {
-			leftT = border.Top
-			rightT = border.Top
-		}
-
-		titleSectionLen := 1 + 1 + lipgloss.Width(title) + 1 + 1
-		if titleSectionLen > actualWidth {
-			actualWidth = titleSectionLen
-		}
-		rightWidgetWidth := WidthWithoutZones(rightWidget)
-		if rightWidget != "" {
-			// Grow actualWidth until the right side (after centering) fits the widget + 1 end dash.
-			needed := rightWidgetWidth + 1
-			for {
-				lp := 0
-				if ctx.DialogTitleAlign != "left" {
-					lp = (actualWidth - titleSectionLen) / 2
-				}
-				if actualWidth-titleSectionLen-lp >= needed {
-					break
-				}
-				actualWidth++
-			}
-		}
-
-		var leftPad int
-		if ctx.DialogTitleAlign == "left" {
-			leftPad = 0
-		} else {
-			leftPad = (actualWidth - titleSectionLen) / 2
-		}
-		rightPad := actualWidth - titleSectionLen - leftPad
-		var rightPadMid, rightPadEnd int
-		if rightWidget != "" {
-			rightPadEnd = 1
-			rightPadMid = rightPad - rightWidgetWidth - rightPadEnd
-			if rightPadMid < 0 {
-				rightPadMid = 0
-			}
-		} else {
-			rightPadMid = rightPad
-			if rightPadMid < 0 {
-				rightPadMid = 0
-			}
-		}
-		result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, leftPad)))
-		result.WriteString(borderStyleLight.Render(leftT))
-		if focused {
-			if ctx.LineCharacters {
-				result.WriteString(borderStyleLight.Render(theme.ToThemeANSI("{{|TitleFocusIndicator|}}▸")))
 			} else {
-				result.WriteString(borderStyleLight.Render(theme.ToThemeANSI("{{|TitleFocusIndicator|}}>")))
+				result.WriteString(borderStyleLight.Render(" "))
 			}
-		} else {
-			result.WriteString(borderStyleLight.Render(" "))
-		}
-		result.WriteString(title)
-		if focused {
-			if ctx.LineCharacters {
-				result.WriteString(borderStyleLight.Render(theme.ToThemeANSI("{{|TitleFocusIndicator|}}◂")))
+			result.WriteString(title)
+			if focused {
+				if ctx.LineCharacters {
+					result.WriteString(borderStyleLight.Render(theme.ToThemeANSI("{{|TitleFocusIndicator|}}◂")))
+				} else {
+					result.WriteString(borderStyleLight.Render(theme.ToThemeANSI("{{|TitleFocusIndicator|}}<")))
+				}
 			} else {
-				result.WriteString(borderStyleLight.Render(theme.ToThemeANSI("{{|TitleFocusIndicator|}}<")))
+				result.WriteString(borderStyleLight.Render(" "))
 			}
-		} else {
-			result.WriteString(borderStyleLight.Render(" "))
+			result.WriteString(borderStyleLight.Render(rightT))
+			result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, rightPadMid)))
+			if rightWidget != "" {
+				result.WriteString(rightWidget)
+				result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, rightPadEnd)))
+			}
 		}
-		result.WriteString(borderStyleLight.Render(rightT))
-		result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, rightPadMid)))
-		if rightWidget != "" {
-			result.WriteString(RenderThemeTextCtx(rightWidget, ctx))
-			result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, rightPadEnd)))
-		}
+		result.WriteString(borderStyleLight.Render(border.TopRight))
+		result.WriteString("\n")
 	}
-	result.WriteString(borderStyleLight.Render(border.TopRight))
-	result.WriteString("\n")
-	} // end else (small titlebar)
 
 	maxLines := len(lines)
 	if targetHeight > innerOverhead {

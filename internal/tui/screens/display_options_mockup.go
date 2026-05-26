@@ -238,10 +238,7 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	}
 	backdropBlock := lipgloss.JoinVertical(lipgloss.Left, backdropLines...)
 
-	// Build title bar widgets ([?]─[×]) to demonstrate icon styles
-	titleWidgets := tui.BuildInactiveTitleWidgets(previewCtx)
-
-	dialogBox := tui.RenderBorderedBoxCtx(dTitle, contentStr, 38, 0, true, true, false, previewCtx.DialogTitleAlign, "Title", previewCtx, titleWidgets)
+	dialogBox := tui.RenderBorderedBoxCtx(dTitle, contentStr, 38, 0, true, true, false, previewCtx.DialogTitleAlign, "Title", previewCtx, tui.TitleBarState{Show: true})
 	dialogBox = tui.AddShadowCtx(dialogBox, previewCtx)
 
 	// Pad dialogBox to full backdrop width with explicit Screen bg chars so no

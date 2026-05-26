@@ -101,7 +101,7 @@ func (m *TabbedVarsEditorModel) ViewString() string {
 		ctx.DialogTitleAlign,
 		"Title",
 		ctx,
-		tui.BuildInactiveTitleWidgets(ctx),
+		tui.TitleBarState{Show: true},
 	)
 }
 

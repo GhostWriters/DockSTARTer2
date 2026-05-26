@@ -167,8 +167,7 @@ func (m *messageDialogModel) ViewString() string {
 		dialogType = DialogTypeError
 	}
 	ctx := GetActiveContext()
-	widgets := m.buildTitleBarWidgets(ctx)
-	return renderDialogWithTypeAndWidgets(fullTitle, fullContent, m.focused || m.titleBarFocused, 0, dialogType, ctx, widgets)
+	return renderDialogWithTypeAndWidgets(fullTitle, fullContent, m.focused || m.titleBarFocused, 0, dialogType, ctx, TitleBarState{Show: true, Focused: m.titleBarFocused, ActiveWidget: m.titleBarWidget})
 }
 
 // View implements tea.Model

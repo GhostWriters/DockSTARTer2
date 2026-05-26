@@ -213,18 +213,6 @@ func (m *MenuModel) SetIsDialog(isDialog bool) {
 }
 
 
-// renderTitleBarWidgets builds the pre-styled widget string for the title bar right side.
-// Returns an empty string when there is no title (sub-menu mode without title has no outer border).
-func (m *MenuModel) renderTitleBarWidgets(ctx StyleContext) string {
-	if m.title == "" || m.subMenuMode {
-		return ""
-	}
-	if ctx.LargeTitleBars {
-		return buildLargeTitleBarWidgets(m.titleBarFocused, m.titleBarWidget, ctx)
-	}
-	return buildDialogTitleWidgets(m.titleBarFocused, m.titleBarWidget, ctx)
-}
-
 func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targetHeight int, focused bool, rounded bool, titleTag string) string {
 	align := GetActiveContext().DialogTitleAlign
 	if m.subMenuMode {
@@ -240,8 +228,8 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 	ctx.Type = m.dialogType
 	// Use pre-computed layout decision; submenus always use small titlebar.
 	ctx.LargeTitleBars = m.layout.LargeTitleBar
-	widgets := m.renderTitleBarWidgets(ctx)
-	return RenderBorderedBoxCtx(m.title, content, contentWidth, targetHeight, focused || m.titleBarFocused, true, rounded, align, titleTag, ctx, widgets)
+	tbs := TitleBarState{Show: m.title != "" && !m.subMenuMode, Focused: m.titleBarFocused, ActiveWidget: m.titleBarWidget}
+	return RenderBorderedBoxCtx(m.title, content, contentWidth, targetHeight, focused || m.titleBarFocused, true, rounded, align, titleTag, ctx, tbs)
 }
 
 func (m *MenuModel) viewSubMenu() string {

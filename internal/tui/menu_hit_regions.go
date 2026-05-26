@@ -321,8 +321,7 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		// narrower than m.width based on content, so the widget X must match.
 		dialogWidth := m.GetInnerContentWidth() + GetLayout().BorderWidth()
 		widgetsStartX := offsetX + dialogWidth - 1 - endPad - widgetTotalWidth
-		// [?] occupies chars 0-2 of the widget string (after leading space... actually no leading space)
-		// Widget string from renderTitleBarWidgets: "[?]" + " " + "[×]"
+		// Widget layout: "[?]" (3) + " " (1) + "[×]" (3) — help starts at 0, close at +4.
 		helpWidgetX := widgetsStartX
 		closeWidgetX := widgetsStartX + 4 // "[?] " = 4 chars
 		// Large titlebar: widgets are on the title row (row 1), not the top border (row 0).

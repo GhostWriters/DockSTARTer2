@@ -146,7 +146,7 @@ ProgressInProgress = "{{[white:black:B]}}"
 ProgressCompleted = "{{[black:white]}}"
 
 # Large Title Bar
-LargeTitleArea = "{{|Dialog|}}"
+LargeTitleArea = "{{[white:blue:-]}}"
 LargeTitleAreaHelp = "{{|LargeTitleArea|}}"
 LargeTitleAreaNotice = "{{|LargeTitleArea|}}"
 LargeTitleAreaWarn = "{{|LargeTitleArea|}}"
