@@ -323,6 +323,7 @@ func (m *promptDialogModel) ViewString() string {
 	parts = append(parts, spacer, buttonRow)
 
 	ctx2 := GetActiveContext()
+	ctx2.LargeTitleBars = m.layout.LargeTitleBar
 	return renderDialogWithTypeAndWidgets(m.title, lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused || m.titleBarFocused, 0, DialogTypeConfirm, ctx2, TitleBarState{Show: true, Focused: m.titleBarFocused, ActiveWidget: m.titleBarWidget})
 }
 

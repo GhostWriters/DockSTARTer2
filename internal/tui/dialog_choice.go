@@ -135,6 +135,7 @@ func (m *choiceDialogModel) ViewString() string {
 	}
 
 	ctx := GetActiveContext()
+	ctx.LargeTitleBars = m.layout.LargeTitleBar
 	borderBG := ctx.Dialog.GetBackground()
 	contentWidth := m.contentWidth()
 
