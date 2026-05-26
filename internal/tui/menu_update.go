@@ -777,6 +777,7 @@ func (m *MenuModel) calculateLayout() {
 		ButtonHeight:   buttonHeight,
 		ShadowHeight:   shadowHeight,
 		Overhead:       overhead,
+		SubtitleHeight: subtitleHeight,
 		LargeTitleBar:  useLargeTitleBar,
 	}
 

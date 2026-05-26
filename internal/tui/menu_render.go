@@ -213,28 +213,25 @@ func (m *MenuModel) SetIsDialog(isDialog bool) {
 }
 
 // MinHeight returns the minimum content-area height for this menu to remain usable
-// (buttons visible, at least 1 list item visible). Only meaningful for maximized menus;
-// returns 0 for non-maximized so the generic MinDialogHeight floor applies instead.
+// (buttons visible with the viewport at its 3-line clamp floor). Only meaningful for
+// maximized menus; returns 0 for non-maximized so MinDialogHeight applies instead.
 // Used by AppModel to limit log panel expansion.
+//
+// Derived from the inverse of calculateLayout's maxListHeight formula:
+//   flat-button path: maxListHeight = h - 5 - subtitleH  →  h = 8 + subtitleH at floor=3
+//   no-button path:   maxListHeight = h - 4 - subtitleH  →  h = 7 + subtitleH at floor=3
 func (m *MenuModel) MinHeight() int {
 	if !m.maximized {
 		return 0
 	}
-	layout := GetLayout()
-	ctx := GetActiveContext()
-	btnH := m.layout.ButtonHeight
-	if btnH == 0 {
-		btnH = 1 // safe default before first calculateLayout
+	subtitleH := m.layout.SubtitleHeight // real rendered height stored by calculateLayout
+	base := 8 + subtitleH                // flat-button minimum (bordered buttons drop to flat first)
+	if !m.showButtons {
+		base = 7 + subtitleH
 	}
-	subtitleLines := 0
-	if m.subtitle != "" {
-		// Subtitle always has at least 1 visible line; AppSelectionScreen has an explicit
-		// newline so 2 is the realistic minimum, but 1 is enough for a conservative floor.
-		subtitleLines = 1
-	}
-	// outer border(2) + subtitle + list min(inner border(2) + 1 item) + buttons
-	base := layout.BorderHeight() + subtitleLines + layout.BorderHeight() + 1 + btnH
-	if ctx.LargeTitleBars && m.layout.LargeTitleBar {
+	// Large titlebar is part of the overhead; use the stored decision so the
+	// adaptive fallback in calculateLayout and the panel ceiling stay in sync.
+	if m.layout.LargeTitleBar {
 		base += LargeTitleBarOverhead
 	}
 	return base

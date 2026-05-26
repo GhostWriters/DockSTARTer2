@@ -58,6 +58,7 @@ type DialogLayout struct {
 	ButtonHeight   int
 	ShadowHeight   int
 	Overhead       int
+	SubtitleHeight int // actual rendered subtitle height at layout time
 
 	LargeTitleBar  bool // whether large titlebar is active (pre-computed at layout time)
 
