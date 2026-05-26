@@ -146,16 +146,15 @@ ProgressWaiting = "{{[white:black]}}"
 ProgressInProgress = "{{[white:black:B]}}"
 ProgressCompleted = "{{[black:white]}}"
 
-[defaults]
-dialog_title_align = "center"
-submenu_title_align = "left"
-panel_title_align = "center"
-
-
-
-
 # Large Title Bar
 LargeTitleArea = "{{|Dialog|}}"
+LargeTitleAreaHelp = "{{|LargeTitleArea|}}"
+LargeTitleAreaNotice = "{{|LargeTitleArea|}}"
+LargeTitleAreaWarn = "{{|LargeTitleArea|}}"
+LargeTitleAreaWarning = "{{|LargeTitleArea|}}"
+LargeTitleAreaError = "{{|LargeTitleArea|}}"
+LargeTitleAreaSuccess = "{{|LargeTitleArea|}}"
+LargeTitleAreaQuestion = "{{|LargeTitleArea|}}"
 LargeTitle = "{{|Title|}}"
 LargeTitleHelp = "{{|LargeTitle|}}"
 LargeTitleNotice = "{{|TitleNotice|}}"
@@ -170,3 +169,8 @@ LargeTitleSubMenuFocused = "{{|TitleSubMenuFocused|}}"
 LargeIconActive = "{{|IconActive|}}"
 LargeHelpIconInactive = "{{|HelpIconInactive|}}"
 LargeExitIconInactive = "{{|ExitIconInactive|}}"
+
+[defaults]
+dialog_title_align = "center"
+submenu_title_align = "left"
+panel_title_align = "center"

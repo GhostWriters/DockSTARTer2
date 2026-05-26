@@ -29,12 +29,14 @@ func largeTitleSepConnectors(border lipgloss.Border, focused bool, lineChars boo
 // renderLargeTitleRow renders the title row and separator line for the large titlebar style.
 // Returns two lines (no trailing newline on the second): the title row and the separator.
 func renderLargeTitleRow(rawTitle string, actualWidth int, focused bool, showIndicators bool, titleTag string, titleAlign string, rightWidget string, borderStyleLight, borderStyleDark lipgloss.Style, border lipgloss.Border, ctx StyleContext) string {
-	areaStyle := ctx.LargeTitleArea
+	areaStyleName := "LargeTitleArea" + strings.TrimPrefix(titleTag, "Title")
+	areaStyle := SemanticRawStyle(areaStyleName)
 	if !hasExplicitBackground(areaStyle) {
-		areaStyle = areaStyle.Background(ctx.Dialog.GetBackground())
+		areaStyle = SemanticRawStyle("LargeTitleArea")
+		if !hasExplicitBackground(areaStyle) {
+			areaStyle = areaStyle.Background(ctx.Dialog.GetBackground())
+		}
 	}
-	areaBG := areaStyle.GetBackground()
-
 	// Build title segment with LargeTitleArea as the reset base
 	titleCtx := ctx
 	titleCtx.Dialog = areaStyle
@@ -113,15 +115,10 @@ func renderLargeTitleRow(rawTitle string, actualWidth int, focused bool, showInd
 		inner.WriteString(pad(rightPadEnd))
 	}
 
-	// Title-row border chars use LargeTitleArea background so themes with a distinct
-	// title area colour don't show a seam between the │ and the padding cells.
-	titleBorderLight := borderStyleLight.Background(areaBG)
-	titleBorderDark := borderStyleDark.Background(areaBG)
-
 	var row strings.Builder
-	row.WriteString(titleBorderLight.Render(border.Left))
-	row.WriteString(MaintainBackground(inner.String(), areaStyle))
-	row.WriteString(titleBorderDark.Render(border.Right))
+	row.WriteString(borderStyleLight.Render(border.Left))
+	row.WriteString(MaintainBackground(RenderThemeTextCtx(inner.String(), titleCtx), areaStyle))
+	row.WriteString(borderStyleDark.Render(border.Right))
 	row.WriteString("\n")
 
 	// Separator: left connector light (left side), dashes + right connector dark (bottom-right side).
@@ -136,13 +133,14 @@ func renderLargeTitleRow(rawTitle string, actualWidth int, focused bool, showInd
 // renderLargeTitleRowFromRendered is like renderLargeTitleRow but takes a pre-rendered
 // title string (already styled) instead of a raw title + tag. Used by renderDialogWithBorderCtx
 // where the title has already been passed through RenderThemeText.
-func renderLargeTitleRowFromRendered(renderedTitle string, actualWidth int, focused bool, titleAlign string, rightWidget string, borderStyleLight, borderStyleDark lipgloss.Style, border lipgloss.Border, ctx StyleContext) string {
-	areaStyle := ctx.LargeTitleArea
+func renderLargeTitleRowFromRendered(renderedTitle string, actualWidth int, focused bool, titleAlign string, rightWidget string, borderStyleLight, borderStyleDark lipgloss.Style, border lipgloss.Border, ctx StyleContext, areaStyleName string) string {
+	areaStyle := SemanticRawStyle(areaStyleName)
 	if !hasExplicitBackground(areaStyle) {
-		areaStyle = areaStyle.Background(ctx.Dialog.GetBackground())
+		areaStyle = SemanticRawStyle("LargeTitleArea")
+		if !hasExplicitBackground(areaStyle) {
+			areaStyle = areaStyle.Background(ctx.Dialog.GetBackground())
+		}
 	}
-	areaBG := areaStyle.GetBackground()
-
 	titleWidth := lipgloss.Width(renderedTitle)
 
 	// Focus indicators — plain spaces when not focused; MaintainBackground handles coloring
@@ -210,15 +208,10 @@ func renderLargeTitleRowFromRendered(renderedTitle string, actualWidth int, focu
 		inner.WriteString(pad(rightPadEnd))
 	}
 
-	// Title-row border chars use LargeTitleArea background so themes with a distinct
-	// title area colour don't show a seam between the │ and the padding cells.
-	titleBorderLight := borderStyleLight.Background(areaBG)
-	titleBorderDark := borderStyleDark.Background(areaBG)
-
 	var row strings.Builder
-	row.WriteString(titleBorderLight.Render(border.Left))
-	row.WriteString(MaintainBackground(inner.String(), areaStyle))
-	row.WriteString(titleBorderDark.Render(border.Right))
+	row.WriteString(borderStyleLight.Render(border.Left))
+	row.WriteString(MaintainBackground(RenderThemeTextCtx(inner.String(), titleCtx), areaStyle))
+	row.WriteString(borderStyleDark.Render(border.Right))
 	row.WriteString("\n")
 
 	// Separator: left connector light (left side), dashes + right connector dark (bottom-right side).
@@ -293,18 +286,23 @@ func renderDialogWithTypeAndWidgets(title, content string, focused bool, targetH
 	}
 
 	titleStyle := ctx.DialogTitle
+	areaStyleName := "LargeTitleArea"
 	switch dialogType {
 	case DialogTypeSuccess:
 		titleStyle = titleStyle.Foreground(ctx.StatusSuccess.GetForeground())
+		areaStyleName = "LargeTitleAreaSuccess"
 	case DialogTypeWarning:
 		titleStyle = titleStyle.Foreground(ctx.StatusWarn.GetForeground())
+		areaStyleName = "LargeTitleAreaWarn"
 	case DialogTypeError:
 		titleStyle = titleStyle.Foreground(SemanticRawStyle("TitleError").GetForeground())
+		areaStyleName = "LargeTitleAreaError"
 	case DialogTypeConfirm:
 		titleStyle = SemanticRawStyle("TitleQuestion") // Semantic
+		areaStyleName = "LargeTitleAreaQuestion"
 	}
 
-	return renderDialogWithBorderCtx(title, content, border, focused, targetHeight, true, true, titleStyle, ctx, widgets)
+	return renderDialogWithBorderCtx(title, content, border, focused, targetHeight, true, true, titleStyle, ctx, widgets, areaStyleName)
 }
 
 // RenderUniformBlockDialog renders a dialog with block borders and uniform dark colors
@@ -315,7 +313,7 @@ func RenderUniformBlockDialog(title, content string) string {
 // RenderUniformBlockDialogCtx renders a uniform block dialog using specific context
 func RenderUniformBlockDialogCtx(title, content string, ctx StyleContext) string {
 	borders := GetBlockBorders(ctx.LineCharacters)
-	return renderDialogWithBorderCtx(title, content, borders.Focused, true, 0, false, false, ctx.DialogTitleHelp, ctx, "")
+	return renderDialogWithBorderCtx(title, content, borders.Focused, true, 0, false, false, ctx.DialogTitleHelp, ctx, "", "LargeTitleArea")
 }
 
 // RenderTitleSegmentCtx renders a single title segment with connectors and optional indicators.
@@ -609,7 +607,7 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 }
 
 // renderDialogWithBorderCtx handles internal shared rendering logic using a specific context.
-func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, focused bool, targetHeight int, threeD bool, useConnectors bool, titleStyle lipgloss.Style, ctx StyleContext, rightWidget string) string {
+func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, focused bool, targetHeight int, threeD bool, useConnectors bool, titleStyle lipgloss.Style, ctx StyleContext, rightWidget string, areaStyleName string) string {
 	if title != "" && !strings.HasSuffix(title, "{{[-]}}") {
 		title += "{{[-]}}"
 	}
@@ -626,8 +624,16 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 		borderStyleLight = borderStyleDark
 	}
 
+	// Determine large title bar mode before rendering the title so the title
+	// is rendered with the LargeTitleArea background, not the dialog background.
+	useLargeInner := ctx.LargeTitleBars && title != ""
+
 	if !hasExplicitBackground(titleStyle) {
-		titleStyle = titleStyle.Background(borderBG)
+		titleBG := borderBG
+		if useLargeInner && hasExplicitBackground(ctx.LargeTitleArea) {
+			titleBG = ctx.LargeTitleArea.GetBackground()
+		}
+		titleStyle = titleStyle.Background(titleBG)
 	}
 
 	title = RenderThemeText(title, titleStyle)
@@ -642,8 +648,6 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 			actualWidth = w
 		}
 	}
-
-	useLargeInner := ctx.LargeTitleBars && title != ""
 	if useLargeInner && targetHeight > 0 {
 		if len(lines)+LargeTitleBarOverhead+2 > targetHeight {
 			useLargeInner = false
@@ -675,7 +679,7 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 		if rightWidget != "" {
 			largeWidget = buildLargeTitleBarWidgets(false, 0, ctx)
 		}
-		result.WriteString(renderLargeTitleRowFromRendered(title, actualWidth, focused, ctx.DialogTitleAlign, largeWidget, borderStyleLight, borderStyleDark, border, ctx))
+		result.WriteString(renderLargeTitleRowFromRendered(title, actualWidth, focused, ctx.DialogTitleAlign, largeWidget, borderStyleLight, borderStyleDark, border, ctx, areaStyleName))
 		result.WriteString("\n")
 	} else {
 	result.WriteString(borderStyleLight.Render(border.TopLeft))
