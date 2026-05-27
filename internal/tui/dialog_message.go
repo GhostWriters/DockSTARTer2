@@ -163,7 +163,12 @@ func (m *messageDialogModel) ViewString() string {
 
 	// Add title with prefix/suffix and wrap in border
 	dialogType := DialogTypeInfo
-	if m.messageType == MessageError {
+	switch m.messageType {
+	case MessageSuccess:
+		dialogType = DialogTypeSuccess
+	case MessageWarning:
+		dialogType = DialogTypeWarning
+	case MessageError:
 		dialogType = DialogTypeError
 	}
 	ctx := GetActiveContext()

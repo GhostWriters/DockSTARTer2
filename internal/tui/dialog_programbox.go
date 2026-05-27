@@ -70,8 +70,11 @@ type ProgramBoxModel struct {
 	progress progress.Model
 
 	// Unified layout (deterministic sizing)
-	layout DialogLayout
-	id     string
+	layout          DialogLayout
+	id              string
+	dialogType      DialogType
+	titleBarFocused bool
+	titleBarWidget  int
 
 	// Scrollbar component
 	Scroll Scrollbar
@@ -164,6 +167,12 @@ func (m *ProgramBoxModel) SetAutoClose(autoClose bool, delay time.Duration) {
 // NewProgramBoxModel creates a new program box dialog (exported)
 func NewProgramBoxModel(title, subtitle, command string) *ProgramBoxModel {
 	return newProgramBox(title, subtitle, command)
+}
+
+// WithDialogType sets the dialog type for title area styling (e.g. DialogTypeSuccess).
+func (m *ProgramBoxModel) WithDialogType(t DialogType) *ProgramBoxModel {
+	m.dialogType = t
+	return m
 }
 
 // SetTask sets the task function to execute
@@ -371,6 +380,12 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyPressMsg:
 		closeDialog := func() tea.Msg { return CloseDialogMsg{} }
+		b := &baseDialogModel{id: m.id, width: m.width, height: m.height, focused: m.focused, layout: m.layout, titleBarFocused: m.titleBarFocused, titleBarWidget: m.titleBarWidget}
+		if handled, cmd := b.handleTitleBarKey(msg, func() tea.Msg { return CloseDialogMsg{} }); handled {
+			m.titleBarFocused = b.titleBarFocused
+			m.titleBarWidget = b.titleBarWidget
+			return m, cmd
+		}
 		switch {
 		case key.Matches(msg, Keys.Esc):
 			if m.done {
@@ -409,6 +424,12 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case LayerHitMsg:
+		b := &baseDialogModel{id: m.id, width: m.width, height: m.height, focused: m.focused, layout: m.layout, titleBarFocused: m.titleBarFocused, titleBarWidget: m.titleBarWidget}
+		if handled, cmd := b.handleTitleBarHit(msg, func() tea.Msg { return CloseDialogMsg{} }); handled {
+			m.titleBarFocused = b.titleBarFocused
+			m.titleBarWidget = b.titleBarWidget
+			return m, cmd
+		}
 		if m.done && ButtonIDMatches(msg.ID, "OK") && msg.Button == tea.MouseLeft {
 			result := tea.Msg(true)
 			if m.err == nil && m.SuccessMsg != nil {

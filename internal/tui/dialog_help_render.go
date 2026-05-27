@@ -570,6 +570,9 @@ func (m *HelpDialogModel) ViewString() string {
 	// Add the title and outer dialog frame.
 	// We no longer add the halo here; it is now managed by the central compositor
 	// via the HaloProvider interface.
+	// Always use small titlebar — the halo is the help dialog's visual signature
+	// and the large titlebar separator conflicts with the halo border at the edges.
+	ctx.LargeTitleBars = false
 	return RenderUniformBlockDialogCtx(title, content, ctx)
 }
 

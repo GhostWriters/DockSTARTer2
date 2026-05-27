@@ -902,7 +902,7 @@ func TriggerAppUpdate() tea.Cmd {
 			return err
 		}
 
-		dialog := NewProgramBoxModel("{{|TitleSuccess|}}Updating App{{[-]}}", CmdLine("--update-app"), "")
+		dialog := NewProgramBoxModel("Updating App", CmdLine("--update-app"), "").WithDialogType(DialogTypeSuccess)
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
@@ -931,7 +931,7 @@ func TriggerTemplateUpdate() tea.Cmd {
 			return err
 		}
 
-		dialog := NewProgramBoxModel("{{|TitleSuccess|}}Updating Templates{{[-]}}", CmdLine("--update-templates"), "")
+		dialog := NewProgramBoxModel("Updating Templates", CmdLine("--update-templates"), "").WithDialogType(DialogTypeSuccess)
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
@@ -979,7 +979,7 @@ func TriggerUpdate() tea.Cmd {
 			return err
 		}
 
-		dialog := NewProgramBoxModel("{{|TitleSuccess|}}Updating DockSTARTer2{{[-]}}", CmdLine("--update"), "")
+		dialog := NewProgramBoxModel("Updating DockSTARTer2", CmdLine("--update"), "").WithDialogType(DialogTypeSuccess)
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
@@ -1017,7 +1017,7 @@ func TriggerComposeUpdate() tea.Cmd {
 			}
 			return nil
 		}
-		dialog := NewProgramBoxModel("{{|TitleSuccess|}}Docker Compose{{[-]}}", "Updating and starting containers for all enabled services.\n"+CmdLine("--compose", "update"), "")
+		dialog := NewProgramBoxModel("Docker Compose", "Updating and starting containers for all enabled services.\n"+CmdLine("--compose", "update"), "").WithDialogType(DialogTypeSuccess)
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
@@ -1046,7 +1046,7 @@ func TriggerComposeStop() tea.Cmd {
 			}
 			return nil
 		}
-		dialog := NewProgramBoxModel("{{|TitleSuccess|}}Docker Compose{{[-]}}", "Stopping or removing running containers.\n"+CmdLine("--compose"), "")
+		dialog := NewProgramBoxModel("Docker Compose", "Stopping or removing running containers.\n"+CmdLine("--compose"), "").WithDialogType(DialogTypeSuccess)
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
@@ -1065,7 +1065,7 @@ func TriggerDockerPrune() tea.Cmd {
 			}
 			return nil
 		}
-		dialog := NewProgramBoxModel("{{|TitleSuccess|}}Docker Prune{{[-]}}", "Removing unused docker resources.\n"+CmdLine("--prune"), "")
+		dialog := NewProgramBoxModel("Docker Prune", "Removing unused docker resources.\n"+CmdLine("--prune"), "").WithDialogType(DialogTypeSuccess)
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)

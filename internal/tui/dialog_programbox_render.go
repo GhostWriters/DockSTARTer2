@@ -318,6 +318,9 @@ func (m *ProgramBoxModel) GetHelpText() string {
 	return "Running." + scrollInfo + " | Press Ctrl+C to cancel | PgUp/PgDn to scroll"
 }
 
+// HelpText satisfies the model_update.go helpline interface (mirrors GetHelpText).
+func (m *ProgramBoxModel) HelpText() string { return m.GetHelpText() }
+
 // RunProgramBox displays a program box dialog that shows command output
 func RunProgramBox(ctx context.Context, title, subtitle string, task func(context.Context, io.Writer) error) error {
 
