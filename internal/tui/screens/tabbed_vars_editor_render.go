@@ -113,7 +113,7 @@ func (m *TabbedVarsEditorModel) View() tea.View {
 		if c != nil {
 			layout := tui.GetLayout()
 			c.X += m.lastOffsetX + layout.NestedLeftOffset()
-			c.Y += m.lastOffsetY + layout.NestedTopOffset() + m.subtitleHeight
+			c.Y += m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight
 			v.Cursor = c
 		}
 	}
@@ -263,6 +263,7 @@ func (m *TabbedVarsEditorModel) SetSize(width, height int) {
 			largeTitleOverhead = 0
 		}
 	}
+	m.largeTitleOverhead = largeTitleOverhead
 
 	// Available for the editor: total inner height minus button row, subtitle, editor borders, and large titlebar rows
 	m.editorHeight = m.height - layout.BorderHeight() - largeTitleOverhead - m.buttonHeight - m.subtitleHeight - layout.BorderHeight()

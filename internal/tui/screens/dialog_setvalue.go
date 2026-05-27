@@ -694,20 +694,25 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 	ctx := tui.GetActiveContext()
 	contentW := m.innerWidth()
 
+	largeTitleOverhead := 0
+	if ctx.LargeTitleBars {
+		largeTitleOverhead = tui.LargeTitleBarOverhead
+	}
+
 	headingRaw := FormatMenuHeading(MenuHeadingParams{
 		AppName: m.appName, AppDescription: m.appDesc,
 		FilePath: m.filePath,
 		VarName:  m.varName, OriginalValue: m.origVal, CurrentValue: m.input.Value(),
 	}, contentW)
 	headingH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToThemeANSI(headingRaw)))
-	// outer border(1) + headingH + "Current Value" section(3) (headingH includes padding natively)
-	listTop := 1 + headingH + 3
+	// outer border(1) + largeTitleOverhead + headingH + "Current Value" section(3)
+	listTop := 1 + largeTitleOverhead + headingH + 3
 
 	// Cover the full preset content area (including blank rows) so clicking
 	// anywhere in the box focuses the list.
-	// Input hit region: outer_border(1) + headingH + section_top_border(1) = input row Y
+	// Input hit region: outer_border(1) + largeTitleOverhead + headingH + section_top_border(1) = input row Y
 	// Text starts at: outer_border(1) + section_border(1) + padding(1) + promptW
-	inputY := 1 + headingH + 1
+	inputY := 1 + largeTitleOverhead + headingH + 1
 	m.inputRelY = inputY
 	m.inputScreenX = offsetX + 1 + 1 + 1 + m.input.PromptWidth()
 	m.input.SetScreenTextX(m.inputScreenX)

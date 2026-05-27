@@ -58,7 +58,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Hit region is at NestedLeftOffset, NestedTopOffset + subtitleHeight
 				layout := tui.GetLayout()
 				relX := msg.X - (m.lastOffsetX + layout.NestedLeftOffset())
-				relY := msg.Y - (m.lastOffsetY + layout.NestedTopOffset() + m.subtitleHeight)
+				relY := msg.Y - (m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight)
 
 				var cmd tea.Cmd
 				m.tabs[m.activeTab].editor, cmd = m.tabs[m.activeTab].editor.Update(tea.MouseClickMsg{
@@ -114,7 +114,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Translate coordinates to editor-relative
 			layout := tui.GetLayout()
 			relX := msg.X - (m.lastOffsetX + layout.NestedLeftOffset())
-			relY := msg.Y - (m.lastOffsetY + layout.NestedTopOffset() + m.subtitleHeight)
+			relY := msg.Y - (m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight)
 
 			var cmd tea.Cmd
 			m.tabs[m.activeTab].editor, cmd = m.tabs[m.activeTab].editor.Update(tea.MouseClickMsg{
@@ -192,7 +192,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.focus == envFocusEditor && len(m.tabs) > 0 {
 				editor := m.tabs[m.activeTab].editor
 				layout := tui.GetLayout()
-				y := m.lastOffsetY + layout.NestedTopOffset() + m.subtitleHeight + editor.CursorVisualRow() - editor.YOffset()
+				y := m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight + editor.CursorVisualRow() - editor.YOffset()
 				x := m.lastOffsetX + layout.NestedLeftOffset()
 				return m, m.showContextMenuForClick(x, y)
 			}
@@ -273,7 +273,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if editor.IsDragging() {
 				layout := tui.GetLayout()
 				relX := msg.X - (m.lastOffsetX + layout.NestedLeftOffset())
-				relY := msg.Y - (m.lastOffsetY + layout.NestedTopOffset() + m.subtitleHeight)
+				relY := msg.Y - (m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight)
 				var cmd tea.Cmd
 				m.tabs[m.activeTab].editor, cmd = editor.Update(tea.MouseMotionMsg{
 					X: relX,
@@ -287,7 +287,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.focus == envFocusEditor && len(m.tabs) > 0 {
 			layout := tui.GetLayout()
 			relX := msg.X - (m.lastOffsetX + layout.NestedLeftOffset())
-			relY := msg.Y - (m.lastOffsetY + layout.NestedTopOffset() + m.subtitleHeight)
+			relY := msg.Y - (m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight)
 			var cmd tea.Cmd
 			m.tabs[m.activeTab].editor, cmd = m.tabs[m.activeTab].editor.Update(tea.MouseReleaseMsg{
 				X:      relX,

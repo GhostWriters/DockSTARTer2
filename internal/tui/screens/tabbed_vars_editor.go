@@ -69,13 +69,14 @@ type TabbedVarsEditorModel struct {
 	focus envFocusArea
 
 	// Action buttons
-	buttons        []string
-	btnIdx         int
-	buttonHeight   int
-	subtitleHeight int
-	editorHeight   int
-	contentWidth   int
-	focused        bool
+	buttons            []string
+	btnIdx             int
+	buttonHeight       int
+	subtitleHeight     int
+	largeTitleOverhead int
+	editorHeight       int
+	contentWidth       int
+	focused            bool
 
 	// Callbacks
 	onClose tea.Cmd
@@ -315,7 +316,7 @@ func (m *TabbedVarsEditorModel) GetInputCursor() (relX, relY int, shape tea.Curs
 	// plus subtitle rows stacked above the inner border.
 	layout := tui.GetLayout()
 	relX = 1 + layout.ContentSideMargin + 1 + c.X
-	relY = 2 + m.subtitleHeight + c.Y
+	relY = 2 + m.largeTitleOverhead + m.subtitleHeight + c.Y
 	switch {
 	case !editor.IsEditableAtCursor():
 		shape = tea.CursorUnderline

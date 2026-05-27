@@ -54,7 +54,7 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitReg
 			regions = append(regions, tui.HitRegion{
 				ID:     "tabbed_vars.tab-" + strconv.Itoa(i),
 				X:      tabX,
-				Y:      offsetY + 1 + m.subtitleHeight, // outer border + subtitle + inner border line with tabs
+				Y:      offsetY + 1 + m.largeTitleOverhead + m.subtitleHeight, // outer border + large title + subtitle + inner border line with tabs
 				Width:  tabWidth,
 				Height: 1,
 				ZOrder: tui.ZDialog + 10,
@@ -74,7 +74,7 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitReg
 	regions = append(regions, tui.HitRegion{
 		ID:     "tabbed_vars.editor",
 		X:      offsetX + layout.NestedLeftOffset(),
-		Y:      offsetY + layout.NestedTopOffset() + m.subtitleHeight,
+		Y:      offsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight,
 		Width:  m.contentWidth - layout.BorderWidth(), // inner box content width
 		Height: m.editorHeight,
 		ZOrder: tui.ZDialog + 5,
@@ -134,8 +134,8 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 
 	layout := tui.GetLayout()
 	// Compute which editor row was clicked.
-	// Editor content starts at: lastOffsetY + layout.NestedTopOffset() + m.subtitleHeight
-	editorTopY := m.lastOffsetY + layout.NestedTopOffset() + m.subtitleHeight
+	// Editor content starts at: lastOffsetY + layout.NestedTopOffset() + largeTitleOverhead + m.subtitleHeight
+	editorTopY := m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight
 	clickedVisualRow := (y - editorTopY) + editor.YOffset()
 
 	// Convert visual (screen) row to logical line index to handle wrapped lines correctly.
