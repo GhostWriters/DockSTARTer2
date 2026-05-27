@@ -150,7 +150,7 @@ ProgressInProgress = "{{[white:$accent:-B]}}"
 ProgressCompleted = "{{[$accent:black:-B]}}"
 
 # Large Title Bar
-LargeTitleArea = "{{[black:white:-]}}"
+LargeTitleArea = "{{[cyan:black:-]}}"
 LargeTitleAreaHelp = "{{|LargeTitleArea::yellow|}}"
 LargeTitleAreaNotice = "{{|LargeTitleArea::green|}}"
 LargeTitleAreaWarn = "{{|LargeTitleArea::yellow|}}"
