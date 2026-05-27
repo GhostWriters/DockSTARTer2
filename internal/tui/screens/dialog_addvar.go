@@ -870,10 +870,15 @@ func (m *addVarDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegion 
 	ctx := tui.GetActiveContext()
 	contentW := m.innerWidth()
 
+	largeTitleOverhead := 0
+	if ctx.LargeTitleBars {
+		largeTitleOverhead = tui.LargeTitleBarOverhead
+	}
+
 	headingRaw := FormatMenuHeading(MenuHeadingParams{AppName: m.appName, AppDescription: m.appDesc}, contentW)
 	headingH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToThemeANSI(headingRaw)))
-	// list starts at: outer border(1) + headingH + "Variable Name" section(3) (headingH includes padding natively)
-	listTop := 1 + headingH + 3
+	// list starts at: outer border(1) + largeTitleOverhead + headingH + "Variable Name" section(3)
+	listTop := 1 + largeTitleOverhead + headingH + 3
 
 	listH := 0
 	rowBudget := m.maxVis
@@ -893,8 +898,8 @@ func (m *addVarDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegion 
 		listH += h
 	}
 
-	// Input hit region: outer_border(1) + headingH + section_top_border(1)
-	inputY := 1 + headingH + 1
+	// Input hit region: outer_border(1) + largeTitleOverhead + headingH + section_top_border(1)
+	inputY := 1 + largeTitleOverhead + headingH + 1
 	m.inputRelY = inputY
 	m.inputScreenX = offsetX + 1 + 1 + 1 + m.input.PromptWidth()
 	m.input.SetScreenTextX(m.inputScreenX)
