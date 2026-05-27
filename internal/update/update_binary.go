@@ -61,21 +61,16 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 		if err != nil {
 			logger.Debug(ctx, "Git tag check failed: %v (will fall back to API)", err)
 		} else if tag == "" {
-			// No tags found for this channel
-			var msg []string
 			if switchingChannels {
-				msg = []string{
-					fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} channel '{{|Branch|}}%s{{[-]}}' does not exist.", version.ApplicationName, requestedVersion),
-					fmt.Sprintf("Run '{{|UserCommand|}}%s -u main{{[-]}}' to update to the latest stable release.", version.CommandName),
-				}
-			} else {
-				msg = []string{
-					fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} channel '{{|Branch|}}%s{{[-]}}' appears to no longer exist.", version.ApplicationName, requestedVersion),
-					fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} is currently on version '{{|Version|}}%s{{[-]}}'.", version.ApplicationName, version.Version),
-					fmt.Sprintf("Run '{{|UserCommand|}}%s -u main{{[-]}}' to update to the latest stable release.", version.CommandName),
-				}
+				logger.Error(ctx, "{{|ApplicationName|}}%s{{[-]}} channel '{{|Branch|}}%s{{[-]}}' does not exist on origin.", version.ApplicationName, requestedVersion)
+				return fmt.Errorf("channel '%s' does not exist", requestedVersion)
 			}
-			logger.Warn(ctx, msg)
+			// Current channel no longer has releases
+			logger.Warn(ctx, []string{
+				fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} channel '{{|Branch|}}%s{{[-]}}' appears to no longer exist.", version.ApplicationName, requestedVersion),
+				fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} is currently on version '{{|Version|}}%s{{[-]}}'.", version.ApplicationName, version.Version),
+				fmt.Sprintf("Run '{{|UserCommand|}}%s -u main{{[-]}}' to update to the latest stable release.", version.CommandName),
+			})
 			return nil
 		}
 	}
@@ -112,20 +107,15 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 		return fmt.Errorf("failed to detect latest version: %w", err)
 	}
 	if !found {
-		var msg []string
 		if switchingChannels {
-			msg = []string{
-				fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} channel '{{|Branch|}}%s{{[-]}}' does not exist.", version.ApplicationName, requestedVersion),
-				fmt.Sprintf("Run '{{|UserCommand|}}%s -u main{{[-]}}' to update to the latest stable release.", version.CommandName),
-			}
-		} else {
-			msg = []string{
-				fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} channel '{{|Branch|}}%s{{[-]}}' appears to no longer exist.", version.ApplicationName, requestedVersion),
-				fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} is currently on version '{{|Version|}}%s{{[-]}}'.", version.ApplicationName, version.Version),
-				fmt.Sprintf("Run '{{|UserCommand|}}%s -u main{{[-]}}' to update to the latest stable release.", version.CommandName),
-			}
+			logger.Error(ctx, "{{|ApplicationName|}}%s{{[-]}} channel '{{|Branch|}}%s{{[-]}}' does not exist on origin.", version.ApplicationName, requestedVersion)
+			return fmt.Errorf("channel '%s' does not exist", requestedVersion)
 		}
-		logger.Warn(ctx, msg)
+		logger.Warn(ctx, []string{
+			fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} channel '{{|Branch|}}%s{{[-]}}' appears to no longer exist.", version.ApplicationName, requestedVersion),
+			fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} is currently on version '{{|Version|}}%s{{[-]}}'.", version.ApplicationName, version.Version),
+			fmt.Sprintf("Run '{{|UserCommand|}}%s -u main{{[-]}}' to update to the latest stable release.", version.CommandName),
+		})
 		return nil
 	}
 
