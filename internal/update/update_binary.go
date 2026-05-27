@@ -47,13 +47,6 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 		switchingChannels = !strings.EqualFold(currentChannel, "stable")
 	}
 
-	// If switching channels, warn if the current channel no longer exists.
-	if switchingChannels && !strings.HasPrefix(currentChannel, "v") {
-		if curTag, err := latestChannelTag(currentChannel); err == nil && curTag == "" {
-			logger.Warn(ctx, "{{|ApplicationName|}}%s{{[-]}} channel '{{|Branch|}}%s{{[-]}}' appears to no longer exist.", version.ApplicationName, currentChannel)
-		}
-	}
-
 	// Quick check using git ls-remote to see if tags for this channel exist.
 	// This avoids hitting the GitHub releases API unnecessarily.
 	if !strings.HasPrefix(requestedVersion, "v") {
