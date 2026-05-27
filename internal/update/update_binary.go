@@ -36,6 +36,7 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 	repo := selfupdate.ParseSlug(slug)
 
 	currentChannel := GetCurrentChannel()
+	switchingChannels := requestedVersion != "" && !strings.EqualFold(requestedVersion, currentChannel) && !strings.EqualFold(requestedVersion, "main")
 	if requestedVersion == "" {
 		requestedVersion = currentChannel
 	}
@@ -43,6 +44,14 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 	// Map "main" to "stable" channel
 	if strings.EqualFold(requestedVersion, "main") {
 		requestedVersion = "stable"
+		switchingChannels = !strings.EqualFold(currentChannel, "stable")
+	}
+
+	// If switching channels, warn if the current channel no longer exists.
+	if switchingChannels && !strings.HasPrefix(currentChannel, "v") {
+		if curTag, err := latestChannelTag(currentChannel); err == nil && curTag == "" {
+			logger.Warn(ctx, "{{|ApplicationName|}}%s{{[-]}} channel '{{|Branch|}}%s{{[-]}}' appears to no longer exist.", version.ApplicationName, currentChannel)
+		}
 	}
 
 	// Quick check using git ls-remote to see if tags for this channel exist.
@@ -52,11 +61,19 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 		if err != nil {
 			logger.Debug(ctx, "Git tag check failed: %v (will fall back to API)", err)
 		} else if tag == "" {
-			// No tags found for this channel - show warning and return early
-			msg := []string{
-				fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} channel '{{|Branch|}}%s{{[-]}}' appears to no longer exist (no releases found).", version.ApplicationName, requestedVersion),
-				fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} is currently on version '{{|Version|}}%s{{[-]}}'.", version.ApplicationName, version.Version),
-				fmt.Sprintf("Run '{{|UserCommand|}}%s -u main{{[-]}}' to update to the latest stable release.", version.CommandName),
+			// No tags found for this channel
+			var msg []string
+			if switchingChannels {
+				msg = []string{
+					fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} channel '{{|Branch|}}%s{{[-]}}' does not exist.", version.ApplicationName, requestedVersion),
+					fmt.Sprintf("Run '{{|UserCommand|}}%s -u main{{[-]}}' to update to the latest stable release.", version.CommandName),
+				}
+			} else {
+				msg = []string{
+					fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} channel '{{|Branch|}}%s{{[-]}}' appears to no longer exist.", version.ApplicationName, requestedVersion),
+					fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} is currently on version '{{|Version|}}%s{{[-]}}'.", version.ApplicationName, version.Version),
+					fmt.Sprintf("Run '{{|UserCommand|}}%s -u main{{[-]}}' to update to the latest stable release.", version.CommandName),
+				}
 			}
 			logger.Warn(ctx, msg)
 			return nil
@@ -95,10 +112,18 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 		return fmt.Errorf("failed to detect latest version: %w", err)
 	}
 	if !found {
-		msg := []string{
-			fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} channel '{{|Branch|}}%s{{[-]}}' appears to no longer exist (no releases found).", version.ApplicationName, requestedVersion),
-			fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} is currently on version '{{|Version|}}%s{{[-]}}'.", version.ApplicationName, version.Version),
-			fmt.Sprintf("Run '{{|UserCommand|}}%s -u main{{[-]}}' to update to the latest stable release.", version.CommandName),
+		var msg []string
+		if switchingChannels {
+			msg = []string{
+				fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} channel '{{|Branch|}}%s{{[-]}}' does not exist.", version.ApplicationName, requestedVersion),
+				fmt.Sprintf("Run '{{|UserCommand|}}%s -u main{{[-]}}' to update to the latest stable release.", version.CommandName),
+			}
+		} else {
+			msg = []string{
+				fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} channel '{{|Branch|}}%s{{[-]}}' appears to no longer exist.", version.ApplicationName, requestedVersion),
+				fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} is currently on version '{{|Version|}}%s{{[-]}}'.", version.ApplicationName, version.Version),
+				fmt.Sprintf("Run '{{|UserCommand|}}%s -u main{{[-]}}' to update to the latest stable release.", version.CommandName),
+			}
 		}
 		logger.Warn(ctx, msg)
 		return nil
