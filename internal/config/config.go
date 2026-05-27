@@ -76,7 +76,8 @@ type AuthConfig struct {
 type UIConfig struct {
 	Theme             string `toml:"theme"`
 	Borders           bool   `toml:"borders"`
-	ButtonBorders     bool   `toml:"button_borders"`
+	LargeButtons      bool   `toml:"large_buttons"`
+	LargeTitleBars    bool   `toml:"large_title_bars"`
 	LineCharacters    bool   `toml:"line_characters"`
 	Shadow            bool   `toml:"shadow"`
 	ShadowLevel       int    `toml:"shadow_level"` // 0=off, 1=light(░), 2=medium(▒), 3=dark(▓), 4=solid(█)
@@ -389,8 +390,10 @@ func UnmarshalRobust(data []byte, v any) (map[string]bool, error) {
 				present["Theme"] = true
 			case "ui.borders":
 				present["Borders"] = true
-			case "ui.button_borders":
-				present["ButtonBorders"] = true
+			case "ui.large_buttons":
+				present["LargeButtons"] = true
+			case "ui.large_title_bars":
+				present["LargeTitleBars"] = true
 			case "ui.line_characters":
 				present["LineCharacters"] = true
 			case "ui.scrollbar":
@@ -649,7 +652,7 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 
 	keys := []string{
 		"ConfigFolder", "ComposeFolder",
-		"Theme", "Borders", "ButtonBorders", "LineCharacters", "Scrollbar", "Shadow", "ShadowLevel", "BorderColor",
+		"Theme", "Borders", "LargeButtons", "LargeTitleBars", "LineCharacters", "Scrollbar", "Shadow", "ShadowLevel", "BorderColor",
 		"DialogTitleAlign", "SubmenuTitleAlign", "PanelTitleAlign", "PanelLocal", "PanelRemote",
 		"SSHPort", "WebPort", "AuthMode",
 	}
@@ -658,7 +661,8 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 		"ComposeFolder":     "Compose Folder",
 		"Theme":             "Theme",
 		"Borders":           "Borders",
-		"ButtonBorders":     "Button Borders",
+		"LargeButtons":     "Large Buttons",
+		"LargeTitleBars":    "Large Title Bars",
 		"LineCharacters":    "Line Characters",
 		"Scrollbar":         "Scrollbar",
 		"Shadow":            "Shadow",
@@ -705,8 +709,10 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 			value = conf.UI.Theme
 		case "Borders":
 			value = boolToYesNo(conf.UI.Borders)
-		case "ButtonBorders":
-			value = boolToYesNo(conf.UI.ButtonBorders)
+		case "LargeButtons":
+			value = boolToYesNo(conf.UI.LargeButtons)
+		case "LargeTitleBars":
+			value = boolToYesNo(conf.UI.LargeTitleBars)
 		case "LineCharacters":
 			value = boolToYesNo(conf.UI.LineCharacters)
 		case "Scrollbar":

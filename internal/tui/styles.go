@@ -164,6 +164,7 @@ type Styles struct {
 	DialogTitleHelp     lipgloss.Style
 	SubmenuTitle        lipgloss.Style
 	SubmenuTitleFocused lipgloss.Style
+	LargeTitleArea      lipgloss.Style
 
 	// Borders
 	Border       lipgloss.Border
@@ -215,7 +216,8 @@ type Styles struct {
 	// Settings
 	LineCharacters    bool
 	DrawBorders       bool
-	ButtonBorders     bool
+	LargeButtons     bool
+	LargeTitleBars    bool
 	DialogTitleAlign  string
 	SubmenuTitleAlign string
 	PanelTitleAlign   string
@@ -236,7 +238,8 @@ type Styles struct {
 type StyleContext struct {
 	LineCharacters      bool
 	DrawBorders         bool
-	ButtonBorders       bool
+	LargeButtons       bool
+	LargeTitleBars      bool
 	Type                DialogType
 	Screen              lipgloss.Style
 	Dialog              lipgloss.Style
@@ -245,6 +248,7 @@ type StyleContext struct {
 	DialogTitleHelp     lipgloss.Style
 	SubmenuTitle        lipgloss.Style
 	SubmenuTitleFocused lipgloss.Style
+	LargeTitleArea      lipgloss.Style
 	Border              lipgloss.Border
 	BorderColor         color.Color
 	Border2Color        color.Color
@@ -296,7 +300,8 @@ func GetActiveContext() StyleContext {
 	return StyleContext{
 		LineCharacters:      currentStyles.LineCharacters,
 		DrawBorders:         currentStyles.DrawBorders,
-		ButtonBorders:       currentStyles.ButtonBorders,
+		LargeButtons:       currentStyles.LargeButtons,
+		LargeTitleBars:      currentStyles.LargeTitleBars,
 		Type:                DialogTypeInfo, // Default to info
 		Screen:              currentStyles.Screen,
 		Dialog:              currentStyles.Dialog,
@@ -305,6 +310,7 @@ func GetActiveContext() StyleContext {
 		DialogTitleHelp:     currentStyles.DialogTitleHelp,
 		SubmenuTitle:        currentStyles.SubmenuTitle,
 		SubmenuTitleFocused: currentStyles.SubmenuTitleFocused,
+		LargeTitleArea:      currentStyles.LargeTitleArea,
 		Border:              currentStyles.Border,
 		BorderColor:         currentStyles.BorderColor,
 		Border2Color:        currentStyles.Border2Color,
@@ -464,7 +470,8 @@ func InitStyles(cfg config.AppConfig) {
 	// Store LineCharacters setting for later use
 	currentStyles.LineCharacters = cfg.UI.LineCharacters
 	currentStyles.DrawBorders = cfg.UI.Borders
-	currentStyles.ButtonBorders = cfg.UI.ButtonBorders
+	currentStyles.LargeButtons = cfg.UI.LargeButtons
+	currentStyles.LargeTitleBars = cfg.UI.LargeTitleBars
 
 	// Border style based on LineCharacters setting
 	if cfg.UI.LineCharacters { // Updated: Use cfg.UI.LineCharacters
@@ -619,6 +626,9 @@ func InitStyles(cfg config.AppConfig) {
 	// Submenu Title
 	currentStyles.SubmenuTitle = SemanticRawStyle("TitleSubMenu")
 	currentStyles.SubmenuTitleFocused = SemanticRawStyle("TitleSubMenuFocused")
+
+	// Large Title Bar
+	currentStyles.LargeTitleArea = SemanticRawStyle("LargeTitleArea")
 
 	// Initialize semantic styles from console color tags (Theme-specific to avoid log interference)
 	currentStyles.StatusSuccess = SemanticRawStyle("TitleNotice")

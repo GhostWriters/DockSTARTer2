@@ -422,7 +422,8 @@ func resolveThemeValue(raw string, rawValues map[string]string, visiting map[str
 
 type ThemeDefaults struct {
 	Borders           *bool   `toml:"borders"`
-	ButtonBorders     *bool   `toml:"button_borders"`
+	LargeButtons      *bool   `toml:"large_buttons"`
+	LargeTitleBars    *bool   `toml:"large_title_bars"`
 	LineCharacters    *bool   `toml:"line_characters"`
 	Shadow            *bool   `toml:"shadow"`
 	ShadowLevel       *int    `toml:"shadow_level"`
@@ -567,9 +568,13 @@ func ApplyThemeDefaults(conf *config.AppConfig, defaults ThemeDefaults) map[stri
 		conf.UI.Borders = *defaults.Borders
 		applied["Borders"] = fmt.Sprintf("%v", conf.UI.Borders)
 	}
-	if defaults.ButtonBorders != nil {
-		conf.UI.ButtonBorders = *defaults.ButtonBorders
-		applied["Button Borders"] = fmt.Sprintf("%v", conf.UI.ButtonBorders)
+	if defaults.LargeButtons != nil {
+		conf.UI.LargeButtons = *defaults.LargeButtons
+		applied["Large Buttons"] = fmt.Sprintf("%v", conf.UI.LargeButtons)
+	}
+	if defaults.LargeTitleBars != nil {
+		conf.UI.LargeTitleBars = *defaults.LargeTitleBars
+		applied["Large Title Bars"] = fmt.Sprintf("%v", conf.UI.LargeTitleBars)
 	}
 	if defaults.LineCharacters != nil {
 		conf.UI.LineCharacters = *defaults.LineCharacters

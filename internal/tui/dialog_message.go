@@ -163,12 +163,17 @@ func (m *messageDialogModel) ViewString() string {
 
 	// Add title with prefix/suffix and wrap in border
 	dialogType := DialogTypeInfo
-	if m.messageType == MessageError {
+	switch m.messageType {
+	case MessageSuccess:
+		dialogType = DialogTypeSuccess
+	case MessageWarning:
+		dialogType = DialogTypeWarning
+	case MessageError:
 		dialogType = DialogTypeError
 	}
 	ctx := GetActiveContext()
-	widgets := m.buildTitleBarWidgets(ctx)
-	return renderDialogWithTypeAndWidgets(fullTitle, fullContent, m.focused || m.titleBarFocused, 0, dialogType, ctx, widgets)
+	ctx.LargeTitleBars = m.layout.LargeTitleBar
+	return renderDialogWithTypeAndWidgets(fullTitle, fullContent, m.focused || m.titleBarFocused, 0, dialogType, ctx, TitleBarState{Show: true, Focused: m.titleBarFocused, ActiveWidget: m.titleBarWidget})
 }
 
 // View implements tea.Model
@@ -185,6 +190,9 @@ func (m *messageDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 
 	// buttonY: border (1) + message with padding
 	buttonY := 1 + messageHeight
+	if m.layout.LargeTitleBar {
+		buttonY += LargeTitleBarOverhead
+	}
 
 	// Use centralized button hit region helper with dialog ID for disambiguation
 	// Must include Text to properly calculate button width

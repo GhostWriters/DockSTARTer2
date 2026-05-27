@@ -224,6 +224,15 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, uCmd
 		}
 
+		// Title widget clicks — delegate to outerMenu
+		if s.outerMenu != nil && (strings.HasSuffix(msg.ID, "."+tui.IDTitleWidgetHelp) || strings.HasSuffix(msg.ID, "."+tui.IDTitleWidgetClose)) {
+			updated, uCmd := s.outerMenu.Update(msg)
+			if m, ok := updated.(*tui.MenuModel); ok {
+				s.outerMenu = m
+			}
+			return s, uCmd
+		}
+
 	case tui.ToggleFocusedMsg:
 		// Middle click: activate the currently focused item in the hovered panel
 		switch s.focusedPanel {
@@ -400,7 +409,8 @@ func (s *DisplayOptionsScreen) applyPreview(themeName string) {
 	// This preserves choices like PanelLocal/PanelRemote, Borders, Shadow, etc.
 	// that the user has changed since opening this screen.
 	s.config.UI.Borders = staged.Borders
-	s.config.UI.ButtonBorders = staged.ButtonBorders
+	s.config.UI.LargeButtons = staged.LargeButtons
+	s.config.UI.LargeTitleBars = staged.LargeTitleBars
 	s.config.UI.LineCharacters = staged.LineCharacters
 	s.config.UI.Shadow = staged.Shadow
 	s.config.UI.ShadowLevel = staged.ShadowLevel
@@ -425,8 +435,10 @@ func (s *DisplayOptionsScreen) syncOptionsMenu() {
 		switch items[i].Tag {
 		case "Borders":
 			items[i].Checked = s.config.UI.Borders
-		case "Button Borders":
-			items[i].Checked = s.config.UI.ButtonBorders
+		case "Large Buttons":
+			items[i].Checked = s.config.UI.LargeButtons
+		case "Large Title Bars":
+			items[i].Checked = s.config.UI.LargeTitleBars
 		case "Line Characters":
 			items[i].Checked = s.config.UI.LineCharacters
 		case "Shadow":

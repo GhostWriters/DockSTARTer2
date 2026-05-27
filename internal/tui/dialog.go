@@ -58,6 +58,9 @@ type DialogLayout struct {
 	ButtonHeight   int
 	ShadowHeight   int
 	Overhead       int
+	SubtitleHeight int // actual rendered subtitle height at layout time
+
+	LargeTitleBar  bool // whether large titlebar is active (pre-computed at layout time)
 
 	// Hit region positions (calculated during render)
 	ListX    int // X offset to first list item content
@@ -125,12 +128,21 @@ func newStandardDialogLayout(width, height int) DialogLayout {
 		shadow = DialogShadowHeight
 	}
 	buttons := DialogButtonHeight
+	// Use large titlebar if enabled and the dialog is tall enough to fit it.
+	// Conservative check: need at least 3 content rows after all overhead.
+	largeTitleBar := currentConfig.UI.LargeTitleBars &&
+		height > DialogBorderHeight+buttons+shadow+LargeTitleBarOverhead+3
+	overhead := DialogBorderHeight + buttons + shadow
+	if largeTitleBar {
+		overhead += LargeTitleBarOverhead
+	}
 	return DialogLayout{
-		Width:        width,
-		Height:       height,
-		ButtonHeight: buttons,
-		ShadowHeight: shadow,
-		Overhead:     DialogBorderHeight + buttons + shadow,
+		Width:         width,
+		Height:        height,
+		ButtonHeight:  buttons,
+		ShadowHeight:  shadow,
+		Overhead:      overhead,
+		LargeTitleBar: largeTitleBar,
 	}
 }
 

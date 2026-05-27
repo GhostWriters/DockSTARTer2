@@ -21,6 +21,9 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	// 1. Vertical Positioning (Y)
 	// All menus start inside an outer Top Border (1 line).
 	listY := layout.SingleBorder()
+	if m.layout.LargeTitleBar {
+		listY += LargeTitleBarOverhead
+	}
 
 	// Account for subtitle if present (positioned above the list content)
 	subtitleH := 0
@@ -90,12 +93,15 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	maxHeight := m.layout.ViewportHeight
 
 	// 3. List panel region (covers only the list items, for scroll focus)
+	// Use m.layout.ViewportHeight, not m.list.Height(): flow mode menus never call
+	// m.list.SetSize so m.list.Height() stays at the initial item count and would
+	// extend the region far below the visible section into adjacent panels.
 	regions = append(regions, HitRegion{
 		ID:     m.id + "." + IDListPanel,
 		X:      offsetX + listX,
 		Y:      offsetY + listY,
 		Width:  m.list.Width(),
-		Height: m.list.Height(),
+		Height: m.layout.ViewportHeight,
 		ZOrder: baseZ + 7, // Below items (+10) but above backdrop (+5)
 		Label:  m.title,
 	})
@@ -159,16 +165,22 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		}
 	} else {
 		// Flow mode: items are arranged horizontally across multiple lines.
-		// Replicate the layout logic from renderFlow() to compute per-item positions.
-		// In flow mode, available width is the inner width minus 2 (for side padding)
-		maxWidth, _ := layout.InnerContentSize(m.width, m.height)
-		if maxWidth > 2 {
-			maxWidth -= 2
+		// Replicate the layout logic from the renderer to compute per-item positions.
+		// subMenuMode: viewSubMenu calls renderFlowContent(m.width - BorderWidth())
+		// non-subMenuMode: renderFlow calls renderFlowContent(InnerContentSize - 2)
+		var maxWidth int
+		if m.subMenuMode {
+			maxWidth = m.width - layout.BorderWidth()
+		} else {
+			maxWidth, _ = layout.InnerContentSize(m.width, m.height)
+			if maxWidth > 2 {
+				maxWidth -= 2
+			}
 		}
 
 		ctx := GetActiveContext()
 		const itemSpacing = 3
-		// lineContentX: items start 1 char past listX because renderFlow applies
+		// lineContentX: items start 1 char past listX because renderFlowContent applies
 		// lineStyle.Padding(0, 1) which adds a 1-char left margin.
 		lineContentX := listX + 1
 
@@ -309,21 +321,25 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		// narrower than m.width based on content, so the widget X must match.
 		dialogWidth := m.GetInnerContentWidth() + GetLayout().BorderWidth()
 		widgetsStartX := offsetX + dialogWidth - 1 - endPad - widgetTotalWidth
-		// [?] occupies chars 0-2 of the widget string (after leading space... actually no leading space)
-		// Widget string from renderTitleBarWidgets: "[?]" + " " + "[×]"
+		// Widget layout: "[?]" (3) + " " (1) + "[×]" (3) — help starts at 0, close at +4.
 		helpWidgetX := widgetsStartX
 		closeWidgetX := widgetsStartX + 4 // "[?] " = 4 chars
+		// Large titlebar: widgets are on the title row (row 1), not the top border (row 0).
+		widgetY := offsetY
+		if m.layout.LargeTitleBar {
+			widgetY++
+		}
 		regions = append(regions,
 			HitRegion{
 				ID:     m.id + "." + IDTitleWidgetHelp,
-				X:      helpWidgetX, Y: offsetY, Width: 3, Height: 1,
+				X:      helpWidgetX, Y: widgetY, Width: 3, Height: 1,
 				ZOrder: baseZ + 25,
 				Label:  "Help",
 				Help:   &HelpContext{ScreenName: m.title, PageTitle: "Help", PageText: "Open help for this dialog."},
 			},
 			HitRegion{
 				ID:     m.id + "." + IDTitleWidgetClose,
-				X:      closeWidgetX, Y: offsetY, Width: 3, Height: 1,
+				X:      closeWidgetX, Y: widgetY, Width: 3, Height: 1,
 				ZOrder: baseZ + 25,
 				Label:  "Close",
 				Help:   &HelpContext{ScreenName: m.title, PageTitle: "Close", PageText: "Close this dialog."},

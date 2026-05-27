@@ -41,7 +41,9 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	previewCtx := tui.StyleContext{
 		LineCharacters:      s.config.UI.LineCharacters,
 		DrawBorders:         s.config.UI.Borders,
-		ButtonBorders:       s.config.UI.ButtonBorders,
+		LargeButtons:        s.config.UI.LargeButtons,
+		LargeTitleBars:      s.config.UI.LargeTitleBars,
+		LargeTitleArea:      tui.SemanticRawStyle("Preview_LargeTitleArea"),
 		Screen:              bgStyle,
 		Dialog:              dContent,
 		ContentBackground:   dContent,
@@ -203,6 +205,14 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	}
 	contentStr := strings.Join(contentLines, "\n")
 
+	// Add a button row so large vs flat buttons are visible in the preview.
+	buttonRow := tui.RenderCenteredButtonsCtx(38, previewCtx,
+		tui.ButtonSpec{Text: "OK"},
+		tui.ButtonSpec{Text: "Cancel"},
+	)
+	buttonRow = strings.TrimSuffix(buttonRow, "\n")
+	contentStr = strings.TrimSuffix(contentStr, "\n") + "\n" + buttonRow
+
 	titleParts := []string{
 		"{{|Title|}}Title{{[-]}}",
 		"{{|TitleSuccess|}}S{{[-]}}",
@@ -228,10 +238,7 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	}
 	backdropBlock := lipgloss.JoinVertical(lipgloss.Left, backdropLines...)
 
-	// Build title bar widgets ([?]─[×]) to demonstrate icon styles
-	titleWidgets := tui.BuildInactiveTitleWidgets(previewCtx)
-
-	dialogBox := tui.RenderBorderedBoxCtx(dTitle, contentStr, 38, 0, true, true, false, previewCtx.DialogTitleAlign, "Title", previewCtx, titleWidgets)
+	dialogBox := tui.RenderBorderedBoxCtx(dTitle, contentStr, 38, 0, true, true, false, previewCtx.DialogTitleAlign, "Title", previewCtx, tui.TitleBarState{Show: true})
 	dialogBox = tui.AddShadowCtx(dialogBox, previewCtx)
 
 	// Pad dialogBox to full backdrop width with explicit Screen bg chars so no

@@ -135,6 +135,7 @@ func (m *choiceDialogModel) ViewString() string {
 	}
 
 	ctx := GetActiveContext()
+	ctx.LargeTitleBars = m.layout.LargeTitleBar
 	borderBG := ctx.Dialog.GetBackground()
 	contentWidth := m.contentWidth()
 
@@ -150,8 +151,7 @@ func (m *choiceDialogModel) ViewString() string {
 	spacer := lipgloss.NewStyle().Width(contentWidth).Background(borderBG).Render("")
 	fullContent := lipgloss.JoinVertical(lipgloss.Left, questionText, spacer, buttonRow)
 
-	widgets := m.buildTitleBarWidgets(ctx)
-	return renderDialogWithTypeAndWidgets(m.title, fullContent, m.baseDialogModel.focused || m.titleBarFocused, 0, DialogTypeConfirm, ctx, widgets)
+	return renderDialogWithTypeAndWidgets(m.title, fullContent, m.baseDialogModel.focused || m.titleBarFocused, 0, DialogTypeConfirm, ctx, TitleBarState{Show: true, Focused: m.titleBarFocused, ActiveWidget: m.titleBarWidget})
 }
 
 func (m *choiceDialogModel) View() tea.View {
@@ -167,6 +167,9 @@ func (m *choiceDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	questionStyle := ctx.Dialog.Padding(1, 2).Width(contentWidth)
 	questionHeight := lipgloss.Height(questionStyle.Render(console.Sprintf("%s", m.question)))
 	buttonY := 1 + questionHeight + 1
+	if m.layout.LargeTitleBar {
+		buttonY += LargeTitleBarOverhead
+	}
 
 	btnSpecs := make([]ButtonSpec, len(m.choices))
 	for i, c := range m.choices {

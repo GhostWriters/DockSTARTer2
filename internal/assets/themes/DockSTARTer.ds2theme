@@ -149,10 +149,31 @@ ProgressWaiting = "{{[$primary:$secondary:-B]}}"
 ProgressInProgress = "{{[white:$accent:-B]}}"
 ProgressCompleted = "{{[$accent:black:-B]}}"
 
+# Large Title Bar
+LargeTitleArea = "{{[black:white:-]}}"
+LargeTitleAreaHelp = "{{|LargeTitleArea::yellow|}}"
+LargeTitleAreaNotice = "{{|LargeTitleArea::green|}}"
+LargeTitleAreaWarn = "{{|LargeTitleArea::yellow|}}"
+LargeTitleAreaWarning = "{{|LargeTitleArea::yellow|}}"
+LargeTitleAreaError = "{{|LargeTitleArea::red|}}"
+LargeTitleAreaSuccess = "{{|LargeTitleArea::green|}}"
+LargeTitleAreaQuestion = "{{|LargeTitleArea::yellow|}}"
+LargeTitle = "{{[:::U]}}"
+LargeTitleHelp = "{{|LargeTitle|}}"
+LargeTitleNotice = "{{|TitleNotice|}}"
+LargeTitleWarn = "{{|TitleWarn|}}"
+LargeTitleWarning = "{{|TitleWarning|}}"
+LargeTitleError = "{{|TitleError|}}"
+LargeTitleSuccess = "{{|TitleSuccess|}}"
+LargeTitleQuestion = "{{|TitleQuestion|}}"
+LargeTitleFocusIndicator = "{{|TitleFocusIndicator|}}"
+LargeTitleSubMenu = "{{|TitleSubMenu|}}"
+LargeTitleSubMenuFocused = "{{|TitleSubMenuFocused|}}"
+LargeIconActive = "{{[red::B]}}"
+LargeHelpIconInactive = ""
+LargeExitIconInactive = "{{[::R]}}"
+
 [defaults]
 dialog_title_align = "center"
 submenu_title_align = "left"
 panel_title_align = "center"
-
-
-

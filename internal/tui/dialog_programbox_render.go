@@ -238,19 +238,30 @@ func (m *ProgramBoxModel) calculateLayout() {
 
 	internalOverhead := headerHeight + commandLines
 
+	// Large titlebar: deduct 2 rows from effective height, same conservative threshold as menus.
+	useLargeTitleBar := m.title != "" && currentConfig.UI.LargeTitleBars
+	largeTitlebarHeight := m.height
+	if useLargeTitleBar {
+		if largeTitlebarHeight-layout.BorderHeight()-internalOverhead-LargeTitleBarOverhead < 4 {
+			useLargeTitleBar = false
+		} else {
+			largeTitlebarHeight -= LargeTitleBarOverhead
+		}
+	}
+
 	// 3. Buttons — width and height aware via ButtonRowHeight.
 	// Compute how many rows the button row itself can have after reserving:
 	//   outer borders(2) + overhead + min viewport(2) + viewport borders(2) + shadow.
 	buttons := 0
 	if m.done {
 		const minVpRows = 2
-		availableForButton := m.height - layout.BorderHeight() - internalOverhead - minVpRows - layout.BorderHeight()
+		availableForButton := largeTitlebarHeight - layout.BorderHeight() - internalOverhead - minVpRows - layout.BorderHeight()
 		buttons = ButtonRowHeight(contentW, availableForButton, ButtonSpec{Text: "OK"})
 	}
 
 	// 4. Viewport height.
 	// DialogContentHeight budgets for outer margins and outer borders.
-	vpHeight := layout.DialogContentHeight(m.height, internalOverhead, m.done, false)
+	vpHeight := layout.DialogContentHeight(largeTitlebarHeight, internalOverhead, m.done, false)
 	if m.done && buttons != DialogButtonHeight {
 		vpHeight += DialogButtonHeight - buttons
 	}
@@ -272,6 +283,7 @@ func (m *ProgramBoxModel) calculateLayout() {
 		ButtonHeight:   buttons,
 		ShadowHeight:   shadowHeight,
 		Overhead:       overhead,
+		LargeTitleBar:  useLargeTitleBar,
 	}
 
 	// Update viewport dimensions: contentW already accounts for margins; subtract inner border and scrollbar gutter.
@@ -305,6 +317,9 @@ func (m *ProgramBoxModel) GetHelpText() string {
 	}
 	return "Running." + scrollInfo + " | Press Ctrl+C to cancel | PgUp/PgDn to scroll"
 }
+
+// HelpText satisfies the model_update.go helpline interface (mirrors GetHelpText).
+func (m *ProgramBoxModel) HelpText() string { return m.GetHelpText() }
 
 // RunProgramBox displays a program box dialog that shows command output
 func RunProgramBox(ctx context.Context, title, subtitle string, task func(context.Context, io.Writer) error) error {

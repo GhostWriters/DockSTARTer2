@@ -60,7 +60,7 @@ TitleCheckbox = ""
 TitleCheckboxFocused = "{{|TitleSubMenuFocused|}}"
 
 # Focus indicators
-TitleFocusIndicator = "{{[::-B]}}"
+TitleFocusIndicator = "{{[yellow::-B]}}"
 
 # Submenu titles
 TitleSubMenu = "{{|Title|}}"
@@ -149,6 +149,30 @@ ProgressWaiting = "{{[$secondary:$primary:B]}}"
 ProgressInProgress = "{{[$primary:$secondary:B]}}"
 ProgressCompleted = "{{[$secondary:$primary:B]}}"
 
+# Large Title Bar
+LargeTitleArea = "{{|Dialog|}}"
+LargeTitleAreaHelp = "{{|LargeTitleArea|}}"
+LargeTitleAreaNotice = "{{|LargeTitleArea|}}"
+LargeTitleAreaWarn = "{{|LargeTitleArea|}}"
+LargeTitleAreaWarning = "{{|LargeTitleArea|}}"
+LargeTitleAreaError = "{{|LargeTitleArea|}}"
+LargeTitleAreaSuccess = "{{|LargeTitleArea|}}"
+LargeTitleAreaQuestion = "{{|LargeTitleArea|}}"
+LargeTitle = "{{|Title|}}"
+LargeTitleHelp = "{{|LargeTitle|}}"
+LargeTitleNotice = "{{|TitleNotice|}}"
+LargeTitleWarn = "{{|TitleWarn|}}"
+LargeTitleWarning = "{{|TitleWarning|}}"
+LargeTitleError = "{{|TitleError|}}"
+LargeTitleSuccess = "{{|TitleSuccess|}}"
+LargeTitleQuestion = "{{|TitleQuestion|}}"
+LargeTitleFocusIndicator = "{{|TitleFocusIndicator|}}"
+LargeTitleSubMenu = "{{|TitleSubMenu|}}"
+LargeTitleSubMenuFocused = "{{|TitleSubMenuFocused|}}"
+LargeIconActive = "{{|IconActive|}}"
+LargeHelpIconInactive = "{{|HelpIconInactive|}}"
+LargeExitIconInactive = "{{|ExitIconInactive|}}"
+
 [defaults]
 borders = true
 line_characters = true
@@ -157,6 +181,3 @@ border_color = 1
 dialog_title_align = "center"
 submenu_title_align = "left"
 panel_title_align = "center"
-
-
-

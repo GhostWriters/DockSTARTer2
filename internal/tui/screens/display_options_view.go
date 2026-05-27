@@ -133,7 +133,13 @@ func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegi
 	// Content starts at outer border (1) + content side margin (1) from left; 1 from top (outer border).
 	layout := tui.GetLayout()
 	contentX := (layout.BorderWidth() / 2) + layout.ContentSideMargin
-	const contentY = 1
+
+	// Account for large title bar overhead when the outerMenu computed a large title bar.
+	largeTitleOffset := 0
+	if s.outerMenu != nil && s.outerMenu.HasLargeTitleBar() {
+		largeTitleOffset = tui.LargeTitleBarOverhead
+	}
+	contentY := 1 + largeTitleOffset
 
 	// Theme menu regions
 	themeRegions := s.themeMenu.GetHitRegions(offsetX+contentX, offsetY+contentY)
@@ -177,8 +183,8 @@ func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegi
 	})
 
 	// Button row regions
-	// buttonY = 1 (top border) + themeHeight + optionsHeight
-	buttonY := 1 + s.themeMenu.Height() + s.optionsMenu.Height()
+	// buttonY = 1 (top border) + largeTitleOffset + themeHeight + optionsHeight
+	buttonY := 1 + largeTitleOffset + s.themeMenu.Height() + s.optionsMenu.Height()
 	btnRowWidth := dialogContentWidth - layout.ContentMarginWidth()
 
 	// Button panel background — height matches flat (1) vs bordered (3) from outerMenu layout.

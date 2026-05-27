@@ -728,6 +728,18 @@ func (m *MenuModel) calculateLayout() {
 		overhead = m.height - maxListHeight
 	}
 
+	// Large titlebar: deduct from list budget; drop titlebar first when space is tight.
+	// Submenus always use small titlebar regardless of config.
+	useLargeTitleBar := !m.subMenuMode && m.title != "" && currentConfig.UI.LargeTitleBars
+	if useLargeTitleBar {
+		if maxListHeight-LargeTitleBarOverhead < 3 {
+			useLargeTitleBar = false // not enough room; titlebar stays small
+		} else {
+			maxListHeight -= LargeTitleBarOverhead
+			overhead += LargeTitleBarOverhead
+		}
+	}
+
 	// Height-based border fallback: drop bordered buttons when 2 or fewer list
 	// rows remain — the 2 freed rows are more useful as list space, and this
 	// threshold also prevents bordered buttons from showing just before clipping.
@@ -765,6 +777,8 @@ func (m *MenuModel) calculateLayout() {
 		ButtonHeight:   buttonHeight,
 		ShadowHeight:   shadowHeight,
 		Overhead:       overhead,
+		SubtitleHeight: subtitleHeight,
+		LargeTitleBar:  useLargeTitleBar,
 	}
 
 	m.list.SetSize(listWidth, listHeight)
@@ -929,6 +943,18 @@ func (m *MenuModel) calculateSectionLayout() {
 	// Remaining height for expandable sections.
 	// Allocate every single remaining row to avoid gaps.
 	const minExpandable = 4
+
+	// Large titlebar: drop before buttons if space is tight.
+	useLargeTitleBar := m.title != "" && currentConfig.UI.LargeTitleBars
+	if useLargeTitleBar {
+		tentativeRemaining := innerHeight - fixedTotal - buttonBudget - LargeTitleBarOverhead
+		if tentativeRemaining < minExpandable {
+			useLargeTitleBar = false // not enough room; titlebar stays small
+		} else {
+			innerHeight -= LargeTitleBarOverhead
+		}
+	}
+
 	remaining := innerHeight - fixedTotal - buttonBudget
 
 	// Height-based button border fallback: drop to flat only when expandable
@@ -968,10 +994,11 @@ func (m *MenuModel) calculateSectionLayout() {
 	}
 
 	m.layout = DialogLayout{
-		Width:        m.width,
-		Height:       m.height,
-		ButtonHeight: buttonHeight,
-		ShadowHeight: shadowHeight,
+		Width:         m.width,
+		Height:        m.height,
+		ButtonHeight:  buttonHeight,
+		ShadowHeight:  shadowHeight,
+		LargeTitleBar: useLargeTitleBar,
 	}
 }
 

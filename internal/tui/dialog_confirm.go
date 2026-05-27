@@ -212,8 +212,8 @@ func (m *confirmDialogModel) ViewString() string {
 	fullContent := lipgloss.JoinVertical(lipgloss.Left, questionText, spacer, buttonRow)
 
 	ctx2 := GetActiveContext()
-	widgets := m.buildTitleBarWidgets(ctx2)
-	return renderDialogWithTypeAndWidgets(m.title, fullContent, m.focused || m.titleBarFocused, 0, DialogTypeConfirm, ctx2, widgets)
+	ctx2.LargeTitleBars = m.layout.LargeTitleBar
+	return renderDialogWithTypeAndWidgets(m.title, fullContent, m.focused || m.titleBarFocused, 0, DialogTypeConfirm, ctx2, TitleBarState{Show: true, Focused: m.titleBarFocused, ActiveWidget: m.titleBarWidget})
 }
 
 // View implements tea.Model
@@ -233,6 +233,9 @@ func (m *confirmDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 
 	// buttonY: border (1) + question with padding + spacer (1)
 	buttonY := 1 + questionHeight + 1
+	if m.layout.LargeTitleBar {
+		buttonY += LargeTitleBarOverhead
+	}
 
 	// Use centralized button hit region helper with dialog ID for disambiguation
 	// Must include Text to properly calculate button width

@@ -161,6 +161,9 @@ func (m *MenuModel) ViewString() string {
 	// only if maximized. Otherwise it should have its intrinsic height.
 	if m.maximized {
 		heightBudget := m.layout.Height - layout.BorderHeight()
+		if m.layout.LargeTitleBar {
+			heightBudget -= LargeTitleBarOverhead
+		}
 		if heightBudget > 0 {
 			content = lipgloss.NewStyle().
 				Height(heightBudget).
@@ -209,15 +212,31 @@ func (m *MenuModel) SetIsDialog(isDialog bool) {
 	m.isDialog = isDialog
 }
 
-
-// renderTitleBarWidgets builds the pre-styled widget string for the title bar right side.
-// Returns an empty string when there is no title (sub-menu mode without title has no outer border).
-func (m *MenuModel) renderTitleBarWidgets(ctx StyleContext) string {
-	if m.title == "" || m.subMenuMode {
-		return ""
+// MinHeight returns the minimum content-area height for this menu to remain usable
+// (buttons visible with the viewport at its 3-line clamp floor). Only meaningful for
+// maximized menus; returns 0 for non-maximized so MinDialogHeight applies instead.
+// Used by AppModel to limit log panel expansion.
+//
+// Derived from the inverse of calculateLayout's maxListHeight formula:
+//   flat-button path: maxListHeight = h - 5 - subtitleH  →  h = 8 + subtitleH at floor=3
+//   no-button path:   maxListHeight = h - 4 - subtitleH  →  h = 7 + subtitleH at floor=3
+func (m *MenuModel) MinHeight() int {
+	if !m.maximized {
+		return 0
 	}
-	return buildDialogTitleWidgets(m.titleBarFocused, m.titleBarWidget, ctx)
+	subtitleH := m.layout.SubtitleHeight // real rendered height stored by calculateLayout
+	base := 8 + subtitleH                // flat-button minimum (bordered buttons drop to flat first)
+	if !m.showButtons {
+		base = 7 + subtitleH
+	}
+	// Large titlebar is part of the overhead; use the stored decision so the
+	// adaptive fallback in calculateLayout and the panel ceiling stay in sync.
+	if m.layout.LargeTitleBar {
+		base += LargeTitleBarOverhead
+	}
+	return base
 }
+
 
 func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targetHeight int, focused bool, rounded bool, titleTag string) string {
 	align := GetActiveContext().DialogTitleAlign
@@ -232,8 +251,10 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 
 	ctx := GetActiveContext()
 	ctx.Type = m.dialogType
-	widgets := m.renderTitleBarWidgets(ctx)
-	return RenderBorderedBoxCtx(m.title, content, contentWidth, targetHeight, focused || m.titleBarFocused, true, rounded, align, titleTag, ctx, widgets)
+	// Use pre-computed layout decision; submenus always use small titlebar.
+	ctx.LargeTitleBars = m.layout.LargeTitleBar
+	tbs := TitleBarState{Show: m.title != "" && !m.subMenuMode, Focused: m.titleBarFocused, ActiveWidget: m.titleBarWidget}
+	return RenderBorderedBoxCtx(m.title, content, contentWidth, targetHeight, focused || m.titleBarFocused, true, rounded, align, titleTag, ctx, tbs)
 }
 
 func (m *MenuModel) viewSubMenu() string {

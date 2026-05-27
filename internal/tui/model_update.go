@@ -157,7 +157,14 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.ready = true
 
-		// Apply screen-aware log panel ceiling first (may snap height down).
+		// Size the active screen first so calculateLayout populates SubtitleHeight (needed by MinHeight).
+		{
+			caW, caH := m.getContentArea()
+			if m.activeScreen != nil {
+				m.activeScreen.SetSize(caW, caH)
+			}
+		}
+		// Apply screen-aware log panel ceiling (may snap height down).
 		m.applyPanelMax()
 		// Update log panel with full dimensions (so Height() is correct for backdrop)
 		m.panel.SetSize(m.width, m.height)
@@ -217,13 +224,17 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.activeScreen = msg.Screen
 		if m.activeScreen != nil {
 			CurrentPageName = m.activeScreen.MenuName()
-			// Re-apply log panel ceiling for the new screen; snap if needed.
+			// Size the screen first so calculateLayout populates SubtitleHeight (needed by MinHeight).
+			caW, caH := m.getContentArea()
+			m.activeScreen.SetSize(caW, caH)
+			// Re-apply log panel ceiling with accurate MinHeight data; snap if needed.
 			if m.applyPanelMax() {
 				m.panel.SetSize(m.width, m.height)
 				m.backdrop.SetSize(m.width, m.backdropHeight())
+				// Re-size with updated content area after panel snap.
+				caW, caH = m.getContentArea()
+				m.activeScreen.SetSize(caW, caH)
 			}
-			caW, caH := m.getContentArea()
-			m.activeScreen.SetSize(caW, caH)
 			m.backdrop.SetHelpText(m.activeScreen.HelpText())
 			cmds = append(cmds, logger.BatchRecoverTUI(m.ctx, m.activeScreen.Init()))
 
@@ -248,13 +259,17 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.screenStack = m.screenStack[:len(m.screenStack)-1]
 			if m.activeScreen != nil {
 				CurrentPageName = m.activeScreen.MenuName()
-				// Re-apply log panel ceiling for the restored screen; snap if needed.
+				// Size the screen first so calculateLayout populates SubtitleHeight (needed by MinHeight).
+				caW, caH := m.getContentArea()
+				m.activeScreen.SetSize(caW, caH)
+				// Re-apply log panel ceiling with accurate MinHeight data; snap if needed.
 				if m.applyPanelMax() {
 					m.panel.SetSize(m.width, m.height)
 					m.backdrop.SetSize(m.width, m.backdropHeight())
+					// Re-size with updated content area after panel snap.
+					caW, caH = m.getContentArea()
+					m.activeScreen.SetSize(caW, caH)
 				}
-				caW, caH := m.getContentArea()
-				m.activeScreen.SetSize(caW, caH)
 				m.backdrop.SetHelpText(m.activeScreen.HelpText())
 
 				// Sync current lock state to the restored screen immediately
@@ -839,8 +854,13 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			// Panel is focused (or its title bar is) — toggle panel title bar.
 			if m.panelTitleFocused {
 				m.setPanelTitleFocus(false)
+				if m.panelInputWasFocused {
+					m.panelInputWasFocused = false
+					return m, m.panel.FocusInput(), true
+				}
 				m.setPanelFocus(true)
 			} else {
+				m.panelInputWasFocused = m.panel.inputFocused
 				m.setPanelTitleFocus(true)
 			}
 			return m, nil, true

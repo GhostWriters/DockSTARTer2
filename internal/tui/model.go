@@ -242,8 +242,9 @@ type AppModel struct {
 
 	// Slide-up log panel (always present below helpline)
 	panel               PanelModel
-	panelFocused        bool
-	panelTitleFocused   bool
+	panelFocused           bool
+	panelTitleFocused      bool
+	panelInputWasFocused   bool // saved state before title-bar focus so F9 can restore it
 	panelSbDrag    ScrollbarDragState // log-panel scrollbar drag tracking state
 	panelSbAbsTopY int                // absolute Y of the scrollbar's first row (for drag computation)
 	panelSbInfo    ScrollbarInfo      // scrollbar geometry captured at drag start

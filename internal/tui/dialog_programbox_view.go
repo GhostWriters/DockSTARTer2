@@ -111,6 +111,9 @@ func (m *ProgramBoxModel) ViewString() string {
 	// only if maximized. Otherwise it should have its intrinsic height.
 	if m.maximized {
 		heightBudget := m.layout.Height - DialogBorderHeight
+		if m.layout.LargeTitleBar {
+			heightBudget -= LargeTitleBarOverhead
+		}
 		if heightBudget > 0 {
 			content = lipgloss.NewStyle().
 				Height(heightBudget).
@@ -135,7 +138,7 @@ func (m *ProgramBoxModel) ViewString() string {
 	if m.maximized {
 		targetHeight = m.height
 	}
-	dialogWithTitle := RenderDialog(m.title, content, true, targetHeight)
+	dialogWithTitle := renderDialogWithTypeAndWidgets(m.title, content, true, targetHeight, m.dialogType, GetActiveContext(), TitleBarState{Show: true, Focused: m.titleBarFocused, ActiveWidget: m.titleBarWidget})
 
 	// If sub-dialog is active, overlay it
 	if m.subDialog != nil {
@@ -209,6 +212,9 @@ func (m *ProgramBoxModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	layout := GetLayout()
 	// All dialogs start inside an outer Top Border (1 line).
 	currentY := layout.SingleBorder()
+	if m.layout.LargeTitleBar {
+		currentY += LargeTitleBarOverhead
+	}
 
 	// 1. Header Area (Subtitle + Tasks + Progress)
 	headerH := m.layout.HeaderHeight
@@ -277,6 +283,11 @@ func (m *ProgramBoxModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 			btnSpecs...,
 		)...)
 	}
+
+	// Titlebar widget hit regions ([?] and [×])
+	b := &baseDialogModel{id: m.id, width: m.layout.Width, height: m.layout.Height, focused: m.focused, layout: m.layout, titleBarFocused: m.titleBarFocused, titleBarWidget: m.titleBarWidget}
+	contentWidth := m.layout.Width - GetLayout().BorderWidth()
+	regions = append(regions, b.titleBarHitRegions(offsetX, offsetY, contentWidth, ZDialog)...)
 
 	// If sub-dialog is active, collect its hit regions
 	if m.subDialog != nil {
