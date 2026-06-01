@@ -81,6 +81,9 @@ func Update(ctx context.Context, force bool, file string) error {
 
 			formattedApp, err := FormatLines(ctx, tmpAppFile.Name(), appDefaultGlobalFile, appName, composeEnvFile)
 			if err == nil {
+				if len(updatedEnvLines) > 0 {
+					updatedEnvLines = append(updatedEnvLines, "")
+				}
 				updatedEnvLines = append(updatedEnvLines, formattedApp...)
 			}
 		}
@@ -240,10 +243,16 @@ func UnsetNeedsUpdate(ctx context.Context, file string) {
 
 	filename := filepath.Base(file)
 
-	// Clean up legacy matching marker files just like Bash's rm -f filename* does
-	matches, _ := filepath.Glob(filepath.Join(timestampsFolder, filename+"*"))
-	for _, m := range matches {
-		_ = os.Remove(m)
+	// Clean up matching marker files safely to avoid prefix collisions
+	if filename == constants.EnvFileName {
+		_ = os.Remove(filepath.Join(timestampsFolder, filename))
+		_ = os.Remove(filepath.Join(timestampsFolder, filename+"_ReferencedApps"))
+	} else {
+		_ = os.Remove(filepath.Join(timestampsFolder, filename))
+		matches, _ := filepath.Glob(filepath.Join(timestampsFolder, filename+"_*"))
+		for _, m := range matches {
+			_ = os.Remove(m)
+		}
 	}
 
 	// Update main timestamp for this file
