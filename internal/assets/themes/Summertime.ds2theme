@@ -98,7 +98,7 @@ CheckboxSelected = "{{|TagSelected|}}"
 
 
 # Inline text highlights
-Highlight = "{{[white:black:B]}}"
+Highlight = "{{[-:-:-BH]}}"
 ApplicationName = "{{|Highlight|}}"
 RunningCommand = "{{|Highlight|}}"
 FailingCommand = "{{|TitleError|}}"
