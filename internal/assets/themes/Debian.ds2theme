@@ -131,6 +131,7 @@ EnvBuiltin = "{{[black:cyan]}}"
 EnvInvalid = "{{[red:cyan]}}"
 EnvDuplicate = "{{[magenta:cyan]}}"
 EnvPendingDelete = "{{|Dialog:::DS|}}"
+EnvReadOnly = "{{|Dialog:::D|}}"
 
 # List item overrides
 ListItem = ""

@@ -138,6 +138,7 @@ EnvBuiltin = "{{|Dialog:$highlight::B|}}"
 EnvInvalid = "{{|Dialog:::D|}}"
 EnvDuplicate = "{{|Dialog:::DR|}}"
 EnvPendingDelete = "{{|Dialog:::DS|}}"
+EnvReadOnly = "{{|Dialog:::D|}}"
 
 # List item overrides
 ListItem = ""

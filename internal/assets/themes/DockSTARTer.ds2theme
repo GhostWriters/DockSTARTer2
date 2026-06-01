@@ -138,6 +138,7 @@ EnvBuiltin = "{{|Dialog:::R|}}"
 EnvInvalid = "{{|TitleError|}}"
 EnvDuplicate = "{{|TitleWarn|}}"
 EnvPendingDelete = "{{|Dialog:::DS|}}"
+EnvReadOnly = "{{|Dialog:::D|}}"
 
 # List item overrides
 ListItem = "{{[black::R]}}"
