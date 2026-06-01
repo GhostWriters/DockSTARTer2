@@ -89,15 +89,11 @@ func FormatLinesCore(ctx context.Context, currentLines, defaultLines, envLines [
 
 	// 3. Add Template Contents Verbatim (Parity with env_format_lines.sh lines 57-64)
 	// Skip the template when the app is user-defined — it has no built-in template structure.
-	processedTemplate := false
-	if len(defaultLines) > 0 && !appIsUserDefined {
+	if defaultLines != nil && !appIsUserDefined {
 		formattedEnvLines = append(formattedEnvLines, defaultLines...)
-		processedTemplate = true
-	}
-
-	// Bash line 62: adds a blank ONLY IF template section was processed/found
-	if processedTemplate && len(formattedEnvLines) > 0 {
-		formattedEnvLines = append(formattedEnvLines, "")
+		if len(formattedEnvLines) > 0 {
+			formattedEnvLines = append(formattedEnvLines, "")
+		}
 	}
 
 	// 4. Index existing variables in formattedEnvLines (Parity lines 66-78)
