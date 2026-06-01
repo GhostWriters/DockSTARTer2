@@ -198,6 +198,7 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 		" {{|LineComment|}}### Sample comment{{[-]}}",
 		" Var='Default'",
 		" {{|ModifiedText|}}Var='Modified'{{[-]}}",
+		" {{|EnvReadOnly|}}Var='ReadOnly'{{[-]}}",
 	}
 
 	for i, l := range contentLines {

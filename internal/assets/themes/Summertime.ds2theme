@@ -116,12 +116,12 @@ Yes = "{{|TitleSuccess|}}"
 No = "{{|TitleError|}}"
 
 # Env editor
-LineComment = "{{|Dialog:::RB|}}"
-ModifiedText = "{{[black:white]}}"
-LineNumber = "{{|Dialog:yellow|}}"
-LineNumberSelected = "{{[black:white:-]}}"
-LineNumberModified = "{{|Dialog:::R|}}"
-LineNumberModifiedSelected = "{{[black:white:-]}}"
+LineComment = "{{|Dialog:::DR|}}"
+ModifiedText = "{{|Dialog:::R|}}"
+LineNumber = "{{|Dialog|}}"
+LineNumberSelected = "{{|LineNumber|}}{{[white::R]}}"
+LineNumberModified = "{{|LineNumber:::R|}}"
+LineNumberModifiedSelected = "{{|LineNumber:::B|}}{{[white::R]}}"
 
 # Markers and cursor
 Marker = "{{[black:-:]}}"
@@ -133,10 +133,11 @@ TextCursor = "{{[:white:]}}"
 MarkerLocked = "{{|MarkerInvalid|}}"
 
 # Env variable types
-EnvBuiltin = "{{[black:cyan]}}"
-EnvInvalid = "{{[red:cyan]}}"
-EnvDuplicate = "{{[magenta:cyan]}}"
+EnvBuiltin = "{{|Dialog:::B|}}"
+EnvInvalid = "{{|Dialog:red|}}"
+EnvDuplicate = "{{|Dialog:magenta|}}"
 EnvPendingDelete = "{{|Dialog:::DS|}}"
+EnvReadOnly = "{{|Dialog:::D|}}"
 
 # List item overrides
 ListItem = ""
