@@ -177,6 +177,10 @@ func FormatLinesCore(ctx context.Context, currentLines, defaultLines, envLines [
 		formattedEnvLines = append(formattedEnvLines, "")
 	}
 
+	// Remove all trailing empty strings to avoid extra newlines (Parity with env_format_lines.sh)
+	for len(formattedEnvLines) > 0 && formattedEnvLines[len(formattedEnvLines)-1] == "" {
+		formattedEnvLines = formattedEnvLines[:len(formattedEnvLines)-1]
+	}
 	return formattedEnvLines
 }
 

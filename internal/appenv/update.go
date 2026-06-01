@@ -211,13 +211,8 @@ func NeedsUpdate(ctx context.Context, force bool, file string) bool {
 
 		if appName != "" {
 			enabledVar := appName + "__ENABLED"
-			enabledValPtr := ""
-			vars, err := ListVars(composeEnv)
-			if err == nil {
-				if v, ok := vars[enabledVar]; ok {
-					enabledValPtr = v
-				}
-			}
+			enabledLine, _ := GetLine(enabledVar, composeEnv)
+			enabledValPtr, _ := Get(enabledVar, composeEnv)
 
 			enabledMarkerFile := filepath.Join(paths.GetTimestampsDir(), "env_update", filename+"_"+enabledVar)
 			storedEnabledBytes, err := os.ReadFile(enabledMarkerFile)
@@ -225,8 +220,9 @@ func NeedsUpdate(ctx context.Context, force bool, file string) bool {
 				return true
 			}
 
-			// Compare
-			if strings.TrimSpace(string(storedEnabledBytes)) != strings.TrimSpace(enabledValPtr) {
+			// Compare against both full line (Bash standard) and parsed value (old/Go-only standard)
+			storedStr := strings.TrimSpace(string(storedEnabledBytes))
+			if storedStr != strings.TrimSpace(enabledLine) && storedStr != strings.TrimSpace(enabledValPtr) {
 				return true
 			}
 		}
@@ -243,6 +239,12 @@ func UnsetNeedsUpdate(ctx context.Context, file string) {
 	_ = os.MkdirAll(timestampsFolder, 0755)
 
 	filename := filepath.Base(file)
+
+	// Clean up legacy matching marker files just like Bash's rm -f filename* does
+	matches, _ := filepath.Glob(filepath.Join(timestampsFolder, filename+"*"))
+	for _, m := range matches {
+		_ = os.Remove(m)
+	}
 
 	// Update main timestamp for this file
 	recordUpdateFileState(file, "")
@@ -263,17 +265,11 @@ func UnsetNeedsUpdate(ctx context.Context, file string) {
 		if appName != "" {
 			composeEnv := filepath.Join(conf.ComposeDir, constants.EnvFileName)
 			enabledVar := appName + "__ENABLED"
-			enabledVal := ""
-			vars, err := ListVars(composeEnv)
-			if err == nil {
-				if v, ok := vars[enabledVar]; ok {
-					enabledVal = v
-				}
-			}
+			enabledLine, _ := GetLine(enabledVar, composeEnv)
 
-			// Write ENABLED marker
+			// Write ENABLED marker with trailing newline to match Bash echo
 			enabledMarkerFile := filepath.Join(timestampsFolder, filename+"_"+enabledVar)
-			_ = os.WriteFile(enabledMarkerFile, []byte(enabledVal), 0644)
+			_ = os.WriteFile(enabledMarkerFile, []byte(enabledLine+"\n"), 0644)
 
 			// Also update the dependency timestamp (main env vs this app)
 			recordUpdateFileState(composeEnv, filename+"_"+filepath.Base(composeEnv))
