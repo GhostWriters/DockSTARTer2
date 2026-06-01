@@ -131,7 +131,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				return commands.HandleInstall(subCtx, &group, &state)
 			case "-u", "--update", "--update-app", "--update-templates":
 				ranCommand = true
-				return commands.HandleUpdate(subCtx, &group, &state, restArgs)
+				return handleUpdate(subCtx, &group, &state, restArgs)
 			case "--edit-global", "--start-edit-global", "--edit-app", "--start-edit-app":
 				ranCommand = true
 				return handleEditVars(subCtx, &group)
