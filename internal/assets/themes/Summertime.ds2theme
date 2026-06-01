@@ -141,7 +141,7 @@ EnvReadOnly = "{{|Dialog:::D|}}"
 
 # List item overrides
 ListItem = ""
-ListItemUserDefined = "{{[black:white]}}"
+ListItemUserDefined = "{{[::R]}}"
 
 # Keys, progress, and indicators
 KeyCap = "{{[::-R]}}"
