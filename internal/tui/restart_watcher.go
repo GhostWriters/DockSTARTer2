@@ -1,7 +1,10 @@
 package tui
 
 import (
+	"bytes"
 	"context"
+	"os/exec"
+	"strings"
 	"time"
 
 	"DockSTARTer2/internal/console"
@@ -74,10 +77,38 @@ func checkPendingRestart(ctx context.Context) {
 	}
 }
 
-// triggerPendingRestart performs the actual re-exec using the same nav args as
-// an in-process update so the user lands back on the correct screen.
+// binaryVersion runs registeredExePath --print-version and returns the trimmed
+// output, or "" on failure.
+func binaryVersion() string {
+	var buf bytes.Buffer
+	cmd := exec.Command(registeredExePath, "--print-version")
+	cmd.Stdout = &buf
+	if err := cmd.Run(); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(buf.String())
+}
+
+// triggerPendingRestart verifies the on-disk binary version before re-execing.
+// If the binary reports the same version we are already running, the version
+// file was stale — clear the pending flag and update the file instead of
+// restarting.
 func triggerPendingRestart(ctx context.Context) {
 	update.RestartPending = false
+
+	// Double-check what the binary on disk actually reports.
+	onDiskVer := binaryVersion()
+	if onDiskVer != "" {
+		if onDiskVer == version.Version {
+			// Binary is actually the same version — stale version file, no restart needed.
+			_ = sessionlocks.Sessions.WriteInstalledVersion(registeredExePath, onDiskVer)
+			Send(UpdateHeaderMsg{})
+			return
+		}
+		// Update the file to what the binary actually reports in case it drifted.
+		_ = sessionlocks.Sessions.WriteInstalledVersion(registeredExePath, onDiskVer)
+		PendingRestartVersion = onDiskVer
+	}
 
 	var reExecArgs []string
 	if console.IsDaemon {

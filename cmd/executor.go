@@ -123,6 +123,12 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			case "-V", "--version":
 				ranCommand = true
 				return commands.HandleVersion(subCtx)
+			case "--print-version":
+				ranCommand = true
+				return commands.HandlePrintVersion()
+			case "--print-templates-version":
+				ranCommand = true
+				return commands.HandlePrintTemplatesVersion()
 			case "--man":
 				ranCommand = true
 				return commands.HandleMan(subCtx, &group)

@@ -24,6 +24,20 @@ func HandleHelp(ctx context.Context, group *CommandGroup) error {
 	return nil
 }
 
+// HandlePrintVersion writes just the raw version string to stdout.
+// Used by the restart watcher to verify the on-disk binary version without
+// parsing the styled --version output.
+func HandlePrintVersion() error {
+	fmt.Println(version.Version)
+	return nil
+}
+
+// HandlePrintTemplatesVersion writes just the raw templates version string to stdout.
+func HandlePrintTemplatesVersion() error {
+	fmt.Println(paths.GetTemplatesVersion())
+	return nil
+}
+
 func HandleVersion(ctx context.Context) error {
 	logger.Display(ctx, fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} [{{|Version|}}%s{{[-]}}]", version.ApplicationName, version.Version))
 	logger.Display(ctx, fmt.Sprintf("{{|ApplicationName|}}DockSTARTer-Templates{{[-]}} [{{|Version|}}%s{{[-]}}]", paths.GetTemplatesVersion()))

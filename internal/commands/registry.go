@@ -24,6 +24,8 @@ var Registry = map[string]Def{
 	"--help":                  {Title: "Help", ConsoleSafe: true},
 	"-V":                      {Title: "Version", ConsoleSafe: true},
 	"--version":               {Title: "Version", ConsoleSafe: true},
+	"--print-version":           {Title: "Print Version", ConsoleSafe: true},
+	"--print-templates-version": {Title: "Print Templates Version", ConsoleSafe: true},
 	"--man":                   {Title: "Application Documentation", ConsoleSafe: true},
 	"-l":                      {Title: "List All Applications", ConsoleSafe: true},
 	"--list":                  {Title: "List All Applications", ConsoleSafe: true},
