@@ -72,7 +72,8 @@ type SessionManager struct {
 
 	editLockPath      string // $STATE/locks/edit.lock
 	serverPIDPath     string // $STATE/locks/server.pid
-	procsDir          string // $STATE/locks/procs/ — one file per registered process
+	procsDir          string // $STATE/locks/procs/    — one file per running TUI/daemon instance
+	versionsDir       string // $STATE/locks/versions/ — one file per executable path
 	disconnectReqPath string // $STATE/disconnect.request
 	stopReqPath       string // $STATE/stop.request
 
@@ -103,13 +104,11 @@ func NewSessionManager() *SessionManager {
 
 	_ = os.MkdirAll(locksDir, 0755)
 
-	procsDir := filepath.Join(locksDir, "procs")
-	_ = os.MkdirAll(procsDir, 0755)
-
 	m := &SessionManager{
 		editLockPath:      filepath.Join(locksDir, "edit.lock"),
 		serverPIDPath:     filepath.Join(locksDir, "server.pid"),
-		procsDir:          procsDir,
+		procsDir:          filepath.Join(locksDir, "procs"),
+		versionsDir:       filepath.Join(locksDir, "versions"),
 		disconnectReqPath: filepath.Join(stateDir, "disconnect.request"),
 		stopReqPath:       filepath.Join(stateDir, "stop.request"),
 	}
@@ -208,18 +207,76 @@ func (m *SessionManager) ReleaseServer() {
 	_ = os.Remove(m.serverPIDPath)
 }
 
+// RegisterProc writes a registration file for the current process under procs/.
+// Stores PID, resolved exe path, and running version so other instances can
+// enumerate what is running. Call at TUI/daemon start; pair with UnregisterProc.
+func (m *SessionManager) RegisterProc(exePath, currentVersion string) {
+	_ = os.MkdirAll(m.procsDir, 0755)
+	path := filepath.Join(m.procsDir, strconv.Itoa(os.Getpid()))
+	_ = writeInfoFile(path, os.Getpid(), exePath, currentVersion)
+}
+
+// UnregisterProc removes the current process's registration file.
+func (m *SessionManager) UnregisterProc() {
+	_ = os.Remove(filepath.Join(m.procsDir, strconv.Itoa(os.Getpid())))
+}
+
+// ProcInfo holds information about a registered running instance.
+type ProcInfo struct {
+	PID     int
+	ExePath string
+	Version string
+}
+
+// ListProcInfos returns info for all live registered processes, excluding the
+// caller. Stale files (dead processes) are removed.
+func (m *SessionManager) ListProcInfos() []ProcInfo {
+	entries, err := os.ReadDir(m.procsDir)
+	if err != nil {
+		return nil
+	}
+	self := os.Getpid()
+	var infos []ProcInfo
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		path := filepath.Join(m.procsDir, e.Name())
+		pid, fields := readInfoFile(path)
+		if pid == 0 || !ProcessExists(pid) {
+			_ = os.Remove(path)
+			continue
+		}
+		if pid == self {
+			continue
+		}
+		info := ProcInfo{PID: pid}
+		if len(fields) > 0 {
+			info.ExePath = fields[0]
+		}
+		if len(fields) > 1 {
+			info.Version = fields[1]
+		}
+		infos = append(infos, info)
+	}
+	return infos
+}
+
 // exeVersionPath returns the path of the installed-version file for the given
 // resolved executable path. The filename is a short hex hash of the exe path
 // so it is filesystem-safe regardless of the original path content.
 func (m *SessionManager) exeVersionPath(exePath string) string {
 	sum := sha256.Sum256([]byte(exePath))
-	return filepath.Join(m.procsDir, fmt.Sprintf("%x.version", sum[:8]))
+	return filepath.Join(m.versionsDir, fmt.Sprintf("%x.version", sum[:8]))
 }
 
 // WriteInstalledVersion records the version that was just installed for the
 // given executable. Any running instance of that binary will detect the change
 // on its next poll and set RestartPending.
 func (m *SessionManager) WriteInstalledVersion(exePath, newVersion string) error {
+	if err := os.MkdirAll(m.versionsDir, 0755); err != nil {
+		return err
+	}
 	path := m.exeVersionPath(exePath)
 	return os.WriteFile(path, []byte(newVersion+"\n"), 0644)
 }
@@ -227,6 +284,7 @@ func (m *SessionManager) WriteInstalledVersion(exePath, newVersion string) error
 // ReadInstalledVersion returns the version recorded in the installed-version
 // file for the given executable, or "" if no file exists.
 func (m *SessionManager) ReadInstalledVersion(exePath string) string {
+	_ = os.MkdirAll(m.versionsDir, 0755)
 	path := m.exeVersionPath(exePath)
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -312,9 +370,21 @@ func (m *SessionManager) cleanStaleLocks() {
 		_ = os.Remove(m.serverPIDPath)
 	}
 
-	// Version files in procsDir are intentionally persistent — they are
-	// overwritten on each update and used by running instances to detect
-	// that a newer binary has been installed. No cleanup needed.
+	// Clean stale proc registration files (dead processes).
+	if entries, err := os.ReadDir(m.procsDir); err == nil {
+		for _, e := range entries {
+			if e.IsDir() {
+				continue
+			}
+			path := filepath.Join(m.procsDir, e.Name())
+			pid, _ := readInfoFile(path)
+			if pid == 0 || !ProcessExists(pid) {
+				_ = os.Remove(path)
+			}
+		}
+	}
+
+	// Version files in versionsDir are intentionally persistent — no cleanup needed.
 }
 
 // ResolvedExePath returns the real path of the current executable with symlinks resolved.

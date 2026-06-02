@@ -221,7 +221,8 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	logger.Info(ctx, "TUI Starting.")
 	defer sessionlocks.Sessions.ReleaseEditLock()
 
-	captureExePath()
+	captureAndRegister(version.Version)
+	defer sessionlocks.Sessions.UnregisterProc()
 
 	// Global panic recovery
 	defer func() {
@@ -376,7 +377,8 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 	}()
 	defer sessionlocks.Sessions.ReleaseEditLock()
 
-	captureExePath()
+	captureAndRegister(version.Version)
+	defer sessionlocks.Sessions.UnregisterProc()
 
 	if err := Initialize(ctx); err != nil {
 		return err
@@ -483,7 +485,8 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 	}()
 	defer sessionlocks.Sessions.ReleaseEditLock()
 
-	captureExePath()
+	captureAndRegister(version.Version)
+	defer sessionlocks.Sessions.UnregisterProc()
 
 	if err := Initialize(ctx); err != nil {
 		return err

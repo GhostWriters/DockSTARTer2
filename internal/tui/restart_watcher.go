@@ -122,10 +122,12 @@ func triggerPendingRestart(ctx context.Context) {
 	_ = update.ReExec(ctx, registeredExePath, reExecArgs)
 }
 
-// captureExePath captures the resolved executable path at TUI start,
-// before any binary replacement can occur.
-func captureExePath() {
+// captureAndRegister captures the resolved exe path and registers the process.
+// Called at TUI/daemon start before any binary replacement can occur.
+// Pair with sessionlocks.Sessions.UnregisterProc() on exit.
+func captureAndRegister(currentVersion string) {
 	registeredExePath = sessionlocks.ResolvedExePath()
+	sessionlocks.Sessions.RegisterProc(registeredExePath, currentVersion)
 }
 
 // showPendingRestartDialog returns a tea.Cmd that shows the appropriate dialog
