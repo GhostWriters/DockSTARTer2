@@ -189,6 +189,9 @@ func (m *SessionManager) AcquireEditLock(clientIP, connType string) bool {
 func (m *SessionManager) ReleaseEditLock() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if !m.editActive {
+		return
+	}
 	m.editActive = false
 	m.localOwner = ""
 	if m.editFlock != nil {
