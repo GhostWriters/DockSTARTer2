@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"sync"
 	"syscall"
 
@@ -133,6 +134,11 @@ func run() (exitCode int) {
 			}, themesDir)
 		}
 	}
+
+	// Ensure lock subdirectories exist (created lazily but do it here too
+	// so they are present from first startup regardless of code path).
+	_ = os.MkdirAll(filepath.Join(paths.GetLocksDir(), "procs"), 0755)
+	_ = os.MkdirAll(filepath.Join(paths.GetLocksDir(), "versions"), 0755)
 
 	// Seed the installed-version file so the restart watcher always has a
 	// baseline to compare against, even after a manual binary replacement.
