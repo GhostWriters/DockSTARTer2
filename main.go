@@ -137,8 +137,14 @@ func run() (exitCode int) {
 
 	// Ensure lock subdirectories exist (created lazily but do it here too
 	// so they are present from first startup regardless of code path).
-	_ = os.MkdirAll(filepath.Join(paths.GetLocksDir(), "procs"), 0755)
-	_ = os.MkdirAll(filepath.Join(paths.GetLocksDir(), "versions"), 0755)
+	procsDir := filepath.Join(paths.GetLocksDir(), "procs")
+	versionsDir := filepath.Join(paths.GetLocksDir(), "versions")
+	if err := os.MkdirAll(procsDir, 0755); err != nil {
+		logger.Warn(ctx, "Could not create procs dir '%s': %v", procsDir, err)
+	}
+	if err := os.MkdirAll(versionsDir, 0755); err != nil {
+		logger.Warn(ctx, "Could not create versions dir '%s': %v", versionsDir, err)
+	}
 
 	// Seed the installed-version file so the restart watcher always has a
 	// baseline to compare against, even after a manual binary replacement.
