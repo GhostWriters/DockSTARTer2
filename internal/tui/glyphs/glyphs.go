@@ -29,6 +29,14 @@ const (
 	LockedMarker      = "×"
 	LockedMarkerAscii = "!"
 
+	// Status bar update markers
+	UpdateAvailable      = "•" // U+2022 Bullet — update is available
+	UpdateAvailableAscii = "*"
+	UpdateApplied        = "✓" // U+2713 Check Mark — update was applied, restart pending
+	UpdateAppliedAscii   = "!"
+	UpdateError          = "▲" // U+25B2 Black Up-Pointing Triangle — update check error
+	UpdateErrorAscii     = "?"
+
 	// Title bar widgets
 	HelpWidget       = "?"
 	CloseWidget      = "×" // Multiplication Sign (U+00D7)

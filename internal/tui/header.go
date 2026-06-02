@@ -27,6 +27,9 @@ const (
 // ShowGlobalFlagsMsg requests the flags toggle dialog
 type ShowGlobalFlagsMsg struct{}
 
+// ShowPendingRestartMsg requests the pending restart confirmation dialog
+type ShowPendingRestartMsg struct{}
+
 // RefreshHeaderMsg signals the header to re-read flags and other dynamic data
 type RefreshHeaderMsg struct{}
 
@@ -123,6 +126,9 @@ func (m *HeaderModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case HeaderFocusFlags:
 			return m, func() tea.Msg { return ShowGlobalFlagsMsg{} }
 		case HeaderFocusApp:
+			if update.RestartPending {
+				return m, func() tea.Msg { return ShowPendingRestartMsg{} }
+			}
 			return m, TriggerAppUpdate()
 		case HeaderFocusTmpl:
 			return m, TriggerTemplateUpdate()
@@ -173,6 +179,9 @@ func (m *HeaderModel) HandleHit(id string) (bool, tea.Cmd) {
 	switch id {
 	case IDAppVersion:
 		m.SetFocus(HeaderFocusApp)
+		if update.RestartPending {
+			return true, func() tea.Msg { return ShowPendingRestartMsg{} }
+		}
 		return true, TriggerAppUpdate()
 	case IDTmplVersion:
 		m.SetFocus(HeaderFocusTmpl)
@@ -231,7 +240,6 @@ func (m *HeaderModel) ViewString() string {
 	}
 
 	// 2. Wrap Stage 1: [Left] [Center] [App] on Line 1, [Tmpl] on Line 2
-	// Verify if Line 1 fits
 	fitsStage1 := leftW+1 <= centerX
 
 	if centerX+centerW+1+appW > m.width {
@@ -245,7 +253,6 @@ func (m *HeaderModel) ViewString() string {
 	}
 
 	// 3. Wrap Stage 2: [Left] [Center] on Line 1, [App] on Line 2, [Tmpl] on Line 3
-	// Verify if Line 1 fits
 	if leftW+1 <= centerX {
 		line1 := left + strutil.Repeat(" ", centerX-leftW) + center
 		line1 = line1 + strutil.Repeat(" ", m.width-WidthWithoutZones(line1))
@@ -334,42 +341,63 @@ func (m HeaderModel) renderVersions() (appText, tmplText string) {
 	appVer := version.Version
 	tmplVer := paths.GetTemplatesVersion()
 
-	// Helper to render version blocks
-	// format: [StatusIcon] [Label][ [Version] ]
-	renderVersionBlock := func(ver string, label string, isAvailable bool, isError bool, isFocused bool, isFirst bool) string {
+	// Select update marker glyphs based on line character setting.
+	var markerAvailable, markerApplied, markerError string
+	if styles.LineCharacters {
+		markerAvailable = updateAvailable
+		markerApplied = updateApplied
+		markerError = updateError
+	} else {
+		markerAvailable = updateAvailableAscii
+		markerApplied = updateAppliedAscii
+		markerError = updateErrorAscii
+	}
+
+	// format: [StatusIcon] [Label]:[ [Version] ]
+	// isApplied — an update was applied externally and a restart is pending.
+	renderVersionBlock := func(ver, label string, isAvailable, isError, isApplied, isFocused, isFirst bool) string {
 		var text string
 
-		// 1. Status Icon / Prefix
-		if isError {
-			text += "{{|StatusUpdateMarker|}}?{{[-]}}{{|StatusBar|}}"
-		} else if isAvailable {
-			text += "{{|StatusUpdateMarker|}}*{{[-]}}{{|StatusBar|}}"
-		} else if isFirst {
+		// 1. Status marker
+		switch {
+		case isError:
+			text += "{{|StatusUpdateMarker|}}" + markerError + "{{[-]}}{{|StatusBar|}}"
+		case isApplied:
+			text += "{{|StatusUpdateMarker|}}" + markerApplied + "{{[-]}}{{|StatusBar|}}"
+		case isAvailable:
+			text += "{{|StatusUpdateMarker|}}" + markerAvailable + "{{[-]}}{{|StatusBar|}}"
+		case isFirst:
 			text += " "
-		} else {
+		default:
 			text += "{{|StatusVersionSpace|}} {{[-]}}{{|StatusBar|}}"
 		}
 
-		// 2. Label + Open Bracket (Standard or Update color)
-		if isError || isAvailable {
+		// 2. Label + open bracket
+		if isError || isAvailable || isApplied {
 			text += "{{|StatusUpdateBrackets|}}" + label + ":[{{[-]}}{{|StatusBar|}}"
 		} else {
 			text += "{{|StatusVersionBrackets|}}" + label + ":[{{[-]}}{{|StatusBar|}}"
 		}
 
-		// 3. Version Number (The Interactive Part)
+		// 3. Version string — append " - Restart Pending" when applied
+		displayVer := ver
+		if isApplied {
+			displayVer = ver + " - Restart Pending"
+		}
+
+		// 4. Styled version text
 		var verStyled string
 		if isFocused {
-			verStyled = "{{|StatusVersionSelected|}}" + ver + "{{[-]}}{{|StatusBar|}}"
-		} else if isError || isAvailable {
-			verStyled = "{{|StatusUpdate|}}" + ver + "{{[-]}}{{|StatusBar|}}"
+			verStyled = "{{|StatusVersionSelected|}}" + displayVer + "{{[-]}}{{|StatusBar|}}"
+		} else if isError || isAvailable || isApplied {
+			verStyled = "{{|StatusUpdate|}}" + displayVer + "{{[-]}}{{|StatusBar|}}"
 		} else {
-			verStyled = "{{|StatusVersion|}}" + ver + "{{[-]}}{{|StatusBar|}}"
+			verStyled = "{{|StatusVersion|}}" + displayVer + "{{[-]}}{{|StatusBar|}}"
 		}
 		text += verStyled
 
-		// 4. Close Bracket
-		if isError || isAvailable {
+		// 5. Close bracket
+		if isError || isAvailable || isApplied {
 			text += "{{|StatusUpdateBrackets|}}]{{[-]}}{{|StatusBar|}}"
 		} else {
 			text += "{{|StatusVersionBrackets|}}]{{[-]}}{{|StatusBar|}}"
@@ -378,8 +406,8 @@ func (m HeaderModel) renderVersions() (appText, tmplText string) {
 		return MaintainBackground(RenderThemeText(text, styles.HeaderBG), styles.HeaderBG)
 	}
 
-	appText = renderVersionBlock(appVer, "A", update.AppUpdateAvailable, update.UpdateCheckError, m.focus == HeaderFocusApp, true)
-	tmplText = renderVersionBlock(tmplVer, "T", update.TmplUpdateAvailable, update.UpdateCheckError, m.focus == HeaderFocusTmpl, false)
+	appText = renderVersionBlock(appVer, "A", update.AppUpdateAvailable, update.UpdateCheckError, update.RestartPending, m.focus == HeaderFocusApp, true)
+	tmplText = renderVersionBlock(tmplVer, "T", update.TmplUpdateAvailable, update.UpdateCheckError, false, m.focus == HeaderFocusTmpl, false)
 
 	return appText, tmplText
 }
@@ -397,9 +425,6 @@ func (m *HeaderModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	appW := WidthWithoutZones(appVer)
 	tmplW := WidthWithoutZones(tmplVer)
 
-	// Add hostname and flags hit regions
-	// Hostname starts at offset 0
-	// Flags start after hostname (hostname length + 1 space)
 	hostnameW := lipgloss.Width(m.hostname)
 	flagsW := leftW - hostnameW - 1
 	regions = append(regions, HitRegion{
@@ -427,12 +452,16 @@ func (m *HeaderModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	rightW := appW + tmplW
 	fitsLine1 := leftW+1 <= centerX && centerX+centerW+1+rightW <= m.width
 
+	appItemText := "Click or press Enter to check for and apply app updates."
+	if update.RestartPending {
+		appItemText = "Click or press Enter to restart with the updated binary."
+	}
 	appHelp := &HelpContext{
 		ScreenName: "App Version",
 		PageTitle:  "Update",
 		PageText:   "The current version of the DockSTARTer2 application.",
 		ItemTitle:  "App Version",
-		ItemText:   "Click or press Enter to check for and apply app updates.",
+		ItemText:   appItemText,
 	}
 	tmplHelp := &HelpContext{
 		ScreenName: "Template Version",

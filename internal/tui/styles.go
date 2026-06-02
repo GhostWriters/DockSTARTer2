@@ -125,8 +125,8 @@ const (
 	IDPanelResize   = "panel_resize"
 	IDPanelViewport = "panel_viewport"
 	IDConsoleInput  = "console_input"
-	IDAppVersion    = "app_version"
-	IDTmplVersion   = "tmpl_version"
+	IDAppVersion  = "app_version"
+	IDTmplVersion = "tmpl_version"
 
 	// Status bar
 	IDStatusBar = "status_bar"

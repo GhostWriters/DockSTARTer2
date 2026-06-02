@@ -15,6 +15,7 @@ import (
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/serve"
+	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/update"
 	"DockSTARTer2/internal/version"
@@ -132,6 +133,13 @@ func run() (exitCode int) {
 			}, themesDir)
 		}
 	}
+
+	// Seed the installed-version file so the restart watcher always has a
+	// baseline to compare against, even after a manual binary replacement.
+	sessionlocks.Sessions.SeedInstalledVersion(
+		sessionlocks.ResolvedExePath(),
+		version.Version,
+	)
 
 	// Ensure templates are cloned
 	if err := update.EnsureTemplates(ctx); err != nil {

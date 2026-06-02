@@ -2,6 +2,8 @@ package sessionlocks
 
 import (
 	"context"
+	"crypto/sha256"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -70,6 +72,7 @@ type SessionManager struct {
 
 	editLockPath      string // $STATE/locks/edit.lock
 	serverPIDPath     string // $STATE/locks/server.pid
+	procsDir          string // $STATE/locks/procs/ — one file per registered process
 	disconnectReqPath string // $STATE/disconnect.request
 	stopReqPath       string // $STATE/stop.request
 
@@ -100,9 +103,13 @@ func NewSessionManager() *SessionManager {
 
 	_ = os.MkdirAll(locksDir, 0755)
 
+	procsDir := filepath.Join(locksDir, "procs")
+	_ = os.MkdirAll(procsDir, 0755)
+
 	m := &SessionManager{
 		editLockPath:      filepath.Join(locksDir, "edit.lock"),
 		serverPIDPath:     filepath.Join(locksDir, "server.pid"),
+		procsDir:          procsDir,
 		disconnectReqPath: filepath.Join(stateDir, "disconnect.request"),
 		stopReqPath:       filepath.Join(stateDir, "stop.request"),
 	}
@@ -198,6 +205,43 @@ func (m *SessionManager) ReleaseServer() {
 	_ = os.Remove(m.serverPIDPath)
 }
 
+// exeVersionPath returns the path of the installed-version file for the given
+// resolved executable path. The filename is a short hex hash of the exe path
+// so it is filesystem-safe regardless of the original path content.
+func (m *SessionManager) exeVersionPath(exePath string) string {
+	sum := sha256.Sum256([]byte(exePath))
+	return filepath.Join(m.procsDir, fmt.Sprintf("%x.version", sum[:8]))
+}
+
+// WriteInstalledVersion records the version that was just installed for the
+// given executable. Any running instance of that binary will detect the change
+// on its next poll and set RestartPending.
+func (m *SessionManager) WriteInstalledVersion(exePath, newVersion string) error {
+	path := m.exeVersionPath(exePath)
+	return os.WriteFile(path, []byte(newVersion+"\n"), 0644)
+}
+
+// ReadInstalledVersion returns the version recorded in the installed-version
+// file for the given executable, or "" if no file exists.
+func (m *SessionManager) ReadInstalledVersion(exePath string) string {
+	path := m.exeVersionPath(exePath)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
+}
+
+// SeedInstalledVersion writes the current running version to the installed-
+// version file if it is missing or out of date. Called at every startup so the
+// file is always present for the watcher to compare against.
+func (m *SessionManager) SeedInstalledVersion(exePath, currentVersion string) {
+	if m.ReadInstalledVersion(exePath) == currentVersion {
+		return
+	}
+	_ = m.WriteInstalledVersion(exePath, currentVersion)
+}
+
 func (m *SessionManager) ReadEditInfo() SessionInfo {
 	// Robust read with retries to handle Windows file-sharing races where fsnotify triggers
 	// before the file is fully written or the handle released.
@@ -264,7 +308,25 @@ func (m *SessionManager) cleanStaleLocks() {
 	if pid != 0 && !ProcessExists(pid) {
 		_ = os.Remove(m.serverPIDPath)
 	}
+
+	// Version files in procsDir are intentionally persistent — they are
+	// overwritten on each update and used by running instances to detect
+	// that a newer binary has been installed. No cleanup needed.
 }
+
+// ResolvedExePath returns the real path of the current executable with symlinks resolved.
+func ResolvedExePath() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	real, err := filepath.EvalSymlinks(exe)
+	if err != nil {
+		return exe
+	}
+	return real
+}
+
 
 func writeInfoFile(path string, pid int, extras ...string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {

@@ -14,6 +14,12 @@ const (
 	radioUnselectedAscii = glyphs.RadioUnselectedAscii
 	checkSelectedAscii   = glyphs.CheckSelectedAscii
 	checkUnselectedAscii = glyphs.CheckUnselectedAscii
+	updateAvailable      = glyphs.UpdateAvailable
+	updateAvailableAscii = glyphs.UpdateAvailableAscii
+	updateApplied        = glyphs.UpdateApplied
+	updateAppliedAscii   = glyphs.UpdateAppliedAscii
+	updateError          = glyphs.UpdateError
+	updateErrorAscii     = glyphs.UpdateErrorAscii
 	invalidMarker        = glyphs.InvalidMarker
 	invalidMarkerAscii   = glyphs.InvalidMarkerAscii
 	lockedMarker         = glyphs.LockedMarker

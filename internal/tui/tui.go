@@ -221,6 +221,8 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	logger.Info(ctx, "TUI Starting.")
 	defer sessionlocks.Sessions.ReleaseEditLock()
 
+	captureExePath()
+
 	// Global panic recovery
 	defer func() {
 		if r := recover(); r != nil {
@@ -278,6 +280,9 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 
 	// Watch remote.lock so the console input bar locks when an SSH/web session is active
 	startLockFileWatcher(ctx, p)
+
+	// Watch for restart signal from another process that updated the binary
+	startRestartWatcher(ctx)
 
 	// Listen for context cancellation to shutdown program
 	go func() {
@@ -371,6 +376,8 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 	}()
 	defer sessionlocks.Sessions.ReleaseEditLock()
 
+	captureExePath()
+
 	if err := Initialize(ctx); err != nil {
 		return err
 	}
@@ -407,6 +414,7 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 	go startUpdateChecker(ctx)
 	startConfigWatcher(ctx, p)
 	startLockFileWatcher(ctx, p)
+	startRestartWatcher(ctx)
 	go func() {
 		<-ctx.Done()
 		Shutdown()
@@ -474,6 +482,8 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 		}
 	}()
 	defer sessionlocks.Sessions.ReleaseEditLock()
+
+	captureExePath()
 
 	if err := Initialize(ctx); err != nil {
 		return err
@@ -555,6 +565,7 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 	go startUpdateChecker(ctx)
 	startConfigWatcher(ctx, p)
 	startLockFileWatcher(ctx, p)
+	startRestartWatcher(ctx)
 	go func() {
 		<-ctx.Done()
 		Shutdown()

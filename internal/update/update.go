@@ -15,4 +15,9 @@ var (
 	// PendingReExec stores the command to run after the TUI shuts down.
 	// The actual exec is performed by the main thread after return.
 	PendingReExec []string
+
+	// RestartPending is true when another process updated the binary and wrote
+	// a restart signal file for this process. The TUI header displays
+	// "(Updated: Restart Pending)" and re-exec fires when a safe screen is reached.
+	RestartPending bool
 )
