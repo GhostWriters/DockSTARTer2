@@ -82,6 +82,7 @@ func run() (exitCode int) {
 	}
 
 	slog.SetDefault(logger.NewLogger())
+	fmt.Fprintf(os.Stderr, "DEBUG: run() reached slog setup\n")
 
 	// Create a cancelable context
 	ctx, cancel := context.WithCancel(context.Background())
