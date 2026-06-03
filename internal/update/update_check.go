@@ -362,7 +362,7 @@ func latestChannelTag(channel string) (string, error) {
 			continue
 		}
 		tagName := ref.Name().Short()
-		if !strings.EqualFold(GetChannelFromVersion(tagName), channel) {
+		if GetChannelFromVersion(tagName) != channel {
 			continue
 		}
 		if compareVersions(tagName, latest) > 0 {
