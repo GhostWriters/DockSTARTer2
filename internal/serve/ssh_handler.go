@@ -23,7 +23,7 @@ func tuiMiddleware(startMenu string) wish.Middleware {
 		return func(s ssh.Session) {
 			ctx := s.Context()
 
-			clientIP := s.RemoteAddr().String()
+			clientIP := formatIP(s.RemoteAddr().String())
 			if s.User() == "web" {
 				// The web proxy connects from loopback; read the real browser IP
 				// forwarded via the DS2_CLIENT_IP environment variable.

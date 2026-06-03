@@ -27,34 +27,41 @@ func CheckStartupStatus(ctx context.Context) {
 	// Build all instance lines then emit as a single multi-line warning.
 	lines := []string{"Other instances running:"}
 	for _, p := range procs {
-		var tags []string
-		// Server connection info stored in proc file
+		// Build tag blocks — each becomes its own [block]
+		var tagBlocks []string
+
+		// Server port info: [SSH Port: N, Web Port: N]
 		if p.ConnInfo != "" {
-			// Format "SSH:40022 Web:40080" → "SSH Server: 40022, Web Server: 40080"
 			parts := strings.Fields(p.ConnInfo)
 			var portTags []string
 			for _, part := range parts {
 				kv := strings.SplitN(part, ":", 2)
 				if len(kv) == 2 {
-					portTags = append(portTags, fmt.Sprintf("%s Server: {{|Version|}}%s{{[-]}}", kv[0], kv[1]))
+					portTags = append(portTags, fmt.Sprintf("%s Port: {{|Version|}}%s{{[-]}}", kv[0], kv[1]))
 				}
 			}
 			if len(portTags) > 0 {
-				tags = append(tags, strings.Join(portTags, ", "))
+				tagBlocks = append(tagBlocks, strings.Join(portTags, ", "))
 			}
 		}
-		// SSH client info if this process was started over SSH
+
+		// SSH client info for processes started over SSH: [SSH: ip]
 		if p.SSHClient != "" {
-			tags = append(tags, fmt.Sprintf("SSH: {{|Version|}}%s{{[-]}}", p.SSHClient))
-		}
-		if editInfo.PID == p.PID {
-			tags = append(tags, "{{|Warn|}}Edit lock{{[-]}}")
+			tagBlocks = append(tagBlocks, fmt.Sprintf("SSH: {{|Version|}}%s{{[-]}}", p.SSHClient))
 		}
 
-		tagStr := ""
-		if len(tags) > 0 {
-			tagStr = " [" + strings.Join(tags, ", ") + "]"
+		// Edit lock as its own block: [Edit lock]
+		if editInfo.PID == p.PID {
+			tagBlocks = append(tagBlocks, "{{|Warn|}}Edit lock{{[-]}}")
 		}
+
+		var tagBuf strings.Builder
+		for _, t := range tagBlocks {
+			tagBuf.WriteString(" [")
+			tagBuf.WriteString(t)
+			tagBuf.WriteString("]")
+		}
+		tagStr := tagBuf.String()
 
 		// Build the command line: full exe path + args
 		cmdLine := p.ExePath
@@ -66,11 +73,12 @@ func CheckStartupStatus(ctx context.Context) {
 			fmt.Sprintf("\tPID {{|Version|}}%-7d{{[-]}} [{{|Version|}}%s{{[-]}}]%s", p.PID, p.Version, tagStr),
 			fmt.Sprintf("\t\t{{|RunningCommand|}}%s{{[-]}}", cmdLine),
 		)
+
 		// Show active connected sessions under the server instance.
 		if p.ConnInfo != "" && len(connSessions) > 0 {
 			for _, cs := range connSessions {
 				lines = append(lines,
-					fmt.Sprintf("\t\t{{|Warn|}}Connected:{{[-]}} %s: {{|Version|}}%s{{[-]}}", cs.ConnType, cs.ClientIP),
+					fmt.Sprintf("\t\t{{|Warn|}}Connected:{{[-]}} [%s: {{|Version|}}%s{{[-]}}]", cs.ConnType, cs.ClientIP),
 				)
 			}
 		}

@@ -25,9 +25,9 @@ var registeredExePath string
 // header indicator and confirmation prompt.
 var PendingRestartVersion string
 
-// isRestartSafePage returns true when the current page is safe to re-exec on —
-// i.e. no unsaved state or in-progress operation that would be interrupted.
-func isRestartSafePage() bool {
+// isRestartSafeLocally returns true when this process is in a safe state to
+// restart — i.e. not editing and not on the vars editor page.
+func isRestartSafeLocally() bool {
 	if CurrentPageName == "tabbed_vars" {
 		return false
 	}
@@ -37,13 +37,34 @@ func isRestartSafePage() bool {
 	return true
 }
 
+// updateRestartSafeMarker writes or clears the .restartunsafe marker file
+// based on the current local state. Called on every page transition.
+func updateRestartSafeMarker() {
+	if isRestartSafeLocally() {
+		sessionlocks.Sessions.MarkRestartSafe()
+	} else {
+		sessionlocks.Sessions.MarkRestartUnsafe()
+	}
+}
+
+// isRestartSafe returns true when ALL registered processes (including this one)
+// are in a safe state to restart.
+func isRestartSafe() bool {
+	if !isRestartSafeLocally() {
+		return false
+	}
+	return !sessionlocks.Sessions.AnyRestartUnsafe()
+}
+
 // startRestartWatcher launches a background goroutine that polls the installed-
 // version file for the current executable. When a newer version is recorded it
 // sets update.RestartPending and triggers a header refresh. If the current page
 // is already safe it fires the re-exec immediately; otherwise re-exec is
 // deferred until the user navigates to a safe page (checkPendingRestart).
 func startRestartWatcher(ctx context.Context) {
+	updateRestartSafeMarker()
 	go func() {
+		defer sessionlocks.Sessions.MarkRestartSafe()
 		ticker := time.NewTicker(restartWatchInterval)
 		defer ticker.Stop()
 		for {
@@ -59,7 +80,7 @@ func startRestartWatcher(ctx context.Context) {
 						Send(UpdateHeaderMsg{})
 					}
 				}
-				if update.RestartPending && isRestartSafePage() {
+				if update.RestartPending && isRestartSafe() {
 					triggerPendingRestart(ctx)
 					return
 				}
@@ -72,7 +93,7 @@ func startRestartWatcher(ctx context.Context) {
 // is pending and the new page is safe, it fires the re-exec immediately rather
 // than waiting for the next poll cycle.
 func checkPendingRestart(ctx context.Context) {
-	if update.RestartPending && isRestartSafePage() {
+	if update.RestartPending && isRestartSafe() {
 		triggerPendingRestart(ctx)
 	}
 }
@@ -141,7 +162,7 @@ func showPendingRestartDialog(ctx context.Context) tea.Cmd {
 		}
 
 		var question string
-		if isRestartSafePage() {
+		if isRestartSafeLocally() {
 			question = "The application was updated" + verSuffix + ". Restart now to use the new version?"
 		} else {
 			question = "The application was updated" + verSuffix + ". You have unsaved changes — restart anyway and lose them?"
@@ -158,7 +179,7 @@ func showPendingRestartDialog(ctx context.Context) tea.Cmd {
 		return ShowConfirmDialogMsg{
 			Title:      "Restart Pending",
 			Question:   question,
-			DefaultYes: isRestartSafePage(),
+			DefaultYes: isRestartSafeLocally(),
 			ResultChan: resultChan,
 		}
 	}

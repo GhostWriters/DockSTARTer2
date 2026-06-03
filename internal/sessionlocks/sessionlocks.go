@@ -246,7 +246,48 @@ func (m *SessionManager) UpdateProcConnInfo(connInfo string) {
 
 // UnregisterProc removes the current process's registration file.
 func (m *SessionManager) UnregisterProc() {
-	_ = os.Remove(filepath.Join(m.procsDir, strconv.Itoa(os.Getpid())))
+	pid := strconv.Itoa(os.Getpid())
+	_ = os.Remove(filepath.Join(m.procsDir, pid))
+	_ = os.Remove(filepath.Join(m.procsDir, pid+".restartunsafe"))
+}
+
+// MarkRestartUnsafe creates a marker file indicating this process is currently
+// in a state where it is unsafe to restart (e.g. editing).
+func (m *SessionManager) MarkRestartUnsafe() {
+	_ = os.MkdirAll(m.procsDir, 0755)
+	_ = os.WriteFile(filepath.Join(m.procsDir, strconv.Itoa(os.Getpid())+".restartunsafe"), []byte{}, 0644)
+}
+
+// MarkRestartSafe removes the restart-unsafe marker for this process.
+func (m *SessionManager) MarkRestartSafe() {
+	_ = os.Remove(filepath.Join(m.procsDir, strconv.Itoa(os.Getpid())+".restartunsafe"))
+}
+
+// AnyRestartUnsafe returns true if any live registered process has marked
+// itself as unsafe to restart.
+func (m *SessionManager) AnyRestartUnsafe() bool {
+	entries, err := os.ReadDir(m.procsDir)
+	if err != nil {
+		return false
+	}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".restartunsafe") {
+			continue
+		}
+		// Derive PID from filename — strip the .restartunsafe suffix.
+		pidStr := strings.TrimSuffix(e.Name(), ".restartunsafe")
+		pid, err := strconv.Atoi(pidStr)
+		if err != nil {
+			_ = os.Remove(filepath.Join(m.procsDir, e.Name()))
+			continue
+		}
+		if !ProcessExists(pid) {
+			_ = os.Remove(filepath.Join(m.procsDir, e.Name()))
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 // ConnectedSession holds information about an active SSH or web connection.
