@@ -74,6 +74,7 @@ type SessionManager struct {
 	serverPIDPath     string // $STATE/locks/server.pid
 	procsDir          string // $STATE/locks/procs/    — one file per running TUI/daemon instance
 	versionsDir       string // $STATE/locks/versions/ — one file per executable path
+	sessionsDir       string // $STATE/locks/sessions/ — one file per active SSH/web connection
 	disconnectReqPath string // $STATE/disconnect.request
 	stopReqPath       string // $STATE/stop.request
 
@@ -109,6 +110,7 @@ func NewSessionManager() *SessionManager {
 		serverPIDPath:     filepath.Join(locksDir, "server.pid"),
 		procsDir:          filepath.Join(locksDir, "procs"),
 		versionsDir:       filepath.Join(locksDir, "versions"),
+		sessionsDir:       filepath.Join(locksDir, "sessions"),
 		disconnectReqPath: filepath.Join(stateDir, "disconnect.request"),
 		stopReqPath:       filepath.Join(stateDir, "stop.request"),
 	}
@@ -208,14 +210,38 @@ func (m *SessionManager) ReleaseServer() {
 }
 
 // RegisterProc writes a registration file for the current process under procs/.
-// Stores PID, resolved exe path, running version, and command-line args so
-// other instances can enumerate what is running. Call at TUI/daemon start;
-// pair with UnregisterProc.
+// Stores PID, resolved exe path, running version, command-line args, and
+// SSH client info (if connected via SSH). Call at startup; pair with UnregisterProc.
 func (m *SessionManager) RegisterProc(exePath, currentVersion string) {
 	_ = os.MkdirAll(m.procsDir, 0755)
 	path := filepath.Join(m.procsDir, strconv.Itoa(os.Getpid()))
 	args := strings.Join(os.Args[1:], " ")
-	_ = writeInfoFile(path, os.Getpid(), exePath, currentVersion, args)
+	// Capture SSH client IP if this process was started over an SSH session.
+	sshClient := ""
+	if sshConn := os.Getenv("SSH_CONNECTION"); sshConn != "" {
+		// SSH_CONNECTION is "clientIP clientPort serverIP serverPort"
+		if parts := strings.Fields(sshConn); len(parts) >= 1 {
+			sshClient = parts[0]
+		}
+	}
+	_ = writeInfoFile(path, os.Getpid(), exePath, currentVersion, args, sshClient)
+}
+
+// UpdateProcConnInfo rewrites the current process's registration file with
+// additional connection info (e.g. SSH/web server ports once the server starts).
+func (m *SessionManager) UpdateProcConnInfo(connInfo string) {
+	path := filepath.Join(m.procsDir, strconv.Itoa(os.Getpid()))
+	pid, fields := readInfoFile(path)
+	if pid == 0 {
+		return
+	}
+	// fields: [exePath, version, args, sshClient]
+	// Replace or append connInfo as fields[4]
+	for len(fields) < 5 {
+		fields = append(fields, "")
+	}
+	fields[4] = connInfo
+	_ = writeInfoFile(path, pid, fields...)
 }
 
 // UnregisterProc removes the current process's registration file.
@@ -223,12 +249,74 @@ func (m *SessionManager) UnregisterProc() {
 	_ = os.Remove(filepath.Join(m.procsDir, strconv.Itoa(os.Getpid())))
 }
 
+// ConnectedSession holds information about an active SSH or web connection.
+type ConnectedSession struct {
+	ID       string // unique session identifier (filename)
+	ClientIP string
+	ConnType string // "SSH" or "Web"
+}
+
+// RegisterSession writes a session file for an active incoming connection.
+// Returns the session ID to pass to UnregisterSession on disconnect.
+func (m *SessionManager) RegisterSession(clientIP, connType string) string {
+	_ = os.MkdirAll(m.sessionsDir, 0755)
+	// Use PID + nanosecond timestamp for a unique session ID.
+	id := fmt.Sprintf("%d_%d", os.Getpid(), time.Now().UnixNano())
+	path := filepath.Join(m.sessionsDir, id)
+	_ = os.WriteFile(path, []byte(connType+"\n"+clientIP+"\n"), 0644)
+	return id
+}
+
+// UnregisterSession removes the session file for a disconnecting client.
+func (m *SessionManager) UnregisterSession(id string) {
+	_ = os.Remove(filepath.Join(m.sessionsDir, id))
+}
+
+// ListConnectedSessions returns all active connected sessions.
+// Stale files (whose server process is dead) are removed.
+func (m *SessionManager) ListConnectedSessions() []ConnectedSession {
+	entries, err := os.ReadDir(m.sessionsDir)
+	if err != nil {
+		return nil
+	}
+	serverInfo := m.ReadServerInfo()
+	var sessions []ConnectedSession
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		path := filepath.Join(m.sessionsDir, e.Name())
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		// Check if the server that owns this session is still alive.
+		if serverInfo.PID == 0 || !ProcessExists(serverInfo.PID) {
+			_ = os.Remove(path)
+			continue
+		}
+		lines := strings.SplitN(strings.TrimSpace(string(data)), "\n", 2)
+		if len(lines) < 2 {
+			_ = os.Remove(path)
+			continue
+		}
+		sessions = append(sessions, ConnectedSession{
+			ID:       e.Name(),
+			ConnType: lines[0],
+			ClientIP: lines[1],
+		})
+	}
+	return sessions
+}
+
 // ProcInfo holds information about a registered running instance.
 type ProcInfo struct {
-	PID     int
-	ExePath string
-	Version string
-	Args    string
+	PID       int
+	ExePath   string
+	Version   string
+	Args      string
+	SSHClient string // client IP if this process was started over SSH, else ""
+	ConnInfo  string // additional connection info (e.g. "SSH:40022 Web:40080" for server)
 }
 
 // ListProcInfos returns info for all live registered processes, excluding the
@@ -262,6 +350,12 @@ func (m *SessionManager) ListProcInfos() []ProcInfo {
 		}
 		if len(fields) > 2 {
 			info.Args = fields[2]
+		}
+		if len(fields) > 3 {
+			info.SSHClient = fields[3]
+		}
+		if len(fields) > 4 {
+			info.ConnInfo = fields[4]
 		}
 		infos = append(infos, info)
 	}
