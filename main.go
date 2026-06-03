@@ -142,12 +142,14 @@ func run() (exitCode int) {
 	_ = os.MkdirAll(procsDir, 0755)
 	_ = os.MkdirAll(versionsDir, 0755)
 
+	// Register this process so other instances can see it in startup warnings.
+	exePath := sessionlocks.ResolvedExePath()
+	sessionlocks.Sessions.RegisterProc(exePath, version.Version)
+	defer sessionlocks.Sessions.UnregisterProc()
+
 	// Seed the installed-version file so the restart watcher always has a
 	// baseline to compare against, even after a manual binary replacement.
-	sessionlocks.Sessions.SeedInstalledVersion(
-		sessionlocks.ResolvedExePath(),
-		version.Version,
-	)
+	sessionlocks.Sessions.SeedInstalledVersion(exePath, version.Version)
 
 	// Ensure templates are cloned
 	if err := update.EnsureTemplates(ctx); err != nil {
