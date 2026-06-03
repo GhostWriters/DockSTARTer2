@@ -364,11 +364,20 @@ func (m *SessionManager) ForceRelease() {
 }
 
 func (m *SessionManager) cleanStaleLocks() {
+	// Clean stale edit lock. Two checks:
+	// 1. If TryLock succeeds, no process holds it — remove it.
+	// 2. If the PID in the lock file is dead, force-remove it regardless
+	//    of flock state (handles PID reuse and race conditions on re-exec).
 	f := flock.New(m.editLockPath)
 	locked, err := f.TryLock()
 	if err == nil && locked {
 		_ = f.Unlock()
 		_ = os.Remove(m.editLockPath)
+	} else {
+		pid, _ := readInfoFile(m.editLockPath)
+		if pid != 0 && !ProcessExists(pid) {
+			_ = os.Remove(m.editLockPath)
+		}
 	}
 
 	pid, _ := readInfoFile(m.serverPIDPath)
