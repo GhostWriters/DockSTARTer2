@@ -24,6 +24,8 @@ func CheckStartupStatus(ctx context.Context) {
 
 	editInfo := sessionlocks.Sessions.ReadEditInfo()
 
+	// Build all instance lines then emit as a single multi-line warning.
+	lines := []string{"Other instances running:"}
 	for _, p := range procs {
 		// Build tags: [SSH Server: N, Web Server: N] and/or [Edit lock]
 		var tags []string
@@ -36,7 +38,7 @@ func CheckStartupStatus(ctx context.Context) {
 			}
 		}
 		if editInfo.PID == p.PID {
-			tags = append(tags, "Edit lock")
+			tags = append(tags, "{{|Warn|}}Edit lock{{[-]}}")
 		}
 
 		tagStr := ""
@@ -50,11 +52,12 @@ func CheckStartupStatus(ctx context.Context) {
 			cmdLine += " " + p.Args
 		}
 
-		logger.Warn(ctx, []string{
-			fmt.Sprintf("{{|Version|}}%s{{[-]}} [PID {{|Version|}}%d{{[-]}}]%s", p.Version, p.PID, tagStr),
-			fmt.Sprintf("\t{{|RunningCommand|}}%s{{[-]}}", cmdLine),
-		})
+		lines = append(lines,
+			fmt.Sprintf("\t{{|Version|}}%s{{[-]}} [PID {{|Version|}}%d{{[-]}}]%s", p.Version, p.PID, tagStr),
+			fmt.Sprintf("\t\t{{|RunningCommand|}}%s{{[-]}}", cmdLine),
+		)
 	}
+	logger.Warn(ctx, lines)
 }
 
 // PrintServerStatus prints the current server and session state to stdout.
