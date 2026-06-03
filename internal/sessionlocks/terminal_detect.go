@@ -29,37 +29,30 @@ func queryXTVersion() string {
 	}
 
 	// Read response with a short timeout using a goroutine.
-	type result struct{ s string }
-	ch := make(chan result, 1)
+	// Response format: \033P>|TerminalName Version\033\\
+	ch := make(chan string, 1)
 	go func() {
 		buf := make([]byte, 128)
-		// Response format: \033P>|TerminalName Version\033\\
 		var collected []byte
-		stdin := os.Stdin
-		_ = stdin.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
-		defer func() { _ = stdin.SetReadDeadline(time.Time{}) }()
-		for {
-			n, err := stdin.Read(buf)
+		for len(collected) < 128 {
+			n, err := os.Stdin.Read(buf)
 			if n > 0 {
 				collected = append(collected, buf[:n]...)
 			}
-			if err != nil || len(collected) > 100 {
+			if err != nil {
 				break
 			}
-			// Stop once we see the ST terminator \033\\
-			if len(collected) >= 2 {
-				s := string(collected)
-				if strings.Contains(s, "\033\\") || strings.Contains(s, "\a") {
-					break
-				}
+			s := string(collected)
+			if strings.Contains(s, "\033\\") || strings.Contains(s, "\a") {
+				break
 			}
 		}
-		ch <- result{string(collected)}
+		ch <- string(collected)
 	}()
 
 	select {
 	case r := <-ch:
-		return parseXTVersion(r.s)
+		return parseXTVersion(r)
 	case <-time.After(250 * time.Millisecond):
 		return ""
 	}
