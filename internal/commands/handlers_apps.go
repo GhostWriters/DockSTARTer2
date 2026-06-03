@@ -11,6 +11,7 @@ import (
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/update"
 	"DockSTARTer2/internal/version"
 )
@@ -69,7 +70,11 @@ func HandleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, res
 		if len(group.Args) > 1 {
 			templBranch = group.Args[1]
 		}
-		_ = update.UpdateTemplates(ctx, state.Force, state.Yes, templBranch)
+		if sessionlocks.Sessions.IsEditLocked() {
+			logger.Warn(ctx, "Configuration is being edited — skipping template update. Run '{{|UserCommand|}}%s -u{{[-]}}' again after editing to update templates.", version.CommandName)
+		} else {
+			_ = update.UpdateTemplates(ctx, state.Force, state.Yes, templBranch)
+		}
 		_ = update.SelfUpdate(ctx, state.Force, state.Yes, appVer, restArgs)
 	case "--update-app":
 		appVer := ""

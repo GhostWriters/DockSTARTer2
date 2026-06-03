@@ -965,7 +965,9 @@ func TriggerUpdate() tea.Cmd {
 			force := console.Force()
 			yes := console.AssumeYes()
 
-			if err := update.UpdateTemplates(ctx, force, yes, ""); err != nil {
+			if sessionlocks.Sessions.IsEditLocked() {
+				logger.Warn(ctx, "Configuration is being edited — skipping template update. Run update again after editing to update templates.")
+			} else if err := update.UpdateTemplates(ctx, force, yes, ""); err != nil {
 				return err
 			}
 
