@@ -82,14 +82,14 @@ var Registry = map[string]Def{
 	"--update-templates":         {Title: "Update Templates", SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
 	"-R":                         {Title: "Reset Actions", SessionLocked: true, ConsoleSafe: true, AppsChanging: true, ConfigChanging: true},
 	"--reset":                    {Title: "Reset Actions", SessionLocked: true, ConsoleSafe: true, AppsChanging: true, ConfigChanging: true},
-	"-S":                         {Title: "Select Applications", SessionLocked: true, ConsoleSafe: true},   // launches TUI
-	"--select":                   {Title: "Select Applications", SessionLocked: true, ConsoleSafe: true},   // launches TUI
-	"-M":                         {Title: "Menu", SessionLocked: true, ConsoleSafe: true},                  // launches TUI
-	"--menu":                     {Title: "Menu", SessionLocked: true, ConsoleSafe: true},                  // launches TUI
-	"--edit-global":              {Title: "Edit Global Variables", SessionLocked: true, ConsoleSafe: true}, // launches TUI
-	"--start-edit-global":        {Title: "Edit Global Variables", SessionLocked: true, ConsoleSafe: true}, // launches TUI
-	"--edit-app":                 {Title: "Edit App Variables", SessionLocked: true, ConsoleSafe: true},    // launches TUI
-	"--start-edit-app":           {Title: "Edit App Variables", SessionLocked: true, ConsoleSafe: true},    // launches TUI
+	"-S":                         {Title: "Select Applications", ConsoleSafe: true},   // launches TUI; edit lock handles conflicts
+	"--select":                   {Title: "Select Applications", ConsoleSafe: true},   // launches TUI; edit lock handles conflicts
+	"-M":                         {Title: "Menu", ConsoleSafe: true},                  // launches TUI; edit lock handles conflicts
+	"--menu":                     {Title: "Menu", ConsoleSafe: true},                  // launches TUI; edit lock handles conflicts
+	"--edit-global":              {Title: "Edit Global Variables", ConsoleSafe: true}, // launches TUI; edit lock handles conflicts
+	"--start-edit-global":        {Title: "Edit Global Variables", ConsoleSafe: true}, // launches TUI; edit lock handles conflicts
+	"--edit-app":                 {Title: "Edit App Variables", ConsoleSafe: true},    // launches TUI; edit lock handles conflicts
+	"--start-edit-app":           {Title: "Edit App Variables", ConsoleSafe: true},    // launches TUI; edit lock handles conflicts
 	"--config-pm":                {Title: "Select Package Manager", SessionLocked: true, ConsoleSafe: true},
 	"--config-pm-auto":           {Title: "Select Package Manager", SessionLocked: true, ConsoleSafe: true},
 	"--config-pm-list":           {Title: "List Known Package Managers", SessionLocked: true, ConsoleSafe: true},
