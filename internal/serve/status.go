@@ -51,7 +51,7 @@ func CheckStartupStatus(ctx context.Context) {
 		}
 
 		logger.Warn(ctx, []string{
-			fmt.Sprintf("v{{|Version|}}%s{{[-]}} [PID {{|Version|}}%d{{[-]}}]%s", p.Version, p.PID, tagStr),
+			fmt.Sprintf("{{|Version|}}%s{{[-]}} [PID {{|Version|}}%d{{[-]}}]%s", p.Version, p.PID, tagStr),
 			fmt.Sprintf("\t{{|RunningCommand|}}%s{{[-]}}", cmdLine),
 		})
 	}
