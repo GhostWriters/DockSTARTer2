@@ -13,6 +13,7 @@ import (
 
 	"DockSTARTer2/internal/paths"
 	"github.com/gofrs/flock"
+	"github.com/pelletier/go-toml/v2"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -95,6 +96,43 @@ type ServerInfo struct {
 	WebPort int
 }
 
+// editLockRecord is the TOML structure stored in edit.lock.
+type editLockRecord struct {
+	PID      int    `toml:"pid"`
+	ClientIP string `toml:"client_ip"`
+	ConnType string `toml:"conn_type"`
+}
+
+// serverRecord is the TOML structure stored in server.pid.
+type serverRecord struct {
+	PID     int `toml:"pid"`
+	Port    int `toml:"port"`
+	WebPort int `toml:"web_port"`
+}
+
+// sessionRecord is the TOML structure stored in each session file.
+type sessionRecord struct {
+	ClientIP string `toml:"client_ip"`
+	ConnType string `toml:"conn_type"`
+	Terminal string `toml:"terminal"`
+}
+
+func writeTomlFile(path string, v any) (retErr error) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			retErr = fmt.Errorf("panic writing toml file: %v", rec)
+		}
+	}()
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	data, err := toml.Marshal(v)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
 // Sessions is the global session manager instance.
 var Sessions = NewSessionManager()
 
@@ -165,7 +203,11 @@ func (m *SessionManager) AcquireEditLock(clientIP, connType string) bool {
 		if err == nil && locked {
 			m.editActive = true
 			m.localOwner = connType
-			_ = writeInfoFile(m.editLockPath, os.Getpid(), clientIP, connType)
+			_ = writeTomlFile(m.editLockPath, editLockRecord{
+				PID:      os.Getpid(),
+				ClientIP: clientIP,
+				ConnType: connType,
+			})
 			return true
 		}
 
@@ -202,29 +244,69 @@ func (m *SessionManager) ReleaseEditLock() {
 }
 
 func (m *SessionManager) AcquireServer(sshPort, webPort int) error {
-	return writeInfoFile(m.serverPIDPath, os.Getpid(), strconv.Itoa(sshPort), strconv.Itoa(webPort))
+	return writeTomlFile(m.serverPIDPath, serverRecord{
+		PID:     os.Getpid(),
+		Port:    sshPort,
+		WebPort: webPort,
+	})
 }
 
 func (m *SessionManager) ReleaseServer() {
 	_ = os.Remove(m.serverPIDPath)
 }
 
-// RegisterProc writes a registration file for the current process under procs/.
-// Stores PID, resolved exe path, running version, command-line args, and
-// SSH client info (if connected via SSH). Call at startup; pair with UnregisterProc.
+// procRecord is the TOML structure stored in each proc file.
+type procRecord struct {
+	PID       int    `toml:"pid"`
+	ExePath   string `toml:"exe"`
+	Version   string `toml:"version"`
+	Args      string `toml:"args"`
+	SSHClient string `toml:"ssh_client"`
+	ConnInfo  string `toml:"conn_info"`
+	Terminal  string `toml:"terminal"`
+}
+
+func (m *SessionManager) procPath(pid int) string {
+	return filepath.Join(m.procsDir, strconv.Itoa(pid)+".toml")
+}
+
+func writeProcRecord(path string, r procRecord) (retErr error) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			retErr = fmt.Errorf("panic writing proc record: %v", rec)
+		}
+	}()
+	data, err := toml.Marshal(r)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+func readProcRecord(path string) (procRecord, bool) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return procRecord{}, false
+	}
+	var r procRecord
+	if err := toml.Unmarshal(data, &r); err != nil {
+		// Corrupt file — remove it so it doesn't persist.
+		_ = os.Remove(path)
+		return procRecord{}, false
+	}
+	return r, true
+}
+
+// RegisterProc writes a TOML registration file for the current process under procs/.
 func (m *SessionManager) RegisterProc(exePath, currentVersion string) {
 	_ = os.MkdirAll(m.procsDir, 0755)
-	path := filepath.Join(m.procsDir, strconv.Itoa(os.Getpid()))
 	args := strings.Join(os.Args[1:], " ")
-	// Capture SSH client IP if this process was started over an SSH session.
 	sshClient := ""
 	if sshConn := os.Getenv("SSH_CONNECTION"); sshConn != "" {
-		// SSH_CONNECTION is "clientIP clientPort serverIP serverPort"
 		if parts := strings.Fields(sshConn); len(parts) >= 1 {
 			sshClient = parts[0]
 		}
 	}
-	// Capture terminal identifier from TERM_PROGRAM and/or TERM env vars.
 	terminal := ""
 	if termProgram := os.Getenv("TERM_PROGRAM"); termProgram != "" {
 		terminal = termProgram
@@ -234,31 +316,32 @@ func (m *SessionManager) RegisterProc(exePath, currentVersion string) {
 	} else if term := os.Getenv("TERM"); term != "" {
 		terminal = term
 	}
-	_ = writeInfoFile(path, os.Getpid(), exePath, currentVersion, args, sshClient, terminal)
+	_ = writeProcRecord(m.procPath(os.Getpid()), procRecord{
+		PID:       os.Getpid(),
+		ExePath:   exePath,
+		Version:   currentVersion,
+		Args:      args,
+		SSHClient: sshClient,
+		Terminal:  terminal,
+	})
 }
 
-// UpdateProcConnInfo rewrites the current process's registration file with
-// additional connection info (e.g. SSH/web server ports once the server starts).
+// UpdateProcConnInfo updates the ConnInfo field in the current process's proc file.
 func (m *SessionManager) UpdateProcConnInfo(connInfo string) {
-	path := filepath.Join(m.procsDir, strconv.Itoa(os.Getpid()))
-	pid, fields := readInfoFile(path)
-	if pid == 0 {
+	path := m.procPath(os.Getpid())
+	r, ok := readProcRecord(path)
+	if !ok {
 		return
 	}
-	// fields: [exePath, version, args, sshClient]
-	// Replace or append connInfo as fields[4]
-	for len(fields) < 5 {
-		fields = append(fields, "")
-	}
-	fields[4] = connInfo
-	_ = writeInfoFile(path, pid, fields...)
+	r.ConnInfo = connInfo
+	_ = writeProcRecord(path, r)
 }
 
 // UnregisterProc removes the current process's registration file.
 func (m *SessionManager) UnregisterProc() {
-	pid := strconv.Itoa(os.Getpid())
-	_ = os.Remove(filepath.Join(m.procsDir, pid))
-	_ = os.Remove(filepath.Join(m.procsDir, pid+".restartunsafe"))
+	pid := os.Getpid()
+	_ = os.Remove(m.procPath(pid))
+	_ = os.Remove(filepath.Join(m.procsDir, strconv.Itoa(pid)+".restartunsafe"))
 }
 
 // MarkRestartUnsafe creates a marker file indicating this process is currently
@@ -316,7 +399,11 @@ func (m *SessionManager) RegisterSession(clientIP, connType, terminal string) st
 	_ = os.MkdirAll(m.sessionsDir, 0755)
 	id := fmt.Sprintf("%d_%d", os.Getpid(), time.Now().UnixNano())
 	path := filepath.Join(m.sessionsDir, id)
-	_ = os.WriteFile(path, []byte(connType+"\n"+clientIP+"\n"+terminal+"\n"), 0644)
+	_ = writeTomlFile(path, sessionRecord{
+		ClientIP: clientIP,
+		ConnType: connType,
+		Terminal: terminal,
+	})
 	return id
 }
 
@@ -339,28 +426,25 @@ func (m *SessionManager) ListConnectedSessions() []ConnectedSession {
 			continue
 		}
 		path := filepath.Join(m.sessionsDir, e.Name())
-		data, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
 		if serverInfo.PID == 0 || !ProcessExists(serverInfo.PID) {
 			_ = os.Remove(path)
 			continue
 		}
-		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-		if len(lines) < 2 {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		var r sessionRecord
+		if err := toml.Unmarshal(data, &r); err != nil || r.ClientIP == "" {
 			_ = os.Remove(path)
 			continue
 		}
-		cs := ConnectedSession{
+		sessions = append(sessions, ConnectedSession{
 			ID:       e.Name(),
-			ConnType: lines[0],
-			ClientIP: lines[1],
-		}
-		if len(lines) > 2 {
-			cs.Terminal = lines[2]
-		}
-		sessions = append(sessions, cs)
+			ConnType: r.ConnType,
+			ClientIP: r.ClientIP,
+			Terminal: r.Terminal,
+		})
 	}
 	return sessions
 }
@@ -386,38 +470,27 @@ func (m *SessionManager) ListProcInfos() []ProcInfo {
 	self := os.Getpid()
 	var infos []ProcInfo
 	for _, e := range entries {
-		if e.IsDir() {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".toml") {
 			continue
 		}
 		path := filepath.Join(m.procsDir, e.Name())
-		pid, fields := readInfoFile(path)
-		if pid == 0 || !ProcessExists(pid) {
+		r, ok := readProcRecord(path)
+		if !ok || r.PID == 0 || !ProcessExists(r.PID) {
 			_ = os.Remove(path)
 			continue
 		}
-		if pid == self {
+		if r.PID == self {
 			continue
 		}
-		info := ProcInfo{PID: pid}
-		if len(fields) > 0 {
-			info.ExePath = fields[0]
-		}
-		if len(fields) > 1 {
-			info.Version = fields[1]
-		}
-		if len(fields) > 2 {
-			info.Args = fields[2]
-		}
-		if len(fields) > 3 {
-			info.SSHClient = fields[3]
-		}
-		if len(fields) > 4 {
-			info.ConnInfo = fields[4]
-		}
-		if len(fields) > 5 {
-			info.Terminal = fields[5]
-		}
-		infos = append(infos, info)
+		infos = append(infos, ProcInfo{
+			PID:       r.PID,
+			ExePath:   r.ExePath,
+			Version:   r.Version,
+			Args:      r.Args,
+			SSHClient: r.SSHClient,
+			ConnInfo:  r.ConnInfo,
+			Terminal:  r.Terminal,
+		})
 	}
 	return infos
 }
@@ -466,42 +539,40 @@ func (m *SessionManager) SeedInstalledVersion(exePath, currentVersion string) {
 func (m *SessionManager) ReadEditInfo() SessionInfo {
 	// Robust read with retries to handle Windows file-sharing races where fsnotify triggers
 	// before the file is fully written or the handle released.
-	var pid int
-	var fields []string
+	var r editLockRecord
 	for i := 0; i < 5; i++ {
-		pid, fields = readInfoFile(m.editLockPath)
-		if pid != 0 && len(fields) >= 2 {
-			break
+		data, err := os.ReadFile(m.editLockPath)
+		if err == nil {
+			if toml.Unmarshal(data, &r) == nil && r.PID != 0 {
+				break
+			}
+			// Bad or old-format file — remove it on last retry.
+			if i == 4 {
+				_ = os.Remove(m.editLockPath)
+			}
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-
-	si := SessionInfo{PID: pid}
-	if len(fields) > 0 {
-		si.ClientIP = fields[0]
-	}
-	if len(fields) > 1 {
-		si.ConnType = fields[1]
-	}
-	return si
+	return SessionInfo{PID: r.PID, ClientIP: r.ClientIP, ConnType: r.ConnType}
 }
 
 func (m *SessionManager) ReadServerInfo() ServerInfo {
-	pid, fields := readInfoFile(m.serverPIDPath)
-	si := ServerInfo{PID: pid}
-	if len(fields) > 0 {
-		si.Port, _ = strconv.Atoi(fields[0])
+	data, err := os.ReadFile(m.serverPIDPath)
+	if err != nil {
+		return ServerInfo{}
 	}
-	if len(fields) > 1 {
-		si.WebPort, _ = strconv.Atoi(fields[1])
+	var r serverRecord
+	if err := toml.Unmarshal(data, &r); err != nil {
+		// Corrupt file — remove it so a fresh server start can write a clean one.
+		_ = os.Remove(m.serverPIDPath)
+		return ServerInfo{}
 	}
-	return si
+	return ServerInfo{PID: r.PID, Port: r.Port, WebPort: r.WebPort}
 }
 
 // EditLockPID returns the PID of the process currently holding the edit lock.
 func (m *SessionManager) EditLockPID() int {
-	pid, _ := readInfoFile(m.editLockPath)
-	return pid
+	return m.ReadEditInfo().PID
 }
 
 // ForceRelease removes the edit lock file regardless of state.
@@ -528,26 +599,24 @@ func (m *SessionManager) cleanStaleLocks() {
 		_ = f.Unlock()
 		_ = os.Remove(m.editLockPath)
 	} else {
-		pid, _ := readInfoFile(m.editLockPath)
-		if pid != 0 && !ProcessExists(pid) {
+		if info := m.ReadEditInfo(); info.PID != 0 && !ProcessExists(info.PID) {
 			_ = os.Remove(m.editLockPath)
 		}
 	}
 
-	pid, _ := readInfoFile(m.serverPIDPath)
-	if pid != 0 && !ProcessExists(pid) {
+	if si := m.ReadServerInfo(); si.PID != 0 && !ProcessExists(si.PID) {
 		_ = os.Remove(m.serverPIDPath)
 	}
 
 	// Clean stale proc registration files (dead processes).
 	if entries, err := os.ReadDir(m.procsDir); err == nil {
 		for _, e := range entries {
-			if e.IsDir() {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".toml") {
 				continue
 			}
 			path := filepath.Join(m.procsDir, e.Name())
-			pid, _ := readInfoFile(path)
-			if pid == 0 || !ProcessExists(pid) {
+			r, ok := readProcRecord(path)
+			if !ok || r.PID == 0 || !ProcessExists(r.PID) {
 				_ = os.Remove(path)
 			}
 		}
@@ -570,30 +639,6 @@ func ResolvedExePath() string {
 }
 
 
-func writeInfoFile(path string, pid int, extras ...string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return err
-	}
-	content := strconv.Itoa(pid) + "\n" + strings.Join(extras, "\n") + "\n"
-	return os.WriteFile(path, []byte(content), 0644)
-}
-
-func readInfoFile(path string) (int, []string) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return 0, nil
-	}
-	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
-	pid, err := strconv.Atoi(strings.TrimSpace(lines[0]))
-	if err != nil {
-		return 0, nil
-	}
-	var extras []string
-	for _, l := range lines[1:] {
-		extras = append(extras, strings.TrimSpace(l))
-	}
-	return pid, extras
-}
 
 func (m *SessionManager) RequestDisconnect() error {
 	return os.WriteFile(m.disconnectReqPath, []byte{}, 0644)
