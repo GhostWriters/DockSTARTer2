@@ -53,7 +53,8 @@ func CheckStartupStatus(ctx context.Context) {
 		}
 
 		// SSH client info for processes started over SSH: [SSH: ip]
-		if p.SSHClient != "" {
+		// Suppressed for the server instance — its connections show under Connected: instead.
+		if p.SSHClient != "" && p.ConnInfo == "" {
 			tagBlocks = append(tagBlocks, fmt.Sprintf("SSH: {{|Version|}}%s{{[-]}}", p.SSHClient))
 		}
 
