@@ -72,6 +72,19 @@ func main() {
 }
 
 func run() (exitCode int) {
+	// Handle internal tool commands immediately before any startup work.
+	// These are invoked by ds2 itself (e.g. restart watcher) and must be fast and silent.
+	if len(os.Args) == 2 {
+		switch os.Args[1] {
+		case "--print-version":
+			fmt.Println(version.Version)
+			return 0
+		case "--print-templates-version":
+			fmt.Println(paths.GetTemplatesVersion())
+			return 0
+		}
+	}
+
 	// Initialize logger level styles to avoid import cycle (logger -> theme -> config -> logger)
 	logger.LevelStyleFunc = func(tag string, label string) lipgloss.Style {
 		s := theme.ConsoleSemanticStyle(tag)
