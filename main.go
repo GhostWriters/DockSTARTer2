@@ -82,7 +82,6 @@ func run() (exitCode int) {
 	}
 
 	slog.SetDefault(logger.NewLogger())
-	fmt.Fprintf(os.Stderr, "DEBUG: run() reached slog setup\n")
 
 	// Create a cancelable context
 	ctx, cancel := context.WithCancel(context.Background())
@@ -140,9 +139,8 @@ func run() (exitCode int) {
 	// so they are present from first startup regardless of code path).
 	procsDir := filepath.Join(paths.GetLocksDir(), "procs")
 	versionsDir := filepath.Join(paths.GetLocksDir(), "versions")
-	fmt.Fprintf(os.Stderr, "DEBUG: locksDir=%s\n", paths.GetLocksDir())
-	fmt.Fprintf(os.Stderr, "DEBUG: procsDir=%s err=%v\n", procsDir, os.MkdirAll(procsDir, 0755))
-	fmt.Fprintf(os.Stderr, "DEBUG: versionsDir=%s err=%v\n", versionsDir, os.MkdirAll(versionsDir, 0755))
+	_ = os.MkdirAll(procsDir, 0755)
+	_ = os.MkdirAll(versionsDir, 0755)
 
 	// Seed the installed-version file so the restart watcher always has a
 	// baseline to compare against, even after a manual binary replacement.
