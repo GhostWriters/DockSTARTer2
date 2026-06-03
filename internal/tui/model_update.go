@@ -248,6 +248,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, func() tea.Msg { return LockStateChangedMsg{LockedByOthers: true} })
 			}
 		}
+		updateRestartSafeMarker()
 		checkPendingRestart(m.ctx)
 		return m, logger.BatchRecoverTUI(m.ctx, cmds...)
 
@@ -294,6 +295,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.ready && m.activeScreen == nil && m.dialog == nil {
 			return m, ConfirmExitAction()
 		}
+		updateRestartSafeMarker()
 		checkPendingRestart(m.ctx)
 		if msg.Refresh && m.activeScreen != nil {
 			return m, func() tea.Msg { return RefreshAppsListMsg{} }
