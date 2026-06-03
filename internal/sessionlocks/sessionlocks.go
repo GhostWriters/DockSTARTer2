@@ -474,15 +474,7 @@ func (m *SessionManager) ListProcInfos() []ProcInfo {
 		if r.PID == self {
 			continue
 		}
-		infos = append(infos, ProcInfo{
-			PID:       r.PID,
-			ExePath:   r.ExePath,
-			Version:   r.Version,
-			Args:      r.Args,
-			SSHClient: r.SSHClient,
-			ConnInfo:  r.ConnInfo,
-			Terminal:  r.Terminal,
-		})
+		infos = append(infos, ProcInfo(r))
 	}
 	return infos
 }
@@ -545,7 +537,7 @@ func (m *SessionManager) ReadEditInfo() SessionInfo {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	return SessionInfo{PID: r.PID, ClientIP: r.ClientIP, ConnType: r.ConnType}
+	return SessionInfo(r)
 }
 
 func (m *SessionManager) ReadServerInfo() ServerInfo {
@@ -559,7 +551,7 @@ func (m *SessionManager) ReadServerInfo() ServerInfo {
 		_ = os.Remove(m.serverPIDPath)
 		return ServerInfo{}
 	}
-	return ServerInfo{PID: r.PID, Port: r.Port, WebPort: r.WebPort}
+	return ServerInfo(r)
 }
 
 // EditLockPID returns the PID of the process currently holding the edit lock.
