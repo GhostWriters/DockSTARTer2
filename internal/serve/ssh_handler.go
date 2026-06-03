@@ -89,6 +89,14 @@ func tuiMiddleware(startMenu string) wish.Middleware {
 
 			logger.Info(ctx, "SSH session started from %s", s.RemoteAddr())
 
+			// Register the active connection so startup warnings can show it.
+			connType := "SSH"
+			if s.User() == "web" {
+				connType = "Web"
+			}
+			sessionID := sessionlocks.Sessions.RegisterSession(clientIP, connType)
+			defer sessionlocks.Sessions.UnregisterSession(sessionID)
+
 			if err := tui.Start(sessCtx, startMenu, opts); err != nil {
 				logger.Error(ctx, "SSH TUI session error: %v", err)
 				_ = s.Exit(1)

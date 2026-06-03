@@ -16,26 +16,36 @@ import (
 // sessions. Suppressed when no other instances are running.
 func CheckStartupStatus(ctx context.Context) {
 	procs := sessionlocks.Sessions.ListProcInfos()
-	serverInfo := sessionlocks.Sessions.ReadServerInfo()
 
 	if len(procs) == 0 {
 		return
 	}
 
 	editInfo := sessionlocks.Sessions.ReadEditInfo()
+	connSessions := sessionlocks.Sessions.ListConnectedSessions()
 
 	// Build all instance lines then emit as a single multi-line warning.
 	lines := []string{"Other instances running:"}
 	for _, p := range procs {
-		// Build tags: [SSH Server: N, Web Server: N] and/or [Edit lock]
 		var tags []string
-		if p.PID == serverInfo.PID {
-			if serverInfo.Port > 0 && serverInfo.WebPort > 0 {
-				tags = append(tags, fmt.Sprintf("SSH Server: {{|Version|}}%d{{[-]}}, Web Server: {{|Version|}}%d{{[-]}}",
-					serverInfo.Port, serverInfo.WebPort))
-			} else if serverInfo.Port > 0 {
-				tags = append(tags, fmt.Sprintf("SSH Server: {{|Version|}}%d{{[-]}}", serverInfo.Port))
+		// Server connection info stored in proc file
+		if p.ConnInfo != "" {
+			// Format "SSH:40022 Web:40080" → "SSH Server: 40022, Web Server: 40080"
+			parts := strings.Fields(p.ConnInfo)
+			var portTags []string
+			for _, part := range parts {
+				kv := strings.SplitN(part, ":", 2)
+				if len(kv) == 2 {
+					portTags = append(portTags, fmt.Sprintf("%s Server: {{|Version|}}%s{{[-]}}", kv[0], kv[1]))
+				}
 			}
+			if len(portTags) > 0 {
+				tags = append(tags, strings.Join(portTags, ", "))
+			}
+		}
+		// SSH client info if this process was started over SSH
+		if p.SSHClient != "" {
+			tags = append(tags, fmt.Sprintf("SSH: {{|Version|}}%s{{[-]}}", p.SSHClient))
 		}
 		if editInfo.PID == p.PID {
 			tags = append(tags, "{{|Warn|}}Edit lock{{[-]}}")
@@ -56,6 +66,14 @@ func CheckStartupStatus(ctx context.Context) {
 			fmt.Sprintf("\tPID {{|Version|}}%-7d{{[-]}} [{{|Version|}}%s{{[-]}}]%s", p.PID, p.Version, tagStr),
 			fmt.Sprintf("\t\t{{|RunningCommand|}}%s{{[-]}}", cmdLine),
 		)
+		// Show active connected sessions under the server instance.
+		if p.ConnInfo != "" && len(connSessions) > 0 {
+			for _, cs := range connSessions {
+				lines = append(lines,
+					fmt.Sprintf("\t\t{{|Warn|}}Connected:{{[-]}} %s: {{|Version|}}%s{{[-]}}", cs.ConnType, cs.ClientIP),
+				)
+			}
+		}
 	}
 	logger.Warn(ctx, lines)
 }

@@ -139,8 +139,10 @@ func run() (exitCode int) {
 	// so they are present from first startup regardless of code path).
 	procsDir := filepath.Join(paths.GetLocksDir(), "procs")
 	versionsDir := filepath.Join(paths.GetLocksDir(), "versions")
+	sessionsDir := filepath.Join(paths.GetLocksDir(), "sessions")
 	_ = os.MkdirAll(procsDir, 0755)
 	_ = os.MkdirAll(versionsDir, 0755)
+	_ = os.MkdirAll(sessionsDir, 0755)
 
 	// Register this process so other instances can see it in startup warnings.
 	exePath := sessionlocks.ResolvedExePath()
