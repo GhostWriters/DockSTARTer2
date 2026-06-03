@@ -5,6 +5,7 @@ import (
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/theme"
+	"DockSTARTer2/internal/update"
 	"fmt"
 
 	"charm.land/bubbles/v2/help"
@@ -149,6 +150,10 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ShowGlobalFlagsMsg:
 		return m, func() tea.Msg { return ShowDialogMsg{Dialog: NewFlagsToggleDialog()} }
 
+	case ShowPendingRestartMsg:
+		return m, showPendingRestartDialog(m.ctx)
+
+
 	case TriggerHelpMsg:
 		return m, m.showHelpCmd(msg.CapturedContext, msg.ScreenLevelOnly)
 
@@ -243,6 +248,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, func() tea.Msg { return LockStateChangedMsg{LockedByOthers: true} })
 			}
 		}
+		checkPendingRestart(m.ctx)
 		return m, logger.BatchRecoverTUI(m.ctx, cmds...)
 
 	case NavigateBackMsg:
@@ -288,6 +294,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.ready && m.activeScreen == nil && m.dialog == nil {
 			return m, ConfirmExitAction()
 		}
+		checkPendingRestart(m.ctx)
 		if msg.Refresh && m.activeScreen != nil {
 			return m, func() tea.Msg { return RefreshAppsListMsg{} }
 		}
@@ -980,6 +987,9 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		case HeaderFocusFlags:
 			return m, func() tea.Msg { return ShowGlobalFlagsMsg{} }, true
 		case HeaderFocusApp:
+			if update.RestartPending {
+				return m, func() tea.Msg { return ShowPendingRestartMsg{} }, true
+			}
 			return m, TriggerAppUpdate(), true
 		case HeaderFocusTmpl:
 			return m, TriggerTemplateUpdate(), true

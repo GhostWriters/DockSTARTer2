@@ -11,6 +11,7 @@ import (
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/update"
 	"DockSTARTer2/internal/version"
 )
@@ -21,6 +22,20 @@ func HandleHelp(ctx context.Context, group *CommandGroup) error {
 		target = group.Args[0]
 	}
 	PrintHelp(ctx, target)
+	return nil
+}
+
+// HandlePrintVersion writes just the raw version string to stdout.
+// Used by the restart watcher to verify the on-disk binary version without
+// parsing the styled --version output.
+func HandlePrintVersion() error {
+	fmt.Println(version.Version)
+	return nil
+}
+
+// HandlePrintTemplatesVersion writes just the raw templates version string to stdout.
+func HandlePrintTemplatesVersion() error {
+	fmt.Println(paths.GetTemplatesVersion())
 	return nil
 }
 
@@ -55,7 +70,11 @@ func HandleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, res
 		if len(group.Args) > 1 {
 			templBranch = group.Args[1]
 		}
-		_ = update.UpdateTemplates(ctx, state.Force, state.Yes, templBranch)
+		if sessionlocks.Sessions.IsEditLocked() {
+			logger.Warn(ctx, "Configuration is being edited — skipping template update. Run '{{|UserCommand|}}%s -u{{[-]}}' again after editing to update templates.", version.CommandName)
+		} else {
+			_ = update.UpdateTemplates(ctx, state.Force, state.Yes, templBranch)
+		}
 		_ = update.SelfUpdate(ctx, state.Force, state.Yes, appVer, restArgs)
 	case "--update-app":
 		appVer := ""

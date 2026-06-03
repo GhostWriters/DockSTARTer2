@@ -405,6 +405,18 @@ func GetUsage(target string, noHeading bool) string {
 			"	Display version information for the specified branches",
 		)
 	}
+	if match("--print-version") {
+		printStr(
+			"{{|UsageCommand|}}--print-version{{[-]}}",
+			fmt.Sprintf("	Print the raw {{|ApplicationName|}}%s{{[-]}} version string and exit. Suitable for scripting.", appName),
+		)
+	}
+	if match("--print-templates-version") {
+		printStr(
+			"{{|UsageCommand|}}--print-templates-version{{[-]}}",
+			"	Print the raw {{|ApplicationName|}}DockSTARTer-Templates{{[-]}} version string and exit. Suitable for scripting.",
+		)
+	}
 
 	if showAll && !noHeading {
 		printStr(

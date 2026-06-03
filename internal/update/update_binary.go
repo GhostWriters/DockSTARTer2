@@ -15,6 +15,7 @@ import (
 	dsexec "DockSTARTer2/internal/exec"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/system"
 	"DockSTARTer2/internal/version"
 
@@ -171,6 +172,13 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 		logger.Info(ctx, "Application location is '{{|File|}}%s{{[-]}}'.", exePath)
 	}
 
+	// Record the installed version so other running instances detect the update.
+	if exePath != "unknown" {
+		if err := sessionlocks.Sessions.WriteInstalledVersion(exePath, remoteVersion); err != nil {
+			logger.Warn(ctx, "Could not write installed version record: %v", err)
+		}
+	}
+
 	// Reset all needs markers
 	system.SetPermissions(ctx, paths.GetTimestampsDir())
 	_ = paths.ResetNeeds()
@@ -320,3 +328,4 @@ func installUpdate(ctx context.Context, assetURL string) error {
 
 	return nil
 }
+

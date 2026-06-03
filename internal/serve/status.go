@@ -10,30 +10,48 @@ import (
 	"DockSTARTer2/internal/sessionlocks"
 )
 
-// CheckStartupStatus logs warnings if an SSH server or active session is
-// detected from a previous or concurrent process. Called during DS2 startup
-// so the user is aware of any running server/session before executing commands.
+// CheckStartupStatus logs information about other running instances of the
+// application. Called during startup so the user is aware of concurrent
+// sessions. Suppressed when no other instances are running.
 func CheckStartupStatus(ctx context.Context) {
+	procs := sessionlocks.Sessions.ListProcInfos()
 	serverInfo := sessionlocks.Sessions.ReadServerInfo()
-	if serverInfo.PID != 0 && sessionlocks.ProcessExists(serverInfo.PID) {
-		if serverInfo.Port > 0 {
-			logger.Warn(ctx, "SSH server is running on port {{|Highlight|}}%d{{[-]}} (PID %d).", serverInfo.Port, serverInfo.PID)
-		} else {
-			logger.Warn(ctx, "SSH server is running (PID %d).", serverInfo.PID)
-		}
-		if serverInfo.WebPort > 0 {
-			logger.Warn(ctx, "Web server is running on port {{|Highlight|}}%d{{[-]}}.", serverInfo.WebPort)
+
+	if len(procs) == 0 {
+		return
+	}
+
+	for _, p := range procs {
+		// Build the command line: full exe path + args
+		cmdLine := p.ExePath
+		if p.Args != "" {
+			cmdLine += " " + p.Args
 		}
 
-		if sessionlocks.Sessions.IsEditLocked() {
-			editInfo := sessionlocks.Sessions.ReadEditInfo()
-			ip := formatIP(editInfo.ClientIP)
-			connType := "SSH"
-			if editInfo.ConnType == "web" {
-				connType = "web"
+		// Build port suffix for server instance
+		portSuffix := ""
+		if p.PID == serverInfo.PID {
+			if serverInfo.Port > 0 && serverInfo.WebPort > 0 {
+				portSuffix = fmt.Sprintf(" (SSH:{{|Highlight|}}%d{{[-]}} Web:{{|Highlight|}}%d{{[-]}}", serverInfo.Port, serverInfo.WebPort) + ")"
+			} else if serverInfo.Port > 0 {
+				portSuffix = fmt.Sprintf(" (SSH:{{|Highlight|}}%d{{[-]}}", serverInfo.Port) + ")"
 			}
-			logger.Warn(ctx, "Configuration is being edited by %s session from {{|Highlight|}}%s{{[-]}}.", connType, ip)
 		}
+
+		logger.Warn(ctx, []string{
+			fmt.Sprintf("Other instance running: PID {{|Highlight|}}%d{{[-]}} v%s%s", p.PID, p.Version, portSuffix),
+			fmt.Sprintf("\t{{|RunningCommand|}}%s{{[-]}}", cmdLine),
+		})
+	}
+
+	if sessionlocks.Sessions.IsEditLocked() {
+		editInfo := sessionlocks.Sessions.ReadEditInfo()
+		ip := formatIP(editInfo.ClientIP)
+		connType := "SSH"
+		if editInfo.ConnType == "web" {
+			connType = "web"
+		}
+		logger.Warn(ctx, "Configuration is being edited by %s session from {{|Highlight|}}%s{{[-]}}.", connType, ip)
 	}
 }
 
