@@ -38,7 +38,9 @@ func CheckStartupStatus(ctx context.Context) {
 		var tagBlocks []string
 
 		// Server port info: [SSH Port: N, Web Port: N]
-		if p.ConnInfo != "" {
+		// Only trust ConnInfo if this PID is actually the server.
+		isServer := p.PID == serverInfo.PID
+		if p.ConnInfo != "" && isServer {
 			parts := strings.Fields(p.ConnInfo)
 			var portTags []string
 			for _, part := range parts {
@@ -54,7 +56,7 @@ func CheckStartupStatus(ctx context.Context) {
 
 		// Connection info for non-server instances.
 		// Suppressed for the server instance — its connections show under Connected: instead.
-		if p.ConnInfo == "" {
+		if !isServer {
 			termStr := ""
 			if p.Terminal != "" {
 				termStr = fmt.Sprintf(" ({{|RunningCommand|}}%s{{[-]}}", p.Terminal) + ")"
@@ -90,8 +92,8 @@ func CheckStartupStatus(ctx context.Context) {
 			fmt.Sprintf("\t\t{{|RunningCommand|}}%s{{[-]}}", cmdLine),
 		)
 
-		// Show active connected sessions under the server instance.
-		if p.ConnInfo != "" && len(connSessions) > 0 {
+		// Show active connected sessions under the server instance only.
+		if isServer && len(connSessions) > 0 {
 			lines = append(lines, "\t\t{{|Warn|}}Connected:{{[-]}}")
 			for _, cs := range connSessions {
 				termStr := ""
