@@ -224,7 +224,17 @@ func (m *SessionManager) RegisterProc(exePath, currentVersion string) {
 			sshClient = parts[0]
 		}
 	}
-	_ = writeInfoFile(path, os.Getpid(), exePath, currentVersion, args, sshClient)
+	// Capture terminal identifier from TERM_PROGRAM and/or TERM env vars.
+	terminal := ""
+	if termProgram := os.Getenv("TERM_PROGRAM"); termProgram != "" {
+		terminal = termProgram
+		if term := os.Getenv("TERM"); term != "" {
+			terminal += "/" + term
+		}
+	} else if term := os.Getenv("TERM"); term != "" {
+		terminal = term
+	}
+	_ = writeInfoFile(path, os.Getpid(), exePath, currentVersion, args, sshClient, terminal)
 }
 
 // UpdateProcConnInfo rewrites the current process's registration file with
@@ -363,6 +373,7 @@ type ProcInfo struct {
 	Args      string
 	SSHClient string // client IP if this process was started over SSH, else ""
 	ConnInfo  string // additional connection info (e.g. "SSH:40022 Web:40080" for server)
+	Terminal  string // terminal identifier e.g. "WezTerm/xterm-256color"
 }
 
 // ListProcInfos returns info for all live registered processes, excluding the
@@ -402,6 +413,9 @@ func (m *SessionManager) ListProcInfos() []ProcInfo {
 		}
 		if len(fields) > 4 {
 			info.ConnInfo = fields[4]
+		}
+		if len(fields) > 5 {
+			info.Terminal = fields[5]
 		}
 		infos = append(infos, info)
 	}
