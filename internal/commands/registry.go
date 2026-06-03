@@ -76,10 +76,10 @@ var Registry = map[string]Def{
 	"--prune":                    {Title: "Docker Prune", SessionLocked: true, ConsoleSafe: true},
 	"-i":                         {Title: "Install", SessionLocked: true, ConsoleSafe: true},
 	"--install":                  {Title: "Install", SessionLocked: true, ConsoleSafe: true},
-	"-u":                         {Title: "Update", ConsoleSafe: true, AppsChanging: true},
-	"--update":                   {Title: "Update", ConsoleSafe: true, AppsChanging: true},
+	"-u":                         {Title: "Update", SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
+	"--update":                   {Title: "Update", SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
 	"--update-app":               {Title: "Update App", ConsoleSafe: true, AppsChanging: true},
-	"--update-templates":         {Title: "Update Templates", ConsoleSafe: true, AppsChanging: true},
+	"--update-templates":         {Title: "Update Templates", SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
 	"-R":                         {Title: "Reset Actions", SessionLocked: true, ConsoleSafe: true, AppsChanging: true, ConfigChanging: true},
 	"--reset":                    {Title: "Reset Actions", SessionLocked: true, ConsoleSafe: true, AppsChanging: true, ConfigChanging: true},
 	"-S":                         {Title: "Select Applications", SessionLocked: true, ConsoleSafe: true},   // launches TUI
