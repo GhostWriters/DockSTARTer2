@@ -134,12 +134,14 @@ func StartSSHServer(ctx context.Context, cfg config.ServerConfig, startMenu stri
 	defer sessionlocks.Sessions.ReleaseServer()
 
 	// Update proc registration with server port info so other instances
-	// can display it in startup warnings.
-	connInfo := fmt.Sprintf("SSH:%d", cfg.SSH.Port)
-	if webPort > 0 {
-		connInfo += fmt.Sprintf(" Web:%d", webPort)
+	// can display it in startup warnings. Only meaningful in the daemon process.
+	if console.IsDaemon {
+		connInfo := fmt.Sprintf("SSH:%d", cfg.SSH.Port)
+		if webPort > 0 {
+			connInfo += fmt.Sprintf(" Web:%d", webPort)
+		}
+		sessionlocks.Sessions.UpdateProcConnInfo(connInfo)
 	}
-	sessionlocks.Sessions.UpdateProcConnInfo(connInfo)
 
 	// Start web server alongside SSH if configured.
 	if cfg.Web.Port > 0 {
