@@ -52,14 +52,18 @@ func CheckStartupStatus(ctx context.Context) {
 			}
 		}
 
-		// SSH client info for processes started over SSH: [SSH: ip (terminal)]
+		// Connection info for non-server instances.
 		// Suppressed for the server instance — its connections show under Connected: instead.
-		if p.SSHClient != "" && p.ConnInfo == "" {
+		if p.ConnInfo == "" {
 			termStr := ""
 			if p.Terminal != "" {
 				termStr = fmt.Sprintf(" ({{|RunningCommand|}}%s{{[-]}}", p.Terminal) + ")"
 			}
-			tagBlocks = append(tagBlocks, fmt.Sprintf("SSH: {{|Version|}}%s{{[-]}}%s", p.SSHClient, termStr))
+			if p.SSHClient != "" {
+				tagBlocks = append(tagBlocks, fmt.Sprintf("SSH: {{|Version|}}%s{{[-]}}%s", p.SSHClient, termStr))
+			} else {
+				tagBlocks = append(tagBlocks, fmt.Sprintf("Local%s", termStr))
+			}
 		}
 
 		// Edit lock as its own block: [Edit lock]
