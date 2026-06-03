@@ -53,7 +53,7 @@ func CheckStartupStatus(ctx context.Context) {
 		}
 
 		lines = append(lines,
-			fmt.Sprintf("\tPID {{|Version|}}%7d{{[-]}}  [{{|Version|}}%s{{[-]}}]%s", p.PID, p.Version, tagStr),
+			fmt.Sprintf("\tPID {{|Version|}}%-6d{{[-]}} [{{|Version|}}%s{{[-]}}]%s", p.PID, p.Version, tagStr),
 			fmt.Sprintf("\t\t{{|RunningCommand|}}%s{{[-]}}", cmdLine),
 		)
 	}
