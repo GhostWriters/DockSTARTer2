@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strings"
 
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/logger"
@@ -21,37 +22,38 @@ func CheckStartupStatus(ctx context.Context) {
 		return
 	}
 
+	editInfo := sessionlocks.Sessions.ReadEditInfo()
+
 	for _, p := range procs {
+		// Build tags: [SSH Server: N, Web Server: N] and/or [Edit lock]
+		var tags []string
+		if p.PID == serverInfo.PID {
+			if serverInfo.Port > 0 && serverInfo.WebPort > 0 {
+				tags = append(tags, fmt.Sprintf("SSH Server: {{|Version|}}%d{{[-]}}, Web Server: {{|Version|}}%d{{[-]}}",
+					serverInfo.Port, serverInfo.WebPort))
+			} else if serverInfo.Port > 0 {
+				tags = append(tags, fmt.Sprintf("SSH Server: {{|Version|}}%d{{[-]}}", serverInfo.Port))
+			}
+		}
+		if editInfo.PID == p.PID {
+			tags = append(tags, "Edit lock")
+		}
+
+		tagStr := ""
+		if len(tags) > 0 {
+			tagStr = " [" + strings.Join(tags, ", ") + "]"
+		}
+
 		// Build the command line: full exe path + args
 		cmdLine := p.ExePath
 		if p.Args != "" {
 			cmdLine += " " + p.Args
 		}
 
-		// Build port suffix for server instance
-		portSuffix := ""
-		if p.PID == serverInfo.PID {
-			if serverInfo.Port > 0 && serverInfo.WebPort > 0 {
-				portSuffix = fmt.Sprintf(" (SSH:{{|Highlight|}}%d{{[-]}} Web:{{|Highlight|}}%d{{[-]}}", serverInfo.Port, serverInfo.WebPort) + ")"
-			} else if serverInfo.Port > 0 {
-				portSuffix = fmt.Sprintf(" (SSH:{{|Highlight|}}%d{{[-]}}", serverInfo.Port) + ")"
-			}
-		}
-
 		logger.Warn(ctx, []string{
-			fmt.Sprintf("Other instance running: PID {{|Highlight|}}%d{{[-]}} v%s%s", p.PID, p.Version, portSuffix),
+			fmt.Sprintf("v{{|Version|}}%s{{[-]}} [PID {{|Version|}}%d{{[-]}}]%s", p.Version, p.PID, tagStr),
 			fmt.Sprintf("\t{{|RunningCommand|}}%s{{[-]}}", cmdLine),
 		})
-	}
-
-	if sessionlocks.Sessions.IsEditLocked() {
-		editInfo := sessionlocks.Sessions.ReadEditInfo()
-		ip := formatIP(editInfo.ClientIP)
-		connType := "SSH"
-		if editInfo.ConnType == "web" {
-			connType = "web"
-		}
-		logger.Warn(ctx, "Configuration is being edited by %s session from {{|Highlight|}}%s{{[-]}}.", connType, ip)
 	}
 }
 
