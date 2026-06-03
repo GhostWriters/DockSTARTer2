@@ -25,7 +25,7 @@ type resizeMsg struct {
 // server. The browser's xterm.js instance drives the session; resize events
 // are translated into SSH window-change requests so bubbletea receives proper
 // tea.WindowSizeMsg messages via the normal SSH path.
-func handleWebSocket(ctx context.Context, conn *websocket.Conn, clientAddr string, cfg config.ServerConfig, signer gossh.Signer) {
+func handleWebSocket(ctx context.Context, conn *websocket.Conn, clientAddr, userAgent string, cfg config.ServerConfig, signer gossh.Signer) {
 	defer func() { _ = conn.CloseNow() }()
 
 	// Wait for the browser's initial resize so we can set the PTY size before
@@ -72,8 +72,11 @@ func handleWebSocket(ctx context.Context, conn *websocket.Conn, clientAddr strin
 	}
 	defer sshSess.Close()
 
-	// Forward the real browser IP so the SSH handler can record it instead of 127.0.0.1.
+	// Forward the real browser IP and User-Agent so the SSH handler can record them.
 	_ = sshSess.Setenv("DS2_CLIENT_IP", clientAddr)
+	if userAgent != "" {
+		_ = sshSess.Setenv("DS2_USER_AGENT", userAgent)
+	}
 
 	// Request a PTY with the dimensions the browser reported.
 	if err := sshSess.RequestPty("xterm-256color", initialRows, initialCols, gossh.TerminalModes{}); err != nil {

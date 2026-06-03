@@ -24,14 +24,16 @@ func tuiMiddleware(startMenu string) wish.Middleware {
 			ctx := s.Context()
 
 			clientIP := formatIP(s.RemoteAddr().String())
-			if s.User() == "web" {
-				// The web proxy connects from loopback; read the real browser IP
-				// forwarded via the DS2_CLIENT_IP environment variable.
-				for _, env := range s.Environ() {
-					if strings.HasPrefix(env, "DS2_CLIENT_IP=") {
-						clientIP = strings.TrimPrefix(env, "DS2_CLIENT_IP=")
-						break
-					}
+			userAgent := ""
+			termProgram := ""
+			for _, env := range s.Environ() {
+				switch {
+				case strings.HasPrefix(env, "DS2_CLIENT_IP="):
+					clientIP = strings.TrimPrefix(env, "DS2_CLIENT_IP=")
+				case strings.HasPrefix(env, "DS2_USER_AGENT="):
+					userAgent = strings.TrimPrefix(env, "DS2_USER_AGENT=")
+				case strings.HasPrefix(env, "TERM_PROGRAM="):
+					termProgram = strings.TrimPrefix(env, "TERM_PROGRAM=")
 				}
 			}
 
@@ -91,10 +93,19 @@ func tuiMiddleware(startMenu string) wish.Middleware {
 
 			// Register the active connection so startup warnings can show it.
 			connType := "SSH"
+			var terminal string
 			if s.User() == "web" {
 				connType = "Web"
+				terminal = simplifyUserAgent(userAgent)
+			} else {
+				// For SSH: "TERM_PROGRAM/TERM" or just "TERM"
+				if termProgram != "" {
+					terminal = termProgram + "/" + ptyReq.Term
+				} else {
+					terminal = ptyReq.Term
+				}
 			}
-			sessionID := sessionlocks.Sessions.RegisterSession(clientIP, connType)
+			sessionID := sessionlocks.Sessions.RegisterSession(clientIP, connType, terminal)
 			defer sessionlocks.Sessions.UnregisterSession(sessionID)
 
 			if err := tui.Start(sessCtx, startMenu, opts); err != nil {
@@ -106,5 +117,31 @@ func tuiMiddleware(startMenu string) wish.Middleware {
 			logger.Info(ctx, "SSH session ended from %s", s.RemoteAddr())
 			_ = s.Exit(0)
 		}
+	}
+}
+
+// simplifyUserAgent returns a short browser name from a User-Agent string.
+// Falls back to the raw string if no known browser is detected.
+func simplifyUserAgent(ua string) string {
+	if ua == "" {
+		return ""
+	}
+	switch {
+	case strings.Contains(ua, "Edg/") || strings.Contains(ua, "Edge/"):
+		return "Edge"
+	case strings.Contains(ua, "OPR/") || strings.Contains(ua, "Opera"):
+		return "Opera"
+	case strings.Contains(ua, "Chrome/"):
+		return "Chrome"
+	case strings.Contains(ua, "Safari/") && strings.Contains(ua, "Version/"):
+		return "Safari"
+	case strings.Contains(ua, "Firefox/"):
+		return "Firefox"
+	default:
+		// Return first token as a best-effort name
+		if idx := strings.IndexAny(ua, " /"); idx > 0 {
+			return ua[:idx]
+		}
+		return ua
 	}
 }

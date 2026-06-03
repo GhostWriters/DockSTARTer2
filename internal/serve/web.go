@@ -90,5 +90,5 @@ func handleWebSocketHTTP(ctx context.Context, w http.ResponseWriter, r *http.Req
 		return
 	}
 	conn.SetReadLimit(1 << 20) // 1 MiB
-	handleWebSocket(ctx, conn, clientAddr, cfg, signer)
+	handleWebSocket(ctx, conn, clientAddr, r.Header.Get("User-Agent"), cfg, signer)
 }

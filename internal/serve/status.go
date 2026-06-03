@@ -86,8 +86,12 @@ func CheckStartupStatus(ctx context.Context) {
 		if p.ConnInfo != "" && len(connSessions) > 0 {
 			lines = append(lines, "\t\t{{|Warn|}}Connected:{{[-]}}")
 			for _, cs := range connSessions {
+				termStr := ""
+				if cs.Terminal != "" {
+					termStr = fmt.Sprintf(" ({{|RunningCommand|}}%s{{[-]}}", cs.Terminal) + ")"
+				}
 				lines = append(lines,
-					fmt.Sprintf("\t\t\t[%s: {{|Version|}}%s{{[-]}}]", cs.ConnType, cs.ClientIP),
+					fmt.Sprintf("\t\t\t[%s: {{|Version|}}%s{{[-]}}%s]", cs.ConnType, cs.ClientIP, termStr),
 				)
 			}
 		}
