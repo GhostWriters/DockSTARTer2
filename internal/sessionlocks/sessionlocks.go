@@ -208,12 +208,14 @@ func (m *SessionManager) ReleaseServer() {
 }
 
 // RegisterProc writes a registration file for the current process under procs/.
-// Stores PID, resolved exe path, and running version so other instances can
-// enumerate what is running. Call at TUI/daemon start; pair with UnregisterProc.
+// Stores PID, resolved exe path, running version, and command-line args so
+// other instances can enumerate what is running. Call at TUI/daemon start;
+// pair with UnregisterProc.
 func (m *SessionManager) RegisterProc(exePath, currentVersion string) {
 	_ = os.MkdirAll(m.procsDir, 0755)
 	path := filepath.Join(m.procsDir, strconv.Itoa(os.Getpid()))
-	_ = writeInfoFile(path, os.Getpid(), exePath, currentVersion)
+	args := strings.Join(os.Args[1:], " ")
+	_ = writeInfoFile(path, os.Getpid(), exePath, currentVersion, args)
 }
 
 // UnregisterProc removes the current process's registration file.
@@ -226,6 +228,7 @@ type ProcInfo struct {
 	PID     int
 	ExePath string
 	Version string
+	Args    string
 }
 
 // ListProcInfos returns info for all live registered processes, excluding the
@@ -256,6 +259,9 @@ func (m *SessionManager) ListProcInfos() []ProcInfo {
 		}
 		if len(fields) > 1 {
 			info.Version = fields[1]
+		}
+		if len(fields) > 2 {
+			info.Args = fields[2]
 		}
 		infos = append(infos, info)
 	}
