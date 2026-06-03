@@ -54,7 +54,9 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 		tag, err := latestChannelTag(requestedVersion)
 		if err != nil {
 			logger.Debug(ctx, "Git tag check failed: %v (will fall back to API)", err)
-		} else if tag == "" {
+			tag = requestedVersion // treat as non-empty so we fall through to the API
+		}
+		if err == nil && tag == "" {
 			if switchingChannels {
 				logger.Error(ctx, "{{|ApplicationName|}}%s{{[-]}} channel '{{|Branch|}}%s{{[-]}}' does not exist on origin.", version.ApplicationName, requestedVersion)
 				return fmt.Errorf("channel '%s' does not exist", requestedVersion)
