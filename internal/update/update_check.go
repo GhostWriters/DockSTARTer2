@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/version"
@@ -56,8 +58,41 @@ func GetUpdateStatus(ctx context.Context) (appUpdate bool, tmplUpdate bool) {
 	return appUpdate, tmplUpdate
 }
 
-// CheckUpdates performs a startup update check and notifies the user if updates are available.
+const updateCheckCacheFile = "update_check"
+const updateCheckCacheDuration = 24 * time.Hour
+
+func updateCheckTimestampPath() string {
+	return filepath.Join(paths.GetTimestampsDir(), updateCheckCacheFile)
+}
+
+// updateCheckFresh returns true if the update check timestamp is less than
+// 24 hours old, meaning we can skip the network check.
+func updateCheckFresh() bool {
+	info, err := os.Stat(updateCheckTimestampPath())
+	return err == nil && time.Since(info.ModTime()) < updateCheckCacheDuration
+}
+
+// touchUpdateCheckTimestamp updates the mtime of the update check timestamp
+// file to now, creating it if it doesn't exist.
+func touchUpdateCheckTimestamp() {
+	_ = os.MkdirAll(paths.GetTimestampsDir(), 0755)
+	path := updateCheckTimestampPath()
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		_ = os.WriteFile(path, []byte{}, 0644)
+	} else {
+		now := time.Now()
+		_ = os.Chtimes(path, now, now)
+	}
+}
+
+// CheckUpdates performs a startup update check and notifies the user if updates
+// are available. Skipped if the check was performed within the last 24 hours,
+// unless --force is set.
 func CheckUpdates(ctx context.Context) {
+	if !console.Force() && updateCheckFresh() {
+		return
+	}
+
 	// Create a timeout context for the update check (3 seconds max)
 	checkCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
@@ -65,41 +100,33 @@ func CheckUpdates(ctx context.Context) {
 	// Run update check synchronously (before user command executes)
 	GetUpdateStatus(checkCtx)
 
-	// Log update check results (either success with updates, or failure)
 	if UpdateCheckError {
-		// Check failed - warn user
 		logger.Warn(ctx, "Failed to check for updates (network timeout or error).")
-	} else {
-		// Check succeeded - log update availability
-		// Check Application Updates
-		if AppUpdateAvailable {
-			msg := []string{
-				GetAppVersionDisplay(),
-				fmt.Sprintf("An update to {{|ApplicationName|}}%s{{[-]}} is available.", version.ApplicationName),
-				fmt.Sprintf("Run '{{|UserCommand|}}%s -u{{[-]}}' to update to version '{{|Version|}}%s{{[-]}}'.", version.CommandName, LatestAppVersion),
-			}
-			logger.Warn(ctx, msg)
-		} else {
-			// Info level is hidden by default (-v shows it), matching main.sh use of VERBOSE
-			logger.Info(ctx, GetAppVersionDisplay())
-		}
-
-		// Check Template Updates
-		if TmplUpdateAvailable {
-			tmplName := "DockSTARTer-Templates"
-			msg := []string{
-				GetTmplVersionDisplay(),
-				fmt.Sprintf("An update to {{|ApplicationName|}}%s{{[-]}} is available.", tmplName),
-				fmt.Sprintf("Run '{{|UserCommand|}}%s -u{{[-]}}' to update to version '{{|Version|}}%s{{[-]}}'.", version.CommandName, LatestTmplVersion),
-			}
-			logger.Warn(ctx, msg)
-		} else {
-			logger.Info(ctx, GetTmplVersionDisplay())
-		}
-
-		// Docker Compose SDK
-		logger.Info(ctx, GetComposeSdkVersionDisplay())
+		return
 	}
+
+	// Touch the timestamp so we skip the check for the next 24 hours.
+	touchUpdateCheckTimestamp()
+
+	if AppUpdateAvailable {
+		logger.Warn(ctx, []string{
+			GetAppVersionDisplay(),
+			fmt.Sprintf("An update to {{|ApplicationName|}}%s{{[-]}} is available.", version.ApplicationName),
+			fmt.Sprintf("Run '{{|UserCommand|}}%s -u{{[-]}}' to update to version '{{|Version|}}%s{{[-]}}'.", version.CommandName, LatestAppVersion),
+		})
+	} else {
+		logger.Info(ctx, GetAppVersionDisplay())
+	}
+	if TmplUpdateAvailable {
+		logger.Warn(ctx, []string{
+			GetTmplVersionDisplay(),
+			fmt.Sprintf("An update to {{|ApplicationName|}}%s{{[-]}} is available.", "DockSTARTer-Templates"),
+			fmt.Sprintf("Run '{{|UserCommand|}}%s -u{{[-]}}' to update to version '{{|Version|}}%s{{[-]}}'.", version.CommandName, LatestTmplVersion),
+		})
+	} else {
+		logger.Info(ctx, GetTmplVersionDisplay())
+	}
+	logger.Info(ctx, GetComposeSdkVersionDisplay())
 }
 
 // GetAppVersionDisplay returns a formatted version string for the application,
