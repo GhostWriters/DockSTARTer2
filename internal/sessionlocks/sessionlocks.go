@@ -307,15 +307,7 @@ func (m *SessionManager) RegisterProc(exePath, currentVersion string) {
 			sshClient = parts[0]
 		}
 	}
-	terminal := ""
-	if termProgram := os.Getenv("TERM_PROGRAM"); termProgram != "" {
-		terminal = termProgram
-		if term := os.Getenv("TERM"); term != "" {
-			terminal += "/" + term
-		}
-	} else if term := os.Getenv("TERM"); term != "" {
-		terminal = term
-	}
+	terminal := DetectTerminal()
 	_ = writeProcRecord(m.procPath(os.Getpid()), procRecord{
 		PID:       os.Getpid(),
 		ExePath:   exePath,
