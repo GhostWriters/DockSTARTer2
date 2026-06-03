@@ -295,16 +295,18 @@ type ConnectedSession struct {
 	ID       string // unique session identifier (filename)
 	ClientIP string
 	ConnType string // "SSH" or "Web"
+	Terminal string // terminal or browser identifier
 }
 
 // RegisterSession writes a session file for an active incoming connection.
 // Returns the session ID to pass to UnregisterSession on disconnect.
-func (m *SessionManager) RegisterSession(clientIP, connType string) string {
+// terminal is a human-readable identifier: for SSH it's e.g. "WezTerm/xterm-256color",
+// for web it's a simplified browser name from the User-Agent.
+func (m *SessionManager) RegisterSession(clientIP, connType, terminal string) string {
 	_ = os.MkdirAll(m.sessionsDir, 0755)
-	// Use PID + nanosecond timestamp for a unique session ID.
 	id := fmt.Sprintf("%d_%d", os.Getpid(), time.Now().UnixNano())
 	path := filepath.Join(m.sessionsDir, id)
-	_ = os.WriteFile(path, []byte(connType+"\n"+clientIP+"\n"), 0644)
+	_ = os.WriteFile(path, []byte(connType+"\n"+clientIP+"\n"+terminal+"\n"), 0644)
 	return id
 }
 
@@ -331,21 +333,24 @@ func (m *SessionManager) ListConnectedSessions() []ConnectedSession {
 		if err != nil {
 			continue
 		}
-		// Check if the server that owns this session is still alive.
 		if serverInfo.PID == 0 || !ProcessExists(serverInfo.PID) {
 			_ = os.Remove(path)
 			continue
 		}
-		lines := strings.SplitN(strings.TrimSpace(string(data)), "\n", 2)
+		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
 		if len(lines) < 2 {
 			_ = os.Remove(path)
 			continue
 		}
-		sessions = append(sessions, ConnectedSession{
+		cs := ConnectedSession{
 			ID:       e.Name(),
 			ConnType: lines[0],
 			ClientIP: lines[1],
-		})
+		}
+		if len(lines) > 2 {
+			cs.Terminal = lines[2]
+		}
+		sessions = append(sessions, cs)
 	}
 	return sessions
 }
