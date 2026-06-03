@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sort"
 	"strings"
 
 	"DockSTARTer2/internal/config"
@@ -23,6 +24,12 @@ func CheckStartupStatus(ctx context.Context) {
 
 	editInfo := sessionlocks.Sessions.ReadEditInfo()
 	connSessions := sessionlocks.Sessions.ListConnectedSessions()
+	serverInfo := sessionlocks.Sessions.ReadServerInfo()
+
+	// Sort so the server instance appears first.
+	sort.Slice(procs, func(i, j int) bool {
+		return procs[i].PID == serverInfo.PID
+	})
 
 	// Build all instance lines then emit as a single multi-line warning.
 	lines := []string{"Other instances running:"}
@@ -76,9 +83,10 @@ func CheckStartupStatus(ctx context.Context) {
 
 		// Show active connected sessions under the server instance.
 		if p.ConnInfo != "" && len(connSessions) > 0 {
+			lines = append(lines, "\t\t{{|Warn|}}Connected:{{[-]}}")
 			for _, cs := range connSessions {
 				lines = append(lines,
-					fmt.Sprintf("\t\t{{|Warn|}}Connected:{{[-]}} [%s: {{|Version|}}%s{{[-]}}]", cs.ConnType, cs.ClientIP),
+					fmt.Sprintf("\t\t\t[%s: {{|Version|}}%s{{[-]}}]", cs.ConnType, cs.ClientIP),
 				)
 			}
 		}
