@@ -108,6 +108,11 @@ func handleWebSocket(ctx context.Context, conn *websocket.Conn, clientAddr, user
 	proxyCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	// sshExited is set to true when the SSH session closes normally (TUI exited).
+	// Used to send a reload signal to the browser so it reconnects immediately
+	// rather than showing "Connection lost".
+	var sshExited bool
+
 	// SSH stdout → WebSocket (binary frames).
 	go func() {
 		defer cancel()
@@ -120,6 +125,8 @@ func handleWebSocket(ctx context.Context, conn *websocket.Conn, clientAddr, user
 				}
 			}
 			if err != nil {
+				// EOF means the TUI exited normally.
+				sshExited = true
 				return
 			}
 		}
@@ -171,6 +178,12 @@ func handleWebSocket(ctx context.Context, conn *websocket.Conn, clientAddr, user
 
 	// Wait for the proxy to finish (either side closed).
 	<-proxyCtx.Done()
+
+	// If the TUI exited normally (user chose Exit), tell the browser to reload
+	// so it reconnects to a fresh session immediately without a "Connection lost" message.
+	if sshExited {
+		_ = conn.Write(context.Background(), websocket.MessageText, []byte(`{"type":"reload"}`))
+	}
 
 	logger.Info(ctx, "Web session ended from %s", clientAddr)
 }

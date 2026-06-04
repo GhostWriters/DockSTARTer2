@@ -74,6 +74,17 @@
         if (evt.data instanceof ArrayBuffer) {
           term.write(new Uint8Array(evt.data));
         } else {
+          // Check for control messages from the server (JSON text frames).
+          if (evt.data.charAt(0) === '{') {
+            try {
+              var msg = JSON.parse(evt.data);
+              if (msg.type === 'reload') {
+                intentionalClose = true;
+                location.reload();
+                return;
+              }
+            } catch (e) { /* not JSON, fall through */ }
+          }
           term.write(evt.data);
         }
       };
