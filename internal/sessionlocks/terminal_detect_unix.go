@@ -1,3 +1,5 @@
+//go:build !windows
+
 package sessionlocks
 
 import (
@@ -28,14 +30,23 @@ func queryXTVersion() string {
 		return ""
 	}
 
+	// Open /dev/tty to read the terminal response. Closing it on timeout kills the
+	// goroutine's Read, so it doesn't linger and consume keystrokes from later prompts.
+	tty, err := os.Open("/dev/tty")
+	if err != nil {
+		// No /dev/tty available (e.g. some CI environments). Skip the query.
+		return ""
+	}
+
 	// Read response with a short timeout using a goroutine.
 	// Response format: \033P>|TerminalName Version\033\\
 	ch := make(chan string, 1)
 	go func() {
+		defer close(ch)
 		buf := make([]byte, 128)
 		var collected []byte
 		for len(collected) < 128 {
-			n, err := os.Stdin.Read(buf)
+			n, err := tty.Read(buf)
 			if n > 0 {
 				collected = append(collected, buf[:n]...)
 			}
@@ -51,9 +62,14 @@ func queryXTVersion() string {
 	}()
 
 	select {
-	case r := <-ch:
+	case r, ok := <-ch:
+		tty.Close()
+		if !ok {
+			return ""
+		}
 		return parseXTVersion(r)
 	case <-time.After(250 * time.Millisecond):
+		tty.Close() // Closing /dev/tty unblocks the goroutine's Read, letting it exit cleanly.
 		return ""
 	}
 }
