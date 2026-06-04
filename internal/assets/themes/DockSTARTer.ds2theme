@@ -118,7 +118,7 @@ No = "{{|TitleError|}}"
 
 # Env editor
 LineComment = "{{|Dialog:::RB|}}"
-ModifiedText = "{{[blue::R]}}"
+ModifiedText = "{{|Dialog:::R|}}"
 LineNumber = "{{|Dialog|}}"
 LineNumberSelected = "{{|Dialog::white|}}"
 LineNumberModified = "{{|ModifiedText|}}"
@@ -134,7 +134,7 @@ TextCursor = "{{[:white:]}}"
 MarkerLocked = "{{|MarkerInvalid|}}"
 
 # Env variable types
-EnvBuiltin = "{{|Dialog:::R|}}"
+EnvBuiltin = "{{|Dialog:::B|}}"
 EnvInvalid = "{{|TitleError|}}"
 EnvDuplicate = "{{|TitleWarn|}}"
 EnvPendingDelete = "{{|Dialog:::DS|}}"

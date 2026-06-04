@@ -117,11 +117,11 @@ No = "{{|TitleError|}}"
 
 # Env editor
 LineComment = "{{|Dialog:::RB|}}"
-ModifiedText = "{{[$primary:$secondary]}}"
-LineNumber = "{{|Dialog|}}"
-LineNumberSelected = "{{|LineNumber::yellow:B|}}"
+ModifiedText = "{{|Dialog:::R|}}"
+LineNumber = "{{|Dialog:::D|}}"
+LineNumberSelected = "{{|LineNumber::$accent:-B|}}"
 LineNumberModified = "{{|ModifiedText|}}"
-LineNumberModifiedSelected = "{{|ModifiedText:yellow::B|}}"
+LineNumberModifiedSelected = "{{|ModifiedText::$accent:B|}}"
 
 # Markers and cursor
 Marker = "{{|Dialog|}}"
@@ -133,9 +133,9 @@ TextCursor = "{{[:white:]}}"
 MarkerLocked = "{{|MarkerInvalid|}}"
 
 # Env variable types
-EnvBuiltin = "{{[black:cyan]}}"
-EnvInvalid = "{{[red:cyan]}}"
-EnvDuplicate = "{{[$accent:cyan]}}"
+EnvBuiltin = "{{|Dialog:::B|}}"
+EnvInvalid = "{{|Dialog::red|]}}"
+EnvDuplicate = "{{|Dialog::$accent|}}"
 EnvPendingDelete = "{{|Dialog:::DS|}}"
 EnvReadOnly = "{{|Dialog:::D|}}"
 
