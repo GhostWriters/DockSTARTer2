@@ -444,6 +444,10 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			tab.editor.ReformatEnv(tab.editor.DefaultValueFunc, tab.readOnlyVars, msg.preservePendingDeletes, func(currentLines []string) []string {
 				return appenv.FormatLinesCore(ctx, currentLines, capturedDefaultLines, capturedEnvLines, capturedApp, capturedComposeEnvPath)
 			})
+			// Update initialVars so that formatting-only changes from refresh
+			// are not treated as unsaved changes by hasChanges().
+			refreshed, _ := appenv.ListVarsLiteralsData(tab.editor.GetContent())
+			tab.initialVars = refreshed
 		}
 		m.SetSize(m.width, m.height)
 		return m, nil
