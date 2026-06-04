@@ -10,8 +10,10 @@ import (
 
 // Title bar widget constants.
 const (
-	titleBarWidgetClose = 1
-	titleBarWidgetHelp  = 2
+	titleBarWidgetClose    = 1
+	titleBarWidgetHelp     = 2
+	TitleBarWidgetClose    = titleBarWidgetClose
+	TitleBarWidgetHelp     = titleBarWidgetHelp
 )
 
 // Title bar widget state fields shared by all simple dialog types.

@@ -87,6 +87,10 @@ type TabbedVarsEditorModel struct {
 
 	lockedByOthers bool
 	connType       string
+
+	// Title bar focus state
+	titleBarFocused bool
+	titleBarWidget  int // 0=none, 1=close, 2=help
 }
 
 type envAddVarMsg struct {

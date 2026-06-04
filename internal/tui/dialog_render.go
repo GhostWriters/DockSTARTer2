@@ -186,6 +186,12 @@ func RenderDialogWithTypeCtx(title, content string, focused bool, targetHeight i
 	return renderDialogWithTypeAndWidgets(title, content, focused, targetHeight, dialogType, ctx, TitleBarState{Show: true}, borders...)
 }
 
+// RenderDialogWithTypeAndWidgets renders a dialog with explicit title bar widget state.
+// Use this when the dialog manages its own titleBarFocused/titleBarWidget fields.
+func RenderDialogWithTypeAndWidgets(title, content string, focused bool, targetHeight int, dialogType DialogType, tbs TitleBarState, borders ...BorderPair) string {
+	return renderDialogWithTypeAndWidgets(title, content, focused, targetHeight, dialogType, GetActiveContext(), tbs, borders...)
+}
+
 // renderDialogWithTypeAndWidgets is the internal implementation used by both
 // RenderDialogWithTypeCtx (inactive widgets) and dialogs that manage title bar focus
 // (active/inactive widgets based on state).
