@@ -189,7 +189,7 @@ type MenuModel struct {
 
 	// Title bar widget focus (keyboard navigation of ? and × widgets)
 	titleBarFocused bool
-	titleBarWidget  int // titleBarWidgetHelp or titleBarWidgetClose
+	titleBarWidget  TitleBarWidget
 }
 
 // TitleBarFocusable is implemented by models whose title bar can receive keyboard focus.
@@ -201,13 +201,13 @@ type TitleBarFocusable interface {
 
 func (m *MenuModel) FocusTitleBar() {
 	m.titleBarFocused = true
-	m.titleBarWidget = titleBarWidgetClose
+	m.titleBarWidget = TitleBarWidgetClose
 	m.InvalidateCache()
 }
 
 func (m *MenuModel) BlurTitleBar() {
 	m.titleBarFocused = false
-	m.titleBarWidget = 0
+	m.titleBarWidget = TitleBarWidgetNone
 	m.InvalidateCache()
 }
 

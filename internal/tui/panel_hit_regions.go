@@ -133,6 +133,17 @@ func (m PanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 			Label:  "Console Input",
 			Help:   inputHelp,
 		})
+		// INS/OVR hit region — bottom border of the input box.
+		regions = append(regions, HitRegion{
+			ID:     IDPanel + "." + IDInsOvr,
+			X:      offsetX + 1, // after the left border corner
+			Y:      offsetY + 1 + vpH + 2,
+			Width:  3,
+			Height: 1,
+			ZOrder: ZPanel + 2,
+			Label:  "INS/OVR",
+			Help:   &HelpContext{ScreenName: "Console Panel", PageTitle: "Insert/Overwrite", PageText: "Toggle between insert and overwrite mode."},
+		})
 
 		// Scrollbar hit regions
 		if currentConfig.UI.Scrollbar {

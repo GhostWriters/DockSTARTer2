@@ -185,7 +185,7 @@ func (s *ServerOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Title widget clicks — delegate to outerMenu
-		if s.outerMenu != nil && (strings.HasSuffix(msg.ID, "."+tui.IDTitleWidgetHelp) || strings.HasSuffix(msg.ID, "."+tui.IDTitleWidgetClose)) {
+		if s.outerMenu != nil && tui.IsTitleWidgetID(msg.ID) {
 			updated, uCmd := s.outerMenu.Update(msg)
 			if m, ok := updated.(*tui.MenuModel); ok {
 				s.outerMenu = m
@@ -429,7 +429,7 @@ func (s *ServerOptionsScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 	// Title widget regions — delegate to outerMenu and filter for title widget IDs.
 	if s.outerMenu != nil {
 		for _, r := range s.outerMenu.GetHitRegions(offsetX, offsetY) {
-			if strings.HasSuffix(r.ID, "."+tui.IDTitleWidgetHelp) || strings.HasSuffix(r.ID, "."+tui.IDTitleWidgetClose) {
+			if tui.IsTitleWidgetID(r.ID) {
 				regions = append(regions, r)
 			}
 		}

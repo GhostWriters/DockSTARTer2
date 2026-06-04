@@ -85,6 +85,10 @@ func HelpContextWidth(termW, termH int) int {
 	return w
 }
 
+// TitleBarRefreshMsg is dispatched when the [↺] title bar widget is activated.
+// Screens that support refresh should handle this message.
+type TitleBarRefreshMsg struct{}
+
 // TriggerHelpMsg is a message that tells the app to open the help dialog.
 type TriggerHelpMsg struct {
 	CapturedContext *HelpContext

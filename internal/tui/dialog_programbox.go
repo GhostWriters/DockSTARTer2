@@ -73,8 +73,7 @@ type ProgramBoxModel struct {
 	layout          DialogLayout
 	id              string
 	dialogType      DialogType
-	titleBarFocused bool
-	titleBarWidget  int
+	TitleBarFocus
 
 	// Scrollbar component
 	Scroll Scrollbar
@@ -123,16 +122,20 @@ func newProgramBox(title, subtitle, command string) *ProgramBoxModel {
 }
 
 // AddTask adds a task category to the progress header
-// TitleBarFocusable implementation.
-func (m *ProgramBoxModel) FocusTitleBar() {
-	m.titleBarFocused = true
-	m.titleBarWidget = titleBarWidgetClose
+// titleBarHitRegions returns hit regions for the title bar widgets,
+// using m.layout.LargeTitleBar to determine the correct Y offset.
+func (m *ProgramBoxModel) titleBarHitRegions(offsetX, offsetY, contentWidth, baseZ int) []HitRegion {
+	ctx := GetActiveContext()
+	activeW := m.TitleBarFocus.ActiveWidgets()
+	widgetStr := BuildInactiveTitleWidgetsFor(activeW, ctx)
+	widgetWidth := lipgloss.Width(GetPlainText(widgetStr))
+	if widgetWidth == 0 {
+		return nil
+	}
+	dialogWidth := contentWidth + 2
+	widgetsStartX := offsetX + dialogWidth - 1 - 1 - widgetWidth
+	return TitleBarWidgetRegions(m.id, activeW, widgetsStartX, TitleBarWidgetY(offsetY, m.layout.LargeTitleBar), baseZ)
 }
-func (m *ProgramBoxModel) BlurTitleBar() {
-	m.titleBarFocused = false
-	m.titleBarWidget = 0
-}
-func (m *ProgramBoxModel) TitleBarFocused() bool { return m.titleBarFocused }
 
 func (m *ProgramBoxModel) AddTask(label, command string, apps []string) {
 	m.Tasks = append(m.Tasks, Task{
@@ -391,10 +394,7 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyPressMsg:
 		closeDialog := func() tea.Msg { return CloseDialogMsg{} }
-		b := &baseDialogModel{id: m.id, width: m.width, height: m.height, focused: m.focused, layout: m.layout, titleBarFocused: m.titleBarFocused, titleBarWidget: m.titleBarWidget}
-		if handled, cmd := b.handleTitleBarKey(msg, func() tea.Msg { return CloseDialogMsg{} }); handled {
-			m.titleBarFocused = b.titleBarFocused
-			m.titleBarWidget = b.titleBarWidget
+		if handled, cmd := m.TitleBarFocus.HandleTitleBarKey(msg, func() tea.Msg { return CloseDialogMsg{} }); handled {
 			return m, cmd
 		}
 		switch {
@@ -435,10 +435,7 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case LayerHitMsg:
-		b := &baseDialogModel{id: m.id, width: m.width, height: m.height, focused: m.focused, layout: m.layout, titleBarFocused: m.titleBarFocused, titleBarWidget: m.titleBarWidget}
-		if handled, cmd := b.handleTitleBarHit(msg, func() tea.Msg { return CloseDialogMsg{} }); handled {
-			m.titleBarFocused = b.titleBarFocused
-			m.titleBarWidget = b.titleBarWidget
+		if handled, cmd := m.TitleBarFocus.HandleTitleBarHit(msg, func() tea.Msg { return CloseDialogMsg{} }); handled {
 			return m, cmd
 		}
 		if m.done && ButtonIDMatches(msg.ID, "OK") && msg.Button == tea.MouseLeft {

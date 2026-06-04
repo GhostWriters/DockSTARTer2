@@ -436,6 +436,11 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 				m.setPanelFocus(true)
 				return m, cmd, true
 			}
+		case IDPanel + "." + IDInsOvr:
+			if _, ok := msg.(tea.MouseClickMsg); ok {
+				m.panel.input.ToggleOverwrite()
+			}
+			return m, nil, true
 		case IDConsoleInput:
 			if me, ok := msg.(tea.MouseClickMsg); ok {
 				m.setPanelFocus(true)
@@ -483,7 +488,7 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		default:
 			// Title bar widget clicks: IDs are "menuID.title_widget_help" / "menuID.title_widget_close"
 			if _, ok := msg.(tea.MouseClickMsg); ok && hitButton == tea.MouseLeft {
-				if strings.HasSuffix(hitID, "."+IDTitleWidgetHelp) || strings.HasSuffix(hitID, "."+IDTitleWidgetClose) {
+				if IsTitleWidgetID(hitID) {
 					// Route the LayerHitMsg (with the ID) through the active dialog/screen
 					// so sub-dialogs (e.g. confirm inside a programbox) receive and handle
 					// the click in their own Update().

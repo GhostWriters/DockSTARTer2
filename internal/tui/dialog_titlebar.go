@@ -8,37 +8,130 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// Title bar widget constants.
+// TitleBarWidget identifies a specific widget in the title bar.
+type TitleBarWidget int
+
 const (
-	titleBarWidgetClose    = 1
-	titleBarWidgetHelp     = 2
-	TitleBarWidgetClose    = titleBarWidgetClose
-	TitleBarWidgetHelp     = titleBarWidgetHelp
+	TitleBarWidgetNone    TitleBarWidget = 0
+	TitleBarWidgetClose   TitleBarWidget = 1
+	TitleBarWidgetHelp    TitleBarWidget = 2
+	TitleBarWidgetRefresh TitleBarWidget = 3
 )
 
-// Title bar widget state fields shared by all simple dialog types.
-// Embedded in baseDialogModel so dialogs get TitleBarFocusable for free.
+// defaultWidgets is the widget set used when none is configured: [?]─[×].
+var defaultWidgets = []TitleBarWidget{TitleBarWidgetHelp, TitleBarWidgetClose}
 
-func (b *baseDialogModel) FocusTitleBar() {
-	b.titleBarFocused = true
-	b.titleBarWidget = titleBarWidgetClose
+// TitleBarFocus is an embeddable struct that provides the TitleBarFocusable interface
+// and key/hit handling for any dialog or screen with [?] and [×] title widgets.
+// Embed this instead of duplicating the fields and methods.
+// Call ConfigureWidgets to add optional widgets (e.g. TitleBarWidgetRefresh).
+type TitleBarFocus struct {
+	tbFocused bool
+	tbWidget  TitleBarWidget
+	tbWidgets []TitleBarWidget // ordered left-to-right; nil means defaultWidgets
 }
 
-func (b *baseDialogModel) BlurTitleBar() {
-	b.titleBarFocused = false
-	b.titleBarWidget = 0
+// ConfigureWidgets sets the ordered list of widgets shown in the title bar (left to right).
+// Must be called before FocusTitleBar is first called.
+func (t *TitleBarFocus) ConfigureWidgets(widgets ...TitleBarWidget) {
+	t.tbWidgets = widgets
 }
 
-func (b *baseDialogModel) TitleBarFocused() bool { return b.titleBarFocused }
+func (t *TitleBarFocus) ActiveWidgets() []TitleBarWidget {
+	if len(t.tbWidgets) > 0 {
+		return t.tbWidgets
+	}
+	return defaultWidgets
+}
+
+func (t *TitleBarFocus) FocusTitleBar() {
+	t.tbFocused = true
+	w := t.ActiveWidgets()
+	// Default focus: rightmost widget (Close).
+	t.tbWidget = w[len(w)-1]
+}
+
+func (t *TitleBarFocus) BlurTitleBar() {
+	t.tbFocused = false
+	t.tbWidget = TitleBarWidgetNone
+}
+
+func (t *TitleBarFocus) TitleBarFocused() bool        { return t.tbFocused }
+func (t *TitleBarFocus) ActiveWidget() TitleBarWidget { return t.tbWidget }
+func (t *TitleBarFocus) SetWidget(w TitleBarWidget)   { t.tbWidget = w }
+
+func (t *TitleBarFocus) CycleWidget(dir int) {
+	widgets := t.ActiveWidgets()
+	for i, w := range widgets {
+		if w == t.tbWidget {
+			next := (i + dir + len(widgets)) % len(widgets)
+			t.tbWidget = widgets[next]
+			return
+		}
+	}
+	t.tbWidget = widgets[len(widgets)-1]
+}
+
+// HandleTitleBarKey intercepts key events when the title bar has focus.
+// closeCmd is the dialog-specific command to run when [×] is activated.
+// Returns (true, cmd) if the key was consumed, (false, nil) otherwise.
+func (t *TitleBarFocus) HandleTitleBarKey(msg tea.KeyPressMsg, closeCmd tea.Cmd) (handled bool, cmd tea.Cmd) {
+	if !t.tbFocused {
+		return false, nil
+	}
+	switch {
+	case key.Matches(msg, Keys.Esc):
+		t.BlurTitleBar()
+	case key.Matches(msg, Keys.Left):
+		t.CycleWidget(-1)
+	case key.Matches(msg, Keys.Right):
+		t.CycleWidget(+1)
+	case key.Matches(msg, Keys.Enter), key.Matches(msg, Keys.Space):
+		switch t.tbWidget {
+		case TitleBarWidgetHelp:
+			t.BlurTitleBar()
+			cmd = func() tea.Msg { return TriggerHelpMsg{ScreenLevelOnly: true} }
+		case TitleBarWidgetClose:
+			t.BlurTitleBar()
+			cmd = closeCmd
+		case TitleBarWidgetRefresh:
+			t.BlurTitleBar()
+			cmd = func() tea.Msg { return TitleBarRefreshMsg{} }
+		}
+	}
+	return true, cmd
+}
+
+// HandleTitleBarHit handles LayerHitMsg for the [?] and [×] widgets.
+// closeCmd is the dialog-specific command to run when [×] is clicked.
+// Returns (true, cmd) if the hit was consumed, (false, nil) otherwise.
+func (t *TitleBarFocus) HandleTitleBarHit(msg LayerHitMsg, closeCmd tea.Cmd) (handled bool, cmd tea.Cmd) {
+	if msg.Button != tea.MouseLeft {
+		return false, nil
+	}
+	if strings.HasSuffix(msg.ID, "."+IDTitleWidgetClose) {
+		t.BlurTitleBar()
+		return true, closeCmd
+	}
+	if strings.HasSuffix(msg.ID, "."+IDTitleWidgetHelp) {
+		t.BlurTitleBar()
+		return true, func() tea.Msg { return TriggerHelpMsg{ScreenLevelOnly: true} }
+	}
+	if strings.HasSuffix(msg.ID, "."+IDTitleWidgetRefresh) {
+		t.BlurTitleBar()
+		return true, func() tea.Msg { return TitleBarRefreshMsg{} }
+	}
+	return false, nil
+}
 
 // buildTitleBarWidgets returns the rendered [?]─[×] widget string for this dialog,
 // with the correct active/inactive styling based on current title bar focus state.
 // Uses large or small widget styles depending on ctx.LargeTitleBars.
 func (b *baseDialogModel) buildTitleBarWidgets(ctx StyleContext) string {
 	if ctx.LargeTitleBars {
-		return buildLargeTitleBarWidgets(b.titleBarFocused, b.titleBarWidget, ctx)
+		return buildLargeTitleBarWidgets(b.tbFocused, b.tbWidget, b.ActiveWidgets(), ctx)
 	}
-	return buildDialogTitleWidgets(b.titleBarFocused, b.titleBarWidget, ctx)
+	return buildDialogTitleWidgets(b.tbFocused, b.tbWidget, b.ActiveWidgets(), ctx)
 }
 
 // minWidthForWidgets returns the minimum content width required so that right-side
@@ -68,133 +161,142 @@ func minWidthForWidgets(w int, titleText, titleAlign string, widgets string) int
 	return w
 }
 
-// BuildInactiveTitleWidgets builds the [?]─[×] widget string using inactive styles only.
-// Automatically selects large or small widget style based on ctx.LargeTitleBars.
-func BuildInactiveTitleWidgets(ctx StyleContext) string {
-	if ctx.LargeTitleBars {
-		return buildLargeTitleBarWidgets(false, 0, ctx)
-	}
-	return buildDialogTitleWidgets(false, 0, ctx)
-}
-
-// BuildInactiveLargeTitleWidgets builds the [?]─[×] widget string styled for the large titlebar row.
-func BuildInactiveLargeTitleWidgets(ctx StyleContext) string {
-	return buildLargeTitleBarWidgets(false, 0, ctx)
-}
-
-// buildLargeTitleBarWidgets returns the raw theme-tag string for the [?] [×] widgets.
-// It is NOT pre-rendered — callers must render it via RenderThemeTextCtx in the correct
-// area context so it picks up the type-specific LargeTitleArea* background.
-func buildLargeTitleBarWidgets(focused bool, activeWidget int, ctx StyleContext) string {
-	helpGlyph := helpWidget
-	closeGlyph := closeWidget
-	if !ctx.LineCharacters {
-		closeGlyph = closeWidgetAscii
-	}
-	helpActive, closeActive := false, false
-	if focused {
-		switch activeWidget {
-		case titleBarWidgetHelp:
-			helpActive = true
-		case titleBarWidgetClose:
-			closeActive = true
+// hasWidget reports whether the given widget is in the list.
+func hasWidget(widgets []TitleBarWidget, w TitleBarWidget) bool {
+	for _, v := range widgets {
+		if v == w {
+			return true
 		}
 	}
-	helpPrefix := "{{|LargeHelpIconInactive|}}"
-	if helpActive {
-		helpPrefix += "{{|LargeIconActive|}}"
-	}
-	closePrefix := "{{|LargeExitIconInactive|}}"
-	if closeActive {
-		closePrefix += "{{|LargeIconActive|}}"
-	}
-	return helpPrefix + "[" + helpGlyph + "]{{[-]}} " +
-		closePrefix + "[" + closeGlyph + "]{{[-]}}"
+	return false
 }
 
-// buildDialogTitleWidgets is the shared renderer for the [?]─[×] title bar widgets.
-// focused/activeWidget are the title bar state; use false/0 for always-inactive output.
-func buildDialogTitleWidgets(focused bool, activeWidget int, ctx StyleContext) string {
+// BuildInactiveTitleWidgets builds the title widget string using inactive styles only.
+// Automatically selects large or small widget style based on ctx.LargeTitleBars.
+func BuildInactiveTitleWidgets(ctx StyleContext) string {
+	return BuildInactiveTitleWidgetsFor(defaultWidgets, ctx)
+}
+
+// BuildInactiveTitleWidgetsFor builds the title widget string for a specific widget set.
+func BuildInactiveTitleWidgetsFor(widgets []TitleBarWidget, ctx StyleContext) string {
+	if ctx.LargeTitleBars {
+		return buildLargeTitleBarWidgets(false, TitleBarWidgetNone, widgets, ctx)
+	}
+	return buildDialogTitleWidgets(false, TitleBarWidgetNone, widgets, ctx)
+}
+
+// BuildInactiveLargeTitleWidgets builds the widget string styled for the large titlebar row.
+func BuildInactiveLargeTitleWidgets(ctx StyleContext) string {
+	return buildLargeTitleBarWidgets(false, TitleBarWidgetNone, defaultWidgets, ctx)
+}
+
+// buildLargeTitleBarWidgets returns the raw theme-tag string for the title bar widgets.
+// It is NOT pre-rendered — callers must render it via RenderThemeTextCtx in the correct
+// area context so it picks up the type-specific LargeTitleArea* background.
+func buildLargeTitleBarWidgets(focused bool, activeWidget TitleBarWidget, widgets []TitleBarWidget, ctx StyleContext) string {
 	helpGlyph := helpWidget
 	closeGlyph := closeWidget
+	refreshGlyph := refreshWidget
+	if !ctx.LineCharacters {
+		closeGlyph = closeWidgetAscii
+		refreshGlyph = refreshWidgetAscii
+	}
+	isActive := func(w TitleBarWidget) bool { return focused && activeWidget == w }
+
+	var parts []string
+	if hasWidget(widgets, TitleBarWidgetRefresh) {
+		prefix := "{{|LargeHelpIconInactive|}}"
+		if isActive(TitleBarWidgetRefresh) {
+			prefix += "{{|LargeIconActive|}}"
+		}
+		parts = append(parts, prefix+"["+refreshGlyph+"]{{[-]}}")
+	}
+	if hasWidget(widgets, TitleBarWidgetHelp) {
+		prefix := "{{|LargeHelpIconInactive|}}"
+		if isActive(TitleBarWidgetHelp) {
+			prefix += "{{|LargeIconActive|}}"
+		}
+		parts = append(parts, prefix+"["+helpGlyph+"]{{[-]}}")
+	}
+	if hasWidget(widgets, TitleBarWidgetClose) {
+		prefix := "{{|LargeExitIconInactive|}}"
+		if isActive(TitleBarWidgetClose) {
+			prefix += "{{|LargeIconActive|}}"
+		}
+		parts = append(parts, prefix+"["+closeGlyph+"]{{[-]}}")
+	}
+	result := ""
+	for i, p := range parts {
+		if i > 0 {
+			result += " "
+		}
+		result += p
+	}
+	return result
+}
+
+// buildDialogTitleWidgets is the shared renderer for the title bar widgets.
+// focused/activeWidget are the title bar state; use TitleBarWidgetNone for always-inactive output.
+func buildDialogTitleWidgets(focused bool, activeWidget TitleBarWidget, widgets []TitleBarWidget, ctx StyleContext) string {
+	helpGlyph := helpWidget
+	closeGlyph := closeWidget
+	refreshGlyph := refreshWidget
 	lineChar := "─"
 	if !ctx.LineCharacters {
 		closeGlyph = closeWidgetAscii
+		refreshGlyph = refreshWidgetAscii
 		lineChar = "-"
 	}
 	borderBase := ctx.BorderFlags.Apply(lipgloss.NewStyle()).
 		Foreground(ctx.BorderColor).
 		Background(ctx.Dialog.GetBackground())
-	helpActive, closeActive := false, false
-	if focused {
-		switch activeWidget {
-		case titleBarWidgetHelp:
-			helpActive = true
-		case titleBarWidgetClose:
-			closeActive = true
+	isActive := func(w TitleBarWidget) bool { return focused && activeWidget == w }
+
+	var parts []string
+	if hasWidget(widgets, TitleBarWidgetRefresh) {
+		prefix := "{{|HelpIconInactive|}}"
+		if isActive(TitleBarWidgetRefresh) {
+			prefix += "{{|IconActive|}}"
 		}
+		parts = append(parts, prefix+"["+refreshGlyph+"]{{[-]}}")
 	}
-	helpPrefix := "{{|HelpIconInactive|}}"
-	if helpActive {
-		helpPrefix += "{{|IconActive|}}"
+	if hasWidget(widgets, TitleBarWidgetHelp) {
+		prefix := "{{|HelpIconInactive|}}"
+		if isActive(TitleBarWidgetHelp) {
+			prefix += "{{|IconActive|}}"
+		}
+		parts = append(parts, prefix+"["+helpGlyph+"]{{[-]}}")
 	}
-	closePrefix := "{{|ExitIconInactive|}}"
-	if closeActive {
-		closePrefix += "{{|IconActive|}}"
+	if hasWidget(widgets, TitleBarWidgetClose) {
+		prefix := "{{|ExitIconInactive|}}"
+		if isActive(TitleBarWidgetClose) {
+			prefix += "{{|IconActive|}}"
+		}
+		parts = append(parts, prefix+"["+closeGlyph+"]{{[-]}}")
 	}
-	iconStr := helpPrefix + "[" + helpGlyph + "]{{[-]}}" +
-		lineChar +
-		closePrefix + "[" + closeGlyph + "]{{[-]}}"
+
+	iconStr := ""
+	for i, p := range parts {
+		if i > 0 {
+			iconStr += lineChar
+		}
+		iconStr += p
+	}
 	ctx.Dialog = borderBase
 	return RenderThemeTextCtx(iconStr, ctx)
 }
 
-// handleTitleBarHit handles LayerHitMsg for the [?] and [×] widgets.
-// closeCmd is the dialog-specific command to run when [×] is clicked.
-// Returns (true, cmd) if the hit was consumed, (false, nil) otherwise.
-func (b *baseDialogModel) handleTitleBarHit(msg LayerHitMsg, closeCmd tea.Cmd) (handled bool, cmd tea.Cmd) {
-	if msg.Button != tea.MouseLeft {
-		return false, nil
-	}
-	if strings.HasSuffix(msg.ID, "."+IDTitleWidgetClose) {
-		b.BlurTitleBar()
-		return true, closeCmd
-	}
-	if strings.HasSuffix(msg.ID, "."+IDTitleWidgetHelp) {
-		b.BlurTitleBar()
-		return true, func() tea.Msg { return TriggerHelpMsg{ScreenLevelOnly: true} }
-	}
-	return false, nil
+// handleTitleBarHit is a convenience alias so existing baseDialogModel callers compile unchanged.
+func (b *baseDialogModel) handleTitleBarHit(msg LayerHitMsg, closeCmd tea.Cmd) (bool, tea.Cmd) {
+	return b.TitleBarFocus.HandleTitleBarHit(msg, closeCmd)
 }
 
-// handleTitleBarKey intercepts key events when the title bar has focus.
-// closeCmd is the dialog-specific command to run when [×] is activated.
-// Returns (true, cmd) if the key was consumed, (false, nil) otherwise.
-func (b *baseDialogModel) handleTitleBarKey(msg tea.KeyPressMsg, closeCmd tea.Cmd) (handled bool, cmd tea.Cmd) {
-	if !b.titleBarFocused {
-		return false, nil
-	}
-	switch {
-	case key.Matches(msg, Keys.Esc):
-		b.BlurTitleBar()
-	case key.Matches(msg, Keys.Left):
-		b.titleBarWidget = titleBarWidgetHelp
-	case key.Matches(msg, Keys.Right):
-		b.titleBarWidget = titleBarWidgetClose
-	case key.Matches(msg, Keys.Enter), key.Matches(msg, Keys.Space):
-		switch b.titleBarWidget {
-		case titleBarWidgetHelp:
-			b.BlurTitleBar()
-			cmd = func() tea.Msg { return TriggerHelpMsg{ScreenLevelOnly: true} }
-		case titleBarWidgetClose:
-			b.BlurTitleBar()
-			cmd = closeCmd
-		}
-	}
-	return true, cmd
+// handleTitleBarKey is a convenience alias so existing baseDialogModel callers compile unchanged.
+func (b *baseDialogModel) handleTitleBarKey(msg tea.KeyPressMsg, closeCmd tea.Cmd) (bool, tea.Cmd) {
+	return b.TitleBarFocus.HandleTitleBarKey(msg, closeCmd)
 }
 
-// titleBarHitRegions returns hit regions for the [?] and [×] widgets in the title bar.
+// titleBarHitRegions returns hit regions for the title bar widgets.
 func (b *baseDialogModel) titleBarHitRegions(offsetX, offsetY, contentWidth, baseZ int) []HitRegion {
 	ctx := GetActiveContext()
 	// Use GetPlainText to strip theme tags before measuring (large titlebar widgets are raw tags).
@@ -205,28 +307,52 @@ func (b *baseDialogModel) titleBarHitRegions(offsetX, offsetY, contentWidth, bas
 	dialogWidth := contentWidth + 2
 	endPad := 1
 	widgetsStartX := offsetX + dialogWidth - 1 - endPad - widgetWidth
-	helpWidgetX := widgetsStartX
-	// Small titlebar: "[?]─" = 4 chars; large titlebar: "[?] " = 4 chars. Both are +4.
-	closeWidgetX := widgetsStartX + 4
-	// Large titlebar: widgets are on the title row (row 1), not the top border (row 0).
-	widgetY := offsetY
-	if b.layout.LargeTitleBar {
-		widgetY++
+	return TitleBarWidgetRegions(b.id, b.ActiveWidgets(), widgetsStartX, TitleBarWidgetY(offsetY, b.layout.LargeTitleBar), baseZ)
+}
+
+// TitleBarWidgetY returns the screen Y coordinate for title bar widgets.
+// For small titlebars the widgets are on the top border row (offsetY).
+// For large titlebars they are on the title content row (offsetY+1).
+func TitleBarWidgetY(offsetY int, largeTitleBar bool) int {
+	if largeTitleBar {
+		return offsetY + 1
 	}
-	return []HitRegion{
-		{
-			ID:     b.id + "." + IDTitleWidgetHelp,
-			X:      helpWidgetX, Y: widgetY, Width: 3, Height: 1,
+	return offsetY
+}
+
+// IsTitleWidgetID reports whether the hit region ID suffix matches any title bar widget.
+func IsTitleWidgetID(id string) bool {
+	return strings.HasSuffix(id, "."+IDTitleWidgetHelp) ||
+		strings.HasSuffix(id, "."+IDTitleWidgetClose) ||
+		strings.HasSuffix(id, "."+IDTitleWidgetRefresh)
+}
+
+// TitleBarWidgetRegions builds HitRegions for a set of widgets starting at x, y.
+// Each widget is 3 chars wide; widgets are separated by 1 char (separator or space).
+func TitleBarWidgetRegions(id string, widgets []TitleBarWidget, startX, y, baseZ int) []HitRegion {
+	var regions []HitRegion
+	x := startX
+	for _, w := range widgets {
+		var hitID, label, helpText string
+		switch w {
+		case TitleBarWidgetRefresh:
+			hitID, label, helpText = IDTitleWidgetRefresh, "Refresh", "Refresh the current view."
+		case TitleBarWidgetHelp:
+			hitID, label, helpText = IDTitleWidgetHelp, "Help", "Open help for this dialog."
+		case TitleBarWidgetClose:
+			hitID, label, helpText = IDTitleWidgetClose, "Close", "Close this dialog."
+		default:
+			x += 4
+			continue
+		}
+		regions = append(regions, HitRegion{
+			ID:     id + "." + hitID,
+			X:      x, Y: y, Width: 3, Height: 1,
 			ZOrder: baseZ + 25,
-			Label:  "Help",
-			Help:   &HelpContext{PageTitle: "Help", PageText: "Open help for this dialog."},
-		},
-		{
-			ID:     b.id + "." + IDTitleWidgetClose,
-			X:      closeWidgetX, Y: widgetY, Width: 3, Height: 1,
-			ZOrder: baseZ + 25,
-			Label:  "Close",
-			Help:   &HelpContext{PageTitle: "Close", PageText: "Close this dialog."},
-		},
+			Label:  label,
+			Help:   &HelpContext{PageTitle: label, PageText: helpText},
+		})
+		x += 4 // [X] = 3 chars + 1 separator/space
 	}
+	return regions
 }

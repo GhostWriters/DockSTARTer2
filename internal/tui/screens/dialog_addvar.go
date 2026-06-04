@@ -51,8 +51,8 @@ type addVarDialogModel struct {
 	height  int
 	focused bool
 
-	titleBarFocused bool
-	titleBarWidget  int // 0=none, 1=close, 2=help
+	tui.TitleBarFocus
+
 
 	appName string
 	appDesc string
@@ -140,40 +140,6 @@ func (m *addVarDialogModel) Init() tea.Cmd {
 	return sinput.Blink
 }
 
-// TitleBarFocusable implementation.
-func (m *addVarDialogModel) FocusTitleBar() {
-	m.titleBarFocused = true
-	m.titleBarWidget = tui.TitleBarWidgetClose
-}
-func (m *addVarDialogModel) BlurTitleBar() {
-	m.titleBarFocused = false
-	m.titleBarWidget = 0
-}
-func (m *addVarDialogModel) TitleBarFocused() bool { return m.titleBarFocused }
-
-func (m *addVarDialogModel) handleTitleBarKey(msg tea.KeyPressMsg) (handled bool, cmd tea.Cmd) {
-	switch {
-	case key.Matches(msg, tui.Keys.Esc):
-		m.BlurTitleBar()
-	case key.Matches(msg, tui.Keys.Left):
-		m.titleBarWidget = tui.TitleBarWidgetHelp
-	case key.Matches(msg, tui.Keys.Right):
-		m.titleBarWidget = tui.TitleBarWidgetClose
-	case key.Matches(msg, tui.Keys.Enter), key.Matches(msg, tui.Keys.Space):
-		switch m.titleBarWidget {
-		case tui.TitleBarWidgetHelp:
-			m.BlurTitleBar()
-			cmd = func() tea.Msg { return tui.TriggerHelpMsg{ScreenLevelOnly: true} }
-		case tui.TitleBarWidgetClose:
-			m.BlurTitleBar()
-			cmd = m.cancelOrConfirm()
-		}
-	default:
-		return false, nil
-	}
-	return true, cmd
-}
-
 func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -183,11 +149,8 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
-		if m.titleBarFocused {
-			handled, cmd := m.handleTitleBarKey(msg)
-			if handled {
-				return m, cmd
-			}
+		if handled, cmd := m.TitleBarFocus.HandleTitleBarKey(msg, m.cancelOrConfirm()); handled {
+			return m, cmd
 		}
 		switch {
 		case key.Matches(msg, tui.Keys.Esc), key.Matches(msg, tui.Keys.ForceQuit):
@@ -315,6 +278,10 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tui.LayerHitMsg:
 		if msg.Button == tea.MouseMiddle {
+			return m, nil
+		}
+		if msg.Button == tea.MouseLeft && strings.HasSuffix(msg.ID, "."+tui.IDInsOvr) {
+			m.input.ToggleOverwrite()
 			return m, nil
 		}
 		if msg.Button == tea.MouseLeft && strings.HasSuffix(msg.ID, "."+tui.IDTitleWidgetClose) {
@@ -904,7 +871,7 @@ func (m *addVarDialogModel) ViewString() string {
 	m.lastSbInfo = sbInfo
 
 	parts := []string{headingText, varNameSection, availableSection, buttonRow}
-	return tui.RenderDialogWithTypeAndWidgets("Add Variable", lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused || m.titleBarFocused, m.height, tui.DialogTypeInfo, tui.TitleBarState{Show: true, Focused: m.titleBarFocused, ActiveWidget: m.titleBarWidget})
+	return tui.RenderDialogWithTypeAndWidgets("Add Variable", lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused || m.TitleBarFocus.TitleBarFocused(), m.height, tui.DialogTypeInfo, tui.TitleBarState{Show: true, Focused: m.TitleBarFocus.TitleBarFocused(), ActiveWidget: m.TitleBarFocus.ActiveWidget()})
 }
 
 func (m *addVarDialogModel) View() tea.View {
@@ -993,6 +960,20 @@ func (m *addVarDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegion 
 			ItemText:   "Type the name and press Enter to create, or Esc to cancel.",
 		},
 	})
+	// INS/OVR hit region — bottom-left of the "Variable Name" section border.
+	// inputY = outer_border(1) + largeTitleOverhead + headingH + section_top_border(1); bottom border = inputY+1
+	insOvrY := 1 + largeTitleOverhead + headingH + 2
+	regions = append(regions, tui.HitRegion{
+		ID:     "addvar_dialog." + tui.IDInsOvr,
+		X:      offsetX + 2, // outer border(1) + section border corner(1)
+		Y:      offsetY + insOvrY,
+		Width:  3,
+		Height: 1,
+		ZOrder: tui.ZDialog + 15,
+		Label:  "INS/OVR",
+		Help:   &tui.HelpContext{ScreenName: "Add Variable", PageTitle: "Insert/Overwrite", PageText: "Toggle between insert and overwrite mode."},
+	})
+
 	regions = append(regions, ListBoxHitRegions(
 		"addvar_list_box", "addvar_list",
 		offsetX+1, offsetY+listTop,
@@ -1048,29 +1029,12 @@ func (m *addVarDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegion 
 	)...)
 
 	// Title widget regions
-	const widgetTotalWidth = 7
-	const endPad = 1
-	widgetsStartX := offsetX + m.width - 1 - endPad - widgetTotalWidth
-	widgetY := offsetY
-	if ctx.LargeTitleBars {
-		widgetY++
-	}
-	regions = append(regions,
-		tui.HitRegion{
-			ID: "addvar_dialog." + tui.IDTitleWidgetHelp,
-			X: widgetsStartX, Y: widgetY, Width: 3, Height: 1,
-			ZOrder: tui.ZDialog + 25,
-			Label:  "Help",
-			Help:   &tui.HelpContext{ScreenName: "Add Variable", PageTitle: "Help", PageText: "Open help for this dialog."},
-		},
-		tui.HitRegion{
-			ID: "addvar_dialog." + tui.IDTitleWidgetClose,
-			X: widgetsStartX + 4, Y: widgetY, Width: 3, Height: 1,
-			ZOrder: tui.ZDialog + 25,
-			Label:  "Close",
-			Help:   &tui.HelpContext{ScreenName: "Add Variable", PageTitle: "Close", PageText: "Close this dialog."},
-		},
-	)
+	activeW := m.TitleBarFocus.ActiveWidgets()
+	widgetStr := tui.BuildInactiveTitleWidgetsFor(activeW, ctx)
+	widgetWidth := lipgloss.Width(tui.GetPlainText(widgetStr))
+	widgetsStartX := offsetX + m.width - 1 - 1 - widgetWidth
+	widgetY := tui.TitleBarWidgetY(offsetY, ctx.LargeTitleBars)
+	regions = append(regions, tui.TitleBarWidgetRegions("addvar_dialog", activeW, widgetsStartX, widgetY, tui.ZDialog)...)
 
 	return regions
 }

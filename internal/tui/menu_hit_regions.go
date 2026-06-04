@@ -324,11 +324,7 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		// Widget layout: "[?]" (3) + " " (1) + "[×]" (3) — help starts at 0, close at +4.
 		helpWidgetX := widgetsStartX
 		closeWidgetX := widgetsStartX + 4 // "[?] " = 4 chars
-		// Large titlebar: widgets are on the title row (row 1), not the top border (row 0).
-		widgetY := offsetY
-		if m.layout.LargeTitleBar {
-			widgetY++
-		}
+		widgetY := TitleBarWidgetY(offsetY, m.layout.LargeTitleBar)
 		regions = append(regions,
 			HitRegion{
 				ID:     m.id + "." + IDTitleWidgetHelp,
