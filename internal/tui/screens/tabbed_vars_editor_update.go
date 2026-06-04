@@ -174,16 +174,16 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		// When titlebar has focus, handle navigation between widgets.
-		if m.TitleBarFocus.TitleBarFocused() {
+		if m.TitleBarFocused() {
 			switch msg.String() {
 			case "left":
-				m.TitleBarFocus.CycleWidget(-1)
+				m.CycleWidget(-1)
 				return m, nil
 			case "right":
-				m.TitleBarFocus.CycleWidget(+1)
+				m.CycleWidget(+1)
 				return m, nil
 			case "enter", " ":
-				switch m.TitleBarFocus.ActiveWidget() {
+				switch m.ActiveWidget() {
 				case tui.TitleBarWidgetHelp:
 					return m, func() tea.Msg { return tui.TriggerHelpMsg{ScreenLevelOnly: true} }
 				case tui.TitleBarWidgetClose:
@@ -192,11 +192,11 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					return m, m.onClose
 				case tui.TitleBarWidgetRefresh:
-					m.TitleBarFocus.BlurTitleBar()
+					m.BlurTitleBar()
 					return m, func() tea.Msg { return envRefreshMsg{} }
 				}
 			case "esc":
-				m.TitleBarFocus.BlurTitleBar()
+				m.BlurTitleBar()
 				return m, nil
 			}
 			return m, nil
@@ -573,4 +573,4 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-// TitleBarFocusable implementation is promoted from the embedded tui.TitleBarFocus.
+// TitleBarFocusable implementation is promoted from the embedded tui.

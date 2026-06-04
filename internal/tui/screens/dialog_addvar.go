@@ -149,7 +149,7 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
-		if handled, cmd := m.TitleBarFocus.HandleTitleBarKey(msg, m.cancelOrConfirm()); handled {
+		if handled, cmd := m.HandleTitleBarKey(msg, m.cancelOrConfirm()); handled {
 			return m, cmd
 		}
 		switch {
@@ -871,7 +871,7 @@ func (m *addVarDialogModel) ViewString() string {
 	m.lastSbInfo = sbInfo
 
 	parts := []string{headingText, varNameSection, availableSection, buttonRow}
-	return tui.RenderDialogWithTypeAndWidgets("Add Variable", lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused || m.TitleBarFocus.TitleBarFocused(), m.height, tui.DialogTypeInfo, tui.TitleBarState{Show: true, Focused: m.TitleBarFocus.TitleBarFocused(), ActiveWidget: m.TitleBarFocus.ActiveWidget()})
+	return tui.RenderDialogWithTypeAndWidgets("Add Variable", lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused || m.TitleBarFocused(), m.height, tui.DialogTypeInfo, tui.TitleBarState{Show: true, Focused: m.TitleBarFocused(), ActiveWidget: m.ActiveWidget()})
 }
 
 func (m *addVarDialogModel) View() tea.View {
@@ -1029,7 +1029,7 @@ func (m *addVarDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegion 
 	)...)
 
 	// Title widget regions
-	activeW := m.TitleBarFocus.ActiveWidgets()
+	activeW := m.ActiveWidgets()
 	widgetStr := tui.BuildInactiveTitleWidgetsFor(activeW, ctx)
 	widgetWidth := lipgloss.Width(tui.GetPlainText(widgetStr))
 	widgetsStartX := offsetX + m.width - 1 - 1 - widgetWidth

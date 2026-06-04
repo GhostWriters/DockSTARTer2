@@ -130,7 +130,7 @@ func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
-		if handled, cmd := m.TitleBarFocus.HandleTitleBarKey(msg, m.cancelOrConfirm()); handled {
+		if handled, cmd := m.HandleTitleBarKey(msg, m.cancelOrConfirm()); handled {
 			return m, cmd
 		}
 		switch {
@@ -698,7 +698,7 @@ func (m *setValueDialogModel) ViewString() string {
 
 	title := "Set Value: " + m.varName
 	parts := []string{headingText, currentValueSection, presetsSection, buttonRow}
-	return tui.RenderDialogWithTypeAndWidgets(title, lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused || m.TitleBarFocus.TitleBarFocused(), m.height, tui.DialogTypeInfo, tui.TitleBarState{Show: true, Focused: m.TitleBarFocus.TitleBarFocused(), ActiveWidget: m.TitleBarFocus.ActiveWidget()})
+	return tui.RenderDialogWithTypeAndWidgets(title, lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused || m.TitleBarFocused(), m.height, tui.DialogTypeInfo, tui.TitleBarState{Show: true, Focused: m.TitleBarFocused(), ActiveWidget: m.ActiveWidget()})
 }
 
 func (m *setValueDialogModel) View() tea.View {

@@ -288,12 +288,12 @@ func buildDialogTitleWidgets(focused bool, activeWidget TitleBarWidget, widgets 
 
 // handleTitleBarHit is a convenience alias so existing baseDialogModel callers compile unchanged.
 func (b *baseDialogModel) handleTitleBarHit(msg LayerHitMsg, closeCmd tea.Cmd) (bool, tea.Cmd) {
-	return b.TitleBarFocus.HandleTitleBarHit(msg, closeCmd)
+	return b.HandleTitleBarHit(msg, closeCmd)
 }
 
 // handleTitleBarKey is a convenience alias so existing baseDialogModel callers compile unchanged.
 func (b *baseDialogModel) handleTitleBarKey(msg tea.KeyPressMsg, closeCmd tea.Cmd) (bool, tea.Cmd) {
-	return b.TitleBarFocus.HandleTitleBarKey(msg, closeCmd)
+	return b.HandleTitleBarKey(msg, closeCmd)
 }
 
 // titleBarHitRegions returns hit regions for the title bar widgets.
