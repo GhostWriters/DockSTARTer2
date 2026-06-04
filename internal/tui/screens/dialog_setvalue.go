@@ -32,8 +32,7 @@ type setValueDialogModel struct {
 	height  int
 	focused bool
 
-	titleBarFocused bool
-	titleBarWidget  int // 0=none, 1=close, 2=help
+	tui.TitleBarFocus
 
 	varName     string
 	appName     string
@@ -122,40 +121,6 @@ func (m *setValueDialogModel) Init() tea.Cmd {
 	return sinput.Blink
 }
 
-// TitleBarFocusable implementation.
-func (m *setValueDialogModel) FocusTitleBar() {
-	m.titleBarFocused = true
-	m.titleBarWidget = tui.TitleBarWidgetClose
-}
-func (m *setValueDialogModel) BlurTitleBar() {
-	m.titleBarFocused = false
-	m.titleBarWidget = 0
-}
-func (m *setValueDialogModel) TitleBarFocused() bool { return m.titleBarFocused }
-
-func (m *setValueDialogModel) handleTitleBarKey(msg tea.KeyPressMsg) (handled bool, cmd tea.Cmd) {
-	switch {
-	case key.Matches(msg, tui.Keys.Esc):
-		m.BlurTitleBar()
-	case key.Matches(msg, tui.Keys.Left):
-		m.titleBarWidget = tui.TitleBarWidgetHelp
-	case key.Matches(msg, tui.Keys.Right):
-		m.titleBarWidget = tui.TitleBarWidgetClose
-	case key.Matches(msg, tui.Keys.Enter), key.Matches(msg, tui.Keys.Space):
-		switch m.titleBarWidget {
-		case tui.TitleBarWidgetHelp:
-			m.BlurTitleBar()
-			cmd = func() tea.Msg { return tui.TriggerHelpMsg{ScreenLevelOnly: true} }
-		case tui.TitleBarWidgetClose:
-			m.BlurTitleBar()
-			cmd = m.cancelOrConfirm()
-		}
-	default:
-		return false, nil
-	}
-	return true, cmd
-}
-
 func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -165,10 +130,8 @@ func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
-		if m.titleBarFocused {
-			if handled, cmd := m.handleTitleBarKey(msg); handled {
-				return m, cmd
-			}
+		if handled, cmd := m.TitleBarFocus.HandleTitleBarKey(msg, m.cancelOrConfirm()); handled {
+			return m, cmd
 		}
 		switch {
 		case key.Matches(msg, tui.Keys.Esc), key.Matches(msg, tui.Keys.ForceQuit):
@@ -194,7 +157,7 @@ func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
-		case key.Matches(msg, tui.Keys.Left):
+		case key.Matches(msg, tui.Keys.Left) && m.focus != setValueFocusInput:
 			switch m.focus {
 			case setValueFocusSave:
 				m.focus = setValueFocusExit
@@ -202,16 +165,20 @@ func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.focus = setValueFocusSave
 			case setValueFocusExit:
 				m.focus = setValueFocusCancel
+			default: // list — jump to last button
+				m.focus = setValueFocusExit
 			}
 			return m, nil
 
-		case key.Matches(msg, tui.Keys.Right):
+		case key.Matches(msg, tui.Keys.Right) && m.focus != setValueFocusInput:
 			switch m.focus {
 			case setValueFocusSave:
 				m.focus = setValueFocusCancel
 			case setValueFocusCancel:
 				m.focus = setValueFocusExit
 			case setValueFocusExit:
+				m.focus = setValueFocusSave
+			default: // list — jump to first button
 				m.focus = setValueFocusSave
 			}
 			return m, nil
@@ -303,6 +270,10 @@ func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tui.LayerHitMsg:
 		if msg.Button == tea.MouseMiddle {
+			return m, nil
+		}
+		if msg.Button == tea.MouseLeft && strings.HasSuffix(msg.ID, "."+tui.IDInsOvr) {
+			m.input.ToggleOverwrite()
 			return m, nil
 		}
 		if msg.Button == tea.MouseLeft && strings.HasSuffix(msg.ID, "."+tui.IDTitleWidgetClose) {
@@ -727,7 +698,7 @@ func (m *setValueDialogModel) ViewString() string {
 
 	title := "Set Value: " + m.varName
 	parts := []string{headingText, currentValueSection, presetsSection, buttonRow}
-	return tui.RenderDialogWithTypeAndWidgets(title, lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused || m.titleBarFocused, m.height, tui.DialogTypeInfo, tui.TitleBarState{Show: true, Focused: m.titleBarFocused, ActiveWidget: m.titleBarWidget})
+	return tui.RenderDialogWithTypeAndWidgets(title, lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused || m.TitleBarFocus.TitleBarFocused(), m.height, tui.DialogTypeInfo, tui.TitleBarState{Show: true, Focused: m.TitleBarFocus.TitleBarFocused(), ActiveWidget: m.TitleBarFocus.ActiveWidget()})
 }
 
 func (m *setValueDialogModel) View() tea.View {
@@ -785,6 +756,20 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 			DocAppName:  m.docAppName,
 		},
 	})
+	// INS/OVR hit region — bottom-left of the "Current Value" section border.
+	// inputY = outer_border(1) + largeTitleOverhead + headingH + section_top_border(1); bottom border = inputY+1
+	insOvrY := 1 + largeTitleOverhead + headingH + 2
+	regions = append(regions, tui.HitRegion{
+		ID:     "setvalue_dialog." + tui.IDInsOvr,
+		X:      offsetX + 2, // outer border(1) + section border corner(1)
+		Y:      offsetY + insOvrY,
+		Width:  3,
+		Height: 1,
+		ZOrder: tui.ZDialog + 15,
+		Label:  "INS/OVR",
+		Help:   &tui.HelpContext{ScreenName: "Set Value: " + m.varName, PageTitle: "Insert/Overwrite", PageText: "Toggle between insert and overwrite mode."},
+	})
+
 	btnH := tui.ButtonRowHeight(contentW, 0, tui.ButtonSpec{Text: "Save"}, tui.ButtonSpec{Text: "Cancel"}, tui.ButtonSpec{Text: "Exit"})
 	// Use exactly the same layout math as ViewString()
 	presetTargetH := m.height - 2 - headingH - 3 - btnH
@@ -878,10 +863,7 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 	const widgetTotalWidth = 7
 	const endPad = 1
 	widgetsStartX := offsetX + m.width - 1 - endPad - widgetTotalWidth
-	widgetY := offsetY
-	if ctx.LargeTitleBars {
-		widgetY++
-	}
+	widgetY := tui.TitleBarWidgetY(offsetY, ctx.LargeTitleBars)
 	regions = append(regions,
 		tui.HitRegion{
 			ID: "setvalue_dialog." + tui.IDTitleWidgetHelp,

@@ -85,13 +85,12 @@ func maxLineWidth(text string) int {
 // (confirm, message, prompt). View() and Layers() are kept on the outer type because
 // they depend on the outer type's ViewString().
 type baseDialogModel struct {
-	id             string
-	width          int
-	height         int
-	focused        bool
-	layout         DialogLayout
-	titleBarFocused bool
-	titleBarWidget  int
+	id      string
+	width   int
+	height  int
+	focused bool
+	layout  DialogLayout
+	TitleBarFocus
 }
 
 func (b *baseDialogModel) Init() tea.Cmd { return nil }

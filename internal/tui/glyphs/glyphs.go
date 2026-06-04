@@ -38,9 +38,11 @@ const (
 	UpdateErrorAscii     = "?"
 
 	// Title bar widgets
-	HelpWidget       = "?"
-	CloseWidget      = "×" // Multiplication Sign (U+00D7)
-	CloseWidgetAscii = "X"
+	HelpWidget          = "?"
+	CloseWidget         = "×" // Multiplication Sign (U+00D7)
+	CloseWidgetAscii    = "X"
+	RefreshWidget       = "↺" // Anticlockwise Open Circle Arrow (U+21BA)
+	RefreshWidgetAscii  = "R"
 
 	// Panel resize widgets
 	ResizeUpWidget      = "▲" // Black Up-Pointing Triangle (U+25B2)

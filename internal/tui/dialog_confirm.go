@@ -213,7 +213,7 @@ func (m *confirmDialogModel) ViewString() string {
 
 	ctx2 := GetActiveContext()
 	ctx2.LargeTitleBars = m.layout.LargeTitleBar
-	return renderDialogWithTypeAndWidgets(m.title, fullContent, m.focused || m.titleBarFocused, 0, DialogTypeConfirm, ctx2, TitleBarState{Show: true, Focused: m.titleBarFocused, ActiveWidget: m.titleBarWidget})
+	return renderDialogWithTypeAndWidgets(m.title, fullContent, m.focused || m.tbFocused, 0, DialogTypeConfirm, ctx2, TitleBarState{Show: true, Focused: m.tbFocused, ActiveWidget: m.tbWidget})
 }
 
 // View implements tea.Model

@@ -53,14 +53,14 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.BlurTitleBar()
 				return m, nil
 			case key.Matches(msg, Keys.Left):
-				if m.titleBarWidget != titleBarWidgetHelp {
-					m.titleBarWidget = titleBarWidgetHelp
+				if m.titleBarWidget != TitleBarWidgetHelp {
+					m.titleBarWidget = TitleBarWidgetHelp
 					m.InvalidateCache()
 				}
 				return m, nil
 			case key.Matches(msg, Keys.Right):
-				if m.titleBarWidget != titleBarWidgetClose {
-					m.titleBarWidget = titleBarWidgetClose
+				if m.titleBarWidget != TitleBarWidgetClose {
+					m.titleBarWidget = TitleBarWidgetClose
 					m.InvalidateCache()
 				}
 				return m, nil
@@ -460,10 +460,10 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // activateTitleBarWidget executes the currently focused title bar widget action.
 func (m *MenuModel) activateTitleBarWidget() tea.Cmd {
 	switch m.titleBarWidget {
-	case titleBarWidgetHelp:
+	case TitleBarWidgetHelp:
 		m.BlurTitleBar()
 		return func() tea.Msg { return TriggerHelpMsg{ScreenLevelOnly: true} }
-	case titleBarWidgetClose:
+	case TitleBarWidgetClose:
 		m.BlurTitleBar()
 		if m.backAction != nil {
 			return m.backAction

@@ -27,6 +27,8 @@ const (
 	helpWidget           = glyphs.HelpWidget
 	closeWidget          = glyphs.CloseWidget
 	closeWidgetAscii     = glyphs.CloseWidgetAscii
+	refreshWidget        = glyphs.RefreshWidget
+	refreshWidgetAscii   = glyphs.RefreshWidgetAscii
 	resizeUpWidget       = glyphs.ResizeUpWidget
 	resizeUpWidgetAscii  = glyphs.ResizeUpWidgetAscii
 	resizeDnWidget       = glyphs.ResizeDnWidget

@@ -242,6 +242,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.backdrop.SetHelpText(m.activeScreen.HelpText())
 			cmds = append(cmds, logger.BatchRecoverTUI(m.ctx, m.activeScreen.Init()))
+			m.updateComponentFocus()
 
 			// Sync current lock state to the new screen immediately
 			if m.lockedByOthers {

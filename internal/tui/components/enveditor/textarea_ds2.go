@@ -43,6 +43,9 @@ type Line struct {
 // IsOverwrite returns true when the textarea is in overwrite (replace) mode.
 func (m Model) IsOverwrite() bool { return m.Overwrite }
 
+// ToggleOverwrite switches between insert and overwrite mode without moving the cursor.
+func (m *Model) ToggleOverwrite() { m.Overwrite = !m.Overwrite }
+
 // IsEditableAtCursor returns true when the cursor is on an editable position.
 func (m Model) IsEditableAtCursor() bool { return m.isEditableAtCursor() }
 

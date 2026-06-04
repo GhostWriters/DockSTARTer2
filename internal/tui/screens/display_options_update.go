@@ -132,14 +132,17 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// 1. Focus routing via panel hit
 		switch msg.ID {
 		case tui.IDThemePanel:
+			s.buttonFocused = false
 			s.focusedPanel = FocusThemes
 			s.updateFocusStates()
 			return s, nil
 		case tui.IDOptionsPanel:
+			s.buttonFocused = false
 			s.focusedPanel = FocusOptions
 			s.updateFocusStates()
 			return s, nil
 		case tui.IDButtonPanel:
+			s.buttonFocused = false
 			s.focusedPanel = FocusButtons
 			s.updateFocusStates()
 			return s, nil
@@ -225,7 +228,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Title widget clicks — delegate to outerMenu
-		if s.outerMenu != nil && (strings.HasSuffix(msg.ID, "."+tui.IDTitleWidgetHelp) || strings.HasSuffix(msg.ID, "."+tui.IDTitleWidgetClose)) {
+		if s.outerMenu != nil && tui.IsTitleWidgetID(msg.ID) {
 			updated, uCmd := s.outerMenu.Update(msg)
 			if m, ok := updated.(*tui.MenuModel); ok {
 				s.outerMenu = m
@@ -271,6 +274,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// 1. Panel Cycling (Tab / Shift-Tab) - Themes <-> Options only
 		if key.Matches(msg, tui.Keys.CycleTab) || key.Matches(msg, tui.Keys.CycleShiftTab) {
+			s.buttonFocused = false
 			if s.focusedPanel == FocusThemes {
 				s.focusedPanel = FocusOptions
 			} else {
@@ -282,20 +286,30 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// 2. Strict Navigation (Workstation Model)
 
-		// Left/Right: Cycle buttons globally
+		// Left/Right: cycle buttons; when on a submenu, keep it focused too (buttonFocused).
 		if key.Matches(msg, tui.Keys.Left) {
-			s.focusedPanel = FocusButtons
-			s.focusedButton--
-			if s.focusedButton < 0 {
+			if s.focusedPanel == FocusButtons || s.buttonFocused {
+				s.buttonFocused = s.focusedPanel != FocusButtons
+				s.focusedButton--
+				if s.focusedButton < 0 {
+					s.focusedButton = s.maxFocusedButton()
+				}
+			} else {
+				s.buttonFocused = true
 				s.focusedButton = s.maxFocusedButton()
 			}
 			s.updateFocusStates()
 			return s, nil
 		}
 		if key.Matches(msg, tui.Keys.Right) {
-			s.focusedPanel = FocusButtons
-			s.focusedButton++
-			if s.focusedButton > s.maxFocusedButton() {
+			if s.focusedPanel == FocusButtons || s.buttonFocused {
+				s.buttonFocused = s.focusedPanel != FocusButtons
+				s.focusedButton++
+				if s.focusedButton > s.maxFocusedButton() {
+					s.focusedButton = 0
+				}
+			} else {
+				s.buttonFocused = true
 				s.focusedButton = 0
 			}
 			s.updateFocusStates()
@@ -303,15 +317,27 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if key.Matches(msg, tui.Keys.Enter) {
-			return s.execFocusedButton()
+			if s.buttonFocused || s.focusedPanel == FocusButtons {
+				s.buttonFocused = false
+				return s.execFocusedButton()
+			}
 		}
 
 		// Esc: Cancel — navigate back or quit if root
 		if key.Matches(msg, tui.Keys.Esc) {
+			if s.buttonFocused {
+				s.buttonFocused = false
+				s.updateFocusStates()
+				return s, nil
+			}
 			return s, s.EscapeAction()
 		}
 
-		// 3. Up/Down/Space: Routed to focused panel
+		// 3. Up/Down/Space: Routed to focused panel; clear button highlight when navigating submenus.
+		if key.Matches(msg, tui.Keys.Up) || key.Matches(msg, tui.Keys.Down) {
+			s.buttonFocused = false
+			s.updateFocusStates()
+		}
 		switch s.focusedPanel {
 		case FocusThemes:
 			// Specific radio logic for Space on theme list

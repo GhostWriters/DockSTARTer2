@@ -129,6 +129,9 @@ func (m Model) IsSelecting() bool { return m.isSelecting }
 // IsOverwrite reports whether the input is in overwrite (OVR) mode.
 func (m Model) IsOverwrite() bool { return m.Overwrite }
 
+// ToggleOverwrite switches between insert and overwrite mode without moving the cursor.
+func (m *Model) ToggleOverwrite() { m.Overwrite = !m.Overwrite }
+
 // CursorColumn returns the visual X offset of the cursor within the
 // rendered textinput view (i.e. after prompt, within the text width).
 // Returns 0 when the input is not focused.

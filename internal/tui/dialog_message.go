@@ -173,7 +173,7 @@ func (m *messageDialogModel) ViewString() string {
 	}
 	ctx := GetActiveContext()
 	ctx.LargeTitleBars = m.layout.LargeTitleBar
-	return renderDialogWithTypeAndWidgets(fullTitle, fullContent, m.focused || m.titleBarFocused, 0, dialogType, ctx, TitleBarState{Show: true, Focused: m.titleBarFocused, ActiveWidget: m.titleBarWidget})
+	return renderDialogWithTypeAndWidgets(fullTitle, fullContent, m.focused || m.tbFocused, 0, dialogType, ctx, TitleBarState{Show: true, Focused: m.tbFocused, ActiveWidget: m.tbWidget})
 }
 
 // View implements tea.Model

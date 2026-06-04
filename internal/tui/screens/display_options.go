@@ -27,7 +27,8 @@ type DisplayOptionsScreen struct {
 	optionsMenu  *tui.MenuModel
 	focusedPanel DisplayOptionsFocus
 	// focusedButton index: 0=Apply, 1=Back (or Exit when isRoot), 2=Exit (only when !isRoot)
-	focusedButton int
+	focusedButton  int
+	buttonFocused  bool // true when a button is highlighted while a submenu also stays focused
 	isRoot        bool // true when launched directly via -M appearance; hides Back button
 
 	config       config.AppConfig
@@ -292,9 +293,10 @@ func (s *DisplayOptionsScreen) initMenus() {
 	outerMenu.AddContentSection(optionsMenu)
 	s.outerMenu = outerMenu
 
-	// Initial Focus
+	// Set initial focus state — applied properly when SetFocused(true) is called by AppModel.
 	s.focusedPanel = FocusThemes
-	s.updateFocusStates()
+	s.buttonFocused = true
+	s.focusedButton = 0
 }
 
 // maxFocusedButton returns the highest valid focusedButton index.
@@ -327,6 +329,11 @@ func (s *DisplayOptionsScreen) execFocusedButton() (tea.Model, tea.Cmd) {
 }
 
 func (s *DisplayOptionsScreen) updateFocusStates() {
+	// Explicit button panel focus clears the dual-focus state.
+	if s.focusedPanel == FocusButtons {
+		s.buttonFocused = false
+	}
+	// Submenus stay visually focused when a button is also highlighted (buttonFocused).
 	s.themeMenu.SetSubFocused(s.focused && s.focusedPanel == FocusThemes)
 	s.optionsMenu.SetSubFocused(s.focused && s.focusedPanel == FocusOptions)
 
@@ -334,7 +341,7 @@ func (s *DisplayOptionsScreen) updateFocusStates() {
 		return
 	}
 	s.outerMenu.SetFocused(s.focused)
-	if s.focusedPanel == FocusButtons {
+	if s.focusedPanel == FocusButtons || s.buttonFocused {
 		switch s.focusedButton {
 		case 0:
 			s.outerMenu.SetFocusedItem(tui.FocusSelectBtn)

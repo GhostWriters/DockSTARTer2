@@ -89,8 +89,7 @@ type TabbedVarsEditorModel struct {
 	connType       string
 
 	// Title bar focus state
-	titleBarFocused bool
-	titleBarWidget  int // 0=none, 1=close, 2=help
+	tui.TitleBarFocus
 }
 
 type envAddVarMsg struct {
@@ -156,7 +155,7 @@ func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec
 		buttons = []string{"Save", "Exit"}
 	}
 
-	return &TabbedVarsEditorModel{
+	m := &TabbedVarsEditorModel{
 		tabs:      tabs,
 		activeTab: 0,
 		title:     title,
@@ -166,6 +165,8 @@ func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec
 		onClose:   onClose,
 		connType:  connType,
 	}
+	m.TitleBarFocus.ConfigureWidgets(tui.TitleBarWidgetRefresh, tui.TitleBarWidgetHelp, tui.TitleBarWidgetClose)
+	return m
 }
 
 func (m *TabbedVarsEditorModel) Init() tea.Cmd {

@@ -143,9 +143,13 @@ const (
 	IDHeaderFlags  = "header_flags"
 	IDHelpline     = "helpline"
 
+	// INS/OVR mode toggle hit region ID
+	IDInsOvr = "ins_ovr"
+
 	// Title bar widget IDs (suffix appended to menu ID)
-	IDTitleWidgetHelp  = "title_widget_help"
-	IDTitleWidgetClose = "title_widget_close"
+	IDTitleWidgetRefresh = "title_widget_refresh"
+	IDTitleWidgetHelp    = "title_widget_help"
+	IDTitleWidgetClose   = "title_widget_close"
 
 	// Panel resize widget IDs
 	IDPanelResizeUp = "panel_resize_up"

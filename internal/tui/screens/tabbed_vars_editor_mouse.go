@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 
+	"charm.land/lipgloss/v2"
+
 	tea "charm.land/bubbletea/v2"
 	"github.com/atotto/clipboard"
 )
@@ -86,6 +88,21 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitReg
 		},
 	})
 
+	// INS/OVR hit region — bottom-left of the inner editor box border.
+	// Inner editor box bottom border = NestedTopOffset + largeTitleOverhead + subtitleHeight + editorHeight
+	// (NestedTopOffset already accounts for outer border + inner top border/tab row)
+	insOvrY := offsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight + m.editorHeight
+	regions = append(regions, tui.HitRegion{
+		ID:     "tabbed_vars." + tui.IDInsOvr,
+		X:      offsetX + layout.NestedLeftOffset() + 1, // +1 to skip the corner char
+		Y:      insOvrY,
+		Width:  3,
+		Height: 1,
+		ZOrder: tui.ZDialog + 15,
+		Label:  "INS/OVR",
+		Help:   &tui.HelpContext{ScreenName: m.title, PageTitle: "Insert/Overwrite", PageText: "Toggle between insert and overwrite mode."},
+	})
+
 	// Button regions (standardized width — matches m.contentWidth which is already margin-reduced)
 	btnY := m.height - m.buttonHeight - 1
 	regions = append(regions, tui.GetButtonHitRegions(
@@ -100,26 +117,13 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitReg
 
 	// Title widget regions — widgets are on the title row (row 1) for large titlebars,
 	// or on the top border (row 0) for small titlebars.
-	const widgetTotalWidth = 7
-	const endPad = 1
-	widgetsStartX := offsetX + m.width - 1 - endPad - widgetTotalWidth
-	widgetY := offsetY + m.largeTitleOverhead
-	regions = append(regions,
-		tui.HitRegion{
-			ID: "tabbed_vars." + tui.IDTitleWidgetHelp,
-			X: widgetsStartX, Y: widgetY, Width: 3, Height: 1,
-			ZOrder: tui.ZDialog + 25,
-			Label:  "Help",
-			Help:   &tui.HelpContext{ScreenName: m.title, PageTitle: "Help", PageText: "Open help for this dialog."},
-		},
-		tui.HitRegion{
-			ID: "tabbed_vars." + tui.IDTitleWidgetClose,
-			X: widgetsStartX + 4, Y: widgetY, Width: 3, Height: 1,
-			ZOrder: tui.ZDialog + 25,
-			Label:  "Close",
-			Help:   &tui.HelpContext{ScreenName: m.title, PageTitle: "Close", PageText: "Close this dialog."},
-		},
-	)
+	activeW := m.TitleBarFocus.ActiveWidgets()
+	ctx := tui.GetActiveContext()
+	widgetStr := tui.BuildInactiveTitleWidgetsFor(activeW, ctx)
+	widgetWidth := lipgloss.Width(tui.GetPlainText(widgetStr))
+	widgetsStartX := offsetX + m.width - 1 - 1 - widgetWidth
+	widgetY := tui.TitleBarWidgetY(offsetY, m.largeTitleOverhead > 0)
+	regions = append(regions, tui.TitleBarWidgetRegions("tabbed_vars", activeW, widgetsStartX, widgetY, tui.ZDialog)...)
 
 	return regions
 }

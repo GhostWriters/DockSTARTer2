@@ -116,24 +116,35 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.Button == tea.MouseLeft {
 				return m, func() tea.Msg { return tui.TriggerHelpMsg{ScreenLevelOnly: true} }
 			}
+		} else if msg.ID == "tabbed_vars."+tui.IDTitleWidgetRefresh {
+			if msg.Button == tea.MouseLeft {
+				return m, func() tea.Msg { return envRefreshMsg{} }
+			}
+		} else if msg.ID == "tabbed_vars."+tui.IDInsOvr {
+			if msg.Button == tea.MouseLeft && len(m.tabs) > 0 {
+				m.tabs[m.activeTab].editor.ToggleOverwrite()
+			}
+			return m, nil
 		}
 		return m, nil
 
 	case tea.MouseClickMsg:
 		// Scrollbar thumb drag initiation routed by model_mouse.go section B0.
 		if msg.Button == tea.MouseLeft && len(m.tabs) > 0 {
-			// Translate coordinates to editor-relative
+			// Translate coordinates to editor-relative and only forward if within editor bounds.
 			layout := tui.GetLayout()
 			relX := msg.X - (m.lastOffsetX + layout.NestedLeftOffset())
 			relY := msg.Y - (m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight)
-
-			var cmd tea.Cmd
-			m.tabs[m.activeTab].editor, cmd = m.tabs[m.activeTab].editor.Update(tea.MouseClickMsg{
-				X:      relX,
-				Y:      relY,
-				Button: msg.Button,
-			})
-			return m, cmd
+			editorW := m.contentWidth - layout.BorderWidth()
+			if relX >= 0 && relY >= 0 && relY < m.editorHeight && relX < editorW {
+				var cmd tea.Cmd
+				m.tabs[m.activeTab].editor, cmd = m.tabs[m.activeTab].editor.Update(tea.MouseClickMsg{
+					X:      relX,
+					Y:      relY,
+					Button: msg.Button,
+				})
+				return m, cmd
+			}
 		}
 
 	case tui.LayerWheelMsg, tea.MouseWheelMsg:
@@ -163,16 +174,16 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		// When titlebar has focus, handle navigation between widgets.
-		if m.titleBarFocused {
+		if m.TitleBarFocus.TitleBarFocused() {
 			switch msg.String() {
 			case "left":
-				m.titleBarWidget = tui.TitleBarWidgetHelp
+				m.TitleBarFocus.CycleWidget(-1)
 				return m, nil
 			case "right":
-				m.titleBarWidget = tui.TitleBarWidgetClose
+				m.TitleBarFocus.CycleWidget(+1)
 				return m, nil
 			case "enter", " ":
-				switch m.titleBarWidget {
+				switch m.TitleBarFocus.ActiveWidget() {
 				case tui.TitleBarWidgetHelp:
 					return m, func() tea.Msg { return tui.TriggerHelpMsg{ScreenLevelOnly: true} }
 				case tui.TitleBarWidgetClose:
@@ -180,10 +191,12 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						return m, m.promptUnsavedChanges(m.onClose)
 					}
 					return m, m.onClose
+				case tui.TitleBarWidgetRefresh:
+					m.TitleBarFocus.BlurTitleBar()
+					return m, func() tea.Msg { return envRefreshMsg{} }
 				}
 			case "esc":
-				m.titleBarFocused = false
-				m.titleBarWidget = 0
+				m.TitleBarFocus.BlurTitleBar()
 				return m, nil
 			}
 			return m, nil
@@ -560,15 +573,4 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-// TitleBarFocusable implementation.
-func (m *TabbedVarsEditorModel) FocusTitleBar() {
-	m.titleBarFocused = true
-	m.titleBarWidget = tui.TitleBarWidgetClose
-}
-
-func (m *TabbedVarsEditorModel) BlurTitleBar() {
-	m.titleBarFocused = false
-	m.titleBarWidget = 0
-}
-
-func (m *TabbedVarsEditorModel) TitleBarFocused() bool { return m.titleBarFocused }
+// TitleBarFocusable implementation is promoted from the embedded tui.TitleBarFocus.

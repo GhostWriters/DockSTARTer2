@@ -16,9 +16,17 @@ const LargeTitleBarOverhead = 2
 // TitleBarState carries the state needed to render title bar widgets ([?]/[×]).
 // The zero value means "no widgets shown".
 type TitleBarState struct {
-	Show         bool // Whether to render the [?]─[×] widgets
-	Focused      bool // Whether the title bar has keyboard focus
-	ActiveWidget int  // Which widget has focus (titleBarWidgetClose or titleBarWidgetHelp)
+	Show         bool           // Whether to render the title bar widgets
+	Focused      bool           // Whether the title bar has keyboard focus
+	ActiveWidget TitleBarWidget // Which widget has focus
+	Widgets      []TitleBarWidget // Ordered widget set; nil means defaultWidgets
+}
+
+func (s TitleBarState) activeWidgets() []TitleBarWidget {
+	if len(s.Widgets) > 0 {
+		return s.Widgets
+	}
+	return defaultWidgets
 }
 
 // titleTagFromAreaName derives the small-titlebar titleTag from a LargeTitleArea style name.
@@ -97,7 +105,7 @@ func renderLargeTitleRow(rawTitle string, actualWidth int, focused bool, showInd
 	renderedWidget := ""
 	rightWidgetWidth := 0
 	if tbs.Show {
-		rawWidget := buildLargeTitleBarWidgets(tbs.Focused, tbs.ActiveWidget, ctx)
+		rawWidget := buildLargeTitleBarWidgets(tbs.Focused, tbs.ActiveWidget, tbs.activeWidgets(), ctx)
 		renderedWidget = RenderThemeTextCtx(rawWidget, titleCtx)
 		rightWidgetWidth = lipgloss.Width(renderedWidget)
 	}
@@ -187,7 +195,7 @@ func RenderDialogWithTypeCtx(title, content string, focused bool, targetHeight i
 }
 
 // RenderDialogWithTypeAndWidgets renders a dialog with explicit title bar widget state.
-// Use this when the dialog manages its own titleBarFocused/titleBarWidget fields.
+// Use this when the dialog embeds TitleBarFocus and manages its own widget state.
 func RenderDialogWithTypeAndWidgets(title, content string, focused bool, targetHeight int, dialogType DialogType, tbs TitleBarState, borders ...BorderPair) string {
 	return renderDialogWithTypeAndWidgets(title, content, focused, targetHeight, dialogType, GetActiveContext(), tbs, borders...)
 }
@@ -417,7 +425,8 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 		tbsState = tbs[0]
 	}
 
-	useLarge := ctx.LargeTitleBars && GetPlainText(rawTitle) != "" && titleTag != "RAW"
+	isSubmenu := titleTag == "TitleSubMenu" || titleTag == "TitleSubMenuFocused"
+	useLarge := ctx.LargeTitleBars && GetPlainText(rawTitle) != "" && titleTag != "RAW" && !isSubmenu
 	if useLarge && targetHeight > 0 {
 		// Fall back if there isn't room for the extra 2 lines.
 		if len(lines)+LargeTitleBarOverhead+2 > targetHeight {
@@ -471,7 +480,7 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 			// Small titlebar: build small-style widgets from tbsState.
 			rightWidget := ""
 			if tbsState.Show {
-				rightWidget = buildDialogTitleWidgets(tbsState.Focused, tbsState.ActiveWidget, ctx)
+				rightWidget = buildDialogTitleWidgets(tbsState.Focused, tbsState.ActiveWidget, tbsState.activeWidgets(), ctx)
 			}
 			rightWidgetWidth := WidthWithoutZones(rightWidget)
 			if rightWidget != "" {
@@ -635,7 +644,7 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 		// Small titlebar: build small-style widgets from tbs.
 		rightWidget := ""
 		if tbs.Show {
-			rightWidget = buildDialogTitleWidgets(tbs.Focused, tbs.ActiveWidget, ctx)
+			rightWidget = buildDialogTitleWidgets(tbs.Focused, tbs.ActiveWidget, tbs.activeWidgets(), ctx)
 		}
 		result.WriteString(borderStyleLight.Render(border.TopLeft))
 		if title == "" {

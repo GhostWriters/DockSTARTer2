@@ -182,6 +182,10 @@ func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if handled, cmd := m.handleTitleBarHit(msg, closeWithResult("", false)); handled {
 			return m, cmd
 		}
+		if msg.Button == tea.MouseLeft && strings.HasSuffix(msg.ID, "."+IDInsOvr) {
+			m.input.ToggleOverwrite()
+			return m, nil
+		}
 		if msg.Button == tea.MouseRight && ButtonIDMatches(msg.ID, "prompt_input") {
 			return m, ShowInputContextMenu(m.input, msg.X, msg.Y, m.width, m.height)
 		}
@@ -324,7 +328,7 @@ func (m *promptDialogModel) ViewString() string {
 
 	ctx2 := GetActiveContext()
 	ctx2.LargeTitleBars = m.layout.LargeTitleBar
-	return renderDialogWithTypeAndWidgets(m.title, lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused || m.titleBarFocused, 0, DialogTypeConfirm, ctx2, TitleBarState{Show: true, Focused: m.titleBarFocused, ActiveWidget: m.titleBarWidget})
+	return renderDialogWithTypeAndWidgets(m.title, lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused || m.tbFocused, 0, DialogTypeConfirm, ctx2, TitleBarState{Show: true, Focused: m.tbFocused, ActiveWidget: m.tbWidget})
 }
 
 func (m *promptDialogModel) View() tea.View {
@@ -398,6 +402,22 @@ func (m *promptDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 			PageText:   m.question,
 		},
 	})
+
+	// INS/OVR hit region — only for non-password prompts (password mode hides typed chars,
+	// so overwrite mode is not useful there).
+	if m.input.EchoMode != textinput.EchoPassword {
+		insOvrY := 1 + largeTitleOffset + questionHeight + 2 // bottom border of input box
+		regions = append(regions, HitRegion{
+			ID:     m.id + "." + IDInsOvr,
+			X:      offsetX + 2, // outer border(1) + inner section corner(1)
+			Y:      offsetY + insOvrY,
+			Width:  3,
+			Height: 1,
+			ZOrder: ZDialog + 15,
+			Label:  "INS/OVR",
+			Help:   &HelpContext{ScreenName: m.title, PageTitle: "Insert/Overwrite", PageText: "Toggle between insert and overwrite mode."},
+		})
+	}
 
 	regions = append(regions, GetButtonHitRegions(
 		HelpContext{ScreenName: m.title, PageTitle: "Input Prompt", PageText: m.question},
