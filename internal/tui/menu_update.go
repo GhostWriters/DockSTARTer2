@@ -71,9 +71,14 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch {
 		case key.Matches(msg, Keys.Enter), key.Matches(msg, Keys.Space):
-			if sel := m.list.SelectedItem(); sel != nil {
-				if item, ok := sel.(MenuItem); ok && item.Locked {
-					return m, nil // Block interaction for locked items
+			// Only block on a locked list item when the list (not a button) has focus.
+			// Buttons like Exit and Back must remain responsive even when destructive
+			// items are locked by another session.
+			if m.focusedItem == FocusList || m.focusedItem == FocusSelectBtn {
+				if sel := m.list.SelectedItem(); sel != nil {
+					if item, ok := sel.(MenuItem); ok && item.Locked {
+						return m, nil // Block interaction for locked items
+					}
 				}
 			}
 		}
