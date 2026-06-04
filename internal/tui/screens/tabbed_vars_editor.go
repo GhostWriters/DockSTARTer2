@@ -165,7 +165,7 @@ func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec
 		onClose:   onClose,
 		connType:  connType,
 	}
-	m.TitleBarFocus.ConfigureWidgets(tui.TitleBarWidgetRefresh, tui.TitleBarWidgetHelp, tui.TitleBarWidgetClose)
+	m.ConfigureWidgets(tui.TitleBarWidgetRefresh, tui.TitleBarWidgetHelp, tui.TitleBarWidgetClose)
 	return m
 }
 

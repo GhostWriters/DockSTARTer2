@@ -117,7 +117,7 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitReg
 
 	// Title widget regions — widgets are on the title row (row 1) for large titlebars,
 	// or on the top border (row 0) for small titlebars.
-	activeW := m.TitleBarFocus.ActiveWidgets()
+	activeW := m.ActiveWidgets()
 	ctx := tui.GetActiveContext()
 	widgetStr := tui.BuildInactiveTitleWidgetsFor(activeW, ctx)
 	widgetWidth := lipgloss.Width(tui.GetPlainText(widgetStr))
