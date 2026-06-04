@@ -2,6 +2,7 @@ package tui
 
 import (
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/theme"
@@ -891,6 +892,14 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		return m, m.showHelpCmd(m.focusedPanelHelpContext(), false), true
 	}
 	if key.Matches(msg, Keys.ForceQuit) {
+		if console.IsDaemon {
+			// In server mode Ctrl-\ restarts the TUI rather than killing the daemon.
+			return m, func() tea.Msg {
+				reExecArgs := []string{"--server-daemon"}
+				_ = update.ReExec(m.ctx, registeredExePath, reExecArgs)
+				return nil
+			}, true
+		}
 		m.Fatal = true
 		return m, tea.Quit, true
 	}
