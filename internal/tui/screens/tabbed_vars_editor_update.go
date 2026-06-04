@@ -105,6 +105,17 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.btnIdx = m.buttonIndex("Exit")
 				return m, m.confirmExitAction()
 			}
+		} else if msg.ID == "tabbed_vars."+tui.IDTitleWidgetClose {
+			if msg.Button == tea.MouseLeft {
+				if m.hasChanges() {
+					return m, m.promptUnsavedChanges(m.onClose)
+				}
+				return m, m.onClose
+			}
+		} else if msg.ID == "tabbed_vars."+tui.IDTitleWidgetHelp {
+			if msg.Button == tea.MouseLeft {
+				return m, func() tea.Msg { return tui.TriggerHelpMsg{ScreenLevelOnly: true} }
+			}
 		}
 		return m, nil
 
@@ -151,6 +162,33 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.KeyMsg:
+		// When titlebar has focus, handle navigation between widgets.
+		if m.titleBarFocused {
+			switch msg.String() {
+			case "left":
+				m.titleBarWidget = tui.TitleBarWidgetHelp
+				return m, nil
+			case "right":
+				m.titleBarWidget = tui.TitleBarWidgetClose
+				return m, nil
+			case "enter", " ":
+				switch m.titleBarWidget {
+				case tui.TitleBarWidgetHelp:
+					return m, func() tea.Msg { return tui.TriggerHelpMsg{ScreenLevelOnly: true} }
+				case tui.TitleBarWidgetClose:
+					if m.hasChanges() {
+						return m, m.promptUnsavedChanges(m.onClose)
+					}
+					return m, m.onClose
+				}
+			case "esc":
+				m.titleBarFocused = false
+				m.titleBarWidget = 0
+				return m, nil
+			}
+			return m, nil
+		}
+
 		switch msg.String() {
 		case "esc":
 			return m, m.EscapeAction()
@@ -521,3 +559,16 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	return m, tea.Batch(cmds...)
 }
+
+// TitleBarFocusable implementation.
+func (m *TabbedVarsEditorModel) FocusTitleBar() {
+	m.titleBarFocused = true
+	m.titleBarWidget = tui.TitleBarWidgetClose
+}
+
+func (m *TabbedVarsEditorModel) BlurTitleBar() {
+	m.titleBarFocused = false
+	m.titleBarWidget = 0
+}
+
+func (m *TabbedVarsEditorModel) TitleBarFocused() bool { return m.titleBarFocused }
