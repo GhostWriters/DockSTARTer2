@@ -32,6 +32,9 @@ type setValueDialogModel struct {
 	height  int
 	focused bool
 
+	titleBarFocused bool
+	titleBarWidget  int // 0=none, 1=close, 2=help
+
 	varName     string
 	appName     string
 	appDesc     string
@@ -119,6 +122,40 @@ func (m *setValueDialogModel) Init() tea.Cmd {
 	return sinput.Blink
 }
 
+// TitleBarFocusable implementation.
+func (m *setValueDialogModel) FocusTitleBar() {
+	m.titleBarFocused = true
+	m.titleBarWidget = tui.TitleBarWidgetClose
+}
+func (m *setValueDialogModel) BlurTitleBar() {
+	m.titleBarFocused = false
+	m.titleBarWidget = 0
+}
+func (m *setValueDialogModel) TitleBarFocused() bool { return m.titleBarFocused }
+
+func (m *setValueDialogModel) handleTitleBarKey(msg tea.KeyPressMsg) (handled bool, cmd tea.Cmd) {
+	switch {
+	case key.Matches(msg, tui.Keys.Esc):
+		m.BlurTitleBar()
+	case key.Matches(msg, tui.Keys.Left):
+		m.titleBarWidget = tui.TitleBarWidgetHelp
+	case key.Matches(msg, tui.Keys.Right):
+		m.titleBarWidget = tui.TitleBarWidgetClose
+	case key.Matches(msg, tui.Keys.Enter), key.Matches(msg, tui.Keys.Space):
+		switch m.titleBarWidget {
+		case tui.TitleBarWidgetHelp:
+			m.BlurTitleBar()
+			cmd = func() tea.Msg { return tui.TriggerHelpMsg{ScreenLevelOnly: true} }
+		case tui.TitleBarWidgetClose:
+			m.BlurTitleBar()
+			cmd = m.cancelOrConfirm()
+		}
+	default:
+		return false, nil
+	}
+	return true, cmd
+}
+
 func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -128,6 +165,11 @@ func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
+		if m.titleBarFocused {
+			if handled, cmd := m.handleTitleBarKey(msg); handled {
+				return m, cmd
+			}
+		}
 		switch {
 		case key.Matches(msg, tui.Keys.Esc), key.Matches(msg, tui.Keys.ForceQuit):
 			return m, m.cancelOrConfirm()
@@ -262,6 +304,14 @@ func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tui.LayerHitMsg:
 		if msg.Button == tea.MouseMiddle {
 			return m, nil
+		}
+		if msg.Button == tea.MouseLeft && strings.HasSuffix(msg.ID, "."+tui.IDTitleWidgetClose) {
+			m.BlurTitleBar()
+			return m, m.cancelOrConfirm()
+		}
+		if msg.Button == tea.MouseLeft && strings.HasSuffix(msg.ID, "."+tui.IDTitleWidgetHelp) {
+			m.BlurTitleBar()
+			return m, func() tea.Msg { return tui.TriggerHelpMsg{ScreenLevelOnly: true} }
 		}
 		if msg.Button == tea.MouseRight && msg.ID == "setvalue_input" {
 			return m, tui.ShowInputContextMenu(m.input, msg.X, msg.Y, m.width, m.height)
@@ -677,7 +727,7 @@ func (m *setValueDialogModel) ViewString() string {
 
 	title := "Set Value: " + m.varName
 	parts := []string{headingText, currentValueSection, presetsSection, buttonRow}
-	return tui.RenderDialogWithType(title, lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused, m.height, tui.DialogTypeInfo)
+	return tui.RenderDialogWithTypeAndWidgets(title, lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused || m.titleBarFocused, m.height, tui.DialogTypeInfo, tui.TitleBarState{Show: true, Focused: m.titleBarFocused, ActiveWidget: m.titleBarWidget})
 }
 
 func (m *setValueDialogModel) View() tea.View {
@@ -828,17 +878,21 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 	const widgetTotalWidth = 7
 	const endPad = 1
 	widgetsStartX := offsetX + m.width - 1 - endPad - widgetTotalWidth
+	widgetY := offsetY
+	if ctx.LargeTitleBars {
+		widgetY++
+	}
 	regions = append(regions,
 		tui.HitRegion{
 			ID: "setvalue_dialog." + tui.IDTitleWidgetHelp,
-			X: widgetsStartX, Y: offsetY, Width: 3, Height: 1,
+			X: widgetsStartX, Y: widgetY, Width: 3, Height: 1,
 			ZOrder: tui.ZDialog + 25,
 			Label:  "Help",
 			Help:   &tui.HelpContext{ScreenName: "Set Value: " + m.varName, PageTitle: "Help", PageText: "Open help for this dialog."},
 		},
 		tui.HitRegion{
 			ID: "setvalue_dialog." + tui.IDTitleWidgetClose,
-			X: widgetsStartX + 4, Y: offsetY, Width: 3, Height: 1,
+			X: widgetsStartX + 4, Y: widgetY, Width: 3, Height: 1,
 			ZOrder: tui.ZDialog + 25,
 			Label:  "Close",
 			Help:   &tui.HelpContext{ScreenName: "Set Value: " + m.varName, PageTitle: "Close", PageText: "Close this dialog."},

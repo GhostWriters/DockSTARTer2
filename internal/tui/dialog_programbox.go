@@ -123,6 +123,17 @@ func newProgramBox(title, subtitle, command string) *ProgramBoxModel {
 }
 
 // AddTask adds a task category to the progress header
+// TitleBarFocusable implementation.
+func (m *ProgramBoxModel) FocusTitleBar() {
+	m.titleBarFocused = true
+	m.titleBarWidget = titleBarWidgetClose
+}
+func (m *ProgramBoxModel) BlurTitleBar() {
+	m.titleBarFocused = false
+	m.titleBarWidget = 0
+}
+func (m *ProgramBoxModel) TitleBarFocused() bool { return m.titleBarFocused }
+
 func (m *ProgramBoxModel) AddTask(label, command string, apps []string) {
 	m.Tasks = append(m.Tasks, Task{
 		Label:   label,
