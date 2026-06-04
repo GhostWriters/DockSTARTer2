@@ -119,7 +119,7 @@ No = "{{|TitleError|}}"
 LineComment = "{{|Dialog:::RB|}}"
 ModifiedText = "{{|Dialog:::R|}}"
 LineNumber = "{{|Dialog:::D|}}"
-LineNumberSelected = "{{|LineNumber::$accent:-B|}}"
+LineNumberSelected = "{{|LineNumber::$accent:d|}}"
 LineNumberModified = "{{|ModifiedText|}}"
 LineNumberModifiedSelected = "{{|ModifiedText::$accent:B|}}"
 
@@ -129,7 +129,7 @@ MarkerAdded = "{{|Marker::green|}}"
 MarkerDeleted = "{{|Marker::red|}}"
 MarkerModified = "{{|Marker::yellow|}}"
 MarkerInvalid = "{{[white:red:B]}}"
-TextCursor = "{{[:white:]}}"
+TextCursor = "{{[magenta:yellow:B]}}"
 MarkerLocked = "{{|MarkerInvalid|}}"
 
 # Env variable types
