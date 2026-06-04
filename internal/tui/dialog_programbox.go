@@ -126,7 +126,7 @@ func newProgramBox(title, subtitle, command string) *ProgramBoxModel {
 // using m.layout.LargeTitleBar to determine the correct Y offset.
 func (m *ProgramBoxModel) titleBarHitRegions(offsetX, offsetY, contentWidth, baseZ int) []HitRegion {
 	ctx := GetActiveContext()
-	activeW := m.TitleBarFocus.ActiveWidgets()
+	activeW := m.ActiveWidgets()
 	widgetStr := BuildInactiveTitleWidgetsFor(activeW, ctx)
 	widgetWidth := lipgloss.Width(GetPlainText(widgetStr))
 	if widgetWidth == 0 {
@@ -394,7 +394,7 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyPressMsg:
 		closeDialog := func() tea.Msg { return CloseDialogMsg{} }
-		if handled, cmd := m.TitleBarFocus.HandleTitleBarKey(msg, func() tea.Msg { return CloseDialogMsg{} }); handled {
+		if handled, cmd := m.HandleTitleBarKey(msg, func() tea.Msg { return CloseDialogMsg{} }); handled {
 			return m, cmd
 		}
 		switch {
@@ -435,7 +435,7 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case LayerHitMsg:
-		if handled, cmd := m.TitleBarFocus.HandleTitleBarHit(msg, func() tea.Msg { return CloseDialogMsg{} }); handled {
+		if handled, cmd := m.HandleTitleBarHit(msg, func() tea.Msg { return CloseDialogMsg{} }); handled {
 			return m, cmd
 		}
 		if m.done && ButtonIDMatches(msg.ID, "OK") && msg.Button == tea.MouseLeft {
