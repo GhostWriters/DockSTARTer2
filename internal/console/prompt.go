@@ -64,6 +64,11 @@ func QuestionPrompt(ctx context.Context, printer Printer, title, question string
 	// Format text for console output (uses console color registry)
 	questionStr := Sprintf("%s", question)
 
+	// Pause any active spinner for the duration of the prompt so it doesn't
+	// overwrite the question or the user's input.
+	PauseSpinner()
+	defer ResumeSpinner()
+
 	// Log the question regardless of prompt mode (matches bash notice behavior)
 	printer(ctx, "%s", questionStr)
 

@@ -10,6 +10,21 @@ import (
 )
 
 func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Spinner tick: advance frame and schedule next tick while loading.
+	if tick, ok := msg.(menuSpinnerTickMsg); ok && tick.id == m.id {
+		if m.loadingText != "" {
+			ctx := GetActiveContext()
+			frames := spinnerFramesUnicode
+			if !ctx.LineCharacters {
+				frames = spinnerFramesASCII
+			}
+			m.spinnerFrame = (m.spinnerFrame + 1) % len(frames)
+			m.InvalidateCache()
+			return m, m.spinnerTickCmd()
+		}
+		return m, nil
+	}
+
 	// 1. Centralized scrollbar processing (Throttling, Clicks, Dragging)
 	if newOff, cmd, changed := m.Scroll.Update(msg, m.viewStartY, m.ScrollTotal(), m.layout.ViewportHeight); changed {
 		m.viewStartY = newOff

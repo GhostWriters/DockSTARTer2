@@ -174,8 +174,8 @@ func SetConsoleOutput(w io.Writer) func() {
 	consoleLogger.SetOutput(w)
 
 	return func() {
-		// Restore to default stderr
-		consoleLogger.SetOutput(os.Stderr)
+		// Restore to default stderr (wrapped to clear spinner before writes)
+		consoleLogger.SetOutput(spinnerClearWriter{os.Stderr})
 	}
 }
 
@@ -212,8 +212,16 @@ func buildConsoleStyles() *charmlog.Styles {
 	return st
 }
 
+// spinnerClearWriter wraps a writer and clears any active CLI spinner before each write.
+type spinnerClearWriter struct{ w *os.File }
+
+func (s spinnerClearWriter) Write(p []byte) (int, error) {
+	console.ClearSpinnerLine()
+	return s.w.Write(p)
+}
+
 func NewLogger() *slog.Logger {
-	wStderr := os.Stderr
+	wStderr := spinnerClearWriter{os.Stderr}
 
 	// Configure Console Handler using charmbracelet/log.
 	// Color support is auto-detected from the output writer (TTY vs non-TTY).
@@ -309,6 +317,7 @@ func Display(ctx context.Context, msg any, args ...any) {
 		// IMPORTANT: Always use ToANSI for stdout to get ANSI colors, regardless of TUI mode
 		// Suppress based on TUIMode
 		if !TUIMode {
+			console.ClearSpinnerLine()
 			fmt.Println(console.ToConsoleANSI(line) + console.CodeReset)
 		}
 	}

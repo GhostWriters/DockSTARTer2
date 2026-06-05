@@ -14,6 +14,9 @@ var (
 
 	// TUIMode indicates whether we're running in TUI mode (always render colors)
 	TUIMode bool
+
+	// LineCharacters indicates whether unicode line/box-drawing characters are enabled.
+	LineCharacters bool
 )
 
 func init() {
@@ -31,6 +34,11 @@ func GetPreferredProfile() colorprofile.Profile {
 // SetPreferredProfile explicitly sets the color profile (useful for testing).
 func SetPreferredProfile(p colorprofile.Profile) {
 	preferredProfile = p
+}
+
+// IsTTY reports whether stderr is a real terminal.
+func IsTTY() bool {
+	return isTTYGlobal
 }
 
 // SetTTY allows forcing the TTY status.

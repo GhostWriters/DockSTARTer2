@@ -28,6 +28,7 @@ var commandDefs = commands.Registry
 func Execute(ctx context.Context, groups []CommandGroup) int {
 	conf := config.LoadAppConfig()
 	_, _ = theme.Load(conf.UI.Theme, "")
+	console.LineCharacters = conf.UI.LineCharacters
 	exitCode := 0
 
 	// Validate override file for operational commands
@@ -270,7 +271,10 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				logger.Error(ctx, "TUI Run Error: %v", err)
 			}
 		} else {
-			if err := task(ctx); err != nil {
+			stopSpinner := console.StartSpinner()
+			err := task(ctx)
+			stopSpinner()
+			if err != nil {
 				exitCode = 1
 				if errors.Is(err, console.ErrUserAborted) {
 					return exitCode // Stop execution immediately on user abort

@@ -114,6 +114,7 @@ func printTableTo(w io.Writer, headers []string, data []string, useLineChars boo
 		if w != nil {
 			fmt.Fprintln(w, line)
 		} else {
+			ClearSpinnerLine()
 			fmt.Println(line)
 		}
 	}
