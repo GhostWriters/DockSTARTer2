@@ -8,6 +8,7 @@ import (
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/update"
 	"fmt"
+	"strings"
 
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
@@ -1184,6 +1185,38 @@ func shouldForwardResult(result any) bool {
 // focusedPanelHelpContext returns the HelpContext for a focused non-screen panel
 // (log panel or header element), or nil so showHelpCmd falls through to the screen/dialog.
 func (m *AppModel) focusedPanelHelpContext() *HelpContext {
+	// Check title bar widget focus on active dialog or screen first.
+	// Find the matching HitRegion by ID suffix so we get the screen-specific help text.
+	widgetHelpFromHits := func(model interface{}) *HelpContext {
+		wh, ok := model.(TitleBarWidgetHelper)
+		if !ok {
+			return nil
+		}
+		suffix := wh.FocusedWidgetID()
+		if suffix == "" {
+			return nil
+		}
+		hrp, ok := model.(HitRegionProvider)
+		if !ok {
+			return nil
+		}
+		for _, r := range hrp.GetHitRegions(0, 0) {
+			if strings.HasSuffix(r.ID, "."+suffix) && r.Help != nil {
+				return r.Help
+			}
+		}
+		return nil
+	}
+	if m.dialog != nil {
+		if h := widgetHelpFromHits(m.dialog); h != nil {
+			return h
+		}
+	} else if m.activeScreen != nil {
+		if h := widgetHelpFromHits(m.activeScreen); h != nil {
+			return h
+		}
+	}
+
 	if m.panelFocused {
 		for _, r := range m.panel.GetHitRegions(0, 0) {
 			if r.Help != nil {
