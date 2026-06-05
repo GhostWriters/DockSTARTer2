@@ -66,7 +66,8 @@ type AppSelectionScreen struct {
 }
 
 func (s *AppSelectionScreen) Init() tea.Cmd {
-	return tea.Batch(s.menu.Init(), s.loadAppSelectItemsCmd())
+	spinCmd := s.menu.SetLoadingText("Loading...")
+	return tea.Batch(s.menu.Init(), spinCmd, s.loadAppSelectItemsCmd())
 }
 func (s *AppSelectionScreen) View() tea.View            { return s.menu.View() }
 func (s *AppSelectionScreen) ViewString() string        { return s.menu.ViewString() }
@@ -197,7 +198,6 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool, connType string) 
 
 	menu.SetHelpLegend(getAppSelectionLegend())
 	menu.SetContextMenuFunc(s.contextMenuHandler)
-	menu.SetLoadingText("Loading…")
 
 	return s
 }

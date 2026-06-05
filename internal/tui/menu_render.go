@@ -333,13 +333,18 @@ func (m *MenuModel) renderVerticalListBlock(ctx StyleContext) string {
 			h = 1
 		}
 		w := m.list.Width()
+		frames := spinnerFramesUnicode
+		if !ctx.LineCharacters {
+			frames = spinnerFramesASCII
+		}
+		frame := frames[m.spinnerFrame%len(frames)]
 		centered := lipgloss.NewStyle().
 			Background(styles.Dialog.GetBackground()).
 			Foreground(styles.DialogTitle.GetForeground()).
 			Width(w).
 			Height(h).
 			Align(lipgloss.Center, lipgloss.Center).
-			Render(m.loadingText)
+			Render(frame + " " + m.loadingText)
 		return ApplyScrollbar(&m.Scroll, centered, 0, h, 0, ctx.LineCharacters, ctx)
 	}
 

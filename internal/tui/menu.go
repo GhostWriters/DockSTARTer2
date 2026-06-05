@@ -1,10 +1,21 @@
 package tui
 
 import (
+	"time"
+
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/atotto/clipboard"
+)
+
+// menuSpinnerTickMsg advances the loading spinner by one frame.
+type menuSpinnerTickMsg struct{ id string }
+
+var (
+	spinnerFramesASCII   = []string{"|", "/", "-", "\\"}
+	spinnerFramesUnicode = []string{"⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"}
+	spinnerFPS           = time.Second / 10
 )
 
 // MenuItem defines an item in a menu
@@ -192,8 +203,9 @@ type MenuModel struct {
 	titleBarWidget  TitleBarWidget
 	titleBarPressed TitleBarWidget
 
-	// loadingText, when non-empty, replaces the list area with a centered message.
-	loadingText string
+	// loadingText, when non-empty, replaces the list area with a centered spinner + message.
+	loadingText  string
+	spinnerFrame int
 }
 
 // TitleBarFocusable is implemented by models whose title bar can receive keyboard focus.
@@ -748,11 +760,23 @@ func (m *MenuModel) SetVariableHeight(variable bool) {
 	m.variableHeight = variable
 }
 
-// SetLoadingText sets a centered message rendered in the list area instead of list items.
-// Set to "" to return to normal list rendering.
-func (m *MenuModel) SetLoadingText(text string) {
+// SetLoadingText sets a centered spinner+message in the list area instead of list items.
+// Returns a tea.Cmd that starts the spinner tick loop. Set to "" to stop.
+func (m *MenuModel) SetLoadingText(text string) tea.Cmd {
 	m.loadingText = text
+	m.spinnerFrame = 0
 	m.InvalidateCache()
+	if text == "" {
+		return nil
+	}
+	return m.spinnerTickCmd()
+}
+
+func (m *MenuModel) spinnerTickCmd() tea.Cmd {
+	id := m.id
+	return tea.Tick(spinnerFPS, func(time.Time) tea.Msg {
+		return menuSpinnerTickMsg{id: id}
+	})
 }
 
 // SetUpdateInterceptor allows setting a custom handler that runs before normal message processing
