@@ -138,6 +138,7 @@ func (h *TagProcessorHandler) Handle(ctx context.Context, r slog.Record) error {
 	// Process based on mode
 	switch h.mode {
 	case "ansi":
+		console.ClearSpinnerLine()
 		msg = console.ToConsoleANSI(msg)
 	case "strip":
 		msg = console.Strip(msg)
