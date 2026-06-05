@@ -111,6 +111,10 @@ func (m *Model) GetContent() string {
 		sb.WriteString(string(l))
 		needNewline = true
 	}
+	// Always end with a trailing newline.
+	if needNewline {
+		sb.WriteString("\n")
+	}
 	return sb.String()
 }
 

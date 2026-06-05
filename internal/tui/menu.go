@@ -191,6 +191,9 @@ type MenuModel struct {
 	titleBarFocused bool
 	titleBarWidget  TitleBarWidget
 	titleBarPressed TitleBarWidget
+
+	// loadingText, when non-empty, replaces the list area with a centered message.
+	loadingText string
 }
 
 // TitleBarFocusable is implemented by models whose title bar can receive keyboard focus.
@@ -728,6 +731,13 @@ func (m *MenuModel) SetItem(index int, item MenuItem) {
 // SetVariableHeight allows the list viewport to expand instead of forcing pagination
 func (m *MenuModel) SetVariableHeight(variable bool) {
 	m.variableHeight = variable
+}
+
+// SetLoadingText sets a centered message rendered in the list area instead of list items.
+// Set to "" to return to normal list rendering.
+func (m *MenuModel) SetLoadingText(text string) {
+	m.loadingText = text
+	m.InvalidateCache()
 }
 
 // SetUpdateInterceptor allows setting a custom handler that runs before normal message processing

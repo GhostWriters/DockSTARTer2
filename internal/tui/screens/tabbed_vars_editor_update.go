@@ -218,7 +218,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "esc":
 			return m, m.EscapeAction()
-		case "ctrl+right", "alt+right": // Next Tab
+		case "ctrl+right", "alt+right", "ctrl+pgdown", "alt+pgdown": // Next Tab
 			if m.focus == envFocusEditor && len(m.tabs) > 1 {
 				m.tabs[m.activeTab].editor.Blur()
 				m.activeTab = (m.activeTab + 1) % len(m.tabs)
@@ -226,7 +226,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.SetSize(m.width, m.height)
 				return m, nil
 			}
-		case "ctrl+left", "alt+left": // Prev Tab
+		case "ctrl+left", "alt+left", "ctrl+pgup", "alt+pgup": // Prev Tab
 			if m.focus == envFocusEditor && len(m.tabs) > 1 {
 				m.tabs[m.activeTab].editor.Blur()
 				m.activeTab--
@@ -454,13 +454,31 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				capturedDefaultLines = tab.defaultLines
 			}
 
+			// Snapshot pre-refresh values to detect which vars the user actually changed.
+			preRefresh, _ := appenv.ListVarsLiteralsData(tab.editor.GetContent())
 			tab.editor.ReformatEnv(tab.editor.DefaultValueFunc, tab.readOnlyVars, msg.preservePendingDeletes, func(currentLines []string) []string {
 				return appenv.FormatLinesCore(ctx, currentLines, capturedDefaultLines, capturedEnvLines, capturedApp, capturedComposeEnvPath)
 			})
-			// Update initialVars so that formatting-only changes from refresh
-			// are not treated as unsaved changes by hasChanges().
+			// Update initialVars only for variables the user had not changed before refresh,
+			// so formatting-only changes don't appear as unsaved edits, but real user edits
+			// remain dirty.
 			refreshed, _ := appenv.ListVarsLiteralsData(tab.editor.GetContent())
-			tab.initialVars = refreshed
+			for k, refreshedVal := range refreshed {
+				preVal, existedBefore := preRefresh[k]
+				initVal, existedInit := tab.initialVars[k]
+				if !existedBefore || !existedInit || preVal == initVal {
+					// Key is new, or user hadn't changed it — absorb the refreshed value.
+					tab.initialVars[k] = refreshedVal
+				}
+				// Otherwise user had edited this var — leave initialVars[k] unchanged so
+				// hasChanges() still detects the diff.
+			}
+			// Remove keys that no longer exist after refresh.
+			for k := range tab.initialVars {
+				if _, exists := refreshed[k]; !exists {
+					delete(tab.initialVars, k)
+				}
+			}
 		}
 		m.SetSize(m.width, m.height)
 		return m, nil

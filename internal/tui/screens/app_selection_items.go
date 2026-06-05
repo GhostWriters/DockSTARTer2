@@ -9,75 +9,118 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	tea "charm.land/bubbletea/v2"
 )
 
-func (s *AppSelectionScreen) refreshItems() {
-	ctx := context.Background()
-	envFile := filepath.Join(s.conf.ComposeDir, constants.EnvFileName)
+// appSelectLoadedMsg carries the result of the async app list load.
+type appSelectLoadedMsg struct {
+	baseApps        []string
+	addedByBase     map[string][]string
+	addedMap        map[string]bool
+	enabledMap      map[string]bool
+	wasEnabledMap   map[string]bool
+	referencedByBase map[string][]string
+	referencedBaseSet map[string]bool
+	envFile         string
+}
 
-	nonDeprecated, err := appenv.ListNonDeprecatedApps(ctx)
-	if err != nil {
-		nonDeprecated = []string{}
-	}
-	added, err := appenv.ListAddedApps(ctx, envFile)
-	if err != nil {
-		added = []string{}
-	}
+// loadAppSelectItemsCmd returns a tea.Cmd that performs all filesystem I/O for
+// the app selection list in a background goroutine.
+func (s *AppSelectionScreen) loadAppSelectItemsCmd() tea.Cmd {
+	conf := s.conf
+	return func() tea.Msg {
+		ctx := context.Background()
+		envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
 
-	baseAppsSet := make(map[string]bool)
-	for _, a := range nonDeprecated {
-		baseAppsSet[appenv.AppNameToBaseAppName(a)] = true
-	}
-	for _, a := range added {
-		baseAppsSet[appenv.AppNameToBaseAppName(a)] = true
-	}
+		nonDeprecated, err := appenv.ListNonDeprecatedApps(ctx)
+		if err != nil {
+			nonDeprecated = []string{}
+		}
+		added, err := appenv.ListAddedApps(ctx, envFile)
+		if err != nil {
+			added = []string{}
+		}
 
-	addedByBase := make(map[string][]string)
-	for _, a := range added {
-		base := appenv.AppNameToBaseAppName(a)
-		addedByBase[base] = append(addedByBase[base], a)
-	}
+		baseAppsSet := make(map[string]bool)
+		for _, a := range nonDeprecated {
+			baseAppsSet[appenv.AppNameToBaseAppName(a)] = true
+		}
+		for _, a := range added {
+			baseAppsSet[appenv.AppNameToBaseAppName(a)] = true
+		}
 
-	enabledApps, err := appenv.ListEnabledApps(s.conf)
-	if err != nil {
-		enabledApps = []string{}
-	}
-	enabledMap := make(map[string]bool)
-	for _, a := range enabledApps {
-		enabledMap[a] = true
-	}
-	wasEnabledMap := enabledMap
+		addedByBase := make(map[string][]string)
+		for _, a := range added {
+			base := appenv.AppNameToBaseAppName(a)
+			addedByBase[base] = append(addedByBase[base], a)
+		}
 
-	addedMap := make(map[string]bool)
-	for _, a := range added {
-		addedMap[a] = true
-	}
+		enabledApps, err := appenv.ListEnabledApps(conf)
+		if err != nil {
+			enabledApps = []string{}
+		}
+		enabledMap := make(map[string]bool)
+		for _, a := range enabledApps {
+			enabledMap[a] = true
+		}
+		wasEnabledMap := enabledMap
 
-	referenced, err := appenv.ListReferencedApps(ctx, s.conf)
-	if err != nil {
-		referenced = []string{}
-	}
-	referencedByBase := make(map[string][]string)
-	referencedBaseSet := make(map[string]bool)
-	for _, r := range referenced {
-		base := appenv.AppNameToBaseAppName(r)
-		if base == r {
-			if !addedMap[r] {
-				referencedBaseSet[r] = true
+		addedMap := make(map[string]bool)
+		for _, a := range added {
+			addedMap[a] = true
+		}
+
+		referenced, err := appenv.ListReferencedApps(ctx, conf)
+		if err != nil {
+			referenced = []string{}
+		}
+		referencedByBase := make(map[string][]string)
+		referencedBaseSet := make(map[string]bool)
+		for _, r := range referenced {
+			base := appenv.AppNameToBaseAppName(r)
+			if base == r {
+				if !addedMap[r] {
+					referencedBaseSet[r] = true
+				}
+				continue
 			}
-			continue
+			if addedMap[r] {
+				continue
+			}
+			referencedByBase[base] = append(referencedByBase[base], r)
 		}
-		if addedMap[r] {
-			continue
-		}
-		referencedByBase[base] = append(referencedByBase[base], r)
-	}
 
-	var baseApps []string
-	for base := range baseAppsSet {
-		baseApps = append(baseApps, base)
+		var baseApps []string
+		for base := range baseAppsSet {
+			baseApps = append(baseApps, base)
+		}
+		slices.Sort(baseApps)
+
+		return appSelectLoadedMsg{
+			baseApps:          baseApps,
+			addedByBase:       addedByBase,
+			addedMap:          addedMap,
+			enabledMap:        enabledMap,
+			wasEnabledMap:     wasEnabledMap,
+			referencedByBase:  referencedByBase,
+			referencedBaseSet: referencedBaseSet,
+			envFile:           envFile,
+		}
 	}
-	slices.Sort(baseApps)
+}
+
+// applyLoadedItems populates the menu from data returned by loadAppSelectItemsCmd.
+func (s *AppSelectionScreen) applyLoadedItems(data appSelectLoadedMsg) {
+	ctx := context.Background()
+	baseApps := data.baseApps
+	addedByBase := data.addedByBase
+	addedMap := data.addedMap
+	enabledMap := data.enabledMap
+	wasEnabledMap := data.wasEnabledMap
+	referencedByBase := data.referencedByBase
+	referencedBaseSet := data.referencedBaseSet
+	envFile := data.envFile
 
 	var items []tui.MenuItem
 	var lastLetter string
