@@ -17,26 +17,26 @@ func renderCheckbox(isRadio, checked, lineChars bool, cbStyle lipgloss.Style) st
 	var cb string
 	if lineChars {
 		if isRadio {
-			cb = radioUnselected
+			cb = radioOff
 			if checked {
-				cb = radioSelected
+				cb = radioOn
 			}
 		} else {
-			cb = checkUnselected
+			cb = checkOff
 			if checked {
-				cb = checkSelected
+				cb = checkOn
 			}
 		}
 	} else {
 		if isRadio {
-			cb = radioUnselectedAscii
+			cb = radioOffAscii
 			if checked {
-				cb = radioSelectedAscii
+				cb = radioOnAscii
 			}
 		} else {
-			cb = checkUnselectedAscii
+			cb = checkOffAscii
 			if checked {
-				cb = checkSelectedAscii
+				cb = checkOnAscii
 			}
 		}
 	}

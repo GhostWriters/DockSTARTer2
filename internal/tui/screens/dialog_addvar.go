@@ -709,7 +709,7 @@ func (m *addVarDialogModel) ViewString() string {
 	sInnerW := contentW - 2 // inner width of each bordered section
 
 	bgStyle := theme.ThemeSemanticStyle("{{|Dialog|}}")
-	selectedStyle := theme.ThemeSemanticStyle("{{|ItemSelected|}}")
+	selectedStyle := theme.ThemeSemanticStyle("{{|ItemFocused|}}")
 	subLabelStyle := theme.ThemeSemanticStyle("{{|HelpItem|}}")
 	sepChar := "─"
 	if !ctx.LineCharacters {

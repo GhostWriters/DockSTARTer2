@@ -197,19 +197,19 @@ type Styles struct {
 
 	// List items
 	ItemNormal   lipgloss.Style
-	ItemSelected lipgloss.Style
+	ItemFocused lipgloss.Style
 
 	// Tags (menu item labels)
 	TagNormal      lipgloss.Style
-	TagSelected    lipgloss.Style
+	TagFocused    lipgloss.Style
 	TagKey         lipgloss.Style // First letter highlight
-	TagKeySelected lipgloss.Style
+	TagKeyFocused lipgloss.Style
 
 	// Header
 	HeaderBG           lipgloss.Style
 	StatusBar          lipgloss.Style
 	StatusBarBorder    lipgloss.Style
-	StatusBarSelected  lipgloss.Style
+	StatusBarFocused  lipgloss.Style
 
 	// Help line
 	HelpLine lipgloss.Style
@@ -227,7 +227,7 @@ type Styles struct {
 	PanelTitleAlign   string
 
 	// Option value (dropdown/inline value in flow menus)
-	OptionValueSelected lipgloss.Style
+	OptionValueFocused lipgloss.Style
 
 	// Semantic styles derived from theme tags
 	StatusSuccess lipgloss.Style
@@ -269,11 +269,11 @@ type StyleContext struct {
 	ButtonKeyActive        lipgloss.Style
 	ButtonKeyInactive      lipgloss.Style
 	ItemNormal             lipgloss.Style
-	ItemSelected        lipgloss.Style
+	ItemFocused        lipgloss.Style
 	TagNormal           lipgloss.Style
-	TagSelected         lipgloss.Style
+	TagFocused         lipgloss.Style
 	TagKey              lipgloss.Style
-	TagKeySelected      lipgloss.Style
+	TagKeyFocused      lipgloss.Style
 	Shadow              lipgloss.Style
 	ShadowColor         color.Color
 	ShadowLevel         int
@@ -281,8 +281,8 @@ type StyleContext struct {
 	StatusSuccess       lipgloss.Style
 	StatusWarn          lipgloss.Style
 	Console             lipgloss.Style
-	OptionValueSelected lipgloss.Style
-	StatusBarSelected   lipgloss.Style
+	OptionValueFocused lipgloss.Style
+	StatusBarFocused   lipgloss.Style
 	ConsoleTitleColor   color.Color
 	DialogTitleAlign    string
 	SubmenuTitleAlign   string
@@ -331,11 +331,11 @@ func GetActiveContext() StyleContext {
 		ButtonKeyActive:        currentStyles.ButtonKeyActive,
 		ButtonKeyInactive:      currentStyles.ButtonKeyInactive,
 		ItemNormal:             currentStyles.ItemNormal,
-		ItemSelected:        currentStyles.ItemSelected,
+		ItemFocused:        currentStyles.ItemFocused,
 		TagNormal:           currentStyles.TagNormal,
-		TagSelected:         currentStyles.TagSelected,
+		TagFocused:         currentStyles.TagFocused,
 		TagKey:              currentStyles.TagKey,
-		TagKeySelected:      currentStyles.TagKeySelected,
+		TagKeyFocused:      currentStyles.TagKeyFocused,
 		Shadow:              currentStyles.Shadow,
 		ShadowColor:         currentStyles.ShadowColor,
 		ShadowLevel:         currentConfig.UI.ShadowLevel,
@@ -343,8 +343,8 @@ func GetActiveContext() StyleContext {
 		StatusSuccess:       currentStyles.StatusSuccess,
 		StatusWarn:          currentStyles.StatusWarn,
 		Console:             currentStyles.Console,
-		OptionValueSelected: currentStyles.OptionValueSelected,
-		StatusBarSelected:   currentStyles.StatusBarSelected,
+		OptionValueFocused: currentStyles.OptionValueFocused,
+		StatusBarFocused:   currentStyles.StatusBarFocused,
 		ConsoleTitleColor:   currentStyles.ConsoleTitleColor,
 		DialogTitleAlign:    currentStyles.DialogTitleAlign,
 		SubmenuTitleAlign:   currentStyles.SubmenuTitleAlign,
@@ -579,14 +579,14 @@ func InitStyles(cfg config.AppConfig) {
 		currentStyles.ItemNormal = currentStyles.ItemNormal.Background(currentStyles.Dialog.GetBackground())
 	}
 
-	currentStyles.ItemSelected = SemanticRawStyle("ItemSelected")
-	if _, noBG := currentStyles.ItemSelected.GetBackground().(lipgloss.NoColor); noBG {
-		currentStyles.ItemSelected = currentStyles.ItemSelected.Background(currentStyles.Dialog.GetBackground())
+	currentStyles.ItemFocused = SemanticRawStyle("ItemFocused")
+	if _, noBG := currentStyles.ItemFocused.GetBackground().(lipgloss.NoColor); noBG {
+		currentStyles.ItemFocused = currentStyles.ItemFocused.Background(currentStyles.Dialog.GetBackground())
 	}
 
-	currentStyles.OptionValueSelected = SemanticRawStyle("OptionValueSelected")
-	if _, noBG := currentStyles.OptionValueSelected.GetBackground().(lipgloss.NoColor); noBG {
-		currentStyles.OptionValueSelected = currentStyles.OptionValueSelected.Background(currentStyles.Dialog.GetBackground())
+	currentStyles.OptionValueFocused = SemanticRawStyle("OptionValueFocused")
+	if _, noBG := currentStyles.OptionValueFocused.GetBackground().(lipgloss.NoColor); noBG {
+		currentStyles.OptionValueFocused = currentStyles.OptionValueFocused.Background(currentStyles.Dialog.GetBackground())
 	}
 
 	// Tags
@@ -595,9 +595,9 @@ func InitStyles(cfg config.AppConfig) {
 		currentStyles.TagNormal = currentStyles.TagNormal.Background(currentStyles.Dialog.GetBackground())
 	}
 
-	currentStyles.TagSelected = SemanticRawStyle("TagSelected")
-	if _, noBG := currentStyles.TagSelected.GetBackground().(lipgloss.NoColor); noBG {
-		currentStyles.TagSelected = currentStyles.TagSelected.Background(currentStyles.Dialog.GetBackground())
+	currentStyles.TagFocused = SemanticRawStyle("TagFocused")
+	if _, noBG := currentStyles.TagFocused.GetBackground().(lipgloss.NoColor); noBG {
+		currentStyles.TagFocused = currentStyles.TagFocused.Background(currentStyles.Dialog.GetBackground())
 	}
 
 	currentStyles.TagKey = SemanticRawStyle("TagKey")
@@ -605,14 +605,14 @@ func InitStyles(cfg config.AppConfig) {
 		currentStyles.TagKey = currentStyles.TagKey.Background(currentStyles.Dialog.GetBackground())
 	}
 
-	currentStyles.TagKeySelected = SemanticRawStyle("TagKeySelected")
-	if _, noBG := currentStyles.TagKeySelected.GetBackground().(lipgloss.NoColor); noBG {
-		currentStyles.TagKeySelected = currentStyles.TagKeySelected.Background(currentStyles.Dialog.GetBackground())
+	currentStyles.TagKeyFocused = SemanticRawStyle("TagKeyFocused")
+	if _, noBG := currentStyles.TagKeyFocused.GetBackground().(lipgloss.NoColor); noBG {
+		currentStyles.TagKeyFocused = currentStyles.TagKeyFocused.Background(currentStyles.Dialog.GetBackground())
 	}
 
 	// Header / Status Bar
 	currentStyles.StatusBar = SemanticRawStyle("StatusBar")
-	currentStyles.StatusBarSelected = SemanticRawStyle("StatusBarSelected")
+	currentStyles.StatusBarFocused = SemanticRawStyle("StatusBarFocused")
 	currentStyles.StatusBarBorder = SemanticRawStyle("StatusBarBorder")
 	{
 		// Fallback for themes that don't define StatusBarBorder: use full StatusBar style.

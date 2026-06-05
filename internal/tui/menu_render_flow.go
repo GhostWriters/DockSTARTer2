@@ -43,9 +43,9 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 		checkboxStyle := theme.ThemeSemanticStyle("{{|Checkbox|}}")
 
 		if isSelected {
-			tagStyle = theme.ThemeSemanticStyle("{{|TagSelected|}}")
-			keyStyle = theme.ThemeSemanticStyle("{{|TagKeySelected|}}")
-			checkboxStyle = theme.ThemeSemanticStyle("{{|CheckboxSelected|}}")
+			tagStyle = theme.ThemeSemanticStyle("{{|TagFocused|}}")
+			keyStyle = theme.ThemeSemanticStyle("{{|TagKeyFocused|}}")
+			checkboxStyle = theme.ThemeSemanticStyle("{{|CheckboxFocused|}}")
 		}
 
 		neutralStyle := lipgloss.NewStyle().Background(dialogBG)
@@ -94,7 +94,7 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 		// Neutral space (dialogBG) breaks the selection background color in the gap only.
 		if !item.IsCheckbox && !item.IsRadioButton && item.Desc != "" {
 			if isSelected {
-				itemContent += neutralStyle.Render(" ") + ctx.OptionValueSelected.Render(GetPlainText(item.Desc))
+				itemContent += neutralStyle.Render(" ") + ctx.OptionValueFocused.Render(GetPlainText(item.Desc))
 			} else {
 				// Neutral space breaks the tag background before the value color starts.
 				itemContent += neutralStyle.Render(" ") + RenderThemeText(item.Desc, neutralStyle)
@@ -163,15 +163,15 @@ func (m *MenuModel) GetFlowHeight(width int) int {
 			glyph := ""
 			if ctx.LineCharacters {
 				if item.IsRadioButton {
-					glyph = radioUnselected + " "
+					glyph = radioOff + " "
 				} else {
-					glyph = checkUnselected + " "
+					glyph = checkOff + " "
 				}
 			} else {
 				if item.IsRadioButton {
-					glyph = radioUnselectedAscii
+					glyph = radioOffAscii
 				} else {
-					glyph = checkUnselectedAscii
+					glyph = checkOffAscii
 				}
 			}
 			cbWidth = lipgloss.Width(glyph)

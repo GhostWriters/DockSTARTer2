@@ -198,15 +198,15 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 				var glyph string
 				if ctx.LineCharacters {
 					if item.IsRadioButton {
-						glyph = radioUnselected + " "
+						glyph = radioOff + " "
 					} else {
-						glyph = checkUnselected + " "
+						glyph = checkOff + " "
 					}
 				} else {
 					if item.IsRadioButton {
-						glyph = radioUnselectedAscii
+						glyph = radioOffAscii
 					} else {
-						glyph = checkUnselectedAscii
+						glyph = checkOffAscii
 					}
 				}
 				cbWidth = lipgloss.Width(glyph)

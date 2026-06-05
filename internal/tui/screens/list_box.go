@@ -22,7 +22,7 @@ func RenderTwoColumnRow(label, value string, cursor, focused bool, maxLabelW, ma
 	neutralStyle := lipgloss.NewStyle().Background(bgStyle.GetBackground())
 	valStyle := tui.GetStyles().ItemNormal.Background(bgStyle.GetBackground())
 	if focused {
-		valStyle = tui.GetStyles().ItemSelected
+		valStyle = tui.GetStyles().ItemFocused
 	}
 
 	cursorStr := " "

@@ -17,11 +17,11 @@ import (
 func getAppSelectionLegend() string {
 	ctx := tui.GetActiveContext()
 	l, r := ">", "<"
-	cbChecked, cbUnchecked := "[{{|TagSelected|}}x{{[-]}}]", "[{{|TagSelected|}} {{[-]}}]"
+	cbChecked, cbUnchecked := "[{{|TagFocused|}}x{{[-]}}]", "[{{|TagFocused|}} {{[-]}}]"
 	if ctx.LineCharacters {
 		l, r = "▸", "◂"
-		cbChecked = "{{|TagSelected|}}" + glyphs.CheckSelected + "{{[-]}}"
-		cbUnchecked = "{{|TagSelected|}}" + glyphs.CheckUnselected + "{{[-]}}"
+		cbChecked = "{{|TagFocused|}}" + glyphs.CheckOn + "{{[-]}}"
+		cbUnchecked = "{{|TagFocused|}}" + glyphs.CheckOff + "{{[-]}}"
 	}
 
 	// Line 1: Gutter markers

@@ -479,9 +479,9 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Apply theme-aware env-specific styles
 			editorStyles := m.tabs[i].editor.Styles()
 			editorStyles.Focused.LineNumber = tui.SemanticRawStyle("LineNumber")
-			editorStyles.Focused.LineNumberSelected = tui.SemanticRawStyle("LineNumberSelected")
+			editorStyles.Focused.LineNumberFocused = tui.SemanticRawStyle("LineNumberFocused")
 			editorStyles.Focused.LineNumberModified = tui.SemanticRawStyle("LineNumberModified")
-			editorStyles.Focused.LineNumberModifiedSelected = tui.SemanticRawStyle("LineNumberModifiedSelected")
+			editorStyles.Focused.LineNumberModifiedFocused = tui.SemanticRawStyle("LineNumberModifiedFocused")
 			editorStyles.Focused.InvalidText = tui.SemanticRawStyle("EnvInvalid")
 			editorStyles.Focused.DuplicateText = tui.SemanticRawStyle("EnvDuplicate")
 			editorStyles.Focused.BuiltinText = tui.SemanticRawStyle("EnvBuiltin")
@@ -496,9 +496,9 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			editorStyles.Cursor.Color = tui.TextCursorColor()
 
 			editorStyles.Blurred.LineNumber = tui.SemanticRawStyle("LineNumber")
-			editorStyles.Blurred.LineNumberSelected = tui.SemanticRawStyle("LineNumberSelected")
+			editorStyles.Blurred.LineNumberFocused = tui.SemanticRawStyle("LineNumberFocused")
 			editorStyles.Blurred.LineNumberModified = tui.SemanticRawStyle("LineNumberModified")
-			editorStyles.Blurred.LineNumberModifiedSelected = tui.SemanticRawStyle("LineNumberModifiedSelected")
+			editorStyles.Blurred.LineNumberModifiedFocused = tui.SemanticRawStyle("LineNumberModifiedFocused")
 			editorStyles.Blurred.InvalidText = tui.SemanticRawStyle("EnvInvalid")
 			editorStyles.Blurred.DuplicateText = tui.SemanticRawStyle("EnvDuplicate")
 			editorStyles.Blurred.BuiltinText = tui.SemanticRawStyle("EnvBuiltin")
