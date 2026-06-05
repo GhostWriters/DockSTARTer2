@@ -61,7 +61,7 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 				logger.Error(ctx, "{{|ApplicationName|}}%s{{[-]}} channel '{{|Branch|}}%s{{[-]}}' does not exist on origin.", version.ApplicationName, requestedVersion)
 				return fmt.Errorf("channel '%s' does not exist", requestedVersion)
 			}
-			// Current channel no longer has releases
+			// No tags at all for this channel — it's genuinely gone.
 			logger.Warn(ctx, []string{
 				fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} channel '{{|Branch|}}%s{{[-]}}' appears to no longer exist.", version.ApplicationName, requestedVersion),
 				fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} is currently on version '{{|Version|}}%s{{[-]}}'.", version.ApplicationName, version.Version),
@@ -107,11 +107,9 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 			logger.Error(ctx, "{{|ApplicationName|}}%s{{[-]}} channel '{{|Branch|}}%s{{[-]}}' does not exist on origin.", version.ApplicationName, requestedVersion)
 			return fmt.Errorf("channel '%s' does not exist", requestedVersion)
 		}
-		logger.Warn(ctx, []string{
-			fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} channel '{{|Branch|}}%s{{[-]}}' appears to no longer exist.", version.ApplicationName, requestedVersion),
-			fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} is currently on version '{{|Version|}}%s{{[-]}}'.", version.ApplicationName, version.Version),
-			fmt.Sprintf("Run '{{|UserCommand|}}%s -u main{{[-]}}' to update to the latest stable release.", version.CommandName),
-		})
+		// Tag exists but release asset not yet published — mid-publish. Treat as up to date.
+		logger.Notice(ctx, "{{|ApplicationName|}}%s{{[-]}} is already up to date on channel '{{|Branch|}}%s{{[-]}}'.", version.ApplicationName, requestedVersion)
+		logger.Notice(ctx, "Current version is '{{|Version|}}%s{{[-]}}'.", version.Version)
 		return nil
 	}
 
