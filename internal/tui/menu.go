@@ -217,6 +217,21 @@ func (m *MenuModel) BlurTitleBar() {
 
 func (m *MenuModel) TitleBarFocused() bool { return m.titleBarFocused }
 
+func (m *MenuModel) FocusedWidgetID() string {
+	if !m.titleBarFocused || m.titleBarWidget == TitleBarWidgetNone {
+		return ""
+	}
+	switch m.titleBarWidget {
+	case TitleBarWidgetClose:
+		return IDTitleWidgetClose
+	case TitleBarWidgetHelp:
+		return IDTitleWidgetHelp
+	case TitleBarWidgetRefresh:
+		return IDTitleWidgetRefresh
+	}
+	return ""
+}
+
 // SetLockedByOthers updates the Locked status of all destructive menu items.
 func (m *MenuModel) SetLockedByOthers(locked bool) {
 	changed := false

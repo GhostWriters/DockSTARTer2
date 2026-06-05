@@ -367,6 +367,29 @@ func TitleBarWidgetY(offsetY int, largeTitleBar bool) int {
 	return offsetY
 }
 
+// TitleBarWidgetHelper is implemented by models that can report the ID suffix of their
+// currently focused title bar widget. Used by F1 to find the matching HitRegion help.
+type TitleBarWidgetHelper interface {
+	FocusedWidgetID() string
+}
+
+// FocusedWidgetID returns the hit-region ID suffix for the currently focused widget
+// (e.g. IDTitleWidgetClose), or "" if no widget is focused.
+func (t *TitleBarFocus) FocusedWidgetID() string {
+	if !t.tbFocused || t.tbWidget == TitleBarWidgetNone {
+		return ""
+	}
+	switch t.tbWidget {
+	case TitleBarWidgetRefresh:
+		return IDTitleWidgetRefresh
+	case TitleBarWidgetHelp:
+		return IDTitleWidgetHelp
+	case TitleBarWidgetClose:
+		return IDTitleWidgetClose
+	}
+	return ""
+}
+
 // IsTitleWidgetID reports whether the hit region ID suffix matches any title bar widget.
 func IsTitleWidgetID(id string) bool {
 	return strings.HasSuffix(id, "."+IDTitleWidgetHelp) ||
