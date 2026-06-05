@@ -82,6 +82,7 @@ type UIConfig struct {
 	Shadow            bool   `toml:"shadow"`
 	ShadowLevel       int    `toml:"shadow_level"` // 0=off, 1=light(░), 2=medium(▒), 3=dark(▓), 4=solid(█)
 	Scrollbar         bool   `toml:"scrollbar"`
+	Spinner           bool   `toml:"spinner"`
 	BorderColor       int    `toml:"border_color"`        // 1=Border, 2=Border2, 3=Both
 	DialogTitleAlign  string `toml:"dialog_title_align"`  // "center" or "left"
 	SubmenuTitleAlign string `toml:"submenu_title_align"` // "center" or "left"
@@ -398,6 +399,8 @@ func UnmarshalRobust(data []byte, v any) (map[string]bool, error) {
 				present["LineCharacters"] = true
 			case "ui.scrollbar":
 				present["Scrollbar"] = true
+			case "ui.spinner":
+				present["Spinner"] = true
 			case "ui.shadow":
 				present["Shadow"] = true
 			case "ui.shadow_level":
@@ -491,6 +494,11 @@ func UnmarshalLegacyIni(data []byte, v *AppConfig) (map[string]bool, error) {
 	} else if val, ok := raw["Scrollbars"]; ok {
 		v.UI.Scrollbar = isTrue(val)
 		present["Scrollbar"] = true
+	}
+
+	if val, ok := raw["Spinner"]; ok {
+		v.UI.Spinner = isTrue(val)
+		present["Spinner"] = true
 	}
 
 	if val, ok := raw["Shadow"]; ok {
@@ -652,7 +660,7 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 
 	keys := []string{
 		"ConfigFolder", "ComposeFolder",
-		"Theme", "Borders", "LargeButtons", "LargeTitleBars", "LineCharacters", "Scrollbar", "Shadow", "ShadowLevel", "BorderColor",
+		"Theme", "Borders", "LargeButtons", "LargeTitleBars", "LineCharacters", "Scrollbar", "Spinner", "Shadow", "ShadowLevel", "BorderColor",
 		"DialogTitleAlign", "SubmenuTitleAlign", "PanelTitleAlign", "PanelLocal", "PanelRemote",
 		"SSHPort", "WebPort", "AuthMode",
 	}
@@ -665,6 +673,7 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 		"LargeTitleBars":    "Large Title Bars",
 		"LineCharacters":    "Line Characters",
 		"Scrollbar":         "Scrollbar",
+		"Spinner":           "Spinner",
 		"Shadow":            "Shadow",
 		"ShadowLevel":       "Shadow Level",
 		"BorderColor":       "Border Color",
@@ -717,6 +726,8 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 			value = boolToYesNo(conf.UI.LineCharacters)
 		case "Scrollbar":
 			value = boolToYesNo(conf.UI.Scrollbar)
+		case "Spinner":
+			value = boolToYesNo(conf.UI.Spinner)
 		case "Shadow":
 			value = boolToYesNo(conf.UI.Shadow)
 		case "ShadowLevel":

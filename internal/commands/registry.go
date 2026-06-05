@@ -107,6 +107,8 @@ var Registry = map[string]Def{
 	"--theme-shadow-level":       {Title: "Set Shadow Level", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--theme-scrollbar":          {Title: "Turned On Scrollbars", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--theme-no-scrollbar":       {Title: "Turned Off Scrollbars", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-spinner":           {Title: "Turned On CLI Spinner", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-no-spinner":        {Title: "Turned Off CLI Spinner", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--theme-lines":              {Title: "Turned On Line Drawing", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--theme-no-lines":           {Title: "Turned Off Line Drawing", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--theme-line":               {Title: "Turned On Line Drawing", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},

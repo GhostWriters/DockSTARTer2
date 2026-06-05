@@ -17,6 +17,9 @@ var (
 
 	// LineCharacters indicates whether unicode line/box-drawing characters are enabled.
 	LineCharacters bool
+
+	// SpinnerEnabled controls whether the CLI spinner is shown during tasks.
+	SpinnerEnabled bool
 )
 
 func init() {

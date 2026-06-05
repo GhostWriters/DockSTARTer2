@@ -428,6 +428,7 @@ type ThemeDefaults struct {
 	Shadow            *bool   `toml:"shadow"`
 	ShadowLevel       *int    `toml:"shadow_level"`
 	Scrollbar         *bool   `toml:"scrollbar"`
+	Spinner           *bool   `toml:"spinner"`
 	BorderColor       *int    `toml:"border_color"`
 	DialogTitleAlign  *string `toml:"dialog_title_align"`
 	SubmenuTitleAlign *string `toml:"submenu_title_align"`
@@ -591,6 +592,10 @@ func ApplyThemeDefaults(conf *config.AppConfig, defaults ThemeDefaults) map[stri
 	if defaults.Scrollbar != nil {
 		conf.UI.Scrollbar = *defaults.Scrollbar
 		applied["Scrollbar"] = fmt.Sprintf("%v", conf.UI.Scrollbar)
+	}
+	if defaults.Spinner != nil {
+		conf.UI.Spinner = *defaults.Spinner
+		applied["Spinner"] = fmt.Sprintf("%v", conf.UI.Spinner)
 	}
 	if defaults.BorderColor != nil {
 		conf.UI.BorderColor = *defaults.BorderColor

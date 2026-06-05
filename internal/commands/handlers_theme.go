@@ -189,6 +189,10 @@ func HandleThemeSettings(ctx context.Context, group *CommandGroup) error {
 		conf.UI.Scrollbar = true
 	case "--theme-no-scrollbar":
 		conf.UI.Scrollbar = false
+	case "--theme-spinner":
+		conf.UI.Spinner = true
+	case "--theme-no-spinner":
+		conf.UI.Spinner = false
 	case "--theme-border-color":
 		if len(group.Args) > 0 {
 			switch group.Args[0] {
