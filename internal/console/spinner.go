@@ -71,7 +71,7 @@ func StartSpinner() func() {
 			case <-time.After(cliSpinnerFPS):
 				activeSpinner.mu.Lock()
 				if !activeSpinner.paused {
-					fmt.Fprintf(os.Stderr, "\r%s ", frames[frame%len(frames)])
+					fmt.Fprintf(os.Stderr, "\033[?25l\r%s\033[?25h", frames[frame%len(frames)])
 					activeSpinner.visible = true
 				}
 				activeSpinner.mu.Unlock()
