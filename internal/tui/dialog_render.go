@@ -16,10 +16,11 @@ const LargeTitleBarOverhead = 2
 // TitleBarState carries the state needed to render title bar widgets ([?]/[×]).
 // The zero value means "no widgets shown".
 type TitleBarState struct {
-	Show         bool           // Whether to render the title bar widgets
-	Focused      bool           // Whether the title bar has keyboard focus
-	ActiveWidget TitleBarWidget // Which widget has focus
-	Widgets      []TitleBarWidget // Ordered widget set; nil means defaultWidgets
+	Show          bool             // Whether to render the title bar widgets
+	Focused       bool             // Whether the title bar has keyboard focus
+	ActiveWidget  TitleBarWidget   // Which widget has focus
+	PressedWidget TitleBarWidget   // Which widget is currently pressed (click flash)
+	Widgets       []TitleBarWidget // Ordered widget set; nil means defaultWidgets
 }
 
 func (s TitleBarState) activeWidgets() []TitleBarWidget {
@@ -105,7 +106,7 @@ func renderLargeTitleRow(rawTitle string, actualWidth int, focused bool, showInd
 	renderedWidget := ""
 	rightWidgetWidth := 0
 	if tbs.Show {
-		rawWidget := buildLargeTitleBarWidgets(tbs.Focused, tbs.ActiveWidget, tbs.activeWidgets(), ctx)
+		rawWidget := buildLargeTitleBarWidgets(tbs.Focused, tbs.ActiveWidget, tbs.PressedWidget, tbs.activeWidgets(), ctx)
 		renderedWidget = RenderThemeTextCtx(rawWidget, titleCtx)
 		rightWidgetWidth = lipgloss.Width(renderedWidget)
 	}
@@ -480,7 +481,7 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 			// Small titlebar: build small-style widgets from tbsState.
 			rightWidget := ""
 			if tbsState.Show {
-				rightWidget = buildDialogTitleWidgets(tbsState.Focused, tbsState.ActiveWidget, tbsState.activeWidgets(), ctx)
+				rightWidget = buildDialogTitleWidgets(tbsState.Focused, tbsState.ActiveWidget, tbsState.PressedWidget, tbsState.activeWidgets(), ctx)
 			}
 			rightWidgetWidth := WidthWithoutZones(rightWidget)
 			if rightWidget != "" {
@@ -644,7 +645,7 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 		// Small titlebar: build small-style widgets from tbs.
 		rightWidget := ""
 		if tbs.Show {
-			rightWidget = buildDialogTitleWidgets(tbs.Focused, tbs.ActiveWidget, tbs.activeWidgets(), ctx)
+			rightWidget = buildDialogTitleWidgets(tbs.Focused, tbs.ActiveWidget, tbs.PressedWidget, tbs.activeWidgets(), ctx)
 		}
 		result.WriteString(borderStyleLight.Render(border.TopLeft))
 		if title == "" {

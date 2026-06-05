@@ -18,7 +18,7 @@ func (m *ContextMenuModel) ViewString() string {
 	ctx := GetActiveContext()
 	bgStyle := theme.ThemeSemanticStyle("{{|Dialog|}}")
 	normalStyle := theme.ThemeSemanticStyle("{{|Item|}}")
-	selectedStyle := theme.ThemeSemanticStyle("{{|ItemSelected|}}")
+	selectedStyle := theme.ThemeSemanticStyle("{{|ItemFocused|}}")
 	subLabelStyle := theme.ThemeSemanticStyle("{{|HelpItem|}}")
 	disabledStyle := normalStyle.Faint(true)
 

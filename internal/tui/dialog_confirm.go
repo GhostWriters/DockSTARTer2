@@ -59,6 +59,10 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return func() tea.Msg { return m.onResult(result) }
 	}
 
+	if m.HandleWidgetClearPress(msg) {
+		return m, nil
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -213,7 +217,7 @@ func (m *confirmDialogModel) ViewString() string {
 
 	ctx2 := GetActiveContext()
 	ctx2.LargeTitleBars = m.layout.LargeTitleBar
-	return renderDialogWithTypeAndWidgets(m.title, fullContent, m.focused || m.tbFocused, 0, DialogTypeConfirm, ctx2, TitleBarState{Show: true, Focused: m.tbFocused, ActiveWidget: m.tbWidget})
+	return renderDialogWithTypeAndWidgets(m.title, fullContent, m.focused || m.tbFocused, 0, DialogTypeConfirm, ctx2, TitleBarState{Show: true, Focused: m.tbFocused, ActiveWidget: m.tbWidget, PressedWidget: m.tbPressed})
 }
 
 // View implements tea.Model

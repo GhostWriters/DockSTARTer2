@@ -74,9 +74,8 @@ type PanelModel struct {
 	historyIdx   int      // -1 = new command; >=0 = navigating history
 	historyDraft string   // saved in-progress text when navigating up
 
-	// Title bar focus state (for keyboard resize)
-	titleBarFocused bool
-	titleBarWidget  int // panelWidgetUp or panelWidgetDn
+	// Title bar focus state (for keyboard resize and press flash)
+	TitleBarFocus
 
 	// Running console command state
 	consoleScanner       *bufio.Scanner
@@ -94,8 +93,8 @@ type PanelModel struct {
 }
 
 const (
-	panelWidgetUp = 1
-	panelWidgetDn = 2
+	panelWidgetUp = TitleBarWidgetRefresh // reuses enum slot; panel has no Refresh action
+	panelWidgetDn = TitleBarWidgetClose   // reuses enum slot; panel has no Close action
 )
 
 // applyInputStyles updates the sinput colours from the current theme.

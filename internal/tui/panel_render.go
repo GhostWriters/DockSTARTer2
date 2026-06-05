@@ -143,11 +143,15 @@ func (m PanelModel) ViewString() string {
 	rightSuffix := ""
 	if m.expanded {
 		upTag, dnTag := "ResizeUpIconInactive", "ResizeDnIconInactive"
-		if m.titleBarFocused {
-			if m.titleBarWidget == panelWidgetUp {
-				upTag = "IconActive"
+		if m.PressedWidget() == panelWidgetUp {
+			upTag = "IconPressed"
+		} else if m.PressedWidget() == panelWidgetDn {
+			dnTag = "IconPressed"
+		} else if m.TitleBarFocused() {
+			if m.ActiveWidget() == panelWidgetUp {
+				upTag = "IconFocused"
 			} else {
-				dnTag = "IconActive"
+				dnTag = "IconFocused"
 			}
 		}
 		iconStr := lineChar +
@@ -159,7 +163,7 @@ func (m PanelModel) ViewString() string {
 		rightSuffix = RenderThemeText(iconStr, baseStyle)
 	}
 
-	return RenderTopBorderBoxCtx(title, rightTitle, rightSuffix, combined, m.width, m.titleBarFocused, consoleTitleStyle, consoleBorderStyle, ctx)
+	return RenderTopBorderBoxCtx(title, rightTitle, rightSuffix, combined, m.width, m.TitleBarFocused(), consoleTitleStyle, consoleBorderStyle, ctx)
 }
 
 // Layers returns a single layer with the panel content for visual compositing.

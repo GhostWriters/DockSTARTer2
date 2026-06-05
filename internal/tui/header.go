@@ -290,7 +290,7 @@ func (m HeaderModel) renderLeft() string {
 
 	// 2. Start selection if focused
 	if isFocused {
-		leftText += "{{|StatusBarSelected|}}"
+		leftText += "{{|StatusBarFocused|}}"
 	}
 
 	// 3. Open bracket for flags
@@ -388,7 +388,7 @@ func (m HeaderModel) renderVersions() (appText, tmplText string) {
 		// 4. Styled version text
 		var verStyled string
 		if isFocused {
-			verStyled = "{{|StatusVersionSelected|}}" + displayVer + "{{[-]}}{{|StatusBar|}}"
+			verStyled = "{{|StatusVersionFocused|}}" + displayVer + "{{[-]}}{{|StatusBar|}}"
 		} else if isError || isAvailable || isApplied {
 			verStyled = "{{|StatusUpdate|}}" + displayVer + "{{[-]}}{{|StatusBar|}}"
 		} else {

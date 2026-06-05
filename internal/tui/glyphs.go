@@ -4,16 +4,16 @@ import "DockSTARTer2/internal/tui/glyphs"
 
 // Package-level aliases so existing tui code continues to use the short lowercase names.
 const (
-	radioSelected        = glyphs.RadioSelected
-	radioUnselected      = glyphs.RadioUnselected
-	checkSelected        = glyphs.CheckSelected
-	checkUnselected      = glyphs.CheckUnselected
+	radioOn              = glyphs.RadioOn
+	radioOff             = glyphs.RadioOff
+	checkOn              = glyphs.CheckOn
+	checkOff             = glyphs.CheckOff
 	subMenuExpanded      = glyphs.SubMenuExpanded
 	subMenuExpandedAscii = glyphs.SubMenuExpandedAscii
-	radioSelectedAscii   = glyphs.RadioSelectedAscii
-	radioUnselectedAscii = glyphs.RadioUnselectedAscii
-	checkSelectedAscii   = glyphs.CheckSelectedAscii
-	checkUnselectedAscii = glyphs.CheckUnselectedAscii
+	radioOnAscii         = glyphs.RadioOnAscii
+	radioOffAscii        = glyphs.RadioOffAscii
+	checkOnAscii         = glyphs.CheckOnAscii
+	checkOffAscii        = glyphs.CheckOffAscii
 	updateAvailable      = glyphs.UpdateAvailable
 	updateAvailableAscii = glyphs.UpdateAvailableAscii
 	updateApplied        = glyphs.UpdateApplied

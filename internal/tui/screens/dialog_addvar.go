@@ -141,6 +141,10 @@ func (m *addVarDialogModel) Init() tea.Cmd {
 }
 
 func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.HandleWidgetClearPress(msg) {
+		return m, nil
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -709,7 +713,7 @@ func (m *addVarDialogModel) ViewString() string {
 	sInnerW := contentW - 2 // inner width of each bordered section
 
 	bgStyle := theme.ThemeSemanticStyle("{{|Dialog|}}")
-	selectedStyle := theme.ThemeSemanticStyle("{{|ItemSelected|}}")
+	selectedStyle := theme.ThemeSemanticStyle("{{|ItemFocused|}}")
 	subLabelStyle := theme.ThemeSemanticStyle("{{|HelpItem|}}")
 	sepChar := "─"
 	if !ctx.LineCharacters {
@@ -871,7 +875,7 @@ func (m *addVarDialogModel) ViewString() string {
 	m.lastSbInfo = sbInfo
 
 	parts := []string{headingText, varNameSection, availableSection, buttonRow}
-	return tui.RenderDialogWithTypeAndWidgets("Add Variable", lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused || m.TitleBarFocused(), m.height, tui.DialogTypeInfo, tui.TitleBarState{Show: true, Focused: m.TitleBarFocused(), ActiveWidget: m.ActiveWidget()})
+	return tui.RenderDialogWithTypeAndWidgets("Add Variable", lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused || m.TitleBarFocused(), m.height, tui.DialogTypeInfo, tui.TitleBarState{Show: true, Focused: m.TitleBarFocused(), ActiveWidget: m.ActiveWidget(), PressedWidget: m.PressedWidget()})
 }
 
 func (m *addVarDialogModel) View() tea.View {

@@ -2,11 +2,17 @@ package tui
 
 import (
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
+
+// widgetClearPressMsg is sent after the press-flash duration to clear the pressed state.
+type widgetClearPressMsg struct{ id string }
+
+const widgetPressDuration = 500 * time.Millisecond
 
 // TitleBarWidget identifies a specific widget in the title bar.
 type TitleBarWidget int
@@ -28,6 +34,7 @@ var defaultWidgets = []TitleBarWidget{TitleBarWidgetHelp, TitleBarWidgetClose}
 type TitleBarFocus struct {
 	tbFocused bool
 	tbWidget  TitleBarWidget
+	tbPressed TitleBarWidget   // widget currently showing press flash
 	tbWidgets []TitleBarWidget // ordered left-to-right; nil means defaultWidgets
 }
 
@@ -59,6 +66,26 @@ func (t *TitleBarFocus) BlurTitleBar() {
 func (t *TitleBarFocus) TitleBarFocused() bool        { return t.tbFocused }
 func (t *TitleBarFocus) ActiveWidget() TitleBarWidget { return t.tbWidget }
 func (t *TitleBarFocus) SetWidget(w TitleBarWidget)   { t.tbWidget = w }
+func (t *TitleBarFocus) PressedWidget() TitleBarWidget { return t.tbPressed }
+
+// PressWidget sets the pressed flash state and returns a tea.Cmd that clears it after the duration.
+func (t *TitleBarFocus) PressWidget(w TitleBarWidget, id string) tea.Cmd {
+	t.tbPressed = w
+	return tea.Tick(widgetPressDuration, func(time.Time) tea.Msg { return widgetClearPressMsg{id: id} })
+}
+
+// ClearPress clears the pressed flash state. Call when widgetClearPressMsg is received.
+func (t *TitleBarFocus) ClearPress() { t.tbPressed = TitleBarWidgetNone }
+
+// HandleWidgetClearPress checks if msg is a widgetClearPressMsg for this instance
+// and clears the pressed state if so. Returns true if handled.
+func (t *TitleBarFocus) HandleWidgetClearPress(msg tea.Msg) bool {
+	if _, ok := msg.(widgetClearPressMsg); ok {
+		t.ClearPress()
+		return true
+	}
+	return false
+}
 
 func (t *TitleBarFocus) CycleWidget(dir int) {
 	widgets := t.ActiveWidgets()
@@ -89,14 +116,17 @@ func (t *TitleBarFocus) HandleTitleBarKey(msg tea.KeyPressMsg, closeCmd tea.Cmd)
 	case key.Matches(msg, Keys.Enter), key.Matches(msg, Keys.Space):
 		switch t.tbWidget {
 		case TitleBarWidgetHelp:
+			pressCmd := t.PressWidget(TitleBarWidgetHelp, "key")
 			t.BlurTitleBar()
-			cmd = func() tea.Msg { return TriggerHelpMsg{ScreenLevelOnly: true} }
+			cmd = tea.Batch(pressCmd, func() tea.Msg { return TriggerHelpMsg{ScreenLevelOnly: true} })
 		case TitleBarWidgetClose:
+			pressCmd := t.PressWidget(TitleBarWidgetClose, "key")
 			t.BlurTitleBar()
-			cmd = closeCmd
+			cmd = tea.Batch(pressCmd, closeCmd)
 		case TitleBarWidgetRefresh:
+			pressCmd := t.PressWidget(TitleBarWidgetRefresh, "key")
 			t.BlurTitleBar()
-			cmd = func() tea.Msg { return TitleBarRefreshMsg{} }
+			cmd = tea.Batch(pressCmd, func() tea.Msg { return TitleBarRefreshMsg{} })
 		}
 	}
 	return true, cmd
@@ -110,16 +140,19 @@ func (t *TitleBarFocus) HandleTitleBarHit(msg LayerHitMsg, closeCmd tea.Cmd) (ha
 		return false, nil
 	}
 	if strings.HasSuffix(msg.ID, "."+IDTitleWidgetClose) {
+		pressCmd := t.PressWidget(TitleBarWidgetClose, msg.ID)
 		t.BlurTitleBar()
-		return true, closeCmd
+		return true, tea.Batch(pressCmd, closeCmd)
 	}
 	if strings.HasSuffix(msg.ID, "."+IDTitleWidgetHelp) {
+		pressCmd := t.PressWidget(TitleBarWidgetHelp, msg.ID)
 		t.BlurTitleBar()
-		return true, func() tea.Msg { return TriggerHelpMsg{ScreenLevelOnly: true} }
+		return true, tea.Batch(pressCmd, func() tea.Msg { return TriggerHelpMsg{ScreenLevelOnly: true} })
 	}
 	if strings.HasSuffix(msg.ID, "."+IDTitleWidgetRefresh) {
+		pressCmd := t.PressWidget(TitleBarWidgetRefresh, msg.ID)
 		t.BlurTitleBar()
-		return true, func() tea.Msg { return TitleBarRefreshMsg{} }
+		return true, tea.Batch(pressCmd, func() tea.Msg { return TitleBarRefreshMsg{} })
 	}
 	return false, nil
 }
@@ -129,9 +162,9 @@ func (t *TitleBarFocus) HandleTitleBarHit(msg LayerHitMsg, closeCmd tea.Cmd) (ha
 // Uses large or small widget styles depending on ctx.LargeTitleBars.
 func (b *baseDialogModel) buildTitleBarWidgets(ctx StyleContext) string {
 	if ctx.LargeTitleBars {
-		return buildLargeTitleBarWidgets(b.tbFocused, b.tbWidget, b.ActiveWidgets(), ctx)
+		return buildLargeTitleBarWidgets(b.tbFocused, b.tbWidget, b.tbPressed, b.ActiveWidgets(), ctx)
 	}
-	return buildDialogTitleWidgets(b.tbFocused, b.tbWidget, b.ActiveWidgets(), ctx)
+	return buildDialogTitleWidgets(b.tbFocused, b.tbWidget, b.tbPressed, b.ActiveWidgets(), ctx)
 }
 
 // minWidthForWidgets returns the minimum content width required so that right-side
@@ -180,20 +213,20 @@ func BuildInactiveTitleWidgets(ctx StyleContext) string {
 // BuildInactiveTitleWidgetsFor builds the title widget string for a specific widget set.
 func BuildInactiveTitleWidgetsFor(widgets []TitleBarWidget, ctx StyleContext) string {
 	if ctx.LargeTitleBars {
-		return buildLargeTitleBarWidgets(false, TitleBarWidgetNone, widgets, ctx)
+		return buildLargeTitleBarWidgets(false, TitleBarWidgetNone, TitleBarWidgetNone, widgets, ctx)
 	}
-	return buildDialogTitleWidgets(false, TitleBarWidgetNone, widgets, ctx)
+	return buildDialogTitleWidgets(false, TitleBarWidgetNone, TitleBarWidgetNone, widgets, ctx)
 }
 
 // BuildInactiveLargeTitleWidgets builds the widget string styled for the large titlebar row.
 func BuildInactiveLargeTitleWidgets(ctx StyleContext) string {
-	return buildLargeTitleBarWidgets(false, TitleBarWidgetNone, defaultWidgets, ctx)
+	return buildLargeTitleBarWidgets(false, TitleBarWidgetNone, TitleBarWidgetNone, defaultWidgets, ctx)
 }
 
 // buildLargeTitleBarWidgets returns the raw theme-tag string for the title bar widgets.
 // It is NOT pre-rendered — callers must render it via RenderThemeTextCtx in the correct
 // area context so it picks up the type-specific LargeTitleArea* background.
-func buildLargeTitleBarWidgets(focused bool, activeWidget TitleBarWidget, widgets []TitleBarWidget, ctx StyleContext) string {
+func buildLargeTitleBarWidgets(focused bool, activeWidget, pressedWidget TitleBarWidget, widgets []TitleBarWidget, ctx StyleContext) string {
 	helpGlyph := helpWidget
 	closeGlyph := closeWidget
 	refreshGlyph := refreshWidget
@@ -201,27 +234,34 @@ func buildLargeTitleBarWidgets(focused bool, activeWidget TitleBarWidget, widget
 		closeGlyph = closeWidgetAscii
 		refreshGlyph = refreshWidgetAscii
 	}
-	isActive := func(w TitleBarWidget) bool { return focused && activeWidget == w }
+	isActive  := func(w TitleBarWidget) bool { return pressedWidget == w || (focused && activeWidget == w) }
+	isPressed := func(w TitleBarWidget) bool { return pressedWidget == w }
 
 	var parts []string
 	if hasWidget(widgets, TitleBarWidgetRefresh) {
-		prefix := "{{|LargeHelpIconInactive|}}"
-		if isActive(TitleBarWidgetRefresh) {
-			prefix += "{{|LargeIconActive|}}"
+		prefix := "{{|LargeRefreshIconInactive|}}"
+		if isPressed(TitleBarWidgetRefresh) {
+			prefix += "{{|LargeIconPressed|}}"
+		} else if isActive(TitleBarWidgetRefresh) {
+			prefix += "{{|LargeIconFocused|}}"
 		}
 		parts = append(parts, prefix+"["+refreshGlyph+"]{{[-]}}")
 	}
 	if hasWidget(widgets, TitleBarWidgetHelp) {
 		prefix := "{{|LargeHelpIconInactive|}}"
-		if isActive(TitleBarWidgetHelp) {
-			prefix += "{{|LargeIconActive|}}"
+		if isPressed(TitleBarWidgetHelp) {
+			prefix += "{{|LargeIconPressed|}}"
+		} else if isActive(TitleBarWidgetHelp) {
+			prefix += "{{|LargeIconFocused|}}"
 		}
 		parts = append(parts, prefix+"["+helpGlyph+"]{{[-]}}")
 	}
 	if hasWidget(widgets, TitleBarWidgetClose) {
 		prefix := "{{|LargeExitIconInactive|}}"
-		if isActive(TitleBarWidgetClose) {
-			prefix += "{{|LargeIconActive|}}"
+		if isPressed(TitleBarWidgetClose) {
+			prefix += "{{|LargeIconPressed|}}"
+		} else if isActive(TitleBarWidgetClose) {
+			prefix += "{{|LargeIconFocused|}}"
 		}
 		parts = append(parts, prefix+"["+closeGlyph+"]{{[-]}}")
 	}
@@ -237,7 +277,7 @@ func buildLargeTitleBarWidgets(focused bool, activeWidget TitleBarWidget, widget
 
 // buildDialogTitleWidgets is the shared renderer for the title bar widgets.
 // focused/activeWidget are the title bar state; use TitleBarWidgetNone for always-inactive output.
-func buildDialogTitleWidgets(focused bool, activeWidget TitleBarWidget, widgets []TitleBarWidget, ctx StyleContext) string {
+func buildDialogTitleWidgets(focused bool, activeWidget, pressedWidget TitleBarWidget, widgets []TitleBarWidget, ctx StyleContext) string {
 	helpGlyph := helpWidget
 	closeGlyph := closeWidget
 	refreshGlyph := refreshWidget
@@ -250,27 +290,34 @@ func buildDialogTitleWidgets(focused bool, activeWidget TitleBarWidget, widgets 
 	borderBase := ctx.BorderFlags.Apply(lipgloss.NewStyle()).
 		Foreground(ctx.BorderColor).
 		Background(ctx.Dialog.GetBackground())
-	isActive := func(w TitleBarWidget) bool { return focused && activeWidget == w }
+	isPressed := func(w TitleBarWidget) bool { return pressedWidget == w }
+	isActive  := func(w TitleBarWidget) bool { return pressedWidget == w || (focused && activeWidget == w) }
 
 	var parts []string
 	if hasWidget(widgets, TitleBarWidgetRefresh) {
-		prefix := "{{|HelpIconInactive|}}"
-		if isActive(TitleBarWidgetRefresh) {
-			prefix += "{{|IconActive|}}"
+		prefix := "{{|RefreshIconInactive|}}"
+		if isPressed(TitleBarWidgetRefresh) {
+			prefix += "{{|IconPressed|}}"
+		} else if isActive(TitleBarWidgetRefresh) {
+			prefix += "{{|IconFocused|}}"
 		}
 		parts = append(parts, prefix+"["+refreshGlyph+"]{{[-]}}")
 	}
 	if hasWidget(widgets, TitleBarWidgetHelp) {
 		prefix := "{{|HelpIconInactive|}}"
-		if isActive(TitleBarWidgetHelp) {
-			prefix += "{{|IconActive|}}"
+		if isPressed(TitleBarWidgetHelp) {
+			prefix += "{{|IconPressed|}}"
+		} else if isActive(TitleBarWidgetHelp) {
+			prefix += "{{|IconFocused|}}"
 		}
 		parts = append(parts, prefix+"["+helpGlyph+"]{{[-]}}")
 	}
 	if hasWidget(widgets, TitleBarWidgetClose) {
 		prefix := "{{|ExitIconInactive|}}"
-		if isActive(TitleBarWidgetClose) {
-			prefix += "{{|IconActive|}}"
+		if isPressed(TitleBarWidgetClose) {
+			prefix += "{{|IconPressed|}}"
+		} else if isActive(TitleBarWidgetClose) {
+			prefix += "{{|IconFocused|}}"
 		}
 		parts = append(parts, prefix+"["+closeGlyph+"]{{[-]}}")
 	}

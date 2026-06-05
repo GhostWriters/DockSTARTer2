@@ -295,6 +295,10 @@ func (m *ProgramBoxModel) Init() tea.Cmd {
 }
 
 func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.HandleWidgetClearPress(msg) {
+		return m, nil
+	}
+
 	// 1. Centralized scrollbar processing (Throttling, Clicks, Dragging)
 	if newOff, cmd, changed := m.Scroll.Update(msg, m.viewport.YOffset(), m.viewport.TotalLineCount(), m.viewport.Height()); changed {
 		m.viewport.SetYOffset(newOff)

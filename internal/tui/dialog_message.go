@@ -38,6 +38,10 @@ func newMessageDialog(title, message string, msgType MessageType) *messageDialog
 func (m *messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	closeCmd := func() tea.Msg { return CloseDialogMsg{Result: true} }
 
+	if m.HandleWidgetClearPress(msg) {
+		return m, nil
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -173,7 +177,7 @@ func (m *messageDialogModel) ViewString() string {
 	}
 	ctx := GetActiveContext()
 	ctx.LargeTitleBars = m.layout.LargeTitleBar
-	return renderDialogWithTypeAndWidgets(fullTitle, fullContent, m.focused || m.tbFocused, 0, dialogType, ctx, TitleBarState{Show: true, Focused: m.tbFocused, ActiveWidget: m.tbWidget})
+	return renderDialogWithTypeAndWidgets(fullTitle, fullContent, m.focused || m.tbFocused, 0, dialogType, ctx, TitleBarState{Show: true, Focused: m.tbFocused, ActiveWidget: m.tbWidget, PressedWidget: m.tbPressed})
 }
 
 // View implements tea.Model

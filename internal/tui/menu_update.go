@@ -2,6 +2,7 @@ package tui
 
 import (
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
@@ -38,6 +39,13 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.viewStartY = m.list.Index() - visible + 1
 			}
 		}
+	}
+
+	if cm, ok := msg.(widgetClearPressMsg); ok {
+		_ = cm
+		m.titleBarPressed = TitleBarWidgetNone
+		m.InvalidateCache()
+		return m, nil
 	}
 
 	switch msg := msg.(type) {
@@ -175,15 +183,28 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch buttonID {
 		case IDTitleWidgetHelp:
 			if msg.Button == tea.MouseLeft {
-				return m, func() tea.Msg { return TriggerHelpMsg{} }
+				pressCmd := tea.Tick(widgetPressDuration, func(_ time.Time) tea.Msg {
+					return widgetClearPressMsg{id: msg.ID}
+				})
+				m.titleBarPressed = TitleBarWidgetHelp
+				m.InvalidateCache()
+				return m, tea.Batch(pressCmd, func() tea.Msg { return TriggerHelpMsg{} })
 			}
 		case IDTitleWidgetClose:
 			if msg.Button == tea.MouseLeft {
+				pressCmd := tea.Tick(widgetPressDuration, func(_ time.Time) tea.Msg {
+					return widgetClearPressMsg{id: msg.ID}
+				})
+				m.titleBarPressed = TitleBarWidgetClose
+				m.InvalidateCache()
 				m.BlurTitleBar()
+				var actionCmd tea.Cmd
 				if m.backAction != nil {
-					return m, m.backAction
+					actionCmd = m.backAction
+				} else {
+					actionCmd = ConfirmExitAction()
 				}
-				return m, ConfirmExitAction()
+				return m, tea.Batch(pressCmd, actionCmd)
 			}
 		case IDListPanel:
 			// Hover moved back over the list — restore list focus so the wheel scrolls items.
@@ -464,16 +485,25 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // activateTitleBarWidget executes the currently focused title bar widget action.
 func (m *MenuModel) activateTitleBarWidget() tea.Cmd {
+	pressCmd := func(w TitleBarWidget) tea.Cmd {
+		m.titleBarPressed = w
+		m.InvalidateCache()
+		return tea.Tick(widgetPressDuration, func(_ time.Time) tea.Msg {
+			return widgetClearPressMsg{id: "key"}
+		})
+	}
 	switch m.titleBarWidget {
 	case TitleBarWidgetHelp:
+		pc := pressCmd(TitleBarWidgetHelp)
 		m.BlurTitleBar()
-		return func() tea.Msg { return TriggerHelpMsg{ScreenLevelOnly: true} }
+		return tea.Batch(pc, func() tea.Msg { return TriggerHelpMsg{ScreenLevelOnly: true} })
 	case TitleBarWidgetClose:
+		pc := pressCmd(TitleBarWidgetClose)
 		m.BlurTitleBar()
 		if m.backAction != nil {
-			return m.backAction
+			return tea.Batch(pc, m.backAction)
 		}
-		return ConfirmExitAction()
+		return tea.Batch(pc, ConfirmExitAction())
 	}
 	return nil
 }

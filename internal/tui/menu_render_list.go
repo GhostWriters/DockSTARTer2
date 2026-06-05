@@ -75,11 +75,11 @@ func (m *MenuModel) renderVariableHeightList() string {
 	tagStyleBase := theme.ThemeSemanticStyle("{{|Tag|}}")
 	keyStyleBase := theme.ThemeSemanticStyle("{{|TagKey|}}")
 	itemStyleBase := theme.ThemeSemanticStyle("{{|Item|}}")
-	tagStyleSel := theme.ThemeSemanticStyle("{{|TagSelected|}}")
-	keyStyleSel := theme.ThemeSemanticStyle("{{|TagKeySelected|}}")
-	itemStyleSel := theme.ThemeSemanticStyle("{{|ItemSelected|}}")
+	tagStyleSel := theme.ThemeSemanticStyle("{{|TagFocused|}}")
+	keyStyleSel := theme.ThemeSemanticStyle("{{|TagKeyFocused|}}")
+	itemStyleSel := theme.ThemeSemanticStyle("{{|ItemFocused|}}")
 	checkboxStyleBase := theme.ThemeSemanticStyle("{{|Checkbox|}}")
-	checkboxStyleSel := theme.ThemeSemanticStyle("{{|CheckboxSelected|}}")
+	checkboxStyleSel := theme.ThemeSemanticStyle("{{|CheckboxFocused|}}")
 	neutralStyle := lipgloss.NewStyle().Background(dialogBG)
 
 	var mainItems []MenuItem
@@ -201,12 +201,12 @@ func (m *MenuModel) renderVariableHeightList() string {
 					cbAdd3 = neutralStyle.Render("   ")
 					cbEnabled3 = neutralStyle.Render(" ") + cbEStyle.Render(subMenuExpanded) + neutralStyle.Render(" ")
 				} else {
-					ca, ce := checkUnselected, checkUnselected
+					ca, ce := checkOff, checkOff
 					if item.Checked {
-						ca = checkSelected
+						ca = checkOn
 					}
 					if item.Enabled {
-						ce = checkSelected
+						ce = checkOn
 					}
 					cbAdd3 = renderCheckboxGlyph(ca, cbAStyle)
 					cbEnabled3 = renderCheckboxGlyph(ce, cbEStyle)
@@ -218,13 +218,13 @@ func (m *MenuModel) renderVariableHeightList() string {
 					cbEnabled3 = neutralStyle.Render(" ") + cbEStyle.Render(subMenuExpandedAscii) + neutralStyle.Render(" ")
 				} else {
 					// ASCII: 3-character variants
-					caText := checkUnselectedAscii
-					ceText := checkUnselectedAscii
+					caText := checkOffAscii
+					ceText := checkOffAscii
 					if item.Checked {
-						caText = checkSelectedAscii
+						caText = checkOnAscii
 					}
 					if item.Enabled {
-						ceText = checkSelectedAscii
+						ceText = checkOnAscii
 					}
 					cbAdd3 = renderCheckboxGlyph(caText, cbAStyle)
 					cbEnabled3 = renderCheckboxGlyph(ceText, cbEStyle)
@@ -613,8 +613,8 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 	neutralStyle := lipgloss.NewStyle().Background(dialogBG)
 	tagStyleBase := theme.ThemeSemanticStyle("{{|Tag|}}")
 	keyStyleBase := theme.ThemeSemanticStyle("{{|TagKey|}}")
-	tagStyleSel := theme.ThemeSemanticStyle("{{|TagSelected|}}")
-	keyStyleSel := theme.ThemeSemanticStyle("{{|TagKeySelected|}}")
+	tagStyleSel := theme.ThemeSemanticStyle("{{|TagFocused|}}")
+	keyStyleSel := theme.ThemeSemanticStyle("{{|TagKeyFocused|}}")
 
 	var subGroupTagMaxW int
 	for _, item := range items {
@@ -714,7 +714,7 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 		if item.IsEditing {
 			// Using the standard edit styling (red background/bold)
 			editTag := GetPlainText(item.Tag)
-			tagStr += theme.ThemeSemanticStyle("{{|ItemSelected|}}").Render(editTag)
+			tagStr += theme.ThemeSemanticStyle("{{|ItemFocused|}}").Render(editTag)
 		} else if len(item.Tag) > 0 {
 			runes := []rune(item.Tag)
 			tagStr += kStyle.Render(string(runes[0])) + tStyle.Render(string(runes[1:]))
@@ -741,22 +741,22 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 
 		var checkboxA3, checkboxE3 string
 		if ctx.LineCharacters {
-			cA, cE := checkUnselected, checkUnselected
+			cA, cE := checkOff, checkOff
 			if item.Checked {
-				cA = checkSelected
+				cA = checkOn
 			}
 			if item.Enabled {
-				cE = checkSelected
+				cE = checkOn
 			}
 			checkboxA3 = renderCheckboxGlyph(cA, cbStyleA)
 			checkboxE3 = renderCheckboxGlyph(cE, cbStyleE)
 		} else {
-			caA, ceA := checkUnselectedAscii, checkUnselectedAscii
+			caA, ceA := checkOffAscii, checkOffAscii
 			if item.Checked {
-				caA = checkSelectedAscii
+				caA = checkOnAscii
 			}
 			if item.Enabled {
-				ceA = checkSelectedAscii
+				ceA = checkOnAscii
 			}
 			checkboxA3 = neutralStyle.Render("[") + cbStyleA.Render(string(caA[1])) + neutralStyle.Render("]")
 			checkboxE3 = neutralStyle.Render("[") + cbStyleE.Render(string(ceA[1])) + neutralStyle.Render("]")

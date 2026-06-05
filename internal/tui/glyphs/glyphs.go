@@ -1,25 +1,25 @@
 package glyphs
 
 const (
-	// RadioSelected (•) - Bullet (U+2022) in parens
-	RadioSelected = "(•)"
-	// RadioUnselected - empty parens
-	RadioUnselected = "( )"
+	// RadioOn (•) - Bullet (U+2022) in parens
+	RadioOn = "(•)"
+	// RadioOff - empty parens
+	RadioOff = "( )"
 
-	// CheckSelected (✓) - Check Mark (U+2713) in brackets
-	CheckSelected = "[✓]"
-	// CheckUnselected - empty brackets
-	CheckUnselected = "[ ]"
+	// CheckOn (✓) - Check Mark (U+2713) in brackets
+	CheckOn = "[✓]"
+	// CheckOff - empty brackets
+	CheckOff = "[ ]"
 
 	// SubMenuExpanded (▼) - Black Down-Pointing Triangle (U+25BC) — group header is always expanded
 	SubMenuExpanded      = "▼"
 	SubMenuExpandedAscii = "v"
 
 	// ASCII variants
-	RadioSelectedAscii   = "(*)"
-	RadioUnselectedAscii = "( )"
-	CheckSelectedAscii   = "[x]"
-	CheckUnselectedAscii = "[ ]"
+	RadioOnAscii   = "(*)"
+	RadioOffAscii  = "( )"
+	CheckOnAscii   = "[x]"
+	CheckOffAscii  = "[ ]"
 
 	// InvalidMarker (▲) - Black Up-Pointing Triangle (U+25B2)
 	InvalidMarker      = "▲"
