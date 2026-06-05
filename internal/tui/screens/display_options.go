@@ -105,7 +105,6 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Checked:       checked,
 			IsInvalid:     t.IsInvalid,
 			IsUserDefined: t.IsUserTheme,
-			IsDestructive: true,
 			Metadata:      map[string]string{"config_value": t.ConfigValue},
 		}
 	}
@@ -138,7 +137,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 	s.themeMenu.SetIsDialog(false) // Part of a screen, not a modal
 	s.themeMenu.SetShowExit(false)
 	s.themeMenu.SetMaximized(true) // Fill available width
-	s.themeMenu.SetShowLockGutter(true)
+	s.themeMenu.SetShowLockGutter(false)
 	s.themeMenu.SetNoLeftMargin(true)
 
 	// 2. Options Menu
@@ -855,8 +854,8 @@ func (s *DisplayOptionsScreen) toggleScrollbar() tea.Cmd {
 
 func (s *DisplayOptionsScreen) handleApply() tea.Cmd {
 	return func() tea.Msg {
-		// Do not apply if any destructive settings are locked
-		if s.optionsMenu.AnyLocked() || s.themeMenu.AnyLocked() {
+		// Do not apply if any destructive options settings are locked
+		if s.optionsMenu.AnyLocked() {
 			return nil
 		}
 		// 1. Apply Theme (Find the actually checked radio option)
