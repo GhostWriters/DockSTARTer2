@@ -458,18 +458,22 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		case IDPanelResizeUp:
 			if _, ok := msg.(tea.MouseClickMsg); ok {
 				if m.panel.expanded {
+					pressCmd := m.panel.PressWidget(panelWidgetUp, IDPanelResizeUp)
 					m.panel.ResizeBy(1)
 					m.applyPanelMax()
 					m.refreshPanelLayout()
+					return m, pressCmd, true
 				}
 			}
 			return m, nil, true
 		case IDPanelResizeDn:
 			if _, ok := msg.(tea.MouseClickMsg); ok {
 				if m.panel.expanded {
+					pressCmd := m.panel.PressWidget(panelWidgetDn, IDPanelResizeDn)
 					m.panel.ResizeBy(-1)
 					m.applyPanelMax()
 					m.refreshPanelLayout()
+					return m, pressCmd, true
 				}
 			}
 			return m, nil, true

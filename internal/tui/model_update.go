@@ -41,6 +41,22 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	if _, ok := msg.(widgetClearPressMsg); ok {
+		m.panel.ClearPress()
+		// Forward to dialog and screen so their title bar pressed states also clear,
+		// even if a different dialog (e.g. help) was open when the tick fired.
+		if m.dialog != nil {
+			m.dialog, _ = m.dialog.Update(msg)
+		}
+		if m.activeScreen != nil {
+			updated, _ := m.activeScreen.Update(msg)
+			if sm, ok := updated.(ScreenModel); ok {
+				m.activeScreen = sm
+			}
+		}
+		return m, nil
+	}
+
 	switch msg := msg.(type) {
 	case LockStateChangedMsg:
 		// Broadcast lock changes to both the active screen and any open dialog
@@ -522,6 +538,10 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
 					focusable.SetFocused(true)
 				}
+				// Blur the title bar of the restored dialog so widgets don't stay focused.
+				if tb, ok := m.dialog.(TitleBarFocusable); ok {
+					tb.BlurTitleBar()
+				}
 			}
 
 			// ForwardToParent: deliver Result to the restored parent dialog.
@@ -544,7 +564,13 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// When returning to screen: restore focus to the active screen.
 		// Clear header focus so version numbers don't stay selected after a dialog closes.
+		// Blur any title bar that may have been focused before the dialog opened.
 		m.setHeaderFocus(HeaderFocusNone)
+		if m.activeScreen != nil {
+			if tb, ok := m.activeScreen.(TitleBarFocusable); ok {
+				tb.BlurTitleBar()
+			}
+		}
 		m.updateComponentFocus()
 		// Forward any followup message or command piggybacked on Result (e.g. from context menus).
 		// Skip the known confirm (bool) and prompt (promptResultMsg) types already handled above.
@@ -670,7 +696,7 @@ func (m *AppModel) setPanelFocus(focused bool) {
 	m.panelFocused = focused
 	m.panelTitleFocused = false
 	m.panel.focused = focused
-	m.panel.titleBarFocused = false
+	m.panel.BlurTitleBar()
 	if focused {
 		m.backdrop.header.SetFocus(HeaderFocusNone)
 	} else {
@@ -682,14 +708,16 @@ func (m *AppModel) setPanelFocus(focused bool) {
 
 func (m *AppModel) setPanelTitleFocus(focused bool) {
 	m.panelTitleFocused = focused
-	m.panel.titleBarFocused = focused
 	if focused {
-		m.panel.titleBarWidget = panelWidgetUp // default to [▲]
+		m.panel.FocusTitleBar()
+		m.panel.SetWidget(panelWidgetUp) // default to [▲]
 		m.panelFocused = false
 		m.panel.focused = false
 		m.panel.input.Blur()
 		m.panel.inputFocused = false
 		m.backdrop.header.SetFocus(HeaderFocusNone)
+	} else {
+		m.panel.BlurTitleBar()
 	}
 	m.updateComponentFocus()
 }
@@ -701,7 +729,7 @@ func (m *AppModel) setHeaderFocus(focus HeaderFocus) {
 		m.panelFocused = false
 		m.panel.focused = false
 		m.panelTitleFocused = false
-		m.panel.titleBarFocused = false
+		m.panel.BlurTitleBar()
 	}
 	m.updateComponentFocus()
 }
@@ -712,7 +740,15 @@ func (m *AppModel) updateComponentFocus() {
 
 	// Log panel only keeps its "internal" focus state if no dialog is blocking it.
 	m.panel.focused = m.panelFocused && !dialogOpen
-	m.panel.titleBarFocused = m.panelTitleFocused && !dialogOpen
+	if m.panelTitleFocused && !dialogOpen {
+		if !m.panel.TitleBarFocused() {
+			m.panel.FocusTitleBar()
+		}
+	} else if !m.panelTitleFocused || dialogOpen {
+		if m.panel.TitleBarFocused() {
+			m.panel.BlurTitleBar()
+		}
+	}
 
 	// Screen is focused only if no dialog is open AND neither panel nor header have focus.
 	if m.activeScreen != nil {
@@ -1015,15 +1051,15 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			return m, nil, true
 		}
 		if key.Matches(msg, Keys.Left) {
-			m.panel.titleBarWidget = panelWidgetUp
+			m.panel.SetWidget(panelWidgetUp)
 			return m, nil, true
 		}
 		if key.Matches(msg, Keys.Right) {
-			m.panel.titleBarWidget = panelWidgetDn
+			m.panel.SetWidget(panelWidgetDn)
 			return m, nil, true
 		}
 		if key.Matches(msg, Keys.Enter) || msg.String() == " " {
-			if m.panel.titleBarWidget == panelWidgetDn {
+			if m.panel.ActiveWidget() == panelWidgetDn {
 				m.panel.ResizeBy(-1)
 			} else {
 				m.panel.ResizeBy(1)

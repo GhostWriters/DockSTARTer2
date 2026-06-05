@@ -190,6 +190,7 @@ type MenuModel struct {
 	// Title bar widget focus (keyboard navigation of ? and × widgets)
 	titleBarFocused bool
 	titleBarWidget  TitleBarWidget
+	titleBarPressed TitleBarWidget
 }
 
 // TitleBarFocusable is implemented by models whose title bar can receive keyboard focus.

@@ -186,9 +186,11 @@ type Styles struct {
 	ButtonInactive lipgloss.Style
 
 	// Title bar icon widgets
-	IconActive           lipgloss.Style
+	IconFocused          lipgloss.Style
+	IconPressed          lipgloss.Style
 	IconInactive         lipgloss.Style
 	HelpIconInactive     lipgloss.Style
+	RefreshIconInactive  lipgloss.Style
 	ExitIconInactive     lipgloss.Style
 	ResizeUpIconInactive lipgloss.Style
 	ResizeDnIconInactive lipgloss.Style
@@ -260,9 +262,11 @@ type StyleContext struct {
 	Border2Flags        theme.StyleFlags
 	ButtonActive        lipgloss.Style
 	ButtonInactive      lipgloss.Style
-	IconActive             lipgloss.Style
+	IconFocused            lipgloss.Style
+	IconPressed            lipgloss.Style
 	IconInactive           lipgloss.Style
 	HelpIconInactive       lipgloss.Style
+	RefreshIconInactive    lipgloss.Style
 	ExitIconInactive       lipgloss.Style
 	ResizeUpIconInactive   lipgloss.Style
 	ResizeDnIconInactive   lipgloss.Style
@@ -322,9 +326,11 @@ func GetActiveContext() StyleContext {
 		Border2Flags:        currentStyles.Border2Flags,
 		ButtonActive:        currentStyles.ButtonActive,
 		ButtonInactive:      currentStyles.ButtonInactive,
-		IconActive:             currentStyles.IconActive,
+		IconFocused:            currentStyles.IconFocused,
+		IconPressed:            currentStyles.IconPressed,
 		IconInactive:           currentStyles.IconInactive,
 		HelpIconInactive:       currentStyles.HelpIconInactive,
+		RefreshIconInactive:    currentStyles.RefreshIconInactive,
 		ExitIconInactive:       currentStyles.ExitIconInactive,
 		ResizeUpIconInactive:   currentStyles.ResizeUpIconInactive,
 		ResizeDnIconInactive:   currentStyles.ResizeDnIconInactive,
@@ -540,9 +546,13 @@ func InitStyles(cfg config.AppConfig) {
 	}
 
 	// Title bar icon widgets
-	currentStyles.IconActive = SemanticRawStyle("IconActive")
-	if _, noBG := currentStyles.IconActive.GetBackground().(lipgloss.NoColor); noBG {
-		currentStyles.IconActive = currentStyles.IconActive.Background(currentStyles.Dialog.GetBackground())
+	currentStyles.IconFocused = SemanticRawStyle("IconFocused")
+	if _, noBG := currentStyles.IconFocused.GetBackground().(lipgloss.NoColor); noBG {
+		currentStyles.IconFocused = currentStyles.IconFocused.Background(currentStyles.Dialog.GetBackground())
+	}
+	currentStyles.IconPressed = SemanticRawStyle("IconPressed")
+	if _, noBG := currentStyles.IconPressed.GetBackground().(lipgloss.NoColor); noBG {
+		currentStyles.IconPressed = currentStyles.IconPressed.Background(currentStyles.Dialog.GetBackground())
 	}
 	currentStyles.IconInactive = SemanticRawStyle("IconInactive")
 	if _, noBG := currentStyles.IconInactive.GetBackground().(lipgloss.NoColor); noBG {
@@ -551,6 +561,10 @@ func InitStyles(cfg config.AppConfig) {
 	currentStyles.HelpIconInactive = SemanticRawStyle("HelpIconInactive")
 	if _, noBG := currentStyles.HelpIconInactive.GetBackground().(lipgloss.NoColor); noBG {
 		currentStyles.HelpIconInactive = currentStyles.HelpIconInactive.Background(currentStyles.Dialog.GetBackground())
+	}
+	currentStyles.RefreshIconInactive = SemanticRawStyle("RefreshIconInactive")
+	if _, noBG := currentStyles.RefreshIconInactive.GetBackground().(lipgloss.NoColor); noBG {
+		currentStyles.RefreshIconInactive = currentStyles.RefreshIconInactive.Background(currentStyles.Dialog.GetBackground())
 	}
 	currentStyles.ExitIconInactive = SemanticRawStyle("ExitIconInactive")
 	if _, noBG := currentStyles.ExitIconInactive.GetBackground().(lipgloss.NoColor); noBG {

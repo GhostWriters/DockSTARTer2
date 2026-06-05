@@ -13,6 +13,10 @@ import (
 func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
+	if m.HandleWidgetClearPress(msg) {
+		return m, nil
+	}
+
 	switch msg := msg.(type) {
 	case tui.LockStateChangedMsg:
 		m.lockedByOthers = msg.LockedByOthers
@@ -107,18 +111,24 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		} else if msg.ID == "tabbed_vars."+tui.IDTitleWidgetClose {
 			if msg.Button == tea.MouseLeft {
+				m.BlurTitleBar()
+				pressCmd := m.PressWidget(tui.TitleBarWidgetClose, msg.ID)
 				if m.hasChanges() {
-					return m, m.promptUnsavedChanges(m.onClose)
+					return m, tea.Batch(pressCmd, m.promptUnsavedChanges(m.onClose))
 				}
-				return m, m.onClose
+				return m, tea.Batch(pressCmd, m.onClose)
 			}
 		} else if msg.ID == "tabbed_vars."+tui.IDTitleWidgetHelp {
 			if msg.Button == tea.MouseLeft {
-				return m, func() tea.Msg { return tui.TriggerHelpMsg{ScreenLevelOnly: true} }
+				m.BlurTitleBar()
+				pressCmd := m.PressWidget(tui.TitleBarWidgetHelp, msg.ID)
+				return m, tea.Batch(pressCmd, func() tea.Msg { return tui.TriggerHelpMsg{ScreenLevelOnly: true} })
 			}
 		} else if msg.ID == "tabbed_vars."+tui.IDTitleWidgetRefresh {
 			if msg.Button == tea.MouseLeft {
-				return m, func() tea.Msg { return envRefreshMsg{} }
+				m.BlurTitleBar()
+				pressCmd := m.PressWidget(tui.TitleBarWidgetRefresh, msg.ID)
+				return m, tea.Batch(pressCmd, func() tea.Msg { return envRefreshMsg{} })
 			}
 		} else if msg.ID == "tabbed_vars."+tui.IDInsOvr {
 			if msg.Button == tea.MouseLeft && len(m.tabs) > 0 {
@@ -185,15 +195,18 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "enter", " ":
 				switch m.ActiveWidget() {
 				case tui.TitleBarWidgetHelp:
-					return m, func() tea.Msg { return tui.TriggerHelpMsg{ScreenLevelOnly: true} }
+					pressCmd := m.PressWidget(tui.TitleBarWidgetHelp, "key")
+					return m, tea.Batch(pressCmd, func() tea.Msg { return tui.TriggerHelpMsg{ScreenLevelOnly: true} })
 				case tui.TitleBarWidgetClose:
+					pressCmd := m.PressWidget(tui.TitleBarWidgetClose, "key")
 					if m.hasChanges() {
-						return m, m.promptUnsavedChanges(m.onClose)
+						return m, tea.Batch(pressCmd, m.promptUnsavedChanges(m.onClose))
 					}
-					return m, m.onClose
+					return m, tea.Batch(pressCmd, m.onClose)
 				case tui.TitleBarWidgetRefresh:
+					pressCmd := m.PressWidget(tui.TitleBarWidgetRefresh, "key")
 					m.BlurTitleBar()
-					return m, func() tea.Msg { return envRefreshMsg{} }
+					return m, tea.Batch(pressCmd, func() tea.Msg { return envRefreshMsg{} })
 				}
 			case "esc":
 				m.BlurTitleBar()

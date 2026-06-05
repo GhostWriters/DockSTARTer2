@@ -122,6 +122,10 @@ func (m *setValueDialogModel) Init() tea.Cmd {
 }
 
 func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.HandleWidgetClearPress(msg) {
+		return m, nil
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -698,7 +702,7 @@ func (m *setValueDialogModel) ViewString() string {
 
 	title := "Set Value: " + m.varName
 	parts := []string{headingText, currentValueSection, presetsSection, buttonRow}
-	return tui.RenderDialogWithTypeAndWidgets(title, lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused || m.TitleBarFocused(), m.height, tui.DialogTypeInfo, tui.TitleBarState{Show: true, Focused: m.TitleBarFocused(), ActiveWidget: m.ActiveWidget()})
+	return tui.RenderDialogWithTypeAndWidgets(title, lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused || m.TitleBarFocused(), m.height, tui.DialogTypeInfo, tui.TitleBarState{Show: true, Focused: m.TitleBarFocused(), ActiveWidget: m.ActiveWidget(), PressedWidget: m.PressedWidget()})
 }
 
 func (m *setValueDialogModel) View() tea.View {

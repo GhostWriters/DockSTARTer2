@@ -37,6 +37,10 @@ func (m *choiceDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return func() tea.Msg { return m.onResult(idx) }
 	}
 
+	if m.HandleWidgetClearPress(msg) {
+		return m, nil
+	}
+
 	n := len(m.choices)
 
 	switch msg := msg.(type) {
@@ -151,7 +155,7 @@ func (m *choiceDialogModel) ViewString() string {
 	spacer := lipgloss.NewStyle().Width(contentWidth).Background(borderBG).Render("")
 	fullContent := lipgloss.JoinVertical(lipgloss.Left, questionText, spacer, buttonRow)
 
-	return renderDialogWithTypeAndWidgets(m.title, fullContent, m.baseDialogModel.focused || m.tbFocused, 0, DialogTypeConfirm, ctx, TitleBarState{Show: true, Focused: m.tbFocused, ActiveWidget: m.tbWidget})
+	return renderDialogWithTypeAndWidgets(m.title, fullContent, m.baseDialogModel.focused || m.tbFocused, 0, DialogTypeConfirm, ctx, TitleBarState{Show: true, Focused: m.tbFocused, ActiveWidget: m.tbWidget, PressedWidget: m.tbPressed})
 }
 
 func (m *choiceDialogModel) View() tea.View {
