@@ -324,7 +324,8 @@ func Parse(args []string) ([]CommandGroup, error) {
 			"--theme-large-buttons", "--theme-no-large-buttons",
 			"--theme-large-titlebars", "--theme-no-large-titlebars",
 			"--theme-shadows", "--theme-no-shadows", "--theme-shadow", "--theme-no-shadow",
-			"--theme-scrollbar", "--theme-no-scrollbar":
+			"--theme-scrollbar", "--theme-no-scrollbar",
+			"--theme-spinner", "--theme-no-spinner":
 			// Do nothing, consumesUntilDash is false
 
 		default:

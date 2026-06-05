@@ -29,6 +29,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 	conf := config.LoadAppConfig()
 	_, _ = theme.Load(conf.UI.Theme, "")
 	console.LineCharacters = conf.UI.LineCharacters
+	console.SpinnerEnabled = conf.UI.Spinner
 	exitCode := 0
 
 	// Validate override file for operational commands

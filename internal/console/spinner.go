@@ -26,7 +26,7 @@ func PauseSpinner() {
 	defer activeSpinner.mu.Unlock()
 	activeSpinner.paused = true
 	if activeSpinner.visible {
-		fmt.Fprintf(os.Stderr, "\r\033[K")
+		fmt.Fprintf(os.Stderr, "\r\033[K\033[?25h") // clear line and restore cursor
 		activeSpinner.visible = false
 	}
 }
@@ -36,6 +36,7 @@ func ResumeSpinner() {
 	activeSpinner.mu.Lock()
 	defer activeSpinner.mu.Unlock()
 	activeSpinner.paused = false
+	fmt.Fprintf(os.Stderr, "\033[?25l") // re-hide cursor as spinner resumes
 }
 
 // ClearSpinnerLine erases the spinner character from the current line if one is visible.
@@ -44,7 +45,7 @@ func ClearSpinnerLine() {
 	activeSpinner.mu.Lock()
 	defer activeSpinner.mu.Unlock()
 	if activeSpinner.visible {
-		fmt.Fprintf(os.Stderr, "\r\033[K")
+		fmt.Fprintf(os.Stderr, "\r\033[K\033[?25h") // clear line and restore cursor
 		activeSpinner.visible = false
 	}
 }
@@ -52,7 +53,7 @@ func ClearSpinnerLine() {
 // StartSpinner starts an animated spinner on stderr while a task is running.
 // Returns a stop function that clears the spinner line. No-op if not a TTY or TUI is active.
 func StartSpinner() func() {
-	if !isTTYGlobal || TUIMode || IsTUIEnabled() {
+	if !isTTYGlobal || TUIMode || IsTUIEnabled() || !SpinnerEnabled {
 		return func() {}
 	}
 
@@ -60,6 +61,8 @@ func StartSpinner() func() {
 	if LineCharacters {
 		frames = cliSpinnerFramesUnicode
 	}
+
+	fmt.Fprintf(os.Stderr, "\033[?25l") // hide cursor for the duration of the spinner
 
 	done := make(chan struct{})
 	go func() {
@@ -71,7 +74,7 @@ func StartSpinner() func() {
 			case <-time.After(cliSpinnerFPS):
 				activeSpinner.mu.Lock()
 				if !activeSpinner.paused {
-					fmt.Fprintf(os.Stderr, "\033[?25l\r%s\033[?25h", frames[frame%len(frames)])
+					fmt.Fprintf(os.Stderr, "\r%s", frames[frame%len(frames)])
 					activeSpinner.visible = true
 				}
 				activeSpinner.mu.Unlock()
@@ -83,7 +86,7 @@ func StartSpinner() func() {
 	return func() {
 		close(done)
 		activeSpinner.mu.Lock()
-		fmt.Fprintf(os.Stderr, "\r\033[K")
+		fmt.Fprintf(os.Stderr, "\r\033[K\033[?25h") // clear line and restore cursor
 		activeSpinner.visible = false
 		activeSpinner.paused = false
 		activeSpinner.mu.Unlock()
