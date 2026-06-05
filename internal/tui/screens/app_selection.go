@@ -65,7 +65,9 @@ type AppSelectionScreen struct {
 	connType                string
 }
 
-func (s *AppSelectionScreen) Init() tea.Cmd             { return s.menu.Init() }
+func (s *AppSelectionScreen) Init() tea.Cmd {
+	return tea.Batch(s.menu.Init(), s.loadAppSelectItemsCmd())
+}
 func (s *AppSelectionScreen) View() tea.View            { return s.menu.View() }
 func (s *AppSelectionScreen) ViewString() string        { return s.menu.ViewString() }
 func (s *AppSelectionScreen) Title() string             { return s.menu.Title() }
@@ -88,6 +90,11 @@ func (s *AppSelectionScreen) TitleBarFocused() bool     { return s.menu.TitleBar
 func (s *AppSelectionScreen) EscapeAction() tea.Cmd     { return s.menu.EscapeAction() }
 
 func (s *AppSelectionScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if loaded, ok := msg.(appSelectLoadedMsg); ok {
+		s.menu.SetLoadingText("")
+		s.applyLoadedItems(loaded)
+		return s, nil
+	}
 	m, cmd := s.menu.Update(msg)
 	if mm, ok := m.(*tui.MenuModel); ok {
 		s.menu = mm
@@ -190,7 +197,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool, connType string) 
 
 	menu.SetHelpLegend(getAppSelectionLegend())
 	menu.SetContextMenuFunc(s.contextMenuHandler)
-	s.refreshItems()
+	menu.SetLoadingText("Loading…")
 
 	return s
 }

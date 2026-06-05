@@ -326,6 +326,23 @@ func (m *MenuModel) viewSubMenu() string {
 // renderVerticalListBlock renders the core list content and applies the scrollbar.
 // This is the single source of truth for list viewport rendering.
 func (m *MenuModel) renderVerticalListBlock(ctx StyleContext) string {
+	if m.loadingText != "" {
+		styles := GetStyles()
+		h := m.layout.ViewportHeight
+		if h < 1 {
+			h = 1
+		}
+		w := m.list.Width()
+		centered := lipgloss.NewStyle().
+			Background(styles.Dialog.GetBackground()).
+			Foreground(styles.DialogTitle.GetForeground()).
+			Width(w).
+			Height(h).
+			Align(lipgloss.Center, lipgloss.Center).
+			Render(m.loadingText)
+		return ApplyScrollbar(&m.Scroll, centered, 0, h, 0, ctx.LineCharacters, ctx)
+	}
+
 	content := m.renderVariableHeightList()
 
 	// Ensure content is exactly ViewportHeight lines before applying the scrollbar,

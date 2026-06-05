@@ -230,11 +230,11 @@ var Keys = KeyMap{
 		key.WithHelp("F2", "edit value"),
 	),
 	EnvNextTab: key.NewBinding(
-		key.WithKeys("ctrl+right", "alt+right"),
+		key.WithKeys("ctrl+right", "alt+right", "ctrl+pgdown", "alt+pgdown"),
 		key.WithHelp("ctrl+→/alt+→", "next tab"),
 	),
 	EnvPrevTab: key.NewBinding(
-		key.WithKeys("ctrl+left", "alt+left"),
+		key.WithKeys("ctrl+left", "alt+left", "ctrl+pgup", "alt+pgup"),
 		key.WithHelp("ctrl+←/alt+←", "prev tab"),
 	),
 }

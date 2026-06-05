@@ -7,7 +7,12 @@ import (
 // ParseEnv takes raw contents of an .env file along with a function that returns the
 // default value for a given variable name, and populates the Model's value and line metadata.
 func (m *Model) ParseEnv(content string, defaultFunc func(string) string, readOnlyVars []string) {
-	rawLines := strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
+	// Normalize line endings and ensure a trailing blank line is always present.
+	content = strings.ReplaceAll(content, "\r\n", "\n")
+	if !strings.HasSuffix(content, "\n") {
+		content += "\n"
+	}
+	rawLines := strings.Split(content, "\n")
 
 	m.Reset() // ensures clean state
 	m.defaultFunc = defaultFunc
@@ -300,14 +305,17 @@ func (m *Model) ReformatEnv(defaultFunc func(string) string, readOnlyVars []stri
 		return
 	}
 
-	// Snapshot cursor position by variable key and column offset so we can restore
-	// it after the buffer is rebuilt (the line number will change but the key won't).
+	// Snapshot cursor position by variable key (or comment text) and column offset
+	// so we can restore it after the buffer is rebuilt.
 	cursorKey := ""
+	cursorComment := ""
 	cursorCol := m.col
 	if m.row < len(m.value) && m.row < len(m.lineMeta) {
 		line := string(m.value[m.row])
 		if eqIdx := strings.Index(line, "="); eqIdx > 0 {
 			cursorKey = strings.TrimSpace(line[:eqIdx])
+		} else if m.lineMeta[m.row].IsComment {
+			cursorComment = strings.TrimSpace(line)
 		}
 	}
 
@@ -338,19 +346,23 @@ func (m *Model) ReformatEnv(defaultFunc func(string) string, readOnlyVars []stri
 		if eqIdx > 0 {
 			key := strings.TrimSpace(line[:eqIdx])
 			if key != "" {
-				if meta.PendingDelete && !preservePendingDeletes {
-					// Manual F5: drop pending-delete lines — built-in vars will be
-					// re-introduced from the template at their default values.
-					continue
-				}
 				if _, exists := snapshot[key]; !exists {
 					// First occurrence wins — it's the original line whose diff markers
 					// should survive after duplicates are collapsed by the formatter.
+					// Always snapshot even pending-delete lines so that when the template
+					// re-introduces a deleted built-in var it restores as modified (~)
+					// rather than new (+).
 					snapshot[key] = diffSnap{
 						InitialLine:   meta.InitialLine,
 						IsNewLine:     meta.IsNewLine,
 						PendingDelete: meta.PendingDelete,
 					}
+				}
+				if meta.PendingDelete && !preservePendingDeletes {
+					// Manual F5: drop pending-delete lines from the formatter input —
+					// built-in vars will be re-introduced from the template at their
+					// default values, but we keep the snapshot above for diff restoration.
+					continue
 				}
 				completeLines = append(completeLines, line)
 				continue
@@ -383,11 +395,20 @@ func (m *Model) ReformatEnv(defaultFunc func(string) string, readOnlyVars []stri
 		}
 		key := strings.TrimSpace(line[:eqIdx])
 		if snap, ok := snapshot[key]; ok {
-			m.lineMeta[i].InitialLine = snap.InitialLine
-			m.lineMeta[i].IsNewLine = snap.IsNewLine
-			m.lineMeta[i].PendingDelete = snap.PendingDelete
-			if snap.PendingDelete {
-				m.lineMeta[i].ReadOnly = true
+			if snap.PendingDelete && !meta.PendingDelete {
+				// Was pending-delete before refresh, now restored by template at default
+				// value. Keep InitialLine so it shows as modified (~) rather than new (+),
+				// but clear the pending-delete state.
+				m.lineMeta[i].InitialLine = snap.InitialLine
+				m.lineMeta[i].IsNewLine = false
+				m.lineMeta[i].PendingDelete = false
+			} else {
+				m.lineMeta[i].InitialLine = snap.InitialLine
+				m.lineMeta[i].IsNewLine = snap.IsNewLine
+				m.lineMeta[i].PendingDelete = snap.PendingDelete
+				if snap.PendingDelete {
+					m.lineMeta[i].ReadOnly = true
+				}
 			}
 		} else {
 			// Key is new — injected by the template for the first time (e.g. app just
@@ -421,6 +442,27 @@ func (m *Model) ReformatEnv(defaultFunc func(string) string, readOnlyVars []stri
 					break
 				}
 			}
+		}
+	}
+	if !restored && cursorComment != "" {
+		// Try to restore to the same comment line. Only restore if the match is unique —
+		// duplicate comments (e.g. "# ---") are ambiguous so fall back to position.
+		matchRow := -1
+		ambiguous := false
+		for i, meta := range m.lineMeta {
+			if meta.IsComment && strings.TrimSpace(string(m.value[i])) == cursorComment {
+				if matchRow == -1 {
+					matchRow = i
+				} else {
+					ambiguous = true
+					break
+				}
+			}
+		}
+		if matchRow != -1 && !ambiguous {
+			m.row = matchRow
+			m.col = min(cursorCol, len(m.value[m.row]))
+			restored = true
 		}
 	}
 	if !restored {

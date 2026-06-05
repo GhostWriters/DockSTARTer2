@@ -1806,6 +1806,11 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 						def := m.DefaultValueFunc(varName)
 						if def != "" && def != "''" {
 							m.insertRunesFromUserInput([]rune(def))
+						} else if def == "''" && m.row < len(m.lineMeta) && m.lineMeta[m.row].IsUserDefined {
+							// User-defined var with no known default — insert '' and place
+							// cursor between the quotes so the user can type immediately.
+							m.insertRunesFromUserInput([]rune("''"))
+							m.col--
 						}
 					}
 				}
