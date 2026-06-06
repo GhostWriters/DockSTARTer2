@@ -276,6 +276,9 @@ func HandleThemeSettings(ctx context.Context, group *CommandGroup) error {
 		}
 	}
 
+	if group.Command == "--theme-spinner-speed" && len(group.Args) > 0 {
+		logger.Notice(ctx, "Spinner speed set to: {{|Var|}}%sms{{[-]}}", group.Args[0])
+	}
 	if group.Command == "--theme-border-color" && len(group.Args) > 0 {
 		logger.Notice(ctx, "Border color set to: {{|Var|}}%s{{[-]}}", group.Args[0])
 	}
