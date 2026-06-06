@@ -13,6 +13,8 @@ import (
 
 	"DockSTARTer2/cmd"
 	"DockSTARTer2/internal/assets"
+	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/serve"
@@ -96,6 +98,13 @@ func run() (exitCode int) {
 
 	slog.SetDefault(logger.NewLogger())
 
+	// Apply spinner/line-char config early so spinner works during startup log messages.
+	{
+		earlyConf := config.LoadAppConfig()
+		console.LineCharacters = earlyConf.UI.LineCharacters
+		console.SpinnerEnabled = earlyConf.UI.Spinner
+	}
+
 	// Create a cancelable context
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -116,10 +125,12 @@ func run() (exitCode int) {
 			if sig == os.Interrupt {
 				interruptCount++
 				if interruptCount > 1 {
+					console.RestoreCursor()
 					fmt.Fprintln(os.Stderr, "\nForced exit.")
 					os.Exit(1)
 				}
 				exitOnce.Do(func() {
+					console.RestoreCursor()
 					logger.TUIMode = false
 					logger.Error(ctx, "User aborted via CTRL-C")
 					exitCode = 1
@@ -166,10 +177,13 @@ func run() (exitCode int) {
 	// baseline to compare against, even after a manual binary replacement.
 	sessionlocks.Sessions.SeedInstalledVersion(exePath, version.Version)
 
+	stopStartupSpinner := console.StartSpinner()
+
 	// Ensure templates are cloned
 	if err := update.EnsureTemplates(ctx); err != nil {
 		// Only fatal if we are NOT running a status/help command that doesn't need templates
 		// But practically, most commands need templates.
+		stopStartupSpinner()
 		logger.FatalWithStack(ctx, "Failed to clone {{|ApplicationName|}}DockSTARTer-Templates{{[-]}} repo.")
 	}
 
@@ -178,6 +192,9 @@ func run() (exitCode int) {
 	update.CheckUpdates(ctx)
 	// Warn if an SSH server or active session is running
 	serve.CheckStartupStatus(ctx)
+
+	stopStartupSpinner()
+
 	// Parse command line arguments
 	groups, err := cmd.Parse(os.Args[1:])
 	if err != nil {
@@ -196,6 +213,7 @@ func run() (exitCode int) {
 	return exitCode
 }
 
-func cleanup(ctx context.Context) {
+func cleanup(_ context.Context) {
+	console.RestoreCursor()
 	logger.Cleanup()
 }

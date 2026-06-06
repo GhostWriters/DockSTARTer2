@@ -309,8 +309,11 @@ func Display(ctx context.Context, msg any, args ...any) {
 		// IMPORTANT: Always use ToANSI for stdout to get ANSI colors, regardless of TUI mode
 		// Suppress based on TUIMode
 		if !TUIMode {
+			console.LockTerminal()
 			console.ClearSpinnerLine()
 			fmt.Println(console.ToConsoleANSI(line) + console.CodeReset)
+			console.ShowSpinnerFrame()
+			console.UnlockTerminal()
 		}
 	}
 }

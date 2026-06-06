@@ -138,7 +138,6 @@ func (h *TagProcessorHandler) Handle(ctx context.Context, r slog.Record) error {
 	// Process based on mode
 	switch h.mode {
 	case "ansi":
-		console.ClearSpinnerLine()
 		msg = console.ToConsoleANSI(msg)
 	case "strip":
 		msg = console.Strip(msg)
@@ -151,6 +150,16 @@ func (h *TagProcessorHandler) Handle(ctx context.Context, r slog.Record) error {
 		return true
 	})
 
+	if h.mode == "ansi" {
+		// Hold termMu across clear+write+show so the spinner goroutine cannot
+		// interleave between these three steps.
+		console.LockTerminal()
+		console.ClearSpinnerLine()
+		err := h.base.Handle(ctx, newR)
+		console.ShowSpinnerFrame()
+		console.UnlockTerminal()
+		return err
+	}
 	return h.base.Handle(ctx, newR)
 }
 
