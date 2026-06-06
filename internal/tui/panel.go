@@ -42,6 +42,9 @@ type ConsoleLockMsg struct {
 // panelSpinnerTickMsg advances the panel title spinner by one frame while a command is running.
 type panelSpinnerTickMsg struct{}
 
+// panelInlineSpinnerTickMsg advances the inline content-area spinner in the panel viewport.
+type panelInlineSpinnerTickMsg struct{}
+
 // consoleDoneMsg signals that a console command has finished.
 type consoleDoneMsg struct {
 	err           error
@@ -97,6 +100,11 @@ type PanelModel struct {
 	connType     string // "local", "ssh", or "web"
 	spinnerFrame int
 	lastLineTime time.Time // when the last log line arrived; spinner runs until idle for spinnerIdleTimeout
+
+	// Inline content-area spinner (shown while a console command is running)
+	commandRunning     bool
+	inlineSpinnerFrame int
+	inlineSpinnerLine  string
 }
 
 const spinnerIdleTimeout = 1500 * time.Millisecond
@@ -116,6 +124,19 @@ func (m *PanelModel) spinnerTickCmd() tea.Cmd {
 	}
 	return tea.Tick(fps, func(time.Time) tea.Msg {
 		return panelSpinnerTickMsg{}
+	})
+}
+
+func (m *PanelModel) inlineSpinnerTickCmd() tea.Cmd {
+	if !console.SpinnerEnabled {
+		return nil
+	}
+	fps := time.Duration(console.SpinnerSpeed) * time.Millisecond
+	if fps <= 0 {
+		fps = 100 * time.Millisecond
+	}
+	return tea.Tick(fps, func(time.Time) tea.Msg {
+		return panelInlineSpinnerTickMsg{}
 	})
 }
 

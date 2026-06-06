@@ -97,7 +97,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, logger.BatchRecoverTUI(m.ctx, cmd)
 
-	case panelSpinnerTickMsg:
+	case panelSpinnerTickMsg, panelInlineSpinnerTickMsg:
 		updated, cmd := m.panel.Update(msg)
 		m.panel = updated.(PanelModel)
 		return m, logger.BatchRecoverTUI(m.ctx, cmd)
