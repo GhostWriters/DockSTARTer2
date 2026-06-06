@@ -10,7 +10,7 @@ import (
 var (
 	cliSpinnerFramesASCII   = []string{"|", "/", "-", "\\"}
 	cliSpinnerFramesUnicode = []string{"⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"}
-	cliSpinnerFPS           = time.Second / 10
+	cliSpinnerFPS           = time.Second / 4
 )
 
 var activeSpinner struct {
