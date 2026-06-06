@@ -17,7 +17,7 @@ type menuSpinnerTickMsg struct{ id string }
 var (
 	spinnerFramesASCII   = []string{"|", "/", "-", "\\"}
 	spinnerFramesUnicode = []string{"⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"}
-	spinnerFPS           = time.Second / 10
+	spinnerFPS           = time.Second / 4
 )
 
 // MenuItem defines an item in a menu

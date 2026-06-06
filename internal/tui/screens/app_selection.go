@@ -66,8 +66,7 @@ type AppSelectionScreen struct {
 }
 
 func (s *AppSelectionScreen) Init() tea.Cmd {
-	spinCmd := s.menu.SetLoadingText("Loading...")
-	return tea.Batch(s.menu.Init(), spinCmd, s.loadAppSelectItemsCmd())
+	return tea.Batch(s.menu.Init(), showSpinnerAfterDelayCmd(), s.loadAppSelectItemsCmd())
 }
 func (s *AppSelectionScreen) View() tea.View            { return s.menu.View() }
 func (s *AppSelectionScreen) ViewString() string        { return s.menu.ViewString() }
@@ -91,6 +90,14 @@ func (s *AppSelectionScreen) TitleBarFocused() bool     { return s.menu.TitleBar
 func (s *AppSelectionScreen) EscapeAction() tea.Cmd     { return s.menu.EscapeAction() }
 
 func (s *AppSelectionScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if _, ok := msg.(appSelectShowSpinnerMsg); ok {
+		// Only show the spinner if loading hasn't finished yet.
+		if len(s.menu.GetItems()) == 0 {
+			spinCmd := s.menu.SetLoadingText("Loading...")
+			return s, spinCmd
+		}
+		return s, nil
+	}
 	if loaded, ok := msg.(appSelectLoadedMsg); ok {
 		s.menu.SetLoadingText("")
 		s.applyLoadedItems(loaded)
