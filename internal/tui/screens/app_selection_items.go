@@ -14,19 +14,15 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-// spinnerRevealDelay is how long to wait before showing the loading spinner.
-// If loading completes within this window the spinner never appears.
-const spinnerRevealDelay = 250 * time.Millisecond
+// appSelectShowSpinnerMsg is sent after a short delay to show the loading spinner,
+// but only if the app list hasn't finished loading yet.
+type appSelectShowSpinnerMsg struct{}
 
 func showSpinnerAfterDelayCmd() tea.Cmd {
-	return tea.Tick(spinnerRevealDelay, func(time.Time) tea.Msg {
+	return tea.Tick(250*time.Millisecond, func(time.Time) tea.Msg {
 		return appSelectShowSpinnerMsg{}
 	})
 }
-
-// appSelectShowSpinnerMsg is sent after a short delay to reveal the loading spinner,
-// but only if the app list hasn't finished loading yet.
-type appSelectShowSpinnerMsg struct{}
 
 // appSelectLoadedMsg carries the result of the async app list load.
 type appSelectLoadedMsg struct {
