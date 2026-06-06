@@ -60,6 +60,7 @@ TitleCheckboxFocused = "{{|TitleSubMenuFocused|}}"
 
 # Focus indicators
 TitleFocusIndicator = "{{[red::-B]}}"
+TitleUnfocusedIndicator = ""
 
 # Submenu titles
 TitleSubMenu = "{{|Title|}}"
@@ -169,6 +170,7 @@ LargeTitleError = "{{|TitleError|}}"
 LargeTitleSuccess = "{{|TitleSuccess|}}"
 LargeTitleQuestion = "{{|TitleQuestion|}}"
 LargeTitleFocusIndicator = "{{|TitleFocusIndicator|}}"
+LargeTitleUnfocusedIndicator = "{{|TitleUnfocusedIndicator|}}"
 LargeTitleSubMenu = "{{|TitleSubMenu|}}"
 LargeTitleSubMenuFocused = "{{|TitleSubMenuFocused|}}"
 LargeIconFocused = "{{|IconFocused|}}"

@@ -32,7 +32,12 @@ func GetBlockBorders(lineCharacters bool) BorderPair {
 // RenderTopBorderBoxCtx renders only the top border line with a title (suitable for log panel).
 // rightTitle is wrapped in T-bar connectors (like the left title). rightSuffix is appended after
 // the T-bar section without additional styling (use it for pre-rendered icon strings).
-func RenderTopBorderBoxCtx(title, rightTitle, rightSuffix, content string, contentWidth int, focused bool, titleStyle, borderStyle lipgloss.Style, ctx StyleContext) string {
+// spinnerIndicator, when non-empty, replaces ▸/◂ focus indicators with the given spinner frame character.
+func RenderTopBorderBoxCtx(title, rightTitle, rightSuffix, content string, contentWidth int, focused bool, titleStyle, borderStyle lipgloss.Style, ctx StyleContext, spinnerIndicator ...string) string {
+	spinInd := ""
+	if len(spinnerIndicator) > 0 {
+		spinInd = spinnerIndicator[0]
+	}
 	borderStyle = ctx.BorderFlags.Apply(borderStyle)
 	var border lipgloss.Border
 	if !ctx.DrawBorders {
@@ -140,22 +145,27 @@ func RenderTopBorderBoxCtx(title, rightTitle, rightSuffix, content string, conte
 	result.WriteString(borderStyle.Render(strutil.Repeat(border.Top, leftPad)))
 	result.WriteString(borderStyle.Render(leftT))
 	if focused {
-		if ctx.LineCharacters {
-			result.WriteString(borderStyle.Render(theme.ToThemeANSI("{{|TitleFocusIndicator|}}▸")))
+		var indL, indR string
+		if spinInd != "" {
+			indL = spinInd
+			indR = spinInd
+		} else if ctx.LineCharacters {
+			indL = "▸"
+			indR = "◂"
 		} else {
-			result.WriteString(borderStyle.Render(theme.ToThemeANSI("{{|TitleFocusIndicator|}}>")))
+			indL = ">"
+			indR = "<"
 		}
+		result.WriteString(borderStyle.Render(theme.ToThemeANSI("{{|TitleFocusIndicator|}}" + indL)))
+		result.WriteString(renderedTitle)
+		result.WriteString(borderStyle.Render(theme.ToThemeANSI("{{|TitleFocusIndicator|}}" + indR)))
+	} else if spinInd != "" {
+		result.WriteString(borderStyle.Render(theme.ToThemeANSI("{{|TitleUnfocusedIndicator|}}" + spinInd)))
+		result.WriteString(renderedTitle)
+		result.WriteString(borderStyle.Render(theme.ToThemeANSI("{{|TitleUnfocusedIndicator|}}" + spinInd)))
 	} else {
 		result.WriteString(borderStyle.Render(" "))
-	}
-	result.WriteString(renderedTitle)
-	if focused {
-		if ctx.LineCharacters {
-			result.WriteString(borderStyle.Render(theme.ToThemeANSI("{{|TitleFocusIndicator|}}◂")))
-		} else {
-			result.WriteString(borderStyle.Render(theme.ToThemeANSI("{{|TitleFocusIndicator|}}<")))
-		}
-	} else {
+		result.WriteString(renderedTitle)
 		result.WriteString(borderStyle.Render(" "))
 	}
 	result.WriteString(borderStyle.Render(rightT))

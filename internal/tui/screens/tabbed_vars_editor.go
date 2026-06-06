@@ -2,10 +2,12 @@ package screens
 
 import (
 	"DockSTARTer2/internal/appenv"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/tui/components/enveditor"
 	"fmt"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 )
@@ -90,6 +92,36 @@ type TabbedVarsEditorModel struct {
 
 	// Title bar focus state
 	tui.TitleBarFocus
+
+	// Spinner while env data is loading from disk
+	loading      bool
+	spinnerFrame int
+}
+
+// editorSpinnerTickMsg advances the title spinner while loading.
+type editorSpinnerTickMsg struct{}
+
+func (m *TabbedVarsEditorModel) spinnerTickCmd() tea.Cmd {
+	if !console.SpinnerEnabled {
+		return nil
+	}
+	fps := time.Duration(console.SpinnerSpeed) * time.Millisecond
+	if fps <= 0 {
+		fps = 100 * time.Millisecond
+	}
+	return tea.Tick(fps, func(time.Time) tea.Msg { return editorSpinnerTickMsg{} })
+}
+
+func (m *TabbedVarsEditorModel) currentSpinnerIndicator() string {
+	if !m.loading || !console.SpinnerEnabled {
+		return ""
+	}
+	ctx := tui.GetActiveContext()
+	frames := console.SpinnerFramesUnicode
+	if !ctx.LineCharacters {
+		frames = console.SpinnerFramesASCII
+	}
+	return frames[m.spinnerFrame%len(frames)]
 }
 
 type envAddVarMsg struct {
@@ -170,7 +202,8 @@ func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec
 }
 
 func (m *TabbedVarsEditorModel) Init() tea.Cmd {
-	return m.loadEnv
+	m.loading = true
+	return tea.Batch(m.loadEnv, m.spinnerTickCmd())
 }
 
 // EscapeAction implements tui.EscapeActioner: prompts for unsaved changes if needed.
@@ -295,9 +328,8 @@ func (m *TabbedVarsEditorModel) MenuName() string {
 	return "tabbed_vars"
 }
 
-func (m *TabbedVarsEditorModel) IsDestructive() bool {
-	return true
-}
+func (m *TabbedVarsEditorModel) IsDestructive() bool { return true }
+func (m *TabbedVarsEditorModel) IsLoading() bool     { return m.loading }
 
 func (m *TabbedVarsEditorModel) HasDialog() bool {
 	return false

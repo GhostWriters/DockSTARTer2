@@ -82,11 +82,9 @@ func (s *AppSelectionScreen) IsMaximized() bool         { return s.menu.IsMaximi
 func (s *AppSelectionScreen) MinHeight() int            { return s.menu.MinHeight() }
 func (s *AppSelectionScreen) HasDialog() bool           { return s.menu.HasDialog() }
 func (s *AppSelectionScreen) MenuName() string          { return s.menu.MenuName() }
-func (s *AppSelectionScreen) IsDestructive() bool       { return true }
+func (s *AppSelectionScreen) IsDestructive() bool { return true }
+func (s *AppSelectionScreen) IsLoading() bool     { return !s.ready }
 func (s *AppSelectionScreen) GetHitRegions(x, y int) []tui.HitRegion {
-	if !s.ready {
-		return nil
-	}
 	return s.menu.GetHitRegions(x, y)
 }
 func (s *AppSelectionScreen) IsScrollbarDragging() bool { return s.menu.IsScrollbarDragging() }
@@ -117,9 +115,33 @@ func (s *AppSelectionScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		s.menu.SetLoadingText("")
 		return s, nil
 	}
-	// Block all input until items are loaded, but let the spinner tick through.
+	// Block most input until items are loaded, but allow Esc (back/cancel),
+	// ? / F1 (help), and mouse hits (for focus restoration and Back/Exit/Help widgets).
 	if !s.ready {
-		_, cmd := s.menu.Update(msg)
+		if kMsg, ok := msg.(tea.KeyPressMsg); ok {
+			if key.Matches(kMsg, tui.Keys.Esc) {
+				return s, s.menu.EscapeAction()
+			}
+			if key.Matches(kMsg, tui.Keys.Help) ||
+				key.Matches(kMsg, tui.Keys.Left) ||
+				key.Matches(kMsg, tui.Keys.Right) ||
+				key.Matches(kMsg, tui.Keys.Enter) ||
+				key.Matches(kMsg, tui.Keys.FocusPanelTitle) {
+				m, cmd := s.menu.Update(msg)
+				if mm, ok := m.(*tui.MenuModel); ok {
+					s.menu = mm
+				}
+				return s, cmd
+			}
+			return s, nil
+		}
+		if _, ok := msg.(tui.ToggleFocusedMsg); ok {
+			return s, nil
+		}
+		m, cmd := s.menu.Update(msg)
+		if mm, ok := m.(*tui.MenuModel); ok {
+			s.menu = mm
+		}
 		return s, cmd
 	}
 	m, cmd := s.menu.Update(msg)

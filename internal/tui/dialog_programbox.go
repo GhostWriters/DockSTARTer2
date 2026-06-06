@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"DockSTARTer2/internal/console"
+
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/progress"
 	"charm.land/bubbles/v2/viewport"
@@ -41,7 +43,9 @@ type ProgramBoxModel struct {
 	viewport viewport.Model
 	lines    []string // Currently rendered/wrapped lines
 	rawLines []string // Themed but unwrapped lines for re-wrapping on resize
-	done     bool
+	done         bool
+	spinnerFrame int
+	spinnerLine  string // current spinner line shown after last output; cleared on new output or done
 	err      error
 	width    int
 	height   int
@@ -90,6 +94,9 @@ type UpdateTaskMsg struct {
 type UpdatePercentMsg struct {
 	Percent float64
 }
+
+// pbSpinnerTickMsg advances the title-bar spinner by one frame while the task is running.
+type pbSpinnerTickMsg struct{ id string }
 
 // newProgramBox creates a new program box dialog (internal use)
 func newProgramBox(title, subtitle, command string) *ProgramBoxModel {
@@ -224,6 +231,7 @@ func (m *ProgramBoxModel) Init() tea.Cmd {
 
 		lockID := fmt.Sprintf("programbox-%p", m)
 		return tea.Batch(
+			m.spinnerTickCmd(),
 			func() tea.Msg { return ConsoleLockMsg{ID: lockID, Locked: true} },
 			func() tea.Msg {
 				reader, writer := io.Pipe()
@@ -294,7 +302,44 @@ func (m *ProgramBoxModel) Init() tea.Cmd {
 	return nil
 }
 
+// setViewportContent sets the viewport content to rawLines + optional spinnerLine.
+// Only scrolls to bottom if already at bottom.
+func (m *ProgramBoxModel) setViewportContent(scrollToBottom bool) {
+	content := strings.Join(m.rawLines, "\n")
+	if m.spinnerLine != "" {
+		content += "\n" + m.spinnerLine
+	}
+	if m.viewport.Width() > 0 {
+		content = lipgloss.NewStyle().Width(m.viewport.Width()).Render(content)
+	}
+	atBottom := m.viewport.AtBottom()
+	m.viewport.SetContent(content)
+	if scrollToBottom || atBottom {
+		m.viewport.GotoBottom()
+	}
+}
+
 func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Spinner tick: advance frame, update content spinner line, reschedule while task is running.
+	if tick, ok := msg.(pbSpinnerTickMsg); ok && tick.id == m.id {
+		if !m.done {
+			ctx := GetActiveContext()
+			frames := console.SpinnerFramesUnicode
+			if !ctx.LineCharacters {
+				frames = console.SpinnerFramesASCII
+			}
+			m.spinnerFrame = (m.spinnerFrame + 1) % len(frames)
+			if console.SpinnerEnabled {
+				styles := GetStyles()
+				frame := lipgloss.NewStyle().Foreground(console.SpinnerColor).Render(frames[m.spinnerFrame%len(frames)])
+				m.spinnerLine = RenderConsoleText(frame, styles.Console)
+				m.setViewportContent(false)
+			}
+			return m, m.spinnerTickCmd()
+		}
+		return m, nil
+	}
+
 	if m.HandleWidgetClearPress(msg) {
 		return m, nil
 	}
@@ -361,31 +406,19 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			rendered := RenderConsoleText(line, styles.Console)
 			m.rawLines = append(m.rawLines, rendered)
 		}
-		if m.viewport.Width() > 0 {
-			content := lipgloss.NewStyle().
-				Width(m.viewport.Width()).
-				Render(strings.Join(m.rawLines, "\n"))
-			m.viewport.SetContent(content)
-		} else {
-			m.viewport.SetContent(strings.Join(m.rawLines, "\n"))
-		}
-		m.viewport.GotoBottom()
+		m.spinnerLine = ""
+		m.setViewportContent(true)
 		if !m.done {
 			return m, nil
 		}
 
 	case outputDoneMsg:
 		m.done = true
+		m.spinnerLine = ""
 		lockID := fmt.Sprintf("programbox-%p", m)
 		m.err = msg.err
 		m.SetSize(m.width, m.height)
-		if m.viewport.Width() > 0 {
-			content := lipgloss.NewStyle().
-				Width(m.viewport.Width()).
-				Render(strings.Join(m.rawLines, "\n"))
-			m.viewport.SetContent(content)
-		}
-		m.viewport.GotoBottom()
+		m.setViewportContent(true)
 		unlockCmd := func() tea.Msg { return ConsoleLockMsg{ID: lockID, Locked: false} }
 		if m.AutoExit && m.err == nil {
 			result := tea.Msg(true)
@@ -467,8 +500,43 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Only pass messages the viewport actually needs — not mouse or semantic messages
+	// which can trigger focus side-effects (e.g. clearing header focus).
+	switch msg.(type) {
+	case LayerHitMsg, LayerWheelMsg,
+		tea.MouseClickMsg, tea.MouseWheelMsg, tea.MouseMotionMsg, tea.MouseReleaseMsg:
+		return m, nil
+	}
 	m.viewport, cmd = m.viewport.Update(msg)
 	return m, cmd
+}
+
+func (m *ProgramBoxModel) spinnerTickCmd() tea.Cmd {
+	if !console.SpinnerEnabled {
+		return nil
+	}
+	fps := time.Duration(console.SpinnerSpeed) * time.Millisecond
+	if fps <= 0 {
+		fps = 100 * time.Millisecond
+	}
+	id := m.id
+	return tea.Tick(fps, func(time.Time) tea.Msg {
+		return pbSpinnerTickMsg{id: id}
+	})
+}
+
+// currentSpinnerIndicator returns the spinner frame character to use in the title bar,
+// or "" when the spinner is disabled or the task is complete.
+func (m *ProgramBoxModel) currentSpinnerIndicator() string {
+	if m.done || !console.SpinnerEnabled {
+		return ""
+	}
+	ctx := GetActiveContext()
+	frames := console.SpinnerFramesUnicode
+	if !ctx.LineCharacters {
+		frames = console.SpinnerFramesASCII
+	}
+	return frames[m.spinnerFrame%len(frames)]
 }
 
 func (m *ProgramBoxModel) satisfySubDialogChan(result any) {

@@ -97,6 +97,11 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, logger.BatchRecoverTUI(m.ctx, cmd)
 
+	case panelSpinnerTickMsg:
+		updated, cmd := m.panel.Update(msg)
+		m.panel = updated.(PanelModel)
+		return m, logger.BatchRecoverTUI(m.ctx, cmd)
+
 	case panelLineMsg:
 		updated, cmd := m.panel.Update(msg)
 		m.panel = updated.(PanelModel)
@@ -132,7 +137,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.ID == resizeZoneID {
 			updated, cmd := m.panel.Update(msg)
 			m.panel = updated.(PanelModel)
-			m.backdrop.SetSize(m.width, m.backdropHeight())
+			m.refreshPanelLayout()
 			return m, logger.BatchRecoverTUI(m.ctx, cmd)
 		}
 
@@ -223,6 +228,16 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, logger.BatchRecoverTUI(m.ctx, cmds...)
 
 	case NavigateMsg:
+		// Block navigation if any screen in the stack is still loading.
+		type loader interface{ IsLoading() bool }
+		if l, ok := m.activeScreen.(loader); ok && l.IsLoading() {
+			return m, logger.BatchRecoverTUI(m.ctx, cmds...)
+		}
+		for _, s := range m.screenStack {
+			if l, ok := s.(loader); ok && l.IsLoading() {
+				return m, logger.BatchRecoverTUI(m.ctx, cmds...)
+			}
+		}
 		if msg.Screen != nil && msg.Screen.IsDestructive() {
 			if !sessionlocks.Sessions.AcquireEditLock(m.clientIP, "Menu") {
 				info := sessionlocks.Sessions.ReadEditInfo()

@@ -531,8 +531,10 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 					return m, cmd, true
 				}
 				// .sb.thumb: fall through to B0 to start the drag
-			} else {
-				// If we hit anything else (dialog, screen, header), ensure logs and header are unfocused
+			} else if _, isClick := msg.(tea.MouseClickMsg); isClick {
+				// On an explicit click elsewhere, clear panel and header focus.
+				// Do not clear on motion or release — those must not override a focus
+				// that was intentionally set by a preceding click.
 				m.setPanelFocus(false)
 				m.setHeaderFocus(HeaderFocusNone)
 			}
@@ -584,11 +586,16 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		}
 
 		// C. Global Backdrop (Header etc)
+		isStatusBarHit := hitID == IDStatusBar || hitID == IDAppVersion || hitID == IDTmplVersion || hitID == IDHeaderFlags
 		var backdropCmd tea.Cmd
 		if m.backdrop != nil {
-			// Do NOT forward semantic messages natively to backdrop if a dialog is open (prevents status bar hits)
-			if m.dialog != nil && (hitID == IDStatusBar || hitID == IDAppVersion || hitID == IDTmplVersion || hitID == IDHeaderFlags) {
-				// Block background hits
+			if m.dialog != nil && isStatusBarHit {
+				// When a dialog is open, allow focus-only (no action) on status bar hits.
+				hoverMsg := LayerHitMsg{ID: hitID, Button: HoverButton, X: hitX, Y: hitY, Hit: hit}
+				updated, _ := m.backdrop.Update(hoverMsg)
+				if backdrop, ok := updated.(*BackdropModel); ok {
+					m.backdrop = backdrop
+				}
 			} else {
 				updated, bCmd := m.backdrop.Update(semanticMsg)
 				if backdrop, ok := updated.(*BackdropModel); ok {
@@ -615,7 +622,11 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 	// 6. MODAL FALLBACK (No hit, but dialog is open)
 	if m.dialog != nil {
 		m.setPanelFocus(false)
-		m.setHeaderFocus(HeaderFocusNone)
+		// Only clear header focus on explicit clicks — not motion/release events.
+		// Motion fires continuously and would immediately cancel a focus set by a preceding click.
+		if _, isClick := msg.(tea.MouseClickMsg); isClick {
+			m.setHeaderFocus(HeaderFocusNone)
+		}
 		return m, nil, false // Let raw msg fall through to dialog in standard loop
 	}
 
