@@ -168,6 +168,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 	// For all other operations: merge first (now that user confirmed), then run SDK operation
 	if command != "down" && command != "stop" && command != "pause" && command != "unpause" {
 		// Operations that need an up-to-date compose file first
+		logger.Notice(ctx, "Preparing compose file, please wait...")
 		if err := MergeYML(ctx, force); err != nil {
 			return err
 		}
@@ -245,7 +246,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 	if w, ok := ctx.Value(console.TUIWriterKey).(io.Writer); ok {
 		outStream = w
 		errStream = w
-		bus = display.Plain(outStream)
+		bus = &tuiEventProcessor{out: w}
 	}
 
 	// Initialize Docker CLI
