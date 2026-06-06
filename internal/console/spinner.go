@@ -36,7 +36,9 @@ func ResumeSpinner() {
 	activeSpinner.mu.Lock()
 	defer activeSpinner.mu.Unlock()
 	activeSpinner.paused = false
-	fmt.Fprintf(os.Stderr, "\033[?25l") // re-hide cursor as spinner resumes
+	if SpinnerEnabled {
+		fmt.Fprintf(os.Stderr, "\033[?25l") // re-hide cursor as spinner resumes
+	}
 }
 
 // ClearSpinnerLine erases the spinner character from the current line if one is visible.

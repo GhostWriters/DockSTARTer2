@@ -203,6 +203,16 @@ func (s *DisplayOptionsScreen) initMenus() {
 			IsDestructive: true,
 		},
 		{
+			Tag:           "Spinner",
+			Desc:          "Show loading spinner animations",
+			Help:          "Toggle spinner animations during loading (Space to toggle)",
+			IsCheckbox:    true,
+			Checked:       s.config.UI.Spinner,
+			Selectable:    true,
+			SpaceAction:   s.toggleSpinner(),
+			IsDestructive: true,
+		},
+		{
 			Tag:           "Shadow Level",
 			Desc:          s.dropdownDesc(s.shadowLevelToDesc(s.config.UI.ShadowLevel)),
 			Help:          "Adjust the density of the shadow (Select/Enter for list)",
@@ -848,6 +858,15 @@ func (s *DisplayOptionsScreen) toggleScrollbar() tea.Cmd {
 		newState := !s.config.UI.Scrollbar
 		return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
 			cfg.UI.Scrollbar = newState
+		}}
+	}
+}
+
+func (s *DisplayOptionsScreen) toggleSpinner() tea.Cmd {
+	return func() tea.Msg {
+		newState := !s.config.UI.Spinner
+		return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
+			cfg.UI.Spinner = newState
 		}}
 	}
 }
