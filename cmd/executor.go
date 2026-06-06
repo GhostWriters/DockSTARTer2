@@ -207,7 +207,8 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				"--theme-large-buttons", "--theme-no-large-buttons",
 				"--theme-shadows", "--theme-no-shadows", "--theme-shadow", "--theme-no-shadow", "--theme-shadow-level",
 				"--theme-scrollbar", "--theme-no-scrollbar", "--theme-border-color",
-				"--theme-dialog-title", "--theme-submenu-title", "--theme-panel-title":
+				"--theme-dialog-title", "--theme-submenu-title", "--theme-panel-title",
+				"--theme-spinner", "--theme-no-spinner":
 				ranCommand = true
 				return commands.HandleThemeSettings(subCtx, &group)
 			case "-p", "--prune":

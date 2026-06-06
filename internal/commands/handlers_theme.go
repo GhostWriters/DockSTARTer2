@@ -250,6 +250,20 @@ func HandleThemeSettings(ctx context.Context, group *CommandGroup) error {
 		return err
 	}
 
+	// Log a confirmation using the registry title for all simple toggle commands.
+	switch group.Command {
+	case "--theme-lines", "--theme-line", "--theme-no-lines", "--theme-no-line",
+		"--theme-borders", "--theme-border", "--theme-no-borders", "--theme-no-border",
+		"--theme-large-buttons", "--theme-no-large-buttons",
+		"--theme-large-titlebars", "--theme-no-large-titlebars",
+		"--theme-shadows", "--theme-shadow", "--theme-no-shadows", "--theme-no-shadow",
+		"--theme-scrollbar", "--theme-no-scrollbar",
+		"--theme-spinner", "--theme-no-spinner":
+		if def, ok := Registry[group.Command]; ok && def.Title != "" {
+			logger.Notice(ctx, "%s", def.Title)
+		}
+	}
+
 	if group.Command == "--theme-border-color" && len(group.Args) > 0 {
 		logger.Notice(ctx, "Border color set to: {{|Var|}}%s{{[-]}}", group.Args[0])
 	}
