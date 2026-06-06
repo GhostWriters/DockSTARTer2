@@ -105,9 +105,16 @@ func (s *AppSelectionScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return s, nil
 	}
 	if loaded, ok := msg.(appSelectLoadedMsg); ok {
-		s.applyLoadedItems(loaded)
-		s.menu.SetLoadingText("")
+		// applyLoadedItems is expensive — run it as a cmd so the spinner keeps
+		// ticking on the main goroutine while items are being built.
+		return s, func() tea.Msg {
+			s.applyLoadedItems(loaded)
+			return appSelectAppliedMsg{}
+		}
+	}
+	if _, ok := msg.(appSelectAppliedMsg); ok {
 		s.ready = true
+		s.menu.SetLoadingText("")
 		return s, nil
 	}
 	// Block all input until items are loaded, but let the spinner tick through.
