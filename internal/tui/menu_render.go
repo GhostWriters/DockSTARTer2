@@ -336,9 +336,9 @@ func (m *MenuModel) renderVerticalListBlock(ctx StyleContext) string {
 		w := m.list.Width()
 		var framePrefix string
 		if console.SpinnerEnabled {
-			frames := spinnerFramesUnicode
+			frames := console.SpinnerFramesUnicode
 			if !ctx.LineCharacters {
-				frames = spinnerFramesASCII
+				frames = console.SpinnerFramesASCII
 			}
 			framePrefix = frames[m.spinnerFrame%len(frames)] + " "
 		}

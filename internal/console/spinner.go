@@ -10,8 +10,8 @@ import (
 )
 
 var (
-	cliSpinnerFramesASCII   = []string{"|", "/", "-", "\\"}
-	cliSpinnerFramesUnicode = []string{"⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"}
+	SpinnerFramesASCII   = []string{"|", "/", "-", "\\"}
+	SpinnerFramesUnicode = []string{"⣷", "⣯", "⣟", "⡿", "⢿", "⣻", "⣽", "⣾"}
 	cliSpinnerFPS = time.Second / 4 // fallback; StartSpinner uses SpinnerSpeed if set
 	cliSpinnerStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color("2")) // green
 )
@@ -32,9 +32,9 @@ var activeSpinner struct {
 // spinnerFrames returns the correct frame set based on config.
 func spinnerFrames() []string {
 	if LineCharacters {
-		return cliSpinnerFramesUnicode
+		return SpinnerFramesUnicode
 	}
-	return cliSpinnerFramesASCII
+	return SpinnerFramesASCII
 }
 
 // LockTerminal acquires the terminal write lock. The caller must write to
