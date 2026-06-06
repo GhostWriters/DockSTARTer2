@@ -89,6 +89,18 @@ func (m *HeaderModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		if msg.Button == HoverButton {
+			// Focus-only hit (e.g. click blocked by open dialog) — update focus without triggering action.
+			switch msg.ID {
+			case IDAppVersion:
+				m.SetFocus(HeaderFocusApp)
+			case IDTmplVersion:
+				m.SetFocus(HeaderFocusTmpl)
+			case IDHeaderFlags:
+				m.SetFocus(HeaderFocusFlags)
+			}
+			return m, nil
+		}
 		_, cmd := m.HandleHit(msg.ID)
 		return m, cmd
 

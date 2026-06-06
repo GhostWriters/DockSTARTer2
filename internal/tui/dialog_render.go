@@ -16,11 +16,12 @@ const LargeTitleBarOverhead = 2
 // TitleBarState carries the state needed to render title bar widgets ([?]/[×]).
 // The zero value means "no widgets shown".
 type TitleBarState struct {
-	Show          bool             // Whether to render the title bar widgets
-	Focused       bool             // Whether the title bar has keyboard focus
-	ActiveWidget  TitleBarWidget   // Which widget has focus
-	PressedWidget TitleBarWidget   // Which widget is currently pressed (click flash)
-	Widgets       []TitleBarWidget // Ordered widget set; nil means defaultWidgets
+	Show             bool             // Whether to render the title bar widgets
+	Focused          bool             // Whether the title bar has keyboard focus
+	ActiveWidget     TitleBarWidget   // Which widget has focus
+	PressedWidget    TitleBarWidget   // Which widget is currently pressed (click flash)
+	Widgets          []TitleBarWidget // Ordered widget set; nil means defaultWidgets
+	SpinnerIndicator string           // When non-empty, replaces ▸/◂ focus indicators with this spinner frame
 }
 
 func (s TitleBarState) activeWidgets() []TitleBarWidget {
@@ -83,15 +84,24 @@ func renderLargeTitleRow(rawTitle string, actualWidth int, focused bool, showInd
 	renderedTitle := RenderThemeTextCtx("{{|"+largeTitleTag+"|}}" + rawTitle + "{{[-]}}", titleCtx)
 	titleWidth := lipgloss.Width(renderedTitle)
 
-	// Focus indicators — plain spaces when not shown/not focused; MaintainBackground handles coloring
+	// Focus indicators — plain spaces when not shown; spinner visible when running regardless of focus
 	indL, indR := " ", " "
-	if showIndicators && focused {
-		if ctx.LineCharacters {
-			indL = RenderThemeTextCtx("{{|LargeTitleFocusIndicator|}}▸{{[-]}}", titleCtx)
-			indR = RenderThemeTextCtx("{{|LargeTitleFocusIndicator|}}◂{{[-]}}", titleCtx)
-		} else {
-			indL = RenderThemeTextCtx("{{|LargeTitleFocusIndicator|}}>{{[-]}}", titleCtx)
-			indR = RenderThemeTextCtx("{{|LargeTitleFocusIndicator|}}<{{[-]}}", titleCtx)
+	if showIndicators {
+		if tbs.SpinnerIndicator != "" {
+			if focused {
+				indL = RenderThemeTextCtx("{{|LargeTitleFocusIndicator|}}"+tbs.SpinnerIndicator+"{{[-]}}", titleCtx)
+			} else {
+				indL = RenderThemeTextCtx("{{|LargeTitleUnfocusedIndicator|}}"+tbs.SpinnerIndicator+"{{[-]}}", titleCtx)
+			}
+			indR = indL
+		} else if focused {
+			if ctx.LineCharacters {
+				indL = RenderThemeTextCtx("{{|LargeTitleFocusIndicator|}}▸{{[-]}}", titleCtx)
+				indR = RenderThemeTextCtx("{{|LargeTitleFocusIndicator|}}◂{{[-]}}", titleCtx)
+			} else {
+				indL = RenderThemeTextCtx("{{|LargeTitleFocusIndicator|}}>{{[-]}}", titleCtx)
+				indR = RenderThemeTextCtx("{{|LargeTitleFocusIndicator|}}<{{[-]}}", titleCtx)
+			}
 		}
 	}
 
@@ -275,7 +285,12 @@ func RenderUniformBlockDialogCtx(title, content string, ctx StyleContext) string
 
 // RenderTitleSegmentCtx renders a single title segment with connectors and optional indicators.
 // This is the "title routine" that can be called multiple times for side-by-side titles.
-func RenderTitleSegmentCtx(rawTitle string, borderFocused bool, contentFocused bool, showIndicators bool, titleTag string, ctx StyleContext) string {
+// spinnerIndicator, when non-empty, replaces the ▸/◂ focus indicators with the given frame character.
+func RenderTitleSegmentCtx(rawTitle string, borderFocused bool, contentFocused bool, showIndicators bool, titleTag string, ctx StyleContext, spinnerIndicator ...string) string {
+	spinInd := ""
+	if len(spinnerIndicator) > 0 {
+		spinInd = spinnerIndicator[0]
+	}
 	if titleTag != "" {
 		rawTitle = console.WrapSemantic(titleTag) + rawTitle
 	}
@@ -311,17 +326,21 @@ func RenderTitleSegmentCtx(rawTitle string, borderFocused bool, contentFocused b
 	var result strings.Builder
 	result.WriteString(borderStyleLight.Render(leftT))
 
-	focusTag := "TitleFocusIndicator"
 	if showIndicators {
 		if contentFocused {
-			ind := "▸"
-			if !ctx.LineCharacters {
+			var ind string
+			if spinInd != "" {
+				ind = spinInd
+			} else if ctx.LineCharacters {
+				ind = "▸"
+			} else {
 				ind = ">"
 			}
-			result.WriteString(borderStyleLight.Render(theme.ToThemeANSIWithPrefix("{{|"+focusTag+"|}}"+ind+"{{[-]}}", ctx.Prefix)))
+			result.WriteString(borderStyleLight.Render(theme.ToThemeANSIWithPrefix("{{|TitleFocusIndicator|}}"+ind+"{{[-]}}", ctx.Prefix)))
+		} else if spinInd != "" {
+			result.WriteString(borderStyleLight.Render(theme.ToThemeANSIWithPrefix("{{|TitleUnfocusedIndicator|}}"+spinInd+"{{[-]}}", ctx.Prefix)))
 		} else {
-			unfocusTag := "TitleUnfocusedIndicator"
-			result.WriteString(borderStyleLight.Render(theme.ToThemeANSIWithPrefix("{{|"+unfocusTag+"|}} {{[-]}}", ctx.Prefix)))
+			result.WriteString(borderStyleLight.Render(theme.ToThemeANSIWithPrefix("{{|TitleUnfocusedIndicator|}} {{[-]}}", ctx.Prefix)))
 		}
 	}
 
@@ -329,14 +348,19 @@ func RenderTitleSegmentCtx(rawTitle string, borderFocused bool, contentFocused b
 
 	if showIndicators {
 		if contentFocused {
-			ind := "◂"
-			if !ctx.LineCharacters {
+			var ind string
+			if spinInd != "" {
+				ind = spinInd
+			} else if ctx.LineCharacters {
+				ind = "◂"
+			} else {
 				ind = "<"
 			}
-			result.WriteString(borderStyleLight.Render(theme.ToThemeANSIWithPrefix("{{|"+focusTag+"|}}"+ind+"{{[-]}}", ctx.Prefix)))
+			result.WriteString(borderStyleLight.Render(theme.ToThemeANSIWithPrefix("{{|TitleFocusIndicator|}}"+ind+"{{[-]}}", ctx.Prefix)))
+		} else if spinInd != "" {
+			result.WriteString(borderStyleLight.Render(theme.ToThemeANSIWithPrefix("{{|TitleUnfocusedIndicator|}}"+spinInd+"{{[-]}}", ctx.Prefix)))
 		} else {
-			unfocusTag := "TitleUnfocusedIndicator"
-			result.WriteString(borderStyleLight.Render(theme.ToThemeANSIWithPrefix("{{|"+unfocusTag+"|}} {{[-]}}", ctx.Prefix)))
+			result.WriteString(borderStyleLight.Render(theme.ToThemeANSIWithPrefix("{{|TitleUnfocusedIndicator|}} {{[-]}}", ctx.Prefix)))
 		}
 	}
 
@@ -472,7 +496,7 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 				renderedSegment = rawTitle
 				titleSectionLen = WidthWithoutZones(rawTitle)
 			} else {
-				renderedSegment = RenderTitleSegmentCtx(rawTitle, focused, focused, showIndicators, titleTag, ctx)
+				renderedSegment = RenderTitleSegmentCtx(rawTitle, focused, focused, showIndicators, titleTag, ctx, tbsState.SpinnerIndicator)
 				titleSectionLen = WidthOfTitleSegment(rawTitle, showIndicators, ctx)
 			}
 			if titleSectionLen > actualWidth {

@@ -10,10 +10,13 @@ import (
 )
 
 var (
+	// SpinnerColor is the ANSI color used for spinner frames in both CLI and TUI contexts.
+	SpinnerColor = lipgloss.Color("2") // green
+
 	SpinnerFramesASCII   = []string{"|", "/", "-", "\\"}
 	SpinnerFramesUnicode = []string{"⣷", "⣯", "⣟", "⡿", "⢿", "⣻", "⣽", "⣾"}
-	cliSpinnerFPS = time.Second / 4 // fallback; StartSpinner uses SpinnerSpeed if set
-	cliSpinnerStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color("2")) // green
+	cliSpinnerFPS        = time.Second / 4 // fallback; StartSpinner uses SpinnerSpeed if set
+	cliSpinnerStyle      = lipgloss.NewStyle().Foreground(SpinnerColor)
 )
 
 // termMu serialises all terminal writes (spinner goroutine + log output path).

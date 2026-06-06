@@ -254,7 +254,15 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 	ctx.Type = m.dialogType
 	// Use pre-computed layout decision; submenus always use small titlebar.
 	ctx.LargeTitleBars = m.layout.LargeTitleBar
-	tbs := TitleBarState{Show: m.title != "" && !m.subMenuMode, Focused: m.titleBarFocused, ActiveWidget: m.titleBarWidget, PressedWidget: m.titleBarPressed}
+	var spinInd string
+	if m.loadingText != "" && console.SpinnerEnabled {
+		frames := console.SpinnerFramesUnicode
+		if !ctx.LineCharacters {
+			frames = console.SpinnerFramesASCII
+		}
+		spinInd = frames[m.spinnerFrame%len(frames)]
+	}
+	tbs := TitleBarState{Show: m.title != "" && !m.subMenuMode, Focused: m.titleBarFocused, ActiveWidget: m.titleBarWidget, PressedWidget: m.titleBarPressed, SpinnerIndicator: spinInd}
 	return RenderBorderedBoxCtx(m.title, content, contentWidth, targetHeight, focused || m.titleBarFocused, true, rounded, align, titleTag, ctx, tbs)
 }
 
@@ -334,21 +342,13 @@ func (m *MenuModel) renderVerticalListBlock(ctx StyleContext) string {
 			h = 1
 		}
 		w := m.list.Width()
-		var framePrefix string
-		if console.SpinnerEnabled {
-			frames := console.SpinnerFramesUnicode
-			if !ctx.LineCharacters {
-				frames = console.SpinnerFramesASCII
-			}
-			framePrefix = frames[m.spinnerFrame%len(frames)] + " "
-		}
 		centered := lipgloss.NewStyle().
 			Background(styles.Dialog.GetBackground()).
 			Foreground(styles.DialogTitle.GetForeground()).
 			Width(w).
 			Height(h).
 			Align(lipgloss.Center, lipgloss.Center).
-			Render(framePrefix + m.loadingText)
+			Render(m.loadingText)
 		return ApplyScrollbar(&m.Scroll, centered, 0, h, 0, ctx.LineCharacters, ctx)
 	}
 

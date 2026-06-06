@@ -2,6 +2,7 @@ package screens
 
 import (
 	"DockSTARTer2/internal/appenv"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/tui"
 	"context"
 	"strconv"
@@ -12,6 +13,19 @@ import (
 
 func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
+
+	if _, ok := msg.(editorSpinnerTickMsg); ok {
+		if m.loading {
+			ctx := tui.GetActiveContext()
+			frames := console.SpinnerFramesUnicode
+			if !ctx.LineCharacters {
+				frames = console.SpinnerFramesASCII
+			}
+			m.spinnerFrame = (m.spinnerFrame + 1) % len(frames)
+			return m, m.spinnerTickCmd()
+		}
+		return m, nil
+	}
 
 	if m.HandleWidgetClearPress(msg) {
 		return m, nil
@@ -364,9 +378,11 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Reload from disk — ParseEnv will fully reset editor state (clears all
 		// gutter markers, removes pending-delete lines, updates InitialLine).
 		// Also refresh the app list so user-defined status reflects the new file.
+		m.loading = true
 		return m, tea.Batch(
 			func() tea.Msg { return tui.RefreshAppsListMsg{} },
 			m.loadEnv,
+			m.spinnerTickCmd(),
 		)
 	case envAddVarMsg:
 		if len(m.tabs) > 0 {
@@ -483,6 +499,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.SetSize(m.width, m.height)
 		return m, nil
 	case tui.EnvLoadDoneMsg:
+		m.loading = false
 		for _, data := range msg.Tabs {
 			i := data.Index
 			if i < 0 || i >= len(m.tabs) {

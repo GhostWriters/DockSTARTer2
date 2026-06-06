@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"context"
 	"strings"
+	"time"
 
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/tui/components/sinput"
 	"charm.land/bubbles/v2/textinput"
 	"charm.land/bubbles/v2/viewport"
@@ -36,6 +38,12 @@ type ConsoleLockMsg struct {
 	ID     string
 	Locked bool
 }
+
+// panelSpinnerTickMsg advances the panel title spinner by one frame while a command is running.
+type panelSpinnerTickMsg struct{}
+
+// panelInlineSpinnerTickMsg advances the inline content-area spinner in the panel viewport.
+type panelInlineSpinnerTickMsg struct{}
 
 // consoleDoneMsg signals that a console command has finished.
 type consoleDoneMsg struct {
@@ -88,14 +96,63 @@ type PanelModel struct {
 
 	rawLines []string // un-wrapped, themed lines
 
-	panelMode string // "log", "console", "system", or "none"
-	connType  string // "local", "ssh", or "web"
+	panelMode    string // "log", "console", "system", or "none"
+	connType     string // "local", "ssh", or "web"
+	spinnerFrame int
+	lastLineTime time.Time // when the last log line arrived; spinner runs until idle for spinnerIdleTimeout
+
+	// Inline content-area spinner (shown while a console command is running)
+	commandRunning     bool
+	inlineSpinnerFrame int
+	inlineSpinnerLine  string
 }
+
+const spinnerIdleTimeout = 1500 * time.Millisecond
 
 const (
 	panelWidgetUp = TitleBarWidgetRefresh // reuses enum slot; panel has no Refresh action
 	panelWidgetDn = TitleBarWidgetClose   // reuses enum slot; panel has no Close action
 )
+
+func (m *PanelModel) spinnerTickCmd() tea.Cmd {
+	if !console.SpinnerEnabled {
+		return nil
+	}
+	fps := time.Duration(console.SpinnerSpeed) * time.Millisecond
+	if fps <= 0 {
+		fps = 100 * time.Millisecond
+	}
+	return tea.Tick(fps, func(time.Time) tea.Msg {
+		return panelSpinnerTickMsg{}
+	})
+}
+
+func (m *PanelModel) inlineSpinnerTickCmd() tea.Cmd {
+	if !console.SpinnerEnabled {
+		return nil
+	}
+	fps := time.Duration(console.SpinnerSpeed) * time.Millisecond
+	if fps <= 0 {
+		fps = 100 * time.Millisecond
+	}
+	return tea.Tick(fps, func(time.Time) tea.Msg {
+		return panelInlineSpinnerTickMsg{}
+	})
+}
+
+// currentSpinnerMarker returns the spinner frame to use in the panel title,
+// or "" when idle (no new lines for spinnerIdleTimeout).
+func (m *PanelModel) currentSpinnerMarker() string {
+	if m.lastLineTime.IsZero() || time.Since(m.lastLineTime) >= spinnerIdleTimeout || !console.SpinnerEnabled {
+		return ""
+	}
+	ctx := GetActiveContext()
+	frames := console.SpinnerFramesUnicode
+	if !ctx.LineCharacters {
+		frames = console.SpinnerFramesASCII
+	}
+	return frames[m.spinnerFrame%len(frames)]
+}
 
 // applyInputStyles updates the sinput colours from the current theme.
 func (m *PanelModel) applyInputStyles() {

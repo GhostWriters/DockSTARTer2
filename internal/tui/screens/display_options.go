@@ -217,7 +217,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 		},
 		{
 			Tag:        "Spinner Speed",
-			Desc:       fmt.Sprintf("%dms", s.config.UI.SpinnerSpeed),
+			Desc:       fmt.Sprintf("{{|OptionValue|}}%dms{{[-]}}", s.config.UI.SpinnerSpeed),
 			Help:       "Spinner frame speed in milliseconds (Enter to change)",
 			Action:     s.promptSpinnerSpeed(),
 			Selectable: true,

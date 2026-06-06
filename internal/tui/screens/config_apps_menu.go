@@ -17,6 +17,17 @@ type configAppsMenuModel struct {
 	connType string
 }
 
+func (m *configAppsMenuModel) refreshItems() {
+	ctx := context.Background()
+	cfg := config.LoadAppConfig()
+	apps, err := appenv.ListReferencedApps(ctx, cfg)
+	if err != nil {
+		return
+	}
+	envFile := filepath.Join(cfg.ComposeDir, constants.EnvFileName)
+	m.SetItems(buildConfigAppItems(ctx, apps, envFile, m.connType))
+}
+
 func (m *configAppsMenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.MenuModel == nil {
 		return m, nil
@@ -68,17 +79,6 @@ func buildConfigAppItems(ctx context.Context, apps []string, envFile string, con
 		Action:        nil,
 	})
 	return items
-}
-
-func (m *configAppsMenuModel) refreshItems() {
-	ctx := context.Background()
-	cfg := config.LoadAppConfig()
-	apps, err := appenv.ListReferencedApps(ctx, cfg)
-	if err != nil {
-		return
-	}
-	envFile := filepath.Join(cfg.ComposeDir, constants.EnvFileName)
-	m.SetItems(buildConfigAppItems(ctx, apps, envFile, m.connType))
 }
 
 // configAppItemHelp returns enriched (itemTitle, itemText) for a config app menu item.
@@ -133,12 +133,10 @@ func (m *configAppsMenuModel) HelpContext(maxWidth int) tui.HelpContext {
 func NewConfigAppsMenuScreen(connType string) tui.ScreenModel {
 	ctx := context.Background()
 	cfg := config.LoadAppConfig()
-
 	apps, err := appenv.ListReferencedApps(ctx, cfg)
 	if err != nil {
 		apps = []string{}
 	}
-
 	envFile := filepath.Join(cfg.ComposeDir, constants.EnvFileName)
 	menu := tui.NewMenuModel(
 		tui.IDListPanel,

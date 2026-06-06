@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 
 	"DockSTARTer2/internal/commands"
 	"DockSTARTer2/internal/console"
@@ -88,6 +89,9 @@ func readConsoleBatch(sc *bufio.Scanner, cancel context.CancelFunc) tea.Cmd {
 // readConsoleBatchWithFlag is like readConsoleBatch but carries post-execution
 // flags so AppModel can trigger config reload and/or app list refresh.
 func readConsoleBatchWithFlag(sc *bufio.Scanner, cancel context.CancelFunc, configChanged, appsChanged bool) tea.Cmd {
+	if sc == nil || cancel == nil {
+		return nil
+	}
 	return func() tea.Msg {
 		var batch []string
 		for i := 0; i < 50 && sc.Scan(); i++ {
@@ -181,12 +185,14 @@ func (m *PanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 		m.consoleScanner = sc
 		m.consoleConfigChanged = configChanged
 		m.consoleAppsChanged = appsChanged
-		return readConsoleBatchWithFlag(sc, cancel, configChanged, appsChanged)
+		m.spinnerFrame = 0
+		return tea.Batch(m.spinnerTickCmd(), readConsoleBatchWithFlag(sc, cancel, configChanged, appsChanged))
 	}
 
 	// Shell command
 	ctx, cancel := context.WithCancel(context.Background())
 	m.consoleCancel = cancel
+	m.spinnerFrame = 0
 
 	// If the command contains sudo, intercept it and prime the sudo credential cache.
 	var containsSudo bool
@@ -198,7 +204,7 @@ func (m *PanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 	}
 
 	if containsSudo && m.panelMode == "system" {
-		return func() tea.Msg {
+		return tea.Batch(m.spinnerTickCmd(), func() tea.Msg {
 			pass, err := PromptText("Sudo Password", "Password for '"+cmdStr+"':", true)
 			if err != nil {
 				if err == console.ErrUserAborted {
@@ -229,7 +235,7 @@ func (m *PanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 			sc := bufio.NewScanner(pr)
 			m.consoleScanner = sc
 			return readConsoleBatch(sc, cancel)
-		}
+		})
 	}
 
 	pr, pw := io.Pipe()
@@ -247,7 +253,23 @@ func (m *PanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 
 	sc := bufio.NewScanner(pr)
 	m.consoleScanner = sc
-	return readConsoleBatch(sc, cancel)
+	return tea.Batch(m.spinnerTickCmd(), readConsoleBatch(sc, cancel))
+}
+
+// setViewportContent rebuilds viewport content from m.lines + optional inlineSpinnerLine.
+// Pass scrollToBottom=true to always jump to bottom; false keeps position unless already at bottom.
+func (m *PanelModel) setViewportContent(scrollToBottom bool) {
+	content := strings.Join(m.lines, "\n")
+	if m.inlineSpinnerLine != "" {
+		content += "\n" + m.inlineSpinnerLine
+	}
+	atBottom := m.viewport.AtBottom()
+	m.viewport.SetContent(content)
+	if scrollToBottom || atBottom {
+		if m.viewport.Height() > 0 {
+			m.viewport.GotoBottom()
+		}
+	}
 }
 
 // appendConsoleLines adds rendered lines to the scrollback.
@@ -273,11 +295,7 @@ func (m *PanelModel) appendConsoleLines(lines []string) {
 		m.lines = m.lines[len(m.lines)-maxHistory:]
 	}
 
-	content := strings.Join(m.lines, "\n")
-	m.viewport.SetContent(content)
-	if m.viewport.Height() > 0 {
-		m.viewport.GotoBottom()
-	}
+	m.setViewportContent(true)
 }
 
 // reRenderLines re-wraps all stored raw lines for the current width.
@@ -303,16 +321,44 @@ func (m *PanelModel) reRenderLines() {
 		m.lines = m.lines[len(m.lines)-maxHistory:]
 	}
 
-	content := strings.Join(m.lines, "\n")
-	m.viewport.SetContent(content)
-	if m.viewport.Height() > 0 {
-		m.viewport.GotoBottom()
-	}
+	m.setViewportContent(true)
 }
 
 // ─── Update ───────────────────────────────────────────────────────────────────
 
 func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Title bar spinner tick: advance frame while recent log lines have arrived.
+	if _, ok := msg.(panelSpinnerTickMsg); ok {
+		if !m.lastLineTime.IsZero() && time.Since(m.lastLineTime) < spinnerIdleTimeout {
+			ctx := GetActiveContext()
+			frames := console.SpinnerFramesUnicode
+			if !ctx.LineCharacters {
+				frames = console.SpinnerFramesASCII
+			}
+			m.spinnerFrame = (m.spinnerFrame + 1) % len(frames)
+			return m, m.spinnerTickCmd()
+		}
+		return m, nil
+	}
+
+	// Inline content-area spinner tick: advance frame while a console command is running.
+	if _, ok := msg.(panelInlineSpinnerTickMsg); ok {
+		if m.commandRunning && console.SpinnerEnabled {
+			ctx := GetActiveContext()
+			frames := console.SpinnerFramesUnicode
+			if !ctx.LineCharacters {
+				frames = console.SpinnerFramesASCII
+			}
+			m.inlineSpinnerFrame = (m.inlineSpinnerFrame + 1) % len(frames)
+			styles := GetStyles()
+			frame := lipgloss.NewStyle().Foreground(console.SpinnerColor).Render(frames[m.inlineSpinnerFrame])
+			m.inlineSpinnerLine = RenderConsoleText(frame, styles.Console)
+			m.setViewportContent(false)
+			return m, m.inlineSpinnerTickCmd()
+		}
+		return m, nil
+	}
+
 	switch msg := msg.(type) {
 
 	case sinput.PasteMsg, sinput.CutMsg, sinput.SelectAllMsg:
@@ -337,16 +383,41 @@ func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case panelLineMsg:
+		wasIdle := m.lastLineTime.IsZero() || time.Since(m.lastLineTime) >= spinnerIdleTimeout
+		m.lastLineTime = time.Now()
 		m.appendConsoleLines(strings.Split(string(msg), "\n"))
+		if wasIdle {
+			return m, tea.Batch(waitForPanelLine(), m.spinnerTickCmd())
+		}
 		return m, waitForPanelLine()
 
 	case consoleLinesMsg:
+		wasIdle := m.lastLineTime.IsZero() || time.Since(m.lastLineTime) >= spinnerIdleTimeout
+		m.lastLineTime = time.Now()
+		wasCommandIdle := !m.commandRunning
+		m.commandRunning = true
+		m.inlineSpinnerLine = ""
 		m.appendConsoleLines(msg.lines)
-		return m, readConsoleBatchWithFlag(m.consoleScanner, m.consoleCancel, m.consoleConfigChanged, m.consoleAppsChanged)
+		if m.consoleScanner == nil {
+			return m, nil
+		}
+		nextCmd := readConsoleBatchWithFlag(m.consoleScanner, m.consoleCancel, m.consoleConfigChanged, m.consoleAppsChanged)
+		var cmds []tea.Cmd
+		cmds = append(cmds, nextCmd)
+		if wasIdle {
+			cmds = append(cmds, m.spinnerTickCmd())
+		}
+		if wasCommandIdle {
+			cmds = append(cmds, m.inlineSpinnerTickCmd())
+		}
+		return m, tea.Batch(cmds...)
 
 	case consoleDoneMsg:
 		m.consoleScanner = nil
 		m.consoleCancel = nil
+		m.commandRunning = false
+		m.inlineSpinnerLine = ""
+		m.setViewportContent(false)
 		if !m.sessionActive() {
 			m.inputFocused = true
 			cmd := m.input.Focus()
