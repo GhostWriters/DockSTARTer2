@@ -129,6 +129,23 @@ func HandleTest(ctx context.Context, group *CommandGroup) error {
 	return nil
 }
 
+// ComposeSubtitle returns the yesNotice subtitle for a compose command group.
+func ComposeSubtitle(group *CommandGroup) string {
+	operation := "update"
+	var appsList []string
+	if len(group.Args) > 0 {
+		operation = group.Args[0]
+		if len(group.Args) > 1 {
+			appsList = group.Args[1:]
+		}
+	}
+	var appNamesJoined string
+	if len(appsList) > 0 {
+		appNamesJoined = strings.Join(appsList, ", ")
+	}
+	return compose.YesNotice(operation, appNamesJoined)
+}
+
 func HandleCompose(ctx context.Context, group *CommandGroup, state *CmdState) error {
 	operation := ""
 	var appsList []string

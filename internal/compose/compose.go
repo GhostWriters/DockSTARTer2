@@ -32,6 +32,56 @@ func setPullPolicy(project *types.Project, policy string) {
 	}
 }
 
+// YesNotice returns the human-readable notice string for a compose action,
+// given the sub-command and an already-joined, display-ready app name string.
+// Matches the yesNotice values used inside ExecuteCompose.
+func YesNotice(command, appNamesJoined string) string {
+	switch command {
+	case "down":
+		if appNamesJoined != "" {
+			return fmt.Sprintf("Stopping and removing %s.", appNamesJoined)
+		}
+		return "Stopping and removing containers, networks, volumes, and images created by DockSTARTer."
+	case "pause":
+		if appNamesJoined != "" {
+			return fmt.Sprintf("Pausing: %s.", appNamesJoined)
+		}
+		return "Pausing all running containers."
+	case "pull":
+		if appNamesJoined != "" {
+			return fmt.Sprintf("Pulling the latest images for: %s.", appNamesJoined)
+		}
+		return "Pulling the latest images for all enabled services."
+	case "restart":
+		if appNamesJoined != "" {
+			return fmt.Sprintf("Restarting: %s.", appNamesJoined)
+		}
+		return "Restarting all stopped and running containers."
+	case "stop":
+		if appNamesJoined != "" {
+			return fmt.Sprintf("Stopping: %s.", appNamesJoined)
+		}
+		return "Stopping all running services."
+	case "unpause":
+		if appNamesJoined != "" {
+			return fmt.Sprintf("Unpausing: %s.", appNamesJoined)
+		}
+		return "Unpausing all running containers."
+	case "up":
+		if appNamesJoined != "" {
+			return fmt.Sprintf("Starting: %s.", appNamesJoined)
+		}
+		return "Starting containers for all enabled services."
+	case "generate", "merge":
+		return "Merging enabled app templates to 'docker-compose.yml'."
+	default: // update
+		if appNamesJoined != "" {
+			return fmt.Sprintf("Updating and starting: %s.", appNamesJoined)
+		}
+		return "Updating and starting containers for all enabled services."
+	}
+}
+
 // ExecuteCompose executes Docker Compose commands
 func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, appNames ...string) error {
 	conf := config.LoadAppConfig()

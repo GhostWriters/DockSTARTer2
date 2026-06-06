@@ -98,10 +98,20 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, logger.BatchRecoverTUI(m.ctx, cmd)
 
-	case panelSpinnerTickMsg, streamvp.SpinnerTickMsg:
+	case panelSpinnerTickMsg:
 		updated, cmd := m.panel.Update(msg)
 		m.panel = updated.(PanelModel)
 		return m, logger.BatchRecoverTUI(m.ctx, cmd)
+
+	case streamvp.SpinnerTickMsg:
+		// Route by tag: panel gets its own tick, dialog gets its own — don't steal across components.
+		updated, cmd := m.panel.Update(msg)
+		m.panel = updated.(PanelModel)
+		var dialogCmd tea.Cmd
+		if m.dialog != nil {
+			m.dialog, dialogCmd = m.dialog.Update(msg)
+		}
+		return m, logger.BatchRecoverTUI(m.ctx, cmd, dialogCmd)
 
 	case panelLineMsg:
 		updated, cmd := m.panel.Update(msg)
@@ -328,7 +338,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Check for application exit immediately if we just cleared the last screen and have no dialog.
 		// This avoids the "No active screen" splotch and ensures ESC works for standalone tools.
 		if m.ready && m.activeScreen == nil && m.dialog == nil {
-			return m, ConfirmExitAction()
+			return m, m.exitOrWarn()
 		}
 		updateRestartSafeMarker()
 		checkPendingRestart(m.ctx)
@@ -577,7 +587,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if result, ok := msg.Result.(bool); ok && result {
 				return m, tea.Quit
 			}
-			return m, ConfirmExitAction()
+			return m, m.exitOrWarn()
 		}
 
 		// When returning to screen: restore focus to the active screen.
@@ -640,10 +650,9 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// edit.lock state sync
 		if msg.ID == "edit.lock" {
-			info := sessionlocks.Sessions.ReadEditInfo()
-			// If locked locally by the Console, we still treat it as "other" for the menu items
-			// to ensure destructive options are restricted while the console command runs.
-			lockedByOthers := msg.Locked && (!sessionlocks.Sessions.HoldEditLockLocal() || info.ConnType == "Console")
+			// Only lock menu items when a genuinely external session holds the lock.
+			// Local console commands use the exitOrWarn guard instead.
+			lockedByOthers := msg.Locked && !sessionlocks.Sessions.HoldEditLockLocal()
 			if lockedByOthers != m.lockedByOthers {
 				m.lockedByOthers = lockedByOthers
 				// Relay the change to the active screen for Menu '!' indicators
@@ -700,11 +709,12 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// We wait until the end of Update to handle batches (e.g. ShowDialog + NavigateBack)
 	if m.ready && m.activeScreen == nil && m.dialog == nil {
 		allCmds := make([]tea.Cmd, 0, len(cmds)+1)
-		allCmds = append(allCmds, ConfirmExitAction())
+		allCmds = append(allCmds, m.exitOrWarn())
 		allCmds = append(allCmds, cmds...)
 		return m, logger.BatchRecoverTUI(m.ctx, allCmds...)
 	}
 
+	m.updateExitLocked()
 	return m, logger.BatchRecoverTUI(m.ctx, cmds...)
 }
 
@@ -756,13 +766,17 @@ func (m *AppModel) updateComponentFocus() {
 	dialogOpen := m.dialog != nil
 	headerFocused := m.backdrop.header.GetFocus() != HeaderFocusNone
 
-	// Log panel only keeps its "internal" focus state if no dialog is blocking it.
-	m.panel.focused = m.panelFocused && !dialogOpen
-	if m.panelTitleFocused && !dialogOpen {
+	_, dialogIsProgramBox := m.dialog.(*ProgramBoxModel)
+	panelBlockedByDialog := dialogOpen && !dialogIsProgramBox
+
+	// Log panel only keeps its "internal" focus state if no modal dialog is blocking it.
+	// Program boxes are non-modal — the panel can be focused alongside them.
+	m.panel.focused = m.panelFocused && !panelBlockedByDialog
+	if m.panelTitleFocused && !panelBlockedByDialog {
 		if !m.panel.TitleBarFocused() {
 			m.panel.FocusTitleBar()
 		}
-	} else if !m.panelTitleFocused || dialogOpen {
+	} else if !m.panelTitleFocused || panelBlockedByDialog {
 		if m.panel.TitleBarFocused() {
 			m.panel.BlurTitleBar()
 		}
@@ -775,10 +789,15 @@ func (m *AppModel) updateComponentFocus() {
 		}
 	}
 
-	// Dialog is ALWAYS focused if it exists.
+	// Dialog focus: modal dialogs are always focused; program boxes yield to the panel.
 	if m.dialog != nil {
 		if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
-			focusable.SetFocused(true)
+			_, isProgramBox := m.dialog.(*ProgramBoxModel)
+			if isProgramBox {
+				focusable.SetFocused(!m.panelFocused && !m.panelTitleFocused)
+			} else {
+				focusable.SetFocused(true)
+			}
 		}
 	}
 }
@@ -835,6 +854,33 @@ func (m *AppModel) applyPanelMax() bool {
 // backdropHeight returns the height available for the backdrop (terminal minus log panel).
 func (m AppModel) backdropHeight() int {
 	return m.height - m.panel.Height()
+}
+
+// updateExitLocked pushes the current panel command-in-progress state to the active screen's menu.
+func (m *AppModel) updateExitLocked() {
+	locked := m.panel.CommandInProgress()
+	if screen, ok := m.activeScreen.(interface {
+		SetExitLocked(bool)
+		SetExitAction(func() tea.Cmd)
+	}); ok {
+		screen.SetExitLocked(locked)
+		screen.SetExitAction(m.exitOrWarn)
+	}
+}
+
+// exitOrWarn returns ConfirmExitAction normally, but blocks exit with a warning
+// when a destructive console command is in progress to prevent data corruption.
+func (m *AppModel) exitOrWarn() tea.Cmd {
+	if m.panel.CommandInProgress() {
+		return func() tea.Msg {
+			return ShowMessageDialogMsg{
+				Title:   "Cannot Exit",
+				Message: "A command is currently running.\nPlease wait for it to finish before exiting.",
+				Type:    MessageInfo,
+			}
+		}
+	}
+	return ConfirmExitAction()
 }
 
 // refreshPanelLayout updates the backdrop and active screen/dialog after the panel height changes.
@@ -1157,14 +1203,23 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	}
 
 	// Modal Dialog Support
+	// Key events only go to the dialog if it is focused; non-key messages always pass through.
 	if m.dialog != nil {
-		var cmd tea.Cmd
-		m.dialog, cmd = m.dialog.Update(msg)
-		// Ensure helpline reflects current state after update
-		if h, ok := m.dialog.(interface{ HelpText() string }); ok {
-			m.backdrop.SetHelpText(h.HelpText())
+		_, isKey := msg.(tea.KeyPressMsg)
+		_, isKeyRelease := msg.(tea.KeyReleaseMsg)
+		dialogFocused := true
+		if focusable, ok := m.dialog.(interface{ IsFocused() bool }); ok {
+			dialogFocused = focusable.IsFocused()
 		}
-		return m, logger.BatchRecoverTUI(m.ctx, cmd), true
+		if !isKey && !isKeyRelease || dialogFocused {
+			var cmd tea.Cmd
+			m.dialog, cmd = m.dialog.Update(msg)
+			// Ensure helpline reflects current state after update
+			if h, ok := m.dialog.(interface{ HelpText() string }); ok {
+				m.backdrop.SetHelpText(h.HelpText())
+			}
+			return m, logger.BatchRecoverTUI(m.ctx, cmd), true
+		}
 	}
 
 	// Active Screen Support (fallback)

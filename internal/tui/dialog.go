@@ -102,6 +102,7 @@ func (b *baseDialogModel) SetSize(w, h int) {
 }
 
 func (b *baseDialogModel) SetFocused(f bool) { b.focused = f }
+func (b *baseDialogModel) IsFocused() bool   { return b.focused }
 
 // layers returns a single compositor layer for a dialog.
 // All dialog types use ZScreen as the base; the dialog renderer re-positions

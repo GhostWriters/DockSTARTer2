@@ -32,8 +32,11 @@ func (m *ProgramBoxModel) renderHeaderUI(width int) string {
 	// {{|Dialog|}} establishes the base style first so the terminal doesn't paint a
 	// reversed cell before the text; {{|CommandLine|}} then styles the command text.
 	if m.subtitle != "" {
-		subtitle := RenderThemeTextCtx("{{|Dialog|}} {{|CommandLine|}}"+m.subtitle, ctx)
-		renderedSubtitle := lipgloss.NewStyle().MaxWidth(width).Render(subtitle)
+		subtitleText := RenderThemeTextCtx("{{|Subtitle|}}"+m.subtitle+"{{[-]}}", ctx)
+		renderedSubtitle := lipgloss.NewStyle().
+			Width(width).
+			Background(ctx.Dialog.GetBackground()).
+			Render(subtitleText)
 		b.WriteString(renderedSubtitle + "\n")
 		hasPrevious = true
 	}
@@ -315,7 +318,7 @@ func (m *ProgramBoxModel) GetHelpText() string {
 func (m *ProgramBoxModel) HelpText() string { return m.GetHelpText() }
 
 // RunProgramBox displays a program box dialog that shows command output
-func RunProgramBox(ctx context.Context, title, subtitle string, task func(context.Context, io.Writer) error) error {
+func RunProgramBox(ctx context.Context, title, subtitle, command string, task func(context.Context, io.Writer) error) error {
 
 	// Enable TUI mode for console prompts
 	console.SetTUIEnabled(true)
@@ -333,7 +336,7 @@ func RunProgramBox(ctx context.Context, title, subtitle string, task func(contex
 	}
 
 	// Create dialog model
-	dialogModel := NewProgramBoxModel(title, subtitle, "")
+	dialogModel := NewProgramBoxModel(title, subtitle, command)
 	dialogModel.ctx = ctx
 	dialogModel.SetTask(task)
 	dialogModel.SetMaximized(true)

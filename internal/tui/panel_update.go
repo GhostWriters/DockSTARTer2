@@ -182,6 +182,7 @@ func (m *PanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 		m.consoleConfigChanged = configChanged
 		m.consoleAppsChanged = appsChanged
 		m.spinnerFrame = 0
+		m.lockSession("console.command", true)
 		return tea.Batch(m.spinnerTickCmd(), readConsoleBatchWithFlag(sc, cancel, configChanged, appsChanged))
 	}
 
@@ -249,6 +250,7 @@ func (m *PanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 
 	sc := bufio.NewScanner(pr)
 	m.consoleScanner = sc
+	m.lockSession("console.command", true)
 	return tea.Batch(m.spinnerTickCmd(), readConsoleBatch(sc, cancel))
 }
 
@@ -346,6 +348,7 @@ func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.consoleCancel = nil
 		m.sv.CommandRunning = false
 		m.sv.ClearSpinner()
+		m.lockSession("console.command", false)
 		if !m.sessionActive() {
 			m.inputFocused = true
 			cmd := m.input.Focus()

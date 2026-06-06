@@ -65,8 +65,8 @@ func (b *TUIBridge) ValueEdit(ctx context.Context, appName, varName, file, mode 
 }
 
 // RunCommand wraps a task in a TUI Program Box.
-func (b *TUIBridge) RunCommand(ctx context.Context, title, subtitle string, task func(context.Context) error) error {
-	return RunCommand(ctx, title, subtitle, task)
+func (b *TUIBridge) RunCommand(ctx context.Context, title, subtitle, command string, task func(context.Context) error) error {
+	return RunCommand(ctx, title, subtitle, command, task)
 }
 
 // Navigate switches the active TUI screen to the specified target.

@@ -218,6 +218,8 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				var actionCmd tea.Cmd
 				if m.backAction != nil {
 					actionCmd = m.backAction
+				} else if m.exitAction != nil {
+					actionCmd = m.exitAction()
 				} else {
 					actionCmd = ConfirmExitAction()
 				}
@@ -519,6 +521,8 @@ func (m *MenuModel) activateTitleBarWidget() tea.Cmd {
 		m.BlurTitleBar()
 		if m.backAction != nil {
 			return tea.Batch(pc, m.backAction)
+		} else if m.exitAction != nil {
+			return tea.Batch(pc, m.exitAction())
 		}
 		return tea.Batch(pc, ConfirmExitAction())
 	}
@@ -554,6 +558,9 @@ func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 			return m, m.backAction
 		}
 	case FocusExitBtn:
+		if m.exitAction != nil {
+			return m, m.exitAction()
+		}
 		return m, ConfirmExitAction()
 	}
 
@@ -1063,6 +1070,9 @@ func (m *MenuModel) SetFlowMode(flow bool) {
 func (m *MenuModel) EscapeAction() tea.Cmd {
 	if m.backAction != nil {
 		return m.backAction
+	}
+	if m.exitAction != nil {
+		return m.exitAction()
 	}
 	return ConfirmExitAction()
 }

@@ -123,6 +123,8 @@ type MenuModel struct {
 	list        list.Model
 	maximized   bool // Whether to maximize the dialog to fill available space
 	showExit    bool // Whether to show Exit button (default true for main menus)
+	exitLocked  bool           // Whether to show the locked marker on the Exit button
+	exitAction  func() tea.Cmd // Overrides ConfirmExitAction when set
 	showButtons bool // Whether to show any buttons (default true)
 
 	// Key override actions
@@ -547,6 +549,16 @@ func (m *MenuModel) SetMaximized(maximized bool) {
 // SetShowExit sets whether to show the Exit button
 func (m *MenuModel) SetShowExit(show bool) {
 	m.showExit = show
+}
+
+// SetExitLocked sets whether to show the locked marker on the Exit button.
+func (m *MenuModel) SetExitLocked(locked bool) {
+	m.exitLocked = locked
+}
+
+// SetExitAction overrides the default ConfirmExitAction with a custom handler.
+func (m *MenuModel) SetExitAction(fn func() tea.Cmd) {
+	m.exitAction = fn
 }
 
 // SetShowButtons sets whether to show the button row at all

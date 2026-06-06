@@ -135,7 +135,7 @@ func (m *PanelModel) currentSpinnerMarker() (indicator string, changed bool) {
 		if !ctx.LineCharacters {
 			frames = console.SpinnerFramesASCII
 		}
-		return frames[m.spinnerFrame%len(frames)], false
+		return frames[m.spinnerFrame%len(frames)], !m.expanded
 	}
 	if m.panelChanged && !m.expanded {
 		ctx := GetActiveContext()
@@ -272,6 +272,9 @@ func (m *PanelModel) SetSessionActive(active bool) {
 }
 
 func (m *PanelModel) sessionActive() bool { return len(m.sessionLockers) > 0 }
+
+// CommandInProgress reports whether a destructive console command is currently running.
+func (m *PanelModel) CommandInProgress() bool { return len(m.sessionLockers) > 0 }
 
 // applyDragY computes the new panel height from the current mouse Y.
 func (m *PanelModel) applyDragY(mouseY int) {

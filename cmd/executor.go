@@ -111,7 +111,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		for _, part := range group.FullSlice() {
 			cmdStr += " " + part
 		}
-		subtitle := " {{|CommandLine|}}" + cmdStr + "{{[-]}}"
+		cmdLine := "{{[-]}} {{|CommandLine|}}" + cmdStr + "{{[-]}}"
 		logger.Notice(ctx, fmt.Sprintf("%s command: '{{|UserCommand|}}%s{{[-]}}'", version.ApplicationName, cmdStr))
 
 		// Command Execution
@@ -268,7 +268,12 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				title = "Running Command"
 			}
 			title = "{{|TitleSuccess|}}" + title + "{{[-]}}"
-			err := tui.RunCommand(ctx, title, subtitle, task)
+			subtitle := ""
+			switch group.Command {
+			case "-c", "--compose":
+				subtitle = commands.ComposeSubtitle(&group)
+			}
+			err := tui.RunCommand(ctx, title, subtitle, cmdLine, task)
 			if err != nil {
 				exitCode = 1
 				if errors.Is(err, console.ErrUserAborted) {

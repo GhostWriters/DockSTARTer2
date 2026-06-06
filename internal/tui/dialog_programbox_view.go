@@ -40,35 +40,23 @@ func (m *ProgramBoxModel) ViewString() string {
 		borderedViewport = borderedViewport + "\n" + BuildPlainBottomBorder(totalWidth, m.focused, ctx)
 	}
 
-	// Calculate content width based on viewport (matches borderedViewport width)
-	contentWidth := m.sv.Width() + 2
-
-	// Build command display using theme semantic tags
-	var commandDisplay string
-	if m.command != "" {
-		// Use RenderThemeText for robust parsing of embedded tags/colors
-		// We use the console style as base, but DO NOT force the background color onto the whole bar
-		// This allows the user to have unstyled spaces or mixed colors.
-		// Use styles.Dialog as base so unstyled text matches the dialog background
-		base := ctx.Dialog
-		renderedCmd := RenderThemeText(m.command, base)
-
-		// Use lipgloss to render the row so width and background are handled correctly
-		// even with ANSI codes in renderedCmd.
-		// Use lipgloss to render the row so width and background are handled correctly
-		// even with ANSI codes in renderedCmd.
-		commandDisplay = lipgloss.NewStyle().
-			Width(contentWidth).
-			Background(ctx.Dialog.GetBackground()).
-			Render(renderedCmd)
-	}
-
 	// Build dialog content
 	var contentParts []string
 
 	// Content width for inner components: inside outer border and 1-char margin on each side.
 	layout := GetLayout()
-	contentWidth = m.layout.Width - layout.BorderWidth() - layout.ContentMarginWidth()
+	contentWidth := m.layout.Width - layout.BorderWidth() - layout.ContentMarginWidth()
+
+	// Build command display using theme semantic tags
+	var commandDisplay string
+	if m.command != "" {
+		base := ctx.Dialog
+		renderedCmd := RenderThemeText(m.command, base)
+		commandDisplay = lipgloss.NewStyle().
+			Width(contentWidth).
+			Background(ctx.Dialog.GetBackground()).
+			Render(renderedCmd)
+	}
 
 	// Render Header
 	headerUI := m.renderHeaderUI(contentWidth)

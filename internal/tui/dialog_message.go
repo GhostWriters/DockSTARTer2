@@ -84,26 +84,11 @@ func (m *messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // titlePrefix returns the icon prefix for this message type.
 func (m *messageDialogModel) titlePrefix() string {
-	switch m.messageType {
-	case MessageSuccess:
-		return "✓ "
-	case MessageWarning:
-		return "⚠ "
-	case MessageError:
-		return "✗ "
-	default:
-		return "ℹ "
-	}
+	return ""
 }
 
-// titleSuffix returns the icon suffix for this message type.
 func (m *messageDialogModel) titleSuffix() string {
-	switch m.messageType {
-	case MessageError:
-		return " ✗"
-	default:
-		return ""
-	}
+	return ""
 }
 
 // messageStyle returns the base text style for this message type (without width).

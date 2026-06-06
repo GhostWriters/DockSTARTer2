@@ -621,7 +621,6 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 
 	// 6. MODAL FALLBACK (No hit, but dialog is open)
 	if m.dialog != nil {
-		m.setPanelFocus(false)
 		// Only clear header focus on explicit clicks — not motion/release events.
 		// Motion fires continuously and would immediately cancel a focus set by a preceding click.
 		if _, isClick := msg.(tea.MouseClickMsg); isClick {

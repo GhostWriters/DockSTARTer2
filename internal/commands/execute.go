@@ -29,7 +29,7 @@ type UIProvider interface {
 	Prompt(ctx context.Context, title, message string, defaultVal bool) (bool, error)
 	AppSelect(ctx context.Context) error
 	ValueEdit(ctx context.Context, appName, varName, file, mode string) error
-	RunCommand(ctx context.Context, title, subtitle string, task func(context.Context) error) error
+	RunCommand(ctx context.Context, title, subtitle, command string, task func(context.Context) error) error
 	Navigate(ctx context.Context, target string) error
 }
 
@@ -272,7 +272,12 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		var err error
 		if state.GUI && GlobalUIProvider != nil && group.Command != "" && group.Command != "-h" && group.Command != "--help" {
 			// Wrap in Program Box
-			err = GlobalUIProvider.RunCommand(ctx, "Console Command", cmdStr, runWithUI)
+			subtitle := ""
+			switch group.Command {
+			case "-c", "--compose":
+				subtitle = ComposeSubtitle(&group)
+			}
+			err = GlobalUIProvider.RunCommand(ctx, "Console Command", subtitle, "{{[-]}} {{|CommandLine|}}"+cmdStr+"{{[-]}}", runWithUI)
 		} else {
 			err = runWithUI(ctx)
 		}
