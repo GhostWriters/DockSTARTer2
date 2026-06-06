@@ -80,7 +80,7 @@ func runShellCmd(ctx context.Context, cmdStr string, w io.Writer, stdinContent s
 	return shellCmd.Run()
 }
 
-// readConsoleBatch reads up to 50 lines from the scanner and returns them as a
+// readConsoleBatch reads one line from the scanner and returns it as a
 // consoleLinesMsg, or consoleDoneMsg on EOF.
 func readConsoleBatch(sc *bufio.Scanner, cancel context.CancelFunc) tea.Cmd {
 	return readConsoleBatchWithFlag(sc, cancel, false, false)
@@ -93,15 +93,11 @@ func readConsoleBatchWithFlag(sc *bufio.Scanner, cancel context.CancelFunc, conf
 		return nil
 	}
 	return func() tea.Msg {
-		var batch []string
-		for i := 0; i < 50 && sc.Scan(); i++ {
-			batch = append(batch, sc.Text())
+		if !sc.Scan() {
+			cancel()
+			return consoleDoneMsg{err: sc.Err(), configChanged: configChanged, appsChanged: appsChanged}
 		}
-		if len(batch) > 0 {
-			return consoleLinesMsg{lines: batch}
-		}
-		cancel()
-		return consoleDoneMsg{err: sc.Err(), configChanged: configChanged, appsChanged: appsChanged}
+		return consoleLinesMsg{lines: []string{sc.Text()}}
 	}
 }
 
