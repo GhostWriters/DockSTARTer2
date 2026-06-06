@@ -52,6 +52,9 @@ type AppSelectionScreen struct {
 	menu *tui.MenuModel
 	conf config.AppConfig
 
+	// ready gates rendering — false until the 250ms reveal delay fires or load completes.
+	ready bool
+
 	// Inline editing state
 	isEditing               bool
 	editingBaseApp          string
@@ -68,8 +71,24 @@ type AppSelectionScreen struct {
 func (s *AppSelectionScreen) Init() tea.Cmd {
 	return tea.Batch(s.menu.Init(), showSpinnerAfterDelayCmd(), s.loadAppSelectItemsCmd())
 }
-func (s *AppSelectionScreen) View() tea.View            { return s.menu.View() }
-func (s *AppSelectionScreen) ViewString() string        { return s.menu.ViewString() }
+func (s *AppSelectionScreen) View() tea.View {
+	if !s.ready {
+		return tea.NewView("")
+	}
+	return s.menu.View()
+}
+func (s *AppSelectionScreen) ViewString() string {
+	if !s.ready {
+		return ""
+	}
+	return s.menu.ViewString()
+}
+func (s *AppSelectionScreen) Layers() []*lipgloss.Layer {
+	if !s.ready {
+		return nil
+	}
+	return s.menu.Layers()
+}
 func (s *AppSelectionScreen) Title() string             { return s.menu.Title() }
 func (s *AppSelectionScreen) HelpText() string          { return s.menu.HelpText() }
 func (s *AppSelectionScreen) SetSize(w, h int)          { s.menu.SetSize(w, h) }
@@ -79,8 +98,10 @@ func (s *AppSelectionScreen) MinHeight() int            { return s.menu.MinHeigh
 func (s *AppSelectionScreen) HasDialog() bool           { return s.menu.HasDialog() }
 func (s *AppSelectionScreen) MenuName() string          { return s.menu.MenuName() }
 func (s *AppSelectionScreen) IsDestructive() bool       { return true }
-func (s *AppSelectionScreen) Layers() []*lipgloss.Layer { return s.menu.Layers() }
 func (s *AppSelectionScreen) GetHitRegions(x, y int) []tui.HitRegion {
+	if !s.ready {
+		return nil
+	}
 	return s.menu.GetHitRegions(x, y)
 }
 func (s *AppSelectionScreen) IsScrollbarDragging() bool { return s.menu.IsScrollbarDragging() }
@@ -91,6 +112,7 @@ func (s *AppSelectionScreen) EscapeAction() tea.Cmd     { return s.menu.EscapeAc
 
 func (s *AppSelectionScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if _, ok := msg.(appSelectShowSpinnerMsg); ok {
+		s.ready = true
 		// Only show the spinner if loading hasn't finished yet.
 		if len(s.menu.GetItems()) == 0 {
 			spinCmd := s.menu.SetLoadingText("Loading...")
@@ -99,8 +121,13 @@ func (s *AppSelectionScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return s, nil
 	}
 	if loaded, ok := msg.(appSelectLoadedMsg); ok {
+		s.ready = true
 		s.menu.SetLoadingText("")
 		s.applyLoadedItems(loaded)
+		return s, nil
+	}
+	// Block all input until the screen is ready to display.
+	if !s.ready {
 		return s, nil
 	}
 	m, cmd := s.menu.Update(msg)
