@@ -783,15 +783,20 @@ func PromptConfirm(title, question string, defaultYes bool) bool {
 
 // PromptText displays a blocking text prompt dialog.
 // It is used by the console package via callback.
-func PromptText(title, question string, sensitive bool) (string, error) {
+func PromptText(title, question string, sensitive bool, initialValue ...string) (string, error) {
+	iv := ""
+	if len(initialValue) > 0 {
+		iv = initialValue[0]
+	}
 	if program != nil {
 		resultChan := make(chan promptResultMsg)
 		program.Send(UniversalPromptMsg{
-			Title:      title,
-			Question:   question,
-			Sensitive:  sensitive,
-			ResultChan: resultChan,
-			Type:       PromptTypeText,
+			Title:        title,
+			Question:     question,
+			Sensitive:    sensitive,
+			InitialValue: iv,
+			ResultChan:   resultChan,
+			Type:         PromptTypeText,
 		})
 		res := <-resultChan
 		if !res.confirmed {
@@ -799,7 +804,7 @@ func PromptText(title, question string, sensitive bool) (string, error) {
 		}
 		return res.result, nil
 	}
-	res, confirmed := ShowPromptDialog(title, question, sensitive)
+	res, confirmed := ShowPromptDialog(title, question, sensitive, iv)
 	if !confirmed {
 		return "", console.ErrUserAborted
 	}

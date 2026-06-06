@@ -83,6 +83,7 @@ type UIConfig struct {
 	ShadowLevel       int    `toml:"shadow_level"` // 0=off, 1=light(░), 2=medium(▒), 3=dark(▓), 4=solid(█)
 	Scrollbar         bool   `toml:"scrollbar"`
 	Spinner           bool   `toml:"spinner"`
+	SpinnerSpeed      int    `toml:"spinner_speed"` // milliseconds per frame, default 250
 	BorderColor       int    `toml:"border_color"`        // 1=Border, 2=Border2, 3=Both
 	DialogTitleAlign  string `toml:"dialog_title_align"`  // "center" or "left"
 	SubmenuTitleAlign string `toml:"submenu_title_align"` // "center" or "left"
@@ -209,6 +210,99 @@ func CollapseVariables(path string) string {
 // defaults.toml (embedded) is always unmarshalled first; the user's file is
 // overlaid on top, so keys present in the user's file override the defaults
 // and keys absent from the user's file fall back to the embedded defaults.
+// sanitizeConfig resets any UIConfig field that has an invalid value, using the
+// embedded defaults as the source of truth for fallback values.
+// Warns for each field that had to be corrected.
+func sanitizeConfig(ctx context.Context, conf *AppConfig) {
+	var def AppConfig
+	_ = toml.Unmarshal(defaultConfigBytes(), &def)
+	ui := &conf.UI
+
+	warn := func(field, bad, fixed string) {
+		logger.Warn(ctx, "Config: invalid value for {{|Var|}}%s{{[-]}} ({{|Var|}}%s{{[-]}}) — reset to {{|Var|}}%s{{[-]}}.", field, bad, fixed)
+	}
+
+	if ui.ShadowLevel < 0 || ui.ShadowLevel > 4 {
+		warn("shadow_level", fmt.Sprintf("%d", ui.ShadowLevel), fmt.Sprintf("%d", def.UI.ShadowLevel))
+		ui.ShadowLevel = def.UI.ShadowLevel
+		ui.Shadow = def.UI.Shadow
+	}
+	if ui.SpinnerSpeed < 50 || ui.SpinnerSpeed > 5000 {
+		warn("spinner_speed", fmt.Sprintf("%d", ui.SpinnerSpeed), fmt.Sprintf("%d", def.UI.SpinnerSpeed))
+		ui.SpinnerSpeed = def.UI.SpinnerSpeed
+	}
+	if ui.BorderColor < 1 || ui.BorderColor > 3 {
+		warn("border_color", fmt.Sprintf("%d", ui.BorderColor), fmt.Sprintf("%d", def.UI.BorderColor))
+		ui.BorderColor = def.UI.BorderColor
+	}
+	switch ui.DialogTitleAlign {
+	case "left", "center":
+	default:
+		warn("dialog_title_align", ui.DialogTitleAlign, def.UI.DialogTitleAlign)
+		ui.DialogTitleAlign = def.UI.DialogTitleAlign
+	}
+	switch ui.SubmenuTitleAlign {
+	case "left", "center":
+	default:
+		warn("submenu_title_align", ui.SubmenuTitleAlign, def.UI.SubmenuTitleAlign)
+		ui.SubmenuTitleAlign = def.UI.SubmenuTitleAlign
+	}
+	switch ui.PanelTitleAlign {
+	case "left", "center":
+	default:
+		warn("panel_title_align", ui.PanelTitleAlign, def.UI.PanelTitleAlign)
+		ui.PanelTitleAlign = def.UI.PanelTitleAlign
+	}
+	switch ui.PanelLocal {
+	case "log", "console", "none", "system":
+	default:
+		warn("panel_local", ui.PanelLocal, def.UI.PanelLocal)
+		ui.PanelLocal = def.UI.PanelLocal
+	}
+	switch ui.PanelRemote {
+	case "log", "console", "none", "system":
+	default:
+		warn("panel_remote", ui.PanelRemote, def.UI.PanelRemote)
+		ui.PanelRemote = def.UI.PanelRemote
+	}
+
+	isValidPath := func(p string) bool {
+		expanded := filepath.Clean(ExpandVariables(p))
+		return filepath.IsAbs(expanded)
+	}
+	if !isValidPath(conf.Paths.ConfigFolder) {
+		warn("config_folder", conf.Paths.ConfigFolder, def.Paths.ConfigFolder)
+		conf.Paths.ConfigFolder = def.Paths.ConfigFolder
+	}
+	if !isValidPath(conf.Paths.ComposeFolder) {
+		logger.Warn(ctx, "Config: invalid value for {{|Var|}}compose_folder{{[-]}} ({{|Var|}}%s{{[-]}}) — attempting detection.", conf.Paths.ComposeFolder)
+		ResolveComposeFolder(ctx, conf, logNotice)
+	}
+}
+
+// ResolveComposeFolder runs compose folder detection and, when multiple candidates
+// are found, prompts the user to choose. Updates conf.Paths.ComposeFolder in place.
+// Uses the same logic as first-run migration so the experience is consistent.
+func ResolveComposeFolder(ctx context.Context, conf *AppConfig, printer console.Printer) {
+	detection := paths.DetectComposeFolder(conf.Paths.ComposeFolder)
+	if detection.LegacyExists && detection.CurrentExists && detection.LegacyPath != detection.CurrentPath {
+		promptMsg := fmt.Sprintf("Detected compose folders in multiple locations.\n   Legacy:  '{{|Folder|}}%s{{[-]}}'\n   Default: '{{|Folder|}}%s{{[-]}}'\n\nWould you like to use the Legacy location?", detection.LegacyPath, detection.CurrentPath)
+		useLegacy, err := console.QuestionPrompt(ctx, printer, "Multiple Compose Folders Detected", promptMsg, "Y", false)
+		if err == nil && useLegacy {
+			printer(ctx, "Chose the Legacy compose folder location:\n   '{{|Folder|}}%s{{[-]}}'", detection.LegacyPath)
+			conf.Paths.ComposeFolder = detection.LegacyPath
+		} else if err == nil {
+			printer(ctx, "Chose the Default compose folder location:\n   '{{|Folder|}}%s{{[-]}}'", detection.CurrentPath)
+			conf.Paths.ComposeFolder = detection.CurrentPath
+		}
+	} else if detection.LegacyExists && !detection.CurrentExists {
+		printer(ctx, "Detected compose folder at '{{|Folder|}}%s{{[-]}}'.", detection.LegacyPath)
+		conf.Paths.ComposeFolder = detection.LegacyPath
+	} else if detection.CurrentExists {
+		conf.Paths.ComposeFolder = detection.CurrentPath
+	}
+}
+
 func LoadAppConfig() AppConfig {
 	var conf AppConfig
 	// Start from embedded defaults so every key has a known baseline value.
@@ -246,6 +340,7 @@ func LoadAppConfig() AppConfig {
 					_ = SaveAppConfig(conf)
 				}
 			}
+			sanitizeConfig(context.Background(), &conf)
 			conf.RawPaths = conf.Paths
 			conf.Paths.ConfigFolder = filepath.Clean(ExpandVariables(conf.Paths.ConfigFolder))
 			conf.Paths.ComposeFolder = filepath.Clean(ExpandVariables(conf.Paths.ComposeFolder))
@@ -279,6 +374,7 @@ func LoadAppConfig() AppConfig {
 	}
 	_ = os.WriteFile(cfgPath, defaultConfigBytes(), 0644)
 	logNotice(context.Background(), "Copying '{{|File|}}%s{{[-]}}' to '{{|File|}}%s{{[-]}}'.", "embedded defaults", cfgPath)
+	sanitizeConfig(context.Background(), &conf)
 	conf.RawPaths = conf.Paths
 	conf.Paths.ConfigFolder = filepath.Clean(ExpandVariables(conf.Paths.ConfigFolder))
 	conf.Paths.ComposeFolder = filepath.Clean(ExpandVariables(conf.Paths.ComposeFolder))
@@ -401,6 +497,8 @@ func UnmarshalRobust(data []byte, v any) (map[string]bool, error) {
 				present["Scrollbar"] = true
 			case "ui.spinner":
 				present["Spinner"] = true
+			case "ui.spinner_speed":
+				present["SpinnerSpeed"] = true
 			case "ui.shadow":
 				present["Shadow"] = true
 			case "ui.shadow_level":
@@ -615,23 +713,9 @@ func MigrateFromLegacy(ctx context.Context) (AppConfig, bool) {
 	}
 
 	// 3. Detect Compose Folder
-	detection := paths.DetectComposeFolder(conf.Paths.ComposeFolder)
-	foundComposeMigration := false
-	if detection.LegacyExists && detection.CurrentExists && detection.LegacyPath != detection.CurrentPath {
-		promptMsg := fmt.Sprintf("Detected compose folders in multiple locations.\n   Legacy:  '{{|Folder|}}%s{{[-]}}'\n   Default: '{{|Folder|}}%s{{[-]}}'\n\nWould you like to use the Legacy location?", detection.LegacyPath, detection.CurrentPath)
-		useLegacy, err := console.QuestionPrompt(ctx, logNotice, "Multiple Compose Folders Detected", promptMsg, "Y", false)
-		if err == nil && useLegacy {
-			logNotice(ctx, "Chose the Legacy compose folder location:\n   '{{|Folder|}}%s{{[-]}}'", detection.LegacyPath)
-			conf.Paths.ComposeFolder = detection.LegacyPath
-			foundComposeMigration = true
-		} else if err == nil {
-			logNotice(ctx, "Chose the Default compose folder location:\n   '{{|Folder|}}%s{{[-]}}'", detection.CurrentPath)
-		}
-	} else if detection.LegacyExists && !detection.CurrentExists {
-		logNotice(ctx, "Detected compose folder at '{{|Folder|}}%s{{[-]}}'.", detection.LegacyPath)
-		conf.Paths.ComposeFolder = detection.LegacyPath
-		foundComposeMigration = true
-	}
+	before := conf.Paths.ComposeFolder
+	ResolveComposeFolder(ctx, &conf, logNotice)
+	foundComposeMigration := conf.Paths.ComposeFolder != before
 
 	if !foundLegacy && !foundComposeMigration {
 		return conf, false
@@ -660,7 +744,7 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 
 	keys := []string{
 		"ConfigFolder", "ComposeFolder",
-		"Theme", "Borders", "LargeButtons", "LargeTitleBars", "LineCharacters", "Scrollbar", "Spinner", "Shadow", "ShadowLevel", "BorderColor",
+		"Theme", "Borders", "LargeButtons", "LargeTitleBars", "LineCharacters", "Scrollbar", "Spinner", "SpinnerSpeed", "Shadow", "ShadowLevel", "BorderColor",
 		"DialogTitleAlign", "SubmenuTitleAlign", "PanelTitleAlign", "PanelLocal", "PanelRemote",
 		"SSHPort", "WebPort", "AuthMode",
 	}
@@ -674,6 +758,7 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 		"LineCharacters":    "Line Characters",
 		"Scrollbar":         "Scrollbar",
 		"Spinner":           "Spinner",
+		"SpinnerSpeed":      "Spinner Speed",
 		"Shadow":            "Shadow",
 		"ShadowLevel":       "Shadow Level",
 		"BorderColor":       "Border Color",
@@ -728,6 +813,8 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 			value = boolToYesNo(conf.UI.Scrollbar)
 		case "Spinner":
 			value = boolToYesNo(conf.UI.Spinner)
+		case "SpinnerSpeed":
+			value = fmt.Sprintf("{{|Var|}}%dms{{[-]}}", conf.UI.SpinnerSpeed)
 		case "Shadow":
 			value = boolToYesNo(conf.UI.Shadow)
 		case "ShadowLevel":

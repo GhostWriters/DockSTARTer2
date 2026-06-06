@@ -12,7 +12,7 @@ import (
 var (
 	cliSpinnerFramesASCII   = []string{"|", "/", "-", "\\"}
 	cliSpinnerFramesUnicode = []string{"⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"}
-	cliSpinnerFPS           = time.Second / 4
+	cliSpinnerFPS = time.Second / 4 // fallback; StartSpinner uses SpinnerSpeed if set
 	cliSpinnerStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color("2")) // green
 )
 
@@ -120,13 +120,18 @@ func StartSpinner() func() {
 	activeSpinner.visible = false
 	activeSpinner.mu.Unlock()
 
+	fps := cliSpinnerFPS
+	if SpinnerSpeed > 0 {
+		fps = time.Duration(SpinnerSpeed) * time.Millisecond
+	}
+
 	done := make(chan struct{})
 	go func() {
 		for {
 			select {
 			case <-done:
 				return
-			case <-time.After(cliSpinnerFPS):
+			case <-time.After(fps):
 				termMu.Lock()
 				activeSpinner.mu.Lock()
 				if activeSpinner.active && !activeSpinner.paused {

@@ -20,6 +20,9 @@ var (
 
 	// SpinnerEnabled controls whether the CLI spinner is shown during tasks.
 	SpinnerEnabled bool
+
+	// SpinnerSpeed is the milliseconds per CLI spinner frame (default 250).
+	SpinnerSpeed int = 250
 )
 
 func init() {
