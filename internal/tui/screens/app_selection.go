@@ -71,24 +71,9 @@ type AppSelectionScreen struct {
 func (s *AppSelectionScreen) Init() tea.Cmd {
 	return tea.Batch(s.menu.Init(), showSpinnerAfterDelayCmd(), s.loadAppSelectItemsCmd())
 }
-func (s *AppSelectionScreen) View() tea.View {
-	if !s.ready {
-		return tea.NewView("")
-	}
-	return s.menu.View()
-}
-func (s *AppSelectionScreen) ViewString() string {
-	if !s.ready {
-		return ""
-	}
-	return s.menu.ViewString()
-}
-func (s *AppSelectionScreen) Layers() []*lipgloss.Layer {
-	if !s.ready {
-		return nil
-	}
-	return s.menu.Layers()
-}
+func (s *AppSelectionScreen) View() tea.View            { return s.menu.View() }
+func (s *AppSelectionScreen) ViewString() string        { return s.menu.ViewString() }
+func (s *AppSelectionScreen) Layers() []*lipgloss.Layer { return s.menu.Layers() }
 func (s *AppSelectionScreen) Title() string             { return s.menu.Title() }
 func (s *AppSelectionScreen) HelpText() string          { return s.menu.HelpText() }
 func (s *AppSelectionScreen) SetSize(w, h int)          { s.menu.SetSize(w, h) }
@@ -112,23 +97,23 @@ func (s *AppSelectionScreen) EscapeAction() tea.Cmd     { return s.menu.EscapeAc
 
 func (s *AppSelectionScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if _, ok := msg.(appSelectShowSpinnerMsg); ok {
-		s.ready = true
 		// Only show the spinner if loading hasn't finished yet.
-		if len(s.menu.GetItems()) == 0 {
+		if !s.ready {
 			spinCmd := s.menu.SetLoadingText("Loading...")
 			return s, spinCmd
 		}
 		return s, nil
 	}
 	if loaded, ok := msg.(appSelectLoadedMsg); ok {
-		s.ready = true
-		s.menu.SetLoadingText("")
 		s.applyLoadedItems(loaded)
+		s.menu.SetLoadingText("")
+		s.ready = true
 		return s, nil
 	}
-	// Block all input until the screen is ready to display.
+	// Block all input until items are loaded, but let the spinner tick through.
 	if !s.ready {
-		return s, nil
+		_, cmd := s.menu.Update(msg)
+		return s, cmd
 	}
 	m, cmd := s.menu.Update(msg)
 	if mm, ok := m.(*tui.MenuModel); ok {
