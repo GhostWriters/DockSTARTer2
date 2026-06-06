@@ -5,14 +5,13 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"strings"
 	"time"
 
 	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/tui/components/streamvp"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/progress"
-	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
@@ -40,15 +39,12 @@ type ProgramBoxModel struct {
 	title    string
 	subtitle string
 	command  string // Command being executed (displayed above output)
-	viewport viewport.Model
-	lines    []string // Currently rendered/wrapped lines
-	rawLines []string // Themed but unwrapped lines for re-wrapping on resize
+	sv           streamvp.Model
+	spinnerFrame int // title-bar spinner frame (advanced by pbSpinnerTickMsg)
 	done         bool
-	spinnerFrame int
-	spinnerLine  string // current spinner line shown after last output; cleared on new output or done
-	err      error
-	width    int
-	height   int
+	err          error
+	width        int
+	height       int
 
 	// Dialog behavior and auto-close
 	isDialog       bool
@@ -100,32 +96,36 @@ type pbSpinnerTickMsg struct{ id string }
 
 // newProgramBox creates a new program box dialog (internal use)
 func newProgramBox(title, subtitle, command string) *ProgramBoxModel {
+	styles := GetStyles()
+	sv := streamvp.New("programbox_dialog")
+	sv.SetStyle(lipgloss.NewStyle().
+		Background(styles.Console.GetBackground()).
+		Foreground(styles.Console.GetForeground()))
 
 	m := &ProgramBoxModel{
 		id:       "programbox_dialog",
 		title:    title,
 		subtitle: subtitle,
 		command:  command,
-		viewport: viewport.New(),
-		lines:    []string{},
+		sv:       sv,
 		Tasks:    []Task{},
 		focused:  true,
 		ctx:      context.Background(),
 		Scroll:   Scrollbar{ID: "programbox_dialog"},
 	}
 
-	// Initialize viewport style to match dialog background
-	styles := GetStyles()
-	m.viewport.Style = styles.Dialog.Padding(0, 0)
-	// Use theme-defined console colors to properly display ANSI colors from command output
-	m.viewport.Style = m.viewport.Style.
-		Background(styles.Console.GetBackground()).
-		Foreground(styles.Console.GetForeground())
-
 	// Initialize progress bar with default options
 	m.progress = progress.New()
 
 	return m
+}
+
+// pbRenderFn returns the render function used by streamvp for the program box.
+func pbRenderFn() func(string) string {
+	styles := GetStyles()
+	return func(raw string) string {
+		return RenderConsoleText(raw, styles.Console)
+	}
 }
 
 // AddTask adds a task category to the progress header
@@ -229,9 +229,11 @@ func (m *ProgramBoxModel) Init() tea.Cmd {
 		task := m.task
 		m.task = nil // Prevent double-start
 
+		m.sv.CommandRunning = true
 		lockID := fmt.Sprintf("programbox-%p", m)
 		return tea.Batch(
 			m.spinnerTickCmd(),
+			m.sv.SpinnerTickCmd(),
 			func() tea.Msg { return ConsoleLockMsg{ID: lockID, Locked: true} },
 			func() tea.Msg {
 				reader, writer := io.Pipe()
@@ -302,39 +304,19 @@ func (m *ProgramBoxModel) Init() tea.Cmd {
 	return nil
 }
 
-// setViewportContent sets the viewport content to rawLines + optional spinnerLine.
-// Only scrolls to bottom if already at bottom.
-func (m *ProgramBoxModel) setViewportContent(scrollToBottom bool) {
-	content := strings.Join(m.rawLines, "\n")
-	if m.spinnerLine != "" {
-		content += "\n" + m.spinnerLine
-	}
-	if m.viewport.Width() > 0 {
-		content = lipgloss.NewStyle().Width(m.viewport.Width()).Render(content)
-	}
-	atBottom := m.viewport.AtBottom()
-	m.viewport.SetContent(content)
-	if scrollToBottom || atBottom {
-		m.viewport.GotoBottom()
-	}
-}
-
 func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Spinner tick: advance frame, update content spinner line, reschedule while task is running.
+	// Inline spinner tick via streamvp.
+	if tick, ok := msg.(streamvp.SpinnerTickMsg); ok {
+		if !m.done && m.sv.HandleSpinnerTick(tick) {
+			return m, m.sv.SpinnerTickCmd()
+		}
+		return m, nil
+	}
+
+	// Title-bar spinner tick.
 	if tick, ok := msg.(pbSpinnerTickMsg); ok && tick.id == m.id {
 		if !m.done {
-			ctx := GetActiveContext()
-			frames := console.SpinnerFramesUnicode
-			if !ctx.LineCharacters {
-				frames = console.SpinnerFramesASCII
-			}
-			m.spinnerFrame = (m.spinnerFrame + 1) % len(frames)
-			if console.SpinnerEnabled {
-				styles := GetStyles()
-				frame := lipgloss.NewStyle().Foreground(console.SpinnerColor).Render(frames[m.spinnerFrame%len(frames)])
-				m.spinnerLine = RenderConsoleText(frame, styles.Console)
-				m.setViewportContent(false)
-			}
+			m.spinnerFrame++
 			return m, m.spinnerTickCmd()
 		}
 		return m, nil
@@ -345,8 +327,8 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	// 1. Centralized scrollbar processing (Throttling, Clicks, Dragging)
-	if newOff, cmd, changed := m.Scroll.Update(msg, m.viewport.YOffset(), m.viewport.TotalLineCount(), m.viewport.Height()); changed {
-		m.viewport.SetYOffset(newOff)
+	if newOff, cmd, changed := m.Scroll.Update(msg, m.sv.YOffset(), m.sv.TotalLineCount(), m.sv.Height()); changed {
+		m.sv.SetYOffset(newOff)
 		return m, cmd
 	}
 
@@ -401,24 +383,19 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case outputLinesMsg:
-		styles := GetStyles()
-		for _, line := range msg.lines {
-			rendered := RenderConsoleText(line, styles.Console)
-			m.rawLines = append(m.rawLines, rendered)
-		}
-		m.spinnerLine = ""
-		m.setViewportContent(true)
+		m.sv.CommandRunning = true
+		m.sv.AppendLines(msg.lines, pbRenderFn())
 		if !m.done {
 			return m, nil
 		}
 
 	case outputDoneMsg:
 		m.done = true
-		m.spinnerLine = ""
+		m.sv.CommandRunning = false
+		m.sv.ClearSpinner()
 		lockID := fmt.Sprintf("programbox-%p", m)
 		m.err = msg.err
 		m.SetSize(m.width, m.height)
-		m.setViewportContent(true)
 		unlockCmd := func() tea.Msg { return ConsoleLockMsg{ID: lockID, Locked: false} }
 		if m.AutoExit && m.err == nil {
 			result := tea.Msg(true)
@@ -454,16 +431,16 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case key.Matches(msg, Keys.Home):
-			m.viewport.GotoTop()
+			m.sv.GotoTop()
 			return m, nil
 		case key.Matches(msg, Keys.End):
-			m.viewport.GotoBottom()
+			m.sv.GotoBottom()
 			return m, nil
 		case key.Matches(msg, Keys.HalfPageUp):
-			m.viewport.HalfPageUp()
+			m.sv.HalfPageUp()
 			return m, nil
 		case key.Matches(msg, Keys.HalfPageDown):
-			m.viewport.HalfPageDown()
+			m.sv.HalfPageDown()
 			return m, nil
 		}
 
@@ -507,7 +484,7 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		tea.MouseClickMsg, tea.MouseWheelMsg, tea.MouseMotionMsg, tea.MouseReleaseMsg:
 		return m, nil
 	}
-	m.viewport, cmd = m.viewport.Update(msg)
+	cmd = m.sv.ViewUpdate(msg)
 	return m, cmd
 }
 

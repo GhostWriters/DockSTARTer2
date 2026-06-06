@@ -16,9 +16,9 @@ func (m *ProgramBoxModel) ViewString() string {
 	ctx := GetActiveContext()
 
 	// Apply background maintenance to captured output to prevent resets from bleeding
-	viewportContent := MaintainBackground(m.viewport.View(), ctx.Console)
+	viewportContent := MaintainBackground(m.sv.View(), ctx.Console)
 	// Sections content plus scrollbar/gutter (right slot)
-	viewportContent = ApplyScrollbar(&m.Scroll, viewportContent, m.viewport.TotalLineCount(), m.viewport.Height(), m.viewport.YOffset(), GetActiveContext().LineCharacters, GetActiveContext())
+	viewportContent = ApplyScrollbar(&m.Scroll, viewportContent, m.sv.TotalLineCount(), m.sv.Height(), m.sv.YOffset(), GetActiveContext().LineCharacters, GetActiveContext())
 
 	// Wrap viewport in rounded inner border with console background.
 	// Disable the bottom border so we can append a custom one with the scroll indicator.
@@ -28,21 +28,20 @@ func (m *ProgramBoxModel) ViewString() string {
 	viewportStyle = viewportStyle.BorderBottom(false)
 
 	borderedViewport := InjectBorderFlags(
-		viewportStyle.Height(m.viewport.Height()).Render(viewportContent),
+		viewportStyle.Height(m.sv.Height()).Render(viewportContent),
 		ctx.BorderFlags, ctx.Border2Flags, false)
 
 	// Append custom bottom border. Only show scroll indicator when content overflows.
-	totalWidth := m.viewport.Width() + ScrollbarGutterWidth + 2
+	totalWidth := m.sv.Width() + ScrollbarGutterWidth + 2
 	borderedViewport = strings.TrimSuffix(borderedViewport, "\n")
 	if m.Scroll.Info.Needed {
-		borderedViewport = borderedViewport + "\n" + BuildScrollPercentBottomBorder(totalWidth, m.viewport.ScrollPercent(), m.focused, ctx)
+		borderedViewport = borderedViewport + "\n" + BuildScrollPercentBottomBorder(totalWidth, m.sv.ScrollPercent(), m.focused, ctx)
 	} else {
 		borderedViewport = borderedViewport + "\n" + BuildPlainBottomBorder(totalWidth, m.focused, ctx)
 	}
 
 	// Calculate content width based on viewport (matches borderedViewport width)
-	// viewport.Width() + border (2) = viewport.Width() + 2
-	contentWidth := m.viewport.Width() + 2
+	contentWidth := m.sv.Width() + 2
 
 	// Build command display using theme semantic tags
 	var commandDisplay string
@@ -229,8 +228,8 @@ func (m *ProgramBoxModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 			ID:     m.id + ".viewport",
 			X:      offsetX + layout.ContentSideMargin + 1, // outer(1) + margin + inner border(1)
 			Y:      offsetY + viewportY + 1,                // +1 for inner top border
-			Width:  m.viewport.Width(),
-			Height: m.viewport.Height(),
+			Width:  m.sv.Width(),
+			Height: m.sv.Height(),
 			ZOrder: ZDialog + 10,
 			Label:  "Output Viewport",
 			Help: &HelpContext{
@@ -244,7 +243,7 @@ func (m *ProgramBoxModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		// Scrollbar Regions
 		if currentConfig.UI.Scrollbar && m.Scroll.Info.Needed {
 			// sbX: outer border(1) + margin + inner border(1) + viewport content width
-			sbX := offsetX + layout.ContentSideMargin + 2 + m.viewport.Width()
+			sbX := offsetX + layout.ContentSideMargin + 2 + m.sv.Width()
 			// sbTopY: outer border(1) + header + command + spacer + inner top border(1) == viewportY+1
 			sbTopY := offsetY + viewportY + 1
 			regions = append(regions, m.Scroll.HitRegions(sbX, sbTopY, ZDialog+20, "Output")...)
