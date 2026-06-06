@@ -4,6 +4,8 @@ import (
 	"strings"
 	"time"
 
+	"DockSTARTer2/internal/console"
+
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -14,9 +16,9 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if tick, ok := msg.(menuSpinnerTickMsg); ok && tick.id == m.id {
 		if m.loadingText != "" {
 			ctx := GetActiveContext()
-			frames := spinnerFramesUnicode
+			frames := console.SpinnerFramesUnicode
 			if !ctx.LineCharacters {
-				frames = spinnerFramesASCII
+				frames = console.SpinnerFramesASCII
 			}
 			m.spinnerFrame = (m.spinnerFrame + 1) % len(frames)
 			m.InvalidateCache()
