@@ -335,7 +335,16 @@ func GetUsage(target string, noHeading bool) string {
 			"	Run tests to check the program",
 		)
 	}
-	if match("-T", "--theme", "--theme-list", "--theme-table", "--theme-lines", "--theme-no-lines", "--theme-borders", "--theme-no-borders", "--theme-large-buttons", "--theme-no-large-buttons", "--theme-shadows", "--theme-no-shadows", "--theme-shadow-level", "--theme-scrollbar", "--theme-no-scrollbar", "--theme-border-color", "--theme-dialog-title", "--theme-submenu-title", "--theme-panel-title", "--theme-extract", "--theme-extract-all", "--theme-spinner", "--theme-no-spinner") {
+	if match("-T", "--theme", "--theme-list", "--theme-table",
+		"--theme-lines", "--theme-no-lines",
+		"--theme-borders", "--theme-no-borders", "--theme-border", "--theme-no-border",
+		"--theme-large-buttons", "--theme-no-large-buttons",
+		"--theme-shadows", "--theme-no-shadows", "--theme-shadow", "--theme-no-shadow", "--theme-shadow-level",
+		"--theme-scrollbar", "--theme-no-scrollbar", "--theme-scrollbars", "--theme-no-scrollbars",
+		"--theme-spinner", "--theme-no-spinner", "--theme-spinners", "--theme-no-spinners",
+		"--theme-border-color",
+		"--theme-dialog-title", "--theme-submenu-title", "--theme-panel-title",
+		"--theme-extract", "--theme-extract-all") {
 		printStr(
 			"{{|UsageCommand|}}-T --theme{{[-]}}",
 			"	Shows the current theme",
@@ -364,11 +373,11 @@ func GetUsage(target string, noHeading bool) string {
 			"	Turn the shadows on or off in the GUI",
 			"{{|UsageCommand|}}--theme-shadow-level{{[-]}} {{|UsageOption|}}<level>{{[-]}}",
 			"	Set the shadow level (0-4 or off/light/medium/dark/solid)",
-			"{{|UsageCommand|}}--theme-scrollbar{{[-]}}",
-			"{{|UsageCommand|}}--theme-no-scrollbar{{[-]}}",
+			"{{|UsageCommand|}}--theme-scrollbars{{[-]}}",
+			"{{|UsageCommand|}}--theme-no-scrollbars{{[-]}}",
 			"	Turn the scrollbar on or off in the GUI",
-			"{{|UsageCommand|}}--theme-spinner{{[-]}}",
-			"{{|UsageCommand|}}--theme-no-spinner{{[-]}}",
+			"{{|UsageCommand|}}--theme-spinners{{[-]}}",
+			"{{|UsageCommand|}}--theme-no-spinners{{[-]}}",
 			"	Turn the CLI spinner on or off",
 			"{{|UsageCommand|}}--theme-border-color{{[-]}} {{|UsageOption|}}<level>{{[-]}}",
 			"	Set the border color (1=Border, 2=Border2, 3=Both)",

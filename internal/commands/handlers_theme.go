@@ -185,13 +185,13 @@ func HandleThemeSettings(ctx context.Context, group *CommandGroup) error {
 			logger.Display(ctx, "Current shadow level: %d", conf.UI.ShadowLevel)
 			return nil
 		}
-	case "--theme-scrollbar":
+	case "--theme-scrollbar", "--theme-scrollbars":
 		conf.UI.Scrollbar = true
-	case "--theme-no-scrollbar":
+	case "--theme-no-scrollbar", "--theme-no-scrollbars":
 		conf.UI.Scrollbar = false
-	case "--theme-spinner":
+	case "--theme-spinner", "--theme-spinners":
 		conf.UI.Spinner = true
-	case "--theme-no-spinner":
+	case "--theme-no-spinner", "--theme-no-spinners":
 		conf.UI.Spinner = false
 	case "--theme-border-color":
 		if len(group.Args) > 0 {
@@ -257,8 +257,8 @@ func HandleThemeSettings(ctx context.Context, group *CommandGroup) error {
 		"--theme-large-buttons", "--theme-no-large-buttons",
 		"--theme-large-titlebars", "--theme-no-large-titlebars",
 		"--theme-shadows", "--theme-shadow", "--theme-no-shadows", "--theme-no-shadow",
-		"--theme-scrollbar", "--theme-no-scrollbar",
-		"--theme-spinner", "--theme-no-spinner":
+		"--theme-scrollbar", "--theme-no-scrollbar", "--theme-scrollbars", "--theme-no-scrollbars",
+		"--theme-spinner", "--theme-no-spinner", "--theme-spinners", "--theme-no-spinners":
 		if def, ok := Registry[group.Command]; ok && def.Title != "" {
 			logger.Notice(ctx, "%s", def.Title)
 		}
