@@ -286,11 +286,10 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 		logger.Notice(ctx, "Running: {{|RunningCommand|}}%s{{[-]}}", strings.Join(fullCmd, " "))
 	}
 
-	// Pause our spinner — the compose SDK has its own progress display.
+	// Execute the operation via SDK.
+	// Pause our spinner just before calling the SDK — it has its own progress display.
 	console.PauseSpinner()
 	defer console.ResumeSpinner()
-
-	// Execute the operation via SDK
 	switch command {
 	case "down":
 		logRunning("down", "--remove-orphans")

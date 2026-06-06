@@ -193,6 +193,7 @@ func (m *MenuModel) IsDestructive() bool { return false }
 
 // Start launches the TUI application
 func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error {
+	console.PauseSpinner()
 	var pOpts ProgramOptions
 	if len(opts) > 0 {
 		pOpts = opts[0]
@@ -344,6 +345,7 @@ func RegisterEditorFactory(f EditorFactory) {
 // appName is empty for the global vars editor, or an app name for the app-specific editor.
 // isRoot controls whether Back navigation exits immediately (true) or uses a pre-populated stack (false).
 func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...ProgramOptions) error {
+	console.PauseSpinner()
 	var pOpts ProgramOptions
 	if len(opts) > 0 {
 		pOpts = opts[0]
@@ -463,6 +465,7 @@ func RegisterVarEditorFactory(f VarEditorFactory) {
 // varName is the variable to edit (upper-cased by the caller).
 // file is the pre-resolved env file path (from resolveEnvVar).
 func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts ...ProgramOptions) error {
+	console.PauseSpinner()
 	var pOpts ProgramOptions
 	if len(progOpts) > 0 {
 		pOpts = progOpts[0]

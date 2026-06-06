@@ -197,8 +197,6 @@ func SudoCommand(ctx context.Context, command string, args ...string) (*exec.Cmd
 	}
 
 	// No TUI, or no password required — let sudo handle it natively.
-	// Pause the spinner so the cursor is visible if sudo prompts for a password.
-	console.PauseSpinner()
 	sudoArgs := append([]string{command}, args...)
 	return exec.CommandContext(ctx, "sudo", sudoArgs...), nil
 }

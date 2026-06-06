@@ -273,7 +273,10 @@ func Sprintf(format string, a ...any) string {
 
 // Println prints a line with Console ANSI color codes parsed
 func Println(a ...any) {
+	LockTerminal()
 	ClearSpinnerLine()
 	msg := fmt.Sprint(a...)
 	fmt.Println(ToConsoleANSI(msg))
+	ShowSpinnerFrame()
+	UnlockTerminal()
 }
