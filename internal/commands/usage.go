@@ -380,7 +380,7 @@ func GetUsage(target string, noHeading bool) string {
 			"{{|UsageCommand|}}--theme-spinners{{[-]}}",
 			"{{|UsageCommand|}}--theme-no-spinners{{[-]}}",
 			"	Turn the CLI spinner on or off",
-			fmt.Sprintf("{{|UsageCommand|}}--theme-spinner-speed{{[-]}} {{|UsageOption|}}<ms>{{[-]}}"),
+			"{{|UsageCommand|}}--theme-spinner-speed{{[-]}} {{|UsageOption|}}<ms>{{[-]}}",
 			fmt.Sprintf("	Set spinner frame speed in milliseconds (50-5000, default %d)", config.DefaultConfig().UI.SpinnerSpeed),
 			"{{|UsageCommand|}}--theme-border-color{{[-]}} {{|UsageOption|}}<level>{{[-]}}",
 			"	Set the border color (1=Border, 2=Border2, 3=Both)",
@@ -398,7 +398,7 @@ func GetUsage(target string, noHeading bool) string {
 	}
 	if match("--theme-spinner-speed") {
 		printStr(
-			fmt.Sprintf("{{|UsageCommand|}}--theme-spinner-speed{{[-]}} {{|UsageOption|}}<ms>{{[-]}}"),
+			"{{|UsageCommand|}}--theme-spinner-speed{{[-]}} {{|UsageOption|}}<ms>{{[-]}}",
 			fmt.Sprintf("	Set spinner frame speed in milliseconds (50-5000, default %d)", config.DefaultConfig().UI.SpinnerSpeed),
 		)
 	}
