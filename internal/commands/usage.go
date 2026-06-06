@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/version"
@@ -379,8 +380,8 @@ func GetUsage(target string, noHeading bool) string {
 			"{{|UsageCommand|}}--theme-spinners{{[-]}}",
 			"{{|UsageCommand|}}--theme-no-spinners{{[-]}}",
 			"	Turn the CLI spinner on or off",
-			"{{|UsageCommand|}}--theme-spinner-speed{{[-]}} {{|UsageOption|}}<ms>{{[-]}}",
-			"	Set spinner frame speed in milliseconds (50-5000, default 250)",
+			fmt.Sprintf("{{|UsageCommand|}}--theme-spinner-speed{{[-]}} {{|UsageOption|}}<ms>{{[-]}}"),
+			fmt.Sprintf("	Set spinner frame speed in milliseconds (50-5000, default %d)", config.DefaultConfig().UI.SpinnerSpeed),
 			"{{|UsageCommand|}}--theme-border-color{{[-]}} {{|UsageOption|}}<level>{{[-]}}",
 			"	Set the border color (1=Border, 2=Border2, 3=Both)",
 			"{{|UsageCommand|}}--theme-dialog-title{{[-]}} {{|UsageOption|}}<align>{{[-]}}",
@@ -393,6 +394,12 @@ func GetUsage(target string, noHeading bool) string {
 			"	Extract a theme to a file (use {{|UsageTheme|}}user:<name>{{[-]}} for user themes; {{|UsageOption|}}user:{{[-]}} as destdir for the user themes folder)",
 			"{{|UsageCommand|}}--theme-extract-all{{[-]}} {{|UsageOption|}}<destdir>{{[-]}}",
 			"	Extract all embedded themes to a directory (use {{|UsageOption|}}user:{{[-]}} for the user themes folder)",
+		)
+	}
+	if match("--theme-spinner-speed") {
+		printStr(
+			fmt.Sprintf("{{|UsageCommand|}}--theme-spinner-speed{{[-]}} {{|UsageOption|}}<ms>{{[-]}}"),
+			fmt.Sprintf("	Set spinner frame speed in milliseconds (50-5000, default %d)", config.DefaultConfig().UI.SpinnerSpeed),
 		)
 	}
 	if match("-u", "--update", "--update-app", "--update-templates") {

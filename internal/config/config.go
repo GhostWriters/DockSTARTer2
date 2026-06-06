@@ -29,6 +29,13 @@ func defaultConfigBytes() []byte {
 	return b
 }
 
+// DefaultConfig returns an AppConfig populated purely from the embedded defaults TOML.
+func DefaultConfig() AppConfig {
+	var conf AppConfig
+	_ = toml.Unmarshal(defaultConfigBytes(), &conf)
+	return conf
+}
+
 type migrationModeKey struct{}
 
 // AppConfig holds the application configuration settings.
