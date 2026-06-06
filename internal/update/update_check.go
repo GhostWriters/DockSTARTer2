@@ -188,7 +188,7 @@ func checkAppUpdate(ctx context.Context) (updateAvailable bool, ver string, hadE
 	return false, version.Version, false
 }
 
-func checkTmplUpdate(ctx context.Context) (updateAvailable bool, ver string, hadError bool) {
+func checkTmplUpdate(_ context.Context) (updateAvailable bool, ver string, hadError bool) {
 	templatesDir := paths.GetTemplatesDir()
 	if _, err := os.Stat(templatesDir); os.IsNotExist(err) {
 		return false, "", false // Not an error - just no templates dir yet
@@ -358,7 +358,7 @@ func compareVersions(v1, v2 string) int {
 }
 
 // getUpdater returns a configured selfupdate.Updater for the given channel.
-func getUpdater(ctx context.Context, channel string) (*selfupdate.Updater, error) {
+func getUpdater(_ context.Context, channel string) (*selfupdate.Updater, error) {
 	cfg := selfupdate.Config{}
 	// Only allow prereleases if the user is on a prerelease/dev channel
 	if !strings.EqualFold(channel, "stable") {
