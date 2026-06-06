@@ -17,6 +17,7 @@ import (
 // appSelectShowSpinnerMsg is sent after a short delay to show the loading spinner,
 // but only if the app list hasn't finished loading yet.
 type appSelectShowSpinnerMsg struct{}
+type appSelectAppliedMsg struct{}
 
 func showSpinnerAfterDelayCmd() tea.Cmd {
 	return tea.Tick(250*time.Millisecond, func(time.Time) tea.Msg {
