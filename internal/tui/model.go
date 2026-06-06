@@ -132,10 +132,11 @@ type (
 
 	// ShowPromptDialogMsg shows a text prompt dialog with a result channel
 	ShowPromptDialogMsg struct {
-		Title      string
-		Question   string
-		Sensitive  bool
-		ResultChan chan promptResultMsg
+		Title        string
+		Question     string
+		Sensitive    bool
+		InitialValue string
+		ResultChan   chan promptResultMsg
 	}
 
 	// LayerHitMsg is sent when a native compositor layer is hit by a mouse event
@@ -201,12 +202,13 @@ type (
 	// UniversalPromptMsg is a generic message for triggering a prompt
 	// that can be routing to either a global dialog or a sub-dialog.
 	UniversalPromptMsg struct {
-		Title      string
-		Question   string
-		DefaultYes bool // For Confirm
-		Sensitive  bool // For Prompt
-		ResultChan any  // chan bool or chan promptResultMsg
-		Type       UniversalPromptType
+		Title        string
+		Question     string
+		DefaultYes   bool // For Confirm
+		Sensitive    bool // For Prompt
+		InitialValue string // For Text prompts: pre-filled value
+		ResultChan   any  // chan bool or chan promptResultMsg
+		Type         UniversalPromptType
 	}
 )
 

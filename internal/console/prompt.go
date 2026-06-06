@@ -25,7 +25,7 @@ var TUIConfirm func(title, question string, defaultYes bool) bool
 
 // TUIPrompt is a function that can be registered by the tui package
 // to allow TextPrompt to show a graphical text input dialog.
-var TUIPrompt func(title, question string, sensitive bool) (string, error)
+var TUIPrompt func(title, question string, sensitive bool, initialValue ...string) (string, error)
 
 // TUIShutdown is a function that can be registered by the tui package
 // to allow the application to cleanly exit the TUI before re-execution.
@@ -173,7 +173,7 @@ func QuestionPrompt(ctx context.Context, printer Printer, title, question string
 
 // TextPrompt prompts the user for string input.
 // If sensitive is true, it attempts to mask the input in standard terminal.
-func TextPrompt(ctx context.Context, printer Printer, title, question string, sensitive bool) (string, error) {
+func TextPrompt(ctx context.Context, printer Printer, title, question string, sensitive bool, initialValue ...string) (string, error) {
 	// Normalize title before any processing
 	if title == "" {
 		title = "Input Required"
@@ -192,7 +192,7 @@ func TextPrompt(ctx context.Context, printer Printer, title, question string, se
 	if TUIPrompt != nil {
 		// Pass raw (unprocessed) strings so the TUI dialog can expand semantic tags
 		// using the active theme instead of the hardcoded console color registry.
-		return TUIPrompt(title, question, sensitive)
+		return TUIPrompt(title, question, sensitive, initialValue...)
 	}
 
 	if sensitive {

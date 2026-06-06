@@ -33,7 +33,7 @@ type promptResultMsg struct {
 }
 
 // newPromptDialog creates a new text input dialog
-func newPromptDialog(title, question string, sensitive bool) *promptDialogModel {
+func newPromptDialog(title, question string, sensitive bool, initialValue ...string) *promptDialogModel {
 	ti := textinput.New()
 	if sensitive {
 		ti.EchoMode = textinput.EchoPassword
@@ -41,6 +41,10 @@ func newPromptDialog(title, question string, sensitive bool) *promptDialogModel 
 	}
 	ti.Focus()
 	ti.CharLimit = 156
+	if len(initialValue) > 0 && initialValue[0] != "" {
+		ti.SetValue(initialValue[0])
+		ti.CursorEnd()
+	}
 
 	// Apply theme-consistent styles to the textinput, inheriting the dialog background
 	styles := GetStyles()
@@ -434,9 +438,9 @@ func (m *promptDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 }
 
 // ShowPromptDialog displays a prompt dialog and returns the text and confirmed bool.
-func ShowPromptDialog(title, question string, sensitive bool) (string, bool) {
+func ShowPromptDialog(title, question string, sensitive bool, initialValue ...string) (string, bool) {
 	helpText := "Type to input | Tab to switch | Enter to confirm | Esc to cancel"
-	dialog := newPromptDialog(title, question, sensitive)
+	dialog := newPromptDialog(title, question, sensitive, initialValue...)
 
 	header := NewHeaderModel()
 	header.SetWidth(80)

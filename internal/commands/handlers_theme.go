@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"DockSTARTer2/internal/config"
@@ -193,6 +194,17 @@ func HandleThemeSettings(ctx context.Context, group *CommandGroup) error {
 		conf.UI.Spinner = true
 	case "--theme-no-spinner", "--theme-no-spinners":
 		conf.UI.Spinner = false
+	case "--theme-spinner-speed":
+		if len(group.Args) == 0 {
+			logger.Error(ctx, "Usage: --theme-spinner-speed <milliseconds>")
+			return fmt.Errorf("missing argument")
+		}
+		ms, err := strconv.Atoi(strings.TrimSpace(group.Args[0]))
+		if err != nil || ms < 50 || ms > 5000 {
+			logger.Error(ctx, "Invalid spinner speed: %s (use 50-5000 ms)", group.Args[0])
+			return fmt.Errorf("invalid spinner speed")
+		}
+		conf.UI.SpinnerSpeed = ms
 	case "--theme-border-color":
 		if len(group.Args) > 0 {
 			switch group.Args[0] {

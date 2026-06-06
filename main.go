@@ -103,6 +103,7 @@ func run() (exitCode int) {
 		earlyConf := config.LoadAppConfig()
 		console.LineCharacters = earlyConf.UI.LineCharacters
 		console.SpinnerEnabled = earlyConf.UI.Spinner
+		console.SpinnerSpeed = earlyConf.UI.SpinnerSpeed
 	}
 
 	// Create a cancelable context

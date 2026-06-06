@@ -778,8 +778,12 @@ func (m *MenuModel) spinnerTickCmd() tea.Cmd {
 	if !console.SpinnerEnabled {
 		return nil
 	}
+	fps := spinnerFPS
+	if console.SpinnerSpeed > 0 {
+		fps = time.Duration(console.SpinnerSpeed) * time.Millisecond
+	}
 	id := m.id
-	return tea.Tick(spinnerFPS, func(time.Time) tea.Msg {
+	return tea.Tick(fps, func(time.Time) tea.Msg {
 		return menuSpinnerTickMsg{id: id}
 	})
 }

@@ -398,7 +398,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Show prompt dialog as the main dialog
-		dialog := newPromptDialog(msg.Title, msg.Question, msg.Sensitive)
+		dialog := newPromptDialog(msg.Title, msg.Question, msg.Sensitive, msg.InitialValue)
 		dW, dH := m.getDialogArea(dialog)
 		if sizable, ok := interface{}(dialog).(interface{ SetSize(int, int) }); ok {
 			sizable.SetSize(dW, dH)
@@ -418,7 +418,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				confirm.onResult = func(r bool) tea.Msg { return SubDialogResultMsg{Result: r} }
 				subModel = confirm
 			} else {
-				prompt := newPromptDialog(msg.Title, msg.Question, msg.Sensitive)
+				prompt := newPromptDialog(msg.Title, msg.Question, msg.Sensitive, msg.InitialValue)
 				prompt.onResult = func(r string, c bool) tea.Msg {
 					return SubDialogResultMsg{Result: promptResultMsg{result: r, confirmed: c}}
 				}
@@ -445,10 +445,11 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, func() tea.Msg {
 			return ShowPromptDialogMsg{
-				Title:      msg.Title,
-				Question:   msg.Question,
-				Sensitive:  msg.Sensitive,
-				ResultChan: msg.ResultChan.(chan promptResultMsg),
+				Title:        msg.Title,
+				Question:     msg.Question,
+				Sensitive:    msg.Sensitive,
+				InitialValue: msg.InitialValue,
+				ResultChan:   msg.ResultChan.(chan promptResultMsg),
 			}
 		}
 

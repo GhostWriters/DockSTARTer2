@@ -1,15 +1,18 @@
 package screens
 
 import (
+	"context"
+	"fmt"
+	"os/exec"
+	"strconv"
+	"strings"
+
+	tea "charm.land/bubbletea/v2"
+
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/tui"
-	"fmt"
-	"os/exec"
-	"strings"
-
-	tea "charm.land/bubbletea/v2"
 )
 
 // DisplayOptionsFocus defines which area of the screen has focus
@@ -211,6 +214,13 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Selectable:    true,
 			SpaceAction:   s.toggleSpinner(),
 			IsDestructive: true,
+		},
+		{
+			Tag:        "Spinner Speed",
+			Desc:       fmt.Sprintf("%dms", s.config.UI.SpinnerSpeed),
+			Help:       "Spinner frame speed in milliseconds (Enter to change)",
+			Action:     s.promptSpinnerSpeed(),
+			Selectable: true,
 		},
 		{
 			Tag:           "Shadow Level",
@@ -867,6 +877,28 @@ func (s *DisplayOptionsScreen) toggleSpinner() tea.Cmd {
 		newState := !s.config.UI.Spinner
 		return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
 			cfg.UI.Spinner = newState
+		}}
+	}
+}
+
+func (s *DisplayOptionsScreen) promptSpinnerSpeed() tea.Cmd {
+	return func() tea.Msg {
+		result, err := console.TextPrompt(context.Background(),
+			func(context.Context, any, ...any) {}, "Spinner Speed", "Enter frame speed in milliseconds (50-5000)", false,
+			strconv.Itoa(s.config.UI.SpinnerSpeed))
+		if err != nil {
+			return nil
+		}
+		ms, err := strconv.Atoi(strings.TrimSpace(result))
+		if err != nil || ms < 50 || ms > 5000 {
+			return tui.ShowMessageDialogMsg{
+				Title:   "Invalid Speed",
+				Message: "Spinner speed must be between 50 and 5000 milliseconds.",
+				Type:    tui.MessageError,
+			}
+		}
+		return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
+			cfg.UI.SpinnerSpeed = ms
 		}}
 	}
 }

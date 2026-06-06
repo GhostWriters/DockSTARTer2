@@ -107,6 +107,7 @@ func NewFlagSet() *pflag.FlagSet {
 	fs.Bool("theme-no-spinner", false, "Turn CLI spinner off")
 	fs.Bool("theme-spinners", false, "Turn CLI spinner on")
 	fs.Bool("theme-no-spinners", false, "Turn CLI spinner off")
+	fs.String("theme-spinner-speed", "", "Set spinner frame speed in milliseconds (e.g. 250)")
 	fs.String("theme-border-color", "", "Set border color (1=Border, 2=Border2, 3=Both)")
 	fs.String("theme-dialog-title", "", "Set dialog title alignment (left/center)")
 	fs.String("theme-submenu-title", "", "Set submenu title alignment (left/center)")

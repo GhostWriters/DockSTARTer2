@@ -341,7 +341,7 @@ func GetUsage(target string, noHeading bool) string {
 		"--theme-large-buttons", "--theme-no-large-buttons",
 		"--theme-shadows", "--theme-no-shadows", "--theme-shadow", "--theme-no-shadow", "--theme-shadow-level",
 		"--theme-scrollbar", "--theme-no-scrollbar", "--theme-scrollbars", "--theme-no-scrollbars",
-		"--theme-spinner", "--theme-no-spinner", "--theme-spinners", "--theme-no-spinners",
+		"--theme-spinner", "--theme-no-spinner", "--theme-spinners", "--theme-no-spinners", "--theme-spinner-speed",
 		"--theme-border-color",
 		"--theme-dialog-title", "--theme-submenu-title", "--theme-panel-title",
 		"--theme-extract", "--theme-extract-all") {
@@ -379,6 +379,8 @@ func GetUsage(target string, noHeading bool) string {
 			"{{|UsageCommand|}}--theme-spinners{{[-]}}",
 			"{{|UsageCommand|}}--theme-no-spinners{{[-]}}",
 			"	Turn the CLI spinner on or off",
+			"{{|UsageCommand|}}--theme-spinner-speed{{[-]}} {{|UsageOption|}}<ms>{{[-]}}",
+			"	Set spinner frame speed in milliseconds (50-5000, default 250)",
 			"{{|UsageCommand|}}--theme-border-color{{[-]}} {{|UsageOption|}}<level>{{[-]}}",
 			"	Set the border color (1=Border, 2=Border2, 3=Both)",
 			"{{|UsageCommand|}}--theme-dialog-title{{[-]}} {{|UsageOption|}}<align>{{[-]}}",
