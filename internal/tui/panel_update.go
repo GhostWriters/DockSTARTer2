@@ -267,6 +267,10 @@ func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.spinnerFrame = (m.spinnerFrame + 1) % len(frames)
 			return m, m.spinnerTickCmd()
 		}
+		// Spinner just went idle — mark changed if panel is collapsed.
+		if !m.expanded && !m.lastLineTime.IsZero() {
+			m.panelChanged = true
+		}
 		return m, nil
 	}
 
@@ -305,6 +309,9 @@ func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case panelLineMsg:
 		wasIdle := m.lastLineTime.IsZero() || time.Since(m.lastLineTime) >= spinnerIdleTimeout
 		m.lastLineTime = time.Now()
+		if !m.expanded {
+			m.panelChanged = true
+		}
 		m.sv.AppendLines(strings.Split(string(msg), "\n"), panelRenderFn())
 		if wasIdle {
 			return m, tea.Batch(waitForPanelLine(), m.spinnerTickCmd())
@@ -314,6 +321,9 @@ func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case consoleLinesMsg:
 		wasIdle := m.lastLineTime.IsZero() || time.Since(m.lastLineTime) >= spinnerIdleTimeout
 		m.lastLineTime = time.Now()
+		if !m.expanded {
+			m.panelChanged = true
+		}
 		wasCommandIdle := !m.sv.CommandRunning
 		m.sv.CommandRunning = true
 		m.sv.AppendLines(msg.lines, panelRenderFn())
@@ -346,6 +356,7 @@ func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case togglePanelMsg:
 		m.expanded = !m.expanded
 		if m.expanded {
+			m.panelChanged = false
 			m.SetSize(m.width, m.totalHeight)
 			m.sv.GotoBottom()
 		}

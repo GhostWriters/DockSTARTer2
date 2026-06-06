@@ -32,11 +32,16 @@ func GetBlockBorders(lineCharacters bool) BorderPair {
 // RenderTopBorderBoxCtx renders only the top border line with a title (suitable for log panel).
 // rightTitle is wrapped in T-bar connectors (like the left title). rightSuffix is appended after
 // the T-bar section without additional styling (use it for pre-rendered icon strings).
-// spinnerIndicator, when non-empty, replaces ▸/◂ focus indicators with the given spinner frame character.
-func RenderTopBorderBoxCtx(title, rightTitle, rightSuffix, content string, contentWidth int, focused bool, titleStyle, borderStyle lipgloss.Style, ctx StyleContext, spinnerIndicator ...string) string {
+// indicators[0]: spinner frame character — replaces ▸/◂ focus indicators when non-empty.
+// indicators[1]: "1" when the spinner indicator is a changed indicator (uses ConsoleTitleChangedIndicator style).
+func RenderTopBorderBoxCtx(title, rightTitle, rightSuffix, content string, contentWidth int, focused bool, titleStyle, borderStyle lipgloss.Style, ctx StyleContext, indicators ...string) string {
 	spinInd := ""
-	if len(spinnerIndicator) > 0 {
-		spinInd = spinnerIndicator[0]
+	isChanged := false
+	if len(indicators) > 0 {
+		spinInd = indicators[0]
+	}
+	if len(indicators) > 1 && indicators[1] == "1" {
+		isChanged = true
 	}
 	borderStyle = ctx.BorderFlags.Apply(borderStyle)
 	var border lipgloss.Border
@@ -160,9 +165,13 @@ func RenderTopBorderBoxCtx(title, rightTitle, rightSuffix, content string, conte
 		result.WriteString(renderedTitle)
 		result.WriteString(borderStyle.Render(theme.ToThemeANSI("{{|TitleFocusIndicator|}}" + indR)))
 	} else if spinInd != "" {
-		result.WriteString(borderStyle.Render(theme.ToThemeANSI("{{|TitleUnfocusedIndicator|}}" + spinInd)))
+		indStyle := "{{|TitleUnfocusedIndicator|}}"
+		if isChanged {
+			indStyle = "{{|ConsoleTitleChangedIndicator|}}"
+		}
+		result.WriteString(borderStyle.Render(theme.ToThemeANSI(indStyle + spinInd)))
 		result.WriteString(renderedTitle)
-		result.WriteString(borderStyle.Render(theme.ToThemeANSI("{{|TitleUnfocusedIndicator|}}" + spinInd)))
+		result.WriteString(borderStyle.Render(theme.ToThemeANSI(indStyle + spinInd)))
 	} else {
 		result.WriteString(borderStyle.Render(" "))
 		result.WriteString(renderedTitle)

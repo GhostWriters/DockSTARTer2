@@ -93,6 +93,7 @@ type PanelModel struct {
 	connType     string // "local", "ssh", or "web"
 	spinnerFrame int
 	lastLineTime time.Time // when the last log line arrived; spinner runs until idle for spinnerIdleTimeout
+	panelChanged bool      // new content arrived while collapsed; cleared on expand
 }
 
 const spinnerIdleTimeout = 1500 * time.Millisecond
@@ -115,18 +116,32 @@ func (m *PanelModel) spinnerTickCmd() tea.Cmd {
 	})
 }
 
+// changedIndicatorChar returns the character used to signal new content arrived while collapsed.
+func changedIndicatorChar(lineCharacters bool) string {
+	if lineCharacters {
+		return "◆"
+	}
+	return "*"
+}
+
 // currentSpinnerMarker returns the spinner frame to use in the panel title,
-// or "" when idle (no new lines for spinnerIdleTimeout).
-func (m *PanelModel) currentSpinnerMarker() string {
-	if m.lastLineTime.IsZero() || time.Since(m.lastLineTime) >= spinnerIdleTimeout || !console.SpinnerEnabled {
-		return ""
+// the changed indicator when new content arrived while collapsed,
+// or "" when idle.
+func (m *PanelModel) currentSpinnerMarker() (indicator string, changed bool) {
+	spinning := !m.lastLineTime.IsZero() && time.Since(m.lastLineTime) < spinnerIdleTimeout && console.SpinnerEnabled
+	if spinning {
+		ctx := GetActiveContext()
+		frames := console.SpinnerFramesUnicode
+		if !ctx.LineCharacters {
+			frames = console.SpinnerFramesASCII
+		}
+		return frames[m.spinnerFrame%len(frames)], false
 	}
-	ctx := GetActiveContext()
-	frames := console.SpinnerFramesUnicode
-	if !ctx.LineCharacters {
-		frames = console.SpinnerFramesASCII
+	if m.panelChanged && !m.expanded {
+		ctx := GetActiveContext()
+		return changedIndicatorChar(ctx.LineCharacters), true
 	}
-	return frames[m.spinnerFrame%len(frames)]
+	return "", false
 }
 
 // panelRenderFn returns the render function for streamvp line rendering.

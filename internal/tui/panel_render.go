@@ -160,7 +160,12 @@ func (m PanelModel) ViewString() string {
 		rightSuffix = RenderThemeText(iconStr, baseStyle)
 	}
 
-	return RenderTopBorderBoxCtx(title, rightTitle, rightSuffix, combined, m.width, m.focused || m.TitleBarFocused(), consoleTitleStyle, consoleBorderStyle, ctx, m.currentSpinnerMarker())
+	spinInd, isChanged := m.currentSpinnerMarker()
+	changedFlag := ""
+	if isChanged {
+		changedFlag = "1"
+	}
+	return RenderTopBorderBoxCtx(title, rightTitle, rightSuffix, combined, m.width, m.focused || m.TitleBarFocused(), consoleTitleStyle, consoleBorderStyle, ctx, spinInd, changedFlag)
 }
 
 // Layers returns a single layer with the panel content for visual compositing.
