@@ -7,6 +7,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/atotto/clipboard"
+
+	"DockSTARTer2/internal/console"
 )
 
 // menuSpinnerTickMsg advances the loading spinner by one frame.
@@ -773,6 +775,9 @@ func (m *MenuModel) SetLoadingText(text string) tea.Cmd {
 }
 
 func (m *MenuModel) spinnerTickCmd() tea.Cmd {
+	if !console.SpinnerEnabled {
+		return nil
+	}
 	id := m.id
 	return tea.Tick(spinnerFPS, func(time.Time) tea.Msg {
 		return menuSpinnerTickMsg{id: id}
