@@ -106,7 +106,7 @@ func (m *MenuModel) ViewString() string {
 	borderedList = strings.TrimSuffix(borderedList, "\n")
 
 	// 3. Add bottom border (AE or Scroll Percent)
-	showAEFocus := m.focused && !m.SelectedItem().IsSubItem && !m.SelectedItem().IsAddInstance && !m.SelectedItem().IsEditing
+	showAEFocus := m.focused && m.loadingText == "" && !m.SelectedItem().IsSubItem && !m.SelectedItem().IsAddInstance && !m.SelectedItem().IsEditing
 	if m.groupedMode {
 		pct := -1.0
 		if m.Scroll.Info.Needed {
