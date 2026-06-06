@@ -310,8 +310,6 @@ func installUpdate(ctx context.Context, assetURL string) error {
 	}
 
 	// If direct rename fails, attempt with sudo
-	logger.Warn(ctx, "Direct update failed (%v), trying with sudo.", err)
-
 	mvCmd, err := dsexec.SudoCommand(ctx, "mv", tmpExe, exe)
 	if err != nil {
 		return fmt.Errorf("sudo update failed: %w", err)
