@@ -223,6 +223,7 @@ func Parse(args []string) ([]CommandGroup, error) {
 			}
 
 		case "-t", "--test", "--man", "--config-pm", "--config-folder", "--config-compose-folder", "--theme-border-color",
+			"--theme-spinner-speed",
 			"--edit-app", "--start-edit-app",
 			"--env-edit", "--env-edit-lower":
 			if i >= len(expandedArgs) || strings.HasPrefix(expandedArgs[i], "-") {
