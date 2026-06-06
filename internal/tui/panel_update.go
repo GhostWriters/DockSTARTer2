@@ -350,6 +350,7 @@ func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			frame := lipgloss.NewStyle().Foreground(console.SpinnerColor).Render(frames[m.inlineSpinnerFrame])
 			m.inlineSpinnerLine = RenderConsoleText(frame, styles.Console)
 			m.setViewportContent(false)
+			m.lastLineTime = time.Now() // keep title spinner alive during silent command execution
 			return m, m.inlineSpinnerTickCmd()
 		}
 		return m, nil
