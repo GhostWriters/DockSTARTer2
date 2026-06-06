@@ -147,9 +147,9 @@ func (m PanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 
 		// Scrollbar hit regions
 		if currentConfig.UI.Scrollbar {
-			sbInfo := ComputeScrollbarInfo(m.viewport.TotalLineCount(), m.viewport.Height(), m.viewport.YOffset(), vpH)
+			sbInfo := ComputeScrollbarInfo(m.sv.TotalLineCount(), m.sv.Height(), m.sv.YOffset(), vpH)
 			if sbInfo.Needed {
-				sbX := offsetX + m.viewport.Width()
+				sbX := offsetX + m.sv.Width()
 				sbTopY := offsetY + 1
 
 				regions = append(regions, HitRegion{

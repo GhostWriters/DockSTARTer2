@@ -6,6 +6,7 @@ import (
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/theme"
+	"DockSTARTer2/internal/tui/components/streamvp"
 	"DockSTARTer2/internal/update"
 	"fmt"
 	"strings"
@@ -97,7 +98,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, logger.BatchRecoverTUI(m.ctx, cmd)
 
-	case panelSpinnerTickMsg, panelInlineSpinnerTickMsg:
+	case panelSpinnerTickMsg, streamvp.SpinnerTickMsg:
 		updated, cmd := m.panel.Update(msg)
 		m.panel = updated.(PanelModel)
 		return m, logger.BatchRecoverTUI(m.ctx, cmd)

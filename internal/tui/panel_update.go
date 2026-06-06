@@ -15,11 +15,11 @@ import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/tui/components/sinput"
+	"DockSTARTer2/internal/tui/components/streamvp"
 	"DockSTARTer2/internal/version"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 )
 
 // preloadPanelLog reads the last 200 lines of the log file.
@@ -252,73 +252,6 @@ func (m *PanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 	return tea.Batch(m.spinnerTickCmd(), readConsoleBatch(sc, cancel))
 }
 
-// setViewportContent rebuilds viewport content from m.lines + optional inlineSpinnerLine.
-// Pass scrollToBottom=true to always jump to bottom; false keeps position unless already at bottom.
-func (m *PanelModel) setViewportContent(scrollToBottom bool) {
-	content := strings.Join(m.lines, "\n")
-	if m.inlineSpinnerLine != "" {
-		content += "\n" + m.inlineSpinnerLine
-	}
-	atBottom := m.viewport.AtBottom()
-	m.viewport.SetContent(content)
-	if scrollToBottom || atBottom {
-		if m.viewport.Height() > 0 {
-			m.viewport.GotoBottom()
-		}
-	}
-}
-
-// appendConsoleLines adds rendered lines to the scrollback.
-func (m *PanelModel) appendConsoleLines(lines []string) {
-	styles := GetStyles()
-	targetWidth := m.viewport.Width()
-	if targetWidth <= 0 && m.width > 0 {
-		targetWidth = m.width - ScrollbarGutterWidth
-	}
-	for _, line := range lines {
-		m.rawLines = append(m.rawLines, line)
-		rendered := RenderConsoleText(line, styles.Console)
-		if targetWidth > 0 {
-			rendered = lipgloss.NewStyle().MaxWidth(targetWidth).Render(rendered)
-		}
-		m.lines = append(m.lines, rendered)
-	}
-
-	// Limit history to 5000 lines
-	maxHistory := 5000
-	if len(m.rawLines) > maxHistory {
-		m.rawLines = m.rawLines[len(m.rawLines)-maxHistory:]
-		m.lines = m.lines[len(m.lines)-maxHistory:]
-	}
-
-	m.setViewportContent(true)
-}
-
-// reRenderLines re-wraps all stored raw lines for the current width.
-func (m *PanelModel) reRenderLines() {
-	styles := GetStyles()
-	targetWidth := m.width - ScrollbarGutterWidth
-	if targetWidth <= 0 {
-		return
-	}
-
-	m.lines = make([]string, 0, len(m.rawLines))
-	style := lipgloss.NewStyle().MaxWidth(targetWidth)
-	for _, line := range m.rawLines {
-		rendered := RenderConsoleText(line, styles.Console)
-		rendered = style.Render(rendered)
-		m.lines = append(m.lines, rendered)
-	}
-
-	// Limit history to 5000 lines
-	maxHistory := 5000
-	if len(m.rawLines) > maxHistory {
-		m.rawLines = m.rawLines[len(m.rawLines)-maxHistory:]
-		m.lines = m.lines[len(m.lines)-maxHistory:]
-	}
-
-	m.setViewportContent(true)
-}
 
 // ─── Update ───────────────────────────────────────────────────────────────────
 
@@ -337,21 +270,11 @@ func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Inline content-area spinner tick: advance frame while a console command is running.
-	if _, ok := msg.(panelInlineSpinnerTickMsg); ok {
-		if m.commandRunning && console.SpinnerEnabled {
-			ctx := GetActiveContext()
-			frames := console.SpinnerFramesUnicode
-			if !ctx.LineCharacters {
-				frames = console.SpinnerFramesASCII
-			}
-			m.inlineSpinnerFrame = (m.inlineSpinnerFrame + 1) % len(frames)
-			styles := GetStyles()
-			frame := lipgloss.NewStyle().Foreground(console.SpinnerColor).Render(frames[m.inlineSpinnerFrame])
-			m.inlineSpinnerLine = RenderConsoleText(frame, styles.Console)
-			m.setViewportContent(false)
+	// Inline content-area spinner tick via streamvp.
+	if tick, ok := msg.(streamvp.SpinnerTickMsg); ok {
+		if m.sv.HandleSpinnerTick(tick) {
 			m.lastLineTime = time.Now() // keep title spinner alive during silent command execution
-			return m, m.inlineSpinnerTickCmd()
+			return m, m.sv.SpinnerTickCmd()
 		}
 		return m, nil
 	}
@@ -382,7 +305,7 @@ func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case panelLineMsg:
 		wasIdle := m.lastLineTime.IsZero() || time.Since(m.lastLineTime) >= spinnerIdleTimeout
 		m.lastLineTime = time.Now()
-		m.appendConsoleLines(strings.Split(string(msg), "\n"))
+		m.sv.AppendLines(strings.Split(string(msg), "\n"), panelRenderFn())
 		if wasIdle {
 			return m, tea.Batch(waitForPanelLine(), m.spinnerTickCmd())
 		}
@@ -391,10 +314,9 @@ func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case consoleLinesMsg:
 		wasIdle := m.lastLineTime.IsZero() || time.Since(m.lastLineTime) >= spinnerIdleTimeout
 		m.lastLineTime = time.Now()
-		wasCommandIdle := !m.commandRunning
-		m.commandRunning = true
-		m.inlineSpinnerLine = ""
-		m.appendConsoleLines(msg.lines)
+		wasCommandIdle := !m.sv.CommandRunning
+		m.sv.CommandRunning = true
+		m.sv.AppendLines(msg.lines, panelRenderFn())
 		if m.consoleScanner == nil {
 			return m, nil
 		}
@@ -405,16 +327,15 @@ func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, m.spinnerTickCmd())
 		}
 		if wasCommandIdle {
-			cmds = append(cmds, m.inlineSpinnerTickCmd())
+			cmds = append(cmds, m.sv.SpinnerTickCmd())
 		}
 		return m, tea.Batch(cmds...)
 
 	case consoleDoneMsg:
 		m.consoleScanner = nil
 		m.consoleCancel = nil
-		m.commandRunning = false
-		m.inlineSpinnerLine = ""
-		m.setViewportContent(false)
+		m.sv.CommandRunning = false
+		m.sv.ClearSpinner()
 		if !m.sessionActive() {
 			m.inputFocused = true
 			cmd := m.input.Focus()
@@ -426,34 +347,32 @@ func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.expanded = !m.expanded
 		if m.expanded {
 			m.SetSize(m.width, m.totalHeight)
-			content := strings.Join(m.lines, "\n")
-			m.viewport.SetContent(content)
-			m.viewport.GotoBottom()
+			m.sv.GotoBottom()
 		}
 		return m, nil
 
 	case LayerHitMsg:
 		if strings.HasSuffix(msg.ID, ".sb.up") {
 			if m.expanded && msg.Button != HoverButton {
-				m.viewport.ScrollUp(1)
+				m.sv.ScrollUp(1)
 			}
 			return m, nil
 		}
 		if strings.HasSuffix(msg.ID, ".sb.down") {
 			if m.expanded && msg.Button != HoverButton {
-				m.viewport.ScrollDown(1)
+				m.sv.ScrollDown(1)
 			}
 			return m, nil
 		}
 		if strings.HasSuffix(msg.ID, ".sb.above") {
 			if m.expanded && msg.Button != HoverButton {
-				m.viewport.HalfPageUp()
+				m.sv.HalfPageUp()
 			}
 			return m, nil
 		}
 		if strings.HasSuffix(msg.ID, ".sb.below") {
 			if m.expanded && msg.Button != HoverButton {
-				m.viewport.HalfPageDown()
+				m.sv.HalfPageDown()
 			}
 			return m, nil
 		}
@@ -484,9 +403,7 @@ func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.height = 1
 				m.SetSize(m.width, m.totalHeight)
 				m.resizeDrag.StartThumbTop = 1
-				content := strings.Join(m.lines, "\n")
-				m.viewport.SetContent(content)
-				m.viewport.GotoBottom()
+				m.sv.GotoBottom()
 			}
 			return m, nil
 		}
@@ -513,11 +430,11 @@ func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseWheelMsg:
 		if m.expanded {
 			if msg.Button == tea.MouseWheelUp {
-				m.viewport.ScrollUp(3)
+				m.sv.ScrollUp(3)
 				return m, nil
 			}
 			if msg.Button == tea.MouseWheelDown {
-				m.viewport.ScrollDown(3)
+				m.sv.ScrollDown(3)
 				return m, nil
 			}
 		}
@@ -529,16 +446,16 @@ func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.expanded {
 			switch {
 			case key.Matches(msg, Keys.Home):
-				m.viewport.GotoTop()
+				m.sv.GotoTop()
 				return m, nil
 			case key.Matches(msg, Keys.End):
-				m.viewport.GotoBottom()
+				m.sv.GotoBottom()
 				return m, nil
 			case key.Matches(msg, Keys.HalfPageUp):
-				m.viewport.HalfPageUp()
+				m.sv.HalfPageUp()
 				return m, nil
 			case key.Matches(msg, Keys.HalfPageDown):
-				m.viewport.HalfPageDown()
+				m.sv.HalfPageDown()
 				return m, nil
 			}
 		}
@@ -546,7 +463,7 @@ func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	var cmd tea.Cmd
 	if m.expanded {
-		m.viewport, cmd = m.viewport.Update(msg)
+		cmd = m.sv.ViewUpdate(msg)
 	}
 	return m, cmd
 }
@@ -600,7 +517,7 @@ func (m PanelModel) updateInputFocused(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 		m.inputFocused = false
 
 		// Show the submitted command in the scrollback.
-		m.appendConsoleLines([]string{"> " + cmdStr})
+		m.sv.AppendLines([]string{"> " + cmdStr}, panelRenderFn())
 
 		return m, m.submitConsoleCommand(cmdStr)
 	}

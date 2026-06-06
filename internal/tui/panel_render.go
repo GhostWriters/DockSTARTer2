@@ -54,22 +54,19 @@ func (m PanelModel) ViewString() string {
 			vpH = 1
 		}
 	}
-	if m.viewport.Height() != vpH {
-		m.viewport.SetHeight(vpH)
+	if m.sv.Height() != vpH {
+		m.sv.SetSize(m.sv.Width(), vpH)
 	}
-	if m.viewport.Width() != m.width-ScrollbarGutterWidth {
-		m.viewport.SetWidth(m.width - ScrollbarGutterWidth)
+	if m.sv.Width() != m.width-ScrollbarGutterWidth {
+		m.sv.SetSize(m.width-ScrollbarGutterWidth, vpH)
 	}
 
-	vpStyle := lipgloss.NewStyle().
-		Width(m.viewport.Width()).
-		Height(vpH).
+	m.sv.SetStyle(lipgloss.NewStyle().
 		Background(ctx.Console.GetBackground()).
-		Foreground(ctx.Console.GetForeground())
-	m.viewport.Style = vpStyle
+		Foreground(ctx.Console.GetForeground()))
 
-	vpView := MaintainBackground(m.viewport.View(), ctx.Console)
-	vpView = ApplyScrollbarColumn(vpView, len(m.lines), vpH, m.viewport.YOffset(), ctx.LineCharacters, ctx)
+	vpView := MaintainBackground(m.sv.View(), ctx.Console)
+	vpView = ApplyScrollbarColumn(vpView, m.sv.TotalLineCount(), vpH, m.sv.YOffset(), ctx.LineCharacters, ctx)
 
 	// Input box — bordered with submenu styling.
 	// RenderTopBorderBoxCtx appends content without side borders, so full m.width is available.
@@ -158,7 +155,7 @@ func (m PanelModel) ViewString() string {
 			"{{|" + upTag + "|}}[" + upGlyph + "]{{[-]}}" +
 			lineChar +
 			"{{|" + dnTag + "|}}[" + dnGlyph + "]{{[-]}}"
-		pct := int(m.viewport.ScrollPercent() * 100)
+		pct := int(m.sv.ScrollPercent() * 100)
 		rightTitle = fmt.Sprintf(" %d%% ", pct)
 		rightSuffix = RenderThemeText(iconStr, baseStyle)
 	}

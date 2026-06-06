@@ -3,13 +3,12 @@ package tui
 import (
 	"bufio"
 	"context"
-	"strings"
 	"time"
 
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/tui/components/sinput"
+	"DockSTARTer2/internal/tui/components/streamvp"
 	"charm.land/bubbles/v2/textinput"
-	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 )
 
@@ -42,9 +41,6 @@ type ConsoleLockMsg struct {
 // panelSpinnerTickMsg advances the panel title spinner by one frame while a command is running.
 type panelSpinnerTickMsg struct{}
 
-// panelInlineSpinnerTickMsg advances the inline content-area spinner in the panel viewport.
-type panelInlineSpinnerTickMsg struct{}
-
 // consoleDoneMsg signals that a console command has finished.
 type consoleDoneMsg struct {
 	err           error
@@ -60,8 +56,7 @@ type consoleDoneMsg struct {
 type PanelModel struct {
 	expanded bool
 	focused  bool
-	viewport viewport.Model
-	lines    []string
+	sv       streamvp.Model
 	width    int
 	// totalHeight is the full height of the terminal (used for max constraint)
 	totalHeight int
@@ -94,17 +89,10 @@ type PanelModel struct {
 	// sessionLockers tracks active locks by ID. Input is locked when non-empty.
 	sessionLockers map[string]struct{}
 
-	rawLines []string // un-wrapped, themed lines
-
 	panelMode    string // "log", "console", "system", or "none"
 	connType     string // "local", "ssh", or "web"
 	spinnerFrame int
 	lastLineTime time.Time // when the last log line arrived; spinner runs until idle for spinnerIdleTimeout
-
-	// Inline content-area spinner (shown while a console command is running)
-	commandRunning     bool
-	inlineSpinnerFrame int
-	inlineSpinnerLine  string
 }
 
 const spinnerIdleTimeout = 1500 * time.Millisecond
@@ -127,19 +115,6 @@ func (m *PanelModel) spinnerTickCmd() tea.Cmd {
 	})
 }
 
-func (m *PanelModel) inlineSpinnerTickCmd() tea.Cmd {
-	if !console.SpinnerEnabled {
-		return nil
-	}
-	fps := time.Duration(console.SpinnerSpeed) * time.Millisecond
-	if fps <= 0 {
-		fps = 100 * time.Millisecond
-	}
-	return tea.Tick(fps, func(time.Time) tea.Msg {
-		return panelInlineSpinnerTickMsg{}
-	})
-}
-
 // currentSpinnerMarker returns the spinner frame to use in the panel title,
 // or "" when idle (no new lines for spinnerIdleTimeout).
 func (m *PanelModel) currentSpinnerMarker() string {
@@ -152,6 +127,14 @@ func (m *PanelModel) currentSpinnerMarker() string {
 		frames = console.SpinnerFramesASCII
 	}
 	return frames[m.spinnerFrame%len(frames)]
+}
+
+// panelRenderFn returns the render function for streamvp line rendering.
+func panelRenderFn() func(string) string {
+	styles := GetStyles()
+	return func(raw string) string {
+		return RenderConsoleText(raw, styles.Console)
+	}
 }
 
 // applyInputStyles updates the sinput colours from the current theme.
@@ -169,14 +152,12 @@ func (m *PanelModel) applyInputStyles() {
 
 // NewPanelModel creates a new console panel in the requested state.
 func NewPanelModel(panelMode string, connType string) PanelModel {
-	vp := viewport.New()
-
 	ti := textinput.New()
 	ti.Prompt = "> "
 	inp := sinput.New(ti)
 
 	m := PanelModel{
-		viewport:   vp,
+		sv:         streamvp.New("panel"),
 		input:      inp,
 		historyIdx: -1,
 		panelMode:  panelMode,
@@ -185,6 +166,18 @@ func NewPanelModel(panelMode string, connType string) PanelModel {
 	}
 	m.applyInputStyles()
 	return m
+}
+
+// vpHeight returns the viewport height for the current panel state.
+func (m *PanelModel) vpHeight() int {
+	vpH := m.height - 1
+	if m.panelMode == "console" || m.panelMode == "system" {
+		vpH -= 3
+	}
+	if vpH < 1 {
+		vpH = 1
+	}
+	return vpH
 }
 
 // CollapsedHeight returns the height the panel always occupies (the toggle strip).
@@ -235,15 +228,9 @@ func (m *PanelModel) ResizeBy(delta int) bool {
 		return false
 	}
 	m.height = newHeight
-	vpH := m.height - 1
-	if m.panelMode == "console" || m.panelMode == "system" {
-		vpH -= 3
-	}
-	if vpH < 1 {
-		vpH = 1
-	}
-	m.viewport.SetHeight(vpH)
-	m.viewport.SetYOffset(m.viewport.YOffset())
+	vpH := m.vpHeight()
+	m.sv.SetSize(m.sv.Width(), vpH)
+	m.sv.SetYOffset(m.sv.YOffset())
 	return true
 }
 
@@ -284,12 +271,9 @@ func (m *PanelModel) applyDragY(mouseY int) {
 	}
 	m.height = newHeight
 	if m.expanded {
-		vpH := m.height - 4
-		if vpH < 1 {
-			vpH = 1
-		}
-		m.viewport.SetHeight(vpH)
-		m.viewport.SetYOffset(m.viewport.YOffset())
+		vpH := m.vpHeight()
+		m.sv.SetSize(m.sv.Width(), vpH)
+		m.sv.SetYOffset(m.sv.YOffset())
 	}
 }
 
@@ -307,12 +291,14 @@ func (m *PanelModel) SetSize(width, totalTermHeight int) {
 	m.width = width
 	m.totalHeight = totalTermHeight
 
+	svWidth := width - ScrollbarGutterWidth
 	if oldWidth != width && width > 0 {
-		m.reRenderLines()
+		m.sv.SetSize(svWidth, m.sv.Height())
+		m.sv.ReRenderWith(panelRenderFn())
+	} else {
+		m.sv.SetSize(svWidth, m.sv.Height())
 	}
 
-	m.viewport.SetWidth(width - ScrollbarGutterWidth)
-	// Input box inner width: outer panel width - 2 (outer box) - 2 (inner border)
 	m.input.SetWidth(width - 4)
 
 	if m.expanded {
@@ -327,21 +313,13 @@ func (m *PanelModel) SetSize(width, totalTermHeight int) {
 			m.height = 5
 		}
 
-		vpH := m.height - 1
-		if m.panelMode == "console" {
-			vpH -= 3 // subtract 3-row input box
-		}
-		if vpH < 1 {
-			vpH = 1
-		}
-		prevH := m.viewport.Height()
-		m.viewport.SetHeight(vpH)
-		if prevH == 0 && vpH > 0 && len(m.lines) > 0 {
-			content := strings.Join(m.lines, "\n")
-			m.viewport.SetContent(content)
-			m.viewport.GotoBottom()
+		vpH := m.vpHeight()
+		prevH := m.sv.Height()
+		m.sv.SetSize(svWidth, vpH)
+		if prevH == 0 && vpH > 0 {
+			m.sv.GotoBottom()
 		} else if vpH > 0 {
-			m.viewport.SetYOffset(m.viewport.YOffset())
+			m.sv.SetYOffset(m.sv.YOffset())
 		}
 	}
 }
@@ -372,10 +350,8 @@ func (m PanelModel) GetInputCursor() (relX, relY int, shape tea.CursorShape, ok 
 	if !m.expanded || !m.inputFocused || !m.input.Focused() {
 		return 0, 0, tea.CursorBar, false
 	}
-	// Vertical offset: 1 (top border) + viewport height + 1 (input top border)
 	vpH := m.height - 4
 	relY = vpH + 2
-	// Horizontal offset: 1 (outer border) + input cursor column (which includes prompt)
 	relX = 1 + m.input.CursorColumn()
 	if m.input.IsOverwrite() {
 		shape = tea.CursorBlock
@@ -387,18 +363,18 @@ func (m PanelModel) GetInputCursor() (relX, relY int, shape tea.CursorShape, ok 
 
 // DragScrollbar scrolls the viewport to match the dragged thumb position.
 func (m PanelModel) DragScrollbar(mouseY int, drag *ScrollbarDragState, sbAbsTopY int, info ScrollbarInfo) (PanelModel, bool) {
-	total := m.viewport.TotalLineCount()
-	visible := m.viewport.Height()
+	total := m.sv.TotalLineCount()
+	visible := m.sv.Height()
 	if total <= visible {
 		return m, false
 	}
 	maxOff := total - visible
 	newOff, _ := drag.ScrollOffset(mouseY, sbAbsTopY, maxOff, info)
-	if newOff == m.viewport.YOffset() {
+	if newOff == m.sv.YOffset() {
 		return m, false
 	}
-	m.viewport.GotoTop()
-	m.viewport.ScrollDown(newOff)
+	m.sv.GotoTop()
+	m.sv.ScrollDown(newOff)
 	return m, true
 }
 
