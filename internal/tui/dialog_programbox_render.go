@@ -26,13 +26,14 @@ func (m *ProgramBoxModel) renderHeaderUI(width int) string {
 	bgStyle := ctx.Dialog
 	hasPrevious := false
 
-	subtitleStyle := bgStyle.Width(width)
 	spacer := bgStyle.Width(width).Render("")
 
-	// Subtitle (rendered as a heading)
+	// Subtitle (rendered as a heading).
+	// {{|Dialog|}} establishes the base style first so the terminal doesn't paint a
+	// reversed cell before the text; {{|CommandLine|}} then styles the command text.
 	if m.subtitle != "" {
-		subtitle := RenderThemeText("{{|Subtitle|}}"+m.subtitle, ctx.Dialog)
-		renderedSubtitle := subtitleStyle.Render(subtitle)
+		subtitle := RenderThemeTextCtx("{{|Dialog|}} {{|CommandLine|}}"+m.subtitle, ctx)
+		renderedSubtitle := lipgloss.NewStyle().MaxWidth(width).Render(subtitle)
 		b.WriteString(renderedSubtitle + "\n")
 		hasPrevious = true
 	}
@@ -288,24 +289,16 @@ func (m *ProgramBoxModel) calculateLayout() {
 
 	// Update viewport dimensions: contentW already accounts for margins; subtract inner border and scrollbar gutter.
 	innerBoxWidth := contentW - ScrollbarGutterWidth - layout.BorderWidth()
-	m.viewport.SetWidth(innerBoxWidth)
-	m.viewport.SetHeight(vpHeight)
-
-	// Refresh content with new word wrap width
-	if m.viewport.Width() > 0 && len(m.rawLines) > 0 {
-		content := lipgloss.NewStyle().
-			Width(m.viewport.Width()).
-			Render(strings.Join(m.rawLines, "\n"))
-		m.viewport.SetContent(content)
-	}
+	m.sv.SetSize(innerBoxWidth, vpHeight)
+	m.sv.ReRenderWith(pbRenderFn())
 }
 
 // GetHelpText returns the dynamic help text based on the current state
 // Implements DynamicHelpProvider interface for use with DialogWithBackdrop
 func (m *ProgramBoxModel) GetHelpText() string {
 	scrollInfo := ""
-	if m.viewport.TotalLineCount() > m.viewport.VisibleLineCount() {
-		scrollPercent := m.viewport.ScrollPercent()
+	if m.sv.TotalLineCount() > m.sv.VisibleLineCount() {
+		scrollPercent := m.sv.ScrollPercent()
 		scrollInfo = fmt.Sprintf(" | %d%%", int(scrollPercent*100))
 	}
 
