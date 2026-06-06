@@ -10,6 +10,7 @@ import (
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/sessionlocks"
+	"DockSTARTer2/internal/version"
 )
 
 // CheckStartupStatus logs information about other running instances of the
@@ -32,7 +33,7 @@ func CheckStartupStatus(ctx context.Context) {
 	})
 
 	// Build all instance lines then emit as a single multi-line warning.
-	lines := []string{"Other instances running:"}
+	lines := []string{fmt.Sprintf("Other %s instances running:", version.ApplicationName)}
 	for _, p := range procs {
 		// Build tag blocks — each becomes its own [block]
 		var tagBlocks []string
