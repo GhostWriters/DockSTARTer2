@@ -55,6 +55,7 @@ TitleSuccess = "{{|Title::green|}}"
 TitleWarning = "{{|Title::yellow|}}"
 TitleQuestion = "{{|Title::yellow|}}"
 ConsoleTitle = "{{|ConsoleBorder|}}"
+ConsoleTitleChangedIndicator = "{{|TitleNotice|}}"
 TitleCheckbox = ""
 TitleCheckboxFocused = "{{|TitleSubMenuFocused|}}"
 

@@ -673,7 +673,7 @@ func startUpdateChecker(ctx context.Context) {
 // RunCommand executes a task with output displayed in a TUI dialog.
 // If a Bubble Tea program is already running, it shows the dialog inline.
 // Otherwise, it starts a standalone program box.
-func RunCommand(ctx context.Context, title, subtitle string, task func(context.Context) error) error {
+func RunCommand(ctx context.Context, title, subtitle, command string, task func(context.Context) error) error {
 	// Wrap the task to pass the writer
 	// We use WithTUIWriter to ensure logger output is captured by the TUI
 	wrappedTask := func(ctx context.Context, w io.Writer) error {
@@ -682,7 +682,7 @@ func RunCommand(ctx context.Context, title, subtitle string, task func(context.C
 
 	// If TUI is already running, show dialog within existing program
 	if program != nil {
-		dialog := NewProgramBoxModel(title, subtitle, "")
+		dialog := NewProgramBoxModel(title, subtitle, command)
 		dialog.SetContext(ctx)
 		dialog.SetTask(wrappedTask)
 		dialog.SetIsDialog(true)
@@ -692,7 +692,7 @@ func RunCommand(ctx context.Context, title, subtitle string, task func(context.C
 	}
 
 	// Otherwise, run standalone with its own Bubble Tea program
-	return RunProgramBox(ctx, title, subtitle, wrappedTask)
+	return RunProgramBox(ctx, title, subtitle, command, wrappedTask)
 }
 
 // Confirm shows a confirmation dialog and returns the user's choice.
@@ -921,7 +921,7 @@ func TriggerAppUpdate() tea.Cmd {
 			return err
 		}
 
-		dialog := NewProgramBoxModel("Updating App", CmdLine("--update-app"), "").WithDialogType(DialogTypeSuccess)
+		dialog := NewProgramBoxModel("Updating App", "Updating the application.", CmdLine("--update-app")).WithDialogType(DialogTypeSuccess)
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
@@ -950,7 +950,7 @@ func TriggerTemplateUpdate() tea.Cmd {
 			return err
 		}
 
-		dialog := NewProgramBoxModel("Updating Templates", CmdLine("--update-templates"), "").WithDialogType(DialogTypeSuccess)
+		dialog := NewProgramBoxModel("Updating Templates", "Updating app templates.", CmdLine("--update-templates")).WithDialogType(DialogTypeSuccess)
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
@@ -1000,7 +1000,7 @@ func TriggerUpdate() tea.Cmd {
 			return err
 		}
 
-		dialog := NewProgramBoxModel("Updating DockSTARTer2", CmdLine("--update"), "").WithDialogType(DialogTypeSuccess)
+		dialog := NewProgramBoxModel("Updating DockSTARTer2", "Updating DockSTARTer2 to the latest version.", CmdLine("--update")).WithDialogType(DialogTypeSuccess)
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
@@ -1038,7 +1038,7 @@ func TriggerComposeUpdate() tea.Cmd {
 			}
 			return nil
 		}
-		dialog := NewProgramBoxModel("Docker Compose", "Updating and starting containers for all enabled services.\n"+CmdLine("--compose", "update"), "").WithDialogType(DialogTypeSuccess)
+		dialog := NewProgramBoxModel("Docker Compose", compose.YesNotice("update", ""), CmdLine("--compose", "update")).WithDialogType(DialogTypeSuccess)
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
@@ -1067,7 +1067,7 @@ func TriggerComposeStop() tea.Cmd {
 			}
 			return nil
 		}
-		dialog := NewProgramBoxModel("Docker Compose", "Stopping or removing running containers.\n"+CmdLine("--compose"), "").WithDialogType(DialogTypeSuccess)
+		dialog := NewProgramBoxModel("Docker Compose", "Stopping or removing running containers.", CmdLine("--compose")).WithDialogType(DialogTypeSuccess)
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
@@ -1086,7 +1086,7 @@ func TriggerDockerPrune() tea.Cmd {
 			}
 			return nil
 		}
-		dialog := NewProgramBoxModel("Docker Prune", "Removing unused docker resources.\n"+CmdLine("--prune"), "").WithDialogType(DialogTypeSuccess)
+		dialog := NewProgramBoxModel("Docker Prune", "Removing unused docker resources.", CmdLine("--prune")).WithDialogType(DialogTypeSuccess)
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)

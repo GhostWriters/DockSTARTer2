@@ -53,6 +53,7 @@ TitleSuccess = "{{[$primary:$secondary]}}"
 TitleWarning = "{{[$primary:$secondary]}}"
 TitleQuestion = "{{[$primary:$secondary]}}"
 ConsoleTitle = "{{|ConsoleBorder|}}"
+ConsoleTitleChangedIndicator = "{{|TitleNotice|}}"
 TitleCheckbox = ""
 TitleCheckboxFocused = "{{|TitleSubMenuFocused|}}"
 

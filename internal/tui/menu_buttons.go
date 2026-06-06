@@ -71,7 +71,7 @@ func (m *MenuModel) getButtonSpecs() []ButtonSpec {
 		if label == "" {
 			label = "Exit"
 		}
-		specs = append(specs, ButtonSpec{Text: label, Active: m.focusedItem == FocusExitBtn, ZoneID: "btn-exit", Help: "Exit the application immediately."})
+		specs = append(specs, ButtonSpec{Text: label, Active: m.focusedItem == FocusExitBtn, Locked: m.exitLocked, ZoneID: "btn-exit", Help: "Exit the application immediately."})
 	}
 
 	return specs

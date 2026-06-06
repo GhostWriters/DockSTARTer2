@@ -36,6 +36,7 @@ func RenderButtonRow(buttons ...string) string {
 type ButtonSpec struct {
 	Text   string
 	Active bool
+	Locked bool   // When true, renders locked markers on either side of the label
 	ZoneID string // Optional zone ID for mouse support (empty = no zone marking)
 	Help   string // Help text for right-click context
 }
@@ -260,21 +261,53 @@ func renderCenteredButtonsImpl(contentWidth int, useBorders bool, ctx StyleConte
 			buttonStyle = ApplyInnerBorderCtx(buttonStyle, btn.Active, ctx)
 		}
 
+		markerChar := ""
+		if btn.Locked {
+			if ctx.LineCharacters {
+				markerChar = lockedMarker
+			} else {
+				markerChar = lockedMarkerAscii
+			}
+		}
+		renderedMarker := ""
+		if markerChar != "" {
+			markerStyle := lipgloss.NewStyle().Background(buttonStyle.GetBackground())
+			renderedMarker = RenderThemeText("{{|MarkerLocked|}}"+markerChar+"{{[-]}}", markerStyle)
+		}
+
 		renderedLabel := RenderHotkeyLabelCtx(btn.Text, btn.Active, ctx)
 		var rendered string
 		if layout.UseBorders {
-			rendered = InjectBorderFlags(buttonStyle.Render(renderedLabel), ctx.BorderFlags, ctx.Border2Flags, true)
+			// buttonContentWidth = maxButtonWidth+4: 2 spaces each side when centered.
+			// For locked: marker occupies 1 space each side as a gutter.
+			// Pass everything through a single buttonStyle.Render to avoid double borders.
+			// Marker is styled via renderedMarker but we need it inside the one Render call,
+			// so we build the content string manually at the right width and use Width(0) to
+			// prevent buttonStyle from re-padding, keeping the border application intact.
+			if markerChar == "" {
+				rendered = InjectBorderFlags(buttonStyle.Render(renderedLabel), ctx.BorderFlags, ctx.Border2Flags, true)
+			} else {
+				// Render exactly as normal, then replace first and last visible char with marker.
+				rendered = replaceFirstLastChar(buttonStyle.Render(renderedLabel), markerChar, renderedMarker)
+				rendered = InjectBorderFlags(rendered, ctx.BorderFlags, ctx.Border2Flags, true)
+			}
 		} else {
 			bracketStyle := lipgloss.NewStyle().
 				Foreground(ctx.Dialog.GetForeground()).
 				Background(ctx.Dialog.GetBackground())
 			pad := maxButtonWidth - lipgloss.Width(btn.Text)
-			leftPad := pad / 2
-			rightPad := pad - leftPad
-			inner := strutil.Repeat(" ", leftPad) + renderedLabel + strutil.Repeat(" ", rightPad)
+			leftPad := max(pad/2, 1)
+			rightPad := max(pad-pad/2, 1)
+			leftStr := buttonStyle.Width(0).Render(strutil.Repeat(" ", leftPad))
+			rightStr := buttonStyle.Width(0).Render(strutil.Repeat(" ", rightPad))
+			inner := leftStr + renderedLabel + rightStr
 			bgStyle := lipgloss.NewStyle().Background(buttonStyle.GetBackground())
-			buttonPart := MaintainBackground(buttonStyle.Render(inner), bgStyle)
-			rendered = bracketStyle.Render("<") + buttonPart + bracketStyle.Render(">")
+			buttonPart := MaintainBackground(buttonStyle.Width(0).UnsetAlign().Render(inner), bgStyle)
+			if markerChar != "" {
+				rendered = renderedMarker + buttonPart + renderedMarker
+			} else {
+				rendered = bracketStyle.Render("<") + buttonPart + bracketStyle.Render(">")
+			}
 		}
 		renderedButtons = append(renderedButtons, rendered)
 	}
@@ -290,6 +323,25 @@ func renderCenteredButtonsImpl(contentWidth int, useBorders bool, ctx StyleConte
 	}
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, sections...)
+}
+
+// replaceFirstLastChar takes a bordered button render (3 lines) and replaces
+// the first and last visible space on the content line with markerChar.
+// markerRendered is the ANSI-styled version inserted at those positions.
+func replaceFirstLastChar(rendered, markerChar, markerRendered string) string {
+	lines := strings.Split(rendered, "\n")
+	if len(lines) < 2 {
+		return rendered
+	}
+	line := lines[1]
+	first := strings.Index(line, " ")
+	last := strings.LastIndex(line, " ")
+	if first < 0 || last <= first {
+		return rendered
+	}
+	line = line[:first] + markerRendered + line[first+1:last] + markerRendered + line[last+1:]
+	lines[1] = line
+	return strings.Join(lines, "\n")
 }
 
 // RenderHotkeyLabelCtx styles the first letter of a label with the theme's hotkey color using a context

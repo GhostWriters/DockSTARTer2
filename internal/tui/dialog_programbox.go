@@ -218,6 +218,8 @@ func (m *ProgramBoxModel) SetFocused(focused bool) {
 	m.focused = focused
 }
 
+func (m *ProgramBoxModel) IsFocused() bool { return m.focused }
+
 // IsScrollbarDragging reports whether the viewport scrollbar thumb is being dragged.
 func (m *ProgramBoxModel) IsScrollbarDragging() bool {
 	return m.Scroll.Drag.Dragging

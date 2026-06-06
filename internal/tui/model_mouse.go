@@ -550,9 +550,9 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 					sbAbsTopY := m.height - m.panel.Height() + 1
 					m.panelSbAbsTopY = sbAbsTopY
 					vpH := m.panel.Height() - 1
-					total := m.panel.viewport.TotalLineCount()
-					visible := m.panel.viewport.Height()
-					m.panelSbInfo = ComputeScrollbarInfo(total, visible, m.panel.viewport.YOffset(), vpH)
+					total := m.panel.sv.TotalLineCount()
+					visible := m.panel.sv.Height()
+					m.panelSbInfo = ComputeScrollbarInfo(total, visible, m.panel.sv.YOffset(), vpH)
 					m.panelSbDrag.StartDrag(me.Y, sbAbsTopY, m.panelSbInfo)
 					return m, nil, true
 				}
@@ -621,7 +621,6 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 
 	// 6. MODAL FALLBACK (No hit, but dialog is open)
 	if m.dialog != nil {
-		m.setPanelFocus(false)
 		// Only clear header focus on explicit clicks — not motion/release events.
 		// Motion fires continuously and would immediately cancel a focus set by a preceding click.
 		if _, isClick := msg.(tea.MouseClickMsg); isClick {

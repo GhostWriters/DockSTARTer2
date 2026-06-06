@@ -54,6 +54,7 @@ TitleSuccess = "{{[$secondary:$accent]}}"
 TitleWarning = "{{[$secondary:$accent]}}"
 TitleQuestion = "{{[$secondary:$accent]}}"
 ConsoleTitle = "{{|ConsoleBorder|}}"
+ConsoleTitleChangedIndicator = "{{|TitleNotice|}}"
 TitleCheckbox = ""
 TitleCheckboxFocused = "{{|TitleSubMenuFocused|}}"
 
