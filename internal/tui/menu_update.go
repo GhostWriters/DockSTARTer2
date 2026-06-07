@@ -217,13 +217,16 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.BlurTitleBar()
 				var actionCmd tea.Cmd
 				if m.backAction != nil {
+					m.processingBtnID = "btn-back"
 					actionCmd = m.backAction
 				} else if m.exitAction != nil {
+					m.processingBtnID = "btn-exit"
 					actionCmd = m.exitAction()
 				} else {
+					m.processingBtnID = "btn-exit"
 					actionCmd = ConfirmExitAction()
 				}
-				return m, tea.Batch(pressCmd, actionCmd)
+				return m, tea.Batch(pressCmd, actionCmd, m.spinnerTickCmd())
 			}
 		case IDListPanel:
 			// Hover moved back over the list — restore list focus so the wheel scrolls items.

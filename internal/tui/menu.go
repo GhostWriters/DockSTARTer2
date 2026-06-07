@@ -541,6 +541,12 @@ func (m *MenuModel) View() tea.View {
 // or unfocused (normal). Called by AppModel when the log panel takes focus.
 func (m *MenuModel) SetFocused(f bool) {
 	m.focused = f
+	if f {
+		// Clear any in-flight processing indicators when the menu regains focus,
+		// which means the previous action resolved (screen came back or was fast).
+		m.processingItemIdx = -1
+		m.processingBtnID = ""
+	}
 	m.updateDelegate()
 	m.InvalidateCache()
 }
