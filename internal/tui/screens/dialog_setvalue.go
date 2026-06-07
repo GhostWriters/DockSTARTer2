@@ -33,6 +33,7 @@ type setValueDialogModel struct {
 	focused bool
 
 	tui.TitleBarFocus
+	btnSpinner tui.ButtonSpinner
 
 	varName     string
 	appName     string
@@ -86,7 +87,7 @@ func newSetValueDialog(
 	tiStyles.Cursor.Color = tui.TextCursorColor()
 	ti.SetStyles(tiStyles)
 
-	return &setValueDialogModel{
+	m := &setValueDialogModel{
 		varName:     varName,
 		appName:     appName,
 		appDesc:     appDesc,
@@ -102,6 +103,8 @@ func newSetValueDialog(
 		onSave:      onSave,
 		onCancel:    onCancel,
 	}
+	m.btnSpinner.Init()
+	return m
 }
 
 // Title implements tui.ScreenModel for standalone use.
@@ -122,6 +125,10 @@ func (m *setValueDialogModel) Init() tea.Cmd {
 }
 
 func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if tickCmd, ok := m.btnSpinner.Update(msg); ok {
+		return m, tickCmd
+	}
+
 	if m.HandleWidgetClearPress(msg) {
 		return m, nil
 	}
@@ -190,15 +197,15 @@ func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, tui.Keys.Enter):
 			switch m.focus {
 			case setValueFocusInput:
-				return m, m.submit()
+				return m, tea.Batch(m.btnSpinner.SetProcessing("Save"), m.submit())
 			case setValueFocusList:
 				return m, nil
 			case setValueFocusSave:
-				return m, m.submit()
+				return m, tea.Batch(m.btnSpinner.SetProcessing("Save"), m.submit())
 			case setValueFocusCancel:
-				return m, m.cancelOrConfirm()
+				return m, tea.Batch(m.btnSpinner.SetProcessing("Cancel"), m.cancelOrConfirm())
 			case setValueFocusExit:
-				return m, m.confirmExit()
+				return m, tea.Batch(m.btnSpinner.SetProcessing("Exit"), m.confirmExit())
 			}
 
 		case msg.String() == "space" && m.focus == setValueFocusList:
@@ -299,13 +306,13 @@ func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.Button == tea.MouseLeft {
 			if strings.HasSuffix(msg.ID, ".Save") {
-				return m, m.submit()
+				return m, tea.Batch(m.btnSpinner.SetProcessing("Save"), m.submit())
 			}
 			if strings.HasSuffix(msg.ID, ".Cancel") {
-				return m, m.cancelOrConfirm()
+				return m, tea.Batch(m.btnSpinner.SetProcessing("Cancel"), m.cancelOrConfirm())
 			}
 			if strings.HasSuffix(msg.ID, ".Exit") {
-				return m, m.confirmExit()
+				return m, tea.Batch(m.btnSpinner.SetProcessing("Exit"), m.confirmExit())
 			}
 			if msg.ID == "setvalue_input" {
 				m.focus = setValueFocusInput
@@ -646,11 +653,12 @@ func (m *setValueDialogModel) ViewString() string {
 	}
 
 	// Button row — rendered before presets so we can derive the presets height budget.
-	buttonRow := strings.TrimRight(tui.RenderCenteredButtonsCtx(contentW, ctx,
-		tui.ButtonSpec{Text: "Save", Active: m.focus == setValueFocusSave, ZoneID: "Save"},
-		tui.ButtonSpec{Text: "Cancel", Active: m.focus == setValueFocusCancel, ZoneID: "Cancel"},
-		tui.ButtonSpec{Text: "Exit", Active: m.focus == setValueFocusExit, ZoneID: "Exit"},
-	), "\n")
+	svBtnSpecs := m.btnSpinner.ApplyToSpecs([]tui.ButtonSpec{
+		{Text: "Save", Active: m.focus == setValueFocusSave, ZoneID: "Save"},
+		{Text: "Cancel", Active: m.focus == setValueFocusCancel, ZoneID: "Cancel"},
+		{Text: "Exit", Active: m.focus == setValueFocusExit, ZoneID: "Exit"},
+	})
+	buttonRow := strings.TrimRight(tui.RenderCenteredButtonsCtx(contentW, ctx, svBtnSpecs...), "\n")
 
 	// Size the presets box to fill all remaining space above the buttons.
 	buttonRowH := lipgloss.Height(buttonRow)

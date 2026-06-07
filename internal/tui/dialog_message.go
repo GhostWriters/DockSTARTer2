@@ -23,19 +23,26 @@ type messageDialogModel struct {
 	title       string
 	message     string
 	messageType MessageType
+	btnSpinner  ButtonSpinner
 }
 
 // newMessageDialog creates a new message dialog
 func newMessageDialog(title, message string, msgType MessageType) *messageDialogModel {
-	return &messageDialogModel{
+	m := &messageDialogModel{
 		baseDialogModel: baseDialogModel{id: "message_dialog", focused: true},
 		title:           title,
 		message:         message,
 		messageType:     msgType,
 	}
+	m.btnSpinner.Init()
+	return m
 }
 
 func (m *messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if tickCmd, ok := m.btnSpinner.Update(msg); ok {
+		return m, tickCmd
+	}
+
 	closeCmd := func() tea.Msg { return CloseDialogMsg{Result: true} }
 
 	if m.HandleWidgetClearPress(msg) {
@@ -69,14 +76,14 @@ func (m *messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Check for suffixes to support prefixed IDs (e.g., "message_dialog.OK")
 		if msg.Button == tea.MouseLeft {
 			if ButtonIDMatches(msg.ID, "OK") {
-				return m, func() tea.Msg { return CloseDialogMsg{Result: true} }
+				return m, tea.Batch(m.btnSpinner.SetProcessing("OK"), func() tea.Msg { return CloseDialogMsg{Result: true} })
 			}
 		}
 	}
 
 	// Middle-click dismisses the dialog
 	if _, ok := msg.(ToggleFocusedMsg); ok {
-		return m, func() tea.Msg { return CloseDialogMsg{Result: true} }
+		return m, tea.Batch(m.btnSpinner.SetProcessing("OK"), func() tea.Msg { return CloseDialogMsg{Result: true} })
 	}
 
 	return m, nil
@@ -139,10 +146,10 @@ func (m *messageDialogModel) ViewString() string {
 	content := messageStyle.Render(m.message)
 
 	// Render OK button with automatic zone marking
-	buttonRow := RenderCenteredButtons(
-		contentWidth,
-		ButtonSpec{Text: " OK ", Active: true},
-	)
+	btnSpecs := m.btnSpinner.ApplyToSpecs([]ButtonSpec{
+		{Text: " OK ", Active: true, ZoneID: "OK"},
+	})
+	buttonRow := RenderCenteredButtons(contentWidth, btnSpecs...)
 
 	// Combine message and button
 	// Standardize to use TrimRight to prevent implicit gaps

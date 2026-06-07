@@ -17,11 +17,12 @@ type confirmDialogModel struct {
 	result     bool
 	confirmed  bool
 	onResult   func(bool) tea.Msg
+	btnSpinner ButtonSpinner
 }
 
 // newConfirmDialog creates a new confirmation dialog
 func newConfirmDialog(title, question string, defaultYes bool) *confirmDialogModel {
-	return &confirmDialogModel{
+	m := &confirmDialogModel{
 		baseDialogModel: baseDialogModel{id: "confirm_dialog", focused: true},
 		title:           title,
 		question:        question,
@@ -31,11 +32,13 @@ func newConfirmDialog(title, question string, defaultYes bool) *confirmDialogMod
 			return CloseDialogMsg{Result: r}
 		},
 	}
+	m.btnSpinner.Init()
+	return m
 }
 
 // NewConfirmModel creates a public confirmation dialog with custom callbacks.
 func NewConfirmModel(title, question string, defaultYes bool, onConfirm, onCancel func() tea.Msg) tea.Model {
-	return &confirmDialogModel{
+	m := &confirmDialogModel{
 		baseDialogModel: baseDialogModel{id: "confirm_dialog", focused: true},
 		title:           title,
 		question:        question,
@@ -51,9 +54,15 @@ func NewConfirmModel(title, question string, defaultYes bool, onConfirm, onCance
 			return CloseDialogMsg{Result: r}
 		},
 	}
+	m.btnSpinner.Init()
+	return m
 }
 
 func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if tickCmd, ok := m.btnSpinner.Update(msg); ok {
+		return m, tickCmd
+	}
+
 	// Helper to close dialog with result
 	closeWithResult := func(result bool) tea.Cmd {
 		return func() tea.Msg { return m.onResult(result) }
@@ -82,7 +91,11 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, Keys.Enter):
 			m.confirmed = true
-			return m, closeWithResult(m.result)
+			zoneID := "No"
+			if m.result {
+				zoneID = "Yes"
+			}
+			return m, tea.Batch(m.btnSpinner.SetProcessing(zoneID), closeWithResult(m.result))
 
 		case key.Matches(msg, Keys.ForceQuit):
 			m.result = false
@@ -109,7 +122,11 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if idx, found := CheckButtonHotkeys(msg, buttons); found {
 				m.result = (idx == 0) // Yes is index 0
 				m.confirmed = true
-				return m, closeWithResult(m.result)
+				zoneID := "No"
+				if m.result {
+					zoneID = "Yes"
+				}
+				return m, tea.Batch(m.btnSpinner.SetProcessing(zoneID), closeWithResult(m.result))
 			}
 		}
 
@@ -127,12 +144,12 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if ButtonIDMatches(msg.ID, "Yes") {
 				m.result = true
 				m.confirmed = true
-				return m, closeWithResult(true)
+				return m, tea.Batch(m.btnSpinner.SetProcessing("Yes"), closeWithResult(true))
 			}
 			if ButtonIDMatches(msg.ID, "No") {
 				m.result = false
 				m.confirmed = true
-				return m, closeWithResult(false)
+				return m, tea.Batch(m.btnSpinner.SetProcessing("No"), closeWithResult(false))
 			}
 		}
 	}
@@ -140,7 +157,11 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Middle-click activates the currently focused button (Yes or No)
 	if _, ok := msg.(ToggleFocusedMsg); ok {
 		m.confirmed = true
-		return m, closeWithResult(m.result)
+		zoneID := "No"
+		if m.result {
+			zoneID = "Yes"
+		}
+		return m, tea.Batch(m.btnSpinner.SetProcessing(zoneID), closeWithResult(m.result))
 	}
 
 	// Scroll wheel selects between Yes (up) and No (down) with clamping — no wrap.
@@ -195,12 +216,11 @@ func (m *confirmDialogModel) ViewString() string {
 	questionText := questionStyle.Render(RenderThemeText(m.question, ctx.Dialog))
 
 	// Render buttons using the standard button helper
-	buttonRow := RenderCenteredButtonsCtx(
-		contentWidth,
-		ctx,
-		ButtonSpec{Text: "Yes", Active: m.result},
-		ButtonSpec{Text: "No", Active: !m.result},
-	)
+	btnSpecs := m.btnSpinner.ApplyToSpecs([]ButtonSpec{
+		{Text: "Yes", Active: m.result, ZoneID: "Yes"},
+		{Text: "No", Active: !m.result, ZoneID: "No"},
+	})
+	buttonRow := RenderCenteredButtonsCtx(contentWidth, ctx, btnSpecs...)
 
 	// Build dialog content
 	// Standardize to use TrimRight to prevent implicit gaps

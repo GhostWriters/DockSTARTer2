@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/tui"
 	"image/color"
@@ -209,8 +210,14 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	contentStr := strings.Join(contentLines, "\n")
 
 	// Add a button row so large vs flat buttons are visible in the preview.
+	// Show a spinner on OK when spinners are enabled so the style is visible.
+	okSpec := tui.ButtonSpec{Text: "OK", Active: true}
+	if console.SpinnerEnabled {
+		okSpec.Spinning = true
+		okSpec.SpinnerFrame = 0
+	}
 	buttonRow := tui.RenderCenteredButtonsCtx(38, previewCtx,
-		tui.ButtonSpec{Text: "OK"},
+		okSpec,
 		tui.ButtonSpec{Text: "Cancel"},
 	)
 	buttonRow = strings.TrimSuffix(buttonRow, "\n")

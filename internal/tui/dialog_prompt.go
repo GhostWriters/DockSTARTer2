@@ -25,6 +25,7 @@ type promptDialogModel struct {
 	confirmed    bool
 	onResult     func(string, bool) tea.Msg
 	focusedItem  FocusItem // FocusList=Input, FocusSelectBtn=OK, FocusBackBtn=Cancel
+	btnSpinner   ButtonSpinner
 }
 
 type promptResultMsg struct {
@@ -57,7 +58,7 @@ func newPromptDialog(title, question string, sensitive bool, initialValue ...str
 	tiStyles.Cursor.Color = TextCursorColor()
 	ti.SetStyles(tiStyles)
 
-	return &promptDialogModel{
+	m := &promptDialogModel{
 		baseDialogModel: baseDialogModel{id: "prompt_dialog", focused: true},
 		title:           title,
 		question:        question,
@@ -67,6 +68,8 @@ func newPromptDialog(title, question string, sensitive bool, initialValue ...str
 			return CloseDialogMsg{Result: promptResultMsg{result: res, confirmed: val}}
 		},
 	}
+	m.btnSpinner.Init()
+	return m
 }
 
 func (m *promptDialogModel) Init() tea.Cmd {
@@ -74,6 +77,10 @@ func (m *promptDialogModel) Init() tea.Cmd {
 }
 
 func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if tickCmd, ok := m.btnSpinner.Update(msg); ok {
+		return m, tickCmd
+	}
+
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
 
@@ -147,12 +154,12 @@ func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, Keys.Enter):
 			if m.focusedItem == FocusBackBtn {
-				return m, closeWithResult("", false)
+				return m, tea.Batch(m.btnSpinner.SetProcessing("Cancel"), closeWithResult("", false))
 			}
 			// OK or Enter directly on input
 			m.result = m.input.Value()
 			m.confirmed = true
-			return m, closeWithResult(m.result, true)
+			return m, tea.Batch(m.btnSpinner.SetProcessing("OK"), closeWithResult(m.result, true))
 		}
 
 		// Handle button hotkeys when not on the input
@@ -162,9 +169,9 @@ func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if idx == 0 {
 					m.result = m.input.Value()
 					m.confirmed = true
-					return m, closeWithResult(m.result, true)
+					return m, tea.Batch(m.btnSpinner.SetProcessing("OK"), closeWithResult(m.result, true))
 				}
-				return m, closeWithResult("", false)
+				return m, tea.Batch(m.btnSpinner.SetProcessing("Cancel"), closeWithResult("", false))
 			}
 		}
 
@@ -201,10 +208,10 @@ func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if ButtonIDMatches(msg.ID, "OK") {
 				m.result = m.input.Value()
 				m.confirmed = true
-				return m, closeWithResult(m.result, true)
+				return m, tea.Batch(m.btnSpinner.SetProcessing("OK"), closeWithResult(m.result, true))
 			}
 			if ButtonIDMatches(msg.ID, "Cancel") {
-				return m, closeWithResult("", false)
+				return m, tea.Batch(m.btnSpinner.SetProcessing("Cancel"), closeWithResult("", false))
 			}
 			if ButtonIDMatches(msg.ID, "prompt_input") {
 				m.focusedItem = FocusList
@@ -321,11 +328,11 @@ func (m *promptDialogModel) ViewString() string {
 
 	// Spacer + buttons (same pattern as dialog_confirm.go)
 	spacer := lipgloss.NewStyle().Width(contentWidth).Background(borderBG).Render("")
-	buttonRow := strings.TrimRight(RenderCenteredButtonsCtx(
-		contentWidth, ctx,
-		ButtonSpec{Text: "OK", Active: m.focusedItem == FocusList || m.focusedItem == FocusSelectBtn},
-		ButtonSpec{Text: "Cancel", Active: m.focusedItem == FocusBackBtn},
-	), "\n")
+	promptBtnSpecs := m.btnSpinner.ApplyToSpecs([]ButtonSpec{
+		{Text: "OK", Active: m.focusedItem == FocusList || m.focusedItem == FocusSelectBtn, ZoneID: "OK"},
+		{Text: "Cancel", Active: m.focusedItem == FocusBackBtn, ZoneID: "Cancel"},
+	})
+	buttonRow := strings.TrimRight(RenderCenteredButtonsCtx(contentWidth, ctx, promptBtnSpecs...), "\n")
 
 	// Assemble
 	parts := []string{questionText, renderedInput}

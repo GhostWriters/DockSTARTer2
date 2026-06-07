@@ -154,7 +154,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				s.focusedPanel = FocusButtons
 				s.focusedButton = 0
 				s.updateFocusStates()
-				return s, s.handleApply()
+				return s, s.outerMenu.SetProcessingBtnDeferred(tui.IDApplyButton, s.handleApply())
 			}
 			if msg.Button == tui.HoverButton {
 				s.focusedPanel = FocusButtons
@@ -171,7 +171,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return s, nil
 				}
 				theme.Unload("Preview")
-				return s, navigateBack()
+				return s, s.outerMenu.SetProcessingBtnDeferred(tui.IDBackButton, navigateBack())
 			}
 			if msg.Button == tui.HoverButton {
 				s.focusedPanel = FocusButtons
@@ -185,7 +185,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				s.focusedButton = s.maxFocusedButton()
 				s.updateFocusStates()
 				theme.Unload("Preview")
-				return s, tui.ConfirmExitAction()
+				return s, s.outerMenu.SetProcessingBtnDeferred(tui.IDExitButton, tui.ConfirmExitAction())
 			}
 			if msg.Button == tui.HoverButton {
 				s.focusedPanel = FocusButtons
@@ -373,12 +373,23 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// and will be lost if the user switches themes (which resets s.config to s.baseConfig).
 		// This is consistent with how other options in this screen work.
 		s.syncOptionsMenu()
+		if s.optionsMenu != nil {
+			s.optionsMenu.ClearProcessingState()
+		}
+		if s.themeMenu != nil {
+			s.themeMenu.ClearProcessingState()
+		}
 		if s.outerMenu != nil {
 			s.outerMenu.InvalidateCache()
 		}
 		return s, nil
 
 	case tui.ConfigChangedMsg:
+		// Stop any in-flight spinner before rebuilding styles — spinner ticks firing
+		// during the rebuild cause intermediate renders that look like a flash.
+		if s.outerMenu != nil {
+			s.outerMenu.ClearProcessingState()
+		}
 		// InitStyles (triggered by AppModel) clears the full semantic cache including "Preview_*"
 		// styles. Re-establish the preview namespace so the mockup renders correctly.
 		if s.previewTheme != "" {
@@ -390,6 +401,42 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return s, nil
 
+	}
+
+	// Forward unhandled messages to all sub-menus and outerMenu so spinner ticks
+	// and deferred actions are processed. menuDeferredActionMsg/menuSpinnerTickMsg
+	// carry the instanceID of whichever menu scheduled them, so each menu must
+	// receive the message to match its own ID.
+	var batchCmds []tea.Cmd
+	if s.themeMenu != nil {
+		updated, uCmd := s.themeMenu.Update(msg)
+		if m, ok := updated.(*tui.MenuModel); ok {
+			s.themeMenu = m
+		}
+		if uCmd != nil {
+			batchCmds = append(batchCmds, uCmd)
+		}
+	}
+	if s.optionsMenu != nil {
+		updated, uCmd := s.optionsMenu.Update(msg)
+		if m, ok := updated.(*tui.MenuModel); ok {
+			s.optionsMenu = m
+		}
+		if uCmd != nil {
+			batchCmds = append(batchCmds, uCmd)
+		}
+	}
+	if s.outerMenu != nil {
+		updated, uCmd := s.outerMenu.Update(msg)
+		if m, ok := updated.(*tui.MenuModel); ok {
+			s.outerMenu = m
+		}
+		if uCmd != nil {
+			batchCmds = append(batchCmds, uCmd)
+		}
+	}
+	if len(batchCmds) > 0 {
+		return s, tea.Batch(batchCmds...)
 	}
 
 	return s, cmd

@@ -36,6 +36,11 @@ func (m *MenuModel) deferAction(action tea.Cmd) tea.Cmd {
 func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Spinner tick: advance frame and schedule next tick while loading.
 	if deferred, ok := msg.(menuDeferredActionMsg); ok && deferred.id == m.instanceID {
+		// Clear processing state now — the action is about to run. This ensures
+		// the spinner stops even if the action returns nil (e.g. user cancels a dialog).
+		m.processingItemIdx = -1
+		m.processingBtnID = ""
+		m.InvalidateCache()
 		return m, deferred.action
 	}
 

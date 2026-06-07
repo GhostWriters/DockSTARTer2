@@ -52,7 +52,7 @@ type addVarDialogModel struct {
 	focused bool
 
 	tui.TitleBarFocus
-
+	btnSpinner tui.ButtonSpinner
 
 	appName string
 	appDesc string
@@ -124,7 +124,7 @@ func newAddVarDialog(
 		items = append(items, stockItems...)
 	}
 
-	return &addVarDialogModel{
+	m := &addVarDialogModel{
 		appName:        appName,
 		appDesc:        appDesc,
 		input:          sinput.New(ti),
@@ -134,6 +134,8 @@ func newAddVarDialog(
 		addAllDefaults: addAllDefaults,
 		maxVis:         8,
 	}
+	m.btnSpinner.Init()
+	return m
 }
 
 func (m *addVarDialogModel) Init() tea.Cmd {
@@ -141,6 +143,10 @@ func (m *addVarDialogModel) Init() tea.Cmd {
 }
 
 func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if tickCmd, ok := m.btnSpinner.Update(msg); ok {
+		return m, tickCmd
+	}
+
 	if m.HandleWidgetClearPress(msg) {
 		return m, nil
 	}
@@ -202,15 +208,15 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, tui.Keys.Enter):
 			switch m.focus {
 			case addVarFocusInput:
-				return m, m.submit()
+				return m, tea.Batch(m.btnSpinner.SetProcessing("Create"), m.submit())
 			case addVarFocusList:
 				return m, nil
 			case addVarFocusCreate:
-				return m, m.submit()
+				return m, tea.Batch(m.btnSpinner.SetProcessing("Create"), m.submit())
 			case addVarFocusCancel:
-				return m, m.cancelOrConfirm()
+				return m, tea.Batch(m.btnSpinner.SetProcessing("Cancel"), m.cancelOrConfirm())
 			case addVarFocusExit:
-				return m, m.confirmExit()
+				return m, tea.Batch(m.btnSpinner.SetProcessing("Exit"), m.confirmExit())
 			}
 			return m, nil
 		}
@@ -307,13 +313,13 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.Button == tea.MouseLeft {
 			if strings.HasSuffix(msg.ID, ".Create") {
-				return m, m.submit()
+				return m, tea.Batch(m.btnSpinner.SetProcessing("Create"), m.submit())
 			}
 			if strings.HasSuffix(msg.ID, ".Cancel") {
-				return m, m.cancelOrConfirm()
+				return m, tea.Batch(m.btnSpinner.SetProcessing("Cancel"), m.cancelOrConfirm())
 			}
 			if strings.HasSuffix(msg.ID, ".Exit") {
-				return m, m.confirmExit()
+				return m, tea.Batch(m.btnSpinner.SetProcessing("Exit"), m.confirmExit())
 			}
 			if msg.ID == "addvar_input" {
 				m.focus = addVarFocusInput
@@ -783,12 +789,12 @@ func (m *addVarDialogModel) ViewString() string {
 	}
 
 	// Button row rendered first so we can derive the available section height budget.
-	buttonRow := strings.TrimRight(tui.RenderCenteredButtonsCtx(
-		contentW, ctx,
-		tui.ButtonSpec{Text: "Create", Active: m.focus == addVarFocusInput || m.focus == addVarFocusCreate},
-		tui.ButtonSpec{Text: "Cancel", Active: m.focus == addVarFocusCancel},
-		tui.ButtonSpec{Text: "Exit", Active: m.focus == addVarFocusExit},
-	), "\n")
+	avBtnSpecs := m.btnSpinner.ApplyToSpecs([]tui.ButtonSpec{
+		{Text: "Create", Active: m.focus == addVarFocusInput || m.focus == addVarFocusCreate, ZoneID: "Create"},
+		{Text: "Cancel", Active: m.focus == addVarFocusCancel, ZoneID: "Cancel"},
+		{Text: "Exit", Active: m.focus == addVarFocusExit, ZoneID: "Exit"},
+	})
+	buttonRow := strings.TrimRight(tui.RenderCenteredButtonsCtx(contentW, ctx, avBtnSpecs...), "\n")
 
 	// Size the available section to fill all remaining space above the buttons.
 	buttonRowH := lipgloss.Height(buttonRow)
