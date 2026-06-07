@@ -80,8 +80,10 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
-		if handled, cmd := m.handleTitleBarKey(msg, m.btnSpinner.SetProcessingDeferred("No", closeWithResult(false))); handled {
-			return m, cmd
+		if handled, cmd := m.handleTitleBarKey(msg, nil); handled {
+			m.result = false
+			m.confirmed = true
+			return m, tea.Batch(cmd, m.btnSpinner.SetProcessingDeferred("No", closeWithResult(false)))
 		}
 		switch {
 		case key.Matches(msg, Keys.Esc):
@@ -135,8 +137,10 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Button == tea.MouseMiddle {
 			return m, nil
 		}
-		if handled, cmd := m.handleTitleBarHit(msg, m.btnSpinner.SetProcessingDeferred("No", closeWithResult(false))); handled {
-			return m, cmd
+		if handled, cmd := m.handleTitleBarHit(msg, nil); handled {
+			m.result = false
+			m.confirmed = true
+			return m, tea.Batch(cmd, m.btnSpinner.SetProcessingDeferred("No", closeWithResult(false)))
 		}
 
 		// Left click on buttons triggers action via onResult so sub-dialog channels work correctly

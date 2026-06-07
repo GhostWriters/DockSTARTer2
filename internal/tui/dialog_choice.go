@@ -64,8 +64,9 @@ func (m *choiceDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
-		if handled, cmd := m.handleTitleBarKey(msg, submitWithSpinner(len(m.choices)-1)); handled {
-			return m, cmd
+		if handled, cmd := m.handleTitleBarKey(msg, nil); handled {
+			m.focused = len(m.choices) - 1
+			return m, tea.Batch(cmd, submitWithSpinner(m.focused))
 		}
 		switch {
 		case key.Matches(msg, Keys.Esc):
@@ -95,8 +96,9 @@ func (m *choiceDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case LayerHitMsg:
-		if handled, cmd := m.handleTitleBarHit(msg, submitWithSpinner(len(m.choices)-1)); handled {
-			return m, cmd
+		if handled, cmd := m.handleTitleBarHit(msg, nil); handled {
+			m.focused = len(m.choices) - 1
+			return m, tea.Batch(cmd, submitWithSpinner(m.focused))
 		}
 		if msg.Button == tea.MouseLeft {
 			for i, choice := range m.choices {

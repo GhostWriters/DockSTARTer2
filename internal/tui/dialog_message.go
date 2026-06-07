@@ -44,7 +44,9 @@ func (m *messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	plainClose := func() tea.Msg { return CloseDialogMsg{Result: true} }
-	closeCmd := m.btnSpinner.SetProcessingDeferred("OK", plainClose)
+	closeWithSpinner := func() tea.Cmd {
+		return m.btnSpinner.SetProcessingDeferred("OK", plainClose)
+	}
 
 	if m.HandleWidgetClearPress(msg) {
 		return m, nil
@@ -58,26 +60,26 @@ func (m *messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
-		if handled, cmd := m.handleTitleBarKey(msg, closeCmd); handled {
-			return m, cmd
+		if handled, cmd := m.handleTitleBarKey(msg, nil); handled {
+			return m, tea.Batch(cmd, closeWithSpinner())
 		}
 		// Any key press closes the dialog
 		// Use CloseDialogMsg so AppModel can handle it when running within existing TUI
-		return m, closeCmd
+		return m, closeWithSpinner()
 
 	case LayerHitMsg:
 		// Middle click is handled by AppModel (global Space mapping)
 		if msg.Button == tea.MouseMiddle {
 			return m, nil
 		}
-		if handled, cmd := m.handleTitleBarHit(msg, closeCmd); handled {
-			return m, cmd
+		if handled, cmd := m.handleTitleBarHit(msg, nil); handled {
+			return m, tea.Batch(cmd, closeWithSpinner())
 		}
 		// Left click on OK button closes
 		// Check for suffixes to support prefixed IDs (e.g., "message_dialog.OK")
 		if msg.Button == tea.MouseLeft {
 			if ButtonIDMatches(msg.ID, "OK") {
-				return m, closeCmd
+				return m, closeWithSpinner()
 			}
 		}
 	}
