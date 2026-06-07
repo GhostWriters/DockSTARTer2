@@ -1,0 +1,79 @@
+package tui
+
+import (
+	"time"
+
+	"DockSTARTer2/internal/console"
+
+	tea "charm.land/bubbletea/v2"
+)
+
+// menuSpinnerTickMsg advances the loading spinner by one frame.
+type menuSpinnerTickMsg struct{ id string }
+
+// ClearProcessingState resets any in-flight spinner indicators.
+// Called when the menu is restored as the active screen after navigation.
+func (m *MenuModel) ClearProcessingState() {
+	m.processingItemIdx = -1
+	m.processingBtnID = ""
+	m.InvalidateCache()
+}
+
+// mapBtnZoneID translates public ID constants (IDApplyButton, IDBackButton, IDExitButton)
+// to the internal zone IDs used by menu_buttons.go ("btn-select", "btn-back", "btn-exit").
+func mapBtnZoneID(zoneID string) string {
+	switch zoneID {
+	case IDApplyButton:
+		return "btn-select"
+	case IDBackButton:
+		return "btn-back"
+	case IDExitButton:
+		return "btn-exit"
+	}
+	return zoneID
+}
+
+// SetProcessingBtn marks the given button zone ID as spinning and starts the tick loop.
+// Use this when the screen handles button clicks itself (bypassing MenuModel.Update)
+// but still wants the MenuModel to render the spinner on that button.
+func (m *MenuModel) SetProcessingBtn(zoneID string) tea.Cmd {
+	m.processingBtnID = mapBtnZoneID(zoneID)
+	m.InvalidateCache()
+	return m.spinnerTickCmd()
+}
+
+// SetProcessingBtnDeferred marks the given button as spinning and defers the action
+// by 2× the spinner interval so at least one spinner frame renders before the action
+// runs. Use this instead of tea.Batch(SetProcessingBtn, action) for any action that
+// is synchronous/blocking (e.g. opens a confirm dialog on the same goroutine).
+func (m *MenuModel) SetProcessingBtnDeferred(zoneID string, action tea.Cmd) tea.Cmd {
+	m.processingBtnID = mapBtnZoneID(zoneID)
+	m.InvalidateCache()
+	return tea.Batch(m.spinnerTickCmd(), m.deferAction(action))
+}
+
+// SetLoadingText sets a centered spinner+message in the list area instead of list items.
+// Returns a tea.Cmd that starts the spinner tick loop. Set to "" to stop.
+func (m *MenuModel) SetLoadingText(text string) tea.Cmd {
+	m.loadingText = text
+	m.spinnerFrame = 0
+	m.InvalidateCache()
+	if text == "" {
+		return nil
+	}
+	return m.spinnerTickCmd()
+}
+
+func (m *MenuModel) spinnerTickCmd() tea.Cmd {
+	if !console.SpinnerEnabled {
+		return nil
+	}
+	fps := time.Duration(console.SpinnerSpeed) * time.Millisecond
+	if fps <= 0 {
+		fps = 100 * time.Millisecond
+	}
+	iid := m.instanceID
+	return tea.Tick(fps, func(time.Time) tea.Msg {
+		return menuSpinnerTickMsg{id: iid}
+	})
+}
