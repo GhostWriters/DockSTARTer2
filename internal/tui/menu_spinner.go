@@ -43,8 +43,8 @@ func (m *MenuModel) SetProcessingBtn(zoneID string) tea.Cmd {
 }
 
 // SetProcessingBtnDeferred marks the given button as spinning and defers the action
-// by 2× the spinner interval so at least one spinner frame renders before the action
-// runs. Use this instead of tea.Batch(SetProcessingBtn, action) for any action that
+// by a short fixed delay so the button's active state renders before the action runs.
+// Use this instead of tea.Batch(SetProcessingBtn, action) for any action that
 // is synchronous/blocking (e.g. opens a confirm dialog on the same goroutine).
 func (m *MenuModel) SetProcessingBtnDeferred(zoneID string, action tea.Cmd) tea.Cmd {
 	m.processingBtnID = mapBtnZoneID(zoneID)

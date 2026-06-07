@@ -69,7 +69,7 @@ func (m *choiceDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch {
 		case key.Matches(msg, Keys.Esc):
-			return m, submit(-1)
+			return m, submitWithSpinner(len(m.choices) - 1)
 		case key.Matches(msg, Keys.Enter):
 			return m, submitWithSpinner(m.focused)
 		case key.Matches(msg, Keys.Left), key.Matches(msg, Keys.Up):

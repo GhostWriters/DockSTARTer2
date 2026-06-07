@@ -46,9 +46,9 @@ func (b *ButtonSpinner) SetProcessing(zoneID string) tea.Cmd {
 	return b.tickCmd()
 }
 
-// SetProcessingDeferred marks the button as spinning and defers action by 2× the spinner
-// interval so at least one frame renders before the action runs. Use instead of
-// tea.Batch(SetProcessing, action) for any synchronous/blocking action.
+// SetProcessingDeferred marks the button as spinning and defers the action by a short
+// fixed delay so the button's active state renders before the action runs. Use instead
+// of tea.Batch(SetProcessing, action) for any synchronous/blocking action.
 func (b *ButtonSpinner) SetProcessingDeferred(zoneID string, action tea.Cmd) tea.Cmd {
 	b.processingID = zoneID
 	b.frame = 0

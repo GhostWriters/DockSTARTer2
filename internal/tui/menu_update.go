@@ -472,7 +472,16 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Esc: back if available, else exit
 		case key.Matches(keyMsg, Keys.Esc):
-			return m, m.EscapeAction()
+			if m.backAction != nil {
+				m.focusedItem = FocusBackBtn
+				return m, m.SetProcessingBtnDeferred(IDBackButton, m.backAction)
+			}
+			if m.exitAction != nil {
+				m.focusedItem = FocusExitBtn
+				return m, m.SetProcessingBtnDeferred(IDExitButton, m.exitAction())
+			}
+			m.focusedItem = FocusExitBtn
+			return m, m.SetProcessingBtnDeferred(IDExitButton, ConfirmExitAction())
 
 		// Dynamic Hotkeys
 		default:
