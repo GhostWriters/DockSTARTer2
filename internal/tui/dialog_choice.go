@@ -64,7 +64,7 @@ func (m *choiceDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
-		if handled, cmd := m.handleTitleBarKey(msg, submit(-1)); handled {
+		if handled, cmd := m.handleTitleBarKey(msg, submitWithSpinner(len(m.choices)-1)); handled {
 			return m, cmd
 		}
 		switch {
@@ -95,7 +95,7 @@ func (m *choiceDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case LayerHitMsg:
-		if handled, cmd := m.handleTitleBarHit(msg, submit(-1)); handled {
+		if handled, cmd := m.handleTitleBarHit(msg, submitWithSpinner(len(m.choices)-1)); handled {
 			return m, cmd
 		}
 		if msg.Button == tea.MouseLeft {

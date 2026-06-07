@@ -100,7 +100,7 @@ func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
-		if handled, cmd := m.handleTitleBarKey(msg, closeWithResult("", false)); handled {
+		if handled, cmd := m.handleTitleBarKey(msg, m.btnSpinner.SetProcessingDeferred("Cancel", closeWithResult("", false))); handled {
 			return m, cmd
 		}
 		switch {
@@ -194,7 +194,7 @@ func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Button == tea.MouseMiddle {
 			return m, nil
 		}
-		if handled, cmd := m.handleTitleBarHit(msg, closeWithResult("", false)); handled {
+		if handled, cmd := m.handleTitleBarHit(msg, m.btnSpinner.SetProcessingDeferred("Cancel", closeWithResult("", false))); handled {
 			return m, cmd
 		}
 		if msg.Button == tea.MouseLeft && strings.HasSuffix(msg.ID, "."+IDInsOvr) {
