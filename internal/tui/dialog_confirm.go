@@ -95,7 +95,7 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.result {
 				zoneID = "Yes"
 			}
-			return m, tea.Batch(m.btnSpinner.SetProcessing(zoneID), closeWithResult(m.result))
+			return m, m.btnSpinner.SetProcessingDeferred(zoneID, closeWithResult(m.result))
 
 		case key.Matches(msg, Keys.ForceQuit):
 			m.result = false
@@ -126,7 +126,7 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.result {
 					zoneID = "Yes"
 				}
-				return m, tea.Batch(m.btnSpinner.SetProcessing(zoneID), closeWithResult(m.result))
+				return m, m.btnSpinner.SetProcessingDeferred(zoneID, closeWithResult(m.result))
 			}
 		}
 
@@ -144,12 +144,12 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if ButtonIDMatches(msg.ID, "Yes") {
 				m.result = true
 				m.confirmed = true
-				return m, tea.Batch(m.btnSpinner.SetProcessing("Yes"), closeWithResult(true))
+				return m, m.btnSpinner.SetProcessingDeferred("Yes", closeWithResult(true))
 			}
 			if ButtonIDMatches(msg.ID, "No") {
 				m.result = false
 				m.confirmed = true
-				return m, tea.Batch(m.btnSpinner.SetProcessing("No"), closeWithResult(false))
+				return m, m.btnSpinner.SetProcessingDeferred("No", closeWithResult(false))
 			}
 		}
 	}
@@ -161,7 +161,7 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.result {
 			zoneID = "Yes"
 		}
-		return m, tea.Batch(m.btnSpinner.SetProcessing(zoneID), closeWithResult(m.result))
+		return m, m.btnSpinner.SetProcessingDeferred(zoneID, closeWithResult(m.result))
 	}
 
 	// Scroll wheel selects between Yes (up) and No (down) with clamping — no wrap.
