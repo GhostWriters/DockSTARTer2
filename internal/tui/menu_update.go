@@ -53,6 +53,15 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Block all user input while an action is in flight (spinner visible).
+	// Still allow system messages (size, lock state, etc.) to pass through.
+	if m.processingItemIdx >= 0 || m.processingBtnID != "" {
+		switch msg.(type) {
+		case tea.KeyPressMsg, tea.MouseClickMsg, tea.MouseReleaseMsg, LayerHitMsg, LayerWheelMsg, tea.MouseWheelMsg, ToggleFocusedMsg:
+			return m, nil
+		}
+	}
+
 	// 1. Centralized scrollbar processing (Throttling, Clicks, Dragging)
 	if newOff, cmd, changed := m.Scroll.Update(msg, m.viewStartY, m.ScrollTotal(), m.layout.ViewportHeight); changed {
 		m.viewStartY = newOff
