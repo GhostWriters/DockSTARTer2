@@ -11,8 +11,28 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+// menuDeferredActionMsg carries an action to execute after one render cycle,
+// allowing the spinner to appear before any synchronous work in the action blocks.
+type menuDeferredActionMsg struct {
+	id     string
+	action tea.Cmd
+}
+
+// deferAction returns a cmd that sends a menuDeferredActionMsg for this menu
+// after a render cycle, then executes the action when it arrives in Update.
+func (m *MenuModel) deferAction(action tea.Cmd) tea.Cmd {
+	id := m.id
+	return func() tea.Msg {
+		return menuDeferredActionMsg{id: id, action: action}
+	}
+}
+
 func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Spinner tick: advance frame and schedule next tick while loading.
+	if deferred, ok := msg.(menuDeferredActionMsg); ok && deferred.id == m.id {
+		return m, deferred.action
+	}
+
 	if tick, ok := msg.(menuSpinnerTickMsg); ok && tick.id == m.id {
 		if m.loadingText != "" || m.processingItemIdx >= 0 || m.processingBtnID != "" {
 			ctx := GetActiveContext()
@@ -226,8 +246,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.processingBtnID = "btn-exit"
 					action = ConfirmExitAction()
 				}
-				deferred := tea.Tick(0, func(time.Time) tea.Msg { return action() })
-				return m, tea.Batch(pressCmd, m.spinnerTickCmd(), deferred)
+				return m, tea.Batch(pressCmd, m.spinnerTickCmd(), m.deferAction(action))
 			}
 		case IDListPanel:
 			// Hover moved back over the list — restore list focus so the wheel scrolls items.
@@ -552,43 +571,28 @@ func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 				m.processingBtnID = "btn-select"
 				// Defer the action by one frame so the spinner renders before
 				// any synchronous work inside the cmd blocks the event loop.
-				action := item.Action
-				return m, tea.Batch(m.spinnerTickCmd(), tea.Tick(0, func(time.Time) tea.Msg {
-					return action()
-				}))
+				return m, tea.Batch(m.spinnerTickCmd(), m.deferAction(item.Action))
 			}
 		}
 
 		// 2. Fall back to model-level enter action (for "Done" buttons on selection screens)
 		if m.enterAction != nil {
 			m.processingBtnID = "btn-select"
-			action := m.enterAction
-			return m, tea.Batch(m.spinnerTickCmd(), tea.Tick(0, func(time.Time) tea.Msg {
-				return action()
-			}))
+			return m, tea.Batch(m.spinnerTickCmd(), m.deferAction(m.enterAction))
 		}
 
 	case FocusBackBtn:
 		if m.backAction != nil {
 			m.processingBtnID = "btn-back"
-			action := m.backAction
-			return m, tea.Batch(m.spinnerTickCmd(), tea.Tick(0, func(time.Time) tea.Msg {
-				return action()
-			}))
+			return m, tea.Batch(m.spinnerTickCmd(), m.deferAction(m.backAction))
 		}
 	case FocusExitBtn:
 		if m.exitAction != nil {
 			m.processingBtnID = "btn-exit"
-			action := m.exitAction()
-			return m, tea.Batch(m.spinnerTickCmd(), tea.Tick(0, func(time.Time) tea.Msg {
-				return action()
-			}))
+			return m, tea.Batch(m.spinnerTickCmd(), m.deferAction(m.exitAction()))
 		}
 		m.processingBtnID = "btn-exit"
-		action := ConfirmExitAction()
-		return m, tea.Batch(m.spinnerTickCmd(), tea.Tick(0, func(time.Time) tea.Msg {
-			return action()
-		}))
+		return m, tea.Batch(m.spinnerTickCmd(), m.deferAction(ConfirmExitAction()))
 	}
 
 	return m, nil
