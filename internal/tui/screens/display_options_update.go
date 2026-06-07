@@ -379,6 +379,11 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return s, nil
 
 	case tui.ConfigChangedMsg:
+		// Stop any in-flight spinner before rebuilding styles — spinner ticks firing
+		// during the rebuild cause intermediate renders that look like a flash.
+		if s.outerMenu != nil {
+			s.outerMenu.ClearProcessingState()
+		}
 		// InitStyles (triggered by AppModel) clears the full semantic cache including "Preview_*"
 		// styles. Re-establish the preview namespace so the mockup renders correctly.
 		if s.previewTheme != "" {
