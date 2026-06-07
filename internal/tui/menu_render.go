@@ -254,15 +254,11 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 	ctx.Type = m.dialogType
 	// Use pre-computed layout decision; submenus always use small titlebar.
 	ctx.LargeTitleBars = m.layout.LargeTitleBar
-	var spinInd string
+	var spinInd, spinIndR string
 	if m.loadingText != "" && console.SpinnerEnabled {
-		frames := console.SpinnerFramesTitleUnicode
-		if !ctx.LineCharacters {
-			frames = console.SpinnerFramesTitleASCII
-		}
-		spinInd = frames[m.spinnerFrame%len(frames)]
+		spinInd, spinIndR = console.TitleSpinnerFrames(m.spinnerFrame, ctx.LineCharacters)
 	}
-	tbs := TitleBarState{Show: m.title != "" && !m.subMenuMode, Focused: m.titleBarFocused, ActiveWidget: m.titleBarWidget, PressedWidget: m.titleBarPressed, SpinnerIndicator: spinInd}
+	tbs := TitleBarState{Show: m.title != "" && !m.subMenuMode, Focused: m.titleBarFocused, ActiveWidget: m.titleBarWidget, PressedWidget: m.titleBarPressed, SpinnerIndicator: spinInd, SpinnerIndicatorRight: spinIndR}
 	return RenderBorderedBoxCtx(m.title, content, contentWidth, targetHeight, focused || m.titleBarFocused, true, rounded, align, titleTag, ctx, tbs)
 }
 

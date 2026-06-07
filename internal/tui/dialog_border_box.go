@@ -36,12 +36,19 @@ func GetBlockBorders(lineCharacters bool) BorderPair {
 // indicators[1]: "1" when the spinner indicator is a changed indicator (uses ConsoleTitleChangedIndicator style).
 func RenderTopBorderBoxCtx(title, rightTitle, rightSuffix, content string, contentWidth int, focused bool, titleStyle, borderStyle lipgloss.Style, ctx StyleContext, indicators ...string) string {
 	spinInd := ""
+	spinIndR := ""
 	isChanged := false
 	if len(indicators) > 0 {
 		spinInd = indicators[0]
 	}
 	if len(indicators) > 1 && indicators[1] == "1" {
 		isChanged = true
+	}
+	if len(indicators) > 2 && indicators[2] != "" {
+		spinIndR = indicators[2]
+	}
+	if spinIndR == "" {
+		spinIndR = spinInd
 	}
 	borderStyle = ctx.BorderFlags.Apply(borderStyle)
 	var border lipgloss.Border
@@ -153,7 +160,7 @@ func RenderTopBorderBoxCtx(title, rightTitle, rightSuffix, content string, conte
 		var indL, indR string
 		if spinInd != "" {
 			indL = spinInd
-			indR = spinInd
+			indR = spinIndR
 		} else if ctx.LineCharacters {
 			indL = "▸"
 			indR = "◂"
@@ -171,7 +178,7 @@ func RenderTopBorderBoxCtx(title, rightTitle, rightSuffix, content string, conte
 		}
 		result.WriteString(borderStyle.Render(theme.ToThemeANSI(indStyle + spinInd)))
 		result.WriteString(renderedTitle)
-		result.WriteString(borderStyle.Render(theme.ToThemeANSI(indStyle + spinInd)))
+		result.WriteString(borderStyle.Render(theme.ToThemeANSI(indStyle + spinIndR)))
 	} else {
 		result.WriteString(borderStyle.Render(" "))
 		result.WriteString(renderedTitle)
