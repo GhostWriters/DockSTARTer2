@@ -184,6 +184,8 @@ type Styles struct {
 	// Buttons
 	ButtonActive   lipgloss.Style
 	ButtonInactive lipgloss.Style
+	ButtonSpinner      lipgloss.Style // Spinner flanking flat button label when processing
+	ButtonSpinnerLarge lipgloss.Style // Spinner at edges of bordered button when processing
 
 	// Title bar icon widgets
 	IconFocused          lipgloss.Style
@@ -206,6 +208,7 @@ type Styles struct {
 	TagFocused    lipgloss.Style
 	TagKey         lipgloss.Style // First letter highlight
 	TagKeyFocused lipgloss.Style
+	TagSpinner    lipgloss.Style // Spinner flanking the tag when processing
 
 	// Header
 	HeaderBG           lipgloss.Style
@@ -278,6 +281,9 @@ type StyleContext struct {
 	TagFocused         lipgloss.Style
 	TagKey              lipgloss.Style
 	TagKeyFocused      lipgloss.Style
+	TagSpinner         lipgloss.Style
+	ButtonSpinner      lipgloss.Style
+	ButtonSpinnerLarge lipgloss.Style
 	Shadow              lipgloss.Style
 	ShadowColor         color.Color
 	ShadowLevel         int
@@ -342,6 +348,9 @@ func GetActiveContext() StyleContext {
 		TagFocused:         currentStyles.TagFocused,
 		TagKey:              currentStyles.TagKey,
 		TagKeyFocused:      currentStyles.TagKeyFocused,
+		TagSpinner:         currentStyles.TagSpinner,
+		ButtonSpinner:      currentStyles.ButtonSpinner,
+		ButtonSpinnerLarge: currentStyles.ButtonSpinnerLarge,
 		Shadow:              currentStyles.Shadow,
 		ShadowColor:         currentStyles.ShadowColor,
 		ShadowLevel:         currentConfig.UI.ShadowLevel,
@@ -622,6 +631,21 @@ func InitStyles(cfg config.AppConfig) {
 	currentStyles.TagKeyFocused = SemanticRawStyle("TagKeyFocused")
 	if _, noBG := currentStyles.TagKeyFocused.GetBackground().(lipgloss.NoColor); noBG {
 		currentStyles.TagKeyFocused = currentStyles.TagKeyFocused.Background(currentStyles.Dialog.GetBackground())
+	}
+
+	currentStyles.TagSpinner = SemanticRawStyle("TagSpinner")
+	if _, noBG := currentStyles.TagSpinner.GetBackground().(lipgloss.NoColor); noBG {
+		currentStyles.TagSpinner = currentStyles.TagSpinner.Background(currentStyles.Dialog.GetBackground())
+	}
+
+	currentStyles.ButtonSpinner = SemanticRawStyle("ButtonSpinner")
+	if _, noBG := currentStyles.ButtonSpinner.GetBackground().(lipgloss.NoColor); noBG {
+		currentStyles.ButtonSpinner = currentStyles.ButtonSpinner.Background(currentStyles.ButtonActive.GetBackground())
+	}
+
+	currentStyles.ButtonSpinnerLarge = SemanticRawStyle("ButtonSpinnerLarge")
+	if _, noBG := currentStyles.ButtonSpinnerLarge.GetBackground().(lipgloss.NoColor); noBG {
+		currentStyles.ButtonSpinnerLarge = currentStyles.ButtonSpinnerLarge.Background(currentStyles.ButtonActive.GetBackground())
 	}
 
 	// Header / Status Bar

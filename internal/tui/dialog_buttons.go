@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/strutil"
 
 	tea "charm.land/bubbletea/v2"
@@ -34,11 +35,13 @@ func RenderButtonRow(buttons ...string) string {
 
 // ButtonSpec defines a button to render
 type ButtonSpec struct {
-	Text   string
-	Active bool
-	Locked bool   // When true, renders locked markers on either side of the label
-	ZoneID string // Optional zone ID for mouse support (empty = no zone marking)
-	Help   string // Help text for right-click context
+	Text         string
+	Active       bool
+	Locked       bool   // When true, renders locked markers on either side of the label
+	Spinning     bool   // When true, renders spinner frames on either side of the label
+	SpinnerFrame int    // Current spinner frame index (used when Spinning is true)
+	ZoneID       string // Optional zone ID for mouse support (empty = no zone marking)
+	Help         string // Help text for right-click context
 }
 
 // GetButtonHitRegions returns hit regions for a row of buttons.
@@ -262,33 +265,50 @@ func renderCenteredButtonsImpl(contentWidth int, useBorders bool, ctx StyleConte
 		}
 
 		markerChar := ""
-		if btn.Locked {
+		spinChar := ""
+		spinCharR := ""
+		if btn.Spinning && console.SpinnerEnabled {
+			spinChar, spinCharR = console.TitleSpinnerFrames(btn.SpinnerFrame, ctx.LineCharacters)
+		} else if btn.Locked {
 			if ctx.LineCharacters {
 				markerChar = lockedMarker
 			} else {
 				markerChar = lockedMarkerAscii
 			}
 		}
-		renderedMarker := ""
-		if markerChar != "" {
-			markerStyle := lipgloss.NewStyle().Background(buttonStyle.GetBackground())
-			renderedMarker = RenderThemeText("{{|MarkerLocked|}}"+markerChar+"{{[-]}}", markerStyle)
-		}
 
 		renderedLabel := RenderHotkeyLabelCtx(btn.Text, btn.Active, ctx)
+
+		edgeCharL := markerChar
+		edgeCharR := markerChar
+		var renderedEdgeL, renderedEdgeR string
+		if spinChar != "" {
+			edgeCharL = spinChar
+			edgeCharR = spinCharR
+			var spinStyle lipgloss.Style
+			if layout.UseBorders {
+				spinStyle = ctx.ButtonSpinnerLarge
+			} else {
+				spinStyle = ctx.ButtonSpinner
+			}
+			renderedEdgeL = spinStyle.Render(spinChar)
+			renderedEdgeR = spinStyle.Render(spinCharR)
+		} else if markerChar != "" {
+			markerTag := "MarkerLocked"
+			if layout.UseBorders {
+				markerTag = "MarkerLockedLarge"
+			}
+			markerStyle := lipgloss.NewStyle().Background(buttonStyle.GetBackground())
+			renderedEdgeL = RenderThemeText("{{|"+markerTag+"|}}" + markerChar + "{{[-]}}", markerStyle)
+			renderedEdgeR = renderedEdgeL
+		}
+
 		var rendered string
 		if layout.UseBorders {
-			// buttonContentWidth = maxButtonWidth+4: 2 spaces each side when centered.
-			// For locked: marker occupies 1 space each side as a gutter.
-			// Pass everything through a single buttonStyle.Render to avoid double borders.
-			// Marker is styled via renderedMarker but we need it inside the one Render call,
-			// so we build the content string manually at the right width and use Width(0) to
-			// prevent buttonStyle from re-padding, keeping the border application intact.
-			if markerChar == "" {
+			if edgeCharL == "" {
 				rendered = InjectBorderFlags(buttonStyle.Render(renderedLabel), ctx.BorderFlags, ctx.Border2Flags, true)
 			} else {
-				// Render exactly as normal, then replace first and last visible char with marker.
-				rendered = replaceFirstLastChar(buttonStyle.Render(renderedLabel), markerChar, renderedMarker)
+				rendered = replaceFirstLastCharLR(buttonStyle.Render(renderedLabel), edgeCharL, edgeCharR, renderedEdgeL, renderedEdgeR)
 				rendered = InjectBorderFlags(rendered, ctx.BorderFlags, ctx.Border2Flags, true)
 			}
 		} else {
@@ -296,15 +316,15 @@ func renderCenteredButtonsImpl(contentWidth int, useBorders bool, ctx StyleConte
 				Foreground(ctx.Dialog.GetForeground()).
 				Background(ctx.Dialog.GetBackground())
 			pad := maxButtonWidth - lipgloss.Width(btn.Text)
-			leftPad := max(pad/2, 1)
-			rightPad := max(pad-pad/2, 1)
+			leftPad := pad / 2
+			rightPad := pad - leftPad
 			leftStr := buttonStyle.Width(0).Render(strutil.Repeat(" ", leftPad))
 			rightStr := buttonStyle.Width(0).Render(strutil.Repeat(" ", rightPad))
 			inner := leftStr + renderedLabel + rightStr
 			bgStyle := lipgloss.NewStyle().Background(buttonStyle.GetBackground())
 			buttonPart := MaintainBackground(buttonStyle.Width(0).UnsetAlign().Render(inner), bgStyle)
-			if markerChar != "" {
-				rendered = renderedMarker + buttonPart + renderedMarker
+			if edgeCharL != "" {
+				rendered = renderedEdgeL + buttonPart + renderedEdgeR
 			} else {
 				rendered = bracketStyle.Render("<") + buttonPart + bracketStyle.Render(">")
 			}
@@ -329,6 +349,12 @@ func renderCenteredButtonsImpl(contentWidth int, useBorders bool, ctx StyleConte
 // the first and last visible space on the content line with markerChar.
 // markerRendered is the ANSI-styled version inserted at those positions.
 func replaceFirstLastChar(rendered, markerChar, markerRendered string) string {
+	return replaceFirstLastCharLR(rendered, markerChar, markerChar, markerRendered, markerRendered)
+}
+
+// replaceFirstLastCharLR is like replaceFirstLastChar but accepts separate
+// left and right chars and rendered strings (for asymmetric spinners).
+func replaceFirstLastCharLR(rendered, _, _ string, leftRendered, rightRendered string) string {
 	lines := strings.Split(rendered, "\n")
 	if len(lines) < 2 {
 		return rendered
@@ -339,7 +365,7 @@ func replaceFirstLastChar(rendered, markerChar, markerRendered string) string {
 	if first < 0 || last <= first {
 		return rendered
 	}
-	line = line[:first] + markerRendered + line[first+1:last] + markerRendered + line[last+1:]
+	line = line[:first] + leftRendered + line[first+1:last] + rightRendered + line[last+1:]
 	lines[1] = line
 	return strings.Join(lines, "\n")
 }

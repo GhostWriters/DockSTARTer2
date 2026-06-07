@@ -315,6 +315,9 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.activeScreen = m.screenStack[len(m.screenStack)-1]
 			m.screenStack = m.screenStack[:len(m.screenStack)-1]
 			if m.activeScreen != nil {
+				if cp, ok := m.activeScreen.(interface{ ClearProcessingState() }); ok {
+					cp.ClearProcessingState()
+				}
 				CurrentPageName = m.activeScreen.MenuName()
 				// Size the screen first so calculateLayout populates SubtitleHeight (needed by MinHeight).
 				caW, caH := m.getContentArea()

@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"fmt"
+	"sync/atomic"
 	"time"
 
 	"charm.land/bubbles/v2/list"
@@ -10,6 +12,8 @@ import (
 
 	"DockSTARTer2/internal/console"
 )
+
+var menuInstanceCounter atomic.Uint64
 
 // menuSpinnerTickMsg advances the loading spinner by one frame.
 type menuSpinnerTickMsg struct{ id string }
@@ -92,7 +96,8 @@ func calculateMaxTagAndDescLength(items []MenuItem) (maxTagLen, maxDescLen int) 
 
 // MenuModel represents a selectable menu
 type MenuModel struct {
-	id             string // Unique identifier for selection persistence
+	id             string // Identifier for selection persistence and zone IDs (may be shared across screens)
+	instanceID     string // Globally unique per-instance ID for spinner tick and deferred action messages
 	title          string // Menu title
 	subtitle       string // Optional subtitle/description shown on-screen
 	helpPageTitle  string // Optional title for the description box in the help dialog
@@ -206,6 +211,12 @@ type MenuModel struct {
 	// loadingText, when non-empty, replaces the list area with a centered spinner + message.
 	loadingText  string
 	spinnerFrame int
+
+	// processingItemIdx is the index of the menu item currently being activated (-1 = none).
+	// processingBtnID is the ZoneID of the button currently being activated ("" = none).
+	// Both show a spinner indicator while the triggered action is in flight.
+	processingItemIdx int
+	processingBtnID   string
 }
 
 // TitleBarFocusable is implemented by models whose title bar can receive keyboard focus.
@@ -407,6 +418,7 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 
 	return &MenuModel{
 		id:                  id,
+		instanceID:          fmt.Sprintf("%s#%d", id, menuInstanceCounter.Add(1)),
 		title:               title,
 		subtitle:            subtitle,
 		items:               items,
@@ -423,6 +435,7 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 		showLockGutter:      true,
 		activityGutterWidth: 0,
 		itemPaddingWidth:    1, // Default 1 char padding after marker gutter
+		processingItemIdx:   -1,
 	}
 }
 
@@ -532,8 +545,23 @@ func (m *MenuModel) View() tea.View {
 
 // SetFocused sets whether this menu's dialog border is rendered as focused (thick)
 // or unfocused (normal). Called by AppModel when the log panel takes focus.
+// ClearProcessingState resets any in-flight spinner indicators.
+// Called when the menu is restored as the active screen after navigation.
+func (m *MenuModel) ClearProcessingState() {
+	m.processingItemIdx = -1
+	m.processingBtnID = ""
+	m.InvalidateCache()
+}
+
 func (m *MenuModel) SetFocused(f bool) {
+	wasUnfocused := !m.focused
 	m.focused = f
+	// Clear processing indicators when menu regains focus after having lost it —
+	// the previous action resolved (screen came back or navigated away and returned).
+	if f && wasUnfocused {
+		m.processingItemIdx = -1
+		m.processingBtnID = ""
+	}
 	m.updateDelegate()
 	m.InvalidateCache()
 }
@@ -698,17 +726,21 @@ func (m *MenuModel) StatusGutterWidth() int {
 
 // RenderItemGutter returns the consistent gutter string (markers) for a menu item.
 // It strictly reserves the width defined by m.StatusGutterWidth().
-func (m *MenuModel) RenderItemGutter(item MenuItem, neutralStyle lipgloss.Style) string {
-	return RenderMenuGutter(item, m.showLockGutter, m.activityGutterWidth, neutralStyle)
+// spinnerChar, when non-empty, overrides the lock gutter slot with a spinner frame.
+func (m *MenuModel) RenderItemGutter(item MenuItem, neutralStyle lipgloss.Style, spinnerChar string) string {
+	return RenderMenuGutter(item, m.showLockGutter, m.activityGutterWidth, neutralStyle, spinnerChar)
 }
 
 // RenderMenuGutter is a standalone helper that returns the consistent gutter string (markers) for a menu item.
-func RenderMenuGutter(item MenuItem, showLockGutter bool, activityGutterWidth int, neutralStyle lipgloss.Style) string {
+// spinnerChar, when non-empty, overrides the lock gutter slot with a spinner frame.
+func RenderMenuGutter(item MenuItem, showLockGutter bool, activityGutterWidth int, neutralStyle lipgloss.Style, spinnerChar string) string {
 	res := ""
 
 	// 1. Lock Gutter (1 char)
 	if showLockGutter {
-		if item.IsInvalid {
+		if spinnerChar != "" {
+			res += neutralStyle.Render(spinnerChar)
+		} else if item.IsInvalid {
 			res += RenderThemeText("{{|MarkerInvalid|}}"+invalidMarker+"{{[-]}}", neutralStyle)
 		} else if item.Locked {
 			marker := lockedMarker
@@ -798,9 +830,9 @@ func (m *MenuModel) spinnerTickCmd() tea.Cmd {
 	if fps <= 0 {
 		fps = 100 * time.Millisecond
 	}
-	id := m.id
+	iid := m.instanceID
 	return tea.Tick(fps, func(time.Time) tea.Msg {
-		return menuSpinnerTickMsg{id: id}
+		return menuSpinnerTickMsg{id: iid}
 	})
 }
 

@@ -11,10 +11,36 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+// menuDeferredActionMsg carries an action to execute after one render cycle,
+// allowing the spinner to appear before any synchronous work in the action blocks.
+type menuDeferredActionMsg struct {
+	id     string
+	action tea.Cmd
+}
+
+// deferAction returns a cmd that waits one spinner tick interval before
+// delivering a menuDeferredActionMsg, giving Bubble Tea time to render the
+// spinner frame before any synchronous work in the action blocks the loop.
+func (m *MenuModel) deferAction(action tea.Cmd) tea.Cmd {
+	iid := m.instanceID
+	fps := time.Duration(console.SpinnerSpeed) * time.Millisecond
+	if fps <= 0 {
+		fps = 100 * time.Millisecond
+	}
+	// Wait 2× the spinner interval so the spinner tick fires and renders first.
+	return tea.Tick(fps*2, func(time.Time) tea.Msg {
+		return menuDeferredActionMsg{id: iid, action: action}
+	})
+}
+
 func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Spinner tick: advance frame and schedule next tick while loading.
-	if tick, ok := msg.(menuSpinnerTickMsg); ok && tick.id == m.id {
-		if m.loadingText != "" {
+	if deferred, ok := msg.(menuDeferredActionMsg); ok && deferred.id == m.instanceID {
+		return m, deferred.action
+	}
+
+	if tick, ok := msg.(menuSpinnerTickMsg); ok && tick.id == m.instanceID {
+		if m.loadingText != "" || m.processingItemIdx >= 0 || m.processingBtnID != "" {
 			ctx := GetActiveContext()
 			frames := console.SpinnerFramesTitleUnicode
 			if !ctx.LineCharacters {
@@ -25,6 +51,15 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.spinnerTickCmd()
 		}
 		return m, nil
+	}
+
+	// Block all user input while an action is in flight (spinner visible).
+	// Still allow system messages (size, lock state, etc.) to pass through.
+	if m.processingItemIdx >= 0 || m.processingBtnID != "" {
+		switch msg.(type) {
+		case tea.KeyPressMsg, tea.MouseClickMsg, tea.MouseReleaseMsg, LayerHitMsg, LayerWheelMsg, tea.MouseWheelMsg, ToggleFocusedMsg:
+			return m, nil
+		}
 	}
 
 	// 1. Centralized scrollbar processing (Throttling, Clicks, Dragging)
@@ -215,15 +250,18 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.titleBarPressed = TitleBarWidgetClose
 				m.InvalidateCache()
 				m.BlurTitleBar()
-				var actionCmd tea.Cmd
+				var action tea.Cmd
 				if m.backAction != nil {
-					actionCmd = m.backAction
+					m.processingBtnID = "btn-back"
+					action = m.backAction
 				} else if m.exitAction != nil {
-					actionCmd = m.exitAction()
+					m.processingBtnID = "btn-exit"
+					action = m.exitAction()
 				} else {
-					actionCmd = ConfirmExitAction()
+					m.processingBtnID = "btn-exit"
+					action = ConfirmExitAction()
 				}
-				return m, tea.Batch(pressCmd, actionCmd)
+				return m, tea.Batch(pressCmd, m.spinnerTickCmd(), m.deferAction(action))
 			}
 		case IDListPanel:
 			// Hover moved back over the list — restore list focus so the wheel scrolls items.
@@ -544,24 +582,35 @@ func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 				// Update cursor for persistence
 				m.cursor = m.list.Index()
 				menuSelectedIndices[m.id] = m.cursor
-				return m, item.Action
+				m.processingItemIdx = m.cursor
+				m.processingBtnID = "btn-select"
+				m.InvalidateCache()
+				return m, tea.Batch(m.spinnerTickCmd(), m.deferAction(item.Action))
 			}
 		}
 
 		// 2. Fall back to model-level enter action (for "Done" buttons on selection screens)
 		if m.enterAction != nil {
-			return m, m.enterAction
+			m.processingBtnID = "btn-select"
+			m.InvalidateCache()
+			return m, tea.Batch(m.spinnerTickCmd(), m.deferAction(m.enterAction))
 		}
 
 	case FocusBackBtn:
 		if m.backAction != nil {
-			return m, m.backAction
+			m.processingBtnID = "btn-back"
+			m.InvalidateCache()
+			return m, tea.Batch(m.spinnerTickCmd(), m.deferAction(m.backAction))
 		}
 	case FocusExitBtn:
 		if m.exitAction != nil {
-			return m, m.exitAction()
+			m.processingBtnID = "btn-exit"
+			m.InvalidateCache()
+			return m, tea.Batch(m.spinnerTickCmd(), m.deferAction(m.exitAction()))
 		}
-		return m, ConfirmExitAction()
+		m.processingBtnID = "btn-exit"
+		m.InvalidateCache()
+		return m, tea.Batch(m.spinnerTickCmd(), m.deferAction(ConfirmExitAction()))
 	}
 
 	return m, nil
