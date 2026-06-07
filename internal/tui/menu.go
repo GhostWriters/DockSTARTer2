@@ -553,11 +553,25 @@ func (m *MenuModel) ClearProcessingState() {
 	m.InvalidateCache()
 }
 
+// mapBtnZoneID translates public ID constants (IDApplyButton, IDBackButton, IDExitButton)
+// to the internal zone IDs used by menu_buttons.go ("btn-select", "btn-back", "btn-exit").
+func mapBtnZoneID(zoneID string) string {
+	switch zoneID {
+	case IDApplyButton:
+		return "btn-select"
+	case IDBackButton:
+		return "btn-back"
+	case IDExitButton:
+		return "btn-exit"
+	}
+	return zoneID
+}
+
 // SetProcessingBtn marks the given button zone ID as spinning and starts the tick loop.
 // Use this when the screen handles button clicks itself (bypassing MenuModel.Update)
 // but still wants the MenuModel to render the spinner on that button.
 func (m *MenuModel) SetProcessingBtn(zoneID string) tea.Cmd {
-	m.processingBtnID = zoneID
+	m.processingBtnID = mapBtnZoneID(zoneID)
 	m.InvalidateCache()
 	return m.spinnerTickCmd()
 }
@@ -567,7 +581,7 @@ func (m *MenuModel) SetProcessingBtn(zoneID string) tea.Cmd {
 // runs. Use this instead of tea.Batch(SetProcessingBtn, action) for any action that
 // is synchronous/blocking (e.g. opens a confirm dialog on the same goroutine).
 func (m *MenuModel) SetProcessingBtnDeferred(zoneID string, action tea.Cmd) tea.Cmd {
-	m.processingBtnID = zoneID
+	m.processingBtnID = mapBtnZoneID(zoneID)
 	m.InvalidateCache()
 	return tea.Batch(m.spinnerTickCmd(), m.deferAction(action))
 }
