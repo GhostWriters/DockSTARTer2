@@ -53,11 +53,7 @@ func (b *ButtonSpinner) SetProcessingDeferred(zoneID string, action tea.Cmd) tea
 	b.processingID = zoneID
 	b.frame = 0
 	id := b.instanceID
-	fps := time.Duration(console.SpinnerSpeed) * time.Millisecond
-	if fps <= 0 {
-		fps = 100 * time.Millisecond
-	}
-	deferred := tea.Tick(fps*2, func(time.Time) tea.Msg {
+	deferred := tea.Tick(50*time.Millisecond, func(time.Time) tea.Msg {
 		return btnDeferredActionMsg{id: id, action: action}
 	})
 	return tea.Batch(b.tickCmd(), deferred)
