@@ -48,9 +48,11 @@ func (h *TUIHandler) Handle(ctx context.Context, r slog.Record) error {
 	tuiMsg := timeLevel + r.Message
 
 	if h.global {
-		// Skip global channel when a local TUI writer is active — the local
-		// handler already delivers the line, so we'd double-log otherwise.
-		if _, hasLocal := ctx.Value(console.TUIWriterKey).(io.Writer); hasLocal {
+		// Skip global channel when a panel writer is active — the panel already
+		// receives lines via its pipe scanner, so logLineCh would double-log.
+		// Program box writers use TUIWriterKey only (no PanelWriterKey), so they
+		// still reach the panel via logLineCh.
+		if ctx.Value(console.PanelWriterKey) != nil {
 			return nil
 		}
 		select {

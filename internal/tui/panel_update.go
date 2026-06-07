@@ -163,7 +163,7 @@ func (m *PanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 		ctx, cancel := context.WithCancel(context.Background())
 		m.consoleCancel = cancel
 		pr, pw := io.Pipe()
-		cmdCtx := console.WithTUIWriter(ctx, pw)
+		cmdCtx := console.WithPanelWriter(ctx, pw)
 
 		go func() {
 			// Log the command header into the pipe first
@@ -182,8 +182,8 @@ func (m *PanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 		m.consoleConfigChanged = configChanged
 		m.consoleAppsChanged = appsChanged
 		m.spinnerFrame = 0
-		m.lockSession("console.command", true)
-		return tea.Batch(m.spinnerTickCmd(), readConsoleBatchWithFlag(sc, cancel, configChanged, appsChanged))
+		lockCmd := m.lockSession("console.command", true)
+		return tea.Batch(lockCmd, m.spinnerTickCmd(), readConsoleBatchWithFlag(sc, cancel, configChanged, appsChanged))
 	}
 
 	// Shell command
@@ -221,7 +221,7 @@ func (m *PanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 
 			// 2. Run the user's original command line exactly as typed.
 			pr, pw := io.Pipe()
-			cmdCtx := console.WithTUIWriter(ctx, pw)
+			cmdCtx := console.WithPanelWriter(ctx, pw)
 			go func() {
 				// Log the command header into the pipe first
 				logger.Notice(cmdCtx, "System Console command: '{{|UserCommand|}}%s{{[-]}}'", cmdStr)
@@ -236,7 +236,7 @@ func (m *PanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 	}
 
 	pr, pw := io.Pipe()
-	cmdCtx := console.WithTUIWriter(ctx, pw)
+	cmdCtx := console.WithPanelWriter(ctx, pw)
 	go func() {
 		// Log the command header into the pipe first
 		if m.panelMode == "system" {
@@ -250,8 +250,8 @@ func (m *PanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 
 	sc := bufio.NewScanner(pr)
 	m.consoleScanner = sc
-	m.lockSession("console.command", true)
-	return tea.Batch(m.spinnerTickCmd(), readConsoleBatch(sc, cancel))
+	lockCmd := m.lockSession("console.command", true)
+	return tea.Batch(lockCmd, m.spinnerTickCmd(), readConsoleBatch(sc, cancel))
 }
 
 
@@ -296,8 +296,7 @@ func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case ConsoleLockMsg:
-		m.lockSession(msg.ID, msg.Locked)
-		return m, nil
+		return m, m.lockSession(msg.ID, msg.Locked)
 
 	case ConfigChangedMsg:
 		m.panelMode = EffectivePanelMode(msg.Config, m.connType)
@@ -348,13 +347,13 @@ func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.consoleCancel = nil
 		m.sv.CommandRunning = false
 		m.sv.ClearSpinner()
-		m.lockSession("console.command", false)
+		unlockCmd := m.lockSession("console.command", false)
 		if !m.sessionActive() {
 			m.inputFocused = true
 			cmd := m.input.Focus()
-			return m, tea.Batch(cmd, sinput.Blink)
+			return m, tea.Batch(unlockCmd, cmd, sinput.Blink)
 		}
-		return m, nil
+		return m, unlockCmd
 
 	case togglePanelMsg:
 		m.expanded = !m.expanded

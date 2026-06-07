@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/tui/components/sinput"
 	"DockSTARTer2/internal/tui/components/streamvp"
 	"charm.land/bubbles/v2/textinput"
@@ -249,9 +250,10 @@ func (m *PanelModel) ResizeBy(delta int) bool {
 	return true
 }
 
-// lockSession adds or removes a locker by ID.
-// The input bar is locked while any lockers are registered.
-func (m *PanelModel) lockSession(id string, lock bool) {
+// lockSession adds or removes a locker by ID and returns a cmd that notifies
+// the app of the new CommandInProgress state so the exit button updates immediately.
+func (m *PanelModel) lockSession(id string, lock bool) tea.Cmd {
+	before := m.CommandInProgress()
 	if lock {
 		if m.sessionLockers == nil {
 			m.sessionLockers = make(map[string]struct{})
@@ -264,11 +266,18 @@ func (m *PanelModel) lockSession(id string, lock bool) {
 	} else {
 		delete(m.sessionLockers, id)
 	}
+	after := m.CommandInProgress()
+	logger.Debug(context.Background(), "lockSession: id=%s lock=%v before=%v after=%v", id, lock, before, after)
+	if after != before {
+		locked := after
+		return func() tea.Msg { return PanelCommandLockChangedMsg{Locked: locked} }
+	}
+	return nil
 }
 
 // SetSessionActive is kept for compatibility; uses a fixed ID.
-func (m *PanelModel) SetSessionActive(active bool) {
-	m.lockSession("__session__", active)
+func (m *PanelModel) SetSessionActive(active bool) tea.Cmd {
+	return m.lockSession("__session__", active)
 }
 
 func (m *PanelModel) sessionActive() bool { return len(m.sessionLockers) > 0 }

@@ -110,6 +110,12 @@ type (
 		LockedByOthers bool
 	}
 
+	// PanelCommandLockChangedMsg is sent by the panel when its command-in-progress
+	// state changes, so the app can immediately update the exit locked marker.
+	PanelCommandLockChangedMsg struct {
+		Locked bool
+	}
+
 	// FinalizeSelectionMsg combines navigation and dialog display for atomic transitions
 	FinalizeSelectionMsg struct {
 		Dialog tea.Model
