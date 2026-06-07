@@ -154,12 +154,12 @@ func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, Keys.Enter):
 			if m.focusedItem == FocusBackBtn {
-				return m, tea.Batch(m.btnSpinner.SetProcessing("Cancel"), closeWithResult("", false))
+				return m, m.btnSpinner.SetProcessingDeferred("Cancel", closeWithResult("", false))
 			}
 			// OK or Enter directly on input
 			m.result = m.input.Value()
 			m.confirmed = true
-			return m, tea.Batch(m.btnSpinner.SetProcessing("OK"), closeWithResult(m.result, true))
+			return m, m.btnSpinner.SetProcessingDeferred("OK", closeWithResult(m.result, true))
 		}
 
 		// Handle button hotkeys when not on the input
@@ -169,9 +169,9 @@ func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if idx == 0 {
 					m.result = m.input.Value()
 					m.confirmed = true
-					return m, tea.Batch(m.btnSpinner.SetProcessing("OK"), closeWithResult(m.result, true))
+					return m, m.btnSpinner.SetProcessingDeferred("OK", closeWithResult(m.result, true))
 				}
-				return m, tea.Batch(m.btnSpinner.SetProcessing("Cancel"), closeWithResult("", false))
+				return m, m.btnSpinner.SetProcessingDeferred("Cancel", closeWithResult("", false))
 			}
 		}
 
@@ -208,10 +208,10 @@ func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if ButtonIDMatches(msg.ID, "OK") {
 				m.result = m.input.Value()
 				m.confirmed = true
-				return m, tea.Batch(m.btnSpinner.SetProcessing("OK"), closeWithResult(m.result, true))
+				return m, m.btnSpinner.SetProcessingDeferred("OK", closeWithResult(m.result, true))
 			}
 			if ButtonIDMatches(msg.ID, "Cancel") {
-				return m, tea.Batch(m.btnSpinner.SetProcessing("Cancel"), closeWithResult("", false))
+				return m, m.btnSpinner.SetProcessingDeferred("Cancel", closeWithResult("", false))
 			}
 			if ButtonIDMatches(msg.ID, "prompt_input") {
 				m.focusedItem = FocusList

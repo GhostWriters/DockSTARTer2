@@ -197,15 +197,15 @@ func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, tui.Keys.Enter):
 			switch m.focus {
 			case setValueFocusInput:
-				return m, tea.Batch(m.btnSpinner.SetProcessing("Save"), m.submit())
+				return m, m.btnSpinner.SetProcessingDeferred("Save", m.submit())
 			case setValueFocusList:
 				return m, nil
 			case setValueFocusSave:
-				return m, tea.Batch(m.btnSpinner.SetProcessing("Save"), m.submit())
+				return m, m.btnSpinner.SetProcessingDeferred("Save", m.submit())
 			case setValueFocusCancel:
-				return m, tea.Batch(m.btnSpinner.SetProcessing("Cancel"), m.cancelOrConfirm())
+				return m, m.btnSpinner.SetProcessingDeferred("Cancel", m.cancelOrConfirm())
 			case setValueFocusExit:
-				return m, tea.Batch(m.btnSpinner.SetProcessing("Exit"), m.confirmExit())
+				return m, m.btnSpinner.SetProcessingDeferred("Exit", m.confirmExit())
 			}
 
 		case msg.String() == "space" && m.focus == setValueFocusList:
@@ -306,13 +306,13 @@ func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.Button == tea.MouseLeft {
 			if strings.HasSuffix(msg.ID, ".Save") {
-				return m, tea.Batch(m.btnSpinner.SetProcessing("Save"), m.submit())
+				return m, m.btnSpinner.SetProcessingDeferred("Save", m.submit())
 			}
 			if strings.HasSuffix(msg.ID, ".Cancel") {
-				return m, tea.Batch(m.btnSpinner.SetProcessing("Cancel"), m.cancelOrConfirm())
+				return m, m.btnSpinner.SetProcessingDeferred("Cancel", m.cancelOrConfirm())
 			}
 			if strings.HasSuffix(msg.ID, ".Exit") {
-				return m, tea.Batch(m.btnSpinner.SetProcessing("Exit"), m.confirmExit())
+				return m, m.btnSpinner.SetProcessingDeferred("Exit", m.confirmExit())
 			}
 			if msg.ID == "setvalue_input" {
 				m.focus = setValueFocusInput

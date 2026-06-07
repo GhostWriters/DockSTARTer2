@@ -45,7 +45,7 @@ func (m *choiceDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	submitWithSpinner := func(idx int) tea.Cmd {
 		if idx >= 0 && idx < len(m.choices) {
-			return tea.Batch(m.btnSpinner.SetProcessing(m.choices[idx]), submit(idx))
+			return m.btnSpinner.SetProcessingDeferred(m.choices[idx], submit(idx))
 		}
 		return submit(idx)
 	}

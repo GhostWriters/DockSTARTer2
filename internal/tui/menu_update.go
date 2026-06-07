@@ -18,17 +18,12 @@ type menuDeferredActionMsg struct {
 	action tea.Cmd
 }
 
-// deferAction returns a cmd that waits one spinner tick interval before
-// delivering a menuDeferredActionMsg, giving Bubble Tea time to render the
-// spinner frame before any synchronous work in the action blocks the loop.
+// deferAction returns a cmd that waits a short fixed delay before delivering
+// a menuDeferredActionMsg, giving Bubble Tea time to render the active button
+// state before any synchronous work in the action blocks the loop.
 func (m *MenuModel) deferAction(action tea.Cmd) tea.Cmd {
 	iid := m.instanceID
-	fps := time.Duration(console.SpinnerSpeed) * time.Millisecond
-	if fps <= 0 {
-		fps = 100 * time.Millisecond
-	}
-	// Wait 2× the spinner interval so the spinner tick fires and renders first.
-	return tea.Tick(fps*2, func(time.Time) tea.Msg {
+	return tea.Tick(50*time.Millisecond, func(time.Time) tea.Msg {
 		return menuDeferredActionMsg{id: iid, action: action}
 	})
 }
@@ -216,6 +211,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m.handleSpace()
 				}
 			}
+			m.focusedItem = FocusSelectBtn
 			return m.handleEnter()
 		}
 

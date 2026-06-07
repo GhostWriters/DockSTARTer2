@@ -208,15 +208,15 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, tui.Keys.Enter):
 			switch m.focus {
 			case addVarFocusInput:
-				return m, tea.Batch(m.btnSpinner.SetProcessing("Create"), m.submit())
+				return m, m.btnSpinner.SetProcessingDeferred("Create", m.submit())
 			case addVarFocusList:
 				return m, nil
 			case addVarFocusCreate:
-				return m, tea.Batch(m.btnSpinner.SetProcessing("Create"), m.submit())
+				return m, m.btnSpinner.SetProcessingDeferred("Create", m.submit())
 			case addVarFocusCancel:
-				return m, tea.Batch(m.btnSpinner.SetProcessing("Cancel"), m.cancelOrConfirm())
+				return m, m.btnSpinner.SetProcessingDeferred("Cancel", m.cancelOrConfirm())
 			case addVarFocusExit:
-				return m, tea.Batch(m.btnSpinner.SetProcessing("Exit"), m.confirmExit())
+				return m, m.btnSpinner.SetProcessingDeferred("Exit", m.confirmExit())
 			}
 			return m, nil
 		}
@@ -313,13 +313,13 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.Button == tea.MouseLeft {
 			if strings.HasSuffix(msg.ID, ".Create") {
-				return m, tea.Batch(m.btnSpinner.SetProcessing("Create"), m.submit())
+				return m, m.btnSpinner.SetProcessingDeferred("Create", m.submit())
 			}
 			if strings.HasSuffix(msg.ID, ".Cancel") {
-				return m, tea.Batch(m.btnSpinner.SetProcessing("Cancel"), m.cancelOrConfirm())
+				return m, m.btnSpinner.SetProcessingDeferred("Cancel", m.cancelOrConfirm())
 			}
 			if strings.HasSuffix(msg.ID, ".Exit") {
-				return m, tea.Batch(m.btnSpinner.SetProcessing("Exit"), m.confirmExit())
+				return m, m.btnSpinner.SetProcessingDeferred("Exit", m.confirmExit())
 			}
 			if msg.ID == "addvar_input" {
 				m.focus = addVarFocusInput

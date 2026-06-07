@@ -76,14 +76,14 @@ func (m *messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Check for suffixes to support prefixed IDs (e.g., "message_dialog.OK")
 		if msg.Button == tea.MouseLeft {
 			if ButtonIDMatches(msg.ID, "OK") {
-				return m, tea.Batch(m.btnSpinner.SetProcessing("OK"), func() tea.Msg { return CloseDialogMsg{Result: true} })
+				return m, m.btnSpinner.SetProcessingDeferred("OK", func() tea.Msg { return CloseDialogMsg{Result: true} })
 			}
 		}
 	}
 
 	// Middle-click dismisses the dialog
 	if _, ok := msg.(ToggleFocusedMsg); ok {
-		return m, tea.Batch(m.btnSpinner.SetProcessing("OK"), func() tea.Msg { return CloseDialogMsg{Result: true} })
+		return m, m.btnSpinner.SetProcessingDeferred("OK", func() tea.Msg { return CloseDialogMsg{Result: true} })
 	}
 
 	return m, nil
