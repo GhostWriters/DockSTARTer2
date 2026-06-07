@@ -373,6 +373,12 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// and will be lost if the user switches themes (which resets s.config to s.baseConfig).
 		// This is consistent with how other options in this screen work.
 		s.syncOptionsMenu()
+		if s.optionsMenu != nil {
+			s.optionsMenu.ClearProcessingState()
+		}
+		if s.themeMenu != nil {
+			s.themeMenu.ClearProcessingState()
+		}
 		if s.outerMenu != nil {
 			s.outerMenu.InvalidateCache()
 		}
