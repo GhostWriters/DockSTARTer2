@@ -251,18 +251,15 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.titleBarPressed = TitleBarWidgetClose
 				m.InvalidateCache()
 				m.BlurTitleBar()
-				var action tea.Cmd
 				if m.backAction != nil {
-					m.processingBtnID = "btn-back"
-					action = m.backAction
+					m.focusedItem = FocusBackBtn
+					return m, tea.Batch(pressCmd, m.SetProcessingBtnDeferred(IDBackButton, m.backAction))
 				} else if m.exitAction != nil {
-					m.processingBtnID = "btn-exit"
-					action = m.exitAction()
-				} else {
-					m.processingBtnID = "btn-exit"
-					action = ConfirmExitAction()
+					m.focusedItem = FocusExitBtn
+					return m, tea.Batch(pressCmd, m.SetProcessingBtnDeferred(IDExitButton, m.exitAction()))
 				}
-				return m, tea.Batch(pressCmd, m.spinnerTickCmd(), m.deferAction(action))
+				m.focusedItem = FocusExitBtn
+				return m, tea.Batch(pressCmd, m.SetProcessingBtnDeferred(IDExitButton, ConfirmExitAction()))
 			}
 		case IDListPanel:
 			// Hover moved back over the list — restore list focus so the wheel scrolls items.
@@ -568,11 +565,14 @@ func (m *MenuModel) activateTitleBarWidget() tea.Cmd {
 		pc := pressCmd(TitleBarWidgetClose)
 		m.BlurTitleBar()
 		if m.backAction != nil {
-			return tea.Batch(pc, m.backAction)
+			m.focusedItem = FocusBackBtn
+			return tea.Batch(pc, m.SetProcessingBtnDeferred(IDBackButton, m.backAction))
 		} else if m.exitAction != nil {
-			return tea.Batch(pc, m.exitAction())
+			m.focusedItem = FocusExitBtn
+			return tea.Batch(pc, m.SetProcessingBtnDeferred(IDExitButton, m.exitAction()))
 		}
-		return tea.Batch(pc, ConfirmExitAction())
+		m.focusedItem = FocusExitBtn
+		return tea.Batch(pc, m.SetProcessingBtnDeferred(IDExitButton, ConfirmExitAction()))
 	}
 	return nil
 }
