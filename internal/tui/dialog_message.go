@@ -43,7 +43,8 @@ func (m *messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tickCmd
 	}
 
-	closeCmd := func() tea.Msg { return CloseDialogMsg{Result: true} }
+	plainClose := func() tea.Msg { return CloseDialogMsg{Result: true} }
+	closeCmd := m.btnSpinner.SetProcessingDeferred("OK", plainClose)
 
 	if m.HandleWidgetClearPress(msg) {
 		return m, nil
@@ -76,7 +77,7 @@ func (m *messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Check for suffixes to support prefixed IDs (e.g., "message_dialog.OK")
 		if msg.Button == tea.MouseLeft {
 			if ButtonIDMatches(msg.ID, "OK") {
-				return m, m.btnSpinner.SetProcessingDeferred("OK", func() tea.Msg { return CloseDialogMsg{Result: true} })
+				return m, closeCmd
 			}
 		}
 	}
