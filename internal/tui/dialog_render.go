@@ -607,7 +607,7 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 }
 
 // renderDialogWithBorderCtx handles internal shared rendering logic using a specific context.
-func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, focused bool, targetHeight int, threeD bool, useConnectors bool, titleStyle lipgloss.Style, ctx StyleContext, tbs TitleBarState, areaStyleName string) string {
+func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, focused bool, targetHeight int, threeD bool, useConnectors bool, _ lipgloss.Style, ctx StyleContext, tbs TitleBarState, areaStyleName string) string {
 	if title != "" && !strings.HasSuffix(title, "{{[-]}}") {
 		title += "{{[-]}}"
 	}
