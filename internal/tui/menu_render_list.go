@@ -1,10 +1,11 @@
 package tui
 
 import (
+	"strings"
+
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
-	"strings"
 
 	"charm.land/lipgloss/v2"
 )
@@ -233,6 +234,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 		}
 
 		tagStr := ""
+		isProcessingItem := m.processingItemIdx >= 0 && i == m.processingItemIdx && console.SpinnerEnabled
 		if len(item.Tag) > 0 {
 			runes := []rune(item.Tag)
 			letterIdx := 0
@@ -244,13 +246,11 @@ func (m *MenuModel) renderVariableHeightList() string {
 			} else {
 				tagStr = RenderThemeText(item.Tag, tStyle)
 			}
-		}
-		if i == m.processingItemIdx && console.SpinnerEnabled {
-			spinL, spinR := console.TitleSpinnerFrames(m.spinnerFrame, ctx.LineCharacters)
-			spinStyle := lipgloss.NewStyle().Background(tStyle.GetBackground())
-			spinLStr := RenderThemeText("{{|TitleUnfocusedIndicator|}}"+spinL+"{{[-]}}", spinStyle)
-			spinRStr := RenderThemeText("{{|TitleUnfocusedIndicator|}}"+spinR+"{{[-]}}", spinStyle)
-			tagStr = spinLStr + tagStr + spinRStr
+			if isProcessingItem {
+				spinL, spinR := console.TitleSpinnerFrames(m.spinnerFrame, GetActiveContext().LineCharacters)
+				spinStyle := GetStyles().TagSpinner
+				tagStr = spinStyle.Render(spinL) + tagStr + spinStyle.Render(spinR)
+			}
 		}
 
 		// Prefix width calculation (Left of the Tag)
@@ -300,7 +300,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 		}
 
 		// Gutter: Use unified helper which respects StatusGutterWidth
-		itemGutter := m.RenderItemGutter(item, neutralStyle)
+		itemGutter := m.RenderItemGutter(item, neutralStyle, "")
 
 		prefixPadding := ""
 		prefixWidth := 0
@@ -318,10 +318,13 @@ func (m *MenuModel) renderVariableHeightList() string {
 
 		// Padding spaces are AFTER the tag to reach the description column.
 		// Alignment column for descriptions: menuGutterWidth(2) + menuPrefixWidth + maxTagLen + minGap(3)
-		gapWidth := (maxTagLen - lipgloss.Width(GetPlainText(item.Tag))) + (menuPrefixWidth - prefixWidth) + minGap
-		if i == m.processingItemIdx && console.SpinnerEnabled {
-			gapWidth -= 2 // spinner adds 1 char each side
+		spinTagExtra := 0
+		if isProcessingItem {
+			// We replace the 1-char sep with spinL, and add spinR after the tag.
+			// Net extra chars = +2 spinners - 1 sep = +1; shrink gap by 1 to keep desc aligned.
+			spinTagExtra = 1
 		}
+		gapWidth := (maxTagLen - lipgloss.Width(GetPlainText(item.Tag))) + (menuPrefixWidth - prefixWidth) + minGap - spinTagExtra
 		paddingSpaces := strutil.Repeat(" ", max(0, gapWidth))
 
 		firstLine := prefixPadding + tagStr + neutralStyle.Render(paddingSpaces) + lines[0]
@@ -339,7 +342,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 
 		for j, l := range renderedItemLines {
 			sep := paddingStr
-			if isAppSelect {
+			if isAppSelect || isProcessingItem {
 				sep = ""
 			}
 

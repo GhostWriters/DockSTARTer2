@@ -18,22 +18,28 @@ type menuDeferredActionMsg struct {
 	action tea.Cmd
 }
 
-// deferAction returns a cmd that sends a menuDeferredActionMsg for this menu
-// after a render cycle, then executes the action when it arrives in Update.
+// deferAction returns a cmd that waits one spinner tick interval before
+// delivering a menuDeferredActionMsg, giving Bubble Tea time to render the
+// spinner frame before any synchronous work in the action blocks the loop.
 func (m *MenuModel) deferAction(action tea.Cmd) tea.Cmd {
-	id := m.id
-	return func() tea.Msg {
-		return menuDeferredActionMsg{id: id, action: action}
+	iid := m.instanceID
+	fps := time.Duration(console.SpinnerSpeed) * time.Millisecond
+	if fps <= 0 {
+		fps = 100 * time.Millisecond
 	}
+	// Wait 2× the spinner interval so the spinner tick fires and renders first.
+	return tea.Tick(fps*2, func(time.Time) tea.Msg {
+		return menuDeferredActionMsg{id: iid, action: action}
+	})
 }
 
 func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Spinner tick: advance frame and schedule next tick while loading.
-	if deferred, ok := msg.(menuDeferredActionMsg); ok && deferred.id == m.id {
+	if deferred, ok := msg.(menuDeferredActionMsg); ok && deferred.id == m.instanceID {
 		return m, deferred.action
 	}
 
-	if tick, ok := msg.(menuSpinnerTickMsg); ok && tick.id == m.id {
+	if tick, ok := msg.(menuSpinnerTickMsg); ok && tick.id == m.instanceID {
 		if m.loadingText != "" || m.processingItemIdx >= 0 || m.processingBtnID != "" {
 			ctx := GetActiveContext()
 			frames := console.SpinnerFramesTitleUnicode
