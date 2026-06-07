@@ -126,7 +126,7 @@ func (s *ServerOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				s.focusedPanel = FocusServerButtons
 				s.focusedButton = 0
 				s.updateFocusStates()
-				return s, s.handleApply()
+				return s, tea.Batch(s.outerMenu.SetProcessingBtn(tui.IDApplyButton), s.handleApply())
 			}
 			if msg.Button == tui.HoverButton {
 				s.focusedPanel = FocusServerButtons
@@ -142,7 +142,7 @@ func (s *ServerOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if s.isRoot {
 					return s, nil
 				}
-				return s, navigateBack()
+				return s, tea.Batch(s.outerMenu.SetProcessingBtn(tui.IDBackButton), navigateBack())
 			}
 			if msg.Button == tui.HoverButton {
 				s.focusedPanel = FocusServerButtons
@@ -155,7 +155,7 @@ func (s *ServerOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				s.focusedPanel = FocusServerButtons
 				s.focusedButton = s.maxFocusedButton()
 				s.updateFocusStates()
-				return s, tui.ConfirmExitAction()
+				return s, tea.Batch(s.outerMenu.SetProcessingBtn(tui.IDExitButton), tui.ConfirmExitAction())
 			}
 			if msg.Button == tui.HoverButton {
 				s.focusedPanel = FocusServerButtons

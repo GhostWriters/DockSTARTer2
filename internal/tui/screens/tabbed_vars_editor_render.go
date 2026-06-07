@@ -148,7 +148,7 @@ func (m *TabbedVarsEditorModel) getButtonSpecs() []tui.ButtonSpec {
 }
 
 func (m *TabbedVarsEditorModel) renderButtons(width int) string {
-	specs := m.getButtonSpecs()
+	specs := m.btnSpinner.ApplyToSpecs(m.getButtonSpecs())
 	return tui.RenderCenteredButtonsExplicit(width, m.buttonHeight == tui.DialogButtonHeight, tui.GetActiveContext(), specs...)
 }
 

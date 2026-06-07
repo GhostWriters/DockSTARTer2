@@ -96,6 +96,8 @@ type TabbedVarsEditorModel struct {
 	// Spinner while env data is loading from disk
 	loading      bool
 	spinnerFrame int
+
+	btnSpinner tui.ButtonSpinner
 }
 
 // editorSpinnerTickMsg advances the title spinner while loading.
@@ -193,6 +195,7 @@ func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec
 		onClose:   onClose,
 		connType:  connType,
 	}
+	m.btnSpinner.Init()
 	m.ConfigureWidgets(tui.TitleBarWidgetRefresh, tui.TitleBarWidgetHelp, tui.TitleBarWidgetClose)
 	return m
 }

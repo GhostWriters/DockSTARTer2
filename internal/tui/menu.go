@@ -553,6 +553,15 @@ func (m *MenuModel) ClearProcessingState() {
 	m.InvalidateCache()
 }
 
+// SetProcessingBtn marks the given button zone ID as spinning and starts the tick loop.
+// Use this when the screen handles button clicks itself (bypassing MenuModel.Update)
+// but still wants the MenuModel to render the spinner on that button.
+func (m *MenuModel) SetProcessingBtn(zoneID string) tea.Cmd {
+	m.processingBtnID = zoneID
+	m.InvalidateCache()
+	return m.spinnerTickCmd()
+}
+
 func (m *MenuModel) SetFocused(f bool) {
 	wasUnfocused := !m.focused
 	m.focused = f

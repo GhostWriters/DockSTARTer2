@@ -14,15 +14,16 @@ import (
 // onResult receives the chosen button index (0-based), or -1 if cancelled via Esc.
 type choiceDialogModel struct {
 	baseDialogModel
-	title    string
-	question string
-	choices  []string
-	focused  int
-	onResult func(int) tea.Msg
+	title      string
+	question   string
+	choices    []string
+	focused    int
+	onResult   func(int) tea.Msg
+	btnSpinner ButtonSpinner
 }
 
 func newChoiceDialog(title, question string, choices []string) *choiceDialogModel {
-	return &choiceDialogModel{
+	m := &choiceDialogModel{
 		baseDialogModel: baseDialogModel{id: "choice_dialog", focused: true},
 		title:           title,
 		question:        question,
@@ -30,11 +31,23 @@ func newChoiceDialog(title, question string, choices []string) *choiceDialogMode
 		focused:         0,
 		onResult:        func(i int) tea.Msg { return CloseDialogMsg{Result: i} },
 	}
+	m.btnSpinner.Init()
+	return m
 }
 
 func (m *choiceDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if tickCmd, ok := m.btnSpinner.Update(msg); ok {
+		return m, tickCmd
+	}
+
 	submit := func(idx int) tea.Cmd {
 		return func() tea.Msg { return m.onResult(idx) }
+	}
+	submitWithSpinner := func(idx int) tea.Cmd {
+		if idx >= 0 && idx < len(m.choices) {
+			return tea.Batch(m.btnSpinner.SetProcessing(m.choices[idx]), submit(idx))
+		}
+		return submit(idx)
 	}
 
 	if m.HandleWidgetClearPress(msg) {
@@ -58,7 +71,7 @@ func (m *choiceDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, Keys.Esc):
 			return m, submit(-1)
 		case key.Matches(msg, Keys.Enter):
-			return m, submit(m.focused)
+			return m, submitWithSpinner(m.focused)
 		case key.Matches(msg, Keys.Left), key.Matches(msg, Keys.Up):
 			if m.focused > 0 {
 				m.focused--
@@ -76,7 +89,7 @@ func (m *choiceDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			k := strings.ToLower(msg.String())
 			for i, choice := range m.choices {
 				if len(choice) > 0 && strings.ToLower(string(choice[0])) == k {
-					return m, submit(i)
+					return m, submitWithSpinner(i)
 				}
 			}
 		}
@@ -88,14 +101,14 @@ func (m *choiceDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Button == tea.MouseLeft {
 			for i, choice := range m.choices {
 				if ButtonIDMatches(msg.ID, choice) {
-					return m, submit(i)
+					return m, submitWithSpinner(i)
 				}
 			}
 		}
 	}
 
 	if _, ok := msg.(ToggleFocusedMsg); ok {
-		return m, submit(m.focused)
+		return m, submitWithSpinner(m.focused)
 	}
 
 	if wheelMsg, ok := msg.(tea.MouseWheelMsg); ok {
@@ -148,8 +161,9 @@ func (m *choiceDialogModel) ViewString() string {
 
 	specs := make([]ButtonSpec, len(m.choices))
 	for i, c := range m.choices {
-		specs[i] = ButtonSpec{Text: c, Active: i == m.focused}
+		specs[i] = ButtonSpec{Text: c, Active: i == m.focused, ZoneID: c}
 	}
+	specs = m.btnSpinner.ApplyToSpecs(specs)
 	buttonRow := strings.TrimRight(RenderCenteredButtonsCtx(contentWidth, ctx, specs...), "\n")
 
 	spacer := lipgloss.NewStyle().Width(contentWidth).Background(borderBG).Render("")

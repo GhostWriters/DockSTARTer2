@@ -14,6 +14,10 @@ import (
 func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
+	if tickCmd, ok := m.btnSpinner.Update(msg); ok {
+		return m, tickCmd
+	}
+
 	if _, ok := msg.(editorSpinnerTickMsg); ok {
 		if m.loading {
 			ctx := tui.GetActiveContext()
@@ -106,22 +110,22 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 					}
 				}
-				return m, m.saveEnv()
+				return m, tea.Batch(m.btnSpinner.SetProcessing(tui.IDSaveButton), m.saveEnv())
 			}
 		} else if tui.ButtonIDMatches(msg.ID, tui.IDBackButton) {
 			if msg.Button == tea.MouseLeft {
 				m.focus = envFocusButtons
 				m.btnIdx = m.buttonIndex("Back")
 				if m.hasChanges() {
-					return m, m.promptUnsavedChanges(m.onClose)
+					return m, tea.Batch(m.btnSpinner.SetProcessing(tui.IDBackButton), m.promptUnsavedChanges(m.onClose))
 				}
-				return m, m.onClose
+				return m, tea.Batch(m.btnSpinner.SetProcessing(tui.IDBackButton), m.onClose)
 			}
 		} else if tui.ButtonIDMatches(msg.ID, tui.IDExitButton) {
 			if msg.Button == tea.MouseLeft {
 				m.focus = envFocusButtons
 				m.btnIdx = m.buttonIndex("Exit")
-				return m, m.confirmExitAction()
+				return m, tea.Batch(m.btnSpinner.SetProcessing(tui.IDExitButton), m.confirmExitAction())
 			}
 		} else if msg.ID == "tabbed_vars."+tui.IDTitleWidgetClose {
 			if msg.Button == tea.MouseLeft {
@@ -290,7 +294,9 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			case "enter":
 				if m.btnIdx >= 0 && m.btnIdx < len(m.buttons) {
-					switch m.buttons[m.btnIdx] {
+					zoneByName := map[string]string{"Save": tui.IDSaveButton, "Back": tui.IDBackButton, "Exit": tui.IDExitButton}
+					btnName := m.buttons[m.btnIdx]
+					switch btnName {
 					case "Save":
 						if m.hasErrors() {
 							return m, func() tea.Msg {
@@ -301,14 +307,15 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 								}
 							}
 						}
-						return m, m.saveEnv()
+						return m, tea.Batch(m.btnSpinner.SetProcessing(zoneByName[btnName]), m.saveEnv())
 					case "Back":
+						spinCmd := m.btnSpinner.SetProcessing(zoneByName[btnName])
 						if m.hasChanges() {
-							return m, m.promptUnsavedChanges(m.onClose)
+							return m, tea.Batch(spinCmd, m.promptUnsavedChanges(m.onClose))
 						}
-						return m, m.onClose
+						return m, tea.Batch(spinCmd, m.onClose)
 					case "Exit":
-						return m, m.confirmExitAction()
+						return m, tea.Batch(m.btnSpinner.SetProcessing(zoneByName[btnName]), m.confirmExitAction())
 					}
 				}
 			}
