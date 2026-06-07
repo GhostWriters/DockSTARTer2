@@ -291,8 +291,9 @@ func renderCenteredButtonsImpl(contentWidth int, useBorders bool, ctx StyleConte
 			} else {
 				spinStyle = ctx.ButtonSpinner
 			}
-			renderedEdgeL = spinStyle.Render(spinChar)
-			renderedEdgeR = spinStyle.Render(spinCharR)
+			bgStyle := lipgloss.NewStyle().Background(buttonStyle.GetBackground())
+			renderedEdgeL = MaintainBackground(spinStyle.Render(spinChar), bgStyle)
+			renderedEdgeR = MaintainBackground(spinStyle.Render(spinCharR), bgStyle)
 		} else if markerChar != "" {
 			markerTag := "MarkerLocked"
 			if layout.UseBorders {
