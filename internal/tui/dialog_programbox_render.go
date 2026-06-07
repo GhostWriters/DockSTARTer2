@@ -237,7 +237,7 @@ func (m *ProgramBoxModel) calculateLayout() {
 	// 2. Command
 	commandLines := 0
 	if m.command != "" {
-		commandLines = 1 + 1 // 1 line for command + 1 line for gap
+		commandLines = 1 // 1 line for command
 	}
 
 	internalOverhead := headerHeight + commandLines
