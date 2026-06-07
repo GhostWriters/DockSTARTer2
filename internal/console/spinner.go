@@ -13,8 +13,10 @@ var (
 	// SpinnerColor is the ANSI color used for spinner frames in both CLI and TUI contexts.
 	SpinnerColor = lipgloss.Color("2") // green
 
-	SpinnerFramesASCII   = []string{"|", "/", "-", "\\"}
-	SpinnerFramesUnicode = []string{"⣷", "⣯", "⣟", "⡿", "⢿", "⣻", "⣽", "⣾"}
+	SpinnerFramesASCII        = []string{"|", "/", "-", "\\"}
+	SpinnerFramesTitleASCII   = []string{"|", "/", "-", "\\"}
+	SpinnerFramesUnicode      = []string{"⣷", "⣯", "⣟", "⡿", "⢿", "⣻", "⣽", "⣾"}
+	SpinnerFramesTitleUnicode = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 	cliSpinnerFPS        = time.Second / 4 // fallback; StartSpinner uses SpinnerSpeed if set
 	cliSpinnerStyle      = lipgloss.NewStyle().Foreground(SpinnerColor)
 )

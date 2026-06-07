@@ -630,13 +630,14 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 	}
 
 	// Save raw title for the large path (renderLargeTitleRow handles its own styling).
-	// For the small path, apply titleStyle background and pre-render.
+	// For the small path, render using the semantic title tag derived from areaStyleName
+	// (e.g. "LargeTitleAreaQuestion" → "TitleQuestion") so colors match the large path.
 	rawTitle := strings.TrimSuffix(title, "{{[-]}}")
 	if !useLargeInner {
-		if !hasExplicitBackground(titleStyle) {
-			titleStyle = titleStyle.Background(borderBG)
-		}
-		title = RenderThemeText(title, titleStyle)
+		titleTag := titleTagFromAreaName(areaStyleName)
+		titleCtx := ctx
+		titleCtx.Dialog = titleCtx.Dialog.Background(borderBG)
+		title = RenderThemeTextCtx("{{|"+titleTag+"|}}" + rawTitle + "{{[-]}}", titleCtx)
 	}
 
 	innerOverhead := 2
@@ -740,22 +741,35 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 			}
 			result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, leftPad)))
 			result.WriteString(borderStyleLight.Render(leftT))
+			spinInd := tbs.SpinnerIndicator
 			if focused {
-				if ctx.LineCharacters {
-					result.WriteString(borderStyleLight.Render(theme.ToThemeANSI("{{|TitleFocusIndicator|}}▸")))
+				var ind string
+				if spinInd != "" {
+					ind = spinInd
+				} else if ctx.LineCharacters {
+					ind = "▸"
 				} else {
-					result.WriteString(borderStyleLight.Render(theme.ToThemeANSI("{{|TitleFocusIndicator|}}>")))
+					ind = ">"
 				}
+				result.WriteString(borderStyleLight.Render(theme.ToThemeANSI("{{|TitleFocusIndicator|}}" + ind)))
+			} else if spinInd != "" {
+				result.WriteString(borderStyleLight.Render(theme.ToThemeANSI("{{|TitleUnfocusedIndicator|}}" + spinInd)))
 			} else {
 				result.WriteString(borderStyleLight.Render(" "))
 			}
 			result.WriteString(title)
 			if focused {
-				if ctx.LineCharacters {
-					result.WriteString(borderStyleLight.Render(theme.ToThemeANSI("{{|TitleFocusIndicator|}}◂")))
+				var ind string
+				if spinInd != "" {
+					ind = spinInd
+				} else if ctx.LineCharacters {
+					ind = "◂"
 				} else {
-					result.WriteString(borderStyleLight.Render(theme.ToThemeANSI("{{|TitleFocusIndicator|}}<")))
+					ind = "<"
 				}
+				result.WriteString(borderStyleLight.Render(theme.ToThemeANSI("{{|TitleFocusIndicator|}}" + ind)))
+			} else if spinInd != "" {
+				result.WriteString(borderStyleLight.Render(theme.ToThemeANSI("{{|TitleUnfocusedIndicator|}}" + spinInd)))
 			} else {
 				result.WriteString(borderStyleLight.Render(" "))
 			}

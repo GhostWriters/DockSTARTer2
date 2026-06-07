@@ -119,7 +119,7 @@ func (m *PanelModel) spinnerTickCmd() tea.Cmd {
 // changedIndicatorChar returns the character used to signal new content arrived while collapsed.
 func changedIndicatorChar(lineCharacters bool) string {
 	if lineCharacters {
-		return "◆"
+		return "•"
 	}
 	return "*"
 }
@@ -131,9 +131,9 @@ func (m *PanelModel) currentSpinnerMarker() (indicator string, changed bool) {
 	spinning := !m.lastLineTime.IsZero() && time.Since(m.lastLineTime) < spinnerIdleTimeout && console.SpinnerEnabled
 	if spinning {
 		ctx := GetActiveContext()
-		frames := console.SpinnerFramesUnicode
+		frames := console.SpinnerFramesTitleUnicode
 		if !ctx.LineCharacters {
-			frames = console.SpinnerFramesASCII
+			frames = console.SpinnerFramesTitleASCII
 		}
 		return frames[m.spinnerFrame%len(frames)], !m.expanded
 	}

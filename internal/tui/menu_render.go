@@ -256,9 +256,9 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 	ctx.LargeTitleBars = m.layout.LargeTitleBar
 	var spinInd string
 	if m.loadingText != "" && console.SpinnerEnabled {
-		frames := console.SpinnerFramesUnicode
+		frames := console.SpinnerFramesTitleUnicode
 		if !ctx.LineCharacters {
-			frames = console.SpinnerFramesASCII
+			frames = console.SpinnerFramesTitleASCII
 		}
 		spinInd = frames[m.spinnerFrame%len(frames)]
 	}
