@@ -50,3 +50,10 @@ DockSTARTer2.exe
 /build.bat
 /.ds2.new
 /scratch/
+
+# Local test binaries
+ds2_test
+ds2_test_linux
+ds2_linux
+ds2_current
+ds2_prev
