@@ -155,8 +155,9 @@ type MenuModel struct {
 	interceptor    func(tea.Msg, *MenuModel) (tea.Cmd, bool) // Optional custom message handler
 
 	// Memoization for expensive rendering
-	lastView   string
-	cacheValid bool // Indicates if lastView is up-to-date with current state
+	lastView         string
+	cacheValid       bool // Indicates if lastView is up-to-date with current state
+	lastStateVersion int  // renderVersion snapshot when lastView was saved
 
 	// Memoization specifically for the variable-height list (separated to avoid border recursion loops)
 	lastListView    string
@@ -173,7 +174,7 @@ type MenuModel struct {
 	lastViewStartY  int         // Previous scroll offset for memoization check
 	lastScrollTotal int         // Total content height from last renderVariableHeightList (for scrollbar)
 
-	renderVersion       int // Incremented on item changes to invalidate list cache
+	renderVersion       int // Incremented on item changes to invalidate list cache and top-level view cache
 	showLockGutter      bool
 	noLeftMargin        bool
 	statusGutterWidth   int
@@ -554,6 +555,14 @@ func (m *MenuModel) SetShowExit(show bool) {
 // SetExitLocked sets whether to show the locked marker on the Exit button.
 func (m *MenuModel) SetExitLocked(locked bool) {
 	m.exitLocked = locked
+	m.InvalidateCache()
+}
+
+// SetCommandLocked locks or unlocks all relevant items for a running panel command:
+// the Exit button marker and all destructive menu items.
+func (m *MenuModel) SetCommandLocked(locked bool) {
+	m.SetExitLocked(locked)
+	m.SetLockedByOthers(locked)
 }
 
 // SetExitAction overrides the default ConfirmExitAction with a custom handler.

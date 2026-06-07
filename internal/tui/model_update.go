@@ -60,6 +60,11 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case PanelCommandLockChangedMsg:
+		logger.Debug(m.ctx, "PanelCommandLockChangedMsg arrived: locked=%v CommandInProgress=%v", msg.Locked, m.panel.CommandInProgress())
+		m.updateExitLockedState(msg.Locked)
+		return m, logger.BatchRecoverTUI(m.ctx, cmds...)
+
 	case LockStateChangedMsg:
 		// Broadcast lock changes to both the active screen and any open dialog
 		// to ensure background items update even if a dialog has focus.
@@ -121,6 +126,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case consoleLinesMsg:
 		updated, cmd := m.panel.Update(msg)
 		m.panel = updated.(PanelModel)
+		m.updateExitLocked()
 		return m, logger.BatchRecoverTUI(m.ctx, cmd)
 
 	case consoleDoneMsg:
@@ -651,11 +657,9 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// edit.lock state sync
 		if msg.ID == "edit.lock" {
 			// Only lock menu items when a genuinely external session holds the lock.
-			// Local console commands use the exitOrWarn guard instead.
 			lockedByOthers := msg.Locked && !sessionlocks.Sessions.HoldEditLockLocal()
 			if lockedByOthers != m.lockedByOthers {
 				m.lockedByOthers = lockedByOthers
-				// Relay the change to the active screen for Menu '!' indicators
 				cmds = append(cmds, func() tea.Msg { return LockStateChangedMsg{LockedByOthers: lockedByOthers} })
 			}
 			return m, logger.BatchRecoverTUI(m.ctx, cmds...)
@@ -858,12 +862,22 @@ func (m AppModel) backdropHeight() int {
 
 // updateExitLocked pushes the current panel command-in-progress state to the active screen's menu.
 func (m *AppModel) updateExitLocked() {
-	locked := m.panel.CommandInProgress()
-	if screen, ok := m.activeScreen.(interface {
-		SetExitLocked(bool)
-		SetExitAction(func() tea.Cmd)
-	}); ok {
+	m.updateExitLockedState(m.panel.CommandInProgress())
+}
+
+// updateExitLockedState pushes an explicit locked state to the active screen's menu.
+// Use this when you have the authoritative state from the message rather than re-querying
+// the panel (which may have already been updated by a subsequent unlock).
+func (m *AppModel) updateExitLockedState(locked bool) {
+	logger.Debug(m.ctx, "updateExitLocked: locked=%v activeScreen=%T", locked, m.activeScreen)
+	if screen, ok := m.activeScreen.(interface{ SetCommandLocked(bool) }); ok {
+		screen.SetCommandLocked(locked)
+	} else if screen, ok := m.activeScreen.(interface{ SetExitLocked(bool) }); ok {
 		screen.SetExitLocked(locked)
+	} else {
+		logger.Debug(m.ctx, "updateExitLocked: activeScreen does not implement SetCommandLocked or SetExitLocked")
+	}
+	if screen, ok := m.activeScreen.(interface{ SetExitAction(func() tea.Cmd) }); ok {
 		screen.SetExitAction(m.exitOrWarn)
 	}
 }

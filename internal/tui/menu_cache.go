@@ -5,12 +5,13 @@ package tui
 func (m *MenuModel) InvalidateCache() {
 	m.cacheValid = false
 	m.lastListView = ""
+	m.renderVersion++
 }
 
 // CheckCache returns the cached rendered screen if it's still valid.
 // Returns the string and true if valid, or empty string and false if the cache needs rebuilding.
 func (m *MenuModel) CheckCache() (string, bool) {
-	if m.cacheValid && m.lastView != "" {
+	if m.cacheValid && m.lastView != "" && m.lastStateVersion == m.renderVersion {
 		return m.lastView, true
 	}
 	return "", false
@@ -21,5 +22,6 @@ func (m *MenuModel) CheckCache() (string, bool) {
 func (m *MenuModel) SaveCache(view string) string {
 	m.lastView = view
 	m.cacheValid = true
+	m.lastStateVersion = m.renderVersion
 	return view
 }
