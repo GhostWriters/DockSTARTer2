@@ -477,14 +477,14 @@ func (s *ServerOptionsScreen) maxFocusedButton() int {
 func (s *ServerOptionsScreen) execFocusedButton() (tea.Model, tea.Cmd) {
 	switch s.focusedButton {
 	case 0:
-		return s, tea.Batch(s.outerMenu.SetProcessingBtn(tui.IDApplyButton), s.handleApply())
+		return s, s.outerMenu.SetProcessingBtnDeferred(tui.IDApplyButton, s.handleApply())
 	case 1:
 		if s.isRoot {
-			return s, tea.Batch(s.outerMenu.SetProcessingBtn(tui.IDExitButton), tui.ConfirmExitAction())
+			return s, s.outerMenu.SetProcessingBtnDeferred(tui.IDExitButton, tui.ConfirmExitAction())
 		}
-		return s, tea.Batch(s.outerMenu.SetProcessingBtn(tui.IDBackButton), navigateBack())
+		return s, s.outerMenu.SetProcessingBtnDeferred(tui.IDBackButton, navigateBack())
 	case 2:
-		return s, tea.Batch(s.outerMenu.SetProcessingBtn(tui.IDExitButton), tui.ConfirmExitAction())
+		return s, s.outerMenu.SetProcessingBtnDeferred(tui.IDExitButton, tui.ConfirmExitAction())
 	}
 	return s, nil
 }

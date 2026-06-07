@@ -154,7 +154,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				s.focusedPanel = FocusButtons
 				s.focusedButton = 0
 				s.updateFocusStates()
-				return s, tea.Batch(s.outerMenu.SetProcessingBtn(tui.IDApplyButton), s.handleApply())
+				return s, s.outerMenu.SetProcessingBtnDeferred(tui.IDApplyButton, s.handleApply())
 			}
 			if msg.Button == tui.HoverButton {
 				s.focusedPanel = FocusButtons
@@ -171,7 +171,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return s, nil
 				}
 				theme.Unload("Preview")
-				return s, tea.Batch(s.outerMenu.SetProcessingBtn(tui.IDBackButton), navigateBack())
+				return s, s.outerMenu.SetProcessingBtnDeferred(tui.IDBackButton, navigateBack())
 			}
 			if msg.Button == tui.HoverButton {
 				s.focusedPanel = FocusButtons
@@ -185,7 +185,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				s.focusedButton = s.maxFocusedButton()
 				s.updateFocusStates()
 				theme.Unload("Preview")
-				return s, tea.Batch(s.outerMenu.SetProcessingBtn(tui.IDExitButton), tui.ConfirmExitAction())
+				return s, s.outerMenu.SetProcessingBtnDeferred(tui.IDExitButton, tui.ConfirmExitAction())
 			}
 			if msg.Button == tui.HoverButton {
 				s.focusedPanel = FocusButtons
