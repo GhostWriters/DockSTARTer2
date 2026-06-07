@@ -637,15 +637,24 @@ func InitStyles(cfg config.AppConfig) {
 	if _, noBG := currentStyles.TagSpinner.GetBackground().(lipgloss.NoColor); noBG {
 		currentStyles.TagSpinner = currentStyles.TagSpinner.Background(currentStyles.Dialog.GetBackground())
 	}
+	if _, noFG := currentStyles.TagSpinner.GetForeground().(lipgloss.NoColor); noFG {
+		currentStyles.TagSpinner = currentStyles.TagSpinner.Foreground(currentStyles.Dialog.GetForeground())
+	}
 
 	currentStyles.ButtonSpinner = SemanticRawStyle("ButtonSpinner")
 	if _, noBG := currentStyles.ButtonSpinner.GetBackground().(lipgloss.NoColor); noBG {
 		currentStyles.ButtonSpinner = currentStyles.ButtonSpinner.Background(currentStyles.ButtonActive.GetBackground())
 	}
+	if _, noFG := currentStyles.ButtonSpinner.GetForeground().(lipgloss.NoColor); noFG {
+		currentStyles.ButtonSpinner = currentStyles.ButtonSpinner.Foreground(currentStyles.ButtonActive.GetForeground())
+	}
 
 	currentStyles.ButtonSpinnerLarge = SemanticRawStyle("ButtonSpinnerLarge")
 	if _, noBG := currentStyles.ButtonSpinnerLarge.GetBackground().(lipgloss.NoColor); noBG {
 		currentStyles.ButtonSpinnerLarge = currentStyles.ButtonSpinnerLarge.Background(currentStyles.ButtonActive.GetBackground())
+	}
+	if _, noFG := currentStyles.ButtonSpinnerLarge.GetForeground().(lipgloss.NoColor); noFG {
+		currentStyles.ButtonSpinnerLarge = currentStyles.ButtonSpinnerLarge.Foreground(currentStyles.ButtonActive.GetForeground())
 	}
 
 	// Header / Status Bar

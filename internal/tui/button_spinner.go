@@ -46,6 +46,29 @@ func (b *ButtonSpinner) SetProcessing(zoneID string) tea.Cmd {
 	return b.tickCmd()
 }
 
+// SetProcessingDeferred marks the button as spinning and defers action by 2× the spinner
+// interval so at least one frame renders before the action runs. Use instead of
+// tea.Batch(SetProcessing, action) for any synchronous/blocking action.
+func (b *ButtonSpinner) SetProcessingDeferred(zoneID string, action tea.Cmd) tea.Cmd {
+	b.processingID = zoneID
+	b.frame = 0
+	id := b.instanceID
+	fps := time.Duration(console.SpinnerSpeed) * time.Millisecond
+	if fps <= 0 {
+		fps = 100 * time.Millisecond
+	}
+	deferred := tea.Tick(fps*2, func(time.Time) tea.Msg {
+		return btnDeferredActionMsg{id: id, action: action}
+	})
+	return tea.Batch(b.tickCmd(), deferred)
+}
+
+// btnDeferredActionMsg carries a deferred action for a specific ButtonSpinner instance.
+type btnDeferredActionMsg struct {
+	id     string
+	action tea.Cmd
+}
+
 // Clear stops the spinner.
 func (b *ButtonSpinner) Clear() {
 	b.processingID = ""
@@ -56,9 +79,14 @@ func (b *ButtonSpinner) IsProcessing() bool {
 	return b.processingID != ""
 }
 
-// Update handles the internal tick message. Returns (cmd, true) when the tick was
-// consumed; the caller should batch cmd with other cmds.
+// Update handles the internal tick and deferred-action messages. Returns (cmd, true)
+// when the message was consumed; the caller should batch cmd with other cmds.
+// When a deferred action fires, cmd wraps the action and the caller must return it.
 func (b *ButtonSpinner) Update(msg tea.Msg) (tea.Cmd, bool) {
+	if deferred, ok := msg.(btnDeferredActionMsg); ok && deferred.id == b.instanceID {
+		b.processingID = ""
+		return deferred.action, true
+	}
 	tick, ok := msg.(btnSpinnerTickMsg)
 	if !ok || tick.id != b.instanceID {
 		return nil, false
