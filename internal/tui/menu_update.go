@@ -216,6 +216,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m.handleSpace()
 				}
 			}
+			m.focusedItem = FocusSelectBtn
 			return m.handleEnter()
 		}
 
