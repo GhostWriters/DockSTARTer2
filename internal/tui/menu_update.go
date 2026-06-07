@@ -215,18 +215,19 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.titleBarPressed = TitleBarWidgetClose
 				m.InvalidateCache()
 				m.BlurTitleBar()
-				var actionCmd tea.Cmd
+				var action tea.Cmd
 				if m.backAction != nil {
 					m.processingBtnID = "btn-back"
-					actionCmd = m.backAction
+					action = m.backAction
 				} else if m.exitAction != nil {
 					m.processingBtnID = "btn-exit"
-					actionCmd = m.exitAction()
+					action = m.exitAction()
 				} else {
 					m.processingBtnID = "btn-exit"
-					actionCmd = ConfirmExitAction()
+					action = ConfirmExitAction()
 				}
-				return m, tea.Batch(pressCmd, actionCmd, m.spinnerTickCmd())
+				deferred := tea.Tick(0, func(time.Time) tea.Msg { return action() })
+				return m, tea.Batch(pressCmd, m.spinnerTickCmd(), deferred)
 			}
 		case IDListPanel:
 			// Hover moved back over the list — restore list focus so the wheel scrolls items.
@@ -549,28 +550,45 @@ func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 				menuSelectedIndices[m.id] = m.cursor
 				m.processingItemIdx = m.cursor
 				m.processingBtnID = "btn-select"
-				return m, tea.Batch(item.Action, m.spinnerTickCmd())
+				// Defer the action by one frame so the spinner renders before
+				// any synchronous work inside the cmd blocks the event loop.
+				action := item.Action
+				return m, tea.Batch(m.spinnerTickCmd(), tea.Tick(0, func(time.Time) tea.Msg {
+					return action()
+				}))
 			}
 		}
 
 		// 2. Fall back to model-level enter action (for "Done" buttons on selection screens)
 		if m.enterAction != nil {
 			m.processingBtnID = "btn-select"
-			return m, tea.Batch(m.enterAction, m.spinnerTickCmd())
+			action := m.enterAction
+			return m, tea.Batch(m.spinnerTickCmd(), tea.Tick(0, func(time.Time) tea.Msg {
+				return action()
+			}))
 		}
 
 	case FocusBackBtn:
 		if m.backAction != nil {
 			m.processingBtnID = "btn-back"
-			return m, tea.Batch(m.backAction, m.spinnerTickCmd())
+			action := m.backAction
+			return m, tea.Batch(m.spinnerTickCmd(), tea.Tick(0, func(time.Time) tea.Msg {
+				return action()
+			}))
 		}
 	case FocusExitBtn:
 		if m.exitAction != nil {
 			m.processingBtnID = "btn-exit"
-			return m, tea.Batch(m.exitAction(), m.spinnerTickCmd())
+			action := m.exitAction()
+			return m, tea.Batch(m.spinnerTickCmd(), tea.Tick(0, func(time.Time) tea.Msg {
+				return action()
+			}))
 		}
 		m.processingBtnID = "btn-exit"
-		return m, tea.Batch(ConfirmExitAction(), m.spinnerTickCmd())
+		action := ConfirmExitAction()
+		return m, tea.Batch(m.spinnerTickCmd(), tea.Tick(0, func(time.Time) tea.Msg {
+			return action()
+		}))
 	}
 
 	return m, nil
