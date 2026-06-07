@@ -392,6 +392,18 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	}
 
+	// Forward unhandled messages to outerMenu so spinner ticks and deferred actions
+	// are processed even when DisplayOptionsScreen handles the button activations itself.
+	if s.outerMenu != nil {
+		updated, uCmd := s.outerMenu.Update(msg)
+		if m, ok := updated.(*tui.MenuModel); ok {
+			s.outerMenu = m
+		}
+		if uCmd != nil {
+			return s, uCmd
+		}
+	}
+
 	return s, cmd
 }
 
