@@ -209,6 +209,7 @@ func FatalWithStackSkip(ctx context.Context, skip int, msg any, args ...any) {
 
 	// Brief sleep to allow stdout/stderr to flush before exit
 	time.Sleep(100 * time.Millisecond)
+	console.RestoreCursor()
 	os.Exit(1)
 }
 
@@ -227,6 +228,7 @@ func Fatal(ctx context.Context, msg any, args ...any) {
 
 	// Brief sleep to allow stdout/stderr to flush before exit
 	time.Sleep(100 * time.Millisecond)
+	console.RestoreCursor()
 	os.Exit(1)
 }
 
