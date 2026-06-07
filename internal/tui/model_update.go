@@ -629,6 +629,9 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ConfigChangedMsg:
 		m.config = msg.Config
+		console.SpinnerEnabled = msg.Config.UI.Spinner
+		console.SpinnerSpeed = msg.Config.UI.SpinnerSpeed
+		console.LineCharacters = msg.Config.UI.LineCharacters
 		_, _ = theme.Load(m.config.UI.Theme, "")
 		m.invalidateAllCaches()
 		m.backdrop.header.SyncFlags()
