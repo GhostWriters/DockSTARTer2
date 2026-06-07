@@ -3,21 +3,14 @@ package tui
 import (
 	"fmt"
 	"sync/atomic"
-	"time"
 
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/atotto/clipboard"
-
-	"DockSTARTer2/internal/console"
 )
 
 var menuInstanceCounter atomic.Uint64
-
-// menuSpinnerTickMsg advances the loading spinner by one frame.
-type menuSpinnerTickMsg struct{ id string }
-
 
 // MenuItem defines an item in a menu
 type MenuItem struct {
@@ -517,12 +510,6 @@ func (m *MenuModel) SetMenuName(name string) {
 	m.menuName = name
 }
 
-// AddContentSection appends a sub-menu as a stacked section rendered inside this menu's border.
-// When sections are present the standard list is not rendered.
-func (m *MenuModel) AddContentSection(section *MenuModel) {
-	m.contentSections = append(m.contentSections, section)
-}
-
 // SetFocusedItem explicitly sets which UI element has focus (list or a button).
 func (m *MenuModel) SetFocusedItem(item FocusItem) {
 	m.focusedItem = item
@@ -541,49 +528,6 @@ func (m *MenuModel) HasLargeTitleBar() bool {
 // View implements tea.Model and ScreenModel
 func (m *MenuModel) View() tea.View {
 	return tea.View{Content: m.ViewString()}
-}
-
-// SetFocused sets whether this menu's dialog border is rendered as focused (thick)
-// or unfocused (normal). Called by AppModel when the log panel takes focus.
-// ClearProcessingState resets any in-flight spinner indicators.
-// Called when the menu is restored as the active screen after navigation.
-func (m *MenuModel) ClearProcessingState() {
-	m.processingItemIdx = -1
-	m.processingBtnID = ""
-	m.InvalidateCache()
-}
-
-// mapBtnZoneID translates public ID constants (IDApplyButton, IDBackButton, IDExitButton)
-// to the internal zone IDs used by menu_buttons.go ("btn-select", "btn-back", "btn-exit").
-func mapBtnZoneID(zoneID string) string {
-	switch zoneID {
-	case IDApplyButton:
-		return "btn-select"
-	case IDBackButton:
-		return "btn-back"
-	case IDExitButton:
-		return "btn-exit"
-	}
-	return zoneID
-}
-
-// SetProcessingBtn marks the given button zone ID as spinning and starts the tick loop.
-// Use this when the screen handles button clicks itself (bypassing MenuModel.Update)
-// but still wants the MenuModel to render the spinner on that button.
-func (m *MenuModel) SetProcessingBtn(zoneID string) tea.Cmd {
-	m.processingBtnID = mapBtnZoneID(zoneID)
-	m.InvalidateCache()
-	return m.spinnerTickCmd()
-}
-
-// SetProcessingBtnDeferred marks the given button as spinning and defers the action
-// by 2× the spinner interval so at least one spinner frame renders before the action
-// runs. Use this instead of tea.Batch(SetProcessingBtn, action) for any action that
-// is synchronous/blocking (e.g. opens a confirm dialog on the same goroutine).
-func (m *MenuModel) SetProcessingBtnDeferred(zoneID string, action tea.Cmd) tea.Cmd {
-	m.processingBtnID = mapBtnZoneID(zoneID)
-	m.InvalidateCache()
-	return tea.Batch(m.spinnerTickCmd(), m.deferAction(action))
 }
 
 func (m *MenuModel) SetFocused(f bool) {
@@ -841,32 +785,6 @@ func (m *MenuModel) SetItem(index int, item MenuItem) {
 // SetVariableHeight allows the list viewport to expand instead of forcing pagination
 func (m *MenuModel) SetVariableHeight(variable bool) {
 	m.variableHeight = variable
-}
-
-// SetLoadingText sets a centered spinner+message in the list area instead of list items.
-// Returns a tea.Cmd that starts the spinner tick loop. Set to "" to stop.
-func (m *MenuModel) SetLoadingText(text string) tea.Cmd {
-	m.loadingText = text
-	m.spinnerFrame = 0
-	m.InvalidateCache()
-	if text == "" {
-		return nil
-	}
-	return m.spinnerTickCmd()
-}
-
-func (m *MenuModel) spinnerTickCmd() tea.Cmd {
-	if !console.SpinnerEnabled {
-		return nil
-	}
-	fps := time.Duration(console.SpinnerSpeed) * time.Millisecond
-	if fps <= 0 {
-		fps = 100 * time.Millisecond
-	}
-	iid := m.instanceID
-	return tea.Tick(fps, func(time.Time) tea.Msg {
-		return menuSpinnerTickMsg{id: iid}
-	})
 }
 
 // SetUpdateInterceptor allows setting a custom handler that runs before normal message processing
