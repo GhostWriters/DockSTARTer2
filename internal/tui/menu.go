@@ -206,6 +206,12 @@ type MenuModel struct {
 	// loadingText, when non-empty, replaces the list area with a centered spinner + message.
 	loadingText  string
 	spinnerFrame int
+
+	// processingItemIdx is the index of the menu item currently being activated (-1 = none).
+	// processingBtnID is the ZoneID of the button currently being activated ("" = none).
+	// Both show a spinner indicator while the triggered action is in flight.
+	processingItemIdx int
+	processingBtnID   string
 }
 
 // TitleBarFocusable is implemented by models whose title bar can receive keyboard focus.
@@ -423,6 +429,7 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 		showLockGutter:      true,
 		activityGutterWidth: 0,
 		itemPaddingWidth:    1, // Default 1 char padding after marker gutter
+		processingItemIdx:   -1,
 	}
 }
 

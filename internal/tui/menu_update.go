@@ -14,7 +14,7 @@ import (
 func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Spinner tick: advance frame and schedule next tick while loading.
 	if tick, ok := msg.(menuSpinnerTickMsg); ok && tick.id == m.id {
-		if m.loadingText != "" {
+		if m.loadingText != "" || m.processingItemIdx >= 0 || m.processingBtnID != "" {
 			ctx := GetActiveContext()
 			frames := console.SpinnerFramesTitleUnicode
 			if !ctx.LineCharacters {
@@ -544,24 +544,30 @@ func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 				// Update cursor for persistence
 				m.cursor = m.list.Index()
 				menuSelectedIndices[m.id] = m.cursor
-				return m, item.Action
+				m.processingItemIdx = m.cursor
+				m.processingBtnID = "btn-select"
+				return m, tea.Batch(item.Action, m.spinnerTickCmd())
 			}
 		}
 
 		// 2. Fall back to model-level enter action (for "Done" buttons on selection screens)
 		if m.enterAction != nil {
-			return m, m.enterAction
+			m.processingBtnID = "btn-select"
+			return m, tea.Batch(m.enterAction, m.spinnerTickCmd())
 		}
 
 	case FocusBackBtn:
 		if m.backAction != nil {
-			return m, m.backAction
+			m.processingBtnID = "btn-back"
+			return m, tea.Batch(m.backAction, m.spinnerTickCmd())
 		}
 	case FocusExitBtn:
 		if m.exitAction != nil {
-			return m, m.exitAction()
+			m.processingBtnID = "btn-exit"
+			return m, tea.Batch(m.exitAction(), m.spinnerTickCmd())
 		}
-		return m, ConfirmExitAction()
+		m.processingBtnID = "btn-exit"
+		return m, tea.Batch(ConfirmExitAction(), m.spinnerTickCmd())
 	}
 
 	return m, nil

@@ -245,6 +245,13 @@ func (m *MenuModel) renderVariableHeightList() string {
 				tagStr = RenderThemeText(item.Tag, tStyle)
 			}
 		}
+		if i == m.processingItemIdx && console.SpinnerEnabled {
+			spinL, spinR := console.TitleSpinnerFrames(m.spinnerFrame, ctx.LineCharacters)
+			spinStyle := lipgloss.NewStyle().Background(tStyle.GetBackground())
+			spinLStr := RenderThemeText("{{|TitleUnfocusedIndicator|}}"+spinL+"{{[-]}}", spinStyle)
+			spinRStr := RenderThemeText("{{|TitleUnfocusedIndicator|}}"+spinR+"{{[-]}}", spinStyle)
+			tagStr = spinLStr + tagStr + spinRStr
+		}
 
 		// Prefix width calculation (Left of the Tag)
 		var gutterWidth int
@@ -312,6 +319,9 @@ func (m *MenuModel) renderVariableHeightList() string {
 		// Padding spaces are AFTER the tag to reach the description column.
 		// Alignment column for descriptions: menuGutterWidth(2) + menuPrefixWidth + maxTagLen + minGap(3)
 		gapWidth := (maxTagLen - lipgloss.Width(GetPlainText(item.Tag))) + (menuPrefixWidth - prefixWidth) + minGap
+		if i == m.processingItemIdx && console.SpinnerEnabled {
+			gapWidth -= 2 // spinner adds 1 char each side
+		}
 		paddingSpaces := strutil.Repeat(" ", max(0, gapWidth))
 
 		firstLine := prefixPadding + tagStr + neutralStyle.Render(paddingSpaces) + lines[0]

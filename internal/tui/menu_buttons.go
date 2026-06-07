@@ -54,7 +54,7 @@ func (m *MenuModel) getButtonSpecs() []ButtonSpec {
 	if label == "" {
 		label = "Select"
 	}
-	specs = append(specs, ButtonSpec{Text: label, Active: m.focusedItem == FocusSelectBtn, ZoneID: "btn-select", Help: "Confirm and execute the selected action."})
+	specs = append(specs, ButtonSpec{Text: label, Active: m.focusedItem == FocusSelectBtn, Spinning: m.processingBtnID == "btn-select", SpinnerFrame: m.spinnerFrame, ZoneID: "btn-select", Help: "Confirm and execute the selected action."})
 
 	// Back Button
 	if m.backAction != nil {
@@ -62,7 +62,7 @@ func (m *MenuModel) getButtonSpecs() []ButtonSpec {
 		if label == "" {
 			label = "Back"
 		}
-		specs = append(specs, ButtonSpec{Text: label, Active: m.focusedItem == FocusBackBtn, ZoneID: "btn-back", Help: "Return to the previous screen."})
+		specs = append(specs, ButtonSpec{Text: label, Active: m.focusedItem == FocusBackBtn, Spinning: m.processingBtnID == "btn-back", SpinnerFrame: m.spinnerFrame, ZoneID: "btn-back", Help: "Return to the previous screen."})
 	}
 
 	// Exit Button
@@ -71,7 +71,7 @@ func (m *MenuModel) getButtonSpecs() []ButtonSpec {
 		if label == "" {
 			label = "Exit"
 		}
-		specs = append(specs, ButtonSpec{Text: label, Active: m.focusedItem == FocusExitBtn, Locked: m.exitLocked, ZoneID: "btn-exit", Help: "Exit the application immediately."})
+		specs = append(specs, ButtonSpec{Text: label, Active: m.focusedItem == FocusExitBtn, Locked: m.exitLocked, Spinning: m.processingBtnID == "btn-exit", SpinnerFrame: m.spinnerFrame, ZoneID: "btn-exit", Help: "Exit the application immediately."})
 	}
 
 	return specs

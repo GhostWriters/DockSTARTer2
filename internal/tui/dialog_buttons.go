@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/strutil"
 
 	tea "charm.land/bubbletea/v2"
@@ -34,11 +35,13 @@ func RenderButtonRow(buttons ...string) string {
 
 // ButtonSpec defines a button to render
 type ButtonSpec struct {
-	Text   string
-	Active bool
-	Locked bool   // When true, renders locked markers on either side of the label
-	ZoneID string // Optional zone ID for mouse support (empty = no zone marking)
-	Help   string // Help text for right-click context
+	Text         string
+	Active       bool
+	Locked       bool   // When true, renders locked markers on either side of the label
+	Spinning     bool   // When true, renders spinner frames on either side of the label
+	SpinnerFrame int    // Current spinner frame index (used when Spinning is true)
+	ZoneID       string // Optional zone ID for mouse support (empty = no zone marking)
+	Help         string // Help text for right-click context
 }
 
 // GetButtonHitRegions returns hit regions for a row of buttons.
@@ -262,17 +265,23 @@ func renderCenteredButtonsImpl(contentWidth int, useBorders bool, ctx StyleConte
 		}
 
 		markerChar := ""
+		markerTag := "MarkerLocked"
 		if btn.Locked {
 			if ctx.LineCharacters {
 				markerChar = lockedMarker
 			} else {
 				markerChar = lockedMarkerAscii
 			}
+		} else if btn.Spinning && console.SpinnerEnabled {
+			spinL, spinR := console.TitleSpinnerFrames(btn.SpinnerFrame, ctx.LineCharacters)
+			_ = spinR // left frame used for both sides on buttons (single position per side)
+			markerChar = spinL
+			markerTag = "TitleUnfocusedIndicator"
 		}
 		renderedMarker := ""
 		if markerChar != "" {
 			markerStyle := lipgloss.NewStyle().Background(buttonStyle.GetBackground())
-			renderedMarker = RenderThemeText("{{|MarkerLocked|}}"+markerChar+"{{[-]}}", markerStyle)
+			renderedMarker = RenderThemeText("{{|"+markerTag+"|}}" + markerChar + "{{[-]}}", markerStyle)
 		}
 
 		renderedLabel := RenderHotkeyLabelCtx(btn.Text, btn.Active, ctx)
