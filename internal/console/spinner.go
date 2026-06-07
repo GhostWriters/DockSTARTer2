@@ -34,6 +34,24 @@ var activeSpinner struct {
 	frame   int
 }
 
+// TitleSpinnerFrames returns the left (clockwise) and right (counter-clockwise) frame
+// characters for the current spinner position, using the title spinner frame set.
+// The right frame mirrors the left so both appear to spin toward the center.
+func TitleSpinnerFrames(frame int, lineCharacters bool) (left, right string) {
+	if lineCharacters {
+		frames := SpinnerFramesTitleUnicode
+		n := len(frames)
+		left = frames[frame%n]
+		right = frames[(n-frame%n)%n]
+	} else {
+		frames := SpinnerFramesTitleASCII
+		n := len(frames)
+		left = frames[frame%n]
+		right = frames[(n-frame%n)%n]
+	}
+	return
+}
+
 // spinnerFrames returns the correct frame set based on config.
 func spinnerFrames() []string {
 	if LineCharacters {

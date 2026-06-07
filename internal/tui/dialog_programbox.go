@@ -504,18 +504,14 @@ func (m *ProgramBoxModel) spinnerTickCmd() tea.Cmd {
 	})
 }
 
-// currentSpinnerIndicator returns the spinner frame character to use in the title bar,
+// currentSpinnerIndicators returns the left and right spinner frame characters for the title bar,
 // or "" when the spinner is disabled or the task is complete.
-func (m *ProgramBoxModel) currentSpinnerIndicator() string {
+func (m *ProgramBoxModel) currentSpinnerIndicators() (left, right string) {
 	if m.done || !console.SpinnerEnabled {
-		return ""
+		return "", ""
 	}
 	ctx := GetActiveContext()
-	frames := console.SpinnerFramesTitleUnicode
-	if !ctx.LineCharacters {
-		frames = console.SpinnerFramesTitleASCII
-	}
-	return frames[m.spinnerFrame%len(frames)]
+	return console.TitleSpinnerFrames(m.spinnerFrame, ctx.LineCharacters)
 }
 
 func (m *ProgramBoxModel) satisfySubDialogChan(result any) {

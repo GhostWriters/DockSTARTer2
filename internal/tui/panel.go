@@ -127,21 +127,19 @@ func changedIndicatorChar(lineCharacters bool) string {
 // currentSpinnerMarker returns the spinner frame to use in the panel title,
 // the changed indicator when new content arrived while collapsed,
 // or "" when idle.
-func (m *PanelModel) currentSpinnerMarker() (indicator string, changed bool) {
+func (m *PanelModel) currentSpinnerMarker() (indicatorL, indicatorR string, changed bool) {
 	spinning := !m.lastLineTime.IsZero() && time.Since(m.lastLineTime) < spinnerIdleTimeout && console.SpinnerEnabled
 	if spinning {
 		ctx := GetActiveContext()
-		frames := console.SpinnerFramesTitleUnicode
-		if !ctx.LineCharacters {
-			frames = console.SpinnerFramesTitleASCII
-		}
-		return frames[m.spinnerFrame%len(frames)], !m.expanded
+		l, r := console.TitleSpinnerFrames(m.spinnerFrame, ctx.LineCharacters)
+		return l, r, !m.expanded
 	}
 	if m.panelChanged && !m.expanded {
 		ctx := GetActiveContext()
-		return changedIndicatorChar(ctx.LineCharacters), true
+		ch := changedIndicatorChar(ctx.LineCharacters)
+		return ch, ch, true
 	}
-	return "", false
+	return "", "", false
 }
 
 // panelRenderFn returns the render function for streamvp line rendering.

@@ -21,7 +21,15 @@ type TitleBarState struct {
 	ActiveWidget     TitleBarWidget   // Which widget has focus
 	PressedWidget    TitleBarWidget   // Which widget is currently pressed (click flash)
 	Widgets          []TitleBarWidget // Ordered widget set; nil means defaultWidgets
-	SpinnerIndicator string           // When non-empty, replaces ▸/◂ focus indicators with this spinner frame
+	SpinnerIndicator      string // When non-empty, replaces left focus indicator with this spinner frame
+	SpinnerIndicatorRight string // When non-empty, replaces right focus indicator (defaults to SpinnerIndicator)
+}
+
+func (s TitleBarState) rightSpinner() string {
+	if s.SpinnerIndicatorRight != "" {
+		return s.SpinnerIndicatorRight
+	}
+	return s.SpinnerIndicator
 }
 
 func (s TitleBarState) activeWidgets() []TitleBarWidget {
@@ -88,12 +96,12 @@ func renderLargeTitleRow(rawTitle string, actualWidth int, focused bool, showInd
 	indL, indR := " ", " "
 	if showIndicators {
 		if tbs.SpinnerIndicator != "" {
-			if focused {
-				indL = RenderThemeTextCtx("{{|LargeTitleFocusIndicator|}}"+tbs.SpinnerIndicator+"{{[-]}}", titleCtx)
-			} else {
-				indL = RenderThemeTextCtx("{{|LargeTitleUnfocusedIndicator|}}"+tbs.SpinnerIndicator+"{{[-]}}", titleCtx)
+			tag := "LargeTitleFocusIndicator"
+			if !focused {
+				tag = "LargeTitleUnfocusedIndicator"
 			}
-			indR = indL
+			indL = RenderThemeTextCtx("{{|"+tag+"|}}" + tbs.SpinnerIndicator + "{{[-]}}", titleCtx)
+			indR = RenderThemeTextCtx("{{|"+tag+"|}}" + tbs.rightSpinner() + "{{[-]}}", titleCtx)
 		} else if focused {
 			if ctx.LineCharacters {
 				indL = RenderThemeTextCtx("{{|LargeTitleFocusIndicator|}}▸{{[-]}}", titleCtx)
@@ -285,11 +293,17 @@ func RenderUniformBlockDialogCtx(title, content string, ctx StyleContext) string
 
 // RenderTitleSegmentCtx renders a single title segment with connectors and optional indicators.
 // This is the "title routine" that can be called multiple times for side-by-side titles.
-// spinnerIndicator, when non-empty, replaces the ▸/◂ focus indicators with the given frame character.
+// spinnerIndicator, when non-empty, replaces the focus indicators with the given frame character.
+// Pass a second value to use a different frame for the right indicator (counter-clockwise effect).
 func RenderTitleSegmentCtx(rawTitle string, borderFocused bool, contentFocused bool, showIndicators bool, titleTag string, ctx StyleContext, spinnerIndicator ...string) string {
 	spinInd := ""
+	spinIndR := ""
 	if len(spinnerIndicator) > 0 {
 		spinInd = spinnerIndicator[0]
+		spinIndR = spinInd
+	}
+	if len(spinnerIndicator) > 1 {
+		spinIndR = spinnerIndicator[1]
 	}
 	if titleTag != "" {
 		rawTitle = console.WrapSemantic(titleTag) + rawTitle
@@ -349,16 +363,16 @@ func RenderTitleSegmentCtx(rawTitle string, borderFocused bool, contentFocused b
 	if showIndicators {
 		if contentFocused {
 			var ind string
-			if spinInd != "" {
-				ind = spinInd
+			if spinIndR != "" {
+				ind = spinIndR
 			} else if ctx.LineCharacters {
 				ind = "◂"
 			} else {
 				ind = "<"
 			}
 			result.WriteString(borderStyleLight.Render(theme.ToThemeANSIWithPrefix("{{|TitleFocusIndicator|}}"+ind+"{{[-]}}", ctx.Prefix)))
-		} else if spinInd != "" {
-			result.WriteString(borderStyleLight.Render(theme.ToThemeANSIWithPrefix("{{|TitleUnfocusedIndicator|}}"+spinInd+"{{[-]}}", ctx.Prefix)))
+		} else if spinIndR != "" {
+			result.WriteString(borderStyleLight.Render(theme.ToThemeANSIWithPrefix("{{|TitleUnfocusedIndicator|}}"+spinIndR+"{{[-]}}", ctx.Prefix)))
 		} else {
 			result.WriteString(borderStyleLight.Render(theme.ToThemeANSIWithPrefix("{{|TitleUnfocusedIndicator|}} {{[-]}}", ctx.Prefix)))
 		}
@@ -742,6 +756,7 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 			result.WriteString(borderStyleLight.Render(strutil.Repeat(border.Top, leftPad)))
 			result.WriteString(borderStyleLight.Render(leftT))
 			spinInd := tbs.SpinnerIndicator
+			spinIndR := tbs.rightSpinner()
 			if focused {
 				var ind string
 				if spinInd != "" {
@@ -760,16 +775,16 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 			result.WriteString(title)
 			if focused {
 				var ind string
-				if spinInd != "" {
-					ind = spinInd
+				if spinIndR != "" {
+					ind = spinIndR
 				} else if ctx.LineCharacters {
 					ind = "◂"
 				} else {
 					ind = "<"
 				}
 				result.WriteString(borderStyleLight.Render(theme.ToThemeANSI("{{|TitleFocusIndicator|}}" + ind)))
-			} else if spinInd != "" {
-				result.WriteString(borderStyleLight.Render(theme.ToThemeANSI("{{|TitleUnfocusedIndicator|}}" + spinInd)))
+			} else if spinIndR != "" {
+				result.WriteString(borderStyleLight.Render(theme.ToThemeANSI("{{|TitleUnfocusedIndicator|}}" + spinIndR)))
 			} else {
 				result.WriteString(borderStyleLight.Render(" "))
 			}

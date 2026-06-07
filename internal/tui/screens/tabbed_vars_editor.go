@@ -112,16 +112,12 @@ func (m *TabbedVarsEditorModel) spinnerTickCmd() tea.Cmd {
 	return tea.Tick(fps, func(time.Time) tea.Msg { return editorSpinnerTickMsg{} })
 }
 
-func (m *TabbedVarsEditorModel) currentSpinnerIndicator() string {
+func (m *TabbedVarsEditorModel) currentSpinnerIndicators() (left, right string) {
 	if !m.loading || !console.SpinnerEnabled {
-		return ""
+		return "", ""
 	}
 	ctx := tui.GetActiveContext()
-	frames := console.SpinnerFramesTitleUnicode
-	if !ctx.LineCharacters {
-		frames = console.SpinnerFramesTitleASCII
-	}
-	return frames[m.spinnerFrame%len(frames)]
+	return console.TitleSpinnerFrames(m.spinnerFrame, ctx.LineCharacters)
 }
 
 type envAddVarMsg struct {
