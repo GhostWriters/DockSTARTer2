@@ -345,14 +345,7 @@ func renderCenteredButtonsImpl(contentWidth int, useBorders bool, ctx StyleConte
 	return lipgloss.JoinHorizontal(lipgloss.Top, sections...)
 }
 
-// replaceFirstLastChar takes a bordered button render (3 lines) and replaces
-// the first and last visible space on the content line with markerChar.
-// markerRendered is the ANSI-styled version inserted at those positions.
-func replaceFirstLastChar(rendered, markerChar, markerRendered string) string {
-	return replaceFirstLastCharLR(rendered, markerChar, markerChar, markerRendered, markerRendered)
-}
-
-// replaceFirstLastCharLR is like replaceFirstLastChar but accepts separate
+// replaceFirstLastCharLR replaces the first and last visible space on the
 // left and right chars and rendered strings (for asymmetric spinners).
 func replaceFirstLastCharLR(rendered, _, _ string, leftRendered, rightRendered string) string {
 	lines := strings.Split(rendered, "\n")
