@@ -87,7 +87,7 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, Keys.Esc):
 			m.result = false
 			m.confirmed = true
-			return m, closeWithResult(false)
+			return m, m.btnSpinner.SetProcessingDeferred("No", closeWithResult(false))
 
 		case key.Matches(msg, Keys.Enter):
 			m.confirmed = true

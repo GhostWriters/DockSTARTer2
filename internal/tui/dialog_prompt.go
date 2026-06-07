@@ -105,7 +105,7 @@ func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch {
 		case key.Matches(msg, Keys.Esc), key.Matches(msg, Keys.ForceQuit):
-			return m, closeWithResult("", false)
+			return m, m.btnSpinner.SetProcessingDeferred("Cancel", closeWithResult("", false))
 
 		case key.Matches(msg, Keys.CycleTab):
 			// Cycle: Input -> OK -> Cancel -> Input
