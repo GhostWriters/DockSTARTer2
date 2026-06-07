@@ -262,9 +262,9 @@ func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if _, ok := msg.(panelSpinnerTickMsg); ok {
 		if !m.lastLineTime.IsZero() && time.Since(m.lastLineTime) < spinnerIdleTimeout {
 			ctx := GetActiveContext()
-			frames := console.SpinnerFramesUnicode
+			frames := console.SpinnerFramesTitleUnicode
 			if !ctx.LineCharacters {
-				frames = console.SpinnerFramesASCII
+				frames = console.SpinnerFramesTitleASCII
 			}
 			m.spinnerFrame = (m.spinnerFrame + 1) % len(frames)
 			return m, m.spinnerTickCmd()

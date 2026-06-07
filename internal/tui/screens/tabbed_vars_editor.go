@@ -117,9 +117,9 @@ func (m *TabbedVarsEditorModel) currentSpinnerIndicator() string {
 		return ""
 	}
 	ctx := tui.GetActiveContext()
-	frames := console.SpinnerFramesUnicode
+	frames := console.SpinnerFramesTitleUnicode
 	if !ctx.LineCharacters {
-		frames = console.SpinnerFramesASCII
+		frames = console.SpinnerFramesTitleASCII
 	}
 	return frames[m.spinnerFrame%len(frames)]
 }

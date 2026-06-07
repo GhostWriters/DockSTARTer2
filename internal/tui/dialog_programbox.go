@@ -511,9 +511,9 @@ func (m *ProgramBoxModel) currentSpinnerIndicator() string {
 		return ""
 	}
 	ctx := GetActiveContext()
-	frames := console.SpinnerFramesUnicode
+	frames := console.SpinnerFramesTitleUnicode
 	if !ctx.LineCharacters {
-		frames = console.SpinnerFramesASCII
+		frames = console.SpinnerFramesTitleASCII
 	}
 	return frames[m.spinnerFrame%len(frames)]
 }

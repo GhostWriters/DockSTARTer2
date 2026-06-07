@@ -16,9 +16,9 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if tick, ok := msg.(menuSpinnerTickMsg); ok && tick.id == m.id {
 		if m.loadingText != "" {
 			ctx := GetActiveContext()
-			frames := console.SpinnerFramesUnicode
+			frames := console.SpinnerFramesTitleUnicode
 			if !ctx.LineCharacters {
-				frames = console.SpinnerFramesASCII
+				frames = console.SpinnerFramesTitleASCII
 			}
 			m.spinnerFrame = (m.spinnerFrame + 1) % len(frames)
 			m.InvalidateCache()

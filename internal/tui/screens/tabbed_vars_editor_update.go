@@ -17,9 +17,9 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if _, ok := msg.(editorSpinnerTickMsg); ok {
 		if m.loading {
 			ctx := tui.GetActiveContext()
-			frames := console.SpinnerFramesUnicode
+			frames := console.SpinnerFramesTitleUnicode
 			if !ctx.LineCharacters {
-				frames = console.SpinnerFramesASCII
+				frames = console.SpinnerFramesTitleASCII
 			}
 			m.spinnerFrame = (m.spinnerFrame + 1) % len(frames)
 			return m, m.spinnerTickCmd()

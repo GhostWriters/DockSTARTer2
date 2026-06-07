@@ -14,9 +14,6 @@ import (
 // menuSpinnerTickMsg advances the loading spinner by one frame.
 type menuSpinnerTickMsg struct{ id string }
 
-var (
-	spinnerFPS = time.Second / 4
-)
 
 // MenuItem defines an item in a menu
 type MenuItem struct {
@@ -797,9 +794,9 @@ func (m *MenuModel) spinnerTickCmd() tea.Cmd {
 	if !console.SpinnerEnabled {
 		return nil
 	}
-	fps := spinnerFPS
-	if console.SpinnerSpeed > 0 {
-		fps = time.Duration(console.SpinnerSpeed) * time.Millisecond
+	fps := time.Duration(console.SpinnerSpeed) * time.Millisecond
+	if fps <= 0 {
+		fps = 100 * time.Millisecond
 	}
 	id := m.id
 	return tea.Tick(fps, func(time.Time) tea.Msg {
