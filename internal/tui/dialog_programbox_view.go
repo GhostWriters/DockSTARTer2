@@ -67,11 +67,6 @@ func (m *ProgramBoxModel) ViewString() string {
 	// Render Command display
 	if commandDisplay != "" {
 		contentParts = append(contentParts, commandDisplay)
-		spacer := lipgloss.NewStyle().
-			Width(contentWidth).
-			Background(ctx.Dialog.GetBackground()).
-			Render("")
-		contentParts = append(contentParts, spacer) // Standard gap after command
 	}
 
 	contentParts = append(contentParts, borderedViewport)
