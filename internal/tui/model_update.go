@@ -61,7 +61,6 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case PanelCommandLockChangedMsg:
-		logger.Debug(m.ctx, "PanelCommandLockChangedMsg arrived: locked=%v CommandInProgress=%v", msg.Locked, m.panel.CommandInProgress())
 		m.updateExitLockedState(msg.Locked)
 		return m, logger.BatchRecoverTUI(m.ctx, cmds...)
 
@@ -869,13 +868,10 @@ func (m *AppModel) updateExitLocked() {
 // Use this when you have the authoritative state from the message rather than re-querying
 // the panel (which may have already been updated by a subsequent unlock).
 func (m *AppModel) updateExitLockedState(locked bool) {
-	logger.Debug(m.ctx, "updateExitLocked: locked=%v activeScreen=%T", locked, m.activeScreen)
 	if screen, ok := m.activeScreen.(interface{ SetCommandLocked(bool) }); ok {
 		screen.SetCommandLocked(locked)
 	} else if screen, ok := m.activeScreen.(interface{ SetExitLocked(bool) }); ok {
 		screen.SetExitLocked(locked)
-	} else {
-		logger.Debug(m.ctx, "updateExitLocked: activeScreen does not implement SetCommandLocked or SetExitLocked")
 	}
 	if screen, ok := m.activeScreen.(interface{ SetExitAction(func() tea.Cmd) }); ok {
 		screen.SetExitAction(m.exitOrWarn)
