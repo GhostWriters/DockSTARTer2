@@ -211,6 +211,13 @@ func (m *SessionManager) AcquireEditLock(clientIP, connType, lockSource string) 
 			session := clientIP
 			if session == "" || session == "local" {
 				session = "local"
+				if sshConn := os.Getenv("SSH_CONNECTION"); sshConn != "" {
+					if parts := strings.Fields(sshConn); len(parts) >= 2 {
+						session = parts[0] + ":" + parts[1]
+					} else if len(parts) >= 1 {
+						session = parts[0]
+					}
+				}
 			}
 			if terminal != "" {
 				session += " (" + terminal + ")"

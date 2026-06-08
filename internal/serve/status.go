@@ -117,11 +117,11 @@ func CheckStartupStatus(ctx context.Context) {
 					conn := editInfo.ConnType
 					switch editInfo.LockSource {
 					case "cli":
-						lines = append(lines, fmt.Sprintf("\t\t\t\t{{|Warn|}}Edit lock:{{[-]}}Running CLI command '{{|RunningCommand|}}%s{{[-]}}'.", conn))
+						lines = append(lines, fmt.Sprintf("\t\t\t\t{{|Warn|}}Edit lock:{{[-]}} Running CLI command '{{|RunningCommand|}}%s{{[-]}}'.", conn))
 					case "console":
-						lines = append(lines, fmt.Sprintf("\t\t\t\t{{|Warn|}}Edit lock:{{[-]}}Running console command '{{|RunningCommand|}}%s{{[-]}}'.", conn))
+						lines = append(lines, fmt.Sprintf("\t\t\t\t{{|Warn|}}Edit lock:{{[-]}} Running console command '{{|RunningCommand|}}%s{{[-]}}'.", conn))
 					default:
-						lines = append(lines, fmt.Sprintf("\t\t\t\t{{|Warn|}}Edit lock:{{[-]}}In the '{{|RunningCommand|}}%s{{[-]}}' menu.", conn))
+						lines = append(lines, fmt.Sprintf("\t\t\t\t{{|Warn|}}Edit lock:{{[-]}} In the '{{|RunningCommand|}}%s{{[-]}}' menu.", conn))
 					}
 				}
 			}
