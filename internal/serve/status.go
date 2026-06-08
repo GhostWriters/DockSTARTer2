@@ -98,7 +98,7 @@ func CheckStartupStatus(ctx context.Context) {
 					termStr = fmt.Sprintf(" ({{|RunningCommand|}}%s{{[-]}}", cs.Terminal) + ")"
 				}
 				editTag := ""
-				if cs.ClientIP == editInfo.ClientIP && cs.ConnType == editInfo.ConnType {
+				if cs.ClientIP == editInfo.ClientIP {
 					editTag = " [{{|Warn|}}Edit lock{{[-]}}]"
 				}
 				lines = append(lines,
