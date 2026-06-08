@@ -340,15 +340,21 @@ func (m *MenuModel) renderVariableHeightList() string {
 		rowStyle := neutralStyle.Width(maxWidth)
 		gutterSpaces := neutralStyle.Render(strutil.Repeat(" ", m.StatusGutterWidth()))
 
-		for j, l := range renderedItemLines {
-			sep := paddingStr
-			if isAppSelect || isProcessingItem {
-				sep = ""
-			}
+		sep := paddingStr
+		if isAppSelect || isProcessingItem {
+			sep = ""
+		}
+		// Continuation lines always use the normal separator width so they align
+		// with the description column on line 0 (the spinner only affects line 0).
+		contSep := paddingStr
+		if isAppSelect {
+			contSep = ""
+		}
 
+		for j, l := range renderedItemLines {
 			if j > 0 {
 				finalItem += "\n"
-				finalItem += rowStyle.Render(gutterSpaces+sep+l) + console.CodeReset
+				finalItem += rowStyle.Render(gutterSpaces+contSep+l) + console.CodeReset
 			} else {
 				finalItem += rowStyle.Render(itemGutter+sep+l) + console.CodeReset
 			}
