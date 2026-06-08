@@ -384,11 +384,15 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.updateComponentFocus()
 			cmds = append(cmds, logger.BatchRecoverTUI(m.ctx, m.dialog.Init()))
-			// Update lock ConnType if this is a destructive dialog (e.g. Set Value, Add Variable).
-			if ds, ok := m.dialog.(interface{ IsDestructive() bool }); ok && ds.IsDestructive() {
+			// Update lock ConnType to show the active screen + dialog context.
+			if m.activeScreen != nil && m.activeScreen.IsDestructive() {
+				connType := m.activeScreen.Title()
 				if titled, ok := m.dialog.(interface{ Title() string }); ok {
-					sessionlocks.Sessions.UpdateEditLockConnType(titled.Title())
+					if t := titled.Title(); t != "" {
+						connType += "|" + t
+					}
 				}
+				sessionlocks.Sessions.UpdateEditLockConnType(connType)
 			}
 		}
 		return m, logger.BatchRecoverTUI(m.ctx, cmds...)
@@ -556,22 +560,18 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, logger.BatchRecoverTUI(m.ctx, cmd)
 		}
 
-		// If closing a destructive dialog, revert lock ConnType to parent.
-		if m.dialog != nil {
-			if ds, ok := m.dialog.(interface{ IsDestructive() bool }); ok && ds.IsDestructive() {
-				if len(m.dialogStack) > 0 {
-					parent := m.dialogStack[len(m.dialogStack)-1]
-					if ds2, ok := parent.(interface{ IsDestructive() bool }); ok && ds2.IsDestructive() {
-						if titled, ok := parent.(interface{ Title() string }); ok {
-							sessionlocks.Sessions.UpdateEditLockConnType(titled.Title())
-						}
-					} else if m.activeScreen != nil {
-						sessionlocks.Sessions.UpdateEditLockConnType(m.activeScreen.Title())
+		// Revert lock ConnType to the parent dialog+screen context (or just screen if no parent dialog).
+		if m.activeScreen != nil && m.activeScreen.IsDestructive() {
+			connType := m.activeScreen.Title()
+			if len(m.dialogStack) > 0 {
+				parent := m.dialogStack[len(m.dialogStack)-1]
+				if titled, ok := parent.(interface{ Title() string }); ok {
+					if t := titled.Title(); t != "" {
+						connType += "|" + t
 					}
-				} else if m.activeScreen != nil {
-					sessionlocks.Sessions.UpdateEditLockConnType(m.activeScreen.Title())
 				}
 			}
+			sessionlocks.Sessions.UpdateEditLockConnType(connType)
 		}
 
 		// Clear current dialog and try to pop from stack
