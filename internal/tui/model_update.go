@@ -250,7 +250,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if msg.Screen != nil && msg.Screen.IsDestructive() {
-			if !sessionlocks.Sessions.AcquireEditLock(m.clientIP, msg.Screen.Title(), "menu") {
+			if !sessionlocks.Sessions.AcquireEditLock(m.clientIP, msg.Screen.Title(), "menu", m.connType) {
 				info := sessionlocks.Sessions.ReadEditInfo()
 				busyMsg := editLockBusyMsg(info, msg.Screen.Title())
 				return m, func() tea.Msg {
