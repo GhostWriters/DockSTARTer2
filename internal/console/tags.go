@@ -178,7 +178,7 @@ func ExpandTagsWithMap(text string, styleMap map[string]string, stripUnresolvabl
 	for range maxPasses - 1 {
 		expanded := expandOnce(text, false)
 		if expanded == text {
-			return text
+			break
 		}
 		text = expanded
 	}
