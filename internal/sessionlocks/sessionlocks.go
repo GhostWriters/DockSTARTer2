@@ -759,12 +759,19 @@ func SessionLabel(transport string) string {
 	}
 }
 
-// EditLockLines returns the formatted lock detail lines for a SessionInfo.
-// These describe who holds the lock and what they are doing, suitable for
-// passing directly to logger.Warn or logger.Error.
-func EditLockLines(info SessionInfo) []string {
+// EditLockDetail returns the lock detail lines and an optional disconnect hint
+// for a SessionInfo. The detail lines describe who holds the lock and what they
+// are doing. The hint is non-empty only for ssh-server and web sessions.
+// Use EditLockLines when you want all lines together (e.g. logger calls).
+//
+// Format of detail lines:
+//
+//	Edit lock:
+//	    <session>
+//	    <action>
+func EditLockDetail(info SessionInfo) (lines []string, hint string) {
 	if info.Session == "" {
-		return nil
+		return nil, ""
 	}
 	conn := info.ConnType
 	if conn == "" {
@@ -772,18 +779,32 @@ func EditLockLines(info SessionInfo) []string {
 	}
 	label := SessionLabel(info.Transport)
 	session := info.FormatSession()
-	var detail string
+	var action string
 	switch info.LockSource {
 	case "cli":
-		detail = fmt.Sprintf("{{|Warn|}}Edit lock:{{[-]}} %s %s is running CLI command '{{|RunningCommand|}}%s{{[-]}}'.", label, session, conn)
+		action = fmt.Sprintf("Running CLI command '{{|RunningCommand|}}%s{{[-]}}'.", conn)
 	case "console":
-		detail = fmt.Sprintf("{{|Warn|}}Edit lock:{{[-]}} %s %s is running console command '{{|RunningCommand|}}%s{{[-]}}'.", label, session, conn)
+		action = fmt.Sprintf("Running console command '{{|RunningCommand|}}%s{{[-]}}'.", conn)
 	default:
-		detail = fmt.Sprintf("{{|Warn|}}Edit lock:{{[-]}} %s %s is in the '{{|MenuPage|}}%s{{[-]}}' menu.", label, session, conn)
+		action = fmt.Sprintf("In the '{{|MenuPage|}}%s{{[-]}}' menu.", conn)
 	}
-	lines := []string{detail}
+	lines = []string{
+		"{{|Warn|}}Edit lock:{{[-]}}",
+		fmt.Sprintf("    %s %s", label, session),
+		"    " + action,
+	}
 	if info.Transport == "ssh-server" || info.Transport == "web" {
-		lines = append(lines, "Use '{{|UserCommand|}}ds2 --server disconnect{{[-]}}' to force-release the lock.")
+		hint = "Use '{{|UserCommand|}}ds2 --server disconnect{{[-]}}' to force-release the lock."
+	}
+	return lines, hint
+}
+
+// EditLockLines returns all lock detail lines including the disconnect hint
+// (if applicable) as a flat slice, suitable for passing to logger.Warn or logger.Error.
+func EditLockLines(info SessionInfo) []string {
+	lines, hint := EditLockDetail(info)
+	if hint != "" {
+		lines = append(lines, hint)
 	}
 	return lines
 }

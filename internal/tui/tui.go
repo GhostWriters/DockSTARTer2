@@ -973,12 +973,24 @@ func TriggerUpdate() tea.Cmd {
 // editLockBusyMsg builds the "Resource Busy" dialog message from the current lock info.
 // attempted is the action that was blocked (command or screen title); empty string omits it.
 func editLockBusyMsg(info sessionlocks.SessionInfo, attempted string) string {
-	msg := "Configuration is currently being edited."
-	if attempted != "" {
-		msg = fmt.Sprintf("Cannot open '{{|UserCommand|}}%s{{[-]}}' while the configuration is being edited.", attempted)
+	detailLines, hint := sessionlocks.EditLockDetail(info)
+	var msg string
+	for i, line := range detailLines {
+		if i > 0 {
+			msg += "\n"
+		}
+		msg += line
 	}
-	for _, line := range sessionlocks.EditLockLines(info) {
-		msg += "\n\n" + line
+	closing := "Configuration is currently being edited."
+	if attempted != "" {
+		closing = fmt.Sprintf("Cannot open '{{|UserCommand|}}%s{{[-]}}' while the configuration is being edited.", attempted)
+	}
+	if msg != "" {
+		msg += "\n\n"
+	}
+	msg += closing
+	if hint != "" {
+		msg += "\n" + hint
 	}
 	return msg
 }
