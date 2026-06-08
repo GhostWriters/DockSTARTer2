@@ -97,6 +97,18 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, logger.BatchRecoverTUI(m.ctx, cmd)
 
+	case menuSpinnerTickMsg, menuDeferredActionMsg:
+		// Always route to the active screen — these are scoped by instanceID so a
+		// dialog being open must not swallow them (dialogs don't own menu spinners).
+		if m.activeScreen != nil {
+			updated, cmd := m.activeScreen.Update(msg)
+			if sm, ok := updated.(ScreenModel); ok {
+				m.activeScreen = sm
+			}
+			return m, logger.BatchRecoverTUI(m.ctx, cmd)
+		}
+		return m, nil
+
 	case panelSpinnerTickMsg:
 		updated, cmd := m.panel.Update(msg)
 		m.panel = updated.(PanelModel)
