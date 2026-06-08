@@ -998,7 +998,7 @@ func editLockBusyMsg(info sessionlocks.SessionInfo, attempted string) string {
 		case "console":
 			msg += fmt.Sprintf("\n\nEdit lock: %s %s is running console command '{{|RunningCommand|}}%s{{[-]}}'.", sessionLabel, sessionStr, conn)
 		default:
-			msg += fmt.Sprintf("\n\nEdit lock: %s %s is in the '{{|RunningCommand|}}%s{{[-]}}' menu.", sessionLabel, sessionStr, conn)
+			msg += fmt.Sprintf("\n\nEdit lock: %s %s is in the '{{|Version|}}%s{{[-]}}' menu.", sessionLabel, sessionStr, conn)
 		}
 	}
 	return msg

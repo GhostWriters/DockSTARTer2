@@ -97,7 +97,7 @@ func CheckStartupStatus(ctx context.Context) {
 			case "console":
 				lines = append(lines, fmt.Sprintf("\t\t{{|Warn|}}Edit lock:{{[-]}} Running console command '{{|RunningCommand|}}%s{{[-]}}'.", conn))
 			default:
-				lines = append(lines, fmt.Sprintf("\t\t{{|Warn|}}Edit lock:{{[-]}} In the '{{|RunningCommand|}}%s{{[-]}}' menu.", conn))
+				lines = append(lines, fmt.Sprintf("\t\t{{|Warn|}}Edit lock:{{[-]}} In the '{{|Version|}}%s{{[-]}}' menu.", conn))
 			}
 		}
 
