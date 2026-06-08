@@ -261,6 +261,8 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 			}
+			// Lock acquired or already held — update ConnType to reflect current screen.
+			sessionlocks.Sessions.UpdateEditLockConnType(msg.Screen.Title())
 		}
 
 		// Push current screen to stack and switch to new screen
@@ -296,7 +298,17 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case NavigateBackMsg:
 		if m.activeScreen != nil && m.activeScreen.IsDestructive() {
-			sessionlocks.Sessions.ReleaseEditLock()
+			// Check if the previous screen is also destructive — if so, update
+			// the lock to reflect it rather than releasing.
+			var prevScreen ScreenModel
+			if len(m.screenStack) > 0 {
+				prevScreen = m.screenStack[len(m.screenStack)-1]
+			}
+			if prevScreen != nil && prevScreen.IsDestructive() {
+				sessionlocks.Sessions.UpdateEditLockConnType(prevScreen.Title())
+			} else {
+				sessionlocks.Sessions.ReleaseEditLock()
+			}
 		}
 
 		// Pop from stack and return to previous screen
@@ -372,6 +384,12 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.updateComponentFocus()
 			cmds = append(cmds, logger.BatchRecoverTUI(m.ctx, m.dialog.Init()))
+			// Update lock ConnType if this is a destructive dialog (e.g. Set Value, Add Variable).
+			if ds, ok := m.dialog.(interface{ IsDestructive() bool }); ok && ds.IsDestructive() {
+				if titled, ok := m.dialog.(interface{ Title() string }); ok {
+					sessionlocks.Sessions.UpdateEditLockConnType(titled.Title())
+				}
+			}
 		}
 		return m, logger.BatchRecoverTUI(m.ctx, cmds...)
 
@@ -536,6 +554,24 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var cmd tea.Cmd
 			m.dialog, cmd = m.dialog.Update(msg)
 			return m, logger.BatchRecoverTUI(m.ctx, cmd)
+		}
+
+		// If closing a destructive dialog, revert lock ConnType to parent.
+		if m.dialog != nil {
+			if ds, ok := m.dialog.(interface{ IsDestructive() bool }); ok && ds.IsDestructive() {
+				if len(m.dialogStack) > 0 {
+					parent := m.dialogStack[len(m.dialogStack)-1]
+					if ds2, ok := parent.(interface{ IsDestructive() bool }); ok && ds2.IsDestructive() {
+						if titled, ok := parent.(interface{ Title() string }); ok {
+							sessionlocks.Sessions.UpdateEditLockConnType(titled.Title())
+						}
+					} else if m.activeScreen != nil {
+						sessionlocks.Sessions.UpdateEditLockConnType(m.activeScreen.Title())
+					}
+				} else if m.activeScreen != nil {
+					sessionlocks.Sessions.UpdateEditLockConnType(m.activeScreen.Title())
+				}
+			}
 		}
 
 		// Clear current dialog and try to pop from stack
