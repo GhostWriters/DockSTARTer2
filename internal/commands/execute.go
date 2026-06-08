@@ -164,18 +164,18 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				}
 				sessionLabel := "Session"
 				switch info.Transport {
-				case "ssh":
-					sessionLabel = "SSH session"
+				case "local", "ssh":
+					sessionLabel = "Terminal session"
+				case "ssh-server":
+					sessionLabel = "SSH server session"
 				case "web":
-					sessionLabel = "Web session"
-				case "local":
-					sessionLabel = "Local session"
+					sessionLabel = "Web server session"
 				}
 				sessionStr := info.FormatSession()
 				var lockDetail string
 				switch info.LockSource {
 				case "cli":
-					lockDetail = fmt.Sprintf("{{|Warn|}}Edit lock:{{[-]}} %s %s is running CLI command '{{|UserCommand|}}%s{{[-]}}'.", sessionLabel, sessionStr, conn)
+					lockDetail = fmt.Sprintf("{{|Warn|}}Edit lock:{{[-]}} %s %s is running CLI command '{{|RunningCommand|}}%s{{[-]}}'.", sessionLabel, sessionStr, conn)
 				case "console":
 					lockDetail = fmt.Sprintf("{{|Warn|}}Edit lock:{{[-]}} %s %s is running console command '{{|RunningCommand|}}%s{{[-]}}'.", sessionLabel, sessionStr, conn)
 				default:
