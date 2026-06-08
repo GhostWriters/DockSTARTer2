@@ -153,9 +153,9 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		if def.SessionLocked {
 			if !sessionlocks.Sessions.AcquireEditLock("local", cmdStr, "console") {
 				info := sessionlocks.Sessions.ReadEditInfo()
-				ip := info.ClientIP
-				if ip == "" || ip == "local" {
-					ip = "the local console"
+				session := info.Session
+				if session == "" {
+					session = "local"
 				}
 				conn := info.ConnType
 				if conn == "" {
@@ -164,11 +164,11 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				var lockDetail string
 				switch info.LockSource {
 				case "cli":
-					lockDetail = fmt.Sprintf("Edit lock: Session {{|IPAddress|}}%s{{[-]}} is running CLI command '{{|UserCommand|}}%s{{[-]}}'.", ip, conn)
+					lockDetail = fmt.Sprintf("Edit lock: Session {{|IPAddress|}}%s{{[-]}} is running CLI command '{{|UserCommand|}}%s{{[-]}}'.", session, conn)
 				case "console":
-					lockDetail = fmt.Sprintf("Edit lock: Session {{|IPAddress|}}%s{{[-]}} is running console command '{{|RunningCommand|}}%s{{[-]}}'.", ip, conn)
+					lockDetail = fmt.Sprintf("Edit lock: Session {{|IPAddress|}}%s{{[-]}} is running console command '{{|RunningCommand|}}%s{{[-]}}'.", session, conn)
 				default:
-					lockDetail = fmt.Sprintf("Edit lock: Session {{|IPAddress|}}%s{{[-]}} is in the '{{|Version|}}%s{{[-]}}' menu.", ip, conn)
+					lockDetail = fmt.Sprintf("Edit lock: Session {{|IPAddress|}}%s{{[-]}} is in the '{{|Version|}}%s{{[-]}}' menu.", session, conn)
 				}
 				logger.Error(ctx, "Cannot run '{{|UserCommand|}}%s{{[-]}}' while the configuration is being edited.\n"+lockDetail, group.Command)
 				logger.Notice(ctx, "Use '{{|UserCommand|}}ds2 --server disconnect{{[-]}}' to force-release the lock.")

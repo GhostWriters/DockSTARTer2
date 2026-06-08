@@ -89,6 +89,17 @@ func CheckStartupStatus(ctx context.Context) {
 			fmt.Sprintf("\tPID {{|Version|}}%-7d{{[-]}} [{{|Version|}}%s{{[-]}}]%s", p.PID, p.Version, tagStr),
 			fmt.Sprintf("\t\t{{|RunningCommand|}}%s{{[-]}}", cmdLine),
 		)
+		if !isServer && p.PID == editInfo.PID && editInfo.ConnType != "" {
+			conn := editInfo.ConnType
+			switch editInfo.LockSource {
+			case "cli":
+				lines = append(lines, fmt.Sprintf("\t\t{{|Warn|}}Edit lock:{{[-]}} Running CLI command '{{|RunningCommand|}}%s{{[-]}}'.", conn))
+			case "console":
+				lines = append(lines, fmt.Sprintf("\t\t{{|Warn|}}Edit lock:{{[-]}} Running console command '{{|RunningCommand|}}%s{{[-]}}'.", conn))
+			default:
+				lines = append(lines, fmt.Sprintf("\t\t{{|Warn|}}Edit lock:{{[-]}} In the '{{|RunningCommand|}}%s{{[-]}}' menu.", conn))
+			}
+		}
 
 		// Show active connected sessions under the server instance only.
 		if isServer && len(connSessions) > 0 {
@@ -98,23 +109,19 @@ func CheckStartupStatus(ctx context.Context) {
 				if cs.Terminal != "" {
 					termStr = fmt.Sprintf(" ({{|RunningCommand|}}%s{{[-]}}", cs.Terminal) + ")"
 				}
-				editTag := ""
 				isEditSession := cs.ClientIP == editInfo.ClientIP
-				if isEditSession {
-					editTag = " [{{|Warn|}}Edit lock{{[-]}}]"
-				}
 				lines = append(lines,
-					fmt.Sprintf("\t\t\t%s: {{|IPAddress|}}%s{{[-]}}%s%s", cs.ConnType, cs.ClientIP, termStr, editTag),
+					fmt.Sprintf("\t\t\t%s: {{|IPAddress|}}%s{{[-]}}%s", cs.ConnType, cs.ClientIP, termStr),
 				)
 				if isEditSession && editInfo.ConnType != "" {
 					conn := editInfo.ConnType
 					switch editInfo.LockSource {
 					case "cli":
-						lines = append(lines, fmt.Sprintf("\t\t\t\tRunning CLI command '{{|RunningCommand|}}%s{{[-]}}'.", conn))
+						lines = append(lines, fmt.Sprintf("\t\t\t\t{{|Warn|}}Edit lock:{{[-]}}Running CLI command '{{|RunningCommand|}}%s{{[-]}}'.", conn))
 					case "console":
-						lines = append(lines, fmt.Sprintf("\t\t\t\tRunning console command '{{|RunningCommand|}}%s{{[-]}}'.", conn))
+						lines = append(lines, fmt.Sprintf("\t\t\t\t{{|Warn|}}Edit lock:{{[-]}}Running console command '{{|RunningCommand|}}%s{{[-]}}'.", conn))
 					default:
-						lines = append(lines, fmt.Sprintf("\t\t\t\tIn the '{{|RunningCommand|}}%s{{[-]}}' menu.", conn))
+						lines = append(lines, fmt.Sprintf("\t\t\t\t{{|Warn|}}Edit lock:{{[-]}}In the '{{|RunningCommand|}}%s{{[-]}}' menu.", conn))
 					}
 				}
 			}
@@ -175,7 +182,10 @@ func PrintServerStatus(_ context.Context, cfg config.ServerConfig) {
 	}
 	if sessionlocks.Sessions.IsEditLocked() {
 		editInfo := sessionlocks.Sessions.ReadEditInfo()
-		ip := formatIP(editInfo.ClientIP)
+		session := editInfo.Session
+		if session == "" {
+			session = "local"
+		}
 		connType := editInfo.ConnType
 		if connType == "" {
 			connType = "unknown"
@@ -189,7 +199,7 @@ func PrintServerStatus(_ context.Context, cfg config.ServerConfig) {
 		default: // "menu"
 			connTypeTag = fmt.Sprintf("{{|Version|}}%s{{[-]}}", connType)
 		}
-		fmt.Println(console.Sprintf("Editing:     %s from {{|IPAddress|}}%s{{[-]}}", connTypeTag, ip))
+		fmt.Println(console.Sprintf("Editing:     %s from {{|IPAddress|}}%s{{[-]}}", connTypeTag, session))
 	} else {
 		fmt.Println("Editing:     no active editor")
 	}

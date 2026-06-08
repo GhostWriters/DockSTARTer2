@@ -88,6 +88,7 @@ type SessionInfo struct {
 	ClientIP   string
 	ConnType   string
 	LockSource string
+	Session    string
 }
 
 // ServerInfo holds the details read from a server PID file.
@@ -103,6 +104,7 @@ type editLockRecord struct {
 	ClientIP   string `toml:"client_ip"`
 	ConnType   string `toml:"conn_type"`
 	LockSource string `toml:"lock_source"`
+	Session    string `toml:"session"`
 }
 
 // serverRecord is the TOML structure stored in server.pid.
@@ -205,11 +207,20 @@ func (m *SessionManager) AcquireEditLock(clientIP, connType, lockSource string) 
 		if err == nil && locked {
 			m.editActive = true
 			m.localOwner = connType
+			terminal := DetectTerminal()
+			session := clientIP
+			if session == "" || session == "local" {
+				session = "local"
+			}
+			if terminal != "" {
+				session += " (" + terminal + ")"
+			}
 			_ = writeTomlFile(m.editLockPath, editLockRecord{
 				PID:        os.Getpid(),
 				ClientIP:   clientIP,
 				ConnType:   connType,
 				LockSource: lockSource,
+				Session:    session,
 			})
 			return true
 		}
