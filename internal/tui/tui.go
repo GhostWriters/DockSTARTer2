@@ -987,9 +987,9 @@ func editLockBusyMsg(info sessionlocks.SessionInfo, attempted string) string {
 		case "local", "ssh":
 			sessionLabel = "Terminal session"
 		case "ssh-server":
-			sessionLabel = "SSH server session"
+			sessionLabel = "SSH Server session"
 		case "web":
-			sessionLabel = "Web server session"
+			sessionLabel = "Web Server session"
 		}
 		sessionStr := info.FormatSession()
 		switch info.LockSource {
