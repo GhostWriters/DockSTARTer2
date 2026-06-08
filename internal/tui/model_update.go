@@ -277,8 +277,12 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			sessionlocks.Sessions.UpdateEditLockConnType(msg.Screen.Title())
 		}
 
-		// Push current screen to stack and switch to new screen
+		// Push current screen to stack and switch to new screen.
+		// Clear its spinner first — it kept spinning while the cmd built the new screen.
 		if m.activeScreen != nil {
+			if cp, ok := m.activeScreen.(interface{ ClearProcessingState() }); ok {
+				cp.ClearProcessingState()
+			}
 			m.screenStack = append(m.screenStack, m.activeScreen)
 		}
 		m.activeScreen = msg.Screen
