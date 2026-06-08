@@ -212,6 +212,7 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, tui.Keys.Enter):
 			switch m.focus {
 			case addVarFocusInput:
+				m.focus = addVarFocusCreate
 				return m, m.btnSpinner.SetProcessingDeferred("Create", m.submit())
 			case addVarFocusList:
 				return m, nil
@@ -318,12 +319,15 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.Button == tea.MouseLeft {
 			if strings.HasSuffix(msg.ID, ".Create") {
+				m.focus = addVarFocusCreate
 				return m, m.btnSpinner.SetProcessingDeferred("Create", m.submit())
 			}
 			if strings.HasSuffix(msg.ID, ".Cancel") {
+				m.focus = addVarFocusCancel
 				return m, m.btnSpinner.SetProcessingDeferred("Cancel", m.cancelOrConfirm())
 			}
 			if strings.HasSuffix(msg.ID, ".Exit") {
+				m.focus = addVarFocusExit
 				return m, m.btnSpinner.SetProcessingDeferred("Exit", m.confirmExit())
 			}
 			if msg.ID == "addvar_input" {

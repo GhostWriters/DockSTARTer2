@@ -201,6 +201,7 @@ func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, tui.Keys.Enter):
 			switch m.focus {
 			case setValueFocusInput:
+				m.focus = setValueFocusSave
 				return m, m.btnSpinner.SetProcessingDeferred("Save", m.submit())
 			case setValueFocusList:
 				return m, nil
@@ -311,12 +312,15 @@ func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.Button == tea.MouseLeft {
 			if strings.HasSuffix(msg.ID, ".Save") {
+				m.focus = setValueFocusSave
 				return m, m.btnSpinner.SetProcessingDeferred("Save", m.submit())
 			}
 			if strings.HasSuffix(msg.ID, ".Cancel") {
+				m.focus = setValueFocusCancel
 				return m, m.btnSpinner.SetProcessingDeferred("Cancel", m.cancelOrConfirm())
 			}
 			if strings.HasSuffix(msg.ID, ".Exit") {
+				m.focus = setValueFocusExit
 				return m, m.btnSpinner.SetProcessingDeferred("Exit", m.confirmExit())
 			}
 			if msg.ID == "setvalue_input" {
