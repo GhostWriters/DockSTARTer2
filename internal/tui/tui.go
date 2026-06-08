@@ -962,6 +962,7 @@ func TriggerUpdate() tea.Cmd {
 	}
 }
 
+
 // editLockBusyMsg builds the "Resource Busy" dialog message from the current lock info.
 // attempted is the action that was blocked (command or screen title); empty string omits it.
 func editLockBusyMsg(info sessionlocks.SessionInfo, attempted string) string {
@@ -969,18 +970,18 @@ func editLockBusyMsg(info sessionlocks.SessionInfo, attempted string) string {
 	if attempted != "" {
 		msg = fmt.Sprintf("Cannot open '{{|UserCommand|}}%s{{[-]}}' while the configuration is being edited.", attempted)
 	}
-	if info.ClientIP != "" {
+	if info.Session != "" {
 		conn := info.ConnType
 		if conn == "" {
 			conn = "unknown"
 		}
 		switch info.LockSource {
 		case "cli":
-			msg += fmt.Sprintf("\n\nEdit lock: Session {{|IPAddress|}}%s{{[-]}} is running CLI command '{{|RunningCommand|}}%s{{[-]}}'.", info.ClientIP, conn)
+			msg += fmt.Sprintf("\n\nEdit lock: Session {{|IPAddress|}}%s{{[-]}} is running CLI command '{{|RunningCommand|}}%s{{[-]}}'.", info.Session, conn)
 		case "console":
-			msg += fmt.Sprintf("\n\nEdit lock: Session {{|IPAddress|}}%s{{[-]}} is running console command '{{|RunningCommand|}}%s{{[-]}}'.", info.ClientIP, conn)
+			msg += fmt.Sprintf("\n\nEdit lock: Session {{|IPAddress|}}%s{{[-]}} is running console command '{{|RunningCommand|}}%s{{[-]}}'.", info.Session, conn)
 		default:
-			msg += fmt.Sprintf("\n\nEdit lock: Session {{|IPAddress|}}%s{{[-]}} is in the '{{|RunningCommand|}}%s{{[-]}}' menu.", info.ClientIP, conn)
+			msg += fmt.Sprintf("\n\nEdit lock: Session {{|IPAddress|}}%s{{[-]}} is in the '{{|RunningCommand|}}%s{{[-]}}' menu.", info.Session, conn)
 		}
 	}
 	return msg
