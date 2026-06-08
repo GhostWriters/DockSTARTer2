@@ -182,39 +182,49 @@ func (m *ContextMenuModel) moveCursor(delta int) {
 		return
 	}
 	m.cursor = next
-	// Adjust scroll offset to keep cursor visible
-	if m.cursor < m.offset {
-		m.offset = m.cursor
+	// Adjust scroll offset (relative to scrollable items, i.e. after pinned header)
+	pinned := m.pinnedCount()
+	scrollCursor := m.cursor - pinned
+	scrollVisible := m.maxVisible - pinned
+	if scrollCursor < m.offset {
+		m.offset = scrollCursor
 	}
-	if m.cursor >= m.offset+m.maxVisible {
-		m.offset = m.cursor - m.maxVisible + 1
+	if scrollCursor >= m.offset+scrollVisible {
+		m.offset = scrollCursor - scrollVisible + 1
+	}
+	if m.offset < 0 {
+		m.offset = 0
 	}
 }
 
 func (m *ContextMenuModel) scrollBy(delta int) {
+	pinned := m.pinnedCount()
+	scrollable := len(m.items) - pinned
+	scrollVisible := m.maxVisible - pinned
 	m.offset += delta
 	if m.offset < 0 {
 		m.offset = 0
 	}
-	maxOff := len(m.items) - m.maxVisible
+	maxOff := scrollable - scrollVisible
 	if maxOff < 0 {
 		maxOff = 0
 	}
 	if m.offset > maxOff {
 		m.offset = maxOff
 	}
-	// Keep cursor within visible range
+	// Keep cursor within visible scrollable range
 	isUnselectable := func(i int) bool {
 		return m.items[i].IsSeparator || m.items[i].IsHeader || m.items[i].Disabled
 	}
-	if m.cursor < m.offset {
-		m.cursor = m.offset
+	scrollCursor := m.cursor - pinned
+	if scrollCursor < m.offset {
+		m.cursor = m.offset + pinned
 		for m.cursor < len(m.items) && isUnselectable(m.cursor) {
 			m.cursor++
 		}
 	}
-	if m.cursor >= m.offset+m.maxVisible {
-		m.cursor = m.offset + m.maxVisible - 1
+	if scrollCursor >= m.offset+scrollVisible {
+		m.cursor = m.offset + scrollVisible - 1 + pinned
 		for m.cursor >= 0 && isUnselectable(m.cursor) {
 			m.cursor--
 		}
@@ -249,15 +259,28 @@ func (m *ContextMenuModel) executeSelected() tea.Cmd {
 	return func() tea.Msg { return CloseDialogMsg{} }
 }
 
+// pinnedCount returns the number of leading header/separator items that are
+// always shown at the top regardless of scroll offset.
+func (m *ContextMenuModel) pinnedCount() int {
+	for i, item := range m.items {
+		if !item.IsHeader && !item.IsSeparator {
+			return i
+		}
+	}
+	return len(m.items)
+}
+
 func (m *ContextMenuModel) visibleItems() []ContextMenuItem {
-	end := m.offset + m.maxVisible
-	if end > len(m.items) {
-		end = len(m.items)
+	pinned := m.pinnedCount()
+	scrollable := m.items[pinned:]
+	end := m.offset + m.maxVisible - pinned
+	if end > len(scrollable) {
+		end = len(scrollable)
 	}
-	if m.offset >= len(m.items) {
-		return nil
+	if m.offset > len(scrollable) {
+		return m.items[:pinned]
 	}
-	return m.items[m.offset:end]
+	return append(m.items[:pinned:pinned], scrollable[m.offset:end]...)
 }
 
 // parseIntSafe parses an integer string, returning -1 on failure.

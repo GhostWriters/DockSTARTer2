@@ -252,29 +252,6 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 		copyText = currentVal
 	}
 
-	// Delete / Restore — only on a variable line.
-	if isVarLine {
-		if meta.PendingDelete {
-			restVarName := varName
-			items = append(items, tui.ContextMenuItem{
-				Label: "Restore Variable",
-				Help:  "Cancel the pending deletion of this variable (same as Ctrl+U).",
-				Action: func() tea.Msg {
-					return tui.CloseDialogMsg{Result: restoreVarMsg{VarName: restVarName}}
-				},
-			})
-		} else {
-			delVarName := varName
-			items = append(items, tui.ContextMenuItem{
-				Label: "Delete Variable",
-				Help:  "Remove this variable from the file (same as Ctrl+D).",
-				Action: func() tea.Msg {
-					return tui.CloseDialogMsg{Result: deleteVarMsg{VarName: delVarName}}
-				},
-			})
-		}
-	}
-
 	// Build Clipboard Submenu items
 	var clipItems []tui.ContextMenuItem
 	if copyText != "" {
@@ -327,11 +304,6 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 		})
 	}
 
-	// Add static items (Add Variable, Refresh)
-	if len(items) > 0 {
-		items = append(items, tui.ContextMenuItem{IsSeparator: true})
-	}
-
 	addM := m
 	items = append(items, tui.ContextMenuItem{
 		Label: "Add Variable",
@@ -348,6 +320,32 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 			return tui.CloseDialogMsg{Result: msg}
 		},
 	})
+
+	// Delete / Restore — only on a variable line, grouped with Add Variable.
+	if isVarLine {
+		if meta.PendingDelete {
+			restVarName := varName
+			items = append(items, tui.ContextMenuItem{
+				Label: "Restore Variable",
+				Help:  "Cancel the pending deletion of this variable (same as Ctrl+U).",
+				Action: func() tea.Msg {
+					return tui.CloseDialogMsg{Result: restoreVarMsg{VarName: restVarName}}
+				},
+			})
+		} else {
+			delVarName := varName
+			items = append(items, tui.ContextMenuItem{
+				Label: "Delete Variable",
+				Help:  "Remove this variable from the file (same as Ctrl+D).",
+				Action: func() tea.Msg {
+					return tui.CloseDialogMsg{Result: deleteVarMsg{VarName: delVarName}}
+				},
+			})
+		}
+	}
+
+	// Refresh (separator added here; AppendContextMenuTail won't double it since Refresh is last)
+	items = append(items, tui.ContextMenuItem{IsSeparator: true})
 	items = append(items, tui.ContextMenuItem{
 		Label: "Refresh",
 		Help:  "Reformat all variables based on current staged state (same as F5).",
