@@ -34,7 +34,11 @@ func handleServer(ctx context.Context, group *CommandGroup, state *CmdState, con
 		}
 		return handleServerStart(ctx, conf)
 	case "disconnect":
-		return handleServerDisconnect(ctx, state)
+		target := ""
+		if len(group.Args) > 1 {
+			target = group.Args[1]
+		}
+		return handleServerDisconnect(ctx, state, target)
 	case "install":
 		return handleServerInstall(ctx)
 	case "uninstall":
@@ -122,9 +126,13 @@ func handleServerStop(ctx context.Context, state *CmdState) error {
 	return serve.StopServer(ctx, state.Force)
 }
 
-// handleServerDisconnect requests a graceful disconnect of the active session.
-func handleServerDisconnect(ctx context.Context, state *CmdState) error {
-	return serve.Disconnect(ctx, state.Force)
+// handleServerDisconnect requests a graceful disconnect of the active session or a targeted set.
+// target may be "", "all", "web", "ssh", or "ip:port".
+func handleServerDisconnect(ctx context.Context, state *CmdState, target string) error {
+	if target == "" {
+		return serve.Disconnect(ctx, state.Force)
+	}
+	return serve.DisconnectSessions(ctx, target, state.Force)
 }
 
 // handleServerInstall writes the OS service unit for the server daemon.
