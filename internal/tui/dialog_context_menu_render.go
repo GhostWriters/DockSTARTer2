@@ -24,10 +24,16 @@ func (m *ContextMenuModel) ViewString() string {
 
 	// Compute which items are visible
 	visible := m.visibleItems()
+	pinned := m.pinnedCount()
 
 	var lines []string
-	absIdx := m.offset
-	for _, item := range visible {
+	for vi, item := range visible {
+		var absIdx int
+		if vi < pinned {
+			absIdx = vi
+		} else {
+			absIdx = pinned + m.offset + (vi - pinned)
+		}
 		if item.IsSeparator {
 			sepChar := "─"
 			if !ctx.LineCharacters {
@@ -35,7 +41,6 @@ func (m *ContextMenuModel) ViewString() string {
 			}
 			sep := bgStyle.Render(" " + strutil.Repeat(sepChar, m.menuW) + " ")
 			lines = append(lines, sep)
-			absIdx++
 			continue
 		}
 		if item.IsHeader {
@@ -49,7 +54,6 @@ func (m *ContextMenuModel) ViewString() string {
 				pad = 0
 			}
 			lines = append(lines, bgStyle.Render(" ")+headerStyle.Render(lbl)+bgStyle.Render(strutil.Repeat(" ", pad)+" "))
-			absIdx++
 			continue
 		}
 
@@ -97,7 +101,6 @@ func (m *ContextMenuModel) ViewString() string {
 				lines = append(lines, MaintainBackground(subLabelStyle.Background(bgStyle.GetBackground()).Render(" "+sl+strutil.Repeat(" ", slPad)+" "), bgStyle))
 			}
 		}
-		absIdx++
 	}
 
 	content := strings.Join(lines, "\n")
@@ -183,9 +186,16 @@ func (m *ContextMenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 
 	// Per-item rows (always present; submenu regions have higher Z and take priority over their area)
 	visible := m.visibleItems()
-	absIdx := m.offset
+	pinned := m.pinnedCount()
 	rowY := m.menuY + 1
-	for _, item := range visible {
+	for vi, item := range visible {
+		// Pinned items occupy their original indices; scrollable items follow.
+		var absIdx int
+		if vi < pinned {
+			absIdx = vi
+		} else {
+			absIdx = pinned + m.offset + (vi - pinned)
+		}
 		h := itemHeight(item)
 		if !item.IsSeparator && !item.IsHeader {
 			regions = append(regions, HitRegion{
@@ -198,7 +208,6 @@ func (m *ContextMenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 				Label:  item.Label,
 			})
 		}
-		absIdx++
 		rowY += h
 	}
 

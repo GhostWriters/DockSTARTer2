@@ -372,6 +372,18 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 			return m, toggleCmd, true
 		}
 
+		// For context menus, forward middle click as a LayerHitMsg so the menu can
+		// select the focused item regardless of where the mouse cursor is.
+		if _, ok := m.dialog.(*ContextMenuModel); ok {
+			layerMsg := LayerHitMsg{Button: tea.MouseMiddle, X: click.X, Y: click.Y, Hit: hit}
+			if hit != nil {
+				layerMsg.ID = hit.ID
+			}
+			var ctxCmd tea.Cmd
+			m.dialog, ctxCmd = m.dialog.Update(layerMsg)
+			return m, ctxCmd, true
+		}
+
 		// For buttons not mapped to a panel (regular menu/dialog buttons like btn-select,
 		// Yes/No confirm buttons, OK dismiss buttons), dispatch as a left click so the
 		// button action fires normally.

@@ -38,7 +38,7 @@ func (m *ContextMenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.moveCursor(-1)
 		case key.Matches(msg, Keys.Down):
 			m.moveCursor(1)
-		case key.Matches(msg, Keys.Enter):
+		case key.Matches(msg, Keys.Enter), key.Matches(msg, Keys.Space):
 			return m, m.executeSelected()
 		case key.Matches(msg, Keys.Right):
 			// Right arrow opens a submenu if the focused item has one.
@@ -64,6 +64,26 @@ func (m *ContextMenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.subMenu = sub
 			}
 			return m, cmd
+		}
+		// Middle click selects the focused item (cursor), not the item under the mouse.
+		if msg.Button == tea.MouseMiddle {
+			if m.subMenu != nil {
+				subMsg := msg
+				subMsg.Button = tea.MouseMiddle
+				updated, cmd := m.subMenu.Update(subMsg)
+				if sub, ok := updated.(*ContextMenuModel); ok {
+					if sub.isClosed {
+						m.subMenu = nil
+						return m, nil
+					}
+					m.subMenu = sub
+				}
+				return m, cmd
+			}
+			if m.cursor >= 0 && m.cursor < len(m.items) && !m.items[m.cursor].IsSeparator && !m.items[m.cursor].IsHeader && !m.items[m.cursor].Disabled {
+				return m, m.executeSelected()
+			}
+			return m, nil
 		}
 		if msg.ID == "ctxmenu.bg" {
 			if m.subMenu != nil {
@@ -108,12 +128,6 @@ func (m *ContextMenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		idx := m.itemIndexAt(msg.X, msg.Y)
 		if idx >= 0 && idx < len(m.items) && !m.items[idx].IsSeparator && !m.items[idx].IsHeader && !m.items[idx].Disabled {
 			m.cursor = idx
-			if m.cursor < m.offset {
-				m.offset = m.cursor
-			}
-			if m.cursor >= m.offset+m.maxVisible {
-				m.offset = m.cursor - m.maxVisible + 1
-			}
 		}
 	}
 
@@ -125,14 +139,19 @@ func (m *ContextMenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *ContextMenuModel) itemIndexAt(x, y int) int {
 	// Content rows begin at menuY+1 (inside the top border).
 	rowY := m.menuY + 1
-	absIdx := m.offset
-	for _, item := range m.visibleItems() {
+	pinned := m.pinnedCount()
+	for vi, item := range m.visibleItems() {
+		var absIdx int
+		if vi < pinned {
+			absIdx = vi
+		} else {
+			absIdx = pinned + m.offset + (vi - pinned)
+		}
 		h := itemHeight(item)
 		if y >= rowY && y < rowY+h && x >= m.menuX+1 && x < m.menuX+m.menuW+3 {
 			return absIdx
 		}
 		rowY += h
-		absIdx++
 	}
 	return -1
 }
