@@ -744,3 +744,46 @@ func (m *SessionManager) IsStopRequested() bool {
 	_, err := os.Stat(m.stopReqPath)
 	return err == nil
 }
+
+// SessionLabel returns the display label for a session transport type.
+func SessionLabel(transport string) string {
+	switch transport {
+	case "local", "ssh":
+		return "Terminal session"
+	case "ssh-server":
+		return "SSH Server session"
+	case "web":
+		return "Web Server session"
+	default:
+		return "Session"
+	}
+}
+
+// EditLockLines returns the formatted lock detail lines for a SessionInfo.
+// These describe who holds the lock and what they are doing, suitable for
+// passing directly to logger.Warn or logger.Error.
+func EditLockLines(info SessionInfo) []string {
+	if info.Session == "" {
+		return nil
+	}
+	conn := info.ConnType
+	if conn == "" {
+		conn = "unknown"
+	}
+	label := SessionLabel(info.Transport)
+	session := info.FormatSession()
+	var detail string
+	switch info.LockSource {
+	case "cli":
+		detail = fmt.Sprintf("{{|Warn|}}Edit lock:{{[-]}} %s %s is running CLI command '{{|RunningCommand|}}%s{{[-]}}'.", label, session, conn)
+	case "console":
+		detail = fmt.Sprintf("{{|Warn|}}Edit lock:{{[-]}} %s %s is running console command '{{|RunningCommand|}}%s{{[-]}}'.", label, session, conn)
+	default:
+		detail = fmt.Sprintf("{{|Warn|}}Edit lock:{{[-]}} %s %s is in the '{{|MenuPage|}}%s{{[-]}}' menu.", label, session, conn)
+	}
+	lines := []string{detail}
+	if info.Transport == "ssh-server" || info.Transport == "web" {
+		lines = append(lines, "Use '{{|UserCommand|}}ds2 --server disconnect{{[-]}}' to force-release the lock.")
+	}
+	return lines
+}

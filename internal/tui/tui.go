@@ -977,29 +977,8 @@ func editLockBusyMsg(info sessionlocks.SessionInfo, attempted string) string {
 	if attempted != "" {
 		msg = fmt.Sprintf("Cannot open '{{|UserCommand|}}%s{{[-]}}' while the configuration is being edited.", attempted)
 	}
-	if info.Session != "" {
-		conn := info.ConnType
-		if conn == "" {
-			conn = "unknown"
-		}
-		sessionLabel := "Session"
-		switch info.Transport {
-		case "local", "ssh":
-			sessionLabel = "Terminal session"
-		case "ssh-server":
-			sessionLabel = "SSH Server session"
-		case "web":
-			sessionLabel = "Web Server session"
-		}
-		sessionStr := info.FormatSession()
-		switch info.LockSource {
-		case "cli":
-			msg += fmt.Sprintf("\n\nEdit lock: %s %s is running CLI command '{{|RunningCommand|}}%s{{[-]}}'.", sessionLabel, sessionStr, conn)
-		case "console":
-			msg += fmt.Sprintf("\n\nEdit lock: %s %s is running console command '{{|RunningCommand|}}%s{{[-]}}'.", sessionLabel, sessionStr, conn)
-		default:
-			msg += fmt.Sprintf("\n\nEdit lock: %s %s is in the '{{|MenuPage|}}%s{{[-]}}' menu.", sessionLabel, sessionStr, conn)
-		}
+	for _, line := range sessionlocks.EditLockLines(info) {
+		msg += "\n\n" + line
 	}
 	return msg
 }
