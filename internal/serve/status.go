@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/version"
@@ -165,9 +166,18 @@ func PrintServerStatus(_ context.Context, cfg config.ServerConfig) {
 		ip := formatIP(editInfo.ClientIP)
 		connType := editInfo.ConnType
 		if connType == "" {
-			connType = "ssh"
+			connType = "unknown"
 		}
-		fmt.Printf("Editing:     %s from %s\n", connType, ip)
+		var connTypeTag string
+		switch editInfo.LockSource {
+		case "cli":
+			connTypeTag = fmt.Sprintf("{{|UserCommand|}}%s{{[-]}}", connType)
+		case "console":
+			connTypeTag = fmt.Sprintf("{{|RunningCommand|}}%s{{[-]}}", connType)
+		default: // "menu"
+			connTypeTag = fmt.Sprintf("{{|Version|}}%s{{[-]}}", connType)
+		}
+		fmt.Println(console.Sprintf("Editing:     %s from {{|IPAddress|}}%s{{[-]}}", connTypeTag, ip))
 	} else {
 		fmt.Println("Editing:     no active editor")
 	}

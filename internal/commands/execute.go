@@ -151,7 +151,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 
 		// Block action commands when someone else is currently editing the configuration.
 		if def.SessionLocked {
-			if !sessionlocks.Sessions.AcquireEditLock("local", "Console") {
+			if !sessionlocks.Sessions.AcquireEditLock("local", cmdStr, "console") {
 				info := sessionlocks.Sessions.ReadEditInfo()
 				ip := info.ClientIP
 				if ip == "" || ip == "local" {

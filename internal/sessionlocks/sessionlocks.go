@@ -84,9 +84,10 @@ type SessionManager struct {
 
 // SessionInfo holds the details read from a session lock file.
 type SessionInfo struct {
-	PID      int
-	ClientIP string
-	ConnType string
+	PID        int
+	ClientIP   string
+	ConnType   string
+	LockSource string
 }
 
 // ServerInfo holds the details read from a server PID file.
@@ -98,9 +99,10 @@ type ServerInfo struct {
 
 // editLockRecord is the TOML structure stored in edit.lock.
 type editLockRecord struct {
-	PID      int    `toml:"pid"`
-	ClientIP string `toml:"client_ip"`
-	ConnType string `toml:"conn_type"`
+	PID        int    `toml:"pid"`
+	ClientIP   string `toml:"client_ip"`
+	ConnType   string `toml:"conn_type"`
+	LockSource string `toml:"lock_source"`
 }
 
 // serverRecord is the TOML structure stored in server.pid.
@@ -186,7 +188,7 @@ func (m *SessionManager) HoldEditLockLocal() bool {
 	return m.editActive
 }
 
-func (m *SessionManager) AcquireEditLock(clientIP, connType string) bool {
+func (m *SessionManager) AcquireEditLock(clientIP, connType, lockSource string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -204,9 +206,10 @@ func (m *SessionManager) AcquireEditLock(clientIP, connType string) bool {
 			m.editActive = true
 			m.localOwner = connType
 			_ = writeTomlFile(m.editLockPath, editLockRecord{
-				PID:      os.Getpid(),
-				ClientIP: clientIP,
-				ConnType: connType,
+				PID:        os.Getpid(),
+				ClientIP:   clientIP,
+				ConnType:   connType,
+				LockSource: lockSource,
 			})
 			return true
 		}
@@ -537,7 +540,7 @@ func (m *SessionManager) ReadEditInfo() SessionInfo {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	return SessionInfo(r)
+	return SessionInfo{PID: r.PID, ClientIP: r.ClientIP, ConnType: r.ConnType, LockSource: r.LockSource}
 }
 
 func (m *SessionManager) ReadServerInfo() ServerInfo {
