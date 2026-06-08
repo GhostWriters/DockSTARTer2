@@ -131,10 +131,13 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.Button == tea.MouseLeft {
 				m.BlurTitleBar()
 				pressCmd := m.PressWidget(tui.TitleBarWidgetClose, msg.ID)
+				m.focus = envFocusButtons
+				m.btnIdx = m.buttonIndex("Back")
+				closeAction := m.onClose
 				if m.hasChanges() {
-					return m, tea.Batch(pressCmd, m.promptUnsavedChanges(m.onClose))
+					closeAction = m.promptUnsavedChanges(m.onClose)
 				}
-				return m, tea.Batch(pressCmd, m.onClose)
+				return m, tea.Batch(pressCmd, m.btnSpinner.SetProcessingDeferred(tui.IDBackButton, closeAction))
 			}
 		} else if msg.ID == "tabbed_vars."+tui.IDTitleWidgetHelp {
 			if msg.Button == tea.MouseLeft {
@@ -235,7 +238,9 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch msg.String() {
 		case "esc":
-			return m, m.EscapeAction()
+			m.focus = envFocusButtons
+			m.btnIdx = m.buttonIndex("Back")
+			return m, m.btnSpinner.SetProcessingDeferred(tui.IDBackButton, m.EscapeAction())
 		case "ctrl+right", "alt+right", "ctrl+pgdown", "alt+pgdown": // Next Tab
 			if m.focus == envFocusEditor && len(m.tabs) > 1 {
 				m.tabs[m.activeTab].editor.Blur()
