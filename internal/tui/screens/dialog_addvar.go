@@ -525,8 +525,6 @@ func (m *addVarDialogModel) HelpText() string {
 
 func (m *addVarDialogModel) SetFocused(f bool) { m.focused = f }
 
-func (m *addVarDialogModel) IsDestructive() bool { return true }
-
 func (m *addVarDialogModel) Title() string { return "Add Variable" }
 
 func (m *addVarDialogModel) IsScrollbarDragging() bool { return m.sbDrag.Dragging }
