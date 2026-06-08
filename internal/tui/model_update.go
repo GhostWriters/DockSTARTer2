@@ -252,7 +252,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if msg.Screen != nil && msg.Screen.IsDestructive() {
-			if !sessionlocks.Sessions.AcquireEditLock(m.clientIP, msg.Screen.Title()) {
+			if !sessionlocks.Sessions.AcquireEditLock(m.clientIP, msg.Screen.Title(), "menu") {
 				info := sessionlocks.Sessions.ReadEditInfo()
 				busyMsg := "Configuration is currently being edited by another session."
 				if info.ClientIP != "" {
