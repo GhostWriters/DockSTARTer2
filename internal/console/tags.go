@@ -94,80 +94,95 @@ func ExpandThemeTags(text string, prefix string) string {
 
 // ExpandTagsWithMap is the base routine for expanding semantic tags.
 // If styleMap is nil, it uses themeMap with fallback to consoleMap (Legacy behavior).
+// Expansion is repeated until stable (up to 8 passes) so that tag values which
+// themselves reference other semantic tags resolve correctly.
 func ExpandTagsWithMap(text string, styleMap map[string]string, stripUnresolvable bool, prefix string) string {
 	ensureMaps()
 	prefix = strings.ToLower(prefix)
 
-	// Process semantic tags
 	semanticMu.RLock()
 	defer semanticMu.RUnlock()
 
-	return semanticRegex.ReplaceAllStringFunc(text, func(match string) string {
-		groupIndex := semanticRegex.SubexpIndex("content")
-		subMatch := semanticRegex.FindStringSubmatch(match)
-		if len(subMatch) <= groupIndex {
-			return ""
-		}
-		fullContent := subMatch[groupIndex]
+	expandOnce := func(s string, strip bool) string {
+		return semanticRegex.ReplaceAllStringFunc(s, func(match string) string {
+			groupIndex := semanticRegex.SubexpIndex("content")
+			subMatch := semanticRegex.FindStringSubmatch(match)
+			if len(subMatch) <= groupIndex {
+				return ""
+			}
+			fullContent := subMatch[groupIndex]
 
-		// Split semantic name from optional inline modifiers (e.g. "Title:::R")
-		semanticName := fullContent
-		modifiers := ""
-		if idx := strings.IndexByte(fullContent, ':'); idx >= 0 {
-			semanticName = fullContent[:idx]
-			modifiers = fullContent[idx+1:]
-		}
-		content := strings.ToLower(semanticName)
+			// Split semantic name from optional inline modifiers (e.g. "Title:::R")
+			semanticName := fullContent
+			modifiers := ""
+			if idx := strings.IndexByte(fullContent, ':'); idx >= 0 {
+				semanticName = fullContent[:idx]
+				modifiers = fullContent[idx+1:]
+			}
+			content := strings.ToLower(semanticName)
 
-		var rawCode string
-		var ok bool
+			var rawCode string
+			var ok bool
 
-		if styleMap != nil {
-			// Specific map requested (No fallback)
-			// 1. Try with prefix if provided
-			if prefix != "" {
-				prefixed := prefix + content
-				rawCode, ok = styleMap[prefixed]
+			if styleMap != nil {
+				// Specific map requested (No fallback)
+				// 1. Try with prefix if provided
+				if prefix != "" {
+					prefixed := prefix + content
+					rawCode, ok = styleMap[prefixed]
+				}
+				// 2. Try raw name if prefix failed or wasn't provided
+				if !ok {
+					rawCode, ok = styleMap[content]
+				}
+			} else {
+				// Legacy behavior: Theme preferred, then Console
+				// 1. Try with prefix in Theme
+				if prefix != "" {
+					prefixed := prefix + content
+					rawCode, ok = themeMap[prefixed]
+				}
+				// 2. Try raw in Theme
+				if !ok {
+					rawCode, ok = themeMap[content]
+				}
+				// 3. Try fallback to Console (No prefix for Console colors)
+				if !ok {
+					rawCode, ok = consoleMap[content]
+				}
 			}
-			// 2. Try raw name if prefix failed or wasn't provided
-			if !ok {
-				rawCode, ok = styleMap[content]
-			}
-		} else {
-			// Legacy behavior: Theme preferred, then Console
-			// 1. Try with prefix in Theme
-			if prefix != "" {
-				prefixed := prefix + content
-				rawCode, ok = themeMap[prefixed]
-			}
-			// 2. Try raw in Theme
-			if !ok {
-				rawCode, ok = themeMap[content]
-			}
-			// 3. Try fallback to Console (No prefix for Console colors)
-			if !ok {
-				rawCode, ok = consoleMap[content]
-			}
-		}
 
-		if ok {
-			result := WrapDirect(rawCode)
+			if ok {
+				result := WrapDirect(rawCode)
+				if modifiers != "" {
+					result += WrapDirect(modifiers)
+				}
+				return result
+			}
+
+			// Name didn't resolve (or was empty) — if modifiers are present, emit them as a
+			// direct tag so {{|:fg:bg:flags|}} and {{|Unknown:fg:bg:flags|}} still apply styling.
 			if modifiers != "" {
-				result += WrapDirect(modifiers)
+				return WrapDirect(modifiers)
 			}
-			return result
-		}
+			if strip {
+				return ""
+			}
+			return match
+		})
+	}
 
-		// Name didn't resolve (or was empty) — if modifiers are present, emit them as a
-		// direct tag so {{|:fg:bg:flags|}} and {{|Unknown:fg:bg:flags|}} still apply styling.
-		if modifiers != "" {
-			return WrapDirect(modifiers)
+	// First passes without stripping so unresolved tags can resolve in later passes.
+	// Final pass applies stripUnresolvable.
+	const maxPasses = 8
+	for range maxPasses - 1 {
+		expanded := expandOnce(text, false)
+		if expanded == text {
+			return text
 		}
-		if stripUnresolvable {
-			return ""
-		}
-		return match
-	})
+		text = expanded
+	}
+	return expandOnce(text, stripUnresolvable)
 }
 
 // processHyperlinks detects {{|URL|}} blocks and wraps them in terminal hyperlink sequences.
