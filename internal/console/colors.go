@@ -168,6 +168,7 @@ func init() {
 		UserCommand:            "{{[-]}}{{[yellow::B]}}",
 		UserCommandError:       "{{[-]}}{{[red::U]}}",
 		UserCommandErrorMarker: "{{[-]}}{{[red]}}",
+		MenuPage:               "{{|Version|}}",
 		Var:                    "{{[-]}}{{[magenta]}}",
 		Version:                "{{[-]}}{{[cyan]}}",
 		Yes:                    "{{[-]}}{{[green]}}",
@@ -290,6 +291,7 @@ type AppColors struct {
 	UserCommand            string
 	UserCommandError       string
 	UserCommandErrorMarker string
+	MenuPage               string
 	Var                    string
 	Version                string
 	Yes                    string
@@ -383,6 +385,7 @@ func RegisterBaseTags() {
 	RegisterConsoleTag("theme", Colors.Theme)
 	RegisterConsoleTag("update", Colors.Update)
 	RegisterConsoleTag("user", Colors.User)
+	RegisterConsoleTag("menupage", Colors.MenuPage)
 	RegisterConsoleTag("var", Colors.Var)
 
 	// Legacy Foreground Colors (F array in main.sh)

@@ -97,7 +97,7 @@ func CheckStartupStatus(ctx context.Context) {
 			case "console":
 				lines = append(lines, fmt.Sprintf("\t\t{{|Warn|}}Edit lock:{{[-]}} Running console command '{{|RunningCommand|}}%s{{[-]}}'.", conn))
 			default:
-				lines = append(lines, fmt.Sprintf("\t\t{{|Warn|}}Edit lock:{{[-]}} In the '{{|Version|}}%s{{[-]}}' menu.", conn))
+				lines = append(lines, fmt.Sprintf("\t\t{{|Warn|}}Edit lock:{{[-]}} In the '{{|MenuPage|}}%s{{[-]}}' menu.", conn))
 			}
 		}
 
@@ -121,7 +121,7 @@ func CheckStartupStatus(ctx context.Context) {
 					case "console":
 						lines = append(lines, fmt.Sprintf("\t\t\t\t{{|Warn|}}Edit lock:{{[-]}} Running console command '{{|RunningCommand|}}%s{{[-]}}'.", conn))
 					default:
-						lines = append(lines, fmt.Sprintf("\t\t\t\t{{|Warn|}}Edit lock:{{[-]}} In the '{{|RunningCommand|}}%s{{[-]}}' menu.", conn))
+						lines = append(lines, fmt.Sprintf("\t\t\t\t{{|Warn|}}Edit lock:{{[-]}} In the '{{|MenuPage|}}%s{{[-]}}' menu.", conn))
 					}
 				}
 			}
@@ -193,7 +193,7 @@ func PrintServerStatus(_ context.Context, cfg config.ServerConfig) {
 		case "console":
 			connTypeTag = fmt.Sprintf("{{|RunningCommand|}}%s{{[-]}}", connType)
 		default: // "menu"
-			connTypeTag = fmt.Sprintf("{{|Version|}}%s{{[-]}}", connType)
+			connTypeTag = fmt.Sprintf("{{|MenuPage|}}%s{{[-]}}", connType)
 		}
 		fmt.Println(console.Sprintf("Editing:     %s from %s", connTypeTag, editInfo.FormatSession()))
 	} else {
