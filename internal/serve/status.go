@@ -104,7 +104,7 @@ func CheckStartupStatus(ctx context.Context) {
 					editTag = " [{{|Warn|}}Edit lock{{[-]}}]"
 				}
 				lines = append(lines,
-					fmt.Sprintf("\t\t\t[%s: {{|IPAddress|}}%s{{[-]}}%s]%s", cs.ConnType, cs.ClientIP, termStr, editTag),
+					fmt.Sprintf("\t\t\t%s: {{|IPAddress|}}%s{{[-]}}%s%s", cs.ConnType, cs.ClientIP, termStr, editTag),
 				)
 				if isEditSession && editInfo.ConnType != "" {
 					conn := editInfo.ConnType
