@@ -335,7 +335,9 @@ func (m *SessionManager) RegisterProc(exePath, currentVersion string) {
 	args := strings.Join(os.Args[1:], " ")
 	sshClient := ""
 	if sshConn := os.Getenv("SSH_CONNECTION"); sshConn != "" {
-		if parts := strings.Fields(sshConn); len(parts) >= 1 {
+		if parts := strings.Fields(sshConn); len(parts) >= 2 {
+			sshClient = parts[0] + ":" + parts[1]
+		} else if len(parts) >= 1 {
 			sshClient = parts[0]
 		}
 	}
