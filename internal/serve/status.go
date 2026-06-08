@@ -48,7 +48,7 @@ func CheckStartupStatus(ctx context.Context) {
 			for _, part := range parts {
 				kv := strings.SplitN(part, ":", 2)
 				if len(kv) == 2 {
-					portTags = append(portTags, fmt.Sprintf("%s Port: {{|Version|}}%s{{[-]}}", kv[0], kv[1]))
+					portTags = append(portTags, fmt.Sprintf("%s Server Port: {{|Version|}}%s{{[-]}}", kv[0], kv[1]))
 				}
 			}
 			if len(portTags) > 0 {
