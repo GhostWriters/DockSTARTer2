@@ -89,6 +89,8 @@ type SessionInfo struct {
 	ConnType   string
 	LockSource string
 	Session    string
+	Transport  string
+	Terminal   string
 }
 
 // ServerInfo holds the details read from a server PID file.
@@ -105,6 +107,8 @@ type editLockRecord struct {
 	ConnType   string `toml:"conn_type"`
 	LockSource string `toml:"lock_source"`
 	Session    string `toml:"session"`
+	Transport  string `toml:"transport"`
+	Terminal   string `toml:"terminal"`
 }
 
 // serverRecord is the TOML structure stored in server.pid.
@@ -190,7 +194,7 @@ func (m *SessionManager) HoldEditLockLocal() bool {
 	return m.editActive
 }
 
-func (m *SessionManager) AcquireEditLock(clientIP, connType, lockSource string) bool {
+func (m *SessionManager) AcquireEditLock(clientIP, connType, lockSource, transport string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -219,15 +223,14 @@ func (m *SessionManager) AcquireEditLock(clientIP, connType, lockSource string) 
 					}
 				}
 			}
-			if terminal != "" {
-				session += " (" + terminal + ")"
-			}
 			_ = writeTomlFile(m.editLockPath, editLockRecord{
 				PID:        os.Getpid(),
 				ClientIP:   clientIP,
 				ConnType:   connType,
 				LockSource: lockSource,
 				Session:    session,
+				Transport:  transport,
+				Terminal:   terminal,
 			})
 			return true
 		}
@@ -539,6 +542,18 @@ func (m *SessionManager) SeedInstalledVersion(exePath, currentVersion string) {
 		return
 	}
 	_ = m.WriteInstalledVersion(exePath, currentVersion)
+}
+
+// FormatSession returns a tag-annotated session string matching the instance-list style:
+// {{|IPAddress|}}ip:port{{[-]}} ({{|RunningCommand|}}terminal{{[-]}})
+// If terminal is empty, the parens are omitted.
+func (info SessionInfo) FormatSession() string {
+	s := "{{|IPAddress|}}" + info.Session + "{{[-]}}"
+	if info.Terminal != "" {
+		s += " ({{|RunningCommand|}}" + info.Terminal + "{{[-]}}"
+		s += ")"
+	}
+	return s
 }
 
 func (m *SessionManager) ReadEditInfo() SessionInfo {

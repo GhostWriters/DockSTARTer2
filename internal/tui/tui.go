@@ -45,6 +45,9 @@ var (
 	// currentClientIP is the IP address of the active TUI session (set at startup).
 	currentClientIP string
 
+	// currentTransport is the transport type of the active TUI session: "local", "ssh", or "web".
+	currentTransport string
+
 	// isRootSession is true when the TUI was started with a plain -M pagename (no start- prefix).
 	// Root sessions suppress the Back button on the entry screen and re-exec to the same plain
 	// pagename after a self-update. Non-root sessions re-exec with the "start-" prefix so the
@@ -203,6 +206,7 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	}
 	clientIP, connType := parseClientInfo(pOpts.Environ)
 	currentClientIP = clientIP
+	currentTransport = connType
 	isSSH := pOpts.Input != nil
 
 	// Enable Virtual Terminal Processing (ANSI) on Windows early so color detection works
@@ -975,13 +979,23 @@ func editLockBusyMsg(info sessionlocks.SessionInfo, attempted string) string {
 		if conn == "" {
 			conn = "unknown"
 		}
+		sessionLabel := "Session"
+		switch info.Transport {
+		case "ssh":
+			sessionLabel = "SSH session"
+		case "web":
+			sessionLabel = "Web session"
+		case "local":
+			sessionLabel = "Local session"
+		}
+		sessionStr := info.FormatSession()
 		switch info.LockSource {
 		case "cli":
-			msg += fmt.Sprintf("\n\nEdit lock: Session {{|IPAddress|}}%s{{[-]}} is running CLI command '{{|RunningCommand|}}%s{{[-]}}'.", info.Session, conn)
+			msg += fmt.Sprintf("\n\nEdit lock: %s %s is running CLI command '{{|RunningCommand|}}%s{{[-]}}'.", sessionLabel, sessionStr, conn)
 		case "console":
-			msg += fmt.Sprintf("\n\nEdit lock: Session {{|IPAddress|}}%s{{[-]}} is running console command '{{|RunningCommand|}}%s{{[-]}}'.", info.Session, conn)
+			msg += fmt.Sprintf("\n\nEdit lock: %s %s is running console command '{{|RunningCommand|}}%s{{[-]}}'.", sessionLabel, sessionStr, conn)
 		default:
-			msg += fmt.Sprintf("\n\nEdit lock: Session {{|IPAddress|}}%s{{[-]}} is in the '{{|RunningCommand|}}%s{{[-]}}' menu.", info.Session, conn)
+			msg += fmt.Sprintf("\n\nEdit lock: %s %s is in the '{{|RunningCommand|}}%s{{[-]}}' menu.", sessionLabel, sessionStr, conn)
 		}
 	}
 	return msg
@@ -990,7 +1004,7 @@ func editLockBusyMsg(info sessionlocks.SessionInfo, attempted string) string {
 // TriggerComposeUpdate returns a tea.Cmd that starts all enabled apps via docker compose update.
 func TriggerComposeUpdate() tea.Cmd {
 	return func() tea.Msg {
-		if !sessionlocks.Sessions.AcquireEditLock(currentClientIP, "Start All Applications", "menu") {
+		if !sessionlocks.Sessions.AcquireEditLock(currentClientIP, "Start All Applications", "menu", currentTransport) {
 			return ShowMessageDialogMsg{Title: "Resource Busy", Message: editLockBusyMsg(sessionlocks.Sessions.ReadEditInfo(), ""), Type: MessageError}
 		}
 		task := func(ctx context.Context, w io.Writer) error {
@@ -1013,7 +1027,7 @@ func TriggerComposeUpdate() tea.Cmd {
 // TriggerComposeStop returns a tea.Cmd that prompts Stop/Down/Cancel then runs the chosen compose op.
 func TriggerComposeStop() tea.Cmd {
 	return func() tea.Msg {
-		if !sessionlocks.Sessions.AcquireEditLock(currentClientIP, "Stop All Applications", "menu") {
+		if !sessionlocks.Sessions.AcquireEditLock(currentClientIP, "Stop All Applications", "menu", currentTransport) {
 			return ShowMessageDialogMsg{Title: "Resource Busy", Message: editLockBusyMsg(sessionlocks.Sessions.ReadEditInfo(), ""), Type: MessageError}
 		}
 		question := "Would you like to {{|Highlight|}}Stop{{[-]}} all containers, or bring all containers {{|Highlight|}}Down{{[-]}}?\n\n{{|Highlight|}}Stop{{[-]}} will stop them, {{|Highlight|}}Down{{[-]}} will stop and remove them."
@@ -1046,7 +1060,7 @@ func TriggerComposeStop() tea.Cmd {
 // TriggerDockerPrune returns a tea.Cmd that runs docker system prune.
 func TriggerDockerPrune() tea.Cmd {
 	return func() tea.Msg {
-		if !sessionlocks.Sessions.AcquireEditLock(currentClientIP, "Prune Docker System", "menu") {
+		if !sessionlocks.Sessions.AcquireEditLock(currentClientIP, "Prune Docker System", "menu", currentTransport) {
 			return ShowMessageDialogMsg{Title: "Resource Busy", Message: editLockBusyMsg(sessionlocks.Sessions.ReadEditInfo(), ""), Type: MessageError}
 		}
 		task := func(ctx context.Context, w io.Writer) error {

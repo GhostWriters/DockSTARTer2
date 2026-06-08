@@ -182,10 +182,6 @@ func PrintServerStatus(_ context.Context, cfg config.ServerConfig) {
 	}
 	if sessionlocks.Sessions.IsEditLocked() {
 		editInfo := sessionlocks.Sessions.ReadEditInfo()
-		session := editInfo.Session
-		if session == "" {
-			session = "local"
-		}
 		connType := editInfo.ConnType
 		if connType == "" {
 			connType = "unknown"
@@ -199,7 +195,7 @@ func PrintServerStatus(_ context.Context, cfg config.ServerConfig) {
 		default: // "menu"
 			connTypeTag = fmt.Sprintf("{{|Version|}}%s{{[-]}}", connType)
 		}
-		fmt.Println(console.Sprintf("Editing:     %s from {{|IPAddress|}}%s{{[-]}}", connTypeTag, session))
+		fmt.Println(console.Sprintf("Editing:     %s from %s", connTypeTag, editInfo.FormatSession()))
 	} else {
 		fmt.Println("Editing:     no active editor")
 	}

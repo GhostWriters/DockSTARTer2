@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"os"
+
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/commands"
 	"DockSTARTer2/internal/config"
@@ -246,24 +248,34 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		// Block action commands when someone else is currently editing the configuration.
 		def := commandDefs[group.Command]
 		if def.SessionLocked {
-			if !sessionlocks.Sessions.AcquireEditLock("local", cmdStr, "cli") {
+			cliTransport := "local"
+			if os.Getenv("SSH_CONNECTION") != "" {
+				cliTransport = "ssh"
+			}
+			if !sessionlocks.Sessions.AcquireEditLock("local", cmdStr, "cli", cliTransport) {
 				info := sessionlocks.Sessions.ReadEditInfo()
-				session := info.Session
-				if session == "" {
-					session = "local"
-				}
 				conn := info.ConnType
 				if conn == "" {
 					conn = "unknown"
 				}
+				sessionLabel := "Session"
+				switch info.Transport {
+				case "ssh":
+					sessionLabel = "SSH session"
+				case "web":
+					sessionLabel = "Web session"
+				case "local":
+					sessionLabel = "Local session"
+				}
+				sessionStr := info.FormatSession()
 				var lockDetail string
 				switch info.LockSource {
 				case "cli":
-					lockDetail = fmt.Sprintf("Edit lock: Session {{|IPAddress|}}%s{{[-]}} is running CLI command '{{|UserCommand|}}%s{{[-]}}'.", session, conn)
+					lockDetail = fmt.Sprintf("{{|Warn|}}Edit lock:{{[-]}} %s %s is running CLI command '{{|UserCommand|}}%s{{[-]}}'.", sessionLabel, sessionStr, conn)
 				case "console":
-					lockDetail = fmt.Sprintf("Edit lock: Session {{|IPAddress|}}%s{{[-]}} is running console command '{{|RunningCommand|}}%s{{[-]}}'.", session, conn)
+					lockDetail = fmt.Sprintf("{{|Warn|}}Edit lock:{{[-]}} %s %s is running console command '{{|RunningCommand|}}%s{{[-]}}'.", sessionLabel, sessionStr, conn)
 				default:
-					lockDetail = fmt.Sprintf("Edit lock: Session {{|IPAddress|}}%s{{[-]}} is in the '{{|Version|}}%s{{[-]}}' menu.", session, conn)
+					lockDetail = fmt.Sprintf("{{|Warn|}}Edit lock:{{[-]}} %s %s is in the '{{|Version|}}%s{{[-]}}' menu.", sessionLabel, sessionStr, conn)
 				}
 				logger.Error(ctx, "Cannot run '{{|UserCommand|}}%s{{[-]}}' while the configuration is being edited.\n"+lockDetail, group.Command)
 				logger.Notice(ctx, "Use '{{|UserCommand|}}ds2 --server disconnect{{[-]}}' to force-release the lock.")
