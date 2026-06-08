@@ -161,7 +161,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				if conn == "" {
 					conn = "SSH"
 				}
-				logger.Error(ctx, "Cannot run '%s' while the configuration is being edited by a %s session from {{|Highlight|}}%s{{[-]}}.", group.Command, conn, ip)
+				logger.Error(ctx, "Cannot run '{{|UserCommand|}}%s{{[-]}}' while the configuration is being edited by a %s session from {{|IPAddress|}}%s{{[-]}}.", group.Command, conn, ip)
 				logger.Notice(ctx, "Use '{{|UserCommand|}}ds2 --server disconnect{{[-]}}' to force-release the lock.")
 				return 1
 			}

@@ -16,20 +16,32 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 )
 
-// UpdateTemplates handles updating the templates directory.
-func UpdateTemplates(ctx context.Context, force bool, yes bool, requestedBranch string) error {
+// TemplatesUpdateInfo holds the result of CheckTemplatesUpdate.
+// Pass it to ApplyTemplatesUpdate to perform the actual update without re-fetching.
+type TemplatesUpdateInfo struct {
+	HasUpdate       bool
+	CurrentDisplay  string
+	RemoteDisplay   string
+	repo            *git.Repository
+	remoteRef       *plumbing.Reference
+	requestedBranch string
+	force           bool
+}
+
+// CheckTemplatesUpdate fetches remote state and returns whether an update is available.
+// If force is true, HasUpdate is true even when already up to date.
+func CheckTemplatesUpdate(ctx context.Context, force bool, requestedBranch string) (*TemplatesUpdateInfo, error) {
 	templatesDir := paths.GetTemplatesDir()
 	if _, err := os.Stat(templatesDir); os.IsNotExist(err) {
-		return fmt.Errorf("templates directory not found at %s", templatesDir)
+		return nil, fmt.Errorf("templates directory not found at %s", templatesDir)
 	}
 
 	repo, err := git.PlainOpen(templatesDir)
 	if err != nil {
-		return fmt.Errorf("failed to open templates repo: %w", err)
+		return nil, fmt.Errorf("failed to open templates repo: %w", err)
 	}
 
 	if requestedBranch == "" {
-		// Default to the branch the templates repo is currently on, not necessarily "main"
 		if head, err := repo.Head(); err == nil && head.Name().IsBranch() {
 			requestedBranch = head.Name().Short()
 		} else {
@@ -37,7 +49,6 @@ func UpdateTemplates(ctx context.Context, force bool, yes bool, requestedBranch 
 		}
 	}
 
-	// Fetch updates to get remote hash
 	logger.Info(ctx, "Setting file ownership on current repository files")
 	system.SetPermissions(ctx, templatesDir)
 	logger.Info(ctx, "Fetching recent changes from git.")
@@ -52,31 +63,28 @@ func UpdateTemplates(ctx context.Context, force bool, yes bool, requestedBranch 
 		logger.Info(ctx, "{{|RunningCommand|}}git:{{[-]}}  = [up to date]      %-10s -> origin/%s", requestedBranch, requestedBranch)
 	}
 	if err != nil && err != git.NoErrAlreadyUpToDate {
-		return fmt.Errorf("failed to fetch templates: %w", err)
+		return nil, fmt.Errorf("failed to fetch templates: %w", err)
 	}
 
-	// Compare current HEAD with remote
 	head, err := repo.Head()
 	if err != nil {
-		return fmt.Errorf("failed to get templates HEAD: %w", err)
+		return nil, fmt.Errorf("failed to get templates HEAD: %w", err)
 	}
 	currentHash := head.Hash().String()[:7]
 	currentDisplay := paths.GetTemplatesVersion()
 
 	remoteRef, err := repo.Reference(plumbing.ReferenceName("refs/remotes/origin/"+requestedBranch), true)
 	if err != nil {
-		// Fallback to tags if branch not found
 		remoteRef, err = repo.Reference(plumbing.ReferenceName("refs/tags/"+requestedBranch), true)
 	}
 	if err != nil {
-		return fmt.Errorf("failed to resolve templates target %s: %w", requestedBranch, err)
+		return nil, fmt.Errorf("failed to resolve templates target %s: %w", requestedBranch, err)
 	}
 	remoteHash := remoteRef.Hash().String()
 	if len(remoteHash) > 7 {
 		remoteHash = remoteHash[:7]
 	}
 
-	// Try to find a tag for the remote commit
 	tags, _ := repo.Tags()
 	foundTag := ""
 	_ = tags.ForEach(func(ref *plumbing.Reference) error {
@@ -94,32 +102,43 @@ func UpdateTemplates(ctx context.Context, force bool, yes bool, requestedBranch 
 		remoteDisplay = fmt.Sprintf("%s commit %s", requestedBranch, remoteHash)
 	}
 
-	question := ""
-	initiationNotice := ""
+	hasUpdate := currentHash != remoteHash || force
+	return &TemplatesUpdateInfo{
+		HasUpdate:       hasUpdate,
+		CurrentDisplay:  currentDisplay,
+		RemoteDisplay:   remoteDisplay,
+		repo:            repo,
+		remoteRef:       remoteRef,
+		requestedBranch: requestedBranch,
+		force:           force,
+	}, nil
+}
+
+// ApplyTemplatesUpdate prompts and applies the update described by info.
+// Call CheckTemplatesUpdate first to obtain info.
+func ApplyTemplatesUpdate(ctx context.Context, info *TemplatesUpdateInfo, yes bool) error {
 	targetName := "DockSTARTer-Templates"
 	noNotice := fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} will not be updated.", targetName)
 
-	if currentHash == remoteHash {
-		logger.Notice(ctx, "{{|ApplicationName|}}%s{{[-]}} is already up to date on branch '{{|Branch|}}%s{{[-]}}'.", targetName, requestedBranch)
-		logger.Notice(ctx, "Current version is '{{|Version|}}%s{{[-]}}'", currentDisplay)
-
-		if force {
-			question = fmt.Sprintf("Would you like to forcefully re-apply {{|ApplicationName|}}%s{{[-]}} update '{{|Version|}}%s{{[-]}}'?", targetName, currentDisplay)
-			initiationNotice = fmt.Sprintf("Forcefully re-apply {{|ApplicationName|}}%s{{[-]}} update '{{|Version|}}%s{{[-]}}'", targetName, remoteDisplay)
-		} else {
-			return nil
-		}
-	} else {
-		question = fmt.Sprintf("Would you like to update {{|ApplicationName|}}%s{{[-]}} from '{{|Version|}}%s{{[-]}}' to '{{|Version|}}%s{{[-]}}' now?", targetName, currentDisplay, remoteDisplay)
-		initiationNotice = fmt.Sprintf("Updating {{|ApplicationName|}}%s{{[-]}} from '{{|Version|}}%s{{[-]}}' to '{{|Version|}}%s{{[-]}}'", targetName, currentDisplay, remoteDisplay)
+	var question, initiationNotice string
+	if !info.HasUpdate {
+		logger.Notice(ctx, "{{|ApplicationName|}}%s{{[-]}} is already up to date on branch '{{|Branch|}}%s{{[-]}}'.", targetName, info.requestedBranch)
+		logger.Notice(ctx, "Current version is '{{|Version|}}%s{{[-]}}'", info.CurrentDisplay)
+		return nil
 	}
 
-	// Wrap logger.Notice to match console.Printer
+	if info.force && info.CurrentDisplay == info.RemoteDisplay {
+		question = fmt.Sprintf("Would you like to forcefully re-apply {{|ApplicationName|}}%s{{[-]}} update '{{|Version|}}%s{{[-]}}'?", targetName, info.CurrentDisplay)
+		initiationNotice = fmt.Sprintf("Forcefully re-apply {{|ApplicationName|}}%s{{[-]}} update '{{|Version|}}%s{{[-]}}'", targetName, info.RemoteDisplay)
+	} else {
+		question = fmt.Sprintf("Would you like to update {{|ApplicationName|}}%s{{[-]}} from '{{|Version|}}%s{{[-]}}' to '{{|Version|}}%s{{[-]}}' now?", targetName, info.CurrentDisplay, info.RemoteDisplay)
+		initiationNotice = fmt.Sprintf("Updating {{|ApplicationName|}}%s{{[-]}} from '{{|Version|}}%s{{[-]}}' to '{{|Version|}}%s{{[-]}}'", targetName, info.CurrentDisplay, info.RemoteDisplay)
+	}
+
 	noticePrinter := func(ctx context.Context, msg any, args ...any) {
 		logger.Notice(ctx, msg, args...)
 	}
 
-	// Prompt user
 	answer, err := console.QuestionPrompt(ctx, noticePrinter, "Update", question, "Y", yes)
 	if err != nil {
 		return err
@@ -129,73 +148,67 @@ func UpdateTemplates(ctx context.Context, force bool, yes bool, requestedBranch 
 		return nil
 	}
 
-	// Execution
 	logger.Notice(ctx, initiationNotice)
-	w, err := repo.Worktree()
+	w, err := info.repo.Worktree()
 	if err != nil {
 		return fmt.Errorf("failed to get templates worktree: %w", err)
 	}
 
-	// Try checking out as branch first
-	logger.Info(ctx, "Running: {{|RunningCommand|}}git checkout --force %s{{[-]}}", requestedBranch)
+	logger.Info(ctx, "Running: {{|RunningCommand|}}git checkout --force %s{{[-]}}", info.requestedBranch)
 	err = w.Checkout(&git.CheckoutOptions{
-		Branch: plumbing.NewBranchReferenceName(requestedBranch),
+		Branch: plumbing.NewBranchReferenceName(info.requestedBranch),
 		Force:  true,
 	})
 	if err != nil {
-		// If branch doesn't exist locally, create it and check it out tracking the remote hash
 		err = w.Checkout(&git.CheckoutOptions{
-			Hash:   remoteRef.Hash(),
-			Branch: plumbing.NewBranchReferenceName(requestedBranch),
+			Hash:   info.remoteRef.Hash(),
+			Branch: plumbing.NewBranchReferenceName(info.requestedBranch),
 			Create: true,
 			Force:  true,
 		})
 	}
 	if err != nil {
-		// Fallback to tag
 		err = w.Checkout(&git.CheckoutOptions{
-			Branch: plumbing.NewTagReferenceName(requestedBranch),
+			Branch: plumbing.NewTagReferenceName(info.requestedBranch),
 			Force:  true,
 		})
 	}
 	if err != nil {
-		// Fallback to specific commit/reference as a last resort (this results in detached HEAD)
 		err = w.Checkout(&git.CheckoutOptions{
-			Hash:  remoteRef.Hash(),
+			Hash:  info.remoteRef.Hash(),
 			Force: true,
 		})
 	}
 	if err == nil {
-		logger.Info(ctx, "{{|RunningCommand|}}git:{{[-]}} Already on '%s'", requestedBranch)
-		logger.Info(ctx, "{{|RunningCommand|}}git:{{[-]}} Your branch is up to date with 'origin/%s'.", requestedBranch)
+		logger.Info(ctx, "{{|RunningCommand|}}git:{{[-]}} Already on '%s'", info.requestedBranch)
+		logger.Info(ctx, "{{|RunningCommand|}}git:{{[-]}} Your branch is up to date with 'origin/%s'.", info.requestedBranch)
 	}
 
 	if err != nil {
-		// Final attempt: try pulling if it's the current branch
 		logger.Info(ctx, "Pulling recent changes from git.")
 		logger.Info(ctx, "Running: {{|RunningCommand|}}git pull{{[-]}}")
 		err = w.Pull(&git.PullOptions{
 			RemoteName:    "origin",
-			ReferenceName: plumbing.ReferenceName("refs/heads/" + requestedBranch),
+			ReferenceName: plumbing.ReferenceName("refs/heads/" + info.requestedBranch),
 		})
 	} else {
 		logger.Info(ctx, "Pulling recent changes from git.")
-		hash := remoteRef.Hash().String()[:7]
+		hash := info.remoteRef.Hash().String()[:7]
 		logger.Info(ctx, "Running: {{|RunningCommand|}}git reset --hard %s{{[-]}}", hash)
 		err = w.Reset(&git.ResetOptions{
 			Mode:   git.HardReset,
-			Commit: remoteRef.Hash(),
+			Commit: info.remoteRef.Hash(),
 		})
 	}
 
 	if err != nil && err != git.NoErrAlreadyUpToDate {
-		return fmt.Errorf("failed to update templates to %s: %w", requestedBranch, err)
+		return fmt.Errorf("failed to update templates to %s: %w", info.requestedBranch, err)
 	}
 
 	if err == nil {
-		newHead, _ := repo.Head()
+		newHead, _ := info.repo.Head()
 		if newHead != nil {
-			commit, _ := repo.CommitObject(newHead.Hash())
+			commit, _ := info.repo.CommitObject(newHead.Hash())
 			if commit != nil {
 				subject := strings.Split(commit.Message, "\n")[0]
 				hash := newHead.Hash().String()[:7]
@@ -207,29 +220,34 @@ func UpdateTemplates(ctx context.Context, force bool, yes bool, requestedBranch 
 		logger.Info(ctx, "Cleaning up unnecessary files and optimizing the local repository.")
 		logger.Info(ctx, "Running: {{|RunningCommand|}}git gc{{[-]}}")
 		logger.Info(ctx, "Setting file ownership on new repository files")
-		system.SetPermissions(ctx, templatesDir)
+		system.SetPermissions(ctx, paths.GetTemplatesDir())
 	}
 
 	logger.Notice(ctx, "Updated {{|ApplicationName|}}%s{{[-]}} to '{{|Version|}}%s{{[-]}}'", targetName, paths.GetTemplatesVersion())
 	appenv.InvalidateAppMetaCache()
-
-	// Reset all needs markers (DELETED ResetNeeds in favor of granular detection)
 	system.SetPermissions(ctx, paths.GetTimestampsDir())
 
 	return nil
 }
 
+// UpdateTemplates handles updating the templates directory.
+func UpdateTemplates(ctx context.Context, force bool, yes bool, requestedBranch string) error {
+	info, err := CheckTemplatesUpdate(ctx, force, requestedBranch)
+	if err != nil {
+		return err
+	}
+	return ApplyTemplatesUpdate(ctx, info, yes)
+}
+
 // EnsureTemplates checks if the templates directory exists and clones it if missing.
 func EnsureTemplates(ctx context.Context) error {
 	templatesDir := paths.GetTemplatesDir()
-	// Check if the directory is a valid git repository
 	if _, err := git.PlainOpen(templatesDir); err == nil {
 		return nil
 	}
 
 	logger.Warn(ctx, "Attempting to clone {{|ApplicationName|}}DockSTARTer-Templates{{[-]}} repo to '{{|Folder|}}%s{{[-]}}' location.", templatesDir)
 
-	// Remove if exists but is invalid (no .git)
 	if _, err := os.Stat(templatesDir); err == nil {
 		logger.Notice(ctx, "Running: {{|RunningCommand|}}rm -rf %s{{[-]}}", templatesDir)
 		if err := os.RemoveAll(templatesDir); err != nil {
@@ -238,7 +256,7 @@ func EnsureTemplates(ctx context.Context) error {
 	}
 
 	url := "https://github.com/GhostWriters/DockSTARTer-Templates"
-	branch := "main" // Default branch
+	branch := "main"
 
 	logger.Notice(ctx, "Running: {{|RunningCommand|}}git clone -b %s %s %s{{[-]}}", branch, url, templatesDir)
 	logger.Notice(ctx, "{{|RunningCommand|}}git:{{[-]}} Cloning into '%s'.", templatesDir)
@@ -247,9 +265,5 @@ func EnsureTemplates(ctx context.Context) error {
 		URL:           url,
 		ReferenceName: plumbing.ReferenceName("refs/heads/" + branch),
 	})
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
