@@ -179,7 +179,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				case "console":
 					lockDetail = fmt.Sprintf("{{|Warn|}}Edit lock:{{[-]}} %s %s is running console command '{{|RunningCommand|}}%s{{[-]}}'.", sessionLabel, sessionStr, conn)
 				default:
-					lockDetail = fmt.Sprintf("{{|Warn|}}Edit lock:{{[-]}} %s %s is in the '{{|Version|}}%s{{[-]}}' menu.", sessionLabel, sessionStr, conn)
+					lockDetail = fmt.Sprintf("{{|Warn|}}Edit lock:{{[-]}} %s %s is in the '{{|MenuPage|}}%s{{[-]}}' menu.", sessionLabel, sessionStr, conn)
 				}
 				errMsg := "Cannot run '{{|UserCommand|}}%s{{[-]}}' while the configuration is being edited.\n" + lockDetail
 				if info.Transport == "ssh-server" || info.Transport == "web" {
