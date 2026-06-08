@@ -79,7 +79,8 @@ type SessionManager struct {
 	disconnectReqPath string // $STATE/disconnect.request
 	stopReqPath       string // $STATE/stop.request
 
-	localOwner string // tracks which part of the current process holds the lock (e.g. "Menu", "Console")
+	localOwner  string // tracks which part of the current process holds the lock (e.g. "Menu", "Console")
+	localSource string // "menu", "cli", or "console" — used to allow re-entry from same source
 }
 
 // SessionInfo holds the details read from a session lock file.
@@ -199,7 +200,7 @@ func (m *SessionManager) AcquireEditLock(clientIP, connType, lockSource, transpo
 	defer m.mu.Unlock()
 
 	if m.editActive {
-		return m.localOwner == connType
+		return m.localSource == lockSource
 	}
 
 	for i := 0; i < 3; i++ {
@@ -211,6 +212,7 @@ func (m *SessionManager) AcquireEditLock(clientIP, connType, lockSource, transpo
 		if err == nil && locked {
 			m.editActive = true
 			m.localOwner = connType
+			m.localSource = lockSource
 			terminal := DetectTerminal()
 			if clientIP != "" && clientIP != "local" {
 				for _, cs := range m.ListConnectedSessions() {
@@ -269,6 +271,7 @@ func (m *SessionManager) ReleaseEditLock() {
 	}
 	m.editActive = false
 	m.localOwner = ""
+	m.localSource = ""
 	if m.editFlock != nil {
 		_ = m.editFlock.Unlock()
 	}
@@ -554,6 +557,33 @@ func (m *SessionManager) SeedInstalledVersion(exePath, currentVersion string) {
 	_ = m.WriteInstalledVersion(exePath, currentVersion)
 }
 
+// UpdateEditLockConnType rewrites the conn_type field in the active edit lock file.
+// Used to reflect the current activity (e.g. switching from menu to var editor and back).
+func (m *SessionManager) UpdateEditLockConnType(connType string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !m.editActive {
+		return
+	}
+	r := m.readEditLockRecord()
+	if r.PID == 0 {
+		return
+	}
+	r.ConnType = connType
+	m.localOwner = connType
+	_ = writeTomlFile(m.editLockPath, r)
+}
+
+func (m *SessionManager) readEditLockRecord() editLockRecord {
+	var r editLockRecord
+	data, err := os.ReadFile(m.editLockPath)
+	if err != nil {
+		return r
+	}
+	_ = toml.Unmarshal(data, &r)
+	return r
+}
+
 // FormatSession returns a tag-annotated session string matching the instance-list style:
 // {{|IPAddress|}}ip:port{{[-]}} ({{|RunningCommand|}}terminal{{[-]}})
 // If terminal is empty, the parens are omitted.
@@ -612,6 +642,7 @@ func (m *SessionManager) ForceRelease() {
 	defer m.mu.Unlock()
 	m.editActive = false
 	m.localOwner = ""
+	m.localSource = ""
 	if m.editFlock != nil {
 		_ = m.editFlock.Unlock()
 	}
