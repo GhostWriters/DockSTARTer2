@@ -263,9 +263,9 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				case "local", "ssh":
 					sessionLabel = "Terminal session"
 				case "ssh-server":
-					sessionLabel = "SSH server session"
+					sessionLabel = "SSH Server session"
 				case "web":
-					sessionLabel = "Web server session"
+					sessionLabel = "Web Server session"
 				}
 				sessionStr := info.FormatSession()
 				var lockDetail string
