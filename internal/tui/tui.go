@@ -963,8 +963,12 @@ func TriggerUpdate() tea.Cmd {
 }
 
 // editLockBusyMsg builds the "Resource Busy" dialog message from the current lock info.
-func editLockBusyMsg(info sessionlocks.SessionInfo) string {
+// attempted is the action that was blocked (command or screen title); empty string omits it.
+func editLockBusyMsg(info sessionlocks.SessionInfo, attempted string) string {
 	msg := "Configuration is currently being edited."
+	if attempted != "" {
+		msg = fmt.Sprintf("Cannot open '{{|UserCommand|}}%s{{[-]}}' while the configuration is being edited.", attempted)
+	}
 	if info.ClientIP != "" {
 		conn := info.ConnType
 		if conn == "" {
@@ -986,7 +990,7 @@ func editLockBusyMsg(info sessionlocks.SessionInfo) string {
 func TriggerComposeUpdate() tea.Cmd {
 	return func() tea.Msg {
 		if !sessionlocks.Sessions.AcquireEditLock(currentClientIP, "Start All Applications", "menu") {
-			return ShowMessageDialogMsg{Title: "Resource Busy", Message: editLockBusyMsg(sessionlocks.Sessions.ReadEditInfo()), Type: MessageError}
+			return ShowMessageDialogMsg{Title: "Resource Busy", Message: editLockBusyMsg(sessionlocks.Sessions.ReadEditInfo(), ""), Type: MessageError}
 		}
 		task := func(ctx context.Context, w io.Writer) error {
 			defer sessionlocks.Sessions.ReleaseEditLock()
@@ -1009,7 +1013,7 @@ func TriggerComposeUpdate() tea.Cmd {
 func TriggerComposeStop() tea.Cmd {
 	return func() tea.Msg {
 		if !sessionlocks.Sessions.AcquireEditLock(currentClientIP, "Stop All Applications", "menu") {
-			return ShowMessageDialogMsg{Title: "Resource Busy", Message: editLockBusyMsg(sessionlocks.Sessions.ReadEditInfo()), Type: MessageError}
+			return ShowMessageDialogMsg{Title: "Resource Busy", Message: editLockBusyMsg(sessionlocks.Sessions.ReadEditInfo(), ""), Type: MessageError}
 		}
 		question := "Would you like to {{|Highlight|}}Stop{{[-]}} all containers, or bring all containers {{|Highlight|}}Down{{[-]}}?\n\n{{|Highlight|}}Stop{{[-]}} will stop them, {{|Highlight|}}Down{{[-]}} will stop and remove them."
 		task := func(ctx context.Context, w io.Writer) error {
@@ -1042,7 +1046,7 @@ func TriggerComposeStop() tea.Cmd {
 func TriggerDockerPrune() tea.Cmd {
 	return func() tea.Msg {
 		if !sessionlocks.Sessions.AcquireEditLock(currentClientIP, "Prune Docker System", "menu") {
-			return ShowMessageDialogMsg{Title: "Resource Busy", Message: editLockBusyMsg(sessionlocks.Sessions.ReadEditInfo()), Type: MessageError}
+			return ShowMessageDialogMsg{Title: "Resource Busy", Message: editLockBusyMsg(sessionlocks.Sessions.ReadEditInfo(), ""), Type: MessageError}
 		}
 		task := func(ctx context.Context, w io.Writer) error {
 			defer sessionlocks.Sessions.ReleaseEditLock()
