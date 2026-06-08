@@ -2,6 +2,7 @@ package console
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	tcellColor "github.com/gdamore/tcell/v3/color"
@@ -168,7 +169,7 @@ func init() {
 		UserCommand:            "{{[-]}}{{[yellow::B]}}",
 		UserCommandError:       "{{[-]}}{{[red::U]}}",
 		UserCommandErrorMarker: "{{[-]}}{{[red]}}",
-		MenuPage:               "{{|Version|}}",
+		MenuPage:               "{{[-]}}{{[cyan]}}",
 		Var:                    "{{[-]}}{{[magenta]}}",
 		Version:                "{{[-]}}{{[cyan]}}",
 		Yes:                    "{{[-]}}{{[green]}}",
@@ -315,9 +316,20 @@ type AppColors struct {
 // Colors is the global instance for application output (stdout)
 var Colors AppColors
 
-// RegisterBaseTags registers semantic tag aliases
-// These map semantic names to their tview-format output values
+// RegisterBaseTags registers semantic tag aliases from AppColors struct fields
+// and a small set of static aliases not covered by the struct.
 func RegisterBaseTags() {
+	// Auto-register all AppColors struct fields by lowercased field name.
+	v := reflect.ValueOf(Colors)
+	t := v.Type()
+	for i := range t.NumField() {
+		field := t.Field(i)
+		val := v.Field(i).String()
+		if val != "" {
+			RegisterConsoleTag(strings.ToLower(field.Name), val)
+		}
+	}
+
 	// Bash-style aliases from main.sh
 	RegisterConsoleTag("NC", "{{[-]}}")
 	RegisterConsoleTag("BD", "{{[::B]}}")
@@ -329,66 +341,7 @@ func RegisterBaseTags() {
 	RegisterConsoleTag("ul", "{{[::U]}}")
 	RegisterConsoleTag("blink", "{{[::L]}}")
 
-	// Semantic tags from struct fields (auto-registered by BuildColorMap)
-	// Double-register here for explicit visibility and aliasMap access
-	RegisterConsoleTag("applicationname", Colors.ApplicationName)
-	RegisterConsoleTag("version", Colors.Version)
-	RegisterConsoleTag("branch", Colors.Branch)
-	RegisterConsoleTag("usercommand", Colors.UserCommand)
-	RegisterConsoleTag("usercommanderror", Colors.UserCommandError)
-	RegisterConsoleTag("usercommanderrormarker", Colors.UserCommandErrorMarker)
-	RegisterConsoleTag("yes", Colors.Yes)
-	RegisterConsoleTag("no", Colors.No)
-
-	// Usage Colors
-	RegisterConsoleTag("usagecommand", Colors.UsageCommand)
-	RegisterConsoleTag("usageoption", Colors.UsageOption)
-	RegisterConsoleTag("usageapp", Colors.UsageApp)
-	RegisterConsoleTag("usagebranch", Colors.UsageBranch)
-	RegisterConsoleTag("usagefile", Colors.UsageFile)
-	RegisterConsoleTag("usagepage", Colors.UsagePage)
-	RegisterConsoleTag("usagetheme", Colors.UsageTheme)
-	RegisterConsoleTag("usagevar", Colors.UsageVar)
-
-	// Viewport Tags
-	RegisterConsoleTag("programbox", Colors.ProgramBox)
-	RegisterConsoleTag("consolebox", Colors.ConsoleBox)
-
-	// Log Level Tags
-	RegisterConsoleTag("timestamp", Colors.Timestamp)
-	RegisterConsoleTag("notice", Colors.Notice)
-	RegisterConsoleTag("warn", Colors.Warn)
-	RegisterConsoleTag("error", Colors.Error)
-	RegisterConsoleTag("fatal", Colors.Fatal)
-	RegisterConsoleTag("debug", Colors.Debug)
-	RegisterConsoleTag("info", Colors.Info)
-	RegisterConsoleTag("trace", Colors.Trace)
-	RegisterConsoleTag("ipaddress", Colors.IPAddress)
-	RegisterConsoleTag("url", Colors.URL)
-	RegisterConsoleTag("traceheader", Colors.TraceHeader)
-	RegisterConsoleTag("tracefooter", Colors.TraceFooter)
-	RegisterConsoleTag("traceframenumber", Colors.TraceFrameNumber)
-	RegisterConsoleTag("traceframelines", Colors.TraceFrameLines)
-	RegisterConsoleTag("tracesourcefile", Colors.TraceSourceFile)
-	RegisterConsoleTag("tracelinenumber", Colors.TraceLineNumber)
-	RegisterConsoleTag("tracefunction", Colors.TraceFunction)
-	RegisterConsoleTag("tracecmd", Colors.TraceCmd)
-	RegisterConsoleTag("tracecmdargs", Colors.TraceCmdArgs)
-
-	// Additional Semantic Tags
-	RegisterConsoleTag("app", Colors.App)
-	RegisterConsoleTag("failingcommand", Colors.FailingCommand)
-	RegisterConsoleTag("file", Colors.File)
-	RegisterConsoleTag("folder", Colors.Folder)
-	RegisterConsoleTag("program", Colors.Program)
-	RegisterConsoleTag("runningcommand", Colors.RunningCommand)
-	RegisterConsoleTag("theme", Colors.Theme)
-	RegisterConsoleTag("update", Colors.Update)
-	RegisterConsoleTag("user", Colors.User)
-	RegisterConsoleTag("menupage", Colors.MenuPage)
-	RegisterConsoleTag("var", Colors.Var)
-
-	// Legacy Foreground Colors (F array in main.sh)
+	// Legacy single-letter foreground aliases (F array in main.sh)
 	RegisterConsoleTag("B", Colors.Blue)
 	RegisterConsoleTag("C", Colors.Cyan)
 	RegisterConsoleTag("G", Colors.Green)
@@ -398,7 +351,7 @@ func RegisterBaseTags() {
 	RegisterConsoleTag("W", Colors.White)
 	RegisterConsoleTag("Y", Colors.Yellow)
 
-	// Explicit F Array Aliases
+	// Explicit F_ aliases
 	RegisterConsoleTag("F_B", Colors.Blue)
 	RegisterConsoleTag("F_C", Colors.Cyan)
 	RegisterConsoleTag("F_G", Colors.Green)
@@ -408,7 +361,7 @@ func RegisterBaseTags() {
 	RegisterConsoleTag("F_W", Colors.White)
 	RegisterConsoleTag("F_Y", Colors.Yellow)
 
-	// Legacy Background Colors (B array in main.sh)
+	// Legacy background aliases (B array in main.sh)
 	RegisterConsoleTag("B_B", Colors.BlueBg)
 	RegisterConsoleTag("B_C", Colors.CyanBg)
 	RegisterConsoleTag("B_G", Colors.GreenBg)
@@ -418,9 +371,6 @@ func RegisterBaseTags() {
 	RegisterConsoleTag("B_W", Colors.WhiteBg)
 	RegisterConsoleTag("B_Y", Colors.YellowBg)
 
-	RegisterConsoleTag("unittestpass", Colors.UnitTestPass)
-	RegisterConsoleTag("unittestfail", Colors.UnitTestFail)
-	RegisterConsoleTag("unittestfailarrow", Colors.UnitTestFailArrow)
 	// NOTE: Theme-related tags (ThemeHostname, ThemeTitle, etc.) are registered
 	// by the theme package in theme.go Default() and Apply() functions.
 }
