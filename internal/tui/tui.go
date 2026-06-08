@@ -167,6 +167,9 @@ func parseClientInfo(environ []string) (string, string) {
 		if strings.HasPrefix(env, "SSH_CONNECTION=") {
 			connType = "ssh"
 		}
+		if strings.HasPrefix(env, "DS2_CONN_TYPE=") {
+			connType = strings.TrimPrefix(env, "DS2_CONN_TYPE=")
+		}
 	}
 	return clientIP, connType
 }
@@ -981,12 +984,12 @@ func editLockBusyMsg(info sessionlocks.SessionInfo, attempted string) string {
 		}
 		sessionLabel := "Session"
 		switch info.Transport {
-		case "ssh":
-			sessionLabel = "SSH session"
+		case "local", "ssh":
+			sessionLabel = "Terminal session"
+		case "ssh-server":
+			sessionLabel = "SSH server session"
 		case "web":
-			sessionLabel = "Web session"
-		case "local":
-			sessionLabel = "Local session"
+			sessionLabel = "Web server session"
 		}
 		sessionStr := info.FormatSession()
 		switch info.LockSource {

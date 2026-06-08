@@ -80,6 +80,9 @@ func tuiMiddleware(startMenu string) wish.Middleware {
 			envs := s.Environ()
 			envs = append(envs, "TERM="+ptyReq.Term)
 			envs = append(envs, "DS2_CLIENT_IP="+clientIP)
+			if s.User() != "web" {
+				envs = append(envs, "DS2_CONN_TYPE=ssh-server")
+			}
 			opts := tui.ProgramOptions{
 				Input:         s,
 				Output:        s,
