@@ -973,33 +973,24 @@ func TriggerUpdate() tea.Cmd {
 // editLockBusyMsg builds the "Resource Busy" dialog message from the current lock info.
 // attempted is the action that was blocked (command or screen title); empty string omits it.
 func editLockBusyMsg(info sessionlocks.SessionInfo, attempted string) string {
-	msg := "Configuration is currently being edited."
-	if attempted != "" {
-		msg = fmt.Sprintf("Cannot open '{{|UserCommand|}}%s{{[-]}}' while the configuration is being edited.", attempted)
+	detailLines, hint := sessionlocks.EditLockDetail(info)
+	var msg string
+	for i, line := range detailLines {
+		if i > 0 {
+			msg += "\n"
+		}
+		msg += line
 	}
-	if info.Session != "" {
-		conn := info.ConnType
-		if conn == "" {
-			conn = "unknown"
-		}
-		sessionLabel := "Session"
-		switch info.Transport {
-		case "local", "ssh":
-			sessionLabel = "Terminal session"
-		case "ssh-server":
-			sessionLabel = "SSH Server session"
-		case "web":
-			sessionLabel = "Web Server session"
-		}
-		sessionStr := info.FormatSession()
-		switch info.LockSource {
-		case "cli":
-			msg += fmt.Sprintf("\n\nEdit lock: %s %s is running CLI command '{{|RunningCommand|}}%s{{[-]}}'.", sessionLabel, sessionStr, conn)
-		case "console":
-			msg += fmt.Sprintf("\n\nEdit lock: %s %s is running console command '{{|RunningCommand|}}%s{{[-]}}'.", sessionLabel, sessionStr, conn)
-		default:
-			msg += fmt.Sprintf("\n\nEdit lock: %s %s is in the '{{|MenuPage|}}%s{{[-]}}' menu.", sessionLabel, sessionStr, conn)
-		}
+	closing := "Configuration is currently being edited."
+	if attempted != "" {
+		closing = fmt.Sprintf("Cannot open '{{|UserCommand|}}%s{{[-]}}' while the configuration is being edited.", attempted)
+	}
+	if msg != "" {
+		msg += "\n\n"
+	}
+	msg += closing
+	if hint != "" {
+		msg += "\n" + hint
 	}
 	return msg
 }

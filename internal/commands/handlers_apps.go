@@ -72,7 +72,9 @@ func HandleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, res
 		}
 		templInfo, err := update.CheckTemplatesUpdate(ctx, state.Force, templBranch)
 		if err == nil && templInfo.HasUpdate && sessionlocks.Sessions.IsEditLocked() {
-			logger.Warn(ctx, "Skipping template update from '{{|Version|}}%s{{[-]}}' to '{{|Version|}}%s{{[-]}}' while configuration is being edited.", templInfo.CurrentDisplay, templInfo.RemoteDisplay)
+			info := sessionlocks.Sessions.ReadEditInfo()
+			closing := fmt.Sprintf("Skipping template update from '{{|Version|}}%s{{[-]}}' to '{{|Version|}}%s{{[-]}}' while configuration is being edited.", templInfo.CurrentDisplay, templInfo.RemoteDisplay)
+			logger.Warn(ctx, sessionlocks.EditLockLines(info, closing))
 		} else if err == nil {
 			_ = update.ApplyTemplatesUpdate(ctx, templInfo, state.Yes)
 		}
@@ -88,7 +90,12 @@ func HandleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, res
 		if len(group.Args) > 0 {
 			templBranch = group.Args[0]
 		}
-		_ = update.UpdateTemplates(ctx, state.Force, state.Yes, templBranch)
+		if sessionlocks.Sessions.IsEditLocked() {
+			info := sessionlocks.Sessions.ReadEditInfo()
+			logger.Warn(ctx, sessionlocks.EditLockLines(info, "Skipping template update while configuration is being edited."))
+		} else {
+			_ = update.UpdateTemplates(ctx, state.Force, state.Yes, templBranch)
+		}
 	}
 	// Server restart after update is handled by the cmd-layer caller (which has access to serve).
 	return nil

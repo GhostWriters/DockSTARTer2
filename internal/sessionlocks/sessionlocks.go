@@ -744,3 +744,72 @@ func (m *SessionManager) IsStopRequested() bool {
 	_, err := os.Stat(m.stopReqPath)
 	return err == nil
 }
+
+// SessionLabel returns the display label for a session transport type.
+func SessionLabel(transport string) string {
+	switch transport {
+	case "local", "ssh":
+		return "Terminal session"
+	case "ssh-server":
+		return "SSH Server session"
+	case "web":
+		return "Web Server session"
+	default:
+		return "Session"
+	}
+}
+
+// EditLockDetail returns the lock detail lines and an optional disconnect hint
+// for a SessionInfo. The detail lines describe who holds the lock and what they
+// are doing. The hint is non-empty only for ssh-server and web sessions.
+// Use EditLockLines when you want all lines together (e.g. logger calls).
+//
+// Format of detail lines:
+//
+//	Edit lock:
+//	    <session>
+//	    <action>
+func EditLockDetail(info SessionInfo) (lines []string, hint string) {
+	if info.Session == "" {
+		return nil, ""
+	}
+	conn := info.ConnType
+	if conn == "" {
+		conn = "unknown"
+	}
+	label := SessionLabel(info.Transport)
+	session := info.FormatSession()
+	var action string
+	switch info.LockSource {
+	case "cli":
+		action = fmt.Sprintf("Running CLI command '{{|RunningCommand|}}%s{{[-]}}'.", conn)
+	case "console":
+		action = fmt.Sprintf("Running console command '{{|RunningCommand|}}%s{{[-]}}'.", conn)
+	default:
+		action = fmt.Sprintf("In the '{{|MenuPage|}}%s{{[-]}}' menu.", conn)
+	}
+	lines = []string{
+		"{{|Warn|}}Edit lock:{{[-]}}",
+		fmt.Sprintf("    %s %s", label, session),
+		"    " + action,
+	}
+	if info.Transport == "ssh-server" || info.Transport == "web" {
+		hint = "Use '{{|UserCommand|}}ds2 --server disconnect{{[-]}}' to force-release the lock."
+	}
+	return lines, hint
+}
+
+// EditLockLines returns all lock detail lines as a flat slice suitable for
+// passing to logger.Warn or logger.Error. closing is appended before the
+// disconnect hint when non-empty (e.g. "Cannot run '-e' while the
+// configuration is being edited.").
+func EditLockLines(info SessionInfo, closing string) []string {
+	lines, hint := EditLockDetail(info)
+	if closing != "" {
+		lines = append(lines, closing)
+	}
+	if hint != "" {
+		lines = append(lines, hint)
+	}
+	return lines
+}

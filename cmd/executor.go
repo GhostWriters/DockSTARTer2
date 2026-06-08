@@ -254,34 +254,8 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			}
 			if !sessionlocks.Sessions.AcquireEditLock("local", cmdStr, "cli", cliTransport) {
 				info := sessionlocks.Sessions.ReadEditInfo()
-				conn := info.ConnType
-				if conn == "" {
-					conn = "unknown"
-				}
-				sessionLabel := "Session"
-				switch info.Transport {
-				case "local", "ssh":
-					sessionLabel = "Terminal session"
-				case "ssh-server":
-					sessionLabel = "SSH Server session"
-				case "web":
-					sessionLabel = "Web Server session"
-				}
-				sessionStr := info.FormatSession()
-				var lockDetail string
-				switch info.LockSource {
-				case "cli":
-					lockDetail = fmt.Sprintf("{{|Warn|}}Edit lock:{{[-]}} %s %s is running CLI command '{{|RunningCommand|}}%s{{[-]}}'.", sessionLabel, sessionStr, conn)
-				case "console":
-					lockDetail = fmt.Sprintf("{{|Warn|}}Edit lock:{{[-]}} %s %s is running console command '{{|RunningCommand|}}%s{{[-]}}'.", sessionLabel, sessionStr, conn)
-				default:
-					lockDetail = fmt.Sprintf("{{|Warn|}}Edit lock:{{[-]}} %s %s is in the '{{|MenuPage|}}%s{{[-]}}' menu.", sessionLabel, sessionStr, conn)
-				}
-				errMsg := "Cannot run '{{|UserCommand|}}%s{{[-]}}' while the configuration is being edited.\n" + lockDetail
-				if info.Transport == "ssh-server" || info.Transport == "web" {
-					errMsg += "\nUse '{{|UserCommand|}}ds2 --server disconnect{{[-]}}' to force-release the lock."
-				}
-				logger.Error(ctx, errMsg, group.Command)
+				closing := fmt.Sprintf("Cannot run '{{|UserCommand|}}%s{{[-]}}' while the configuration is being edited.", group.Command)
+				logger.Error(ctx, sessionlocks.EditLockLines(info, closing))
 				return 1
 			}
 		}
