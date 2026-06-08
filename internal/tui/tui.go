@@ -972,11 +972,11 @@ func editLockBusyMsg(info sessionlocks.SessionInfo) string {
 		}
 		switch info.LockSource {
 		case "cli":
-			msg += fmt.Sprintf("\n\nEdit lock: Session {{|TitleQuestion|}}%s{{[-]}} is running CLI command '{{|RunningCommand|}}%s{{[-]}}'.", info.ClientIP, conn)
+			msg += fmt.Sprintf("\n\nEdit lock: Session {{|IPAddress|}}%s{{[-]}} is running CLI command '{{|RunningCommand|}}%s{{[-]}}'.", info.ClientIP, conn)
 		case "console":
-			msg += fmt.Sprintf("\n\nEdit lock: Session {{|TitleQuestion|}}%s{{[-]}} is running console command '{{|RunningCommand|}}%s{{[-]}}'.", info.ClientIP, conn)
+			msg += fmt.Sprintf("\n\nEdit lock: Session {{|IPAddress|}}%s{{[-]}} is running console command '{{|RunningCommand|}}%s{{[-]}}'.", info.ClientIP, conn)
 		default:
-			msg += fmt.Sprintf("\n\nEdit lock: Session {{|TitleQuestion|}}%s{{[-]}} is in the '{{|RunningCommand|}}%s{{[-]}}' menu.", info.ClientIP, conn)
+			msg += fmt.Sprintf("\n\nEdit lock: Session {{|IPAddress|}}%s{{[-]}} is in the '{{|RunningCommand|}}%s{{[-]}}' menu.", info.ClientIP, conn)
 		}
 	}
 	return msg
