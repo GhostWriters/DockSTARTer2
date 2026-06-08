@@ -181,8 +181,11 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				default:
 					lockDetail = fmt.Sprintf("{{|Warn|}}Edit lock:{{[-]}} %s %s is in the '{{|Version|}}%s{{[-]}}' menu.", sessionLabel, sessionStr, conn)
 				}
-				logger.Error(ctx, "Cannot run '{{|UserCommand|}}%s{{[-]}}' while the configuration is being edited.\n"+lockDetail, group.Command)
-				logger.Notice(ctx, "Use '{{|UserCommand|}}ds2 --server disconnect{{[-]}}' to force-release the lock.")
+				errMsg := "Cannot run '{{|UserCommand|}}%s{{[-]}}' while the configuration is being edited.\n" + lockDetail
+				if info.Transport == "ssh-server" || info.Transport == "web" {
+					errMsg += "\nUse '{{|UserCommand|}}ds2 --server disconnect{{[-]}}' to force-release the lock."
+				}
+				logger.Error(ctx, errMsg, group.Command)
 				return 1
 			}
 		}
