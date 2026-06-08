@@ -217,8 +217,6 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 
 	// For all other operations: merge first (now that user confirmed), then run SDK operation
 	if command != "down" && command != "stop" && command != "pause" && command != "unpause" {
-		// Operations that need an up-to-date compose file first
-		logger.Notice(ctx, "Preparing compose file, please wait...")
 		if err := MergeYML(ctx, force); err != nil {
 			return err
 		}
@@ -329,7 +327,6 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 		return fmt.Errorf("failed to create compose service: %w", err)
 	}
 
-	// Log the equivalent CLI command for transparency
 	logRunning := func(opArgs ...string) {
 		fullCmd := []string{"docker", "compose", "--project-directory", conf.ComposeDir + "/"}
 		fullCmd = append(fullCmd, opArgs...)

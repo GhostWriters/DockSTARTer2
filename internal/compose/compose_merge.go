@@ -182,12 +182,9 @@ func MergeYML(ctx context.Context, force bool) error {
 			logger.Warn(ctx, "Failed to create config folders for %s: %v", appName, err)
 		}
 
-		logger.Info(ctx, "All configurations for '{{|App|}}%s{{[-]}}' are included.", niceName)
 	}
 
 	// Use SDK to load and merge all compose files
-	logger.Info(ctx, "Running: {{|RunningCommand|}}docker compose --project-directory %s/ config{{[-]}}", conf.ComposeDir)
-	logger.Info(ctx, "Running compose config to create '{{|File|}}docker-compose.yml{{[-]}}' file from enabled templates.")
 
 	composePath := filepath.Join(conf.ComposeDir, "docker-compose.yml")
 
@@ -247,8 +244,6 @@ func MergeYML(ctx context.Context, force bool) error {
 			})
 		}
 	}
-
-	logger.Info(ctx, "Merging '{{|File|}}docker-compose.yml{{[-]}}' complete.")
 
 	// Mark YML merge as complete
 	UnsetNeedsYMLMerge(ctx)
