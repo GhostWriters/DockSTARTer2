@@ -158,11 +158,8 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			}
 			if !sessionlocks.Sessions.AcquireEditLock("local", cmdStr, "console", cliTransport) {
 				info := sessionlocks.Sessions.ReadEditInfo()
-				lines := append(
-					sessionlocks.EditLockLines(info),
-					fmt.Sprintf("Cannot run '{{|UserCommand|}}%s{{[-]}}' while the configuration is being edited.", group.Command),
-				)
-				logger.Error(ctx, lines)
+				closing := fmt.Sprintf("Cannot run '{{|UserCommand|}}%s{{[-]}}' while the configuration is being edited.", group.Command)
+				logger.Error(ctx, sessionlocks.EditLockLines(info, closing))
 				return 1
 			}
 		}

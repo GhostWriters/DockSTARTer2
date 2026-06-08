@@ -799,10 +799,15 @@ func EditLockDetail(info SessionInfo) (lines []string, hint string) {
 	return lines, hint
 }
 
-// EditLockLines returns all lock detail lines including the disconnect hint
-// (if applicable) as a flat slice, suitable for passing to logger.Warn or logger.Error.
-func EditLockLines(info SessionInfo) []string {
+// EditLockLines returns all lock detail lines as a flat slice suitable for
+// passing to logger.Warn or logger.Error. closing is appended before the
+// disconnect hint when non-empty (e.g. "Cannot run '-e' while the
+// configuration is being edited.").
+func EditLockLines(info SessionInfo, closing string) []string {
 	lines, hint := EditLockDetail(info)
+	if closing != "" {
+		lines = append(lines, closing)
+	}
 	if hint != "" {
 		lines = append(lines, hint)
 	}

@@ -73,11 +73,8 @@ func HandleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, res
 		templInfo, err := update.CheckTemplatesUpdate(ctx, state.Force, templBranch)
 		if err == nil && templInfo.HasUpdate && sessionlocks.Sessions.IsEditLocked() {
 			info := sessionlocks.Sessions.ReadEditInfo()
-			lines := append(
-				[]string{fmt.Sprintf("Skipping template update from '{{|Version|}}%s{{[-]}}' to '{{|Version|}}%s{{[-]}}' while configuration is being edited.", templInfo.CurrentDisplay, templInfo.RemoteDisplay)},
-				sessionlocks.EditLockLines(info)...,
-			)
-			logger.Warn(ctx, lines)
+			closing := fmt.Sprintf("Skipping template update from '{{|Version|}}%s{{[-]}}' to '{{|Version|}}%s{{[-]}}' while configuration is being edited.", templInfo.CurrentDisplay, templInfo.RemoteDisplay)
+			logger.Warn(ctx, sessionlocks.EditLockLines(info, closing))
 		} else if err == nil {
 			_ = update.ApplyTemplatesUpdate(ctx, templInfo, state.Yes)
 		}
@@ -95,11 +92,7 @@ func HandleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, res
 		}
 		if sessionlocks.Sessions.IsEditLocked() {
 			info := sessionlocks.Sessions.ReadEditInfo()
-			lines := append(
-				[]string{"Skipping template update while configuration is being edited."},
-				sessionlocks.EditLockLines(info)...,
-			)
-			logger.Warn(ctx, lines)
+			logger.Warn(ctx, sessionlocks.EditLockLines(info, "Skipping template update while configuration is being edited."))
 		} else {
 			_ = update.UpdateTemplates(ctx, state.Force, state.Yes, templBranch)
 		}
