@@ -48,6 +48,9 @@ type ContextMenuModel struct {
 
 	offset     int // scroll offset for long menus
 	maxVisible int // max items to show at once (default 12)
+
+	subMenu  *ContextMenuModel // open submenu, managed internally
+	isClosed bool             // set when submenu wants to close (signals parent to nil it)
 }
 
 // NewContextMenuModel creates a context menu positioned near (clickX, clickY).
@@ -227,16 +230,17 @@ func (m *ContextMenuModel) executeSelected() tea.Cmd {
 		return nil
 	}
 
-	// Item with sub-items: open a child context menu positioned to the right.
+	// Item with sub-items: open submenu internally so parent stays visible.
 	if len(item.SubItems) > 0 {
-		subItems := item.SubItems
-		// Position submenu to the right of this menu, aligned with the selected row.
-		subClickX := m.menuX + m.menuW + 3 // right edge of parent box
-		subClickY := m.menuY + (m.cursor - m.offset)
-		sw, sh := m.screenW, m.screenH
-		return func() tea.Msg {
-			return ShowDialogMsg{Dialog: NewContextMenuModel(subClickX, subClickY, sw, sh, subItems)}
+		subClickX := m.menuX + m.menuW + 1 // right edge of parent box, overlapping by 2 chars
+		// Count display rows from top of menu to the selected item
+		rowOffset := 0
+		for i := m.offset; i < m.cursor; i++ {
+			rowOffset += itemHeight(m.items[i])
 		}
+		subClickY := m.menuY + rowOffset
+		m.subMenu = NewContextMenuModel(subClickX, subClickY, m.screenW, m.screenH, item.SubItems)
+		return nil
 	}
 
 	if action := item.Action; action != nil {

@@ -147,9 +147,18 @@ func (m *ContextMenuModel) Layers() []*lipgloss.Layer {
 	ly := layout.ContentStartY(1) // 1-line header: headerH(1) + separator(1) + gap(1) = 3
 	layerX := m.menuX - lx
 	layerY := m.menuY - ly
-	return []*lipgloss.Layer{
+	layers := []*lipgloss.Layer{
 		lipgloss.NewLayer(content).X(layerX).Y(layerY).Z(ZScreen).ID("Dialog.ContextMenu"),
 	}
+	if m.subMenu != nil {
+		subContent := m.subMenu.ViewString()
+		if subContent != "" {
+			subX := m.subMenu.menuX - lx
+			subY := m.subMenu.menuY - ly
+			layers = append(layers, lipgloss.NewLayer(subContent).X(subX).Y(subY).Z(ZScreen+1).ID("Dialog.ContextMenu.Sub"))
+		}
+	}
+	return layers
 }
 
 // GetHitRegions implements the hit-region interface so mouse events route correctly.
@@ -172,7 +181,7 @@ func (m *ContextMenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		Label:  "Context Menu",
 	})
 
-	// Per-item rows (inside border, starting at menuY+1)
+	// Per-item rows (always present; submenu regions have higher Z and take priority over their area)
 	visible := m.visibleItems()
 	absIdx := m.offset
 	rowY := m.menuY + 1
@@ -183,7 +192,7 @@ func (m *ContextMenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 				ID:     "ctxmenu.item-" + itoa(absIdx),
 				X:      m.menuX + 1,
 				Y:      rowY,
-				Width:  m.menuW + 2, // content + 2 padding spaces
+				Width:  m.menuW + 2,
 				Height: h,
 				ZOrder: ZDialog + 10,
 				Label:  item.Label,
@@ -192,5 +201,16 @@ func (m *ContextMenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		absIdx++
 		rowY += h
 	}
+
+	// Add submenu hit regions at higher Z, prefixed so parent can route them
+	if m.subMenu != nil {
+		subRegions := m.subMenu.GetHitRegions(offsetX, offsetY)
+		for i := range subRegions {
+			subRegions[i].ID = "ctxmenu.sub." + subRegions[i].ID
+			subRegions[i].ZOrder += 20 // above parent items
+		}
+		regions = append(regions, subRegions...)
+	}
+
 	return regions
 }

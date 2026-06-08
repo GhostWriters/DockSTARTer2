@@ -323,12 +323,11 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Esc: Cancel — navigate back or quit if root
+		// Esc: Cancel — same as clicking the close widget
 		if key.Matches(msg, tui.Keys.Esc) {
 			if s.buttonFocused {
 				s.buttonFocused = false
 				s.updateFocusStates()
-				return s, nil
 			}
 			return s, s.EscapeAction()
 		}
@@ -615,9 +614,15 @@ func (s *DisplayOptionsScreen) IsMaximized() bool {
 func (s *DisplayOptionsScreen) EscapeAction() tea.Cmd {
 	theme.Unload("Preview")
 	if s.isRoot {
-		return tui.ConfirmExitAction()
+		s.focusedPanel = FocusButtons
+		s.focusedButton = s.maxFocusedButton()
+		s.updateFocusStates()
+		return s.outerMenu.SetProcessingBtnDeferred(tui.IDExitButton, tui.ConfirmExitAction())
 	}
-	return navigateBack()
+	s.focusedPanel = FocusButtons
+	s.focusedButton = 1 // Back
+	s.updateFocusStates()
+	return s.outerMenu.SetProcessingBtnDeferred(tui.IDBackButton, navigateBack())
 }
 
 func (s *DisplayOptionsScreen) HasDialog() bool {
