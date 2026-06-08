@@ -99,12 +99,24 @@ func CheckStartupStatus(ctx context.Context) {
 					termStr = fmt.Sprintf(" ({{|RunningCommand|}}%s{{[-]}}", cs.Terminal) + ")"
 				}
 				editTag := ""
-				if cs.ClientIP == editInfo.ClientIP {
+				isEditSession := cs.ClientIP == editInfo.ClientIP
+				if isEditSession {
 					editTag = " [{{|Warn|}}Edit lock{{[-]}}]"
 				}
 				lines = append(lines,
 					fmt.Sprintf("\t\t\t[%s: {{|IPAddress|}}%s{{[-]}}%s]%s", cs.ConnType, cs.ClientIP, termStr, editTag),
 				)
+				if isEditSession && editInfo.ConnType != "" {
+					conn := editInfo.ConnType
+					switch editInfo.LockSource {
+					case "cli":
+						lines = append(lines, fmt.Sprintf("\t\t\t\tRunning CLI command '{{|RunningCommand|}}%s{{[-]}}'.", conn))
+					case "console":
+						lines = append(lines, fmt.Sprintf("\t\t\t\tRunning console command '{{|RunningCommand|}}%s{{[-]}}'.", conn))
+					default:
+						lines = append(lines, fmt.Sprintf("\t\t\t\tIn the '{{|RunningCommand|}}%s{{[-]}}' menu.", conn))
+					}
+				}
 			}
 		}
 	}
