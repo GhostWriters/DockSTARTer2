@@ -159,11 +159,15 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
-		if handled, cmd := m.HandleTitleBarKey(msg, m.cancelOrConfirm()); handled {
-			return m, cmd
+		if handled, cmd := m.HandleTitleBarKey(msg, nil); handled {
+			m.focus = addVarFocusCancel
+			return m, tea.Batch(cmd, m.btnSpinner.SetProcessingDeferred("Cancel", m.cancelOrConfirm()))
 		}
 		switch {
-		case key.Matches(msg, tui.Keys.Esc), key.Matches(msg, tui.Keys.ForceQuit):
+		case key.Matches(msg, tui.Keys.Esc):
+			m.focus = addVarFocusCancel
+			return m, m.btnSpinner.SetProcessingDeferred("Cancel", m.cancelOrConfirm())
+		case key.Matches(msg, tui.Keys.ForceQuit):
 			return m, m.cancelOrConfirm()
 
 		case key.Matches(msg, tui.Keys.Tab), key.Matches(msg, tui.Keys.CycleTab):
@@ -296,7 +300,8 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.Button == tea.MouseLeft && strings.HasSuffix(msg.ID, "."+tui.IDTitleWidgetClose) {
 			m.BlurTitleBar()
-			return m, m.cancelOrConfirm()
+			m.focus = addVarFocusCancel
+			return m, m.btnSpinner.SetProcessingDeferred("Cancel", m.cancelOrConfirm())
 		}
 		if msg.Button == tea.MouseLeft && strings.HasSuffix(msg.ID, "."+tui.IDTitleWidgetHelp) {
 			m.BlurTitleBar()
