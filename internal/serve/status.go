@@ -69,10 +69,6 @@ func CheckStartupStatus(ctx context.Context) {
 			}
 		}
 
-		// Edit lock as its own block: [Edit lock]
-		if editInfo.PID == p.PID {
-			tagBlocks = append(tagBlocks, "{{|Warn|}}Edit lock{{[-]}}")
-		}
 
 		var tagBuf strings.Builder
 		for _, t := range tagBlocks {
@@ -101,8 +97,12 @@ func CheckStartupStatus(ctx context.Context) {
 				if cs.Terminal != "" {
 					termStr = fmt.Sprintf(" ({{|RunningCommand|}}%s{{[-]}}", cs.Terminal) + ")"
 				}
+				editTag := ""
+				if cs.ClientIP == editInfo.ClientIP && cs.ConnType == editInfo.ConnType {
+					editTag = " [{{|Warn|}}Edit lock{{[-]}}]"
+				}
 				lines = append(lines,
-					fmt.Sprintf("\t\t\t[%s: {{|Version|}}%s{{[-]}}%s]", cs.ConnType, cs.ClientIP, termStr),
+					fmt.Sprintf("\t\t\t[%s: {{|Version|}}%s{{[-]}}%s]%s", cs.ConnType, cs.ClientIP, termStr, editTag),
 				)
 			}
 		}
