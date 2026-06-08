@@ -159,9 +159,19 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				}
 				conn := info.ConnType
 				if conn == "" {
-					conn = "SSH"
+					conn = "unknown"
 				}
-				logger.Error(ctx, "Cannot run '{{|UserCommand|}}%s{{[-]}}' while the configuration is being edited by a %s session from {{|IPAddress|}}%s{{[-]}}.", group.Command, conn, ip)
+				var lockDetail string
+				switch info.LockSource {
+				case "cli":
+					lockDetail = fmt.Sprintf("Edit lock: Session {{|IPAddress|}}%s{{[-]}} is running CLI command '{{|UserCommand|}}%s{{[-]}}'.", ip, conn)
+				case "console":
+					lockDetail = fmt.Sprintf("Edit lock: Session {{|IPAddress|}}%s{{[-]}} is running console command '{{|RunningCommand|}}%s{{[-]}}'.", ip, conn)
+				default:
+					lockDetail = fmt.Sprintf("Edit lock: Session {{|IPAddress|}}%s{{[-]}} is in the '{{|Version|}}%s{{[-]}}' menu.", ip, conn)
+				}
+				logger.Error(ctx, "Cannot run '{{|UserCommand|}}%s{{[-]}}' while the configuration is being edited.", group.Command)
+				logger.Notice(ctx, lockDetail)
 				logger.Notice(ctx, "Use '{{|UserCommand|}}ds2 --server disconnect{{[-]}}' to force-release the lock.")
 				return 1
 			}
