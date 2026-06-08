@@ -805,6 +805,9 @@ func EditLockDetail(info SessionInfo) (lines []string, hint string) {
 // configuration is being edited.").
 func EditLockLines(info SessionInfo, closing string) []string {
 	lines, hint := EditLockDetail(info)
+	if closing != "" || hint != "" {
+		lines = append(lines, "")
+	}
 	if closing != "" {
 		lines = append(lines, closing)
 	}
