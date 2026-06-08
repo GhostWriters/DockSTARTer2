@@ -63,7 +63,7 @@ func CheckStartupStatus(ctx context.Context) {
 				termStr = fmt.Sprintf(" ({{|RunningCommand|}}%s{{[-]}}", p.Terminal) + ")"
 			}
 			if p.SSHClient != "" {
-				tagBlocks = append(tagBlocks, fmt.Sprintf("SSH: {{|Version|}}%s{{[-]}}%s", p.SSHClient, termStr))
+				tagBlocks = append(tagBlocks, fmt.Sprintf("SSH: {{|IPAddress|}}%s{{[-]}}%s", p.SSHClient, termStr))
 			} else {
 				tagBlocks = append(tagBlocks, fmt.Sprintf("Local%s", termStr))
 			}
@@ -102,7 +102,7 @@ func CheckStartupStatus(ctx context.Context) {
 					editTag = " [{{|Warn|}}Edit lock{{[-]}}]"
 				}
 				lines = append(lines,
-					fmt.Sprintf("\t\t\t[%s: {{|Version|}}%s{{[-]}}%s]%s", cs.ConnType, cs.ClientIP, termStr, editTag),
+					fmt.Sprintf("\t\t\t[%s: {{|IPAddress|}}%s{{[-]}}%s]%s", cs.ConnType, cs.ClientIP, termStr, editTag),
 				)
 			}
 		}

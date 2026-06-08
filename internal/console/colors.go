@@ -163,6 +163,7 @@ func init() {
 		Theme:                  "{{[-]}}{{[cyan]}}",
 		Update:                 "{{[-]}}{{[green]}}",
 		User:                   "{{[-]}}{{[cyan]}}",
+		IPAddress:              "{{[-]}}{{[cyan]}}",
 		URL:                    "{{[-]}}{{[cyan::U]}}",
 		UserCommand:            "{{[-]}}{{[yellow::B]}}",
 		UserCommandError:       "{{[-]}}{{[red::U]}}",
@@ -284,6 +285,7 @@ type AppColors struct {
 	Theme                  string
 	Update                 string
 	User                   string
+	IPAddress              string
 	URL                    string
 	UserCommand            string
 	UserCommandError       string
@@ -359,6 +361,7 @@ func RegisterBaseTags() {
 	RegisterConsoleTag("debug", Colors.Debug)
 	RegisterConsoleTag("info", Colors.Info)
 	RegisterConsoleTag("trace", Colors.Trace)
+	RegisterConsoleTag("ipaddress", Colors.IPAddress)
 	RegisterConsoleTag("url", Colors.URL)
 	RegisterConsoleTag("traceheader", Colors.TraceHeader)
 	RegisterConsoleTag("tracefooter", Colors.TraceFooter)
