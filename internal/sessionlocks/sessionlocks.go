@@ -540,7 +540,7 @@ func (m *SessionManager) ReadEditInfo() SessionInfo {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	return SessionInfo{PID: r.PID, ClientIP: r.ClientIP, ConnType: r.ConnType, LockSource: r.LockSource}
+	return SessionInfo(r)
 }
 
 func (m *SessionManager) ReadServerInfo() ServerInfo {
