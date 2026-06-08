@@ -212,6 +212,14 @@ func (m *SessionManager) AcquireEditLock(clientIP, connType, lockSource, transpo
 			m.editActive = true
 			m.localOwner = connType
 			terminal := DetectTerminal()
+			if clientIP != "" && clientIP != "local" {
+				for _, cs := range m.ListConnectedSessions() {
+					if cs.ClientIP == clientIP {
+						terminal = cs.Terminal
+						break
+					}
+				}
+			}
 			session := clientIP
 			if session == "" || session == "local" {
 				session = "local"
