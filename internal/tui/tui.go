@@ -42,6 +42,9 @@ var (
 	// Only meaningful when CurrentPageName == "tabbed_vars".
 	CurrentEditorApp string
 
+	// currentClientIP is the IP address of the active TUI session (set at startup).
+	currentClientIP string
+
 	// isRootSession is true when the TUI was started with a plain -M pagename (no start- prefix).
 	// Root sessions suppress the Back button on the entry screen and re-exec to the same plain
 	// pagename after a self-update. Non-root sessions re-exec with the "start-" prefix so the
@@ -199,6 +202,7 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 		pOpts = opts[0]
 	}
 	clientIP, connType := parseClientInfo(pOpts.Environ)
+	currentClientIP = clientIP
 	isSSH := pOpts.Input != nil
 
 	// Enable Virtual Terminal Processing (ANSI) on Windows early so color detection works
@@ -961,7 +965,16 @@ func TriggerUpdate() tea.Cmd {
 // TriggerComposeUpdate returns a tea.Cmd that starts all enabled apps via docker compose update.
 func TriggerComposeUpdate() tea.Cmd {
 	return func() tea.Msg {
+		if !sessionlocks.Sessions.AcquireEditLock(currentClientIP, "Start All Applications", "menu") {
+			info := sessionlocks.Sessions.ReadEditInfo()
+			msg := "Configuration is currently being edited by another session."
+			if info.ClientIP != "" {
+				msg = fmt.Sprintf("Configuration is currently being edited by {{|TitleError|}}%s{{[-]}} from {{|TitleQuestion|}}%s{{[-]}}.", info.ConnType, info.ClientIP)
+			}
+			return ShowMessageDialogMsg{Title: "Resource Busy", Message: msg, Type: MessageError}
+		}
 		task := func(ctx context.Context, w io.Writer) error {
+			defer sessionlocks.Sessions.ReleaseEditLock()
 			ctx = console.WithTUIWriter(ctx, w)
 			if err := compose.ExecuteCompose(ctx, console.AssumeYes(), console.Force(), "update"); err != nil {
 				logger.Error(ctx, "%v", err)
@@ -980,8 +993,17 @@ func TriggerComposeUpdate() tea.Cmd {
 // TriggerComposeStop returns a tea.Cmd that prompts Stop/Down/Cancel then runs the chosen compose op.
 func TriggerComposeStop() tea.Cmd {
 	return func() tea.Msg {
+		if !sessionlocks.Sessions.AcquireEditLock(currentClientIP, "Stop All Applications", "menu") {
+			info := sessionlocks.Sessions.ReadEditInfo()
+			msg := "Configuration is currently being edited by another session."
+			if info.ClientIP != "" {
+				msg = fmt.Sprintf("Configuration is currently being edited by {{|TitleError|}}%s{{[-]}} from {{|TitleQuestion|}}%s{{[-]}}.", info.ConnType, info.ClientIP)
+			}
+			return ShowMessageDialogMsg{Title: "Resource Busy", Message: msg, Type: MessageError}
+		}
 		question := "Would you like to {{|Highlight|}}Stop{{[-]}} all containers, or bring all containers {{|Highlight|}}Down{{[-]}}?\n\n{{|Highlight|}}Stop{{[-]}} will stop them, {{|Highlight|}}Down{{[-]}} will stop and remove them."
 		task := func(ctx context.Context, w io.Writer) error {
+			defer sessionlocks.Sessions.ReleaseEditLock()
 			ctx = console.WithTUIWriter(ctx, w)
 			choice := PromptChoice("Docker Compose", question, "Stop", "Down", "Cancel")
 			switch choice {
@@ -1009,7 +1031,16 @@ func TriggerComposeStop() tea.Cmd {
 // TriggerDockerPrune returns a tea.Cmd that runs docker system prune.
 func TriggerDockerPrune() tea.Cmd {
 	return func() tea.Msg {
+		if !sessionlocks.Sessions.AcquireEditLock(currentClientIP, "Prune Docker System", "menu") {
+			info := sessionlocks.Sessions.ReadEditInfo()
+			msg := "Configuration is currently being edited by another session."
+			if info.ClientIP != "" {
+				msg = fmt.Sprintf("Configuration is currently being edited by {{|TitleError|}}%s{{[-]}} from {{|TitleQuestion|}}%s{{[-]}}.", info.ConnType, info.ClientIP)
+			}
+			return ShowMessageDialogMsg{Title: "Resource Busy", Message: msg, Type: MessageError}
+		}
 		task := func(ctx context.Context, w io.Writer) error {
+			defer sessionlocks.Sessions.ReleaseEditLock()
 			ctx = console.WithTUIWriter(ctx, w)
 			if err := docker.Prune(ctx, console.AssumeYes()); err != nil {
 				logger.Error(ctx, "%v", err)
