@@ -962,16 +962,31 @@ func TriggerUpdate() tea.Cmd {
 	}
 }
 
+// editLockBusyMsg builds the "Resource Busy" dialog message from the current lock info.
+func editLockBusyMsg(info sessionlocks.SessionInfo) string {
+	msg := "Configuration is currently being edited."
+	if info.ClientIP != "" {
+		conn := info.ConnType
+		if conn == "" {
+			conn = "unknown"
+		}
+		switch info.LockSource {
+		case "cli":
+			msg += fmt.Sprintf("\n\nEdit lock: Session {{|TitleQuestion|}}%s{{[-]}} is running CLI command '{{|RunningCommand|}}%s{{[-]}}'.", info.ClientIP, conn)
+		case "console":
+			msg += fmt.Sprintf("\n\nEdit lock: Session {{|TitleQuestion|}}%s{{[-]}} is running console command '{{|RunningCommand|}}%s{{[-]}}'.", info.ClientIP, conn)
+		default:
+			msg += fmt.Sprintf("\n\nEdit lock: Session {{|TitleQuestion|}}%s{{[-]}} is in the '{{|RunningCommand|}}%s{{[-]}}' menu.", info.ClientIP, conn)
+		}
+	}
+	return msg
+}
+
 // TriggerComposeUpdate returns a tea.Cmd that starts all enabled apps via docker compose update.
 func TriggerComposeUpdate() tea.Cmd {
 	return func() tea.Msg {
 		if !sessionlocks.Sessions.AcquireEditLock(currentClientIP, "Start All Applications", "menu") {
-			info := sessionlocks.Sessions.ReadEditInfo()
-			msg := "Configuration is currently being edited by another session."
-			if info.ClientIP != "" {
-				msg = fmt.Sprintf("Configuration is currently being edited by {{|TitleError|}}%s{{[-]}} from {{|TitleQuestion|}}%s{{[-]}}.", info.ConnType, info.ClientIP)
-			}
-			return ShowMessageDialogMsg{Title: "Resource Busy", Message: msg, Type: MessageError}
+			return ShowMessageDialogMsg{Title: "Resource Busy", Message: editLockBusyMsg(sessionlocks.Sessions.ReadEditInfo()), Type: MessageError}
 		}
 		task := func(ctx context.Context, w io.Writer) error {
 			defer sessionlocks.Sessions.ReleaseEditLock()
@@ -994,12 +1009,7 @@ func TriggerComposeUpdate() tea.Cmd {
 func TriggerComposeStop() tea.Cmd {
 	return func() tea.Msg {
 		if !sessionlocks.Sessions.AcquireEditLock(currentClientIP, "Stop All Applications", "menu") {
-			info := sessionlocks.Sessions.ReadEditInfo()
-			msg := "Configuration is currently being edited by another session."
-			if info.ClientIP != "" {
-				msg = fmt.Sprintf("Configuration is currently being edited by {{|TitleError|}}%s{{[-]}} from {{|TitleQuestion|}}%s{{[-]}}.", info.ConnType, info.ClientIP)
-			}
-			return ShowMessageDialogMsg{Title: "Resource Busy", Message: msg, Type: MessageError}
+			return ShowMessageDialogMsg{Title: "Resource Busy", Message: editLockBusyMsg(sessionlocks.Sessions.ReadEditInfo()), Type: MessageError}
 		}
 		question := "Would you like to {{|Highlight|}}Stop{{[-]}} all containers, or bring all containers {{|Highlight|}}Down{{[-]}}?\n\n{{|Highlight|}}Stop{{[-]}} will stop them, {{|Highlight|}}Down{{[-]}} will stop and remove them."
 		task := func(ctx context.Context, w io.Writer) error {
@@ -1032,12 +1042,7 @@ func TriggerComposeStop() tea.Cmd {
 func TriggerDockerPrune() tea.Cmd {
 	return func() tea.Msg {
 		if !sessionlocks.Sessions.AcquireEditLock(currentClientIP, "Prune Docker System", "menu") {
-			info := sessionlocks.Sessions.ReadEditInfo()
-			msg := "Configuration is currently being edited by another session."
-			if info.ClientIP != "" {
-				msg = fmt.Sprintf("Configuration is currently being edited by {{|TitleError|}}%s{{[-]}} from {{|TitleQuestion|}}%s{{[-]}}.", info.ConnType, info.ClientIP)
-			}
-			return ShowMessageDialogMsg{Title: "Resource Busy", Message: msg, Type: MessageError}
+			return ShowMessageDialogMsg{Title: "Resource Busy", Message: editLockBusyMsg(sessionlocks.Sessions.ReadEditInfo()), Type: MessageError}
 		}
 		task := func(ctx context.Context, w io.Writer) error {
 			defer sessionlocks.Sessions.ReleaseEditLock()

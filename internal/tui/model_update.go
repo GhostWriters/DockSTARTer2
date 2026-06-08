@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"fmt"
-
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
@@ -254,10 +252,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Screen != nil && msg.Screen.IsDestructive() {
 			if !sessionlocks.Sessions.AcquireEditLock(m.clientIP, msg.Screen.Title(), "menu") {
 				info := sessionlocks.Sessions.ReadEditInfo()
-				busyMsg := "Configuration is currently being edited by another session."
-				if info.ClientIP != "" {
-					busyMsg = fmt.Sprintf("Configuration is currently being edited by {{|TitleError|}}%s{{[-]}} from {{|TitleQuestion|}}%s{{[-]}}.", info.ConnType, info.ClientIP)
-				}
+				busyMsg := editLockBusyMsg(info)
 				return m, func() tea.Msg {
 					return ShowMessageDialogMsg{
 						Title:   "Resource Busy",
