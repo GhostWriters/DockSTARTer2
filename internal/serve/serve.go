@@ -239,6 +239,15 @@ func StopServer(ctx context.Context, force bool) error {
 	return nil
 }
 
+// sessionLabel returns a display string for a connected session.
+func sessionLabel(cs sessionlocks.ConnectedSession) string {
+	s := "{{|IPAddress|}}" + cs.ClientIP + "{{[-]}}"
+	if cs.Terminal != "" {
+		s += " ({{|RunningCommand|}}" + cs.Terminal + "{{[-]}})"
+	}
+	return cs.ConnType + " Server session " + s
+}
+
 // Disconnect requests a graceful disconnect of the active editor session.
 // It writes a disconnect request file that the session handler watches for,
 // then waits up to 10 seconds for the session to close cleanly.
@@ -246,14 +255,8 @@ func StopServer(ctx context.Context, force bool) error {
 func Disconnect(ctx context.Context, force bool) error {
 	pid := sessionlocks.Sessions.EditLockPID()
 	if pid == 0 {
-		logger.Info(ctx, "No active editor session found.")
+		logger.Warn(ctx, "No active editor session to disconnect.")
 		return nil
-	}
-
-	if force {
-		logger.Info(ctx, "Forcing disconnect of session (PID %d).", pid)
-	} else {
-		logger.Info(ctx, "Requesting graceful disconnect (PID %d).", pid)
 	}
 
 	err := sessionlocks.Sessions.Disconnect(ctx, force)
@@ -262,14 +265,80 @@ func Disconnect(ctx context.Context, force bool) error {
 	}
 
 	if sessionlocks.Sessions.EditLockPID() == 0 {
-		if force {
-			logger.Info(ctx, "Session forcibly disconnected.")
-		} else {
-			logger.Info(ctx, "Session disconnected successfully.")
-		}
-	} else if !force {
-		logger.Warn(ctx, "Session did not close within 10s. Use '--force --disconnect' to forcibly disconnect.")
+		logger.Notice(ctx, "Editor session disconnected.")
+	} else if force {
+		logger.Warn(ctx, "Editor session could not be forcibly disconnected.")
+	} else {
+		logger.Warn(ctx, "Editor session did not close within 10s. Use '--force --server disconnect' to forcibly disconnect.")
 	}
 
+	return nil
+}
+
+// DisconnectSessions disconnects connected sessions matching target.
+// target may be "all", "web", "ssh", or an "ip:port" string.
+func DisconnectSessions(ctx context.Context, target string, force bool) error {
+	sessions := sessionlocks.Sessions.ListConnectedSessions()
+	var matched []sessionlocks.ConnectedSession
+	for _, cs := range sessions {
+		switch target {
+		case "all":
+			matched = append(matched, cs)
+		case "web":
+			if cs.ConnType == "Web" {
+				matched = append(matched, cs)
+			}
+		case "ssh":
+			if cs.ConnType == "SSH" {
+				matched = append(matched, cs)
+			}
+		default:
+			if cs.ClientIP == target {
+				matched = append(matched, cs)
+			}
+		}
+	}
+
+	if len(matched) == 0 {
+		logger.Warn(ctx, "No matching sessions found for target %q.", target)
+		return nil
+	}
+
+	deadline := time.Now().Add(10 * time.Second)
+	for _, cs := range matched {
+		label := sessionLabel(cs)
+		if force {
+			_ = sessionlocks.Sessions.RequestSessionDisconnect(cs.ID)
+		} else {
+			_ = sessionlocks.Sessions.RequestSessionDisconnect(cs.ID)
+			// Wait up to deadline for this session to unregister.
+			for time.Now().Before(deadline) {
+				time.Sleep(250 * time.Millisecond)
+				found := false
+				for _, s := range sessionlocks.Sessions.ListConnectedSessions() {
+					if s.ID == cs.ID {
+						found = true
+						break
+					}
+				}
+				if !found {
+					break
+				}
+			}
+		}
+		// Check if it's gone.
+		gone := true
+		for _, s := range sessionlocks.Sessions.ListConnectedSessions() {
+			if s.ID == cs.ID {
+				gone = false
+				break
+			}
+		}
+		if gone {
+			logger.Notice(ctx, "Disconnected session: %s.", label)
+		} else {
+			logger.Warn(ctx, "Failed to disconnect session: %s.", label)
+		}
+	}
 	return nil
 }

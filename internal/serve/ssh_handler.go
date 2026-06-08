@@ -57,26 +57,6 @@ func tuiMiddleware(startMenu string) wish.Middleware {
 			sessCtx, cancel := context.WithCancel(ctx)
 			defer cancel()
 
-			// Watch for a graceful disconnect request from the local user.
-			// When detected, cancel the session context so the TUI exits cleanly.
-			go func() {
-				ticker := time.NewTicker(500 * time.Millisecond)
-				defer ticker.Stop()
-				for {
-					select {
-					case <-sessCtx.Done():
-						return
-					case <-ticker.C:
-						if sessionlocks.Sessions.IsDisconnectRequested() {
-							sessionlocks.Sessions.ClearDisconnectRequest()
-							logger.Info(ctx, "Graceful disconnect requested — closing SSH session from %s", s.RemoteAddr())
-							cancel()
-							return
-						}
-					}
-				}
-			}()
-
 			envs := s.Environ()
 			envs = append(envs, "TERM="+ptyReq.Term)
 			envs = append(envs, "DS2_CLIENT_IP="+clientIP)
@@ -110,6 +90,31 @@ func tuiMiddleware(startMenu string) wish.Middleware {
 			}
 			sessionID := sessionlocks.Sessions.RegisterSession(clientIP, connType, terminal)
 			defer sessionlocks.Sessions.UnregisterSession(sessionID)
+
+			// Watch for graceful disconnect requests (global or per-session).
+			go func() {
+				ticker := time.NewTicker(500 * time.Millisecond)
+				defer ticker.Stop()
+				for {
+					select {
+					case <-sessCtx.Done():
+						return
+					case <-ticker.C:
+						if sessionlocks.Sessions.IsDisconnectRequested() {
+							sessionlocks.Sessions.ClearDisconnectRequest()
+							logger.Info(ctx, "Graceful disconnect requested — closing SSH session from %s", s.RemoteAddr())
+							cancel()
+							return
+						}
+						if sessionlocks.Sessions.IsSessionDisconnectRequested(sessionID) {
+							sessionlocks.Sessions.ClearSessionDisconnectRequest(sessionID)
+							logger.Info(ctx, "Per-session disconnect requested — closing SSH session from %s", s.RemoteAddr())
+							cancel()
+							return
+						}
+					}
+				}
+			}()
 
 			if err := tui.Start(sessCtx, startMenu, opts); err != nil {
 				logger.Error(ctx, "SSH TUI session error: %v", err)

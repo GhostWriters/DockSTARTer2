@@ -683,6 +683,24 @@ func (m *SessionManager) IsDisconnectRequested() bool {
 	return err == nil
 }
 
+func (m *SessionManager) sessionDisconnectPath(id string) string {
+	return filepath.Join(m.sessionsDir, "disconnect."+id)
+}
+
+func (m *SessionManager) RequestSessionDisconnect(id string) error {
+	_ = os.MkdirAll(m.sessionsDir, 0755)
+	return os.WriteFile(m.sessionDisconnectPath(id), []byte{}, 0644)
+}
+
+func (m *SessionManager) ClearSessionDisconnectRequest(id string) {
+	_ = os.Remove(m.sessionDisconnectPath(id))
+}
+
+func (m *SessionManager) IsSessionDisconnectRequested(id string) bool {
+	_, err := os.Stat(m.sessionDisconnectPath(id))
+	return err == nil
+}
+
 func (m *SessionManager) RequestStop() error {
 	return os.WriteFile(m.stopReqPath, []byte{}, 0644)
 }
