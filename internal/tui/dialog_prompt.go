@@ -101,11 +101,15 @@ func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyPressMsg:
 		if handled, cmd := m.handleTitleBarKey(msg, nil); handled {
+			m.focusedItem = FocusBackBtn
 			return m, tea.Batch(cmd, m.btnSpinner.SetProcessingDeferred("Cancel", closeWithResult("", false)))
 		}
 		switch {
-		case key.Matches(msg, Keys.Esc), key.Matches(msg, Keys.ForceQuit):
+		case key.Matches(msg, Keys.Esc):
+			m.focusedItem = FocusBackBtn
 			return m, m.btnSpinner.SetProcessingDeferred("Cancel", closeWithResult("", false))
+		case key.Matches(msg, Keys.ForceQuit):
+			return m, closeWithResult("", false)
 
 		case key.Matches(msg, Keys.CycleTab):
 			// Cycle: Input -> OK -> Cancel -> Input
@@ -195,6 +199,7 @@ func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if handled, cmd := m.handleTitleBarHit(msg, nil); handled {
+			m.focusedItem = FocusBackBtn
 			return m, tea.Batch(cmd, m.btnSpinner.SetProcessingDeferred("Cancel", closeWithResult("", false)))
 		}
 		if msg.Button == tea.MouseLeft && strings.HasSuffix(msg.ID, "."+IDInsOvr) {
