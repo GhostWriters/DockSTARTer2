@@ -916,10 +916,13 @@ func TriggerUpdate() tea.Cmd {
 			force := console.Force()
 			yes := console.AssumeYes()
 
-			if sessionlocks.Sessions.IsEditLocked() {
-				logger.Warn(ctx, "Configuration is being edited — skipping template update. Run update again after editing to update templates.")
-			} else if err := update.UpdateTemplates(ctx, force, yes, ""); err != nil {
-				return err
+			templInfo, templErr := update.CheckTemplatesUpdate(ctx, force, "")
+			if templErr == nil && templInfo.HasUpdate && sessionlocks.Sessions.IsEditLocked() {
+				logger.Warn(ctx, "Skipping template update from '{{|Version|}}%s{{[-]}}' to '{{|Version|}}%s{{[-]}}' while configuration is being edited.", templInfo.CurrentDisplay, templInfo.RemoteDisplay)
+			} else if templErr == nil {
+				if err := update.ApplyTemplatesUpdate(ctx, templInfo, yes); err != nil {
+					return err
+				}
 			}
 
 			// Re-exec args restore the active screen after update.

@@ -70,10 +70,11 @@ func HandleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, res
 		if len(group.Args) > 1 {
 			templBranch = group.Args[1]
 		}
-		if sessionlocks.Sessions.IsEditLocked() {
-			logger.Warn(ctx, "Configuration is being edited — skipping template update. Run '{{|UserCommand|}}%s -u{{[-]}}' again after editing to update templates.", version.CommandName)
-		} else {
-			_ = update.UpdateTemplates(ctx, state.Force, state.Yes, templBranch)
+		templInfo, err := update.CheckTemplatesUpdate(ctx, state.Force, templBranch)
+		if err == nil && templInfo.HasUpdate && sessionlocks.Sessions.IsEditLocked() {
+			logger.Warn(ctx, "Skipping template update from '{{|Version|}}%s{{[-]}}' to '{{|Version|}}%s{{[-]}}' while configuration is being edited.", templInfo.CurrentDisplay, templInfo.RemoteDisplay)
+		} else if err == nil {
+			_ = update.ApplyTemplatesUpdate(ctx, templInfo, state.Yes)
 		}
 		_ = update.SelfUpdate(ctx, state.Force, state.Yes, appVer, restArgs)
 	case "--update-app":
