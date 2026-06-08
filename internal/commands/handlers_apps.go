@@ -88,7 +88,11 @@ func HandleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, res
 		if len(group.Args) > 0 {
 			templBranch = group.Args[0]
 		}
-		_ = update.UpdateTemplates(ctx, state.Force, state.Yes, templBranch)
+		if sessionlocks.Sessions.IsEditLocked() {
+			logger.Warn(ctx, "Skipping template update while configuration is being edited.")
+		} else {
+			_ = update.UpdateTemplates(ctx, state.Force, state.Yes, templBranch)
+		}
 	}
 	// Server restart after update is handled by the cmd-layer caller (which has access to serve).
 	return nil
