@@ -171,7 +171,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 					lockDetail = fmt.Sprintf("Edit lock: Session {{|IPAddress|}}%s{{[-]}} is in the '{{|Version|}}%s{{[-]}}' menu.", ip, conn)
 				}
 				logger.Error(ctx, "Cannot run '{{|UserCommand|}}%s{{[-]}}' while the configuration is being edited.", group.Command)
-				logger.Notice(ctx, lockDetail)
+				logger.Error(ctx, lockDetail)
 				logger.Notice(ctx, "Use '{{|UserCommand|}}ds2 --server disconnect{{[-]}}' to force-release the lock.")
 				return 1
 			}
