@@ -14,8 +14,25 @@ func (m *ContextMenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.screenW = msg.Width
 		m.screenH = msg.Height
 		m.recalculate()
+		if m.subMenu != nil {
+			m.subMenu.screenW = msg.Width
+			m.subMenu.screenH = msg.Height
+			m.subMenu.recalculate()
+		}
 
 	case tea.KeyPressMsg:
+		// Route keyboard to submenu when open
+		if m.subMenu != nil {
+			updated, cmd := m.subMenu.Update(msg)
+			if sub, ok := updated.(*ContextMenuModel); ok {
+				if sub.isClosed {
+					m.subMenu = nil
+					return m, nil
+				}
+				m.subMenu = sub
+			}
+			return m, cmd
+		}
 		switch {
 		case key.Matches(msg, Keys.Up):
 			m.moveCursor(-1)
@@ -28,13 +45,33 @@ func (m *ContextMenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.cursor >= 0 && m.cursor < len(m.items) && len(m.items[m.cursor].SubItems) > 0 {
 				return m, m.executeSelected()
 			}
-		case key.Matches(msg, Keys.Esc):
+		case key.Matches(msg, Keys.Esc), key.Matches(msg, Keys.Left):
+			m.isClosed = true
 			return m, func() tea.Msg { return CloseDialogMsg{} }
 		}
 
 	case LayerHitMsg:
+		// Route prefixed hits to submenu
+		if m.subMenu != nil && strings.HasPrefix(msg.ID, "ctxmenu.sub.") {
+			subMsg := msg
+			subMsg.ID = strings.TrimPrefix(msg.ID, "ctxmenu.sub.")
+			updated, cmd := m.subMenu.Update(subMsg)
+			if sub, ok := updated.(*ContextMenuModel); ok {
+				if sub.isClosed {
+					m.subMenu = nil
+					return m, nil
+				}
+				m.subMenu = sub
+			}
+			return m, cmd
+		}
 		if msg.ID == "ctxmenu.bg" {
-			// Click outside the item list — close
+			if m.subMenu != nil {
+				// Click on parent area while submenu open — close submenu only
+				m.subMenu = nil
+				return m, nil
+			}
+			// Click outside — close everything
 			return m, func() tea.Msg { return CloseDialogMsg{} }
 		}
 		// Per-item hit: "ctxmenu.item-N"
@@ -42,6 +79,7 @@ func (m *ContextMenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			idxStr := strings.TrimPrefix(msg.ID, "ctxmenu.item-")
 			idx := parseIntSafe(idxStr)
 			if idx >= 0 && idx < len(m.items) && !m.items[idx].IsSeparator && !m.items[idx].IsHeader && !m.items[idx].Disabled {
+				m.subMenu = nil // clicking a parent item closes any open submenu
 				m.cursor = idx
 				if msg.Button == tea.MouseLeft {
 					return m, m.executeSelected()

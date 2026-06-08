@@ -149,25 +149,39 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		}
 	}
 
+	// 4a. CONTEXT MENU OUTSIDE CLICK: left- or right-click outside an open context menu closes it.
+	if click, ok := msg.(tea.MouseClickMsg); ok {
+		if _, ok := m.dialog.(*ContextMenuModel); ok && (click.Button == tea.MouseLeft || click.Button == tea.MouseRight) {
+			hit := m.hitRegions.FindHit(click.X, click.Y)
+			hitID := ""
+			if hit != nil {
+				hitID = hit.ID
+			}
+			if !strings.HasPrefix(hitID, "ctxmenu.") {
+				// Close the context menu, then let the click fall through so:
+				// - left-click activates whatever is under the cursor
+				// - right-click is picked up by 4b with fresh context (no stale dialog)
+				m.dialog = nil
+				m.updateComponentFocus()
+				// Don't consume — fall through to normal dispatch
+			}
+		}
+	}
+
 	// 4b. GLOBAL RIGHT-CLICK: Intercept right-click on background or anywhere
 	// if it wasn't intercepted by a modal blockade above.
 	if click, ok := msg.(tea.MouseClickMsg); ok && click.Button == tea.MouseRight {
-		// Don't allow bringing up a new context menu if one is already open.
-		// Standard behavior is to click outside to close the current one.
-		if _, ok := m.dialog.(*ContextMenuModel); ok {
-			return m, nil, true
-		}
-
 		hit := m.hitRegions.FindHit(click.X, click.Y)
 		hitID := ""
 		if hit != nil {
 			hitID = hit.ID
 		}
 
-		// 1. If hitting a context menu already open, let the hit region dispatch it (usually closes)
-		if strings.HasPrefix(hitID, "ctxmenu.") {
+		// 1. If hitting a context menu already open, let the hit region dispatch it (usually closes).
+		// Stale ctxmenu regions (no dialog open) are treated as a miss → show global menu.
+		if strings.HasPrefix(hitID, "ctxmenu.") && m.dialog != nil {
 			// Fall through to normal hit dispatch
-		} else if hit == nil || hitID == IDStatusBar || hitID == IDPanel || hitID == IDPanelViewport || hitID == IDPanelToggle || hitID == IDPanelResize || hitID == IDPanelResizeUp || hitID == IDPanelResizeDn || hitID == IDConsoleInput ||
+		} else if hit == nil || strings.HasPrefix(hitID, "ctxmenu.") || hitID == IDStatusBar || hitID == IDPanel || hitID == IDPanelViewport || hitID == IDPanelToggle || hitID == IDPanelResize || hitID == IDPanelResizeUp || hitID == IDPanelResizeDn || hitID == IDConsoleInput ||
 			hitID == IDAppVersion || hitID == IDTmplVersion || hitID == IDHeaderFlags {
 			// 2. If hitting background or a global element that doesn't usually have a context menu,
 			// show the global context menu.
