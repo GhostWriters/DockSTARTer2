@@ -590,6 +590,9 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			sessionlocks.Sessions.UpdateEditLockConnType(connType)
 		}
 
+		// Capture whether the closing dialog was a context menu before clearing
+		_, closingContextMenu := m.dialog.(*ContextMenuModel)
+
 		// Clear current dialog and try to pop from stack
 		m.dialog = nil
 		if len(m.dialogStack) > 0 {
@@ -644,14 +647,18 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// When returning to screen: restore focus to the active screen.
 		// Clear header focus so version numbers don't stay selected after a dialog closes.
+		// Exception: context menu opened from a header widget — preserve focus so ESC
+		// closes the menu first; a second ESC then unfocuses the widget.
 		// Blur any title bar that may have been focused before the dialog opened.
-		m.setHeaderFocus(HeaderFocusNone)
-		if m.activeScreen != nil {
-			if tb, ok := m.activeScreen.(TitleBarFocusable); ok {
-				tb.BlurTitleBar()
+		if !closingContextMenu {
+			m.setHeaderFocus(HeaderFocusNone)
+			if m.activeScreen != nil {
+				if tb, ok := m.activeScreen.(TitleBarFocusable); ok {
+					tb.BlurTitleBar()
+				}
 			}
+			m.updateComponentFocus()
 		}
-		m.updateComponentFocus()
 		// Forward any followup message or command piggybacked on Result (e.g. from context menus).
 		// Skip the known confirm (bool) and prompt (promptResultMsg) types already handled above.
 		if msg.Result != nil && m.activeScreen != nil {
@@ -836,9 +843,12 @@ func (m *AppModel) updateComponentFocus() {
 	}
 
 	// Screen is focused only if no dialog is open AND neither panel nor header have focus.
+	// Exception: context menus are lightweight overlays — keep the screen focused so the
+	// selected item stays highlighted while the context menu is visible.
+	_, dialogIsContextMenu := m.dialog.(*ContextMenuModel)
 	if m.activeScreen != nil {
 		if focusable, ok := m.activeScreen.(interface{ SetFocused(bool) }); ok {
-			focusable.SetFocused(!dialogOpen && !m.panelFocused && !m.panelTitleFocused && !headerFocused)
+			focusable.SetFocused((!dialogOpen || dialogIsContextMenu) && !m.panelFocused && !m.panelTitleFocused && !headerFocused)
 		}
 	}
 

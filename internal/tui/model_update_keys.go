@@ -23,6 +23,17 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		}
 	}
 
+	// Context Menu Blockade
+	// If a context menu is open, ALL keys go to it and we return immediately to
+	// prevent keys (especially ESC) from leaking through to the underlying screen.
+	if m.dialog != nil {
+		if _, ok := m.dialog.(*ContextMenuModel); ok {
+			var cmd tea.Cmd
+			m.dialog, cmd = m.dialog.Update(msg)
+			return m, logger.BatchRecoverTUI(m.ctx, cmd), true
+		}
+	}
+
 	// Global Priority Actions (always work, regardless of focus)
 	if key.Matches(msg, Keys.ToggleLog) {
 		return m, func() tea.Msg { return togglePanelMsg{} }, true
@@ -68,6 +79,9 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	}
 	if key.Matches(msg, Keys.Help) || msg.String() == "?" {
 		return m, m.showHelpCmd(m.focusedPanelHelpContext(), false), true
+	}
+	if key.Matches(msg, Keys.ContextMenu) {
+		return m, m.showContextMenuCmd(), true
 	}
 	if key.Matches(msg, Keys.ForceQuit) {
 		if console.IsDaemon {
@@ -443,6 +457,57 @@ func (m *AppModel) showHelpCmd(capturedCtx *HelpContext, screenLevelOnly bool) t
 	return func() tea.Msg {
 		return ShowDialogMsg{Dialog: NewHelpDialogWithContext(km, contextInfo)}
 	}
+}
+
+// showContextMenuCmd builds a context menu for the currently focused element,
+// using the same focus detection as showHelpCmd so both F1 and the context menu
+// key always reflect the same focused item.
+func (m *AppModel) showContextMenuCmd() tea.Cmd {
+	x, y := m.width/2, m.height/2
+	helpContentWidth := HelpContextWidth(m.width, m.height)
+
+	// Panel/header element has focus — use its HelpContext, position near the element
+	if panelCtx := m.focusedPanelHelpContext(); panelCtx != nil {
+		r := HitRegion{Help: panelCtx, Label: panelCtx.ScreenName}
+		// Try to find the hit region to get its screen position
+		for _, hr := range m.hitRegions {
+			if hr.Help != nil && hr.Help.ScreenName == panelCtx.ScreenName && hr.Help.PageTitle == panelCtx.PageTitle {
+				rx, ry := hr.X, hr.Y+hr.Height
+				return m.showGlobalContextMenu(rx, ry, &r)
+			}
+		}
+		return m.showGlobalContextMenu(x, y, &r)
+	}
+
+	// Dialog is open — use dialog's HelpContext
+	if m.dialog != nil {
+		if cp, ok := m.dialog.(HelpContextProvider); ok {
+			ctx := cp.HelpContext(helpContentWidth)
+			r := HitRegion{Help: &ctx, Label: ctx.ScreenName}
+			return m.showGlobalContextMenu(x, y, &r)
+		}
+		return m.showGlobalContextMenu(x, y, nil)
+	}
+
+	// Active screen — let it handle via HandleContextMenuKey if it can
+	if m.activeScreen != nil {
+		if ckh, ok := m.activeScreen.(interface {
+			HandleContextMenuKey() (tea.Model, tea.Cmd, bool)
+		}); ok {
+			if updated, cmd, handled := ckh.HandleContextMenuKey(); handled {
+				m.activeScreen = updated.(ScreenModel)
+				return cmd
+			}
+		}
+		// Fallback: use screen's HelpContext for the global menu header
+		if cp, ok := m.activeScreen.(HelpContextProvider); ok {
+			ctx := cp.HelpContext(helpContentWidth)
+			r := HitRegion{Help: &ctx, Label: ctx.ScreenName}
+			return m.showGlobalContextMenu(x, y, &r)
+		}
+	}
+
+	return m.showGlobalContextMenu(x, y, nil)
 }
 
 // showGlobalContextMenu shows a context menu with global actions like Help.

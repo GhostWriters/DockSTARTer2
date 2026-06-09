@@ -989,6 +989,13 @@ func (m *MenuModel) HelpContext(contentWidth int) HelpContext {
 	return m.helpContextForIdx(m.list.Index())
 }
 
+// HandleContextMenuKey implements the ContextMenuKeyHandler interface.
+// Called by AppModel when Keys.ContextMenu is pressed and no dialog is open.
+func (m *MenuModel) HandleContextMenuKey() (tea.Model, tea.Cmd, bool) {
+	cmd := m.ShowContextMenu(m.cursor, m.width/2, m.height/2)
+	return m, cmd, true
+}
+
 // ShowContextMenu returns a command to show the context menu for the item at the given index.
 func (m *MenuModel) ShowContextMenu(idx int, x, y int) tea.Cmd {
 	var tag, desc string

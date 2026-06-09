@@ -64,8 +64,11 @@ type KeyMap struct {
 	EnvInsert    key.Binding
 	EnvSplitLine key.Binding
 	EnvEditValue key.Binding
-	EnvNextTab   key.Binding
-	EnvPrevTab   key.Binding
+	EnvNextTab    key.Binding
+	EnvPrevTab    key.Binding
+
+	// Program-wide context menu (keyboard equiv of right-click)
+	ContextMenu key.Binding
 }
 
 // ShortHelp returns bindings shown in the compact helpline.
@@ -236,5 +239,9 @@ var Keys = KeyMap{
 	EnvPrevTab: key.NewBinding(
 		key.WithKeys("ctrl+left", "alt+left", "ctrl+pgup", "alt+pgup"),
 		key.WithHelp("ctrl+←/alt+←", "prev tab"),
+	),
+	ContextMenu: key.NewBinding(
+		key.WithKeys("f3", "ctrl+space", "alt+space", "shift+F10", "alt+enter", "ctrl+enter", "menu"),
+		key.WithHelp("right-click/F3/Alt+Enter", "value options"),
 	),
 }
