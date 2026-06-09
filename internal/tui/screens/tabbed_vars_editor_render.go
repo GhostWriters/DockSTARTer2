@@ -206,7 +206,7 @@ func (m *TabbedVarsEditorModel) FullHelp() [][]key.Binding {
 			key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("Ctrl+C", "copy value/selection")),
 			key.NewBinding(key.WithKeys("shift+left"), key.WithHelp("Shift+←/→/Home/End", "select text")),
 			tui.Keys.EnvEditValue,
-			key.NewBinding(key.WithKeys("ctrl+ "), key.WithHelp("right-click/Ctrl+Space", "value options")),
+			tui.Keys.ContextMenu,
 		},
 		{tui.Keys.Tab, tui.Keys.Enter, tui.Keys.Esc, tui.Keys.ToggleLog, tui.Keys.Help, tui.Keys.ForceQuit},
 	}

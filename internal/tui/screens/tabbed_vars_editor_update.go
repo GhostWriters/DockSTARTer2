@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 )
 
@@ -275,13 +276,15 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "f5", "ctrl+r":
 			return m, func() tea.Msg { return envRefreshMsg{} }
-		case "ctrl+ ", "shift+F10": // Keyboard equiv of right-click: open context menu at current cursor
-			if m.focus == envFocusEditor && len(m.tabs) > 0 {
-				editor := m.tabs[m.activeTab].editor
-				layout := tui.GetLayout()
-				y := m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight + editor.CursorVisualRow() - editor.YOffset()
-				x := m.lastOffsetX + layout.NestedLeftOffset()
-				return m, m.showContextMenuForClick(x, y)
+		default:
+			if key.Matches(msg, tui.Keys.ContextMenu) {
+				if m.focus == envFocusEditor && len(m.tabs) > 0 {
+					editor := m.tabs[m.activeTab].editor
+					layout := tui.GetLayout()
+					y := m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight + editor.CursorVisualRow() - editor.YOffset()
+					x := m.lastOffsetX + layout.NestedLeftOffset()
+					return m, m.showContextMenuForClick(x, y)
+				}
 			}
 		}
 
