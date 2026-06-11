@@ -947,7 +947,7 @@ func (m *MenuModel) scrollPageUp() {
 	menuSelectedIndices[m.persistKey()] = m.cursor
 }
 
-func (m *MenuModel) scrollHalfPageUp() {
+func (m *MenuModel) scrollHalfPageUp() { //nolint:unused
 	pageHeight := m.list.Height() / 2
 	if pageHeight < 1 {
 		pageHeight = 1
@@ -990,7 +990,7 @@ func (m *MenuModel) scrollPageDown() {
 	menuSelectedIndices[m.persistKey()] = m.cursor
 }
 
-func (m *MenuModel) scrollHalfPageDown() {
+func (m *MenuModel) scrollHalfPageDown() { //nolint:unused
 	pageHeight := m.list.Height() / 2
 	if pageHeight < 1 {
 		pageHeight = 1

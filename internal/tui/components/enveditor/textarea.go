@@ -1093,7 +1093,7 @@ func (m *Model) deleteAfterCursor() {
 // before. No-op if the cursor is at the beginning of the line.  If
 // the cursor is not at the end of the line yet, moves the cursor to
 // the right.
-func (m *Model) transposeLeft() {
+func (m *Model) transposeLeft() { //nolint:unused
 	if m.col == 0 || len(m.value[m.row]) < 2 {
 		return
 	}
@@ -1217,7 +1217,7 @@ func (m *Model) characterLeft(insideLine bool) {
 // wordLeft moves the cursor one word to the left. Returns whether or not the
 // cursor blink should be reset. If input is masked, move input to the start
 // so as not to reveal word breaks in the masked input.
-func (m *Model) wordLeft() {
+func (m *Model) wordLeft() { //nolint:unused
 	for {
 		m.characterLeft(true /* insideLine */)
 		if m.col < len(m.value[m.row]) && !unicode.IsSpace(m.value[m.row][m.col]) {
@@ -1236,11 +1236,11 @@ func (m *Model) wordLeft() {
 // wordRight moves the cursor one word to the right. Returns whether or not the
 // cursor blink should be reset. If the input is masked, move input to the end
 // so as not to reveal word breaks in the masked input.
-func (m *Model) wordRight() {
+func (m *Model) wordRight() { //nolint:unused
 	m.doWordRight(func(int, int) { /* nothing */ })
 }
 
-func (m *Model) doWordRight(fn func(charIdx int, pos int)) {
+func (m *Model) doWordRight(fn func(charIdx int, pos int)) { //nolint:unused
 	// Skip spaces forward.
 	for m.col >= len(m.value[m.row]) || unicode.IsSpace(m.value[m.row][m.col]) {
 		if m.row == len(m.value)-1 && m.col == len(m.value[m.row]) {
@@ -1262,7 +1262,7 @@ func (m *Model) doWordRight(fn func(charIdx int, pos int)) {
 }
 
 // uppercaseRight changes the word to the right to uppercase.
-func (m *Model) uppercaseRight() {
+func (m *Model) uppercaseRight() { //nolint:unused
 	m.invalidateDiffCache(m.row)
 	m.doWordRight(func(_ int, i int) {
 		m.value[m.row][i] = unicode.ToUpper(m.value[m.row][i])
@@ -1270,7 +1270,7 @@ func (m *Model) uppercaseRight() {
 }
 
 // lowercaseRight changes the word to the right to lowercase.
-func (m *Model) lowercaseRight() {
+func (m *Model) lowercaseRight() { //nolint:unused
 	m.invalidateDiffCache(m.row)
 	m.doWordRight(func(_ int, i int) {
 		m.value[m.row][i] = unicode.ToLower(m.value[m.row][i])
@@ -1278,7 +1278,7 @@ func (m *Model) lowercaseRight() {
 }
 
 // capitalizeRight changes the word to the right to title case.
-func (m *Model) capitalizeRight() {
+func (m *Model) capitalizeRight() { //nolint:unused
 	m.invalidateDiffCache(m.row)
 	m.doWordRight(func(charIdx int, i int) {
 		if charIdx == 0 {
