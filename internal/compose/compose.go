@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"DockSTARTer2/internal/appenv"
@@ -297,11 +298,23 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 		bus = &tuiEventProcessor{out: w}
 	}
 
+	// Detect TTY before constructing the Docker CLI so we can decide whether
+	// to pass io.Discard as its output (our processor renders everything via the
+	// event bus when running in a TTY; the CLI's own output would corrupt the display).
+	isTTY := bus == nil && console.IsTTY()
+
+	cliOut := outStream
+	cliErr := errStream
+	if isTTY {
+		cliOut = io.Discard
+		cliErr = io.Discard
+	}
+
 	// Initialize Docker CLI
 	dockerCLI, err := dockercommand.NewDockerCli(
 		dockercommand.WithInputStream(os.Stdin),
-		dockercommand.WithOutputStream(outStream),
-		dockercommand.WithErrorStream(errStream),
+		dockercommand.WithOutputStream(cliOut),
+		dockercommand.WithErrorStream(cliErr),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create docker CLI: %w", err)
@@ -311,8 +324,29 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 	}
 
 	if bus == nil {
-		if dockerCLI.Out().IsTerminal() {
-			bus = NewConsoleEventProcessor(outStream)
+		if isTTY {
+			imageServices := make(map[string][]string)
+			containerToService := make(map[string]string)
+			for name, svc := range project.Services {
+				if svc.Image != "" {
+					imageServices[svc.Image] = append(imageServices[svc.Image], name)
+				}
+				// Map container_name back to service name so SDK events normalize correctly.
+				if svc.ContainerName != "" && svc.ContainerName != name {
+					containerToService[svc.ContainerName] = name
+				}
+			}
+			imageOrder := make([]string, 0, len(imageServices))
+			for img, svcs := range imageServices {
+				sort.Strings(svcs)
+				imageServices[img] = svcs
+				imageOrder = append(imageOrder, img)
+			}
+			sort.Strings(imageOrder)
+			bus = NewConsoleEventProcessor(outStream, command, imageServices, imageOrder, containerToService)
+			// Also discard SDK service streams — processor handles all output.
+			outStream = io.Discard
+			errStream = io.Discard
 		} else {
 			bus = display.Plain(outStream)
 		}
