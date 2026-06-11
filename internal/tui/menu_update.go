@@ -175,7 +175,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Move selection and column focus for any click
 			m.list.Select(idx)
 			m.cursor = idx
-			menuSelectedIndices[m.id] = idx
+			menuSelectedIndices[m.persistKey()] = idx
 			m.focusedItem = FocusList
 
 			// Handle column focus based on click region
@@ -333,7 +333,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 				m.cursor = m.list.Index()
-				menuSelectedIndices[m.id] = m.cursor
+				menuSelectedIndices[m.persistKey()] = m.cursor
 				return m, m.MarkScrollPending()
 			}
 
@@ -365,7 +365,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			m.cursor = m.list.Index()
-			menuSelectedIndices[m.id] = m.cursor
+			menuSelectedIndices[m.persistKey()] = m.cursor
 			return m, m.MarkScrollPending()
 		}
 
@@ -393,16 +393,8 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.scrollPageUp()
 			return m, nil
 
-		case key.Matches(keyMsg, Keys.HalfPageUp):
-			m.scrollHalfPageUp()
-			return m, nil
-
 		case key.Matches(keyMsg, Keys.PageDown):
 			m.scrollPageDown()
-			return m, nil
-
-		case key.Matches(keyMsg, Keys.HalfPageDown):
-			m.scrollHalfPageDown()
 			return m, nil
 
 		case key.Matches(keyMsg, Keys.Home):
@@ -412,7 +404,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.list.CursorDown()
 			}
 			m.cursor = m.list.Index()
-			menuSelectedIndices[m.id] = m.cursor
+			menuSelectedIndices[m.persistKey()] = m.cursor
 			return m, nil
 
 		case key.Matches(keyMsg, Keys.End):
@@ -422,7 +414,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.list.CursorUp()
 			}
 			m.cursor = m.list.Index()
-			menuSelectedIndices[m.id] = m.cursor
+			menuSelectedIndices[m.persistKey()] = m.cursor
 			return m, nil
 
 		// Right: move to next button (wraps within button row)
@@ -503,7 +495,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							if firstChar == keyChar {
 								m.list.Select(idx)
 								m.cursor = idx
-								menuSelectedIndices[m.id] = idx
+								menuSelectedIndices[m.persistKey()] = idx
 								m.focusedItem = FocusList
 								m.updateDelegate()
 								// NAVIGATION ONLY: Move cursor, do not execute Action.
@@ -590,7 +582,7 @@ func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 				}
 				// Update cursor for persistence
 				m.cursor = m.list.Index()
-				menuSelectedIndices[m.id] = m.cursor
+				menuSelectedIndices[m.persistKey()] = m.cursor
 				m.processingItemIdx = m.cursor
 				m.processingBtnID = "btn-select"
 				m.InvalidateCache()
@@ -914,7 +906,7 @@ func (m *MenuModel) scrollLineUp() {
 		}
 	}
 	m.cursor = m.list.Index()
-	menuSelectedIndices[m.id] = m.cursor
+	menuSelectedIndices[m.persistKey()] = m.cursor
 }
 
 func (m *MenuModel) scrollLineDown() {
@@ -926,7 +918,7 @@ func (m *MenuModel) scrollLineDown() {
 		}
 	}
 	m.cursor = m.list.Index()
-	menuSelectedIndices[m.id] = m.cursor
+	menuSelectedIndices[m.persistKey()] = m.cursor
 }
 
 func (m *MenuModel) scrollPageUp() {
@@ -952,7 +944,7 @@ func (m *MenuModel) scrollPageUp() {
 		m.list.CursorDown()
 	}
 	m.cursor = m.list.Index()
-	menuSelectedIndices[m.id] = m.cursor
+	menuSelectedIndices[m.persistKey()] = m.cursor
 }
 
 func (m *MenuModel) scrollHalfPageUp() {
@@ -969,7 +961,7 @@ func (m *MenuModel) scrollHalfPageUp() {
 		m.list.CursorDown()
 	}
 	m.cursor = m.list.Index()
-	menuSelectedIndices[m.id] = m.cursor
+	menuSelectedIndices[m.persistKey()] = m.cursor
 }
 
 func (m *MenuModel) scrollPageDown() {
@@ -995,7 +987,7 @@ func (m *MenuModel) scrollPageDown() {
 		m.list.CursorUp()
 	}
 	m.cursor = m.list.Index()
-	menuSelectedIndices[m.id] = m.cursor
+	menuSelectedIndices[m.persistKey()] = m.cursor
 }
 
 func (m *MenuModel) scrollHalfPageDown() {
@@ -1012,7 +1004,7 @@ func (m *MenuModel) scrollHalfPageDown() {
 		m.list.CursorUp()
 	}
 	m.cursor = m.list.Index()
-	menuSelectedIndices[m.id] = m.cursor
+	menuSelectedIndices[m.persistKey()] = m.cursor
 }
 
 
@@ -1079,5 +1071,5 @@ func (m *MenuModel) syncSelectionToViewport() {
 	}
 
 	m.cursor = m.list.Index()
-	menuSelectedIndices[m.id] = m.cursor
+	menuSelectedIndices[m.persistKey()] = m.cursor
 }

@@ -831,3 +831,33 @@ func (s *AppSelectionScreen) contextMenuHandler(idx int) []tui.ContextMenuItem {
 
 	return res
 }
+
+func (s *AppSelectionScreen) ShortHelp() []key.Binding {
+	return []key.Binding{tui.Keys.Up, tui.Keys.Down, tui.Keys.Enter, tui.Keys.Esc, tui.Keys.Help}
+}
+
+func (s *AppSelectionScreen) FullHelp() [][]key.Binding {
+	return [][]key.Binding{
+		{
+			tui.Keys.Help,
+			tui.Keys.Esc,
+			key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter/left click", "activate button")),
+			key.NewBinding(key.WithKeys("space"), key.WithHelp("space/middle click", "toggle item")),
+			tui.Keys.MouseRight,
+			tui.Keys.ContextMenu,
+			key.NewBinding(key.WithKeys("up"), key.WithHelp("↑/↓/scroll", "up/down")),
+			key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup/pgdn", "page up/down")),
+			key.NewBinding(key.WithKeys("home"), key.WithHelp("home/end", "top/bottom")),
+		},
+		{
+			key.NewBinding(key.WithKeys("left"), key.WithHelp("←/→", "previous/next button")),
+			key.NewBinding(key.WithKeys("alt+n"), key.WithHelp("alt+n/p", "next/previous element")),
+			tui.Keys.CycleTab,
+			tui.Keys.CycleShiftTab,
+			key.NewBinding(key.WithKeys("f2"), key.WithHelp("F2", "edit instance name")),
+			tui.Keys.ToggleLog,
+			tui.Keys.FocusPanelTitle,
+			tui.Keys.ForceQuit,
+		},
+	}
+}

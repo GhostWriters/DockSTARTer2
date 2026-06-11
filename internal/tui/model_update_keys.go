@@ -226,6 +226,16 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		}
 		const coarseDelta = 5
 		switch {
+		case key.Matches(msg, Keys.EnvReorderU):
+			m.panel.ResizeBy(coarseDelta)
+			m.applyPanelMax()
+			m.refreshPanelLayout()
+			return m, nil, true
+		case key.Matches(msg, Keys.EnvReorderD):
+			m.panel.ResizeBy(-coarseDelta)
+			m.applyPanelMax()
+			m.refreshPanelLayout()
+			return m, nil, true
 		case key.Matches(msg, Keys.Up):
 			m.panel.ResizeBy(1)
 			m.applyPanelMax()
@@ -236,12 +246,12 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			m.applyPanelMax()
 			m.refreshPanelLayout()
 			return m, nil, true
-		case key.Matches(msg, Keys.PageUp) || msg.String() == "alt+up":
+		case key.Matches(msg, Keys.PageUp):
 			m.panel.ResizeBy(coarseDelta)
 			m.applyPanelMax()
 			m.refreshPanelLayout()
 			return m, nil, true
-		case key.Matches(msg, Keys.PageDown) || msg.String() == "alt+down":
+		case key.Matches(msg, Keys.PageDown):
 			m.panel.ResizeBy(-coarseDelta)
 			m.applyPanelMax()
 			m.refreshPanelLayout()

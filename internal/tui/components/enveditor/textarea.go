@@ -66,17 +66,11 @@ type KeyMap struct {
 	PageUp                  key.Binding
 	PageDown                key.Binding
 	Paste                   key.Binding
-	WordBackward            key.Binding
-	WordForward             key.Binding
 	InputBegin              key.Binding
 	InputEnd                key.Binding
 
-	UppercaseWordForward  key.Binding
-	LowercaseWordForward  key.Binding
-	CapitalizeWordForward key.Binding
 
-	TransposeCharacterBackward key.Binding
-	InsertLine                 key.Binding
+	InsertLine key.Binding
 	Undo                       key.Binding
 	Redo                       key.Binding
 
@@ -97,37 +91,30 @@ type KeyMap struct {
 // upon the textarea.
 func DefaultKeyMap() KeyMap {
 	return KeyMap{
-		CharacterForward:        key.NewBinding(key.WithKeys("right", "ctrl+f"), key.WithHelp("right", "character forward")),
-		CharacterBackward:       key.NewBinding(key.WithKeys("left", "ctrl+b"), key.WithHelp("left", "character backward")),
-		WordForward:             key.NewBinding(key.WithKeys("alt+right", "alt+f"), key.WithHelp("alt+right", "word forward")),
-		WordBackward:            key.NewBinding(key.WithKeys("alt+left", "alt+b"), key.WithHelp("alt+left", "word backward")),
+		CharacterForward:        key.NewBinding(key.WithKeys("right"), key.WithHelp("right", "character forward")),
+		CharacterBackward:       key.NewBinding(key.WithKeys("left"), key.WithHelp("left", "character backward")),
 		LineNext:                key.NewBinding(key.WithKeys("down"), key.WithHelp("down", "next line")),
 		LinePrevious:            key.NewBinding(key.WithKeys("up"), key.WithHelp("up", "previous line")),
-		DeleteWordBackward:      key.NewBinding(key.WithKeys("alt+backspace", "ctrl+w", "alt+ctrl+h"), key.WithHelp("alt+backspace", "delete word backward")),
-		DeleteWordForward:       key.NewBinding(key.WithKeys("alt+delete", "alt+d"), key.WithHelp("alt+delete", "delete word forward")),
-		DeleteAfterCursor:       key.NewBinding(key.WithKeys("ctrl+k"), key.WithHelp("ctrl+k", "delete after cursor")),
-		DeleteBeforeCursor:      key.NewBinding(key.WithKeys("ctrl+u"), key.WithHelp("ctrl+u", "delete before cursor")),
-		InsertNewline:           key.NewBinding(key.WithKeys("enter", "ctrl+m"), key.WithHelp("enter", "insert newline")),
-		SplitLine:               key.NewBinding(key.WithKeys("ctrl+j"), key.WithHelp("ctrl+j", "split line at cursor")),
-		DeleteCharacterBackward: key.NewBinding(key.WithKeys("backspace", "ctrl+h"), key.WithHelp("backspace", "delete character backward")),
-		DeleteCharacterForward:  key.NewBinding(key.WithKeys("delete", "ctrl+d"), key.WithHelp("delete", "delete character forward")),
-		LineStart:               key.NewBinding(key.WithKeys("home", "ctrl+a"), key.WithHelp("home", "line start")),
-		LineEnd:                 key.NewBinding(key.WithKeys("end", "ctrl+e"), key.WithHelp("end", "line end")),
+		DeleteWordBackward:      key.NewBinding(key.WithKeys("ctrl+backspace", "alt+backspace", "ctrl+alt+backspace"), key.WithHelp("alt+bksp", "delete word backward")),
+		DeleteWordForward:       key.NewBinding(key.WithKeys("ctrl+delete", "alt+delete", "ctrl+alt+delete"), key.WithHelp("alt+del", "delete word forward")),
+		DeleteAfterCursor:       key.NewBinding(key.WithKeys("ctrl+k", "alt+k", "ctrl+alt+k"), key.WithHelp("alt+k", "delete after cursor")),
+		DeleteBeforeCursor:      key.NewBinding(key.WithKeys("ctrl+u", "alt+u", "ctrl+alt+u"), key.WithHelp("alt+u", "delete before cursor")),
+		InsertNewline:           key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "insert newline")),
+		SplitLine:               key.NewBinding(key.WithKeys("ctrl+j", "alt+j", "ctrl+alt+j"), key.WithHelp("alt+j", "split line at cursor")),
+		DeleteCharacterBackward: key.NewBinding(key.WithKeys("backspace"), key.WithHelp("bksp", "delete character backward")),
+		DeleteCharacterForward:  key.NewBinding(key.WithKeys("delete"), key.WithHelp("del", "delete character forward")),
+		LineStart:               key.NewBinding(key.WithKeys("home"), key.WithHelp("home", "line start")),
+		LineEnd:                 key.NewBinding(key.WithKeys("end"), key.WithHelp("end", "line end")),
 		PageUp:                  key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup", "page up")),
 		PageDown:                key.NewBinding(key.WithKeys("pgdown"), key.WithHelp("pgdown", "page down")),
-		Paste:                   key.NewBinding(key.WithKeys("ctrl+v"), key.WithHelp("ctrl+v", "paste")),
-		InputBegin:              key.NewBinding(key.WithKeys("alt+<", "ctrl+home"), key.WithHelp("alt+<", "input begin")),
-		InputEnd:                key.NewBinding(key.WithKeys("alt+>", "ctrl+end"), key.WithHelp("alt+>", "input end")),
+		Paste:                   key.NewBinding(key.WithKeys("ctrl+v", "alt+v", "ctrl+alt+v"), key.WithHelp("alt+v", "paste")),
+		InputBegin:              key.NewBinding(key.WithKeys("ctrl+home", "alt+<", "ctrl+alt+home", "ctrl+alt+<"), key.WithHelp("alt+<", "input begin")),
+		InputEnd:                key.NewBinding(key.WithKeys("ctrl+end", "alt+>", "ctrl+alt+end", "ctrl+alt+>"), key.WithHelp("alt+>", "input end")),
 
-		CapitalizeWordForward: key.NewBinding(key.WithKeys("alt+c"), key.WithHelp("alt+c", "capitalize word forward")),
-		LowercaseWordForward:  key.NewBinding(key.WithKeys("alt+l"), key.WithHelp("alt+l", "lowercase word forward")),
-		UppercaseWordForward:  key.NewBinding(key.WithKeys("alt+u"), key.WithHelp("alt+u", "uppercase word forward")),
-
-		TransposeCharacterBackward: key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "transpose character backward")),
-		InsertLine:                 key.NewBinding(key.WithKeys("ctrl+o"), key.WithHelp("ctrl+o", "insert line")),
-		Undo:                       key.NewBinding(key.WithKeys("ctrl+z"), key.WithHelp("ctrl+z", "undo")),
-		Redo:                       key.NewBinding(key.WithKeys("ctrl+y", "ctrl+shift+z"), key.WithHelp("ctrl+y", "redo")),
-		Copy:                       key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "copy")),
+		InsertLine:                 key.NewBinding(key.WithKeys("ctrl+o", "alt+o", "ctrl+alt+o"), key.WithHelp("alt+o", "insert line")),
+		Undo:                       key.NewBinding(key.WithKeys("ctrl+z", "alt+z", "ctrl+alt+z"), key.WithHelp("alt+z", "undo")),
+		Redo:                       key.NewBinding(key.WithKeys("ctrl+y", "alt+y", "ctrl+alt+y"), key.WithHelp("alt+y", "redo")),
+		Copy:                       key.NewBinding(key.WithKeys("ctrl+c", "alt+c", "ctrl+alt+c"), key.WithHelp("alt+c", "copy")),
 		SelectLeft:                 key.NewBinding(key.WithKeys("shift+left"), key.WithHelp("shift+left", "select left")),
 		SelectRight:                key.NewBinding(key.WithKeys("shift+right"), key.WithHelp("shift+right", "select right")),
 		SelectHome:                 key.NewBinding(key.WithKeys("shift+home"), key.WithHelp("shift+home", "select to start")),
@@ -1734,9 +1721,6 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		case key.Matches(msg, m.KeyMap.LineNext):
 			m.selActive = false
 			m.CursorDown()
-		case key.Matches(msg, m.KeyMap.WordForward):
-			m.selActive = false
-			m.wordRight()
 		case key.Matches(msg, m.KeyMap.Paste):
 			return m, Paste
 		case key.Matches(msg, m.KeyMap.CharacterBackward):
@@ -1745,9 +1729,6 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		case key.Matches(msg, m.KeyMap.LinePrevious):
 			m.selActive = false
 			m.CursorUp()
-		case key.Matches(msg, m.KeyMap.WordBackward):
-			m.selActive = false
-			m.wordLeft()
 		case key.Matches(msg, m.KeyMap.InputBegin):
 			m.selActive = false
 			m.MoveToBegin()
@@ -1760,23 +1741,6 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		case key.Matches(msg, m.KeyMap.PageDown):
 			m.selActive = false
 			m.PageDown()
-		case key.Matches(msg, m.KeyMap.LowercaseWordForward):
-			m.invalidateDiffCache(m.row)
-			m.pushUndoSnapshot()
-			m.lowercaseRight()
-		case key.Matches(msg, m.KeyMap.UppercaseWordForward):
-			m.invalidateDiffCache(m.row)
-			m.pushUndoSnapshot()
-			m.uppercaseRight()
-		case key.Matches(msg, m.KeyMap.CapitalizeWordForward):
-			m.invalidateDiffCache(m.row)
-			m.pushUndoSnapshot()
-			m.capitalizeRight()
-		case key.Matches(msg, m.KeyMap.TransposeCharacterBackward):
-			m.invalidateDiffCache(m.row)
-			m.pushUndoSnapshot()
-			m.transposeLeft()
-
 		case key.Matches(msg, m.KeyMap.ToggleInsert):
 			m.Overwrite = !m.Overwrite
 

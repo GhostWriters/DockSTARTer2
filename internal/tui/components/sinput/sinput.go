@@ -57,9 +57,9 @@ func DefaultKeyMap() KeyMap {
 		SelectRight: key.NewBinding(key.WithKeys("shift+right"), key.WithHelp("shift+right", "select right")),
 		SelectHome:  key.NewBinding(key.WithKeys("shift+home"), key.WithHelp("shift+home", "select to start")),
 		SelectEnd:   key.NewBinding(key.WithKeys("shift+end"), key.WithHelp("shift+end", "select to end")),
-		SelectAll:   key.NewBinding(key.WithKeys("ctrl+a"), key.WithHelp("ctrl+a", "select all")),
-		Copy:        key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "copy")),
-		Cut:         key.NewBinding(key.WithKeys("ctrl+x"), key.WithHelp("ctrl+x", "cut")),
+		SelectAll:   key.NewBinding(key.WithKeys("ctrl+a", "alt+a", "ctrl+alt+a"), key.WithHelp("alt+a", "select all")),
+		Copy:        key.NewBinding(key.WithKeys("ctrl+c", "alt+c", "ctrl+alt+c"), key.WithHelp("alt+c", "copy")),
+		Cut:         key.NewBinding(key.WithKeys("ctrl+x", "alt+x", "ctrl+alt+x"), key.WithHelp("alt+x", "cut")),
 		Insert:      key.NewBinding(key.WithKeys("insert"), key.WithHelp("insert", "toggle insert/overwrite")),
 	}
 }

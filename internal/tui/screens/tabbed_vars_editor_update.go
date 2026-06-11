@@ -237,12 +237,12 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		switch msg.String() {
-		case "esc":
+		switch {
+		case msg.String() == "esc":
 			m.focus = envFocusButtons
 			m.btnIdx = m.buttonIndex("Back")
 			return m, m.btnSpinner.SetProcessingDeferred(tui.IDBackButton, m.EscapeAction())
-		case "ctrl+right", "alt+right", "ctrl+pgdown", "alt+pgdown": // Next Tab
+		case key.Matches(msg, tui.Keys.EnvNextTab): // Next Tab
 			if m.focus == envFocusEditor && len(m.tabs) > 1 {
 				m.tabs[m.activeTab].editor.Blur()
 				m.activeTab = (m.activeTab + 1) % len(m.tabs)
@@ -250,7 +250,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.SetSize(m.width, m.height)
 				return m, nil
 			}
-		case "ctrl+left", "alt+left", "ctrl+pgup", "alt+pgup": // Prev Tab
+		case key.Matches(msg, tui.Keys.EnvPrevTab): // Prev Tab
 			if m.focus == envFocusEditor && len(m.tabs) > 1 {
 				m.tabs[m.activeTab].editor.Blur()
 				m.activeTab--
@@ -261,7 +261,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.SetSize(m.width, m.height)
 				return m, nil
 			}
-		case "tab", "shift+tab":
+		case msg.String() == "tab" || msg.String() == "shift+tab":
 			if m.focus == envFocusEditor {
 				m.focus = envFocusButtons
 				if len(m.tabs) > 0 {
@@ -274,17 +274,15 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			return m, nil
-		case "f5", "ctrl+r":
+		case key.Matches(msg, tui.Keys.EnvRefresh):
 			return m, func() tea.Msg { return envRefreshMsg{} }
-		default:
-			if key.Matches(msg, tui.Keys.ContextMenu) {
-				if m.focus == envFocusEditor && len(m.tabs) > 0 {
-					editor := m.tabs[m.activeTab].editor
-					layout := tui.GetLayout()
-					y := m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight + editor.CursorVisualRow() - editor.YOffset()
-					x := m.lastOffsetX + layout.NestedLeftOffset()
-					return m, m.showContextMenuForClick(x, y)
-				}
+		case key.Matches(msg, tui.Keys.ContextMenu):
+			if m.focus == envFocusEditor && len(m.tabs) > 0 {
+				editor := m.tabs[m.activeTab].editor
+				layout := tui.GetLayout()
+				y := m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight + editor.CursorVisualRow() - editor.YOffset()
+				x := m.lastOffsetX + layout.NestedLeftOffset()
+				return m, m.showContextMenuForClick(x, y)
 			}
 		}
 
@@ -328,31 +326,31 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		} else {
 			// Specific editor hotkeys
-			switch msg.String() {
-			case "ctrl+d", "alt+backspace":
+			switch {
+			case key.Matches(msg, tui.Keys.EnvDelete):
 				if len(m.tabs) > 0 {
 					varName := m.tabs[m.activeTab].editor.CurrentVariableName()
 					m.tabs[m.activeTab].editor.DeleteCurrentVariable()
 					return m, m.checkEnabledChangedForKey(varName)
 				}
 				return m, nil
-			case "ctrl+u":
+			case msg.String() == "ctrl+u":
 				if len(m.tabs) > 0 {
 					varName := m.tabs[m.activeTab].editor.CurrentVariableName()
 					m.tabs[m.activeTab].editor.UndeleteCurrentVariable()
 					return m, m.checkEnabledChangedForKey(varName)
 				}
 				return m, nil
-			case "ctrl+a":
+			case key.Matches(msg, tui.Keys.EnvAddVar):
 				return m, m.showAddVarDialog()
-			case "f2":
+			case msg.String() == "f2":
 				return m, m.showSetValueDialog()
-			case "ctrl+up":
+			case key.Matches(msg, tui.Keys.EnvReorderU):
 				if len(m.tabs) > 0 {
 					m.tabs[m.activeTab].editor.MoveVariableUp()
 				}
 				return m, nil
-			case "ctrl+down":
+			case key.Matches(msg, tui.Keys.EnvReorderD):
 				if len(m.tabs) > 0 {
 					m.tabs[m.activeTab].editor.MoveVariableDown()
 				}
