@@ -184,31 +184,40 @@ func (m *TabbedVarsEditorModel) ShortHelp() []key.Binding {
 }
 
 func (m *TabbedVarsEditorModel) FullHelp() [][]key.Binding {
-	nav := []key.Binding{
-		key.NewBinding(key.WithKeys("up"), key.WithHelp("↑/↓/←/→", "navigate")),
-		key.NewBinding(key.WithKeys("pgup"), key.WithHelp("PgUp/PgDn", "page up/down")),
-		key.NewBinding(key.WithKeys("home"), key.WithHelp("Home/End", "top/bottom")),
+	editorActions := []key.Binding{
+		tui.Keys.EnvRefresh,
+		tui.Keys.EnvAddVar,
+		tui.Keys.EnvInsert,
+		tui.Keys.EnvSplitLine,
+		tui.Keys.EnvDelete,
+		key.NewBinding(key.WithKeys("ctrl+up"), key.WithHelp("alt+↑/↓", "reorder row")),
+		tui.Keys.EnvEditValue,
 	}
 	if len(m.tabs) > 1 {
-		nav = append(nav, tui.Keys.EnvNextTab, tui.Keys.EnvPrevTab)
+		editorActions = append(editorActions, tui.Keys.EnvNextTab, tui.Keys.EnvPrevTab)
 	}
 
 	return [][]key.Binding{
-		nav,
 		{
-			tui.Keys.EnvRefresh,
-			tui.Keys.EnvAddVar,
-			tui.Keys.EnvInsert,
-			tui.Keys.EnvSplitLine,
-			tui.Keys.EnvDelete,
-			key.NewBinding(key.WithKeys("ctrl+up"), key.WithHelp("Ctrl+↑/↓", "reorder row")),
-			key.NewBinding(key.WithKeys("ctrl+z"), key.WithHelp("Ctrl+Z/Y", "undo/redo")),
-			key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("Ctrl+C", "copy value/selection")),
-			key.NewBinding(key.WithKeys("shift+left"), key.WithHelp("Shift+←/→/Home/End", "select text")),
-			tui.Keys.EnvEditValue,
+			tui.Keys.Help,
+			tui.Keys.Esc,
+			tui.Keys.Tab,
+			tui.Keys.Enter,
+			tui.Keys.MouseRight,
 			tui.Keys.ContextMenu,
+			key.NewBinding(key.WithKeys("up"), key.WithHelp("↑/↓/←/→", "move cursor")),
+			key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup/pgdn", "page up/down")),
+			key.NewBinding(key.WithKeys("home"), key.WithHelp("home/end", "top/bottom")),
 		},
-		{tui.Keys.Tab, tui.Keys.Enter, tui.Keys.Esc, tui.Keys.ToggleLog, tui.Keys.Help, tui.Keys.ForceQuit},
+		editorActions,
+		{
+			key.NewBinding(key.WithKeys("ctrl+z"), key.WithHelp("alt+z/y", "undo/redo")),
+			key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("alt+c", "copy value/selection")),
+			key.NewBinding(key.WithKeys("shift+left"), key.WithHelp("shift+←/→/home/end", "select text")),
+			tui.Keys.ToggleLog,
+			tui.Keys.FocusPanelTitle,
+			tui.Keys.ForceQuit,
+		},
 	}
 }
 

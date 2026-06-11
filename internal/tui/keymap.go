@@ -10,7 +10,7 @@ import (
 //   - Focus:        Tab, ShiftTab (screen-level element cycling)
 //   - Action:       Enter (select/confirm), Esc (back/exit)
 //   - Confirm:      Yes, No
-//   - Scroll:       PageUp, PageDown, HalfPageUp, HalfPageDown (viewport)
+//   - Scroll:       PageUp, PageDown (viewport)
 //   - Utility:      Help, ForceQuit
 type KeyMap struct {
 	// List navigation
@@ -37,8 +37,6 @@ type KeyMap struct {
 	// Viewport scrolling (programbox)
 	PageUp       key.Binding
 	PageDown     key.Binding
-	HalfPageUp   key.Binding
-	HalfPageDown key.Binding
 	Home         key.Binding
 	End          key.Binding
 
@@ -46,7 +44,7 @@ type KeyMap struct {
 	Help      key.Binding
 	ForceQuit key.Binding
 
-	// Log panel
+	// Panel
 	ToggleLog        key.Binding
 	FocusPanelTitle  key.Binding
 
@@ -80,26 +78,24 @@ func (k KeyMap) ShortHelp() []key.Binding {
 func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{
-			key.NewBinding(key.WithKeys("up"), key.WithHelp("↑/↓/scroll", "up/down")),
-			key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup/pgdn", "page up/down")),
-			key.NewBinding(key.WithKeys("ctrl+u"), key.WithHelp("ctrl+u/ctrl+d", "half page up/down")),
-			key.NewBinding(key.WithKeys("home"), key.WithHelp("home/end", "top/bottom")),
-			key.NewBinding(key.WithKeys("ctrl+left"), key.WithHelp("ctrl ←/→", "switch tab/col")),
-			key.NewBinding(key.WithKeys("alt+left"), key.WithHelp("alt ←/→", "switch tab/col")),
-			key.NewBinding(key.WithKeys("left"), key.WithHelp("←/→", "previous/next button")),
-			key.NewBinding(key.WithKeys("f2"), key.WithHelp("f2", "edit/rename item")),
-		},
-		{
+			k.Help,
+			k.Esc,
 			key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter/left click", "activate button")),
 			key.NewBinding(key.WithKeys("space"), key.WithHelp("space/middle click", "toggle item")),
 			k.MouseRight,
-			key.NewBinding(key.WithKeys("ctrl+n"), key.WithHelp("ctrl+n/p", "next/previous element")),
+			k.ContextMenu,
+			key.NewBinding(key.WithKeys("up"), key.WithHelp("↑/↓/scroll", "up/down")),
+			key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup/pgdn", "page up/down")),
+			key.NewBinding(key.WithKeys("home"), key.WithHelp("home/end", "top/bottom")),
+		},
+		{
+			key.NewBinding(key.WithKeys("left"), key.WithHelp("←/→", "previous/next button")),
+			key.NewBinding(key.WithKeys("alt+left"), key.WithHelp("alt ←/→", "switch tab/col")),
+			key.NewBinding(key.WithKeys("alt+n"), key.WithHelp("alt+n/p", "next/previous element")),
 			k.CycleTab,
 			k.CycleShiftTab,
-			k.Esc,
 			k.ToggleLog,
 			k.FocusPanelTitle,
-			k.Help,
 			k.ForceQuit,
 		},
 	}
@@ -124,12 +120,12 @@ var Keys = KeyMap{
 		key.WithHelp("→", "next button"),
 	),
 	Tab: key.NewBinding(
-		key.WithKeys("ctrl+n"),
-		key.WithHelp("ctrl+n", "next screen element"),
+		key.WithKeys("ctrl+n", "alt+n", "ctrl+alt+n"),
+		key.WithHelp("alt+n", "next screen element"),
 	),
 	ShiftTab: key.NewBinding(
-		key.WithKeys("ctrl+p"),
-		key.WithHelp("ctrl+p", "prev screen element"),
+		key.WithKeys("ctrl+p", "alt+p", "ctrl+alt+p"),
+		key.WithHelp("alt+p", "prev screen element"),
 	),
 	CycleTab: key.NewBinding(
 		key.WithKeys("tab", "."),
@@ -152,27 +148,19 @@ var Keys = KeyMap{
 		key.WithHelp("esc", "back/exit"),
 	),
 	PageUp: key.NewBinding(
-		key.WithKeys("pgup", "ctrl+b", "ctrl+up"),
-		key.WithHelp("pgup/ctrl+up", "scroll up"),
+		key.WithKeys("pgup"),
+		key.WithHelp("pgup", "scroll up"),
 	),
 	PageDown: key.NewBinding(
-		key.WithKeys("pgdown", "ctrl+f", "ctrl+down"),
-		key.WithHelp("pgdn/ctrl+down", "scroll down"),
-	),
-	HalfPageUp: key.NewBinding(
-		key.WithKeys("ctrl+u"),
-		key.WithHelp("ctrl+u", "half page up"),
-	),
-	HalfPageDown: key.NewBinding(
-		key.WithKeys("ctrl+d"),
-		key.WithHelp("ctrl+d", "half page down"),
+		key.WithKeys("pgdown"),
+		key.WithHelp("pgdn", "scroll down"),
 	),
 	Home: key.NewBinding(
-		key.WithKeys("home", "ctrl+home"),
+		key.WithKeys("home", "ctrl+home", "alt+home", "ctrl+alt+home"),
 		key.WithHelp("home", "top"),
 	),
 	End: key.NewBinding(
-		key.WithKeys("end", "ctrl+end"),
+		key.WithKeys("end", "ctrl+end", "alt+end", "ctrl+alt+end"),
 		key.WithHelp("end", "bottom"),
 	),
 	Help: key.NewBinding(
@@ -184,64 +172,64 @@ var Keys = KeyMap{
 		key.WithHelp("ctrl+\\", "force quit"),
 	),
 	ToggleLog: key.NewBinding(
-		key.WithKeys("f10", "ctrl+l"),
-		key.WithHelp("f10/ctrl+l", "toggle log panel"),
+		key.WithKeys("f10", "ctrl+l", "alt+l", "ctrl+alt+l"),
+		key.WithHelp("F10/alt+l", "expand/collapse panel"),
 	),
 	FocusPanelTitle: key.NewBinding(
-		key.WithKeys("f9", "ctrl+t"),
-		key.WithHelp("f9/ctrl+t", "focus panel title bar"),
+		key.WithKeys("f9", "ctrl+t", "alt+t", "ctrl+alt+t"),
+		key.WithHelp("F9/alt+t", "focus title bar"),
 	),
 	MouseLeft: key.NewBinding(
 		key.WithHelp("left click", "select/confirm"),
 	),
 	MouseRight: key.NewBinding(
-		key.WithHelp("right click", "context menu/help"),
+		key.WithHelp("right click", "context menu"),
 	),
 	MouseWheel: key.NewBinding(
 		key.WithHelp("scroll wheel", "scroll list/logs"),
 	),
 	EnvRefresh: key.NewBinding(
-		key.WithKeys("f5", "ctrl+r"),
-		key.WithHelp("F5/Ctrl+R", "refresh"),
+		key.WithKeys("f5", "ctrl+r", "alt+r", "ctrl+alt+r"),
+		key.WithHelp("F5/alt+r", "refresh"),
 	),
 	EnvAddVar: key.NewBinding(
-		key.WithKeys("ctrl+a"),
-		key.WithHelp("ctrl+a", "add var"),
+		key.WithKeys("ctrl+a", "alt+a", "ctrl+alt+a"),
+		key.WithHelp("alt+a", "add var"),
 	),
 	EnvDelete: key.NewBinding(
-		key.WithKeys("ctrl+d", "alt+backspace", "alt+ctrl+h"),
-		key.WithHelp("ctrl+d", "delete var"),
+		key.WithKeys("ctrl+d", "alt+d", "ctrl+alt+d"),
+		key.WithHelp("alt+d", "delete var"),
 	),
 	EnvReorderU: key.NewBinding(
-		key.WithKeys("ctrl+up", "alt+up"),
-		key.WithHelp("ctrl+up/alt+up", "move up"),
+		key.WithKeys("ctrl+up", "alt+up", "ctrl+alt+up"),
+		key.WithHelp("alt+↑", "move up"),
 	),
 	EnvReorderD: key.NewBinding(
-		key.WithKeys("ctrl+down", "alt+down"),
-		key.WithHelp("ctrl+down/alt+down", "move down"),
+		key.WithKeys("ctrl+down", "alt+down", "ctrl+alt+down"),
+		key.WithHelp("alt+↓", "move down"),
 	),
 	EnvInsert: key.NewBinding(
-		key.WithKeys("ctrl+o"),
-		key.WithHelp("ctrl+o", "insert row"),
+		key.WithKeys("ctrl+o", "alt+o", "ctrl+alt+o"),
+		key.WithHelp("alt+o", "insert row"),
 	),
 	EnvSplitLine: key.NewBinding(
-		key.WithKeys("ctrl+j"),
-		key.WithHelp("Ctrl+J", "split line at cursor"),
+		key.WithKeys("ctrl+j", "alt+j", "ctrl+alt+j"),
+		key.WithHelp("alt+j", "split line at cursor"),
 	),
 	EnvEditValue: key.NewBinding(
 		key.WithKeys("f2"),
 		key.WithHelp("F2", "edit value"),
 	),
 	EnvNextTab: key.NewBinding(
-		key.WithKeys("ctrl+right", "alt+right", "ctrl+pgdown", "alt+pgdown"),
-		key.WithHelp("ctrl+→/alt+→", "next tab"),
+		key.WithKeys("ctrl+right", "alt+right", "ctrl+pgdown", "alt+pgdown", "ctrl+alt+right"),
+		key.WithHelp("alt+→", "next tab"),
 	),
 	EnvPrevTab: key.NewBinding(
-		key.WithKeys("ctrl+left", "alt+left", "ctrl+pgup", "alt+pgup"),
-		key.WithHelp("ctrl+←/alt+←", "prev tab"),
+		key.WithKeys("ctrl+left", "alt+left", "ctrl+pgup", "alt+pgup", "ctrl+alt+left"),
+		key.WithHelp("alt+←", "prev tab"),
 	),
 	ContextMenu: key.NewBinding(
-		key.WithKeys("f3", "ctrl+space", "alt+space", "shift+F10", "alt+enter", "ctrl+enter", "menu"),
-		key.WithHelp("right-click/F3/Alt+Enter", "value options"),
+		key.WithKeys("f3", "ctrl+space", "alt+space", "ctrl+alt+space", "shift+F10", "alt+enter", "ctrl+enter", "ctrl+alt+enter", "menu"),
+		key.WithHelp("F3/alt+space/alt+enter", "context menu"),
 	),
 }

@@ -505,9 +505,33 @@ func (m *MenuModel) MenuName() string {
 	return m.menuName
 }
 
-// SetMenuName sets the persistent menu name
+// SetMenuName sets the persistent menu name and re-keys any saved selection
+// so menus with different names don't share the same position slot.
 func (m *MenuModel) SetMenuName(name string) {
+	if name != "" && name != m.menuName {
+		oldKey := m.persistKey()
+		if idx, ok := menuSelectedIndices[oldKey]; ok {
+			// Migrate saved selection from old key (id) to new key (name)
+			delete(menuSelectedIndices, oldKey)
+			menuSelectedIndices[name] = idx
+		} else if idx, ok := menuSelectedIndices[name]; ok {
+			// Restore position that was previously saved under the name key
+			if idx >= 0 && idx < len(m.items) {
+				m.cursor = idx
+				m.list.Select(idx)
+			}
+		}
+	}
 	m.menuName = name
+}
+
+// persistKey returns the key used in menuSelectedIndices.
+// Prefers menuName when set so distinct menus with the same id don't collide.
+func (m *MenuModel) persistKey() string {
+	if m.menuName != "" {
+		return m.menuName
+	}
+	return m.id
 }
 
 // SetFocusedItem explicitly sets which UI element has focus (list or a button).
@@ -807,7 +831,7 @@ func (m *MenuModel) Select(index int) {
 	if index >= 0 && index < len(m.items) {
 		m.cursor = index
 		m.list.Select(index)
-		menuSelectedIndices[m.id] = index
+		menuSelectedIndices[m.persistKey()] = index
 	}
 }
 

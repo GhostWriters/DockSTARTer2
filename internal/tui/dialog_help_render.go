@@ -509,11 +509,16 @@ func (m *HelpDialogModel) ViewString() string {
 			}
 			bindingContent = append(bindingContent, paddedLine)
 		}
+		// Append modifier note at the bottom of every bindings page.
+		note := theme.ToThemeANSI("Most {{|KeyCap|}}alt+key{{[-]}} shortcuts also accept {{|KeyCap|}}ctrl{{[-]}} or {{|KeyCap|}}ctrl+alt{{[-]}}")
+		centeredNote := CenterText(note, targetWidth)
+		blankLine := strutil.Repeat(" ", targetWidth)
+		bindingContent = append(bindingContent, blankLine, centeredNote)
 		bindingsBox := RenderBorderedBoxCtx(
 			"Keyboard & Mouse Controls",
 			strings.Join(bindingContent, "\n"),
 			targetWidth,
-			len(bpLines)+2,
+			len(bpLines)+4,
 			false, // not interactive
 			true,  // showIndicators: true — reserve space to match legend/context title alignment
 			true,
