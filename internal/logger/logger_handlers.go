@@ -128,10 +128,15 @@ func (h *TagProcessorHandler) Enabled(ctx context.Context, level slog.Level) boo
 }
 
 func (h *TagProcessorHandler) Handle(ctx context.Context, r slog.Record) error {
-	// Suppress console output in TUI mode (ansi mode is for console)
+	// Suppress console output in TUI mode or file-only context (ansi mode is for console)
 	// EXCEPT for LevelFatal, which must always be visible.
-	if h.mode == "ansi" && TUIMode && r.Level < LevelFatal {
-		return nil
+	if h.mode == "ansi" && r.Level < LevelFatal {
+		if TUIMode {
+			return nil
+		}
+		if ctx.Value(suppressConsoleKey{}) == true {
+			return nil
+		}
 	}
 
 	// Resolve message (it contains raw tags)

@@ -312,7 +312,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 
 	if bus == nil {
 		if dockerCLI.Out().IsTerminal() {
-			bus = display.Full(outStream, errStream, true)
+			bus = NewConsoleEventProcessor(outStream)
 		} else {
 			bus = display.Plain(outStream)
 		}

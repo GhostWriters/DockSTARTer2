@@ -22,6 +22,17 @@ import (
 // TUIMode suppresses direct console output (stdout/stderr) when active.
 var TUIMode bool
 
+// suppressConsoleKey is the context key for suppressing console output for log calls.
+type suppressConsoleKey struct{}
+
+// WithSuppressConsole returns a context that suppresses console output for all log calls.
+// Messages still appear in the TUI log panel and log file. Fatal messages are always shown.
+//
+//nolint:unused
+func WithSuppressConsole(ctx context.Context) context.Context {
+	return context.WithValue(ctx, suppressConsoleKey{}, true)
+}
+
 // logLineCh carries TUI-formatted log lines to the log panel.
 var logLineCh = make(chan string, 200)
 
