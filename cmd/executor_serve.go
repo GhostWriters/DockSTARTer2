@@ -158,16 +158,10 @@ func handleServerUninstall(ctx context.Context) error {
 }
 
 // handleServerEnable enables and starts the OS service.
+// Always reinstalls the unit file so ExecStart reflects the current binary path.
 func handleServerEnable(ctx context.Context) error {
-	installed, err := serve.ServiceInstalled()
-	if err != nil {
+	if err := handleServerInstall(ctx); err != nil {
 		return err
-	}
-	if !installed {
-		logger.Notice(ctx, "Service is not installed — installing first.")
-		if err := handleServerInstall(ctx); err != nil {
-			return err
-		}
 	}
 	if err := serve.EnableService(); err != nil {
 		return err
