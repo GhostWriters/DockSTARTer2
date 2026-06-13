@@ -1252,14 +1252,10 @@ func (p *consoleEventProcessor) buildLayerLines(layers []*consoleTask, maxImgNam
 	}
 
 	// SDK approach: one char per layer, no min clamp.
-	// Failsafe: clamp to terminal width minus fixed prefix (~70 chars) so bar never wraps.
-	barW := len(layers)
+	// Failsafe: clamp bar width to terminal width minus fixed prefix (~70 chars) so bar never wraps.
 	maxBarW := termW - 70
 	if maxBarW < 1 {
 		maxBarW = 1
-	}
-	if barW > maxBarW {
-		barW = maxBarW
 	}
 
 	// Pre-compute per-layer percents for the shared bar (all rows show the same bar).
@@ -1275,6 +1271,9 @@ func (p *consoleEventProcessor) buildLayerLines(layers []*consoleTask, maxImgNam
 			pct = 100
 		}
 		layerPcts[i] = pct
+	}
+	if len(layerPcts) > maxBarW {
+		layerPcts = layerPcts[:maxBarW]
 	}
 
 	var out []string
