@@ -62,7 +62,7 @@ func (h *TUIHandler) Handle(ctx context.Context, r slog.Record) error {
 		}
 	} else {
 		if w, ok := ctx.Value(console.TUIWriterKey).(io.Writer); ok {
-			if ctx.Value(suppressWriterKey{}) != w {
+			if !isSuppressed(ctx, w) {
 				fmt.Fprintln(w, tuiMsg)
 			}
 		}
@@ -137,7 +137,13 @@ func (h *TagProcessorHandler) Handle(ctx context.Context, r slog.Record) error {
 		if TUIMode {
 			return nil
 		}
-		if sw, ok := ctx.Value(suppressWriterKey{}).(io.Writer); ok && sw == h.consoleWriter {
+		// Suppress console when this command has a TUI writer (running inside a program box).
+		// Do NOT suppress globally when IsTUIEnabled() — console panel commands have no TUI
+		// writer on their context and rely on stdout reaching the panel's pipe scanner.
+		if ctx.Value(console.TUIWriterKey) != nil {
+			return nil
+		}
+		if isSuppressed(ctx, h.consoleWriter) {
 			return nil
 		}
 	}

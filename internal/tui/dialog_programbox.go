@@ -496,6 +496,12 @@ func (m *ProgramBoxModel) satisfySubDialogChan(result any) {
 	}
 	// Handle result based on channel type
 	switch ch := m.subDialogChan.(type) {
+	case chan int:
+		if r, ok := result.(int); ok {
+			ch <- r
+		} else {
+			ch <- -1
+		}
 	case chan bool:
 		if r, ok := result.(bool); ok {
 			ch <- r

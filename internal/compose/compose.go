@@ -293,7 +293,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 	var errStream io.Writer = os.Stderr
 	var bus api.EventProcessor
 
-	// Detect TUI writer (GUI program box) and TTY mode.
+	// Detect TUI writer (GUI program box or console panel) and TTY mode.
 	tuiWriter, hasTUIWriter := ctx.Value(console.TUIWriterKey).(io.Writer)
 	isTTY := !hasTUIWriter && console.IsTTY()
 
@@ -364,10 +364,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 		sort.Slice(imageOrder, func(i, j int) bool {
 			return imageBaseName(imageOrder[i]) < imageBaseName(imageOrder[j])
 		})
-		var updateFn func([]string)
-		if hasTUIWriter {
-			updateFn = console.ReplaceOutputLinesFn
-		}
+		updateFn := console.ReplaceOutputLinesFn
 		bus = NewConsoleEventProcessor(ctx, outStream, command, imageServices, imageOrder, containerToService, project.Name, !conf.UI.LineCharacters, console.GlobalVerbose, updateFn)
 		// Also discard SDK service streams — processor handles all output.
 		outStream = io.Discard
