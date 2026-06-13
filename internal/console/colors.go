@@ -189,17 +189,22 @@ func init() {
 		ProgramBox: "{{[-]}}{{[white:black]}}",
 		ConsoleBox: "{{[-]}}{{[white:black]}}",
 
-		// Docker Compose progress colors
-		DockerSuccess:     "{{[-]}}{{[green]}}",
-		DockerFinal:       "{{[-]}}{{[green::B]}}",
-		DockerFail:        "{{[-]}}{{[red]}}",
-		DockerWarn:        "{{[-]}}{{[yellow]}}",
-		DockerPending:     "{{[-]}}{{[gray::D]}}",
-		DockerActive:      "{{[-]}}{{[yellow]}}",
-		DockerImage:       "{{[-]}}{{[magenta]}}",
-		DockerTag:         "{{[-]}}{{[magenta::D]}}",
-		DockerSpinner:     "{{[-]}}{{[yellow]}}",
-		DockerProgressBar: "{{[-]}}{{[cyan]}}",
+		// Docker Compose progress colors — markers (icons, labels, decorations)
+		DockerMarkerDone:    "{{[-]}}{{[green]}}",
+		DockerMarkerError:   "{{[-]}}{{[red]}}",
+		DockerMarkerWarn:    "{{[-]}}{{[yellow]}}",
+		DockerColon:   "{{[-]}}{{[gray::D]}}",
+		DockerImage:   "{{[-]}}{{[magenta]}}",
+		DockerTag:     "{{[-]}}{{[magenta::D]}}",
+		DockerSpinner: "{{[-]}}{{[yellow]}}",
+		DockerBar:     "{{[-]}}{{[cyan]}}",
+		// Docker Compose progress colors — status text
+		DockerStatusSuccess: "{{[-]}}{{[cyan]}}",
+		DockerStatusFinal:   "{{[-]}}{{[green::B]}}",
+		DockerStatusFail:    "{{[-]}}{{[red]}}",
+		DockerStatusWarn:    "{{[-]}}{{[yellow]}}",
+		DockerStatusPending: "{{[-]}}{{[gray::D]}}",
+		DockerStatusActive:  "{{[-]}}{{[yellow]}}",
 	}
 
 	// Register base tags once Colors is populated
@@ -324,17 +329,22 @@ type AppColors struct {
 	ProgramBox string
 	ConsoleBox string
 
-	// Docker Compose progress colors
-	DockerSuccess     string
-	DockerFinal       string
-	DockerFail        string
-	DockerWarn        string
-	DockerPending     string
-	DockerActive      string
-	DockerImage       string
-	DockerTag         string
-	DockerSpinner     string
-	DockerProgressBar string
+	// Docker Compose progress colors — markers (icons, labels, decorations)
+	DockerMarkerDone    string
+	DockerMarkerError   string
+	DockerMarkerWarn    string
+	DockerColon   string
+	DockerImage   string
+	DockerTag     string
+	DockerSpinner string
+	DockerBar     string
+	// Docker Compose progress colors — status text
+	DockerStatusSuccess string
+	DockerStatusFinal   string
+	DockerStatusFail    string
+	DockerStatusWarn    string
+	DockerStatusPending string
+	DockerStatusActive  string
 }
 
 // Colors is the global instance for application output (stdout)
