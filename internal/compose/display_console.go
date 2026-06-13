@@ -490,12 +490,27 @@ func (p *consoleEventProcessor) buildSummaryLine() string {
 	netCount := len(p.networkIDs)
 	volCount := len(p.volumeIDs)
 
+	// Count layer tasks (children of image tasks).
+	isImageID := make(map[string]bool, len(p.imageIDs))
+	for _, id := range p.imageIDs {
+		isImageID[id] = true
+	}
+	layerCount := 0
+	for _, id := range p.ids {
+		if t := p.tasks[id]; t != nil && t.parentID != "" && isImageID[t.parentID] {
+			layerCount++
+		}
+	}
+
 	var parts []string
 	if svcCount > 0 {
 		parts = append(parts, fmt.Sprintf("{{|App|}}%d %s{{[-]}}", svcCount, plural(svcCount, "service", "services")))
 	}
 	if imgCount > 0 {
 		parts = append(parts, fmt.Sprintf("{{|DockerImage|}}%d %s{{[-]}}", imgCount, plural(imgCount, "image", "images")))
+	}
+	if layerCount > 0 {
+		parts = append(parts, fmt.Sprintf("{{[::D]}}%d %s{{[-]}}", layerCount, plural(layerCount, "layer", "layers")))
 	}
 	if netCount > 0 {
 		parts = append(parts, fmt.Sprintf("{{|App|}}%d %s{{[-]}}", netCount, plural(netCount, "network", "networks")))

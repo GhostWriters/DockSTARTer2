@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	"DockSTARTer2/internal/compose"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 
 	"github.com/docker/docker/api/types/filters"
-	"github.com/docker/go-units"
 )
 
 // Prune removes unused docker resources.
@@ -40,76 +40,53 @@ func Prune(ctx context.Context, assumeYes bool) error {
 		return fmt.Errorf("failed to get docker client: %w", err)
 	}
 
-	// Logging prefix parity with RunAndLog
-	logPrune := func(msg string, args ...any) {
-		line := fmt.Sprintf(msg, args...)
-		if line != "" {
-			logger.Notice(ctx, "{{|RunningCommand|}}docker:{{[-]}} %s", line)
-		} else {
-			logger.Notice(ctx, "{{|RunningCommand|}}docker:{{[-]}}")
-		}
-	}
+	asciiMode := !console.LineCharacters
+	imageServices := compose.LoadImageServices(ctx)
 
-	var totalSpace uint64
+	stopSpinner := console.StartSpinner()
+	report := PruneReport{AsciiMode: asciiMode}
 
 	// 1. Containers
 	cReport, err := cli.ContainersPrune(ctx, filters.NewArgs())
 	if err != nil {
 		logger.Error(ctx, "Failed to prune containers: %v", err)
-	} else if len(cReport.ContainersDeleted) > 0 {
-		logPrune("Deleted Containers:")
-		for _, id := range cReport.ContainersDeleted {
-			logPrune("%s", id)
-		}
-		totalSpace += cReport.SpaceReclaimed
-		logPrune("")
+	} else {
+		report.ContainersDeleted = cReport.ContainersDeleted
+		report.SpaceReclaimed += cReport.SpaceReclaimed
 	}
 
 	// 2. Networks
 	nReport, err := cli.NetworksPrune(ctx, filters.NewArgs())
 	if err != nil {
 		logger.Error(ctx, "Failed to prune networks: %v", err)
-	} else if len(nReport.NetworksDeleted) > 0 {
-		logPrune("Deleted Networks:")
-		for _, id := range nReport.NetworksDeleted {
-			logPrune("%s", id)
-		}
-		logPrune("")
+	} else {
+		report.NetworksDeleted = nReport.NetworksDeleted
 	}
 
 	// 3. Volumes
 	vReport, err := cli.VolumesPrune(ctx, filters.NewArgs())
 	if err != nil {
 		logger.Error(ctx, "Failed to prune volumes: %v", err)
-	} else if len(vReport.VolumesDeleted) > 0 {
-		logPrune("Deleted Volumes:")
-		for _, id := range vReport.VolumesDeleted {
-			logPrune("%s", id)
-		}
-		totalSpace += vReport.SpaceReclaimed
-		logPrune("")
+	} else {
+		report.VolumesDeleted = vReport.VolumesDeleted
+		report.SpaceReclaimed += vReport.SpaceReclaimed
 	}
 
 	// 4. Images (--all = include non-dangling)
 	iReport, err := cli.ImagesPrune(ctx, filters.NewArgs(filters.Arg("dangling", "false")))
 	if err != nil {
 		logger.Error(ctx, "Failed to prune images: %v", err)
-	} else if len(iReport.ImagesDeleted) > 0 {
-		logPrune("Deleted Images:")
-		for _, img := range iReport.ImagesDeleted {
-			if img.Untagged != "" {
-				logPrune("untagged: %s", img.Untagged)
-			}
-			if img.Deleted != "" {
-				logPrune("deleted: %s", img.Deleted)
-			}
-		}
-		totalSpace += iReport.SpaceReclaimed
-		logPrune("")
+	} else {
+		report.ImagesDeleted = iReport.ImagesDeleted
+		report.SpaceReclaimed += iReport.SpaceReclaimed
 	}
 
-	if totalSpace > 0 {
-		logPrune("Total reclaimed space: %s", units.HumanSize(float64(totalSpace)))
+	stopSpinner()
+
+	if report.SpaceReclaimed > 0 || len(report.ImagesDeleted) > 0 ||
+		len(report.NetworksDeleted) > 0 || len(report.VolumesDeleted) > 0 ||
+		len(report.ContainersDeleted) > 0 {
+		LogPruneReport(ctx, report, imageServices)
 	}
 
 	return nil
