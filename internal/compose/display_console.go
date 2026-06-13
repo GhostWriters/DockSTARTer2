@@ -231,6 +231,14 @@ func (p *consoleEventProcessor) Done(_ string, _ bool) {
 	// returns to normal inline output for anything that runs after compose.
 	if !p.noViewport {
 		if vp := console.GlobalViewport; vp != nil {
+			// Prepend the summary to lastComposeLines so it appears in the scrollback
+			// dump. The live header was shown via SetHeader; now bake it into the lines.
+			termW := goterm.Width()
+			if termW <= 0 {
+				termW = 80
+			}
+			finalLines := append([]string{p.buildSummaryLine()}, p.buildLines(termW)...)
+			vp.UpdateLines(finalLines)
 			vp.Deactivate()
 		}
 	}
@@ -575,6 +583,11 @@ func (p *consoleEventProcessor) attachTimers(lines []string, timers []timerEntry
 
 func (p *consoleEventProcessor) prependSummary(lines []string, timers []timerEntry) []string {
 	lines = p.attachTimers(lines, timers)
+	// When the viewport is active the summary line is shown as the header — don't
+	// also prepend it to the scrollable content or it appears twice.
+	if vp := console.GlobalViewport; vp != nil && vp.IsActive() {
+		return lines
+	}
 	summary := p.buildSummaryLine()
 	if summary == "" {
 		return lines

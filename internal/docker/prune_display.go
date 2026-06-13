@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -17,8 +16,6 @@ import (
 	"github.com/docker/go-units"
 )
 
-// pruneLayout mirrors the column widths used by display_console.go so the
-// prune output looks consistent with compose output.
 const (
 	pruneGlobalIndentW       = 1
 	pruneIconW               = 1
@@ -34,42 +31,61 @@ var (
 
 // PruneReport holds structured prune results for display.
 type PruneReport struct {
+	Candidates        []ImageCandidate
 	ImagesDeleted     []image.DeleteResponse
 	NetworksDeleted   []string
 	VolumesDeleted    []string
 	ContainersDeleted []string
 	SpaceReclaimed    uint64
 	AsciiMode         bool
+	ImagesError       error
+	NetworksError     error
+	VolumesError      error
+	ContainersError   error
 }
 
-// LogPruneReport formats and outputs a structured prune report using the same
-// visual style as the compose live display. imageServices maps image ref →
-// []service names from the compose project (best-effort; non-compose images
-// are shown without a service label).
-//
-// Mirrors logSummary in display_console.go:
-//   - Lines written directly to stdout (or TUI writer) for immediate display
-//   - Then logged with "docker: " prefix, suppressing the console writer to
-//     avoid double-printing.
+func (r *PruneReport) hasErrors() bool {
+	return r.ImagesError != nil || r.NetworksError != nil ||
+		r.VolumesError != nil || r.ContainersError != nil
+}
+
+// imageGroup is the display unit — one ref with its layers and per-layer status.
+type imageGroup struct {
+	ref        string
+	layers     []layerEntry
+	refStatus  entryStatus // Untagged or Failed
+	anyFailed  bool
+}
+
+type layerEntry struct {
+	id     string
+	status entryStatus
+}
+
+type entryStatus int
+
+const (
+	statusRemoved   entryStatus = iota // ✓ Removed / Untagged / Deleted
+	statusFailed                       // ⚠ Failed — expected but not in deleted list
+)
+
+// LogPruneReport formats and outputs a structured prune report.
 func LogPruneReport(ctx context.Context, r PruneReport, imageServices map[string][]string) {
 	lines := buildPruneLines(r, imageServices)
 	if len(lines) == 0 {
 		return
 	}
 
-	// Write directly to terminal (or TUI writer when inside a program box).
-	var out io.Writer = os.Stdout
+	var out io.Writer = console.ViewportWriter()
 	if w, ok := ctx.Value(console.TUIWriterKey).(io.Writer); ok {
 		out = w
 	}
-	// Pause the CLI spinner, write the report, then resume.
 	console.PauseSpinner()
 	for _, line := range lines {
 		fmt.Fprintln(out, line)
 	}
 	console.ResumeSpinner()
 
-	// Log with suppressed console writer — already shown directly above.
 	logCtx := logger.WithSuppressWriter(ctx, logger.ConsoleWriter())
 	const pfx = "{{|RunningCommand|}}docker:{{[-]}} "
 	for _, line := range lines {
@@ -77,45 +93,195 @@ func LogPruneReport(ctx context.Context, r PruneReport, imageServices map[string
 	}
 }
 
-// buildPruneLines constructs the ANSI display lines for a prune report.
-//
-// Layout per group:
-//
-//	 services:
-//	   autobrr:
-//	   deluge:
-//	 images:
-//	✓ Untagged     image: ghcr.io/autobrr/autobrr:latest   (2 layers)
-//	✓ Deleted            944b1c438302
-//	✓ Deleted            c85d153d0a29
 func buildPruneLines(r PruneReport, imageServices map[string][]string) []string {
 	doneIcon := "{{|DockerSuccess|}}✓{{[-]}}"
+	warnIcon := "{{|DockerWarn|}}⚠{{[-]}}"
 	if r.AsciiMode {
 		doneIcon = "{{|DockerSuccess|}}+{{[-]}}"
+		warnIcon = "{{|DockerWarn|}}!{{[-]}}"
 	}
 	doneIconANSI := console.ToConsoleANSI(doneIcon)
+	warnIconANSI := console.ToConsoleANSI(warnIcon)
 
 	untaggedStatus := console.ToConsoleANSI("{{|DockerFinal|}}Untagged{{[-]}}")
 	deletedStatus := console.ToConsoleANSI("{{|DockerFinal|}}Deleted{{[-]}}")
+	removedStatus := console.ToConsoleANSI("{{|DockerFinal|}}Removed{{[-]}}")
+	failedStatus := console.ToConsoleANSI("{{|DockerWarn|}}Failed{{[-]}}")
 	untaggedPad := strutil.Repeat(" ", pruneSectionStatusW-len("Untagged"))
 	deletedPad := strutil.Repeat(" ", pruneSectionStatusW-len("Deleted"))
+	removedPad := strutil.Repeat(" ", pruneSectionStatusW-len("Removed"))
+	failedPad := strutil.Repeat(" ", pruneSectionStatusW-len("Failed"))
+	incompletePad := strutil.Repeat(" ", pruneSectionStatusW-len("Incomplete"))
+	incompleteStatus := console.ToConsoleANSI("{{|DockerWarn|}}Incomplete{{[-]}}")
+
+	iconStatus := func(s entryStatus) (icon, status, pad string) {
+		if s == statusFailed {
+			return warnIconANSI, failedStatus, failedPad
+		}
+		return doneIconANSI, removedStatus, removedPad
+	}
 
 	var lines []string
 	add := func(line string) { lines = append(lines, line) }
 
-	// ── header ───────────────────────────────────────────────────────────────
-	// Count totals up-front so the header can be the first line.
-	var totalImages, totalLayers int
-	seenSvcsForHeader := make(map[string]bool)
+	sectionHeader := func(label string, err error) string {
+		if err != nil {
+			return pruneGlobalIndent + warnIconANSI + " " + incompleteStatus + console.CodeReset + incompletePad +
+				console.ToConsoleANSI("{{[white::B]}}"+label+"{{[-]}}{{|DockerColon|}}:{{[-]}} {{|DockerWarn|}}"+err.Error()+"{{[-]}}")
+		}
+		return pruneGlobalIndent + doneIconANSI + " " + removedStatus + console.CodeReset + removedPad +
+			console.ToConsoleANSI("{{[white::B]}}"+label+"{{[-]}}{{|DockerColon|}}:{{[-]}}")
+	}
+	childRow := func(name, colorTag string, s entryStatus) string {
+		icon, status, pad := iconStatus(s)
+		return pruneGlobalIndent + icon + " " + status + console.CodeReset + pad +
+			pruneSectionChildIndent + console.ToConsoleANSI(colorTag+name+"{{[-]}}")
+	}
+
+	// ── build image groups ───────────────────────────────────────────────────
+	// Index what was actually deleted.
+	untaggedSet := make(map[string]bool)
+	deletedSet := make(map[string]bool)
 	for _, item := range r.ImagesDeleted {
 		if item.Untagged != "" {
-			totalImages++
-			for _, svc := range imageServices[item.Untagged] {
-				seenSvcsForHeader[svc] = true
-			}
+			untaggedSet[item.Untagged] = true
 		}
 		if item.Deleted != "" {
-			totalLayers++
+			deletedSet[item.Deleted] = true
+		}
+	}
+
+	var groups []imageGroup
+
+	if len(r.Candidates) > 0 {
+		// Build a map from ref → deleted layers (from actual prune output).
+		// Layers in ImagesDeleted are grouped: Untagged entries mark image boundaries,
+		// Deleted entries following belong to that image.
+		refLayers := make(map[string][]string)
+		var curRef string
+		for _, item := range r.ImagesDeleted {
+			if item.Untagged != "" {
+				curRef = item.Untagged
+			}
+			if item.Deleted != "" && curRef != "" {
+				refLayers[curRef] = append(refLayers[curRef], item.Deleted)
+			}
+		}
+
+		// Use pre-flight candidate refs; layers come from actual deleted output.
+		// Candidate layers (from ImageHistory) are used only for failure detection.
+		candidateLayerSet := make(map[string]map[string]bool)
+		for _, c := range r.Candidates {
+			if len(c.Layers) > 0 {
+				s := make(map[string]bool, len(c.Layers))
+				for _, l := range c.Layers {
+					s[l] = true
+				}
+				candidateLayerSet[c.Ref] = s
+			}
+		}
+
+		for _, c := range r.Candidates {
+			ref := c.Ref
+			refStatus := statusRemoved
+			if !untaggedSet[ref] {
+				refStatus = statusFailed
+			}
+
+			// Layers: use what was actually deleted for this ref.
+			deleted := refLayers[ref]
+			// Detect failed layers: candidate history layers not in deleted set.
+			anyFailed := refStatus == statusFailed
+			var layerEntries []layerEntry
+			for _, lid := range deleted {
+				short := strings.TrimPrefix(lid, "sha256:")
+				if len(short) > 12 {
+					short = short[:12]
+				}
+				layerEntries = append(layerEntries, layerEntry{id: short, status: statusRemoved})
+			}
+			// Check candidate layers against deleted to find failures.
+			if cls := candidateLayerSet[ref]; len(cls) > 0 {
+				for lid := range cls {
+					if !deletedSet[lid] {
+						anyFailed = true
+						break
+					}
+				}
+			}
+
+			groups = append(groups, imageGroup{
+				ref:       ref,
+				layers:    layerEntries,
+				refStatus: refStatus,
+				anyFailed: anyFailed,
+			})
+		}
+		// Also include anything deleted that wasn't in candidates (dangling etc).
+		inCandidates := make(map[string]bool, len(r.Candidates))
+		for _, c := range r.Candidates {
+			inCandidates[c.Ref] = true
+		}
+		var danglingCurrent *imageGroup
+		for _, item := range r.ImagesDeleted {
+			if item.Untagged != "" && !inCandidates[item.Untagged] {
+				groups = append(groups, imageGroup{ref: item.Untagged, refStatus: statusRemoved})
+				danglingCurrent = &groups[len(groups)-1]
+			}
+			if item.Deleted != "" && danglingCurrent != nil {
+				short := strings.TrimPrefix(item.Deleted, "sha256:")
+				if len(short) > 12 {
+					short = short[:12]
+				}
+				danglingCurrent.layers = append(danglingCurrent.layers, layerEntry{id: short, status: statusRemoved})
+			}
+		}
+	} else {
+		// No candidates — fall back to deleted-only view (original behaviour).
+		var current *imageGroup
+		for _, item := range r.ImagesDeleted {
+			if item.Untagged != "" {
+				groups = append(groups, imageGroup{ref: item.Untagged, refStatus: statusRemoved})
+				current = &groups[len(groups)-1]
+			}
+			if item.Deleted != "" {
+				if current == nil {
+					groups = append(groups, imageGroup{ref: ""})
+					current = &groups[len(groups)-1]
+				}
+				short := strings.TrimPrefix(item.Deleted, "sha256:")
+				if len(short) > 12 {
+					short = short[:12]
+				}
+				current.layers = append(current.layers, layerEntry{id: short, status: statusRemoved})
+			}
+		}
+	}
+
+	// Sort: compose-known first by service name, then unknown by ref.
+	sort.SliceStable(groups, func(i, j int) bool {
+		si := imageServices[groups[i].ref]
+		sj := imageServices[groups[j].ref]
+		switch {
+		case len(si) > 0 && len(sj) == 0:
+			return true
+		case len(si) == 0 && len(sj) > 0:
+			return false
+		case len(si) > 0 && len(sj) > 0:
+			return si[0] < sj[0]
+		default:
+			return groups[i].ref < groups[j].ref
+		}
+	})
+
+	// ── header ───────────────────────────────────────────────────────────────
+	var totalImages, totalLayers int
+	seenSvcsForHeader := make(map[string]bool)
+	for _, g := range groups {
+		totalImages++
+		totalLayers += len(g.layers)
+		for _, svc := range imageServices[g.ref] {
+			seenSvcsForHeader[svc] = true
 		}
 	}
 	totalServices := len(seenSvcsForHeader)
@@ -139,67 +305,12 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) []string 
 	if len(r.ContainersDeleted) > 0 {
 		headerParts = append(headerParts, fmt.Sprintf("{{|App|}}%d %s{{[-]}}", len(r.ContainersDeleted), prunePlural(len(r.ContainersDeleted), "container", "containers")))
 	}
-
 	if len(headerParts) > 0 {
 		add(console.ToConsoleANSI(fmt.Sprintf("{{|RunningCommand|}}prune:{{[-]}} %s", strings.Join(headerParts, ", "))))
 	}
 
-	removedStatus := console.ToConsoleANSI("{{|DockerFinal|}}Removed{{[-]}}")
-	removedPad := strutil.Repeat(" ", pruneSectionStatusW-len("Removed"))
-
-	// sectionHeader renders a section label with icon+status prefix, matching
-	// the compose "✓ Complete  services:" style.
-	sectionHeader := func(label string) string {
-		return pruneGlobalIndent + doneIconANSI + " " + removedStatus + console.CodeReset + removedPad +
-			console.ToConsoleANSI("{{[white::B]}}"+label+"{{[-]}}{{|DockerColon|}}:{{[-]}}")
-	}
-	// childRow renders an indented name under a section header.
-	childRow := func(name, colorTag string) string {
-		return pruneGlobalIndent + doneIconANSI + " " + removedStatus + console.CodeReset + removedPad +
-			pruneSectionChildIndent + console.ToConsoleANSI(colorTag+name+"{{[-]}}")
-	}
-
-	// ── images: section ──────────────────────────────────────────────────────
-	// Group deleted items by Untagged ref — each untagged line starts a new group.
-	type imageGroup struct {
-		ref    string
-		layers []string
-	}
-	var groups []imageGroup
-	var current *imageGroup
-	for _, item := range r.ImagesDeleted {
-		if item.Untagged != "" {
-			groups = append(groups, imageGroup{ref: item.Untagged})
-			current = &groups[len(groups)-1]
-		}
-		if item.Deleted != "" {
-			if current == nil {
-				// Dangling layer with no preceding Untagged.
-				groups = append(groups, imageGroup{ref: ""})
-				current = &groups[len(groups)-1]
-			}
-			current.layers = append(current.layers, item.Deleted)
-		}
-	}
-
+	// ── images / services section ─────────────────────────────────────────────
 	if len(groups) > 0 {
-		// Sort: compose-known images first (by service name), then unknown by ref.
-		sort.SliceStable(groups, func(i, j int) bool {
-			si := imageServices[groups[i].ref]
-			sj := imageServices[groups[j].ref]
-			switch {
-			case len(si) > 0 && len(sj) == 0:
-				return true
-			case len(si) == 0 && len(sj) > 0:
-				return false
-			case len(si) > 0 && len(sj) > 0:
-				return si[0] < sj[0]
-			default:
-				return groups[i].ref < groups[j].ref
-			}
-		})
-
-		// Find widest image ref for column alignment.
 		maxRefW := 0
 		for _, g := range groups {
 			ref := g.ref
@@ -211,34 +322,12 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) []string 
 			}
 		}
 
-		// services: section — all unique services in image-sort order, before images:.
-		seenSvcs := make(map[string]bool)
-		var orderedSvcs []string
-		for _, g := range groups {
-			for _, svc := range imageServices[g.ref] {
-				if !seenSvcs[svc] {
-					seenSvcs[svc] = true
-					orderedSvcs = append(orderedSvcs, svc)
-				}
-			}
-		}
-		if len(orderedSvcs) > 0 {
-			add(sectionHeader("services"))
-			for _, svc := range orderedSvcs {
-				add(childRow(svc+":", "{{|App|}}"))
-			}
-		}
-
 		imageLabel := strings.Repeat(" ", 2*pruneSectionChildIndentW) +
 			console.ToConsoleANSI("{{|DockerSuccess|}}image{{[-]}}{{|DockerColon|}}:{{[-]}} ")
-		// Layer indent: same prefix as the image ref column, plus 2 extra chars (matching compose).
-		// imageLabel plain width = 2*childIndent + len("image: ") = 4 + 7 = 11
 		imageLabelPlainW := 2*pruneSectionChildIndentW + len("image: ")
 		layerIndent := strings.Repeat(" ", imageLabelPlainW+pruneSectionChildIndentW)
 
-		add(sectionHeader("images"))
-
-		for _, g := range groups {
+		renderImageGroup := func(g imageGroup) {
 			ref := g.ref
 			if ref == "" {
 				ref = "<dangling>"
@@ -247,47 +336,79 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) []string 
 			refPad := strutil.Repeat(" ", maxRefW-utf8.RuneCountInString(console.Strip(refANSI)))
 			layerCount := console.ToConsoleANSI(fmt.Sprintf(" {{[::D]}}(%d %s){{[-]}}", len(g.layers), prunePlural(len(g.layers), "layer", "layers")))
 
-			// Untagged row — image ref.
-			add(pruneGlobalIndent + doneIconANSI + " " + untaggedStatus + console.CodeReset + untaggedPad +
+			// Image ref row — Untagged or Failed.
+			var imgIcon, imgStatus, imgPad string
+			if g.refStatus == statusFailed {
+				imgIcon, imgStatus, imgPad = warnIconANSI, failedStatus, failedPad
+			} else {
+				imgIcon, imgStatus, imgPad = doneIconANSI, untaggedStatus, untaggedPad
+			}
+			add(pruneGlobalIndent + imgIcon + " " + imgStatus + console.CodeReset + imgPad +
 				imageLabel + refANSI + refPad + layerCount)
 
-			// Deleted rows — one per layer, abbreviated to first 12 hex chars.
-			for _, layer := range g.layers {
-				short := strings.TrimPrefix(layer, "sha256:")
-				if len(short) > 12 {
-					short = short[:12]
+			// Layer rows — Deleted or Failed.
+			for _, l := range g.layers {
+				var lIcon, lStatus, lPad string
+				if l.status == statusFailed {
+					lIcon, lStatus, lPad = warnIconANSI, failedStatus, failedPad
+				} else {
+					lIcon, lStatus, lPad = doneIconANSI, deletedStatus, deletedPad
 				}
-				add(pruneGlobalIndent + doneIconANSI + " " + deletedStatus + console.CodeReset + deletedPad +
-					layerIndent + console.ToConsoleANSI("{{[::D]}}"+short+"{{[-]}}"))
+				add(pruneGlobalIndent + lIcon + " " + lStatus + console.CodeReset + lPad +
+					layerIndent + console.ToConsoleANSI("{{[::D]}}"+l.id+"{{[-]}}"))
 			}
 		}
+
+		// Determine services: section error — warn if any group failed.
+		var svcsErr error
+		if r.ImagesError != nil {
+			svcsErr = r.ImagesError
+		}
+		add(sectionHeader("services", svcsErr))
+		for _, g := range groups {
+			svcs := imageServices[g.ref]
+			svcStatus := statusRemoved
+			if g.anyFailed {
+				svcStatus = statusFailed
+			}
+			if len(svcs) > 0 {
+				for _, svc := range svcs {
+					add(childRow(svc+":", "{{|App|}}", svcStatus))
+				}
+			} else {
+				add(childRow("<Unknown>:", "{{[::D]}}", svcStatus))
+			}
+			renderImageGroup(g)
+		}
+	} else if r.ImagesError != nil {
+		add(sectionHeader("services", r.ImagesError))
 	}
 
-	// ── networks: section ────────────────────────────────────────────────────
-	if len(r.NetworksDeleted) > 0 {
-		add(sectionHeader("networks"))
+	// ── networks ─────────────────────────────────────────────────────────────
+	if len(r.NetworksDeleted) > 0 || r.NetworksError != nil {
+		add(sectionHeader("networks", r.NetworksError))
 		for _, net := range r.NetworksDeleted {
-			add(childRow(net, "{{|App|}}"))
+			add(childRow(net, "{{|App|}}", statusRemoved))
 		}
 	}
 
-	// ── volumes: section ─────────────────────────────────────────────────────
-	if len(r.VolumesDeleted) > 0 {
-		add(sectionHeader("volumes"))
+	// ── volumes ──────────────────────────────────────────────────────────────
+	if len(r.VolumesDeleted) > 0 || r.VolumesError != nil {
+		add(sectionHeader("volumes", r.VolumesError))
 		for _, vol := range r.VolumesDeleted {
-			add(childRow(vol, "{{|App|}}"))
+			add(childRow(vol, "{{|App|}}", statusRemoved))
 		}
 	}
 
-	// ── containers: section ──────────────────────────────────────────────────
-	if len(r.ContainersDeleted) > 0 {
-		add(sectionHeader("containers"))
+	// ── containers ───────────────────────────────────────────────────────────
+	if len(r.ContainersDeleted) > 0 || r.ContainersError != nil {
+		add(sectionHeader("containers", r.ContainersError))
 		for _, ctr := range r.ContainersDeleted {
-			add(childRow(ctr, "{{|App|}}"))
+			add(childRow(ctr, "{{|App|}}", statusRemoved))
 		}
 	}
 
-	// ── summary ──────────────────────────────────────────────────────────────
+	// ── summary ───────────────────────────────────────────────────────────────
 	if r.SpaceReclaimed > 0 {
 		add(console.ToConsoleANSI("{{[white::B]}}Total reclaimed space:{{[-]}} {{|DockerSuccess|}}" +
 			units.HumanSize(float64(r.SpaceReclaimed)) + "{{[-]}}"))
@@ -296,7 +417,6 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) []string 
 	return lines
 }
 
-// styleImageRef styles an image reference consistently with display_console.go.
 func styleImageRef(ref string) string {
 	if idx := strings.LastIndex(ref, ":"); idx >= 0 {
 		return console.ToConsoleANSI("{{|DockerImage|}}" + ref[:idx] + "{{[-]}}{{|DockerTag|}}:" + ref[idx+1:] + "{{[-]}}")
