@@ -51,10 +51,11 @@ func (r *PruneReport) hasErrors() bool {
 
 // imageGroup is the display unit — one ref with its layers and per-layer status.
 type imageGroup struct {
-	ref        string
-	layers     []layerEntry
-	refStatus  entryStatus // Untagged or Failed
-	anyFailed  bool
+	ref       string
+	layers    []layerEntry
+	refStatus entryStatus // Untagged or Failed
+	refError  error       // specific error for this image (from ImageRemove)
+	anyFailed bool
 }
 
 type layerEntry struct {
@@ -71,8 +72,8 @@ const (
 
 // LogPruneReport formats and outputs a structured prune report.
 func LogPruneReport(ctx context.Context, r PruneReport, imageServices map[string][]string) {
-	lines := buildPruneLines(r, imageServices)
-	if len(lines) == 0 {
+	lines, errs := buildPruneLines(r, imageServices)
+	if len(lines) == 0 && len(errs) == 0 {
 		return
 	}
 
@@ -91,32 +92,33 @@ func LogPruneReport(ctx context.Context, r PruneReport, imageServices map[string
 	for _, line := range lines {
 		logger.Notice(logCtx, pfx+"%s", console.Strip(line))
 	}
+	for _, e := range errs {
+		logger.Error(ctx, "%s", e)
+	}
 }
 
-func buildPruneLines(r PruneReport, imageServices map[string][]string) []string {
+func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string, []string) {
 	doneIcon := "{{|DockerSuccess|}}✓{{[-]}}"
-	warnIcon := "{{|DockerWarn|}}⚠{{[-]}}"
+	errorIcon := "{{|DockerFail|}}×{{[-]}}"
 	if r.AsciiMode {
 		doneIcon = "{{|DockerSuccess|}}+{{[-]}}"
-		warnIcon = "{{|DockerWarn|}}!{{[-]}}"
+		errorIcon = "{{|DockerFail|}}x{{[-]}}"
 	}
 	doneIconANSI := console.ToConsoleANSI(doneIcon)
-	warnIconANSI := console.ToConsoleANSI(warnIcon)
+	errorIconANSI := console.ToConsoleANSI(errorIcon)
 
 	untaggedStatus := console.ToConsoleANSI("{{|DockerFinal|}}Untagged{{[-]}}")
 	deletedStatus := console.ToConsoleANSI("{{|DockerFinal|}}Deleted{{[-]}}")
 	removedStatus := console.ToConsoleANSI("{{|DockerFinal|}}Removed{{[-]}}")
-	failedStatus := console.ToConsoleANSI("{{|DockerWarn|}}Failed{{[-]}}")
+	errorStatus := console.ToConsoleANSI("{{|DockerFail|}}Error{{[-]}}")
 	untaggedPad := strutil.Repeat(" ", pruneSectionStatusW-len("Untagged"))
 	deletedPad := strutil.Repeat(" ", pruneSectionStatusW-len("Deleted"))
 	removedPad := strutil.Repeat(" ", pruneSectionStatusW-len("Removed"))
-	failedPad := strutil.Repeat(" ", pruneSectionStatusW-len("Failed"))
-	incompletePad := strutil.Repeat(" ", pruneSectionStatusW-len("Incomplete"))
-	incompleteStatus := console.ToConsoleANSI("{{|DockerWarn|}}Incomplete{{[-]}}")
+	errorPad := strutil.Repeat(" ", pruneSectionStatusW-len("Error"))
 
 	iconStatus := func(s entryStatus) (icon, status, pad string) {
 		if s == statusFailed {
-			return warnIconANSI, failedStatus, failedPad
+			return errorIconANSI, errorStatus, errorPad
 		}
 		return doneIconANSI, removedStatus, removedPad
 	}
@@ -124,10 +126,10 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) []string 
 	var lines []string
 	add := func(line string) { lines = append(lines, line) }
 
-	sectionHeader := func(label string, err error) string {
-		if err != nil {
-			return pruneGlobalIndent + warnIconANSI + " " + incompleteStatus + console.CodeReset + incompletePad +
-				console.ToConsoleANSI("{{[white::B]}}"+label+"{{[-]}}{{|DockerColon|}}:{{[-]}} {{|DockerWarn|}}"+err.Error()+"{{[-]}}")
+	sectionHeader := func(label string, hasErr bool) string {
+		if hasErr {
+			return pruneGlobalIndent + errorIconANSI + " " + errorStatus + console.CodeReset + errorPad +
+				console.ToConsoleANSI("{{[white::B]}}"+label+"{{[-]}}{{|DockerColon|}}:{{[-]}}")
 		}
 		return pruneGlobalIndent + doneIconANSI + " " + removedStatus + console.CodeReset + removedPad +
 			console.ToConsoleANSI("{{[white::B]}}"+label+"{{[-]}}{{|DockerColon|}}:{{[-]}}")
@@ -214,6 +216,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) []string 
 				ref:       ref,
 				layers:    layerEntries,
 				refStatus: refStatus,
+				refError:  c.Error,
 				anyFailed: anyFailed,
 			})
 		}
@@ -336,21 +339,22 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) []string 
 			refPad := strutil.Repeat(" ", maxRefW-utf8.RuneCountInString(console.Strip(refANSI)))
 			layerCount := console.ToConsoleANSI(fmt.Sprintf(" {{[::D]}}(%d %s){{[-]}}", len(g.layers), prunePlural(len(g.layers), "layer", "layers")))
 
-			// Image ref row — Untagged or Failed.
+			// Image ref row — Untagged or Error.
 			var imgIcon, imgStatus, imgPad string
 			if g.refStatus == statusFailed {
-				imgIcon, imgStatus, imgPad = warnIconANSI, failedStatus, failedPad
+				imgIcon, imgStatus, imgPad = errorIconANSI, errorStatus, errorPad
 			} else {
 				imgIcon, imgStatus, imgPad = doneIconANSI, untaggedStatus, untaggedPad
 			}
-			add(pruneGlobalIndent + imgIcon + " " + imgStatus + console.CodeReset + imgPad +
-				imageLabel + refANSI + refPad + layerCount)
+			imgLine := pruneGlobalIndent + imgIcon + " " + imgStatus + console.CodeReset + imgPad +
+				imageLabel + refANSI + refPad + layerCount
+			add(imgLine)
 
-			// Layer rows — Deleted or Failed.
+			// Layer rows — Deleted or Error.
 			for _, l := range g.layers {
 				var lIcon, lStatus, lPad string
 				if l.status == statusFailed {
-					lIcon, lStatus, lPad = warnIconANSI, failedStatus, failedPad
+					lIcon, lStatus, lPad = errorIconANSI, errorStatus, errorPad
 				} else {
 					lIcon, lStatus, lPad = doneIconANSI, deletedStatus, deletedPad
 				}
@@ -359,12 +363,17 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) []string 
 			}
 		}
 
-		// Determine services: section error — warn if any group failed.
-		var svcsErr error
-		if r.ImagesError != nil {
-			svcsErr = r.ImagesError
+		// Determine services: section status — Error if API error or any group failed.
+		anyGroupFailed := r.ImagesError != nil
+		if !anyGroupFailed {
+			for _, g := range groups {
+				if g.anyFailed {
+					anyGroupFailed = true
+					break
+				}
+			}
 		}
-		add(sectionHeader("services", svcsErr))
+		add(sectionHeader("services", anyGroupFailed))
 		for _, g := range groups {
 			svcs := imageServices[g.ref]
 			svcStatus := statusRemoved
@@ -381,12 +390,12 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) []string 
 			renderImageGroup(g)
 		}
 	} else if r.ImagesError != nil {
-		add(sectionHeader("services", r.ImagesError))
+		add(sectionHeader("services", true))
 	}
 
 	// ── networks ─────────────────────────────────────────────────────────────
 	if len(r.NetworksDeleted) > 0 || r.NetworksError != nil {
-		add(sectionHeader("networks", r.NetworksError))
+		add(sectionHeader("networks", r.NetworksError != nil))
 		for _, net := range r.NetworksDeleted {
 			add(childRow(net, "{{|App|}}", statusRemoved))
 		}
@@ -394,7 +403,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) []string 
 
 	// ── volumes ──────────────────────────────────────────────────────────────
 	if len(r.VolumesDeleted) > 0 || r.VolumesError != nil {
-		add(sectionHeader("volumes", r.VolumesError))
+		add(sectionHeader("volumes", r.VolumesError != nil))
 		for _, vol := range r.VolumesDeleted {
 			add(childRow(vol, "{{|App|}}", statusRemoved))
 		}
@@ -402,7 +411,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) []string 
 
 	// ── containers ───────────────────────────────────────────────────────────
 	if len(r.ContainersDeleted) > 0 || r.ContainersError != nil {
-		add(sectionHeader("containers", r.ContainersError))
+		add(sectionHeader("containers", r.ContainersError != nil))
 		for _, ctr := range r.ContainersDeleted {
 			add(childRow(ctr, "{{|App|}}", statusRemoved))
 		}
@@ -414,7 +423,30 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) []string 
 			units.HumanSize(float64(r.SpaceReclaimed)) + "{{[-]}}"))
 	}
 
-	return lines
+	// ── error notices ─────────────────────────────────────────────────────────
+	var errs []string
+	for _, g := range groups {
+		if g.refError != nil {
+			ref := g.ref
+			if ref == "" {
+				ref = "<dangling>"
+			}
+			errs = append(errs, fmt.Sprintf("%s: %s", ref, g.refError.Error()))
+		}
+	}
+	if r.ImagesError != nil {
+		errs = append(errs, "images: "+r.ImagesError.Error())
+	}
+	if r.NetworksError != nil {
+		errs = append(errs, "networks: "+r.NetworksError.Error())
+	}
+	if r.VolumesError != nil {
+		errs = append(errs, "volumes: "+r.VolumesError.Error())
+	}
+	if r.ContainersError != nil {
+		errs = append(errs, "containers: "+r.ContainersError.Error())
+	}
+	return lines, errs
 }
 
 func styleImageRef(ref string) string {
