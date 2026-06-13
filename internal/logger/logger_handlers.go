@@ -62,7 +62,9 @@ func (h *TUIHandler) Handle(ctx context.Context, r slog.Record) error {
 		}
 	} else {
 		if w, ok := ctx.Value(console.TUIWriterKey).(io.Writer); ok {
-			fmt.Fprintln(w, tuiMsg)
+			if ctx.Value(suppressWriterKey{}) != w {
+				fmt.Fprintln(w, tuiMsg)
+			}
 		}
 	}
 
@@ -119,8 +121,9 @@ func (h *FanoutHandler) WithGroup(name string) slog.Handler {
 
 // TagProcessorHandler processes custom tags and ANSI codes before passing to the base handler
 type TagProcessorHandler struct {
-	base slog.Handler
-	mode string // "ansi", "strip", or "tui"
+	base          slog.Handler
+	mode          string    // "ansi", "strip", or "tui"
+	consoleWriter io.Writer // set for "ansi" handlers; used to match suppressWriterKey
 }
 
 func (h *TagProcessorHandler) Enabled(ctx context.Context, level slog.Level) bool {
@@ -134,7 +137,7 @@ func (h *TagProcessorHandler) Handle(ctx context.Context, r slog.Record) error {
 		if TUIMode {
 			return nil
 		}
-		if ctx.Value(suppressConsoleKey{}) == true {
+		if sw, ok := ctx.Value(suppressWriterKey{}).(io.Writer); ok && sw == h.consoleWriter {
 			return nil
 		}
 	}
@@ -171,9 +174,9 @@ func (h *TagProcessorHandler) Handle(ctx context.Context, r slog.Record) error {
 }
 
 func (h *TagProcessorHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return &TagProcessorHandler{base: h.base.WithAttrs(attrs), mode: h.mode}
+	return &TagProcessorHandler{base: h.base.WithAttrs(attrs), mode: h.mode, consoleWriter: h.consoleWriter}
 }
 
 func (h *TagProcessorHandler) WithGroup(name string) slog.Handler {
-	return &TagProcessorHandler{base: h.base.WithGroup(name), mode: h.mode}
+	return &TagProcessorHandler{base: h.base.WithGroup(name), mode: h.mode, consoleWriter: h.consoleWriter}
 }

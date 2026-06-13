@@ -155,6 +155,18 @@ func NewProgram(model tea.Model, opts ProgramOptions) *tea.Program {
 	return p
 }
 
+// ReplaceOutputLines sends a replaceOutputMsg to the running program, replacing
+// all current program box output with the given lines. No-op if no program is running.
+func ReplaceOutputLines(lines []string) {
+	if program != nil {
+		program.Send(replaceOutputMsg{lines: lines})
+	}
+}
+
+func init() {
+	console.ReplaceOutputLinesFn = ReplaceOutputLines
+}
+
 // parseClientInfo extracts IP and connection type from environment strings.
 func parseClientInfo(environ []string) (string, string) {
 	clientIP := "local"

@@ -23,6 +23,7 @@ import (
 	"github.com/docker/compose/v5/cmd/display"
 	"github.com/docker/compose/v5/pkg/api"
 	composev5 "github.com/docker/compose/v5/pkg/compose"
+	mobyclient "github.com/moby/moby/client"
 )
 
 // setPullPolicy sets the pull policy on all services in the project.
@@ -292,20 +293,18 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 	var errStream io.Writer = os.Stderr
 	var bus api.EventProcessor
 
-	if w, ok := ctx.Value(console.TUIWriterKey).(io.Writer); ok {
-		outStream = w
-		errStream = w
-		bus = &tuiEventProcessor{out: w}
-	}
+	// Detect TUI writer (GUI program box) and TTY mode.
+	tuiWriter, hasTUIWriter := ctx.Value(console.TUIWriterKey).(io.Writer)
+	isTTY := !hasTUIWriter && console.IsTTY()
 
-	// Detect TTY before constructing the Docker CLI so we can decide whether
-	// to pass io.Discard as its output (our processor renders everything via the
-	// event bus when running in a TTY; the CLI's own output would corrupt the display).
-	isTTY := bus == nil && console.IsTTY()
+	if hasTUIWriter {
+		outStream = tuiWriter
+		errStream = tuiWriter
+	}
 
 	cliOut := outStream
 	cliErr := errStream
-	if isTTY {
+	if isTTY || hasTUIWriter {
 		cliOut = io.Discard
 		cliErr = io.Discard
 	}
@@ -323,33 +322,58 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 		return fmt.Errorf("failed to initialize docker CLI: %w", err)
 	}
 
-	if bus == nil {
-		if isTTY {
-			imageServices := make(map[string][]string)
-			containerToService := make(map[string]string)
-			for name, svc := range project.Services {
-				if svc.Image != "" {
-					imageServices[svc.Image] = append(imageServices[svc.Image], name)
-				}
-				// Map container_name back to service name so SDK events normalize correctly.
-				if svc.ContainerName != "" && svc.ContainerName != name {
-					containerToService[svc.ContainerName] = name
-				}
+	if isTTY || hasTUIWriter {
+		imageServices := make(map[string][]string)
+		containerToService := make(map[string]string)
+		for name, svc := range project.Services {
+			if svc.Image != "" {
+				imageServices[svc.Image] = append(imageServices[svc.Image], name)
 			}
-			imageOrder := make([]string, 0, len(imageServices))
-			for img, svcs := range imageServices {
-				sort.Strings(svcs)
-				imageServices[img] = svcs
-				imageOrder = append(imageOrder, img)
+			// Map container_name back to service name so SDK events normalize correctly.
+			if svc.ContainerName != "" && svc.ContainerName != name {
+				containerToService[svc.ContainerName] = name
 			}
-			sort.Strings(imageOrder)
-			bus = NewConsoleEventProcessor(outStream, command, imageServices, imageOrder, containerToService)
-			// Also discard SDK service streams — processor handles all output.
-			outStream = io.Discard
-			errStream = io.Discard
-		} else {
-			bus = display.Plain(outStream)
 		}
+		// Also query running containers to map their actual names (which may include
+		// random suffixes like "<project>-<service>-<random>") to service names via label.
+		f := mobyclient.Filters{}
+		f.Add("label", api.ProjectLabel+"="+project.Name)
+		if result, err := dockerCLI.Client().ContainerList(ctx, mobyclient.ContainerListOptions{
+			All:     true,
+			Filters: f,
+		}); err == nil {
+			for _, ctr := range result.Items {
+				svcName := ctr.Labels[api.ServiceLabel]
+				if svcName == "" {
+					continue
+				}
+				for _, rawName := range ctr.Names {
+					cname := strings.TrimPrefix(rawName, "/")
+					if cname != svcName {
+						containerToService[cname] = svcName
+					}
+				}
+			}
+		}
+		imageOrder := make([]string, 0, len(imageServices))
+		for img, svcs := range imageServices {
+			sort.Strings(svcs)
+			imageServices[img] = svcs
+			imageOrder = append(imageOrder, img)
+		}
+		sort.Slice(imageOrder, func(i, j int) bool {
+			return imageBaseName(imageOrder[i]) < imageBaseName(imageOrder[j])
+		})
+		var updateFn func([]string)
+		if hasTUIWriter {
+			updateFn = console.ReplaceOutputLinesFn
+		}
+		bus = NewConsoleEventProcessor(ctx, outStream, command, imageServices, imageOrder, containerToService, project.Name, updateFn)
+		// Also discard SDK service streams — processor handles all output.
+		outStream = io.Discard
+		errStream = io.Discard
+	} else {
+		bus = display.Plain(outStream)
 	}
 
 	srv, err := composev5.NewComposeService(dockerCLI,
@@ -368,6 +392,14 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 		logger.Notice(ctx, "Running: {{|RunningCommand|}}%s{{[-]}}", strings.Join(fullCmd, " "))
 	}
 
+	// Suppress logger output during the SDK operation so log lines don't
+	// interleave with the compose display. logRunning above uses ctx (unsuppressed)
+	// so the "Running:" line still appears before the display takes over.
+	sdkCtx := ctx
+	if w, ok := ctx.Value(console.TUIWriterKey).(io.Writer); ok {
+		sdkCtx = logger.WithSuppressWriter(ctx, w)
+	}
+
 	// Execute the operation via SDK.
 	// Pause our spinner just before calling the SDK — it has its own progress display.
 	console.PauseSpinner()
@@ -379,56 +411,56 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 		if len(appNames) > 0 {
 			downOpts.Services = serviceNames
 		}
-		return srv.Down(ctx, project.Name, downOpts)
+		return srv.Down(sdkCtx, project.Name, downOpts)
 	case "pause":
 		logRunning("pause")
 		pauseOpts := api.PauseOptions{}
 		if len(appNames) > 0 {
 			pauseOpts.Services = serviceNames
 		}
-		return srv.Pause(ctx, project.Name, pauseOpts)
+		return srv.Pause(sdkCtx, project.Name, pauseOpts)
 	case "pull":
 		logRunning("pull", "--include-deps")
-		return srv.Pull(ctx, project, api.PullOptions{})
+		return srv.Pull(sdkCtx, project, api.PullOptions{})
 	case "restart":
 		logRunning("restart")
 		restartOpts := api.RestartOptions{}
 		if len(appNames) > 0 {
 			restartOpts.Services = serviceNames
 		}
-		return srv.Restart(ctx, project.Name, restartOpts)
+		return srv.Restart(sdkCtx, project.Name, restartOpts)
 	case "stop":
 		logRunning("stop")
 		stopOpts := api.StopOptions{}
 		if len(appNames) > 0 {
 			stopOpts.Services = serviceNames
 		}
-		return srv.Stop(ctx, project.Name, stopOpts)
+		return srv.Stop(sdkCtx, project.Name, stopOpts)
 	case "unpause":
 		logRunning("unpause")
 		unpauseOpts := api.PauseOptions{}
 		if len(appNames) > 0 {
 			unpauseOpts.Services = serviceNames
 		}
-		return srv.UnPause(ctx, project.Name, unpauseOpts)
+		return srv.UnPause(sdkCtx, project.Name, unpauseOpts)
 	case "update":
 		logRunning("up", "-d", "--remove-orphans", "--pull", "always")
 		setPullPolicy(project, types.PullPolicyAlways)
-		return srv.Up(ctx, project, api.UpOptions{
+		return srv.Up(sdkCtx, project, api.UpOptions{
 			Create: api.CreateOptions{RemoveOrphans: true},
 			Start:  api.StartOptions{Attach: nil, Project: project},
 		})
 	case "up":
 		logRunning("up", "-d", "--remove-orphans", "--pull", "missing")
 		setPullPolicy(project, types.PullPolicyMissing)
-		return srv.Up(ctx, project, api.UpOptions{
+		return srv.Up(sdkCtx, project, api.UpOptions{
 			Create: api.CreateOptions{RemoveOrphans: true},
 			Start:  api.StartOptions{Attach: nil, Project: project},
 		})
 	default: // unknown commands
 		logRunning("up", "-d", "--remove-orphans", "--pull", "always")
 		setPullPolicy(project, types.PullPolicyAlways)
-		return srv.Up(ctx, project, api.UpOptions{
+		return srv.Up(sdkCtx, project, api.UpOptions{
 			Create: api.CreateOptions{RemoveOrphans: true},
 			Start:  api.StartOptions{Attach: nil, Project: project},
 		})

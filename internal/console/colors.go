@@ -191,12 +191,14 @@ func init() {
 
 		// Docker Compose progress colors
 		DockerSuccess:     "{{[-]}}{{[green]}}",
+		DockerFinal:       "{{[-]}}{{[green::B]}}",
 		DockerFail:        "{{[-]}}{{[red]}}",
 		DockerWarn:        "{{[-]}}{{[yellow]}}",
 		DockerPending:     "{{[-]}}{{[gray::D]}}",
-		DockerActive:      "{{[-]}}{{[cyan]}}",
-		DockerImage:       "{{[-]}}{{[yellow]}}",
-		DockerTag:         "{{[-]}}{{[yellow::D]}}",
+		DockerActive:      "{{[-]}}{{[yellow]}}",
+		DockerImage:       "{{[-]}}{{[magenta]}}",
+		DockerTag:         "{{[-]}}{{[magenta::D]}}",
+		DockerSpinner:     "{{[-]}}{{[yellow]}}",
 		DockerProgressBar: "{{[-]}}{{[cyan]}}",
 	}
 
@@ -324,12 +326,14 @@ type AppColors struct {
 
 	// Docker Compose progress colors
 	DockerSuccess     string
+	DockerFinal       string
 	DockerFail        string
 	DockerWarn        string
 	DockerPending     string
 	DockerActive      string
 	DockerImage       string
 	DockerTag         string
+	DockerSpinner     string
 	DockerProgressBar string
 }
 

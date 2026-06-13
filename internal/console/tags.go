@@ -288,10 +288,14 @@ func Sprintf(format string, a ...any) string {
 
 // Println prints a line with Console ANSI color codes parsed
 func Println(a ...any) {
+	msg := ToConsoleANSI(fmt.Sprint(a...))
+	if GlobalViewport != nil && GlobalViewport.active {
+		GlobalViewport.Append(msg)
+		return
+	}
 	LockTerminal()
 	ClearSpinnerLine()
-	msg := fmt.Sprint(a...)
-	fmt.Println(ToConsoleANSI(msg))
+	fmt.Println(msg)
 	ShowSpinnerFrame()
 	UnlockTerminal()
 }

@@ -4,10 +4,14 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"slices"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
+
+	"DockSTARTer2/internal/strutil"
 
 	"github.com/buger/goterm"
 	"github.com/docker/compose/v5/pkg/api"
@@ -27,9 +31,18 @@ import (
 //   - Tasks with no ParentID and a container lifecycle status text → service tasks
 //   - Tasks with a ParentID → layer tasks (children of an image task)
 const (
-	globalIndent  = " "   // 1-space left margin for all lines
-	layerIndent   = "    " // additional indent for layer rows (after globalIndent+icon)
-	progressWidth = 10
+	globalIndent = " " // 1-space left margin for all lines
+
+	// sectionStatusW is the fixed status column width for service/network lines.
+	// Layout: globalIndent(1) + icon(1) + space(1) + sectionStatusW chars before the name.
+	// sectionHeaderIndent is the indent for "services:" / "networks:" labels —
+	// visually aligned to the name column (globalIndent + icon + space + sectionStatusW).
+	sectionStatusW      = 13
+	sectionHeaderIndent = 1 + 1 + 1 + sectionStatusW // 16 chars before name / section label
+
+	// sectionChildIndent is extra indent applied to child entries (services, networks)
+	// to visually nest them under the section header label.
+	sectionChildIndent = "   "
 )
 
 var brailleChars = strings.Split("⠀⡀⣀⣄⣤⣦⣶⣷⣿", "")
@@ -53,7 +66,8 @@ func (t *consoleTask) completed() bool {
 
 type consoleEventProcessor struct {
 	out    io.Writer
-	ctx    context.Context
+	ctx    context.Context // set by SDK in Start(); may not have caller's context values
+	logCtx context.Context // caller's original context; used for logSummary suppression
 	mtx    sync.Mutex
 	ticker *time.Ticker
 	doneCh chan struct{}
@@ -66,6 +80,10 @@ type consoleEventProcessor struct {
 	imageIDs []string
 	// serviceIDs: top-level tasks that represent container lifecycle
 	serviceIDs []string
+	// networkIDs: top-level tasks that represent network lifecycle (created/removed)
+	networkIDs []string
+	// volumeIDs: top-level tasks that represent volume lifecycle (created/removed)
+	volumeIDs []string
 
 	// command is the ds2 command name (e.g. "up", "update") used for the summary header.
 	command string
@@ -76,25 +94,43 @@ type consoleEventProcessor struct {
 	imageOrder []string
 	// containerToService maps container_name -> service name for services where they differ.
 	containerToService map[string]string
+	// projectName is used to strip "<project>-" prefix and "-<n>" suffix from container names.
+	projectName string
+	// unknownContainers maps raw container name -> assigned "<Unknown N>" id.
+	unknownContainers map[string]string
+	unknownCount      int
+	// serviceStartTimes records the earliest wall-clock time work began for a service.
+	// Set when the service's image task is first seen, before the container lifecycle starts.
+	serviceStartTimes map[string]time.Time
 
 	numLines     int // lines written in last render
 	started      bool
 	spinnerFrame int
+	maxLineWidth int // widest visible line seen so far; grows but never shrinks
+	noViewport    bool            // when true, skip GlobalViewport activation (e.g. running inside program box)
+	updateFn      func([]string) // called each render tick in noViewport mode instead of writing to out
+	lastSentLines []string       // last lines sent via updateFn; skip if unchanged
 }
 
 // NewConsoleEventProcessor creates a themed live-updating EventProcessor for TTY output.
 // imageServices maps image name (e.g. "lscr.io/linuxserver/plex:latest") to the list of
 // service names that use it, so service headers can be shown before lifecycle events arrive.
 // imageOrder is the stable key order for imageServices (caller must provide sorted/deterministic order).
-func NewConsoleEventProcessor(out io.Writer, command string, imageServices map[string][]string, imageOrder []string, containerToService map[string]string) api.EventProcessor {
+func NewConsoleEventProcessor(logCtx context.Context, out io.Writer, command string, imageServices map[string][]string, imageOrder []string, containerToService map[string]string, projectName string, updateFn func([]string)) api.EventProcessor {
 	return &consoleEventProcessor{
 		out:                out,
+		logCtx:             logCtx,
 		doneCh:             make(chan struct{}, 1),
 		tasks:              make(map[string]*consoleTask),
 		command:            command,
 		imageServices:      imageServices,
 		imageOrder:         imageOrder,
 		containerToService: containerToService,
+		projectName:        projectName,
+		unknownContainers:  make(map[string]string),
+		serviceStartTimes:  make(map[string]time.Time),
+		noViewport:         updateFn != nil,
+		updateFn:           updateFn,
 	}
 }
 
@@ -102,36 +138,42 @@ func (p *consoleEventProcessor) Start(ctx context.Context, operation string) {
 	p.ctx = ctx
 	p.operation = operation
 
-	// Print a one-line summary header showing service and image counts.
-	svcCount := 0
-	for _, svcs := range p.imageServices {
-		svcCount += len(svcs)
-	}
-	imgCount := len(p.imageOrder)
-	summary := console.ToConsoleANSI(fmt.Sprintf(
-		"{{|RunningCommand|}}%s{{[-]}}  {{|DockerPending|}}%d service%s{{[-]}}  {{|DockerPending|}}%d image%s{{[-]}}\n",
-		p.command,
-		svcCount, pluralS(svcCount),
-		imgCount, pluralS(imgCount),
-	))
-	fmt.Fprint(p.out, summary)
-
-	// Pre-print one blank line per line buildLines() will produce from the initial
-	// state (no tasks yet, but all imageOrder/imageServices entries known).
-	// This fixes the stable height — render() will overwrite these in-place.
-	// We call buildLines() with a wide terminal to avoid two-column compression
-	// affecting the reserved count (layer columns only appear during active pulls).
-	termW := goterm.Width()
-	if termW <= 0 {
-		termW = 80
-	}
-	initialLines := p.buildLines(termW)
-	if len(initialLines) > 0 {
-		for range initialLines {
-			fmt.Fprintln(p.out)
+	// Activate the viewport now — enters alt screen pre-filled with recent history.
+	if !p.noViewport {
+		if vp := console.GlobalViewport; vp != nil {
+			vp.Activate()
 		}
-		p.numLines = len(initialLines)
-		p.started = true
+	}
+
+	// Summary line is built dynamically each render so network count updates as events arrive.
+	// Print a placeholder now for the CLI viewport header path.
+	if !p.noViewport {
+		summaryLine := p.buildSummaryLine()
+		if vp := console.GlobalViewport; vp != nil && vp.IsActive() {
+			vp.SetHeader(summaryLine)
+		} else {
+			fmt.Fprintln(p.out, summaryLine)
+		}
+	}
+
+	// Pre-print placeholder lines so render() can overwrite in-place.
+	// Skip when the global viewport is active or running in noViewport mode.
+	if !p.noViewport {
+		termW := goterm.Width()
+		if termW <= 0 {
+			termW = 80
+		}
+		vpActive := func() bool { vp := console.GlobalViewport; return vp != nil && vp.IsActive() }()
+		if !vpActive {
+			initialLines := p.buildLines(termW)
+			if len(initialLines) > 0 {
+				for range initialLines {
+					fmt.Fprintln(p.out)
+				}
+				p.numLines = len(initialLines)
+				p.started = true
+			}
+		}
 	}
 
 	p.ticker = time.NewTicker(100 * time.Millisecond)
@@ -159,71 +201,39 @@ func (p *consoleEventProcessor) Done(_ string, _ bool) {
 	}
 	p.mtx.Unlock()
 	p.render()
+
 	p.logSummary()
+
+	// Deactivate the viewport — leaves alt screen, dumps history to main screen,
+	// returns to normal inline output for anything that runs after compose.
+	if !p.noViewport {
+		if vp := console.GlobalViewport; vp != nil {
+			vp.Deactivate()
+		}
+	}
 }
 
-// logSummary writes a plain-text summary to the log file — one layer per line,
-// no ANSI codes, no cursor movement. Uses WithSuppressConsole so it goes to
-// the log file and TUI panel only, not the terminal (which has the live display).
+// logSummary writes a structured summary to the log file only.
+// The viewport already dumped the final rendered state to the console on Deactivate,
+// so we suppress the console handler here to avoid a duplicate printout.
 func (p *consoleEventProcessor) logSummary() {
-	if p.ctx == nil {
+	if p.logCtx == nil {
 		return
 	}
-	ctx := logger.WithSuppressConsole(p.ctx)
+	// Suppress the console (stderr) handler — the viewport dump already showed the
+	// final state. We still want the lines in the log file and TUI panel.
+	ctx := logger.WithSuppressWriter(p.logCtx, logger.ConsoleWriter())
 
 	const pfx = "{{|RunningCommand|}}docker compose:{{[-]}} "
-	svcCount := 0
-	for _, svcs := range p.imageServices {
-		svcCount += len(svcs)
+
+	termW := goterm.Width()
+	if termW <= 0 {
+		termW = 80
 	}
-	imgCount := len(p.imageOrder)
-	logger.Info(ctx, pfx+"{{|RunningCommand|}}%s{{[-]}}  {{|DockerPending|}}%d service%s{{[-]}}  {{|DockerPending|}}%d image%s{{[-]}}",
-		p.command,
-		svcCount, pluralS(svcCount),
-		imgCount, pluralS(imgCount),
-	)
 
-	for _, imgName := range p.imageOrder {
-		svcs := p.serviceIDsForImage(imgName)
-		img := p.tasks[imgName]
-
-		for _, svc := range svcs {
-			t := p.tasks[svc]
-			var svcStatus string
-			if t != nil {
-				svcStatus = statusTag(t.status, t.text)
-			} else if img != nil {
-				svcStatus = statusTag(img.status, img.text)
-			} else {
-				svcStatus = "{{|DockerPending|}}Pending{{[-]}}"
-			}
-			logger.Info(ctx, pfx+"  {{|App|}}%s{{[-]}}: %s", svc, svcStatus)
-		}
-
-		if img != nil {
-			logger.Info(ctx, pfx+"    %s  %s  %s",
-				styleImage(imgName),
-				statusTag(img.status, img.text),
-				"{{|DockerPending|}}"+elapsedStr(img)+"{{[-]}}")
-		} else {
-			logger.Info(ctx, pfx+"    %s  {{|DockerSuccess|}}Cached{{[-]}}", styleImage(imgName))
-		}
-
-		for _, id := range p.ids {
-			t := p.tasks[id]
-			if t.parentID != imgName {
-				continue
-			}
-			if t.total > 0 {
-				logger.Info(ctx, pfx+"      {{|DockerPending|}}%s{{[-]}}  %s/%s  %s",
-					t.id,
-					strings.TrimSpace(fixedSize(t.current)),
-					strings.TrimSpace(fixedSize(t.total)),
-					statusTag(t.status, t.text))
-			} else {
-				logger.Info(ctx, pfx+"      {{|DockerPending|}}%s{{[-]}}  %s", t.id, statusTag(t.status, t.text))
-			}
-		}
+	logger.Notice(ctx, pfx+p.buildSummaryLine())
+	for _, line := range p.buildLines(termW) {
+		logger.Notice(ctx, pfx+line)
 	}
 }
 
@@ -234,20 +244,65 @@ func (p *consoleEventProcessor) On(events ...api.Resource) {
 		if e.ID == api.ResourceCompose {
 			continue
 		}
+		// Skip Starting/Started events for non-start commands, matching SDK TTY behaviour.
+		// The last visible state before these (typically Running/Created) is more familiar
+		// to users accustomed to "docker compose" output.
+		if p.command != "start" && (e.Text == api.StatusStarted || e.Text == api.StatusStarting) {
+			continue
+		}
 		p.upsert(e)
 	}
 }
 
 func (p *consoleEventProcessor) upsert(e api.Resource) {
 	// Normalise SDK-prefixed IDs so they match project service/image names
+	isNetwork := strings.HasPrefix(e.ID, "Network ")
+	isVolume := strings.HasPrefix(e.ID, "Volume ")
 	id := strings.TrimPrefix(e.ID, "Container ")
 	id = strings.TrimPrefix(id, "Image ")
+	id = strings.TrimPrefix(id, "Network ")
+	id = strings.TrimPrefix(id, "Volume ")
 	parentID := strings.TrimPrefix(e.ParentID, "Container ")
 	parentID = strings.TrimPrefix(parentID, "Image ")
+	parentID = strings.TrimPrefix(parentID, "Network ")
+	parentID = strings.TrimPrefix(parentID, "Volume ")
 
 	// Remap container_name back to service name (e.g. "qbittorrentx" -> "qbittorrent")
 	if svc, ok := p.containerToService[id]; ok {
 		id = svc
+	}
+
+	// Container names from down/stop/restart use "<project>-<service>-<n>" format.
+	// Strip the project prefix and instance suffix to recover the service name.
+	if p.projectName != "" {
+		prefix := p.projectName + "-"
+		if strings.HasPrefix(id, prefix) {
+			trimmed := strings.TrimPrefix(id, prefix)
+			// Strip trailing "-<digits>" instance suffix
+			if idx := strings.LastIndex(trimmed, "-"); idx >= 0 {
+				if _, err := fmt.Sscanf(trimmed[idx+1:], "%d", new(int)); err == nil {
+					trimmed = trimmed[:idx]
+				}
+			}
+			// Only use trimmed form if it matches a known service (avoid false matches)
+			if _, ok := p.containerToService[trimmed]; ok || p.isKnownServiceName(trimmed) {
+				id = trimmed
+			}
+		}
+	}
+
+	// If this is a top-level container event that still doesn't match any known
+	// service or image, assign it a stable numbered "<Unknown N>" id so it's
+	// visible rather than silently dropped. Each distinct raw name gets its own slot.
+	if !isNetwork && parentID == "" && isServiceStatus(e.Text) && !p.isKnownServiceName(id) && !contains(p.imageIDs, id) {
+		if assigned, ok := p.unknownContainers[id]; ok {
+			id = assigned
+		} else {
+			p.unknownCount++
+			assigned = fmt.Sprintf("<Unknown %d>", p.unknownCount)
+			p.unknownContainers[id] = assigned
+			id = assigned
+		}
 	}
 
 	t, exists := p.tasks[id]
@@ -261,10 +316,24 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 		p.ids = append(p.ids, id)
 
 		if e.ParentID == "" {
-			if isServiceStatus(e.Text) {
+			if isNetwork {
+				p.networkIDs = append(p.networkIDs, id)
+			} else if isVolume {
+				p.volumeIDs = append(p.volumeIDs, id)
+			} else if isServiceStatus(e.Text) && !looksLikeImageName(id) {
 				p.serviceIDs = append(p.serviceIDs, id)
+				// If we haven't stamped a start time yet (image may not have been seen), record now.
+				if _, ok := p.serviceStartTimes[id]; !ok {
+					p.serviceStartTimes[id] = t.startTime
+				}
 			} else {
 				p.imageIDs = append(p.imageIDs, id)
+				// Stamp start time for every service that uses this image.
+				for _, svc := range p.imageServices[id] {
+					if _, ok := p.serviceStartTimes[svc]; !ok {
+						p.serviceStartTimes[svc] = t.startTime
+					}
+				}
 			}
 		}
 		// layer tasks (ParentID != "") are rendered as children — no separate list needed
@@ -287,7 +356,7 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 
 	// Reclassify: if a top-level task initially looked like an image but later
 	// receives a service lifecycle status, move it to serviceIDs.
-	if e.ParentID == "" && isServiceStatus(e.Text) && contains(p.imageIDs, id) {
+	if !isNetwork && e.ParentID == "" && isServiceStatus(e.Text) && contains(p.imageIDs, id) {
 		p.imageIDs = remove(p.imageIDs, id)
 		if !contains(p.serviceIDs, id) {
 			p.serviceIDs = append(p.serviceIDs, id)
@@ -304,7 +373,6 @@ func (p *consoleEventProcessor) render() {
 	if termH <= 0 {
 		termH = 24
 	}
-	_ = termH
 
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
@@ -314,6 +382,31 @@ func (p *consoleEventProcessor) render() {
 	if len(lines) == 0 {
 		return
 	}
+
+	// When the global viewport is present, delegate rendering to it.
+	// If it exists but isn't active yet (Activate() is called from Start() which
+	// fires just before the first tick), skip this render and wait for next tick.
+	if !p.noViewport {
+		if vp := console.GlobalViewport; vp != nil {
+			if vp.IsActive() {
+				vp.SetHeader(p.buildSummaryLine())
+				vp.UpdateLines(lines)
+				p.started = true
+				p.numLines = len(lines)
+			}
+			return
+		}
+	}
+
+	// noViewport (program box) mode: call updateFn to replace lines in the TUI viewport.
+	if p.noViewport {
+		if p.updateFn != nil && !slices.Equal(lines, p.lastSentLines) {
+			p.updateFn(lines)
+			p.lastSentLines = lines
+		}
+		return
+	}
+
 	if !p.started {
 		// First render: print blank placeholder lines so subsequent renders
 		// have lines to move the cursor up into.
@@ -351,91 +444,271 @@ func (p *consoleEventProcessor) render() {
 	buf.WriteString("\033[?25h") // show cursor
 	fmt.Fprint(p.out, buf.String())
 	p.numLines = len(lines)
+	_ = termH
 }
 
 // buildLines constructs the full set of display lines grouped by image.
 // Layout is driven entirely by imageOrder so line count is stable across renders:
 // every known image always emits a service-header + image-row + any layer rows.
-func (p *consoleEventProcessor) buildLines(termW int) []string {
-	var lines []string
+// buildTeardownLines renders a flat service list for commands that don't pull images
+// (down, stop, kill, pause, unpause, restart). No image column is shown.
+// buildSummaryLine constructs the summary header line dynamically so network count
+// updates as events arrive (networks are not known from config ahead of time).
+func (p *consoleEventProcessor) buildSummaryLine() string {
+	svcCount := 0
+	for _, svcs := range p.imageServices {
+		svcCount += len(svcs)
+	}
+	imgCount := len(p.imageOrder)
+	netCount := len(p.networkIDs)
+	volCount := len(p.volumeIDs)
 
-	// Pre-compute global alignment widths across all service groups.
-	// Floor is the longest possible abbreviated status word so the image column
-	// never shifts as statuses change during the operation.
-	globalNameW := 0
-	globalStatusW := len("Downloading")
-	globalImageW := 0
+	var parts []string
+	if svcCount > 0 {
+		parts = append(parts, fmt.Sprintf("{{|App|}}%d %s{{[-]}}", svcCount, plural(svcCount, "service", "services")))
+	}
+	if imgCount > 0 {
+		parts = append(parts, fmt.Sprintf("{{|DockerImage|}}%d %s{{[-]}}", imgCount, plural(imgCount, "image", "images")))
+	}
+	if netCount > 0 {
+		parts = append(parts, fmt.Sprintf("{{|App|}}%d %s{{[-]}}", netCount, plural(netCount, "network", "networks")))
+	}
+	if volCount > 0 {
+		parts = append(parts, fmt.Sprintf("{{|App|}}%d %s{{[-]}}", volCount, plural(volCount, "volume", "volumes")))
+	}
+	summaryFmt := fmt.Sprintf("{{|RunningCommand|}}%s:{{[-]}} %s", p.command, strings.Join(parts, ", "))
+	return console.ToConsoleANSI(summaryFmt)
+}
+
+type timerStyle int
+
+const (
+	timerSection timerStyle = iota // bold white — services: header
+	timerService                   // App cyan — individual service containers
+	timerImage                     // DockerSuccess green — image rows
+	timerLayer                     // unstyled — layer rows
+)
+
+type timerEntry struct {
+	task  *consoleTask
+	style timerStyle
+}
+
+// attachTimers right-aligns elapsed timers on lines.
+// timers is parallel to lines: non-nil task entries get a timer appended.
+// The column is set by the widest visible line seen so far (maxLineWidth grows, never shrinks).
+func (p *consoleEventProcessor) attachTimers(lines []string, timers []timerEntry) []string {
+	// Update maxLineWidth if any line is wider.
+	for _, line := range lines {
+		if w := utf8.RuneCountInString(console.Strip(line)); w > p.maxLineWidth {
+			p.maxLineWidth = w
+		}
+	}
+	col := p.maxLineWidth + 2
+	out := make([]string, len(lines))
+	for i, line := range lines {
+		e := timers[i]
+		if e.task == nil {
+			out[i] = line
+			continue
+		}
+		visible := utf8.RuneCountInString(console.Strip(line))
+		pad := strings.Repeat(" ", col-visible)
+		var styleTag string
+		switch e.style {
+		case timerSection:
+			styleTag = "{{[white::B]}}"
+		case timerService:
+			styleTag = "{{|App|}}"
+		case timerImage:
+			styleTag = "{{|DockerSuccess|}}"
+		default: // timerLayer
+			styleTag = "{{[::D]}}"
+		}
+		timer := console.ToConsoleANSI(styleTag + elapsedStr(e.task) + "{{[-]}}")
+		out[i] = line + pad + timer
+	}
+	return out
+}
+
+func (p *consoleEventProcessor) prependSummary(lines []string, timers []timerEntry) []string {
+	lines = p.attachTimers(lines, timers)
+	summary := p.buildSummaryLine()
+	if summary == "" {
+		return lines
+	}
+	return append([]string{summary}, lines...)
+}
+
+func (p *consoleEventProcessor) buildTeardownLines() []string {
+	impliedText, impliedTag := p.impliedStatus()
+	impliedANSI := console.ToConsoleANSI(impliedTag + impliedText + "{{[-]}}")
+	var impliedIcon string
+	if impliedTag == "{{|DockerPending|}}" {
+		impliedIcon = console.ToConsoleANSI("{{|DockerPending|}}·{{[-]}}")
+	} else {
+		impliedIcon = console.ToConsoleANSI("{{|DockerSuccess|}}✓{{[-]}}")
+	}
+
+	svcRollupIDs := append([]string{}, p.serviceIDs...)
+	svcImageMap := make(map[string]string)
 	for _, imgName := range p.imageOrder {
-		if n := utf8.RuneCountInString(imgName); n > globalImageW {
-			globalImageW = n
-		}
-		for _, svc := range p.serviceIDsForImage(imgName) {
-			if n := utf8.RuneCountInString(svc); n > globalNameW {
-				globalNameW = n
-			}
-			if t := p.tasks[svc]; t != nil {
-				if s := utf8.RuneCountInString(abbreviateStatus(t.text)); s > globalStatusW {
-					globalStatusW = s
-				}
+		for _, s := range p.serviceIDsForImage(imgName) {
+			svcImageMap[s] = imgName
+			if !contains(svcRollupIDs, s) {
+				svcRollupIDs = append(svcRollupIDs, s)
 			}
 		}
 	}
-	// Also account for orphan services.
-	for _, svcID := range p.serviceIDs {
-		if n := utf8.RuneCountInString(svcID); n > globalNameW {
-			globalNameW = n
-		}
-		if t := p.tasks[svcID]; t != nil {
-			if s := utf8.RuneCountInString(abbreviateStatus(t.text)); s > globalStatusW {
-				globalStatusW = s
-			}
-		}
-	}
-
+	svcIcon, svcStatusANSI, svcStatusText, _ := p.sectionRollupWithPropagation(svcRollupIDs, func(id string) string { return svcImageMap[id] })
+	svcStatusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(svcStatusText))
 	coveredSvcs := make(map[string]bool)
+	var lines []string
+	var timers []timerEntry
+
+	appendLine := func(line string, t *consoleTask, style timerStyle) {
+		lines = append(lines, line)
+		timers = append(timers, timerEntry{task: t, style: style})
+	}
+
+	appendLine(globalIndent+svcIcon+" "+svcStatusANSI+console.CodeReset+svcStatusPad+console.ToConsoleANSI("{{[white::B]}}services{{[-]}}{{|DockerColon|}}:{{[-]}}"), p.sectionTaskFor(svcRollupIDs), timerSection)
 
 	for _, imgName := range p.imageOrder {
-		// Service header — use live task IDs if available, else config names
 		svcs := p.serviceIDsForImage(imgName)
 		for _, s := range svcs {
 			coveredSvcs[s] = true
 		}
-		// One line per service; image suffix on the last one, columns aligned.
-		// Layout: "name: " padded to maxNameW+2, status padded to maxStatusW, then image.
+		for _, svc := range svcs {
+			t := p.tasks[svc]
+			nameANSI := console.ToConsoleANSI("{{|App|}}" + svc + "{{[-]}}")
+			var svcStatus, svcIcon, svcStatusText string
+			if t != nil {
+				svcStatusText = abbreviateStatus(t.text)
+				svcStatus = console.ToConsoleANSI(serviceStatusTag(t.status, t.text, p.command))
+				svcIcon = p.propagatedIcon(t, p.worstServiceStatus(svc, imgName))
+			} else {
+				svcStatusText = impliedText
+				svcStatus = impliedANSI
+				svcIcon = impliedIcon
+			}
+			statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(svcStatusText))
+			appendLine(globalIndent+svcIcon+" "+svcStatus+console.CodeReset+statusPad+sectionChildIndent+nameANSI+console.ToConsoleANSI("{{|DockerColon|}}:{{[-]}}"), t, timerService)
+		}
+	}
+
+	// Orphan services with no image group.
+	for _, svc := range p.serviceIDs {
+		if coveredSvcs[svc] || looksLikeImageName(svc) || contains(p.imageIDs, svc) {
+			continue
+		}
+		t := p.tasks[svc]
+		nameANSI := console.ToConsoleANSI("{{|App|}}" + svc + "{{[-]}}")
+		var svcStatus, svcIcon, svcStatusText string
+		if t != nil {
+			svcStatusText = abbreviateStatus(t.text)
+			svcStatus = console.ToConsoleANSI(serviceStatusTag(t.status, t.text, p.command))
+			svcIcon = p.propagatedIcon(t, t.status)
+		} else {
+			svcStatusText = impliedText
+			svcStatus = impliedANSI
+			svcIcon = impliedIcon
+		}
+		statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(svcStatusText))
+		appendLine(globalIndent+svcIcon+" "+svcStatus+console.CodeReset+statusPad+sectionChildIndent+nameANSI+console.ToConsoleANSI("{{|DockerColon|}}:{{[-]}}"), t, timerService)
+	}
+
+	netLines, netTimers := p.buildNetworkLines()
+	for i, line := range netLines {
+		appendLine(line, netTimers[i].task, netTimers[i].style)
+	}
+	volLines, volTimers := p.buildVolumeLines()
+	for i, line := range volLines {
+		appendLine(line, volTimers[i].task, volTimers[i].style)
+	}
+
+	return p.prependSummary(lines, timers)
+}
+
+// isTeardownCommand returns true for commands that operate on containers without pulling images.
+func (p *consoleEventProcessor) isTeardownCommand() bool {
+	switch p.command {
+	case "down", "stop", "kill", "pause", "unpause", "restart":
+		return true
+	}
+	return false
+}
+
+func (p *consoleEventProcessor) buildLines(termW int) []string {
+	if p.isTeardownCommand() {
+		return p.buildTeardownLines()
+	}
+
+	svcRollupIDs := append([]string{}, p.serviceIDs...)
+	svcImageMap := make(map[string]string)
+	for _, imgName := range p.imageOrder {
+		for _, s := range p.serviceIDsForImage(imgName) {
+			svcImageMap[s] = imgName
+			if !contains(svcRollupIDs, s) {
+				svcRollupIDs = append(svcRollupIDs, s)
+			}
+		}
+	}
+	svcIcon, svcStatusANSI, svcStatusText, _ := p.sectionRollupWithPropagation(svcRollupIDs, func(id string) string { return svcImageMap[id] })
+	svcStatusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(svcStatusText))
+	var lines []string
+	var timers []timerEntry
+
+	appendLine := func(line string, t *consoleTask, style timerStyle) {
+		lines = append(lines, line)
+		timers = append(timers, timerEntry{task: t, style: style})
+	}
+
+	// ── services: section ──────────────────────────────────────────────────
+	// Section timer spans all service start times (which are stamped when image tasks first appear).
+	allSvcIDs := append(append([]string{}, p.imageOrder...), svcRollupIDs...)
+	appendLine(globalIndent+svcIcon+" "+svcStatusANSI+console.CodeReset+svcStatusPad+console.ToConsoleANSI("{{[white::B]}}services{{[-]}}{{|DockerColon|}}:{{[-]}}"), p.sectionTaskFor(allSvcIDs), timerSection)
+
+	coveredSvcs := make(map[string]bool)
+
+	for _, imgName := range p.imageOrder {
+		svcs := p.serviceIDsForImage(imgName)
+		for _, s := range svcs {
+			coveredSvcs[s] = true
+		}
 		img := p.tasks[imgName]
 
-		for i, svc := range svcs {
+		for _, svc := range svcs {
 			t := p.tasks[svc]
-			nameW := utf8.RuneCountInString(svc)
-			namePad := strings.Repeat(" ", globalNameW-nameW)
 			nameANSI := console.ToConsoleANSI("{{|App|}}" + svc + "{{[-]}}")
-
 			var statusText, statusANSI, icon string
 			if t == nil {
 				if img != nil {
 					statusText = abbreviateStatus(img.text)
-					statusANSI = console.ToConsoleANSI(statusTag(img.status, img.text))
-					icon = p.spinnerIcon(nil) // active — inheriting image pull
+					statusANSI = console.ToConsoleANSI(imageStatusTag(img.status, img.text))
+					icon = p.spinnerIcon(img)
 				} else {
-					statusText = "Pending"
-					statusANSI = console.ToConsoleANSI("{{|DockerPending|}}" + statusText + "{{[-]}}")
-					icon = console.ToConsoleANSI("{{|DockerPending|}}·{{[-]}}")
+					impliedText, impliedTag := p.impliedStatus()
+					statusText = impliedText
+					statusANSI = console.ToConsoleANSI(impliedTag + statusText + "{{[-]}}")
+					if impliedTag == "{{|DockerPending|}}" {
+						icon = console.ToConsoleANSI("{{|DockerPending|}}·{{[-]}}")
+					} else {
+						icon = console.ToConsoleANSI("{{|DockerSuccess|}}✓{{[-]}}")
+					}
 				}
 			} else {
 				statusText = abbreviateStatus(t.text)
-				statusANSI = console.ToConsoleANSI(statusTag(t.status, t.text))
-				icon = p.spinnerIcon(t)
+				statusANSI = console.ToConsoleANSI(serviceStatusTag(t.status, t.text, p.command))
+				icon = p.propagatedIcon(t, p.worstServiceStatus(svc, imgName))
 			}
-			statusPad := strings.Repeat(" ", globalStatusW-utf8.RuneCountInString(statusText))
-			line := globalIndent + icon + " " + nameANSI + ":" + namePad + " " + statusANSI + console.CodeReset + statusPad
-
-			if i == len(svcs)-1 {
-				line += "  " + p.buildImageSuffix(imgName, img, globalImageW, globalStatusW)
-			}
-			lines = append(lines, line)
+			statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
+			appendLine(globalIndent+icon+" "+statusANSI+console.CodeReset+statusPad+sectionChildIndent+nameANSI+console.ToConsoleANSI("{{|DockerColon|}}:{{[-]}}"), p.serviceTimerTask(svc), timerService)
 		}
 
-		// Layer rows for this image — two columns if terminal is wide enough.
+		// Image row indented under the service name.
+		appendLine(p.buildImageLine(imgName, img), img, timerImage)
+
+		// Layer rows for this image.
 		var layers []*consoleTask
 		for _, id := range p.ids {
 			t := p.tasks[id]
@@ -443,53 +716,326 @@ func (p *consoleEventProcessor) buildLines(termW int) []string {
 				layers = append(layers, t)
 			}
 		}
-		lines = append(lines, p.buildLayerLines(layers, termW)...)
+		layerLines, layerTasks := p.buildLayerLines(layers, termW)
+		for i, line := range layerLines {
+			appendLine(line, layerTasks[i], timerLayer)
+		}
 	}
 
-	// Runtime service events with no image group (restart/stop/start) — one line each.
+	// Orphan services with no image group.
 	for _, svcID := range p.serviceIDs {
-		if coveredSvcs[svcID] {
+		if coveredSvcs[svcID] || looksLikeImageName(svcID) || contains(p.imageIDs, svcID) {
 			continue
 		}
 		t := p.tasks[svcID]
-		nameW := utf8.RuneCountInString(svcID)
-		namePad := strings.Repeat(" ", globalNameW-nameW)
 		nameANSI := console.ToConsoleANSI("{{|App|}}" + svcID + "{{[-]}}")
 		var statusText, statusANSI, icon string
 		if t == nil {
-			statusText = "Pending"
-			statusANSI = console.ToConsoleANSI("{{|DockerPending|}}" + statusText + "{{[-]}}")
-			icon = console.ToConsoleANSI("{{|DockerPending|}}·{{[-]}}")
+			impliedText, impliedTag := p.impliedStatus()
+			statusText = impliedText
+			statusANSI = console.ToConsoleANSI(impliedTag + statusText + "{{[-]}}")
+			if impliedTag == "{{|DockerPending|}}" {
+				icon = console.ToConsoleANSI("{{|DockerPending|}}·{{[-]}}")
+			} else {
+				icon = console.ToConsoleANSI("{{|DockerSuccess|}}✓{{[-]}}")
+			}
 		} else {
 			statusText = abbreviateStatus(t.text)
-			statusANSI = console.ToConsoleANSI(statusTag(t.status, t.text))
-			icon = p.spinnerIcon(t)
+			statusANSI = console.ToConsoleANSI(serviceStatusTag(t.status, t.text, p.command))
+			icon = p.propagatedIcon(t, t.status)
 		}
-		statusPad := strings.Repeat(" ", globalStatusW-utf8.RuneCountInString(statusText))
-		lines = append(lines, globalIndent+icon+" "+nameANSI+":"+namePad+" "+statusANSI+console.CodeReset+statusPad)
+		statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
+		appendLine(globalIndent+icon+" "+statusANSI+console.CodeReset+statusPad+sectionChildIndent+nameANSI+console.ToConsoleANSI("{{|DockerColon|}}:{{[-]}}"), p.serviceTimerTask(svcID), timerService)
 	}
 
-	return lines
+	// ── networks/volumes: sections ────────────────────────────────────────
+	netLines, netTimers := p.buildNetworkLines()
+	for i, line := range netLines {
+		appendLine(line, netTimers[i].task, netTimers[i].style)
+	}
+	volLines, volTimers := p.buildVolumeLines()
+	for i, line := range volLines {
+		appendLine(line, volTimers[i].task, volTimers[i].style)
+	}
+
+	return p.prependSummary(lines, timers)
 }
 
-// buildServiceHeader renders "svc1: Status, svc2: Status"
-// If a service has no task yet (no lifecycle event received), it shows with no status.
-func (p *consoleEventProcessor) buildServiceHeader(svcIDs []string) string {
-	if len(svcIDs) == 0 {
-		return ""
+// buildImageLine renders the image row with icon/status, indented to align under the service name.
+// Layout: " icon Status      image: name:tag   2.5s"
+// statusPad brings the cursor to the name column — no additional indent needed.
+func (p *consoleEventProcessor) buildImageLine(imgName string, t *consoleTask) string {
+	imageLabel := console.ToConsoleANSI("      {{|DockerSuccess|}}image{{[-]}}{{|DockerColon|}}:{{[-]}} ")
+	if t == nil {
+		cachedIcon := console.ToConsoleANSI("{{|DockerSuccess|}}✓{{[-]}}")
+		cachedStatus := console.ToConsoleANSI("{{|DockerSuccess|}}Cached{{[-]}}")
+		statusPad := strutil.Repeat(" ", sectionStatusW-len("Cached"))
+		return globalIndent + cachedIcon + " " + cachedStatus + console.CodeReset + statusPad + imageLabel + styleImage(imgName)
 	}
-	var parts []string
-	for _, id := range svcIDs {
+	worst := p.worstImageStatus(imgName)
+	icon := p.propagatedIcon(t, worst)
+	statusText := abbreviateStatus(t.text)
+	statusANSI := console.ToConsoleANSI(imageStatusTag(t.status, t.text))
+	statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
+	return globalIndent + icon + " " + statusANSI + console.CodeReset + statusPad + imageLabel + styleImage(imgName)
+}
+
+// worstChildStatus returns the worst EventStatus among all layer children of parentID.
+// Order: Error > Warning > Working > Done (i.e. any error beats everything).
+func (p *consoleEventProcessor) worstChildStatus(parentID string) api.EventStatus {
+	worst := api.Done
+	for _, id := range p.ids {
 		t := p.tasks[id]
-		name := console.ToConsoleANSI("{{|App|}}" + id + "{{[-]}}")
-		if t == nil {
-			parts = append(parts, name)
+		if t.parentID != parentID {
 			continue
 		}
-		statusANSI := console.ToConsoleANSI(statusTag(t.status, t.text))
-		parts = append(parts, name+": "+statusANSI+console.CodeReset)
+		switch t.status {
+		case api.Error:
+			return api.Error // can't get worse
+		case api.Warning:
+			worst = api.Warning
+		case api.Working:
+			if worst != api.Warning {
+				worst = api.Working
+			}
+		}
 	}
-	return strings.Join(parts, ", ")
+	return worst
+}
+
+// worstImageStatus returns the worst status for an image, propagating from its layers.
+func (p *consoleEventProcessor) worstImageStatus(imgName string) api.EventStatus {
+	img := p.tasks[imgName]
+	layerWorst := p.worstChildStatus(imgName)
+	if img == nil {
+		return layerWorst
+	}
+	if layerWorst == api.Error || img.status == api.Error {
+		return api.Error
+	}
+	if layerWorst == api.Warning || img.status == api.Warning {
+		return api.Warning
+	}
+	return img.status
+}
+
+// worstServiceStatus returns the worst status for a service, propagating from its image.
+func (p *consoleEventProcessor) worstServiceStatus(svcID, imgName string) api.EventStatus {
+	svc := p.tasks[svcID]
+	imgWorst := p.worstImageStatus(imgName)
+	if svc == nil {
+		return imgWorst
+	}
+	if imgWorst == api.Error || svc.status == api.Error {
+		return api.Error
+	}
+	if imgWorst == api.Warning || svc.status == api.Warning {
+		return api.Warning
+	}
+	return svc.status
+}
+
+// propagatedIcon returns the icon for a task after considering propagated child errors.
+// worstStatus should come from worstImageStatus or worstServiceStatus as appropriate.
+func (p *consoleEventProcessor) propagatedIcon(t *consoleTask, worstStatus api.EventStatus) string {
+	if worstStatus == api.Error {
+		return console.ToConsoleANSI("{{|DockerFail|}}×{{[-]}}")
+	}
+	if worstStatus == api.Warning {
+		return console.ToConsoleANSI("{{|DockerWarn|}}⚠{{[-]}}")
+	}
+	return p.spinnerIcon(t)
+}
+
+// sectionRollupState is the computed rollup state for a section header.
+type sectionRollupState int
+
+const (
+	rollupPending    sectionRollupState = iota
+	rollupProcessing                    // at least one in progress
+	rollupComplete                      // all done, no errors/warnings
+	rollupWarning                       // at least one warning
+	rollupError                         // at least one error
+)
+
+// sectionStatusText returns the status label and ANSI tag for a rollup state.
+func sectionStatusText(s sectionRollupState, spinnerFrame int) (text, statusTag, iconTag string) {
+	switch s {
+	case rollupError:
+		return "Error", "{{|DockerFail|}}", "{{|DockerFail|}}"
+	case rollupWarning:
+		return "Warning", "{{|DockerWarn|}}", "{{|DockerWarn|}}"
+	case rollupPending:
+		return "Pending", "{{|DockerPending|}}", "{{|DockerPending|}}"
+	case rollupComplete:
+		return "Complete", "{{|DockerFinal|}}", "{{|DockerSuccess|}}"
+	default: // rollupProcessing
+		return "Processing", "{{|DockerActive|}}", "{{|DockerSpinner|}}"
+	}
+}
+
+// sectionRollup computes the rolled-up status for a section header from a set of task IDs.
+// Returns (icon, statusANSI, statusText, labelTag).
+func (p *consoleEventProcessor) sectionRollup(ids []string) (icon, statusANSI, statusText, labelTag string) {
+	state := p.rollupState(ids, nil)
+	text, stTag, iconTag := sectionStatusText(state, p.spinnerFrame)
+	spinnerOrCheck := spinnerFrames[p.spinnerFrame]
+	if state != rollupProcessing {
+		spinnerOrCheck = sectionRollupIcon(state)
+	}
+	icon = console.ToConsoleANSI(iconTag + spinnerOrCheck + "{{[-]}}")
+	statusANSI = console.ToConsoleANSI(stTag + text + "{{[-]}}")
+	statusText = text
+	labelTag = stTag
+	return
+}
+
+// sectionRollupWithPropagation is like sectionRollup but also checks child tasks
+// (layers for image IDs, images for service IDs) for propagated errors/warnings.
+func (p *consoleEventProcessor) sectionRollupWithPropagation(ids []string, imageForID func(string) string) (icon, statusANSI, statusText, labelTag string) {
+	state := p.rollupState(ids, imageForID)
+	text, stTag, iconTag := sectionStatusText(state, p.spinnerFrame)
+	spinnerOrCheck := spinnerFrames[p.spinnerFrame]
+	if state != rollupProcessing {
+		spinnerOrCheck = sectionRollupIcon(state)
+	}
+	icon = console.ToConsoleANSI(iconTag + spinnerOrCheck + "{{[-]}}")
+	statusANSI = console.ToConsoleANSI(stTag + text + "{{[-]}}")
+	statusText = text
+	labelTag = stTag
+	return
+}
+
+func sectionRollupIcon(s sectionRollupState) string {
+	switch s {
+	case rollupError:
+		return "×"
+	case rollupWarning:
+		return "⚠"
+	case rollupComplete:
+		return "✓"
+	default:
+		return "·"
+	}
+}
+
+// rollupState computes the sectionRollupState for a set of IDs, optionally propagating
+// through child tasks when imageForID is non-nil.
+func (p *consoleEventProcessor) rollupState(ids []string, imageForID func(string) string) sectionRollupState {
+	anyError := false
+	anyWarning := false
+	anyStarted := false
+	allDone := true
+	for _, id := range ids {
+		t := p.tasks[id]
+		var worst api.EventStatus
+		if imageForID != nil {
+			imgName := imageForID(id)
+			if imgName != "" {
+				worst = p.worstServiceStatus(id, imgName)
+			} else {
+				worst = p.worstImageStatus(id)
+			}
+		} else {
+			worst = p.worstImageStatus(id)
+		}
+		if t != nil {
+			anyStarted = true
+			if !t.completed() {
+				allDone = false
+			}
+		} else if p.isTeardownCommand() {
+			// For teardown: services with no task are already in the implied final
+			// state (container was already stopped/removed before we ran). Count as
+			// started and done so the section shows Complete, not Pending.
+			anyStarted = true
+		} else {
+			allDone = false
+			// For startup: if the image is being worked on, the section has started
+			// even though the service task doesn't exist yet (container not created).
+			if imageForID != nil {
+				imgName := imageForID(id)
+				if imgName != "" && p.tasks[imgName] != nil {
+					anyStarted = true
+				}
+			}
+		}
+		if worst == api.Error {
+			anyError = true
+		} else if worst == api.Warning {
+			anyWarning = true
+		}
+	}
+	switch {
+	case anyError:
+		return rollupError
+	case anyWarning:
+		return rollupWarning
+	case !anyStarted:
+		return rollupPending
+	case allDone:
+		return rollupComplete
+	default:
+		return rollupProcessing
+	}
+}
+
+// buildNetworkLines renders the networks: section header and one line per network event.
+func (p *consoleEventProcessor) buildNetworkLines() ([]string, []timerEntry) {
+	if len(p.networkIDs) == 0 {
+		return nil, nil
+	}
+	netIcon, netStatusANSI, netStatusText, _ := p.sectionRollupWithPropagation(p.networkIDs, nil)
+	netStatusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(netStatusText))
+	lines := []string{globalIndent + netIcon + " " + netStatusANSI + console.CodeReset + netStatusPad + console.ToConsoleANSI("{{[white::B]}}networks{{[-]}}{{|DockerColon|}}:{{[-]}}")}
+	timers := []timerEntry{{task: p.sectionTaskFor(p.networkIDs), style: timerSection}}
+	for _, netID := range p.networkIDs {
+		t := p.tasks[netID]
+		nameANSI := console.ToConsoleANSI("{{|App|}}" + netID + "{{[-]}}")
+		var icon, statusText, statusANSI string
+		if t != nil {
+			icon = p.spinnerIcon(t)
+			statusText = abbreviateStatus(t.text)
+			statusANSI = console.ToConsoleANSI(networkStatusTag(t.status, t.text, p.command))
+		} else {
+			icon = console.ToConsoleANSI("{{|DockerPending|}}·{{[-]}}")
+			statusText = "Pending"
+			statusANSI = console.ToConsoleANSI("{{|DockerPending|}}Pending{{[-]}}")
+		}
+		statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
+		lines = append(lines, globalIndent+icon+" "+statusANSI+console.CodeReset+statusPad+sectionChildIndent+nameANSI+console.ToConsoleANSI("{{|DockerColon|}}:{{[-]}}"))
+		timers = append(timers, timerEntry{task: t, style: timerService})
+	}
+	return lines, timers
+}
+
+// buildVolumeLines renders the volumes: section header and one line per volume event.
+func (p *consoleEventProcessor) buildVolumeLines() ([]string, []timerEntry) {
+	if len(p.volumeIDs) == 0 {
+		return nil, nil
+	}
+	volIcon, volStatusANSI, volStatusText, _ := p.sectionRollupWithPropagation(p.volumeIDs, nil)
+	volStatusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(volStatusText))
+	lines := []string{globalIndent + volIcon + " " + volStatusANSI + console.CodeReset + volStatusPad + console.ToConsoleANSI("{{[white::B]}}volumes{{[-]}}{{|DockerColon|}}:{{[-]}}")}
+	timers := []timerEntry{{task: p.sectionTaskFor(p.volumeIDs), style: timerSection}}
+	for _, volID := range p.volumeIDs {
+		t := p.tasks[volID]
+		nameANSI := console.ToConsoleANSI("{{|App|}}" + volID + "{{[-]}}")
+		var icon, statusText, statusANSI string
+		if t != nil {
+			icon = p.spinnerIcon(t)
+			statusText = abbreviateStatus(t.text)
+			statusANSI = console.ToConsoleANSI(volumeStatusTag(t.status, t.text, p.command))
+		} else {
+			icon = console.ToConsoleANSI("{{|DockerPending|}}·{{[-]}}")
+			statusText = "Pending"
+			statusANSI = console.ToConsoleANSI("{{|DockerPending|}}Pending{{[-]}}")
+		}
+		statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
+		lines = append(lines, globalIndent+icon+" "+statusANSI+console.CodeReset+statusPad+sectionChildIndent+nameANSI+console.ToConsoleANSI("{{|DockerColon|}}:{{[-]}}"))
+		timers = append(timers, timerEntry{task: t, style: timerService})
+	}
+	return lines, timers
 }
 
 // serviceIDsForImage returns the service list for an image, merging pre-populated
@@ -505,6 +1051,7 @@ func (p *consoleEventProcessor) serviceIDsForImage(imgID string) []string {
 			result = append(result, svcID)
 		}
 	}
+	sort.Strings(result)
 	return result
 }
 
@@ -519,97 +1066,95 @@ func styleImage(imgName string) string {
 	return console.ToConsoleANSI("{{|DockerImage|}}" + imgName + "{{[-]}}")
 }
 
-// buildImageSuffix returns the parenthesised image info appended to the service header line.
-// e.g. " (lscr.io/.../radarr:develop  Pulling  [⣿⣿⡀⠀⠀]  18.1s)"
-// If no task yet (image not yet being pulled), returns just the image name in parens.
-func (p *consoleEventProcessor) buildImageSuffix(imgName string, t *consoleTask, imageW, statusW int) string {
-	// Pad image name to imageW so the status column aligns across all groups.
-	imagePad := strings.Repeat(" ", imageW-utf8.RuneCountInString(imgName))
-	imageANSI := styleImage(imgName) + imagePad
-	if t == nil {
-		// No pull event means the image was already cached — show as done.
-		cachedIcon := console.ToConsoleANSI("{{|DockerSuccess|}}✔{{[-]}}")
-		return cachedIcon + " " + imageANSI
-	}
-	icon := p.spinnerIcon(t)
-	statusText := abbreviateStatus(t.text)
-	statusPad := strings.Repeat(" ", statusW-utf8.RuneCountInString(statusText))
-	statusANSI := console.ToConsoleANSI(statusTag(t.status, t.text)) + statusPad
-	timerANSI := console.ToConsoleANSI("{{|DockerPending|}}" + elapsedStr(t) + "{{[-]}}")
-	return icon + " " + imageANSI + "  " + statusANSI + console.CodeReset + "  " + timerANSI
-}
-
 // buildLayerLine renders a layer row with optional progress bar.
-func (p *consoleEventProcessor) buildLayerLine(t *consoleTask) string {
+// statusW is the minimum width for the status column (0 = no padding).
+// barW is the number of braille chars in the progress bar (scales with layer count).
+//
+// Layout: layerPrefix + icon + " " + status + statusPad + " " + id + " " + sizes + bar
+// sizes is always fixed-width (fixedSize cur + "/" + fixedSize total) so the bar column aligns.
+func (p *consoleEventProcessor) buildLayerLine(t *consoleTask, statusW, barW int) string {
 	id := t.id
 	if len(id) > 19 {
 		id = id[:18] + "…"
 	}
 
-	// barWidth = 1(space) + 2(brackets)+progressWidth + 1(space) + 7(cur) + 1(/) + 7(total)
-	const barWidth = 1 + (2 + progressWidth) + 1 + 7 + 1 + 7
-	bar := ""
+	// The SDK sets percent=100 on Done but does not update Current to equal Total
+	// (Download complete / Pull complete events carry no progress bytes).
+	// Use percent=100 to render a full bar and total/total for the size column.
+	current := t.current
+	if t.completed() && t.percent == 100 && t.total > 0 {
+		current = t.total
+	}
+
+	var sizes string
 	if t.total > 0 {
-		bar = " " + renderProgressBar(t.current, t.total, progressWidth) +
-			" " + fixedSize(t.current) + "/" + fixedSize(t.total)
-	} else if t.percent > 0 {
-		bar = " " + renderProgressBarPct(t.percent, progressWidth) + strings.Repeat(" ", barWidth-(1+2+progressWidth))
+		sizes = " " + console.ToConsoleANSI("{{|DockerProgressBar|}}"+fixedSize(current)+"{{[-]}}"+
+			"{{|DockerColon|}}/{{[-]}}"+
+			"{{|DockerProgressBar|}}"+fixedSize(t.total)+"{{[-]}}")
 	} else {
-		bar = strings.Repeat(" ", barWidth)
+		sizes = strings.Repeat(" ", 1+8+1+8)
+	}
+
+	bar := ""
+	if barW > 0 {
+		pct := t.percent
+		if t.completed() && pct == 100 {
+			pct = 100 // explicit for clarity; renders full bar
+		}
+		if t.total > 0 {
+			bar = " " + renderProgressBar(current, t.total, barW)
+		} else if pct > 0 {
+			bar = " " + renderProgressBarPct(pct, barW)
+		} else {
+			bar = " " + renderProgressBar(0, 0, barW)
+		}
 	}
 
 	icon := p.spinnerIcon(t)
-	statusANSI := console.ToConsoleANSI(statusTag(t.status, t.text))
-	return globalIndent + layerIndent + icon + " " + id + bar + "  " + statusANSI + console.CodeReset
+	short := abbreviateStatus(t.text)
+	statusPad := ""
+	if pad := statusW - utf8.RuneCountInString(short); pad > 0 {
+		statusPad = strutil.Repeat(" ", pad)
+	}
+	statusANSI := console.ToConsoleANSI(layerStatusTag(t.status, t.text))
+	// Indent layers to sit under the image: line content.
+	// globalIndent(1) + icon(1) + space(1) + sectionStatusW(13) + imageLabel(6) + "   "(3 extra) = 25
+	const layerPrefix = "                         " // 25 spaces
+	return layerPrefix + console.CodeDim + icon + " " + statusANSI + console.CodeReset + console.CodeDim + statusPad + " " + id + sizes + bar + console.CodeDimOff
 }
 
-const (
-	minColWidth  = 60 // minimum visible width for a layer column
-	layerGutter  = 2  // chars between left and right layer columns
-)
-
-// buildLayerLines lays out layer rows in one or two columns depending on terminal width.
-func (p *consoleEventProcessor) buildLayerLines(layers []*consoleTask, termW int) []string {
+// buildLayerLines renders layer rows single-column, indented under the image: line.
+// Bar width scales with the number of layers (more layers = narrower bars), matching the SDK approach.
+// Returns parallel (lines, tasks) slices for timer attachment.
+func (p *consoleEventProcessor) buildLayerLines(layers []*consoleTask, termW int) ([]string, []*consoleTask) {
 	if len(layers) == 0 {
-		return nil
-	}
-	// Account for globalIndent + icon + space prefix (3 chars) already on each line.
-	usableW := termW - len(globalIndent) - 2 // 2 = icon + space
-	colW := (usableW - layerGutter) / 2
-	twoCol := colW >= minColWidth && len(layers) > 1
-
-	if !twoCol {
-		var out []string
-		for _, t := range layers {
-			out = append(out, p.buildLayerLine(t))
-		}
-		return out
+		return nil, nil
 	}
 
-	gutter := strings.Repeat(" ", layerGutter)
-	half := (len(layers) + 1) / 2
+	// SDK approach: bar width = number of layers (one braille char per sibling layer).
+	// Clamp to a reasonable range so very few or very many layers still look good.
+	barW := len(layers)
+	if barW < 5 {
+		barW = 5
+	}
+	if barW > 30 {
+		barW = 30
+	}
 
-	// Pre-render all left-column lines and find the widest visible width,
-	// so we pad to content width rather than half the terminal.
-	leftLines := make([]string, half)
-	maxLeftW := 0
-	for i := 0; i < half; i++ {
-		leftLines[i] = p.buildLayerLine(layers[i])
-		if w := utf8.RuneCountInString(console.Strip(leftLines[i])); w > maxLeftW {
-			maxLeftW = w
+	maxLayerStatusW := 0
+	for _, t := range layers {
+		if w := utf8.RuneCountInString(abbreviateStatus(t.text)); w > maxLayerStatusW {
+			maxLayerStatusW = w
 		}
 	}
 
 	var out []string
-	for i := 0; i < half; i++ {
-		left := padOrTruncN(leftLines[i], maxLeftW)
-		right := ""
-		if i+half < len(layers) {
-			right = p.buildLayerLine(layers[i+half])
-		}
-		out = append(out, left+gutter+right)
+	var outTasks []*consoleTask
+	for _, t := range layers {
+		out = append(out, p.buildLayerLine(t, maxLayerStatusW, barW))
+		outTasks = append(outTasks, t)
 	}
-	return out
+	return out, outTasks
 }
 
 // fixedSize formats a byte count as a fixed-width 7-char string (e.g. " 80.6MB", "  1.0KB").
@@ -619,6 +1164,13 @@ func pluralS(n int) string {
 		return ""
 	}
 	return "s"
+}
+
+func plural(n int, singular, pluralForm string) string {
+	if n == 1 {
+		return singular
+	}
+	return pluralForm
 }
 
 func fixedSize(b int64) string {
@@ -638,8 +1190,8 @@ func fixedSize(b int64) string {
 	default:
 		s = fmt.Sprintf("%dB", b)
 	}
-	// Right-pad to 7 chars for consistent column width
-	for len(s) < 7 {
+	// Right-pad to 8 chars for consistent column width (handles up to 9999.9kB / 9999MB)
+	for len(s) < 8 {
 		s = " " + s
 	}
 	return s
@@ -671,22 +1223,48 @@ func renderProgressBarPct(pct, width int) string {
 
 // spinnerIcon returns the animated spinner or a terminal icon based on task state.
 // Pass nil for t to get the active spinner (used when inheriting image state).
+// impliedStatus returns the status text and ANSI tag for a service that received
+// no events. For teardown commands this means the container was already in the
+// target state; for startup commands it's genuinely pending.
+func (p *consoleEventProcessor) impliedStatus() (text, ansiTag string) {
+	switch p.command {
+	case "down":
+		return "Removed", "{{|DockerFinal|}}"
+	case "stop", "kill":
+		return "Stopped", "{{|DockerFinal|}}"
+	case "pause":
+		return "Paused", "{{|DockerFinal|}}"
+	case "unpause", "start":
+		return "Running", "{{|DockerFinal|}}"
+	default:
+		return "Pending", "{{|DockerPending|}}"
+	}
+}
+
 func (p *consoleEventProcessor) spinnerIcon(t *consoleTask) string {
+	var s string
 	if t == nil {
-		return console.ToConsoleANSI("{{|DockerActive|}}" + spinnerFrames[p.spinnerFrame] + "{{[-]}}")
+		s = console.ToConsoleANSI("{{|DockerSpinner|}}" + spinnerFrames[p.spinnerFrame] + "{{[-]}}")
+	} else {
+		switch t.status {
+		case api.Done:
+			s = console.ToConsoleANSI("{{|DockerSuccess|}}✓{{[-]}}")
+		case api.Error:
+			s = console.ToConsoleANSI("{{|DockerFail|}}×{{[-]}}")
+		case api.Warning:
+			s = console.ToConsoleANSI("{{|DockerWarn|}}⚠{{[-]}}")
+		default:
+			if t.completed() {
+				s = console.ToConsoleANSI("{{|DockerSuccess|}}✓{{[-]}}")
+			} else {
+				s = console.ToConsoleANSI("{{|DockerSpinner|}}" + spinnerFrames[p.spinnerFrame] + "{{[-]}}")
+			}
+		}
 	}
-	switch t.status {
-	case api.Done:
-		return console.ToConsoleANSI("{{|DockerSuccess|}}✔{{[-]}}")
-	case api.Error:
-		return console.ToConsoleANSI("{{|DockerFail|}}✘{{[-]}}")
-	case api.Warning:
-		return console.ToConsoleANSI("{{|DockerWarn|}}⚠{{[-]}}")
+	if s == "" {
+		return " "
 	}
-	if t.completed() {
-		return console.ToConsoleANSI("{{|DockerSuccess|}}✔{{[-]}}")
-	}
-	return console.ToConsoleANSI("{{|DockerActive|}}" + spinnerFrames[p.spinnerFrame] + "{{[-]}}")
+	return s
 }
 
 // abbreviateStatus shortens verbose Docker layer/image status strings.
@@ -706,23 +1284,155 @@ func abbreviateStatus(text string) string {
 	return text
 }
 
-func statusTag(s api.EventStatus, text string) string {
+// applyStatusTag wraps short in the appropriate semantic tag based on event status and
+// whether the text belongs to the final/active/success/pending category for that task type.
+// finalTexts: text values that represent a stable running/done-for-good state (DockerFinal).
+// activeTexts: text values that represent in-progress transitions (DockerActive).
+// successTexts: text values that represent a completed transition (DockerSuccess).
+// Anything else with Working status → DockerPending.
+func applyStatusTag(s api.EventStatus, text string, finalTexts, activeTexts, successTexts []string) string {
 	short := abbreviateStatus(text)
 	switch s {
-	case api.Done:
-		return "{{|DockerSuccess|}}" + short + "{{[-]}}"
 	case api.Warning:
 		return "{{|DockerWarn|}}" + short + "{{[-]}}"
 	case api.Error:
 		return "{{|DockerFail|}}" + short + "{{[-]}}"
-	default:
-		// Distinguish active (in-progress) from pending (waiting)
-		switch text {
-		case api.StatusDownloading, api.StatusPulling, "Extracting", "Verifying Checksum":
-			return "{{|DockerActive|}}" + short + "{{[-]}}"
-		default:
-			return "{{|DockerPending|}}" + short + "{{[-]}}"
+	case api.Done:
+		if contains(finalTexts, text) {
+			return "{{|DockerFinal|}}" + short + "{{[-]}}"
 		}
+		return "{{|DockerSuccess|}}" + short + "{{[-]}}"
+	default: // Working
+		if contains(finalTexts, text) {
+			return "{{|DockerFinal|}}" + short + "{{[-]}}"
+		}
+		if contains(activeTexts, text) {
+			return "{{|DockerActive|}}" + short + "{{[-]}}"
+		}
+		if contains(successTexts, text) {
+			return "{{|DockerSuccess|}}" + short + "{{[-]}}"
+		}
+		return "{{|DockerPending|}}" + short + "{{[-]}}"
+	}
+}
+
+// serviceStatusTag styles a service (container lifecycle) status.
+// finalTexts is command-specific — see serviceFinalStatuses.
+// Active: Creating, Starting, Stopping, Restarting, Killing, Removing — in-progress transitions.
+// Success: remaining completed transitions not in finalTexts.
+func serviceStatusTag(s api.EventStatus, text string, command string) string {
+	final := serviceFinalStatuses(command)
+	success := []string{api.StatusCreated, api.StatusStarted, api.StatusStopped,
+		api.StatusRestarted, api.StatusKilled, api.StatusRemoved}
+	// Remove any status that appears in final from the success list.
+	filtered := success[:0:len(success)]
+	for _, v := range success {
+		if !contains(final, v) {
+			filtered = append(filtered, v)
+		}
+	}
+	return applyStatusTag(s, text,
+		final,
+		[]string{api.StatusCreating, api.StatusStarting, api.StatusStopping,
+			api.StatusRestarting, api.StatusKilling, api.StatusRemoving},
+		filtered,
+	)
+}
+
+// serviceFinalStatuses returns the terminal "final" states for a given command.
+func serviceFinalStatuses(command string) []string {
+	switch command {
+	case "down", "rm":
+		return []string{api.StatusRemoved}
+	case "stop":
+		return []string{api.StatusStopped}
+	case "restart":
+		return []string{api.StatusRestarted}
+	case "kill":
+		return []string{api.StatusKilled}
+	case "create":
+		return []string{api.StatusCreated}
+	default: // up, update, start
+		return []string{api.StatusRunning, api.StatusHealthy, api.StatusCreated}
+	}
+}
+
+// imageStatusTag styles an image-level (pull/build) status.
+// Final: Pulled, Built — image fetch/build completed.
+// Active: Pulling, Building — in-progress.
+func imageStatusTag(s api.EventStatus, text string) string {
+	return applyStatusTag(s, text,
+		[]string{api.StatusPulled, api.StatusBuilt},
+		[]string{api.StatusPulling, api.StatusBuilding},
+		nil,
+	)
+}
+
+// layerStatusTag styles a layer-level (download/extract) status.
+// Final: Downloaded, Pull complete, Already exists — layer is done.
+// Active: Downloading, Extracting, Verifying Checksum, Pulling fs layer — in-progress.
+func layerStatusTag(s api.EventStatus, text string) string {
+	return applyStatusTag(s, text,
+		[]string{api.StatusDownloadComplete, "Pull complete", "Already exists"},
+		[]string{api.StatusDownloading, "Extracting", "Verifying Checksum", "Pulling fs layer"},
+		nil,
+	)
+}
+
+// networkStatusTag styles a network lifecycle status.
+// Final is command-specific: Created for up/create, Removed for down.
+// Active: Creating, Removing — in-progress.
+func networkStatusTag(s api.EventStatus, text string, command string) string {
+	final := networkFinalStatuses(command)
+	success := []string{api.StatusCreated, api.StatusRemoved}
+	filtered := success[:0:len(success)]
+	for _, v := range success {
+		if !contains(final, v) {
+			filtered = append(filtered, v)
+		}
+	}
+	return applyStatusTag(s, text,
+		final,
+		[]string{api.StatusCreating, api.StatusRemoving},
+		filtered,
+	)
+}
+
+// networkFinalStatuses returns the terminal "final" states for a given command.
+func networkFinalStatuses(command string) []string {
+	switch command {
+	case "down", "rm":
+		return []string{api.StatusRemoved}
+	default: // up, update, create
+		return []string{api.StatusCreated}
+	}
+}
+
+// volumeStatusTag styles a volume lifecycle status.
+// Final is command-specific: Created for up/create, Removed for down -v.
+func volumeStatusTag(s api.EventStatus, text string, command string) string {
+	final := volumeFinalStatuses(command)
+	success := []string{api.StatusCreated, api.StatusRemoved}
+	filtered := success[:0:len(success)]
+	for _, v := range success {
+		if !contains(final, v) {
+			filtered = append(filtered, v)
+		}
+	}
+	return applyStatusTag(s, text,
+		final,
+		[]string{api.StatusCreating, api.StatusRemoving},
+		filtered,
+	)
+}
+
+// volumeFinalStatuses returns the terminal "final" states for a given command.
+func volumeFinalStatuses(command string) []string {
+	switch command {
+	case "down", "rm":
+		return []string{api.StatusRemoved}
+	default: // up, update, create
+		return []string{api.StatusCreated}
 	}
 }
 
@@ -731,7 +1441,69 @@ func elapsedStr(t *consoleTask) string {
 	if t.completed() && !t.endTime.IsZero() {
 		end = t.endTime
 	}
-	return fmt.Sprintf("%.1fs", end.Sub(t.startTime).Seconds())
+	secs := end.Sub(t.startTime).Seconds()
+	// Left-align integer part so decimal points stay aligned:
+	// < 10s → " 1.2s", < 100s → "12.3s", >= 100s → "123.4s" (expands as needed)
+	switch {
+	case secs < 10:
+		return fmt.Sprintf(" %.1fs", secs)
+	default:
+		return fmt.Sprintf("%.1fs", secs)
+	}
+}
+
+// serviceTimerTask returns a synthetic consoleTask for a service timer:
+// startTime = earliest recorded start (image pull or container start),
+// endTime/status = from the service container task once it completes.
+// Returns nil if work hasn't started yet.
+func (p *consoleEventProcessor) serviceTimerTask(svcID string) *consoleTask {
+	start, ok := p.serviceStartTimes[svcID]
+	if !ok || start.IsZero() {
+		return nil
+	}
+	synthetic := &consoleTask{startTime: start}
+	if t := p.tasks[svcID]; t != nil && t.completed() && !t.endTime.IsZero() {
+		synthetic.status = api.Done
+		synthetic.endTime = t.endTime
+	}
+	return synthetic
+}
+
+// sectionTaskFor returns a synthetic consoleTask whose startTime/endTime span all tasks in ids.
+// Returns nil if no tasks have started yet.
+func (p *consoleEventProcessor) sectionTaskFor(ids []string) *consoleTask {
+	var minStart, maxEnd time.Time
+	allDone := true
+	for _, id := range ids {
+		t := p.tasks[id]
+		if t == nil || t.startTime.IsZero() {
+			allDone = false
+			continue
+		}
+		if minStart.IsZero() || t.startTime.Before(minStart) {
+			minStart = t.startTime
+		}
+		if !t.completed() {
+			allDone = false
+		} else if !t.endTime.IsZero() && t.endTime.After(maxEnd) {
+			maxEnd = t.endTime
+		}
+	}
+	if minStart.IsZero() {
+		return nil
+	}
+	synthetic := &consoleTask{startTime: minStart}
+	if allDone && !maxEnd.IsZero() {
+		synthetic.status = api.Done
+		synthetic.endTime = maxEnd
+	}
+	return synthetic
+}
+
+// looksLikeImageName returns true if id looks like a Docker image reference (contains / or :).
+// Used to avoid misclassifying a failing image pull as a service when the SDK sends StatusError.
+func looksLikeImageName(id string) bool {
+	return strings.ContainsAny(id, "/:")
 }
 
 // isServiceStatus returns true if text is a container lifecycle status.
@@ -771,19 +1543,6 @@ func imageMatchesService(imageID, serviceID string) bool {
 	return img == base || img == svc
 }
 
-// padOrTruncN ensures a line is exactly w visible chars wide.
-func padOrTruncN(line string, w int) string {
-	plain := console.Strip(line)
-	visible := utf8.RuneCountInString(plain)
-	if visible < w {
-		return line + strings.Repeat(" ", w-visible)
-	}
-	runes := []rune(plain)
-	if len(runes) > w {
-		return string(runes[:w-1]) + "…"
-	}
-	return line
-}
 
 // padOrTrunc ensures a line is exactly termW visible chars wide.
 func padOrTrunc(line string, termW int) string {
@@ -797,6 +1556,30 @@ func padOrTrunc(line string, termW int) string {
 		return string(runes[:termW-1]) + "…"
 	}
 	return line
+}
+
+// imageBaseName returns the image name portion of a URL for sort purposes:
+// the path segment after the last "/" stripped of its tag (e.g. "lscr.io/linuxserver/sonarr:latest" → "sonarr").
+func imageBaseName(img string) string {
+	// strip tag
+	if i := strings.LastIndex(img, ":"); i >= 0 {
+		img = img[:i]
+	}
+	// basename after last /
+	if i := strings.LastIndex(img, "/"); i >= 0 {
+		return img[i+1:]
+	}
+	return img
+}
+
+// isKnownServiceName returns true if name appears in any imageServices service list or serviceIDs.
+func (p *consoleEventProcessor) isKnownServiceName(name string) bool {
+	for _, svcs := range p.imageServices {
+		if contains(svcs, name) {
+			return true
+		}
+	}
+	return contains(p.serviceIDs, name)
 }
 
 func contains(s []string, v string) bool {
