@@ -5,8 +5,6 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"unicode/utf8"
-
 	tea "charm.land/bubbletea/v2"
 )
 
@@ -227,24 +225,6 @@ func (vp *Viewport) Append(line string) {
 	}
 }
 
-// appendUnderTermMu is kept for compatibility with TagProcessorHandler which
-// holds termMu. Routes to Append (which re-acquires termMu) only when inactive;
-// when active it posts to the tea program without needing termMu.
-func (vp *Viewport) appendUnderTermMu(line string) {
-	vp.mu.Lock()
-	lines := []string{line}
-	vp.appendToHistoryLocked(lines)
-	prog := vp.teaProg
-	active := vp.active
-	vp.mu.Unlock()
-
-	if active && prog != nil {
-		prog.Send(cliAppendMsg{lines: lines})
-	} else {
-		fmt.Fprintln(os.Stderr, line)
-	}
-}
-
 // SetHeader sets a persistent header line shown above all viewport content.
 func (vp *Viewport) SetHeader(line string) {
 	vp.mu.Lock()
@@ -342,36 +322,4 @@ func splitLines(s string) []string {
 	return out
 }
 
-// startInputGoroutine — no-op; Bubble Tea handles input in tea mode.
-func (vp *Viewport) startInputGoroutine() {}
-
-func clamp(v, lo, hi int) int {
-	if v < lo {
-		return lo
-	}
-	if v > hi {
-		return hi
-	}
-	return v
-}
-
-func wrapLine(line string, width int) []string {
-	if width <= 0 || utf8.RuneCountInString(Strip(line)) <= width {
-		return []string{line}
-	}
-	return []string{line}
-}
-
-// padOrTruncVisible pads or truncates to exactly width visible columns.
-func padOrTruncVisible(line string, width int) string {
-	stripped := Strip(line)
-	visible := utf8.RuneCountInString(stripped)
-	if visible < width {
-		return line + strings.Repeat(" ", width-visible)
-	}
-	if visible > width {
-		return string([]rune(stripped)[:width])
-	}
-	return line
-}
 
