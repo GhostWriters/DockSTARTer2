@@ -231,10 +231,9 @@ func (p *consoleEventProcessor) Done(_ string, _ bool) {
 	p.mtx.Unlock()
 	p.render()
 
-	p.logSummary()
-
-	// Deactivate the viewport — leaves alt screen, dumps history to main screen,
-	// returns to normal inline output for anything that runs after compose.
+	// Deactivate the viewport first — leaves alt screen, dumps history to main screen.
+	// logSummary must run after so buildLines sees the viewport as inactive and
+	// prependSummary includes the summary header the same way in all paths.
 	if !p.noViewport {
 		if vp := console.GlobalViewport; vp != nil {
 			// Prepend the summary to lastComposeLines so it appears in the scrollback
@@ -248,6 +247,8 @@ func (p *consoleEventProcessor) Done(_ string, _ bool) {
 			vp.Deactivate()
 		}
 	}
+
+	p.logSummary()
 }
 
 // logSummary writes a structured summary to the log file only.
