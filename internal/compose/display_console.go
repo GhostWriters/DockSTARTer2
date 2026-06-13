@@ -31,22 +31,41 @@ import (
 //   - Tasks with no ParentID and a container lifecycle status text → service tasks
 //   - Tasks with a ParentID → layer tasks (children of an image task)
 const (
-	globalIndent = " " // 1-space left margin for all lines
+	// Layout primitive widths — change these to adjust the entire layout.
+	globalIndentW      = 1  // left margin for all lines
+	iconW              = 1  // width of a spinner/status icon character
+	spaceW             = 1  // single separator space
+	sectionStatusW     = 13 // fixed status column width for service/image/network lines
+	layerStatusW       = 11 // max width of any abbreviated layer status ("Downloading")
+	sectionChildIndentW = 2  // extra indent for child entries nested under a section header
+	imageLabelTextW    = 7  // visible width of "image: " ("image" + ":" + " ")
+	sizeColW           = 8  // width of one fixedSize() value
+	sizeSepW           = 1  // width of "/" between current/total sizes
 
-	// sectionStatusW is the fixed status column width for service/network lines.
-	// Layout: globalIndent(1) + icon(1) + space(1) + sectionStatusW chars before the name.
-	// sectionHeaderIndent is the indent for "services:" / "networks:" labels —
-	// visually aligned to the name column (globalIndent + icon + space + sectionStatusW).
-	sectionStatusW      = 13
-	sectionHeaderIndent = 1 + 1 + 1 + sectionStatusW // 16 chars before name / section label
+	// Derived column positions — computed from primitives above.
+	// Nesting depth (from col 0):
+	//   col sectionHeaderIndent          → "services:" / "networks:" label
+	//   col sectionHeaderIndent+1*child  → service name (autobrr:)
+	//   col sectionHeaderIndent+2*child  → "image:" text
+	//   col sectionHeaderIndent+3*child  → layer icon
+	sectionHeaderIndent = globalIndentW + iconW + spaceW + sectionStatusW      // col where section labels start
+	imageLabelW         = 2*sectionChildIndentW + imageLabelTextW              // indent to image: + "image: "
+	imageSizesColBase   = globalIndentW + iconW + spaceW + sectionStatusW + imageLabelW
+	layerPrefixW        = sectionHeaderIndent + 3*sectionChildIndentW          // spaces before layer icon
+	layerSizesColBase   = layerPrefixW + iconW + spaceW
+)
 
-	// sectionChildIndent is extra indent applied to child entries (services, networks)
-	// to visually nest them under the section header label.
-	sectionChildIndent = "   "
+// Strings derived from width constants — updated automatically when constants change.
+var (
+	globalIndent      = strings.Repeat(" ", globalIndentW)
+	sectionChildIndent = strings.Repeat(" ", sectionChildIndentW)
+	layerPrefix        = strings.Repeat(" ", layerPrefixW)
 )
 
 var brailleChars = strings.Split("⠀⡀⣀⣄⣤⣦⣶⣷⣿", "")
+var asciiProgressChars = []string{" ", ".", ",", ":", ";", "+", "%", "#", "█"}
 var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+var asciiSpinnerFrames = []string{"|", "/", "-", "\\"}
 
 type consoleTask struct {
 	id        string
@@ -110,13 +129,15 @@ type consoleEventProcessor struct {
 	noViewport    bool            // when true, skip GlobalViewport activation (e.g. running inside program box)
 	updateFn      func([]string) // called each render tick in noViewport mode instead of writing to out
 	lastSentLines []string       // last lines sent via updateFn; skip if unchanged
+	asciiMode     bool           // when true, use ASCII spinners, icons, and progress bar chars
+	verbose       bool           // when true, show individual layer rows under each image
 }
 
 // NewConsoleEventProcessor creates a themed live-updating EventProcessor for TTY output.
 // imageServices maps image name (e.g. "lscr.io/linuxserver/plex:latest") to the list of
 // service names that use it, so service headers can be shown before lifecycle events arrive.
 // imageOrder is the stable key order for imageServices (caller must provide sorted/deterministic order).
-func NewConsoleEventProcessor(logCtx context.Context, out io.Writer, command string, imageServices map[string][]string, imageOrder []string, containerToService map[string]string, projectName string, updateFn func([]string)) api.EventProcessor {
+func NewConsoleEventProcessor(logCtx context.Context, out io.Writer, command string, imageServices map[string][]string, imageOrder []string, containerToService map[string]string, projectName string, asciiMode bool, verbose bool, updateFn func([]string)) api.EventProcessor {
 	return &consoleEventProcessor{
 		out:                out,
 		logCtx:             logCtx,
@@ -131,6 +152,8 @@ func NewConsoleEventProcessor(logCtx context.Context, out io.Writer, command str
 		serviceStartTimes:  make(map[string]time.Time),
 		noViewport:         updateFn != nil,
 		updateFn:           updateFn,
+		asciiMode:          asciiMode,
+		verbose:            verbose,
 	}
 }
 
@@ -377,7 +400,11 @@ func (p *consoleEventProcessor) render() {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
-	p.spinnerFrame = (p.spinnerFrame + 1) % len(spinnerFrames)
+	if p.asciiMode {
+		p.spinnerFrame = (p.spinnerFrame + 1) % len(asciiSpinnerFrames)
+	} else {
+		p.spinnerFrame = (p.spinnerFrame + 1) % len(spinnerFrames)
+	}
 	lines := p.buildLines(termW)
 	if len(lines) == 0 {
 		return
@@ -543,11 +570,12 @@ func (p *consoleEventProcessor) prependSummary(lines []string, timers []timerEnt
 func (p *consoleEventProcessor) buildTeardownLines() []string {
 	impliedText, impliedTag := p.impliedStatus()
 	impliedANSI := console.ToConsoleANSI(impliedTag + impliedText + "{{[-]}}")
+	ic := p.icons()
 	var impliedIcon string
 	if impliedTag == "{{|DockerPending|}}" {
-		impliedIcon = console.ToConsoleANSI("{{|DockerPending|}}·{{[-]}}")
+		impliedIcon = console.ToConsoleANSI("{{|DockerPending|}}" + ic.pending + "{{[-]}}")
 	} else {
-		impliedIcon = console.ToConsoleANSI("{{|DockerSuccess|}}✓{{[-]}}")
+		impliedIcon = console.ToConsoleANSI("{{|DockerSuccess|}}" + ic.done + "{{[-]}}")
 	}
 
 	svcRollupIDs := append([]string{}, p.serviceIDs...)
@@ -668,6 +696,14 @@ func (p *consoleEventProcessor) buildLines(termW int) []string {
 	allSvcIDs := append(append([]string{}, p.imageOrder...), svcRollupIDs...)
 	appendLine(globalIndent+svcIcon+" "+svcStatusANSI+console.CodeReset+svcStatusPad+console.ToConsoleANSI("{{[white::B]}}services{{[-]}}{{|DockerColon|}}:{{[-]}}"), p.sectionTaskFor(allSvcIDs), timerSection)
 
+	// Pre-pass: find the widest visible image name so sizes+bar align across all image rows.
+	maxImgNameW := 0
+	for _, imgName := range p.imageOrder {
+		if w := utf8.RuneCountInString(console.Strip(styleImage(imgName))); w > maxImgNameW {
+			maxImgNameW = w
+		}
+	}
+
 	coveredSvcs := make(map[string]bool)
 
 	for _, imgName := range p.imageOrder {
@@ -691,9 +727,9 @@ func (p *consoleEventProcessor) buildLines(termW int) []string {
 					statusText = impliedText
 					statusANSI = console.ToConsoleANSI(impliedTag + statusText + "{{[-]}}")
 					if impliedTag == "{{|DockerPending|}}" {
-						icon = console.ToConsoleANSI("{{|DockerPending|}}·{{[-]}}")
+						icon = console.ToConsoleANSI("{{|DockerPending|}}" + p.icons().pending + "{{[-]}}")
 					} else {
-						icon = console.ToConsoleANSI("{{|DockerSuccess|}}✓{{[-]}}")
+						icon = console.ToConsoleANSI("{{|DockerSuccess|}}" + p.icons().done + "{{[-]}}")
 					}
 				}
 			} else {
@@ -705,10 +741,7 @@ func (p *consoleEventProcessor) buildLines(termW int) []string {
 			appendLine(globalIndent+icon+" "+statusANSI+console.CodeReset+statusPad+sectionChildIndent+nameANSI+console.ToConsoleANSI("{{|DockerColon|}}:{{[-]}}"), p.serviceTimerTask(svc), timerService)
 		}
 
-		// Image row indented under the service name.
-		appendLine(p.buildImageLine(imgName, img), img, timerImage)
-
-		// Layer rows for this image.
+		// Collect layers for this image.
 		var layers []*consoleTask
 		for _, id := range p.ids {
 			t := p.tasks[id]
@@ -716,9 +749,16 @@ func (p *consoleEventProcessor) buildLines(termW int) []string {
 				layers = append(layers, t)
 			}
 		}
-		layerLines, layerTasks := p.buildLayerLines(layers, termW)
-		for i, line := range layerLines {
-			appendLine(line, layerTasks[i], timerLayer)
+
+		// Image row with per-layer progress bar.
+		appendLine(p.buildImageLine(imgName, img, layers, maxImgNameW, termW), img, timerImage)
+
+		// Layer rows only in verbose mode.
+		if p.verbose {
+			layerLines, layerTasks := p.buildLayerLines(layers, maxImgNameW, termW)
+			for i, line := range layerLines {
+				appendLine(line, layerTasks[i], timerLayer)
+			}
 		}
 	}
 
@@ -764,20 +804,85 @@ func (p *consoleEventProcessor) buildLines(termW int) []string {
 // buildImageLine renders the image row with icon/status, indented to align under the service name.
 // Layout: " icon Status      image: name:tag   2.5s"
 // statusPad brings the cursor to the name column — no additional indent needed.
-func (p *consoleEventProcessor) buildImageLine(imgName string, t *consoleTask) string {
-	imageLabel := console.ToConsoleANSI("      {{|DockerSuccess|}}image{{[-]}}{{|DockerColon|}}:{{[-]}} ")
+func (p *consoleEventProcessor) buildImageLine(imgName string, t *consoleTask, layers []*consoleTask, maxImgNameW int, termW int) string {
+	imageLabel := strings.Repeat(" ", 2*sectionChildIndentW) + console.ToConsoleANSI("{{|DockerSuccess|}}image{{[-]}}{{|DockerColon|}}:{{[-]}} ")
+	imgStr := styleImage(imgName)
+	imgNameW := utf8.RuneCountInString(console.Strip(imgStr))
+	imgPad := strutil.Repeat(" ", maxImgNameW-imgNameW)
+	sizes, bar := p.buildImageSizesAndBar(layers, maxImgNameW, termW)
 	if t == nil {
-		cachedIcon := console.ToConsoleANSI("{{|DockerSuccess|}}✓{{[-]}}")
+		cachedIcon := console.ToConsoleANSI("{{|DockerSuccess|}}" + p.icons().done + "{{[-]}}")
 		cachedStatus := console.ToConsoleANSI("{{|DockerSuccess|}}Cached{{[-]}}")
 		statusPad := strutil.Repeat(" ", sectionStatusW-len("Cached"))
-		return globalIndent + cachedIcon + " " + cachedStatus + console.CodeReset + statusPad + imageLabel + styleImage(imgName)
+		return globalIndent + cachedIcon + " " + cachedStatus + console.CodeReset + statusPad + imageLabel + imgStr + imgPad + sizes + bar
 	}
 	worst := p.worstImageStatus(imgName)
 	icon := p.propagatedIcon(t, worst)
 	statusText := abbreviateStatus(t.text)
 	statusANSI := console.ToConsoleANSI(imageStatusTag(t.status, t.text))
 	statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
-	return globalIndent + icon + " " + statusANSI + console.CodeReset + statusPad + imageLabel + styleImage(imgName)
+	return globalIndent + icon + " " + statusANSI + console.CodeReset + statusPad + imageLabel + imgStr + imgPad + sizes + bar
+}
+
+// buildImageSizesAndBar computes the aggregate size column and per-layer progress bar for an image row.
+// maxImgNameW is used to calculate remaining terminal space for the bar.
+// Returns (sizes, bar) — both may be empty strings.
+func (p *consoleEventProcessor) buildImageSizesAndBar(layers []*consoleTask, maxImgNameW int, termW int) (string, string) {
+	if len(layers) == 0 {
+		return "", ""
+	}
+
+	// Aggregate current/total across layers.
+	var current, total int64
+	for _, t := range layers {
+		c := t.current
+		if t.completed() && t.percent == 100 && t.total > 0 {
+			c = t.total
+		}
+		current += c
+		total += t.total
+	}
+
+	var sizes string
+	if total > 0 {
+		sizes = " " + console.ToConsoleANSI("{{|DockerSuccess|}}"+fixedSize(current)+"{{[-]}}"+
+			"{{|DockerColon|}}/{{[-]}}"+
+			"{{|DockerSuccess|}}"+fixedSize(total)+"{{[-]}}")
+	} else {
+		sizes = strings.Repeat(" ", 1+8+1+8)
+	}
+
+	// Fixed visible width before the bar: imageSizesColBase + maxImgNameW + sizes(space+sizeColW+sizeSepW+sizeColW)
+	usedW := imageSizesColBase + maxImgNameW + spaceW + sizeColW + sizeSepW + sizeColW
+	barW := len(layers)
+	maxBarW := termW - usedW - 3 // 3 = space + "[" + "]"
+	if maxBarW < 1 {
+		return sizes, ""
+	}
+	if barW > maxBarW {
+		barW = maxBarW
+	}
+
+	layerPcts := make([]int, barW)
+	for i := range barW {
+		t := layers[i]
+		pct := t.percent
+		if t.completed() && pct == 100 {
+			pct = 100
+		} else if t.total > 0 {
+			pct = int(float64(t.current) / float64(t.total) * 100)
+		}
+		if pct > 100 {
+			pct = 100
+		}
+		layerPcts[i] = pct
+	}
+
+	progressChars := brailleChars
+	if p.asciiMode {
+		progressChars = asciiProgressChars
+	}
+	return sizes, " " + renderProgressBarLayers(layerPcts, progressChars, "{{|DockerSuccess|}}")
 }
 
 // worstChildStatus returns the worst EventStatus among all layer children of parentID.
@@ -838,11 +943,12 @@ func (p *consoleEventProcessor) worstServiceStatus(svcID, imgName string) api.Ev
 // propagatedIcon returns the icon for a task after considering propagated child errors.
 // worstStatus should come from worstImageStatus or worstServiceStatus as appropriate.
 func (p *consoleEventProcessor) propagatedIcon(t *consoleTask, worstStatus api.EventStatus) string {
+	ic := p.icons()
 	if worstStatus == api.Error {
-		return console.ToConsoleANSI("{{|DockerFail|}}×{{[-]}}")
+		return console.ToConsoleANSI("{{|DockerFail|}}" + ic.error + "{{[-]}}")
 	}
 	if worstStatus == api.Warning {
-		return console.ToConsoleANSI("{{|DockerWarn|}}⚠{{[-]}}")
+		return console.ToConsoleANSI("{{|DockerWarn|}}" + ic.warn + "{{[-]}}")
 	}
 	return p.spinnerIcon(t)
 }
@@ -859,7 +965,7 @@ const (
 )
 
 // sectionStatusText returns the status label and ANSI tag for a rollup state.
-func sectionStatusText(s sectionRollupState, spinnerFrame int) (text, statusTag, iconTag string) {
+func sectionStatusText(s sectionRollupState) (text, statusTag, iconTag string) {
 	switch s {
 	case rollupError:
 		return "Error", "{{|DockerFail|}}", "{{|DockerFail|}}"
@@ -878,10 +984,11 @@ func sectionStatusText(s sectionRollupState, spinnerFrame int) (text, statusTag,
 // (layers for image IDs, images for service IDs) for propagated errors/warnings.
 func (p *consoleEventProcessor) sectionRollupWithPropagation(ids []string, imageForID func(string) string) (icon, statusANSI, statusText, labelTag string) {
 	state := p.rollupState(ids, imageForID)
-	text, stTag, iconTag := sectionStatusText(state, p.spinnerFrame)
-	spinnerOrCheck := spinnerFrames[p.spinnerFrame]
+	text, stTag, iconTag := sectionStatusText(state)
+	ic := p.icons()
+	spinnerOrCheck := ic.spinner
 	if state != rollupProcessing {
-		spinnerOrCheck = sectionRollupIcon(state)
+		spinnerOrCheck = p.sectionRollupIcon(state)
 	}
 	icon = console.ToConsoleANSI(iconTag + spinnerOrCheck + "{{[-]}}")
 	statusANSI = console.ToConsoleANSI(stTag + text + "{{[-]}}")
@@ -890,16 +997,17 @@ func (p *consoleEventProcessor) sectionRollupWithPropagation(ids []string, image
 	return
 }
 
-func sectionRollupIcon(s sectionRollupState) string {
+func (p *consoleEventProcessor) sectionRollupIcon(s sectionRollupState) string {
+	ic := p.icons()
 	switch s {
 	case rollupError:
-		return "×"
+		return ic.error
 	case rollupWarning:
-		return "⚠"
+		return ic.warn
 	case rollupComplete:
-		return "✓"
+		return ic.done
 	default:
-		return "·"
+		return ic.pending
 	}
 }
 
@@ -1057,11 +1165,12 @@ func styleImage(imgName string) string {
 //
 // Layout: layerPrefix + icon + " " + status + statusPad + " " + id + " " + sizes + bar
 // sizes is always fixed-width (fixedSize cur + "/" + fixedSize total) so the bar column aligns.
-func (p *consoleEventProcessor) buildLayerLine(t *consoleTask, statusW, barW int) string {
+func (p *consoleEventProcessor) buildLayerLine(t *consoleTask, statusW int, maxImgNameW int, layerPcts []int) string {
 	id := t.id
 	if len(id) > 19 {
 		id = id[:18] + "…"
 	}
+	idW := utf8.RuneCountInString(id)
 
 	// The SDK sets percent=100 on Done but does not update Current to equal Total
 	// (Download complete / Pull complete events carry no progress bytes).
@@ -1073,26 +1182,20 @@ func (p *consoleEventProcessor) buildLayerLine(t *consoleTask, statusW, barW int
 
 	var sizes string
 	if t.total > 0 {
-		sizes = " " + console.ToConsoleANSI("{{|DockerProgressBar|}}"+fixedSize(current)+"{{[-]}}"+
+		sizes = " " + console.ToConsoleANSI("{{[::D]}}"+fixedSize(current)+"{{[-]}}"+
 			"{{|DockerColon|}}/{{[-]}}"+
-			"{{|DockerProgressBar|}}"+fixedSize(t.total)+"{{[-]}}")
+			"{{[::D]}}"+fixedSize(t.total)+"{{[-]}}")
 	} else {
 		sizes = strings.Repeat(" ", 1+8+1+8)
 	}
 
 	bar := ""
-	if barW > 0 {
-		pct := t.percent
-		if t.completed() && pct == 100 {
-			pct = 100 // explicit for clarity; renders full bar
+	if len(layerPcts) > 0 {
+		progressChars := brailleChars
+		if p.asciiMode {
+			progressChars = asciiProgressChars
 		}
-		if t.total > 0 {
-			bar = " " + renderProgressBar(current, t.total, barW)
-		} else if pct > 0 {
-			bar = " " + renderProgressBarPct(pct, barW)
-		} else {
-			bar = " " + renderProgressBar(0, 0, barW)
-		}
+		bar = " " + renderProgressBarLayers(layerPcts, progressChars, "{{[::D]}}")
 	}
 
 	icon := p.spinnerIcon(t)
@@ -1102,41 +1205,54 @@ func (p *consoleEventProcessor) buildLayerLine(t *consoleTask, statusW, barW int
 		statusPad = strutil.Repeat(" ", pad)
 	}
 	statusANSI := console.ToConsoleANSI(layerStatusTag(t.status, t.text))
-	// Indent layers to sit under the image: line content.
-	// globalIndent(1) + icon(1) + space(1) + sectionStatusW(13) + imageLabel(6) + "   "(3 extra) = 25
-	const layerPrefix = "                         " // 25 spaces
-	return layerPrefix + console.CodeDim + icon + " " + statusANSI + console.CodeReset + console.CodeDim + statusPad + " " + id + sizes + bar + console.CodeDimOff
+	// Pad id so sizes column aligns with the image row sizes column.
+	// imageSizesCol = imageSizesColBase + maxImgNameW
+	// layerSizesCol = layerSizesColBase + statusW + spaceW + idW
+	idPad := (imageSizesColBase + maxImgNameW) - (layerSizesColBase + statusW + spaceW + idW)
+	if idPad < 1 {
+		idPad = 1
+	}
+	return layerPrefix + console.CodeDim + icon + " " + statusANSI + console.CodeReset + console.CodeDim + statusPad + " " + id + strings.Repeat(" ", idPad) + sizes + bar + console.CodeDimOff
 }
 
 // buildLayerLines renders layer rows single-column, indented under the image: line.
 // Bar width scales with the number of layers (more layers = narrower bars), matching the SDK approach.
 // Returns parallel (lines, tasks) slices for timer attachment.
-func (p *consoleEventProcessor) buildLayerLines(layers []*consoleTask, termW int) ([]string, []*consoleTask) {
+func (p *consoleEventProcessor) buildLayerLines(layers []*consoleTask, maxImgNameW int, termW int) ([]string, []*consoleTask) {
 	if len(layers) == 0 {
 		return nil, nil
 	}
 
-	// SDK approach: bar width = number of layers (one braille char per sibling layer).
-	// Clamp to a reasonable range so very few or very many layers still look good.
+	// SDK approach: one char per layer, no min clamp.
+	// Failsafe: clamp to terminal width minus fixed prefix (~70 chars) so bar never wraps.
 	barW := len(layers)
-	if barW < 5 {
-		barW = 5
+	maxBarW := termW - 70
+	if maxBarW < 1 {
+		maxBarW = 1
 	}
-	if barW > 30 {
-		barW = 30
+	if barW > maxBarW {
+		barW = maxBarW
 	}
 
-	maxLayerStatusW := 0
-	for _, t := range layers {
-		if w := utf8.RuneCountInString(abbreviateStatus(t.text)); w > maxLayerStatusW {
-			maxLayerStatusW = w
+	// Pre-compute per-layer percents for the shared bar (all rows show the same bar).
+	layerPcts := make([]int, len(layers))
+	for i, t := range layers {
+		pct := t.percent
+		if t.completed() && pct == 100 {
+			pct = 100
+		} else if t.total > 0 {
+			pct = int(float64(t.current) / float64(t.total) * 100)
 		}
+		if pct > 100 {
+			pct = 100
+		}
+		layerPcts[i] = pct
 	}
 
 	var out []string
 	var outTasks []*consoleTask
 	for _, t := range layers {
-		out = append(out, p.buildLayerLine(t, maxLayerStatusW, barW))
+		out = append(out, p.buildLayerLine(t, layerStatusW, maxImgNameW, layerPcts))
 		outTasks = append(outTasks, t)
 	}
 	return out, outTasks
@@ -1174,28 +1290,17 @@ func fixedSize(b int64) string {
 	return s
 }
 
-func renderProgressBar(current, total int64, width int) string {
-	if total == 0 {
-		return "[" + console.ToConsoleANSI("{{|DockerProgressBar|}}" + strings.Repeat(brailleChars[0], width) + "{{[-]}}") + "]"
-	}
-	filled := int(float64(current) / float64(total) * float64(width*8))
+// renderProgressBarLayers renders one char per layer, each at its own fill level — matching the SDK.
+func renderProgressBarLayers(layerPcts []int, chars []string, colorTag string) string {
+	levels := len(chars) - 1
 	var sb strings.Builder
-	for i := range width {
-		cell := filled - i*8
-		switch {
-		case cell >= 8:
-			sb.WriteString(brailleChars[8])
-		case cell > 0:
-			sb.WriteString(brailleChars[cell])
-		default:
-			sb.WriteString(brailleChars[0])
+	for _, pct := range layerPcts {
+		if pct > 100 {
+			pct = 100
 		}
+		sb.WriteString(chars[levels*pct/100])
 	}
-	return "[" + console.ToConsoleANSI("{{|DockerProgressBar|}}" + sb.String() + "{{[-]}}") + "]"
-}
-
-func renderProgressBarPct(pct, width int) string {
-	return renderProgressBar(int64(pct), 100, width)
+	return "[" + console.ToConsoleANSI(colorTag+sb.String()+"{{[-]}}") + "]"
 }
 
 // spinnerIcon returns the animated spinner or a terminal icon based on task state.
@@ -1218,23 +1323,36 @@ func (p *consoleEventProcessor) impliedStatus() (text, ansiTag string) {
 	}
 }
 
+type iconSet struct {
+	done, error, warn, pending, spinner string
+}
+
+func (p *consoleEventProcessor) icons() iconSet {
+	if p.asciiMode {
+		return iconSet{done: "+", error: "x", warn: "!", pending: "-", spinner: asciiSpinnerFrames[p.spinnerFrame%len(asciiSpinnerFrames)]}
+	}
+	return iconSet{done: "✓", error: "×", warn: "⚠", pending: "·", spinner: spinnerFrames[p.spinnerFrame]}
+}
+
 func (p *consoleEventProcessor) spinnerIcon(t *consoleTask) string {
+	ic := p.icons()
+
 	var s string
 	if t == nil {
-		s = console.ToConsoleANSI("{{|DockerSpinner|}}" + spinnerFrames[p.spinnerFrame] + "{{[-]}}")
+		s = console.ToConsoleANSI("{{|DockerSpinner|}}" + ic.spinner + "{{[-]}}")
 	} else {
 		switch t.status {
 		case api.Done:
-			s = console.ToConsoleANSI("{{|DockerSuccess|}}✓{{[-]}}")
+			s = console.ToConsoleANSI("{{|DockerSuccess|}}" + ic.done + "{{[-]}}")
 		case api.Error:
-			s = console.ToConsoleANSI("{{|DockerFail|}}×{{[-]}}")
+			s = console.ToConsoleANSI("{{|DockerFail|}}" + ic.error + "{{[-]}}")
 		case api.Warning:
-			s = console.ToConsoleANSI("{{|DockerWarn|}}⚠{{[-]}}")
+			s = console.ToConsoleANSI("{{|DockerWarn|}}" + ic.warn + "{{[-]}}")
 		default:
 			if t.completed() {
-				s = console.ToConsoleANSI("{{|DockerSuccess|}}✓{{[-]}}")
+				s = console.ToConsoleANSI("{{|DockerSuccess|}}" + ic.done + "{{[-]}}")
 			} else {
-				s = console.ToConsoleANSI("{{|DockerSpinner|}}" + spinnerFrames[p.spinnerFrame] + "{{[-]}}")
+				s = console.ToConsoleANSI("{{|DockerSpinner|}}" + ic.spinner + "{{[-]}}")
 			}
 		}
 	}

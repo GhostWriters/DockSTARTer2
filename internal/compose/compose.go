@@ -368,7 +368,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 		if hasTUIWriter {
 			updateFn = console.ReplaceOutputLinesFn
 		}
-		bus = NewConsoleEventProcessor(ctx, outStream, command, imageServices, imageOrder, containerToService, project.Name, updateFn)
+		bus = NewConsoleEventProcessor(ctx, outStream, command, imageServices, imageOrder, containerToService, project.Name, !conf.UI.LineCharacters, console.GlobalVerbose, updateFn)
 		// Also discard SDK service streams — processor handles all output.
 		outStream = io.Discard
 		errStream = io.Discard
