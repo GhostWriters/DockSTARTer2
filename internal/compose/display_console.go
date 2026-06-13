@@ -275,7 +275,6 @@ func (p *consoleEventProcessor) logSummary() {
 		termW = 80
 	}
 
-	logger.Notice(ctx, pfx+p.buildSummaryLine())
 	for _, line := range p.buildLines(termW) {
 		logger.Notice(ctx, pfx+line)
 	}
