@@ -364,7 +364,10 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 		sort.Slice(imageOrder, func(i, j int) bool {
 			return imageBaseName(imageOrder[i]) < imageBaseName(imageOrder[j])
 		})
-		updateFn := console.ReplaceOutputLinesFn
+		var updateFn func([]string)
+		if hasTUIWriter {
+			updateFn = console.ReplaceOutputLinesFn
+		}
 		bus = NewConsoleEventProcessor(ctx, outStream, command, imageServices, imageOrder, containerToService, project.Name, !conf.UI.LineCharacters, console.GlobalVerbose, updateFn)
 		// Also discard SDK service streams — processor handles all output.
 		outStream = io.Discard
