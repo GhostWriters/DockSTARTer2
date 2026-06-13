@@ -22,13 +22,27 @@ import (
 // TUIMode suppresses direct console output (stdout/stderr) when active.
 var TUIMode bool
 
-// suppressWriterKey is the context key holding the io.Writer to suppress from log output.
+// suppressWriterKey is the context key holding the set of io.Writers to suppress.
 type suppressWriterKey struct{}
 
 // WithSuppressWriter returns a context that suppresses log output to the given writer.
-// Messages still appear in other destinations (TUI panel, log file). Fatal messages are always shown.
+// Multiple calls accumulate — each writer is added to the suppress set.
+// Messages still appear in other destinations (log file, etc.). Fatal messages are always shown.
 func WithSuppressWriter(ctx context.Context, w io.Writer) context.Context {
-	return context.WithValue(ctx, suppressWriterKey{}, w)
+	existing, _ := ctx.Value(suppressWriterKey{}).(map[io.Writer]struct{})
+	next := make(map[io.Writer]struct{}, len(existing)+1)
+	for k := range existing {
+		next[k] = struct{}{}
+	}
+	next[w] = struct{}{}
+	return context.WithValue(ctx, suppressWriterKey{}, next)
+}
+
+// isSuppressed reports whether w is in the suppress set on ctx.
+func isSuppressed(ctx context.Context, w io.Writer) bool {
+	set, _ := ctx.Value(suppressWriterKey{}).(map[io.Writer]struct{})
+	_, ok := set[w]
+	return ok
 }
 
 // logLineCh carries TUI-formatted log lines to the log panel.

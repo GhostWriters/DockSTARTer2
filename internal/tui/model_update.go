@@ -136,6 +136,13 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.panel = updated.(PanelModel)
 		return m, logger.BatchRecoverTUI(m.ctx, cmd)
 
+	case replaceOutputMsg:
+		if m.panel.consoleCancel != nil {
+			updated, cmd := m.panel.Update(msg)
+			m.panel = updated.(PanelModel)
+			return m, logger.BatchRecoverTUI(m.ctx, cmd)
+		}
+
 	case consoleLinesMsg:
 		updated, cmd := m.panel.Update(msg)
 		m.panel = updated.(PanelModel)

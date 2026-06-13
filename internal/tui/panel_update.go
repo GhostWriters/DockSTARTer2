@@ -162,6 +162,7 @@ func (m *PanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 
 		ctx, cancel := context.WithCancel(context.Background())
 		m.consoleCancel = cancel
+		m.replaceHeaderCount = -1
 		pr, pw := io.Pipe()
 		cmdCtx := console.WithPanelWriter(ctx, pw)
 
@@ -342,9 +343,22 @@ func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Batch(cmds...)
 
+	case replaceOutputMsg:
+		m.lastLineTime = time.Now()
+		if !m.expanded {
+			m.panelChanged = true
+		}
+		m.sv.CommandRunning = false
+		if m.replaceHeaderCount < 0 {
+			m.replaceHeaderCount = m.sv.TotalLineCount()
+		}
+		m.sv.ReplaceTailLines(m.replaceHeaderCount, msg.lines, panelRenderFn())
+		return m, nil
+
 	case consoleDoneMsg:
 		m.consoleScanner = nil
 		m.consoleCancel = nil
+		m.replaceHeaderCount = -1
 		m.sv.CommandRunning = false
 		m.sv.ClearSpinner()
 		unlockCmd := m.lockSession("console.command", false)

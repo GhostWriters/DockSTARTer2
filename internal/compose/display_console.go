@@ -57,9 +57,9 @@ const (
 
 // Strings derived from width constants — updated automatically when constants change.
 var (
-	globalIndent      = strings.Repeat(" ", globalIndentW)
-	sectionChildIndent = strings.Repeat(" ", sectionChildIndentW)
-	layerPrefix        = strings.Repeat(" ", layerPrefixW)
+	globalIndent      = strutil.Repeat(" ", globalIndentW)
+	sectionChildIndent = strutil.Repeat(" ", sectionChildIndentW)
+	layerPrefix        = strutil.Repeat(" ", layerPrefixW)
 )
 
 var brailleChars = strings.Split("⠀⡀⣀⣄⣤⣦⣶⣷⣿", "")
@@ -254,8 +254,15 @@ func (p *consoleEventProcessor) logSummary() {
 		return
 	}
 	// Suppress the console (stderr) handler — the viewport dump already showed the
-	// final state. We still want the lines in the log file and TUI panel.
+	// final state. We still want the lines in the log file and log panel.
 	ctx := logger.WithSuppressWriter(p.logCtx, logger.ConsoleWriter())
+	// In noViewport (program box) mode the rendered output is already shown directly
+	// in the TUI panel — suppress the TUI writer too to avoid duplicates there.
+	if p.noViewport {
+		if tuiW := console.GetTUIWriter(p.logCtx); tuiW != nil {
+			ctx = logger.WithSuppressWriter(ctx, tuiW)
+		}
+	}
 
 	const pfx = "{{|RunningCommand|}}docker compose:{{[-]}} "
 
@@ -473,7 +480,7 @@ func (p *consoleEventProcessor) render() {
 	}
 	// Blank out leftover lines from a previous larger render
 	for i := rendered; i < p.numLines; i++ {
-		buf.WriteString(strings.Repeat(" ", termW))
+		buf.WriteString(strutil.Repeat(" ", termW))
 		buf.WriteString("\033[K\n")
 		rendered++
 	}
@@ -565,7 +572,7 @@ func (p *consoleEventProcessor) attachTimers(lines []string, timers []timerEntry
 			continue
 		}
 		visible := utf8.RuneCountInString(console.Strip(line))
-		pad := strings.Repeat(" ", col-visible)
+		pad := strutil.Repeat(" ", col-visible)
 		var styleTag string
 		switch e.style {
 		case timerSection:
@@ -584,13 +591,18 @@ func (p *consoleEventProcessor) attachTimers(lines []string, timers []timerEntry
 }
 
 func (p *consoleEventProcessor) prependSummary(lines []string, timers []timerEntry) []string {
+	// Factor the summary line width into maxLineWidth before attachTimers computes
+	// the timer column, so header and body timers land in the same column.
+	summary := p.buildSummaryLine()
+	if w := utf8.RuneCountInString(console.Strip(summary)); w > p.maxLineWidth {
+		p.maxLineWidth = w
+	}
 	lines = p.attachTimers(lines, timers)
 	// When the viewport is active the summary line is shown as the header — don't
 	// also prepend it to the scrollable content or it appears twice.
 	if vp := console.GlobalViewport; vp != nil && vp.IsActive() {
 		return lines
 	}
-	summary := p.buildSummaryLine()
 	if summary == "" {
 		return lines
 	}
@@ -598,16 +610,14 @@ func (p *consoleEventProcessor) prependSummary(lines []string, timers []timerEnt
 }
 
 // withSummaryTimer appends a right-aligned overall elapsed timer to the summary line.
+// Uses the same column as attachTimers (maxLineWidth + 2) so all timers align.
 func (p *consoleEventProcessor) withSummaryTimer(summary string) string {
 	if p.startTime.IsZero() {
 		return summary
 	}
 	col := p.maxLineWidth + 2
 	visible := utf8.RuneCountInString(console.Strip(summary))
-	if col <= visible {
-		col = visible + 2
-	}
-	pad := strings.Repeat(" ", col-visible)
+	pad := strutil.Repeat(" ", col-visible)
 	elapsed := elapsedFromTime(p.startTime)
 	timer := console.ToConsoleANSI("{{[yellow::B]}}" + elapsed + "{{[-]}}")
 	return summary + pad + timer
@@ -851,7 +861,7 @@ func (p *consoleEventProcessor) buildLines(termW int) []string {
 // Layout: " icon Status      image: name:tag   2.5s"
 // statusPad brings the cursor to the name column — no additional indent needed.
 func (p *consoleEventProcessor) buildImageLine(imgName string, t *consoleTask, layers []*consoleTask, maxImgNameW int, termW int) string {
-	imageLabel := strings.Repeat(" ", 2*sectionChildIndentW) + console.ToConsoleANSI("{{|DockerMarkerDone|}}image{{[-]}}{{|DockerColon|}}:{{[-]}} ")
+	imageLabel := strutil.Repeat(" ", 2*sectionChildIndentW) + console.ToConsoleANSI("{{|DockerMarkerDone|}}image{{[-]}}{{|DockerColon|}}:{{[-]}} ")
 	imgStr := styleImage(imgName)
 	imgNameW := utf8.RuneCountInString(console.Strip(imgStr))
 	imgPad := strutil.Repeat(" ", maxImgNameW-imgNameW)
@@ -895,7 +905,7 @@ func (p *consoleEventProcessor) buildImageSizesAndBar(layers []*consoleTask, max
 			"{{|DockerColon|}}/{{[-]}}"+
 			"{{|DockerMarkerDone|}}"+fixedSize(total)+"{{[-]}}")
 	} else {
-		sizes = strings.Repeat(" ", 1+8+1+8)
+		sizes = strutil.Repeat(" ", 1+8+1+8)
 	}
 
 	// Fixed visible width before the bar: imageSizesColBase + maxImgNameW + sizes(space+sizeColW+sizeSepW+sizeColW)
@@ -1232,7 +1242,7 @@ func (p *consoleEventProcessor) buildLayerLine(t *consoleTask, statusW int, maxI
 			"{{|DockerColon|}}/{{[-]}}"+
 			"{{[::D]}}"+fixedSize(t.total)+"{{[-]}}")
 	} else {
-		sizes = strings.Repeat(" ", 1+8+1+8)
+		sizes = strutil.Repeat(" ", 1+8+1+8)
 	}
 
 	bar := ""
@@ -1258,7 +1268,11 @@ func (p *consoleEventProcessor) buildLayerLine(t *consoleTask, statusW int, maxI
 	if idPad < 1 {
 		idPad = 1
 	}
-	return layerPrefix + console.CodeDim + icon + " " + statusANSI + console.CodeReset + console.CodeDim + statusPad + " " + id + strings.Repeat(" ", idPad) + sizes + bar + console.CodeDimOff
+	barReset := ""
+	if bar != "" {
+		barReset = console.CodeReset
+	}
+	return layerPrefix + console.CodeDim + icon + " " + statusANSI + console.CodeReset + console.CodeDim + statusPad + " " + id + strutil.Repeat(" ", idPad) + sizes + barReset + bar + console.CodeDimOff
 }
 
 // buildLayerLines renders layer rows single-column, indented under the image: line.
@@ -1698,7 +1712,7 @@ func padOrTrunc(line string, termW int) string {
 	plain := console.Strip(line)
 	visible := utf8.RuneCountInString(plain)
 	if visible < termW {
-		return line + strings.Repeat(" ", termW-visible)
+		return line + strutil.Repeat(" ", termW-visible)
 	}
 	runes := []rune(plain)
 	if len(runes) > termW {

@@ -341,10 +341,6 @@ func RunProgramBox(ctx context.Context, title, subtitle, command string, task fu
 	dialogModel.SetTask(task)
 	dialogModel.SetMaximized(true)
 
-	// If -y flag was passed, enable AutoExit
-	if console.GlobalYes {
-		dialogModel.AutoExit = true
-	}
 
 	// Create full app model with standalone dialog to include log panel and backdrop
 	model := NewAppModelStandalone(ctx, currentConfig, "local", "cli", dialogModel)

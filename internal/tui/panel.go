@@ -89,11 +89,12 @@ type PanelModel struct {
 	// sessionLockers tracks active locks by ID. Input is locked when non-empty.
 	sessionLockers map[string]struct{}
 
-	panelMode    string // "log", "console", "system", or "none"
-	connType     string // "local", "ssh", or "web"
-	spinnerFrame int
-	lastLineTime time.Time // when the last log line arrived; spinner runs until idle for spinnerIdleTimeout
-	panelChanged bool      // new content arrived while collapsed; cleared on expand
+	panelMode            string // "log", "console", "system", or "none"
+	connType             string // "local", "ssh", or "web"
+	spinnerFrame         int
+	lastLineTime         time.Time // when the last log line arrived; spinner runs until idle for spinnerIdleTimeout
+	panelChanged         bool      // new content arrived while collapsed; cleared on expand
+	replaceHeaderCount   int       // line count before first replaceOutputMsg (-1 = not yet set)
 }
 
 const spinnerIdleTimeout = 1500 * time.Millisecond
@@ -170,12 +171,13 @@ func NewPanelModel(panelMode string, connType string) PanelModel {
 	inp := sinput.New(ti)
 
 	m := PanelModel{
-		sv:         streamvp.New("panel"),
-		input:      inp,
-		historyIdx: -1,
-		panelMode:  panelMode,
-		connType:   connType,
-		expanded:   false,
+		sv:                 streamvp.New("panel"),
+		input:              inp,
+		historyIdx:         -1,
+		panelMode:          panelMode,
+		connType:           connType,
+		expanded:           false,
+		replaceHeaderCount: -1,
 	}
 	m.applyInputStyles()
 	return m
