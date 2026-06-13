@@ -122,6 +122,7 @@ type consoleEventProcessor struct {
 	// Set when the service's image task is first seen, before the container lifecycle starts.
 	serviceStartTimes map[string]time.Time
 
+	startTime    time.Time // set on first event; used for overall elapsed timer in summary
 	numLines     int // lines written in last render
 	started      bool
 	spinnerFrame int
@@ -154,6 +155,7 @@ func NewConsoleEventProcessor(logCtx context.Context, out io.Writer, command str
 		updateFn:           updateFn,
 		asciiMode:          asciiMode,
 		verbose:            verbose,
+		startTime:          time.Now(),
 	}
 }
 
@@ -173,7 +175,7 @@ func (p *consoleEventProcessor) Start(ctx context.Context, operation string) {
 	if !p.noViewport {
 		summaryLine := p.buildSummaryLine()
 		if vp := console.GlobalViewport; vp != nil && vp.IsActive() {
-			vp.SetHeader(summaryLine)
+			vp.SetHeader(p.withSummaryTimer(summaryLine))
 		} else {
 			fmt.Fprintln(p.out, summaryLine)
 		}
@@ -237,7 +239,7 @@ func (p *consoleEventProcessor) Done(_ string, _ bool) {
 			if termW <= 0 {
 				termW = 80
 			}
-			finalLines := append([]string{p.buildSummaryLine()}, p.buildLines(termW)...)
+			finalLines := append([]string{p.withSummaryTimer(p.buildSummaryLine())}, p.buildLines(termW)...)
 			vp.UpdateLines(finalLines)
 			vp.Deactivate()
 		}
@@ -424,7 +426,7 @@ func (p *consoleEventProcessor) render() {
 	if !p.noViewport {
 		if vp := console.GlobalViewport; vp != nil {
 			if vp.IsActive() {
-				vp.SetHeader(p.buildSummaryLine())
+				vp.SetHeader(p.withSummaryTimer(p.buildSummaryLine()))
 				vp.UpdateLines(lines)
 				p.started = true
 				p.numLines = len(lines)
@@ -535,7 +537,7 @@ type timerStyle int
 const (
 	timerSection timerStyle = iota // bold white — services: header
 	timerService                   // App cyan — individual service containers
-	timerImage                     // DockerSuccess green — image rows
+	timerImage                     // DockerMarkerDone green — image rows
 	timerLayer                     // unstyled — layer rows
 )
 
@@ -571,7 +573,7 @@ func (p *consoleEventProcessor) attachTimers(lines []string, timers []timerEntry
 		case timerService:
 			styleTag = "{{|App|}}"
 		case timerImage:
-			styleTag = "{{|DockerSuccess|}}"
+			styleTag = "{{|DockerMarkerDone|}}"
 		default: // timerLayer
 			styleTag = "{{[::D]}}"
 		}
@@ -592,7 +594,23 @@ func (p *consoleEventProcessor) prependSummary(lines []string, timers []timerEnt
 	if summary == "" {
 		return lines
 	}
-	return append([]string{summary}, lines...)
+	return append([]string{p.withSummaryTimer(summary)}, lines...)
+}
+
+// withSummaryTimer appends a right-aligned overall elapsed timer to the summary line.
+func (p *consoleEventProcessor) withSummaryTimer(summary string) string {
+	if p.startTime.IsZero() {
+		return summary
+	}
+	col := p.maxLineWidth + 2
+	visible := utf8.RuneCountInString(console.Strip(summary))
+	if col <= visible {
+		col = visible + 2
+	}
+	pad := strings.Repeat(" ", col-visible)
+	elapsed := elapsedFromTime(p.startTime)
+	timer := console.ToConsoleANSI("{{[yellow::B]}}" + elapsed + "{{[-]}}")
+	return summary + pad + timer
 }
 
 func (p *consoleEventProcessor) buildTeardownLines() []string {
@@ -600,10 +618,10 @@ func (p *consoleEventProcessor) buildTeardownLines() []string {
 	impliedANSI := console.ToConsoleANSI(impliedTag + impliedText + "{{[-]}}")
 	ic := p.icons()
 	var impliedIcon string
-	if impliedTag == "{{|DockerPending|}}" {
-		impliedIcon = console.ToConsoleANSI("{{|DockerPending|}}" + ic.pending + "{{[-]}}")
+	if impliedTag == "{{|DockerStatusPending|}}" {
+		impliedIcon = console.ToConsoleANSI("{{|DockerStatusPending|}}" + ic.pending + "{{[-]}}")
 	} else {
-		impliedIcon = console.ToConsoleANSI("{{|DockerSuccess|}}" + ic.done + "{{[-]}}")
+		impliedIcon = console.ToConsoleANSI("{{|DockerMarkerDone|}}" + ic.done + "{{[-]}}")
 	}
 
 	svcRollupIDs := append([]string{}, p.serviceIDs...)
@@ -748,16 +766,16 @@ func (p *consoleEventProcessor) buildLines(termW int) []string {
 			if t == nil {
 				if img != nil {
 					statusText = abbreviateStatus(img.text)
-					statusANSI = console.ToConsoleANSI(imageStatusTag(img.status, img.text))
+					statusANSI = console.ToConsoleANSI(imageStatusTag(img.status, img.text, p.command))
 					icon = p.spinnerIcon(img)
 				} else {
 					impliedText, impliedTag := p.impliedStatus()
 					statusText = impliedText
 					statusANSI = console.ToConsoleANSI(impliedTag + statusText + "{{[-]}}")
-					if impliedTag == "{{|DockerPending|}}" {
-						icon = console.ToConsoleANSI("{{|DockerPending|}}" + p.icons().pending + "{{[-]}}")
+					if impliedTag == "{{|DockerStatusPending|}}" {
+						icon = console.ToConsoleANSI("{{|DockerStatusPending|}}" + p.icons().pending + "{{[-]}}")
 					} else {
-						icon = console.ToConsoleANSI("{{|DockerSuccess|}}" + p.icons().done + "{{[-]}}")
+						icon = console.ToConsoleANSI("{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}}")
 					}
 				}
 			} else {
@@ -802,10 +820,10 @@ func (p *consoleEventProcessor) buildLines(termW int) []string {
 			impliedText, impliedTag := p.impliedStatus()
 			statusText = impliedText
 			statusANSI = console.ToConsoleANSI(impliedTag + statusText + "{{[-]}}")
-			if impliedTag == "{{|DockerPending|}}" {
-				icon = console.ToConsoleANSI("{{|DockerPending|}}·{{[-]}}")
+			if impliedTag == "{{|DockerStatusPending|}}" {
+				icon = console.ToConsoleANSI("{{|DockerStatusPending|}}·{{[-]}}")
 			} else {
-				icon = console.ToConsoleANSI("{{|DockerSuccess|}}✓{{[-]}}")
+				icon = console.ToConsoleANSI("{{|DockerMarkerDone|}}✓{{[-]}}")
 			}
 		} else {
 			statusText = abbreviateStatus(t.text)
@@ -833,21 +851,21 @@ func (p *consoleEventProcessor) buildLines(termW int) []string {
 // Layout: " icon Status      image: name:tag   2.5s"
 // statusPad brings the cursor to the name column — no additional indent needed.
 func (p *consoleEventProcessor) buildImageLine(imgName string, t *consoleTask, layers []*consoleTask, maxImgNameW int, termW int) string {
-	imageLabel := strings.Repeat(" ", 2*sectionChildIndentW) + console.ToConsoleANSI("{{|DockerSuccess|}}image{{[-]}}{{|DockerColon|}}:{{[-]}} ")
+	imageLabel := strings.Repeat(" ", 2*sectionChildIndentW) + console.ToConsoleANSI("{{|DockerMarkerDone|}}image{{[-]}}{{|DockerColon|}}:{{[-]}} ")
 	imgStr := styleImage(imgName)
 	imgNameW := utf8.RuneCountInString(console.Strip(imgStr))
 	imgPad := strutil.Repeat(" ", maxImgNameW-imgNameW)
 	sizes, bar := p.buildImageSizesAndBar(layers, maxImgNameW, termW)
 	if t == nil {
-		cachedIcon := console.ToConsoleANSI("{{|DockerSuccess|}}" + p.icons().done + "{{[-]}}")
-		cachedStatus := console.ToConsoleANSI("{{|DockerSuccess|}}Cached{{[-]}}")
+		cachedIcon := console.ToConsoleANSI("{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}}")
+		cachedStatus := console.ToConsoleANSI("{{|DockerStatusSuccess|}}Cached{{[-]}}")
 		statusPad := strutil.Repeat(" ", sectionStatusW-len("Cached"))
 		return globalIndent + cachedIcon + " " + cachedStatus + console.CodeReset + statusPad + imageLabel + imgStr + imgPad + sizes + bar
 	}
 	worst := p.worstImageStatus(imgName)
 	icon := p.propagatedIcon(t, worst)
 	statusText := abbreviateStatus(t.text)
-	statusANSI := console.ToConsoleANSI(imageStatusTag(t.status, t.text))
+	statusANSI := console.ToConsoleANSI(imageStatusTag(t.status, t.text, p.command))
 	statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
 	return globalIndent + icon + " " + statusANSI + console.CodeReset + statusPad + imageLabel + imgStr + imgPad + sizes + bar
 }
@@ -873,9 +891,9 @@ func (p *consoleEventProcessor) buildImageSizesAndBar(layers []*consoleTask, max
 
 	var sizes string
 	if total > 0 {
-		sizes = " " + console.ToConsoleANSI("{{|DockerSuccess|}}"+fixedSize(current)+"{{[-]}}"+
+		sizes = " " + console.ToConsoleANSI("{{|DockerMarkerDone|}}"+fixedSize(current)+"{{[-]}}"+
 			"{{|DockerColon|}}/{{[-]}}"+
-			"{{|DockerSuccess|}}"+fixedSize(total)+"{{[-]}}")
+			"{{|DockerMarkerDone|}}"+fixedSize(total)+"{{[-]}}")
 	} else {
 		sizes = strings.Repeat(" ", 1+8+1+8)
 	}
@@ -910,7 +928,7 @@ func (p *consoleEventProcessor) buildImageSizesAndBar(layers []*consoleTask, max
 	if p.asciiMode {
 		progressChars = asciiProgressChars
 	}
-	return sizes, " " + renderProgressBarLayers(layerPcts, progressChars, "{{|DockerSuccess|}}")
+	return sizes, " " + renderProgressBarLayers(layerPcts, progressChars, "{{|DockerMarkerDone|}}")
 }
 
 // worstChildStatus returns the worst EventStatus among all layer children of parentID.
@@ -973,10 +991,10 @@ func (p *consoleEventProcessor) worstServiceStatus(svcID, imgName string) api.Ev
 func (p *consoleEventProcessor) propagatedIcon(t *consoleTask, worstStatus api.EventStatus) string {
 	ic := p.icons()
 	if worstStatus == api.Error {
-		return console.ToConsoleANSI("{{|DockerFail|}}" + ic.error + "{{[-]}}")
+		return console.ToConsoleANSI("{{|DockerMarkerError|}}" + ic.error + "{{[-]}}")
 	}
 	if worstStatus == api.Warning {
-		return console.ToConsoleANSI("{{|DockerWarn|}}" + ic.warn + "{{[-]}}")
+		return console.ToConsoleANSI("{{|DockerMarkerWarn|}}" + ic.warn + "{{[-]}}")
 	}
 	return p.spinnerIcon(t)
 }
@@ -996,15 +1014,15 @@ const (
 func sectionStatusText(s sectionRollupState) (text, statusTag, iconTag string) {
 	switch s {
 	case rollupError:
-		return "Error", "{{|DockerFail|}}", "{{|DockerFail|}}"
+		return "Error", "{{|DockerStatusFail|}}", "{{|DockerMarkerError|}}"
 	case rollupWarning:
-		return "Warning", "{{|DockerWarn|}}", "{{|DockerWarn|}}"
+		return "Warning", "{{|DockerStatusWarn|}}", "{{|DockerMarkerWarn|}}"
 	case rollupPending:
-		return "Pending", "{{|DockerPending|}}", "{{|DockerPending|}}"
+		return "Pending", "{{|DockerStatusPending|}}", "{{|DockerStatusPending|}}"
 	case rollupComplete:
-		return "Complete", "{{|DockerFinal|}}", "{{|DockerSuccess|}}"
+		return "Complete", "{{|DockerStatusFinal|}}", "{{|DockerMarkerDone|}}"
 	default: // rollupProcessing
-		return "Processing", "{{|DockerActive|}}", "{{|DockerSpinner|}}"
+		return "Processing", "{{|DockerStatusActive|}}", "{{|DockerSpinner|}}"
 	}
 }
 
@@ -1119,9 +1137,9 @@ func (p *consoleEventProcessor) buildNetworkLines() ([]string, []timerEntry) {
 			statusText = abbreviateStatus(t.text)
 			statusANSI = console.ToConsoleANSI(networkStatusTag(t.status, t.text, p.command))
 		} else {
-			icon = console.ToConsoleANSI("{{|DockerPending|}}·{{[-]}}")
+			icon = console.ToConsoleANSI("{{|DockerStatusPending|}}·{{[-]}}")
 			statusText = "Pending"
-			statusANSI = console.ToConsoleANSI("{{|DockerPending|}}Pending{{[-]}}")
+			statusANSI = console.ToConsoleANSI("{{|DockerStatusPending|}}Pending{{[-]}}")
 		}
 		statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
 		lines = append(lines, globalIndent+icon+" "+statusANSI+console.CodeReset+statusPad+sectionChildIndent+nameANSI+console.ToConsoleANSI("{{|DockerColon|}}:{{[-]}}"))
@@ -1148,9 +1166,9 @@ func (p *consoleEventProcessor) buildVolumeLines() ([]string, []timerEntry) {
 			statusText = abbreviateStatus(t.text)
 			statusANSI = console.ToConsoleANSI(volumeStatusTag(t.status, t.text, p.command))
 		} else {
-			icon = console.ToConsoleANSI("{{|DockerPending|}}·{{[-]}}")
+			icon = console.ToConsoleANSI("{{|DockerStatusPending|}}·{{[-]}}")
 			statusText = "Pending"
-			statusANSI = console.ToConsoleANSI("{{|DockerPending|}}Pending{{[-]}}")
+			statusANSI = console.ToConsoleANSI("{{|DockerStatusPending|}}Pending{{[-]}}")
 		}
 		statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
 		lines = append(lines, globalIndent+icon+" "+statusANSI+console.CodeReset+statusPad+sectionChildIndent+nameANSI+console.ToConsoleANSI("{{|DockerColon|}}:{{[-]}}"))
@@ -1338,15 +1356,15 @@ func renderProgressBarLayers(layerPcts []int, chars []string, colorTag string) s
 func (p *consoleEventProcessor) impliedStatus() (text, ansiTag string) {
 	switch p.command {
 	case "down":
-		return "Removed", "{{|DockerFinal|}}"
+		return "Removed", "{{|DockerStatusFinal|}}"
 	case "stop", "kill":
-		return "Stopped", "{{|DockerFinal|}}"
+		return "Stopped", "{{|DockerStatusFinal|}}"
 	case "pause":
-		return "Paused", "{{|DockerFinal|}}"
+		return "Paused", "{{|DockerStatusFinal|}}"
 	case "unpause", "start":
-		return "Running", "{{|DockerFinal|}}"
+		return "Running", "{{|DockerStatusFinal|}}"
 	default:
-		return "Pending", "{{|DockerPending|}}"
+		return "Pending", "{{|DockerStatusPending|}}"
 	}
 }
 
@@ -1370,14 +1388,14 @@ func (p *consoleEventProcessor) spinnerIcon(t *consoleTask) string {
 	} else {
 		switch t.status {
 		case api.Done:
-			s = console.ToConsoleANSI("{{|DockerSuccess|}}" + ic.done + "{{[-]}}")
+			s = console.ToConsoleANSI("{{|DockerMarkerDone|}}" + ic.done + "{{[-]}}")
 		case api.Error:
-			s = console.ToConsoleANSI("{{|DockerFail|}}" + ic.error + "{{[-]}}")
+			s = console.ToConsoleANSI("{{|DockerMarkerError|}}" + ic.error + "{{[-]}}")
 		case api.Warning:
-			s = console.ToConsoleANSI("{{|DockerWarn|}}" + ic.warn + "{{[-]}}")
+			s = console.ToConsoleANSI("{{|DockerMarkerWarn|}}" + ic.warn + "{{[-]}}")
 		default:
 			if t.completed() {
-				s = console.ToConsoleANSI("{{|DockerSuccess|}}" + ic.done + "{{[-]}}")
+				s = console.ToConsoleANSI("{{|DockerMarkerDone|}}" + ic.done + "{{[-]}}")
 			} else {
 				s = console.ToConsoleANSI("{{|DockerSpinner|}}" + ic.spinner + "{{[-]}}")
 			}
@@ -1408,33 +1426,33 @@ func abbreviateStatus(text string) string {
 
 // applyStatusTag wraps short in the appropriate semantic tag based on event status and
 // whether the text belongs to the final/active/success/pending category for that task type.
-// finalTexts: text values that represent a stable running/done-for-good state (DockerFinal).
-// activeTexts: text values that represent in-progress transitions (DockerActive).
-// successTexts: text values that represent a completed transition (DockerSuccess).
-// Anything else with Working status → DockerPending.
+// finalTexts: text values that represent a stable running/done-for-good state (DockerStatusFinal).
+// activeTexts: text values that represent in-progress transitions (DockerStatusActive).
+// successTexts: text values that represent a completed transition (DockerStatusSuccess).
+// Anything else with Working status → DockerStatusPending.
 func applyStatusTag(s api.EventStatus, text string, finalTexts, activeTexts, successTexts []string) string {
 	short := abbreviateStatus(text)
 	switch s {
 	case api.Warning:
-		return "{{|DockerWarn|}}" + short + "{{[-]}}"
+		return "{{|DockerStatusWarn|}}" + short + "{{[-]}}"
 	case api.Error:
-		return "{{|DockerFail|}}" + short + "{{[-]}}"
+		return "{{|DockerStatusFail|}}" + short + "{{[-]}}"
 	case api.Done:
 		if contains(finalTexts, text) {
-			return "{{|DockerFinal|}}" + short + "{{[-]}}"
+			return "{{|DockerStatusFinal|}}" + short + "{{[-]}}"
 		}
-		return "{{|DockerSuccess|}}" + short + "{{[-]}}"
+		return "{{|DockerStatusSuccess|}}" + short + "{{[-]}}"
 	default: // Working
 		if contains(finalTexts, text) {
-			return "{{|DockerFinal|}}" + short + "{{[-]}}"
+			return "{{|DockerStatusFinal|}}" + short + "{{[-]}}"
 		}
 		if contains(activeTexts, text) {
-			return "{{|DockerActive|}}" + short + "{{[-]}}"
+			return "{{|DockerStatusActive|}}" + short + "{{[-]}}"
 		}
 		if contains(successTexts, text) {
-			return "{{|DockerSuccess|}}" + short + "{{[-]}}"
+			return "{{|DockerStatusSuccess|}}" + short + "{{[-]}}"
 		}
-		return "{{|DockerPending|}}" + short + "{{[-]}}"
+		return "{{|DockerStatusPending|}}" + short + "{{[-]}}"
 	}
 }
 
@@ -1482,7 +1500,8 @@ func serviceFinalStatuses(command string) []string {
 // imageStatusTag styles an image-level (pull/build) status.
 // Final: Pulled, Built — image fetch/build completed.
 // Active: Pulling, Building — in-progress.
-func imageStatusTag(s api.EventStatus, text string) string {
+func imageStatusTag(s api.EventStatus, text string, command string) string {
+	_ = command // reserved for future command-specific styling
 	return applyStatusTag(s, text,
 		[]string{api.StatusPulled, api.StatusBuilt},
 		[]string{api.StatusPulling, api.StatusBuilding},
@@ -1556,6 +1575,14 @@ func volumeFinalStatuses(command string) []string {
 	default: // up, update, create
 		return []string{api.StatusCreated}
 	}
+}
+
+func elapsedFromTime(start time.Time) string {
+	secs := time.Since(start).Seconds()
+	if secs < 10 {
+		return fmt.Sprintf(" %.1fs", secs)
+	}
+	return fmt.Sprintf("%.1fs", secs)
 }
 
 func elapsedStr(t *consoleTask) string {

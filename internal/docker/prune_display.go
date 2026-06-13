@@ -98,19 +98,19 @@ func LogPruneReport(ctx context.Context, r PruneReport, imageServices map[string
 }
 
 func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string, []string) {
-	doneIcon := "{{|DockerSuccess|}}✓{{[-]}}"
-	errorIcon := "{{|DockerFail|}}×{{[-]}}"
+	doneIcon := "{{|DockerMarkerDone|}}✓{{[-]}}"
+	errorIcon := "{{|DockerMarkerError|}}×{{[-]}}"
 	if r.AsciiMode {
-		doneIcon = "{{|DockerSuccess|}}+{{[-]}}"
-		errorIcon = "{{|DockerFail|}}x{{[-]}}"
+		doneIcon = "{{|DockerMarkerDone|}}+{{[-]}}"
+		errorIcon = "{{|DockerMarkerError|}}x{{[-]}}"
 	}
 	doneIconANSI := console.ToConsoleANSI(doneIcon)
 	errorIconANSI := console.ToConsoleANSI(errorIcon)
 
-	untaggedStatus := console.ToConsoleANSI("{{|DockerFinal|}}Untagged{{[-]}}")
-	deletedStatus := console.ToConsoleANSI("{{|DockerFinal|}}Deleted{{[-]}}")
-	removedStatus := console.ToConsoleANSI("{{|DockerFinal|}}Removed{{[-]}}")
-	errorStatus := console.ToConsoleANSI("{{|DockerFail|}}Error{{[-]}}")
+	untaggedStatus := console.ToConsoleANSI("{{|DockerStatusFinal|}}Untagged{{[-]}}")
+	deletedStatus := console.ToConsoleANSI("{{|DockerStatusFinal|}}Deleted{{[-]}}")
+	removedStatus := console.ToConsoleANSI("{{|DockerStatusFinal|}}Removed{{[-]}}")
+	errorStatus := console.ToConsoleANSI("{{|DockerStatusFail|}}Error{{[-]}}")
 	untaggedPad := strutil.Repeat(" ", pruneSectionStatusW-len("Untagged"))
 	deletedPad := strutil.Repeat(" ", pruneSectionStatusW-len("Deleted"))
 	removedPad := strutil.Repeat(" ", pruneSectionStatusW-len("Removed"))
@@ -326,7 +326,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 		}
 
 		imageLabel := strings.Repeat(" ", 2*pruneSectionChildIndentW) +
-			console.ToConsoleANSI("{{|DockerSuccess|}}image{{[-]}}{{|DockerColon|}}:{{[-]}} ")
+			console.ToConsoleANSI("{{|DockerMarkerDone|}}image{{[-]}}{{|DockerColon|}}:{{[-]}} ")
 		imageLabelPlainW := 2*pruneSectionChildIndentW + len("image: ")
 		layerIndent := strings.Repeat(" ", imageLabelPlainW+pruneSectionChildIndentW)
 
@@ -419,7 +419,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 
 	// ── summary ───────────────────────────────────────────────────────────────
 	if r.SpaceReclaimed > 0 {
-		add(console.ToConsoleANSI("{{[white::B]}}Total reclaimed space:{{[-]}} {{|DockerSuccess|}}" +
+		add(console.ToConsoleANSI("{{[white::B]}}Total reclaimed space:{{[-]}} {{|DockerMarkerDone|}}" +
 			units.HumanSize(float64(r.SpaceReclaimed)) + "{{[-]}}"))
 	}
 
