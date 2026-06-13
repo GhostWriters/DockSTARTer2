@@ -424,7 +424,7 @@ func (p *consoleEventProcessor) render() {
 	// Hide cursor, move up to start of previously rendered block, go to column 0
 	buf.WriteString("\033[?25l") // hide cursor
 	if p.numLines > 0 {
-		buf.WriteString(fmt.Sprintf("\033[%dA", p.numLines)) // cursor up N lines
+		fmt.Fprintf(&buf, "\033[%dA", p.numLines) // cursor up N lines
 	}
 	buf.WriteString("\r") // column 0
 
@@ -874,22 +874,6 @@ func sectionStatusText(s sectionRollupState, spinnerFrame int) (text, statusTag,
 	}
 }
 
-// sectionRollup computes the rolled-up status for a section header from a set of task IDs.
-// Returns (icon, statusANSI, statusText, labelTag).
-func (p *consoleEventProcessor) sectionRollup(ids []string) (icon, statusANSI, statusText, labelTag string) {
-	state := p.rollupState(ids, nil)
-	text, stTag, iconTag := sectionStatusText(state, p.spinnerFrame)
-	spinnerOrCheck := spinnerFrames[p.spinnerFrame]
-	if state != rollupProcessing {
-		spinnerOrCheck = sectionRollupIcon(state)
-	}
-	icon = console.ToConsoleANSI(iconTag + spinnerOrCheck + "{{[-]}}")
-	statusANSI = console.ToConsoleANSI(stTag + text + "{{[-]}}")
-	statusText = text
-	labelTag = stTag
-	return
-}
-
 // sectionRollupWithPropagation is like sectionRollup but also checks child tasks
 // (layers for image IDs, images for service IDs) for propagated errors/warnings.
 func (p *consoleEventProcessor) sectionRollupWithPropagation(ids []string, imageForID func(string) string) (icon, statusANSI, statusText, labelTag string) {
@@ -960,9 +944,10 @@ func (p *consoleEventProcessor) rollupState(ids []string, imageForID func(string
 				}
 			}
 		}
-		if worst == api.Error {
+		switch worst {
+		case api.Error:
 			anyError = true
-		} else if worst == api.Warning {
+		case api.Warning:
 			anyWarning = true
 		}
 	}
@@ -1157,14 +1142,6 @@ func (p *consoleEventProcessor) buildLayerLines(layers []*consoleTask, termW int
 	return out, outTasks
 }
 
-// fixedSize formats a byte count as a fixed-width 7-char string (e.g. " 80.6MB", "  1.0KB").
-// MB and above are whole numbers; KB gets one decimal. Always right-aligned in 7 chars.
-func pluralS(n int) string {
-	if n == 1 {
-		return ""
-	}
-	return "s"
-}
 
 func plural(n int, singular, pluralForm string) string {
 	if n == 1 {

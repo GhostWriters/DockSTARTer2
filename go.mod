@@ -5,7 +5,7 @@ go 1.26.4
 require (
 	charm.land/bubbles/v2 v2.1.0
 	charm.land/bubbletea/v2 v2.0.7
-	charm.land/lipgloss/v2 v2.0.3
+	charm.land/lipgloss/v2 v2.0.4
 	charm.land/log/v2 v2.0.0
 	charm.land/wish/v2 v2.0.1
 	github.com/Masterminds/semver/v3 v3.5.0
@@ -30,7 +30,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/gofrs/flock v0.13.0
 	github.com/mattn/go-runewidth v0.0.24
-	github.com/mattn/go-sixel v0.0.9
+	github.com/mattn/go-sixel v0.0.11
 	github.com/moby/moby/client v0.4.1
 	github.com/muesli/termenv v0.16.0
 	github.com/pelletier/go-toml/v2 v2.3.1
@@ -39,9 +39,9 @@ require (
 	github.com/rivo/uniseg v0.4.7
 	github.com/sergi/go-diff v1.4.0
 	github.com/spf13/pflag v1.0.10
-	golang.org/x/crypto v0.52.0
-	golang.org/x/sys v0.45.0
-	golang.org/x/term v0.43.0
+	golang.org/x/crypto v0.53.0
+	golang.org/x/sys v0.46.0
+	golang.org/x/term v0.44.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -210,10 +210,10 @@ require (
 	go.yaml.in/yaml/v4 v4.0.0-rc.4 // indirect
 	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f // indirect
 	golang.org/x/image v0.39.0 // indirect
-	golang.org/x/net v0.54.0 // indirect
+	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/text v0.37.0 // indirect
+	golang.org/x/sync v0.21.0 // indirect
+	golang.org/x/text v0.38.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260504160031-60b97b32f348 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260504160031-60b97b32f348 // indirect
