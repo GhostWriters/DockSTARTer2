@@ -697,7 +697,12 @@ func (m *MenuModel) SetSize(width, height int) {
 
 	// If in flow mode, calculate height based on content
 	if m.flowMode {
-		flowLines := m.GetFlowHeight(width)
+		layout := GetLayout()
+		flowMaxW, _ := layout.InnerContentSize(width, height)
+		if flowMaxW > 2 {
+			flowMaxW -= 2
+		}
+		flowLines := m.GetFlowHeight(flowMaxW)
 		// +2 for top/bottom borders
 		m.layout.ViewportHeight = flowLines
 		m.layout.Height = flowLines + 2

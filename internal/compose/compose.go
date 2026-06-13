@@ -466,3 +466,56 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 		})
 	}
 }
+
+// LoadImageServices loads the compose project and returns a map of image ref → []service names.
+// Returns an empty map (not an error) if the compose file cannot be read.
+func LoadImageServices(ctx context.Context) map[string][]string {
+	conf := config.LoadAppConfig()
+	composePath := filepath.Join(conf.ComposeDir, constants.ComposeFileName)
+	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
+
+	envMap := make(map[string]string)
+	if vars, err := dotenv.GetEnvFromFile(make(map[string]string), []string{envFile}); err == nil {
+		for k, v := range vars {
+			envMap[strings.Clone(k)] = strings.Clone(v)
+		}
+	}
+
+	configFiles := []types.ConfigFile{{Filename: composePath}}
+	overridePath := filepath.Join(conf.ComposeDir, constants.ComposeOverrideFileName)
+	if _, err := os.Stat(overridePath); err == nil {
+		configFiles = append(configFiles, types.ConfigFile{Filename: overridePath})
+	}
+
+	configDetails := types.ConfigDetails{
+		WorkingDir:  conf.ComposeDir,
+		ConfigFiles: configFiles,
+		Environment: envMap,
+	}
+
+	projectName := envMap["COMPOSE_PROJECT_NAME"]
+	override := true
+	if projectName == "" {
+		projectName = loader.NormalizeProjectName(filepath.Base(conf.ComposeDir))
+		override = false
+	}
+
+	project, err := loader.LoadWithContext(ctx, configDetails, func(options *loader.Options) {
+		options.SetProjectName(projectName, override)
+		options.SkipInterpolation = false
+	})
+	if err != nil {
+		return map[string][]string{}
+	}
+
+	result := make(map[string][]string)
+	for name, svc := range project.Services {
+		if svc.Image != "" {
+			result[svc.Image] = append(result[svc.Image], name)
+		}
+	}
+	for img := range result {
+		sort.Strings(result[img])
+	}
+	return result
+}

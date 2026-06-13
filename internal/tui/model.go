@@ -121,6 +121,11 @@ type (
 		Dialog tea.Model
 	}
 
+	// ConfirmQuitMsg requests a "Do you want to exit?" confirm dialog.
+	// On Yes the AppModel sends tea.Quit; on No it simply closes the dialog.
+	// Use this instead of calling Confirm() inside a tea.Cmd (which deadlocks).
+	ConfirmQuitMsg struct{}
+
 	// ShowConfirmDialogMsg shows a confirmation dialog with a result channel
 	ShowConfirmDialogMsg struct {
 		Title      string

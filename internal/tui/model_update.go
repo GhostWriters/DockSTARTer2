@@ -30,7 +30,8 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.WindowSizeMsg:
 			// Allow resizing to proceed
 		case EnvLoadDoneMsg, RefreshAppsListMsg, SubDialogMsg, SubDialogResultMsg,
-			UniversalPromptMsg, ShowConfirmDialogMsg, ShowPromptDialogMsg, ShowMessageDialogMsg:
+			UniversalPromptMsg, ShowConfirmDialogMsg, ShowPromptDialogMsg, ShowMessageDialogMsg,
+			ConfirmQuitMsg:
 			// Allow data-loading, dialog triggers, and results to pass through
 			// even if terminal size isn't yet synced.
 		default:
@@ -98,16 +99,22 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, logger.BatchRecoverTUI(m.ctx, cmd)
 
 	case menuSpinnerTickMsg, menuDeferredActionMsg:
-		// Always route to the active screen — these are scoped by instanceID so a
-		// dialog being open must not swallow them (dialogs don't own menu spinners).
+		// Route to both the active screen AND any open dialog — these messages are
+		// scoped by instanceID so each recipient ignores ones that aren't its own.
+		// Dialogs that are MenuModels (e.g. flags, shadow dropdown) own their own
+		// spinner/deferred-action pairs and must receive these messages directly.
+		var screenCmd, dialogCmd tea.Cmd
 		if m.activeScreen != nil {
 			updated, cmd := m.activeScreen.Update(msg)
 			if sm, ok := updated.(ScreenModel); ok {
 				m.activeScreen = sm
 			}
-			return m, logger.BatchRecoverTUI(m.ctx, cmd)
+			screenCmd = cmd
 		}
-		return m, nil
+		if m.dialog != nil {
+			m.dialog, dialogCmd = m.dialog.Update(msg)
+		}
+		return m, logger.BatchRecoverTUI(m.ctx, screenCmd, dialogCmd)
 
 	case panelSpinnerTickMsg:
 		updated, cmd := m.panel.Update(msg)
@@ -194,6 +201,10 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Fall through to common update logic (backdrop and activeScreen)
 
 	case ShowGlobalFlagsMsg:
+		// If the flags dialog is already open, close it (toggle behaviour).
+		if _, ok := m.dialog.(*FlagsToggleDialog); ok {
+			return m, func() tea.Msg { return CloseDialogMsg{} }
+		}
 		return m, func() tea.Msg { return ShowDialogMsg{Dialog: NewFlagsToggleDialog()} }
 
 	case ShowPendingRestartMsg:
@@ -412,6 +423,30 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, logger.BatchRecoverTUI(m.ctx, cmds...)
+
+	case ConfirmQuitMsg:
+		// Show an exit confirmation dialog. On Yes we quit; on No the dialog just closes.
+		resultChan := make(chan bool, 1)
+		dialog := newConfirmDialog("Exit DockSTARTer", "Do you want to exit DockSTARTer?", true)
+		dW, dH := m.getDialogArea(dialog)
+		if sizable, ok := interface{}(dialog).(interface{ SetSize(int, int) }); ok {
+			sizable.SetSize(dW, dH)
+		}
+		if m.dialog != nil {
+			if _, ok := m.dialog.(*ContextMenuModel); !ok {
+				m.dialogStack = append(m.dialogStack, m.dialog)
+			}
+		}
+		m.dialog = dialog
+		m.updateComponentFocus()
+		m.pendingConfirm = resultChan
+		// Drain the channel in a goroutine and send tea.Quit when confirmed.
+		go func() {
+			if result := <-resultChan; result {
+				program.Send(tea.QuitMsg{})
+			}
+		}()
+		return m, logger.RecoverTUI(m.ctx, m.dialog.Init())
 
 	case ShowConfirmDialogMsg:
 		// If a dialog is already open, push it to stack and show the confirm dialog as the new top
@@ -651,6 +686,12 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// closes the menu first; a second ESC then unfocuses the widget.
 		// Blur any title bar that may have been focused before the dialog opened.
 		if !closingContextMenu {
+			// Clear any in-flight spinner on the screen — the dialog has resolved.
+			if m.activeScreen != nil {
+				if cp, ok := m.activeScreen.(interface{ ClearProcessingState() }); ok {
+					cp.ClearProcessingState()
+				}
+			}
 			m.setHeaderFocus(HeaderFocusNone)
 			if m.activeScreen != nil {
 				if tb, ok := m.activeScreen.(TitleBarFocusable); ok {

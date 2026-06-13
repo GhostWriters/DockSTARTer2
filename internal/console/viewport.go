@@ -49,7 +49,7 @@ var GlobalViewport *Viewport
 type viewportWriter struct{}
 
 func (viewportWriter) Write(p []byte) (int, error) {
-	if GlobalViewport != nil {
+	if GlobalViewport != nil && !TUIMode && !IsTUIEnabled() {
 		vp := GlobalViewport
 		lines := splitLines(string(p))
 		if vp.IsActive() {
@@ -64,14 +64,14 @@ func (viewportWriter) Write(p []byte) (int, error) {
 			return len(p), nil
 		}
 		if vp.IsBuffering() {
-			// Write through to stderr and capture to history.
+			// Write through to stdout and capture to history.
 			vp.mu.Lock()
 			vp.appendToHistoryLocked(lines)
 			vp.mu.Unlock()
-			// fall through to os.Stderr write below
+			// fall through to os.Stdout write below
 		}
 	}
-	return os.Stderr.Write(p)
+	return os.Stdout.Write(p)
 }
 
 // ViewportWriter returns the io.Writer that routes into the active viewport.
@@ -171,6 +171,12 @@ func (vp *Viewport) Deactivate() {
 			fmt.Fprint(os.Stderr, line+"\r\n")
 		}
 		termMu.Unlock()
+
+		// Append the final compose lines to history so the next Activate() pre-fills
+		// them into the viewport scrollback.
+		vp.mu.Lock()
+		vp.appendToHistoryLocked(composeLines)
+		vp.mu.Unlock()
 	}
 }
 

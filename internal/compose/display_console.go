@@ -231,6 +231,14 @@ func (p *consoleEventProcessor) Done(_ string, _ bool) {
 	// returns to normal inline output for anything that runs after compose.
 	if !p.noViewport {
 		if vp := console.GlobalViewport; vp != nil {
+			// Prepend the summary to lastComposeLines so it appears in the scrollback
+			// dump. The live header was shown via SetHeader; now bake it into the lines.
+			termW := goterm.Width()
+			if termW <= 0 {
+				termW = 80
+			}
+			finalLines := append([]string{p.buildSummaryLine()}, p.buildLines(termW)...)
+			vp.UpdateLines(finalLines)
 			vp.Deactivate()
 		}
 	}
@@ -490,12 +498,27 @@ func (p *consoleEventProcessor) buildSummaryLine() string {
 	netCount := len(p.networkIDs)
 	volCount := len(p.volumeIDs)
 
+	// Count layer tasks (children of image tasks).
+	isImageID := make(map[string]bool, len(p.imageIDs))
+	for _, id := range p.imageIDs {
+		isImageID[id] = true
+	}
+	layerCount := 0
+	for _, id := range p.ids {
+		if t := p.tasks[id]; t != nil && t.parentID != "" && isImageID[t.parentID] {
+			layerCount++
+		}
+	}
+
 	var parts []string
 	if svcCount > 0 {
 		parts = append(parts, fmt.Sprintf("{{|App|}}%d %s{{[-]}}", svcCount, plural(svcCount, "service", "services")))
 	}
 	if imgCount > 0 {
 		parts = append(parts, fmt.Sprintf("{{|DockerImage|}}%d %s{{[-]}}", imgCount, plural(imgCount, "image", "images")))
+	}
+	if layerCount > 0 {
+		parts = append(parts, fmt.Sprintf("{{[::D]}}%d %s{{[-]}}", layerCount, plural(layerCount, "layer", "layers")))
 	}
 	if netCount > 0 {
 		parts = append(parts, fmt.Sprintf("{{|App|}}%d %s{{[-]}}", netCount, plural(netCount, "network", "networks")))
@@ -560,6 +583,11 @@ func (p *consoleEventProcessor) attachTimers(lines []string, timers []timerEntry
 
 func (p *consoleEventProcessor) prependSummary(lines []string, timers []timerEntry) []string {
 	lines = p.attachTimers(lines, timers)
+	// When the viewport is active the summary line is shown as the header — don't
+	// also prepend it to the scrollable content or it appears twice.
+	if vp := console.GlobalViewport; vp != nil && vp.IsActive() {
+		return lines
+	}
 	summary := p.buildSummaryLine()
 	if summary == "" {
 		return lines

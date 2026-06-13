@@ -122,6 +122,18 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		},
 	})
 
+	// flowMaxWidth is the usable content width passed to renderFlowContent — used for
+	// both item wrapping and GetFlowHeight so the two stay in sync.
+	var flowMaxWidth int
+	if m.subMenuMode {
+		flowMaxWidth = m.width - layout.BorderWidth()
+	} else {
+		flowMaxWidth, _ = layout.InnerContentSize(m.width, m.height)
+		if flowMaxWidth > 2 {
+			flowMaxWidth -= 2
+		}
+	}
+
 	// Item regions: vertical list mode vs horizontal flow mode.
 	if !m.flowMode {
 		// All vertical lists (uniform and variable) now use our custom layout engine.
@@ -165,19 +177,7 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		}
 	} else {
 		// Flow mode: items are arranged horizontally across multiple lines.
-		// Replicate the layout logic from the renderer to compute per-item positions.
-		// subMenuMode: viewSubMenu calls renderFlowContent(m.width - BorderWidth())
-		// non-subMenuMode: renderFlow calls renderFlowContent(InnerContentSize - 2)
-		var maxWidth int
-		if m.subMenuMode {
-			maxWidth = m.width - layout.BorderWidth()
-		} else {
-			maxWidth, _ = layout.InnerContentSize(m.width, m.height)
-			if maxWidth > 2 {
-				maxWidth -= 2
-			}
-		}
-
+		// Uses flowMaxWidth (computed above) to match renderFlowContent wrapping exactly.
 		ctx := GetActiveContext()
 		const itemSpacing = 3
 		// lineContentX: items start 1 char past listX because renderFlowContent applies
@@ -203,10 +203,12 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 						glyph = checkOff + " "
 					}
 				} else {
+					// ASCII glyphs also get a trailing space (matching renderFlowContent's
+					// `renderCheckbox(...) + neutralStyle.Render(" ")` which adds the space).
 					if item.IsRadioButton {
-						glyph = radioOffAscii
+						glyph = radioOffAscii + " "
 					} else {
-						glyph = checkOffAscii
+						glyph = checkOffAscii + " "
 					}
 				}
 				cbWidth = lipgloss.Width(glyph)
@@ -219,7 +221,7 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 
 			// Determine item's position within the current line
 			var itemX int
-			if currentLineWidth > 0 && currentLineWidth+itemSpacing+itemWidth > maxWidth {
+			if currentLineWidth > 0 && currentLineWidth+itemSpacing+itemWidth > flowMaxWidth {
 				flowLine++
 				itemX = 0
 				currentLineWidth = itemWidth
@@ -262,7 +264,7 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	if len(specs) > 0 {
 		listHeight := m.list.Height()
 		if m.flowMode {
-			listHeight = m.GetFlowHeight(m.width)
+			listHeight = m.GetFlowHeight(flowMaxWidth)
 		}
 
 		buttonY := listY + listHeight

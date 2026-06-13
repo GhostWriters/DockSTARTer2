@@ -45,7 +45,14 @@ func (m *MenuModel) calculateSectionLayout() {
 	expandableCount := 0
 	for i, sec := range m.contentSections {
 		if sec.flowMode {
-			flowH := sec.GetFlowHeight(sectionWidth)
+			// The section renders its flow content at (sectionWidth - BorderWidth),
+			// because viewSubMenu subtracts the border from m.width to get contentWidth.
+			// Pass that same inner width to GetFlowHeight so the line count matches.
+			flowContentW := sectionWidth - layout.BorderWidth()
+			if flowContentW < 1 {
+				flowContentW = 1
+			}
+			flowH := sec.GetFlowHeight(flowContentW)
 			sectionH := flowH + layout.BorderHeight()
 			sectionHeights[i] = sectionH
 			fixedTotal += sectionH
