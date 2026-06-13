@@ -523,7 +523,7 @@ func (s *DisplayOptionsScreen) shadowLevelToDesc(l int) string {
 			"({{|Shadow|}}.{{|OptionValue|}})",
 			"({{|Shadow|}}:{{|OptionValue|}})",
 			"({{|Shadow|}}#{{|OptionValue|}})",
-			"({{|OptionValue|}} )",
+			"({{|Shadow|}}█{{|OptionValue|}})",
 		}
 	}
 	if l < 0 || l >= len(levels) {
@@ -752,7 +752,7 @@ func (s *DisplayOptionsScreen) showShadowDropdown() tea.Cmd {
 				{"Light", "{{|OptionValue|}}({{|Shadow|}}.{{|OptionValue|}}){{[-]}}"},
 				{"Medium", "{{|OptionValue|}}({{|Shadow|}}:{{|OptionValue|}}){{[-]}}"},
 				{"Dark", "{{|OptionValue|}}({{|Shadow|}}#{{|OptionValue|}}){{[-]}}"},
-				{"Solid", "{{|OptionValue|}}( ){{[-]}}"},
+				{"Solid", "{{|OptionValue|}}({{|Shadow|}}█{{|OptionValue|}}){{[-]}}"},
 			}
 		}
 		var items []tui.MenuItem

@@ -625,6 +625,20 @@ func (s *DisplayOptionsScreen) EscapeAction() tea.Cmd {
 	return s.outerMenu.SetProcessingBtnDeferred(tui.IDBackButton, navigateBack())
 }
 
+// ClearProcessingState clears spinner state on all inner menus.
+// Called by AppModel when a dialog closes and returns focus to this screen.
+func (s *DisplayOptionsScreen) ClearProcessingState() {
+	if s.optionsMenu != nil {
+		s.optionsMenu.ClearProcessingState()
+	}
+	if s.themeMenu != nil {
+		s.themeMenu.ClearProcessingState()
+	}
+	if s.outerMenu != nil {
+		s.outerMenu.ClearProcessingState()
+	}
+}
+
 func (s *DisplayOptionsScreen) HasDialog() bool {
 	if s.themeMenu == nil || s.optionsMenu == nil {
 		return false

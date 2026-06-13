@@ -135,19 +135,14 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }
 
-// GetFlowHeight calculates required lines for horizontal layout given the available width
-func (m *MenuModel) GetFlowHeight(width int) int {
+// GetFlowHeight calculates required lines for the given maxWidth.
+// maxWidth must already be the usable content width (same value passed to renderFlowContent).
+func (m *MenuModel) GetFlowHeight(maxWidth int) int {
 	if len(m.items) == 0 {
 		return 0
 	}
 
 	ctx := GetActiveContext()
-
-	maxWidth := width
-	// Subtract 2 for borders and 2 for internal 1-char margins (matching standard list menus)
-	if maxWidth > 4 {
-		maxWidth -= 4
-	}
 
 	lines := 1
 	currentLineWidth := 0
@@ -168,10 +163,12 @@ func (m *MenuModel) GetFlowHeight(width int) int {
 					glyph = checkOff + " "
 				}
 			} else {
+				// ASCII glyphs also get a trailing space (matching renderFlowContent's
+				// `renderCheckbox(...) + neutralStyle.Render(" ")` which adds the space).
 				if item.IsRadioButton {
-					glyph = radioOffAscii
+					glyph = radioOffAscii + " "
 				} else {
-					glyph = checkOffAscii
+					glyph = checkOffAscii + " "
 				}
 			}
 			cbWidth = lipgloss.Width(glyph)

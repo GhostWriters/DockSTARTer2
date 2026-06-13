@@ -183,9 +183,7 @@ func GetShadowBoxCtx(content string, ctx StyleContext) string {
 		case 3:
 			shadeChar = "#"
 		case 4:
-			// Solid ASCII: use reverse so ShadowColor becomes the visible cell background.
-			shadowStyle = shadowStyle.Foreground(ctx.ShadowColor).Reverse(true)
-			shadeChar = " "
+			shadeChar = "█"
 		default:
 			shadeChar = " "
 		}

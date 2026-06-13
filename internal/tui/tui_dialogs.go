@@ -19,14 +19,11 @@ func Confirm(title, question string, defaultYes bool) bool {
 	return ShowConfirmDialog(title, question, defaultYes)
 }
 
-// ConfirmExitAction returns a tea.Cmd that prompts the user to confirm exiting.
-// If confirmed, it returns tea.QuitMsg to gracefully terminate the application.
+// ConfirmExitAction returns a tea.Cmd that shows an exit confirmation dialog.
+// Returns ConfirmQuitMsg which AppModel handles without blocking the event loop.
 func ConfirmExitAction() tea.Cmd {
 	return func() tea.Msg {
-		if Confirm("Exit DockSTARTer", "Do you want to exit DockSTARTer?", true) {
-			return tea.Quit() // Returns tea.QuitMsg{}
-		}
-		return nil
+		return ConfirmQuitMsg{}
 	}
 }
 
