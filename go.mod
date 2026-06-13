@@ -11,6 +11,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/adrg/xdg v0.5.3
 	github.com/atotto/clipboard v0.1.4
+	github.com/buger/goterm v1.0.4
 	github.com/charmbracelet/colorprofile v0.4.3
 	github.com/charmbracelet/ssh v0.0.0-20250826160808-ebfa259c7309
 	github.com/charmbracelet/x/ansi v0.11.7
@@ -30,6 +31,7 @@ require (
 	github.com/gofrs/flock v0.13.0
 	github.com/mattn/go-runewidth v0.0.24
 	github.com/mattn/go-sixel v0.0.9
+	github.com/moby/moby/client v0.4.1
 	github.com/muesli/termenv v0.16.0
 	github.com/pelletier/go-toml/v2 v2.3.1
 	github.com/pgavlin/goldmark v1.1.33-0.20210916052350-16f491902b32
@@ -57,7 +59,6 @@ require (
 	github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
-	github.com/buger/goterm v1.0.4 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/charmbracelet/glamour v1.0.0 // indirect
@@ -142,7 +143,6 @@ require (
 	github.com/moby/go-archive v0.2.0 // indirect
 	github.com/moby/locker v1.0.1 // indirect
 	github.com/moby/moby/api v1.54.2 // indirect
-	github.com/moby/moby/client v0.4.1 // indirect
 	github.com/moby/patternmatcher v0.6.1 // indirect
 	github.com/moby/sys/atomicwriter v0.1.0 // indirect
 	github.com/moby/sys/capability v0.4.0 // indirect

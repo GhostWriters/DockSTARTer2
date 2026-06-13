@@ -128,8 +128,9 @@ func ShowSpinnerFrame() {
 }
 
 // StartSpinner marks the spinner as active and starts the background tick.
-// The goroutine holds termMu for each frame write, so it cannot interleave
-// with log output that also holds termMu across clear+write+show.
+// When the viewport is active the spinner renders inside the viewport's
+// reserved region (bottom row) using the same spinnerLine pattern as streamvp.
+// Otherwise it writes directly to stderr on the current line.
 // Returns a stop function that clears the spinner.
 func StartSpinner() func() {
 	if !isTTYGlobal || TUIMode || IsTUIEnabled() || !SpinnerEnabled {
@@ -155,29 +156,44 @@ func StartSpinner() func() {
 			case <-done:
 				return
 			case <-time.After(fps):
-				termMu.Lock()
 				activeSpinner.mu.Lock()
-				if activeSpinner.active && !activeSpinner.paused {
-					frames := spinnerFrames()
-					fmt.Fprintf(os.Stderr, "\033[?25l\r%s", cliSpinnerStyle.Render(frames[activeSpinner.frame%len(frames)]))
-					activeSpinner.visible = true
-					activeSpinner.frame++
+				if !activeSpinner.active || activeSpinner.paused {
+					activeSpinner.mu.Unlock()
+					continue
 				}
+				frames := spinnerFrames()
+				frame := cliSpinnerStyle.Render(frames[activeSpinner.frame%len(frames)])
+				activeSpinner.frame++
 				activeSpinner.mu.Unlock()
-				termMu.Unlock()
+
+				if vp := GlobalViewport; vp != nil && vp.IsActive() {
+					vp.SetSpinnerLine(frame)
+				} else if !TUIMode {
+					termMu.Lock()
+					fmt.Fprintf(os.Stderr, "\033[?25l\r%s", frame)
+					activeSpinner.mu.Lock()
+					activeSpinner.visible = true
+					activeSpinner.mu.Unlock()
+					termMu.Unlock()
+				}
 			}
 		}
 	}()
 
 	return func() {
 		close(done)
-		termMu.Lock()
 		activeSpinner.mu.Lock()
 		activeSpinner.active = false
 		activeSpinner.visible = false
 		activeSpinner.paused = false
-		fmt.Fprintf(os.Stderr, "\r\033[K\033[?25h") // clear line and restore cursor
 		activeSpinner.mu.Unlock()
-		termMu.Unlock()
+
+		if vp := GlobalViewport; vp != nil && vp.IsActive() {
+			vp.ClearSpinnerLine()
+		} else if !TUIMode {
+			termMu.Lock()
+			fmt.Fprintf(os.Stderr, "\r\033[K\033[?25h") // clear line and restore cursor
+			termMu.Unlock()
+		}
 	}
 }

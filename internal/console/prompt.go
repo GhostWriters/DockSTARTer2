@@ -92,10 +92,24 @@ func QuestionPrompt(ctx context.Context, printer Printer, title, question string
 		return answer, nil
 	}
 
-	// Switch to raw mode to read a single character
-	fd := int(os.Stdin.Fd())
+	// When the viewport is active, its goroutine owns os.Stdin (fd 0).
+	// Open /dev/tty directly so we read from the terminal without racing.
+	// On Windows openTTY returns os.Stdin (viewport never active there anyway).
+	stdinReader := os.Stdin
+	if GlobalViewport != nil && GlobalViewport.IsActive() {
+		if tty, ok := openTTY(); ok {
+			defer tty.Close()
+			stdinReader = tty
+		}
+	}
+
+	// Enter raw mode so we can read a single keypress.
+	// When the viewport owns raw mode the terminal is already raw — no need to
+	// set it again (double-enter would corrupt state on the inner restore).
+	fd := int(stdinReader.Fd())
 	var oldState *term.State
-	if term.IsTerminal(fd) {
+	viewportOwnsRaw := GlobalViewport != nil && GlobalViewport.IsRawMode()
+	if !viewportOwnsRaw && term.IsTerminal(fd) {
 		var err error
 		oldState, err = term.MakeRaw(fd)
 		if err == nil {
@@ -108,9 +122,9 @@ func QuestionPrompt(ctx context.Context, printer Printer, title, question string
 	answered := false
 
 	for !answered {
-		_, err := os.Stdin.Read(b)
+		_, err := stdinReader.Read(b)
 		if err != nil {
-			// If read fails, use default if available, else defalt to No (safe)
+			// If read fails, use default if available, else default to No (safe)
 			if strings.EqualFold(defaultValue, "y") {
 				answer = true
 			} else {

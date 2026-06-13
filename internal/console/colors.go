@@ -188,6 +188,18 @@ func init() {
 		// Viewport Colors
 		ProgramBox: "{{[-]}}{{[white:black]}}",
 		ConsoleBox: "{{[-]}}{{[white:black]}}",
+
+		// Docker Compose progress colors
+		DockerSuccess:     "{{[-]}}{{[green]}}",
+		DockerFinal:       "{{[-]}}{{[green::B]}}",
+		DockerFail:        "{{[-]}}{{[red]}}",
+		DockerWarn:        "{{[-]}}{{[yellow]}}",
+		DockerPending:     "{{[-]}}{{[gray::D]}}",
+		DockerActive:      "{{[-]}}{{[yellow]}}",
+		DockerImage:       "{{[-]}}{{[magenta]}}",
+		DockerTag:         "{{[-]}}{{[magenta::D]}}",
+		DockerSpinner:     "{{[-]}}{{[yellow]}}",
+		DockerProgressBar: "{{[-]}}{{[cyan]}}",
 	}
 
 	// Register base tags once Colors is populated
@@ -311,6 +323,18 @@ type AppColors struct {
 	// Viewport Colors
 	ProgramBox string
 	ConsoleBox string
+
+	// Docker Compose progress colors
+	DockerSuccess     string
+	DockerFinal       string
+	DockerFail        string
+	DockerWarn        string
+	DockerPending     string
+	DockerActive      string
+	DockerImage       string
+	DockerTag         string
+	DockerSpinner     string
+	DockerProgressBar string
 }
 
 // Colors is the global instance for application output (stdout)

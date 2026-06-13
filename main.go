@@ -106,6 +106,14 @@ func run() (exitCode int) {
 		console.SpinnerSpeed = earlyConf.UI.SpinnerSpeed
 	}
 
+	// Start the CLI viewport — a fixed-height scrolling region that all console
+	// output flows through. Only active in TTY CLI mode (not TUI, not piped).
+	stopViewport := console.StartViewport()
+	defer stopViewport()
+	if console.GlobalViewport != nil {
+		logger.SetConsoleOutput(console.ViewportWriter())
+	}
+
 	// Create a cancelable context
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -131,6 +139,11 @@ func run() (exitCode int) {
 					os.Exit(1)
 				}
 				exitOnce.Do(func() {
+					// Stop viewport first so we exit the alternate screen before
+					// any further output, then restore cursor.
+					if console.GlobalViewport != nil {
+						console.GlobalViewport.ForceStop()
+					}
 					console.RestoreCursor()
 					logger.TUIMode = false
 					logger.Error(ctx, "User aborted via CTRL-C")

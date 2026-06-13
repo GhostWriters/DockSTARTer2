@@ -130,6 +130,46 @@ func (m *Model) AppendLines(rawLines []string, renderFn func(string) string) {
 	m.setViewportContent(true)
 }
 
+// ReplaceLines replaces all current content with newLines, re-rendering each through renderFn.
+// Viewport position is preserved (scrollToBottom=false) so live updates don't jump the view.
+func (m *Model) ReplaceLines(rawLines []string, renderFn func(string) string) {
+	w := m.viewport.Width()
+	m.rawLines = make([]string, 0, len(rawLines))
+	m.lines = make([]string, 0, len(rawLines))
+	for _, raw := range rawLines {
+		m.rawLines = append(m.rawLines, raw)
+		rendered := renderFn(raw)
+		if w > 0 {
+			rendered = lipgloss.NewStyle().MaxWidth(w).Render(rendered)
+		}
+		m.lines = append(m.lines, rendered)
+	}
+	m.spinnerLine = ""
+	m.setViewportContent(false)
+}
+
+// ReplaceTailLines keeps the first headerCount lines intact and replaces everything
+// after them with newLines. Used by the program box to preserve pre-compose notice
+// lines while updating the live compose display below them.
+func (m *Model) ReplaceTailLines(headerCount int, rawLines []string, renderFn func(string) string) {
+	w := m.viewport.Width()
+	// Trim back to the header lines.
+	if headerCount < len(m.rawLines) {
+		m.rawLines = m.rawLines[:headerCount]
+		m.lines = m.lines[:headerCount]
+	}
+	for _, raw := range rawLines {
+		m.rawLines = append(m.rawLines, raw)
+		rendered := renderFn(raw)
+		if w > 0 {
+			rendered = lipgloss.NewStyle().MaxWidth(w).Render(rendered)
+		}
+		m.lines = append(m.lines, rendered)
+	}
+	m.spinnerLine = ""
+	m.setViewportContent(false)
+}
+
 // ClearSpinner removes the inline spinner line and rebuilds content.
 func (m *Model) ClearSpinner() {
 	if m.spinnerLine == "" {
@@ -207,11 +247,15 @@ func (m *Model) setViewportContent(scrollToBottom bool) {
 		content += "\n" + m.spinnerLine
 	}
 	atBottom := m.viewport.AtBottom()
+	savedOffset := m.viewport.YOffset()
 	m.viewport.SetContent(content)
 	if scrollToBottom || atBottom {
 		if m.viewport.Height() > 0 {
 			m.viewport.GotoBottom()
 		}
+	} else {
+		// Restore scroll position — SetContent resets the offset to 0.
+		m.viewport.SetYOffset(savedOffset)
 	}
 }
 

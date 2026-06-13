@@ -22,6 +22,15 @@ import (
 // TUIMode suppresses direct console output (stdout/stderr) when active.
 var TUIMode bool
 
+// suppressWriterKey is the context key holding the io.Writer to suppress from log output.
+type suppressWriterKey struct{}
+
+// WithSuppressWriter returns a context that suppresses log output to the given writer.
+// Messages still appear in other destinations (TUI panel, log file). Fatal messages are always shown.
+func WithSuppressWriter(ctx context.Context, w io.Writer) context.Context {
+	return context.WithValue(ctx, suppressWriterKey{}, w)
+}
+
 // logLineCh carries TUI-formatted log lines to the log panel.
 var logLineCh = make(chan string, 200)
 
@@ -132,7 +141,7 @@ var fileLogger *charmlog.Logger
 
 func init() {
 	LevelVar.Set(LevelNotice)
-	FileLevelVar.Set(LevelInfo) // Default file to Info (-v behavior)
+	FileLevelVar.Set(LevelTrace) // File always receives all logs regardless of console level
 
 	// Register global abort handler for console prompts
 	console.AbortHandler = func(ctx context.Context) {
@@ -145,15 +154,7 @@ func SetLevel(level slog.Level) {
 	if consoleLogger != nil {
 		consoleLogger.SetLevel(charmlog.Level(level))
 	}
-	// File level should be at least Info, or lower if Debug is requested
-	fileLevel := LevelInfo
-	if level < LevelInfo {
-		fileLevel = level
-	}
-	FileLevelVar.Set(fileLevel)
-	if fileLogger != nil {
-		fileLogger.SetLevel(charmlog.Level(fileLevel))
-	}
+	// File level is always Trace — flags only affect console output.
 }
 
 // SetColorProfile forces the color profile for the console logger.
@@ -161,6 +162,13 @@ func SetColorProfile(profile termenv.Profile) {
 	if consoleLogger != nil {
 		consoleLogger.SetColorProfile(colorprofile.Profile(profile))
 	}
+}
+
+// ConsoleWriter returns the io.Writer used by the console handler (os.Stderr).
+// Use this with WithSuppressWriter to prevent logSummary from double-printing
+// after the viewport has already dumped its final state to the terminal.
+func ConsoleWriter() io.Writer {
+	return os.Stderr
 }
 
 // SetConsoleOutput redirects the console logger output to the provided writer.
@@ -223,7 +231,7 @@ func NewLogger() *slog.Logger {
 		ReportTimestamp: true,
 	})
 	consoleLogger.SetStyles(buildConsoleStyles())
-	consoleHandler := &TagProcessorHandler{base: consoleLogger, mode: "ansi"}
+	consoleHandler := &TagProcessorHandler{base: consoleLogger, mode: "ansi", consoleWriter: wStderr}
 
 	// Configure File Handler (No Color)
 	stateDir := paths.GetStateDir()
@@ -305,15 +313,19 @@ func Display(ctx context.Context, msg any, args ...any) {
 			fmt.Fprintln(w, line)
 		}
 
-		// Output directly to terminal (stdout)
-		// IMPORTANT: Always use ToANSI for stdout to get ANSI colors, regardless of TUI mode
-		// Suppress based on TUIMode
+		// Output directly to terminal.
+		// Suppress in TUI mode (Bubble Tea owns the terminal).
 		if !TUIMode {
-			console.LockTerminal()
-			console.ClearSpinnerLine()
-			fmt.Println(console.ToConsoleANSI(line) + console.CodeReset)
-			console.ShowSpinnerFrame()
-			console.UnlockTerminal()
+			rendered := console.ToConsoleANSI(line) + console.CodeReset
+			if console.GlobalViewport != nil && console.GlobalViewport.IsActive() {
+				console.GlobalViewport.Append(rendered)
+			} else {
+				console.LockTerminal()
+				console.ClearSpinnerLine()
+				fmt.Println(rendered)
+				console.ShowSpinnerFrame()
+				console.UnlockTerminal()
+			}
 		}
 	}
 }

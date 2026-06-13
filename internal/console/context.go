@@ -38,3 +38,8 @@ func GetTUIWriter(ctx context.Context) io.Writer {
 	}
 	return nil
 }
+
+// ReplaceOutputLinesFn is set by the tui package to send a replaceOutputMsg to
+// the running program. compose calls this to do live in-place updates inside the
+// program box without cursor-movement ANSI sequences.
+var ReplaceOutputLinesFn func([]string)

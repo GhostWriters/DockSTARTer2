@@ -75,6 +75,9 @@ type ProgramBoxModel struct {
 	dialogType      DialogType
 	TitleBarFocus
 
+	// headerLineCount tracks lines present before the first replaceOutputMsg (-1 = not yet set).
+	headerLineCount int
+
 	// Scrollbar component
 	Scroll Scrollbar
 }
@@ -103,15 +106,16 @@ func newProgramBox(title, subtitle, command string) *ProgramBoxModel {
 		Foreground(styles.Console.GetForeground()))
 
 	m := &ProgramBoxModel{
-		id:       "programbox_dialog",
-		title:    title,
-		subtitle: subtitle,
-		command:  command,
-		sv:       sv,
-		Tasks:    []Task{},
-		focused:  true,
-		ctx:      context.Background(),
-		Scroll:   Scrollbar{ID: "programbox_dialog"},
+		id:              "programbox_dialog",
+		title:           title,
+		subtitle:        subtitle,
+		command:         command,
+		sv:              sv,
+		Tasks:           []Task{},
+		focused:         true,
+		ctx:             context.Background(),
+		Scroll:          Scrollbar{ID: "programbox_dialog"},
+		headerLineCount: -1,
 	}
 
 	// Initialize progress bar with default options
@@ -242,44 +246,12 @@ func (m *ProgramBoxModel) Init() tea.Cmd {
 
 				errChan := make(chan error, 1)
 
-				// Start reading output in a goroutine — sends lines to the viewport
+				// Start reading output in a goroutine — sends each line immediately to the viewport.
 				go func() {
-					ticker := time.NewTicker(100 * time.Millisecond)
-					defer ticker.Stop()
-
-					var lines []string
-					lineChan := make(chan string, 100)
-
-					// Separate goroutine to scan and feed the aggregator channel
-					go func() {
-						scanner := bufio.NewScanner(reader)
-						for scanner.Scan() {
-							lineChan <- scanner.Text()
-						}
-						close(lineChan)
-					}()
-
-					for {
-						select {
-						case line, ok := <-lineChan:
-							if !ok {
-								// Flush remaining lines before exiting
-								if len(lines) > 0 && program != nil {
-									program.Send(outputLinesMsg{lines: lines})
-								}
-								return
-							}
-							lines = append(lines, line)
-							// Auto-flush if buffer is large to keep it responsive
-							if len(lines) >= 50 && program != nil {
-								program.Send(outputLinesMsg{lines: lines})
-								lines = nil
-							}
-						case <-ticker.C:
-							if len(lines) > 0 && program != nil {
-								program.Send(outputLinesMsg{lines: lines})
-								lines = nil
-							}
+					scanner := bufio.NewScanner(reader)
+					for scanner.Scan() {
+						if program != nil {
+							program.Send(outputLinesMsg{lines: []string{scanner.Text()}})
 						}
 					}
 				}()
@@ -387,6 +359,16 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case outputLinesMsg:
 		m.sv.CommandRunning = true
 		m.sv.AppendLines(msg.lines, pbRenderFn())
+		if !m.done {
+			return m, nil
+		}
+
+	case replaceOutputMsg:
+		m.sv.CommandRunning = false
+		if m.headerLineCount < 0 {
+			m.headerLineCount = m.sv.TotalLineCount()
+		}
+		m.sv.ReplaceTailLines(m.headerLineCount, msg.lines, pbRenderFn())
 		if !m.done {
 			return m, nil
 		}

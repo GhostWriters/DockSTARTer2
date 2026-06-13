@@ -176,6 +176,11 @@ type (
 		lines []string
 	}
 
+	// replaceOutputMsg replaces all current output lines (used for live-updating displays)
+	replaceOutputMsg struct {
+		lines []string
+	}
+
 	// outputDoneMsg signals that output is complete
 	outputDoneMsg struct {
 		err error
