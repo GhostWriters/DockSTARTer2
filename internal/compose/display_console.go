@@ -201,7 +201,11 @@ func (p *consoleEventProcessor) Start(ctx context.Context, operation string) {
 		}
 	}
 
-	p.ticker = time.NewTicker(100 * time.Millisecond)
+	tickInterval := time.Duration(console.SpinnerSpeed) * time.Millisecond
+	if tickInterval <= 0 {
+		tickInterval = 100 * time.Millisecond
+	}
+	p.ticker = time.NewTicker(tickInterval)
 	go func() {
 		for {
 			select {
@@ -1042,11 +1046,11 @@ func (p *consoleEventProcessor) sectionRollupWithPropagation(ids []string, image
 	state := p.rollupState(ids, imageForID)
 	text, stTag, iconTag := sectionStatusText(state)
 	ic := p.icons()
-	spinnerOrCheck := ic.spinner
 	if state != rollupProcessing {
-		spinnerOrCheck = p.sectionRollupIcon(state)
+		icon = console.ToConsoleANSI(iconTag + p.sectionRollupIcon(state) + "{{[-]}}")
+	} else {
+		icon = p.activeSpinnerANSI(ic.spinner)
 	}
-	icon = console.ToConsoleANSI(iconTag + spinnerOrCheck + "{{[-]}}")
 	statusANSI = console.ToConsoleANSI(stTag + text + "{{[-]}}")
 	statusText = text
 	labelTag = stTag
@@ -1388,9 +1392,24 @@ type iconSet struct {
 
 func (p *consoleEventProcessor) icons() iconSet {
 	if p.asciiMode {
-		return iconSet{done: "+", error: "x", warn: "!", pending: "-", spinner: asciiSpinnerFrames[p.spinnerFrame%len(asciiSpinnerFrames)]}
+		spinnerChar := "-"
+		if console.SpinnerEnabled {
+			spinnerChar = asciiSpinnerFrames[p.spinnerFrame%len(asciiSpinnerFrames)]
+		}
+		return iconSet{done: "+", error: "x", warn: "!", pending: "-", spinner: spinnerChar}
 	}
-	return iconSet{done: "✓", error: "×", warn: "⚠", pending: "·", spinner: spinnerFrames[p.spinnerFrame]}
+	spinnerChar := "·"
+	if console.SpinnerEnabled {
+		spinnerChar = spinnerFrames[p.spinnerFrame]
+	}
+	return iconSet{done: "✓", error: "×", warn: "⚠", pending: "·", spinner: spinnerChar}
+}
+
+func (p *consoleEventProcessor) activeSpinnerANSI(char string) string {
+	if console.SpinnerEnabled {
+		return console.ToConsoleANSI("{{|DockerSpinner|}}" + char + "{{[-]}}")
+	}
+	return console.ToConsoleANSI("{{[::D]}}" + char + "{{[-]}}")
 }
 
 func (p *consoleEventProcessor) spinnerIcon(t *consoleTask) string {
@@ -1398,7 +1417,7 @@ func (p *consoleEventProcessor) spinnerIcon(t *consoleTask) string {
 
 	var s string
 	if t == nil {
-		s = console.ToConsoleANSI("{{|DockerSpinner|}}" + ic.spinner + "{{[-]}}")
+		s = p.activeSpinnerANSI(ic.spinner)
 	} else {
 		switch t.status {
 		case api.Done:
@@ -1411,7 +1430,7 @@ func (p *consoleEventProcessor) spinnerIcon(t *consoleTask) string {
 			if t.completed() {
 				s = console.ToConsoleANSI("{{|DockerMarkerDone|}}" + ic.done + "{{[-]}}")
 			} else {
-				s = console.ToConsoleANSI("{{|DockerSpinner|}}" + ic.spinner + "{{[-]}}")
+				s = p.activeSpinnerANSI(ic.spinner)
 			}
 		}
 	}
