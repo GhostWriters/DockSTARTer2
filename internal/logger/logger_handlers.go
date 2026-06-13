@@ -143,7 +143,7 @@ func (h *TagProcessorHandler) Handle(ctx context.Context, r slog.Record) error {
 		if ctx.Value(console.TUIWriterKey) != nil {
 			return nil
 		}
-		if isSuppressed(ctx, h.consoleWriter) {
+		if isSuppressed(ctx, h.consoleWriter) || isSuppressed(ctx, currentConsoleWriter) {
 			return nil
 		}
 	}

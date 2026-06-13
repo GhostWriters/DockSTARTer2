@@ -178,11 +178,15 @@ func SetColorProfile(profile termenv.Profile) {
 	}
 }
 
-// ConsoleWriter returns the io.Writer used by the console handler (os.Stderr).
+// currentConsoleWriter tracks where the console logger is currently writing.
+// Updated by SetConsoleOutput; used by ConsoleWriter() for accurate suppression.
+var currentConsoleWriter io.Writer = os.Stderr
+
+// ConsoleWriter returns the io.Writer currently used by the console handler.
 // Use this with WithSuppressWriter to prevent logSummary from double-printing
 // after the viewport has already dumped its final state to the terminal.
 func ConsoleWriter() io.Writer {
-	return os.Stderr
+	return currentConsoleWriter
 }
 
 // SetConsoleOutput redirects the console logger output to the provided writer.
@@ -193,9 +197,11 @@ func SetConsoleOutput(w io.Writer) func() {
 		return func() {}
 	}
 
+	currentConsoleWriter = w
 	consoleLogger.SetOutput(w)
 
 	return func() {
+		currentConsoleWriter = os.Stderr
 		// Restore to default stderr
 		consoleLogger.SetOutput(os.Stderr)
 	}
