@@ -19,7 +19,23 @@
       "Bash(go test:*)",
       "Bash(go clean:*)",
       "Bash(for theme in DockSTARTer Firehouse ZenFocus)",
-      "Bash(do echo \"=== $theme.ds2theme ===\")"
+      "Bash(do echo \"=== $theme.ds2theme ===\")",
+      "Bash(cat \"$\\(go env GOPATH\\)/pkg/mod/cache/download/sumdb\")",
+      "Bash(ssh dstest.lan \"pkill ds2_test; sleep 0.5; exit 0\")",
+      "Bash(scp -p \"C:\\\\Users\\\\CLHat\\\\Documents\\\\GitHub\\\\GhostWriters\\\\DockSTARTer2\\\\ds2_test\" clhatch@dstest.lan:~/ds2_test)",
+      "Bash(ssh dstest.lan \"chmod +x ~/ds2_test\")",
+      "Bash(ssh dstest.lan \"pkill -9 ds2_test; sleep 1\")",
+      "Bash(ssh dstest.lan \"chmod +x ~/ds2_test && ls -la ~/ds2_test\")",
+      "Bash(ssh dstest.lan \"ls -la ~/ds2_test\")",
+      "Bash(ssh dstest.lan \"ls -la ~/ds2_test && md5sum ~/ds2_test\")",
+      "Bash(ssh dstest.lan \"pkill -9 ds2_test; sleep 0.5; exit 0\")",
+      "Bash(ssh dstest.lan \"chmod +x ~/ds2_test && md5sum ~/ds2_test\")",
+      "PowerShell(ssh dstest.lan \"pkill ds2_test; sleep 0.5; exit 0\")",
+      "PowerShell(scp -p \"C:\\\\Users\\\\CLHat\\\\Documents\\\\GitHub\\\\GhostWriters\\\\DockSTARTer2\\\\ds2_test\" clhatch@dstest.lan:~/ds2_test)",
+      "PowerShell(ssh dstest.lan \"chmod +x ~/ds2_test\")",
+      "Bash(grep -rn \"Appearance\\\\|display_options\\\\|DisplayOptions\" /mnt/c/Users/CLHat/Documents/GitHub/GhostWriters/DockSTARTer2 --include=\"*.go\" -l 2>/dev/null | head -10)",
+      "Read(//mnt/c/Users/CLHat/Documents/GitHub/GhostWriters/**)",
+      "PowerShell(head -30)"
     ]
   }
 }
