@@ -8,9 +8,7 @@ import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 
-	dockerimage "github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/filters"
-	"github.com/docker/docker/client"
 )
 
 // Prune removes unused docker resources.
@@ -46,10 +44,7 @@ func Prune(ctx context.Context, assumeYes bool) error {
 
 	stopSpinner := console.StartSpinner()
 
-	// Pre-flight: list candidate images and their layers so we can detect failures.
-	candidates, candidateErr := buildImageCandidates(ctx, cli)
-
-	report := PruneReport{AsciiMode: asciiMode, Candidates: candidates}
+	report := PruneReport{AsciiMode: asciiMode}
 
 	// 1. Containers
 	cReport, err := cli.ContainersPrune(ctx, filters.NewArgs())
@@ -80,39 +75,14 @@ func Prune(ctx context.Context, assumeYes bool) error {
 		report.SpaceReclaimed += vReport.SpaceReclaimed
 	}
 
-	// 4. Images — remove per candidate so each error is attached to the right image.
-	if candidateErr != nil {
-		// Pre-flight failed; fall back to bulk prune.
-		logger.Warn(ctx, "Could not list images before pruning: %v", candidateErr)
-		iReport, err := cli.ImagesPrune(ctx, filters.NewArgs(filters.Arg("dangling", "false")))
-		if err != nil {
-			report.ImagesError = err
-		}
-		if iReport.ImagesDeleted != nil {
-			report.ImagesDeleted = iReport.ImagesDeleted
-			report.SpaceReclaimed += iReport.SpaceReclaimed
-		}
-	} else {
-		for i, c := range candidates {
-			if c.Ref == "" {
-				continue // skip untagged/dangling — no ref to remove by
-			}
-			deleted, err := cli.ImageRemove(ctx, c.Ref, dockerimage.RemoveOptions{
-				Force:         false,
-				PruneChildren: true,
-			})
-			if err != nil {
-				report.Candidates[i].Error = err
-			}
-			for _, d := range deleted {
-				report.ImagesDeleted = append(report.ImagesDeleted, d)
-				if d.Untagged != "" {
-					// Count space from image size — ImageRemove doesn't return SpaceReclaimed.
-					// Use the candidate's size if available.
-					report.SpaceReclaimed += uint64(candidates[i].Size)
-				}
-			}
-		}
+	// 4. Images (--all = include non-dangling, equivalent to docker image prune --all)
+	iReport, err := cli.ImagesPrune(ctx, filters.NewArgs(filters.Arg("dangling", "false")))
+	if err != nil {
+		report.ImagesError = err
+	}
+	if iReport.ImagesDeleted != nil {
+		report.ImagesDeleted = iReport.ImagesDeleted
+		report.SpaceReclaimed += iReport.SpaceReclaimed
 	}
 
 	stopSpinner()
@@ -124,45 +94,4 @@ func Prune(ctx context.Context, assumeYes bool) error {
 	}
 
 	return nil
-}
-
-// ImageCandidate holds a pre-flight image entry — the ref and its expected layer IDs.
-type ImageCandidate struct {
-	Ref    string   // e.g. "ghcr.io/autobrr/autobrr:latest"
-	Layers []string // sha256 layer IDs from ImageHistory
-	Size   int64    // image size in bytes (for SpaceReclaimed accounting)
-	Error  error    // set if ImageRemove failed for this specific image
-}
-
-// buildImageCandidates lists all dangling=false images and fetches their layer history.
-func buildImageCandidates(ctx context.Context, cli *client.Client) ([]ImageCandidate, error) {
-	imgs, err := cli.ImageList(ctx, dockerimage.ListOptions{
-		All:     false,
-		Filters: filters.NewArgs(filters.Arg("dangling", "false")),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("image list: %w", err)
-	}
-
-	var candidates []ImageCandidate
-	for _, img := range imgs {
-		refs := img.RepoTags
-		if len(refs) == 0 {
-			refs = []string{""} // dangling — include with empty ref
-		}
-		// Fetch layer history for the image ID (same for all tags of the same image).
-		history, err := cli.ImageHistory(ctx, img.ID)
-		var layers []string
-		if err == nil {
-			for _, h := range history {
-				if h.ID != "" && h.ID != "<missing>" {
-					layers = append(layers, h.ID)
-				}
-			}
-		}
-		for _, ref := range refs {
-			candidates = append(candidates, ImageCandidate{Ref: ref, Layers: layers, Size: img.Size})
-		}
-	}
-	return candidates, nil
 }

@@ -22,16 +22,21 @@ const (
 	pruneSpaceW              = 1
 	pruneSectionStatusW      = 13
 	pruneSectionChildIndentW = 2
+	pruneImageLabelTextW     = len("image: ")
+
+	// pruneImageColW: column where the 2*childIndent prefix before "image:" starts
+	pruneImageColW = pruneGlobalIndentW + pruneIconW + pruneSpaceW + pruneSectionStatusW
+	// pruneLayerPrefixW: indent for layer icon — sits under the "a" of "image:"
+	pruneLayerPrefixW = pruneImageColW + 2*pruneSectionChildIndentW + 2
 )
 
 var (
-	pruneGlobalIndent       = strings.Repeat(" ", pruneGlobalIndentW)
-	pruneSectionChildIndent = strings.Repeat(" ", pruneSectionChildIndentW)
+	pruneGlobalIndent       = strutil.Repeat(" ", pruneGlobalIndentW)
+	pruneSectionChildIndent = strutil.Repeat(" ", pruneSectionChildIndentW)
 )
 
 // PruneReport holds structured prune results for display.
 type PruneReport struct {
-	Candidates        []ImageCandidate
 	ImagesDeleted     []image.DeleteResponse
 	NetworksDeleted   []string
 	VolumesDeleted    []string
@@ -53,9 +58,7 @@ func (r *PruneReport) hasErrors() bool {
 type imageGroup struct {
 	ref       string
 	layers    []layerEntry
-	refStatus entryStatus // Untagged or Failed
-	refError  error       // specific error for this image (from ImageRemove)
-	anyFailed bool
+	refStatus entryStatus
 }
 
 type layerEntry struct {
@@ -111,11 +114,9 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 	errorIconANSI := console.ToConsoleANSI(errorIcon)
 
 	untaggedStatus := console.ToConsoleANSI("{{|DockerStatusFinal|}}Untagged{{[-]}}")
-	deletedStatus := console.ToConsoleANSI("{{|DockerStatusFinal|}}Deleted{{[-]}}")
 	removedStatus := console.ToConsoleANSI("{{|DockerStatusFinal|}}Removed{{[-]}}")
 	errorStatus := console.ToConsoleANSI("{{|DockerStatusFail|}}Error{{[-]}}")
 	untaggedPad := strutil.Repeat(" ", pruneSectionStatusW-len("Untagged"))
-	deletedPad := strutil.Repeat(" ", pruneSectionStatusW-len("Deleted"))
 	removedPad := strutil.Repeat(" ", pruneSectionStatusW-len("Removed"))
 	errorPad := strutil.Repeat(" ", pruneSectionStatusW-len("Error"))
 
@@ -144,123 +145,19 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 	}
 
 	// ── build image groups ───────────────────────────────────────────────────
-	// Index what was actually deleted.
-	untaggedSet := make(map[string]bool)
-	deletedSet := make(map[string]bool)
+	var groups []imageGroup
+	var current *imageGroup
 	for _, item := range r.ImagesDeleted {
 		if item.Untagged != "" {
-			untaggedSet[item.Untagged] = true
+			groups = append(groups, imageGroup{ref: item.Untagged, refStatus: statusRemoved})
+			current = &groups[len(groups)-1]
 		}
 		if item.Deleted != "" {
-			deletedSet[item.Deleted] = true
-		}
-	}
-
-	var groups []imageGroup
-
-	if len(r.Candidates) > 0 {
-		// Build a map from ref → deleted layers (from actual prune output).
-		// Layers in ImagesDeleted are grouped: Untagged entries mark image boundaries,
-		// Deleted entries following belong to that image.
-		refLayers := make(map[string][]string)
-		var curRef string
-		for _, item := range r.ImagesDeleted {
-			if item.Untagged != "" {
-				curRef = item.Untagged
-			}
-			if item.Deleted != "" && curRef != "" {
-				refLayers[curRef] = append(refLayers[curRef], item.Deleted)
-			}
-		}
-
-		// Use pre-flight candidate refs; layers come from actual deleted output.
-		// Candidate layers (from ImageHistory) are used only for failure detection.
-		candidateLayerSet := make(map[string]map[string]bool)
-		for _, c := range r.Candidates {
-			if len(c.Layers) > 0 {
-				s := make(map[string]bool, len(c.Layers))
-				for _, l := range c.Layers {
-					s[l] = true
-				}
-				candidateLayerSet[c.Ref] = s
-			}
-		}
-
-		for _, c := range r.Candidates {
-			ref := c.Ref
-			refStatus := statusRemoved
-			if !untaggedSet[ref] {
-				refStatus = statusFailed
-			}
-
-			// Layers: use what was actually deleted for this ref.
-			deleted := refLayers[ref]
-			// Detect failed layers: candidate history layers not in deleted set.
-			anyFailed := refStatus == statusFailed
-			var layerEntries []layerEntry
-			for _, lid := range deleted {
-				short := strings.TrimPrefix(lid, "sha256:")
-				if len(short) > 12 {
-					short = short[:12]
-				}
-				layerEntries = append(layerEntries, layerEntry{id: short, status: statusRemoved})
-			}
-			// Check candidate layers against deleted to find failures.
-			if cls := candidateLayerSet[ref]; len(cls) > 0 {
-				for lid := range cls {
-					if !deletedSet[lid] {
-						anyFailed = true
-						break
-					}
-				}
-			}
-
-			groups = append(groups, imageGroup{
-				ref:       ref,
-				layers:    layerEntries,
-				refStatus: refStatus,
-				refError:  c.Error,
-				anyFailed: anyFailed,
-			})
-		}
-		// Also include anything deleted that wasn't in candidates (dangling etc).
-		inCandidates := make(map[string]bool, len(r.Candidates))
-		for _, c := range r.Candidates {
-			inCandidates[c.Ref] = true
-		}
-		var danglingCurrent *imageGroup
-		for _, item := range r.ImagesDeleted {
-			if item.Untagged != "" && !inCandidates[item.Untagged] {
-				groups = append(groups, imageGroup{ref: item.Untagged, refStatus: statusRemoved})
-				danglingCurrent = &groups[len(groups)-1]
-			}
-			if item.Deleted != "" && danglingCurrent != nil {
-				short := strings.TrimPrefix(item.Deleted, "sha256:")
-				if len(short) > 12 {
-					short = short[:12]
-				}
-				danglingCurrent.layers = append(danglingCurrent.layers, layerEntry{id: short, status: statusRemoved})
-			}
-		}
-	} else {
-		// No candidates — fall back to deleted-only view (original behaviour).
-		var current *imageGroup
-		for _, item := range r.ImagesDeleted {
-			if item.Untagged != "" {
-				groups = append(groups, imageGroup{ref: item.Untagged, refStatus: statusRemoved})
+			if current == nil {
+				groups = append(groups, imageGroup{ref: ""})
 				current = &groups[len(groups)-1]
 			}
-			if item.Deleted != "" {
-				if current == nil {
-					groups = append(groups, imageGroup{ref: ""})
-					current = &groups[len(groups)-1]
-				}
-				short := strings.TrimPrefix(item.Deleted, "sha256:")
-				if len(short) > 12 {
-					short = short[:12]
-				}
-				current.layers = append(current.layers, layerEntry{id: short, status: statusRemoved})
-			}
+			current.layers = append(current.layers, layerEntry{id: item.Deleted, status: statusRemoved})
 		}
 	}
 
@@ -328,10 +225,14 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 			}
 		}
 
-		imageLabel := strings.Repeat(" ", 2*pruneSectionChildIndentW) +
+		imageLabel := strutil.Repeat(" ", 2*pruneSectionChildIndentW) +
 			console.ToConsoleANSI("{{|DockerMarkerDone|}}image{{[-]}}{{|DockerColon|}}:{{[-]}} ")
-		imageLabelPlainW := 2*pruneSectionChildIndentW + len("image: ")
-		layerIndent := strings.Repeat(" ", imageLabelPlainW+pruneSectionChildIndentW)
+
+		layerIconIndent := strutil.Repeat(" ", pruneLayerPrefixW)
+
+		// Compact layer status labels (no full status-column padding — matches compose layer style).
+		layerDeletedANSI := console.ToConsoleANSI("{{|DockerStatusFinal|}}Deleted   {{[-]}}")
+		layerFailedANSI  := console.ToConsoleANSI("{{|DockerStatusFail|}}Failed    {{[-]}}")
 
 		renderImageGroup := func(g imageGroup) {
 			ref := g.ref
@@ -353,42 +254,34 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 				imageLabel + refANSI + refPad + layerCount
 			add(imgLine)
 
-			// Layer rows — Deleted or Error.
-			for _, l := range g.layers {
-				var lIcon, lStatus, lPad string
-				if l.status == statusFailed {
-					lIcon, lStatus, lPad = errorIconANSI, errorStatus, errorPad
-				} else {
-					lIcon, lStatus, lPad = doneIconANSI, deletedStatus, deletedPad
+			// Layer rows — only shown in verbose mode, compact dim style like compose.
+			if console.GlobalVerbose {
+				for _, l := range g.layers {
+					var lIcon, lStatus string
+					if l.status == statusFailed {
+						lIcon, lStatus = errorIconANSI, layerFailedANSI
+					} else {
+						lIcon, lStatus = doneIconANSI, layerDeletedANSI
+					}
+					lid := strings.TrimPrefix(l.id, "sha256:")
+					if len(lid) > 12 {
+						lid = lid[:12]
+					}
+				add(layerIconIndent + console.CodeDim + lIcon + " " + lStatus +
+						console.ToConsoleANSI("{{[::D]}}"+lid+"{{[-]}}") + console.CodeDimOff)
 				}
-				add(pruneGlobalIndent + lIcon + " " + lStatus + console.CodeReset + lPad +
-					layerIndent + console.ToConsoleANSI("{{[::D]}}"+l.id+"{{[-]}}"))
 			}
 		}
 
-		// Determine services: section status — Error if API error or any group failed.
-		anyGroupFailed := r.ImagesError != nil
-		if !anyGroupFailed {
-			for _, g := range groups {
-				if g.anyFailed {
-					anyGroupFailed = true
-					break
-				}
-			}
-		}
-		add(sectionHeader("services", anyGroupFailed))
+		add(sectionHeader("services", r.ImagesError != nil))
 		for _, g := range groups {
 			svcs := imageServices[g.ref]
-			svcStatus := statusRemoved
-			if g.anyFailed {
-				svcStatus = statusFailed
-			}
 			if len(svcs) > 0 {
 				for _, svc := range svcs {
-					add(childRow(svc+":", "{{|App|}}", svcStatus))
+					add(childRow(svc+":", "{{|App|}}", statusRemoved))
 				}
 			} else {
-				add(childRow("<Unknown>:", "{{[::D]}}", svcStatus))
+				add(childRow("<Unknown>:", "{{[::D]}}", statusRemoved))
 			}
 			renderImageGroup(g)
 		}
@@ -428,15 +321,6 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 
 	// ── error notices ─────────────────────────────────────────────────────────
 	var errs []string
-	for _, g := range groups {
-		if g.refError != nil {
-			ref := g.ref
-			if ref == "" {
-				ref = "<dangling>"
-			}
-			errs = append(errs, fmt.Sprintf("%s: %s", ref, g.refError.Error()))
-		}
-	}
 	if r.ImagesError != nil {
 		errs = append(errs, "images: "+r.ImagesError.Error())
 	}
