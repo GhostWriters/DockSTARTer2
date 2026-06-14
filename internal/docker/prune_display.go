@@ -21,6 +21,8 @@ const (
 	pruneImageColW = GlobalIndentW + IconW + SpaceW + SectionStatusW
 	// pruneLayerPrefixW: indent for layer icon — sits under the "a" of "image:"
 	pruneLayerPrefixW = pruneImageColW + 2*SectionChildIndentW + 2
+	// pruneLayerStatusW: matches compose layerStatusW so columns align when -p and -c are combined
+	pruneLayerStatusW = LayerStatusW
 )
 
 // PruneReport holds structured prune results for display.
@@ -104,9 +106,9 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 	untaggedStatus := console.ToConsoleANSI("{{|DockerStatusFinal|}}Untagged{{[-]}}")
 	removedStatus := console.ToConsoleANSI("{{|DockerStatusFinal|}}Removed{{[-]}}")
 	errorStatus := console.ToConsoleANSI("{{|DockerStatusFail|}}Error{{[-]}}")
-	untaggedPad := strutil.Repeat(" ", SectionStatusTextW-len("Untagged"))
-	removedPad := strutil.Repeat(" ", SectionStatusTextW-len("Removed"))
-	errorPad := strutil.Repeat(" ", SectionStatusTextW-len("Error"))
+	untaggedPad := strutil.Repeat(" ", SectionStatusW-len("Untagged"))
+	removedPad := strutil.Repeat(" ", SectionStatusW-len("Removed"))
+	errorPad := strutil.Repeat(" ", SectionStatusW-len("Error"))
 
 	iconStatus := func(s entryStatus) (icon, status, pad string) {
 		if s == statusFailed {
@@ -218,9 +220,10 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 
 		layerIconIndent := strutil.Repeat(" ", pruneLayerPrefixW)
 
-		// Compact layer status labels (no full status-column padding — matches compose layer style).
-		layerDeletedANSI := console.ToConsoleANSI("{{|DockerStatusFinal|}}Deleted   {{[-]}}")
-		layerFailedANSI  := console.ToConsoleANSI("{{|DockerStatusFail|}}Failed    {{[-]}}")
+		layerDeletedPad := strutil.Repeat(" ", pruneLayerStatusW-len("Deleted"))
+		layerFailedPad  := strutil.Repeat(" ", pruneLayerStatusW-len("Failed"))
+		layerDeletedANSI := console.ToConsoleANSI("{{|DockerStatusFinal|}}Deleted{{[-]}}") + layerDeletedPad
+		layerFailedANSI  := console.ToConsoleANSI("{{|DockerStatusFail|}}Failed{{[-]}}") + layerFailedPad
 
 		renderImageGroup := func(g imageGroup) {
 			ref := g.ref
@@ -255,7 +258,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 					if len(lid) > 12 {
 						lid = lid[:12]
 					}
-				add(layerIconIndent + console.CodeDim + lIcon + " " + lStatus +
+				add(layerIconIndent + console.CodeDim + lIcon + " " + lStatus + " " +
 						console.ToConsoleANSI("{{[::D]}}"+lid+"{{[-]}}") + console.CodeDimOff)
 				}
 			}

@@ -44,7 +44,7 @@ const (
 	layerPrefixW         = dockerlayout.LayerPrefixW
 
 	// Compose-specific constants.
-	layerStatusW      = 11 // max width of any abbreviated layer status ("Downloading")
+	layerStatusW      = dockerlayout.LayerStatusW // max width of any abbreviated layer status ("Downloading")
 	sizeColW          = 8  // width of one fixedSize() value
 	sizeSepW          = 1  // width of "/" between current/total sizes
 	imageSizesColBase = globalIndentW + iconW + spaceW + sectionStatusW + imageLabelW
