@@ -52,8 +52,10 @@ DockSTARTer2.exe
 /scratch/
 
 # Local test binaries
+DockSTARTer2
 ds2_test
 ds2_test_linux
 ds2_linux
 ds2_current
 ds2_prev
+
