@@ -126,7 +126,8 @@ type consoleEventProcessor struct {
 	numLines     int // lines written in last render
 	started      bool
 	spinnerFrame int
-	maxLineWidth int // widest visible line seen so far; grows but never shrinks
+	maxLineWidth  int // widest visible line seen so far; grows but never shrinks
+	maxTimerWidth int // widest timer string seen so far; grows but never shrinks
 	noViewport    bool            // when true, skip GlobalViewport activation (e.g. running inside program box)
 	updateFn      func([]string) // called each render tick in noViewport mode instead of writing to out
 	lastSentLines []string       // last lines sent via updateFn; skip if unchanged
@@ -560,6 +561,7 @@ type timerEntry struct {
 // attachTimers right-aligns elapsed timers on lines.
 // timers is parallel to lines: non-nil task entries get a timer appended.
 // The column is set by the widest visible line seen so far (maxLineWidth grows, never shrinks).
+// Timer strings are left-padded to the widest timer in this batch so they align within the column.
 func (p *consoleEventProcessor) attachTimers(lines []string, timers []timerEntry) []string {
 	// Update maxLineWidth if any line is wider.
 	for _, line := range lines {
@@ -567,6 +569,29 @@ func (p *consoleEventProcessor) attachTimers(lines []string, timers []timerEntry
 			p.maxLineWidth = w
 		}
 	}
+	// Pre-compute timer strings and find the widest.
+	timerStrs := make([]string, len(timers))
+	maxTimerW := 0
+	for i, e := range timers {
+		if e.task == nil {
+			continue
+		}
+		s := elapsedStr(e.task)
+		timerStrs[i] = s
+		if w := len(s); w > maxTimerW {
+			maxTimerW = w
+		}
+	}
+	// Also factor in the overall summary timer width so it aligns with body timers.
+	if !p.startTime.IsZero() {
+		if w := len(elapsedFromTime(p.startTime)); w > maxTimerW {
+			maxTimerW = w
+		}
+	}
+	if maxTimerW > p.maxTimerWidth {
+		p.maxTimerWidth = maxTimerW
+	}
+	maxTimerW = p.maxTimerWidth
 	col := p.maxLineWidth + 2
 	out := make([]string, len(lines))
 	for i, line := range lines {
@@ -588,7 +613,9 @@ func (p *consoleEventProcessor) attachTimers(lines []string, timers []timerEntry
 		default: // timerLayer
 			styleTag = "{{[::D]}}"
 		}
-		timer := console.ToConsoleANSI(styleTag + elapsedStr(e.task) + "{{[-]}}")
+		s := timerStrs[i]
+		s = strutil.Repeat(" ", maxTimerW-len(s)) + s
+		timer := console.ToConsoleANSI(styleTag + s + "{{[-]}}")
 		out[i] = line + pad + timer
 	}
 	return out
@@ -614,7 +641,7 @@ func (p *consoleEventProcessor) prependSummary(lines []string, timers []timerEnt
 }
 
 // withSummaryTimer appends a right-aligned overall elapsed timer to the summary line.
-// Uses the same column as attachTimers (maxLineWidth + 2) so all timers align.
+// Uses the same column and timer width as attachTimers so all timers align.
 func (p *consoleEventProcessor) withSummaryTimer(summary string) string {
 	if p.startTime.IsZero() {
 		return summary
@@ -623,6 +650,10 @@ func (p *consoleEventProcessor) withSummaryTimer(summary string) string {
 	visible := utf8.RuneCountInString(console.Strip(summary))
 	pad := strutil.Repeat(" ", col-visible)
 	elapsed := elapsedFromTime(p.startTime)
+	// Pad to maxTimerWidth so summary timer aligns with body timers.
+	if w := len(elapsed); w < p.maxTimerWidth {
+		elapsed = strutil.Repeat(" ", p.maxTimerWidth-w) + elapsed
+	}
 	timer := console.ToConsoleANSI("{{[yellow::B]}}" + elapsed + "{{[-]}}")
 	return summary + pad + timer
 }
@@ -1610,12 +1641,23 @@ func volumeFinalStatuses(command string) []string {
 	}
 }
 
-func elapsedFromTime(start time.Time) string {
-	secs := time.Since(start).Seconds()
-	if secs < 10 {
-		return fmt.Sprintf(" %.1fs", secs)
+const elapsedShortFmt = "5.0s"    // "9.1s" / "42.7s"
+// const elapsedLongFmt = "4m05.0s" // "1m02.3s" (minutes + zero-padded seconds)
+const elapsedLongFmt = elapsedShortFmt // seconds only — FormatDuration uses total seconds for "5" when no "4" token present
+
+// formatElapsed formats a duration in seconds.
+// < 60s → "9.1s" / "42.7s", >= 60s → "1m02.3s"
+// Truncates to 100ms precision before branching to avoid e.g. 59.95s → "60.0s" with short format.
+func formatElapsed(secs float64) string {
+	d := (time.Duration(secs*float64(time.Second)) / (100 * time.Millisecond)) * (100 * time.Millisecond)
+	if d < 60*time.Second {
+		return strutil.FormatDuration(d, elapsedShortFmt)
 	}
-	return fmt.Sprintf("%.1fs", secs)
+	return strutil.FormatDuration(d, elapsedLongFmt)
+}
+
+func elapsedFromTime(start time.Time) string {
+	return formatElapsed(time.Since(start).Seconds())
 }
 
 func elapsedStr(t *consoleTask) string {
@@ -1623,15 +1665,7 @@ func elapsedStr(t *consoleTask) string {
 	if t.completed() && !t.endTime.IsZero() {
 		end = t.endTime
 	}
-	secs := end.Sub(t.startTime).Seconds()
-	// Left-align integer part so decimal points stay aligned:
-	// < 10s → " 1.2s", < 100s → "12.3s", >= 100s → "123.4s" (expands as needed)
-	switch {
-	case secs < 10:
-		return fmt.Sprintf(" %.1fs", secs)
-	default:
-		return fmt.Sprintf("%.1fs", secs)
-	}
+	return formatElapsed(end.Sub(t.startTime).Seconds())
 }
 
 // serviceTimerTask returns a synthetic consoleTask for a service timer:
