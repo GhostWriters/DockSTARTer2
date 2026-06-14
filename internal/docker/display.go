@@ -16,6 +16,7 @@ const (
 	SectionHeaderIndent  = dockerlayout.SectionHeaderIndent
 	ImageLabelW          = dockerlayout.ImageLabelW
 	LayerPrefixW         = dockerlayout.LayerPrefixW
+	LayerStatusW         = dockerlayout.LayerStatusW
 )
 
 var (

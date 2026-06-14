@@ -19,6 +19,7 @@ const (
 	SectionChildIndentW  = 2  // extra indent per nesting level (matches YAML convention)
 	ImageLabelTextW      = 7  // visible width of "image: "
 	TimerGutterW         = 1  // spaces between rightmost content column and timer
+	LayerStatusW         = 11 // max layer status width ("Downloading"); shared so prune and compose layer columns align
 
 	// Derived column positions.
 	SectionHeaderIndent = GlobalIndentW + IconW + SpaceW + SectionStatusW

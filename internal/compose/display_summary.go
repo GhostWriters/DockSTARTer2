@@ -21,16 +21,17 @@ func (p *consoleEventProcessor) buildSummaryLine() string {
 	netCount := len(p.networkIDs)
 	volCount := len(p.volumeIDs)
 
-	isImageID := make(map[string]bool, len(p.imageIDs))
-	for _, id := range p.imageIDs {
-		isImageID[id] = true
+	isImageOrder := make(map[string]bool, len(p.imageOrder))
+	for _, id := range p.imageOrder {
+		isImageOrder[id] = true
 	}
-	layerCount := 0
+	seenLayers := make(map[string]bool)
 	for _, id := range p.ids {
-		if t := p.tasks[id]; t != nil && t.parentID != "" && isImageID[t.parentID] {
-			layerCount++
+		if t := p.tasks[id]; t != nil && t.parentID != "" && isImageOrder[t.parentID] {
+			seenLayers[id] = true
 		}
 	}
+	layerCount := len(seenLayers)
 
 	var parts []string
 	if svcCount > 0 {

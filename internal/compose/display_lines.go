@@ -1,6 +1,7 @@
 package compose
 
 import (
+	"fmt"
 	"unicode/utf8"
 
 	"DockSTARTer2/internal/console"
@@ -149,19 +150,23 @@ func (p *consoleEventProcessor) buildImageLine(imgName string, t *consoleTask, l
 	imgStr := styleImage(imgName)
 	imgNameW := utf8.RuneCountInString(console.Strip(imgStr))
 	imgPad := strutil.Repeat(" ", maxImgNameW-imgNameW)
+	layerCount := ""
+	if len(layers) > 0 {
+		layerCount = console.ToConsoleANSI(fmt.Sprintf(" {{[::D]}}(%d %s){{[-]}}", len(layers), plural(len(layers), "layer", "layers")))
+	}
 	sizes, bar := p.buildImageSizesAndBar(layers, maxImgNameW, termW)
 	if t == nil {
 		cachedIcon := console.ToConsoleANSI("{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}}")
 		cachedStatus := console.ToConsoleANSI("{{|DockerStatusSuccess|}}Cached{{[-]}}")
 		statusPad := strutil.Repeat(" ", sectionStatusW-len("Cached"))
-		return globalIndent + cachedIcon + " " + cachedStatus + console.CodeReset + statusPad + imageLabel + imgStr + imgPad + sizes + bar
+		return globalIndent + cachedIcon + " " + cachedStatus + console.CodeReset + statusPad + imageLabel + imgStr + imgPad + layerCount + sizes + bar
 	}
 	worst := p.worstImageStatus(imgName)
 	icon := p.propagatedIcon(t, worst)
 	statusText := abbreviateStatus(t.text)
 	statusANSI := console.ToConsoleANSI(imageStatusTag(t.status, t.text, p.command))
 	statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
-	return globalIndent + icon + " " + statusANSI + console.CodeReset + statusPad + imageLabel + imgStr + imgPad + sizes + bar
+	return globalIndent + icon + " " + statusANSI + console.CodeReset + statusPad + imageLabel + imgStr + imgPad + layerCount + sizes + bar
 }
 
 func (p *consoleEventProcessor) buildImageSizesAndBar(layers []*consoleTask, maxImgNameW int, termW int) (string, string) {
