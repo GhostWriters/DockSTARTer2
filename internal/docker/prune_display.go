@@ -17,22 +17,10 @@ import (
 )
 
 const (
-	pruneGlobalIndentW       = 1
-	pruneIconW               = 1
-	pruneSpaceW              = 1
-	pruneSectionStatusW      = 13
-	pruneSectionChildIndentW = 2
-	pruneImageLabelTextW     = len("image: ")
-
 	// pruneImageColW: column where the 2*childIndent prefix before "image:" starts
-	pruneImageColW = pruneGlobalIndentW + pruneIconW + pruneSpaceW + pruneSectionStatusW
+	pruneImageColW = GlobalIndentW + IconW + SpaceW + SectionStatusW
 	// pruneLayerPrefixW: indent for layer icon — sits under the "a" of "image:"
-	pruneLayerPrefixW = pruneImageColW + 2*pruneSectionChildIndentW + 2
-)
-
-var (
-	pruneGlobalIndent       = strutil.Repeat(" ", pruneGlobalIndentW)
-	pruneSectionChildIndent = strutil.Repeat(" ", pruneSectionChildIndentW)
+	pruneLayerPrefixW = pruneImageColW + 2*SectionChildIndentW + 2
 )
 
 // PruneReport holds structured prune results for display.
@@ -116,9 +104,9 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 	untaggedStatus := console.ToConsoleANSI("{{|DockerStatusFinal|}}Untagged{{[-]}}")
 	removedStatus := console.ToConsoleANSI("{{|DockerStatusFinal|}}Removed{{[-]}}")
 	errorStatus := console.ToConsoleANSI("{{|DockerStatusFail|}}Error{{[-]}}")
-	untaggedPad := strutil.Repeat(" ", pruneSectionStatusW-len("Untagged"))
-	removedPad := strutil.Repeat(" ", pruneSectionStatusW-len("Removed"))
-	errorPad := strutil.Repeat(" ", pruneSectionStatusW-len("Error"))
+	untaggedPad := strutil.Repeat(" ", SectionStatusTextW-len("Untagged"))
+	removedPad := strutil.Repeat(" ", SectionStatusTextW-len("Removed"))
+	errorPad := strutil.Repeat(" ", SectionStatusTextW-len("Error"))
 
 	iconStatus := func(s entryStatus) (icon, status, pad string) {
 		if s == statusFailed {
@@ -132,16 +120,16 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 
 	sectionHeader := func(label string, hasErr bool) string {
 		if hasErr {
-			return pruneGlobalIndent + errorIconANSI + " " + errorStatus + console.CodeReset + errorPad +
+			return GlobalIndent + errorIconANSI + " " + errorStatus + console.CodeReset + errorPad +
 				console.ToConsoleANSI("{{[white::B]}}"+label+"{{[-]}}{{|DockerColon|}}:{{[-]}}")
 		}
-		return pruneGlobalIndent + doneIconANSI + " " + removedStatus + console.CodeReset + removedPad +
+		return GlobalIndent + doneIconANSI + " " + removedStatus + console.CodeReset + removedPad +
 			console.ToConsoleANSI("{{[white::B]}}"+label+"{{[-]}}{{|DockerColon|}}:{{[-]}}")
 	}
 	childRow := func(name, colorTag string, s entryStatus) string {
 		icon, status, pad := iconStatus(s)
-		return pruneGlobalIndent + icon + " " + status + console.CodeReset + pad +
-			pruneSectionChildIndent + console.ToConsoleANSI(colorTag+name+"{{[-]}}")
+		return GlobalIndent + icon + " " + status + console.CodeReset + pad +
+			SectionChildIndent + console.ToConsoleANSI(colorTag+name+"{{[-]}}")
 	}
 
 	// ── build image groups ───────────────────────────────────────────────────
@@ -191,22 +179,22 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 
 	var headerParts []string
 	if totalServices > 0 {
-		headerParts = append(headerParts, fmt.Sprintf("{{|App|}}%d %s{{[-]}}", totalServices, prunePlural(totalServices, "service", "services")))
+		headerParts = append(headerParts, fmt.Sprintf("{{|App|}}%d %s{{[-]}}", totalServices, Plural(totalServices, "service", "services")))
 	}
 	if totalImages > 0 {
-		headerParts = append(headerParts, fmt.Sprintf("{{|DockerImage|}}%d %s{{[-]}}", totalImages, prunePlural(totalImages, "image", "images")))
+		headerParts = append(headerParts, fmt.Sprintf("{{|DockerImage|}}%d %s{{[-]}}", totalImages, Plural(totalImages, "image", "images")))
 	}
 	if totalLayers > 0 {
-		headerParts = append(headerParts, fmt.Sprintf("{{[::D]}}%d %s{{[-]}}", totalLayers, prunePlural(totalLayers, "layer", "layers")))
+		headerParts = append(headerParts, fmt.Sprintf("{{[::D]}}%d %s{{[-]}}", totalLayers, Plural(totalLayers, "layer", "layers")))
 	}
 	if len(r.NetworksDeleted) > 0 {
-		headerParts = append(headerParts, fmt.Sprintf("{{|App|}}%d %s{{[-]}}", len(r.NetworksDeleted), prunePlural(len(r.NetworksDeleted), "network", "networks")))
+		headerParts = append(headerParts, fmt.Sprintf("{{|App|}}%d %s{{[-]}}", len(r.NetworksDeleted), Plural(len(r.NetworksDeleted), "network", "networks")))
 	}
 	if len(r.VolumesDeleted) > 0 {
-		headerParts = append(headerParts, fmt.Sprintf("{{|App|}}%d %s{{[-]}}", len(r.VolumesDeleted), prunePlural(len(r.VolumesDeleted), "volume", "volumes")))
+		headerParts = append(headerParts, fmt.Sprintf("{{|App|}}%d %s{{[-]}}", len(r.VolumesDeleted), Plural(len(r.VolumesDeleted), "volume", "volumes")))
 	}
 	if len(r.ContainersDeleted) > 0 {
-		headerParts = append(headerParts, fmt.Sprintf("{{|App|}}%d %s{{[-]}}", len(r.ContainersDeleted), prunePlural(len(r.ContainersDeleted), "container", "containers")))
+		headerParts = append(headerParts, fmt.Sprintf("{{|App|}}%d %s{{[-]}}", len(r.ContainersDeleted), Plural(len(r.ContainersDeleted), "container", "containers")))
 	}
 	if len(headerParts) > 0 {
 		add(console.ToConsoleANSI(fmt.Sprintf("{{|RunningCommand|}}prune:{{[-]}} %s", strings.Join(headerParts, ", "))))
@@ -220,12 +208,12 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 			if ref == "" {
 				ref = "<dangling>"
 			}
-			if w := utf8.RuneCountInString(console.Strip(styleImageRef(ref))); w > maxRefW {
+			if w := utf8.RuneCountInString(console.Strip(StyleImageRef(ref))); w > maxRefW {
 				maxRefW = w
 			}
 		}
 
-		imageLabel := strutil.Repeat(" ", 2*pruneSectionChildIndentW) +
+		imageLabel := strutil.Repeat(" ", 2*SectionChildIndentW) +
 			console.ToConsoleANSI("{{|DockerMarkerDone|}}image{{[-]}}{{|DockerColon|}}:{{[-]}} ")
 
 		layerIconIndent := strutil.Repeat(" ", pruneLayerPrefixW)
@@ -239,9 +227,9 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 			if ref == "" {
 				ref = "<dangling>"
 			}
-			refANSI := styleImageRef(ref)
+			refANSI := StyleImageRef(ref)
 			refPad := strutil.Repeat(" ", maxRefW-utf8.RuneCountInString(console.Strip(refANSI)))
-			layerCount := console.ToConsoleANSI(fmt.Sprintf(" {{[::D]}}(%d %s){{[-]}}", len(g.layers), prunePlural(len(g.layers), "layer", "layers")))
+			layerCount := console.ToConsoleANSI(fmt.Sprintf(" {{[::D]}}(%d %s){{[-]}}", len(g.layers), Plural(len(g.layers), "layer", "layers")))
 
 			// Image ref row — Untagged or Error.
 			var imgIcon, imgStatus, imgPad string
@@ -250,7 +238,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 			} else {
 				imgIcon, imgStatus, imgPad = doneIconANSI, untaggedStatus, untaggedPad
 			}
-			imgLine := pruneGlobalIndent + imgIcon + " " + imgStatus + console.CodeReset + imgPad +
+			imgLine := GlobalIndent + imgIcon + " " + imgStatus + console.CodeReset + imgPad +
 				imageLabel + refANSI + refPad + layerCount
 			add(imgLine)
 
@@ -274,6 +262,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 		}
 
 		add(sectionHeader("services", r.ImagesError != nil))
+		unknownCount := 0
 		for _, g := range groups {
 			svcs := imageServices[g.ref]
 			if len(svcs) > 0 {
@@ -281,7 +270,8 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 					add(childRow(svc+":", "{{|App|}}", statusRemoved))
 				}
 			} else {
-				add(childRow("<Unknown>:", "{{[::D]}}", statusRemoved))
+				unknownCount++
+				add(childRow(fmt.Sprintf("<Unknown%d>:", unknownCount), "{{|App|}}", statusRemoved))
 			}
 			renderImageGroup(g)
 		}
@@ -336,16 +326,3 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 	return lines, errs
 }
 
-func styleImageRef(ref string) string {
-	if idx := strings.LastIndex(ref, ":"); idx >= 0 {
-		return console.ToConsoleANSI("{{|DockerImage|}}" + ref[:idx] + "{{[-]}}{{|DockerTag|}}:" + ref[idx+1:] + "{{[-]}}")
-	}
-	return console.ToConsoleANSI("{{|DockerImage|}}" + ref + "{{[-]}}")
-}
-
-func prunePlural(n int, singular, pluralForm string) string {
-	if n == 1 {
-		return singular
-	}
-	return pluralForm
-}
