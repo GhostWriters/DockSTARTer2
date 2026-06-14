@@ -1642,8 +1642,8 @@ func volumeFinalStatuses(command string) []string {
 }
 
 const elapsedShortFmt = "5.0s"    // "9.1s" / "42.7s"
-// const elapsedLongFmt = "4m05.0s" // "1m02.3s" (minutes + zero-padded seconds)
-const elapsedLongFmt = elapsedShortFmt // seconds only — FormatDuration uses total seconds for "5" when no "4" token present
+const elapsedLongFmt = "4m05.0s" // "1m02.3s" (minutes + zero-padded seconds)
+// const elapsedLongFmt = elapsedShortFmt // seconds only
 
 // formatElapsed formats a duration in seconds.
 // < 60s → "9.1s" / "42.7s", >= 60s → "1m02.3s"
