@@ -16,7 +16,7 @@ func (p *consoleEventProcessor) buildSummaryLine() string {
 		svcCount += len(svcs)
 	}
 	imgCount := len(p.imageOrder)
-	netCount := len(p.networkIDs)
+	netCount := len(p.visibleNetworkIDs()) // excludes in-use networks hidden on teardown
 	volCount := len(p.volumeIDs)
 
 	// Count unique DiffIDs across all images (each sha256 counted once regardless of sharing).

@@ -34,13 +34,31 @@ func sectionStatusText(s sectionRollupState) (text, statusTag, iconTag string) {
 	}
 }
 
+// visibleNetworkIDs returns the network IDs that should be shown/counted. On teardown
+// commands, networks that ended in a Warning (e.g. "Resource is still in use" when downing
+// a subset of services) are expected and hidden, so they don't show or skew the rollup.
+func (p *consoleEventProcessor) visibleNetworkIDs() []string {
+	if !p.isTeardownCommand() {
+		return p.networkIDs
+	}
+	out := make([]string, 0, len(p.networkIDs))
+	for _, id := range p.networkIDs {
+		if t := p.tasks[id]; t != nil && t.status == api.Warning {
+			continue
+		}
+		out = append(out, id)
+	}
+	return out
+}
+
 // overallRollupIcon returns just the icon for the whole operation: a spinner while any
 // work is in progress, else a success/warning/error marker. Used on the summary header.
 func (p *consoleEventProcessor) overallRollupIcon() string {
-	ids := make([]string, 0, len(p.serviceIDs)+len(p.imageOrder)+len(p.networkIDs)+len(p.volumeIDs))
+	netIDs := p.visibleNetworkIDs()
+	ids := make([]string, 0, len(p.serviceIDs)+len(p.imageOrder)+len(netIDs)+len(p.volumeIDs))
 	ids = append(ids, p.serviceIDs...)
 	ids = append(ids, p.imageOrder...)
-	ids = append(ids, p.networkIDs...)
+	ids = append(ids, netIDs...)
 	ids = append(ids, p.volumeIDs...)
 	state := p.rollupState(ids, nil)
 	if state == rollupProcessing || state == rollupPending {
