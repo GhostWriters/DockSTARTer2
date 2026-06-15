@@ -287,9 +287,10 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 		serviceNames = append(serviceNames, name)
 	}
 
-	// Set up output streams
+	// outStream is where the themed processor writes its final output (real stdout, or the
+	// TUI writer in GUI mode). The processor owns all output, so the SDK streams below are
+	// always discarded and there is no separate error stream to manage.
 	var outStream io.Writer = os.Stdout
-	var errStream io.Writer = os.Stderr
 	var bus api.EventProcessor
 
 	// Detect TUI writer (GUI program box or console panel). The live CLI viewport draws on
@@ -301,7 +302,6 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 
 	if hasTUIWriter {
 		outStream = tuiWriter
-		errStream = tuiWriter
 	}
 
 	// The themed event processor owns all output in every mode (TTY, TUI, and redirected),
@@ -369,14 +369,11 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 			updateFn = console.ReplaceOutputLinesFn
 		}
 		bus = NewConsoleEventProcessor(ctx, outStream, command, imageServices, imageOrder, containerToService, project.Name, !conf.UI.LineCharacters, console.GlobalVerbose, staticOut, updateFn, dockerCLI.Client())
-		// Also discard SDK service streams — processor handles all output.
-		outStream = io.Discard
-		errStream = io.Discard
 	}
 
 	srv, err := composev5.NewComposeService(dockerCLI,
-		composev5.WithOutputStream(outStream),
-		composev5.WithErrorStream(errStream),
+		composev5.WithOutputStream(io.Discard),
+		composev5.WithErrorStream(io.Discard),
 		composev5.WithEventProcessor(bus),
 	)
 	if err != nil {
