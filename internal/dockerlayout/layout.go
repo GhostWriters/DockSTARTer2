@@ -39,7 +39,7 @@ var (
 func AbbreviateStatus(text string) string {
 	switch text {
 	case "Pulling fs layer":
-		return "Pending"
+		return "Pulling fs"
 	case "Download complete", "Pull complete":
 		return "Downloaded"
 	case "Already exists":

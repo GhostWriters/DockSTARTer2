@@ -2,6 +2,7 @@ package compose
 
 import (
 	"fmt"
+	"strings"
 	"unicode/utf8"
 
 	"DockSTARTer2/internal/console"
@@ -89,11 +90,21 @@ func (p *consoleEventProcessor) buildLines(termW int) []string {
 			appendLine(globalIndent+icon+" "+statusANSI+console.CodeReset+statusPad+sectionChildIndent+nameANSI+console.ToConsoleANSI("{{|DockerColon|}}:{{[-]}}"), p.serviceTimerTask(svc), timerService)
 		}
 
+		// Build layer list from pre-flight DiffIDs (sha256 keyed tasks).
+		// Shared layers produce identical rows under each image — same sha, same status.
 		var layers []*consoleTask
-		for _, id := range p.ids {
-			t := p.tasks[id]
-			if t.parentID == imgName {
+		for _, sha := range p.imageLayerDiffIDs[imgName] {
+			if t := p.tasks[sha]; t != nil {
 				layers = append(layers, t)
+			}
+		}
+		// Fallback for images with no pre-flight data (not local before pull).
+		if len(layers) == 0 {
+			for _, id := range p.ids {
+				t := p.tasks[id]
+				if t.parentID == imgName {
+					layers = append(layers, t)
+				}
 			}
 		}
 
@@ -151,8 +162,19 @@ func (p *consoleEventProcessor) buildImageLine(imgName string, t *consoleTask, l
 	imgNameW := utf8.RuneCountInString(console.Strip(imgStr))
 	imgPad := strutil.Repeat(" ", maxImgNameW-imgNameW)
 	layerCount := ""
-	if len(layers) > 0 {
-		layerCount = console.ToConsoleANSI(fmt.Sprintf(" {{[::D]}}(%d %s){{[-]}}", len(layers), plural(len(layers), "layer", "layers")))
+	total := len(layers)
+	if total > 0 {
+		unique := 0
+		for _, l := range layers {
+			if p.diffIDImageCount[l.id] <= 1 {
+				unique++
+			}
+		}
+		if unique < total {
+			layerCount = console.ToConsoleANSI(fmt.Sprintf(" {{[::D]}}[%d/%d]{{[-]}}", total, unique))
+		} else {
+			layerCount = console.ToConsoleANSI(fmt.Sprintf(" {{[::D]}}[%d]{{[-]}}", total))
+		}
 	}
 	sizes, bar := p.buildImageSizesAndBar(layers, maxImgNameW, termW)
 	if t == nil {
@@ -281,10 +303,14 @@ func (p *consoleEventProcessor) buildVolumeLines() ([]string, []timerEntry) {
 	return lines, timers
 }
 
-func (p *consoleEventProcessor) buildLayerLine(t *consoleTask, statusW int, maxImgNameW int, layerPcts []int) string {
+func (p *consoleEventProcessor) buildLayerLine(t *consoleTask, statusW int, maxImgNameW int, layerPcts []int, groupNum int) string {
+	// DiffIDs are "sha256:<64hex>"; show first 12 hex chars to match Docker convention.
 	id := t.id
-	if len(id) > 19 {
-		id = id[:18] + "…"
+	if strings.HasPrefix(id, "sha256:") {
+		id = id[7:]
+	}
+	if len(id) > 12 {
+		id = id[:12]
 	}
 	idW := utf8.RuneCountInString(id)
 
@@ -312,13 +338,29 @@ func (p *consoleEventProcessor) buildLayerLine(t *consoleTask, statusW int, maxI
 	}
 
 	icon := p.spinnerIcon(t)
-	short := abbreviateStatus(t.text)
+	displayText := t.text
+	// SDK drops "Pull complete" events, so "Extracting" is the last event we receive.
+	// While the parent image is still pulling it's genuinely in progress; once the
+	// image completes, relabel it as "Extracted" to reflect the finished state.
+	if t.text == "Extracting" && t.completed() {
+		displayText = "Extracted"
+	}
+	short := abbreviateStatus(displayText)
 	statusPad := ""
 	if pad := statusW - utf8.RuneCountInString(short); pad > 0 {
 		statusPad = strutil.Repeat(" ", pad)
 	}
-	statusANSI := console.ToConsoleANSI(layerStatusTag(t.status, t.text))
-	idPad := (imageSizesColBase + maxImgNameW) - (layerSizesColBase + statusW + spaceW + idW)
+	statusANSI := console.ToConsoleANSI(layerStatusTag(t.status, displayText))
+
+	// Shared-layer badge: [N] in yellow immediately after the layer ID.
+	badge := ""
+	badgeW := 0
+	if groupNum > 0 {
+		badge = console.ToConsoleANSI(fmt.Sprintf("{{[::D]}}[{{[-]}}{{|DockerSharedLayer|}}%d{{[-]}}{{[::D]}}]{{[-]}}", groupNum))
+		badgeW = 2 + len(fmt.Sprintf("%d", groupNum)) // "[" + digits + "]"
+	}
+
+	idPad := (imageSizesColBase + maxImgNameW) - (layerSizesColBase + statusW + spaceW + idW + badgeW)
 	if idPad < 1 {
 		idPad = 1
 	}
@@ -326,7 +368,8 @@ func (p *consoleEventProcessor) buildLayerLine(t *consoleTask, statusW int, maxI
 	if bar != "" {
 		barReset = console.CodeReset
 	}
-	return layerPrefix + console.CodeDim + icon + " " + statusANSI + console.CodeReset + console.CodeDim + statusPad + " " + id + strutil.Repeat(" ", idPad) + sizes + barReset + bar + console.CodeDimOff
+
+	return layerPrefix + console.CodeDim + icon + " " + statusANSI + console.CodeReset + console.CodeDim + statusPad + " " + id + badge + strutil.Repeat(" ", idPad) + sizes + barReset + bar + console.CodeDimOff
 }
 
 func (p *consoleEventProcessor) buildLayerLines(layers []*consoleTask, maxImgNameW int, termW int) ([]string, []*consoleTask) {
@@ -359,7 +402,7 @@ func (p *consoleEventProcessor) buildLayerLines(layers []*consoleTask, maxImgNam
 	var out []string
 	var outTasks []*consoleTask
 	for _, t := range layers {
-		out = append(out, p.buildLayerLine(t, layerStatusW, maxImgNameW, layerPcts))
+		out = append(out, p.buildLayerLine(t, layerStatusW, maxImgNameW, layerPcts, p.diffIDGroupNum[t.id]))
 		outTasks = append(outTasks, t)
 	}
 	return out, outTasks
