@@ -20,7 +20,6 @@ import (
 	"github.com/compose-spec/compose-go/v2/types"
 	dockercommand "github.com/docker/cli/cli/command"
 	cliflags "github.com/docker/cli/cli/flags"
-	"github.com/docker/compose/v5/cmd/display"
 	"github.com/docker/compose/v5/pkg/api"
 	composev5 "github.com/docker/compose/v5/pkg/compose"
 	mobyclient "github.com/moby/moby/client"
@@ -293,21 +292,22 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 	var errStream io.Writer = os.Stderr
 	var bus api.EventProcessor
 
-	// Detect TUI writer (GUI program box or console panel) and TTY mode.
+	// Detect TUI writer (GUI program box or console panel). The live CLI viewport draws on
+	// stderr and dumps its final content to stdout, so it's only usable when BOTH stdout and
+	// stderr are terminals. If either is redirected (and there's no TUI), run in static mode:
+	// render silently and write the final output once to stdout.
 	tuiWriter, hasTUIWriter := ctx.Value(console.TUIWriterKey).(io.Writer)
-	isTTY := !hasTUIWriter && console.IsTTY()
+	staticOut := !hasTUIWriter && (!console.IsStdoutTTY() || !console.IsTTY())
 
 	if hasTUIWriter {
 		outStream = tuiWriter
 		errStream = tuiWriter
 	}
 
-	cliOut := outStream
-	cliErr := errStream
-	if isTTY || hasTUIWriter {
-		cliOut = io.Discard
-		cliErr = io.Discard
-	}
+	// The themed event processor owns all output in every mode (TTY, TUI, and redirected),
+	// so the SDK's own CLI streams are always discarded.
+	cliOut := io.Discard
+	cliErr := io.Discard
 
 	// Initialize Docker CLI
 	dockerCLI, err := dockercommand.NewDockerCli(
@@ -322,7 +322,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 		return fmt.Errorf("failed to initialize docker CLI: %w", err)
 	}
 
-	if isTTY || hasTUIWriter {
+	{
 		imageServices := make(map[string][]string)
 		containerToService := make(map[string]string)
 		for name, svc := range project.Services {
@@ -368,12 +368,10 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 		if hasTUIWriter {
 			updateFn = console.ReplaceOutputLinesFn
 		}
-		bus = NewConsoleEventProcessor(ctx, outStream, command, imageServices, imageOrder, containerToService, project.Name, !conf.UI.LineCharacters, console.GlobalVerbose, updateFn, dockerCLI.Client())
+		bus = NewConsoleEventProcessor(ctx, outStream, command, imageServices, imageOrder, containerToService, project.Name, !conf.UI.LineCharacters, console.GlobalVerbose, staticOut, updateFn, dockerCLI.Client())
 		// Also discard SDK service streams — processor handles all output.
 		outStream = io.Discard
 		errStream = io.Discard
-	} else {
-		bus = display.Plain(outStream)
 	}
 
 	srv, err := composev5.NewComposeService(dockerCLI,
