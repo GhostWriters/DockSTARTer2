@@ -38,8 +38,12 @@ func (p *consoleEventProcessor) buildSummaryLine() string {
 	if volCount > 0 {
 		parts = append(parts, fmt.Sprintf("{{|App|}}%d %s{{[-]}}", volCount, plural(volCount, "volume", "volumes")))
 	}
-	summaryFmt := fmt.Sprintf("{{|RunningCommand|}}%s:{{[-]}} %s", p.command, strings.Join(parts, ", "))
-	return console.ToConsoleANSI(summaryFmt)
+	// Command word is bold yellow (matching the summary line's overall duration); the
+	// colon uses DockerColon (matching the colons on the section/name lines below).
+	summaryFmt := fmt.Sprintf("{{[yellow::B]}}%s{{[-]}}{{|DockerColon|}}:{{[-]}} %s", p.command, strings.Join(parts, ", "))
+	// Prepend an overall spinner/marker (icon + space) so the summary reads as the
+	// top-level rollup header, shifting the whole block 3 chars right to align under it.
+	return globalIndent + p.overallRollupIcon() + " " + console.ToConsoleANSI(summaryFmt)
 }
 
 type timerStyle int
@@ -56,11 +60,12 @@ type timerEntry struct {
 	style timerStyle
 }
 
-// attachTimers right-aligns elapsed timers on lines.
-func (p *consoleEventProcessor) attachTimers(lines []string, timers []timerEntry) []string {
+// attachTimers right-aligns elapsed timers on lines. extraWidth lets the caller include
+// the width of a line not in `lines` (e.g. the summary header) so all timers share one column.
+func (p *consoleEventProcessor) attachTimers(lines []string, timers []timerEntry, extraWidth int) []string {
 	// Recompute the widest line each render (not grow-only) so the timer column follows
 	// the content when the terminal/viewport shrinks on resize.
-	p.maxLineWidth = 0
+	p.maxLineWidth = extraWidth
 	for _, line := range lines {
 		if w := utf8.RuneCountInString(console.Strip(line)); w > p.maxLineWidth {
 			p.maxLineWidth = w
@@ -120,9 +125,17 @@ func (p *consoleEventProcessor) attachTimers(lines []string, timers []timerEntry
 
 func (p *consoleEventProcessor) prependSummary(lines []string, timers []timerEntry) []string {
 	summary := p.buildSummaryLine()
-	// attachTimers recomputes maxLineWidth from the content lines (it resets it), so the
-	// summary timer column aligns to the widest content row.
-	lines = p.attachTimers(lines, timers)
+	// Indent all content lines under the summary header (which carries the overall
+	// icon + "update:" text) so the block nests beneath it. The header itself is not
+	// indented. Done before attachTimers so the timer column accounts for the shift.
+	headerIndent := strutil.Repeat(" ", summaryHeaderIndentW)
+	for i := range lines {
+		lines[i] = headerIndent + lines[i]
+	}
+	// Include the summary header's width so its timer and the row timers share one column
+	// (the header is often the widest line for teardown commands with no image/layer rows).
+	summaryW := utf8.RuneCountInString(console.Strip(summary))
+	lines = p.attachTimers(lines, timers, summaryW)
 	if vp := console.GlobalViewport; vp != nil && vp.IsActive() {
 		return lines
 	}
@@ -139,7 +152,11 @@ func (p *consoleEventProcessor) withSummaryTimer(summary string) string {
 	}
 	col := p.maxLineWidth + timerGutterW
 	visible := utf8.RuneCountInString(console.Strip(summary))
-	pad := strutil.Repeat(" ", col-visible)
+	padW := col - visible
+	if padW < timerGutterW {
+		padW = timerGutterW // always keep at least the gutter so the timer never glues to text
+	}
+	pad := strutil.Repeat(" ", padW)
 	elapsed := elapsedFromTime(p.startTime)
 	if w := len(elapsed); w < p.maxTimerWidth {
 		elapsed = strutil.Repeat(" ", p.maxTimerWidth-w) + elapsed

@@ -34,6 +34,22 @@ func sectionStatusText(s sectionRollupState) (text, statusTag, iconTag string) {
 	}
 }
 
+// overallRollupIcon returns just the icon for the whole operation: a spinner while any
+// work is in progress, else a success/warning/error marker. Used on the summary header.
+func (p *consoleEventProcessor) overallRollupIcon() string {
+	ids := make([]string, 0, len(p.serviceIDs)+len(p.imageOrder)+len(p.networkIDs)+len(p.volumeIDs))
+	ids = append(ids, p.serviceIDs...)
+	ids = append(ids, p.imageOrder...)
+	ids = append(ids, p.networkIDs...)
+	ids = append(ids, p.volumeIDs...)
+	state := p.rollupState(ids, nil)
+	if state == rollupProcessing || state == rollupPending {
+		return p.activeSpinnerANSI(p.icons().spinner)
+	}
+	_, _, iconTag := sectionStatusText(state)
+	return console.ToConsoleANSI(iconTag + p.sectionRollupIcon(state) + "{{[-]}}")
+}
+
 // sectionRollupWithPropagation is like sectionRollup but also checks child tasks
 // (layers for image IDs, images for service IDs) for propagated errors/warnings.
 func (p *consoleEventProcessor) sectionRollupWithPropagation(ids []string, imageForID func(string) string) (icon, statusANSI, statusText, labelTag string) {

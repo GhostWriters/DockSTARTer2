@@ -6,7 +6,6 @@ import (
 	"io"
 	"sort"
 	"strings"
-	"unicode/utf8"
 
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
@@ -131,7 +130,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 	childRow := func(name, colorTag string, s entryStatus) string {
 		icon, status, pad := iconStatus(s)
 		return GlobalIndent + icon + " " + status + console.CodeReset + pad +
-			SectionChildIndent + console.ToConsoleANSI(colorTag+name+"{{[-]}}")
+			SectionChildIndent + console.ToConsoleANSI(colorTag+name+"{{[-]}}{{|DockerColon|}}:{{[-]}}")
 	}
 
 	// ── build image groups ───────────────────────────────────────────────────
@@ -199,22 +198,22 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 		headerParts = append(headerParts, fmt.Sprintf("{{|App|}}%d %s{{[-]}}", len(r.ContainersDeleted), Plural(len(r.ContainersDeleted), "container", "containers")))
 	}
 	if len(headerParts) > 0 {
-		add(console.ToConsoleANSI(fmt.Sprintf("{{|RunningCommand|}}prune:{{[-]}} %s", strings.Join(headerParts, ", "))))
+		// Overall marker: error if any category failed, else success. Prune is rendered
+		// after completion, so there's no spinner — just the final marker (icon + space),
+		// matching the compose summary header. Command word is bold yellow; colon DockerColon.
+		anyErr := r.ImagesError != nil || r.NetworksError != nil || r.VolumesError != nil || r.ContainersError != nil
+		marker := doneIconANSI
+		if anyErr {
+			marker = errorIconANSI
+		}
+		header := console.ToConsoleANSI(fmt.Sprintf("{{[yellow::B]}}prune{{[-]}}{{|DockerColon|}}:{{[-]}} %s", strings.Join(headerParts, ", ")))
+		add(GlobalIndent + marker + " " + header)
 	}
+	// All lines after the header nest under it (indent by icon + space), matching compose.
+	headerEnd := len(lines)
 
 	// ── images / services section ─────────────────────────────────────────────
 	if len(groups) > 0 {
-		maxRefW := 0
-		for _, g := range groups {
-			ref := g.ref
-			if ref == "" {
-				ref = "<dangling>"
-			}
-			if w := utf8.RuneCountInString(console.Strip(StyleImageRef(ref))); w > maxRefW {
-				maxRefW = w
-			}
-		}
-
 		imageLabel := strutil.Repeat(" ", 2*SectionChildIndentW) +
 			console.ToConsoleANSI("{{|DockerMarkerDone|}}image{{[-]}}{{|DockerColon|}}:{{[-]}} ")
 
@@ -231,8 +230,9 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 				ref = "<dangling>"
 			}
 			refANSI := StyleImageRef(ref)
-			refPad := strutil.Repeat(" ", maxRefW-utf8.RuneCountInString(console.Strip(refANSI)))
-			layerCount := console.ToConsoleANSI(fmt.Sprintf(" {{[::D]}}(%d %s){{[-]}}", len(g.layers), Plural(len(g.layers), "layer", "layers")))
+			// Match compose: append the layer count directly to the image URL ("ref [N]")
+			// rather than in a separate padded column. "[N]" uses DockerTag brackets, dim interior.
+			layerCount := console.ToConsoleANSI(fmt.Sprintf(" {{|DockerTag|}}[{{[-]}}{{[::D]}}%d{{[-]}}{{|DockerTag|}}]{{[-]}}", len(g.layers)))
 
 			// Image ref row — Untagged or Error.
 			var imgIcon, imgStatus, imgPad string
@@ -242,7 +242,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 				imgIcon, imgStatus, imgPad = doneIconANSI, untaggedStatus, untaggedPad
 			}
 			imgLine := GlobalIndent + imgIcon + " " + imgStatus + console.CodeReset + imgPad +
-				imageLabel + refANSI + refPad + layerCount
+				imageLabel + refANSI + layerCount
 			add(imgLine)
 
 			// Layer rows — only shown in verbose mode, compact dim style like compose.
@@ -270,11 +270,11 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 			svcs := imageServices[g.ref]
 			if len(svcs) > 0 {
 				for _, svc := range svcs {
-					add(childRow(svc+":", "{{|App|}}", statusRemoved))
+					add(childRow(svc, "{{|App|}}", statusRemoved))
 				}
 			} else {
 				unknownCount++
-				add(childRow(fmt.Sprintf("<Unknown%d>:", unknownCount), "{{|App|}}", statusRemoved))
+				add(childRow(fmt.Sprintf("<Unknown%d>", unknownCount), "{{|App|}}", statusRemoved))
 			}
 			renderImageGroup(g)
 		}
@@ -325,6 +325,14 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 	}
 	if r.ContainersError != nil {
 		errs = append(errs, "containers: "+r.ContainersError.Error())
+	}
+
+	// Indent all lines after the header so the block nests under it (matching compose).
+	// Lines carry their own global indent, so add icon + space + one child-indent step to
+	// place content markers under the 3rd char of the header text.
+	headerIndent := strutil.Repeat(" ", IconW+SpaceW+SectionChildIndentW)
+	for i := headerEnd; i < len(lines); i++ {
+		lines[i] = headerIndent + lines[i]
 	}
 	return lines, errs
 }

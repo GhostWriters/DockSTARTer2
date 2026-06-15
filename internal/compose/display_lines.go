@@ -252,7 +252,7 @@ func (p *consoleEventProcessor) buildImageSizesAndBar(layers []*consoleTask, max
 
 	usedW := imageSizesColBase + maxImgNameW + spaceW + sizeColW + sizeSepW + sizeColW
 	barW := len(layers)
-	maxBarW := termW - usedW - timerReserveW
+	maxBarW := termW - usedW - timerReserveW - summaryHeaderIndentW
 	if maxBarW < 1 {
 		return sizes, ""
 	}
@@ -415,7 +415,7 @@ func (p *consoleEventProcessor) buildLayerLines(layers []*consoleTask, maxImgNam
 	// reserving space for the right-aligned elapsed timer, so a large layer's proportional
 	// bar can't overflow the line or crowd out the duration.
 	usedW := imageSizesColBase + maxImgNameW + spaceW + sizeColW + sizeSepW + sizeColW
-	maxBarW := termW - usedW - timerReserveW
+	maxBarW := termW - usedW - timerReserveW - summaryHeaderIndentW
 	if maxBarW < 1 {
 		maxBarW = 1
 	}
