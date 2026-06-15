@@ -56,6 +56,11 @@ const (
 	timerReserveW     = 10 // reserved trailing width for the right-aligned elapsed timer + gutter (e.g. "  9999.9s")
 	imageSizesColBase = globalIndentW + iconW + spaceW + sectionStatusW + imageLabelW
 	layerSizesColBase = layerPrefixW + iconW + spaceW
+	// summaryHeaderIndentW shifts content lines right to nest under the summary header.
+	// Content lines carry their own global indent, so this adds the header's icon + space
+	// plus one child-indent step, putting content markers under the 3rd char of the header
+	// text (matching how section children nest beneath their section headers elsewhere).
+	summaryHeaderIndentW = iconW + spaceW + sectionChildIndentW
 )
 
 // Strings derived from width constants — updated automatically when constants change.
