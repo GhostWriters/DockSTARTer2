@@ -47,6 +47,16 @@ func IsTTY() bool {
 	return isTTYGlobal
 }
 
+// IsStdoutTTY reports whether stdout is a real terminal. Distinct from IsTTY (stderr):
+// stdout can be redirected (e.g. `cmd > file`) while stderr stays a TTY, so output
+// destined for stdout must check this rather than IsTTY.
+func IsStdoutTTY() bool {
+	if stat, err := os.Stdout.Stat(); err == nil {
+		return (stat.Mode() & os.ModeCharDevice) != 0
+	}
+	return false
+}
+
 // SetTTY allows forcing the TTY status.
 // Returns the previous value so it can be restored.
 func SetTTY(isTTY bool) bool {

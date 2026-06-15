@@ -146,6 +146,7 @@ type consoleEventProcessor struct {
 	lastSentLines []string        // last lines sent via updateFn; skip if unchanged
 	asciiMode     bool            // when true, use ASCII spinners, icons, and progress bar chars
 	verbose       bool            // when true, show individual layer rows under each image
+	staticOut     bool            // when true (redirected stdout, no TTY/TUI), skip live rendering and emit final lines once in Done
 
 	dockerClient imageInspector // Docker client for pre-flight and post-pull ImageInspect
 
@@ -186,7 +187,7 @@ type consoleEventProcessor struct {
 // imageServices maps image name (e.g. "lscr.io/linuxserver/plex:latest") to the list of
 // service names that use it, so service headers can be shown before lifecycle events arrive.
 // imageOrder is the stable key order for imageServices (caller must provide sorted/deterministic order).
-func NewConsoleEventProcessor(logCtx context.Context, out io.Writer, command string, imageServices map[string][]string, imageOrder []string, containerToService map[string]string, projectName string, asciiMode bool, verbose bool, updateFn func([]string), dockerClient imageInspector) api.EventProcessor {
+func NewConsoleEventProcessor(logCtx context.Context, out io.Writer, command string, imageServices map[string][]string, imageOrder []string, containerToService map[string]string, projectName string, asciiMode bool, verbose bool, staticOut bool, updateFn func([]string), dockerClient imageInspector) api.EventProcessor {
 	return &consoleEventProcessor{
 		out:                out,
 		logCtx:             logCtx,
@@ -203,6 +204,7 @@ func NewConsoleEventProcessor(logCtx context.Context, out io.Writer, command str
 		updateFn:           updateFn,
 		asciiMode:          asciiMode,
 		verbose:            verbose,
+		staticOut:          staticOut,
 		startTime:          time.Now(),
 		dockerClient:      dockerClient,
 		imageLayerDiffIDs: make(map[string][]string),
@@ -222,6 +224,12 @@ func (p *consoleEventProcessor) Start(ctx context.Context, operation string) {
 
 	// Pre-flight: inspect all images to get RootFS DiffIDs before pull events arrive.
 	p.preflight(ctx)
+
+	// Static mode (redirected stdout, no TTY/TUI): no live rendering or ticker — events are
+	// processed silently and the final lines are emitted once in Done.
+	if p.staticOut {
+		return
+	}
 
 	// Activate the viewport now — enters alt screen pre-filled with recent history.
 	if !p.noViewport {
@@ -282,6 +290,24 @@ func (p *consoleEventProcessor) Start(ctx context.Context, operation string) {
 }
 
 func (p *consoleEventProcessor) Done(_ string, _ bool) {
+	// Static mode (redirected stdout): no ticker/viewport was started. Wait for post-pull
+	// inspects, then emit the fully rendered output once to out, plus the log summary.
+	if p.staticOut {
+		p.inspectWG.Wait()
+		p.mtx.Lock()
+		termW := goterm.Width()
+		if termW <= 0 {
+			termW = 80
+		}
+		lines := append([]string{p.withSummaryTimer(p.buildSummaryLine())}, p.buildLines(termW, p.verbose)...)
+		p.mtx.Unlock()
+		for _, line := range lines {
+			fmt.Fprintln(p.out, line)
+		}
+		p.logSummary()
+		return
+	}
+
 	// Stop the ticker goroutine first.
 	p.doneCh <- struct{}{}
 	p.mtx.Lock()
@@ -516,6 +542,9 @@ func (p *consoleEventProcessor) renderWidth() int {
 }
 
 func (p *consoleEventProcessor) render() {
+	if p.staticOut {
+		return // static mode renders once in Done, never live
+	}
 	termW := p.renderWidth()
 	termH := goterm.Height()
 	if termH <= 0 {
