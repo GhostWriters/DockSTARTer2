@@ -163,8 +163,25 @@ func ReplaceOutputLines(lines []string) {
 	}
 }
 
+// activeOutputWidth is the content width (columns) of whichever output viewport is
+// currently showing compose output — the program box or the console panel. It is updated
+// by those components as they resize/receive output, and read via OutputContentWidth so
+// compose can size proportional bars to the viewport instead of the raw terminal.
+var activeOutputWidth int
+
+// setActiveOutputWidth records the active output viewport's content width.
+func setActiveOutputWidth(w int) {
+	if w > 0 {
+		activeOutputWidth = w
+	}
+}
+
+// OutputContentWidth returns the active output viewport's content width, or 0 if unknown.
+func OutputContentWidth() int { return activeOutputWidth }
+
 func init() {
 	console.ReplaceOutputLinesFn = ReplaceOutputLines
+	console.OutputContentWidthFn = OutputContentWidth
 }
 
 // parseClientInfo extracts IP and connection type from environment strings.

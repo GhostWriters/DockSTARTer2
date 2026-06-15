@@ -364,6 +364,7 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case replaceOutputMsg:
+		setActiveOutputWidth(m.sv.Width())
 		m.sv.CommandRunning = false
 		if m.headerLineCount < 0 {
 			m.headerLineCount = m.sv.TotalLineCount()

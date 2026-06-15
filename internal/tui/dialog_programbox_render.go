@@ -293,6 +293,7 @@ func (m *ProgramBoxModel) calculateLayout() {
 	// Update viewport dimensions: contentW already accounts for margins; subtract inner border and scrollbar gutter.
 	innerBoxWidth := contentW - ScrollbarGutterWidth - layout.BorderWidth()
 	m.sv.SetSize(innerBoxWidth, vpHeight)
+	setActiveOutputWidth(innerBoxWidth) // publish width so compose bars reflow on resize
 	m.sv.ReRenderWith(pbRenderFn())
 }
 
