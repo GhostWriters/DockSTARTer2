@@ -348,10 +348,7 @@ func (p *consoleEventProcessor) buildVolumeLines() ([]string, []timerEntry) {
 
 func (p *consoleEventProcessor) buildLayerLine(t *consoleTask, statusW int, maxImgNameW int, layerPcts []int, groupNum int) string {
 	// DiffIDs are "sha256:<64hex>"; show first 12 hex chars to match Docker convention.
-	id := t.id
-	if strings.HasPrefix(id, "sha256:") {
-		id = id[7:]
-	}
+	id := strings.TrimPrefix(t.id, "sha256:")
 	if len(id) > 12 {
 		id = id[:12]
 	}

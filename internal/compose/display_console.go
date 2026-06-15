@@ -284,11 +284,10 @@ func (p *consoleEventProcessor) Done(_ string, _ bool) {
 	}
 	p.mtx.Unlock()
 
-	// Wait for all post-pull ImageInspect goroutines to complete, then do positional
-	// mapping of layer task IDs → true sha256s now that all layer events have arrived.
+	// Wait for all post-pull ImageInspect goroutines (which remap layer task IDs to their
+	// sha256 DiffIDs) to complete before the final render. inspectWG.Wait establishes a
+	// happens-before edge for their writes, so no extra lock barrier is needed here.
 	p.inspectWG.Wait()
-	p.mtx.Lock()
-	p.mtx.Unlock()
 	p.render()
 
 	// Deactivate the viewport first — leaves alt screen, dumps history to main screen.
