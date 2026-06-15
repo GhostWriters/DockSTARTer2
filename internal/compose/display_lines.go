@@ -292,7 +292,7 @@ func (p *consoleEventProcessor) buildNetworkLines() ([]string, []timerEntry) {
 	timers := []timerEntry{{task: p.sectionTaskFor(p.networkIDs), style: timerSection}}
 	for _, netID := range p.networkIDs {
 		t := p.tasks[netID]
-		nameANSI := console.ToConsoleANSI("{{|App|}}" + netID + "{{[-]}}")
+		nameANSI := console.ToConsoleANSI("{{|IPAddress|}}" + netID + "{{[-]}}")
 		var icon, statusText, statusANSI string
 		if t != nil {
 			icon = p.spinnerIcon(t)
@@ -320,7 +320,7 @@ func (p *consoleEventProcessor) buildVolumeLines() ([]string, []timerEntry) {
 	timers := []timerEntry{{task: p.sectionTaskFor(p.volumeIDs), style: timerSection}}
 	for _, volID := range p.volumeIDs {
 		t := p.tasks[volID]
-		nameANSI := console.ToConsoleANSI("{{|App|}}" + volID + "{{[-]}}")
+		nameANSI := console.ToConsoleANSI("{{|Folder|}}" + volID + "{{[-]}}")
 		var icon, statusText, statusANSI string
 		if t != nil {
 			icon = p.spinnerIcon(t)

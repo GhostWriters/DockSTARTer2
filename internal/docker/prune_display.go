@@ -189,10 +189,10 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 		headerParts = append(headerParts, fmt.Sprintf("{{[::D]}}%d %s{{[-]}}", totalLayers, Plural(totalLayers, "layer", "layers")))
 	}
 	if len(r.NetworksDeleted) > 0 {
-		headerParts = append(headerParts, fmt.Sprintf("{{|App|}}%d %s{{[-]}}", len(r.NetworksDeleted), Plural(len(r.NetworksDeleted), "network", "networks")))
+		headerParts = append(headerParts, fmt.Sprintf("{{|IPAddress|}}%d %s{{[-]}}", len(r.NetworksDeleted), Plural(len(r.NetworksDeleted), "network", "networks")))
 	}
 	if len(r.VolumesDeleted) > 0 {
-		headerParts = append(headerParts, fmt.Sprintf("{{|App|}}%d %s{{[-]}}", len(r.VolumesDeleted), Plural(len(r.VolumesDeleted), "volume", "volumes")))
+		headerParts = append(headerParts, fmt.Sprintf("{{|Folder|}}%d %s{{[-]}}", len(r.VolumesDeleted), Plural(len(r.VolumesDeleted), "volume", "volumes")))
 	}
 	if len(r.ContainersDeleted) > 0 {
 		headerParts = append(headerParts, fmt.Sprintf("{{|App|}}%d %s{{[-]}}", len(r.ContainersDeleted), Plural(len(r.ContainersDeleted), "container", "containers")))
@@ -286,7 +286,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 	if len(r.NetworksDeleted) > 0 || r.NetworksError != nil {
 		add(sectionHeader("networks", r.NetworksError != nil))
 		for _, net := range r.NetworksDeleted {
-			add(childRow(net, "{{|App|}}", statusRemoved))
+			add(childRow(net, "{{|IPAddress|}}", statusRemoved))
 		}
 	}
 
@@ -294,7 +294,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 	if len(r.VolumesDeleted) > 0 || r.VolumesError != nil {
 		add(sectionHeader("volumes", r.VolumesError != nil))
 		for _, vol := range r.VolumesDeleted {
-			add(childRow(vol, "{{|App|}}", statusRemoved))
+			add(childRow(vol, "{{|Folder|}}", statusRemoved))
 		}
 	}
 
