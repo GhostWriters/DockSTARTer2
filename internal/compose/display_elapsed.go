@@ -8,11 +8,13 @@ import (
 	"github.com/docker/compose/v5/pkg/api"
 )
 
-const elapsedShortFmt = "5.0s"    // "9.1s" / "42.7s"
-const elapsedLongFmt = "4m05.0s"  // "1m02.3s" (minutes + zero-padded seconds)
+const elapsedShortFmt = "5.0s" // "9.1s" / "42.7s"
+
+// const elapsedLongFmt = "4m05.0s" // "1m02.3s" (minutes + zero-padded seconds)
+const elapsedLongFmt = "5.0s" // total seconds: "62.3s" / "200.3s"
 
 // formatElapsed formats a duration for display.
-// < 60s → "9.1s" / "42.7s", >= 60s → "1m02.3s"
+// < 60s → elapsedShortFmt, >= 60s → elapsedLongFmt.
 // Truncates to 100ms precision before branching to avoid e.g. 59.95s → "60.0s" with short format.
 func formatElapsed(d time.Duration) string {
 	d = (d / (100 * time.Millisecond)) * (100 * time.Millisecond)
