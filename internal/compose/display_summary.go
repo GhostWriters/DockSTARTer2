@@ -165,7 +165,8 @@ func (p *consoleEventProcessor) logSummary() {
 		termW = 80
 	}
 
-	for _, line := range p.buildLines(termW) {
+	// Final log always includes layer rows, regardless of the -v console flag.
+	for _, line := range p.buildLines(termW, true) {
 		logger.Notice(ctx, pfx+line)
 	}
 }

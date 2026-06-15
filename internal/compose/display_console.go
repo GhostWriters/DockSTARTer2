@@ -244,7 +244,7 @@ func (p *consoleEventProcessor) Start(ctx context.Context, operation string) {
 		}
 		vpActive := func() bool { vp := console.GlobalViewport; return vp != nil && vp.IsActive() }()
 		if !vpActive {
-			initialLines := p.buildLines(termW)
+			initialLines := p.buildLines(termW, p.verbose)
 			if len(initialLines) > 0 {
 				for range initialLines {
 					fmt.Fprintln(p.out)
@@ -302,7 +302,7 @@ func (p *consoleEventProcessor) Done(_ string, _ bool) {
 			if termW <= 0 {
 				termW = 80
 			}
-			finalLines := append([]string{p.withSummaryTimer(p.buildSummaryLine())}, p.buildLines(termW)...)
+			finalLines := append([]string{p.withSummaryTimer(p.buildSummaryLine())}, p.buildLines(termW, p.verbose)...)
 			vp.UpdateLines(finalLines)
 			vp.Deactivate()
 		}
@@ -512,7 +512,7 @@ func (p *consoleEventProcessor) render() {
 	} else {
 		p.spinnerFrame = (p.spinnerFrame + 1) % len(spinnerFrames)
 	}
-	lines := p.buildLines(termW)
+	lines := p.buildLines(termW, p.verbose)
 	if len(lines) == 0 {
 		return
 	}
