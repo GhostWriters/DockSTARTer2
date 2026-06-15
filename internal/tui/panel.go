@@ -317,6 +317,7 @@ func (m *PanelModel) SetSize(width, totalTermHeight int) {
 	m.totalHeight = totalTermHeight
 
 	svWidth := width - ScrollbarGutterWidth
+	setActiveOutputWidth(svWidth) // publish width so compose bars reflow on resize
 	if oldWidth != width && width > 0 {
 		m.sv.SetSize(svWidth, m.sv.Height())
 		m.sv.ReRenderWith(panelRenderFn())

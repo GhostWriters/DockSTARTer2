@@ -344,6 +344,7 @@ func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 
 	case replaceOutputMsg:
+		setActiveOutputWidth(m.sv.Width())
 		m.lastLineTime = time.Now()
 		if !m.expanded {
 			m.panelChanged = true

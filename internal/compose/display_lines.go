@@ -172,27 +172,19 @@ func (p *consoleEventProcessor) layersForImage(imgName string) []*consoleTask {
 	return layers
 }
 
-// layerCountText returns the inner text of the layer-count suffix (e.g. "9/2" or "9"),
-// or "" when there are no layers. unique is the number of layers not shared with others.
+// layerCountText returns the inner text of the layer-count suffix (e.g. "9"),
+// or "" when there are no layers. Shared layers are indicated by per-layer badges,
+// so the image suffix is just the total count.
 func (p *consoleEventProcessor) layerCountText(layers []*consoleTask) string {
 	total := len(layers)
 	if total == 0 {
 		return ""
 	}
-	unique := 0
-	for _, l := range layers {
-		if p.diffIDImageCount[l.id] <= 1 {
-			unique++
-		}
-	}
-	if unique < total {
-		return fmt.Sprintf("%d/%d", total, unique)
-	}
 	return fmt.Sprintf("%d", total)
 }
 
 // layerCountWidth returns the visible width of an image's layer-count suffix, including
-// the leading space and brackets (e.g. " [9/2]" -> 6), or 0 when there are no layers.
+// the leading space and brackets (e.g. " [9]" -> 4), or 0 when there are no layers.
 func (p *consoleEventProcessor) layerCountWidth(imgName string) int {
 	inner := p.layerCountText(p.layersForImage(imgName))
 	if inner == "" {
@@ -260,7 +252,7 @@ func (p *consoleEventProcessor) buildImageSizesAndBar(layers []*consoleTask, max
 
 	usedW := imageSizesColBase + maxImgNameW + spaceW + sizeColW + sizeSepW + sizeColW
 	barW := len(layers)
-	maxBarW := termW - usedW - 3
+	maxBarW := termW - usedW - timerReserveW
 	if maxBarW < 1 {
 		return sizes, ""
 	}
@@ -393,11 +385,13 @@ func (p *consoleEventProcessor) buildLayerLine(t *consoleTask, statusW int, maxI
 	statusANSI := console.ToConsoleANSI(layerStatusTag(t.status, displayText))
 
 	// Shared-layer badge: [N] in yellow immediately after the layer ID.
+	// Shared-layer badge uses parens "(N)" to stay distinct from the image line's "[N]"
+	// layer-count suffix. The number is colored DockerSharedLayer (yellow); parens are dim.
 	badge := ""
 	badgeW := 0
 	if groupNum > 0 {
-		badge = console.ToConsoleANSI(fmt.Sprintf("{{[::D]}}[{{[-]}}{{|DockerSharedLayer|}}%d{{[-]}}{{[::D]}}]{{[-]}}", groupNum))
-		badgeW = 2 + len(fmt.Sprintf("%d", groupNum)) // "[" + digits + "]"
+		badge = console.ToConsoleANSI(fmt.Sprintf("{{[::D]}}({{[-]}}{{|DockerSharedLayer|}}%d{{[-]}}{{[::D]}}){{[-]}}", groupNum))
+		badgeW = 2 + len(fmt.Sprintf("%d", groupNum)) // "(" + digits + ")"
 	}
 
 	idPad := (imageSizesColBase + maxImgNameW) - (layerSizesColBase + statusW + spaceW + idW + badgeW)
@@ -417,13 +411,28 @@ func (p *consoleEventProcessor) buildLayerLines(layers []*consoleTask, maxImgNam
 		return nil, nil
 	}
 
-	maxBarW := termW - 70
+	// Bar starts after the size column; cap its width to the remaining terminal width,
+	// reserving space for the right-aligned elapsed timer, so a large layer's proportional
+	// bar can't overflow the line or crowd out the duration.
+	usedW := imageSizesColBase + maxImgNameW + spaceW + sizeColW + sizeSepW + sizeColW
+	maxBarW := termW - usedW - timerReserveW
 	if maxBarW < 1 {
 		maxBarW = 1
 	}
 
-	layerPcts := make([]int, len(layers))
-	for i, t := range layers {
+	// Per-layer bar WIDTH is proportional to the layer's byte size relative to the
+	// largest layer in this image (so a big layer gets a wide bar, a small one a short
+	// bar). Each bar's cells are all filled to that layer's own download percent.
+	var maxTotal int64
+	for _, t := range layers {
+		if t.total > maxTotal {
+			maxTotal = t.total
+		}
+	}
+
+	var out []string
+	var outTasks []*consoleTask
+	for _, t := range layers {
 		pct := t.percent
 		if t.completed() && pct == 100 {
 			pct = 100
@@ -433,15 +442,20 @@ func (p *consoleEventProcessor) buildLayerLines(layers []*consoleTask, maxImgNam
 		if pct > 100 {
 			pct = 100
 		}
-		layerPcts[i] = pct
-	}
-	if len(layerPcts) > maxBarW {
-		layerPcts = layerPcts[:maxBarW]
-	}
 
-	var out []string
-	var outTasks []*consoleTask
-	for _, t := range layers {
+		// Scale this layer's bar width by its size relative to the largest layer.
+		barW := 1
+		if maxTotal > 0 && t.total > 0 {
+			barW = int(float64(maxBarW) * float64(t.total) / float64(maxTotal))
+			if barW < 1 {
+				barW = 1
+			}
+		}
+		layerPcts := make([]int, barW)
+		for i := range layerPcts {
+			layerPcts[i] = pct
+		}
+
 		out = append(out, p.buildLayerLine(t, layerStatusW, maxImgNameW, layerPcts, p.diffIDGroupNum[t.id]))
 		outTasks = append(outTasks, t)
 	}

@@ -43,3 +43,9 @@ func GetTUIWriter(ctx context.Context) io.Writer {
 // the running program. compose calls this to do live in-place updates inside the
 // program box without cursor-movement ANSI sequences.
 var ReplaceOutputLinesFn func([]string)
+
+// OutputContentWidthFn is set by the tui package to report the current content width
+// (in columns) of the active output viewport — the program box or the console panel.
+// compose calls this to size proportional progress bars to the viewport rather than the
+// raw terminal width. Returns 0 if no TUI viewport is active (fall back to terminal width).
+var OutputContentWidthFn func() int

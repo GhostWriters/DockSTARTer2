@@ -8,8 +8,6 @@ import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/strutil"
-
-	"github.com/buger/goterm"
 )
 
 func (p *consoleEventProcessor) buildSummaryLine() string {
@@ -60,6 +58,9 @@ type timerEntry struct {
 
 // attachTimers right-aligns elapsed timers on lines.
 func (p *consoleEventProcessor) attachTimers(lines []string, timers []timerEntry) []string {
+	// Recompute the widest line each render (not grow-only) so the timer column follows
+	// the content when the terminal/viewport shrinks on resize.
+	p.maxLineWidth = 0
 	for _, line := range lines {
 		if w := utf8.RuneCountInString(console.Strip(line)); w > p.maxLineWidth {
 			p.maxLineWidth = w
@@ -82,6 +83,8 @@ func (p *consoleEventProcessor) attachTimers(lines []string, timers []timerEntry
 			maxTimerW = w
 		}
 	}
+	// Timer width can grow as durations tick up; keep it monotonic so the column doesn't
+	// jitter narrower mid-run (a 9.9s→10.1s transition shouldn't shift everything).
 	if maxTimerW > p.maxTimerWidth {
 		p.maxTimerWidth = maxTimerW
 	}
@@ -117,9 +120,8 @@ func (p *consoleEventProcessor) attachTimers(lines []string, timers []timerEntry
 
 func (p *consoleEventProcessor) prependSummary(lines []string, timers []timerEntry) []string {
 	summary := p.buildSummaryLine()
-	if w := utf8.RuneCountInString(console.Strip(summary)); w > p.maxLineWidth {
-		p.maxLineWidth = w
-	}
+	// attachTimers recomputes maxLineWidth from the content lines (it resets it), so the
+	// summary timer column aligns to the widest content row.
 	lines = p.attachTimers(lines, timers)
 	if vp := console.GlobalViewport; vp != nil && vp.IsActive() {
 		return lines
@@ -158,16 +160,21 @@ func (p *consoleEventProcessor) logSummary() {
 		}
 	}
 
-	const pfx = "{{|RunningCommand|}}docker compose:{{[-]}} "
+	const pfx = "{{|RunningCommand|}}compose:{{[-]}} "
 
-	termW := goterm.Width()
-	if termW <= 0 {
-		termW = 80
-	}
+	// Log uses a fixed width, not the live terminal width, so the persisted output
+	// (including proportional bar sizes) is deterministic regardless of terminal size.
+	const logWidth = 120
+
+	// maxLineWidth/maxTimerWidth accumulate from the live console render (wider terminal)
+	// and only grow. Reset them so the log's timer column aligns to the fixed log width
+	// rather than inheriting the console's, which would pad every line out far too wide.
+	savedLineW, savedTimerW := p.maxLineWidth, p.maxTimerWidth
+	p.maxLineWidth, p.maxTimerWidth = 0, 0
+	defer func() { p.maxLineWidth, p.maxTimerWidth = savedLineW, savedTimerW }()
 
 	// Final log always includes layer rows, regardless of the -v console flag.
-	for _, line := range p.buildLines(termW, true) {
+	for _, line := range p.buildLines(logWidth, true) {
 		logger.Notice(ctx, pfx+line)
 	}
 }
-

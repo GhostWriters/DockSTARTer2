@@ -53,6 +53,7 @@ const (
 	layerStatusW      = dockerlayout.LayerStatusW // max width of any abbreviated layer status ("Downloading")
 	sizeColW          = 8  // width of one fixedSize() value
 	sizeSepW          = 1  // width of "/" between current/total sizes
+	timerReserveW     = 10 // reserved trailing width for the right-aligned elapsed timer + gutter (e.g. "  9999.9s")
 	imageSizesColBase = globalIndentW + iconW + spaceW + sectionStatusW + imageLabelW
 	layerSizesColBase = layerPrefixW + iconW + spaceW
 )
@@ -493,12 +494,25 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 	}
 }
 
-func (p *consoleEventProcessor) render() {
-	termW := goterm.Width()
-	termH := goterm.Height()
-	if termW <= 0 {
-		termW = 80
+// renderWidth returns the width to size output against: the active TUI viewport's
+// content width (program box or console panel) when one is reporting, else the raw
+// terminal width. This keeps proportional bars inside the viewport instead of the tty.
+func (p *consoleEventProcessor) renderWidth() int {
+	if console.OutputContentWidthFn != nil {
+		if w := console.OutputContentWidthFn(); w > 0 {
+			return w
+		}
 	}
+	w := goterm.Width()
+	if w <= 0 {
+		w = 80
+	}
+	return w
+}
+
+func (p *consoleEventProcessor) render() {
+	termW := p.renderWidth()
+	termH := goterm.Height()
 	if termH <= 0 {
 		termH = 24
 	}
