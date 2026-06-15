@@ -283,14 +283,16 @@ func (p *consoleEventProcessor) buildImageSizesAndBar(layers []*consoleTask, max
 }
 
 func (p *consoleEventProcessor) buildNetworkLines() ([]string, []timerEntry) {
-	if len(p.networkIDs) == 0 {
+	// Only surface networks we actually act on — in-use Warnings on teardown are hidden.
+	netIDs := p.visibleNetworkIDs()
+	if len(netIDs) == 0 {
 		return nil, nil
 	}
-	netIcon, netStatusANSI, netStatusText, _ := p.sectionRollupWithPropagation(p.networkIDs, nil)
+	netIcon, netStatusANSI, netStatusText, _ := p.sectionRollupWithPropagation(netIDs, nil)
 	netStatusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(netStatusText))
 	lines := []string{globalIndent + netIcon + " " + netStatusANSI + console.CodeReset + netStatusPad + console.ToConsoleANSI("{{[white::B]}}networks{{[-]}}{{|DockerColon|}}:{{[-]}}")}
-	timers := []timerEntry{{task: p.sectionTaskFor(p.networkIDs), style: timerSection}}
-	for _, netID := range p.networkIDs {
+	timers := []timerEntry{{task: p.sectionTaskFor(netIDs), style: timerSection}}
+	for _, netID := range netIDs {
 		t := p.tasks[netID]
 		nameANSI := console.ToConsoleANSI("{{|IPAddress|}}" + netID + "{{[-]}}")
 		var icon, statusText, statusANSI string
