@@ -469,6 +469,23 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 
 // LoadImageServices loads the compose project and returns a map of image ref → []service names.
 // Returns an empty map (not an error) if the compose file cannot be read.
+// ProjectName returns the compose project name (from COMPOSE_PROJECT_NAME or the
+// normalized compose dir basename), matching what the SDK labels containers with.
+func ProjectName() string {
+	conf := config.LoadAppConfig()
+	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
+	envMap := make(map[string]string)
+	if vars, err := dotenv.GetEnvFromFile(make(map[string]string), []string{envFile}); err == nil {
+		for k, v := range vars {
+			envMap[strings.Clone(k)] = strings.Clone(v)
+		}
+	}
+	if pn := envMap["COMPOSE_PROJECT_NAME"]; pn != "" {
+		return pn
+	}
+	return loader.NormalizeProjectName(filepath.Base(conf.ComposeDir))
+}
+
 func LoadImageServices(ctx context.Context) map[string][]string {
 	conf := config.LoadAppConfig()
 	composePath := filepath.Join(conf.ComposeDir, constants.ComposeFileName)
