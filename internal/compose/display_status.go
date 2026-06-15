@@ -122,12 +122,34 @@ func (p *consoleEventProcessor) rollupState(ids []string, imageForID func(string
 	}
 }
 
-// worstChildStatus returns the worst EventStatus among all layer children of parentID.
-func (p *consoleEventProcessor) worstChildStatus(parentID string) api.EventStatus {
+// worstChildStatus returns the worst EventStatus among all layer children of imgName.
+// With sha256-keyed tasks, layers are looked up via imageLayerDiffIDs rather than parentID.
+func (p *consoleEventProcessor) worstChildStatus(imgName string) api.EventStatus {
 	worst := api.Done
+	diffIDs := p.imageLayerDiffIDs[imgName]
+	if len(diffIDs) > 0 {
+		for _, sha := range diffIDs {
+			t := p.tasks[sha]
+			if t == nil {
+				continue
+			}
+			switch t.status {
+			case api.Error:
+				return api.Error
+			case api.Warning:
+				worst = api.Warning
+			case api.Working:
+				if worst != api.Warning {
+					worst = api.Working
+				}
+			}
+		}
+		return worst
+	}
+	// Fallback for images with no pre-flight data: use parentID matching.
 	for _, id := range p.ids {
 		t := p.tasks[id]
-		if t.parentID != parentID {
+		if t.parentID != imgName {
 			continue
 		}
 		switch t.status {
@@ -340,9 +362,11 @@ func imageStatusTag(s api.EventStatus, text string, command string) string {
 }
 
 // layerStatusTag styles a layer-level (download/extract) status.
+// Note: the SDK drops "Pull complete" events (jm.Progress == nil guard in toPullProgressEvent),
+// so "Extracting" is the terminal state for extracted layers and must be treated as final.
 func layerStatusTag(s api.EventStatus, text string) string {
 	return applyStatusTag(s, text,
-		[]string{api.StatusDownloadComplete, "Pull complete", "Already exists"},
+		[]string{api.StatusDownloadComplete, "Pull complete", "Already exists", "Extracted"},
 		[]string{api.StatusDownloading, "Extracting", "Verifying Checksum", "Pulling fs layer"},
 		nil,
 	)

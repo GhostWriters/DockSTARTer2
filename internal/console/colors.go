@@ -197,7 +197,8 @@ func init() {
 		DockerImage:   "{{[-]}}{{[magenta]}}",
 		DockerTag:     "{{[-]}}{{[magenta::D]}}",
 		DockerSpinner: "{{[-]}}{{[yellow]}}",
-		DockerBar:     "{{[-]}}{{[cyan]}}",
+		DockerBar:          "{{[-]}}{{[cyan]}}",
+		DockerSharedLayer:  "{{[-]}}{{[yellow]}}",
 		// Docker Compose progress colors — status text
 		DockerStatusSuccess: "{{[-]}}{{[cyan]}}",
 		DockerStatusFinal:   "{{[-]}}{{[green::B]}}",
@@ -337,7 +338,8 @@ type AppColors struct {
 	DockerImage   string
 	DockerTag     string
 	DockerSpinner string
-	DockerBar     string
+	DockerBar          string
+	DockerSharedLayer  string
 	// Docker Compose progress colors — status text
 	DockerStatusSuccess string
 	DockerStatusFinal   string

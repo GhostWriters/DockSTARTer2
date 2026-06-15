@@ -21,17 +21,8 @@ func (p *consoleEventProcessor) buildSummaryLine() string {
 	netCount := len(p.networkIDs)
 	volCount := len(p.volumeIDs)
 
-	isImageOrder := make(map[string]bool, len(p.imageOrder))
-	for _, id := range p.imageOrder {
-		isImageOrder[id] = true
-	}
-	seenLayers := make(map[string]bool)
-	for _, id := range p.ids {
-		if t := p.tasks[id]; t != nil && t.parentID != "" && isImageOrder[t.parentID] {
-			seenLayers[id] = true
-		}
-	}
-	layerCount := len(seenLayers)
+	// Count unique DiffIDs across all images (each sha256 counted once regardless of sharing).
+	layerCount := len(p.diffIDImageCount)
 
 	var parts []string
 	if svcCount > 0 {
@@ -174,7 +165,8 @@ func (p *consoleEventProcessor) logSummary() {
 		termW = 80
 	}
 
-	for _, line := range p.buildLines(termW) {
+	// Final log always includes layer rows, regardless of the -v console flag.
+	for _, line := range p.buildLines(termW, true) {
 		logger.Notice(ctx, pfx+line)
 	}
 }

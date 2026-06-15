@@ -15,7 +15,13 @@ import (
 
 	"github.com/buger/goterm"
 	"github.com/docker/compose/v5/pkg/api"
+	dockerclient "github.com/moby/moby/client"
 )
+
+// imageInspector is the subset of the Docker client API used for post-pull layer inspection.
+type imageInspector interface {
+	ImageInspect(ctx context.Context, imageID string, opts ...dockerclient.ImageInspectOption) (dockerclient.ImageInspectResult, error)
+}
 
 // consoleEventProcessor implements api.EventProcessor with a themed live-updating
 // display for terminals. Layout per image group:
@@ -76,7 +82,12 @@ type consoleTask struct {
 }
 
 func (t *consoleTask) completed() bool {
-	return t.status == api.Done || t.status == api.Error || t.status == api.Warning
+	if t.status == api.Done || t.status == api.Error || t.status == api.Warning {
+		return true
+	}
+	// SDK drops "Pull complete" (jm.Progress == nil guard), so "Extracting" is the
+	// terminal state for extracted layers — treat it as completed.
+	return t.text == "Extracting"
 }
 
 type consoleEventProcessor struct {
@@ -129,13 +140,47 @@ type consoleEventProcessor struct {
 	lastSentLines []string        // last lines sent via updateFn; skip if unchanged
 	asciiMode     bool            // when true, use ASCII spinners, icons, and progress bar chars
 	verbose       bool            // when true, show individual layer rows under each image
+
+	dockerClient imageInspector // Docker client for pre-flight and post-pull ImageInspect
+
+	// Pre-flight layer data (populated before pull starts via ImageInspect on local images).
+	// imageLayerDiffIDs[imgRef] = ordered RootFS.Layers sha256s from pre-flight inspect.
+	// diffIDImageCount[sha256]  = number of images that contain this layer (for sharing).
+	// diffIDGroupNum[sha256]    = badge group number (1-based); 0 = unique.
+	imageLayerDiffIDs map[string][]string // imgRef → ordered sha256 DiffIDs
+	diffIDImageCount  map[string]int      // sha256 → count of images containing it
+	diffIDGroupNum    map[string]int      // sha256 → sharing group number (assigned in first-seen order)
+
+	// Pull-event → DiffID positional mapping.
+	// Docker sends MANY events per layer (Pulling fs layer → Downloading → Download
+	// complete → Extracting → Pull complete), all sharing the same pull-event ID. Layers
+	// first appear in RootFS.DiffIDs order, so we assign each NEW pull-event ID to the next
+	// DiffID slot and remember that assignment for all subsequent events of that same ID.
+	// imagePullIdx[imgRef] = index of next unassigned DiffID slot for that image.
+	// pullIDToDiffID[imgRef+":"+pullEventID] = assigned sha256 DiffID (stable across events).
+	imagePullIdx   map[string]int    // imgRef → next DiffID slot index
+	pullIDToDiffID map[string]string // imgRef+":"+pullEventID → sha256 DiffID
+
+	// Cold-pull layer identity (when pre-flight had no DiffIDs, e.g. after a prune).
+	// Layer tasks are keyed by the pull-event rawID during the pull. rawIDs are NOT stable
+	// across images for the same layer, so we can't detect cross-image sharing from them.
+	// Instead we record each image's rawID arrival order, then AFTER the image finishes
+	// pulling we inspect it (now on disk) to get its RootFS DiffIDs and positionally remap
+	// each rawID task to its sha256 DiffID — unifying identity with warm images so shared
+	// layers collapse onto one sha task and badges/counts work across warm+cold images.
+	imagePullOrder map[string][]string // imgRef → rawIDs in first-seen pull order
+	rawIDSeen      map[string]bool      // imgRef+":"+rawID → already recorded in order
+
+	// Post-pull inspect (for images not already local at start, or to confirm).
+	inspectWG       sync.WaitGroup
+	inspectedImages map[string]bool
 }
 
 // NewConsoleEventProcessor creates a themed live-updating EventProcessor for TTY output.
 // imageServices maps image name (e.g. "lscr.io/linuxserver/plex:latest") to the list of
 // service names that use it, so service headers can be shown before lifecycle events arrive.
 // imageOrder is the stable key order for imageServices (caller must provide sorted/deterministic order).
-func NewConsoleEventProcessor(logCtx context.Context, out io.Writer, command string, imageServices map[string][]string, imageOrder []string, containerToService map[string]string, projectName string, asciiMode bool, verbose bool, updateFn func([]string)) api.EventProcessor {
+func NewConsoleEventProcessor(logCtx context.Context, out io.Writer, command string, imageServices map[string][]string, imageOrder []string, containerToService map[string]string, projectName string, asciiMode bool, verbose bool, updateFn func([]string), dockerClient imageInspector) api.EventProcessor {
 	return &consoleEventProcessor{
 		out:                out,
 		logCtx:             logCtx,
@@ -153,12 +198,24 @@ func NewConsoleEventProcessor(logCtx context.Context, out io.Writer, command str
 		asciiMode:          asciiMode,
 		verbose:            verbose,
 		startTime:          time.Now(),
+		dockerClient:      dockerClient,
+		imageLayerDiffIDs: make(map[string][]string),
+		diffIDImageCount:  make(map[string]int),
+		diffIDGroupNum:    make(map[string]int),
+		imagePullIdx:      make(map[string]int),
+		pullIDToDiffID:    make(map[string]string),
+		inspectedImages:   make(map[string]bool),
+		imagePullOrder:    make(map[string][]string),
+		rawIDSeen:         make(map[string]bool),
 	}
 }
 
 func (p *consoleEventProcessor) Start(ctx context.Context, operation string) {
 	p.ctx = ctx
 	p.operation = operation
+
+	// Pre-flight: inspect all images to get RootFS DiffIDs before pull events arrive.
+	p.preflight(ctx)
 
 	// Activate the viewport now — enters alt screen pre-filled with recent history.
 	if !p.noViewport {
@@ -187,7 +244,7 @@ func (p *consoleEventProcessor) Start(ctx context.Context, operation string) {
 		}
 		vpActive := func() bool { vp := console.GlobalViewport; return vp != nil && vp.IsActive() }()
 		if !vpActive {
-			initialLines := p.buildLines(termW)
+			initialLines := p.buildLines(termW, p.verbose)
 			if len(initialLines) > 0 {
 				for range initialLines {
 					fmt.Fprintln(p.out)
@@ -219,13 +276,18 @@ func (p *consoleEventProcessor) Start(ctx context.Context, operation string) {
 }
 
 func (p *consoleEventProcessor) Done(_ string, _ bool) {
-	// Stop the ticker goroutine first, then do a final render.
+	// Stop the ticker goroutine first.
 	p.doneCh <- struct{}{}
 	p.mtx.Lock()
 	if p.ticker != nil {
 		p.ticker.Stop()
 	}
 	p.mtx.Unlock()
+
+	// Wait for all post-pull ImageInspect goroutines (which remap layer task IDs to their
+	// sha256 DiffIDs) to complete before the final render. inspectWG.Wait establishes a
+	// happens-before edge for their writes, so no extra lock barrier is needed here.
+	p.inspectWG.Wait()
 	p.render()
 
 	// Deactivate the viewport first — leaves alt screen, dumps history to main screen.
@@ -239,7 +301,7 @@ func (p *consoleEventProcessor) Done(_ string, _ bool) {
 			if termW <= 0 {
 				termW = 80
 			}
-			finalLines := append([]string{p.withSummaryTimer(p.buildSummaryLine())}, p.buildLines(termW)...)
+			finalLines := append([]string{p.withSummaryTimer(p.buildSummaryLine())}, p.buildLines(termW, p.verbose)...)
 			vp.UpdateLines(finalLines)
 			vp.Deactivate()
 		}
@@ -316,6 +378,39 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 		}
 	}
 
+	// Positional mapping: remap pull-event layer IDs to sha256 DiffID task keys.
+	// A single layer produces many events sharing one pull-event ID. Assign each NEW
+	// pull-event ID to the next DiffID slot (layers first appear in RootFS order) and
+	// reuse that assignment for all later events of the same ID, so a layer's whole
+	// progression lands on one DiffID row instead of being smeared across several.
+	// Shared layers (same id across images) intentionally map to ONE task and show under
+	// each image — see the regression guard below for late re-pull events from a 2nd image.
+	if parentID != "" {
+		diffIDs := p.imageLayerDiffIDs[parentID]
+		if len(diffIDs) > 0 {
+			mapKey := parentID + ":" + id
+			if sha, ok := p.pullIDToDiffID[mapKey]; ok {
+				id = sha // already assigned this pull-event ID
+			} else {
+				idx := p.imagePullIdx[parentID]
+				if idx < len(diffIDs) {
+					sha := diffIDs[idx]
+					p.imagePullIdx[parentID] = idx + 1
+					p.pullIDToDiffID[mapKey] = sha
+					id = sha
+				}
+			}
+		} else {
+			// Cold-pull path: no pre-flight DiffIDs. Record this rawID's first-seen position
+			// for this image so post-pull inspect can remap it to its sha256 DiffID. id is rawID.
+			seenKey := parentID + ":" + id
+			if !p.rawIDSeen[seenKey] {
+				p.rawIDSeen[seenKey] = true
+				p.imagePullOrder[parentID] = append(p.imagePullOrder[parentID], id)
+			}
+		}
+	}
+
 	t, exists := p.tasks[id]
 	if !exists {
 		t = &consoleTask{
@@ -350,8 +445,15 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 		// layer tasks (ParentID != "") are rendered as children — no separate list needed
 	}
 
-	t.text = e.Text
-	t.status = e.Status
+	// Update task state.
+	// Text/status always reflect the latest event — a shared layer may legitimately move
+	// through phases again for another image. But progress (sizes/bar) is NEVER cleared:
+	// total/current/percent only ever advance, so a sizeless re-pull event from a second
+	// image can't blank a row that already showed download progress.
+	if e.Text != "" {
+		t.text = e.Text
+		t.status = e.Status
+	}
 	if e.Total > t.total {
 		t.total = e.Total
 	}
@@ -363,6 +465,22 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 	}
 	if t.completed() && t.endTime.IsZero() {
 		t.endTime = time.Now()
+	}
+
+	// Post-pull inspect for images where pre-flight had no local data.
+	if t.completed() && contains(p.imageIDs, id) && p.dockerClient != nil && !p.inspectedImages[id] {
+		p.inspectedImages[id] = true
+		p.inspectWG.Add(1)
+		go func(imgRef string) {
+			defer p.inspectWG.Done()
+			info, err := p.dockerClient.ImageInspect(context.Background(), imgRef)
+			if err != nil {
+				return
+			}
+			p.mtx.Lock()
+			p.applyInspectResult(imgRef, info.RootFS.Layers)
+			p.mtx.Unlock()
+		}(id)
 	}
 
 	// Reclassify: if a top-level task initially looked like an image but later
@@ -393,7 +511,7 @@ func (p *consoleEventProcessor) render() {
 	} else {
 		p.spinnerFrame = (p.spinnerFrame + 1) % len(spinnerFrames)
 	}
-	lines := p.buildLines(termW)
+	lines := p.buildLines(termW, p.verbose)
 	if len(lines) == 0 {
 		return
 	}
@@ -460,6 +578,141 @@ func (p *consoleEventProcessor) render() {
 	fmt.Fprint(p.out, buf.String())
 	p.numLines = len(lines)
 	_ = termH
+}
+
+// preflight calls ImageInspect on all known images concurrently before the pull starts,
+// populating imageLayerDiffIDs, diffIDImageCount, and diffIDGroupNum so layer rows and
+// sharing badges are available from the first render.
+func (p *consoleEventProcessor) preflight(ctx context.Context) {
+	if p.dockerClient == nil {
+		return
+	}
+	type result struct {
+		imgRef string
+		layers []string
+	}
+	ch := make(chan result, len(p.imageOrder))
+	for _, imgRef := range p.imageOrder {
+		go func(ref string) {
+			info, err := p.dockerClient.ImageInspect(ctx, ref)
+			if err != nil {
+				ch <- result{ref, nil}
+				return
+			}
+			ch <- result{ref, info.RootFS.Layers}
+		}(imgRef)
+	}
+	for range p.imageOrder {
+		r := <-ch
+		if len(r.layers) > 0 {
+			p.imageLayerDiffIDs[r.imgRef] = r.layers
+			for _, sha := range r.layers {
+				p.diffIDImageCount[sha]++
+			}
+		}
+	}
+	// Assign group numbers to shared DiffIDs in imageOrder × layer order.
+	nextGroup := 1
+	for _, imgRef := range p.imageOrder {
+		for _, sha := range p.imageLayerDiffIDs[imgRef] {
+			if p.diffIDImageCount[sha] > 1 {
+				if _, seen := p.diffIDGroupNum[sha]; !seen {
+					p.diffIDGroupNum[sha] = nextGroup
+					nextGroup++
+				}
+			}
+		}
+	}
+	// Pre-populate layer tasks from DiffIDs so rows appear before pull events arrive.
+	// Keyed by sha256 — no parentID needed; display iterates imageLayerDiffIDs per image.
+	// Default to Already exists/Done — safe assumption since layer updates always apply.
+	for _, imgRef := range p.imageOrder {
+		for _, sha := range p.imageLayerDiffIDs[imgRef] {
+			if _, exists := p.tasks[sha]; !exists {
+				p.tasks[sha] = &consoleTask{
+					id:        sha,
+					startTime: time.Now(),
+					text:      "Already exists",
+					status:    api.Done,
+					percent:   100,
+				}
+				p.ids = append(p.ids, sha)
+			}
+		}
+	}
+}
+
+// applyInspectResult runs after a cold-pull image finishes pulling (it's now on disk).
+// It positionally remaps that image's rawID-keyed layer tasks to their sha256 DiffIDs,
+// unifying identity with warm images so shared layers collapse onto one sha task. This is
+// how dup badges/counts work across mixed warm+cold images: rawIDs differ per image for
+// the same layer, but DiffIDs match. Existing progress is preserved (merged into the sha
+// task, or the rawID task is rekeyed in place).
+func (p *consoleEventProcessor) applyInspectResult(imgRef string, layers []string) {
+	if len(layers) == 0 || len(p.imageLayerDiffIDs[imgRef]) > 0 {
+		return // warm image (already had DiffIDs) or nothing to do
+	}
+	order := p.imagePullOrder[imgRef]
+	p.imageLayerDiffIDs[imgRef] = layers
+
+	// Alignment: the SDK drops "Already exists" events for cached layers, so `order` (the
+	// rawIDs we actually saw download) only contains this image's NON-cached layers, while
+	// `layers` is the full RootFS DiffID list. The cached layers are exactly the DiffIDs that
+	// already have a sha task (owned by a warm image that shares them). So the downloaded
+	// rawIDs map, in order, to the subsequence of DiffIDs that have NO existing sha task.
+	var downloadSlots []string // DiffIDs (sha) not yet owned — these were downloaded
+	for _, sha := range layers {
+		if _, ok := p.tasks[sha]; !ok {
+			downloadSlots = append(downloadSlots, sha)
+		}
+	}
+	n := len(order)
+	if len(downloadSlots) < n {
+		n = len(downloadSlots)
+	}
+	for i := 0; i < n; i++ {
+		rawID, sha := order[i], downloadSlots[i]
+		rawTask := p.tasks[rawID]
+		if rawTask == nil {
+			continue
+		}
+		// Rekey the downloaded rawID task in place to its sha DiffID.
+		rawTask.id = sha
+		delete(p.tasks, rawID)
+		p.tasks[sha] = rawTask
+		for j, x := range p.ids {
+			if x == rawID {
+				p.ids[j] = sha
+				break
+			}
+		}
+	}
+
+	// Recompute sharing counts + badge group numbers from unified sha identity.
+	p.recomputeDiffIDSharing()
+}
+
+// recomputeDiffIDSharing rebuilds diffIDImageCount and diffIDGroupNum from imageLayerDiffIDs,
+// so dup counts and badge numbers reflect all images currently known (warm + remapped cold).
+func (p *consoleEventProcessor) recomputeDiffIDSharing() {
+	p.diffIDImageCount = make(map[string]int)
+	for _, imgRef := range p.imageOrder {
+		for _, sha := range p.imageLayerDiffIDs[imgRef] {
+			p.diffIDImageCount[sha]++
+		}
+	}
+	p.diffIDGroupNum = make(map[string]int)
+	nextGroup := 1
+	for _, imgRef := range p.imageOrder {
+		for _, sha := range p.imageLayerDiffIDs[imgRef] {
+			if p.diffIDImageCount[sha] > 1 {
+				if _, seen := p.diffIDGroupNum[sha]; !seen {
+					p.diffIDGroupNum[sha] = nextGroup
+					nextGroup++
+				}
+			}
+		}
+	}
 }
 
 func remove(s []string, v string) []string {
