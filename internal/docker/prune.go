@@ -3,12 +3,15 @@ package docker
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"DockSTARTer2/internal/compose"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/client"
 )
 
 // Prune removes unused docker resources.
@@ -42,9 +45,14 @@ func Prune(ctx context.Context, assumeYes bool) error {
 	asciiMode := !console.LineCharacters
 	imageServices := compose.LoadImageServices(ctx)
 
+	// Pre-flight: capture container ID → service/name BEFORE pruning, so deleted
+	// containers can be shown under their service. After pruning the containers are gone
+	// and can no longer be inspected, so this must happen first.
+	containerInfo := containerServiceMap(ctx, cli)
+
 	stopSpinner := console.StartSpinner()
 
-	report := PruneReport{AsciiMode: asciiMode}
+	report := PruneReport{AsciiMode: asciiMode, ContainerInfo: containerInfo}
 
 	// 1. Containers
 	cReport, err := cli.ContainersPrune(ctx, filters.NewArgs())
@@ -94,4 +102,39 @@ func Prune(ctx context.Context, assumeYes bool) error {
 	}
 
 	return nil
+}
+
+// containerServiceMap returns a map of container ID (both full and 12-char short forms)
+// to its compose service name and display name, for containers belonging to the current
+// project. Used so prune can display deleted containers under their service.
+func containerServiceMap(ctx context.Context, cli *client.Client) map[string]containerMeta {
+	const projectLabel = "com.docker.compose.project"
+	const serviceLabel = "com.docker.compose.service"
+
+	projectName := compose.ProjectName()
+	f := filters.NewArgs()
+	if projectName != "" {
+		f.Add("label", projectLabel+"="+projectName)
+	}
+	containers, err := cli.ContainerList(ctx, container.ListOptions{All: true, Filters: f})
+	if err != nil {
+		return nil
+	}
+	m := make(map[string]containerMeta, len(containers)*2)
+	for _, c := range containers {
+		svc := c.Labels[serviceLabel]
+		if svc == "" {
+			continue
+		}
+		name := svc
+		if len(c.Names) > 0 {
+			name = strings.TrimPrefix(c.Names[0], "/")
+		}
+		meta := containerMeta{service: svc, name: name}
+		m[c.ID] = meta
+		if len(c.ID) >= 12 {
+			m[c.ID[:12]] = meta
+		}
+	}
+	return m
 }

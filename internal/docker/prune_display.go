@@ -36,6 +36,18 @@ type PruneReport struct {
 	NetworksError     error
 	VolumesError      error
 	ContainersError   error
+
+	// ContainerInfo maps a container ID (full and short forms) to its compose service and
+	// display name, captured before pruning. Deleted containers that match a service whose
+	// image was also pruned are shown nested under that service; the rest go in a standalone
+	// containers: section (by container name when known, else the truncated raw ID).
+	ContainerInfo map[string]containerMeta
+}
+
+// containerMeta is the pre-flight info for one container.
+type containerMeta struct {
+	service string // compose service name
+	name    string // display container name
 }
 
 func (r *PruneReport) hasErrors() bool {
@@ -132,6 +144,16 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 		return GlobalIndent + icon + " " + status + console.CodeReset + pad +
 			SectionChildIndent + console.ToConsoleANSI(colorTag+name+"{{[-]}}{{|DockerColon|}}:{{[-]}}")
 	}
+	deletedStatus := console.ToConsoleANSI("{{|DockerStatusFinal|}}Deleted{{[-]}}")
+	deletedPad := strutil.Repeat(" ", SectionStatusW-len("Deleted"))
+	// containerNameRow renders a "container_name: <name>" sub-line under a service,
+	// parallel to the image: line, with Deleted status.
+	containerNameRow := func(name string) string {
+		label := strutil.Repeat(" ", 2*SectionChildIndentW) +
+			console.ToConsoleANSI("{{|DockerMarkerDone|}}container_name{{[-]}}{{|DockerColon|}}:{{[-]}} ")
+		return GlobalIndent + doneIconANSI + " " + deletedStatus + console.CodeReset + deletedPad +
+			label + console.ToConsoleANSI("{{|App|}}"+name+"{{[-]}}")
+	}
 
 	// ── build image groups ───────────────────────────────────────────────────
 	var groups []imageGroup
@@ -212,6 +234,36 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 	// All lines after the header nest under it (indent by icon + space), matching compose.
 	headerEnd := len(lines)
 
+	// Resolve deleted containers to their compose service/name. A container nests under
+	// its service (when that service's image was also pruned); the rest are shown in a
+	// standalone containers: section. svcContainerName maps service -> container name for
+	// nesting; leftover IDs (no service, or service not in an image group) go to the section.
+	svcContainerName := make(map[string]string)
+	servicesShown := map[string]bool{}
+	for _, g := range groups {
+		for _, svc := range imageServices[g.ref] {
+			servicesShown[svc] = true
+		}
+	}
+	var leftoverContainers []string // display strings for the standalone section
+	for _, id := range r.ContainersDeleted {
+		meta, ok := r.ContainerInfo[id]
+		if ok && servicesShown[meta.service] {
+			svcContainerName[meta.service] = meta.name
+			continue
+		}
+		// Not nestable: show the container name if known, else the truncated raw ID.
+		if ok && meta.name != "" {
+			leftoverContainers = append(leftoverContainers, meta.name)
+		} else {
+			tid := id
+			if len(tid) > 12 {
+				tid = tid[:12]
+			}
+			leftoverContainers = append(leftoverContainers, tid)
+		}
+	}
+
 	// ── images / services section ─────────────────────────────────────────────
 	if len(groups) > 0 {
 		imageLabel := strutil.Repeat(" ", 2*SectionChildIndentW) +
@@ -271,6 +323,11 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 			if len(svcs) > 0 {
 				for _, svc := range svcs {
 					add(childRow(svc, "{{|App|}}", statusRemoved))
+					// If a deleted container belongs to this service, nest its
+					// container_name line under the service (parallel to the image line).
+					if name, ok := svcContainerName[svc]; ok {
+						add(containerNameRow(name))
+					}
 				}
 			} else {
 				unknownCount++
@@ -299,10 +356,11 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 	}
 
 	// ── containers ───────────────────────────────────────────────────────────
-	if len(r.ContainersDeleted) > 0 || r.ContainersError != nil {
+	// Only containers not nested under a service (above) appear here.
+	if len(leftoverContainers) > 0 || r.ContainersError != nil {
 		add(sectionHeader("containers", r.ContainersError != nil))
-		for _, ctr := range r.ContainersDeleted {
-			add(childRow(ctr, "{{|App|}}", statusRemoved))
+		for _, name := range leftoverContainers {
+			add(childRow(name, "{{|App|}}", statusRemoved))
 		}
 	}
 
