@@ -33,10 +33,10 @@ func (p *consoleEventProcessor) buildSummaryLine() string {
 		parts = append(parts, fmt.Sprintf("{{[::D]}}%d %s{{[-]}}", layerCount, plural(layerCount, "layer", "layers")))
 	}
 	if netCount > 0 {
-		parts = append(parts, fmt.Sprintf("{{|App|}}%d %s{{[-]}}", netCount, plural(netCount, "network", "networks")))
+		parts = append(parts, fmt.Sprintf("{{|IPAddress|}}%d %s{{[-]}}", netCount, plural(netCount, "network", "networks")))
 	}
 	if volCount > 0 {
-		parts = append(parts, fmt.Sprintf("{{|App|}}%d %s{{[-]}}", volCount, plural(volCount, "volume", "volumes")))
+		parts = append(parts, fmt.Sprintf("{{|Folder|}}%d %s{{[-]}}", volCount, plural(volCount, "volume", "volumes")))
 	}
 	// Command word is bold yellow (matching the summary line's overall duration); the
 	// colon uses DockerColon (matching the colons on the section/name lines below).
