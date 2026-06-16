@@ -2,6 +2,7 @@ package screens
 
 import (
 	"DockSTARTer2/internal/tui"
+	"DockSTARTer2/internal/version"
 )
 
 // NewMainMenuScreen creates the main menu as a standalone screen
@@ -38,7 +39,7 @@ func NewMainMenuScreen(connType string) tui.ScreenModel {
 
 	menu.SetMenuName("")
 	menu.SetConnType(connType)
-	menu.SetHelpPageText("The main navigation menu for DockSTARTer. Select an action to configure your Docker application stack, apply updates, or adjust settings.")
+	menu.SetHelpPageText("The main navigation menu for " + version.ApplicationName + ". Select an action to configure your Docker application stack, apply updates, or adjust settings.")
 	menu.SetHelpItemPrefix("Action")
 	return menu
 }

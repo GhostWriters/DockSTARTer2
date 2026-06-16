@@ -7,6 +7,7 @@ import (
 	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/tui/components/streamvp"
+	"DockSTARTer2/internal/version"
 
 	tea "charm.land/bubbletea/v2"
 )
@@ -434,7 +435,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ConfirmQuitMsg:
 		// Show an exit confirmation dialog. On Yes we quit; on No the dialog just closes.
 		resultChan := make(chan bool, 1)
-		dialog := newConfirmDialog("Exit DockSTARTer", "Do you want to exit DockSTARTer?", true)
+		dialog := newConfirmDialog("Exit "+version.ApplicationName, "Do you want to exit "+version.ApplicationName+"?", true)
 		dW, dH := m.getDialogArea(dialog)
 		if sizable, ok := interface{}(dialog).(interface{ SetSize(int, int) }); ok {
 			sizable.SetSize(dW, dH)

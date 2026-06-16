@@ -14,6 +14,7 @@ import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/version"
 
 	"github.com/compose-spec/compose-go/v2/dotenv"
 	"github.com/compose-spec/compose-go/v2/loader"
@@ -42,7 +43,7 @@ func YesNotice(command, appNamesJoined string) string {
 		if appNamesJoined != "" {
 			return fmt.Sprintf("Stopping and removing %s.", appNamesJoined)
 		}
-		return "Stopping and removing containers, networks, volumes, and images created by DockSTARTer."
+		return "Stopping and removing containers, networks, volumes, and images created by " + version.ApplicationName + "."
 	case "pause":
 		if appNamesJoined != "" {
 			return fmt.Sprintf("Pausing: %s.", appNamesJoined)
@@ -115,9 +116,9 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 			yesNotice = fmt.Sprintf("Stopping and removing {{|App|}}%s{{[-]}}.", appNamesJoined)
 			noNotice = fmt.Sprintf("Not stopping and removing: {{|App|}}%s{{[-]}}.", appNamesJoined)
 		} else {
-			question = "Stop and remove containers, networks, volumes, and images created by {{|ApplicationName|}}DockSTARTer{{[-]}}?"
-			yesNotice = "Stopping and removing containers, networks, volumes, and images created by {{|ApplicationName|}}DockSTARTer{{[-]}}."
-			noNotice = "Not stopping and removing containers, networks, volumes, and images created by {{|ApplicationName|}}DockSTARTer{{[-]}}."
+			question = "Stop and remove containers, networks, volumes, and images created by {{|ApplicationName|}}" + version.ApplicationName + "{{[-]}}?"
+			yesNotice = "Stopping and removing containers, networks, volumes, and images created by {{|ApplicationName|}}" + version.ApplicationName + "{{[-]}}."
+			noNotice = "Not stopping and removing containers, networks, volumes, and images created by {{|ApplicationName|}}" + version.ApplicationName + "{{[-]}}."
 		}
 	case "pause":
 		if appNamesJoined != "" {
