@@ -3,6 +3,7 @@ package screens
 import (
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/tui"
+	"DockSTARTer2/internal/version"
 	"context"
 	"strconv"
 	"strings"
@@ -408,7 +409,7 @@ func (m *TabbedVarsEditorModel) showAddVarDialog() tea.Cmd {
 		{appUpper + "__TAG", "Used in the image: tag section of your override."},
 	}
 	if appenv.IsAppBuiltIn(appUpper) && !editor.HasVariable(appUpper+"__ENABLED") {
-		allStock = append([]stockDef{{appUpper + "__ENABLED", "Creating this variable causes DockSTARTer to manage this app with no override needed."}}, allStock...)
+		allStock = append([]stockDef{{appUpper + "__ENABLED", "Creating this variable causes " + version.ApplicationName + " to manage this app with no override needed."}}, allStock...)
 	}
 
 	var stockItems []addVarItem

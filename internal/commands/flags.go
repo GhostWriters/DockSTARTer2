@@ -1,6 +1,10 @@
 package commands
 
-import "github.com/spf13/pflag"
+import (
+	"DockSTARTer2/internal/version"
+
+	"github.com/spf13/pflag"
+)
 
 // NewFlagSet returns a fresh, isolated FlagSet with all ds2 flags registered.
 // Each call to Parse gets its own FlagSet so console parses never share state
@@ -40,11 +44,11 @@ func NewFlagSet() *pflag.FlagSet {
 
 	// Installation / Update
 	fs.BoolP("install", "i", false, "Install/update dependencies")
-	fs.StringP("update", "u", "", "Update DockSTARTer and Templates (can specify tag/branch)")
-	fs.String("update-app", "", "Update DockSTARTer only (can specify tag)")
+	fs.StringP("update", "u", "", "Update "+version.ApplicationName+" and Templates (can specify tag/branch)")
+	fs.String("update-app", "", "Update "+version.ApplicationName+" only (can specify tag)")
 	fs.String("update-templates", "", "Update Templates only (can specify tag/branch)")
 	fs.StringP("version", "V", "", "Show version")
-	fs.BoolP("reset", "R", false, "Reset DockSTARTer to process all actions")
+	fs.BoolP("reset", "R", false, "Reset "+version.ApplicationName+" to process all actions")
 
 	// Environment Variables
 	fs.BoolP("env", "e", false, "Update .env files")

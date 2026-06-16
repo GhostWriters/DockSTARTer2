@@ -5,6 +5,7 @@ import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/tui/components/enveditor"
+	"DockSTARTer2/internal/version"
 	"fmt"
 	"strings"
 	"time"
@@ -403,12 +404,12 @@ func (m *TabbedVarsEditorModel) confirmExitAction() tea.Cmd {
 	hasChanges := m.hasChanges()
 	return func() tea.Msg {
 		if hasChanges {
-			if tui.Confirm("Exit DockSTARTer", "You have unsaved changes. Discard changes and exit DockSTARTer?", false) {
+			if tui.Confirm("Exit "+version.ApplicationName, "You have unsaved changes. Discard changes and exit "+version.ApplicationName+"?", false) {
 				return tea.Quit()
 			}
 			return nil
 		}
-		if tui.Confirm("Exit DockSTARTer", "Do you want to exit DockSTARTer?", true) {
+		if tui.Confirm("Exit "+version.ApplicationName, "Do you want to exit "+version.ApplicationName+"?", true) {
 			return tea.Quit()
 		}
 		return nil

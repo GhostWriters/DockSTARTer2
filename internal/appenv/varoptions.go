@@ -3,6 +3,8 @@ package appenv
 import (
 	"regexp"
 	"strings"
+
+	"DockSTARTer2/internal/version"
 )
 
 // VarOption represents a single predefined selectable value for a variable,
@@ -62,7 +64,7 @@ func GetVarOptions(varName, appName, computedDefault string, meta *AppMeta) []Va
 		switch {
 		case varName == appName+"__ENABLED":
 			if len(opts) > 0 {
-				opts[0].Help = "Must be true or false. Controls whether DockSTARTer manages this application."
+				opts[0].Help = "Must be true or false. Controls whether " + version.ApplicationName + " manages this application."
 			}
 			opts = append(opts,
 				VarOption{Display: "Enabled", Value: "'true'",

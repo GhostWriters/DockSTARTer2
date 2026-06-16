@@ -3,6 +3,8 @@ package appenv
 import (
 	"regexp"
 	"strings"
+
+	"DockSTARTer2/internal/version"
 )
 
 // varHelpEntry holds the full description and a short one-liner for a known variable.
@@ -53,7 +55,7 @@ var globalVarHelp = map[string]varHelpEntry{
 // Sourced from DockSTARTer scripts/menu_value_prompt.sh (APP case).
 var appVarSuffixHelp = map[string]varHelpEntry{
 	"ENABLED": {
-		helpText: "This is used to set the application as enabled or disabled. If this variable is removed, the application will not be controlled by DockSTARTer. Must be {{|Highlight|}}true{{[-]}} or {{|Highlight|}}false{{[-]}}.",
+		helpText: "This is used to set the application as enabled or disabled. If this variable is removed, the application will not be controlled by " + version.ApplicationName + ". Must be {{|Highlight|}}true{{[-]}} or {{|Highlight|}}false{{[-]}}.",
 		helpLine: "Enable or disable this application ({{|Highlight|}}true{{[-]}}/{{|Highlight|}}false{{[-]}}).",
 	},
 	"NETWORK_MODE": {
@@ -119,7 +121,7 @@ func lookupVarHelp(varName string) (varHelpEntry, bool) {
 	// VOLUME_ prefix (e.g. VOLUME_CONFIG, VOLUME_DATA)
 	if strings.HasPrefix(suffix, "VOLUME_") {
 		return varHelpEntry{
-			helpText: "If the directory selected does not exist, DockSTARTer will attempt to create it.",
+			helpText: "If the directory selected does not exist, " + version.ApplicationName + " will attempt to create it.",
 			helpLine: "Path to a volume directory for this application.",
 		}, true
 	}
