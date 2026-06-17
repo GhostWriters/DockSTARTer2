@@ -8,9 +8,6 @@ package console
 // semstyle directly and delete this file. Until then, console.X == semstyle.X.
 
 import (
-	"image/color"
-	"regexp"
-
 	"DockSTARTer2/internal/semstyle"
 )
 
@@ -26,57 +23,53 @@ var (
 
 // --- Functions ---
 var (
-	ToConsoleANSI        = semstyle.ToConsoleANSI
-	ToThemeANSI          = semstyle.ToThemeANSI
+	ToConsoleANSI         = semstyle.ToConsoleANSI
+	ToThemeANSI           = semstyle.ToThemeANSI
 	ToThemeANSIWithPrefix = semstyle.ToThemeANSIWithPrefix
-	ForTUI               = semstyle.ForTUI
-	Sprintf              = semstyle.Sprintf
-	Strip                = semstyle.Strip
-	StripANSI            = semstyle.StripANSI
-	StripDelimiters      = semstyle.StripDelimiters
-	StripSemanticTags    = semstyle.StripSemanticTags
-	ExpandConsoleTags    = semstyle.ExpandConsoleTags
-	ExpandThemeTags      = semstyle.ExpandThemeTags
-	ExpandSemanticTags   = semstyle.ExpandSemanticTags
-	ExpandTagsWithMap    = semstyle.ExpandTagsWithMap
-	WrapDirect           = semstyle.WrapDirect
-	WrapSemantic         = semstyle.WrapSemantic
-	SetDelimiters        = semstyle.SetDelimiters
-	GetDelimitedRegex    = semstyle.GetDelimitedRegex
-	GetDirectRegex       = semstyle.GetDirectRegex
+	ForTUI                = semstyle.ForTUI
+	Sprintf               = semstyle.Sprintf
+	Strip                 = semstyle.Strip
+	StripANSI             = semstyle.StripANSI
+	StripDelimiters       = semstyle.StripDelimiters
+	StripSemanticTags     = semstyle.StripSemanticTags
+	ExpandConsoleTags     = semstyle.ExpandConsoleTags
+	ExpandThemeTags       = semstyle.ExpandThemeTags
+	ExpandSemanticTags    = semstyle.ExpandSemanticTags
+	ExpandTagsWithMap     = semstyle.ExpandTagsWithMap
+	WrapDirect            = semstyle.WrapDirect
+	WrapSemantic          = semstyle.WrapSemantic
+	SetDelimiters         = semstyle.SetDelimiters
+	GetDelimitedRegex     = semstyle.GetDelimitedRegex
+	GetDirectRegex        = semstyle.GetDirectRegex
 
-	ParseColor          = semstyle.ParseColor
-	GetColorStr         = semstyle.GetColorStr
-	GetHexForColor      = semstyle.GetHexForColor
-	ResolveTcellColor   = semstyle.ResolveTcellColor
-	GetColorDefinition  = semstyle.GetColorDefinition
-	GetRawTagCode       = semstyle.GetRawTagCode
+	ParseColor         = semstyle.ParseColor
+	GetColorStr        = semstyle.GetColorStr
+	GetHexForColor     = semstyle.GetHexForColor
+	ResolveTcellColor  = semstyle.ResolveTcellColor
+	GetColorDefinition = semstyle.GetColorDefinition
+	GetRawTagCode      = semstyle.GetRawTagCode
 
-	BuildColorMap        = semstyle.BuildColorMap
-	RegisterBaseTags     = semstyle.RegisterBaseTags
-	RegisterHyperlinkTag = semstyle.RegisterHyperlinkTag
-	RegisterColor        = semstyle.RegisterColor
-	UnregisterColor      = semstyle.UnregisterColor
-	UnregisterPrefix     = semstyle.UnregisterPrefix
-	ResetCustomColors    = semstyle.ResetCustomColors
-	RegisterConsoleTag   = semstyle.RegisterConsoleTag
-	RegisterConsoleTagRaw = semstyle.RegisterConsoleTagRaw
-	RegisterThemeTag     = semstyle.RegisterThemeTag
-	RegisterThemeTagRaw  = semstyle.RegisterThemeTagRaw
-	RegisterSemanticTag  = semstyle.RegisterSemanticTag
+	BuildColorMap          = semstyle.BuildColorMap
+	RegisterBaseTags       = semstyle.RegisterBaseTags
+	RegisterHyperlinkTag   = semstyle.RegisterHyperlinkTag
+	RegisterColor          = semstyle.RegisterColor
+	UnregisterColor        = semstyle.UnregisterColor
+	UnregisterPrefix       = semstyle.UnregisterPrefix
+	ResetCustomColors      = semstyle.ResetCustomColors
+	RegisterConsoleTag     = semstyle.RegisterConsoleTag
+	RegisterConsoleTagRaw  = semstyle.RegisterConsoleTagRaw
+	RegisterThemeTag       = semstyle.RegisterThemeTag
+	RegisterThemeTagRaw    = semstyle.RegisterThemeTagRaw
+	RegisterSemanticTag    = semstyle.RegisterSemanticTag
 	RegisterSemanticTagRaw = semstyle.RegisterSemanticTagRaw
-	ClearThemeMap        = semstyle.ClearThemeMap
-	Translate            = semstyle.Translate
-	TranslateToTagged    = semstyle.TranslateToTagged
-	ToCviewTag           = semstyle.ToCviewTag
+	ClearThemeMap          = semstyle.ClearThemeMap
+	Translate              = semstyle.Translate
+	TranslateToTagged      = semstyle.TranslateToTagged
+	ToCviewTag             = semstyle.ToCviewTag
 )
 
 // --- Types ---
 type AppColors = semstyle.AppColors
-
-// --- Color helpers retaining concrete signatures (for type inference at call sites) ---
-var _ = func() color.Color { return nil } // keep image/color imported for any future re-exports
-var _ = regexp.MustCompile               // keep regexp imported for any future re-exports
 
 // --- Constants (ANSI codes + delimiters) ---
 const (

@@ -156,15 +156,15 @@ func (st *Styler) GetRawTagCode(name string) string {
 	return raw
 }
 
-// RegisterSemanticTag is a legacy wrapper that registers to BOTH maps for backward compatibility during transition.
-// TODO: Remove after all calls are migrated.
+// RegisterSemanticTag registers a tag into BOTH the console (base) and theme maps — a
+// convenience for defining a style that should resolve identically whether or not a theme
+// is active. Prefer RegisterConsoleTag / RegisterThemeTag when you want to target one map.
 func (st *Styler) RegisterSemanticTag(name, taggedValue string) {
 	st.RegisterConsoleTag(name, taggedValue)
 	st.RegisterThemeTag(name, taggedValue)
 }
 
-// RegisterSemanticTagRaw is a legacy wrapper that registers to BOTH maps for backward compatibility during transition.
-// TODO: Remove after all calls are migrated.
+// RegisterSemanticTagRaw is the raw-value form of RegisterSemanticTag (registers to both maps).
 func (st *Styler) RegisterSemanticTagRaw(name, rawValue string) {
 	st.RegisterConsoleTagRaw(name, rawValue)
 	st.RegisterThemeTagRaw(name, rawValue)
@@ -188,7 +188,7 @@ func (st *Styler) GetColorDefinition(name string) string {
 	if raw == "" {
 		return ""
 	}
-	return WrapDirect(raw)
+	return st.WrapDirect(raw)
 }
 
 // UnregisterColor removes a semantic tag from both maps
@@ -258,7 +258,7 @@ func (st *Styler) StripDelimiters(text string) string {
 }
 
 // --- package-level delegators to Default ---
-func ensureMaps()                       { Default.ensureMaps() }
+func ensureMaps()                        { Default.ensureMaps() }
 func StripDelimiters(text string) string { return Default.StripDelimiters(text) }
 
 func BuildColorMap() {

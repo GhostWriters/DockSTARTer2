@@ -190,15 +190,15 @@ func init() {
 		ConsoleBox: "{{[-]}}{{[white:black]}}",
 
 		// Docker Compose progress colors — markers (icons, labels, decorations)
-		DockerMarkerDone:    "{{[-]}}{{[green]}}",
-		DockerMarkerError:   "{{[-]}}{{[red]}}",
-		DockerMarkerWarn:    "{{[-]}}{{[yellow]}}",
-		DockerColon:   "{{[-]}}{{[gray::D]}}",
-		DockerImage:   "{{[-]}}{{[magenta]}}",
-		DockerTag:     "{{[-]}}{{[magenta::D]}}",
-		DockerSpinner: "{{[-]}}{{[yellow]}}",
-		DockerBar:          "{{[-]}}{{[cyan]}}",
-		DockerSharedLayer:  "{{[-]}}{{[yellow]}}",
+		DockerMarkerDone:  "{{[-]}}{{[green]}}",
+		DockerMarkerError: "{{[-]}}{{[red]}}",
+		DockerMarkerWarn:  "{{[-]}}{{[yellow]}}",
+		DockerColon:       "{{[-]}}{{[gray::D]}}",
+		DockerImage:       "{{[-]}}{{[magenta]}}",
+		DockerTag:         "{{[-]}}{{[magenta::D]}}",
+		DockerSpinner:     "{{[-]}}{{[yellow]}}",
+		DockerBar:         "{{[-]}}{{[cyan]}}",
+		DockerSharedLayer: "{{[-]}}{{[yellow]}}",
 		// Docker Compose progress colors — status text
 		DockerStatusSuccess: "{{[-]}}{{[cyan]}}",
 		DockerStatusFinal:   "{{[-]}}{{[green::B]}}",
@@ -208,7 +208,13 @@ func init() {
 		DockerStatusActive:  "{{[-]}}{{[yellow]}}",
 	}
 
-	// Register base tags once Colors is populated
+	// Re-register base tags onto Default now that Colors is populated.
+	//
+	// Ordering note: Default = New() (a var initializer) runs before this init() and already
+	// calls RegisterBaseTags, but at that point Colors is still its zero value (Colors is set
+	// here in init, not at declaration). This second call re-registers from the populated
+	// Colors so Default is correct before any application code runs. Any Styler created via
+	// New() *after* package init (the normal case) sees the populated Colors directly.
 	RegisterBaseTags()
 }
 
@@ -331,15 +337,15 @@ type AppColors struct {
 	ConsoleBox string
 
 	// Docker Compose progress colors — markers (icons, labels, decorations)
-	DockerMarkerDone    string
-	DockerMarkerError   string
-	DockerMarkerWarn    string
-	DockerColon   string
-	DockerImage   string
-	DockerTag     string
-	DockerSpinner string
-	DockerBar          string
-	DockerSharedLayer  string
+	DockerMarkerDone  string
+	DockerMarkerError string
+	DockerMarkerWarn  string
+	DockerColon       string
+	DockerImage       string
+	DockerTag         string
+	DockerSpinner     string
+	DockerBar         string
+	DockerSharedLayer string
 	// Docker Compose progress colors — status text
 	DockerStatusSuccess string
 	DockerStatusFinal   string

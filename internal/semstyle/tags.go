@@ -74,11 +74,11 @@ func SetDelimiters(semPre, semSuf, dirPre, dirSuf string) {
 }
 
 // Package-level delimiter helpers delegate to Default.
-func GetDelimitedRegex() *regexp.Regexp     { return Default.GetDelimitedRegex() }
-func GetDirectRegex() *regexp.Regexp        { return Default.GetDirectRegex() }
-func StripSemanticTags(s string) string     { return Default.StripSemanticTags(s) }
-func WrapSemantic(name string) string       { return Default.WrapSemantic(name) }
-func WrapDirect(code string) string         { return Default.WrapDirect(code) }
+func GetDelimitedRegex() *regexp.Regexp { return Default.GetDelimitedRegex() }
+func GetDirectRegex() *regexp.Regexp    { return Default.GetDirectRegex() }
+func StripSemanticTags(s string) string { return Default.StripSemanticTags(s) }
+func WrapSemantic(name string) string   { return Default.WrapSemantic(name) }
+func WrapDirect(code string) string     { return Default.WrapDirect(code) }
 
 // ExpandConsoleTags converts semantic tags to standardized direct format using only the console map.
 func (st *Styler) ExpandConsoleTags(text string) string {
