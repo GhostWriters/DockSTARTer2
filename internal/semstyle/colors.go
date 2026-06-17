@@ -354,7 +354,7 @@ var Colors AppColors
 
 // RegisterBaseTags registers semantic tag aliases from AppColors struct fields
 // and a small set of static aliases not covered by the struct.
-func RegisterBaseTags() {
+func (st *Styler) RegisterBaseTags() {
 	// Auto-register all AppColors struct fields by lowercased field name.
 	v := reflect.ValueOf(Colors)
 	t := v.Type()
@@ -362,51 +362,56 @@ func RegisterBaseTags() {
 		field := t.Field(i)
 		val := v.Field(i).String()
 		if val != "" {
-			RegisterConsoleTag(strings.ToLower(field.Name), val)
+			st.RegisterConsoleTag(strings.ToLower(field.Name), val)
 		}
 	}
 
 	// Bash-style aliases from main.sh
-	RegisterConsoleTag("NC", "{{[-]}}")
-	RegisterConsoleTag("BD", "{{[::B]}}")
-	RegisterConsoleTag("UL", "{{[::U]}}")
-	RegisterConsoleTag("DM", "{{[::D]}}")
-	RegisterConsoleTag("BL", "{{[::L]}}")
+	st.RegisterConsoleTag("NC", "{{[-]}}")
+	st.RegisterConsoleTag("BD", "{{[::B]}}")
+	st.RegisterConsoleTag("UL", "{{[::U]}}")
+	st.RegisterConsoleTag("DM", "{{[::D]}}")
+	st.RegisterConsoleTag("BL", "{{[::L]}}")
 
 	// Existing shorthands
-	RegisterConsoleTag("ul", "{{[::U]}}")
-	RegisterConsoleTag("blink", "{{[::L]}}")
+	st.RegisterConsoleTag("ul", "{{[::U]}}")
+	st.RegisterConsoleTag("blink", "{{[::L]}}")
 
 	// Legacy single-letter foreground aliases (F array in main.sh)
-	RegisterConsoleTag("B", Colors.Blue)
-	RegisterConsoleTag("C", Colors.Cyan)
-	RegisterConsoleTag("G", Colors.Green)
-	RegisterConsoleTag("K", Colors.Black)
-	RegisterConsoleTag("M", Colors.Magenta)
-	RegisterConsoleTag("R", Colors.Red)
-	RegisterConsoleTag("W", Colors.White)
-	RegisterConsoleTag("Y", Colors.Yellow)
+	st.RegisterConsoleTag("B", Colors.Blue)
+	st.RegisterConsoleTag("C", Colors.Cyan)
+	st.RegisterConsoleTag("G", Colors.Green)
+	st.RegisterConsoleTag("K", Colors.Black)
+	st.RegisterConsoleTag("M", Colors.Magenta)
+	st.RegisterConsoleTag("R", Colors.Red)
+	st.RegisterConsoleTag("W", Colors.White)
+	st.RegisterConsoleTag("Y", Colors.Yellow)
 
 	// Explicit F_ aliases
-	RegisterConsoleTag("F_B", Colors.Blue)
-	RegisterConsoleTag("F_C", Colors.Cyan)
-	RegisterConsoleTag("F_G", Colors.Green)
-	RegisterConsoleTag("F_K", Colors.Black)
-	RegisterConsoleTag("F_M", Colors.Magenta)
-	RegisterConsoleTag("F_R", Colors.Red)
-	RegisterConsoleTag("F_W", Colors.White)
-	RegisterConsoleTag("F_Y", Colors.Yellow)
+	st.RegisterConsoleTag("F_B", Colors.Blue)
+	st.RegisterConsoleTag("F_C", Colors.Cyan)
+	st.RegisterConsoleTag("F_G", Colors.Green)
+	st.RegisterConsoleTag("F_K", Colors.Black)
+	st.RegisterConsoleTag("F_M", Colors.Magenta)
+	st.RegisterConsoleTag("F_R", Colors.Red)
+	st.RegisterConsoleTag("F_W", Colors.White)
+	st.RegisterConsoleTag("F_Y", Colors.Yellow)
 
 	// Legacy background aliases (B array in main.sh)
-	RegisterConsoleTag("B_B", Colors.BlueBg)
-	RegisterConsoleTag("B_C", Colors.CyanBg)
-	RegisterConsoleTag("B_G", Colors.GreenBg)
-	RegisterConsoleTag("B_K", Colors.BlackBg)
-	RegisterConsoleTag("B_M", Colors.MagentaBg)
-	RegisterConsoleTag("B_R", Colors.RedBg)
-	RegisterConsoleTag("B_W", Colors.WhiteBg)
-	RegisterConsoleTag("B_Y", Colors.YellowBg)
+	st.RegisterConsoleTag("B_B", Colors.BlueBg)
+	st.RegisterConsoleTag("B_C", Colors.CyanBg)
+	st.RegisterConsoleTag("B_G", Colors.GreenBg)
+	st.RegisterConsoleTag("B_K", Colors.BlackBg)
+	st.RegisterConsoleTag("B_M", Colors.MagentaBg)
+	st.RegisterConsoleTag("B_R", Colors.RedBg)
+	st.RegisterConsoleTag("B_W", Colors.WhiteBg)
+	st.RegisterConsoleTag("B_Y", Colors.YellowBg)
 
 	// NOTE: Theme-related tags (ThemeHostname, ThemeTitle, etc.) are registered
 	// by the theme package in theme.go Default() and Apply() functions.
+}
+
+// --- package-level delegators to Default ---
+func RegisterBaseTags() {
+	Default.RegisterBaseTags()
 }

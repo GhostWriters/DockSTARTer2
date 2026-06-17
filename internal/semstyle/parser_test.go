@@ -8,10 +8,10 @@ import (
 
 func TestStrip(t *testing.T) {
 	// Setup style maps via ensureMaps
-	ensureMaps()
-	consoleMap["notice"] = "green" // RAW value (no brackets)
-	consoleMap["applicationname"] = "cyan::B"
-	consoleMap["version"] = "cyan"
+	Default.ensureMaps()
+	Default.consoleMap["notice"] = "green" // RAW value (no brackets)
+	Default.consoleMap["applicationname"] = "cyan::B"
+	Default.consoleMap["version"] = "cyan"
 
 	tests := []struct {
 		name     string
@@ -109,10 +109,10 @@ func TestStripANSI(t *testing.T) {
 }
 
 func TestExpandConsoleTags(t *testing.T) {
-	ensureMaps()
-	consoleMap["notice"] = "green" // RAW value (no brackets)
-	consoleMap["applicationname"] = "cyan::B"
-	consoleMap["version"] = "cyan"
+	Default.ensureMaps()
+	Default.consoleMap["notice"] = "green" // RAW value (no brackets)
+	Default.consoleMap["applicationname"] = "cyan::B"
+	Default.consoleMap["version"] = "cyan"
 
 	tests := []struct {
 		name     string
@@ -160,12 +160,12 @@ func TestToConsoleANSI(t *testing.T) {
 	// Setup for TTY mode
 	SetPreferredProfile(colorprofile.TrueColor)
 
-	ensureMaps()
+	Default.ensureMaps()
 	BuildColorMap()
 
 	// Register test-specific semantic tags (RAW values)
-	consoleMap["notice"] = "green"
-	consoleMap["version"] = "cyan"
+	Default.consoleMap["notice"] = "green"
+	Default.consoleMap["version"] = "cyan"
 
 	tests := []struct {
 		name     string
@@ -220,7 +220,7 @@ func TestToConsoleANSI(t *testing.T) {
 }
 
 func TestBackwardsCompatibility(t *testing.T) {
-	ensureMaps()
+	Default.ensureMaps()
 	RegisterSemanticTagRaw("notice", "green") // Sets both console and theme maps
 
 	SetPreferredProfile(colorprofile.TrueColor)
@@ -249,8 +249,8 @@ func TestBackwardsCompatibility(t *testing.T) {
 }
 
 func TestSemanticVsDirectDistinction(t *testing.T) {
-	ensureMaps()
-	consoleMap["blue"] = "#0066CC" // Custom blue shade (RAW value)
+	Default.ensureMaps()
+	Default.consoleMap["blue"] = "#0066CC" // Custom blue shade (RAW value)
 
 	tests := []struct {
 		name     string

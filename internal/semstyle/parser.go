@@ -18,29 +18,50 @@ func Parse(text string) string {
 }
 
 // Translate is a convenience alias for ExpandConsoleTags (backwards compatibility)
-func Translate(text string) string {
-	return ExpandConsoleTags(text)
+func (st *Styler) Translate(text string) string {
+	return st.ExpandConsoleTags(text)
 }
 
 // ExpandSemanticTags is a convenience alias for ExpandConsoleTags (backwards compatibility)
-func ExpandSemanticTags(text string) string {
-	return ExpandConsoleTags(text)
+func (st *Styler) ExpandSemanticTags(text string) string {
+	return st.ExpandConsoleTags(text)
 }
 
 // TranslateToTagged is a convenience alias for ExpandConsoleTags
-func TranslateToTagged(text string) string {
-	return ExpandConsoleTags(text)
+func (st *Styler) TranslateToTagged(text string) string {
+	return st.ExpandConsoleTags(text)
 }
 
 // RegisterColor is a legacy alias for RegisterSemanticTag
-func RegisterColor(name, value string) {
+func (st *Styler) RegisterColor(name, value string) {
 	// Strip underscore wrapper if present (legacy format)
 	name = strings.TrimPrefix(name, "_")
 	name = strings.TrimSuffix(name, "_")
-	RegisterSemanticTag(name, value)
+	st.RegisterSemanticTag(name, value)
 }
 
 // ToCviewTag is a no-op for compatibility (tags are already in proper format)
-func ToCviewTag(tag string) string {
+func (st *Styler) ToCviewTag(tag string) string {
 	return tag
+}
+
+// --- package-level delegators to Default ---
+func Translate(text string) string {
+	return Default.Translate(text)
+}
+
+func ExpandSemanticTags(text string) string {
+	return Default.ExpandSemanticTags(text)
+}
+
+func TranslateToTagged(text string) string {
+	return Default.TranslateToTagged(text)
+}
+
+func RegisterColor(name, value string) {
+	Default.RegisterColor(name, value)
+}
+
+func ToCviewTag(tag string) string {
+	return Default.ToCviewTag(tag)
 }

@@ -25,7 +25,7 @@ func colorToBGSequence(c color.Color) string {
 
 // parseStyleCodeToANSI parses fg:bg:flags format and returns ANSI codes.
 // Uses the lipgloss global renderer (set from colorprofile in profile.go).
-func parseStyleCodeToANSI(content string) string {
+func (st *Styler) parseStyleCodeToANSI(content string) string {
 	if content == "-" {
 		return CodeReset
 	}
@@ -60,19 +60,19 @@ func parseStyleCodeToANSI(content string) string {
 	} else if len(parts) > 0 && parts[0] != "" {
 		colorName := strings.ToLower(parts[0])
 		if highIntensity {
-			if brightName, ok := getBrightVariant(colorName); ok {
+			if brightName, ok := st.getBrightVariant(colorName); ok {
 				colorName = brightName
 			}
 		}
 
 		// Check for non-color attributes (bold, etc.) first
-		if code, ok := attributeMap[colorName]; ok {
+		if code, ok := st.attributeMap[colorName]; ok {
 			codes.WriteString(code)
 			goto FoundFG
 		}
 
-		// Check ansiMap for standard colors (direct ANSI codes, max compatibility)
-		if code, ok := ansiMap[colorName]; ok {
+		// Check st.ansiMap for standard colors (direct ANSI codes, max compatibility)
+		if code, ok := st.ansiMap[colorName]; ok {
 			codes.WriteString(code)
 			goto FoundFG
 		}
@@ -100,17 +100,17 @@ FoundFG:
 	} else if len(parts) > 1 && parts[1] != "" {
 		colorName := strings.ToLower(parts[1])
 		if highIntensity {
-			if brightName, ok := getBrightVariant(colorName); ok {
+			if brightName, ok := st.getBrightVariant(colorName); ok {
 				colorName = brightName
 			}
 		}
 
-		if code, ok := attributeMap[colorName]; ok {
+		if code, ok := st.attributeMap[colorName]; ok {
 			codes.WriteString(code)
 			goto FoundBG
 		}
 
-		if code, ok := ansiMap[colorName+"bg"]; ok {
+		if code, ok := st.ansiMap[colorName+"bg"]; ok {
 			codes.WriteString(code)
 			goto FoundBG
 		}
@@ -134,7 +134,7 @@ FoundBG:
 		f := strings.TrimPrefix(parts[2], "-")
 		for _, flag := range f {
 			flagStr := string(flag)
-			if code, ok := ansiMap[flagStr]; ok {
+			if code, ok := st.ansiMap[flagStr]; ok {
 				codes.WriteString(code)
 			}
 		}
@@ -151,12 +151,17 @@ func StripANSI(text string) string {
 }
 
 // getBrightVariant attempts to get the bright variant of a color name
-func getBrightVariant(name string) (string, bool) {
+func (st *Styler) getBrightVariant(name string) (string, bool) {
 	if strings.HasPrefix(name, "bright-") {
 		return name, true
 	}
-	if _, ok := ansiMap["bright-"+name]; ok {
+	if _, ok := st.ansiMap["bright-"+name]; ok {
 		return "bright-" + name, true
 	}
 	return name, false
+}
+
+// --- package-level delegators to Default ---
+func parseStyleCodeToANSI(content string) string {
+	return Default.parseStyleCodeToANSI(content)
 }

@@ -2,212 +2,188 @@ package semstyle
 
 import (
 	"strings"
-	"sync"
 )
 
-var (
-	// semanticMu guards all reads and writes of semanticMap, which is written
-	// concurrently by theme-loading goroutines and read by the render goroutine.
-	semanticMu sync.RWMutex
-
-	// consoleMap stores hardcoded console semantic tag -> raw style code mappings
-	consoleMap map[string]string
-
-	// themeMap stores theme-loaded semantic tag -> raw style code mappings
-	themeMap map[string]string
-
-	// ansiMap stores color/modifier names -> ANSI code mappings
-	ansiMap map[string]string
-
-	// attributeMap stores non-color attribute names -> ANSI code mappings
-	attributeMap map[string]string
-)
-
-func init() {
-	// Initialize maps
-	consoleMap = make(map[string]string)
-	themeMap = make(map[string]string)
-	ansiMap = make(map[string]string)
-	attributeMap = make(map[string]string)
-}
+// Per-Styler map state lives on the Styler struct (see styler.go). The maps are created in
+// New(); ensureMaps is a defensive guard for zero-value access.
 
 // ensureMaps ensures color maps are built if they were missed by init
-func ensureMaps() {
-	if len(ansiMap) == 0 {
-		BuildColorMap()
+func (st *Styler) ensureMaps() {
+	if len(st.ansiMap) == 0 {
+		st.BuildColorMap()
 	}
 }
 
 // BuildColorMap initializes the ANSI code and attribute name mappings.
 // Default semantic tag registrations are handled separately by RegisterBaseTags.
-func BuildColorMap() {
-	if ansiMap == nil {
-		ansiMap = make(map[string]string)
+func (st *Styler) BuildColorMap() {
+	if st.ansiMap == nil {
+		st.ansiMap = make(map[string]string)
 	}
-	if consoleMap == nil {
-		consoleMap = make(map[string]string)
+	if st.consoleMap == nil {
+		st.consoleMap = make(map[string]string)
 	}
-	if themeMap == nil {
-		themeMap = make(map[string]string)
+	if st.themeMap == nil {
+		st.themeMap = make(map[string]string)
 	}
-	if attributeMap == nil {
-		attributeMap = make(map[string]string)
+	if st.attributeMap == nil {
+		st.attributeMap = make(map[string]string)
 	}
 
 	// Standard ANSI mappings
-	ansiMap["-"] = CodeReset
-	ansiMap["reset"] = CodeReset
-	ansiMap["B"] = CodeBold
-	ansiMap["b"] = CodeBoldOff
-	ansiMap["D"] = CodeDim
-	ansiMap["d"] = CodeDimOff
-	ansiMap["U"] = CodeUnderline
-	ansiMap["u"] = CodeUnderlineOff
-	ansiMap["L"] = CodeBlink
-	ansiMap["l"] = CodeBlinkOff
-	ansiMap["R"] = CodeReverse
-	ansiMap["r"] = CodeReverseOff
-	ansiMap["I"] = CodeItalic
-	ansiMap["i"] = CodeItalicOff
-	ansiMap["S"] = CodeStrikethrough
-	ansiMap["s"] = CodeStrikethroughOff
+	st.ansiMap["-"] = CodeReset
+	st.ansiMap["reset"] = CodeReset
+	st.ansiMap["B"] = CodeBold
+	st.ansiMap["b"] = CodeBoldOff
+	st.ansiMap["D"] = CodeDim
+	st.ansiMap["d"] = CodeDimOff
+	st.ansiMap["U"] = CodeUnderline
+	st.ansiMap["u"] = CodeUnderlineOff
+	st.ansiMap["L"] = CodeBlink
+	st.ansiMap["l"] = CodeBlinkOff
+	st.ansiMap["R"] = CodeReverse
+	st.ansiMap["r"] = CodeReverseOff
+	st.ansiMap["I"] = CodeItalic
+	st.ansiMap["i"] = CodeItalicOff
+	st.ansiMap["S"] = CodeStrikethrough
+	st.ansiMap["s"] = CodeStrikethroughOff
 
 	// Attribute mappings (normalized names)
-	attributeMap["reset"] = CodeReset
-	attributeMap["-"] = CodeReset
-	attributeMap["bold"] = CodeBold
-	attributeMap["b"] = CodeBold
-	attributeMap["dim"] = CodeDim
-	attributeMap["d"] = CodeDim
-	attributeMap["underline"] = CodeUnderline
-	attributeMap["u"] = CodeUnderline
-	attributeMap["blink"] = CodeBlink
-	attributeMap["l"] = CodeBlink
-	attributeMap["reverse"] = CodeReverse
-	attributeMap["r"] = CodeReverse
-	attributeMap["italic"] = CodeItalic
-	attributeMap["i"] = CodeItalic
-	attributeMap["strikethrough"] = CodeStrikethrough
-	attributeMap["s"] = CodeStrikethrough
-	attributeMap["-bold"] = CodeBoldOff
-	attributeMap["-b"] = CodeBoldOff
-	attributeMap["-dim"] = CodeDimOff
-	attributeMap["-d"] = CodeDimOff
-	attributeMap["-underline"] = CodeUnderlineOff
-	attributeMap["-u"] = CodeUnderlineOff
-	attributeMap["-blink"] = CodeBlinkOff
-	attributeMap["-l"] = CodeBlinkOff
-	attributeMap["-reverse"] = CodeReverseOff
-	attributeMap["-r"] = CodeReverseOff
-	attributeMap["-italic"] = CodeItalicOff
-	attributeMap["-i"] = CodeItalicOff
-	attributeMap["-strikethrough"] = CodeStrikethroughOff
-	attributeMap["-s"] = CodeStrikethroughOff
+	st.attributeMap["reset"] = CodeReset
+	st.attributeMap["-"] = CodeReset
+	st.attributeMap["bold"] = CodeBold
+	st.attributeMap["b"] = CodeBold
+	st.attributeMap["dim"] = CodeDim
+	st.attributeMap["d"] = CodeDim
+	st.attributeMap["underline"] = CodeUnderline
+	st.attributeMap["u"] = CodeUnderline
+	st.attributeMap["blink"] = CodeBlink
+	st.attributeMap["l"] = CodeBlink
+	st.attributeMap["reverse"] = CodeReverse
+	st.attributeMap["r"] = CodeReverse
+	st.attributeMap["italic"] = CodeItalic
+	st.attributeMap["i"] = CodeItalic
+	st.attributeMap["strikethrough"] = CodeStrikethrough
+	st.attributeMap["s"] = CodeStrikethrough
+	st.attributeMap["-bold"] = CodeBoldOff
+	st.attributeMap["-b"] = CodeBoldOff
+	st.attributeMap["-dim"] = CodeDimOff
+	st.attributeMap["-d"] = CodeDimOff
+	st.attributeMap["-underline"] = CodeUnderlineOff
+	st.attributeMap["-u"] = CodeUnderlineOff
+	st.attributeMap["-blink"] = CodeBlinkOff
+	st.attributeMap["-l"] = CodeBlinkOff
+	st.attributeMap["-reverse"] = CodeReverseOff
+	st.attributeMap["-r"] = CodeReverseOff
+	st.attributeMap["-italic"] = CodeItalicOff
+	st.attributeMap["-i"] = CodeItalicOff
+	st.attributeMap["-strikethrough"] = CodeStrikethroughOff
+	st.attributeMap["-s"] = CodeStrikethroughOff
 
 	// Colors...
-	ansiMap["black"] = CodeBlack
-	ansiMap["red"] = CodeRed
-	ansiMap["green"] = CodeGreen
-	ansiMap["yellow"] = CodeYellow
-	ansiMap["blue"] = CodeBlue
-	ansiMap["magenta"] = CodeMagenta
-	ansiMap["cyan"] = CodeCyan
-	ansiMap["white"] = CodeWhite
-	ansiMap["bright-black"] = CodeBrightBlack
-	ansiMap["bright-red"] = CodeBrightRed
-	ansiMap["bright-green"] = CodeBrightGreen
-	ansiMap["bright-yellow"] = CodeBrightYellow
-	ansiMap["bright-blue"] = CodeBrightBlue
-	ansiMap["bright-magenta"] = CodeBrightMagenta
-	ansiMap["bright-cyan"] = CodeBrightCyan
-	ansiMap["bright-white"] = CodeBrightWhite
+	st.ansiMap["black"] = CodeBlack
+	st.ansiMap["red"] = CodeRed
+	st.ansiMap["green"] = CodeGreen
+	st.ansiMap["yellow"] = CodeYellow
+	st.ansiMap["blue"] = CodeBlue
+	st.ansiMap["magenta"] = CodeMagenta
+	st.ansiMap["cyan"] = CodeCyan
+	st.ansiMap["white"] = CodeWhite
+	st.ansiMap["bright-black"] = CodeBrightBlack
+	st.ansiMap["bright-red"] = CodeBrightRed
+	st.ansiMap["bright-green"] = CodeBrightGreen
+	st.ansiMap["bright-yellow"] = CodeBrightYellow
+	st.ansiMap["bright-blue"] = CodeBrightBlue
+	st.ansiMap["bright-magenta"] = CodeBrightMagenta
+	st.ansiMap["bright-cyan"] = CodeBrightCyan
+	st.ansiMap["bright-white"] = CodeBrightWhite
 
-	ansiMap["blackbg"] = CodeBlackBg
-	ansiMap["redbg"] = CodeRedBg
-	ansiMap["greenbg"] = CodeGreenBg
-	ansiMap["yellowbg"] = CodeYellowBg
-	ansiMap["bluebg"] = CodeBlueBg
-	ansiMap["magentabg"] = CodeMagentaBg
-	ansiMap["cyanbg"] = CodeCyanBg
-	ansiMap["whitebg"] = CodeWhiteBg
-	ansiMap["bright-blackbg"] = CodeBrightBlackBg
-	ansiMap["bright-redbg"] = CodeBrightRedBg
-	ansiMap["bright-greenbg"] = CodeBrightGreenBg
-	ansiMap["bright-yellowbg"] = CodeBrightYellowBg
-	ansiMap["bright-bluebg"] = CodeBrightBlueBg
-	ansiMap["bright-magentabg"] = CodeBrightMagentaBg
-	ansiMap["bright-cyanbg"] = CodeBrightCyanBg
-	ansiMap["bright-whitebg"] = CodeBrightWhiteBg
+	st.ansiMap["blackbg"] = CodeBlackBg
+	st.ansiMap["redbg"] = CodeRedBg
+	st.ansiMap["greenbg"] = CodeGreenBg
+	st.ansiMap["yellowbg"] = CodeYellowBg
+	st.ansiMap["bluebg"] = CodeBlueBg
+	st.ansiMap["magentabg"] = CodeMagentaBg
+	st.ansiMap["cyanbg"] = CodeCyanBg
+	st.ansiMap["whitebg"] = CodeWhiteBg
+	st.ansiMap["bright-blackbg"] = CodeBrightBlackBg
+	st.ansiMap["bright-redbg"] = CodeBrightRedBg
+	st.ansiMap["bright-greenbg"] = CodeBrightGreenBg
+	st.ansiMap["bright-yellowbg"] = CodeBrightYellowBg
+	st.ansiMap["bright-bluebg"] = CodeBrightBlueBg
+	st.ansiMap["bright-magentabg"] = CodeBrightMagentaBg
+	st.ansiMap["bright-cyanbg"] = CodeBrightCyanBg
+	st.ansiMap["bright-whitebg"] = CodeBrightWhiteBg
 
 }
 
 // RegisterConsoleTag registers a semantic tag with its standardized tag value in the console map.
-func RegisterConsoleTag(name, taggedValue string) {
-	RegisterConsoleTagRaw(name, StripDelimiters(taggedValue))
+func (st *Styler) RegisterConsoleTag(name, taggedValue string) {
+	st.RegisterConsoleTagRaw(name, StripDelimiters(taggedValue))
 }
 
 // RegisterConsoleTagRaw registers a semantic tag with a raw style code in the console map.
-func RegisterConsoleTagRaw(name, rawValue string) {
-	ensureMaps()
-	semanticMu.Lock()
-	consoleMap[strings.ToLower(name)] = rawValue
-	semanticMu.Unlock()
+func (st *Styler) RegisterConsoleTagRaw(name, rawValue string) {
+	st.ensureMaps()
+	st.mu.Lock()
+	st.consoleMap[strings.ToLower(name)] = rawValue
+	st.mu.Unlock()
 }
 
 // RegisterThemeTag registers a semantic tag with its standardized tag value in the theme map.
-func RegisterThemeTag(name, taggedValue string) {
-	RegisterThemeTagRaw(name, StripDelimiters(taggedValue))
+func (st *Styler) RegisterThemeTag(name, taggedValue string) {
+	st.RegisterThemeTagRaw(name, StripDelimiters(taggedValue))
 }
 
 // RegisterThemeTagRaw registers a semantic tag with a raw style code in the theme map.
-func RegisterThemeTagRaw(name, rawValue string) {
-	ensureMaps()
-	semanticMu.Lock()
-	themeMap[strings.ToLower(name)] = rawValue
-	semanticMu.Unlock()
+func (st *Styler) RegisterThemeTagRaw(name, rawValue string) {
+	st.ensureMaps()
+	st.mu.Lock()
+	st.themeMap[strings.ToLower(name)] = rawValue
+	st.mu.Unlock()
 }
 
 // GetRawTagCode returns the raw style code (fg:bg:flags) for the given tag name from the theme map.
 // Returns "" if the tag is not registered.
-func GetRawTagCode(name string) string {
-	ensureMaps()
-	semanticMu.RLock()
-	raw := themeMap[strings.ToLower(name)]
+func (st *Styler) GetRawTagCode(name string) string {
+	st.ensureMaps()
+	st.mu.RLock()
+	raw := st.themeMap[strings.ToLower(name)]
 	if raw == "" {
-		raw = consoleMap[strings.ToLower(name)]
+		raw = st.consoleMap[strings.ToLower(name)]
 	}
-	semanticMu.RUnlock()
+	st.mu.RUnlock()
 	return raw
 }
 
 // RegisterSemanticTag is a legacy wrapper that registers to BOTH maps for backward compatibility during transition.
 // TODO: Remove after all calls are migrated.
-func RegisterSemanticTag(name, taggedValue string) {
-	RegisterConsoleTag(name, taggedValue)
-	RegisterThemeTag(name, taggedValue)
+func (st *Styler) RegisterSemanticTag(name, taggedValue string) {
+	st.RegisterConsoleTag(name, taggedValue)
+	st.RegisterThemeTag(name, taggedValue)
 }
 
 // RegisterSemanticTagRaw is a legacy wrapper that registers to BOTH maps for backward compatibility during transition.
 // TODO: Remove after all calls are migrated.
-func RegisterSemanticTagRaw(name, rawValue string) {
-	RegisterConsoleTagRaw(name, rawValue)
-	RegisterThemeTagRaw(name, rawValue)
+func (st *Styler) RegisterSemanticTagRaw(name, rawValue string) {
+	st.RegisterConsoleTagRaw(name, rawValue)
+	st.RegisterThemeTagRaw(name, rawValue)
 }
 
 // GetColorDefinition returns the formatted tag value (with brackets) for a semantic tag.
 // It searches the theme map first, then console map.
-func GetColorDefinition(name string) string {
-	ensureMaps()
+func (st *Styler) GetColorDefinition(name string) string {
+	st.ensureMaps()
 	name = strings.TrimPrefix(name, "_")
 	name = strings.TrimSuffix(name, "_")
 	content := strings.ToLower(name)
 
-	semanticMu.RLock()
-	raw, ok := themeMap[content]
+	st.mu.RLock()
+	raw, ok := st.themeMap[content]
 	if !ok {
-		raw = consoleMap[content]
+		raw = st.consoleMap[content]
 	}
-	semanticMu.RUnlock()
+	st.mu.RUnlock()
 
 	if raw == "" {
 		return ""
@@ -216,46 +192,46 @@ func GetColorDefinition(name string) string {
 }
 
 // UnregisterColor removes a semantic tag from both maps
-func UnregisterColor(name string) {
-	ensureMaps()
+func (st *Styler) UnregisterColor(name string) {
+	st.ensureMaps()
 	name = strings.TrimPrefix(name, "_")
 	name = strings.TrimSuffix(name, "_")
 	content := strings.ToLower(name)
 
-	semanticMu.Lock()
-	delete(consoleMap, content)
-	delete(themeMap, content)
-	semanticMu.Unlock()
+	st.mu.Lock()
+	delete(st.consoleMap, content)
+	delete(st.themeMap, content)
+	st.mu.Unlock()
 }
 
 // UnregisterPrefix removes all semantic tags that start with the given prefix from both maps
-func UnregisterPrefix(prefix string) {
-	ensureMaps()
+func (st *Styler) UnregisterPrefix(prefix string) {
+	st.ensureMaps()
 	searchPrefix := strings.ToLower(strings.TrimSuffix(prefix, "_") + "_")
-	semanticMu.Lock()
-	for key := range consoleMap {
+	st.mu.Lock()
+	for key := range st.consoleMap {
 		if strings.HasPrefix(key, searchPrefix) {
-			delete(consoleMap, key)
+			delete(st.consoleMap, key)
 		}
 	}
-	for key := range themeMap {
+	for key := range st.themeMap {
 		if strings.HasPrefix(key, searchPrefix) {
-			delete(themeMap, key)
+			delete(st.themeMap, key)
 		}
 	}
-	semanticMu.Unlock()
+	st.mu.Unlock()
 }
 
 // ClearThemeMap removes all entries from the theme map.
-func ClearThemeMap() {
-	semanticMu.Lock()
-	themeMap = make(map[string]string)
-	semanticMu.Unlock()
+func (st *Styler) ClearThemeMap() {
+	st.mu.Lock()
+	st.themeMap = make(map[string]string)
+	st.mu.Unlock()
 }
 
 // ResetCustomColors clears all semantic tags and rebuilds from Colors struct
-func ResetCustomColors() {
-	BuildColorMap()
+func (st *Styler) ResetCustomColors() {
+	st.BuildColorMap()
 }
 
 // StripDelimiters removes any known library delimiters from a style string to get the raw content
@@ -280,4 +256,61 @@ func StripDelimiters(text string) string {
 		}
 	}
 	return text
+}
+
+// --- package-level delegators to Default ---
+func ensureMaps() {
+	Default.ensureMaps()
+}
+
+func BuildColorMap() {
+	Default.BuildColorMap()
+}
+
+func RegisterConsoleTag(name, taggedValue string) {
+	Default.RegisterConsoleTag(name, taggedValue)
+}
+
+func RegisterConsoleTagRaw(name, rawValue string) {
+	Default.RegisterConsoleTagRaw(name, rawValue)
+}
+
+func RegisterThemeTag(name, taggedValue string) {
+	Default.RegisterThemeTag(name, taggedValue)
+}
+
+func RegisterThemeTagRaw(name, rawValue string) {
+	Default.RegisterThemeTagRaw(name, rawValue)
+}
+
+func GetRawTagCode(name string) string {
+	return Default.GetRawTagCode(name)
+}
+
+func RegisterSemanticTag(name, taggedValue string) {
+	Default.RegisterSemanticTag(name, taggedValue)
+}
+
+func RegisterSemanticTagRaw(name, rawValue string) {
+	Default.RegisterSemanticTagRaw(name, rawValue)
+}
+
+func GetColorDefinition(name string) string {
+	return Default.GetColorDefinition(name)
+}
+
+func UnregisterColor(name string) {
+	Default.UnregisterColor(name)
+}
+
+func UnregisterPrefix(prefix string) {
+	Default.UnregisterPrefix(prefix)
+}
+
+func ClearThemeMap() {
+	Default.ClearThemeMap()
+}
+
+func ResetCustomColors() {
+	Default.ResetCustomColors()
 }
