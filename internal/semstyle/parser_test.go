@@ -1,4 +1,4 @@
-package console
+package semstyle
 
 import (
 	"testing"
@@ -158,7 +158,6 @@ func TestExpandConsoleTags(t *testing.T) {
 
 func TestToConsoleANSI(t *testing.T) {
 	// Setup for TTY mode
-	isTTYGlobal = true
 	SetPreferredProfile(colorprofile.TrueColor)
 
 	ensureMaps()
@@ -224,7 +223,6 @@ func TestBackwardsCompatibility(t *testing.T) {
 	ensureMaps()
 	RegisterSemanticTagRaw("notice", "green") // Sets both console and theme maps
 
-	isTTYGlobal = true
 	SetPreferredProfile(colorprofile.TrueColor)
 
 	input := "{{|Notice|}}Test{{[-]}}"

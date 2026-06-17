@@ -1,4 +1,4 @@
-package console
+package semstyle
 
 import (
 	"fmt"
@@ -222,9 +222,14 @@ func processHyperlinks(text string) string {
 	})
 }
 
+// RenderPolicy, when set, is consulted by ToConsoleANSI: if it returns false the text
+// is stripped (no ANSI) instead of rendered. The host app sets this to encode its
+// TTY/TUI policy; when nil the engine always renders. Keeps the engine free of TTY state.
+var RenderPolicy func() bool
+
 // ToConsoleANSI converts semantic and direct tags to ANSI escape sequences using only console colors.
 func ToConsoleANSI(text string) string {
-	if !isTTYGlobal && !TUIMode && !IsTUIEnabled() {
+	if RenderPolicy != nil && !RenderPolicy() {
 		return Strip(text)
 	}
 
@@ -284,18 +289,4 @@ func ForTUI(text string) string {
 func Sprintf(format string, a ...any) string {
 	msg := fmt.Sprintf(format, a...)
 	return ToConsoleANSI(msg)
-}
-
-// Println prints a line with Console ANSI color codes parsed
-func Println(a ...any) {
-	msg := ToConsoleANSI(fmt.Sprint(a...))
-	if GlobalViewport != nil && GlobalViewport.active {
-		GlobalViewport.Append(msg)
-		return
-	}
-	LockTerminal()
-	ClearSpinnerLine()
-	fmt.Println(msg)
-	ShowSpinnerFrame()
-	UnlockTerminal()
 }
