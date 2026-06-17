@@ -5,7 +5,7 @@ import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
-	"DockSTARTer2/internal/semtheme"
+	"DockSTARTer2/internal/semstyle/theme"
 	"bytes"
 	"context"
 	"fmt"

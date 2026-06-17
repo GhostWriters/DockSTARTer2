@@ -19,6 +19,17 @@ semstyle.ToConsoleANSI("{{|Error|}}failed{{[-]}}: {{[red::B]}}retry{{[-]}}")
 It depends only on `lipgloss`, `colorprofile`, and `tcell/color` for color resolution — no
 application, TTY, or config coupling.
 
+## Layout
+
+- **`semstyle`** (this package) — the styling engine. Import it alone if you only need
+  tag-based styling and define styles in code.
+- **`semstyle/theme`** — an optional layer that parses theme **files** (TOML) into style
+  maps for the engine. Import it only if you want file-driven themes; it pulls in a TOML
+  parser. See [theme/README.md](theme/README.md) and the [Theming](#theming) section below.
+
+They're one module, two packages: styling-only consumers never compile the theme package or
+its TOML dependency.
+
 ## Two ways to use it
 
 ### 1. Package-level (simple, one global config)
@@ -111,6 +122,28 @@ semstyle.SetRenderPolicy(func() bool { return isTerminal() })
 ```
 
 When the policy returns false, `ToConsoleANSI` strips instead of rendering.
+
+## Theming
+
+The `semstyle/theme` subpackage parses theme **files** (TOML) into a style map you can hand
+to a styler. It's optional — import it only for file-driven themes.
+
+```go
+import (
+    "…/semstyle"
+    semtheme "…/semstyle/theme"
+)
+
+data, _ := os.ReadFile("midnight.theme")   // your app fetches the bytes
+defaults, _ := semtheme.RegisterInto(data, "") // parse + register into the Default styler
+// `defaults` is the theme's opaque [defaults] table (map[string]any) for your app to interpret.
+```
+
+A theme file carries `[metadata]`, an optional `[palette]` (reusable `$vars`), `[styles]`
+(semantic name → style, may reference palette vars or other styles), optional `[syntax]`
+delimiter overrides, and an opaque `[defaults]` table that `semtheme` passes through without
+interpreting (so any app can define whatever UI defaults it wants). Full details and the
+theme-file format are in [theme/README.md](theme/README.md).
 
 ## Notes
 

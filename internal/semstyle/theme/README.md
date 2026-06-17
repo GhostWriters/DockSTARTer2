@@ -1,7 +1,8 @@
 # semtheme
 
-The optional **theming layer** for [`semstyle`](../semstyle). It parses theme files (TOML)
-into resolved semantic style maps and registers them into a `semstyle` styler.
+The optional **theming layer** for [`semstyle`](..) (this is the `semstyle/theme`
+subpackage). It parses theme files (TOML) into resolved semantic style maps and registers
+them into a `semstyle` styler.
 
 `semtheme` depends only on `semstyle` (plus a TOML parser). It knows nothing about
 application config, file paths, or logging — the host application discovers theme bytes
@@ -63,15 +64,17 @@ s.SetThemeMap(styles)
 | `Parse(data)` | Unmarshal TOML → `ThemeFile` |
 | `ResolveColors(tf)` | Resolve palette + semantic refs → `map[name]rawStyle` |
 | `ResolveValue(raw, …)` | Resolve a single value string → raw `fg:bg:flags` |
-| `RegisterInto(data, prefix)` | Parse, resolve, and register into the default styler under a prefix; returns the theme's UI defaults |
+| `RegisterInto(data, prefix)` | Parse, resolve, and register into the default styler under a prefix; returns the theme's opaque `[defaults]` table (`map[string]any`) |
 | `PrefixTag(prefix, name)` | Join a namespace prefix with a tag name (`prefix_name`) |
 
 ## Types
 
-- **`ThemeFile`** — the parsed theme (metadata, syntax/delimiters, defaults, palette, styles).
-- **`ThemeDefaults`** — optional UI hints a theme may carry (borders, shadow, spinner, panel
-  modes, etc.); pointer fields distinguish "unset" from a zero value. Interpreting these is
-  the host application's responsibility.
+- **`ThemeFile`** — the parsed theme: metadata, optional `[syntax]` delimiters, `[palette]`,
+  `[styles]`, and `Defaults` (the opaque `[defaults]` table as `map[string]any`).
+
+`semtheme` intentionally does **not** define a typed defaults struct. The `[defaults]` table
+is app-specific UI vocabulary (borders, panels, …), so it's passed through untyped; the
+consuming application decodes it into its own settings (e.g. with `mapstructure`).
 
 ## Prefixes
 
