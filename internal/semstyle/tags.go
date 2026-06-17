@@ -8,51 +8,35 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+// Standard tag delimiters (library default). These are the values New() copies into each
+// Styler and the "standard" delimiters external packages reference. Override a single
+// Styler's delimiters with (*Styler).SetDelimiters, or change the process-wide standard
+// (and the Default styler) with the package-level SetDelimiters.
 var (
-	// Delimiters for semantic and direct tags (Library Standard)
 	SemanticPrefix = "{{|"
 	SemanticSuffix = "|}}"
 	DirectPrefix   = "{{["
 	DirectSuffix   = "]}}"
-
-	// Precompiled regexes (Locked to standard)
-	semanticRegex *regexp.Regexp
-	directRegex   *regexp.Regexp
 )
 
-func init() {
-	rebuildRegexes()
-}
-
-// SetDelimiters updates the global tag delimiters and rebuilds the compiled regex patterns.
-// Call this once at startup before any tag processing if non-standard delimiters are desired.
-// semPre/semSuf wrap semantic tag names (e.g. "{{|" / "|}}").
-// dirPre/dirSuf wrap direct style codes (e.g. "{{[" / "]}}").
-func SetDelimiters(semPre, semSuf, dirPre, dirSuf string) {
-	SemanticPrefix = semPre
-	SemanticSuffix = semSuf
-	DirectPrefix = dirPre
-	DirectSuffix = dirSuf
-	rebuildRegexes()
-}
-
-func rebuildRegexes() {
-	semEscPre := regexp.QuoteMeta(SemanticPrefix)
-	semEscSuf := regexp.QuoteMeta(SemanticSuffix)
-	dirEscPre := regexp.QuoteMeta(DirectPrefix)
-	dirEscSuf := regexp.QuoteMeta(DirectSuffix)
+// rebuildRegexes recompiles this Styler's tag regexes from its current delimiters.
+func (st *Styler) rebuildRegexes() {
+	semEscPre := regexp.QuoteMeta(st.semPre)
+	semEscSuf := regexp.QuoteMeta(st.semSuf)
+	dirEscPre := regexp.QuoteMeta(st.dirPre)
+	dirEscSuf := regexp.QuoteMeta(st.dirSuf)
 
 	// Allow either a named tag (optionally with modifiers) or bare modifiers with no name (e.g. {{|:red:black:B|}})
-	semanticRegex = regexp.MustCompile(semEscPre + `(?P<content>[A-Za-z0-9_]+(?::[A-Za-z0-9_:\-#;~]*)?|:[A-Za-z0-9_:\-#;~]+)` + semEscSuf)
-	directRegex = regexp.MustCompile(dirEscPre + `(?P<content>[A-Za-z0-9_:\-#;~]+)` + dirEscSuf)
+	st.semanticRegex = regexp.MustCompile(semEscPre + `(?P<content>[A-Za-z0-9_]+(?::[A-Za-z0-9_:\-#;~]*)?|:[A-Za-z0-9_:\-#;~]+)` + semEscSuf)
+	st.directRegex = regexp.MustCompile(dirEscPre + `(?P<content>[A-Za-z0-9_:\-#;~]+)` + dirEscSuf)
 }
 
-// GetDelimitedRegex returns the standard regex for both semantic and direct tags.
-func GetDelimitedRegex() *regexp.Regexp {
-	semEscPre := regexp.QuoteMeta(SemanticPrefix)
-	semEscSuf := regexp.QuoteMeta(SemanticSuffix)
-	dirEscPre := regexp.QuoteMeta(DirectPrefix)
-	dirEscSuf := regexp.QuoteMeta(DirectSuffix)
+// GetDelimitedRegex returns a regex matching both semantic and direct tags for this Styler.
+func (st *Styler) GetDelimitedRegex() *regexp.Regexp {
+	semEscPre := regexp.QuoteMeta(st.semPre)
+	semEscSuf := regexp.QuoteMeta(st.semSuf)
+	dirEscPre := regexp.QuoteMeta(st.dirPre)
+	dirEscSuf := regexp.QuoteMeta(st.dirSuf)
 
 	// Group 1: Semantic, Group 2: Direct
 	pattern := fmt.Sprintf(`(?:%s(?P<semantic>[A-Za-z0-9_]+(?::[A-Za-z0-9_:\-#;~]*)?)%s|%s(?P<direct>[A-Za-z0-9_:\-#;~]+)%s)`,
@@ -60,27 +44,41 @@ func GetDelimitedRegex() *regexp.Regexp {
 	return regexp.MustCompile(pattern)
 }
 
-// GetDirectRegex returns the standard regex for direct tags only.
-func GetDirectRegex() *regexp.Regexp {
-	return directRegex
+// GetDirectRegex returns the direct-tag regex for this Styler.
+func (st *Styler) GetDirectRegex() *regexp.Regexp {
+	return st.directRegex
 }
 
 // StripSemanticTags removes all semantic and direct tags from s, returning plain text.
-func StripSemanticTags(s string) string {
-	s = semanticRegex.ReplaceAllString(s, "")
-	s = directRegex.ReplaceAllString(s, "")
+func (st *Styler) StripSemanticTags(s string) string {
+	s = st.semanticRegex.ReplaceAllString(s, "")
+	s = st.directRegex.ReplaceAllString(s, "")
 	return s
 }
 
-// WrapSemantic wraps a tag name in standard semantic delimiters
-func WrapSemantic(name string) string {
-	return SemanticPrefix + name + SemanticSuffix
+// WrapSemantic wraps a tag name in this Styler's semantic delimiters.
+func (st *Styler) WrapSemantic(name string) string {
+	return st.semPre + name + st.semSuf
 }
 
-// WrapDirect wraps a style code in standard direct delimiters
-func WrapDirect(code string) string {
-	return DirectPrefix + code + DirectSuffix
+// WrapDirect wraps a style code in this Styler's direct delimiters.
+func (st *Styler) WrapDirect(code string) string {
+	return st.dirPre + code + st.dirSuf
 }
+
+// SetDelimiters changes the process-wide standard delimiters and applies them to the
+// Default styler. Per-instance overrides use (*Styler).SetDelimiters.
+func SetDelimiters(semPre, semSuf, dirPre, dirSuf string) {
+	SemanticPrefix, SemanticSuffix, DirectPrefix, DirectSuffix = semPre, semSuf, dirPre, dirSuf
+	Default.SetDelimiters(semPre, semSuf, dirPre, dirSuf)
+}
+
+// Package-level delimiter helpers delegate to Default.
+func GetDelimitedRegex() *regexp.Regexp     { return Default.GetDelimitedRegex() }
+func GetDirectRegex() *regexp.Regexp        { return Default.GetDirectRegex() }
+func StripSemanticTags(s string) string     { return Default.StripSemanticTags(s) }
+func WrapSemantic(name string) string       { return Default.WrapSemantic(name) }
+func WrapDirect(code string) string         { return Default.WrapDirect(code) }
 
 // ExpandConsoleTags converts semantic tags to standardized direct format using only the console map.
 func (st *Styler) ExpandConsoleTags(text string) string {
@@ -104,9 +102,9 @@ func (st *Styler) ExpandTagsWithMap(text string, styleMap map[string]string, str
 	defer st.mu.RUnlock()
 
 	expandOnce := func(s string, strip bool) string {
-		return semanticRegex.ReplaceAllStringFunc(s, func(match string) string {
-			groupIndex := semanticRegex.SubexpIndex("content")
-			subMatch := semanticRegex.FindStringSubmatch(match)
+		return st.semanticRegex.ReplaceAllStringFunc(s, func(match string) string {
+			groupIndex := st.semanticRegex.SubexpIndex("content")
+			subMatch := st.semanticRegex.FindStringSubmatch(match)
 			if len(subMatch) <= groupIndex {
 				return ""
 			}
@@ -153,9 +151,9 @@ func (st *Styler) ExpandTagsWithMap(text string, styleMap map[string]string, str
 			}
 
 			if ok {
-				result := WrapDirect(rawCode)
+				result := st.WrapDirect(rawCode)
 				if modifiers != "" {
-					result += WrapDirect(modifiers)
+					result += st.WrapDirect(modifiers)
 				}
 				return result
 			}
@@ -163,7 +161,7 @@ func (st *Styler) ExpandTagsWithMap(text string, styleMap map[string]string, str
 			// Name didn't resolve (or was empty) — if modifiers are present, emit them as a
 			// direct tag so {{|:fg:bg:flags|}} and {{|Unknown:fg:bg:flags|}} still apply styling.
 			if modifiers != "" {
-				return WrapDirect(modifiers)
+				return st.WrapDirect(modifiers)
 			}
 			if strip {
 				return ""
@@ -185,17 +183,31 @@ func (st *Styler) ExpandTagsWithMap(text string, styleMap map[string]string, str
 	return expandOnce(text, stripUnresolvable)
 }
 
-// processHyperlinks detects {{|URL|}} blocks and wraps them in terminal hyperlink sequences.
-func processHyperlinks(text string) string {
-	// Pattern to find {{|URL|}} ... {{[-]}} or {{|-|}}
-	// We handle {{|URL|}} as a start marker and {{[-]}}, {{|reset|}}, or {{|-|}} as the end marker.
-	semEscPre := regexp.QuoteMeta(SemanticPrefix)
-	semEscSuf := regexp.QuoteMeta(SemanticSuffix)
-	dirEscPre := regexp.QuoteMeta(DirectPrefix)
-	dirEscSuf := regexp.QuoteMeta(DirectSuffix)
+// processHyperlinks wraps the content of any registered hyperlink tag (see
+// RegisterHyperlinkTag) — from the tag up to the next reset — in a terminal hyperlink, using
+// the content's plain text as the destination. No-op when no hyperlink tags are registered.
+func (st *Styler) processHyperlinks(text string) string {
+	st.mu.RLock()
+	n := len(st.hyperlinkTags)
+	names := make([]string, 0, n)
+	for name := range st.hyperlinkTags {
+		names = append(names, regexp.QuoteMeta(name))
+	}
+	st.mu.RUnlock()
+	if n == 0 {
+		return text
+	}
 
-	pattern := fmt.Sprintf(`((?i)%sURL%s)(.*?)(%s-%s|%sreset%s|%s-%s)`,
-		semEscPre, semEscSuf,
+	semEscPre := regexp.QuoteMeta(st.semPre)
+	semEscSuf := regexp.QuoteMeta(st.semSuf)
+	dirEscPre := regexp.QuoteMeta(st.dirPre)
+	dirEscSuf := regexp.QuoteMeta(st.dirSuf)
+
+	// Start marker: any registered hyperlink tag (case-insensitive).
+	// End marker: a reset, either direct ({{[-]}}) or semantic ({{|reset|}} / {{|-|}}).
+	tagAlt := strings.Join(names, "|")
+	pattern := fmt.Sprintf(`((?i)%s(?:%s)%s)(.*?)(%s-%s|%sreset%s|%s-%s)`,
+		semEscPre, tagAlt, semEscSuf,
 		dirEscPre, dirEscSuf,
 		semEscPre, semEscSuf,
 		semEscPre, semEscSuf)
@@ -207,16 +219,9 @@ func processHyperlinks(text string) string {
 		if len(subMatch) < 4 {
 			return match
 		}
-
-		// Group 1: {{|URL|}}
-		// Group 2: The content to wrap
-		// Group 3: The terminator (e.g., {{[-]}})
-
-		content := subMatch[2]
-		// The URL used for the link destination should have ALL tags stripped (semantic and direct)
-		urlDestination := Strip(content)
-
-		// Wrap the entire block (including style tags) in a hyperlink style
+		// Group 2 is the content between the start tag and the terminator. The link
+		// destination is that content with all tags stripped.
+		urlDestination := st.Strip(subMatch[2])
 		linkStyle := lipgloss.NewStyle().Hyperlink(urlDestination)
 		return linkStyle.Render(match)
 	})
@@ -234,7 +239,7 @@ func (st *Styler) ToConsoleANSI(text string) string {
 	}
 
 	// 0. Process Hyperlinks
-	text = processHyperlinks(text)
+	text = st.processHyperlinks(text)
 
 	// 1. Expand only console tags
 	text = st.ExpandConsoleTags(text)
@@ -251,7 +256,7 @@ func (st *Styler) ToThemeANSI(text string) string {
 // ToThemeANSIWithPrefix converts semantic and direct tags to ANSI escape sequences using only theme colors with a prefix.
 func (st *Styler) ToThemeANSIWithPrefix(text string, prefix string) string {
 	// 0. Process Hyperlinks
-	text = processHyperlinks(text)
+	text = st.processHyperlinks(text)
 
 	// 1. Expand theme tags
 	text = st.ExpandThemeTags(text, prefix)
@@ -275,8 +280,8 @@ func (st *Styler) processDirectTags(text string) string {
 
 // Strip removes all semantic and direct tags from text, as well as ANSI escape sequences
 func (st *Styler) Strip(text string) string {
-	text = semanticRegex.ReplaceAllString(text, "")
-	text = directRegex.ReplaceAllString(text, "")
+	text = st.semanticRegex.ReplaceAllString(text, "")
+	text = st.directRegex.ReplaceAllString(text, "")
 	return StripANSI(text)
 }
 

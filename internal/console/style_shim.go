@@ -54,6 +54,7 @@ var (
 
 	BuildColorMap        = semstyle.BuildColorMap
 	RegisterBaseTags     = semstyle.RegisterBaseTags
+	RegisterHyperlinkTag = semstyle.RegisterHyperlinkTag
 	RegisterColor        = semstyle.RegisterColor
 	UnregisterColor      = semstyle.UnregisterColor
 	UnregisterPrefix     = semstyle.UnregisterPrefix

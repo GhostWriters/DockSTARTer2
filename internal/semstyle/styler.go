@@ -1,6 +1,8 @@
 package semstyle
 
 import (
+	"regexp"
+	"strings"
 	"sync"
 )
 
@@ -23,23 +25,51 @@ type Styler struct {
 	// renderPolicy, when non-nil and returning false, makes ToConsoleANSI strip instead
 	// of render (host apps encode TTY/redirect policy here).
 	renderPolicy func() bool
+
+	// Tag delimiters and their compiled regexes (per-instance). Defaults come from the
+	// package-level Default* vars; override per Styler with SetDelimiters.
+	semPre, semSuf string
+	dirPre, dirSuf string
+	semanticRegex  *regexp.Regexp
+	directRegex    *regexp.Regexp
+
+	// hyperlinkTags: semantic tag names (lowercased) whose content, up to the next reset,
+	// is rendered as a terminal hyperlink. Empty by default (no special hyperlink handling).
+	hyperlinkTags map[string]bool
 }
 
-// Note: the color profile (terminal capability) and the tag delimiters/regexes remain
-// package-level — they are process-wide concerns, not per-style-configuration state, and
-// external packages read the exported delimiter vars directly.
+// Note: the color profile (terminal capability) remains package-level — it describes the
+// output terminal, not an individual style configuration.
 
-// New returns a Styler initialised with the built-in base tags.
+// New returns a Styler initialised with the built-in base tags and the standard delimiters
+// (the package-level SemanticPrefix/Suffix and DirectPrefix/Suffix values).
 func New() *Styler {
 	s := &Styler{
 		consoleMap:   make(map[string]string),
 		themeMap:     make(map[string]string),
 		ansiMap:      make(map[string]string),
 		attributeMap: make(map[string]string),
+		semPre:       SemanticPrefix,
+		semSuf:       SemanticSuffix,
+		dirPre:       DirectPrefix,
+		dirSuf:       DirectSuffix,
 	}
+	s.rebuildRegexes()
 	s.BuildColorMap()
 	s.RegisterBaseTags()
 	return s
+}
+
+// SetDelimiters overrides this Styler's tag delimiters and rebuilds its regexes.
+// semPre/semSuf wrap semantic tag names; dirPre/dirSuf wrap direct style codes.
+func (st *Styler) SetDelimiters(semPre, semSuf, dirPre, dirSuf string) {
+	st.semPre, st.semSuf, st.dirPre, st.dirSuf = semPre, semSuf, dirPre, dirSuf
+	st.rebuildRegexes()
+}
+
+// Delimiters returns this Styler's current semantic and direct delimiters.
+func (st *Styler) Delimiters() (semPre, semSuf, dirPre, dirSuf string) {
+	return st.semPre, st.semSuf, st.dirPre, st.dirSuf
 }
 
 // Default is the process-wide Styler that the package-level functions delegate to.
@@ -48,9 +78,25 @@ var Default = New()
 // SetRenderPolicy sets the policy consulted by ToConsoleANSI.
 func (s *Styler) SetRenderPolicy(fn func() bool) { s.renderPolicy = fn }
 
+// RegisterHyperlinkTag marks a semantic tag as a hyperlink trigger on the Default styler.
+func RegisterHyperlinkTag(name string) { Default.RegisterHyperlinkTag(name) }
+
 // SetThemeMap replaces the theme map wholesale.
 func (s *Styler) SetThemeMap(m map[string]string) {
 	s.mu.Lock()
 	s.themeMap = m
+	s.mu.Unlock()
+}
+
+// RegisterHyperlinkTag marks a semantic tag whose content (everything from the tag up to
+// the next reset, e.g. {{[-]}}) should be rendered as a terminal hyperlink, with the tag
+// content's plain text used as the link destination. For example, registering "URL" makes
+// {{|URL|}}https://example.com{{[-]}} a clickable link. Off by default; call once per tag.
+func (s *Styler) RegisterHyperlinkTag(name string) {
+	s.mu.Lock()
+	if s.hyperlinkTags == nil {
+		s.hyperlinkTags = make(map[string]bool)
+	}
+	s.hyperlinkTags[strings.ToLower(name)] = true
 	s.mu.Unlock()
 }

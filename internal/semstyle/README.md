@@ -70,7 +70,36 @@ package, which parses theme files into a map).
 | `SetThemeMap(m)` | Replace the theme map wholesale |
 | `SetRenderPolicy(fn)` | Gate rendering (return false → strip instead of color) |
 | `New()` | Create an independent `*Styler` |
-| `SetDelimiters(…)` | Customize the tag delimiters (process-wide) |
+| `(*Styler).SetDelimiters(…)` | Customize this Styler's tag delimiters |
+| `(*Styler).RegisterHyperlinkTag(name)` | Make a tag render its content as a terminal hyperlink |
+
+## Delimiters
+
+The default delimiters are the package-level standard: `{{|`…`|}}` (semantic) and `{{[`…`]}}`
+(direct). Each `Styler` gets these at construction and can override them independently:
+
+```go
+s := semstyle.New()
+s.SetDelimiters("{|", "|}", "{[", "]}")    // this Styler only
+```
+
+`semstyle.SetDelimiters(...)` (package-level) changes the standard values and applies them to
+`Default`. Delimiters are per-`Styler` state, so different stylers can use different markup
+syntaxes in the same process.
+
+## Hyperlinks
+
+Hyperlinking is opt-in and keyed on a tag name (not a style flag, so theme authors don't
+have to remember anything). Register a tag, and its content up to the next reset becomes a
+terminal hyperlink, using the content's plain text as the destination:
+
+```go
+semstyle.RegisterHyperlinkTag("URL")
+semstyle.ToConsoleANSI("{{|URL|}}https://example.com{{[-]}}") // clickable link
+```
+
+Off by default. The registration lives on the `Styler` (independent of the console/theme
+style maps), so it persists across theme changes.
 
 ## Render policy
 
@@ -85,8 +114,9 @@ When the policy returns false, `ToConsoleANSI` strips instead of rendering.
 
 ## Notes
 
-- **Delimiters** (`{{|`, `|}}`, `{{[`, `]}}`) and the detected **color profile** are
-  process-wide, not per-`Styler` — they describe the markup format and the terminal, not an
+- **Delimiters** and **hyperlink tags** are per-`Styler`; the package-level standard
+  delimiter values seed each new `Styler`.
+- The detected **color profile** is process-wide — it describes the output terminal, not an
   individual style configuration.
 - Hard-reset constants (`CodeHardReset`, etc.) are multi-parameter SGR variants useful when
   a compositor intercepts single-parameter resets.

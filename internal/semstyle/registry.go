@@ -119,7 +119,7 @@ func (st *Styler) BuildColorMap() {
 
 // RegisterConsoleTag registers a semantic tag with its standardized tag value in the console map.
 func (st *Styler) RegisterConsoleTag(name, taggedValue string) {
-	st.RegisterConsoleTagRaw(name, StripDelimiters(taggedValue))
+	st.RegisterConsoleTagRaw(name, st.StripDelimiters(taggedValue))
 }
 
 // RegisterConsoleTagRaw registers a semantic tag with a raw style code in the console map.
@@ -132,7 +132,7 @@ func (st *Styler) RegisterConsoleTagRaw(name, rawValue string) {
 
 // RegisterThemeTag registers a semantic tag with its standardized tag value in the theme map.
 func (st *Styler) RegisterThemeTag(name, taggedValue string) {
-	st.RegisterThemeTagRaw(name, StripDelimiters(taggedValue))
+	st.RegisterThemeTagRaw(name, st.StripDelimiters(taggedValue))
 }
 
 // RegisterThemeTagRaw registers a semantic tag with a raw style code in the theme map.
@@ -234,23 +234,22 @@ func (st *Styler) ResetCustomColors() {
 	st.BuildColorMap()
 }
 
-// StripDelimiters removes any known library delimiters from a style string to get the raw content
-func StripDelimiters(text string) string {
-	// Check current semantic delimiters
-	if strings.HasPrefix(text, SemanticPrefix) && strings.HasSuffix(text, SemanticSuffix) {
-		return text[len(SemanticPrefix) : len(text)-len(SemanticSuffix)]
+// StripDelimiters removes any of this Styler's known delimiters from a style string to get
+// the raw content, falling back to the library-standard delimiters if customised.
+func (st *Styler) StripDelimiters(text string) string {
+	if strings.HasPrefix(text, st.semPre) && strings.HasSuffix(text, st.semSuf) {
+		return text[len(st.semPre) : len(text)-len(st.semSuf)]
 	}
-	// Check current direct delimiters
-	if strings.HasPrefix(text, DirectPrefix) && strings.HasSuffix(text, DirectSuffix) {
-		return text[len(DirectPrefix) : len(text)-len(DirectSuffix)]
+	if strings.HasPrefix(text, st.dirPre) && strings.HasSuffix(text, st.dirSuf) {
+		return text[len(st.dirPre) : len(text)-len(st.dirSuf)]
 	}
-	// Fallback to standard delimiters if the globals have been customised
-	if SemanticPrefix != "{{|" {
+	// Fallback to standard delimiters if this Styler uses custom ones
+	if st.semPre != "{{|" {
 		if strings.HasPrefix(text, "{{|") && strings.HasSuffix(text, "|}}") {
 			return text[3 : len(text)-3]
 		}
 	}
-	if DirectPrefix != "{{[" {
+	if st.dirPre != "{{[" {
 		if strings.HasPrefix(text, "{{[") && strings.HasSuffix(text, "]}}") {
 			return text[3 : len(text)-3]
 		}
@@ -259,9 +258,8 @@ func StripDelimiters(text string) string {
 }
 
 // --- package-level delegators to Default ---
-func ensureMaps() {
-	Default.ensureMaps()
-}
+func ensureMaps()                       { Default.ensureMaps() }
+func StripDelimiters(text string) string { return Default.StripDelimiters(text) }
 
 func BuildColorMap() {
 	Default.BuildColorMap()
