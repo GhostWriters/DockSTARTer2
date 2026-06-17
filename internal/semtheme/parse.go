@@ -13,28 +13,12 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
-// ThemeDefaults holds optional UI defaults a theme may suggest (pointers distinguish
-// "unset" from a zero value).
-type ThemeDefaults struct {
-	Borders           *bool   `toml:"borders"`
-	LargeButtons      *bool   `toml:"large_buttons"`
-	LargeTitleBars    *bool   `toml:"large_title_bars"`
-	LineCharacters    *bool   `toml:"line_characters"`
-	Shadow            *bool   `toml:"shadow"`
-	ShadowLevel       *int    `toml:"shadow_level"`
-	Scrollbar         *bool   `toml:"scrollbar"`
-	Spinner           *bool   `toml:"spinner"`
-	BorderColor       *int    `toml:"border_color"`
-	DialogTitleAlign  *string `toml:"dialog_title_align"`
-	SubmenuTitleAlign *string `toml:"submenu_title_align"`
-	PanelTitleAlign   *string `toml:"panel_title_align"`
-	// Panel modes: themes may suggest "log" or "none" but never "console".
-	// Any attempt to set "console" via a theme is silently clamped to "log".
-	PanelLocal  *string `toml:"panel_local"`
-	PanelRemote *string `toml:"panel_remote"`
-}
-
-// ThemeFile is the parsed structure of a .theme (TOML) file.
+// ThemeFile is the parsed structure of a theme (TOML) file.
+//
+// Defaults is an opaque, app-defined table: semtheme does not interpret it. Whatever keys a
+// theme places under [defaults] are parsed generically; the consuming application decodes
+// them into its own settings (e.g. via mapstructure). This keeps semtheme free of any
+// particular UI vocabulary (borders, dialogs, panels, …).
 type ThemeFile struct {
 	Metadata struct {
 		Name        string `toml:"name"`
@@ -47,7 +31,7 @@ type ThemeFile struct {
 		DirectPrefix   string `toml:"direct_prefix"`
 		DirectSuffix   string `toml:"direct_suffix"`
 	} `toml:"syntax"`
-	Defaults *ThemeDefaults    `toml:"defaults"`
+	Defaults map[string]any    `toml:"defaults"`
 	Palette  map[string]string `toml:"palette"`
 	Styles   map[string]string `toml:"styles"`
 }
@@ -283,9 +267,10 @@ func Parse(data []byte) (ThemeFile, error) {
 }
 
 // RegisterInto parses TOML theme data, resolves its styles, and registers them into the
-// semstyle theme map under the given prefix. Returns the theme's UI defaults. When prefix
-// is empty (the main theme) it re-applies base tags and rebuilds the color map.
-func RegisterInto(data []byte, prefix string) (*ThemeDefaults, error) {
+// semstyle theme map under the given prefix. Returns the theme's opaque [defaults] table for
+// the caller to interpret. When prefix is empty (the main theme) it re-applies base tags and
+// rebuilds the color map.
+func RegisterInto(data []byte, prefix string) (map[string]any, error) {
 	tf, err := Parse(data)
 	if err != nil {
 		return nil, err

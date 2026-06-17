@@ -15,6 +15,7 @@ import (
 	"sync"
 
 	"charm.land/lipgloss/v2"
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/pelletier/go-toml/v2"
 )
 
@@ -295,10 +296,47 @@ func resolveThemeValue(raw string, rawValues map[string]string, visiting map[str
 	return semtheme.ResolveValue(raw, rawValues, visiting, semPre, semSuf, dirPre, dirSuf)
 }
 
-// ThemeDefaults and ThemeFile now live in the semtheme parse layer; aliased here so the
-// many theme.* consumers across the app keep working unchanged.
-type ThemeDefaults = semtheme.ThemeDefaults
+// ThemeFile lives in the semtheme parse layer; aliased here so theme.* consumers are unchanged.
 type ThemeFile = semtheme.ThemeFile
+
+// ThemeDefaults holds the DockSTARTer2-specific UI defaults a theme may suggest under its
+// [defaults] table. semtheme keeps that table opaque (app-defined); this struct is how DS2
+// interprets it. Pointers distinguish "unset" from a zero value.
+type ThemeDefaults struct {
+	Borders           *bool   `mapstructure:"borders"`
+	LargeButtons      *bool   `mapstructure:"large_buttons"`
+	LargeTitleBars    *bool   `mapstructure:"large_title_bars"`
+	LineCharacters    *bool   `mapstructure:"line_characters"`
+	Shadow            *bool   `mapstructure:"shadow"`
+	ShadowLevel       *int    `mapstructure:"shadow_level"`
+	Scrollbar         *bool   `mapstructure:"scrollbar"`
+	Spinner           *bool   `mapstructure:"spinner"`
+	BorderColor       *int    `mapstructure:"border_color"`
+	DialogTitleAlign  *string `mapstructure:"dialog_title_align"`
+	SubmenuTitleAlign *string `mapstructure:"submenu_title_align"`
+	PanelTitleAlign   *string `mapstructure:"panel_title_align"`
+	PanelLocal        *string `mapstructure:"panel_local"`
+	PanelRemote       *string `mapstructure:"panel_remote"`
+}
+
+// decodeThemeDefaults converts the opaque [defaults] table from a parsed theme into DS2's
+// typed ThemeDefaults. Returns nil when there is no defaults table.
+func decodeThemeDefaults(raw map[string]any) (*ThemeDefaults, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	var d ThemeDefaults
+	if err := mapstructure.Decode(raw, &d); err != nil {
+		return nil, err
+	}
+	return &d, nil
+}
+
+// FileDefaults decodes a parsed theme's opaque [defaults] table into DS2's typed
+// ThemeDefaults. Returns nil if the theme has no defaults.
+func FileDefaults(tf ThemeFile) (*ThemeDefaults, error) {
+	return decodeThemeDefaults(tf.Defaults)
+}
 
 // GetThemeFile reads a theme file and returns its structured content without applying it.
 // resolveThemeColors resolves all color values in tf, returning the resolved map or an error
@@ -393,7 +431,11 @@ func ApplyThemeDefaults(conf *config.AppConfig, defaults ThemeDefaults) map[stri
 }
 
 func parseThemeTOMLData(data []byte, prefix string) (*ThemeDefaults, error) {
-	return semtheme.RegisterInto(data, prefix)
+	rawDefaults, err := semtheme.RegisterInto(data, prefix)
+	if err != nil {
+		return nil, err
+	}
+	return decodeThemeDefaults(rawDefaults)
 }
 
 var (

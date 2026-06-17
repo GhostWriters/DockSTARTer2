@@ -473,8 +473,10 @@ func (s *DisplayOptionsScreen) buildThemeItemHelp(item tui.MenuItem) (itemTitle,
 	if tf.Metadata.Author != "" {
 		parts = append(parts, "By: "+tf.Metadata.Author)
 	}
-	if defaultsText := formatThemeDefaults(tf.Defaults); defaultsText != "" {
-		parts = append(parts, defaultsText)
+	if defaults, derr := theme.FileDefaults(tf); derr == nil {
+		if defaultsText := formatThemeDefaults(defaults); defaultsText != "" {
+			parts = append(parts, defaultsText)
+		}
 	}
 	if len(parts) == 0 {
 		return "", ""
