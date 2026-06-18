@@ -62,7 +62,7 @@ s.SetThemeMap(styles)
 ### Theme file parsing
 
 | Function | Purpose |
-|---|---|
+| --- | --- |
 | `Parse(data)` | Unmarshal TOML → `ThemeFile` |
 | `ResolveColors(tf)` | Resolve palette + semantic refs → `map[name]rawStyle` |
 | `ResolveValue(raw, …)` | Resolve a single value string → raw `fg:bg:flags` |
@@ -75,7 +75,7 @@ These functions convert semantic/direct tags or raw style codes into **lipgloss 
 for use when building TUI components rather than writing ANSI to a terminal:
 
 | Function | Purpose |
-|---|---|
+| --- | --- |
 | `ToStyle(st, text, style, reset)` | Resolve all tags in `text` and apply them to `style`; resets to `reset` on a reset tag |
 | `CodeToStyle(code, style, reset)` | Apply a raw `fg:bg:flags` code directly to `style` |
 | `CodeToFlags(code)` | Parse the flags field of a raw code → `StyleFlags` struct |

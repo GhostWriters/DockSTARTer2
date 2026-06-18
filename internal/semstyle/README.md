@@ -76,7 +76,7 @@ package, which parses theme files into a map).
 ## Key API
 
 | Function / method | Purpose |
-|---|---|
+| --- | --- |
 | `ToANSI(s, prefix...)` | Expand tags → ANSI; console map by default, theme map when prefix given |
 | `ToTags(s, prefix...)` | Expand semantic tags → direct tags; stops before ANSI conversion |
 | `ToPlain(s)` | Remove all tags **and** ANSI escapes → plain text |
