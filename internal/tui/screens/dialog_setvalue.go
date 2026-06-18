@@ -511,7 +511,7 @@ func (m *setValueDialogModel) recalc() {
 		CurrentValue:   m.input.Value(),
 	}, contentW)
 	headingStyle := ctx.Dialog.Padding(1, 2).Width(contentW).Border(lipgloss.Border{})
-	headingH := lipgloss.Height(headingStyle.Render(theme.ToANSI(headingRaw)))
+	headingH := lipgloss.Height(headingStyle.Render(theme.ToANSI(headingRaw, "")))
 
 	// "Current Value" input section height
 	// Top border(1) + InputRow(1) + Bottom border(1) = 3
@@ -616,7 +616,7 @@ func (m *setValueDialogModel) ViewString() string {
 		CurrentValue:   m.input.Value(),
 	}, contentW)
 	headingText := strings.TrimRight(
-		ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToANSI(headingRaw)), "\n")
+		ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToANSI(headingRaw, "")), "\n")
 
 	// "Current Value" section — titled bordered box, thick border when focused
 	inputFocused := m.focus == setValueFocusInput
@@ -746,7 +746,7 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 		FilePath: m.filePath,
 		VarName:  m.varName, OriginalValue: m.origVal, CurrentValue: m.input.Value(),
 	}, contentW)
-	headingH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToANSI(headingRaw)))
+	headingH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToANSI(headingRaw, "")))
 	// outer border(1) + largeTitleOverhead + headingH + "Current Value" section(3)
 	listTop := 1 + largeTitleOverhead + headingH + 3
 

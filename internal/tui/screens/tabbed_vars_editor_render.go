@@ -359,7 +359,7 @@ func (m *TabbedVarsEditorModel) renderSubtitle() string {
 	bgStyle := ctx.Dialog
 
 	renderLine := func(raw string) string {
-		processed := theme.ToANSI(raw)
+		processed := theme.ToANSI(raw, "")
 		w := lipgloss.Width(processed)
 		padded := processed + strutil.Repeat(" ", m.contentWidth-w)
 		return tui.MaintainBackground(bgStyle.Render(padded), bgStyle)

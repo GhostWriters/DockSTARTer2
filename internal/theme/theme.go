@@ -528,7 +528,8 @@ func ClearSemanticCachePrefix(prefix string) {
 }
 
 // ToANSI converts semantic and direct tags to ANSI. Without a prefix uses the console
-// map; with a prefix uses the theme map. Delegates to semstyle.ToANSI.
+// map; with "" uses the theme map (theme-first, console fallback); with a named prefix
+// qualifies theme map lookups. Delegates to semstyle.ToANSI.
 func ToANSI(text string, prefix ...string) string {
 	return semstyle.ToANSI(text, prefix...)
 }
