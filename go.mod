@@ -16,7 +16,7 @@ require (
 	github.com/charmbracelet/colorprofile v0.4.3
 	github.com/charmbracelet/ssh v0.0.0-20250826160808-ebfa259c7309
 	github.com/charmbracelet/x/ansi v0.11.7
-	github.com/coder/websocket v1.8.14
+	github.com/coder/websocket v1.8.15
 	github.com/compose-spec/compose-go/v2 v2.11.0
 	github.com/containerd/errdefs v1.0.0
 	github.com/creativeprojects/go-selfupdate v1.5.2
@@ -33,7 +33,7 @@ require (
 	github.com/mattn/go-sixel v0.0.11
 	github.com/moby/moby/client v0.4.1
 	github.com/muesli/termenv v0.16.0
-	github.com/pelletier/go-toml/v2 v2.3.1
+	github.com/pelletier/go-toml/v2 v2.4.0
 	github.com/pgavlin/goldmark v1.1.33-0.20210916052350-16f491902b32
 	github.com/pgavlin/markdown-kit v0.0.0-20260512143711-19b7911a51a5
 	github.com/rivo/uniseg v0.4.7
