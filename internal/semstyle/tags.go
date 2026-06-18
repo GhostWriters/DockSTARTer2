@@ -26,8 +26,13 @@ func (st *Styler) rebuildRegexes() {
 	dirEscPre := regexp.QuoteMeta(st.dirPre)
 	dirEscSuf := regexp.QuoteMeta(st.dirSuf)
 
-	// Allow either a named tag (optionally with modifiers) or bare modifiers with no name (e.g. {{|:red:black:B|}})
-	st.semanticRegex = regexp.MustCompile(semEscPre + `(?P<content>[A-Za-z0-9_]+(?::[A-Za-z0-9_:\-#;~]*)?|:[A-Za-z0-9_:\-#;~]+)` + semEscSuf)
+	// Semantic tag: name + optional modifier overrides (fg:bg:flags) + optional label.
+	// Parsed as a single content group; label extraction done in code by counting colon fields.
+	// {{|Name|}} {{|Name:fg:bg:flags|}} {{|Name:fg:bg:flags:Display Label|}} {{|Name::::Label|}}
+	semClosingChar := regexp.QuoteMeta(string(st.semSuf[0]))
+	st.semanticRegex = regexp.MustCompile(semEscPre +
+		`(?P<content>[^` + semClosingChar + `]+)` +
+		semEscSuf)
 	// content = up to three colon-separated fields (fg:bg:flags), no spaces.
 	// An optional fourth field ":label" follows; label may contain spaces but not the closing delimiter char.
 	field := `[A-Za-z0-9_\-#;~]*`
@@ -90,6 +95,43 @@ func WrapDirect(code string) string     { return Default.WrapDirect(code) }
 // theme map when a prefix is provided. Stops short of ANSI conversion — useful when the
 // output will be passed to a compositor or TUI renderer that understands direct tags.
 //
+// stripSemanticLabel removes the label (5th colon-field) from a semantic tag content string,
+// returning only the name + up to 3 modifier fields (fg:bg:flags). Label presence requires
+// exactly 4 colons: name:fg:bg:flags:label — fewer colons means no label.
+func stripSemanticLabel(content string) string {
+	// Count colons; label only exists at the 5th field (index 4).
+	idx := 0
+	colons := 0
+	for i, c := range content {
+		if c == ':' {
+			colons++
+			if colons == 4 {
+				idx = i
+				break
+			}
+		}
+	}
+	if colons < 4 {
+		return content
+	}
+	return content[:idx]
+}
+
+// semLabelFrom extracts the label from a semantic tag content string (the 5th colon-field).
+// Returns ("", false) when no label is present.
+func semLabelFrom(content string) (string, bool) {
+	colons := 0
+	for i, c := range content {
+		if c == ':' {
+			colons++
+			if colons == 4 {
+				return content[i+1:], true
+			}
+		}
+	}
+	return "", false
+}
+
 // ToTags(s)         — console map, no prefix
 // ToTags(s, "")     — theme map, no prefix (theme-first with console fallback)
 // ToTags(s, "pfx")  — theme map, prefix-qualified lookup
@@ -119,7 +161,9 @@ func (st *Styler) ExpandTagsWithMap(text string, styleMap map[string]string, str
 			}
 			fullContent := subMatch[groupIndex]
 
-			semanticName, modifiers, _ := strings.Cut(fullContent, ":")
+			// Strip any label field (5th colon-field) before resolving — labels are for
+			// hyperlinks only and must not be passed to the style resolver.
+			semanticName, modifiers, _ := strings.Cut(stripSemanticLabel(fullContent), ":")
 			content := strings.ToLower(semanticName)
 
 			var rawCode string
@@ -240,18 +284,19 @@ func (st *Styler) ToPlain(s string) string {
 	return StripANSI(s)
 }
 
-// processInlineHyperlinks handles direct tags with an explicit display-text (label) field:
+// processInlineHyperlinks handles tags with an explicit display-text (label) field:
 //
-//	{{[fg:bg:flags:Display Text]}}https://url{{[-]}}
+//	Direct:   {{[fg:bg:flags:Display Label]}}https://url{{[-]}}
+//	Semantic: {{|StyleName:fg:bg:flags:Display Label|}}https://url{{[-]}}
 //
-// The label is used as the visible link text; the enclosed content (up to the next reset
-// tag) is the hyperlink URL. If the label is empty, the enclosed content is used as both.
-// Tags without a label field are left untouched for processDirectTags.
+// The label is the visible link text; content up to the next reset tag is the URL.
+// Empty label uses the URL as both link and display text.
+// Tags without a label field are left untouched for later processing.
 func (st *Styler) processInlineHyperlinks(text string) string {
-	re := st.directRegex
-	contentIdx := re.SubexpIndex("content")
-	labelIdx := re.SubexpIndex("label")
-	if contentIdx < 0 || labelIdx < 0 {
+	dirContentIdx := st.directRegex.SubexpIndex("content")
+	dirLabelIdx := st.directRegex.SubexpIndex("label")
+	semContentIdx := st.semanticRegex.SubexpIndex("content")
+	if dirContentIdx < 0 || dirLabelIdx < 0 || semContentIdx < 0 {
 		return text
 	}
 
@@ -264,44 +309,71 @@ func (st *Styler) processInlineHyperlinks(text string) string {
 	consumed := 0
 
 	for {
-		loc := re.FindStringSubmatchIndex(text[consumed:])
-		if loc == nil {
+		slice := text[consumed:]
+
+		dirLoc := st.directRegex.FindStringSubmatchIndex(slice)
+		semLoc := st.semanticRegex.FindStringSubmatchIndex(slice)
+
+		if dirLoc == nil && semLoc == nil {
 			break
 		}
 
-		// loc indices are relative to text[consumed:]; adjust to full string.
-		tagStart := consumed + loc[0]
-		tagEnd := consumed + loc[1]
+		// Prefer whichever tag starts earliest.
+		useDir := dirLoc != nil && (semLoc == nil || dirLoc[0] <= semLoc[0])
 
-		// Skip tags with no label group — leave them for processDirectTags.
-		if loc[labelIdx*2] < 0 {
-			out.WriteString(text[consumed:tagEnd])
-			consumed = tagEnd
-			continue
+		var tagStart, tagEnd int
+		var label, styleCode string
+		var isSemantic bool
+
+		if useDir {
+			tagStart, tagEnd = dirLoc[0], dirLoc[1]
+			// Direct tag: label is a named regex group.
+			if dirLoc[dirLabelIdx*2] < 0 {
+				out.WriteString(slice[:tagEnd])
+				consumed += tagEnd
+				continue
+			}
+			label = slice[dirLoc[dirLabelIdx*2]:dirLoc[dirLabelIdx*2+1]]
+			styleCode = slice[dirLoc[dirContentIdx*2]:dirLoc[dirContentIdx*2+1]]
+		} else {
+			tagStart, tagEnd = semLoc[0], semLoc[1]
+			// Semantic tag: label is the 5th colon-field, extracted in code.
+			fullContent := slice[semLoc[semContentIdx*2]:semLoc[semContentIdx*2+1]]
+			semLabel, hasLabel := semLabelFrom(fullContent)
+			if !hasLabel {
+				out.WriteString(slice[:tagEnd])
+				consumed += tagEnd
+				continue
+			}
+			label = semLabel
+			styleCode = stripSemanticLabel(fullContent)
+			isSemantic = true
 		}
 
-		label := text[consumed+loc[labelIdx*2] : consumed+loc[labelIdx*2+1]]
-		styleCode := text[consumed+loc[contentIdx*2] : consumed+loc[contentIdx*2+1]]
-
-		resetLoc := resetPat.FindStringIndex(text[tagEnd:])
+		resetLoc := resetPat.FindStringIndex(slice[tagEnd:])
 		if resetLoc == nil {
-			out.WriteString(text[consumed:tagEnd])
-			consumed = tagEnd
+			out.WriteString(slice[:tagEnd])
+			consumed += tagEnd
 			continue
 		}
 
-		url := text[tagEnd : tagEnd+resetLoc[0]]
+		url := slice[tagEnd : tagEnd+resetLoc[0]]
 		if label == "" {
 			label = st.ToPlain(url)
 		}
 
-		styleANSI := st.parseStyleCodeToANSI(styleCode)
+		var styleANSI string
+		if isSemantic {
+			styleANSI = st.ToANSI(st.semPre + styleCode + st.semSuf)
+		} else {
+			styleANSI = st.parseStyleCodeToANSI(styleCode)
+		}
+
 		hyperlink := fmt.Sprintf("\x1b]8;;%s\x1b\\%s%s%s\x1b]8;;\x1b\\", url, styleANSI, label, CodeReset)
 
-		// Write everything before this tag, then the hyperlink.
-		out.WriteString(text[consumed:tagStart])
+		out.WriteString(slice[:tagStart])
 		out.WriteString(hyperlink)
-		consumed = tagEnd + resetLoc[1]
+		consumed += tagEnd + resetLoc[1]
 	}
 
 	out.WriteString(text[consumed:])

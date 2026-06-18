@@ -310,5 +310,30 @@ func TestInlineHyperlinks(t *testing.T) {
 	if strings.Contains(result3, "\x1b]8;") {
 		t.Errorf("plain tag should not produce hyperlink, got: %q", result3)
 	}
+
+	// Semantic tag with full fields + label
+	st.RegisterConsoleTag("mylink", "cyan::U")
+	result4 := st.ToANSI(`{{|mylink:::B:DockSTARTer Website|}}https://dockstarter.com{{[-]}}`)
+	if !strings.Contains(result4, "\x1b]8;;https://dockstarter.com\x1b\\") {
+		t.Errorf("semantic: expected OSC8 hyperlink open, got: %q", result4)
+	}
+	if !strings.Contains(result4, "DockSTARTer Website") {
+		t.Errorf("semantic: expected label in output, got: %q", result4)
+	}
+
+	// Semantic tag with no color overrides + label (4 empty fields before label)
+	result5 := st.ToANSI(`{{|mylink::::DockSTARTer Website|}}https://dockstarter.com{{[-]}}`)
+	if !strings.Contains(result5, "\x1b]8;;https://dockstarter.com\x1b\\") {
+		t.Errorf("semantic no-override: expected OSC8 hyperlink, got: %q", result5)
+	}
+	if !strings.Contains(result5, "DockSTARTer Website") {
+		t.Errorf("semantic no-override: expected label, got: %q", result5)
+	}
+
+	// Semantic tag with only name:fg — no label, must not hyperlink
+	result6 := st.ToANSI(`{{|mylink:red|}}hello{{[-]}}`)
+	if strings.Contains(result6, "\x1b]8;") {
+		t.Errorf("semantic single-modifier should not produce hyperlink, got: %q", result6)
+	}
 }
 
