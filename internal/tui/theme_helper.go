@@ -2,12 +2,10 @@ package tui
 
 import (
 	"image/color"
-	"regexp"
 	"strings"
 	"sync"
 
-	"github.com/GhostWriters/semstyle"
-	semtheme "github.com/GhostWriters/semstyle/theme"
+	semlg "github.com/GhostWriters/semstyle/lg"
 	"DockSTARTer2/internal/theme"
 
 	"charm.land/lipgloss/v2"
@@ -57,12 +55,12 @@ func TextCursorColor() color.Color {
 	return SemanticRawStyle("TextCursor").GetForeground()
 }
 
-// Color parsing now uses tcell/v3/colors for RGB conversion via semstyle.GetHexForColor().
+// Color parsing now uses tcell/v3/colors for RGB conversion via semlg.GetHexForColor().
 // This ensures all colors are resolved to RGB/hex values, allowing proper color profile
 // downgrading for terminals with limited color support.
 
 // themeTagRegex matches any tag using current delimiters
-var themeTagRegex = semstyle.GetDelimitedRegex()
+var themeTagRegex = semlg.GetDelimitedRegex()
 
 // RenderThemeText takes text with {{...}} theme tags and returns lipgloss-styled text
 // defaultStyle is used for reset state and unstyled text
@@ -107,10 +105,10 @@ func RenderThemeTextCtx(text string, ctx StyleContext) string {
 	}
 
 	// Resolve tags to ANSI using the context's prefix and the isolated theme map
-	rendered := semstyle.ToANSI(text, ctx.Prefix)
+	rendered := semlg.ToANSI(text, ctx.Prefix)
 
 	// Combine components and ensure reset at end
-	result := getCodes(resetStyle) + rendered + semstyle.CodeReset
+	result := getCodes(resetStyle) + rendered + semlg.CodeReset
 
 	// Prevent embedded resets from clearing container background or attributes
 	final := MaintainBackground(result, resetStyle)
@@ -146,10 +144,10 @@ func RenderConsoleTextCtx(text string, ctx StyleContext) string {
 	}
 
 	// Resolve tags to ANSI using MUST use the console registry
-	rendered := semstyle.ToANSI(text)
+	rendered := semlg.ToANSI(text)
 
 	// Combine components and ensure reset at end
-	result := getCodes(resetStyle) + rendered + semstyle.CodeReset
+	result := getCodes(resetStyle) + rendered + semlg.CodeReset
 
 	// Prevent embedded resets from clearing container background or attributes
 	final := MaintainBackground(result, resetStyle)
@@ -163,17 +161,17 @@ func RenderConsoleTextCtx(text string, ctx StyleContext) string {
 
 // CodeToStyle applies tview-style color codes (fg:bg:flags) to a lipgloss style.
 func CodeToStyle(style lipgloss.Style, resetStyle lipgloss.Style, styleCode string) lipgloss.Style {
-	return semtheme.CodeToStyle(styleCode, style, resetStyle)
+	return semlg.CodeToStyle(styleCode, style, resetStyle)
 }
 
 // ToStyle translates any {{...}} tags and applies them to the given style.
 func ToStyle(text string, style lipgloss.Style, resetStyle lipgloss.Style) lipgloss.Style {
-	return semtheme.ToStyle(semstyle.Default, text, style, resetStyle)
+	return semlg.ToStyle(semlg.Default, text, style, resetStyle)
 }
 
 // ParseColor is a wrapper around console.ParseColor for TUI use.
 func ParseColor(name string) color.Color {
-	return semstyle.ToColor(name)
+	return semlg.ToColor(name)
 }
 
 // GetInitialStyle peeks at the first theme tag in text and returns a style derived from it.
@@ -186,7 +184,7 @@ func GetInitialStyle(text string, base lipgloss.Style) lipgloss.Style {
 
 		if semantic != "" {
 			tagContent := semantic
-			translated := semstyle.ToTags(semstyle.WrapSemantic(tagContent))
+			translated := semlg.ToTags(semlg.WrapSemantic(tagContent))
 			// Recurse into translated (recursive check)
 			return GetInitialStyle(translated, base)
 		} else if direct != "" {
@@ -197,53 +195,11 @@ func GetInitialStyle(text string, base lipgloss.Style) lipgloss.Style {
 	return base
 }
 
-// MaintainBackground replaces ANSI resets (\x1b[0m, \x1b[m, \x1b[39m, \x1b[49m) with the reset followed by the parent style's codes.
-// This prevents content-level resets from "bleeding" to the terminal default background or clearing attributes.
-// It also ensures that the string starts with the parent's full ANSI code to provide a "Base-Layer" background
-// for unstyled or plain text.
 func MaintainBackground(text string, style lipgloss.Style) string {
-	// Extract the full ANSI state from a dummy render
-	getANSI := func(s lipgloss.Style) string {
-		rendered := s.Render("_")
-		return strings.Split(rendered, "_")[0]
-	}
-
-	fullCode := getANSI(style)
-	if fullCode == "" {
-		return text
-	}
-
-	// Base-Layer Injection: Ensure the string starts with the parent's colors.
-	// This captures "plain" text that has no internal ANSI codes.
-	// We only inject if the string doesn't already start with an ANSI sequence (which usually contains its own colors).
-	if !strings.HasPrefix(text, "\x1b[") {
-		text = fullCode + text
-	}
-
-	// Per-channel codes: injecting only the affected channel after a partial reset
-	// prevents overwriting colors set by the content before the reset.
-	fgCode := getANSI(lipgloss.NewStyle().Foreground(style.GetForeground()))
-	bgCode := getANSI(lipgloss.NewStyle().Background(style.GetBackground()))
-
-	// Regex to find:
-	// 1. Full reset: \x1b[0m or \x1b[m
-	// 2. FG reset: \x1b[39m
-	// 3. BG reset: \x1b[49m
-	re := regexp.MustCompile(`\x1b\[(?:0|39|49)?m`)
-
-	return re.ReplaceAllStringFunc(text, func(match string) string {
-		switch match {
-		case "\x1b[39m":
-			return match + fgCode
-		case "\x1b[49m":
-			return match + bgCode
-		default: // \x1b[0m or \x1b[m — full reset, restore everything
-			return match + fullCode
-		}
-	})
+	return semlg.MaintainBackground(text, style)
 }
 
 // GetPlainText strips all {{...}} theme tags from text
 func GetPlainText(text string) string {
-	return semstyle.StripTags(text)
+	return semlg.StripTags(text)
 }

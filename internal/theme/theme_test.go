@@ -1,7 +1,7 @@
 package theme
 
 import (
-	"github.com/GhostWriters/semstyle"
+	"github.com/GhostWriters/semstyle/lg"
 	"DockSTARTer2/internal/testutils"
 	"fmt"
 	"image/color"
@@ -29,7 +29,7 @@ func TestGetColorStr(t *testing.T) {
 	var cases []testutils.TestCase
 
 	for _, tt := range tests {
-		actual := semstyle.ToColorStr(tt.input)
+		actual := semlg.ToColorStr(tt.input)
 		pass := actual == tt.expected
 		cases = append(cases, testutils.TestCase{
 			Input:    fmt.Sprintf("%v", tt.input),

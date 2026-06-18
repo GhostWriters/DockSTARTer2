@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"DockSTARTer2/internal/console"
-	"github.com/GhostWriters/semstyle"
+	"github.com/GhostWriters/semstyle/lg"
 
 	"github.com/charmbracelet/colorprofile"
 )
@@ -16,13 +16,13 @@ func TestResolveThemeValue(t *testing.T) {
 	defer console.SetTTY(oldTTY)
 
 	// Ensure a color-capable profile is active (for CI environments)
-	oldProfile := semstyle.GetPreferredProfile()
-	semstyle.SetPreferredProfile(colorprofile.TrueColor)
-	defer semstyle.SetPreferredProfile(oldProfile)
+	oldProfile := semlg.GetPreferredProfile()
+	semlg.SetPreferredProfile(colorprofile.TrueColor)
+	defer semlg.SetPreferredProfile(oldProfile)
 
 	// Setup console maps for resolution
 	console.RegisterBaseTags()
-	semstyle.BuildColorMap()
+	semlg.BuildColorMap()
 
 	// Mock theme data map (simulating what we read from INI)
 	// Using new delimiter format: {{[direct]}} and {{|semantic|}}
@@ -52,52 +52,52 @@ func TestResolveThemeValue(t *testing.T) {
 		{
 			name:     "Simple Value",
 			key:      "Simple",
-			expected: "\x1b[31m\x1b[44m" + semstyle.CodeBold, // red fg, blue bg, bold
+			expected: "\x1b[31m\x1b[44m" + semlg.CodeBold, // red fg, blue bg, bold
 		},
 		{
 			name:     "Direct Reference",
 			key:      "Reference",
-			expected: "\x1b[31m\x1b[44m" + semstyle.CodeBold, // same as Simple
+			expected: "\x1b[31m\x1b[44m" + semlg.CodeBold, // same as Simple
 		},
 		{
 			name:     "Override Foreground",
 			key:      "OverrideFG",
-			expected: "\x1b[32m\x1b[44m" + semstyle.CodeBold, // green fg, blue bg, bold
+			expected: "\x1b[32m\x1b[44m" + semlg.CodeBold, // green fg, blue bg, bold
 		},
 		{
 			name:     "Override Background",
 			key:      "OverrideBG",
-			expected: "\x1b[31m\x1b[42m" + semstyle.CodeBold, // red fg, green bg, bold
+			expected: "\x1b[31m\x1b[42m" + semlg.CodeBold, // red fg, green bg, bold
 		},
 		{
 			name:     "Override Flag (Additive)",
 			key:      "OverrideFlag",
-			expected: "\x1b[31m\x1b[44m" + semstyle.CodeBold + semstyle.CodeUnderline, // red fg, blue bg, bold + underline
+			expected: "\x1b[31m\x1b[44m" + semlg.CodeBold + semlg.CodeUnderline, // red fg, blue bg, bold + underline
 		},
 		{
 			name:     "Chained Resolution",
 			key:      "ChainC",
-			expected: "\x1b[37m\x1b[40m" + semstyle.CodeBold, // white fg, black bg, bold
+			expected: "\x1b[37m\x1b[40m" + semlg.CodeBold, // white fg, black bg, bold
 		},
 		{
 			name:     "Inline FG Override",
 			key:      "InlineFG",
-			expected: "\x1b[32m\x1b[44m" + semstyle.CodeBold, // green fg, blue bg, bold
+			expected: "\x1b[32m\x1b[44m" + semlg.CodeBold, // green fg, blue bg, bold
 		},
 		{
 			name:     "Inline BG Override",
 			key:      "InlineBG",
-			expected: "\x1b[31m\x1b[42m" + semstyle.CodeBold, // red fg, green bg, bold
+			expected: "\x1b[31m\x1b[42m" + semlg.CodeBold, // red fg, green bg, bold
 		},
 		{
 			name:     "Inline Flag Additive",
 			key:      "InlineFlag",
-			expected: semstyle.CodeBold + semstyle.CodeUnderline, // bold + underline
+			expected: semlg.CodeBold + semlg.CodeUnderline, // bold + underline
 		},
 		{
 			name:     "Inline Reset FG+BG",
 			key:      "InlineReset",
-			expected: semstyle.CodeReverse, // reverse only (fg+bg reset)
+			expected: semlg.CodeReverse, // reverse only (fg+bg reset)
 		},
 	}
 
@@ -115,14 +115,14 @@ func TestResolveThemeValue(t *testing.T) {
 			// because resolveThemeValue expects the raw string, not the key.
 			// Pass the delimiters used in the test data
 			got, err := resolveThemeValue(rawVal, themeMap, make(map[string]bool),
-				semstyle.SemanticPrefix, semstyle.SemanticSuffix, semstyle.DirectPrefix, semstyle.DirectSuffix)
+				semlg.SemanticPrefix, semlg.SemanticSuffix, semlg.DirectPrefix, semlg.DirectSuffix)
 			if err != nil {
 				t.Fatalf("resolve error: %v", err)
 			}
 
 			// Since resolveThemeValue returns a tag string (e.g. {{[red:blue:B]}}),
 			// we must expand it to ANSI to compare with expected ANSI values.
-			gotExpanded := semstyle.ToANSI(semstyle.WrapDirect(got))
+			gotExpanded := semlg.ToANSI(semlg.WrapDirect(got))
 
 			if !strings.Contains(gotExpanded, tt.expected) {
 				t.Errorf("resolveThemeValue() ANSI = %q, want %q (raw: %v)", gotExpanded, tt.expected, got)

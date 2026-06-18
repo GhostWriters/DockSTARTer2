@@ -1,7 +1,7 @@
 package tui
 
 import (
-	"github.com/GhostWriters/semstyle"
+	"github.com/GhostWriters/semstyle/lg"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -158,7 +158,7 @@ func (m *choiceDialogModel) ViewString() string {
 	contentWidth := m.contentWidth()
 
 	questionStyle := ctx.Dialog.Padding(1, 2).Width(contentWidth)
-	questionText := strings.TrimRight(questionStyle.Render(semstyle.Sprintf("%s", m.question)), "\n")
+	questionText := strings.TrimRight(questionStyle.Render(semlg.Sprintf("%s", m.question)), "\n")
 
 	specs := make([]ButtonSpec, len(m.choices))
 	for i, c := range m.choices {
@@ -184,7 +184,7 @@ func (m *choiceDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	contentWidth := m.contentWidth()
 
 	questionStyle := ctx.Dialog.Padding(1, 2).Width(contentWidth)
-	questionHeight := lipgloss.Height(questionStyle.Render(semstyle.Sprintf("%s", m.question)))
+	questionHeight := lipgloss.Height(questionStyle.Render(semlg.Sprintf("%s", m.question)))
 	buttonY := 1 + questionHeight + 1
 	if m.layout.LargeTitleBar {
 		buttonY += LargeTitleBarOverhead
