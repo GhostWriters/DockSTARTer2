@@ -1,7 +1,7 @@
 package tui
 
 import (
-	"DockSTARTer2/internal/semstyle"
+	"github.com/GhostWriters/semstyle"
 	"strings"
 
 	"charm.land/bubbles/v2/key"

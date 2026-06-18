@@ -3,7 +3,7 @@ package theme
 import (
 	"testing"
 
-	"DockSTARTer2/internal/semstyle/theme"
+	"github.com/GhostWriters/semstyle/theme"
 )
 
 // TestFileDefaultsDecode verifies the opaque [defaults] table round-trips into the typed

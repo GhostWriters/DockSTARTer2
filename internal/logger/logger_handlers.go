@@ -2,7 +2,7 @@ package logger
 
 import (
 	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/semstyle"
+	"github.com/GhostWriters/semstyle"
 	"context"
 	"fmt"
 	"io"

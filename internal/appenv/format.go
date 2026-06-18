@@ -4,7 +4,7 @@ import (
 	"DockSTARTer2/internal/assets"
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/envutil"
-	"DockSTARTer2/internal/semstyle"
+	"github.com/GhostWriters/semstyle"
 	"context"
 	"os"
 	"path/filepath"

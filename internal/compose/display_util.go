@@ -7,7 +7,7 @@ import (
 	"unicode/utf8"
 
 	"DockSTARTer2/internal/dockerlayout"
-	"DockSTARTer2/internal/semstyle"
+	"github.com/GhostWriters/semstyle"
 	"DockSTARTer2/internal/strutil"
 
 	"github.com/docker/compose/v5/pkg/api"

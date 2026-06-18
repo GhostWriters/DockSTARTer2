@@ -17,7 +17,7 @@ import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
-	"DockSTARTer2/internal/semstyle"
+	"github.com/GhostWriters/semstyle"
 
 	"github.com/adrg/xdg"
 	"github.com/go-viper/mapstructure/v2"

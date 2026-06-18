@@ -3,7 +3,7 @@ package compose
 import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/dockerlayout"
-	"DockSTARTer2/internal/semstyle"
+	"github.com/GhostWriters/semstyle"
 
 	"github.com/docker/compose/v5/pkg/api"
 )

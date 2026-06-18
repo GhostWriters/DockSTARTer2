@@ -1,7 +1,7 @@
 package console
 
 import (
-	"DockSTARTer2/internal/semstyle"
+	"github.com/GhostWriters/semstyle"
 	"fmt"
 	"os"
 	"sync"

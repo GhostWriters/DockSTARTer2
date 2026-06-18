@@ -3,7 +3,7 @@ package tui
 import (
 	"strings"
 
-	"DockSTARTer2/internal/semstyle"
+	"github.com/GhostWriters/semstyle"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
 

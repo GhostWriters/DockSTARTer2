@@ -5,7 +5,7 @@ import (
 
 	"github.com/charmbracelet/colorprofile"
 
-	"DockSTARTer2/internal/semstyle"
+	"github.com/GhostWriters/semstyle"
 )
 
 var (
