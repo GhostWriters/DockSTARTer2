@@ -3,6 +3,7 @@ package logger
 import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/semstyle"
 	"DockSTARTer2/internal/version"
 	"context"
 	"fmt"
@@ -161,6 +162,10 @@ func init() {
 	console.AbortHandler = func(ctx context.Context) {
 		Error(ctx, "User aborted via CTRL-C")
 	}
+
+	// The URL semantic tag renders its content (up to the next reset) as a terminal
+	// hyperlink. The styling engine no longer hardcodes this, so DS2 opts in here.
+	semstyle.RegisterHyperlinkTag("URL")
 }
 
 func SetLevel(level slog.Level) {
@@ -336,7 +341,7 @@ func Display(ctx context.Context, msg any, args ...any) {
 		// Output directly to terminal.
 		// Suppress in TUI mode (Bubble Tea owns the terminal).
 		if !TUIMode {
-			rendered := console.ToConsoleANSI(line) + console.CodeReset
+			rendered := semstyle.ToANSI(line) + semstyle.CodeReset
 			if console.GlobalViewport != nil && console.GlobalViewport.IsActive() {
 				console.GlobalViewport.Append(rendered)
 			} else {

@@ -8,7 +8,7 @@ import (
 )
 
 // hasExplicitBackground returns true if the style has a meaningful background color set.
-// When a theme tag uses '-' for background, ApplyStyleCode calls style.Background(nil),
+// When a theme tag uses '-' for background, CodeToStyle calls style.Background(nil),
 // which lipgloss stores as NoColor{} — the absence of color.
 // We detect this by direct type assertion, since NoColor{}.RGBA() returns full alpha (0xFFFF)
 // making alpha-based detection unreliable.

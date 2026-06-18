@@ -1,7 +1,7 @@
 package tui
 
 import (
-	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/semstyle"
 	"DockSTARTer2/internal/theme"
 	"strings"
 
@@ -292,7 +292,7 @@ func (m *promptDialogModel) ViewString() string {
 
 	// Question text — matches dialog_confirm.go: Padding(1, 2), Width(contentWidth)
 	questionText := strings.TrimRight(
-		ctx.Dialog.Padding(1, 2).Width(contentWidth).Render(console.Sprintf("%s", m.question)),
+		ctx.Dialog.Padding(1, 2).Width(contentWidth).Render(semstyle.Sprintf("%s", m.question)),
 		"\n")
 
 	// Input field with inner border
@@ -327,7 +327,7 @@ func (m *promptDialogModel) ViewString() string {
 			ctx.Dialog.Padding(0, 2).
 				Foreground(theme.ThemeSemanticStyle("{{|Highlight|}}").GetForeground()).
 				Width(contentWidth).
-				Render(console.Sprintf("(password will not be logged)")),
+				Render(semstyle.Sprintf("(password will not be logged)")),
 			"\n")
 	}
 

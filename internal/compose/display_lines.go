@@ -5,7 +5,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/semstyle"
 	"DockSTARTer2/internal/strutil"
 )
 
@@ -47,11 +47,11 @@ func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string 
 
 	// ── services: section ──────────────────────────────────────────────────
 	allSvcIDs := append(append([]string{}, p.imageOrder...), svcRollupIDs...)
-	appendLine(globalIndent+svcIcon+" "+svcStatusANSI+console.CodeReset+svcStatusPad+console.ToConsoleANSI("{{[white::B]}}services{{[-]}}{{|DockerColon|}}:{{[-]}}"), p.sectionTaskFor(allSvcIDs), timerSection)
+	appendLine(globalIndent+svcIcon+" "+svcStatusANSI+semstyle.CodeReset+svcStatusPad+semstyle.ToANSI("{{[white::B]}}services{{[-]}}{{|DockerColon|}}:{{[-]}}"), p.sectionTaskFor(allSvcIDs), timerSection)
 
 	maxImgNameW := 0
 	for _, imgName := range p.imageOrder {
-		if w := utf8.RuneCountInString(console.Strip(styleImage(imgName))); w > maxImgNameW {
+		if w := utf8.RuneCountInString(semstyle.ToPlain(styleImage(imgName))); w > maxImgNameW {
 			maxImgNameW = w
 		}
 	}
@@ -76,30 +76,30 @@ func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string 
 
 		for _, svc := range svcs {
 			t := p.tasks[svc]
-			nameANSI := console.ToConsoleANSI("{{|App|}}" + svc + "{{[-]}}")
+			nameANSI := semstyle.ToANSI("{{|App|}}" + svc + "{{[-]}}")
 			var statusText, statusANSI, icon string
 			if t == nil {
 				if img != nil {
 					statusText = abbreviateStatus(img.text)
-					statusANSI = console.ToConsoleANSI(imageStatusTag(img.status, img.text, p.command))
+					statusANSI = semstyle.ToANSI(imageStatusTag(img.status, img.text, p.command))
 					icon = p.spinnerIcon(img)
 				} else {
 					impliedText, impliedTag := p.impliedStatus()
 					statusText = impliedText
-					statusANSI = console.ToConsoleANSI(impliedTag + statusText + "{{[-]}}")
+					statusANSI = semstyle.ToANSI(impliedTag + statusText + "{{[-]}}")
 					if impliedTag == "{{|DockerStatusPending|}}" {
-						icon = console.ToConsoleANSI("{{|DockerStatusPending|}}" + p.icons().pending + "{{[-]}}")
+						icon = semstyle.ToANSI("{{|DockerStatusPending|}}" + p.icons().pending + "{{[-]}}")
 					} else {
-						icon = console.ToConsoleANSI("{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}}")
+						icon = semstyle.ToANSI("{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}}")
 					}
 				}
 			} else {
 				statusText = abbreviateStatus(t.text)
-				statusANSI = console.ToConsoleANSI(serviceStatusTag(t.status, t.text, p.command))
+				statusANSI = semstyle.ToANSI(serviceStatusTag(t.status, t.text, p.command))
 				icon = p.propagatedIcon(t, p.worstServiceStatus(svc, imgName))
 			}
 			statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
-			appendLine(globalIndent+icon+" "+statusANSI+console.CodeReset+statusPad+sectionChildIndent+nameANSI+console.ToConsoleANSI("{{|DockerColon|}}:{{[-]}}"), p.serviceTimerTask(svc), timerService)
+			appendLine(globalIndent+icon+" "+statusANSI+semstyle.CodeReset+statusPad+sectionChildIndent+nameANSI+semstyle.ToANSI("{{|DockerColon|}}:{{[-]}}"), p.serviceTimerTask(svc), timerService)
 		}
 
 		layers := p.layersForImage(imgName)
@@ -120,24 +120,24 @@ func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string 
 			continue
 		}
 		t := p.tasks[svcID]
-		nameANSI := console.ToConsoleANSI("{{|App|}}" + svcID + "{{[-]}}")
+		nameANSI := semstyle.ToANSI("{{|App|}}" + svcID + "{{[-]}}")
 		var statusText, statusANSI, icon string
 		if t == nil {
 			impliedText, impliedTag := p.impliedStatus()
 			statusText = impliedText
-			statusANSI = console.ToConsoleANSI(impliedTag + statusText + "{{[-]}}")
+			statusANSI = semstyle.ToANSI(impliedTag + statusText + "{{[-]}}")
 			if impliedTag == "{{|DockerStatusPending|}}" {
-				icon = console.ToConsoleANSI("{{|DockerStatusPending|}}·{{[-]}}")
+				icon = semstyle.ToANSI("{{|DockerStatusPending|}}·{{[-]}}")
 			} else {
-				icon = console.ToConsoleANSI("{{|DockerMarkerDone|}}✓{{[-]}}")
+				icon = semstyle.ToANSI("{{|DockerMarkerDone|}}✓{{[-]}}")
 			}
 		} else {
 			statusText = abbreviateStatus(t.text)
-			statusANSI = console.ToConsoleANSI(serviceStatusTag(t.status, t.text, p.command))
+			statusANSI = semstyle.ToANSI(serviceStatusTag(t.status, t.text, p.command))
 			icon = p.propagatedIcon(t, t.status)
 		}
 		statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
-		appendLine(globalIndent+icon+" "+statusANSI+console.CodeReset+statusPad+sectionChildIndent+nameANSI+console.ToConsoleANSI("{{|DockerColon|}}:{{[-]}}"), p.serviceTimerTask(svcID), timerService)
+		appendLine(globalIndent+icon+" "+statusANSI+semstyle.CodeReset+statusPad+sectionChildIndent+nameANSI+semstyle.ToANSI("{{|DockerColon|}}:{{[-]}}"), p.serviceTimerTask(svcID), timerService)
 	}
 
 	netLines, netTimers := p.buildNetworkLines()
@@ -194,16 +194,16 @@ func (p *consoleEventProcessor) layerCountWidth(imgName string) int {
 }
 
 func (p *consoleEventProcessor) buildImageLine(imgName string, t *consoleTask, layers []*consoleTask, maxImgNameW int, termW int) string {
-	imageLabel := strutil.Repeat(" ", 2*sectionChildIndentW) + console.ToConsoleANSI("{{|DockerMarkerDone|}}image{{[-]}}{{|DockerColon|}}:{{[-]}} ")
+	imageLabel := strutil.Repeat(" ", 2*sectionChildIndentW) + semstyle.ToANSI("{{|DockerMarkerDone|}}image{{[-]}}{{|DockerColon|}}:{{[-]}} ")
 	imgStr := styleImage(imgName)
-	imgNameW := utf8.RuneCountInString(console.Strip(imgStr))
+	imgNameW := utf8.RuneCountInString(semstyle.ToPlain(imgStr))
 
 	// Layer count is appended directly to the image URL (e.g. "radarr:latest [9/2]").
 	// Brackets use the image-tag color (DockerTag); the count interior is dim.
 	layerCount := ""
 	countW := 0
 	if inner := p.layerCountText(layers); inner != "" {
-		layerCount = console.ToConsoleANSI(" {{|DockerTag|}}[{{[-]}}{{[::D]}}" + inner + "{{[-]}}{{|DockerTag|}}]{{[-]}}")
+		layerCount = semstyle.ToANSI(" {{|DockerTag|}}[{{[-]}}{{[::D]}}" + inner + "{{[-]}}{{|DockerTag|}}]{{[-]}}")
 		countW = 1 + 1 + len(inner) + 1 // " " + "[" + inner + "]"
 	}
 	// maxImgNameW already includes the widest count suffix; pad by what this row lacks
@@ -213,17 +213,17 @@ func (p *consoleEventProcessor) buildImageLine(imgName string, t *consoleTask, l
 
 	sizes, bar := p.buildImageSizesAndBar(layers, maxImgNameW, termW)
 	if t == nil {
-		cachedIcon := console.ToConsoleANSI("{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}}")
-		cachedStatus := console.ToConsoleANSI("{{|DockerStatusSuccess|}}Cached{{[-]}}")
+		cachedIcon := semstyle.ToANSI("{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}}")
+		cachedStatus := semstyle.ToANSI("{{|DockerStatusSuccess|}}Cached{{[-]}}")
 		statusPad := strutil.Repeat(" ", sectionStatusW-len("Cached"))
-		return globalIndent + cachedIcon + " " + cachedStatus + console.CodeReset + statusPad + imageLabel + urlWithCount + imgPad + sizes + bar
+		return globalIndent + cachedIcon + " " + cachedStatus + semstyle.CodeReset + statusPad + imageLabel + urlWithCount + imgPad + sizes + bar
 	}
 	worst := p.worstImageStatus(imgName)
 	icon := p.propagatedIcon(t, worst)
 	statusText := abbreviateStatus(t.text)
-	statusANSI := console.ToConsoleANSI(imageStatusTag(t.status, t.text, p.command))
+	statusANSI := semstyle.ToANSI(imageStatusTag(t.status, t.text, p.command))
 	statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
-	return globalIndent + icon + " " + statusANSI + console.CodeReset + statusPad + imageLabel + urlWithCount + imgPad + sizes + bar
+	return globalIndent + icon + " " + statusANSI + semstyle.CodeReset + statusPad + imageLabel + urlWithCount + imgPad + sizes + bar
 }
 
 func (p *consoleEventProcessor) buildImageSizesAndBar(layers []*consoleTask, maxImgNameW int, termW int) (string, string) {
@@ -243,7 +243,7 @@ func (p *consoleEventProcessor) buildImageSizesAndBar(layers []*consoleTask, max
 
 	var sizes string
 	if total > 0 {
-		sizes = " " + console.ToConsoleANSI("{{|DockerMarkerDone|}}"+fixedSize(current)+"{{[-]}}"+
+		sizes = " " + semstyle.ToANSI("{{|DockerMarkerDone|}}"+fixedSize(current)+"{{[-]}}"+
 			"{{|DockerColon|}}/{{[-]}}"+
 			"{{|DockerMarkerDone|}}"+fixedSize(total)+"{{[-]}}")
 	} else {
@@ -290,23 +290,23 @@ func (p *consoleEventProcessor) buildNetworkLines() ([]string, []timerEntry) {
 	}
 	netIcon, netStatusANSI, netStatusText, _ := p.sectionRollupWithPropagation(netIDs, nil)
 	netStatusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(netStatusText))
-	lines := []string{globalIndent + netIcon + " " + netStatusANSI + console.CodeReset + netStatusPad + console.ToConsoleANSI("{{[white::B]}}networks{{[-]}}{{|DockerColon|}}:{{[-]}}")}
+	lines := []string{globalIndent + netIcon + " " + netStatusANSI + semstyle.CodeReset + netStatusPad + semstyle.ToANSI("{{[white::B]}}networks{{[-]}}{{|DockerColon|}}:{{[-]}}")}
 	timers := []timerEntry{{task: p.sectionTaskFor(netIDs), style: timerSection}}
 	for _, netID := range netIDs {
 		t := p.tasks[netID]
-		nameANSI := console.ToConsoleANSI("{{|IPAddress|}}" + netID + "{{[-]}}")
+		nameANSI := semstyle.ToANSI("{{|IPAddress|}}" + netID + "{{[-]}}")
 		var icon, statusText, statusANSI string
 		if t != nil {
 			icon = p.spinnerIcon(t)
 			statusText = abbreviateStatus(t.text)
-			statusANSI = console.ToConsoleANSI(networkStatusTag(t.status, t.text, p.command))
+			statusANSI = semstyle.ToANSI(networkStatusTag(t.status, t.text, p.command))
 		} else {
-			icon = console.ToConsoleANSI("{{|DockerStatusPending|}}·{{[-]}}")
+			icon = semstyle.ToANSI("{{|DockerStatusPending|}}·{{[-]}}")
 			statusText = "Pending"
-			statusANSI = console.ToConsoleANSI("{{|DockerStatusPending|}}Pending{{[-]}}")
+			statusANSI = semstyle.ToANSI("{{|DockerStatusPending|}}Pending{{[-]}}")
 		}
 		statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
-		lines = append(lines, globalIndent+icon+" "+statusANSI+console.CodeReset+statusPad+sectionChildIndent+nameANSI+console.ToConsoleANSI("{{|DockerColon|}}:{{[-]}}"))
+		lines = append(lines, globalIndent+icon+" "+statusANSI+semstyle.CodeReset+statusPad+sectionChildIndent+nameANSI+semstyle.ToANSI("{{|DockerColon|}}:{{[-]}}"))
 		timers = append(timers, timerEntry{task: t, style: timerService})
 	}
 	return lines, timers
@@ -318,23 +318,23 @@ func (p *consoleEventProcessor) buildVolumeLines() ([]string, []timerEntry) {
 	}
 	volIcon, volStatusANSI, volStatusText, _ := p.sectionRollupWithPropagation(p.volumeIDs, nil)
 	volStatusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(volStatusText))
-	lines := []string{globalIndent + volIcon + " " + volStatusANSI + console.CodeReset + volStatusPad + console.ToConsoleANSI("{{[white::B]}}volumes{{[-]}}{{|DockerColon|}}:{{[-]}}")}
+	lines := []string{globalIndent + volIcon + " " + volStatusANSI + semstyle.CodeReset + volStatusPad + semstyle.ToANSI("{{[white::B]}}volumes{{[-]}}{{|DockerColon|}}:{{[-]}}")}
 	timers := []timerEntry{{task: p.sectionTaskFor(p.volumeIDs), style: timerSection}}
 	for _, volID := range p.volumeIDs {
 		t := p.tasks[volID]
-		nameANSI := console.ToConsoleANSI("{{|Folder|}}" + volID + "{{[-]}}")
+		nameANSI := semstyle.ToANSI("{{|Folder|}}" + volID + "{{[-]}}")
 		var icon, statusText, statusANSI string
 		if t != nil {
 			icon = p.spinnerIcon(t)
 			statusText = abbreviateStatus(t.text)
-			statusANSI = console.ToConsoleANSI(volumeStatusTag(t.status, t.text, p.command))
+			statusANSI = semstyle.ToANSI(volumeStatusTag(t.status, t.text, p.command))
 		} else {
-			icon = console.ToConsoleANSI("{{|DockerStatusPending|}}·{{[-]}}")
+			icon = semstyle.ToANSI("{{|DockerStatusPending|}}·{{[-]}}")
 			statusText = "Pending"
-			statusANSI = console.ToConsoleANSI("{{|DockerStatusPending|}}Pending{{[-]}}")
+			statusANSI = semstyle.ToANSI("{{|DockerStatusPending|}}Pending{{[-]}}")
 		}
 		statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
-		lines = append(lines, globalIndent+icon+" "+statusANSI+console.CodeReset+statusPad+sectionChildIndent+nameANSI+console.ToConsoleANSI("{{|DockerColon|}}:{{[-]}}"))
+		lines = append(lines, globalIndent+icon+" "+statusANSI+semstyle.CodeReset+statusPad+sectionChildIndent+nameANSI+semstyle.ToANSI("{{|DockerColon|}}:{{[-]}}"))
 		timers = append(timers, timerEntry{task: t, style: timerService})
 	}
 	return lines, timers
@@ -355,7 +355,7 @@ func (p *consoleEventProcessor) buildLayerLine(t *consoleTask, statusW int, maxI
 
 	var sizes string
 	if t.total > 0 {
-		sizes = " " + console.ToConsoleANSI("{{[::D]}}"+fixedSize(current)+"{{[-]}}"+
+		sizes = " " + semstyle.ToANSI("{{[::D]}}"+fixedSize(current)+"{{[-]}}"+
 			"{{|DockerColon|}}/{{[-]}}"+
 			"{{[::D]}}"+fixedSize(t.total)+"{{[-]}}")
 	} else {
@@ -384,7 +384,7 @@ func (p *consoleEventProcessor) buildLayerLine(t *consoleTask, statusW int, maxI
 	if pad := statusW - utf8.RuneCountInString(short); pad > 0 {
 		statusPad = strutil.Repeat(" ", pad)
 	}
-	statusANSI := console.ToConsoleANSI(layerStatusTag(t.status, displayText))
+	statusANSI := semstyle.ToANSI(layerStatusTag(t.status, displayText))
 
 	// Shared-layer badge: [N] in yellow immediately after the layer ID.
 	// Shared-layer badge uses parens "(N)" to stay distinct from the image line's "[N]"
@@ -392,7 +392,7 @@ func (p *consoleEventProcessor) buildLayerLine(t *consoleTask, statusW int, maxI
 	badge := ""
 	badgeW := 0
 	if groupNum > 0 {
-		badge = console.ToConsoleANSI(fmt.Sprintf("{{[::D]}}({{[-]}}{{|DockerSharedLayer|}}%d{{[-]}}{{[::D]}}){{[-]}}", groupNum))
+		badge = semstyle.ToANSI(fmt.Sprintf("{{[::D]}}({{[-]}}{{|DockerSharedLayer|}}%d{{[-]}}{{[::D]}}){{[-]}}", groupNum))
 		badgeW = 2 + len(fmt.Sprintf("%d", groupNum)) // "(" + digits + ")"
 	}
 
@@ -402,10 +402,10 @@ func (p *consoleEventProcessor) buildLayerLine(t *consoleTask, statusW int, maxI
 	}
 	barReset := ""
 	if bar != "" {
-		barReset = console.CodeReset
+		barReset = semstyle.CodeReset
 	}
 
-	return layerPrefix + console.CodeDim + icon + " " + statusANSI + console.CodeReset + console.CodeDim + statusPad + " " + id + badge + strutil.Repeat(" ", idPad) + sizes + barReset + bar + console.CodeDimOff
+	return layerPrefix + semstyle.CodeDim + icon + " " + statusANSI + semstyle.CodeReset + semstyle.CodeDim + statusPad + " " + id + badge + strutil.Repeat(" ", idPad) + sizes + barReset + bar + semstyle.CodeDimOff
 }
 
 func (p *consoleEventProcessor) buildLayerLines(layers []*consoleTask, maxImgNameW int, termW int) ([]string, []*consoleTask) {
@@ -466,13 +466,13 @@ func (p *consoleEventProcessor) buildLayerLines(layers []*consoleTask, maxImgNam
 
 func (p *consoleEventProcessor) buildTeardownLines() []string {
 	impliedText, impliedTag := p.impliedStatus()
-	impliedANSI := console.ToConsoleANSI(impliedTag + impliedText + "{{[-]}}")
+	impliedANSI := semstyle.ToANSI(impliedTag + impliedText + "{{[-]}}")
 	ic := p.icons()
 	var impliedIcon string
 	if impliedTag == "{{|DockerStatusPending|}}" {
-		impliedIcon = console.ToConsoleANSI("{{|DockerStatusPending|}}" + ic.pending + "{{[-]}}")
+		impliedIcon = semstyle.ToANSI("{{|DockerStatusPending|}}" + ic.pending + "{{[-]}}")
 	} else {
-		impliedIcon = console.ToConsoleANSI("{{|DockerMarkerDone|}}" + ic.done + "{{[-]}}")
+		impliedIcon = semstyle.ToANSI("{{|DockerMarkerDone|}}" + ic.done + "{{[-]}}")
 	}
 
 	svcRollupIDs := append([]string{}, p.serviceIDs...)
@@ -496,7 +496,7 @@ func (p *consoleEventProcessor) buildTeardownLines() []string {
 	}
 
 	allSvcIDs := append(append([]string{}, p.imageOrder...), svcRollupIDs...)
-	appendLine(globalIndent+svcIcon+" "+svcStatusANSI+console.CodeReset+svcStatusPad+console.ToConsoleANSI("{{[white::B]}}services{{[-]}}{{|DockerColon|}}:{{[-]}}"), p.sectionTaskFor(allSvcIDs), timerSection)
+	appendLine(globalIndent+svcIcon+" "+svcStatusANSI+semstyle.CodeReset+svcStatusPad+semstyle.ToANSI("{{[white::B]}}services{{[-]}}{{|DockerColon|}}:{{[-]}}"), p.sectionTaskFor(allSvcIDs), timerSection)
 
 	seenSvcs := make(map[string]bool)
 	for _, imgName := range p.imageOrder {
@@ -506,17 +506,17 @@ func (p *consoleEventProcessor) buildTeardownLines() []string {
 			}
 			seenSvcs[svc] = true
 			t := p.tasks[svc]
-			nameANSI := console.ToConsoleANSI("{{|App|}}" + svc + "{{[-]}}")
+			nameANSI := semstyle.ToANSI("{{|App|}}" + svc + "{{[-]}}")
 			var icon, statusText, statusANSI string
 			if t == nil {
 				icon, statusANSI, statusText = impliedIcon, impliedANSI, impliedText
 			} else {
 				statusText = abbreviateStatus(t.text)
-				statusANSI = console.ToConsoleANSI(serviceStatusTag(t.status, t.text, p.command))
+				statusANSI = semstyle.ToANSI(serviceStatusTag(t.status, t.text, p.command))
 				icon = p.propagatedIcon(t, p.worstServiceStatus(svc, imgName))
 			}
 			statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
-			appendLine(globalIndent+icon+" "+statusANSI+console.CodeReset+statusPad+sectionChildIndent+nameANSI+console.ToConsoleANSI("{{|DockerColon|}}:{{[-]}}"), p.serviceTimerTask(svc), timerService)
+			appendLine(globalIndent+icon+" "+statusANSI+semstyle.CodeReset+statusPad+sectionChildIndent+nameANSI+semstyle.ToANSI("{{|DockerColon|}}:{{[-]}}"), p.serviceTimerTask(svc), timerService)
 		}
 	}
 	for _, svcID := range p.serviceIDs {
@@ -525,17 +525,17 @@ func (p *consoleEventProcessor) buildTeardownLines() []string {
 		}
 		seenSvcs[svcID] = true
 		t := p.tasks[svcID]
-		nameANSI := console.ToConsoleANSI("{{|App|}}" + svcID + "{{[-]}}")
+		nameANSI := semstyle.ToANSI("{{|App|}}" + svcID + "{{[-]}}")
 		var icon, statusText, statusANSI string
 		if t == nil {
 			icon, statusANSI, statusText = impliedIcon, impliedANSI, impliedText
 		} else {
 			statusText = abbreviateStatus(t.text)
-			statusANSI = console.ToConsoleANSI(serviceStatusTag(t.status, t.text, p.command))
+			statusANSI = semstyle.ToANSI(serviceStatusTag(t.status, t.text, p.command))
 			icon = p.propagatedIcon(t, t.status)
 		}
 		statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
-		appendLine(globalIndent+icon+" "+statusANSI+console.CodeReset+statusPad+sectionChildIndent+nameANSI+console.ToConsoleANSI("{{|DockerColon|}}:{{[-]}}"), p.serviceTimerTask(svcID), timerService)
+		appendLine(globalIndent+icon+" "+statusANSI+semstyle.CodeReset+statusPad+sectionChildIndent+nameANSI+semstyle.ToANSI("{{|DockerColon|}}:{{[-]}}"), p.serviceTimerTask(svcID), timerService)
 	}
 
 	netLines, netTimers := p.buildNetworkLines()

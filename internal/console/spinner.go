@@ -1,6 +1,7 @@
 package console
 
 import (
+	"DockSTARTer2/internal/semstyle"
 	"fmt"
 	"os"
 	"sync"
@@ -17,8 +18,8 @@ var (
 	SpinnerFramesTitleASCII   = []string{"|", "/", "-", "\\"}
 	SpinnerFramesUnicode      = []string{"⣷", "⣯", "⣟", "⡿", "⢿", "⣻", "⣽", "⣾"}
 	SpinnerFramesTitleUnicode = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
-	cliSpinnerFPS        = time.Second / 4 // fallback; StartSpinner uses SpinnerSpeed if set
-	cliSpinnerStyle      = lipgloss.NewStyle().Foreground(SpinnerColor)
+	cliSpinnerFPS             = time.Second / 4 // fallback; StartSpinner uses SpinnerSpeed if set
+	cliSpinnerStyle           = lipgloss.NewStyle().Foreground(SpinnerColor)
 )
 
 // termMu serialises all terminal writes (spinner goroutine + log output path).
@@ -108,6 +109,22 @@ func ClearSpinnerLine() {
 		fmt.Fprintf(os.Stderr, "\r\033[K\033[?25h") // clear line and restore cursor
 		activeSpinner.visible = false
 	}
+}
+
+// Println renders semantic/direct tags in a and prints the line, routing to the active
+// viewport when present and otherwise writing to the terminal around the spinner. This is
+// the app-level I/O wrapper over the styling engine (semstyle owns the rendering).
+func Println(a ...any) {
+	msg := semstyle.ToANSI(fmt.Sprint(a...))
+	if GlobalViewport != nil && GlobalViewport.active {
+		GlobalViewport.Append(msg)
+		return
+	}
+	LockTerminal()
+	ClearSpinnerLine()
+	fmt.Println(msg)
+	ShowSpinnerFrame()
+	UnlockTerminal()
 }
 
 // ShowSpinnerFrame draws the current spinner frame. Must be called while

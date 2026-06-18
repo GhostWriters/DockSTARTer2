@@ -3,7 +3,7 @@ package tui
 import (
 	"strings"
 
-	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/semstyle"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
 
@@ -16,13 +16,13 @@ const LargeTitleBarOverhead = 2
 // TitleBarState carries the state needed to render title bar widgets ([?]/[×]).
 // The zero value means "no widgets shown".
 type TitleBarState struct {
-	Show             bool             // Whether to render the title bar widgets
-	Focused          bool             // Whether the title bar has keyboard focus
-	ActiveWidget     TitleBarWidget   // Which widget has focus
-	PressedWidget    TitleBarWidget   // Which widget is currently pressed (click flash)
-	Widgets          []TitleBarWidget // Ordered widget set; nil means defaultWidgets
-	SpinnerIndicator      string // When non-empty, replaces left focus indicator with this spinner frame
-	SpinnerIndicatorRight string // When non-empty, replaces right focus indicator (defaults to SpinnerIndicator)
+	Show                  bool             // Whether to render the title bar widgets
+	Focused               bool             // Whether the title bar has keyboard focus
+	ActiveWidget          TitleBarWidget   // Which widget has focus
+	PressedWidget         TitleBarWidget   // Which widget is currently pressed (click flash)
+	Widgets               []TitleBarWidget // Ordered widget set; nil means defaultWidgets
+	SpinnerIndicator      string           // When non-empty, replaces left focus indicator with this spinner frame
+	SpinnerIndicatorRight string           // When non-empty, replaces right focus indicator (defaults to SpinnerIndicator)
 }
 
 func (s TitleBarState) rightSpinner() string {
@@ -89,7 +89,7 @@ func renderLargeTitleRow(rawTitle string, actualWidth int, focused bool, showInd
 	titleCtx := ctx
 	titleCtx.Dialog = areaStyle
 	largeTitleTag := "Large" + titleTag
-	renderedTitle := RenderThemeTextCtx("{{|"+largeTitleTag+"|}}" + rawTitle + "{{[-]}}", titleCtx)
+	renderedTitle := RenderThemeTextCtx("{{|"+largeTitleTag+"|}}"+rawTitle+"{{[-]}}", titleCtx)
 	titleWidth := lipgloss.Width(renderedTitle)
 
 	// Focus indicators — plain spaces when not shown; spinner visible when running regardless of focus
@@ -100,8 +100,8 @@ func renderLargeTitleRow(rawTitle string, actualWidth int, focused bool, showInd
 			if !focused {
 				tag = "LargeTitleUnfocusedIndicator"
 			}
-			indL = RenderThemeTextCtx("{{|"+tag+"|}}" + tbs.SpinnerIndicator + "{{[-]}}", titleCtx)
-			indR = RenderThemeTextCtx("{{|"+tag+"|}}" + tbs.rightSpinner() + "{{[-]}}", titleCtx)
+			indL = RenderThemeTextCtx("{{|"+tag+"|}}"+tbs.SpinnerIndicator+"{{[-]}}", titleCtx)
+			indR = RenderThemeTextCtx("{{|"+tag+"|}}"+tbs.rightSpinner()+"{{[-]}}", titleCtx)
 		} else if focused {
 			if ctx.LineCharacters {
 				indL = RenderThemeTextCtx("{{|LargeTitleFocusIndicator|}}▸{{[-]}}", titleCtx)
@@ -306,7 +306,7 @@ func RenderTitleSegmentCtx(rawTitle string, borderFocused bool, contentFocused b
 		spinIndR = spinnerIndicator[1]
 	}
 	if titleTag != "" {
-		rawTitle = console.WrapSemantic(titleTag) + rawTitle
+		rawTitle = semstyle.WrapSemantic(titleTag) + rawTitle
 	}
 	renderedTitle := RenderThemeTextCtx(rawTitle, ctx)
 
@@ -350,11 +350,11 @@ func RenderTitleSegmentCtx(rawTitle string, borderFocused bool, contentFocused b
 			} else {
 				ind = ">"
 			}
-			result.WriteString(borderStyleLight.Render(theme.ToThemeANSIWithPrefix("{{|TitleFocusIndicator|}}"+ind+"{{[-]}}", ctx.Prefix)))
+			result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleFocusIndicator|}}"+ind+"{{[-]}}", ctx.Prefix)))
 		} else if spinInd != "" {
-			result.WriteString(borderStyleLight.Render(theme.ToThemeANSIWithPrefix("{{|TitleUnfocusedIndicator|}}"+spinInd+"{{[-]}}", ctx.Prefix)))
+			result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleUnfocusedIndicator|}}"+spinInd+"{{[-]}}", ctx.Prefix)))
 		} else {
-			result.WriteString(borderStyleLight.Render(theme.ToThemeANSIWithPrefix("{{|TitleUnfocusedIndicator|}} {{[-]}}", ctx.Prefix)))
+			result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleUnfocusedIndicator|}} {{[-]}}", ctx.Prefix)))
 		}
 	}
 
@@ -370,11 +370,11 @@ func RenderTitleSegmentCtx(rawTitle string, borderFocused bool, contentFocused b
 			} else {
 				ind = "<"
 			}
-			result.WriteString(borderStyleLight.Render(theme.ToThemeANSIWithPrefix("{{|TitleFocusIndicator|}}"+ind+"{{[-]}}", ctx.Prefix)))
+			result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleFocusIndicator|}}"+ind+"{{[-]}}", ctx.Prefix)))
 		} else if spinIndR != "" {
-			result.WriteString(borderStyleLight.Render(theme.ToThemeANSIWithPrefix("{{|TitleUnfocusedIndicator|}}"+spinIndR+"{{[-]}}", ctx.Prefix)))
+			result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleUnfocusedIndicator|}}"+spinIndR+"{{[-]}}", ctx.Prefix)))
 		} else {
-			result.WriteString(borderStyleLight.Render(theme.ToThemeANSIWithPrefix("{{|TitleUnfocusedIndicator|}} {{[-]}}", ctx.Prefix)))
+			result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleUnfocusedIndicator|}} {{[-]}}", ctx.Prefix)))
 		}
 	}
 
@@ -651,7 +651,7 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 		titleTag := titleTagFromAreaName(areaStyleName)
 		titleCtx := ctx
 		titleCtx.Dialog = titleCtx.Dialog.Background(borderBG)
-		title = RenderThemeTextCtx("{{|"+titleTag+"|}}" + rawTitle + "{{[-]}}", titleCtx)
+		title = RenderThemeTextCtx("{{|"+titleTag+"|}}"+rawTitle+"{{[-]}}", titleCtx)
 	}
 
 	innerOverhead := 2
@@ -766,9 +766,9 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 				} else {
 					ind = ">"
 				}
-				result.WriteString(borderStyleLight.Render(theme.ToThemeANSI("{{|TitleFocusIndicator|}}" + ind)))
+				result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleFocusIndicator|}}" + ind)))
 			} else if spinInd != "" {
-				result.WriteString(borderStyleLight.Render(theme.ToThemeANSI("{{|TitleUnfocusedIndicator|}}" + spinInd)))
+				result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleUnfocusedIndicator|}}" + spinInd)))
 			} else {
 				result.WriteString(borderStyleLight.Render(" "))
 			}
@@ -782,9 +782,9 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 				} else {
 					ind = "<"
 				}
-				result.WriteString(borderStyleLight.Render(theme.ToThemeANSI("{{|TitleFocusIndicator|}}" + ind)))
+				result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleFocusIndicator|}}" + ind)))
 			} else if spinIndR != "" {
-				result.WriteString(borderStyleLight.Render(theme.ToThemeANSI("{{|TitleUnfocusedIndicator|}}" + spinIndR)))
+				result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleUnfocusedIndicator|}}" + spinIndR)))
 			} else {
 				result.WriteString(borderStyleLight.Render(" "))
 			}

@@ -1,4 +1,4 @@
-package console
+package semstyle
 
 import (
 	"testing"
@@ -12,8 +12,6 @@ func TestParseStyleCodeToANSI(t *testing.T) {
 	defer func() { preferredProfile = originalProfile }()
 	preferredProfile = colorprofile.TrueColor
 
-	// Set up maps
-	RegisterBaseTags()
 	BuildColorMap()
 
 	tests := []struct {

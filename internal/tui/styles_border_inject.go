@@ -1,10 +1,9 @@
 package tui
 
 import (
+	semtheme "DockSTARTer2/internal/semstyle/theme"
 	"regexp"
 	"strings"
-
-	"DockSTARTer2/internal/theme"
 )
 
 // ansiSeqRe matches ANSI SGR escape sequences (e.g. \x1b[1m, \x1b[38;5;15m).
@@ -12,7 +11,7 @@ var ansiSeqRe = regexp.MustCompile(`\x1b\[[\d;]*m`)
 
 // ansiCodeFromFlags converts a StyleFlags struct into a single ANSI escape sequence string.
 // Returns "" if no flags are set.
-func ansiCodeFromFlags(f theme.StyleFlags) string {
+func ansiCodeFromFlags(f semtheme.StyleFlags) string {
 	var codes []string
 	if f.Bold {
 		codes = append(codes, "1")
@@ -81,11 +80,12 @@ func injectBeforeLastColorAnsi(line, code string) string {
 //
 // flags  — applied to the top border row and the left border character on each middle row.
 // flags2 — applied to the right border character on each middle row.
-//           If hasBottom is true, also applied to the bottom border row.
+//
+//	If hasBottom is true, also applied to the bottom border row.
 //
 // Set hasBottom=false when the bottom border was removed (e.g. via BorderBottom(false))
 // and will be appended separately; the bottom builders apply flags2 themselves.
-func InjectBorderFlags(rendered string, flags, flags2 theme.StyleFlags, hasBottom bool) string {
+func InjectBorderFlags(rendered string, flags, flags2 semtheme.StyleFlags, hasBottom bool) string {
 	flagCode := ansiCodeFromFlags(flags)
 	flag2Code := ansiCodeFromFlags(flags2)
 	if flagCode == "" && flag2Code == "" {

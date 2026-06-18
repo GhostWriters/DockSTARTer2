@@ -6,7 +6,8 @@ import (
 	"strings"
 	"sync"
 
-	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/semstyle"
+	semtheme "DockSTARTer2/internal/semstyle/theme"
 	"DockSTARTer2/internal/theme"
 
 	"charm.land/lipgloss/v2"
@@ -56,12 +57,12 @@ func TextCursorColor() color.Color {
 	return SemanticRawStyle("TextCursor").GetForeground()
 }
 
-// Color parsing now uses tcell/v3/colors for RGB conversion via console.GetHexForColor().
+// Color parsing now uses tcell/v3/colors for RGB conversion via semstyle.GetHexForColor().
 // This ensures all colors are resolved to RGB/hex values, allowing proper color profile
 // downgrading for terminals with limited color support.
 
 // themeTagRegex matches any tag using current delimiters
-var themeTagRegex = console.GetDelimitedRegex()
+var themeTagRegex = semstyle.GetDelimitedRegex()
 
 // RenderThemeText takes text with {{...}} theme tags and returns lipgloss-styled text
 // defaultStyle is used for reset state and unstyled text
@@ -106,10 +107,10 @@ func RenderThemeTextCtx(text string, ctx StyleContext) string {
 	}
 
 	// Resolve tags to ANSI using the context's prefix and the isolated theme map
-	rendered := console.ToThemeANSIWithPrefix(text, ctx.Prefix)
+	rendered := semstyle.ToANSI(text, ctx.Prefix)
 
 	// Combine components and ensure reset at end
-	result := getCodes(resetStyle) + rendered + console.CodeReset
+	result := getCodes(resetStyle) + rendered + semstyle.CodeReset
 
 	// Prevent embedded resets from clearing container background or attributes
 	final := MaintainBackground(result, resetStyle)
@@ -145,10 +146,10 @@ func RenderConsoleTextCtx(text string, ctx StyleContext) string {
 	}
 
 	// Resolve tags to ANSI using MUST use the console registry
-	rendered := console.ToConsoleANSI(text)
+	rendered := semstyle.ToANSI(text)
 
 	// Combine components and ensure reset at end
-	result := getCodes(resetStyle) + rendered + console.CodeReset
+	result := getCodes(resetStyle) + rendered + semstyle.CodeReset
 
 	// Prevent embedded resets from clearing container background or attributes
 	final := MaintainBackground(result, resetStyle)
@@ -160,24 +161,19 @@ func RenderConsoleTextCtx(text string, ctx StyleContext) string {
 	return final
 }
 
-// ApplyStyleCode applies tview-style color codes (fg:bg:flags) to a lipgloss style.
-func ApplyStyleCode(style lipgloss.Style, resetStyle lipgloss.Style, styleCode string) lipgloss.Style {
-	return theme.ApplyStyleCode(style, resetStyle, styleCode)
+// CodeToStyle applies tview-style color codes (fg:bg:flags) to a lipgloss style.
+func CodeToStyle(style lipgloss.Style, resetStyle lipgloss.Style, styleCode string) lipgloss.Style {
+	return semtheme.CodeToStyle(styleCode, style, resetStyle)
 }
 
-// ApplyTagsToStyle translates any {{...}} tags and applies them to the given style.
-func ApplyTagsToStyle(text string, style lipgloss.Style, resetStyle lipgloss.Style) lipgloss.Style {
-	return theme.ApplyTagsToStyle(text, style, resetStyle)
+// ToStyle translates any {{...}} tags and applies them to the given style.
+func ToStyle(text string, style lipgloss.Style, resetStyle lipgloss.Style) lipgloss.Style {
+	return semtheme.ToStyle(semstyle.Default, text, style, resetStyle)
 }
 
 // ParseColor is a wrapper around console.ParseColor for TUI use.
 func ParseColor(name string) color.Color {
-	return theme.ParseColor(name)
-}
-
-// brightenColor delegates to theme.BrightenColor.
-func brightenColor(c color.Color) color.Color {
-	return theme.BrightenColor(c)
+	return semstyle.ToColor(name)
 }
 
 // GetInitialStyle peeks at the first theme tag in text and returns a style derived from it.
@@ -190,12 +186,12 @@ func GetInitialStyle(text string, base lipgloss.Style) lipgloss.Style {
 
 		if semantic != "" {
 			tagContent := semantic
-			translated := console.Translate(console.WrapSemantic(tagContent))
+			translated := semstyle.ToTags(semstyle.WrapSemantic(tagContent))
 			// Recurse into translated (recursive check)
 			return GetInitialStyle(translated, base)
 		} else if direct != "" {
 			colorCode := strings.Trim(direct, "|")
-			return ApplyStyleCode(base, base, colorCode)
+			return CodeToStyle(base, base, colorCode)
 		}
 	}
 	return base
@@ -249,5 +245,5 @@ func MaintainBackground(text string, style lipgloss.Style) string {
 
 // GetPlainText strips all {{...}} theme tags from text
 func GetPlainText(text string) string {
-	return console.StripSemanticTags(text)
+	return semstyle.StripTags(text)
 }

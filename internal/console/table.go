@@ -7,6 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"DockSTARTer2/internal/semstyle"
 	"DockSTARTer2/internal/strutil"
 )
 
@@ -38,13 +39,13 @@ func printTableTo(w io.Writer, headers []string, data []string, useLineChars boo
 
 	// Check headers
 	for i, h := range headers {
-		colWidths[i] = max(colWidths[i], utf8.RuneCountInString(Strip(h)))
+		colWidths[i] = max(colWidths[i], utf8.RuneCountInString(semstyle.ToPlain(h)))
 	}
 
 	// Check data
 	for i, d := range data {
 		col := i % cols
-		colWidths[col] = max(colWidths[col], utf8.RuneCountInString(Strip(d)))
+		colWidths[col] = max(colWidths[col], utf8.RuneCountInString(semstyle.ToPlain(d)))
 	}
 
 	// 2. Define Character Set
@@ -110,7 +111,7 @@ func printTableTo(w io.Writer, headers []string, data []string, useLineChars boo
 	// 4. Print Table
 
 	printLine := func(s string) {
-		line := ToConsoleANSI(s)
+		line := semstyle.ToANSI(s)
 		if w != nil {
 			fmt.Fprintln(w, line)
 		} else {
@@ -129,7 +130,7 @@ func printTableTo(w io.Writer, headers []string, data []string, useLineChars boo
 		var rowBuilder strings.Builder
 		rowBuilder.WriteString(charSet["Vertical"])
 		for i, item := range rowItems {
-			visibleLen := utf8.RuneCountInString(Strip(item))
+			visibleLen := utf8.RuneCountInString(semstyle.ToPlain(item))
 			padding := colWidths[i] - visibleLen
 			padStr := strutil.Repeat(" ", padding)
 

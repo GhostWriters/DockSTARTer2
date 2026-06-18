@@ -66,8 +66,9 @@ func HandleTheme(ctx context.Context, group *CommandGroup) error {
 			return err
 		}
 		conf.UI.Theme = newTheme
-		if tf, err := theme.GetThemeFile(newTheme); err == nil && tf.Defaults != nil {
-			changes := theme.ApplyThemeDefaults(&conf, *tf.Defaults)
+		if tf, err := theme.GetThemeFile(newTheme); err == nil {
+			if defaults, derr := theme.FileDefaults(tf); derr == nil && defaults != nil {
+			changes := theme.ApplyThemeDefaults(&conf, *defaults)
 			if len(changes) > 0 {
 				var lines []string
 				for k, v := range changes {
@@ -84,6 +85,7 @@ func HandleTheme(ctx context.Context, group *CommandGroup) error {
 				}
 				logger.Notice(ctx, "Applying settings from theme file:\n%s", strings.Join(lines, "\n"))
 			}
+		}
 		}
 		if err := config.SaveAppConfig(conf); err != nil {
 			logger.Error(ctx, "Failed to save theme setting: %v", err)

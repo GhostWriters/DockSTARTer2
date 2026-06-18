@@ -53,6 +53,7 @@ DockSTARTer2.exe
 
 # Local test binaries
 DockSTARTer2
+DockSTARTer2_linux
 ds2_test
 ds2_test_linux
 ds2_linux

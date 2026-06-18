@@ -1,41 +1,77 @@
-package theme
+package semtheme
 
 import (
-	"DockSTARTer2/internal/console"
 	"fmt"
 	"image/color"
 	"strings"
 
+	"DockSTARTer2/internal/semstyle"
 	"charm.land/lipgloss/v2"
 )
 
-// ApplyTagsToStyle translates any {{...}} tags and applies them to the given style.
-func ApplyTagsToStyle(text string, style lipgloss.Style, resetStyle lipgloss.Style) lipgloss.Style {
-	translated := console.Translate(text)
-	re := console.GetDelimitedRegex()
-	subMatches := re.FindAllStringSubmatch(translated, -1)
-	for _, subMatch := range subMatches {
+// StyleFlags holds ANSI style modifier state parsed from a flags field.
+type StyleFlags struct {
+	Bold          bool
+	Underline     bool
+	Italic        bool
+	Blink         bool
+	Dim           bool
+	Reverse       bool
+	Strikethrough bool
+	HighIntensity bool
+}
+
+// Apply applies all set flags to a lipgloss style.
+func (f StyleFlags) Apply(s lipgloss.Style) lipgloss.Style {
+	s = s.
+		Bold(f.Bold).
+		Underline(f.Underline).
+		Italic(f.Italic).
+		Blink(f.Blink).
+		Faint(f.Dim).
+		Reverse(f.Reverse).
+		Strikethrough(f.Strikethrough)
+	if f.HighIntensity {
+		if fg := s.GetForeground(); fg != nil {
+			s = s.Foreground(brightenColor(fg))
+		}
+		if bg := s.GetBackground(); bg != nil {
+			s = s.Background(brightenColor(bg))
+		}
+	}
+	return s
+}
+
+// ResetFlags clears all text attributes from a style.
+func ResetFlags(s lipgloss.Style) lipgloss.Style {
+	return StyleFlags{}.Apply(s)
+}
+
+// ToStyle resolves any semantic or direct tags in text and applies the resulting
+// style to the provided lipgloss.Style, resetting to resetStyle on a reset tag.
+func ToStyle(st *semstyle.Styler, text string, style lipgloss.Style, resetStyle lipgloss.Style) lipgloss.Style {
+	translated := st.ToTags(text)
+	re := st.GetDelimitedRegex()
+	for _, subMatch := range re.FindAllStringSubmatch(translated, -1) {
 		semantic := subMatch[1]
 		direct := subMatch[2]
-
 		if semantic != "" {
 			tagName := strings.Trim(semantic, "_")
-			def := console.GetColorDefinition(tagName)
-			style = ApplyTagsToStyle(def, style, resetStyle)
+			def := st.GetColorDefinition(tagName)
+			style = ToStyle(st, def, style, resetStyle)
 		} else if direct != "" {
 			if direct == "|" || direct == "-" {
 				style = resetStyle
 			} else {
-				code := strings.Trim(direct, "|")
-				style = ApplyStyleCode(style, resetStyle, code)
+				style = CodeToStyle(strings.Trim(direct, "|"), style, resetStyle)
 			}
 		}
 	}
 	return style
 }
 
-// StyleFlagsFromCode parses the flags portion of a raw style code (fg:bg:flags) into a StyleFlags struct.
-func StyleFlagsFromCode(rawCode string) StyleFlags {
+// CodeToFlags parses the flags field of a raw fg:bg:flags code into a StyleFlags struct.
+func CodeToFlags(rawCode string) StyleFlags {
 	parts := strings.Split(rawCode, ":")
 	if len(parts) < 3 {
 		return StyleFlags{}
@@ -77,19 +113,16 @@ func StyleFlagsFromCode(rawCode string) StyleFlags {
 	return f
 }
 
-// ApplyStyleCode applies a fg:bg:flags style code to a lipgloss.Style.
-func ApplyStyleCode(style lipgloss.Style, resetStyle lipgloss.Style, styleCode string) lipgloss.Style {
+// CodeToStyle applies a raw fg:bg:flags code to a lipgloss.Style.
+func CodeToStyle(styleCode string, style lipgloss.Style, resetStyle lipgloss.Style) lipgloss.Style {
 	if styleCode == "~" {
 		return lipgloss.NewStyle()
 	}
-	if styleCode == console.CodeReset || styleCode == "-" {
+	if styleCode == semstyle.CodeReset || styleCode == "-" {
 		return resetStyle
 	}
 
 	parts := strings.Split(styleCode, ":")
-	if len(parts) == 0 {
-		return style
-	}
 
 	if len(parts) > 2 && strings.HasPrefix(parts[2], "-") {
 		style = ResetFlags(style)
@@ -102,7 +135,7 @@ func ApplyStyleCode(style lipgloss.Style, resetStyle lipgloss.Style, styleCode s
 		case "-":
 			style = style.Foreground(resetStyle.GetForeground())
 		default:
-			if c := ParseColor(parts[0]); c != nil {
+			if c := semstyle.ToColor(parts[0]); c != nil {
 				style = style.Foreground(c)
 			}
 		}
@@ -115,16 +148,13 @@ func ApplyStyleCode(style lipgloss.Style, resetStyle lipgloss.Style, styleCode s
 		case "-":
 			style = style.Background(resetStyle.GetBackground())
 		default:
-			if c := ParseColor(parts[1]); c != nil {
+			if c := semstyle.ToColor(parts[1]); c != nil {
 				style = style.Background(c)
 			}
 		}
 	}
 
 	if len(parts) > 2 {
-		if strings.HasPrefix(parts[2], "-") {
-			style = ResetFlags(style)
-		}
 		s := strings.TrimPrefix(parts[2], "-")
 		for _, char := range s {
 			switch char {
@@ -158,10 +188,10 @@ func ApplyStyleCode(style lipgloss.Style, resetStyle lipgloss.Style, styleCode s
 				style = style.Strikethrough(false)
 			case 'H':
 				if fg := style.GetForeground(); fg != nil {
-					style = style.Foreground(BrightenColor(fg))
+					style = style.Foreground(brightenColor(fg))
 				}
 				if bg := style.GetBackground(); bg != nil {
-					style = style.Background(BrightenColor(bg))
+					style = style.Background(brightenColor(bg))
 				}
 			}
 		}
@@ -170,15 +200,8 @@ func ApplyStyleCode(style lipgloss.Style, resetStyle lipgloss.Style, styleCode s
 	return style
 }
 
-// ParseColor converts a color name or hex string to a lipgloss-compatible color.Color.
-// Named colors and hex strings are passed directly to lipgloss, which handles
-// profile-aware downconversion. Only falls back to tcell for truly extended color names.
-func ParseColor(name string) color.Color {
-	return console.ParseColor(name)
-}
-
-// BrightenColor brightens a color by 30% of remaining headroom.
-func BrightenColor(c color.Color) color.Color {
+// brightenColor brightens a color by 30% of remaining headroom toward white.
+func brightenColor(c color.Color) color.Color {
 	if c == nil {
 		return c
 	}

@@ -3,6 +3,7 @@ package compose
 import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/dockerlayout"
+	"DockSTARTer2/internal/semstyle"
 
 	"github.com/docker/compose/v5/pkg/api"
 )
@@ -65,7 +66,7 @@ func (p *consoleEventProcessor) overallRollupIcon() string {
 		return p.activeSpinnerANSI(p.icons().spinner)
 	}
 	_, _, iconTag := sectionStatusText(state)
-	return console.ToConsoleANSI(iconTag + p.sectionRollupIcon(state) + "{{[-]}}")
+	return semstyle.ToANSI(iconTag + p.sectionRollupIcon(state) + "{{[-]}}")
 }
 
 // sectionRollupWithPropagation is like sectionRollup but also checks child tasks
@@ -75,11 +76,11 @@ func (p *consoleEventProcessor) sectionRollupWithPropagation(ids []string, image
 	text, stTag, iconTag := sectionStatusText(state)
 	ic := p.icons()
 	if state != rollupProcessing {
-		icon = console.ToConsoleANSI(iconTag + p.sectionRollupIcon(state) + "{{[-]}}")
+		icon = semstyle.ToANSI(iconTag + p.sectionRollupIcon(state) + "{{[-]}}")
 	} else {
 		icon = p.activeSpinnerANSI(ic.spinner)
 	}
-	statusANSI = console.ToConsoleANSI(stTag + text + "{{[-]}}")
+	statusANSI = semstyle.ToANSI(stTag + text + "{{[-]}}")
 	statusText = text
 	labelTag = stTag
 	return
@@ -236,10 +237,10 @@ func (p *consoleEventProcessor) worstServiceStatus(svcID, imgName string) api.Ev
 func (p *consoleEventProcessor) propagatedIcon(t *consoleTask, worstStatus api.EventStatus) string {
 	ic := p.icons()
 	if worstStatus == api.Error {
-		return console.ToConsoleANSI("{{|DockerMarkerError|}}" + ic.error + "{{[-]}}")
+		return semstyle.ToANSI("{{|DockerMarkerError|}}" + ic.error + "{{[-]}}")
 	}
 	if worstStatus == api.Warning {
-		return console.ToConsoleANSI("{{|DockerMarkerWarn|}}" + ic.warn + "{{[-]}}")
+		return semstyle.ToANSI("{{|DockerMarkerWarn|}}" + ic.warn + "{{[-]}}")
 	}
 	return p.spinnerIcon(t)
 }
@@ -265,9 +266,9 @@ func (p *consoleEventProcessor) icons() iconSet {
 
 func (p *consoleEventProcessor) activeSpinnerANSI(char string) string {
 	if console.SpinnerEnabled {
-		return console.ToConsoleANSI("{{|DockerSpinner|}}" + char + "{{[-]}}")
+		return semstyle.ToANSI("{{|DockerSpinner|}}" + char + "{{[-]}}")
 	}
-	return console.ToConsoleANSI("{{[::D]}}" + char + "{{[-]}}")
+	return semstyle.ToANSI("{{[::D]}}" + char + "{{[-]}}")
 }
 
 func (p *consoleEventProcessor) spinnerIcon(t *consoleTask) string {
@@ -278,14 +279,14 @@ func (p *consoleEventProcessor) spinnerIcon(t *consoleTask) string {
 	} else {
 		switch t.status {
 		case api.Done:
-			s = console.ToConsoleANSI("{{|DockerMarkerDone|}}" + ic.done + "{{[-]}}")
+			s = semstyle.ToANSI("{{|DockerMarkerDone|}}" + ic.done + "{{[-]}}")
 		case api.Error:
-			s = console.ToConsoleANSI("{{|DockerMarkerError|}}" + ic.error + "{{[-]}}")
+			s = semstyle.ToANSI("{{|DockerMarkerError|}}" + ic.error + "{{[-]}}")
 		case api.Warning:
-			s = console.ToConsoleANSI("{{|DockerMarkerWarn|}}" + ic.warn + "{{[-]}}")
+			s = semstyle.ToANSI("{{|DockerMarkerWarn|}}" + ic.warn + "{{[-]}}")
 		default:
 			if t.completed() {
-				s = console.ToConsoleANSI("{{|DockerMarkerDone|}}" + ic.done + "{{[-]}}")
+				s = semstyle.ToANSI("{{|DockerMarkerDone|}}" + ic.done + "{{[-]}}")
 			} else {
 				s = p.activeSpinnerANSI(ic.spinner)
 			}

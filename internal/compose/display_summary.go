@@ -7,6 +7,7 @@ import (
 
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/semstyle"
 	"DockSTARTer2/internal/strutil"
 )
 
@@ -43,7 +44,7 @@ func (p *consoleEventProcessor) buildSummaryLine() string {
 	summaryFmt := fmt.Sprintf("{{[yellow::B]}}%s{{[-]}}{{|DockerColon|}}:{{[-]}} %s", p.command, strings.Join(parts, ", "))
 	// Prepend an overall spinner/marker (icon + space) so the summary reads as the
 	// top-level rollup header, shifting the whole block 3 chars right to align under it.
-	return globalIndent + p.overallRollupIcon() + " " + console.ToConsoleANSI(summaryFmt)
+	return globalIndent + p.overallRollupIcon() + " " + semstyle.ToANSI(summaryFmt)
 }
 
 type timerStyle int
@@ -67,7 +68,7 @@ func (p *consoleEventProcessor) attachTimers(lines []string, timers []timerEntry
 	// the content when the terminal/viewport shrinks on resize.
 	p.maxLineWidth = extraWidth
 	for _, line := range lines {
-		if w := utf8.RuneCountInString(console.Strip(line)); w > p.maxLineWidth {
+		if w := utf8.RuneCountInString(semstyle.ToPlain(line)); w > p.maxLineWidth {
 			p.maxLineWidth = w
 		}
 	}
@@ -102,7 +103,7 @@ func (p *consoleEventProcessor) attachTimers(lines []string, timers []timerEntry
 			out[i] = line
 			continue
 		}
-		visible := utf8.RuneCountInString(console.Strip(line))
+		visible := utf8.RuneCountInString(semstyle.ToPlain(line))
 		pad := strutil.Repeat(" ", col-visible)
 		var styleTag string
 		switch e.style {
@@ -117,7 +118,7 @@ func (p *consoleEventProcessor) attachTimers(lines []string, timers []timerEntry
 		}
 		s := timerStrs[i]
 		s = strutil.Repeat(" ", maxTimerW-len(s)) + s
-		timer := console.ToConsoleANSI(styleTag + s + "{{[-]}}")
+		timer := semstyle.ToANSI(styleTag + s + "{{[-]}}")
 		out[i] = line + pad + timer
 	}
 	return out
@@ -134,7 +135,7 @@ func (p *consoleEventProcessor) prependSummary(lines []string, timers []timerEnt
 	}
 	// Include the summary header's width so its timer and the row timers share one column
 	// (the header is often the widest line for teardown commands with no image/layer rows).
-	summaryW := utf8.RuneCountInString(console.Strip(summary))
+	summaryW := utf8.RuneCountInString(semstyle.ToPlain(summary))
 	lines = p.attachTimers(lines, timers, summaryW)
 	if vp := console.GlobalViewport; vp != nil && vp.IsActive() {
 		return lines
@@ -151,7 +152,7 @@ func (p *consoleEventProcessor) withSummaryTimer(summary string) string {
 		return summary
 	}
 	col := p.maxLineWidth + timerGutterW
-	visible := utf8.RuneCountInString(console.Strip(summary))
+	visible := utf8.RuneCountInString(semstyle.ToPlain(summary))
 	padW := col - visible
 	if padW < timerGutterW {
 		padW = timerGutterW // always keep at least the gutter so the timer never glues to text
@@ -161,7 +162,7 @@ func (p *consoleEventProcessor) withSummaryTimer(summary string) string {
 	if w := len(elapsed); w < p.maxTimerWidth {
 		elapsed = strutil.Repeat(" ", p.maxTimerWidth-w) + elapsed
 	}
-	timer := console.ToConsoleANSI("{{[yellow::B]}}" + elapsed + "{{[-]}}")
+	timer := semstyle.ToANSI("{{[yellow::B]}}" + elapsed + "{{[-]}}")
 	return summary + pad + timer
 }
 

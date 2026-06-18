@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/semstyle"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
 
@@ -167,7 +168,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 			editStr := RenderThemeText(item.Tag, dStyle)
 			line := cbStr + editStr
 			rowStyle := neutralStyle.Width(maxWidth)
-			renderedItems = append(renderedItems, rowStyle.Render(line)+console.CodeReset)
+			renderedItems = append(renderedItems, rowStyle.Render(line)+semstyle.CodeReset)
 			itemHeights = append(itemHeights, 1)
 			itemMappings = append(itemMappings, i)
 			continue
@@ -354,9 +355,9 @@ func (m *MenuModel) renderVariableHeightList() string {
 		for j, l := range renderedItemLines {
 			if j > 0 {
 				finalItem += "\n"
-				finalItem += rowStyle.Render(gutterSpaces+contSep+l) + console.CodeReset
+				finalItem += rowStyle.Render(gutterSpaces+contSep+l) + semstyle.CodeReset
 			} else {
-				finalItem += rowStyle.Render(itemGutter+sep+l) + console.CodeReset
+				finalItem += rowStyle.Render(itemGutter+sep+l) + semstyle.CodeReset
 			}
 		}
 		renderedItems = append(renderedItems, finalItem)
@@ -796,14 +797,14 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 		}
 		line := itemGutter + indent + pContent + vStyleDark.Render(vBorderChar)
 
-		resLines = append(resLines, line+console.CodeReset)
+		resLines = append(resLines, line+semstyle.CodeReset)
 		resH = append(resH, 1)
 		resM = append(resM, visibleIdx)
 	}
 
 	// 3. Build Bottom Border with 1 dash.
 	bottomBorder := BuildAEBottomBorder(subListWidth, 1, subFocused, m.activeColumn, -1, ctx)
-	resLines = append(resLines, neutralStyle.Render(strutil.Repeat(" ", 10))+bottomBorder+console.CodeReset)
+	resLines = append(resLines, neutralStyle.Render(strutil.Repeat(" ", 10))+bottomBorder+semstyle.CodeReset)
 	resH = append(resH, 1)
 	resM = append(resM, startVisibleIndex|vIdxBorderFlag) // Flag as border
 

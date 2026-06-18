@@ -1,6 +1,7 @@
-package console
+package semstyle
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/charmbracelet/colorprofile"
@@ -8,10 +9,10 @@ import (
 
 func TestStrip(t *testing.T) {
 	// Setup style maps via ensureMaps
-	ensureMaps()
-	consoleMap["notice"] = "green" // RAW value (no brackets)
-	consoleMap["applicationname"] = "cyan::B"
-	consoleMap["version"] = "cyan"
+	Default.ensureMaps()
+	Default.consoleMap["notice"] = "green" // RAW value (no brackets)
+	Default.consoleMap["applicationname"] = "cyan::B"
+	Default.consoleMap["version"] = "cyan"
 
 	tests := []struct {
 		name     string
@@ -62,9 +63,9 @@ func TestStrip(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actual := Strip(tt.input)
+			actual := ToPlain(tt.input)
 			if actual != tt.expected {
-				t.Errorf("Strip(%q) = %q; want %q", tt.input, actual, tt.expected)
+				t.Errorf("ToPlain(%q) = %q; want %q", tt.input, actual, tt.expected)
 			}
 		})
 	}
@@ -94,7 +95,7 @@ func TestStripANSI(t *testing.T) {
 		{
 			name:     "Mixed ANSI and tags",
 			input:    "\x1b[31m{{|Notice|}}Hello{{[-]}}\x1b[0m",
-			expected: "{{|Notice|}}Hello{{[-]}}", // Note: StripANSI ONLY strips real ANSI, Strip() strips both
+			expected: "{{|Notice|}}Hello{{[-]}}", // Note: StripANSI ONLY strips real ANSI, ToPlain() strips both
 		},
 	}
 
@@ -109,10 +110,10 @@ func TestStripANSI(t *testing.T) {
 }
 
 func TestExpandConsoleTags(t *testing.T) {
-	ensureMaps()
-	consoleMap["notice"] = "green" // RAW value (no brackets)
-	consoleMap["applicationname"] = "cyan::B"
-	consoleMap["version"] = "cyan"
+	Default.ensureMaps()
+	Default.consoleMap["notice"] = "green" // RAW value (no brackets)
+	Default.consoleMap["applicationname"] = "cyan::B"
+	Default.consoleMap["version"] = "cyan"
 
 	tests := []struct {
 		name     string
@@ -148,9 +149,9 @@ func TestExpandConsoleTags(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actual := ExpandConsoleTags(tt.input)
+			actual := ToTags(tt.input)
 			if actual != tt.expected {
-				t.Errorf("ExpandConsoleTags(%q) = %q; want %q", tt.input, actual, tt.expected)
+				t.Errorf("ToTags(%q) = %q; want %q", tt.input, actual, tt.expected)
 			}
 		})
 	}
@@ -158,15 +159,14 @@ func TestExpandConsoleTags(t *testing.T) {
 
 func TestToConsoleANSI(t *testing.T) {
 	// Setup for TTY mode
-	isTTYGlobal = true
 	SetPreferredProfile(colorprofile.TrueColor)
 
-	ensureMaps()
+	Default.ensureMaps()
 	BuildColorMap()
 
 	// Register test-specific semantic tags (RAW values)
-	consoleMap["notice"] = "green"
-	consoleMap["version"] = "cyan"
+	Default.consoleMap["notice"] = "green"
+	Default.consoleMap["version"] = "cyan"
 
 	tests := []struct {
 		name     string
@@ -212,47 +212,41 @@ func TestToConsoleANSI(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actual := ToConsoleANSI(tt.input)
+			actual := ToANSI(tt.input)
 			if actual != tt.expected {
-				t.Errorf("ToConsoleANSI(%q) = %q; want %q", tt.input, actual, tt.expected)
+				t.Errorf("ToANSI(%q) = %q; want %q", tt.input, actual, tt.expected)
 			}
 		})
 	}
 }
 
 func TestBackwardsCompatibility(t *testing.T) {
-	ensureMaps()
+	Default.ensureMaps()
 	RegisterSemanticTagRaw("notice", "green") // Sets both console and theme maps
 
-	isTTYGlobal = true
 	SetPreferredProfile(colorprofile.TrueColor)
 
 	input := "{{|Notice|}}Test{{[-]}}"
 
 	// Test Parse alias
-	parseResult := Parse(input)
-	toAnsiResult := ToConsoleANSI(input)
+	parseResult := ToANSI(input)
+	toAnsiResult := ToANSI(input)
 	if parseResult != toAnsiResult {
 		t.Errorf("Parse should equal ToANSI: Parse=%q, ToANSI=%q", parseResult, toAnsiResult)
 	}
 
 	// Test Translate alias
-	translateResult := Translate(input)
-	expandResult := ExpandConsoleTags(input)
+	translateResult := ToTags(input)
+	expandResult := ToTags(input)
 	if translateResult != expandResult {
 		t.Errorf("Translate should equal ExpandTags: Translate=%q, ExpandTags=%q", translateResult, expandResult)
 	}
 
-	// Test ForTUI alias
-	forTUIResult := ForTUI(input)
-	if forTUIResult != expandResult {
-		t.Errorf("ForTUI should equal ExpandTags: ForTUI=%q, ExpandTags=%q", forTUIResult, expandResult)
-	}
 }
 
 func TestSemanticVsDirectDistinction(t *testing.T) {
-	ensureMaps()
-	consoleMap["blue"] = "#0066CC" // Custom blue shade (RAW value)
+	Default.ensureMaps()
+	Default.consoleMap["blue"] = "#0066CC" // Custom blue shade (RAW value)
 
 	tests := []struct {
 		name     string
@@ -278,10 +272,68 @@ func TestSemanticVsDirectDistinction(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actual := ExpandConsoleTags(tt.input)
+			actual := ToTags(tt.input)
 			if actual != tt.expected {
-				t.Errorf("ExpandConsoleTags(%q) = %q; want %q", tt.input, actual, tt.expected)
+				t.Errorf("ToTags(%q) = %q; want %q", tt.input, actual, tt.expected)
 			}
 		})
 	}
 }
+
+func TestInlineHyperlinks(t *testing.T) {
+	SetPreferredProfile(colorprofile.TrueColor)
+	st := New()
+
+	// With explicit label
+	result := st.ToANSI(`{{[magenta:black:B:DockSTARTer Website]}}https://dockstarter.com{{[-]}}`)
+	if !strings.Contains(result, "\x1b]8;;https://dockstarter.com\x1b\\") {
+		t.Errorf("expected OSC8 hyperlink open, got: %q", result)
+	}
+	if !strings.Contains(result, "DockSTARTer Website") {
+		t.Errorf("expected label text in output, got: %q", result)
+	}
+	if !strings.Contains(result, "\x1b]8;;\x1b\\") {
+		t.Errorf("expected OSC8 hyperlink close, got: %q", result)
+	}
+
+	// With empty label — URL used as both link and display text
+	result2 := st.ToANSI(`{{[cyan::U:]}}https://dockstarter.com{{[-]}}`)
+	if !strings.Contains(result2, "https://dockstarter.com") {
+		t.Errorf("expected URL as label when label empty, got: %q", result2)
+	}
+	if !strings.Contains(result2, "\x1b]8;;https://dockstarter.com\x1b\\") {
+		t.Errorf("expected OSC8 hyperlink, got: %q", result2)
+	}
+
+	// Non-hyperlink tag (no label field) must still render normally
+	result3 := st.ToANSI(`{{[red::B]}}hello{{[-]}}`)
+	if strings.Contains(result3, "\x1b]8;") {
+		t.Errorf("plain tag should not produce hyperlink, got: %q", result3)
+	}
+
+	// Semantic tag with full fields + label
+	st.RegisterConsoleTag("mylink", "cyan::U")
+	result4 := st.ToANSI(`{{|mylink:::B:DockSTARTer Website|}}https://dockstarter.com{{[-]}}`)
+	if !strings.Contains(result4, "\x1b]8;;https://dockstarter.com\x1b\\") {
+		t.Errorf("semantic: expected OSC8 hyperlink open, got: %q", result4)
+	}
+	if !strings.Contains(result4, "DockSTARTer Website") {
+		t.Errorf("semantic: expected label in output, got: %q", result4)
+	}
+
+	// Semantic tag with no color overrides + label (4 empty fields before label)
+	result5 := st.ToANSI(`{{|mylink::::DockSTARTer Website|}}https://dockstarter.com{{[-]}}`)
+	if !strings.Contains(result5, "\x1b]8;;https://dockstarter.com\x1b\\") {
+		t.Errorf("semantic no-override: expected OSC8 hyperlink, got: %q", result5)
+	}
+	if !strings.Contains(result5, "DockSTARTer Website") {
+		t.Errorf("semantic no-override: expected label, got: %q", result5)
+	}
+
+	// Semantic tag with only name:fg — no label, must not hyperlink
+	result6 := st.ToANSI(`{{|mylink:red|}}hello{{[-]}}`)
+	if strings.Contains(result6, "\x1b]8;") {
+		t.Errorf("semantic single-modifier should not produce hyperlink, got: %q", result6)
+	}
+}
+

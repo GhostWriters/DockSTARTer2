@@ -168,17 +168,17 @@ func RenderTopBorderBoxCtx(title, rightTitle, rightSuffix, content string, conte
 			indL = ">"
 			indR = "<"
 		}
-		result.WriteString(borderStyle.Render(theme.ToThemeANSI("{{|TitleFocusIndicator|}}" + indL)))
+		result.WriteString(borderStyle.Render(theme.ToANSI("{{|TitleFocusIndicator|}}" + indL)))
 		result.WriteString(renderedTitle)
-		result.WriteString(borderStyle.Render(theme.ToThemeANSI("{{|TitleFocusIndicator|}}" + indR)))
+		result.WriteString(borderStyle.Render(theme.ToANSI("{{|TitleFocusIndicator|}}" + indR)))
 	} else if spinInd != "" {
 		indStyle := "{{|TitleUnfocusedIndicator|}}"
 		if isChanged {
 			indStyle = "{{|ConsoleTitleChangedIndicator|}}"
 		}
-		result.WriteString(borderStyle.Render(theme.ToThemeANSI(indStyle + spinInd)))
+		result.WriteString(borderStyle.Render(theme.ToANSI(indStyle + spinInd)))
 		result.WriteString(renderedTitle)
-		result.WriteString(borderStyle.Render(theme.ToThemeANSI(indStyle + spinIndR)))
+		result.WriteString(borderStyle.Render(theme.ToANSI(indStyle + spinIndR)))
 	} else {
 		result.WriteString(borderStyle.Render(" "))
 		result.WriteString(renderedTitle)
