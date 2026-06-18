@@ -176,11 +176,6 @@ func ParseColor(name string) color.Color {
 	return semstyle.ToColor(name)
 }
 
-// brightenColor delegates to theme.BrightenColor.
-func brightenColor(c color.Color) color.Color {
-	return semtheme.BrightenColor(c)
-}
-
 // GetInitialStyle peeks at the first theme tag in text and returns a style derived from it.
 // Useful for setting container backgrounds to match themed content.
 func GetInitialStyle(text string, base lipgloss.Style) lipgloss.Style {

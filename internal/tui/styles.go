@@ -694,29 +694,6 @@ func InitStyles(cfg config.AppConfig) {
 	currentStyles.PanelTitleAlign = cfg.UI.PanelTitleAlign
 }
 
-// ApplyFlags applies ANSI style modifiers to a lipgloss.Style
-func ApplyFlags(style lipgloss.Style, flags semtheme.StyleFlags) lipgloss.Style {
-	style = style.
-		Bold(flags.Bold).
-		Underline(flags.Underline).
-		Italic(flags.Italic).
-		Blink(flags.Blink).
-		Faint(flags.Dim).
-		Reverse(flags.Reverse).
-		Strikethrough(flags.Strikethrough)
-
-	if flags.HighIntensity {
-		if fg := style.GetForeground(); fg != nil {
-			style = style.Foreground(brightenColor(fg))
-		}
-		if bg := style.GetBackground(); bg != nil {
-			style = style.Background(brightenColor(bg))
-		}
-	}
-
-	return style
-}
-
 // Helper functions for common style operations
 
 // CenterText centers text within a given width.

@@ -80,7 +80,6 @@ for use when building TUI components rather than writing ANSI to a terminal:
 | `CodeToStyle(code, style, reset)` | Apply a raw `fg:bg:flags` code directly to `style` |
 | `CodeToFlags(code)` | Parse the flags field of a raw code → `StyleFlags` struct |
 | `ResetFlags(style)` | Clear all text attributes (bold, italic, etc.) from a style |
-| `BrightenColor(c)` | Shift a `color.Color` 30% toward white (implements the `H` flag) |
 
 **`StyleFlags`** holds the parsed on/off state for each modifier (Bold, Underline, Italic,
 Dim, Blink, Reverse, Strikethrough, HighIntensity). Its `.Apply(style)` method applies all

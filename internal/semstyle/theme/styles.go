@@ -23,7 +23,7 @@ type StyleFlags struct {
 
 // Apply applies all set flags to a lipgloss style.
 func (f StyleFlags) Apply(s lipgloss.Style) lipgloss.Style {
-	return s.
+	s = s.
 		Bold(f.Bold).
 		Underline(f.Underline).
 		Italic(f.Italic).
@@ -31,6 +31,15 @@ func (f StyleFlags) Apply(s lipgloss.Style) lipgloss.Style {
 		Faint(f.Dim).
 		Reverse(f.Reverse).
 		Strikethrough(f.Strikethrough)
+	if f.HighIntensity {
+		if fg := s.GetForeground(); fg != nil {
+			s = s.Foreground(brightenColor(fg))
+		}
+		if bg := s.GetBackground(); bg != nil {
+			s = s.Background(brightenColor(bg))
+		}
+	}
+	return s
 }
 
 // ResetFlags clears all text attributes from a style.
@@ -179,10 +188,10 @@ func CodeToStyle(styleCode string, style lipgloss.Style, resetStyle lipgloss.Sty
 				style = style.Strikethrough(false)
 			case 'H':
 				if fg := style.GetForeground(); fg != nil {
-					style = style.Foreground(BrightenColor(fg))
+					style = style.Foreground(brightenColor(fg))
 				}
 				if bg := style.GetBackground(); bg != nil {
-					style = style.Background(BrightenColor(bg))
+					style = style.Background(brightenColor(bg))
 				}
 			}
 		}
@@ -191,8 +200,8 @@ func CodeToStyle(styleCode string, style lipgloss.Style, resetStyle lipgloss.Sty
 	return style
 }
 
-// BrightenColor brightens a color by 30% of remaining headroom toward white.
-func BrightenColor(c color.Color) color.Color {
+// brightenColor brightens a color by 30% of remaining headroom toward white.
+func brightenColor(c color.Color) color.Color {
 	if c == nil {
 		return c
 	}
