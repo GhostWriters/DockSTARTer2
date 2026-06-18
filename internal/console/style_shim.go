@@ -49,9 +49,8 @@ var (
 	GetColorDefinition = semstyle.GetColorDefinition
 	GetRawTagCode      = semstyle.GetRawTagCode
 
-	BuildColorMap          = semstyle.BuildColorMap
-	RegisterBaseTags       = semstyle.RegisterBaseTags
-	RegisterHyperlinkTag   = semstyle.RegisterHyperlinkTag
+	BuildColorMap        = semstyle.BuildColorMap
+	RegisterHyperlinkTag = semstyle.RegisterHyperlinkTag
 	RegisterColor          = semstyle.RegisterColor
 	UnregisterColor        = semstyle.UnregisterColor
 	UnregisterPrefix       = semstyle.UnregisterPrefix
@@ -67,9 +66,6 @@ var (
 	TranslateToTagged      = semstyle.TranslateToTagged
 	ToCviewTag             = semstyle.ToCviewTag
 )
-
-// --- Types ---
-type AppColors = semstyle.AppColors
 
 // --- Constants (ANSI codes + delimiters) ---
 const (

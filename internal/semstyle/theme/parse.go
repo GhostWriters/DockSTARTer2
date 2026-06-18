@@ -283,7 +283,6 @@ func RegisterInto(data []byte, prefix string) (map[string]any, error) {
 		semstyle.RegisterThemeTagRaw(PrefixTag(prefix, key), styleValue)
 	}
 	if prefix == "" {
-		semstyle.RegisterBaseTags()
 		semstyle.BuildColorMap()
 	}
 	return tf.Defaults, nil

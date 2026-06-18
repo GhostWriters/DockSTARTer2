@@ -56,7 +56,6 @@ func New() *Styler {
 	}
 	s.rebuildRegexes()
 	s.BuildColorMap()
-	s.RegisterBaseTags()
 	return s
 }
 
