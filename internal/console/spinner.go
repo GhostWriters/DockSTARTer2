@@ -1,7 +1,7 @@
 package console
 
 import (
-	"github.com/GhostWriters/semstyle/lg"
+	semstyle "github.com/GhostWriters/semstyle/lg"
 	"fmt"
 	"os"
 	"sync"
@@ -115,7 +115,7 @@ func ClearSpinnerLine() {
 // viewport when present and otherwise writing to the terminal around the spinner. This is
 // the app-level I/O wrapper over the styling engine (semstyle owns the rendering).
 func Println(a ...any) {
-	msg := semlg.ToANSI(fmt.Sprint(a...))
+	msg := semstyle.ToANSI(fmt.Sprint(a...))
 	if GlobalViewport != nil && GlobalViewport.active {
 		GlobalViewport.Append(msg)
 		return

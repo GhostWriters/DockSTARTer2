@@ -2,7 +2,7 @@ package tui
 
 import (
 	"DockSTARTer2/internal/config"
-	semlg "github.com/GhostWriters/semstyle/lg"
+	semstyle "github.com/GhostWriters/semstyle/lg"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
 	"image/color"
@@ -174,8 +174,8 @@ type Styles struct {
 	Border       lipgloss.Border
 	BorderColor  color.Color
 	Border2Color color.Color
-	BorderFlags  semlg.StyleFlags
-	Border2Flags semlg.StyleFlags
+	BorderFlags  semstyle.StyleFlags
+	Border2Flags semstyle.StyleFlags
 
 	// Shadow
 	Shadow      lipgloss.Style
@@ -261,8 +261,8 @@ type StyleContext struct {
 	Border               lipgloss.Border
 	BorderColor          color.Color
 	Border2Color         color.Color
-	BorderFlags          semlg.StyleFlags
-	Border2Flags         semlg.StyleFlags
+	BorderFlags          semstyle.StyleFlags
+	Border2Flags         semstyle.StyleFlags
 	ButtonActive         lipgloss.Style
 	ButtonInactive       lipgloss.Style
 	IconFocused          lipgloss.Style
@@ -517,20 +517,20 @@ func InitStyles(cfg config.AppConfig) {
 	case 1:
 		currentStyles.BorderColor = SemanticRawStyle("Border").GetForeground()
 		currentStyles.Border2Color = SemanticRawStyle("Border").GetForeground()
-		currentStyles.BorderFlags = semlg.CodeToFlags(semlg.GetRawTagCode("border"))
+		currentStyles.BorderFlags = semstyle.CodeToFlags(semstyle.GetRawTagCode("border"))
 		currentStyles.Border2Flags = currentStyles.BorderFlags
 	case 2:
 		currentStyles.BorderColor = SemanticRawStyle("Border2").GetForeground()
 		currentStyles.Border2Color = SemanticRawStyle("Border2").GetForeground()
-		currentStyles.BorderFlags = semlg.CodeToFlags(semlg.GetRawTagCode("border2"))
+		currentStyles.BorderFlags = semstyle.CodeToFlags(semstyle.GetRawTagCode("border2"))
 		currentStyles.Border2Flags = currentStyles.BorderFlags
 	case 3:
 		fallthrough
 	default:
 		currentStyles.BorderColor = SemanticRawStyle("Border").GetForeground()
 		currentStyles.Border2Color = SemanticRawStyle("Border2").GetForeground()
-		currentStyles.BorderFlags = semlg.CodeToFlags(semlg.GetRawTagCode("border"))
-		currentStyles.Border2Flags = semlg.CodeToFlags(semlg.GetRawTagCode("border2"))
+		currentStyles.BorderFlags = semstyle.CodeToFlags(semstyle.GetRawTagCode("border"))
+		currentStyles.Border2Flags = semstyle.CodeToFlags(semstyle.GetRawTagCode("border2"))
 	}
 
 	// Shadow defines the shadow color and any attributes (e.g. dim, bold) for shade characters.

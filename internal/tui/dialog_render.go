@@ -3,7 +3,7 @@ package tui
 import (
 	"strings"
 
-	"github.com/GhostWriters/semstyle/lg"
+	semstyle "github.com/GhostWriters/semstyle/lg"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
 
@@ -306,7 +306,7 @@ func RenderTitleSegmentCtx(rawTitle string, borderFocused bool, contentFocused b
 		spinIndR = spinnerIndicator[1]
 	}
 	if titleTag != "" {
-		rawTitle = semlg.WrapSemantic(titleTag) + rawTitle
+		rawTitle = semstyle.WrapSemantic(titleTag) + rawTitle
 	}
 	renderedTitle := RenderThemeTextCtx(rawTitle, ctx)
 

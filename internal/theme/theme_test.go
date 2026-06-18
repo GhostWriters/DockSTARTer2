@@ -29,7 +29,7 @@ func TestGetColorStr(t *testing.T) {
 	var cases []testutils.TestCase
 
 	for _, tt := range tests {
-		actual := semlg.ToColorStr(tt.input)
+		actual := semstyle.ToColorStr(tt.input)
 		pass := actual == tt.expected
 		cases = append(cases, testutils.TestCase{
 			Input:    fmt.Sprintf("%v", tt.input),

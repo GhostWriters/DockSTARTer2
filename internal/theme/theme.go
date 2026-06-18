@@ -5,7 +5,7 @@ import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
-	semlg "github.com/GhostWriters/semstyle/lg"
+	semstyle "github.com/GhostWriters/semstyle/lg"
 	semtheme "github.com/GhostWriters/semstyle/theme"
 	"bytes"
 	"context"
@@ -231,7 +231,7 @@ func Apply() {
 	// 0. Ensure base tags and color map are built from defaults FIRST
 	// This prevents theme-specific registration from being wiped out later.
 	console.RegisterBaseTags()
-	semlg.BuildColorMap()
+	semstyle.BuildColorMap()
 }
 
 // prefixTag is a helper to consistently prefix theme-related semantic tags
@@ -246,10 +246,10 @@ func prefixTag(prefix, name string) string {
 // Unload unregisters all theme-prefixed tags from the console registry.
 func Unload(prefix string) {
 	if prefix == "" {
-		semlg.ClearThemeMap()
+		semstyle.ClearThemeMap()
 		return
 	}
-	semlg.UnregisterPrefix(prefixTag(prefix, ""))
+	semstyle.UnregisterPrefix(prefixTag(prefix, ""))
 }
 
 // Default initializes the Current configuration with standard DockSTARTer colors (Classic)
@@ -445,17 +445,17 @@ func SemanticStyleWithRegistry(tag string, prefix string, useConsole bool) lipgl
 	}
 
 	var style lipgloss.Style
-	if strings.HasPrefix(tag, semlg.SemanticPrefix) && strings.HasSuffix(tag, semlg.SemanticSuffix) {
-		name := tag[len(semlg.SemanticPrefix) : len(tag)-len(semlg.SemanticSuffix)]
+	if strings.HasPrefix(tag, semstyle.SemanticPrefix) && strings.HasSuffix(tag, semstyle.SemanticSuffix) {
+		name := tag[len(semstyle.SemanticPrefix) : len(tag)-len(semstyle.SemanticSuffix)]
 		style = SemanticRawStyleWithRegistry(name, prefix, useConsole)
 	} else {
 		var expanded string
 		if useConsole {
-			expanded = semlg.ToTags(tag)
+			expanded = semstyle.ToTags(tag)
 		} else {
-			expanded = semlg.ToTags(tag, prefix)
+			expanded = semstyle.ToTags(tag, prefix)
 		}
-		style = semlg.ToStyle(semlg.Default, expanded, lipgloss.NewStyle(), lipgloss.NewStyle())
+		style = semstyle.ToStyle(semstyle.Default, expanded, lipgloss.NewStyle(), lipgloss.NewStyle())
 	}
 
 	cacheMu.Lock()
@@ -495,11 +495,11 @@ func SemanticRawStyleWithRegistry(name string, prefix string, useConsole bool) l
 
 	var expanded string
 	if useConsole {
-		expanded = semlg.ToTags(semlg.WrapSemantic(name))
+		expanded = semstyle.ToTags(semstyle.WrapSemantic(name))
 	} else {
-		expanded = semlg.ToTags(semlg.WrapSemantic(name), prefix)
+		expanded = semstyle.ToTags(semstyle.WrapSemantic(name), prefix)
 	}
-	s := semlg.ToStyle(semlg.Default, expanded, lipgloss.NewStyle(), lipgloss.NewStyle())
+	s := semstyle.ToStyle(semstyle.Default, expanded, lipgloss.NewStyle(), lipgloss.NewStyle())
 
 	cacheMu.Lock()
 	semanticStyleCache[cacheKey] = s
@@ -528,22 +528,22 @@ func ClearSemanticCachePrefix(prefix string) {
 }
 
 // ToANSI converts semantic and direct tags to ANSI. Without a prefix uses the console
-// map; with a prefix uses the theme map. Delegates to semlg.ToANSI.
+// map; with a prefix uses the theme map. Delegates to semstyle.ToANSI.
 func ToANSI(text string, prefix ...string) string {
-	return semlg.ToANSI(text, prefix...)
+	return semstyle.ToANSI(text, prefix...)
 }
 
 // ToTags expands semantic tags to direct tags without converting to ANSI.
 func ToTags(text string, prefix ...string) string {
-	return semlg.ToTags(text, prefix...)
+	return semstyle.ToTags(text, prefix...)
 }
 
 // ToPlain removes all tags and ANSI sequences, returning plain text.
 func ToPlain(text string) string {
-	return semlg.ToPlain(text)
+	return semstyle.ToPlain(text)
 }
 
 // StripTags removes semantic and direct tags, leaving ANSI sequences intact.
 func StripTags(text string) string {
-	return semlg.StripTags(text)
+	return semstyle.StripTags(text)
 }
