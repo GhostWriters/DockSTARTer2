@@ -14,9 +14,11 @@ semstyle.ToConsoleANSI("{{|Error|}}failed{{[-]}}: {{[red::B]}}retry{{[-]}}")
   re-styles, without touching call sites.
 - **Direct tags** — `{{[fg:bg:flags]}}…{{[-]}}` — inline ANSI styling, e.g. `{{[red:black:B]}}`
   for bold red on black. Flags: `B`old, `D`im, `U`nderline, `I`talic, `L` blink, `R`everse,
-  `S`trikethrough (uppercase = on, lowercase = off, e.g. `b` = Bold off). A leading `-` in the
-  flags field resets **all** attributes first, then applies the remaining flags (e.g. `{{[-B]}}`
-  = reset all, then Bold on — use `b` for Bold off without a reset).
+  `S`trikethrough (uppercase = on, lowercase = off, e.g. `b` = Bold off). `H` = High Intensity:
+  shifts the fg and/or bg color to its bright variant (`red` → `bright-red`) without affecting
+  attributes. A leading `-` in the flags field resets **all** attributes first, then applies the
+  remaining flags (e.g. `{{[-B]}}` = reset all, then Bold on — use `b` for Bold off without a
+  reset).
 
 It depends only on `lipgloss`, `colorprofile`, and `tcell/color` for color resolution — no
 application, TTY, or config coupling.
