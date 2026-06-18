@@ -48,36 +48,22 @@ func (st *Styler) BuildColorMap() {
 	st.ansiMap["S"] = CodeStrikethrough
 	st.ansiMap["s"] = CodeStrikethroughOff
 
-	// Attribute mappings (normalized names)
+	// Attribute mappings (short keys only — no long-form aliases)
 	st.attributeMap["reset"] = CodeReset
 	st.attributeMap["-"] = CodeReset
-	st.attributeMap["bold"] = CodeBold
 	st.attributeMap["b"] = CodeBold
-	st.attributeMap["dim"] = CodeDim
 	st.attributeMap["d"] = CodeDim
-	st.attributeMap["underline"] = CodeUnderline
 	st.attributeMap["u"] = CodeUnderline
-	st.attributeMap["blink"] = CodeBlink
 	st.attributeMap["l"] = CodeBlink
-	st.attributeMap["reverse"] = CodeReverse
 	st.attributeMap["r"] = CodeReverse
-	st.attributeMap["italic"] = CodeItalic
 	st.attributeMap["i"] = CodeItalic
-	st.attributeMap["strikethrough"] = CodeStrikethrough
 	st.attributeMap["s"] = CodeStrikethrough
-	st.attributeMap["-bold"] = CodeBoldOff
 	st.attributeMap["-b"] = CodeBoldOff
-	st.attributeMap["-dim"] = CodeDimOff
 	st.attributeMap["-d"] = CodeDimOff
-	st.attributeMap["-underline"] = CodeUnderlineOff
 	st.attributeMap["-u"] = CodeUnderlineOff
-	st.attributeMap["-blink"] = CodeBlinkOff
 	st.attributeMap["-l"] = CodeBlinkOff
-	st.attributeMap["-reverse"] = CodeReverseOff
 	st.attributeMap["-r"] = CodeReverseOff
-	st.attributeMap["-italic"] = CodeItalicOff
 	st.attributeMap["-i"] = CodeItalicOff
-	st.attributeMap["-strikethrough"] = CodeStrikethroughOff
 	st.attributeMap["-s"] = CodeStrikethroughOff
 
 	// Colors...
