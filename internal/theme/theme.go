@@ -19,35 +19,6 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
-// StyleFlags holds ANSI style modifiers
-type StyleFlags struct {
-	Bold          bool
-	Underline     bool
-	Italic        bool
-	Blink         bool
-	Dim           bool
-	Reverse       bool
-	Strikethrough bool
-	HighIntensity bool
-}
-
-// Apply applies all style flags to a lipgloss style
-func (f StyleFlags) Apply(s lipgloss.Style) lipgloss.Style {
-	return s.
-		Bold(f.Bold).
-		Underline(f.Underline).
-		Italic(f.Italic).
-		Blink(f.Blink).
-		Faint(f.Dim).
-		Reverse(f.Reverse).
-		Strikethrough(f.Strikethrough)
-}
-
-// ResetFlags clears all text attributes from a style
-func ResetFlags(s lipgloss.Style) lipgloss.Style {
-	return StyleFlags{}.Apply(s)
-}
-
 // ThemeConfig holds the metadata for the active theme
 type ThemeConfig struct {
 	Name string
