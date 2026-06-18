@@ -4,7 +4,7 @@ A small, dependency-light engine for **semantic terminal styling** in Go. Write 
 named, tag-based markup and resolve it to ANSI escape sequences at render time:
 
 ```go
-semstyle.ToConsoleANSI("{{|Error|}}failed{{[-]}}: {{[red::B]}}retry{{[-]}}")
+semstyle.ToANSI("{{|Error|}}failed{{[-]}}: {{[red::B]}}retry{{[-]}}")
 ```
 
 `semstyle` is built around two ideas:
@@ -43,9 +43,9 @@ A process-wide `Default` styler backs the package functions. This is all most pr
 ```go
 import "…/semstyle"
 
-fmt.Println(semstyle.ToConsoleANSI("{{|Notice|}}hello{{[-]}}"))
+fmt.Println(semstyle.ToANSI("{{|Notice|}}hello{{[-]}}"))
 semstyle.RegisterConsoleTag("Notice", "{{[cyan::B]}}") // define a semantic tag
-plain := semstyle.Strip(styled)                        // remove all tags + ANSI
+plain := semstyle.ToPlain(styled)                      // remove all tags + ANSI
 ```
 
 ### 2. Per-instance `Styler` (multiple independent configs)
@@ -56,7 +56,7 @@ configurations in one process (e.g. different themes for different surfaces):
 ```go
 s := semstyle.New()
 s.RegisterThemeTag("Title", "{{[magenta::B]}}")
-out := s.ToConsoleANSI("{{|Title|}}Report{{[-]}}")
+out := s.ToANSI("{{|Title|}}Report{{[-]}}")
 ```
 
 The package functions are thin delegators to `Default`, so the global API and the
@@ -69,9 +69,9 @@ Each `Styler` keeps two semantic maps:
 - **console map** — built-in / base tags (the defaults from `RegisterBaseTags`).
 - **theme map** — overrides loaded from a theme; takes precedence over the console map.
 
-`ToConsoleANSI` resolves against the console map only; `ToThemeANSI` resolves theme-first
-with console fallback. Supply a theme map with `SetThemeMap` (or the `semtheme` companion
-package, which parses theme files into a map).
+`ToANSI` without a prefix resolves against the console map only; with a prefix it resolves
+theme-first with console fallback. Supply a theme map with `SetThemeMap` (or the `semtheme`
+companion package, which parses theme files into a map).
 
 ## Key API
 
@@ -139,14 +139,14 @@ style maps), so it persists across theme changes.
 
 ## Render policy
 
-By default `ToConsoleANSI` always emits ANSI. A host that wants to suppress color when
-output is redirected (or any other condition) sets a policy:
+By default `ToANSI` always emits ANSI. A host that wants to suppress color when output is
+redirected (or any other condition) sets a policy:
 
 ```go
 semstyle.SetRenderPolicy(func() bool { return isTerminal() })
 ```
 
-When the policy returns false, `ToConsoleANSI` strips instead of rendering.
+When the policy returns false, `ToANSI` strips instead of rendering.
 
 ## Theming
 
