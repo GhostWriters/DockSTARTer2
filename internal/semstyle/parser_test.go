@@ -241,11 +241,6 @@ func TestBackwardsCompatibility(t *testing.T) {
 		t.Errorf("Translate should equal ExpandTags: Translate=%q, ExpandTags=%q", translateResult, expandResult)
 	}
 
-	// Test ForTUI alias
-	forTUIResult := ForTUI(input)
-	if forTUIResult != expandResult {
-		t.Errorf("ForTUI should equal ExpandTags: ForTUI=%q, ExpandTags=%q", forTUIResult, expandResult)
-	}
 }
 
 func TestSemanticVsDirectDistinction(t *testing.T) {

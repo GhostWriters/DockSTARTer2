@@ -257,11 +257,6 @@ func (st *Styler) Sprintf(format string, a ...any) string {
 	return st.ToANSI(fmt.Sprintf(format, a...))
 }
 
-// ForTUI prepares text for display with theme tags expanded to direct tags.
-func (st *Styler) ForTUI(text string) string {
-	return st.ToTags(text, "")
-}
-
 // --- package-level delegators to Default ---
 
 func ToANSI(s string, prefix ...string) string        { return Default.ToANSI(s, prefix...) }
@@ -272,5 +267,4 @@ func ExpandTagsWithMap(text string, styleMap map[string]string, stripUnresolvabl
 	return Default.ExpandTagsWithMap(text, styleMap, stripUnresolvable, prefix)
 }
 func processDirectTags(text string) string { return Default.processDirectTags(text) }
-func ForTUI(text string) string            { return Default.ForTUI(text) }
 func Sprintf(format string, a ...any) string { return Default.Sprintf(format, a...) }
