@@ -75,27 +75,27 @@ func (st *Styler) Delimiters() (semPre, semSuf, dirPre, dirSuf string) {
 var Default = New()
 
 // SetRenderPolicy sets the policy consulted by ToConsoleANSI.
-func (s *Styler) SetRenderPolicy(fn func() bool) { s.renderPolicy = fn }
+func (st *Styler) SetRenderPolicy(fn func() bool) { st.renderPolicy = fn }
 
 // RegisterHyperlinkTag marks a semantic tag as a hyperlink trigger on the Default styler.
 func RegisterHyperlinkTag(name string) { Default.RegisterHyperlinkTag(name) }
 
 // SetThemeMap replaces the theme map wholesale.
-func (s *Styler) SetThemeMap(m map[string]string) {
-	s.mu.Lock()
-	s.themeMap = m
-	s.mu.Unlock()
+func (st *Styler) SetThemeMap(m map[string]string) {
+	st.mu.Lock()
+	st.themeMap = m
+	st.mu.Unlock()
 }
 
 // RegisterHyperlinkTag marks a semantic tag whose content (everything from the tag up to
 // the next reset, e.g. {{[-]}}) should be rendered as a terminal hyperlink, with the tag
 // content's plain text used as the link destination. For example, registering "URL" makes
 // {{|URL|}}https://example.com{{[-]}} a clickable link. Off by default; call once per tag.
-func (s *Styler) RegisterHyperlinkTag(name string) {
-	s.mu.Lock()
-	if s.hyperlinkTags == nil {
-		s.hyperlinkTags = make(map[string]bool)
+func (st *Styler) RegisterHyperlinkTag(name string) {
+	st.mu.Lock()
+	if st.hyperlinkTags == nil {
+		st.hyperlinkTags = make(map[string]bool)
 	}
-	s.hyperlinkTags[strings.ToLower(name)] = true
-	s.mu.Unlock()
+	st.hyperlinkTags[strings.ToLower(name)] = true
+	st.mu.Unlock()
 }
