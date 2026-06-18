@@ -1,4 +1,4 @@
-package console
+package semstyle
 
 import (
 	"fmt"
@@ -15,9 +15,9 @@ const (
 	CodeFGReset = "\033[39m" // Reset foreground to default
 	CodeBGReset = "\033[49m" // Reset background to default
 
-	// Hard reset sequences — bypass MaintainBackground interception.
-	// MaintainBackground only matches single-parameter SGR sequences (\x1b[0m, \x1b[39m, \x1b[49m).
-	// These multi-parameter equivalents have the same terminal effect but are not intercepted.
+	// Hard reset sequences: multi-parameter SGR variants with the same terminal effect as
+	// the single-parameter resets above. Useful when a compositor or filter intercepts the
+	// single-parameter forms (\x1b[0m, \x1b[39m, \x1b[49m) but should let a true reset through.
 	CodeHardReset   = "\033[0;39;49m" // Full reset to terminal defaults
 	CodeHardFGReset = "\033[39;39m"   // FG reset to terminal default
 	CodeHardBGReset = "\033[49;49m"   // BG reset to terminal default
@@ -190,15 +190,15 @@ func init() {
 		ConsoleBox: "{{[-]}}{{[white:black]}}",
 
 		// Docker Compose progress colors — markers (icons, labels, decorations)
-		DockerMarkerDone:    "{{[-]}}{{[green]}}",
-		DockerMarkerError:   "{{[-]}}{{[red]}}",
-		DockerMarkerWarn:    "{{[-]}}{{[yellow]}}",
-		DockerColon:   "{{[-]}}{{[gray::D]}}",
-		DockerImage:   "{{[-]}}{{[magenta]}}",
-		DockerTag:     "{{[-]}}{{[magenta::D]}}",
-		DockerSpinner: "{{[-]}}{{[yellow]}}",
-		DockerBar:          "{{[-]}}{{[cyan]}}",
-		DockerSharedLayer:  "{{[-]}}{{[yellow]}}",
+		DockerMarkerDone:  "{{[-]}}{{[green]}}",
+		DockerMarkerError: "{{[-]}}{{[red]}}",
+		DockerMarkerWarn:  "{{[-]}}{{[yellow]}}",
+		DockerColon:       "{{[-]}}{{[gray::D]}}",
+		DockerImage:       "{{[-]}}{{[magenta]}}",
+		DockerTag:         "{{[-]}}{{[magenta::D]}}",
+		DockerSpinner:     "{{[-]}}{{[yellow]}}",
+		DockerBar:         "{{[-]}}{{[cyan]}}",
+		DockerSharedLayer: "{{[-]}}{{[yellow]}}",
 		// Docker Compose progress colors — status text
 		DockerStatusSuccess: "{{[-]}}{{[cyan]}}",
 		DockerStatusFinal:   "{{[-]}}{{[green::B]}}",
@@ -208,7 +208,13 @@ func init() {
 		DockerStatusActive:  "{{[-]}}{{[yellow]}}",
 	}
 
-	// Register base tags once Colors is populated
+	// Re-register base tags onto Default now that Colors is populated.
+	//
+	// Ordering note: Default = New() (a var initializer) runs before this init() and already
+	// calls RegisterBaseTags, but at that point Colors is still its zero value (Colors is set
+	// here in init, not at declaration). This second call re-registers from the populated
+	// Colors so Default is correct before any application code runs. Any Styler created via
+	// New() *after* package init (the normal case) sees the populated Colors directly.
 	RegisterBaseTags()
 }
 
@@ -331,15 +337,15 @@ type AppColors struct {
 	ConsoleBox string
 
 	// Docker Compose progress colors — markers (icons, labels, decorations)
-	DockerMarkerDone    string
-	DockerMarkerError   string
-	DockerMarkerWarn    string
-	DockerColon   string
-	DockerImage   string
-	DockerTag     string
-	DockerSpinner string
-	DockerBar          string
-	DockerSharedLayer  string
+	DockerMarkerDone  string
+	DockerMarkerError string
+	DockerMarkerWarn  string
+	DockerColon       string
+	DockerImage       string
+	DockerTag         string
+	DockerSpinner     string
+	DockerBar         string
+	DockerSharedLayer string
 	// Docker Compose progress colors — status text
 	DockerStatusSuccess string
 	DockerStatusFinal   string
@@ -354,7 +360,7 @@ var Colors AppColors
 
 // RegisterBaseTags registers semantic tag aliases from AppColors struct fields
 // and a small set of static aliases not covered by the struct.
-func RegisterBaseTags() {
+func (st *Styler) RegisterBaseTags() {
 	// Auto-register all AppColors struct fields by lowercased field name.
 	v := reflect.ValueOf(Colors)
 	t := v.Type()
@@ -362,51 +368,56 @@ func RegisterBaseTags() {
 		field := t.Field(i)
 		val := v.Field(i).String()
 		if val != "" {
-			RegisterConsoleTag(strings.ToLower(field.Name), val)
+			st.RegisterConsoleTag(strings.ToLower(field.Name), val)
 		}
 	}
 
 	// Bash-style aliases from main.sh
-	RegisterConsoleTag("NC", "{{[-]}}")
-	RegisterConsoleTag("BD", "{{[::B]}}")
-	RegisterConsoleTag("UL", "{{[::U]}}")
-	RegisterConsoleTag("DM", "{{[::D]}}")
-	RegisterConsoleTag("BL", "{{[::L]}}")
+	st.RegisterConsoleTag("NC", "{{[-]}}")
+	st.RegisterConsoleTag("BD", "{{[::B]}}")
+	st.RegisterConsoleTag("UL", "{{[::U]}}")
+	st.RegisterConsoleTag("DM", "{{[::D]}}")
+	st.RegisterConsoleTag("BL", "{{[::L]}}")
 
 	// Existing shorthands
-	RegisterConsoleTag("ul", "{{[::U]}}")
-	RegisterConsoleTag("blink", "{{[::L]}}")
+	st.RegisterConsoleTag("ul", "{{[::U]}}")
+	st.RegisterConsoleTag("blink", "{{[::L]}}")
 
 	// Legacy single-letter foreground aliases (F array in main.sh)
-	RegisterConsoleTag("B", Colors.Blue)
-	RegisterConsoleTag("C", Colors.Cyan)
-	RegisterConsoleTag("G", Colors.Green)
-	RegisterConsoleTag("K", Colors.Black)
-	RegisterConsoleTag("M", Colors.Magenta)
-	RegisterConsoleTag("R", Colors.Red)
-	RegisterConsoleTag("W", Colors.White)
-	RegisterConsoleTag("Y", Colors.Yellow)
+	st.RegisterConsoleTag("B", Colors.Blue)
+	st.RegisterConsoleTag("C", Colors.Cyan)
+	st.RegisterConsoleTag("G", Colors.Green)
+	st.RegisterConsoleTag("K", Colors.Black)
+	st.RegisterConsoleTag("M", Colors.Magenta)
+	st.RegisterConsoleTag("R", Colors.Red)
+	st.RegisterConsoleTag("W", Colors.White)
+	st.RegisterConsoleTag("Y", Colors.Yellow)
 
 	// Explicit F_ aliases
-	RegisterConsoleTag("F_B", Colors.Blue)
-	RegisterConsoleTag("F_C", Colors.Cyan)
-	RegisterConsoleTag("F_G", Colors.Green)
-	RegisterConsoleTag("F_K", Colors.Black)
-	RegisterConsoleTag("F_M", Colors.Magenta)
-	RegisterConsoleTag("F_R", Colors.Red)
-	RegisterConsoleTag("F_W", Colors.White)
-	RegisterConsoleTag("F_Y", Colors.Yellow)
+	st.RegisterConsoleTag("F_B", Colors.Blue)
+	st.RegisterConsoleTag("F_C", Colors.Cyan)
+	st.RegisterConsoleTag("F_G", Colors.Green)
+	st.RegisterConsoleTag("F_K", Colors.Black)
+	st.RegisterConsoleTag("F_M", Colors.Magenta)
+	st.RegisterConsoleTag("F_R", Colors.Red)
+	st.RegisterConsoleTag("F_W", Colors.White)
+	st.RegisterConsoleTag("F_Y", Colors.Yellow)
 
 	// Legacy background aliases (B array in main.sh)
-	RegisterConsoleTag("B_B", Colors.BlueBg)
-	RegisterConsoleTag("B_C", Colors.CyanBg)
-	RegisterConsoleTag("B_G", Colors.GreenBg)
-	RegisterConsoleTag("B_K", Colors.BlackBg)
-	RegisterConsoleTag("B_M", Colors.MagentaBg)
-	RegisterConsoleTag("B_R", Colors.RedBg)
-	RegisterConsoleTag("B_W", Colors.WhiteBg)
-	RegisterConsoleTag("B_Y", Colors.YellowBg)
+	st.RegisterConsoleTag("B_B", Colors.BlueBg)
+	st.RegisterConsoleTag("B_C", Colors.CyanBg)
+	st.RegisterConsoleTag("B_G", Colors.GreenBg)
+	st.RegisterConsoleTag("B_K", Colors.BlackBg)
+	st.RegisterConsoleTag("B_M", Colors.MagentaBg)
+	st.RegisterConsoleTag("B_R", Colors.RedBg)
+	st.RegisterConsoleTag("B_W", Colors.WhiteBg)
+	st.RegisterConsoleTag("B_Y", Colors.YellowBg)
 
 	// NOTE: Theme-related tags (ThemeHostname, ThemeTitle, etc.) are registered
 	// by the theme package in theme.go Default() and Apply() functions.
+}
+
+// --- package-level delegators to Default ---
+func RegisterBaseTags() {
+	Default.RegisterBaseTags()
 }

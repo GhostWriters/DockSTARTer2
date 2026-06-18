@@ -161,6 +161,10 @@ func init() {
 	console.AbortHandler = func(ctx context.Context) {
 		Error(ctx, "User aborted via CTRL-C")
 	}
+
+	// The URL semantic tag renders its content (up to the next reset) as a terminal
+	// hyperlink. The styling engine no longer hardcodes this, so DS2 opts in here.
+	console.RegisterHyperlinkTag("URL")
 }
 
 func SetLevel(level slog.Level) {

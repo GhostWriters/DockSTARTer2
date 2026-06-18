@@ -4,13 +4,12 @@ import (
 	"os"
 
 	"github.com/charmbracelet/colorprofile"
+
+	"DockSTARTer2/internal/semstyle"
 )
 
 var (
 	isTTYGlobal bool
-
-	// preferredProfile stores the detected or forced color profile
-	preferredProfile colorprofile.Profile
 
 	// TUIMode indicates whether we're running in TUI mode (always render colors)
 	TUIMode bool
@@ -29,17 +28,17 @@ func init() {
 	if stat, err := os.Stderr.Stat(); err == nil {
 		isTTYGlobal = (stat.Mode() & os.ModeCharDevice) != 0
 	}
-	preferredProfile = colorprofile.Detect(os.Stderr, os.Environ())
 }
 
 // GetPreferredProfile returns the detected or forced color profile.
+// Re-exported from the styling engine (semstyle owns the profile state).
 func GetPreferredProfile() colorprofile.Profile {
-	return preferredProfile
+	return semstyle.GetPreferredProfile()
 }
 
 // SetPreferredProfile explicitly sets the color profile (useful for testing).
 func SetPreferredProfile(p colorprofile.Profile) {
-	preferredProfile = p
+	semstyle.SetPreferredProfile(p)
 }
 
 // IsTTY reports whether stderr is a real terminal.

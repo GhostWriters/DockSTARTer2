@@ -5,6 +5,7 @@ import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/semstyle/theme"
 	"bytes"
 	"context"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"sync"
 
 	"charm.land/lipgloss/v2"
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/pelletier/go-toml/v2"
 )
 
@@ -287,263 +289,60 @@ func Default(prefix string) {
 	}
 }
 
-// resolveThemeValue recursively resolves a theme value string, handling semantic references and overrides.
-// It supports chaining (A->B->C) and partial overlays.
-// Uses file-specific delimiters (semPre/semSuf for semantic, dirPre/dirSuf for direct).
-// Returns a RAW style string (fg:bg:flags) without any delimiters.
+// resolveThemeValue delegates to the semtheme parse layer; retained so existing callers
+// and tests in this package keep their signature.
 func resolveThemeValue(raw string, rawValues map[string]string, visiting map[string]bool,
 	semPre, semSuf, dirPre, dirSuf string) (string, error) {
-
-	var finalFG, finalBG string
-	var finalFlags string
-
-	// Helper to merge a raw style string (fg:bg:flags)
-	mergeStyle := func(styleStr string) {
-		// Strip file-specific (or global fallback) delimiters to get raw content
-		inner := styleStr
-		switch {
-		case strings.HasPrefix(inner, dirPre) && strings.HasSuffix(inner, dirSuf):
-			inner = inner[len(dirPre) : len(inner)-len(dirSuf)]
-		case strings.HasPrefix(inner, semPre) && strings.HasSuffix(inner, semSuf):
-			inner = inner[len(semPre) : len(inner)-len(semSuf)]
-		default:
-			// Already raw or uses global delimiters (e.g. result from ExpandTags)
-			inner = console.StripDelimiters(inner)
-		}
-		// Bare "-" is the full-reset shorthand: treat it as resetting fg, bg, and all flags.
-		// This makes {{[-]}}{{::B}} equivalent to {{[-:-:-B]}} in theme values.
-		if inner == "-" {
-			inner = "-:-:-"
-		}
-
-		parts := strings.Split(inner, ":")
-
-		if len(parts) > 0 && parts[0] != "" {
-			finalFG = parts[0]
-		}
-		if len(parts) > 1 && parts[1] != "" {
-			finalBG = parts[1]
-		}
-		if len(parts) > 2 {
-			// Merge flags (concatenate - renderer handles ordering)
-			for _, f := range parts[2] {
-				finalFlags += string(f)
-			}
-		}
-	}
-
-	// Iterate through the string seeking the next tag (semantic or direct)
-	cur := raw
-	for {
-		// Find the nearest occurrence of either file-specific prefix
-		nextSem := strings.Index(cur, semPre)
-		nextDir := strings.Index(cur, dirPre)
-		if nextSem == -1 && nextDir == -1 {
-			break
-		}
-
-		// Determine which prefix comes first and select its matching suffix
-		var start int
-		var closeSuf string
-		switch {
-		case nextSem == -1:
-			start, closeSuf = nextDir, dirSuf
-		case nextDir == -1:
-			start, closeSuf = nextSem, semSuf
-		case nextDir < nextSem:
-			start, closeSuf = nextDir, dirSuf
-		default:
-			start, closeSuf = nextSem, semSuf
-		}
-
-		end := strings.Index(cur[start:], closeSuf)
-		if end == -1 {
-			break
-		}
-		end += start + len(closeSuf)
-
-		tag := cur[start:end]
-
-		if strings.HasPrefix(tag, dirPre) {
-			// Direct style tag - extract and merge
-			mergeStyle(tag)
-		} else if strings.HasPrefix(tag, semPre) {
-			// Semantic reference - extract tag name (may include inline modifiers, e.g. "Title:::R")
-			refKey := strings.TrimSuffix(strings.TrimPrefix(tag, semPre), semSuf)
-
-			// Split off any inline modifiers after the semantic name
-			semanticRef := refKey
-			modifiers := ""
-			if idx := strings.IndexByte(refKey, ':'); idx >= 0 {
-				semanticRef = refKey[:idx]
-				modifiers = refKey[idx+1:]
-			}
-
-			// 1. Try resolving as internal reference first (with or without '' prefix)
-			targetKey := strings.TrimPrefix(semanticRef, "")
-			if _, exists := rawValues[targetKey]; exists {
-				if visiting[targetKey] {
-					return "", fmt.Errorf("circular reference to %q in theme", targetKey)
-				}
-				visiting[targetKey] = true
-				resolvedRef, err := resolveThemeValue(rawValues[targetKey], rawValues, visiting,
-					semPre, semSuf, dirPre, dirSuf)
-				delete(visiting, targetKey)
-				if err != nil {
-					return "", err
-				}
-				mergeStyle(resolvedRef)
-				if modifiers != "" {
-					mergeStyle(modifiers)
-				}
-				cur = cur[end:]
-				continue
-			}
-
-			// 2. Fallback to global semantic tags (e.g. Notice, Success).
-			// Re-wrap in global standard delimiters so ExpandTags can resolve it
-			// regardless of the file-specific delimiters in use.
-			standardTag := console.SemanticPrefix + semanticRef + console.SemanticSuffix
-			expanded := console.ExpandConsoleTags(standardTag)
-			if expanded != standardTag && expanded != "" {
-				mergeStyle(expanded)
-			}
-			if modifiers != "" {
-				mergeStyle(modifiers)
-			}
-		}
-
-		cur = cur[end:]
-	}
-
-	// Return RAW style string (no delimiters)
-	return fmt.Sprintf("%s:%s:%s", finalFG, finalBG, finalFlags), nil
+	return semtheme.ResolveValue(raw, rawValues, visiting, semPre, semSuf, dirPre, dirSuf)
 }
 
+// ThemeFile lives in the semtheme parse layer; aliased here so theme.* consumers are unchanged.
+type ThemeFile = semtheme.ThemeFile
+
+// ThemeDefaults holds the DockSTARTer2-specific UI defaults a theme may suggest under its
+// [defaults] table. semtheme keeps that table opaque (app-defined); this struct is how DS2
+// interprets it. Pointers distinguish "unset" from a zero value.
 type ThemeDefaults struct {
-	Borders           *bool   `toml:"borders"`
-	LargeButtons      *bool   `toml:"large_buttons"`
-	LargeTitleBars    *bool   `toml:"large_title_bars"`
-	LineCharacters    *bool   `toml:"line_characters"`
-	Shadow            *bool   `toml:"shadow"`
-	ShadowLevel       *int    `toml:"shadow_level"`
-	Scrollbar         *bool   `toml:"scrollbar"`
-	Spinner           *bool   `toml:"spinner"`
-	BorderColor       *int    `toml:"border_color"`
-	DialogTitleAlign  *string `toml:"dialog_title_align"`
-	SubmenuTitleAlign *string `toml:"submenu_title_align"`
-	PanelTitleAlign   *string `toml:"panel_title_align"`
-	// Panel modes: themes may suggest "log" or "none" but never "console".
-	// Any attempt to set "console" via a theme is silently clamped to "log".
-	PanelLocal  *string `toml:"panel_local"`
-	PanelRemote *string `toml:"panel_remote"`
+	Borders           *bool   `mapstructure:"borders"`
+	LargeButtons      *bool   `mapstructure:"large_buttons"`
+	LargeTitleBars    *bool   `mapstructure:"large_title_bars"`
+	LineCharacters    *bool   `mapstructure:"line_characters"`
+	Shadow            *bool   `mapstructure:"shadow"`
+	ShadowLevel       *int    `mapstructure:"shadow_level"`
+	Scrollbar         *bool   `mapstructure:"scrollbar"`
+	Spinner           *bool   `mapstructure:"spinner"`
+	BorderColor       *int    `mapstructure:"border_color"`
+	DialogTitleAlign  *string `mapstructure:"dialog_title_align"`
+	SubmenuTitleAlign *string `mapstructure:"submenu_title_align"`
+	PanelTitleAlign   *string `mapstructure:"panel_title_align"`
+	PanelLocal        *string `mapstructure:"panel_local"`
+	PanelRemote       *string `mapstructure:"panel_remote"`
 }
 
-type ThemeFile struct {
-	Metadata struct {
-		Name        string `toml:"name"`
-		Description string `toml:"description"`
-		Author      string `toml:"author"`
-	} `toml:"metadata"`
-	Syntax *struct {
-		SemanticPrefix string `toml:"semantic_prefix"`
-		SemanticSuffix string `toml:"semantic_suffix"`
-		DirectPrefix   string `toml:"direct_prefix"`
-		DirectSuffix   string `toml:"direct_suffix"`
-	} `toml:"syntax"`
-	Defaults *ThemeDefaults    `toml:"defaults"`
-	Palette  map[string]string `toml:"palette"`
-	Styles   map[string]string `toml:"styles"`
+// decodeThemeDefaults converts the opaque [defaults] table from a parsed theme into DS2's
+// typed ThemeDefaults. Returns nil when there is no defaults table.
+func decodeThemeDefaults(raw map[string]any) (*ThemeDefaults, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	var d ThemeDefaults
+	if err := mapstructure.Decode(raw, &d); err != nil {
+		return nil, err
+	}
+	return &d, nil
 }
 
-// substitutePaletteVars replaces $varname tokens in s with values from palette.
-func substitutePaletteVars(s string, palette map[string]string) string {
-	if !strings.ContainsRune(s, '$') {
-		return s
-	}
-	var b strings.Builder
-	i := 0
-	for i < len(s) {
-		if s[i] != '$' {
-			b.WriteByte(s[i])
-			i++
-			continue
-		}
-		j := i + 1
-		for j < len(s) && (s[j] == '_' || (s[j] >= 'A' && s[j] <= 'Z') || (s[j] >= 'a' && s[j] <= 'z') || (j > i+1 && s[j] >= '0' && s[j] <= '9')) {
-			j++
-		}
-		if j > i+1 {
-			name := s[i+1 : j]
-			if val, ok := palette[name]; ok {
-				b.WriteString(val)
-				i = j
-				continue
-			}
-		}
-		b.WriteByte(s[i])
-		i++
-	}
-	return b.String()
+// FileDefaults decodes a parsed theme's opaque [defaults] table into DS2's typed
+// ThemeDefaults. Returns nil if the theme has no defaults.
+func FileDefaults(tf ThemeFile) (*ThemeDefaults, error) {
+	return decodeThemeDefaults(tf.Defaults)
 }
 
 // GetThemeFile reads a theme file and returns its structured content without applying it.
 // resolveThemeColors resolves all color values in tf, returning the resolved map or an error
 // (e.g. on circular reference). The returned map is keyed the same as tf.Styles.
 func resolveThemeColors(tf ThemeFile) (map[string]string, error) {
-	semPre, semSuf := console.SemanticPrefix, console.SemanticSuffix
-	dirPre, dirSuf := console.DirectPrefix, console.DirectSuffix
-	if tf.Syntax != nil {
-		if tf.Syntax.SemanticPrefix != "" {
-			semPre = tf.Syntax.SemanticPrefix
-		}
-		if tf.Syntax.SemanticSuffix != "" {
-			semSuf = tf.Syntax.SemanticSuffix
-		}
-		if tf.Syntax.DirectPrefix != "" {
-			dirPre = tf.Syntax.DirectPrefix
-		}
-		if tf.Syntax.DirectSuffix != "" {
-			dirSuf = tf.Syntax.DirectSuffix
-		}
-	}
-	// Substitute palette variables ($varname) in color strings before semantic resolution.
-	// First resolve palette entries against each other (handles chains like accent → bg → dialog).
-	// Iterate until stable or len(palette) passes to avoid infinite loops on circular refs.
-	colors := tf.Styles
-	if len(tf.Palette) > 0 {
-		resolved := make(map[string]string, len(tf.Palette))
-		for k, v := range tf.Palette {
-			resolved[k] = v
-		}
-		for range len(tf.Palette) {
-			changed := false
-			for k, v := range resolved {
-				if s := substitutePaletteVars(v, resolved); s != v {
-					resolved[k] = s
-					changed = true
-				}
-			}
-			if !changed {
-				break
-			}
-		}
-		colors = make(map[string]string, len(tf.Styles))
-		for key, raw := range tf.Styles {
-			colors[key] = substitutePaletteVars(raw, resolved)
-		}
-	}
-
-	resolved := make(map[string]string, len(colors))
-	for key, raw := range colors {
-		visiting := make(map[string]bool)
-		styleValue, err := resolveThemeValue(raw, colors, visiting, semPre, semSuf, dirPre, dirSuf)
-		if err != nil {
-			return nil, fmt.Errorf("theme key %q: %w", key, err)
-		}
-		resolved[key] = styleValue
-	}
-	return resolved, nil
+	return semtheme.ResolveColors(tf)
 }
 
 func GetThemeFile(themeName string) (ThemeFile, error) {
@@ -632,27 +431,11 @@ func ApplyThemeDefaults(conf *config.AppConfig, defaults ThemeDefaults) map[stri
 }
 
 func parseThemeTOMLData(data []byte, prefix string) (*ThemeDefaults, error) {
-	var tf ThemeFile
-	if err := toml.Unmarshal(data, &tf); err != nil {
-		return nil, err
-	}
-
-	// 1. Resolve values and register/apply them
-	resolved, err := resolveThemeColors(tf)
+	rawDefaults, err := semtheme.RegisterInto(data, prefix)
 	if err != nil {
 		return nil, err
 	}
-	for key, styleValue := range resolved {
-		console.RegisterThemeTagRaw(prefixTag(prefix, key), styleValue)
-	}
-
-	// 2. Re-apply tags if loading main theme
-	if prefix == "" {
-		console.RegisterBaseTags()
-		console.BuildColorMap()
-	}
-
-	return tf.Defaults, nil
+	return decodeThemeDefaults(rawDefaults)
 }
 
 var (

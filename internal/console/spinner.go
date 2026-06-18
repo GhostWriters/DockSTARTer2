@@ -110,6 +110,22 @@ func ClearSpinnerLine() {
 	}
 }
 
+// Println renders semantic/direct tags in a and prints the line, routing to the active
+// viewport when present and otherwise writing to the terminal around the spinner. This is
+// the app-level I/O wrapper over the styling engine (semstyle owns the rendering).
+func Println(a ...any) {
+	msg := ToConsoleANSI(fmt.Sprint(a...))
+	if GlobalViewport != nil && GlobalViewport.active {
+		GlobalViewport.Append(msg)
+		return
+	}
+	LockTerminal()
+	ClearSpinnerLine()
+	fmt.Println(msg)
+	ShowSpinnerFrame()
+	UnlockTerminal()
+}
+
 // ShowSpinnerFrame draws the current spinner frame. Must be called while
 // holding termMu (via LockTerminal), after the log line has been written.
 func ShowSpinnerFrame() {
