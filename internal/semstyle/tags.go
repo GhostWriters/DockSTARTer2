@@ -28,7 +28,14 @@ func (st *Styler) rebuildRegexes() {
 
 	// Allow either a named tag (optionally with modifiers) or bare modifiers with no name (e.g. {{|:red:black:B|}})
 	st.semanticRegex = regexp.MustCompile(semEscPre + `(?P<content>[A-Za-z0-9_]+(?::[A-Za-z0-9_:\-#;~]*)?|:[A-Za-z0-9_:\-#;~]+)` + semEscSuf)
-	st.directRegex = regexp.MustCompile(dirEscPre + `(?P<content>[A-Za-z0-9_:\-#;~]+)` + dirEscSuf)
+	// content = up to three colon-separated fields (fg:bg:flags), no spaces.
+	// An optional fourth field ":label" follows; label may contain spaces but not the closing delimiter char.
+	field := `[A-Za-z0-9_\-#;~]*`
+	closingChar := regexp.QuoteMeta(string(st.dirSuf[0]))
+	st.directRegex = regexp.MustCompile(dirEscPre +
+		`(?P<content>` + field + `(?::` + field + `(?::` + field + `)?)?)` +
+		`(?::(?P<label>[^` + closingChar + `]*))?` +
+		dirEscSuf)
 }
 
 // GetDelimitedRegex returns a regex matching both semantic and direct tags for this Styler.
@@ -220,6 +227,7 @@ func (st *Styler) ToANSI(s string, prefix ...string) string {
 		return st.ToPlain(s)
 	}
 	s = st.processHyperlinks(s)
+	s = st.processInlineHyperlinks(s)
 	s = st.ToTags(s, prefix...)
 	return st.processDirectTags(s)
 }
@@ -232,16 +240,86 @@ func (st *Styler) ToPlain(s string) string {
 	return StripANSI(s)
 }
 
-// processDirectTags converts direct tags {{[code]}} to ANSI sequences.
+// processInlineHyperlinks handles direct tags with an explicit display-text (label) field:
+//
+//	{{[fg:bg:flags:Display Text]}}https://url{{[-]}}
+//
+// The label is used as the visible link text; the enclosed content (up to the next reset
+// tag) is the hyperlink URL. If the label is empty, the enclosed content is used as both.
+// Tags without a label field are left untouched for processDirectTags.
+func (st *Styler) processInlineHyperlinks(text string) string {
+	re := st.directRegex
+	contentIdx := re.SubexpIndex("content")
+	labelIdx := re.SubexpIndex("label")
+	if contentIdx < 0 || labelIdx < 0 {
+		return text
+	}
+
+	resetPat := regexp.MustCompile(
+		regexp.QuoteMeta(st.dirPre) + `(?:-|` + regexp.QuoteMeta(CodeReset) + `)` + regexp.QuoteMeta(st.dirSuf) + `|` +
+			regexp.QuoteMeta(st.semPre) + `(?:-|reset)` + regexp.QuoteMeta(st.semSuf),
+	)
+
+	var out strings.Builder
+	consumed := 0
+
+	for {
+		loc := re.FindStringSubmatchIndex(text[consumed:])
+		if loc == nil {
+			break
+		}
+
+		// loc indices are relative to text[consumed:]; adjust to full string.
+		tagStart := consumed + loc[0]
+		tagEnd := consumed + loc[1]
+
+		// Skip tags with no label group — leave them for processDirectTags.
+		if loc[labelIdx*2] < 0 {
+			out.WriteString(text[consumed:tagEnd])
+			consumed = tagEnd
+			continue
+		}
+
+		label := text[consumed+loc[labelIdx*2] : consumed+loc[labelIdx*2+1]]
+		styleCode := text[consumed+loc[contentIdx*2] : consumed+loc[contentIdx*2+1]]
+
+		resetLoc := resetPat.FindStringIndex(text[tagEnd:])
+		if resetLoc == nil {
+			out.WriteString(text[consumed:tagEnd])
+			consumed = tagEnd
+			continue
+		}
+
+		url := text[tagEnd : tagEnd+resetLoc[0]]
+		if label == "" {
+			label = st.ToPlain(url)
+		}
+
+		styleANSI := st.parseStyleCodeToANSI(styleCode)
+		hyperlink := fmt.Sprintf("\x1b]8;;%s\x1b\\%s%s%s\x1b]8;;\x1b\\", url, styleANSI, label, CodeReset)
+
+		// Write everything before this tag, then the hyperlink.
+		out.WriteString(text[consumed:tagStart])
+		out.WriteString(hyperlink)
+		consumed = tagEnd + resetLoc[1]
+	}
+
+	out.WriteString(text[consumed:])
+	return out.String()
+}
+
+// processDirectTags converts remaining direct tags {{[code]}} to ANSI sequences.
+// Inline hyperlink tags (those with a label field) are handled before this by
+// processInlineHyperlinks and are not present in the text when this runs.
 func (st *Styler) processDirectTags(text string) string {
 	re := st.directRegex
+	contentIdx := re.SubexpIndex("content")
 	return re.ReplaceAllStringFunc(text, func(match string) string {
-		groupIndex := re.SubexpIndex("content")
 		subMatch := re.FindStringSubmatch(match)
-		if len(subMatch) <= groupIndex {
+		if len(subMatch) <= contentIdx {
 			return ""
 		}
-		return st.parseStyleCodeToANSI(subMatch[groupIndex])
+		return st.parseStyleCodeToANSI(subMatch[contentIdx])
 	})
 }
 

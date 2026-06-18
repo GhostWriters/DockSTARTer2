@@ -1,6 +1,7 @@
 package semstyle
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/charmbracelet/colorprofile"
@@ -278,3 +279,36 @@ func TestSemanticVsDirectDistinction(t *testing.T) {
 		})
 	}
 }
+
+func TestInlineHyperlinks(t *testing.T) {
+	SetPreferredProfile(colorprofile.TrueColor)
+	st := New()
+
+	// With explicit label
+	result := st.ToANSI(`{{[magenta:black:B:DockSTARTer Website]}}https://dockstarter.com{{[-]}}`)
+	if !strings.Contains(result, "\x1b]8;;https://dockstarter.com\x1b\\") {
+		t.Errorf("expected OSC8 hyperlink open, got: %q", result)
+	}
+	if !strings.Contains(result, "DockSTARTer Website") {
+		t.Errorf("expected label text in output, got: %q", result)
+	}
+	if !strings.Contains(result, "\x1b]8;;\x1b\\") {
+		t.Errorf("expected OSC8 hyperlink close, got: %q", result)
+	}
+
+	// With empty label — URL used as both link and display text
+	result2 := st.ToANSI(`{{[cyan::U:]}}https://dockstarter.com{{[-]}}`)
+	if !strings.Contains(result2, "https://dockstarter.com") {
+		t.Errorf("expected URL as label when label empty, got: %q", result2)
+	}
+	if !strings.Contains(result2, "\x1b]8;;https://dockstarter.com\x1b\\") {
+		t.Errorf("expected OSC8 hyperlink, got: %q", result2)
+	}
+
+	// Non-hyperlink tag (no label field) must still render normally
+	result3 := st.ToANSI(`{{[red::B]}}hello{{[-]}}`)
+	if strings.Contains(result3, "\x1b]8;") {
+		t.Errorf("plain tag should not produce hyperlink, got: %q", result3)
+	}
+}
+
