@@ -88,7 +88,6 @@ func RenderThemeTextCtx(text string, ctx StyleContext) string {
 	}
 
 	resetStyle := ctx.Dialog
-	// Create a cache key from the text, the style, and the prefix
 	cacheKey := "theme|" + text + "|" + resetStyle.String() + "|" + ctx.Prefix
 
 	cacheMu.RLock()
@@ -98,20 +97,7 @@ func RenderThemeTextCtx(text string, ctx StyleContext) string {
 	}
 	cacheMu.RUnlock()
 
-	// Ensure the starting text has the correct background/foreground/attributes
-	getCodes := func(s lipgloss.Style) string {
-		rendered := s.Render("_")
-		return strings.Split(rendered, "_")[0]
-	}
-
-	// Resolve tags to ANSI using the context's prefix and the isolated theme map
-	rendered := semstyle.ToANSI(text, ctx.Prefix)
-
-	// Combine components and ensure reset at end
-	result := getCodes(resetStyle) + rendered + semstyle.CodeReset
-
-	// Prevent embedded resets from clearing container background or attributes
-	final := MaintainBackground(result, resetStyle)
+	final := semstyle.ToANSIOnBackground(text, resetStyle, ctx.Prefix)
 
 	cacheMu.Lock()
 	renderCache[cacheKey] = final
@@ -137,20 +123,7 @@ func RenderConsoleTextCtx(text string, ctx StyleContext) string {
 	}
 	cacheMu.RUnlock()
 
-	// Ensure the starting text has the correct background/foreground/attributes
-	getCodes := func(s lipgloss.Style) string {
-		rendered := s.Render("_")
-		return strings.Split(rendered, "_")[0]
-	}
-
-	// Resolve tags to ANSI using MUST use the console registry
-	rendered := semstyle.ToANSI(text)
-
-	// Combine components and ensure reset at end
-	result := getCodes(resetStyle) + rendered + semstyle.CodeReset
-
-	// Prevent embedded resets from clearing container background or attributes
-	final := MaintainBackground(result, resetStyle)
+	final := semstyle.ToANSIOnBackground(text, resetStyle)
 
 	cacheMu.Lock()
 	renderCache[cacheKey] = final
