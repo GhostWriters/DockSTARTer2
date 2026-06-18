@@ -9,7 +9,7 @@ import (
 // PrintHelp prints usage information to stdout.
 // Used by the standalone CLI.
 func PrintHelp(target string) {
-	fmt.Println(console.ToConsoleANSI(commands.GetUsage(target, false)))
+	fmt.Println(console.ToANSI(commands.GetUsage(target, false)))
 }
 
 // GetUsage returns usage information as a string.

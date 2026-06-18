@@ -38,7 +38,6 @@ func (st *Styler) GetDelimitedRegex() *regexp.Regexp {
 	dirEscPre := regexp.QuoteMeta(st.dirPre)
 	dirEscSuf := regexp.QuoteMeta(st.dirSuf)
 
-	// Group 1: Semantic, Group 2: Direct
 	pattern := fmt.Sprintf(`(?:%s(?P<semantic>[A-Za-z0-9_]+(?::[A-Za-z0-9_:\-#;~]*)?)%s|%s(?P<direct>[A-Za-z0-9_:\-#;~]+)%s)`,
 		semEscPre, semEscSuf, dirEscPre, dirEscSuf)
 	return regexp.MustCompile(pattern)
@@ -49,8 +48,9 @@ func (st *Styler) GetDirectRegex() *regexp.Regexp {
 	return st.directRegex
 }
 
-// StripSemanticTags removes all semantic and direct tags from s, returning plain text.
-func (st *Styler) StripSemanticTags(s string) string {
+// StripTags removes all semantic and direct tags from s, leaving plain text and any
+// existing ANSI sequences untouched.
+func (st *Styler) StripTags(s string) string {
 	s = st.semanticRegex.ReplaceAllString(s, "")
 	s = st.directRegex.ReplaceAllString(s, "")
 	return s
@@ -76,24 +76,27 @@ func SetDelimiters(semPre, semSuf, dirPre, dirSuf string) {
 // Package-level delimiter helpers delegate to Default.
 func GetDelimitedRegex() *regexp.Regexp { return Default.GetDelimitedRegex() }
 func GetDirectRegex() *regexp.Regexp    { return Default.GetDirectRegex() }
-func StripSemanticTags(s string) string { return Default.StripSemanticTags(s) }
+func StripTags(s string) string         { return Default.StripTags(s) }
 func WrapSemantic(name string) string   { return Default.WrapSemantic(name) }
 func WrapDirect(code string) string     { return Default.WrapDirect(code) }
 
-// ExpandConsoleTags converts semantic tags to standardized direct format using only the console map.
-func (st *Styler) ExpandConsoleTags(text string) string {
-	return st.ExpandTagsWithMap(text, st.consoleMap, true, "")
+// ToTags resolves semantic tags to direct tags using the console map (no prefix), or the
+// theme map when a prefix is provided. Stops short of ANSI conversion — useful when the
+// output will be passed to a compositor or TUI renderer that understands direct tags.
+//
+// ToTags(s)         — console map, no prefix
+// ToTags(s, "")     — theme map, no prefix (theme-first with console fallback)
+// ToTags(s, "pfx")  — theme map, prefix-qualified lookup
+func (st *Styler) ToTags(s string, prefix ...string) string {
+	if len(prefix) == 0 {
+		return st.ExpandTagsWithMap(s, st.consoleMap, true, "")
+	}
+	return st.ExpandTagsWithMap(s, st.themeMap, true, prefix[0])
 }
 
-// ExpandThemeTags converts semantic tags to standardized direct format using only the theme map.
-func (st *Styler) ExpandThemeTags(text string, prefix string) string {
-	return st.ExpandTagsWithMap(text, st.themeMap, true, prefix)
-}
-
-// ExpandTagsWithMap is the base routine for expanding semantic tags.
-// If styleMap is nil, it uses themeMap with fallback to consoleMap (Legacy behavior).
-// Expansion is repeated until stable (up to 8 passes) so that tag values which
-// themselves reference other semantic tags resolve correctly.
+// ExpandTagsWithMap is the base tag-expansion routine. If styleMap is nil it uses the
+// theme map with console fallback. Expansion repeats up to 8 passes so tag values that
+// themselves reference other tags resolve correctly.
 func (st *Styler) ExpandTagsWithMap(text string, styleMap map[string]string, stripUnresolvable bool, prefix string) string {
 	st.ensureMaps()
 	prefix = strings.ToLower(prefix)
@@ -110,7 +113,6 @@ func (st *Styler) ExpandTagsWithMap(text string, styleMap map[string]string, str
 			}
 			fullContent := subMatch[groupIndex]
 
-			// Split semantic name from optional inline modifiers (e.g. "Title:::R")
 			semanticName := fullContent
 			modifiers := ""
 			if idx := strings.IndexByte(fullContent, ':'); idx >= 0 {
@@ -123,28 +125,19 @@ func (st *Styler) ExpandTagsWithMap(text string, styleMap map[string]string, str
 			var ok bool
 
 			if styleMap != nil {
-				// Specific map requested (No fallback)
-				// 1. Try with prefix if provided
 				if prefix != "" {
-					prefixed := prefix + content
-					rawCode, ok = styleMap[prefixed]
+					rawCode, ok = styleMap[prefix+content]
 				}
-				// 2. Try raw name if prefix failed or wasn't provided
 				if !ok {
 					rawCode, ok = styleMap[content]
 				}
 			} else {
-				// Legacy behavior: Theme preferred, then Console
-				// 1. Try with prefix in Theme
 				if prefix != "" {
-					prefixed := prefix + content
-					rawCode, ok = st.themeMap[prefixed]
+					rawCode, ok = st.themeMap[prefix+content]
 				}
-				// 2. Try raw in Theme
 				if !ok {
 					rawCode, ok = st.themeMap[content]
 				}
-				// 3. Try fallback to Console (No prefix for Console colors)
 				if !ok {
 					rawCode, ok = st.consoleMap[content]
 				}
@@ -158,8 +151,6 @@ func (st *Styler) ExpandTagsWithMap(text string, styleMap map[string]string, str
 				return result
 			}
 
-			// Name didn't resolve (or was empty) — if modifiers are present, emit them as a
-			// direct tag so {{|:fg:bg:flags|}} and {{|Unknown:fg:bg:flags|}} still apply styling.
 			if modifiers != "" {
 				return st.WrapDirect(modifiers)
 			}
@@ -170,8 +161,6 @@ func (st *Styler) ExpandTagsWithMap(text string, styleMap map[string]string, str
 		})
 	}
 
-	// First passes without stripping so unresolved tags can resolve in later passes.
-	// Final pass applies stripUnresolvable.
 	const maxPasses = 8
 	for range maxPasses - 1 {
 		expanded := expandOnce(text, false)
@@ -183,9 +172,8 @@ func (st *Styler) ExpandTagsWithMap(text string, styleMap map[string]string, str
 	return expandOnce(text, stripUnresolvable)
 }
 
-// processHyperlinks wraps the content of any registered hyperlink tag (see
-// RegisterHyperlinkTag) — from the tag up to the next reset — in a terminal hyperlink, using
-// the content's plain text as the destination. No-op when no hyperlink tags are registered.
+// processHyperlinks wraps the content of any registered hyperlink tag in a terminal
+// hyperlink, using the content's plain text as the destination.
 func (st *Styler) processHyperlinks(text string) string {
 	st.mu.RLock()
 	n := len(st.hyperlinkTags)
@@ -203,8 +191,6 @@ func (st *Styler) processHyperlinks(text string) string {
 	dirEscPre := regexp.QuoteMeta(st.dirPre)
 	dirEscSuf := regexp.QuoteMeta(st.dirSuf)
 
-	// Start marker: any registered hyperlink tag (case-insensitive).
-	// End marker: a reset, either direct ({{[-]}}) or semantic ({{|reset|}} / {{|-|}}).
 	tagAlt := strings.Join(names, "|")
 	pattern := fmt.Sprintf(`((?i)%s(?:%s)%s)(.*?)(%s-%s|%sreset%s|%s-%s)`,
 		semEscPre, tagAlt, semEscSuf,
@@ -219,55 +205,42 @@ func (st *Styler) processHyperlinks(text string) string {
 		if len(subMatch) < 4 {
 			return match
 		}
-		// Group 2 is the content between the start tag and the terminator. The link
-		// destination is that content with all tags stripped.
-		urlDestination := st.Strip(subMatch[2])
+		urlDestination := st.ToPlain(subMatch[2])
 		linkStyle := lipgloss.NewStyle().Hyperlink(urlDestination)
 		return linkStyle.Render(match)
 	})
 }
 
-// RenderPolicy, when set, is consulted by ToConsoleANSI: if it returns false the text
-// is stripped (no ANSI) instead of rendered. The host app sets this to encode its
-// TTY/TUI policy; when nil the engine always renders. Keeps the engine free of TTY state.
+// RenderPolicy, when set, is consulted by ToANSI: if it returns false the text is
+// stripped instead of rendered. The host app sets this to encode its TTY/TUI policy;
+// when nil the engine always renders.
 var RenderPolicy func() bool
 
-// ToConsoleANSI converts semantic and direct tags to ANSI escape sequences using only console colors.
-func (st *Styler) ToConsoleANSI(text string) string {
+// ToANSI converts semantic and direct tags to ANSI escape sequences.
+//
+// ToANSI(s)         — resolves using the console map
+// ToANSI(s, "")     — resolves using the theme map (theme-first, console fallback), no prefix
+// ToANSI(s, "pfx")  — resolves using the theme map with a prefix qualifier
+func (st *Styler) ToANSI(s string, prefix ...string) string {
 	if RenderPolicy != nil && !RenderPolicy() {
-		return st.Strip(text)
+		return st.ToPlain(s)
 	}
-
-	// 0. Process Hyperlinks
-	text = st.processHyperlinks(text)
-
-	// 1. Expand only console tags
-	text = st.ExpandConsoleTags(text)
-
-	// 2. Process all direct tags -> ANSI
-	return st.processDirectTags(text)
+	s = st.processHyperlinks(s)
+	s = st.ToTags(s, prefix...)
+	return st.processDirectTags(s)
 }
 
-// ToThemeANSI converts semantic and direct tags to ANSI escape sequences using only theme colors.
-func (st *Styler) ToThemeANSI(text string) string {
-	return st.ToThemeANSIWithPrefix(text, "")
+// ToPlain removes all semantic tags, direct tags, and ANSI escape sequences, returning
+// plain undecorated text.
+func (st *Styler) ToPlain(s string) string {
+	s = st.semanticRegex.ReplaceAllString(s, "")
+	s = st.directRegex.ReplaceAllString(s, "")
+	return StripANSI(s)
 }
 
-// ToThemeANSIWithPrefix converts semantic and direct tags to ANSI escape sequences using only theme colors with a prefix.
-func (st *Styler) ToThemeANSIWithPrefix(text string, prefix string) string {
-	// 0. Process Hyperlinks
-	text = st.processHyperlinks(text)
-
-	// 1. Expand theme tags
-	text = st.ExpandThemeTags(text, prefix)
-
-	// 2. Process all direct tags -> ANSI
-	return st.processDirectTags(text)
-}
-
-// processDirectTags is a helper to convert direct tags {{[code]}} to ANSI sequences.
+// processDirectTags converts direct tags {{[code]}} to ANSI sequences.
 func (st *Styler) processDirectTags(text string) string {
-	re := GetDirectRegex()
+	re := st.directRegex
 	return re.ReplaceAllStringFunc(text, func(match string) string {
 		groupIndex := re.SubexpIndex("content")
 		subMatch := re.FindStringSubmatch(match)
@@ -278,61 +251,26 @@ func (st *Styler) processDirectTags(text string) string {
 	})
 }
 
-// Strip removes all semantic and direct tags from text, as well as ANSI escape sequences
-func (st *Styler) Strip(text string) string {
-	text = st.semanticRegex.ReplaceAllString(text, "")
-	text = st.directRegex.ReplaceAllString(text, "")
-	return StripANSI(text)
-}
-
-// ForTUI prepares text for display with standardized theme tags
-func (st *Styler) ForTUI(text string) string {
-	return st.ExpandThemeTags(text, "")
-}
-
-// Sprintf formats according to a format specifier and returns the string with Console ANSI codes
+// Sprintf formats according to a format specifier and returns the result with ANSI codes
+// applied via the console map.
 func (st *Styler) Sprintf(format string, a ...any) string {
-	msg := fmt.Sprintf(format, a...)
-	return st.ToConsoleANSI(msg)
+	return st.ToANSI(fmt.Sprintf(format, a...))
+}
+
+// ForTUI prepares text for display with theme tags expanded to direct tags.
+func (st *Styler) ForTUI(text string) string {
+	return st.ToTags(text, "")
 }
 
 // --- package-level delegators to Default ---
-func ExpandConsoleTags(text string) string {
-	return Default.ExpandConsoleTags(text)
-}
 
-func ExpandThemeTags(text string, prefix string) string {
-	return Default.ExpandThemeTags(text, prefix)
-}
-
+func ToANSI(s string, prefix ...string) string        { return Default.ToANSI(s, prefix...) }
+func ToTags(s string, prefix ...string) string        { return Default.ToTags(s, prefix...) }
+func ToPlain(s string) string                         { return Default.ToPlain(s) }
+func StripSemanticTags(s string) string               { return Default.StripTags(s) }
 func ExpandTagsWithMap(text string, styleMap map[string]string, stripUnresolvable bool, prefix string) string {
 	return Default.ExpandTagsWithMap(text, styleMap, stripUnresolvable, prefix)
 }
-
-func ToConsoleANSI(text string) string {
-	return Default.ToConsoleANSI(text)
-}
-
-func ToThemeANSI(text string) string {
-	return Default.ToThemeANSI(text)
-}
-
-func ToThemeANSIWithPrefix(text string, prefix string) string {
-	return Default.ToThemeANSIWithPrefix(text, prefix)
-}
-
-func processDirectTags(text string) string {
-	return Default.processDirectTags(text)
-}
-
-func Strip(text string) string {
-	return Default.Strip(text)
-}
-
-func ForTUI(text string) string {
-	return Default.ForTUI(text)
-}
-
-func Sprintf(format string, a ...any) string {
-	return Default.Sprintf(format, a...)
-}
+func processDirectTags(text string) string { return Default.processDirectTags(text) }
+func ForTUI(text string) string            { return Default.ForTUI(text) }
+func Sprintf(format string, a ...any) string { return Default.Sprintf(format, a...) }

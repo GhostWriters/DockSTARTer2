@@ -11,9 +11,7 @@ import (
 	"DockSTARTer2/internal/semstyle"
 )
 
-// --- Tag delimiter values (set once at init; read-only consumers) ---
-// The engine owns the authoritative values; SetDelimiters updates them there. These are
-// convenience re-exports for the common read-only case.
+// --- Tag delimiter values ---
 var (
 	SemanticPrefix = semstyle.SemanticPrefix
 	SemanticSuffix = semstyle.SemanticSuffix
@@ -21,36 +19,45 @@ var (
 	DirectSuffix   = semstyle.DirectSuffix
 )
 
-// --- Functions ---
+// --- Core rendering ---
 var (
-	ToConsoleANSI         = semstyle.ToConsoleANSI
-	ToThemeANSI           = semstyle.ToThemeANSI
-	ToThemeANSIWithPrefix = semstyle.ToThemeANSIWithPrefix
-	ForTUI                = semstyle.ForTUI
-	Sprintf               = semstyle.Sprintf
-	Strip                 = semstyle.Strip
-	StripANSI             = semstyle.StripANSI
-	StripDelimiters       = semstyle.StripDelimiters
-	StripSemanticTags     = semstyle.StripSemanticTags
-	ExpandConsoleTags     = semstyle.ExpandConsoleTags
-	ExpandThemeTags       = semstyle.ExpandThemeTags
-	ExpandSemanticTags    = semstyle.ExpandSemanticTags
-	ExpandTagsWithMap     = semstyle.ExpandTagsWithMap
-	WrapDirect            = semstyle.WrapDirect
-	WrapSemantic          = semstyle.WrapSemantic
-	SetDelimiters         = semstyle.SetDelimiters
-	GetDelimitedRegex     = semstyle.GetDelimitedRegex
-	GetDirectRegex        = semstyle.GetDirectRegex
+	ToANSI  = semstyle.ToANSI
+	ToTags  = semstyle.ToTags
+	ToPlain = semstyle.ToPlain
+	Sprintf = semstyle.Sprintf
+)
 
-	ParseColor         = semstyle.ParseColor
-	GetColorStr        = semstyle.GetColorStr
-	GetHexForColor     = semstyle.GetHexForColor
-	ResolveTcellColor  = semstyle.ResolveTcellColor
+// --- Color conversion ---
+var (
+	ToColor      = semstyle.ToColor
+	ToColorStr   = semstyle.ToColorStr
+	GetHexForColor    = semstyle.GetHexForColor
+	ResolveTcellColor = semstyle.ResolveTcellColor
+)
+
+// --- Tag stripping ---
+var (
+	StripTags  = semstyle.StripTags
+	StripANSI  = semstyle.StripANSI
+)
+
+// --- Tag utilities ---
+var (
+	StripDelimiters    = semstyle.StripDelimiters
+	SetDelimiters      = semstyle.SetDelimiters
+	GetDelimitedRegex  = semstyle.GetDelimitedRegex
+	GetDirectRegex     = semstyle.GetDirectRegex
+	WrapDirect         = semstyle.WrapDirect
+	WrapSemantic       = semstyle.WrapSemantic
+	ExpandTagsWithMap  = semstyle.ExpandTagsWithMap
 	GetColorDefinition = semstyle.GetColorDefinition
 	GetRawTagCode      = semstyle.GetRawTagCode
+)
 
-	BuildColorMap        = semstyle.BuildColorMap
-	RegisterHyperlinkTag = semstyle.RegisterHyperlinkTag
+// --- Tag registration ---
+var (
+	BuildColorMap          = semstyle.BuildColorMap
+	RegisterHyperlinkTag   = semstyle.RegisterHyperlinkTag
 	RegisterColor          = semstyle.RegisterColor
 	UnregisterColor        = semstyle.UnregisterColor
 	UnregisterPrefix       = semstyle.UnregisterPrefix
@@ -62,12 +69,9 @@ var (
 	RegisterSemanticTag    = semstyle.RegisterSemanticTag
 	RegisterSemanticTagRaw = semstyle.RegisterSemanticTagRaw
 	ClearThemeMap          = semstyle.ClearThemeMap
-	Translate              = semstyle.Translate
-	TranslateToTagged      = semstyle.TranslateToTagged
-	ToCviewTag             = semstyle.ToCviewTag
 )
 
-// --- Constants (ANSI codes + delimiters) ---
+// --- Constants (ANSI codes) ---
 const (
 	CodeReset            = semstyle.CodeReset
 	CodeHardReset        = semstyle.CodeHardReset

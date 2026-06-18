@@ -258,7 +258,7 @@ func writeFatalLog(msg any, args ...any) {
 	lines := strings.Split(msgStr, "\n")
 	for _, line := range lines {
 		// Strip semantic style tags and ANSI codes from the fatal log file.
-		fmt.Fprintln(f, console.Strip(line))
+		fmt.Fprintln(f, console.ToPlain(line))
 	}
 }
 

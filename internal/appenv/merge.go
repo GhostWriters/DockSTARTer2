@@ -67,7 +67,7 @@ func MergeNewOnly(ctx context.Context, targetFile, sourceFile string) ([]string,
 						newLines = append(newLines, "### "+niceName)
 						newLines = append(newLines, "###")
 						if desc != "" && !strings.Contains(desc, "Missing description") {
-							newLines = append(newLines, "### "+console.StripSemanticTags(desc))
+							newLines = append(newLines, "### "+console.StripTags(desc))
 							newLines = append(newLines, "###")
 						}
 						currentApp = appName

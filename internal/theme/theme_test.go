@@ -29,7 +29,7 @@ func TestGetColorStr(t *testing.T) {
 	var cases []testutils.TestCase
 
 	for _, tt := range tests {
-		actual := console.GetColorStr(tt.input)
+		actual := console.ToColorStr(tt.input)
 		pass := actual == tt.expected
 		cases = append(cases, testutils.TestCase{
 			Input:    fmt.Sprintf("%v", tt.input),

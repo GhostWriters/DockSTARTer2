@@ -121,7 +121,7 @@ func TestResolveThemeValue(t *testing.T) {
 
 			// Since resolveThemeValue returns a tag string (e.g. {{[red:blue:B]}}),
 			// we must expand it to ANSI to compare with expected ANSI values.
-			gotExpanded := console.ToConsoleANSI(console.WrapDirect(got))
+			gotExpanded := console.ToANSI(console.WrapDirect(got))
 
 			if !strings.Contains(gotExpanded, tt.expected) {
 				t.Errorf("resolveThemeValue() ANSI = %q, want %q (raw: %v)", gotExpanded, tt.expected, got)

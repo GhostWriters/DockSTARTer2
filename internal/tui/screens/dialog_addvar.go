@@ -615,7 +615,7 @@ func (m *addVarDialogModel) recalc() {
 		AppDescription: m.appDesc,
 	}, contentW)
 	headingStyle := ctx.Dialog.Padding(1, 2).Width(contentW).Border(lipgloss.Border{})
-	headingH := lipgloss.Height(headingStyle.Render(theme.ToThemeANSI(headingRaw)))
+	headingH := lipgloss.Height(headingStyle.Render(theme.ToANSI(headingRaw)))
 
 	// "Variable Name" section height (Bordered box with title and labeled bottom border)
 	// Top border(1) + InputRow(1) + Bottom border(1) = 3
@@ -743,7 +743,7 @@ func (m *addVarDialogModel) ViewString() string {
 		AppDescription: m.appDesc,
 	}, contentW)
 	headingText := strings.TrimRight(
-		ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToThemeANSI(headingRaw)), "\n")
+		ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToANSI(headingRaw)), "\n")
 
 	// "Variable Name" section — titled bordered box, thick border when focused
 	inputFocused := m.focus == addVarFocusInput
@@ -915,7 +915,7 @@ func (m *addVarDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegion 
 	}
 
 	headingRaw := FormatMenuHeading(MenuHeadingParams{AppName: m.appName, AppDescription: m.appDesc}, contentW)
-	headingH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToThemeANSI(headingRaw)))
+	headingH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToANSI(headingRaw)))
 	// list starts at: outer border(1) + largeTitleOverhead + headingH + "Variable Name" section(3)
 	listTop := 1 + largeTitleOverhead + headingH + 3
 

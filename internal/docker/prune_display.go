@@ -97,7 +97,7 @@ func LogPruneReport(ctx context.Context, r PruneReport, imageServices map[string
 	}
 	const pfx = "{{|RunningCommand|}}docker:{{[-]}} "
 	for _, line := range lines {
-		logger.Notice(logCtx, pfx+"%s", console.Strip(line))
+		logger.Notice(logCtx, pfx+"%s", console.ToPlain(line))
 	}
 	for _, e := range errs {
 		logger.Error(logCtx, "%s", e)
@@ -111,12 +111,12 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 		doneIcon = "{{|DockerMarkerDone|}}+{{[-]}}"
 		errorIcon = "{{|DockerMarkerError|}}x{{[-]}}"
 	}
-	doneIconANSI := console.ToConsoleANSI(doneIcon)
-	errorIconANSI := console.ToConsoleANSI(errorIcon)
+	doneIconANSI := console.ToANSI(doneIcon)
+	errorIconANSI := console.ToANSI(errorIcon)
 
-	untaggedStatus := console.ToConsoleANSI("{{|DockerStatusFinal|}}Untagged{{[-]}}")
-	removedStatus := console.ToConsoleANSI("{{|DockerStatusFinal|}}Removed{{[-]}}")
-	errorStatus := console.ToConsoleANSI("{{|DockerStatusFail|}}Error{{[-]}}")
+	untaggedStatus := console.ToANSI("{{|DockerStatusFinal|}}Untagged{{[-]}}")
+	removedStatus := console.ToANSI("{{|DockerStatusFinal|}}Removed{{[-]}}")
+	errorStatus := console.ToANSI("{{|DockerStatusFail|}}Error{{[-]}}")
 	untaggedPad := strutil.Repeat(" ", SectionStatusW-len("Untagged"))
 	removedPad := strutil.Repeat(" ", SectionStatusW-len("Removed"))
 	errorPad := strutil.Repeat(" ", SectionStatusW-len("Error"))
@@ -134,25 +134,25 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 	sectionHeader := func(label string, hasErr bool) string {
 		if hasErr {
 			return GlobalIndent + errorIconANSI + " " + errorStatus + console.CodeReset + errorPad +
-				console.ToConsoleANSI("{{[white::B]}}"+label+"{{[-]}}{{|DockerColon|}}:{{[-]}}")
+				console.ToANSI("{{[white::B]}}"+label+"{{[-]}}{{|DockerColon|}}:{{[-]}}")
 		}
 		return GlobalIndent + doneIconANSI + " " + removedStatus + console.CodeReset + removedPad +
-			console.ToConsoleANSI("{{[white::B]}}"+label+"{{[-]}}{{|DockerColon|}}:{{[-]}}")
+			console.ToANSI("{{[white::B]}}"+label+"{{[-]}}{{|DockerColon|}}:{{[-]}}")
 	}
 	childRow := func(name, colorTag string, s entryStatus) string {
 		icon, status, pad := iconStatus(s)
 		return GlobalIndent + icon + " " + status + console.CodeReset + pad +
-			SectionChildIndent + console.ToConsoleANSI(colorTag+name+"{{[-]}}{{|DockerColon|}}:{{[-]}}")
+			SectionChildIndent + console.ToANSI(colorTag+name+"{{[-]}}{{|DockerColon|}}:{{[-]}}")
 	}
-	deletedStatus := console.ToConsoleANSI("{{|DockerStatusFinal|}}Deleted{{[-]}}")
+	deletedStatus := console.ToANSI("{{|DockerStatusFinal|}}Deleted{{[-]}}")
 	deletedPad := strutil.Repeat(" ", SectionStatusW-len("Deleted"))
 	// containerNameRow renders a "container_name: <name>" sub-line under a service,
 	// parallel to the image: line, with Deleted status.
 	containerNameRow := func(name string) string {
 		label := strutil.Repeat(" ", 2*SectionChildIndentW) +
-			console.ToConsoleANSI("{{|DockerMarkerDone|}}container_name{{[-]}}{{|DockerColon|}}:{{[-]}} ")
+			console.ToANSI("{{|DockerMarkerDone|}}container_name{{[-]}}{{|DockerColon|}}:{{[-]}} ")
 		return GlobalIndent + doneIconANSI + " " + deletedStatus + console.CodeReset + deletedPad +
-			label + console.ToConsoleANSI("{{|App|}}"+name+"{{[-]}}")
+			label + console.ToANSI("{{|App|}}"+name+"{{[-]}}")
 	}
 
 	// ── build image groups ───────────────────────────────────────────────────
@@ -228,7 +228,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 		if anyErr {
 			marker = errorIconANSI
 		}
-		header := console.ToConsoleANSI(fmt.Sprintf("{{[yellow::B]}}prune{{[-]}}{{|DockerColon|}}:{{[-]}} %s", strings.Join(headerParts, ", ")))
+		header := console.ToANSI(fmt.Sprintf("{{[yellow::B]}}prune{{[-]}}{{|DockerColon|}}:{{[-]}} %s", strings.Join(headerParts, ", ")))
 		add(GlobalIndent + marker + " " + header)
 	}
 	// All lines after the header nest under it (indent by icon + space), matching compose.
@@ -267,14 +267,14 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 	// ── images / services section ─────────────────────────────────────────────
 	if len(groups) > 0 {
 		imageLabel := strutil.Repeat(" ", 2*SectionChildIndentW) +
-			console.ToConsoleANSI("{{|DockerMarkerDone|}}image{{[-]}}{{|DockerColon|}}:{{[-]}} ")
+			console.ToANSI("{{|DockerMarkerDone|}}image{{[-]}}{{|DockerColon|}}:{{[-]}} ")
 
 		layerIconIndent := strutil.Repeat(" ", pruneLayerPrefixW)
 
 		layerDeletedPad := strutil.Repeat(" ", pruneLayerStatusW-len("Deleted"))
 		layerFailedPad  := strutil.Repeat(" ", pruneLayerStatusW-len("Failed"))
-		layerDeletedANSI := console.ToConsoleANSI("{{|DockerStatusFinal|}}Deleted{{[-]}}") + layerDeletedPad
-		layerFailedANSI  := console.ToConsoleANSI("{{|DockerStatusFail|}}Failed{{[-]}}") + layerFailedPad
+		layerDeletedANSI := console.ToANSI("{{|DockerStatusFinal|}}Deleted{{[-]}}") + layerDeletedPad
+		layerFailedANSI  := console.ToANSI("{{|DockerStatusFail|}}Failed{{[-]}}") + layerFailedPad
 
 		renderImageGroup := func(g imageGroup) {
 			ref := g.ref
@@ -284,7 +284,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 			refANSI := StyleImageRef(ref)
 			// Match compose: append the layer count directly to the image URL ("ref [N]")
 			// rather than in a separate padded column. "[N]" uses DockerTag brackets, dim interior.
-			layerCount := console.ToConsoleANSI(fmt.Sprintf(" {{|DockerTag|}}[{{[-]}}{{[::D]}}%d{{[-]}}{{|DockerTag|}}]{{[-]}}", len(g.layers)))
+			layerCount := console.ToANSI(fmt.Sprintf(" {{|DockerTag|}}[{{[-]}}{{[::D]}}%d{{[-]}}{{|DockerTag|}}]{{[-]}}", len(g.layers)))
 
 			// Image ref row — Untagged or Error.
 			var imgIcon, imgStatus, imgPad string
@@ -311,7 +311,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 						lid = lid[:12]
 					}
 				add(layerIconIndent + console.CodeDim + lIcon + " " + lStatus + " " +
-						console.ToConsoleANSI("{{[::D]}}"+lid+"{{[-]}}") + console.CodeDimOff)
+						console.ToANSI("{{[::D]}}"+lid+"{{[-]}}") + console.CodeDimOff)
 				}
 			}
 		}
@@ -366,7 +366,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 
 	// ── summary ───────────────────────────────────────────────────────────────
 	if r.SpaceReclaimed > 0 {
-		add(console.ToConsoleANSI("{{[white::B]}}Total reclaimed space:{{[-]}} {{|DockerMarkerDone|}}" +
+		add(console.ToANSI("{{[white::B]}}Total reclaimed space:{{[-]}} {{|DockerMarkerDone|}}" +
 			units.HumanSize(float64(r.SpaceReclaimed)) + "{{[-]}}"))
 	}
 

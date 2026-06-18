@@ -179,7 +179,7 @@ func resolveThemeValue(raw string, rawValues map[string]string, visiting map[str
 			// engine's standard delimiters so ExpandConsoleTags can resolve it regardless
 			// of the file-specific delimiters in use.
 			standardTag := semstyle.SemanticPrefix + semanticRef + semstyle.SemanticSuffix
-			expanded := semstyle.ExpandConsoleTags(standardTag)
+			expanded := semstyle.ToTags(standardTag)
 			if expanded != standardTag && expanded != "" {
 				mergeStyle(expanded)
 			}

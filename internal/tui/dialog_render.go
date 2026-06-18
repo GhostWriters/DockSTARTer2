@@ -350,11 +350,11 @@ func RenderTitleSegmentCtx(rawTitle string, borderFocused bool, contentFocused b
 			} else {
 				ind = ">"
 			}
-			result.WriteString(borderStyleLight.Render(theme.ToThemeANSIWithPrefix("{{|TitleFocusIndicator|}}"+ind+"{{[-]}}", ctx.Prefix)))
+			result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleFocusIndicator|}}"+ind+"{{[-]}}", ctx.Prefix)))
 		} else if spinInd != "" {
-			result.WriteString(borderStyleLight.Render(theme.ToThemeANSIWithPrefix("{{|TitleUnfocusedIndicator|}}"+spinInd+"{{[-]}}", ctx.Prefix)))
+			result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleUnfocusedIndicator|}}"+spinInd+"{{[-]}}", ctx.Prefix)))
 		} else {
-			result.WriteString(borderStyleLight.Render(theme.ToThemeANSIWithPrefix("{{|TitleUnfocusedIndicator|}} {{[-]}}", ctx.Prefix)))
+			result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleUnfocusedIndicator|}} {{[-]}}", ctx.Prefix)))
 		}
 	}
 
@@ -370,11 +370,11 @@ func RenderTitleSegmentCtx(rawTitle string, borderFocused bool, contentFocused b
 			} else {
 				ind = "<"
 			}
-			result.WriteString(borderStyleLight.Render(theme.ToThemeANSIWithPrefix("{{|TitleFocusIndicator|}}"+ind+"{{[-]}}", ctx.Prefix)))
+			result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleFocusIndicator|}}"+ind+"{{[-]}}", ctx.Prefix)))
 		} else if spinIndR != "" {
-			result.WriteString(borderStyleLight.Render(theme.ToThemeANSIWithPrefix("{{|TitleUnfocusedIndicator|}}"+spinIndR+"{{[-]}}", ctx.Prefix)))
+			result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleUnfocusedIndicator|}}"+spinIndR+"{{[-]}}", ctx.Prefix)))
 		} else {
-			result.WriteString(borderStyleLight.Render(theme.ToThemeANSIWithPrefix("{{|TitleUnfocusedIndicator|}} {{[-]}}", ctx.Prefix)))
+			result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleUnfocusedIndicator|}} {{[-]}}", ctx.Prefix)))
 		}
 	}
 
@@ -766,9 +766,9 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 				} else {
 					ind = ">"
 				}
-				result.WriteString(borderStyleLight.Render(theme.ToThemeANSI("{{|TitleFocusIndicator|}}" + ind)))
+				result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleFocusIndicator|}}" + ind)))
 			} else if spinInd != "" {
-				result.WriteString(borderStyleLight.Render(theme.ToThemeANSI("{{|TitleUnfocusedIndicator|}}" + spinInd)))
+				result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleUnfocusedIndicator|}}" + spinInd)))
 			} else {
 				result.WriteString(borderStyleLight.Render(" "))
 			}
@@ -782,9 +782,9 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 				} else {
 					ind = "<"
 				}
-				result.WriteString(borderStyleLight.Render(theme.ToThemeANSI("{{|TitleFocusIndicator|}}" + ind)))
+				result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleFocusIndicator|}}" + ind)))
 			} else if spinIndR != "" {
-				result.WriteString(borderStyleLight.Render(theme.ToThemeANSI("{{|TitleUnfocusedIndicator|}}" + spinIndR)))
+				result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleUnfocusedIndicator|}}" + spinIndR)))
 			} else {
 				result.WriteString(borderStyleLight.Render(" "))
 			}

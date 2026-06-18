@@ -114,7 +114,7 @@ func ClearSpinnerLine() {
 // viewport when present and otherwise writing to the terminal around the spinner. This is
 // the app-level I/O wrapper over the styling engine (semstyle owns the rendering).
 func Println(a ...any) {
-	msg := ToConsoleANSI(fmt.Sprint(a...))
+	msg := ToANSI(fmt.Sprint(a...))
 	if GlobalViewport != nil && GlobalViewport.active {
 		GlobalViewport.Append(msg)
 		return

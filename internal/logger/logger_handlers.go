@@ -154,9 +154,9 @@ func (h *TagProcessorHandler) Handle(ctx context.Context, r slog.Record) error {
 	// Process based on mode
 	switch h.mode {
 	case "ansi":
-		msg = console.ToConsoleANSI(msg)
+		msg = console.ToANSI(msg)
 	case "strip":
-		msg = console.Strip(msg)
+		msg = console.ToPlain(msg)
 	}
 
 	// Create new record with processed message

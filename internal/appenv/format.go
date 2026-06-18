@@ -74,7 +74,7 @@ func FormatLinesCore(ctx context.Context, currentLines, defaultLines, envLines [
 		formattedEnvLines = append(formattedEnvLines, "### "+headingTitle)
 		formattedEnvLines = append(formattedEnvLines, "###")
 		if appDescription != "" {
-			descLines := strutil.WordWrapToSlice(console.StripSemanticTags(appDescription), 75)
+			descLines := strutil.WordWrapToSlice(console.StripTags(appDescription), 75)
 			for _, line := range descLines {
 				trimmed := strings.TrimRight(line, " \r\t")
 				if trimmed == "" {

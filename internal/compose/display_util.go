@@ -52,12 +52,12 @@ func renderProgressBarLayers(layerPcts []int, chars []string, colorTag string) s
 		}
 		sb.WriteString(chars[levels*pct/100])
 	}
-	return "[" + console.ToConsoleANSI(colorTag+sb.String()+"{{[-]}}") + "]"
+	return "[" + console.ToANSI(colorTag+sb.String()+"{{[-]}}") + "]"
 }
 
 // padOrTrunc ensures a line is exactly termW visible chars wide.
 func padOrTrunc(line string, termW int) string {
-	plain := console.Strip(line)
+	plain := console.ToPlain(line)
 	visible := utf8.RuneCountInString(plain)
 	if visible < termW {
 		return line + strutil.Repeat(" ", termW-visible)

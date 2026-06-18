@@ -11,7 +11,7 @@ import (
 
 // ApplyTagsToStyle translates any {{...}} tags and applies them to the given style.
 func ApplyTagsToStyle(text string, style lipgloss.Style, resetStyle lipgloss.Style) lipgloss.Style {
-	translated := console.Translate(text)
+	translated := console.ToTags(text)
 	re := console.GetDelimitedRegex()
 	subMatches := re.FindAllStringSubmatch(translated, -1)
 	for _, subMatch := range subMatches {
@@ -174,7 +174,7 @@ func ApplyStyleCode(style lipgloss.Style, resetStyle lipgloss.Style, styleCode s
 // Named colors and hex strings are passed directly to lipgloss, which handles
 // profile-aware downconversion. Only falls back to tcell for truly extended color names.
 func ParseColor(name string) color.Color {
-	return console.ParseColor(name)
+	return console.ToColor(name)
 }
 
 // BrightenColor brightens a color by 30% of remaining headroom.

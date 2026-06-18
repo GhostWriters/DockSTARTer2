@@ -62,9 +62,9 @@ func TestStrip(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actual := Strip(tt.input)
+			actual := ToPlain(tt.input)
 			if actual != tt.expected {
-				t.Errorf("Strip(%q) = %q; want %q", tt.input, actual, tt.expected)
+				t.Errorf("ToPlain(%q) = %q; want %q", tt.input, actual, tt.expected)
 			}
 		})
 	}
@@ -94,7 +94,7 @@ func TestStripANSI(t *testing.T) {
 		{
 			name:     "Mixed ANSI and tags",
 			input:    "\x1b[31m{{|Notice|}}Hello{{[-]}}\x1b[0m",
-			expected: "{{|Notice|}}Hello{{[-]}}", // Note: StripANSI ONLY strips real ANSI, Strip() strips both
+			expected: "{{|Notice|}}Hello{{[-]}}", // Note: StripANSI ONLY strips real ANSI, ToPlain() strips both
 		},
 	}
 
@@ -148,9 +148,9 @@ func TestExpandConsoleTags(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actual := ExpandConsoleTags(tt.input)
+			actual := ToTags(tt.input)
 			if actual != tt.expected {
-				t.Errorf("ExpandConsoleTags(%q) = %q; want %q", tt.input, actual, tt.expected)
+				t.Errorf("ToTags(%q) = %q; want %q", tt.input, actual, tt.expected)
 			}
 		})
 	}
@@ -211,9 +211,9 @@ func TestToConsoleANSI(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actual := ToConsoleANSI(tt.input)
+			actual := ToANSI(tt.input)
 			if actual != tt.expected {
-				t.Errorf("ToConsoleANSI(%q) = %q; want %q", tt.input, actual, tt.expected)
+				t.Errorf("ToANSI(%q) = %q; want %q", tt.input, actual, tt.expected)
 			}
 		})
 	}
@@ -228,15 +228,15 @@ func TestBackwardsCompatibility(t *testing.T) {
 	input := "{{|Notice|}}Test{{[-]}}"
 
 	// Test Parse alias
-	parseResult := Parse(input)
-	toAnsiResult := ToConsoleANSI(input)
+	parseResult := ToANSI(input)
+	toAnsiResult := ToANSI(input)
 	if parseResult != toAnsiResult {
 		t.Errorf("Parse should equal ToANSI: Parse=%q, ToANSI=%q", parseResult, toAnsiResult)
 	}
 
 	// Test Translate alias
-	translateResult := Translate(input)
-	expandResult := ExpandConsoleTags(input)
+	translateResult := ToTags(input)
+	expandResult := ToTags(input)
 	if translateResult != expandResult {
 		t.Errorf("Translate should equal ExpandTags: Translate=%q, ExpandTags=%q", translateResult, expandResult)
 	}
@@ -276,9 +276,9 @@ func TestSemanticVsDirectDistinction(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actual := ExpandConsoleTags(tt.input)
+			actual := ToTags(tt.input)
 			if actual != tt.expected {
-				t.Errorf("ExpandConsoleTags(%q) = %q; want %q", tt.input, actual, tt.expected)
+				t.Errorf("ToTags(%q) = %q; want %q", tt.input, actual, tt.expected)
 			}
 		})
 	}

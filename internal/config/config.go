@@ -884,10 +884,10 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 		console.PrintTableCtx(console.WithTUIWriter(ctx, &sb), headers, data, conf.UI.LineCharacters)
 		logNotice(ctx, strings.TrimSuffix(sb.String(), "\n"))
 	} else {
-		fmt.Println(console.ToConsoleANSI(title))
+		fmt.Println(console.ToANSI(title))
 		var sb strings.Builder
 		console.PrintTableCtx(console.WithTUIWriter(ctx, &sb), headers, data, conf.UI.LineCharacters)
-		fmt.Println(console.ToConsoleANSI(sb.String()))
+		fmt.Println(console.ToANSI(sb.String()))
 	}
 }
 

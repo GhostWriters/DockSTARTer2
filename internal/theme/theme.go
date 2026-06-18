@@ -479,9 +479,9 @@ func SemanticStyleWithRegistry(tag string, prefix string, useConsole bool) lipgl
 	} else {
 		var expanded string
 		if useConsole {
-			expanded = console.ExpandConsoleTags(tag)
+			expanded = console.ToTags(tag)
 		} else {
-			expanded = console.ExpandThemeTags(tag, prefix)
+			expanded = console.ToTags(tag, prefix)
 		}
 		style = ApplyTagsToStyle(expanded, lipgloss.NewStyle(), lipgloss.NewStyle())
 	}
@@ -523,9 +523,9 @@ func SemanticRawStyleWithRegistry(name string, prefix string, useConsole bool) l
 
 	var expanded string
 	if useConsole {
-		expanded = console.ExpandConsoleTags(console.WrapSemantic(name))
+		expanded = console.ToTags(console.WrapSemantic(name))
 	} else {
-		expanded = console.ExpandThemeTags(console.WrapSemantic(name), prefix)
+		expanded = console.ToTags(console.WrapSemantic(name), prefix)
 	}
 	s := ApplyTagsToStyle(expanded, lipgloss.NewStyle(), lipgloss.NewStyle())
 
@@ -555,17 +555,23 @@ func ClearSemanticCachePrefix(prefix string) {
 	}
 }
 
-// ToThemeANSI translates text with theme tags into ANSI escape sequences strictly using the theme registry.
-func ToThemeANSI(text string) string {
-	return console.ToThemeANSI(text)
+// ToANSI converts semantic and direct tags to ANSI. Without a prefix uses the console
+// map; with a prefix uses the theme map. Delegates to console.ToANSI.
+func ToANSI(text string, prefix ...string) string {
+	return console.ToANSI(text, prefix...)
 }
 
-// ToThemeANSIWithPrefix translates text with theme tags and a prefix into ANSI escape sequences.
-func ToThemeANSIWithPrefix(text string, prefix string) string {
-	return console.ToThemeANSIWithPrefix(text, prefix)
+// ToTags expands semantic tags to direct tags without converting to ANSI.
+func ToTags(text string, prefix ...string) string {
+	return console.ToTags(text, prefix...)
 }
 
-// ToConsoleANSI translates text with console tags into ANSI escape sequences strictly using the console registry.
-func ToConsoleANSI(text string) string {
-	return console.ToConsoleANSI(text)
+// ToPlain removes all tags and ANSI sequences, returning plain text.
+func ToPlain(text string) string {
+	return console.ToPlain(text)
+}
+
+// StripTags removes semantic and direct tags, leaving ANSI sequences intact.
+func StripTags(text string) string {
+	return console.StripTags(text)
 }

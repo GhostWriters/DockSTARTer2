@@ -106,7 +106,7 @@ func RenderThemeTextCtx(text string, ctx StyleContext) string {
 	}
 
 	// Resolve tags to ANSI using the context's prefix and the isolated theme map
-	rendered := console.ToThemeANSIWithPrefix(text, ctx.Prefix)
+	rendered := console.ToANSI(text, ctx.Prefix)
 
 	// Combine components and ensure reset at end
 	result := getCodes(resetStyle) + rendered + console.CodeReset
@@ -145,7 +145,7 @@ func RenderConsoleTextCtx(text string, ctx StyleContext) string {
 	}
 
 	// Resolve tags to ANSI using MUST use the console registry
-	rendered := console.ToConsoleANSI(text)
+	rendered := console.ToANSI(text)
 
 	// Combine components and ensure reset at end
 	result := getCodes(resetStyle) + rendered + console.CodeReset
@@ -190,7 +190,7 @@ func GetInitialStyle(text string, base lipgloss.Style) lipgloss.Style {
 
 		if semantic != "" {
 			tagContent := semantic
-			translated := console.Translate(console.WrapSemantic(tagContent))
+			translated := console.ToTags(console.WrapSemantic(tagContent))
 			// Recurse into translated (recursive check)
 			return GetInitialStyle(translated, base)
 		} else if direct != "" {
@@ -249,5 +249,5 @@ func MaintainBackground(text string, style lipgloss.Style) string {
 
 // GetPlainText strips all {{...}} theme tags from text
 func GetPlainText(text string) string {
-	return console.StripSemanticTags(text)
+	return console.StripTags(text)
 }
