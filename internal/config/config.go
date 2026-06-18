@@ -17,12 +17,12 @@ import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/semstyle"
 
 	"github.com/adrg/xdg"
 	"github.com/go-viper/mapstructure/v2"
 	toml "github.com/pelletier/go-toml/v2"
 )
-
 
 func defaultConfigBytes() []byte {
 	b, _ := assets.GetDefaultConfig()
@@ -90,7 +90,7 @@ type UIConfig struct {
 	ShadowLevel       int    `toml:"shadow_level"` // 0=off, 1=light(░), 2=medium(▒), 3=dark(▓), 4=solid(█)
 	Scrollbar         bool   `toml:"scrollbar"`
 	Spinner           bool   `toml:"spinner"`
-	SpinnerSpeed      int    `toml:"spinner_speed"` // milliseconds per frame, default 250
+	SpinnerSpeed      int    `toml:"spinner_speed"`       // milliseconds per frame, default 250
 	BorderColor       int    `toml:"border_color"`        // 1=Border, 2=Border2, 3=Both
 	DialogTitleAlign  string `toml:"dialog_title_align"`  // "center" or "left"
 	SubmenuTitleAlign string `toml:"submenu_title_align"` // "center" or "left"
@@ -760,7 +760,7 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 		"ComposeFolder":     "Compose Folder",
 		"Theme":             "Theme",
 		"Borders":           "Borders",
-		"LargeButtons":     "Large Buttons",
+		"LargeButtons":      "Large Buttons",
 		"LargeTitleBars":    "Large Title Bars",
 		"LineCharacters":    "Line Characters",
 		"Scrollbar":         "Scrollbar",
@@ -884,10 +884,10 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 		console.PrintTableCtx(console.WithTUIWriter(ctx, &sb), headers, data, conf.UI.LineCharacters)
 		logNotice(ctx, strings.TrimSuffix(sb.String(), "\n"))
 	} else {
-		fmt.Println(console.ToANSI(title))
+		fmt.Println(semstyle.ToANSI(title))
 		var sb strings.Builder
 		console.PrintTableCtx(console.WithTUIWriter(ctx, &sb), headers, data, conf.UI.LineCharacters)
-		fmt.Println(console.ToANSI(sb.String()))
+		fmt.Println(semstyle.ToANSI(sb.String()))
 	}
 }
 

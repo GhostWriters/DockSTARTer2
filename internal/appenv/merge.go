@@ -1,8 +1,8 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/semstyle"
 	"DockSTARTer2/internal/system"
 	"bufio"
 	"context"
@@ -67,7 +67,7 @@ func MergeNewOnly(ctx context.Context, targetFile, sourceFile string) ([]string,
 						newLines = append(newLines, "### "+niceName)
 						newLines = append(newLines, "###")
 						if desc != "" && !strings.Contains(desc, "Missing description") {
-							newLines = append(newLines, "### "+console.StripTags(desc))
+							newLines = append(newLines, "### "+semstyle.StripTags(desc))
 							newLines = append(newLines, "###")
 						}
 						currentApp = appName

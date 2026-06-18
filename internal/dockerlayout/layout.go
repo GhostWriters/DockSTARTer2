@@ -3,7 +3,7 @@ package dockerlayout
 import (
 	"strings"
 
-	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/semstyle"
 	"DockSTARTer2/internal/strutil"
 )
 
@@ -70,10 +70,10 @@ func Plural(n int, singular, pluralForm string) string {
 //   - "name" (no colon)    → entire string as DockerImage
 func StyleImageRef(ref string) string {
 	if strings.HasPrefix(ref, "sha256:") {
-		return console.ToANSI("{{|DockerTag|}}sha256:{{[-]}}{{|DockerImage|}}" + ref[7:] + "{{[-]}}")
+		return semstyle.ToANSI("{{|DockerTag|}}sha256:{{[-]}}{{|DockerImage|}}" + ref[7:] + "{{[-]}}")
 	}
 	if idx := strings.LastIndex(ref, ":"); idx >= 0 {
-		return console.ToANSI("{{|DockerImage|}}" + ref[:idx] + "{{[-]}}{{|DockerTag|}}:" + ref[idx+1:] + "{{[-]}}")
+		return semstyle.ToANSI("{{|DockerImage|}}" + ref[:idx] + "{{[-]}}{{|DockerTag|}}:" + ref[idx+1:] + "{{[-]}}")
 	}
-	return console.ToANSI("{{|DockerImage|}}" + ref + "{{[-]}}")
+	return semstyle.ToANSI("{{|DockerImage|}}" + ref + "{{[-]}}")
 }

@@ -3,6 +3,7 @@ package logger
 import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/semstyle"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/version"
 	"context"
@@ -80,7 +81,7 @@ func FatalWithStackSkip(ctx context.Context, skip int, msg any, args ...any) {
 	rawInfo := getSystemInfo()
 	for _, i := range rawInfo {
 		if i != "" {
-			infoLines = append(infoLines, "\t"+i /* console.ToANSI handled by logAt */)
+			infoLines = append(infoLines, "\t"+i /* semstyle.ToANSI handled by logAt */)
 		} else {
 			infoLines = append(infoLines, "")
 		}
@@ -258,7 +259,7 @@ func writeFatalLog(msg any, args ...any) {
 	lines := strings.Split(msgStr, "\n")
 	for _, line := range lines {
 		// Strip semantic style tags and ANSI codes from the fatal log file.
-		fmt.Fprintln(f, console.ToPlain(line))
+		fmt.Fprintln(f, semstyle.ToPlain(line))
 	}
 }
 

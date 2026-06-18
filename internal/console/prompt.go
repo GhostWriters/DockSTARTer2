@@ -1,6 +1,7 @@
 package console
 
 import (
+	"DockSTARTer2/internal/semstyle"
 	"bufio"
 	"context"
 	"errors"
@@ -62,7 +63,7 @@ func QuestionPrompt(ctx context.Context, printer Printer, title, question string
 	}
 
 	// Format text for console output (uses console color registry)
-	questionStr := Sprintf("%s", question)
+	questionStr := semstyle.Sprintf("%s", question)
 
 	// Log the question regardless of prompt mode (matches bash notice behavior)
 	printer(ctx, "%s", questionStr)
@@ -85,9 +86,9 @@ func QuestionPrompt(ctx context.Context, printer Printer, title, question string
 		// using the active theme instead of the hardcoded console color registry.
 		answer := TUIConfirm(title, question, defaultYes)
 		if answer {
-			printer(ctx, "%s", Sprintf("Answered: {{|Yes|}}Yes{{[-]}}"))
+			printer(ctx, "%s", semstyle.Sprintf("Answered: {{|Yes|}}Yes{{[-]}}"))
 		} else {
-			printer(ctx, "%s", Sprintf("Answered: {{|No|}}No{{[-]}}"))
+			printer(ctx, "%s", semstyle.Sprintf("Answered: {{|No|}}No{{[-]}}"))
 		}
 		return answer, nil
 	}
@@ -194,8 +195,8 @@ func TextPrompt(ctx context.Context, printer Printer, title, question string, se
 	}
 
 	// Format text for console output (uses console color registry)
-	questionStr := Sprintf("%s", question)
-	titleStr := Sprintf("%s", title)
+	questionStr := semstyle.Sprintf("%s", question)
+	titleStr := semstyle.Sprintf("%s", title)
 
 	// Log the prompt regardless of mode (matches bash notice behavior)
 	if titleStr != "" {

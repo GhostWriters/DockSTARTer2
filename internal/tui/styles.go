@@ -2,7 +2,8 @@ package tui
 
 import (
 	"DockSTARTer2/internal/config"
-	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/semstyle"
+	semtheme "DockSTARTer2/internal/semstyle/theme"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
 	"image/color"
@@ -125,8 +126,8 @@ const (
 	IDPanelResize   = "panel_resize"
 	IDPanelViewport = "panel_viewport"
 	IDConsoleInput  = "console_input"
-	IDAppVersion  = "app_version"
-	IDTmplVersion = "tmpl_version"
+	IDAppVersion    = "app_version"
+	IDTmplVersion   = "tmpl_version"
 
 	// Status bar
 	IDStatusBar = "status_bar"
@@ -174,16 +175,16 @@ type Styles struct {
 	Border       lipgloss.Border
 	BorderColor  color.Color
 	Border2Color color.Color
-	BorderFlags  theme.StyleFlags
-	Border2Flags theme.StyleFlags
+	BorderFlags  semtheme.StyleFlags
+	Border2Flags semtheme.StyleFlags
 
 	// Shadow
 	Shadow      lipgloss.Style
 	ShadowColor color.Color
 
 	// Buttons
-	ButtonActive   lipgloss.Style
-	ButtonInactive lipgloss.Style
+	ButtonActive       lipgloss.Style
+	ButtonInactive     lipgloss.Style
 	ButtonSpinner      lipgloss.Style // Spinner flanking flat button label when processing
 	ButtonSpinnerLarge lipgloss.Style // Spinner at edges of bordered button when processing
 
@@ -200,21 +201,21 @@ type Styles struct {
 	ButtonKeyInactive    lipgloss.Style
 
 	// List items
-	ItemNormal   lipgloss.Style
+	ItemNormal  lipgloss.Style
 	ItemFocused lipgloss.Style
 
 	// Tags (menu item labels)
-	TagNormal      lipgloss.Style
+	TagNormal     lipgloss.Style
 	TagFocused    lipgloss.Style
-	TagKey         lipgloss.Style // First letter highlight
+	TagKey        lipgloss.Style // First letter highlight
 	TagKeyFocused lipgloss.Style
 	TagSpinner    lipgloss.Style // Spinner flanking the tag when processing
 
 	// Header
-	HeaderBG           lipgloss.Style
-	StatusBar          lipgloss.Style
-	StatusBarBorder    lipgloss.Style
-	StatusBarFocused  lipgloss.Style
+	HeaderBG         lipgloss.Style
+	StatusBar        lipgloss.Style
+	StatusBarBorder  lipgloss.Style
+	StatusBarFocused lipgloss.Style
 
 	// Help line
 	HelpLine lipgloss.Style
@@ -225,7 +226,7 @@ type Styles struct {
 	// Settings
 	LineCharacters    bool
 	DrawBorders       bool
-	LargeButtons     bool
+	LargeButtons      bool
 	LargeTitleBars    bool
 	DialogTitleAlign  string
 	SubmenuTitleAlign string
@@ -245,60 +246,60 @@ type Styles struct {
 
 // StyleContext holds a subset of Styles for decoupled rendering
 type StyleContext struct {
-	LineCharacters      bool
-	DrawBorders         bool
-	LargeButtons       bool
-	LargeTitleBars      bool
-	Type                DialogType
-	Screen              lipgloss.Style
-	Dialog              lipgloss.Style
-	ContentBackground   lipgloss.Style
-	DialogTitle         lipgloss.Style
-	DialogTitleHelp     lipgloss.Style
-	SubmenuTitle        lipgloss.Style
-	SubmenuTitleFocused lipgloss.Style
-	LargeTitleArea      lipgloss.Style
-	Border              lipgloss.Border
-	BorderColor         color.Color
-	Border2Color        color.Color
-	BorderFlags         theme.StyleFlags
-	Border2Flags        theme.StyleFlags
-	ButtonActive        lipgloss.Style
-	ButtonInactive      lipgloss.Style
-	IconFocused            lipgloss.Style
-	IconPressed            lipgloss.Style
-	IconInactive           lipgloss.Style
-	HelpIconInactive       lipgloss.Style
-	RefreshIconInactive    lipgloss.Style
-	ExitIconInactive       lipgloss.Style
-	ResizeUpIconInactive   lipgloss.Style
-	ResizeDnIconInactive   lipgloss.Style
-	ButtonKeyActive        lipgloss.Style
-	ButtonKeyInactive      lipgloss.Style
-	ItemNormal             lipgloss.Style
-	ItemFocused        lipgloss.Style
-	TagNormal           lipgloss.Style
-	TagFocused         lipgloss.Style
-	TagKey              lipgloss.Style
-	TagKeyFocused      lipgloss.Style
-	TagSpinner         lipgloss.Style
-	ButtonSpinner      lipgloss.Style
-	ButtonSpinnerLarge lipgloss.Style
-	Shadow              lipgloss.Style
-	ShadowColor         color.Color
-	ShadowLevel         int
-	HelpLine            lipgloss.Style
-	StatusSuccess       lipgloss.Style
-	StatusWarn          lipgloss.Style
-	Console             lipgloss.Style
-	OptionValueFocused lipgloss.Style
-	StatusBarFocused   lipgloss.Style
-	ConsoleTitleColor   color.Color
-	DialogTitleAlign    string
-	SubmenuTitleAlign   string
-	PanelTitleAlign     string
-	Prefix              string // Prefix for semantic tag remapping (e.g. "Preview_")
-	DrawShadow          bool   // Whether to draw shadows for this context
+	LineCharacters       bool
+	DrawBorders          bool
+	LargeButtons         bool
+	LargeTitleBars       bool
+	Type                 DialogType
+	Screen               lipgloss.Style
+	Dialog               lipgloss.Style
+	ContentBackground    lipgloss.Style
+	DialogTitle          lipgloss.Style
+	DialogTitleHelp      lipgloss.Style
+	SubmenuTitle         lipgloss.Style
+	SubmenuTitleFocused  lipgloss.Style
+	LargeTitleArea       lipgloss.Style
+	Border               lipgloss.Border
+	BorderColor          color.Color
+	Border2Color         color.Color
+	BorderFlags          semtheme.StyleFlags
+	Border2Flags         semtheme.StyleFlags
+	ButtonActive         lipgloss.Style
+	ButtonInactive       lipgloss.Style
+	IconFocused          lipgloss.Style
+	IconPressed          lipgloss.Style
+	IconInactive         lipgloss.Style
+	HelpIconInactive     lipgloss.Style
+	RefreshIconInactive  lipgloss.Style
+	ExitIconInactive     lipgloss.Style
+	ResizeUpIconInactive lipgloss.Style
+	ResizeDnIconInactive lipgloss.Style
+	ButtonKeyActive      lipgloss.Style
+	ButtonKeyInactive    lipgloss.Style
+	ItemNormal           lipgloss.Style
+	ItemFocused          lipgloss.Style
+	TagNormal            lipgloss.Style
+	TagFocused           lipgloss.Style
+	TagKey               lipgloss.Style
+	TagKeyFocused        lipgloss.Style
+	TagSpinner           lipgloss.Style
+	ButtonSpinner        lipgloss.Style
+	ButtonSpinnerLarge   lipgloss.Style
+	Shadow               lipgloss.Style
+	ShadowColor          color.Color
+	ShadowLevel          int
+	HelpLine             lipgloss.Style
+	StatusSuccess        lipgloss.Style
+	StatusWarn           lipgloss.Style
+	Console              lipgloss.Style
+	OptionValueFocused   lipgloss.Style
+	StatusBarFocused     lipgloss.Style
+	ConsoleTitleColor    color.Color
+	DialogTitleAlign     string
+	SubmenuTitleAlign    string
+	PanelTitleAlign      string
+	Prefix               string // Prefix for semantic tag remapping (e.g. "Preview_")
+	DrawShadow           bool   // Whether to draw shadows for this context
 }
 
 // currentStyles holds the active styles
@@ -312,60 +313,60 @@ func GetStyles() Styles {
 // GetActiveContext returns the current global styles as a StyleContext
 func GetActiveContext() StyleContext {
 	return StyleContext{
-		LineCharacters:      currentStyles.LineCharacters,
-		DrawBorders:         currentStyles.DrawBorders,
-		LargeButtons:       currentStyles.LargeButtons,
-		LargeTitleBars:      currentStyles.LargeTitleBars,
-		Type:                DialogTypeInfo, // Default to info
-		Screen:              currentStyles.Screen,
-		Dialog:              currentStyles.Dialog,
-		ContentBackground:   currentStyles.ContentBackground,
-		DialogTitle:         currentStyles.DialogTitle,
-		DialogTitleHelp:     currentStyles.DialogTitleHelp,
-		SubmenuTitle:        currentStyles.SubmenuTitle,
-		SubmenuTitleFocused: currentStyles.SubmenuTitleFocused,
-		LargeTitleArea:      currentStyles.LargeTitleArea,
-		Border:              currentStyles.Border,
-		BorderColor:         currentStyles.BorderColor,
-		Border2Color:        currentStyles.Border2Color,
-		BorderFlags:         currentStyles.BorderFlags,
-		Border2Flags:        currentStyles.Border2Flags,
-		ButtonActive:        currentStyles.ButtonActive,
-		ButtonInactive:      currentStyles.ButtonInactive,
-		IconFocused:            currentStyles.IconFocused,
-		IconPressed:            currentStyles.IconPressed,
-		IconInactive:           currentStyles.IconInactive,
-		HelpIconInactive:       currentStyles.HelpIconInactive,
-		RefreshIconInactive:    currentStyles.RefreshIconInactive,
-		ExitIconInactive:       currentStyles.ExitIconInactive,
-		ResizeUpIconInactive:   currentStyles.ResizeUpIconInactive,
-		ResizeDnIconInactive:   currentStyles.ResizeDnIconInactive,
-		ButtonKeyActive:        currentStyles.ButtonKeyActive,
-		ButtonKeyInactive:      currentStyles.ButtonKeyInactive,
-		ItemNormal:             currentStyles.ItemNormal,
-		ItemFocused:        currentStyles.ItemFocused,
-		TagNormal:           currentStyles.TagNormal,
-		TagFocused:         currentStyles.TagFocused,
-		TagKey:              currentStyles.TagKey,
-		TagKeyFocused:      currentStyles.TagKeyFocused,
-		TagSpinner:         currentStyles.TagSpinner,
-		ButtonSpinner:      currentStyles.ButtonSpinner,
-		ButtonSpinnerLarge: currentStyles.ButtonSpinnerLarge,
-		Shadow:              currentStyles.Shadow,
-		ShadowColor:         currentStyles.ShadowColor,
-		ShadowLevel:         currentConfig.UI.ShadowLevel,
-		HelpLine:            currentStyles.HelpLine,
-		StatusSuccess:       currentStyles.StatusSuccess,
-		StatusWarn:          currentStyles.StatusWarn,
-		Console:             currentStyles.Console,
-		OptionValueFocused: currentStyles.OptionValueFocused,
-		StatusBarFocused:   currentStyles.StatusBarFocused,
-		ConsoleTitleColor:   currentStyles.ConsoleTitleColor,
-		DialogTitleAlign:    currentStyles.DialogTitleAlign,
-		SubmenuTitleAlign:   currentStyles.SubmenuTitleAlign,
-		PanelTitleAlign:     currentStyles.PanelTitleAlign,
-		Prefix:              "", // Global context has no prefix
-		DrawShadow:          currentConfig.UI.Shadow,
+		LineCharacters:       currentStyles.LineCharacters,
+		DrawBorders:          currentStyles.DrawBorders,
+		LargeButtons:         currentStyles.LargeButtons,
+		LargeTitleBars:       currentStyles.LargeTitleBars,
+		Type:                 DialogTypeInfo, // Default to info
+		Screen:               currentStyles.Screen,
+		Dialog:               currentStyles.Dialog,
+		ContentBackground:    currentStyles.ContentBackground,
+		DialogTitle:          currentStyles.DialogTitle,
+		DialogTitleHelp:      currentStyles.DialogTitleHelp,
+		SubmenuTitle:         currentStyles.SubmenuTitle,
+		SubmenuTitleFocused:  currentStyles.SubmenuTitleFocused,
+		LargeTitleArea:       currentStyles.LargeTitleArea,
+		Border:               currentStyles.Border,
+		BorderColor:          currentStyles.BorderColor,
+		Border2Color:         currentStyles.Border2Color,
+		BorderFlags:          currentStyles.BorderFlags,
+		Border2Flags:         currentStyles.Border2Flags,
+		ButtonActive:         currentStyles.ButtonActive,
+		ButtonInactive:       currentStyles.ButtonInactive,
+		IconFocused:          currentStyles.IconFocused,
+		IconPressed:          currentStyles.IconPressed,
+		IconInactive:         currentStyles.IconInactive,
+		HelpIconInactive:     currentStyles.HelpIconInactive,
+		RefreshIconInactive:  currentStyles.RefreshIconInactive,
+		ExitIconInactive:     currentStyles.ExitIconInactive,
+		ResizeUpIconInactive: currentStyles.ResizeUpIconInactive,
+		ResizeDnIconInactive: currentStyles.ResizeDnIconInactive,
+		ButtonKeyActive:      currentStyles.ButtonKeyActive,
+		ButtonKeyInactive:    currentStyles.ButtonKeyInactive,
+		ItemNormal:           currentStyles.ItemNormal,
+		ItemFocused:          currentStyles.ItemFocused,
+		TagNormal:            currentStyles.TagNormal,
+		TagFocused:           currentStyles.TagFocused,
+		TagKey:               currentStyles.TagKey,
+		TagKeyFocused:        currentStyles.TagKeyFocused,
+		TagSpinner:           currentStyles.TagSpinner,
+		ButtonSpinner:        currentStyles.ButtonSpinner,
+		ButtonSpinnerLarge:   currentStyles.ButtonSpinnerLarge,
+		Shadow:               currentStyles.Shadow,
+		ShadowColor:          currentStyles.ShadowColor,
+		ShadowLevel:          currentConfig.UI.ShadowLevel,
+		HelpLine:             currentStyles.HelpLine,
+		StatusSuccess:        currentStyles.StatusSuccess,
+		StatusWarn:           currentStyles.StatusWarn,
+		Console:              currentStyles.Console,
+		OptionValueFocused:   currentStyles.OptionValueFocused,
+		StatusBarFocused:     currentStyles.StatusBarFocused,
+		ConsoleTitleColor:    currentStyles.ConsoleTitleColor,
+		DialogTitleAlign:     currentStyles.DialogTitleAlign,
+		SubmenuTitleAlign:    currentStyles.SubmenuTitleAlign,
+		PanelTitleAlign:      currentStyles.PanelTitleAlign,
+		Prefix:               "", // Global context has no prefix
+		DrawShadow:           currentConfig.UI.Shadow,
 	}
 }
 
@@ -517,20 +518,20 @@ func InitStyles(cfg config.AppConfig) {
 	case 1:
 		currentStyles.BorderColor = SemanticRawStyle("Border").GetForeground()
 		currentStyles.Border2Color = SemanticRawStyle("Border").GetForeground()
-		currentStyles.BorderFlags = theme.ToStyleFlags(console.GetRawTagCode("border"))
+		currentStyles.BorderFlags = semtheme.ToStyleFlags(semstyle.GetRawTagCode("border"))
 		currentStyles.Border2Flags = currentStyles.BorderFlags
 	case 2:
 		currentStyles.BorderColor = SemanticRawStyle("Border2").GetForeground()
 		currentStyles.Border2Color = SemanticRawStyle("Border2").GetForeground()
-		currentStyles.BorderFlags = theme.ToStyleFlags(console.GetRawTagCode("border2"))
+		currentStyles.BorderFlags = semtheme.ToStyleFlags(semstyle.GetRawTagCode("border2"))
 		currentStyles.Border2Flags = currentStyles.BorderFlags
 	case 3:
 		fallthrough
 	default:
 		currentStyles.BorderColor = SemanticRawStyle("Border").GetForeground()
 		currentStyles.Border2Color = SemanticRawStyle("Border2").GetForeground()
-		currentStyles.BorderFlags = theme.ToStyleFlags(console.GetRawTagCode("border"))
-		currentStyles.Border2Flags = theme.ToStyleFlags(console.GetRawTagCode("border2"))
+		currentStyles.BorderFlags = semtheme.ToStyleFlags(semstyle.GetRawTagCode("border"))
+		currentStyles.Border2Flags = semtheme.ToStyleFlags(semstyle.GetRawTagCode("border2"))
 	}
 
 	// Shadow defines the shadow color and any attributes (e.g. dim, bold) for shade characters.
@@ -694,7 +695,7 @@ func InitStyles(cfg config.AppConfig) {
 }
 
 // ApplyFlags applies ANSI style modifiers to a lipgloss.Style
-func ApplyFlags(style lipgloss.Style, flags theme.StyleFlags) lipgloss.Style {
+func ApplyFlags(style lipgloss.Style, flags semtheme.StyleFlags) lipgloss.Style {
 	style = style.
 		Bold(flags.Bold).
 		Underline(flags.Underline).

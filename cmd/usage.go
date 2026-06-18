@@ -2,14 +2,14 @@ package cmd
 
 import (
 	"DockSTARTer2/internal/commands"
-	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/semstyle"
 	"fmt"
 )
 
 // PrintHelp prints usage information to stdout.
 // Used by the standalone CLI.
 func PrintHelp(target string) {
-	fmt.Println(console.ToANSI(commands.GetUsage(target, false)))
+	fmt.Println(semstyle.ToANSI(commands.GetUsage(target, false)))
 }
 
 // GetUsage returns usage information as a string.

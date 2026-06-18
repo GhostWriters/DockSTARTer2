@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"DockSTARTer2/internal/config"
-	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/semstyle"
 	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/version"
 )
@@ -69,7 +69,6 @@ func CheckStartupStatus(ctx context.Context) {
 				tagBlocks = append(tagBlocks, fmt.Sprintf("Local%s", termStr))
 			}
 		}
-
 
 		var tagBuf strings.Builder
 		for _, t := range tagBlocks {
@@ -195,7 +194,7 @@ func PrintServerStatus(_ context.Context, cfg config.ServerConfig) {
 		default: // "menu"
 			connTypeTag = fmt.Sprintf("{{|MenuPage|}}%s{{[-]}}", connType)
 		}
-		fmt.Println(console.Sprintf("Editing:     %s from %s", connTypeTag, editInfo.FormatSession()))
+		fmt.Println(semstyle.Sprintf("Editing:     %s from %s", connTypeTag, editInfo.FormatSession()))
 	} else {
 		fmt.Println("Editing:     no active editor")
 	}

@@ -1,7 +1,7 @@
 package tui
 
 import (
-	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/semstyle"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
 	"strings"
@@ -103,7 +103,7 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 
 		// Hard reset after each element to ensure background colors (like selection)
 		// don't bleed into the itemSpacing gaps.
-		itemContent += console.CodeReset
+		itemContent += semstyle.CodeReset
 
 		itemWidth := lipgloss.Width(GetPlainText(itemContent))
 
