@@ -76,7 +76,6 @@ func SetDelimiters(semPre, semSuf, dirPre, dirSuf string) {
 // Package-level delimiter helpers delegate to Default.
 func GetDelimitedRegex() *regexp.Regexp { return Default.GetDelimitedRegex() }
 func GetDirectRegex() *regexp.Regexp    { return Default.GetDirectRegex() }
-func StripTags(s string) string         { return Default.StripTags(s) }
 func WrapSemantic(name string) string   { return Default.WrapSemantic(name) }
 func WrapDirect(code string) string     { return Default.WrapDirect(code) }
 
@@ -113,12 +112,7 @@ func (st *Styler) ExpandTagsWithMap(text string, styleMap map[string]string, str
 			}
 			fullContent := subMatch[groupIndex]
 
-			semanticName := fullContent
-			modifiers := ""
-			if idx := strings.IndexByte(fullContent, ':'); idx >= 0 {
-				semanticName = fullContent[:idx]
-				modifiers = fullContent[idx+1:]
-			}
+			semanticName, modifiers, _ := strings.Cut(fullContent, ":")
 			content := strings.ToLower(semanticName)
 
 			var rawCode string
@@ -259,12 +253,11 @@ func (st *Styler) Sprintf(format string, a ...any) string {
 
 // --- package-level delegators to Default ---
 
-func ToANSI(s string, prefix ...string) string        { return Default.ToANSI(s, prefix...) }
-func ToTags(s string, prefix ...string) string        { return Default.ToTags(s, prefix...) }
-func ToPlain(s string) string                         { return Default.ToPlain(s) }
-func StripSemanticTags(s string) string               { return Default.StripTags(s) }
+func ToANSI(s string, prefix ...string) string { return Default.ToANSI(s, prefix...) }
+func ToTags(s string, prefix ...string) string { return Default.ToTags(s, prefix...) }
+func ToPlain(s string) string                  { return Default.ToPlain(s) }
+func StripTags(s string) string                { return Default.StripTags(s) }
 func ExpandTagsWithMap(text string, styleMap map[string]string, stripUnresolvable bool, prefix string) string {
 	return Default.ExpandTagsWithMap(text, styleMap, stripUnresolvable, prefix)
 }
-func processDirectTags(text string) string { return Default.processDirectTags(text) }
 func Sprintf(format string, a ...any) string { return Default.Sprintf(format, a...) }
