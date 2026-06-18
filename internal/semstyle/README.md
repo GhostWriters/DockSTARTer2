@@ -77,16 +77,37 @@ package, which parses theme files into a map).
 
 | Function / method | Purpose |
 |---|---|
-| `ToConsoleANSI(s)` | Expand tags using base (console) styles → ANSI |
-| `ToThemeANSI(s)` / `…WithPrefix` | Expand tags theme-first → ANSI |
-| `Strip(s)` | Remove all semantic/direct tags **and** ANSI escapes |
+| `ToANSI(s, prefix...)` | Expand tags → ANSI; console map by default, theme map when prefix given |
+| `ToTags(s, prefix...)` | Expand semantic tags → direct tags; stops before ANSI conversion |
+| `ToPlain(s)` | Remove all tags **and** ANSI escapes → plain text |
+| `StripTags(s)` | Remove tags only, leaving any existing ANSI intact |
+| `ToColor(s)` | Color name or hex string → `color.Color` |
+| `ToColorStr(c)` | `color.Color` → hex or ANSI index string |
+| `Sprintf(fmt, a...)` | Format string then apply `ToANSI` |
 | `RegisterConsoleTag(name, val)` / `…Raw` | Define a base semantic tag |
 | `RegisterThemeTag(name, val)` / `…Raw` | Define a theme semantic tag |
 | `SetThemeMap(m)` | Replace the theme map wholesale |
-| `SetRenderPolicy(fn)` | Gate rendering (return false → strip instead of color) |
+| `SetRenderPolicy(fn)` | Gate rendering (return false → `ToPlain` instead of color) |
 | `New()` | Create an independent `*Styler` |
 | `(*Styler).SetDelimiters(…)` | Customize this Styler's tag delimiters |
 | `(*Styler).RegisterHyperlinkTag(name)` | Make a tag render its content as a terminal hyperlink |
+
+## Converting to lipgloss styles
+
+`ToANSI` produces terminal escape sequences for plain output. When building a
+**lipgloss** `Style` (e.g. for a TUI component), use `ToTags` first to resolve semantic
+names to raw `fg:bg:flags` codes, then feed the result into a style-builder. The
+`fg:bg:flags` direct-tag format maps cleanly onto lipgloss foreground/background/modifier
+calls — host applications typically wrap this in a helper, for example:
+
+```go
+rawCode := semstyle.StripDelimiters(semstyle.ToTags("{{|Error|}}"))
+// rawCode = "red::B"  (or whatever Error resolves to)
+style := theme.ApplyStyleCode(lipgloss.NewStyle(), lipgloss.NewStyle(), rawCode)
+```
+
+`ToTags` is also the right choice when passing styled text to a TUI compositor that
+understands direct tags natively rather than ANSI escapes.
 
 ## Delimiters
 
