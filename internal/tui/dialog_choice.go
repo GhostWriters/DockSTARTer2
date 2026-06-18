@@ -1,7 +1,7 @@
 package tui
 
 import (
-	"github.com/GhostWriters/semstyle"
+	semstyle "github.com/GhostWriters/semstyle/lg"
 	"strings"
 
 	"charm.land/bubbles/v2/key"

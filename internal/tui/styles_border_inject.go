@@ -1,7 +1,7 @@
 package tui
 
 import (
-	semtheme "github.com/GhostWriters/semstyle/theme"
+	semstyle "github.com/GhostWriters/semstyle/lg"
 	"regexp"
 	"strings"
 )
@@ -11,7 +11,7 @@ var ansiSeqRe = regexp.MustCompile(`\x1b\[[\d;]*m`)
 
 // ansiCodeFromFlags converts a StyleFlags struct into a single ANSI escape sequence string.
 // Returns "" if no flags are set.
-func ansiCodeFromFlags(f semtheme.StyleFlags) string {
+func ansiCodeFromFlags(f semstyle.StyleFlags) string {
 	var codes []string
 	if f.Bold {
 		codes = append(codes, "1")
@@ -85,7 +85,7 @@ func injectBeforeLastColorAnsi(line, code string) string {
 //
 // Set hasBottom=false when the bottom border was removed (e.g. via BorderBottom(false))
 // and will be appended separately; the bottom builders apply flags2 themselves.
-func InjectBorderFlags(rendered string, flags, flags2 semtheme.StyleFlags, hasBottom bool) string {
+func InjectBorderFlags(rendered string, flags, flags2 semstyle.StyleFlags, hasBottom bool) string {
 	flagCode := ansiCodeFromFlags(flags)
 	flag2Code := ansiCodeFromFlags(flags2)
 	if flagCode == "" && flag2Code == "" {

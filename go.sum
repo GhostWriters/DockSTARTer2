@@ -20,8 +20,8 @@ github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c h1:udKWzYgxTojEK
 github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c/go.mod h1:xomTg63KZ2rFqZQzSB4Vz2SUXa1BpHTVz9L5PTmPC4E=
 github.com/DefangLabs/secret-detector v0.0.0-20250811234530-d4b4214cd679 h1:qNT7R4qrN+5u5ajSbqSW1opHP4LA8lzA+ASyw5MQZjs=
 github.com/DefangLabs/secret-detector v0.0.0-20250811234530-d4b4214cd679/go.mod h1:blbwPQh4DTlCZEfk1BLU4oMIhLda2U+A840Uag9DsZw=
-github.com/GhostWriters/semstyle v0.1.0 h1:r1zLChGS0TO3PHqLIJEiqhoDl5g1e19PHr7gufBhjHQ=
-github.com/GhostWriters/semstyle v0.1.0/go.mod h1:Rrl34V23OWqx/Uj5elSUFRNFvLLQVcvp+/yAJugAOTQ=
+github.com/GhostWriters/semstyle v0.1.1-0.20260618095927-61bec8311c0d h1:IEW1krnLgjHxvVYLN83nWSzLiU0NQMNv964Jn4klypE=
+github.com/GhostWriters/semstyle v0.1.1-0.20260618095927-61bec8311c0d/go.mod h1:Rrl34V23OWqx/Uj5elSUFRNFvLLQVcvp+/yAJugAOTQ=
 github.com/Masterminds/semver/v3 v3.5.0 h1:kQceYJfbupGfZOKZQg0kou0DgAKhzDg2NZPAwZ/2OOE=
 github.com/Masterminds/semver/v3 v3.5.0/go.mod h1:4V+yj/TJE1HU9XfppCwVMZq3I84lprf4nC11bSS5beM=
 github.com/Microsoft/go-winio v0.5.2/go.mod h1:WpS1mjBmmwHBEWmogvA2mj8546UReBk4v8QkMxJ6pZY=

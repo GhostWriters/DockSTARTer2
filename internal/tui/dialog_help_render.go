@@ -188,7 +188,7 @@ func (m *HelpDialogModel) ViewString() string {
 	}
 
 	if hasPageCtx {
-		resolved := theme.ToANSI(m.contextInfo.PageText)
+		resolved := theme.ToANSI(m.contextInfo.PageText, "")
 		for _, line := range strings.Split(resolved, "\n") {
 			wrapped := ansi.Wordwrap(line, wrapWidth, "")
 			for _, wl := range strings.Split(wrapped, "\n") {
@@ -203,7 +203,7 @@ func (m *HelpDialogModel) ViewString() string {
 	}
 
 	if hasItemCtx {
-		resolved := theme.ToANSI(m.contextInfo.ItemText)
+		resolved := theme.ToANSI(m.contextInfo.ItemText, "")
 		for _, line := range strings.Split(resolved, "\n") {
 			wrapped := ansi.Wordwrap(line, wrapWidth, "")
 			for _, wl := range strings.Split(wrapped, "\n") {
@@ -510,7 +510,7 @@ func (m *HelpDialogModel) ViewString() string {
 			bindingContent = append(bindingContent, paddedLine)
 		}
 		// Append modifier note at the bottom of every bindings page.
-		note := theme.ToANSI("Most {{|KeyCap|}}alt+key{{[-]}} shortcuts also accept {{|KeyCap|}}ctrl{{[-]}} or {{|KeyCap|}}ctrl+alt{{[-]}}")
+		note := theme.ToANSI("Most {{|KeyCap|}}alt+key{{[-]}} shortcuts also accept {{|KeyCap|}}ctrl{{[-]}} or {{|KeyCap|}}ctrl+alt{{[-]}}", "")
 		centeredNote := CenterText(note, targetWidth)
 		blankLine := strutil.Repeat(" ", targetWidth)
 		bindingContent = append(bindingContent, blankLine, centeredNote)

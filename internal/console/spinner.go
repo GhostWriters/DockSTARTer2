@@ -1,7 +1,7 @@
 package console
 
 import (
-	"github.com/GhostWriters/semstyle"
+	semstyle "github.com/GhostWriters/semstyle/lg"
 	"fmt"
 	"os"
 	"sync"

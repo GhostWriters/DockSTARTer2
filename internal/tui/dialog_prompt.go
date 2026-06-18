@@ -1,7 +1,7 @@
 package tui
 
 import (
-	"github.com/GhostWriters/semstyle"
+	semstyle "github.com/GhostWriters/semstyle/lg"
 	"DockSTARTer2/internal/theme"
 	"strings"
 

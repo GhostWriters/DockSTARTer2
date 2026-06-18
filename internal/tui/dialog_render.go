@@ -3,7 +3,7 @@ package tui
 import (
 	"strings"
 
-	"github.com/GhostWriters/semstyle"
+	semstyle "github.com/GhostWriters/semstyle/lg"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
 
@@ -766,9 +766,9 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 				} else {
 					ind = ">"
 				}
-				result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleFocusIndicator|}}" + ind)))
+				result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleFocusIndicator|}}" + ind, "")))
 			} else if spinInd != "" {
-				result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleUnfocusedIndicator|}}" + spinInd)))
+				result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleUnfocusedIndicator|}}" + spinInd, "")))
 			} else {
 				result.WriteString(borderStyleLight.Render(" "))
 			}
@@ -782,9 +782,9 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 				} else {
 					ind = "<"
 				}
-				result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleFocusIndicator|}}" + ind)))
+				result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleFocusIndicator|}}" + ind, "")))
 			} else if spinIndR != "" {
-				result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleUnfocusedIndicator|}}" + spinIndR)))
+				result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleUnfocusedIndicator|}}" + spinIndR, "")))
 			} else {
 				result.WriteString(borderStyleLight.Render(" "))
 			}

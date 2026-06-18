@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"DockSTARTer2/internal/console"
-	"github.com/GhostWriters/semstyle"
+	semstyle "github.com/GhostWriters/semstyle/lg"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
 

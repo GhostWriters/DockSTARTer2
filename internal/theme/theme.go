@@ -5,7 +5,7 @@ import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
-	"github.com/GhostWriters/semstyle"
+	semstyle "github.com/GhostWriters/semstyle/lg"
 	semtheme "github.com/GhostWriters/semstyle/theme"
 	"bytes"
 	"context"
@@ -455,7 +455,7 @@ func SemanticStyleWithRegistry(tag string, prefix string, useConsole bool) lipgl
 		} else {
 			expanded = semstyle.ToTags(tag, prefix)
 		}
-		style = semtheme.ToStyle(semstyle.Default, expanded, lipgloss.NewStyle(), lipgloss.NewStyle())
+		style = semstyle.ToStyle(semstyle.Default, expanded, lipgloss.NewStyle(), lipgloss.NewStyle())
 	}
 
 	cacheMu.Lock()
@@ -499,7 +499,7 @@ func SemanticRawStyleWithRegistry(name string, prefix string, useConsole bool) l
 	} else {
 		expanded = semstyle.ToTags(semstyle.WrapSemantic(name), prefix)
 	}
-	s := semtheme.ToStyle(semstyle.Default, expanded, lipgloss.NewStyle(), lipgloss.NewStyle())
+	s := semstyle.ToStyle(semstyle.Default, expanded, lipgloss.NewStyle(), lipgloss.NewStyle())
 
 	cacheMu.Lock()
 	semanticStyleCache[cacheKey] = s
@@ -528,7 +528,8 @@ func ClearSemanticCachePrefix(prefix string) {
 }
 
 // ToANSI converts semantic and direct tags to ANSI. Without a prefix uses the console
-// map; with a prefix uses the theme map. Delegates to semstyle.ToANSI.
+// map; with "" uses the theme map (theme-first, console fallback); with a named prefix
+// qualifies theme map lookups. Delegates to semstyle.ToANSI.
 func ToANSI(text string, prefix ...string) string {
 	return semstyle.ToANSI(text, prefix...)
 }
