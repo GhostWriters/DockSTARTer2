@@ -230,7 +230,6 @@ func (st *Styler) StripDelimiters(text string) string {
 }
 
 // --- package-level delegators to Default ---
-func ensureMaps()                        { Default.ensureMaps() }
 func StripDelimiters(text string) string { return Default.StripDelimiters(text) }
 
 func BuildColorMap() {
