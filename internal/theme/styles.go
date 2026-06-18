@@ -9,8 +9,8 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// ApplyTagsToStyle translates any {{...}} tags and applies them to the given style.
-func ApplyTagsToStyle(text string, style lipgloss.Style, resetStyle lipgloss.Style) lipgloss.Style {
+// ToStyle translates any {{...}} tags and applies them to the given style.
+func ToStyle(text string, style lipgloss.Style, resetStyle lipgloss.Style) lipgloss.Style {
 	translated := console.ToTags(text)
 	re := console.GetDelimitedRegex()
 	subMatches := re.FindAllStringSubmatch(translated, -1)
@@ -21,21 +21,21 @@ func ApplyTagsToStyle(text string, style lipgloss.Style, resetStyle lipgloss.Sty
 		if semantic != "" {
 			tagName := strings.Trim(semantic, "_")
 			def := console.GetColorDefinition(tagName)
-			style = ApplyTagsToStyle(def, style, resetStyle)
+			style = ToStyle(def, style, resetStyle)
 		} else if direct != "" {
 			if direct == "|" || direct == "-" {
 				style = resetStyle
 			} else {
 				code := strings.Trim(direct, "|")
-				style = ApplyStyleCode(style, resetStyle, code)
+				style = ToStyleCode(style, resetStyle, code)
 			}
 		}
 	}
 	return style
 }
 
-// StyleFlagsFromCode parses the flags portion of a raw style code (fg:bg:flags) into a StyleFlags struct.
-func StyleFlagsFromCode(rawCode string) StyleFlags {
+// ToStyleFlags parses the flags portion of a raw style code (fg:bg:flags) into a StyleFlags struct.
+func ToStyleFlags(rawCode string) StyleFlags {
 	parts := strings.Split(rawCode, ":")
 	if len(parts) < 3 {
 		return StyleFlags{}
@@ -77,8 +77,8 @@ func StyleFlagsFromCode(rawCode string) StyleFlags {
 	return f
 }
 
-// ApplyStyleCode applies a fg:bg:flags style code to a lipgloss.Style.
-func ApplyStyleCode(style lipgloss.Style, resetStyle lipgloss.Style, styleCode string) lipgloss.Style {
+// ToStyleCode applies a fg:bg:flags style code to a lipgloss.Style.
+func ToStyleCode(style lipgloss.Style, resetStyle lipgloss.Style, styleCode string) lipgloss.Style {
 	if styleCode == "~" {
 		return lipgloss.NewStyle()
 	}

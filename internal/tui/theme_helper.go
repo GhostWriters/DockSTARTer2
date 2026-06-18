@@ -160,14 +160,14 @@ func RenderConsoleTextCtx(text string, ctx StyleContext) string {
 	return final
 }
 
-// ApplyStyleCode applies tview-style color codes (fg:bg:flags) to a lipgloss style.
-func ApplyStyleCode(style lipgloss.Style, resetStyle lipgloss.Style, styleCode string) lipgloss.Style {
-	return theme.ApplyStyleCode(style, resetStyle, styleCode)
+// ToStyleCode applies tview-style color codes (fg:bg:flags) to a lipgloss style.
+func ToStyleCode(style lipgloss.Style, resetStyle lipgloss.Style, styleCode string) lipgloss.Style {
+	return theme.ToStyleCode(style, resetStyle, styleCode)
 }
 
-// ApplyTagsToStyle translates any {{...}} tags and applies them to the given style.
-func ApplyTagsToStyle(text string, style lipgloss.Style, resetStyle lipgloss.Style) lipgloss.Style {
-	return theme.ApplyTagsToStyle(text, style, resetStyle)
+// ToStyle translates any {{...}} tags and applies them to the given style.
+func ToStyle(text string, style lipgloss.Style, resetStyle lipgloss.Style) lipgloss.Style {
+	return theme.ToStyle(text, style, resetStyle)
 }
 
 // ParseColor is a wrapper around console.ParseColor for TUI use.
@@ -195,7 +195,7 @@ func GetInitialStyle(text string, base lipgloss.Style) lipgloss.Style {
 			return GetInitialStyle(translated, base)
 		} else if direct != "" {
 			colorCode := strings.Trim(direct, "|")
-			return ApplyStyleCode(base, base, colorCode)
+			return ToStyleCode(base, base, colorCode)
 		}
 	}
 	return base

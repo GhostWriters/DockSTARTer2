@@ -517,20 +517,20 @@ func InitStyles(cfg config.AppConfig) {
 	case 1:
 		currentStyles.BorderColor = SemanticRawStyle("Border").GetForeground()
 		currentStyles.Border2Color = SemanticRawStyle("Border").GetForeground()
-		currentStyles.BorderFlags = theme.StyleFlagsFromCode(console.GetRawTagCode("border"))
+		currentStyles.BorderFlags = theme.ToStyleFlags(console.GetRawTagCode("border"))
 		currentStyles.Border2Flags = currentStyles.BorderFlags
 	case 2:
 		currentStyles.BorderColor = SemanticRawStyle("Border2").GetForeground()
 		currentStyles.Border2Color = SemanticRawStyle("Border2").GetForeground()
-		currentStyles.BorderFlags = theme.StyleFlagsFromCode(console.GetRawTagCode("border2"))
+		currentStyles.BorderFlags = theme.ToStyleFlags(console.GetRawTagCode("border2"))
 		currentStyles.Border2Flags = currentStyles.BorderFlags
 	case 3:
 		fallthrough
 	default:
 		currentStyles.BorderColor = SemanticRawStyle("Border").GetForeground()
 		currentStyles.Border2Color = SemanticRawStyle("Border2").GetForeground()
-		currentStyles.BorderFlags = theme.StyleFlagsFromCode(console.GetRawTagCode("border"))
-		currentStyles.Border2Flags = theme.StyleFlagsFromCode(console.GetRawTagCode("border2"))
+		currentStyles.BorderFlags = theme.ToStyleFlags(console.GetRawTagCode("border"))
+		currentStyles.Border2Flags = theme.ToStyleFlags(console.GetRawTagCode("border2"))
 	}
 
 	// Shadow defines the shadow color and any attributes (e.g. dim, bold) for shade characters.
