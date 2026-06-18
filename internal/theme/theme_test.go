@@ -1,7 +1,7 @@
 package theme
 
 import (
-	"DockSTARTer2/internal/semstyle"
+	"github.com/GhostWriters/semstyle"
 	"DockSTARTer2/internal/testutils"
 	"fmt"
 	"image/color"

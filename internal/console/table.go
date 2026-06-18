@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"DockSTARTer2/internal/semstyle"
+	"github.com/GhostWriters/semstyle"
 	"DockSTARTer2/internal/strutil"
 )
 

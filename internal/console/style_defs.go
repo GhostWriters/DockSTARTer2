@@ -11,7 +11,7 @@ import (
 	"reflect"
 	"strings"
 
-	"DockSTARTer2/internal/semstyle"
+	"github.com/GhostWriters/semstyle"
 )
 
 // AppColors holds DS2's named semantic styles.

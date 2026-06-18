@@ -2,8 +2,8 @@ package tui
 
 import (
 	"DockSTARTer2/internal/config"
-	"DockSTARTer2/internal/semstyle"
-	semtheme "DockSTARTer2/internal/semstyle/theme"
+	"github.com/GhostWriters/semstyle"
+	semtheme "github.com/GhostWriters/semstyle/theme"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
 	"image/color"

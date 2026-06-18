@@ -2,7 +2,7 @@ package appenv
 
 import (
 	"DockSTARTer2/internal/logger"
-	"DockSTARTer2/internal/semstyle"
+	"github.com/GhostWriters/semstyle"
 	"DockSTARTer2/internal/system"
 	"bufio"
 	"context"

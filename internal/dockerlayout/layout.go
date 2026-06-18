@@ -3,7 +3,7 @@ package dockerlayout
 import (
 	"strings"
 
-	"DockSTARTer2/internal/semstyle"
+	"github.com/GhostWriters/semstyle"
 	"DockSTARTer2/internal/strutil"
 )
 

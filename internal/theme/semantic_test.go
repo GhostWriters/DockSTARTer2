@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/semstyle"
+	"github.com/GhostWriters/semstyle"
 
 	"github.com/charmbracelet/colorprofile"
 )

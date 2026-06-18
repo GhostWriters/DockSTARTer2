@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"DockSTARTer2/internal/commands"
-	"DockSTARTer2/internal/semstyle"
+	"github.com/GhostWriters/semstyle"
 	"fmt"
 )
 

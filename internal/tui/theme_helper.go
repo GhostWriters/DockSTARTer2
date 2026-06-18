@@ -6,8 +6,8 @@ import (
 	"strings"
 	"sync"
 
-	"DockSTARTer2/internal/semstyle"
-	semtheme "DockSTARTer2/internal/semstyle/theme"
+	"github.com/GhostWriters/semstyle"
+	semtheme "github.com/GhostWriters/semstyle/theme"
 	"DockSTARTer2/internal/theme"
 
 	"charm.land/lipgloss/v2"
