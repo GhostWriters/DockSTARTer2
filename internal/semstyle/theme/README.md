@@ -59,6 +59,8 @@ s.SetThemeMap(styles)
 
 ## API
 
+### Theme file parsing
+
 | Function | Purpose |
 |---|---|
 | `Parse(data)` | Unmarshal TOML → `ThemeFile` |
@@ -67,10 +69,42 @@ s.SetThemeMap(styles)
 | `RegisterInto(data, prefix)` | Parse, resolve, and register into the default styler under a prefix; returns the theme's opaque `[defaults]` table (`map[string]any`) |
 | `PrefixTag(prefix, name)` | Join a namespace prefix with a tag name (`prefix_name`) |
 
+### Lipgloss style conversion
+
+These functions convert semantic/direct tags or raw style codes into **lipgloss styles**,
+for use when building TUI components rather than writing ANSI to a terminal:
+
+| Function | Purpose |
+|---|---|
+| `ToStyle(st, text, style, reset)` | Resolve all tags in `text` and apply them to `style`; resets to `reset` on a reset tag |
+| `CodeToStyle(code, style, reset)` | Apply a raw `fg:bg:flags` code directly to `style` |
+| `CodeToFlags(code)` | Parse the flags field of a raw code → `StyleFlags` struct |
+| `ResetFlags(style)` | Clear all text attributes (bold, italic, etc.) from a style |
+| `BrightenColor(c)` | Shift a `color.Color` 30% toward white (implements the `H` flag) |
+
+**`StyleFlags`** holds the parsed on/off state for each modifier (Bold, Underline, Italic,
+Dim, Blink, Reverse, Strikethrough, HighIntensity). Its `.Apply(style)` method applies all
+flags to a lipgloss style in one call.
+
+Example — resolve a semantic tag to a lipgloss style:
+
+```go
+import (
+    "…/semstyle"
+    semtheme "…/semstyle/theme"
+    "charm.land/lipgloss/v2"
+)
+
+base := lipgloss.NewStyle()
+styled := semtheme.ToStyle(semstyle.Default, "{{|Error|}}", base, base)
+// styled now has the fg/bg/flags of the Error semantic tag applied
+```
+
 ## Types
 
 - **`ThemeFile`** — the parsed theme: metadata, optional `[syntax]` delimiters, `[palette]`,
   `[styles]`, and `Defaults` (the opaque `[defaults]` table as `map[string]any`).
+- **`StyleFlags`** — parsed modifier state from a flags field; `.Apply(style)` applies all flags.
 
 `semtheme` intentionally does **not** define a typed defaults struct. The `[defaults]` table
 is app-specific UI vocabulary (borders, panels, …), so it's passed through untyped; the

@@ -161,9 +161,9 @@ func RenderConsoleTextCtx(text string, ctx StyleContext) string {
 	return final
 }
 
-// ToStyleCode applies tview-style color codes (fg:bg:flags) to a lipgloss style.
-func ToStyleCode(style lipgloss.Style, resetStyle lipgloss.Style, styleCode string) lipgloss.Style {
-	return semtheme.ToStyleCode(styleCode, style, resetStyle)
+// CodeToStyle applies tview-style color codes (fg:bg:flags) to a lipgloss style.
+func CodeToStyle(style lipgloss.Style, resetStyle lipgloss.Style, styleCode string) lipgloss.Style {
+	return semtheme.CodeToStyle(styleCode, style, resetStyle)
 }
 
 // ToStyle translates any {{...}} tags and applies them to the given style.
@@ -196,7 +196,7 @@ func GetInitialStyle(text string, base lipgloss.Style) lipgloss.Style {
 			return GetInitialStyle(translated, base)
 		} else if direct != "" {
 			colorCode := strings.Trim(direct, "|")
-			return ToStyleCode(base, base, colorCode)
+			return CodeToStyle(base, base, colorCode)
 		}
 	}
 	return base

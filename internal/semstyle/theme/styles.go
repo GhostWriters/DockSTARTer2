@@ -54,15 +54,15 @@ func ToStyle(st *semstyle.Styler, text string, style lipgloss.Style, resetStyle 
 			if direct == "|" || direct == "-" {
 				style = resetStyle
 			} else {
-				style = ToStyleCode(strings.Trim(direct, "|"), style, resetStyle)
+				style = CodeToStyle(strings.Trim(direct, "|"), style, resetStyle)
 			}
 		}
 	}
 	return style
 }
 
-// ToStyleFlags parses the flags field of a raw fg:bg:flags code into a StyleFlags struct.
-func ToStyleFlags(rawCode string) StyleFlags {
+// CodeToFlags parses the flags field of a raw fg:bg:flags code into a StyleFlags struct.
+func CodeToFlags(rawCode string) StyleFlags {
 	parts := strings.Split(rawCode, ":")
 	if len(parts) < 3 {
 		return StyleFlags{}
@@ -104,8 +104,8 @@ func ToStyleFlags(rawCode string) StyleFlags {
 	return f
 }
 
-// ToStyleCode applies a raw fg:bg:flags code to a lipgloss.Style.
-func ToStyleCode(styleCode string, style lipgloss.Style, resetStyle lipgloss.Style) lipgloss.Style {
+// CodeToStyle applies a raw fg:bg:flags code to a lipgloss.Style.
+func CodeToStyle(styleCode string, style lipgloss.Style, resetStyle lipgloss.Style) lipgloss.Style {
 	if styleCode == "~" {
 		return lipgloss.NewStyle()
 	}
