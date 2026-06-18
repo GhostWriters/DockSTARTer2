@@ -103,7 +103,7 @@ calls — host applications typically wrap this in a helper, for example:
 ```go
 rawCode := semstyle.StripDelimiters(semstyle.ToTags("{{|Error|}}"))
 // rawCode = "red::B"  (or whatever Error resolves to)
-style := theme.ApplyStyleCode(lipgloss.NewStyle(), lipgloss.NewStyle(), rawCode)
+style := theme.ToStyleCode(lipgloss.NewStyle(), lipgloss.NewStyle(), rawCode)
 ```
 
 `ToTags` is also the right choice when passing styled text to a TUI compositor that
