@@ -48,23 +48,9 @@ func (st *Styler) BuildColorMap() {
 	st.ansiMap["S"] = CodeStrikethrough
 	st.ansiMap["s"] = CodeStrikethroughOff
 
-	// Attribute mappings (short keys only — no long-form aliases)
+	// Attribute mappings — reset only; per-attribute on/off is handled by ansiMap in the flags field
 	st.attributeMap["reset"] = CodeReset
 	st.attributeMap["-"] = CodeReset
-	st.attributeMap["b"] = CodeBold
-	st.attributeMap["d"] = CodeDim
-	st.attributeMap["u"] = CodeUnderline
-	st.attributeMap["l"] = CodeBlink
-	st.attributeMap["r"] = CodeReverse
-	st.attributeMap["i"] = CodeItalic
-	st.attributeMap["s"] = CodeStrikethrough
-	st.attributeMap["-b"] = CodeBoldOff
-	st.attributeMap["-d"] = CodeDimOff
-	st.attributeMap["-u"] = CodeUnderlineOff
-	st.attributeMap["-l"] = CodeBlinkOff
-	st.attributeMap["-r"] = CodeReverseOff
-	st.attributeMap["-i"] = CodeItalicOff
-	st.attributeMap["-s"] = CodeStrikethroughOff
 
 	// Colors...
 	st.ansiMap["black"] = CodeBlack
