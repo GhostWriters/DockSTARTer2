@@ -367,7 +367,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 
 	// ── summary ───────────────────────────────────────────────────────────────
 	if r.SpaceReclaimed > 0 {
-		add(GlobalIndent + semstyle.ToANSI("{{[white::B]}}Total reclaimed space:{{[-]}} {{|DockerMarkerDone|}}" +
+		add(strutil.Repeat(" ", GlobalIndentW+IconW+SpaceW) + semstyle.ToANSI("{{[white::B]}}Total reclaimed space:{{[-]}} {{|DockerMarkerDone|}}" +
 			units.HumanSize(float64(r.SpaceReclaimed)) + "{{[-]}}"))
 	}
 
