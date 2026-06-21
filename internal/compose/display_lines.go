@@ -212,11 +212,27 @@ func (p *consoleEventProcessor) buildImageLine(imgName string, t *consoleTask, l
 	urlWithCount := imgStr + layerCount
 
 	sizes, bar := p.buildImageSizesAndBar(layers, maxImgNameW, termW)
-	if t == nil {
+
+	var layerTotalBytes int64
+	allLayersDone := len(layers) > 0
+	for _, l := range layers {
+		layerTotalBytes += l.total
+		if !l.completed() {
+			allLayersDone = false
+		}
+	}
+
+	if t == nil || (allLayersDone && layerTotalBytes == 0) {
 		cachedIcon := semstyle.ToANSI("{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}}")
 		cachedStatus := semstyle.ToANSI("{{|DockerStatusSuccess|}}Cached{{[-]}}")
 		statusPad := strutil.Repeat(" ", sectionStatusW-len("Cached"))
 		return globalIndent + cachedIcon + " " + cachedStatus + semstyle.CodeReset + statusPad + imageLabel + urlWithCount + imgPad + sizes + bar
+	}
+	if layerTotalBytes == 0 {
+		waitIcon := semstyle.ToANSI("{{|DockerSpinner|}}" + p.icons().spinner + "{{[-]}}")
+		waitStatus := semstyle.ToANSI("{{|DockerStatusPending|}}Waiting{{[-]}}")
+		statusPad := strutil.Repeat(" ", sectionStatusW-len("Waiting"))
+		return globalIndent + waitIcon + " " + waitStatus + semstyle.CodeReset + statusPad + imageLabel + urlWithCount + imgPad + sizes + bar
 	}
 	worst := p.worstImageStatus(imgName)
 	icon := p.propagatedIcon(t, worst)
