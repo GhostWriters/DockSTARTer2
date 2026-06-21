@@ -67,12 +67,14 @@ func (m *SessionManager) forceDisconnect(pid int) error {
 
 // SessionManager tracks the active session state and manages lock files.
 type SessionManager struct {
-	mu         sync.Mutex
-	editActive bool
-	editFlock  *flock.Flock
+	mu                  sync.Mutex
+	editActive          bool
+	editFlock           *flock.Flock
+	procFlock           *flock.Flock // shared flock held on our own .toml for the process lifetime
+	restartUnsafeFlock  *flock.Flock // shared flock held on our .restartunsafe file while unsafe
 
 	editLockPath      string // $STATE/locks/edit.lock
-	serverPIDPath     string // $STATE/locks/server.pid
+	serverPIDPath     string // $STATE/locks/server.pid — kept for legacy cleanup only
 	procsDir          string // $STATE/locks/procs/    — one file per running TUI/daemon instance
 	versionsDir       string // $STATE/locks/versions/ — one file per executable path
 	sessionsDir       string // $STATE/locks/sessions/ — one file per active SSH/web connection
@@ -94,7 +96,7 @@ type SessionInfo struct {
 	Terminal   string
 }
 
-// ServerInfo holds the details read from a server PID file.
+// ServerInfo holds details about a running server daemon instance.
 type ServerInfo struct {
 	PID     int
 	Port    int
@@ -110,13 +112,6 @@ type editLockRecord struct {
 	Session    string `toml:"session"`
 	Transport  string `toml:"transport"`
 	Terminal   string `toml:"terminal"`
-}
-
-// serverRecord is the TOML structure stored in server.pid.
-type serverRecord struct {
-	PID     int `toml:"pid"`
-	Port    int `toml:"port"`
-	WebPort int `toml:"web_port"`
 }
 
 // sessionRecord is the TOML structure stored in each session file.
@@ -278,15 +273,33 @@ func (m *SessionManager) ReleaseEditLock() {
 	_ = os.Remove(m.editLockPath)
 }
 
+// AcquireServer marks the current process as a server daemon in its proc toml,
+// recording the SSH and web ports. Multiple server instances are supported.
 func (m *SessionManager) AcquireServer(sshPort, webPort int) error {
-	return writeTomlFile(m.serverPIDPath, serverRecord{
-		PID:     os.Getpid(),
-		Port:    sshPort,
-		WebPort: webPort,
-	})
+	path := m.procPath(os.Getpid())
+	r, ok := readProcRecord(path)
+	if !ok {
+		return fmt.Errorf("proc record not found for PID %d", os.Getpid())
+	}
+	r.IsServer = true
+	r.SSHPort = sshPort
+	r.WebPort = webPort
+	return writeProcRecord(path, r)
 }
 
+// ReleaseServer clears the server flag from the current process's proc toml.
+// The proc file itself is removed by UnregisterProc on process exit.
 func (m *SessionManager) ReleaseServer() {
+	path := m.procPath(os.Getpid())
+	r, ok := readProcRecord(path)
+	if !ok {
+		return
+	}
+	r.IsServer = false
+	r.SSHPort = 0
+	r.WebPort = 0
+	_ = writeProcRecord(path, r)
+	// Also remove legacy server.pid if present from an older build.
 	_ = os.Remove(m.serverPIDPath)
 }
 
@@ -299,10 +312,31 @@ type procRecord struct {
 	SSHClient string `toml:"ssh_client"`
 	ConnInfo  string `toml:"conn_info"`
 	Terminal  string `toml:"terminal"`
+	IsServer  bool   `toml:"is_server,omitempty"`
+	SSHPort   int    `toml:"ssh_port,omitempty"`
+	WebPort   int    `toml:"web_port,omitempty"`
 }
 
 func (m *SessionManager) procPath(pid int) string {
 	return filepath.Join(m.procsDir, strconv.Itoa(pid)+".toml")
+}
+
+// isProcFileStale returns true if no live process holds a shared flock on the
+// proc toml file at path. An exclusive TryLock succeeds only when no shared
+// locks are held, meaning the owning process has exited. Files written by older
+// builds that never acquired a flock are also treated as stale and removed —
+// they will be re-registered on the next startup of that instance.
+func isProcFileStale(path string, _ procRecord) bool {
+	f := flock.New(path)
+	locked, err := f.TryLock()
+	if err != nil {
+		return false // can't tell; assume live
+	}
+	if !locked {
+		return false // shared lock held — process is alive
+	}
+	_ = f.Unlock()
+	return true
 }
 
 func writeProcRecord(path string, r procRecord) (retErr error) {
@@ -345,7 +379,8 @@ func (m *SessionManager) RegisterProc(exePath, currentVersion string) {
 		}
 	}
 	terminal := DetectTerminal()
-	_ = writeProcRecord(m.procPath(os.Getpid()), procRecord{
+	path := m.procPath(os.Getpid())
+	_ = writeProcRecord(path, procRecord{
 		PID:       os.Getpid(),
 		ExePath:   exePath,
 		Version:   currentVersion,
@@ -353,6 +388,12 @@ func (m *SessionManager) RegisterProc(exePath, currentVersion string) {
 		SSHClient: sshClient,
 		Terminal:  terminal,
 	})
+	// Hold a shared flock on our own .toml for the process lifetime.
+	// Other instances use TryLock (exclusive) to detect dead processes without PID reuse false positives.
+	f := flock.New(path)
+	if _, err := f.TryRLock(); err == nil {
+		m.procFlock = f
+	}
 }
 
 // UpdateProcConnInfo updates the ConnInfo field in the current process's proc file.
@@ -368,25 +409,39 @@ func (m *SessionManager) UpdateProcConnInfo(connInfo string) {
 
 // UnregisterProc removes the current process's registration file.
 func (m *SessionManager) UnregisterProc() {
+	if m.procFlock != nil {
+		_ = m.procFlock.Unlock()
+		m.procFlock = nil
+	}
 	pid := os.Getpid()
 	_ = os.Remove(m.procPath(pid))
 	_ = os.Remove(filepath.Join(m.procsDir, strconv.Itoa(pid)+".restartunsafe"))
 }
 
-// MarkRestartUnsafe creates a marker file indicating this process is currently
-// in a state where it is unsafe to restart (e.g. editing).
+// MarkRestartUnsafe acquires a shared flock on this process's .restartunsafe
+// file, holding it until MarkRestartSafe is called or the process exits.
+// AnyRestartUnsafe uses TryLock to detect live holders without PID parsing.
 func (m *SessionManager) MarkRestartUnsafe() {
 	_ = os.MkdirAll(m.procsDir, 0755)
-	_ = os.WriteFile(filepath.Join(m.procsDir, strconv.Itoa(os.Getpid())+".restartunsafe"), []byte{}, 0644)
+	path := filepath.Join(m.procsDir, strconv.Itoa(os.Getpid())+".restartunsafe")
+	_ = os.WriteFile(path, []byte{}, 0644)
+	f := flock.New(path)
+	if _, err := f.TryRLock(); err == nil {
+		m.restartUnsafeFlock = f
+	}
 }
 
-// MarkRestartSafe removes the restart-unsafe marker for this process.
+// MarkRestartSafe releases the restart-unsafe flock and removes the marker file.
 func (m *SessionManager) MarkRestartSafe() {
+	if m.restartUnsafeFlock != nil {
+		_ = m.restartUnsafeFlock.Unlock()
+		m.restartUnsafeFlock = nil
+	}
 	_ = os.Remove(filepath.Join(m.procsDir, strconv.Itoa(os.Getpid())+".restartunsafe"))
 }
 
-// AnyRestartUnsafe returns true if any live registered process has marked
-// itself as unsafe to restart.
+// AnyRestartUnsafe returns true if any live process holds a restart-unsafe flock.
+// Stale files (no flock held) are removed as they are encountered.
 func (m *SessionManager) AnyRestartUnsafe() bool {
 	entries, err := os.ReadDir(m.procsDir)
 	if err != nil {
@@ -396,18 +451,17 @@ func (m *SessionManager) AnyRestartUnsafe() bool {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".restartunsafe") {
 			continue
 		}
-		// Derive PID from filename — strip the .restartunsafe suffix.
-		pidStr := strings.TrimSuffix(e.Name(), ".restartunsafe")
-		pid, err := strconv.Atoi(pidStr)
+		path := filepath.Join(m.procsDir, e.Name())
+		f := flock.New(path)
+		locked, err := f.TryLock()
 		if err != nil {
-			_ = os.Remove(filepath.Join(m.procsDir, e.Name()))
-			continue
+			continue // can't tell; assume live
 		}
-		if !ProcessExists(pid) {
-			_ = os.Remove(filepath.Join(m.procsDir, e.Name()))
-			continue
+		if !locked {
+			return true // shared flock held — process is alive and restart-unsafe
 		}
-		return true
+		_ = f.Unlock()
+		_ = os.Remove(path) // exclusive lock succeeded — no live holder
 	}
 	return false
 }
@@ -448,14 +502,14 @@ func (m *SessionManager) ListConnectedSessions() []ConnectedSession {
 	if err != nil {
 		return nil
 	}
-	serverInfo := m.ReadServerInfo()
+	anyServerRunning := len(m.ListServerInfos()) > 0
 	var sessions []ConnectedSession
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
 		}
 		path := filepath.Join(m.sessionsDir, e.Name())
-		if serverInfo.PID == 0 || !ProcessExists(serverInfo.PID) {
+		if !anyServerRunning {
 			_ = os.Remove(path)
 			continue
 		}
@@ -487,6 +541,9 @@ type ProcInfo struct {
 	SSHClient string // client IP if this process was started over SSH, else ""
 	ConnInfo  string // additional connection info (e.g. "SSH:40022 Web:40080" for server)
 	Terminal  string // terminal identifier e.g. "WezTerm/xterm-256color"
+	IsServer  bool
+	SSHPort   int
+	WebPort   int
 }
 
 // ListProcInfos returns info for all live registered processes, excluding the
@@ -504,7 +561,7 @@ func (m *SessionManager) ListProcInfos() []ProcInfo {
 		}
 		path := filepath.Join(m.procsDir, e.Name())
 		r, ok := readProcRecord(path)
-		if !ok || r.PID == 0 || !ProcessExists(r.PID) {
+		if !ok || r.PID == 0 || isProcFileStale(path, r) {
 			_ = os.Remove(path)
 			continue
 		}
@@ -616,18 +673,44 @@ func (m *SessionManager) ReadEditInfo() SessionInfo {
 	return SessionInfo(r)
 }
 
+// ReadServerInfo returns info for the first live server daemon found in the
+// proc directory. Returns zero ServerInfo if none is running.
+// For multiple servers, use ListServerInfos.
 func (m *SessionManager) ReadServerInfo() ServerInfo {
-	data, err := os.ReadFile(m.serverPIDPath)
+	servers := m.ListServerInfos()
+	if len(servers) == 0 {
+		return ServerInfo{}
+	}
+	return servers[0]
+}
+
+// ListServerInfos returns ServerInfo for all live server daemon instances.
+func (m *SessionManager) ListServerInfos() []ServerInfo {
+	entries, err := os.ReadDir(m.procsDir)
 	if err != nil {
-		return ServerInfo{}
+		return nil
 	}
-	var r serverRecord
-	if err := toml.Unmarshal(data, &r); err != nil {
-		// Corrupt file — remove it so a fresh server start can write a clean one.
-		_ = os.Remove(m.serverPIDPath)
-		return ServerInfo{}
+	var result []ServerInfo
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".toml") {
+			continue
+		}
+		path := filepath.Join(m.procsDir, e.Name())
+		r, ok := readProcRecord(path)
+		if !ok || !r.IsServer {
+			continue
+		}
+		if isProcFileStale(path, r) {
+			_ = os.Remove(path)
+			continue
+		}
+		result = append(result, ServerInfo{
+			PID:     r.PID,
+			Port:    r.SSHPort,
+			WebPort: r.WebPort,
+		})
 	}
-	return ServerInfo(r)
+	return result
 }
 
 // EditLockPID returns the PID of the process currently holding the edit lock.
@@ -665,23 +748,8 @@ func (m *SessionManager) cleanStaleLocks() {
 		}
 	}
 
-	if si := m.ReadServerInfo(); si.PID != 0 && !ProcessExists(si.PID) {
-		_ = os.Remove(m.serverPIDPath)
-	}
-
-	// Clean stale proc registration files (dead processes).
-	if entries, err := os.ReadDir(m.procsDir); err == nil {
-		for _, e := range entries {
-			if e.IsDir() || !strings.HasSuffix(e.Name(), ".toml") {
-				continue
-			}
-			path := filepath.Join(m.procsDir, e.Name())
-			r, ok := readProcRecord(path)
-			if !ok || r.PID == 0 || !ProcessExists(r.PID) {
-				_ = os.Remove(path)
-			}
-		}
-	}
+	// Remove legacy server.pid if present from an older build.
+	_ = os.Remove(m.serverPIDPath)
 
 	// Version files in versionsDir are intentionally persistent — no cleanup needed.
 }

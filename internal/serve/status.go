@@ -26,11 +26,13 @@ func CheckStartupStatus(ctx context.Context) {
 
 	editInfo := sessionlocks.Sessions.ReadEditInfo()
 	connSessions := sessionlocks.Sessions.ListConnectedSessions()
-	serverInfo := sessionlocks.Sessions.ReadServerInfo()
 
-	// Sort so the server instance appears first.
+	// Sort so server instances appear first.
 	sort.Slice(procs, func(i, j int) bool {
-		return procs[i].PID == serverInfo.PID
+		if procs[i].IsServer != procs[j].IsServer {
+			return procs[i].IsServer
+		}
+		return procs[i].PID < procs[j].PID
 	})
 
 	// Build all instance lines then emit as a single multi-line warning.
@@ -39,17 +41,14 @@ func CheckStartupStatus(ctx context.Context) {
 		// Build tag blocks — each becomes its own [block]
 		var tagBlocks []string
 
-		// Server port info: [SSH Port: N, Web Port: N]
-		// Only trust ConnInfo if this PID is actually the server.
-		isServer := p.PID == serverInfo.PID
-		if p.ConnInfo != "" && isServer {
-			parts := strings.Fields(p.ConnInfo)
+		// Server port info: [SSH Server Port: N, Web Server Port: N]
+		if p.IsServer {
 			var portTags []string
-			for _, part := range parts {
-				kv := strings.SplitN(part, ":", 2)
-				if len(kv) == 2 {
-					portTags = append(portTags, fmt.Sprintf("%s Server Port: {{|Version|}}%s{{[-]}}", kv[0], kv[1]))
-				}
+			if p.SSHPort > 0 {
+				portTags = append(portTags, fmt.Sprintf("SSH Server Port: {{|Version|}}%d{{[-]}}", p.SSHPort))
+			}
+			if p.WebPort > 0 {
+				portTags = append(portTags, fmt.Sprintf("Web Server Port: {{|Version|}}%d{{[-]}}", p.WebPort))
 			}
 			if len(portTags) > 0 {
 				tagBlocks = append(tagBlocks, strings.Join(portTags, ", "))
@@ -57,8 +56,8 @@ func CheckStartupStatus(ctx context.Context) {
 		}
 
 		// Connection info for non-server instances.
-		// Suppressed for the server instance — its connections show under Connected: instead.
-		if !isServer {
+		// Suppressed for server instances — their connections show under Connected: instead.
+		if !p.IsServer {
 			termStr := ""
 			if p.Terminal != "" {
 				termStr = fmt.Sprintf(" ({{|RunningCommand|}}%s{{[-]}}", p.Terminal) + ")"
@@ -88,7 +87,7 @@ func CheckStartupStatus(ctx context.Context) {
 			fmt.Sprintf("\tPID {{|Version|}}%-7d{{[-]}} [{{|Version|}}%s{{[-]}}]%s", p.PID, p.Version, tagStr),
 			fmt.Sprintf("\t\t{{|RunningCommand|}}%s{{[-]}}", cmdLine),
 		)
-		if !isServer && p.PID == editInfo.PID && editInfo.ConnType != "" {
+		if !p.IsServer && p.PID == editInfo.PID && editInfo.ConnType != "" {
 			conn := editInfo.ConnType
 			switch editInfo.LockSource {
 			case "cli":
@@ -101,7 +100,7 @@ func CheckStartupStatus(ctx context.Context) {
 		}
 
 		// Show active connected sessions under the server instance only.
-		if isServer && len(connSessions) > 0 {
+		if p.IsServer && len(connSessions) > 0 {
 			lines = append(lines, "\t\t{{|Warn|}}Connected:{{[-]}}")
 			for _, cs := range connSessions {
 				termStr := ""
@@ -145,32 +144,27 @@ func PrintServerStatus(_ context.Context, cfg config.ServerConfig) {
 	}
 
 	// ── Server ───────────────────────────────────────────────────────────────
-	serverInfo := sessionlocks.Sessions.ReadServerInfo()
-	serverRunning := serverInfo.PID != 0 && sessionlocks.ProcessExists(serverInfo.PID)
+	servers := sessionlocks.Sessions.ListServerInfos()
+	serverRunning := len(servers) > 0
 
-	sshPort := serverInfo.Port
-	if sshPort == 0 {
-		sshPort = cfg.SSH.Port
-	}
-	if sshPort > 0 {
-		if serverRunning {
-			fmt.Printf("SSH Server:  port %d (running, PID %d)\n", sshPort, serverInfo.PID)
-		} else {
-			fmt.Printf("SSH Server:  port %d (stopped)\n", sshPort)
+	if serverRunning {
+		for _, si := range servers {
+			if si.Port > 0 {
+				fmt.Printf("SSH Server:  port %d (running, PID %d)\n", si.Port, si.PID)
+			}
+			if si.WebPort > 0 {
+				fmt.Printf("Web Server:  port %d (running, PID %d)\n", si.WebPort, si.PID)
+			}
 		}
 	} else {
-		fmt.Println("SSH Server:  not configured")
-	}
-
-	webPort := serverInfo.WebPort
-	if webPort == 0 {
-		webPort = cfg.Web.Port
-	}
-	if webPort > 0 {
-		if serverRunning && serverInfo.WebPort > 0 {
-			fmt.Printf("Web Server:  port %d (running)\n", webPort)
+		sshPort := cfg.SSH.Port
+		if sshPort > 0 {
+			fmt.Printf("SSH Server:  port %d (stopped)\n", sshPort)
 		} else {
-			fmt.Printf("Web Server:  port %d (stopped)\n", webPort)
+			fmt.Println("SSH Server:  not configured")
+		}
+		if cfg.Web.Port > 0 {
+			fmt.Printf("Web Server:  port %d (stopped)\n", cfg.Web.Port)
 		}
 	}
 

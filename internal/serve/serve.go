@@ -191,22 +191,15 @@ func StartSSHServer(ctx context.Context, cfg config.ServerConfig, startMenu stri
 	return nil
 }
 
-// StopServer signals the running server daemon to shut down gracefully.
-// If force is true it kills the process immediately and clears the PID file.
+// StopServer signals all running server daemons to shut down gracefully.
+// If force is true it kills them immediately.
 func StopServer(ctx context.Context, force bool) error {
-	info := sessionlocks.Sessions.ReadServerInfo()
-	if info.PID == 0 || !sessionlocks.ProcessExists(info.PID) {
-		sessionlocks.Sessions.ReleaseServer()
+	servers := sessionlocks.Sessions.ListServerInfos()
+	if len(servers) == 0 {
 		logger.Info(ctx, "Server is not running.")
 		return nil
 	}
 
-	proc, err := os.FindProcess(info.PID)
-	if err != nil {
-		return fmt.Errorf("finding server process (PID %d): %w", info.PID, err)
-	}
-
-	logger.Info(ctx, "Requesting graceful server stop (PID %d).", info.PID)
 	if err := sessionlocks.Sessions.RequestStop(); err != nil {
 		return fmt.Errorf("writing stop request: %w", err)
 	}
@@ -216,10 +209,28 @@ func StopServer(ctx context.Context, force bool) error {
 		timeout = 5 * time.Second
 	}
 
+	// Wait for all server instances to exit.
+	pids := make([]int, len(servers))
+	procs := make([]*os.Process, len(servers))
+	for i, s := range servers {
+		pids[i] = s.PID
+		logger.Info(ctx, "Requesting graceful server stop (PID %d).", s.PID)
+		if p, err := os.FindProcess(s.PID); err == nil {
+			procs[i] = p
+		}
+	}
+
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		time.Sleep(250 * time.Millisecond)
-		if !sessionlocks.ProcessExists(info.PID) {
+		allDead := true
+		for _, pid := range pids {
+			if sessionlocks.ProcessExists(pid) {
+				allDead = false
+				break
+			}
+		}
+		if allDead {
 			logger.Notice(ctx, "Server stopped.")
 			return nil
 		}
@@ -230,9 +241,12 @@ func StopServer(ctx context.Context, force bool) error {
 		return nil
 	}
 
-	logger.Warn(ctx, "Server did not stop gracefully — forcing stop (PID %d).", info.PID)
-	_ = proc.Kill()
-	sessionlocks.Sessions.ReleaseServer()
+	for i, p := range procs {
+		if p != nil && sessionlocks.ProcessExists(pids[i]) {
+			logger.Warn(ctx, "Server did not stop gracefully — forcing stop (PID %d).", pids[i])
+			_ = p.Kill()
+		}
+	}
 	sessionlocks.Sessions.ForceRelease()
 	sessionlocks.Sessions.ClearDisconnectRequest()
 	logger.Notice(ctx, "Server stopped.")
