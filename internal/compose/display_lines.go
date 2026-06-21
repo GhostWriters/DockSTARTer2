@@ -5,6 +5,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/docker/compose/v5/pkg/api"
 	"github.com/GhostWriters/semstyle"
 	"DockSTARTer2/internal/strutil"
 )
@@ -102,18 +103,28 @@ func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string 
 						icon = semstyle.ToANSI("{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}}")
 					}
 				}
-			} else if p.allLayersAlreadyExist(imgName) {
-				statusText = "Cached"
-				cachedTag := "{{|DockerStatusSuccess|}}"
-				if p.command == "pull" {
-					cachedTag = "{{|DockerStatusFinal|}}"
-				}
-				statusANSI = semstyle.ToANSI(cachedTag + "Cached{{[-]}}")
-				icon = semstyle.ToANSI("{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}}")
 			} else {
-				statusText = abbreviateStatus(t.text)
-				statusANSI = semstyle.ToANSI(serviceStatusTag(t.status, t.text, p.command))
-				icon = p.propagatedIcon(t, p.worstServiceStatus(svc, imgName))
+				switch t.text {
+				case api.StatusPulling, api.StatusBuilding:
+					if p.allLayersAlreadyExist(imgName) {
+						statusText = "Cached"
+						if p.command == "pull" {
+							statusANSI = semstyle.ToANSI("{{|DockerStatusFinal|}}Cached{{[-]}}")
+							icon = semstyle.ToANSI("{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}}")
+						} else {
+							statusANSI = semstyle.ToANSI("{{|DockerStatusActive|}}Cached{{[-]}}")
+							icon = p.activeSpinnerANSI(p.icons().spinner)
+						}
+					} else {
+						statusText = abbreviateStatus(t.text)
+						statusANSI = semstyle.ToANSI(serviceStatusTag(t.status, t.text, p.command))
+						icon = p.propagatedIcon(t, p.worstServiceStatus(svc, imgName))
+					}
+				default:
+					statusText = abbreviateStatus(t.text)
+					statusANSI = semstyle.ToANSI(serviceStatusTag(t.status, t.text, p.command))
+					icon = p.propagatedIcon(t, p.worstServiceStatus(svc, imgName))
+				}
 			}
 			statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
 			appendLine(globalIndent+icon+" "+statusANSI+semstyle.CodeReset+statusPad+sectionChildIndent+nameANSI+semstyle.ToANSI("{{|DockerColon|}}:{{[-]}}"), p.serviceTimerTask(svc), timerService)
@@ -536,18 +547,28 @@ func (p *consoleEventProcessor) buildTeardownLines() []string {
 			var icon, statusText, statusANSI string
 			if t == nil {
 				icon, statusANSI, statusText = impliedIcon, impliedANSI, impliedText
-			} else if p.allLayersAlreadyExist(imgName) {
-				statusText = "Cached"
-				cachedTag := "{{|DockerStatusSuccess|}}"
-				if p.command == "pull" {
-					cachedTag = "{{|DockerStatusFinal|}}"
-				}
-				statusANSI = semstyle.ToANSI(cachedTag + "Cached{{[-]}}")
-				icon = semstyle.ToANSI("{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}}")
 			} else {
-				statusText = abbreviateStatus(t.text)
-				statusANSI = semstyle.ToANSI(serviceStatusTag(t.status, t.text, p.command))
-				icon = p.propagatedIcon(t, p.worstServiceStatus(svc, imgName))
+				switch t.text {
+				case api.StatusPulling, api.StatusBuilding:
+					if p.allLayersAlreadyExist(imgName) {
+						statusText = "Cached"
+						if p.command == "pull" {
+							statusANSI = semstyle.ToANSI("{{|DockerStatusFinal|}}Cached{{[-]}}")
+							icon = semstyle.ToANSI("{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}}")
+						} else {
+							statusANSI = semstyle.ToANSI("{{|DockerStatusActive|}}Cached{{[-]}}")
+							icon = p.activeSpinnerANSI(p.icons().spinner)
+						}
+					} else {
+						statusText = abbreviateStatus(t.text)
+						statusANSI = semstyle.ToANSI(serviceStatusTag(t.status, t.text, p.command))
+						icon = p.propagatedIcon(t, p.worstServiceStatus(svc, imgName))
+					}
+				default:
+					statusText = abbreviateStatus(t.text)
+					statusANSI = semstyle.ToANSI(serviceStatusTag(t.status, t.text, p.command))
+					icon = p.propagatedIcon(t, p.worstServiceStatus(svc, imgName))
+				}
 			}
 			statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
 			appendLine(globalIndent+icon+" "+statusANSI+semstyle.CodeReset+statusPad+sectionChildIndent+nameANSI+semstyle.ToANSI("{{|DockerColon|}}:{{[-]}}"), p.serviceTimerTask(svc), timerService)
