@@ -66,11 +66,12 @@ func handleServerStart(ctx context.Context, conf *config.AppConfig) error {
 		return nil
 	}
 
-	// Check if already running.
-	info := sessionlocks.Sessions.ReadServerInfo()
-	if info.PID != 0 {
-		logger.Notice(ctx, "Server is already running (PID %d, port %d).", info.PID, info.Port)
-		return nil
+	// Check if already running on the configured port.
+	for _, info := range sessionlocks.Sessions.ListServerInfos() {
+		if info.Port == conf.Server.SSH.Port {
+			logger.Notice(ctx, "Server is already running on port %d (PID %d).", info.Port, info.PID)
+			return nil
+		}
 	}
 
 	execPath, err := os.Executable()

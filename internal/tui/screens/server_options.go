@@ -144,12 +144,16 @@ func (s *ServerOptionsScreen) buildSettingsMenu() *tui.MenuModel {
 }
 
 func (s *ServerOptionsScreen) buildStatusMenu() *tui.MenuModel {
-	serverInfo := sessionlocks.Sessions.ReadServerInfo()
+	servers := sessionlocks.Sessions.ListServerInfos()
 	editInfo := sessionlocks.Sessions.ReadEditInfo()
 
 	serverStatus := "{{|TitleError|}}Not running{{[-]}}"
-	if serverInfo.PID != 0 && sessionlocks.ProcessExists(serverInfo.PID) {
-		serverStatus = fmt.Sprintf("{{|Yes|}}Running{{[-]}} (PID %d, port %d)", serverInfo.PID, serverInfo.Port)
+	if len(servers) > 0 {
+		si := servers[0]
+		serverStatus = fmt.Sprintf("{{|Yes|}}Running{{[-]}} (PID %d, port %d)", si.PID, si.Port)
+		if len(servers) > 1 {
+			serverStatus += fmt.Sprintf(" +%d more", len(servers)-1)
+		}
 	}
 
 	sessionStatus := "None"
@@ -442,8 +446,7 @@ func (s *ServerOptionsScreen) handleApply() tea.Cmd {
 		if s.settingsMenu.AnyLocked() {
 			return nil
 		}
-		serverInfo := sessionlocks.Sessions.ReadServerInfo()
-		if serverInfo.PID != 0 && sessionlocks.ProcessExists(serverInfo.PID) {
+		if len(sessionlocks.Sessions.ListServerInfos()) > 0 {
 			if !tui.Confirm("Server Is Running",
 				"Changing server settings while the server is running may disconnect active remote sessions.\n\nApply anyway?",
 				false) {
