@@ -214,7 +214,27 @@ func (p *consoleEventProcessor) worstImageStatus(imgName string) api.EventStatus
 	if layerWorst == api.Warning || img.status == api.Warning {
 		return api.Warning
 	}
+	// If all layers report "Already exists" the image is fully cached; treat as Done
+	// so the rollup propagates correctly even before the SDK sends a Done event.
+	if p.allLayersAlreadyExist(imgName) {
+		return api.Done
+	}
 	return img.status
+}
+
+// allLayersAlreadyExist reports whether every layer of imgName has text "Already exists".
+func (p *consoleEventProcessor) allLayersAlreadyExist(imgName string) bool {
+	diffIDs := p.imageLayerDiffIDs[imgName]
+	if len(diffIDs) == 0 {
+		return false
+	}
+	for _, sha := range diffIDs {
+		l := p.tasks[sha]
+		if l == nil || l.text != "Already exists" {
+			return false
+		}
+	}
+	return true
 }
 
 // worstServiceStatus returns the worst status for a service, propagating from its image.
