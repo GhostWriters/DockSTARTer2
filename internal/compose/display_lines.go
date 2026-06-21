@@ -81,12 +81,13 @@ func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string 
 			if t == nil {
 				if img != nil && p.allLayersAlreadyExist(imgName) {
 					statusText = "Cached"
-					cachedTag := "{{|DockerStatusSuccess|}}"
 					if p.command == "pull" {
-						cachedTag = "{{|DockerStatusFinal|}}"
+						statusANSI = semstyle.ToANSI("{{|DockerStatusFinal|}}Cached{{[-]}}")
+						icon = semstyle.ToANSI("{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}}")
+					} else {
+						statusANSI = semstyle.ToANSI("{{|DockerStatusActive|}}Cached{{[-]}}")
+						icon = p.activeSpinnerANSI(p.icons().spinner)
 					}
-					statusANSI = semstyle.ToANSI(cachedTag + "Cached{{[-]}}")
-					icon = semstyle.ToANSI("{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}}")
 				} else if img != nil {
 					statusText = abbreviateStatus(img.text)
 					statusANSI = semstyle.ToANSI(imageStatusTag(img.status, img.text, p.command))
