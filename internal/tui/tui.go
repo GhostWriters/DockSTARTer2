@@ -303,9 +303,14 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	// Create the app model
 	model := NewAppModel(ctx, currentConfig, clientIP, connType, startScreen, initialStack...)
 
+	if console.IsPuTTY() {
+		logger.Info(ctx, "PuTTY terminal detected")
+	}
+
 	// Create and run the Bubble Tea program
 	// Note: AltScreen is set via View().AltScreen in v2
 	p := NewProgram(model, pOpts)
+
 
 	// Initialize re-execution sync
 	programExited = make(chan struct{})
