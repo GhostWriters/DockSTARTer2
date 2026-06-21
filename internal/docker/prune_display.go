@@ -365,12 +365,6 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 		}
 	}
 
-	// ── summary ───────────────────────────────────────────────────────────────
-	if r.SpaceReclaimed > 0 {
-		add(GlobalIndent + strutil.Repeat(" ", IconW+SpaceW) + semstyle.ToANSI("{{[white::B]}}Total reclaimed space:{{[-]}} {{|DockerMarkerDone|}}" +
-			units.HumanSize(float64(r.SpaceReclaimed)) + "{{[-]}}"))
-	}
-
 	// ── error notices ─────────────────────────────────────────────────────────
 	var errs []string
 	if r.ImagesError != nil {
@@ -393,5 +387,13 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 	for i := headerEnd; i < len(lines); i++ {
 		lines[i] = headerIndent + lines[i]
 	}
+
+	// ── summary ───────────────────────────────────────────────────────────────
+	// Added after the indent loop so it aligns with "prune:" in the header, not the children.
+	if r.SpaceReclaimed > 0 {
+		lines = append(lines, GlobalIndent+strutil.Repeat(" ", IconW+SpaceW)+semstyle.ToANSI("{{[white::B]}}Total reclaimed space:{{[-]}} {{|DockerMarkerDone|}}" +
+			units.HumanSize(float64(r.SpaceReclaimed))+"{{[-]}}"))
+	}
+
 	return lines, errs
 }
