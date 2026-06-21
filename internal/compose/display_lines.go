@@ -93,6 +93,14 @@ func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string 
 						icon = semstyle.ToANSI("{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}}")
 					}
 				}
+			} else if p.allLayersAlreadyExist(imgName) {
+				statusText = "Cached"
+				cachedTag := "{{|DockerStatusSuccess|}}"
+				if p.command == "pull" {
+					cachedTag = "{{|DockerStatusFinal|}}"
+				}
+				statusANSI = semstyle.ToANSI(cachedTag + "Cached{{[-]}}")
+				icon = semstyle.ToANSI("{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}}")
 			} else {
 				statusText = abbreviateStatus(t.text)
 				statusANSI = semstyle.ToANSI(serviceStatusTag(t.status, t.text, p.command))
@@ -223,7 +231,7 @@ func (p *consoleEventProcessor) buildImageLine(imgName string, t *consoleTask, l
 
 	if t == nil || allLayersCached {
 		cachedIcon := semstyle.ToANSI("{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}}")
-		cachedStatus := semstyle.ToANSI("{{|DockerStatusSuccess|}}Cached{{[-]}}")
+		cachedStatus := semstyle.ToANSI("{{|DockerStatusFinal|}}Cached{{[-]}}")
 		statusPad := strutil.Repeat(" ", sectionStatusW-len("Cached"))
 		return globalIndent + cachedIcon + " " + cachedStatus + semstyle.CodeReset + statusPad + imageLabel + urlWithCount + imgPad + sizes + bar
 	}
@@ -519,6 +527,14 @@ func (p *consoleEventProcessor) buildTeardownLines() []string {
 			var icon, statusText, statusANSI string
 			if t == nil {
 				icon, statusANSI, statusText = impliedIcon, impliedANSI, impliedText
+			} else if p.allLayersAlreadyExist(imgName) {
+				statusText = "Cached"
+				cachedTag := "{{|DockerStatusSuccess|}}"
+				if p.command == "pull" {
+					cachedTag = "{{|DockerStatusFinal|}}"
+				}
+				statusANSI = semstyle.ToANSI(cachedTag + "Cached{{[-]}}")
+				icon = semstyle.ToANSI("{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}}")
 			} else {
 				statusText = abbreviateStatus(t.text)
 				statusANSI = semstyle.ToANSI(serviceStatusTag(t.status, t.text, p.command))
