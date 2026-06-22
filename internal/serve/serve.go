@@ -191,31 +191,35 @@ func StartSSHServer(ctx context.Context, cfg config.ServerConfig, startMenu stri
 	return nil
 }
 
-// StopServer signals server daemon(s) to shut down gracefully.
-// If targetPID is non-zero, only that instance is stopped via SIGTERM.
-// If targetPID is zero, all instances are stopped via the stop-request file.
-// If force is true, processes are killed after the timeout.
-func StopServer(ctx context.Context, force bool, targetPID int) error {
+// FindServersByPort returns all server instances that use targetPort as either
+// their SSH or web port. Returns all servers if targetPort is 0.
+func FindServersByPort(targetPort int) []sessionlocks.ServerInfo {
 	servers := sessionlocks.Sessions.ListServerInfos()
-	if len(servers) == 0 {
-		logger.Info(ctx, "Server is not running.")
-		return nil
+	if targetPort == 0 {
+		return servers
 	}
+	var matched []sessionlocks.ServerInfo
+	for _, s := range servers {
+		if s.Port == targetPort || s.WebPort == targetPort {
+			matched = append(matched, s)
+		}
+	}
+	return matched
+}
 
-	// Filter to target if specified.
-	if targetPID != 0 {
-		found := false
-		for _, s := range servers {
-			if s.PID == targetPID {
-				found = true
-				break
-			}
+// StopServer signals server daemon(s) to shut down gracefully.
+// If targetPort is non-zero, only instances using that port are stopped.
+// If targetPort is zero, all instances are stopped.
+// If force is true, processes are killed after the timeout.
+func StopServer(ctx context.Context, force bool, targetPort int) error {
+	servers := FindServersByPort(targetPort)
+	if len(servers) == 0 {
+		if targetPort != 0 {
+			logger.Warn(ctx, "No running server found on port %d.", targetPort)
+		} else {
+			logger.Info(ctx, "Server is not running.")
 		}
-		if !found {
-			logger.Warn(ctx, "No running server found with PID %d.", targetPID)
-			return nil
-		}
-		servers = []sessionlocks.ServerInfo{{PID: targetPID}}
+		return nil
 	}
 
 	timeout := 10 * time.Second
@@ -229,7 +233,7 @@ func StopServer(ctx context.Context, force bool, targetPID int) error {
 	}
 	entries := make([]procEntry, 0, len(servers))
 	for _, s := range servers {
-		logger.Info(ctx, "Requesting graceful server stop (PID %d).", s.PID)
+		logger.Info(ctx, "Requesting graceful server stop (PID %d, port %d).", s.PID, s.Port)
 		e := procEntry{pid: s.PID}
 		if p, err := os.FindProcess(s.PID); err == nil {
 			e.proc = p
@@ -237,10 +241,12 @@ func StopServer(ctx context.Context, force bool, targetPID int) error {
 		entries = append(entries, e)
 	}
 
-	if targetPID != 0 {
-		// Targeted stop — write a PID-specific request file.
-		if err := sessionlocks.Sessions.RequestStopPID(targetPID); err != nil {
-			return fmt.Errorf("writing stop request: %w", err)
+	if targetPort != 0 {
+		// Targeted stop — write PID-specific request files for matched instances.
+		for _, s := range servers {
+			if err := sessionlocks.Sessions.RequestStopPID(s.PID); err != nil {
+				return fmt.Errorf("writing stop request: %w", err)
+			}
 		}
 	} else {
 		// Broadcast stop via request file — all daemons pick it up.
@@ -276,7 +282,7 @@ func StopServer(ctx context.Context, force bool, targetPID int) error {
 			_ = e.proc.Kill()
 		}
 	}
-	if targetPID == 0 {
+	if targetPort == 0 {
 		sessionlocks.Sessions.ForceRelease()
 		sessionlocks.Sessions.ClearDisconnectRequest()
 	}
