@@ -391,7 +391,8 @@ func serviceStatusTag(s api.EventStatus, text string, command string) string {
 	return applyStatusTag(s, text,
 		final,
 		[]string{api.StatusCreating, api.StatusStarting, api.StatusStopping,
-			api.StatusRestarting, api.StatusKilling, api.StatusRemoving, "Recreate", "Restart"},
+			api.StatusRestarting, api.StatusKilling, api.StatusRemoving,
+			"Recreate", "Restart", api.StatusWaiting},
 		filtered,
 	)
 }
@@ -429,7 +430,7 @@ func imageStatusTag(s api.EventStatus, text string, command string) string {
 func layerStatusTag(s api.EventStatus, text string) string {
 	return applyStatusTag(s, text,
 		[]string{api.StatusDownloadComplete, "Pull complete", "Already exists", "Extracted"},
-		[]string{api.StatusDownloading, "Extracting", "Verifying Checksum", "Pulling fs layer"},
+		[]string{api.StatusDownloading, "Extracting", "Verifying Checksum", "Pulling fs layer", api.StatusWaiting},
 		nil,
 	)
 }
