@@ -8,6 +8,7 @@ import (
 	"syscall"
 )
 
+
 // SpawnDaemon re-execs the current binary with --server-daemon, detached from
 // the controlling terminal via a new session (setsid). Stdin is redirected to
 // /dev/null; stdout and stderr inherit the parent's so startup log lines are

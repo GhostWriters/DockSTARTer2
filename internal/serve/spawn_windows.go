@@ -27,3 +27,4 @@ func SpawnDaemon(execPath string, extraArgs []string) (*os.Process, error) {
 	}
 	return cmd.Process, nil
 }
+

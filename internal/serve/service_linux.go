@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -31,7 +32,7 @@ WorkingDirectory={{.HomeDir}}
 {{- range .Env}}
 Environment={{.}}
 {{- end}}
-ExecStart={{.ExecPath}} --server-daemon
+ExecStart={{.ExecPath}} --server-daemon{{.PortArgs}}
 Restart=on-failure
 RestartSec=5
 
@@ -45,6 +46,7 @@ type systemdUnitData struct {
 	HomeDir  string
 	Env      []string
 	ExecPath string
+	PortArgs string // e.g. " 40022 40080" — appended to ExecStart
 }
 
 func systemdUnitPath() string {
@@ -112,11 +114,17 @@ func writeUnitFile(ctx context.Context, unitPath string, data systemdUnitData) e
 	return nil
 }
 
-func InstallService(execPath string) error {
+func InstallService(execPath string, sshPort, webPort int) error {
 	ctx := context.Background()
 	data, err := buildUnitData(execPath)
 	if err != nil {
 		return err
+	}
+	if sshPort > 0 {
+		data.PortArgs = " " + strconv.Itoa(sshPort)
+		if webPort > 0 {
+			data.PortArgs += " " + strconv.Itoa(webPort)
+		}
 	}
 	if err := writeUnitFile(ctx, systemdUnitPath(), data); err != nil {
 		return err

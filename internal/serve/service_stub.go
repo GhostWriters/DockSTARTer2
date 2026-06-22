@@ -4,7 +4,7 @@ package serve
 
 import "fmt"
 
-func InstallService(_ string) error {
+func InstallService(_ string, _, _ int) error {
 	return fmt.Errorf("service management is not supported on this platform")
 }
 

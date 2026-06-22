@@ -800,17 +800,34 @@ func (m *SessionManager) IsSessionDisconnectRequested(id string) bool {
 	return err == nil
 }
 
+// RequestStop writes the broadcast stop-request file, picked up by all daemons.
 func (m *SessionManager) RequestStop() error {
 	return os.WriteFile(m.stopReqPath, []byte{}, 0644)
+}
+
+// RequestStopPID writes a PID-specific stop-request file, picked up only by
+// the daemon with that PID.
+func (m *SessionManager) RequestStopPID(pid int) error {
+	path := strings.TrimSuffix(m.stopReqPath, ".request") + "." + strconv.Itoa(pid) + ".request"
+	return os.WriteFile(path, []byte{}, 0644)
 }
 
 func (m *SessionManager) ClearStopRequest() {
 	_ = os.Remove(m.stopReqPath)
 }
 
+// IsStopRequested returns true if either the broadcast or this process's
+// PID-specific stop-request file exists.
 func (m *SessionManager) IsStopRequested() bool {
-	_, err := os.Stat(m.stopReqPath)
-	return err == nil
+	if _, err := os.Stat(m.stopReqPath); err == nil {
+		return true
+	}
+	pidPath := strings.TrimSuffix(m.stopReqPath, ".request") + "." + strconv.Itoa(os.Getpid()) + ".request"
+	if _, err := os.Stat(pidPath); err == nil {
+		_ = os.Remove(pidPath)
+		return true
+	}
+	return false
 }
 
 // SessionLabel returns the display label for a session transport type.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
@@ -11,6 +12,22 @@ import (
 	"DockSTARTer2/internal/serve"
 	"DockSTARTer2/internal/sessionlocks"
 )
+
+// parsePortArgs reads up to two numeric port values from args.
+// Returns 0 for any argument that is missing or non-numeric.
+func parsePortArgs(args []string) (sshPort, webPort int) {
+	if len(args) > 0 {
+		if p, err := strconv.Atoi(args[0]); err == nil {
+			sshPort = p
+		}
+	}
+	if len(args) > 1 {
+		if p, err := strconv.Atoi(args[1]); err == nil {
+			webPort = p
+		}
+	}
+	return
+}
 
 // handleServer routes --server [subcommand] to the appropriate handler.
 // No subcommand defaults to "status". All subcommands print a notice and
@@ -20,19 +37,41 @@ func handleServer(ctx context.Context, group *CommandGroup, state *CmdState, con
 	if len(group.Args) > 0 {
 		sub = group.Args[0]
 	}
+	// Arg layout differs by subcommand:
+	//   start   [sshPort [webPort]]
+	//   stop    [pid]
+	//   restart [pid [sshPort [webPort]]]
+	//   install [sshPort [webPort]]
+	//   enable  [sshPort [webPort]]
+	tail := group.Args[min(1, len(group.Args)):]
+
+	var sshPort, webPort, targetPID int
+	switch sub {
+	case "stop":
+		if len(tail) > 0 {
+			targetPID, _ = strconv.Atoi(tail[0])
+		}
+	case "restart":
+		if len(tail) > 0 {
+			targetPID, _ = strconv.Atoi(tail[0])
+		}
+		sshPort, webPort = parsePortArgs(tail[min(1, len(tail)):])
+	default:
+		sshPort, webPort = parsePortArgs(tail)
+	}
 
 	switch sub {
 	case "status", "":
 		return handleServerStatus(ctx, conf)
 	case "start":
-		return handleServerStart(ctx, conf)
+		return handleServerStart(ctx, conf, sshPort, webPort)
 	case "stop":
-		return handleServerStop(ctx, state)
+		return handleServerStop(ctx, state, targetPID)
 	case "restart":
-		if err := handleServerStop(ctx, state); err != nil {
+		if err := handleServerStop(ctx, state, targetPID); err != nil {
 			return err
 		}
-		return handleServerStart(ctx, conf)
+		return handleServerStart(ctx, conf, sshPort, webPort)
 	case "disconnect":
 		target := ""
 		if len(group.Args) > 1 {
@@ -40,11 +79,11 @@ func handleServer(ctx context.Context, group *CommandGroup, state *CmdState, con
 		}
 		return handleServerDisconnect(ctx, state, target)
 	case "install":
-		return handleServerInstall(ctx)
+		return handleServerInstall(ctx, sshPort, webPort)
 	case "uninstall":
 		return handleServerUninstall(ctx)
 	case "enable":
-		return handleServerEnable(ctx)
+		return handleServerEnable(ctx, sshPort, webPort)
 	case "disable":
 		return handleServerDisable(ctx)
 	default:
@@ -60,15 +99,18 @@ func handleServerStatus(ctx context.Context, conf *config.AppConfig) error {
 
 // handleServerStart spawns the server as a background daemon process.
 // It validates the config before attempting to start.
-func handleServerStart(ctx context.Context, conf *config.AppConfig) error {
-	if conf.Server.SSH.Port == 0 {
+func handleServerStart(ctx context.Context, conf *config.AppConfig, sshPort, webPort int) error {
+	if sshPort == 0 {
+		sshPort = conf.Server.SSH.Port
+	}
+	if sshPort == 0 {
 		logger.Warn(ctx, "server.ssh.port is not set in dockstarter2.toml — cannot start server.")
 		return nil
 	}
 
-	// Check if already running on the configured port.
+	// Check if already running on the target port.
 	for _, info := range sessionlocks.Sessions.ListServerInfos() {
-		if info.Port == conf.Server.SSH.Port {
+		if info.Port == sshPort {
 			logger.Notice(ctx, "Server is already running on port %d (PID %d).", info.Port, info.PID)
 			return nil
 		}
@@ -79,8 +121,16 @@ func handleServerStart(ctx context.Context, conf *config.AppConfig) error {
 		return fmt.Errorf("finding executable path: %w", err)
 	}
 
+	var portArgs []string
+	portArgs = append(portArgs, strconv.Itoa(sshPort))
+	if webPort > 0 {
+		portArgs = append(portArgs, strconv.Itoa(webPort))
+	} else if conf.Server.Web.Port > 0 {
+		portArgs = append(portArgs, strconv.Itoa(conf.Server.Web.Port))
+	}
+
 	logger.Notice(ctx, "Starting server in the background.")
-	proc, err := serve.SpawnDaemon(execPath, nil)
+	proc, err := serve.SpawnDaemon(execPath, portArgs)
 	if err != nil {
 		return fmt.Errorf("spawning server daemon: %w", err)
 	}
@@ -98,6 +148,13 @@ func handleServerStart(ctx context.Context, conf *config.AppConfig) error {
 func handleServeDaemon(ctx context.Context, group *CommandGroup, conf *config.AppConfig) error {
 	console.IsDaemon = true
 	startMenu := extractNavArg(group.Args)
+	sshPort, webPort := parsePortArgs(group.Args)
+	if sshPort > 0 {
+		conf.Server.SSH.Port = sshPort
+	}
+	if webPort > 0 {
+		conf.Server.Web.Port = webPort
+	}
 	return serve.StartSSHServer(ctx, conf.Server, startMenu)
 }
 
@@ -123,8 +180,8 @@ func extractNavArg(args []string) string {
 }
 
 // handleServerStop signals the server daemon to shut down.
-func handleServerStop(ctx context.Context, state *CmdState) error {
-	return serve.StopServer(ctx, state.Force)
+func handleServerStop(ctx context.Context, state *CmdState, targetPID int) error {
+	return serve.StopServer(ctx, state.Force, targetPID)
 }
 
 // handleServerDisconnect requests a graceful disconnect of the active session or a targeted set.
@@ -137,12 +194,12 @@ func handleServerDisconnect(ctx context.Context, state *CmdState, target string)
 }
 
 // handleServerInstall writes the OS service unit for the server daemon.
-func handleServerInstall(ctx context.Context) error {
+func handleServerInstall(ctx context.Context, sshPort, webPort int) error {
 	execPath, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("finding executable path: %w", err)
 	}
-	if err := serve.InstallService(execPath); err != nil {
+	if err := serve.InstallService(execPath, sshPort, webPort); err != nil {
 		return err
 	}
 	logger.Notice(ctx, "Service installed. Run 'ds2 --server enable' to start it at boot.")
@@ -160,8 +217,8 @@ func handleServerUninstall(ctx context.Context) error {
 
 // handleServerEnable enables and starts the OS service.
 // Always reinstalls the unit file so ExecStart reflects the current binary path.
-func handleServerEnable(ctx context.Context) error {
-	if err := handleServerInstall(ctx); err != nil {
+func handleServerEnable(ctx context.Context, sshPort, webPort int) error {
+	if err := handleServerInstall(ctx, sshPort, webPort); err != nil {
 		return err
 	}
 	if err := serve.EnableService(); err != nil {
