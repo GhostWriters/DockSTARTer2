@@ -84,6 +84,7 @@ func (m *AppModel) View() (v tea.View) {
 		headerH = m.backdrop.ChromeHeight() - 1
 		contentYOffset = layout.ContentStartY(headerH)
 	}
+	SetActiveContentStartY(contentYOffset)
 
 	// Create native compositor for rendering
 	comp := lipgloss.NewCompositor()
