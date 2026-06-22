@@ -191,17 +191,31 @@ func StartSSHServer(ctx context.Context, cfg config.ServerConfig, startMenu stri
 	return nil
 }
 
-// StopServer signals all running server daemons to shut down gracefully.
-// If force is true it kills them immediately.
-func StopServer(ctx context.Context, force bool) error {
+// StopServer signals server daemon(s) to shut down gracefully.
+// If targetPID is non-zero, only that instance is stopped via SIGTERM.
+// If targetPID is zero, all instances are stopped via the stop-request file.
+// If force is true, processes are killed after the timeout.
+func StopServer(ctx context.Context, force bool, targetPID int) error {
 	servers := sessionlocks.Sessions.ListServerInfos()
 	if len(servers) == 0 {
 		logger.Info(ctx, "Server is not running.")
 		return nil
 	}
 
-	if err := sessionlocks.Sessions.RequestStop(); err != nil {
-		return fmt.Errorf("writing stop request: %w", err)
+	// Filter to target if specified.
+	if targetPID != 0 {
+		found := false
+		for _, s := range servers {
+			if s.PID == targetPID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			logger.Warn(ctx, "No running server found with PID %d.", targetPID)
+			return nil
+		}
+		servers = []sessionlocks.ServerInfo{{PID: targetPID}}
 	}
 
 	timeout := 10 * time.Second
@@ -209,14 +223,29 @@ func StopServer(ctx context.Context, force bool) error {
 		timeout = 5 * time.Second
 	}
 
-	// Wait for all server instances to exit.
-	pids := make([]int, len(servers))
-	procs := make([]*os.Process, len(servers))
-	for i, s := range servers {
-		pids[i] = s.PID
+	type procEntry struct {
+		pid  int
+		proc *os.Process
+	}
+	entries := make([]procEntry, 0, len(servers))
+	for _, s := range servers {
 		logger.Info(ctx, "Requesting graceful server stop (PID %d).", s.PID)
+		e := procEntry{pid: s.PID}
 		if p, err := os.FindProcess(s.PID); err == nil {
-			procs[i] = p
+			e.proc = p
+		}
+		entries = append(entries, e)
+	}
+
+	if targetPID != 0 {
+		// Targeted stop — write a PID-specific request file.
+		if err := sessionlocks.Sessions.RequestStopPID(targetPID); err != nil {
+			return fmt.Errorf("writing stop request: %w", err)
+		}
+	} else {
+		// Broadcast stop via request file — all daemons pick it up.
+		if err := sessionlocks.Sessions.RequestStop(); err != nil {
+			return fmt.Errorf("writing stop request: %w", err)
 		}
 	}
 
@@ -224,8 +253,8 @@ func StopServer(ctx context.Context, force bool) error {
 	for time.Now().Before(deadline) {
 		time.Sleep(250 * time.Millisecond)
 		allDead := true
-		for _, pid := range pids {
-			if sessionlocks.ProcessExists(pid) {
+		for _, e := range entries {
+			if sessionlocks.ProcessExists(e.pid) {
 				allDead = false
 				break
 			}
@@ -241,14 +270,16 @@ func StopServer(ctx context.Context, force bool) error {
 		return nil
 	}
 
-	for i, p := range procs {
-		if p != nil && sessionlocks.ProcessExists(pids[i]) {
-			logger.Warn(ctx, "Server did not stop gracefully — forcing stop (PID %d).", pids[i])
-			_ = p.Kill()
+	for _, e := range entries {
+		if e.proc != nil && sessionlocks.ProcessExists(e.pid) {
+			logger.Warn(ctx, "Server did not stop gracefully — forcing stop (PID %d).", e.pid)
+			_ = e.proc.Kill()
 		}
 	}
-	sessionlocks.Sessions.ForceRelease()
-	sessionlocks.Sessions.ClearDisconnectRequest()
+	if targetPID == 0 {
+		sessionlocks.Sessions.ForceRelease()
+		sessionlocks.Sessions.ClearDisconnectRequest()
+	}
 	logger.Notice(ctx, "Server stopped.")
 	return nil
 }

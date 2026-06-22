@@ -5,6 +5,7 @@ import (
 	"DockSTARTer2/internal/version"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/pflag"
@@ -269,6 +270,29 @@ func Parse(args []string) ([]CommandGroup, error) {
 				}
 				currentGroup.Args = append(currentGroup.Args, sub)
 				i++
+				// Consume optional numeric args:
+				//   stop/restart: [pid [sshPort [webPort]]]
+				//   start/install/enable: [sshPort [webPort]]
+				maxExtra := 2
+				if sub == "restart" {
+					maxExtra = 3
+				}
+				for count := 0; count < maxExtra; count++ {
+					if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
+						if _, err := strconv.Atoi(expandedArgs[i]); err != nil {
+							break
+						}
+						currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
+						i++
+					} else {
+						break
+					}
+				}
+				// disconnect also takes an optional non-numeric target arg
+				if sub == "disconnect" && i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
+					currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
+					i++
+				}
 			}
 
 		case "--theme-extract":

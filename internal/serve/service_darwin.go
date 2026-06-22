@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -42,6 +43,9 @@ var launchDaemonTemplate = template.Must(template.New("plist").Parse(`<?xml vers
 	<array>
 		<string>{{.ExecPath}}</string>
 		<string>--server-daemon</string>
+		{{- range .PortArgs}}
+		<string>{{.}}</string>
+		{{- end}}
 	</array>
 	<key>RunAtLoad</key>
 	<true/>
@@ -63,6 +67,7 @@ type launchDaemonData struct {
 	HomeDir  string
 	Env      []envPair
 	ExecPath string
+	PortArgs []string // optional port overrides appended after --server-daemon
 }
 
 func launchDaemonPath() string {
@@ -130,11 +135,17 @@ func writePlistFile(ctx context.Context, plistPath string, data launchDaemonData
 	return nil
 }
 
-func InstallService(execPath string) error {
+func InstallService(execPath string, sshPort, webPort int) error {
 	ctx := context.Background()
 	data, err := buildDaemonData(execPath)
 	if err != nil {
 		return err
+	}
+	if sshPort > 0 {
+		data.PortArgs = append(data.PortArgs, strconv.Itoa(sshPort))
+		if webPort > 0 {
+			data.PortArgs = append(data.PortArgs, strconv.Itoa(webPort))
+		}
 	}
 	mkdirCmd, err := dsexec.SudoCommand(ctx, "mkdir", "-p", launchDaemonDir)
 	if err != nil {
