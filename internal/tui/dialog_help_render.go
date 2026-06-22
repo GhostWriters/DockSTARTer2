@@ -219,7 +219,7 @@ func (m *HelpDialogModel) ViewString() string {
 
 	if hasLegend {
 		for _, line := range strings.Split(m.contextInfo.Legend, "\n") {
-			resolved := " " + strings.TrimRight(theme.ToANSI(strings.TrimRight(line, " ")), " ")
+			resolved := " " + strings.TrimRight(theme.ToANSI(strings.TrimRight(line, " "), ""), " ")
 			legendLines = append(legendLines, resolved)
 			if w := lipgloss.Width(resolved); w > maxLineWidth {
 				maxLineWidth = w
