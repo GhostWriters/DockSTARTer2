@@ -58,6 +58,10 @@ type updateDisplayOptionMsg struct {
 	update func(*config.AppConfig)
 }
 
+// displayOptionsAbortMsg is sent when Apply is attempted but blocked (e.g. command lock).
+// Handled by Update to clear the processing spinner without applying changes.
+type displayOptionsAbortMsg struct{}
+
 // NewDisplayOptionsScreen creates a new consolidated display options screen.
 // isRoot suppresses the Back button when this screen is the entry point.
 func NewDisplayOptionsScreen(isRoot bool, connType string) *DisplayOptionsScreen {
@@ -153,7 +157,6 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Checked:       s.config.UI.Borders,
 			Selectable:    true,
 			SpaceAction:   s.toggleBorders(),
-			IsDestructive: true,
 		},
 		{
 			Tag:           "Large Buttons",
@@ -163,7 +166,6 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Checked:       s.config.UI.LargeButtons,
 			Selectable:    true,
 			SpaceAction:   s.toggleLargeButtons(),
-			IsDestructive: true,
 		},
 		{
 			Tag:           "Large Title Bars",
@@ -173,7 +175,6 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Checked:       s.config.UI.LargeTitleBars,
 			Selectable:    true,
 			SpaceAction:   s.toggleLargeTitleBars(),
-			IsDestructive: true,
 		},
 		{
 			Tag:           "Line Characters",
@@ -183,7 +184,6 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Checked:       s.config.UI.LineCharacters,
 			Selectable:    true,
 			SpaceAction:   s.toggleLineChars(),
-			IsDestructive: true,
 		},
 		{
 			Tag:           "Shadow",
@@ -193,7 +193,6 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Checked:       s.config.UI.Shadow,
 			Selectable:    true,
 			SpaceAction:   s.toggleShadow(),
-			IsDestructive: true,
 		},
 		{
 			Tag:           "Scrollbar",
@@ -203,7 +202,6 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Checked:       s.config.UI.Scrollbar,
 			Selectable:    true,
 			SpaceAction:   s.toggleScrollbar(),
-			IsDestructive: true,
 		},
 		{
 			Tag:           "Spinner",
@@ -213,7 +211,6 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Checked:       s.config.UI.Spinner,
 			Selectable:    true,
 			SpaceAction:   s.toggleSpinner(),
-			IsDestructive: true,
 		},
 		{
 			Tag:        "Spinner Speed",
@@ -227,14 +224,12 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Desc:          s.dropdownDesc(s.shadowLevelToDesc(s.config.UI.ShadowLevel)),
 			Help:          "Adjust the density of the shadow (Select/Enter for list)",
 			Action:        s.showShadowDropdown(),
-			IsDestructive: true,
 		},
 		{
 			Tag:           "Border Color",
 			Desc:          s.dropdownDesc(s.borderColorToDesc(s.config.UI.BorderColor)),
 			Help:          "Choose theme colors for borders (Select/Enter for list)",
 			Action:        s.showBorderColorDropdown(),
-			IsDestructive: true,
 		},
 		{
 			Tag:  "Dialog Title",
@@ -243,7 +238,6 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Action: s.showTitleAlignDropdown("dialog_title_align", "Dialog Title Align",
 				func() string { return s.config.UI.DialogTitleAlign },
 				func(cfg *config.AppConfig, v string) { cfg.UI.DialogTitleAlign = v }),
-			IsDestructive: true,
 		},
 		{
 			Tag:  "Submenu Title",
@@ -252,7 +246,6 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Action: s.showTitleAlignDropdown("submenu_title_align", "Submenu Title Align",
 				func() string { return s.config.UI.SubmenuTitleAlign },
 				func(cfg *config.AppConfig, v string) { cfg.UI.SubmenuTitleAlign = v }),
-			IsDestructive: true,
 		},
 		{
 			Tag:  "Panel Title",
@@ -261,7 +254,6 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Action: s.showTitleAlignDropdown("panel_title_align", "Panel Title Align",
 				func() string { return s.config.UI.PanelTitleAlign },
 				func(cfg *config.AppConfig, v string) { cfg.UI.PanelTitleAlign = v }),
-			IsDestructive: true,
 		},
 	}
 
@@ -907,9 +899,9 @@ func (s *DisplayOptionsScreen) promptSpinnerSpeed() tea.Cmd {
 
 func (s *DisplayOptionsScreen) handleApply() tea.Cmd {
 	return func() tea.Msg {
-		// Do not apply if any destructive options settings are locked
+		// Do not apply if any options settings are locked (e.g. panel command running).
 		if s.optionsMenu.AnyLocked() {
-			return nil
+			return displayOptionsAbortMsg{}
 		}
 		// 1. Apply Theme (Find the actually checked radio option)
 		themeSelected := s.previewTheme
