@@ -271,7 +271,8 @@ func Parse(args []string) ([]CommandGroup, error) {
 				currentGroup.Args = append(currentGroup.Args, sub)
 				i++
 				// Consume optional numeric args:
-				//   stop/restart: [pid [sshPort [webPort]]]
+				//   stop:    [port]
+				//   restart: [port [newSshPort [newWebPort]]]  — port=0 targets single instance
 				//   start/install/enable: [sshPort [webPort]]
 				maxExtra := 2
 				if sub == "restart" {
@@ -279,10 +280,14 @@ func Parse(args []string) ([]CommandGroup, error) {
 				}
 				for count := 0; count < maxExtra; count++ {
 					if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
-						if _, err := strconv.Atoi(expandedArgs[i]); err != nil {
-							break
+						arg := expandedArgs[i]
+						// Accept empty string ("") or numeric value; reject anything else.
+						if arg != "" {
+							if _, err := strconv.Atoi(arg); err != nil {
+								break
+							}
 						}
-						currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
+						currentGroup.Args = append(currentGroup.Args, arg)
 						i++
 					} else {
 						break
