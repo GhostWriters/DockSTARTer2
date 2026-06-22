@@ -222,7 +222,11 @@ func handleServerRestart(ctx context.Context, state *CmdState, conf *config.AppC
 	// > 0: explicit new port.
 	newPortsSpecified := newSSHPort != -1 || newWebPort != -1
 
-	if targetPort == 0 && newPortsSpecified && len(all) > 1 {
+	if newPortsSpecified && len(targets) > 1 {
+		logger.Warn(ctx, "Multiple server instances matched — cannot determine which to restart with new ports. Restarting all matched instances without changing ports.")
+		newSSHPort, newWebPort = -1, -1
+		newPortsSpecified = false
+	} else if targetPort == 0 && newPortsSpecified && len(all) > 1 {
 		logger.Warn(ctx, "Multiple server instances running — cannot determine which to restart with new ports. Restarting all without changing ports.")
 		newSSHPort, newWebPort = -1, -1
 		newPortsSpecified = false
