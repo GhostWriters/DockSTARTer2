@@ -177,6 +177,8 @@ type MenuModel struct {
 	itemPaddingWidth    int    // Optional padding after getters
 	menuName            string // Name used for --menu or -M to return to this screen
 	connType            string // "local", "ssh", or "web"
+	externalLock        bool   // Whether destructive items are locked by an external session (persists across SetItems)
+	commandLock         bool   // Whether destructive items are locked by a running panel command
 
 	// Content sections: sub-menus rendered stacked inside the outer border.
 	// When present, replaces the standard list+inner-border rendering.
@@ -248,8 +250,10 @@ func (m *MenuModel) FocusedWidgetID() string {
 	return ""
 }
 
-// SetLockedByOthers updates the Locked status of all destructive menu items.
-func (m *MenuModel) SetLockedByOthers(locked bool) {
+// applyItemLocks sets the Locked flag on all destructive items based on the
+// current externalLock and commandLock states (either source locks the item).
+func (m *MenuModel) applyItemLocks() {
+	locked := m.externalLock || m.commandLock
 	changed := false
 	for i, item := range m.items {
 		if item.IsDestructive && item.Locked != locked {
@@ -258,7 +262,6 @@ func (m *MenuModel) SetLockedByOthers(locked bool) {
 			changed = true
 		}
 	}
-	// Also sync to the bubbletea list model
 	items := m.list.Items()
 	for i, it := range items {
 		if item, ok := it.(MenuItem); ok {
@@ -273,6 +276,12 @@ func (m *MenuModel) SetLockedByOthers(locked bool) {
 		m.renderVersion++
 		m.cacheValid = false
 	}
+}
+
+// SetLockedByOthers updates the Locked status of all destructive menu items.
+func (m *MenuModel) SetLockedByOthers(locked bool) {
+	m.externalLock = locked
+	m.applyItemLocks()
 
 	// Propagate to sub-menus
 	for _, sub := range m.contentSections {
@@ -588,7 +597,8 @@ func (m *MenuModel) SetExitLocked(locked bool) {
 // the Exit button marker and all destructive menu items.
 func (m *MenuModel) SetCommandLocked(locked bool) {
 	m.SetExitLocked(locked)
-	m.SetLockedByOthers(locked)
+	m.commandLock = locked
+	m.applyItemLocks()
 }
 
 // SetExitAction overrides the default ConfirmExitAction with a custom handler.
@@ -874,6 +884,9 @@ func (m *MenuModel) SetItems(items []MenuItem) {
 		listItems[i] = item
 	}
 	m.list.SetItems(listItems)
+
+	// Re-apply lock state so item rebuilds don't lose lock markers.
+	m.applyItemLocks()
 
 	m.renderVersion++
 	m.InvalidateCache()
