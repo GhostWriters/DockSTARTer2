@@ -381,7 +381,7 @@ func applyStatusTag(s api.EventStatus, text string, finalTexts, activeTexts, suc
 func serviceStatusTag(s api.EventStatus, text string, command string) string {
 	final := serviceFinalStatuses(command)
 	success := []string{api.StatusCreated, api.StatusStarted, api.StatusStopped,
-		api.StatusRestarted, api.StatusKilled, api.StatusRemoved, "Recreated"}
+		api.StatusRestarted, api.StatusKilled, api.StatusRemoved, api.StatusPulled, "Recreated"}
 	filtered := success[:0:len(success)]
 	for _, v := range success {
 		if !contains(final, v) {
