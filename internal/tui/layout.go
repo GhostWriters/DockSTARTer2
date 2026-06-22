@@ -83,6 +83,16 @@ func GetLayout() Layout {
 	return DefaultLayout()
 }
 
+// activeContentStartY holds the actual content start Y for the current frame,
+// set by model_view.go on each render using the real header height.
+var activeContentStartY = 3 // default: 1-line header + separator + gap
+
+// SetActiveContentStartY is called by AppModel.View() to record the frame's content Y.
+func SetActiveContentStartY(y int) { activeContentStartY = y }
+
+// GetActiveContentStartY returns the current content start Y.
+func GetActiveContentStartY() int { return activeContentStartY }
+
 // -------------------------------------------------------------------
 // Computed properties
 // -------------------------------------------------------------------

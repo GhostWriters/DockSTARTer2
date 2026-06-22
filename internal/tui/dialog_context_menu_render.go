@@ -147,7 +147,7 @@ func (m *ContextMenuModel) Layers() []*lipgloss.Layer {
 	}
 	layout := GetLayout()
 	lx := layout.EdgeIndent
-	ly := layout.ContentStartY(1) // 1-line header: headerH(1) + separator(1) + gap(1) = 3
+	ly := GetActiveContentStartY()
 	layerX := m.menuX - lx
 	layerY := m.menuY - ly
 	layers := []*lipgloss.Layer{
