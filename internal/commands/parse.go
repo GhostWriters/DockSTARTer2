@@ -257,6 +257,13 @@ func Parse(args []string) ([]CommandGroup, error) {
 				i++
 			}
 
+		case "--disconnect":
+			// Optional target: all, web, ssh, ip:port, or a bare port number.
+			if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
+				currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
+				i++
+			}
+
 		case "--server":
 			if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
 				sub := expandedArgs[i]

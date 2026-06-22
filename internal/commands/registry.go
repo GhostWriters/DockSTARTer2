@@ -54,6 +54,7 @@ var Registry = map[string]Def{
 	"--theme-extract-all":     {Title: "Extract All Themes", ConsoleSafe: true},
 	"--server":                {Title: "Server Management"}, // needs serve package — not console-safe
 	"--server-daemon":         {Title: "Server Daemon"},     // launches daemon — not console-safe
+	"--disconnect":            {Title: "Disconnect Session"},
 
 	// ── Session-locked (modifies env files / shared state) ────────────────────
 	"-a":                         {Title: "Add Application", SessionLocked: true, ConsoleSafe: true, AppsChanging: true},

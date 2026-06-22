@@ -232,6 +232,13 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			case "--config-panel":
 				ranCommand = true
 				return commands.HandleConfigPanel(subCtx, &group)
+			case "--disconnect":
+				ranCommand = true
+				target := ""
+				if len(group.Args) > 0 {
+					target = group.Args[0]
+				}
+				return handleDisconnect(subCtx, &state, target)
 			case "--server":
 				ranCommand = true
 				return handleServer(subCtx, &group, &state, &conf)

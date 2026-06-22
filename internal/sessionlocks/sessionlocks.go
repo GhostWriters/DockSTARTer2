@@ -116,9 +116,10 @@ type editLockRecord struct {
 
 // sessionRecord is the TOML structure stored in each session file.
 type sessionRecord struct {
-	ClientIP string `toml:"client_ip"`
-	ConnType string `toml:"conn_type"`
-	Terminal string `toml:"terminal"`
+	ClientIP  string `toml:"client_ip"`
+	ConnType  string `toml:"conn_type"`
+	Terminal  string `toml:"terminal"`
+	ServerPID int    `toml:"server_pid"`
 }
 
 func writeTomlFile(path string, v any) (retErr error) {
@@ -468,10 +469,11 @@ func (m *SessionManager) AnyRestartUnsafe() bool {
 
 // ConnectedSession holds information about an active SSH or web connection.
 type ConnectedSession struct {
-	ID       string // unique session identifier (filename)
-	ClientIP string
-	ConnType string // "SSH" or "Web"
-	Terminal string // terminal or browser identifier
+	ID        string // unique session identifier (filename)
+	ClientIP  string
+	ConnType  string // "SSH" or "Web"
+	Terminal  string // terminal or browser identifier
+	ServerPID int    // PID of the server process that owns this session
 }
 
 // RegisterSession writes a session file for an active incoming connection.
@@ -483,9 +485,10 @@ func (m *SessionManager) RegisterSession(clientIP, connType, terminal string) st
 	id := fmt.Sprintf("%d_%d", os.Getpid(), time.Now().UnixNano())
 	path := filepath.Join(m.sessionsDir, id)
 	_ = writeTomlFile(path, sessionRecord{
-		ClientIP: clientIP,
-		ConnType: connType,
-		Terminal: terminal,
+		ClientIP:  clientIP,
+		ConnType:  connType,
+		Terminal:  terminal,
+		ServerPID: os.Getpid(),
 	})
 	return id
 }
@@ -523,10 +526,11 @@ func (m *SessionManager) ListConnectedSessions() []ConnectedSession {
 			continue
 		}
 		sessions = append(sessions, ConnectedSession{
-			ID:       e.Name(),
-			ConnType: r.ConnType,
-			ClientIP: r.ClientIP,
-			Terminal: r.Terminal,
+			ID:        e.Name(),
+			ConnType:  r.ConnType,
+			ClientIP:  r.ClientIP,
+			Terminal:  r.Terminal,
+			ServerPID: r.ServerPID,
 		})
 	}
 	return sessions
@@ -879,7 +883,7 @@ func EditLockDetail(info SessionInfo) (lines []string, hint string) {
 		"    " + action,
 	}
 	if info.Transport == "ssh-server" || info.Transport == "web" {
-		hint = "Use '{{|UserCommand|}}ds2 --server disconnect{{[-]}}' to force-release the lock."
+		hint = "Use '{{|UserCommand|}}ds2 --disconnect{{[-]}}' to force-release the lock."
 	}
 	return lines, hint
 }

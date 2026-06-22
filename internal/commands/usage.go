@@ -151,6 +151,15 @@ func GetUsage(target string, noHeading bool) string {
 			"	Sets the folder where the docker-compose.yml file is stored.",
 		)
 	}
+	if match("--disconnect", "--server") {
+		printStr(
+			"{{|UsageCommand|}}--disconnect{{[-]}}",
+			"	Release the active editor session edit lock (graceful, waits up to 10s).",
+			"{{|UsageCommand|}}--disconnect{{[-]}} [{{|UsageOption|}}all{{[-]}}|{{|UsageOption|}}web{{[-]}}|{{|UsageOption|}}ssh{{[-]}}|{{|UsageVar|}}<port>{{[-]}}|{{|UsageVar|}}<ip:port>{{[-]}}]",
+			"	Disconnect sessions matching the target. A bare port number (SSH or web) disconnects",
+			"	all sessions on the server instance using that port.",
+		)
+	}
 	if match("-e", "--env") {
 		printStr(
 			"{{|UsageCommand|}}-e --env{{[-]}}",
@@ -235,6 +244,20 @@ func GetUsage(target string, noHeading bool) string {
 			"	Open the value picker TUI for a {{|UsageVar|}}<var>{{[-]}}iable (preserve case)",
 		)
 	}
+	if match("-h", "--help") {
+		printStr(
+			"{{|UsageCommand|}}-h --help{{[-]}}",
+			"	Show this usage information",
+			"{{|UsageCommand|}}-h --help{{[-]}} {{|UsageOption|}}<option>{{[-]}}",
+			"	Show the usage of the specified option",
+		)
+	}
+	if match("--man") {
+		printStr(
+			"{{|UsageCommand|}}--man{{[-]}} {{|UsageApp|}}<app>{{[-]}}",
+			"	Show documentation for the app specified",
+		)
+	}
 	if match("-l", "--list", "--list-added", "--list-builtin", "--list-deprecated", "--list-enabled", "--list-disabled", "--list-nondeprecated", "--list-referenced") {
 		printStr(
 			"{{|UsageCommand|}}-l --list{{[-]}}",
@@ -255,21 +278,6 @@ func GetUsage(target string, noHeading bool) string {
 			"	List referenced apps",
 		)
 	}
-	if match("-h", "--help") {
-		printStr(
-			"{{|UsageCommand|}}-h --help{{[-]}}",
-			"	Show this usage information",
-			"{{|UsageCommand|}}-h --help{{[-]}} {{|UsageOption|}}<option>{{[-]}}",
-			"	Show the usage of the specified option",
-		)
-	}
-	if match("--man") {
-		printStr(
-			"{{|UsageCommand|}}--man{{[-]}} {{|UsageApp|}}<app>{{[-]}}",
-			"	Show documentation for the app specified",
-		)
-	}
-
 	if match("-p", "--prune") {
 		printStr(
 			"{{|UsageCommand|}}-p --prune{{[-]}}",
@@ -291,21 +299,7 @@ func GetUsage(target string, noHeading bool) string {
 			"	This is usually not needed unless you have modified application templates yourself.",
 		)
 	}
-	if match("-s", "--status") {
-		printStr(
-			"{{|UsageCommand|}}-s --status{{[-]}} {{|UsageApp|}}<app>{{[-]}} [{{|UsageApp|}}<app>{{[-]}} ...]{{[-]}}",
-			"	Returns the enabled/disabled status for the app specified",
-		)
-	}
-	if match("--status-disable", "--status-enable") {
-		printStr(
-			"{{|UsageCommand|}}--status-disable{{[-]}} {{|UsageApp|}}<app>{{[-]}} [{{|UsageApp|}}<app>{{[-]}} ...]{{[-]}}",
-			"	Disable the app specified",
-			"{{|UsageCommand|}}--status-enable{{[-]}} {{|UsageApp|}}<app>{{[-]}} [{{|UsageApp|}}<app>{{[-]}} ...]{{[-]}}",
-			"	Enable the app specified",
-		)
-	}
-	if match("--server") {
+	if match("--server", "--disconnect") {
 		printStr(
 			"{{|UsageCommand|}}--server{{[-]}}",
 			"	Show the server status (default when no subcommand is given).",
@@ -317,10 +311,8 @@ func GetUsage(target string, noHeading bool) string {
 			"	Stop and restart the server daemon. Optionally target a specific instance by port",
 			"	(SSH or web) and override ports for the new instance. Use 0 or \"\" to target the",
 			"	single running instance when changing ports without specifying a target port.",
-			"{{|UsageCommand|}}--server{{[-]}} {{|UsageOption|}}disconnect{{[-]}}",
-			"	Release the active editor session edit lock (graceful, waits up to 10s).",
-			"{{|UsageCommand|}}--server{{[-]}} {{|UsageOption|}}disconnect{{[-]}} [{{|UsageOption|}}all{{[-]}}|{{|UsageOption|}}web{{[-]}}|{{|UsageOption|}}ssh{{[-]}}|{{|UsageVar|}}<ip:port>{{[-]}}]",
-			"	Disconnect connected sessions matching the target.",
+			"{{|UsageCommand|}}--server{{[-]}} {{|UsageOption|}}disconnect{{[-]}} [{{|UsageOption|}}all{{[-]}}|{{|UsageOption|}}web{{[-]}}|{{|UsageOption|}}ssh{{[-]}}|{{|UsageVar|}}<port>{{[-]}}|{{|UsageVar|}}<ip:port>{{[-]}}]",
+			"	Alias for --disconnect. See --disconnect for full details.",
 			"{{|UsageCommand|}}--server{{[-]}} {{|UsageOption|}}install{{[-]}} [{{|UsageVar|}}<sshPort>{{[-]}} [{{|UsageVar|}}<webPort>{{[-]}}]]",
 			"	Install the OS service unit for the server daemon. Port args are written into",
 			"	the service unit and override the config file.",
@@ -333,6 +325,20 @@ func GetUsage(target string, noHeading bool) string {
 			"{{|UsageCommand|}}--server-daemon{{[-]}} [{{|UsageVar|}}<sshPort>{{[-]}} [{{|UsageVar|}}<webPort>{{[-]}}]]",
 			"	Run the server daemon directly in the foreground (blocking). Useful if you",
 			"	want to manage the process yourself rather than using '{{|UsageOption|}}--server start{{[-]}}'.",
+		)
+	}
+	if match("-s", "--status") {
+		printStr(
+			"{{|UsageCommand|}}-s --status{{[-]}} {{|UsageApp|}}<app>{{[-]}} [{{|UsageApp|}}<app>{{[-]}} ...]{{[-]}}",
+			"	Returns the enabled/disabled status for the app specified",
+		)
+	}
+	if match("--status-disable", "--status-enable") {
+		printStr(
+			"{{|UsageCommand|}}--status-disable{{[-]}} {{|UsageApp|}}<app>{{[-]}} [{{|UsageApp|}}<app>{{[-]}} ...]{{[-]}}",
+			"	Disable the app specified",
+			"{{|UsageCommand|}}--status-enable{{[-]}} {{|UsageApp|}}<app>{{[-]}} [{{|UsageApp|}}<app>{{[-]}} ...]{{[-]}}",
+			"	Enable the app specified",
 		)
 	}
 	if match("-t", "--test") {
