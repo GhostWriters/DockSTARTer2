@@ -340,6 +340,13 @@ func abbreviateStatus(text string) string {
 	if text == api.StatusDownloadComplete {
 		return "Downloaded"
 	}
+	// SDK emits bare verb forms (Working) — normalize to *ing for consistency.
+	switch text {
+	case "Recreate":
+		return "Recreating"
+	case "Restart":
+		return "Restarting"
+	}
 	return dockerlayout.AbbreviateStatus(text)
 }
 
@@ -374,7 +381,7 @@ func applyStatusTag(s api.EventStatus, text string, finalTexts, activeTexts, suc
 func serviceStatusTag(s api.EventStatus, text string, command string) string {
 	final := serviceFinalStatuses(command)
 	success := []string{api.StatusCreated, api.StatusStarted, api.StatusStopped,
-		api.StatusRestarted, api.StatusKilled, api.StatusRemoved}
+		api.StatusRestarted, api.StatusKilled, api.StatusRemoved, "Recreated"}
 	filtered := success[:0:len(success)]
 	for _, v := range success {
 		if !contains(final, v) {
@@ -384,7 +391,7 @@ func serviceStatusTag(s api.EventStatus, text string, command string) string {
 	return applyStatusTag(s, text,
 		final,
 		[]string{api.StatusCreating, api.StatusStarting, api.StatusStopping,
-			api.StatusRestarting, api.StatusKilling, api.StatusRemoving},
+			api.StatusRestarting, api.StatusKilling, api.StatusRemoving, "Recreate", "Restart"},
 		filtered,
 	)
 }
@@ -402,7 +409,7 @@ func serviceFinalStatuses(command string) []string {
 	case "create":
 		return []string{api.StatusCreated}
 	default:
-		return []string{api.StatusRunning, api.StatusHealthy, api.StatusCreated}
+		return []string{api.StatusRunning, api.StatusHealthy, api.StatusCreated, "Recreated"}
 	}
 }
 
