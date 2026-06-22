@@ -125,6 +125,7 @@ func NewFlagSet() *pflag.FlagSet {
 
 	// Server
 	fs.String("server", "", "Server management (status, start, stop, restart, disconnect, install, uninstall, enable, disable)")
+	fs.String("disconnect", "", "Disconnect sessions (all, web, ssh, <port>, <ip:port>)")
 
 	// Internal — used by --server start to re-exec as a background daemon.
 	fs.Bool("server-daemon", false, "")

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"DockSTARTer2/internal/config"
@@ -327,20 +328,35 @@ func Disconnect(ctx context.Context, force bool) error {
 }
 
 // DisconnectSessions disconnects connected sessions matching target.
-// target may be "all", "web", "ssh", or an "ip:port" string.
+// target may be "all", "web", "ssh", an "ip:port" string, or a bare port number.
+// A bare port number matches sessions on a server instance using that SSH or web port.
 func DisconnectSessions(ctx context.Context, target string, force bool) error {
 	sessions := sessionlocks.Sessions.ListConnectedSessions()
+
+	// Resolve a bare port number to the set of server PIDs using that port.
+	var portServerPIDs map[int]bool
+	if targetPort, err := strconv.Atoi(target); err == nil && targetPort > 0 {
+		portServerPIDs = make(map[int]bool)
+		for _, s := range FindServersByPort(targetPort) {
+			portServerPIDs[s.PID] = true
+		}
+	}
+
 	var matched []sessionlocks.ConnectedSession
 	for _, cs := range sessions {
-		switch target {
-		case "all":
+		switch {
+		case target == "all":
 			matched = append(matched, cs)
-		case "web":
+		case target == "web":
 			if cs.ConnType == "Web" {
 				matched = append(matched, cs)
 			}
-		case "ssh":
+		case target == "ssh":
 			if cs.ConnType == "SSH" {
+				matched = append(matched, cs)
+			}
+		case portServerPIDs != nil:
+			if portServerPIDs[cs.ServerPID] {
 				matched = append(matched, cs)
 			}
 		default:

@@ -272,8 +272,15 @@ func handleServerRestart(ctx context.Context, state *CmdState, conf *config.AppC
 }
 
 // handleServerDisconnect requests a graceful disconnect of the active session or a targeted set.
-// target may be "", "all", "web", "ssh", or "ip:port".
+// target may be "", "all", "web", "ssh", "ip:port", or a bare port number.
 func handleServerDisconnect(ctx context.Context, state *CmdState, target string) error {
+	return handleDisconnect(ctx, state, target)
+}
+
+// handleDisconnect is the top-level --disconnect handler, also used by --server disconnect.
+// target may be "", "all", "web", "ssh", "ip:port", or a bare port number.
+// A bare port number disconnects sessions connected via the server using that SSH or web port.
+func handleDisconnect(ctx context.Context, state *CmdState, target string) error {
 	if target == "" {
 		return serve.Disconnect(ctx, state.Force)
 	}
