@@ -177,6 +177,7 @@ type MenuModel struct {
 	itemPaddingWidth    int    // Optional padding after getters
 	menuName            string // Name used for --menu or -M to return to this screen
 	connType            string // "local", "ssh", or "web"
+	externalLock        bool   // Whether destructive items are locked by an external session (persists across SetItems)
 
 	// Content sections: sub-menus rendered stacked inside the outer border.
 	// When present, replaces the standard list+inner-border rendering.
@@ -250,6 +251,7 @@ func (m *MenuModel) FocusedWidgetID() string {
 
 // SetLockedByOthers updates the Locked status of all destructive menu items.
 func (m *MenuModel) SetLockedByOthers(locked bool) {
+	m.externalLock = locked
 	changed := false
 	for i, item := range m.items {
 		if item.IsDestructive && item.Locked != locked {
@@ -866,6 +868,14 @@ func (m *MenuModel) GetInnerContentWidth() int {
 
 // SetItems updates the menu items and refreshes the bubbles list
 func (m *MenuModel) SetItems(items []MenuItem) {
+	// Re-apply current lock state to incoming items so rebuilds don't lose lock markers.
+	if m.externalLock {
+		for i := range items {
+			if items[i].IsDestructive {
+				items[i].Locked = true
+			}
+		}
+	}
 	m.items = items
 
 	// Convert MenuItems to list.Items
