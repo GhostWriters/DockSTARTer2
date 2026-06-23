@@ -328,7 +328,7 @@ func (p *consoleEventProcessor) impliedStatus() (text, ansiTag string) {
 	case "pause":
 		return "Paused", "{{|DockerStatusFinal|}}"
 	case "unpause", "start":
-		return "Running", "{{|DockerStatusFinal|}}"
+		return "Started", "{{|DockerStatusFinal|}}"
 	default:
 		return "Pending", "{{|DockerStatusPending|}}"
 	}
@@ -347,7 +347,12 @@ func abbreviateStatus(text string) string {
 	case "Restart":
 		return "Restarting"
 	}
-	return dockerlayout.AbbreviateStatus(text)
+	result := dockerlayout.AbbreviateStatus(text)
+	// Remap "Running" → "Started" to match Docker's own *ed naming (service_started).
+	if result == "Running" {
+		return "Started"
+	}
+	return result
 }
 
 // applyStatusTag wraps short in the appropriate semantic tag based on event status.
