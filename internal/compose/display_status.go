@@ -1,6 +1,8 @@
 package compose
 
 import (
+	"strings"
+
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/dockerlayout"
 	"github.com/GhostWriters/semstyle"
@@ -362,6 +364,9 @@ func applyStatusTag(s api.EventStatus, text string, finalTexts, activeTexts, suc
 	case api.Warning:
 		return "{{|DockerStatusWarn|}}" + short + "{{[-]}}"
 	case api.Error:
+		if strings.Contains(text, "is unhealthy") {
+			short = "Unhealthy"
+		}
 		return "{{|DockerStatusFail|}}" + short + "{{[-]}}"
 	case api.Done:
 		if contains(finalTexts, text) {
