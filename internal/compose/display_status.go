@@ -364,7 +364,7 @@ func applyStatusTag(s api.EventStatus, text string, finalTexts, activeTexts, suc
 	case api.Warning:
 		return "{{|DockerStatusWarn|}}" + short + "{{[-]}}"
 	case api.Error:
-		if strings.Contains(text, "unhealthy") {
+		if strings.Contains(text, "is unhealthy") {
 			short = "Unhealthy"
 		}
 		return "{{|DockerStatusFail|}}" + short + "{{[-]}}"
