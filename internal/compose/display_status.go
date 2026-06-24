@@ -325,11 +325,15 @@ func (p *consoleEventProcessor) impliedStatus() (text, ansiTag string) {
 	switch p.command {
 	case "down":
 		return "Removed", "{{|DockerStatusFinal|}}"
-	case "stop", "kill":
+	case "stop":
 		return "Stopped", "{{|DockerStatusFinal|}}"
+	case "kill":
+		return "Killed", "{{|DockerStatusWarn|}}"
 	case "pause":
 		return "Paused", "{{|DockerStatusFinal|}}"
-	case "unpause", "start":
+	case "unpause":
+		return "Unpaused", "{{|DockerStatusFinal|}}"
+	case "start":
 		return "Started", "{{|DockerStatusFinal|}}"
 	default:
 		return "Pending", "{{|DockerStatusPending|}}"
@@ -389,6 +393,10 @@ func applyStatusTag(s api.EventStatus, text string, finalTexts, activeTexts, suc
 
 // serviceStatusTag styles a service (container lifecycle) status.
 func serviceStatusTag(s api.EventStatus, text string, command string) string {
+	// Killed during an explicit kill command is expected but forceful — show as warn, not final.
+	if command == "kill" && text == api.StatusKilled {
+		return "{{|DockerStatusWarn|}}" + abbreviateStatus(text) + "{{[-]}}"
+	}
 	final := serviceFinalStatuses(command)
 	success := []string{api.StatusCreated, api.StatusStarted, api.StatusStopped,
 		api.StatusRestarted, api.StatusKilled, api.StatusRemoved, api.StatusPulled, "Recreated"}
@@ -417,6 +425,10 @@ func serviceFinalStatuses(command string) []string {
 		return []string{api.StatusRestarted}
 	case "kill":
 		return []string{api.StatusKilled}
+	case "pause":
+		return []string{"Paused"}
+	case "unpause", "start":
+		return []string{api.StatusRunning, api.StatusHealthy}
 	case "create":
 		return []string{api.StatusCreated}
 	default:
