@@ -44,6 +44,11 @@ func YesNotice(command, appNamesJoined string) string {
 			return fmt.Sprintf("Creating containers for: %s.", appNamesJoined)
 		}
 		return "Creating containers for all enabled services."
+	case "rm":
+		if appNamesJoined != "" {
+			return fmt.Sprintf("Removing stopped containers for: %s.", appNamesJoined)
+		}
+		return "Removing stopped containers."
 	case "down":
 		if appNamesJoined != "" {
 			return fmt.Sprintf("Stopping and removing %s.", appNamesJoined)
@@ -134,6 +139,16 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 			question = "Create containers for all enabled services?"
 			yesNotice = "Creating containers for all enabled services."
 			noNotice = "Not creating containers for all enabled services."
+		}
+	case "rm":
+		if appNamesJoined != "" {
+			question = fmt.Sprintf("Remove stopped containers for: {{|App|}}%s{{[-]}}?", appNamesJoined)
+			yesNotice = fmt.Sprintf("Removing stopped containers for: {{|App|}}%s{{[-]}}.", appNamesJoined)
+			noNotice = fmt.Sprintf("Not removing stopped containers for: {{|App|}}%s{{[-]}}.", appNamesJoined)
+		} else {
+			question = "Remove stopped containers?"
+			yesNotice = "Removing stopped containers."
+			noNotice = "Not removing stopped containers."
 		}
 	case "kill":
 		if appNamesJoined != "" {
@@ -264,7 +279,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 
 	// For all other operations: merge first (now that user confirmed), then run SDK operation
 	if command != "down" && command != "stop" && command != "start" && command != "kill" &&
-		command != "pause" && command != "unpause" {
+		command != "pause" && command != "unpause" && command != "rm" {
 		if err := MergeYML(ctx, force); err != nil {
 			return err
 		}
@@ -468,6 +483,13 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 			startOpts.AttachTo = serviceNames
 		}
 		return srv.Start(sdkCtx, project.Name, startOpts)
+	case "rm":
+		logRunning("rm")
+		rmOpts := api.RemoveOptions{Project: project}
+		if len(appNames) > 0 {
+			rmOpts.Services = serviceNames
+		}
+		return srv.Remove(sdkCtx, project.Name, rmOpts)
 	case "down":
 		logRunning("down", "--remove-orphans")
 		downOpts := api.DownOptions{RemoveOrphans: true}
