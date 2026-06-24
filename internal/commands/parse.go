@@ -210,7 +210,8 @@ func Parse(args []string) ([]CommandGroup, error) {
 			if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
 				sub := expandedArgs[i]
 				validSubs := map[string]bool{
-					"pull": true, "up": true, "down": true, "stop": true, "restart": true, "update": true,
+					"pull": true, "up": true, "down": true, "stop": true, "start": true, "restart": true, "update": true,
+					"create": true, "kill": true, "pause": true, "unpause": true, "rm": true,
 					"generate": true, "merge": true,
 				}
 				if !validSubs[sub] {

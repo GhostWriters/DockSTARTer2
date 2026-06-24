@@ -39,11 +39,26 @@ func setPullPolicy(project *types.Project, policy string) {
 // Matches the yesNotice values used inside ExecuteCompose.
 func YesNotice(command, appNamesJoined string) string {
 	switch command {
+	case "create":
+		if appNamesJoined != "" {
+			return fmt.Sprintf("Creating containers for: %s.", appNamesJoined)
+		}
+		return "Creating containers for all enabled services."
+	case "rm":
+		if appNamesJoined != "" {
+			return fmt.Sprintf("Removing stopped containers for: %s.", appNamesJoined)
+		}
+		return "Removing stopped containers."
 	case "down":
 		if appNamesJoined != "" {
 			return fmt.Sprintf("Stopping and removing %s.", appNamesJoined)
 		}
 		return "Stopping and removing containers, networks, volumes, and images created by " + version.ApplicationName + "."
+	case "kill":
+		if appNamesJoined != "" {
+			return fmt.Sprintf("Force stopping: %s.", appNamesJoined)
+		}
+		return "Force stopping all running containers."
 	case "pause":
 		if appNamesJoined != "" {
 			return fmt.Sprintf("Pausing: %s.", appNamesJoined)
@@ -64,6 +79,11 @@ func YesNotice(command, appNamesJoined string) string {
 			return fmt.Sprintf("Stopping: %s.", appNamesJoined)
 		}
 		return "Stopping all running services."
+	case "start":
+		if appNamesJoined != "" {
+			return fmt.Sprintf("Starting: %s.", appNamesJoined)
+		}
+		return "Starting all stopped containers."
 	case "unpause":
 		if appNamesJoined != "" {
 			return fmt.Sprintf("Unpausing: %s.", appNamesJoined)
@@ -110,6 +130,46 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 	var question, yesNotice, noNotice string
 
 	switch command {
+	case "create":
+		if appNamesJoined != "" {
+			question = fmt.Sprintf("Create containers for: {{|App|}}%s{{[-]}}?", appNamesJoined)
+			yesNotice = fmt.Sprintf("Creating containers for: {{|App|}}%s{{[-]}}.", appNamesJoined)
+			noNotice = fmt.Sprintf("Not creating containers for: {{|App|}}%s{{[-]}}.", appNamesJoined)
+		} else {
+			question = "Create containers for all enabled services?"
+			yesNotice = "Creating containers for all enabled services."
+			noNotice = "Not creating containers for all enabled services."
+		}
+	case "rm":
+		if appNamesJoined != "" {
+			question = fmt.Sprintf("Remove stopped containers for: {{|App|}}%s{{[-]}}?", appNamesJoined)
+			yesNotice = fmt.Sprintf("Removing stopped containers for: {{|App|}}%s{{[-]}}.", appNamesJoined)
+			noNotice = fmt.Sprintf("Not removing stopped containers for: {{|App|}}%s{{[-]}}.", appNamesJoined)
+		} else {
+			question = "Remove stopped containers?"
+			yesNotice = "Removing stopped containers."
+			noNotice = "Not removing stopped containers."
+		}
+	case "kill":
+		if appNamesJoined != "" {
+			question = fmt.Sprintf("Force stop: {{|App|}}%s{{[-]}}?", appNamesJoined)
+			yesNotice = fmt.Sprintf("Force stopping: {{|App|}}%s{{[-]}}.", appNamesJoined)
+			noNotice = fmt.Sprintf("Not force stopping: {{|App|}}%s{{[-]}}.", appNamesJoined)
+		} else {
+			question = "Force stop all running containers?"
+			yesNotice = "Force stopping all running containers."
+			noNotice = "Not force stopping all running containers."
+		}
+	case "start":
+		if appNamesJoined != "" {
+			question = fmt.Sprintf("Start: {{|App|}}%s{{[-]}}?", appNamesJoined)
+			yesNotice = fmt.Sprintf("Starting: {{|App|}}%s{{[-]}}.", appNamesJoined)
+			noNotice = fmt.Sprintf("Not starting: {{|App|}}%s{{[-]}}.", appNamesJoined)
+		} else {
+			question = "Start all stopped containers?"
+			yesNotice = "Starting all stopped containers."
+			noNotice = "Not starting all stopped containers."
+		}
 	case "down":
 		if appNamesJoined != "" {
 			question = fmt.Sprintf("Stop and remove: {{|App|}}%s{{[-]}}?", appNamesJoined)
@@ -218,7 +278,8 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 	}
 
 	// For all other operations: merge first (now that user confirmed), then run SDK operation
-	if command != "down" && command != "stop" && command != "pause" && command != "unpause" {
+	if command != "down" && command != "stop" && command != "start" && command != "kill" &&
+		command != "pause" && command != "unpause" && command != "rm" {
 		if err := MergeYML(ctx, force); err != nil {
 			return err
 		}
@@ -401,6 +462,34 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 	console.PauseSpinner()
 	defer console.ResumeSpinner()
 	switch command {
+	case "create":
+		logRunning("create", "--remove-orphans")
+		createOpts := api.CreateOptions{RemoveOrphans: true}
+		if len(appNames) > 0 {
+			createOpts.Services = serviceNames
+		}
+		return srv.Create(sdkCtx, project, createOpts)
+	case "kill":
+		logRunning("kill")
+		killOpts := api.KillOptions{Project: project}
+		if len(appNames) > 0 {
+			killOpts.Services = serviceNames
+		}
+		return srv.Kill(sdkCtx, project.Name, killOpts)
+	case "start":
+		logRunning("start")
+		startOpts := api.StartOptions{Project: project}
+		if len(appNames) > 0 {
+			startOpts.AttachTo = serviceNames
+		}
+		return srv.Start(sdkCtx, project.Name, startOpts)
+	case "rm":
+		logRunning("rm")
+		rmOpts := api.RemoveOptions{Project: project}
+		if len(appNames) > 0 {
+			rmOpts.Services = serviceNames
+		}
+		return srv.Remove(sdkCtx, project.Name, rmOpts)
 	case "down":
 		logRunning("down", "--remove-orphans")
 		downOpts := api.DownOptions{RemoveOrphans: true}

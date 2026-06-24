@@ -335,6 +335,10 @@ func (p *consoleEventProcessor) impliedStatus() (text, ansiTag string) {
 		return "Unpaused", "{{|DockerStatusFinal|}}"
 	case "start":
 		return "Started", "{{|DockerStatusFinal|}}"
+	case "create":
+		return "Created", "{{|DockerStatusFinal|}}"
+	case "rm":
+		return "Removed", "{{|DockerStatusFinal|}}"
 	default:
 		return "Pending", "{{|DockerStatusPending|}}"
 	}
