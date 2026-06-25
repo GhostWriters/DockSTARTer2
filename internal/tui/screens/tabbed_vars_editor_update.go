@@ -637,4 +637,21 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
+// HandleContextMenuKey implements the ContextMenuKeyHandler interface so that
+// AppModel delegates the context-menu key to the editor rather than showing the
+// generic global menu. Mirrors the case tui.Keys.ContextMenu branch in Update.
+func (m *TabbedVarsEditorModel) HandleContextMenuKey() (tea.Model, tea.Cmd, bool) {
+	if m.focus == envFocusEditor && len(m.tabs) > 0 {
+		editor := m.tabs[m.activeTab].editor
+		layout := tui.GetLayout()
+		y := m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight + editor.CursorVisualRow() - editor.YOffset()
+		x := m.lastOffsetX + layout.NestedLeftOffset()
+		cmd := m.showContextMenuForClick(x, y)
+		if cmd != nil {
+			return m, cmd, true
+		}
+	}
+	return m, nil, false
+}
+
 // TitleBarFocusable implementation is promoted from the embedded tui.
