@@ -281,7 +281,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				editor := m.tabs[m.activeTab].editor
 				layout := tui.GetLayout()
 				y := m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight + editor.CursorVisualRow() - editor.YOffset()
-				x := m.lastOffsetX + layout.NestedLeftOffset()
+				x := m.lastOffsetX + layout.NestedLeftOffset() + editor.CursorVisualCol()
 				return m, m.showContextMenuForClick(x, y)
 			}
 		}
@@ -645,7 +645,7 @@ func (m *TabbedVarsEditorModel) HandleContextMenuKey() (tea.Model, tea.Cmd, bool
 		editor := m.tabs[m.activeTab].editor
 		layout := tui.GetLayout()
 		y := m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight + editor.CursorVisualRow() - editor.YOffset()
-		x := m.lastOffsetX + layout.NestedLeftOffset()
+		x := m.lastOffsetX + layout.NestedLeftOffset() + editor.CursorVisualCol()
 		cmd := m.showContextMenuForClick(x, y)
 		if cmd != nil {
 			return m, cmd, true

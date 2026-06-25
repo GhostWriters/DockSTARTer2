@@ -311,6 +311,12 @@ func (m *Model) DeleteVariableByName(varName string) bool {
 	return false
 }
 
+// CursorVisualCol returns the visual (screen) column of the cursor within the
+// current line, which equals m.col (the rune index within the line).
+func (m *Model) CursorVisualCol() int {
+	return m.col
+}
+
 // CursorVisualRow returns the visual (screen) row index of the cursor, accounting
 // for wrapped lines above it.
 func (m *Model) CursorVisualRow() int {
