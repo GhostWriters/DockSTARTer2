@@ -311,10 +311,19 @@ func (m *Model) DeleteVariableByName(varName string) bool {
 	return false
 }
 
-// CursorVisualCol returns the visual (screen) column of the cursor within the
-// current line, which equals m.col (the rune index within the line).
+// CursorVisualCol returns the visual (screen) column of the cursor, including
+// the line number gutter and prompt widths — mirrors the xOffset calculation
+// used for the hardware cursor in GetInputCursor.
 func (m *Model) CursorVisualCol() int {
-	return m.col
+	lineInfo := m.LineInfo()
+	w := lipgloss.Width
+	baseStyle := m.activeStyle().Base
+	return lineInfo.CharOffset +
+		w(m.promptView(0, -1)) +
+		w(m.lineNumberView(0, false, -1)) +
+		baseStyle.GetMarginLeft() +
+		baseStyle.GetPaddingLeft() +
+		baseStyle.GetBorderLeftSize()
 }
 
 // CursorVisualRow returns the visual (screen) row index of the cursor, accounting
