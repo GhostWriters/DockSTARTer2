@@ -151,8 +151,8 @@ EnvPendingDelete = "{{|Dialog:::DS|}}"
 EnvReadOnly = "{{|Dialog:::D|}}"
 
 # List item overrides
-ListItem = "{{[black::R]}}"
-ListItemUserDefined = "{{[blue::R]}}"
+ListItem = "{{[cyan:black]}}"
+ListItemUserDefined = "{{[blue:white]}}"
 
 # Keys, progress, and indicators
 KeyCap = "{{[::-R]}}"
