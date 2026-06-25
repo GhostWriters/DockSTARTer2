@@ -289,7 +289,33 @@ func (p *consoleEventProcessor) Start(ctx context.Context, operation string) {
 	}()
 }
 
+// finalizeActiveTasks synthesizes a Done event for any service task still in an
+// active (non-completed) state when the SDK call returns. Some commands (e.g.
+// restart) never emit a final status event per service, so without this they
+// would remain stuck showing "Restarting" in the final render.
+func (p *consoleEventProcessor) finalizeActiveTasks() {
+	finals := serviceFinalStatuses(p.command)
+	if len(finals) == 0 {
+		return
+	}
+	finalText := finals[0]
+	for _, id := range p.serviceIDs {
+		t := p.tasks[id]
+		if t != nil && !t.completed() && t.status != api.Error && t.status != api.Warning {
+			t.text = finalText
+			t.status = api.Done
+			t.endTime = time.Now()
+		}
+	}
+}
+
 func (p *consoleEventProcessor) Done(_ string, _ bool) {
+	// Synthesize final status for any service still in an active state.
+	// Some SDK operations (e.g. restart) never emit a per-service Done event.
+	p.mtx.Lock()
+	p.finalizeActiveTasks()
+	p.mtx.Unlock()
+
 	// Static mode (redirected stdout): no ticker/viewport was started. Wait for post-pull
 	// inspects, then emit the fully rendered output once to out, plus the log summary.
 	if p.staticOut {
