@@ -251,6 +251,12 @@ func UnsetNeedsUpdate(ctx context.Context, file string) {
 		_ = os.Remove(filepath.Join(timestampsFolder, filename))
 		matches, _ := filepath.Glob(filepath.Join(timestampsFolder, filename+"_*"))
 		for _, m := range matches {
+			// Skip markers belonging to other apps that share this filename as a prefix
+			// e.g. ".env.app.plex_*" must not delete ".env.app.plex__ota_*" markers
+			suffix := filepath.Base(m)[len(filename)+1:]
+			if strings.HasPrefix(suffix, "_") {
+				continue
+			}
 			_ = os.Remove(m)
 		}
 	}
