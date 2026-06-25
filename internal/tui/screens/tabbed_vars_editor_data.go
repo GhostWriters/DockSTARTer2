@@ -205,7 +205,7 @@ func (m *TabbedVarsEditorModel) saveEnv() tea.Cmd {
 			if err := appenv.SanitizeEnv(ctx, envPath, cfg); err != nil {
 				return err
 			}
-			if err := appenv.CreateAll(ctx, true, cfg); err != nil {
+			if err := appenv.CreateAll(ctx, false, cfg); err != nil {
 				return err
 			}
 
