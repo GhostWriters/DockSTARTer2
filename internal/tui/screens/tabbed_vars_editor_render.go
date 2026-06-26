@@ -521,7 +521,12 @@ func (m *TabbedVarsEditorModel) getVariableHelpContext(varName string, tab *envT
 	h := tui.HelpContext{
 		ScreenName: m.title,
 		Legend:     legend,
-		ItemTitle:  "Variable: " + varName,
+		ItemTitle:  "Variable: " + func() string {
+			if tab.niceName != "" {
+				return tab.niceName + ":" + varName
+			}
+			return varName
+		}(),
 		ItemText:   itemText,
 	}
 
