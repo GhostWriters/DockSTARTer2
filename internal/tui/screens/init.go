@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"context"
 	"strings"
 
 	"DockSTARTer2/internal/appenv"
@@ -33,7 +34,7 @@ func init() {
 			{Title: ".env", App: appName, IsGlobal: true},
 			{Title: ".env.app." + strings.ToLower(appName), App: appName, IsGlobal: false},
 		}
-		return NewTabbedVarsEditorScreen(onClose, "Configure "+appName, specs, showBack, connType)
+		return NewTabbedVarsEditorScreen(onClose, "Configure "+appenv.GetNiceName(context.Background(), appName), specs, showBack, connType)
 	})
 	// Register each screen with its canonical page name, creator, and parent stack.
 	// Parents are ordered outermost-first and define the navigation stack that is
