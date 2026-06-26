@@ -107,8 +107,16 @@ func newSetValueDialog(
 	return m
 }
 
+// setValueTitle returns the dialog title, prefixing with the app nicename for app-specific files.
+func (m *setValueDialogModel) setValueTitle() string {
+	if m.appName != "" && strings.Contains(m.filePath, ".env.app.") {
+		return "Set Value: " + m.appName + ":" + m.varName
+	}
+	return "Set Value: " + m.varName
+}
+
 // Title implements tui.ScreenModel for standalone use.
-func (m *setValueDialogModel) Title() string { return "Set Value: " + m.varName }
+func (m *setValueDialogModel) Title() string { return m.setValueTitle() }
 
 // MenuName implements tui.ScreenModel; the standalone var editor has no menu alias.
 func (m *setValueDialogModel) MenuName() string { return "" }
@@ -433,7 +441,7 @@ func (m *setValueDialogModel) HelpContext(maxWidth int) tui.HelpContext {
 	}
 
 	h := tui.HelpContext{
-		ScreenName:  "Set Value: " + m.varName,
+		ScreenName:  m.setValueTitle(),
 		PageTitle:   "Variable Info",
 		PageText:    pageText,
 		Legend:      "| {{|MarkerAdded|}}+{{[-]}} Added | {{|MarkerDeleted|}}-{{[-]}} Deleted | {{|MarkerModified|}}~{{[-]}} Changed | {{|MarkerInvalid|}}!{{[-]}} Invalid |",
@@ -717,7 +725,7 @@ func (m *setValueDialogModel) ViewString() string {
 	)
 	m.lastSbInfo = sbInfo
 
-	title := "Set Value: " + m.varName
+	title := m.setValueTitle()
 	parts := []string{headingText, currentValueSection, presetsSection, buttonRow}
 	return tui.RenderDialogWithTypeAndWidgets(title, lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused || m.TitleBarFocused(), m.height, tui.DialogTypeInfo, tui.TitleBarState{Show: true, Focused: m.TitleBarFocused(), ActiveWidget: m.ActiveWidget(), PressedWidget: m.PressedWidget()})
 }
@@ -769,7 +777,7 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 		ZOrder: tui.ZDialog + 10,
 		Label:  "Value Input",
 		Help: &tui.HelpContext{
-			ScreenName:  "Set Value: " + m.varName,
+			ScreenName:  m.setValueTitle(),
 			PageTitle:   "Editing",
 			PageText:    "Type to enter a custom value for " + m.varName + ".",
 			ItemText:    "Press Enter to save or Esc to cancel.",
@@ -788,7 +796,7 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 		Height: 1,
 		ZOrder: tui.ZDialog + 15,
 		Label:  "INS/OVR",
-		Help:   &tui.HelpContext{ScreenName: "Set Value: " + m.varName, PageTitle: "Insert/Overwrite", PageText: "Toggle between insert and overwrite mode."},
+		Help:   &tui.HelpContext{ScreenName: m.setValueTitle(), PageTitle: "Insert/Overwrite", PageText: "Toggle between insert and overwrite mode."},
 	})
 
 	btnH := tui.ButtonRowHeight(contentW, 0, tui.ButtonSpec{Text: "Save"}, tui.ButtonSpec{Text: "Cancel"}, tui.ButtonSpec{Text: "Exit"})
@@ -821,7 +829,7 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 		"Preset Values",
 		sbInfo,
 		&tui.HelpContext{
-			ScreenName:  "Set Value: " + m.varName,
+			ScreenName:  m.setValueTitle(),
 			PageTitle:   "Variable Info",
 			PageText:    pageText,
 			DocMarkdown: m.docMarkdown,
@@ -839,7 +847,7 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 		ZOrder: tui.ZDialog,
 		Label:  "Set Value",
 		Help: &tui.HelpContext{
-			ScreenName:  "Set Value: " + m.varName,
+			ScreenName:  m.setValueTitle(),
 			PageTitle:   "Variable Info",
 			PageText:    pageText,
 			DocMarkdown: m.docMarkdown,
@@ -859,7 +867,7 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 		ZOrder: tui.ZDialog + 5,
 		Label:  "Actions",
 		Help: &tui.HelpContext{
-			ScreenName:  "Set Value: " + m.varName,
+			ScreenName:  m.setValueTitle(),
 			PageTitle:   "Variable Info",
 			PageText:    pageText,
 			DocMarkdown: m.docMarkdown,
@@ -868,7 +876,7 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 	})
 	regions = append(regions, tui.GetButtonHitRegions(
 		tui.HelpContext{
-			ScreenName:  "Set Value: " + m.varName,
+			ScreenName:  m.setValueTitle(),
 			PageTitle:   "Variable Info",
 			PageText:    pageText,
 			DocMarkdown: m.docMarkdown,
@@ -891,14 +899,14 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegio
 			X: widgetsStartX, Y: widgetY, Width: 3, Height: 1,
 			ZOrder: tui.ZDialog + 25,
 			Label:  "Help",
-			Help:   &tui.HelpContext{ScreenName: "Set Value: " + m.varName, PageTitle: "Help", PageText: "Open help for this dialog."},
+			Help:   &tui.HelpContext{ScreenName: m.setValueTitle(), PageTitle: "Help", PageText: "Open help for this dialog."},
 		},
 		tui.HitRegion{
 			ID: "setvalue_dialog." + tui.IDTitleWidgetClose,
 			X: widgetsStartX + 4, Y: widgetY, Width: 3, Height: 1,
 			ZOrder: tui.ZDialog + 25,
 			Label:  "Close",
-			Help:   &tui.HelpContext{ScreenName: "Set Value: " + m.varName, PageTitle: "Close", PageText: "Close this dialog."},
+			Help:   &tui.HelpContext{ScreenName: m.setValueTitle(), PageTitle: "Close", PageText: "Close this dialog."},
 		},
 	)
 
