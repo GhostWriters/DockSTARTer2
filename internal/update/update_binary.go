@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"DockSTARTer2/internal/console"
 	dsexec "DockSTARTer2/internal/exec"
@@ -318,10 +319,14 @@ func installUpdate(ctx context.Context, assetURL string) error {
 		return fmt.Errorf("sudo update failed: %s: %w", string(out), err)
 	}
 
-	// Restore ownership to root:root if sudo was used.
-	// Usually /usr/local/bin is root owned.
-	if chownCmd, err := dsexec.SudoCommand(ctx, "chown", "root:root", exe); err == nil {
-		_ = chownCmd.Run()
+	// Restore ownership to root:root only if the parent directory is root-owned.
+	// Avoids clobbering ownership when the binary lives in a user-owned dir (e.g. ~/.local/bin).
+	if info, err := os.Stat(filepath.Dir(exe)); err == nil {
+		if stat, ok := info.Sys().(*syscall.Stat_t); ok && stat.Uid == 0 {
+			if chownCmd, err := dsexec.SudoCommand(ctx, "chown", "root:root", exe); err == nil {
+				_ = chownCmd.Run()
+			}
+		}
 	}
 
 	return nil
