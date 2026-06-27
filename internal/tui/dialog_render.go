@@ -18,9 +18,9 @@ const LargeTitleBarOverhead = 2
 type TitleBarState struct {
 	Show                  bool             // Whether to render the title bar widgets
 	Focused               bool             // Whether the title bar has keyboard focus
-	ActiveWidget          TitleBarWidget   // Which widget has focus
-	PressedWidget         TitleBarWidget   // Which widget is currently pressed (click flash)
-	Widgets               []TitleBarWidget // Ordered widget set; nil means defaultWidgets
+	ActiveWidget          string      // Which widget has focus (widget ID, "" = none)
+	PressedWidget         string      // Which widget is currently pressed (widget ID, "" = none)
+	Widgets               []WidgetDef // Ordered widget set; nil means defaultWidgets
 	SpinnerIndicator      string           // When non-empty, replaces left focus indicator with this spinner frame
 	SpinnerIndicatorRight string           // When non-empty, replaces right focus indicator (defaults to SpinnerIndicator)
 }
@@ -32,7 +32,7 @@ func (s TitleBarState) rightSpinner() string {
 	return s.SpinnerIndicator
 }
 
-func (s TitleBarState) activeWidgets() []TitleBarWidget {
+func (s TitleBarState) activeWidgets() []WidgetDef {
 	if len(s.Widgets) > 0 {
 		return s.Widgets
 	}
@@ -828,3 +828,4 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 
 	return result.String()
 }
+

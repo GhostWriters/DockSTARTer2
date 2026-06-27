@@ -94,7 +94,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if cm, ok := msg.(widgetClearPressMsg); ok {
 		_ = cm
-		m.titleBarPressed = TitleBarWidgetNone
+		m.titleBarPressed = ""
 		m.InvalidateCache()
 		return m, nil
 	}
@@ -112,14 +112,14 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.BlurTitleBar()
 				return m, nil
 			case key.Matches(msg, Keys.Left):
-				if m.titleBarWidget != TitleBarWidgetHelp {
-					m.titleBarWidget = TitleBarWidgetHelp
+				if m.titleBarWidget != IDTitleWidgetHelp {
+					m.titleBarWidget = IDTitleWidgetHelp
 					m.InvalidateCache()
 				}
 				return m, nil
 			case key.Matches(msg, Keys.Right):
-				if m.titleBarWidget != TitleBarWidgetClose {
-					m.titleBarWidget = TitleBarWidgetClose
+				if m.titleBarWidget != IDTitleWidgetClose {
+					m.titleBarWidget = IDTitleWidgetClose
 					m.InvalidateCache()
 				}
 				return m, nil
@@ -238,7 +238,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				pressCmd := tea.Tick(widgetPressDuration, func(_ time.Time) tea.Msg {
 					return widgetClearPressMsg{id: msg.ID}
 				})
-				m.titleBarPressed = TitleBarWidgetHelp
+				m.titleBarPressed = IDTitleWidgetHelp
 				m.InvalidateCache()
 				return m, tea.Batch(pressCmd, func() tea.Msg { return TriggerHelpMsg{} })
 			}
@@ -247,7 +247,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				pressCmd := tea.Tick(widgetPressDuration, func(_ time.Time) tea.Msg {
 					return widgetClearPressMsg{id: msg.ID}
 				})
-				m.titleBarPressed = TitleBarWidgetClose
+				m.titleBarPressed = IDTitleWidgetClose
 				m.InvalidateCache()
 				m.BlurTitleBar()
 				for i, btn := range m.buttons {
@@ -543,20 +543,20 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // activateTitleBarWidget executes the currently focused title bar widget action.
 func (m *MenuModel) activateTitleBarWidget() tea.Cmd {
-	pressCmd := func(w TitleBarWidget) tea.Cmd {
-		m.titleBarPressed = w
+	pressCmd := func(widgetID string) tea.Cmd {
+		m.titleBarPressed = widgetID
 		m.InvalidateCache()
 		return tea.Tick(widgetPressDuration, func(_ time.Time) tea.Msg {
 			return widgetClearPressMsg{id: "key"}
 		})
 	}
 	switch m.titleBarWidget {
-	case TitleBarWidgetHelp:
-		pc := pressCmd(TitleBarWidgetHelp)
+	case IDTitleWidgetHelp:
+		pc := pressCmd(IDTitleWidgetHelp)
 		m.BlurTitleBar()
 		return tea.Batch(pc, func() tea.Msg { return TriggerHelpMsg{ScreenLevelOnly: true} })
-	case TitleBarWidgetClose:
-		pc := pressCmd(TitleBarWidgetClose)
+	case IDTitleWidgetClose:
+		pc := pressCmd(IDTitleWidgetClose)
 		m.BlurTitleBar()
 		for i, btn := range m.buttons {
 			if (btn.ZoneID == "btn-back" || btn.ZoneID == "btn-cancel") && btn.Action != nil {
@@ -1114,3 +1114,5 @@ func (m *MenuModel) syncSelectionToViewport() {
 	m.cursor = m.list.Index()
 	menuSelectedIndices[m.persistKey()] = m.cursor
 }
+
+

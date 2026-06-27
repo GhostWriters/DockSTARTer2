@@ -197,7 +197,7 @@ func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec
 		connType:  connType,
 	}
 	m.btnSpinner.Init()
-	m.ConfigureWidgets(tui.TitleBarWidgetRefresh, tui.TitleBarWidgetHelp, tui.TitleBarWidgetClose)
+	m.ConfigureWidgets(tui.WidgetRefresh, tui.WidgetHelp, tui.WidgetClose)
 	return m
 }
 
@@ -415,3 +415,4 @@ func (m *TabbedVarsEditorModel) confirmExitAction() tea.Cmd {
 		return nil
 	}
 }
+

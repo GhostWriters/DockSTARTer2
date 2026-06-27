@@ -193,8 +193,8 @@ type MenuModel struct {
 
 	// Title bar widget focus (keyboard navigation of ? and × widgets)
 	titleBarFocused bool
-	titleBarWidget  TitleBarWidget
-	titleBarPressed TitleBarWidget
+	titleBarWidget  string
+	titleBarPressed string
 
 	// loadingText, when non-empty, replaces the list area with a centered spinner + message.
 	loadingText  string
@@ -231,31 +231,23 @@ type TitleBarFocusable interface {
 
 func (m *MenuModel) FocusTitleBar() {
 	m.titleBarFocused = true
-	m.titleBarWidget = TitleBarWidgetClose
+	m.titleBarWidget = IDTitleWidgetClose
 	m.InvalidateCache()
 }
 
 func (m *MenuModel) BlurTitleBar() {
 	m.titleBarFocused = false
-	m.titleBarWidget = TitleBarWidgetNone
+	m.titleBarWidget = ""
 	m.InvalidateCache()
 }
 
 func (m *MenuModel) TitleBarFocused() bool { return m.titleBarFocused }
 
 func (m *MenuModel) FocusedWidgetID() string {
-	if !m.titleBarFocused || m.titleBarWidget == TitleBarWidgetNone {
+	if !m.titleBarFocused || m.titleBarWidget == "" {
 		return ""
 	}
-	switch m.titleBarWidget {
-	case TitleBarWidgetClose:
-		return IDTitleWidgetClose
-	case TitleBarWidgetHelp:
-		return IDTitleWidgetHelp
-	case TitleBarWidgetRefresh:
-		return IDTitleWidgetRefresh
-	}
-	return ""
+	return m.titleBarWidget
 }
 
 // applyItemLocks sets the Locked flag on all destructive items based on the
@@ -1130,3 +1122,4 @@ func (m *MenuModel) AnyLocked() bool {
 	}
 	return false
 }
+
