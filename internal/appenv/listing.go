@@ -15,7 +15,7 @@ import (
 	"slices"
 	"strings"
 
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // ListAddedApps returns a sorted list of all added applications (those with __ENABLED variables).
