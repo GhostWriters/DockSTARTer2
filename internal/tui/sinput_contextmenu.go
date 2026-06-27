@@ -13,13 +13,18 @@ import (
 // returns a Cmd that opens it. Call from a dialog's LayerHitMsg handler when
 // msg.Button == tea.MouseRight on the input hit region.
 func ShowInputContextMenu(input sinput.Model, x, y, screenW, screenH int) tea.Cmd {
-	items := buildInputContextMenuItems(input)
+	return ShowInputContextMenuWithTitle(input, "", x, y, screenW, screenH)
+}
+
+// ShowInputContextMenuWithTitle is like ShowInputContextMenu but overrides the header label.
+func ShowInputContextMenuWithTitle(input sinput.Model, titleOverride string, x, y, screenW, screenH int) tea.Cmd {
+	items := buildInputContextMenuItems(input, titleOverride)
 	return func() tea.Msg {
 		return ShowDialogMsg{Dialog: NewContextMenuModel(x, y, screenW, screenH, items)}
 	}
 }
 
-func buildInputContextMenuItems(input sinput.Model) []ContextMenuItem {
+func buildInputContextMenuItems(input sinput.Model, titleOverride string) []ContextMenuItem {
 	sel := input.SelectedText()
 	hasValue := input.Value() != ""
 	hasClip := false
@@ -35,7 +40,10 @@ func buildInputContextMenuItems(input sinput.Model) []ContextMenuItem {
 		copyHelp = "Copy selected text to clipboard."
 	}
 
-	header := strings.TrimSpace(input.Prompt)
+	header := titleOverride
+	if header == "" {
+		header = strings.TrimSpace(input.Prompt)
+	}
 	if header == "" || header == ">" || header == ":" {
 		header = strings.TrimSpace(input.Placeholder)
 	}

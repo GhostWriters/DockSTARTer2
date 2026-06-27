@@ -4,36 +4,69 @@ package webmsg
 
 import "sync"
 
+// DisplaySettings holds the browser's current xterm.js display settings.
+type DisplaySettings struct {
+	FontFamily string
+	FontSize   int
+}
+
+type session struct {
+	outbound chan<- []byte
+	display  DisplaySettings
+}
+
 var (
 	mu       sync.Mutex
-	sessions = map[string]chan<- []byte{}
+	sessions = map[string]*session{}
 )
 
-// Register creates and stores an outbound channel for the given client address.
+// Register creates and stores an outbound channel for the given token.
 // The caller (web handler) should read from the returned channel and forward
 // messages to the WebSocket. Call Unregister when the session ends.
-func Register(clientAddr string) <-chan []byte {
+func Register(token string) <-chan []byte {
 	ch := make(chan []byte, 16)
 	mu.Lock()
-	sessions[clientAddr] = ch
+	sessions[token] = &session{outbound: ch}
 	mu.Unlock()
 	return ch
 }
 
-// Unregister removes and closes the outbound channel for the given client address.
-func Unregister(clientAddr string) {
+// Unregister removes and closes the session for the given token.
+func Unregister(token string) {
 	mu.Lock()
-	if ch, ok := sessions[clientAddr]; ok {
-		delete(sessions, clientAddr)
-		close(ch)
+	if s, ok := sessions[token]; ok {
+		delete(sessions, token)
+		close(s.outbound)
 	}
 	mu.Unlock()
 }
 
-// Get returns the write end of the outbound channel for the given client address,
-// or nil if no session is registered for that address.
-func Get(clientAddr string) chan<- []byte {
+// Get returns the write end of the outbound channel for the given token,
+// or nil if no session is registered for that token.
+func Get(token string) chan<- []byte {
 	mu.Lock()
 	defer mu.Unlock()
-	return sessions[clientAddr]
+	if s, ok := sessions[token]; ok {
+		return s.outbound
+	}
+	return nil
+}
+
+// SetDisplaySettings stores the browser's current display settings for the session.
+func SetDisplaySettings(token string, d DisplaySettings) {
+	mu.Lock()
+	if s, ok := sessions[token]; ok {
+		s.display = d
+	}
+	mu.Unlock()
+}
+
+// GetDisplaySettings returns the stored display settings for the session.
+func GetDisplaySettings(token string) DisplaySettings {
+	mu.Lock()
+	defer mu.Unlock()
+	if s, ok := sessions[token]; ok {
+		return s.display
+	}
+	return DisplaySettings{FontFamily: "monospace", FontSize: 14}
 }

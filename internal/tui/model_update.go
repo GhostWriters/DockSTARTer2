@@ -219,7 +219,12 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if _, ok := m.dialog.(*WebDisplayDialog); ok {
 			return m, func() tea.Msg { return CloseDialogMsg{} }
 		}
-		return m, func() tea.Msg { return ShowDialogMsg{Dialog: NewWebDisplayDialog(DefaultWebDisplaySettings())} }
+		d := GetWebDisplaySettings()
+		current := WebDisplaySettings{FontFamily: d.FontFamily, FontSize: d.FontSize}
+		if current.FontFamily == "" || current.FontSize == 0 {
+			current = DefaultWebDisplaySettings()
+		}
+		return m, func() tea.Msg { return ShowDialogMsg{Dialog: NewWebDisplayDialog(current)} }
 
 	case ShowPendingRestartMsg:
 		return m, showPendingRestartDialog(m.ctx)

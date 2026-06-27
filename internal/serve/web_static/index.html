@@ -92,6 +92,12 @@
       ws.onopen = function() {
         reconnectDelay = 1000;
         sendResize();
+        // Send current display settings so the server can pre-populate the dialog.
+        ws.send(JSON.stringify({
+          type: 'display-settings-init',
+          fontFamily: term.options.fontFamily,
+          fontSize: term.options.fontSize,
+        }));
       };
 
       ws.onmessage = function(evt) {
@@ -108,6 +114,7 @@
                 return;
               }
               if (msg.type === 'display-settings') {
+                console.log('display-settings received:', msg);
                 var s = { fontFamily: msg.fontFamily || display.fontFamily, fontSize: msg.fontSize || display.fontSize };
                 display = s;
                 saveDisplaySettings(s);
