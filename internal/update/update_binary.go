@@ -319,12 +319,17 @@ func installUpdate(ctx context.Context, assetURL string) error {
 		return fmt.Errorf("sudo update failed: %s: %w", string(out), err)
 	}
 
-	// Restore ownership to root:root only if the parent directory is root-owned.
-	// Avoids clobbering ownership when the binary lives in a user-owned dir (e.g. ~/.local/bin).
-	if info, err := os.Stat(filepath.Dir(exe)); err == nil {
-		if stat, ok := info.Sys().(*syscall.Stat_t); ok && stat.Uid == 0 {
-			if chownCmd, err := dsexec.SudoCommand(ctx, "chown", "root:root", exe); err == nil {
-				_ = chownCmd.Run()
+	// Chown to match the parent directory owner, but only if the exe owner differs.
+	// sudo mv may leave the file owned by the wrong user depending on the OS/umask.
+	if dirInfo, err := os.Stat(filepath.Dir(exe)); err == nil {
+		if exeInfo, err := os.Stat(exe); err == nil {
+			dirStat, dirOk := dirInfo.Sys().(*syscall.Stat_t)
+			exeStat, exeOk := exeInfo.Sys().(*syscall.Stat_t)
+			if dirOk && exeOk && (exeStat.Uid != dirStat.Uid || exeStat.Gid != dirStat.Gid) {
+				owner := fmt.Sprintf("%d:%d", dirStat.Uid, dirStat.Gid)
+				if chownCmd, err := dsexec.SudoCommand(ctx, "chown", owner, exe); err == nil {
+					_ = chownCmd.Run()
+				}
 			}
 		}
 	}
