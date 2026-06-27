@@ -22,11 +22,33 @@
   <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-webgl@0.18/lib/addon-webgl.min.js"></script>
 
   <script>
+    const DS2_DISPLAY_KEY = 'ds2_display';
+
+    function loadDisplaySettings() {
+      try {
+        var saved = localStorage.getItem(DS2_DISPLAY_KEY);
+        if (saved) return JSON.parse(saved);
+      } catch (e) {}
+      return { fontFamily: 'monospace', fontSize: 14 };
+    }
+
+    function saveDisplaySettings(s) {
+      try { localStorage.setItem(DS2_DISPLAY_KEY, JSON.stringify(s)); } catch (e) {}
+    }
+
+    function applyDisplaySettings(s) {
+      term.options.fontFamily = s.fontFamily;
+      term.options.fontSize = s.fontSize;
+      fitAddon.fit();
+    }
+
+    var display = loadDisplaySettings();
+
     const term = new Terminal({
       cursorBlink: true,
       allowProposedApi: true,
-      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-      fontSize: 14,
+      fontFamily: display.fontFamily,
+      fontSize: display.fontSize,
       lineHeight: 1.0,
       letterSpacing: 0,
     });
@@ -83,6 +105,13 @@
               if (msg.type === 'reload') {
                 intentionalClose = true;
                 location.reload();
+                return;
+              }
+              if (msg.type === 'display-settings') {
+                var s = { fontFamily: msg.fontFamily || display.fontFamily, fontSize: msg.fontSize || display.fontSize };
+                display = s;
+                saveDisplaySettings(s);
+                applyDisplaySettings(s);
                 return;
               }
             } catch (e) { /* not JSON, fall through */ }

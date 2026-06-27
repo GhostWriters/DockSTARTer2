@@ -22,7 +22,11 @@ const (
 	HeaderFocusApp
 	HeaderFocusTmpl
 	HeaderFocusFlags
+	HeaderFocusWebDisplay
 )
+
+// ShowWebDisplaySettingsMsg requests the web display settings dialog
+type ShowWebDisplaySettingsMsg struct{}
 
 // ShowGlobalFlagsMsg requests the flags toggle dialog
 type ShowGlobalFlagsMsg struct{}
@@ -40,7 +44,8 @@ const (
 
 // HeaderModel represents the header bar at the top of the TUI
 type HeaderModel struct {
-	width int
+	width    int
+	connType string
 
 	// Cached values
 	hostname string
@@ -98,6 +103,8 @@ func (m *HeaderModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.SetFocus(HeaderFocusTmpl)
 			case IDHeaderFlags:
 				m.SetFocus(HeaderFocusFlags)
+			case IDHeaderWebDisplay:
+				m.SetFocus(HeaderFocusWebDisplay)
 			}
 			return m, nil
 		}
@@ -106,7 +113,8 @@ func (m *HeaderModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case LayerWheelMsg:
 		if msg.ID == IDStatusBar {
-			// Scroll wheel cycles between Flags, App version and Tmpl version focus.
+			// Scroll wheel cycles between Flags, Center (web only), App version and Tmpl version.
+			isWeb := m.connType == "web"
 			switch msg.Button {
 			case tea.MouseWheelUp:
 				switch m.focus {
@@ -114,10 +122,18 @@ func (m *HeaderModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.focus = HeaderFocusFlags
 				case HeaderFocusTmpl:
 					m.focus = HeaderFocusApp
+				case HeaderFocusWebDisplay:
+					m.focus = HeaderFocusFlags
 				}
 			case tea.MouseWheelDown:
 				switch m.focus {
 				case HeaderFocusNone, HeaderFocusFlags:
+					if isWeb {
+						m.focus = HeaderFocusWebDisplay
+					} else {
+						m.focus = HeaderFocusApp
+					}
+				case HeaderFocusWebDisplay:
 					m.focus = HeaderFocusApp
 				case HeaderFocusApp:
 					m.focus = HeaderFocusTmpl
@@ -137,6 +153,8 @@ func (m *HeaderModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch m.focus {
 		case HeaderFocusFlags:
 			return m, func() tea.Msg { return ShowGlobalFlagsMsg{} }
+		case HeaderFocusWebDisplay:
+			return m, func() tea.Msg { return ShowWebDisplaySettingsMsg{} }
 		case HeaderFocusApp:
 			if update.RestartPending {
 				return m, func() tea.Msg { return ShowPendingRestartMsg{} }
@@ -154,6 +172,11 @@ func (m *HeaderModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // SetWidth sets the header width
 func (m *HeaderModel) SetWidth(width int) {
 	m.width = width
+}
+
+// SetConnType sets the connection type ("local", "ssh", "web")
+func (m *HeaderModel) SetConnType(ct string) {
+	m.connType = ct
 }
 
 // SyncFlags re-reads the global console flags into the header's cache
@@ -201,6 +224,9 @@ func (m *HeaderModel) HandleHit(id string) (bool, tea.Cmd) {
 	case IDHeaderFlags:
 		m.SetFocus(HeaderFocusFlags)
 		return true, func() tea.Msg { return ShowGlobalFlagsMsg{} }
+	case IDHeaderWebDisplay:
+		m.SetFocus(HeaderFocusWebDisplay)
+		return true, func() tea.Msg { return ShowWebDisplaySettingsMsg{} }
 	}
 	return false, nil
 }
@@ -343,7 +369,12 @@ func (m HeaderModel) renderLeft() string {
 
 func (m HeaderModel) renderCenter() string {
 	styles := GetStyles()
-	centerText := "{{|StatusName|}}" + version.ApplicationName + "{{[-]}}"
+	var centerText string
+	if m.connType == "web" && m.focus == HeaderFocusWebDisplay {
+		centerText = "{{|StatusBarFocused|}}" + version.ApplicationName + "{{[-]}}"
+	} else {
+		centerText = "{{|StatusName|}}" + version.ApplicationName + "{{[-]}}"
+	}
 	return MaintainBackground(RenderThemeText(centerText, styles.HeaderBG), styles.HeaderBG)
 }
 
@@ -459,6 +490,25 @@ func (m *HeaderModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	centerX := (m.width - centerW) / 2
 	if centerX < 0 {
 		centerX = 0
+	}
+
+	if m.connType == "web" {
+		regions = append(regions, HitRegion{
+			ID:     IDHeaderWebDisplay,
+			X:      offsetX + centerX,
+			Y:      offsetY,
+			Width:  centerW,
+			Height: 1,
+			ZOrder: ZHeader + 1,
+			Label:  "Display Settings",
+			Help: &HelpContext{
+				ScreenName: "Display Settings",
+				PageTitle:  "Web Display",
+				PageText:   "Configure xterm.js display settings for this browser session.",
+				ItemTitle:  "Display Settings",
+				ItemText:   "Click or press Enter to open font and display settings for the web terminal.",
+			},
+		})
 	}
 
 	rightW := appW + tmplW

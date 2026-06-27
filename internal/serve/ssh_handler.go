@@ -11,6 +11,7 @@ import (
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/tui"
+	"DockSTARTer2/internal/webmsg"
 
 	"charm.land/wish/v2"
 	"github.com/charmbracelet/ssh"
@@ -70,6 +71,7 @@ func tuiMiddleware(startMenu string) wish.Middleware {
 				Environ:       envs,
 				InitialWidth:  ptyReq.Window.Width,
 				InitialHeight: ptyReq.Window.Height,
+				WebOutbound:   webmsg.Get(clientIP),
 			}
 
 			logger.Info(ctx, "SSH session started from %s", s.RemoteAddr())

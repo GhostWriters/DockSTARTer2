@@ -9,6 +9,7 @@ import (
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/sessionlocks"
+	"DockSTARTer2/internal/webmsg"
 
 	"github.com/coder/websocket"
 	gossh "golang.org/x/crypto/ssh"
@@ -105,6 +106,10 @@ func handleWebSocket(ctx context.Context, conn *websocket.Conn, clientAddr, user
 
 	logger.Info(ctx, "Web session proxied via SSH from %s (%dx%d)", clientAddr, initialCols, initialRows)
 
+	// Register an outbound channel so the TUI can push JSON messages to the browser.
+	outboundCh := webmsg.Register(clientAddr)
+	defer webmsg.Unregister(clientAddr)
+
 	proxyCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -172,6 +177,21 @@ func handleWebSocket(ctx context.Context, conn *websocket.Conn, clientAddr, user
 					cancel()
 					return
 				}
+			}
+		}
+	}()
+
+	// Forward TUI-initiated outbound messages (e.g. display-settings) to the browser.
+	go func() {
+		for {
+			select {
+			case <-proxyCtx.Done():
+				return
+			case msg, ok := <-outboundCh:
+				if !ok {
+					return
+				}
+				_ = conn.Write(proxyCtx, websocket.MessageText, msg)
 			}
 		}
 	}()

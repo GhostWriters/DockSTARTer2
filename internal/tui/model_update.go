@@ -215,6 +215,12 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, func() tea.Msg { return ShowDialogMsg{Dialog: NewFlagsToggleDialog()} }
 
+	case ShowWebDisplaySettingsMsg:
+		if _, ok := m.dialog.(*WebDisplayDialog); ok {
+			return m, func() tea.Msg { return CloseDialogMsg{} }
+		}
+		return m, func() tea.Msg { return ShowDialogMsg{Dialog: NewWebDisplayDialog(DefaultWebDisplaySettings())} }
+
 	case ShowPendingRestartMsg:
 		return m, showPendingRestartDialog(m.ctx)
 

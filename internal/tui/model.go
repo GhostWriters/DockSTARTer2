@@ -301,6 +301,8 @@ func NewAppModel(ctx context.Context, cfg config.AppConfig, clientIP, connType s
 	stack := make([]ScreenModel, len(initialStack))
 	copy(stack, initialStack)
 
+	bd := NewBackdropModel(helpText)
+	bd.SetConnType(connType)
 	return &AppModel{
 		ctx:          ctx,
 		config:       cfg,
@@ -308,19 +310,21 @@ func NewAppModel(ctx context.Context, cfg config.AppConfig, clientIP, connType s
 		connType:     connType,
 		activeScreen: startScreen,
 		screenStack:  stack,
-		backdrop:     NewBackdropModel(helpText),
+		backdrop:     bd,
 		panel:        NewPanelModel(EffectivePanelMode(cfg, connType), connType),
 	}
 }
 
 // NewAppModelStandalone creates a new application model that starts with a modal dialog only
 func NewAppModelStandalone(ctx context.Context, cfg config.AppConfig, clientIP, connType string, dialog tea.Model) *AppModel {
+	bd := NewBackdropModel("")
+	bd.SetConnType(connType)
 	return &AppModel{
 		ctx:      ctx,
 		config:   cfg,
 		clientIP: clientIP,
 		connType: connType,
-		backdrop: NewBackdropModel(""),
+		backdrop: bd,
 		panel:    NewPanelModel(EffectivePanelMode(cfg, connType), connType),
 		dialog:   dialog,
 	}

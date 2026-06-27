@@ -140,7 +140,8 @@ const (
 	IDApplyButton  = "apply_button"
 	IDBackButton   = "back_button"
 	IDExitButton   = "exit_button"
-	IDHeaderFlags  = "header_flags"
+	IDHeaderFlags      = "header_flags"
+	IDHeaderWebDisplay = "header_web_display"
 	IDHelpline     = "helpline"
 
 	// INS/OVR mode toggle hit region ID
