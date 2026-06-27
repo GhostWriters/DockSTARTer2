@@ -435,11 +435,7 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem) *MenuModel {
 		focusedItem:         FocusBtn,
 		activeColumn:        ColAdd,
 		list:                l,
-		showButtons:         true, // Default to show buttons
-		buttons: []ButtonDef{
-			{Label: "Select", ZoneID: "btn-select", Help: "Confirm and execute the selected action."},
-			{Label: "Exit", ZoneID: "btn-exit", Action: ConfirmExitAction(), Help: "Exit the application."},
-		},
+		showButtons: false,
 		Scroll:              Scrollbar{ID: id},
 		showLockGutter:      true,
 		activityGutterWidth: 0,
@@ -567,6 +563,11 @@ func (m *MenuModel) SetFocusedBtnIndex(idx int) {
 func (m *MenuModel) SetButtons(btns []ButtonDef) {
 	m.buttons = btns
 	m.focusedBtnIndex = 0
+	if len(btns) > 0 {
+		m.showButtons = true
+	} else {
+		m.showButtons = false
+	}
 	m.InvalidateCache()
 }
 

@@ -660,7 +660,7 @@ func (s *Scrollbar) Update(msg tea.Msg, currentOffset, totalItems, visibleItems 
 		}
 		switch msg.Button {
 		case tea.MouseWheelUp:
-			newOff := currentOffset - 3
+			newOff := currentOffset - 1
 			if newOff < 0 {
 				newOff = 0
 			}
@@ -669,7 +669,7 @@ func (s *Scrollbar) Update(msg tea.Msg, currentOffset, totalItems, visibleItems 
 				return newOff, scrollDoneCmd(s.ID), true
 			}
 		case tea.MouseWheelDown:
-			newOff := currentOffset + 3
+			newOff := currentOffset + 1
 			if newOff > maxOff {
 				newOff = maxOff
 			}

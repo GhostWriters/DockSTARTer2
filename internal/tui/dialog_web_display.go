@@ -3,6 +3,7 @@ package tui
 import (
 	"encoding/json"
 	"strconv"
+	"time"
 
 	"DockSTARTer2/internal/tui/components/sinput"
 	"DockSTARTer2/internal/webmsg"
@@ -31,7 +32,7 @@ type WebDisplayDialog struct {
 	familyMenu  *MenuModel
 	sizeSection *MenuModel
 	sizeInput   *sinput.Model
-	initial     WebDisplaySettings // settings at dialog open time, for Cancel
+	initial WebDisplaySettings // settings at dialog open time, for Cancel
 }
 
 type applyWebDisplayMsg struct{}
@@ -140,9 +141,14 @@ func (d *WebDisplayDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if len(secs) >= 1 {
 			d.familyMenu = secs[0]
 		}
-		d.sendAndStore(d.collectSettings())
+		settings := d.collectSettings()
 		d.outer.ClearProcessingState()
-		return d, nil
+		// Hide all dialogs, send the font change, then restore after reflow settles.
+		d.sendAndStore(settings)
+		return d, tea.Batch(
+			func() tea.Msg { return HideDialogsMsg{} },
+			tea.Tick(600*time.Millisecond, func(time.Time) tea.Msg { return UnhideDialogsMsg{} }),
+		)
 
 	case cancelWebDisplayMsg:
 		d.sendAndStore(d.initial)

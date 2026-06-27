@@ -62,6 +62,10 @@ func (m *AppModel) View() (v tea.View) {
 		}
 	}()
 
+	if m.suppressRender {
+		return m.lastFrame
+	}
+
 	if !m.ready {
 		// Enable mouse tracking immediately so the terminal receives \x1b[?1002h
 		// before the first WindowSizeMsg is processed. Without this, clicks that
@@ -351,6 +355,7 @@ func (m *AppModel) View() (v tea.View) {
 		}
 	}
 
+	m.lastFrame = v
 	return v
 }
 

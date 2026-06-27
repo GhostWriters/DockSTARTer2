@@ -8,13 +8,10 @@ func (m *MenuModel) nextButtonFocus() FocusItem {
 		m.focusedBtnIndex = 0
 		return FocusBtn
 	}
-	if m.focusedItem == FocusBtn {
-		if m.focusedBtnIndex < len(m.buttons)-1 {
-			m.focusedBtnIndex++
-		}
-		return FocusBtn
+	// FocusBtn / FocusSelectBtn: advance index, clamp at end
+	if m.focusedBtnIndex < len(m.buttons)-1 {
+		m.focusedBtnIndex++
 	}
-	m.focusedBtnIndex = 0
 	return FocusBtn
 }
 

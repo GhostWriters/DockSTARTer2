@@ -84,6 +84,13 @@ type (
 		ForwardToParent bool
 	}
 
+	// HideDialogsMsg temporarily hides all open dialogs without closing them.
+	// Use UnhideDialogsMsg to restore them.
+	HideDialogsMsg struct{}
+
+	// UnhideDialogsMsg restores dialogs previously hidden by HideDialogsMsg.
+	UnhideDialogsMsg struct{}
+
 	// UpdateHeaderMsg triggers a header refresh
 	UpdateHeaderMsg struct{}
 
@@ -270,6 +277,16 @@ type AppModel struct {
 	// Modal dialog overlay (nil when no dialog)
 	dialog      tea.Model
 	dialogStack []tea.Model
+
+	// Stashed dialogs while hidden (see HideDialogsMsg / UnhideDialogsMsg)
+	hiddenDialog      tea.Model
+	hiddenDialogStack []tea.Model
+
+	// suppressRender, when true, causes View() to return the last rendered frame
+	// unchanged. Used during hide/unhide to prevent spinner ticks or other async
+	// msgs from painting a partial frame between hide and reflow settling.
+	suppressRender bool
+	lastFrame      tea.View
 
 	// Channel for receiving confirmation result from a modal dialog
 	pendingConfirm chan bool

@@ -143,6 +143,16 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// Route messages to content sections when present.
+	if len(m.contentSections) > 0 {
+		if updated, cmd, handled := m.updateSections(msg); handled {
+			if mm, ok := updated.(*MenuModel); ok {
+				*m = *mm
+			}
+			return m, cmd
+		}
+	}
+
 	switch msg := msg.(type) {
 
 	case ToggleFocusedMsg:
@@ -251,7 +261,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.InvalidateCache()
 				m.BlurTitleBar()
 				for i, btn := range m.buttons {
-					if (btn.ZoneID == "btn-back" || btn.ZoneID == "btn-cancel") && btn.Action != nil {
+					if (btn.ZoneID == "btn-back" || btn.ZoneID == "btn-cancel" || btn.ZoneID == IDBackButton) && btn.Action != nil {
 						m.focusedItem = FocusBtn
 						m.focusedBtnIndex = i
 						action := btn.Action
@@ -259,16 +269,15 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 				for i, btn := range m.buttons {
-					if btn.ZoneID == "btn-exit" && btn.Action != nil {
+					if (btn.ZoneID == "btn-exit" || btn.ZoneID == IDExitButton) && btn.Action != nil {
 						m.focusedItem = FocusBtn
 						m.focusedBtnIndex = i
 						action := btn.Action
 						return m, tea.Batch(pressCmd, m.SetProcessingBtnDeferred(btn.ZoneID, func() tea.Msg { return action() }))
 					}
 				}
-				m.focusedItem = FocusBtn
-				m.focusedBtnIndex = 0
-				return m, tea.Batch(pressCmd, m.SetProcessingBtnDeferred(IDExitButton, ConfirmExitAction()))
+				// No back/cancel/exit found — nothing to do, just close the title bar focus
+				return m, pressCmd
 			}
 		case IDListPanel:
 			// Hover moved back over the list — restore list focus so the wheel scrolls items.
@@ -324,7 +333,9 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			// IDListPanel: scroll the list regardless of button focus state.
-			if wheelID == IDListPanel || wheelID == m.id {
+			// Empty wheelID means a raw MouseWheelMsg with no hit position (e.g. routed
+			// from a parent's updateSections) — treat it as a list scroll.
+			if wheelID == IDListPanel || wheelID == m.id || wheelID == "" {
 				m.focusedItem = FocusList // Reclaim focus for the list so space/middle-click activates list items
 				switch wheelBtn {
 				case tea.MouseWheelUp:
@@ -468,7 +479,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Esc: back if available, else exit
 		case key.Matches(keyMsg, Keys.Esc):
 			for i, btn := range m.buttons {
-				if (btn.ZoneID == "btn-back" || btn.ZoneID == "btn-cancel") && btn.Action != nil {
+				if (btn.ZoneID == "btn-back" || btn.ZoneID == "btn-cancel" || btn.ZoneID == IDBackButton) && btn.Action != nil {
 					m.focusedItem = FocusBtn
 					m.focusedBtnIndex = i
 					action := btn.Action
@@ -477,8 +488,14 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, tea.Batch(m.spinnerTickCmd(), m.deferAction(func() tea.Msg { return action() }))
 				}
 			}
-			m.focusedItem = FocusBtn
-			m.focusedBtnIndex = 0
+			for i, btn := range m.buttons {
+				if (btn.ZoneID == "btn-exit" || btn.ZoneID == IDExitButton) && btn.Action != nil {
+					m.focusedItem = FocusBtn
+					m.focusedBtnIndex = i
+					action := btn.Action
+					return m, m.SetProcessingBtnDeferred(btn.ZoneID, func() tea.Msg { return action() })
+				}
+			}
 			return m, m.SetProcessingBtnDeferred(IDExitButton, ConfirmExitAction())
 
 		// Dynamic Hotkeys
@@ -559,7 +576,7 @@ func (m *MenuModel) activateTitleBarWidget() tea.Cmd {
 		pc := pressCmd(IDTitleWidgetClose)
 		m.BlurTitleBar()
 		for i, btn := range m.buttons {
-			if (btn.ZoneID == "btn-back" || btn.ZoneID == "btn-cancel") && btn.Action != nil {
+			if (btn.ZoneID == "btn-back" || btn.ZoneID == "btn-cancel" || btn.ZoneID == IDBackButton) && btn.Action != nil {
 				m.focusedItem = FocusBtn
 				m.focusedBtnIndex = i
 				action := btn.Action
@@ -567,16 +584,14 @@ func (m *MenuModel) activateTitleBarWidget() tea.Cmd {
 			}
 		}
 		for i, btn := range m.buttons {
-			if btn.ZoneID == "btn-exit" && btn.Action != nil {
+			if (btn.ZoneID == "btn-exit" || btn.ZoneID == IDExitButton) && btn.Action != nil {
 				m.focusedItem = FocusBtn
 				m.focusedBtnIndex = i
 				action := btn.Action
 				return tea.Batch(pc, m.SetProcessingBtnDeferred(btn.ZoneID, func() tea.Msg { return action() }))
 			}
 		}
-		m.focusedItem = FocusBtn
-		m.focusedBtnIndex = 0
-		return tea.Batch(pc, m.SetProcessingBtnDeferred(IDExitButton, ConfirmExitAction()))
+		return pc
 	}
 	return nil
 }
@@ -695,6 +710,12 @@ func (m *MenuModel) handleSpace() (tea.Model, tea.Cmd) {
 			}
 			m.renderVersion++
 			m.InvalidateCache()
+
+			if m.interceptor != nil {
+				if cmd, handled := m.interceptor(ToggleFocusedMsg{}, m); handled {
+					return m, cmd
+				}
+			}
 
 			if item.SpaceAction != nil {
 				return m, item.SpaceAction
@@ -1052,7 +1073,13 @@ func (m *MenuModel) scrollHalfPageDown() { //nolint:unused
 // EscapeAction implements EscapeActioner: runs back/cancel action if present, otherwise prompts to exit.
 func (m *MenuModel) EscapeAction() tea.Cmd {
 	for _, btn := range m.buttons {
-		if (btn.ZoneID == "btn-back" || btn.ZoneID == "btn-cancel") && btn.Action != nil {
+		if (btn.ZoneID == "btn-back" || btn.ZoneID == "btn-cancel" || btn.ZoneID == IDBackButton) && btn.Action != nil {
+			action := btn.Action
+			return func() tea.Msg { return action() }
+		}
+	}
+	for _, btn := range m.buttons {
+		if (btn.ZoneID == "btn-exit" || btn.ZoneID == IDExitButton) && btn.Action != nil {
 			action := btn.Action
 			return func() tea.Msg { return action() }
 		}

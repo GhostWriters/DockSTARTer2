@@ -64,14 +64,38 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			m.InvalidateCache()
 			return m, cmd, true
 		}
-		// Route keyboard to focused section only when a section (not buttons) has focus.
-		if m.focusedSection >= 0 && m.focusedSection < n && m.focusedItem == FocusList {
-			updated, cmd := m.contentSections[m.focusedSection].Update(msg)
-			if sec, ok := updated.(*MenuModel); ok {
-				m.contentSections[m.focusedSection] = sec
+		// Route keyboard to focused section when a section has focus.
+		// Left/Right navigate buttons while keeping section highlighted (dual focus).
+		// Up/Down always go to the section even in dual-focus (button highlighted) mode.
+		if m.focusedSection >= 0 && m.focusedSection < n {
+			if m.focusedItem == FocusList {
+				if key.Matches(msg, Keys.Left) || key.Matches(msg, Keys.Right) {
+					// Switch focus to buttons without losing section highlight.
+					if key.Matches(msg, Keys.Right) {
+						m.focusedItem = m.nextButtonFocus()
+					} else {
+						m.focusedItem = m.prevButtonFocus()
+					}
+					m.InvalidateCache()
+					return m, nil, true
+				}
+				updated, cmd := m.contentSections[m.focusedSection].Update(msg)
+				if sec, ok := updated.(*MenuModel); ok {
+					m.contentSections[m.focusedSection] = sec
+				}
+				m.InvalidateCache()
+				return m, cmd, true
 			}
-			m.InvalidateCache()
-			return m, cmd, true
+			// Dual-focus: button is highlighted but section still active.
+			// Up/Down/Space route to section; Left/Right/Enter stay in button navigation (fall through).
+			if m.focusedItem == FocusBtn && (key.Matches(msg, Keys.Up) || key.Matches(msg, Keys.Down) || key.Matches(msg, Keys.Space)) {
+				updated, cmd := m.contentSections[m.focusedSection].Update(msg)
+				if sec, ok := updated.(*MenuModel); ok {
+					m.contentSections[m.focusedSection] = sec
+				}
+				m.InvalidateCache()
+				return m, cmd, true
+			}
 		}
 		return m, nil, false
 
@@ -99,11 +123,9 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 
 	case tea.MouseWheelMsg:
 		if m.focusedSection >= 0 && m.focusedSection < n {
-			sec := m.contentSections[m.focusedSection]
-			// Wrap as LayerWheelMsg with the section's list panel ID so the section's
-			// wheel handler recognizes it (raw MouseWheelMsg has no ID and is ignored).
-			lw := LayerWheelMsg{ID: sec.id + "." + IDListPanel, Button: msg.Button}
-			updated, cmd := sec.Update(lw)
+			// Send the raw MouseWheelMsg so the section's Scroll.Update handles it
+			// (3-step scroll with pending throttle), not the 1-step LayerWheelMsg path.
+			updated, cmd := m.contentSections[m.focusedSection].Update(msg)
 			if s, ok := updated.(*MenuModel); ok {
 				m.contentSections[m.focusedSection] = s
 			}

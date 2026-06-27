@@ -40,5 +40,9 @@ func NewMainMenuScreen(connType string) tui.ScreenModel {
 	menu.SetConnType(connType)
 	menu.SetHelpPageText("The main navigation menu for " + version.ApplicationName + ". Select an action to configure your Docker application stack, apply updates, or adjust settings.")
 	menu.SetHelpItemPrefix("Action")
+	menu.SetButtons([]tui.ButtonDef{
+		{Label: "Select", ZoneID: tui.IDApplyButton, Help: "Execute the selected action."},
+		{Label: "Exit", ZoneID: tui.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
+	})
 	return menu
 }
