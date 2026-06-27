@@ -337,7 +337,7 @@ func RunProgramBox(ctx context.Context, title, subtitle, command string, task fu
 	}
 
 	// Create dialog model
-	dialogModel := NewProgramBoxModel(title, subtitle, command)
+	dialogModel := NewProgramBoxModel(title, subtitle, command).WithDialogType(DialogTypeSuccess)
 	dialogModel.ctx = ctx
 	dialogModel.SetTask(task)
 	dialogModel.SetMaximized(true)
