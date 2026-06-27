@@ -34,7 +34,6 @@ func NewMainMenuScreen(connType string) tui.ScreenModel {
 		"Main Menu",
 		"What would you like to do?",
 		items,
-		nil, // No back action for main menu
 	)
 
 	menu.SetMenuName("")

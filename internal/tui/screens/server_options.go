@@ -70,10 +70,20 @@ func (s *ServerOptionsScreen) initMenus() {
 	if !s.isRoot {
 		outerBack = navigateBack()
 	}
-	outerMenu := tui.NewMenuModel("server_outer", "Server Settings", "", nil, outerBack)
-	outerMenu.SetShowExit(true)
+	outerMenu := tui.NewMenuModel("server_outer", "Server Settings", "", nil)
+	if s.isRoot {
+		outerMenu.SetButtons([]tui.ButtonDef{
+			{Label: "Apply", ZoneID: tui.IDApplyButton, Help: "Apply and save server settings."},
+			{Label: "Exit", ZoneID: tui.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
+		})
+	} else {
+		outerMenu.SetButtons([]tui.ButtonDef{
+			{Label: "Apply", ZoneID: tui.IDApplyButton, Help: "Apply and save server settings."},
+			{Label: "Back", ZoneID: tui.IDBackButton, Action: outerBack, Help: "Return to the previous screen."},
+			{Label: "Exit", ZoneID: tui.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
+		})
+	}
 	outerMenu.SetConnType(s.connType)
-	outerMenu.SetButtonLabels("Apply", "Back", "Exit")
 	outerMenu.AddContentSection(s.settingsMenu)
 	outerMenu.AddContentSection(s.statusMenu)
 	s.outerMenu = outerMenu
@@ -132,13 +142,13 @@ func (s *ServerOptionsScreen) buildSettingsMenu() *tui.MenuModel {
 		},
 	}
 
-	menu := tui.NewMenuModel("server_settings", "Configuration", "", items, nil)
+	menu := tui.NewMenuModel("server_settings", "Configuration", "", items)
 	menu.SetConnType(s.connType)
 	menu.SetHelpItemPrefix("Setting")
 	menu.SetHelpPageText("Configure remote access to the DS2 TUI. SSH must be enabled and configured before the web server can be used.")
 	menu.SetSubMenuMode(true)
 	menu.SetIsDialog(false)
-	menu.SetShowExit(false)
+	menu.SetButtons([]tui.ButtonDef{})
 	menu.SetMaximized(true)
 	return menu
 }
@@ -194,13 +204,13 @@ func (s *ServerOptionsScreen) buildStatusMenu() *tui.MenuModel {
 		},
 	}
 
-	menu := tui.NewMenuModel("server_status", "Live Status", "", items, nil)
+	menu := tui.NewMenuModel("server_status", "Live Status", "", items)
 	menu.SetConnType(s.connType)
 	menu.SetHelpItemPrefix("Status")
 	menu.SetHelpPageText("Live status of the SSH server and any active remote session. Use Disconnect to gracefully close a session.")
 	menu.SetSubMenuMode(true)
 	menu.SetIsDialog(false)
-	menu.SetShowExit(false)
+	menu.SetButtons([]tui.ButtonDef{})
 	menu.SetMaximized(true)
 	return menu
 }
@@ -214,10 +224,20 @@ func (s *ServerOptionsScreen) refreshStatus() {
 	if !s.isRoot {
 		outerBack = navigateBack()
 	}
-	outer := tui.NewMenuModel("server_outer", "Server Settings", "", nil, outerBack)
-	outer.SetShowExit(true)
+	outer := tui.NewMenuModel("server_outer", "Server Settings", "", nil)
+	if s.isRoot {
+		outer.SetButtons([]tui.ButtonDef{
+			{Label: "Apply", ZoneID: tui.IDApplyButton, Help: "Apply and save server settings."},
+			{Label: "Exit", ZoneID: tui.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
+		})
+	} else {
+		outer.SetButtons([]tui.ButtonDef{
+			{Label: "Apply", ZoneID: tui.IDApplyButton, Help: "Apply and save server settings."},
+			{Label: "Back", ZoneID: tui.IDBackButton, Action: outerBack, Help: "Return to the previous screen."},
+			{Label: "Exit", ZoneID: tui.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
+		})
+	}
 	outer.SetConnType(s.connType)
-	outer.SetButtonLabels("Apply", "Back", "Exit")
 	outer.AddContentSection(s.settingsMenu)
 	outer.AddContentSection(s.statusMenu)
 	if s.width != 0 && s.height != 0 {
@@ -404,8 +424,11 @@ func (s *ServerOptionsScreen) showAuthModeDropdown() tea.Cmd {
 			})
 		}
 
-		menu := tui.NewMenuModel("auth_mode_dropdown", "Auth Mode", "Select authentication mode", items, tui.CloseDialog())
-		menu.SetShowExit(false)
+		menu := tui.NewMenuModel("auth_mode_dropdown", "Auth Mode", "Select authentication mode", items)
+		menu.SetButtons([]tui.ButtonDef{
+			{Label: "Select", ZoneID: "btn-select", Help: "Confirm and execute the selected action."},
+			{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return tui.CloseDialogMsg{} }, Help: "Close without applying."},
+		})
 
 		// Pre-select current mode
 		for i, m := range modes {
@@ -501,18 +524,7 @@ func (s *ServerOptionsScreen) updateFocusStates() {
 	}
 	s.outerMenu.SetFocused(s.focused)
 	if s.focusedPanel == FocusServerButtons {
-		switch s.focusedButton {
-		case 0:
-			s.outerMenu.SetFocusedItem(tui.FocusSelectBtn)
-		case 1:
-			if s.isRoot {
-				s.outerMenu.SetFocusedItem(tui.FocusExitBtn)
-			} else {
-				s.outerMenu.SetFocusedItem(tui.FocusBackBtn)
-			}
-		case 2:
-			s.outerMenu.SetFocusedItem(tui.FocusExitBtn)
-		}
+		s.outerMenu.SetFocusedBtnIndex(s.focusedButton)
 	} else {
 		s.outerMenu.SetFocusedItem(tui.FocusList)
 	}

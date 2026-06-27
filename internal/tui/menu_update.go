@@ -250,14 +250,24 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.titleBarPressed = TitleBarWidgetClose
 				m.InvalidateCache()
 				m.BlurTitleBar()
-				if m.backAction != nil {
-					m.focusedItem = FocusBackBtn
-					return m, tea.Batch(pressCmd, m.SetProcessingBtnDeferred(IDBackButton, m.backAction))
-				} else if m.exitAction != nil {
-					m.focusedItem = FocusExitBtn
-					return m, tea.Batch(pressCmd, m.SetProcessingBtnDeferred(IDExitButton, m.exitAction()))
+				for i, btn := range m.buttons {
+					if (btn.ZoneID == "btn-back" || btn.ZoneID == "btn-cancel") && btn.Action != nil {
+						m.focusedItem = FocusBtn
+						m.focusedBtnIndex = i
+						action := btn.Action
+						return m, tea.Batch(pressCmd, m.SetProcessingBtnDeferred(btn.ZoneID, func() tea.Msg { return action() }))
+					}
 				}
-				m.focusedItem = FocusExitBtn
+				for i, btn := range m.buttons {
+					if btn.ZoneID == "btn-exit" && btn.Action != nil {
+						m.focusedItem = FocusBtn
+						m.focusedBtnIndex = i
+						action := btn.Action
+						return m, tea.Batch(pressCmd, m.SetProcessingBtnDeferred(btn.ZoneID, func() tea.Msg { return action() }))
+					}
+				}
+				m.focusedItem = FocusBtn
+				m.focusedBtnIndex = 0
 				return m, tea.Batch(pressCmd, m.SetProcessingBtnDeferred(IDExitButton, ConfirmExitAction()))
 			}
 		case IDListPanel:
@@ -266,25 +276,21 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case IDButtonPanel:
 			// Hover landed on the button row background — focus the row without executing.
-			// Keep whatever button is already highlighted; default to Select when coming from list.
+			// Keep whatever button is already highlighted; default to first button when coming from list.
 			if m.focusedItem == FocusList {
-				m.focusedItem = FocusSelectBtn
+				m.focusedItem = FocusBtn
+				m.focusedBtnIndex = 0
 			}
 			return m, nil
-		case "btn-select":
+		default:
 			if msg.Button == tea.MouseLeft {
-				m.focusedItem = FocusSelectBtn
-				return m.handleEnter()
-			}
-		case "btn-back":
-			if msg.Button == tea.MouseLeft && m.backAction != nil {
-				m.focusedItem = FocusBackBtn
-				return m.handleEnter()
-			}
-		case "btn-exit":
-			if msg.Button == tea.MouseLeft && m.showExit {
-				m.focusedItem = FocusExitBtn
-				return m.handleEnter()
+				for i, btn := range m.buttons {
+					if btn.ZoneID == buttonID {
+						m.focusedItem = FocusBtn
+						m.focusedBtnIndex = i
+						return m.handleEnter()
+					}
+				}
 			}
 		}
 
@@ -340,7 +346,8 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// When a button is focused (hover+scroll over button row), shift focus
 			// left/right using the clamping helpers — no wrap at either end.
 			// subMenuMode menus never render buttons, so always fall through to list scroll.
-			if !m.subMenuMode && (m.focusedItem == FocusSelectBtn || m.focusedItem == FocusBackBtn || m.focusedItem == FocusExitBtn) {
+			isButtonFocused := m.focusedItem == FocusBtn
+			if !m.subMenuMode && isButtonFocused {
 				switch wheelBtn {
 				case tea.MouseWheelUp:
 					m.focusedItem = m.prevButtonFocus()
@@ -460,15 +467,18 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Esc: back if available, else exit
 		case key.Matches(keyMsg, Keys.Esc):
-			if m.backAction != nil {
-				m.focusedItem = FocusBackBtn
-				return m, m.SetProcessingBtnDeferred(IDBackButton, m.backAction)
+			for i, btn := range m.buttons {
+				if (btn.ZoneID == "btn-back" || btn.ZoneID == "btn-cancel") && btn.Action != nil {
+					m.focusedItem = FocusBtn
+					m.focusedBtnIndex = i
+					action := btn.Action
+					m.processingBtnID = btn.ZoneID
+					m.InvalidateCache()
+					return m, tea.Batch(m.spinnerTickCmd(), m.deferAction(func() tea.Msg { return action() }))
+				}
 			}
-			if m.exitAction != nil {
-				m.focusedItem = FocusExitBtn
-				return m, m.SetProcessingBtnDeferred(IDExitButton, m.exitAction())
-			}
-			m.focusedItem = FocusExitBtn
+			m.focusedItem = FocusBtn
+			m.focusedBtnIndex = 0
 			return m, m.SetProcessingBtnDeferred(IDExitButton, ConfirmExitAction())
 
 		// Dynamic Hotkeys
@@ -508,16 +518,9 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// 2. Check Buttons (if no item matched)
 				buttons := m.getButtonSpecs()
 				if idx, found := CheckButtonHotkeys(keyMsg, buttons); found {
-					focusMap := []FocusItem{FocusSelectBtn}
-					if m.backAction != nil {
-						focusMap = append(focusMap, FocusBackBtn)
-					}
-					if m.showExit {
-						focusMap = append(focusMap, FocusExitBtn)
-					}
-
-					if idx < len(focusMap) {
-						m.focusedItem = focusMap[idx]
+					if idx < len(m.buttons) {
+						m.focusedItem = FocusBtn
+						m.focusedBtnIndex = idx
 						m.updateDelegate()
 					}
 					// NAVIGATION ONLY: Move focus to button, do not execute Action automatically
@@ -555,20 +558,68 @@ func (m *MenuModel) activateTitleBarWidget() tea.Cmd {
 	case TitleBarWidgetClose:
 		pc := pressCmd(TitleBarWidgetClose)
 		m.BlurTitleBar()
-		if m.backAction != nil {
-			m.focusedItem = FocusBackBtn
-			return tea.Batch(pc, m.SetProcessingBtnDeferred(IDBackButton, m.backAction))
-		} else if m.exitAction != nil {
-			m.focusedItem = FocusExitBtn
-			return tea.Batch(pc, m.SetProcessingBtnDeferred(IDExitButton, m.exitAction()))
+		for i, btn := range m.buttons {
+			if (btn.ZoneID == "btn-back" || btn.ZoneID == "btn-cancel") && btn.Action != nil {
+				m.focusedItem = FocusBtn
+				m.focusedBtnIndex = i
+				action := btn.Action
+				return tea.Batch(pc, m.SetProcessingBtnDeferred(btn.ZoneID, func() tea.Msg { return action() }))
+			}
 		}
-		m.focusedItem = FocusExitBtn
+		for i, btn := range m.buttons {
+			if btn.ZoneID == "btn-exit" && btn.Action != nil {
+				m.focusedItem = FocusBtn
+				m.focusedBtnIndex = i
+				action := btn.Action
+				return tea.Batch(pc, m.SetProcessingBtnDeferred(btn.ZoneID, func() tea.Msg { return action() }))
+			}
+		}
+		m.focusedItem = FocusBtn
+		m.focusedBtnIndex = 0
 		return tea.Batch(pc, m.SetProcessingBtnDeferred(IDExitButton, ConfirmExitAction()))
 	}
 	return nil
 }
 
 func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
+	// FocusBtn dispatches to the focused button's Action
+	if m.focusedItem == FocusBtn {
+		if m.focusedBtnIndex >= 0 && m.focusedBtnIndex < len(m.buttons) {
+			btn := m.buttons[m.focusedBtnIndex]
+			if btn.Action != nil {
+				m.processingBtnID = btn.ZoneID
+				m.InvalidateCache()
+				action := btn.Action
+				return m, tea.Batch(m.spinnerTickCmd(), m.deferAction(func() tea.Msg { return action() }))
+			}
+		}
+		// Button has no action (inert) — also check if it's the first button (Select-role)
+		// and try item action / enterAction as a fallback.
+		if m.focusedBtnIndex == 0 {
+			selectedItem := m.list.SelectedItem()
+			if item, ok := selectedItem.(MenuItem); ok {
+				if item.Action != nil && !item.Locked {
+					m.cursor = m.list.Index()
+					menuSelectedIndices[m.persistKey()] = m.cursor
+					m.processingItemIdx = m.cursor
+					if len(m.buttons) > 0 {
+						m.processingBtnID = m.buttons[0].ZoneID
+					}
+					m.InvalidateCache()
+					return m, tea.Batch(m.spinnerTickCmd(), m.deferAction(item.Action))
+				}
+			}
+			if m.enterAction != nil {
+				if len(m.buttons) > 0 {
+					m.processingBtnID = m.buttons[0].ZoneID
+				}
+				m.InvalidateCache()
+				return m, tea.Batch(m.spinnerTickCmd(), m.deferAction(m.enterAction))
+			}
+		}
+		return m, nil
+	}
+
 	switch m.focusedItem {
 	case FocusList, FocusSelectBtn:
 		// 1. Try list item action first (for navigation menus)
@@ -597,21 +648,6 @@ func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 			return m, tea.Batch(m.spinnerTickCmd(), m.deferAction(m.enterAction))
 		}
 
-	case FocusBackBtn:
-		if m.backAction != nil {
-			m.processingBtnID = "btn-back"
-			m.InvalidateCache()
-			return m, tea.Batch(m.spinnerTickCmd(), m.deferAction(m.backAction))
-		}
-	case FocusExitBtn:
-		if m.exitAction != nil {
-			m.processingBtnID = "btn-exit"
-			m.InvalidateCache()
-			return m, tea.Batch(m.spinnerTickCmd(), m.deferAction(m.exitAction()))
-		}
-		m.processingBtnID = "btn-exit"
-		m.InvalidateCache()
-		return m, tea.Batch(m.spinnerTickCmd(), m.deferAction(ConfirmExitAction()))
 	}
 
 	return m, nil
@@ -1013,13 +1049,13 @@ func (m *MenuModel) scrollHalfPageDown() { //nolint:unused
 }
 
 
-// EscapeAction implements EscapeActioner: runs backAction if set, otherwise prompts to exit.
+// EscapeAction implements EscapeActioner: runs back/cancel action if present, otherwise prompts to exit.
 func (m *MenuModel) EscapeAction() tea.Cmd {
-	if m.backAction != nil {
-		return m.backAction
-	}
-	if m.exitAction != nil {
-		return m.exitAction()
+	for _, btn := range m.buttons {
+		if (btn.ZoneID == "btn-back" || btn.ZoneID == "btn-cancel") && btn.Action != nil {
+			action := btn.Action
+			return func() tea.Msg { return action() }
+		}
 	}
 	return ConfirmExitAction()
 }

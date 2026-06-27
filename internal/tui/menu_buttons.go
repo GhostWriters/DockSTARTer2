@@ -4,41 +4,27 @@ import "charm.land/lipgloss/v2"
 
 // nextButtonFocus moves focus right through buttons, clamping at the last button (no wrap).
 func (m *MenuModel) nextButtonFocus() FocusItem {
-	switch m.focusedItem {
-	case FocusList:
-		return FocusSelectBtn
-	case FocusSelectBtn:
-		if m.backAction != nil {
-			return FocusBackBtn
-		}
-		if m.showExit {
-			return FocusExitBtn
-		}
-		return FocusSelectBtn // only one button, stay
-	case FocusBackBtn:
-		if m.showExit {
-			return FocusExitBtn
-		}
-		return FocusBackBtn // rightmost, clamp
-	case FocusExitBtn:
-		return FocusExitBtn // already rightmost, stay
+	if m.focusedItem == FocusList {
+		m.focusedBtnIndex = 0
+		return FocusBtn
 	}
-	return FocusSelectBtn
+	if m.focusedItem == FocusBtn {
+		if m.focusedBtnIndex < len(m.buttons)-1 {
+			m.focusedBtnIndex++
+		}
+		return FocusBtn
+	}
+	m.focusedBtnIndex = 0
+	return FocusBtn
 }
 
 // prevButtonFocus moves focus left through buttons, clamping at Select (no wrap).
 func (m *MenuModel) prevButtonFocus() FocusItem {
-	switch m.focusedItem {
-	case FocusList, FocusSelectBtn:
-		return FocusSelectBtn // already leftmost, stay
-	case FocusExitBtn:
-		if m.backAction != nil {
-			return FocusBackBtn
-		}
-		return FocusSelectBtn
-	case FocusBackBtn:
-		return FocusSelectBtn
+	if m.focusedItem == FocusBtn && m.focusedBtnIndex > 0 {
+		m.focusedBtnIndex--
+		return FocusBtn
 	}
+	m.focusedBtnIndex = 0
 	return FocusSelectBtn
 }
 
@@ -48,32 +34,18 @@ func (m *MenuModel) getButtonSpecs() []ButtonSpec {
 		return nil
 	}
 	var specs []ButtonSpec
-
-	// Select Button
-	label := m.selectLabel
-	if label == "" {
-		label = "Select"
+	for i, btn := range m.buttons {
+		active := m.focusedItem == FocusBtn && m.focusedBtnIndex == i
+		specs = append(specs, ButtonSpec{
+			Text:         btn.Label,
+			Active:       active,
+			Locked:       btn.Locked,
+			Spinning:     m.processingBtnID == btn.ZoneID,
+			SpinnerFrame: m.spinnerFrame,
+			ZoneID:       btn.ZoneID,
+			Help:         btn.Help,
+		})
 	}
-	specs = append(specs, ButtonSpec{Text: label, Active: m.focusedItem == FocusSelectBtn, Spinning: m.processingBtnID == "btn-select", SpinnerFrame: m.spinnerFrame, ZoneID: "btn-select", Help: "Confirm and execute the selected action."})
-
-	// Back Button
-	if m.backAction != nil {
-		label := m.backLabel
-		if label == "" {
-			label = "Back"
-		}
-		specs = append(specs, ButtonSpec{Text: label, Active: m.focusedItem == FocusBackBtn, Spinning: m.processingBtnID == "btn-back", SpinnerFrame: m.spinnerFrame, ZoneID: "btn-back", Help: "Return to the previous screen."})
-	}
-
-	// Exit Button
-	if m.showExit {
-		label := m.exitLabel
-		if label == "" {
-			label = "Exit"
-		}
-		specs = append(specs, ButtonSpec{Text: label, Active: m.focusedItem == FocusExitBtn, Locked: m.exitLocked, Spinning: m.processingBtnID == "btn-exit", SpinnerFrame: m.spinnerFrame, ZoneID: "btn-exit", Help: "Exit the application immediately."})
-	}
-
 	return specs
 }
 

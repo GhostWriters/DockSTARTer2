@@ -111,26 +111,15 @@ type MenuModel struct {
 	subMenuMode bool
 	focusedSub  bool // If false, use normal borders. If true, use thick borders.
 
-	// Back action (nil if no back button)
-	backAction tea.Cmd
-
 	// Bubbles list model
 	list        list.Model
 	maximized   bool // Whether to maximize the dialog to fill available space
-	showExit    bool // Whether to show Exit button (default true for main menus)
-	exitLocked  bool           // Whether to show the locked marker on the Exit button
-	exitAction  func() tea.Cmd // Overrides ConfirmExitAction when set
 	showButtons bool // Whether to show any buttons (default true)
 
 	// Key override actions
 	escAction   tea.Cmd
 	enterAction tea.Cmd
 	spaceAction tea.Cmd
-
-	// Custom button labels
-	selectLabel string
-	backLabel   string
-	exitLabel   string
 
 	// Checkbox mode (for app selection)
 	checkboxMode bool
@@ -147,7 +136,9 @@ type MenuModel struct {
 
 	// Variable height support (for dynamic word wrapping)
 	variableHeight bool                                      // Allow list to expand naturally up to layout limits
-	interceptor    func(tea.Msg, *MenuModel) (tea.Cmd, bool) // Optional custom message handler
+	interceptor      func(tea.Msg, *MenuModel) (tea.Cmd, bool) // Optional custom message handler
+	contentRenderer  func(contentWidth int) string              // Optional: replaces list content in viewSubMenu
+	onSubFocused     func() tea.Cmd                             // Optional: called when section gains sub-focus
 
 	// Memoization for expensive rendering
 	lastView         string
@@ -164,7 +155,8 @@ type MenuModel struct {
 	lastLineChars   bool
 	lastVersion     int
 	lastColumn      CheckboxColumn
-	lastHitRegions  []HitRegion // Cache for variable height hit regions
+	lastHitRegions  []HitRegion                                        // Cache for variable height hit regions
+	extraHitRegions func(offsetX, offsetY, baseZ int) []HitRegion // Optional: extra hit regions injected by section helpers
 	viewStartY      int         // Persistent scroll offset for variable height lists
 	lastViewStartY  int         // Previous scroll offset for memoization check
 	lastScrollTotal int         // Total content height from last renderVariableHeightList (for scrollbar)
@@ -183,6 +175,7 @@ type MenuModel struct {
 	// Content sections: sub-menus rendered stacked inside the outer border.
 	// When present, replaces the standard list+inner-border rendering.
 	contentSections []*MenuModel
+	focusedSection   int // index into contentSections; -1 = buttons focused
 
 	// Optional hook to enrich the ItemText shown in the help dialog for a menu item.
 	// If set, called by showContextMenu (right-click Help) and HelpContext.
@@ -212,6 +205,21 @@ type MenuModel struct {
 	// Both show a spinner indicator while the triggered action is in flight.
 	processingItemIdx int
 	processingBtnID   string
+
+	// Slice-based button system. Replaces any legacy configuration.
+	// Use SetButtons() to set; focusedBtnIndex tracks which button in the slice is focused.
+	buttons         []ButtonDef
+	focusedBtnIndex int
+}
+
+// ButtonDef defines a single button in a dialog's button row.
+// Use SetButtons to configure the button row.
+type ButtonDef struct {
+	Label  string
+	ZoneID string         // used for hit regions and processingBtnID tracking
+	Action func() tea.Msg // nil = no action (button is inert)
+	Locked bool           // show lock marker
+	Help   string         // helpline text
 }
 
 // TitleBarFocusable is implemented by models whose title bar can receive keyboard focus.
@@ -330,6 +338,11 @@ const (
 	FocusSelectBtn
 	FocusBackBtn
 	FocusExitBtn
+	// FocusBtn is a generic "one of the buttons[] slice has focus" alias.
+	// The specific button is identified by focusedBtnIndex.
+	// It is intentionally equal to FocusSelectBtn so that code that checks
+	// focusedItem == FocusSelectBtn continues to detect button focus correctly.
+	FocusBtn = FocusSelectBtn
 )
 
 // CheckboxColumn represents which column (Add or Enable) has focus in a row
@@ -349,7 +362,7 @@ func (m *MenuModel) SetContextMenuFunc(f func(idx int) []ContextMenuItem) {
 var menuSelectedIndices = make(map[string]int)
 
 // NewMenuModel creates a new menu model
-func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.Cmd) *MenuModel {
+func NewMenuModel(id, title, subtitle string, items []MenuItem) *MenuModel {
 	// Set default shortcuts from first letter of Tag
 	for i := range items {
 		if items[i].Shortcut == 0 && len(items[i].Tag) > 0 {
@@ -425,14 +438,16 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem, backAction tea.C
 		subtitle:            subtitle,
 		items:               items,
 		cursor:              cursor,
-		backAction:          backAction,
 		connType:            "local", // default
 		focused:             true,
-		focusedItem:         FocusSelectBtn,
+		focusedItem:         FocusBtn,
 		activeColumn:        ColAdd,
 		list:                l,
-		showExit:            true, // Default to show Exit button
 		showButtons:         true, // Default to show buttons
+		buttons: []ButtonDef{
+			{Label: "Select", ZoneID: "btn-select", Help: "Confirm and execute the selected action."},
+			{Label: "Exit", ZoneID: "btn-exit", Action: ConfirmExitAction(), Help: "Exit the application."},
+		},
 		Scroll:              Scrollbar{ID: id},
 		showLockGutter:      true,
 		activityGutterWidth: 0,
@@ -548,6 +563,21 @@ func (m *MenuModel) SetFocusedItem(item FocusItem) {
 	m.focusedItem = item
 }
 
+// SetFocusedBtnIndex sets the focused button index within the buttons slice.
+func (m *MenuModel) SetFocusedBtnIndex(idx int) {
+	m.focusedBtnIndex = idx
+	m.focusedItem = FocusBtn
+	m.InvalidateCache()
+}
+
+// SetButtons replaces the button row with an arbitrary slice of ButtonDef entries.
+// Pass an empty slice to show no buttons.
+func (m *MenuModel) SetButtons(btns []ButtonDef) {
+	m.buttons = btns
+	m.focusedBtnIndex = 0
+	m.InvalidateCache()
+}
+
 // GetButtonHeight returns the current button row height (1 = flat, 3 = bordered).
 func (m *MenuModel) GetButtonHeight() int {
 	return m.layout.ButtonHeight
@@ -582,28 +612,18 @@ func (m *MenuModel) SetMaximized(maximized bool) {
 	m.calculateLayout()
 }
 
-// SetShowExit sets whether to show the Exit button
-func (m *MenuModel) SetShowExit(show bool) {
-	m.showExit = show
-}
-
-// SetExitLocked sets whether to show the locked marker on the Exit button.
-func (m *MenuModel) SetExitLocked(locked bool) {
-	m.exitLocked = locked
-	m.InvalidateCache()
-}
-
 // SetCommandLocked locks or unlocks all relevant items for a running panel command:
 // the Exit button marker and all destructive menu items.
 func (m *MenuModel) SetCommandLocked(locked bool) {
-	m.SetExitLocked(locked)
+	for i, btn := range m.buttons {
+		if btn.ZoneID == "btn-exit" {
+			m.buttons[i].Locked = locked
+			m.InvalidateCache()
+			break
+		}
+	}
 	m.commandLock = locked
 	m.applyItemLocks()
-}
-
-// SetExitAction overrides the default ConfirmExitAction with a custom handler.
-func (m *MenuModel) SetExitAction(fn func() tea.Cmd) {
-	m.exitAction = fn
 }
 
 // SetShowButtons sets whether to show the button row at all
@@ -632,9 +652,19 @@ func (m *MenuModel) SetSubMenuMode(v bool) {
 }
 
 // SetSubFocused sets the focus state specifically for sub-menu mode (thick vs normal border)
-func (m *MenuModel) SetSubFocused(focused bool) {
+func (m *MenuModel) SetSubFocused(focused bool) tea.Cmd {
 	m.focusedSub = focused
+	var cmd tea.Cmd
+	if focused && m.onSubFocused != nil {
+		cmd = m.onSubFocused()
+	}
 	m.updateDelegate()
+	return cmd
+}
+
+// SetOnSubFocused registers a callback invoked when this section gains sub-focus.
+func (m *MenuModel) SetOnSubFocused(fn func() tea.Cmd) {
+	m.onSubFocused = fn
 }
 
 // IsActive returns whether this menu actually has focus (accounting for subMenuMode)
@@ -929,13 +959,6 @@ func (m *MenuModel) SetActiveColumn(col CheckboxColumn) {
 	m.activeColumn = col
 	m.renderVersion++
 	m.updateDelegate()
-}
-
-// SetButtonLabels sets custom labels for the buttons
-func (m *MenuModel) SetButtonLabels(selectLabel, backLabel, exitLabel string) {
-	m.selectLabel = selectLabel
-	m.backLabel = backLabel
-	m.exitLabel = exitLabel
 }
 
 // ToggleSelectedItem toggles the selected state of the current item (for checkbox mode)
