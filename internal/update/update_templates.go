@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
 	"DockSTARTer2/internal/appenv"
@@ -218,7 +219,10 @@ func ApplyTemplatesUpdate(ctx context.Context, info *TemplatesUpdateInfo, yes bo
 			}
 		}
 		logger.Info(ctx, "Cleaning up unnecessary files and optimizing the local repository.")
-		logger.Info(ctx, "Running: {{|RunningCommand|}}git gc{{[-]}}")
+		if gitPath, err := exec.LookPath("git"); err == nil {
+			logger.Info(ctx, "Running: {{|RunningCommand|}}git maintenance run{{[-]}}")
+			_ = exec.CommandContext(ctx, gitPath, "-C", paths.GetTemplatesDir(), "maintenance", "run").Run()
+		}
 		logger.Info(ctx, "Setting file ownership on new repository files")
 		system.SetPermissions(ctx, paths.GetTemplatesDir())
 	}
