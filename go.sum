@@ -170,8 +170,8 @@ github.com/dlclark/regexp2 v1.12.0 h1:0j4c5qQmnC6XOWNjP3PIXURXN2gWx76rd3KvgdPkCz
 github.com/dlclark/regexp2 v1.12.0/go.mod h1:DHkYz0B9wPfa6wondMfaivmHpzrQ3v9q8cnmRbL6yW8=
 github.com/docker/buildx v0.35.0 h1:5r/ZcAC0s2oZ1XOJHvYFYbj44I4rxRsIdfsRBeXClks=
 github.com/docker/buildx v0.35.0/go.mod h1:kO/9ZBoZmhi1OsZbeLJqWclckB2TKu/yeW6aj6xxdt0=
-github.com/docker/cli v29.6.0+incompatible h1:nw9himxMMZ7eIeherJNlKQq+acnlzGgHd+4uf10QRSc=
-github.com/docker/cli v29.6.0+incompatible/go.mod h1:JLrzqnKDaYBop7H2jaqPtU4hHvMKP+vjCwu2uszcLI8=
+github.com/docker/cli v29.6.1+incompatible h1:oO7F4nn3Ovr/5TlfTUWFbMwBSS/B7Xs6Epv26gBrUP8=
+github.com/docker/cli v29.6.1+incompatible/go.mod h1:JLrzqnKDaYBop7H2jaqPtU4hHvMKP+vjCwu2uszcLI8=
 github.com/docker/compose/v5 v5.2.0 h1:WuZgtAM91BjFWy7xMKcM2Huq9OksVqRgkgBKFiEXs2Q=
 github.com/docker/compose/v5 v5.2.0/go.mod h1:tjYsBMooQQZ8XGtVoUnc+/T9peXtkMmTdmMakW8/ZXE=
 github.com/docker/distribution v2.8.3+incompatible h1:AtKxIZ36LoNK51+Z6RpzLpddBirtxJnzDrHLEKxTAYk=
@@ -433,8 +433,8 @@ github.com/opencontainers/runtime-spec v1.3.0 h1:YZupQUdctfhpZy3TM39nN9Ika5CBWT5
 github.com/opencontainers/runtime-spec v1.3.0/go.mod h1:jwyrGlmzljRJv/Fgzds9SsS/C5hL+LL3ko9hs6T5lQ0=
 github.com/package-url/packageurl-go v0.1.1 h1:KTRE0bK3sKbFKAk3yy63DpeskU7Cvs/x/Da5l+RtzyU=
 github.com/package-url/packageurl-go v0.1.1/go.mod h1:uQd4a7Rh3ZsVg5j0lNyAfyxIeGde9yrlhjF78GzeW0c=
-github.com/pelletier/go-toml/v2 v2.4.1 h1:j5OMOImsH+j2k7GJ5YO+RxfWwohNiH6t5zB/+h3bagc=
-github.com/pelletier/go-toml/v2 v2.4.1/go.mod h1:2gIqNv+qfxSVS7cM2xJQKtLSTLUE9V8t9Stt+h56mCY=
+github.com/pelletier/go-toml/v2 v2.4.2 h1:M2fKKbmyvI+hGId/D0W64qDBMVhJnNR10O5gIbMc//Q=
+github.com/pelletier/go-toml/v2 v2.4.2/go.mod h1:2gIqNv+qfxSVS7cM2xJQKtLSTLUE9V8t9Stt+h56mCY=
 github.com/pgavlin/goldmark v1.1.33-0.20210916052350-16f491902b32 h1:6dWdvpLPcMW+FQ4k3K/mrPr+y3M8AgwvNL+jkC0i3iM=
 github.com/pgavlin/goldmark v1.1.33-0.20210916052350-16f491902b32/go.mod h1:MRxHTJrf9FhdfNQ8Hdeh9gmHevC9RJE/fu8M3JIGjoE=
 github.com/pgavlin/markdown-kit v0.0.0-20260512143711-19b7911a51a5 h1:wLzE4EHwuK7sEzTJ9o14lNITqE/la7icVZwN+9ySnQI=

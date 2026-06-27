@@ -20,7 +20,7 @@ require (
 	github.com/compose-spec/compose-go/v2 v2.12.1
 	github.com/containerd/errdefs v1.0.0
 	github.com/creativeprojects/go-selfupdate v1.5.2
-	github.com/docker/cli v29.6.0+incompatible
+	github.com/docker/cli v29.6.1+incompatible
 	github.com/docker/compose/v5 v5.2.0
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/docker/go-units v0.5.0
@@ -33,7 +33,7 @@ require (
 	github.com/mattn/go-sixel v0.0.11
 	github.com/moby/moby/client v0.5.0
 	github.com/muesli/termenv v0.16.0
-	github.com/pelletier/go-toml/v2 v2.4.1
+	github.com/pelletier/go-toml/v2 v2.4.2
 	github.com/pgavlin/goldmark v1.1.33-0.20210916052350-16f491902b32
 	github.com/pgavlin/markdown-kit v0.0.0-20260512143711-19b7911a51a5
 	github.com/rivo/uniseg v0.4.7
