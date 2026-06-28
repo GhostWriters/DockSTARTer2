@@ -516,12 +516,15 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 		return nil, false
 	}
 
-	if wheelMsg, ok := msg.(tea.MouseWheelMsg); ok {
+	var wheelBtn tea.MouseButton
+	switch wm := msg.(type) {
+	case tea.MouseWheelMsg:
+		wheelBtn = wm.Button
+	case tui.LayerWheelMsg:
+		wheelBtn = wm.Button
+	}
+	if wheelBtn == tea.MouseWheelUp || wheelBtn == tea.MouseWheelDown {
 		if s.isEditing {
-			return nil, true
-		}
-		// Swallow wheel events while a previous scroll is still being processed.
-		if m.ScrollPending() {
 			return nil, true
 		}
 		items := m.GetItems()
@@ -530,16 +533,12 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 			return nil, false
 		}
 		item := items[idx]
-
-		// Using the same navigation logic as keys
-		switch wheelMsg.Button {
-		case tea.MouseWheelUp:
+		if wheelBtn == tea.MouseWheelUp {
 			s.navUp(m, items, idx, item)
-			return m.MarkScrollPending(), true
-		case tea.MouseWheelDown:
+		} else {
 			s.navDown(m, items, idx, item)
-			return m.MarkScrollPending(), true
 		}
+		return nil, true
 	}
 
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
