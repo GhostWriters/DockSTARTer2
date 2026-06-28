@@ -62,11 +62,23 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	// 1. Centralized scrollbar processing (Throttling, Clicks, Dragging)
-	if newOff, cmd, changed := m.Scroll.Update(msg, m.viewStartY, m.ScrollTotal(), m.layout.ViewportHeight); changed {
-		m.viewStartY = newOff
-		m.syncSelectionToViewport()
-		m.InvalidateCache()
-		return m, cmd
+	// For cursor-driven lists, don't let the scrollbar handle wheel — the cursor
+	// code below calls scrollLineUp/Down which also update viewStartY via the list
+	// component's own pagination. Column-scroll mode (variableHeight + flow columns)
+	// drives viewStartY directly so wheel is allowed there.
+	isColumnScroll := m.flowColumns >= 2 && m.maxFlowRows > 0
+	skipScrollbarWheel := false
+	switch msg.(type) {
+	case tea.MouseWheelMsg, LayerWheelMsg:
+		skipScrollbarWheel = !isColumnScroll
+	}
+	if !skipScrollbarWheel {
+		if newOff, cmd, changed := m.Scroll.Update(msg, m.viewStartY, m.ScrollTotal(), m.layout.ViewportHeight); changed {
+			m.viewStartY = newOff
+			m.syncSelectionToViewport()
+			m.InvalidateCache()
+			return m, cmd
+		}
 	}
 
 	// Any other incoming message (keypress, mouse event, window size) potentially
@@ -342,19 +354,11 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.focusedItem = FocusList // Reclaim focus for the list so space/middle-click activates list items
 				switch wheelBtn {
 				case tea.MouseWheelUp:
-					m.list.CursorUp()
-					for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator {
-						m.list.CursorUp()
-					}
+					m.scrollLineUp()
 				case tea.MouseWheelDown:
-					m.list.CursorDown()
-					for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator {
-						m.list.CursorDown()
-					}
+					m.scrollLineDown()
 				}
-				m.cursor = m.list.Index()
-				menuSelectedIndices[m.persistKey()] = m.cursor
-				return m, m.MarkScrollPending()
+				return m, nil
 			}
 
 			// When a button is focused (hover+scroll over button row), shift focus
@@ -368,26 +372,16 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case tea.MouseWheelDown:
 					m.focusedItem = m.nextButtonFocus()
 				}
-				return m, m.MarkScrollPending()
+				return m, nil
 			}
 
 			switch wheelBtn {
 			case tea.MouseWheelUp:
-				m.list.CursorUp()
-				// Skip separators automatically
-				for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator {
-					m.list.CursorUp()
-				}
+				m.scrollLineUp()
 			case tea.MouseWheelDown:
-				m.list.CursorDown()
-				// Skip separators automatically
-				for m.list.Index() >= 0 && m.list.Index() < len(m.items) && m.items[m.list.Index()].IsSeparator {
-					m.list.CursorDown()
-				}
+				m.scrollLineDown()
 			}
-			m.cursor = m.list.Index()
-			menuSelectedIndices[m.persistKey()] = m.cursor
-			return m, m.MarkScrollPending()
+			return m, nil
 		}
 
 	case tea.KeyPressMsg:
