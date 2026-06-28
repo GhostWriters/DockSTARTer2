@@ -336,8 +336,8 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 					m.deleteSelection()
 					m.clearSelection()
 				}
-				m.Model.SetValue(m.Value()[:m.Model.Position()] + text + m.Value()[m.Model.Position():])
-				m.Model.SetCursor(m.Model.Position() + len([]rune(text)))
+				m.SetValue(m.Value()[:m.Position()] + text + m.Value()[m.Position():])
+				m.SetCursor(m.Position() + len([]rune(text)))
 				m.syncViewport()
 			}
 			return m, nil
