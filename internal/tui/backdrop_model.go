@@ -32,6 +32,14 @@ func NewBackdropModel(helpText string) *BackdropModel {
 	}
 }
 
+// SetConnType propagates the connection type to the header so it can show
+// web-only UI elements (e.g. the Display Settings widget).
+func (m *BackdropModel) SetConnType(ct string) {
+	if m.header != nil {
+		m.header.SetConnType(ct)
+	}
+}
+
 func (m *BackdropModel) invalidateCache() {
 	m.cacheValid = false
 	m.cachedHeader = ""

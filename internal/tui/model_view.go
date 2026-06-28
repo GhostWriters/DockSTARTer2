@@ -62,6 +62,18 @@ func (m *AppModel) View() (v tea.View) {
 		}
 	}()
 
+	if m.suppressRender {
+		// Fill every cell with the screen background color so BubbleTea's diff
+		// renderer is forced to overwrite all stale cells from the previous frame,
+		// even when the background color matches the terminal default.
+		row := currentStyles.Screen.Render(strings.Repeat(" ", m.width))
+		content := strings.Repeat(row+"\n", m.height)
+		v := tea.NewView(content)
+		v.MouseMode = tea.MouseModeCellMotion
+		v.AltScreen = true
+		return v
+	}
+
 	if !m.ready {
 		// Enable mouse tracking immediately so the terminal receives \x1b[?1002h
 		// before the first WindowSizeMsg is processed. Without this, clicks that

@@ -17,6 +17,7 @@ import (
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/theme"
+	"DockSTARTer2/internal/webmsg"
 	"DockSTARTer2/internal/update"
 
 	tea "charm.land/bubbletea/v2"
@@ -56,6 +57,12 @@ var (
 
 	// programExited is used to synchronize TUI shutdown for updates
 	programExited chan struct{}
+
+	// webOutbound is a channel for sending JSON messages to the browser (web sessions only).
+	webOutbound chan<- []byte
+
+	// webToken is the session token used to look up per-session web state.
+	webToken string
 
 	// initialInputState holds the stdin terminal state for emergency restoration
 	initialInputState *term.State
@@ -124,6 +131,28 @@ type ProgramOptions struct {
 	// the first resize event arrives. Zero values are ignored.
 	InitialWidth  int
 	InitialHeight int
+
+	// WebOutbound, when non-nil, receives JSON messages to be forwarded to the
+	// browser over WebSocket (web sessions only).
+	WebOutbound chan<- []byte
+
+	// WebToken is the session token used to look up per-session web state (display settings etc).
+	WebToken string
+}
+
+// SendWebMsg sends a JSON message to the browser if a web outbound channel is set.
+func SendWebMsg(msg []byte) {
+	if webOutbound != nil {
+		select {
+		case webOutbound <- msg:
+		default:
+		}
+	}
+}
+
+// GetWebDisplaySettings returns the browser's current display settings for this session.
+func GetWebDisplaySettings() webmsg.DisplaySettings {
+	return webmsg.GetDisplaySettings(webToken)
 }
 
 // NewProgram creates a new Bubble Tea program with standardized options.
@@ -280,6 +309,8 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	pageName, isRoot := resolveMenuTarget(startMenu)
 	isRootSession = isRoot
 	activeConnType = connType
+	webOutbound = pOpts.WebOutbound
+	webToken = pOpts.WebToken
 
 	// Look up the screen entry; fall back to "main" if unrecognised.
 	entry, ok := screenRegistry[pageName]

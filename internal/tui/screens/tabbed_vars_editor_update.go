@@ -131,7 +131,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if msg.ID == "tabbed_vars."+tui.IDTitleWidgetClose {
 			if msg.Button == tea.MouseLeft {
 				m.BlurTitleBar()
-				pressCmd := m.PressWidget(tui.TitleBarWidgetClose, msg.ID)
+				pressCmd := m.PressWidgetID(tui.IDTitleWidgetClose, msg.ID)
 				m.focus = envFocusButtons
 				m.btnIdx = m.buttonIndex("Back")
 				closeAction := m.onClose
@@ -143,13 +143,13 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if msg.ID == "tabbed_vars."+tui.IDTitleWidgetHelp {
 			if msg.Button == tea.MouseLeft {
 				m.BlurTitleBar()
-				pressCmd := m.PressWidget(tui.TitleBarWidgetHelp, msg.ID)
+				pressCmd := m.PressWidgetID(tui.IDTitleWidgetHelp, msg.ID)
 				return m, tea.Batch(pressCmd, func() tea.Msg { return tui.TriggerHelpMsg{ScreenLevelOnly: true} })
 			}
 		} else if msg.ID == "tabbed_vars."+tui.IDTitleWidgetRefresh {
 			if msg.Button == tea.MouseLeft {
 				m.BlurTitleBar()
-				pressCmd := m.PressWidget(tui.TitleBarWidgetRefresh, msg.ID)
+				pressCmd := m.PressWidgetID(tui.IDTitleWidgetRefresh, msg.ID)
 				return m, tea.Batch(pressCmd, func() tea.Msg { return envRefreshMsg{} })
 			}
 		} else if msg.ID == "tabbed_vars."+tui.IDInsOvr {
@@ -216,17 +216,17 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			case "enter", " ":
 				switch m.ActiveWidget() {
-				case tui.TitleBarWidgetHelp:
-					pressCmd := m.PressWidget(tui.TitleBarWidgetHelp, "key")
+				case tui.IDTitleWidgetHelp:
+					pressCmd := m.PressWidgetID(tui.IDTitleWidgetHelp, "key")
 					return m, tea.Batch(pressCmd, func() tea.Msg { return tui.TriggerHelpMsg{ScreenLevelOnly: true} })
-				case tui.TitleBarWidgetClose:
-					pressCmd := m.PressWidget(tui.TitleBarWidgetClose, "key")
+				case tui.IDTitleWidgetClose:
+					pressCmd := m.PressWidgetID(tui.IDTitleWidgetClose, "key")
 					if m.hasChanges() {
 						return m, tea.Batch(pressCmd, m.promptUnsavedChanges(m.onClose))
 					}
 					return m, tea.Batch(pressCmd, m.onClose)
-				case tui.TitleBarWidgetRefresh:
-					pressCmd := m.PressWidget(tui.TitleBarWidgetRefresh, "key")
+				case tui.IDTitleWidgetRefresh:
+					pressCmd := m.PressWidgetID(tui.IDTitleWidgetRefresh, "key")
 					m.BlurTitleBar()
 					return m, tea.Batch(pressCmd, func() tea.Msg { return envRefreshMsg{} })
 				}
@@ -655,3 +655,4 @@ func (m *TabbedVarsEditorModel) HandleContextMenuKey() (tea.Model, tea.Cmd, bool
 }
 
 // TitleBarFocusable implementation is promoted from the embedded tui.
+

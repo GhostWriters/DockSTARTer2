@@ -284,7 +284,9 @@ func (m *MenuModel) viewSubMenu() string {
 	}
 
 	// Render core list with scrollbar (or flow layout if flowMode is set)
-	if m.flowMode {
+	if m.contentRenderer != nil {
+		innerParts = append(innerParts, m.contentRenderer(contentWidth))
+	} else if m.flowMode {
 		innerParts = append(innerParts, m.renderFlowContent(contentWidth))
 	} else {
 		content := m.renderVerticalListBlock(ctx)

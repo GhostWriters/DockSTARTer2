@@ -188,7 +188,6 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool, connType string) 
 		"Select Applications",
 		"{{[-]}}Choose which apps you would like to install:\nUse {{|KeyCap|}}[up]{{[-]}}/{{|KeyCap|}}[down]{{[-]}} and {{|KeyCap|}}[space]{{[-]}} to select; {{|KeyCap|}}[ctrl+←/→]{{[-]}} to move between Add/Enable columns.",
 		nil,
-		backAction,
 	)
 	s.menu = menu
 
@@ -228,15 +227,25 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool, connType string) 
 		}
 		return doc, item.Tag
 	})
-	menu.SetButtonLabels("Done", "Back", "Exit")
-	menu.SetShowExit(true)
+	if backAction != nil {
+		menu.SetButtons([]tui.ButtonDef{
+			{Label: "Done", ZoneID: "btn-select", Help: "Confirm and execute the selected action."},
+			{Label: "Back", ZoneID: "btn-back", Action: backAction, Help: "Return to the previous screen."},
+			{Label: "Exit", ZoneID: "btn-exit", Action: tui.ConfirmExitAction(), Help: "Exit the application."},
+		})
+	} else {
+		menu.SetButtons([]tui.ButtonDef{
+			{Label: "Done", ZoneID: "btn-select", Help: "Confirm and execute the selected action."},
+			{Label: "Exit", ZoneID: "btn-exit", Action: tui.ConfirmExitAction(), Help: "Exit the application."},
+		})
+	}
 	menu.SetGroupedMode(true)
 	menu.SetVariableHeight(true)
 	menu.SetMaximized(true)
 	menu.SetSubMenuMode(false)
 	menu.SetShowLockGutter(false)
 	menu.SetActivityGutterWidth(2)
-	menu.SetFocusedItem(tui.FocusSelectBtn)
+	menu.SetFocusedItem(tui.FocusBtn)
 
 	menu.SetEnterAction(func() tea.Msg {
 		return s.handleSave()

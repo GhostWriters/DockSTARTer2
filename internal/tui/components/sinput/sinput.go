@@ -47,6 +47,7 @@ type KeyMap struct {
 	SelectAll   key.Binding // ctrl+a      — select all
 	Copy        key.Binding // ctrl+c      — copy to clipboard
 	Cut         key.Binding // ctrl+x      — cut to clipboard
+	Paste       key.Binding // ctrl+v      — paste from clipboard
 	Insert      key.Binding // insert      — toggle insert/overwrite mode
 }
 
@@ -60,6 +61,7 @@ func DefaultKeyMap() KeyMap {
 		SelectAll:   key.NewBinding(key.WithKeys("ctrl+a", "alt+a", "ctrl+alt+a"), key.WithHelp("alt+a", "select all")),
 		Copy:        key.NewBinding(key.WithKeys("ctrl+c", "alt+c", "ctrl+alt+c"), key.WithHelp("alt+c", "copy")),
 		Cut:         key.NewBinding(key.WithKeys("ctrl+x", "alt+x", "ctrl+alt+x"), key.WithHelp("alt+x", "cut")),
+		Paste:       key.NewBinding(key.WithKeys("ctrl+v", "alt+v", "ctrl+alt+v"), key.WithHelp("alt+v", "paste")),
 		Insert:      key.NewBinding(key.WithKeys("insert"), key.WithHelp("insert", "toggle insert/overwrite")),
 	}
 }
@@ -323,6 +325,21 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			}
 			_ = clipboard.WriteAll(text)
 			m.syncViewport()
+			return m, nil
+		}
+
+		// ─── Paste ────────────────────────────────────────────────────────────
+		if key.Matches(msg, m.KeyMap.Paste) {
+			text, err := clipboard.ReadAll()
+			if err == nil && text != "" {
+				if m.selActive {
+					m.deleteSelection()
+					m.clearSelection()
+				}
+				m.SetValue(m.Value()[:m.Position()] + text + m.Value()[m.Position():])
+				m.SetCursor(m.Position() + len([]rune(text)))
+				m.syncViewport()
+			}
 			return m, nil
 		}
 

@@ -11,6 +11,7 @@ import (
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/tui"
+	"DockSTARTer2/internal/webmsg"
 
 	"charm.land/wish/v2"
 	"github.com/charmbracelet/ssh"
@@ -26,6 +27,7 @@ func tuiMiddleware(startMenu string) wish.Middleware {
 			clientIP := formatIP(s.RemoteAddr().String())
 			userAgent := ""
 			termProgram := ""
+			webToken := ""
 			for _, env := range s.Environ() {
 				switch {
 				case strings.HasPrefix(env, "DS2_CLIENT_IP="):
@@ -34,6 +36,8 @@ func tuiMiddleware(startMenu string) wish.Middleware {
 					userAgent = strings.TrimPrefix(env, "DS2_USER_AGENT=")
 				case strings.HasPrefix(env, "TERM_PROGRAM="):
 					termProgram = strings.TrimPrefix(env, "TERM_PROGRAM=")
+				case strings.HasPrefix(env, "DS2_WEB_TOKEN="):
+					webToken = strings.TrimPrefix(env, "DS2_WEB_TOKEN=")
 				}
 			}
 
@@ -70,6 +74,8 @@ func tuiMiddleware(startMenu string) wish.Middleware {
 				Environ:       envs,
 				InitialWidth:  ptyReq.Window.Width,
 				InitialHeight: ptyReq.Window.Height,
+				WebOutbound:   webmsg.Get(webToken),
+				WebToken:      webToken,
 			}
 
 			logger.Info(ctx, "SSH session started from %s", s.RemoteAddr())

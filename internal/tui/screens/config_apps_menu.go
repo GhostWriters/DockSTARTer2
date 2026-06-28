@@ -143,8 +143,12 @@ func NewConfigAppsMenuScreen(connType string) tui.ScreenModel {
 		"Configure Applications",
 		"Select the application to configure",
 		buildConfigAppItems(ctx, apps, envFile, connType),
-		navigateBack(),
 	)
+	menu.SetButtons([]tui.ButtonDef{
+		{Label: "Select", ZoneID: "btn-select", Help: "Confirm and execute the selected action."},
+		{Label: "Back", ZoneID: "btn-back", Action: navigateBack(), Help: "Return to the previous screen."},
+		{Label: "Exit", ZoneID: "btn-exit", Action: tui.ConfirmExitAction(), Help: "Exit the application."},
+	})
 
 	menu.SetMenuName("config_apps")
 	menu.SetConnType(connType)

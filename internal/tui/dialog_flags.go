@@ -61,13 +61,15 @@ func NewFlagsToggleDialog() *FlagsToggleDialog {
 		return items[i].Tag < items[j].Tag
 	})
 
-	menu := NewMenuModel("global_flags", "Application Flags", "Toggle runtime flags", items, CloseDialog())
+	menu := NewMenuModel("global_flags", "Application Flags", "Toggle runtime flags", items)
 	menu.SetCheckboxMode(true) // Use the standard checkbox mode like app_selection.go
 	menu.SetMaximized(false)   // Ensure it is NOT maximized
 	menu.SetIsDialog(true)     // Mark this menu as a modal dialog so it elevates ZOrder
 	menu.SetDialogType(DialogTypeConfirm)
-	menu.SetButtonLabels("Done", "", "")
-	menu.SetShowExit(false)
+	menu.SetButtons([]ButtonDef{
+		{Label: "Done", ZoneID: "btn-select", Help: "Apply flag changes and close."},
+		{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return CloseDialogMsg{} }, Help: "Close without applying."},
+	})
 
 	menu.SetEnterAction(func() tea.Msg { return TriggerApplyFlagsMsg{} })
 	menu.SetEscAction(CloseDialog())

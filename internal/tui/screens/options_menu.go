@@ -34,8 +34,14 @@ func NewOptionsMenuScreen(isRoot bool, connType string) tui.ScreenModel {
 		"Options",
 		"Customize settings",
 		items,
-		backAction,
 	)
+	if backAction != nil {
+		menu.SetButtons([]tui.ButtonDef{
+			{Label: "Select", ZoneID: "btn-select", Help: "Confirm and execute the selected action."},
+			{Label: "Back", ZoneID: "btn-back", Action: backAction, Help: "Return to the previous screen."},
+			{Label: "Exit", ZoneID: "btn-exit", Action: tui.ConfirmExitAction(), Help: "Exit the application."},
+		})
+	}
 
 	menu.SetMenuName("options")
 	menu.SetConnType(connType)

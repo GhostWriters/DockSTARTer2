@@ -134,15 +134,15 @@ func (s *DisplayOptionsScreen) initMenus() {
 		}}, themeItems...)
 	}
 
-	themeMenu := tui.NewMenuModel(tui.IDThemePanel, "Select Theme", "", themeItems, nil)
+	themeMenu := tui.NewMenuModel(tui.IDThemePanel, "Select Theme", "", themeItems)
 	s.themeMenu = themeMenu
 	s.themeMenu.SetHelpItemPrefix("Theme")
 	s.themeMenu.SetItemHelpFunc(s.buildThemeItemHelp)
 	s.themeMenu.SetHelpPageText("Configure the visual appearance of the application, including theme selection, borders, shadows, and other display options.")
 	s.themeMenu.SetSubMenuMode(true)
-	s.themeMenu.SetVariableHeight(false)
+	s.themeMenu.SetVariableHeight(true)
 	s.themeMenu.SetIsDialog(false) // Part of a screen, not a modal
-	s.themeMenu.SetShowExit(false)
+	s.themeMenu.SetButtons([]tui.ButtonDef{})
 	s.themeMenu.SetMaximized(true) // Fill available width
 	s.themeMenu.SetShowLockGutter(false)
 	s.themeMenu.SetNoLeftMargin(true)
@@ -281,25 +281,31 @@ func (s *DisplayOptionsScreen) initMenus() {
 		})
 	}
 
-	optionsMenu := tui.NewMenuModel(tui.IDOptionsPanel, "Options", "", optionItems, nil)
+	optionsMenu := tui.NewMenuModel(tui.IDOptionsPanel, "Options", "", optionItems)
 	s.optionsMenu = optionsMenu
 	s.optionsMenu.SetHelpItemPrefix("Option")
 	s.optionsMenu.SetHelpPageText("Configure the visual appearance of the application, including theme selection, borders, shadows, and other display options.")
 	s.optionsMenu.SetSubMenuMode(true)
 	s.optionsMenu.SetIsDialog(false) // Part of a screen, not a modal
-	s.optionsMenu.SetShowExit(false)
+	s.optionsMenu.SetButtons([]tui.ButtonDef{})
 	s.optionsMenu.SetFlowMode(true)
 	s.optionsMenu.SetMaximized(true) // Fill available width
 	s.optionsMenu.SetShowLockGutter(false)
 
 	// 3. Outer "Appearance Settings" dialog (sections container + buttons)
-	var outerBack tea.Cmd
-	if !s.isRoot {
-		outerBack = navigateBack()
+	outerMenu := tui.NewMenuModel("appearance_outer", "Appearance Settings", "", nil)
+	if s.isRoot {
+		outerMenu.SetButtons([]tui.ButtonDef{
+			{Label: "Apply", ZoneID: tui.IDApplyButton, Help: "Apply and save appearance settings."},
+			{Label: "Exit", ZoneID: tui.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
+		})
+	} else {
+		outerMenu.SetButtons([]tui.ButtonDef{
+			{Label: "Apply", ZoneID: tui.IDApplyButton, Help: "Apply and save appearance settings."},
+			{Label: "Back", ZoneID: tui.IDBackButton, Action: navigateBack(), Help: "Return to the previous screen."},
+			{Label: "Exit", ZoneID: tui.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
+		})
 	}
-	outerMenu := tui.NewMenuModel("appearance_outer", "Appearance Settings", "", nil, outerBack)
-	outerMenu.SetShowExit(true)
-	outerMenu.SetButtonLabels("Apply", "Back", "Exit")
 	outerMenu.AddContentSection(themeMenu)
 	outerMenu.AddContentSection(optionsMenu)
 	s.outerMenu = outerMenu
@@ -353,18 +359,7 @@ func (s *DisplayOptionsScreen) updateFocusStates() {
 	}
 	s.outerMenu.SetFocused(s.focused)
 	if s.focusedPanel == FocusButtons || s.buttonFocused {
-		switch s.focusedButton {
-		case 0:
-			s.outerMenu.SetFocusedItem(tui.FocusSelectBtn)
-		case 1:
-			if s.isRoot {
-				s.outerMenu.SetFocusedItem(tui.FocusExitBtn)
-			} else {
-				s.outerMenu.SetFocusedItem(tui.FocusBackBtn)
-			}
-		case 2:
-			s.outerMenu.SetFocusedItem(tui.FocusExitBtn)
-		}
+		s.outerMenu.SetFocusedBtnIndex(s.focusedButton)
 	} else {
 		s.outerMenu.SetFocusedItem(tui.FocusList)
 	}
@@ -575,8 +570,11 @@ func (s *DisplayOptionsScreen) showTitleAlignDropdown(menuName, label string, ge
 			{Tag: "Left", Help: "Align title to the left", Action: s.titleAlignAction(apply, "left")},
 			{Tag: "Center", Help: "Center the title", Action: s.titleAlignAction(apply, "center")},
 		}
-		menu := tui.NewMenuModel(menuName, label, "Select alignment", items, tui.CloseDialog())
-		menu.SetShowExit(false)
+		menu := tui.NewMenuModel(menuName, label, "Select alignment", items)
+		menu.SetButtons([]tui.ButtonDef{
+			{Label: "Select", ZoneID: "btn-select", Help: "Confirm and execute the selected action."},
+			{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return tui.CloseDialogMsg{} }, Help: "Cancel and close."},
+		})
 		if current == "left" {
 			menu.Select(0)
 		} else {
@@ -712,8 +710,11 @@ func (s *DisplayOptionsScreen) showPanelDropdown(isLocalSetting bool) tea.Cmd {
 		if isLocalSetting {
 			title = "Local Panel Mode"
 		}
-		menu := tui.NewMenuModel("panel_dropdown", title, "Choose layout", items, tui.CloseDialog())
-		menu.SetShowExit(false)
+		menu := tui.NewMenuModel("panel_dropdown", title, "Choose layout", items)
+		menu.SetButtons([]tui.ButtonDef{
+			{Label: "Select", ZoneID: "btn-select", Help: "Confirm and execute the selected action."},
+			{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return tui.CloseDialogMsg{} }, Help: "Cancel and close."},
+		})
 
 		// Set initial selection — "system" maps to tag "System Console"
 		current := strings.ToLower(currentMode)
@@ -768,8 +769,11 @@ func (s *DisplayOptionsScreen) showShadowDropdown() tea.Cmd {
 				},
 			})
 		}
-		menu := tui.NewMenuModel("shadow_dropdown", "Shadow Level", "Select shadow fill pattern", items, tui.CloseDialog())
-		menu.SetShowExit(false)
+		menu := tui.NewMenuModel("shadow_dropdown", "Shadow Level", "Select shadow fill pattern", items)
+		menu.SetButtons([]tui.ButtonDef{
+			{Label: "Select", ZoneID: "btn-select", Help: "Confirm and execute the selected action."},
+			{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return tui.CloseDialogMsg{} }, Help: "Cancel and close."},
+		})
 		menu.Select(s.config.UI.ShadowLevel)
 		return tui.ShowDialogMsg{Dialog: menu}
 	}
@@ -805,8 +809,11 @@ func (s *DisplayOptionsScreen) showBorderColorDropdown() tea.Cmd {
 				},
 			})
 		}
-		menu := tui.NewMenuModel("border_dropdown", "Border Coloring", "Select which theme colors highlight borders", items, tui.CloseDialog())
-		menu.SetShowExit(false)
+		menu := tui.NewMenuModel("border_dropdown", "Border Coloring", "Select which theme colors highlight borders", items)
+		menu.SetButtons([]tui.ButtonDef{
+			{Label: "Select", ZoneID: "btn-select", Help: "Confirm and execute the selected action."},
+			{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return tui.CloseDialogMsg{} }, Help: "Cancel and close."},
+		})
 		menu.Select(s.config.UI.BorderColor - 1)
 		return tui.ShowDialogMsg{Dialog: menu}
 	}

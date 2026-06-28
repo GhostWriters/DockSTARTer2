@@ -9,6 +9,7 @@ import (
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/sessionlocks"
+	"DockSTARTer2/internal/webmsg"
 
 	"github.com/coder/websocket"
 	gossh "golang.org/x/crypto/ssh"
@@ -72,8 +73,16 @@ func handleWebSocket(ctx context.Context, conn *websocket.Conn, clientAddr, user
 	}
 	defer sshSess.Close()
 
-	// Forward the real browser IP and User-Agent so the SSH handler can record them.
+	// Register the outbound channel before starting the SSH session so the
+	// SSH handler can look it up via DS2_WEB_TOKEN before tui.Start() runs.
+	webKey := fmt.Sprintf("%s-%p", formatIP(clientAddr), conn)
+	outboundCh := webmsg.Register(webKey)
+	defer webmsg.Unregister(webKey)
+
+	// Forward the real browser IP, User-Agent, and web token so the SSH handler
+	// can record them and wire up the outbound channel.
 	_ = sshSess.Setenv("DS2_CLIENT_IP", clientAddr)
+	_ = sshSess.Setenv("DS2_WEB_TOKEN", webKey)
 	if userAgent != "" {
 		_ = sshSess.Setenv("DS2_USER_AGENT", userAgent)
 	}
@@ -141,11 +150,23 @@ func handleWebSocket(ctx context.Context, conn *websocket.Conn, clientAddr, user
 				return
 			}
 
-			// Text frames starting with '{' may be resize messages.
+			// Text frames starting with '{' may be control messages.
 			if len(data) > 0 && data[0] == '{' {
 				var rm resizeMsg
 				if json.Unmarshal(data, &rm) == nil && rm.Type == "resize" && rm.Cols > 0 && rm.Rows > 0 {
 					_ = sshSess.WindowChange(rm.Rows, rm.Cols)
+					continue
+				}
+				var cm struct {
+					Type       string `json:"type"`
+					FontFamily string `json:"fontFamily"`
+					FontSize   int    `json:"fontSize"`
+				}
+				if json.Unmarshal(data, &cm) == nil && cm.Type == "display-settings-init" {
+					webmsg.SetDisplaySettings(webKey, webmsg.DisplaySettings{
+						FontFamily: cm.FontFamily,
+						FontSize:   cm.FontSize,
+					})
 					continue
 				}
 			}
@@ -172,6 +193,21 @@ func handleWebSocket(ctx context.Context, conn *websocket.Conn, clientAddr, user
 					cancel()
 					return
 				}
+			}
+		}
+	}()
+
+	// Forward TUI-initiated outbound messages (e.g. display-settings) to the browser.
+	go func() {
+		for {
+			select {
+			case <-proxyCtx.Done():
+				return
+			case msg, ok := <-outboundCh:
+				if !ok {
+					return
+				}
+				_ = conn.Write(proxyCtx, websocket.MessageText, msg)
 			}
 		}
 	}()

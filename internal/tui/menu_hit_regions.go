@@ -262,16 +262,21 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	// 4. Button regions
 	specs := m.getButtonSpecs()
 	if len(specs) > 0 {
-		listHeight := m.list.Height()
-		if m.flowMode {
-			listHeight = m.GetFlowHeight(flowMaxWidth)
-		}
-
-		buttonY := listY + listHeight
-		if !m.subMenuMode {
-			// In full dialog mode, the list has an inner border (+1 line bottom)
-			// and there is no gap, so buttons start at listY + listHeight + SingleBorder
-			buttonY += layout.SingleBorder()
+		var buttonY int
+		if len(m.contentSections) > 0 {
+			// Use pre-computed ButtonY from calculateSectionLayout.
+			buttonY = m.layout.ButtonY
+		} else {
+			listHeight := m.list.Height()
+			if m.flowMode {
+				listHeight = m.GetFlowHeight(flowMaxWidth)
+			}
+			buttonY = listY + listHeight
+			if !m.subMenuMode {
+				// In full dialog mode, the list has an inner border (+1 line bottom)
+				// and there is no gap, so buttons start at listY + listHeight + SingleBorder
+				buttonY += layout.SingleBorder()
+			}
 		}
 		// In subMenuMode, there is no inner border around the list, so JoinVertical
 		// puts buttons immediately after the last content line.
@@ -310,6 +315,20 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		)...)
 	}
 
+	// 4b. Section hit regions — delegate to each content section at correct Y offset.
+	if len(m.contentSections) > 0 {
+		secOffsetY := offsetY + layout.SingleBorder()
+		if m.layout.LargeTitleBar {
+			secOffsetY += LargeTitleBarOverhead
+		}
+		// Sections are inset by outer left border (1) + ContentSideMargin.
+		secOffsetX := offsetX + layout.ContentInset()
+		for _, sec := range m.contentSections {
+			regions = append(regions, sec.GetHitRegions(secOffsetX, secOffsetY)...)
+			secOffsetY += sec.height
+		}
+	}
+
 	// 5. Hyperlink hit regions
 	regions = append(regions, ScanForHyperlinks(m.ViewString(), offsetX, offsetY, baseZ)...)
 
@@ -343,6 +362,11 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 				Help:   &HelpContext{ScreenName: m.title, PageTitle: "Close", PageText: "Close this dialog."},
 			},
 		)
+	}
+
+	// Extra hit regions from section helpers (e.g. sinput text area).
+	if m.extraHitRegions != nil {
+		regions = append(regions, m.extraHitRegions(offsetX, offsetY, baseZ)...)
 	}
 
 	return regions

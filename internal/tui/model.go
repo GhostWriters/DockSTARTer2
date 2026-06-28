@@ -84,6 +84,25 @@ type (
 		ForwardToParent bool
 	}
 
+	// HideDialogsMsg temporarily hides all open dialogs without closing them.
+	// Use UnhideDialogsMsg to restore them.
+	HideDialogsMsg struct{}
+
+	// UnhideDialogsMsg restores dialogs previously hidden by HideDialogsMsg.
+	UnhideDialogsMsg struct{}
+
+	// FreezeDisplayMsg clears the terminal then suppresses all rendering until
+	// ThawDisplayMsg arrives. Used when an external event (e.g. font change) will
+	// cause the browser to reflow and send a WindowSizeMsg.
+	FreezeDisplayMsg struct{}
+
+	// ThawDisplayMsg invalidates all caches and resumes rendering in one clean frame.
+	ThawDisplayMsg struct{}
+
+	// ForceRepaintMsg sends a synthetic WindowSizeMsg with current dimensions
+	// after a short delay, triggering BubbleTea's full repaint path.
+	ForceRepaintMsg struct{}
+
 	// UpdateHeaderMsg triggers a header refresh
 	UpdateHeaderMsg struct{}
 
@@ -271,6 +290,15 @@ type AppModel struct {
 	dialog      tea.Model
 	dialogStack []tea.Model
 
+	// Stashed dialogs while hidden (see HideDialogsMsg / UnhideDialogsMsg)
+	hiddenDialog      tea.Model
+	hiddenDialogStack []tea.Model
+
+	// suppressRender, when true, causes View() to return the last rendered frame
+	// unchanged. Used during hide/unhide to prevent spinner ticks or other async
+	// msgs from painting a partial frame between hide and reflow settling.
+	suppressRender bool
+
 	// Channel for receiving confirmation result from a modal dialog
 	pendingConfirm chan bool
 
@@ -301,6 +329,8 @@ func NewAppModel(ctx context.Context, cfg config.AppConfig, clientIP, connType s
 	stack := make([]ScreenModel, len(initialStack))
 	copy(stack, initialStack)
 
+	bd := NewBackdropModel(helpText)
+	bd.SetConnType(connType)
 	return &AppModel{
 		ctx:          ctx,
 		config:       cfg,
@@ -308,19 +338,21 @@ func NewAppModel(ctx context.Context, cfg config.AppConfig, clientIP, connType s
 		connType:     connType,
 		activeScreen: startScreen,
 		screenStack:  stack,
-		backdrop:     NewBackdropModel(helpText),
+		backdrop:     bd,
 		panel:        NewPanelModel(EffectivePanelMode(cfg, connType), connType),
 	}
 }
 
 // NewAppModelStandalone creates a new application model that starts with a modal dialog only
 func NewAppModelStandalone(ctx context.Context, cfg config.AppConfig, clientIP, connType string, dialog tea.Model) *AppModel {
+	bd := NewBackdropModel("")
+	bd.SetConnType(connType)
 	return &AppModel{
 		ctx:      ctx,
 		config:   cfg,
 		clientIP: clientIP,
 		connType: connType,
-		backdrop: NewBackdropModel(""),
+		backdrop: bd,
 		panel:    NewPanelModel(EffectivePanelMode(cfg, connType), connType),
 		dialog:   dialog,
 	}

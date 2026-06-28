@@ -100,8 +100,8 @@ type PanelModel struct {
 const spinnerIdleTimeout = 1500 * time.Millisecond
 
 const (
-	panelWidgetUp = TitleBarWidgetRefresh // reuses enum slot; panel has no Refresh action
-	panelWidgetDn = TitleBarWidgetClose   // reuses enum slot; panel has no Close action
+	panelWidgetUp = "panel-up" // widget ID for the resize-up button in the panel title bar
+	panelWidgetDn = "panel-dn" // widget ID for the resize-down button in the panel title bar
 )
 
 func (m *PanelModel) spinnerTickCmd() tea.Cmd {
@@ -418,3 +418,4 @@ func panelMaxHeight(totalTermHeight int) int {
 	}
 	return maxH
 }
+
