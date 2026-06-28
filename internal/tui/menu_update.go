@@ -83,7 +83,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// For standard lists, ensure viewStartY follows the cursor.
 	// Column scroll mode skips this — viewStartY is driven by wheel/explicit nav
 	// in the interceptor, not by cursor position (which would pull viewStartY back).
-	if !m.variableHeight && !(m.flowColumns >= 2 && m.maxFlowRows > 0) {
+	if !m.variableHeight && (m.flowColumns < 2 || m.maxFlowRows == 0) {
 		visible := m.layout.ViewportHeight
 		if visible > 0 {
 			cursorRow := m.list.Index()
