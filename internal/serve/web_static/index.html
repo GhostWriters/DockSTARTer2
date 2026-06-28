@@ -40,6 +40,7 @@
       term.options.fontFamily = s.fontFamily;
       term.options.fontSize = s.fontSize;
       fitAddon.fit();
+      term.refresh(0, term.rows - 1);
     }
 
     var display = loadDisplaySettings();

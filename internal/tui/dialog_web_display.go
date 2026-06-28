@@ -143,12 +143,13 @@ func (d *WebDisplayDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		settings := d.collectSettings()
 		d.outer.ClearProcessingState()
-		// Hide all dialogs, send the font change, then restore after reflow settles.
 		d.sendAndStore(settings)
+		// Freeze during reflow, thaw after 500ms fallback (WindowSizeMsg thaws early).
 		return d, tea.Batch(
-			func() tea.Msg { return HideDialogsMsg{} },
-			tea.Tick(600*time.Millisecond, func(time.Time) tea.Msg { return UnhideDialogsMsg{} }),
+			func() tea.Msg { return FreezeDisplayMsg{} },
+			tea.Tick(500*time.Millisecond, func(time.Time) tea.Msg { return ThawDisplayMsg{} }),
 		)
+
 
 	case cancelWebDisplayMsg:
 		d.sendAndStore(d.initial)

@@ -91,6 +91,18 @@ type (
 	// UnhideDialogsMsg restores dialogs previously hidden by HideDialogsMsg.
 	UnhideDialogsMsg struct{}
 
+	// FreezeDisplayMsg clears the terminal then suppresses all rendering until
+	// ThawDisplayMsg arrives. Used when an external event (e.g. font change) will
+	// cause the browser to reflow and send a WindowSizeMsg.
+	FreezeDisplayMsg struct{}
+
+	// ThawDisplayMsg invalidates all caches and resumes rendering in one clean frame.
+	ThawDisplayMsg struct{}
+
+	// ForceRepaintMsg sends a synthetic WindowSizeMsg with current dimensions
+	// after a short delay, triggering BubbleTea's full repaint path.
+	ForceRepaintMsg struct{}
+
 	// UpdateHeaderMsg triggers a header refresh
 	UpdateHeaderMsg struct{}
 
@@ -286,7 +298,6 @@ type AppModel struct {
 	// unchanged. Used during hide/unhide to prevent spinner ticks or other async
 	// msgs from painting a partial frame between hide and reflow settling.
 	suppressRender bool
-	lastFrame      tea.View
 
 	// Channel for receiving confirmation result from a modal dialog
 	pendingConfirm chan bool

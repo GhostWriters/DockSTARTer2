@@ -239,13 +239,13 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ready = true
 		invalidateShadowCache()
 
-		// If dialogs are hidden waiting for browser reflow, restore them now that
-		// the resize has arrived (reflow is complete). Always clear suppressRender
-		// here as a safety net in case UnhideDialogsMsg was already processed.
+		// If dialogs are hidden waiting for browser reflow, restore them now.
 		if m.hiddenDialog != nil || len(m.hiddenDialogStack) > 0 {
 			cmds = append(cmds, func() tea.Msg { return UnhideDialogsMsg{} })
-		} else if m.suppressRender {
-			m.suppressRender = false
+		}
+		// If display is frozen waiting for reflow, thaw now that resize arrived.
+		if m.suppressRender {
+			cmds = append(cmds, func() tea.Msg { return ThawDisplayMsg{} })
 		}
 
 		// Size the active screen first so calculateLayout populates SubtitleHeight (needed by MinHeight).
@@ -491,6 +491,35 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.suppressRender = false
 		return m, nil
+
+	case ForceRepaintMsg:
+		// ClearScreen forces BubbleTea's renderer to repaint every cell,
+		// regardless of whether dimensions changed.
+		return m, tea.ClearScreen
+
+	case FreezeDisplayMsg:
+		// Suppress rendering — View() returns a blank frame while frozen,
+		// clearing the terminal until ThawDisplayMsg arrives.
+		m.suppressRender = true
+		return m, nil
+
+	case ThawDisplayMsg:
+		// Unfreeze and force a full repaint via ClearScreen so BubbleTea rewrites
+		// every cell, clearing any stale content from the browser reflow.
+		invalidateShadowCache()
+		m.backdrop.InvalidateBackdropCache()
+		if m.activeScreen != nil {
+			if ic, ok := m.activeScreen.(interface{ InvalidateCache() }); ok {
+				ic.InvalidateCache()
+			}
+		}
+		if m.dialog != nil {
+			if ic, ok := m.dialog.(interface{ InvalidateCache() }); ok {
+				ic.InvalidateCache()
+			}
+		}
+		m.suppressRender = false
+		return m, tea.ClearScreen
 
 	case ConfirmQuitMsg:
 		// Show an exit confirmation dialog. On Yes we quit; on No the dialog just closes.
