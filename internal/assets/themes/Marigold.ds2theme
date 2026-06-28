@@ -23,6 +23,8 @@ StatusBarBorder = "{{|StatusBar|}}"
 Dialog = "{{[$fg:$bg]}}"
 Border = "{{[$fg:$bg]}}"
 Border2 = "{{[$fg:$bg:D]}}"
+BorderDisabled = "{{|Border:::-D|}}"
+Border2Disabled = "{{|Border2:::-D|}}"
 Shadow = "{{|Screen:::D|}}"
 ProgramBox = "{{[white:black:-]}}"
 ConsoleBorder = "{{|Helpline|}}"
@@ -64,6 +66,7 @@ TitleUnfocusedIndicator = ""
 # Submenu titles
 TitleSubMenu = "{{|Title|}}"
 TitleSubMenuFocused = "{{|Title:::R|}}"
+TitleSubMenuDisabled = "{{|TitleSubMenu:::-D|}}"
 
 # Menu, buttons, and help
 CommandLine = "{{[-]}}"

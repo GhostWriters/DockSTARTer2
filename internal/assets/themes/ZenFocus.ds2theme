@@ -25,6 +25,8 @@ StatusBarBorder = "{{|StatusBar|}}"
 Dialog = "{{[$primary:$secondary]}}"
 Border = "{{[$primary:$secondary:B]}}"
 Border2 = "{{[$primary:$secondary:D]}}"
+BorderDisabled = "{{|Border:::-D|}}"
+Border2Disabled = "{{|Border2:::-D|}}"
 Shadow = "{{|Screen:::D|}}"
 ProgramBox = "{{[white:black:-]}}"
 BoxTitle = "{{[$primary:$secondary]}}"
@@ -67,6 +69,7 @@ TitleUnfocusedIndicator = ""
 # Submenu titles
 TitleSubMenu = "{{|Title|}}"
 TitleSubMenuFocused = "{{|Title:::R|}}"
+TitleSubMenuDisabled = "{{|TitleSubMenu:::-D|}}"
 
 # Menu, buttons, and help
 CommandLine = "{{|Screen|}}"

@@ -163,6 +163,11 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, logger.BatchRecoverTUI(m.ctx, cmd)
 
 	case ScrollDoneMsg:
+		if m.dialog != nil {
+			updated, cmd := m.dialog.Update(msg)
+			m.dialog = updated
+			return m, logger.BatchRecoverTUI(m.ctx, cmd)
+		}
 		if m.activeScreen != nil {
 			updated, cmd := m.activeScreen.Update(msg)
 			if s, ok := updated.(ScreenModel); ok {

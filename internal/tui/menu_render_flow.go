@@ -23,6 +23,10 @@ func (m *MenuModel) renderFlow() string {
 // renderFlowContent renders the flow items at the given content width.
 // Used by both renderFlow (standalone) and viewSubMenu (subMenu+flow combination).
 func (m *MenuModel) renderFlowContent(maxWidth int) string {
+	if m.flowColumns >= 2 {
+		return m.renderColumnContent(maxWidth, m.flowColumns)
+	}
+
 	ctx := GetActiveContext()
 	styles := GetStyles()
 	dialogBG := styles.Dialog.GetBackground()
@@ -135,11 +139,192 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }
 
+// renderColumnContent renders items in N balanced vertical columns.
+// Column widths are determined by the widest item in each column.
+func (m *MenuModel) renderColumnContent(maxWidth, numCols int) string {
+	ctx := GetActiveContext()
+	styles := GetStyles()
+	dialogBG := styles.Dialog.GetBackground()
+	neutralStyle := lipgloss.NewStyle().Background(dialogBG)
+	colGap := 2
+
+	// index of non-separator items in m.items
+	var itemIndices []int
+	for i, item := range m.items {
+		if !item.IsSeparator {
+			itemIndices = append(itemIndices, i)
+		}
+	}
+
+	n := len(itemIndices)
+	if n == 0 {
+		lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(maxWidth + 2)
+		return lineStyle.Render("")
+	}
+
+	// Distribute items into columns top-to-bottom.
+	rows := (n + numCols - 1) / numCols
+
+	// Measure plain-text width of each item (without selection styling).
+	itemWidths := make([]int, n)
+	for ni, ii := range itemIndices {
+		item := m.items[ii]
+		cbWidth := 0
+		if item.IsRadioButton || item.IsCheckbox {
+			glyph := radioOffAscii + " "
+			if ctx.LineCharacters {
+				glyph = radioOff + " "
+			}
+			cbWidth = lipgloss.Width(glyph)
+		}
+		itemWidths[ni] = cbWidth + lipgloss.Width(GetPlainText(item.Tag))
+	}
+
+	// Find the widest item in each column.
+	colWidths := make([]int, numCols)
+	for col := 0; col < numCols; col++ {
+		for row := 0; row < rows; row++ {
+			ni := col*rows + row
+			if ni >= n {
+				break
+			}
+			if itemWidths[ni] > colWidths[col] {
+				colWidths[col] = itemWidths[ni]
+			}
+		}
+	}
+
+	// Clip to viewport when maxFlowRows is set.
+	startRow := 0
+	endRow := rows
+	if m.maxFlowRows > 0 {
+		startRow = m.viewStartY
+		if startRow > rows-m.maxFlowRows {
+			startRow = rows - m.maxFlowRows
+		}
+		if startRow < 0 {
+			startRow = 0
+		}
+		endRow = startRow + m.maxFlowRows
+		if endRow > rows {
+			endRow = rows
+		}
+	}
+
+	// Build each row: render each item then pad to its column width.
+	var lines []string
+	for row := startRow; row < endRow; row++ {
+		var parts []string
+		for col := 0; col < numCols; col++ {
+			ni := col*rows + row
+			colW := colWidths[col]
+			if ni >= n {
+				// Empty cell — fill with neutral background to keep columns aligned.
+				parts = append(parts, neutralStyle.Width(colW).Render(""))
+				continue
+			}
+			ii := itemIndices[ni]
+			item := m.items[ii]
+			isSelected := ii == m.cursor && m.IsActive()
+
+			tagStyle := theme.ThemeSemanticStyle("{{|Tag|}}")
+			keyStyle := theme.ThemeSemanticStyle("{{|TagKey|}}")
+			checkboxStyle := theme.ThemeSemanticStyle("{{|Checkbox|}}")
+			if isSelected {
+				tagStyle = theme.ThemeSemanticStyle("{{|TagFocused|}}")
+				keyStyle = theme.ThemeSemanticStyle("{{|TagKeyFocused|}}")
+				checkboxStyle = theme.ThemeSemanticStyle("{{|CheckboxFocused|}}")
+			}
+
+			prefix := ""
+			if item.IsRadioButton || item.IsCheckbox {
+				prefix = renderCheckbox(item.IsRadioButton, item.Checked, ctx.LineCharacters, checkboxStyle) + neutralStyle.Render(" ")
+			}
+
+			tag := item.Tag
+			tagStr := ""
+			if len(tag) > 0 {
+				letterIdx := 0
+				if strings.HasPrefix(tag, "[") && len(tag) > 1 {
+					letterIdx = 1
+				}
+				p := tag[:letterIdx]
+				f := string(tag[letterIdx])
+				r := tag[letterIdx+1:]
+				tagStr = tagStyle.Render(p) + keyStyle.Render(f) + tagStyle.Render(r)
+			}
+
+			content := prefix + tagStr + semstyle.CodeReset
+			// Pad to column width with neutral background so hit zone is exact.
+			pad := colW - itemWidths[ni]
+			if pad > 0 {
+				content += neutralStyle.Render(strutil.Repeat(" ", pad))
+			}
+			parts = append(parts, content)
+		}
+		// Join columns with a neutral gap.
+		lines = append(lines, strings.Join(parts, neutralStyle.Render(strutil.Repeat(" ", colGap))))
+	}
+
+	scrolling := m.maxFlowRows > 0 && rows > m.maxFlowRows
+	visibleRows := endRow - startRow
+
+	// The lineStyle width must match maxWidth exactly (the outer border's content width).
+	// Padding(0,1) adds 1 char on each side, so inner content = maxWidth - 2.
+	// When scrolling, reserve 1 more char on the right for the scrollbar — inner = maxWidth - 3.
+	lineW := maxWidth
+	if scrolling {
+		lineW = maxWidth - ScrollbarGutterWidth
+	}
+
+	lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(lineW)
+	for i, line := range lines {
+		lines[i] = lineStyle.Render(line)
+	}
+
+	if !scrolling {
+		return lipgloss.JoinVertical(lipgloss.Left, lines...)
+	}
+
+	// Render scrollbar column (1 char wide) and append to each content line.
+	sbStr := m.Scroll.Render(visibleRows, rows, visibleRows, startRow, ctx.LineCharacters, ctx)
+	sbLines := strings.Split(sbStr, "\n")
+	blank := neutralStyle.Render(" ")
+	for len(sbLines) < visibleRows {
+		sbLines = append(sbLines, blank)
+	}
+
+	for i, line := range lines {
+		sb := blank
+		if i < len(sbLines) {
+			sb = sbLines[i]
+		}
+		lines[i] = line + sb
+	}
+
+	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+}
+
 // GetFlowHeight calculates required lines for the given maxWidth.
 // maxWidth must already be the usable content width (same value passed to renderFlowContent).
 func (m *MenuModel) GetFlowHeight(maxWidth int) int {
 	if len(m.items) == 0 {
 		return 0
+	}
+
+	if m.flowColumns >= 2 {
+		// Count non-separator items and divide into columns.
+		n := 0
+		for _, item := range m.items {
+			if !item.IsSeparator {
+				n++
+			}
+		}
+		rows := (n + m.flowColumns - 1) / m.flowColumns
+		if m.maxFlowRows > 0 && rows > m.maxFlowRows {
+			return m.maxFlowRows
+		}
+		return rows
 	}
 
 	ctx := GetActiveContext()

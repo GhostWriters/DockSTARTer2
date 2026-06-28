@@ -167,16 +167,21 @@ type Styles struct {
 	ContentBackground   lipgloss.Style
 	DialogTitle         lipgloss.Style
 	DialogTitleHelp     lipgloss.Style
-	SubmenuTitle        lipgloss.Style
-	SubmenuTitleFocused lipgloss.Style
+	SubmenuTitle         lipgloss.Style
+	SubmenuTitleFocused  lipgloss.Style
+	SubmenuTitleDisabled lipgloss.Style
 	LargeTitleArea      lipgloss.Style
 
 	// Borders
-	Border       lipgloss.Border
-	BorderColor  color.Color
-	Border2Color color.Color
-	BorderFlags  semstyle.StyleFlags
-	Border2Flags semstyle.StyleFlags
+	Border               lipgloss.Border
+	BorderColor          color.Color
+	Border2Color         color.Color
+	BorderDisabledColor  color.Color
+	Border2DisabledColor color.Color
+	BorderFlags          semstyle.StyleFlags
+	Border2Flags         semstyle.StyleFlags
+	BorderDisabledFlags  semstyle.StyleFlags
+	Border2DisabledFlags semstyle.StyleFlags
 
 	// Shadow
 	Shadow      lipgloss.Style
@@ -258,12 +263,17 @@ type StyleContext struct {
 	DialogTitleHelp      lipgloss.Style
 	SubmenuTitle         lipgloss.Style
 	SubmenuTitleFocused  lipgloss.Style
+	SubmenuTitleDisabled lipgloss.Style
 	LargeTitleArea       lipgloss.Style
 	Border               lipgloss.Border
 	BorderColor          color.Color
 	Border2Color         color.Color
+	BorderDisabledColor  color.Color
+	Border2DisabledColor color.Color
 	BorderFlags          semstyle.StyleFlags
 	Border2Flags         semstyle.StyleFlags
+	BorderDisabledFlags  semstyle.StyleFlags
+	Border2DisabledFlags semstyle.StyleFlags
 	ButtonActive         lipgloss.Style
 	ButtonInactive       lipgloss.Style
 	IconFocused          lipgloss.Style
@@ -325,12 +335,17 @@ func GetActiveContext() StyleContext {
 		DialogTitleHelp:      currentStyles.DialogTitleHelp,
 		SubmenuTitle:         currentStyles.SubmenuTitle,
 		SubmenuTitleFocused:  currentStyles.SubmenuTitleFocused,
+		SubmenuTitleDisabled: currentStyles.SubmenuTitleDisabled,
 		LargeTitleArea:       currentStyles.LargeTitleArea,
 		Border:               currentStyles.Border,
 		BorderColor:          currentStyles.BorderColor,
 		Border2Color:         currentStyles.Border2Color,
+		BorderDisabledColor:  currentStyles.BorderDisabledColor,
+		Border2DisabledColor: currentStyles.Border2DisabledColor,
 		BorderFlags:          currentStyles.BorderFlags,
 		Border2Flags:         currentStyles.Border2Flags,
+		BorderDisabledFlags:  currentStyles.BorderDisabledFlags,
+		Border2DisabledFlags: currentStyles.Border2DisabledFlags,
 		ButtonActive:         currentStyles.ButtonActive,
 		ButtonInactive:       currentStyles.ButtonInactive,
 		IconFocused:          currentStyles.IconFocused,
@@ -534,6 +549,11 @@ func InitStyles(cfg config.AppConfig) {
 		currentStyles.Border2Flags = semstyle.CodeToFlags(semstyle.GetRawTagCode("border2"))
 	}
 
+	currentStyles.BorderDisabledColor = SemanticRawStyle("BorderDisabled").GetForeground()
+	currentStyles.Border2DisabledColor = SemanticRawStyle("Border2Disabled").GetForeground()
+	currentStyles.BorderDisabledFlags = semstyle.CodeToFlags(semstyle.GetRawTagCode("borderdisabled"))
+	currentStyles.Border2DisabledFlags = semstyle.CodeToFlags(semstyle.GetRawTagCode("border2disabled"))
+
 	// Shadow defines the shadow color and any attributes (e.g. dim, bold) for shade characters.
 	shadowDef := SemanticRawStyle("Shadow")
 	currentStyles.ShadowColor = shadowDef.GetForeground()
@@ -678,6 +698,7 @@ func InitStyles(cfg config.AppConfig) {
 	// Submenu Title
 	currentStyles.SubmenuTitle = SemanticRawStyle("TitleSubMenu")
 	currentStyles.SubmenuTitleFocused = SemanticRawStyle("TitleSubMenuFocused")
+	currentStyles.SubmenuTitleDisabled = SemanticRawStyle("TitleSubMenuDisabled")
 
 	// Large Title Bar
 	currentStyles.LargeTitleArea = SemanticRawStyle("LargeTitleArea")

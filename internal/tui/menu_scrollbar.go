@@ -613,6 +613,12 @@ type Scrollbar struct {
 // Update processes any message that affects the scrollbar (clicks, drags, wheel).
 // Returns (newOffset, cmd, changed).
 func (s *Scrollbar) Update(msg tea.Msg, currentOffset, totalItems, visibleItems int) (int, tea.Cmd, bool) {
+	// Always clear Pending on ScrollDoneMsg — the list may not need a scrollbar
+	// (totalItems <= visibleItems) but Pending can still be set by MarkScrollPending.
+	if done, ok := msg.(ScrollDoneMsg); ok && done.ID == s.ID {
+		s.Pending = false
+		return currentOffset, nil, false
+	}
 	if !IsScrollbarEnabled() || totalItems <= visibleItems {
 		return currentOffset, nil, false
 	}

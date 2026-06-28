@@ -265,18 +265,7 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 				listCmd = sCmd
 			}
 
-			// For the wheel event itself, forward it too
-			var scrollCmd tea.Cmd
-			if m.dialog != nil {
-				m.dialog, scrollCmd = m.dialog.Update(msg)
-			} else if m.activeScreen != nil {
-				updated, sCmd := m.activeScreen.Update(msg)
-				if s, ok := updated.(ScreenModel); ok {
-					m.activeScreen = s
-				}
-				scrollCmd = sCmd
-			}
-			return m, tea.Batch(listCmd, scrollCmd), true
+			return m, listCmd, true
 		}
 
 		// For other panels (submenus, button row), switch focus to the hovered panel first
