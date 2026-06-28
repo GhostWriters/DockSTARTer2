@@ -59,8 +59,9 @@ func SubscribeLogLines() <-chan string {
 	return logLineCh
 }
 
-// logFilePath is set during NewLogger so the TUI can pre-load it.
+// logFilePath and logDir are set during NewLogger so fatal/cleanup paths use the same location.
 var logFilePath string
+var logDir string
 
 // GetLogFilePath returns the path to the current log file (empty if not yet initialised).
 func GetLogFilePath() string {
@@ -259,13 +260,13 @@ func NewLogger() *slog.Logger {
 	consoleHandler := &TagProcessorHandler{base: consoleLogger, mode: "ansi", consoleWriter: wStderr}
 
 	// Configure File Handler (No Color)
-	stateDir := paths.GetStateDir()
-	if err := os.MkdirAll(stateDir, 0755); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create state directory: %v\n", err)
+	logDir = paths.GetConfigDir()
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create config directory: %v\n", err)
 	}
 
 	appName := strings.ToLower(version.ApplicationName)
-	logFilePath = filepath.Join(stateDir, appName+".log")
+	logFilePath = filepath.Join(logDir, appName+".log")
 
 	// Open file in Append mode
 	wFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)

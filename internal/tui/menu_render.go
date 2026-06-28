@@ -50,6 +50,9 @@ func (m *MenuModel) listScrollPercent() float64 {
 	if m.variableHeight {
 		offset = m.viewStartY
 		total = m.lastScrollTotal
+	} else if m.flowColumns >= 2 && m.maxFlowRows > 0 {
+		offset = m.viewStartY
+		total = m.ScrollTotal()
 	} else {
 		offset = m.viewStartY
 		total = len(m.items)
@@ -243,7 +246,9 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 	align := GetActiveContext().DialogTitleAlign
 	if m.subMenuMode {
 		align = GetActiveContext().SubmenuTitleAlign
-		if focused {
+		if m.disabled {
+			titleTag = "TitleSubMenuDisabled"
+		} else if focused {
 			titleTag = "TitleSubMenuFocused"
 		} else {
 			titleTag = "TitleSubMenu"
@@ -254,6 +259,12 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 	ctx.Type = m.dialogType
 	// Use pre-computed layout decision; submenus always use small titlebar.
 	ctx.LargeTitleBars = m.layout.LargeTitleBar
+	if m.disabled {
+		ctx.BorderColor = ctx.BorderDisabledColor
+		ctx.Border2Color = ctx.Border2DisabledColor
+		ctx.BorderFlags = ctx.BorderDisabledFlags
+		ctx.Border2Flags = ctx.Border2DisabledFlags
+	}
 	var spinInd, spinIndR string
 	if m.loadingText != "" && console.SpinnerEnabled {
 		spinInd, spinIndR = console.TitleSpinnerFrames(m.spinnerFrame, ctx.LineCharacters)
@@ -321,7 +332,7 @@ func (m *MenuModel) viewSubMenu() string {
 	result := m.renderBorderWithTitle(combined, contentWidth, targetHeight, m.focusedSub, true, "Title")
 
 	// 3. Replace bottom border with scroll-percent indicator if needed
-	if !m.flowMode && m.Scroll.Info.Needed {
+	if (!m.flowMode || m.maxFlowRows > 0) && m.Scroll.Info.Needed {
 		if lastNL := strings.LastIndex(result, "\n"); lastNL >= 0 {
 			bottomLine := BuildScrollPercentBottomBorder(m.width, m.listScrollPercent(), m.focusedSub, ctx)
 			result = result[:lastNL+1] + bottomLine

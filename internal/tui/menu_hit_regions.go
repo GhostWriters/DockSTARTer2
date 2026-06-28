@@ -60,6 +60,23 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		baseZ = ZDialog
 	}
 
+	// Submenu frame catch-all: covers the full bordered panel including title and border chars.
+	// Lets clicking the border or empty space focus the section in the parent outer dialog.
+	if m.subMenuMode {
+		frameH := m.height
+		if frameH > 0 && m.width > 0 {
+			regions = append(regions, HitRegion{
+				ID:     m.id + ".frame",
+				X:      offsetX,
+				Y:      offsetY,
+				Width:  m.width,
+				Height: frameH,
+				ZOrder: baseZ - 1,
+				Label:  m.title,
+			})
+		}
+	}
+
 	// Outer frame catch-all: covers the full dialog including border, title bar, and subtitle.
 	// Placed at baseZ-1 so all specific item/button/widget regions take priority via higher Z.
 	// This ensures clicks on non-item areas still register as a hit, allowing header/panel focus
@@ -96,15 +113,18 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	// Use m.layout.ViewportHeight, not m.list.Height(): flow mode menus never call
 	// m.list.SetSize so m.list.Height() stays at the initial item count and would
 	// extend the region far below the visible section into adjacent panels.
-	regions = append(regions, HitRegion{
-		ID:     m.id + "." + IDListPanel,
-		X:      offsetX + listX,
-		Y:      offsetY + listY,
-		Width:  m.list.Width(),
-		Height: m.layout.ViewportHeight,
-		ZOrder: baseZ + 7, // Below items (+10) but above backdrop (+5)
-		Label:  m.title,
-	})
+	// Skip for contentRenderer sections — they register their own hit regions via extraHitRegions.
+	if m.contentRenderer == nil {
+		regions = append(regions, HitRegion{
+			ID:     m.id + "." + IDListPanel,
+			X:      offsetX + listX,
+			Y:      offsetY + listY,
+			Width:  m.list.Width(),
+			Height: m.layout.ViewportHeight,
+			ZOrder: baseZ + 7, // Below items (+10) but above backdrop (+5)
+			Label:  m.title,
+		})
+	}
 
 	// Background region for the whole list — allows hover+scroll over the gaps
 	regions = append(regions, HitRegion{
@@ -173,6 +193,81 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 				ZOrder: baseZ + 10,
 				Label:  label,
 				Help:   help,
+			})
+		}
+	} else if m.flowColumns >= 2 {
+		// Column mode: items fill columns top-to-bottom, matching renderColumnContent exactly.
+		ctx := GetActiveContext()
+		numCols := m.flowColumns
+		colGap := 2
+		// +1 for the 1-char left padding from lineStyle.Padding(0,1)
+		lineContentX := listX + 1
+
+		// Collect non-separator item indices.
+		var itemIndices []int
+		for i, item := range m.items {
+			if !item.IsSeparator {
+				itemIndices = append(itemIndices, i)
+			}
+		}
+		n := len(itemIndices)
+		rows := (n + numCols - 1) / numCols
+
+		// Measure plain-text width of each item (no-selection, matches renderColumnContent).
+		itemWidths := make([]int, n)
+		for ni, ii := range itemIndices {
+			item := m.items[ii]
+			cbWidth := 0
+			if item.IsRadioButton || item.IsCheckbox {
+				glyph := radioOffAscii + " "
+				if ctx.LineCharacters {
+					glyph = radioOff + " "
+				}
+				cbWidth = lipgloss.Width(glyph)
+			}
+			itemWidths[ni] = cbWidth + lipgloss.Width(GetPlainText(item.Tag))
+		}
+
+		// Find widest item per column (matches renderColumnContent).
+		colWidths := make([]int, numCols)
+		for col := 0; col < numCols; col++ {
+			for row := 0; row < rows; row++ {
+				ni := col*rows + row
+				if ni >= n {
+					break
+				}
+				if itemWidths[ni] > colWidths[col] {
+					colWidths[col] = itemWidths[ni]
+				}
+			}
+		}
+
+		// Compute X offset for the start of each column.
+		colOffsets := make([]int, numCols)
+		x := 0
+		for col := 0; col < numCols; col++ {
+			colOffsets[col] = x
+			x += colWidths[col] + colGap
+		}
+
+		// Emit hit regions using (col, row) → (x, y) mapping.
+		for ni, ii := range itemIndices {
+			col := ni / rows
+			row := ni % rows
+			regions = append(regions, HitRegion{
+				ID:     GetMenuItemID(m.id, ii),
+				X:      offsetX + lineContentX + colOffsets[col],
+				Y:      offsetY + listY + row,
+				Width:  itemWidths[ni],
+				Height: 1,
+				ZOrder: baseZ + 10,
+				Label:  GetPlainText(m.items[ii].Tag),
+				Help: &HelpContext{
+					ScreenName: m.title,
+					PageTitle:  "Menu Item",
+					ItemTitle:  GetPlainText(m.items[ii].Tag),
+					ItemText:   m.items[ii].Desc,
+				},
 			})
 		}
 	} else {
@@ -255,7 +350,13 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 
 	// 3b. Scrollbar hit regions (when scrollbar is active)
 	if currentConfig.UI.Scrollbar && m.Scroll.Info.Needed {
-		sbX := offsetX + listX + m.list.Width()
+		var sbX int
+		if m.flowColumns >= 2 && m.maxFlowRows > 0 {
+			// Column mode: scrollbar is at the right edge of the content area.
+			sbX = offsetX + listX + (m.width - layout.BorderWidth() - ScrollbarGutterWidth)
+		} else {
+			sbX = offsetX + listX + m.list.Width()
+		}
 		regions = append(regions, m.Scroll.HitRegions(sbX, offsetY+listY, baseZ, m.title)...)
 	}
 

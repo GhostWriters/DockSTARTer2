@@ -64,7 +64,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// 1. Centralized scrollbar processing (Throttling, Clicks, Dragging)
 	if newOff, cmd, changed := m.Scroll.Update(msg, m.viewStartY, m.ScrollTotal(), m.layout.ViewportHeight); changed {
 		m.viewStartY = newOff
-		m.syncSelectionToViewport() // Ensure selection follows the manual scroll
+		m.syncSelectionToViewport()
 		m.InvalidateCache()
 		return m, cmd
 	}
@@ -80,14 +80,17 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// For standard lists, ensure viewStartY follows the cursor
-	if !m.variableHeight {
+	// For standard lists, ensure viewStartY follows the cursor.
+	// Column scroll mode skips this — viewStartY is driven by wheel/explicit nav
+	// in the interceptor, not by cursor position (which would pull viewStartY back).
+	if !m.variableHeight && !(m.flowColumns >= 2 && m.maxFlowRows > 0) {
 		visible := m.layout.ViewportHeight
 		if visible > 0 {
-			if m.list.Index() < m.viewStartY {
-				m.viewStartY = m.list.Index()
-			} else if m.list.Index() >= m.viewStartY+visible {
-				m.viewStartY = m.list.Index() - visible + 1
+			cursorRow := m.list.Index()
+			if cursorRow < m.viewStartY {
+				m.viewStartY = cursorRow
+			} else if cursorRow >= m.viewStartY+visible {
+				m.viewStartY = cursorRow - visible + 1
 			}
 		}
 	}
@@ -772,7 +775,7 @@ func (m *MenuModel) SetSize(width, height int) {
 	// Update call would otherwise correct it). Variable-height lists clamp
 	// inside renderVariableHeightList, so only standard lists need this here.
 	if !m.variableHeight && m.layout.ViewportHeight > 0 {
-		maxOff := len(m.items) - m.layout.ViewportHeight
+		maxOff := m.ScrollTotal() - m.layout.ViewportHeight
 		if maxOff < 0 {
 			maxOff = 0
 		}
@@ -1110,6 +1113,10 @@ func (m *MenuModel) Cursor() int {
 // It is called after manual scroll events (scrollbar drag, mouse wheel) to
 // satisfy the "Selection follows scroll" requirement.
 func (m *MenuModel) syncSelectionToViewport() {
+	// Column scroll mode manages cursor position in the interceptor; skip here.
+	if m.flowColumns >= 2 && m.maxFlowRows > 0 {
+		return
+	}
 	visible := m.layout.ViewportHeight
 	if visible <= 0 || len(m.items) == 0 {
 		return

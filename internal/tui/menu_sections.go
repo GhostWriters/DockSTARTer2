@@ -134,6 +134,19 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 		return m, nil, false
 
+	case ScrollDoneMsg:
+		// Route to whichever section owns this scrollbar ID so Pending gets cleared.
+		for i, sec := range m.contentSections {
+			if sec.Scroll.ID == msg.ID {
+				updated, cmd := sec.Update(msg)
+				if s, ok := updated.(*MenuModel); ok {
+					m.contentSections[i] = s
+				}
+				return m, cmd, true
+			}
+		}
+		return m, nil, false
+
 	case ToggleFocusedMsg:
 		if m.focusedSection >= 0 && m.focusedSection < n {
 			updated, cmd := m.contentSections[m.focusedSection].Update(msg)
@@ -218,6 +231,14 @@ func (m *MenuModel) SetFlowMode(flow bool) {
 	m.flowMode = flow
 }
 
+func (m *MenuModel) SetFlowColumns(n int) {
+	m.flowColumns = n
+}
+
+func (m *MenuModel) SetMaxFlowRows(n int) {
+	m.maxFlowRows = n
+}
+
 // calculateSectionLayout distributes available height among content sections.
 // Fixed sections (flowMode) get their intrinsic height; the remaining height goes
 // to expandable sections.  Called by calculateLayout when contentSections is set.
@@ -259,6 +280,9 @@ func (m *MenuModel) calculateSectionLayout() {
 				flowContentW = 1
 			}
 			flowH := sec.GetFlowHeight(flowContentW)
+			if sec.maxFlowRows > 0 && flowH > sec.maxFlowRows {
+				flowH = sec.maxFlowRows
+			}
 			sectionH := flowH + layout.BorderHeight()
 			sectionHeights[i] = sectionH
 			fixedTotal += sectionH
@@ -352,4 +376,23 @@ func (m *MenuModel) calculateSectionLayout() {
 		ShadowHeight:  shadowHeight,
 		LargeTitleBar: useLargeTitleBar,
 	}
+}
+
+// GetFocusedSection returns the index of the currently focused content section (-1 = buttons).
+func (m *MenuModel) GetFocusedSection() int {
+	return m.focusedSection
+}
+
+// SetFocusedSection sets focus to the given content section index without triggering tab navigation.
+func (m *MenuModel) SetFocusedSection(idx int) {
+	n := len(m.contentSections)
+	if idx < 0 || idx >= n {
+		return
+	}
+	m.focusedSection = idx
+	m.focusedItem = FocusList
+	for i, sec := range m.contentSections {
+		sec.SetSubFocused(i == idx)
+	}
+	m.InvalidateCache()
 }

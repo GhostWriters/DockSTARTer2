@@ -110,6 +110,7 @@ type MenuModel struct {
 	// Sub-menu mode (for consolidated screens)
 	subMenuMode bool
 	focusedSub  bool // If false, use normal borders. If true, use thick borders.
+	disabled    bool // When true, renders title with TitleSubMenuDisabled style.
 
 	// Bubbles list model
 	list        list.Model
@@ -125,6 +126,8 @@ type MenuModel struct {
 	checkboxMode bool
 	groupedMode  bool // Grouped hierarchical mode (app selection with instances)
 	flowMode     bool // Whether to layout items horizontally instead of vertically
+	flowColumns  int  // When > 1, render as N balanced vertical columns
+	maxFlowRows  int  // When > 0, cap visible rows (enables scrolling in flow/column mode)
 
 	// Dialog positioning
 	isDialog bool // True when used as a modal dialog — raises hit-region Z priority above screen regions
@@ -318,6 +321,16 @@ func (m *MenuModel) IsScrollbarDragging() bool {
 func (m *MenuModel) ScrollTotal() int {
 	if m.variableHeight {
 		return m.lastScrollTotal
+	}
+	if m.flowColumns >= 2 && m.maxFlowRows > 0 {
+		// Return total rows (not items) for column scroll.
+		n := 0
+		for _, item := range m.items {
+			if !item.IsSeparator {
+				n++
+			}
+		}
+		return (n + m.flowColumns - 1) / m.flowColumns
 	}
 	return len(m.items)
 }
@@ -642,6 +655,12 @@ func (m *MenuModel) SetSubMenuMode(v bool) {
 		m.showButtons = false
 	}
 	m.calculateLayout()
+}
+
+// SetDisabled marks the section as disabled, rendering its title with TitleSubMenuDisabled style.
+func (m *MenuModel) SetDisabled(disabled bool) {
+	m.disabled = disabled
+	m.InvalidateCache()
 }
 
 // SetSubFocused sets the focus state specifically for sub-menu mode (thick vs normal border)
