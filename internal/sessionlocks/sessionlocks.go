@@ -505,23 +505,28 @@ func (m *SessionManager) ListConnectedSessions() []ConnectedSession {
 	if err != nil {
 		return nil
 	}
-	anyServerRunning := len(m.ListServerInfos()) > 0
+	// Build a set of running server PIDs for fast lookup.
+	runningServers := make(map[int]bool)
+	for _, s := range m.ListServerInfos() {
+		runningServers[s.PID] = true
+	}
 	var sessions []ConnectedSession
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
 		}
 		path := filepath.Join(m.sessionsDir, e.Name())
-		if !anyServerRunning {
-			_ = os.Remove(path)
-			continue
-		}
 		data, err := os.ReadFile(path)
 		if err != nil {
 			continue
 		}
 		var r sessionRecord
 		if err := toml.Unmarshal(data, &r); err != nil || r.ClientIP == "" {
+			_ = os.Remove(path)
+			continue
+		}
+		// Remove sessions whose server process is no longer running.
+		if !runningServers[r.ServerPID] {
 			_ = os.Remove(path)
 			continue
 		}
