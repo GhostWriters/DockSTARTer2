@@ -259,13 +259,13 @@ func NewLogger() *slog.Logger {
 	consoleHandler := &TagProcessorHandler{base: consoleLogger, mode: "ansi", consoleWriter: wStderr}
 
 	// Configure File Handler (No Color)
-	stateDir := paths.GetStateDir()
-	if err := os.MkdirAll(stateDir, 0755); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create state directory: %v\n", err)
+	configDir := paths.GetConfigDir()
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create config directory: %v\n", err)
 	}
 
 	appName := strings.ToLower(version.ApplicationName)
-	logFilePath = filepath.Join(stateDir, appName+".log")
+	logFilePath = filepath.Join(configDir, appName+".log")
 
 	// Open file in Append mode
 	wFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
