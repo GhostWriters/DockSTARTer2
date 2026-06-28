@@ -198,8 +198,8 @@ func FatalWithStackSkip(ctx context.Context, skip int, msg any, args ...any) {
 		msg,
 		"",
 		"{{|FatalFooter|}}Please let the dev know of this error.",
-		"{{|FatalFooter|}}It has been written to {{[-]}}'{{|File|}}" + filepath.Join(paths.GetConfigDir(), strings.ToLower(version.ApplicationName)+".fatal.log") + "{{[-]}}'{{|FatalFooter|}},",
-		"and appended to {{[-]}}'{{|File|}}" + filepath.Join(paths.GetConfigDir(), strings.ToLower(version.ApplicationName)+".log") + "{{[-]}}'{{|FatalFooter|}}.",
+		"{{|FatalFooter|}}It has been written to {{[-]}}'{{|File|}}" + filepath.Join(logDir, strings.ToLower(version.ApplicationName)+".fatal.log") + "{{[-]}}'{{|FatalFooter|}},",
+		"and appended to {{[-]}}'{{|File|}}" + filepath.Join(logDir, strings.ToLower(version.ApplicationName)+".log") + "{{[-]}}'{{|FatalFooter|}}.",
 	}
 
 	// Log Everything
@@ -235,13 +235,11 @@ func Fatal(ctx context.Context, msg any, args ...any) {
 
 // writeFatalLog writes the resolved message to a separate fatal log file
 func writeFatalLog(msg any, args ...any) {
-	configDir := paths.GetConfigDir()
-	if err := os.MkdirAll(configDir, 0755); err != nil {
+	if logDir == "" {
 		return
 	}
-
 	appName := strings.ToLower(version.ApplicationName)
-	fatalLogPath := filepath.Join(configDir, appName+".fatal.log")
+	fatalLogPath := filepath.Join(logDir, appName+".fatal.log")
 
 	// Explicitly truncate the file to ensure we only have the latest fatal error
 	f, err := os.OpenFile(fatalLogPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
@@ -269,9 +267,8 @@ type FatalError struct{}
 
 // Cleanup performs final logging tasks, such as truncating the log file.
 func Cleanup() {
-	configDir := paths.GetConfigDir()
 	appName := strings.ToLower(version.ApplicationName)
-	logFilePath := filepath.Join(configDir, appName+".log")
+	logFilePath := filepath.Join(logDir, appName+".log")
 	truncateLogFile(logFilePath, 1000)
 }
 
