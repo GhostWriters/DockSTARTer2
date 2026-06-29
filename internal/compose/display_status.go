@@ -5,7 +5,6 @@ import (
 
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/dockerlayout"
-	"github.com/GhostWriters/semstyle"
 
 	"github.com/docker/compose/v5/pkg/api"
 )
@@ -504,9 +503,4 @@ func volumeFinalStatuses(command string) []string {
 	default:
 		return []string{api.StatusCreated}
 	}
-}
-
-// toANSI converts a semstyle tag string to ANSI. Used at the last moment before output.
-func toANSI(s string) string {
-	return semstyle.ToANSI(s)
 }
