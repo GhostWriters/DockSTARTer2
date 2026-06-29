@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"sort"
 	"strings"
 
@@ -82,7 +83,7 @@ func LogPruneReport(ctx context.Context, r PruneReport, imageServices map[string
 		return
 	}
 
-	var out io.Writer = console.ViewportWriter()
+	var out io.Writer = os.Stdout
 	if w, ok := ctx.Value(console.TUIWriterKey).(io.Writer); ok {
 		out = w
 	}
