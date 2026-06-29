@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/dockerlayout"
 	"DockSTARTer2/internal/logger"
 	"github.com/GhostWriters/semstyle"
 	"DockSTARTer2/internal/strutil"
@@ -141,10 +142,10 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 		return GlobalIndent + doneIconANSI + " " + removedStatus + semstyle.CodeReset + removedPad +
 			semstyle.ToANSI("{{[white::B]}}"+label+"{{[-]}}{{|DockerColon|}}:{{[-]}}")
 	}
-	childRow := func(name, colorTag string, s entryStatus) string {
+	childRow := func(nameANSI string, s entryStatus) string {
 		icon, status, pad := iconStatus(s)
 		return GlobalIndent + icon + " " + status + semstyle.CodeReset + pad +
-			SectionChildIndent + semstyle.ToANSI(colorTag+name+"{{[-]}}{{|DockerColon|}}:{{[-]}}")
+			SectionChildIndent + nameANSI + semstyle.ToANSI("{{|DockerColon|}}:{{[-]}}")
 	}
 	deletedStatus := semstyle.ToANSI("{{|DockerStatusFinal|}}Deleted{{[-]}}")
 	deletedPad := strutil.Repeat(" ", SectionStatusW-len("Deleted"))
@@ -324,7 +325,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 			svcs := imageServices[g.ref]
 			if len(svcs) > 0 {
 				for _, svc := range svcs {
-					add(childRow(svc, "{{|App|}}", statusRemoved))
+					add(childRow(dockerlayout.StyleServiceName(svc), statusRemoved))
 					// If a deleted container belongs to this service, nest its
 					// container_name line under the service (parallel to the image line).
 					if name, ok := svcContainerName[svc]; ok {
@@ -333,7 +334,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 				}
 			} else {
 				unknownCount++
-				add(childRow(fmt.Sprintf("<Unknown%d>", unknownCount), "{{|App|}}", statusRemoved))
+				add(childRow(semstyle.ToANSI("{{|App|}}<Unknown"+fmt.Sprintf("%d", unknownCount)+">{{[-]}}"), statusRemoved))
 			}
 			renderImageGroup(g)
 		}
@@ -345,7 +346,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 	if len(r.NetworksDeleted) > 0 || r.NetworksError != nil {
 		add(sectionHeader("networks", r.NetworksError != nil))
 		for _, net := range r.NetworksDeleted {
-			add(childRow(net, "{{|IPAddress|}}", statusRemoved))
+			add(childRow(semstyle.ToANSI("{{|IPAddress|}}"+net+"{{[-]}}"), statusRemoved))
 		}
 	}
 
@@ -353,7 +354,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 	if len(r.VolumesDeleted) > 0 || r.VolumesError != nil {
 		add(sectionHeader("volumes", r.VolumesError != nil))
 		for _, vol := range r.VolumesDeleted {
-			add(childRow(vol, "{{|Folder|}}", statusRemoved))
+			add(childRow(semstyle.ToANSI("{{|Folder|}}"+vol+"{{[-]}}"), statusRemoved))
 		}
 	}
 
@@ -362,7 +363,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 	if len(leftoverContainers) > 0 || r.ContainersError != nil {
 		add(sectionHeader("containers", r.ContainersError != nil))
 		for _, name := range leftoverContainers {
-			add(childRow(name, "{{|App|}}", statusRemoved))
+			add(childRow(semstyle.ToANSI("{{|App|}}"+name+"{{[-]}}"), statusRemoved))
 		}
 	}
 
