@@ -7,6 +7,7 @@ import (
 
 	"github.com/docker/compose/v5/pkg/api"
 	"github.com/GhostWriters/semstyle"
+	"DockSTARTer2/internal/dockerlayout"
 	"DockSTARTer2/internal/strutil"
 )
 
@@ -77,7 +78,7 @@ func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string 
 
 		for _, svc := range svcs {
 			t := p.tasks[svc]
-			nameANSI := semstyle.ToANSI("{{|App|}}" + svc + "{{[-]}}")
+			nameANSI := dockerlayout.StyleServiceName(svc)
 			var statusText, statusANSI, icon string
 			if t == nil {
 				if img != nil && p.allLayersAlreadyExist(imgName) {
@@ -148,7 +149,7 @@ func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string 
 			continue
 		}
 		t := p.tasks[svcID]
-		nameANSI := semstyle.ToANSI("{{|App|}}" + svcID + "{{[-]}}")
+		nameANSI := dockerlayout.StyleServiceName(svcID)
 		var statusText, statusANSI, icon string
 		if t == nil {
 			impliedText, impliedTag := p.impliedStatus()
@@ -543,7 +544,7 @@ func (p *consoleEventProcessor) buildTeardownLines() []string {
 			}
 			seenSvcs[svc] = true
 			t := p.tasks[svc]
-			nameANSI := semstyle.ToANSI("{{|App|}}" + svc + "{{[-]}}")
+			nameANSI := dockerlayout.StyleServiceName(svc)
 			var icon, statusText, statusANSI string
 			if t == nil {
 				icon, statusANSI, statusText = impliedIcon, impliedANSI, impliedText
@@ -580,7 +581,7 @@ func (p *consoleEventProcessor) buildTeardownLines() []string {
 		}
 		seenSvcs[svcID] = true
 		t := p.tasks[svcID]
-		nameANSI := semstyle.ToANSI("{{|App|}}" + svcID + "{{[-]}}")
+		nameANSI := dockerlayout.StyleServiceName(svcID)
 		var icon, statusText, statusANSI string
 		if t == nil {
 			icon, statusANSI, statusText = impliedIcon, impliedANSI, impliedText
