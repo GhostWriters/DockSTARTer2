@@ -224,7 +224,7 @@ func (p *consoleEventProcessor) layerCountWidth(imgName string) int {
 func (p *consoleEventProcessor) buildImageLine(imgName string, t *consoleTask, layers []*consoleTask, maxImgNameW int, termW int) string {
 	imageLabel := strutil.Repeat(" ", 2*sectionChildIndentW) + semstyle.ToANSI("{{|DockerMarkerDone|}}image{{[-]}}{{|DockerColon|}}:{{[-]}} ")
 	imgStr := styleImage(imgName)
-	imgNameW := utf8.RuneCountInString(semstyle.ToPlain(imgStr))
+	imgNameW := utf8.RuneCountInString(imgName)
 
 	// Layer count is appended directly to the image URL (e.g. "radarr:latest [9/2]").
 	// Brackets use the image-tag color (DockerTag); the count interior is dim.
