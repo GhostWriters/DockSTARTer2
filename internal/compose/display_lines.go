@@ -52,7 +52,7 @@ func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string 
 
 	maxImgNameW := 0
 	for _, imgName := range p.imageOrder {
-		if w := utf8.RuneCountInString(semstyle.ToPlain(styleImage(imgName))); w > maxImgNameW {
+		if w := utf8.RuneCountInString(imgName); w > maxImgNameW {
 			maxImgNameW = w
 		}
 	}
