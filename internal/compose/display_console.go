@@ -12,6 +12,7 @@ import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/dockerlayout"
 	"DockSTARTer2/internal/strutil"
+	"github.com/GhostWriters/semstyle"
 
 	"github.com/buger/goterm"
 	"github.com/docker/compose/v5/pkg/api"
@@ -328,7 +329,7 @@ func (p *consoleEventProcessor) Done(_ string, _ bool) {
 		lines := append([]string{p.withSummaryTimer(p.buildSummaryLine())}, p.buildLines(termW, p.verbose)...)
 		p.mtx.Unlock()
 		for _, line := range lines {
-			fmt.Fprintln(p.out, line)
+			fmt.Fprintln(p.out, semstyle.ToANSI(line))
 		}
 		p.logSummary()
 		return
@@ -359,7 +360,11 @@ func (p *consoleEventProcessor) Done(_ string, _ bool) {
 			if termW <= 0 {
 				termW = 80
 			}
-			finalLines := append([]string{p.withSummaryTimer(p.buildSummaryLine())}, p.buildLines(termW, p.verbose)...)
+			rawLines := append([]string{p.withSummaryTimer(p.buildSummaryLine())}, p.buildLines(termW, p.verbose)...)
+			finalLines := make([]string, len(rawLines))
+			for i, l := range rawLines {
+				finalLines[i] = semstyle.ToANSI(l)
+			}
 			vp.UpdateLines(finalLines)
 			vp.Deactivate()
 		}
@@ -596,8 +601,12 @@ func (p *consoleEventProcessor) render() {
 	if !p.noViewport {
 		if vp := console.GlobalViewport; vp != nil {
 			if vp.IsActive() {
-				vp.SetHeader(p.withSummaryTimer(p.buildSummaryLine()))
-				vp.UpdateLines(lines)
+				vp.SetHeader(semstyle.ToANSI(p.withSummaryTimer(p.buildSummaryLine())))
+				ansiLines := make([]string, len(lines))
+				for i, l := range lines {
+					ansiLines[i] = semstyle.ToANSI(l)
+				}
+				vp.UpdateLines(ansiLines)
 				p.started = true
 				p.numLines = len(lines)
 			}
@@ -608,7 +617,11 @@ func (p *consoleEventProcessor) render() {
 	// noViewport (program box) mode: call updateFn to replace lines in the TUI viewport.
 	if p.noViewport {
 		if p.updateFn != nil && !slices.Equal(lines, p.lastSentLines) {
-			p.updateFn(lines)
+			ansiLines := make([]string, len(lines))
+			for i, l := range lines {
+				ansiLines[i] = semstyle.ToANSI(l)
+			}
+			p.updateFn(ansiLines)
 			p.lastSentLines = lines
 		}
 		return

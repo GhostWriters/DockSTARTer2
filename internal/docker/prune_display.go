@@ -284,7 +284,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 			if ref == "" {
 				ref = "<dangling>"
 			}
-			refANSI := StyleImageRef(ref)
+			refANSI := semstyle.ToANSI(StyleImageRef(ref))
 			// Match compose: append the layer count directly to the image URL ("ref [N]")
 			// rather than in a separate padded column. "[N]" uses DockerTag brackets, dim interior.
 			layerCount := semstyle.ToANSI(fmt.Sprintf(" {{|DockerTag|}}[{{[-]}}{{[::D]}}%d{{[-]}}{{|DockerTag|}}]{{[-]}}", len(g.layers)))
@@ -325,7 +325,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 			svcs := imageServices[g.ref]
 			if len(svcs) > 0 {
 				for _, svc := range svcs {
-					add(childRow(dockerlayout.StyleServiceName(svc), statusRemoved))
+					add(childRow(semstyle.ToANSI(dockerlayout.StyleServiceName(svc)), statusRemoved))
 					// If a deleted container belongs to this service, nest its
 					// container_name line under the service (parallel to the image line).
 					if name, ok := svcContainerName[svc]; ok {

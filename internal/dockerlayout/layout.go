@@ -4,7 +4,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/GhostWriters/semstyle"
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/strutil"
 )
@@ -16,12 +15,15 @@ var (
 // StyleServiceName styles a compose service name with the App tag. If the
 // service maps to a known built-in app, the name becomes a clickable hyperlink
 // to its dockstarter.com page. Results are cached after the first lookup.
+// StyleServiceName returns a semstyle tag string for a compose service name.
+// If the service maps to a known built-in app, the name is wrapped in a hyperlink tag.
+// Callers must convert to ANSI with semstyle.ToANSI when ready to output.
 func StyleServiceName(svc string) string {
 	url := serviceURL(svc)
 	if url == "" {
-		return semstyle.ToANSI("{{|App|}}" + svc + "{{[-]}}")
+		return "{{|App|}}" + svc + "{{[-]}}"
 	}
-	return semstyle.ToANSI("{{|App::::"+svc+"|}}"+url+"{{[-]}}")
+	return "{{|App::::"+svc+"|}}"+url+"{{[-]}}"
 }
 
 func serviceURL(svc string) string {
@@ -120,15 +122,17 @@ func imageRefURL(name string) string {
 //   - "registry/name:tag"  → name styled as DockerImage (linked), ":tag" as DockerTag
 //   - "sha256:digest"      → "sha256:" as DockerTag (dim), digest as DockerImage (no link)
 //   - "name" (no colon)    → entire string as DockerImage (linked)
+// StyleImageRef returns a semstyle tag string for an image reference.
+// Callers must convert to ANSI with semstyle.ToANSI when ready to output.
 func StyleImageRef(ref string) string {
 	if strings.HasPrefix(ref, "sha256:") {
-		return semstyle.ToANSI("{{|DockerTag|}}sha256:{{[-]}}{{|DockerImage|}}" + ref[7:] + "{{[-]}}")
+		return "{{|DockerTag|}}sha256:{{[-]}}{{|DockerImage|}}" + ref[7:] + "{{[-]}}"
 	}
 	if idx := strings.LastIndex(ref, ":"); idx >= 0 {
 		name, tag := ref[:idx], ref[idx+1:]
 		url := imageRefURL(name)
-		return semstyle.ToANSI("{{|DockerImage::::"+name+"|}}"+url+"{{[-]}}{{|DockerColon|}}:{{[-]}}{{|DockerTag|}}"+tag+"{{[-]}}")
+		return "{{|DockerImage::::"+name+"|}}"+url+"{{[-]}}{{|DockerColon|}}:{{[-]}}{{|DockerTag|}}"+tag+"{{[-]}}"
 	}
 	url := imageRefURL(ref)
-	return semstyle.ToANSI("{{|DockerImage::::"+ref+"|}}"+url+"{{[-]}}")
+	return "{{|DockerImage::::"+ref+"|}}"+url+"{{[-]}}"
 }

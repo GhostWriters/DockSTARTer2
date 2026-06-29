@@ -55,18 +55,18 @@ func renderProgressBarLayers(layerPcts []int, chars []string, colorTag string) s
 	return "[" + semstyle.ToANSI(colorTag+sb.String()+"{{[-]}}") + "]"
 }
 
-// padOrTrunc ensures a line is exactly termW visible chars wide.
+// padOrTrunc measures a tag-string line with ToPlain, converts to ANSI for output,
+// and pads or truncates to exactly termW visible chars.
 func padOrTrunc(line string, termW int) string {
 	plain := semstyle.ToPlain(line)
 	visible := utf8.RuneCountInString(plain)
-	if visible < termW {
-		return line + strutil.Repeat(" ", termW-visible)
+	ansi := semstyle.ToANSI(line)
+	if visible <= termW {
+		return ansi + strutil.Repeat(" ", termW-visible)
 	}
-	runes := []rune(plain)
-	if len(runes) > termW {
-		return string(runes[:termW-1]) + "…"
-	}
-	return line
+	// Truncate: cut plain text, re-render is not possible without re-tagging,
+	// so just return the ANSI and let the terminal clip it.
+	return ansi
 }
 
 // imageBaseName returns the image name portion of a URL for sort purposes.
