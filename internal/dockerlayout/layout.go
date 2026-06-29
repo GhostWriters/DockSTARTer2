@@ -66,6 +66,10 @@ func Plural(n int, singular, pluralForm string) string {
 // imageRefURL builds a browser URL for a Docker image reference (without tag).
 // Supports ghcr.io, lscr.io, and Docker Hub (official and namespaced images).
 func imageRefURL(name string) string {
+	// LinuxServer images: map to their docs page.
+	if rest, ok := strings.CutPrefix(name, "lscr.io/linuxserver/"); ok {
+		return "https://docs.linuxserver.io/images/docker-" + rest + "/"
+	}
 	// Known third-party registries: use https:// directly.
 	for _, registry := range []string{"ghcr.io/", "lscr.io/", "mcr.microsoft.com/", "quay.io/", "registry.k8s.io/"} {
 		if strings.HasPrefix(name, registry) {
