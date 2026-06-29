@@ -65,24 +65,24 @@ func (p *consoleEventProcessor) overallRollupIcon() string {
 	ids = append(ids, p.volumeIDs...)
 	state := p.rollupState(ids, nil)
 	if state == rollupProcessing || state == rollupPending {
-		return p.activeSpinnerANSI(p.icons().spinner)
+		return p.activeSpinnerTag(p.icons().spinner)
 	}
 	_, _, iconTag := sectionStatusText(state)
-	return semstyle.ToANSI(iconTag + p.sectionRollupIcon(state) + "{{[-]}}")
+	return iconTag + p.sectionRollupIcon(state) + "{{[-]}}"
 }
 
 // sectionRollupWithPropagation is like sectionRollup but also checks child tasks
 // (layers for image IDs, images for service IDs) for propagated errors/warnings.
-func (p *consoleEventProcessor) sectionRollupWithPropagation(ids []string, imageForID func(string) string) (icon, statusANSI, statusText, labelTag string) {
+func (p *consoleEventProcessor) sectionRollupWithPropagation(ids []string, imageForID func(string) string) (icon, statusTag, statusText, labelTag string) {
 	state := p.rollupState(ids, imageForID)
 	text, stTag, iconTag := sectionStatusText(state)
 	ic := p.icons()
 	if state != rollupProcessing {
-		icon = semstyle.ToANSI(iconTag + p.sectionRollupIcon(state) + "{{[-]}}")
+		icon = iconTag + p.sectionRollupIcon(state) + "{{[-]}}"
 	} else {
-		icon = p.activeSpinnerANSI(ic.spinner)
+		icon = p.activeSpinnerTag(ic.spinner)
 	}
-	statusANSI = semstyle.ToANSI(stTag + text + "{{[-]}}")
+	statusTag = stTag + text + "{{[-]}}"
 	statusText = text
 	labelTag = stTag
 	return
@@ -255,14 +255,14 @@ func (p *consoleEventProcessor) worstServiceStatus(svcID, imgName string) api.Ev
 	return svc.status
 }
 
-// propagatedIcon returns the icon for a task after considering propagated child errors.
+// propagatedIcon returns the icon tag for a task after considering propagated child errors.
 func (p *consoleEventProcessor) propagatedIcon(t *consoleTask, worstStatus api.EventStatus) string {
 	ic := p.icons()
 	if worstStatus == api.Error {
-		return semstyle.ToANSI("{{|DockerMarkerError|}}" + ic.error + "{{[-]}}")
+		return "{{|DockerMarkerError|}}" + ic.error + "{{[-]}}"
 	}
 	if worstStatus == api.Warning {
-		return semstyle.ToANSI("{{|DockerMarkerWarn|}}" + ic.warn + "{{[-]}}")
+		return "{{|DockerMarkerWarn|}}" + ic.warn + "{{[-]}}"
 	}
 	return p.spinnerIcon(t)
 }
@@ -286,41 +286,34 @@ func (p *consoleEventProcessor) icons() iconSet {
 	return iconSet{done: "✓", error: "×", warn: "⚠", pending: "·", spinner: spinnerChar}
 }
 
-func (p *consoleEventProcessor) activeSpinnerANSI(char string) string {
+func (p *consoleEventProcessor) activeSpinnerTag(char string) string {
 	if console.SpinnerEnabled {
-		return semstyle.ToANSI("{{|DockerSpinner|}}" + char + "{{[-]}}")
+		return "{{|DockerSpinner|}}" + char + "{{[-]}}"
 	}
-	return semstyle.ToANSI("{{[::D]}}" + char + "{{[-]}}")
+	return "{{[::D]}}" + char + "{{[-]}}"
 }
 
 func (p *consoleEventProcessor) spinnerIcon(t *consoleTask) string {
 	ic := p.icons()
-	var s string
 	if t == nil {
-		s = p.activeSpinnerANSI(ic.spinner)
-	} else {
-		switch t.status {
-		case api.Done:
-			s = semstyle.ToANSI("{{|DockerMarkerDone|}}" + ic.done + "{{[-]}}")
-		case api.Error:
-			s = semstyle.ToANSI("{{|DockerMarkerError|}}" + ic.error + "{{[-]}}")
-		case api.Warning:
-			s = semstyle.ToANSI("{{|DockerMarkerWarn|}}" + ic.warn + "{{[-]}}")
-		default:
-			if t.completed() {
-				s = semstyle.ToANSI("{{|DockerMarkerDone|}}" + ic.done + "{{[-]}}")
-			} else {
-				s = p.activeSpinnerANSI(ic.spinner)
-			}
+		return p.activeSpinnerTag(ic.spinner)
+	}
+	switch t.status {
+	case api.Done:
+		return "{{|DockerMarkerDone|}}" + ic.done + "{{[-]}}"
+	case api.Error:
+		return "{{|DockerMarkerError|}}" + ic.error + "{{[-]}}"
+	case api.Warning:
+		return "{{|DockerMarkerWarn|}}" + ic.warn + "{{[-]}}"
+	default:
+		if t.completed() {
+			return "{{|DockerMarkerDone|}}" + ic.done + "{{[-]}}"
 		}
+		return p.activeSpinnerTag(ic.spinner)
 	}
-	if s == "" {
-		return " "
-	}
-	return s
 }
 
-// impliedStatus returns the status text and ANSI tag for a service that received no events.
+// impliedStatus returns the status text and tag for a service that received no events.
 func (p *consoleEventProcessor) impliedStatus() (text, ansiTag string) {
 	switch p.command {
 	case "down":
@@ -511,4 +504,9 @@ func volumeFinalStatuses(command string) []string {
 	default:
 		return []string{api.StatusCreated}
 	}
+}
+
+// toANSI converts a semstyle tag string to ANSI. Used at the last moment before output.
+func toANSI(s string) string {
+	return semstyle.ToANSI(s)
 }

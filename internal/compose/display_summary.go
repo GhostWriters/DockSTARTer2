@@ -44,7 +44,7 @@ func (p *consoleEventProcessor) buildSummaryLine() string {
 	summaryFmt := fmt.Sprintf("{{[yellow::B]}}%s{{[-]}}{{|DockerColon|}}:{{[-]}} %s", p.command, strings.Join(parts, ", "))
 	// Prepend an overall spinner/marker (icon + space) so the summary reads as the
 	// top-level rollup header, shifting the whole block 3 chars right to align under it.
-	return globalIndent + p.overallRollupIcon() + " " + semstyle.ToANSI(summaryFmt)
+	return globalIndent + p.overallRollupIcon() + " " + summaryFmt
 }
 
 type timerStyle int
@@ -118,8 +118,7 @@ func (p *consoleEventProcessor) attachTimers(lines []string, timers []timerEntry
 		}
 		s := timerStrs[i]
 		s = strutil.Repeat(" ", maxTimerW-len(s)) + s
-		timer := semstyle.ToANSI(styleTag + s + "{{[-]}}")
-		out[i] = line + pad + timer
+		out[i] = line + pad + styleTag + s + "{{[-]}}"
 	}
 	return out
 }
@@ -162,8 +161,7 @@ func (p *consoleEventProcessor) withSummaryTimer(summary string) string {
 	if w := len(elapsed); w < p.maxTimerWidth {
 		elapsed = strutil.Repeat(" ", p.maxTimerWidth-w) + elapsed
 	}
-	timer := semstyle.ToANSI("{{[yellow::B]}}" + elapsed + "{{[-]}}")
-	return summary + pad + timer
+	return summary + pad + "{{[yellow::B]}}" + elapsed + "{{[-]}}"
 }
 
 // logSummary writes a structured summary to the log file only.
@@ -193,6 +191,6 @@ func (p *consoleEventProcessor) logSummary() {
 
 	// Final log always includes layer rows, regardless of the -v console flag.
 	for _, line := range p.buildLines(logWidth, true) {
-		logger.Notice(ctx, pfx+line)
+		logger.Notice(ctx, pfx+semstyle.ToANSI(line))
 	}
 }
