@@ -449,13 +449,7 @@ func SemanticStyleWithRegistry(tag string, prefix string, useConsole bool) lipgl
 		name := tag[len(semstyle.SemanticPrefix) : len(tag)-len(semstyle.SemanticSuffix)]
 		style = SemanticRawStyleWithRegistry(name, prefix, useConsole)
 	} else {
-		var expanded string
-		if useConsole {
-			expanded = semstyle.ToTags(tag)
-		} else {
-			expanded = semstyle.ToTags(tag, prefix)
-		}
-		style = semstyle.ToStyle(semstyle.Default, expanded, lipgloss.NewStyle(), lipgloss.NewStyle())
+		style = semstyle.ToStyle(semstyle.Default, tag, lipgloss.NewStyle(), lipgloss.NewStyle())
 	}
 
 	cacheMu.Lock()
@@ -493,13 +487,7 @@ func SemanticRawStyleWithRegistry(name string, prefix string, useConsole bool) l
 	}
 	cacheMu.RUnlock()
 
-	var expanded string
-	if useConsole {
-		expanded = semstyle.ToTags(semstyle.WrapSemantic(name))
-	} else {
-		expanded = semstyle.ToTags(semstyle.WrapSemantic(name), prefix)
-	}
-	s := semstyle.ToStyle(semstyle.Default, expanded, lipgloss.NewStyle(), lipgloss.NewStyle())
+	s := semstyle.ToStyle(semstyle.Default, semstyle.WrapSemantic(name), lipgloss.NewStyle(), lipgloss.NewStyle())
 
 	cacheMu.Lock()
 	semanticStyleCache[cacheKey] = s
