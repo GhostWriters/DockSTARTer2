@@ -326,7 +326,7 @@ func (p *consoleEventProcessor) Done(_ string, _ bool) {
 		if termW <= 0 {
 			termW = 80
 		}
-		lines := append([]string{p.withSummaryTimer(p.buildSummaryLine())}, p.buildLines(termW, p.verbose)...)
+		lines := p.buildLines(termW, p.verbose)
 		p.mtx.Unlock()
 		for _, line := range lines {
 			fmt.Fprintln(p.out, semstyle.ToANSI(line))
@@ -360,7 +360,7 @@ func (p *consoleEventProcessor) Done(_ string, _ bool) {
 			if termW <= 0 {
 				termW = 80
 			}
-			rawLines := append([]string{p.withSummaryTimer(p.buildSummaryLine())}, p.buildLines(termW, p.verbose)...)
+			rawLines := p.buildLines(termW, p.verbose)
 			finalLines := make([]string, len(rawLines))
 			for i, l := range rawLines {
 				finalLines[i] = semstyle.ToANSI(l)

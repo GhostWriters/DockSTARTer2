@@ -222,7 +222,7 @@ func (p *consoleEventProcessor) layerCountWidth(imgName string) int {
 }
 
 func (p *consoleEventProcessor) buildImageLine(imgName string, t *consoleTask, layers []*consoleTask, maxImgNameW int, termW int) string {
-	imageLabel := strutil.Repeat(" ", 2*sectionChildIndentW) + toANSI("{{|DockerMarkerDone|}}image{{[-]}}{{|DockerColon|}}:{{[-]}} ")
+	imageLabel := strutil.Repeat(" ", 2*sectionChildIndentW) + "{{|DockerMarkerDone|}}image{{[-]}}{{|DockerColon|}}:{{[-]}} "
 	imgStr := styleImage(imgName)
 	imgNameW := utf8.RuneCountInString(imgName)
 
@@ -231,13 +231,13 @@ func (p *consoleEventProcessor) buildImageLine(imgName string, t *consoleTask, l
 	layerCount := ""
 	countW := 0
 	if inner := p.layerCountText(layers); inner != "" {
-		layerCount = toANSI(" {{|DockerTag|}}[{{[-]}}{{[::D]}}" + inner + "{{[-]}}{{|DockerTag|}}]{{[-]}}")
+		layerCount = " {{|DockerTag|}}[{{[-]}}{{[::D]}}" + inner + "{{[-]}}{{|DockerTag|}}]{{[-]}}"
 		countW = 1 + 1 + len(inner) + 1 // " " + "[" + inner + "]"
 	}
 	// maxImgNameW already includes the widest count suffix; pad by what this row lacks
 	// so the size/bar columns stay aligned across images.
 	imgPad := strutil.Repeat(" ", maxImgNameW-imgNameW-countW)
-	urlWithCount := toANSI(imgStr) + layerCount
+	urlWithCount := imgStr + layerCount
 
 	sizes, bar := p.buildImageSizesAndBar(layers, maxImgNameW, termW)
 
@@ -250,17 +250,17 @@ func (p *consoleEventProcessor) buildImageLine(imgName string, t *consoleTask, l
 	}
 
 	if t == nil || allLayersCached {
-		cachedIcon := toANSI("{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}}")
-		cachedStatus := toANSI("{{|DockerStatusFinal|}}Cached{{[-]}}")
+		cachedIcon := "{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}}"
+		cachedStatus := "{{|DockerStatusFinal|}}Cached{{[-]}}"
 		statusPad := strutil.Repeat(" ", sectionStatusW-len("Cached"))
 		return globalIndent + cachedIcon + " " + cachedStatus + "{{[-]}}" + statusPad + imageLabel + urlWithCount + imgPad + sizes + bar
 	}
 	worst := p.worstImageStatus(imgName)
-	icon := toANSI(p.propagatedIcon(t, worst))
+	icon := p.propagatedIcon(t, worst)
 	statusText := abbreviateStatus(t.text)
-	statusANSI := toANSI(imageStatusTag(t.status, t.text, p.command))
+	statusTag := imageStatusTag(t.status, t.text, p.command)
 	statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
-	return globalIndent + icon + " " + statusANSI + "{{[-]}}" + statusPad + imageLabel + urlWithCount + imgPad + sizes + bar
+	return globalIndent + icon + " " + statusTag + "{{[-]}}" + statusPad + imageLabel + urlWithCount + imgPad + sizes + bar
 }
 
 func (p *consoleEventProcessor) buildImageSizesAndBar(layers []*consoleTask, maxImgNameW int, termW int) (string, string) {
@@ -280,9 +280,9 @@ func (p *consoleEventProcessor) buildImageSizesAndBar(layers []*consoleTask, max
 
 	var sizes string
 	if total > 0 {
-		sizes = " " + toANSI("{{|DockerMarkerDone|}}"+fixedSize(current)+"{{[-]}}"+
+		sizes = " " + "{{|DockerMarkerDone|}}"+fixedSize(current)+"{{[-]}}"+
 			"{{|DockerColon|}}/{{[-]}}"+
-			"{{|DockerMarkerDone|}}"+fixedSize(total)+"{{[-]}}")
+			"{{|DockerMarkerDone|}}"+fixedSize(total)+"{{[-]}}"
 	} else {
 		sizes = strutil.Repeat(" ", 1+8+1+8)
 	}
@@ -392,9 +392,9 @@ func (p *consoleEventProcessor) buildLayerLine(t *consoleTask, statusW int, maxI
 
 	var sizes string
 	if t.total > 0 {
-		sizes = " " + toANSI("{{[::D]}}"+fixedSize(current)+"{{[-]}}"+
+		sizes = " " + "{{[::D]}}"+fixedSize(current)+"{{[-]}}"+
 			"{{|DockerColon|}}/{{[-]}}"+
-			"{{[::D]}}"+fixedSize(t.total)+"{{[-]}}")
+			"{{[::D]}}"+fixedSize(t.total)+"{{[-]}}"
 	} else {
 		sizes = strutil.Repeat(" ", 1+8+1+8)
 	}
@@ -408,7 +408,7 @@ func (p *consoleEventProcessor) buildLayerLine(t *consoleTask, statusW int, maxI
 		bar = " " + renderProgressBarLayers(layerPcts, progressChars, "{{[::D]}}")
 	}
 
-	icon := toANSI(p.spinnerIcon(t))
+	icon := p.spinnerIcon(t)
 	displayText := t.text
 	// SDK drops "Pull complete" events, so "Extracting" is the last event we receive.
 	// While the parent image is still pulling it's genuinely in progress; once the
@@ -421,7 +421,7 @@ func (p *consoleEventProcessor) buildLayerLine(t *consoleTask, statusW int, maxI
 	if pad := statusW - utf8.RuneCountInString(short); pad > 0 {
 		statusPad = strutil.Repeat(" ", pad)
 	}
-	statusANSI := toANSI(layerStatusTag(t.status, displayText))
+	statusTag := layerStatusTag(t.status, displayText)
 
 	// Shared-layer badge: [N] in yellow immediately after the layer ID.
 	// Shared-layer badge uses parens "(N)" to stay distinct from the image line's "[N]"
@@ -429,7 +429,7 @@ func (p *consoleEventProcessor) buildLayerLine(t *consoleTask, statusW int, maxI
 	badge := ""
 	badgeW := 0
 	if groupNum > 0 {
-		badge = toANSI(fmt.Sprintf("{{[::D]}}({{[-]}}{{|DockerSharedLayer|}}%d{{[-]}}{{[::D]}}){{[-]}}", groupNum))
+		badge = fmt.Sprintf("{{[::D]}}({{[-]}}{{|DockerSharedLayer|}}%d{{[-]}}{{[::D]}}){{[-]}}", groupNum)
 		badgeW = 2 + len(fmt.Sprintf("%d", groupNum)) // "(" + digits + ")"
 	}
 
@@ -442,7 +442,7 @@ func (p *consoleEventProcessor) buildLayerLine(t *consoleTask, statusW int, maxI
 		barReset = "{{[-]}}"
 	}
 
-	return "{{[::D]}}" + layerPrefix + icon + " " + statusANSI + "{{[-]}}{{[::D]}}" + statusPad + " " + id + badge + strutil.Repeat(" ", idPad) + sizes + barReset + bar + "{{[-]}}"
+	return "{{[::D]}}" + layerPrefix + icon + " " + statusTag + "{{[-]}}{{[::D]}}" + statusPad + " " + id + badge + strutil.Repeat(" ", idPad) + sizes + barReset + bar + "{{[-]}}"
 }
 
 func (p *consoleEventProcessor) buildLayerLines(layers []*consoleTask, maxImgNameW int, termW int) ([]string, []*consoleTask) {
@@ -450,9 +450,8 @@ func (p *consoleEventProcessor) buildLayerLines(layers []*consoleTask, maxImgNam
 		return nil, nil
 	}
 
-	// Bar starts after the size column; cap its width to the remaining terminal width,
-	// reserving space for the right-aligned elapsed timer, so a large layer's proportional
-	// bar can't overflow the line or crowd out the duration.
+	// Bar starts after the size column; cap its width so the line stays within termW,
+	// leaving timerReserveW chars for the timer column.
 	usedW := imageSizesColBase + maxImgNameW + spaceW + sizeColW + sizeSepW + sizeColW
 	maxBarW := termW - usedW - timerReserveW - summaryHeaderIndentW
 	if maxBarW < 1 {
