@@ -487,7 +487,13 @@ func SemanticRawStyleWithRegistry(name string, prefix string, useConsole bool) l
 	}
 	cacheMu.RUnlock()
 
-	s := semstyle.ToStyle(semstyle.Default, semstyle.WrapSemantic(name), lipgloss.NewStyle(), lipgloss.NewStyle())
+	var expanded string
+	if useConsole {
+		expanded = semstyle.ToTags(semstyle.WrapSemantic(name))
+	} else {
+		expanded = semstyle.ToTags(semstyle.WrapSemantic(name), prefix)
+	}
+	s := semstyle.ToStyle(semstyle.Default, expanded, lipgloss.NewStyle(), lipgloss.NewStyle())
 
 	cacheMu.Lock()
 	semanticStyleCache[cacheKey] = s
