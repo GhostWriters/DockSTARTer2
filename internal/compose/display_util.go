@@ -43,6 +43,7 @@ func fixedSize(b int64) string {
 }
 
 // renderProgressBarLayers renders one char per layer, each at its own fill level.
+// Returns a tag string (not ANSI) so width measurement via ToPlain works correctly.
 func renderProgressBarLayers(layerPcts []int, chars []string, colorTag string) string {
 	levels := len(chars) - 1
 	var sb strings.Builder
@@ -52,7 +53,7 @@ func renderProgressBarLayers(layerPcts []int, chars []string, colorTag string) s
 		}
 		sb.WriteString(chars[levels*pct/100])
 	}
-	return "[" + semstyle.ToANSI(colorTag+sb.String()+"{{[-]}}") + "]"
+	return "[" + colorTag + sb.String() + "{{[-]}}]"
 }
 
 // padOrTrunc measures a tag-string line with ToPlain, converts to ANSI for output,
