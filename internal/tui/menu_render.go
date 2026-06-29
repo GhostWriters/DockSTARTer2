@@ -255,6 +255,19 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 		}
 	}
 
+	if !m.subMenuMode {
+		switch m.dialogType {
+		case DialogTypeConfirm:
+			titleTag = "TitleQuestion"
+		case DialogTypeWarning:
+			titleTag = "TitleWarning"
+		case DialogTypeError:
+			titleTag = "TitleError"
+		case DialogTypeSuccess:
+			titleTag = "TitleSuccess"
+		}
+	}
+
 	ctx := GetActiveContext()
 	ctx.Type = m.dialogType
 	// Use pre-computed layout decision; submenus always use small titlebar.
