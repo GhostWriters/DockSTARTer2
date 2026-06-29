@@ -63,17 +63,42 @@ func Plural(n int, singular, pluralForm string) string {
 	return pluralForm
 }
 
+// imageRefURL builds a browser URL for a Docker image reference (without tag).
+// Supports ghcr.io, lscr.io, and Docker Hub (official and namespaced images).
+func imageRefURL(name string) string {
+	// LinuxServer images: map to their docs page.
+	if rest, ok := strings.CutPrefix(name, "lscr.io/linuxserver/"); ok {
+		return "https://docs.linuxserver.io/images/docker-" + rest + "/"
+	}
+	// Known third-party registries: use https:// directly.
+	for _, registry := range []string{"ghcr.io/", "lscr.io/", "mcr.microsoft.com/", "quay.io/", "registry.k8s.io/"} {
+		if strings.HasPrefix(name, registry) {
+			return "https://" + name
+		}
+	}
+	// Docker Hub: strip optional "docker.io/" prefix.
+	name = strings.TrimPrefix(name, "docker.io/")
+	if strings.Contains(name, "/") {
+		return "https://hub.docker.com/r/" + name
+	}
+	return "https://hub.docker.com/_/" + name
+}
+
 // StyleImageRef styles an image reference with DockerImage/DockerTag tags.
-// Handles three forms:
-//   - "registry/name:tag"  → name styled as DockerImage, ":tag" as DockerTag
-//   - "sha256:digest"      → "sha256:" as DockerTag (dim), digest as DockerImage
-//   - "name" (no colon)    → entire string as DockerImage
+// When the terminal supports hyperlinks, the image name becomes a clickable
+// link to its registry page. Handles three forms:
+//   - "registry/name:tag"  → name styled as DockerImage (linked), ":tag" as DockerTag
+//   - "sha256:digest"      → "sha256:" as DockerTag (dim), digest as DockerImage (no link)
+//   - "name" (no colon)    → entire string as DockerImage (linked)
 func StyleImageRef(ref string) string {
 	if strings.HasPrefix(ref, "sha256:") {
 		return semstyle.ToANSI("{{|DockerTag|}}sha256:{{[-]}}{{|DockerImage|}}" + ref[7:] + "{{[-]}}")
 	}
 	if idx := strings.LastIndex(ref, ":"); idx >= 0 {
-		return semstyle.ToANSI("{{|DockerImage|}}" + ref[:idx] + "{{[-]}}{{|DockerTag|}}:" + ref[idx+1:] + "{{[-]}}")
+		name, tag := ref[:idx], ref[idx+1:]
+		url := imageRefURL(name)
+		return semstyle.ToANSI("{{|DockerImage::::"+name+"|}}"+url+"{{[-]}}{{|DockerColon|}}:{{[-]}}{{|DockerTag|}}"+tag+"{{[-]}}")
 	}
-	return semstyle.ToANSI("{{|DockerImage|}}" + ref + "{{[-]}}")
+	url := imageRefURL(ref)
+	return semstyle.ToANSI("{{|DockerImage::::"+ref+"|}}"+url+"{{[-]}}")
 }
