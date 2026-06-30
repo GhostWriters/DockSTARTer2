@@ -7,7 +7,7 @@ import (
 
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/logger"
-	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/update"
 	"DockSTARTer2/internal/version"
 )
 
@@ -40,9 +40,9 @@ func GetUsage(target string, noHeading bool) string {
 	if !noHeading {
 		// Mimic the header section
 		printStr(
-			fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} [{{|Version|}}%s{{[-]}}]", appName, version.Version),
-			fmt.Sprintf("{{|ApplicationName|}}DockSTARTer-Templates{{[-]}} [{{|Version|}}%s{{[-]}}]", paths.GetTemplatesVersion()),
-			fmt.Sprintf("{{|ApplicationName|}}Docker Compose SDK{{[-]}} [{{|Version|}}%s{{[-]}}]", version.GetComposeSdkVersion()),
+			update.GetAppVersionDisplay(),
+			update.GetTmplVersionDisplay(),
+			update.GetComposeSdkVersionDisplay(),
 			"",
 			fmt.Sprintf("Usage: {{|UsageCommand|}}%s{{[-]}} [{{|UsageCommand|}}<Flags>{{[-]}}] [{{|UsageCommand|}}<Command>{{[-]}}] ...", appCmd),
 			"",
