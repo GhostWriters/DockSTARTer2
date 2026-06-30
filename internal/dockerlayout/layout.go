@@ -102,6 +102,13 @@ func imageRefURL(name string) string {
 	if rest, ok := strings.CutPrefix(name, "lscr.io/linuxserver/"); ok {
 		return "https://docs.linuxserver.io/images/docker-" + rest + "/"
 	}
+	// Hotio images: map to their containers doc page, regardless of registry.
+	bare := strings.TrimPrefix(name, "docker.io/")
+	for _, registry := range []string{"ghcr.io/", "lscr.io/", "quay.io/", ""} {
+		if rest, ok := strings.CutPrefix(bare, registry+"hotio/"); ok {
+			return "https://hotio.dev/containers/" + rest
+		}
+	}
 	// Known third-party registries: use https:// directly.
 	for _, registry := range []string{"ghcr.io/", "lscr.io/", "mcr.microsoft.com/", "quay.io/", "registry.k8s.io/"} {
 		if strings.HasPrefix(name, registry) {
@@ -109,11 +116,10 @@ func imageRefURL(name string) string {
 		}
 	}
 	// Docker Hub: strip optional "docker.io/" prefix.
-	name = strings.TrimPrefix(name, "docker.io/")
-	if strings.Contains(name, "/") {
-		return "https://hub.docker.com/r/" + name
+	if strings.Contains(bare, "/") {
+		return "https://hub.docker.com/r/" + bare
 	}
-	return "https://hub.docker.com/_/" + name
+	return "https://hub.docker.com/_/" + bare
 }
 
 // StyleImageRef styles an image reference with DockerImage/DockerTag tags.
