@@ -185,7 +185,7 @@ func StartSpinner() func() {
 
 				if vp := GlobalViewport; vp != nil && vp.IsActive() {
 					vp.SetSpinnerLine(frame)
-				} else if !TUIMode {
+				} else if !TUIMode && !IsTUIEnabled() {
 					termMu.Lock()
 					fmt.Fprintf(os.Stderr, "\033[?25l\r%s", frame)
 					activeSpinner.mu.Lock()

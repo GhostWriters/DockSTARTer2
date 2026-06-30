@@ -14,28 +14,32 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// WebDisplaySettings holds font settings for the xterm.js terminal.
+// WebDisplaySettings holds font and refresh-rate settings for the xterm.js terminal.
 type WebDisplaySettings struct {
-	FontFamily string `json:"fontFamily"`
-	FontSize   int    `json:"fontSize"`
+	FontFamily  string `json:"fontFamily"`
+	FontSize    int    `json:"fontSize"`
+	RefreshRate int    `json:"-"`
 }
 
 // DefaultWebDisplaySettings returns sensible defaults matching xterm.js defaults.
 func DefaultWebDisplaySettings() WebDisplaySettings {
 	return WebDisplaySettings{
-		FontFamily: "monospace",
-		FontSize:   14,
+		FontFamily:  "monospace",
+		FontSize:    14,
+		RefreshRate: 100,
 	}
 }
 
 // WebDisplayDialog is the dialog for configuring web terminal display settings.
 type WebDisplayDialog struct {
-	outer         *MenuModel
+	outer          *MenuModel
 	defaultSection *MenuModel
-	familyMenu    *MenuModel
-	sizeSection   *MenuModel
-	sizeInput     *sinput.Model
-	initial       WebDisplaySettings // settings at dialog open time, for Cancel
+	familyMenu     *MenuModel
+	sizeSection    *MenuModel
+	sizeInput      *sinput.Model
+	refreshSection *MenuModel
+	refreshInput   *sinput.Model
+	initial        WebDisplaySettings // settings at dialog open time, for Cancel
 }
 
 type applyWebDisplayMsg struct{}
@@ -253,6 +257,11 @@ func NewWebDisplayDialog(current WebDisplaySettings) *WebDisplayDialog {
 	d.defaultSection = buildDefaultSection(isDefaultFont(current.FontFamily))
 	d.familyMenu = buildFamilyMenu(current.FontFamily)
 	d.sizeSection, d.sizeInput = NewNumberSinputSection("web_display_size", "Font Size", strconv.Itoa(current.FontSize))
+	refreshRate := current.RefreshRate
+	if refreshRate <= 0 {
+		refreshRate = 100
+	}
+	d.refreshSection, d.refreshInput = NewNumberSinputSection("web_display_refresh", "Refresh Rate (ms, applies on next reload)", strconv.Itoa(refreshRate))
 
 	outer := NewMenuModel("web_display", "Browser Settings", "", nil)
 	outer.SetMaximized(false)
@@ -270,6 +279,7 @@ func NewWebDisplayDialog(current WebDisplaySettings) *WebDisplayDialog {
 	outer.AddContentSection(d.defaultSection)
 	outer.AddContentSection(d.familyMenu)
 	outer.AddContentSection(d.sizeSection)
+	outer.AddContentSection(d.refreshSection)
 	d.outer = outer
 	return d
 }
@@ -338,6 +348,9 @@ func (d *WebDisplayDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if len(secs) >= 3 {
 			d.sizeSection = secs[2]
 		}
+		if len(secs) >= 4 {
+			d.refreshSection = secs[3]
+		}
 		settings := d.collectSettings()
 		d.outer.ClearProcessingState()
 		d.sendAndStore(settings)
@@ -356,7 +369,8 @@ func (d *WebDisplayDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		d.defaultSection = buildDefaultSection(isDefaultFont(defaults.FontFamily))
 		d.familyMenu = buildFamilyMenu(defaults.FontFamily)
 		d.sizeSection, d.sizeInput = NewNumberSinputSection("web_display_size", "Font Size", strconv.Itoa(defaults.FontSize))
-		d.outer.ReplaceSections(d.defaultSection, d.familyMenu, d.sizeSection)
+		d.refreshSection, d.refreshInput = NewNumberSinputSection("web_display_refresh", "Refresh Rate (ms, applies on next reload)", strconv.Itoa(defaults.RefreshRate))
+		d.outer.ReplaceSections(d.defaultSection, d.familyMenu, d.sizeSection, d.refreshSection)
 		w, h := d.outer.Width(), d.outer.Height()
 		d.outer.SetSize(w, h)
 		d.outer.ClearProcessingState()
@@ -389,28 +403,36 @@ func (d *WebDisplayDialog) sendAndStore(s WebDisplaySettings) {
 	})
 	SendWebMsg(data)
 	webmsg.SetDisplaySettings(webToken, webmsg.DisplaySettings{
-		FontFamily: s.FontFamily,
-		FontSize:   s.FontSize,
+		FontFamily:  s.FontFamily,
+		FontSize:    s.FontSize,
+		RefreshRate: s.RefreshRate,
 	})
 }
 
 func (d *WebDisplayDialog) collectSettings() WebDisplaySettings {
 	s := DefaultWebDisplaySettings()
 	// Check if "Use browser default" is selected.
+	useDefault := false
 	for _, it := range d.defaultSection.GetItems() {
 		if it.Checked {
-			return s // return "monospace" default
-		}
-	}
-	// Otherwise read the radio selection.
-	for _, it := range d.familyMenu.GetItems() {
-		if it.Checked && it.Metadata != nil {
-			s.FontFamily = it.Metadata["value"]
+			useDefault = true
 			break
 		}
 	}
-	if v, err := strconv.Atoi(d.sizeInput.Value()); err == nil && v > 0 {
-		s.FontSize = v
+	if !useDefault {
+		// Otherwise read the radio selection.
+		for _, it := range d.familyMenu.GetItems() {
+			if it.Checked && it.Metadata != nil {
+				s.FontFamily = it.Metadata["value"]
+				break
+			}
+		}
+		if v, err := strconv.Atoi(d.sizeInput.Value()); err == nil && v > 0 {
+			s.FontSize = v
+		}
+	}
+	if v, err := strconv.Atoi(d.refreshInput.Value()); err == nil && v > 0 {
+		s.RefreshRate = v
 	}
 	return s
 }

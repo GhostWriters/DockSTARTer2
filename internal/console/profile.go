@@ -20,9 +20,21 @@ var (
 	// SpinnerEnabled controls whether the CLI spinner is shown during tasks.
 	SpinnerEnabled bool
 
-	// SpinnerSpeed is the milliseconds per CLI spinner frame (default 250).
-	SpinnerSpeed int = 250
+	// SpinnerSpeed is the milliseconds per CLI spinner frame (default 120;
+	// overwritten from config before any real use).
+	SpinnerSpeed int = 100
 )
+
+// AlignToRefreshRate rounds spinnerMs up to the nearest multiple of refreshMs,
+// so the spinner's tick interval never falls out of sync with the screen's
+// repaint cadence. Exact multiples are left unchanged. Returns spinnerMs
+// unmodified if refreshMs is not positive.
+func AlignToRefreshRate(spinnerMs, refreshMs int) int {
+	if refreshMs <= 0 {
+		return spinnerMs
+	}
+	return ((spinnerMs + refreshMs - 1) / refreshMs) * refreshMs
+}
 
 func init() {
 	if stat, err := os.Stderr.Stat(); err == nil {

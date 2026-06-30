@@ -90,7 +90,8 @@ type UIConfig struct {
 	ShadowLevel       int    `toml:"shadow_level"` // 0=off, 1=light(░), 2=medium(▒), 3=dark(▓), 4=solid(█)
 	Scrollbar         bool   `toml:"scrollbar"`
 	Spinner           bool   `toml:"spinner"`
-	SpinnerSpeed      int    `toml:"spinner_speed"`       // milliseconds per frame, default 250
+	SpinnerSpeed      int    `toml:"spinner_speed"`       // milliseconds per frame, default 120
+	RefreshRate       int    `toml:"refresh_rate"`        // screen repaint interval in milliseconds, default 60
 	BorderColor       int    `toml:"border_color"`        // 1=Border, 2=Border2, 3=Both
 	DialogTitleAlign  string `toml:"dialog_title_align"`  // "center" or "left"
 	SubmenuTitleAlign string `toml:"submenu_title_align"` // "center" or "left"
@@ -237,6 +238,10 @@ func sanitizeConfig(ctx context.Context, conf *AppConfig) {
 	if ui.SpinnerSpeed < 50 || ui.SpinnerSpeed > 5000 {
 		warn("spinner_speed", fmt.Sprintf("%d", ui.SpinnerSpeed), fmt.Sprintf("%d", def.UI.SpinnerSpeed))
 		ui.SpinnerSpeed = def.UI.SpinnerSpeed
+	}
+	if ui.RefreshRate < 16 || ui.RefreshRate > 1000 {
+		warn("refresh_rate", fmt.Sprintf("%d", ui.RefreshRate), fmt.Sprintf("%d", def.UI.RefreshRate))
+		ui.RefreshRate = def.UI.RefreshRate
 	}
 	if ui.BorderColor < 1 || ui.BorderColor > 3 {
 		warn("border_color", fmt.Sprintf("%d", ui.BorderColor), fmt.Sprintf("%d", def.UI.BorderColor))

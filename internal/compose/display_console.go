@@ -201,7 +201,13 @@ func NewConsoleEventProcessor(logCtx context.Context, out io.Writer, command str
 		projectName:        projectName,
 		unknownContainers:  make(map[string]string),
 		serviceStartTimes:  make(map[string]time.Time),
-		noViewport:         updateFn != nil,
+		// Also gate on console.IsTUIEnabled() directly, not just updateFn != nil:
+		// a caller that forgets to thread the TUI writer through context (and so
+		// never sets updateFn) would otherwise fall through to the raw-ANSI
+		// direct-terminal-write path below while the TUI's alt-screen owns the
+		// real cursor, leaving a stray animating glyph stuck at a fixed
+		// terminal position that survives redraws.
+		noViewport:         updateFn != nil || console.IsTUIEnabled(),
 		updateFn:           updateFn,
 		asciiMode:          asciiMode,
 		verbose:            verbose,

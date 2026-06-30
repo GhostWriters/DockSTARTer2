@@ -115,6 +115,7 @@ var Registry = map[string]Def{
 	"--theme-spinners":           {Title: "Turning on spinners.", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--theme-no-spinners":        {Title: "Turning off spinners.", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--theme-spinner-speed":      {Title: "Set Spinner Speed", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-refresh-rate":       {Title: "Set Refresh Rate", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--theme-lines":              {Title: "Turning on line drawing characters.", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--theme-no-lines":           {Title: "Turning off line drawing characters.", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--theme-line":               {Title: "Turning on line drawing characters.", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
