@@ -95,13 +95,10 @@ type UpdatePercentMsg struct {
 	Percent float64
 }
 
-// pbSpinnerTickMsg advances the title-bar spinner by one frame while the task is running.
-type pbSpinnerTickMsg struct{ id string }
-
 // newProgramBox creates a new program box dialog (internal use)
 func newProgramBox(title, subtitle, command string) *ProgramBoxModel {
 	styles := GetStyles()
-	sv := streamvp.New("programbox_dialog")
+	sv := streamvp.New()
 	sv.SetStyle(lipgloss.NewStyle().
 		Background(styles.Console.GetBackground()).
 		Foreground(styles.Console.GetForeground()))

@@ -183,7 +183,7 @@ func NewPanelModel(panelMode string, connType string) PanelModel {
 	inp := sinput.New(ti)
 
 	m := PanelModel{
-		sv:                 streamvp.New("panel"),
+		sv:                 streamvp.New(),
 		input:              inp,
 		historyIdx:         -1,
 		panelMode:          panelMode,
