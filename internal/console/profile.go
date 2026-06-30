@@ -25,15 +25,16 @@ var (
 	SpinnerSpeed int = 100
 )
 
-// AlignToRefreshRate rounds spinnerMs up to the nearest multiple of refreshMs,
-// so the spinner's tick interval never falls out of sync with the screen's
-// repaint cadence. Exact multiples are left unchanged. Returns spinnerMs
-// unmodified if refreshMs is not positive.
+// AlignToRefreshRate rounds spinnerMs to the nearest multiple of refreshMs,
+// so the spinner's tick interval stays in sync with the screen's repaint
+// cadence while remaining as close as possible to the configured speed.
+// Exact multiples are left unchanged. Returns spinnerMs unmodified if
+// refreshMs is not positive.
 func AlignToRefreshRate(spinnerMs, refreshMs int) int {
 	if refreshMs <= 0 {
 		return spinnerMs
 	}
-	return ((spinnerMs + refreshMs - 1) / refreshMs) * refreshMs
+	return ((spinnerMs + refreshMs/2) / refreshMs) * refreshMs
 }
 
 func init() {
