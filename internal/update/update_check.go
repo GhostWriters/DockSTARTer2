@@ -165,6 +165,31 @@ func ComposeSdkVersionLink(ver string) string {
 	return versionTag(ver, "https://github.com/docker/compose/releases/tag/"+ver)
 }
 
+// branchTag wraps a branch/channel name in a semstyle Branch hyperlink tag pointing at the
+// given URL. An empty url renders the name as plain styled text with no link.
+func branchTag(name, url string) string {
+	if url == "" {
+		return "{{|Branch|}}" + name + "{{[-]}}"
+	}
+	return "{{|Branch::::" + url + "|}}" + name + "{{[-]}}"
+}
+
+// AppBranchLink wraps a DockSTARTer2 channel name as a link to the matching branch on GitHub.
+// The release workflow names channel branches to match the channel (e.g. "Prerelease"),
+// except "stable", which is released from "main".
+func AppBranchLink(name string) string {
+	branch := name
+	if branch == "stable" {
+		branch = "main"
+	}
+	return branchTag(name, "https://github.com/GhostWriters/DockSTARTer2/tree/"+branch)
+}
+
+// TmplBranchLink wraps a DockSTARTer-Templates branch name as a link to that branch on GitHub.
+func TmplBranchLink(name string) string {
+	return branchTag(name, "https://github.com/GhostWriters/DockSTARTer-Templates/tree/"+name)
+}
+
 // GetAppVersionDisplay returns a formatted version string for the application,
 // optionally including an update indicator.
 func GetAppVersionDisplay() string {
