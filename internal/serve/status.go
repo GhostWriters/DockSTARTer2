@@ -11,6 +11,7 @@ import (
 	"DockSTARTer2/internal/logger"
 	"github.com/GhostWriters/semstyle"
 	"DockSTARTer2/internal/sessionlocks"
+	"DockSTARTer2/internal/update"
 	"DockSTARTer2/internal/version"
 )
 
@@ -84,7 +85,7 @@ func CheckStartupStatus(ctx context.Context) {
 		}
 
 		lines = append(lines,
-			fmt.Sprintf("\tPID {{|Version|}}%-7d{{[-]}} [{{|Version|}}%s{{[-]}}]%s", p.PID, p.Version, tagStr),
+			fmt.Sprintf("\tPID {{|Version|}}%-7d{{[-]}} [%s]%s", p.PID, update.AppVersionLink(p.Version), tagStr),
 			fmt.Sprintf("\t\t{{|RunningCommand|}}%s{{[-]}}", cmdLine),
 		)
 		if !p.IsServer && p.PID == editInfo.PID && editInfo.ConnType != "" {

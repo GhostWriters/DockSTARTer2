@@ -31,7 +31,7 @@ func CheckCurrentStatus(ctx context.Context) error {
 		// Log a warning if 'dev' is used, as it might no longer exist in some contexts
 		msg := []string{
 			fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} channel '{{|Branch|}}%s{{[-]}}' appears to no longer exist.", version.ApplicationName, requestedVersion),
-			fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} is currently on version '%s'.", version.ApplicationName, appVersionLink(version.Version)),
+			fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} is currently on version '%s'.", version.ApplicationName, AppVersionLink(version.Version)),
 			fmt.Sprintf("Run '{{|UserCommand|}}%s -u main{{[-]}}' to update to the latest stable release.", version.CommandName),
 		}
 		logger.Warn(ctx, msg)
@@ -112,7 +112,7 @@ func CheckUpdates(ctx context.Context) {
 		logger.Warn(ctx, []string{
 			GetAppVersionDisplay(),
 			fmt.Sprintf("An update to {{|ApplicationName|}}%s{{[-]}} is available.", version.ApplicationName),
-			fmt.Sprintf("Run '{{|UserCommand|}}%s -u{{[-]}}' to update to version '%s'.", version.CommandName, appVersionLink(LatestAppVersion)),
+			fmt.Sprintf("Run '{{|UserCommand|}}%s -u{{[-]}}' to update to version '%s'.", version.CommandName, AppVersionLink(LatestAppVersion)),
 		})
 	} else {
 		logger.Info(ctx, GetAppVersionDisplay())
@@ -121,7 +121,7 @@ func CheckUpdates(ctx context.Context) {
 		logger.Warn(ctx, []string{
 			GetTmplVersionDisplay(),
 			fmt.Sprintf("An update to {{|ApplicationName|}}%s{{[-]}} is available.", "DockSTARTer-Templates"),
-			fmt.Sprintf("Run '{{|UserCommand|}}%s -u{{[-]}}' to update to version '%s'.", version.CommandName, tmplVersionLink(LatestTmplVersion)),
+			fmt.Sprintf("Run '{{|UserCommand|}}%s -u{{[-]}}' to update to version '%s'.", version.CommandName, TmplVersionLink(LatestTmplVersion)),
 		})
 	} else {
 		logger.Info(ctx, GetTmplVersionDisplay())
@@ -139,15 +139,15 @@ func versionTag(ver, url string) string {
 	return "{{|Version::::" + url + "|}}" + ver + "{{[-]}}"
 }
 
-// appVersionLink wraps a DockSTARTer2 version string as a link to its GitHub release tag.
-func appVersionLink(ver string) string {
+// AppVersionLink wraps a DockSTARTer2 version string as a link to its GitHub release tag.
+func AppVersionLink(ver string) string {
 	return versionTag(ver, "https://github.com/GhostWriters/DockSTARTer2/releases/tag/"+ver)
 }
 
-// tmplVersionLink wraps a DockSTARTer-Templates version string as a link to its source on
+// TmplVersionLink wraps a DockSTARTer-Templates version string as a link to its source on
 // GitHub. Tagged versions link to the release tag; the "branch commit hash" fallback form
 // links to that commit.
-func tmplVersionLink(ver string) string {
+func TmplVersionLink(ver string) string {
 	if _, hash, ok := strings.Cut(ver, " commit "); ok {
 		return versionTag(ver, "https://github.com/GhostWriters/DockSTARTer-Templates/commit/"+hash)
 	}
@@ -157,8 +157,8 @@ func tmplVersionLink(ver string) string {
 	return versionTag(ver, "https://github.com/GhostWriters/DockSTARTer-Templates/releases/tag/"+ver)
 }
 
-// composeSdkVersionLink wraps a Docker Compose SDK version string as a link to its GitHub tag.
-func composeSdkVersionLink(ver string) string {
+// ComposeSdkVersionLink wraps a Docker Compose SDK version string as a link to its GitHub tag.
+func ComposeSdkVersionLink(ver string) string {
 	if ver == "" || ver == "unknown" {
 		return versionTag(ver, "")
 	}
@@ -168,18 +168,18 @@ func composeSdkVersionLink(ver string) string {
 // GetAppVersionDisplay returns a formatted version string for the application,
 // optionally including an update indicator.
 func GetAppVersionDisplay() string {
-	return fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} [%s]", version.ApplicationName, appVersionLink(version.Version))
+	return fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} [%s]", version.ApplicationName, AppVersionLink(version.Version))
 }
 
 // GetTmplVersionDisplay returns a formatted version string for the templates,
 // optionally including an update indicator.
 func GetTmplVersionDisplay() string {
-	return fmt.Sprintf("{{|ApplicationName|}}DockSTARTer-Templates{{[-]}} [%s]", tmplVersionLink(paths.GetTemplatesVersion()))
+	return fmt.Sprintf("{{|ApplicationName|}}DockSTARTer-Templates{{[-]}} [%s]", TmplVersionLink(paths.GetTemplatesVersion()))
 }
 
 // GetComposeSdkVersionDisplay returns a formatted version string for the Docker Compose SDK.
 func GetComposeSdkVersionDisplay() string {
-	return fmt.Sprintf("{{|ApplicationName|}}Docker Compose SDK{{[-]}} [%s]", composeSdkVersionLink(version.GetComposeSdkVersion()))
+	return fmt.Sprintf("{{|ApplicationName|}}Docker Compose SDK{{[-]}} [%s]", ComposeSdkVersionLink(version.GetComposeSdkVersion()))
 }
 
 func checkAppUpdate(ctx context.Context) (updateAvailable bool, ver string, hadError bool) {

@@ -124,16 +124,16 @@ func ApplyTemplatesUpdate(ctx context.Context, info *TemplatesUpdateInfo, yes bo
 	var question, initiationNotice string
 	if !info.HasUpdate {
 		logger.Notice(ctx, "{{|ApplicationName|}}%s{{[-]}} is already up to date on branch '{{|Branch|}}%s{{[-]}}'.", targetName, info.requestedBranch)
-		logger.Notice(ctx, "Current version is '{{|Version|}}%s{{[-]}}'", info.CurrentDisplay)
+		logger.Notice(ctx, "Current version is '%s'", TmplVersionLink(info.CurrentDisplay))
 		return nil
 	}
 
 	if info.force && info.CurrentDisplay == info.RemoteDisplay {
-		question = fmt.Sprintf("Would you like to forcefully re-apply {{|ApplicationName|}}%s{{[-]}} update '{{|Version|}}%s{{[-]}}'?", targetName, info.CurrentDisplay)
-		initiationNotice = fmt.Sprintf("Forcefully re-apply {{|ApplicationName|}}%s{{[-]}} update '{{|Version|}}%s{{[-]}}'", targetName, info.RemoteDisplay)
+		question = fmt.Sprintf("Would you like to forcefully re-apply {{|ApplicationName|}}%s{{[-]}} update '%s'?", targetName, TmplVersionLink(info.CurrentDisplay))
+		initiationNotice = fmt.Sprintf("Forcefully re-apply {{|ApplicationName|}}%s{{[-]}} update '%s'", targetName, TmplVersionLink(info.RemoteDisplay))
 	} else {
-		question = fmt.Sprintf("Would you like to update {{|ApplicationName|}}%s{{[-]}} from '{{|Version|}}%s{{[-]}}' to '{{|Version|}}%s{{[-]}}' now?", targetName, info.CurrentDisplay, info.RemoteDisplay)
-		initiationNotice = fmt.Sprintf("Updating {{|ApplicationName|}}%s{{[-]}} from '{{|Version|}}%s{{[-]}}' to '{{|Version|}}%s{{[-]}}'", targetName, info.CurrentDisplay, info.RemoteDisplay)
+		question = fmt.Sprintf("Would you like to update {{|ApplicationName|}}%s{{[-]}} from '%s' to '%s' now?", targetName, TmplVersionLink(info.CurrentDisplay), TmplVersionLink(info.RemoteDisplay))
+		initiationNotice = fmt.Sprintf("Updating {{|ApplicationName|}}%s{{[-]}} from '%s' to '%s'", targetName, TmplVersionLink(info.CurrentDisplay), TmplVersionLink(info.RemoteDisplay))
 	}
 
 	noticePrinter := func(ctx context.Context, msg any, args ...any) {
@@ -227,7 +227,7 @@ func ApplyTemplatesUpdate(ctx context.Context, info *TemplatesUpdateInfo, yes bo
 		system.SetPermissions(ctx, paths.GetTemplatesDir())
 	}
 
-	logger.Notice(ctx, "Updated {{|ApplicationName|}}%s{{[-]}} to '{{|Version|}}%s{{[-]}}'", targetName, paths.GetTemplatesVersion())
+	logger.Notice(ctx, "Updated {{|ApplicationName|}}%s{{[-]}} to '%s'", targetName, TmplVersionLink(paths.GetTemplatesVersion()))
 	appenv.InvalidateAppMetaCache()
 	system.SetPermissions(ctx, paths.GetTimestampsDir())
 
