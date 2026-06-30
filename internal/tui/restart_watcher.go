@@ -25,6 +25,30 @@ var registeredExePath string
 // header indicator and confirmation prompt.
 var PendingRestartVersion string
 
+// IsRestartSafeLocally reports whether this process is in a safe state to
+// restart — i.e. not editing and not on the vars editor page. Exported for
+// callers (e.g. Display Options screens) that need to restart the program in
+// place to apply a setting requiring re-construction, such as refresh rate.
+func IsRestartSafeLocally() bool {
+	return isRestartSafeLocally()
+}
+
+// RestartForConfigChange re-execs the running process immediately, restoring
+// the current page via GetNavArgs. Intended for settings (like refresh rate)
+// that can only take effect at program construction time, not via the live
+// ConfigChangedMsg sync path.
+func RestartForConfigChange(ctx context.Context) {
+	var reExecArgs []string
+	if console.IsDaemon {
+		reExecArgs = append(reExecArgs, "--server-daemon")
+	} else {
+		reExecArgs = append(reExecArgs, console.CurrentFlags...)
+		reExecArgs = append(reExecArgs, GetNavArgs()...)
+		reExecArgs = append(reExecArgs, console.RestArgs...)
+	}
+	_ = update.ReExec(ctx, registeredExePath, reExecArgs)
+}
+
 // isRestartSafeLocally returns true when this process is in a safe state to
 // restart — i.e. not editing and not on the vars editor page.
 func isRestartSafeLocally() bool {

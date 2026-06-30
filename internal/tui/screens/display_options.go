@@ -220,6 +220,13 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Selectable: true,
 		},
 		{
+			Tag:        "Refresh Rate",
+			Desc:       fmt.Sprintf("{{|OptionValue|}}%dms{{[-]}}", s.config.UI.RefreshRate),
+			Help:       "Screen repaint interval in milliseconds (Enter to change). Applies on restart.",
+			Action:     s.promptRefreshRate(),
+			Selectable: true,
+		},
+		{
 			Tag:           "Shadow Level",
 			Desc:          s.dropdownDesc(s.shadowLevelToDesc(s.config.UI.ShadowLevel)),
 			Help:          "Adjust the density of the shadow (Select/Enter for list)",
@@ -904,6 +911,28 @@ func (s *DisplayOptionsScreen) promptSpinnerSpeed() tea.Cmd {
 	}
 }
 
+func (s *DisplayOptionsScreen) promptRefreshRate() tea.Cmd {
+	return func() tea.Msg {
+		result, err := console.TextPrompt(context.Background(),
+			func(context.Context, any, ...any) {}, "Refresh Rate", "Enter screen repaint interval in milliseconds (16-1000)", false,
+			strconv.Itoa(s.config.UI.RefreshRate))
+		if err != nil {
+			return nil
+		}
+		ms, err := strconv.Atoi(strings.TrimSpace(result))
+		if err != nil || ms < 16 || ms > 1000 {
+			return tui.ShowMessageDialogMsg{
+				Title:   "Invalid Refresh Rate",
+				Message: "Refresh rate must be between 16 and 1000 milliseconds.",
+				Type:    tui.MessageError,
+			}
+		}
+		return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
+			cfg.UI.RefreshRate = ms
+		}}
+	}
+}
+
 func (s *DisplayOptionsScreen) handleApply() tea.Cmd {
 	return func() tea.Msg {
 		// Do not apply if any options settings are locked (e.g. panel command running).
@@ -930,10 +959,33 @@ func (s *DisplayOptionsScreen) handleApply() tea.Cmd {
 		}
 
 		// 2. Save Config
+		refreshRateChanged := s.config.UI.RefreshRate != s.baseConfig.UI.RefreshRate
 		_ = config.SaveAppConfig(s.config)
 		s.baseConfig = s.config
 
-		// 3. Trigger synchronized style update
+		// 3. Refresh rate can only take effect at program construction time
+		// (tea.WithFPS has no live-update API), so it needs a restart rather
+		// than the live ConfigChangedMsg sync path used by other settings.
+		if refreshRateChanged {
+			if tui.IsRestartSafeLocally() {
+				tui.RestartForConfigChange(context.Background())
+			} else {
+				resultChan := make(chan bool, 1)
+				go func() {
+					if <-resultChan {
+						tui.RestartForConfigChange(context.Background())
+					}
+				}()
+				return tui.ShowConfirmDialogMsg{
+					Title:      "Restart Required",
+					Question:   "Refresh rate changed. You have unsaved changes — restart now to apply it, or keep editing and it'll apply next session?",
+					DefaultYes: false,
+					ResultChan: resultChan,
+				}
+			}
+		}
+
+		// 4. Trigger synchronized style update
 		return tui.ConfigChangedMsg{Config: s.config}
 	}
 }

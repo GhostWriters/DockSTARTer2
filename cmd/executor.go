@@ -287,9 +287,19 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				logger.Error(ctx, "TUI Run Error: %v", err)
 			}
 		} else {
-			stopSpinner := console.StartSpinner()
+			// -M/--menu blocks for the entire interactive TUI session (not a single
+			// quick task), so it must not wrap task() in the CLI spinner: StartSpinner's
+			// stop function wouldn't run until the user exits the TUI entirely, leaving
+			// its ticker goroutine alive and drawing into the TUI's terminal the whole time.
+			isMenu := group.Command == "-M" || group.Command == "--menu"
+			var stopSpinner func()
+			if !isMenu {
+				stopSpinner = console.StartSpinner()
+			}
 			err := task(ctx)
-			stopSpinner()
+			if stopSpinner != nil {
+				stopSpinner()
+			}
 			if err != nil {
 				exitCode = 1
 				if errors.Is(err, console.ErrUserAborted) {

@@ -354,6 +354,7 @@ func GetUsage(target string, noHeading bool) string {
 		"--theme-shadows", "--theme-no-shadows", "--theme-shadow", "--theme-no-shadow", "--theme-shadow-level",
 		"--theme-scrollbar", "--theme-no-scrollbar", "--theme-scrollbars", "--theme-no-scrollbars",
 		"--theme-spinner", "--theme-no-spinner", "--theme-spinners", "--theme-no-spinners", "--theme-spinner-speed",
+		"--theme-refresh-rate",
 		"--theme-border-color",
 		"--theme-dialog-title", "--theme-submenu-title", "--theme-panel-title",
 		"--theme-extract", "--theme-extract-all") {
@@ -382,6 +383,8 @@ func GetUsage(target string, noHeading bool) string {
 			"	Turn the CLI spinner on or off",
 			"{{|UsageCommand|}}--theme-spinner-speed{{[-]}} {{|UsageOption|}}<ms>{{[-]}}",
 			fmt.Sprintf("	Set spinner frame speed in milliseconds (50-5000, default %d)", config.DefaultConfig().UI.SpinnerSpeed),
+			"{{|UsageCommand|}}--theme-refresh-rate{{[-]}} {{|UsageOption|}}<ms>{{[-]}}",
+			fmt.Sprintf("	Set screen repaint interval in milliseconds (16-1000, default %d)", config.DefaultConfig().UI.RefreshRate),
 			"{{|UsageCommand|}}--theme-border-color{{[-]}} {{|UsageOption|}}<level>{{[-]}}",
 			"	Set the border color (1=Border, 2=Border2, 3=Both)",
 			"{{|UsageCommand|}}--theme-dialog-title{{[-]}} {{|UsageOption|}}<align>{{[-]}}",
@@ -400,6 +403,12 @@ func GetUsage(target string, noHeading bool) string {
 		printStr(
 			"{{|UsageCommand|}}--theme-spinner-speed{{[-]}} {{|UsageOption|}}<ms>{{[-]}}",
 			fmt.Sprintf("	Set spinner frame speed in milliseconds (50-5000, default %d)", config.DefaultConfig().UI.SpinnerSpeed),
+		)
+	}
+	if match("--theme-refresh-rate") {
+		printStr(
+			"{{|UsageCommand|}}--theme-refresh-rate{{[-]}} {{|UsageOption|}}<ms>{{[-]}}",
+			fmt.Sprintf("	Set screen repaint interval in milliseconds (16-1000, default %d)", config.DefaultConfig().UI.RefreshRate),
 		)
 	}
 	if match("-u", "--update", "--update-app", "--update-templates") {

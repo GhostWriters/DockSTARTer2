@@ -207,6 +207,17 @@ func HandleThemeSettings(ctx context.Context, group *CommandGroup) error {
 			return fmt.Errorf("invalid spinner speed")
 		}
 		conf.UI.SpinnerSpeed = ms
+	case "--theme-refresh-rate":
+		if len(group.Args) == 0 {
+			logger.Error(ctx, "Usage: --theme-refresh-rate <milliseconds>")
+			return fmt.Errorf("missing argument")
+		}
+		ms, err := strconv.Atoi(strings.TrimSpace(group.Args[0]))
+		if err != nil || ms < 16 || ms > 1000 {
+			logger.Error(ctx, "Invalid refresh rate: %s (use 16-1000 ms)", group.Args[0])
+			return fmt.Errorf("invalid refresh rate")
+		}
+		conf.UI.RefreshRate = ms
 	case "--theme-border-color":
 		if len(group.Args) > 0 {
 			switch group.Args[0] {
@@ -280,6 +291,9 @@ func HandleThemeSettings(ctx context.Context, group *CommandGroup) error {
 
 	if group.Command == "--theme-spinner-speed" && len(group.Args) > 0 {
 		logger.Notice(ctx, "Spinner speed set to: {{|Var|}}%sms{{[-]}}", group.Args[0])
+	}
+	if group.Command == "--theme-refresh-rate" && len(group.Args) > 0 {
+		logger.Notice(ctx, "Refresh rate set to: {{|Var|}}%sms{{[-]}}", group.Args[0])
 	}
 	if group.Command == "--theme-border-color" && len(group.Args) > 0 {
 		logger.Notice(ctx, "Border color set to: {{|Var|}}%s{{[-]}}", group.Args[0])

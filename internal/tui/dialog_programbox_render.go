@@ -332,6 +332,9 @@ func RunProgramBox(ctx context.Context, title, subtitle, command string, task fu
 	cfg := config.LoadAppConfig()
 
 	currentConfig = cfg // Set global config so styles like AddShadow work correctly
+	console.SpinnerEnabled = cfg.UI.Spinner
+	console.SpinnerSpeed = console.AlignToRefreshRate(cfg.UI.SpinnerSpeed, cfg.UI.RefreshRate)
+	console.LineCharacters = cfg.UI.LineCharacters
 	if _, err := theme.Load(cfg.UI.Theme, ""); err == nil {
 		InitStyles(cfg)
 	}
@@ -347,7 +350,7 @@ func RunProgramBox(ctx context.Context, title, subtitle, command string, task fu
 	model := NewAppModelStandalone(ctx, currentConfig, "local", "cli", dialogModel)
 
 	// Create Bubble Tea program
-	p := NewProgram(model, ProgramOptions{})
+	p := NewProgram(model, ProgramOptions{RefreshRate: cfg.UI.RefreshRate})
 
 	registerCallbacks()
 	defer func() {

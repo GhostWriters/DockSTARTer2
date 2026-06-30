@@ -91,6 +91,9 @@ func Initialize(ctx context.Context) error {
 	registerCallbacks()
 
 	currentConfig = config.LoadAppConfig()
+	console.SpinnerEnabled = currentConfig.UI.Spinner
+	console.SpinnerSpeed = console.AlignToRefreshRate(currentConfig.UI.SpinnerSpeed, currentConfig.UI.RefreshRate)
+	console.LineCharacters = currentConfig.UI.LineCharacters
 	if deflts, err := theme.Load(currentConfig.UI.Theme, ""); err != nil {
 		if deflts == nil {
 			// Default theme itself failed to parse — unrecoverable
@@ -138,6 +141,26 @@ type ProgramOptions struct {
 
 	// WebToken is the session token used to look up per-session web state (display settings etc).
 	WebToken string
+
+	// RefreshRate is the screen repaint interval in milliseconds, used to compute
+	// the FPS passed to tea.WithFPS. Zero falls back to a 100ms default.
+	RefreshRate int
+}
+
+// resolveRefreshRate returns the refresh rate (ms) to use for a new program,
+// based on connection type: web sessions use their per-browser-token setting,
+// local/SSH sessions share the daemon's config.
+func resolveRefreshRate(connType, webToken string) int {
+	if connType == "web" {
+		if rate := webmsg.GetDisplaySettings(webToken).RefreshRate; rate > 0 {
+			return rate
+		}
+		return 100
+	}
+	if currentConfig.UI.RefreshRate > 0 {
+		return currentConfig.UI.RefreshRate
+	}
+	return 100
 }
 
 // SendWebMsg sends a JSON message to the browser if a web outbound channel is set.
@@ -179,6 +202,12 @@ func NewProgram(model tea.Model, opts ProgramOptions) *tea.Program {
 	if opts.InitialWidth > 0 && opts.InitialHeight > 0 {
 		teaOpts = append(teaOpts, tea.WithWindowSize(opts.InitialWidth, opts.InitialHeight))
 	}
+	refreshRate := opts.RefreshRate
+	if refreshRate <= 0 {
+		refreshRate = 100
+	}
+	fps := 1000 / refreshRate
+	teaOpts = append(teaOpts, tea.WithFPS(fps))
 	p := tea.NewProgram(model, teaOpts...)
 	program = p
 	return p
@@ -311,6 +340,7 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	activeConnType = connType
 	webOutbound = pOpts.WebOutbound
 	webToken = pOpts.WebToken
+	pOpts.RefreshRate = resolveRefreshRate(connType, pOpts.WebToken)
 
 	// Look up the screen entry; fall back to "main" if unrecognised.
 	entry, ok := screenRegistry[pageName]
@@ -463,6 +493,7 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 	isRootSession = isRoot
 	ip, ctype := parseClientInfo(pOpts.Environ)
 	activeConnType = ctype
+	pOpts.RefreshRate = resolveRefreshRate(ctype, pOpts.WebToken)
 
 	onClose := func() tea.Msg { return NavigateBackMsg{} }
 	startScreen := editorFactory(appName, onClose, !isRoot, ctype)
@@ -635,6 +666,7 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 	startScreen := varEditorFactory(varName, displayAppName, appDesc, file, origVal, opts, helpText, docMarkdown, docAppName, onSave, tea.Quit)
 
 	ip, ctype := parseClientInfo(pOpts.Environ)
+	pOpts.RefreshRate = resolveRefreshRate(ctype, pOpts.WebToken)
 	model := NewAppModel(ctx, currentConfig, ip, ctype, startScreen)
 	p := NewProgram(model, pOpts)
 	programExited = make(chan struct{})
