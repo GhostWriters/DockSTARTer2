@@ -23,7 +23,7 @@ func StyleServiceName(svc string) string {
 	if url == "" {
 		return "{{|App|}}" + svc + "{{[-]}}"
 	}
-	return "{{|App::::"+svc+"|}}"+url+"{{[-]}}"
+	return "{{|App::::"+url+"|}}"+svc+"{{[-]}}"
 }
 
 func serviceURL(svc string) string {
@@ -131,8 +131,8 @@ func StyleImageRef(ref string) string {
 	if idx := strings.LastIndex(ref, ":"); idx >= 0 {
 		name, tag := ref[:idx], ref[idx+1:]
 		url := imageRefURL(name)
-		return "{{|DockerImage::::"+name+"|}}"+url+"{{[-]}}{{|DockerColon|}}:{{[-]}}{{|DockerTag|}}"+tag+"{{[-]}}"
+		return "{{|DockerImage::::"+url+"|}}"+name+"{{[-]}}{{|DockerColon|}}:{{[-]}}{{|DockerTag|}}"+tag+"{{[-]}}"
 	}
 	url := imageRefURL(ref)
-	return "{{|DockerImage::::"+ref+"|}}"+url+"{{[-]}}"
+	return "{{|DockerImage::::"+url+"|}}"+ref+"{{[-]}}"
 }
