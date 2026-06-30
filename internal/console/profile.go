@@ -34,7 +34,11 @@ func AlignToRefreshRate(spinnerMs, refreshMs int) int {
 	if refreshMs <= 0 {
 		return spinnerMs
 	}
-	return ((spinnerMs + refreshMs/2) / refreshMs) * refreshMs
+	aligned := ((spinnerMs + refreshMs/2) / refreshMs) * refreshMs
+	if aligned <= 0 {
+		aligned = refreshMs
+	}
+	return aligned
 }
 
 func init() {
