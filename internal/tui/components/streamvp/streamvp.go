@@ -15,9 +15,6 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// SpinnerTickMsg is sent on each spinner tick. Tag is an opaque identifier set
-// by the owner so ticks from different instances don't cross-fire.
-type SpinnerTickMsg struct{ Tag string }
 
 const maxHistory = 5000
 
@@ -36,14 +33,12 @@ type Model struct {
 	// CommandRunning controls the inline spinner: true while a command is executing.
 	CommandRunning bool
 
-	tag string // unique per-instance identifier for SpinnerTickMsg
 }
 
-// New creates a Model with the given tag (used to scope spinner ticks).
-func New(tag string) Model {
+// New creates a new Model.
+func New() Model {
 	return Model{
 		viewport: viewport.New(),
-		tag:      tag,
 	}
 }
 
@@ -178,43 +173,6 @@ func (m *Model) ClearSpinner() {
 	}
 	m.spinnerLine = ""
 	m.setViewportContent(false)
-}
-
-// SpinnerTickCmd returns the Bubble Tea command that fires the next SpinnerTickMsg
-// after the configured spinner speed. Returns nil if spinners are disabled.
-func (m *Model) SpinnerTickCmd() tea.Cmd {
-	if !console.SpinnerEnabled {
-		return nil
-	}
-	fps := time.Duration(console.SpinnerSpeed) * time.Millisecond
-	if fps <= 0 {
-		fps = 100 * time.Millisecond
-	}
-	tag := m.tag
-	return tea.Tick(fps, func(time.Time) tea.Msg {
-		return SpinnerTickMsg{Tag: tag}
-	})
-}
-
-// HandleSpinnerTick processes a SpinnerTickMsg if it belongs to this instance.
-// Returns (advanced, cmd): advanced=true if the frame was updated.
-// Callers should call SpinnerTickCmd() themselves if they want to reschedule —
-// this keeps the decision (continue vs stop) with the caller.
-func (m *Model) HandleSpinnerTick(msg SpinnerTickMsg) (advanced bool) {
-	if msg.Tag != m.tag || !m.CommandRunning || !console.SpinnerEnabled {
-		return false
-	}
-	lineChars := getLineCharacters()
-	frames := console.SpinnerFramesUnicode
-	if !lineChars {
-		frames = console.SpinnerFramesASCII
-	}
-	m.spinnerFrame = (m.spinnerFrame + 1) % len(frames)
-	frame := lipgloss.NewStyle().Foreground(console.SpinnerColor).Render(frames[m.spinnerFrame])
-	// Wrap in console background so it blends with the viewport
-	m.spinnerLine = frame
-	m.setViewportContent(false)
-	return true
 }
 
 // AdvanceSpinner advances the inline spinner by one frame if CommandRunning is
