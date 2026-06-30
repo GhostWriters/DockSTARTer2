@@ -138,6 +138,15 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, logger.BatchRecoverTUI(m.ctx, cmd)
 
 	case replaceOutputMsg:
+		// A running programbox dialog is the true owner of live-updating output
+		// (e.g. compose progress). Route it there, never to the panel, even if
+		// the panel also has a command pipe open — otherwise an unrelated
+		// programbox's live output bleeds into the console panel.
+		if pb, ok := m.dialog.(*ProgramBoxModel); ok && !pb.done {
+			dialog, cmd := pb.Update(msg)
+			m.dialog = dialog
+			return m, logger.BatchRecoverTUI(m.ctx, cmd)
+		}
 		if m.panel.consoleCancel != nil {
 			updated, cmd := m.panel.Update(msg)
 			m.panel = updated.(PanelModel)
