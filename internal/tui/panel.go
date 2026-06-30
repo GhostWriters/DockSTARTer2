@@ -38,8 +38,6 @@ type ConsoleLockMsg struct {
 	Locked bool
 }
 
-// panelSpinnerTickMsg advances the panel title spinner by one frame while a command is running.
-type panelSpinnerTickMsg struct{}
 
 // consoleDoneMsg signals that a console command has finished.
 type consoleDoneMsg struct {
@@ -92,6 +90,7 @@ type PanelModel struct {
 	panelMode            string // "log", "console", "system", or "none"
 	connType             string // "local", "ssh", or "web"
 	spinnerFrame         int
+	lastSpinner          time.Time // when the title spinner frame was last advanced
 	lastLineTime         time.Time // when the last log line arrived; spinner runs until idle for spinnerIdleTimeout
 	panelChanged         bool      // new content arrived while collapsed; cleared on expand
 	replaceHeaderCount   int       // line count before first replaceOutputMsg (-1 = not yet set)
@@ -104,17 +103,30 @@ const (
 	panelWidgetDn = "panel-dn" // widget ID for the resize-down button in the panel title bar
 )
 
-func (m *PanelModel) spinnerTickCmd() tea.Cmd {
+// AdvanceSpinners advances the panel title spinner and the inline streamvp
+// spinner if their interval has elapsed. Returns true if anything changed.
+// Called by the global tick in AppModel.Update.
+func (m *PanelModel) AdvanceSpinners(now time.Time) bool {
 	if !console.SpinnerEnabled {
-		return nil
+		return false
 	}
+	changed := false
+	isSpinnerActive := !m.lastLineTime.IsZero() && time.Since(m.lastLineTime) < spinnerIdleTimeout
 	fps := time.Duration(console.SpinnerSpeed) * time.Millisecond
-	if fps <= 0 {
-		fps = 100 * time.Millisecond
+	if fps > 0 && isSpinnerActive && now.Sub(m.lastSpinner) >= fps {
+		m.lastSpinner = now
+		ctx := GetActiveContext()
+		frames := console.SpinnerFramesTitleUnicode
+		if !ctx.LineCharacters {
+			frames = console.SpinnerFramesTitleASCII
+		}
+		m.spinnerFrame = (m.spinnerFrame + 1) % len(frames)
+		changed = true
 	}
-	return tea.Tick(fps, func(time.Time) tea.Msg {
-		return panelSpinnerTickMsg{}
-	})
+	if m.sv.AdvanceSpinner(now) {
+		changed = true
+	}
+	return changed
 }
 
 // changedIndicatorChar returns the character used to signal new content arrived while collapsed.

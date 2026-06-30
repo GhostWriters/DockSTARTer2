@@ -2,6 +2,7 @@ package screens
 
 import (
 	"strings"
+	"time"
 
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
@@ -1058,4 +1059,8 @@ func (m *addVarDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegion 
 	regions = append(regions, tui.TitleBarWidgetRegions("addvar_dialog", activeW, widgetsStartX, widgetY, tui.ZDialog)...)
 
 	return regions
+}
+
+func (m *addVarDialogModel) AdvanceSpinners(now time.Time) bool {
+	return m.btnSpinner.AdvanceSpinner(now)
 }

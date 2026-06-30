@@ -31,6 +31,7 @@ type Model struct {
 
 	spinnerLine  string // transient inline spinner appended after last line; not in lines/rawLines
 	spinnerFrame int
+	lastSpinner  time.Time // when the spinner frame was last advanced
 
 	// CommandRunning controls the inline spinner: true while a command is executing.
 	CommandRunning bool
@@ -211,6 +212,31 @@ func (m *Model) HandleSpinnerTick(msg SpinnerTickMsg) (advanced bool) {
 	m.spinnerFrame = (m.spinnerFrame + 1) % len(frames)
 	frame := lipgloss.NewStyle().Foreground(console.SpinnerColor).Render(frames[m.spinnerFrame])
 	// Wrap in console background so it blends with the viewport
+	m.spinnerLine = frame
+	m.setViewportContent(false)
+	return true
+}
+
+// AdvanceSpinner advances the inline spinner by one frame if CommandRunning is
+// true, spinners are enabled, and at least SpinnerSpeed ms have elapsed since
+// the last advance. Returns true if the frame was updated. Used by the global
+// tick driver in the TUI app model instead of the per-instance SpinnerTickCmd.
+func (m *Model) AdvanceSpinner(now time.Time) bool {
+	if !m.CommandRunning || !console.SpinnerEnabled {
+		return false
+	}
+	fps := time.Duration(console.SpinnerSpeed) * time.Millisecond
+	if fps <= 0 || now.Sub(m.lastSpinner) < fps {
+		return false
+	}
+	m.lastSpinner = now
+	lineChars := getLineCharacters()
+	frames := console.SpinnerFramesUnicode
+	if !lineChars {
+		frames = console.SpinnerFramesASCII
+	}
+	m.spinnerFrame = (m.spinnerFrame + 1) % len(frames)
+	frame := lipgloss.NewStyle().Foreground(console.SpinnerColor).Render(frames[m.spinnerFrame])
 	m.spinnerLine = frame
 	m.setViewportContent(false)
 	return true

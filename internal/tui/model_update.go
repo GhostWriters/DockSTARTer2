@@ -6,7 +6,6 @@ import (
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/theme"
-	"DockSTARTer2/internal/tui/components/streamvp"
 	"DockSTARTer2/internal/version"
 
 	tea "charm.land/bubbletea/v2"
@@ -99,7 +98,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, logger.BatchRecoverTUI(m.ctx, cmd)
 
-	case menuSpinnerTickMsg, menuDeferredActionMsg:
+	case menuDeferredActionMsg:
 		// Route to both the active screen AND any open dialog — these messages are
 		// scoped by instanceID so each recipient ignores ones that aren't its own.
 		// Dialogs that are MenuModels (e.g. flags, shadow dropdown) own their own
@@ -117,20 +116,17 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, logger.BatchRecoverTUI(m.ctx, screenCmd, dialogCmd)
 
-	case panelSpinnerTickMsg:
-		updated, cmd := m.panel.Update(msg)
-		m.panel = updated.(PanelModel)
-		return m, logger.BatchRecoverTUI(m.ctx, cmd)
-
-	case streamvp.SpinnerTickMsg:
-		// Route by tag: panel gets its own tick, dialog gets its own — don't steal across components.
-		updated, cmd := m.panel.Update(msg)
-		m.panel = updated.(PanelModel)
-		var dialogCmd tea.Cmd
-		if m.dialog != nil {
-			m.dialog, dialogCmd = m.dialog.Update(msg)
+	case globalTickMsg:
+		// Advance all active spinners before the repaint so the frame is already
+		// updated when Bubble Tea flushes the frame to the terminal.
+		m.panel.AdvanceSpinners(msg.time)
+		if sa, ok := m.dialog.(SpinnerAdvancer); ok {
+			sa.AdvanceSpinners(msg.time)
 		}
-		return m, logger.BatchRecoverTUI(m.ctx, cmd, dialogCmd)
+		if sa, ok := m.activeScreen.(SpinnerAdvancer); ok {
+			sa.AdvanceSpinners(msg.time)
+		}
+		return m, logger.BatchRecoverTUI(m.ctx, globalTickCmd())
 
 	case panelLineMsg:
 		updated, cmd := m.panel.Update(msg)

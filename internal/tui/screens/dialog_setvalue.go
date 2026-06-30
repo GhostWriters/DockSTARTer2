@@ -2,6 +2,7 @@ package screens
 
 import (
 	"strings"
+	"time"
 
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/theme"
@@ -955,4 +956,8 @@ func (m *setValueDialogModel) selectOpt(idx int) {
 
 func (m *setValueDialogModel) hasChanges() bool {
 	return m.input.Value() != m.origVal
+}
+
+func (m *setValueDialogModel) AdvanceSpinners(now time.Time) bool {
+	return m.btnSpinner.AdvanceSpinner(now)
 }

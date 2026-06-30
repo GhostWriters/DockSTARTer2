@@ -2,6 +2,7 @@ package tui
 
 import (
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
@@ -311,4 +312,8 @@ func ShowConfirmDialog(title, question string, defaultYes bool) bool {
 	}
 
 	return finalDialog.result
+}
+
+func (m *confirmDialogModel) AdvanceSpinners(now time.Time) bool {
+	return m.btnSpinner.AdvanceSpinner(now)
 }

@@ -12,9 +12,6 @@ import (
 
 var buttonSpinnerCounter atomic.Uint64
 
-// btnSpinnerTickMsg is the internal tick message for ButtonSpinner.
-type btnSpinnerTickMsg struct{ id string }
-
 // ButtonSpinner is an embeddable helper that drives a spinner on a button while
 // an action is in flight. Embed it in any screen/dialog that has its own buttons.
 //
@@ -30,6 +27,7 @@ type ButtonSpinner struct {
 	instanceID   string
 	processingID string
 	frame        int
+	lastSpinner  time.Time
 }
 
 // Init must be called once (in the model constructor or Init()) to assign a unique ID.
@@ -43,7 +41,7 @@ func (b *ButtonSpinner) Init() {
 func (b *ButtonSpinner) SetProcessing(zoneID string) tea.Cmd {
 	b.processingID = zoneID
 	b.frame = 0
-	return b.tickCmd()
+	return nil
 }
 
 // SetProcessingDeferred marks the button as spinning and defers the action by a short
@@ -53,10 +51,9 @@ func (b *ButtonSpinner) SetProcessingDeferred(zoneID string, action tea.Cmd) tea
 	b.processingID = zoneID
 	b.frame = 0
 	id := b.instanceID
-	deferred := tea.Tick(50*time.Millisecond, func(time.Time) tea.Msg {
+	return tea.Tick(50*time.Millisecond, func(time.Time) tea.Msg {
 		return btnDeferredActionMsg{id: id, action: action}
 	})
-	return tea.Batch(b.tickCmd(), deferred)
 }
 
 // btnDeferredActionMsg carries a deferred action for a specific ButtonSpinner instance.
@@ -83,20 +80,27 @@ func (b *ButtonSpinner) Update(msg tea.Msg) (tea.Cmd, bool) {
 		b.processingID = ""
 		return deferred.action, true
 	}
-	tick, ok := msg.(btnSpinnerTickMsg)
-	if !ok || tick.id != b.instanceID {
-		return nil, false
+	return nil, false
+}
+
+// AdvanceSpinner advances the button spinner frame if its interval has elapsed.
+// Returns true if the frame changed. Called by the global tick.
+func (b *ButtonSpinner) AdvanceSpinner(now time.Time) bool {
+	if b.processingID == "" || !console.SpinnerEnabled {
+		return false
 	}
-	if b.processingID == "" {
-		return nil, true
+	fps := time.Duration(console.SpinnerSpeed) * time.Millisecond
+	if fps <= 0 || now.Sub(b.lastSpinner) < fps {
+		return false
 	}
+	b.lastSpinner = now
 	ctx := GetActiveContext()
 	frames := console.SpinnerFramesTitleUnicode
 	if !ctx.LineCharacters {
 		frames = console.SpinnerFramesTitleASCII
 	}
 	b.frame = (b.frame + 1) % len(frames)
-	return b.tickCmd(), true
+	return true
 }
 
 // ApplyToSpecs returns a copy of specs with Spinning/SpinnerFrame set on the
@@ -116,16 +120,3 @@ func (b *ButtonSpinner) ApplyToSpecs(specs []ButtonSpec) []ButtonSpec {
 	return out
 }
 
-func (b *ButtonSpinner) tickCmd() tea.Cmd {
-	if !console.SpinnerEnabled {
-		return nil
-	}
-	fps := time.Duration(console.SpinnerSpeed) * time.Millisecond
-	if fps <= 0 {
-		fps = 100 * time.Millisecond
-	}
-	id := b.instanceID
-	return tea.Tick(fps, func(time.Time) tea.Msg {
-		return btnSpinnerTickMsg{id: id}
-	})
-}

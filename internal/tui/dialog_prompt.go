@@ -4,6 +4,7 @@ import (
 	semstyle "github.com/GhostWriters/semstyle/lg"
 	"DockSTARTer2/internal/theme"
 	"strings"
+	"time"
 
 	"DockSTARTer2/internal/tui/components/sinput"
 
@@ -447,6 +448,10 @@ func (m *promptDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	)...)
 	regions = append(regions, m.titleBarHitRegions(offsetX, offsetY, contentWidth, ZDialog)...)
 	return regions
+}
+
+func (m *promptDialogModel) AdvanceSpinners(now time.Time) bool {
+	return m.btnSpinner.AdvanceSpinner(now)
 }
 
 // ShowPromptDialog displays a prompt dialog and returns the text and confirmed bool.

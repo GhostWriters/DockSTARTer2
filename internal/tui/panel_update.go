@@ -16,7 +16,6 @@ import (
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/tui/components/sinput"
-	"DockSTARTer2/internal/tui/components/streamvp"
 	"DockSTARTer2/internal/version"
 
 	"charm.land/bubbles/v2/key"
@@ -200,7 +199,7 @@ func (m *PanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 		m.consoleAppsChanged = appsChanged
 		m.spinnerFrame = 0
 		lockCmd := m.lockSession("console.command", true)
-		return tea.Batch(lockCmd, m.spinnerTickCmd(), readConsoleBatchWithFlag(sc, cancel, configChanged, appsChanged))
+		return tea.Batch(lockCmd, readConsoleBatchWithFlag(sc, cancel, configChanged, appsChanged))
 	}
 
 	// Shell command
@@ -218,7 +217,7 @@ func (m *PanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 	}
 
 	if containsSudo && m.panelMode == "system" {
-		return tea.Batch(m.spinnerTickCmd(), func() tea.Msg {
+		return tea.Batch(func() tea.Msg {
 			pass, err := PromptText("Sudo Password", "Password for '"+cmdStr+"':", true)
 			if err != nil {
 				if err == console.ErrUserAborted {
@@ -268,40 +267,13 @@ func (m *PanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 	sc := bufio.NewScanner(pr)
 	m.consoleScanner = sc
 	lockCmd := m.lockSession("console.command", true)
-	return tea.Batch(lockCmd, m.spinnerTickCmd(), readConsoleBatch(sc, cancel))
+	return tea.Batch(lockCmd, readConsoleBatch(sc, cancel))
 }
 
 
 // ─── Update ───────────────────────────────────────────────────────────────────
 
 func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Title bar spinner tick: advance frame while recent log lines have arrived.
-	if _, ok := msg.(panelSpinnerTickMsg); ok {
-		if !m.lastLineTime.IsZero() && time.Since(m.lastLineTime) < spinnerIdleTimeout {
-			ctx := GetActiveContext()
-			frames := console.SpinnerFramesTitleUnicode
-			if !ctx.LineCharacters {
-				frames = console.SpinnerFramesTitleASCII
-			}
-			m.spinnerFrame = (m.spinnerFrame + 1) % len(frames)
-			return m, m.spinnerTickCmd()
-		}
-		// Spinner just went idle — mark changed if panel is collapsed.
-		if !m.expanded && !m.lastLineTime.IsZero() {
-			m.panelChanged = true
-		}
-		return m, nil
-	}
-
-	// Inline content-area spinner tick via streamvp.
-	if tick, ok := msg.(streamvp.SpinnerTickMsg); ok {
-		if m.sv.HandleSpinnerTick(tick) {
-			m.lastLineTime = time.Now() // keep title spinner alive during silent command execution
-			return m, m.sv.SpinnerTickCmd()
-		}
-		return m, nil
-	}
-
 	switch msg := msg.(type) {
 
 	case sinput.PasteMsg, sinput.CutMsg, sinput.SelectAllMsg:
@@ -325,39 +297,24 @@ func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case panelLineMsg:
-		wasIdle := m.lastLineTime.IsZero() || time.Since(m.lastLineTime) >= spinnerIdleTimeout
 		m.lastLineTime = time.Now()
 		if !m.expanded {
 			m.panelChanged = true
 		}
 		m.sv.AppendLines(strings.Split(string(msg), "\n"), panelRenderFn())
-		if wasIdle {
-			return m, tea.Batch(waitForPanelLine(), m.spinnerTickCmd())
-		}
 		return m, waitForPanelLine()
 
 	case consoleLinesMsg:
-		wasIdle := m.lastLineTime.IsZero() || time.Since(m.lastLineTime) >= spinnerIdleTimeout
 		m.lastLineTime = time.Now()
 		if !m.expanded {
 			m.panelChanged = true
 		}
-		wasCommandIdle := !m.sv.CommandRunning
 		m.sv.CommandRunning = true
 		m.sv.AppendLines(msg.lines, panelRenderFn())
 		if m.consoleScanner == nil {
 			return m, nil
 		}
-		nextCmd := readConsoleBatchWithFlag(m.consoleScanner, m.consoleCancel, m.consoleConfigChanged, m.consoleAppsChanged)
-		var cmds []tea.Cmd
-		cmds = append(cmds, nextCmd)
-		if wasIdle {
-			cmds = append(cmds, m.spinnerTickCmd())
-		}
-		if wasCommandIdle {
-			cmds = append(cmds, m.sv.SpinnerTickCmd())
-		}
-		return m, tea.Batch(cmds...)
+		return m, readConsoleBatchWithFlag(m.consoleScanner, m.consoleCancel, m.consoleConfigChanged, m.consoleAppsChanged)
 
 	case replaceOutputMsg:
 		setActiveOutputWidth(m.sv.Width())
