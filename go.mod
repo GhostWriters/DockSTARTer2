@@ -17,7 +17,7 @@ require (
 	github.com/charmbracelet/ssh v0.0.0-20250826160808-ebfa259c7309
 	github.com/charmbracelet/x/ansi v0.11.7
 	github.com/coder/websocket v1.8.15
-	github.com/compose-spec/compose-go/v2 v2.12.1
+	github.com/compose-spec/compose-go/v2 v2.13.0
 	github.com/containerd/errdefs v1.0.0
 	github.com/creativeprojects/go-selfupdate v1.5.2
 	github.com/docker/cli v29.6.1+incompatible
