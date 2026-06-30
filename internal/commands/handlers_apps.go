@@ -40,9 +40,9 @@ func HandlePrintTemplatesVersion() error {
 }
 
 func HandleVersion(ctx context.Context) error {
-	logger.Display(ctx, fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} [{{|Version|}}%s{{[-]}}]", version.ApplicationName, version.Version))
-	logger.Display(ctx, fmt.Sprintf("{{|ApplicationName|}}DockSTARTer-Templates{{[-]}} [{{|Version|}}%s{{[-]}}]", paths.GetTemplatesVersion()))
-	logger.Display(ctx, fmt.Sprintf("{{|ApplicationName|}}Docker Compose SDK{{[-]}} [{{|Version|}}%s{{[-]}}]", version.GetComposeSdkVersion()))
+	logger.Display(ctx, update.GetAppVersionDisplay())
+	logger.Display(ctx, update.GetTmplVersionDisplay())
+	logger.Display(ctx, update.GetComposeSdkVersionDisplay())
 	return nil
 }
 
