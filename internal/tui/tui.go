@@ -1095,7 +1095,7 @@ func editLockBusyMsg(info sessionlocks.SessionInfo, attempted string) string {
 // TriggerComposeUpdate returns a tea.Cmd that starts all enabled apps via docker compose update.
 func TriggerComposeUpdate() tea.Cmd {
 	return func() tea.Msg {
-		if !sessionlocks.Sessions.AcquireEditLock(currentClientIP, "Start All Applications", "menu", currentTransport) {
+		if !sessionlocks.Sessions.AcquireEditLock(currentClientIP, "Start All Applications", "menu:compose-start", currentTransport) {
 			return ShowMessageDialogMsg{Title: "Resource Busy", Message: editLockBusyMsg(sessionlocks.Sessions.ReadEditInfo(), ""), Type: MessageError}
 		}
 		task := func(ctx context.Context, w io.Writer) error {
@@ -1118,7 +1118,7 @@ func TriggerComposeUpdate() tea.Cmd {
 // TriggerComposeStop returns a tea.Cmd that prompts Stop/Down/Cancel then runs the chosen compose op.
 func TriggerComposeStop() tea.Cmd {
 	return func() tea.Msg {
-		if !sessionlocks.Sessions.AcquireEditLock(currentClientIP, "Stop All Applications", "menu", currentTransport) {
+		if !sessionlocks.Sessions.AcquireEditLock(currentClientIP, "Stop All Applications", "menu:compose-stop", currentTransport) {
 			return ShowMessageDialogMsg{Title: "Resource Busy", Message: editLockBusyMsg(sessionlocks.Sessions.ReadEditInfo(), ""), Type: MessageError}
 		}
 		question := "Would you like to {{|Highlight|}}Stop{{[-]}} all containers, or bring all containers {{|Highlight|}}Down{{[-]}}?\n\n{{|Highlight|}}Stop{{[-]}} will stop them, {{|Highlight|}}Down{{[-]}} will stop and remove them."
@@ -1151,7 +1151,7 @@ func TriggerComposeStop() tea.Cmd {
 // TriggerDockerPrune returns a tea.Cmd that runs docker system prune.
 func TriggerDockerPrune() tea.Cmd {
 	return func() tea.Msg {
-		if !sessionlocks.Sessions.AcquireEditLock(currentClientIP, "Prune Docker System", "menu", currentTransport) {
+		if !sessionlocks.Sessions.AcquireEditLock(currentClientIP, "Prune Docker System", "menu:docker-prune", currentTransport) {
 			return ShowMessageDialogMsg{Title: "Resource Busy", Message: editLockBusyMsg(sessionlocks.Sessions.ReadEditInfo(), ""), Type: MessageError}
 		}
 		task := func(ctx context.Context, w io.Writer) error {

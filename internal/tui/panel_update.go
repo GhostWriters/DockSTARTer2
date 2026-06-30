@@ -14,6 +14,7 @@ import (
 	"DockSTARTer2/internal/commands"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/tui/components/sinput"
 	"DockSTARTer2/internal/tui/components/streamvp"
 	"DockSTARTer2/internal/version"
@@ -155,6 +156,21 @@ func (m *PanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 		if err != nil {
 			logger.Error(context.Background(), "%s", err.Error())
 			return func() tea.Msg { return consoleDoneMsg{} }
+		}
+
+		// Pre-check the edit lock for any session-locked command so the panel
+		// shows a clear error immediately, instead of a line that can get
+		// buried under unrelated background output once execution is blocked.
+		for _, g := range groups {
+			if def, ok := commands.Registry[g.Command]; ok && def.SessionLocked {
+				if sessionlocks.Sessions.IsEditLocked() {
+					info := sessionlocks.Sessions.ReadEditInfo()
+					closing := fmt.Sprintf("Cannot run '{{|UserCommand|}}%s{{[-]}}' while the configuration is being edited.", cmdStr)
+					logger.Error(context.Background(), sessionlocks.EditLockLines(info, closing))
+					return func() tea.Msg { return consoleDoneMsg{} }
+				}
+				break
+			}
 		}
 
 		configChanged := commands.GroupsNeedConfigReload(groups)
