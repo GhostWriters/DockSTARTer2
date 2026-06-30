@@ -40,7 +40,8 @@ type ProgramBoxModel struct {
 	subtitle string
 	command  string // Command being executed (displayed above output)
 	sv           streamvp.Model
-	spinnerFrame int // title-bar spinner frame (advanced by pbSpinnerTickMsg)
+	spinnerFrame int       // title-bar spinner frame (advanced by global tick)
+	lastSpinner  time.Time // when the title-bar spinner was last advanced
 	done         bool
 	err          error
 	width        int
@@ -238,8 +239,6 @@ func (m *ProgramBoxModel) Init() tea.Cmd {
 		m.sv.CommandRunning = true
 		lockID := fmt.Sprintf("programbox-%p", m)
 		return tea.Batch(
-			m.spinnerTickCmd(),
-			m.sv.SpinnerTickCmd(),
 			func() tea.Msg { return ConsoleLockMsg{ID: lockID, Locked: true} },
 			func() tea.Msg {
 				reader, writer := io.Pipe()
@@ -279,22 +278,6 @@ func (m *ProgramBoxModel) Init() tea.Cmd {
 }
 
 func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Inline spinner tick via streamvp.
-	if tick, ok := msg.(streamvp.SpinnerTickMsg); ok {
-		if !m.done && m.sv.HandleSpinnerTick(tick) {
-			return m, m.sv.SpinnerTickCmd()
-		}
-		return m, nil
-	}
-
-	// Title-bar spinner tick.
-	if tick, ok := msg.(pbSpinnerTickMsg); ok && tick.id == m.id {
-		if !m.done {
-			m.spinnerFrame++
-			return m, m.spinnerTickCmd()
-		}
-		return m, nil
-	}
 
 	if m.HandleWidgetClearPress(msg) {
 		return m, nil
@@ -467,18 +450,24 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m *ProgramBoxModel) spinnerTickCmd() tea.Cmd {
-	if !console.SpinnerEnabled {
-		return nil
+// AdvanceSpinners advances the title-bar spinner and the inline streamvp spinner
+// if their interval has elapsed. Returns true if anything changed (caller should
+// trigger a re-render). Called by the global tick in AppModel.Update.
+func (m *ProgramBoxModel) AdvanceSpinners(now time.Time) bool {
+	if m.done || !console.SpinnerEnabled {
+		return false
 	}
+	changed := false
 	fps := time.Duration(console.SpinnerSpeed) * time.Millisecond
-	if fps <= 0 {
-		fps = 100 * time.Millisecond
+	if fps > 0 && now.Sub(m.lastSpinner) >= fps {
+		m.lastSpinner = now
+		m.spinnerFrame++
+		changed = true
 	}
-	id := m.id
-	return tea.Tick(fps, func(time.Time) tea.Msg {
-		return pbSpinnerTickMsg{id: id}
-	})
+	if m.sv.AdvanceSpinner(now) {
+		changed = true
+	}
+	return changed
 }
 
 // currentSpinnerIndicators returns the left and right spinner frame characters for the title bar,

@@ -97,22 +97,29 @@ type TabbedVarsEditorModel struct {
 	// Spinner while env data is loading from disk
 	loading      bool
 	spinnerFrame int
+	lastSpinner  time.Time
 
 	btnSpinner tui.ButtonSpinner
 }
 
-// editorSpinnerTickMsg advances the title spinner while loading.
-type editorSpinnerTickMsg struct{}
-
-func (m *TabbedVarsEditorModel) spinnerTickCmd() tea.Cmd {
-	if !console.SpinnerEnabled {
-		return nil
+// AdvanceSpinners advances the loading title spinner if its interval has elapsed.
+// Returns true if the frame changed. Called by the global tick via globalTickMsg.
+func (m *TabbedVarsEditorModel) AdvanceSpinners(now time.Time) bool {
+	if !m.loading || !console.SpinnerEnabled {
+		return false
 	}
 	fps := time.Duration(console.SpinnerSpeed) * time.Millisecond
-	if fps <= 0 {
-		fps = 100 * time.Millisecond
+	if fps <= 0 || now.Sub(m.lastSpinner) < fps {
+		return false
 	}
-	return tea.Tick(fps, func(time.Time) tea.Msg { return editorSpinnerTickMsg{} })
+	m.lastSpinner = now
+	ctx := tui.GetActiveContext()
+	frames := console.SpinnerFramesTitleUnicode
+	if !ctx.LineCharacters {
+		frames = console.SpinnerFramesTitleASCII
+	}
+	m.spinnerFrame = (m.spinnerFrame + 1) % len(frames)
+	return true
 }
 
 func (m *TabbedVarsEditorModel) currentSpinnerIndicators() (left, right string) {
@@ -203,7 +210,7 @@ func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec
 
 func (m *TabbedVarsEditorModel) Init() tea.Cmd {
 	m.loading = true
-	return tea.Batch(m.loadEnv, m.spinnerTickCmd())
+	return m.loadEnv
 }
 
 // EscapeAction implements tui.EscapeActioner: prompts for unsaved changes if needed.

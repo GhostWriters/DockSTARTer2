@@ -4,8 +4,6 @@ import (
 	"strings"
 	"time"
 
-	"DockSTARTer2/internal/console"
-
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -36,20 +34,6 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// new screen). ClearProcessingState() is called when the screen is popped
 		// back from the stack, or explicitly by the action if it doesn't navigate.
 		return m, deferred.action
-	}
-
-	if tick, ok := msg.(menuSpinnerTickMsg); ok && tick.id == m.instanceID {
-		if m.loadingText != "" || m.processingItemIdx >= 0 || m.processingBtnID != "" {
-			ctx := GetActiveContext()
-			frames := console.SpinnerFramesTitleUnicode
-			if !ctx.LineCharacters {
-				frames = console.SpinnerFramesTitleASCII
-			}
-			m.spinnerFrame = (m.spinnerFrame + 1) % len(frames)
-			m.InvalidateCache()
-			return m, m.spinnerTickCmd()
-		}
-		return m, nil
 	}
 
 	// Block all user input while an action is in flight (spinner visible).
@@ -482,7 +466,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					action := btn.Action
 					m.processingBtnID = btn.ZoneID
 					m.InvalidateCache()
-					return m, tea.Batch(m.spinnerTickCmd(), m.deferAction(func() tea.Msg { return action() }))
+					return m, m.deferAction(func() tea.Msg { return action() })
 				}
 			}
 			for i, btn := range m.buttons {
@@ -602,7 +586,7 @@ func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 				m.processingBtnID = btn.ZoneID
 				m.InvalidateCache()
 				action := btn.Action
-				return m, tea.Batch(m.spinnerTickCmd(), m.deferAction(func() tea.Msg { return action() }))
+				return m, m.deferAction(func() tea.Msg { return action() })
 			}
 		}
 		// Button has no action (inert) — also check if it's the first button (Select-role)
@@ -618,7 +602,7 @@ func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 						m.processingBtnID = m.buttons[0].ZoneID
 					}
 					m.InvalidateCache()
-					return m, tea.Batch(m.spinnerTickCmd(), m.deferAction(item.Action))
+					return m, m.deferAction(item.Action)
 				}
 			}
 			if m.enterAction != nil {
@@ -626,7 +610,7 @@ func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 					m.processingBtnID = m.buttons[0].ZoneID
 				}
 				m.InvalidateCache()
-				return m, tea.Batch(m.spinnerTickCmd(), m.deferAction(m.enterAction))
+				return m, m.deferAction(m.enterAction)
 			}
 		}
 		return m, nil
@@ -649,7 +633,7 @@ func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 				m.processingItemIdx = m.cursor
 				m.processingBtnID = "btn-select"
 				m.InvalidateCache()
-				return m, tea.Batch(m.spinnerTickCmd(), m.deferAction(item.Action))
+				return m, m.deferAction(item.Action)
 			}
 		}
 
@@ -657,7 +641,7 @@ func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 		if m.enterAction != nil {
 			m.processingBtnID = "btn-select"
 			m.InvalidateCache()
-			return m, tea.Batch(m.spinnerTickCmd(), m.deferAction(m.enterAction))
+			return m, m.deferAction(m.enterAction)
 		}
 
 	}

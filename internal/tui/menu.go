@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"sync/atomic"
+	"time"
 
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
@@ -202,6 +203,7 @@ type MenuModel struct {
 	// loadingText, when non-empty, replaces the list area with a centered spinner + message.
 	loadingText  string
 	spinnerFrame int
+	lastSpinner  time.Time
 
 	// processingItemIdx is the index of the menu item currently being activated (-1 = none).
 	// processingBtnID is the ZoneID of the button currently being activated ("" = none).

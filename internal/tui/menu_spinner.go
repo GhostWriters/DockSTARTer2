@@ -8,9 +8,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-// menuSpinnerTickMsg advances the loading spinner by one frame.
-type menuSpinnerTickMsg struct{ id string }
-
 // ClearProcessingState resets any in-flight spinner indicators.
 // Called when the menu is restored as the active screen after navigation.
 func (m *MenuModel) ClearProcessingState() {
@@ -39,7 +36,7 @@ func mapBtnZoneID(zoneID string) string {
 func (m *MenuModel) SetProcessingBtn(zoneID string) tea.Cmd {
 	m.processingBtnID = mapBtnZoneID(zoneID)
 	m.InvalidateCache()
-	return m.spinnerTickCmd()
+	return nil
 }
 
 // SetProcessingBtnDeferred marks the given button as spinning and defers the action
@@ -49,31 +46,38 @@ func (m *MenuModel) SetProcessingBtn(zoneID string) tea.Cmd {
 func (m *MenuModel) SetProcessingBtnDeferred(zoneID string, action tea.Cmd) tea.Cmd {
 	m.processingBtnID = mapBtnZoneID(zoneID)
 	m.InvalidateCache()
-	return tea.Batch(m.spinnerTickCmd(), m.deferAction(action))
+	return m.deferAction(action)
 }
 
 // SetLoadingText sets a centered spinner+message in the list area instead of list items.
-// Returns a tea.Cmd that starts the spinner tick loop. Set to "" to stop.
+// Set to "" to stop.
 func (m *MenuModel) SetLoadingText(text string) tea.Cmd {
 	m.loadingText = text
 	m.spinnerFrame = 0
 	m.InvalidateCache()
-	if text == "" {
-		return nil
-	}
-	return m.spinnerTickCmd()
+	return nil
 }
 
-func (m *MenuModel) spinnerTickCmd() tea.Cmd {
+// AdvanceSpinners advances the menu spinner by one frame if its interval has
+// elapsed. Returns true if anything changed. Called by the global tick.
+func (m *MenuModel) AdvanceSpinners(now time.Time) bool {
 	if !console.SpinnerEnabled {
-		return nil
+		return false
+	}
+	if m.loadingText == "" && m.processingItemIdx < 0 && m.processingBtnID == "" {
+		return false
 	}
 	fps := time.Duration(console.SpinnerSpeed) * time.Millisecond
-	if fps <= 0 {
-		fps = 100 * time.Millisecond
+	if fps <= 0 || now.Sub(m.lastSpinner) < fps {
+		return false
 	}
-	iid := m.instanceID
-	return tea.Tick(fps, func(time.Time) tea.Msg {
-		return menuSpinnerTickMsg{id: iid}
-	})
+	m.lastSpinner = now
+	ctx := GetActiveContext()
+	frames := console.SpinnerFramesTitleUnicode
+	if !ctx.LineCharacters {
+		frames = console.SpinnerFramesTitleASCII
+	}
+	m.spinnerFrame = (m.spinnerFrame + 1) % len(frames)
+	m.InvalidateCache()
+	return true
 }

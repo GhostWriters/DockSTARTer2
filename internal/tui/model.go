@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"image/color"
+	"time"
 
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/config"
@@ -34,6 +35,12 @@ type ScreenModel interface {
 	HasDialog() bool
 	MenuName() string    // Returns the name used for --menu or -M to return to this screen
 	IsDestructive() bool // Returns true if this screen modifies data and needs an edit lock
+}
+
+// SpinnerAdvancer is implemented by any screen or dialog that drives spinners
+// via the global tick rather than independent tea.Tick commands.
+type SpinnerAdvancer interface {
+	AdvanceSpinners(now time.Time) bool
 }
 
 // LayeredView is an interface for models that provide multiple visual layers
@@ -194,6 +201,10 @@ type (
 	SubDialogResultMsg struct {
 		Result any
 	}
+
+	// globalTickMsg is the single shared ticker that drives all spinner advances
+	// and triggers the periodic screen repaint. Fired at RefreshRate ms.
+	globalTickMsg struct{ time time.Time }
 
 	// outputLinesMsg carries one or more lines of output
 	outputLinesMsg struct {
@@ -361,6 +372,7 @@ func NewAppModelStandalone(ctx context.Context, cfg config.AppConfig, clientIP, 
 // Init implements tea.Model
 func (m *AppModel) Init() tea.Cmd {
 	cmds := []tea.Cmd{
+		globalTickCmd(),
 		m.backdrop.Init(),
 		m.panel.Init(),
 	}

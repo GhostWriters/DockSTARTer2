@@ -2,6 +2,7 @@ package tui
 
 import (
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -219,6 +220,10 @@ func (m *messageDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 
 	regions = append(regions, m.titleBarHitRegions(offsetX, offsetY, contentWidth, ZDialog)...)
 	return regions
+}
+
+func (m *messageDialogModel) AdvanceSpinners(now time.Time) bool {
+	return m.btnSpinner.AdvanceSpinner(now)
 }
 
 // ShowMessageDialog displays a message dialog

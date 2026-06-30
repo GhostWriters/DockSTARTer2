@@ -3,6 +3,7 @@ package tui
 import (
 	semstyle "github.com/GhostWriters/semstyle/lg"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
@@ -220,4 +221,8 @@ func (m *choiceDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 
 	regions = append(regions, m.titleBarHitRegions(offsetX, offsetY, contentWidth, ZDialog)...)
 	return regions
+}
+
+func (m *choiceDialogModel) AdvanceSpinners(now time.Time) bool {
+	return m.btnSpinner.AdvanceSpinner(now)
 }

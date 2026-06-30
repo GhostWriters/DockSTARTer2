@@ -163,6 +163,20 @@ func resolveRefreshRate(connType, webToken string) int {
 	return 100
 }
 
+// globalTickCmd returns a tea.Cmd that fires a globalTickMsg after the
+// configured refresh interval. This single ticker drives all spinner advances
+// and the periodic repaint, ensuring spinners are updated before each frame.
+func globalTickCmd() tea.Cmd {
+	ms := currentConfig.UI.RefreshRate
+	if ms <= 0 {
+		ms = 60
+	}
+	d := time.Duration(ms) * time.Millisecond
+	return tea.Tick(d, func(t time.Time) tea.Msg {
+		return globalTickMsg{time: t}
+	})
+}
+
 // SendWebMsg sends a JSON message to the browser if a web outbound channel is set.
 func SendWebMsg(msg []byte) {
 	if webOutbound != nil {

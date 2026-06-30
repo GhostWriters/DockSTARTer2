@@ -2,7 +2,6 @@ package screens
 
 import (
 	"DockSTARTer2/internal/appenv"
-	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/tui"
 	"context"
 	"strconv"
@@ -17,19 +16,6 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if tickCmd, ok := m.btnSpinner.Update(msg); ok {
 		return m, tickCmd
-	}
-
-	if _, ok := msg.(editorSpinnerTickMsg); ok {
-		if m.loading {
-			ctx := tui.GetActiveContext()
-			frames := console.SpinnerFramesTitleUnicode
-			if !ctx.LineCharacters {
-				frames = console.SpinnerFramesTitleASCII
-			}
-			m.spinnerFrame = (m.spinnerFrame + 1) % len(frames)
-			return m, m.spinnerTickCmd()
-		}
-		return m, nil
 	}
 
 	if m.HandleWidgetClearPress(msg) {
@@ -394,7 +380,6 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(
 			func() tea.Msg { return tui.RefreshAppsListMsg{} },
 			m.loadEnv,
-			m.spinnerTickCmd(),
 		)
 	case envAddVarMsg:
 		if len(m.tabs) > 0 {
