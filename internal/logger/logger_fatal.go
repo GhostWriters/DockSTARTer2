@@ -21,8 +21,13 @@ func getSystemInfo() []string {
 	var info []string
 
 	// App Info
-	info = append(info, fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} [{{|Version|}}%s{{[-]}}]", version.ApplicationName, version.Version))
-	info = append(info, fmt.Sprintf("{{|ApplicationName|}}DockSTARTer-Templates{{[-]}} [{{|Version|}}%s{{[-]}}]", paths.GetTemplatesVersion()))
+	info = append(info, fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} [{{|Version::::https://github.com/GhostWriters/DockSTARTer2/releases/tag/%s|}}%s{{[-]}}]", version.ApplicationName, version.Version, version.Version))
+	tmplVer := paths.GetTemplatesVersion()
+	tmplURL := "https://github.com/GhostWriters/DockSTARTer-Templates/releases/tag/" + tmplVer
+	if _, hash, ok := strings.Cut(tmplVer, " commit "); ok {
+		tmplURL = "https://github.com/GhostWriters/DockSTARTer-Templates/commit/" + hash
+	}
+	info = append(info, fmt.Sprintf("{{|ApplicationName|}}DockSTARTer-Templates{{[-]}} [{{|Version::::%s|}}%s{{[-]}}]", tmplURL, tmplVer))
 	info = append(info, "")
 
 	// Process Info

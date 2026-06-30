@@ -73,7 +73,7 @@ func HandleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, res
 		templInfo, err := update.CheckTemplatesUpdate(ctx, state.Force, templBranch)
 		if err == nil && templInfo.HasUpdate && sessionlocks.Sessions.IsEditLocked() {
 			info := sessionlocks.Sessions.ReadEditInfo()
-			closing := fmt.Sprintf("Skipping template update from '{{|Version|}}%s{{[-]}}' to '{{|Version|}}%s{{[-]}}' while configuration is being edited.", templInfo.CurrentDisplay, templInfo.RemoteDisplay)
+			closing := fmt.Sprintf("Skipping template update from '%s' to '%s' while configuration is being edited.", update.TmplVersionLink(templInfo.CurrentDisplay), update.TmplVersionLink(templInfo.RemoteDisplay))
 			logger.Warn(ctx, sessionlocks.EditLockLines(info, closing))
 		} else if err == nil {
 			_ = update.ApplyTemplatesUpdate(ctx, templInfo, state.Yes)

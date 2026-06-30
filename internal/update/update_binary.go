@@ -67,7 +67,7 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 			// No tags at all for this channel — it's genuinely gone.
 			logger.Warn(ctx, []string{
 				fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} channel '{{|Branch|}}%s{{[-]}}' appears to no longer exist.", version.ApplicationName, requestedVersion),
-				fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} is currently on version '%s'.", version.ApplicationName, appVersionLink(version.Version)),
+				fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} is currently on version '%s'.", version.ApplicationName, AppVersionLink(version.Version)),
 				fmt.Sprintf("Run '{{|UserCommand|}}%s -u main{{[-]}}' to update to the latest stable release.", version.CommandName),
 			})
 			return nil
@@ -112,7 +112,7 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 		}
 		// Tag exists but release asset not yet published — mid-publish. Treat as up to date.
 		logger.Notice(ctx, "{{|ApplicationName|}}%s{{[-]}} is already up to date on channel '{{|Branch|}}%s{{[-]}}'.", version.ApplicationName, requestedVersion)
-		logger.Notice(ctx, "Current version is '%s'.", appVersionLink(version.Version))
+		logger.Notice(ctx, "Current version is '%s'.", AppVersionLink(version.Version))
 		return nil
 	}
 
@@ -138,17 +138,17 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 
 	if compareVersions(currentVersion, remoteVersion) == 0 {
 		logger.Notice(ctx, "{{|ApplicationName|}}%s{{[-]}} is already up to date on channel '{{|Branch|}}%s{{[-]}}'.", version.ApplicationName, requestedVersion)
-		logger.Notice(ctx, "Current version is '%s'.", appVersionLink(currentVersion))
+		logger.Notice(ctx, "Current version is '%s'.", AppVersionLink(currentVersion))
 
 		if force {
-			question = fmt.Sprintf("Would you like to forcefully re-apply {{|ApplicationName|}}%s{{[-]}} update '%s'?", version.ApplicationName, appVersionLink(currentVersion))
-			initiationNotice = fmt.Sprintf("Forcefully re-applying {{|ApplicationName|}}%s{{[-]}} update '%s'", version.ApplicationName, appVersionLink(remoteVersion))
+			question = fmt.Sprintf("Would you like to forcefully re-apply {{|ApplicationName|}}%s{{[-]}} update '%s'?", version.ApplicationName, AppVersionLink(currentVersion))
+			initiationNotice = fmt.Sprintf("Forcefully re-applying {{|ApplicationName|}}%s{{[-]}} update '%s'", version.ApplicationName, AppVersionLink(remoteVersion))
 		} else {
 			return nil
 		}
 	} else {
-		question = fmt.Sprintf("Would you like to update {{|ApplicationName|}}%s{{[-]}} from '%s' to '%s' now?", version.ApplicationName, appVersionLink(currentVersion), appVersionLink(remoteVersion))
-		initiationNotice = fmt.Sprintf("Updating {{|ApplicationName|}}%s{{[-]}} from '%s' to '%s'", version.ApplicationName, appVersionLink(currentVersion), appVersionLink(remoteVersion))
+		question = fmt.Sprintf("Would you like to update {{|ApplicationName|}}%s{{[-]}} from '%s' to '%s' now?", version.ApplicationName, AppVersionLink(currentVersion), AppVersionLink(remoteVersion))
+		initiationNotice = fmt.Sprintf("Updating {{|ApplicationName|}}%s{{[-]}} from '%s' to '%s'", version.ApplicationName, AppVersionLink(currentVersion), AppVersionLink(remoteVersion))
 	}
 
 	// Prompt user
@@ -169,7 +169,7 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 		return fmt.Errorf("failed to install update: %w", err)
 	}
 
-	logger.Notice(ctx, "Updated {{|ApplicationName|}}%s{{[-]}} to '%s'", version.ApplicationName, appVersionLink(remoteVersion))
+	logger.Notice(ctx, "Updated {{|ApplicationName|}}%s{{[-]}} to '%s'", version.ApplicationName, AppVersionLink(remoteVersion))
 
 	if exePath != "unknown" {
 		logger.Info(ctx, "Application location is '{{|File|}}%s{{[-]}}'.", exePath)
