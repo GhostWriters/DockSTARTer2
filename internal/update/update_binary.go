@@ -61,12 +61,12 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 		}
 		if err == nil && tag == "" {
 			if switchingChannels {
-				logger.Error(ctx, "{{|ApplicationName|}}%s{{[-]}} channel '{{|Branch|}}%s{{[-]}}' does not exist on origin.", version.ApplicationName, requestedVersion)
+				logger.Error(ctx, "{{|ApplicationName|}}%s{{[-]}} channel '%s' does not exist on origin.", version.ApplicationName, AppBranchLink(requestedVersion))
 				return fmt.Errorf("channel '%s' does not exist", requestedVersion)
 			}
 			// No tags at all for this channel — it's genuinely gone.
 			logger.Warn(ctx, []string{
-				fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} channel '{{|Branch|}}%s{{[-]}}' appears to no longer exist.", version.ApplicationName, requestedVersion),
+				fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} channel '%s' appears to no longer exist.", version.ApplicationName, AppBranchLink(requestedVersion)),
 				fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} is currently on version '%s'.", version.ApplicationName, AppVersionLink(version.Version)),
 				fmt.Sprintf("Run '{{|UserCommand|}}%s -u main{{[-]}}' to update to the latest stable release.", version.CommandName),
 			})
@@ -107,11 +107,11 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 	}
 	if !found {
 		if switchingChannels {
-			logger.Error(ctx, "{{|ApplicationName|}}%s{{[-]}} channel '{{|Branch|}}%s{{[-]}}' does not exist on origin.", version.ApplicationName, requestedVersion)
+			logger.Error(ctx, "{{|ApplicationName|}}%s{{[-]}} channel '%s' does not exist on origin.", version.ApplicationName, AppBranchLink(requestedVersion))
 			return fmt.Errorf("channel '%s' does not exist", requestedVersion)
 		}
 		// Tag exists but release asset not yet published — mid-publish. Treat as up to date.
-		logger.Notice(ctx, "{{|ApplicationName|}}%s{{[-]}} is already up to date on channel '{{|Branch|}}%s{{[-]}}'.", version.ApplicationName, requestedVersion)
+		logger.Notice(ctx, "{{|ApplicationName|}}%s{{[-]}} is already up to date on channel '%s'.", version.ApplicationName, AppBranchLink(requestedVersion))
 		logger.Notice(ctx, "Current version is '%s'.", AppVersionLink(version.Version))
 		return nil
 	}
@@ -137,7 +137,7 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 	}
 
 	if compareVersions(currentVersion, remoteVersion) == 0 {
-		logger.Notice(ctx, "{{|ApplicationName|}}%s{{[-]}} is already up to date on channel '{{|Branch|}}%s{{[-]}}'.", version.ApplicationName, requestedVersion)
+		logger.Notice(ctx, "{{|ApplicationName|}}%s{{[-]}} is already up to date on channel '%s'.", version.ApplicationName, AppBranchLink(requestedVersion))
 		logger.Notice(ctx, "Current version is '%s'.", AppVersionLink(currentVersion))
 
 		if force {
