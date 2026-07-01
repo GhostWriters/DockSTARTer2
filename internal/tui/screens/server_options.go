@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
@@ -624,4 +625,11 @@ func (s *ServerOptionsScreen) HelpContext(maxWidth int) tui.HelpContext {
 	inner.PageTitle = "Description"
 	inner.PageText = pageText
 	return inner
+}
+
+func (s *ServerOptionsScreen) AdvanceSpinners(now time.Time) bool {
+	a := s.settingsMenu != nil && s.settingsMenu.AdvanceSpinners(now)
+	b := s.statusMenu != nil && s.statusMenu.AdvanceSpinners(now)
+	c := s.outerMenu != nil && s.outerMenu.AdvanceSpinners(now)
+	return a || b || c
 }

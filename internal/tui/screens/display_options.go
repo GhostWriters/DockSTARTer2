@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -1016,4 +1017,11 @@ func (s *DisplayOptionsScreen) TitleBarFocused() bool {
 
 func (s *DisplayOptionsScreen) Init() tea.Cmd {
 	return tea.Batch(s.themeMenu.Init(), s.optionsMenu.Init())
+}
+
+func (s *DisplayOptionsScreen) AdvanceSpinners(now time.Time) bool {
+	a := s.themeMenu.AdvanceSpinners(now)
+	b := s.optionsMenu.AdvanceSpinners(now)
+	c := s.outerMenu != nil && s.outerMenu.AdvanceSpinners(now)
+	return a || b || c
 }
