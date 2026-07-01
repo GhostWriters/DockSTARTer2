@@ -489,13 +489,18 @@ func (d *WebDisplayDialog) SetSize(width, height int) {
 		width = 60
 	}
 	layout := GetLayout()
-	defaultH := layout.BorderHeight() + len(d.defaultSection.GetItems())
 	contentW := width - layout.BorderWidth() - layout.ContentMarginWidth()
 	if contentW < 1 {
 		contentW = 1
 	}
-	sizeH := 1 + layout.BorderHeight()
-	btnH := DialogButtonHeight
+
+	// Fixed budget for every section OTHER than the font-family flow-grid,
+	// via the same per-section formula calculateSectionLayout uses
+	// internally (SectionHeight) -- no re-derivation here.
+	defaultH := d.defaultSection.SectionHeight(contentW)
+	sizeH := d.sizeSection.SectionHeight(contentW)
+	refreshH := d.refreshSection.SectionHeight(contentW)
+	btnH := ButtonRowHeight(contentW, 0, d.outer.getButtonSpecs()...)
 	largeTitleOverhead := 0
 	if currentConfig.UI.LargeTitleBars {
 		largeTitleOverhead = LargeTitleBarOverhead
@@ -505,10 +510,16 @@ func (d *WebDisplayDialog) SetSize(width, height int) {
 	d.familyMenu.SetMaxFlowRows(0)
 	totalFamilyRows := d.familyMenu.GetFlowHeight(contentW - layout.BorderWidth())
 
-	// Space available for the family section after all fixed elements.
 	const minFamilyRows = 3
-	fixedH := layout.BorderHeight() + largeTitleOverhead + defaultH + sizeH + btnH
-	availableForFamily := height - fixedH - layout.BorderHeight() // border around family box
+
+	// Space available for the family section after all other fixed sections,
+	// buttons, the large-title-bar overhead, and both outer/family borders.
+	// This dialog has no expandable content sections, so
+	// calculateSectionLayout's DecideLargeTitleBar check only needs
+	// largeTitleOverhead of slack (not the extra minRemaining it reserves for
+	// dialogs with an expandable section to protect) -- see LargeTitleBarBudget.
+	otherFixed := defaultH + sizeH + refreshH + btnH
+	availableForFamily := height - layout.BorderHeight() - largeTitleOverhead - otherFixed - layout.BorderHeight()
 	if availableForFamily < minFamilyRows {
 		availableForFamily = minFamilyRows
 	}
@@ -518,10 +529,13 @@ func (d *WebDisplayDialog) SetSize(width, height int) {
 	if availableForFamily < totalFamilyRows {
 		maxRows = availableForFamily
 	}
+	if maxRows < minFamilyRows {
+		maxRows = minFamilyRows
+	}
 	d.familyMenu.SetMaxFlowRows(maxRows)
 
 	familyH := maxRows + layout.BorderHeight()
-	natural := fixedH + familyH
+	natural := layout.BorderHeight() + largeTitleOverhead + otherFixed + familyH
 	if natural < height {
 		height = natural
 	}
