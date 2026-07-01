@@ -18,7 +18,7 @@ type confirmDialogModel struct {
 	result     bool
 	confirmed  bool
 	onResult   func(bool) tea.Msg
-	btnSpinner ButtonSpinner
+	buttons    *ButtonRow
 }
 
 // newConfirmDialog creates a new confirmation dialog
@@ -33,7 +33,7 @@ func newConfirmDialog(title, question string, defaultYes bool) *confirmDialogMod
 			return CloseDialogMsg{Result: r}
 		},
 	}
-	m.btnSpinner.Init()
+	m.buttons = NewButtonRow([]ButtonDef{{Label: "Yes", ZoneID: "Yes"}, {Label: "No", ZoneID: "No"}})
 	return m
 }
 
@@ -55,12 +55,12 @@ func NewConfirmModel(title, question string, defaultYes bool, onConfirm, onCance
 			return CloseDialogMsg{Result: r}
 		},
 	}
-	m.btnSpinner.Init()
+	m.buttons = NewButtonRow([]ButtonDef{{Label: "Yes", ZoneID: "Yes"}, {Label: "No", ZoneID: "No"}})
 	return m
 }
 
 func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if tickCmd, ok := m.btnSpinner.Update(msg); ok {
+	if tickCmd, ok := m.buttons.Update(msg); ok {
 		return m, tickCmd
 	}
 
@@ -84,13 +84,13 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if handled, cmd := m.handleTitleBarKey(msg, nil); handled {
 			m.result = false
 			m.confirmed = true
-			return m, tea.Batch(cmd, m.btnSpinner.SetProcessingDeferred("No", closeWithResult(false)))
+			return m, tea.Batch(cmd, m.buttons.SetProcessing("No", closeWithResult(false)))
 		}
 		switch {
 		case key.Matches(msg, Keys.Esc):
 			m.result = false
 			m.confirmed = true
-			return m, m.btnSpinner.SetProcessingDeferred("No", closeWithResult(false))
+			return m, m.buttons.SetProcessing("No", closeWithResult(false))
 
 		case key.Matches(msg, Keys.Enter):
 			m.confirmed = true
@@ -98,7 +98,7 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.result {
 				zoneID = "Yes"
 			}
-			return m, m.btnSpinner.SetProcessingDeferred(zoneID, closeWithResult(m.result))
+			return m, m.buttons.SetProcessing(zoneID, closeWithResult(m.result))
 
 		case key.Matches(msg, Keys.ForceQuit):
 			m.result = false
@@ -129,7 +129,7 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.result {
 					zoneID = "Yes"
 				}
-				return m, m.btnSpinner.SetProcessingDeferred(zoneID, closeWithResult(m.result))
+				return m, m.buttons.SetProcessing(zoneID, closeWithResult(m.result))
 			}
 		}
 
@@ -141,7 +141,7 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if handled, cmd := m.handleTitleBarHit(msg, nil); handled {
 			m.result = false
 			m.confirmed = true
-			return m, tea.Batch(cmd, m.btnSpinner.SetProcessingDeferred("No", closeWithResult(false)))
+			return m, tea.Batch(cmd, m.buttons.SetProcessing("No", closeWithResult(false)))
 		}
 
 		// Left click on buttons triggers action via onResult so sub-dialog channels work correctly
@@ -149,12 +149,12 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if ButtonIDMatches(msg.ID, "Yes") {
 				m.result = true
 				m.confirmed = true
-				return m, m.btnSpinner.SetProcessingDeferred("Yes", closeWithResult(true))
+				return m, m.buttons.SetProcessing("Yes", closeWithResult(true))
 			}
 			if ButtonIDMatches(msg.ID, "No") {
 				m.result = false
 				m.confirmed = true
-				return m, m.btnSpinner.SetProcessingDeferred("No", closeWithResult(false))
+				return m, m.buttons.SetProcessing("No", closeWithResult(false))
 			}
 		}
 	}
@@ -166,7 +166,7 @@ func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.result {
 			zoneID = "Yes"
 		}
-		return m, m.btnSpinner.SetProcessingDeferred(zoneID, closeWithResult(m.result))
+		return m, m.buttons.SetProcessing(zoneID, closeWithResult(m.result))
 	}
 
 	// Scroll wheel selects between Yes (up) and No (down) with clamping — no wrap.
@@ -221,9 +221,9 @@ func (m *confirmDialogModel) ViewString() string {
 	questionText := questionStyle.Render(RenderThemeText(m.question, ctx.Dialog))
 
 	// Render buttons using the standard button helper
-	btnSpecs := m.btnSpinner.ApplyToSpecs([]ButtonSpec{
-		{Text: "Yes", Active: m.result, ZoneID: "Yes"},
-		{Text: "No", Active: !m.result, ZoneID: "No"},
+	btnSpecs := m.buttons.ApplySpinner([]ButtonSpec{
+		{Text: "Yes", Active: m.result || m.buttons.IsProcessingID("Yes"), ZoneID: "Yes"},
+		{Text: "No", Active: !m.result || m.buttons.IsProcessingID("No"), ZoneID: "No"},
 	})
 	buttonRow := RenderCenteredButtonsCtx(contentWidth, ctx, btnSpecs...)
 
@@ -315,5 +315,5 @@ func ShowConfirmDialog(title, question string, defaultYes bool) bool {
 }
 
 func (m *confirmDialogModel) AdvanceSpinners(now time.Time) bool {
-	return m.btnSpinner.AdvanceSpinner(now)
+	return m.buttons.AdvanceSpinner(now)
 }

@@ -24,7 +24,7 @@ type messageDialogModel struct {
 	title       string
 	message     string
 	messageType MessageType
-	btnSpinner  ButtonSpinner
+	buttons     *ButtonRow
 }
 
 // newMessageDialog creates a new message dialog
@@ -34,19 +34,19 @@ func newMessageDialog(title, message string, msgType MessageType) *messageDialog
 		title:           title,
 		message:         message,
 		messageType:     msgType,
+		buttons:         NewButtonRow([]ButtonDef{{Label: " OK ", ZoneID: "OK"}}),
 	}
-	m.btnSpinner.Init()
 	return m
 }
 
 func (m *messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if tickCmd, ok := m.btnSpinner.Update(msg); ok {
+	if tickCmd, ok := m.buttons.Update(msg); ok {
 		return m, tickCmd
 	}
 
 	plainClose := func() tea.Msg { return CloseDialogMsg{Result: true} }
 	closeWithSpinner := func() tea.Cmd {
-		return m.btnSpinner.SetProcessingDeferred("OK", plainClose)
+		return m.buttons.SetProcessing("OK", plainClose)
 	}
 
 	if m.HandleWidgetClearPress(msg) {
@@ -87,7 +87,7 @@ func (m *messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Middle-click dismisses the dialog
 	if _, ok := msg.(ToggleFocusedMsg); ok {
-		return m, m.btnSpinner.SetProcessingDeferred("OK", func() tea.Msg { return CloseDialogMsg{Result: true} })
+		return m, m.buttons.SetProcessing("OK", func() tea.Msg { return CloseDialogMsg{Result: true} })
 	}
 
 	return m, nil
@@ -150,9 +150,7 @@ func (m *messageDialogModel) ViewString() string {
 	content := messageStyle.Render(m.message)
 
 	// Render OK button with automatic zone marking
-	btnSpecs := m.btnSpinner.ApplyToSpecs([]ButtonSpec{
-		{Text: " OK ", Active: true, ZoneID: "OK"},
-	})
+	btnSpecs := m.buttons.Specs(true)
 	buttonRow := RenderCenteredButtons(contentWidth, btnSpecs...)
 
 	// Combine message and button
@@ -223,7 +221,7 @@ func (m *messageDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 }
 
 func (m *messageDialogModel) AdvanceSpinners(now time.Time) bool {
-	return m.btnSpinner.AdvanceSpinner(now)
+	return m.buttons.AdvanceSpinner(now)
 }
 
 // ShowMessageDialog displays a message dialog

@@ -137,10 +137,11 @@ func (m *TabbedVarsEditorModel) getButtonSpecs() []tui.ButtonSpec {
 	}
 	var specs []tui.ButtonSpec
 	for i, btn := range m.buttons {
+		zoneID := zoneByName[btn]
 		specs = append(specs, tui.ButtonSpec{
 			Text:   btn,
-			Active: m.focus == envFocusButtons && m.btnIdx == i,
-			ZoneID: zoneByName[btn],
+			Active: (m.focus == envFocusButtons && m.btnIdx == i) || m.btnRow.IsProcessingID(zoneID),
+			ZoneID: zoneID,
 			Help:   helpByName[btn],
 		})
 	}
@@ -148,7 +149,7 @@ func (m *TabbedVarsEditorModel) getButtonSpecs() []tui.ButtonSpec {
 }
 
 func (m *TabbedVarsEditorModel) renderButtons(width int) string {
-	specs := m.btnSpinner.ApplyToSpecs(m.getButtonSpecs())
+	specs := m.btnRow.ApplySpinner(m.getButtonSpecs())
 	return tui.RenderCenteredButtonsExplicit(width, m.buttonHeight == tui.DialogButtonHeight, tui.GetActiveContext(), specs...)
 }
 
