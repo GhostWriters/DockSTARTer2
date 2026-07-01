@@ -102,8 +102,9 @@ func (m *TabbedVarsEditorModel) ViewString() string {
 		"Title",
 		ctx,
 		func() tui.TitleBarState {
-			spinL, spinR := m.currentSpinnerIndicators()
-			return tui.TitleBarState{Show: true, Focused: m.TitleBarFocused(), ActiveWidget: m.ActiveWidget(), PressedWidget: m.PressedWidget(), Widgets: m.ActiveWidgets(), SpinnerIndicator: spinL, SpinnerIndicatorRight: spinR}
+			tbs := m.State()
+			tbs.SpinnerIndicator, tbs.SpinnerIndicatorRight = m.currentSpinnerIndicators()
+			return tbs
 		}(),
 	)
 }

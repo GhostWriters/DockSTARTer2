@@ -277,12 +277,12 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 		ctx.BorderFlags = ctx.BorderDisabledFlags
 		ctx.Border2Flags = ctx.Border2DisabledFlags
 	}
-	var spinInd, spinIndR string
+	tbs := m.State()
+	tbs.Show = m.title != "" && !m.subMenuMode
 	if m.loadingText != "" {
-		spinInd, spinIndR = m.titleSpinner.Indicators()
+		tbs.SpinnerIndicator, tbs.SpinnerIndicatorRight = m.titleSpinner.Indicators()
 	}
-	tbs := TitleBarState{Show: m.title != "" && !m.subMenuMode, Focused: m.titleBarFocused, ActiveWidget: m.titleBarWidget, PressedWidget: m.titleBarPressed, SpinnerIndicator: spinInd, SpinnerIndicatorRight: spinIndR}
-	return RenderBorderedBoxCtx(m.title, content, contentWidth, targetHeight, focused || m.titleBarFocused, true, rounded, align, titleTag, ctx, tbs)
+	return RenderBorderedBoxCtx(m.title, content, contentWidth, targetHeight, focused || m.TitleBarFocused(), true, rounded, align, titleTag, ctx, tbs)
 }
 
 func (m *MenuModel) viewSubMenu() string {

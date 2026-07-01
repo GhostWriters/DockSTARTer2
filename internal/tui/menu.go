@@ -195,9 +195,7 @@ type MenuModel struct {
 	itemDocFunc func(item MenuItem) (docMarkdown, docAppName string)
 
 	// Title bar widget focus (keyboard navigation of ? and × widgets)
-	titleBarFocused bool
-	titleBarWidget  string
-	titleBarPressed string
+	TitleBarFocus
 
 	// loadingText, when non-empty, replaces the list area with a centered spinner + message.
 	// titleSpinner drives this list-item/loading spinner only — the button
@@ -234,25 +232,22 @@ type TitleBarFocusable interface {
 	TitleBarFocused() bool
 }
 
+// FocusTitleBar overrides the embedded TitleBarFocus method to also clear
+// button-row focus (so a button doesn't stay visually "active" while the
+// title bar is also focused) and invalidate the render cache — callers may
+// invoke this from outside MenuModel.Update() (e.g. the global Ctrl+T
+// handler), which doesn't go through Update()'s own cache invalidation.
 func (m *MenuModel) FocusTitleBar() {
-	m.titleBarFocused = true
-	m.titleBarWidget = IDTitleWidgetClose
+	m.TitleBarFocus.FocusTitleBar()
+	m.focusedItem = FocusList
 	m.InvalidateCache()
 }
 
+// BlurTitleBar overrides the embedded TitleBarFocus method to also
+// invalidate the render cache for the same reason as FocusTitleBar.
 func (m *MenuModel) BlurTitleBar() {
-	m.titleBarFocused = false
-	m.titleBarWidget = ""
+	m.TitleBarFocus.BlurTitleBar()
 	m.InvalidateCache()
-}
-
-func (m *MenuModel) TitleBarFocused() bool { return m.titleBarFocused }
-
-func (m *MenuModel) FocusedWidgetID() string {
-	if !m.titleBarFocused || m.titleBarWidget == "" {
-		return ""
-	}
-	return m.titleBarWidget
 }
 
 // applyItemLocks sets the Locked flag on all destructive items based on the

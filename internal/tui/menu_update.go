@@ -96,9 +96,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	if cm, ok := msg.(widgetClearPressMsg); ok {
-		_ = cm
-		m.titleBarPressed = ""
+	if m.HandleWidgetClearPress(msg) {
 		m.InvalidateCache()
 		return m, nil
 	}
@@ -110,27 +108,8 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyPressMsg:
 		// Title bar focus: intercept all keys before normal list handling.
-		if m.titleBarFocused {
-			switch {
-			case key.Matches(msg, Keys.Esc):
-				m.BlurTitleBar()
-				return m, nil
-			case key.Matches(msg, Keys.Left):
-				if m.titleBarWidget != IDTitleWidgetHelp {
-					m.titleBarWidget = IDTitleWidgetHelp
-					m.InvalidateCache()
-				}
-				return m, nil
-			case key.Matches(msg, Keys.Right):
-				if m.titleBarWidget != IDTitleWidgetClose {
-					m.titleBarWidget = IDTitleWidgetClose
-					m.InvalidateCache()
-				}
-				return m, nil
-			case key.Matches(msg, Keys.Enter), key.Matches(msg, Keys.Space):
-				return m, m.activateTitleBarWidget()
-			}
-			return m, nil
+		if handled, cmd := m.HandleTitleBarKey(msg, m.menuTitleBarCloseCmd()); handled {
+			return m, cmd
 		}
 		switch {
 		case key.Matches(msg, Keys.Enter), key.Matches(msg, Keys.Space):
@@ -247,41 +226,9 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		switch buttonID {
-		case IDTitleWidgetHelp:
-			if msg.Button == tea.MouseLeft {
-				pressCmd := tea.Tick(widgetPressDuration, func(_ time.Time) tea.Msg {
-					return widgetClearPressMsg{id: msg.ID}
-				})
-				m.titleBarPressed = IDTitleWidgetHelp
-				m.InvalidateCache()
-				return m, tea.Batch(pressCmd, func() tea.Msg { return TriggerHelpMsg{} })
-			}
-		case IDTitleWidgetClose:
-			if msg.Button == tea.MouseLeft {
-				pressCmd := tea.Tick(widgetPressDuration, func(_ time.Time) tea.Msg {
-					return widgetClearPressMsg{id: msg.ID}
-				})
-				m.titleBarPressed = IDTitleWidgetClose
-				m.InvalidateCache()
-				m.BlurTitleBar()
-				for i, btn := range m.buttons {
-					if (btn.ZoneID == "btn-back" || btn.ZoneID == "btn-cancel" || btn.ZoneID == IDBackButton) && btn.Action != nil {
-						m.focusedItem = FocusBtn
-						m.focusedBtnIndex = i
-						action := btn.Action
-						return m, tea.Batch(pressCmd, m.SetProcessingBtnDeferred(btn.ZoneID, func() tea.Msg { return action() }))
-					}
-				}
-				for i, btn := range m.buttons {
-					if (btn.ZoneID == "btn-exit" || btn.ZoneID == IDExitButton) && btn.Action != nil {
-						m.focusedItem = FocusBtn
-						m.focusedBtnIndex = i
-						action := btn.Action
-						return m, tea.Batch(pressCmd, m.SetProcessingBtnDeferred(btn.ZoneID, func() tea.Msg { return action() }))
-					}
-				}
-				// No back/cancel/exit found — nothing to do, just close the title bar focus
-				return m, pressCmd
+		case IDTitleWidgetHelp, IDTitleWidgetClose:
+			if handled, cmd := m.HandleTitleBarHit(msg, m.menuTitleBarCloseCmd()); handled {
+				return m, cmd
 			}
 		case IDListPanel:
 			// Hover moved back over the list — restore list focus so the wheel scrolls items.
@@ -542,29 +489,27 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // renderFlow, GetFlowHeight → menu_render_flow.go
 // renderVariableHeightList → menu_render_list.go
 
-// activateTitleBarWidget executes the currently focused title bar widget action.
-func (m *MenuModel) activateTitleBarWidget() tea.Cmd {
-	pressCmd := func(widgetID string) tea.Cmd {
-		m.titleBarPressed = widgetID
-		m.InvalidateCache()
-		return tea.Tick(widgetPressDuration, func(_ time.Time) tea.Msg {
-			return widgetClearPressMsg{id: "key"}
-		})
-	}
-	switch m.titleBarWidget {
-	case IDTitleWidgetHelp:
-		pc := pressCmd(IDTitleWidgetHelp)
-		m.BlurTitleBar()
-		return tea.Batch(pc, func() tea.Msg { return TriggerHelpMsg{ScreenLevelOnly: true} })
-	case IDTitleWidgetClose:
-		pc := pressCmd(IDTitleWidgetClose)
-		m.BlurTitleBar()
+// menuTitleBarCloseCmd returns the action to run when the title bar's
+// Close widget activates: fire the first back/cancel button if present,
+// otherwise the first exit button, with the same spinner treatment as a
+// normal button click. Returns nil if no matching button exists (Close
+// then just blurs the title bar, same as TitleBarFocus's default nil-closeCmd
+// behavior).
+//
+// This is passed as the closeCmd argument to HandleTitleBarKey/HandleTitleBarHit,
+// which evaluate it eagerly as a plain tea.Cmd argument regardless of which key
+// was pressed. The button search (and its focus/spinner side effects) must not
+// run until the returned tea.Cmd is actually invoked by Bubble Tea, so the body
+// is wrapped in a closure rather than executed directly here.
+func (m *MenuModel) menuTitleBarCloseCmd() tea.Cmd {
+	return func() tea.Msg {
 		for i, btn := range m.buttons {
 			if (btn.ZoneID == "btn-back" || btn.ZoneID == "btn-cancel" || btn.ZoneID == IDBackButton) && btn.Action != nil {
 				m.focusedItem = FocusBtn
 				m.focusedBtnIndex = i
 				action := btn.Action
-				return tea.Batch(pc, m.SetProcessingBtnDeferred(btn.ZoneID, func() tea.Msg { return action() }))
+				cmd := m.SetProcessingBtnDeferred(btn.ZoneID, func() tea.Msg { return action() })
+				return cmd()
 			}
 		}
 		for i, btn := range m.buttons {
@@ -572,12 +517,12 @@ func (m *MenuModel) activateTitleBarWidget() tea.Cmd {
 				m.focusedItem = FocusBtn
 				m.focusedBtnIndex = i
 				action := btn.Action
-				return tea.Batch(pc, m.SetProcessingBtnDeferred(btn.ZoneID, func() tea.Msg { return action() }))
+				cmd := m.SetProcessingBtnDeferred(btn.ZoneID, func() tea.Msg { return action() })
+				return cmd()
 			}
 		}
-		return pc
+		return nil
 	}
-	return nil
 }
 
 func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {

@@ -120,8 +120,9 @@ func (m *ProgramBoxModel) ViewString() string {
 	if m.maximized {
 		targetHeight = m.height
 	}
-	spinIndL, spinIndR := m.currentSpinnerIndicators()
-	dialogWithTitle := renderDialogWithTypeAndWidgets(m.title, content, true, targetHeight, m.dialogType, GetActiveContext(), TitleBarState{Show: true, Focused: m.tbFocused, ActiveWidget: m.tbWidget, PressedWidget: m.tbPressed, SpinnerIndicator: spinIndL, SpinnerIndicatorRight: spinIndR})
+	tbs := m.State()
+	tbs.SpinnerIndicator, tbs.SpinnerIndicatorRight = m.currentSpinnerIndicators()
+	dialogWithTitle := renderDialogWithTypeAndWidgets(m.title, content, true, targetHeight, m.dialogType, GetActiveContext(), tbs)
 
 	// If sub-dialog is active, overlay it
 	if m.subDialog != nil {

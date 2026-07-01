@@ -137,6 +137,21 @@ func (t *TitleBarFocus) ActiveWidget() string   { return t.tbWidget }
 func (t *TitleBarFocus) SetWidget(id string)    { t.tbWidget = id }
 func (t *TitleBarFocus) PressedWidget() string  { return t.tbPressed }
 
+// State returns the TitleBarState for rendering, populated from this
+// TitleBarFocus's current focus/widget state. Show defaults to true;
+// callers needing Show:false should set it after: tbs := t.State(); tbs.Show = false.
+// Widgets is left nil (render code falls back to defaultWidgets) unless a
+// custom widget set was configured via ConfigureWidgets.
+func (t *TitleBarFocus) State() TitleBarState {
+	return TitleBarState{
+		Show:          true,
+		Focused:       t.tbFocused,
+		ActiveWidget:  t.tbWidget,
+		PressedWidget: t.tbPressed,
+		Widgets:       t.tbWidgets,
+	}
+}
+
 // PressWidget sets the pressed flash state and returns a tea.Cmd that clears it after the duration.
 func (t *TitleBarFocus) PressWidget(w WidgetDef, id string) tea.Cmd {
 	t.tbPressed = w.ID

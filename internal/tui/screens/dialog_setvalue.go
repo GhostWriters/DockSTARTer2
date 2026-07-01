@@ -728,7 +728,7 @@ func (m *setValueDialogModel) ViewString() string {
 
 	title := m.setValueTitle()
 	parts := []string{headingText, currentValueSection, presetsSection, buttonRow}
-	return tui.RenderDialogWithTypeAndWidgets(title, lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused || m.TitleBarFocused(), m.height, tui.DialogTypeInfo, tui.TitleBarState{Show: true, Focused: m.TitleBarFocused(), ActiveWidget: m.ActiveWidget(), PressedWidget: m.PressedWidget()})
+	return tui.RenderDialogWithTypeAndWidgets(title, lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused || m.TitleBarFocused(), m.height, tui.DialogTypeInfo, m.State())
 }
 
 func (m *setValueDialogModel) View() tea.View {
