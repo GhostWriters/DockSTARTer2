@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/strutil"
 	"strings"
 
@@ -279,8 +278,8 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 		ctx.Border2Flags = ctx.Border2DisabledFlags
 	}
 	var spinInd, spinIndR string
-	if m.loadingText != "" && console.SpinnerEnabled {
-		spinInd, spinIndR = console.TitleSpinnerFrames(m.spinnerFrame, ctx.LineCharacters)
+	if m.loadingText != "" {
+		spinInd, spinIndR = m.titleSpinner.Indicators()
 	}
 	tbs := TitleBarState{Show: m.title != "" && !m.subMenuMode, Focused: m.titleBarFocused, ActiveWidget: m.titleBarWidget, PressedWidget: m.titleBarPressed, SpinnerIndicator: spinInd, SpinnerIndicatorRight: spinIndR}
 	return RenderBorderedBoxCtx(m.title, content, contentWidth, targetHeight, focused || m.titleBarFocused, true, rounded, align, titleTag, ctx, tbs)

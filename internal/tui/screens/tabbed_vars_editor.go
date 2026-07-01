@@ -2,7 +2,6 @@ package screens
 
 import (
 	"DockSTARTer2/internal/appenv"
-	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/tui/components/enveditor"
 	"DockSTARTer2/internal/version"
@@ -96,8 +95,7 @@ type TabbedVarsEditorModel struct {
 
 	// Spinner while env data is loading from disk
 	loading      bool
-	spinnerFrame int
-	lastSpinner  time.Time
+	titleSpinner tui.TitleSpinner
 
 	btnRow *tui.ButtonRow
 }
@@ -110,29 +108,14 @@ func (m *TabbedVarsEditorModel) AdvanceSpinners(now time.Time) bool {
 	if m.btnRow != nil && m.btnRow.AdvanceSpinner(now) {
 		changed = true
 	}
-	if !m.loading || !console.SpinnerEnabled {
-		return changed
+	if m.titleSpinner.AdvanceSpinner(now) {
+		changed = true
 	}
-	fps := time.Duration(console.SpinnerSpeed) * time.Millisecond
-	if fps <= 0 || now.Sub(m.lastSpinner) < fps {
-		return changed
-	}
-	m.lastSpinner = now
-	ctx := tui.GetActiveContext()
-	frames := console.SpinnerFramesTitleUnicode
-	if !ctx.LineCharacters {
-		frames = console.SpinnerFramesTitleASCII
-	}
-	m.spinnerFrame = (m.spinnerFrame + 1) % len(frames)
-	return true
+	return changed
 }
 
 func (m *TabbedVarsEditorModel) currentSpinnerIndicators() (left, right string) {
-	if !m.loading || !console.SpinnerEnabled {
-		return "", ""
-	}
-	ctx := tui.GetActiveContext()
-	return console.TitleSpinnerFrames(m.spinnerFrame, ctx.LineCharacters)
+	return m.titleSpinner.Indicators()
 }
 
 type envAddVarMsg struct {
@@ -224,6 +207,7 @@ func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec
 
 func (m *TabbedVarsEditorModel) Init() tea.Cmd {
 	m.loading = true
+	m.titleSpinner.Start()
 	return m.loadEnv
 }
 

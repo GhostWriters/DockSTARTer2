@@ -3,8 +3,6 @@ package tui
 import (
 	"time"
 
-	"DockSTARTer2/internal/console"
-
 	tea "charm.land/bubbletea/v2"
 )
 
@@ -12,6 +10,9 @@ import (
 // Called when the menu is restored as the active screen after navigation.
 func (m *MenuModel) ClearProcessingState() {
 	m.processingItemIdx = -1
+	if m.loadingText == "" {
+		m.titleSpinner.Stop()
+	}
 	m.btnRow.Clear()
 	m.InvalidateCache()
 }
@@ -48,7 +49,11 @@ func (m *MenuModel) AbsorbMessage(msg tea.Msg) tea.Cmd {
 // Set to "" to stop.
 func (m *MenuModel) SetLoadingText(text string) tea.Cmd {
 	m.loadingText = text
-	m.spinnerFrame = 0
+	if text != "" {
+		m.titleSpinner.Start()
+	} else {
+		m.titleSpinner.Stop()
+	}
 	m.InvalidateCache()
 	return nil
 }
@@ -61,23 +66,9 @@ func (m *MenuModel) AdvanceSpinners(now time.Time) bool {
 	if btnChanged {
 		m.InvalidateCache()
 	}
-	if !console.SpinnerEnabled {
-		return btnChanged
+	if m.titleSpinner.AdvanceSpinner(now) {
+		m.InvalidateCache()
+		return true
 	}
-	if m.loadingText == "" && m.processingItemIdx < 0 {
-		return btnChanged
-	}
-	fps := time.Duration(console.SpinnerSpeed) * time.Millisecond
-	if fps <= 0 || now.Sub(m.lastSpinner) < fps {
-		return btnChanged
-	}
-	m.lastSpinner = now
-	ctx := GetActiveContext()
-	frames := console.SpinnerFramesTitleUnicode
-	if !ctx.LineCharacters {
-		frames = console.SpinnerFramesTitleASCII
-	}
-	m.spinnerFrame = (m.spinnerFrame + 1) % len(frames)
-	m.InvalidateCache()
-	return true
+	return btnChanged
 }

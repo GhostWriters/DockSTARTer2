@@ -53,6 +53,27 @@ func TitleSpinnerFrames(frame int, lineCharacters bool) (left, right string) {
 	return
 }
 
+// AdvanceTitleSpinnerFrame returns the next spinner frame index and whether
+// enough time has elapsed to advance, given the current frame, last-advance
+// timestamp, current time, and whether line-drawing characters are enabled.
+// Callers gate this on their own "is a spinner active" condition; this only
+// computes the shared cadence/frame-set math for title-style spinners
+// (MenuModel, TabbedVarsEditorModel, PanelModel).
+func AdvanceTitleSpinnerFrame(frame int, lastSpinner, now time.Time, lineCharacters bool) (newFrame int, newLastSpinner time.Time, advanced bool) {
+	if !SpinnerEnabled {
+		return frame, lastSpinner, false
+	}
+	fps := time.Duration(SpinnerSpeed) * time.Millisecond
+	if fps <= 0 || now.Sub(lastSpinner) < fps {
+		return frame, lastSpinner, false
+	}
+	frames := SpinnerFramesTitleUnicode
+	if !lineCharacters {
+		frames = SpinnerFramesTitleASCII
+	}
+	return (frame + 1) % len(frames), now, true
+}
+
 // spinnerFrames returns the correct frame set based on config.
 func spinnerFrames() []string {
 	if LineCharacters {

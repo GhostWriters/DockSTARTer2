@@ -599,6 +599,7 @@ func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 					m.cursor = m.list.Index()
 					menuSelectedIndices[m.persistKey()] = m.cursor
 					m.processingItemIdx = m.cursor
+					m.titleSpinner.Start()
 					if len(m.buttons) > 0 {
 						m.btnRow.MarkProcessing(m.buttons[0].ZoneID)
 					}
@@ -632,6 +633,7 @@ func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 				m.cursor = m.list.Index()
 				menuSelectedIndices[m.persistKey()] = m.cursor
 				m.processingItemIdx = m.cursor
+				m.titleSpinner.Start()
 				m.btnRow.MarkProcessing("btn-select")
 				m.InvalidateCache()
 				return m, m.deferAction(item.Action)
