@@ -32,7 +32,7 @@ func (m *MenuModel) getButtonSpecs() []ButtonSpec {
 	}
 	var specs []ButtonSpec
 	for i, btn := range m.buttons {
-		active := m.focusedItem == FocusBtn && m.focusedBtnIndex == i
+		active := (m.focusedItem == FocusBtn && m.focusedBtnIndex == i) || m.processingBtnID == btn.ZoneID
 		specs = append(specs, ButtonSpec{
 			Text:         btn.Label,
 			Active:       active,
