@@ -30,20 +30,7 @@ func (m *MenuModel) getButtonSpecs() []ButtonSpec {
 	if !m.showButtons {
 		return nil
 	}
-	var specs []ButtonSpec
-	for i, btn := range m.buttons {
-		active := (m.focusedItem == FocusBtn && m.focusedBtnIndex == i) || m.processingBtnID == btn.ZoneID
-		specs = append(specs, ButtonSpec{
-			Text:         btn.Label,
-			Active:       active,
-			Locked:       btn.Locked,
-			Spinning:     m.processingBtnID == btn.ZoneID,
-			SpinnerFrame: m.spinnerFrame,
-			ZoneID:       btn.ZoneID,
-			Help:         btn.Help,
-		})
-	}
-	return specs
+	return m.btnRow.Specs(m.focusedItem == FocusBtn, m.focusedBtnIndex)
 }
 
 // renderSimpleButtons creates a button row with evenly spaced sections.

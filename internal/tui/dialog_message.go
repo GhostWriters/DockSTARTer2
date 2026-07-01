@@ -150,7 +150,7 @@ func (m *messageDialogModel) ViewString() string {
 	content := messageStyle.Render(m.message)
 
 	// Render OK button with automatic zone marking
-	btnSpecs := m.buttons.Specs(true)
+	btnSpecs := m.buttons.Specs(true, 0)
 	buttonRow := RenderCenteredButtons(contentWidth, btnSpecs...)
 
 	// Combine message and button
