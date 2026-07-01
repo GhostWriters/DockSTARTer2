@@ -874,3 +874,15 @@ func (s *AppSelectionScreen) FullHelp() [][]key.Binding {
 func (s *AppSelectionScreen) AdvanceSpinners(now time.Time) bool {
 	return s.menu != nil && s.menu.AdvanceSpinners(now)
 }
+
+// ClearProcessingState clears any in-flight button spinner on the menu.
+// Called by AppModel when a dialog closes and returns focus to this screen
+// (e.g. the Exit or Back confirm dialog resolving) -- without this, a
+// button's spinner started via SetProcessingBtnDeferred keeps running
+// forever once its action resolves without navigating away, since s.menu is
+// a named field here rather than an embedded/promoted MenuModel.
+func (s *AppSelectionScreen) ClearProcessingState() {
+	if s.menu != nil {
+		s.menu.ClearProcessingState()
+	}
+}

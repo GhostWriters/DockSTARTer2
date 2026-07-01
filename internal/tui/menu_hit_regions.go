@@ -408,10 +408,13 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 			},
 		})
 
-		// Use centralized helper for button hit regions
-		regions = append(regions, GetButtonHitRegions(
+		// Use centralized helper for button hit regions, passing the already-decided
+		// border/height choice so hit regions never disagree with what rendered
+		// (m.layout.ButtonHeight may be flat-downgraded due to height, not just width).
+		regions = append(regions, GetButtonHitRegionsExplicit(
 			HelpContext{ScreenName: m.title, PageTitle: "Description", PageText: m.subtitle},
 			m.id, buttonX, offsetY+buttonY, contentWidth, baseZ+20,
+			m.layout.ButtonHeight == DialogButtonHeight,
 			specs...,
 		)...)
 	}

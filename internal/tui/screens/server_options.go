@@ -633,3 +633,21 @@ func (s *ServerOptionsScreen) AdvanceSpinners(now time.Time) bool {
 	c := s.outerMenu != nil && s.outerMenu.AdvanceSpinners(now)
 	return a || b || c
 }
+
+// ClearProcessingState clears spinner state on all inner menus.
+// Called by AppModel when a dialog closes and returns focus to this screen
+// (e.g. the Exit or Back confirm dialog resolving) -- without this, a
+// button's spinner started via SetProcessingBtnDeferred keeps running
+// forever once its action resolves without navigating away, since these
+// menus are named fields here rather than an embedded/promoted MenuModel.
+func (s *ServerOptionsScreen) ClearProcessingState() {
+	if s.settingsMenu != nil {
+		s.settingsMenu.ClearProcessingState()
+	}
+	if s.statusMenu != nil {
+		s.statusMenu.ClearProcessingState()
+	}
+	if s.outerMenu != nil {
+		s.outerMenu.ClearProcessingState()
+	}
+}
