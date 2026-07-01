@@ -3,6 +3,7 @@ package screens
 import (
 	"context"
 	"strings"
+	"time"
 
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/config"
@@ -868,4 +869,8 @@ func (s *AppSelectionScreen) FullHelp() [][]key.Binding {
 			tui.Keys.ForceQuit,
 		},
 	}
+}
+
+func (s *AppSelectionScreen) AdvanceSpinners(now time.Time) bool {
+	return s.menu != nil && s.menu.AdvanceSpinners(now)
 }
