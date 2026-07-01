@@ -10,11 +10,23 @@ import (
 )
 
 func (s *ServerOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// outerMenu owns all buttons on this screen (Apply/Back/Exit); it must see
-	// every message so its button's deferred-action/spinner state can never
-	// be skipped by an early return below.
+	// Every inner menu must see its own deferred-action messages (button
+	// clicks on outerMenu, item Action clicks like the SSH Port/Auth Mode
+	// dropdowns on settingsMenu) before any early-return branch below can
+	// drop them -- each menu's menuDeferredActionMsg is scoped to its own
+	// instanceID, so only that menu can absorb it.
 	if s.outerMenu != nil {
 		if action := s.outerMenu.AbsorbMessage(msg); action != nil {
+			return s, action
+		}
+	}
+	if s.settingsMenu != nil {
+		if action := s.settingsMenu.AbsorbMessage(msg); action != nil {
+			return s, action
+		}
+	}
+	if s.statusMenu != nil {
+		if action := s.statusMenu.AbsorbMessage(msg); action != nil {
 			return s, action
 		}
 	}
