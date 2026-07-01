@@ -24,11 +24,23 @@ func (s *DisplayOptionsScreen) IsScrollbarDragging() bool {
 }
 
 func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// outerMenu owns all buttons on this screen (Apply/Back/Exit); it must see
-	// every message so its button's deferred-action/spinner state can never
-	// be skipped by an early return below.
+	// Every inner menu must see its own deferred-action messages (button
+	// clicks on outerMenu, item Action clicks like the Options dropdowns on
+	// optionsMenu/themeMenu) before any early-return branch below can drop
+	// them -- each menu's menuDeferredActionMsg is scoped to its own
+	// instanceID, so only that menu can absorb it.
 	if s.outerMenu != nil {
 		if action := s.outerMenu.AbsorbMessage(msg); action != nil {
+			return s, action
+		}
+	}
+	if s.optionsMenu != nil {
+		if action := s.optionsMenu.AbsorbMessage(msg); action != nil {
+			return s, action
+		}
+	}
+	if s.themeMenu != nil {
+		if action := s.themeMenu.AbsorbMessage(msg); action != nil {
 			return s, action
 		}
 	}

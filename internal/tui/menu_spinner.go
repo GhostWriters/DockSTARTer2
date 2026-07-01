@@ -29,18 +29,23 @@ func (m *MenuModel) SetProcessingBtnDeferred(zoneID string, action tea.Cmd) tea.
 	return cmd
 }
 
-// AbsorbMessage lets a MenuModel observe its button row's deferred-action
-// message without participating in general Update() dispatch, so callers
-// routing other message types elsewhere cannot accidentally skip button
-// spinner/action bookkeeping. Returns nil if the message is not a deferred
-// button action targeted at this instance's button row. Intended for the
-// button-owning MenuModel on screens that hold multiple MenuModels — call
-// this unconditionally at the very top of the screen's Update(), before any
-// early-return branches, so a future early return can never silently drop
-// this menu's button click.
+// AbsorbMessage lets a MenuModel observe its own deferred-action messages
+// (both button-row clicks and list-item Action clicks) without participating
+// in general Update() dispatch, so callers routing other message types
+// elsewhere cannot accidentally skip spinner/action bookkeeping. Returns nil
+// if msg is not a deferred action targeted at this instance. Call this
+// unconditionally at the very top of a multi-menu screen's Update(), before
+// any early-return branches, for every *MenuModel the screen holds (not just
+// the button-owning one) — any menu with items that set Action (e.g. a
+// dropdown-opening item) schedules a menuDeferredActionMsg scoped to its own
+// instanceID one tick after the click, and nothing else routes that message
+// back to it once it's no longer reachable via a hit-region dispatch case.
 func (m *MenuModel) AbsorbMessage(msg tea.Msg) tea.Cmd {
 	if cmd, ok := m.btnRow.Update(msg); ok {
 		return cmd
+	}
+	if deferred, ok := msg.(menuDeferredActionMsg); ok && deferred.id == m.instanceID {
+		return deferred.action
 	}
 	return nil
 }
