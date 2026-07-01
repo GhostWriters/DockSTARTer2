@@ -885,14 +885,10 @@ func (m *MenuModel) calculateLayout() {
 
 	// Large titlebar: deduct from list budget; drop titlebar first when space is tight.
 	// Submenus always use small titlebar regardless of config.
-	useLargeTitleBar := !m.subMenuMode && m.title != "" && currentConfig.UI.LargeTitleBars
+	enabled := !m.subMenuMode && m.title != "" && currentConfig.UI.LargeTitleBars
+	useLargeTitleBar, maxListHeight := DecideLargeTitleBar(enabled, maxListHeight, 3)
 	if useLargeTitleBar {
-		if maxListHeight-LargeTitleBarOverhead < 3 {
-			useLargeTitleBar = false // not enough room; titlebar stays small
-		} else {
-			maxListHeight -= LargeTitleBarOverhead
-			overhead += LargeTitleBarOverhead
-		}
+		overhead += LargeTitleBarOverhead
 	}
 
 	// Height-based border fallback: drop bordered buttons when 2 or fewer list

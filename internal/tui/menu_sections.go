@@ -306,14 +306,10 @@ func (m *MenuModel) calculateSectionLayout() {
 	const minExpandable = 4
 
 	// Large titlebar: drop before buttons if space is tight.
-	useLargeTitleBar := m.title != "" && currentConfig.UI.LargeTitleBars
+	enabled := m.title != "" && currentConfig.UI.LargeTitleBars
+	useLargeTitleBar, _ := DecideLargeTitleBar(enabled, innerHeight-fixedTotal-buttonBudget, 3)
 	if useLargeTitleBar {
-		tentativeRemaining := innerHeight - fixedTotal - buttonBudget - LargeTitleBarOverhead
-		if tentativeRemaining < 0 {
-			useLargeTitleBar = false // not enough room; titlebar stays small
-		} else {
-			innerHeight -= LargeTitleBarOverhead
-		}
+		innerHeight -= LargeTitleBarOverhead
 	}
 
 	remaining := innerHeight - fixedTotal - buttonBudget

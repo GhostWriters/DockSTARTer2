@@ -242,15 +242,13 @@ func (m *ProgramBoxModel) calculateLayout() {
 
 	internalOverhead := headerHeight + commandLines
 
-	// Large titlebar: deduct 2 rows from effective height, same conservative threshold as menus.
-	useLargeTitleBar := m.title != "" && currentConfig.UI.LargeTitleBars
+	// Large titlebar: deduct 2 rows from effective height, same threshold as other dialogs.
+	enabled := m.title != "" && currentConfig.UI.LargeTitleBars
+	titleBudget := m.height - layout.BorderHeight() - internalOverhead
+	useLargeTitleBar, _ := DecideLargeTitleBar(enabled, titleBudget, 3)
 	largeTitlebarHeight := m.height
 	if useLargeTitleBar {
-		if largeTitlebarHeight-layout.BorderHeight()-internalOverhead-LargeTitleBarOverhead < 4 {
-			useLargeTitleBar = false
-		} else {
-			largeTitlebarHeight -= LargeTitleBarOverhead
-		}
+		largeTitlebarHeight -= LargeTitleBarOverhead
 	}
 
 	// 3. Buttons — width and height aware via ButtonRowHeight.

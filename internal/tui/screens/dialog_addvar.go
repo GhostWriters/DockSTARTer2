@@ -637,13 +637,11 @@ func (m *addVarDialogModel) recalc() {
 	// - "Available Variables" list box borders: 2
 	// - spacing/margin: 1
 	// - buttons: btnH
+	titleBudget := m.height - 2 - headingH - varNameH - 2 - btnH
+	useLarge, _ := tui.DecideLargeTitleBar(ctx.LargeTitleBars, titleBudget, 3)
 	largeTitleOverhead := 0
-	if ctx.LargeTitleBars {
+	if useLarge {
 		largeTitleOverhead = tui.LargeTitleBarOverhead
-		// Adaptive fallback: revert to small titlebar if the list would have fewer than 3 visible rows
-		if m.height-2-largeTitleOverhead-headingH-varNameH-2-btnH < 3 {
-			largeTitleOverhead = 0
-		}
 	}
 	overhead := 2 + largeTitleOverhead + headingH + varNameH + 2 + btnH
 	m.maxVis = m.height - overhead
@@ -816,13 +814,11 @@ func (m *addVarDialogModel) ViewString() string {
 	buttonRowH := lipgloss.Height(buttonRow)
 	headingH := lipgloss.Height(headingText)
 	varNameH := lipgloss.Height(varNameSection)
+	titleBudget2 := m.height - 2 - headingH - varNameH - buttonRowH - 2
+	useLarge2, _ := tui.DecideLargeTitleBar(ctx.LargeTitleBars, titleBudget2, 3)
 	largeTitleOverhead := 0
-	if ctx.LargeTitleBars {
+	if useLarge2 {
 		largeTitleOverhead = tui.LargeTitleBarOverhead
-		// Adaptive fallback: revert to small titlebar if the list would have fewer than 3 visible rows
-		if m.height-2-largeTitleOverhead-headingH-varNameH-buttonRowH-2 < 3 {
-			largeTitleOverhead = 0
-		}
 	}
 	// Sync with recalc() logic:
 	// availableTargetH is the total physical height of the "Available Variables" box.

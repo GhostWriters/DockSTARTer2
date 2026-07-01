@@ -540,13 +540,11 @@ func (m *setValueDialogModel) recalc() {
 	// - "Current Value" input section: currentValueH
 	// - "Presets" section borders: 2
 	// - buttons: btnH
+	titleBudget := m.height - 2 - headingH - currentValueH - 2 - btnH
+	useLarge, _ := tui.DecideLargeTitleBar(ctx.LargeTitleBars, titleBudget, 3)
 	largeTitleOverhead := 0
-	if ctx.LargeTitleBars {
+	if useLarge {
 		largeTitleOverhead = tui.LargeTitleBarOverhead
-		// Adaptive fallback: revert to small titlebar if the list would have fewer than 3 visible rows
-		if m.height-2-largeTitleOverhead-headingH-currentValueH-2-btnH < 3 {
-			largeTitleOverhead = 0
-		}
 	}
 	overhead := 2 + largeTitleOverhead + headingH + currentValueH + 2 + btnH
 	m.maxVis = m.height - overhead
@@ -686,13 +684,11 @@ func (m *setValueDialogModel) ViewString() string {
 	buttonRowH := lipgloss.Height(buttonRow)
 	headingH := lipgloss.Height(headingText)
 	currentValueH := lipgloss.Height(currentValueSection)
+	titleBudget2 := m.height - 2 - headingH - currentValueH - buttonRowH - 2
+	useLarge2, _ := tui.DecideLargeTitleBar(ctx.LargeTitleBars, titleBudget2, 3)
 	largeTitleOverhead := 0
-	if ctx.LargeTitleBars {
+	if useLarge2 {
 		largeTitleOverhead = tui.LargeTitleBarOverhead
-		// Adaptive fallback: revert to small titlebar if the list would have fewer than 3 visible rows
-		if m.height-2-largeTitleOverhead-headingH-currentValueH-buttonRowH-2 < 3 {
-			largeTitleOverhead = 0
-		}
 	}
 	// Sync with recalc() logic:
 	// presetTargetH is the total physical height of the "Preset Values" box.
