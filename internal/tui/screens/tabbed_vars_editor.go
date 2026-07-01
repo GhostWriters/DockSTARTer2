@@ -100,6 +100,17 @@ type TabbedVarsEditorModel struct {
 	btnRow *tui.ButtonRow
 }
 
+// ClearProcessingState clears any in-flight button spinner. Called by
+// AppModel when a dialog closes and returns focus to this screen (e.g. the
+// Exit or Back confirm dialog resolving) -- without this, a button's
+// spinner started via btnRow.SetProcessing keeps running forever once its
+// action resolves without navigating away.
+func (m *TabbedVarsEditorModel) ClearProcessingState() {
+	if m.btnRow != nil {
+		m.btnRow.Clear()
+	}
+}
+
 // AdvanceSpinners advances the loading title spinner and the button-row
 // spinner if their intervals have elapsed. Returns true if either frame
 // changed. Called by the global tick via globalTickMsg.

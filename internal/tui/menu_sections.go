@@ -239,6 +239,62 @@ func (m *MenuModel) SetMaxFlowRows(n int) {
 	m.maxFlowRows = n
 }
 
+// largeTitleBarMinRemaining is the minimum rows that must remain in a
+// section-layout budget (after subtracting LargeTitleBarOverhead) for
+// calculateSectionLayout's DecideLargeTitleBar call to choose large. Kept as
+// a named constant, referenced by both calculateSectionLayout and
+// LargeTitleBarBudget, so the two can never drift out of sync the way the
+// web-display dialog's hand-rolled height budget once did.
+const largeTitleBarMinRemaining = 3
+
+// LargeTitleBarBudget returns the extra height (beyond whatever this menu's
+// content sections and buttons already need) a caller must add when sizing
+// this menu externally to guarantee calculateSectionLayout's own
+// DecideLargeTitleBar check will choose a large title bar. Use this instead
+// of hand-adding LargeTitleBarOverhead when pre-computing a height to pass
+// into SetSize -- LargeTitleBarOverhead alone pays for the title bar's own
+// rows. When this menu has at least one expandable (variableHeight) content
+// section, DecideLargeTitleBar also requires largeTitleBarMinRemaining rows
+// of slack beyond that to protect that section's breathing room; with no
+// expandable sections there's nothing to protect, so calculateSectionLayout
+// relaxes that requirement to 0 and this mirrors it -- see calculateSectionLayout.
+func (m *MenuModel) LargeTitleBarBudget() int {
+	for _, sec := range m.contentSections {
+		if sec.variableHeight {
+			return LargeTitleBarOverhead + largeTitleBarMinRemaining
+		}
+	}
+	return LargeTitleBarOverhead
+}
+
+// SectionHeight returns how many rows this MenuModel would occupy as a
+// content section at the given content width (i.e. width already inset for
+// the outer section's own border/margin — same convention calculateSectionLayout
+// uses when calling GetFlowHeight). Covers every fixed section "kind": flow-grid,
+// contentRenderer-based (e.g. sinput), and plain/checklist. variableHeight
+// (expandable) sections have no fixed answer; callers needing their height
+// must account for that separately (same as calculateSectionLayout itself
+// does via expandableCount).
+func (m *MenuModel) SectionHeight(sectionWidth int) int {
+	layout := GetLayout()
+	switch {
+	case m.flowMode:
+		flowContentW := sectionWidth - layout.BorderWidth()
+		if flowContentW < 1 {
+			flowContentW = 1
+		}
+		flowH := m.GetFlowHeight(flowContentW)
+		if m.maxFlowRows > 0 && flowH > m.maxFlowRows {
+			flowH = m.maxFlowRows
+		}
+		return flowH + layout.BorderHeight()
+	case m.contentRenderer != nil:
+		return 1 + layout.BorderHeight()
+	default:
+		return len(m.items) + layout.BorderHeight()
+	}
+}
+
 // calculateSectionLayout distributes available height among content sections.
 // Fixed sections (flowMode) get their intrinsic height; the remaining height goes
 // to expandable sections.  Called by calculateLayout when contentSections is set.
@@ -271,43 +327,29 @@ func (m *MenuModel) calculateSectionLayout() {
 	fixedTotal := 0
 	expandableCount := 0
 	for i, sec := range m.contentSections {
-		if sec.flowMode {
-			// The section renders its flow content at (sectionWidth - BorderWidth),
-			// because viewSubMenu subtracts the border from m.width to get contentWidth.
-			// Pass that same inner width to GetFlowHeight so the line count matches.
-			flowContentW := sectionWidth - layout.BorderWidth()
-			if flowContentW < 1 {
-				flowContentW = 1
-			}
-			flowH := sec.GetFlowHeight(flowContentW)
-			if sec.maxFlowRows > 0 && flowH > sec.maxFlowRows {
-				flowH = sec.maxFlowRows
-			}
-			sectionH := flowH + layout.BorderHeight()
-			sectionHeights[i] = sectionH
-			fixedTotal += sectionH
-		} else if sec.contentRenderer != nil {
-			// contentRenderer sections render exactly 1 content line + 2 border rows.
-			sectionH := 1 + layout.BorderHeight()
-			sectionHeights[i] = sectionH
-			fixedTotal += sectionH
-		} else if !sec.variableHeight {
-			// Fixed list: item count + 2 border rows.
-			sectionH := len(sec.items) + layout.BorderHeight()
-			sectionHeights[i] = sectionH
-			fixedTotal += sectionH
-		} else {
+		if sec.variableHeight {
 			expandableCount++
+			continue
 		}
+		sectionH := sec.SectionHeight(sectionWidth)
+		sectionHeights[i] = sectionH
+		fixedTotal += sectionH
 	}
 
 	// Remaining height for expandable sections.
 	// Allocate every single remaining row to avoid gaps.
 	const minExpandable = 4
 
-	// Large titlebar: drop before buttons if space is tight.
+	// Large titlebar: drop before buttons if space is tight. minRemaining
+	// protects an expandable section's breathing room; with no expandable
+	// sections there's nothing to protect, so only the title bar's own
+	// overhead needs to fit (same relaxation buttonThreshold applies above).
+	titleBarMinRemaining := largeTitleBarMinRemaining
+	if expandableCount == 0 {
+		titleBarMinRemaining = 0
+	}
 	enabled := m.title != "" && currentConfig.UI.LargeTitleBars
-	useLargeTitleBar, _ := DecideLargeTitleBar(enabled, innerHeight-fixedTotal-buttonBudget, 3)
+	useLargeTitleBar, _ := DecideLargeTitleBar(enabled, innerHeight-fixedTotal-buttonBudget, titleBarMinRemaining)
 	if useLargeTitleBar {
 		innerHeight -= LargeTitleBarOverhead
 	}

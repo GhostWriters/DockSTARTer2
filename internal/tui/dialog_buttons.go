@@ -57,11 +57,25 @@ type ButtonSpec struct {
 //   - baseZ: z-order for the hit regions (typically ZDialog + 20)
 //   - buttons: same button specs passed to RenderCenteredButtons
 func GetButtonHitRegions(hCtx HelpContext, dialogID string, offsetX, offsetY, contentWidth, baseZ int, buttons ...ButtonSpec) []HitRegion {
+	return getButtonHitRegionsImpl(hCtx, dialogID, offsetX, offsetY, contentWidth, baseZ, buttonsFitWithBorders(contentWidth, GetActiveContext(), buttons), buttons...)
+}
+
+// GetButtonHitRegionsExplicit is the same as GetButtonHitRegions but accepts an
+// explicit useBorders decision, bypassing the automatic width check. Use when the
+// caller has already determined border suitability from constraints other than
+// width (e.g. a pre-computed layout.ButtonHeight from calculateSectionLayout) --
+// otherwise the hit region can disagree with what actually rendered, since a
+// height-based downgrade to flat buttons is invisible to a width-only check.
+func GetButtonHitRegionsExplicit(hCtx HelpContext, dialogID string, offsetX, offsetY, contentWidth, baseZ int, useBorders bool, buttons ...ButtonSpec) []HitRegion {
+	return getButtonHitRegionsImpl(hCtx, dialogID, offsetX, offsetY, contentWidth, baseZ, useBorders, buttons...)
+}
+
+func getButtonHitRegionsImpl(hCtx HelpContext, dialogID string, offsetX, offsetY, contentWidth, baseZ int, useBorders bool, buttons ...ButtonSpec) []HitRegion {
 	if len(buttons) == 0 {
 		return nil
 	}
 
-	layout := ComputeButtonLayout(contentWidth, GetActiveContext(), buttons)
+	layout := computeButtonLayoutExplicit(contentWidth, useBorders, GetActiveContext(), buttons)
 
 	var regions []HitRegion
 	for i, btn := range buttons {
