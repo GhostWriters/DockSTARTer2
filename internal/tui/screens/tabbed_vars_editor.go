@@ -99,18 +99,23 @@ type TabbedVarsEditorModel struct {
 	spinnerFrame int
 	lastSpinner  time.Time
 
-	btnSpinner tui.ButtonSpinner
+	btnRow *tui.ButtonRow
 }
 
-// AdvanceSpinners advances the loading title spinner if its interval has elapsed.
-// Returns true if the frame changed. Called by the global tick via globalTickMsg.
+// AdvanceSpinners advances the loading title spinner and the button-row
+// spinner if their intervals have elapsed. Returns true if either frame
+// changed. Called by the global tick via globalTickMsg.
 func (m *TabbedVarsEditorModel) AdvanceSpinners(now time.Time) bool {
+	changed := false
+	if m.btnRow != nil && m.btnRow.AdvanceSpinner(now) {
+		changed = true
+	}
 	if !m.loading || !console.SpinnerEnabled {
-		return false
+		return changed
 	}
 	fps := time.Duration(console.SpinnerSpeed) * time.Millisecond
 	if fps <= 0 || now.Sub(m.lastSpinner) < fps {
-		return false
+		return changed
 	}
 	m.lastSpinner = now
 	ctx := tui.GetActiveContext()
@@ -203,7 +208,16 @@ func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec
 		onClose:   onClose,
 		connType:  connType,
 	}
-	m.btnSpinner.Init()
+	zoneByName := map[string]string{
+		"Save": tui.IDSaveButton,
+		"Back": tui.IDBackButton,
+		"Exit": tui.IDExitButton,
+	}
+	defs := make([]tui.ButtonDef, len(buttons))
+	for i, btn := range buttons {
+		defs[i] = tui.ButtonDef{Label: btn, ZoneID: zoneByName[btn]}
+	}
+	m.btnRow = tui.NewButtonRow(defs)
 	m.ConfigureWidgets(tui.WidgetRefresh, tui.WidgetHelp, tui.WidgetClose)
 	return m
 }

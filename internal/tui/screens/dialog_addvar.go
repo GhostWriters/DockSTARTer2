@@ -53,7 +53,7 @@ type addVarDialogModel struct {
 	focused bool
 
 	tui.TitleBarFocus
-	btnSpinner tui.ButtonSpinner
+	buttons *tui.ButtonRow
 
 	appName string
 	appDesc string
@@ -135,7 +135,11 @@ func newAddVarDialog(
 		addAllDefaults: addAllDefaults,
 		maxVis:         8,
 	}
-	m.btnSpinner.Init()
+	m.buttons = tui.NewButtonRow([]tui.ButtonDef{
+		{Label: "Create", ZoneID: "Create"},
+		{Label: "Cancel", ZoneID: "Cancel"},
+		{Label: "Exit", ZoneID: "Exit"},
+	})
 	return m
 }
 
@@ -144,7 +148,7 @@ func (m *addVarDialogModel) Init() tea.Cmd {
 }
 
 func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if tickCmd, ok := m.btnSpinner.Update(msg); ok {
+	if tickCmd, ok := m.buttons.Update(msg); ok {
 		return m, tickCmd
 	}
 
@@ -162,12 +166,12 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		if handled, cmd := m.HandleTitleBarKey(msg, nil); handled {
 			m.focus = addVarFocusCancel
-			return m, tea.Batch(cmd, m.btnSpinner.SetProcessingDeferred("Cancel", m.cancelOrConfirm()))
+			return m, tea.Batch(cmd, m.buttons.SetProcessing("Cancel", m.cancelOrConfirm()))
 		}
 		switch {
 		case key.Matches(msg, tui.Keys.Esc):
 			m.focus = addVarFocusCancel
-			return m, m.btnSpinner.SetProcessingDeferred("Cancel", m.cancelOrConfirm())
+			return m, m.buttons.SetProcessing("Cancel", m.cancelOrConfirm())
 		case key.Matches(msg, tui.Keys.ForceQuit):
 			return m, m.cancelOrConfirm()
 
@@ -214,15 +218,15 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch m.focus {
 			case addVarFocusInput:
 				m.focus = addVarFocusCreate
-				return m, m.btnSpinner.SetProcessingDeferred("Create", m.submit())
+				return m, m.buttons.SetProcessing("Create", m.submit())
 			case addVarFocusList:
 				return m, nil
 			case addVarFocusCreate:
-				return m, m.btnSpinner.SetProcessingDeferred("Create", m.submit())
+				return m, m.buttons.SetProcessing("Create", m.submit())
 			case addVarFocusCancel:
-				return m, m.btnSpinner.SetProcessingDeferred("Cancel", m.cancelOrConfirm())
+				return m, m.buttons.SetProcessing("Cancel", m.cancelOrConfirm())
 			case addVarFocusExit:
-				return m, m.btnSpinner.SetProcessingDeferred("Exit", m.confirmExit())
+				return m, m.buttons.SetProcessing("Exit", m.confirmExit())
 			}
 			return m, nil
 		}
@@ -303,7 +307,7 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Button == tea.MouseLeft && strings.HasSuffix(msg.ID, "."+tui.IDTitleWidgetClose) {
 			m.BlurTitleBar()
 			m.focus = addVarFocusCancel
-			return m, m.btnSpinner.SetProcessingDeferred("Cancel", m.cancelOrConfirm())
+			return m, m.buttons.SetProcessing("Cancel", m.cancelOrConfirm())
 		}
 		if msg.Button == tea.MouseLeft && strings.HasSuffix(msg.ID, "."+tui.IDTitleWidgetHelp) {
 			m.BlurTitleBar()
@@ -321,15 +325,15 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Button == tea.MouseLeft {
 			if strings.HasSuffix(msg.ID, ".Create") {
 				m.focus = addVarFocusCreate
-				return m, m.btnSpinner.SetProcessingDeferred("Create", m.submit())
+				return m, m.buttons.SetProcessing("Create", m.submit())
 			}
 			if strings.HasSuffix(msg.ID, ".Cancel") {
 				m.focus = addVarFocusCancel
-				return m, m.btnSpinner.SetProcessingDeferred("Cancel", m.cancelOrConfirm())
+				return m, m.buttons.SetProcessing("Cancel", m.cancelOrConfirm())
 			}
 			if strings.HasSuffix(msg.ID, ".Exit") {
 				m.focus = addVarFocusExit
-				return m, m.btnSpinner.SetProcessingDeferred("Exit", m.confirmExit())
+				return m, m.buttons.SetProcessing("Exit", m.confirmExit())
 			}
 			if msg.ID == "addvar_input" {
 				m.focus = addVarFocusInput
@@ -801,10 +805,10 @@ func (m *addVarDialogModel) ViewString() string {
 	}
 
 	// Button row rendered first so we can derive the available section height budget.
-	avBtnSpecs := m.btnSpinner.ApplyToSpecs([]tui.ButtonSpec{
-		{Text: "Create", Active: m.focus == addVarFocusInput || m.focus == addVarFocusCreate, ZoneID: "Create"},
-		{Text: "Cancel", Active: m.focus == addVarFocusCancel, ZoneID: "Cancel"},
-		{Text: "Exit", Active: m.focus == addVarFocusExit, ZoneID: "Exit"},
+	avBtnSpecs := m.buttons.ApplySpinner([]tui.ButtonSpec{
+		{Text: "Create", Active: m.focus == addVarFocusInput || m.focus == addVarFocusCreate || m.buttons.IsProcessingID("Create"), ZoneID: "Create"},
+		{Text: "Cancel", Active: m.focus == addVarFocusCancel || m.buttons.IsProcessingID("Cancel"), ZoneID: "Cancel"},
+		{Text: "Exit", Active: m.focus == addVarFocusExit || m.buttons.IsProcessingID("Exit"), ZoneID: "Exit"},
 	})
 	buttonRow := strings.TrimRight(tui.RenderCenteredButtonsCtx(contentW, ctx, avBtnSpecs...), "\n")
 
@@ -1062,5 +1066,5 @@ func (m *addVarDialogModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegion 
 }
 
 func (m *addVarDialogModel) AdvanceSpinners(now time.Time) bool {
-	return m.btnSpinner.AdvanceSpinner(now)
+	return m.buttons.AdvanceSpinner(now)
 }

@@ -14,7 +14,7 @@ import (
 func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
-	if tickCmd, ok := m.btnSpinner.Update(msg); ok {
+	if tickCmd, ok := m.btnRow.Update(msg); ok {
 		return m, tickCmd
 	}
 
@@ -97,22 +97,22 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 					}
 				}
-				return m, m.btnSpinner.SetProcessingDeferred(tui.IDSaveButton, m.saveEnv())
+				return m, m.btnRow.SetProcessing(tui.IDSaveButton, m.saveEnv())
 			}
 		} else if tui.ButtonIDMatches(msg.ID, tui.IDBackButton) {
 			if msg.Button == tea.MouseLeft {
 				m.focus = envFocusButtons
 				m.btnIdx = m.buttonIndex("Back")
 				if m.hasChanges() {
-					return m, m.btnSpinner.SetProcessingDeferred(tui.IDBackButton, m.promptUnsavedChanges(m.onClose))
+					return m, m.btnRow.SetProcessing(tui.IDBackButton, m.promptUnsavedChanges(m.onClose))
 				}
-				return m, m.btnSpinner.SetProcessingDeferred(tui.IDBackButton, m.onClose)
+				return m, m.btnRow.SetProcessing(tui.IDBackButton, m.onClose)
 			}
 		} else if tui.ButtonIDMatches(msg.ID, tui.IDExitButton) {
 			if msg.Button == tea.MouseLeft {
 				m.focus = envFocusButtons
 				m.btnIdx = m.buttonIndex("Exit")
-				return m, m.btnSpinner.SetProcessingDeferred(tui.IDExitButton, m.confirmExitAction())
+				return m, m.btnRow.SetProcessing(tui.IDExitButton, m.confirmExitAction())
 			}
 		} else if msg.ID == "tabbed_vars."+tui.IDTitleWidgetClose {
 			if msg.Button == tea.MouseLeft {
@@ -124,7 +124,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.hasChanges() {
 					closeAction = m.promptUnsavedChanges(m.onClose)
 				}
-				return m, tea.Batch(pressCmd, m.btnSpinner.SetProcessingDeferred(tui.IDBackButton, closeAction))
+				return m, tea.Batch(pressCmd, m.btnRow.SetProcessing(tui.IDBackButton, closeAction))
 			}
 		} else if msg.ID == "tabbed_vars."+tui.IDTitleWidgetHelp {
 			if msg.Button == tea.MouseLeft {
@@ -227,7 +227,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case msg.String() == "esc":
 			m.focus = envFocusButtons
 			m.btnIdx = m.buttonIndex("Back")
-			return m, m.btnSpinner.SetProcessingDeferred(tui.IDBackButton, m.EscapeAction())
+			return m, m.btnRow.SetProcessing(tui.IDBackButton, m.EscapeAction())
 		case key.Matches(msg, tui.Keys.EnvNextTab): // Next Tab
 			if m.focus == envFocusEditor && len(m.tabs) > 1 {
 				m.tabs[m.activeTab].editor.Blur()
@@ -299,14 +299,14 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 								}
 							}
 						}
-						return m, m.btnSpinner.SetProcessingDeferred(zoneByName[btnName], m.saveEnv())
+						return m, m.btnRow.SetProcessing(zoneByName[btnName], m.saveEnv())
 					case "Back":
 						if m.hasChanges() {
-							return m, m.btnSpinner.SetProcessingDeferred(zoneByName[btnName], m.promptUnsavedChanges(m.onClose))
+							return m, m.btnRow.SetProcessing(zoneByName[btnName], m.promptUnsavedChanges(m.onClose))
 						}
-						return m, m.btnSpinner.SetProcessingDeferred(zoneByName[btnName], m.onClose)
+						return m, m.btnRow.SetProcessing(zoneByName[btnName], m.onClose)
 					case "Exit":
-						return m, m.btnSpinner.SetProcessingDeferred(zoneByName[btnName], m.confirmExitAction())
+						return m, m.btnRow.SetProcessing(zoneByName[btnName], m.confirmExitAction())
 					}
 				}
 			}

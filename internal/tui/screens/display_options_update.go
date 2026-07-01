@@ -24,6 +24,15 @@ func (s *DisplayOptionsScreen) IsScrollbarDragging() bool {
 }
 
 func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// outerMenu owns all buttons on this screen (Apply/Back/Exit); it must see
+	// every message so its spinner/deferred-action state can never be skipped
+	// by an early return below.
+	if s.outerMenu != nil {
+		if action := s.outerMenu.AbsorbMessage(msg); action != nil {
+			return s, action
+		}
+	}
+
 	var cmd tea.Cmd
 
 	// Forward coalescing done-messages to whichever inner menu owns them.
@@ -404,42 +413,6 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return s, nil
 
-	}
-
-	// Forward unhandled messages to all sub-menus and outerMenu so spinner ticks
-	// and deferred actions are processed. menuDeferredActionMsg/menuSpinnerTickMsg
-	// carry the instanceID of whichever menu scheduled them, so each menu must
-	// receive the message to match its own ID.
-	var batchCmds []tea.Cmd
-	if s.themeMenu != nil {
-		updated, uCmd := s.themeMenu.Update(msg)
-		if m, ok := updated.(*tui.MenuModel); ok {
-			s.themeMenu = m
-		}
-		if uCmd != nil {
-			batchCmds = append(batchCmds, uCmd)
-		}
-	}
-	if s.optionsMenu != nil {
-		updated, uCmd := s.optionsMenu.Update(msg)
-		if m, ok := updated.(*tui.MenuModel); ok {
-			s.optionsMenu = m
-		}
-		if uCmd != nil {
-			batchCmds = append(batchCmds, uCmd)
-		}
-	}
-	if s.outerMenu != nil {
-		updated, uCmd := s.outerMenu.Update(msg)
-		if m, ok := updated.(*tui.MenuModel); ok {
-			s.outerMenu = m
-		}
-		if uCmd != nil {
-			batchCmds = append(batchCmds, uCmd)
-		}
-	}
-	if len(batchCmds) > 0 {
-		return s, tea.Batch(batchCmds...)
 	}
 
 	return s, cmd

@@ -10,6 +10,15 @@ import (
 )
 
 func (s *ServerOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// outerMenu owns all buttons on this screen (Apply/Back/Exit); it must see
+	// every message so its spinner/deferred-action state can never be skipped
+	// by an early return below.
+	if s.outerMenu != nil {
+		if action := s.outerMenu.AbsorbMessage(msg); action != nil {
+			return s, action
+		}
+	}
+
 	var cmd tea.Cmd
 
 	// Forward drag/scroll done messages to inner menus.
@@ -306,18 +315,6 @@ func (s *ServerOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			s.statusMenu = m
 		}
 		return s, tea.Batch(c1, c2)
-	}
-
-	// Forward unhandled messages to outerMenu so spinner ticks and deferred actions
-	// are processed even when ServerOptionsScreen handles the button activations itself.
-	if s.outerMenu != nil {
-		updated, uCmd := s.outerMenu.Update(msg)
-		if m, ok := updated.(*tui.MenuModel); ok {
-			s.outerMenu = m
-		}
-		if uCmd != nil {
-			return s, uCmd
-		}
 	}
 
 	return s, cmd

@@ -14,15 +14,19 @@ import (
 // onResult receives the chosen button index (0-based), or -1 if cancelled via Esc.
 type choiceDialogModel struct {
 	baseDialogModel
-	title      string
-	question   string
-	choices    []string
-	focused    int
-	onResult   func(int) tea.Msg
-	btnSpinner ButtonSpinner
+	title    string
+	question string
+	choices  []string
+	focused  int
+	onResult func(int) tea.Msg
+	buttons  *ButtonRow
 }
 
 func newChoiceDialog(title, question string, choices []string) *choiceDialogModel {
+	defs := make([]ButtonDef, len(choices))
+	for i, c := range choices {
+		defs[i] = ButtonDef{Label: c, ZoneID: c}
+	}
 	m := &choiceDialogModel{
 		baseDialogModel: baseDialogModel{id: "choice_dialog", focused: true},
 		title:           title,
@@ -30,13 +34,13 @@ func newChoiceDialog(title, question string, choices []string) *choiceDialogMode
 		choices:         choices,
 		focused:         0,
 		onResult:        func(i int) tea.Msg { return CloseDialogMsg{Result: i} },
+		buttons:         NewButtonRow(defs),
 	}
-	m.btnSpinner.Init()
 	return m
 }
 
 func (m *choiceDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if tickCmd, ok := m.btnSpinner.Update(msg); ok {
+	if tickCmd, ok := m.buttons.Update(msg); ok {
 		return m, tickCmd
 	}
 
@@ -45,7 +49,7 @@ func (m *choiceDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	submitWithSpinner := func(idx int) tea.Cmd {
 		if idx >= 0 && idx < len(m.choices) {
-			return m.btnSpinner.SetProcessingDeferred(m.choices[idx], submit(idx))
+			return m.buttons.SetProcessing(m.choices[idx], submit(idx))
 		}
 		return submit(idx)
 	}
@@ -163,9 +167,9 @@ func (m *choiceDialogModel) ViewString() string {
 
 	specs := make([]ButtonSpec, len(m.choices))
 	for i, c := range m.choices {
-		specs[i] = ButtonSpec{Text: c, Active: i == m.focused, ZoneID: c}
+		specs[i] = ButtonSpec{Text: c, Active: i == m.focused || m.buttons.IsProcessingID(c), ZoneID: c}
 	}
-	specs = m.btnSpinner.ApplyToSpecs(specs)
+	specs = m.buttons.ApplySpinner(specs)
 	buttonRow := strings.TrimRight(RenderCenteredButtonsCtx(contentWidth, ctx, specs...), "\n")
 
 	spacer := lipgloss.NewStyle().Width(contentWidth).Background(borderBG).Render("")
@@ -224,5 +228,5 @@ func (m *choiceDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 }
 
 func (m *choiceDialogModel) AdvanceSpinners(now time.Time) bool {
-	return m.btnSpinner.AdvanceSpinner(now)
+	return m.buttons.AdvanceSpinner(now)
 }

@@ -26,7 +26,7 @@ type promptDialogModel struct {
 	confirmed    bool
 	onResult     func(string, bool) tea.Msg
 	focusedItem  FocusItem // FocusList=Input, FocusSelectBtn=OK, FocusBackBtn=Cancel
-	btnSpinner   ButtonSpinner
+	buttons      *ButtonRow
 }
 
 type promptResultMsg struct {
@@ -68,8 +68,8 @@ func newPromptDialog(title, question string, sensitive bool, initialValue ...str
 		onResult: func(res string, val bool) tea.Msg {
 			return CloseDialogMsg{Result: promptResultMsg{result: res, confirmed: val}}
 		},
+		buttons: NewButtonRow([]ButtonDef{{Label: "OK", ZoneID: "OK"}, {Label: "Cancel", ZoneID: "Cancel"}}),
 	}
-	m.btnSpinner.Init()
 	return m
 }
 
@@ -78,7 +78,7 @@ func (m *promptDialogModel) Init() tea.Cmd {
 }
 
 func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if tickCmd, ok := m.btnSpinner.Update(msg); ok {
+	if tickCmd, ok := m.buttons.Update(msg); ok {
 		return m, tickCmd
 	}
 
@@ -103,12 +103,12 @@ func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		if handled, cmd := m.handleTitleBarKey(msg, nil); handled {
 			m.focusedItem = FocusBackBtn
-			return m, tea.Batch(cmd, m.btnSpinner.SetProcessingDeferred("Cancel", closeWithResult("", false)))
+			return m, tea.Batch(cmd, m.buttons.SetProcessing("Cancel", closeWithResult("", false)))
 		}
 		switch {
 		case key.Matches(msg, Keys.Esc):
 			m.focusedItem = FocusBackBtn
-			return m, m.btnSpinner.SetProcessingDeferred("Cancel", closeWithResult("", false))
+			return m, m.buttons.SetProcessing("Cancel", closeWithResult("", false))
 		case key.Matches(msg, Keys.ForceQuit):
 			return m, closeWithResult("", false)
 
@@ -159,12 +159,12 @@ func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, Keys.Enter):
 			if m.focusedItem == FocusBackBtn {
-				return m, m.btnSpinner.SetProcessingDeferred("Cancel", closeWithResult("", false))
+				return m, m.buttons.SetProcessing("Cancel", closeWithResult("", false))
 			}
 			// OK or Enter directly on input
 			m.result = m.input.Value()
 			m.confirmed = true
-			return m, m.btnSpinner.SetProcessingDeferred("OK", closeWithResult(m.result, true))
+			return m, m.buttons.SetProcessing("OK", closeWithResult(m.result, true))
 		}
 
 		// Handle button hotkeys when not on the input
@@ -174,9 +174,9 @@ func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if idx == 0 {
 					m.result = m.input.Value()
 					m.confirmed = true
-					return m, m.btnSpinner.SetProcessingDeferred("OK", closeWithResult(m.result, true))
+					return m, m.buttons.SetProcessing("OK", closeWithResult(m.result, true))
 				}
-				return m, m.btnSpinner.SetProcessingDeferred("Cancel", closeWithResult("", false))
+				return m, m.buttons.SetProcessing("Cancel", closeWithResult("", false))
 			}
 		}
 
@@ -201,7 +201,7 @@ func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if handled, cmd := m.handleTitleBarHit(msg, nil); handled {
 			m.focusedItem = FocusBackBtn
-			return m, tea.Batch(cmd, m.btnSpinner.SetProcessingDeferred("Cancel", closeWithResult("", false)))
+			return m, tea.Batch(cmd, m.buttons.SetProcessing("Cancel", closeWithResult("", false)))
 		}
 		if msg.Button == tea.MouseLeft && strings.HasSuffix(msg.ID, "."+IDInsOvr) {
 			m.input.ToggleOverwrite()
@@ -214,10 +214,10 @@ func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if ButtonIDMatches(msg.ID, "OK") {
 				m.result = m.input.Value()
 				m.confirmed = true
-				return m, m.btnSpinner.SetProcessingDeferred("OK", closeWithResult(m.result, true))
+				return m, m.buttons.SetProcessing("OK", closeWithResult(m.result, true))
 			}
 			if ButtonIDMatches(msg.ID, "Cancel") {
-				return m, m.btnSpinner.SetProcessingDeferred("Cancel", closeWithResult("", false))
+				return m, m.buttons.SetProcessing("Cancel", closeWithResult("", false))
 			}
 			if ButtonIDMatches(msg.ID, "prompt_input") {
 				m.focusedItem = FocusList
@@ -334,9 +334,9 @@ func (m *promptDialogModel) ViewString() string {
 
 	// Spacer + buttons (same pattern as dialog_confirm.go)
 	spacer := lipgloss.NewStyle().Width(contentWidth).Background(borderBG).Render("")
-	promptBtnSpecs := m.btnSpinner.ApplyToSpecs([]ButtonSpec{
-		{Text: "OK", Active: m.focusedItem == FocusList || m.focusedItem == FocusSelectBtn, ZoneID: "OK"},
-		{Text: "Cancel", Active: m.focusedItem == FocusBackBtn, ZoneID: "Cancel"},
+	promptBtnSpecs := m.buttons.ApplySpinner([]ButtonSpec{
+		{Text: "OK", Active: m.focusedItem == FocusList || m.focusedItem == FocusSelectBtn || m.buttons.IsProcessingID("OK"), ZoneID: "OK"},
+		{Text: "Cancel", Active: m.focusedItem == FocusBackBtn || m.buttons.IsProcessingID("Cancel"), ZoneID: "Cancel"},
 	})
 	buttonRow := strings.TrimRight(RenderCenteredButtonsCtx(contentWidth, ctx, promptBtnSpecs...), "\n")
 
@@ -451,7 +451,7 @@ func (m *promptDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 }
 
 func (m *promptDialogModel) AdvanceSpinners(now time.Time) bool {
-	return m.btnSpinner.AdvanceSpinner(now)
+	return m.buttons.AdvanceSpinner(now)
 }
 
 // ShowPromptDialog displays a prompt dialog and returns the text and confirmed bool.
