@@ -49,6 +49,21 @@ func (m *MenuModel) SetProcessingBtnDeferred(zoneID string, action tea.Cmd) tea.
 	return m.deferAction(action)
 }
 
+// AbsorbMessage lets a MenuModel observe menuDeferredActionMsg without
+// participating in general Update() dispatch, so callers routing other
+// message types elsewhere cannot accidentally skip spinner bookkeeping.
+// Returns nil if the message is not a deferred action targeted at this
+// instance. Intended for the button-owning MenuModel on screens that hold
+// multiple MenuModels — call this unconditionally at the very top of the
+// screen's Update(), before any early-return branches, so a future early
+// return can never silently drop this menu's deferred action.
+func (m *MenuModel) AbsorbMessage(msg tea.Msg) tea.Cmd {
+	if deferred, ok := msg.(menuDeferredActionMsg); ok && deferred.id == m.instanceID {
+		return deferred.action
+	}
+	return nil
+}
+
 // SetLoadingText sets a centered spinner+message in the list area instead of list items.
 // Set to "" to stop.
 func (m *MenuModel) SetLoadingText(text string) tea.Cmd {
