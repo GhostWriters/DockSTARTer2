@@ -175,7 +175,7 @@ func (m *choiceDialogModel) ViewString() string {
 	spacer := lipgloss.NewStyle().Width(contentWidth).Background(borderBG).Render("")
 	fullContent := lipgloss.JoinVertical(lipgloss.Left, questionText, spacer, buttonRow)
 
-	return renderDialogWithTypeAndWidgets(m.title, fullContent, m.baseDialogModel.focused || m.tbFocused, 0, DialogTypeConfirm, ctx, TitleBarState{Show: true, Focused: m.tbFocused, ActiveWidget: m.tbWidget, PressedWidget: m.tbPressed})
+	return renderDialogWithTypeAndWidgets(m.title, fullContent, m.baseDialogModel.focused || m.TitleBarFocused(), 0, DialogTypeConfirm, ctx, m.State())
 }
 
 func (m *choiceDialogModel) View() tea.View {

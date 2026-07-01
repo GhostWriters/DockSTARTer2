@@ -893,7 +893,7 @@ func (m *addVarDialogModel) ViewString() string {
 	m.lastSbInfo = sbInfo
 
 	parts := []string{headingText, varNameSection, availableSection, buttonRow}
-	return tui.RenderDialogWithTypeAndWidgets("Add Variable", lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused || m.TitleBarFocused(), m.height, tui.DialogTypeInfo, tui.TitleBarState{Show: true, Focused: m.TitleBarFocused(), ActiveWidget: m.ActiveWidget(), PressedWidget: m.PressedWidget()})
+	return tui.RenderDialogWithTypeAndWidgets("Add Variable", lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused || m.TitleBarFocused(), m.height, tui.DialogTypeInfo, m.State())
 }
 
 func (m *addVarDialogModel) View() tea.View {
