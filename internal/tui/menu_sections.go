@@ -1,20 +1,19 @@
 package tui
 
 import (
-	"strings"
-
 	"DockSTARTer2/internal/tui/components/sinput"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 )
 
-// AddContentSection appends a sub-menu as a stacked section rendered inside this menu's border.
-// When sections are present the standard list is not rendered.
-func (m *MenuModel) AddContentSection(section *MenuModel) {
+// AddContentSection appends a sub-menu (or ContentRow) as a stacked section
+// rendered inside this menu's border, one section = one row. When sections
+// are present the standard list is not rendered.
+func (m *MenuModel) AddContentSection(section Content) {
 	// Inherit isDialog so section hit regions use ZDialog base, staying above
 	// the outer dialog's frame catch-all region (ZDialog-1).
-	section.isDialog = m.isDialog
+	section.SetIsDialog(m.isDialog)
 	m.contentSections = append(m.contentSections, section)
 	// First section added gets focus; move focusedItem away from buttons.
 	if len(m.contentSections) == 1 {
@@ -22,6 +21,13 @@ func (m *MenuModel) AddContentSection(section *MenuModel) {
 		m.focusedItem = FocusList
 		m.updateSectionFocus()
 	}
+}
+
+// AddContentRow groups the given items into a single horizontal row and adds
+// that row as one section (i.e. multiple sections sharing one row of
+// vertical space, side by side).
+func (m *MenuModel) AddContentRow(items ...Content) {
+	m.AddContentSection(NewContentRow(items...))
 }
 
 // updateSections routes a message to the focused content section and returns
@@ -37,6 +43,20 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		if key.Matches(msg, Keys.CycleTab) {
+			// A ContentRow contributes one Tab stop per child (Left/Right at
+			// this level already means "jump to the button row," so a row
+			// can't also claim it for intra-row navigation -- Tab must visit
+			// each child individually instead).
+			if m.focusedSection >= 0 && m.focusedSection < n && m.focusedItem == FocusList {
+				if row, ok := m.contentSections[m.focusedSection].(*ContentRow); ok {
+					if row.SubFocusIndex() < row.NumTabStops()-1 {
+						row.SetSubFocusIndex(row.SubFocusIndex() + 1)
+						cmd := m.updateSectionFocus()
+						m.InvalidateCache()
+						return m, cmd, true
+					}
+				}
+			}
 			next := m.focusedSection + 1
 			if next >= n {
 				m.focusedSection = -1
@@ -44,12 +64,25 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			} else {
 				m.focusedSection = next
 				m.focusedItem = FocusList
+				if row, ok := m.contentSections[next].(*ContentRow); ok {
+					row.SetSubFocusIndex(0)
+				}
 			}
 			cmd := m.updateSectionFocus()
 			m.InvalidateCache()
 			return m, cmd, true
 		}
 		if key.Matches(msg, Keys.CycleShiftTab) {
+			if m.focusedSection >= 0 && m.focusedSection < n && m.focusedItem == FocusList {
+				if row, ok := m.contentSections[m.focusedSection].(*ContentRow); ok {
+					if row.SubFocusIndex() > 0 {
+						row.SetSubFocusIndex(row.SubFocusIndex() - 1)
+						cmd := m.updateSectionFocus()
+						m.InvalidateCache()
+						return m, cmd, true
+					}
+				}
+			}
 			if m.focusedSection == -1 {
 				m.focusedSection = n - 1
 				m.focusedItem = FocusList
@@ -60,6 +93,9 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				}
 				m.focusedItem = FocusList
 			}
+			if row, ok := m.contentSections[m.focusedSection].(*ContentRow); ok {
+				row.SetSubFocusIndex(row.NumTabStops() - 1)
+			}
 			cmd := m.updateSectionFocus()
 			m.InvalidateCache()
 			return m, cmd, true
@@ -69,7 +105,8 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		// Up/Down always go to the section even in dual-focus (button highlighted) mode.
 		if m.focusedSection >= 0 && m.focusedSection < n {
 			if m.focusedItem == FocusList {
-				if key.Matches(msg, Keys.Left) || key.Matches(msg, Keys.Right) {
+				sec := m.contentSections[m.focusedSection]
+				if (key.Matches(msg, Keys.Left) || key.Matches(msg, Keys.Right)) && !sec.WantsHorizontalKeys() {
 					// Switch focus to buttons without losing section highlight.
 					if key.Matches(msg, Keys.Right) {
 						m.focusedItem = m.nextButtonFocus()
@@ -80,7 +117,7 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 					return m, nil, true
 				}
 				updated, cmd := m.contentSections[m.focusedSection].Update(msg)
-				if sec, ok := updated.(*MenuModel); ok {
+				if sec, ok := updated.(Content); ok {
 					m.contentSections[m.focusedSection] = sec
 				}
 				m.InvalidateCache()
@@ -90,7 +127,7 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			// Up/Down/Space route to section; Left/Right/Enter stay in button navigation (fall through).
 			if m.focusedItem == FocusBtn && (key.Matches(msg, Keys.Up) || key.Matches(msg, Keys.Down) || key.Matches(msg, Keys.Space)) {
 				updated, cmd := m.contentSections[m.focusedSection].Update(msg)
-				if sec, ok := updated.(*MenuModel); ok {
+				if sec, ok := updated.(Content); ok {
 					m.contentSections[m.focusedSection] = sec
 				}
 				m.InvalidateCache()
@@ -104,15 +141,28 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		// Item IDs are "item-{sectionID}-{index}", background is "{sectionID}",
 		// list panel is "{sectionID}.list-panel" — all contain the section ID.
 		for i, sec := range m.contentSections {
-			if strings.Contains(msg.ID, sec.id) {
+			if sec.MatchesID(msg.ID) {
+				// For a ContentRow, resolve which child the click landed on
+				// (updating its internal sub-focus) before calling
+				// updateSectionFocus, so SetSubFocused propagates to the
+				// correct child rather than whatever child previously had
+				// sub-focus.
+				if row, ok := sec.(*ContentRow); ok {
+					for ci, item := range row.Items() {
+						if item.MatchesID(msg.ID) {
+							row.SetSubFocusIndex(ci)
+							break
+						}
+					}
+				}
 				var focusCmd tea.Cmd
 				if m.focusedSection != i {
 					m.focusedSection = i
 					m.focusedItem = FocusList
-					focusCmd = m.updateSectionFocus()
 				}
+				focusCmd = m.updateSectionFocus()
 				updated, cmd := sec.Update(msg)
-				if s, ok := updated.(*MenuModel); ok {
+				if s, ok := updated.(Content); ok {
 					m.contentSections[i] = s
 				}
 				m.InvalidateCache()
@@ -126,7 +176,7 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			// Send the raw MouseWheelMsg so the section's Scroll.Update handles it
 			// (3-step scroll with pending throttle), not the 1-step LayerWheelMsg path.
 			updated, cmd := m.contentSections[m.focusedSection].Update(msg)
-			if s, ok := updated.(*MenuModel); ok {
+			if s, ok := updated.(Content); ok {
 				m.contentSections[m.focusedSection] = s
 			}
 			m.InvalidateCache()
@@ -137,9 +187,9 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	case ScrollDoneMsg:
 		// Route to whichever section owns this scrollbar ID so Pending gets cleared.
 		for i, sec := range m.contentSections {
-			if sec.Scroll.ID == msg.ID {
+			if sec.ScrollID() == msg.ID {
 				updated, cmd := sec.Update(msg)
-				if s, ok := updated.(*MenuModel); ok {
+				if s, ok := updated.(Content); ok {
 					m.contentSections[i] = s
 				}
 				return m, cmd, true
@@ -150,7 +200,7 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	case ToggleFocusedMsg:
 		if m.focusedSection >= 0 && m.focusedSection < n {
 			updated, cmd := m.contentSections[m.focusedSection].Update(msg)
-			if s, ok := updated.(*MenuModel); ok {
+			if s, ok := updated.(Content); ok {
 				m.contentSections[m.focusedSection] = s
 			}
 			m.InvalidateCache()
@@ -161,7 +211,7 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	case LayerWheelMsg:
 		// Route wheel to whichever section owns the hit ID.
 		for i, sec := range m.contentSections {
-			if strings.Contains(msg.ID, sec.id) {
+			if sec.MatchesID(msg.ID) {
 				var focusCmd tea.Cmd
 				if m.focusedSection != i {
 					m.focusedSection = i
@@ -170,7 +220,7 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				}
 				_ = focusCmd
 				updated, cmd := sec.Update(msg)
-				if s, ok := updated.(*MenuModel); ok {
+				if s, ok := updated.(Content); ok {
 					m.contentSections[i] = s
 				}
 				m.InvalidateCache()
@@ -182,7 +232,7 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		// Forwarded clipboard messages from the context menu — route to focused section.
 		if m.focusedSection >= 0 && m.focusedSection < n && m.focusedItem == FocusList {
 			updated, cmd := m.contentSections[m.focusedSection].Update(msg)
-			if sec, ok := updated.(*MenuModel); ok {
+			if sec, ok := updated.(Content); ok {
 				m.contentSections[m.focusedSection] = sec
 			}
 			m.InvalidateCache()
@@ -212,14 +262,14 @@ func (m *MenuModel) ApplySectionFocus() {
 }
 
 // GetContentSections returns the current content sections.
-func (m *MenuModel) GetContentSections() []*MenuModel {
+func (m *MenuModel) GetContentSections() []Content {
 	return m.contentSections
 }
 
 // ReplaceSections replaces all content sections with the provided ones.
-func (m *MenuModel) ReplaceSections(sections ...*MenuModel) {
+func (m *MenuModel) ReplaceSections(sections ...Content) {
 	for _, sec := range sections {
-		sec.isDialog = m.isDialog
+		sec.SetIsDialog(m.isDialog)
 	}
 	m.contentSections = sections
 	m.InvalidateCache()
@@ -260,7 +310,7 @@ const largeTitleBarMinRemaining = 3
 // relaxes that requirement to 0 and this mirrors it -- see calculateSectionLayout.
 func (m *MenuModel) LargeTitleBarBudget() int {
 	for _, sec := range m.contentSections {
-		if sec.variableHeight {
+		if sec.IsVariableHeight() {
 			return LargeTitleBarOverhead + largeTitleBarMinRemaining
 		}
 	}
@@ -327,7 +377,7 @@ func (m *MenuModel) calculateSectionLayout() {
 	fixedTotal := 0
 	expandableCount := 0
 	for i, sec := range m.contentSections {
-		if sec.variableHeight {
+		if sec.IsVariableHeight() {
 			expandableCount++
 			continue
 		}
@@ -403,7 +453,7 @@ func (m *MenuModel) calculateSectionLayout() {
 		buttonY += LargeTitleBarOverhead
 	}
 	for _, sec := range m.contentSections {
-		buttonY += sec.height
+		buttonY += sec.Height()
 	}
 
 	m.layout = DialogLayout{

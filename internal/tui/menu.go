@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 	"sync/atomic"
 
 	"charm.land/bubbles/v2/list"
@@ -175,9 +176,10 @@ type MenuModel struct {
 	externalLock        bool   // Whether destructive items are locked by an external session (persists across SetItems)
 	commandLock         bool   // Whether destructive items are locked by a running panel command
 
-	// Content sections: sub-menus rendered stacked inside the outer border.
-	// When present, replaces the standard list+inner-border rendering.
-	contentSections []*MenuModel
+	// Content sections: sub-menus (or ContentRows of sub-menus) rendered
+	// stacked inside the outer border. When present, replaces the standard
+	// list+inner-border rendering.
+	contentSections []Content
 	focusedSection   int // index into contentSections; -1 = buttons focused
 
 	// Optional hook to enrich the ItemText shown in the help dialog for a menu item.
@@ -519,6 +521,29 @@ func (m *MenuModel) SetItemDocFunc(f func(item MenuItem) (docMarkdown, docAppNam
 
 // ID returns the unique identifier for this menu
 func (m *MenuModel) ID() string { return m.id }
+
+// IsVariableHeight reports whether this menu expands to fill available space
+// when used as a content section, rather than having a fixed intrinsic
+// height. Part of the Content interface.
+func (m *MenuModel) IsVariableHeight() bool { return m.variableHeight }
+
+// ScrollID returns the ID of this menu's own scrollbar, for ScrollDoneMsg
+// routing. Part of the Content interface.
+func (m *MenuModel) ScrollID() string { return m.Scroll.ID }
+
+// MatchesID reports whether msgID belongs to this menu (hit-region IDs like
+// "item-{id}-{index}" contain the section's own id as a substring). Part of
+// the Content interface.
+func (m *MenuModel) MatchesID(msgID string) bool {
+	return strings.Contains(msgID, m.id)
+}
+
+// WantsHorizontalKeys reports true when this menu has a contentRenderer (the
+// sinput text-input kind), which consumes Left/Right itself for cursor
+// movement via its own interceptor. Part of the Content interface.
+func (m *MenuModel) WantsHorizontalKeys() bool {
+	return m.contentRenderer != nil
+}
 
 // SetDialogType sets the visual style/type of the menu dialog
 func (m *MenuModel) SetDialogType(t DialogType) { m.dialogType = t }

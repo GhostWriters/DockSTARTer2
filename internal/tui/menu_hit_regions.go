@@ -429,7 +429,7 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		secOffsetX := offsetX + layout.ContentInset()
 		for _, sec := range m.contentSections {
 			regions = append(regions, sec.GetHitRegions(secOffsetX, secOffsetY)...)
-			secOffsetY += sec.height
+			secOffsetY += sec.Height()
 		}
 	}
 
