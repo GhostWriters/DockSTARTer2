@@ -12,54 +12,34 @@ import (
 // Called when the menu is restored as the active screen after navigation.
 func (m *MenuModel) ClearProcessingState() {
 	m.processingItemIdx = -1
-	m.processingBtnID = ""
+	m.btnRow.Clear()
 	m.InvalidateCache()
-}
-
-// mapBtnZoneID translates public ID constants (IDApplyButton, IDBackButton, IDExitButton)
-// to the internal zone IDs used by menu_buttons.go ("btn-select", "btn-back", "btn-exit").
-func mapBtnZoneID(zoneID string) string {
-	switch zoneID {
-	case IDApplyButton:
-		return "btn-select"
-	case IDBackButton:
-		return "btn-back"
-	case IDExitButton:
-		return "btn-exit"
-	}
-	return zoneID
-}
-
-// SetProcessingBtn marks the given button zone ID as spinning and starts the tick loop.
-// Use this when the screen handles button clicks itself (bypassing MenuModel.Update)
-// but still wants the MenuModel to render the spinner on that button.
-func (m *MenuModel) SetProcessingBtn(zoneID string) tea.Cmd {
-	m.processingBtnID = mapBtnZoneID(zoneID)
-	m.InvalidateCache()
-	return nil
 }
 
 // SetProcessingBtnDeferred marks the given button as spinning and defers the action
 // by a short fixed delay so the button's active state renders before the action runs.
 // Use this instead of tea.Batch(SetProcessingBtn, action) for any action that
 // is synchronous/blocking (e.g. opens a confirm dialog on the same goroutine).
+// zoneID must match the ButtonDef.ZoneID exactly (no aliasing) so the spinner
+// state matches the ZoneID checked when rendering (see getButtonSpecs).
 func (m *MenuModel) SetProcessingBtnDeferred(zoneID string, action tea.Cmd) tea.Cmd {
-	m.processingBtnID = mapBtnZoneID(zoneID)
+	cmd := m.btnRow.SetProcessing(zoneID, action)
 	m.InvalidateCache()
-	return m.deferAction(action)
+	return cmd
 }
 
-// AbsorbMessage lets a MenuModel observe menuDeferredActionMsg without
-// participating in general Update() dispatch, so callers routing other
-// message types elsewhere cannot accidentally skip spinner bookkeeping.
-// Returns nil if the message is not a deferred action targeted at this
-// instance. Intended for the button-owning MenuModel on screens that hold
-// multiple MenuModels — call this unconditionally at the very top of the
-// screen's Update(), before any early-return branches, so a future early
-// return can never silently drop this menu's deferred action.
+// AbsorbMessage lets a MenuModel observe its button row's deferred-action
+// message without participating in general Update() dispatch, so callers
+// routing other message types elsewhere cannot accidentally skip button
+// spinner/action bookkeeping. Returns nil if the message is not a deferred
+// button action targeted at this instance's button row. Intended for the
+// button-owning MenuModel on screens that hold multiple MenuModels — call
+// this unconditionally at the very top of the screen's Update(), before any
+// early-return branches, so a future early return can never silently drop
+// this menu's button click.
 func (m *MenuModel) AbsorbMessage(msg tea.Msg) tea.Cmd {
-	if deferred, ok := msg.(menuDeferredActionMsg); ok && deferred.id == m.instanceID {
-		return deferred.action
+	if cmd, ok := m.btnRow.Update(msg); ok {
+		return cmd
 	}
 	return nil
 }
@@ -73,18 +53,23 @@ func (m *MenuModel) SetLoadingText(text string) tea.Cmd {
 	return nil
 }
 
-// AdvanceSpinners advances the menu spinner by one frame if its interval has
-// elapsed. Returns true if anything changed. Called by the global tick.
+// AdvanceSpinners advances the button spinner and the list-item/loading
+// spinner by one frame each, if their intervals have elapsed. Returns true
+// if anything changed. Called by the global tick.
 func (m *MenuModel) AdvanceSpinners(now time.Time) bool {
-	if !console.SpinnerEnabled {
-		return false
+	btnChanged := m.btnRow.AdvanceSpinner(now)
+	if btnChanged {
+		m.InvalidateCache()
 	}
-	if m.loadingText == "" && m.processingItemIdx < 0 && m.processingBtnID == "" {
-		return false
+	if !console.SpinnerEnabled {
+		return btnChanged
+	}
+	if m.loadingText == "" && m.processingItemIdx < 0 {
+		return btnChanged
 	}
 	fps := time.Duration(console.SpinnerSpeed) * time.Millisecond
 	if fps <= 0 || now.Sub(m.lastSpinner) < fps {
-		return false
+		return btnChanged
 	}
 	m.lastSpinner = now
 	ctx := GetActiveContext()

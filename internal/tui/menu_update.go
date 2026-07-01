@@ -29,16 +29,21 @@ func (m *MenuModel) deferAction(action tea.Cmd) tea.Cmd {
 func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Spinner tick: advance frame and schedule next tick while loading.
 	if deferred, ok := msg.(menuDeferredActionMsg); ok && deferred.id == m.instanceID {
-		// Keep processingBtnID/processingItemIdx set so the spinner keeps ticking
-		// while the action runs (actions like NavigateMsg can be slow to build the
+		// Keep processingItemIdx set so the spinner keeps ticking while the
+		// action runs (actions like NavigateMsg can be slow to build the
 		// new screen). ClearProcessingState() is called when the screen is popped
 		// back from the stack, or explicitly by the action if it doesn't navigate.
 		return m, deferred.action
 	}
+	// Button deferred-action messages are scoped to btnRow's own instanceID,
+	// separate from menuDeferredActionMsg above (list-item actions).
+	if cmd, ok := m.btnRow.Update(msg); ok {
+		return m, cmd
+	}
 
 	// Block all user input while an action is in flight (spinner visible).
 	// Still allow system messages (size, lock state, etc.) to pass through.
-	if m.processingItemIdx >= 0 || m.processingBtnID != "" {
+	if m.processingItemIdx >= 0 || m.btnRow.IsProcessing() {
 		switch msg.(type) {
 		case tea.KeyPressMsg, tea.MouseClickMsg, tea.MouseReleaseMsg, LayerHitMsg, LayerWheelMsg, tea.MouseWheelMsg, ToggleFocusedMsg:
 			return m, nil
@@ -464,9 +469,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.focusedItem = FocusBtn
 					m.focusedBtnIndex = i
 					action := btn.Action
-					m.processingBtnID = btn.ZoneID
-					m.InvalidateCache()
-					return m, m.deferAction(func() tea.Msg { return action() })
+					return m, m.SetProcessingBtnDeferred(btn.ZoneID, func() tea.Msg { return action() })
 				}
 			}
 			for i, btn := range m.buttons {
@@ -583,10 +586,8 @@ func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 		if m.focusedBtnIndex >= 0 && m.focusedBtnIndex < len(m.buttons) {
 			btn := m.buttons[m.focusedBtnIndex]
 			if btn.Action != nil {
-				m.processingBtnID = btn.ZoneID
-				m.InvalidateCache()
 				action := btn.Action
-				return m, m.deferAction(func() tea.Msg { return action() })
+				return m, m.SetProcessingBtnDeferred(btn.ZoneID, func() tea.Msg { return action() })
 			}
 		}
 		// Button has no action (inert) — also check if it's the first button (Select-role)
@@ -599,7 +600,7 @@ func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 					menuSelectedIndices[m.persistKey()] = m.cursor
 					m.processingItemIdx = m.cursor
 					if len(m.buttons) > 0 {
-						m.processingBtnID = m.buttons[0].ZoneID
+						m.btnRow.MarkProcessing(m.buttons[0].ZoneID)
 					}
 					m.InvalidateCache()
 					return m, m.deferAction(item.Action)
@@ -607,7 +608,7 @@ func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 			}
 			if m.enterAction != nil {
 				if len(m.buttons) > 0 {
-					m.processingBtnID = m.buttons[0].ZoneID
+					m.btnRow.MarkProcessing(m.buttons[0].ZoneID)
 				}
 				m.InvalidateCache()
 				return m, m.deferAction(m.enterAction)
@@ -631,7 +632,7 @@ func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 				m.cursor = m.list.Index()
 				menuSelectedIndices[m.persistKey()] = m.cursor
 				m.processingItemIdx = m.cursor
-				m.processingBtnID = "btn-select"
+				m.btnRow.MarkProcessing("btn-select")
 				m.InvalidateCache()
 				return m, m.deferAction(item.Action)
 			}
@@ -639,7 +640,7 @@ func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 
 		// 2. Fall back to model-level enter action (for "Done" buttons on selection screens)
 		if m.enterAction != nil {
-			m.processingBtnID = "btn-select"
+			m.btnRow.MarkProcessing("btn-select")
 			m.InvalidateCache()
 			return m, m.deferAction(m.enterAction)
 		}

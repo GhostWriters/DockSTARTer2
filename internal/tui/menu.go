@@ -201,20 +201,22 @@ type MenuModel struct {
 	titleBarPressed string
 
 	// loadingText, when non-empty, replaces the list area with a centered spinner + message.
+	// spinnerFrame/lastSpinner drive this list-item/loading spinner only —
+	// the button spinner is owned by btnRow.
 	loadingText  string
 	spinnerFrame int
 	lastSpinner  time.Time
 
 	// processingItemIdx is the index of the menu item currently being activated (-1 = none).
-	// processingBtnID is the ZoneID of the button currently being activated ("" = none).
-	// Both show a spinner indicator while the triggered action is in flight.
+	// Shows a spinner indicator while the triggered action is in flight.
 	processingItemIdx int
-	processingBtnID   string
 
 	// Slice-based button system. Replaces any legacy configuration.
 	// Use SetButtons() to set; focusedBtnIndex tracks which button in the slice is focused.
+	// btnRow owns button processing/spinner state; kept in sync by SetButtons.
 	buttons         []ButtonDef
 	focusedBtnIndex int
+	btnRow          *ButtonRow
 }
 
 // ButtonDef defines a single button in a dialog's button row.
@@ -456,6 +458,7 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem) *MenuModel {
 		activityGutterWidth: 0,
 		itemPaddingWidth:    1, // Default 1 char padding after marker gutter
 		processingItemIdx:   -1,
+		btnRow:              NewButtonRow(nil),
 	}
 }
 
@@ -578,6 +581,7 @@ func (m *MenuModel) SetFocusedBtnIndex(idx int) {
 func (m *MenuModel) SetButtons(btns []ButtonDef) {
 	m.buttons = btns
 	m.focusedBtnIndex = 0
+	m.btnRow.SetButtons(btns)
 	if len(btns) > 0 {
 		m.showButtons = true
 	} else {
@@ -608,7 +612,7 @@ func (m *MenuModel) SetFocused(f bool) {
 	// the previous action resolved (screen came back or navigated away and returned).
 	if f && wasUnfocused {
 		m.processingItemIdx = -1
-		m.processingBtnID = ""
+		m.btnRow.Clear()
 	}
 	m.updateDelegate()
 	m.InvalidateCache()

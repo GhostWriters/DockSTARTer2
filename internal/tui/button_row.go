@@ -31,11 +31,10 @@ type buttonRowDeferredActionMsg struct {
 //     cmd, return it.
 //  3. When a button is clicked, call m.buttons.SetProcessing(zoneID, action)
 //     and return the cmd it returns.
-//  4. Before rendering, call m.buttons.Specs() to get []ButtonSpec.
+//  4. Before rendering, call m.buttons.Specs(focused, focusedIndex) to get []ButtonSpec.
 type ButtonRow struct {
 	instanceID      string
 	buttons         []ButtonDef
-	focusedBtnIndex int
 	processingBtnID string
 	spinnerFrame    int
 	lastSpinner     time.Time
@@ -49,11 +48,10 @@ func NewButtonRow(buttons []ButtonDef) *ButtonRow {
 	}
 }
 
-// FocusedIndex returns the currently focused button index.
-func (b *ButtonRow) FocusedIndex() int { return b.focusedBtnIndex }
-
-// SetFocusedIndex sets the currently focused button index.
-func (b *ButtonRow) SetFocusedIndex(idx int) { b.focusedBtnIndex = idx }
+// SetButtons replaces the button definitions.
+func (b *ButtonRow) SetButtons(buttons []ButtonDef) {
+	b.buttons = buttons
+}
 
 // ZoneIDAt returns the ZoneID of the button at idx, or "" if out of range.
 func (b *ButtonRow) ZoneIDAt(idx int) string {
@@ -75,6 +73,15 @@ func (b *ButtonRow) SetProcessing(zoneID string, action tea.Cmd) tea.Cmd {
 	return tea.Tick(50*time.Millisecond, func(time.Time) tea.Msg {
 		return buttonRowDeferredActionMsg{id: id, action: action}
 	})
+}
+
+// MarkProcessing marks the given button zone ID as spinning without
+// scheduling any deferred action. Use this when the caller drives its own
+// deferred dispatch separately (e.g. a list-item action that also visually
+// spins a proxy "Select" button).
+func (b *ButtonRow) MarkProcessing(zoneID string) {
+	b.processingBtnID = zoneID
+	b.spinnerFrame = 0
 }
 
 // Clear stops the spinner.
@@ -133,11 +140,13 @@ func (b *ButtonRow) AdvanceSpinners(now time.Time) bool {
 // Active/Spinning/SpinnerFrame populated from focus and processing state.
 // focused indicates whether button-row focus (vs. some other widget in the
 // dialog) is active; when false, no button renders as Active from keyboard
-// focus (though a processing button still renders as Active).
-func (b *ButtonRow) Specs(focused bool) []ButtonSpec {
+// focus (though a processing button still renders as Active). focusedIndex
+// is the caller-owned index of the currently focused button (ButtonRow does
+// not track focus itself).
+func (b *ButtonRow) Specs(focused bool, focusedIndex int) []ButtonSpec {
 	specs := make([]ButtonSpec, len(b.buttons))
 	for i, btn := range b.buttons {
-		active := (focused && b.focusedBtnIndex == i) || b.processingBtnID == btn.ZoneID
+		active := (focused && focusedIndex == i) || b.processingBtnID == btn.ZoneID
 		specs[i] = ButtonSpec{
 			Text:         btn.Label,
 			Active:       active,

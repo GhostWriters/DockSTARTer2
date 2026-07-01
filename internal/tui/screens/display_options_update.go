@@ -25,8 +25,8 @@ func (s *DisplayOptionsScreen) IsScrollbarDragging() bool {
 
 func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// outerMenu owns all buttons on this screen (Apply/Back/Exit); it must see
-	// every message so its spinner/deferred-action state can never be skipped
-	// by an early return below.
+	// every message so its button's deferred-action/spinner state can never
+	// be skipped by an early return below.
 	if s.outerMenu != nil {
 		if action := s.outerMenu.AbsorbMessage(msg); action != nil {
 			return s, action
