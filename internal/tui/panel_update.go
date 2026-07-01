@@ -197,7 +197,7 @@ func (m *PanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 		m.consoleScanner = sc
 		m.consoleConfigChanged = configChanged
 		m.consoleAppsChanged = appsChanged
-		m.spinnerFrame = 0
+		m.titleSpinner.Start()
 		lockCmd := m.lockSession("console.command", true)
 		return tea.Batch(lockCmd, readConsoleBatchWithFlag(sc, cancel, configChanged, appsChanged))
 	}
@@ -205,7 +205,7 @@ func (m *PanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 	// Shell command
 	ctx, cancel := context.WithCancel(context.Background())
 	m.consoleCancel = cancel
-	m.spinnerFrame = 0
+	m.titleSpinner.Start()
 
 	// If the command contains sudo, intercept it and prime the sudo credential cache.
 	var containsSudo bool

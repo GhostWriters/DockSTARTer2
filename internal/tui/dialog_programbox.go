@@ -7,7 +7,6 @@ import (
 	"io"
 	"time"
 
-	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/tui/components/streamvp"
 
 	"charm.land/bubbles/v2/key"
@@ -40,8 +39,7 @@ type ProgramBoxModel struct {
 	subtitle string
 	command  string // Command being executed (displayed above output)
 	sv           streamvp.Model
-	spinnerFrame int       // title-bar spinner frame (advanced by global tick)
-	lastSpinner  time.Time // when the title-bar spinner was last advanced
+	titleSpinner TitleSpinner // title-bar spinner (advanced by global tick)
 	done         bool
 	err          error
 	width        int
@@ -115,6 +113,7 @@ func newProgramBox(title, subtitle, command string) *ProgramBoxModel {
 		Scroll:          Scrollbar{ID: "programbox_dialog"},
 		headerLineCount: -1,
 	}
+	m.titleSpinner.Start()
 
 	// Initialize progress bar with default options
 	m.progress = progress.New()
@@ -356,6 +355,7 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case outputDoneMsg:
 		m.done = true
+		m.titleSpinner.Stop()
 		m.sv.CommandRunning = false
 		m.sv.ClearSpinner()
 		lockID := fmt.Sprintf("programbox-%p", m)
@@ -451,16 +451,10 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // if their interval has elapsed. Returns true if anything changed (caller should
 // trigger a re-render). Called by the global tick in AppModel.Update.
 func (m *ProgramBoxModel) AdvanceSpinners(now time.Time) bool {
-	if m.done || !console.SpinnerEnabled {
+	if m.done {
 		return false
 	}
-	changed := false
-	fps := time.Duration(console.SpinnerSpeed) * time.Millisecond
-	if fps > 0 && now.Sub(m.lastSpinner) >= fps {
-		m.lastSpinner = now
-		m.spinnerFrame++
-		changed = true
-	}
+	changed := m.titleSpinner.AdvanceSpinner(now)
 	if m.sv.AdvanceSpinner(now) {
 		changed = true
 	}
@@ -470,11 +464,10 @@ func (m *ProgramBoxModel) AdvanceSpinners(now time.Time) bool {
 // currentSpinnerIndicators returns the left and right spinner frame characters for the title bar,
 // or "" when the spinner is disabled or the task is complete.
 func (m *ProgramBoxModel) currentSpinnerIndicators() (left, right string) {
-	if m.done || !console.SpinnerEnabled {
+	if m.done {
 		return "", ""
 	}
-	ctx := GetActiveContext()
-	return console.TitleSpinnerFrames(m.spinnerFrame, ctx.LineCharacters)
+	return m.titleSpinner.Indicators()
 }
 
 func (m *ProgramBoxModel) satisfySubDialogChan(result any) {

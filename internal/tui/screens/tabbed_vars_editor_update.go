@@ -377,6 +377,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// gutter markers, removes pending-delete lines, updates InitialLine).
 		// Also refresh the app list so user-defined status reflects the new file.
 		m.loading = true
+		m.titleSpinner.Start()
 		return m, tea.Batch(
 			func() tea.Msg { return tui.RefreshAppsListMsg{} },
 			m.loadEnv,
@@ -497,6 +498,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tui.EnvLoadDoneMsg:
 		m.loading = false
+		m.titleSpinner.Stop()
 		for _, data := range msg.Tabs {
 			i := data.Index
 			if i < 0 || i >= len(m.tabs) {

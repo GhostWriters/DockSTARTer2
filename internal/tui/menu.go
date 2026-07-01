@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	"sync/atomic"
-	"time"
 
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
@@ -201,11 +200,10 @@ type MenuModel struct {
 	titleBarPressed string
 
 	// loadingText, when non-empty, replaces the list area with a centered spinner + message.
-	// spinnerFrame/lastSpinner drive this list-item/loading spinner only —
-	// the button spinner is owned by btnRow.
+	// titleSpinner drives this list-item/loading spinner only — the button
+	// spinner is owned by btnRow.
 	loadingText  string
-	spinnerFrame int
-	lastSpinner  time.Time
+	titleSpinner TitleSpinner
 
 	// processingItemIdx is the index of the menu item currently being activated (-1 = none).
 	// Shows a spinner indicator while the triggered action is in flight.
@@ -612,6 +610,9 @@ func (m *MenuModel) SetFocused(f bool) {
 	// the previous action resolved (screen came back or navigated away and returned).
 	if f && wasUnfocused {
 		m.processingItemIdx = -1
+		if m.loadingText == "" {
+			m.titleSpinner.Stop()
+		}
 		m.btnRow.Clear()
 	}
 	m.updateDelegate()

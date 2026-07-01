@@ -5,7 +5,6 @@ import (
 	"context"
 	"time"
 
-	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/tui/components/sinput"
 	"DockSTARTer2/internal/tui/components/streamvp"
 	"charm.land/bubbles/v2/textinput"
@@ -89,8 +88,7 @@ type PanelModel struct {
 
 	panelMode            string // "log", "console", "system", or "none"
 	connType             string // "local", "ssh", or "web"
-	spinnerFrame         int
-	lastSpinner          time.Time // when the title spinner frame was last advanced
+	titleSpinner         TitleSpinner
 	lastLineTime         time.Time // when the last log line arrived; spinner runs until idle for spinnerIdleTimeout
 	panelChanged         bool      // new content arrived while collapsed; cleared on expand
 	replaceHeaderCount   int       // line count before first replaceOutputMsg (-1 = not yet set)
@@ -107,22 +105,13 @@ const (
 // spinner if their interval has elapsed. Returns true if anything changed.
 // Called by the global tick in AppModel.Update.
 func (m *PanelModel) AdvanceSpinners(now time.Time) bool {
-	if !console.SpinnerEnabled {
-		return false
-	}
-	changed := false
 	isSpinnerActive := !m.lastLineTime.IsZero() && time.Since(m.lastLineTime) < spinnerIdleTimeout
-	fps := time.Duration(console.SpinnerSpeed) * time.Millisecond
-	if fps > 0 && isSpinnerActive && now.Sub(m.lastSpinner) >= fps {
-		m.lastSpinner = now
-		ctx := GetActiveContext()
-		frames := console.SpinnerFramesTitleUnicode
-		if !ctx.LineCharacters {
-			frames = console.SpinnerFramesTitleASCII
-		}
-		m.spinnerFrame = (m.spinnerFrame + 1) % len(frames)
-		changed = true
+	if isSpinnerActive {
+		m.titleSpinner.Start()
+	} else {
+		m.titleSpinner.Stop()
 	}
+	changed := m.titleSpinner.AdvanceSpinner(now)
 	if m.sv.AdvanceSpinner(now) {
 		changed = true
 	}
@@ -141,10 +130,7 @@ func changedIndicatorChar(lineCharacters bool) string {
 // the changed indicator when new content arrived while collapsed,
 // or "" when idle.
 func (m *PanelModel) currentSpinnerMarker() (indicatorL, indicatorR string, changed bool) {
-	spinning := !m.lastLineTime.IsZero() && time.Since(m.lastLineTime) < spinnerIdleTimeout && console.SpinnerEnabled
-	if spinning {
-		ctx := GetActiveContext()
-		l, r := console.TitleSpinnerFrames(m.spinnerFrame, ctx.LineCharacters)
+	if l, r := m.titleSpinner.Indicators(); l != "" {
 		return l, r, !m.expanded
 	}
 	if m.panelChanged && !m.expanded {

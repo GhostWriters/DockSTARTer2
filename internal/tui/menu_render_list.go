@@ -3,7 +3,6 @@ package tui
 import (
 	"strings"
 
-	"DockSTARTer2/internal/console"
 	semstyle "github.com/GhostWriters/semstyle/lg"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
@@ -235,7 +234,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 		}
 
 		tagStr := ""
-		isProcessingItem := m.processingItemIdx >= 0 && i == m.processingItemIdx && console.SpinnerEnabled
+		isProcessingItem := m.processingItemIdx >= 0 && i == m.processingItemIdx
 		if len(item.Tag) > 0 {
 			runes := []rune(item.Tag)
 			letterIdx := 0
@@ -248,9 +247,11 @@ func (m *MenuModel) renderVariableHeightList() string {
 				tagStr = RenderThemeText(item.Tag, tStyle)
 			}
 			if isProcessingItem {
-				spinL, spinR := console.TitleSpinnerFrames(m.spinnerFrame, GetActiveContext().LineCharacters)
-				spinStyle := GetStyles().TagSpinner
-				tagStr = spinStyle.Render(spinL) + tagStr + spinStyle.Render(spinR)
+				spinL, spinR := m.titleSpinner.Indicators()
+				if spinL != "" {
+					spinStyle := GetStyles().TagSpinner
+					tagStr = spinStyle.Render(spinL) + tagStr + spinStyle.Render(spinR)
+				}
 			}
 		}
 
