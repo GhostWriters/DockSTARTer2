@@ -104,10 +104,7 @@ type TabbedVarsEditorModel struct {
 // spinner if their intervals have elapsed. Returns true if either frame
 // changed. Called by the global tick via globalTickMsg.
 func (m *TabbedVarsEditorModel) AdvanceSpinners(now time.Time) bool {
-	changed := false
-	if m.btnRow != nil && m.btnRow.AdvanceSpinner(now) {
-		changed = true
-	}
+	changed := m.btnRow != nil && m.btnRow.AdvanceSpinner(now)
 	if m.titleSpinner.AdvanceSpinner(now) {
 		changed = true
 	}
