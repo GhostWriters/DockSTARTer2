@@ -13,6 +13,28 @@ import (
 // LargeTitleBarOverhead is the extra lines a large titlebar adds over a small one (title row + separator).
 const LargeTitleBarOverhead = 2
 
+// DecideLargeTitleBar returns whether a large (multi-row) title bar should
+// be used, given the remaining content budget after all other overhead
+// (buttons, subtitles, headings, minimum viewport rows, etc.) has already
+// been subtracted, and the minimum rows that must remain after also
+// reserving LargeTitleBarOverhead. Returns the decision and the adjusted
+// budget (budget - LargeTitleBarOverhead if large, budget unchanged if not).
+//
+// enabled should be the caller's own currentConfig.UI.LargeTitleBars /
+// ctx.LargeTitleBars check combined with any caller-specific precondition
+// (e.g. MenuModel's "!m.subMenuMode && m.title != \"\"") — those
+// preconditions stay at the call site since they're not part of the shared
+// size math.
+func DecideLargeTitleBar(enabled bool, budget, minRemaining int) (useLarge bool, adjustedBudget int) {
+	if !enabled {
+		return false, budget
+	}
+	if budget-LargeTitleBarOverhead < minRemaining {
+		return false, budget
+	}
+	return true, budget - LargeTitleBarOverhead
+}
+
 // TitleBarState carries the state needed to render title bar widgets ([?]/[×]).
 // The zero value means "no widgets shown".
 type TitleBarState struct {
