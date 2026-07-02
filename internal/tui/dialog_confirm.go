@@ -1,298 +1,145 @@
 package tui
 
 import (
-	"strings"
 	"time"
 
-	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
 
-// confirmDialogModel represents a yes/no confirmation dialog
+// confirmDialogModel represents a yes/no confirmation dialog. Built as an
+// outer container MenuModel (title, buttons) with the question as a single
+// plain-text content section, matching the pattern used by Main Menu/Config
+// Menu/Options Menu/Config Apps Menu/Global Flags.
 type confirmDialogModel struct {
-	baseDialogModel
-	title      string
-	question   string
-	defaultYes bool
-	result     bool
-	confirmed  bool
-	onResult   func(bool) tea.Msg
-	buttons    *ButtonRow
+	outer     *MenuModel
+	result    bool
+	confirmed bool
+	onResult  func(bool) tea.Msg
+}
+
+func newConfirmDialogModel(title, question string, defaultYes bool, onResult func(bool) tea.Msg) *confirmDialogModel {
+	m := &confirmDialogModel{
+		result:   defaultYes,
+		onResult: onResult,
+	}
+
+	// confirm_dialog_question deliberately avoids being a substring of
+	// "confirm_dialog" the other way around -- MatchesID uses
+	// strings.Contains, so distinct, non-overlapping ids are safe by
+	// construction (learned from the Global Flags ID-collision bug).
+	outer := NewMenuModel("confirm_dialog", title, "", nil)
+	outer.SetMaximized(false) // grow to fit, matching original behavior
+	outer.SetIsDialog(true)
+	outer.SetDialogType(DialogTypeConfirm)
+	outer.SetShowButtons(true)
+	outer.SetButtons([]ButtonDef{
+		{Label: "Yes", ZoneID: "btn-yes", Action: func() tea.Msg {
+			m.result = true
+			m.confirmed = true
+			return m.onResult(true)
+		}, Help: "Confirm."},
+		{Label: "No", ZoneID: "btn-cancel", Action: func() tea.Msg {
+			m.result = false
+			m.confirmed = true
+			return m.onResult(false)
+		}, Help: "Cancel."},
+	})
+	if defaultYes {
+		outer.SetFocusedBtnIndex(0)
+	} else {
+		outer.SetFocusedBtnIndex(1)
+	}
+	questionSection := NewPlainTextSection("confirm_dialog_question", question)
+	questionSection.SetPlainTextStyle("", 1)
+	outer.AddContentSection(questionSection)
+
+	m.outer = outer
+	return m
 }
 
 // newConfirmDialog creates a new confirmation dialog
 func newConfirmDialog(title, question string, defaultYes bool) *confirmDialogModel {
-	m := &confirmDialogModel{
-		baseDialogModel: baseDialogModel{id: "confirm_dialog", focused: true},
-		title:           title,
-		question:        question,
-		defaultYes:      defaultYes,
-		result:          defaultYes,
-		onResult: func(r bool) tea.Msg {
-			return CloseDialogMsg{Result: r}
-		},
-	}
-	m.buttons = NewButtonRow([]ButtonDef{{Label: "Yes", ZoneID: "Yes"}, {Label: "No", ZoneID: "No"}})
-	return m
+	return newConfirmDialogModel(title, question, defaultYes, func(r bool) tea.Msg {
+		return CloseDialogMsg{Result: r}
+	})
 }
 
 // NewConfirmModel creates a public confirmation dialog with custom callbacks.
 func NewConfirmModel(title, question string, defaultYes bool, onConfirm, onCancel func() tea.Msg) tea.Model {
-	m := &confirmDialogModel{
-		baseDialogModel: baseDialogModel{id: "confirm_dialog", focused: true},
-		title:           title,
-		question:        question,
-		defaultYes:      defaultYes,
-		result:          defaultYes,
-		onResult: func(r bool) tea.Msg {
-			if r && onConfirm != nil {
-				return onConfirm()
-			}
-			if !r && onCancel != nil {
-				return onCancel()
-			}
-			return CloseDialogMsg{Result: r}
-		},
-	}
-	m.buttons = NewButtonRow([]ButtonDef{{Label: "Yes", ZoneID: "Yes"}, {Label: "No", ZoneID: "No"}})
-	return m
-}
-
-func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if tickCmd, ok := m.buttons.Update(msg); ok {
-		return m, tickCmd
-	}
-
-	// Helper to close dialog with result
-	closeWithResult := func(result bool) tea.Cmd {
-		return func() tea.Msg { return m.onResult(result) }
-	}
-
-	if m.HandleWidgetClearPress(msg) {
-		return m, nil
-	}
-
-	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-		m.calculateLayout()
-		return m, nil
-
-	case tea.KeyPressMsg:
-		if handled, cmd := m.handleTitleBarKey(msg, nil); handled {
-			m.result = false
-			m.confirmed = true
-			return m, tea.Batch(cmd, m.buttons.SetProcessing("No", closeWithResult(false)))
+	return newConfirmDialogModel(title, question, defaultYes, func(r bool) tea.Msg {
+		if r && onConfirm != nil {
+			return onConfirm()
 		}
-		switch {
-		case key.Matches(msg, Keys.Esc):
-			m.result = false
-			m.confirmed = true
-			return m, m.buttons.SetProcessing("No", closeWithResult(false))
-
-		case key.Matches(msg, Keys.Enter):
-			m.confirmed = true
-			zoneID := "No"
-			if m.result {
-				zoneID = "Yes"
-			}
-			return m, m.buttons.SetProcessing(zoneID, closeWithResult(m.result))
-
-		case key.Matches(msg, Keys.ForceQuit):
-			m.result = false
-			m.confirmed = true
-			return m, closeWithResult(false)
-
-		default:
-			// Arrow keys toggle between Yes and No
-			if key.Matches(msg, Keys.Left) || key.Matches(msg, Keys.Right) ||
-				key.Matches(msg, Keys.Up) || key.Matches(msg, Keys.Down) {
-				m.result = !m.result
-				return m, nil
-			}
-			// Tab/ShiftTab also toggle
-			if key.Matches(msg, Keys.Tab) || key.Matches(msg, Keys.ShiftTab) || msg.String() == " " {
-				m.result = !m.result
-				return m, nil
-			}
-			// Check dynamic hotkeys for buttons (Yes/No)
-			buttons := []ButtonSpec{
-				{Text: "Yes"},
-				{Text: "No"},
-			}
-			if idx, found := CheckButtonHotkeys(msg, buttons); found {
-				m.result = (idx == 0) // Yes is index 0
-				m.confirmed = true
-				zoneID := "No"
-				if m.result {
-					zoneID = "Yes"
-				}
-				return m, m.buttons.SetProcessing(zoneID, closeWithResult(m.result))
-			}
+		if !r && onCancel != nil {
+			return onCancel()
 		}
-
-	case LayerHitMsg:
-		// Middle click is handled by AppModel (global Space mapping)
-		if msg.Button == tea.MouseMiddle {
-			return m, nil
-		}
-		if handled, cmd := m.handleTitleBarHit(msg, nil); handled {
-			m.result = false
-			m.confirmed = true
-			return m, tea.Batch(cmd, m.buttons.SetProcessing("No", closeWithResult(false)))
-		}
-
-		// Left click on buttons triggers action via onResult so sub-dialog channels work correctly
-		if msg.Button == tea.MouseLeft {
-			if ButtonIDMatches(msg.ID, "Yes") {
-				m.result = true
-				m.confirmed = true
-				return m, m.buttons.SetProcessing("Yes", closeWithResult(true))
-			}
-			if ButtonIDMatches(msg.ID, "No") {
-				m.result = false
-				m.confirmed = true
-				return m, m.buttons.SetProcessing("No", closeWithResult(false))
-			}
-		}
-	}
-
-	// Middle-click activates the currently focused button (Yes or No)
-	if _, ok := msg.(ToggleFocusedMsg); ok {
-		m.confirmed = true
-		zoneID := "No"
-		if m.result {
-			zoneID = "Yes"
-		}
-		return m, m.buttons.SetProcessing(zoneID, closeWithResult(m.result))
-	}
-
-	// Scroll wheel selects between Yes (up) and No (down) with clamping — no wrap.
-	if wheelMsg, ok := msg.(tea.MouseWheelMsg); ok {
-		switch wheelMsg.Button {
-		case tea.MouseWheelUp:
-			m.result = true // Yes (first option — clamps here on repeated up)
-		case tea.MouseWheelDown:
-			m.result = false // No (last option — clamps here on repeated down)
-		}
-		return m, nil
-	}
-
-	return m, nil
-}
-
-// contentWidth calculates the ideal dialog inner width.
-func (m *confirmDialogModel) contentWidth() int {
-	maxAllowed := m.layout.Width - 2
-	w := maxLineWidth(m.question) + DialogBodyPadH
-	if minBtn := lipgloss.Width("Yes") + 4 + lipgloss.Width("No") + 4 + 4 + DialogBodyPadH; minBtn > w {
-		w = minBtn
-	}
-	if tw := lipgloss.Width(GetPlainText(m.title)) + 6; tw > w {
-		w = tw
-	}
-	ctx := GetActiveContext()
-	w = minWidthForWidgets(w, GetPlainText(m.title), ctx.DialogTitleAlign, BuildInactiveTitleWidgets(ctx))
-	if w > maxAllowed {
-		w = maxAllowed
-	}
-	return w
-}
-
-// ViewString returns the dialog content as a string for compositing
-func (m *confirmDialogModel) ViewString() string {
-	if m.width == 0 {
-		return ""
-	}
-
-	ctx := GetActiveContext()
-	borderBG := ctx.Dialog.GetBackground()
-	contentWidth := m.contentWidth()
-
-	// Question text style - inherit from ctx.Dialog to get background
-	questionStyle := ctx.Dialog.
-		Padding(1, 2).
-		Width(contentWidth)
-
-	// Process TUI theme tags (using base dialog style for color resets only),
-	// then apply the full questionStyle (padding + width) uniformly to the whole block.
-	questionText := questionStyle.Render(RenderThemeText(m.question, ctx.Dialog))
-
-	// Render buttons using the standard button helper
-	btnSpecs := m.buttons.ApplySpinner([]ButtonSpec{
-		{Text: "Yes", Active: m.result || m.buttons.IsProcessingID("Yes"), ZoneID: "Yes"},
-		{Text: "No", Active: !m.result || m.buttons.IsProcessingID("No"), ZoneID: "No"},
+		return CloseDialogMsg{Result: r}
 	})
-	buttonRow := RenderCenteredButtonsCtx(contentWidth, ctx, btnSpecs...)
+}
 
-	// Build dialog content
-	// Standardize to use TrimRight to prevent implicit gaps
-	questionText = strings.TrimRight(questionText, "\n")
-	buttonRow = strings.TrimRight(buttonRow, "\n")
+// Init implements tea.Model
+func (m *confirmDialogModel) Init() tea.Cmd {
+	return m.outer.Init()
+}
 
-	// Ensure a blank line between question and buttons carries the background
-	spacer := lipgloss.NewStyle().
-		Width(contentWidth).
-		Background(borderBG).
-		Render("")
-
-	fullContent := lipgloss.JoinVertical(lipgloss.Left, questionText, spacer, buttonRow)
-
-	ctx2 := GetActiveContext()
-	ctx2.LargeTitleBars = m.layout.LargeTitleBar
-	return renderDialogWithTypeAndWidgets(m.title, fullContent, m.focused || m.TitleBarFocused(), 0, DialogTypeConfirm, ctx2, m.State())
+// Update implements tea.Model
+func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	newOuter, cmd := m.outer.Update(msg)
+	if outer, ok := newOuter.(*MenuModel); ok {
+		m.outer = outer
+	}
+	return m, cmd
 }
 
 // View implements tea.Model
 func (m *confirmDialogModel) View() tea.View {
-	return tea.NewView(m.ViewString())
+	return m.outer.View()
 }
 
-func (m *confirmDialogModel) Layers() []*lipgloss.Layer { return m.layers(m.ViewString) }
+// ViewString implements ViewStringer for overlay compositing
+func (m *confirmDialogModel) ViewString() string {
+	return m.outer.ViewString()
+}
+
+// SetSize implements sizing
+func (m *confirmDialogModel) SetSize(width, height int) {
+	m.outer.SetSize(width, height)
+}
+
+// IsMaximized lets the AppModel know its size state
+func (m *confirmDialogModel) IsMaximized() bool {
+	return m.outer.IsMaximized()
+}
+
+// SetFocused propagates focus state
+func (m *confirmDialogModel) SetFocused(f bool) {
+	m.outer.SetFocused(f)
+}
+
+// Layers implements LayeredView for compositing
+func (m *confirmDialogModel) Layers() []*lipgloss.Layer {
+	return m.outer.Layers()
+}
 
 // GetHitRegions implements HitRegionProvider for mouse hit testing
 func (m *confirmDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
-	ctx := GetActiveContext()
-	contentWidth := m.contentWidth()
+	return m.outer.GetHitRegions(offsetX, offsetY)
+}
 
-	questionStyle := ctx.Dialog.Padding(1, 2).Width(contentWidth)
-	questionHeight := lipgloss.Height(questionStyle.Render(GetPlainText(m.question)))
+// IsScrollbarDragging contributes to the sbDragger interface for mouse motion forwarding
+func (m *confirmDialogModel) IsScrollbarDragging() bool {
+	return m.outer.IsScrollbarDragging()
+}
 
-	// buttonY: border (1) + question with padding + spacer (1)
-	buttonY := 1 + questionHeight + 1
-	if m.layout.LargeTitleBar {
-		buttonY += LargeTitleBarOverhead
-	}
+// HelpText returns help info
+func (m *confirmDialogModel) HelpText() string {
+	return m.outer.HelpText()
+}
 
-	// Use centralized button hit region helper with dialog ID for disambiguation
-	// Must include Text to properly calculate button width
-	regions := GetButtonHitRegions(
-		HelpContext{ScreenName: m.title, PageTitle: "Question", PageText: m.question},
-		m.id, offsetX+1, offsetY+buttonY, contentWidth, ZDialog+20,
-		ButtonSpec{Text: "Yes", ZoneID: "Yes", Help: "Select this option."},
-		ButtonSpec{Text: "No", ZoneID: "No", Help: "Select this option."},
-	)
-
-	// Dialog background
-	regions = append(regions, HitRegion{
-		ID:     m.id,
-		X:      offsetX,
-		Y:      offsetY,
-		Width:  contentWidth + 2,
-		Height: buttonY + 2, // buttonRow (1) + border (1 more)
-		ZOrder: ZDialog,
-		Label:  "Confirm",
-		Help: &HelpContext{
-			ScreenName: m.title,
-			PageTitle:  "Question",
-			PageText:   m.question,
-		},
-	})
-
-	regions = append(regions, m.titleBarHitRegions(offsetX, offsetY, contentWidth, ZDialog)...)
-	return regions
+// AdvanceSpinners advances any active button spinner.
+func (m *confirmDialogModel) AdvanceSpinners(now time.Time) bool {
+	return m.outer.AdvanceSpinners(now)
 }
 
 // ShowConfirmDialog displays a confirmation dialog and returns the result
@@ -312,8 +159,4 @@ func ShowConfirmDialog(title, question string, defaultYes bool) bool {
 	}
 
 	return finalDialog.result
-}
-
-func (m *confirmDialogModel) AdvanceSpinners(now time.Time) bool {
-	return m.buttons.AdvanceSpinner(now)
 }

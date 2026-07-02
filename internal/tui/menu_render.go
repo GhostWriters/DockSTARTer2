@@ -381,7 +381,20 @@ func (m *MenuModel) renderPlainText(width int) string {
 		Width(width).
 		Padding(0, leftPad).
 		Align(lipgloss.Left)
-	return textStyle.Render(RenderThemeText("{{|Subtitle|}}"+m.plainText, styles.Dialog))
+	rendered := textStyle.Render(RenderThemeText(m.plainTextThemeTag+m.plainText, styles.Dialog))
+	if m.plainTextVPad > 0 {
+		blank := textStyle.Render("")
+		lines := make([]string, 0, m.plainTextVPad*2+1)
+		for i := 0; i < m.plainTextVPad; i++ {
+			lines = append(lines, blank)
+		}
+		lines = append(lines, rendered)
+		for i := 0; i < m.plainTextVPad; i++ {
+			lines = append(lines, blank)
+		}
+		rendered = lipgloss.JoinVertical(lipgloss.Left, lines...)
+	}
+	return rendered
 }
 
 // renderVerticalListBlock renders the core list content and applies the scrollbar.
