@@ -149,6 +149,14 @@ type MenuModel struct {
 	// the "plain text" Content kind, used e.g. for a dialog's subtitle
 	// expressed as its own content section. Set only via NewPlainTextSection.
 	plainText string
+	// plainTextThemeTag wraps plainText for RenderThemeText -- "{{|Subtitle|}}"
+	// for menu subtitles (default), "" for dialog question/body text that
+	// should inherit the surrounding Dialog style unstyled.
+	plainTextThemeTag string
+	// plainTextVPad adds this many blank lines above and below the text --
+	// used by confirm-style dialogs to vertically center the question over
+	// the button row without a border.
+	plainTextVPad int
 
 	// Memoization for expensive rendering
 	lastView         string

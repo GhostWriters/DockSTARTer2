@@ -12,6 +12,7 @@ package tui
 func NewPlainTextSection(id, text string) *MenuModel {
 	m := NewMenuModel(id, "", "", nil)
 	m.plainText = text
+	m.plainTextThemeTag = "{{|Subtitle|}}"
 	m.SetSubMenuMode(true)
 	m.SetVariableHeight(false)
 	m.SetIsDialog(false)
@@ -19,5 +20,16 @@ func NewPlainTextSection(id, text string) *MenuModel {
 	m.SetMaximized(true)
 	m.SetShowLockGutter(false)
 	m.SetNoLeftMargin(true)
+	return m
+}
+
+// SetPlainTextStyle overrides the plain-text kind's theme tag (default
+// "{{|Subtitle|}}") and adds vPad blank lines above and below the text.
+// Used by confirm-style dialogs to render the question as plain dialog body
+// copy -- no Subtitle styling -- vertically centered over the button row,
+// instead of the default menu-subtitle look.
+func (m *MenuModel) SetPlainTextStyle(themeTag string, vPad int) *MenuModel {
+	m.plainTextThemeTag = themeTag
+	m.plainTextVPad = vPad
 	return m
 }

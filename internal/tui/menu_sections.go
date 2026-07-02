@@ -461,7 +461,7 @@ func (m *MenuModel) SectionHeight(sectionWidth int) int {
 // they simply return maxWidth.
 func (m *MenuModel) SectionNaturalWidth(maxWidth int) int {
 	if m.plainText != "" {
-		natural := lipgloss.Width(RenderThemeText(m.plainText))
+		natural := lipgloss.Width(RenderThemeText(m.plainTextThemeTag + m.plainText))
 		if natural > maxWidth {
 			natural = maxWidth
 		}
