@@ -271,6 +271,23 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 		return m, nil, false
 
+	case DragDoneMsg:
+		// Route to whichever section owns this scrollbar ID so DragPending
+		// gets cleared -- without this, a section's scrollbar thumb drag
+		// gets stuck after the first motion event: the first MouseMotionMsg
+		// sets DragPending=true and schedules a DragDoneMsg to clear it one
+		// render cycle later, but with contentSections non-empty nothing
+		// routed that message back to the section, so DragPending never
+		// resets and every subsequent motion event is silently gated off by
+		// the "if !s.Drag.DragPending" guard in Scroll.Update.
+		for i, sec := range m.contentSections {
+			if sec.ScrollID() == msg.ID {
+				cmd := m.updateSection(i, msg)
+				return m, cmd, true
+			}
+		}
+		return m, nil, false
+
 	case ToggleFocusedMsg:
 		if m.focusedSection >= 0 && m.focusedSection < n {
 			cmd := m.updateSection(m.focusedSection, msg)
@@ -299,6 +316,22 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	case sinput.CutMsg, sinput.PasteMsg, sinput.SelectAllMsg:
 		// Forwarded clipboard messages from the context menu — route to focused section.
 		if m.focusedSection >= 0 && m.focusedSection < n && m.focusedItem == FocusList {
+			cmd := m.updateSection(m.focusedSection, msg)
+			m.InvalidateCache()
+			return m, cmd, true
+		}
+
+	case tea.MouseMotionMsg, tea.MouseReleaseMsg:
+		// Scrollbar thumb drag continuation/release: a drag started on the
+		// focused section's scrollbar (via its own LayerHitMsg ".sb.thumb"
+		// handling) needs these follow-up events routed back to that same
+		// section regardless of the mouse's current on-screen position --
+		// the top-level (non-sectioned) MenuModel.Update handles this
+		// unconditionally at the very top for its own Scroll (menu_update.go),
+		// but a section's Scroll is a different object nested one level
+		// down, and nothing else forwards these message types to it once
+		// contentSections is non-empty.
+		if m.focusedSection >= 0 && m.focusedSection < n {
 			cmd := m.updateSection(m.focusedSection, msg)
 			m.InvalidateCache()
 			return m, cmd, true
@@ -505,12 +538,20 @@ func (m *MenuModel) calculateSectionLayout() {
 	innerHeight := m.height - layout.BorderHeight()
 
 	// Pass 1: measure fixed sections (flow mode or contentRenderer = intrinsic height).
+	// Expandable sections' natural height is also measured (via the same
+	// SectionHeight -- e.g. a plain list's len(items)+BorderHeight formula
+	// works regardless of IsVariableHeight) but kept separate from fixedTotal:
+	// it's only used below to compute a non-maximized dialog's natural total
+	// height, never added to the fixed budget an expandable section would
+	// otherwise be excluded from filling.
 	sectionHeights := make([]int, len(m.contentSections))
 	fixedTotal := 0
 	expandableCount := 0
+	expandableNaturalTotal := 0
 	for i, sec := range m.contentSections {
 		if sec.IsVariableHeight() {
 			expandableCount++
+			expandableNaturalTotal += sec.SectionHeight(sectionWidth)
 			continue
 		}
 		sectionH := sec.SectionHeight(sectionWidth)
@@ -518,20 +559,25 @@ func (m *MenuModel) calculateSectionLayout() {
 		fixedTotal += sectionH
 	}
 
-	// Non-maximized, fully-intrinsic dialogs (no expandable section to fill
-	// remaining space) shrink to their natural content height instead of
-	// filling whatever height AppModel handed them -- mirroring the
+	// Non-maximized dialogs shrink to their natural content height instead
+	// of filling whatever height AppModel handed them -- mirroring the
 	// plain-list path's own maximized check (menu_update.go's calculateLayout,
 	// "listHeight = totalItemHeight; if ... || m.maximized { shrink }"). Done
 	// once here, generically, so every future non-maximized sectioned dialog
 	// gets this for free instead of re-deriving its own natural-height clamp
 	// per dialog (the exact duplication that caused the Browser Settings
-	// large-title-bar/blank-space bug fixed earlier this session). A dialog
-	// that's both non-maximized AND has an expandable section has no defined
-	// natural height (expandable sections have no intrinsic size); treated
-	// as maximized in that case -- no current dialog has this combination.
-	if !m.maximized && expandableCount == 0 {
-		naturalInner := fixedTotal + buttonBudget
+	// large-title-bar/blank-space bug fixed earlier this session). Expandable
+	// sections' natural height (expandableNaturalTotal, from Pass 1 above)
+	// is folded in so a "grow to fit content, cap at available space, then
+	// scroll" dialog (e.g. Config Apps Menu's app list) shrinks correctly
+	// too -- with exactly one expandable section this composes cleanly with
+	// Pass 2's remaining/expandableCount split below (remaining ends up
+	// exactly expandableNaturalTotal after the shrink, so expandableH ==
+	// that section's own natural height). With multiple expandable sections
+	// in a non-maximized dialog, remaining still divides evenly rather than
+	// per-section-natural -- not needed by any current screen.
+	if !m.maximized {
+		naturalInner := fixedTotal + expandableNaturalTotal + buttonBudget
 		if enabled := m.title != "" && currentConfig.UI.LargeTitleBars; enabled {
 			naturalInner += LargeTitleBarOverhead
 		}

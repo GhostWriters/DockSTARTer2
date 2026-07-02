@@ -12,8 +12,13 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
+// configAppsMenuModel wraps the outer container MenuModel (title, buttons)
+// built by NewConfigAppsMenuScreen; the actual app list lives in a nested
+// variable-height content section (m.list), following the outer-container +
+// inner-submenu-section pattern used by Main Menu/Config Menu/Options Menu.
 type configAppsMenuModel struct {
 	*tui.MenuModel
+	list     *tui.MenuModel
 	connType string
 }
 
@@ -25,7 +30,16 @@ func (m *configAppsMenuModel) refreshItems() {
 		return
 	}
 	envFile := filepath.Join(cfg.ComposeDir, constants.EnvFileName)
-	m.SetItems(buildConfigAppItems(ctx, apps, envFile, m.connType))
+	m.list.SetItems(buildConfigAppItems(ctx, apps, envFile, m.connType))
+	// The item count may have changed (apps added/removed elsewhere);
+	// re-trigger the outer's grow-then-scroll height calculation against the
+	// new count -- SetItems alone only invalidates the render cache, it
+	// doesn't recompute layout (same as it never did before this screen was
+	// sectioned; the difference now is the outer container's height needs
+	// this explicit nudge to stay consistent with calculateSectionLayout's
+	// natural-height shrink).
+	w, h := m.Width(), m.Height()
+	m.SetSize(w, h)
 }
 
 func (m *configAppsMenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -114,9 +128,9 @@ func configAppItemHelp(item tui.MenuItem) (itemTitle, itemText string) {
 }
 
 func (m *configAppsMenuModel) HelpContext(maxWidth int) tui.HelpContext {
-	inner := m.MenuModel.HelpContext(maxWidth)
-	items := m.GetItems()
-	idx := m.Index()
+	inner := m.list.HelpContext(maxWidth)
+	items := m.list.GetItems()
+	idx := m.list.Index()
 	if idx >= 0 && idx < len(items) {
 		if t, txt := configAppItemHelp(items[idx]); txt != "" {
 			if t != "" {
@@ -129,7 +143,12 @@ func (m *configAppsMenuModel) HelpContext(maxWidth int) tui.HelpContext {
 	return inner
 }
 
-// NewConfigAppsMenuScreen creates the "Configure Applications" menu
+// NewConfigAppsMenuScreen creates the "Configure Applications" menu.
+// Built as an outer container MenuModel (title, buttons) with the app list
+// as a single submenu-mode, variable-height content section, matching the
+// pattern used by Main Menu/Config Menu/Options Menu -- except this list is
+// non-maximized (grows to fit the app list, capped at available terminal
+// height, then scrolls), preserving the screen's original behavior.
 func NewConfigAppsMenuScreen(connType string) tui.ScreenModel {
 	ctx := context.Background()
 	cfg := config.LoadAppConfig()
@@ -138,25 +157,15 @@ func NewConfigAppsMenuScreen(connType string) tui.ScreenModel {
 		apps = []string{}
 	}
 	envFile := filepath.Join(cfg.ComposeDir, constants.EnvFileName)
-	menu := tui.NewMenuModel(
-		tui.IDListPanel,
-		"Configure Applications",
-		"Select the application to configure",
-		buildConfigAppItems(ctx, apps, envFile, connType),
-	)
-	menu.SetButtons([]tui.ButtonDef{
-		{Label: "Select", ZoneID: "btn-select", Help: "Confirm and execute the selected action."},
-		{Label: "Back", ZoneID: "btn-back", Action: navigateBack(), Help: "Return to the previous screen."},
-		{Label: "Exit", ZoneID: "btn-exit", Action: tui.ConfirmExitAction(), Help: "Exit the application."},
-	})
 
-	menu.SetMenuName("config_apps")
-	menu.SetConnType(connType)
-	menu.SetVariableHeight(true)
-	menu.SetHelpPageText("Select an application to browse and edit its environment variables. Each application's settings are stored in your .env file.")
-	menu.SetHelpItemPrefix("App")
-	menu.SetItemHelpFunc(configAppItemHelp)
-	menu.SetItemDocFunc(func(item tui.MenuItem) (docMarkdown, docAppName string) {
+	list := tui.NewMenuModel(tui.IDListPanel, "", "", buildConfigAppItems(ctx, apps, envFile, connType))
+	list.SetMenuName("config_apps")
+	list.SetConnType(connType)
+	list.SetVariableHeight(true)
+	list.SetHelpPageText("Select an application to browse and edit its environment variables. Each application's settings are stored in your .env file.")
+	list.SetHelpItemPrefix("App")
+	list.SetItemHelpFunc(configAppItemHelp)
+	list.SetItemDocFunc(func(item tui.MenuItem) (docMarkdown, docAppName string) {
 		if item.BaseApp == "" || item.IsUserDefined {
 			return "", ""
 		}
@@ -166,5 +175,29 @@ func NewConfigAppsMenuScreen(connType string) tui.ScreenModel {
 		}
 		return doc, item.Tag
 	})
-	return &configAppsMenuModel{MenuModel: menu, connType: connType}
+	list.SetSubMenuMode(true)
+	list.SetIsDialog(false)
+	list.SetButtons([]tui.ButtonDef{})
+	list.SetMaximized(true)
+	list.SetNoLeftMargin(true)
+
+	outer := tui.NewMenuModel("config_apps_outer", "Configure Applications", "", nil)
+	outer.SetShowButtons(true)
+	outer.SetButtons([]tui.ButtonDef{
+		{Label: "Select", ZoneID: "btn-select", Action: func() tea.Msg {
+			item := list.SelectedItem()
+			if item.Action != nil {
+				return item.Action()
+			}
+			return nil
+		}, Help: "Execute the selected action."},
+		{Label: "Back", ZoneID: "btn-back", Action: navigateBack(), Help: "Return to the previous screen."},
+		{Label: "Exit", ZoneID: "btn-exit", Action: tui.ConfirmExitAction(), Help: "Exit the application."},
+	})
+	outer.AddContentSection(tui.NewPlainTextSection("config_apps_subtitle", "Select the application to configure"))
+	outer.AddContentSection(list)
+	// Outer intentionally never calls SetMaximized -- defaults false, so
+	// calculateSectionLayout uses the grow-then-scroll natural-height path.
+
+	return &configAppsMenuModel{MenuModel: outer, list: list, connType: connType}
 }

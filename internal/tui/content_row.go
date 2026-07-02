@@ -301,6 +301,16 @@ func (r *ContentRow) IsProcessing() bool {
 	return false
 }
 
+// IsScrollbarDragging reports true if any child is dragging its scrollbar.
+func (r *ContentRow) IsScrollbarDragging() bool {
+	for _, item := range r.items {
+		if d, ok := item.(interface{ IsScrollbarDragging() bool }); ok && d.IsScrollbarDragging() {
+			return true
+		}
+	}
+	return false
+}
+
 // WantsHorizontalKeys delegates to whichever child currently holds
 // row-internal focus.
 func (r *ContentRow) WantsHorizontalKeys() bool {

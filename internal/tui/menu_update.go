@@ -745,9 +745,17 @@ func (m *MenuModel) calculateLayout() {
 	var maxListWidth int
 	if m.subMenuMode {
 		// Submenu: scrollbar sits flush against the right border (no right margin),
-		// so only subtract the left margin, not both.
+		// so only subtract the left margin, not both -- unless this section
+		// has no left margin of its own (noLeftMargin), e.g. a section nested
+		// inside an outer sectioned dialog's viewWithSections, which already
+		// applies its own margin around every section -- subtracting a
+		// second column here would leave the list (and its trailing
+		// scrollbar) one column narrower than the space it's actually
+		// rendered into, shifting the scrollbar left of the border.
 		maxListWidth, _ = layout.InnerContentSize(m.width, m.height)
-		maxListWidth -= layout.ContentSideMargin
+		if !m.noLeftMargin {
+			maxListWidth -= layout.ContentSideMargin
+		}
 	} else {
 		// Full dialog: Outer Border (2) + Margins (2) + Inner Border (2)
 		maxListWidth = m.width - (layout.BorderWidth() + layout.ContentMarginWidth() + layout.BorderWidth())

@@ -317,9 +317,24 @@ func (m *MenuModel) MarkScrollPending() tea.Cmd {
 }
 
 // IsScrollbarDragging reports whether the menu is currently processing a scrollbar thumb drag.
-// AppModel uses this interface to give the active screen drag priority.
+// AppModel uses this interface to give the active screen drag priority --
+// without this, mouse motion/release during a drag never reaches
+// Update(), since AppModel's top-level dispatch only forwards those message
+// types unconditionally when IsScrollbarDragging() is true (model_mouse.go).
+// Recurses into content sections: a plain *MenuModel container (no custom
+// screen wrapper, e.g. any outer-container + inner-submenu-section screen)
+// has no scrollbar of its own -- the drag is happening on a nested section's
+// Scroll instead, and nothing else would report it up to AppModel.
 func (m *MenuModel) IsScrollbarDragging() bool {
-	return m.Scroll.Drag.Dragging
+	if m.Scroll.Drag.Dragging {
+		return true
+	}
+	for _, sec := range m.contentSections {
+		if d, ok := sec.(interface{ IsScrollbarDragging() bool }); ok && d.IsScrollbarDragging() {
+			return true
+		}
+	}
+	return false
 }
 
 // ScrollTotal returns the total scrollable units (lines or items).
