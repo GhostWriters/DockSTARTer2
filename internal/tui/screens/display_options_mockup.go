@@ -2,8 +2,8 @@ package screens
 
 import (
 	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/strutil"
-	"DockSTARTer2/internal/tui"
 	"image/color"
 	"strings"
 
@@ -13,12 +13,12 @@ import (
 func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	width := 44 // Reduced width to fit the screen better
 
-	bgStyle := tui.SemanticRawStyle("Preview_Screen")
-	dContent := tui.SemanticRawStyle("Preview_Dialog")
-	dBorder1 := tui.SemanticRawStyle("Preview_Border")
-	dBorder2 := tui.SemanticRawStyle("Preview_Border2")
+	bgStyle := displayengine.SemanticRawStyle("Preview_Screen")
+	dContent := displayengine.SemanticRawStyle("Preview_Dialog")
+	dBorder1 := displayengine.SemanticRawStyle("Preview_Border")
+	dBorder2 := displayengine.SemanticRawStyle("Preview_Border2")
 
-	pMode := tui.EffectivePanelMode(s.config, s.connType)
+	pMode := displayengine.EffectivePanelMode(s.config, s.connType)
 	showStrip := pMode != "none"
 
 	// Adjust border colors based on setting
@@ -35,48 +35,48 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	} else if s.config.UI.LineCharacters {
 		b = lipgloss.RoundedBorder()
 	} else {
-		b = tui.RoundedAsciiBorder
+		b = displayengine.RoundedAsciiBorder
 	}
 
 	// Build StyleContext for the preview
-	previewCtx := tui.StyleContext{
+	previewCtx := displayengine.StyleContext{
 		LineCharacters:      s.config.UI.LineCharacters,
 		DrawBorders:         s.config.UI.Borders,
 		LargeButtons:        s.config.UI.LargeButtons,
 		LargeTitleBars:      s.config.UI.LargeTitleBars,
-		LargeTitleArea:      tui.SemanticRawStyle("Preview_LargeTitleArea"),
+		LargeTitleArea:      displayengine.SemanticRawStyle("Preview_LargeTitleArea"),
 		Screen:              bgStyle,
 		Dialog:              dContent,
 		ContentBackground:   dContent,
-		DialogTitle:         tui.SemanticRawStyle("Preview_Title"),
-		DialogTitleHelp:     tui.SemanticRawStyle("Preview_TitleHelp"),
-		SubmenuTitle:        tui.SemanticRawStyle("Preview_TitleSubMenu"),
-		SubmenuTitleFocused: tui.SemanticRawStyle("Preview_TitleSubMenuFocused"),
+		DialogTitle:         displayengine.SemanticRawStyle("Preview_Title"),
+		DialogTitleHelp:     displayengine.SemanticRawStyle("Preview_TitleHelp"),
+		SubmenuTitle:        displayengine.SemanticRawStyle("Preview_TitleSubMenu"),
+		SubmenuTitleFocused: displayengine.SemanticRawStyle("Preview_TitleSubMenuFocused"),
 		Border:              b,
 		BorderColor:         dBorder1.GetForeground(),
 		Border2Color:        dBorder2.GetForeground(),
-		ButtonActive:        tui.SemanticRawStyle("Preview_ButtonActive"),
-		ButtonInactive:      tui.SemanticRawStyle("Preview_ButtonInactive"),
-		ButtonKeyActive:     tui.SemanticRawStyle("Preview_ButtonKeyActive"),
-		ButtonKeyInactive:   tui.SemanticRawStyle("Preview_ButtonKeyInactive"),
-		IconFocused:         tui.SemanticRawStyle("Preview_IconFocused"),
-		IconPressed:         tui.SemanticRawStyle("Preview_IconPressed"),
-		IconInactive:        tui.SemanticRawStyle("Preview_IconInactive"),
-		HelpIconInactive:    tui.SemanticRawStyle("Preview_HelpIconInactive"),
-		RefreshIconInactive: tui.SemanticRawStyle("Preview_RefreshIconInactive"),
-		ExitIconInactive:    tui.SemanticRawStyle("Preview_ExitIconInactive"),
-		ItemNormal:          tui.SemanticRawStyle("Preview_Item"),
-		ItemFocused:        tui.SemanticRawStyle("Preview_ItemFocused"),
-		TagNormal:           tui.SemanticRawStyle("Preview_Tag"),
-		TagFocused:         tui.SemanticRawStyle("Preview_TagFocused"),
-		TagKey:              tui.SemanticRawStyle("Preview_TagKey"),
-		TagKeyFocused:      tui.SemanticRawStyle("Preview_TagKeyFocused"),
-		Shadow:              tui.SemanticRawStyle("Preview_Shadow"),
+		ButtonActive:        displayengine.SemanticRawStyle("Preview_ButtonActive"),
+		ButtonInactive:      displayengine.SemanticRawStyle("Preview_ButtonInactive"),
+		ButtonKeyActive:     displayengine.SemanticRawStyle("Preview_ButtonKeyActive"),
+		ButtonKeyInactive:   displayengine.SemanticRawStyle("Preview_ButtonKeyInactive"),
+		IconFocused:         displayengine.SemanticRawStyle("Preview_IconFocused"),
+		IconPressed:         displayengine.SemanticRawStyle("Preview_IconPressed"),
+		IconInactive:        displayengine.SemanticRawStyle("Preview_IconInactive"),
+		HelpIconInactive:    displayengine.SemanticRawStyle("Preview_HelpIconInactive"),
+		RefreshIconInactive: displayengine.SemanticRawStyle("Preview_RefreshIconInactive"),
+		ExitIconInactive:    displayengine.SemanticRawStyle("Preview_ExitIconInactive"),
+		ItemNormal:          displayengine.SemanticRawStyle("Preview_Item"),
+		ItemFocused:         displayengine.SemanticRawStyle("Preview_ItemFocused"),
+		TagNormal:           displayengine.SemanticRawStyle("Preview_Tag"),
+		TagFocused:          displayengine.SemanticRawStyle("Preview_TagFocused"),
+		TagKey:              displayengine.SemanticRawStyle("Preview_TagKey"),
+		TagKeyFocused:       displayengine.SemanticRawStyle("Preview_TagKeyFocused"),
+		Shadow:              displayengine.SemanticRawStyle("Preview_Shadow"),
 		ShadowColor:         getPreviewShadowColor(),
 		ShadowLevel:         s.config.UI.ShadowLevel,
-		HelpLine:            tui.SemanticRawStyle("Preview_Helpline"),
-		StatusSuccess:       tui.SemanticRawStyle("Preview_TitleNotice"),
-		StatusWarn:          tui.SemanticRawStyle("Preview_TitleWarn"),
+		HelpLine:            displayengine.SemanticRawStyle("Preview_Helpline"),
+		StatusSuccess:       displayengine.SemanticRawStyle("Preview_TitleNotice"),
+		StatusWarn:          displayengine.SemanticRawStyle("Preview_TitleWarn"),
 		DialogTitleAlign:    s.config.UI.DialogTitleAlign,
 		SubmenuTitleAlign:   s.config.UI.SubmenuTitleAlign,
 		PanelTitleAlign:     s.config.UI.PanelTitleAlign,
@@ -84,13 +84,13 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 		DrawShadow:          s.config.UI.Shadow,
 	}
 
-	paddedLine := func(text string, style lipgloss.Style, fallback string, ctx ...tui.StyleContext) string {
+	paddedLine := func(text string, style lipgloss.Style, fallback string, ctx ...displayengine.StyleContext) string {
 		activeCtx := previewCtx
 		if len(ctx) > 0 {
 			activeCtx = ctx[0]
 		}
-		rendered := tui.RenderThemeTextCtx(text, activeCtx)
-		plain := tui.GetPlainText(rendered)
+		rendered := displayengine.RenderThemeTextCtx(text, activeCtx)
+		plain := displayengine.GetPlainText(rendered)
 		wt := lipgloss.Width(plain)
 		if wt < width {
 			leftPad := (width - wt) / 2
@@ -101,7 +101,7 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	}
 
 	// --- 1. Header (Status Bar) ---
-	hStyle := tui.SemanticRawStyle("Preview_StatusBar")
+	hStyle := displayengine.SemanticRawStyle("Preview_StatusBar")
 	headerCtx := previewCtx
 	headerCtx.Dialog = hStyle // Ensure snapping back to StatusBar background
 
@@ -113,7 +113,7 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	// Background is ALWAYS forced to hStyle so the │ chars blend with the status bar
 	// (StatusBarBorder in the theme uses Screen/white bg for the real header's bottom
 	// corners, which would create a visible seam here).
-	bStyle := tui.SemanticRawStyle("Preview_StatusBarBorder")
+	bStyle := displayengine.SemanticRawStyle("Preview_StatusBarBorder")
 	if _, noFG := bStyle.GetForeground().(lipgloss.NoColor); noFG {
 		bStyle = bStyle.Foreground(hStyle.GetForeground())
 	}
@@ -140,18 +140,18 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 
 	// Left: Host
 	leftText := " {{|StatusHostname|}}HOST{{[-]}}"
-	leftRendered := tui.RenderThemeTextCtx(leftText, headerCtx)
-	leftW := lipgloss.Width(tui.GetPlainText(leftRendered))
+	leftRendered := displayengine.RenderThemeTextCtx(leftText, headerCtx)
+	leftW := lipgloss.Width(displayengine.GetPlainText(leftRendered))
 
 	// Center: App Name
-	centerText := "{{|StatusName|}}" + tui.GetPlainText(themeName) + "{{[-]}}"
-	centerRendered := tui.RenderThemeTextCtx(centerText, headerCtx)
-	centerW := lipgloss.Width(tui.GetPlainText(centerRendered))
+	centerText := "{{|StatusName|}}" + displayengine.GetPlainText(themeName) + "{{[-]}}"
+	centerRendered := displayengine.RenderThemeTextCtx(centerText, headerCtx)
+	centerW := lipgloss.Width(displayengine.GetPlainText(centerRendered))
 
 	// Right: Version
 	rightText := "{{|StatusVersion|}}A:[{{[-]}}{{|StatusVersion|}}2.1{{[-]}}{{|StatusVersion|}}]{{[-]}} "
-	rightRendered := tui.RenderThemeTextCtx(rightText, headerCtx)
-	rightW := lipgloss.Width(tui.GetPlainText(rightRendered))
+	rightRendered := displayengine.RenderThemeTextCtx(rightText, headerCtx)
+	rightW := lipgloss.Width(displayengine.GetPlainText(rightRendered))
 
 	centerX := (innerWidth - centerW) / 2
 	if centerX < 0 {
@@ -168,7 +168,7 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 		headerContent = hStyle.Render(fullLine)
 	} else if leftW+1 <= centerX {
 		line1 := leftRendered + strutil.Repeat(" ", centerX-leftW) + centerRendered
-		line1 += strutil.Repeat(" ", innerWidth-lipgloss.Width(tui.GetPlainText(line1)))
+		line1 += strutil.Repeat(" ", innerWidth-lipgloss.Width(displayengine.GetPlainText(line1)))
 		line2 := strutil.Repeat(" ", innerWidth-rightW) + rightRendered
 		headerContent = hStyle.Render(line1) + "\n" + hStyle.Render(line2)
 	} else {
@@ -205,20 +205,20 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	}
 
 	for i, l := range contentLines {
-		contentLines[i] = tui.RenderThemeTextCtx(l, previewCtx)
+		contentLines[i] = displayengine.RenderThemeTextCtx(l, previewCtx)
 	}
 	contentStr := strings.Join(contentLines, "\n")
 
 	// Add a button row so large vs flat buttons are visible in the preview.
 	// Show a spinner on OK when spinners are enabled so the style is visible.
-	okSpec := tui.ButtonSpec{Text: "OK", Active: true}
+	okSpec := displayengine.ButtonSpec{Text: "OK", Active: true}
 	if console.SpinnerEnabled {
 		okSpec.Spinning = true
 		okSpec.SpinnerFrame = 0
 	}
-	buttonRow := tui.RenderCenteredButtonsCtx(38, previewCtx,
+	buttonRow := displayengine.RenderCenteredButtonsCtx(38, previewCtx,
 		okSpec,
-		tui.ButtonSpec{Text: "Cancel"},
+		displayengine.ButtonSpec{Text: "Cancel"},
 	)
 	buttonRow = strings.TrimSuffix(buttonRow, "\n")
 	contentStr = strings.TrimSuffix(contentStr, "\n") + "\n" + buttonRow
@@ -230,9 +230,9 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 		"{{|TitleError|}}E{{[-]}}",
 		"{{|TitleQuestion|}}Q{{[-]}}",
 	}
-	dTitle := tui.RenderThemeTextCtx(strings.Join(titleParts, " "), previewCtx)
+	dTitle := displayengine.RenderThemeTextCtx(strings.Join(titleParts, " "), previewCtx)
 
-	layout := tui.GetLayout()
+	layout := displayengine.GetLayout()
 	fixedLines := layout.BorderHeight() + 3 // headerRow + bottomBorderRow + helpRow
 	if showStrip {
 		fixedLines++ // logStripRow
@@ -248,8 +248,8 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	}
 	backdropBlock := lipgloss.JoinVertical(lipgloss.Left, backdropLines...)
 
-	dialogBox := tui.RenderBorderedBoxCtx(dTitle, contentStr, 38, 0, true, true, false, previewCtx.DialogTitleAlign, "Title", previewCtx, tui.TitleBarState{Show: true})
-	dialogBox = tui.AddShadowCtx(dialogBox, previewCtx)
+	dialogBox := displayengine.RenderBorderedBoxCtx(dTitle, contentStr, 38, 0, true, true, false, previewCtx.DialogTitleAlign, "Title", previewCtx, displayengine.TitleBarState{Show: true})
+	dialogBox = displayengine.AddShadowCtx(dialogBox, previewCtx)
 
 	// Pad dialogBox to full backdrop width with explicit Screen bg chars so no
 	// exposed backdrop positions remain after overlay (avoids ANSI-state artifacts).
@@ -265,10 +265,10 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 		}
 		dialogBox = strings.Join(dLines, "\n")
 	}
-	backdropBlock = tui.Overlay(dialogBox, backdropBlock, tui.OverlayCenter, tui.OverlayCenter, 0, 0)
+	backdropBlock = displayengine.Overlay(dialogBox, backdropBlock, displayengine.OverlayCenter, displayengine.OverlayCenter, 0, 0)
 
 	// --- 3. Help Line ---
-	helpStyle := tui.SemanticRawStyle("Preview_Helpline")
+	helpStyle := displayengine.SemanticRawStyle("Preview_Helpline")
 	helpCtx := previewCtx
 	helpCtx.Dialog = helpStyle // Ensure snapping back to Helpline background
 
@@ -277,8 +277,8 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 
 	// --- 4. Console Toggle Strip ---
 	// Both strip and label: ConsoleTitle fg on ConsoleBox bg.
-	consoleTitleStyle := tui.SemanticRawStyle("Preview_ConsoleTitle")
-	consoleBorderStyle := tui.SemanticRawStyle("Preview_ConsoleBorder")
+	consoleTitleStyle := displayengine.SemanticRawStyle("Preview_ConsoleTitle")
+	consoleBorderStyle := displayengine.SemanticRawStyle("Preview_ConsoleBorder")
 
 	marker := "^"
 	titleText := "Console"
@@ -305,7 +305,7 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 		topRightC = "+"
 	}
 
-	labelW := lipgloss.Width(tui.GetPlainText(label))
+	labelW := lipgloss.Width(displayengine.GetPlainText(label))
 	titleSectionLen := 1 + 1 + labelW + 1 + 1
 
 	// Strip has side borders/corners in the mockup
@@ -346,13 +346,13 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	// Wrap in a standard dialog using the current (active) theme
 	mockupWidth := lipgloss.Width(mockup)
 	// Synchronize preview height with settings dialog
-	return tui.RenderBorderedBoxCtx("Preview", mockup, mockupWidth, targetHeight, false, true, false, tui.GetActiveContext().DialogTitleAlign, "Title", tui.GetActiveContext())
+	return displayengine.RenderBorderedBoxCtx("Preview", mockup, mockupWidth, targetHeight, false, true, false, displayengine.GetActiveContext().DialogTitleAlign, "Title", displayengine.GetActiveContext())
 }
 
 // getPreviewShadowColor extracts the shadow color from the preview theme
 // Prefers foreground (for shade chars), falls back to background
 func getPreviewShadowColor() color.Color {
-	shadowStyle := tui.SemanticRawStyle("Preview_Shadow")
+	shadowStyle := displayengine.SemanticRawStyle("Preview_Shadow")
 	if fg := shadowStyle.GetForeground(); fg != nil {
 		return fg
 	}

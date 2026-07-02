@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/tui/components/sinput"
 	"DockSTARTer2/internal/webmsg"
 
@@ -32,12 +33,12 @@ func DefaultWebDisplaySettings() WebDisplaySettings {
 
 // WebDisplayDialog is the dialog for configuring web terminal display settings.
 type WebDisplayDialog struct {
-	outer          *MenuModel
-	defaultSection *MenuModel
-	familyMenu     *MenuModel
-	sizeSection    *MenuModel
+	outer          *displayengine.MenuModel
+	defaultSection *displayengine.MenuModel
+	familyMenu     *displayengine.MenuModel
+	sizeSection    *displayengine.MenuModel
 	sizeInput      *sinput.Model
-	refreshSection *MenuModel
+	refreshSection *displayengine.MenuModel
 	refreshInput   *sinput.Model
 	initial        WebDisplaySettings // settings at dialog open time, for Cancel
 }
@@ -70,30 +71,30 @@ var webDisplayFontFamilies = []struct {
 	{"'IBM Plex Mono', monospace", "IBM Plex Mono"},
 }
 
-func buildDefaultSection(isDefault bool) *MenuModel {
-	items := []MenuItem{
+func buildDefaultSection(isDefault bool) *displayengine.MenuModel {
+	items := []displayengine.MenuItem{
 		{
-			Tag:          "Use default browser font",
-			IsCheckbox:   true,
-			Selectable:   true,
-			Checked:      isDefault,
-			Selected:     isDefault,
+			Tag:        "Use default browser font",
+			IsCheckbox: true,
+			Selectable: true,
+			Checked:    isDefault,
+			Selected:   isDefault,
 		},
 	}
-	m := NewMenuModel("web_display_default", "", "", items)
+	m := displayengine.NewMenuModel("web_display_default", "", "", items)
 	m.SetSubMenuMode(true)
 	m.SetVariableHeight(false)
 	m.SetIsDialog(false)
-	m.SetButtons([]ButtonDef{})
+	m.SetButtons([]displayengine.ButtonDef{})
 	m.SetShowLockGutter(false)
 	m.SetNoLeftMargin(true)
 	m.SetFlowMode(false)
 	return m
 }
 
-func buildFamilyMenu(current string) *MenuModel {
+func buildFamilyMenu(current string) *displayengine.MenuModel {
 	useDefault := isDefaultFont(current)
-	var items []MenuItem
+	var items []displayengine.MenuItem
 	checkedIdx := 0
 	for i, f := range webDisplayFontFamilies {
 		fCopy := f
@@ -101,7 +102,7 @@ func buildFamilyMenu(current string) *MenuModel {
 		if checked {
 			checkedIdx = i
 		}
-		items = append(items, MenuItem{
+		items = append(items, displayengine.MenuItem{
 			Tag:           fCopy.label,
 			IsRadioButton: true,
 			Selectable:    true,
@@ -110,11 +111,11 @@ func buildFamilyMenu(current string) *MenuModel {
 			Metadata:      map[string]string{"value": fCopy.value},
 		})
 	}
-	m := NewMenuModel("web_display_family", "Font Family", "", items)
+	m := displayengine.NewMenuModel("web_display_family", "Font Family", "", items)
 	m.SetSubMenuMode(true)
 	m.SetVariableHeight(false)
 	m.SetIsDialog(false)
-	m.SetButtons([]ButtonDef{})
+	m.SetButtons([]displayengine.ButtonDef{})
 	m.SetMaximized(true)
 	m.SetShowLockGutter(false)
 	m.SetNoLeftMargin(true)
@@ -131,16 +132,16 @@ func buildFamilyMenu(current string) *MenuModel {
 // among all radio items in the menu.  When the menu is in scrollable column mode
 // (maxFlowRows > 0 and total rows exceed the viewport), Up/Down navigate
 // across columns at the same row rather than down the item list.
-func radioGroupInterceptor(id string) func(tea.Msg, *MenuModel) (tea.Cmd, bool) {
-	return func(msg tea.Msg, m *MenuModel) (tea.Cmd, bool) {
+func radioGroupInterceptor(id string) func(tea.Msg, *displayengine.MenuModel) (tea.Cmd, bool) {
+	return func(msg tea.Msg, m *displayengine.MenuModel) (tea.Cmd, bool) {
 		// Reading-order navigation when scrollbar is active (viewport is clipped).
 		// Up/Down step through items in reading order (left→right per row) so the
 		// visible row stays stable and the scrollbar doesn't jump.
-		if kp, ok := msg.(tea.KeyPressMsg); ok && m.flowColumns >= 2 && m.maxFlowRows > 0 {
+		if kp, ok := msg.(tea.KeyPressMsg); ok && m.FlowColumns >= 2 && m.MaxFlowRows > 0 {
 			totalRows := m.ScrollTotal()
-			if totalRows > m.maxFlowRows {
-				isUp := key.Matches(kp, Keys.Up)
-				isDown := key.Matches(kp, Keys.Down)
+			if totalRows > m.MaxFlowRows {
+				isUp := key.Matches(kp, displayengine.Keys.Up)
+				isDown := key.Matches(kp, displayengine.Keys.Down)
 				if isUp || isDown {
 					its := m.GetItems()
 					// Count total non-separator items and find current non-sep index (ni).
@@ -159,7 +160,7 @@ func radioGroupInterceptor(id string) func(tea.Msg, *MenuModel) (tea.Cmd, bool) 
 						return nil, false
 					}
 					// Convert column-major ni to reading-order index, step ±1, convert back.
-					numCols := m.flowColumns
+					numCols := m.FlowColumns
 					col := ni / totalRows
 					row := ni % totalRows
 					readIdx := row*numCols + col
@@ -189,12 +190,12 @@ func radioGroupInterceptor(id string) func(tea.Msg, *MenuModel) (tea.Cmd, bool) 
 							// Update viewStartY so the selection stays in the visible viewport.
 							totalRows := m.ScrollTotal()
 							cursorRow := targetNI % totalRows
-							visible := m.layout.ViewportHeight
+							visible := m.Layout.ViewportHeight
 							if visible > 0 {
-								if cursorRow < m.viewStartY {
-									m.viewStartY = cursorRow
-								} else if cursorRow >= m.viewStartY+visible {
-									m.viewStartY = cursorRow - visible + 1
+								if cursorRow < m.ViewStartY {
+									m.ViewStartY = cursorRow
+								} else if cursorRow >= m.ViewStartY+visible {
+									m.ViewStartY = cursorRow - visible + 1
 								}
 							}
 							m.InvalidateCache()
@@ -207,9 +208,9 @@ func radioGroupInterceptor(id string) func(tea.Msg, *MenuModel) (tea.Cmd, bool) 
 		}
 
 		// Non-scrolling column mode: block Up/Down from wrapping past the list ends.
-		if kp, ok := msg.(tea.KeyPressMsg); ok && m.flowColumns >= 2 {
-			isUp := key.Matches(kp, Keys.Up)
-			isDown := key.Matches(kp, Keys.Down)
+		if kp, ok := msg.(tea.KeyPressMsg); ok && m.FlowColumns >= 2 {
+			isUp := key.Matches(kp, displayengine.Keys.Up)
+			isDown := key.Matches(kp, displayengine.Keys.Down)
 			if isUp || isDown {
 				its := m.GetItems()
 				n := 0
@@ -232,7 +233,7 @@ func radioGroupInterceptor(id string) func(tea.Msg, *MenuModel) (tea.Cmd, bool) 
 			}
 		}
 
-		if _, ok := msg.(ToggleFocusedMsg); !ok {
+		if _, ok := msg.(displayengine.ToggleFocusedMsg); !ok {
 			return nil, false
 		}
 		idx := m.Index()
@@ -256,23 +257,23 @@ func NewWebDisplayDialog(current WebDisplaySettings) *WebDisplayDialog {
 	d := &WebDisplayDialog{initial: current}
 	d.defaultSection = buildDefaultSection(isDefaultFont(current.FontFamily))
 	d.familyMenu = buildFamilyMenu(current.FontFamily)
-	d.sizeSection, d.sizeInput = NewNumberSinputSection("web_display_size", "Font Size", strconv.Itoa(current.FontSize))
+	d.sizeSection, d.sizeInput = displayengine.NewNumberSinputSection("web_display_size", "Font Size", strconv.Itoa(current.FontSize))
 	refreshRate := current.RefreshRate
 	if refreshRate <= 0 {
 		refreshRate = 100
 	}
-	d.refreshSection, d.refreshInput = NewNumberSinputSection("web_display_refresh", "Refresh Rate (ms)", strconv.Itoa(refreshRate))
+	d.refreshSection, d.refreshInput = displayengine.NewNumberSinputSection("web_display_refresh", "Refresh Rate (ms)", strconv.Itoa(refreshRate))
 
-	outer := NewMenuModel("web_display", "Browser Settings", "", nil)
+	outer := displayengine.NewMenuModel("web_display", "Browser Settings", "", nil)
 	outer.SetMaximized(false)
 	outer.SetIsDialog(true)
-	outer.SetDialogType(DialogTypeConfirm)
+	outer.SetDialogType(displayengine.DialogTypeConfirm)
 	outer.SetShowButtons(true)
-	outer.SetEscAction(func() tea.Msg { return CloseDialogMsg{} })
-	outer.SetButtons([]ButtonDef{
+	outer.SetEscAction(func() tea.Msg { return displayengine.CloseDialogMsg{} })
+	outer.SetButtons([]displayengine.ButtonDef{
 		{Label: "Apply", ZoneID: "btn-select", Action: func() tea.Msg { return applyWebDisplayMsg{} }, Help: "Apply settings to the browser terminal."},
 		{Label: "Reset", ZoneID: "btn-reset", Action: func() tea.Msg { return resetWebDisplayMsg{} }, Help: "Reset to default font settings."},
-		{Label: "Back", ZoneID: "btn-back", Action: func() tea.Msg { return CloseDialogMsg{} }, Help: "Close without reverting changes."},
+		{Label: "Back", ZoneID: "btn-back", Action: func() tea.Msg { return displayengine.CloseDialogMsg{} }, Help: "Close without reverting changes."},
 		{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return cancelWebDisplayMsg{} }, Help: "Revert to original settings and close."},
 	})
 	d.familyMenu.SetDisabled(isDefaultFont(current.FontFamily))
@@ -300,11 +301,11 @@ func (d *WebDisplayDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// When "Use browser default" is checked, block all interaction with the font list.
 	if d.isBrowserDefault() {
 		switch m := msg.(type) {
-		case LayerHitMsg:
+		case displayengine.LayerHitMsg:
 			if strings.Contains(m.ID, "web_display_family") {
 				return d, nil
 			}
-		case LayerWheelMsg:
+		case displayengine.LayerWheelMsg:
 			if strings.Contains(m.ID, "web_display_family") {
 				return d, nil
 			}
@@ -317,7 +318,7 @@ func (d *WebDisplayDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	if kp, ok := msg.(tea.KeyPressMsg); ok && d.isBrowserDefault() {
-		if key.Matches(kp, Keys.CycleTab) {
+		if key.Matches(kp, displayengine.Keys.CycleTab) {
 			fs := d.outer.GetFocusedSection()
 			if fs == 0 {
 				// Tab from default section → skip familyMenu, go to size section
@@ -325,7 +326,7 @@ func (d *WebDisplayDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return d, nil
 			}
 		}
-		if key.Matches(kp, Keys.CycleShiftTab) {
+		if key.Matches(kp, displayengine.Keys.CycleShiftTab) {
 			fs := d.outer.GetFocusedSection()
 			if fs == 2 {
 				// Shift-Tab from size section → skip familyMenu, go to default section
@@ -339,21 +340,21 @@ func (d *WebDisplayDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case applyWebDisplayMsg:
 		secs := d.outer.GetContentSections()
 		if len(secs) >= 1 {
-			if mm, ok := secs[0].(*MenuModel); ok {
+			if mm, ok := secs[0].(*displayengine.MenuModel); ok {
 				d.defaultSection = mm
 			}
 		}
 		if len(secs) >= 2 {
-			if mm, ok := secs[1].(*MenuModel); ok {
+			if mm, ok := secs[1].(*displayengine.MenuModel); ok {
 				d.familyMenu = mm
 			}
 		}
 		if len(secs) >= 3 {
-			if row, ok := secs[2].(*ContentRow); ok && len(row.Items()) >= 2 {
-				if mm, ok := row.Items()[0].(*MenuModel); ok {
+			if row, ok := secs[2].(*displayengine.ContentRow); ok && len(row.Items()) >= 2 {
+				if mm, ok := row.Items()[0].(*displayengine.MenuModel); ok {
 					d.sizeSection = mm
 				}
-				if mm, ok := row.Items()[1].(*MenuModel); ok {
+				if mm, ok := row.Items()[1].(*displayengine.MenuModel); ok {
 					d.refreshSection = mm
 				}
 			}
@@ -375,31 +376,31 @@ func (d *WebDisplayDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		defaults := DefaultWebDisplaySettings()
 		d.defaultSection = buildDefaultSection(isDefaultFont(defaults.FontFamily))
 		d.familyMenu = buildFamilyMenu(defaults.FontFamily)
-		d.sizeSection, d.sizeInput = NewNumberSinputSection("web_display_size", "Font Size", strconv.Itoa(defaults.FontSize))
-		d.refreshSection, d.refreshInput = NewNumberSinputSection("web_display_refresh", "Refresh Rate (ms)", strconv.Itoa(defaults.RefreshRate))
-		d.outer.ReplaceSections(d.defaultSection, d.familyMenu, NewContentRow(d.sizeSection, d.refreshSection))
+		d.sizeSection, d.sizeInput = displayengine.NewNumberSinputSection("web_display_size", "Font Size", strconv.Itoa(defaults.FontSize))
+		d.refreshSection, d.refreshInput = displayengine.NewNumberSinputSection("web_display_refresh", "Refresh Rate (ms)", strconv.Itoa(defaults.RefreshRate))
+		d.outer.ReplaceSections(d.defaultSection, d.familyMenu, displayengine.NewContentRow(d.sizeSection, d.refreshSection))
 		w, h := d.outer.Width(), d.outer.Height()
 		d.outer.SetSize(w, h)
 		d.outer.ClearProcessingState()
-		d.outer.SetFocusedItem(FocusList)
+		d.outer.SetFocusedItem(displayengine.FocusList)
 		d.sendAndStore(defaults)
 		return d, nil
 	}
 
 	newOuter, cmd := d.outer.Update(msg)
-	if m, ok := newOuter.(*MenuModel); ok {
+	if m, ok := newOuter.(*displayengine.MenuModel); ok {
 		d.outer = m
 	}
 	// Sync d.defaultSection from outer so isBrowserDefault() sees current state,
 	// then apply disabled to familyMenu immediately.
 	secs := d.outer.GetContentSections()
 	if len(secs) >= 1 {
-		if mm, ok := secs[0].(*MenuModel); ok {
+		if mm, ok := secs[0].(*displayengine.MenuModel); ok {
 			d.defaultSection = mm
 		}
 	}
 	if len(secs) >= 2 {
-		if mm, ok := secs[1].(*MenuModel); ok {
+		if mm, ok := secs[1].(*displayengine.MenuModel); ok {
 			mm.SetDisabled(d.isBrowserDefault())
 		}
 	}
@@ -448,17 +449,17 @@ func (d *WebDisplayDialog) collectSettings() WebDisplaySettings {
 	return s
 }
 
-func (d *WebDisplayDialog) View() tea.View               { return d.outer.View() }
-func (d *WebDisplayDialog) ViewString() string           { return d.outer.ViewString() }
-func (d *WebDisplayDialog) IsMaximized() bool            { return d.outer.IsMaximized() }
+func (d *WebDisplayDialog) View() tea.View     { return d.outer.View() }
+func (d *WebDisplayDialog) ViewString() string { return d.outer.ViewString() }
+func (d *WebDisplayDialog) IsMaximized() bool  { return d.outer.IsMaximized() }
 func (d *WebDisplayDialog) SetFocused(f bool) {
 	d.outer.SetFocused(f)
 	d.outer.ApplySectionFocus()
 }
-func (d *WebDisplayDialog) HelpText() string             { return d.outer.HelpText() }
-func (d *WebDisplayDialog) IsScrollbarDragging() bool    { return d.outer.IsScrollbarDragging() }
-func (d *WebDisplayDialog) Layers() []*lipgloss.Layer    { return d.outer.Layers() }
-func (d *WebDisplayDialog) GetHitRegions(offsetX, offsetY int) []HitRegion {
+func (d *WebDisplayDialog) HelpText() string          { return d.outer.HelpText() }
+func (d *WebDisplayDialog) IsScrollbarDragging() bool { return d.outer.IsScrollbarDragging() }
+func (d *WebDisplayDialog) Layers() []*lipgloss.Layer { return d.outer.Layers() }
+func (d *WebDisplayDialog) GetHitRegions(offsetX, offsetY int) []displayengine.HitRegion {
 	return d.outer.GetHitRegions(offsetX, offsetY)
 }
 
@@ -470,18 +471,18 @@ func (d *WebDisplayDialog) GetInputCursor() (relX, relY int, shape tea.CursorSha
 	if len(sections) < 3 {
 		return 0, 0, tea.CursorBar, false
 	}
-	row, isRow := sections[2].(*ContentRow)
+	row, isRow := sections[2].(*displayengine.ContentRow)
 	if !isRow || d.outer.GetFocusedSection() != 2 {
 		return 0, 0, tea.CursorBar, false
 	}
-	layout := GetLayout()
+	layout := displayengine.GetLayout()
 	largeTitleOffset := 0
-	if d.outer.layout.LargeTitleBar {
-		largeTitleOffset = LargeTitleBarOverhead
+	if d.outer.Layout.LargeTitleBar {
+		largeTitleOffset = displayengine.LargeTitleBarOverhead
 	}
 	defaultH := layout.BorderHeight() + len(d.defaultSection.GetItems())
 	// Use the capped row count (maxFlowRows) so the cursor Y matches the rendered height.
-	familyRows := d.familyMenu.maxFlowRows
+	familyRows := d.familyMenu.MaxFlowRows
 	if familyRows == 0 {
 		familyRows = d.familyMenu.GetFlowHeight(d.familyMenu.Width() - layout.BorderWidth())
 	}
@@ -515,7 +516,7 @@ func (d *WebDisplayDialog) SetSize(width, height int) {
 	if width > 60 {
 		width = 60
 	}
-	layout := GetLayout()
+	layout := displayengine.GetLayout()
 	contentW := width - layout.BorderWidth() - layout.ContentMarginWidth()
 	if contentW < 1 {
 		contentW = 1
@@ -524,22 +525,22 @@ func (d *WebDisplayDialog) SetSize(width, height int) {
 	// Fixed budget for every section OTHER than the font-family flow-grid,
 	// via the same per-section formula calculateSectionLayout uses
 	// internally (SectionHeight) -- no re-derivation here. Font Size and
-	// Refresh Rate share one ContentRow, so their combined contribution is
+	// Refresh Rate share one displayengine.ContentRow, so their combined contribution is
 	// the max of the two (they're side by side, same convention
-	// ContentRow.SectionHeight uses), not the sum of each measured
+	// displayengine.ContentRow.SectionHeight uses), not the sum of each measured
 	// separately -- summing them here would double-count and leave the
 	// row's actual (shorter) height as unclaimed blank space below the
 	// buttons.
 	defaultH := d.defaultSection.SectionHeight(contentW)
-	rowContentW := splitWidth(contentW, 2)
+	rowContentW := displayengine.SplitWidth(contentW, 2)
 	sizeRowH := d.sizeSection.SectionHeight(rowContentW[0])
 	if h := d.refreshSection.SectionHeight(rowContentW[1]); h > sizeRowH {
 		sizeRowH = h
 	}
-	btnH := ButtonRowHeight(contentW, 0, d.outer.getButtonSpecs()...)
+	btnH := displayengine.ButtonRowHeight(contentW, 0, d.outer.GetButtonSpecsForState()...)
 	largeTitleOverhead := 0
-	if currentConfig.UI.LargeTitleBars {
-		largeTitleOverhead = LargeTitleBarOverhead
+	if displayengine.CurrentConfig().UI.LargeTitleBars {
+		largeTitleOverhead = displayengine.LargeTitleBarOverhead
 	}
 
 	// Total rows the font family column layout wants (uncapped).
@@ -551,7 +552,7 @@ func (d *WebDisplayDialog) SetSize(width, height int) {
 	// Space available for the family section after all other fixed sections,
 	// buttons, the large-title-bar overhead, and both outer/family borders.
 	// This dialog has no expandable content sections, so
-	// calculateSectionLayout's DecideLargeTitleBar check only needs
+	// calculateSectionLayout's displayengine.DecideLargeTitleBar check only needs
 	// largeTitleOverhead of slack (not the extra minRemaining it reserves for
 	// dialogs with an expandable section to protect) -- see LargeTitleBarBudget.
 	otherFixed := defaultH + sizeRowH + btnH

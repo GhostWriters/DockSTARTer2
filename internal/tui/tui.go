@@ -12,13 +12,14 @@ import (
 	"DockSTARTer2/internal/compose"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/version"
+	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/docker"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/theme"
-	"DockSTARTer2/internal/webmsg"
 	"DockSTARTer2/internal/update"
+	"DockSTARTer2/internal/version"
+	"DockSTARTer2/internal/webmsg"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/colorprofile"
@@ -31,9 +32,6 @@ var (
 
 	// program holds the running Bubble Tea program
 	program *tea.Program
-
-	// currentConfig holds the loaded app configuration
-	currentConfig config.AppConfig
 
 	// CurrentPageName tracks the active menu page for re-execution
 	CurrentPageName string
@@ -77,6 +75,24 @@ func registerCallbacks() {
 	console.TUIPrompt = PromptText
 	console.TUIShutdown = Shutdown
 	console.TUIEmergencyShutdown = EmergencyShutdown
+
+	// classic's Esc/exit-button fallback defaults to a plain tea.Quit; override
+	// it here so a menu with no explicit btn-back/btn-cancel/btn-exit shows a
+	// real "confirm exit?" dialog instead. Keeps classic decoupled from
+	// app-navigation message types (see displayengine.SetConfirmExitFallback's doc comment).
+	displayengine.SetConfirmExitFallback(ConfirmExitAction)
+
+	// classic's displayengine.HeaderModel only owns rendering/hit-regions; header click/wheel
+	// reactions (opening Global Flags, triggering app/template updates) are
+	// app-navigation concerns, so wire the real handler in here.
+	displayengine.SetHeaderUpdateHook(headerUpdate)
+
+	// classic's panel (sudo-password interception) needs the real blocking
+	// prompt dialog, which is app-integrated (routes through the running
+	// tea.Program or a standalone dialog).
+	displayengine.SetPromptTextHook(func(title, question string, sensitive bool) (string, error) {
+		return PromptText(title, question, sensitive)
+	})
 }
 
 // deregisterCallbacks removes TUI prompt/shutdown handlers from the console package.
@@ -90,21 +106,21 @@ func deregisterCallbacks() {
 func Initialize(ctx context.Context) error {
 	registerCallbacks()
 
-	currentConfig = config.LoadAppConfig()
-	console.SpinnerEnabled = currentConfig.UI.Spinner
-	console.SpinnerSpeed = console.AlignToRefreshRate(currentConfig.UI.SpinnerSpeed, currentConfig.UI.RefreshRate)
-	console.LineCharacters = currentConfig.UI.LineCharacters
-	if deflts, err := theme.Load(currentConfig.UI.Theme, ""); err != nil {
+	cfg := config.LoadAppConfig()
+	console.SpinnerEnabled = cfg.UI.Spinner
+	console.SpinnerSpeed = console.AlignToRefreshRate(cfg.UI.SpinnerSpeed, cfg.UI.RefreshRate)
+	console.LineCharacters = cfg.UI.LineCharacters
+	if deflts, err := theme.Load(cfg.UI.Theme, ""); err != nil {
 		if deflts == nil {
 			// Default theme itself failed to parse — unrecoverable
 			logger.FatalWithStack(ctx, "failed to load default theme: %v", err)
 		}
 		// Non-default theme fell back to default — log warning and continue
-		logger.Warn(ctx, "failed to load theme '%s', fell back to default: %v", currentConfig.UI.Theme, err)
+		logger.Warn(ctx, "failed to load theme '%s', fell back to default: %v", cfg.UI.Theme, err)
 	}
 
 	// Initialize styles from theme
-	InitStyles(currentConfig)
+	displayengine.InitStyles(cfg)
 
 	return nil
 }
@@ -157,8 +173,8 @@ func resolveRefreshRate(connType, webToken string) int {
 		}
 		return 100
 	}
-	if currentConfig.UI.RefreshRate > 0 {
-		return currentConfig.UI.RefreshRate
+	if displayengine.CurrentConfig().UI.RefreshRate > 0 {
+		return displayengine.CurrentConfig().UI.RefreshRate
 	}
 	return 100
 }
@@ -167,7 +183,7 @@ func resolveRefreshRate(connType, webToken string) int {
 // configured refresh interval. This single ticker drives all spinner advances
 // and the periodic repaint, ensuring spinners are updated before each frame.
 func globalTickCmd() tea.Cmd {
-	ms := currentConfig.UI.RefreshRate
+	ms := displayengine.CurrentConfig().UI.RefreshRate
 	if ms <= 0 {
 		ms = 60
 	}
@@ -227,33 +243,17 @@ func NewProgram(model tea.Model, opts ProgramOptions) *tea.Program {
 	return p
 }
 
-// ReplaceOutputLines sends a replaceOutputMsg to the running program, replacing
+// ReplaceOutputLines sends a displayengine.ReplaceOutputMsg to the running program, replacing
 // all current program box output with the given lines. No-op if no program is running.
 func ReplaceOutputLines(lines []string) {
 	if program != nil {
-		program.Send(replaceOutputMsg{lines: lines})
+		program.Send(displayengine.ReplaceOutputMsg{Lines: lines})
 	}
 }
-
-// activeOutputWidth is the content width (columns) of whichever output viewport is
-// currently showing compose output — the program box or the console panel. It is updated
-// by those components as they resize/receive output, and read via OutputContentWidth so
-// compose can size proportional bars to the viewport instead of the raw terminal.
-var activeOutputWidth int
-
-// setActiveOutputWidth records the active output viewport's content width.
-func setActiveOutputWidth(w int) {
-	if w > 0 {
-		activeOutputWidth = w
-	}
-}
-
-// OutputContentWidth returns the active output viewport's content width, or 0 if unknown.
-func OutputContentWidth() int { return activeOutputWidth }
 
 func init() {
 	console.ReplaceOutputLinesFn = ReplaceOutputLines
-	console.OutputContentWidthFn = OutputContentWidth
+	console.OutputContentWidthFn = displayengine.OutputContentWidth
 }
 
 // parseClientInfo extracts IP and connection type from environment strings.
@@ -296,10 +296,6 @@ func startWindowSizeForwarder(ctx context.Context, p *tea.Program, opts ProgramO
 		}
 	}()
 }
-
-// IsDestructive reports whether this menu can modify data.
-// Default for MenuModel is false (read-only navigation).
-func (m *MenuModel) IsDestructive() bool { return false }
 
 // Start launches the TUI application
 func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error {
@@ -376,7 +372,7 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	}
 
 	// Create the app model
-	model := NewAppModel(ctx, currentConfig, clientIP, connType, startScreen, initialStack...)
+	model := NewAppModel(ctx, displayengine.CurrentConfig(), clientIP, connType, startScreen, initialStack...)
 
 	if console.IsPuTTY() {
 		logger.Info(ctx, "PuTTY terminal detected")
@@ -385,7 +381,6 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	// Create and run the Bubble Tea program
 	// Note: AltScreen is set via View().AltScreen in v2
 	p := NewProgram(model, pOpts)
-
 
 	// Initialize re-execution sync
 	programExited = make(chan struct{})
@@ -528,7 +523,7 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 		}
 	}
 
-	model := NewAppModel(ctx, currentConfig, ip, ctype, startScreen, initialStack...)
+	model := NewAppModel(ctx, displayengine.CurrentConfig(), ip, ctype, startScreen, initialStack...)
 	p := NewProgram(model, pOpts)
 	programExited = make(chan struct{})
 
@@ -681,7 +676,7 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 
 	ip, ctype := parseClientInfo(pOpts.Environ)
 	pOpts.RefreshRate = resolveRefreshRate(ctype, pOpts.WebToken)
-	model := NewAppModel(ctx, currentConfig, ip, ctype, startScreen)
+	model := NewAppModel(ctx, displayengine.CurrentConfig(), ip, ctype, startScreen)
 	p := NewProgram(model, pOpts)
 	programExited = make(chan struct{})
 
@@ -804,12 +799,12 @@ func RunCommand(ctx context.Context, title, subtitle, command string, task func(
 
 	// If TUI is already running, show dialog within existing program
 	if program != nil {
-		dialog := NewProgramBoxModel(title, subtitle, command).WithDialogType(DialogTypeSuccess)
+		dialog := NewProgramBoxModel(title, subtitle, command).WithDialogType(displayengine.DialogTypeSuccess)
 		dialog.SetContext(ctx)
 		dialog.SetTask(wrappedTask)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
-		program.Send(ShowDialogMsg{Dialog: dialog})
+		program.Send(displayengine.ShowDialogMsg{Dialog: dialog})
 		return nil
 	}
 
@@ -989,12 +984,12 @@ func TriggerAppUpdate() tea.Cmd {
 			return err
 		}
 
-		dialog := NewProgramBoxModel("Updating App", "Updating the application.", CmdLine("--update-app")).WithDialogType(DialogTypeSuccess)
+		dialog := NewProgramBoxModel("Updating App", "Updating the application.", CmdLine("--update-app")).WithDialogType(displayengine.DialogTypeSuccess)
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
 
-		return ShowDialogMsg{Dialog: dialog}
+		return displayengine.ShowDialogMsg{Dialog: dialog}
 	}
 }
 
@@ -1018,12 +1013,12 @@ func TriggerTemplateUpdate() tea.Cmd {
 			return err
 		}
 
-		dialog := NewProgramBoxModel("Updating Templates", "Updating app templates.", CmdLine("--update-templates")).WithDialogType(DialogTypeSuccess)
+		dialog := NewProgramBoxModel("Updating Templates", "Updating app templates.", CmdLine("--update-templates")).WithDialogType(displayengine.DialogTypeSuccess)
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
 
-		return ShowDialogMsg{Dialog: dialog}
+		return displayengine.ShowDialogMsg{Dialog: dialog}
 	}
 }
 
@@ -1071,15 +1066,14 @@ func TriggerUpdate() tea.Cmd {
 			return err
 		}
 
-		dialog := NewProgramBoxModel("Updating DockSTARTer2", "Updating DockSTARTer2 to the latest version.", CmdLine("--update")).WithDialogType(DialogTypeSuccess)
+		dialog := NewProgramBoxModel("Updating DockSTARTer2", "Updating DockSTARTer2 to the latest version.", CmdLine("--update")).WithDialogType(displayengine.DialogTypeSuccess)
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
 
-		return ShowDialogMsg{Dialog: dialog}
+		return displayengine.ShowDialogMsg{Dialog: dialog}
 	}
 }
-
 
 // editLockBusyMsg builds the "Resource Busy" dialog message from the current lock info.
 // attempted is the action that was blocked (command or screen title); empty string omits it.
@@ -1121,11 +1115,11 @@ func TriggerComposeUpdate() tea.Cmd {
 			}
 			return nil
 		}
-		dialog := NewProgramBoxModel("Docker Compose", compose.YesNotice("update", ""), CmdLine("--compose", "update")).WithDialogType(DialogTypeSuccess)
+		dialog := NewProgramBoxModel("Docker Compose", compose.YesNotice("update", ""), CmdLine("--compose", "update")).WithDialogType(displayengine.DialogTypeSuccess)
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
-		return ShowDialogMsg{Dialog: dialog}
+		return displayengine.ShowDialogMsg{Dialog: dialog}
 	}
 }
 
@@ -1154,11 +1148,11 @@ func TriggerComposeStop() tea.Cmd {
 			}
 			return nil
 		}
-		dialog := NewProgramBoxModel("Docker Compose", "Stopping or removing running containers.", CmdLine("--compose")).WithDialogType(DialogTypeSuccess)
+		dialog := NewProgramBoxModel("Docker Compose", "Stopping or removing running containers.", CmdLine("--compose")).WithDialogType(displayengine.DialogTypeSuccess)
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
-		return ShowDialogMsg{Dialog: dialog}
+		return displayengine.ShowDialogMsg{Dialog: dialog}
 	}
 }
 
@@ -1177,11 +1171,11 @@ func TriggerDockerPrune() tea.Cmd {
 			}
 			return nil
 		}
-		dialog := NewProgramBoxModel("Docker Prune", "Removing unused docker resources.", CmdLine("--prune")).WithDialogType(DialogTypeSuccess)
+		dialog := NewProgramBoxModel("Docker Prune", "Removing unused docker resources.", CmdLine("--prune")).WithDialogType(displayengine.DialogTypeSuccess)
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
-		return ShowDialogMsg{Dialog: dialog}
+		return displayengine.ShowDialogMsg{Dialog: dialog}
 	}
 }
 
@@ -1195,20 +1189,20 @@ func Send(msg tea.Msg) {
 // IsShadowEnabled returns whether shadow is currently enabled in the global config.
 // Use this for dialog chrome that should reflect the active setting, not preview changes.
 func IsShadowEnabled() bool {
-	return currentConfig.UI.Shadow
+	return displayengine.CurrentConfig().UI.Shadow
 }
 
 // CloseDialog returns a command to close the current modal dialog
 func CloseDialog() tea.Cmd {
 	return func() tea.Msg {
-		return CloseDialogMsg{}
+		return displayengine.CloseDialogMsg{}
 	}
 }
 
 // CloseDialogWithResult returns a command to close the current modal dialog with a result
 func CloseDialogWithResult(result any) tea.Cmd {
 	return func() tea.Msg {
-		return CloseDialogMsg{Result: result}
+		return displayengine.CloseDialogMsg{Result: result}
 	}
 }
 
@@ -1219,14 +1213,6 @@ func GetConnType() string {
 	}
 	// We can't easily reach into the model from here, but we can track it globally.
 	return activeConnType
-}
-
-// EffectivePanelMode returns the correct panel mode (log, console, none) for the current session.
-func EffectivePanelMode(cfg config.AppConfig, connType string) string {
-	if connType == "local" {
-		return cfg.UI.PanelLocal
-	}
-	return cfg.UI.PanelRemote
 }
 
 var activeConnType = "local"

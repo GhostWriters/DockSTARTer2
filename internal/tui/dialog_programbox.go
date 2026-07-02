@@ -7,6 +7,7 @@ import (
 	"io"
 	"time"
 
+	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/tui/components/streamvp"
 
 	"charm.land/bubbles/v2/progress"
@@ -38,7 +39,7 @@ type ProgramBoxModel struct {
 	subtitle     string
 	command      string // Command being executed (displayed above output)
 	sv           streamvp.Model
-	titleSpinner TitleSpinner // title-bar spinner (advanced by global tick)
+	titleSpinner displayengine.TitleSpinner // title-bar spinner (advanced by global tick)
 	done         bool
 	err          error
 	width        int
@@ -51,14 +52,14 @@ type ProgramBoxModel struct {
 	autoCloseDelay time.Duration
 	// AutoExit determines if the dialog should automatically close (and exit app) on success
 	AutoExit bool
-	// SuccessMsg is forwarded as CloseDialogMsg.Result when the task completes without error
+	// SuccessMsg is forwarded as displayengine.CloseDialogMsg.Result when the task completes without error
 	// and the user dismisses the dialog.  shouldForwardResult routes it to the active screen.
 	SuccessMsg tea.Msg
 	task       func(context.Context, io.Writer) error
 	focused    bool
 	ctx        context.Context
 
-	// Overlay prompts (for blocking prompts during task)
+	// displayengine.Overlay prompts (for blocking prompts during task)
 	subDialog     tea.Model
 	subDialogChan any
 
@@ -67,22 +68,22 @@ type ProgramBoxModel struct {
 	Percent  float64
 	progress progress.Model
 
-	// headerLineCount tracks lines present before the first replaceOutputMsg (-1 = not yet set).
+	// headerLineCount tracks lines present before the first displayengine.ReplaceOutputMsg (-1 = not yet set).
 	headerLineCount int
 
-	// Scrollbar component
-	Scroll Scrollbar
+	// displayengine.Scrollbar component
+	Scroll displayengine.Scrollbar
 
-	// outer is the outer container MenuModel (title, buttons) owning the
+	// outer is the outer container displayengine.MenuModel (title, buttons) owning the
 	// header/command/viewport content sections, following the pattern used
 	// by every other migrated dialog. Rendering/hit-regions/sizing delegate
 	// to it; sub-dialog overlay compositing and task-goroutine orchestration
 	// stay on this wrapper (see dialog_programbox_view.go / this file's
 	// Update).
-	outer           *MenuModel
-	commandSection  *MenuModel // nil when command == ""
-	viewportSection *MenuModel
-	headerSection   *MenuModel
+	outer           *displayengine.MenuModel
+	commandSection  *displayengine.MenuModel // nil when command == ""
+	viewportSection *displayengine.MenuModel
+	headerSection   *displayengine.MenuModel
 }
 
 // UpdateTaskMsg updates a task's status or active app
@@ -99,7 +100,7 @@ type UpdatePercentMsg struct {
 
 // newProgramBox creates a new program box dialog (internal use)
 func newProgramBox(title, subtitle, command string) *ProgramBoxModel {
-	styles := GetStyles()
+	styles := displayengine.GetStyles()
 	sv := streamvp.New()
 	sv.SetStyle(lipgloss.NewStyle().
 		Background(styles.Console.GetBackground()).
@@ -113,7 +114,7 @@ func newProgramBox(title, subtitle, command string) *ProgramBoxModel {
 		Tasks:           []Task{},
 		focused:         true,
 		ctx:             context.Background(),
-		Scroll:          Scrollbar{ID: "programbox_dialog"},
+		Scroll:          displayengine.Scrollbar{ID: "programbox_viewport"},
 		headerLineCount: -1,
 		// Every real caller ends up filling the full dialog content area
 		// regardless of whether it calls SetMaximized itself (getDialogArea
@@ -129,7 +130,7 @@ func newProgramBox(title, subtitle, command string) *ProgramBoxModel {
 	// Initialize progress bar with default options
 	m.progress = progress.New()
 
-	outer := NewMenuModel("programbox_dialog", title, "", nil)
+	outer := displayengine.NewMenuModel("programbox_dialog", title, "", nil)
 	outer.SetMaximized(true)
 	outer.SetIsDialog(true)
 	outer.SetTitleSpinnerIndicator(m.currentSpinnerIndicators)
@@ -152,26 +153,26 @@ func newProgramBox(title, subtitle, command string) *ProgramBoxModel {
 // okButtons returns the single OK button def, added to outer only once the
 // task completes (see outputDoneMsg's handler). ZoneID "btn-select" matches
 // the primary-action convention every other migrated dialog uses.
-// MenuModel's Esc/title-bar-[x] handling falls back to this single button
+// displayengine.MenuModel's Esc/title-bar-[x] handling falls back to this single button
 // when no btn-back/btn-cancel/btn-exit ZoneID is present, so Esc/[x]
 // correctly close via this Action without needing a borrowed ZoneID.
-func (m *ProgramBoxModel) okButtons() []ButtonDef {
-	return []ButtonDef{
+func (m *ProgramBoxModel) okButtons() []displayengine.ButtonDef {
+	return []displayengine.ButtonDef{
 		{Label: "OK", ZoneID: "btn-select", Action: func() tea.Msg {
 			result := tea.Msg(true)
 			if m.err == nil && m.SuccessMsg != nil {
 				result = m.SuccessMsg
 			}
-			return CloseDialogMsg{Result: result}
+			return displayengine.CloseDialogMsg{Result: result}
 		}, Help: "Dismiss and return."},
 	}
 }
 
 // pbRenderFn returns the render function used by streamvp for the program box.
 func pbRenderFn() func(string) string {
-	styles := GetStyles()
+	styles := displayengine.GetStyles()
 	return func(raw string) string {
-		return RenderConsoleText(raw, styles.Console)
+		return displayengine.RenderConsoleText(raw, styles.Console)
 	}
 }
 
@@ -225,8 +226,8 @@ func NewProgramBoxModel(title, subtitle, command string) *ProgramBoxModel {
 	return newProgramBox(title, subtitle, command)
 }
 
-// WithDialogType sets the dialog type for title area styling (e.g. DialogTypeSuccess).
-func (m *ProgramBoxModel) WithDialogType(t DialogType) *ProgramBoxModel {
+// WithDialogType sets the dialog type for title area styling (e.g. displayengine.DialogTypeSuccess).
+func (m *ProgramBoxModel) WithDialogType(t displayengine.DialogType) *ProgramBoxModel {
 	m.outer.SetDialogType(t)
 	return m
 }
@@ -261,8 +262,8 @@ func (m *ProgramBoxModel) IsScrollbarDragging() bool {
 	return m.outer.IsScrollbarDragging()
 }
 
-// FocusTitleBar, BlurTitleBar, TitleBarFocused implement TitleBarFocusable
-// by delegating to outer, which now owns the sole TitleBarFocus state (see
+// FocusTitleBar, BlurTitleBar, TitleBarFocused implement displayengine.TitleBarFocusable
+// by delegating to outer, which now owns the sole displayengine.TitleBarFocus state (see
 // newProgramBox's SetTitleSpinnerIndicator wiring for how outer's title-bar
 // spinner reflects this wrapper's task-running state).
 func (m *ProgramBoxModel) FocusTitleBar()        { m.outer.FocusTitleBar() }
@@ -278,7 +279,7 @@ func (m *ProgramBoxModel) Init() tea.Cmd {
 		m.sv.CommandRunning = true
 		lockID := fmt.Sprintf("programbox-%p", m)
 		return tea.Batch(
-			func() tea.Msg { return ConsoleLockMsg{ID: lockID, Locked: true} },
+			func() tea.Msg { return displayengine.ConsoleLockMsg{ID: lockID, Locked: true} },
 			func() tea.Msg {
 				reader, writer := io.Pipe()
 
@@ -337,7 +338,7 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.height = wsm.Height
 			m.outer.SetSize(wsm.Width, wsm.Height)
 			m.subDialog, subCmd = m.subDialog.Update(msg)
-		case outputLinesMsg, replaceOutputMsg, UpdateTaskMsg, UpdatePercentMsg:
+		case outputLinesMsg, displayengine.ReplaceOutputMsg, UpdateTaskMsg, UpdatePercentMsg:
 			// Streaming output and task/progress state must keep flowing into
 			// the viewport/header even while a sub-dialog (e.g. a confirm
 			// prompt raised mid-task) is up -- these aren't interactive
@@ -374,7 +375,7 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case CloseDialogMsg:
+	case displayengine.CloseDialogMsg:
 		if m.subDialog != nil {
 			m.satisfySubDialogChan(msg.Result)
 			m.subDialog = nil
@@ -398,13 +399,13 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-	case replaceOutputMsg:
-		setActiveOutputWidth(m.sv.Width())
+	case displayengine.ReplaceOutputMsg:
+		displayengine.SetActiveOutputWidth(m.sv.Width())
 		m.sv.CommandRunning = false
 		if m.headerLineCount < 0 {
 			m.headerLineCount = m.sv.TotalLineCount()
 		}
-		m.sv.ReplaceTailLines(m.headerLineCount, msg.lines, pbRenderFn())
+		m.sv.ReplaceTailLines(m.headerLineCount, msg.Lines, pbRenderFn())
 		m.viewportSection.InvalidateCache()
 		m.outer.InvalidateCache()
 		if !m.done {
@@ -420,13 +421,13 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg.err
 		m.outer.SetButtons(m.okButtons())
 		m.outer.SetSize(m.width, m.height)
-		unlockCmd := func() tea.Msg { return ConsoleLockMsg{ID: lockID, Locked: false} }
+		unlockCmd := func() tea.Msg { return displayengine.ConsoleLockMsg{ID: lockID, Locked: false} }
 		if m.AutoExit && m.err == nil {
 			result := tea.Msg(true)
 			if m.SuccessMsg != nil {
 				result = m.SuccessMsg
 			}
-			return m, tea.Batch(unlockCmd, func() tea.Msg { return CloseDialogMsg{Result: result} })
+			return m, tea.Batch(unlockCmd, func() tea.Msg { return displayengine.CloseDialogMsg{Result: result} })
 		}
 		return m, unlockCmd
 
@@ -444,7 +445,7 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	newOuter, cmd := m.outer.Update(msg)
-	if o, ok := newOuter.(*MenuModel); ok {
+	if o, ok := newOuter.(*displayengine.MenuModel); ok {
 		m.outer = o
 	}
 	return m, cmd
@@ -462,7 +463,7 @@ func (m *ProgramBoxModel) AdvanceSpinners(now time.Time) bool {
 		changed = true
 	}
 	if changed {
-		// Same stale-cache class as outputLinesMsg/replaceOutputMsg: both the
+		// Same stale-cache class as outputLinesMsg/displayengine.ReplaceOutputMsg: both the
 		// viewport section's own cache and outer's top-level cache must be
 		// invalidated, or the advanced spinner frame never actually reaches
 		// the screen despite AdvanceSpinners correctly mutating m.sv/

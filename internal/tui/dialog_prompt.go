@@ -3,6 +3,7 @@ package tui
 import (
 	"time"
 
+	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/tui/components/sinput"
 
 	tea "charm.land/bubbletea/v2"
@@ -10,12 +11,12 @@ import (
 )
 
 // promptDialogModel represents a single-line text/password input dialog.
-// Built as an outer container MenuModel (title, buttons) with the question
+// Built as an outer container displayengine.MenuModel (title, buttons) with the question
 // as a plain-text section and the input as a sinput section, matching the
 // pattern used by Main Menu/Config Menu/.../Global Flags/Confirm dialog.
 type promptDialogModel struct {
-	outer        *MenuModel
-	inputSection *MenuModel
+	outer        *displayengine.MenuModel
+	inputSection *displayengine.MenuModel
 	input        *sinput.Model
 	result       string
 	confirmed    bool
@@ -35,21 +36,21 @@ func newPromptDialogModel(title, question string, sensitive bool, onResult func(
 
 	m := &promptDialogModel{onResult: onResult}
 
-	var inputSection *MenuModel
+	var inputSection *displayengine.MenuModel
 	var inp *sinput.Model
 	if sensitive {
-		inputSection, inp = NewPasswordSinputSection("prompt_dialog_input", "", initial)
+		inputSection, inp = displayengine.NewPasswordSinputSection("prompt_dialog_input", "", initial)
 	} else {
-		inputSection, inp = NewSinputSection("prompt_dialog_input", "", initial)
+		inputSection, inp = displayengine.NewSinputSection("prompt_dialog_input", "", initial)
 	}
 	m.inputSection = inputSection
 	m.input = inp
 
 	// Keep the INS/OVR bottom-border label live across every keystroke/click
 	// by wrapping the section's existing interceptor (already wired by
-	// NewSinputSection for typing/click/drag/paste/context-menu) rather than
+	// displayengine.NewSinputSection for typing/click/drag/paste/context-menu) rather than
 	// replacing it.
-	prevInterceptor := inputSection.interceptor
+	prevInterceptor := inputSection.Interceptor
 	updateInsOvrLabel := func() {
 		label := "INS"
 		if (*inp).IsOverwrite() {
@@ -57,19 +58,19 @@ func newPromptDialogModel(title, question string, sensitive bool, onResult func(
 		}
 		inputSection.SetBottomBorderLabel(label)
 	}
-	inputSection.SetUpdateInterceptor(func(msg tea.Msg, menu *MenuModel) (tea.Cmd, bool) {
+	inputSection.SetUpdateInterceptor(func(msg tea.Msg, menu *displayengine.MenuModel) (tea.Cmd, bool) {
 		cmd, handled := prevInterceptor(msg, menu)
 		updateInsOvrLabel()
 		return cmd, handled
 	})
 	updateInsOvrLabel()
 
-	outer := NewMenuModel("prompt_dialog", title, "", nil)
+	outer := displayengine.NewMenuModel("prompt_dialog", title, "", nil)
 	outer.SetMaximized(false)
 	outer.SetIsDialog(true)
-	outer.SetDialogType(DialogTypeConfirm)
+	outer.SetDialogType(displayengine.DialogTypeConfirm)
 	outer.SetShowButtons(true)
-	outer.SetButtons([]ButtonDef{
+	outer.SetButtons([]displayengine.ButtonDef{
 		{Label: "OK", ZoneID: "btn-select", Action: func() tea.Msg {
 			m.result = (*inp).Value()
 			m.confirmed = true
@@ -80,12 +81,12 @@ func newPromptDialogModel(title, question string, sensitive bool, onResult func(
 		}, Help: "Cancel."},
 	})
 
-	questionSection := NewPlainTextSection("prompt_dialog_question", question)
+	questionSection := displayengine.NewPlainTextSection("prompt_dialog_question", question)
 	questionSection.SetPlainTextStyle("", 1)
 	outer.AddContentSection(questionSection)
 	outer.AddContentSection(inputSection)
 	if sensitive {
-		disclaimer := NewPlainTextSection("prompt_dialog_disclaimer", "(password will not be logged)")
+		disclaimer := displayengine.NewPlainTextSection("prompt_dialog_disclaimer", "(password will not be logged)")
 		disclaimer.SetPlainTextStyle("{{|Highlight|}}", 0)
 		outer.AddContentSection(disclaimer)
 	}
@@ -97,7 +98,7 @@ func newPromptDialogModel(title, question string, sensitive bool, onResult func(
 // newPromptDialog creates a new text input dialog
 func newPromptDialog(title, question string, sensitive bool, initialValue ...string) *promptDialogModel {
 	return newPromptDialogModel(title, question, sensitive, func(res string, confirmed bool) tea.Msg {
-		return CloseDialogMsg{Result: promptResultMsg{result: res, confirmed: confirmed}}
+		return displayengine.CloseDialogMsg{Result: promptResultMsg{result: res, confirmed: confirmed}}
 	}, initialValue...)
 }
 
@@ -109,7 +110,7 @@ func (m *promptDialogModel) Init() tea.Cmd {
 // Update implements tea.Model
 func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	newOuter, cmd := m.outer.Update(msg)
-	if outer, ok := newOuter.(*MenuModel); ok {
+	if outer, ok := newOuter.(*displayengine.MenuModel); ok {
 		m.outer = outer
 	}
 	return m, cmd
@@ -152,8 +153,8 @@ func (m *promptDialogModel) Layers() []*lipgloss.Layer {
 	return m.outer.Layers()
 }
 
-// GetHitRegions implements HitRegionProvider for mouse hit testing
-func (m *promptDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
+// GetHitRegions implements displayengine.HitRegionProvider for mouse hit testing
+func (m *promptDialogModel) GetHitRegions(offsetX, offsetY int) []displayengine.HitRegion {
 	return m.outer.GetHitRegions(offsetX, offsetY)
 }
 
@@ -188,10 +189,10 @@ func (m *promptDialogModel) GetInputCursor() (relX, relY int, shape tea.CursorSh
 		return 0, 0, tea.CursorBar, false
 	}
 
-	layout := GetLayout()
+	layout := displayengine.GetLayout()
 	largeTitleOffset := 0
-	if m.outer.layout.LargeTitleBar {
-		largeTitleOffset = LargeTitleBarOverhead
+	if m.outer.Layout.LargeTitleBar {
+		largeTitleOffset = displayengine.LargeTitleBarOverhead
 	}
 
 	contentWidth := m.outer.Width() - layout.BorderWidth() - layout.ContentMarginWidth()
@@ -215,11 +216,11 @@ func ShowPromptDialog(title, question string, sensitive bool, initialValue ...st
 	helpText := "Type to input | Tab to switch | Enter to confirm | Esc to cancel"
 	dialog := newPromptDialog(title, question, sensitive, initialValue...)
 
-	header := NewHeaderModel()
+	header := displayengine.NewHeaderModel()
 	header.SetWidth(80)
 	headerH := header.Height()
 
-	finalDialog, err := RunDialogWithBackdrop(dialog, helpText, GetPositionCenter(headerH))
+	finalDialog, err := RunDialogWithBackdrop(dialog, helpText, displayengine.GetPositionCenter(headerH))
 	if err != nil {
 		return "", false
 	}

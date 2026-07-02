@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"DockSTARTer2/internal/displayengine"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -8,11 +9,11 @@ import (
 )
 
 // confirmDialogModel represents a yes/no confirmation dialog. Built as an
-// outer container MenuModel (title, buttons) with the question as a single
+// outer container displayengine.MenuModel (title, buttons) with the question as a single
 // plain-text content section, matching the pattern used by Main Menu/Config
 // Menu/Options Menu/Config Apps Menu/Global Flags.
 type confirmDialogModel struct {
-	outer     *MenuModel
+	outer     *displayengine.MenuModel
 	result    bool
 	confirmed bool
 	onResult  func(bool) tea.Msg
@@ -28,12 +29,12 @@ func newConfirmDialogModel(title, question string, defaultYes bool, onResult fun
 	// "confirm_dialog" the other way around -- MatchesID uses
 	// strings.Contains, so distinct, non-overlapping ids are safe by
 	// construction (learned from the Global Flags ID-collision bug).
-	outer := NewMenuModel("confirm_dialog", title, "", nil)
+	outer := displayengine.NewMenuModel("confirm_dialog", title, "", nil)
 	outer.SetMaximized(false) // grow to fit, matching original behavior
 	outer.SetIsDialog(true)
-	outer.SetDialogType(DialogTypeConfirm)
+	outer.SetDialogType(displayengine.DialogTypeConfirm)
 	outer.SetShowButtons(true)
-	outer.SetButtons([]ButtonDef{
+	outer.SetButtons([]displayengine.ButtonDef{
 		{Label: "Yes", ZoneID: "btn-yes", Action: func() tea.Msg {
 			m.result = true
 			m.confirmed = true
@@ -50,7 +51,7 @@ func newConfirmDialogModel(title, question string, defaultYes bool, onResult fun
 	} else {
 		outer.SetFocusedBtnIndex(1)
 	}
-	questionSection := NewPlainTextSection("confirm_dialog_question", question)
+	questionSection := displayengine.NewPlainTextSection("confirm_dialog_question", question)
 	questionSection.SetPlainTextStyle("", 1)
 	outer.AddContentSection(questionSection)
 
@@ -61,7 +62,7 @@ func newConfirmDialogModel(title, question string, defaultYes bool, onResult fun
 // newConfirmDialog creates a new confirmation dialog
 func newConfirmDialog(title, question string, defaultYes bool) *confirmDialogModel {
 	return newConfirmDialogModel(title, question, defaultYes, func(r bool) tea.Msg {
-		return CloseDialogMsg{Result: r}
+		return displayengine.CloseDialogMsg{Result: r}
 	})
 }
 
@@ -74,7 +75,7 @@ func NewConfirmModel(title, question string, defaultYes bool, onConfirm, onCance
 		if !r && onCancel != nil {
 			return onCancel()
 		}
-		return CloseDialogMsg{Result: r}
+		return displayengine.CloseDialogMsg{Result: r}
 	})
 }
 
@@ -86,7 +87,7 @@ func (m *confirmDialogModel) Init() tea.Cmd {
 // Update implements tea.Model
 func (m *confirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	newOuter, cmd := m.outer.Update(msg)
-	if outer, ok := newOuter.(*MenuModel); ok {
+	if outer, ok := newOuter.(*displayengine.MenuModel); ok {
 		m.outer = outer
 	}
 	return m, cmd
@@ -122,8 +123,8 @@ func (m *confirmDialogModel) Layers() []*lipgloss.Layer {
 	return m.outer.Layers()
 }
 
-// GetHitRegions implements HitRegionProvider for mouse hit testing
-func (m *confirmDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
+// GetHitRegions implements displayengine.HitRegionProvider for mouse hit testing
+func (m *confirmDialogModel) GetHitRegions(offsetX, offsetY int) []displayengine.HitRegion {
 	return m.outer.GetHitRegions(offsetX, offsetY)
 }
 
@@ -148,11 +149,11 @@ func ShowConfirmDialog(title, question string, defaultYes bool) bool {
 	dialog := newConfirmDialog(title, question, defaultYes)
 
 	// Otherwise, run standalone with backdrop
-	header := NewHeaderModel()
+	header := displayengine.NewHeaderModel()
 	header.SetWidth(80) // Initial width
 	headerH := header.Height()
 
-	finalDialog, err := RunDialogWithBackdrop(dialog, helpText, GetPositionCenter(headerH))
+	finalDialog, err := RunDialogWithBackdrop(dialog, helpText, displayengine.GetPositionCenter(headerH))
 	if err != nil {
 		// Fallback to default on error
 		return defaultYes

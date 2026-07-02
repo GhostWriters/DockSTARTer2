@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/update"
 
@@ -27,7 +28,7 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	// If a context menu is open, ALL keys go to it and we return immediately to
 	// prevent keys (especially ESC) from leaking through to the underlying screen.
 	if m.dialog != nil {
-		if _, ok := m.dialog.(*ContextMenuModel); ok {
+		if _, ok := m.dialog.(*displayengine.ContextMenuModel); ok {
 			var cmd tea.Cmd
 			m.dialog, cmd = m.dialog.Update(msg)
 			return m, logger.BatchRecoverTUI(m.ctx, cmd), true
@@ -35,14 +36,14 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	}
 
 	// Global Priority Actions (always work, regardless of focus)
-	if key.Matches(msg, Keys.ToggleLog) {
-		return m, func() tea.Msg { return togglePanelMsg{} }, true
+	if key.Matches(msg, displayengine.Keys.ToggleLog) {
+		return m, func() tea.Msg { return displayengine.TogglePanelMsg{} }, true
 	}
-	if key.Matches(msg, Keys.FocusPanelTitle) {
+	if key.Matches(msg, displayengine.Keys.FocusPanelTitle) {
 		// Focus the title bar of whatever currently has focus — never silently fall through.
 		if m.dialog != nil {
 			// A dialog is open: toggle its title bar.
-			if tb, ok := m.dialog.(TitleBarFocusable); ok {
+			if tb, ok := m.dialog.(displayengine.TitleBarFocusable); ok {
 				if tb.TitleBarFocused() {
 					tb.BlurTitleBar()
 				} else {
@@ -50,7 +51,7 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 				}
 				return m, nil, true
 			}
-		} else if (m.panelFocused || m.panelTitleFocused) && m.panel.panelMode != "none" {
+		} else if (m.panelFocused || m.panelTitleFocused) && m.panel.PanelMode != "none" {
 			// Panel is focused (or its title bar is) — toggle panel title bar.
 			if m.panelTitleFocused {
 				m.setPanelTitleFocus(false)
@@ -60,13 +61,13 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 				}
 				m.setPanelFocus(true)
 			} else {
-				m.panelInputWasFocused = m.panel.inputFocused
+				m.panelInputWasFocused = m.panel.InputFocused
 				m.setPanelTitleFocus(true)
 			}
 			return m, nil, true
-		} else if m.activeScreen != nil && m.backdrop.header.GetFocus() == HeaderFocusNone {
+		} else if m.activeScreen != nil && m.backdrop.Header.GetFocus() == displayengine.HeaderFocusNone {
 			// No dialog, no focused panel, no header focus: toggle active screen title bar.
-			if tb, ok := m.activeScreen.(TitleBarFocusable); ok {
+			if tb, ok := m.activeScreen.(displayengine.TitleBarFocusable); ok {
 				if tb.TitleBarFocused() {
 					tb.BlurTitleBar()
 				} else {
@@ -75,15 +76,15 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 				return m, nil, true
 			}
 		}
-		// No TitleBarFocusable target found — ignore.
+		// No displayengine.TitleBarFocusable target found — ignore.
 	}
-	if key.Matches(msg, Keys.Help) || msg.String() == "?" {
+	if key.Matches(msg, displayengine.Keys.Help) || msg.String() == "?" {
 		return m, m.showHelpCmd(m.focusedPanelHelpContext(), false), true
 	}
-	if key.Matches(msg, Keys.ContextMenu) {
+	if key.Matches(msg, displayengine.Keys.ContextMenu) {
 		return m, m.showContextMenuCmd(), true
 	}
-	if key.Matches(msg, Keys.ForceQuit) {
+	if key.Matches(msg, displayengine.Keys.ForceQuit) {
 		if console.IsDaemon {
 			// In server mode Ctrl-\ restarts the TUI rather than killing the daemon.
 			return m, func() tea.Msg {
@@ -97,10 +98,10 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	}
 
 	// Cycle: Screen -> panel viewport -> Input bar -> Header(Flags) -> Header(App) -> Header(Tmpl) -> Screen
-	if key.Matches(msg, Keys.Tab) {
+	if key.Matches(msg, displayengine.Keys.Tab) {
 		if m.panelFocused {
 			// If panel is expanded and input not yet focused, Tab → input bar.
-			if m.panel.expanded && !m.panel.inputFocused && !m.panel.sessionActive() {
+			if m.panel.Expanded && !m.panel.InputFocused && !m.panel.SessionActive() {
 				return m, m.panel.FocusInput(), true
 			}
 			// Viewport focused (inputFocused already handled above): Tab → exit panel to header / dialog.
@@ -108,19 +109,19 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 				m.setPanelFocus(false)
 				return m, nil, true
 			}
-			m.setHeaderFocus(HeaderFocusFlags)
+			m.setHeaderFocus(displayengine.HeaderFocusFlags)
 			return m, nil, true
 		} else if m.dialog != nil {
 			// Dialog open: pass Tab through to the dialog (not handled here).
 			return m, nil, false
-		} else if m.backdrop.header.GetFocus() == HeaderFocusFlags {
-			m.setHeaderFocus(HeaderFocusApp)
+		} else if m.backdrop.Header.GetFocus() == displayengine.HeaderFocusFlags {
+			m.setHeaderFocus(displayengine.HeaderFocusApp)
 			return m, nil, true
-		} else if m.backdrop.header.GetFocus() == HeaderFocusApp {
-			m.setHeaderFocus(HeaderFocusTmpl)
+		} else if m.backdrop.Header.GetFocus() == displayengine.HeaderFocusApp {
+			m.setHeaderFocus(displayengine.HeaderFocusTmpl)
 			return m, nil, true
-		} else if m.backdrop.header.GetFocus() == HeaderFocusTmpl {
-			m.setHeaderFocus(HeaderFocusNone)
+		} else if m.backdrop.Header.GetFocus() == displayengine.HeaderFocusTmpl {
+			m.setHeaderFocus(displayengine.HeaderFocusNone)
 			return m, nil, true
 		} else {
 			// From screen to panel viewport
@@ -129,18 +130,18 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		}
 	}
 
-	if key.Matches(msg, Keys.ShiftTab) {
+	if key.Matches(msg, displayengine.Keys.ShiftTab) {
 		if m.panelFocused {
 			m.setPanelFocus(false)
 			return m, nil, true
-		} else if m.backdrop.header.GetFocus() == HeaderFocusFlags {
+		} else if m.backdrop.Header.GetFocus() == displayengine.HeaderFocusFlags {
 			m.setPanelFocus(true)
 			return m, nil, true
-		} else if m.backdrop.header.GetFocus() == HeaderFocusApp {
-			m.setHeaderFocus(HeaderFocusFlags)
+		} else if m.backdrop.Header.GetFocus() == displayengine.HeaderFocusApp {
+			m.setHeaderFocus(displayengine.HeaderFocusFlags)
 			return m, nil, true
-		} else if m.backdrop.header.GetFocus() == HeaderFocusTmpl {
-			m.setHeaderFocus(HeaderFocusApp)
+		} else if m.backdrop.Header.GetFocus() == displayengine.HeaderFocusTmpl {
+			m.setHeaderFocus(displayengine.HeaderFocusApp)
 			return m, nil, true
 		} else {
 			// From screen to header (tmpl)
@@ -148,74 +149,74 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 				// Dialog open: pass ShiftTab through to the dialog (not handled here).
 				return m, nil, false
 			}
-			m.setHeaderFocus(HeaderFocusTmpl)
+			m.setHeaderFocus(displayengine.HeaderFocusTmpl)
 			return m, nil, true
 		}
 	}
 
 	// Arrow Key Navigation within Header
 	// We handle this regardless of m.dialog != nil because the header should trap its keys if focused
-	if m.backdrop.header.GetFocus() != HeaderFocusNone {
-		if key.Matches(msg, Keys.Right) {
-			switch m.backdrop.header.GetFocus() {
-			case HeaderFocusFlags:
-				m.setHeaderFocus(HeaderFocusApp)
-			case HeaderFocusApp:
-				m.setHeaderFocus(HeaderFocusTmpl)
+	if m.backdrop.Header.GetFocus() != displayengine.HeaderFocusNone {
+		if key.Matches(msg, displayengine.Keys.Right) {
+			switch m.backdrop.Header.GetFocus() {
+			case displayengine.HeaderFocusFlags:
+				m.setHeaderFocus(displayengine.HeaderFocusApp)
+			case displayengine.HeaderFocusApp:
+				m.setHeaderFocus(displayengine.HeaderFocusTmpl)
 			}
 			return m, nil, true
 		}
-		if key.Matches(msg, Keys.Left) {
-			switch m.backdrop.header.GetFocus() {
-			case HeaderFocusTmpl:
-				m.setHeaderFocus(HeaderFocusApp)
-			case HeaderFocusApp:
-				m.setHeaderFocus(HeaderFocusFlags)
+		if key.Matches(msg, displayengine.Keys.Left) {
+			switch m.backdrop.Header.GetFocus() {
+			case displayengine.HeaderFocusTmpl:
+				m.setHeaderFocus(displayengine.HeaderFocusApp)
+			case displayengine.HeaderFocusApp:
+				m.setHeaderFocus(displayengine.HeaderFocusFlags)
 			}
 			return m, nil, true
 		}
 		// Trap Up/Down keys so they don't leak to underlying screens/dialogs
-		if key.Matches(msg, Keys.Up) || key.Matches(msg, Keys.Down) {
+		if key.Matches(msg, displayengine.Keys.Up) || key.Matches(msg, displayengine.Keys.Down) {
 			return m, nil, true
 		}
 		// Escape to return to screen
-		if key.Matches(msg, Keys.Esc) {
-			m.setHeaderFocus(HeaderFocusNone)
+		if key.Matches(msg, displayengine.Keys.Esc) {
+			m.setHeaderFocus(displayengine.HeaderFocusNone)
 			return m, nil, true
 		}
 	}
 
 	// Handle Enter on focused header items
-	if key.Matches(msg, Keys.Enter) && m.backdrop.header.GetFocus() != HeaderFocusNone {
-		switch m.backdrop.header.GetFocus() {
-		case HeaderFocusFlags:
+	if key.Matches(msg, displayengine.Keys.Enter) && m.backdrop.Header.GetFocus() != displayengine.HeaderFocusNone {
+		switch m.backdrop.Header.GetFocus() {
+		case displayengine.HeaderFocusFlags:
 			return m, func() tea.Msg { return ShowGlobalFlagsMsg{} }, true
-		case HeaderFocusApp:
+		case displayengine.HeaderFocusApp:
 			if update.RestartPending {
 				return m, func() tea.Msg { return ShowPendingRestartMsg{} }, true
 			}
 			return m, TriggerAppUpdate(), true
-		case HeaderFocusTmpl:
+		case displayengine.HeaderFocusTmpl:
 			return m, TriggerTemplateUpdate(), true
 		}
 	}
 
 	// Panel Title Bar Focus: keyboard resize actions.
 	if m.panelTitleFocused {
-		if key.Matches(msg, Keys.Esc) {
+		if key.Matches(msg, displayengine.Keys.Esc) {
 			m.setPanelTitleFocus(false)
 			return m, nil, true
 		}
-		if key.Matches(msg, Keys.Left) {
-			m.panel.SetWidget(panelWidgetUp)
+		if key.Matches(msg, displayengine.Keys.Left) {
+			m.panel.SetWidget(displayengine.PanelWidgetUp)
 			return m, nil, true
 		}
-		if key.Matches(msg, Keys.Right) {
-			m.panel.SetWidget(panelWidgetDn)
+		if key.Matches(msg, displayengine.Keys.Right) {
+			m.panel.SetWidget(displayengine.PanelWidgetDn)
 			return m, nil, true
 		}
-		if key.Matches(msg, Keys.Enter) || msg.String() == " " {
-			if m.panel.ActiveWidget() == panelWidgetDn {
+		if key.Matches(msg, displayengine.Keys.Enter) || msg.String() == " " {
+			if m.panel.ActiveWidget() == displayengine.PanelWidgetDn {
 				m.panel.ResizeBy(-1)
 			} else {
 				m.panel.ResizeBy(1)
@@ -226,32 +227,32 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		}
 		const coarseDelta = 5
 		switch {
-		case key.Matches(msg, Keys.EnvReorderU):
+		case key.Matches(msg, displayengine.Keys.EnvReorderU):
 			m.panel.ResizeBy(coarseDelta)
 			m.applyPanelMax()
 			m.refreshPanelLayout()
 			return m, nil, true
-		case key.Matches(msg, Keys.EnvReorderD):
+		case key.Matches(msg, displayengine.Keys.EnvReorderD):
 			m.panel.ResizeBy(-coarseDelta)
 			m.applyPanelMax()
 			m.refreshPanelLayout()
 			return m, nil, true
-		case key.Matches(msg, Keys.Up):
+		case key.Matches(msg, displayengine.Keys.Up):
 			m.panel.ResizeBy(1)
 			m.applyPanelMax()
 			m.refreshPanelLayout()
 			return m, nil, true
-		case key.Matches(msg, Keys.Down):
+		case key.Matches(msg, displayengine.Keys.Down):
 			m.panel.ResizeBy(-1)
 			m.applyPanelMax()
 			m.refreshPanelLayout()
 			return m, nil, true
-		case key.Matches(msg, Keys.PageUp):
+		case key.Matches(msg, displayengine.Keys.PageUp):
 			m.panel.ResizeBy(coarseDelta)
 			m.applyPanelMax()
 			m.refreshPanelLayout()
 			return m, nil, true
-		case key.Matches(msg, Keys.PageDown):
+		case key.Matches(msg, displayengine.Keys.PageDown):
 			m.panel.ResizeBy(-coarseDelta)
 			m.applyPanelMax()
 			m.refreshPanelLayout()
@@ -264,43 +265,43 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	// When log panel is focused, it gets all scroll/navigation keys exclusively.
 	// We handle this AFTER global cycling (Tab/ShiftTab) so we don't trap those keys.
 	if m.panelFocused {
-		if m.panel.inputFocused {
+		if m.panel.InputFocused {
 			// Physical Tab/Shift+Tab only (not "."/","): cycle back to viewport.
 			if kp, ok := msg.(tea.KeyPressMsg); ok && (kp.String() == "tab" || kp.String() == "shift+tab") {
-				m.panel.input.Blur()
-				m.panel.inputFocused = false
+				m.panel.Input.Blur()
+				m.panel.InputFocused = false
 				return m, nil, true
 			}
 			// Input bar has focus: forward all keys (Esc handled inside the panel).
 			updated, cmd := m.panel.Update(msg)
-			m.panel = updated.(PanelModel)
+			m.panel = updated.(displayengine.PanelModel)
 			return m, logger.BatchRecoverTUI(m.ctx, cmd), true
 		}
 		// Viewport-focused: Esc unfocuses the panel.
-		if key.Matches(msg, Keys.Esc) {
+		if key.Matches(msg, displayengine.Keys.Esc) {
 			m.setPanelFocus(false)
 			return m, nil, true
 		}
 		// Tab/Shift+Tab: cycle to input bar (two-section dialog cycle).
-		if key.Matches(msg, Keys.CycleTab) || key.Matches(msg, Keys.CycleShiftTab) {
-			if m.panel.expanded && !m.panel.sessionActive() {
+		if key.Matches(msg, displayengine.Keys.CycleTab) || key.Matches(msg, displayengine.Keys.CycleShiftTab) {
+			if m.panel.Expanded && !m.panel.SessionActive() {
 				return m, m.panel.FocusInput(), true
 			}
 		}
 		// Enter focuses the input bar (if panel is expanded and not session-locked).
-		if key.Matches(msg, Keys.Enter) {
-			if m.panel.expanded && !m.panel.sessionActive() {
+		if key.Matches(msg, displayengine.Keys.Enter) {
+			if m.panel.Expanded && !m.panel.SessionActive() {
 				return m, m.panel.FocusInput(), true
 			}
-			return m, func() tea.Msg { return togglePanelMsg{} }, true
+			return m, func() tea.Msg { return displayengine.TogglePanelMsg{} }, true
 		}
 		// Space toggles the panel open/closed.
 		if msg.String() == " " {
-			return m, func() tea.Msg { return togglePanelMsg{} }, true
+			return m, func() tea.Msg { return displayengine.TogglePanelMsg{} }, true
 		}
 		// All other keys go to the panel viewport.
 		updated, cmd := m.panel.Update(msg)
-		m.panel = updated.(PanelModel)
+		m.panel = updated.(displayengine.PanelModel)
 		return m, logger.BatchRecoverTUI(m.ctx, cmd), true
 	}
 
@@ -338,7 +339,7 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	return m, nil, false
 }
 
-// shouldForwardResult reports whether a CloseDialogMsg.Result needs to be
+// shouldForwardResult reports whether a displayengine.CloseDialogMsg.Result needs to be
 // forwarded to the active screen rather than silently dropped.
 // Bool and promptResultMsg are consumed internally by pending channel listeners;
 // everything else (e.g. ApplyVarValueMsg from a context menu) must reach the screen.
@@ -355,13 +356,13 @@ func shouldForwardResult(result any) bool {
 	return true
 }
 
-// focusedPanelHelpContext returns the HelpContext for a focused non-screen panel
+// focusedPanelHelpContext returns the displayengine.HelpContext for a focused non-screen panel
 // (log panel or header element), or nil so showHelpCmd falls through to the screen/dialog.
-func (m *AppModel) focusedPanelHelpContext() *HelpContext {
+func (m *AppModel) focusedPanelHelpContext() *displayengine.HelpContext {
 	// Check title bar widget focus on active dialog or screen first.
-	// Find the matching HitRegion by ID suffix so we get the screen-specific help text.
-	widgetHelpFromHits := func(model interface{}) *HelpContext {
-		wh, ok := model.(TitleBarWidgetHelper)
+	// Find the matching displayengine.HitRegion by ID suffix so we get the screen-specific help text.
+	widgetHelpFromHits := func(model interface{}) *displayengine.HelpContext {
+		wh, ok := model.(displayengine.TitleBarWidgetHelper)
 		if !ok {
 			return nil
 		}
@@ -369,7 +370,7 @@ func (m *AppModel) focusedPanelHelpContext() *HelpContext {
 		if suffix == "" {
 			return nil
 		}
-		hrp, ok := model.(HitRegionProvider)
+		hrp, ok := model.(displayengine.HitRegionProvider)
 		if !ok {
 			return nil
 		}
@@ -397,20 +398,20 @@ func (m *AppModel) focusedPanelHelpContext() *HelpContext {
 			}
 		}
 	}
-	focus := m.backdrop.header.GetFocus()
-	if focus == HeaderFocusNone {
+	focus := m.backdrop.Header.GetFocus()
+	if focus == displayengine.HeaderFocusNone {
 		return nil
 	}
 	var targetID string
 	switch focus {
-	case HeaderFocusFlags:
-		targetID = IDHeaderFlags
-	case HeaderFocusApp:
-		targetID = IDAppVersion
-	case HeaderFocusTmpl:
-		targetID = IDTmplVersion
+	case displayengine.HeaderFocusFlags:
+		targetID = displayengine.IDHeaderFlags
+	case displayengine.HeaderFocusApp:
+		targetID = displayengine.IDAppVersion
+	case displayengine.HeaderFocusTmpl:
+		targetID = displayengine.IDTmplVersion
 	}
-	for _, r := range m.backdrop.header.GetHitRegions(0, 0) {
+	for _, r := range m.backdrop.Header.GetHitRegions(0, 0) {
 		if r.ID == targetID && r.Help != nil {
 			return r.Help
 		}
@@ -419,15 +420,15 @@ func (m *AppModel) focusedPanelHelpContext() *HelpContext {
 }
 
 // showHelpCmd returns a command that builds and shows the context-sensitive help dialog.
-func (m *AppModel) showHelpCmd(capturedCtx *HelpContext, screenLevelOnly bool) tea.Cmd {
-	var km help.KeyMap = Keys
-	var contextInfo HelpContext
-	availW, availH := GetAvailableDialogSize(m.width, m.height, true)
+func (m *AppModel) showHelpCmd(capturedCtx *displayengine.HelpContext, screenLevelOnly bool) tea.Cmd {
+	var km help.KeyMap = displayengine.Keys
+	var contextInfo displayengine.HelpContext
+	availW, availH := displayengine.GetAvailableDialogSize(m.width, m.height, true)
 	if availW < 40 || availH < 10 {
 		// Terminal too small for help dialog
 		return nil
 	}
-	helpContentWidth := HelpContextWidth(m.width, m.height)
+	helpContentWidth := displayengine.HelpContextWidth(m.width, m.height)
 
 	if capturedCtx != nil {
 		contextInfo = *capturedCtx
@@ -445,14 +446,14 @@ func (m *AppModel) showHelpCmd(capturedCtx *HelpContext, screenLevelOnly bool) t
 		if h, ok := m.dialog.(help.KeyMap); ok {
 			km = h
 		}
-		if cp, ok := m.dialog.(HelpContextProvider); ok {
+		if cp, ok := m.dialog.(displayengine.HelpContextProvider); ok {
 			contextInfo = cp.HelpContext(helpContentWidth)
 		}
 	} else if m.activeScreen != nil {
 		if h, ok := m.activeScreen.(help.KeyMap); ok {
 			km = h
 		}
-		if cp, ok := m.activeScreen.(HelpContextProvider); ok {
+		if cp, ok := m.activeScreen.(displayengine.HelpContextProvider); ok {
 			contextInfo = cp.HelpContext(helpContentWidth)
 		}
 	}
@@ -465,7 +466,7 @@ func (m *AppModel) showHelpCmd(capturedCtx *HelpContext, screenLevelOnly bool) t
 	}
 
 	return func() tea.Msg {
-		return ShowDialogMsg{Dialog: NewHelpDialogWithContext(km, contextInfo)}
+		return displayengine.ShowDialogMsg{Dialog: NewHelpDialogWithContext(km, contextInfo)}
 	}
 }
 
@@ -474,11 +475,11 @@ func (m *AppModel) showHelpCmd(capturedCtx *HelpContext, screenLevelOnly bool) t
 // key always reflect the same focused item.
 func (m *AppModel) showContextMenuCmd() tea.Cmd {
 	x, y := m.width/2, m.height/2
-	helpContentWidth := HelpContextWidth(m.width, m.height)
+	helpContentWidth := displayengine.HelpContextWidth(m.width, m.height)
 
-	// Panel/header element has focus — use its HelpContext, position near the element
+	// Panel/header element has focus — use its displayengine.HelpContext, position near the element
 	if panelCtx := m.focusedPanelHelpContext(); panelCtx != nil {
-		r := HitRegion{Help: panelCtx, Label: panelCtx.ScreenName}
+		r := displayengine.HitRegion{Help: panelCtx, Label: panelCtx.ScreenName}
 		// Try to find the hit region to get its screen position
 		for _, hr := range m.hitRegions {
 			if hr.Help != nil && hr.Help.ScreenName == panelCtx.ScreenName && hr.Help.PageTitle == panelCtx.PageTitle {
@@ -489,11 +490,11 @@ func (m *AppModel) showContextMenuCmd() tea.Cmd {
 		return m.showGlobalContextMenu(x, y, &r)
 	}
 
-	// Dialog is open — use dialog's HelpContext
+	// Dialog is open — use dialog's displayengine.HelpContext
 	if m.dialog != nil {
-		if cp, ok := m.dialog.(HelpContextProvider); ok {
+		if cp, ok := m.dialog.(displayengine.HelpContextProvider); ok {
 			ctx := cp.HelpContext(helpContentWidth)
-			r := HitRegion{Help: &ctx, Label: ctx.ScreenName}
+			r := displayengine.HitRegion{Help: &ctx, Label: ctx.ScreenName}
 			return m.showGlobalContextMenu(x, y, &r)
 		}
 		return m.showGlobalContextMenu(x, y, nil)
@@ -509,10 +510,10 @@ func (m *AppModel) showContextMenuCmd() tea.Cmd {
 				return cmd
 			}
 		}
-		// Fallback: use screen's HelpContext for the global menu header
-		if cp, ok := m.activeScreen.(HelpContextProvider); ok {
+		// Fallback: use screen's displayengine.HelpContext for the global menu header
+		if cp, ok := m.activeScreen.(displayengine.HelpContextProvider); ok {
 			ctx := cp.HelpContext(helpContentWidth)
-			r := HitRegion{Help: &ctx, Label: ctx.ScreenName}
+			r := displayengine.HitRegion{Help: &ctx, Label: ctx.ScreenName}
 			return m.showGlobalContextMenu(x, y, &r)
 		}
 	}
@@ -521,8 +522,8 @@ func (m *AppModel) showContextMenuCmd() tea.Cmd {
 }
 
 // showGlobalContextMenu shows a context menu with global actions like Help.
-func (m *AppModel) showGlobalContextMenu(x, y int, hit *HitRegion) tea.Cmd {
-	var items []ContextMenuItem
+func (m *AppModel) showGlobalContextMenu(x, y int, hit *displayengine.HitRegion) tea.Cmd {
+	var items []displayengine.ContextMenuItem
 
 	header := "Main Menu"
 	if hit != nil {
@@ -535,34 +536,34 @@ func (m *AppModel) showGlobalContextMenu(x, y int, hit *HitRegion) tea.Cmd {
 		} else {
 			// Fallback to ID-based labels for regions not yet fully converted to metadata
 			switch hit.ID {
-			case IDAppVersion:
+			case displayengine.IDAppVersion:
 				header = "App Version"
-			case IDTmplVersion:
+			case displayengine.IDTmplVersion:
 				header = "Template Version"
-			case IDHeaderFlags:
+			case displayengine.IDHeaderFlags:
 				header = "Global Flags"
-			case IDStatusBar:
+			case displayengine.IDStatusBar:
 				header = "Status Bar"
-			case IDPanel, IDPanelViewport, IDPanelToggle, IDPanelResize:
+			case displayengine.IDPanel, displayengine.IDPanelViewport, displayengine.IDPanelToggle, displayengine.IDPanelResize:
 				header = "Log Panel"
 			}
 		}
 	}
 
 	// For now, global menu is primarily for Help.
-	items = append(items, ContextMenuItem{IsHeader: true, Label: header})
-	items = append(items, ContextMenuItem{IsSeparator: true})
+	items = append(items, displayengine.ContextMenuItem{IsHeader: true, Label: header})
+	items = append(items, displayengine.ContextMenuItem{IsSeparator: true})
 	// You could add "Refresh" or "App Version" here if they are useful as menu items.
 
 	// Use the tail helper to add Clipboard and Help
 	// (clipItems nil for now as global clipboard actions like Paste need a target)
-	var hCtx *HelpContext
+	var hCtx *displayengine.HelpContext
 	if hit != nil {
 		hCtx = hit.Help
 	}
-	items = AppendContextMenuTail(items, nil, hCtx)
+	items = displayengine.AppendContextMenuTail(items, nil, hCtx)
 
 	return func() tea.Msg {
-		return ShowDialogMsg{Dialog: NewContextMenuModel(x, y, m.width, m.height, items)}
+		return displayengine.ShowDialogMsg{Dialog: displayengine.NewContextMenuModel(x, y, m.width, m.height, items)}
 	}
 }

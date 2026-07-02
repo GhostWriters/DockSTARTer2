@@ -1,0 +1,464 @@
+package classic
+
+import (
+	"os"
+	"sort"
+
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/strutil"
+	"DockSTARTer2/internal/update"
+	"DockSTARTer2/internal/version"
+
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+)
+
+// HeaderFocus states for interactive elements
+type HeaderFocus int
+
+const (
+	HeaderFocusNone HeaderFocus = iota
+	HeaderFocusApp
+	HeaderFocusTmpl
+	HeaderFocusFlags
+	HeaderFocusWebDisplay
+)
+
+// RefreshHeaderMsg signals the header to re-read flags and other dynamic data
+type RefreshHeaderMsg struct{}
+
+// Zone IDs
+const (
+	ZoneTmplVersion = "header_tmpl_ver"
+)
+
+// HeaderModel represents the header bar at the top of the TUI
+type HeaderModel struct {
+	width    int
+	ConnType string
+
+	// Cached values
+	hostname string
+	flags    []string
+	focus    HeaderFocus
+}
+
+// NewHeaderModel creates a new header model with default values
+func NewHeaderModel() *HeaderModel {
+	hostname, _ := os.Hostname()
+
+	var flags []string
+	if console.Verbose() {
+		flags = append(flags, "VERBOSE")
+	}
+	if console.Debug() {
+		flags = append(flags, "DEBUG")
+	}
+	if console.Force() {
+		flags = append(flags, "FORCE")
+	}
+	if console.AssumeYes() {
+		flags = append(flags, "YES")
+	}
+
+	return &HeaderModel{
+		hostname: hostname,
+		flags:    flags,
+		focus:    HeaderFocusNone,
+	}
+}
+
+// Init implements tea.Model
+func (m *HeaderModel) Init() tea.Cmd {
+	return nil
+}
+
+// HeaderUpdateHook handles header interaction messages (clicks, wheel, focus
+// cycling) and dispatches app-level actions in response (e.g. opening the
+// Global Flags dialog, triggering an app/template update). HeaderModel itself
+// only owns rendering/hit-region/focus-state; the reaction to a hit is an
+// app-navigation concern that classic can't own directly, so BackdropModel.Update
+// delegates to this injectable hook. internal/tui's registerCallbacks() sets
+// it to the real implementation at startup; defaults to a no-op passthrough
+// so classic still builds/runs standalone (e.g. under future unit tests).
+var HeaderUpdateHook func(h *HeaderModel, msg tea.Msg) (tea.Model, tea.Cmd) = func(h *HeaderModel, msg tea.Msg) (tea.Model, tea.Cmd) {
+	return h, nil
+}
+
+// Update implements tea.Model by delegating to HeaderUpdateHook.
+func (m *HeaderModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	return HeaderUpdateHook(m, msg)
+}
+
+// SetWidth sets the header width
+func (m *HeaderModel) SetWidth(width int) {
+	m.width = width
+}
+
+// SetConnType sets the connection type ("local", "ssh", "web")
+func (m *HeaderModel) SetConnType(ct string) {
+	m.ConnType = ct
+}
+
+// SyncFlags re-reads the global console flags into the header's cache
+func (m *HeaderModel) SyncFlags() {
+	var flags []string
+	if console.Verbose() {
+		flags = append(flags, "VERBOSE")
+	}
+	if console.Debug() {
+		flags = append(flags, "DEBUG")
+	}
+	if console.Force() {
+		flags = append(flags, "FORCE")
+	}
+	if console.AssumeYes() {
+		flags = append(flags, "YES")
+	}
+
+	sort.Strings(flags)
+	m.flags = flags
+}
+
+// SetFocus sets the focus state of the header
+func (m *HeaderModel) SetFocus(f HeaderFocus) {
+	m.focus = f
+}
+
+// GetFocus returns the current focus state
+func (m *HeaderModel) GetFocus() HeaderFocus {
+	return m.focus
+}
+
+// Height returns the number of lines the header currently occupies.
+func (m *HeaderModel) Height() int {
+	return lipgloss.Height(m.ViewString())
+}
+
+// View implements tea.Model
+func (m *HeaderModel) View() tea.View {
+	return tea.NewView(m.ViewString())
+}
+
+// ViewString renders the header as a string (used by backdrop for compositing)
+func (m *HeaderModel) ViewString() string {
+	styles := GetStyles()
+
+	left := m.renderLeft()
+	center := m.renderCenter()
+	appVer, tmplVer := m.renderVersions()
+
+	leftW := WidthWithoutZones(left)
+	centerW := WidthWithoutZones(center)
+	appW := WidthWithoutZones(appVer)
+	tmplW := WidthWithoutZones(tmplVer)
+
+	// Branding (center) ideal position
+	centerX := (m.width - centerW) / 2
+	if centerX < 0 {
+		centerX = 0
+	}
+
+	// 1. Single Line Layout: [Left] [Center] [App] [Tmpl]
+	// Requirements:
+	// - Left doesn't collide with Center (min 1 space)
+	// - Center doesn't collide with Right (min 1 space)
+	// - Right fits in terminal
+	rightW := appW + tmplW
+	fitsLine1 := leftW+1 <= centerX
+
+	if centerX+centerW+1+rightW > m.width {
+		fitsLine1 = false
+	}
+
+	if fitsLine1 {
+		fullLine := left + strutil.Repeat(" ", centerX-leftW) + center + strutil.Repeat(" ", m.width-(centerX+centerW)-rightW) + appVer + tmplVer
+		return MaintainBackground(fullLine, styles.HeaderBG)
+	}
+
+	// 2. Wrap Stage 1: [Left] [Center] [App] on Line 1, [Tmpl] on Line 2
+	fitsStage1 := leftW+1 <= centerX
+
+	if centerX+centerW+1+appW > m.width {
+		fitsStage1 = false
+	}
+
+	if fitsStage1 {
+		line1 := left + strutil.Repeat(" ", centerX-leftW) + center + strutil.Repeat(" ", m.width-(centerX+centerW)-appW) + appVer
+		line2 := strutil.Repeat(" ", m.width-tmplW) + tmplVer
+		return MaintainBackground(line1, styles.HeaderBG) + "\n" + MaintainBackground(line2, styles.HeaderBG)
+	}
+
+	// 3. Wrap Stage 2: [Left] [Center] on Line 1, [App] on Line 2, [Tmpl] on Line 3
+	if leftW+1 <= centerX {
+		line1 := left + strutil.Repeat(" ", centerX-leftW) + center
+		line1 = line1 + strutil.Repeat(" ", m.width-WidthWithoutZones(line1))
+		line2 := strutil.Repeat(" ", m.width-appW) + appVer
+		line3 := strutil.Repeat(" ", m.width-tmplW) + tmplVer
+		return MaintainBackground(line1, styles.HeaderBG) + "\n" +
+			MaintainBackground(line2, styles.HeaderBG) + "\n" +
+			MaintainBackground(line3, styles.HeaderBG)
+	}
+
+	// Fallback: Total Stacked Layout
+	line1 := left
+	if WidthWithoutZones(line1) < m.width {
+		line1 += strutil.Repeat(" ", m.width-WidthWithoutZones(line1))
+	}
+	line2 := center
+	if WidthWithoutZones(line2) < m.width {
+		line2 += strutil.Repeat(" ", m.width-WidthWithoutZones(line2))
+	}
+	line3 := strutil.Repeat(" ", m.width-appW) + appVer
+	line4 := strutil.Repeat(" ", m.width-tmplW) + tmplVer
+
+	return MaintainBackground(line1, styles.HeaderBG) + "\n" +
+		MaintainBackground(line2, styles.HeaderBG) + "\n" +
+		MaintainBackground(line3, styles.HeaderBG) + "\n" +
+		MaintainBackground(line4, styles.HeaderBG)
+}
+
+func (m HeaderModel) renderLeft() string {
+	styles := GetStyles()
+	isFocused := m.focus == HeaderFocusFlags
+
+	// 1. Hostname
+	leftText := "{{|StatusHostname|}}" + m.hostname + "{{[-]}} "
+
+	// 2. Start selection if focused
+	if isFocused {
+		leftText += "{{|StatusBarFocused|}}"
+	}
+
+	// 3. Open bracket for flags
+	if !isFocused {
+		leftText += "{{|StatusFlagsBrackets|}}"
+	}
+	leftText += "|"
+
+	// 4. Flags content
+	if len(m.flags) > 0 {
+		for i, flag := range m.flags {
+			if i > 0 {
+				// Internal separator
+				if isFocused {
+					leftText += "|"
+				} else {
+					leftText += "{{[-]}}{{|StatusFlagsBrackets|}}|{{[-]}}{{|StatusFlags|}}"
+				}
+			} else if !isFocused {
+				leftText += "{{[-]}}{{|StatusFlags|}}"
+			}
+			leftText += flag
+		}
+	}
+
+	// 5. Close bracket for flags
+	if !isFocused {
+		leftText += "{{[-]}}{{|StatusFlagsBrackets|}}"
+	}
+	leftText += "|"
+
+	// 6. Close selection
+	leftText += "{{[-]}}"
+
+	// Translate theme tags and render with lipgloss, using header background as default
+	return MaintainBackground(RenderThemeText(leftText, styles.HeaderBG), styles.HeaderBG)
+}
+
+func (m HeaderModel) renderCenter() string {
+	styles := GetStyles()
+	var centerText string
+	if m.ConnType == "web" && m.focus == HeaderFocusWebDisplay {
+		centerText = "{{|StatusBarFocused|}}" + version.ApplicationName + "{{[-]}}"
+	} else {
+		centerText = "{{|StatusName|}}" + version.ApplicationName + "{{[-]}}"
+	}
+	return MaintainBackground(RenderThemeText(centerText, styles.HeaderBG), styles.HeaderBG)
+}
+
+// renderVersions returns app version and template version as separate strings
+func (m HeaderModel) renderVersions() (appText, tmplText string) {
+	styles := GetStyles()
+	appVer := version.Version
+	tmplVer := paths.GetTemplatesVersion()
+
+	// Select update marker glyphs based on line character setting.
+	var markerAvailable, markerApplied, markerError string
+	if styles.LineCharacters {
+		markerAvailable = updateAvailable
+		markerApplied = updateApplied
+		markerError = updateError
+	} else {
+		markerAvailable = updateAvailableAscii
+		markerApplied = updateAppliedAscii
+		markerError = updateErrorAscii
+	}
+
+	// format: [StatusIcon] [Label]:[ [Version] ]
+	// isApplied — an update was applied externally and a restart is pending.
+	renderVersionBlock := func(ver, label string, isAvailable, isError, isApplied, isFocused, isFirst bool) string {
+		var text string
+
+		// 1. Status marker
+		switch {
+		case isError:
+			text += "{{|StatusUpdateMarker|}}" + markerError + "{{[-]}}{{|StatusBar|}}"
+		case isApplied:
+			text += "{{|StatusUpdateMarker|}}" + markerApplied + "{{[-]}}{{|StatusBar|}}"
+		case isAvailable:
+			text += "{{|StatusUpdateMarker|}}" + markerAvailable + "{{[-]}}{{|StatusBar|}}"
+		case isFirst:
+			text += " "
+		default:
+			text += "{{|StatusVersionSpace|}} {{[-]}}{{|StatusBar|}}"
+		}
+
+		// 2. Label + open bracket
+		if isError || isAvailable || isApplied {
+			text += "{{|StatusUpdateBrackets|}}" + label + ":[{{[-]}}{{|StatusBar|}}"
+		} else {
+			text += "{{|StatusVersionBrackets|}}" + label + ":[{{[-]}}{{|StatusBar|}}"
+		}
+
+		// 3. Version string — append " - Restart Pending" when applied
+		displayVer := ver
+		if isApplied {
+			displayVer = ver + " - Restart Pending"
+		}
+
+		// 4. Styled version text
+		var verStyled string
+		if isFocused {
+			verStyled = "{{|StatusVersionFocused|}}" + displayVer + "{{[-]}}{{|StatusBar|}}"
+		} else if isError || isAvailable || isApplied {
+			verStyled = "{{|StatusUpdate|}}" + displayVer + "{{[-]}}{{|StatusBar|}}"
+		} else {
+			verStyled = "{{|StatusVersion|}}" + displayVer + "{{[-]}}{{|StatusBar|}}"
+		}
+		text += verStyled
+
+		// 5. Close bracket
+		if isError || isAvailable || isApplied {
+			text += "{{|StatusUpdateBrackets|}}]{{[-]}}{{|StatusBar|}}"
+		} else {
+			text += "{{|StatusVersionBrackets|}}]{{[-]}}{{|StatusBar|}}"
+		}
+
+		return MaintainBackground(RenderThemeText(text, styles.HeaderBG), styles.HeaderBG)
+	}
+
+	appText = renderVersionBlock(appVer, "A", update.AppUpdateAvailable, update.UpdateCheckError, update.RestartPending, m.focus == HeaderFocusApp, true)
+	tmplText = renderVersionBlock(tmplVer, "T", update.TmplUpdateAvailable, update.UpdateCheckError, false, m.focus == HeaderFocusTmpl, false)
+
+	return appText, tmplText
+}
+
+// GetHitRegions returns clickable regions for the header version labels
+func (m *HeaderModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
+	var regions []HitRegion
+
+	left := m.renderLeft()
+	center := m.renderCenter()
+	appVer, tmplVer := m.renderVersions()
+
+	leftW := WidthWithoutZones(left)
+	centerW := WidthWithoutZones(center)
+	appW := WidthWithoutZones(appVer)
+	tmplW := WidthWithoutZones(tmplVer)
+
+	hostnameW := lipgloss.Width(m.hostname)
+	flagsW := leftW - hostnameW - 1
+	regions = append(regions, HitRegion{
+		ID:     IDHeaderFlags,
+		X:      offsetX + hostnameW + 1,
+		Y:      offsetY,
+		Width:  flagsW,
+		Height: 1,
+		ZOrder: ZHeader + 1,
+		Label:  "Global Flags",
+		Help: &HelpContext{
+			ScreenName: "Global Flags",
+			PageTitle:  "Status",
+			PageText:   "Shows the currently active global flags (VERBOSE, DEBUG, FORCE, YES).",
+			ItemTitle:  "Global Flags",
+			ItemText:   "Click or press Enter to open the Global Flags toggle dialog.",
+		},
+	})
+
+	centerX := (m.width - centerW) / 2
+	if centerX < 0 {
+		centerX = 0
+	}
+
+	if m.ConnType == "web" {
+		regions = append(regions, HitRegion{
+			ID:     IDHeaderWebDisplay,
+			X:      offsetX + centerX,
+			Y:      offsetY,
+			Width:  centerW,
+			Height: 1,
+			ZOrder: ZHeader + 1,
+			Label:  "Display Settings",
+			Help: &HelpContext{
+				ScreenName: "Display Settings",
+				PageTitle:  "Web Display",
+				PageText:   "Configure xterm.js display settings for this browser session.",
+				ItemTitle:  "Display Settings",
+				ItemText:   "Click or press Enter to open font and display settings for the web terminal.",
+			},
+		})
+	}
+
+	rightW := appW + tmplW
+	fitsLine1 := leftW+1 <= centerX && centerX+centerW+1+rightW <= m.width
+
+	appItemText := "Click or press Enter to check for and apply app updates."
+	if update.RestartPending {
+		appItemText = "Click or press Enter to restart with the updated binary."
+	}
+	appHelp := &HelpContext{
+		ScreenName: "App Version",
+		PageTitle:  "Update",
+		PageText:   "The current version of the DockSTARTer2 application.",
+		ItemTitle:  "App Version",
+		ItemText:   appItemText,
+	}
+	tmplHelp := &HelpContext{
+		ScreenName: "Template Version",
+		PageTitle:  "Update",
+		PageText:   "The current version of the application templates (configs).",
+		ItemTitle:  "Template Version",
+		ItemText:   "Click or press Enter to check for and apply template updates.",
+	}
+
+	if fitsLine1 {
+		// Line 1: [Left] [Center] [App] [Tmpl]
+		appX := m.width - rightW
+		tmplX := m.width - tmplW
+		regions = append(regions, HitRegion{ID: IDAppVersion, X: offsetX + appX, Y: offsetY, Width: appW, Height: 1, ZOrder: ZHeader + 1, Label: "App Version", Help: appHelp})
+		regions = append(regions, HitRegion{ID: IDTmplVersion, X: offsetX + tmplX, Y: offsetY, Width: tmplW, Height: 1, ZOrder: ZHeader + 1, Label: "Template Version", Help: tmplHelp})
+	} else {
+		fitsStage1 := leftW+1 <= centerX && centerX+centerW+1+appW <= m.width
+
+		if fitsStage1 {
+			appX := m.width - appW
+			tmplX := m.width - tmplW
+			regions = append(regions, HitRegion{ID: IDAppVersion, X: offsetX + appX, Y: offsetY, Width: appW, Height: 1, ZOrder: ZHeader + 1, Label: "App Version", Help: appHelp})
+			regions = append(regions, HitRegion{ID: IDTmplVersion, X: offsetX + tmplX, Y: offsetY + 1, Width: tmplW, Height: 1, ZOrder: ZHeader + 1, Label: "Template Version", Help: tmplHelp})
+		} else if leftW+1 <= centerX {
+			appX := m.width - appW
+			tmplX := m.width - tmplW
+			regions = append(regions, HitRegion{ID: IDAppVersion, X: offsetX + appX, Y: offsetY + 1, Width: appW, Height: 1, ZOrder: ZHeader + 1, Label: "App Version", Help: appHelp})
+			regions = append(regions, HitRegion{ID: IDTmplVersion, X: offsetX + tmplX, Y: offsetY + 2, Width: tmplW, Height: 1, ZOrder: ZHeader + 1, Label: "Template Version", Help: tmplHelp})
+		} else {
+			appX := m.width - appW
+			tmplX := m.width - tmplW
+			regions = append(regions, HitRegion{ID: IDAppVersion, X: offsetX + appX, Y: offsetY + 2, Width: appW, Height: 1, ZOrder: ZHeader + 1, Label: "App Version", Help: appHelp})
+			regions = append(regions, HitRegion{ID: IDTmplVersion, X: offsetX + tmplX, Y: offsetY + 3, Width: tmplW, Height: 1, ZOrder: ZHeader + 1, Label: "Template Version", Help: tmplHelp})
+		}
+	}
+
+	return regions
+}

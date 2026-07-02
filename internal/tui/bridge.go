@@ -2,9 +2,10 @@ package tui
 
 import (
 	"DockSTARTer2/internal/commands"
-	tea "charm.land/bubbletea/v2"
 	"context"
 	"fmt"
+
+	tea "charm.land/bubbletea/v2"
 )
 
 // TUIBridge implements commands.UIProvider to allow the TUI Console

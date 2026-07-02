@@ -3,7 +3,7 @@ package screens
 import (
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/constants"
-	"DockSTARTer2/internal/tui"
+	"DockSTARTer2/internal/displayengine"
 	"context"
 	"fmt"
 	"path/filepath"
@@ -27,14 +27,14 @@ func showSpinnerAfterDelayCmd() tea.Cmd {
 
 // appSelectLoadedMsg carries the result of the async app list load.
 type appSelectLoadedMsg struct {
-	baseApps        []string
-	addedByBase     map[string][]string
-	addedMap        map[string]bool
-	enabledMap      map[string]bool
-	wasEnabledMap   map[string]bool
-	referencedByBase map[string][]string
+	baseApps          []string
+	addedByBase       map[string][]string
+	addedMap          map[string]bool
+	enabledMap        map[string]bool
+	wasEnabledMap     map[string]bool
+	referencedByBase  map[string][]string
 	referencedBaseSet map[string]bool
-	envFile         string
+	envFile           string
 }
 
 // loadAppSelectItemsCmd returns a tea.Cmd that performs all filesystem I/O for
@@ -134,7 +134,7 @@ func (s *AppSelectionScreen) applyLoadedItems(data appSelectLoadedMsg) {
 	referencedBaseSet := data.referencedBaseSet
 	envFile := data.envFile
 
-	var items []tui.MenuItem
+	var items []displayengine.MenuItem
 	var lastLetter string
 
 	for _, base := range baseApps {
@@ -144,13 +144,13 @@ func (s *AppSelectionScreen) applyLoadedItems(data appSelectLoadedMsg) {
 		}
 		if letter != lastLetter && letter != "" {
 			if lastLetter != "" {
-				items = append(items, tui.MenuItem{IsSeparator: true})
+				items = append(items, displayengine.MenuItem{IsSeparator: true})
 			}
 			lastLetter = letter
 		}
 
 		niceName := appenv.GetNiceName(ctx, base)
-		desc := tui.GetPlainText(appenv.GetDescriptionFromTemplate(ctx, base, envFile))
+		desc := displayengine.GetPlainText(appenv.GetDescriptionFromTemplate(ctx, base, envFile))
 
 		instances := addedByBase[base]
 		slices.Sort(instances)
@@ -166,7 +166,7 @@ func (s *AppSelectionScreen) applyLoadedItems(data appSelectLoadedMsg) {
 		nonBaseCount += len(refInstances)
 
 		if nonBaseCount == 0 {
-			items = append(items, tui.MenuItem{
+			items = append(items, displayengine.MenuItem{
 				Tag:               niceName,
 				Desc:              "{{|ListItem|}}" + desc,
 				Help:              fmt.Sprintf("Toggle %s. Press Ctrl/Alt+Right to manage instances.", niceName),
@@ -191,7 +191,7 @@ func (s *AppSelectionScreen) applyLoadedItems(data appSelectLoadedMsg) {
 				}
 			}
 
-			items = append(items, tui.MenuItem{
+			items = append(items, displayengine.MenuItem{
 				Tag:               niceName,
 				Desc:              "{{|ListItem|}}" + desc,
 				Help:              fmt.Sprintf("Press Ctrl/Alt+Right to manage %s instances", niceName),
@@ -226,7 +226,7 @@ func (s *AppSelectionScreen) applyLoadedItems(data appSelectLoadedMsg) {
 			for _, ie := range allInsts {
 				displayName := appenv.InstanceDisplayName(niceName, ie.appName)
 				if ie.isReferenced {
-					items = append(items, tui.MenuItem{
+					items = append(items, displayengine.MenuItem{
 						Tag:               displayName,
 						Help:              fmt.Sprintf("%s — referenced in config but not added", displayName),
 						Selectable:        true,
@@ -243,7 +243,7 @@ func (s *AppSelectionScreen) applyLoadedItems(data appSelectLoadedMsg) {
 						Metadata:          map[string]string{"appName": ie.appName},
 					})
 				} else {
-					items = append(items, tui.MenuItem{
+					items = append(items, displayengine.MenuItem{
 						Tag:               displayName,
 						Help:              fmt.Sprintf("Toggle %s", displayName),
 						Selectable:        true,
@@ -260,7 +260,7 @@ func (s *AppSelectionScreen) applyLoadedItems(data appSelectLoadedMsg) {
 					})
 				}
 			}
-			items = append(items, tui.MenuItem{
+			items = append(items, displayengine.MenuItem{
 				Tag:           "+ Add instance\u2026",
 				Help:          fmt.Sprintf("Press Space/Enter or Ctrl/Alt+Right to add another %s instance", niceName),
 				IsAddInstance: true,
@@ -292,8 +292,8 @@ func (s *AppSelectionScreen) expandGroup(baseApp string) {
 	ctx := context.Background()
 	envFile := filepath.Join(s.conf.ComposeDir, constants.EnvFileName)
 	niceName := appenv.GetNiceName(ctx, baseApp)
-	desc := tui.GetPlainText(appenv.GetDescriptionFromTemplate(ctx, baseApp, envFile))
-	groupHeader := tui.MenuItem{
+	desc := displayengine.GetPlainText(appenv.GetDescriptionFromTemplate(ctx, baseApp, envFile))
+	groupHeader := displayengine.MenuItem{
 		Tag:           niceName,
 		Desc:          "{{|ListItem|}}" + desc,
 		Help:          fmt.Sprintf("Press Ctrl/Alt+Right to manage %s instances. Ctrl/Alt+Left to collapse.", niceName),
@@ -308,7 +308,7 @@ func (s *AppSelectionScreen) expandGroup(baseApp string) {
 		IsDestructive: true,
 		Metadata:      orig.Metadata,
 	}
-	baseSubRow := tui.MenuItem{
+	baseSubRow := displayengine.MenuItem{
 		Tag:               niceName,
 		Help:              fmt.Sprintf("Toggle %s", niceName),
 		IsSubItem:         true,
@@ -324,7 +324,7 @@ func (s *AppSelectionScreen) expandGroup(baseApp string) {
 		IsDestructive:     true,
 		Metadata:          orig.Metadata,
 	}
-	addRow := tui.MenuItem{
+	addRow := displayengine.MenuItem{
 		Tag:           "+ Add instance\u2026",
 		Help:          fmt.Sprintf("Press Space/Enter or Ctrl/Alt+Right to add a %s instance", niceName),
 		IsAddInstance: true,
@@ -332,7 +332,7 @@ func (s *AppSelectionScreen) expandGroup(baseApp string) {
 		IsDestructive: true,
 		BaseApp:       baseApp,
 	}
-	newItems := make([]tui.MenuItem, 0, len(items)+2)
+	newItems := make([]displayengine.MenuItem, 0, len(items)+2)
 	for i, item := range items {
 		if i == simpleIdx {
 			newItems = append(newItems, groupHeader, baseSubRow, addRow)
@@ -344,7 +344,7 @@ func (s *AppSelectionScreen) expandGroup(baseApp string) {
 	s.menu.Select(simpleIdx + 1)
 }
 
-func (s *AppSelectionScreen) isPhantom(it tui.MenuItem) bool {
+func (s *AppSelectionScreen) isPhantom(it displayengine.MenuItem) bool {
 	if !it.IsSubItem || it.IsEditing {
 		return false
 	}
@@ -355,7 +355,7 @@ func (s *AppSelectionScreen) isPhantom(it tui.MenuItem) bool {
 	return !it.Checked && !it.IsReferenced && !it.WasAdded
 }
 
-func (s *AppSelectionScreen) collapseGroupIfNeeded(items []tui.MenuItem, base string) ([]tui.MenuItem, bool) {
+func (s *AppSelectionScreen) collapseGroupIfNeeded(items []displayengine.MenuItem, base string) ([]displayengine.MenuItem, bool) {
 	var activeNamedCount int
 	for _, item := range items {
 		if item.IsSubItem && item.BaseApp == base && !s.isPhantom(item) && appenv.AppNameToInstanceName(item.Metadata["appName"]) != "" {
@@ -381,8 +381,8 @@ func (s *AppSelectionScreen) collapseGroupIfNeeded(items []tui.MenuItem, base st
 	ctx := context.Background()
 	envFile := filepath.Join(s.conf.ComposeDir, constants.EnvFileName)
 	niceName := appenv.GetNiceName(ctx, base)
-	desc := tui.GetPlainText(appenv.GetDescriptionFromTemplate(ctx, base, envFile))
-	simpleRow := tui.MenuItem{
+	desc := displayengine.GetPlainText(appenv.GetDescriptionFromTemplate(ctx, base, envFile))
+	simpleRow := displayengine.MenuItem{
 		Tag:               niceName,
 		Desc:              "{{|ListItem|}}" + desc,
 		Help:              fmt.Sprintf("Toggle %s. Press Ctrl/Alt+Right to manage instances.", niceName),
@@ -398,7 +398,7 @@ func (s *AppSelectionScreen) collapseGroupIfNeeded(items []tui.MenuItem, base st
 		IsDestructive:     true,
 		Metadata:          map[string]string{"appName": base},
 	}
-	newItems := make([]tui.MenuItem, 0, len(items))
+	newItems := make([]displayengine.MenuItem, 0, len(items))
 	inserted := false
 	for _, item := range items {
 		if item.BaseApp == base && (item.IsGroupHeader || item.IsSubItem || item.IsAddInstance) {
@@ -417,7 +417,7 @@ func (s *AppSelectionScreen) collapseAllEmptyGroups(skipBase string) {
 	cur := s.menu.GetItems()
 
 	// Prune phantoms first
-	pruned := make([]tui.MenuItem, 0, len(cur))
+	pruned := make([]displayengine.MenuItem, 0, len(cur))
 	for _, it := range cur {
 		if s.isPhantom(it) {
 			continue
@@ -453,7 +453,7 @@ func (s *AppSelectionScreen) collapseAllEmptyGroups(skipBase string) {
 	}
 }
 
-func (s *AppSelectionScreen) refreshGroupHeaders(items []tui.MenuItem) []tui.MenuItem {
+func (s *AppSelectionScreen) refreshGroupHeaders(items []displayengine.MenuItem) []displayengine.MenuItem {
 	subChecked := make(map[string]bool)
 	for _, item := range items {
 		if item.IsSubItem && item.Checked {

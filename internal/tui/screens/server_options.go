@@ -9,6 +9,7 @@ import (
 
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/tui"
 
@@ -26,9 +27,9 @@ const (
 
 // ServerOptionsScreen allows the user to configure the SSH (and web) server.
 type ServerOptionsScreen struct {
-	settingsMenu *tui.MenuModel
-	statusMenu   *tui.MenuModel
-	outerMenu    *tui.MenuModel
+	settingsMenu *displayengine.MenuModel
+	statusMenu   *displayengine.MenuModel
+	outerMenu    *displayengine.MenuModel
 
 	focusedPanel  ServerOptionsFocus
 	focusedButton int
@@ -71,17 +72,17 @@ func (s *ServerOptionsScreen) initMenus() {
 	if !s.isRoot {
 		outerBack = navigateBack()
 	}
-	outerMenu := tui.NewMenuModel("server_outer", "Server Settings", "", nil)
+	outerMenu := displayengine.NewMenuModel("server_outer", "Server Settings", "", nil)
 	if s.isRoot {
-		outerMenu.SetButtons([]tui.ButtonDef{
-			{Label: "Apply", ZoneID: tui.IDApplyButton, Help: "Apply and save server settings."},
-			{Label: "Exit", ZoneID: tui.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
+		outerMenu.SetButtons([]displayengine.ButtonDef{
+			{Label: "Apply", ZoneID: displayengine.IDApplyButton, Help: "Apply and save server settings."},
+			{Label: "Exit", ZoneID: displayengine.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
 		})
 	} else {
-		outerMenu.SetButtons([]tui.ButtonDef{
-			{Label: "Apply", ZoneID: tui.IDApplyButton, Help: "Apply and save server settings."},
-			{Label: "Back", ZoneID: tui.IDBackButton, Action: outerBack, Help: "Return to the previous screen."},
-			{Label: "Exit", ZoneID: tui.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
+		outerMenu.SetButtons([]displayengine.ButtonDef{
+			{Label: "Apply", ZoneID: displayengine.IDApplyButton, Help: "Apply and save server settings."},
+			{Label: "Back", ZoneID: displayengine.IDBackButton, Action: outerBack, Help: "Return to the previous screen."},
+			{Label: "Exit", ZoneID: displayengine.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
 		})
 	}
 	outerMenu.SetConnType(s.connType)
@@ -93,7 +94,7 @@ func (s *ServerOptionsScreen) initMenus() {
 	s.updateFocusStates()
 }
 
-func (s *ServerOptionsScreen) buildSettingsMenu() *tui.MenuModel {
+func (s *ServerOptionsScreen) buildSettingsMenu() *displayengine.MenuModel {
 	authModeDesc := func() string {
 		switch s.config.Server.Auth.Mode {
 		case "password":
@@ -105,7 +106,7 @@ func (s *ServerOptionsScreen) buildSettingsMenu() *tui.MenuModel {
 		}
 	}
 
-	items := []tui.MenuItem{
+	items := []displayengine.MenuItem{
 		{
 			Tag:           "SSH Port",
 			Desc:          fmt.Sprintf("{{|OptionValue|}}%d{{[-]}}", s.config.Server.SSH.Port),
@@ -143,18 +144,18 @@ func (s *ServerOptionsScreen) buildSettingsMenu() *tui.MenuModel {
 		},
 	}
 
-	menu := tui.NewMenuModel("server_settings", "Configuration", "", items)
+	menu := displayengine.NewMenuModel("server_settings", "Configuration", "", items)
 	menu.SetConnType(s.connType)
 	menu.SetHelpItemPrefix("Setting")
 	menu.SetHelpPageText("Configure remote access to the DS2 TUI. SSH must be enabled and configured before the web server can be used.")
 	menu.SetSubMenuMode(true)
 	menu.SetIsDialog(false)
-	menu.SetButtons([]tui.ButtonDef{})
+	menu.SetButtons([]displayengine.ButtonDef{})
 	menu.SetMaximized(true)
 	return menu
 }
 
-func (s *ServerOptionsScreen) buildStatusMenu() *tui.MenuModel {
+func (s *ServerOptionsScreen) buildStatusMenu() *displayengine.MenuModel {
 	servers := sessionlocks.Sessions.ListServerInfos()
 	editInfo := sessionlocks.Sessions.ReadEditInfo()
 
@@ -178,7 +179,7 @@ func (s *ServerOptionsScreen) buildStatusMenu() *tui.MenuModel {
 		disconnectEnabled = true
 	}
 
-	items := []tui.MenuItem{
+	items := []displayengine.MenuItem{
 		{
 			Tag:        "Server",
 			Desc:       serverStatus,
@@ -205,13 +206,13 @@ func (s *ServerOptionsScreen) buildStatusMenu() *tui.MenuModel {
 		},
 	}
 
-	menu := tui.NewMenuModel("server_status", "Live Status", "", items)
+	menu := displayengine.NewMenuModel("server_status", "Live Status", "", items)
 	menu.SetConnType(s.connType)
 	menu.SetHelpItemPrefix("Status")
 	menu.SetHelpPageText("Live status of the SSH server and any active remote session. Use Disconnect to gracefully close a session.")
 	menu.SetSubMenuMode(true)
 	menu.SetIsDialog(false)
-	menu.SetButtons([]tui.ButtonDef{})
+	menu.SetButtons([]displayengine.ButtonDef{})
 	menu.SetMaximized(true)
 	return menu
 }
@@ -225,17 +226,17 @@ func (s *ServerOptionsScreen) refreshStatus() {
 	if !s.isRoot {
 		outerBack = navigateBack()
 	}
-	outer := tui.NewMenuModel("server_outer", "Server Settings", "", nil)
+	outer := displayengine.NewMenuModel("server_outer", "Server Settings", "", nil)
 	if s.isRoot {
-		outer.SetButtons([]tui.ButtonDef{
-			{Label: "Apply", ZoneID: tui.IDApplyButton, Help: "Apply and save server settings."},
-			{Label: "Exit", ZoneID: tui.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
+		outer.SetButtons([]displayengine.ButtonDef{
+			{Label: "Apply", ZoneID: displayengine.IDApplyButton, Help: "Apply and save server settings."},
+			{Label: "Exit", ZoneID: displayengine.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
 		})
 	} else {
-		outer.SetButtons([]tui.ButtonDef{
-			{Label: "Apply", ZoneID: tui.IDApplyButton, Help: "Apply and save server settings."},
-			{Label: "Back", ZoneID: tui.IDBackButton, Action: outerBack, Help: "Return to the previous screen."},
-			{Label: "Exit", ZoneID: tui.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
+		outer.SetButtons([]displayengine.ButtonDef{
+			{Label: "Apply", ZoneID: displayengine.IDApplyButton, Help: "Apply and save server settings."},
+			{Label: "Back", ZoneID: displayengine.IDBackButton, Action: outerBack, Help: "Return to the previous screen."},
+			{Label: "Exit", ZoneID: displayengine.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
 		})
 	}
 	outer.SetConnType(s.connType)
@@ -402,14 +403,14 @@ func (s *ServerOptionsScreen) showAuthModeDropdown() tea.Cmd {
 			current = "none"
 		}
 
-		var items []tui.MenuItem
+		var items []displayengine.MenuItem
 		for i, m := range modes {
 			mode := m.value
 			label := m.label
 			help := m.help
 			selected := i
 			_ = selected
-			items = append(items, tui.MenuItem{
+			items = append(items, displayengine.MenuItem{
 				Tag:  label,
 				Help: help,
 				Action: func() tea.Msg {
@@ -425,10 +426,10 @@ func (s *ServerOptionsScreen) showAuthModeDropdown() tea.Cmd {
 			})
 		}
 
-		menu := tui.NewMenuModel("auth_mode_dropdown", "Auth Mode", "Select authentication mode", items)
-		menu.SetButtons([]tui.ButtonDef{
+		menu := displayengine.NewMenuModel("auth_mode_dropdown", "Auth Mode", "Select authentication mode", items)
+		menu.SetButtons([]displayengine.ButtonDef{
 			{Label: "Select", ZoneID: "btn-select", Help: "Confirm and execute the selected action."},
-			{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return tui.CloseDialogMsg{} }, Help: "Close without applying."},
+			{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return displayengine.CloseDialogMsg{} }, Help: "Close without applying."},
 		})
 
 		// Pre-select current mode
@@ -439,7 +440,7 @@ func (s *ServerOptionsScreen) showAuthModeDropdown() tea.Cmd {
 			}
 		}
 
-		return tui.ShowDialogMsg{Dialog: menu}
+		return displayengine.ShowDialogMsg{Dialog: menu}
 	}
 }
 
@@ -504,14 +505,14 @@ func (s *ServerOptionsScreen) maxFocusedButton() int {
 func (s *ServerOptionsScreen) execFocusedButton() (tea.Model, tea.Cmd) {
 	switch s.focusedButton {
 	case 0:
-		return s, s.outerMenu.SetProcessingBtnDeferred(tui.IDApplyButton, s.handleApply())
+		return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDApplyButton, s.handleApply())
 	case 1:
 		if s.isRoot {
-			return s, s.outerMenu.SetProcessingBtnDeferred(tui.IDExitButton, tui.ConfirmExitAction())
+			return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDExitButton, tui.ConfirmExitAction())
 		}
-		return s, s.outerMenu.SetProcessingBtnDeferred(tui.IDBackButton, navigateBack())
+		return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDBackButton, navigateBack())
 	case 2:
-		return s, s.outerMenu.SetProcessingBtnDeferred(tui.IDExitButton, tui.ConfirmExitAction())
+		return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDExitButton, tui.ConfirmExitAction())
 	}
 	return s, nil
 }
@@ -527,7 +528,7 @@ func (s *ServerOptionsScreen) updateFocusStates() {
 	if s.focusedPanel == FocusServerButtons {
 		s.outerMenu.SetFocusedBtnIndex(s.focusedButton)
 	} else {
-		s.outerMenu.SetFocusedItem(tui.FocusList)
+		s.outerMenu.SetFocusedItem(displayengine.FocusList)
 	}
 	s.outerMenu.InvalidateCache()
 }
@@ -609,11 +610,11 @@ func (s *ServerOptionsScreen) IsScrollbarDragging() bool {
 	return s.settingsMenu.IsScrollbarDragging() || s.statusMenu.IsScrollbarDragging()
 }
 
-func (s *ServerOptionsScreen) HelpContext(maxWidth int) tui.HelpContext {
+func (s *ServerOptionsScreen) HelpContext(maxWidth int) displayengine.HelpContext {
 	screenName := s.outerMenu.Title()
 	pageText := "Configure remote access to the DS2 TUI. SSH must be enabled and configured before the web server can be used."
 
-	var inner tui.HelpContext
+	var inner displayengine.HelpContext
 	switch s.focusedPanel {
 	case FocusServerSettings:
 		inner = s.settingsMenu.HelpContext(maxWidth)

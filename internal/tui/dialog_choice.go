@@ -1,40 +1,43 @@
 package tui
 
 import (
-	semstyle "github.com/GhostWriters/semstyle/lg"
 	"strings"
 	"time"
+
+	semstyle "github.com/GhostWriters/semstyle/lg"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"DockSTARTer2/internal/displayengine"
 )
 
 // choiceDialogModel is a multi-button choice dialog.
 // onResult receives the chosen button index (0-based), or -1 if cancelled via Esc.
 type choiceDialogModel struct {
-	baseDialogModel
+	displayengine.BaseDialogModel
 	title    string
 	question string
 	choices  []string
 	focused  int
 	onResult func(int) tea.Msg
-	buttons  *ButtonRow
+	buttons  *displayengine.ButtonRow
 }
 
 func newChoiceDialog(title, question string, choices []string) *choiceDialogModel {
-	defs := make([]ButtonDef, len(choices))
+	defs := make([]displayengine.ButtonDef, len(choices))
 	for i, c := range choices {
-		defs[i] = ButtonDef{Label: c, ZoneID: c}
+		defs[i] = displayengine.ButtonDef{Label: c, ZoneID: c}
 	}
 	m := &choiceDialogModel{
-		baseDialogModel: baseDialogModel{id: "choice_dialog", focused: true},
+		BaseDialogModel: displayengine.BaseDialogModel{ID: "choice_dialog", Focused: true},
 		title:           title,
 		question:        question,
 		choices:         choices,
 		focused:         0,
-		onResult:        func(i int) tea.Msg { return CloseDialogMsg{Result: i} },
-		buttons:         NewButtonRow(defs),
+		onResult:        func(i int) tea.Msg { return displayengine.CloseDialogMsg{Result: i} },
+		buttons:         displayengine.NewButtonRow(defs),
 	}
 	return m
 }
@@ -62,32 +65,32 @@ func (m *choiceDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-		m.calculateLayout()
+		m.Width = msg.Width
+		m.Height = msg.Height
+		m.CalculateLayout()
 		return m, nil
 
 	case tea.KeyPressMsg:
-		if handled, cmd := m.handleTitleBarKey(msg, nil); handled {
+		if handled, cmd := m.HandleTitleBarKey(msg, nil); handled {
 			m.focused = len(m.choices) - 1
 			return m, tea.Batch(cmd, submitWithSpinner(m.focused))
 		}
 		switch {
-		case key.Matches(msg, Keys.Esc):
+		case key.Matches(msg, displayengine.Keys.Esc):
 			return m, submitWithSpinner(len(m.choices) - 1)
-		case key.Matches(msg, Keys.Enter):
+		case key.Matches(msg, displayengine.Keys.Enter):
 			return m, submitWithSpinner(m.focused)
-		case key.Matches(msg, Keys.Left), key.Matches(msg, Keys.Up):
+		case key.Matches(msg, displayengine.Keys.Left), key.Matches(msg, displayengine.Keys.Up):
 			if m.focused > 0 {
 				m.focused--
 			}
-		case key.Matches(msg, Keys.Right), key.Matches(msg, Keys.Down):
+		case key.Matches(msg, displayengine.Keys.Right), key.Matches(msg, displayengine.Keys.Down):
 			if m.focused < n-1 {
 				m.focused++
 			}
-		case key.Matches(msg, Keys.Tab):
+		case key.Matches(msg, displayengine.Keys.Tab):
 			m.focused = (m.focused + 1) % n
-		case key.Matches(msg, Keys.ShiftTab):
+		case key.Matches(msg, displayengine.Keys.ShiftTab):
 			m.focused = (m.focused + n - 1) % n
 		default:
 			// First letter of each choice as hotkey
@@ -99,21 +102,21 @@ func (m *choiceDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-	case LayerHitMsg:
-		if handled, cmd := m.handleTitleBarHit(msg, nil); handled {
+	case displayengine.LayerHitMsg:
+		if handled, cmd := m.HandleTitleBarHit(msg, nil); handled {
 			m.focused = len(m.choices) - 1
 			return m, tea.Batch(cmd, submitWithSpinner(m.focused))
 		}
 		if msg.Button == tea.MouseLeft {
 			for i, choice := range m.choices {
-				if ButtonIDMatches(msg.ID, choice) {
+				if displayengine.ButtonIDMatches(msg.ID, choice) {
 					return m, submitWithSpinner(i)
 				}
 			}
 		}
 	}
 
-	if _, ok := msg.(ToggleFocusedMsg); ok {
+	if _, ok := msg.(displayengine.ToggleFocusedMsg); ok {
 		return m, submitWithSpinner(m.focused)
 	}
 
@@ -130,8 +133,8 @@ func (m *choiceDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *choiceDialogModel) contentWidth() int {
-	maxAllowed := m.layout.Width - 2
-	w := maxLineWidth(m.question) + DialogBodyPadH
+	maxAllowed := m.Layout.Width - 2
+	w := displayengine.MaxLineWidth(m.question) + displayengine.DialogBodyPadH
 
 	// Minimum to fit all buttons with spacing
 	minBtn := 4
@@ -141,11 +144,11 @@ func (m *choiceDialogModel) contentWidth() int {
 	if minBtn > w {
 		w = minBtn
 	}
-	if tw := lipgloss.Width(GetPlainText(m.title)) + 6; tw > w {
+	if tw := lipgloss.Width(displayengine.GetPlainText(m.title)) + 6; tw > w {
 		w = tw
 	}
-	ctx := GetActiveContext()
-	w = minWidthForWidgets(w, GetPlainText(m.title), ctx.DialogTitleAlign, BuildInactiveTitleWidgets(ctx))
+	ctx := displayengine.GetActiveContext()
+	w = displayengine.MinWidthForWidgets(w, displayengine.GetPlainText(m.title), ctx.DialogTitleAlign, displayengine.BuildInactiveTitleWidgets(ctx))
 	if w > maxAllowed {
 		w = maxAllowed
 	}
@@ -153,77 +156,77 @@ func (m *choiceDialogModel) contentWidth() int {
 }
 
 func (m *choiceDialogModel) ViewString() string {
-	if m.width == 0 {
+	if m.Width == 0 {
 		return ""
 	}
 
-	ctx := GetActiveContext()
-	ctx.LargeTitleBars = m.layout.LargeTitleBar
+	ctx := displayengine.GetActiveContext()
+	ctx.LargeTitleBars = m.Layout.LargeTitleBar
 	borderBG := ctx.Dialog.GetBackground()
 	contentWidth := m.contentWidth()
 
 	questionStyle := ctx.Dialog.Padding(1, 2).Width(contentWidth)
 	questionText := strings.TrimRight(questionStyle.Render(semstyle.Sprintf("%s", m.question)), "\n")
 
-	specs := make([]ButtonSpec, len(m.choices))
+	specs := make([]displayengine.ButtonSpec, len(m.choices))
 	for i, c := range m.choices {
-		specs[i] = ButtonSpec{Text: c, Active: i == m.focused || m.buttons.IsProcessingID(c), ZoneID: c}
+		specs[i] = displayengine.ButtonSpec{Text: c, Active: i == m.focused || m.buttons.IsProcessingID(c), ZoneID: c}
 	}
 	specs = m.buttons.ApplySpinner(specs)
-	buttonRow := strings.TrimRight(RenderCenteredButtonsCtx(contentWidth, ctx, specs...), "\n")
+	buttonRow := strings.TrimRight(displayengine.RenderCenteredButtonsCtx(contentWidth, ctx, specs...), "\n")
 
 	spacer := lipgloss.NewStyle().Width(contentWidth).Background(borderBG).Render("")
 	fullContent := lipgloss.JoinVertical(lipgloss.Left, questionText, spacer, buttonRow)
 
-	return renderDialogWithTypeAndWidgets(m.title, fullContent, m.baseDialogModel.focused || m.TitleBarFocused(), 0, DialogTypeConfirm, ctx, m.State())
+	return displayengine.RenderDialogWithTypeAndWidgets(m.title, fullContent, m.Focused || m.TitleBarFocused(), 0, displayengine.DialogTypeConfirm, m.State())
 }
 
 func (m *choiceDialogModel) View() tea.View {
 	return tea.NewView(m.ViewString())
 }
 
-func (m *choiceDialogModel) Layers() []*lipgloss.Layer { return m.layers(m.ViewString) }
+func (m *choiceDialogModel) Layers() []*lipgloss.Layer { return m.BaseDialogModel.Layers(m.ViewString) }
 
-func (m *choiceDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
-	ctx := GetActiveContext()
+func (m *choiceDialogModel) GetHitRegions(offsetX, offsetY int) []displayengine.HitRegion {
+	ctx := displayengine.GetActiveContext()
 	contentWidth := m.contentWidth()
 
 	questionStyle := ctx.Dialog.Padding(1, 2).Width(contentWidth)
 	questionHeight := lipgloss.Height(questionStyle.Render(semstyle.Sprintf("%s", m.question)))
 	buttonY := 1 + questionHeight + 1
-	if m.layout.LargeTitleBar {
-		buttonY += LargeTitleBarOverhead
+	if m.Layout.LargeTitleBar {
+		buttonY += displayengine.LargeTitleBarOverhead
 	}
 
-	btnSpecs := make([]ButtonSpec, len(m.choices))
+	btnSpecs := make([]displayengine.ButtonSpec, len(m.choices))
 	for i, c := range m.choices {
-		btnSpecs[i] = ButtonSpec{Text: c, ZoneID: c, Help: "Select this option."}
+		btnSpecs[i] = displayengine.ButtonSpec{Text: c, ZoneID: c, Help: "Select this option."}
 	}
 
-	var regions []HitRegion
-	regions = append(regions, GetButtonHitRegions(
-		HelpContext{ScreenName: m.title, PageTitle: "Question", PageText: m.question},
-		m.id, offsetX+1, offsetY+buttonY, contentWidth, ZDialog+20,
+	var regions []displayengine.HitRegion
+	regions = append(regions, displayengine.GetButtonHitRegions(
+		displayengine.HelpContext{ScreenName: m.title, PageTitle: "Question", PageText: m.question},
+		m.ID, offsetX+1, offsetY+buttonY, contentWidth, displayengine.ZDialog+20,
 		btnSpecs...,
 	)...)
 
 	// Dialog background
-	regions = append(regions, HitRegion{
-		ID:     m.id,
+	regions = append(regions, displayengine.HitRegion{
+		ID:     m.ID,
 		X:      offsetX,
 		Y:      offsetY,
 		Width:  contentWidth + 2,
 		Height: buttonY + 2, // buttonRow (1) + border (1 more)
-		ZOrder: ZDialog,
+		ZOrder: displayengine.ZDialog,
 		Label:  "Choice",
-		Help: &HelpContext{
+		Help: &displayengine.HelpContext{
 			ScreenName: m.title,
 			PageTitle:  "Question",
 			PageText:   m.question,
 		},
 	})
 
-	regions = append(regions, m.titleBarHitRegions(offsetX, offsetY, contentWidth, ZDialog)...)
+	regions = append(regions, m.TitleBarHitRegions(offsetX, offsetY, contentWidth, displayengine.ZDialog)...)
 	return regions
 }
 

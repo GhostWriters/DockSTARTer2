@@ -36,7 +36,7 @@ func IsRestartSafeLocally() bool {
 // RestartForConfigChange re-execs the running process immediately, restoring
 // the current page via GetNavArgs. Intended for settings (like refresh rate)
 // that can only take effect at program construction time, not via the live
-// ConfigChangedMsg sync path.
+// displayengine.ConfigChangedMsg sync path.
 func RestartForConfigChange(ctx context.Context) {
 	var reExecArgs []string
 	if console.IsDaemon {

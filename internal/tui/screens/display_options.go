@@ -12,6 +12,7 @@ import (
 
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/tui"
 )
@@ -27,12 +28,12 @@ const (
 
 // DisplayOptionsScreen allows the user to configure UI settings and themes together.
 type DisplayOptionsScreen struct {
-	themeMenu    *tui.MenuModel
-	optionsMenu  *tui.MenuModel
+	themeMenu    *displayengine.MenuModel
+	optionsMenu  *displayengine.MenuModel
 	focusedPanel DisplayOptionsFocus
 	// focusedButton index: 0=Apply, 1=Back (or Exit when isRoot), 2=Exit (only when !isRoot)
-	focusedButton  int
-	buttonFocused  bool // true when a button is highlighted while a submenu also stays focused
+	focusedButton int
+	buttonFocused bool // true when a button is highlighted while a submenu also stays focused
 	isRoot        bool // true when launched directly via -M appearance; hides Back button
 
 	config       config.AppConfig
@@ -43,7 +44,7 @@ type DisplayOptionsScreen struct {
 	width  int
 	height int
 
-	outerMenu *tui.MenuModel // outer "Appearance Settings" dialog with sections + buttons
+	outerMenu *displayengine.MenuModel // outer "Appearance Settings" dialog with sections + buttons
 
 	focused bool // tracks global screen focus (header/log panel interaction)
 
@@ -90,7 +91,7 @@ func NewDisplayOptionsScreen(isRoot bool, connType string) *DisplayOptionsScreen
 
 func (s *DisplayOptionsScreen) initMenus() {
 	// 1. Theme Selection Menu
-	themeItems := make([]tui.MenuItem, len(s.themes))
+	themeItems := make([]displayengine.MenuItem, len(s.themes))
 	foundCurrent := false
 	for i, t := range s.themes {
 		desc := t.Description
@@ -105,7 +106,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 		if checked {
 			foundCurrent = true
 		}
-		themeItems[i] = tui.MenuItem{
+		themeItems[i] = displayengine.MenuItem{
 			Tag:           t.Name,
 			Desc:          descTag + desc,
 			Help:          desc,
@@ -124,7 +125,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 			shortURI = "file:" + theme.ThemeDisplayName(s.currentTheme)
 		}
 		displayName := "(missing) " + shortURI
-		themeItems = append([]tui.MenuItem{{
+		themeItems = append([]displayengine.MenuItem{{
 			Tag:           displayName,
 			Desc:          "{{|ListItemUserDefined|}}Source file not found — using cached version",
 			Help:          "Theme source file is missing. The cached version remains active until you choose another theme.",
@@ -135,7 +136,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 		}}, themeItems...)
 	}
 
-	themeMenu := tui.NewMenuModel(tui.IDThemePanel, "Select Theme", "", themeItems)
+	themeMenu := displayengine.NewMenuModel(displayengine.IDThemePanel, "Select Theme", "", themeItems)
 	s.themeMenu = themeMenu
 	s.themeMenu.SetHelpItemPrefix("Theme")
 	s.themeMenu.SetItemHelpFunc(s.buildThemeItemHelp)
@@ -143,75 +144,75 @@ func (s *DisplayOptionsScreen) initMenus() {
 	s.themeMenu.SetSubMenuMode(true)
 	s.themeMenu.SetVariableHeight(true)
 	s.themeMenu.SetIsDialog(false) // Part of a screen, not a modal
-	s.themeMenu.SetButtons([]tui.ButtonDef{})
+	s.themeMenu.SetButtons([]displayengine.ButtonDef{})
 	s.themeMenu.SetMaximized(true) // Fill available width
 	s.themeMenu.SetShowLockGutter(false)
 	s.themeMenu.SetNoLeftMargin(true)
 
 	// 2. Options Menu
-	optionItems := []tui.MenuItem{
+	optionItems := []displayengine.MenuItem{
 		{
-			Tag:           "Borders",
-			Desc:          "Show borders on all dialogs",
-			Help:          "Toggle border visibility (Space to toggle)",
-			IsCheckbox:    true,
-			Checked:       s.config.UI.Borders,
-			Selectable:    true,
-			SpaceAction:   s.toggleBorders(),
+			Tag:         "Borders",
+			Desc:        "Show borders on all dialogs",
+			Help:        "Toggle border visibility (Space to toggle)",
+			IsCheckbox:  true,
+			Checked:     s.config.UI.Borders,
+			Selectable:  true,
+			SpaceAction: s.toggleBorders(),
 		},
 		{
-			Tag:           "Large Buttons",
-			Desc:          "Show large (bordered) buttons",
-			Help:          "Toggle large (bordered) vs flat button style (Space to toggle)",
-			IsCheckbox:    true,
-			Checked:       s.config.UI.LargeButtons,
-			Selectable:    true,
-			SpaceAction:   s.toggleLargeButtons(),
+			Tag:         "Large Buttons",
+			Desc:        "Show large (bordered) buttons",
+			Help:        "Toggle large (bordered) vs flat button style (Space to toggle)",
+			IsCheckbox:  true,
+			Checked:     s.config.UI.LargeButtons,
+			Selectable:  true,
+			SpaceAction: s.toggleLargeButtons(),
 		},
 		{
-			Tag:           "Large Title Bars",
-			Desc:          "Show title in a separate row above content",
-			Help:          "Toggle large title bar style (Space to toggle)",
-			IsCheckbox:    true,
-			Checked:       s.config.UI.LargeTitleBars,
-			Selectable:    true,
-			SpaceAction:   s.toggleLargeTitleBars(),
+			Tag:         "Large Title Bars",
+			Desc:        "Show title in a separate row above content",
+			Help:        "Toggle large title bar style (Space to toggle)",
+			IsCheckbox:  true,
+			Checked:     s.config.UI.LargeTitleBars,
+			Selectable:  true,
+			SpaceAction: s.toggleLargeTitleBars(),
 		},
 		{
-			Tag:           "Line Characters",
-			Desc:          "Use unicode line drawing characters",
-			Help:          "Use ┌─ instead of +- for borders (Space to toggle)",
-			IsCheckbox:    true,
-			Checked:       s.config.UI.LineCharacters,
-			Selectable:    true,
-			SpaceAction:   s.toggleLineChars(),
+			Tag:         "Line Characters",
+			Desc:        "Use unicode line drawing characters",
+			Help:        "Use ┌─ instead of +- for borders (Space to toggle)",
+			IsCheckbox:  true,
+			Checked:     s.config.UI.LineCharacters,
+			Selectable:  true,
+			SpaceAction: s.toggleLineChars(),
 		},
 		{
-			Tag:           "Shadow",
-			Desc:          "Enable drop shadows",
-			Help:          "Toggle drop shadow effect (Space to toggle)",
-			IsCheckbox:    true,
-			Checked:       s.config.UI.Shadow,
-			Selectable:    true,
-			SpaceAction:   s.toggleShadow(),
+			Tag:         "Shadow",
+			Desc:        "Enable drop shadows",
+			Help:        "Toggle drop shadow effect (Space to toggle)",
+			IsCheckbox:  true,
+			Checked:     s.config.UI.Shadow,
+			Selectable:  true,
+			SpaceAction: s.toggleShadow(),
 		},
 		{
-			Tag:           "Scrollbar",
-			Desc:          "Show scrollbar in lists",
-			Help:          "Toggle scrollbar in scrollable lists (Space to toggle)",
-			IsCheckbox:    true,
-			Checked:       s.config.UI.Scrollbar,
-			Selectable:    true,
-			SpaceAction:   s.toggleScrollbar(),
+			Tag:         "Scrollbar",
+			Desc:        "Show scrollbar in lists",
+			Help:        "Toggle scrollbar in scrollable lists (Space to toggle)",
+			IsCheckbox:  true,
+			Checked:     s.config.UI.Scrollbar,
+			Selectable:  true,
+			SpaceAction: s.toggleScrollbar(),
 		},
 		{
-			Tag:           "Spinner",
-			Desc:          "Show loading spinner animations",
-			Help:          "Toggle spinner animations during loading (Space to toggle)",
-			IsCheckbox:    true,
-			Checked:       s.config.UI.Spinner,
-			Selectable:    true,
-			SpaceAction:   s.toggleSpinner(),
+			Tag:         "Spinner",
+			Desc:        "Show loading spinner animations",
+			Help:        "Toggle spinner animations during loading (Space to toggle)",
+			IsCheckbox:  true,
+			Checked:     s.config.UI.Spinner,
+			Selectable:  true,
+			SpaceAction: s.toggleSpinner(),
 		},
 		{
 			Tag:        "Spinner Speed",
@@ -228,16 +229,16 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Selectable: true,
 		},
 		{
-			Tag:           "Shadow Level",
-			Desc:          s.dropdownDesc(s.shadowLevelToDesc(s.config.UI.ShadowLevel)),
-			Help:          "Adjust the density of the shadow (Select/Enter for list)",
-			Action:        s.showShadowDropdown(),
+			Tag:    "Shadow Level",
+			Desc:   s.dropdownDesc(s.shadowLevelToDesc(s.config.UI.ShadowLevel)),
+			Help:   "Adjust the density of the shadow (Select/Enter for list)",
+			Action: s.showShadowDropdown(),
 		},
 		{
-			Tag:           "Border Color",
-			Desc:          s.dropdownDesc(s.borderColorToDesc(s.config.UI.BorderColor)),
-			Help:          "Choose theme colors for borders (Select/Enter for list)",
-			Action:        s.showBorderColorDropdown(),
+			Tag:    "Border Color",
+			Desc:   s.dropdownDesc(s.borderColorToDesc(s.config.UI.BorderColor)),
+			Help:   "Choose theme colors for borders (Select/Enter for list)",
+			Action: s.showBorderColorDropdown(),
 		},
 		{
 			Tag:  "Dialog Title",
@@ -266,7 +267,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 	}
 
 	if s.connType == "local" {
-		optionItems = append(optionItems, tui.MenuItem{
+		optionItems = append(optionItems, displayengine.MenuItem{
 			Tag:           "Local Panel Mode",
 			Desc:          s.dropdownDesc(s.panelModeToDesc(s.config.UI.PanelLocal)),
 			Help:          "Choose the panel mode for local terminal sessions (Console allowed).",
@@ -280,7 +281,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 		if s.connType == "local" {
 			label = "Remote Panel Mode"
 		}
-		optionItems = append(optionItems, tui.MenuItem{
+		optionItems = append(optionItems, displayengine.MenuItem{
 			Tag:           label,
 			Desc:          s.dropdownDesc(s.panelModeToDesc(s.config.UI.PanelRemote)),
 			Help:          "Choose the panel mode for SSH and Web sessions (Console restricted).",
@@ -289,29 +290,29 @@ func (s *DisplayOptionsScreen) initMenus() {
 		})
 	}
 
-	optionsMenu := tui.NewMenuModel(tui.IDOptionsPanel, "Options", "", optionItems)
+	optionsMenu := displayengine.NewMenuModel(displayengine.IDOptionsPanel, "Options", "", optionItems)
 	s.optionsMenu = optionsMenu
 	s.optionsMenu.SetHelpItemPrefix("Option")
 	s.optionsMenu.SetHelpPageText("Configure the visual appearance of the application, including theme selection, borders, shadows, and other display options.")
 	s.optionsMenu.SetSubMenuMode(true)
 	s.optionsMenu.SetIsDialog(false) // Part of a screen, not a modal
-	s.optionsMenu.SetButtons([]tui.ButtonDef{})
+	s.optionsMenu.SetButtons([]displayengine.ButtonDef{})
 	s.optionsMenu.SetFlowMode(true)
 	s.optionsMenu.SetMaximized(true) // Fill available width
 	s.optionsMenu.SetShowLockGutter(false)
 
 	// 3. Outer "Appearance Settings" dialog (sections container + buttons)
-	outerMenu := tui.NewMenuModel("appearance_outer", "Appearance Settings", "", nil)
+	outerMenu := displayengine.NewMenuModel("appearance_outer", "Appearance Settings", "", nil)
 	if s.isRoot {
-		outerMenu.SetButtons([]tui.ButtonDef{
-			{Label: "Apply", ZoneID: tui.IDApplyButton, Help: "Apply and save appearance settings."},
-			{Label: "Exit", ZoneID: tui.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
+		outerMenu.SetButtons([]displayengine.ButtonDef{
+			{Label: "Apply", ZoneID: displayengine.IDApplyButton, Help: "Apply and save appearance settings."},
+			{Label: "Exit", ZoneID: displayengine.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
 		})
 	} else {
-		outerMenu.SetButtons([]tui.ButtonDef{
-			{Label: "Apply", ZoneID: tui.IDApplyButton, Help: "Apply and save appearance settings."},
-			{Label: "Back", ZoneID: tui.IDBackButton, Action: navigateBack(), Help: "Return to the previous screen."},
-			{Label: "Exit", ZoneID: tui.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
+		outerMenu.SetButtons([]displayengine.ButtonDef{
+			{Label: "Apply", ZoneID: displayengine.IDApplyButton, Help: "Apply and save appearance settings."},
+			{Label: "Back", ZoneID: displayengine.IDBackButton, Action: navigateBack(), Help: "Return to the previous screen."},
+			{Label: "Exit", ZoneID: displayengine.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
 		})
 	}
 	outerMenu.AddContentSection(themeMenu)
@@ -338,17 +339,17 @@ func (s *DisplayOptionsScreen) maxFocusedButton() int {
 func (s *DisplayOptionsScreen) execFocusedButton() (tea.Model, tea.Cmd) {
 	switch s.focusedButton {
 	case 0:
-		return s, s.outerMenu.SetProcessingBtnDeferred(tui.IDApplyButton, s.handleApply())
+		return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDApplyButton, s.handleApply())
 	case 1:
 		if s.isRoot {
 			theme.Unload("Preview")
-			return s, s.outerMenu.SetProcessingBtnDeferred(tui.IDExitButton, tui.ConfirmExitAction())
+			return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDExitButton, tui.ConfirmExitAction())
 		}
 		theme.Unload("Preview")
-		return s, s.outerMenu.SetProcessingBtnDeferred(tui.IDBackButton, navigateBack())
+		return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDBackButton, navigateBack())
 	case 2:
 		theme.Unload("Preview")
-		return s, s.outerMenu.SetProcessingBtnDeferred(tui.IDExitButton, tui.ConfirmExitAction())
+		return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDExitButton, tui.ConfirmExitAction())
 	}
 	return s, nil
 }
@@ -369,7 +370,7 @@ func (s *DisplayOptionsScreen) updateFocusStates() {
 	if s.focusedPanel == FocusButtons || s.buttonFocused {
 		s.outerMenu.SetFocusedBtnIndex(s.focusedButton)
 	} else {
-		s.outerMenu.SetFocusedItem(tui.FocusList)
+		s.outerMenu.SetFocusedItem(displayengine.FocusList)
 	}
 	s.outerMenu.InvalidateCache()
 }
@@ -444,7 +445,7 @@ func formatThemeDefaults(d *theme.ThemeDefaults) string {
 
 // buildThemeItemHelp returns enriched (itemTitle, itemText) for a theme menu item.
 // Used by itemHelpFunc (right-click) and HelpContext (F1).
-func (s *DisplayOptionsScreen) buildThemeItemHelp(item tui.MenuItem) (itemTitle, itemText string) {
+func (s *DisplayOptionsScreen) buildThemeItemHelp(item displayengine.MenuItem) (itemTitle, itemText string) {
 	cv, ok := item.Metadata["config_value"]
 	if !ok || cv == "" {
 		return "", ""
@@ -479,12 +480,12 @@ func (s *DisplayOptionsScreen) buildThemeItemHelp(item tui.MenuItem) (itemTitle,
 	return item.Tag, strings.Join(parts, "\n\n")
 }
 
-// HelpContext implements tui.HelpContextProvider.
-func (s *DisplayOptionsScreen) HelpContext(maxWidth int) tui.HelpContext {
+// HelpContext implements displayengine.HelpContextProvider.
+func (s *DisplayOptionsScreen) HelpContext(maxWidth int) displayengine.HelpContext {
 	screenName := s.outerMenu.Title()
 	pageText := "Configure the visual appearance of the application, including theme selection, borders, shadows, and other display options."
 
-	var inner tui.HelpContext
+	var inner displayengine.HelpContext
 	switch s.focusedPanel {
 	case FocusThemes:
 		inner = s.themeMenu.HelpContext(maxWidth)
@@ -574,21 +575,21 @@ func (s *DisplayOptionsScreen) titleAlignAction(apply func(*config.AppConfig, st
 func (s *DisplayOptionsScreen) showTitleAlignDropdown(menuName, label string, getter func() string, apply func(*config.AppConfig, string)) tea.Cmd {
 	return func() tea.Msg {
 		current := getter()
-		items := []tui.MenuItem{
+		items := []displayengine.MenuItem{
 			{Tag: "Left", Help: "Align title to the left", Action: s.titleAlignAction(apply, "left")},
 			{Tag: "Center", Help: "Center the title", Action: s.titleAlignAction(apply, "center")},
 		}
-		menu := tui.NewMenuModel(menuName, label, "Select alignment", items)
-		menu.SetButtons([]tui.ButtonDef{
+		menu := displayengine.NewMenuModel(menuName, label, "Select alignment", items)
+		menu.SetButtons([]displayengine.ButtonDef{
 			{Label: "Select", ZoneID: "btn-select", Help: "Confirm and execute the selected action."},
-			{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return tui.CloseDialogMsg{} }, Help: "Cancel and close."},
+			{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return displayengine.CloseDialogMsg{} }, Help: "Cancel and close."},
 		})
 		if current == "left" {
 			menu.Select(0)
 		} else {
 			menu.Select(1)
 		}
-		return tui.ShowDialogMsg{Dialog: menu}
+		return displayengine.ShowDialogMsg{Dialog: menu}
 	}
 }
 
@@ -630,14 +631,14 @@ func (s *DisplayOptionsScreen) showPanelDropdown(isLocalSetting bool) tea.Cmd {
 					return tea.Batch(applyChange(mode), tui.CloseDialog())()
 				}
 				confirm := tui.NewConfirmModel(title, msg, false, onConfirm, tui.CloseDialog())
-				return tui.ShowDialogMsg{Dialog: confirm}
+				return displayengine.ShowDialogMsg{Dialog: confirm}
 			}
 		}
 
-		var items []tui.MenuItem
+		var items []displayengine.MenuItem
 
 		// None option: always available
-		items = append(items, tui.MenuItem{
+		items = append(items, displayengine.MenuItem{
 			Tag:    "None",
 			Desc:   "Hide the panel entirely",
 			Help:   "Removes the panel and stretches content to the bottom of the screen.",
@@ -645,7 +646,7 @@ func (s *DisplayOptionsScreen) showPanelDropdown(isLocalSetting bool) tea.Cmd {
 		})
 
 		// Log option: always available
-		items = append(items, tui.MenuItem{
+		items = append(items, displayengine.MenuItem{
 			Tag:    "Log",
 			Desc:   "Show read-only log viewer",
 			Help:   "Displays application logs but hides the command input bar.",
@@ -654,7 +655,7 @@ func (s *DisplayOptionsScreen) showPanelDropdown(isLocalSetting bool) tea.Cmd {
 
 		// Console (ds2-only): always available for both local and remote —
 		// it only accepts ds2 subcommands so it is safe in all session types.
-		items = append(items, tui.MenuItem{
+		items = append(items, displayengine.MenuItem{
 			Tag:    "Console",
 			Desc:   "ds2 commands only",
 			Help:   "Accepts ds2 subcommands only. Safe for remote sessions.",
@@ -703,11 +704,11 @@ func (s *DisplayOptionsScreen) showPanelDropdown(isLocalSetting bool) tea.Cmd {
 					}()
 				}
 				confirm := tui.NewConfirmModel(title, msg, false, onConfirm, tui.CloseDialog())
-				return tui.ShowDialogMsg{Dialog: confirm}
+				return displayengine.ShowDialogMsg{Dialog: confirm}
 			}
 			return applyChange("system")()
 		}
-		items = append(items, tui.MenuItem{
+		items = append(items, displayengine.MenuItem{
 			Tag:    "System Console",
 			Desc:   "Full shell access",
 			Help:   "Passes commands directly to the OS shell. Use with caution for remote sessions.",
@@ -718,10 +719,10 @@ func (s *DisplayOptionsScreen) showPanelDropdown(isLocalSetting bool) tea.Cmd {
 		if isLocalSetting {
 			title = "Local Panel Mode"
 		}
-		menu := tui.NewMenuModel("panel_dropdown", title, "Choose layout", items)
-		menu.SetButtons([]tui.ButtonDef{
+		menu := displayengine.NewMenuModel("panel_dropdown", title, "Choose layout", items)
+		menu.SetButtons([]displayengine.ButtonDef{
 			{Label: "Select", ZoneID: "btn-select", Help: "Confirm and execute the selected action."},
-			{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return tui.CloseDialogMsg{} }, Help: "Cancel and close."},
+			{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return displayengine.CloseDialogMsg{} }, Help: "Cancel and close."},
 		})
 
 		// Set initial selection — "system" maps to tag "System Console"
@@ -733,7 +734,7 @@ func (s *DisplayOptionsScreen) showPanelDropdown(isLocalSetting bool) tea.Cmd {
 			}
 		}
 
-		return tui.ShowDialogMsg{Dialog: menu}
+		return displayengine.ShowDialogMsg{Dialog: menu}
 	}
 }
 
@@ -758,10 +759,10 @@ func (s *DisplayOptionsScreen) showShadowDropdown() tea.Cmd {
 				{"Solid", "{{|OptionValue|}}({{|Shadow|}}█{{|OptionValue|}}){{[-]}}"},
 			}
 		}
-		var items []tui.MenuItem
+		var items []displayengine.MenuItem
 		for i, e := range entries {
 			level := i
-			items = append(items, tui.MenuItem{
+			items = append(items, displayengine.MenuItem{
 				Tag:  e.label,
 				Desc: e.value,
 				Help: fmt.Sprintf("Set shadow to %s", e.label),
@@ -777,13 +778,13 @@ func (s *DisplayOptionsScreen) showShadowDropdown() tea.Cmd {
 				},
 			})
 		}
-		menu := tui.NewMenuModel("shadow_dropdown", "Shadow Level", "Select shadow fill pattern", items)
-		menu.SetButtons([]tui.ButtonDef{
+		menu := displayengine.NewMenuModel("shadow_dropdown", "Shadow Level", "Select shadow fill pattern", items)
+		menu.SetButtons([]displayengine.ButtonDef{
 			{Label: "Select", ZoneID: "btn-select", Help: "Confirm and execute the selected action."},
-			{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return tui.CloseDialogMsg{} }, Help: "Cancel and close."},
+			{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return displayengine.CloseDialogMsg{} }, Help: "Cancel and close."},
 		})
 		menu.Select(s.config.UI.ShadowLevel)
-		return tui.ShowDialogMsg{Dialog: menu}
+		return displayengine.ShowDialogMsg{Dialog: menu}
 	}
 }
 
@@ -798,10 +799,10 @@ func (s *DisplayOptionsScreen) showBorderColorDropdown() tea.Cmd {
 			{2, "Border 2 (Theme Accent)", "{{|OptionValue|}}(2){{[-]}}"},
 			{3, "Both (3D Effect)", "{{|OptionValue|}}(3D){{[-]}}"},
 		}
-		var items []tui.MenuItem
+		var items []displayengine.MenuItem
 		for _, e := range entries {
 			mode := e.mode
-			items = append(items, tui.MenuItem{
+			items = append(items, displayengine.MenuItem{
 				Tag:  e.label,
 				Desc: e.value,
 				Help: fmt.Sprintf("Set border coloring to %s", e.label),
@@ -817,13 +818,13 @@ func (s *DisplayOptionsScreen) showBorderColorDropdown() tea.Cmd {
 				},
 			})
 		}
-		menu := tui.NewMenuModel("border_dropdown", "Border Coloring", "Select which theme colors highlight borders", items)
-		menu.SetButtons([]tui.ButtonDef{
+		menu := displayengine.NewMenuModel("border_dropdown", "Border Coloring", "Select which theme colors highlight borders", items)
+		menu.SetButtons([]displayengine.ButtonDef{
 			{Label: "Select", ZoneID: "btn-select", Help: "Confirm and execute the selected action."},
-			{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return tui.CloseDialogMsg{} }, Help: "Cancel and close."},
+			{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return displayengine.CloseDialogMsg{} }, Help: "Cancel and close."},
 		})
 		menu.Select(s.config.UI.BorderColor - 1)
-		return tui.ShowDialogMsg{Dialog: menu}
+		return displayengine.ShowDialogMsg{Dialog: menu}
 	}
 }
 
@@ -987,7 +988,7 @@ func (s *DisplayOptionsScreen) handleApply() tea.Cmd {
 		}
 
 		// 4. Trigger synchronized style update
-		return tui.ConfigChangedMsg{Config: s.config}
+		return displayengine.ConfigChangedMsg{Config: s.config}
 	}
 }
 

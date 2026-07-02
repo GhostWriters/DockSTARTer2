@@ -2,9 +2,9 @@ package screens
 
 import (
 	"DockSTARTer2/internal/appenv"
+	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
-	"DockSTARTer2/internal/tui"
 	"context"
 	"fmt"
 	"strings"
@@ -27,7 +27,7 @@ func (m *TabbedVarsEditorModel) ViewString() string {
 	editor := tab.editor
 	editorView := editor.View()
 
-	ctx := tui.GetActiveContext()
+	ctx := displayengine.GetActiveContext()
 	focused := m.focus == envFocusEditor
 
 	// 1. Render the tabs row (to be used as the title of the inner border)
@@ -36,7 +36,7 @@ func (m *TabbedVarsEditorModel) ViewString() string {
 	// 2. Wrap the editor in its own inner border (matching MenuModel list style)
 	// We use m.contentWidth for the inner box width.
 	// Height includes editor + 2 lines for borders.
-	innerBox := tui.RenderBorderedBoxCtx(
+	innerBox := displayengine.RenderBorderedBoxCtx(
 		tabRow,
 		editorView,
 		m.contentWidth-2,
@@ -60,7 +60,7 @@ func (m *TabbedVarsEditorModel) ViewString() string {
 	}
 	lines := strings.Split(innerBox, "\n")
 	if len(lines) > 0 {
-		lines[len(lines)-1] = tui.BuildDualLabelBottomBorderCtx(m.contentWidth, modeLabel, scrollLabel, focused, ctx)
+		lines[len(lines)-1] = displayengine.BuildDualLabelBottomBorderCtx(m.contentWidth, modeLabel, scrollLabel, focused, ctx)
 		innerBox = strings.Join(lines, "\n")
 	}
 
@@ -81,7 +81,7 @@ func (m *TabbedVarsEditorModel) ViewString() string {
 	innerContent := lipgloss.JoinVertical(lipgloss.Left, parts...)
 
 	// Apply 1-char side margin so inner components are inset from the outer border (matching menu dialogs).
-	layout := tui.GetLayout()
+	layout := displayengine.GetLayout()
 	outerContentWidth := m.contentWidth + layout.ContentMarginWidth()
 	fullContent := lipgloss.NewStyle().
 		Background(ctx.Dialog.GetBackground()).
@@ -90,7 +90,7 @@ func (m *TabbedVarsEditorModel) ViewString() string {
 
 	// 6. Wrap in the outer dialog border
 	// outerContentWidth = m.contentWidth + margin = m.width - BorderWidth, so total = m.width.
-	return tui.RenderBorderedBoxCtx(
+	return displayengine.RenderBorderedBoxCtx(
 		m.title,
 		fullContent,
 		outerContentWidth,
@@ -101,7 +101,7 @@ func (m *TabbedVarsEditorModel) ViewString() string {
 		ctx.DialogTitleAlign,
 		"Title",
 		ctx,
-		func() tui.TitleBarState {
+		func() displayengine.TitleBarState {
 			tbs := m.State()
 			tbs.SpinnerIndicator, tbs.SpinnerIndicatorRight = m.currentSpinnerIndicators()
 			return tbs
@@ -115,7 +115,7 @@ func (m *TabbedVarsEditorModel) View() tea.View {
 	if m.focus == envFocusEditor && len(m.tabs) > 0 {
 		c := m.tabs[m.activeTab].editor.Cursor()
 		if c != nil {
-			layout := tui.GetLayout()
+			layout := displayengine.GetLayout()
 			c.X += m.lastOffsetX + layout.NestedLeftOffset()
 			c.Y += m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight
 			v.Cursor = c
@@ -125,21 +125,21 @@ func (m *TabbedVarsEditorModel) View() tea.View {
 	return v
 }
 
-func (m *TabbedVarsEditorModel) getButtonSpecs() []tui.ButtonSpec {
+func (m *TabbedVarsEditorModel) getButtonSpecs() []displayengine.ButtonSpec {
 	zoneByName := map[string]string{
-		"Save": tui.IDSaveButton,
-		"Back": tui.IDBackButton,
-		"Exit": tui.IDExitButton,
+		"Save": displayengine.IDSaveButton,
+		"Back": displayengine.IDBackButton,
+		"Exit": displayengine.IDExitButton,
 	}
 	helpByName := map[string]string{
 		"Save": "Save all changes in all tabs to the environment file.",
 		"Back": "Discard all changes and return (prompts if unsaved changes exist).",
 		"Exit": "Discard all changes and exit the application.",
 	}
-	var specs []tui.ButtonSpec
+	var specs []displayengine.ButtonSpec
 	for i, btn := range m.buttons {
 		zoneID := zoneByName[btn]
-		specs = append(specs, tui.ButtonSpec{
+		specs = append(specs, displayengine.ButtonSpec{
 			Text:   btn,
 			Active: (m.focus == envFocusButtons && m.btnIdx == i) || m.btnRow.IsProcessingID(zoneID),
 			ZoneID: zoneID,
@@ -151,11 +151,11 @@ func (m *TabbedVarsEditorModel) getButtonSpecs() []tui.ButtonSpec {
 
 func (m *TabbedVarsEditorModel) renderButtons(width int) string {
 	specs := m.btnRow.ApplySpinner(m.getButtonSpecs())
-	return tui.RenderCenteredButtonsExplicit(width, m.buttonHeight == tui.DialogButtonHeight, tui.GetActiveContext(), specs...)
+	return displayengine.RenderCenteredButtonsExplicit(width, m.buttonHeight == displayengine.DialogButtonHeight, displayengine.GetActiveContext(), specs...)
 }
 
 func (m *TabbedVarsEditorModel) renderTabs() string {
-	ctx := tui.GetActiveContext()
+	ctx := displayengine.GetActiveContext()
 	editorFocused := m.focus == envFocusEditor
 	var tabSegments []string
 	for i, tab := range m.tabs {
@@ -168,7 +168,7 @@ func (m *TabbedVarsEditorModel) renderTabs() string {
 		// Pass editorFocused as borderFocused so the tab bar border dims when
 		// buttons have focus, but always mark the active tab as contentFocused
 		// so it remains visually distinguished regardless of which panel is active.
-		seg := tui.RenderTitleSegmentCtx(title, editorFocused, isActive, true, styleTag, ctx)
+		seg := displayengine.RenderTitleSegmentCtx(title, editorFocused, isActive, true, styleTag, ctx)
 		tabSegments = append(tabSegments, seg)
 	}
 	return strings.Join(tabSegments, "")
@@ -176,37 +176,37 @@ func (m *TabbedVarsEditorModel) renderTabs() string {
 
 func (m *TabbedVarsEditorModel) ShortHelp() []key.Binding {
 	if m.focus == envFocusEditor {
-		b := []key.Binding{tui.Keys.EnvRefresh, tui.Keys.EnvAddVar, tui.Keys.EnvDelete, tui.Keys.Esc, tui.Keys.Help}
+		b := []key.Binding{displayengine.Keys.EnvRefresh, displayengine.Keys.EnvAddVar, displayengine.Keys.EnvDelete, displayengine.Keys.Esc, displayengine.Keys.Help}
 		if len(m.tabs) > 1 {
-			b = append(b, tui.Keys.EnvNextTab)
+			b = append(b, displayengine.Keys.EnvNextTab)
 		}
 		return b
 	}
-	return []key.Binding{tui.Keys.Left, tui.Keys.Right, tui.Keys.Enter, tui.Keys.CycleTab, tui.Keys.Esc}
+	return []key.Binding{displayengine.Keys.Left, displayengine.Keys.Right, displayengine.Keys.Enter, displayengine.Keys.CycleTab, displayengine.Keys.Esc}
 }
 
 func (m *TabbedVarsEditorModel) FullHelp() [][]key.Binding {
 	editorActions := []key.Binding{
-		tui.Keys.EnvRefresh,
-		tui.Keys.EnvAddVar,
-		tui.Keys.EnvInsert,
-		tui.Keys.EnvSplitLine,
-		tui.Keys.EnvDelete,
+		displayengine.Keys.EnvRefresh,
+		displayengine.Keys.EnvAddVar,
+		displayengine.Keys.EnvInsert,
+		displayengine.Keys.EnvSplitLine,
+		displayengine.Keys.EnvDelete,
 		key.NewBinding(key.WithKeys("ctrl+up"), key.WithHelp("alt+↑/↓", "reorder row")),
-		tui.Keys.EnvEditValue,
+		displayengine.Keys.EnvEditValue,
 	}
 	if len(m.tabs) > 1 {
-		editorActions = append(editorActions, tui.Keys.EnvNextTab, tui.Keys.EnvPrevTab)
+		editorActions = append(editorActions, displayengine.Keys.EnvNextTab, displayengine.Keys.EnvPrevTab)
 	}
 
 	return [][]key.Binding{
 		{
-			tui.Keys.Help,
-			tui.Keys.Esc,
-			tui.Keys.Tab,
-			tui.Keys.Enter,
-			tui.Keys.MouseRight,
-			tui.Keys.ContextMenu,
+			displayengine.Keys.Help,
+			displayengine.Keys.Esc,
+			displayengine.Keys.Tab,
+			displayengine.Keys.Enter,
+			displayengine.Keys.MouseRight,
+			displayengine.Keys.ContextMenu,
 			key.NewBinding(key.WithKeys("up"), key.WithHelp("↑/↓/←/→", "move cursor")),
 			key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup/pgdn", "page up/down")),
 			key.NewBinding(key.WithKeys("home"), key.WithHelp("home/end", "top/bottom")),
@@ -216,9 +216,9 @@ func (m *TabbedVarsEditorModel) FullHelp() [][]key.Binding {
 			key.NewBinding(key.WithKeys("ctrl+z"), key.WithHelp("alt+z/y", "undo/redo")),
 			key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("alt+c", "copy value/selection")),
 			key.NewBinding(key.WithKeys("shift+left"), key.WithHelp("shift+←/→/home/end", "select text")),
-			tui.Keys.ToggleLog,
-			tui.Keys.FocusPanelTitle,
-			tui.Keys.ForceQuit,
+			displayengine.Keys.ToggleLog,
+			displayengine.Keys.FocusPanelTitle,
+			displayengine.Keys.ForceQuit,
 		},
 	}
 }
@@ -254,7 +254,7 @@ func (m *TabbedVarsEditorModel) SetSize(width, height int) {
 	// Use them directly as dialog bounds, just like MenuModel does.
 	// contentWidth is the inner space inside the outer border (border takes 2 chars).
 	// Inner components are further inset by 1-char margin each side (ContentMarginWidth).
-	layout := tui.GetLayout()
+	layout := displayengine.GetLayout()
 	m.contentWidth = m.width - layout.BorderWidth() - layout.ContentMarginWidth()
 	if m.contentWidth < 1 {
 		m.contentWidth = 1
@@ -262,17 +262,17 @@ func (m *TabbedVarsEditorModel) SetSize(width, height int) {
 
 	specs := m.getButtonSpecs()
 	// Determine button height based on width availability (bordered=3, flat=1)
-	m.buttonHeight = tui.ButtonRowHeight(m.contentWidth, 0, specs...)
+	m.buttonHeight = displayengine.ButtonRowHeight(m.contentWidth, 0, specs...)
 
 	// Calculate subtitle height based on active tab heading content
 	m.subtitleHeight = m.calcSubtitleHeight()
 
-	ctx := tui.GetActiveContext()
+	ctx := displayengine.GetActiveContext()
 	titleBudget := m.height - layout.BorderHeight() - m.buttonHeight - m.subtitleHeight - layout.BorderHeight()
-	useLarge, _ := tui.DecideLargeTitleBar(ctx.LargeTitleBars, titleBudget, 3)
+	useLarge, _ := displayengine.DecideLargeTitleBar(ctx.LargeTitleBars, titleBudget, 3)
 	largeTitleOverhead := 0
 	if useLarge {
-		largeTitleOverhead = tui.LargeTitleBarOverhead
+		largeTitleOverhead = displayengine.LargeTitleBarOverhead
 	}
 	m.largeTitleOverhead = largeTitleOverhead
 
@@ -354,14 +354,14 @@ func (m *TabbedVarsEditorModel) renderSubtitle() string {
 		return ""
 	}
 	tab := m.tabs[m.activeTab]
-	ctx := tui.GetActiveContext()
+	ctx := displayengine.GetActiveContext()
 	bgStyle := ctx.Dialog
 
 	renderLine := func(raw string) string {
 		processed := theme.ToANSI(raw, "")
 		w := lipgloss.Width(processed)
 		padded := processed + strutil.Repeat(" ", m.contentWidth-w)
-		return tui.MaintainBackground(bgStyle.Render(padded), bgStyle)
+		return displayengine.MaintainBackground(bgStyle.Render(padded), bgStyle)
 	}
 
 	var lines []string
@@ -381,7 +381,7 @@ func (m *TabbedVarsEditorModel) renderSubtitle() string {
 			if valueW < 10 {
 				valueW = 10
 			}
-			for _, dl := range subtitleWrapText(tui.GetPlainText(tab.description), valueW) {
+			for _, dl := range subtitleWrapText(displayengine.GetPlainText(tab.description), valueW) {
 				lines = append(lines, renderLine(indent+"{{|HeadingAppDescription|}}"+dl+"{{[-]}}"))
 			}
 		}
@@ -416,12 +416,12 @@ func subtitleWrapText(text string, maxWidth int) []string {
 	return lines
 }
 
-// HelpContext implements tui.HelpContextProvider.
+// HelpContext implements displayengine.HelpContextProvider.
 // Returns heading-style info about the variable under the cursor shown at the top of the help dialog.
 // contentWidth is the available display width (used to word-wrap descriptions).
-func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) tui.HelpContext {
+func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) displayengine.HelpContext {
 	if m.focus != envFocusEditor || len(m.tabs) == 0 {
-		return tui.HelpContext{}
+		return displayengine.HelpContext{}
 	}
 
 	tab := m.tabs[m.activeTab]
@@ -433,7 +433,7 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) tui.HelpContext {
 
 	meta, ok := tab.editor.CurrentLineMeta()
 	if !ok || !meta.IsVariable {
-		hctx := tui.HelpContext{
+		hctx := displayengine.HelpContext{
 			ScreenName: m.title,
 			Legend:     legend,
 		}
@@ -470,7 +470,7 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) tui.HelpContext {
 		varName = strings.TrimSpace(varName[:idx])
 	}
 	if varName == "" {
-		return tui.HelpContext{
+		return displayengine.HelpContext{
 			ScreenName: m.title,
 			Legend:     legend,
 		}
@@ -480,7 +480,7 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) tui.HelpContext {
 }
 
 // getVariableHelpContext builds a help context for a specific variable in a tab.
-func (m *TabbedVarsEditorModel) getVariableHelpContext(varName string, tab *envTab, contentWidth int) *tui.HelpContext {
+func (m *TabbedVarsEditorModel) getVariableHelpContext(varName string, tab *envTab, contentWidth int) *displayengine.HelpContext {
 	legend := "| " +
 		"{{|MarkerAdded|}}+{{[-]}} Added | " +
 		"{{|MarkerDeleted|}}-{{[-]}} Deleted | " +
@@ -517,16 +517,16 @@ func (m *TabbedVarsEditorModel) getVariableHelpContext(varName string, tab *envT
 		itemText += "\n\n" + vm.HelpText
 	}
 
-	h := tui.HelpContext{
+	h := displayengine.HelpContext{
 		ScreenName: m.title,
 		Legend:     legend,
-		ItemTitle:  "Variable: " + func() string {
+		ItemTitle: "Variable: " + func() string {
 			if tab.niceName != "" {
 				return tab.niceName + ":" + varName
 			}
 			return varName
 		}(),
-		ItemText:   itemText,
+		ItemText: itemText,
 	}
 
 	if tab.spec.App != "" {

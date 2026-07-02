@@ -7,6 +7,7 @@ import (
 
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/logger"
 
 	tea "charm.land/bubbletea/v2"
@@ -76,21 +77,6 @@ type (
 		Refresh bool
 	}
 
-	// ShowDialogMsg shows a modal dialog
-	ShowDialogMsg struct {
-		Dialog tea.Model
-	}
-
-	// CloseDialogMsg closes the current dialog
-	CloseDialogMsg struct {
-		Result any
-		// ForwardToParent, when true, pops only one dialog level and delivers
-		// Result to the restored parent dialog rather than draining the entire
-		// stack and sending to the active screen.  Use this for results that
-		// belong to a parent dialog (e.g. sinput clipboard operations).
-		ForwardToParent bool
-	}
-
 	// HideDialogsMsg temporarily hides all open dialogs without closing them.
 	// Use UnhideDialogsMsg to restore them.
 	HideDialogsMsg struct{}
@@ -119,28 +105,8 @@ type (
 	// QuitMsg requests application exit
 	QuitMsg struct{}
 
-	// ConfigChangedMsg is sent when configuration (like theme) is updated
-	ConfigChangedMsg struct {
-		Config config.AppConfig
-	}
-
 	// TemplateUpdateSuccessMsg indicates that templates have been successfully updated
 	TemplateUpdateSuccessMsg struct{}
-
-	// ToggleFocusedMsg requests toggling/activating the currently focused item
-	// This is triggered by middle mouse click and acts like pressing Space
-	ToggleFocusedMsg struct{}
-
-	// LockStateChangedMsg is sent when the global configuration lock state changes
-	LockStateChangedMsg struct {
-		LockedByOthers bool
-	}
-
-	// PanelCommandLockChangedMsg is sent by the panel when its command-in-progress
-	// state changes, so the app can immediately update the exit locked marker.
-	PanelCommandLockChangedMsg struct {
-		Locked bool
-	}
 
 	// FinalizeSelectionMsg combines navigation and dialog display for atomic transitions
 	FinalizeSelectionMsg struct {
@@ -176,21 +142,6 @@ type (
 		ResultChan   chan promptResultMsg
 	}
 
-	// LayerHitMsg is sent when a native compositor layer is hit by a mouse event
-	LayerHitMsg struct {
-		ID     string
-		X      int
-		Y      int
-		Button tea.MouseButton
-		Hit    *HitRegion
-	}
-
-	// LayerWheelMsg is sent when a native compositor layer is hit by a mouse wheel event
-	LayerWheelMsg struct {
-		ID     string
-		Button tea.MouseButton // MouseWheelUp or MouseWheelDown
-		Hit    *HitRegion
-	}
 	// SubDialogMsg signals a request to show a sub-dialog and blocks the task
 	SubDialogMsg struct {
 		Model tea.Model
@@ -208,11 +159,6 @@ type (
 
 	// outputLinesMsg carries one or more lines of output
 	outputLinesMsg struct {
-		lines []string
-	}
-
-	// replaceOutputMsg replaces all current output lines (used for live-updating displays)
-	replaceOutputMsg struct {
 		lines []string
 	}
 
@@ -250,10 +196,10 @@ type (
 	UniversalPromptMsg struct {
 		Title        string
 		Question     string
-		DefaultYes   bool // For Confirm
-		Sensitive    bool // For Prompt
+		DefaultYes   bool   // For Confirm
+		Sensitive    bool   // For Prompt
 		InitialValue string // For Text prompts: pre-filled value
-		ResultChan   any  // chan bool or chan promptResultMsg
+		ResultChan   any    // chan bool or chan promptResultMsg
 		Type         UniversalPromptType
 	}
 )
@@ -264,8 +210,6 @@ const (
 	PromptTypeConfirm UniversalPromptType = iota
 	PromptTypeText
 )
-
-const HoverButton tea.MouseButton = 99
 
 // AppModel is the root Bubble Tea model
 type AppModel struct {
@@ -286,16 +230,16 @@ type AppModel struct {
 	screenStack  []ScreenModel
 
 	// Persistent backdrop (header + separator + helpline)
-	backdrop *BackdropModel
+	backdrop *displayengine.BackdropModel
 
 	// Slide-up log panel (always present below helpline)
-	panel               PanelModel
-	panelFocused           bool
-	panelTitleFocused      bool
-	panelInputWasFocused   bool // saved state before title-bar focus so F9 can restore it
-	panelSbDrag    ScrollbarDragState // log-panel scrollbar drag tracking state
-	panelSbAbsTopY int                // absolute Y of the scrollbar's first row (for drag computation)
-	panelSbInfo    ScrollbarInfo      // scrollbar geometry captured at drag start
+	panel                displayengine.PanelModel
+	panelFocused         bool
+	panelTitleFocused    bool
+	panelInputWasFocused bool                             // saved state before title-bar focus so F9 can restore it
+	panelSbDrag          displayengine.ScrollbarDragState // log-panel scrollbar drag tracking state
+	panelSbAbsTopY       int                              // absolute Y of the scrollbar's first row (for drag computation)
+	panelSbInfo          displayengine.ScrollbarInfo      // scrollbar geometry captured at drag start
 
 	// Modal dialog overlay (nil when no dialog)
 	dialog      tea.Model
@@ -323,7 +267,7 @@ type AppModel struct {
 	Fatal bool
 
 	// Hit regions for mouse click detection (simpler than compositor hit testing)
-	hitRegions HitRegions
+	hitRegions displayengine.HitRegions
 }
 
 // NewAppModel creates a new application model.
@@ -340,7 +284,7 @@ func NewAppModel(ctx context.Context, cfg config.AppConfig, clientIP, connType s
 	stack := make([]ScreenModel, len(initialStack))
 	copy(stack, initialStack)
 
-	bd := NewBackdropModel(helpText)
+	bd := displayengine.NewBackdropModel(helpText)
 	bd.SetConnType(connType)
 	return &AppModel{
 		ctx:          ctx,
@@ -350,13 +294,13 @@ func NewAppModel(ctx context.Context, cfg config.AppConfig, clientIP, connType s
 		activeScreen: startScreen,
 		screenStack:  stack,
 		backdrop:     bd,
-		panel:        NewPanelModel(EffectivePanelMode(cfg, connType), connType),
+		panel:        displayengine.NewPanelModel(displayengine.EffectivePanelMode(cfg, connType), connType),
 	}
 }
 
 // NewAppModelStandalone creates a new application model that starts with a modal dialog only
 func NewAppModelStandalone(ctx context.Context, cfg config.AppConfig, clientIP, connType string, dialog tea.Model) *AppModel {
-	bd := NewBackdropModel("")
+	bd := displayengine.NewBackdropModel("")
 	bd.SetConnType(connType)
 	return &AppModel{
 		ctx:      ctx,
@@ -364,7 +308,7 @@ func NewAppModelStandalone(ctx context.Context, cfg config.AppConfig, clientIP, 
 		clientIP: clientIP,
 		connType: connType,
 		backdrop: bd,
-		panel:    NewPanelModel(EffectivePanelMode(cfg, connType), connType),
+		panel:    displayengine.NewPanelModel(displayengine.EffectivePanelMode(cfg, connType), connType),
 		dialog:   dialog,
 	}
 }

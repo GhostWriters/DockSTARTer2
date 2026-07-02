@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 
+	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/lockfile"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
@@ -13,7 +14,7 @@ import (
 )
 
 // startLockFileWatcher watches for lock file events in the locks directory
-// and sends ConsoleLockMsg to the running program so the console input bar
+// and sends displayengine.ConsoleLockMsg to the running program so the console input bar
 // locks/unlocks in response to activity (SSH sessions or Edit modes).
 func startLockFileWatcher(ctx context.Context, p *tea.Program) {
 	locksDir := paths.GetLocksDir()
@@ -35,10 +36,10 @@ func startLockFileWatcher(ctx context.Context, p *tea.Program) {
 	go func() {
 		// Initial state check - moved into goroutine to avoid blocking TUI startup
 		if lockfile.IsLocked(paths.GetRemoteLockPath()) {
-			p.Send(ConsoleLockMsg{ID: "remote.lock", Locked: true})
+			p.Send(displayengine.ConsoleLockMsg{ID: "remote.lock", Locked: true})
 		}
 		if lockfile.IsLocked(filepath.Join(locksDir, editLockBase)) {
-			p.Send(ConsoleLockMsg{ID: "edit.lock", Locked: true})
+			p.Send(displayengine.ConsoleLockMsg{ID: "edit.lock", Locked: true})
 		}
 
 		defer watcher.Close()
@@ -60,7 +61,7 @@ func startLockFileWatcher(ctx context.Context, p *tea.Program) {
 
 				lockID := base
 				locked := lockfile.IsLocked(event.Name)
-				p.Send(ConsoleLockMsg{ID: lockID, Locked: locked})
+				p.Send(displayengine.ConsoleLockMsg{ID: lockID, Locked: locked})
 
 			case err, ok := <-watcher.Errors:
 				if !ok {

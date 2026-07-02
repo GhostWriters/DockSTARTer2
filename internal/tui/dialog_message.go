@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"DockSTARTer2/internal/displayengine"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -18,22 +19,22 @@ const (
 )
 
 // messageDialogModel represents a message dialog. Built as an outer
-// container MenuModel (title, OK button) with the message as a plain-text
+// container displayengine.MenuModel (title, OK button) with the message as a plain-text
 // section, matching the pattern used by Main Menu/.../Confirm/Prompt dialogs.
 type messageDialogModel struct {
-	outer *MenuModel
+	outer *displayengine.MenuModel
 }
 
-func dialogTypeForMessage(msgType MessageType) DialogType {
+func dialogTypeForMessage(msgType MessageType) displayengine.DialogType {
 	switch msgType {
 	case MessageSuccess:
-		return DialogTypeSuccess
+		return displayengine.DialogTypeSuccess
 	case MessageWarning:
-		return DialogTypeWarning
+		return displayengine.DialogTypeWarning
 	case MessageError:
-		return DialogTypeError
+		return displayengine.DialogTypeError
 	default:
-		return DialogTypeInfo
+		return displayengine.DialogTypeInfo
 	}
 }
 
@@ -46,18 +47,18 @@ func messageThemeTag(_ MessageType) string {
 
 // newMessageDialog creates a new message dialog
 func newMessageDialog(title, message string, msgType MessageType) *messageDialogModel {
-	outer := NewMenuModel("message_dialog", title, "", nil)
+	outer := displayengine.NewMenuModel("message_dialog", title, "", nil)
 	outer.SetMaximized(false)
 	outer.SetIsDialog(true)
 	outer.SetDialogType(dialogTypeForMessage(msgType))
-	outer.SetBorderStyle(BorderStyleRounded)
+	outer.SetBorderStyle(displayengine.BorderStyleRounded)
 	outer.SetShowButtons(true)
-	outer.SetButtons([]ButtonDef{
-		{Label: " OK ", ZoneID: "btn-select", Action: func() tea.Msg { return CloseDialogMsg{Result: true} }, Help: "Dismiss this message."},
+	outer.SetButtons([]displayengine.ButtonDef{
+		{Label: " OK ", ZoneID: "btn-select", Action: func() tea.Msg { return displayengine.CloseDialogMsg{Result: true} }, Help: "Dismiss this message."},
 	})
-	outer.SetEscAction(func() tea.Msg { return CloseDialogMsg{Result: true} })
+	outer.SetEscAction(func() tea.Msg { return displayengine.CloseDialogMsg{Result: true} })
 
-	messageSection := NewPlainTextSection("message_dialog_text", message)
+	messageSection := displayengine.NewPlainTextSection("message_dialog_text", message)
 	messageSection.SetPlainTextStyle(messageThemeTag(msgType), 1)
 	outer.AddContentSection(messageSection)
 
@@ -72,16 +73,16 @@ func (m *messageDialogModel) Init() tea.Cmd {
 // Update implements tea.Model
 func (m *messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Any key press closes the dialog, matching the original's "press any
-	// key to continue" behavior -- MenuModel's own key handling only closes
+	// key to continue" behavior -- displayengine.MenuModel's own key handling only closes
 	// on Enter/Esc/hotkeys, so intercept KeyPressMsg here first. Skip the
 	// intercept while the title bar [?]/[x] widgets have focus so Tab/Enter/
 	// arrow navigation there still works via the outer's own handling.
 	if _, ok := msg.(tea.KeyPressMsg); ok && !m.outer.TitleBarFocused() {
-		return m, m.outer.SetProcessingBtnDeferred("btn-select", func() tea.Msg { return CloseDialogMsg{Result: true} })
+		return m, m.outer.SetProcessingBtnDeferred("btn-select", func() tea.Msg { return displayengine.CloseDialogMsg{Result: true} })
 	}
 
 	newOuter, cmd := m.outer.Update(msg)
-	if outer, ok := newOuter.(*MenuModel); ok {
+	if outer, ok := newOuter.(*displayengine.MenuModel); ok {
 		m.outer = outer
 	}
 	return m, cmd
@@ -120,8 +121,8 @@ func (m *messageDialogModel) Layers() []*lipgloss.Layer {
 	return m.outer.Layers()
 }
 
-// GetHitRegions implements HitRegionProvider for mouse hit testing
-func (m *messageDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
+// GetHitRegions implements displayengine.HitRegionProvider for mouse hit testing
+func (m *messageDialogModel) GetHitRegions(offsetX, offsetY int) []displayengine.HitRegion {
 	return m.outer.GetHitRegions(offsetX, offsetY)
 }
 
@@ -156,11 +157,11 @@ func ShowMessageDialog(title, message string, msgType MessageType) {
 	helpText := "Press any key to continue"
 	dialog := newMessageDialog(title, message, msgType)
 
-	header := NewHeaderModel()
+	header := displayengine.NewHeaderModel()
 	header.SetWidth(80)
 	headerH := header.Height()
 
-	_, _ = RunDialogWithBackdrop(dialog, helpText, GetPositionCenter(headerH))
+	_, _ = RunDialogWithBackdrop(dialog, helpText, displayengine.GetPositionCenter(headerH))
 }
 
 // ShowInfoDialog displays an info message dialog

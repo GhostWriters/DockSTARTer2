@@ -3,8 +3,8 @@ package screens
 import (
 	"strings"
 
+	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/strutil"
-	"DockSTARTer2/internal/tui"
 
 	"charm.land/lipgloss/v2"
 )
@@ -17,12 +17,12 @@ type TwoColumnRow = string
 // hotkey on the first character), and an optional value column.
 // maxLabelW is the pre-computed max width of all label strings (for alignment).
 // maxItemW is the total usable content width (excluding cursor+space and scrollbar gutter).
-func RenderTwoColumnRow(label, value string, cursor, focused bool, maxLabelW, maxItemW int, ctx tui.StyleContext) string {
-	bgStyle := tui.GetStyles().Dialog
+func RenderTwoColumnRow(label, value string, cursor, focused bool, maxLabelW, maxItemW int, ctx displayengine.StyleContext) string {
+	bgStyle := displayengine.GetStyles().Dialog
 	neutralStyle := lipgloss.NewStyle().Background(bgStyle.GetBackground())
-	valStyle := tui.GetStyles().ItemNormal.Background(bgStyle.GetBackground())
+	valStyle := displayengine.GetStyles().ItemNormal.Background(bgStyle.GetBackground())
 	if focused {
-		valStyle = tui.GetStyles().ItemFocused
+		valStyle = displayengine.GetStyles().ItemFocused
 	}
 
 	cursorStr := " "
@@ -32,10 +32,10 @@ func RenderTwoColumnRow(label, value string, cursor, focused bool, maxLabelW, ma
 	cursorRendered := neutralStyle.Render(cursorStr + " ")
 
 	if lipgloss.Width(label) > maxLabelW {
-		label = tui.TruncateRight(label, maxLabelW)
+		label = displayengine.TruncateRight(label, maxLabelW)
 	}
 	labelW := lipgloss.Width(label)
-	labelStr := tui.RenderHotkeyLabelCtx(label, focused, ctx)
+	labelStr := displayengine.RenderHotkeyLabelCtx(label, focused, ctx)
 
 	if value == "" {
 		// Label-only row: fill to maxItemW.
@@ -56,7 +56,7 @@ func RenderTwoColumnRow(label, value string, cursor, focused bool, maxLabelW, ma
 		remaining = 0
 	}
 	if valW > remaining {
-		value = tui.TruncateRight(value, remaining)
+		value = displayengine.TruncateRight(value, remaining)
 		valW = remaining
 	}
 	trailW := maxItemW + 1 - 2 - maxLabelW - 2 - valW
@@ -85,15 +85,15 @@ func RenderListInBorderedBox(
 	totalRows, visRows, offsetRows int,
 	sInnerW, targetH int,
 	focused bool,
-	ctx tui.StyleContext,
-) (string, tui.ScrollbarInfo) {
+	ctx displayengine.StyleContext,
+) (string, displayengine.ScrollbarInfo) {
 	// Use the actual physical inner height (targetH - 2) for scrollbar geometry
 	// and padding, ensuring the gutter column always spans the full box.
 	innerH := targetH - 2
 	if innerH < 1 {
 		innerH = 1
 	}
-	listContent, sbInfo := tui.ApplyScrollbarColumnTracked(
+	listContent, sbInfo := displayengine.ApplyScrollbarColumnTracked(
 		strings.Join(listLines, "\n"),
 		totalRows, innerH, offsetRows,
 		ctx.LineCharacters, ctx,
@@ -104,7 +104,7 @@ func RenderListInBorderedBox(
 		titleTag = "TitleSubMenuFocused"
 	}
 
-	section := strings.TrimRight(tui.RenderBorderedBoxCtx(
+	section := strings.TrimRight(displayengine.RenderBorderedBoxCtx(
 		title, listContent, sInnerW, targetH, focused, true, true,
 		ctx.SubmenuTitleAlign, titleTag, ctx,
 	), "\n")
@@ -119,7 +119,7 @@ func RenderListInBorderedBox(
 		}
 		lines := strings.Split(section, "\n")
 		if len(lines) > 0 {
-			lines[len(lines)-1] = tui.BuildScrollPercentBottomBorder(sInnerW+2, scrollPct, focused, ctx)
+			lines[len(lines)-1] = displayengine.BuildScrollPercentBottomBorder(sInnerW+2, scrollPct, focused, ctx)
 			section = strings.Join(lines, "\n")
 		}
 	}
@@ -143,13 +143,13 @@ func ListBoxHitRegions(
 	boxX, boxY, boxW, contentH int,
 	baseZ int,
 	label string,
-	info tui.ScrollbarInfo,
-	help *tui.HelpContext,
-) []tui.HitRegion {
-	var regions []tui.HitRegion
+	info displayengine.ScrollbarInfo,
+	help *displayengine.HelpContext,
+) []displayengine.HitRegion {
+	var regions []displayengine.HitRegion
 
 	// Outer box: covers borders and content. Total height = contentH + 2.
-	box := tui.HitRegion{
+	box := displayengine.HitRegion{
 		ID:     boxID,
 		X:      boxX,
 		Y:      boxY,
@@ -168,7 +168,7 @@ func ListBoxHitRegions(
 
 	// Inner content rows (excluding left border and scrollbar column).
 	// contentW = boxW - 2. Scrollbar is the last column of content.
-	regions = append(regions, tui.HitRegion{
+	regions = append(regions, displayengine.HitRegion{
 		ID:     contentID,
 		X:      boxX + 1,
 		Y:      boxY + 1,
@@ -182,10 +182,10 @@ func ListBoxHitRegions(
 	// Scrollbar hits (detailed targets for up/down/track/thumb)
 	if info.Needed {
 		sbX := boxX + boxW - 2 // column inside the right border
-		regions = append(regions, tui.ScrollbarHitRegions(boxID, sbX, boxY+1, info, baseZ, label)...)
+		regions = append(regions, displayengine.ScrollbarHitRegions(boxID, sbX, boxY+1, info, baseZ, label)...)
 	} else {
 		// Generic fallback if scrollbar is not needed or not yet computed
-		regions = append(regions, tui.HitRegion{
+		regions = append(regions, displayengine.HitRegion{
 			ID:     boxID,
 			X:      boxX + boxW - 2,
 			Y:      boxY + 1,

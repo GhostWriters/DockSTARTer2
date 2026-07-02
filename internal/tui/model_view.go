@@ -2,6 +2,7 @@ package tui
 
 import (
 	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/logger"
 	"image/color"
 	"sort"
@@ -66,7 +67,7 @@ func (m *AppModel) View() (v tea.View) {
 		// Fill every cell with the screen background color so BubbleTea's diff
 		// renderer is forced to overwrite all stale cells from the previous frame,
 		// even when the background color matches the terminal default.
-		row := currentStyles.Screen.Render(strings.Repeat(" ", m.width))
+		row := displayengine.GetStyles().Screen.Render(strings.Repeat(" ", m.width))
 		content := strings.Repeat(row+"\n", m.height)
 		v := tea.NewView(content)
 		v.MouseMode = tea.MouseModeCellMotion
@@ -86,21 +87,21 @@ func (m *AppModel) View() (v tea.View) {
 		return v
 	}
 
-	// Use Layout helpers for consistent positioning
-	layout := GetLayout()
+	// Use displayengine.Layout helpers for consistent positioning
+	layout := displayengine.GetLayout()
 	// Query the backdrop for the actual rendered chrome height (header + bottom border).
 	// This avoids hardcoding a constant and correctly handles multi-line headers.
 	contentYOffset := layout.ContentStartY(1) // fallback: 1-line header
-	headerH := 1                               // header content height, needed by layout functions
+	headerH := 1                              // header content height, needed by layout functions
 	if m.backdrop != nil {
 		headerH = m.backdrop.ChromeHeight() - 1
 		contentYOffset = layout.ContentStartY(headerH)
 	}
-	SetActiveContentStartY(contentYOffset)
+	displayengine.SetActiveContentStartY(contentYOffset)
 
 	// Create native compositor for rendering
 	comp := lipgloss.NewCompositor()
-	maxZ := ZScreen
+	maxZ := displayengine.ZScreen
 
 	// Reset hit regions for this frame
 	m.hitRegions = nil
@@ -121,7 +122,7 @@ func (m *AppModel) View() (v tea.View) {
 	} else if vs, ok := interface{}(m.panel).(ViewStringer); ok {
 		if logContent := vs.ViewString(); logContent != "" {
 			comp.AddLayers(lipgloss.NewLayer(logContent).
-				X(0).Y(logY).Z(ZPanel).ID(IDPanel))
+				X(0).Y(logY).Z(displayengine.ZPanel).ID(displayengine.IDPanel))
 		}
 	}
 	// Collect hit regions from log panel
@@ -151,7 +152,7 @@ func (m *AppModel) View() (v tea.View) {
 		if screenContent != "" {
 			// Calculate centered position for non-maximized screens
 			caW, caH := m.getContentArea()
-			screenW := WidthWithoutZones(screenContent)
+			screenW := displayengine.WidthWithoutZones(screenContent)
 			screenH := lipgloss.Height(screenContent)
 
 			screenX := maxX
@@ -172,13 +173,13 @@ func (m *AppModel) View() (v tea.View) {
 				}
 			}
 
-			// Base Z for screens: each screen level is 10 units apart within ZScreen band
-			screenZBase := ZScreen + (i * 10)
+			// Base Z for screens: each screen level is 10 units apart within displayengine.ZScreen band
+			screenZBase := displayengine.ZScreen + (i * 10)
 
 			if lv, ok := s.(LayeredView); ok {
 				for _, l := range lv.Layers() {
 					// Translate layer relative to screen position and stack Z
-					l = l.X(l.GetX() + screenX).Y(l.GetY() + screenY).Z(l.GetZ() + screenZBase - ZScreen)
+					l = l.X(l.GetX() + screenX).Y(l.GetY() + screenY).Z(l.GetZ() + screenZBase - displayengine.ZScreen)
 					if l.GetZ() > maxZ {
 						maxZ = l.GetZ()
 					}
@@ -198,7 +199,7 @@ func (m *AppModel) View() (v tea.View) {
 			lastScreenX, lastScreenY = screenX, screenY
 
 			// Collect hit regions from screen with the actual position
-			if hrp, ok := s.(HitRegionProvider); ok {
+			if hrp, ok := s.(displayengine.HitRegionProvider); ok {
 				m.hitRegions = append(m.hitRegions, hrp.GetHitRegions(screenX, screenY)...)
 			}
 		}
@@ -224,10 +225,10 @@ func (m *AppModel) View() (v tea.View) {
 				maximized = md.IsMaximized()
 			}
 
-			fgWidth := WidthWithoutZones(content)
+			fgWidth := displayengine.WidthWithoutZones(content)
 			fgHeight := lipgloss.Height(content)
 
-			mode := DialogAbsoluteCentered
+			mode := displayengine.DialogAbsoluteCentered
 			targetHeight := m.backdropHeight()
 
 			hasHalo := false
@@ -240,18 +241,18 @@ func (m *AppModel) View() (v tea.View) {
 			}
 
 			if maximized {
-				mode = DialogMaximized
+				mode = displayengine.DialogMaximized
 				targetHeight = m.backdropHeight()
 			}
 
 			lx, ly := layout.DialogPosition(mode, fgWidth, fgHeight, m.width, targetHeight, m.config.UI.Shadow, hasHalo, headerH)
 
-			modalZBase := maxZ + ZModalBaseOffset + (i * ZModalStackStep)
+			modalZBase := maxZ + displayengine.ZModalBaseOffset + (i * displayengine.ZModalStackStep)
 
 			if lv, ok := d.(LayeredView); ok {
 				for _, l := range lv.Layers() {
 					// Apply modal offset to ensure it sits above the background content
-					l = l.X(l.GetX() + lx).Y(l.GetY() + ly).Z(l.GetZ() + modalZBase - ZScreen)
+					l = l.X(l.GetX() + lx).Y(l.GetY() + ly).Z(l.GetZ() + modalZBase - displayengine.ZScreen)
 					if hasHalo {
 						compositorAddHalo(comp, l, modalZBase, d.(HaloProvider).HaloColor())
 					} else {
@@ -270,10 +271,10 @@ func (m *AppModel) View() (v tea.View) {
 
 			// Collect hit regions from dialog.
 			// Shift their ZOrder so they track with the visual modal stack.
-			if hrp, ok := d.(HitRegionProvider); ok {
+			if hrp, ok := d.(displayengine.HitRegionProvider); ok {
 				regions := hrp.GetHitRegions(lx, ly)
 				for j := range regions {
-					regions[j].ZOrder += modalZBase - ZScreen
+					regions[j].ZOrder += modalZBase - displayengine.ZScreen
 				}
 				m.hitRegions = append(m.hitRegions, regions...)
 			}
@@ -311,15 +312,15 @@ func (m *AppModel) View() (v tea.View) {
 					if md, ok2 := topDialog.(interface{ IsMaximized() bool }); ok2 {
 						maximized = md.IsMaximized()
 					}
-					fgWidth := WidthWithoutZones(content)
+					fgWidth := displayengine.WidthWithoutZones(content)
 					fgHeight := lipgloss.Height(content)
-					mode := DialogAbsoluteCentered
+					mode := displayengine.DialogAbsoluteCentered
 					targetHeight := m.backdropHeight()
 					if _, ok2 := topDialog.(*HelpDialogModel); ok2 {
 						targetHeight = m.height
 					}
 					if maximized {
-						mode = DialogMaximized
+						mode = displayengine.DialogMaximized
 						targetHeight = m.backdropHeight()
 					}
 					hasHalo := false
@@ -372,18 +373,18 @@ func (m AppModel) GetActiveScreen() ScreenModel {
 }
 
 // Backdrop returns the shared backdrop model
-func (m *AppModel) Backdrop() *BackdropModel {
+func (m *AppModel) Backdrop() *displayengine.BackdropModel {
 	return m.backdrop
 }
 
 // GetPanel returns the log panel model
-func (m AppModel) GetPanel() PanelModel {
+func (m AppModel) GetPanel() displayengine.PanelModel {
 	return m.panel
 }
 
 // compositorAddShadow adds a drop-shadow layer behind l in the compositor.
 // It fires only when enabled is true and l is a base content layer (l.GetZ() == baseZ).
-// DialogShadowWidth/Height from dialog.go are used as the canonical offsets.
+// displayengine.DialogShadowWidth/Height from dialog.go are used as the canonical offsets.
 // The shadow box is cached by content dimensions + context settings so it is
 // not recomputed on frames where neither the dialog size nor the theme changed.
 func compositorAddShadow(comp *lipgloss.Compositor, l *lipgloss.Layer, baseZ int, enabled bool) {
@@ -391,18 +392,18 @@ func compositorAddShadow(comp *lipgloss.Compositor, l *lipgloss.Layer, baseZ int
 		return
 	}
 	content := l.GetContent()
-	w := WidthWithoutZones(content)
+	w := displayengine.WidthWithoutZones(content)
 	h := lipgloss.Height(content)
 	if w <= 0 || h <= 0 {
 		return
 	}
-	ctx := GetActiveContext()
+	ctx := displayengine.GetActiveContext()
 	var shadowBox string
 	if shadowBoxCache.width == w && shadowBoxCache.height == h &&
 		shadowBoxCache.level == ctx.ShadowLevel && shadowBoxCache.lineChars == ctx.LineCharacters {
 		shadowBox = shadowBoxCache.result
 	} else {
-		shadowBox = GetShadowBoxCtx(content, ctx)
+		shadowBox = displayengine.GetShadowBoxCtx(content, ctx)
 		shadowBoxCache.width = w
 		shadowBoxCache.height = h
 		shadowBoxCache.level = ctx.ShadowLevel
@@ -411,8 +412,8 @@ func compositorAddShadow(comp *lipgloss.Compositor, l *lipgloss.Layer, baseZ int
 	}
 	if shadowBox != "" {
 		comp.AddLayers(lipgloss.NewLayer(shadowBox).
-			X(l.GetX() + DialogShadowWidth).
-			Y(l.GetY() + DialogShadowHeight).
+			X(l.GetX() + displayengine.DialogShadowWidth).
+			Y(l.GetY() + displayengine.DialogShadowHeight).
 			Z(l.GetZ() - 1))
 	}
 }
@@ -424,18 +425,18 @@ func compositorAddHalo(comp *lipgloss.Compositor, l *lipgloss.Layer, baseZ int, 
 		return
 	}
 	content := l.GetContent()
-	w := WidthWithoutZones(content)
+	w := displayengine.WidthWithoutZones(content)
 	h := lipgloss.Height(content)
 	if w <= 0 || h <= 0 {
 		return
 	}
 
-	layout := GetLayout()
+	layout := displayengine.GetLayout()
 	haloW := w + layout.HaloWidth
 	haloH := h + layout.HaloHeight
 
-	// Use existing GetSolidBoxCtx if possible, otherwise build manual string
-	haloBox := GetSolidBoxCtx(haloW, haloH, haloColor)
+	// Use existing displayengine.GetSolidBoxCtx if possible, otherwise build manual string
+	haloBox := displayengine.GetSolidBoxCtx(haloW, haloH, haloColor)
 	if haloBox != "" {
 		comp.AddLayers(lipgloss.NewLayer(haloBox).
 			X(l.GetX() - (layout.HaloWidth / 2)).

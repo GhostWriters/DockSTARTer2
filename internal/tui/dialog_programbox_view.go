@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"DockSTARTer2/internal/displayengine"
 	"fmt"
 
 	tea "charm.land/bubbletea/v2"
@@ -10,7 +11,7 @@ import (
 // ViewString delegates to outer for the dialog's own content, overlaying the
 // sub-dialog (a blocking prompt shown during a running task) on top when
 // present -- sub-dialog overlay compositing is orchestration-level, not a
-// Content-section concept, so it stays hand-rolled here rather than moving
+// displayengine.Content-section concept, so it stays hand-rolled here rather than moving
 // into a section.
 func (m *ProgramBoxModel) ViewString() string {
 	base := m.outer.ViewString()
@@ -21,7 +22,7 @@ func (m *ProgramBoxModel) ViewString() string {
 		} else {
 			subView = fmt.Sprintf("%v", m.subDialog.View())
 		}
-		base = Overlay(subView, base, OverlayCenter, OverlayCenter, 0, 0)
+		base = displayengine.Overlay(subView, base, displayengine.OverlayCenter, displayengine.OverlayCenter, 0, 0)
 	}
 	return base
 }
@@ -40,7 +41,7 @@ func (m *ProgramBoxModel) View() tea.View {
 // each TOP-LEVEL layer this method returns, but does NOT recurse into a
 // layer's children to apply that same offset. Nesting the sub-dialog as a
 // child of the base layer left it at the child's own small Z (e.g.
-// ZScreen+10) while the base layer got bumped to the much larger modalZBase,
+// displayengine.ZScreen+10) while the base layer got bumped to the much larger modalZBase,
 // so the sub-dialog silently rendered underneath (and was fully covered by)
 // ProgramBox's own content despite compositing correctly in every other
 // respect. Returning siblings lets both receive the identical modal offset,
@@ -93,12 +94,12 @@ func (m *ProgramBoxModel) Layers() []*lipgloss.Layer {
 	return result
 }
 
-// GetHitRegions implements HitRegionProvider for mouse hit testing
-func (m *ProgramBoxModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
+// GetHitRegions implements displayengine.HitRegionProvider for mouse hit testing
+func (m *ProgramBoxModel) GetHitRegions(offsetX, offsetY int) []displayengine.HitRegion {
 	regions := m.outer.GetHitRegions(offsetX, offsetY)
 
 	if m.subDialog != nil {
-		if hrp, ok := m.subDialog.(HitRegionProvider); ok {
+		if hrp, ok := m.subDialog.(displayengine.HitRegionProvider); ok {
 			containerStr := m.outer.ViewString()
 			containerW := lipgloss.Width(containerStr)
 			containerH := lipgloss.Height(containerStr)

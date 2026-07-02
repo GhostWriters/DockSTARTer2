@@ -2,7 +2,7 @@ package screens
 
 import (
 	"DockSTARTer2/internal/appenv"
-	"DockSTARTer2/internal/tui"
+	"DockSTARTer2/internal/displayengine"
 	"context"
 	"fmt"
 )
@@ -69,7 +69,7 @@ func (s *AppSelectionScreen) startEditing(baseApp string) {
 		return
 	}
 
-	editRow := tui.MenuItem{
+	editRow := displayengine.MenuItem{
 		Tag:        s.editingTag(appenv.GetNiceName(context.Background(), baseApp), "", ""),
 		Help:       "Type instance suffix (blank = base). Enter to confirm, Esc to cancel.",
 		IsEditing:  true,
@@ -85,7 +85,7 @@ func (s *AppSelectionScreen) startEditing(baseApp string) {
 		niceName := appenv.GetNiceName(ctx, baseApp)
 		orig := items[simpleIdx]
 		s.convertedSimpleOriginal = orig
-		promoted := tui.MenuItem{
+		promoted := displayengine.MenuItem{
 			Tag:           orig.Tag,
 			Desc:          orig.Desc,
 			Help:          fmt.Sprintf("Press Ctrl/Alt+Right to manage %s instances", niceName),
@@ -95,13 +95,13 @@ func (s *AppSelectionScreen) startEditing(baseApp string) {
 			BaseApp:       baseApp,
 			Metadata:      orig.Metadata,
 		}
-		workItems = make([]tui.MenuItem, len(items))
+		workItems = make([]displayengine.MenuItem, len(items))
 		copy(workItems, items)
 		workItems[simpleIdx] = promoted
 		s.convertedFromSimple = true
 	}
 
-	newItems := make([]tui.MenuItem, 0, len(workItems)+1)
+	newItems := make([]displayengine.MenuItem, 0, len(workItems)+1)
 	newItems = append(newItems, workItems[:insertAt]...)
 	newItems = append(newItems, editRow)
 	newItems = append(newItems, workItems[insertAt:]...)
@@ -130,7 +130,7 @@ func (s *AppSelectionScreen) startRenaming(subIdx int) {
 	subItem := items[subIdx]
 	suffix := appenv.AppNameToInstanceName(subItem.Metadata["appName"])
 
-	editRow := tui.MenuItem{
+	editRow := displayengine.MenuItem{
 		Tag:        s.editingTag(appenv.GetNiceName(context.Background(), subItem.BaseApp), suffix, ""),
 		Help:       "Edit instance name. Enter to confirm, Esc to cancel.",
 		IsEditing:  true,
@@ -141,7 +141,7 @@ func (s *AppSelectionScreen) startRenaming(subIdx int) {
 		BaseApp:    subItem.BaseApp,
 	}
 
-	newItems := make([]tui.MenuItem, len(items))
+	newItems := make([]displayengine.MenuItem, len(items))
 	copy(newItems, items)
 	newItems[subIdx] = editRow
 
@@ -159,7 +159,7 @@ func (s *AppSelectionScreen) startRenaming(subIdx int) {
 
 func (s *AppSelectionScreen) cancelEdit() {
 	items := s.menu.GetItems()
-	newItems := make([]tui.MenuItem, 0, len(items))
+	newItems := make([]displayengine.MenuItem, 0, len(items))
 	if s.isRenaming {
 		for i, item := range items {
 			if i == s.editingIdx {
@@ -188,8 +188,8 @@ func (s *AppSelectionScreen) cancelEdit() {
 	s.isEditing = false
 	s.isRenaming = false
 	s.convertedFromSimple = false
-	s.convertedSimpleOriginal = tui.MenuItem{}
-	s.renamingOriginal = tui.MenuItem{}
+	s.convertedSimpleOriginal = displayengine.MenuItem{}
+	s.renamingOriginal = displayengine.MenuItem{}
 	s.editingBaseApp = ""
 	s.editContent = ""
 	s.editError = ""
@@ -237,7 +237,7 @@ func (s *AppSelectionScreen) confirmEdit() {
 		checkedState = s.renamingOriginal.Checked
 		enabledState = s.renamingOriginal.Enabled
 	}
-	newSubRow := tui.MenuItem{
+	newSubRow := displayengine.MenuItem{
 		Tag:               displayName,
 		Help:              fmt.Sprintf("Toggle %s", displayName),
 		IsSubItem:         true,
@@ -250,7 +250,7 @@ func (s *AppSelectionScreen) confirmEdit() {
 		BaseApp:           base,
 		Metadata:          map[string]string{"appName": newAppName},
 	}
-	newItems := make([]tui.MenuItem, 0, len(items))
+	newItems := make([]displayengine.MenuItem, 0, len(items))
 	for i, item := range items {
 		if i == s.editingIdx {
 			newItems = append(newItems, newSubRow)
@@ -281,8 +281,8 @@ func (s *AppSelectionScreen) confirmEdit() {
 	s.isEditing = false
 	s.isRenaming = false
 	s.convertedFromSimple = false
-	s.convertedSimpleOriginal = tui.MenuItem{}
-	s.renamingOriginal = tui.MenuItem{}
+	s.convertedSimpleOriginal = displayengine.MenuItem{}
+	s.renamingOriginal = displayengine.MenuItem{}
 	s.editingBaseApp = ""
 	s.editContent = ""
 	s.editError = ""

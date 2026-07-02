@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/tui"
 	"strings"
@@ -11,7 +12,7 @@ import (
 
 // itemConfigValue returns the config value (e.g. "user:MyTheme") for a theme menu item.
 // Falls back to Tag (display name) if no Metadata entry was set.
-func itemConfigValue(item tui.MenuItem) string {
+func itemConfigValue(item displayengine.MenuItem) string {
 	if cv, ok := item.Metadata["config_value"]; ok {
 		return cv
 	}
@@ -51,23 +52,23 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// These messages are sent by inner menus' dragDoneCmd/scrollDoneCmd after a render cycle.
 	// Without forwarding, dragPending/scrollPending would be stuck true permanently on inner menus.
 	switch dmsg := msg.(type) {
-	case tui.DragDoneMsg:
+	case displayengine.DragDoneMsg:
 		updated, uCmd := s.themeMenu.Update(dmsg)
-		if m, ok := updated.(*tui.MenuModel); ok {
+		if m, ok := updated.(*displayengine.MenuModel); ok {
 			s.themeMenu = m
 		}
 		updated, uCmd2 := s.optionsMenu.Update(dmsg)
-		if m, ok := updated.(*tui.MenuModel); ok {
+		if m, ok := updated.(*displayengine.MenuModel); ok {
 			s.optionsMenu = m
 		}
 		return s, tea.Batch(uCmd, uCmd2)
-	case tui.ScrollDoneMsg:
+	case displayengine.ScrollDoneMsg:
 		updated, uCmd := s.themeMenu.Update(dmsg)
-		if m, ok := updated.(*tui.MenuModel); ok {
+		if m, ok := updated.(*displayengine.MenuModel); ok {
 			s.themeMenu = m
 		}
 		updated, uCmd2 := s.optionsMenu.Update(dmsg)
-		if m, ok := updated.(*tui.MenuModel); ok {
+		if m, ok := updated.(*displayengine.MenuModel); ok {
 			s.optionsMenu = m
 		}
 		return s, tea.Batch(uCmd, uCmd2)
@@ -83,7 +84,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if _, ok := msg.(tea.MouseMotionMsg); ok {
 			updated, uCmd := target.Update(msg)
-			if m, ok := updated.(*tui.MenuModel); ok {
+			if m, ok := updated.(*displayengine.MenuModel); ok {
 				if target == s.themeMenu {
 					s.themeMenu = m
 				} else {
@@ -94,7 +95,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if _, ok := msg.(tea.MouseReleaseMsg); ok {
 			updated, uCmd := target.Update(msg)
-			if m, ok := updated.(*tui.MenuModel); ok {
+			if m, ok := updated.(*displayengine.MenuModel); ok {
 				if target == s.themeMenu {
 					s.themeMenu = m
 				} else {
@@ -122,13 +123,13 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch s.focusedPanel {
 		case FocusThemes:
 			updated, uCmd := s.themeMenu.Update(msg)
-			if m, ok := updated.(*tui.MenuModel); ok {
+			if m, ok := updated.(*displayengine.MenuModel); ok {
 				s.themeMenu = m
 			}
 			return s, uCmd
 		case FocusOptions:
 			updated, uCmd := s.optionsMenu.Update(msg)
-			if m, ok := updated.(*tui.MenuModel); ok {
+			if m, ok := updated.(*displayengine.MenuModel); ok {
 				s.optionsMenu = m
 			}
 			return s, uCmd
@@ -149,20 +150,20 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return s, nil
 
-	case tui.LayerHitMsg:
+	case displayengine.LayerHitMsg:
 		// 1. Focus routing via panel hit
 		switch msg.ID {
-		case tui.IDThemePanel:
+		case displayengine.IDThemePanel:
 			s.buttonFocused = false
 			s.focusedPanel = FocusThemes
 			s.updateFocusStates()
 			return s, nil
-		case tui.IDOptionsPanel:
+		case displayengine.IDOptionsPanel:
 			s.buttonFocused = false
 			s.focusedPanel = FocusOptions
 			s.updateFocusStates()
 			return s, nil
-		case tui.IDButtonPanel:
+		case displayengine.IDButtonPanel:
 			s.buttonFocused = false
 			s.focusedPanel = FocusButtons
 			s.updateFocusStates()
@@ -170,20 +171,20 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// 2. Button actions (global buttons not belonging to a sub-menu)
-		if tui.ButtonIDMatches(msg.ID, tui.IDApplyButton) {
+		if displayengine.ButtonIDMatches(msg.ID, displayengine.IDApplyButton) {
 			if msg.Button == tea.MouseLeft {
 				s.focusedPanel = FocusButtons
 				s.focusedButton = 0
 				s.updateFocusStates()
-				return s, s.outerMenu.SetProcessingBtnDeferred(tui.IDApplyButton, s.handleApply())
+				return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDApplyButton, s.handleApply())
 			}
-			if msg.Button == tui.HoverButton {
+			if msg.Button == displayengine.HoverButton {
 				s.focusedPanel = FocusButtons
 				s.focusedButton = 0
 				s.updateFocusStates()
 				return s, nil
 			}
-		} else if tui.ButtonIDMatches(msg.ID, tui.IDBackButton) {
+		} else if displayengine.ButtonIDMatches(msg.ID, displayengine.IDBackButton) {
 			if msg.Button == tea.MouseLeft {
 				s.focusedPanel = FocusButtons
 				s.focusedButton = 1
@@ -192,23 +193,23 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return s, nil
 				}
 				theme.Unload("Preview")
-				return s, s.outerMenu.SetProcessingBtnDeferred(tui.IDBackButton, navigateBack())
+				return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDBackButton, navigateBack())
 			}
-			if msg.Button == tui.HoverButton {
+			if msg.Button == displayengine.HoverButton {
 				s.focusedPanel = FocusButtons
 				s.focusedButton = 1
 				s.updateFocusStates()
 				return s, nil
 			}
-		} else if tui.ButtonIDMatches(msg.ID, tui.IDExitButton) {
+		} else if displayengine.ButtonIDMatches(msg.ID, displayengine.IDExitButton) {
 			if msg.Button == tea.MouseLeft {
 				s.focusedPanel = FocusButtons
 				s.focusedButton = s.maxFocusedButton()
 				s.updateFocusStates()
 				theme.Unload("Preview")
-				return s, s.outerMenu.SetProcessingBtnDeferred(tui.IDExitButton, tui.ConfirmExitAction())
+				return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDExitButton, tui.ConfirmExitAction())
 			}
-			if msg.Button == tui.HoverButton {
+			if msg.Button == displayengine.HoverButton {
 				s.focusedPanel = FocusButtons
 				s.focusedButton = s.maxFocusedButton()
 				s.updateFocusStates()
@@ -217,11 +218,11 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// 3. Delegation to sub-menus (handles items and internal buttons)
-		if strings.Contains(msg.ID, tui.IDThemePanel) {
+		if strings.Contains(msg.ID, displayengine.IDThemePanel) {
 			s.focusedPanel = FocusThemes
 			s.updateFocusStates()
 			updated, uCmd := s.themeMenu.Update(msg)
-			if m, ok := updated.(*tui.MenuModel); ok {
+			if m, ok := updated.(*displayengine.MenuModel); ok {
 				s.themeMenu = m
 			}
 			// Hook for theme preview: if theme changed (Left Click), apply it
@@ -238,26 +239,26 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			return s, uCmd
-		} else if strings.Contains(msg.ID, tui.IDOptionsPanel) {
+		} else if strings.Contains(msg.ID, displayengine.IDOptionsPanel) {
 			s.focusedPanel = FocusOptions
 			s.updateFocusStates()
 			updated, uCmd := s.optionsMenu.Update(msg)
-			if m, ok := updated.(*tui.MenuModel); ok {
+			if m, ok := updated.(*displayengine.MenuModel); ok {
 				s.optionsMenu = m
 			}
 			return s, uCmd
 		}
 
 		// Title widget clicks — delegate to outerMenu
-		if s.outerMenu != nil && tui.IsTitleWidgetID(msg.ID) {
+		if s.outerMenu != nil && displayengine.IsTitleWidgetID(msg.ID) {
 			updated, uCmd := s.outerMenu.Update(msg)
-			if m, ok := updated.(*tui.MenuModel); ok {
+			if m, ok := updated.(*displayengine.MenuModel); ok {
 				s.outerMenu = m
 			}
 			return s, uCmd
 		}
 
-	case tui.ToggleFocusedMsg:
+	case displayengine.ToggleFocusedMsg:
 		// Middle click: activate the currently focused item in the hovered panel
 		switch s.focusedPanel {
 		case FocusThemes:
@@ -274,7 +275,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, nil
 		case FocusOptions:
 			updated, uCmd := s.optionsMenu.Update(msg)
-			if m, ok := updated.(*tui.MenuModel); ok {
+			if m, ok := updated.(*displayengine.MenuModel); ok {
 				s.optionsMenu = m
 			}
 			return s, uCmd
@@ -287,14 +288,14 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Title bar focus: delegate all keys to outer menu when its title bar is focused.
 		if s.outerMenu != nil && s.outerMenu.TitleBarFocused() {
 			updated, uCmd := s.outerMenu.Update(msg)
-			if m, ok := updated.(*tui.MenuModel); ok {
+			if m, ok := updated.(*displayengine.MenuModel); ok {
 				s.outerMenu = m
 			}
 			return s, uCmd
 		}
 
 		// 1. Panel Cycling (Tab / Shift-Tab) - Themes <-> Options only
-		if key.Matches(msg, tui.Keys.CycleTab) || key.Matches(msg, tui.Keys.CycleShiftTab) {
+		if key.Matches(msg, displayengine.Keys.CycleTab) || key.Matches(msg, displayengine.Keys.CycleShiftTab) {
 			s.buttonFocused = false
 			if s.focusedPanel == FocusThemes {
 				s.focusedPanel = FocusOptions
@@ -308,7 +309,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// 2. Strict Navigation (Workstation Model)
 
 		// Left/Right: cycle buttons; when on a submenu, keep it focused too (buttonFocused).
-		if key.Matches(msg, tui.Keys.Left) {
+		if key.Matches(msg, displayengine.Keys.Left) {
 			if s.focusedPanel == FocusButtons || s.buttonFocused {
 				s.buttonFocused = s.focusedPanel != FocusButtons
 				s.focusedButton--
@@ -322,7 +323,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			s.updateFocusStates()
 			return s, nil
 		}
-		if key.Matches(msg, tui.Keys.Right) {
+		if key.Matches(msg, displayengine.Keys.Right) {
 			if s.focusedPanel == FocusButtons || s.buttonFocused {
 				s.buttonFocused = s.focusedPanel != FocusButtons
 				s.focusedButton++
@@ -337,7 +338,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, nil
 		}
 
-		if key.Matches(msg, tui.Keys.Enter) {
+		if key.Matches(msg, displayengine.Keys.Enter) {
 			if s.buttonFocused || s.focusedPanel == FocusButtons {
 				s.buttonFocused = false
 				return s.execFocusedButton()
@@ -345,7 +346,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Esc: Cancel — same as clicking the close widget
-		if key.Matches(msg, tui.Keys.Esc) {
+		if key.Matches(msg, displayengine.Keys.Esc) {
 			if s.buttonFocused {
 				s.buttonFocused = false
 				s.updateFocusStates()
@@ -354,14 +355,14 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// 3. Up/Down/Space: Routed to focused panel; clear button highlight when navigating submenus.
-		if key.Matches(msg, tui.Keys.Up) || key.Matches(msg, tui.Keys.Down) {
+		if key.Matches(msg, displayengine.Keys.Up) || key.Matches(msg, displayengine.Keys.Down) {
 			s.buttonFocused = false
 			s.updateFocusStates()
 		}
 		switch s.focusedPanel {
 		case FocusThemes:
 			// Specific radio logic for Space on theme list
-			if key.Matches(msg, tui.Keys.Space) {
+			if key.Matches(msg, displayengine.Keys.Space) {
 				items := s.themeMenu.GetItems()
 				cursor := s.themeMenu.Index()
 				if cursor >= 0 && cursor < len(items) {
@@ -375,13 +376,13 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			updated, uCmd := s.themeMenu.Update(msg)
-			if m, ok := updated.(*tui.MenuModel); ok {
+			if m, ok := updated.(*displayengine.MenuModel); ok {
 				s.themeMenu = m
 			}
 			return s, uCmd
 		case FocusOptions:
 			updated, uCmd := s.optionsMenu.Update(msg)
-			if m, ok := updated.(*tui.MenuModel); ok {
+			if m, ok := updated.(*displayengine.MenuModel); ok {
 				s.optionsMenu = m
 			}
 			return s, uCmd
@@ -408,7 +409,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		s.ClearProcessingState()
 		return s, nil
 
-	case tui.ConfigChangedMsg:
+	case displayengine.ConfigChangedMsg:
 		// Stop any in-flight spinner before rebuilding styles — spinner ticks firing
 		// during the rebuild cause intermediate renders that look like a flash.
 		if s.outerMenu != nil {
@@ -418,7 +419,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// styles. Re-establish the preview namespace so the mockup renders correctly.
 		if s.previewTheme != "" {
 			_, _ = theme.Load(s.previewTheme, "Preview")
-			tui.ClearSemanticCachePrefix("Preview_")
+			displayengine.ClearSemanticCachePrefix("Preview_")
 		}
 		if s.outerMenu != nil {
 			s.outerMenu.InvalidateCache()
@@ -477,7 +478,7 @@ func (s *DisplayOptionsScreen) applyPreview(themeName string) {
 	if s.outerMenu != nil {
 		s.outerMenu.InvalidateCache()
 	}
-	tui.ClearSemanticCachePrefix("Preview_")
+	displayengine.ClearSemanticCachePrefix("Preview_")
 }
 
 func (s *DisplayOptionsScreen) syncOptionsMenu() {
@@ -550,7 +551,7 @@ const (
 // computePanelLayout is the single source of truth for the split-panel layout.
 // All rendering paths (SetSize, ViewString, Layers, GetHitRegions) delegate here.
 func (s *DisplayOptionsScreen) computePanelLayout(width int) panelLayout {
-	layout := tui.GetLayout()
+	layout := displayengine.GetLayout()
 	gutter := layout.VisualGutter(tui.IsShadowEnabled())
 
 	fullPreviewW := displayPreviewInnerWidth + layout.BorderWidth()
@@ -606,12 +607,12 @@ func (s *DisplayOptionsScreen) EscapeAction() tea.Cmd {
 		s.focusedPanel = FocusButtons
 		s.focusedButton = s.maxFocusedButton()
 		s.updateFocusStates()
-		return s.outerMenu.SetProcessingBtnDeferred(tui.IDExitButton, tui.ConfirmExitAction())
+		return s.outerMenu.SetProcessingBtnDeferred(displayengine.IDExitButton, tui.ConfirmExitAction())
 	}
 	s.focusedPanel = FocusButtons
 	s.focusedButton = 1 // Back
 	s.updateFocusStates()
-	return s.outerMenu.SetProcessingBtnDeferred(tui.IDBackButton, navigateBack())
+	return s.outerMenu.SetProcessingBtnDeferred(displayengine.IDBackButton, navigateBack())
 }
 
 // ClearProcessingState clears spinner state on all inner menus.

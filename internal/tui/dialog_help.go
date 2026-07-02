@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"DockSTARTer2/internal/displayengine"
 	"image/color"
 	"strings"
 
@@ -53,52 +54,8 @@ func buildBindingPages(h help.Model, allCols [][]keybind.Binding, maxW int) []su
 	return pages
 }
 
-// HelpContext defines the two contextual help panels.
-type HelpContext struct {
-	ScreenName string // e.g., "Main Menu" — used in the title bar: "Help: Main Menu"
-	PageTitle  string // title for the page context box (e.g. "Description")
-	PageText   string // body text for the page context box
-	Legend     string // multi-line legend (newline-separated); rendered centered at the bottom of each page in its own "Legend" box
-	ItemTitle  string // e.g., variable name or menu item Tag
-	ItemText   string
-
-	DocMarkdown string // Markdown documentation content
-	DocAppName  string // Name of the application for the documentation
-}
-
-// HelpContextProvider is implemented by models that can provide structured help content.
-type HelpContextProvider interface {
-	HelpContext(maxWidth int) HelpContext
-}
-
-// HelpContextWidth returns the content width the help dialog will use for word-wrapping,
-// given the current terminal dimensions. Mirrors the calculation in showHelpCmd.
-func HelpContextWidth(termW, termH int) int {
-	availW, _ := GetAvailableDialogSize(termW, termH, true)
-	w := availW - 8
-	if w < 30 {
-		w = 30
-	}
-	if w > 120 {
-		w = 120
-	}
-	return w
-}
-
-// TitleBarRefreshMsg is dispatched when the [↺] title bar widget is activated.
-// Screens that support refresh should handle this message.
-type TitleBarRefreshMsg struct{}
-
-// TriggerHelpMsg is a message that tells the app to open the help dialog.
-type TriggerHelpMsg struct {
-	CapturedContext *HelpContext
-	// ScreenLevelOnly strips item-specific fields so help shows screen/page context only.
-	// Used when [?] is activated from the title bar widget.
-	ScreenLevelOnly bool
-}
-
-// HelpContext contains both page-level and item-level help information.
-// It integrates with AppModel via ShowDialogMsg/CloseDialogMsg.
+// displayengine.HelpContext contains both page-level and item-level help information.
+// It integrates with AppModel via displayengine.ShowDialogMsg/displayengine.CloseDialogMsg.
 type HelpDialogModel struct {
 	help   help.Model
 	width  int
@@ -107,8 +64,8 @@ type HelpDialogModel struct {
 	focused bool // tracks global focus
 
 	keyMap        help.KeyMap
-	contextInfo   HelpContext // structured help info
-	contextOffset int         // scroll offset for item context text
+	contextInfo   displayengine.HelpContext // structured help info
+	contextOffset int                       // scroll offset for item context text
 
 	// Paged mode: cycles through context page and/or multiple binding column pages.
 	paged        bool
@@ -117,14 +74,14 @@ type HelpDialogModel struct {
 	numPages     int // total pages; set each ViewString call, used by Update
 
 	// Unified layout (deterministic sizing)
-	layout DialogLayout
+	layout displayengine.DialogLayout
 
 	// Markdown cache
 	renderedMarkdown      string
 	renderedMarkdownWidth int
 
-	// Scrollbar component
-	Scroll Scrollbar
+	// displayengine.Scrollbar component
+	Scroll displayengine.Scrollbar
 
 	// Geometry cache for hit regions (set by ViewString)
 	lastDocBoxX int
@@ -134,20 +91,20 @@ type HelpDialogModel struct {
 }
 
 func NewHelpDialogModel() *HelpDialogModel {
-	return NewHelpDialogModelWithMap(Keys)
+	return NewHelpDialogModelWithMap(displayengine.Keys)
 }
 
 func NewHelpDialogModelWithMap(km help.KeyMap) *HelpDialogModel {
-	return NewHelpDialogWithContext(km, HelpContext{})
+	return NewHelpDialogWithContext(km, displayengine.HelpContext{})
 }
 
 // NewHelpDialogWithContext creates a help dialog that shows contextInfo
 // (e.g. current variable info) above the standard key bindings.
-// Pass an empty HelpContext to show only the key bindings.
-func NewHelpDialogWithContext(km help.KeyMap, info HelpContext) *HelpDialogModel {
+// Pass an empty displayengine.HelpContext to show only the key bindings.
+func NewHelpDialogWithContext(km help.KeyMap, info displayengine.HelpContext) *HelpDialogModel {
 	h := help.New()
 	h.ShowAll = true
-	return &HelpDialogModel{help: h, focused: true, keyMap: km, contextInfo: info, Scroll: Scrollbar{ID: "help-dialog"}}
+	return &HelpDialogModel{help: h, focused: true, keyMap: km, contextInfo: info, Scroll: displayengine.Scrollbar{ID: "help-dialog"}}
 }
 
 func (m *HelpDialogModel) Init() tea.Cmd { return nil }
@@ -179,7 +136,7 @@ func (m *HelpDialogModel) docInfo() (total int, visible int) {
 	}
 
 	// Calculate target width for help content exactly matching ViewString.
-	availW, availH := GetAvailableDialogSize(m.width, m.height, true)
+	availW, availH := displayengine.GetAvailableDialogSize(m.width, m.height, true)
 	if availW < 30 {
 		availW = 30
 	}
@@ -219,7 +176,7 @@ func (m *HelpDialogModel) calculateLayout() {
 	// Overhead for Help: Halo (2) + Bordered Dialog (2) = 4
 	overhead := 4
 
-	m.layout = DialogLayout{
+	m.layout = displayengine.DialogLayout{
 		Width:    0, // content-driven
 		Height:   0, // content-driven
 		Overhead: overhead,
