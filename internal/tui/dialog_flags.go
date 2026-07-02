@@ -8,9 +8,13 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// FlagsToggleDialog is the dialog for toggling global application flags
+// FlagsToggleDialog is the dialog for toggling global application flags.
+// Built as an outer container MenuModel (title, buttons) with the checkbox
+// list as a single submenu-mode content section, matching the pattern used
+// by Main Menu/Config Menu/Options Menu/Config Apps Menu.
 type FlagsToggleDialog struct {
-	menu *MenuModel
+	outer *MenuModel
+	list  *MenuModel
 }
 
 type TriggerApplyFlagsMsg struct{}
@@ -61,32 +65,52 @@ func NewFlagsToggleDialog() *FlagsToggleDialog {
 		return items[i].Tag < items[j].Tag
 	})
 
-	menu := NewMenuModel("global_flags", "Application Flags", "Toggle runtime flags", items)
-	menu.SetCheckboxMode(true) // Use the standard checkbox mode like app_selection.go
-	menu.SetMaximized(false)   // Ensure it is NOT maximized
-	menu.SetIsDialog(true)     // Mark this menu as a modal dialog so it elevates ZOrder
-	menu.SetDialogType(DialogTypeConfirm)
-	menu.SetButtons([]ButtonDef{
-		{Label: "Done", ZoneID: "btn-select", Help: "Apply flag changes and close."},
+	// IDListPanel (not e.g. "global_flags") deliberately avoids being a
+	// substring of the outer's own id ("global_flags_outer") -- MatchesID
+	// uses strings.Contains, so a section id that's a prefix of the outer's
+	// id would incorrectly claim hits meant for the outer (e.g. its Done/
+	// Cancel button clicks), which never reach the outer's own button-click
+	// switch as a result. Matches the id convention every other migrated
+	// section-owning screen already uses for its inner list.
+	list := NewMenuModel(IDListPanel, "", "", items)
+	list.SetCheckboxMode(true) // Use the standard checkbox mode like app_selection.go
+	list.SetSubMenuMode(true)
+	list.SetVariableHeight(false)
+	list.SetIsDialog(false)
+	list.SetButtons([]ButtonDef{})
+	list.SetMaximized(true)
+	// viewWithSections already wraps every content section in its own
+	// ContentSideMargin padding; suppress the section's own internal left
+	// margin to avoid doubling up (matches the convention used by every
+	// other migrated section-owning screen).
+	list.SetNoLeftMargin(true)
+
+	outer := NewMenuModel("global_flags_outer", "Application Flags", "", nil)
+	outer.SetMaximized(false) // Ensure it is NOT maximized -- grow to fit, matching original behavior
+	outer.SetIsDialog(true)   // Mark this menu as a modal dialog so it elevates ZOrder
+	outer.SetDialogType(DialogTypeConfirm)
+	outer.SetShowButtons(true)
+	outer.SetButtons([]ButtonDef{
+		{Label: "Done", ZoneID: "btn-select", Action: func() tea.Msg { return TriggerApplyFlagsMsg{} }, Help: "Apply flag changes and close."},
 		{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return CloseDialogMsg{} }, Help: "Close without applying."},
 	})
+	outer.SetEscAction(CloseDialog())
+	outer.AddContentSection(NewPlainTextSection("global_flags_subtitle", "Toggle runtime flags"))
+	outer.AddContentSection(list)
 
-	menu.SetEnterAction(func() tea.Msg { return TriggerApplyFlagsMsg{} })
-	menu.SetEscAction(CloseDialog())
-
-	return &FlagsToggleDialog{menu: menu}
+	return &FlagsToggleDialog{outer: outer, list: list}
 }
 
 // Init implements tea.Model
 func (d *FlagsToggleDialog) Init() tea.Cmd {
-	return d.menu.Init()
+	return d.outer.Init()
 }
 
 // Update implements tea.Model
 func (d *FlagsToggleDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg.(type) {
 	case TriggerApplyFlagsMsg:
-		for _, it := range d.menu.GetItems() {
+		for _, it := range d.list.GetItems() {
 			switch it.Tag {
 			case "VERBOSE":
 				console.SetVerbose(it.Selected)
@@ -106,10 +130,18 @@ func (d *FlagsToggleDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	var cmd tea.Cmd
-	var newMenu tea.Model
-	newMenu, cmd = d.menu.Update(msg)
-	if menu, ok := newMenu.(*MenuModel); ok {
-		d.menu = menu
+	var newOuter tea.Model
+	newOuter, cmd = d.outer.Update(msg)
+	if outer, ok := newOuter.(*MenuModel); ok {
+		d.outer = outer
+	}
+	// Sync d.list from outer's content sections so GetItems() in
+	// TriggerApplyFlagsMsg above reflects the latest checkbox state.
+	secs := d.outer.GetContentSections()
+	if len(secs) >= 2 {
+		if mm, ok := secs[1].(*MenuModel); ok {
+			d.list = mm
+		}
 	}
 
 	return d, cmd
@@ -117,12 +149,12 @@ func (d *FlagsToggleDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View implements tea.Model
 func (d *FlagsToggleDialog) View() tea.View {
-	return d.menu.View()
+	return d.outer.View()
 }
 
 // ViewString implements ViewStringer for overlay compositing
 func (d *FlagsToggleDialog) ViewString() string {
-	return d.menu.ViewString()
+	return d.outer.ViewString()
 }
 
 // SetSize implements sizing
@@ -130,35 +162,35 @@ func (d *FlagsToggleDialog) SetSize(width, height int) {
 	if width > 60 {
 		width = 60
 	}
-	d.menu.SetSize(width, height)
+	d.outer.SetSize(width, height)
 }
 
 // IsMaximized lets the AppModel know its size state
 func (d *FlagsToggleDialog) IsMaximized() bool {
-	return d.menu.IsMaximized()
+	return d.outer.IsMaximized()
 }
 
 // SetFocused propagates focus state
 func (d *FlagsToggleDialog) SetFocused(f bool) {
-	d.menu.SetFocused(f)
+	d.outer.SetFocused(f)
 }
 
 // Layers implements LayeredView for compositing
 func (d *FlagsToggleDialog) Layers() []*lipgloss.Layer {
-	return d.menu.Layers()
+	return d.outer.Layers()
 }
 
 // GetHitRegions implements HitRegionProvider for mouse hit testing
 func (d *FlagsToggleDialog) GetHitRegions(offsetX, offsetY int) []HitRegion {
-	return d.menu.GetHitRegions(offsetX, offsetY)
+	return d.outer.GetHitRegions(offsetX, offsetY)
 }
 
 // IsScrollbarDragging contributes to the sbDragger interface for mouse motion forwarding
 func (d *FlagsToggleDialog) IsScrollbarDragging() bool {
-	return d.menu.IsScrollbarDragging()
+	return d.outer.IsScrollbarDragging()
 }
 
 // HelpText returns help info
 func (d *FlagsToggleDialog) HelpText() string {
-	return d.menu.HelpText()
+	return d.outer.HelpText()
 }

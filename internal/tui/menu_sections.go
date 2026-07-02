@@ -470,10 +470,17 @@ func (m *MenuModel) SectionNaturalWidth(maxWidth int) int {
 	if m.flowMode || m.contentRenderer != nil {
 		return maxWidth
 	}
+	layout := GetLayout()
 	maxTagLen, maxDescLen := calculateMaxTagAndDescLength(m.items)
 	// Width = tag + spacing(2) + desc + margins(2) + buffer(4), same formula
-	// as menu_update.go's calculateLayout.
+	// as menu_update.go's calculateLayout -- plus the checkbox glyph prefix
+	// (e.g. "[ ] ") when in checkbox mode, which the render path
+	// (menu_render_list.go's menuPrefixWidth) adds but this formula's
+	// tag/desc-only measurement doesn't otherwise account for.
 	natural := maxTagLen + 2 + maxDescLen + 2 + 4
+	if m.checkboxMode {
+		natural += layout.CheckboxWidth()
+	}
 	if natural > maxWidth {
 		natural = maxWidth
 	}
@@ -494,7 +501,10 @@ func (m *MenuModel) calculateSectionLayout() {
 	// given max available width, then re-derive contentWidth/sectionWidth
 	// from the (possibly shrunk) m.width below as normal.
 	if !m.maximized {
-		const minSectionWidth = 30
+		// Matches the plain-list path's own minWidth (menu_update.go's
+		// calculateLayout) so a sectioned dialog's minimum width is
+		// consistent with the un-sectioned convention it's replacing.
+		const minSectionWidth = 34
 		maxAvailable := m.width - layout.BorderWidth() - layout.ContentMarginWidth()
 		if maxAvailable < 1 {
 			maxAvailable = 1

@@ -81,6 +81,14 @@ func (m *BackdropModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.header.GetFocus() != prevFocus {
 			m.invalidateCache()
 		}
+		// RefreshHeaderMsg (e.g. after the Global Flags dialog applies changes
+		// via SyncFlags) updates the header's underlying data but doesn't
+		// change focus -- without this, the stale cachedHeader string keeps
+		// rendering until some unrelated event (focus change, resize, theme
+		// change) happens to invalidate the cache for a different reason.
+		if _, ok := msg.(RefreshHeaderMsg); ok {
+			m.invalidateCache()
+		}
 		return m, cmd
 	}
 	return m, nil
