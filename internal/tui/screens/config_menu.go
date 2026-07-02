@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/version"
 
@@ -13,7 +14,7 @@ import (
 // as a single submenu-mode content section, matching the pattern used by
 // Main Menu and other multi-section screens.
 func NewConfigMenuScreen(isRoot bool, connType string) tui.ScreenModel {
-	items := []tui.MenuItem{
+	items := []displayengine.MenuItem{
 		{
 			Tag:           "Full Setup",
 			Desc:          "Run complete setup wizard",
@@ -64,7 +65,7 @@ func NewConfigMenuScreen(isRoot bool, connType string) tui.ScreenModel {
 		},
 	}
 
-	list := tui.NewMenuModel(tui.IDListPanel, "", "", items)
+	list := displayengine.NewMenuModel(displayengine.IDListPanel, "", "", items)
 	list.SetMenuName("")
 	list.SetConnType(connType)
 	list.SetHelpPageText("Docker and " + version.ApplicationName + " configuration tasks. Run the full setup wizard, edit environment variables, enable or disable applications, and manage your running containers.")
@@ -72,7 +73,7 @@ func NewConfigMenuScreen(isRoot bool, connType string) tui.ScreenModel {
 	list.SetSubMenuMode(true)
 	list.SetVariableHeight(false)
 	list.SetIsDialog(false)
-	list.SetButtons([]tui.ButtonDef{})
+	list.SetButtons([]displayengine.ButtonDef{})
 	list.SetMaximized(true)
 	// viewWithSections already wraps every content section in its own
 	// ContentSideMargin padding; suppress the section's own internal left
@@ -80,7 +81,7 @@ func NewConfigMenuScreen(isRoot bool, connType string) tui.ScreenModel {
 	// convention for sections nested inside an outer sectioned dialog).
 	list.SetNoLeftMargin(true)
 
-	outer := tui.NewMenuModel("config_menu_outer", "Configuration", "", nil)
+	outer := displayengine.NewMenuModel("config_menu_outer", "Configuration", "", nil)
 	outer.SetShowButtons(true)
 	selectAction := func() tea.Msg {
 		item := list.SelectedItem()
@@ -89,15 +90,15 @@ func NewConfigMenuScreen(isRoot bool, connType string) tui.ScreenModel {
 		}
 		return nil
 	}
-	buttons := []tui.ButtonDef{
+	buttons := []displayengine.ButtonDef{
 		{Label: "Select", ZoneID: "btn-select", Action: selectAction, Help: "Confirm and execute the selected action."},
 	}
 	if !isRoot {
-		buttons = append(buttons, tui.ButtonDef{Label: "Back", ZoneID: "btn-back", Action: navigateBack(), Help: "Return to the previous screen."})
+		buttons = append(buttons, displayengine.ButtonDef{Label: "Back", ZoneID: "btn-back", Action: navigateBack(), Help: "Return to the previous screen."})
 	}
-	buttons = append(buttons, tui.ButtonDef{Label: "Exit", ZoneID: "btn-exit", Action: tui.ConfirmExitAction(), Help: "Exit the application."})
+	buttons = append(buttons, displayengine.ButtonDef{Label: "Exit", ZoneID: "btn-exit", Action: tui.ConfirmExitAction(), Help: "Exit the application."})
 	outer.SetButtons(buttons)
-	outer.AddContentSection(tui.NewPlainTextSection("config_menu_subtitle", "Select a configuration task"))
+	outer.AddContentSection(displayengine.NewPlainTextSection("config_menu_subtitle", "Select a configuration task"))
 	outer.AddContentSection(list)
 
 	return outer

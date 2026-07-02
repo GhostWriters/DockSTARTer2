@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/version"
 
@@ -13,7 +14,7 @@ import (
 // multi-section screens like DisplayOptionsScreen -- see the Content/
 // ContentRow migration plan for why a MenuModel can't be its own section.
 func NewMainMenuScreen(connType string) tui.ScreenModel {
-	items := []tui.MenuItem{
+	items := []displayengine.MenuItem{
 		{
 			Tag:    "Configuration",
 			Desc:   "Setup and start applications",
@@ -35,7 +36,7 @@ func NewMainMenuScreen(connType string) tui.ScreenModel {
 		},
 	}
 
-	list := tui.NewMenuModel(tui.IDListPanel, "", "", items)
+	list := displayengine.NewMenuModel(displayengine.IDListPanel, "", "", items)
 	list.SetMenuName("")
 	list.SetConnType(connType)
 	list.SetHelpPageText("The main navigation menu for " + version.ApplicationName + ". Select an action to configure your Docker application stack, apply updates, or adjust settings.")
@@ -43,7 +44,7 @@ func NewMainMenuScreen(connType string) tui.ScreenModel {
 	list.SetSubMenuMode(true)
 	list.SetVariableHeight(false)
 	list.SetIsDialog(false)
-	list.SetButtons([]tui.ButtonDef{})
+	list.SetButtons([]displayengine.ButtonDef{})
 	list.SetMaximized(true)
 	// viewWithSections already wraps every content section in its own
 	// ContentSideMargin padding, so the section's own internal left margin
@@ -53,19 +54,19 @@ func NewMainMenuScreen(connType string) tui.ScreenModel {
 	// sections nested inside an outer sectioned dialog.
 	list.SetNoLeftMargin(true)
 
-	outer := tui.NewMenuModel("main_menu_outer", "Main Menu", "", nil)
+	outer := displayengine.NewMenuModel("main_menu_outer", "Main Menu", "", nil)
 	outer.SetShowButtons(true)
-	outer.SetButtons([]tui.ButtonDef{
-		{Label: "Select", ZoneID: tui.IDApplyButton, Action: func() tea.Msg {
+	outer.SetButtons([]displayengine.ButtonDef{
+		{Label: "Select", ZoneID: displayengine.IDApplyButton, Action: func() tea.Msg {
 			item := list.SelectedItem()
 			if item.Action != nil {
 				return item.Action()
 			}
 			return nil
 		}, Help: "Execute the selected action."},
-		{Label: "Exit", ZoneID: tui.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
+		{Label: "Exit", ZoneID: displayengine.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
 	})
-	outer.AddContentSection(tui.NewPlainTextSection("main_menu_subtitle", "What would you like to do?"))
+	outer.AddContentSection(displayengine.NewPlainTextSection("main_menu_subtitle", "What would you like to do?"))
 	outer.AddContentSection(list)
 
 	return outer

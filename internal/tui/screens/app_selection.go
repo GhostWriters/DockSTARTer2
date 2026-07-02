@@ -7,6 +7,7 @@ import (
 
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/tui/glyphs"
 
@@ -16,7 +17,7 @@ import (
 )
 
 func getAppSelectionLegend() string {
-	ctx := tui.GetActiveContext()
+	ctx := displayengine.GetActiveContext()
 	l, r := ">", "<"
 	cbChecked, cbUnchecked := "[{{|TagFocused|}}x{{[-]}}]", "[{{|TagFocused|}} {{[-]}}]"
 	if ctx.LineCharacters {
@@ -50,7 +51,7 @@ func getAppSelectionLegend() string {
 
 // AppSelectionScreen wraps MenuModel to provide a custom Legend help panel.
 type AppSelectionScreen struct {
-	menu *tui.MenuModel
+	menu *displayengine.MenuModel
 	conf config.AppConfig
 
 	// ready gates rendering — false until the 250ms reveal delay fires or load completes.
@@ -63,9 +64,9 @@ type AppSelectionScreen struct {
 	editContent             string
 	editError               string
 	isRenaming              bool
-	renamingOriginal        tui.MenuItem
+	renamingOriginal        displayengine.MenuItem
 	convertedFromSimple     bool
-	convertedSimpleOriginal tui.MenuItem
+	convertedSimpleOriginal displayengine.MenuItem
 	connType                string
 }
 
@@ -83,9 +84,9 @@ func (s *AppSelectionScreen) IsMaximized() bool         { return s.menu.IsMaximi
 func (s *AppSelectionScreen) MinHeight() int            { return s.menu.MinHeight() }
 func (s *AppSelectionScreen) HasDialog() bool           { return s.menu.HasDialog() }
 func (s *AppSelectionScreen) MenuName() string          { return s.menu.MenuName() }
-func (s *AppSelectionScreen) IsDestructive() bool { return true }
-func (s *AppSelectionScreen) IsLoading() bool     { return !s.ready }
-func (s *AppSelectionScreen) GetHitRegions(x, y int) []tui.HitRegion {
+func (s *AppSelectionScreen) IsDestructive() bool       { return true }
+func (s *AppSelectionScreen) IsLoading() bool           { return !s.ready }
+func (s *AppSelectionScreen) GetHitRegions(x, y int) []displayengine.HitRegion {
 	return s.menu.GetHitRegions(x, y)
 }
 func (s *AppSelectionScreen) IsScrollbarDragging() bool { return s.menu.IsScrollbarDragging() }
@@ -120,43 +121,43 @@ func (s *AppSelectionScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// ? / F1 (help), and mouse hits (for focus restoration and Back/Exit/Help widgets).
 	if !s.ready {
 		if kMsg, ok := msg.(tea.KeyPressMsg); ok {
-			if key.Matches(kMsg, tui.Keys.Esc) {
+			if key.Matches(kMsg, displayengine.Keys.Esc) {
 				return s, s.menu.EscapeAction()
 			}
-			if key.Matches(kMsg, tui.Keys.Help) ||
-				key.Matches(kMsg, tui.Keys.Left) ||
-				key.Matches(kMsg, tui.Keys.Right) ||
-				key.Matches(kMsg, tui.Keys.Enter) ||
-				key.Matches(kMsg, tui.Keys.FocusPanelTitle) {
+			if key.Matches(kMsg, displayengine.Keys.Help) ||
+				key.Matches(kMsg, displayengine.Keys.Left) ||
+				key.Matches(kMsg, displayengine.Keys.Right) ||
+				key.Matches(kMsg, displayengine.Keys.Enter) ||
+				key.Matches(kMsg, displayengine.Keys.FocusPanelTitle) {
 				m, cmd := s.menu.Update(msg)
-				if mm, ok := m.(*tui.MenuModel); ok {
+				if mm, ok := m.(*displayengine.MenuModel); ok {
 					s.menu = mm
 				}
 				return s, cmd
 			}
 			return s, nil
 		}
-		if _, ok := msg.(tui.ToggleFocusedMsg); ok {
+		if _, ok := msg.(displayengine.ToggleFocusedMsg); ok {
 			return s, nil
 		}
 		m, cmd := s.menu.Update(msg)
-		if mm, ok := m.(*tui.MenuModel); ok {
+		if mm, ok := m.(*displayengine.MenuModel); ok {
 			s.menu = mm
 		}
 		return s, cmd
 	}
 	m, cmd := s.menu.Update(msg)
-	if mm, ok := m.(*tui.MenuModel); ok {
+	if mm, ok := m.(*displayengine.MenuModel); ok {
 		s.menu = mm
 	}
 	return s, cmd
 }
 
-func (s *AppSelectionScreen) HelpContext(maxWidth int) tui.HelpContext {
+func (s *AppSelectionScreen) HelpContext(maxWidth int) displayengine.HelpContext {
 	return s.menu.HelpContext(maxWidth)
 }
 
-func (s *AppSelectionScreen) isSubRow(it tui.MenuItem) bool {
+func (s *AppSelectionScreen) isSubRow(it displayengine.MenuItem) bool {
 	return it.IsSubItem || it.IsAddInstance || it.IsEditing
 }
 
@@ -184,7 +185,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool, connType string) 
 		}
 	}
 
-	menu := tui.NewMenuModel(
+	menu := displayengine.NewMenuModel(
 		"app-select",
 		"Select Applications",
 		"{{[-]}}Choose which apps you would like to install:\nUse {{|KeyCap|}}[up]{{[-]}}/{{|KeyCap|}}[down]{{[-]}} and {{|KeyCap|}}[space]{{[-]}} to select; {{|KeyCap|}}[ctrl+←/→]{{[-]}} to move between Add/Enable columns.",
@@ -195,7 +196,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool, connType string) 
 	menu.SetMenuName("app-select")
 	menu.SetConnType(connType)
 	menu.SetHelpItemPrefix("App")
-	menu.SetItemHelpFunc(func(item tui.MenuItem) (itemTitle, itemText string) {
+	menu.SetItemHelpFunc(func(item displayengine.MenuItem) (itemTitle, itemText string) {
 		if item.BaseApp == "" || item.IsSeparator {
 			return "", ""
 		}
@@ -216,9 +217,9 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool, connType string) 
 		if len(parts) == 0 {
 			return "", ""
 		}
-		return tui.GetPlainText(item.Tag), strings.Join(parts, "\n\n")
+		return displayengine.GetPlainText(item.Tag), strings.Join(parts, "\n\n")
 	})
-	menu.SetItemDocFunc(func(item tui.MenuItem) (docMarkdown, docAppName string) {
+	menu.SetItemDocFunc(func(item displayengine.MenuItem) (docMarkdown, docAppName string) {
 		if item.BaseApp == "" || item.IsSeparator {
 			return "", ""
 		}
@@ -229,13 +230,13 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool, connType string) 
 		return doc, item.Tag
 	})
 	if backAction != nil {
-		menu.SetButtons([]tui.ButtonDef{
+		menu.SetButtons([]displayengine.ButtonDef{
 			{Label: "Done", ZoneID: "btn-select", Help: "Confirm and execute the selected action."},
 			{Label: "Back", ZoneID: "btn-back", Action: backAction, Help: "Return to the previous screen."},
 			{Label: "Exit", ZoneID: "btn-exit", Action: tui.ConfirmExitAction(), Help: "Exit the application."},
 		})
 	} else {
-		menu.SetButtons([]tui.ButtonDef{
+		menu.SetButtons([]displayengine.ButtonDef{
 			{Label: "Done", ZoneID: "btn-select", Help: "Confirm and execute the selected action."},
 			{Label: "Exit", ZoneID: "btn-exit", Action: tui.ConfirmExitAction(), Help: "Exit the application."},
 		})
@@ -246,7 +247,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool, connType string) 
 	menu.SetSubMenuMode(false)
 	menu.SetShowLockGutter(false)
 	menu.SetActivityGutterWidth(2)
-	menu.SetFocusedItem(tui.FocusBtn)
+	menu.SetFocusedItem(displayengine.FocusBtn)
 
 	menu.SetEnterAction(func() tea.Msg {
 		return s.handleSave()
@@ -280,7 +281,7 @@ func (s *AppSelectionScreen) toggleItem(idx int) {
 	col := s.menu.ActiveColumn()
 
 	switch col {
-	case tui.ColAdd:
+	case displayengine.ColAdd:
 		item.Checked = !item.Checked
 		if item.Checked {
 			item.Enabled = true // Auto-enable when adding
@@ -288,7 +289,7 @@ func (s *AppSelectionScreen) toggleItem(idx int) {
 			item.Enabled = false // Auto-disable when removing
 		}
 		item.ShowEnabledGutter = item.Checked
-	case tui.ColEnable:
+	case displayengine.ColEnable:
 		item.Enabled = !item.Enabled
 		if item.Enabled {
 			item.Checked = true // Auto-add if user enables
@@ -309,7 +310,7 @@ func (s *AppSelectionScreen) toggleItem(idx int) {
 	s.menu.SetItems(items)
 }
 
-func (s *AppSelectionScreen) navUp(m *tui.MenuModel, items []tui.MenuItem, idx int, item tui.MenuItem) {
+func (s *AppSelectionScreen) navUp(m *displayengine.MenuModel, items []displayengine.MenuItem, idx int, item displayengine.MenuItem) {
 	if idx <= 0 {
 		return
 	}
@@ -344,7 +345,7 @@ func (s *AppSelectionScreen) navUp(m *tui.MenuModel, items []tui.MenuItem, idx i
 	}
 }
 
-func (s *AppSelectionScreen) navDown(m *tui.MenuModel, items []tui.MenuItem, idx int, item tui.MenuItem) {
+func (s *AppSelectionScreen) navDown(m *displayengine.MenuModel, items []displayengine.MenuItem, idx int, item displayengine.MenuItem) {
 	if idx >= len(items)-1 {
 		return
 	}
@@ -375,7 +376,7 @@ func (s *AppSelectionScreen) navDown(m *tui.MenuModel, items []tui.MenuItem, idx
 	}
 }
 
-func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (tea.Cmd, bool) {
+func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *displayengine.MenuModel) (tea.Cmd, bool) {
 	idx := m.Index()
 	items := m.GetItems()
 	if idx < 0 || idx >= len(items) {
@@ -383,12 +384,12 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 	}
 	item := items[idx]
 
-	if _, ok := msg.(tui.ToggleFocusedMsg); ok {
+	if _, ok := msg.(displayengine.ToggleFocusedMsg); ok {
 		s.toggleItem(idx)
 		return nil, true
 	}
 
-	if hitMsg, ok := msg.(tui.LayerHitMsg); ok && (hitMsg.Button == tea.MouseLeft || hitMsg.Button == tea.MouseRight) {
+	if hitMsg, ok := msg.(displayengine.LayerHitMsg); ok && (hitMsg.Button == tea.MouseLeft || hitMsg.Button == tea.MouseRight) {
 		if s.isEditing {
 			return nil, true
 		}
@@ -413,7 +414,7 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 			suffix = "border"
 		}
 
-		if idx, ok := tui.ParseMenuItemIndex(id, m.ID()); ok {
+		if idx, ok := displayengine.ParseMenuItemIndex(id, m.ID()); ok {
 			items := m.GetItems()
 			if idx < 0 || idx >= len(items) {
 				return nil, true
@@ -425,9 +426,9 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 				m.Select(idx)
 				switch suffix {
 				case "add":
-					m.SetActiveColumn(tui.ColAdd)
+					m.SetActiveColumn(displayengine.ColAdd)
 				case "enable":
-					m.SetActiveColumn(tui.ColEnable)
+					m.SetActiveColumn(displayengine.ColEnable)
 				}
 				return m.ShowContextMenu(idx, hitMsg.X, hitMsg.Y), true
 			}
@@ -455,13 +456,13 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 			// 1. Process specific region suffixes
 			switch suffix {
 			case "add":
-				m.SetActiveColumn(tui.ColAdd)
+				m.SetActiveColumn(displayengine.ColAdd)
 				if !item.IsGroupHeader {
 					s.toggleItem(idx)
 				}
 				return nil, true
 			case "enable":
-				m.SetActiveColumn(tui.ColEnable)
+				m.SetActiveColumn(displayengine.ColEnable)
 				if !item.IsGroupHeader {
 					s.toggleItem(idx)
 				}
@@ -521,7 +522,7 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 	switch wm := msg.(type) {
 	case tea.MouseWheelMsg:
 		wheelBtn = wm.Button
-	case tui.LayerWheelMsg:
+	case displayengine.LayerWheelMsg:
 		wheelBtn = wm.Button
 	}
 	if wheelBtn == tea.MouseWheelUp || wheelBtn == tea.MouseWheelDown {
@@ -571,13 +572,13 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 
 		// Use keymap bindings for keys that have alt+/ctrl+ aliases.
 		switch {
-		case key.Matches(keyMsg, tui.Keys.EnvPrevTab):
-			if s.isSubRow(item) && m.ActiveColumn() == tui.ColAdd {
+		case key.Matches(keyMsg, displayengine.Keys.EnvPrevTab):
+			if s.isSubRow(item) && m.ActiveColumn() == displayengine.ColAdd {
 				base := item.BaseApp
 				for i := idx - 1; i >= 0; i-- {
 					if items[i].BaseApp == base && items[i].IsGroupHeader {
 						m.Select(i)
-						m.SetActiveColumn(tui.ColEnable)
+						m.SetActiveColumn(displayengine.ColEnable)
 						// Collapse the group if no active named instances remain
 						if ni, ok := s.collapseGroupIfNeeded(m.GetItems(), base); ok {
 							m.SetItems(ni)
@@ -595,15 +596,15 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 					}
 				}
 			}
-			if m.ActiveColumn() == tui.ColEnable {
-				m.SetActiveColumn(tui.ColAdd)
+			if m.ActiveColumn() == displayengine.ColEnable {
+				m.SetActiveColumn(displayengine.ColAdd)
 			}
 			return nil, true
-		case key.Matches(keyMsg, tui.Keys.EnvNextTab):
-			if m.ActiveColumn() == tui.ColEnable {
+		case key.Matches(keyMsg, displayengine.Keys.EnvNextTab):
+			if m.ActiveColumn() == displayengine.ColEnable {
 				if item.IsGroupHeader {
 					m.Select(idx + 1)
-					m.SetActiveColumn(tui.ColAdd)
+					m.SetActiveColumn(displayengine.ColAdd)
 					return nil, true
 				}
 				if item.IsSubItem && !item.IsEditing {
@@ -614,12 +615,12 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 				}
 				if !item.IsSubItem && !item.IsSeparator && !item.IsEditing && item.IsCheckbox {
 					s.expandGroup(item.BaseApp)
-					m.SetActiveColumn(tui.ColAdd)
+					m.SetActiveColumn(displayengine.ColAdd)
 					return nil, true
 				}
 			}
-			if m.ActiveColumn() == tui.ColAdd {
-				m.SetActiveColumn(tui.ColEnable)
+			if m.ActiveColumn() == displayengine.ColAdd {
+				m.SetActiveColumn(displayengine.ColEnable)
 			}
 			return nil, true
 		}
@@ -749,7 +750,7 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *tui.MenuModel) (t
 	return nil, false
 }
 
-func (s *AppSelectionScreen) contextMenuHandler(idx int) []tui.ContextMenuItem {
+func (s *AppSelectionScreen) contextMenuHandler(idx int) []displayengine.ContextMenuItem {
 	items := s.menu.GetItems()
 	if idx < 0 || idx >= len(items) {
 		return nil
@@ -760,7 +761,7 @@ func (s *AppSelectionScreen) contextMenuHandler(idx int) []tui.ContextMenuItem {
 		return nil
 	}
 
-	var res []tui.ContextMenuItem
+	var res []displayengine.ContextMenuItem
 
 	// --- 1. Rename Action ---
 	canRename := false
@@ -780,7 +781,7 @@ func (s *AppSelectionScreen) contextMenuHandler(idx int) []tui.ContextMenuItem {
 		renameHelp = "Expand to rename specific instances."
 	}
 
-	res = append(res, tui.ContextMenuItem{
+	res = append(res, displayengine.ContextMenuItem{
 		Label:    "Rename Instance",
 		Help:     renameHelp,
 		Disabled: !canRename,
@@ -800,7 +801,7 @@ func (s *AppSelectionScreen) contextMenuHandler(idx int) []tui.ContextMenuItem {
 			} else {
 				s.startRenaming(idx)
 			}
-			return tui.CloseDialogMsg{}
+			return displayengine.CloseDialogMsg{}
 		},
 	})
 
@@ -810,13 +811,13 @@ func (s *AppSelectionScreen) contextMenuHandler(idx int) []tui.ContextMenuItem {
 		if item.Checked {
 			label = "Remove from List"
 		}
-		res = append(res, tui.ContextMenuItem{
+		res = append(res, displayengine.ContextMenuItem{
 			Label: label,
 			Help:  "Toggle selection state (Space).",
 			Action: func() tea.Msg {
-				s.menu.SetActiveColumn(tui.ColAdd)
+				s.menu.SetActiveColumn(displayengine.ColAdd)
 				s.toggleItem(idx)
-				return tui.CloseDialogMsg{}
+				return displayengine.CloseDialogMsg{}
 			},
 		})
 	}
@@ -827,13 +828,13 @@ func (s *AppSelectionScreen) contextMenuHandler(idx int) []tui.ContextMenuItem {
 		if item.Enabled {
 			label = "Disable Instance"
 		}
-		res = append(res, tui.ContextMenuItem{
+		res = append(res, displayengine.ContextMenuItem{
 			Label: label,
 			Help:  "Toggle enabled state (Ctrl/Alt+Right on checkbox area).",
 			Action: func() tea.Msg {
-				s.menu.SetActiveColumn(tui.ColEnable)
+				s.menu.SetActiveColumn(displayengine.ColEnable)
 				s.toggleItem(idx)
-				return tui.CloseDialogMsg{}
+				return displayengine.CloseDialogMsg{}
 			},
 		})
 	}
@@ -842,18 +843,18 @@ func (s *AppSelectionScreen) contextMenuHandler(idx int) []tui.ContextMenuItem {
 }
 
 func (s *AppSelectionScreen) ShortHelp() []key.Binding {
-	return []key.Binding{tui.Keys.Up, tui.Keys.Down, tui.Keys.Enter, tui.Keys.Esc, tui.Keys.Help}
+	return []key.Binding{displayengine.Keys.Up, displayengine.Keys.Down, displayengine.Keys.Enter, displayengine.Keys.Esc, displayengine.Keys.Help}
 }
 
 func (s *AppSelectionScreen) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{
-			tui.Keys.Help,
-			tui.Keys.Esc,
+			displayengine.Keys.Help,
+			displayengine.Keys.Esc,
 			key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter/left click", "activate button")),
 			key.NewBinding(key.WithKeys("space"), key.WithHelp("space/middle click", "toggle item")),
-			tui.Keys.MouseRight,
-			tui.Keys.ContextMenu,
+			displayengine.Keys.MouseRight,
+			displayengine.Keys.ContextMenu,
 			key.NewBinding(key.WithKeys("up"), key.WithHelp("↑/↓/scroll", "up/down")),
 			key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup/pgdn", "page up/down")),
 			key.NewBinding(key.WithKeys("home"), key.WithHelp("home/end", "top/bottom")),
@@ -861,12 +862,12 @@ func (s *AppSelectionScreen) FullHelp() [][]key.Binding {
 		{
 			key.NewBinding(key.WithKeys("left"), key.WithHelp("←/→", "previous/next button")),
 			key.NewBinding(key.WithKeys("alt+n"), key.WithHelp("alt+n/p", "next/previous element")),
-			tui.Keys.CycleTab,
-			tui.Keys.CycleShiftTab,
+			displayengine.Keys.CycleTab,
+			displayengine.Keys.CycleShiftTab,
 			key.NewBinding(key.WithKeys("f2"), key.WithHelp("F2", "edit instance name")),
-			tui.Keys.ToggleLog,
-			tui.Keys.FocusPanelTitle,
-			tui.Keys.ForceQuit,
+			displayengine.Keys.ToggleLog,
+			displayengine.Keys.FocusPanelTitle,
+			displayengine.Keys.ForceQuit,
 		},
 	}
 }

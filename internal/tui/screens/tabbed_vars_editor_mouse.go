@@ -2,6 +2,7 @@ package screens
 
 import (
 	"DockSTARTer2/internal/appenv"
+	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/version"
 	"context"
@@ -14,22 +15,22 @@ import (
 	"github.com/atotto/clipboard"
 )
 
-func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitRegion {
-	var regions []tui.HitRegion
+func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []displayengine.HitRegion {
+	var regions []displayengine.HitRegion
 
 	m.lastOffsetX = offsetX
 	m.lastOffsetY = offsetY
 
-	layout := tui.GetLayout()
+	layout := displayengine.GetLayout()
 
 	// Tabs hit regions
 	if len(m.tabs) > 0 {
-		ctx := tui.GetActiveContext()
+		ctx := displayengine.GetActiveContext()
 		// Calculate total width of all tabs to determine centering offset
 		totalTitleWidth := 0
 		var tabWidths []int
 		for _, tab := range m.tabs {
-			w := tui.WidthOfTitleSegment(tab.spec.Title, true, ctx)
+			w := displayengine.WidthOfTitleSegment(tab.spec.Title, true, ctx)
 			tabWidths = append(tabWidths, w)
 			totalTitleWidth += w
 		}
@@ -54,15 +55,15 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitReg
 		// Inner box starts at offsetX + outer border(1) + margin; tabs start after inner TopLeft corner(1).
 		tabX := offsetX + 1 + layout.ContentSideMargin + 1 + leftPad // outer border + margin + inner TopLeft + leftPad
 		for i, tabWidth := range tabWidths {
-			regions = append(regions, tui.HitRegion{
+			regions = append(regions, displayengine.HitRegion{
 				ID:     "tabbed_vars.tab-" + strconv.Itoa(i),
 				X:      tabX,
 				Y:      offsetY + 1 + m.largeTitleOverhead + m.subtitleHeight, // outer border + large title + subtitle + inner border line with tabs
 				Width:  tabWidth,
 				Height: 1,
-				ZOrder: tui.ZDialog + 10,
+				ZOrder: displayengine.ZDialog + 10,
 				Label:  m.tabs[i].spec.Title,
-				Help: &tui.HelpContext{
+				Help: &displayengine.HelpContext{
 					ScreenName: m.title,
 					ItemTitle:  m.tabs[i].spec.Title,
 					ItemText:   "Tab: " + m.tabs[i].spec.Title + ". Click to switch to this category of variables.",
@@ -74,15 +75,15 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitReg
 
 	// Editor hit region
 	// Editor content is inside nesting (outer border + margin + inner border).
-	regions = append(regions, tui.HitRegion{
+	regions = append(regions, displayengine.HitRegion{
 		ID:     "tabbed_vars.editor",
 		X:      offsetX + layout.NestedLeftOffset(),
 		Y:      offsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight,
 		Width:  m.contentWidth - layout.BorderWidth(), // inner box content width
 		Height: m.editorHeight,
-		ZOrder: tui.ZDialog + 5,
+		ZOrder: displayengine.ZDialog + 5,
 		Label:  "Variables Editor",
-		Help: &tui.HelpContext{
+		Help: &displayengine.HelpContext{
 			ScreenName: m.title,
 			PageTitle:  "Variables Editor",
 			PageText:   "Grouped environment variable editor. Right-click any row for specific options.",
@@ -93,38 +94,38 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []tui.HitReg
 	// Inner editor box bottom border = NestedTopOffset + largeTitleOverhead + subtitleHeight + editorHeight
 	// (NestedTopOffset already accounts for outer border + inner top border/tab row)
 	insOvrY := offsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight + m.editorHeight
-	regions = append(regions, tui.HitRegion{
-		ID:     "tabbed_vars." + tui.IDInsOvr,
+	regions = append(regions, displayengine.HitRegion{
+		ID:     "tabbed_vars." + displayengine.IDInsOvr,
 		X:      offsetX + layout.NestedLeftOffset() + 1, // +1 to skip the corner char
 		Y:      insOvrY,
 		Width:  3,
 		Height: 1,
-		ZOrder: tui.ZDialog + 15,
+		ZOrder: displayengine.ZDialog + 15,
 		Label:  "INS/OVR",
-		Help:   &tui.HelpContext{ScreenName: m.title, PageTitle: "Insert/Overwrite", PageText: "Toggle between insert and overwrite mode."},
+		Help:   &displayengine.HelpContext{ScreenName: m.title, PageTitle: "Insert/Overwrite", PageText: "Toggle between insert and overwrite mode."},
 	})
 
 	// Button regions (standardized width — matches m.contentWidth which is already margin-reduced)
 	btnY := m.height - m.buttonHeight - 1
-	regions = append(regions, tui.GetButtonHitRegions(
-		tui.HelpContext{
+	regions = append(regions, displayengine.GetButtonHitRegions(
+		displayengine.HelpContext{
 			ScreenName: m.title,
 			PageTitle:  "Variables Editor",
 			PageText:   "Grouped environment variable editor. Right-click any row for specific options.",
 		},
-		"tabbed_vars", offsetX+1+layout.ContentSideMargin, offsetY+btnY, m.contentWidth, tui.ZDialog+20,
+		"tabbed_vars", offsetX+1+layout.ContentSideMargin, offsetY+btnY, m.contentWidth, displayengine.ZDialog+20,
 		m.getButtonSpecs()...,
 	)...)
 
 	// Title widget regions — widgets are on the title row (row 1) for large titlebars,
 	// or on the top border (row 0) for small titlebars.
 	activeW := m.ActiveWidgets()
-	ctx := tui.GetActiveContext()
-	widgetStr := tui.BuildInactiveTitleWidgetsFor(activeW, ctx)
-	widgetWidth := lipgloss.Width(tui.GetPlainText(widgetStr))
+	ctx := displayengine.GetActiveContext()
+	widgetStr := displayengine.BuildInactiveTitleWidgetsFor(activeW, ctx)
+	widgetWidth := lipgloss.Width(displayengine.GetPlainText(widgetStr))
 	widgetsStartX := offsetX + m.width - 1 - 1 - widgetWidth
-	widgetY := tui.TitleBarWidgetY(offsetY, m.largeTitleOverhead > 0)
-	regions = append(regions, tui.TitleBarWidgetRegions("tabbed_vars", activeW, widgetsStartX, widgetY, tui.ZDialog)...)
+	widgetY := displayengine.TitleBarWidgetY(offsetY, m.largeTitleOverhead > 0)
+	regions = append(regions, displayengine.TitleBarWidgetRegions("tabbed_vars", activeW, widgetsStartX, widgetY, displayengine.ZDialog)...)
 
 	return regions
 }
@@ -139,7 +140,7 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 	tab := &m.tabs[m.activeTab]
 	editor := tab.editor
 
-	layout := tui.GetLayout()
+	layout := displayengine.GetLayout()
 	// Compute which editor row was clicked.
 	// Editor content starts at: lastOffsetY + layout.NestedTopOffset() + largeTitleOverhead + m.subtitleHeight
 	editorTopY := m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight
@@ -173,38 +174,38 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 		}
 	}
 
-	var items []tui.ContextMenuItem
+	var items []displayengine.ContextMenuItem
 
 	if isVarLine {
-		items = append(items, tui.ContextMenuItem{IsHeader: true, Label: varName})
-		items = append(items, tui.ContextMenuItem{IsSeparator: true})
+		items = append(items, displayengine.ContextMenuItem{IsHeader: true, Label: varName})
+		items = append(items, displayengine.ContextMenuItem{IsSeparator: true})
 	}
 
 	if isVarLine {
 		// Set Value ▶ (most-used — first)
-		var subItems []tui.ContextMenuItem
+		var subItems []displayengine.ContextMenuItem
 		origVn, origV := varName, currentVal
-		subItems = append(subItems, tui.ContextMenuItem{
+		subItems = append(subItems, displayengine.ContextMenuItem{
 			Label:    "Original Value",
 			SubLabel: origV,
 			Help:     "Keep the current value as-is.",
 			Action: func() tea.Msg {
-				return tui.CloseDialogMsg{Result: ApplyVarValueMsg{VarName: origVn, Value: origV}}
+				return displayengine.CloseDialogMsg{Result: ApplyVarValueMsg{VarName: origVn, Value: origV}}
 			},
 		})
 		for _, opt := range opts {
 			opt := opt
 			vn := varName
-			subItems = append(subItems, tui.ContextMenuItem{
+			subItems = append(subItems, displayengine.ContextMenuItem{
 				Label:    opt.Display,
 				SubLabel: opt.Value,
 				Help:     opt.Help,
 				Action: func() tea.Msg {
-					return tui.CloseDialogMsg{Result: ApplyVarValueMsg{VarName: vn, Value: opt.Value}}
+					return displayengine.CloseDialogMsg{Result: ApplyVarValueMsg{VarName: vn, Value: opt.Value}}
 				},
 			})
 		}
-		items = append(items, tui.ContextMenuItem{
+		items = append(items, displayengine.ContextMenuItem{
 			Label:    "Set Value",
 			Help:     "Choose or reset this variable's value.",
 			SubItems: subItems,
@@ -225,7 +226,7 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 			varHelp = vm.HelpText
 		}
 
-		items = append(items, tui.ContextMenuItem{
+		items = append(items, displayengine.ContextMenuItem{
 			Label: "Edit Value",
 			Help:  "Open the value editor for this variable.",
 			Action: func() tea.Msg {
@@ -241,7 +242,7 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 					}
 				}
 				dlg := newSetValueDialog(evVarName, evTab.niceName, evTab.description, evTab.envFilePath, evOrigVal, evOpts, varHelp, docMarkdown, docAppName, nil, nil)
-				return tui.CloseDialogMsg{Result: tui.ShowDialogMsg{Dialog: dlg}}
+				return displayengine.CloseDialogMsg{Result: displayengine.ShowDialogMsg{Dialog: dlg}}
 			},
 		})
 	}
@@ -254,7 +255,7 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 	}
 
 	// Build Clipboard Submenu items
-	var clipItems []tui.ContextMenuItem
+	var clipItems []displayengine.ContextMenuItem
 	if copyText != "" {
 		copyLabel := "Copy Value"
 		cutLabel := "Cut Value"
@@ -265,26 +266,26 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 			cutHelp = "Copy selected text to clipboard and delete the selection."
 		}
 		ct := copyText
-		clipItems = append(clipItems, tui.ContextMenuItem{
+		clipItems = append(clipItems, displayengine.ContextMenuItem{
 			Label: copyLabel,
 			Help:  "Copy to clipboard.",
 			Action: func() tea.Msg {
 				_ = clipboard.WriteAll(ct)
-				return tui.CloseDialogMsg{}
+				return displayengine.CloseDialogMsg{}
 			},
 		})
 		if isVarLine || selectedText != "" {
 			cutVarName := varName
 			hasSelection := selectedText != ""
-			clipItems = append(clipItems, tui.ContextMenuItem{
+			clipItems = append(clipItems, displayengine.ContextMenuItem{
 				Label: cutLabel,
 				Help:  cutHelp,
 				Action: func() tea.Msg {
 					_ = clipboard.WriteAll(ct)
 					if hasSelection {
-						return tui.CloseDialogMsg{}
+						return displayengine.CloseDialogMsg{}
 					}
-					return tui.CloseDialogMsg{Result: deleteVarMsg{VarName: cutVarName}}
+					return displayengine.CloseDialogMsg{Result: deleteVarMsg{VarName: cutVarName}}
 				},
 			})
 		}
@@ -292,33 +293,33 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 
 	if isVarLine {
 		vn2 := varName
-		clipItems = append(clipItems, tui.ContextMenuItem{
+		clipItems = append(clipItems, displayengine.ContextMenuItem{
 			Label: "Paste Value",
 			Help:  "Replace the entire variable value with clipboard text.",
 			Action: func() tea.Msg {
 				text, err := clipboard.ReadAll()
 				if err != nil || text == "" {
-					return tui.CloseDialogMsg{}
+					return displayengine.CloseDialogMsg{}
 				}
-				return tui.CloseDialogMsg{Result: ApplyVarValueMsg{VarName: vn2, Value: text}}
+				return displayengine.CloseDialogMsg{Result: ApplyVarValueMsg{VarName: vn2, Value: text}}
 			},
 		})
 	}
 
 	addM := m
-	items = append(items, tui.ContextMenuItem{
+	items = append(items, displayengine.ContextMenuItem{
 		Label: "Add Variable",
 		Help:  "Add a new variable to this file.",
 		Action: func() tea.Msg {
 			cmd := addM.showAddVarDialog()
 			if cmd == nil {
-				return tui.CloseDialogMsg{}
+				return displayengine.CloseDialogMsg{}
 			}
 			msg := cmd()
 			if msg == nil {
-				return tui.CloseDialogMsg{}
+				return displayengine.CloseDialogMsg{}
 			}
-			return tui.CloseDialogMsg{Result: msg}
+			return displayengine.CloseDialogMsg{Result: msg}
 		},
 	})
 
@@ -326,45 +327,45 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 	if isVarLine {
 		if meta.PendingDelete {
 			restVarName := varName
-			items = append(items, tui.ContextMenuItem{
+			items = append(items, displayengine.ContextMenuItem{
 				Label: "Restore Variable",
 				Help:  "Cancel the pending deletion of this variable (same as Ctrl+U).",
 				Action: func() tea.Msg {
-					return tui.CloseDialogMsg{Result: restoreVarMsg{VarName: restVarName}}
+					return displayengine.CloseDialogMsg{Result: restoreVarMsg{VarName: restVarName}}
 				},
 			})
 		} else {
 			delVarName := varName
-			items = append(items, tui.ContextMenuItem{
+			items = append(items, displayengine.ContextMenuItem{
 				Label: "Delete Variable",
 				Help:  "Remove this variable from the file (same as Ctrl+D).",
 				Action: func() tea.Msg {
-					return tui.CloseDialogMsg{Result: deleteVarMsg{VarName: delVarName}}
+					return displayengine.CloseDialogMsg{Result: deleteVarMsg{VarName: delVarName}}
 				},
 			})
 		}
 	}
 
 	// Refresh (separator added here; AppendContextMenuTail won't double it since Refresh is last)
-	items = append(items, tui.ContextMenuItem{IsSeparator: true})
-	items = append(items, tui.ContextMenuItem{
+	items = append(items, displayengine.ContextMenuItem{IsSeparator: true})
+	items = append(items, displayengine.ContextMenuItem{
 		Label: "Refresh",
 		Help:  "Reformat all variables based on current staged state (same as F5).",
 		Action: func() tea.Msg {
-			return tui.CloseDialogMsg{Result: envRefreshMsg{}}
+			return displayengine.CloseDialogMsg{Result: envRefreshMsg{}}
 		},
 	})
 
 	// Build captured help context for this specific variable.
 	// Use the same width calculation as showHelpCmd so pre-wrapped text matches the dialog.
-	helpW := tui.HelpContextWidth(m.width, m.height)
+	helpW := displayengine.HelpContextWidth(m.width, m.height)
 	capturedCtx := m.getVariableHelpContext(varName, tab, helpW)
 
 	// Final tail (Clipboard submenu + Help)
-	items = tui.AppendContextMenuTail(items, clipItems, capturedCtx)
+	items = displayengine.AppendContextMenuTail(items, clipItems, capturedCtx)
 
 	return func() tea.Msg {
-		return tui.ShowDialogMsg{Dialog: tui.NewContextMenuModel(x, y, m.width, m.height, items)}
+		return displayengine.ShowDialogMsg{Dialog: displayengine.NewContextMenuModel(x, y, m.width, m.height, items)}
 	}
 }
 
@@ -432,7 +433,7 @@ func (m *TabbedVarsEditorModel) showAddVarDialog() tea.Cmd {
 
 	dlg := newAddVarDialog(tab.niceName, tab.description, templates, stockItems, addAllVars, addAllDefaults)
 	return func() tea.Msg {
-		return tui.ShowDialogMsg{Dialog: dlg}
+		return displayengine.ShowDialogMsg{Dialog: dlg}
 	}
 }
 
@@ -484,6 +485,6 @@ func (m *TabbedVarsEditorModel) showSetValueDialog() tea.Cmd {
 
 	dlg := newSetValueDialog(varName, tab.niceName, tab.description, tab.envFilePath, origVal, opts, varHelp, docMarkdown, docAppName, nil, nil)
 	return func() tea.Msg {
-		return tui.ShowDialogMsg{Dialog: dlg}
+		return displayengine.ShowDialogMsg{Dialog: dlg}
 	}
 }

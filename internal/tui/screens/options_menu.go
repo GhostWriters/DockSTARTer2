@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/tui"
 
 	tea "charm.land/bubbletea/v2"
@@ -12,7 +13,7 @@ import (
 // as a single submenu-mode content section, matching the pattern used by
 // Main Menu and other multi-section screens.
 func NewOptionsMenuScreen(isRoot bool, connType string) tui.ScreenModel {
-	items := []tui.MenuItem{
+	items := []displayengine.MenuItem{
 		{
 			Tag:    "Appearance",
 			Desc:   "Themes and Display Options",
@@ -28,7 +29,7 @@ func NewOptionsMenuScreen(isRoot bool, connType string) tui.ScreenModel {
 		},
 	}
 
-	list := tui.NewMenuModel(tui.IDListPanel, "", "", items)
+	list := displayengine.NewMenuModel(displayengine.IDListPanel, "", "", items)
 	list.SetMenuName("")
 	list.SetConnType(connType)
 	list.SetHelpPageText("Application settings and preferences. Configure the visual theme, UI display options, and other tool behaviors.")
@@ -36,7 +37,7 @@ func NewOptionsMenuScreen(isRoot bool, connType string) tui.ScreenModel {
 	list.SetSubMenuMode(true)
 	list.SetVariableHeight(false)
 	list.SetIsDialog(false)
-	list.SetButtons([]tui.ButtonDef{})
+	list.SetButtons([]displayengine.ButtonDef{})
 	list.SetMaximized(true)
 	// viewWithSections already wraps every content section in its own
 	// ContentSideMargin padding; suppress the section's own internal left
@@ -44,7 +45,7 @@ func NewOptionsMenuScreen(isRoot bool, connType string) tui.ScreenModel {
 	// convention for sections nested inside an outer sectioned dialog).
 	list.SetNoLeftMargin(true)
 
-	outer := tui.NewMenuModel("options_menu_outer", "Options", "", nil)
+	outer := displayengine.NewMenuModel("options_menu_outer", "Options", "", nil)
 	selectAction := func() tea.Msg {
 		item := list.SelectedItem()
 		if item.Action != nil {
@@ -54,13 +55,13 @@ func NewOptionsMenuScreen(isRoot bool, connType string) tui.ScreenModel {
 	}
 	if !isRoot {
 		outer.SetShowButtons(true)
-		outer.SetButtons([]tui.ButtonDef{
+		outer.SetButtons([]displayengine.ButtonDef{
 			{Label: "Select", ZoneID: "btn-select", Action: selectAction, Help: "Confirm and execute the selected action."},
 			{Label: "Back", ZoneID: "btn-back", Action: navigateBack(), Help: "Return to the previous screen."},
 			{Label: "Exit", ZoneID: "btn-exit", Action: tui.ConfirmExitAction(), Help: "Exit the application."},
 		})
 	}
-	outer.AddContentSection(tui.NewPlainTextSection("options_menu_subtitle", "Customize settings"))
+	outer.AddContentSection(displayengine.NewPlainTextSection("options_menu_subtitle", "Customize settings"))
 	outer.AddContentSection(list)
 
 	return outer

@@ -1,32 +1,26 @@
 package tui
 
 import (
-	semstyle "github.com/GhostWriters/semstyle/lg"
-	"DockSTARTer2/internal/theme"
-	"strings"
 	"time"
 
+	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/tui/components/sinput"
 
-	"charm.land/bubbles/v2/key"
-	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
 
-// promptDialogModel represents a text input prompt dialog
+// promptDialogModel represents a single-line text/password input dialog.
+// Built as an outer container displayengine.MenuModel (title, buttons) with the question
+// as a plain-text section and the input as a sinput section, matching the
+// pattern used by Main Menu/Config Menu/.../Global Flags/Confirm dialog.
 type promptDialogModel struct {
-	baseDialogModel
-	title        string
-	question     string
-	input        sinput.Model
-	inputScreenX int
-	inputRelY    int // row of the input text within the dialog (for hardware cursor)
+	outer        *displayengine.MenuModel
+	inputSection *displayengine.MenuModel
+	input        *sinput.Model
 	result       string
 	confirmed    bool
 	onResult     func(string, bool) tea.Msg
-	focusedItem  FocusItem // FocusList=Input, FocusSelectBtn=OK, FocusBackBtn=Cancel
-	buttons      *ButtonRow
 }
 
 type promptResultMsg struct {
@@ -34,248 +28,182 @@ type promptResultMsg struct {
 	confirmed bool
 }
 
-// newPromptDialog creates a new text input dialog
-func newPromptDialog(title, question string, sensitive bool, initialValue ...string) *promptDialogModel {
-	ti := textinput.New()
+func newPromptDialogModel(title, question string, sensitive bool, onResult func(string, bool) tea.Msg, initialValue ...string) *promptDialogModel {
+	initial := ""
+	if len(initialValue) > 0 {
+		initial = initialValue[0]
+	}
+
+	m := &promptDialogModel{onResult: onResult}
+
+	var inputSection *displayengine.MenuModel
+	var inp *sinput.Model
 	if sensitive {
-		ti.EchoMode = textinput.EchoPassword
-		ti.EchoCharacter = '*'
+		inputSection, inp = displayengine.NewPasswordSinputSection("prompt_dialog_input", "", initial)
+	} else {
+		inputSection, inp = displayengine.NewSinputSection("prompt_dialog_input", "", initial)
 	}
-	ti.Focus()
-	ti.CharLimit = 156
-	if len(initialValue) > 0 && initialValue[0] != "" {
-		ti.SetValue(initialValue[0])
-		ti.CursorEnd()
+	m.inputSection = inputSection
+	m.input = inp
+
+	// Keep the INS/OVR bottom-border label live across every keystroke/click
+	// by wrapping the section's existing interceptor (already wired by
+	// displayengine.NewSinputSection for typing/click/drag/paste/context-menu) rather than
+	// replacing it.
+	prevInterceptor := inputSection.Interceptor
+	updateInsOvrLabel := func() {
+		label := "INS"
+		if (*inp).IsOverwrite() {
+			label = "OVR"
+		}
+		inputSection.SetBottomBorderLabel(label)
+	}
+	inputSection.SetUpdateInterceptor(func(msg tea.Msg, menu *displayengine.MenuModel) (tea.Cmd, bool) {
+		cmd, handled := prevInterceptor(msg, menu)
+		updateInsOvrLabel()
+		return cmd, handled
+	})
+	updateInsOvrLabel()
+
+	outer := displayengine.NewMenuModel("prompt_dialog", title, "", nil)
+	outer.SetMaximized(false)
+	outer.SetIsDialog(true)
+	outer.SetDialogType(displayengine.DialogTypeConfirm)
+	outer.SetShowButtons(true)
+	outer.SetButtons([]displayengine.ButtonDef{
+		{Label: "OK", ZoneID: "btn-select", Action: func() tea.Msg {
+			m.result = (*inp).Value()
+			m.confirmed = true
+			return m.onResult(m.result, true)
+		}, Help: "Confirm."},
+		{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg {
+			return m.onResult("", false)
+		}, Help: "Cancel."},
+	})
+
+	questionSection := displayengine.NewPlainTextSection("prompt_dialog_question", question)
+	questionSection.SetPlainTextStyle("", 1)
+	outer.AddContentSection(questionSection)
+	outer.AddContentSection(inputSection)
+	if sensitive {
+		disclaimer := displayengine.NewPlainTextSection("prompt_dialog_disclaimer", "(password will not be logged)")
+		disclaimer.SetPlainTextStyle("{{|Highlight|}}", 0)
+		outer.AddContentSection(disclaimer)
 	}
 
-	// Apply theme-consistent styles to the textinput, inheriting the dialog background
-	styles := GetStyles()
-	bg := styles.Dialog.GetBackground()
-	tiStyles := textinput.DefaultStyles(true)
-	tiStyles.Focused.Prompt = styles.ItemNormal.Background(bg)
-	tiStyles.Focused.Text = styles.ItemNormal.Background(bg)
-	tiStyles.Blurred.Prompt = styles.ItemNormal.Background(bg)
-	tiStyles.Blurred.Text = styles.ItemNormal.Background(bg)
-	tiStyles.Cursor.Color = TextCursorColor()
-	ti.SetStyles(tiStyles)
-
-	m := &promptDialogModel{
-		baseDialogModel: baseDialogModel{id: "prompt_dialog", focused: true},
-		title:           title,
-		question:        question,
-		input:           sinput.New(ti),
-		focusedItem:     FocusList,
-		onResult: func(res string, val bool) tea.Msg {
-			return CloseDialogMsg{Result: promptResultMsg{result: res, confirmed: val}}
-		},
-		buttons: NewButtonRow([]ButtonDef{{Label: "OK", ZoneID: "OK"}, {Label: "Cancel", ZoneID: "Cancel"}}),
-	}
+	m.outer = outer
 	return m
 }
 
+// newPromptDialog creates a new text input dialog
+func newPromptDialog(title, question string, sensitive bool, initialValue ...string) *promptDialogModel {
+	return newPromptDialogModel(title, question, sensitive, func(res string, confirmed bool) tea.Msg {
+		return displayengine.CloseDialogMsg{Result: promptResultMsg{result: res, confirmed: confirmed}}
+	}, initialValue...)
+}
+
+// Init implements tea.Model
 func (m *promptDialogModel) Init() tea.Cmd {
-	return sinput.Blink
+	return tea.Batch(m.outer.Init(), sinput.Blink)
 }
 
+// Update implements tea.Model
 func (m *promptDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if tickCmd, ok := m.buttons.Update(msg); ok {
-		return m, tickCmd
+	newOuter, cmd := m.outer.Update(msg)
+	if outer, ok := newOuter.(*displayengine.MenuModel); ok {
+		m.outer = outer
 	}
-
-	var cmd tea.Cmd
-	var cmds []tea.Cmd
-
-	closeWithResult := func(val string, confirmed bool) tea.Cmd {
-		return func() tea.Msg { return m.onResult(val, confirmed) }
-	}
-
-	if m.HandleWidgetClearPress(msg) {
-		return m, nil
-	}
-
-	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-		m.calculateLayout()
-		return m, nil
-
-	case tea.KeyPressMsg:
-		if handled, cmd := m.handleTitleBarKey(msg, nil); handled {
-			m.focusedItem = FocusBackBtn
-			return m, tea.Batch(cmd, m.buttons.SetProcessing("Cancel", closeWithResult("", false)))
-		}
-		switch {
-		case key.Matches(msg, Keys.Esc):
-			m.focusedItem = FocusBackBtn
-			return m, m.buttons.SetProcessing("Cancel", closeWithResult("", false))
-		case key.Matches(msg, Keys.ForceQuit):
-			return m, closeWithResult("", false)
-
-		case key.Matches(msg, Keys.CycleTab):
-			// Cycle: Input -> OK -> Cancel -> Input
-			switch m.focusedItem {
-			case FocusList:
-				m.focusedItem = FocusSelectBtn
-				m.input.Blur()
-			case FocusSelectBtn:
-				m.focusedItem = FocusBackBtn
-			case FocusBackBtn:
-				m.focusedItem = FocusList
-				m.input.Focus()
-			default:
-				m.focusedItem = FocusList
-				m.input.Focus()
-			}
-			return m, nil
-
-		case key.Matches(msg, Keys.CycleShiftTab):
-			// Reverse cycle: Input -> Cancel -> OK -> Input
-			switch m.focusedItem {
-			case FocusList:
-				m.focusedItem = FocusBackBtn
-				m.input.Blur()
-			case FocusBackBtn:
-				m.focusedItem = FocusSelectBtn
-			case FocusSelectBtn:
-				m.focusedItem = FocusList
-				m.input.Focus()
-			default:
-				m.focusedItem = FocusList
-				m.input.Focus()
-			}
-			return m, nil
-
-		case key.Matches(msg, Keys.Left), key.Matches(msg, Keys.Right):
-			// Toggle between OK and Cancel when on the button row
-			switch m.focusedItem {
-			case FocusSelectBtn:
-				m.focusedItem = FocusBackBtn
-				return m, nil
-			case FocusBackBtn:
-				m.focusedItem = FocusSelectBtn
-				return m, nil
-			}
-
-		case key.Matches(msg, Keys.Enter):
-			if m.focusedItem == FocusBackBtn {
-				return m, m.buttons.SetProcessing("Cancel", closeWithResult("", false))
-			}
-			// OK or Enter directly on input
-			m.result = m.input.Value()
-			m.confirmed = true
-			return m, m.buttons.SetProcessing("OK", closeWithResult(m.result, true))
-		}
-
-		// Handle button hotkeys when not on the input
-		if m.focusedItem != FocusList {
-			buttons := []ButtonSpec{{Text: "OK"}, {Text: "Cancel"}}
-			if idx, found := CheckButtonHotkeys(msg, buttons); found {
-				if idx == 0 {
-					m.result = m.input.Value()
-					m.confirmed = true
-					return m, m.buttons.SetProcessing("OK", closeWithResult(m.result, true))
-				}
-				return m, m.buttons.SetProcessing("Cancel", closeWithResult("", false))
-			}
-		}
-
-	case tea.MouseMotionMsg:
-		if m.input.IsSelecting() {
-			m.input.HandleDragTo(msg.X)
-		}
-		return m, nil
-
-	case tea.MouseReleaseMsg:
-		m.input.EndDrag()
-		return m, nil
-
-	case sinput.PasteMsg, sinput.CutMsg, sinput.SelectAllMsg:
-		m.input, cmd = m.input.Update(msg)
-		cmds = append(cmds, cmd)
-		return m, tea.Batch(cmds...)
-
-	case LayerHitMsg:
-		if msg.Button == tea.MouseMiddle {
-			return m, nil
-		}
-		if handled, cmd := m.handleTitleBarHit(msg, nil); handled {
-			m.focusedItem = FocusBackBtn
-			return m, tea.Batch(cmd, m.buttons.SetProcessing("Cancel", closeWithResult("", false)))
-		}
-		if msg.Button == tea.MouseLeft && strings.HasSuffix(msg.ID, "."+IDInsOvr) {
-			m.input.ToggleOverwrite()
-			return m, nil
-		}
-		if msg.Button == tea.MouseRight && ButtonIDMatches(msg.ID, "prompt_input") {
-			return m, ShowInputContextMenu(m.input, msg.X, msg.Y, m.width, m.height)
-		}
-		if msg.Button == tea.MouseLeft {
-			if ButtonIDMatches(msg.ID, "OK") {
-				m.result = m.input.Value()
-				m.confirmed = true
-				return m, m.buttons.SetProcessing("OK", closeWithResult(m.result, true))
-			}
-			if ButtonIDMatches(msg.ID, "Cancel") {
-				return m, m.buttons.SetProcessing("Cancel", closeWithResult("", false))
-			}
-			if ButtonIDMatches(msg.ID, "prompt_input") {
-				m.focusedItem = FocusList
-				m.input.Focus()
-				m.input.HandleClick(msg.X)
-				return m, nil
-			}
-		}
-	}
-
-	// Route remaining messages (e.g. typing) to the textinput
-	if m.focusedItem == FocusList {
-		m.input, cmd = m.input.Update(msg)
-		cmds = append(cmds, cmd)
-	}
-
-	return m, tea.Batch(cmds...)
+	return m, cmd
 }
 
-// contentWidth calculates the ideal dialog inner width.
-func (m *promptDialogModel) contentWidth() int {
-	maxAllowed := m.layout.Width - 2
-	w := maxLineWidth(m.question) + DialogBodyPadH
+// View implements tea.Model
+func (m *promptDialogModel) View() tea.View {
+	return m.outer.View()
+}
 
-	// Input field: same Padding(0,1) so same +4 for the inner border
-	if iw := lipgloss.Width(m.input.View()) + 4 + DialogBodyPadH; iw > w {
-		w = iw
-	}
+// ViewString implements ViewStringer for overlay compositing
+func (m *promptDialogModel) ViewString() string {
+	return m.outer.ViewString()
+}
 
-	// Buttons
-	minBtn := lipgloss.Width("OK") + 4 + lipgloss.Width("Cancel") + 4 + 4 + DialogBodyPadH
-	if minBtn > w {
-		w = minBtn
+// SetSize implements sizing. The sinput section has no narrower natural
+// width than whatever it's given (SectionNaturalWidth always returns
+// maxWidth for it), so unlike plain-text-only dialogs this one needs an
+// explicit cap -- matching the fixed-width convention used by other small
+// non-maximized dialogs (e.g. FlagsToggleDialog, WebDisplayDialog).
+func (m *promptDialogModel) SetSize(width, height int) {
+	if width > 60 {
+		width = 60
 	}
+	m.outer.SetSize(width, height)
+}
 
-	// Title
-	if tw := lipgloss.Width(GetPlainText(m.title)) + 6; tw > w {
-		w = tw
-	}
-	ctx := GetActiveContext()
-	w = minWidthForWidgets(w, GetPlainText(m.title), ctx.DialogTitleAlign, BuildInactiveTitleWidgets(ctx))
-	if w > maxAllowed {
-		w = maxAllowed
-	}
-	return w
+// IsMaximized lets the AppModel know its size state
+func (m *promptDialogModel) IsMaximized() bool {
+	return m.outer.IsMaximized()
+}
+
+// SetFocused propagates focus state
+func (m *promptDialogModel) SetFocused(f bool) {
+	m.outer.SetFocused(f)
+}
+
+// Layers implements LayeredView for compositing
+func (m *promptDialogModel) Layers() []*lipgloss.Layer {
+	return m.outer.Layers()
+}
+
+// GetHitRegions implements displayengine.HitRegionProvider for mouse hit testing
+func (m *promptDialogModel) GetHitRegions(offsetX, offsetY int) []displayengine.HitRegion {
+	return m.outer.GetHitRegions(offsetX, offsetY)
+}
+
+// IsScrollbarDragging contributes to the sbDragger interface for mouse motion forwarding
+func (m *promptDialogModel) IsScrollbarDragging() bool {
+	return m.outer.IsScrollbarDragging()
+}
+
+// HelpText returns help info
+func (m *promptDialogModel) HelpText() string {
+	return m.outer.HelpText()
+}
+
+// AdvanceSpinners advances any active button spinner.
+func (m *promptDialogModel) AdvanceSpinners(now time.Time) bool {
+	return m.outer.AdvanceSpinners(now)
 }
 
 // GetInputCursor returns the cursor position (relative to dialog top-left),
 // cursor shape, and whether the cursor should be shown.
 // Implements InputCursorProvider for AppModel.View().
 func (m *promptDialogModel) GetInputCursor() (relX, relY int, shape tea.CursorShape, ok bool) {
-	if m.focusedItem != FocusList || !m.input.Focused() {
+	sections := m.outer.GetContentSections()
+	inputIdx := -1
+	for i, sec := range sections {
+		if sec == m.inputSection {
+			inputIdx = i
+			break
+		}
+	}
+	if inputIdx < 0 || m.outer.GetFocusedSection() != inputIdx {
 		return 0, 0, tea.CursorBar, false
 	}
-	// 1 outer_left + 1 inner_left + 1 pad_left + cursor column within textinput view
-	relX = 3 + m.input.CursorColumn()
-	relY = m.inputRelY
-	if m.input.IsOverwrite() {
+
+	layout := displayengine.GetLayout()
+	largeTitleOffset := 0
+	if m.outer.Layout.LargeTitleBar {
+		largeTitleOffset = displayengine.LargeTitleBarOverhead
+	}
+
+	contentWidth := m.outer.Width() - layout.BorderWidth() - layout.ContentMarginWidth()
+	relY = layout.SingleBorder() + largeTitleOffset
+	for i := 0; i < inputIdx; i++ {
+		relY += sections[i].SectionHeight(contentWidth)
+	}
+	relY += layout.SingleBorder()
+
+	relX = layout.SingleBorder() + layout.SingleMargin() + (*m.input).PromptWidth() + (*m.input).CursorColumn()
+	if (*m.input).IsOverwrite() {
 		shape = tea.CursorBlock
 	} else {
 		shape = tea.CursorBar
@@ -283,187 +211,16 @@ func (m *promptDialogModel) GetInputCursor() (relX, relY int, shape tea.CursorSh
 	return relX, relY, shape, true
 }
 
-func (m *promptDialogModel) ViewString() string {
-	if m.width == 0 {
-		return ""
-	}
-
-	ctx := GetActiveContext()
-	contentWidth := m.contentWidth()
-
-	// Question text — matches dialog_confirm.go: Padding(1, 2), Width(contentWidth)
-	questionText := strings.TrimRight(
-		ctx.Dialog.Padding(1, 2).Width(contentWidth).Render(semstyle.Sprintf("%s", m.question)),
-		"\n")
-
-	// Input field with inner border
-	inputFocused := m.focusedItem == FocusList
-	borderBG := ctx.Dialog.GetBackground()
-	sInnerW := contentWidth - 2
-	if sInnerW < 1 {
-		sInnerW = 1
-	}
-
-	inputContent := strings.TrimRight(ctx.Dialog.Padding(0, 1).Width(sInnerW).Render(m.input.View()), "\n")
-	renderedInput := strings.TrimRight(RenderBorderedBoxCtx(
-		"", inputContent, sInnerW, 0, inputFocused, true, true,
-		ctx.SubmenuTitleAlign, "", ctx,
-	), "\n")
-
-	// Inject INS/OVR label into the bottom-left of the input box border.
-	modeLabel := "INS"
-	if m.input.IsOverwrite() {
-		modeLabel = "OVR"
-	}
-	inputLines := strings.Split(renderedInput, "\n")
-	if len(inputLines) > 0 {
-		inputLines[len(inputLines)-1] = BuildLabeledBottomBorderCtx(contentWidth, modeLabel, inputFocused, ctx)
-		renderedInput = strings.Join(inputLines, "\n")
-	}
-
-	// Disclaimer (only for sensitive/password prompts)
-	var disclaimerText string
-	if m.input.EchoMode == textinput.EchoPassword {
-		disclaimerText = strings.TrimRight(
-			ctx.Dialog.Padding(0, 2).
-				Foreground(theme.ThemeSemanticStyle("{{|Highlight|}}").GetForeground()).
-				Width(contentWidth).
-				Render(semstyle.Sprintf("(password will not be logged)")),
-			"\n")
-	}
-
-	// Spacer + buttons (same pattern as dialog_confirm.go)
-	spacer := lipgloss.NewStyle().Width(contentWidth).Background(borderBG).Render("")
-	promptBtnSpecs := m.buttons.ApplySpinner([]ButtonSpec{
-		{Text: "OK", Active: m.focusedItem == FocusList || m.focusedItem == FocusSelectBtn || m.buttons.IsProcessingID("OK"), ZoneID: "OK"},
-		{Text: "Cancel", Active: m.focusedItem == FocusBackBtn || m.buttons.IsProcessingID("Cancel"), ZoneID: "Cancel"},
-	})
-	buttonRow := strings.TrimRight(RenderCenteredButtonsCtx(contentWidth, ctx, promptBtnSpecs...), "\n")
-
-	// Assemble
-	parts := []string{questionText, renderedInput}
-	if disclaimerText != "" {
-		parts = append(parts, disclaimerText)
-	}
-	parts = append(parts, spacer, buttonRow)
-
-	ctx2 := GetActiveContext()
-	ctx2.LargeTitleBars = m.layout.LargeTitleBar
-	return renderDialogWithTypeAndWidgets(m.title, lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused || m.TitleBarFocused(), 0, DialogTypeConfirm, ctx2, m.State())
-}
-
-func (m *promptDialogModel) View() tea.View {
-	return tea.NewView(m.ViewString())
-}
-
-func (m *promptDialogModel) Layers() []*lipgloss.Layer { return m.layers(m.ViewString) }
-
-func (m *promptDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
-	ctx := GetActiveContext()
-	contentWidth := m.contentWidth()
-
-	questionHeight := lipgloss.Height(
-		ctx.Dialog.Padding(1, 2).Width(contentWidth).Render(m.question))
-
-	inputFocused := m.focusedItem == FocusList
-	borderedInputStyle := ApplyInnerBorderCtx(
-		ctx.Dialog.Padding(0, 1).Width(contentWidth),
-		inputFocused, ctx)
-	inputHeight := lipgloss.Height(borderedInputStyle.Render(m.input.View()))
-
-	disclaimerHeight := 0
-	if m.input.EchoMode == textinput.EchoPassword {
-		disclaimerHeight = lipgloss.Height(
-			ctx.Dialog.Padding(0, 2).Width(contentWidth).Render("(password will not be logged)"))
-	}
-
-	largeTitleOffset := 0
-	if m.layout.LargeTitleBar {
-		largeTitleOffset = LargeTitleBarOverhead
-	}
-
-	// Input hit region: outer_border(1) + questionH + inner_border_top(1) = input text row
-	// Text X: outer_border(1) + inner_border(1) + padding(1) + promptW
-	inputTextY := 1 + largeTitleOffset + questionHeight + 1
-	m.inputRelY = inputTextY
-	m.inputScreenX = offsetX + 1 + 1 + 1 + m.input.PromptWidth()
-	m.input.SetScreenTextX(m.inputScreenX)
-
-	// buttonY: outer border (1) + question + input + disclaimer + spacer (1)
-	buttonY := 1 + largeTitleOffset + questionHeight + inputHeight + disclaimerHeight + 1
-
-	regions := []HitRegion{{
-		ID:     "prompt_input",
-		X:      offsetX + 1,
-		Y:      offsetY + inputTextY,
-		Width:  contentWidth,
-		Height: 1,
-		ZOrder: ZDialog + 10,
-		Label:  "Input Field",
-		Help: &HelpContext{
-			ScreenName: "Prompt",
-			PageTitle:  "Editing",
-			PageText:   m.question,
-			ItemText:   "Type your response and press Enter to confirm, or Esc to cancel.",
-		},
-	}}
-
-	// Dialog background
-	regions = append(regions, HitRegion{
-		ID:     m.id,
-		X:      offsetX,
-		Y:      offsetY,
-		Width:  contentWidth + 2,
-		Height: buttonY + 2,
-		ZOrder: ZDialog,
-		Label:  "Prompt",
-		Help: &HelpContext{
-			ScreenName: m.title,
-			PageTitle:  "Input Prompt",
-			PageText:   m.question,
-		},
-	})
-
-	// INS/OVR hit region — only for non-password prompts (password mode hides typed chars,
-	// so overwrite mode is not useful there).
-	if m.input.EchoMode != textinput.EchoPassword {
-		insOvrY := 1 + largeTitleOffset + questionHeight + 2 // bottom border of input box
-		regions = append(regions, HitRegion{
-			ID:     m.id + "." + IDInsOvr,
-			X:      offsetX + 2, // outer border(1) + inner section corner(1)
-			Y:      offsetY + insOvrY,
-			Width:  3,
-			Height: 1,
-			ZOrder: ZDialog + 15,
-			Label:  "INS/OVR",
-			Help:   &HelpContext{ScreenName: m.title, PageTitle: "Insert/Overwrite", PageText: "Toggle between insert and overwrite mode."},
-		})
-	}
-
-	regions = append(regions, GetButtonHitRegions(
-		HelpContext{ScreenName: m.title, PageTitle: "Input Prompt", PageText: m.question},
-		m.id, offsetX+1, offsetY+buttonY, contentWidth, ZDialog+20,
-		ButtonSpec{Text: "OK", ZoneID: "OK", Help: "Save changes and return."},
-		ButtonSpec{Text: "Cancel", ZoneID: "Cancel", Help: "Discard changes and return."},
-	)...)
-	regions = append(regions, m.titleBarHitRegions(offsetX, offsetY, contentWidth, ZDialog)...)
-	return regions
-}
-
-func (m *promptDialogModel) AdvanceSpinners(now time.Time) bool {
-	return m.buttons.AdvanceSpinner(now)
-}
-
 // ShowPromptDialog displays a prompt dialog and returns the text and confirmed bool.
 func ShowPromptDialog(title, question string, sensitive bool, initialValue ...string) (string, bool) {
 	helpText := "Type to input | Tab to switch | Enter to confirm | Esc to cancel"
 	dialog := newPromptDialog(title, question, sensitive, initialValue...)
 
-	header := NewHeaderModel()
+	header := displayengine.NewHeaderModel()
 	header.SetWidth(80)
 	headerH := header.Height()
 
-	finalDialog, err := RunDialogWithBackdrop(dialog, helpText, GetPositionCenter(headerH))
+	finalDialog, err := RunDialogWithBackdrop(dialog, helpText, displayengine.GetPositionCenter(headerH))
 	if err != nil {
 		return "", false
 	}

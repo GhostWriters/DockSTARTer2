@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/graphics"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
@@ -111,7 +112,7 @@ func (m *HelpDialogModel) ViewString() string {
 
 	// Calculate target width for help content.
 	// We want a consistent width for the help panels relative to the screen.
-	availW, availH := GetAvailableDialogSize(m.width, m.height, true)
+	availW, availH := displayengine.GetAvailableDialogSize(m.width, m.height, true)
 
 	// Ensure at least some minimal room
 	if availW < 30 {
@@ -296,12 +297,12 @@ func (m *HelpDialogModel) ViewString() string {
 		bindingPageIdx = 0
 	}
 
-	ctx := GetActiveContext()
+	ctx := displayengine.GetActiveContext()
 
 	if showContext && (len(pageTextLines) > 0 || len(itemLines) > 0) {
 		// Render Page Context box if content exists
 		if len(pageTextLines) > 0 {
-			pageTextBox = RenderBorderedBoxCtx(
+			pageTextBox = displayengine.RenderBorderedBoxCtx(
 				m.contextInfo.PageTitle,
 				strings.Join(pageTextLines, "\n"),
 				maxLineWidth,
@@ -366,7 +367,7 @@ func (m *HelpDialogModel) ViewString() string {
 		for i := 0; i < visibleRows && (i+boxOffset) < boxTotalLines; i++ {
 			line := docLines[i+boxOffset]
 			if lw := lipgloss.Width(line); lw > docTextW {
-				line = TruncateRight(line, docTextW)
+				line = displayengine.TruncateRight(line, docTextW)
 			} else if lw < docTextW {
 				line += strutil.Repeat(" ", docTextW-lw)
 			}
@@ -429,7 +430,7 @@ func (m *HelpDialogModel) ViewString() string {
 				Foreground(lipgloss.Color("15"))
 		}
 
-		boxContent = ApplyScrollbar(
+		boxContent = displayengine.ApplyScrollbar(
 			&m.Scroll,
 			boxContent,
 			boxTotalLines,
@@ -439,7 +440,7 @@ func (m *HelpDialogModel) ViewString() string {
 			scrollCtx,
 		)
 
-		scrollBox = RenderBorderedBoxCtx(
+		scrollBox = displayengine.RenderBorderedBoxCtx(
 			boxTitle,
 			boxContent,
 			boxTargetW,
@@ -463,7 +464,7 @@ func (m *HelpDialogModel) ViewString() string {
 			}
 			boxLines := strings.Split(scrollBox, "\n")
 			if len(boxLines) > 0 {
-				boxLines[len(boxLines)-1] = BuildScrollPercentBottomBorder(boxTargetW+2, scrollPct, true, ctx)
+				boxLines[len(boxLines)-1] = displayengine.BuildScrollPercentBottomBorder(boxTargetW+2, scrollPct, true, ctx)
 				scrollBox = strings.Join(boxLines, "\n")
 			}
 		}
@@ -473,9 +474,9 @@ func (m *HelpDialogModel) ViewString() string {
 	if len(legendLines) > 0 {
 		var centeredLines []string
 		for _, ll := range legendLines {
-			centeredLines = append(centeredLines, CenterText(ll, targetWidth))
+			centeredLines = append(centeredLines, displayengine.CenterText(ll, targetWidth))
 		}
-		legendBox = RenderBorderedBoxCtx(
+		legendBox = displayengine.RenderBorderedBoxCtx(
 			"Legend",
 			strings.Join(centeredLines, "\n"),
 			targetWidth,
@@ -511,10 +512,10 @@ func (m *HelpDialogModel) ViewString() string {
 		}
 		// Append modifier note at the bottom of every bindings page.
 		note := theme.ToANSI("Most {{|KeyCap|}}alt+key{{[-]}} shortcuts also accept {{|KeyCap|}}ctrl{{[-]}} or {{|KeyCap|}}ctrl+alt{{[-]}}", "")
-		centeredNote := CenterText(note, targetWidth)
+		centeredNote := displayengine.CenterText(note, targetWidth)
 		blankLine := strutil.Repeat(" ", targetWidth)
 		bindingContent = append(bindingContent, blankLine, centeredNote)
-		bindingsBox := RenderBorderedBoxCtx(
+		bindingsBox := displayengine.RenderBorderedBoxCtx(
 			"Keyboard & Mouse Controls",
 			strings.Join(bindingContent, "\n"),
 			targetWidth,
@@ -534,11 +535,11 @@ func (m *HelpDialogModel) ViewString() string {
 	combinedText := strings.Join(parts, "\n")
 
 	// Calculate relative position of the scrollBox for hit regions.
-	layout := GetLayout()
+	layout := displayengine.GetLayout()
 	// All dialogs start inside an outer halo(2) and outer border(1).
 	// But ViewString returns the content that will be wrapped by a border and halo later.
 	// We calculate relative positions INSIDE the dialog content area.
-	// Content is padded by layout.ContentSideMargin (1) inside the outer border.
+	// displayengine.Content is padded by layout.ContentSideMargin (1) inside the outer border.
 	relativeX := layout.ContentSideMargin
 	relativeY := 0 // Relative to the start of the joined parts
 	for _, p := range parts {
@@ -557,10 +558,10 @@ func (m *HelpDialogModel) ViewString() string {
 
 	// Ensure the title is visible on the black border bar.
 	// Use the original themed Dialog background for the title text area.
-	ctx = GetActiveContext()
-	ctx.DialogTitleHelp = GetStyles().DialogTitleHelp.
-		Background(GetStyles().Dialog.GetBackground()).
-		Foreground(GetStyles().DialogTitleHelp.GetForeground())
+	ctx = displayengine.GetActiveContext()
+	ctx.DialogTitleHelp = displayengine.GetStyles().DialogTitleHelp.
+		Background(displayengine.GetStyles().Dialog.GetBackground()).
+		Foreground(displayengine.GetStyles().DialogTitleHelp.GetForeground())
 	ctx.BorderColor = haloColor
 	ctx.Border2Color = haloColor
 
@@ -578,7 +579,7 @@ func (m *HelpDialogModel) ViewString() string {
 	// Always use small titlebar — the halo is the help dialog's visual signature
 	// and the large titlebar separator conflicts with the halo border at the edges.
 	ctx.LargeTitleBars = false
-	return RenderUniformBlockDialogCtx(title, content, ctx)
+	return displayengine.RenderUniformBlockDialogCtx(title, content, ctx)
 }
 
 // View implements tea.Model
@@ -592,29 +593,29 @@ func (m *HelpDialogModel) View() tea.View {
 // Layers implements LayeredView
 func (m *HelpDialogModel) Layers() []*lipgloss.Layer {
 	return []*lipgloss.Layer{
-		lipgloss.NewLayer(m.ViewString()).Z(ZScreen).ID("Dialog.Help"),
+		lipgloss.NewLayer(m.ViewString()).Z(displayengine.ZScreen).ID("Dialog.Help"),
 	}
 }
 
-// GetHitRegions implements HitRegionProvider for mouse hit testing
-func (m *HelpDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
+// GetHitRegions implements displayengine.HitRegionProvider for mouse hit testing
+func (m *HelpDialogModel) GetHitRegions(offsetX, offsetY int) []displayengine.HitRegion {
 	// Make sure geometry from ViewString is fresh.
 	h := lipgloss.Height(m.ViewString())
 
-	var regions []HitRegion
+	var regions []displayengine.HitRegion
 
 	// Background catch-all for the entire dialog (lowest Z, absorbs unmatched clicks).
-	regions = append(regions, HitRegion{
+	regions = append(regions, displayengine.HitRegion{
 		ID:     "help_dialog",
 		X:      offsetX,
 		Y:      offsetY,
 		Width:  m.width,
 		Height: h,
-		ZOrder: ZScreen,
+		ZOrder: displayengine.ZScreen,
 		Label:  "Help",
 	})
 
-	layout := GetLayout()
+	layout := displayengine.GetLayout()
 	// Using offsetX (border) + 1 (border width) + SideMargin (1) = offsetX + 2.
 	// This covers the interactive area where text is displayed.
 	docBoxX := offsetX + layout.SingleBorder() + m.lastDocBoxX
@@ -623,24 +624,24 @@ func (m *HelpDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	// Restore X-axis trial adjustment to resolve reported horizontal drift.
 	docBoxX -= 1
 
-	regions = append(regions, HitRegion{
+	regions = append(regions, displayengine.HitRegion{
 		ID:     "help_doc_viewport",
 		X:      docBoxX,
 		Y:      docBoxY,
 		Width:  m.lastDocBoxW,
 		Height: m.lastDocBoxH,
-		ZOrder: ZScreen + 5, // Above dialog background, below scrollbar
+		ZOrder: displayengine.ZScreen + 5, // Above dialog background, below scrollbar
 		Label:  "Doc Viewport",
 	})
-	// 3. Scrollbar hit regions
-	if m.Scroll.Info.Needed && IsScrollbarEnabled() {
+	// 3. displayengine.Scrollbar hit regions
+	if m.Scroll.Info.Needed && displayengine.IsScrollbarEnabled() {
 		// The scrollbar column is the last column of the doc box content area.
 		// If docBoxX is the left border, scrollbar is at docBoxX + width - 2.
-		regions = append(regions, m.Scroll.HitRegions(docBoxX+m.lastDocBoxW-2, docBoxY, ZScreen+10, "Doc")...)
+		regions = append(regions, m.Scroll.HitRegions(docBoxX+m.lastDocBoxW-2, docBoxY, displayengine.ZScreen+10, "Doc")...)
 	}
 
 	// 4. Hyperlink hit regions
-	regions = append(regions, ScanForHyperlinks(m.ViewString(), offsetX, offsetY, ZScreen)...)
+	regions = append(regions, displayengine.ScanForHyperlinks(m.ViewString(), offsetX, offsetY, displayengine.ZScreen)...)
 
 	return regions
 }

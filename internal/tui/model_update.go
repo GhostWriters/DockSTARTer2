@@ -3,6 +3,7 @@ package tui
 import (
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/theme"
@@ -39,7 +40,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	if _, ok := msg.(widgetClearPressMsg); ok {
+	if _, ok := msg.(displayengine.WidgetClearPressMsg); ok {
 		m.panel.ClearPress()
 		// Forward to dialog and screen so their title bar pressed states also clear,
 		// even if a different dialog (e.g. help) was open when the tick fired.
@@ -56,11 +57,11 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
-	case PanelCommandLockChangedMsg:
+	case displayengine.PanelCommandLockChangedMsg:
 		m.updateExitLockedState(msg.Locked)
 		return m, logger.BatchRecoverTUI(m.ctx, cmds...)
 
-	case LockStateChangedMsg:
+	case displayengine.LockStateChangedMsg:
 		// Broadcast lock changes to both the active screen and any open dialog
 		// to ensure background items update even if a dialog has focus.
 		if m.activeScreen != nil {
@@ -78,11 +79,11 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, logger.BatchRecoverTUI(m.ctx, cmds...)
 
-	case togglePanelMsg:
+	case displayengine.TogglePanelMsg:
 		updated, cmd := m.panel.Update(msg)
-		m.panel = updated.(PanelModel)
+		m.panel = updated.(displayengine.PanelModel)
 		// Sync focus with expansion state
-		m.setPanelFocus(m.panel.expanded)
+		m.setPanelFocus(m.panel.Expanded)
 		// Resize backdrop, screen, and dialog to match new panel height
 		m.backdrop.SetSize(m.width, m.backdropHeight())
 
@@ -98,7 +99,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, logger.BatchRecoverTUI(m.ctx, cmd)
 
-	case menuDeferredActionMsg:
+	case displayengine.MenuDeferredActionMsg:
 		// Route to both the active screen AND any open dialog — these messages are
 		// scoped by instanceID so each recipient ignores ones that aren't its own.
 		// Dialogs that are MenuModels (e.g. flags, shadow dropdown) own their own
@@ -128,12 +129,12 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, logger.BatchRecoverTUI(m.ctx, globalTickCmd())
 
-	case panelLineMsg:
+	case displayengine.PanelLineMsg:
 		updated, cmd := m.panel.Update(msg)
-		m.panel = updated.(PanelModel)
+		m.panel = updated.(displayengine.PanelModel)
 		return m, logger.BatchRecoverTUI(m.ctx, cmd)
 
-	case replaceOutputMsg:
+	case displayengine.ReplaceOutputMsg:
 		// A running programbox dialog is the true owner of live-updating output
 		// (e.g. compose progress). Route it there, never to the panel, even if
 		// the panel also has a command pipe open — otherwise an unrelated
@@ -143,31 +144,31 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.dialog = dialog
 			return m, logger.BatchRecoverTUI(m.ctx, cmd)
 		}
-		if m.panel.consoleCancel != nil {
+		if m.panel.ConsoleCancel != nil {
 			updated, cmd := m.panel.Update(msg)
-			m.panel = updated.(PanelModel)
+			m.panel = updated.(displayengine.PanelModel)
 			return m, logger.BatchRecoverTUI(m.ctx, cmd)
 		}
 
-	case consoleLinesMsg:
+	case displayengine.ConsoleLinesMsg:
 		updated, cmd := m.panel.Update(msg)
-		m.panel = updated.(PanelModel)
+		m.panel = updated.(displayengine.PanelModel)
 		m.updateExitLocked()
 		return m, logger.BatchRecoverTUI(m.ctx, cmd)
 
-	case consoleDoneMsg:
+	case displayengine.ConsoleDoneMsg:
 		updated, cmd := m.panel.Update(msg)
-		m.panel = updated.(PanelModel)
-		if msg.configChanged {
+		m.panel = updated.(displayengine.PanelModel)
+		if msg.ConfigChanged {
 			conf := config.LoadAppConfig()
-			cmd = tea.Batch(cmd, func() tea.Msg { return ConfigChangedMsg{Config: conf} })
+			cmd = tea.Batch(cmd, func() tea.Msg { return displayengine.ConfigChangedMsg{Config: conf} })
 		}
-		if msg.appsChanged {
+		if msg.AppsChanged {
 			cmd = tea.Batch(cmd, func() tea.Msg { return RefreshAppsListMsg{} })
 		}
 		return m, logger.BatchRecoverTUI(m.ctx, cmd)
 
-	case ScrollDoneMsg:
+	case displayengine.ScrollDoneMsg:
 		if m.dialog != nil {
 			updated, cmd := m.dialog.Update(msg)
 			m.dialog = updated
@@ -181,10 +182,10 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, logger.BatchRecoverTUI(m.ctx, cmd)
 		}
 
-	case DragDoneMsg:
-		if msg.ID == resizeZoneID {
+	case displayengine.DragDoneMsg:
+		if msg.ID == displayengine.ResizeZoneID {
 			updated, cmd := m.panel.Update(msg)
-			m.panel = updated.(PanelModel)
+			m.panel = updated.(displayengine.PanelModel)
 			m.refreshPanelLayout()
 			return m, logger.BatchRecoverTUI(m.ctx, cmd)
 		}
@@ -221,26 +222,25 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ShowGlobalFlagsMsg:
 		// If the flags dialog is already open, close it (toggle behaviour).
 		if _, ok := m.dialog.(*FlagsToggleDialog); ok {
-			return m, func() tea.Msg { return CloseDialogMsg{} }
+			return m, func() tea.Msg { return displayengine.CloseDialogMsg{} }
 		}
-		return m, func() tea.Msg { return ShowDialogMsg{Dialog: NewFlagsToggleDialog()} }
+		return m, func() tea.Msg { return displayengine.ShowDialogMsg{Dialog: NewFlagsToggleDialog()} }
 
 	case ShowWebDisplaySettingsMsg:
 		if _, ok := m.dialog.(*WebDisplayDialog); ok {
-			return m, func() tea.Msg { return CloseDialogMsg{} }
+			return m, func() tea.Msg { return displayengine.CloseDialogMsg{} }
 		}
 		d := GetWebDisplaySettings()
 		current := WebDisplaySettings{FontFamily: d.FontFamily, FontSize: d.FontSize}
 		if current.FontFamily == "" || current.FontSize == 0 {
 			current = DefaultWebDisplaySettings()
 		}
-		return m, func() tea.Msg { return ShowDialogMsg{Dialog: NewWebDisplayDialog(current)} }
+		return m, func() tea.Msg { return displayengine.ShowDialogMsg{Dialog: NewWebDisplayDialog(current)} }
 
 	case ShowPendingRestartMsg:
 		return m, showPendingRestartDialog(m.ctx)
 
-
-	case TriggerHelpMsg:
+	case displayengine.TriggerHelpMsg:
 		return m, m.showHelpCmd(msg.CapturedContext, msg.ScreenLevelOnly)
 
 	case tea.WindowSizeMsg:
@@ -355,7 +355,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Sync current lock state to the new screen immediately
 			if m.lockedByOthers {
-				cmds = append(cmds, func() tea.Msg { return LockStateChangedMsg{LockedByOthers: true} })
+				cmds = append(cmds, func() tea.Msg { return displayengine.LockStateChangedMsg{LockedByOthers: true} })
 			}
 		}
 		updateRestartSafeMarker()
@@ -404,7 +404,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				// Sync current lock state to the restored screen immediately
 				if m.lockedByOthers {
-					cmds = append(cmds, func() tea.Msg { return LockStateChangedMsg{LockedByOthers: true} })
+					cmds = append(cmds, func() tea.Msg { return displayengine.LockStateChangedMsg{LockedByOthers: true} })
 				}
 			}
 		} else {
@@ -424,11 +424,11 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return RefreshAppsListMsg{} }
 		}
 		return m, logger.BatchRecoverTUI(m.ctx, cmds...)
-	case ShowDialogMsg:
+	case displayengine.ShowDialogMsg:
 		// Push current dialog to stack if one exists
 		if m.dialog != nil {
 			// Never push context menus to the stack; they should always be discarded when a new dialog opens.
-			if _, ok := m.dialog.(*ContextMenuModel); !ok {
+			if _, ok := m.dialog.(*displayengine.ContextMenuModel); !ok {
 				m.dialogStack = append(m.dialogStack, m.dialog)
 			}
 		}
@@ -441,12 +441,12 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dialog = msg.Dialog
 		if m.dialog != nil {
 			// Ensure MenuModels are marked as dialogs so they render with shadows
-			if menu, ok := m.dialog.(*MenuModel); ok {
+			if menu, ok := m.dialog.(*displayengine.MenuModel); ok {
 				menu.SetIsDialog(true)
 			}
 			// Clear header focus so modal dialogs receive keyboard input immediately.
-			if _, isCtxMenu := m.dialog.(*ContextMenuModel); !isCtxMenu {
-				m.backdrop.header.SetFocus(HeaderFocusNone)
+			if _, isCtxMenu := m.dialog.(*displayengine.ContextMenuModel); !isCtxMenu {
+				m.backdrop.Header.SetFocus(displayengine.HeaderFocusNone)
 				m.backdrop.InvalidateBackdropCache()
 			}
 			dW, dH := m.getDialogArea(m.dialog)
@@ -540,7 +540,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			sizable.SetSize(dW, dH)
 		}
 		if m.dialog != nil {
-			if _, ok := m.dialog.(*ContextMenuModel); !ok {
+			if _, ok := m.dialog.(*displayengine.ContextMenuModel); !ok {
 				m.dialogStack = append(m.dialogStack, m.dialog)
 			}
 		}
@@ -559,7 +559,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// If a dialog is already open, push it to stack and show the confirm dialog as the new top
 		if m.dialog != nil {
 			// Never push context menus to the stack
-			if _, ok := m.dialog.(*ContextMenuModel); !ok {
+			if _, ok := m.dialog.(*displayengine.ContextMenuModel); !ok {
 				m.dialogStack = append(m.dialogStack, m.dialog)
 			}
 		}
@@ -579,7 +579,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// If a dialog is already open, push it to stack
 		if m.dialog != nil {
 			// Never push context menus to the stack
-			if _, ok := m.dialog.(*ContextMenuModel); !ok {
+			if _, ok := m.dialog.(*displayengine.ContextMenuModel); !ok {
 				m.dialogStack = append(m.dialogStack, m.dialog)
 			}
 		}
@@ -598,7 +598,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// If a dialog is already open, push it to stack
 		if m.dialog != nil {
 			// Never push context menus to the stack
-			if _, ok := m.dialog.(*ContextMenuModel); !ok {
+			if _, ok := m.dialog.(*displayengine.ContextMenuModel); !ok {
 				m.dialogStack = append(m.dialogStack, m.dialog)
 			}
 		}
@@ -689,7 +689,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, logger.BatchRecoverTUI(m.ctx, cmds...)
 
-	case CloseDialogMsg:
+	case displayengine.CloseDialogMsg:
 		// If we're waiting for a confirmation, send the result
 		if m.pendingConfirm != nil {
 			if b, ok := msg.Result.(bool); ok {
@@ -733,7 +733,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Capture whether the closing dialog was a context menu before clearing
-		_, closingContextMenu := m.dialog.(*ContextMenuModel)
+		_, closingContextMenu := m.dialog.(*displayengine.ContextMenuModel)
 
 		// Clear current dialog and try to pop from stack
 		m.dialog = nil
@@ -764,7 +764,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					focusable.SetFocused(true)
 				}
 				// Blur the title bar of the restored dialog so widgets don't stay focused.
-				if tb, ok := m.dialog.(TitleBarFocusable); ok {
+				if tb, ok := m.dialog.(displayengine.TitleBarFocusable); ok {
 					tb.BlurTitleBar()
 				}
 			}
@@ -799,9 +799,9 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					cp.ClearProcessingState()
 				}
 			}
-			m.setHeaderFocus(HeaderFocusNone)
+			m.setHeaderFocus(displayengine.HeaderFocusNone)
 			if m.activeScreen != nil {
-				if tb, ok := m.activeScreen.(TitleBarFocusable); ok {
+				if tb, ok := m.activeScreen.(displayengine.TitleBarFocusable); ok {
 					tb.BlurTitleBar()
 				}
 			}
@@ -823,19 +823,19 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case UpdateHeaderMsg:
-		m.backdrop.header.SyncFlags()
+		m.backdrop.Header.SyncFlags()
 		return m, nil
 
-	case ConfigChangedMsg:
+	case displayengine.ConfigChangedMsg:
 		m.config = msg.Config
 		console.SpinnerEnabled = msg.Config.UI.Spinner
 		console.SpinnerSpeed = console.AlignToRefreshRate(msg.Config.UI.SpinnerSpeed, msg.Config.UI.RefreshRate)
 		console.LineCharacters = msg.Config.UI.LineCharacters
 		_, _ = theme.Load(m.config.UI.Theme, "")
 		m.invalidateAllCaches()
-		m.backdrop.header.SyncFlags()
+		m.backdrop.Header.SyncFlags()
 		updated, _ := m.panel.Update(msg)
-		m.panel = updated.(PanelModel)
+		m.panel = updated.(displayengine.PanelModel)
 
 		// Manually trigger sizing to avoid the complexities of tea.WindowSizeMsg re-triggering
 		m.backdrop.SetSize(m.width, m.backdropHeight())
@@ -843,7 +843,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.activeScreen != nil {
 			m.activeScreen.SetSize(caW, caH)
 			// Forward so screens like DisplayOptionsScreen can reload preview-namespace styles
-			// that were cleared by InitStyles → ClearSemanticCache above.
+			// that were cleared by displayengine.InitStyles → displayengine.ClearSemanticCache above.
 			_, cmd := m.activeScreen.Update(msg)
 			return m, logger.BatchRecoverTUI(m.ctx, cmd)
 		}
@@ -852,7 +852,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case QuitMsg:
 		return m, tea.Quit
 
-	case ConsoleLockMsg:
+	case displayengine.ConsoleLockMsg:
 		// remote.lock never locks the local console bar (it just indicates session presence)
 		if msg.ID == "remote.lock" {
 			return m, nil
@@ -864,7 +864,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			lockedByOthers := msg.Locked && !sessionlocks.Sessions.HoldEditLockLocal()
 			if lockedByOthers != m.lockedByOthers {
 				m.lockedByOthers = lockedByOthers
-				cmds = append(cmds, func() tea.Msg { return LockStateChangedMsg{LockedByOthers: lockedByOthers} })
+				cmds = append(cmds, func() tea.Msg { return displayengine.LockStateChangedMsg{LockedByOthers: lockedByOthers} })
 			}
 			return m, logger.BatchRecoverTUI(m.ctx, cmds...)
 		}
@@ -882,7 +882,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if backdropMsg != nil {
 		var backdropCmd tea.Cmd
 		backdropModel, backdropCmd := m.backdrop.Update(backdropMsg)
-		m.backdrop = backdropModel.(*BackdropModel)
+		m.backdrop = backdropModel.(*displayengine.BackdropModel)
 		if backdropCmd != nil {
 			cmds = append(cmds, backdropCmd)
 		}
@@ -931,13 +931,13 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *AppModel) setPanelFocus(focused bool) {
 	m.panelFocused = focused
 	m.panelTitleFocused = false
-	m.panel.focused = focused
+	m.panel.Focused = focused
 	m.panel.BlurTitleBar()
 	if focused {
-		m.backdrop.header.SetFocus(HeaderFocusNone)
+		m.backdrop.Header.SetFocus(displayengine.HeaderFocusNone)
 	} else {
-		m.panel.input.Blur()
-		m.panel.inputFocused = false
+		m.panel.Input.Blur()
+		m.panel.InputFocused = false
 	}
 	m.updateComponentFocus()
 }
@@ -946,24 +946,24 @@ func (m *AppModel) setPanelTitleFocus(focused bool) {
 	m.panelTitleFocused = focused
 	if focused {
 		m.panel.FocusTitleBar()
-		m.panel.SetWidget(panelWidgetUp) // default to [▲]
+		m.panel.SetWidget(displayengine.PanelWidgetUp) // default to [▲]
 		m.panelFocused = false
-		m.panel.focused = false
-		m.panel.input.Blur()
-		m.panel.inputFocused = false
-		m.backdrop.header.SetFocus(HeaderFocusNone)
+		m.panel.Focused = false
+		m.panel.Input.Blur()
+		m.panel.InputFocused = false
+		m.backdrop.Header.SetFocus(displayengine.HeaderFocusNone)
 	} else {
 		m.panel.BlurTitleBar()
 	}
 	m.updateComponentFocus()
 }
 
-func (m *AppModel) setHeaderFocus(focus HeaderFocus) {
-	m.backdrop.header.SetFocus(focus)
+func (m *AppModel) setHeaderFocus(focus displayengine.HeaderFocus) {
+	m.backdrop.Header.SetFocus(focus)
 	m.backdrop.InvalidateBackdropCache()
-	if focus != HeaderFocusNone {
+	if focus != displayengine.HeaderFocusNone {
 		m.panelFocused = false
-		m.panel.focused = false
+		m.panel.Focused = false
 		m.panelTitleFocused = false
 		m.panel.BlurTitleBar()
 	}
@@ -972,14 +972,14 @@ func (m *AppModel) setHeaderFocus(focus HeaderFocus) {
 
 func (m *AppModel) updateComponentFocus() {
 	dialogOpen := m.dialog != nil
-	headerFocused := m.backdrop.header.GetFocus() != HeaderFocusNone
+	headerFocused := m.backdrop.Header.GetFocus() != displayengine.HeaderFocusNone
 
 	_, dialogIsProgramBox := m.dialog.(*ProgramBoxModel)
 	panelBlockedByDialog := dialogOpen && !dialogIsProgramBox
 
 	// Log panel only keeps its "internal" focus state if no modal dialog is blocking it.
 	// Program boxes are non-modal — the panel can be focused alongside them.
-	m.panel.focused = m.panelFocused && !panelBlockedByDialog
+	m.panel.Focused = m.panelFocused && !panelBlockedByDialog
 	if m.panelTitleFocused && !panelBlockedByDialog {
 		if !m.panel.TitleBarFocused() {
 			m.panel.FocusTitleBar()
@@ -993,7 +993,7 @@ func (m *AppModel) updateComponentFocus() {
 	// Screen is focused only if no dialog is open AND neither panel nor header have focus.
 	// Exception: context menus are lightweight overlays — keep the screen focused so the
 	// selected item stays highlighted while the context menu is visible.
-	_, dialogIsContextMenu := m.dialog.(*ContextMenuModel)
+	_, dialogIsContextMenu := m.dialog.(*displayengine.ContextMenuModel)
 	if m.activeScreen != nil {
 		if focusable, ok := m.activeScreen.(interface{ SetFocused(bool) }); ok {
 			focusable.SetFocused((!dialogOpen || dialogIsContextMenu) && !m.panelFocused && !m.panelTitleFocused && !headerFocused)
@@ -1014,9 +1014,9 @@ func (m *AppModel) updateComponentFocus() {
 }
 
 // invalidateAllCaches clears every render cache in the TUI so a full redraw
-// occurs on the next frame. Call this before InitStyles on any config change.
+// occurs on the next frame. Call this before displayengine.InitStyles on any config change.
 func (m *AppModel) invalidateAllCaches() {
-	InitStyles(m.config)
+	displayengine.InitStyles(m.config)
 	invalidateShadowCache()
 	m.backdrop.InvalidateBackdropCache()
 }
@@ -1025,11 +1025,11 @@ func (m *AppModel) invalidateAllCaches() {
 // updates the log panel's ceiling, and snaps the log panel down if it now exceeds the new max.
 // Returns true if the log panel height changed (caller should resize the active screen/dialog).
 func (m *AppModel) applyPanelMax() bool {
-	layout := GetLayout()
-	hasShadow := currentConfig.UI.Shadow
+	layout := displayengine.GetLayout()
+	hasShadow := displayengine.CurrentConfig().UI.Shadow
 	headerH := 1
 	if m.backdrop != nil {
-		headerH = m.backdrop.header.Height()
+		headerH = m.backdrop.Header.Height()
 	}
 	shadowH := 0
 	if hasShadow {
@@ -1037,7 +1037,7 @@ func (m *AppModel) applyPanelMax() bool {
 	}
 
 	// Ask the active screen for its minimum height requirement (optional interface).
-	minContentH := MinDialogHeight
+	minContentH := displayengine.MinDialogHeight
 	if m.activeScreen != nil {
 		if mh, ok := m.activeScreen.(interface{ MinHeight() int }); ok {
 			if h := mh.MinHeight(); h > minContentH {
@@ -1054,8 +1054,8 @@ func (m *AppModel) applyPanelMax() bool {
 	m.panel.SetMaxHeight(maxLogH)
 
 	// Snap down if the current height exceeds the new ceiling.
-	if m.panel.expanded && m.panel.height > maxLogH {
-		m.panel.height = maxLogH
+	if m.panel.Expanded && m.panel.PanelHeight > maxLogH {
+		m.panel.PanelHeight = maxLogH
 		m.panel.SetSize(m.width, m.height)
 		return true
 	}
@@ -1121,12 +1121,12 @@ func (m *AppModel) refreshPanelLayout() {
 func (m AppModel) getContentArea() (int, int) {
 	// Use backdropHeight() to account for log panel
 	bh := m.backdropHeight()
-	layout := GetLayout()
-	hasShadow := currentConfig.UI.Shadow
+	layout := displayengine.GetLayout()
+	hasShadow := displayengine.CurrentConfig().UI.Shadow
 	headerH := 1
 	helplineH := layout.HelplineHeight
 	if m.backdrop != nil {
-		headerH = m.backdrop.header.Height()
+		headerH = m.backdrop.Header.Height()
 		helplineH = m.backdrop.HelplineActualHeight()
 	}
 
@@ -1137,8 +1137,8 @@ func (m AppModel) getContentArea() (int, int) {
 // Help dialog uses the full terminal height, other dialogs use the backdrop's content area.
 func (m AppModel) getDialogArea(d tea.Model) (int, int) {
 	if _, isHelp := d.(*HelpDialogModel); isHelp {
-		// Use Layout helpers directly to get full-screen content area for help
-		layout := GetLayout()
+		// Use displayengine.Layout helpers directly to get full-screen content area for help
+		layout := displayengine.GetLayout()
 		headerH := 1
 		helplineH := layout.HelplineHeight
 		if m.backdrop != nil {

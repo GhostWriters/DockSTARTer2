@@ -2,6 +2,7 @@ package screens
 
 import (
 	"DockSTARTer2/internal/appenv"
+	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/tui"
 	"context"
 	"strconv"
@@ -23,11 +24,11 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
-	case tui.LockStateChangedMsg:
+	case displayengine.LockStateChangedMsg:
 		m.lockedByOthers = msg.LockedByOthers
 		return m, nil
 
-	case tui.LayerHitMsg:
+	case displayengine.LayerHitMsg:
 		if strings.HasPrefix(msg.ID, "tabbed_vars.tab-") {
 			// On right-click, do nothing (allows through hit-testing to global context menu)
 			if msg.Button == tea.MouseRight {
@@ -65,7 +66,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				// Calculate relative coordinates for the editor click
 				// Hit region is at NestedLeftOffset, NestedTopOffset + subtitleHeight
-				layout := tui.GetLayout()
+				layout := displayengine.GetLayout()
 				relX := msg.X - (m.lastOffsetX + layout.NestedLeftOffset())
 				relY := msg.Y - (m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight)
 
@@ -81,7 +82,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Button clicks
-		if tui.ButtonIDMatches(msg.ID, tui.IDSaveButton) {
+		if displayengine.ButtonIDMatches(msg.ID, displayengine.IDSaveButton) {
 			if msg.Button == tea.MouseLeft {
 				m.focus = envFocusButtons
 				m.btnIdx = 0
@@ -97,48 +98,48 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 					}
 				}
-				return m, m.btnRow.SetProcessing(tui.IDSaveButton, m.saveEnv())
+				return m, m.btnRow.SetProcessing(displayengine.IDSaveButton, m.saveEnv())
 			}
-		} else if tui.ButtonIDMatches(msg.ID, tui.IDBackButton) {
+		} else if displayengine.ButtonIDMatches(msg.ID, displayengine.IDBackButton) {
 			if msg.Button == tea.MouseLeft {
 				m.focus = envFocusButtons
 				m.btnIdx = m.buttonIndex("Back")
 				if m.hasChanges() {
-					return m, m.btnRow.SetProcessing(tui.IDBackButton, m.promptUnsavedChanges(m.onClose))
+					return m, m.btnRow.SetProcessing(displayengine.IDBackButton, m.promptUnsavedChanges(m.onClose))
 				}
-				return m, m.btnRow.SetProcessing(tui.IDBackButton, m.onClose)
+				return m, m.btnRow.SetProcessing(displayengine.IDBackButton, m.onClose)
 			}
-		} else if tui.ButtonIDMatches(msg.ID, tui.IDExitButton) {
+		} else if displayengine.ButtonIDMatches(msg.ID, displayengine.IDExitButton) {
 			if msg.Button == tea.MouseLeft {
 				m.focus = envFocusButtons
 				m.btnIdx = m.buttonIndex("Exit")
-				return m, m.btnRow.SetProcessing(tui.IDExitButton, m.confirmExitAction())
+				return m, m.btnRow.SetProcessing(displayengine.IDExitButton, m.confirmExitAction())
 			}
-		} else if msg.ID == "tabbed_vars."+tui.IDTitleWidgetClose {
+		} else if msg.ID == "tabbed_vars."+displayengine.IDTitleWidgetClose {
 			if msg.Button == tea.MouseLeft {
 				m.BlurTitleBar()
-				pressCmd := m.PressWidgetID(tui.IDTitleWidgetClose, msg.ID)
+				pressCmd := m.PressWidgetID(displayengine.IDTitleWidgetClose, msg.ID)
 				m.focus = envFocusButtons
 				m.btnIdx = m.buttonIndex("Back")
 				closeAction := m.onClose
 				if m.hasChanges() {
 					closeAction = m.promptUnsavedChanges(m.onClose)
 				}
-				return m, tea.Batch(pressCmd, m.btnRow.SetProcessing(tui.IDBackButton, closeAction))
+				return m, tea.Batch(pressCmd, m.btnRow.SetProcessing(displayengine.IDBackButton, closeAction))
 			}
-		} else if msg.ID == "tabbed_vars."+tui.IDTitleWidgetHelp {
+		} else if msg.ID == "tabbed_vars."+displayengine.IDTitleWidgetHelp {
 			if msg.Button == tea.MouseLeft {
 				m.BlurTitleBar()
-				pressCmd := m.PressWidgetID(tui.IDTitleWidgetHelp, msg.ID)
-				return m, tea.Batch(pressCmd, func() tea.Msg { return tui.TriggerHelpMsg{ScreenLevelOnly: true} })
+				pressCmd := m.PressWidgetID(displayengine.IDTitleWidgetHelp, msg.ID)
+				return m, tea.Batch(pressCmd, func() tea.Msg { return displayengine.TriggerHelpMsg{ScreenLevelOnly: true} })
 			}
-		} else if msg.ID == "tabbed_vars."+tui.IDTitleWidgetRefresh {
+		} else if msg.ID == "tabbed_vars."+displayengine.IDTitleWidgetRefresh {
 			if msg.Button == tea.MouseLeft {
 				m.BlurTitleBar()
-				pressCmd := m.PressWidgetID(tui.IDTitleWidgetRefresh, msg.ID)
+				pressCmd := m.PressWidgetID(displayengine.IDTitleWidgetRefresh, msg.ID)
 				return m, tea.Batch(pressCmd, func() tea.Msg { return envRefreshMsg{} })
 			}
-		} else if msg.ID == "tabbed_vars."+tui.IDInsOvr {
+		} else if msg.ID == "tabbed_vars."+displayengine.IDInsOvr {
 			if msg.Button == tea.MouseLeft && len(m.tabs) > 0 {
 				m.tabs[m.activeTab].editor.ToggleOverwrite()
 			}
@@ -150,7 +151,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Scrollbar thumb drag initiation routed by model_mouse.go section B0.
 		if msg.Button == tea.MouseLeft && len(m.tabs) > 0 {
 			// Translate coordinates to editor-relative and only forward if within editor bounds.
-			layout := tui.GetLayout()
+			layout := displayengine.GetLayout()
 			relX := msg.X - (m.lastOffsetX + layout.NestedLeftOffset())
 			relY := msg.Y - (m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight)
 			editorW := m.contentWidth - layout.BorderWidth()
@@ -165,11 +166,11 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-	case tui.LayerWheelMsg, tea.MouseWheelMsg:
+	case displayengine.LayerWheelMsg, tea.MouseWheelMsg:
 		var wheelBtn tea.MouseButton
 		if mwMsg, ok := msg.(tea.MouseWheelMsg); ok {
 			wheelBtn = mwMsg.Button
-		} else if lwMsg, ok := msg.(tui.LayerWheelMsg); ok {
+		} else if lwMsg, ok := msg.(displayengine.LayerWheelMsg); ok {
 			wheelBtn = lwMsg.Button
 		}
 
@@ -202,17 +203,17 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			case "enter", " ":
 				switch m.ActiveWidget() {
-				case tui.IDTitleWidgetHelp:
-					pressCmd := m.PressWidgetID(tui.IDTitleWidgetHelp, "key")
-					return m, tea.Batch(pressCmd, func() tea.Msg { return tui.TriggerHelpMsg{ScreenLevelOnly: true} })
-				case tui.IDTitleWidgetClose:
-					pressCmd := m.PressWidgetID(tui.IDTitleWidgetClose, "key")
+				case displayengine.IDTitleWidgetHelp:
+					pressCmd := m.PressWidgetID(displayengine.IDTitleWidgetHelp, "key")
+					return m, tea.Batch(pressCmd, func() tea.Msg { return displayengine.TriggerHelpMsg{ScreenLevelOnly: true} })
+				case displayengine.IDTitleWidgetClose:
+					pressCmd := m.PressWidgetID(displayengine.IDTitleWidgetClose, "key")
 					if m.hasChanges() {
 						return m, tea.Batch(pressCmd, m.promptUnsavedChanges(m.onClose))
 					}
 					return m, tea.Batch(pressCmd, m.onClose)
-				case tui.IDTitleWidgetRefresh:
-					pressCmd := m.PressWidgetID(tui.IDTitleWidgetRefresh, "key")
+				case displayengine.IDTitleWidgetRefresh:
+					pressCmd := m.PressWidgetID(displayengine.IDTitleWidgetRefresh, "key")
 					m.BlurTitleBar()
 					return m, tea.Batch(pressCmd, func() tea.Msg { return envRefreshMsg{} })
 				}
@@ -227,8 +228,8 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case msg.String() == "esc":
 			m.focus = envFocusButtons
 			m.btnIdx = m.buttonIndex("Back")
-			return m, m.btnRow.SetProcessing(tui.IDBackButton, m.EscapeAction())
-		case key.Matches(msg, tui.Keys.EnvNextTab): // Next Tab
+			return m, m.btnRow.SetProcessing(displayengine.IDBackButton, m.EscapeAction())
+		case key.Matches(msg, displayengine.Keys.EnvNextTab): // Next Tab
 			if m.focus == envFocusEditor && len(m.tabs) > 1 {
 				m.tabs[m.activeTab].editor.Blur()
 				m.activeTab = (m.activeTab + 1) % len(m.tabs)
@@ -236,7 +237,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.SetSize(m.width, m.height)
 				return m, nil
 			}
-		case key.Matches(msg, tui.Keys.EnvPrevTab): // Prev Tab
+		case key.Matches(msg, displayengine.Keys.EnvPrevTab): // Prev Tab
 			if m.focus == envFocusEditor && len(m.tabs) > 1 {
 				m.tabs[m.activeTab].editor.Blur()
 				m.activeTab--
@@ -260,12 +261,12 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			return m, nil
-		case key.Matches(msg, tui.Keys.EnvRefresh):
+		case key.Matches(msg, displayengine.Keys.EnvRefresh):
 			return m, func() tea.Msg { return envRefreshMsg{} }
-		case key.Matches(msg, tui.Keys.ContextMenu):
+		case key.Matches(msg, displayengine.Keys.ContextMenu):
 			if m.focus == envFocusEditor && len(m.tabs) > 0 {
 				editor := m.tabs[m.activeTab].editor
-				layout := tui.GetLayout()
+				layout := displayengine.GetLayout()
 				y := m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight + editor.CursorVisualRow() - editor.YOffset()
 				x := m.lastOffsetX + layout.NestedLeftOffset() + editor.CursorVisualCol() + 1
 				return m, m.showContextMenuForClick(x, y)
@@ -286,7 +287,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			case "enter":
 				if m.btnIdx >= 0 && m.btnIdx < len(m.buttons) {
-					zoneByName := map[string]string{"Save": tui.IDSaveButton, "Back": tui.IDBackButton, "Exit": tui.IDExitButton}
+					zoneByName := map[string]string{"Save": displayengine.IDSaveButton, "Back": displayengine.IDBackButton, "Exit": displayengine.IDExitButton}
 					btnName := m.buttons[m.btnIdx]
 					switch btnName {
 					case "Save":
@@ -313,7 +314,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			// Specific editor hotkeys
 			switch {
-			case key.Matches(msg, tui.Keys.EnvDelete):
+			case key.Matches(msg, displayengine.Keys.EnvDelete):
 				if len(m.tabs) > 0 {
 					varName := m.tabs[m.activeTab].editor.CurrentVariableName()
 					m.tabs[m.activeTab].editor.DeleteCurrentVariable()
@@ -327,16 +328,16 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, m.checkEnabledChangedForKey(varName)
 				}
 				return m, nil
-			case key.Matches(msg, tui.Keys.EnvAddVar):
+			case key.Matches(msg, displayengine.Keys.EnvAddVar):
 				return m, m.showAddVarDialog()
 			case msg.String() == "f2":
 				return m, m.showSetValueDialog()
-			case key.Matches(msg, tui.Keys.EnvReorderU):
+			case key.Matches(msg, displayengine.Keys.EnvReorderU):
 				if len(m.tabs) > 0 {
 					m.tabs[m.activeTab].editor.MoveVariableUp()
 				}
 				return m, nil
-			case key.Matches(msg, tui.Keys.EnvReorderD):
+			case key.Matches(msg, displayengine.Keys.EnvReorderD):
 				if len(m.tabs) > 0 {
 					m.tabs[m.activeTab].editor.MoveVariableDown()
 				}
@@ -347,7 +348,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.focus == envFocusEditor && len(m.tabs) > 0 {
 			editor := m.tabs[m.activeTab].editor
 			if editor.IsDragging() {
-				layout := tui.GetLayout()
+				layout := displayengine.GetLayout()
 				relX := msg.X - (m.lastOffsetX + layout.NestedLeftOffset())
 				relY := msg.Y - (m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight)
 				var cmd tea.Cmd
@@ -361,7 +362,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.MouseReleaseMsg:
 		if m.focus == envFocusEditor && len(m.tabs) > 0 {
-			layout := tui.GetLayout()
+			layout := displayengine.GetLayout()
 			relX := msg.X - (m.lastOffsetX + layout.NestedLeftOffset())
 			relY := msg.Y - (m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight)
 			var cmd tea.Cmd
@@ -519,44 +520,44 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.tabs[i].editor.Blur()
 			}
 			m.tabs[i].editor.ScrollbarFunc = func(content string, total, visible, offset int, lineChars bool) string {
-				return tui.ApplyScrollbarColumn(content, total, visible, offset, lineChars, tui.GetActiveContext())
+				return displayengine.ApplyScrollbarColumn(content, total, visible, offset, lineChars, displayengine.GetActiveContext())
 			}
-			m.tabs[i].editor.SetLineCharacters(tui.GetActiveContext().LineCharacters)
+			m.tabs[i].editor.SetLineCharacters(displayengine.GetActiveContext().LineCharacters)
 
 			// Apply theme-aware env-specific styles
 			editorStyles := m.tabs[i].editor.Styles()
-			editorStyles.Focused.LineNumber = tui.SemanticRawStyle("LineNumber")
-			editorStyles.Focused.LineNumberFocused = tui.SemanticRawStyle("LineNumberFocused")
-			editorStyles.Focused.LineNumberModified = tui.SemanticRawStyle("LineNumberModified")
-			editorStyles.Focused.LineNumberModifiedFocused = tui.SemanticRawStyle("LineNumberModifiedFocused")
-			editorStyles.Focused.InvalidText = tui.SemanticRawStyle("EnvInvalid")
-			editorStyles.Focused.DuplicateText = tui.SemanticRawStyle("EnvDuplicate")
-			editorStyles.Focused.BuiltinText = tui.SemanticRawStyle("EnvBuiltin")
-			editorStyles.Focused.CommentText = tui.SemanticRawStyle("LineComment")
-			editorStyles.Focused.ModifiedText = tui.SemanticRawStyle("ModifiedText")
-			editorStyles.Focused.ReadOnlyText = tui.SemanticRawStyle("EnvReadOnly")
-			editorStyles.Focused.PendingDeleteText = tui.SemanticRawStyle("EnvPendingDelete")
-			editorStyles.Focused.GutterAdded = tui.SemanticRawStyle("MarkerAdded")
-			editorStyles.Focused.GutterDeleted = tui.SemanticRawStyle("MarkerDeleted")
-			editorStyles.Focused.GutterModified = tui.SemanticRawStyle("MarkerModified")
-			editorStyles.Focused.GutterInvalid = tui.SemanticRawStyle("MarkerInvalid")
-			editorStyles.Cursor.Color = tui.TextCursorColor()
+			editorStyles.Focused.LineNumber = displayengine.SemanticRawStyle("LineNumber")
+			editorStyles.Focused.LineNumberFocused = displayengine.SemanticRawStyle("LineNumberFocused")
+			editorStyles.Focused.LineNumberModified = displayengine.SemanticRawStyle("LineNumberModified")
+			editorStyles.Focused.LineNumberModifiedFocused = displayengine.SemanticRawStyle("LineNumberModifiedFocused")
+			editorStyles.Focused.InvalidText = displayengine.SemanticRawStyle("EnvInvalid")
+			editorStyles.Focused.DuplicateText = displayengine.SemanticRawStyle("EnvDuplicate")
+			editorStyles.Focused.BuiltinText = displayengine.SemanticRawStyle("EnvBuiltin")
+			editorStyles.Focused.CommentText = displayengine.SemanticRawStyle("LineComment")
+			editorStyles.Focused.ModifiedText = displayengine.SemanticRawStyle("ModifiedText")
+			editorStyles.Focused.ReadOnlyText = displayengine.SemanticRawStyle("EnvReadOnly")
+			editorStyles.Focused.PendingDeleteText = displayengine.SemanticRawStyle("EnvPendingDelete")
+			editorStyles.Focused.GutterAdded = displayengine.SemanticRawStyle("MarkerAdded")
+			editorStyles.Focused.GutterDeleted = displayengine.SemanticRawStyle("MarkerDeleted")
+			editorStyles.Focused.GutterModified = displayengine.SemanticRawStyle("MarkerModified")
+			editorStyles.Focused.GutterInvalid = displayengine.SemanticRawStyle("MarkerInvalid")
+			editorStyles.Cursor.Color = displayengine.TextCursorColor()
 
-			editorStyles.Blurred.LineNumber = tui.SemanticRawStyle("LineNumber")
-			editorStyles.Blurred.LineNumberFocused = tui.SemanticRawStyle("LineNumberFocused")
-			editorStyles.Blurred.LineNumberModified = tui.SemanticRawStyle("LineNumberModified")
-			editorStyles.Blurred.LineNumberModifiedFocused = tui.SemanticRawStyle("LineNumberModifiedFocused")
-			editorStyles.Blurred.InvalidText = tui.SemanticRawStyle("EnvInvalid")
-			editorStyles.Blurred.DuplicateText = tui.SemanticRawStyle("EnvDuplicate")
-			editorStyles.Blurred.BuiltinText = tui.SemanticRawStyle("EnvBuiltin")
-			editorStyles.Blurred.CommentText = tui.SemanticRawStyle("LineComment")
-			editorStyles.Blurred.ModifiedText = tui.SemanticRawStyle("ModifiedText")
-			editorStyles.Blurred.ReadOnlyText = tui.SemanticRawStyle("EnvReadOnly")
-			editorStyles.Blurred.PendingDeleteText = tui.SemanticRawStyle("EnvPendingDelete")
-			editorStyles.Blurred.GutterAdded = tui.SemanticRawStyle("MarkerAdded")
-			editorStyles.Blurred.GutterDeleted = tui.SemanticRawStyle("MarkerDeleted")
-			editorStyles.Blurred.GutterModified = tui.SemanticRawStyle("MarkerModified")
-			editorStyles.Blurred.GutterInvalid = tui.SemanticRawStyle("MarkerInvalid")
+			editorStyles.Blurred.LineNumber = displayengine.SemanticRawStyle("LineNumber")
+			editorStyles.Blurred.LineNumberFocused = displayengine.SemanticRawStyle("LineNumberFocused")
+			editorStyles.Blurred.LineNumberModified = displayengine.SemanticRawStyle("LineNumberModified")
+			editorStyles.Blurred.LineNumberModifiedFocused = displayengine.SemanticRawStyle("LineNumberModifiedFocused")
+			editorStyles.Blurred.InvalidText = displayengine.SemanticRawStyle("EnvInvalid")
+			editorStyles.Blurred.DuplicateText = displayengine.SemanticRawStyle("EnvDuplicate")
+			editorStyles.Blurred.BuiltinText = displayengine.SemanticRawStyle("EnvBuiltin")
+			editorStyles.Blurred.CommentText = displayengine.SemanticRawStyle("LineComment")
+			editorStyles.Blurred.ModifiedText = displayengine.SemanticRawStyle("ModifiedText")
+			editorStyles.Blurred.ReadOnlyText = displayengine.SemanticRawStyle("EnvReadOnly")
+			editorStyles.Blurred.PendingDeleteText = displayengine.SemanticRawStyle("EnvPendingDelete")
+			editorStyles.Blurred.GutterAdded = displayengine.SemanticRawStyle("MarkerAdded")
+			editorStyles.Blurred.GutterDeleted = displayengine.SemanticRawStyle("MarkerDeleted")
+			editorStyles.Blurred.GutterModified = displayengine.SemanticRawStyle("MarkerModified")
+			editorStyles.Blurred.GutterInvalid = displayengine.SemanticRawStyle("MarkerInvalid")
 			m.tabs[i].editor.SetStyles(editorStyles)
 			// Update tab metadata used by saveEnv and heading display
 			m.tabs[i].initialVars = data.InitialVars
@@ -626,11 +627,11 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // HandleContextMenuKey implements the ContextMenuKeyHandler interface so that
 // AppModel delegates the context-menu key to the editor rather than showing the
-// generic global menu. Mirrors the case tui.Keys.ContextMenu branch in Update.
+// generic global menu. Mirrors the case displayengine.Keys.ContextMenu branch in Update.
 func (m *TabbedVarsEditorModel) HandleContextMenuKey() (tea.Model, tea.Cmd, bool) {
 	if m.focus == envFocusEditor && len(m.tabs) > 0 {
 		editor := m.tabs[m.activeTab].editor
-		layout := tui.GetLayout()
+		layout := displayengine.GetLayout()
 		y := m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight + editor.CursorVisualRow() - editor.YOffset()
 		x := m.lastOffsetX + layout.NestedLeftOffset() + editor.CursorVisualCol() + 1
 		cmd := m.showContextMenuForClick(x, y)
@@ -642,4 +643,3 @@ func (m *TabbedVarsEditorModel) HandleContextMenuKey() (tea.Model, tea.Cmd, bool
 }
 
 // TitleBarFocusable implementation is promoted from the embedded tui.
-

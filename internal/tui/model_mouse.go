@@ -2,6 +2,7 @@ package tui
 
 import (
 	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/displayengine"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -24,7 +25,7 @@ func hitIDToPanelID(hitID string) string {
 		if len(parts) >= 3 {
 			return strings.Join(parts[1:len(parts)-1], "-")
 		}
-		return IDListPanel
+		return displayengine.IDListPanel
 	}
 
 	// 2. Normalize prefixed IDs (e.g. "menuID.list_panel" -> "menuID")
@@ -38,28 +39,28 @@ func hitIDToPanelID(hitID string) string {
 
 	// 3. Map button IDs to the button panel ONLY IF they are panel-level buttons in a sub-menu.
 	// We want global buttons like Apply/Back/Exit to fall through to normal `MouseLeft` routing,
-	// so they don't get caught in the panel-hover -> ToggleFocusedMsg auto-activation branch.
-	if strings.HasPrefix(effectiveID, "btn-") || effectiveID == IDApplyButton || effectiveID == IDBackButton || effectiveID == IDExitButton {
-		return IDButtonPanel
+	// so they don't get caught in the panel-hover -> displayengine.ToggleFocusedMsg auto-activation branch.
+	if strings.HasPrefix(effectiveID, "btn-") || effectiveID == displayengine.IDApplyButton || effectiveID == displayengine.IDBackButton || effectiveID == displayengine.IDExitButton {
+		return displayengine.IDButtonPanel
 	}
 
 	// 4. Panel IDs themselves
-	if effectiveID == IDThemePanel || effectiveID == IDOptionsPanel || effectiveID == IDListPanel ||
-		effectiveID == IDPanelViewport || effectiveID == IDButtonPanel {
+	if effectiveID == displayengine.IDThemePanel || effectiveID == displayengine.IDOptionsPanel || effectiveID == displayengine.IDListPanel ||
+		effectiveID == displayengine.IDPanelViewport || effectiveID == displayengine.IDButtonPanel {
 		return effectiveID
 	}
 
-	// 4b. Scrollable list regions in dialogs: map to IDListPanel so wheel uses
-	// hover+LayerWheelMsg routing instead of the focus-snap generic path.
+	// 4b. Scrollable list regions in dialogs: map to displayengine.IDListPanel so wheel uses
+	// hover+displayengine.LayerWheelMsg routing instead of the focus-snap generic path.
 	if effectiveID == "setvalue_list" || effectiveID == "addvar_list" {
-		return IDListPanel
+		return displayengine.IDListPanel
 	}
 
-	// 5. Base Menu IDs (the background region of a MenuModel).
+	// 5. Base Menu IDs (the background region of a displayengine.MenuModel).
 	// If the user hovers the background of a menu, we still want the wheel to scroll the list.
 	// Common screen IDs are "main_menu", "config_menu", "options_menu", "app_selection", "global_flags"
 	// Rather than hardcoding every ID, if it's not a known panel/button but has a hit, it's likely a menu background.
-	if hitID != "" && hitID != IDStatusBar && hitID != IDAppVersion && hitID != IDTmplVersion && hitID != IDHeaderFlags && hitID != IDPanel && hitID != IDPanelToggle && hitID != IDPanelResize && hitID != IDPanelResizeUp && hitID != IDPanelResizeDn {
+	if hitID != "" && hitID != displayengine.IDStatusBar && hitID != displayengine.IDAppVersion && hitID != displayengine.IDTmplVersion && hitID != displayengine.IDHeaderFlags && hitID != displayengine.IDPanel && hitID != displayengine.IDPanelToggle && hitID != displayengine.IDPanelResize && hitID != displayengine.IDPanelResizeUp && hitID != displayengine.IDPanelResizeDn {
 		return effectiveID
 	}
 
@@ -70,17 +71,17 @@ func hitIDToPanelID(hitID string) string {
 // Returns (model, cmd, handled) where handled indicates if the event was consumed.
 func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 	// 1. RESIZE DRAG PRIORITY: If log panel is dragging, it intercepts EVERYTHING
-	if m.panel.resizeDrag.Dragging {
-		prevHeight := m.panel.height
+	if m.panel.ResizeDrag.Dragging {
+		prevHeight := m.panel.PanelHeight
 		updated, cmd := m.panel.Update(msg)
-		m.panel = updated.(PanelModel)
+		m.panel = updated.(displayengine.PanelModel)
 
 		// Only resize downstream components when the panel height actually changed.
 		// Mouse motion events fire at pixel resolution but terminal rows span many
 		// pixels, so many consecutive events map to the same row — skipping the
 		// resize avoids invalidating the menu render cache and recomputing shadows
 		// on those no-op frames.
-		if m.panel.height != prevHeight {
+		if m.panel.PanelHeight != prevHeight {
 			m.backdrop.SetSize(m.width, m.backdropHeight())
 
 			caW, caH := m.getContentArea()
@@ -139,19 +140,19 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 	if m.panelFocused {
 		if _, ok := msg.(tea.MouseWheelMsg); ok {
 			updated, cmd := m.panel.Update(msg)
-			m.panel = updated.(PanelModel)
+			m.panel = updated.(displayengine.PanelModel)
 			return m, cmd, true
 		}
 		if click, ok := msg.(tea.MouseClickMsg); ok && click.Button == tea.MouseMiddle {
 			updated, cmd := m.panel.Update(msg)
-			m.panel = updated.(PanelModel)
+			m.panel = updated.(displayengine.PanelModel)
 			return m, cmd, true
 		}
 	}
 
 	// 4a. CONTEXT MENU OUTSIDE CLICK: left- or right-click outside an open context menu closes it.
 	if click, ok := msg.(tea.MouseClickMsg); ok {
-		if _, ok := m.dialog.(*ContextMenuModel); ok && (click.Button == tea.MouseLeft || click.Button == tea.MouseRight) {
+		if _, ok := m.dialog.(*displayengine.ContextMenuModel); ok && (click.Button == tea.MouseLeft || click.Button == tea.MouseRight) {
 			hit := m.hitRegions.FindHit(click.X, click.Y)
 			hitID := ""
 			if hit != nil {
@@ -181,8 +182,8 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		// Stale ctxmenu regions (no dialog open) are treated as a miss → show global menu.
 		if strings.HasPrefix(hitID, "ctxmenu.") && m.dialog != nil {
 			// Fall through to normal hit dispatch
-		} else if hit == nil || strings.HasPrefix(hitID, "ctxmenu.") || hitID == IDStatusBar || hitID == IDPanel || hitID == IDPanelViewport || hitID == IDPanelToggle || hitID == IDPanelResize || hitID == IDPanelResizeUp || hitID == IDPanelResizeDn || hitID == IDConsoleInput ||
-			hitID == IDAppVersion || hitID == IDTmplVersion || hitID == IDHeaderFlags {
+		} else if hit == nil || strings.HasPrefix(hitID, "ctxmenu.") || hitID == displayengine.IDStatusBar || hitID == displayengine.IDPanel || hitID == displayengine.IDPanelViewport || hitID == displayengine.IDPanelToggle || hitID == displayengine.IDPanelResize || hitID == displayengine.IDPanelResizeUp || hitID == displayengine.IDPanelResizeDn || hitID == displayengine.IDConsoleInput ||
+			hitID == displayengine.IDAppVersion || hitID == displayengine.IDTmplVersion || hitID == displayengine.IDHeaderFlags {
 			// 2. If hitting background or a global element that doesn't usually have a context menu,
 			// show the global context menu.
 			return m, m.showGlobalContextMenu(click.X, click.Y, hit), true
@@ -208,14 +209,14 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		}
 
 		// Status bar: route wheel to the header for version cycling
-		if hitID == IDStatusBar || hitID == IDAppVersion || hitID == IDTmplVersion {
+		if hitID == displayengine.IDStatusBar || hitID == displayengine.IDAppVersion || hitID == displayengine.IDTmplVersion {
 			if m.dialog != nil {
 				return m, nil, true // Block interaction if dialog is open
 			}
 			var cmd tea.Cmd
 			if m.backdrop != nil {
-				updated, bCmd := m.backdrop.Update(LayerWheelMsg{ID: IDStatusBar, Button: wheelMsg.Button, Hit: hit})
-				if backdrop, ok := updated.(*BackdropModel); ok {
+				updated, bCmd := m.backdrop.Update(displayengine.LayerWheelMsg{ID: displayengine.IDStatusBar, Button: wheelMsg.Button, Hit: hit})
+				if backdrop, ok := updated.(*displayengine.BackdropModel); ok {
 					m.backdrop = backdrop
 				}
 				cmd = bCmd
@@ -224,10 +225,10 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		}
 
 		// Check if hovering over log panel - if so, focus and scroll it
-		if hitID == IDPanel || hitID == IDPanelViewport {
+		if hitID == displayengine.IDPanel || hitID == displayengine.IDPanelViewport {
 			m.setPanelFocus(true)
 			updated, cmd := m.panel.Update(msg)
-			m.panel = updated.(PanelModel)
+			m.panel = updated.(displayengine.PanelModel)
 			return m, cmd, true
 		}
 
@@ -235,15 +236,15 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		m.setPanelFocus(false)
 
 		// Clear header focus — wheel moved away from the status bar
-		m.setHeaderFocus(HeaderFocusNone)
+		m.setHeaderFocus(displayengine.HeaderFocusNone)
 
 		panelID := hitIDToPanelID(hitID)
 
-		// List panel: send a semantic LayerWheelMsg so screens can scroll the list
+		// List panel: send a semantic displayengine.LayerWheelMsg so screens can scroll the list
 		// without changing button focus — mirrors keyboard up/down arrow behaviour.
-		if panelID == IDListPanel {
+		if panelID == displayengine.IDListPanel {
 			// Trigger focus shift FIRST so the border changes visually
-			focusMsg := LayerHitMsg{ID: IDListPanel, Button: HoverButton, X: wheelMsg.X, Y: wheelMsg.Y, Hit: hit} // Use custom HoverButton
+			focusMsg := displayengine.LayerHitMsg{ID: displayengine.IDListPanel, Button: displayengine.HoverButton, X: wheelMsg.X, Y: wheelMsg.Y, Hit: hit} // Use custom displayengine.HoverButton
 			if m.dialog != nil {
 				m.dialog, _ = m.dialog.Update(focusMsg)
 			} else if m.activeScreen != nil {
@@ -253,7 +254,7 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 				}
 			}
 
-			listWheel := LayerWheelMsg{ID: IDListPanel, Button: wheelMsg.Button, Hit: hit}
+			listWheel := displayengine.LayerWheelMsg{ID: displayengine.IDListPanel, Button: wheelMsg.Button, Hit: hit}
 			var listCmd tea.Cmd
 			if m.dialog != nil {
 				m.dialog, listCmd = m.dialog.Update(listWheel)
@@ -270,7 +271,7 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 
 		// For other panels (submenus, button row), switch focus to the hovered panel first
 		if panelID != "" {
-			focusMsg := LayerHitMsg{ID: panelID, Button: tea.MouseLeft, X: wheelMsg.X, Y: wheelMsg.Y, Hit: hit}
+			focusMsg := displayengine.LayerHitMsg{ID: panelID, Button: tea.MouseLeft, X: wheelMsg.X, Y: wheelMsg.Y, Hit: hit}
 			if m.dialog != nil {
 				m.dialog, _ = m.dialog.Update(focusMsg)
 			} else if m.activeScreen != nil {
@@ -304,14 +305,14 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		}
 
 		// Status bar: middle-click activates the currently focused version item
-		if hitID == IDStatusBar || hitID == IDAppVersion || hitID == IDTmplVersion || hitID == IDHeaderFlags {
+		if hitID == displayengine.IDStatusBar || hitID == displayengine.IDAppVersion || hitID == displayengine.IDTmplVersion || hitID == displayengine.IDHeaderFlags {
 			if m.dialog != nil {
 				return m, nil, true // Block interaction if dialog is open
 			}
 			var cmd tea.Cmd
 			if m.backdrop != nil {
-				updated, bCmd := m.backdrop.Update(ToggleFocusedMsg{})
-				if backdrop, ok := updated.(*BackdropModel); ok {
+				updated, bCmd := m.backdrop.Update(displayengine.ToggleFocusedMsg{})
+				if backdrop, ok := updated.(*displayengine.BackdropModel); ok {
 					m.backdrop = backdrop
 				}
 				cmd = bCmd
@@ -320,10 +321,10 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		}
 
 		// Check if hovering over log panel - focus it and send toggle
-		if hitID == IDPanel || hitID == IDPanelViewport {
+		if hitID == displayengine.IDPanel || hitID == displayengine.IDPanelViewport {
 			m.setPanelFocus(true)
-			updated, cmd := m.panel.Update(ToggleFocusedMsg{})
-			m.panel = updated.(PanelModel)
+			updated, cmd := m.panel.Update(displayengine.ToggleFocusedMsg{})
+			m.panel = updated.(displayengine.PanelModel)
 			return m, cmd, true
 		}
 
@@ -331,15 +332,15 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		m.setPanelFocus(false)
 
 		// Clear header focus — middle-click landed away from the status bar
-		m.setHeaderFocus(HeaderFocusNone)
+		m.setHeaderFocus(displayengine.HeaderFocusNone)
 
 		// Check if the hit ID maps to a panel (submenu or button row).
 		// Panel-mapped IDs use the hover model: focus the panel, then activate the
-		// currently focused item in that panel via ToggleFocusedMsg.
+		// currently focused item in that panel via displayengine.ToggleFocusedMsg.
 		// This covers display_options submenus (theme/options) and button row.
 		panelID := hitIDToPanelID(hitID)
 		if panelID != "" {
-			focusMsg := LayerHitMsg{ID: panelID, Button: tea.MouseLeft, X: click.X, Y: click.Y, Hit: hit}
+			focusMsg := displayengine.LayerHitMsg{ID: panelID, Button: tea.MouseLeft, X: click.X, Y: click.Y, Hit: hit}
 			if m.dialog != nil {
 				m.dialog, _ = m.dialog.Update(focusMsg)
 			} else if m.activeScreen != nil {
@@ -350,9 +351,9 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 			}
 			var toggleCmd tea.Cmd
 			if m.dialog != nil {
-				m.dialog, toggleCmd = m.dialog.Update(ToggleFocusedMsg{})
+				m.dialog, toggleCmd = m.dialog.Update(displayengine.ToggleFocusedMsg{})
 			} else if m.activeScreen != nil {
-				updated, sCmd := m.activeScreen.Update(ToggleFocusedMsg{})
+				updated, sCmd := m.activeScreen.Update(displayengine.ToggleFocusedMsg{})
 				if s, ok := updated.(ScreenModel); ok {
 					m.activeScreen = s
 				}
@@ -361,10 +362,10 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 			return m, toggleCmd, true
 		}
 
-		// For context menus, forward middle click as a LayerHitMsg so the menu can
+		// For context menus, forward middle click as a displayengine.LayerHitMsg so the menu can
 		// select the focused item regardless of where the mouse cursor is.
-		if _, ok := m.dialog.(*ContextMenuModel); ok {
-			layerMsg := LayerHitMsg{Button: tea.MouseMiddle, X: click.X, Y: click.Y, Hit: hit}
+		if _, ok := m.dialog.(*displayengine.ContextMenuModel); ok {
+			layerMsg := displayengine.LayerHitMsg{Button: tea.MouseMiddle, X: click.X, Y: click.Y, Hit: hit}
 			if hit != nil {
 				layerMsg.ID = hit.ID
 			}
@@ -377,7 +378,7 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		// Yes/No confirm buttons, OK dismiss buttons), dispatch as a left click so the
 		// button action fires normally.
 		if isButtonHitID(hitID) {
-			layerMsg := LayerHitMsg{ID: hitID, Button: tea.MouseLeft, X: click.X, Y: click.Y, Hit: hit}
+			layerMsg := displayengine.LayerHitMsg{ID: hitID, Button: tea.MouseLeft, X: click.X, Y: click.Y, Hit: hit}
 			var btnCmd tea.Cmd
 			if m.dialog != nil {
 				m.dialog, btnCmd = m.dialog.Update(layerMsg)
@@ -392,13 +393,13 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 			}
 		}
 
-		// For anything else with no panel and no button mapping, send ToggleFocusedMsg
+		// For anything else with no panel and no button mapping, send displayengine.ToggleFocusedMsg
 		// generically (e.g., middle-clicking empty screen space).
 		var mainCmd tea.Cmd
 		if m.dialog != nil {
-			m.dialog, mainCmd = m.dialog.Update(ToggleFocusedMsg{})
+			m.dialog, mainCmd = m.dialog.Update(displayengine.ToggleFocusedMsg{})
 		} else if m.activeScreen != nil {
-			updated, sCmd := m.activeScreen.Update(ToggleFocusedMsg{})
+			updated, sCmd := m.activeScreen.Update(displayengine.ToggleFocusedMsg{})
 			if s, ok := updated.(ScreenModel); ok {
 				m.activeScreen = s
 			}
@@ -412,7 +413,7 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 	var hitButton tea.MouseButton
 	var hitX, hitY int
 
-	var hit *HitRegion
+	var hit *displayengine.HitRegion
 	switch me := msg.(type) {
 	case tea.MouseClickMsg:
 		hit = m.hitRegions.FindHit(me.X, me.Y)
@@ -432,48 +433,48 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		// Create semantic message with button info
 		var semanticMsg tea.Msg
 		if _, ok := msg.(tea.MouseWheelMsg); ok {
-			semanticMsg = LayerWheelMsg{ID: hitID, Button: hitButton, Hit: hit}
+			semanticMsg = displayengine.LayerWheelMsg{ID: hitID, Button: hitButton, Hit: hit}
 		} else {
-			semanticMsg = LayerHitMsg{ID: hitID, Button: hitButton, X: hitX, Y: hitY, Hit: hit}
+			semanticMsg = displayengine.LayerHitMsg{ID: hitID, Button: hitButton, X: hitX, Y: hitY, Hit: hit}
 		}
 
 		// A. AppModel Internal IDs (handled globally)
 		switch hitID {
-		case IDPanelToggle:
+		case displayengine.IDPanelToggle:
 			if me, ok := msg.(tea.MouseClickMsg); ok && me.Button == tea.MouseLeft {
-				return m, func() tea.Msg { return togglePanelMsg{} }, true
+				return m, func() tea.Msg { return displayengine.TogglePanelMsg{} }, true
 			}
-		case IDPanelResize:
+		case displayengine.IDPanelResize:
 			if me, ok := msg.(tea.MouseClickMsg); ok && me.Button == tea.MouseLeft {
 				// Correctly deliver raw msg to start dragging
 				updated, cmd := m.panel.Update(msg)
-				m.panel = updated.(PanelModel)
+				m.panel = updated.(displayengine.PanelModel)
 				m.setPanelFocus(true)
 				return m, cmd, true
 			}
-		case IDPanel + "." + IDInsOvr:
+		case displayengine.IDPanel + "." + displayengine.IDInsOvr:
 			if _, ok := msg.(tea.MouseClickMsg); ok {
-				m.panel.input.ToggleOverwrite()
+				m.panel.Input.ToggleOverwrite()
 			}
 			return m, nil, true
-		case IDConsoleInput:
+		case displayengine.IDConsoleInput:
 			if me, ok := msg.(tea.MouseClickMsg); ok {
 				m.setPanelFocus(true)
 				if me.Button == tea.MouseLeft {
 					blinkCmd := m.panel.FocusInput()
-					m.panel.input.HandleClick(me.X)
+					m.panel.Input.HandleClick(me.X)
 					return m, blinkCmd, true
 				}
 				if me.Button == tea.MouseRight {
-					updated, cmd := m.panel.Update(LayerHitMsg{ID: IDConsoleInput, Button: tea.MouseRight, X: me.X, Y: me.Y, Hit: hit})
-					m.panel = updated.(PanelModel)
+					updated, cmd := m.panel.Update(displayengine.LayerHitMsg{ID: displayengine.IDConsoleInput, Button: tea.MouseRight, X: me.X, Y: me.Y, Hit: hit})
+					m.panel = updated.(displayengine.PanelModel)
 					return m, cmd, true
 				}
 			}
-		case IDPanelResizeUp:
+		case displayengine.IDPanelResizeUp:
 			if _, ok := msg.(tea.MouseClickMsg); ok {
-				if m.panel.expanded {
-					pressCmd := m.panel.PressWidgetID(panelWidgetUp, IDPanelResizeUp)
+				if m.panel.Expanded {
+					pressCmd := m.panel.PressWidgetID(displayengine.PanelWidgetUp, displayengine.IDPanelResizeUp)
 					m.panel.ResizeBy(1)
 					m.applyPanelMax()
 					m.refreshPanelLayout()
@@ -481,10 +482,10 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 				}
 			}
 			return m, nil, true
-		case IDPanelResizeDn:
+		case displayengine.IDPanelResizeDn:
 			if _, ok := msg.(tea.MouseClickMsg); ok {
-				if m.panel.expanded {
-					pressCmd := m.panel.PressWidgetID(panelWidgetDn, IDPanelResizeDn)
+				if m.panel.Expanded {
+					pressCmd := m.panel.PressWidgetID(displayengine.PanelWidgetDn, displayengine.IDPanelResizeDn)
 					m.panel.ResizeBy(-1)
 					m.applyPanelMax()
 					m.refreshPanelLayout()
@@ -492,23 +493,23 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 				}
 			}
 			return m, nil, true
-		case IDPanel, IDPanelViewport:
+		case displayengine.IDPanel, displayengine.IDPanelViewport:
 			m.setPanelFocus(true)
-			if m.panel.inputFocused {
-				m.panel.input.Blur()
-				m.panel.inputFocused = false
+			if m.panel.InputFocused {
+				m.panel.Input.Blur()
+				m.panel.InputFocused = false
 			}
 			if _, ok := msg.(tea.MouseWheelMsg); ok {
 				updated, cmd := m.panel.Update(msg)
-				m.panel = updated.(PanelModel)
+				m.panel = updated.(displayengine.PanelModel)
 				return m, cmd, true
 			}
 			return m, nil, true
 		default:
 			// Title bar widget clicks: IDs are "menuID.title_widget_help" / "menuID.title_widget_close"
 			if _, ok := msg.(tea.MouseClickMsg); ok && hitButton == tea.MouseLeft {
-				if IsTitleWidgetID(hitID) {
-					// Route the LayerHitMsg (with the ID) through the active dialog/screen
+				if displayengine.IsTitleWidgetID(hitID) {
+					// Route the displayengine.LayerHitMsg (with the ID) through the active dialog/screen
 					// so sub-dialogs (e.g. confirm inside a programbox) receive and handle
 					// the click in their own Update().
 					if m.dialog != nil {
@@ -537,12 +538,12 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 			}
 
 			// Log panel scrollbar hits (IDs are "panel.sb.*")
-			if strings.HasPrefix(hitID, IDPanel+".sb.") {
+			if strings.HasPrefix(hitID, displayengine.IDPanel+".sb.") {
 				m.setPanelFocus(true)
 				if !strings.HasSuffix(hitID, ".sb.thumb") {
-					// Arrow/track clicks: route LayerHitMsg to log panel and return
-					updated, cmd := m.panel.Update(LayerHitMsg{ID: hitID, Button: hitButton, Hit: hit})
-					m.panel = updated.(PanelModel)
+					// Arrow/track clicks: route displayengine.LayerHitMsg to log panel and return
+					updated, cmd := m.panel.Update(displayengine.LayerHitMsg{ID: hitID, Button: hitButton, Hit: hit})
+					m.panel = updated.(displayengine.PanelModel)
 					return m, cmd, true
 				}
 				// .sb.thumb: fall through to B0 to start the drag
@@ -551,23 +552,23 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 				// Do not clear on motion or release — those must not override a focus
 				// that was intentionally set by a preceding click.
 				m.setPanelFocus(false)
-				m.setHeaderFocus(HeaderFocusNone)
+				m.setHeaderFocus(displayengine.HeaderFocusNone)
 			}
 		}
 
-		// B0. Scrollbar thumb drag start — route raw click so the drag-target gets the Y coordinate.
-		// Other .sb.* IDs (up/down/above/below) are handled normally via LayerHitMsg.
+		// B0. displayengine.Scrollbar thumb drag start — route raw click so the drag-target gets the Y coordinate.
+		// Other .sb.* IDs (up/down/above/below) are handled normally via displayengine.LayerHitMsg.
 		if strings.HasSuffix(hitID, ".sb.thumb") {
 			if me, ok := msg.(tea.MouseClickMsg); ok && me.Button == tea.MouseLeft {
 				// Log panel scrollbar thumb
-				if strings.HasPrefix(hitID, IDPanel+".sb.") {
+				if strings.HasPrefix(hitID, displayengine.IDPanel+".sb.") {
 					m.setPanelFocus(true)
 					sbAbsTopY := m.height - m.panel.Height() + 1
 					m.panelSbAbsTopY = sbAbsTopY
 					vpH := m.panel.Height() - 1
-					total := m.panel.sv.TotalLineCount()
-					visible := m.panel.sv.Height()
-					m.panelSbInfo = ComputeScrollbarInfo(total, visible, m.panel.sv.YOffset(), vpH)
+					total := m.panel.Sv.TotalLineCount()
+					visible := m.panel.Sv.Height()
+					m.panelSbInfo = displayengine.ComputeScrollbarInfo(total, visible, m.panel.Sv.YOffset(), vpH)
 					m.panelSbDrag.StartDrag(me.Y, sbAbsTopY, m.panelSbInfo)
 					return m, nil, true
 				}
@@ -601,19 +602,19 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		}
 
 		// C. Global Backdrop (Header etc)
-		isStatusBarHit := hitID == IDStatusBar || hitID == IDAppVersion || hitID == IDTmplVersion || hitID == IDHeaderFlags
+		isStatusBarHit := hitID == displayengine.IDStatusBar || hitID == displayengine.IDAppVersion || hitID == displayengine.IDTmplVersion || hitID == displayengine.IDHeaderFlags
 		var backdropCmd tea.Cmd
 		if m.backdrop != nil {
 			if m.dialog != nil && isStatusBarHit {
 				// When a dialog is open, allow focus-only (no action) on status bar hits.
-				hoverMsg := LayerHitMsg{ID: hitID, Button: HoverButton, X: hitX, Y: hitY, Hit: hit}
+				hoverMsg := displayengine.LayerHitMsg{ID: hitID, Button: displayengine.HoverButton, X: hitX, Y: hitY, Hit: hit}
 				updated, _ := m.backdrop.Update(hoverMsg)
-				if backdrop, ok := updated.(*BackdropModel); ok {
+				if backdrop, ok := updated.(*displayengine.BackdropModel); ok {
 					m.backdrop = backdrop
 				}
 			} else {
 				updated, bCmd := m.backdrop.Update(semanticMsg)
-				if backdrop, ok := updated.(*BackdropModel); ok {
+				if backdrop, ok := updated.(*displayengine.BackdropModel); ok {
 					m.backdrop = backdrop
 				}
 				backdropCmd = bCmd
@@ -639,7 +640,7 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		// Only clear header focus on explicit clicks — not motion/release events.
 		// Motion fires continuously and would immediately cancel a focus set by a preceding click.
 		if _, isClick := msg.(tea.MouseClickMsg); isClick {
-			m.setHeaderFocus(HeaderFocusNone)
+			m.setHeaderFocus(displayengine.HeaderFocusNone)
 		}
 		return m, nil, false // Let raw msg fall through to dialog in standard loop
 	}
@@ -656,4 +657,3 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 	m.updateComponentFocus()
 	return m, nil, false
 }
-

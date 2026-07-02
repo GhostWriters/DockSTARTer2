@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/tui"
 	"strings"
 
@@ -35,23 +36,23 @@ func (s *ServerOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Forward drag/scroll done messages to inner menus.
 	switch dmsg := msg.(type) {
-	case tui.DragDoneMsg:
+	case displayengine.DragDoneMsg:
 		updated, c1 := s.settingsMenu.Update(dmsg)
-		if m, ok := updated.(*tui.MenuModel); ok {
+		if m, ok := updated.(*displayengine.MenuModel); ok {
 			s.settingsMenu = m
 		}
 		updated, c2 := s.statusMenu.Update(dmsg)
-		if m, ok := updated.(*tui.MenuModel); ok {
+		if m, ok := updated.(*displayengine.MenuModel); ok {
 			s.statusMenu = m
 		}
 		return s, tea.Batch(c1, c2)
-	case tui.ScrollDoneMsg:
+	case displayengine.ScrollDoneMsg:
 		updated, c1 := s.settingsMenu.Update(dmsg)
-		if m, ok := updated.(*tui.MenuModel); ok {
+		if m, ok := updated.(*displayengine.MenuModel); ok {
 			s.settingsMenu = m
 		}
 		updated, c2 := s.statusMenu.Update(dmsg)
-		if m, ok := updated.(*tui.MenuModel); ok {
+		if m, ok := updated.(*displayengine.MenuModel); ok {
 			s.statusMenu = m
 		}
 		return s, tea.Batch(c1, c2)
@@ -65,7 +66,7 @@ func (s *ServerOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if _, ok := msg.(tea.MouseMotionMsg); ok {
 			updated, uCmd := target.Update(msg)
-			if m, ok := updated.(*tui.MenuModel); ok {
+			if m, ok := updated.(*displayengine.MenuModel); ok {
 				if target == s.settingsMenu {
 					s.settingsMenu = m
 				} else {
@@ -76,7 +77,7 @@ func (s *ServerOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if _, ok := msg.(tea.MouseReleaseMsg); ok {
 			updated, uCmd := target.Update(msg)
-			if m, ok := updated.(*tui.MenuModel); ok {
+			if m, ok := updated.(*displayengine.MenuModel); ok {
 				if target == s.settingsMenu {
 					s.settingsMenu = m
 				} else {
@@ -99,13 +100,13 @@ func (s *ServerOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch s.focusedPanel {
 		case FocusServerSettings:
 			updated, uCmd := s.settingsMenu.Update(msg)
-			if m, ok := updated.(*tui.MenuModel); ok {
+			if m, ok := updated.(*displayengine.MenuModel); ok {
 				s.settingsMenu = m
 			}
 			return s, uCmd
 		case FocusServerStatus:
 			updated, uCmd := s.statusMenu.Update(msg)
-			if m, ok := updated.(*tui.MenuModel); ok {
+			if m, ok := updated.(*displayengine.MenuModel); ok {
 				s.statusMenu = m
 			}
 			return s, uCmd
@@ -124,7 +125,7 @@ func (s *ServerOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, nil
 		}
 
-	case tui.LayerHitMsg:
+	case displayengine.LayerHitMsg:
 		// Panel focus routing
 		switch msg.ID {
 		case "server_settings":
@@ -135,27 +136,27 @@ func (s *ServerOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			s.focusedPanel = FocusServerStatus
 			s.updateFocusStates()
 			return s, nil
-		case tui.IDButtonPanel:
+		case displayengine.IDButtonPanel:
 			s.focusedPanel = FocusServerButtons
 			s.updateFocusStates()
 			return s, nil
 		}
 
 		// Global button actions
-		if tui.ButtonIDMatches(msg.ID, tui.IDApplyButton) {
+		if displayengine.ButtonIDMatches(msg.ID, displayengine.IDApplyButton) {
 			if msg.Button == tea.MouseLeft {
 				s.focusedPanel = FocusServerButtons
 				s.focusedButton = 0
 				s.updateFocusStates()
-				return s, s.outerMenu.SetProcessingBtnDeferred(tui.IDApplyButton, s.handleApply())
+				return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDApplyButton, s.handleApply())
 			}
-			if msg.Button == tui.HoverButton {
+			if msg.Button == displayengine.HoverButton {
 				s.focusedPanel = FocusServerButtons
 				s.focusedButton = 0
 				s.updateFocusStates()
 				return s, nil
 			}
-		} else if tui.ButtonIDMatches(msg.ID, tui.IDBackButton) {
+		} else if displayengine.ButtonIDMatches(msg.ID, displayengine.IDBackButton) {
 			if msg.Button == tea.MouseLeft {
 				s.focusedPanel = FocusServerButtons
 				s.focusedButton = 1
@@ -163,22 +164,22 @@ func (s *ServerOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if s.isRoot {
 					return s, nil
 				}
-				return s, s.outerMenu.SetProcessingBtnDeferred(tui.IDBackButton, navigateBack())
+				return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDBackButton, navigateBack())
 			}
-			if msg.Button == tui.HoverButton {
+			if msg.Button == displayengine.HoverButton {
 				s.focusedPanel = FocusServerButtons
 				s.focusedButton = 1
 				s.updateFocusStates()
 				return s, nil
 			}
-		} else if tui.ButtonIDMatches(msg.ID, tui.IDExitButton) {
+		} else if displayengine.ButtonIDMatches(msg.ID, displayengine.IDExitButton) {
 			if msg.Button == tea.MouseLeft {
 				s.focusedPanel = FocusServerButtons
 				s.focusedButton = s.maxFocusedButton()
 				s.updateFocusStates()
-				return s, s.outerMenu.SetProcessingBtnDeferred(tui.IDExitButton, tui.ConfirmExitAction())
+				return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDExitButton, tui.ConfirmExitAction())
 			}
-			if msg.Button == tui.HoverButton {
+			if msg.Button == displayengine.HoverButton {
 				s.focusedPanel = FocusServerButtons
 				s.focusedButton = s.maxFocusedButton()
 				s.updateFocusStates()
@@ -191,7 +192,7 @@ func (s *ServerOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			s.focusedPanel = FocusServerSettings
 			s.updateFocusStates()
 			updated, uCmd := s.settingsMenu.Update(msg)
-			if m, ok := updated.(*tui.MenuModel); ok {
+			if m, ok := updated.(*displayengine.MenuModel); ok {
 				s.settingsMenu = m
 			}
 			return s, uCmd
@@ -199,32 +200,32 @@ func (s *ServerOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			s.focusedPanel = FocusServerStatus
 			s.updateFocusStates()
 			updated, uCmd := s.statusMenu.Update(msg)
-			if m, ok := updated.(*tui.MenuModel); ok {
+			if m, ok := updated.(*displayengine.MenuModel); ok {
 				s.statusMenu = m
 			}
 			return s, uCmd
 		}
 
 		// Title widget clicks — delegate to outerMenu
-		if s.outerMenu != nil && tui.IsTitleWidgetID(msg.ID) {
+		if s.outerMenu != nil && displayengine.IsTitleWidgetID(msg.ID) {
 			updated, uCmd := s.outerMenu.Update(msg)
-			if m, ok := updated.(*tui.MenuModel); ok {
+			if m, ok := updated.(*displayengine.MenuModel); ok {
 				s.outerMenu = m
 			}
 			return s, uCmd
 		}
 
-	case tui.ToggleFocusedMsg:
+	case displayengine.ToggleFocusedMsg:
 		switch s.focusedPanel {
 		case FocusServerSettings:
 			updated, uCmd := s.settingsMenu.Update(msg)
-			if m, ok := updated.(*tui.MenuModel); ok {
+			if m, ok := updated.(*displayengine.MenuModel); ok {
 				s.settingsMenu = m
 			}
 			return s, uCmd
 		case FocusServerStatus:
 			updated, uCmd := s.statusMenu.Update(msg)
-			if m, ok := updated.(*tui.MenuModel); ok {
+			if m, ok := updated.(*displayengine.MenuModel); ok {
 				s.statusMenu = m
 			}
 			return s, uCmd
@@ -237,14 +238,14 @@ func (s *ServerOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Title bar focus: delegate all keys to outer menu when its title bar is focused.
 		if s.outerMenu != nil && s.outerMenu.TitleBarFocused() {
 			updated, uCmd := s.outerMenu.Update(msg)
-			if m, ok := updated.(*tui.MenuModel); ok {
+			if m, ok := updated.(*displayengine.MenuModel); ok {
 				s.outerMenu = m
 			}
 			return s, uCmd
 		}
 
 		// Tab / Shift-Tab: cycle between panels
-		if key.Matches(msg, tui.Keys.CycleTab) || key.Matches(msg, tui.Keys.CycleShiftTab) {
+		if key.Matches(msg, displayengine.Keys.CycleTab) || key.Matches(msg, displayengine.Keys.CycleShiftTab) {
 			switch s.focusedPanel {
 			case FocusServerSettings:
 				s.focusedPanel = FocusServerStatus
@@ -256,7 +257,7 @@ func (s *ServerOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Left/Right: cycle buttons
-		if key.Matches(msg, tui.Keys.Left) {
+		if key.Matches(msg, displayengine.Keys.Left) {
 			s.focusedPanel = FocusServerButtons
 			s.focusedButton--
 			if s.focusedButton < 0 {
@@ -265,7 +266,7 @@ func (s *ServerOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			s.updateFocusStates()
 			return s, nil
 		}
-		if key.Matches(msg, tui.Keys.Right) {
+		if key.Matches(msg, displayengine.Keys.Right) {
 			s.focusedPanel = FocusServerButtons
 			s.focusedButton++
 			if s.focusedButton > s.maxFocusedButton() {
@@ -275,11 +276,11 @@ func (s *ServerOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, nil
 		}
 
-		if key.Matches(msg, tui.Keys.Enter) {
+		if key.Matches(msg, displayengine.Keys.Enter) {
 			return s.execFocusedButton()
 		}
 
-		if key.Matches(msg, tui.Keys.Esc) {
+		if key.Matches(msg, displayengine.Keys.Esc) {
 			return s, s.EscapeAction()
 		}
 
@@ -287,13 +288,13 @@ func (s *ServerOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch s.focusedPanel {
 		case FocusServerSettings:
 			updated, uCmd := s.settingsMenu.Update(msg)
-			if m, ok := updated.(*tui.MenuModel); ok {
+			if m, ok := updated.(*displayengine.MenuModel); ok {
 				s.settingsMenu = m
 			}
 			return s, uCmd
 		case FocusServerStatus:
 			updated, uCmd := s.statusMenu.Update(msg)
-			if m, ok := updated.(*tui.MenuModel); ok {
+			if m, ok := updated.(*displayengine.MenuModel); ok {
 				s.statusMenu = m
 			}
 			return s, uCmd
@@ -311,19 +312,19 @@ func (s *ServerOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		s.refreshStatus()
 		return s, nil
 
-	case tui.ConfigChangedMsg:
+	case displayengine.ConfigChangedMsg:
 		if s.outerMenu != nil {
 			s.outerMenu.InvalidateCache()
 		}
 		return s, nil
 
-	case tui.LockStateChangedMsg:
+	case displayengine.LockStateChangedMsg:
 		updated, c1 := s.settingsMenu.Update(msg)
-		if m, ok := updated.(*tui.MenuModel); ok {
+		if m, ok := updated.(*displayengine.MenuModel); ok {
 			s.settingsMenu = m
 		}
 		updated, c2 := s.statusMenu.Update(msg)
-		if m, ok := updated.(*tui.MenuModel); ok {
+		if m, ok := updated.(*displayengine.MenuModel); ok {
 			s.statusMenu = m
 		}
 		return s, tea.Batch(c1, c2)
@@ -362,99 +363,19 @@ func (s *ServerOptionsScreen) Layers() []*lipgloss.Layer {
 	}
 	dialog := s.outerMenu.ViewString()
 	return []*lipgloss.Layer{
-		lipgloss.NewLayer(dialog).X(0).Y(0).Z(tui.ZScreen),
+		lipgloss.NewLayer(dialog).X(0).Y(0).Z(displayengine.ZScreen),
 	}
 }
 
-func (s *ServerOptionsScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegion {
-	var regions []tui.HitRegion
-
-	layout := tui.GetLayout()
-	contentX := (layout.BorderWidth() / 2) + layout.ContentSideMargin
-
-	largeTitleOffset := 0
-	if s.outerMenu != nil && s.outerMenu.HasLargeTitleBar() {
-		largeTitleOffset = tui.LargeTitleBarOverhead
+// GetHitRegions delegates entirely to the outer container MenuModel, which
+// already knows its own (possibly shrunk, non-maximized) rendered width and
+// each content section's actual position -- hand-computing regions here
+// from s.width (the full content area, before the outer's own width-shrink)
+// went stale and desynced from the real rendered layout once Server Settings
+// started shrinking to fit instead of always filling the screen.
+func (s *ServerOptionsScreen) GetHitRegions(offsetX, offsetY int) []displayengine.HitRegion {
+	if s.outerMenu == nil {
+		return nil
 	}
-	contentY := 1 + largeTitleOffset
-
-	// Settings menu regions
-	settingsRegions := s.settingsMenu.GetHitRegions(offsetX+contentX, offsetY+contentY)
-	regions = append(regions, settingsRegions...)
-	regions = append(regions, tui.HitRegion{
-		ID:     "server_settings",
-		X:      offsetX + contentX,
-		Y:      offsetY + contentY,
-		Width:  s.settingsMenu.Width(),
-		Height: s.settingsMenu.Height(),
-		ZOrder: tui.ZScreen + 1,
-		Label:  "Server Configuration",
-	})
-
-	// Status menu regions (below settings)
-	statusY := contentY + s.settingsMenu.Height()
-	statusRegions := s.statusMenu.GetHitRegions(offsetX+contentX, offsetY+statusY)
-	regions = append(regions, statusRegions...)
-	regions = append(regions, tui.HitRegion{
-		ID:     "server_status",
-		X:      offsetX + contentX,
-		Y:      offsetY + statusY,
-		Width:  s.statusMenu.Width(),
-		Height: s.statusMenu.Height(),
-		ZOrder: tui.ZScreen + 1,
-		Label:  "Server Status",
-		Help: &tui.HelpContext{
-			ScreenName: s.outerMenu.Title(),
-			PageTitle:  "Description",
-			PageText:   "Live status of the SSH server and any active remote session.",
-		},
-	})
-
-	// Button row
-	menuWidth := s.width - layout.BorderWidth()
-	buttonY := 1 + largeTitleOffset + s.settingsMenu.Height() + s.statusMenu.Height()
-	btnRowWidth := menuWidth - layout.ContentMarginWidth()
-
-	regions = append(regions, tui.HitRegion{
-		ID:     tui.IDButtonPanel,
-		X:      offsetX + contentX,
-		Y:      offsetY + buttonY,
-		Width:  btnRowWidth,
-		Height: s.outerMenu.GetButtonHeight(),
-		ZOrder: tui.ZScreen + 1,
-		Label:  "Actions",
-	})
-
-	btnSpecs := []tui.ButtonSpec{
-		{Text: "Apply", ZoneID: tui.IDApplyButton, Help: "Save server settings to dockstarter2.toml."},
-	}
-	if s.isRoot {
-		btnSpecs = append(btnSpecs, tui.ButtonSpec{Text: "Exit", ZoneID: tui.IDExitButton, Help: "Exit the application."})
-	} else {
-		btnSpecs = append(btnSpecs,
-			tui.ButtonSpec{Text: "Back", ZoneID: tui.IDBackButton, Help: "Return to the previous screen."},
-			tui.ButtonSpec{Text: "Exit", ZoneID: tui.IDExitButton, Help: "Exit the application."},
-		)
-	}
-	helpCtx := tui.HelpContext{
-		ScreenName: s.outerMenu.Title(),
-		PageTitle:  "Description",
-		PageText:   "Configure remote access to the DS2 TUI.",
-	}
-	regions = append(regions, tui.GetButtonHitRegions(
-		helpCtx,
-		s.outerMenu.ID(), offsetX+contentX, offsetY+buttonY, btnRowWidth, tui.ZScreen+25,
-		btnSpecs...,
-	)...)
-
-	// Title widget regions — delegate to outerMenu and filter for title widget IDs.
-	if s.outerMenu != nil {
-		for _, r := range s.outerMenu.GetHitRegions(offsetX, offsetY) {
-			if tui.IsTitleWidgetID(r.ID) {
-				regions = append(regions, r)
-			}
-		}
-	}
-
-	return regions
+	return s.outerMenu.GetHitRegions(offsetX, offsetY)
 }

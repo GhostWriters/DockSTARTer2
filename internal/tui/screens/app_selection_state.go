@@ -4,6 +4,7 @@ import (
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/constants"
+	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/tui"
 	"context"
 	"io"
@@ -132,7 +133,7 @@ func (s *AppSelectionScreen) handleSave() tea.Msg {
 		toDisableNice = append(toDisableNice, niceNames[app])
 	}
 
-	dialog := tui.NewProgramBoxModel("Applying Changes", "Installing or updating all DockSTARTer2 dependencies.\n"+tui.CmdLine("--install"), "").WithDialogType(tui.DialogTypeSuccess)
+	dialog := tui.NewProgramBoxModel("Applying Changes", "Installing or updating all DockSTARTer2 dependencies.\n"+tui.CmdLine("--install"), "").WithDialogType(displayengine.DialogTypeSuccess)
 	dialog.SetIsDialog(true)
 	dialog.SetMaximized(true)
 	dialog.SetAutoClose(false, 0)
@@ -202,5 +203,5 @@ func (s *AppSelectionScreen) handleSave() tea.Msg {
 	}
 	dialog.SetTask(task)
 
-	return tui.ShowDialogMsg{Dialog: dialog}
+	return displayengine.ShowDialogMsg{Dialog: dialog}
 }

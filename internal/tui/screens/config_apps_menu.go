@@ -8,7 +8,9 @@ import (
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/constants"
+	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/tui"
+
 	tea "charm.land/bubbletea/v2"
 )
 
@@ -17,8 +19,8 @@ import (
 // variable-height content section (m.list), following the outer-container +
 // inner-submenu-section pattern used by Main Menu/Config Menu/Options Menu.
 type configAppsMenuModel struct {
-	*tui.MenuModel
-	list     *tui.MenuModel
+	*displayengine.MenuModel
+	list     *displayengine.MenuModel
 	connType string
 }
 
@@ -54,25 +56,25 @@ func (m *configAppsMenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	updated, cmd := m.MenuModel.Update(msg)
-	m.MenuModel = updated.(*tui.MenuModel)
+	m.MenuModel = updated.(*displayengine.MenuModel)
 	return m, cmd
 }
 
-func buildConfigAppItems(ctx context.Context, apps []string, envFile string, connType string) []tui.MenuItem {
-	var items []tui.MenuItem
+func buildConfigAppItems(ctx context.Context, apps []string, envFile string, connType string) []displayengine.MenuItem {
+	var items []displayengine.MenuItem
 	for _, appName := range apps {
 		niceName := appenv.GetNiceName(ctx, appName)
 		desc := appenv.GetDescription(ctx, appName, envFile)
 		isUserDefined := appenv.IsAppUserDefined(ctx, appName, envFile)
 
-		descText := tui.GetPlainText(desc)
+		descText := displayengine.GetPlainText(desc)
 		if isUserDefined {
 			descText = "{{|ListItemUserDefined|}}" + descText
 		} else {
 			descText = "{{|ListItem|}}" + descText
 		}
 
-		items = append(items, tui.MenuItem{
+		items = append(items, displayengine.MenuItem{
 			Tag:           niceName,
 			Desc:          descText,
 			Help:          "Configure environment variables for " + niceName,
@@ -85,7 +87,7 @@ func buildConfigAppItems(ctx context.Context, apps []string, envFile string, con
 	}
 
 	// Add an item to add a new application
-	items = append(items, tui.MenuItem{
+	items = append(items, displayengine.MenuItem{
 		Tag:           "<ADD APPLICATION>",
 		Desc:          "Add a new application to configure",
 		Help:          "Add a new application",
@@ -97,7 +99,7 @@ func buildConfigAppItems(ctx context.Context, apps []string, envFile string, con
 
 // configAppItemHelp returns enriched (itemTitle, itemText) for a config app menu item.
 // Returns ("", "") for items without a base app.
-func configAppItemHelp(item tui.MenuItem) (itemTitle, itemText string) {
+func configAppItemHelp(item displayengine.MenuItem) (itemTitle, itemText string) {
 	if item.BaseApp == "" {
 		return "", ""
 	}
@@ -127,7 +129,7 @@ func configAppItemHelp(item tui.MenuItem) (itemTitle, itemText string) {
 	return item.Tag, strings.Join(parts, "\n\n")
 }
 
-func (m *configAppsMenuModel) HelpContext(maxWidth int) tui.HelpContext {
+func (m *configAppsMenuModel) HelpContext(maxWidth int) displayengine.HelpContext {
 	inner := m.list.HelpContext(maxWidth)
 	items := m.list.GetItems()
 	idx := m.list.Index()
@@ -158,14 +160,14 @@ func NewConfigAppsMenuScreen(connType string) tui.ScreenModel {
 	}
 	envFile := filepath.Join(cfg.ComposeDir, constants.EnvFileName)
 
-	list := tui.NewMenuModel(tui.IDListPanel, "", "", buildConfigAppItems(ctx, apps, envFile, connType))
+	list := displayengine.NewMenuModel(displayengine.IDListPanel, "", "", buildConfigAppItems(ctx, apps, envFile, connType))
 	list.SetMenuName("config_apps")
 	list.SetConnType(connType)
 	list.SetVariableHeight(true)
 	list.SetHelpPageText("Select an application to browse and edit its environment variables. Each application's settings are stored in your .env file.")
 	list.SetHelpItemPrefix("App")
 	list.SetItemHelpFunc(configAppItemHelp)
-	list.SetItemDocFunc(func(item tui.MenuItem) (docMarkdown, docAppName string) {
+	list.SetItemDocFunc(func(item displayengine.MenuItem) (docMarkdown, docAppName string) {
 		if item.BaseApp == "" || item.IsUserDefined {
 			return "", ""
 		}
@@ -177,13 +179,13 @@ func NewConfigAppsMenuScreen(connType string) tui.ScreenModel {
 	})
 	list.SetSubMenuMode(true)
 	list.SetIsDialog(false)
-	list.SetButtons([]tui.ButtonDef{})
+	list.SetButtons([]displayengine.ButtonDef{})
 	list.SetMaximized(true)
 	list.SetNoLeftMargin(true)
 
-	outer := tui.NewMenuModel("config_apps_outer", "Configure Applications", "", nil)
+	outer := displayengine.NewMenuModel("config_apps_outer", "Configure Applications", "", nil)
 	outer.SetShowButtons(true)
-	outer.SetButtons([]tui.ButtonDef{
+	outer.SetButtons([]displayengine.ButtonDef{
 		{Label: "Select", ZoneID: "btn-select", Action: func() tea.Msg {
 			item := list.SelectedItem()
 			if item.Action != nil {
@@ -194,7 +196,7 @@ func NewConfigAppsMenuScreen(connType string) tui.ScreenModel {
 		{Label: "Back", ZoneID: "btn-back", Action: navigateBack(), Help: "Return to the previous screen."},
 		{Label: "Exit", ZoneID: "btn-exit", Action: tui.ConfirmExitAction(), Help: "Exit the application."},
 	})
-	outer.AddContentSection(tui.NewPlainTextSection("config_apps_subtitle", "Select the application to configure"))
+	outer.AddContentSection(displayengine.NewPlainTextSection("config_apps_subtitle", "Select the application to configure"))
 	outer.AddContentSection(list)
 	// Outer intentionally never calls SetMaximized -- defaults false, so
 	// calculateSectionLayout uses the grow-then-scroll natural-height path.

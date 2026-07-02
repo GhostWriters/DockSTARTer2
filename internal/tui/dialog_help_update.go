@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"DockSTARTer2/internal/displayengine"
+
 	keybind "charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 )
@@ -15,7 +17,7 @@ func (m *HelpDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		// Help key (? / F1) cycles pages when paged, otherwise closes.
-		if keybind.Matches(msg, Keys.Help) {
+		if keybind.Matches(msg, displayengine.Keys.Help) {
 			if m.paged {
 				n := m.numPages
 				if n < 2 {
@@ -25,33 +27,33 @@ func (m *HelpDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.contextOffset = 0
 				return m, nil
 			}
-			return m, func() tea.Msg { return CloseDialogMsg{} }
+			return m, func() tea.Msg { return displayengine.CloseDialogMsg{} }
 		}
 		switch {
-		case keybind.Matches(msg, Keys.Up):
+		case keybind.Matches(msg, displayengine.Keys.Up):
 			m.contextOffset--
 			if m.contextOffset < 0 {
 				m.contextOffset = 0
 			}
 			return m, nil
-		case keybind.Matches(msg, Keys.Down):
+		case keybind.Matches(msg, displayengine.Keys.Down):
 			m.contextOffset++
 			return m, nil
-		case keybind.Matches(msg, Keys.PageUp):
+		case keybind.Matches(msg, displayengine.Keys.PageUp):
 			m.contextOffset -= 5
 			if m.contextOffset < 0 {
 				m.contextOffset = 0
 			}
 			return m, nil
-		case keybind.Matches(msg, Keys.PageDown):
+		case keybind.Matches(msg, displayengine.Keys.PageDown):
 			m.contextOffset += 5
 			return m, nil
-		case keybind.Matches(msg, Keys.Home):
+		case keybind.Matches(msg, displayengine.Keys.Home):
 			m.contextOffset = 0
 			return m, nil
 		}
 		// Any other key closes the help dialog (Esc also works)
-		return m, func() tea.Msg { return CloseDialogMsg{} }
+		return m, func() tea.Msg { return displayengine.CloseDialogMsg{} }
 
 	case tea.MouseWheelMsg:
 		// On a bindings-only page (context overflowed to its own page), scrolling does nothing.
@@ -78,7 +80,7 @@ func (m *HelpDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Logic handled in m.Scroll.Update at top of function.
 		return m, nil
 
-	case LayerHitMsg:
+	case displayengine.LayerHitMsg:
 		// Non-scrollbar click: cycle pages when paged, otherwise close.
 		// Only handle this if the click was actually on the help dialog background.
 		if msg.ID != "help_dialog" {
@@ -93,7 +95,7 @@ func (m *HelpDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.contextOffset = 0
 			return m, nil
 		}
-		return m, func() tea.Msg { return CloseDialogMsg{} }
+		return m, func() tea.Msg { return displayengine.CloseDialogMsg{} }
 
 	}
 	return m, nil

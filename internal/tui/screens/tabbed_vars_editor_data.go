@@ -5,6 +5,7 @@ import (
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/constants"
+	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/envutil"
 	"DockSTARTer2/internal/lockfile"
 	"DockSTARTer2/internal/logger"
@@ -212,12 +213,12 @@ func (m *TabbedVarsEditorModel) saveEnv() tea.Cmd {
 			return nil
 		}
 
-		dialog := tui.NewProgramBoxModel("Saving Environment Variables", "Please be patient, this can take a while.\n"+tui.CmdLine("--env"), "").WithDialogType(tui.DialogTypeSuccess)
+		dialog := tui.NewProgramBoxModel("Saving Environment Variables", "Please be patient, this can take a while.\n"+tui.CmdLine("--env"), "").WithDialogType(displayengine.DialogTypeSuccess)
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
 		dialog.SuccessMsg = envSaveSuccessMsg{}
 
-		return tui.ShowDialogMsg{Dialog: dialog}
+		return displayengine.ShowDialogMsg{Dialog: dialog}
 	}
 }

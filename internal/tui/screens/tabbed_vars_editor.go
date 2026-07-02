@@ -2,6 +2,7 @@ package screens
 
 import (
 	"DockSTARTer2/internal/appenv"
+	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/tui/components/enveditor"
 	"DockSTARTer2/internal/version"
@@ -91,13 +92,13 @@ type TabbedVarsEditorModel struct {
 	connType       string
 
 	// Title bar focus state
-	tui.TitleBarFocus
+	displayengine.TitleBarFocus
 
 	// Spinner while env data is loading from disk
 	loading      bool
-	titleSpinner tui.TitleSpinner
+	titleSpinner displayengine.TitleSpinner
 
-	btnRow *tui.ButtonRow
+	btnRow *displayengine.ButtonRow
 }
 
 // ClearProcessingState clears any in-flight button spinner. Called by
@@ -176,10 +177,10 @@ func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec
 	for _, spec := range specs {
 		editor := enveditor.New()
 		editor.ShowLineNumbers = true
-		editor.SetLineCharacters(tui.GetActiveContext().LineCharacters)
+		editor.SetLineCharacters(displayengine.GetActiveContext().LineCharacters)
 		editor.SetVirtualCursor(false)
 		editor.ScrollbarFunc = func(content string, total, visible, offset int, lineChars bool) string {
-			return tui.ApplyScrollbarColumn(content, total, visible, offset, lineChars, tui.GetActiveContext())
+			return displayengine.ApplyScrollbarColumn(content, total, visible, offset, lineChars, displayengine.GetActiveContext())
 		}
 		tabs = append(tabs, envTab{spec: spec, editor: editor})
 	}
@@ -200,16 +201,16 @@ func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec
 		connType:  connType,
 	}
 	zoneByName := map[string]string{
-		"Save": tui.IDSaveButton,
-		"Back": tui.IDBackButton,
-		"Exit": tui.IDExitButton,
+		"Save": displayengine.IDSaveButton,
+		"Back": displayengine.IDBackButton,
+		"Exit": displayengine.IDExitButton,
 	}
-	defs := make([]tui.ButtonDef, len(buttons))
+	defs := make([]displayengine.ButtonDef, len(buttons))
 	for i, btn := range buttons {
-		defs[i] = tui.ButtonDef{Label: btn, ZoneID: zoneByName[btn]}
+		defs[i] = displayengine.ButtonDef{Label: btn, ZoneID: zoneByName[btn]}
 	}
-	m.btnRow = tui.NewButtonRow(defs)
-	m.ConfigureWidgets(tui.WidgetRefresh, tui.WidgetHelp, tui.WidgetClose)
+	m.btnRow = displayengine.NewButtonRow(defs)
+	m.ConfigureWidgets(displayengine.WidgetRefresh, displayengine.WidgetHelp, displayengine.WidgetClose)
 	return m
 }
 
@@ -331,8 +332,8 @@ func (m *TabbedVarsEditorModel) IsMaximized() bool {
 // Increases by LargeTitleBarOverhead when large titlebars are enabled.
 func (m *TabbedVarsEditorModel) MinHeight() int {
 	base := 9
-	if tui.GetActiveContext().LargeTitleBars {
-		base += tui.LargeTitleBarOverhead
+	if displayengine.GetActiveContext().LargeTitleBars {
+		base += displayengine.LargeTitleBarOverhead
 	}
 	return base
 }
@@ -364,7 +365,7 @@ func (m *TabbedVarsEditorModel) GetInputCursor() (relX, relY int, shape tea.Curs
 	//   outer_border(1) + ContentSideMargin(1) + inner_border(1) = 3 cols
 	//   outer_border(1) + inner_border/tab_row(1) = 2 rows
 	// plus subtitle rows stacked above the inner border.
-	layout := tui.GetLayout()
+	layout := displayengine.GetLayout()
 	relX = 1 + layout.ContentSideMargin + 1 + c.X
 	relY = 2 + m.largeTitleOverhead + m.subtitleHeight + c.Y
 	switch {
@@ -428,4 +429,3 @@ func (m *TabbedVarsEditorModel) confirmExitAction() tea.Cmd {
 		return nil
 	}
 }
-

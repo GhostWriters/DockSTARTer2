@@ -6,16 +6,17 @@ import (
 	"time"
 
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 
-	"charm.land/bubbletea/v2"
+	tea "charm.land/bubbletea/v2"
 	"github.com/fsnotify/fsnotify"
 )
 
 // startConfigWatcher watches the config file for external changes (e.g. from
 // `ds2 --theme-no-shadows` run in a separate terminal or via the web server).
-// On a valid change it sends ConfigChangedMsg to the running program.
+// On a valid change it sends displayengine.ConfigChangedMsg to the running program.
 // Invalid TOML files are silently ignored so a mid-write partial file does not
 // flash bad state into the UI.
 //
@@ -66,7 +67,7 @@ func startConfigWatcher(ctx context.Context, p *tea.Program) {
 						if err != nil {
 							return
 						}
-						p.Send(ConfigChangedMsg{Config: conf})
+						p.Send(displayengine.ConfigChangedMsg{Config: conf})
 					})
 				}
 

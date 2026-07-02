@@ -8,6 +8,7 @@ import (
 
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
@@ -22,7 +23,7 @@ func (m *ProgramBoxModel) renderHeaderUI(width int) string {
 	}
 
 	var b strings.Builder
-	ctx := GetActiveContext()
+	ctx := displayengine.GetActiveContext()
 	bgStyle := ctx.Dialog
 	hasPrevious := false
 
@@ -32,7 +33,7 @@ func (m *ProgramBoxModel) renderHeaderUI(width int) string {
 	// {{|Dialog|}} establishes the base style first so the terminal doesn't paint a
 	// reversed cell before the text; {{|CommandLine|}} then styles the command text.
 	if m.subtitle != "" {
-		subtitleText := RenderThemeTextCtx("{{|Subtitle|}}"+m.subtitle+"{{[-]}}", ctx)
+		subtitleText := displayengine.RenderThemeTextCtx("{{|Subtitle|}}"+m.subtitle+"{{[-]}}", ctx)
 		renderedSubtitle := lipgloss.NewStyle().
 			Width(width).
 			Background(ctx.Dialog.GetBackground()).
@@ -143,8 +144,8 @@ func (m *ProgramBoxModel) renderHeaderUI(width int) string {
 			Padding(0, 1).
 			Background(ctx.Dialog.GetBackground())
 
-		barStyle = ApplyThickBorderCtx(barStyle, ctx)
-		borderedBar := InjectBorderFlags(barStyle.Render(barView), ctx.BorderFlags, ctx.Border2Flags, true)
+		barStyle = displayengine.ApplyThickBorderCtx(barStyle, ctx)
+		borderedBar := displayengine.InjectBorderFlags(barStyle.Render(barView), ctx.BorderFlags, ctx.Border2Flags, true)
 
 		// Center the multiline bordered bar line consistently
 		centeredBar := lipgloss.NewStyle().
@@ -203,100 +204,25 @@ func (m *ProgramBoxModel) calculateHeaderHeight(width int) int {
 		}
 	}
 	if m.Percent > 0 {
-		headerHeight += 3 // Bordered bar (Border-Top, Content, Border-Bottom). Gap before was removed.
+		headerHeight += 3 // Bordered bar (Border-Top, displayengine.Content, Border-Bottom). Gap before was removed.
 	}
 	return headerHeight
 }
 
 // SetSize updates the dialog dimensions (called by AppModel on window resize).
+// Delegates to outer, which drives calculateSectionLayout -- the header/
+// command/viewport sections each compute their own height (fixed sections
+// via sectionHeightOverride, the viewport via IsVariableHeight filling
+// whatever's left), replacing this wrapper's former hand-rolled
+// calculateLayout.
 func (m *ProgramBoxModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
-	m.calculateLayout()
-}
-
-// calculateLayout performs all vertical budgeting in one place.
-// This implements the "calculate once, use everywhere" pattern.
-func (m *ProgramBoxModel) calculateLayout() {
-	if m.width == 0 || m.height == 0 {
-		return
-	}
-
-	layout := GetLayout()
-	hasShadow := currentConfig.UI.Shadow
-	// contentW is the padded content width: inside outer border minus 1-char margin each side.
-	contentW := m.width - layout.BorderWidth() - layout.ContentMarginWidth()
-	shadowHeight := 0
-	if hasShadow {
-		shadowHeight = DialogShadowHeight
-	}
-
-	// 1. Header
-	headerHeight := m.calculateHeaderHeight(contentW)
-
-	// 2. Command
-	commandLines := 0
-	if m.command != "" {
-		commandLines = 1 // 1 line for command
-	}
-
-	internalOverhead := headerHeight + commandLines
-
-	// Large titlebar: deduct 2 rows from effective height, same threshold as other dialogs.
-	enabled := m.title != "" && currentConfig.UI.LargeTitleBars
-	titleBudget := m.height - layout.BorderHeight() - internalOverhead
-	useLargeTitleBar, _ := DecideLargeTitleBar(enabled, titleBudget, 3)
-	largeTitlebarHeight := m.height
-	if useLargeTitleBar {
-		largeTitlebarHeight -= LargeTitleBarOverhead
-	}
-
-	// 3. Buttons — width and height aware via ButtonRowHeight.
-	// Compute how many rows the button row itself can have after reserving:
-	//   outer borders(2) + overhead + min viewport(2) + viewport borders(2) + shadow.
-	buttons := 0
-	if m.done {
-		const minVpRows = 2
-		availableForButton := largeTitlebarHeight - layout.BorderHeight() - internalOverhead - minVpRows - layout.BorderHeight()
-		buttons = ButtonRowHeight(contentW, availableForButton, ButtonSpec{Text: "OK"})
-	}
-
-	// 4. Viewport height.
-	// DialogContentHeight budgets for outer margins and outer borders.
-	vpHeight := layout.DialogContentHeight(largeTitlebarHeight, internalOverhead, m.done, false)
-	if m.done && buttons != DialogButtonHeight {
-		vpHeight += DialogButtonHeight - buttons
-	}
-	// Subtract internal viewport chrome (top inner border + bottom inner border/indicator).
-	vpHeight -= layout.BorderHeight()
-	if vpHeight < 2 {
-		vpHeight = 2
-	}
-
-	overhead := m.height - vpHeight
-
-	// Save to layout struct
-	m.layout = DialogLayout{
-		Width:          m.width,
-		Height:         m.height,
-		HeaderHeight:   headerHeight,
-		CommandHeight:  commandLines,
-		ViewportHeight: vpHeight,
-		ButtonHeight:   buttons,
-		ShadowHeight:   shadowHeight,
-		Overhead:       overhead,
-		LargeTitleBar:  useLargeTitleBar,
-	}
-
-	// Update viewport dimensions: contentW already accounts for margins; subtract inner border and scrollbar gutter.
-	innerBoxWidth := contentW - ScrollbarGutterWidth - layout.BorderWidth()
-	m.sv.SetSize(innerBoxWidth, vpHeight)
-	setActiveOutputWidth(innerBoxWidth) // publish width so compose bars reflow on resize
-	m.sv.ReRenderWith(pbRenderFn())
+	m.outer.SetSize(w, h)
 }
 
 // GetHelpText returns the dynamic help text based on the current state
-// Implements DynamicHelpProvider interface for use with DialogWithBackdrop
+// Implements displayengine.DynamicHelpProvider interface for use with DialogWithBackdrop
 func (m *ProgramBoxModel) GetHelpText() string {
 	scrollInfo := ""
 	if m.sv.TotalLineCount() > m.sv.VisibleLineCount() {
@@ -329,23 +255,21 @@ func RunProgramBox(ctx context.Context, title, subtitle, command string, task fu
 	// Initialize TUI if not already done
 	cfg := config.LoadAppConfig()
 
-	currentConfig = cfg // Set global config so styles like AddShadow work correctly
 	console.SpinnerEnabled = cfg.UI.Spinner
 	console.SpinnerSpeed = console.AlignToRefreshRate(cfg.UI.SpinnerSpeed, cfg.UI.RefreshRate)
 	console.LineCharacters = cfg.UI.LineCharacters
 	if _, err := theme.Load(cfg.UI.Theme, ""); err == nil {
-		InitStyles(cfg)
+		displayengine.InitStyles(cfg)
 	}
 
 	// Create dialog model
-	dialogModel := NewProgramBoxModel(title, subtitle, command).WithDialogType(DialogTypeSuccess)
+	dialogModel := NewProgramBoxModel(title, subtitle, command).WithDialogType(displayengine.DialogTypeSuccess)
 	dialogModel.ctx = ctx
 	dialogModel.SetTask(task)
 	dialogModel.SetMaximized(true)
 
-
 	// Create full app model with standalone dialog to include log panel and backdrop
-	model := NewAppModelStandalone(ctx, currentConfig, "local", "cli", dialogModel)
+	model := NewAppModelStandalone(ctx, cfg, "local", "cli", dialogModel)
 
 	// Create Bubble Tea program
 	p := NewProgram(model, ProgramOptions{RefreshRate: cfg.UI.RefreshRate})
