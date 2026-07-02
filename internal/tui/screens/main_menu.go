@@ -45,7 +45,12 @@ func NewMainMenuScreen(connType string) tui.ScreenModel {
 	list.SetIsDialog(false)
 	list.SetButtons([]tui.ButtonDef{})
 	list.SetMaximized(true)
-	list.SetShowLockGutter(false)
+	// viewWithSections already wraps every content section in its own
+	// ContentSideMargin padding, so the section's own internal left margin
+	// (which was correct for the original single-MenuModel, unwrapped
+	// layout) would double up to 2 margin columns instead of 1 -- suppress
+	// it here to match themeMenu/optionsMenu's identical convention for
+	// sections nested inside an outer sectioned dialog.
 	list.SetNoLeftMargin(true)
 
 	outer := tui.NewMenuModel("main_menu_outer", "Main Menu", "", nil)
