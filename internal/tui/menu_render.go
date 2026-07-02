@@ -78,6 +78,13 @@ func (m *MenuModel) ViewString() string {
 		return cachedView
 	}
 
+	// Plain-text kind: a single borderless, theme-styled line -- e.g. a
+	// dialog's subtitle expressed as its own content section. Checked before
+	// subMenuMode since a plain-text section never wants viewSubMenu's border.
+	if m.plainText != "" {
+		return m.viewPlainText()
+	}
+
 	// In Sub-menu mode, we render a simpler view without the global backdrop logic
 	if m.subMenuMode {
 		return m.viewSubMenu()
@@ -351,6 +358,30 @@ func (m *MenuModel) viewSubMenu() string {
 		}
 	}
 	return result
+}
+
+// viewPlainText renders a single line of theme-styled text with no border --
+// the plain-text Content kind's render path. Not routed through
+// viewSubMenu/renderBorderWithTitle since this kind never wants a box.
+func (m *MenuModel) viewPlainText() string {
+	return m.renderPlainText(m.width)
+}
+
+// renderPlainText renders the plain-text kind's content at an explicit width,
+// so SectionHeight can measure it at its post-layout sectionWidth without
+// depending on m.width having already been assigned via SetSize.
+func (m *MenuModel) renderPlainText(width int) string {
+	styles := GetStyles()
+	layout := GetLayout()
+	leftPad := layout.ContentSideMargin
+	if m.noLeftMargin {
+		leftPad = 0
+	}
+	textStyle := styles.Dialog.
+		Width(width).
+		Padding(0, leftPad).
+		Align(lipgloss.Left)
+	return textStyle.Render(RenderThemeText("{{|Subtitle|}}"+m.plainText, styles.Dialog))
 }
 
 // renderVerticalListBlock renders the core list content and applies the scrollbar.

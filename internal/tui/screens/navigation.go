@@ -14,7 +14,7 @@ import (
 // navigateToConfigMenu returns a command to navigate to the config menu
 func navigateToConfigMenu(connType string) tea.Cmd {
 	return func() tea.Msg {
-		return tui.NavigateMsg{Screen: NewConfigMenuScreen(connType)}
+		return tui.NavigateMsg{Screen: NewConfigMenuScreen(false, connType)}
 	}
 }
 

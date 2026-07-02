@@ -44,7 +44,7 @@ func init() {
 		nil)
 
 	tui.RegisterScreen("config",
-		func(isRoot bool, connType string) tui.ScreenModel { return NewConfigMenuScreen(connType) },
+		func(isRoot bool, connType string) tui.ScreenModel { return NewConfigMenuScreen(isRoot, connType) },
 		[]string{"main"})
 
 	tui.RegisterScreen("options",

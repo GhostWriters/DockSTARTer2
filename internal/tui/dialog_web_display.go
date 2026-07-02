@@ -261,7 +261,7 @@ func NewWebDisplayDialog(current WebDisplaySettings) *WebDisplayDialog {
 	if refreshRate <= 0 {
 		refreshRate = 100
 	}
-	d.refreshSection, d.refreshInput = NewNumberSinputSection("web_display_refresh", "Refresh Rate (ms, applies on next reload)", strconv.Itoa(refreshRate))
+	d.refreshSection, d.refreshInput = NewNumberSinputSection("web_display_refresh", "Refresh Rate (ms)", strconv.Itoa(refreshRate))
 
 	outer := NewMenuModel("web_display", "Browser Settings", "", nil)
 	outer.SetMaximized(false)
@@ -278,8 +278,7 @@ func NewWebDisplayDialog(current WebDisplaySettings) *WebDisplayDialog {
 	d.familyMenu.SetDisabled(isDefaultFont(current.FontFamily))
 	outer.AddContentSection(d.defaultSection)
 	outer.AddContentSection(d.familyMenu)
-	outer.AddContentSection(d.sizeSection)
-	outer.AddContentSection(d.refreshSection)
+	outer.AddContentRow(d.sizeSection, d.refreshSection)
 	d.outer = outer
 	return d
 }
@@ -340,16 +339,24 @@ func (d *WebDisplayDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case applyWebDisplayMsg:
 		secs := d.outer.GetContentSections()
 		if len(secs) >= 1 {
-			d.defaultSection = secs[0]
+			if mm, ok := secs[0].(*MenuModel); ok {
+				d.defaultSection = mm
+			}
 		}
 		if len(secs) >= 2 {
-			d.familyMenu = secs[1]
+			if mm, ok := secs[1].(*MenuModel); ok {
+				d.familyMenu = mm
+			}
 		}
 		if len(secs) >= 3 {
-			d.sizeSection = secs[2]
-		}
-		if len(secs) >= 4 {
-			d.refreshSection = secs[3]
+			if row, ok := secs[2].(*ContentRow); ok && len(row.Items()) >= 2 {
+				if mm, ok := row.Items()[0].(*MenuModel); ok {
+					d.sizeSection = mm
+				}
+				if mm, ok := row.Items()[1].(*MenuModel); ok {
+					d.refreshSection = mm
+				}
+			}
 		}
 		settings := d.collectSettings()
 		d.outer.ClearProcessingState()
@@ -369,8 +376,8 @@ func (d *WebDisplayDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		d.defaultSection = buildDefaultSection(isDefaultFont(defaults.FontFamily))
 		d.familyMenu = buildFamilyMenu(defaults.FontFamily)
 		d.sizeSection, d.sizeInput = NewNumberSinputSection("web_display_size", "Font Size", strconv.Itoa(defaults.FontSize))
-		d.refreshSection, d.refreshInput = NewNumberSinputSection("web_display_refresh", "Refresh Rate (ms, applies on next reload)", strconv.Itoa(defaults.RefreshRate))
-		d.outer.ReplaceSections(d.defaultSection, d.familyMenu, d.sizeSection, d.refreshSection)
+		d.refreshSection, d.refreshInput = NewNumberSinputSection("web_display_refresh", "Refresh Rate (ms)", strconv.Itoa(defaults.RefreshRate))
+		d.outer.ReplaceSections(d.defaultSection, d.familyMenu, NewContentRow(d.sizeSection, d.refreshSection))
 		w, h := d.outer.Width(), d.outer.Height()
 		d.outer.SetSize(w, h)
 		d.outer.ClearProcessingState()
@@ -387,10 +394,14 @@ func (d *WebDisplayDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// then apply disabled to familyMenu immediately.
 	secs := d.outer.GetContentSections()
 	if len(secs) >= 1 {
-		d.defaultSection = secs[0]
+		if mm, ok := secs[0].(*MenuModel); ok {
+			d.defaultSection = mm
+		}
 	}
 	if len(secs) >= 2 {
-		secs[1].SetDisabled(d.isBrowserDefault())
+		if mm, ok := secs[1].(*MenuModel); ok {
+			mm.SetDisabled(d.isBrowserDefault())
+		}
 	}
 	return d, cmd
 }
@@ -452,14 +463,15 @@ func (d *WebDisplayDialog) GetHitRegions(offsetX, offsetY int) []HitRegion {
 }
 
 // GetInputCursor implements InputCursorProvider so AppModel positions the hardware cursor
-// over the Font Size sinput field when it is focused.
+// over whichever of the Font Size / Refresh Rate sinput fields is focused.
 func (d *WebDisplayDialog) GetInputCursor() (relX, relY int, shape tea.CursorShape, ok bool) {
-	// Only show cursor when size section (index 2) is focused.
+	// Only show cursor when the size/refresh row (index 2) is focused.
 	sections := d.outer.GetContentSections()
 	if len(sections) < 3 {
 		return 0, 0, tea.CursorBar, false
 	}
-	if !sections[2].IsActive() {
+	row, isRow := sections[2].(*ContentRow)
+	if !isRow || d.outer.GetFocusedSection() != 2 {
 		return 0, 0, tea.CursorBar, false
 	}
 	layout := GetLayout()
@@ -475,11 +487,26 @@ func (d *WebDisplayDialog) GetInputCursor() (relX, relY int, shape tea.CursorSha
 	}
 	familyH := familyRows + layout.BorderHeight()
 	relY = layout.SingleBorder() + largeTitleOffset + defaultH + familyH + layout.SingleBorder()
-	relX = layout.SingleBorder() + layout.SingleMargin() + (*d.sizeInput).PromptWidth() + (*d.sizeInput).CursorColumn()
-	if (*d.sizeInput).IsOverwrite() {
-		shape = tea.CursorBlock
-	} else {
-		shape = tea.CursorBar
+
+	switch row.SubFocusIndex() {
+	case 0:
+		relX = layout.SingleBorder() + layout.SingleMargin() + (*d.sizeInput).PromptWidth() + (*d.sizeInput).CursorColumn()
+		if (*d.sizeInput).IsOverwrite() {
+			shape = tea.CursorBlock
+		} else {
+			shape = tea.CursorBar
+		}
+	case 1:
+		// Refresh input starts at the size child's assigned width (the two
+		// children split the row's width evenly).
+		relX = row.ItemWidth(0) + layout.SingleBorder() + layout.SingleMargin() + (*d.refreshInput).PromptWidth() + (*d.refreshInput).CursorColumn()
+		if (*d.refreshInput).IsOverwrite() {
+			shape = tea.CursorBlock
+		} else {
+			shape = tea.CursorBar
+		}
+	default:
+		return 0, 0, tea.CursorBar, false
 	}
 	return relX, relY, shape, true
 }
@@ -496,10 +523,19 @@ func (d *WebDisplayDialog) SetSize(width, height int) {
 
 	// Fixed budget for every section OTHER than the font-family flow-grid,
 	// via the same per-section formula calculateSectionLayout uses
-	// internally (SectionHeight) -- no re-derivation here.
+	// internally (SectionHeight) -- no re-derivation here. Font Size and
+	// Refresh Rate share one ContentRow, so their combined contribution is
+	// the max of the two (they're side by side, same convention
+	// ContentRow.SectionHeight uses), not the sum of each measured
+	// separately -- summing them here would double-count and leave the
+	// row's actual (shorter) height as unclaimed blank space below the
+	// buttons.
 	defaultH := d.defaultSection.SectionHeight(contentW)
-	sizeH := d.sizeSection.SectionHeight(contentW)
-	refreshH := d.refreshSection.SectionHeight(contentW)
+	rowContentW := splitWidth(contentW, 2)
+	sizeRowH := d.sizeSection.SectionHeight(rowContentW[0])
+	if h := d.refreshSection.SectionHeight(rowContentW[1]); h > sizeRowH {
+		sizeRowH = h
+	}
 	btnH := ButtonRowHeight(contentW, 0, d.outer.getButtonSpecs()...)
 	largeTitleOverhead := 0
 	if currentConfig.UI.LargeTitleBars {
@@ -518,7 +554,7 @@ func (d *WebDisplayDialog) SetSize(width, height int) {
 	// calculateSectionLayout's DecideLargeTitleBar check only needs
 	// largeTitleOverhead of slack (not the extra minRemaining it reserves for
 	// dialogs with an expandable section to protect) -- see LargeTitleBarBudget.
-	otherFixed := defaultH + sizeH + refreshH + btnH
+	otherFixed := defaultH + sizeRowH + btnH
 	availableForFamily := height - layout.BorderHeight() - largeTitleOverhead - otherFixed - layout.BorderHeight()
 	if availableForFamily < minFamilyRows {
 		availableForFamily = minFamilyRows

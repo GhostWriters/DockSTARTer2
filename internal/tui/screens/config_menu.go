@@ -3,10 +3,16 @@ package screens
 import (
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/version"
+
+	tea "charm.land/bubbletea/v2"
 )
 
-// NewConfigMenuScreen creates the configuration menu as a standalone screen
-func NewConfigMenuScreen(connType string) tui.ScreenModel {
+// NewConfigMenuScreen creates the configuration menu as a standalone screen.
+// isRoot suppresses the Back button when this screen is the entry point.
+// Built as an outer container MenuModel (title, buttons) with the item list
+// as a single submenu-mode content section, matching the pattern used by
+// Main Menu and other multi-section screens.
+func NewConfigMenuScreen(isRoot bool, connType string) tui.ScreenModel {
 	items := []tui.MenuItem{
 		{
 			Tag:           "Full Setup",
@@ -58,21 +64,41 @@ func NewConfigMenuScreen(connType string) tui.ScreenModel {
 		},
 	}
 
-	menu := tui.NewMenuModel(
-		tui.IDListPanel,
-		"Configuration",
-		"Select a configuration task",
-		items,
-	)
-	menu.SetButtons([]tui.ButtonDef{
-		{Label: "Select", ZoneID: "btn-select", Help: "Confirm and execute the selected action."},
-		{Label: "Back", ZoneID: "btn-back", Action: navigateBack(), Help: "Return to the previous screen."},
-		{Label: "Exit", ZoneID: "btn-exit", Action: tui.ConfirmExitAction(), Help: "Exit the application."},
-	})
+	list := tui.NewMenuModel(tui.IDListPanel, "", "", items)
+	list.SetMenuName("")
+	list.SetConnType(connType)
+	list.SetHelpPageText("Docker and " + version.ApplicationName + " configuration tasks. Run the full setup wizard, edit environment variables, enable or disable applications, and manage your running containers.")
+	list.SetHelpItemPrefix("Action")
+	list.SetSubMenuMode(true)
+	list.SetVariableHeight(false)
+	list.SetIsDialog(false)
+	list.SetButtons([]tui.ButtonDef{})
+	list.SetMaximized(true)
+	// viewWithSections already wraps every content section in its own
+	// ContentSideMargin padding; suppress the section's own internal left
+	// margin to avoid doubling up (matches themeMenu/optionsMenu's identical
+	// convention for sections nested inside an outer sectioned dialog).
+	list.SetNoLeftMargin(true)
 
-	menu.SetMenuName("config")
-	menu.SetConnType(connType)
-	menu.SetHelpPageText("Docker and " + version.ApplicationName + " configuration tasks. Run the full setup wizard, edit environment variables, enable or disable applications, and manage your running containers.")
-	menu.SetHelpItemPrefix("Action")
-	return menu
+	outer := tui.NewMenuModel("config_menu_outer", "Configuration", "", nil)
+	outer.SetShowButtons(true)
+	selectAction := func() tea.Msg {
+		item := list.SelectedItem()
+		if item.Action != nil {
+			return item.Action()
+		}
+		return nil
+	}
+	buttons := []tui.ButtonDef{
+		{Label: "Select", ZoneID: "btn-select", Action: selectAction, Help: "Confirm and execute the selected action."},
+	}
+	if !isRoot {
+		buttons = append(buttons, tui.ButtonDef{Label: "Back", ZoneID: "btn-back", Action: navigateBack(), Help: "Return to the previous screen."})
+	}
+	buttons = append(buttons, tui.ButtonDef{Label: "Exit", ZoneID: "btn-exit", Action: tui.ConfirmExitAction(), Help: "Exit the application."})
+	outer.SetButtons(buttons)
+	outer.AddContentSection(tui.NewPlainTextSection("config_menu_subtitle", "Select a configuration task"))
+	outer.AddContentSection(list)
+
+	return outer
 }

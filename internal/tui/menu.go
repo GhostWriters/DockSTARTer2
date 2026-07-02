@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 	"sync/atomic"
 
 	"charm.land/bubbles/v2/list"
@@ -143,6 +144,12 @@ type MenuModel struct {
 	contentRenderer  func(contentWidth int) string              // Optional: replaces list content in viewSubMenu
 	onSubFocused     func() tea.Cmd                             // Optional: called when section gains sub-focus
 
+	// plainText, when non-empty, makes this MenuModel render as a borderless,
+	// non-focusable single line of theme-styled text instead of a list --
+	// the "plain text" Content kind, used e.g. for a dialog's subtitle
+	// expressed as its own content section. Set only via NewPlainTextSection.
+	plainText string
+
 	// Memoization for expensive rendering
 	lastView         string
 	cacheValid       bool // Indicates if lastView is up-to-date with current state
@@ -175,9 +182,10 @@ type MenuModel struct {
 	externalLock        bool   // Whether destructive items are locked by an external session (persists across SetItems)
 	commandLock         bool   // Whether destructive items are locked by a running panel command
 
-	// Content sections: sub-menus rendered stacked inside the outer border.
-	// When present, replaces the standard list+inner-border rendering.
-	contentSections []*MenuModel
+	// Content sections: sub-menus (or ContentRows of sub-menus) rendered
+	// stacked inside the outer border. When present, replaces the standard
+	// list+inner-border rendering.
+	contentSections []Content
 	focusedSection   int // index into contentSections; -1 = buttons focused
 
 	// Optional hook to enrich the ItemText shown in the help dialog for a menu item.
@@ -309,9 +317,24 @@ func (m *MenuModel) MarkScrollPending() tea.Cmd {
 }
 
 // IsScrollbarDragging reports whether the menu is currently processing a scrollbar thumb drag.
-// AppModel uses this interface to give the active screen drag priority.
+// AppModel uses this interface to give the active screen drag priority --
+// without this, mouse motion/release during a drag never reaches
+// Update(), since AppModel's top-level dispatch only forwards those message
+// types unconditionally when IsScrollbarDragging() is true (model_mouse.go).
+// Recurses into content sections: a plain *MenuModel container (no custom
+// screen wrapper, e.g. any outer-container + inner-submenu-section screen)
+// has no scrollbar of its own -- the drag is happening on a nested section's
+// Scroll instead, and nothing else would report it up to AppModel.
 func (m *MenuModel) IsScrollbarDragging() bool {
-	return m.Scroll.Drag.Dragging
+	if m.Scroll.Drag.Dragging {
+		return true
+	}
+	for _, sec := range m.contentSections {
+		if d, ok := sec.(interface{ IsScrollbarDragging() bool }); ok && d.IsScrollbarDragging() {
+			return true
+		}
+	}
+	return false
 }
 
 // ScrollTotal returns the total scrollable units (lines or items).
@@ -519,6 +542,42 @@ func (m *MenuModel) SetItemDocFunc(f func(item MenuItem) (docMarkdown, docAppNam
 
 // ID returns the unique identifier for this menu
 func (m *MenuModel) ID() string { return m.id }
+
+// IsVariableHeight reports whether this menu expands to fill available space
+// when used as a content section, rather than having a fixed intrinsic
+// height. Part of the Content interface.
+func (m *MenuModel) IsVariableHeight() bool { return m.variableHeight }
+
+// ScrollID returns the ID of this menu's own scrollbar, for ScrollDoneMsg
+// routing. Part of the Content interface.
+func (m *MenuModel) ScrollID() string { return m.Scroll.ID }
+
+// MatchesID reports whether msgID belongs to this menu (hit-region IDs like
+// "item-{id}-{index}" contain the section's own id as a substring). Part of
+// the Content interface.
+func (m *MenuModel) MatchesID(msgID string) bool {
+	return strings.Contains(msgID, m.id)
+}
+
+// WantsHorizontalKeys reports true when this menu has a contentRenderer (the
+// sinput text-input kind), which consumes Left/Right itself for cursor
+// movement via its own interceptor. Part of the Content interface.
+func (m *MenuModel) WantsHorizontalKeys() bool {
+	return m.contentRenderer != nil
+}
+
+// Focusable reports false only for the plain-text kind (a read-only display
+// line with nothing to interact with); every other kind can receive Tab
+// focus. Part of the Content interface.
+func (m *MenuModel) Focusable() bool {
+	return m.plainText == ""
+}
+
+// IsProcessing reports whether this menu has an in-flight item or button
+// action. Part of the Content interface.
+func (m *MenuModel) IsProcessing() bool {
+	return m.processingItemIdx >= 0 || m.btnRow.IsProcessing()
+}
 
 // SetDialogType sets the visual style/type of the menu dialog
 func (m *MenuModel) SetDialogType(t DialogType) { m.dialogType = t }
