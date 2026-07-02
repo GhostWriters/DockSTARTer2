@@ -144,6 +144,12 @@ type MenuModel struct {
 	contentRenderer  func(contentWidth int) string              // Optional: replaces list content in viewSubMenu
 	onSubFocused     func() tea.Cmd                             // Optional: called when section gains sub-focus
 
+	// plainText, when non-empty, makes this MenuModel render as a borderless,
+	// non-focusable single line of theme-styled text instead of a list --
+	// the "plain text" Content kind, used e.g. for a dialog's subtitle
+	// expressed as its own content section. Set only via NewPlainTextSection.
+	plainText string
+
 	// Memoization for expensive rendering
 	lastView         string
 	cacheValid       bool // Indicates if lastView is up-to-date with current state
@@ -543,6 +549,19 @@ func (m *MenuModel) MatchesID(msgID string) bool {
 // movement via its own interceptor. Part of the Content interface.
 func (m *MenuModel) WantsHorizontalKeys() bool {
 	return m.contentRenderer != nil
+}
+
+// Focusable reports false only for the plain-text kind (a read-only display
+// line with nothing to interact with); every other kind can receive Tab
+// focus. Part of the Content interface.
+func (m *MenuModel) Focusable() bool {
+	return m.plainText == ""
+}
+
+// IsProcessing reports whether this menu has an in-flight item or button
+// action. Part of the Content interface.
+func (m *MenuModel) IsProcessing() bool {
+	return m.processingItemIdx >= 0 || m.btnRow.IsProcessing()
 }
 
 // SetDialogType sets the visual style/type of the menu dialog

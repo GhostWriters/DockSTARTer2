@@ -8,6 +8,16 @@ import tea "charm.land/bubbletea/v2"
 // expandable ones.
 type Sizer interface {
 	SectionHeight(width int) int
+	// SectionNaturalWidth returns how wide this Content would naturally like
+	// to be, given at most maxWidth to work with -- used by
+	// calculateSectionLayout when the outer MenuModel is not maximized, to
+	// shrink to intrinsic content width the same way it already shrinks to
+	// intrinsic content height. Most kinds (flow-grid, sinput, plain-text)
+	// have no narrower natural width than whatever they're given, so they
+	// simply return maxWidth; the plain-list kind measures from its items'
+	// Tag/Desc text (mirroring the plain-list calculateLayout path's own
+	// natural-width formula).
+	SectionNaturalWidth(maxWidth int) int
 }
 
 // Content is a sizeable, renderable, focusable unit that can be placed inside
@@ -48,6 +58,32 @@ type Content interface {
 	// contentRenderer (the sinput kind); a ContentRow delegates to whichever
 	// child currently holds row-internal focus.
 	WantsHorizontalKeys() bool
+	// Focusable reports whether this Content can receive Tab-cycled focus at
+	// all. A *MenuModel reports false only for the plain-text kind (a
+	// read-only display line, e.g. a subtitle section, that Tab/Shift-Tab
+	// must skip automatically); every other kind reports true. A ContentRow
+	// reports true if any child is focusable.
+	Focusable() bool
+	// AbsorbMessage lets a Content section observe its own deferred-action
+	// messages (button-row clicks and list-item Action clicks scheduled via
+	// deferAction) without participating in general Update() dispatch.
+	// Returns nil if msg doesn't belong to this section. updateSections calls
+	// this for every content section on every message -- not just the
+	// focused one -- so a section's deferred action still fires correctly
+	// after focus has moved elsewhere by the time the tick arrives (e.g. a
+	// list item's click schedules a menuDeferredActionMsg scoped to that
+	// section's own instanceID one tick later; nothing else would route it
+	// back once the section is no longer focused). A ContentRow delegates to
+	// each child.
+	AbsorbMessage(msg tea.Msg) tea.Cmd
+	// IsProcessing reports whether this section has an in-flight item/button
+	// action (spinner visible). updateSections uses this to detect when a
+	// section just started processing an item click, so the outer dialog's
+	// own Select-role button can spin too -- mirroring the pre-migration
+	// single-MenuModel behavior where the button row and the item spinner
+	// were the same object. A ContentRow reports true if any child is
+	// processing.
+	IsProcessing() bool
 }
 
 var _ Content = (*MenuModel)(nil)

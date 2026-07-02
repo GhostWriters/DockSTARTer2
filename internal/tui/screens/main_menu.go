@@ -3,9 +3,15 @@ package screens
 import (
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/version"
+
+	tea "charm.land/bubbletea/v2"
 )
 
-// NewMainMenuScreen creates the main menu as a standalone screen
+// NewMainMenuScreen creates the main menu as a standalone screen.
+// Built as an outer container MenuModel (title, buttons) with the item list
+// as a single submenu-mode content section, matching the pattern used by
+// multi-section screens like DisplayOptionsScreen -- see the Content/
+// ContentRow migration plan for why a MenuModel can't be its own section.
 func NewMainMenuScreen(connType string) tui.ScreenModel {
 	items := []tui.MenuItem{
 		{
@@ -29,20 +35,33 @@ func NewMainMenuScreen(connType string) tui.ScreenModel {
 		},
 	}
 
-	menu := tui.NewMenuModel(
-		tui.IDListPanel,
-		"Main Menu",
-		"What would you like to do?",
-		items,
-	)
+	list := tui.NewMenuModel(tui.IDListPanel, "", "", items)
+	list.SetMenuName("")
+	list.SetConnType(connType)
+	list.SetHelpPageText("The main navigation menu for " + version.ApplicationName + ". Select an action to configure your Docker application stack, apply updates, or adjust settings.")
+	list.SetHelpItemPrefix("Action")
+	list.SetSubMenuMode(true)
+	list.SetVariableHeight(false)
+	list.SetIsDialog(false)
+	list.SetButtons([]tui.ButtonDef{})
+	list.SetMaximized(true)
+	list.SetShowLockGutter(false)
+	list.SetNoLeftMargin(true)
 
-	menu.SetMenuName("")
-	menu.SetConnType(connType)
-	menu.SetHelpPageText("The main navigation menu for " + version.ApplicationName + ". Select an action to configure your Docker application stack, apply updates, or adjust settings.")
-	menu.SetHelpItemPrefix("Action")
-	menu.SetButtons([]tui.ButtonDef{
-		{Label: "Select", ZoneID: tui.IDApplyButton, Help: "Execute the selected action."},
+	outer := tui.NewMenuModel("main_menu_outer", "Main Menu", "", nil)
+	outer.SetShowButtons(true)
+	outer.SetButtons([]tui.ButtonDef{
+		{Label: "Select", ZoneID: tui.IDApplyButton, Action: func() tea.Msg {
+			item := list.SelectedItem()
+			if item.Action != nil {
+				return item.Action()
+			}
+			return nil
+		}, Help: "Execute the selected action."},
 		{Label: "Exit", ZoneID: tui.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
 	})
-	return menu
+	outer.AddContentSection(tui.NewPlainTextSection("main_menu_subtitle", "What would you like to do?"))
+	outer.AddContentSection(list)
+
+	return outer
 }

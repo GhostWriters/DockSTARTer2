@@ -116,6 +116,16 @@ func (r *ContentRow) SectionHeight(width int) int {
 	return maxH
 }
 
+// SectionNaturalWidth returns maxWidth unchanged -- a row's width is always
+// determined by the outer layout (children split whatever width the row is
+// given, per SetSize's equal-split), not by summing children's own natural
+// widths, since equal-split sizing doesn't reserve narrower space per child
+// today (see the equal-split-only design note in content_row.go/the
+// horizontal-layout plan).
+func (r *ContentRow) SectionNaturalWidth(maxWidth int) int {
+	return maxWidth
+}
+
 // SetSize splits width evenly across children and stretches every child to
 // height h.
 func (r *ContentRow) SetSize(width, height int) {
@@ -260,6 +270,37 @@ func (r *ContentRow) MatchesID(msgID string) bool {
 	return false
 }
 
+// AbsorbMessage delegates to each child, returning the first non-nil cmd.
+func (r *ContentRow) AbsorbMessage(msg tea.Msg) tea.Cmd {
+	for _, item := range r.items {
+		if cmd := item.AbsorbMessage(msg); cmd != nil {
+			return cmd
+		}
+	}
+	return nil
+}
+
+// ClearProcessingState propagates to every child that supports it, so
+// MenuModel.ClearProcessingState's generic interface-assertion recursion
+// reaches into a row's children too.
+func (r *ContentRow) ClearProcessingState() {
+	for _, item := range r.items {
+		if cp, ok := item.(interface{ ClearProcessingState() }); ok {
+			cp.ClearProcessingState()
+		}
+	}
+}
+
+// IsProcessing reports true if any child is processing.
+func (r *ContentRow) IsProcessing() bool {
+	for _, item := range r.items {
+		if item.IsProcessing() {
+			return true
+		}
+	}
+	return false
+}
+
 // WantsHorizontalKeys delegates to whichever child currently holds
 // row-internal focus.
 func (r *ContentRow) WantsHorizontalKeys() bool {
@@ -267,4 +308,14 @@ func (r *ContentRow) WantsHorizontalKeys() bool {
 		return false
 	}
 	return r.items[r.SubFocusIndex()].WantsHorizontalKeys()
+}
+
+// Focusable reports true if any child is focusable.
+func (r *ContentRow) Focusable() bool {
+	for _, item := range r.items {
+		if item.Focusable() {
+			return true
+		}
+	}
+	return false
 }

@@ -14,6 +14,19 @@ func (m *MenuModel) ClearProcessingState() {
 		m.titleSpinner.Stop()
 	}
 	m.btnRow.Clear()
+	// Recurse into content sections -- a plain *MenuModel container (no
+	// custom screen wrapper, e.g. Main Menu) has no other place to propagate
+	// this to. A section's own spinner/processing state would otherwise stay
+	// stuck after the outer dialog is reactivated (e.g. returning from a
+	// confirm dialog or a screen navigated to by a deferred item Action),
+	// permanently blocking that section's input -- the same class of gap
+	// DisplayOptionsScreen/ServerOptionsScreen fix by hand in their own
+	// custom ClearProcessingState wrappers.
+	for _, sec := range m.contentSections {
+		if cp, ok := sec.(interface{ ClearProcessingState() }); ok {
+			cp.ClearProcessingState()
+		}
+	}
 	m.InvalidateCache()
 }
 

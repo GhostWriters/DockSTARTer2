@@ -14,6 +14,14 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		return regions
 	}
 
+	// Plain-text kind is a read-only display line with nothing to click,
+	// hover, or focus -- never in Tab-cycling (Focusable() is false) and
+	// never routed through the list/subtitle/section hit-region math below,
+	// which assumes the standard list rendering path.
+	if m.plainText != "" {
+		return regions
+	}
+
 	// Single source of truth for all layout math
 	layout := GetLayout()
 	styles := GetStyles()
