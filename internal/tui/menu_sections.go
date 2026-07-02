@@ -337,6 +337,18 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			return m, cmd, true
 		}
 	}
+
+	// Catch-all: forward otherwise-unhandled message types to the focused
+	// section only if it opted in via WantsAllMessages -- e.g. a streaming
+	// viewport section needs raw key messages (PgUp/PgDn, etc.) and internal
+	// bubbles/viewport messages that none of the explicit cases above match.
+	// Every other section kind does not opt in, so this changes no existing
+	// behavior.
+	if m.focusedSection >= 0 && m.focusedSection < n && m.contentSections[m.focusedSection].WantsAllMessages() {
+		cmd := m.updateSection(m.focusedSection, msg)
+		m.InvalidateCache()
+		return m, cmd, true
+	}
 	return m, nil, false
 }
 
@@ -426,6 +438,12 @@ func (m *MenuModel) LargeTitleBarBudget() int {
 func (m *MenuModel) SectionHeight(sectionWidth int) int {
 	layout := GetLayout()
 	switch {
+	case m.sectionHeightOverride != nil:
+		// Caller-supplied fixed-height formula, checked before the generic
+		// contentRenderer "1 + BorderHeight()" default -- e.g. a header
+		// section whose height depends on dynamic subtitle/task-list/
+		// progress-bar content, not a single fixed line.
+		return m.sectionHeightOverride(sectionWidth)
 	case m.plainText != "":
 		// Borderless kind -- no BorderHeight contribution, unlike every other
 		// case here. Measure the actual rendered line count (word-wrap aware)
@@ -536,7 +554,10 @@ func (m *MenuModel) calculateSectionLayout() {
 	}
 
 	// Button height — width-based decision using the inset section width.
-	buttonHeight := DialogButtonHeight
+	// 0 (not DialogButtonHeight) when buttons are hidden, so viewWithSections
+	// doesn't reserve/center an empty button row and DecideLargeTitleBar's
+	// budget isn't short-changed by phantom button space.
+	buttonHeight := 0
 	buttonBudget := 0
 	if m.showButtons {
 		buttonHeight = ButtonRowHeight(sectionWidth, 0, m.getButtonSpecs()...)
@@ -641,15 +662,23 @@ func (m *MenuModel) calculateSectionLayout() {
 		remainder = remaining % expandableCount
 	}
 
-	// Pass 2: size each section at the inset width.
+	// Pass 2: size each section at the inset width. Dispatch on
+	// IsVariableHeight() directly, not "sectionHeights[i] == 0" -- a FIXED
+	// section (e.g. a header with no subtitle/tasks/progress bar to show)
+	// can legitimately have a genuine natural height of 0, which the old
+	// zero-as-sentinel check misread as "not set, treat as expandable,"
+	// handing it a full share of expandableH and starving/overflowing every
+	// section after it.
 	for i, sec := range m.contentSections {
-		h := sectionHeights[i]
-		if h == 0 {
+		var h int
+		if sec.IsVariableHeight() {
 			h = expandableH
 			if remainder > 0 {
 				h++
 				remainder--
 			}
+		} else {
+			h = sectionHeights[i]
 		}
 		sec.SetSize(sectionWidth, h)
 	}

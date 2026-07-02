@@ -320,6 +320,15 @@ func (r *ContentRow) WantsHorizontalKeys() bool {
 	return r.items[r.SubFocusIndex()].WantsHorizontalKeys()
 }
 
+// WantsAllMessages delegates to whichever child currently holds row-internal
+// focus, matching WantsHorizontalKeys' convention.
+func (r *ContentRow) WantsAllMessages() bool {
+	if len(r.items) == 0 {
+		return false
+	}
+	return r.items[r.SubFocusIndex()].WantsAllMessages()
+}
+
 // Focusable reports true if any child is focusable.
 func (r *ContentRow) Focusable() bool {
 	for _, item := range r.items {

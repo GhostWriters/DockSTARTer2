@@ -144,6 +144,41 @@ type MenuModel struct {
 	contentRenderer func(contentWidth int) string             // Optional: replaces list content in viewSubMenu
 	onSubFocused    func() tea.Cmd                            // Optional: called when section gains sub-focus
 
+	// wantsAllMessages opts this section into updateSections' catch-all
+	// fallback (see WantsAllMessages) -- unlike WantsHorizontalKeys, this is
+	// NOT derived from contentRenderer != nil, since sinput sections declare
+	// their message needs exhaustively via explicit case types already
+	// present in updateSections and must not additionally opt in here. Set
+	// only via SetWantsAllMessages.
+	wantsAllMessages bool
+
+	// sectionHeightOverride, when set, is a caller-supplied fixed-height
+	// formula checked before SectionHeight's generic contentRenderer
+	// default -- e.g. a header section whose height depends on dynamic
+	// content (subtitle/task-list/progress-bar) rather than a single line.
+	sectionHeightOverride func(width int) int
+
+	// onResize, when set, is called at the end of SetSize with this
+	// section's own final (post-border-inset) content dimensions -- for a
+	// section whose contentRenderer wraps an inner widget that needs its
+	// own explicit resize (e.g. a streaming viewport recalculating wrapped
+	// line layout), not just a re-render at the new width.
+	onResize func(width, height int)
+
+	// borderless, combined with contentRenderer != nil, skips viewSubMenu's
+	// outer bordered-box wrap entirely -- for a contentRenderer section that
+	// renders fully self-contained content (optionally with its own inner
+	// border), e.g. a header or streaming-viewport section. Generalizes the
+	// bypass plainText already gets, for content beyond a single text line.
+	// Set only via SetBorderless.
+	borderless bool
+
+	// nonFocusable excludes this section from Tab-cycled focus even though
+	// it isn't the plain-text kind (which is non-focusable by default) --
+	// e.g. a header section with no interactive content of its own. Set
+	// only via SetNonFocusable.
+	nonFocusable bool
+
 	// plainText, when non-empty, makes this MenuModel render as a borderless,
 	// non-focusable single line of theme-styled text instead of a list --
 	// the "plain text" Content kind, used e.g. for a dialog's subtitle
@@ -231,6 +266,13 @@ type MenuModel struct {
 	// spinner is owned by btnRow.
 	loadingText  string
 	titleSpinner TitleSpinner
+
+	// titleSpinnerIndicator, when set, overrides the title-bar spinner
+	// indicators independent of loadingText -- e.g. a wrapper (like
+	// ProgramBoxModel) that owns its own task-running spinner state and
+	// wants it reflected in this outer MenuModel's title bar without
+	// triggering loadingText's full content-area replacement.
+	titleSpinnerIndicator func() (left, right string)
 
 	// processingItemIdx is the index of the menu item currently being activated (-1 = none).
 	// Shows a spinner indicator while the triggered action is in flight.
@@ -587,11 +629,43 @@ func (m *MenuModel) WantsHorizontalKeys() bool {
 	return m.contentRenderer != nil
 }
 
-// Focusable reports false only for the plain-text kind (a read-only display
-// line with nothing to interact with); every other kind can receive Tab
-// focus. Part of the Content interface.
+// WantsAllMessages reports whether updateSections' catch-all should forward
+// otherwise-unhandled message types to this section. Part of the Content
+// interface. See SetWantsAllMessages.
+func (m *MenuModel) WantsAllMessages() bool {
+	return m.wantsAllMessages
+}
+
+// SetWantsAllMessages opts this section into updateSections' catch-all
+// fallback for message types none of its explicit cases match.
+func (m *MenuModel) SetWantsAllMessages(v bool) {
+	m.wantsAllMessages = v
+}
+
+// Focusable reports false for the plain-text kind (a read-only display line
+// with nothing to interact with) and any section explicitly marked
+// non-focusable via SetNonFocusable; every other kind can receive Tab focus.
+// Part of the Content interface.
 func (m *MenuModel) Focusable() bool {
-	return m.plainText == ""
+	return m.plainText == "" && !m.nonFocusable
+}
+
+// SetBorderless skips viewSubMenu's outer bordered-box wrap for this
+// contentRenderer section, so its render closure is responsible for its own
+// (optional) framing.
+func (m *MenuModel) SetBorderless(v bool) {
+	m.borderless = v
+}
+
+// SetNonFocusable excludes this section from Tab-cycled focus.
+func (m *MenuModel) SetNonFocusable(v bool) {
+	m.nonFocusable = v
+}
+
+// SetTitleSpinnerIndicator overrides this MenuModel's title-bar spinner
+// indicators, independent of loadingText.
+func (m *MenuModel) SetTitleSpinnerIndicator(fn func() (left, right string)) {
+	m.titleSpinnerIndicator = fn
 }
 
 // IsProcessing reports whether this menu has an in-flight item or button

@@ -58,6 +58,17 @@ type Content interface {
 	// contentRenderer (the sinput kind); a ContentRow delegates to whichever
 	// child currently holds row-internal focus.
 	WantsHorizontalKeys() bool
+	// WantsAllMessages reports whether this Content must see every message
+	// type reaching updateSections, not just the ones its switch has an
+	// explicit case for (Tab/Shift-Tab, LayerHitMsg, wheel/drag/motion/
+	// release, ToggleFocusedMsg, sinput clipboard messages). A *MenuModel
+	// reports true only when it wraps a variable-height contentRenderer
+	// section whose inner widget needs raw message types beyond those
+	// explicit cases (e.g. a streaming viewport section forwarding
+	// PgUp/PgDn and other leftover key messages to its own inner model).
+	// Every other kind reports false, preserving existing behavior exactly.
+	// A ContentRow reports true if any child does.
+	WantsAllMessages() bool
 	// Focusable reports whether this Content can receive Tab-cycled focus at
 	// all. A *MenuModel reports false only for the plain-text kind (a
 	// read-only display line, e.g. a subtitle section, that Tab/Shift-Tab

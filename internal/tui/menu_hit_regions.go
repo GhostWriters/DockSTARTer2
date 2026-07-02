@@ -22,6 +22,21 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		return regions
 	}
 
+	// Borderless contentRenderer sections have no border/frame for the
+	// generic list-panel math below to position against -- they're fully
+	// responsible for their own hit regions via extraHitRegions, offset
+	// directly from offsetX/offsetY (no border inset assumed).
+	if m.borderless && m.contentRenderer != nil {
+		if m.extraHitRegions != nil {
+			baseZ := ZScreen
+			if m.isDialog {
+				baseZ = ZDialog
+			}
+			regions = append(regions, m.extraHitRegions(offsetX, offsetY, baseZ)...)
+		}
+		return regions
+	}
+
 	// Single source of truth for all layout math
 	layout := GetLayout()
 	styles := GetStyles()
@@ -460,15 +475,15 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		widgetY := TitleBarWidgetY(offsetY, m.layout.LargeTitleBar)
 		regions = append(regions,
 			HitRegion{
-				ID:     m.id + "." + IDTitleWidgetHelp,
-				X:      helpWidgetX, Y: widgetY, Width: 3, Height: 1,
+				ID: m.id + "." + IDTitleWidgetHelp,
+				X:  helpWidgetX, Y: widgetY, Width: 3, Height: 1,
 				ZOrder: baseZ + 25,
 				Label:  "Help",
 				Help:   &HelpContext{ScreenName: m.title, PageTitle: "Help", PageText: "Open help for this dialog."},
 			},
 			HitRegion{
-				ID:     m.id + "." + IDTitleWidgetClose,
-				X:      closeWidgetX, Y: widgetY, Width: 3, Height: 1,
+				ID: m.id + "." + IDTitleWidgetClose,
+				X:  closeWidgetX, Y: widgetY, Width: 3, Height: 1,
 				ZOrder: baseZ + 25,
 				Label:  "Close",
 				Help:   &HelpContext{ScreenName: m.title, PageTitle: "Close", PageText: "Close this dialog."},

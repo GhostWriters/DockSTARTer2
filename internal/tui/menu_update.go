@@ -409,7 +409,9 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(keyMsg, Keys.Space):
 			return m.handleSpace()
 
-		// Esc: back if available, else exit
+		// Esc: back if available, else exit, else fall back to whatever
+		// single button this dialog has (e.g. a ProgramBox's "OK" button,
+		// which is neither a back/cancel nor an exit action).
 		case key.Matches(keyMsg, Keys.Esc):
 			for i, btn := range m.buttons {
 				if (btn.ZoneID == "btn-back" || btn.ZoneID == "btn-cancel" || btn.ZoneID == IDBackButton) && btn.Action != nil {
@@ -426,6 +428,12 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					action := btn.Action
 					return m, m.SetProcessingBtnDeferred(btn.ZoneID, func() tea.Msg { return action() })
 				}
+			}
+			if len(m.buttons) == 1 && m.buttons[0].Action != nil {
+				btn := m.buttons[0]
+				m.focusedItem = FocusBtn
+				m.focusedBtnIndex = 0
+				return m, m.SetProcessingBtnDeferred(btn.ZoneID, func() tea.Msg { return btn.Action() })
 			}
 			return m, m.SetProcessingBtnDeferred(IDExitButton, ConfirmExitAction())
 
@@ -520,6 +528,17 @@ func (m *MenuModel) menuTitleBarCloseCmd() tea.Cmd {
 				cmd := m.SetProcessingBtnDeferred(btn.ZoneID, func() tea.Msg { return action() })
 				return cmd()
 			}
+		}
+		// Fall back to whatever single button this dialog has (e.g. a
+		// ProgramBox's "OK" button, which is neither a back/cancel nor an
+		// exit action) so the title-bar [x] widget always has something to
+		// close with.
+		if len(m.buttons) == 1 && m.buttons[0].Action != nil {
+			btn := m.buttons[0]
+			m.focusedItem = FocusBtn
+			m.focusedBtnIndex = 0
+			cmd := m.SetProcessingBtnDeferred(btn.ZoneID, func() tea.Msg { return btn.Action() })
+			return cmd()
 		}
 		return nil
 	}
@@ -711,6 +730,10 @@ func (m *MenuModel) SetSize(width, height int) {
 		if m.viewStartY < 0 {
 			m.viewStartY = 0
 		}
+	}
+
+	if m.onResize != nil {
+		m.onResize(width, height)
 	}
 }
 
@@ -1002,7 +1025,6 @@ func (m *MenuModel) scrollHalfPageDown() { //nolint:unused
 	menuSelectedIndices[m.persistKey()] = m.cursor
 }
 
-
 // EscapeAction implements EscapeActioner: runs back/cancel action if present, otherwise prompts to exit.
 func (m *MenuModel) EscapeAction() tea.Cmd {
 	for _, btn := range m.buttons {
@@ -1078,5 +1100,3 @@ func (m *MenuModel) syncSelectionToViewport() {
 	m.cursor = m.list.Index()
 	menuSelectedIndices[m.persistKey()] = m.cursor
 }
-
-

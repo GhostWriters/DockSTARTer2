@@ -85,6 +85,15 @@ func (m *MenuModel) ViewString() string {
 		return m.viewPlainText()
 	}
 
+	// Borderless contentRenderer sections (e.g. a header or streaming
+	// viewport section that renders its own fully self-contained content,
+	// optionally with its own inner border) skip viewSubMenu's outer
+	// bordered-box wrap entirely -- same bypass plainText uses, generalized
+	// for content that isn't a single themed text line.
+	if m.borderless && m.contentRenderer != nil {
+		return m.SaveCache(m.contentRenderer(m.width))
+	}
+
 	// In Sub-menu mode, we render a simpler view without the global backdrop logic
 	if m.subMenuMode {
 		return m.viewSubMenu()
@@ -288,7 +297,9 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 	}
 	tbs := m.State()
 	tbs.Show = m.title != "" && !m.subMenuMode
-	if m.loadingText != "" {
+	if m.titleSpinnerIndicator != nil {
+		tbs.SpinnerIndicator, tbs.SpinnerIndicatorRight = m.titleSpinnerIndicator()
+	} else if m.loadingText != "" {
 		tbs.SpinnerIndicator, tbs.SpinnerIndicatorRight = m.titleSpinner.Indicators()
 	}
 	rendered := RenderBorderedBoxCtx(m.title, content, contentWidth, targetHeight, focused || m.TitleBarFocused(), true, rounded, align, titleTag, ctx, tbs)
@@ -476,16 +487,22 @@ func (m *MenuModel) viewWithSections() string {
 		}
 	}
 
-	// Button row also inset by the same margin.
-	buttonRowRaw := m.renderSimpleButtons(sectionWidth)
-	if m.layout.ButtonHeight > 1 {
-		buttonRowRaw = lipgloss.NewStyle().
-			Height(m.layout.ButtonHeight).
-			Align(lipgloss.Center, lipgloss.Center).
-			Render(buttonRowRaw)
+	// Button row also inset by the same margin -- omitted entirely when
+	// buttons are hidden (m.showButtons false), so no empty reserved row
+	// remains and the expandable section correctly reclaims that space
+	// (see calculateSectionLayout's buttonHeight/buttonBudget, both 0 in
+	// that case).
+	if m.showButtons {
+		buttonRowRaw := m.renderSimpleButtons(sectionWidth)
+		if m.layout.ButtonHeight > 1 {
+			buttonRowRaw = lipgloss.NewStyle().
+				Height(m.layout.ButtonHeight).
+				Align(lipgloss.Center, lipgloss.Center).
+				Render(buttonRowRaw)
+		}
+		buttonRow := marginStyle.Render(buttonRowRaw)
+		parts = append(parts, buttonRow)
 	}
-	buttonRow := marginStyle.Render(buttonRowRaw)
-	parts = append(parts, buttonRow)
 
 	content := lipgloss.JoinVertical(lipgloss.Left, parts...)
 
