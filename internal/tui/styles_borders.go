@@ -131,7 +131,7 @@ func ApplyInnerBorderCtx(style lipgloss.Style, focused bool, ctx StyleContext) l
 	borderBG := ctx.Dialog.GetBackground()
 
 	var border lipgloss.Border
-	if ctx.Type == DialogTypeConfirm {
+	if !ctx.SquareBorder && (ctx.Type == DialogTypeConfirm || ctx.AngledBorder) {
 		if ctx.LineCharacters {
 			if focused {
 				border = SlantedThickBorder

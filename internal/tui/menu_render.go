@@ -191,7 +191,7 @@ func (m *MenuModel) ViewString() string {
 	// Wrap in bordered dialog with title embedded in border
 	var dialog string
 	if m.title != "" {
-		dialog = m.renderBorderWithTitle(content, contentWidth, targetHeight, m.focused, false, "Title")
+		dialog = m.renderBorderWithTitle(content, contentWidth, targetHeight, m.focused, m.borderStyle == BorderStyleRounded, "Title")
 	} else {
 		// No title: use focus-aware inner rounded border
 		// We must ensure the style width accounts for the layout's actual visual borders
@@ -228,8 +228,9 @@ func (m *MenuModel) SetIsDialog(isDialog bool) {
 // Used by AppModel to limit log panel expansion.
 //
 // Derived from the inverse of calculateLayout's maxListHeight formula:
-//   flat-button path: maxListHeight = h - 5 - subtitleH  →  h = 8 + subtitleH at floor=3
-//   no-button path:   maxListHeight = h - 4 - subtitleH  →  h = 7 + subtitleH at floor=3
+//
+//	flat-button path: maxListHeight = h - 5 - subtitleH  →  h = 8 + subtitleH at floor=3
+//	no-button path:   maxListHeight = h - 4 - subtitleH  →  h = 7 + subtitleH at floor=3
 func (m *MenuModel) MinHeight() int {
 	if !m.maximized {
 		return 0
@@ -246,7 +247,6 @@ func (m *MenuModel) MinHeight() int {
 	}
 	return base
 }
-
 
 func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targetHeight int, focused bool, rounded bool, titleTag string) string {
 	align := GetActiveContext().DialogTitleAlign
@@ -276,6 +276,8 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 
 	ctx := GetActiveContext()
 	ctx.Type = m.dialogType
+	ctx.AngledBorder = m.borderStyle == BorderStyleAngled
+	ctx.SquareBorder = m.borderStyle == BorderStyleSquare
 	// Use pre-computed layout decision; submenus always use small titlebar.
 	ctx.LargeTitleBars = m.layout.LargeTitleBar
 	if m.disabled {
@@ -289,7 +291,18 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 	if m.loadingText != "" {
 		tbs.SpinnerIndicator, tbs.SpinnerIndicatorRight = m.titleSpinner.Indicators()
 	}
-	return RenderBorderedBoxCtx(m.title, content, contentWidth, targetHeight, focused || m.TitleBarFocused(), true, rounded, align, titleTag, ctx, tbs)
+	rendered := RenderBorderedBoxCtx(m.title, content, contentWidth, targetHeight, focused || m.TitleBarFocused(), true, rounded, align, titleTag, ctx, tbs)
+	if m.bottomBorderLabel != "" {
+		lines := strings.Split(rendered, "\n")
+		if n := len(lines); n > 0 {
+			// BuildLabeledBottomBorderCtx wants the box's full visual width
+			// (including the two side border columns), unlike
+			// RenderBorderedBoxCtx's contentWidth which is inner-only.
+			lines[n-1] = BuildLabeledBottomBorderCtx(contentWidth+GetLayout().BorderWidth(), m.bottomBorderLabel, focused || m.TitleBarFocused(), ctx)
+			rendered = strings.Join(lines, "\n")
+		}
+	}
+	return rendered
 }
 
 func (m *MenuModel) viewSubMenu() string {
@@ -477,6 +490,6 @@ func (m *MenuModel) viewWithSections() string {
 	content := lipgloss.JoinVertical(lipgloss.Left, parts...)
 
 	return m.SaveCache(
-		m.renderBorderWithTitle(content, contentWidth, m.height, m.focused, false, "Title"),
+		m.renderBorderWithTitle(content, contentWidth, m.height, m.focused, m.borderStyle == BorderStyleRounded, "Title"),
 	)
 }

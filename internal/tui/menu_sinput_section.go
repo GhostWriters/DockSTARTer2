@@ -14,7 +14,21 @@ import (
 // The returned *sinput.Model pointer is kept in sync by the section's interceptor;
 // read inp.Value() to get the current text.
 func NewSinputSection(id, title, initialValue string) (*MenuModel, *sinput.Model) {
+	return newSinputSectionWithEcho(id, title, initialValue, textinput.EchoNormal)
+}
+
+// NewPasswordSinputSection is like NewSinputSection but masks input with '*',
+// matching the password mode the prompt dialog's sensitive inputs use.
+func NewPasswordSinputSection(id, title, initialValue string) (*MenuModel, *sinput.Model) {
+	return newSinputSectionWithEcho(id, title, initialValue, textinput.EchoPassword)
+}
+
+func newSinputSectionWithEcho(id, title, initialValue string, echoMode textinput.EchoMode) (*MenuModel, *sinput.Model) {
 	ti := textinput.New()
+	if echoMode == textinput.EchoPassword {
+		ti.EchoMode = textinput.EchoPassword
+		ti.EchoCharacter = '*'
+	}
 	ti.SetValue(initialValue)
 	ti.CursorEnd()
 	ti.CharLimit = 128

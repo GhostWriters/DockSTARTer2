@@ -451,7 +451,7 @@ func (s *ServerOptionsScreen) disconnectAction(force bool, enabled bool) tea.Cmd
 			return tui.ShowMessageDialogMsg{
 				Title:   "No Active Session",
 				Message: "There is no active remote session to disconnect.",
-				Type:    tui.MessageInfo,
+				Type:    tui.MessageWarning,
 			}
 		}
 	}
@@ -558,7 +558,7 @@ func (s *ServerOptionsScreen) HelpText() string {
 }
 
 func (s *ServerOptionsScreen) IsMaximized() bool {
-	return true
+	return s.outerMenu.IsMaximized()
 }
 
 func (s *ServerOptionsScreen) MenuName() string {

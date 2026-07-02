@@ -2,9 +2,9 @@ package tui
 
 import (
 	"DockSTARTer2/internal/config"
-	semstyle "github.com/GhostWriters/semstyle/lg"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
+	semstyle "github.com/GhostWriters/semstyle/lg"
 	"image/color"
 	"regexp"
 	"strconv"
@@ -132,17 +132,17 @@ const (
 	IDStatusBar = "status_bar"
 
 	// Display Options IDs
-	IDThemePanel   = "theme_panel"
-	IDOptionsPanel = "options_panel"
-	IDButtonPanel  = "button_panel"
-	IDListPanel    = "list_panel"
-	IDSaveButton   = "save_button"
-	IDApplyButton  = "apply_button"
-	IDBackButton   = "back_button"
-	IDExitButton   = "exit_button"
+	IDThemePanel       = "theme_panel"
+	IDOptionsPanel     = "options_panel"
+	IDButtonPanel      = "button_panel"
+	IDListPanel        = "list_panel"
+	IDSaveButton       = "save_button"
+	IDApplyButton      = "apply_button"
+	IDBackButton       = "back_button"
+	IDExitButton       = "exit_button"
 	IDHeaderFlags      = "header_flags"
 	IDHeaderWebDisplay = "header_web_display"
-	IDHelpline     = "helpline"
+	IDHelpline         = "helpline"
 
 	// INS/OVR mode toggle hit region ID
 	IDInsOvr = "ins_ovr"
@@ -163,14 +163,14 @@ type Styles struct {
 	Screen lipgloss.Style
 
 	// Dialog
-	Dialog              lipgloss.Style
-	ContentBackground   lipgloss.Style
-	DialogTitle         lipgloss.Style
-	DialogTitleHelp     lipgloss.Style
+	Dialog               lipgloss.Style
+	ContentBackground    lipgloss.Style
+	DialogTitle          lipgloss.Style
+	DialogTitleHelp      lipgloss.Style
 	SubmenuTitle         lipgloss.Style
 	SubmenuTitleFocused  lipgloss.Style
 	SubmenuTitleDisabled lipgloss.Style
-	LargeTitleArea      lipgloss.Style
+	LargeTitleArea       lipgloss.Style
 
 	// Borders
 	Border               lipgloss.Border
@@ -251,8 +251,18 @@ type Styles struct {
 
 // StyleContext holds a subset of Styles for decoupled rendering
 type StyleContext struct {
-	LineCharacters       bool
-	DrawBorders          bool
+	LineCharacters bool
+	DrawBorders    bool
+	// AngledBorder forces the slanted/beveled border style independent of
+	// Type -- Type == DialogTypeConfirm already implies it by default (see
+	// the ctx.Type == DialogTypeConfirm checks), but a dialog that wants
+	// both the angled border AND a non-Confirm Type's title color (e.g. a
+	// colored message dialog) sets this explicitly instead.
+	AngledBorder bool
+	// SquareBorder forces the square border style even when Type ==
+	// DialogTypeConfirm would otherwise imply angled -- checked first so it
+	// wins over both AngledBorder and the DialogTypeConfirm default.
+	SquareBorder         bool
 	LargeButtons         bool
 	LargeTitleBars       bool
 	Type                 DialogType

@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -18,210 +17,127 @@ const (
 	MessageError
 )
 
-// messageDialogModel represents a message dialog
+// messageDialogModel represents a message dialog. Built as an outer
+// container MenuModel (title, OK button) with the message as a plain-text
+// section, matching the pattern used by Main Menu/.../Confirm/Prompt dialogs.
 type messageDialogModel struct {
-	baseDialogModel
-	title       string
-	message     string
-	messageType MessageType
-	buttons     *ButtonRow
+	outer *MenuModel
+}
+
+func dialogTypeForMessage(msgType MessageType) DialogType {
+	switch msgType {
+	case MessageSuccess:
+		return DialogTypeSuccess
+	case MessageWarning:
+		return DialogTypeWarning
+	case MessageError:
+		return DialogTypeError
+	default:
+		return DialogTypeInfo
+	}
+}
+
+// messageThemeTag returns the plain-text theme tag for the message body.
+// All message types render with plain (untagged) text -- the border/title
+// color from dialogTypeForMessage is what distinguishes severity.
+func messageThemeTag(_ MessageType) string {
+	return ""
 }
 
 // newMessageDialog creates a new message dialog
 func newMessageDialog(title, message string, msgType MessageType) *messageDialogModel {
-	m := &messageDialogModel{
-		baseDialogModel: baseDialogModel{id: "message_dialog", focused: true},
-		title:           title,
-		message:         message,
-		messageType:     msgType,
-		buttons:         NewButtonRow([]ButtonDef{{Label: " OK ", ZoneID: "OK"}}),
-	}
-	return m
+	outer := NewMenuModel("message_dialog", title, "", nil)
+	outer.SetMaximized(false)
+	outer.SetIsDialog(true)
+	outer.SetDialogType(dialogTypeForMessage(msgType))
+	outer.SetBorderStyle(BorderStyleRounded)
+	outer.SetShowButtons(true)
+	outer.SetButtons([]ButtonDef{
+		{Label: " OK ", ZoneID: "btn-select", Action: func() tea.Msg { return CloseDialogMsg{Result: true} }, Help: "Dismiss this message."},
+	})
+	outer.SetEscAction(func() tea.Msg { return CloseDialogMsg{Result: true} })
+
+	messageSection := NewPlainTextSection("message_dialog_text", message)
+	messageSection.SetPlainTextStyle(messageThemeTag(msgType), 1)
+	outer.AddContentSection(messageSection)
+
+	return &messageDialogModel{outer: outer}
 }
 
+// Init implements tea.Model
+func (m *messageDialogModel) Init() tea.Cmd {
+	return m.outer.Init()
+}
+
+// Update implements tea.Model
 func (m *messageDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if tickCmd, ok := m.buttons.Update(msg); ok {
-		return m, tickCmd
+	// Any key press closes the dialog, matching the original's "press any
+	// key to continue" behavior -- MenuModel's own key handling only closes
+	// on Enter/Esc/hotkeys, so intercept KeyPressMsg here first. Skip the
+	// intercept while the title bar [?]/[x] widgets have focus so Tab/Enter/
+	// arrow navigation there still works via the outer's own handling.
+	if _, ok := msg.(tea.KeyPressMsg); ok && !m.outer.TitleBarFocused() {
+		return m, m.outer.SetProcessingBtnDeferred("btn-select", func() tea.Msg { return CloseDialogMsg{Result: true} })
 	}
 
-	plainClose := func() tea.Msg { return CloseDialogMsg{Result: true} }
-	closeWithSpinner := func() tea.Cmd {
-		return m.buttons.SetProcessing("OK", plainClose)
+	newOuter, cmd := m.outer.Update(msg)
+	if outer, ok := newOuter.(*MenuModel); ok {
+		m.outer = outer
 	}
-
-	if m.HandleWidgetClearPress(msg) {
-		return m, nil
-	}
-
-	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-		m.calculateLayout()
-		return m, nil
-
-	case tea.KeyPressMsg:
-		if handled, cmd := m.handleTitleBarKey(msg, nil); handled {
-			return m, tea.Batch(cmd, closeWithSpinner())
-		}
-		// Any key press closes the dialog
-		// Use CloseDialogMsg so AppModel can handle it when running within existing TUI
-		return m, closeWithSpinner()
-
-	case LayerHitMsg:
-		// Middle click is handled by AppModel (global Space mapping)
-		if msg.Button == tea.MouseMiddle {
-			return m, nil
-		}
-		if handled, cmd := m.handleTitleBarHit(msg, nil); handled {
-			return m, tea.Batch(cmd, closeWithSpinner())
-		}
-		// Left click on OK button closes
-		// Check for suffixes to support prefixed IDs (e.g., "message_dialog.OK")
-		if msg.Button == tea.MouseLeft {
-			if ButtonIDMatches(msg.ID, "OK") {
-				return m, closeWithSpinner()
-			}
-		}
-	}
-
-	// Middle-click dismisses the dialog
-	if _, ok := msg.(ToggleFocusedMsg); ok {
-		return m, m.buttons.SetProcessing("OK", func() tea.Msg { return CloseDialogMsg{Result: true} })
-	}
-
-	return m, nil
-}
-
-// titlePrefix returns the icon prefix for this message type.
-func (m *messageDialogModel) titlePrefix() string {
-	return ""
-}
-
-func (m *messageDialogModel) titleSuffix() string {
-	return ""
-}
-
-// messageStyle returns the base text style for this message type (without width).
-func (m *messageDialogModel) messageStyle() lipgloss.Style {
-	styles := GetStyles()
-	switch m.messageType {
-	case MessageSuccess:
-		return styles.StatusSuccess.Padding(1, 2)
-	case MessageWarning:
-		return styles.StatusWarn.Padding(1, 2)
-	case MessageError:
-		return styles.ItemNormal.Padding(1, 2)
-	default:
-		return styles.ItemNormal.Padding(1, 2)
-	}
-}
-
-// contentWidth calculates the ideal dialog inner width.
-func (m *messageDialogModel) contentWidth() int {
-	maxAllowed := m.layout.Width - 2
-	w := maxLineWidth(m.message) + DialogBodyPadH
-	if minBtn := lipgloss.Width(" OK ") + 4 + DialogBodyPadH; minBtn > w {
-		w = minBtn
-	}
-	fullTitle := m.titlePrefix() + GetPlainText(m.title) + m.titleSuffix()
-	if tw := lipgloss.Width(fullTitle) + 6; tw > w {
-		w = tw
-	}
-	ctx := GetActiveContext()
-	w = minWidthForWidgets(w, fullTitle, ctx.DialogTitleAlign, BuildInactiveTitleWidgets(ctx))
-	if w > maxAllowed {
-		w = maxAllowed
-	}
-	return w
-}
-
-// ViewString returns the dialog content as a string for compositing
-func (m *messageDialogModel) ViewString() string {
-	if m.width == 0 {
-		return ""
-	}
-
-	contentWidth := m.contentWidth()
-	fullTitle := m.titlePrefix() + GetPlainText(m.title) + m.titleSuffix()
-
-	// Wrap message text to fit width
-	messageStyle := m.messageStyle().Width(contentWidth)
-	content := messageStyle.Render(m.message)
-
-	// Render OK button with automatic zone marking
-	btnSpecs := m.buttons.Specs(true, 0)
-	buttonRow := RenderCenteredButtons(contentWidth, btnSpecs...)
-
-	// Combine message and button
-	// Standardize to use TrimRight to prevent implicit gaps
-	content = strings.TrimRight(content, "\n")
-	buttonRow = strings.TrimRight(buttonRow, "\n")
-	fullContent := lipgloss.JoinVertical(lipgloss.Left, content, buttonRow)
-
-	// Add title with prefix/suffix and wrap in border
-	dialogType := DialogTypeInfo
-	switch m.messageType {
-	case MessageSuccess:
-		dialogType = DialogTypeSuccess
-	case MessageWarning:
-		dialogType = DialogTypeWarning
-	case MessageError:
-		dialogType = DialogTypeError
-	}
-	ctx := GetActiveContext()
-	ctx.LargeTitleBars = m.layout.LargeTitleBar
-	return renderDialogWithTypeAndWidgets(fullTitle, fullContent, m.focused || m.TitleBarFocused(), 0, dialogType, ctx, m.State())
+	return m, cmd
 }
 
 // View implements tea.Model
 func (m *messageDialogModel) View() tea.View {
-	return tea.NewView(m.ViewString())
+	return m.outer.View()
 }
 
-func (m *messageDialogModel) Layers() []*lipgloss.Layer { return m.layers(m.ViewString) }
+// ViewString implements ViewStringer for overlay compositing
+func (m *messageDialogModel) ViewString() string {
+	return m.outer.ViewString()
+}
+
+// SetSize implements sizing
+func (m *messageDialogModel) SetSize(width, height int) {
+	if width > 60 {
+		width = 60
+	}
+	m.outer.SetSize(width, height)
+}
+
+// IsMaximized lets the AppModel know its size state
+func (m *messageDialogModel) IsMaximized() bool {
+	return m.outer.IsMaximized()
+}
+
+// SetFocused propagates focus state
+func (m *messageDialogModel) SetFocused(f bool) {
+	m.outer.SetFocused(f)
+}
+
+// Layers implements LayeredView for compositing
+func (m *messageDialogModel) Layers() []*lipgloss.Layer {
+	return m.outer.Layers()
+}
 
 // GetHitRegions implements HitRegionProvider for mouse hit testing
 func (m *messageDialogModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
-	contentWidth := m.contentWidth()
-	messageHeight := lipgloss.Height(m.messageStyle().Width(contentWidth).Render(m.message))
-
-	// buttonY: border (1) + message with padding
-	buttonY := 1 + messageHeight
-	if m.layout.LargeTitleBar {
-		buttonY += LargeTitleBarOverhead
-	}
-
-	// Use centralized button hit region helper with dialog ID for disambiguation
-	// Must include Text to properly calculate button width
-	regions := append([]HitRegion{}, GetButtonHitRegions(
-		HelpContext{ScreenName: m.title, PageTitle: "Information", PageText: m.message},
-		m.id, offsetX+1, offsetY+buttonY, contentWidth, ZDialog+20,
-		ButtonSpec{Text: "OK", ZoneID: "OK", Help: "Dismiss this message."},
-	)...)
-
-	// Dialog background
-	regions = append(regions, HitRegion{
-		ID:     m.id,
-		X:      offsetX,
-		Y:      offsetY,
-		Width:  contentWidth + 2,
-		Height: buttonY + 2, // buttonRow (1) + border (1 more)
-		ZOrder: ZDialog,
-		Label:  "Message",
-		Help: &HelpContext{
-			ScreenName: m.title,
-			PageTitle:  "Information",
-			PageText:   m.message,
-		},
-	})
-
-	regions = append(regions, m.titleBarHitRegions(offsetX, offsetY, contentWidth, ZDialog)...)
-	return regions
+	return m.outer.GetHitRegions(offsetX, offsetY)
 }
 
+// IsScrollbarDragging contributes to the sbDragger interface for mouse motion forwarding
+func (m *messageDialogModel) IsScrollbarDragging() bool {
+	return m.outer.IsScrollbarDragging()
+}
+
+// HelpText returns help info
+func (m *messageDialogModel) HelpText() string {
+	return m.outer.HelpText()
+}
+
+// AdvanceSpinners advances any active button spinner.
 func (m *messageDialogModel) AdvanceSpinners(now time.Time) bool {
-	return m.buttons.AdvanceSpinner(now)
+	return m.outer.AdvanceSpinners(now)
 }
 
 // ShowMessageDialog displays a message dialog

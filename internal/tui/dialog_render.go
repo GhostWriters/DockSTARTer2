@@ -3,9 +3,9 @@ package tui
 import (
 	"strings"
 
-	semstyle "github.com/GhostWriters/semstyle/lg"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
+	semstyle "github.com/GhostWriters/semstyle/lg"
 
 	"charm.land/lipgloss/v2"
 )
@@ -38,13 +38,13 @@ func DecideLargeTitleBar(enabled bool, budget, minRemaining int) (useLarge bool,
 // TitleBarState carries the state needed to render title bar widgets ([?]/[×]).
 // The zero value means "no widgets shown".
 type TitleBarState struct {
-	Show                  bool             // Whether to render the title bar widgets
-	Focused               bool             // Whether the title bar has keyboard focus
+	Show                  bool        // Whether to render the title bar widgets
+	Focused               bool        // Whether the title bar has keyboard focus
 	ActiveWidget          string      // Which widget has focus (widget ID, "" = none)
 	PressedWidget         string      // Which widget is currently pressed (widget ID, "" = none)
 	Widgets               []WidgetDef // Ordered widget set; nil means defaultWidgets
-	SpinnerIndicator      string           // When non-empty, replaces left focus indicator with this spinner frame
-	SpinnerIndicatorRight string           // When non-empty, replaces right focus indicator (defaults to SpinnerIndicator)
+	SpinnerIndicator      string      // When non-empty, replaces left focus indicator with this spinner frame
+	SpinnerIndicatorRight string      // When non-empty, replaces right focus indicator (defaults to SpinnerIndicator)
 }
 
 func (s TitleBarState) rightSpinner() string {
@@ -419,7 +419,7 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 	var border lipgloss.Border
 	if !ctx.DrawBorders {
 		border = lipgloss.HiddenBorder()
-	} else if ctx.Type == DialogTypeConfirm {
+	} else if !ctx.SquareBorder && (ctx.Type == DialogTypeConfirm || ctx.AngledBorder) {
 		if ctx.LineCharacters {
 			if focused {
 				border = SlantedThickBorder
@@ -788,9 +788,9 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 				} else {
 					ind = ">"
 				}
-				result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleFocusIndicator|}}" + ind, "")))
+				result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleFocusIndicator|}}"+ind, "")))
 			} else if spinInd != "" {
-				result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleUnfocusedIndicator|}}" + spinInd, "")))
+				result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleUnfocusedIndicator|}}"+spinInd, "")))
 			} else {
 				result.WriteString(borderStyleLight.Render(" "))
 			}
@@ -804,9 +804,9 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 				} else {
 					ind = "<"
 				}
-				result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleFocusIndicator|}}" + ind, "")))
+				result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleFocusIndicator|}}"+ind, "")))
 			} else if spinIndR != "" {
-				result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleUnfocusedIndicator|}}" + spinIndR, "")))
+				result.WriteString(borderStyleLight.Render(theme.ToANSI("{{|TitleUnfocusedIndicator|}}"+spinIndR, "")))
 			} else {
 				result.WriteString(borderStyleLight.Render(" "))
 			}
@@ -850,4 +850,3 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 
 	return result.String()
 }
-

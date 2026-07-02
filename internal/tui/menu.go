@@ -139,10 +139,10 @@ type MenuModel struct {
 	dialogType DialogType
 
 	// Variable height support (for dynamic word wrapping)
-	variableHeight bool                                      // Allow list to expand naturally up to layout limits
-	interceptor      func(tea.Msg, *MenuModel) (tea.Cmd, bool) // Optional custom message handler
-	contentRenderer  func(contentWidth int) string              // Optional: replaces list content in viewSubMenu
-	onSubFocused     func() tea.Cmd                             // Optional: called when section gains sub-focus
+	variableHeight  bool                                      // Allow list to expand naturally up to layout limits
+	interceptor     func(tea.Msg, *MenuModel) (tea.Cmd, bool) // Optional custom message handler
+	contentRenderer func(contentWidth int) string             // Optional: replaces list content in viewSubMenu
+	onSubFocused    func() tea.Cmd                            // Optional: called when section gains sub-focus
 
 	// plainText, when non-empty, makes this MenuModel render as a borderless,
 	// non-focusable single line of theme-styled text instead of a list --
@@ -157,6 +157,19 @@ type MenuModel struct {
 	// used by confirm-style dialogs to vertically center the question over
 	// the button row without a border.
 	plainTextVPad int
+
+	// bottomBorderLabel, when non-empty, is injected into this section's
+	// bottom border line (e.g. an INS/OVR mode indicator on a bordered
+	// sinput section) via BuildLabeledBottomBorderCtx. Set via
+	// SetBottomBorderLabel.
+	bottomBorderLabel string
+
+	// borderStyle overrides the corner/edge shape of this section's outer
+	// bordered box independent of dialogType. Zero value (BorderStyleAuto)
+	// means "let dialogType decide" (DialogTypeConfirm implies angled,
+	// everything else is square) -- the pre-existing behavior. Set via
+	// SetBorderStyle.
+	borderStyle BorderStyle
 
 	// Memoization for expensive rendering
 	lastView         string
@@ -173,11 +186,11 @@ type MenuModel struct {
 	lastLineChars   bool
 	lastVersion     int
 	lastColumn      CheckboxColumn
-	lastHitRegions  []HitRegion                                        // Cache for variable height hit regions
+	lastHitRegions  []HitRegion                                   // Cache for variable height hit regions
 	extraHitRegions func(offsetX, offsetY, baseZ int) []HitRegion // Optional: extra hit regions injected by section helpers
-	viewStartY      int         // Persistent scroll offset for variable height lists
-	lastViewStartY  int         // Previous scroll offset for memoization check
-	lastScrollTotal int         // Total content height from last renderVariableHeightList (for scrollbar)
+	viewStartY      int                                           // Persistent scroll offset for variable height lists
+	lastViewStartY  int                                           // Previous scroll offset for memoization check
+	lastScrollTotal int                                           // Total content height from last renderVariableHeightList (for scrollbar)
 
 	renderVersion       int // Incremented on item changes to invalidate list cache and top-level view cache
 	showLockGutter      bool
@@ -194,7 +207,7 @@ type MenuModel struct {
 	// stacked inside the outer border. When present, replaces the standard
 	// list+inner-border rendering.
 	contentSections []Content
-	focusedSection   int // index into contentSections; -1 = buttons focused
+	focusedSection  int // index into contentSections; -1 = buttons focused
 
 	// Optional hook to enrich the ItemText shown in the help dialog for a menu item.
 	// If set, called by showContextMenu (right-click Help) and HelpContext.
@@ -476,7 +489,7 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem) *MenuModel {
 		focusedItem:         FocusBtn,
 		activeColumn:        ColAdd,
 		list:                l,
-		showButtons: false,
+		showButtons:         false,
 		Scroll:              Scrollbar{ID: id},
 		showLockGutter:      true,
 		activityGutterWidth: 0,
@@ -589,6 +602,25 @@ func (m *MenuModel) IsProcessing() bool {
 
 // SetDialogType sets the visual style/type of the menu dialog
 func (m *MenuModel) SetDialogType(t DialogType) { m.dialogType = t }
+
+// SetBottomBorderLabel injects label into this section's bottom border line
+// (e.g. an INS/OVR indicator). Pass "" to clear it. Invalidates the render
+// cache so a changing label (e.g. toggling INS/OVR while typing) is picked
+// up immediately.
+func (m *MenuModel) SetBottomBorderLabel(label string) {
+	if m.bottomBorderLabel == label {
+		return
+	}
+	m.bottomBorderLabel = label
+	m.InvalidateCache()
+}
+
+// SetBorderStyle overrides the corner/edge shape of this section's outer
+// bordered box independent of dialogType. Use BorderStyleAuto to revert to
+// the default (DialogTypeConfirm implies angled, everything else square).
+func (m *MenuModel) SetBorderStyle(style BorderStyle) {
+	m.borderStyle = style
+}
 
 // MenuName returns the name used for --menu or -M to return to this screen
 func (m *MenuModel) MenuName() string {
@@ -1211,4 +1243,3 @@ func (m *MenuModel) AnyLocked() bool {
 	}
 	return false
 }
-

@@ -222,7 +222,7 @@ func BuildLabeledBottomBorderCtx(totalWidth int, label string, focused bool, ctx
 	var border lipgloss.Border
 	var leftT, rightT string
 
-	if ctx.Type == DialogTypeConfirm {
+	if !ctx.SquareBorder && (ctx.Type == DialogTypeConfirm || ctx.AngledBorder) {
 		// Slanted border variant used by the prompt dialog input box
 		if ctx.LineCharacters {
 			if focused {

@@ -32,6 +32,20 @@ const (
 	DialogTypeConfirm
 )
 
+// BorderStyle overrides the corner/edge shape of a bordered box independent
+// of DialogType. BorderStyleAuto (the zero value) means "let DialogType
+// decide" -- DialogTypeConfirm implies BorderStyleAngled, everything else
+// implies BorderStyleSquare -- matching the pre-existing behavior before
+// this type existed.
+type BorderStyle int
+
+const (
+	BorderStyleAuto BorderStyle = iota
+	BorderStyleSquare
+	BorderStyleRounded
+	BorderStyleAngled
+)
+
 // BorderPair holds the border styles for focused and unfocused states
 type BorderPair struct {
 	Focused   lipgloss.Border
@@ -60,7 +74,7 @@ type DialogLayout struct {
 	Overhead       int
 	SubtitleHeight int // actual rendered subtitle height at layout time
 
-	LargeTitleBar  bool // whether large titlebar is active (pre-computed at layout time)
+	LargeTitleBar bool // whether large titlebar is active (pre-computed at layout time)
 
 	// Hit region positions (calculated during render)
 	ListX    int // X offset to first list item content

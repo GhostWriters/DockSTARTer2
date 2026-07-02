@@ -366,95 +366,15 @@ func (s *ServerOptionsScreen) Layers() []*lipgloss.Layer {
 	}
 }
 
+// GetHitRegions delegates entirely to the outer container MenuModel, which
+// already knows its own (possibly shrunk, non-maximized) rendered width and
+// each content section's actual position -- hand-computing regions here
+// from s.width (the full content area, before the outer's own width-shrink)
+// went stale and desynced from the real rendered layout once Server Settings
+// started shrinking to fit instead of always filling the screen.
 func (s *ServerOptionsScreen) GetHitRegions(offsetX, offsetY int) []tui.HitRegion {
-	var regions []tui.HitRegion
-
-	layout := tui.GetLayout()
-	contentX := (layout.BorderWidth() / 2) + layout.ContentSideMargin
-
-	largeTitleOffset := 0
-	if s.outerMenu != nil && s.outerMenu.HasLargeTitleBar() {
-		largeTitleOffset = tui.LargeTitleBarOverhead
+	if s.outerMenu == nil {
+		return nil
 	}
-	contentY := 1 + largeTitleOffset
-
-	// Settings menu regions
-	settingsRegions := s.settingsMenu.GetHitRegions(offsetX+contentX, offsetY+contentY)
-	regions = append(regions, settingsRegions...)
-	regions = append(regions, tui.HitRegion{
-		ID:     "server_settings",
-		X:      offsetX + contentX,
-		Y:      offsetY + contentY,
-		Width:  s.settingsMenu.Width(),
-		Height: s.settingsMenu.Height(),
-		ZOrder: tui.ZScreen + 1,
-		Label:  "Server Configuration",
-	})
-
-	// Status menu regions (below settings)
-	statusY := contentY + s.settingsMenu.Height()
-	statusRegions := s.statusMenu.GetHitRegions(offsetX+contentX, offsetY+statusY)
-	regions = append(regions, statusRegions...)
-	regions = append(regions, tui.HitRegion{
-		ID:     "server_status",
-		X:      offsetX + contentX,
-		Y:      offsetY + statusY,
-		Width:  s.statusMenu.Width(),
-		Height: s.statusMenu.Height(),
-		ZOrder: tui.ZScreen + 1,
-		Label:  "Server Status",
-		Help: &tui.HelpContext{
-			ScreenName: s.outerMenu.Title(),
-			PageTitle:  "Description",
-			PageText:   "Live status of the SSH server and any active remote session.",
-		},
-	})
-
-	// Button row
-	menuWidth := s.width - layout.BorderWidth()
-	buttonY := 1 + largeTitleOffset + s.settingsMenu.Height() + s.statusMenu.Height()
-	btnRowWidth := menuWidth - layout.ContentMarginWidth()
-
-	regions = append(regions, tui.HitRegion{
-		ID:     tui.IDButtonPanel,
-		X:      offsetX + contentX,
-		Y:      offsetY + buttonY,
-		Width:  btnRowWidth,
-		Height: s.outerMenu.GetButtonHeight(),
-		ZOrder: tui.ZScreen + 1,
-		Label:  "Actions",
-	})
-
-	btnSpecs := []tui.ButtonSpec{
-		{Text: "Apply", ZoneID: tui.IDApplyButton, Help: "Save server settings to dockstarter2.toml."},
-	}
-	if s.isRoot {
-		btnSpecs = append(btnSpecs, tui.ButtonSpec{Text: "Exit", ZoneID: tui.IDExitButton, Help: "Exit the application."})
-	} else {
-		btnSpecs = append(btnSpecs,
-			tui.ButtonSpec{Text: "Back", ZoneID: tui.IDBackButton, Help: "Return to the previous screen."},
-			tui.ButtonSpec{Text: "Exit", ZoneID: tui.IDExitButton, Help: "Exit the application."},
-		)
-	}
-	helpCtx := tui.HelpContext{
-		ScreenName: s.outerMenu.Title(),
-		PageTitle:  "Description",
-		PageText:   "Configure remote access to the DS2 TUI.",
-	}
-	regions = append(regions, tui.GetButtonHitRegions(
-		helpCtx,
-		s.outerMenu.ID(), offsetX+contentX, offsetY+buttonY, btnRowWidth, tui.ZScreen+25,
-		btnSpecs...,
-	)...)
-
-	// Title widget regions — delegate to outerMenu and filter for title widget IDs.
-	if s.outerMenu != nil {
-		for _, r := range s.outerMenu.GetHitRegions(offsetX, offsetY) {
-			if tui.IsTitleWidgetID(r.ID) {
-				regions = append(regions, r)
-			}
-		}
-	}
-
-	return regions
+	return s.outerMenu.GetHitRegions(offsetX, offsetY)
 }
