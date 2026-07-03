@@ -213,6 +213,38 @@ func SetConsoleOutput(w io.Writer) func() {
 	}
 }
 
+// timestampTagName is the semantic tag name for a log line's timestamp,
+// used by buildConsoleStyles and TUIHandler (logger_handlers.go).
+const timestampTagName = "Timestamp"
+
+// allLevels lists every level in display order, used by buildConsoleStyles
+// and TUIHandler.
+var allLevels = []slog.Level{LevelTrace, LevelDebug, LevelInfo, LevelNotice, LevelWarn, LevelError, LevelFatal}
+
+// levelTagName returns the semantic tag name for a log level (case-
+// insensitively matches a field in console.Styles), or "" for an unknown
+// level. Used by buildConsoleStyles and TUIHandler.
+func levelTagName(level slog.Level) string {
+	switch level {
+	case LevelTrace:
+		return "Trace"
+	case LevelDebug:
+		return "Debug"
+	case LevelInfo:
+		return "Info"
+	case LevelNotice:
+		return "Notice"
+	case LevelWarn:
+		return "Warn"
+	case LevelError:
+		return "Error"
+	case LevelFatal:
+		return "Fatal"
+	default:
+		return ""
+	}
+}
+
 // buildConsoleStyles returns level styles using lipgloss colors.
 // Colors are auto-stripped by charmbracelet/log when the output is not a TTY.
 func buildConsoleStyles() *charmlog.Styles {
@@ -221,26 +253,16 @@ func buildConsoleStyles() *charmlog.Styles {
 
 	st := charmlog.DefaultStyles()
 	if LevelStyleFunc != nil {
-		st.Timestamp = LevelStyleFunc("{{|timestamp|}}", "")
+		st.Timestamp = LevelStyleFunc("{{|"+timestampTagName+"|}}", "")
 	}
 
-	// Style level labels using theme if available
-	if LevelStyleFunc != nil {
-		st.Levels[charmlog.Level(LevelTrace)] = LevelStyleFunc("{{|trace|}}", "[TRACE ]")
-		st.Levels[charmlog.Level(LevelDebug)] = LevelStyleFunc("{{|debug|}}", "[DEBUG ]")
-		st.Levels[charmlog.Level(LevelInfo)] = LevelStyleFunc("{{|info|}}", "[INFO  ]")
-		st.Levels[charmlog.Level(LevelNotice)] = LevelStyleFunc("{{|notice|}}", "[NOTICE]")
-		st.Levels[charmlog.Level(LevelWarn)] = LevelStyleFunc("{{|warn|}}", "[WARN  ]")
-		st.Levels[charmlog.Level(LevelError)] = LevelStyleFunc("{{|error|}}", "[ERROR ]")
-		st.Levels[charmlog.Level(LevelFatal)] = LevelStyleFunc("{{|fatal|}}", "[FATAL ]")
-	} else {
-		st.Levels[charmlog.Level(LevelTrace)] = lipgloss.NewStyle().SetString("[TRACE ]")
-		st.Levels[charmlog.Level(LevelDebug)] = lipgloss.NewStyle().SetString("[DEBUG ]")
-		st.Levels[charmlog.Level(LevelInfo)] = lipgloss.NewStyle().SetString("[INFO  ]")
-		st.Levels[charmlog.Level(LevelNotice)] = lipgloss.NewStyle().SetString("[NOTICE]")
-		st.Levels[charmlog.Level(LevelWarn)] = lipgloss.NewStyle().SetString("[WARN  ]")
-		st.Levels[charmlog.Level(LevelError)] = lipgloss.NewStyle().SetString("[ERROR ]")
-		st.Levels[charmlog.Level(LevelFatal)] = lipgloss.NewStyle().SetString("[FATAL ]")
+	for _, lvl := range allLevels {
+		label := "[" + FormatLevel(lvl) + "]"
+		if LevelStyleFunc != nil {
+			st.Levels[charmlog.Level(lvl)] = LevelStyleFunc("{{|"+levelTagName(lvl)+"|}}", label)
+		} else {
+			st.Levels[charmlog.Level(lvl)] = lipgloss.NewStyle().SetString(label)
+		}
 	}
 
 	return st

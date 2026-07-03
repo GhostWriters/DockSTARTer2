@@ -20,32 +20,17 @@ func (h *TUIHandler) Enabled(ctx context.Context, level slog.Level) bool {
 }
 
 func (h *TUIHandler) Handle(ctx context.Context, r slog.Record) error {
-	// Format line consistently (TIME [LEVEL] \t MESSAGE)
+	// Format line consistently (TIME [LEVEL] \t MESSAGE). Tag names come from
+	// timestampTagName/levelTagName (logger.go), also used by buildConsoleStyles.
 	timeStr := r.Time.Format("2006-01-02 15:04:05")
 	levelStr := FormatLevel(r.Level)
 
-	// Wrap level in semantic tag for color
-	var levelTag string
-	switch r.Level {
-	case LevelTrace:
-		levelTag = "{{|Trace|}}"
-	case LevelDebug:
-		levelTag = "{{|Debug|}}"
-	case LevelInfo:
-		levelTag = "{{|Info|}}"
-	case LevelNotice:
-		levelTag = "{{|Notice|}}"
-	case LevelWarn:
-		levelTag = "{{|Warn|}}"
-	case LevelError:
-		levelTag = "{{|Error|}}"
-	case LevelFatal:
-		levelTag = "{{|Fatal|}}"
-	default:
-		levelTag = "{{[-]}}"
+	levelTag := "{{[-]}}"
+	if name := levelTagName(r.Level); name != "" {
+		levelTag = "{{|" + name + "|}}"
 	}
 
-	timeLevel := fmt.Sprintf("%s %s[%s]{{[-]}} ", timeStr, levelTag, levelStr)
+	timeLevel := fmt.Sprintf("{{|%s|}}%s{{[-]}} %s[%s]{{[-]}} ", timestampTagName, timeStr, levelTag, levelStr)
 	tuiMsg := timeLevel + r.Message
 
 	if h.global {
