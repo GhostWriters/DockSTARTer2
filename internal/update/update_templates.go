@@ -15,6 +15,7 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
 // TemplatesUpdateInfo holds the result of CheckTemplatesUpdate.
@@ -176,10 +177,18 @@ func templatesRefDisplay(repo *git.Repository, requestedBranch string, remoteRef
 	return fmt.Sprintf("%s commit %s", requestedBranch, remoteHash)
 }
 
-// latestReachableTag returns the highest-versioned tag (by compareVersions,
-// the same semver-aware comparison used for app-update channel selection)
-// that is an ancestor of (or equal to) branchRef's commit. ok is false if no
-// tag reaches branchRef at all.
+// latestReachableTag returns the most recently committed tag (by the
+// tagged commit's committer date -- NOT by comparing tag name strings,
+// see below) that is an ancestor of (or equal to) branchRef's commit. ok
+// is false if no tag reaches branchRef at all.
+//
+// This deliberately does not use compareVersions (name-string comparison):
+// a repo that has changed its tag-naming scheme over time (e.g.
+// "v2026.01.19-1" -> "v1.20260628.1") can have two tags whose names sort
+// in the wrong chronological order relative to each other -- a real case
+// found when porting this same policy to DockSTARTer's bash update
+// scripts. Comparing by actual commit date is immune to naming-scheme
+// changes entirely.
 func latestReachableTag(repo *git.Repository, branchRef *plumbing.Reference) (ref *plumbing.Reference, name string, ok bool) {
 	branchCommit, err := repo.CommitObject(branchRef.Hash())
 	if err != nil {
@@ -192,6 +201,7 @@ func latestReachableTag(repo *git.Repository, branchRef *plumbing.Reference) (re
 	}
 
 	var bestRef *plumbing.Reference
+	var bestCommit *object.Commit
 	bestName := ""
 	_ = tags.ForEach(func(tagRef *plumbing.Reference) error {
 		tagCommit, err := repo.CommitObject(tagRef.Hash())
@@ -202,10 +212,10 @@ func latestReachableTag(repo *git.Repository, branchRef *plumbing.Reference) (re
 		if err != nil || (!reachable && tagCommit.Hash != branchCommit.Hash) {
 			return nil
 		}
-		tagName := tagRef.Name().Short()
-		if bestRef == nil || compareVersions(tagName, bestName) > 0 {
+		if bestCommit == nil || tagCommit.Committer.When.After(bestCommit.Committer.When) {
 			bestRef = tagRef
-			bestName = tagName
+			bestCommit = tagCommit
+			bestName = tagRef.Name().Short()
 		}
 		return nil
 	})
