@@ -132,7 +132,7 @@ No = "{{|TitleError|}}"
 LineComment = "{{|Dialog:::RB|}}"
 ModifiedText = "{{|Dialog:::R|}}"
 LineNumber = "{{|Dialog|}}"
-LineNumberFocused = "{{|Dialog::white|}}"
+LineNumberFocused = "{{[blue:white]}}"
 LineNumberModified = "{{|ModifiedText|}}"
 LineNumberModifiedFocused = "{{|ModifiedText:white|}}"
 
