@@ -29,21 +29,47 @@ type resizeMsg struct {
 func handleWebSocket(ctx context.Context, conn *websocket.Conn, clientAddr, userAgent string, cfg config.ServerConfig, signer gossh.Signer) {
 	defer func() { _ = conn.CloseNow() }()
 
-	// Wait for the browser's initial resize so we can set the PTY size before
-	// the first frame is rendered.
+	// Wait for the browser's initial resize AND display-settings-init,
+	// sent back-to-back in ws.onopen (web_static/index.html), so the
+	// session's real display settings are recorded before webmsg.Register
+	// below -- otherwise the Browser Settings dialog can read the
+	// fresh-session defaults if opened before the later WebSocket-read
+	// goroutine gets to this same message.
 	var initialCols, initialRows int
 	initialCols, initialRows = 80, 24
+	var pendingDisplay *webmsg.DisplaySettings
 
-	// Use a short-lived context just for the resize wait.
+	// Two messages are expected; stop early once both arrive, but never
+	// wait past the overall timeout for a straggler.
 	waitCtx, waitCancel := context.WithTimeout(ctx, 2*time.Second)
-	_, data, err := conn.Read(waitCtx)
-	waitCancel()
-	if err == nil {
+	for haveResize, haveDisplay := false, false; !haveResize || !haveDisplay; {
+		_, data, err := conn.Read(waitCtx)
+		if err != nil {
+			break
+		}
 		var rm resizeMsg
 		if json.Unmarshal(data, &rm) == nil && rm.Type == "resize" && rm.Cols > 0 && rm.Rows > 0 {
 			initialCols, initialRows = rm.Cols, rm.Rows
+			haveResize = true
+			continue
+		}
+		var cm struct {
+			Type           string `json:"type"`
+			FontFamily     string `json:"fontFamily"`
+			FontSize       int    `json:"fontSize"`
+			UseDefaultFont bool   `json:"useDefaultFont"`
+		}
+		if json.Unmarshal(data, &cm) == nil && cm.Type == "display-settings-init" {
+			pendingDisplay = &webmsg.DisplaySettings{
+				FontFamily:     cm.FontFamily,
+				FontSize:       cm.FontSize,
+				UseDefaultFont: cm.UseDefaultFont,
+			}
+			haveDisplay = true
+			continue
 		}
 	}
+	waitCancel()
 
 	// Connect to the local wish SSH server using the ephemeral internal key.
 	sshAddr := fmt.Sprintf("127.0.0.1:%d", cfg.SSH.Port)
@@ -78,6 +104,9 @@ func handleWebSocket(ctx context.Context, conn *websocket.Conn, clientAddr, user
 	webKey := fmt.Sprintf("%s-%p", formatIP(clientAddr), conn)
 	outboundCh := webmsg.Register(webKey)
 	defer webmsg.Unregister(webKey)
+	if pendingDisplay != nil {
+		webmsg.SetDisplaySettings(webKey, *pendingDisplay)
+	}
 
 	// Forward the real browser IP, User-Agent, and web token so the SSH handler
 	// can record them and wire up the outbound channel.
@@ -158,14 +187,16 @@ func handleWebSocket(ctx context.Context, conn *websocket.Conn, clientAddr, user
 					continue
 				}
 				var cm struct {
-					Type       string `json:"type"`
-					FontFamily string `json:"fontFamily"`
-					FontSize   int    `json:"fontSize"`
+					Type           string `json:"type"`
+					FontFamily     string `json:"fontFamily"`
+					FontSize       int    `json:"fontSize"`
+					UseDefaultFont bool   `json:"useDefaultFont"`
 				}
 				if json.Unmarshal(data, &cm) == nil && cm.Type == "display-settings-init" {
 					webmsg.SetDisplaySettings(webKey, webmsg.DisplaySettings{
-						FontFamily: cm.FontFamily,
-						FontSize:   cm.FontSize,
+						FontFamily:     cm.FontFamily,
+						FontSize:       cm.FontSize,
+						UseDefaultFont: cm.UseDefaultFont,
 					})
 					continue
 				}
