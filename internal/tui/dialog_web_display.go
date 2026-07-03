@@ -17,17 +17,23 @@ import (
 
 // WebDisplaySettings holds font and refresh-rate settings for the xterm.js terminal.
 type WebDisplaySettings struct {
-	FontFamily  string `json:"fontFamily"`
-	FontSize    int    `json:"fontSize"`
-	RefreshRate int    `json:"-"`
+	FontFamily string `json:"fontFamily"`
+	FontSize   int    `json:"fontSize"`
+	// UseDefaultFont is whether "Use default browser font" is checked.
+	// Explicit flag, not inferred from FontFamily -- FontFamily can equal
+	// "monospace" even when this is false (the user explicitly picked
+	// "Default (Monospace)" from the Font Family list).
+	UseDefaultFont bool `json:"-"`
+	RefreshRate    int  `json:"-"`
 }
 
 // DefaultWebDisplaySettings returns sensible defaults matching xterm.js defaults.
 func DefaultWebDisplaySettings() WebDisplaySettings {
 	return WebDisplaySettings{
-		FontFamily:  "monospace",
-		FontSize:    14,
-		RefreshRate: 100,
+		FontFamily:     "monospace",
+		FontSize:       14,
+		UseDefaultFont: true,
+		RefreshRate:    100,
 	}
 }
 
@@ -47,15 +53,11 @@ type applyWebDisplayMsg struct{}
 type resetWebDisplayMsg struct{}
 type cancelWebDisplayMsg struct{}
 
-// isDefaultFont returns true when the font family value represents the browser default.
-func isDefaultFont(family string) bool {
-	return family == "" || family == "monospace"
-}
-
 var webDisplayFontFamilies = []struct {
 	value string
 	label string
 }{
+	{"monospace", "Default (Monospace)"},
 	{"'Courier New', monospace", "Courier New"},
 	{"'Fira Code', monospace", "Fira Code"},
 	{"'JetBrains Mono', monospace", "JetBrains Mono"},
@@ -93,12 +95,21 @@ func buildDefaultSection(isDefault bool) *displayengine.MenuModel {
 }
 
 func buildFamilyMenu(current string) *displayengine.MenuModel {
-	useDefault := isDefaultFont(current)
+	// "Default (Monospace)" is a literal entry in webDisplayFontFamilies
+	// (value "monospace"), so it's matched the same way as every other
+	// font -- no special-casing needed here. Whether the family list is
+	// disabled/forced is a separate concern driven by the checkbox
+	// (WebDisplaySettings.UseDefaultFont), not by what value happens to be
+	// selected here.
+	effectiveCurrent := current
+	if effectiveCurrent == "" {
+		effectiveCurrent = "monospace"
+	}
 	var items []displayengine.MenuItem
 	checkedIdx := 0
 	for i, f := range webDisplayFontFamilies {
 		fCopy := f
-		checked := !useDefault && fCopy.value == current
+		checked := fCopy.value == effectiveCurrent
 		if checked {
 			checkedIdx = i
 		}
@@ -122,9 +133,7 @@ func buildFamilyMenu(current string) *displayengine.MenuModel {
 	m.SetFlowMode(true)
 	m.SetFlowColumns(2)
 	m.SetUpdateInterceptor(radioGroupInterceptor("web_display_family"))
-	if !useDefault {
-		m.Select(checkedIdx)
-	}
+	m.Select(checkedIdx)
 	return m
 }
 
@@ -255,9 +264,17 @@ func radioGroupInterceptor(id string) func(tea.Msg, *displayengine.MenuModel) (t
 // NewWebDisplayDialog creates a new WebDisplayDialog with the given current settings.
 func NewWebDisplayDialog(current WebDisplaySettings) *WebDisplayDialog {
 	d := &WebDisplayDialog{initial: current}
-	d.defaultSection = buildDefaultSection(isDefaultFont(current.FontFamily))
+	d.defaultSection = buildDefaultSection(current.UseDefaultFont)
 	d.familyMenu = buildFamilyMenu(current.FontFamily)
-	d.sizeSection, d.sizeInput = displayengine.NewNumberSinputSection("web_display_size", "Font Size", strconv.Itoa(current.FontSize))
+	// When the checkbox was checked, show the true default size (not
+	// current.FontSize, which may be a stale leftover from a previous
+	// custom size) -- matches familyMenu showing "Default (Monospace)"
+	// selected rather than some other font.
+	initialSize := current.FontSize
+	if current.UseDefaultFont {
+		initialSize = DefaultWebDisplaySettings().FontSize
+	}
+	d.sizeSection, d.sizeInput = displayengine.NewNumberSinputSection("web_display_size", "Font Size", strconv.Itoa(initialSize))
 	refreshRate := current.RefreshRate
 	if refreshRate <= 0 {
 		refreshRate = 100
@@ -276,7 +293,8 @@ func NewWebDisplayDialog(current WebDisplaySettings) *WebDisplayDialog {
 		{Label: "Back", ZoneID: "btn-back", Action: func() tea.Msg { return displayengine.CloseDialogMsg{} }, Help: "Close without reverting changes."},
 		{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return cancelWebDisplayMsg{} }, Help: "Revert to original settings and close."},
 	})
-	d.familyMenu.SetDisabled(isDefaultFont(current.FontFamily))
+	d.familyMenu.SetDisabled(current.UseDefaultFont)
+	d.sizeSection.SetDisabled(current.UseDefaultFont)
 	outer.AddContentSection(d.defaultSection)
 	outer.AddContentSection(d.familyMenu)
 	outer.AddContentRow(d.sizeSection, d.refreshSection)
@@ -298,21 +316,30 @@ func (d *WebDisplayDialog) isBrowserDefault() bool {
 }
 
 func (d *WebDisplayDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// When "Use browser default" is checked, block all interaction with the font list.
+	// When "Use browser default" is checked, block all interaction with the
+	// font family list and font size input -- both are forced back to the
+	// default (see collectSettings) regardless of what's clicked/typed.
 	if d.isBrowserDefault() {
 		switch m := msg.(type) {
 		case displayengine.LayerHitMsg:
-			if strings.Contains(m.ID, "web_display_family") {
+			if strings.Contains(m.ID, "web_display_family") || strings.Contains(m.ID, "web_display_size") {
 				return d, nil
 			}
 		case displayengine.LayerWheelMsg:
-			if strings.Contains(m.ID, "web_display_family") {
+			if strings.Contains(m.ID, "web_display_family") || strings.Contains(m.ID, "web_display_size") {
 				return d, nil
 			}
 		case tea.MouseWheelMsg:
-			// Block wheel when family section is focused
-			if d.outer.GetFocusedSection() == 1 {
+			// Block wheel when family section is focused, or when the
+			// size/refresh row is focused with sizeSection (sub-index 0) active.
+			fs := d.outer.GetFocusedSection()
+			if fs == 1 {
 				return d, nil
+			}
+			if fs == 2 {
+				if row, ok := d.outer.GetContentSections()[2].(*displayengine.ContentRow); ok && row.SubFocusIndex() == 0 {
+					return d, nil
+				}
 			}
 		}
 	}
@@ -321,15 +348,23 @@ func (d *WebDisplayDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if key.Matches(kp, displayengine.Keys.CycleTab) {
 			fs := d.outer.GetFocusedSection()
 			if fs == 0 {
-				// Tab from default section → skip familyMenu, go to size section
+				// Tab from default section → skip familyMenu (disabled) and
+				// sizeSection (also disabled, forced to the default), land
+				// on refreshSection, the row's second child.
 				d.outer.SetFocusedSection(2)
+				if row, ok := d.outer.GetContentSections()[2].(*displayengine.ContentRow); ok {
+					row.SetSubFocusIndex(1)
+				}
 				return d, nil
 			}
 		}
 		if key.Matches(kp, displayengine.Keys.CycleShiftTab) {
 			fs := d.outer.GetFocusedSection()
-			if fs == 2 {
-				// Shift-Tab from size section → skip familyMenu, go to default section
+			row, isRow := d.outer.GetContentSections()[2].(*displayengine.ContentRow)
+			if fs == 2 && (!isRow || row.SubFocusIndex() == 1) {
+				// Shift-Tab from refreshSection (or the row generally, if we
+				// can't tell which child) → skip sizeSection/familyMenu
+				// (both disabled), go to default section.
 				d.outer.SetFocusedSection(0)
 				return d, nil
 			}
@@ -374,10 +409,12 @@ func (d *WebDisplayDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case resetWebDisplayMsg:
 		defaults := DefaultWebDisplaySettings()
-		d.defaultSection = buildDefaultSection(isDefaultFont(defaults.FontFamily))
+		d.defaultSection = buildDefaultSection(defaults.UseDefaultFont)
 		d.familyMenu = buildFamilyMenu(defaults.FontFamily)
 		d.sizeSection, d.sizeInput = displayengine.NewNumberSinputSection("web_display_size", "Font Size", strconv.Itoa(defaults.FontSize))
 		d.refreshSection, d.refreshInput = displayengine.NewNumberSinputSection("web_display_refresh", "Refresh Rate (ms)", strconv.Itoa(defaults.RefreshRate))
+		d.familyMenu.SetDisabled(defaults.UseDefaultFont)
+		d.sizeSection.SetDisabled(defaults.UseDefaultFont)
 		d.outer.ReplaceSections(d.defaultSection, d.familyMenu, displayengine.NewContentRow(d.sizeSection, d.refreshSection))
 		w, h := d.outer.Width(), d.outer.Height()
 		d.outer.SetSize(w, h)
@@ -392,7 +429,11 @@ func (d *WebDisplayDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		d.outer = m
 	}
 	// Sync d.defaultSection from outer so isBrowserDefault() sees current state,
-	// then apply disabled to familyMenu immediately.
+	// then apply disabled to familyMenu and sizeSection immediately -- font
+	// size is silently forced back to the default whenever "Use default
+	// browser font" is checked (see collectSettings), so its input must be
+	// disabled the same way the family list already is, or a typed value
+	// looks live but is discarded on Apply.
 	secs := d.outer.GetContentSections()
 	if len(secs) >= 1 {
 		if mm, ok := secs[0].(*displayengine.MenuModel); ok {
@@ -404,20 +445,42 @@ func (d *WebDisplayDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			mm.SetDisabled(d.isBrowserDefault())
 		}
 	}
+	if len(secs) >= 3 {
+		if row, ok := secs[2].(*displayengine.ContentRow); ok && len(row.Items()) >= 1 {
+			if mm, ok := row.Items()[0].(*displayengine.MenuModel); ok {
+				disabled := d.isBrowserDefault()
+				mm.SetDisabled(disabled)
+				// Show the true default size while disabled, not whatever
+				// custom value was previously typed/loaded -- a disabled
+				// field claiming to represent "the default" must actually
+				// display it, matching familyMenu showing no radio selected
+				// rather than leaving some other font's radio checked.
+				if disabled {
+					want := strconv.Itoa(DefaultWebDisplaySettings().FontSize)
+					if d.sizeInput.Value() != want {
+						d.sizeInput.SetValue(want)
+						mm.InvalidateCache()
+					}
+				}
+			}
+		}
+	}
 	return d, cmd
 }
 
 func (d *WebDisplayDialog) sendAndStore(s WebDisplaySettings) {
 	data, _ := json.Marshal(map[string]any{
-		"type":       "display-settings",
-		"fontFamily": s.FontFamily,
-		"fontSize":   s.FontSize,
+		"type":           "display-settings",
+		"fontFamily":     s.FontFamily,
+		"fontSize":       s.FontSize,
+		"useDefaultFont": s.UseDefaultFont,
 	})
 	SendWebMsg(data)
 	webmsg.SetDisplaySettings(webToken, webmsg.DisplaySettings{
-		FontFamily:  s.FontFamily,
-		FontSize:    s.FontSize,
-		RefreshRate: s.RefreshRate,
+		FontFamily:     s.FontFamily,
+		FontSize:       s.FontSize,
+		UseDefaultFont: s.UseDefaultFont,
+		RefreshRate:    s.RefreshRate,
 	})
 }
 
@@ -431,6 +494,7 @@ func (d *WebDisplayDialog) collectSettings() WebDisplaySettings {
 			break
 		}
 	}
+	s.UseDefaultFont = useDefault
 	if !useDefault {
 		// Otherwise read the radio selection.
 		for _, it := range d.familyMenu.GetItems() {

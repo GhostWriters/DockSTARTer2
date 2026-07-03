@@ -27,9 +27,15 @@
     function loadDisplaySettings() {
       try {
         var saved = localStorage.getItem(DS2_DISPLAY_KEY);
-        if (saved) return JSON.parse(saved);
+        if (saved) {
+          var s = JSON.parse(saved);
+          // Settings saved before useDefaultFont existed won't have it --
+          // default to true (matches the TUI dialog's own DefaultWebDisplaySettings).
+          if (typeof s.useDefaultFont !== 'boolean') s.useDefaultFont = true;
+          return s;
+        }
       } catch (e) {}
-      return { fontFamily: 'monospace', fontSize: 14 };
+      return { fontFamily: 'monospace', fontSize: 14, useDefaultFont: true };
     }
 
     function saveDisplaySettings(s) {
@@ -93,11 +99,14 @@
       ws.onopen = function() {
         reconnectDelay = 1000;
         sendResize();
-        // Send current display settings so the server can pre-populate the dialog.
+        // Send current display settings so the server can pre-populate the
+        // dialog. useDefaultFont comes from `display` (localStorage), not
+        // term.options, which has no concept of "was the checkbox checked."
         ws.send(JSON.stringify({
           type: 'display-settings-init',
           fontFamily: term.options.fontFamily,
           fontSize: term.options.fontSize,
+          useDefaultFont: display.useDefaultFont,
         }));
       };
 
@@ -116,7 +125,11 @@
               }
               if (msg.type === 'display-settings') {
                 console.log('display-settings received:', msg);
-                var s = { fontFamily: msg.fontFamily || display.fontFamily, fontSize: msg.fontSize || display.fontSize };
+                var s = {
+                  fontFamily: msg.fontFamily || display.fontFamily,
+                  fontSize: msg.fontSize || display.fontSize,
+                  useDefaultFont: typeof msg.useDefaultFont === 'boolean' ? msg.useDefaultFont : display.useDefaultFont,
+                };
                 display = s;
                 saveDisplaySettings(s);
                 applyDisplaySettings(s);

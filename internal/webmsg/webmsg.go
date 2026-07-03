@@ -6,14 +6,16 @@ import "sync"
 
 // DisplaySettings holds the browser's current xterm.js display settings.
 type DisplaySettings struct {
-	FontFamily  string
-	FontSize    int
-	RefreshRate int
+	FontFamily string
+	FontSize   int
+	// UseDefaultFont is whether "Use default browser font" is checked.
+	UseDefaultFont bool
+	RefreshRate    int
 }
 
 // defaultDisplaySettings is returned for sessions with no stored settings yet.
 func defaultDisplaySettings() DisplaySettings {
-	return DisplaySettings{FontFamily: "monospace", FontSize: 14, RefreshRate: 100}
+	return DisplaySettings{FontFamily: "monospace", FontSize: 14, UseDefaultFont: true, RefreshRate: 100}
 }
 
 type session struct {

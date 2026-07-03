@@ -231,7 +231,12 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return displayengine.CloseDialogMsg{} }
 		}
 		d := GetWebDisplaySettings()
-		current := WebDisplaySettings{FontFamily: d.FontFamily, FontSize: d.FontSize}
+		current := WebDisplaySettings{
+			FontFamily:     d.FontFamily,
+			FontSize:       d.FontSize,
+			UseDefaultFont: d.UseDefaultFont,
+			RefreshRate:    d.RefreshRate,
+		}
 		if current.FontFamily == "" || current.FontSize == 0 {
 			current = DefaultWebDisplaySettings()
 		}
