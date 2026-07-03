@@ -93,6 +93,37 @@ func SetActiveContentStartY(y int) { activeContentStartY = y }
 // GetActiveContentStartY returns the current content start Y.
 func GetActiveContentStartY() int { return activeContentStartY }
 
+// activeDialogOffset holds the screen position (lx, ly) at which the
+// topmost dialog/screen (whichever AppModel currently routes keypresses to)
+// was actually rendered this frame -- set by AppModel.View() alongside
+// activeContentStartY. A maximized screen is always at (EdgeIndent,
+// ContentStartY), but a centered dialog (e.g. Main Menu) is positioned by
+// DialogPosition based on its own content size, which HandleContextMenuKey
+// has no other way to know -- it needs this to translate a content
+// section's local hit-region coordinates into real screen coordinates.
+var activeDialogOffsetX, activeDialogOffsetY int
+
+// SetActiveDialogOffset is called by AppModel.View() to record the current
+// frame's topmost dialog/screen position.
+func SetActiveDialogOffset(x, y int) { activeDialogOffsetX, activeDialogOffsetY = x, y }
+
+// GetActiveDialogOffset returns the current frame's topmost dialog/screen position.
+func GetActiveDialogOffset() (int, int) { return activeDialogOffsetX, activeDialogOffsetY }
+
+// activeScreenSize holds the real terminal dimensions for the current frame,
+// set by AppModel.View() on each render. A MenuModel embedded as a content
+// section inside an outer sectioned container only knows its own (much
+// smaller) section-local width/height -- ShowContextMenu needs the real
+// terminal size to clamp/position a popup menu correctly regardless of
+// which MenuModel (outer or a nested section) actually triggers it.
+var activeScreenWidth, activeScreenHeight = 80, 24
+
+// SetActiveScreenSize is called by AppModel.View() to record the frame's real terminal size.
+func SetActiveScreenSize(w, h int) { activeScreenWidth, activeScreenHeight = w, h }
+
+// GetActiveScreenSize returns the current real terminal size.
+func GetActiveScreenSize() (int, int) { return activeScreenWidth, activeScreenHeight }
+
 // -------------------------------------------------------------------
 // Computed properties
 // -------------------------------------------------------------------

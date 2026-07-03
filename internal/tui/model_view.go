@@ -98,6 +98,7 @@ func (m *AppModel) View() (v tea.View) {
 		contentYOffset = layout.ContentStartY(headerH)
 	}
 	displayengine.SetActiveContentStartY(contentYOffset)
+	displayengine.SetActiveScreenSize(m.width, m.height)
 
 	// Create native compositor for rendering
 	comp := lipgloss.NewCompositor()
@@ -195,6 +196,11 @@ func (m *AppModel) View() (v tea.View) {
 				comp.AddLayers(l)
 			}
 
+			// Record this screen's position for HandleContextMenuKey (keyboard
+			// context-menu shortcut), which has no other way to learn where a
+			// non-maximized/centered screen actually landed.
+			displayengine.SetActiveDialogOffset(screenX, screenY)
+
 			// Save screen position for hardware cursor routing below.
 			lastScreenX, lastScreenY = screenX, screenY
 
@@ -247,13 +253,27 @@ func (m *AppModel) View() (v tea.View) {
 
 			lx, ly := layout.DialogPosition(mode, fgWidth, fgHeight, m.width, targetHeight, m.config.UI.Shadow, hasHalo, headerH)
 
+			// Record the topmost dialog's position for HandleContextMenuKey
+			// (keyboard context-menu shortcut) -- a centered dialog (e.g. Main
+			// Menu) has no fixed screen position the way a maximized screen
+			// does, so this is its only way to learn where it actually landed.
+			if i == len(allDialogs)-1 {
+				displayengine.SetActiveDialogOffset(lx, ly)
+			}
+
 			modalZBase := maxZ + displayengine.ZModalBaseOffset + (i * displayengine.ZModalStackStep)
+
+			// Context menus are small positioned popups, not full dialogs -- a
+			// shadow/halo behind them looks out of place, so skip both.
+			_, isContextMenu := d.(*displayengine.ContextMenuModel)
 
 			if lv, ok := d.(LayeredView); ok {
 				for _, l := range lv.Layers() {
 					// Apply modal offset to ensure it sits above the background content
 					l = l.X(l.GetX() + lx).Y(l.GetY() + ly).Z(l.GetZ() + modalZBase - displayengine.ZScreen)
-					if hasHalo {
+					if isContextMenu {
+						// No shadow/halo.
+					} else if hasHalo {
 						compositorAddHalo(comp, l, modalZBase, d.(HaloProvider).HaloColor())
 					} else {
 						compositorAddShadow(comp, l, modalZBase, m.config.UI.Shadow)
@@ -262,10 +282,13 @@ func (m *AppModel) View() (v tea.View) {
 				}
 			} else {
 				l := lipgloss.NewLayer(content).X(lx).Y(ly).Z(modalZBase)
-				if hasHalo {
+				if isContextMenu {
+					// No shadow/halo.
+				} else if hasHalo {
 					compositorAddHalo(comp, l, modalZBase, d.(HaloProvider).HaloColor())
+				} else {
+					compositorAddShadow(comp, l, modalZBase, m.config.UI.Shadow)
 				}
-				compositorAddShadow(comp, l, modalZBase, m.config.UI.Shadow)
 				comp.AddLayers(l)
 			}
 

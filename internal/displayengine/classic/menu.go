@@ -1231,15 +1231,75 @@ func (m *MenuModel) helpContextForIdx(idx int) HelpContext {
 	return h
 }
 
+// focusedSectionMenu resolves the innermost *MenuModel actually holding the
+// user's focus: for an outer container built with no items of its own (e.g.
+// NewMenuModel(id, title, "", nil) wrapping content sections, the pattern
+// used by Config Menu/Main Menu/Options Menu/etc.), m.list.Index() and
+// m.cursor are meaningless -- the real focused item lives inside whichever
+// content section currently has focus. Recurses through ContentRow wrappers
+// to find the actual *MenuModel. Returns m itself when it has real items
+// (the plain-list case) or no focusable section was found.
+func (m *MenuModel) focusedSectionMenu() *MenuModel {
+	if len(m.items) > 0 || len(m.contentSections) == 0 {
+		return m
+	}
+	if m.focusedSection < 0 || m.focusedSection >= len(m.contentSections) {
+		return m
+	}
+	c := m.contentSections[m.focusedSection]
+	for {
+		if row, ok := c.(*ContentRow); ok {
+			items := row.Items()
+			idx := row.SubFocusIndex()
+			if idx < 0 || idx >= len(items) {
+				return m
+			}
+			c = items[idx]
+			continue
+		}
+		break
+	}
+	if mm, ok := c.(*MenuModel); ok {
+		return mm
+	}
+	return m
+}
+
 // HelpContext implements HelpContextProvider.
 func (m *MenuModel) HelpContext(contentWidth int) HelpContext {
-	return m.helpContextForIdx(m.list.Index())
+	target := m.focusedSectionMenu()
+	return target.helpContextForIdx(target.list.Index())
 }
 
 // HandleContextMenuKey implements the ContextMenuKeyHandler interface.
 // Called by AppModel when Keys.ContextMenu is pressed and no dialog is open.
 func (m *MenuModel) HandleContextMenuKey() (tea.Model, tea.Cmd, bool) {
-	cmd := m.ShowContextMenu(m.cursor, m.width/2, m.height/2)
+	target := m.focusedSectionMenu()
+
+	// m's actual screen position varies: a maximized screen is always at
+	// (EdgeIndent, ContentStartY), but a centered dialog (e.g. Main Menu) is
+	// positioned by DialogPosition based on its own content size -- there is
+	// no fixed formula, so GetActiveDialogOffset reports whatever AppModel.View()
+	// actually computed for m this frame (see its SetActiveDialogOffset call
+	// sites in model_view.go). Crucially, m.GetHitRegions already recurses
+	// into every content section at the correct cumulative offset (see
+	// menu_hit_regions.go's "Section hit regions" step) -- the same regions
+	// the mouse-click path relies on via AppModel's hit-region collection --
+	// so querying m (not target) here reuses that existing offset math
+	// instead of reimplementing it.
+	absOffsetX, absOffsetY := GetActiveDialogOffset()
+
+	x, y := target.width/2+absOffsetX, target.height/2+absOffsetY
+	idx := target.cursor
+	if idx >= 0 {
+		for _, r := range m.GetHitRegions(absOffsetX, absOffsetY) {
+			if suffix, ok := ParseMenuItemIndex(r.ID, target.id); ok && suffix == idx {
+				x, y = r.X, r.Y
+				break
+			}
+		}
+	}
+	cmd := target.ShowContextMenu(idx, x, y)
 	return m, cmd, true
 }
 
@@ -1298,8 +1358,14 @@ func (m *MenuModel) ShowContextMenu(idx int, x, y int) tea.Cmd {
 
 	items = AppendContextMenuTail(items, clipItems, hCtx)
 
+	// m.width/m.height are section-local when m is a content section nested
+	// inside an outer sectioned container (e.g. Config Menu's item list) --
+	// use the real terminal size instead so the popup clamps/positions
+	// correctly regardless of which MenuModel actually owns the item.
+	screenW, screenH := GetActiveScreenSize()
+
 	return func() tea.Msg {
-		return ShowDialogMsg{Dialog: NewContextMenuModel(x, y, m.width, m.height, items)}
+		return ShowDialogMsg{Dialog: NewContextMenuModel(x, y, screenW, screenH, items)}
 	}
 }
 
