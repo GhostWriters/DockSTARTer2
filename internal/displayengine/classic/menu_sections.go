@@ -189,6 +189,19 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			m.InvalidateCache()
 			return m, cmd, true
 		}
+		// Esc is never routed into a section: a section's own Update has no
+		// knowledge of the outer container's Back/Exit buttons (most
+		// sections have zero buttons of their own -- see
+		// AddContentSection), so forwarding Esc here would hit the
+		// section's own no-buttons Esc fallback (ConfirmExitFallback)
+		// instead of the outer's real Back/Exit/single-button logic. Fall
+		// through unhandled so it reaches the outer's own Esc case in
+		// Update's main switch, which checks m.buttons correctly regardless
+		// of which section (if any) currently has focus.
+		if key.Matches(msg, Keys.Esc) {
+			return m, nil, false
+		}
+
 		// Route keyboard to focused section when a section has focus.
 		// Left/Right navigate buttons while keeping section highlighted (dual focus).
 		// Up/Down always go to the section even in dual-focus (button highlighted) mode.
