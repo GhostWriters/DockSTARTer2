@@ -132,9 +132,9 @@ No = "{{|TitleError|}}"
 LineComment = "{{|Dialog:::RB|}}"
 ModifiedText = "{{|Dialog:::R|}}"
 LineNumber = "{{|Dialog|}}"
-LineNumberFocused = "{{[blue:white]}}"
+LineNumberFocused = "{{[black:white]}}"
 LineNumberModified = "{{|ModifiedText|}}"
-LineNumberModifiedFocused = "{{|ModifiedText:white|}}"
+LineNumberModifiedFocused = "{{[blue:white]}}"
 
 # Markers and cursor
 Marker = ""
