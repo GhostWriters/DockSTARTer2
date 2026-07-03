@@ -2,10 +2,12 @@ package tui
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
+	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/tui/components/sinput"
 	"DockSTARTer2/internal/webmsg"
@@ -28,13 +30,30 @@ type WebDisplaySettings struct {
 }
 
 // DefaultWebDisplaySettings returns sensible defaults matching xterm.js defaults.
+// RefreshRate defaults to the Appearance menu's configured refresh rate, not
+// a hardcoded value, so web and local sessions agree unless the browser
+// explicitly overrides it.
 func DefaultWebDisplaySettings() WebDisplaySettings {
 	return WebDisplaySettings{
 		FontFamily:     "monospace",
 		FontSize:       14,
 		UseDefaultFont: true,
-		RefreshRate:    100,
+		RefreshRate:    defaultRefreshRate(),
 	}
+}
+
+// defaultRefreshRate returns the Appearance menu's configured refresh rate,
+// falling back to the config package's default if unset.
+func defaultRefreshRate() int {
+	if rate := displayengine.CurrentConfig().UI.RefreshRate; rate > 0 {
+		return rate
+	}
+	return config.DefaultConfig().UI.RefreshRate
+}
+
+// refreshRateHelp is the helpline text shown while the Refresh Rate field is focused.
+func refreshRateHelp() string {
+	return fmt.Sprintf("How often the terminal repaints, in milliseconds (%d-%d). Lower is smoother but uses more bandwidth.", config.MinRefreshRateMS, config.MaxRefreshRateMS)
 }
 
 // WebDisplayDialog is the dialog for configuring web terminal display settings.
@@ -47,11 +66,14 @@ type WebDisplayDialog struct {
 	refreshSection *displayengine.MenuModel
 	refreshInput   *sinput.Model
 	initial        WebDisplaySettings // settings at dialog open time, for Cancel
+	appliedRefresh int                // refresh rate as of the most recent Apply
+	appliedFont    WebDisplaySettings // font-related fields as of the most recent Apply (RefreshRate unused)
 }
 
 type applyWebDisplayMsg struct{}
 type resetWebDisplayMsg struct{}
 type cancelWebDisplayMsg struct{}
+type backWebDisplayMsg struct{}
 
 var webDisplayFontFamilies = []struct {
 	value string
@@ -263,7 +285,7 @@ func radioGroupInterceptor(id string) func(tea.Msg, *displayengine.MenuModel) (t
 
 // NewWebDisplayDialog creates a new WebDisplayDialog with the given current settings.
 func NewWebDisplayDialog(current WebDisplaySettings) *WebDisplayDialog {
-	d := &WebDisplayDialog{initial: current}
+	d := &WebDisplayDialog{initial: current, appliedRefresh: current.RefreshRate, appliedFont: current}
 	d.defaultSection = buildDefaultSection(current.UseDefaultFont)
 	d.familyMenu = buildFamilyMenu(current.FontFamily)
 	// When the checkbox was checked, show the true default size (not
@@ -277,9 +299,10 @@ func NewWebDisplayDialog(current WebDisplaySettings) *WebDisplayDialog {
 	d.sizeSection, d.sizeInput = displayengine.NewNumberSinputSection("web_display_size", "Font Size", strconv.Itoa(initialSize))
 	refreshRate := current.RefreshRate
 	if refreshRate <= 0 {
-		refreshRate = 100
+		refreshRate = defaultRefreshRate()
 	}
 	d.refreshSection, d.refreshInput = displayengine.NewNumberSinputSection("web_display_refresh", "Refresh Rate (ms)", strconv.Itoa(refreshRate))
+	d.refreshSection.SectionHelp = refreshRateHelp()
 
 	outer := displayengine.NewMenuModel("web_display", "Browser Settings", "", nil)
 	outer.SetMaximized(false)
@@ -290,7 +313,7 @@ func NewWebDisplayDialog(current WebDisplaySettings) *WebDisplayDialog {
 	outer.SetButtons([]displayengine.ButtonDef{
 		{Label: "Apply", ZoneID: "btn-select", Action: func() tea.Msg { return applyWebDisplayMsg{} }, Help: "Apply settings to the browser terminal."},
 		{Label: "Reset", ZoneID: "btn-reset", Action: func() tea.Msg { return resetWebDisplayMsg{} }, Help: "Reset to default font settings."},
-		{Label: "Back", ZoneID: "btn-back", Action: func() tea.Msg { return displayengine.CloseDialogMsg{} }, Help: "Close without reverting changes."},
+		{Label: "Back", ZoneID: "btn-back", Action: func() tea.Msg { return backWebDisplayMsg{} }, Help: "Close without reverting changes."},
 		{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return cancelWebDisplayMsg{} }, Help: "Revert to original settings and close."},
 	})
 	d.familyMenu.SetDisabled(current.UseDefaultFont)
@@ -397,6 +420,17 @@ func (d *WebDisplayDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		settings := d.collectSettings()
 		d.outer.ClearProcessingState()
 		d.sendAndStore(settings)
+		d.appliedRefresh = settings.RefreshRate
+		// Font changes reflow the browser's terminal grid (cell size changes),
+		// which needs the freeze/thaw dance below to hide the resize. Refresh
+		// rate alone never resizes anything, so skip it when only that changed.
+		fontChanged := settings.FontFamily != d.appliedFont.FontFamily ||
+			settings.FontSize != d.appliedFont.FontSize ||
+			settings.UseDefaultFont != d.appliedFont.UseDefaultFont
+		d.appliedFont = settings
+		if !fontChanged {
+			return d, nil
+		}
 		// Freeze during reflow, thaw after 500ms fallback (WindowSizeMsg thaws early).
 		return d, tea.Batch(
 			func() tea.Msg { return FreezeDisplayMsg{} },
@@ -407,12 +441,24 @@ func (d *WebDisplayDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		d.sendAndStore(d.initial)
 		return d, CloseDialog()
 
+	case backWebDisplayMsg:
+		// The refresh rate can only take effect on a new tea.Program (its FPS
+		// is fixed at construction), so if it changed during this dialog
+		// session, quitting -- same as Exit -- ends this web session and the
+		// browser auto-reconnects with the new rate. Only do this on a safe
+		// page, mirroring RestartForConfigChange's local-session guard.
+		if GetConnType() == "web" && d.appliedRefresh != d.initial.RefreshRate && isRestartSafeLocally() {
+			return d, tea.Quit
+		}
+		return d, CloseDialog()
+
 	case resetWebDisplayMsg:
 		defaults := DefaultWebDisplaySettings()
 		d.defaultSection = buildDefaultSection(defaults.UseDefaultFont)
 		d.familyMenu = buildFamilyMenu(defaults.FontFamily)
 		d.sizeSection, d.sizeInput = displayengine.NewNumberSinputSection("web_display_size", "Font Size", strconv.Itoa(defaults.FontSize))
 		d.refreshSection, d.refreshInput = displayengine.NewNumberSinputSection("web_display_refresh", "Refresh Rate (ms)", strconv.Itoa(defaults.RefreshRate))
+		d.refreshSection.SectionHelp = refreshRateHelp()
 		d.familyMenu.SetDisabled(defaults.UseDefaultFont)
 		d.sizeSection.SetDisabled(defaults.UseDefaultFont)
 		d.outer.ReplaceSections(d.defaultSection, d.familyMenu, displayengine.NewContentRow(d.sizeSection, d.refreshSection))
@@ -474,6 +520,7 @@ func (d *WebDisplayDialog) sendAndStore(s WebDisplaySettings) {
 		"fontFamily":     s.FontFamily,
 		"fontSize":       s.FontSize,
 		"useDefaultFont": s.UseDefaultFont,
+		"refreshRate":    s.RefreshRate,
 	})
 	SendWebMsg(data)
 	webmsg.SetDisplaySettings(webToken, webmsg.DisplaySettings{
@@ -508,6 +555,12 @@ func (d *WebDisplayDialog) collectSettings() WebDisplaySettings {
 		}
 	}
 	if v, err := strconv.Atoi(d.refreshInput.Value()); err == nil && v > 0 {
+		switch {
+		case v < config.MinRefreshRateMS:
+			v = config.MinRefreshRateMS
+		case v > config.MaxRefreshRateMS:
+			v = config.MaxRefreshRateMS
+		}
 		s.RefreshRate = v
 	}
 	return s

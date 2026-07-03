@@ -58,12 +58,14 @@ func handleWebSocket(ctx context.Context, conn *websocket.Conn, clientAddr, user
 			FontFamily     string `json:"fontFamily"`
 			FontSize       int    `json:"fontSize"`
 			UseDefaultFont bool   `json:"useDefaultFont"`
+			RefreshRate    int    `json:"refreshRate"`
 		}
 		if json.Unmarshal(data, &cm) == nil && cm.Type == "display-settings-init" {
 			pendingDisplay = &webmsg.DisplaySettings{
 				FontFamily:     cm.FontFamily,
 				FontSize:       cm.FontSize,
 				UseDefaultFont: cm.UseDefaultFont,
+				RefreshRate:    cm.RefreshRate,
 			}
 			haveDisplay = true
 			continue
@@ -191,12 +193,14 @@ func handleWebSocket(ctx context.Context, conn *websocket.Conn, clientAddr, user
 					FontFamily     string `json:"fontFamily"`
 					FontSize       int    `json:"fontSize"`
 					UseDefaultFont bool   `json:"useDefaultFont"`
+					RefreshRate    int    `json:"refreshRate"`
 				}
 				if json.Unmarshal(data, &cm) == nil && cm.Type == "display-settings-init" {
 					webmsg.SetDisplaySettings(webKey, webmsg.DisplaySettings{
 						FontFamily:     cm.FontFamily,
 						FontSize:       cm.FontSize,
 						UseDefaultFont: cm.UseDefaultFont,
+						RefreshRate:    cm.RefreshRate,
 					})
 					continue
 				}

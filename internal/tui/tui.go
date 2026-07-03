@@ -163,27 +163,40 @@ type ProgramOptions struct {
 	RefreshRate int
 }
 
-// resolveRefreshRate returns the refresh rate (ms) to use for a new program,
-// based on connection type: web sessions use their per-browser-token setting,
-// local/SSH sessions share the daemon's config.
+// resolveRefreshRate returns the refresh rate (ms) to use for a new program.
+// Web sessions use their per-browser-token override if the browser set one;
+// otherwise (including local/SSH sessions) it falls back to the Appearance
+// menu's configured refresh rate.
 func resolveRefreshRate(connType, webToken string) int {
 	if connType == "web" {
 		if rate := webmsg.GetDisplaySettings(webToken).RefreshRate; rate > 0 {
-			return rate
+			return clampRefreshRate(rate)
 		}
-		return 100
 	}
 	if displayengine.CurrentConfig().UI.RefreshRate > 0 {
 		return displayengine.CurrentConfig().UI.RefreshRate
 	}
-	return 100
+	return config.DefaultConfig().UI.RefreshRate
+}
+
+// clampRefreshRate bounds a browser-supplied refresh rate to the same
+// range the Appearance menu and config validation enforce.
+func clampRefreshRate(ms int) int {
+	switch {
+	case ms < config.MinRefreshRateMS:
+		return config.MinRefreshRateMS
+	case ms > config.MaxRefreshRateMS:
+		return config.MaxRefreshRateMS
+	default:
+		return ms
+	}
 }
 
 // globalTickCmd returns a tea.Cmd that fires a globalTickMsg after the
 // configured refresh interval. This single ticker drives all spinner advances
 // and the periodic repaint, ensuring spinners are updated before each frame.
 func globalTickCmd() tea.Cmd {
-	ms := displayengine.CurrentConfig().UI.RefreshRate
+	ms := resolveRefreshRate(activeConnType, webToken)
 	if ms <= 0 {
 		ms = 60
 	}
@@ -236,7 +249,13 @@ func NewProgram(model tea.Model, opts ProgramOptions) *tea.Program {
 	if refreshRate <= 0 {
 		refreshRate = 100
 	}
+	// Integer division truncates to 0 for refreshRate > 1000ms, and
+	// tea.WithFPS treats anything below 1 as "use its 60fps default" --
+	// clamp to 1 so slow refresh rates are actually honored.
 	fps := 1000 / refreshRate
+	if fps < 1 {
+		fps = 1
+	}
 	teaOpts = append(teaOpts, tea.WithFPS(fps))
 	p := tea.NewProgram(model, teaOpts...)
 	program = p
