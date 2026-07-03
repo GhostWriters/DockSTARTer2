@@ -13,9 +13,11 @@ type DisplaySettings struct {
 	RefreshRate    int
 }
 
-// defaultDisplaySettings is returned for sessions with no stored settings yet.
+// defaultDisplaySettings is returned for sessions with no stored settings
+// yet. RefreshRate is left 0 (unset) so callers fall back to the Appearance
+// menu's configured rate rather than a hardcoded value.
 func defaultDisplaySettings() DisplaySettings {
-	return DisplaySettings{FontFamily: "monospace", FontSize: 14, UseDefaultFont: true, RefreshRate: 100}
+	return DisplaySettings{FontFamily: "monospace", FontSize: 14, UseDefaultFont: true}
 }
 
 type session struct {

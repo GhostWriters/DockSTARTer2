@@ -1067,12 +1067,22 @@ func (m *MenuModel) SetHeaderVisibility(visible bool) {
 	m.list.SetShowTitle(visible)
 }
 
-// HelpText returns the current item's help text
+// HelpText returns the current item's help text. When content sections are
+// in use, the focused section's own HelpText (if any) takes priority --
+// this is how sinput-only sections (no MenuItem list of their own) surface
+// a SectionHelp string.
 func (m *MenuModel) HelpText() string {
+	if len(m.contentSections) > 0 && m.focusedSection >= 0 && m.focusedSection < len(m.contentSections) {
+		if h, ok := m.contentSections[m.focusedSection].(interface{ HelpText() string }); ok {
+			if t := h.HelpText(); t != "" {
+				return t
+			}
+		}
+	}
 	if m.cursor >= 0 && m.cursor < len(m.items) {
 		return m.items[m.cursor].Help
 	}
-	return ""
+	return m.SectionHelp
 }
 
 // Cursor returns the current selection index

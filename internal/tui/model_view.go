@@ -4,6 +4,7 @@ import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/strutil"
 	"image/color"
 	"sort"
 	"strings"
@@ -67,8 +68,8 @@ func (m *AppModel) View() (v tea.View) {
 		// Fill every cell with the screen background color so BubbleTea's diff
 		// renderer is forced to overwrite all stale cells from the previous frame,
 		// even when the background color matches the terminal default.
-		row := displayengine.GetStyles().Screen.Render(strings.Repeat(" ", m.width))
-		content := strings.Repeat(row+"\n", m.height)
+		row := displayengine.GetStyles().Screen.Render(strutil.Repeat(" ", m.width))
+		content := strutil.Repeat(row+"\n", m.height)
 		v := tea.NewView(content)
 		v.MouseMode = tea.MouseModeCellMotion
 		v.AltScreen = true

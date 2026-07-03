@@ -32,10 +32,13 @@
           // Settings saved before useDefaultFont existed won't have it --
           // default to true (matches the TUI dialog's own DefaultWebDisplaySettings).
           if (typeof s.useDefaultFont !== 'boolean') s.useDefaultFont = true;
+          // 0 means "no browser-side override yet" -- the server falls back
+          // to the Appearance menu's configured refresh rate in that case.
+          if (typeof s.refreshRate !== 'number' || s.refreshRate < 0) s.refreshRate = 0;
           return s;
         }
       } catch (e) {}
-      return { fontFamily: 'monospace', fontSize: 14, useDefaultFont: true };
+      return { fontFamily: 'monospace', fontSize: 14, useDefaultFont: true, refreshRate: 0 };
     }
 
     function saveDisplaySettings(s) {
@@ -107,6 +110,7 @@
           fontFamily: term.options.fontFamily,
           fontSize: term.options.fontSize,
           useDefaultFont: display.useDefaultFont,
+          refreshRate: display.refreshRate,
         }));
       };
 
@@ -129,6 +133,7 @@
                   fontFamily: msg.fontFamily || display.fontFamily,
                   fontSize: msg.fontSize || display.fontSize,
                   useDefaultFont: typeof msg.useDefaultFont === 'boolean' ? msg.useDefaultFont : display.useDefaultFont,
+                  refreshRate: typeof msg.refreshRate === 'number' && msg.refreshRate > 0 ? msg.refreshRate : display.refreshRate,
                 };
                 display = s;
                 saveDisplaySettings(s);

@@ -244,6 +244,11 @@ type MenuModel struct {
 	contentSections []Content
 	focusedSection  int // index into contentSections; -1 = buttons focused
 
+	// SectionHelp is help text shown in the helpline when this section has
+	// no items of its own (e.g. a sinput section) but should still describe
+	// itself when focused. See HelpText.
+	SectionHelp string
+
 	// Optional hook to enrich the ItemText shown in the help dialog for a menu item.
 	// If set, called by showContextMenu (right-click Help) and HelpContext.
 	// Return ("", "") to keep the default item.Help text.

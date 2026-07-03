@@ -24,6 +24,14 @@ import (
 	toml "github.com/pelletier/go-toml/v2"
 )
 
+// MinRefreshRateMS and MaxRefreshRateMS bound UI.RefreshRate (screen repaint
+// interval, in milliseconds). Shared by config validation, the Appearance
+// menu's prompt, and the Browser Settings dialog's refresh-rate field.
+const (
+	MinRefreshRateMS = 16
+	MaxRefreshRateMS = 1000
+)
+
 func defaultConfigBytes() []byte {
 	b, _ := assets.GetDefaultConfig()
 	return b
@@ -239,7 +247,7 @@ func sanitizeConfig(ctx context.Context, conf *AppConfig) {
 		warn("spinner_speed", fmt.Sprintf("%d", ui.SpinnerSpeed), fmt.Sprintf("%d", def.UI.SpinnerSpeed))
 		ui.SpinnerSpeed = def.UI.SpinnerSpeed
 	}
-	if ui.RefreshRate < 16 || ui.RefreshRate > 1000 {
+	if ui.RefreshRate < MinRefreshRateMS || ui.RefreshRate > MaxRefreshRateMS {
 		warn("refresh_rate", fmt.Sprintf("%d", ui.RefreshRate), fmt.Sprintf("%d", def.UI.RefreshRate))
 		ui.RefreshRate = def.UI.RefreshRate
 	}

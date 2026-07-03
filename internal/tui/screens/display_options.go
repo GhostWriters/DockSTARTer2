@@ -916,16 +916,17 @@ func (s *DisplayOptionsScreen) promptSpinnerSpeed() tea.Cmd {
 func (s *DisplayOptionsScreen) promptRefreshRate() tea.Cmd {
 	return func() tea.Msg {
 		result, err := console.TextPrompt(context.Background(),
-			func(context.Context, any, ...any) {}, "Refresh Rate", "Enter screen repaint interval in milliseconds (16-1000)", false,
+			func(context.Context, any, ...any) {}, "Refresh Rate",
+			fmt.Sprintf("Enter screen repaint interval in milliseconds (%d-%d)", config.MinRefreshRateMS, config.MaxRefreshRateMS), false,
 			strconv.Itoa(s.config.UI.RefreshRate))
 		if err != nil {
 			return nil
 		}
 		ms, err := strconv.Atoi(strings.TrimSpace(result))
-		if err != nil || ms < 16 || ms > 1000 {
+		if err != nil || ms < config.MinRefreshRateMS || ms > config.MaxRefreshRateMS {
 			return tui.ShowMessageDialogMsg{
 				Title:   "Invalid Refresh Rate",
-				Message: "Refresh rate must be between 16 and 1000 milliseconds.",
+				Message: fmt.Sprintf("Refresh rate must be between %d and %d milliseconds.", config.MinRefreshRateMS, config.MaxRefreshRateMS),
 				Type:    tui.MessageError,
 			}
 		}

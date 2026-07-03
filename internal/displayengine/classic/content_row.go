@@ -46,6 +46,20 @@ func (r *ContentRow) SubFocusIndex() int {
 	return r.subFocus
 }
 
+// HelpText delegates to whichever child currently holds row-internal focus,
+// mirroring MenuModel.HelpText so a ContentRow of sinput sections (e.g. Font
+// Size / Refresh Rate side by side) still surfaces the focused child's help.
+func (r *ContentRow) HelpText() string {
+	idx := r.SubFocusIndex()
+	if idx < 0 || idx >= len(r.items) {
+		return ""
+	}
+	if h, ok := r.items[idx].(interface{ HelpText() string }); ok {
+		return h.HelpText()
+	}
+	return ""
+}
+
 // SetSubFocusIndex sets which child holds row-internal focus. Called by
 // updateSections' Tab/Shift-Tab cycling, which treats each row child as its
 // own Tab stop (see NumTabStops) rather than routing Left/Right within a
