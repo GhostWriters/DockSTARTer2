@@ -238,6 +238,8 @@ var (
 	EffectivePanelMode             = classic.EffectivePanelMode
 	EnforceDialogLayout            = classic.EnforceDialogLayout
 	GetActiveContentStartY         = classic.GetActiveContentStartY
+	GetActiveDialogOffset          = classic.GetActiveDialogOffset
+	GetActiveScreenSize            = classic.GetActiveScreenSize
 	GetActiveContext               = classic.GetActiveContext
 	GetAvailableDialogSize         = classic.GetAvailableDialogSize
 	GetBlockBorders                = classic.GetBlockBorders
@@ -312,7 +314,9 @@ var (
 	SemanticRawStyle                = classic.SemanticRawStyle
 	SemanticStyle                   = classic.SemanticStyle
 	SetActiveContentStartY          = classic.SetActiveContentStartY
+	SetActiveDialogOffset           = classic.SetActiveDialogOffset
 	SetActiveOutputWidth            = classic.SetActiveOutputWidth
+	SetActiveScreenSize             = classic.SetActiveScreenSize
 	ShowInputContextMenu            = classic.ShowInputContextMenu
 	ShowInputContextMenuWithTitle   = classic.ShowInputContextMenuWithTitle
 	SinputSectionInit               = classic.SinputSectionInit
