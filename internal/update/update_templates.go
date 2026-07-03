@@ -73,34 +73,18 @@ func CheckTemplatesUpdate(ctx context.Context, force bool, requestedBranch strin
 	}
 	currentHash := head.Hash().String()[:7]
 	currentDisplay := paths.GetTemplatesVersion()
-
-	remoteRef, err := repo.Reference(plumbing.ReferenceName("refs/remotes/origin/"+requestedBranch), true)
-	if err != nil {
-		remoteRef, err = repo.Reference(plumbing.ReferenceName("refs/tags/"+requestedBranch), true)
+	currentBranch := ""
+	if head.Name().IsBranch() {
+		currentBranch = head.Name().Short()
 	}
+
+	remoteRef, remoteDisplay, err := resolveTemplatesTarget(repo, head, currentBranch, requestedBranch)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve templates target %s: %w", requestedBranch, err)
 	}
 	remoteHash := remoteRef.Hash().String()
 	if len(remoteHash) > 7 {
 		remoteHash = remoteHash[:7]
-	}
-
-	tags, _ := repo.Tags()
-	foundTag := ""
-	_ = tags.ForEach(func(ref *plumbing.Reference) error {
-		if ref.Hash() == remoteRef.Hash() {
-			foundTag = ref.Name().Short()
-			return fmt.Errorf("found")
-		}
-		return nil
-	})
-
-	var remoteDisplay string
-	if foundTag != "" {
-		remoteDisplay = foundTag
-	} else {
-		remoteDisplay = fmt.Sprintf("%s commit %s", requestedBranch, remoteHash)
 	}
 
 	hasUpdate := currentHash != remoteHash || force
@@ -113,6 +97,140 @@ func CheckTemplatesUpdate(ctx context.Context, force bool, requestedBranch strin
 		requestedBranch: requestedBranch,
 		force:           force,
 	}, nil
+}
+
+// resolveTemplatesTarget determines the remote ref to update the templates
+// repo to, and its display string (tag name, or "<branch> commit <hash>").
+//
+// When the resolved branch is "main" (whether auto-detected from HEAD, or
+// explicitly named -- naming the branch is "pick which branch to track",
+// not "opt out of the release policy"), this applies a release policy
+// instead of main's literal tip: renovate and other CI commits land on main
+// between releases, so main's tip is frequently NOT the commit the user was
+// actually on -- restrict to the latest tag reachable from origin/main's
+// history instead. If no such tag exists yet (e.g. a fresh repo before any
+// release), falls back to main's tip.
+//
+// If currentBranch already equals requestedBranch (i.e. this is an update
+// check/apply while staying on the same branch, not a switch onto main from
+// elsewhere) and the resolved target is an ancestor of (or equal to)
+// current HEAD -- e.g. the user is already ahead of the latest tag -- this
+// returns current HEAD itself as the target, so callers see "no update
+// available" rather than incorrectly offering to move backward to an older
+// tag. This check is skipped when switching branches: a different branch
+// (e.g. one that forked from main after the latest tag) being a descendant
+// of that tag must never block the switch itself.
+//
+// Only an explicit literal tag name or commit hash bypasses this policy --
+// those resolve via the refs/tags/ or raw-hash fallback below and are
+// never equal to the branch name "main", so they naturally skip it.
+//
+// head is the repo's current HEAD reference (already resolved by the
+// caller), used only for the ancestor-of-latest-tag check above.
+func resolveTemplatesTarget(repo *git.Repository, head *plumbing.Reference, currentBranch, requestedBranch string) (*plumbing.Reference, string, error) {
+	remoteRef, err := repo.Reference(plumbing.ReferenceName("refs/remotes/origin/"+requestedBranch), true)
+	if err != nil {
+		remoteRef, err = repo.Reference(plumbing.ReferenceName("refs/tags/"+requestedBranch), true)
+	}
+	if err != nil {
+		return nil, "", err
+	}
+
+	if requestedBranch == "main" {
+		if tagRef, tagName, ok := latestReachableTag(repo, remoteRef); ok {
+			if currentBranch == requestedBranch {
+				if ahead, err := isAncestorOrEqual(repo, tagRef, head); err == nil && ahead {
+					// Current HEAD is already at or ahead of the latest tag --
+					// report current HEAD as the target so callers see no update.
+					return head, paths.GetTemplatesVersion(), nil
+				}
+			}
+			return tagRef, tagName, nil
+		}
+		// No reachable tag yet -- fall back to main's tip (old behavior).
+	}
+
+	remoteDisplay := templatesRefDisplay(repo, requestedBranch, remoteRef)
+	return remoteRef, remoteDisplay, nil
+}
+
+// templatesRefDisplay returns a tag name if one points at remoteRef's
+// commit, otherwise "<branch> commit <hash>".
+func templatesRefDisplay(repo *git.Repository, requestedBranch string, remoteRef *plumbing.Reference) string {
+	tags, _ := repo.Tags()
+	foundTag := ""
+	_ = tags.ForEach(func(ref *plumbing.Reference) error {
+		if ref.Hash() == remoteRef.Hash() {
+			foundTag = ref.Name().Short()
+			return fmt.Errorf("found")
+		}
+		return nil
+	})
+	if foundTag != "" {
+		return foundTag
+	}
+	remoteHash := remoteRef.Hash().String()
+	if len(remoteHash) > 7 {
+		remoteHash = remoteHash[:7]
+	}
+	return fmt.Sprintf("%s commit %s", requestedBranch, remoteHash)
+}
+
+// latestReachableTag returns the highest-versioned tag (by compareVersions,
+// the same semver-aware comparison used for app-update channel selection)
+// that is an ancestor of (or equal to) branchRef's commit. ok is false if no
+// tag reaches branchRef at all.
+func latestReachableTag(repo *git.Repository, branchRef *plumbing.Reference) (ref *plumbing.Reference, name string, ok bool) {
+	branchCommit, err := repo.CommitObject(branchRef.Hash())
+	if err != nil {
+		return nil, "", false
+	}
+
+	tags, err := repo.Tags()
+	if err != nil {
+		return nil, "", false
+	}
+
+	var bestRef *plumbing.Reference
+	bestName := ""
+	_ = tags.ForEach(func(tagRef *plumbing.Reference) error {
+		tagCommit, err := repo.CommitObject(tagRef.Hash())
+		if err != nil {
+			return nil
+		}
+		reachable, err := tagCommit.IsAncestor(branchCommit)
+		if err != nil || (!reachable && tagCommit.Hash != branchCommit.Hash) {
+			return nil
+		}
+		tagName := tagRef.Name().Short()
+		if bestRef == nil || compareVersions(tagName, bestName) > 0 {
+			bestRef = tagRef
+			bestName = tagName
+		}
+		return nil
+	})
+
+	if bestRef == nil {
+		return nil, "", false
+	}
+	return bestRef, bestName, true
+}
+
+// isAncestorOrEqual reports whether ancestorRef's commit is the same as, or
+// a git-history ancestor of, descendantRef's commit.
+func isAncestorOrEqual(repo *git.Repository, ancestorRef, descendantRef *plumbing.Reference) (bool, error) {
+	if ancestorRef.Hash() == descendantRef.Hash() {
+		return true, nil
+	}
+	ancestorCommit, err := repo.CommitObject(ancestorRef.Hash())
+	if err != nil {
+		return false, err
+	}
+	descendantCommit, err := repo.CommitObject(descendantRef.Hash())
+	if err != nil {
+		return false, err
+	}
+	return ancestorCommit.IsAncestor(descendantCommit)
 }
 
 // ApplyTemplatesUpdate prompts and applies the update described by info.
@@ -227,6 +345,7 @@ func ApplyTemplatesUpdate(ctx context.Context, info *TemplatesUpdateInfo, yes bo
 		system.SetPermissions(ctx, paths.GetTemplatesDir())
 	}
 
+	paths.InvalidateTemplatesVersionCache()
 	logger.Notice(ctx, "Updated {{|ApplicationName|}}%s{{[-]}} to '%s'", targetName, TmplVersionLink(paths.GetTemplatesVersion()))
 	appenv.InvalidateAppMetaCache()
 	system.SetPermissions(ctx, paths.GetTimestampsDir())
