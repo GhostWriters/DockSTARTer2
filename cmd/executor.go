@@ -17,7 +17,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 )
+
+// quoteCmdPart wraps part in double quotes if it's empty or contains
+// whitespace, so a command-echo notice built by joining args with spaces
+// (e.g. `ds2 -u "" main`) doesn't silently lose an empty argument or blur
+// together an argument containing spaces with its neighbors. Mirrors
+// DockSTARTer's bash `printf '%q'` quoting for the same notice, though not
+// byte-for-byte identical -- this is for display, not shell re-execution.
+func quoteCmdPart(part string) string {
+	if part == "" || strings.ContainsAny(part, " \t\n\"") {
+		return `"` + strings.ReplaceAll(part, `"`, `\"`) + `"`
+	}
+	return part
+}
 
 // CmdState aliases the shared state struct in internal/commands.
 type CmdState = commands.CmdState
@@ -111,7 +125,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		// Logging
 		cmdStr := version.CommandName
 		for _, part := range group.FullSlice() {
-			cmdStr += " " + part
+			cmdStr += " " + quoteCmdPart(part)
 		}
 		cmdLine := "{{[-]}} {{|CommandLine|}}" + cmdStr + "{{[-]}}"
 		logger.Notice(ctx, fmt.Sprintf("%s command: '{{|UserCommand|}}%s{{[-]}}'", version.ApplicationName, cmdStr))
