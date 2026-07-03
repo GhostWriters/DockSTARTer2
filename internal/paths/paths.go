@@ -56,6 +56,17 @@ func GetTemplatesDir() string {
 	return filepath.Join(xdg.StateHome, appName, "templates", "DockSTARTer-Templates")
 }
 
+// InvalidateTemplatesVersionCache forces the next GetTemplatesVersion call to
+// re-read the repository instead of returning a cached value up to 60
+// seconds stale. Callers that just changed the templates repo's HEAD (e.g.
+// after applying an update) must call this, or the immediately-following
+// "updated to X" display can show the pre-update version.
+func InvalidateTemplatesVersionCache() {
+	versionCacheMu.Lock()
+	lastTmplCheck = time.Time{}
+	versionCacheMu.Unlock()
+}
+
 // GetTemplatesVersion retrieves the current version of the DockSTARTer-Templates repository.
 func GetTemplatesVersion() string {
 	versionCacheMu.RLock()

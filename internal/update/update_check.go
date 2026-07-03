@@ -18,7 +18,6 @@ import (
 	selfupdate "github.com/creativeprojects/go-selfupdate"
 	"github.com/go-git/go-git/v5"
 	gitConfig "github.com/go-git/go-git/v5/config"
-	"github.com/go-git/go-git/v5/plumbing"
 )
 
 // CheckCurrentStatus verifies if the current channel still exists on GitHub.
@@ -257,6 +256,7 @@ func checkTmplUpdate(_ context.Context) (updateAvailable bool, ver string, hadEr
 
 	err = repo.FetchContext(fetchCtx, &git.FetchOptions{
 		RemoteName: "origin",
+		Tags:       git.AllTags,
 	})
 	if err != nil && err != git.NoErrAlreadyUpToDate {
 		// Timeout or network error - this IS an error
@@ -275,36 +275,16 @@ func checkTmplUpdate(_ context.Context) (updateAvailable bool, ver string, hadEr
 		currentBranch = head.Name().Short()
 	}
 
-	remoteHead, err := repo.Reference(plumbing.ReferenceName("refs/remotes/origin/"+currentBranch), true)
+	// resolveTemplatesTarget applies the same main-means-latest-reachable-tag
+	// policy as the real update flow in update_templates.go, so this
+	// indicator never disagrees with it.
+	remoteHead, _, err := resolveTemplatesTarget(repo, head, currentBranch, currentBranch)
 	if err != nil {
 		return false, "", false // Remote branch not found — not an error
 	}
 
 	if head.Hash() != remoteHead.Hash() {
-		remoteHash := remoteHead.Hash().String()
-		if len(remoteHash) > 7 {
-			remoteHash = remoteHash[:7]
-		}
-
-		// Try to find a tag for the remote commit
-		tags, _ := repo.Tags()
-		foundTag := ""
-		_ = tags.ForEach(func(ref *plumbing.Reference) error {
-			if ref.Hash() == remoteHead.Hash() {
-				foundTag = ref.Name().Short()
-				return fmt.Errorf("found")
-			}
-			return nil
-		})
-
-		var remoteDisplay string
-		if foundTag != "" {
-			remoteDisplay = foundTag
-		} else {
-			remoteDisplay = fmt.Sprintf("%s commit %s", currentBranch, remoteHash)
-		}
-
-		return true, remoteDisplay, false
+		return true, templatesRefDisplay(repo, currentBranch, remoteHead), false
 	}
 
 	return false, paths.GetTemplatesVersion(), false
