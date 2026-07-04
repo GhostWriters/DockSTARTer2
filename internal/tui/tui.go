@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -216,6 +217,57 @@ func SendWebMsg(msg []byte) {
 	}
 }
 
+// OpenAppLink opens url using whichever mechanism fits the current session.
+//
+// Web sessions relay the URL to the browser over the WebSocket so it opens
+// there -- unlike a mouse click on a rendered OSC8 hyperlink, which xterm.js
+// already intercepts and opens client-side with no server involvement, a
+// keyboard-triggered open has no click for it to catch, so it must always be
+// driven from here.
+//
+// Local sessions just open the URL on that machine directly via console.OpenURL.
+//
+// SSH sessions have no equivalent to the web session's WebSocket to relay a
+// URL back to whatever client the user is actually sitting at, and a mouse
+// click only reaches a local browser if the SSH client terminal supports
+// OSC8 hyperlinks itself (works in e.g. WezTerm, not in e.g. MobaXterm). So
+// for keyboard-triggered opens over SSH, copy the URL to the client's
+// clipboard via OSC52 (tea.SetClipboard) as a best effort -- not all
+// terminals support that either -- and always also show it in a message
+// dialog so the user can read/copy it manually regardless.
+func OpenAppLink(ctx context.Context, url string) tea.Cmd {
+	if url == "" {
+		return nil
+	}
+	switch GetConnType() {
+	case "web":
+		return func() tea.Msg {
+			data, _ := json.Marshal(map[string]any{
+				"type": "open-url",
+				"url":  url,
+			})
+			SendWebMsg(data)
+			return nil
+		}
+	case "local":
+		return func() tea.Msg {
+			_ = console.OpenURL(ctx, url)
+			return nil
+		}
+	default: // "ssh"
+		return tea.Batch(
+			tea.SetClipboard(url),
+			func() tea.Msg {
+				return ShowMessageDialogMsg{
+					Title:   "Docs Page",
+					Message: "Copied to clipboard (if your terminal supports it):\n" + url,
+					Type:    MessageInfo,
+				}
+			},
+		)
+	}
+}
+
 // GetWebDisplaySettings returns the browser's current display settings for this session.
 func GetWebDisplaySettings() webmsg.DisplaySettings {
 	return webmsg.GetDisplaySettings(webToken)
@@ -289,6 +341,20 @@ func parseClientInfo(environ []string) (string, string) {
 		}
 		if strings.HasPrefix(env, "DS2_CONN_TYPE=") {
 			connType = strings.TrimPrefix(env, "DS2_CONN_TYPE=")
+		}
+	}
+	// A plain foreground invocation (the CLI binary run directly, not through
+	// DS2's own wish SSH server) never gets a synthetic environ with any of
+	// the markers above, but the process's real OS environment still reflects
+	// how its own shell was reached. If that shell came from an SSH login
+	// (e.g. Tabby/PuTTY/OpenSSH running the binary interactively rather than
+	// connecting to DS2's built-in SSH listener), treat it as ssh too --
+	// there's still no local display to open a browser on. Telnet and other
+	// remote-shell protocols have no equivalent de facto standard env var, so
+	// they can't be detected this way.
+	if connType == "local" {
+		if os.Getenv("SSH_CONNECTION") != "" || os.Getenv("SSH_TTY") != "" || os.Getenv("SSH_CLIENT") != "" {
+			connType = "ssh"
 		}
 	}
 	return clientIP, connType

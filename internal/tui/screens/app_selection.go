@@ -261,24 +261,28 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool, connType string) 
 	return s
 }
 
-func (s *AppSelectionScreen) toggleItem(idx int) {
+func (s *AppSelectionScreen) toggleItem(idx int) tea.Cmd {
 	items := s.menu.GetItems()
 	if idx < 0 || idx >= len(items) {
-		return
+		return nil
 	}
 	item := items[idx]
 	if item.IsAddInstance {
 		s.startEditing(item.BaseApp)
-		return
+		return nil
 	}
 	if !item.Selectable {
-		return
+		return nil
 	}
 	if item.IsSeparator || item.IsEditing {
-		return
+		return nil
 	}
 
 	col := s.menu.ActiveColumn()
+
+	if col == displayengine.ColName {
+		return tui.OpenAppLink(context.Background(), item.Metadata["docsURL"])
+	}
 
 	if col == displayengine.ColExpand {
 		// expandGroup/Select rebuild or move the list selection themselves;
@@ -292,16 +296,16 @@ func (s *AppSelectionScreen) toggleItem(idx int) {
 			// being a dead end, matching Ctrl/Alt+Right's existing behavior.
 			s.menu.Select(idx + 1)
 			s.menu.SetActiveColumn(displayengine.ColAdd)
-			return
+			return nil
 		}
 		s.expandGroup(item.BaseApp)
 		s.collapseAllEmptyGroups(item.BaseApp)
 		s.menu.SetActiveColumn(displayengine.ColAdd)
-		return
+		return nil
 	}
 
 	if item.IsGroupHeader {
-		return
+		return nil
 	}
 
 	switch col {
@@ -332,6 +336,7 @@ func (s *AppSelectionScreen) toggleItem(idx int) {
 		items = s.refreshGroupHeaders(items)
 	}
 	s.menu.SetItems(items)
+	return nil
 }
 
 func (s *AppSelectionScreen) navUp(m *displayengine.MenuModel, items []displayengine.MenuItem, idx int, item displayengine.MenuItem) {
@@ -409,8 +414,7 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *displayengine.Men
 	item := items[idx]
 
 	if _, ok := msg.(displayengine.ToggleFocusedMsg); ok {
-		s.toggleItem(idx)
-		return nil, true
+		return s.toggleItem(idx), true
 	}
 
 	if hitMsg, ok := msg.(displayengine.LayerHitMsg); ok && (hitMsg.Button == tea.MouseLeft || hitMsg.Button == tea.MouseRight) {
@@ -482,13 +486,13 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *displayengine.Men
 			case "add":
 				m.SetActiveColumn(displayengine.ColAdd)
 				if !item.IsGroupHeader {
-					s.toggleItem(idx)
+					return s.toggleItem(idx), true
 				}
 				return nil, true
 			case "enable":
 				m.SetActiveColumn(displayengine.ColEnable)
 				if !item.IsGroupHeader {
-					s.toggleItem(idx)
+					return s.toggleItem(idx), true
 				}
 				return nil, true
 			case "expand":
@@ -597,6 +601,10 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *displayengine.Men
 		// Use keymap bindings for keys that have alt+/ctrl+ aliases.
 		switch {
 		case key.Matches(keyMsg, displayengine.Keys.EnvPrevTab):
+			if m.ActiveColumn() == displayengine.ColName {
+				m.SetActiveColumn(displayengine.ColExpand)
+				return nil, true
+			}
 			if m.ActiveColumn() == displayengine.ColExpand {
 				m.SetActiveColumn(displayengine.ColEnable)
 				return nil, true
@@ -632,6 +640,14 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *displayengine.Men
 			}
 			return nil, true
 		case key.Matches(keyMsg, displayengine.Keys.EnvNextTab):
+			if m.ActiveColumn() == displayengine.ColExpand {
+				// Only reachable for main-list rows (collapsed or expanded-header) --
+				// sub-item rows never set ColExpand, so this never fires for them.
+				// Space here (once wired) opens the app's docs page; sub-item rows
+				// keep Ctrl/Alt+Right for renaming, untouched below.
+				m.SetActiveColumn(displayengine.ColName)
+				return nil, true
+			}
 			if m.ActiveColumn() == displayengine.ColEnable {
 				if item.IsGroupHeader {
 					// Land on the Expand column like a collapsed row does --
@@ -751,8 +767,7 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *displayengine.Men
 			}
 			return nil, true
 		case "space":
-			s.toggleItem(idx)
-			return nil, true
+			return s.toggleItem(idx), true
 		case "f2":
 			if item.IsSubItem {
 				s.startRenaming(idx)

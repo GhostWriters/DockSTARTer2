@@ -342,13 +342,25 @@ func (m *MenuModel) renderVariableHeightList() string {
 		// Gutter: Use unified helper which respects StatusGutterWidth
 		itemGutter := m.RenderItemGutter(item, neutralStyle, "")
 
+		// Name-column focus indicator: "[AppName]", with the "[" replacing the
+		// separator space before the tag (no extra width) and an unstyled "]"
+		// appended right after it (accounted for via spinTagExtra-style gap
+		// shrink below, since it does add a character).
+		nameFocused := isAppSelect && isSelected && m.activeColumn == ColName
+		nameSep := neutralStyle.Render(" ")
+		nameClose := ""
+		if nameFocused {
+			nameSep = neutralStyle.Render("[")
+			nameClose = neutralStyle.Render("]")
+		}
+
 		prefixPadding := ""
 		prefixWidth := 0
 		if item.IsCheckbox || item.IsRadioButton || item.IsGroupHeader {
 			if isAppSelect && (item.IsCheckbox || item.IsGroupHeader) {
 				// Slot1(3) + Space(1) + Slot2(3) + Space(1) + Slot3(1) + Space(1) = 10 characters.
 				// This MUST match menuPrefixWidth above to align with standard app-select rows.
-				prefixPadding = cbAdd3 + neutralStyle.Render(" ") + cbEnabled3 + neutralStyle.Render(" ") + cbExpand3 + neutralStyle.Render(" ")
+				prefixPadding = cbAdd3 + neutralStyle.Render(" ") + cbEnabled3 + neutralStyle.Render(" ") + cbExpand3 + nameSep
 			} else {
 				// Standard menus or Radio buttons: indicator followed by one space
 				prefixPadding = checkbox + neutralStyle.Render(" ")
@@ -364,10 +376,14 @@ func (m *MenuModel) renderVariableHeightList() string {
 			// Net extra chars = +2 spinners - 1 sep = +1; shrink gap by 1 to keep desc aligned.
 			spinTagExtra = 1
 		}
+		if nameFocused {
+			// The trailing "]" adds a character beyond the tag's own width.
+			spinTagExtra++
+		}
 		gapWidth := (maxTagLen - lipgloss.Width(GetPlainText(item.Tag))) + (menuPrefixWidth - prefixWidth) + minGap - spinTagExtra
 		paddingSpaces := strutil.Repeat(" ", max(0, gapWidth))
 
-		firstLine := prefixPadding + tagStr + neutralStyle.Render(paddingSpaces) + lines[0]
+		firstLine := prefixPadding + tagStr + nameClose + neutralStyle.Render(paddingSpaces) + lines[0]
 		indent := neutralStyle.Render(strutil.Repeat(" ", menuPrefixWidth+maxTagLen+minGap))
 		renderedItemLines := []string{firstLine}
 		for j := 1; j < len(lines); j++ {

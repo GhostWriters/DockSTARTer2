@@ -644,22 +644,29 @@ func (m *MenuModel) handleSpace() (tea.Model, tea.Cmd) {
 	// Always prioritize checkbox toggle if item is one
 	selectedItem := m.list.SelectedItem()
 	if item, ok := selectedItem.(MenuItem); ok {
-		if (item.IsCheckbox || item.IsRadioButton) && item.Selectable {
+		// Group headers (IsCheckbox: false) have no Checked/Enabled of their own
+		// to toggle, but still need to reach the Interceptor below so app_selection's
+		// toggleItem can handle Space on the Expand/Name columns for them.
+		if (item.IsCheckbox || item.IsRadioButton || (m.groupedMode && item.IsGroupHeader)) && item.Selectable {
 			if item.Locked {
 				return m, nil
 			}
 			idx := m.list.Index()
-			if m.groupedMode && m.activeColumn == ColEnable {
+			switch {
+			case m.groupedMode && item.IsGroupHeader:
+				// Read-only/aggregate state -- the Interceptor owns all Space
+				// behavior for a group header row.
+			case m.groupedMode && m.activeColumn == ColEnable:
 				item.Enabled = !item.Enabled
 				if item.Enabled {
 					item.Checked = true // Auto-add if user enables
 					item.ShowEnabledGutter = true
 				}
-			} else if m.groupedMode && m.activeColumn == ColExpand {
-				// The Expand column has no Checked/Enabled state of its own --
-				// leave item untouched and let the Interceptor (app_selection's
-				// toggleItem) fully own what Space does here.
-			} else {
+			case m.groupedMode && (m.activeColumn == ColExpand || m.activeColumn == ColName):
+				// Neither the Expand nor Name column has Checked/Enabled state of
+				// its own -- leave item untouched and let the Interceptor
+				// (app_selection's toggleItem) fully own what Space does here.
+			default:
 				if item.IsRadioButton {
 					item.Checked = true
 				} else {
