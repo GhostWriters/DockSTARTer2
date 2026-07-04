@@ -11,6 +11,21 @@ const (
 	// CheckOff - empty brackets
 	CheckOff = "[ ]"
 
+	// CheckOnBare/CheckOffBare are the same width as CheckOn/CheckOff but with
+	// the brackets replaced by blank space -- used for regular (non-flow)
+	// checkbox lists so the brackets appear only when that row has keyboard
+	// focus, matching App Selection's [AppName]-style focus indicator.
+	CheckOnBare  = " ✓ "
+	CheckOffBare = "   "
+
+	// RadioOnBare/RadioOffBare are the same idea as CheckOnBare/CheckOffBare
+	// but for radio buttons -- the bullet still shows on the checked item
+	// regardless of cursor position, but the parens themselves only appear on
+	// whichever row currently has keyboard focus (they "travel" with the
+	// cursor rather than staying pinned to the checked item).
+	RadioOnBare  = " • "
+	RadioOffBare = "   "
+
 	// SubMenuExpanded (▾) - Black Down-Pointing Small Triangle (U+25BE), matching
 	// the small-triangle family used by the title focus indicators (▸/◂) rather
 	// than the larger ▼/▶ triangles, which render as colored emoji in some fonts.
@@ -24,10 +39,14 @@ const (
 	SubMenuCollapsedAscii = ">"
 
 	// ASCII variants
-	RadioOnAscii   = "(*)"
-	RadioOffAscii  = "( )"
-	CheckOnAscii   = "[x]"
-	CheckOffAscii  = "[ ]"
+	RadioOnAscii      = "(*)"
+	RadioOffAscii     = "( )"
+	CheckOnAscii      = "[x]"
+	CheckOffAscii     = "[ ]"
+	CheckOnBareAscii  = " x "
+	CheckOffBareAscii = "   "
+	RadioOnBareAscii  = " * "
+	RadioOffBareAscii = "   "
 
 	// InvalidMarker (▲) - Black Up-Pointing Triangle (U+25B2)
 	InvalidMarker      = "▲"
@@ -46,11 +65,11 @@ const (
 	UpdateErrorAscii     = "?"
 
 	// Title bar widgets
-	HelpWidget          = "?"
-	CloseWidget         = "×" // Multiplication Sign (U+00D7)
-	CloseWidgetAscii    = "X"
-	RefreshWidget       = "↺" // Anticlockwise Open Circle Arrow (U+21BA)
-	RefreshWidgetAscii  = "R"
+	HelpWidget         = "?"
+	CloseWidget        = "×" // Multiplication Sign (U+00D7)
+	CloseWidgetAscii   = "X"
+	RefreshWidget      = "↺" // Anticlockwise Open Circle Arrow (U+21BA)
+	RefreshWidgetAscii = "R"
 
 	// Panel resize widgets
 	ResizeUpWidget      = "▲" // Black Up-Pointing Triangle (U+25B2)

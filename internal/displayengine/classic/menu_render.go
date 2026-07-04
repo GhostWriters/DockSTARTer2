@@ -13,30 +13,62 @@ func renderCheckboxGlyph(cb string, cbStyle lipgloss.Style) string {
 }
 
 // renderCheckbox selects the correct glyph for a checkbox or radio button and renders it.
-func renderCheckbox(isRadio, checked, lineChars bool, cbStyle lipgloss.Style) string {
+// focused controls whether the bracket/parens are shown at all -- when false,
+// the glyph renders "bare" (no brackets/parens, same width, but the
+// checkmark/bullet itself still shows if checked): for a checkbox this simply
+// hides an unfocused row's brackets; for a radio button it means the bullet
+// marking the CHECKED item always shows, but the parens themselves only
+// appear on whichever row currently has keyboard focus, effectively
+// "traveling" with the cursor independent of which item is checked. Callers
+// rendering a flow/grid list should always pass focused=true to keep that
+// list's checkboxes/radios bracketed unconditionally, matching how flow
+// lists rendered before this.
+func renderCheckbox(isRadio, checked, lineChars, focused bool, cbStyle lipgloss.Style) string {
 	var cb string
 	if lineChars {
-		if isRadio {
+		switch {
+		case isRadio && focused:
 			cb = radioOff
 			if checked {
 				cb = radioOn
 			}
-		} else {
+		case isRadio:
+			cb = radioOffBare
+			if checked {
+				cb = radioOnBare
+			}
+		case focused:
 			cb = checkOff
 			if checked {
 				cb = checkOn
 			}
+		default:
+			cb = checkOffBare
+			if checked {
+				cb = checkOnBare
+			}
 		}
 	} else {
-		if isRadio {
+		switch {
+		case isRadio && focused:
 			cb = radioOffAscii
 			if checked {
 				cb = radioOnAscii
 			}
-		} else {
+		case isRadio:
+			cb = radioOffBareAscii
+			if checked {
+				cb = radioOnBareAscii
+			}
+		case focused:
 			cb = checkOffAscii
 			if checked {
 				cb = checkOnAscii
+			}
+		default:
+			cb = checkOffBareAscii
+			if checked {
+				cb = checkOnBareAscii
 			}
 		}
 	}

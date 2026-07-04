@@ -73,19 +73,20 @@ type AppSelectionScreen struct {
 func (s *AppSelectionScreen) Init() tea.Cmd {
 	return tea.Batch(s.menu.Init(), showSpinnerAfterDelayCmd(), s.loadAppSelectItemsCmd())
 }
-func (s *AppSelectionScreen) View() tea.View            { return s.menu.View() }
-func (s *AppSelectionScreen) ViewString() string        { return s.menu.ViewString() }
-func (s *AppSelectionScreen) Layers() []*lipgloss.Layer { return s.menu.Layers() }
-func (s *AppSelectionScreen) Title() string             { return s.menu.Title() }
-func (s *AppSelectionScreen) HelpText() string          { return s.menu.HelpText() }
-func (s *AppSelectionScreen) SetSize(w, h int)          { s.menu.SetSize(w, h) }
-func (s *AppSelectionScreen) SetFocused(f bool)         { s.menu.SetFocused(f) }
-func (s *AppSelectionScreen) IsMaximized() bool         { return s.menu.IsMaximized() }
-func (s *AppSelectionScreen) MinHeight() int            { return s.menu.MinHeight() }
-func (s *AppSelectionScreen) HasDialog() bool           { return s.menu.HasDialog() }
-func (s *AppSelectionScreen) MenuName() string          { return s.menu.MenuName() }
-func (s *AppSelectionScreen) IsDestructive() bool       { return true }
-func (s *AppSelectionScreen) IsLoading() bool           { return !s.ready }
+func (s *AppSelectionScreen) View() tea.View              { return s.menu.View() }
+func (s *AppSelectionScreen) ViewString() string          { return s.menu.ViewString() }
+func (s *AppSelectionScreen) Layers() []*lipgloss.Layer   { return s.menu.Layers() }
+func (s *AppSelectionScreen) Title() string               { return s.menu.Title() }
+func (s *AppSelectionScreen) HelpText() string            { return s.menu.HelpText() }
+func (s *AppSelectionScreen) SetSize(w, h int)            { s.menu.SetSize(w, h) }
+func (s *AppSelectionScreen) SetFocused(f bool)           { s.menu.SetFocused(f) }
+func (s *AppSelectionScreen) SetListFocusOverride(v bool) { s.menu.SetListFocusOverride(v) }
+func (s *AppSelectionScreen) IsMaximized() bool           { return s.menu.IsMaximized() }
+func (s *AppSelectionScreen) MinHeight() int              { return s.menu.MinHeight() }
+func (s *AppSelectionScreen) HasDialog() bool             { return s.menu.HasDialog() }
+func (s *AppSelectionScreen) MenuName() string            { return s.menu.MenuName() }
+func (s *AppSelectionScreen) IsDestructive() bool         { return true }
+func (s *AppSelectionScreen) IsLoading() bool             { return !s.ready }
 func (s *AppSelectionScreen) GetHitRegions(x, y int) []displayengine.HitRegion {
 	return s.menu.GetHitRegions(x, y)
 }

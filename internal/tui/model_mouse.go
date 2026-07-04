@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/displayengine"
 	"strings"
 
@@ -526,14 +525,18 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 					}
 				}
 			}
-			// Hyperlinks (IDs are "link:<URL>")
+			// Hyperlinks (IDs are "link:<URL>"). Real OSC8-aware terminals (e.g.
+			// WezTerm) typically intercept a modifier-click on rendered hyperlink
+			// text themselves, client-side, before it ever reaches us as a mouse
+			// event here -- so this only fires for terminals without that support
+			// (e.g. MobaXterm), where a plain click still reaches us as a normal
+			// click. Route it through the same connType-aware helper Space on
+			// App Selection's Name column uses, rather than always assuming a
+			// local browser is reachable.
 			if strings.HasPrefix(hitID, "link:") {
 				if me, ok := msg.(tea.MouseClickMsg); ok && me.Button == tea.MouseLeft {
 					url := strings.TrimPrefix(hitID, "link:")
-					return m, func() tea.Msg {
-						_ = console.OpenURL(m.ctx, url)
-						return nil
-					}, true
+					return m, OpenAppLink(m.ctx, url), true
 				}
 			}
 
