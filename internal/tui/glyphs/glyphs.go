@@ -11,9 +11,17 @@ const (
 	// CheckOff - empty brackets
 	CheckOff = "[ ]"
 
-	// SubMenuExpanded (▼) - Black Down-Pointing Triangle (U+25BC) — group header is always expanded
-	SubMenuExpanded      = "▼"
+	// SubMenuExpanded (▾) - Black Down-Pointing Small Triangle (U+25BE), matching
+	// the small-triangle family used by the title focus indicators (▸/◂) rather
+	// than the larger ▼/▶ triangles, which render as colored emoji in some fonts.
+	SubMenuExpanded      = "▾"
 	SubMenuExpandedAscii = "v"
+
+	// SubMenuCollapsed (▸) - Black Right-Pointing Small Triangle (U+25B8), same
+	// glyph already used elsewhere for focus indicators (dialog_border_box.go,
+	// dialog_render.go, menu_borders.go).
+	SubMenuCollapsed      = "▸"
+	SubMenuCollapsedAscii = ">"
 
 	// ASCII variants
 	RadioOnAscii   = "(*)"

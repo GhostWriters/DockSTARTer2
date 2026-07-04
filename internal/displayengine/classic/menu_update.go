@@ -655,6 +655,10 @@ func (m *MenuModel) handleSpace() (tea.Model, tea.Cmd) {
 					item.Checked = true // Auto-add if user enables
 					item.ShowEnabledGutter = true
 				}
+			} else if m.groupedMode && m.activeColumn == ColExpand {
+				// The Expand column has no Checked/Enabled state of its own --
+				// leave item untouched and let the Interceptor (app_selection's
+				// toggleItem) fully own what Space does here.
 			} else {
 				if item.IsRadioButton {
 					item.Checked = true

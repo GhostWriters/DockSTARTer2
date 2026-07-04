@@ -274,11 +274,35 @@ func (s *AppSelectionScreen) toggleItem(idx int) {
 	if !item.Selectable {
 		return
 	}
-	if item.IsSeparator || item.IsEditing || item.IsGroupHeader {
+	if item.IsSeparator || item.IsEditing {
 		return
 	}
 
 	col := s.menu.ActiveColumn()
+
+	if col == displayengine.ColExpand {
+		// expandGroup/Select rebuild or move the list selection themselves;
+		// nothing left in items/item is valid afterward, so return immediately
+		// rather than falling into the generic Checked/Enabled post-processing
+		// below (which also doesn't apply to group headers -- see the
+		// IsGroupHeader guard right after this block).
+		if item.IsGroupHeader {
+			// Already expanded (and not collapsible, e.g. has real instances)
+			// -- Space just descends into the visible instance list instead of
+			// being a dead end, matching Ctrl/Alt+Right's existing behavior.
+			s.menu.Select(idx + 1)
+			s.menu.SetActiveColumn(displayengine.ColAdd)
+			return
+		}
+		s.expandGroup(item.BaseApp)
+		s.collapseAllEmptyGroups(item.BaseApp)
+		s.menu.SetActiveColumn(displayengine.ColAdd)
+		return
+	}
+
+	if item.IsGroupHeader {
+		return
+	}
 
 	switch col {
 	case displayengine.ColAdd:
@@ -573,12 +597,19 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *displayengine.Men
 		// Use keymap bindings for keys that have alt+/ctrl+ aliases.
 		switch {
 		case key.Matches(keyMsg, displayengine.Keys.EnvPrevTab):
+			if m.ActiveColumn() == displayengine.ColExpand {
+				m.SetActiveColumn(displayengine.ColEnable)
+				return nil, true
+			}
 			if s.isSubRow(item) && m.ActiveColumn() == displayengine.ColAdd {
 				base := item.BaseApp
 				for i := idx - 1; i >= 0; i-- {
 					if items[i].BaseApp == base && items[i].IsGroupHeader {
 						m.Select(i)
-						m.SetActiveColumn(displayengine.ColEnable)
+						// Exiting the instance list from its leftmost (Add) column
+						// lands back on the Expand column, mirroring how expanding
+						// (Space on Expand) lands on Add going in.
+						m.SetActiveColumn(displayengine.ColExpand)
 						// Collapse the group if no active named instances remain
 						if ni, ok := s.collapseGroupIfNeeded(m.GetItems(), base); ok {
 							m.SetItems(ni)
@@ -603,8 +634,11 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *displayengine.Men
 		case key.Matches(keyMsg, displayengine.Keys.EnvNextTab):
 			if m.ActiveColumn() == displayengine.ColEnable {
 				if item.IsGroupHeader {
-					m.Select(idx + 1)
-					m.SetActiveColumn(displayengine.ColAdd)
+					// Land on the Expand column like a collapsed row does --
+					// Space (toggleItem's ColExpand case) is what descends into
+					// the instance list, rather than Ctrl/Alt+Right doing it
+					// immediately.
+					m.SetActiveColumn(displayengine.ColExpand)
 					return nil, true
 				}
 				if item.IsSubItem && !item.IsEditing {
@@ -614,8 +648,10 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *displayengine.Men
 					return nil, true
 				}
 				if !item.IsSubItem && !item.IsSeparator && !item.IsEditing && item.IsCheckbox {
-					s.expandGroup(item.BaseApp)
-					m.SetActiveColumn(displayengine.ColAdd)
+					// Land on the Expand column rather than expanding immediately --
+					// Up/Down can now browse rows while it stays focused, and Space
+					// (toggleItem's ColExpand case) is what actually triggers it.
+					m.SetActiveColumn(displayengine.ColExpand)
 					return nil, true
 				}
 			}

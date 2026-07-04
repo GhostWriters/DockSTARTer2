@@ -8,8 +8,10 @@ const (
 	radioOff             = glyphs.RadioOff
 	checkOn              = glyphs.CheckOn
 	checkOff             = glyphs.CheckOff
-	subMenuExpanded      = glyphs.SubMenuExpanded
-	subMenuExpandedAscii = glyphs.SubMenuExpandedAscii
+	subMenuExpanded       = glyphs.SubMenuExpanded
+	subMenuExpandedAscii  = glyphs.SubMenuExpandedAscii
+	subMenuCollapsed      = glyphs.SubMenuCollapsed
+	subMenuCollapsedAscii = glyphs.SubMenuCollapsedAscii
 	radioOnAscii         = glyphs.RadioOnAscii
 	radioOffAscii        = glyphs.RadioOffAscii
 	checkOnAscii         = glyphs.CheckOnAscii

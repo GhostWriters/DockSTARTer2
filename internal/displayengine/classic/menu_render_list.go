@@ -3,9 +3,9 @@ package classic
 import (
 	"strings"
 
-	semstyle "github.com/GhostWriters/semstyle/lg"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
+	semstyle "github.com/GhostWriters/semstyle/lg"
 
 	"charm.land/lipgloss/v2"
 )
@@ -114,11 +114,16 @@ func (m *MenuModel) renderVariableHeightList() string {
 		kStyle := keyStyleBase
 		dStyle := itemStyleBase
 		cbStyle := checkboxStyleBase
-		if isSelected || isParentOfSelected {
+		if isSelected {
 			tStyle = tagStyleSel
 			kStyle = keyStyleSel
 			dStyle = itemStyleSel
 			cbStyle = checkboxStyleSel
+		} else if isParentOfSelected {
+			// A child instance is focused, not this header row itself -- keep the
+			// app name unfocused, but still highlight the description so it's
+			// clear which app's description is showing below the instance list.
+			dStyle = itemStyleSel
 		}
 
 		isActuallySub := item.IsSubItem || item.IsAddInstance
@@ -184,51 +189,64 @@ func (m *MenuModel) renderVariableHeightList() string {
 			checkbox = renderCheckbox(item.IsRadioButton, item.Checked, ctx.LineCharacters, cbStyle)
 		}
 
-		var cbAdd3, cbEnabled3 string
+		var cbAdd3, cbEnabled3, cbExpand3 string
 		if isAppSelect && (item.IsCheckbox || item.IsGroupHeader) {
 			cbAStyle := checkboxStyleBase
 			cbEStyle := checkboxStyleBase
+			cbXStyle := neutralStyle
 			if isSelected {
-				if m.activeColumn == ColAdd {
+				switch m.activeColumn {
+				case ColAdd:
 					cbAStyle = checkboxStyleSel
-				} else {
+				case ColEnable:
 					cbEStyle = checkboxStyleSel
+				case ColExpand:
+					cbXStyle = checkboxStyleSel
 				}
 			}
 
+			// Expandable rows are the plain (collapsed) base-app row and the
+			// group-header (expanded) row -- never sub-items or the "+ Add
+			// instance..." row, which have no arrow of their own.
+			canExpand := item.IsGroupHeader || (item.IsCheckbox && !item.IsSubItem && !item.IsAddInstance)
+
 			if ctx.LineCharacters {
-				if item.IsGroupHeader {
-					// Expansion arrow is single-width; pad to 3 manually
-					cbAdd3 = neutralStyle.Render("   ")
-					cbEnabled3 = neutralStyle.Render(" ") + cbEStyle.Render(subMenuExpanded) + neutralStyle.Render(" ")
+				ca, ce := checkOff, checkOff
+				if item.Checked {
+					ca = checkOn
+				}
+				if item.Enabled {
+					ce = checkOn
+				}
+				cbAdd3 = renderCheckboxGlyph(ca, cbAStyle)
+				cbEnabled3 = renderCheckboxGlyph(ce, cbEStyle)
+				if canExpand {
+					arrow := subMenuCollapsed
+					if item.IsGroupHeader {
+						arrow = subMenuExpanded
+					}
+					cbExpand3 = cbXStyle.Render(arrow)
 				} else {
-					ca, ce := checkOff, checkOff
-					if item.Checked {
-						ca = checkOn
-					}
-					if item.Enabled {
-						ce = checkOn
-					}
-					cbAdd3 = renderCheckboxGlyph(ca, cbAStyle)
-					cbEnabled3 = renderCheckboxGlyph(ce, cbEStyle)
+					cbExpand3 = neutralStyle.Render(" ")
 				}
 			} else {
-				if item.IsGroupHeader {
-					// Expansion arrow is single-width; pad to 3 manually
-					cbAdd3 = neutralStyle.Render("   ")
-					cbEnabled3 = neutralStyle.Render(" ") + cbEStyle.Render(subMenuExpandedAscii) + neutralStyle.Render(" ")
+				caText, ceText := checkOffAscii, checkOffAscii
+				if item.Checked {
+					caText = checkOnAscii
+				}
+				if item.Enabled {
+					ceText = checkOnAscii
+				}
+				cbAdd3 = renderCheckboxGlyph(caText, cbAStyle)
+				cbEnabled3 = renderCheckboxGlyph(ceText, cbEStyle)
+				if canExpand {
+					arrow := subMenuCollapsedAscii
+					if item.IsGroupHeader {
+						arrow = subMenuExpandedAscii
+					}
+					cbExpand3 = cbXStyle.Render(arrow)
 				} else {
-					// ASCII: 3-character variants
-					caText := checkOffAscii
-					ceText := checkOffAscii
-					if item.Checked {
-						caText = checkOnAscii
-					}
-					if item.Enabled {
-						ceText = checkOnAscii
-					}
-					cbAdd3 = renderCheckboxGlyph(caText, cbAStyle)
-					cbEnabled3 = renderCheckboxGlyph(ceText, cbEStyle)
+					cbExpand3 = neutralStyle.Render(" ")
 				}
 			}
 		}
@@ -241,8 +259,24 @@ func (m *MenuModel) renderVariableHeightList() string {
 			if strings.HasPrefix(item.Tag, "[") && len(runes) > 1 {
 				letterIdx = 1
 			}
+			// App-select rows with a docs URL render the tag as a clickable
+			// hyperlink (two adjacent OSC8 spans -- hotkey-letter style and
+			// rest-of-name style -- both pointing at the same URL, since a
+			// single hyperlink span can't carry two different text styles).
+			var linkURL string
+			if isAppSelect {
+				linkURL = item.Metadata["docsURL"]
+			}
 			if letterIdx < len(runes) {
-				tagStr = tStyle.Render(string(runes[:letterIdx])) + kStyle.Render(string(runes[letterIdx])) + RenderThemeText(string(runes[letterIdx+1:]), tStyle)
+				if linkURL != "" {
+					tagStr = tStyle.Render(string(runes[:letterIdx])) +
+						kStyle.Hyperlink(linkURL).Render(string(runes[letterIdx])) +
+						tStyle.Hyperlink(linkURL).Render(string(runes[letterIdx+1:]))
+				} else {
+					tagStr = tStyle.Render(string(runes[:letterIdx])) + kStyle.Render(string(runes[letterIdx])) + RenderThemeText(string(runes[letterIdx+1:]), tStyle)
+				}
+			} else if linkURL != "" {
+				tagStr = tStyle.Hyperlink(linkURL).Render(item.Tag)
 			} else {
 				tagStr = RenderThemeText(item.Tag, tStyle)
 			}
@@ -268,7 +302,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 
 		menuPrefixWidth := 0
 		if isAppSelect {
-			menuPrefixWidth = 8 // cbAdd(3) + sp(1) + cbEnabled(3) + sp(1)
+			menuPrefixWidth = 10 // cbAdd(3) + sp(1) + cbEnabled(3) + sp(1) + cbExpand(1) + sp(1)
 		} else if hasAnyCheckboxes {
 			menuPrefixWidth = layout.CheckboxWidth()
 		}
@@ -284,7 +318,11 @@ func (m *MenuModel) renderVariableHeightList() string {
 		}
 
 		var descStr string
-		if isSelected && item.Desc != "" {
+		if (isSelected || isParentOfSelected) && item.Desc != "" {
+			// item.Desc is normally pre-wrapped in its own semstyle tag (e.g.
+			// "{{|ListItem|}}..."), which overrides dStyle entirely -- strip
+			// tags here so dStyle (itemStyleSel) actually takes effect, same
+			// as the plain isSelected case already did.
 			descStr = dStyle.Render(GetPlainText(item.Desc))
 		} else {
 			descStr = RenderThemeText(item.Desc, dStyle)
@@ -308,9 +346,9 @@ func (m *MenuModel) renderVariableHeightList() string {
 		prefixWidth := 0
 		if item.IsCheckbox || item.IsRadioButton || item.IsGroupHeader {
 			if isAppSelect && (item.IsCheckbox || item.IsGroupHeader) {
-				// Slot1(3) + Space(1) + Slot2(3) + Space(1) = 8 characters
-				// This MUST be exactly 8 characters to align with standard app-select rows.
-				prefixPadding = cbAdd3 + neutralStyle.Render(" ") + cbEnabled3 + neutralStyle.Render(" ")
+				// Slot1(3) + Space(1) + Slot2(3) + Space(1) + Slot3(1) + Space(1) = 10 characters.
+				// This MUST match menuPrefixWidth above to align with standard app-select rows.
+				prefixPadding = cbAdd3 + neutralStyle.Render(" ") + cbEnabled3 + neutralStyle.Render(" ") + cbExpand3 + neutralStyle.Render(" ")
 			} else {
 				// Standard menus or Radio buttons: indicator followed by one space
 				prefixPadding = checkbox + neutralStyle.Render(" ")
@@ -445,12 +483,24 @@ func (m *MenuModel) renderVariableHeightList() string {
 							Height: h,
 						})
 						tagX := baseShift + layout.SingleBorder()*10
-						tagW := listContentWidth - tagX
+						// Simple rows and group headers have a dedicated single-char arrow
+						// column at tagX; widen its hit region by 1 char on each side (the
+						// surrounding blank gap columns) so it's easier to click without
+						// growing the visible glyph. Clicks past it (the app name /
+						// description) fall through to "-border" so the name's own
+						// hyperlink hit region (registered separately, higher ZOrder) and
+						// plain row-selection both work. Sub-items and "+ Add instance..."
+						// rows have no arrow column, so they keep the wide region for
+						// rename/add-instance clicks.
+						expandX, expandWidth := tagX-1, 3
+						if item.IsSubItem || item.IsAddInstance {
+							expandX, expandWidth = tagX, listContentWidth-tagX
+						}
 						newHitRegions = append(newHitRegions, HitRegion{
 							ID:     itemID + "-expand",
-							X:      tagX,
+							X:      max(0, expandX),
 							Y:      aggY,
-							Width:  max(1, tagW),
+							Width:  max(1, expandWidth),
 							Height: h,
 						})
 					} else {
@@ -587,12 +637,17 @@ func (m *MenuModel) renderVariableHeightList() string {
 							Height: itemH,
 						})
 						tagX := baseShift + layout.SingleBorder()*10
-						tagW := listContentWidth - tagX
+						// See the corresponding comment in the non-scrolled render path above:
+						// widen the arrow's hit region by 1 char on each side for easier clicking.
+						expandX, expandWidth := tagX-1, 3
+						if item.IsSubItem || item.IsAddInstance {
+							expandX, expandWidth = tagX, listContentWidth-tagX
+						}
 						newHitRegions = append(newHitRegions, HitRegion{
 							ID:     itemID + "-expand",
-							X:      tagX,
+							X:      max(0, expandX),
 							Y:      y,
-							Width:  max(1, tagW),
+							Width:  max(1, expandWidth),
 							Height: itemH,
 						})
 					} else {

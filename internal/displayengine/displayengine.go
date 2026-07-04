@@ -95,6 +95,7 @@ const (
 	FocusBtn              = classic.FocusBtn
 	ColAdd                = classic.ColAdd
 	ColEnable             = classic.ColEnable
+	ColExpand             = classic.ColExpand
 	IDTitleWidgetClose    = classic.IDTitleWidgetClose
 	IDTitleWidgetHelp     = classic.IDTitleWidgetHelp
 	IDTitleWidgetRefresh  = classic.IDTitleWidgetRefresh

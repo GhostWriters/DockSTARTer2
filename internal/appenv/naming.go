@@ -5,11 +5,31 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"unicode"
 	"unicode/utf8"
 
 	"go.yaml.in/yaml/v4"
 )
+
+// appURLCache caches AppURL results: app name → url string, or "" if not built-in.
+var appURLCache sync.Map
+
+// AppURL returns the dockstarter.com docs page for a built-in app, or "" if
+// appName isn't a known built-in app (e.g. user-defined). Shared by compose/
+// prune output styling and any UI that wants to link an app name to its docs.
+func AppURL(appName string) string {
+	if v, ok := appURLCache.Load(appName); ok {
+		return v.(string)
+	}
+	url := ""
+	if IsAppBuiltIn(appName) {
+		base := strings.ToLower(AppNameToBaseAppName(appName))
+		url = "https://dockstarter.com/apps/" + base + "/"
+	}
+	appURLCache.Store(appName, url)
+	return url
+}
 
 // LabelsFile structure for unmarshaling labels.yml
 type LabelsFile struct {
