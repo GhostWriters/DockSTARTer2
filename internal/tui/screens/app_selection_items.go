@@ -165,6 +165,8 @@ func (s *AppSelectionScreen) applyLoadedItems(data appSelectLoadedMsg) {
 		}
 		nonBaseCount += len(refInstances)
 
+		docsURL := appenv.AppURL(base)
+
 		if nonBaseCount == 0 {
 			items = append(items, displayengine.MenuItem{
 				Tag:               niceName,
@@ -180,7 +182,7 @@ func (s *AppSelectionScreen) applyLoadedItems(data appSelectLoadedMsg) {
 				IsReferenced:      referencedBaseSet[base],
 				BaseApp:           base,
 				IsDestructive:     true,
-				Metadata:          map[string]string{"appName": base},
+				Metadata:          map[string]string{"appName": base, "docsURL": docsURL},
 			})
 		} else {
 			anyEnabled := false
@@ -205,7 +207,7 @@ func (s *AppSelectionScreen) applyLoadedItems(data appSelectLoadedMsg) {
 				IsReferenced:      referencedBaseSet[base],
 				BaseApp:           base,
 				IsDestructive:     true,
-				Metadata:          map[string]string{"appName": base},
+				Metadata:          map[string]string{"appName": base, "docsURL": docsURL},
 			})
 
 			type instEntry struct {
@@ -240,7 +242,7 @@ func (s *AppSelectionScreen) applyLoadedItems(data appSelectLoadedMsg) {
 						ShowEnabledGutter: false,
 						BaseApp:           base,
 						IsDestructive:     true,
-						Metadata:          map[string]string{"appName": ie.appName},
+						Metadata:          map[string]string{"appName": ie.appName, "docsURL": docsURL},
 					})
 				} else {
 					items = append(items, displayengine.MenuItem{
@@ -256,7 +258,7 @@ func (s *AppSelectionScreen) applyLoadedItems(data appSelectLoadedMsg) {
 						ShowEnabledGutter: addedMap[ie.appName],
 						BaseApp:           base,
 						IsDestructive:     true,
-						Metadata:          map[string]string{"appName": ie.appName},
+						Metadata:          map[string]string{"appName": ie.appName, "docsURL": docsURL},
 					})
 				}
 			}
@@ -396,7 +398,7 @@ func (s *AppSelectionScreen) collapseGroupIfNeeded(items []displayengine.MenuIte
 		IsReferenced:      isReferenced,
 		BaseApp:           base,
 		IsDestructive:     true,
-		Metadata:          map[string]string{"appName": base},
+		Metadata:          map[string]string{"appName": base, "docsURL": appenv.AppURL(base)},
 	}
 	newItems := make([]displayengine.MenuItem, 0, len(items))
 	inserted := false

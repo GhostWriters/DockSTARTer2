@@ -2,41 +2,21 @@ package dockerlayout
 
 import (
 	"strings"
-	"sync"
 
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/strutil"
 )
 
-var (
-	serviceURLCache   = sync.Map{} // service name → url string or "" if not built-in
-)
-
-// StyleServiceName styles a compose service name with the App tag. If the
-// service maps to a known built-in app, the name becomes a clickable hyperlink
-// to its dockstarter.com page. Results are cached after the first lookup.
 // StyleServiceName returns a semstyle tag string for a compose service name.
-// If the service maps to a known built-in app, the name is wrapped in a hyperlink tag.
+// If the service maps to a known built-in app, the name is wrapped in a
+// hyperlink tag pointing to its dockstarter.com docs page (see appenv.AppURL).
 // Callers must convert to ANSI with semstyle.ToANSI when ready to output.
 func StyleServiceName(svc string) string {
-	url := serviceURL(svc)
+	url := appenv.AppURL(svc)
 	if url == "" {
 		return "{{|App|}}" + svc + "{{[-]}}"
 	}
-	return "{{|App::::"+url+"|}}"+svc+"{{[-]}}"
-}
-
-func serviceURL(svc string) string {
-	if v, ok := serviceURLCache.Load(svc); ok {
-		return v.(string)
-	}
-	base := strings.ToLower(appenv.AppNameToBaseAppName(svc))
-	url := ""
-	if appenv.IsAppBuiltIn(svc) {
-		url = "https://dockstarter.com/apps/" + base + "/"
-	}
-	serviceURLCache.Store(svc, url)
-	return url
+	return "{{|App::::" + url + "|}}" + svc + "{{[-]}}"
 }
 
 // Layout primitive widths — shared by compose and prune display.

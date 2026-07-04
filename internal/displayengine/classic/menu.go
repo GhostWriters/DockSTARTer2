@@ -438,12 +438,13 @@ const (
 	FocusBtn = FocusSelectBtn
 )
 
-// CheckboxColumn represents which column (Add or Enable) has focus in a row
+// CheckboxColumn represents which column (Add, Enable, or Expand) has focus in a row
 type CheckboxColumn int
 
 const (
 	ColAdd CheckboxColumn = iota
 	ColEnable
+	ColExpand
 )
 
 // SetContextMenuFunc sets the callback that provides custom context menu items for this menu
