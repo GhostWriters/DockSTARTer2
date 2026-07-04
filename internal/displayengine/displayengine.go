@@ -96,6 +96,7 @@ const (
 	ColAdd                = classic.ColAdd
 	ColEnable             = classic.ColEnable
 	ColExpand             = classic.ColExpand
+	ColName               = classic.ColName
 	IDTitleWidgetClose    = classic.IDTitleWidgetClose
 	IDTitleWidgetHelp     = classic.IDTitleWidgetHelp
 	IDTitleWidgetRefresh  = classic.IDTitleWidgetRefresh

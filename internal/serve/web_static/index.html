@@ -127,6 +127,10 @@
                 location.reload();
                 return;
               }
+              if (msg.type === 'open-url' && msg.url) {
+                window.open(msg.url, '_blank');
+                return;
+              }
               if (msg.type === 'display-settings') {
                 console.log('display-settings received:', msg);
                 var s = {
