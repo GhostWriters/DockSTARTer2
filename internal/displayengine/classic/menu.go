@@ -108,6 +108,13 @@ type MenuModel struct {
 	focusedItem  FocusItem      // Which element has focus
 	activeColumn CheckboxColumn // Which checkbox column has focus
 
+	// listFocusOverride keeps list-item/column selection highlighting visible
+	// even when focused is false (e.g. a lightweight dialog like a message box
+	// is on top) -- unlike focused, it does NOT affect title-bar focus
+	// indicators (▸Title◂), which should still reflect that focus has moved
+	// to the dialog. Set via SetListFocusOverride.
+	listFocusOverride bool
+
 	// Sub-menu mode (for consolidated screens)
 	subMenuMode bool
 	focusedSub  bool // If false, use normal borders. If true, use thick borders.
@@ -218,6 +225,7 @@ type MenuModel struct {
 	lastIndex       int
 	lastFilter      string
 	lastActive      bool
+	lastListActive  bool
 	lastLineChars   bool
 	lastVersion     int
 	lastColumn      CheckboxColumn
@@ -867,6 +875,21 @@ func (m *MenuModel) IsActive() bool {
 		return m.focusedSub
 	}
 	return m.focused
+}
+
+// SetListFocusOverride keeps list-item/column selection highlighting visible
+// even while IsActive() is false, without affecting title-bar focus indicators.
+// Used when a lightweight dialog (e.g. a plain message box) is on top and the
+// underlying list's selection should still read clearly, but the title
+// shouldn't falsely claim keyboard focus is still here.
+func (m *MenuModel) SetListFocusOverride(v bool) {
+	m.listFocusOverride = v
+}
+
+// IsListActive is like IsActive but also true when SetListFocusOverride(true)
+// is set -- the signal list-item rendering should use instead of IsActive.
+func (m *MenuModel) IsListActive() bool {
+	return m.IsActive() || m.listFocusOverride
 }
 
 // updateDelegate refreshes the list delegate with the current focus state

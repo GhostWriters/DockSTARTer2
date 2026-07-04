@@ -1,9 +1,9 @@
 package classic
 
 import (
-	semstyle "github.com/GhostWriters/semstyle/lg"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
+	semstyle "github.com/GhostWriters/semstyle/lg"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -40,7 +40,7 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 		if item.IsSeparator {
 			continue
 		}
-		isSelected := i == m.cursor && m.IsActive()
+		isSelected := i == m.cursor && m.IsListActive()
 
 		tagStyle := theme.ThemeSemanticStyle("{{|Tag|}}")
 		keyStyle := theme.ThemeSemanticStyle("{{|TagKey|}}")
@@ -57,7 +57,8 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 		// Checkbox/Radio visual
 		prefix := ""
 		if item.IsRadioButton || item.IsCheckbox {
-			prefix = renderCheckbox(item.IsRadioButton, item.Checked, ctx.LineCharacters, checkboxStyle) + neutralStyle.Render(" ")
+			// Flow/grid lists always keep their brackets, regardless of focus.
+			prefix = renderCheckbox(item.IsRadioButton, item.Checked, ctx.LineCharacters, true, checkboxStyle) + neutralStyle.Render(" ")
 		}
 
 		// Tag with first-letter shortcut
@@ -225,7 +226,7 @@ func (m *MenuModel) renderColumnContent(maxWidth, numCols int) string {
 			}
 			ii := itemIndices[ni]
 			item := m.items[ii]
-			isSelected := ii == m.cursor && m.IsActive()
+			isSelected := ii == m.cursor && m.IsListActive()
 
 			tagStyle := theme.ThemeSemanticStyle("{{|Tag|}}")
 			keyStyle := theme.ThemeSemanticStyle("{{|TagKey|}}")
@@ -238,7 +239,8 @@ func (m *MenuModel) renderColumnContent(maxWidth, numCols int) string {
 
 			prefix := ""
 			if item.IsRadioButton || item.IsCheckbox {
-				prefix = renderCheckbox(item.IsRadioButton, item.Checked, ctx.LineCharacters, checkboxStyle) + neutralStyle.Render(" ")
+				// Flow/grid lists always keep their brackets, regardless of focus.
+				prefix = renderCheckbox(item.IsRadioButton, item.Checked, ctx.LineCharacters, true, checkboxStyle) + neutralStyle.Render(" ")
 			}
 
 			tag := item.Tag

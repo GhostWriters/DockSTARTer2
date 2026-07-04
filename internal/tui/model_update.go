@@ -999,9 +999,16 @@ func (m *AppModel) updateComponentFocus() {
 	// Exception: context menus are lightweight overlays — keep the screen focused so the
 	// selected item stays highlighted while the context menu is visible.
 	_, dialogIsContextMenu := m.dialog.(*displayengine.ContextMenuModel)
+	_, dialogIsMessage := m.dialog.(*messageDialogModel)
 	if m.activeScreen != nil {
 		if focusable, ok := m.activeScreen.(interface{ SetFocused(bool) }); ok {
 			focusable.SetFocused((!dialogOpen || dialogIsContextMenu) && !m.panelFocused && !m.panelTitleFocused && !headerFocused)
+		}
+		// Plain message dialogs shouldn't make the screen's own title claim focus
+		// (that's genuinely on the dialog now), but the underlying list's own
+		// selection highlighting should still read clearly underneath it.
+		if lister, ok := m.activeScreen.(interface{ SetListFocusOverride(bool) }); ok {
+			lister.SetListFocusOverride(dialogIsMessage && !m.panelFocused && !m.panelTitleFocused && !headerFocused)
 		}
 	}
 

@@ -260,7 +260,7 @@ func OpenAppLink(ctx context.Context, url string) tea.Cmd {
 			func() tea.Msg {
 				return ShowMessageDialogMsg{
 					Title:   "Docs Page",
-					Message: "Copied to clipboard (if your terminal supports it):\n" + url,
+					Message: "Copied to clipboard (if your terminal supports it):\n{{|URL::::|}}" + url + "{{[-]}}",
 					Type:    MessageInfo,
 				}
 			},

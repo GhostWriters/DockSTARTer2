@@ -24,6 +24,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 		m.lastIndex == m.list.Index() &&
 		m.lastFilter == m.list.FilterValue() &&
 		m.lastActive == m.IsActive() &&
+		m.lastListActive == m.IsListActive() &&
 		m.lastLineChars == ctx.LineCharacters &&
 		m.ViewStartY == m.lastViewStartY &&
 		m.lastVersion == m.renderVersion &&
@@ -98,7 +99,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 	for i := 0; i < len(visibleItems); i++ {
 		item := visibleItems[i]
 		isAppSelect := m.id == "app-select"
-		isSelected := i == selectedVisibleIndex && m.IsActive()
+		isSelected := i == selectedVisibleIndex && m.IsListActive()
 
 		// Highlight the parent header if a child item is selected
 		isParentOfSelected := false
@@ -167,7 +168,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 		if item.IsEditing && !isActuallySub {
 			cbStr := ""
 			if item.IsCheckbox {
-				cbStr = renderCheckbox(false, item.Checked, ctx.LineCharacters, cbStyle) + neutralStyle.Render(" ")
+				cbStr = renderCheckbox(false, item.Checked, ctx.LineCharacters, true, cbStyle) + neutralStyle.Render(" ")
 			}
 			editStr := RenderThemeText(item.Tag, dStyle)
 			line := cbStr + editStr
@@ -186,7 +187,10 @@ func (m *MenuModel) renderVariableHeightList() string {
 			}
 			checkbox = tStyle.Render(cb)
 		} else if item.IsRadioButton || item.IsCheckbox {
-			checkbox = renderCheckbox(item.IsRadioButton, item.Checked, ctx.LineCharacters, cbStyle)
+			// Regular (non-flow, non-app-select) checkbox/radio rows show their
+			// bracket/parens only when this row has cursor focus; the checked
+			// item's bullet/checkmark still shows regardless (see renderCheckbox).
+			checkbox = renderCheckbox(item.IsRadioButton, item.Checked, ctx.LineCharacters, isSelected, cbStyle)
 		}
 
 		var cbAdd3, cbEnabled3, cbExpand3 string
@@ -210,13 +214,32 @@ func (m *MenuModel) renderVariableHeightList() string {
 			// instance..." row, which have no arrow of their own.
 			canExpand := item.IsGroupHeader || (item.IsCheckbox && !item.IsSubItem && !item.IsAddInstance)
 
+			// Each column's brackets show only when it's the specific one with
+			// keyboard focus, matching cbAStyle/cbEStyle's own per-column
+			// highlighting above rather than "is this row selected at all".
+			addFocused := isSelected && m.activeColumn == ColAdd
+			enableFocused := isSelected && m.activeColumn == ColEnable
+			expandFocused := isSelected && m.activeColumn == ColExpand
+
 			if ctx.LineCharacters {
-				ca, ce := checkOff, checkOff
+				ca, ce := checkOffBare, checkOffBare
+				if addFocused {
+					ca = checkOff
+				}
+				if enableFocused {
+					ce = checkOff
+				}
 				if item.Checked {
-					ca = checkOn
+					ca = checkOnBare
+					if addFocused {
+						ca = checkOn
+					}
 				}
 				if item.Enabled {
-					ce = checkOn
+					ce = checkOnBare
+					if enableFocused {
+						ce = checkOn
+					}
 				}
 				cbAdd3 = renderCheckboxGlyph(ca, cbAStyle)
 				cbEnabled3 = renderCheckboxGlyph(ce, cbEStyle)
@@ -225,17 +248,33 @@ func (m *MenuModel) renderVariableHeightList() string {
 					if item.IsGroupHeader {
 						arrow = subMenuExpanded
 					}
-					cbExpand3 = cbXStyle.Render(arrow)
+					if expandFocused {
+						cbExpand3 = cbXStyle.Render("[") + cbXStyle.Render(arrow) + cbXStyle.Render("]")
+					} else {
+						cbExpand3 = neutralStyle.Render(" ") + cbXStyle.Render(arrow) + neutralStyle.Render(" ")
+					}
 				} else {
-					cbExpand3 = neutralStyle.Render(" ")
+					cbExpand3 = neutralStyle.Render("   ")
 				}
 			} else {
-				caText, ceText := checkOffAscii, checkOffAscii
+				caText, ceText := checkOffBareAscii, checkOffBareAscii
+				if addFocused {
+					caText = checkOffAscii
+				}
+				if enableFocused {
+					ceText = checkOffAscii
+				}
 				if item.Checked {
-					caText = checkOnAscii
+					caText = checkOnBareAscii
+					if addFocused {
+						caText = checkOnAscii
+					}
 				}
 				if item.Enabled {
-					ceText = checkOnAscii
+					ceText = checkOnBareAscii
+					if enableFocused {
+						ceText = checkOnAscii
+					}
 				}
 				cbAdd3 = renderCheckboxGlyph(caText, cbAStyle)
 				cbEnabled3 = renderCheckboxGlyph(ceText, cbEStyle)
@@ -244,9 +283,13 @@ func (m *MenuModel) renderVariableHeightList() string {
 					if item.IsGroupHeader {
 						arrow = subMenuExpandedAscii
 					}
-					cbExpand3 = cbXStyle.Render(arrow)
+					if expandFocused {
+						cbExpand3 = cbXStyle.Render("[") + cbXStyle.Render(arrow) + cbXStyle.Render("]")
+					} else {
+						cbExpand3 = neutralStyle.Render(" ") + cbXStyle.Render(arrow) + neutralStyle.Render(" ")
+					}
 				} else {
-					cbExpand3 = neutralStyle.Render(" ")
+					cbExpand3 = neutralStyle.Render("   ")
 				}
 			}
 		}
@@ -302,7 +345,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 
 		menuPrefixWidth := 0
 		if isAppSelect {
-			menuPrefixWidth = 10 // cbAdd(3) + sp(1) + cbEnabled(3) + sp(1) + cbExpand(1) + sp(1)
+			menuPrefixWidth = 12 // cbAdd(3) + sp(1) + cbEnabled(3) + sp(1) + cbExpand(3) + sp(1)
 		} else if hasAnyCheckboxes {
 			menuPrefixWidth = layout.CheckboxWidth()
 		}
@@ -358,7 +401,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 		prefixWidth := 0
 		if item.IsCheckbox || item.IsRadioButton || item.IsGroupHeader {
 			if isAppSelect && (item.IsCheckbox || item.IsGroupHeader) {
-				// Slot1(3) + Space(1) + Slot2(3) + Space(1) + Slot3(1) + Space(1) = 10 characters.
+				// Slot1(3) + Space(1) + Slot2(3) + Space(1) + Slot3(3) + Space(1) = 12 characters.
 				// This MUST match menuPrefixWidth above to align with standard app-select rows.
 				prefixPadding = cbAdd3 + neutralStyle.Render(" ") + cbEnabled3 + neutralStyle.Render(" ") + cbExpand3 + nameSep
 			} else {
@@ -499,16 +542,13 @@ func (m *MenuModel) renderVariableHeightList() string {
 							Height: h,
 						})
 						tagX := baseShift + layout.SingleBorder()*10
-						// Simple rows and group headers have a dedicated single-char arrow
-						// column at tagX; widen its hit region by 1 char on each side (the
-						// surrounding blank gap columns) so it's easier to click without
-						// growing the visible glyph. Clicks past it (the app name /
-						// description) fall through to "-border" so the name's own
-						// hyperlink hit region (registered separately, higher ZOrder) and
-						// plain row-selection both work. Sub-items and "+ Add instance..."
-						// rows have no arrow column, so they keep the wide region for
-						// rename/add-instance clicks.
-						expandX, expandWidth := tagX-1, 3
+						// Simple rows and group headers have a dedicated 3-char-wide arrow
+						// column at tagX. Clicks past it (the app name / description) fall
+						// through to "-border" so the name's own hyperlink hit region
+						// (registered separately, higher ZOrder) and plain row-selection
+						// both work. Sub-items and "+ Add instance..." rows have no arrow
+						// column, so they keep the wide region for rename/add-instance clicks.
+						expandX, expandWidth := tagX, 3
 						if item.IsSubItem || item.IsAddInstance {
 							expandX, expandWidth = tagX, listContentWidth-tagX
 						}
@@ -544,6 +584,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 		m.lastHitRegions = newHitRegions
 		m.lastVersion = m.renderVersion
 		m.lastColumn = m.ActiveColumn()
+		m.lastListActive = m.IsListActive()
 		return result
 	}
 
@@ -695,6 +736,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 	m.lastVersion = m.renderVersion
 	m.lastColumn = m.ActiveColumn()
 	m.lastViewStartY = m.ViewStartY
+	m.lastListActive = m.IsListActive()
 	return finalResult
 }
 
@@ -726,7 +768,7 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 		subListWidth = maxWidth
 	}
 
-	subFocused := m.IsActive() && hasCursor
+	subFocused := m.IsListActive() && hasCursor
 	var resLines []string
 	var resH []int
 	var resM []int
@@ -757,7 +799,7 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 
 	for i, item := range items {
 		visibleIdx := startVisibleIndex + i
-		isSelected := visibleIdx == selectedVisibleIndex && m.IsActive()
+		isSelected := visibleIdx == selectedVisibleIndex && m.IsListActive()
 
 		tStyle := tagStyleBase
 		kStyle := keyStyleBase
@@ -831,14 +873,31 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 			}
 		}
 
+		// Brackets show only on the specific column with keyboard focus, same
+		// convention as the top-level app row's cbAdd3/cbEnabled3 above.
+		addFocused := isSelected && subFocused && m.activeColumn == ColAdd
+		enableFocused := isSelected && subFocused && m.activeColumn == ColEnable
+
 		var checkboxA3, checkboxE3 string
 		if ctx.LineCharacters {
-			cA, cE := checkOff, checkOff
+			cA, cE := checkOffBare, checkOffBare
+			if addFocused {
+				cA = checkOff
+			}
+			if enableFocused {
+				cE = checkOff
+			}
 			if item.Checked {
-				cA = checkOn
+				cA = checkOnBare
+				if addFocused {
+					cA = checkOn
+				}
 			}
 			if item.Enabled {
-				cE = checkOn
+				cE = checkOnBare
+				if enableFocused {
+					cE = checkOn
+				}
 			}
 			checkboxA3 = renderCheckboxGlyph(cA, cbStyleA)
 			checkboxE3 = renderCheckboxGlyph(cE, cbStyleE)
@@ -850,8 +909,16 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 			if item.Enabled {
 				ceA = checkOnAscii
 			}
-			checkboxA3 = neutralStyle.Render("[") + cbStyleA.Render(string(caA[1])) + neutralStyle.Render("]")
-			checkboxE3 = neutralStyle.Render("[") + cbStyleE.Render(string(ceA[1])) + neutralStyle.Render("]")
+			if addFocused {
+				checkboxA3 = neutralStyle.Render("[") + cbStyleA.Render(string(caA[1])) + neutralStyle.Render("]")
+			} else {
+				checkboxA3 = neutralStyle.Render(" ") + cbStyleA.Render(string(caA[1])) + neutralStyle.Render(" ")
+			}
+			if enableFocused {
+				checkboxE3 = neutralStyle.Render("[") + cbStyleE.Render(string(ceA[1])) + neutralStyle.Render("]")
+			} else {
+				checkboxE3 = neutralStyle.Render(" ") + cbStyleE.Render(string(ceA[1])) + neutralStyle.Render(" ")
+			}
 		}
 
 		// Sub-menus require a 10-character indent to align with the top/bottom borders.
