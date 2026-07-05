@@ -88,6 +88,17 @@ func run() (exitCode int) {
 		}
 	}
 
+	// Hidden elevated helper mode, invoked by DS2 on itself via sudo when it
+	// lacks the privileges to fix file ownership/permissions natively (see
+	// system.RunInternalFixPermissions). Must be dispatched before ANY other
+	// startup work: the child deliberately runs as root, so it must never
+	// reach CheckNotRoot, config loading, logging setup, or the
+	// other-instances detection (deadlock risk if the parent holds an edit
+	// lock).
+	if len(os.Args) >= 2 && os.Args[1] == system.InternalFixPermissionsArg {
+		return system.RunInternalFixPermissions(os.Args[2:])
+	}
+
 	// Initialize logger level styles to avoid import cycle (logger -> theme -> config -> logger)
 	logger.LevelStyleFunc = func(tag string, label string) lipgloss.Style {
 		s := theme.ConsoleSemanticStyle(tag)
