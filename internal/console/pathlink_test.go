@@ -29,10 +29,10 @@ func TestFormatFilePath(t *testing.T) {
 	withViaOwnServer(t, false, func() {
 		got := FormatFilePath(path)
 		for _, want := range []string{
-			"{{|Folder::::file:///home|}}home{{[-]}}",
-			"{{|Folder::::file:///home/clhatch|}}clhatch{{[-]}}",
-			"{{|Folder::::file:///home/clhatch/.config|}}.config{{[-]}}",
-			"{{|Folder::::file:///home/clhatch/.config/compose|}}compose{{[-]}}",
+			"{{|Folder::::file:///home/|}}home{{[-]}}",
+			"{{|Folder::::file:///home/clhatch/|}}clhatch{{[-]}}",
+			"{{|Folder::::file:///home/clhatch/.config/|}}.config{{[-]}}",
+			"{{|Folder::::file:///home/clhatch/.config/compose/|}}compose{{[-]}}",
 			"{{|File::::file:///home/clhatch/.config/compose/.env|}}.env{{[-]}}",
 		} {
 			if !strings.Contains(got, want) {
@@ -69,10 +69,10 @@ func TestFormatFolderPath(t *testing.T) {
 	withViaOwnServer(t, false, func() {
 		got := FormatFolderPath(path)
 		for _, want := range []string{
-			"{{|Folder::::file:///home|}}home{{[-]}}",
-			"{{|Folder::::file:///home/clhatch|}}clhatch{{[-]}}",
-			"{{|Folder::::file:///home/clhatch/.config|}}.config{{[-]}}",
-			"{{|Folder::::file:///home/clhatch/.config/appdata|}}appdata{{[-]}}",
+			"{{|Folder::::file:///home/|}}home{{[-]}}",
+			"{{|Folder::::file:///home/clhatch/|}}clhatch{{[-]}}",
+			"{{|Folder::::file:///home/clhatch/.config/|}}.config{{[-]}}",
+			"{{|Folder::::file:///home/clhatch/.config/appdata/|}}appdata{{[-]}}",
 		} {
 			if !strings.Contains(got, want) {
 				t.Errorf("FormatFolderPath(%q) missing segment %q, got %q", path, want, got)
@@ -127,7 +127,7 @@ func TestFormatFolderName(t *testing.T) {
 
 	withViaOwnServer(t, false, func() {
 		got := FormatFolderName("appdata", path)
-		want := "{{|Folder::::" + strutil.FileURL(path) + "|}}appdata{{[-]}}"
+		want := "{{|Folder::::" + strutil.FileURL(path+"/") + "|}}appdata{{[-]}}"
 		if got != want {
 			t.Errorf("FormatFolderName(...) = %q, want %q", got, want)
 		}
