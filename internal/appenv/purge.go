@@ -2,6 +2,7 @@ package appenv
 
 import (
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/system"
@@ -79,7 +80,7 @@ func purgeFromFile(ctx context.Context, appName string, file string) error {
 	}
 
 	if len(removedLines) > 0 {
-		logger.Notice(ctx, "Removing variables from '{{|File|}}%s{{[-]}}':", filepath.Base(file))
+		logger.Notice(ctx, "Removing variables from '"+console.FormatFilePath(file)+"':")
 		for _, rl := range removedLines {
 			logger.Notice(ctx, "\t{{|Var|}}%s{{[-]}}", rl)
 		}

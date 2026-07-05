@@ -137,7 +137,7 @@ func EnsureThemeExtracted(themeNameOrURI string) (string, error) {
 	// Write to state file if missing or content differs
 	if !activeThemeMatchesData(sourceData) {
 		if info, err := os.Stat(paths.GetStateDir()); err == nil && !info.IsDir() {
-			logger.Info(context.Background(), "Removing existing file '{{|File|}}%s{{[-]}}' before folder can be created.", paths.GetStateDir())
+			logger.Info(context.Background(), "Removing existing file '"+console.FormatFilePath(paths.GetStateDir())+"' before folder can be created.")
 			if err := os.Remove(paths.GetStateDir()); err != nil {
 				logger.FatalWithStack(context.Background(), []string{
 					"Failed to remove existing file.",
@@ -146,7 +146,7 @@ func EnsureThemeExtracted(themeNameOrURI string) (string, error) {
 			}
 		}
 		if _, err := os.Stat(paths.GetStateDir()); os.IsNotExist(err) {
-			logger.Info(context.Background(), "Creating folder '{{|Folder|}}%s{{[-]}}'.", paths.GetStateDir())
+			logger.Info(context.Background(), "Creating folder '"+console.FormatFolderPath(paths.GetStateDir())+"'.")
 			if err := os.MkdirAll(paths.GetStateDir(), 0755); err != nil {
 				logger.FatalWithStack(context.Background(), []string{
 					"Failed to create folder.",

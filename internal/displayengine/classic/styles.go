@@ -63,6 +63,54 @@ func (regions HitRegions) FindHit(x, y int) *HitRegion {
 	return nil
 }
 
+// hyperlinkRegex matches an OSC 8 hyperlink span: \x1b]8;[params];[url]\a[content]\x1b]8;;\a
+// Both \x07 (BEL) and \x1b\\ (ST) terminators are supported. Shared by
+// ScanForHyperlinks (hit-region detection) and StripHyperlinks (removing the
+// link wrapper for sessions where it can't resolve to anything useful).
+var hyperlinkRegex = regexp.MustCompile(`\x1b\]8;.*?;(.*?)(?:\x07|\x1b\\)(.*?)\x1b\]8;;(?:\x07|\x1b\\)`)
+
+// StripHyperlinks removes OSC 8 hyperlink wrappers from rendered text while
+// keeping the label's own styling (e.g. SGR color codes) intact -- for
+// notices referencing a local file path, a file:// link only ever resolves
+// on the machine the DS2 process itself is running on, so it's meaningless
+// (not just suboptimal) for SSH and web sessions: unlike an https:// docs
+// link, there's no clipboard-copy fallback that helps either, since the
+// remote user's machine doesn't have that file at all. Callers should call
+// this for any non-local session before displaying such text.
+func StripHyperlinks(rendered string) string {
+	return hyperlinkRegex.ReplaceAllString(rendered, "$2")
+}
+
+// HyperlinkPath renders path as a clickable OSC 8 hyperlink to itself
+// (file://path). styleTag is a semantic tag ("{{|Tag|}}") or a direct style
+// code ("{{[fg:bg:attrs]}}"), resolved the same way as any other themed
+// text (see theme.ThemeSemanticStyle). Intended for building a path out of
+// several independently-clickable segments (e.g. each directory component
+// plus the filename, each opening that specific file or folder) -- call this
+// once per segment rather than trying to express multiple destinations in a
+// single call. See StripHyperlinks for why this is local-session-only.
+//
+// This renders immediately (like calling style.Render() directly) -- it is
+// NOT deferred semstyle tag markup, so it's meant for callers that already
+// have a resolved rendering context (e.g. building a viewport string
+// directly), not for building a logger.Notice/Info message string that gets
+// resolved later per-destination (console/file/TUI). For that case, build
+// the raw tag with strutil.FileURL yourself instead (see console.FormatFilePath).
+func HyperlinkPath(styleTag, path string) string {
+	return theme.ThemeSemanticStyle(styleTag).Hyperlink(strutil.FileURL(path)).Render(path)
+}
+
+// HyperlinkText renders text as a clickable OSC 8 hyperlink to path
+// (file://path). styleTag is a semantic tag or direct style code, same as
+// HyperlinkPath. Use this when the visible label should differ from the path
+// itself (e.g. a friendly name); use HyperlinkPath when the path is its own
+// label. See HyperlinkPath's doc comment for the immediate-vs-deferred
+// rendering distinction, and StripHyperlinks for why this is
+// local-session-only.
+func HyperlinkText(styleTag, path, text string) string {
+	return theme.ThemeSemanticStyle(styleTag).Hyperlink(strutil.FileURL(path)).Render(text)
+}
+
 // ScanForHyperlinks scans a rendered string for OSC 8 hyperlinks and returns hit regions for them.
 // offsetX and offsetY are the absolute screen coordinates of the top-left of the rendered block.
 // Z is the base ZOrder for the new regions.
@@ -70,12 +118,8 @@ func ScanForHyperlinks(rendered string, offsetX, offsetY, baseZ int) []HitRegion
 	var regions []HitRegion
 	lines := strings.Split(rendered, "\n")
 
-	// OSC 8 Regex: \x1b]8;[params];[url]\a[content]\x1b]8;;\a
-	// We support both \x07 (BEL) and \x1b\\ (ST) as terminators.
-	re := regexp.MustCompile(`\x1b\]8;.*?;(.*?)(?:\x07|\x1b\\)(.*?)\x1b\]8;;(?:\x07|\x1b\\)`)
-
 	for y, line := range lines {
-		matches := re.FindAllStringSubmatchIndex(line, -1)
+		matches := hyperlinkRegex.FindAllStringSubmatchIndex(line, -1)
 		for _, match := range matches {
 			if len(match) < 6 {
 				continue

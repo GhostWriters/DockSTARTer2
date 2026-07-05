@@ -42,7 +42,7 @@ func removeAllDisabled(ctx context.Context, conf config.AppConfig, assumeYes boo
 	}
 
 	if len(disabledApps) == 0 {
-		logger.Notice(ctx, "File '{{|File|}}%s{{[-]}}' does not contain any disabled apps.", envFile)
+		logger.Notice(ctx, "File '"+console.FormatFilePath(envFile)+"' does not contain any disabled apps.")
 		return nil
 	}
 
@@ -104,14 +104,14 @@ func removeApp(ctx context.Context, appName string, conf config.AppConfig, assum
 	question := fmt.Sprintf("Would you like to purge these settings for '{{|App|}}%s{{[-]}}'?\n", nice)
 
 	if len(globalLinesToRemove) > 0 {
-		question += fmt.Sprintf("%s{{|Folder|}}%s{{[-]}}:\n", indent, envFile)
+		question += fmt.Sprintf("%s%s:\n", indent, console.FormatFolderPath(envFile))
 		for _, line := range globalLinesToRemove {
 			question += fmt.Sprintf("%s%s{{|Var|}}%s{{[-]}}\n", indent, indent, line)
 		}
 	}
 
 	if len(appLinesToRemove) > 0 {
-		question += fmt.Sprintf("%s{{|Folder|}}%s{{[-]}}:\n", indent, appEnvFile)
+		question += fmt.Sprintf("%s%s:\n", indent, console.FormatFolderPath(appEnvFile))
 		for _, line := range appLinesToRemove {
 			question += fmt.Sprintf("%s%s{{|Var|}}%s{{[-]}}\n", indent, indent, line)
 		}
@@ -129,7 +129,7 @@ func removeApp(ctx context.Context, appName string, conf config.AppConfig, assum
 	// Remove global variables (matching Bash multi-line notice format)
 	if len(globalVarsToRemove) > 0 {
 		// Build multi-line message
-		msg := fmt.Sprintf("Removing variables from {{|File|}}%s{{[-]}}:", envFile)
+		msg := "Removing variables from " + console.FormatFilePath(envFile) + ":"
 		for _, line := range globalLinesToRemove {
 			msg += fmt.Sprintf("\n%s{{|Var|}}%s{{[-]}}", indent, line)
 		}
@@ -143,7 +143,7 @@ func removeApp(ctx context.Context, appName string, conf config.AppConfig, assum
 	// Remove app-specific variables (matching Bash multi-line notice format)
 	if len(appVarsToRemove) > 0 {
 		// Build multi-line message
-		msg := fmt.Sprintf("Removing variables from {{|File|}}%s{{[-]}}:", appEnvFile)
+		msg := "Removing variables from " + console.FormatFilePath(appEnvFile) + ":"
 		for _, line := range appLinesToRemove {
 			msg += fmt.Sprintf("\n%s{{|Var|}}%s{{[-]}}", indent, line)
 		}

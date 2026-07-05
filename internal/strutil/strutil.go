@@ -1,8 +1,32 @@
 package strutil
 
 import (
+	"net/url"
+	"path/filepath"
+	"strings"
+
 	"charm.land/lipgloss/v2"
 )
+
+// FileURL builds a well-formed file:// URI for an absolute filesystem path,
+// percent-encoding it as needed (net/url handles spaces and other reserved
+// characters correctly, unlike a naive "file://"+path concatenation). Lives
+// here (rather than in a UI-specific package) so both the CLI/console layer
+// and the TUI's rendering layer can build the same well-formed URLs without
+// either depending on the other.
+//
+// DS2 runs natively on both Windows and Linux hosts, so path may use either
+// "\" or "/" as its separator. A URL path always uses "/", and a Windows
+// drive path (e.g. "C:\Users\x") needs a leading "/" added before the drive
+// letter to form the conventional "file:///C:/Users/x" -- without it the
+// drive letter would be misread as a URL scheme/host.
+func FileURL(path string) string {
+	p := filepath.ToSlash(path)
+	if !strings.HasPrefix(p, "/") {
+		p = "/" + p
+	}
+	return (&url.URL{Scheme: "file", Path: p}).String()
+}
 
 // Limit truncates a string to a specific width, accounting for ANSI codes
 func Limit(s string, width int) string {

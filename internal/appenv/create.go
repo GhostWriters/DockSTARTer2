@@ -3,6 +3,7 @@ package appenv
 import (
 	"DockSTARTer2/internal/assets"
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"context"
 	"os"
@@ -14,7 +15,7 @@ import (
 func Create(ctx context.Context, file string) error {
 	dir := filepath.Dir(file)
 	if info, err := os.Stat(dir); err == nil && !info.IsDir() {
-		logger.Info(ctx, "Removing existing file '{{|File|}}%s{{[-]}}' before folder can be created.", dir)
+		logger.Info(ctx, "Removing existing file '"+console.FormatFilePath(dir)+"' before folder can be created.")
 		if err := os.Remove(dir); err != nil {
 			logger.FatalWithStack(ctx, []string{
 				"Failed to remove existing file.",
@@ -23,7 +24,7 @@ func Create(ctx context.Context, file string) error {
 		}
 	}
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		logger.Notice(ctx, "Creating folder '{{|Folder|}}%s{{[-]}}'.", dir)
+		logger.Notice(ctx, "Creating folder '"+console.FormatFolderPath(dir)+"'.")
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			logger.FatalWithStack(ctx, []string{
 				"Failed to create folder.",
@@ -39,13 +40,13 @@ func Create(ctx context.Context, file string) error {
 	input, err := assets.GetDefaultEnv()
 	if err != nil {
 		if err := os.WriteFile(file, []byte{}, 0644); err != nil {
-			logger.FatalWithStack(ctx, "Failed to create empty env file '{{|File|}}%s{{[-]}}'.", file)
+			logger.FatalWithStack(ctx, "Failed to create empty env file '"+console.FormatFilePath(file)+"'.")
 		}
 		return nil
 	}
 
 	if err := os.WriteFile(file, input, 0644); err != nil {
-		logger.FatalWithStack(ctx, "Failed to create env file '{{|File|}}%s{{[-]}}'.", file)
+		logger.FatalWithStack(ctx, "Failed to create env file '"+console.FormatFilePath(file)+"'.")
 	}
 
 	// Sanitize: Set specific top-level variables

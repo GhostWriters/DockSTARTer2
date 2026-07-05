@@ -21,13 +21,14 @@ func getSystemInfo() []string {
 	var info []string
 
 	// App Info
-	info = append(info, fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} [{{|Version::::https://github.com/GhostWriters/DockSTARTer2/releases/tag/%s|}}%s{{[-]}}]", version.ApplicationName, version.Version, version.Version))
+	versionLink := console.FormatLink("Version", version.Version, "https://github.com/GhostWriters/DockSTARTer2/releases/tag/"+version.Version)
+	info = append(info, fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} [%s]", version.ApplicationName, versionLink))
 	tmplVer := paths.GetTemplatesVersion()
 	tmplURL := "https://github.com/GhostWriters/DockSTARTer-Templates/releases/tag/" + tmplVer
 	if _, hash, ok := strings.Cut(tmplVer, " commit "); ok {
 		tmplURL = "https://github.com/GhostWriters/DockSTARTer-Templates/commit/" + hash
 	}
-	info = append(info, fmt.Sprintf("{{|ApplicationName|}}DockSTARTer-Templates{{[-]}} [{{|Version::::%s|}}%s{{[-]}}]", tmplURL, tmplVer))
+	info = append(info, fmt.Sprintf("{{|ApplicationName|}}DockSTARTer-Templates{{[-]}} [%s]", console.FormatLink("Version", tmplVer, tmplURL)))
 	info = append(info, "")
 
 	// Process Info
@@ -203,8 +204,8 @@ func FatalWithStackSkip(ctx context.Context, skip int, msg any, args ...any) {
 		msg,
 		"",
 		"{{|FatalFooter|}}Please let the dev know of this error.",
-		"{{|FatalFooter|}}It has been written to {{[-]}}'{{|File|}}" + filepath.Join(logDir, strings.ToLower(version.ApplicationName)+".fatal.log") + "{{[-]}}'{{|FatalFooter|}},",
-		"and appended to {{[-]}}'{{|File|}}" + filepath.Join(logDir, strings.ToLower(version.ApplicationName)+".log") + "{{[-]}}'{{|FatalFooter|}}.",
+		"{{|FatalFooter|}}It has been written to {{[-]}}'" + console.FormatFilePath(filepath.Join(logDir, strings.ToLower(version.ApplicationName)+".fatal.log")) + "'{{|FatalFooter|}},",
+		"and appended to {{[-]}}'" + console.FormatFilePath(filepath.Join(logDir, strings.ToLower(version.ApplicationName)+".log")) + "'{{|FatalFooter|}}.",
 	}
 
 	// Log Everything

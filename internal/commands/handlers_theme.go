@@ -46,7 +46,7 @@ func HandleTheme(ctx context.Context, group *CommandGroup) error {
 				return err
 			}
 			if _, err := os.Stat(absPath); err != nil {
-				logger.Error(ctx, "Theme file not found: '{{|Folder|}}%s{{[-]}}'", absPath)
+				logger.Error(ctx, "Theme file not found: '"+console.FormatFolderPath(absPath)+"'")
 				return err
 			}
 			configValue := "file:" + absPath
@@ -55,7 +55,7 @@ func HandleTheme(ctx context.Context, group *CommandGroup) error {
 				logger.Error(ctx, "Failed to save theme setting: %v", err)
 				return err
 			}
-			logger.Notice(ctx, "Theme set to file: {{|Folder|}}%s{{[-]}}", absPath)
+			logger.Notice(ctx, "Theme set to file: "+console.FormatFolderPath(absPath))
 			_, _ = theme.Load(configValue, "")
 			return nil
 		}
@@ -349,7 +349,7 @@ func HandleThemeExtract(ctx context.Context, group *CommandGroup) error {
 		}
 
 		if err := os.MkdirAll(destDir, 0755); err != nil {
-			logger.Error(ctx, "Failed to create directory '{{|Folder|}}%s{{[-]}}': %v", destDir, err)
+			logger.Error(ctx, "Failed to create directory '"+console.FormatFolderPath(destDir)+"': %v", err)
 			return err
 		}
 
@@ -365,7 +365,7 @@ func HandleThemeExtract(ctx context.Context, group *CommandGroup) error {
 			logger.Error(ctx, "Failed to write theme file: %v", err)
 			return err
 		}
-		logger.Notice(ctx, "Theme '{{|Theme|}}%s{{[-]}}' extracted to: {{|Folder|}}%s{{[-]}}", theme.ThemeDisplayName(themeName), outPath)
+		logger.Notice(ctx, "Theme '{{|Theme|}}%s{{[-]}}' extracted to: "+console.FormatFolderPath(outPath), theme.ThemeDisplayName(themeName))
 
 	case "--theme-extract-all":
 		destDir := resolveExtractDest("")
@@ -385,7 +385,7 @@ func HandleThemeExtract(ctx context.Context, group *CommandGroup) error {
 		}
 
 		if err := os.MkdirAll(destDir, 0755); err != nil {
-			logger.Error(ctx, "Failed to create directory '{{|Folder|}}%s{{[-]}}': %v", destDir, err)
+			logger.Error(ctx, "Failed to create directory '"+console.FormatFolderPath(destDir)+"': %v", err)
 			return err
 		}
 
@@ -398,13 +398,13 @@ func HandleThemeExtract(ctx context.Context, group *CommandGroup) error {
 			}
 			outPath := filepath.Join(destDir, stem+".ds2theme")
 			if err := os.WriteFile(outPath, data, 0644); err != nil {
-				logger.Warn(ctx, "Failed to write '{{|Folder|}}%s{{[-]}}': %v", outPath, err)
+				logger.Warn(ctx, "Failed to write '"+console.FormatFolderPath(outPath)+"': %v", err)
 				continue
 			}
 			logger.Notice(ctx, "  Extracted: {{|Theme|}}%s{{[-]}}", stem+".ds2theme")
 			extracted++
 		}
-		logger.Notice(ctx, "%d theme(s) extracted to: {{|Folder|}}%s{{[-]}}", extracted, destDir)
+		logger.Notice(ctx, "%d theme(s) extracted to: "+console.FormatFolderPath(destDir), extracted)
 	}
 	return nil
 }

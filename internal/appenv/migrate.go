@@ -2,6 +2,7 @@ package appenv
 
 import (
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/system"
@@ -205,7 +206,7 @@ func OverrideVarRename(ctx context.Context, fromVar, toVar string, conf config.A
 	replacement := fmt.Sprintf(`${1}%s`, toVar)
 
 	if re.Match(content) {
-		logger.Notice(ctx, "Renaming variable in {{|File|}}%s{{[-]}}:", filepath.Base(overrideFile))
+		logger.Notice(ctx, "Renaming variable in "+console.FormatFilePath(overrideFile)+":")
 		logger.Notice(ctx, "\t{{|Var|}}%s{{[-]}} to {{|Var|}}%s{{[-]}}", fromVar, toVar)
 
 		newContent := re.ReplaceAll(content, []byte(replacement))

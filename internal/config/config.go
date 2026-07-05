@@ -306,17 +306,17 @@ func sanitizeConfig(ctx context.Context, conf *AppConfig) {
 func ResolveComposeFolder(ctx context.Context, conf *AppConfig, printer console.Printer) {
 	detection := paths.DetectComposeFolder(conf.Paths.ComposeFolder)
 	if detection.LegacyExists && detection.CurrentExists && detection.LegacyPath != detection.CurrentPath {
-		promptMsg := fmt.Sprintf("Detected compose folders in multiple locations.\n   Legacy:  '{{|Folder|}}%s{{[-]}}'\n   Default: '{{|Folder|}}%s{{[-]}}'\n\nWould you like to use the Legacy location?", detection.LegacyPath, detection.CurrentPath)
+		promptMsg := "Detected compose folders in multiple locations.\n   Legacy:  '" + console.FormatFolderPath(detection.LegacyPath) + "'\n   Default: '" + console.FormatFolderPath(detection.CurrentPath) + "'\n\nWould you like to use the Legacy location?"
 		useLegacy, err := console.QuestionPrompt(ctx, printer, "Multiple Compose Folders Detected", promptMsg, "Y", false)
 		if err == nil && useLegacy {
-			printer(ctx, "Chose the Legacy compose folder location:\n   '{{|Folder|}}%s{{[-]}}'", detection.LegacyPath)
+			printer(ctx, "Chose the Legacy compose folder location:\n   '"+console.FormatFolderPath(detection.LegacyPath)+"'")
 			conf.Paths.ComposeFolder = detection.LegacyPath
 		} else if err == nil {
-			printer(ctx, "Chose the Default compose folder location:\n   '{{|Folder|}}%s{{[-]}}'", detection.CurrentPath)
+			printer(ctx, "Chose the Default compose folder location:\n   '"+console.FormatFolderPath(detection.CurrentPath)+"'")
 			conf.Paths.ComposeFolder = detection.CurrentPath
 		}
 	} else if detection.LegacyExists && !detection.CurrentExists {
-		printer(ctx, "Detected compose folder at '{{|Folder|}}%s{{[-]}}'.", detection.LegacyPath)
+		printer(ctx, "Detected compose folder at '"+console.FormatFolderPath(detection.LegacyPath)+"'.")
 		conf.Paths.ComposeFolder = detection.LegacyPath
 	} else if detection.CurrentExists {
 		conf.Paths.ComposeFolder = detection.CurrentPath
@@ -374,7 +374,7 @@ func LoadAppConfig() AppConfig {
 	cfgPath := paths.GetConfigFilePath()
 	dir := filepath.Dir(cfgPath)
 	if info, err := os.Stat(dir); err == nil && !info.IsDir() {
-		logger.Info(context.Background(), "Removing existing file '{{|File|}}%s{{[-]}}' before folder can be created.", dir)
+		logger.Info(context.Background(), "Removing existing file '"+console.FormatFilePath(dir)+"' before folder can be created.")
 		if err := os.Remove(dir); err != nil {
 			logger.FatalWithStack(context.Background(), []string{
 				"Failed to remove existing file.",
@@ -384,7 +384,7 @@ func LoadAppConfig() AppConfig {
 	}
 
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		logNotice(context.Background(), "Creating '{{|Folder|}}%s{{[-]}}'.", dir)
+		logNotice(context.Background(), "Creating '"+console.FormatFolderPath(dir)+"'.")
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			logger.FatalWithStack(context.Background(), []string{
 				"Failed to create config folder.",
@@ -393,7 +393,7 @@ func LoadAppConfig() AppConfig {
 		}
 	}
 	_ = os.WriteFile(cfgPath, defaultConfigBytes(), 0644)
-	logNotice(context.Background(), "Copying '{{|File|}}%s{{[-]}}' to '{{|File|}}%s{{[-]}}'.", "embedded defaults", cfgPath)
+	logNotice(context.Background(), "Copying '"+console.FormatFileName("embedded defaults", "")+"' to '"+console.FormatFilePath(cfgPath)+"'.")
 	sanitizeConfig(context.Background(), &conf)
 	conf.RawPaths = conf.Paths
 	conf.Paths.ConfigFolder = filepath.Clean(ExpandVariables(conf.Paths.ConfigFolder))
@@ -437,7 +437,7 @@ func SaveAppConfig(conf AppConfig) error {
 	// Create directory if it doesn't exist
 	dir := filepath.Dir(path)
 	if info, err := os.Stat(dir); err == nil && !info.IsDir() {
-		logger.Info(context.Background(), "Removing existing file '{{|File|}}%s{{[-]}}' before folder can be created.", dir)
+		logger.Info(context.Background(), "Removing existing file '"+console.FormatFilePath(dir)+"' before folder can be created.")
 		if err := os.Remove(dir); err != nil {
 			logger.FatalWithStack(context.Background(), []string{
 				"Failed to remove existing file.",
@@ -447,7 +447,7 @@ func SaveAppConfig(conf AppConfig) error {
 	}
 
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		logNotice(context.Background(), "Creating '{{|Folder|}}%s{{[-]}}'.", dir)
+		logNotice(context.Background(), "Creating '"+console.FormatFolderPath(dir)+"'.")
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			logger.FatalWithStack(context.Background(), []string{
 				"Failed to create config folder.",
@@ -661,8 +661,8 @@ func MigrateFromLegacy(ctx context.Context) (AppConfig, bool) {
 		}
 		raw := ReadLegacyMap(data)
 		if len(raw) > 0 {
-			logNotice(ctx, "Detected legacy config file at '{{|File|}}%s{{[-]}}'.", path)
-			heading := fmt.Sprintf("Configuration options in legacy config file '{{|File|}}%s{{[-]}}':", path)
+			logNotice(ctx, "Detected legacy config file at '"+console.FormatFilePath(path)+"'.")
+			heading := "Configuration options in legacy config file '" + console.FormatFilePath(path) + "':"
 			logNotice(ctx, " ")
 
 			headers := []string{
@@ -701,14 +701,11 @@ func MigrateFromLegacy(ctx context.Context) (AppConfig, bool) {
 				}
 				if ok {
 					tableData = append(tableData, m.name)
-					colorTag := "{{|Var|}}"
 					if m.isDir {
-						colorTag = "{{|Folder|}}"
-					}
-					tableData = append(tableData, fmt.Sprintf("%s%s{{[-]}}", colorTag, val))
-					if m.isDir {
-						tableData = append(tableData, fmt.Sprintf("%s%s{{[-]}}", colorTag, ExpandVariables(val)))
+						tableData = append(tableData, console.FormatFolderPath(val))
+						tableData = append(tableData, console.FormatFolderPath(ExpandVariables(val)))
 					} else {
+						tableData = append(tableData, fmt.Sprintf("{{|Var|}}%s{{[-]}}", val))
 						tableData = append(tableData, "")
 					}
 				}
@@ -720,7 +717,7 @@ func MigrateFromLegacy(ctx context.Context) (AppConfig, bool) {
 			logNotice(ctx, strings.TrimSuffix(sb.String(), "\n"))
 
 			logNotice(ctx, " ")
-			logNotice(ctx, "Migrating '{{|File|}}%s{{[-]}}' to '{{|File|}}%s{{[-]}}'.", path, paths.GetConfigFilePath())
+			logNotice(ctx, "Migrating '"+console.FormatFilePath(path)+"' to '"+console.FormatFilePath(paths.GetConfigFilePath())+"'.")
 
 			// Start with defaults so the final saved file is complete
 			_ = toml.Unmarshal(defaultConfigBytes(), &conf)
@@ -867,28 +864,29 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.Server.Auth.Mode)
 		}
 
-		colorTag := "{{|Var|}}"
-		if useFolderColor {
-			colorTag = "{{|Folder|}}"
-		}
-
 		data = append(data, displayNames[key])
 
-		if useFolderColor || key == "Theme" {
-			data = append(data, fmt.Sprintf("%s%s{{[-]}}", colorTag, value))
-		} else {
+		switch {
+		case useFolderColor:
+			data = append(data, console.FormatFolderPath(value))
+		case key == "Theme":
+			data = append(data, fmt.Sprintf("{{|Var|}}%s{{[-]}}", value))
+		default:
 			data = append(data, value)
 		}
 
-		if expandedValue != "" {
-			data = append(data, fmt.Sprintf("%s%s{{[-]}}", colorTag, expandedValue))
-		} else {
+		switch {
+		case expandedValue == "":
 			data = append(data, "")
+		case useFolderColor:
+			data = append(data, console.FormatFolderPath(expandedValue))
+		default:
+			data = append(data, fmt.Sprintf("{{|Var|}}%s{{[-]}}", expandedValue))
 		}
 	}
 
 	if title == "" {
-		title = "Configuration options stored in '{{|File|}}" + paths.GetConfigFilePath() + "{{[-]}}':"
+		title = "Configuration options stored in '" + console.FormatFilePath(paths.GetConfigFilePath()) + "':"
 	}
 
 	if val, ok := ctx.Value("migration_mode").(bool); ok && val {

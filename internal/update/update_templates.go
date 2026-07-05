@@ -379,7 +379,7 @@ func EnsureTemplates(ctx context.Context) error {
 		return nil
 	}
 
-	logger.Warn(ctx, "Attempting to clone {{|ApplicationName|}}DockSTARTer-Templates{{[-]}} repo to '{{|Folder|}}%s{{[-]}}' location.", templatesDir)
+	logger.Warn(ctx, "Attempting to clone {{|ApplicationName|}}DockSTARTer-Templates{{[-]}} repo to '"+console.FormatFolderPath(templatesDir)+"' location.")
 
 	if _, err := os.Stat(templatesDir); err == nil {
 		logger.Notice(ctx, "Running: {{|RunningCommand|}}rm -rf %s{{[-]}}", templatesDir)

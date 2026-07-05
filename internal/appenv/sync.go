@@ -1,6 +1,7 @@
 package appenv
 
 import (
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"context"
 	"fmt"
@@ -39,19 +40,19 @@ func SyncVariables(ctx context.Context, file string, initialVars, newVars map[st
 	sort.Strings(removed)
 
 	if len(added) > 0 {
-		logger.Notice(ctx, "Adding variables to {{|File|}}%s{{[-]}}:", file)
+		logger.Notice(ctx, "Adding variables to "+console.FormatFilePath(file)+":")
 		for _, k := range added {
 			logger.Notice(ctx, "\t{{|Var|}}%s{{[-]}}={{|Highlight|}}%s{{[-]}}", k, newVars[k])
 		}
 	}
 	if len(updated) > 0 {
-		logger.Notice(ctx, "Updating variables in {{|File|}}%s{{[-]}}:", file)
+		logger.Notice(ctx, "Updating variables in "+console.FormatFilePath(file)+":")
 		for _, k := range updated {
 			logger.Notice(ctx, "\t{{|Var|}}%s{{[-]}}={{|Highlight|}}%s{{[-]}}", k, newVars[k])
 		}
 	}
 	if len(removed) > 0 {
-		logger.Notice(ctx, "Removing variables from {{|File|}}%s{{[-]}}:", file)
+		logger.Notice(ctx, "Removing variables from "+console.FormatFilePath(file)+":")
 		for _, k := range removed {
 			logger.Notice(ctx, "\t{{|Var|}}%s{{[-]}}", k)
 		}

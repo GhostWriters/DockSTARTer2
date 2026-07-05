@@ -2,6 +2,7 @@ package appenv
 
 import (
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/logger"
 	"context"
@@ -21,7 +22,7 @@ func Enable(ctx context.Context, appNames []string, conf config.AppConfig) error
 		if IsAppBuiltIn(appUpper) {
 			enabledVar := appUpper + "__ENABLED"
 			logger.Info(ctx, "Enabling application '{{|App|}}%s{{[-]}}'", niceName)
-			logger.Notice(ctx, "Setting variable in '{{|File|}}%s{{[-]}}':", envFile)
+			logger.Notice(ctx, "Setting variable in '"+console.FormatFilePath(envFile)+"':")
 			logger.Notice(ctx, "\t{{|Var|}}%s='true'{{[-]}}", enabledVar)
 
 			if err := Set(ctx, enabledVar, "true", envFile); err != nil {
@@ -47,7 +48,7 @@ func Disable(ctx context.Context, appNames []string, conf config.AppConfig) erro
 		if IsAppBuiltIn(appUpper) {
 			enabledVar := appUpper + "__ENABLED"
 			logger.Info(ctx, "Disabling application '{{|App|}}%s{{[-]}}'", niceName)
-			logger.Notice(ctx, "Setting variable in '{{|File|}}%s{{[-]}}':", envFile)
+			logger.Notice(ctx, "Setting variable in '"+console.FormatFilePath(envFile)+"':")
 			logger.Notice(ctx, "\t{{|Var|}}%s='false'{{[-]}}", enabledVar)
 
 			if err := Set(ctx, enabledVar, "false", envFile); err != nil {

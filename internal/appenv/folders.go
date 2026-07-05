@@ -2,6 +2,7 @@ package appenv
 
 import (
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/system"
@@ -80,12 +81,12 @@ func CreateAppFolders(ctx context.Context, appNameRaw string, conf config.AppCon
 	if len(foldersToCreate) > 0 {
 		logger.Notice(ctx, "Creating config folders for '{{|App|}}%s{{[-]}}'.", niceName)
 		for _, folder := range foldersToCreate {
-			logger.Notice(ctx, "Creating folder '{{|Folder|}}%s{{[-]}}'", folder)
+			logger.Notice(ctx, "Creating folder '"+console.FormatFolderPath(folder)+"'")
 			if err := os.MkdirAll(folder, 0755); err != nil {
 				logger.Warn(ctx, []string{
-					"Could not create folder '{{|Folder|}}%s{{[-]}}'",
+					"Could not create folder '" + console.FormatFolderPath(folder) + "'",
 					"Failing command: {{|FailingCommand|}}mkdir -p \"%s\"{{[-]}}",
-				}, folder, folder)
+				}, folder)
 			}
 			system.SetPermissions(ctx, folder)
 		}

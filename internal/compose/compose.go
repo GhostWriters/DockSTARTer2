@@ -111,7 +111,8 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 	// For merge/generate: do an upfront read-only check before prompting
 	if command == "merge" || command == "generate" {
 		if !force && !NeedsYMLMerge(ctx, false) {
-			logger.Notice(ctx, "Enabled app templates already merged to '{{|File|}}docker-compose.yml{{[-]}}'.")
+			composeFile := filepath.Join(conf.ComposeDir, constants.ComposeFileName)
+			logger.Notice(ctx, "Enabled app templates already merged to '"+console.FormatFilePath(composeFile)+"'.")
 			return nil
 		}
 	}
@@ -251,9 +252,10 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 			noNotice = "Not starting containers for all enabled services."
 		}
 	case "generate", "merge":
-		question = "Merge enabled app templates to '{{|File|}}docker-compose.yml{{[-]}}'?"
-		yesNotice = "Merging enabled app templates to '{{|File|}}docker-compose.yml{{[-]}}'."
-		noNotice = "Not merging enabled app templates to '{{|File|}}docker-compose.yml{{[-]}}'."
+		composeFile := filepath.Join(conf.ComposeDir, constants.ComposeFileName)
+		question = "Merge enabled app templates to '" + console.FormatFilePath(composeFile) + "'?"
+		yesNotice = "Merging enabled app templates to '" + console.FormatFilePath(composeFile) + "'."
+		noNotice = "Not merging enabled app templates to '" + console.FormatFilePath(composeFile) + "'."
 	default:
 		question = "Update and start containers for all enabled services?"
 		yesNotice = "Updating and starting containers for all enabled services."
