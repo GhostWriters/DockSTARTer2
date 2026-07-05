@@ -36,18 +36,18 @@ func TestPermissionsMatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !permissionsMatch(dir, uid, gid) {
+	if !permissionsMatch(dir, uid, gid, true) {
 		t.Error("expected match for freshly created tree with correct modes and current uid/gid")
 	}
 
-	if permissionsMatch(dir, uid+1, gid) {
+	if permissionsMatch(dir, uid+1, gid, true) {
 		t.Error("expected mismatch when target uid differs from actual owner")
 	}
 
 	if err := os.Chmod(file, 0644); err != nil {
 		t.Fatal(err)
 	}
-	if permissionsMatch(dir, uid, gid) {
+	if permissionsMatch(dir, uid, gid, true) {
 		t.Error("expected mismatch when a file's mode differs from the expected 0664")
 	}
 }
@@ -72,7 +72,38 @@ func TestPermissionsMatchIgnoresSymlinks(t *testing.T) {
 		t.Skipf("symlinks not supported in this environment: %v", err)
 	}
 
-	if !permissionsMatch(dir, uid, gid) {
+	if !permissionsMatch(dir, uid, gid, true) {
 		t.Error("expected match: symlink's own (unusual) mode/ownership should not affect the result")
+	}
+}
+
+func TestPermissionsMatchNonRecursive(t *testing.T) {
+	uid := os.Getuid()
+	gid := os.Getgid()
+
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0775); err != nil {
+		t.Fatal(err)
+	}
+	// A mismatched child must NOT affect the non-recursive result -- only
+	// dir's own ownership/mode matter.
+	sub := filepath.Join(dir, "sub")
+	if err := os.Mkdir(sub, 0700); err != nil {
+		t.Fatal(err)
+	}
+
+	if !permissionsMatch(dir, uid, gid, false) {
+		t.Error("expected match: non-recursive check should ignore mismatched children")
+	}
+
+	if permissionsMatch(dir, uid+1, gid, false) {
+		t.Error("expected mismatch when target uid differs from dir's actual owner")
+	}
+
+	if err := os.Chmod(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if permissionsMatch(dir, uid, gid, false) {
+		t.Error("expected mismatch when dir's own mode differs from the expected 0775")
 	}
 }

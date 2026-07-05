@@ -43,7 +43,7 @@ func SetPermissions(ctx context.Context, path string) {
 	if puid == 0 || pgid == 0 {
 		return
 	}
-	if permissionsMatch(path, puid, pgid) {
+	if permissionsMatch(path, puid, pgid, true) {
 		return
 	}
 
@@ -76,7 +76,10 @@ func SetPermissions(ctx context.Context, path string) {
 	}
 }
 
-// TakeOwnership mimics the non-recursive chown used in some bash scripts.
+// TakeOwnership mimics the non-recursive chown used in some bash scripts,
+// and also corrects path's own permission bits (non-recursively) if they
+// don't match DS2's target mode -- both checked (and skipped when already
+// correct) via permissionsMatch, same as SetPermissions.
 func TakeOwnership(ctx context.Context, path string) {
 	if runtime.GOOS == "windows" {
 		return
@@ -90,16 +93,33 @@ func TakeOwnership(ctx context.Context, path string) {
 		return
 	}
 
+	logger.Info(ctx, "Checking ownership and permissions of '"+console.FormatFolderPath(path)+"' (non-recursive).")
+
 	puid, pgid := GetIDs()
-	if puid != 0 && pgid != 0 {
-		logger.Info(ctx, "Taking ownership of '"+console.FormatFolderPath(path)+"' (non-recursive).")
-		if cmd, err := dsexec.SudoCommand(ctx, "chown", fmt.Sprintf("%d:%d", puid, pgid), path); err == nil {
-			if err := cmd.Run(); err != nil {
-				logger.FatalWithStack(ctx, []string{
-					"Failed to set ownership of folder.",
-					"Failing command: {{|FailingCommand|}}sudo chown \"%d:%d\" \"%s\"{{[-]}}",
-				}, puid, pgid, path)
-			}
+	if puid == 0 || pgid == 0 {
+		return
+	}
+	if permissionsMatch(path, puid, pgid, false) {
+		return
+	}
+
+	logger.Info(ctx, "Taking ownership of '"+console.FormatFolderPath(path)+"' (non-recursive).")
+	if cmd, err := dsexec.SudoCommand(ctx, "chown", fmt.Sprintf("%d:%d", puid, pgid), path); err == nil {
+		if err := cmd.Run(); err != nil {
+			logger.FatalWithStack(ctx, []string{
+				"Failed to set ownership of folder.",
+				"Failing command: {{|FailingCommand|}}sudo chown \"%d:%d\" \"%s\"{{[-]}}",
+			}, puid, pgid, path)
+		}
+	}
+
+	logger.Info(ctx, "Setting permissions of '"+console.FormatFolderPath(path)+"' (non-recursive).")
+	if cmd, err := dsexec.SudoCommand(ctx, "chmod", "0775", path); err == nil {
+		if err := cmd.Run(); err != nil {
+			logger.FatalWithStack(ctx, []string{
+				"Failed to set permissions of folder.",
+				"Failing command: {{|FailingCommand|}}sudo chmod \"0775\" \"%s\"{{[-]}}",
+			}, path)
 		}
 	}
 }

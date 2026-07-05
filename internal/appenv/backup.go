@@ -78,6 +78,20 @@ func BackupEnv(ctx context.Context, envFile string, conf config.AppConfig) error
 	composeBackupsFolder := filepath.Join(expandedVolumeConfig, ".compose.backups")
 	composeFolderName := filepath.Base(composeFolder)
 
+	// Ensure the backups folder itself exists and is correctly permissioned
+	// before adding anything new to it. Doing this now (while it contains
+	// only older backups already corrected on a prior run, or nothing at
+	// all) means the check almost always succeeds instantly with no sudo
+	// call -- it only really costs anything the very first time this folder
+	// is created.
+	if err := os.MkdirAll(composeBackupsFolder, 0755); err != nil {
+		logger.FatalWithStack(ctx, []string{
+			"Failed to create folder.",
+			"Failing command: {{|FailingCommand|}}mkdir -p \"%s\"{{[-]}}",
+		}, composeBackupsFolder)
+	}
+	system.SetPermissions(ctx, composeBackupsFolder)
+
 	// Retry until we find a folder name that doesn't already exist.
 	var backupFolder string
 	for {
@@ -146,8 +160,14 @@ func BackupEnv(ctx context.Context, envFile string, conf config.AppConfig) error
 		logger.Info(ctx, "No files to backup.")
 	}
 
-	// run_script 'set_permissions' "${COMPOSE_BACKUPS_FOLDER}"
-	system.SetPermissions(ctx, composeBackupsFolder)
+	// Only the freshly created backup folder ever needs fixing -- its
+	// content is always brand new, but every older backup under
+	// composeBackupsFolder was already corrected on a prior run. Scoping to
+	// backupFolder avoids re-walking (and, worse, re-chowning) the entire
+	// accumulated backup history on every single call.
+	if len(backupList) > 0 {
+		system.SetPermissions(ctx, backupFolder)
+	}
 
 	// info "Removing old compose backups."
 	logger.Info(ctx, "Removing old compose backups.")
