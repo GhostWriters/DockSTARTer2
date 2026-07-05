@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 )
 
@@ -14,14 +15,14 @@ func HandleConfigSettings(ctx context.Context, group *CommandGroup) error {
 		if len(group.Args) > 0 {
 			conf.Paths.ConfigFolder = group.Args[0]
 		} else {
-			logger.Display(ctx, "Current config folder: {{|Folder|}}%s{{[-]}}", conf.Paths.ConfigFolder)
+			logger.Display(ctx, "Current config folder: "+console.FormatFolderPath(conf.Paths.ConfigFolder))
 			return nil
 		}
 	case "--config-compose-folder":
 		if len(group.Args) > 0 {
 			conf.Paths.ComposeFolder = group.Args[0]
 		} else {
-			logger.Display(ctx, "Current compose folder: {{|Folder|}}%s{{[-]}}", conf.Paths.ComposeFolder)
+			logger.Display(ctx, "Current compose folder: "+console.FormatFolderPath(conf.Paths.ComposeFolder))
 			return nil
 		}
 	}

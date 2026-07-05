@@ -132,10 +132,7 @@ func CheckUpdates(ctx context.Context) {
 // given URL. Used so version numbers in CLI/log output are clickable links to their source.
 // An empty url renders the version as plain styled text with no link.
 func versionTag(ver, url string) string {
-	if url == "" {
-		return "{{|Version|}}" + ver + "{{[-]}}"
-	}
-	return "{{|Version::::" + url + "|}}" + ver + "{{[-]}}"
+	return console.FormatLink("Version", ver, url)
 }
 
 // AppVersionLink wraps a DockSTARTer2 version string as a link to its GitHub release tag.
@@ -167,10 +164,7 @@ func ComposeSdkVersionLink(ver string) string {
 // branchTag wraps a branch/channel name in a semstyle Branch hyperlink tag pointing at the
 // given URL. An empty url renders the name as plain styled text with no link.
 func branchTag(name, url string) string {
-	if url == "" {
-		return "{{|Branch|}}" + name + "{{[-]}}"
-	}
-	return "{{|Branch::::" + url + "|}}" + name + "{{[-]}}"
+	return console.FormatLink("Branch", name, url)
 }
 
 // AppBranchLink wraps a DockSTARTer2 channel name as a link to the matching branch on GitHub.

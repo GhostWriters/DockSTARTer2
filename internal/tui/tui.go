@@ -328,9 +328,22 @@ func init() {
 }
 
 // parseClientInfo extracts IP and connection type from environment strings.
-func parseClientInfo(environ []string) (string, string) {
-	clientIP := "local"
-	connType := "local"
+// The returned viaOwnServer flag reports whether the session arrived through
+// one of DS2's own listeners (its wish SSH server or its web server) as
+// opposed to a plain foreground CLI/TUI invocation -- these are the only
+// cases where DS2 knows for certain that the terminal/browser rendering the
+// output is on a different machine than the one that built the output. It's
+// computed BEFORE the real-shell SSH fallback below, which intentionally
+// folds "invoked directly inside a real SSH login shell" into connType=="ssh"
+// for a different purpose (OpenAppLink's browser-opening decision) but should
+// NOT affect viaOwnServer -- a real SSH terminal may well render file://
+// hyperlinks correctly, and DS2 has no way to know either way, so callers
+// that only care about "did this go through our own server" (e.g. deciding
+// whether to emit a file:// hyperlink at all) should use viaOwnServer, not
+// connType.
+func parseClientInfo(environ []string) (clientIP, connType string, viaOwnServer bool) {
+	clientIP = "local"
+	connType = "local"
 	for _, env := range environ {
 		if strings.HasPrefix(env, "DS2_CLIENT_IP=") {
 			clientIP = strings.TrimPrefix(env, "DS2_CLIENT_IP=")
@@ -343,6 +356,7 @@ func parseClientInfo(environ []string) (string, string) {
 			connType = strings.TrimPrefix(env, "DS2_CONN_TYPE=")
 		}
 	}
+	viaOwnServer = connType != "local"
 	// A plain foreground invocation (the CLI binary run directly, not through
 	// DS2's own wish SSH server) never gets a synthetic environ with any of
 	// the markers above, but the process's real OS environment still reflects
@@ -357,7 +371,7 @@ func parseClientInfo(environ []string) (string, string) {
 			connType = "ssh"
 		}
 	}
-	return clientIP, connType
+	return clientIP, connType, viaOwnServer
 }
 
 // startWindowSizeForwarder launches a goroutine that reads from opts.WindowSize
@@ -389,9 +403,11 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	if len(opts) > 0 {
 		pOpts = opts[0]
 	}
-	clientIP, connType := parseClientInfo(pOpts.Environ)
+	clientIP, connType, viaOwnServer := parseClientInfo(pOpts.Environ)
 	currentClientIP = clientIP
 	currentTransport = connType
+	console.SetViaOwnServer(viaOwnServer)
+	console.SetClientIP(clientIP)
 	isSSH := pOpts.Input != nil
 
 	// Enable Virtual Terminal Processing (ANSI) on Windows early so color detection works
@@ -585,8 +601,10 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 	}
 
 	isRootSession = isRoot
-	ip, ctype := parseClientInfo(pOpts.Environ)
+	ip, ctype, viaOwnServer := parseClientInfo(pOpts.Environ)
 	activeConnType = ctype
+	console.SetViaOwnServer(viaOwnServer)
+	console.SetClientIP(ip)
 	pOpts.RefreshRate = resolveRefreshRate(ctype, pOpts.WebToken)
 
 	onClose := func() tea.Msg { return NavigateBackMsg{} }
@@ -759,7 +777,9 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 
 	startScreen := varEditorFactory(varName, displayAppName, appDesc, file, origVal, opts, helpText, docMarkdown, docAppName, onSave, tea.Quit)
 
-	ip, ctype := parseClientInfo(pOpts.Environ)
+	ip, ctype, viaOwnServer := parseClientInfo(pOpts.Environ)
+	console.SetViaOwnServer(viaOwnServer)
+	console.SetClientIP(ip)
 	pOpts.RefreshRate = resolveRefreshRate(ctype, pOpts.WebToken)
 	model := NewAppModel(ctx, displayengine.CurrentConfig(), ip, ctype, startScreen)
 	p := NewProgram(model, pOpts)

@@ -164,7 +164,7 @@ func run() (exitCode int) {
 	// Ensure user themes directory exists
 	themesDir := paths.GetThemesDir()
 	if _, err := os.Stat(themesDir); os.IsNotExist(err) {
-		logger.Info(ctx, "Creating folder '{{|Folder|}}%s{{[-]}}'.", themesDir)
+		logger.Info(ctx, "Creating folder '"+console.FormatFolderPath(themesDir)+"'.")
 		if err := os.MkdirAll(themesDir, 0755); err != nil {
 			logger.FatalWithStack(ctx, []string{
 				"Failed to create folder.",
@@ -221,7 +221,7 @@ func run() (exitCode int) {
 
 	if exitCode != 0 {
 		logger.Display(ctx, "{{|ApplicationName|}}%s{{[-]}} did not finish running successfully.", version.ApplicationName)
-		logger.Display(ctx, "Check logs in '{{|File|}}%s{{[-]}}'.", logger.GetLogFilePath())
+		logger.Display(ctx, "Check logs in '"+console.FormatFilePath(logger.GetLogFilePath())+"'.")
 	}
 
 	return exitCode

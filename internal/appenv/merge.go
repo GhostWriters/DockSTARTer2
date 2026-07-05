@@ -1,6 +1,7 @@
 package appenv
 
 import (
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"github.com/GhostWriters/semstyle"
 	"DockSTARTer2/internal/system"
@@ -16,7 +17,7 @@ func MergeNewOnly(ctx context.Context, targetFile, sourceFile string) ([]string,
 	var addedVars []string
 
 	if _, err := os.Stat(sourceFile); os.IsNotExist(err) {
-		logger.Warn(ctx, "File '{{|File|}}%s{{[-]}}' does not exist.", sourceFile)
+		logger.Warn(ctx, "File '"+console.FormatFilePath(sourceFile)+"' does not exist.")
 		return nil, nil
 	}
 
@@ -88,7 +89,7 @@ func MergeNewOnly(ctx context.Context, targetFile, sourceFile string) ([]string,
 
 	if len(newLines) > 0 {
 		if len(varsToLog) > 0 {
-			logger.Notice(ctx, "Adding variables to {{|File|}}%s{{[-]}}:", targetFile)
+			logger.Notice(ctx, "Adding variables to "+console.FormatFilePath(targetFile)+":")
 			for _, line := range varsToLog {
 				logger.Notice(ctx, "\t{{|Var|}}%s{{[-]}}", line)
 			}

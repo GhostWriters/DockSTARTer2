@@ -172,7 +172,7 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 	logger.Notice(ctx, "Updated {{|ApplicationName|}}%s{{[-]}} to '%s'", version.ApplicationName, AppVersionLink(remoteVersion))
 
 	if exePath != "unknown" {
-		logger.Info(ctx, "Application location is '{{|File|}}%s{{[-]}}'.", exePath)
+		logger.Info(ctx, "Application location is '"+console.FormatFilePath(exePath)+"'.")
 	}
 
 	// Record the installed version so other running instances detect the update.

@@ -2,6 +2,7 @@ package appenv
 
 import (
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
@@ -38,7 +39,7 @@ func Update(ctx context.Context, force bool, file string) error {
 	// Unconditional — users need immediate feedback since the check can take a while.
 	logger.Notice(ctx, "Updating environment variable files.")
 	if NeedsUpdate(ctx, force, composeEnvFile) {
-		logger.Notice(ctx, "Updating '{{|File|}}%s{{[-]}}'.", composeEnvFile)
+		logger.Notice(ctx, "Updating '"+console.FormatFilePath(composeEnvFile)+"'.")
 
 		// Read current .env file content
 		input, _ := os.ReadFile(composeEnvFile)
@@ -51,7 +52,7 @@ func Update(ctx context.Context, force bool, file string) error {
 		tmpGlobalFile, _ := os.CreateTemp("", "ds2.global.*.tmp")
 		if err := os.WriteFile(tmpGlobalFile.Name(), []byte(strings.Join(globalVars, "\n")), 0644); err != nil {
 			logger.FatalWithStack(ctx, []string{
-				"Failed to write temporary '{{|File|}}.env{{[-]}}' update file.",
+				"Failed to write temporary '" + console.FormatFileName(".env", tmpGlobalFile.Name()) + "' update file.",
 			})
 		}
 		defer os.Remove(tmpGlobalFile.Name())
@@ -68,7 +69,7 @@ func Update(ctx context.Context, force bool, file string) error {
 			tmpAppFile, _ := os.CreateTemp("", "ds2.app_main.*.tmp")
 			if err := os.WriteFile(tmpAppFile.Name(), []byte(strings.Join(appVars, "\n")), 0644); err != nil {
 				logger.FatalWithStack(ctx, []string{
-					"Failed to write temporary '{{|File|}}.env{{[-]}}' update file.",
+					"Failed to write temporary '" + console.FormatFileName(".env", tmpAppFile.Name()) + "' update file.",
 				})
 			}
 			defer os.Remove(tmpAppFile.Name())
@@ -105,7 +106,7 @@ func Update(ctx context.Context, force bool, file string) error {
 		}
 		UnsetNeedsUpdate(ctx, composeEnvFile)
 	} else {
-		logger.Info(ctx, "File '{{|File|}}%s{{[-]}}' already updated.", composeEnvFile)
+		logger.Info(ctx, "File '"+console.FormatFilePath(composeEnvFile)+"' already updated.")
 	}
 
 	// 4. Update individual .env.app.* files (Parity with env_update.sh lines 82-121)
@@ -113,9 +114,9 @@ func Update(ctx context.Context, force bool, file string) error {
 		appEnvFile := GetAppEnvFile(appName, conf)
 		if NeedsUpdate(ctx, force, appEnvFile) {
 			if _, err := os.Stat(appEnvFile); os.IsNotExist(err) {
-				logger.Notice(ctx, "Creating '{{|File|}}%s{{[-]}}'.", appEnvFile)
+				logger.Notice(ctx, "Creating '"+console.FormatFilePath(appEnvFile)+"'.")
 			} else {
-				logger.Notice(ctx, "Updating '{{|File|}}%s{{[-]}}'.", appEnvFile)
+				logger.Notice(ctx, "Updating '"+console.FormatFilePath(appEnvFile)+"'.")
 			}
 
 			// Only use template for non-user-defined apps (Parity lines 99-101)
@@ -135,7 +136,7 @@ func Update(ctx context.Context, force bool, file string) error {
 				tmpFile, _ := os.CreateTemp("", "ds2.app_env.*.tmp")
 				if err := os.WriteFile(tmpFile.Name(), []byte(finalAppContent), 0644); err != nil {
 					logger.FatalWithStack(ctx, []string{
-						"Failed to write temporary '{{|File|}}.env.app." + appName + "{{[-]}}' update file.",
+						"Failed to write temporary '" + console.FormatFileName(".env.app."+appName, tmpFile.Name()) + "' update file.",
 					})
 				}
 				tmpFile.Close()
@@ -158,7 +159,7 @@ func Update(ctx context.Context, force bool, file string) error {
 				}
 			}
 		} else {
-			logger.Info(ctx, "Environment variable file '{{|File|}}%s{{[-]}}' already updated.", appEnvFile)
+			logger.Info(ctx, "Environment variable file '"+console.FormatFilePath(appEnvFile)+"' already updated.")
 		}
 	}
 

@@ -10,6 +10,8 @@ import (
 
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 
@@ -20,13 +22,14 @@ import (
 
 // MergeYML merges enabled app templates into docker-compose.yml
 func MergeYML(ctx context.Context, force bool) error {
+	conf := config.LoadAppConfig()
+	composeFile := filepath.Join(conf.ComposeDir, constants.ComposeFileName)
+
 	// 1. Check if merge is needed (Mirror Bash which checks this BEFORE setup tasks)
 	if !force && !NeedsYMLMerge(ctx, false) {
-		logger.Notice(ctx, "Enabled app templates already merged to '{{|File|}}docker-compose.yml{{[-]}}'.")
+		logger.Notice(ctx, "Enabled app templates already merged to '"+console.FormatFilePath(composeFile)+"'.")
 		return nil
 	}
-
-	conf := config.LoadAppConfig()
 
 	// 2. Ensure appvars are created first
 	if err := appenv.CreateAll(ctx, force, conf); err != nil {
@@ -35,11 +38,11 @@ func MergeYML(ctx context.Context, force bool) error {
 
 	// 3. Dual Check (CreateAll might have modified files)
 	if !force && !NeedsYMLMerge(ctx, false) {
-		logger.Notice(ctx, "Enabled app templates already merged to '{{|File|}}docker-compose.yml{{[-]}}'.")
+		logger.Notice(ctx, "Enabled app templates already merged to '"+console.FormatFilePath(composeFile)+"'.")
 		return nil
 	}
 
-	logger.Notice(ctx, "Adding enabled app templates to merge '{{|File|}}docker-compose.yml{{[-]}}'. Please be patient, this can take a while.")
+	logger.Notice(ctx, "Adding enabled app templates to merge '"+console.FormatFilePath(composeFile)+"'. Please be patient, this can take a while.")
 
 	envFile := filepath.Join(conf.ComposeDir, ".env")
 	enabledApps, err := appenv.ListEnabledApps(conf)
@@ -61,7 +64,7 @@ func MergeYML(ctx context.Context, force bool) error {
 
 		instanceFolder := paths.GetInstanceDir(appNameLower)
 		if !dirExists(instanceFolder) {
-			logger.Error(ctx, "Folder '{{|Folder|}}%s/{{[-]}}' does not exist.", instanceFolder)
+			logger.Error(ctx, "Folder '"+console.FormatFolderPath(instanceFolder)+"/' does not exist.")
 			return fmt.Errorf("folder %s does not exist", instanceFolder)
 		}
 
@@ -81,7 +84,7 @@ func MergeYML(ctx context.Context, force bool) error {
 			return fmt.Errorf("failed to get arch file for %s: %w", appName, err)
 		}
 		if archFile == "" || !fileExists(archFile) {
-			logger.Error(ctx, "File '{{|File|}}%s{{[-]}}' does not exist.", archFile)
+			logger.Error(ctx, "File '"+console.FormatFilePath(archFile)+"' does not exist.")
 			return fmt.Errorf("file %s does not exist", archFile)
 		}
 		composeFiles = append(composeFiles, archFile)
@@ -97,7 +100,7 @@ func MergeYML(ctx context.Context, force bool) error {
 			if hostnameFile != "" && fileExists(hostnameFile) {
 				composeFiles = append(composeFiles, hostnameFile)
 			} else if hostnameFile != "" {
-				logger.Info(ctx, "File '{{|File|}}%s{{[-]}}' does not exist.", hostnameFile)
+				logger.Info(ctx, "File '"+console.FormatFilePath(hostnameFile)+"' does not exist.")
 			}
 
 			// Add ports file if exists
@@ -108,7 +111,7 @@ func MergeYML(ctx context.Context, force bool) error {
 			if portsFile != "" && fileExists(portsFile) {
 				composeFiles = append(composeFiles, portsFile)
 			} else if portsFile != "" {
-				logger.Info(ctx, "File '{{|File|}}%s{{[-]}}' does not exist.", portsFile)
+				logger.Info(ctx, "File '"+console.FormatFilePath(portsFile)+"' does not exist.")
 			}
 		} else if netMode != "" {
 			// Add netmode file if exists
@@ -119,7 +122,7 @@ func MergeYML(ctx context.Context, force bool) error {
 			if netmodeFile != "" && fileExists(netmodeFile) {
 				composeFiles = append(composeFiles, netmodeFile)
 			} else if netmodeFile != "" {
-				logger.Info(ctx, "File '{{|File|}}%s{{[-]}}' does not exist.", netmodeFile)
+				logger.Info(ctx, "File '"+console.FormatFilePath(netmodeFile)+"' does not exist.")
 			}
 		}
 
@@ -145,7 +148,7 @@ func MergeYML(ctx context.Context, force bool) error {
 					if storageFile != "" && fileExists(storageFile) {
 						composeFiles = append(composeFiles, storageFile)
 					} else if storageFile != "" {
-						logger.Info(ctx, "File '{{|File|}}%s{{[-]}}' does not exist.", storageFile)
+						logger.Info(ctx, "File '"+console.FormatFilePath(storageFile)+"' does not exist.")
 					}
 				}
 			}
@@ -161,7 +164,7 @@ func MergeYML(ctx context.Context, force bool) error {
 			if devicesFile != "" && fileExists(devicesFile) {
 				composeFiles = append(composeFiles, devicesFile)
 			} else if devicesFile != "" {
-				logger.Info(ctx, "File '{{|File|}}%s{{[-]}}' does not exist.", devicesFile)
+				logger.Info(ctx, "File '"+console.FormatFilePath(devicesFile)+"' does not exist.")
 			}
 		}
 
@@ -172,7 +175,7 @@ func MergeYML(ctx context.Context, force bool) error {
 		}
 		if mainFile == "" || !fileExists(mainFile) {
 			expectedMain := filepath.Join(instanceFolder, fmt.Sprintf("%s.yml", appNameLower))
-			logger.Error(ctx, "File '{{|File|}}%s{{[-]}}' does not exist.", expectedMain)
+			logger.Error(ctx, "File '"+console.FormatFilePath(expectedMain)+"' does not exist.")
 			return fmt.Errorf("file %s does not exist", expectedMain)
 		}
 		composeFiles = append(composeFiles, mainFile)

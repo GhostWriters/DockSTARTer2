@@ -3,6 +3,7 @@ package appenv
 import (
 	"DockSTARTer2/internal/assets"
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/system"
@@ -31,7 +32,7 @@ import (
 func EnvCreate(ctx context.Context, conf config.AppConfig) error {
 	// 1. Ensure ComposeFolder exists
 	if info, err := os.Stat(conf.Paths.ComposeFolder); err == nil && !info.IsDir() {
-		logger.Info(ctx, "Removing existing file '{{|File|}}%s{{[-]}}' before folder can be created.", conf.Paths.ComposeFolder)
+		logger.Info(ctx, "Removing existing file '"+console.FormatFilePath(conf.Paths.ComposeFolder)+"' before folder can be created.")
 		if err := os.Remove(conf.Paths.ComposeFolder); err != nil {
 			logger.FatalWithStack(ctx, []string{
 				"Failed to remove existing file.",
@@ -40,7 +41,7 @@ func EnvCreate(ctx context.Context, conf config.AppConfig) error {
 		}
 	}
 	if _, err := os.Stat(conf.Paths.ComposeFolder); os.IsNotExist(err) {
-		logger.Notice(ctx, "Creating folder '{{|Folder|}}%s{{[-]}}'.", conf.Paths.ComposeFolder)
+		logger.Notice(ctx, "Creating folder '"+console.FormatFolderPath(conf.Paths.ComposeFolder)+"'.")
 		if err := os.MkdirAll(conf.Paths.ComposeFolder, 0755); err != nil {
 			logger.FatalWithStack(ctx, []string{
 				"Failed to create folder.",
@@ -61,7 +62,7 @@ func EnvCreate(ctx context.Context, conf config.AppConfig) error {
 
 	// 3. Initialize .env file if missing
 	if _, err := os.Stat(mainEnvPath); os.IsNotExist(err) {
-		logger.Notice(ctx, "File '{{|File|}}%s{{[-]}}' not found. Copying example template.", mainEnvPath)
+		logger.Notice(ctx, "File '"+console.FormatFilePath(mainEnvPath)+"' not found. Copying example template.")
 
 		defaultContent, err := assets.GetDefaultEnv()
 		if err != nil {
@@ -330,7 +331,7 @@ func SanitizeEnv(ctx context.Context, file string, conf config.AppConfig) error 
 
 	// 3. Log and Apply Updates
 	if len(updatedVars) > 0 {
-		logger.Notice(ctx, "Setting variables in '{{|File|}}%s{{[-]}}':", file)
+		logger.Notice(ctx, "Setting variables in '"+console.FormatFilePath(file)+"':")
 		for _, key := range updatedVars {
 			val := updates[key]
 			logger.Notice(ctx, "\t{{|Var|}}%s=%s{{[-]}}", key, val)
@@ -363,9 +364,9 @@ func CleanupOrphanedEnvFiles(ctx context.Context, conf config.AppConfig) error {
 			if !IsAppReferenced(ctx, appName, conf) {
 				targetFile := filepath.Join(conf.ComposeDir, entry.Name())
 				system.SetPermissions(ctx, targetFile)
-				logger.Notice(ctx, "Deleting '{{|File|}}%s{{[-]}}'.", targetFile)
+				logger.Notice(ctx, "Deleting '"+console.FormatFilePath(targetFile)+"'.")
 				if err := os.Remove(targetFile); err != nil {
-					logger.Warn(ctx, "Failed to remove '{{|File|}}%s{{[-]}}': %v", targetFile, err)
+					logger.Warn(ctx, "Failed to remove '"+console.FormatFilePath(targetFile)+"': %v", err)
 				}
 			}
 		}

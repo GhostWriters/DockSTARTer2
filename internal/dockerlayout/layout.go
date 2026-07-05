@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"DockSTARTer2/internal/appenv"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/strutil"
 )
 
@@ -16,7 +17,7 @@ func StyleServiceName(svc string) string {
 	if url == "" {
 		return "{{|App|}}" + svc + "{{[-]}}"
 	}
-	return "{{|App::::" + url + "|}}" + svc + "{{[-]}}"
+	return console.FormatLink("App", svc, url)
 }
 
 // Layout primitive widths — shared by compose and prune display.
@@ -117,8 +118,8 @@ func StyleImageRef(ref string) string {
 	if idx := strings.LastIndex(ref, ":"); idx >= 0 {
 		name, tag := ref[:idx], ref[idx+1:]
 		url := imageRefURL(name)
-		return "{{|DockerImage::::"+url+"|}}"+name+"{{[-]}}{{|DockerColon|}}:{{[-]}}{{|DockerTag|}}"+tag+"{{[-]}}"
+		return console.FormatLink("DockerImage", name, url) + "{{|DockerColon|}}:{{[-]}}{{|DockerTag|}}" + tag + "{{[-]}}"
 	}
 	url := imageRefURL(ref)
-	return "{{|DockerImage::::"+url+"|}}"+ref+"{{[-]}}"
+	return console.FormatLink("DockerImage", ref, url)
 }

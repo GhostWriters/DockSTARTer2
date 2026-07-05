@@ -2,6 +2,7 @@ package appenv
 
 import (
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/logger"
 	"context"
@@ -52,7 +53,7 @@ func CreateAll(ctx context.Context, force bool, conf config.AppConfig) error {
 	}
 
 	if len(added) == 0 {
-		logger.Notice(ctx, "File '{{|File|}}%s{{[-]}}' does not contain any added apps.", envFile)
+		logger.Notice(ctx, "File '"+console.FormatFilePath(envFile)+"' does not contain any added apps.")
 	} else {
 		logger.Notice(ctx, "Creating environment variables for added apps. Please be patient, this can take a while.")
 

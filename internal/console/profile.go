@@ -45,6 +45,18 @@ func init() {
 	if stat, err := os.Stderr.Stat(); err == nil {
 		isTTYGlobal = (stat.Mode() & os.ModeCharDevice) != 0
 	}
+
+	// semstyle auto-detects the color profile at its own init (respecting
+	// NO_COLOR, TTY status, etc. via colorprofile.Detect), but ToANSI renders
+	// unconditionally unless a RenderPolicy is set -- without this, every
+	// tag (including OSC 8 hyperlinks) would still be emitted even when
+	// output is redirected to a file or the terminal can't handle color,
+	// producing raw escape-sequence garbage instead of plain text. TUIMode
+	// is exempted since bubbletea manages its own output stream/profile
+	// independent of stdout/stderr.
+	semstyle.RenderPolicy = func() bool {
+		return TUIMode || GetPreferredProfile() > colorprofile.Ascii
+	}
 }
 
 // GetPreferredProfile returns the detected or forced color profile.

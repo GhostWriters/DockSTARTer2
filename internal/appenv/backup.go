@@ -2,6 +2,7 @@ package appenv
 
 import (
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/system"
@@ -119,8 +120,8 @@ func BackupEnv(ctx context.Context, envFile string, conf config.AppConfig) error
 
 	if len(backupList) > 0 {
 		logger.Notice(ctx, "Backing up user files to folder:")
-		logger.Notice(ctx, "\t'{{|Folder|}}%s{{[-]}}'", backupFolder)
-		logger.Info(ctx, "Creating folder '{{|Folder|}}%s{{[-]}}'.", backupFolder)
+		logger.Notice(ctx, "\t'"+console.FormatFolderPath(backupFolder)+"'")
+		logger.Info(ctx, "Creating folder '"+console.FormatFolderPath(backupFolder)+"'.")
 		if err := os.MkdirAll(backupFolder, 0755); err != nil {
 			logger.FatalWithStack(ctx, []string{
 				"Failed to create folder.",
@@ -129,7 +130,7 @@ func BackupEnv(ctx context.Context, envFile string, conf config.AppConfig) error
 		}
 		logger.Info(ctx, "Backing up files:")
 		for _, item := range backupList {
-			logger.Info(ctx, "\t'{{|File|}}%s{{[-]}}'", item)
+			logger.Info(ctx, "\t'"+console.FormatFilePath(item)+"'")
 			dst := filepath.Join(backupFolder, filepath.Base(item))
 			if info, err := os.Stat(item); err == nil && info.IsDir() {
 				if err := copyDir(item, dst); err != nil {
@@ -253,7 +254,7 @@ func copyDir(src, dst string) error {
 	}
 
 	if info, err := os.Stat(dst); err == nil && !info.IsDir() {
-		logger.Info(context.Background(), "Removing existing file '{{|File|}}%s{{[-]}}' before folder can be created.", dst)
+		logger.Info(context.Background(), "Removing existing file '"+console.FormatFilePath(dst)+"' before folder can be created.")
 		if err := os.Remove(dst); err != nil {
 			logger.FatalWithStack(context.Background(), []string{
 				"Failed to remove existing file.",

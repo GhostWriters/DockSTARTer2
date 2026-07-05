@@ -2,6 +2,7 @@ package appenv
 
 import (
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/system"
@@ -35,7 +36,7 @@ func RenameAppVars(ctx context.Context, fromApp, toApp string, conf config.AppCo
 	toFolder := filepath.Join(conf.ConfigDir, toLower)
 
 	if _, err := os.Stat(fromFolder); err == nil {
-		logger.Notice(ctx, "Moving configuration folder from '{{|Folder|}}%s{{[-]}}' to '{{|Folder|}}%s{{[-]}}'.", fromFolder, toFolder)
+		logger.Notice(ctx, "Moving configuration folder from '"+console.FormatFolderPath(fromFolder)+"' to '"+console.FormatFolderPath(toFolder)+"'.")
 		if err := os.Rename(fromFolder, toFolder); err != nil {
 			logger.Warn(ctx, "Failed to move folder: %v", err)
 		}
@@ -53,7 +54,7 @@ func RenameAppVars(ctx context.Context, fromApp, toApp string, conf config.AppCo
 	toAppEnv := filepath.Join(conf.ComposeDir, constants.AppEnvFileNamePrefix+toLower)
 
 	if _, err := os.Stat(fromAppEnv); err == nil {
-		logger.Notice(ctx, "Renaming environment file '{{|File|}}%s{{[-]}}' to '{{|File|}}%s{{[-]}}'.", fromAppEnv, toAppEnv)
+		logger.Notice(ctx, "Renaming environment file '"+console.FormatFilePath(fromAppEnv)+"' to '"+console.FormatFilePath(toAppEnv)+"'.")
 		if err := renameInFile(ctx, fromUpper, toUpper, fromAppEnv); err != nil {
 			return err
 		}
@@ -100,7 +101,7 @@ func renameInFile(ctx context.Context, fromUpper, toUpper, file string) error {
 	}
 
 	if changed {
-		logger.Notice(ctx, "Renamed variables in '{{|File|}}%s{{[-]}}'.", filepath.Base(file))
+		logger.Notice(ctx, "Renamed variables in '"+console.FormatFilePath(file)+"'.")
 		output := strings.Join(lines, "\n")
 		if err := os.WriteFile(file, []byte(output), 0644); err != nil {
 			return err

@@ -2,6 +2,7 @@ package system
 
 import (
 	dsexec "DockSTARTer2/internal/exec"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"context"
 	"fmt"
@@ -28,22 +29,22 @@ func SetPermissions(ctx context.Context, path string) {
 
 	// 1. System path check
 	if isSystemPath(path) {
-		logger.Error(ctx, "Skipping permissions on '{{|Folder|}}%s{{[-]}}' because it is a system path.", path)
+		logger.Error(ctx, "Skipping permissions on '"+console.FormatFolderPath(path)+"' because it is a system path.")
 		return
 	}
 
 	// 2. Home directory check
 	home, _ := os.UserHomeDir()
 	if !strings.HasPrefix(path, home) {
-		logger.Warn(ctx, "Setting permissions for '{{|Folder|}}%s{{[-]}}' outside of '{{|Folder|}}%s{{[-]}}' may be unsafe.", path, home)
+		logger.Warn(ctx, "Setting permissions for '"+console.FormatFolderPath(path)+"' outside of '"+console.FormatFolderPath(home)+"' may be unsafe.")
 	} else {
-		logger.Info(ctx, "Setting permissions for '{{|Folder|}}%s{{[-]}}'", path)
+		logger.Info(ctx, "Setting permissions for '"+console.FormatFolderPath(path)+"'")
 	}
 
 	// 3. Take Ownership and Set Permissions
 	puid, pgid := GetIDs()
 	if puid != 0 && pgid != 0 {
-		logger.Info(ctx, "Taking ownership of '{{|Folder|}}%s{{[-]}}' for user '{{|User|}}%d{{[-]}}' and group '{{|User|}}%d{{[-]}}'", path, puid, pgid)
+		logger.Info(ctx, "Taking ownership of '"+console.FormatFolderPath(path)+"' for user '{{|User|}}%d{{[-]}}' and group '{{|User|}}%d{{[-]}}'", puid, pgid)
 		if cmdChown, err := dsexec.SudoCommand(ctx, "chown", "-R", fmt.Sprintf("%d:%d", puid, pgid), path); err == nil {
 			if err := cmdChown.Run(); err != nil {
 				logger.FatalWithStack(ctx, []string{
@@ -53,7 +54,7 @@ func SetPermissions(ctx context.Context, path string) {
 			}
 		}
 
-		logger.Info(ctx, "Setting file and folder permissions in '{{|Folder|}}%s{{[-]}}'", path)
+		logger.Info(ctx, "Setting file and folder permissions in '"+console.FormatFolderPath(path)+"'")
 		if cmdChmod, err := dsexec.SudoCommand(ctx, "chmod", "-R", "a=,a+rX,u+w,g+w", path); err == nil {
 			if err := cmdChmod.Run(); err != nil {
 				logger.FatalWithStack(ctx, []string{
@@ -81,7 +82,7 @@ func TakeOwnership(ctx context.Context, path string) {
 
 	puid, pgid := GetIDs()
 	if puid != 0 && pgid != 0 {
-		logger.Info(ctx, "Taking ownership of '{{|Folder|}}%s{{[-]}}' (non-recursive).", path)
+		logger.Info(ctx, "Taking ownership of '"+console.FormatFolderPath(path)+"' (non-recursive).")
 		if cmd, err := dsexec.SudoCommand(ctx, "chown", fmt.Sprintf("%d:%d", puid, pgid), path); err == nil {
 			if err := cmd.Run(); err != nil {
 				logger.FatalWithStack(ctx, []string{
