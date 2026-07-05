@@ -56,7 +56,9 @@ func blocksHyperlink() bool {
 // folder without needing to click the final file. Separators between
 // segments are colored to match but never wrapped in a hyperlink, so only
 // whole segments are clickable. The final segment is tagged {{|File|}};
-// every segment before it is tagged {{|Folder|}}. Unless the active session
+// every segment before it is tagged {{|Folder|}}, and its target URL gets a
+// trailing "/" (see ensureTrailingSlash) so it can only ever resolve to a
+// directory, never execute a same-named file. Unless the active session
 // is connected through DS2's own SSH or web server from a different machine
 // (see blocksHyperlink), each tag carries an explicit file:// URL for its
 // own cumulative path so it renders as a clickable hyperlink wherever it's
@@ -103,7 +105,21 @@ func formatNamedTag(tag, name, path string) string {
 	if path == "" || blocksHyperlink() {
 		return "{{|" + tag + "|}}" + name + "{{[-]}}"
 	}
+	if tag == "Folder" {
+		path = ensureTrailingSlash(path)
+	}
 	return "{{|" + tag + "::::" + strutil.FileURL(path) + "|}}" + name + "{{[-]}}"
+}
+
+// ensureTrailingSlash appends "/" if not already present. Used for folder
+// targets: a trailing slash forces path resolution to require a directory
+// (POSIX open/execve fail with ENOTDIR otherwise), which rules out a
+// same-named executable being run instead of the folder being opened.
+func ensureTrailingSlash(path string) string {
+	if strings.HasSuffix(path, "/") || strings.HasSuffix(path, "\\") {
+		return path
+	}
+	return path + "/"
 }
 
 func formatPathSegments(path string, lastIsFile bool) string {
@@ -143,6 +159,9 @@ func formatPathSegments(path string, lastIsFile bool) string {
 			b.WriteString("{{|" + tag + "|}}" + seg + "{{[-]}}")
 		} else {
 			cumulative := strings.Join(segments[:i+1], "/")
+			if tag == "Folder" {
+				cumulative = ensureTrailingSlash(cumulative)
+			}
 			b.WriteString("{{|" + tag + "::::" + strutil.FileURL(cumulative) + "|}}" + seg + "{{[-]}}")
 		}
 	}
