@@ -19,6 +19,7 @@ import (
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/serve"
 	"DockSTARTer2/internal/sessionlocks"
+	"DockSTARTer2/internal/system"
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/update"
 	"DockSTARTer2/internal/version"
@@ -97,6 +98,10 @@ func run() (exitCode int) {
 	}
 
 	slog.SetDefault(logger.NewLogger())
+
+	// Must happen before any real work (including config loading, which can
+	// create files) -- see CheckNotRoot's doc comment for why.
+	system.CheckNotRoot(context.Background())
 
 	// Apply spinner/line-char config early so spinner works during startup log messages.
 	{
