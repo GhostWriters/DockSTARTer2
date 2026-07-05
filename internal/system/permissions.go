@@ -33,7 +33,21 @@ func SetPermissions(ctx context.Context, path string) {
 		return
 	}
 
-	// 2. Home directory check
+	// 2. Check current ownership/permissions first. This is a read-only walk
+	// needing no elevated privileges, so it's always safe regardless of
+	// location -- only the chown/chmod below is a destructive action worth
+	// warning about, so that warning is deferred until we know it'll run.
+	logger.Info(ctx, "Checking ownership and permissions of '"+console.FormatFolderPath(path)+"'")
+
+	puid, pgid := GetIDs()
+	if puid == 0 || pgid == 0 {
+		return
+	}
+	if permissionsMatch(path, puid, pgid) {
+		return
+	}
+
+	// 3. Take Ownership and Set Permissions
 	home, _ := os.UserHomeDir()
 	if !strings.HasPrefix(path, home) {
 		logger.Warn(ctx, "Setting permissions for '"+console.FormatFolderPath(path)+"' outside of '"+console.FormatFolderPath(home)+"' may be unsafe.")
@@ -41,31 +55,23 @@ func SetPermissions(ctx context.Context, path string) {
 		logger.Info(ctx, "Setting permissions for '"+console.FormatFolderPath(path)+"'")
 	}
 
-	// 3. Take Ownership and Set Permissions
-	puid, pgid := GetIDs()
-	if puid != 0 && pgid != 0 {
-		if permissionsMatch(path, puid, pgid) {
-			return
+	logger.Info(ctx, "Taking ownership of '"+console.FormatFolderPath(path)+"' for user '{{|User|}}%d{{[-]}}' and group '{{|User|}}%d{{[-]}}'", puid, pgid)
+	if cmdChown, err := dsexec.SudoCommand(ctx, "chown", "-R", fmt.Sprintf("%d:%d", puid, pgid), path); err == nil {
+		if err := cmdChown.Run(); err != nil {
+			logger.FatalWithStack(ctx, []string{
+				"Failed to set ownership of folder.",
+				"Failing command: {{|FailingCommand|}}sudo chown -R \"%d:%d\" \"%s\"{{[-]}}",
+			}, puid, pgid, path)
 		}
+	}
 
-		logger.Info(ctx, "Taking ownership of '"+console.FormatFolderPath(path)+"' for user '{{|User|}}%d{{[-]}}' and group '{{|User|}}%d{{[-]}}'", puid, pgid)
-		if cmdChown, err := dsexec.SudoCommand(ctx, "chown", "-R", fmt.Sprintf("%d:%d", puid, pgid), path); err == nil {
-			if err := cmdChown.Run(); err != nil {
-				logger.FatalWithStack(ctx, []string{
-					"Failed to set ownership of folder.",
-					"Failing command: {{|FailingCommand|}}sudo chown -R \"%d:%d\" \"%s\"{{[-]}}",
-				}, puid, pgid, path)
-			}
-		}
-
-		logger.Info(ctx, "Setting file and folder permissions in '"+console.FormatFolderPath(path)+"'")
-		if cmdChmod, err := dsexec.SudoCommand(ctx, "chmod", "-R", "a=,a+rX,u+w,g+w", path); err == nil {
-			if err := cmdChmod.Run(); err != nil {
-				logger.FatalWithStack(ctx, []string{
-					"Failed to set permissions of folder.",
-					"Failing command: {{|FailingCommand|}}sudo chmod -R \"a=,a+rX,u+w,g+w\" \"%s\"{{[-]}}",
-				}, path)
-			}
+	logger.Info(ctx, "Setting file and folder permissions in '"+console.FormatFolderPath(path)+"'")
+	if cmdChmod, err := dsexec.SudoCommand(ctx, "chmod", "-R", "a=,a+rX,u+w,g+w", path); err == nil {
+		if err := cmdChmod.Run(); err != nil {
+			logger.FatalWithStack(ctx, []string{
+				"Failed to set permissions of folder.",
+				"Failing command: {{|FailingCommand|}}sudo chmod -R \"a=,a+rX,u+w,g+w\" \"%s\"{{[-]}}",
+			}, path)
 		}
 	}
 }
