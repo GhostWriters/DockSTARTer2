@@ -80,7 +80,8 @@ func (m *MenuModel) renderVariableHeightList() string {
 	tagStyleSel := theme.ThemeSemanticStyle("{{|TagFocused|}}")
 	keyStyleSel := theme.ThemeSemanticStyle("{{|TagKeyFocused|}}")
 	itemStyleSel := theme.ThemeSemanticStyle("{{|ItemFocused|}}")
-	checkboxStyleBase := theme.ThemeSemanticStyle("{{|Checkbox|}}")
+	checkboxStyleBase := theme.ThemeSemanticStyle("{{|CheckboxOff|}}")
+	checkboxStyleOn := theme.ThemeSemanticStyle("{{|CheckboxOn|}}")
 	checkboxStyleSel := theme.ThemeSemanticStyle("{{|CheckboxFocused|}}")
 	neutralStyle := lipgloss.NewStyle().Background(dialogBG)
 
@@ -115,6 +116,9 @@ func (m *MenuModel) renderVariableHeightList() string {
 		kStyle := keyStyleBase
 		dStyle := itemStyleBase
 		cbStyle := checkboxStyleBase
+		if item.Checked {
+			cbStyle = checkboxStyleOn
+		}
 		if isSelected {
 			tStyle = tagStyleSel
 			kStyle = keyStyleSel
@@ -196,7 +200,13 @@ func (m *MenuModel) renderVariableHeightList() string {
 		var cbAdd3, cbEnabled3, cbExpand3 string
 		if isAppSelect && (item.IsCheckbox || item.IsGroupHeader) {
 			cbAStyle := checkboxStyleBase
+			if item.Checked {
+				cbAStyle = checkboxStyleOn
+			}
 			cbEStyle := checkboxStyleBase
+			if item.Enabled {
+				cbEStyle = checkboxStyleOn
+			}
 			cbXStyle := neutralStyle
 			if isSelected {
 				switch m.activeColumn {
@@ -345,7 +355,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 
 		menuPrefixWidth := 0
 		if isAppSelect {
-			menuPrefixWidth = 12 // cbAdd(3) + sp(1) + cbEnabled(3) + sp(1) + cbExpand(3) + sp(1)
+			menuPrefixWidth = 11 // cbAdd(3) + sp(1) + cbEnabled(3) + cbExpand(3) + sp(1)
 		} else if hasAnyCheckboxes {
 			menuPrefixWidth = layout.CheckboxWidth()
 		}
@@ -401,9 +411,13 @@ func (m *MenuModel) renderVariableHeightList() string {
 		prefixWidth := 0
 		if item.IsCheckbox || item.IsRadioButton || item.IsGroupHeader {
 			if isAppSelect && (item.IsCheckbox || item.IsGroupHeader) {
-				// Slot1(3) + Space(1) + Slot2(3) + Space(1) + Slot3(3) + Space(1) = 12 characters.
+				// Slot1(3) + Space(1) + Slot2(3) + Slot3(3) + Space(1) = 11 characters.
+				// No separator between Slot2 and Slot3 -- the Expand slot's own
+				// leading character (a blank when unfocused, "[" when focused)
+				// already acts as that gap, matching the single space everywhere
+				// else instead of doubling up.
 				// This MUST match menuPrefixWidth above to align with standard app-select rows.
-				prefixPadding = cbAdd3 + neutralStyle.Render(" ") + cbEnabled3 + neutralStyle.Render(" ") + cbExpand3 + nameSep
+				prefixPadding = cbAdd3 + neutralStyle.Render(" ") + cbEnabled3 + cbExpand3 + nameSep
 			} else {
 				// Standard menus or Radio buttons: indicator followed by one space
 				prefixPadding = checkbox + neutralStyle.Render(" ")
@@ -541,7 +555,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 							Width:  layout.CheckboxWidth(),
 							Height: h,
 						})
-						tagX := baseShift + layout.SingleBorder()*10
+						tagX := baseShift + layout.SingleBorder()*9
 						// Simple rows and group headers have a dedicated 3-char-wide arrow
 						// column at tagX. Clicks past it (the app name / description) fall
 						// through to "-border" so the name's own hyperlink hit region
@@ -693,7 +707,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 							Width:  layout.CheckboxWidth(),
 							Height: itemH,
 						})
-						tagX := baseShift + layout.SingleBorder()*10
+						tagX := baseShift + layout.SingleBorder()*9
 						// See the corresponding comment in the non-scrolled render path above:
 						// widen the arrow's hit region by 1 char on each side for easier clicking.
 						expandX, expandWidth := tagX-1, 3
@@ -753,15 +767,21 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 	var subGroupTagMaxW int
 	for _, item := range items {
 		w := lipgloss.Width(GetPlainText(item.Tag))
+		if item.IsEditing {
+			// The opening "[" replaces one of the two blank spaces already
+			// before the tag (see rowContent below), but the closing "]" has
+			// no space slot to replace -- account for that 1 extra character.
+			w++
+		}
 		if w > subGroupTagMaxW {
 			subGroupTagMaxW = w
 		}
 	}
 
 	// Instance Grid: Indent 10, Dash 1, Left Pad 1, Right Pad 1.
-	// Total width: 1(│) + 1(sp_l) + 10(prefix) + tag + 1(sp_r) + 1(│).
-	// Total width: 2 + 10 + tag + 1 = 13 + tag. No, prefix is already 10.
-	// Prefix = 1(sp_l) + 3(cbA) + 1(sp) + 3(cbE) + 1(sp) = 10.
+	// Prefix = 1(sp_l) + 3(cbA) + 1(sp) + 3(cbE) + 1(sp) = 10 -- that single
+	// separator space becomes "[" while editing (see nameSep below), same as
+	// the top-level Name column, rather than reserving a permanent extra one.
 	// Total width: 1(│l) + 10(prefix) + maxTag + 1(sp_r) + 1(│r) = 13 + maxTag.
 	subListWidth := 12 + subGroupTagMaxW
 	if subListWidth > maxWidth {
@@ -769,12 +789,25 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 	}
 
 	subFocused := m.IsListActive() && hasCursor
+
+	// While renaming/adding an instance, keyboard input goes to the text
+	// field, not the Add/Enable columns -- don't let the "A E" border labels
+	// keep claiming one of them has focus.
+	anyEditing := false
+	for _, it := range items {
+		if it.IsEditing {
+			anyEditing = true
+			break
+		}
+	}
+	aeBorderFocused := subFocused && !anyEditing
+
 	var resLines []string
 	var resH []int
 	var resM []int
 
 	// 1. Build Top Border with 1 dash.
-	topBorder := BuildAETopBorder(subListWidth, 1, subFocused, m.activeColumn, ctx)
+	topBorder := BuildAETopBorder(subListWidth, 1, aeBorderFocused, m.activeColumn, ctx)
 	resLines = append(resLines, neutralStyle.Render(strutil.Repeat(" ", 10))+topBorder)
 	resH = append(resH, 1)
 	resM = append(resM, startVisibleIndex|vIdxBorderFlag) // Flag as border
@@ -846,18 +879,29 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 
 		tagStr := ""
 		if item.IsEditing {
-			// Using the standard edit styling (red background/bold)
+			// Same [Name]-style indicator as the top-level Name column, with
+			// unstyled brackets -- the edited text itself keeps the standard
+			// edit styling (red background/bold). The opening "[" is added by
+			// rowContent below, replacing one of the blank separator spaces
+			// rather than adding width; only the closing "]" is added here.
+			// The real hardware cursor (see AppSelectionScreen.GetInputCursor)
+			// marks the actual edit position, so no visual cursor glyph is
+			// embedded in the text.
 			editTag := GetPlainText(item.Tag)
-			tagStr += theme.ThemeSemanticStyle("{{|ItemFocused|}}").Render(editTag)
+			editStyle := theme.ThemeSemanticStyle("{{|ItemFocused|}}")
+			tagStr += editStyle.Render(editTag) + neutralStyle.Render("]")
 		} else if len(item.Tag) > 0 {
 			runes := []rune(item.Tag)
 			tagStr += kStyle.Render(string(runes[0])) + tStyle.Render(string(runes[1:]))
 		}
 
-		// Choose checkbox styles individually
-		cbStyleA := tStyle
-		cbStyleE := tStyle
-		if isSelected {
+		// Choose checkbox styles individually. While this row is being renamed,
+		// keyboard input goes to the text field, not Add/Enable -- neither
+		// column should keep claiming whichever one was active before editing
+		// started.
+		cbStyleA := tagStyleBase
+		cbStyleE := tagStyleBase
+		if isSelected && !item.IsEditing {
 			if subFocused {
 				if m.activeColumn == ColAdd {
 					cbStyleA = tagStyleSel
@@ -875,8 +919,8 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 
 		// Brackets show only on the specific column with keyboard focus, same
 		// convention as the top-level app row's cbAdd3/cbEnabled3 above.
-		addFocused := isSelected && subFocused && m.activeColumn == ColAdd
-		enableFocused := isSelected && subFocused && m.activeColumn == ColEnable
+		addFocused := isSelected && subFocused && !item.IsEditing && m.activeColumn == ColAdd
+		enableFocused := isSelected && subFocused && !item.IsEditing && m.activeColumn == ColEnable
 
 		var checkboxA3, checkboxE3 string
 		if ctx.LineCharacters {
@@ -926,7 +970,14 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 		indent := neutralStyle.Render(strutil.Repeat(" ", 8))
 
 		// The rowContent starts with the left border, followed by a mandatory internal space.
-		rowContent := vStyleLight.Render(vBorderChar) + neutralStyle.Render(" ") + checkboxA3 + neutralStyle.Render(" ") + checkboxE3 + neutralStyle.Render(" ") + tagStr
+		// The single separator before the tag becomes "[" while editing rather
+		// than adding a new character -- matches the top-level Name column's
+		// own [AppName] indicator, which does the same.
+		nameSep := neutralStyle.Render(" ")
+		if item.IsEditing {
+			nameSep = neutralStyle.Render("[")
+		}
+		rowContent := vStyleLight.Render(vBorderChar) + neutralStyle.Render(" ") + checkboxA3 + neutralStyle.Render(" ") + checkboxE3 + nameSep + tagStr
 		rowWidth := subListWidth - 1
 		pContent := rowContent + neutralStyle.Render(strutil.Repeat(" ", max(0, rowWidth-lipgloss.Width(GetPlainText(rowContent)))))
 
@@ -942,7 +993,7 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 	}
 
 	// 3. Build Bottom Border with 1 dash.
-	bottomBorder := BuildAEBottomBorder(subListWidth, 1, subFocused, m.activeColumn, -1, ctx)
+	bottomBorder := BuildAEBottomBorder(subListWidth, 1, aeBorderFocused, m.activeColumn, -1, ctx)
 	resLines = append(resLines, neutralStyle.Render(strutil.Repeat(" ", 10))+bottomBorder+semstyle.CodeReset)
 	resH = append(resH, 1)
 	resM = append(resM, startVisibleIndex|vIdxBorderFlag) // Flag as border

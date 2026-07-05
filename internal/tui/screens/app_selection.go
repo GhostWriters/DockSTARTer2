@@ -96,6 +96,32 @@ func (s *AppSelectionScreen) BlurTitleBar()             { s.menu.BlurTitleBar() 
 func (s *AppSelectionScreen) TitleBarFocused() bool     { return s.menu.TitleBarFocused() }
 func (s *AppSelectionScreen) EscapeAction() tea.Cmd     { return s.menu.EscapeAction() }
 
+// GetInputCursor implements tui.InputCursorProvider so the real hardware
+// cursor tracks the rename/add-instance text field, instead of a hand-drawn
+// cursor glyph embedded in the row's text. The editing row's on-screen
+// position is read back from its own "-expand" hit region (already correctly
+// positioned by the renderer, scroll offset and all) rather than
+// recalculating list layout math independently here.
+func (s *AppSelectionScreen) GetInputCursor() (relX, relY int, shape tea.CursorShape, ok bool) {
+	if !s.isEditing || s.editingIdx < 0 {
+		return 0, 0, tea.CursorBar, false
+	}
+	itemID := displayengine.GetMenuItemID(s.menu.ID(), s.editingIdx) + "-expand"
+	for _, r := range s.menu.GetHitRegions(0, 0) {
+		if r.ID != itemID {
+			continue
+		}
+		niceName := appenv.GetNiceName(context.Background(), s.editingBaseApp)
+		content := niceName
+		if s.editContent != "" {
+			content = niceName + "__" + appenv.CapitalizeFirstLetter(s.editContent)
+		}
+		// +1 skips the opening "[" itself, landing right after the typed text.
+		return r.X + 1 + lipgloss.Width(content), r.Y, tea.CursorBar, true
+	}
+	return 0, 0, tea.CursorBar, false
+}
+
 func (s *AppSelectionScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if _, ok := msg.(appSelectShowSpinnerMsg); ok {
 		// Only show the spinner if loading hasn't finished yet.
