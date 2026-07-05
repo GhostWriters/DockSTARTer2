@@ -51,11 +51,13 @@ func init() {
 	// unconditionally unless a RenderPolicy is set -- without this, every
 	// tag (including OSC 8 hyperlinks) would still be emitted even when
 	// output is redirected to a file or the terminal can't handle color,
-	// producing raw escape-sequence garbage instead of plain text. TUIMode
-	// is exempted since bubbletea manages its own output stream/profile
-	// independent of stdout/stderr.
+	// producing raw escape-sequence garbage instead of plain text.
+	// IsTUIEnabled is exempted since bubbletea manages its own output
+	// stream/profile independent of stdout/stderr -- NOT the TUIMode var,
+	// which (despite the name) is never actually assigned anywhere in the
+	// codebase and would always evaluate false here.
 	semstyle.RenderPolicy = func() bool {
-		return TUIMode || GetPreferredProfile() > colorprofile.Ascii
+		return IsTUIEnabled() || GetPreferredProfile() > colorprofile.Ascii
 	}
 }
 
