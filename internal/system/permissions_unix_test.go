@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestPermissionsMatch(t *testing.T) {
+func TestCheckPermissions(t *testing.T) {
 	uid := os.Getuid()
 	gid := os.Getgid()
 
@@ -36,23 +36,27 @@ func TestPermissionsMatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !permissionsMatch(dir, uid, gid, true) {
-		t.Error("expected match for freshly created tree with correct modes and current uid/gid")
+	if chown, chmod := checkPermissions(dir, uid, gid, true); chown || chmod {
+		t.Errorf("expected no fix needed for freshly created tree with correct modes and current uid/gid, got chown=%v chmod=%v", chown, chmod)
 	}
 
-	if permissionsMatch(dir, uid+1, gid, true) {
-		t.Error("expected mismatch when target uid differs from actual owner")
+	if chown, chmod := checkPermissions(dir, uid+1, gid, true); !chown || chmod {
+		t.Errorf("expected only chown needed when target uid differs from actual owner (mode still fine), got chown=%v chmod=%v", chown, chmod)
 	}
 
 	if err := os.Chmod(file, 0644); err != nil {
 		t.Fatal(err)
 	}
-	if permissionsMatch(dir, uid, gid, true) {
-		t.Error("expected mismatch when a file's mode differs from the expected 0664")
+	if chown, chmod := checkPermissions(dir, uid, gid, true); chown || !chmod {
+		t.Errorf("expected only chmod needed when a file's mode differs from the expected 0664 (ownership still fine), got chown=%v chmod=%v", chown, chmod)
+	}
+
+	if chown, chmod := checkPermissions(dir, uid+1, gid, true); !chown || !chmod {
+		t.Errorf("expected both needed when both ownership and mode are wrong, got chown=%v chmod=%v", chown, chmod)
 	}
 }
 
-func TestPermissionsMatchIgnoresSymlinks(t *testing.T) {
+func TestCheckPermissionsIgnoresSymlinks(t *testing.T) {
 	uid := os.Getuid()
 	gid := os.Getgid()
 
@@ -72,12 +76,12 @@ func TestPermissionsMatchIgnoresSymlinks(t *testing.T) {
 		t.Skipf("symlinks not supported in this environment: %v", err)
 	}
 
-	if !permissionsMatch(dir, uid, gid, true) {
-		t.Error("expected match: symlink's own (unusual) mode/ownership should not affect the result")
+	if chown, chmod := checkPermissions(dir, uid, gid, true); chown || chmod {
+		t.Errorf("expected no fix needed: symlink's own (unusual) mode/ownership should not affect the result, got chown=%v chmod=%v", chown, chmod)
 	}
 }
 
-func TestPermissionsMatchNonRecursive(t *testing.T) {
+func TestCheckPermissionsNonRecursive(t *testing.T) {
 	uid := os.Getuid()
 	gid := os.Getgid()
 
@@ -92,18 +96,18 @@ func TestPermissionsMatchNonRecursive(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !permissionsMatch(dir, uid, gid, false) {
-		t.Error("expected match: non-recursive check should ignore mismatched children")
+	if chown, chmod := checkPermissions(dir, uid, gid, false); chown || chmod {
+		t.Errorf("expected no fix needed: non-recursive check should ignore mismatched children, got chown=%v chmod=%v", chown, chmod)
 	}
 
-	if permissionsMatch(dir, uid+1, gid, false) {
-		t.Error("expected mismatch when target uid differs from dir's actual owner")
+	if chown, chmod := checkPermissions(dir, uid+1, gid, false); !chown || chmod {
+		t.Errorf("expected only chown needed when target uid differs from dir's actual owner, got chown=%v chmod=%v", chown, chmod)
 	}
 
 	if err := os.Chmod(dir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	if permissionsMatch(dir, uid, gid, false) {
-		t.Error("expected mismatch when dir's own mode differs from the expected 0775")
+	if chown, chmod := checkPermissions(dir, uid, gid, false); chown || !chmod {
+		t.Errorf("expected only chmod needed when dir's own mode differs from the expected 0775, got chown=%v chmod=%v", chown, chmod)
 	}
 }
