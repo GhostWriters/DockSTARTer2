@@ -44,6 +44,10 @@ func SetPermissions(ctx context.Context, path string) {
 	// 3. Take Ownership and Set Permissions
 	puid, pgid := GetIDs()
 	if puid != 0 && pgid != 0 {
+		if permissionsMatch(path, puid, pgid) {
+			return
+		}
+
 		logger.Info(ctx, "Taking ownership of '"+console.FormatFolderPath(path)+"' for user '{{|User|}}%d{{[-]}}' and group '{{|User|}}%d{{[-]}}'", puid, pgid)
 		if cmdChown, err := dsexec.SudoCommand(ctx, "chown", "-R", fmt.Sprintf("%d:%d", puid, pgid), path); err == nil {
 			if err := cmdChown.Run(); err != nil {
