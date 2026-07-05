@@ -44,7 +44,7 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 
 		tagStyle := theme.ThemeSemanticStyle("{{|Tag|}}")
 		keyStyle := theme.ThemeSemanticStyle("{{|TagKey|}}")
-		checkboxStyle := theme.ThemeSemanticStyle("{{|Checkbox|}}")
+		checkboxStyle := theme.ThemeSemanticStyle("{{|CheckboxOff|}}")
 
 		if isSelected {
 			tagStyle = theme.ThemeSemanticStyle("{{|TagFocused|}}")
@@ -230,7 +230,7 @@ func (m *MenuModel) renderColumnContent(maxWidth, numCols int) string {
 
 			tagStyle := theme.ThemeSemanticStyle("{{|Tag|}}")
 			keyStyle := theme.ThemeSemanticStyle("{{|TagKey|}}")
-			checkboxStyle := theme.ThemeSemanticStyle("{{|Checkbox|}}")
+			checkboxStyle := theme.ThemeSemanticStyle("{{|CheckboxOff|}}")
 			if isSelected {
 				tagStyle = theme.ThemeSemanticStyle("{{|TagFocused|}}")
 				keyStyle = theme.ThemeSemanticStyle("{{|TagKeyFocused|}}")

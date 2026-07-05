@@ -103,7 +103,8 @@ Heading = "{{[$primary:$secondary:B]}}"
 HeadingTag = "{{[$secondary:$primary]}}"
 HeadingValue = "{{[-:-:-RB]}}"
 HeadingAppDescription = "{{[-:-:-B]}}"
-Checkbox = "{{|Dialog|}}"
+CheckboxOff = "{{|Dialog|}}"
+CheckboxOn = "{{|TagKey|}}"
 CheckboxFocused = "{{|TagFocused|}}"
 
 

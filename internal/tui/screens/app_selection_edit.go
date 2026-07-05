@@ -8,14 +8,12 @@ import (
 )
 
 func (s *AppSelectionScreen) editingTag(niceName, content, errMsg string) string {
-	cursor := "▌"
 	var display string
 	if content == "" {
 		display = niceName
 	} else {
 		display = niceName + "__" + appenv.CapitalizeFirstLetter(content)
 	}
-	display += cursor
 	if errMsg != "" {
 		display += "  {{|TitleError|}}" + errMsg + "{{[-]}}"
 	}
@@ -155,6 +153,13 @@ func (s *AppSelectionScreen) startRenaming(subIdx int) {
 
 	s.menu.SetItems(newItems)
 	s.menu.Select(subIdx)
+	// Renaming a name is conceptually "on" that name, which for sub-items sits
+	// right after Enable (there's no dedicated Name column for sub-items the
+	// way the top-level Add/Enable/Expand/Name row has one) -- so landing back
+	// on Enable when Esc cancels the edit matches that ordering, regardless of
+	// which column was active before editing started (e.g. a direct click on
+	// the name itself, which doesn't otherwise touch the active column).
+	s.menu.SetActiveColumn(displayengine.ColEnable)
 }
 
 func (s *AppSelectionScreen) cancelEdit() {
