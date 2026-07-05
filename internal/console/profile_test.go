@@ -10,12 +10,9 @@ import (
 
 func TestRenderPolicyStripsWhenProfileHasNoColor(t *testing.T) {
 	origProfile := GetPreferredProfile()
-	origTUIMode := TUIMode
-	defer func() {
-		SetPreferredProfile(origProfile)
-		TUIMode = origTUIMode
-	}()
-	TUIMode = false
+	defer SetPreferredProfile(origProfile)
+	SetTUIEnabled(false)
+	defer SetTUIEnabled(false)
 
 	SetPreferredProfile(colorprofile.NoTTY)
 	got := semstyle.ToANSI("{{|Notice|}}hello{{[-]}}")
@@ -29,12 +26,9 @@ func TestRenderPolicyStripsWhenProfileHasNoColor(t *testing.T) {
 
 func TestRenderPolicyRendersWhenProfileHasColor(t *testing.T) {
 	origProfile := GetPreferredProfile()
-	origTUIMode := TUIMode
-	defer func() {
-		SetPreferredProfile(origProfile)
-		TUIMode = origTUIMode
-	}()
-	TUIMode = false
+	defer SetPreferredProfile(origProfile)
+	SetTUIEnabled(false)
+	defer SetTUIEnabled(false)
 
 	SetPreferredProfile(colorprofile.TrueColor)
 	got := semstyle.ToANSI("{{|Notice|}}hello{{[-]}}")
@@ -43,18 +37,15 @@ func TestRenderPolicyRendersWhenProfileHasColor(t *testing.T) {
 	}
 }
 
-func TestRenderPolicyAlwaysRendersInTUIMode(t *testing.T) {
+func TestRenderPolicyAlwaysRendersWhenTUIEnabled(t *testing.T) {
 	origProfile := GetPreferredProfile()
-	origTUIMode := TUIMode
-	defer func() {
-		SetPreferredProfile(origProfile)
-		TUIMode = origTUIMode
-	}()
+	defer SetPreferredProfile(origProfile)
+	defer SetTUIEnabled(false)
 
 	SetPreferredProfile(colorprofile.NoTTY)
-	TUIMode = true
+	SetTUIEnabled(true)
 	got := semstyle.ToANSI("{{|Notice|}}hello{{[-]}}")
 	if !strings.Contains(got, "\x1b") {
-		t.Errorf("expected ANSI escapes when TUIMode is true regardless of profile, got %q", got)
+		t.Errorf("expected ANSI escapes when TUI is enabled regardless of profile, got %q", got)
 	}
 }
