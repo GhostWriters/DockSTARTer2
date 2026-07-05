@@ -7,11 +7,29 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/user"
 	"runtime"
 	"strconv"
 	"strings"
 )
+
+// chmodCommand builds the command to run for a chmod, skipping sudo when the
+// current process's real UID/GID already equal puid:pgid -- chmod only
+// requires the effective UID to match the file's current owner (or be
+// root), unlike chown, which generally needs CAP_CHOWN/root regardless. DS2
+// disallows running as root or via sudo at all (see CheckNotRoot), so the
+// invoking user is always supposed to already BE puid:pgid; this check is a
+// failsafe for the rare case they diverge (e.g. a stale SUDO_UID/SUDO_GID
+// env var inherited from an unrelated earlier "sudo -u otheruser" shell,
+// which wouldn't trip CheckNotRoot since that process isn't itself
+// currently elevated).
+func chmodCommand(ctx context.Context, puid, pgid int, args ...string) (*exec.Cmd, error) {
+	if os.Getuid() == puid && os.Getgid() == pgid {
+		return exec.CommandContext(ctx, "chmod", args...), nil
+	}
+	return dsexec.SudoCommand(ctx, "chmod", args...)
+}
 
 // SetPermissions mimics the bash set_permissions.sh logic exactly.
 func SetPermissions(ctx context.Context, path string) {
@@ -66,7 +84,7 @@ func SetPermissions(ctx context.Context, path string) {
 	}
 
 	logger.Info(ctx, "Setting file and folder permissions in '"+console.FormatFolderPath(path)+"'")
-	if cmdChmod, err := dsexec.SudoCommand(ctx, "chmod", "-R", "a=,a+rX,u+w,g+w", path); err == nil {
+	if cmdChmod, err := chmodCommand(ctx, puid, pgid, "-R", "a=,a+rX,u+w,g+w", path); err == nil {
 		if err := cmdChmod.Run(); err != nil {
 			logger.FatalWithStack(ctx, []string{
 				"Failed to set permissions of folder.",
@@ -114,7 +132,7 @@ func TakeOwnership(ctx context.Context, path string) {
 	}
 
 	logger.Info(ctx, "Setting permissions of '"+console.FormatFolderPath(path)+"' (non-recursive).")
-	if cmd, err := dsexec.SudoCommand(ctx, "chmod", "0775", path); err == nil {
+	if cmd, err := chmodCommand(ctx, puid, pgid, "0775", path); err == nil {
 		if err := cmd.Run(); err != nil {
 			logger.FatalWithStack(ctx, []string{
 				"Failed to set permissions of folder.",
