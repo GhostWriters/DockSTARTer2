@@ -165,7 +165,8 @@ func LogProblem(ctx context.Context, st Status, asError bool) {
 		log(ctx, "Permission denied connecting to the Docker daemon socket.")
 		log(ctx, "This usually means your user is not in the '{{|User|}}docker{{[-]}}' group. See "+link+" for instructions.")
 	default:
-		log(ctx, "The Docker daemon is not reachable (is Docker installed and running?): %v", st.Err)
+		log(ctx, "The Docker daemon is not reachable (is Docker installed and running?)")
+		log(ctx, "%v", st.Err)
 		log(ctx, "Docker commands will not work until it is. See "+link+" for instructions on setting up Docker.")
 	}
 }
