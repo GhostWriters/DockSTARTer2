@@ -213,9 +213,9 @@ func GetDockerDaemonVersionDisplay(ctx context.Context) string {
 		st = &fresh
 	}
 	if !st.Reachable || st.ServerVersion == "" {
-		return "{{|ApplicationName|}}Docker Daemon{{[-]}} [{{|Version|}}not detected{{[-]}}] (external dependency)"
+		return "{{|ApplicationName|}}Docker Daemon{{[-]}} [{{|Error|}}not detected{{[-]}}] (external dependency)"
 	}
-	ver := versionTag(st.ServerVersion, "https://github.com/moby/moby/releases/tag/v"+st.ServerVersion)
+	ver := versionTag(st.ServerVersion, "https://github.com/moby/moby/releases/tag/docker-v"+st.ServerVersion)
 	return fmt.Sprintf("{{|ApplicationName|}}Docker Daemon{{[-]}} [%s] (external dependency)", ver)
 }
 
