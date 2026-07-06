@@ -213,10 +213,10 @@ func GetDockerDaemonVersionDisplay(ctx context.Context) string {
 		st = &fresh
 	}
 	if !st.Reachable || st.ServerVersion == "" {
-		return "{{|ApplicationName|}}Docker Daemon{{[-]}} [{{|Error|}}not detected{{[-]}}] (external dependency)"
+		return "{{|ApplicationName|}}Docker Engine{{[-]}} [{{|Error|}}not detected{{[-]}}] (external dependency)"
 	}
 	ver := versionTag(st.ServerVersion, "https://github.com/moby/moby/releases/tag/docker-v"+st.ServerVersion)
-	return fmt.Sprintf("{{|ApplicationName|}}Docker Daemon{{[-]}} [%s] (external dependency)", ver)
+	return fmt.Sprintf("{{|ApplicationName|}}Docker Engine{{[-]}} [%s] (external dependency)", ver)
 }
 
 func checkAppUpdate(ctx context.Context) (updateAvailable bool, ver string, hadError bool) {
