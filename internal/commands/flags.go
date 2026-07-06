@@ -44,6 +44,9 @@ func NewFlagSet() *pflag.FlagSet {
 
 	// Installation / Update
 	fs.BoolP("install", "i", false, "Install/update dependencies")
+	fs.Bool("setcap", false, "Grant CAP_CHOWN/CAP_FOWNER file capabilities to the binary (Linux; use with -y for scripts)")
+	fs.Bool("config-setcap", false, "Enable and apply the file capability grant without asking")
+	fs.Bool("config-no-setcap", false, "Disable the file capability grant and remove it from the binary")
 	fs.StringP("update", "u", "", "Update "+version.ApplicationName+" and Templates (can specify tag/branch)")
 	fs.String("update-app", "", "Update "+version.ApplicationName+" only (can specify tag)")
 	fs.String("update-templates", "", "Update Templates only (can specify tag/branch)")

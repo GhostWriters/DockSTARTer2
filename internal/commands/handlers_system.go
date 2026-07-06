@@ -18,8 +18,82 @@ import (
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/system"
+	"DockSTARTer2/internal/update"
 	"DockSTARTer2/internal/version"
 )
+
+// HandleSetcap runs the explicit --setcap command: offer/apply the optional
+// CAP_CHOWN/CAP_FOWNER grant on the binary and persist the answer.
+// "-y --setcap" makes it fully scriptable (QuestionPrompt auto-accepts).
+func HandleSetcap(ctx context.Context) error {
+	conf := config.LoadAppConfig()
+	asked, enabled, applied, err := system.RunSetcapCommand(ctx)
+	if asked != conf.System.SetcapAsked || enabled != conf.System.AutoSetcap {
+		conf.System.SetcapAsked = asked
+		conf.System.AutoSetcap = enabled
+		if saveErr := config.SaveAppConfig(conf); saveErr != nil {
+			logger.Warn(ctx, "Failed to save auto_setcap setting: %v", saveErr)
+		}
+	}
+	if err != nil {
+		logger.Error(ctx, "%v", err)
+		return err
+	}
+	// File capabilities only bind at exec time, so when more commands follow
+	// on this command line, re-exec with the remainder (the same pattern as
+	// "-u -c": update, then re-exec with "-c") so they run with the
+	// capabilities active instead of falling back to sudo.
+	if applied && len(console.RestArgs) > 0 {
+		return reExecRest(ctx)
+	}
+	return nil
+}
+
+// HandleConfigSetcap runs --config-setcap / --config-no-setcap: directly set
+// the auto_setcap config option with no question asked (the config-style
+// counterpart of --setcap, like --theme-shadows/--theme-no-shadows).
+// Enabling applies the grant immediately; disabling also removes the
+// capabilities from the binary.
+func HandleConfigSetcap(ctx context.Context, enable bool) error {
+	conf := config.LoadAppConfig()
+	if !conf.System.SetcapAsked || conf.System.AutoSetcap != enable {
+		conf.System.SetcapAsked = true
+		conf.System.AutoSetcap = enable
+		if err := config.SaveAppConfig(conf); err != nil {
+			logger.Warn(ctx, "Failed to save auto_setcap setting: %v", err)
+		}
+	}
+	if !enable {
+		if err := system.DisableSetcap(ctx); err != nil {
+			logger.Error(ctx, "%v", err)
+			return err
+		}
+		return nil
+	}
+	applied, err := system.EnableSetcap(ctx)
+	if err != nil {
+		logger.Error(ctx, "%v", err)
+		return err
+	}
+	// Same re-exec-with-the-remainder pattern as --setcap, so commands that
+	// follow on this command line run with the capabilities active.
+	if applied && len(console.RestArgs) > 0 {
+		return reExecRest(ctx)
+	}
+	return nil
+}
+
+// reExecRest re-executes DS2 with the remaining (not yet processed) command
+// line, so those commands run in a process that picked up the just-applied
+// file capabilities at exec time.
+func reExecRest(ctx context.Context) error {
+	exePath, err := os.Executable()
+	if err != nil {
+		logger.Warn(ctx, "Cannot re-exec for the remaining commands: %v", err)
+		return nil
+	}
+	return update.ReExec(ctx, exePath, console.RestArgs)
+}
 
 func HandleList(ctx context.Context, group *CommandGroup) error {
 	conf := config.LoadAppConfig()

@@ -156,6 +156,15 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			case "-i", "--install":
 				ranCommand = true
 				return commands.HandleInstall(subCtx, &group, &state)
+			case "--setcap":
+				ranCommand = true
+				return commands.HandleSetcap(subCtx)
+			case "--config-setcap":
+				ranCommand = true
+				return commands.HandleConfigSetcap(subCtx, true)
+			case "--config-no-setcap":
+				ranCommand = true
+				return commands.HandleConfigSetcap(subCtx, false)
 			case "-u", "--update", "--update-app", "--update-templates":
 				ranCommand = true
 				return handleUpdate(subCtx, &group, &state, restArgs)

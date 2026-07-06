@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/dockercheck"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/version"
@@ -198,6 +199,24 @@ func GetTmplVersionDisplay() string {
 // GetComposeSdkVersionDisplay returns a formatted version string for the Docker Compose SDK.
 func GetComposeSdkVersionDisplay() string {
 	return fmt.Sprintf("{{|ApplicationName|}}Docker Compose SDK{{[-]}} [%s]", ComposeSdkVersionLink(version.GetComposeSdkVersion()))
+}
+
+// GetDockerDaemonVersionDisplay returns a formatted version string for the
+// Docker daemon DS2 talks to. Uses the startup probe's cached result when
+// available, probing fresh otherwise (e.g. when the startup check was
+// skipped this invocation). The daemon is the one piece DS2 doesn't ship,
+// hence the "external dependency" label.
+func GetDockerDaemonVersionDisplay(ctx context.Context) string {
+	st := dockercheck.Last()
+	if st == nil {
+		fresh := dockercheck.Check(ctx)
+		st = &fresh
+	}
+	if !st.Reachable || st.ServerVersion == "" {
+		return "{{|ApplicationName|}}Docker Daemon{{[-]}} [{{|Version|}}not detected{{[-]}}] (external dependency)"
+	}
+	ver := versionTag(st.ServerVersion, "https://github.com/moby/moby/releases/tag/v"+st.ServerVersion)
+	return fmt.Sprintf("{{|ApplicationName|}}Docker Daemon{{[-]}} [%s] (external dependency)", ver)
 }
 
 func checkAppUpdate(ctx context.Context) (updateAvailable bool, ver string, hadError bool) {

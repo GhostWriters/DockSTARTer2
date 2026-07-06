@@ -43,6 +43,7 @@ func HandleVersion(ctx context.Context) error {
 	logger.Display(ctx, update.GetAppVersionDisplay())
 	logger.Display(ctx, update.GetTmplVersionDisplay())
 	logger.Display(ctx, update.GetComposeSdkVersionDisplay())
+	logger.Display(ctx, update.GetDockerDaemonVersionDisplay(ctx))
 	return nil
 }
 

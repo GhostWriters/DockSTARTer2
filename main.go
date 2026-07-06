@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"sync"
 	"syscall"
 
@@ -15,6 +16,7 @@ import (
 	"DockSTARTer2/internal/assets"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/dockercheck"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/serve"
@@ -224,6 +226,50 @@ func run() (exitCode int) {
 	serve.CheckStartupStatus(ctx)
 
 	stopStartupSpinner()
+
+	// A setcap command on the command line decides the capability setting
+	// itself and may re-exec with the remaining arguments -- so both the
+	// startup setcap offer AND the startup Docker probe are skipped for it
+	// (the re-exec'd child repeats startup, and would duplicate any
+	// warnings the parent already printed).
+	setcapCmdPresent := slices.ContainsFunc(os.Args[1:], func(a string) bool {
+		return a == "--setcap" || a == "--config-setcap" || a == "--config-no-setcap"
+	})
+	interactive := console.IsTTY() && console.IsStdoutTTY() && console.IsStdinTTY()
+
+	// Offer/maintain the optional CAP_CHOWN/CAP_FOWNER grant on the binary
+	// (lets permission fixes run without sudo; Linux + interactive startups
+	// only). The user's answer is persisted so they're only ever asked once.
+	if !setcapCmdPresent {
+		conf := config.LoadAppConfig()
+		asked, enabled := system.AutoSetcapStartup(ctx, conf.System.SetcapAsked, conf.System.AutoSetcap, interactive)
+		if asked != conf.System.SetcapAsked || enabled != conf.System.AutoSetcap {
+			conf.System.SetcapAsked = asked
+			conf.System.AutoSetcap = enabled
+			if err := config.SaveAppConfig(conf); err != nil {
+				logger.Warn(ctx, "Failed to save auto_setcap setting: %v", err)
+			}
+		}
+	}
+
+	// Probe the Docker daemon once at startup: warn -- never block -- if
+	// it's missing, unreachable, or too old, since everything that doesn't
+	// touch Docker (adding apps, editing env files, themes, ...) must keep
+	// working regardless. Operations that DO need the daemon re-check and
+	// hard-error at their own start (dockercheck.Require). When the
+	// permission-denied cause is specifically a missing docker-group
+	// membership, offer to fix it right here (interactive only).
+	if !setcapCmdPresent {
+		if st := dockercheck.StartupCheck(ctx); !st.OK() {
+			handled := false
+			if st.PermissionDenied && interactive {
+				handled = system.OfferDockerGroupFix(ctx)
+			}
+			if !handled {
+				dockercheck.LogProblem(ctx, st, false)
+			}
+		}
+	}
 
 	// Parse command line arguments
 	groups, err := cmd.Parse(os.Args[1:])

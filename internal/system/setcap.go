@@ -1,0 +1,212 @@
+package system
+
+import (
+	dsexec "DockSTARTer2/internal/exec"
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/paths"
+	"bytes"
+	"context"
+	"fmt"
+	"os"
+	"runtime"
+	"strings"
+)
+
+// AutoSetcapStartup manages the optional CAP_CHOWN/CAP_FOWNER grant on the
+// DS2 binary at startup. With those capabilities present, permission fixes
+// (see applyPermissionFix) run natively in-process and never need sudo at
+// all. The grant is strictly opt-in, controlled by two persisted config
+// values (config.SystemConfig) passed in and returned for the caller to
+// save back if changed:
+//
+//	enabled (auto_setcap)  -- keep the capabilities applied: re-run
+//	        "sudo setcap" whenever the binary lacks them (file capabilities
+//	        are attached to the binary itself, so a self-update replacing
+//	        it strips them). Applies regardless of asked, so setting it
+//	        true by hand in the config enables the grant without ever
+//	        being asked.
+//	asked (setcap_asked)   -- the one-time question has been answered;
+//	        never ask again. Only set here, after the user actually
+//	        answers (an aborted prompt leaves it false so a later startup
+//	        offers again).
+//
+// Linux-only (file capabilities don't exist elsewhere), and skipped
+// entirely on non-interactive startups (daemons, cron, piped): applying
+// requires sudo, which may need a password prompt, and offering requires a
+// user present to answer. Capabilities granted during an interactive run
+// take effect at the next exec, so an already-running daemon benefits after
+// its next restart.
+func AutoSetcapStartup(ctx context.Context, asked, enabled, interactive bool) (newAsked, newEnabled bool) {
+	if runtime.GOOS != "linux" || !interactive {
+		return asked, enabled
+	}
+	if hasCapChown() && hasCapFowner() {
+		return asked, enabled
+	}
+
+	if enabled {
+		// Opted in; the binary lost the capabilities (most likely replaced
+		// by a self-update). Re-apply without asking.
+		if err := applySelfCaps(ctx); err != nil {
+			logger.Warn(ctx, "Failed to re-apply file capabilities: %v", err)
+			logger.Warn(ctx, "Set {{|Var|}}auto_setcap = false{{[-]}} in '"+console.FormatFilePath(paths.GetConfigFilePath())+"' to stop these attempts.")
+		} else {
+			logger.Notice(ctx, "Re-applied file capabilities to '"+console.FormatFilePath(selfExePath())+"' (they take effect on the next run).")
+		}
+		return asked, enabled
+	}
+	if asked {
+		// Declined previously; never ask again.
+		return asked, enabled
+	}
+
+	// Never asked before: offer once.
+	exe := selfExePath()
+	if exe == "" {
+		return asked, enabled
+	}
+	yes, err := promptGrant(ctx, exe)
+	if err != nil {
+		// Aborted (e.g. Ctrl-C): leave unasked so a future startup asks again.
+		return asked, enabled
+	}
+	if !yes {
+		logger.Notice(ctx, "Not granting capabilities; '{{|UserCommand|}}sudo{{[-]}}' will be used when needed. To change this later, edit {{|Var|}}auto_setcap{{[-]}} in '"+console.FormatFilePath(paths.GetConfigFilePath())+"' or run '{{|UserCommand|}}ds2 --setcap{{[-]}}'.")
+		return true, false
+	}
+	if err := applySelfCaps(ctx); err != nil {
+		logger.Warn(ctx, "Failed to apply file capabilities: %v", err)
+		logger.Warn(ctx, "Will retry at the next interactive startup; set {{|Var|}}auto_setcap = false{{[-]}} in '"+console.FormatFilePath(paths.GetConfigFilePath())+"' to stop.")
+	} else {
+		logger.Notice(ctx, "Capabilities granted (they take effect on the next run, and are re-applied automatically after updates).")
+	}
+	return true, true
+}
+
+// RunSetcapCommand implements the explicit "--setcap" CLI command: ask the
+// grant question (auto-accepted by -y/--yes via QuestionPrompt's GlobalYes
+// handling, making "ds2 -y --setcap" fully scriptable) and apply on yes.
+// Unlike the startup offer, this always asks -- an explicit --setcap is a
+// request to (re)decide, even if the question was answered before. Returns
+// the values to persist (setcap_asked/auto_setcap) plus whether the
+// capabilities were newly applied to the binary in this run -- callers use
+// that to re-exec so any REMAINING command-line commands run with the
+// capabilities active (file capabilities only bind at exec time).
+func RunSetcapCommand(ctx context.Context) (asked, enabled, applied bool, err error) {
+	if runtime.GOOS != "linux" {
+		return false, false, false, fmt.Errorf("file capabilities are only supported on Linux")
+	}
+	if hasCapChown() && hasCapFowner() {
+		logger.Notice(ctx, "Capabilities {{|Var|}}CAP_CHOWN{{[-]}} and {{|Var|}}CAP_FOWNER{{[-]}} are already granted; keeping them maintained automatically.")
+		return true, true, false, nil
+	}
+	exe := selfExePath()
+	if exe == "" {
+		return false, false, false, fmt.Errorf("cannot locate own executable")
+	}
+	yes, err := promptGrant(ctx, exe)
+	if err != nil {
+		return false, false, false, err
+	}
+	if !yes {
+		logger.Notice(ctx, "Not granting capabilities; '{{|UserCommand|}}sudo{{[-]}}' will be used when needed.")
+		return true, false, false, nil
+	}
+	if err := applySelfCaps(ctx); err != nil {
+		// Keep the opt-in: startup will retry, and the failure cause is
+		// reported to the caller for a proper non-zero exit.
+		return true, true, false, fmt.Errorf("failed to apply file capabilities: %w", err)
+	}
+	logger.Notice(ctx, "Capabilities granted (re-applied automatically whenever an update replaces the binary).")
+	return true, true, true, nil
+}
+
+// EnableSetcap applies the CAP_CHOWN/CAP_FOWNER grant directly, with no
+// question -- the "--config-setcap" command. Returns whether the
+// capabilities were newly applied (the current process lacked them), which
+// callers use to decide whether a re-exec is worthwhile for any remaining
+// command-line commands.
+func EnableSetcap(ctx context.Context) (applied bool, err error) {
+	if runtime.GOOS != "linux" {
+		return false, fmt.Errorf("file capabilities are only supported on Linux")
+	}
+	hadCaps := hasCapChown() && hasCapFowner()
+	if err := applySelfCaps(ctx); err != nil {
+		return false, fmt.Errorf("failed to apply file capabilities: %w", err)
+	}
+	logger.Notice(ctx, "Capabilities {{|Var|}}CAP_CHOWN{{[-]}} and {{|Var|}}CAP_FOWNER{{[-]}} granted to '"+console.FormatFilePath(selfExePath())+"' (re-applied automatically whenever an update replaces the binary).")
+	return !hadCaps, nil
+}
+
+// DisableSetcap removes the capability grant from the binary -- the
+// "--config-no-setcap" command. Removal is skipped when the current process
+// doesn't hold the capabilities (they bind at exec time, so a process
+// without them means the file didn't have them at launch either -- nothing
+// to remove, and no pointless sudo prompt). A no-op outside Linux.
+func DisableSetcap(ctx context.Context) error {
+	if runtime.GOOS != "linux" {
+		return nil
+	}
+	if !hasCapChown() && !hasCapFowner() {
+		logger.Notice(ctx, "No file capabilities to remove.")
+		return nil
+	}
+	exe := selfExePath()
+	if exe == "" {
+		return fmt.Errorf("cannot locate own executable")
+	}
+	cmd, err := dsexec.SudoCommand(ctx, "setcap", "-r", exe)
+	if err != nil {
+		return err
+	}
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			return fmt.Errorf("%s", msg)
+		}
+		return err
+	}
+	logger.Notice(ctx, "File capabilities removed from '"+console.FormatFilePath(exe)+"'.")
+	return nil
+}
+
+// promptGrant explains the capability grant and asks for confirmation.
+// QuestionPrompt auto-accepts when -y/--yes is in effect.
+func promptGrant(ctx context.Context, exe string) (bool, error) {
+	logger.Notice(ctx, "{{|ApplicationName|}}DockSTARTer2{{[-]}} can be granted the Linux capabilities {{|Var|}}CAP_CHOWN{{[-]}} and {{|Var|}}CAP_FOWNER{{[-]}}, letting it fix file ownership and permissions without any '{{|UserCommand|}}sudo{{[-]}}' password prompts.")
+	logger.Notice(ctx, "This runs '{{|UserCommand|}}sudo setcap cap_chown,cap_fowner+ep %s{{[-]}}' once now, and again automatically whenever an update replaces the binary.", exe)
+	return console.QuestionPrompt(ctx, logger.Notice, "Grant Capabilities", "Grant these capabilities now?", "Y", false)
+}
+
+// applySelfCaps grants CAP_CHOWN/CAP_FOWNER to the running binary's on-disk
+// file via "sudo setcap". The current process does NOT gain them (file
+// capabilities are read at exec time); they apply from the next run.
+func applySelfCaps(ctx context.Context) error {
+	exe := selfExePath()
+	if exe == "" {
+		return fmt.Errorf("cannot locate own executable")
+	}
+	cmd, err := dsexec.SudoCommand(ctx, "setcap", "cap_chown,cap_fowner+ep", exe)
+	if err != nil {
+		return err
+	}
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			return fmt.Errorf("%s", msg)
+		}
+		return err
+	}
+	return nil
+}
+
+func selfExePath() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	return exe
+}
