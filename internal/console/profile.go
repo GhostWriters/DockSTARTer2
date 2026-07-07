@@ -87,6 +87,16 @@ func IsStdoutTTY() bool {
 	return false
 }
 
+// IsStdinTTY reports whether stdin is a real terminal. Interactive prompts
+// that read a reply must check this: stdin can be redirected (e.g.
+// `cmd < file`, cron, CI) while both output streams remain TTYs.
+func IsStdinTTY() bool {
+	if stat, err := os.Stdin.Stat(); err == nil {
+		return (stat.Mode() & os.ModeCharDevice) != 0
+	}
+	return false
+}
+
 // SetTTY allows forcing the TTY status.
 // Returns the previous value so it can be restored.
 func SetTTY(isTTY bool) bool {

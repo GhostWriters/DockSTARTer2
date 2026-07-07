@@ -4,31 +4,80 @@ import (
 	dsexec "DockSTARTer2/internal/exec"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
+	"bytes"
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"os/user"
 	"runtime"
 	"strconv"
 	"strings"
 )
 
-// chmodCommand builds the command to run for a chmod, skipping sudo when the
-// current process's real UID/GID already equal puid:pgid -- chmod only
-// requires the effective UID to match the file's current owner (or be
-// root), unlike chown, which generally needs CAP_CHOWN/root regardless. DS2
-// disallows running as root or via sudo at all (see CheckNotRoot), so the
-// invoking user is always supposed to already BE puid:pgid; this check is a
-// failsafe for the rare case they diverge (e.g. a stale SUDO_UID/SUDO_GID
-// env var inherited from an unrelated earlier "sudo -u otheruser" shell,
-// which wouldn't trip CheckNotRoot since that process isn't itself
-// currently elevated).
-func chmodCommand(ctx context.Context, puid, pgid int, args ...string) (*exec.Cmd, error) {
-	if os.Getuid() == puid && os.Getgid() == pgid {
-		return exec.CommandContext(ctx, "chmod", args...), nil
+// applyPermissionFix performs the actual ownership/permission changes for
+// SetPermissions/TakeOwnership: natively in-process (see fixPermissions)
+// when this process holds the privileges each requested operation needs,
+// otherwise by re-executing DS2 via sudo into the hidden
+// --internal-fix-permissions helper, which runs the exact same native fix
+// as root. Either way the chown/chmod binaries are no longer involved and
+// the whole fix is a single tree walk; the only difference between the
+// branches is which process the walk runs in.
+//
+// Native eligibility, judged per operation:
+//   - chown requires CAP_CHOWN (changing a file's owner is privileged
+//     regardless of who currently owns it -- see "sudo setcap
+//     cap_chown,cap_fowner+ep <binary>" for the opt-in that grants it).
+//   - chmod requires owning the files, or CAP_FOWNER. Ownership is judged
+//     against puid/pgid: checkPermissions guarantees everything is already
+//     owned by puid:pgid when doChown is false, and when doChown is true
+//     the chown runs first within the same walk, so in both cases the
+//     process's own UID/GID matching puid:pgid is sufficient.
+//
+// A plain "sudo ds2" never reaches here still elevated (see CheckNotRoot),
+// so the invoking user normally IS puid:pgid and chmod-only fixes stay
+// native even with no capabilities granted; the UID/GID comparison is a
+// failsafe for the rare divergence case (e.g. a stale SUDO_UID/SUDO_GID env
+// var inherited from an unrelated earlier "sudo -u otheruser" shell). A
+// genuine root login is allowed to run DS2 (CheckNotRoot doesn't reject
+// it) and trivially satisfies this check regardless, since root always
+// matches whatever puid:pgid it's comparing against.
+func applyPermissionFix(ctx context.Context, path string, puid, pgid int, doChown, doChmod, recursive bool) error {
+	nativeChown := !doChown || hasCapChown()
+	nativeChmod := !doChmod || hasCapFowner() || (os.Getuid() == puid && os.Getgid() == pgid)
+	if nativeChown && nativeChmod {
+		logger.Debug(ctx, "Fixing ownership/permissions natively (no sudo needed).")
+		return fixPermissions(path, puid, pgid, doChown, doChmod, recursive)
 	}
-	return dsexec.SudoCommand(ctx, "chmod", args...)
+
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("cannot locate own executable for elevated re-exec: %w", err)
+	}
+	logger.Debug(ctx, "Re-executing via sudo to fix ownership/permissions.")
+	cmd, err := dsexec.SudoCommand(ctx, exe,
+		InternalFixPermissionsArg,
+		strconv.Itoa(puid), strconv.Itoa(pgid),
+		bit(doChown), bit(doChmod), bit(recursive),
+		path)
+	if err != nil {
+		return err
+	}
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			return fmt.Errorf("%s", msg)
+		}
+		return err
+	}
+	return nil
+}
+
+func bit(b bool) string {
+	if b {
+		return "1"
+	}
+	return "0"
 }
 
 // SetPermissions mimics the bash set_permissions.sh logic exactly.
@@ -76,26 +125,16 @@ func SetPermissions(ctx context.Context, path string) {
 
 	if needsChown {
 		logger.Info(ctx, "Taking ownership of '"+console.FormatFolderPath(path)+"' for user '{{|User|}}%d{{[-]}}' and group '{{|User|}}%d{{[-]}}'", puid, pgid)
-		if cmdChown, err := dsexec.SudoCommand(ctx, "chown", "-R", fmt.Sprintf("%d:%d", puid, pgid), path); err == nil {
-			if err := cmdChown.Run(); err != nil {
-				logger.FatalWithStack(ctx, []string{
-					"Failed to set ownership of folder.",
-					"Failing command: {{|FailingCommand|}}sudo chown -R \"%d:%d\" \"%s\"{{[-]}}",
-				}, puid, pgid, path)
-			}
-		}
 	}
-
 	if needsChmod {
 		logger.Info(ctx, "Setting file and folder permissions in '"+console.FormatFolderPath(path)+"'")
-		if cmdChmod, err := chmodCommand(ctx, puid, pgid, "-R", "a=,a+rX,u+w,g+w", path); err == nil {
-			if err := cmdChmod.Run(); err != nil {
-				logger.FatalWithStack(ctx, []string{
-					"Failed to set permissions of folder.",
-					"Failing command: {{|FailingCommand|}}sudo chmod -R \"a=,a+rX,u+w,g+w\" \"%s\"{{[-]}}",
-				}, path)
-			}
-		}
+	}
+
+	if err := applyPermissionFix(ctx, path, puid, pgid, needsChown, needsChmod, true); err != nil {
+		logger.FatalWithStack(ctx, []string{
+			"Failed to set ownership/permissions of folder '" + console.FormatFolderPath(path) + "'.",
+			"Error: %v",
+		}, err)
 	}
 }
 
@@ -129,26 +168,16 @@ func TakeOwnership(ctx context.Context, path string) {
 
 	if needsChown {
 		logger.Info(ctx, "Taking ownership of '"+console.FormatFolderPath(path)+"' (non-recursive).")
-		if cmd, err := dsexec.SudoCommand(ctx, "chown", fmt.Sprintf("%d:%d", puid, pgid), path); err == nil {
-			if err := cmd.Run(); err != nil {
-				logger.FatalWithStack(ctx, []string{
-					"Failed to set ownership of folder.",
-					"Failing command: {{|FailingCommand|}}sudo chown \"%d:%d\" \"%s\"{{[-]}}",
-				}, puid, pgid, path)
-			}
-		}
 	}
-
 	if needsChmod {
 		logger.Info(ctx, "Setting permissions of '"+console.FormatFolderPath(path)+"' (non-recursive).")
-		if cmd, err := chmodCommand(ctx, puid, pgid, "0775", path); err == nil {
-			if err := cmd.Run(); err != nil {
-				logger.FatalWithStack(ctx, []string{
-					"Failed to set permissions of folder.",
-					"Failing command: {{|FailingCommand|}}sudo chmod \"0775\" \"%s\"{{[-]}}",
-				}, path)
-			}
-		}
+	}
+
+	if err := applyPermissionFix(ctx, path, puid, pgid, needsChown, needsChmod, false); err != nil {
+		logger.FatalWithStack(ctx, []string{
+			"Failed to set ownership/permissions of folder '" + console.FormatFolderPath(path) + "'.",
+			"Error: %v",
+		}, err)
 	}
 }
 

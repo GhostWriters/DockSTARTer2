@@ -353,6 +353,7 @@ func Parse(args []string) ([]CommandGroup, error) {
 			"-p", "--prune",
 			"-R", "--reset",
 			"-e", "--env",
+			"--setcap", "--config-setcap", "--config-no-setcap",
 			"--edit-global", "--start-edit-global",
 			"-l", "--list", "--list-added", "--list-builtin", "--list-deprecated", "--list-enabled", "--list-disabled", "--list-nondeprecated", "--list-referenced",
 			"--config-pm-list", "--config-pm-table", "--config-pm-existing-list", "--config-pm-existing-table",

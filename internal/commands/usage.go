@@ -421,6 +421,16 @@ func GetUsage(target string, noHeading bool) string {
 			"	Update {{|ApplicationName|}}DockSTARTer-Templates{{[-]}} only. Optionally specify a branch.",
 		)
 	}
+	if match("--setcap", "--config-setcap", "--config-no-setcap") {
+		printStr(
+			"{{|UsageCommand|}}--setcap{{[-]}}",
+			fmt.Sprintf("	Offer to grant the {{|UsageVar|}}CAP_CHOWN{{[-]}}/{{|UsageVar|}}CAP_FOWNER{{[-]}} Linux file capabilities to the {{|ApplicationName|}}%s{{[-]}} binary (via '{{|UsageCommand|}}sudo setcap{{[-]}}'), so permission fixes never need '{{|UsageCommand|}}sudo{{[-]}}'. Combine with {{|UsageOption|}}-y{{[-]}} for scripted setup. Re-applied automatically after updates.", appName),
+			"{{|UsageCommand|}}--config-setcap{{[-]}}",
+			"	Enable and apply the capability grant directly, without asking.",
+			"{{|UsageCommand|}}--config-no-setcap{{[-]}}",
+			"	Disable the capability grant and remove it from the binary.",
+		)
+	}
 	if match("-V", "--version") {
 		printStr(
 			"{{|UsageCommand|}}-V --version{{[-]}} [{{|UsageBranch|}}<AppBranch>{{[-]}} [{{|UsageBranch|}}<TemplateBranch>{{[-]}}]]",

@@ -13,6 +13,7 @@ import (
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/constants"
+	"DockSTARTer2/internal/dockercheck"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/version"
 
@@ -114,6 +115,14 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 			composeFile := filepath.Join(conf.ComposeDir, constants.ComposeFileName)
 			logger.Notice(ctx, "Enabled app templates already merged to '"+console.FormatFilePath(composeFile)+"'.")
 			return nil
+		}
+	} else {
+		// Every other subcommand talks to the daemon -- fail clearly up
+		// front (before any prompt) if it's missing or too old, instead of
+		// a low-level SDK error partway through. merge/generate are pure
+		// file generation and must keep working without Docker.
+		if err := dockercheck.Require(ctx); err != nil {
+			return err
 		}
 	}
 

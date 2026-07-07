@@ -8,13 +8,16 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"sync"
 	"syscall"
 
 	"DockSTARTer2/cmd"
 	"DockSTARTer2/internal/assets"
+	"DockSTARTer2/internal/boot"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/dockercheck"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/serve"
@@ -75,6 +78,24 @@ func main() {
 }
 
 func run() (exitCode int) {
+	// NOTE: if DS2 was launched via "sudo ds2 ...", privileges were already
+	// dropped back to the invoking user before main() even started --
+	// internal/boot's init() (pulled in below every filesystem-touching
+	// package via internal/paths) handles it, so not even package-level
+	// initializers can compute paths from or write into root's home. True
+	// root falls through untouched and is rejected by CheckNotRoot below.
+
+	// Hidden elevated helper mode, invoked by DS2 on itself via sudo when it
+	// lacks the privileges to fix file ownership/permissions natively (see
+	// system.RunInternalFixPermissions). This child deliberately runs as
+	// root: boot's demotion skips it by recognizing the same argument, and
+	// it's dispatched here before CheckNotRoot, config loading, logging
+	// setup, or the other-instances detection (deadlock risk if the parent
+	// holds an edit lock).
+	if len(os.Args) >= 2 && os.Args[1] == system.InternalFixPermissionsArg {
+		return system.RunInternalFixPermissions(os.Args[2:])
+	}
+
 	// Handle internal tool commands immediately before any startup work.
 	// These are invoked by ds2 itself (e.g. restart watcher) and must be fast and silent.
 	if len(os.Args) == 2 {
@@ -100,8 +121,16 @@ func run() (exitCode int) {
 	slog.SetDefault(logger.NewLogger())
 
 	// Must happen before any real work (including config loading, which can
-	// create files) -- see CheckNotRoot's doc comment for why.
+	// create files) -- see CheckNotRoot's doc comment for why. Normal sudo
+	// invocations never reach this as root anymore (demoted above); this
+	// rejects true root sessions, which have no user to drop back to.
 	system.CheckNotRoot(context.Background())
+
+	// Always visible (not gated behind -v): silently continuing under a
+	// different identity than the user typed would be surprising.
+	if note := boot.DemotionNotice(); note != "" {
+		logger.Notice(context.Background(), note)
+	}
 
 	// Apply spinner/line-char config early so spinner works during startup log messages.
 	{
@@ -213,6 +242,50 @@ func run() (exitCode int) {
 	serve.CheckStartupStatus(ctx)
 
 	stopStartupSpinner()
+
+	// A setcap command on the command line decides the capability setting
+	// itself and may re-exec with the remaining arguments -- so both the
+	// startup setcap offer AND the startup Docker probe are skipped for it
+	// (the re-exec'd child repeats startup, and would duplicate any
+	// warnings the parent already printed).
+	setcapCmdPresent := slices.ContainsFunc(os.Args[1:], func(a string) bool {
+		return a == "--setcap" || a == "--config-setcap" || a == "--config-no-setcap"
+	})
+	interactive := console.IsTTY() && console.IsStdoutTTY() && console.IsStdinTTY()
+
+	// Offer/maintain the optional CAP_CHOWN/CAP_FOWNER grant on the binary
+	// (lets permission fixes run without sudo; Linux + interactive startups
+	// only). The user's answer is persisted so they're only ever asked once.
+	if !setcapCmdPresent {
+		conf := config.LoadAppConfig()
+		asked, enabled := system.AutoSetcapStartup(ctx, conf.System.SetcapAsked, conf.System.AutoSetcap, interactive)
+		if asked != conf.System.SetcapAsked || enabled != conf.System.AutoSetcap {
+			conf.System.SetcapAsked = asked
+			conf.System.AutoSetcap = enabled
+			if err := config.SaveAppConfig(conf); err != nil {
+				logger.Warn(ctx, "Failed to save auto_setcap setting: %v", err)
+			}
+		}
+	}
+
+	// Probe the Docker daemon once at startup: warn -- never block -- if
+	// it's missing, unreachable, or too old, since everything that doesn't
+	// touch Docker (adding apps, editing env files, themes, ...) must keep
+	// working regardless. Operations that DO need the daemon re-check and
+	// hard-error at their own start (dockercheck.Require). When the
+	// permission-denied cause is specifically a missing docker-group
+	// membership, offer to fix it right here (interactive only).
+	if !setcapCmdPresent {
+		if st := dockercheck.StartupCheck(ctx); !st.OK() {
+			handled := false
+			if st.PermissionDenied && interactive {
+				handled = system.OfferDockerGroupFix(ctx)
+			}
+			if !handled {
+				dockercheck.LogProblem(ctx, st, false)
+			}
+		}
+	}
 
 	// Parse command line arguments
 	groups, err := cmd.Parse(os.Args[1:])

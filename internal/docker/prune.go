@@ -7,6 +7,7 @@ import (
 
 	"DockSTARTer2/internal/compose"
 	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/dockercheck"
 	"DockSTARTer2/internal/logger"
 
 	"github.com/docker/docker/api/types/container"
@@ -17,6 +18,12 @@ import (
 // Prune removes unused docker resources.
 // Mirrors docker_prune.sh from the original Bash implementation.
 func Prune(ctx context.Context, assumeYes bool) error {
+	// Fail clearly up front (before prompting) if the daemon is missing or
+	// too old, instead of a low-level SDK error after the user confirms.
+	if err := dockercheck.Require(ctx); err != nil {
+		return err
+	}
+
 	question := "Would you like to remove all unused containers, networks, volumes, images and build cache?"
 	yesNotice := "Removing unused docker resources."
 	noNotice := "Nothing will be removed."

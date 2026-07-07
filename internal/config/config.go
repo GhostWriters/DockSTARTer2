@@ -51,12 +51,28 @@ type AppConfig struct {
 	UI     UIConfig     `toml:"ui"`
 	Paths  PathConfig   `toml:"paths"`
 	Server ServerConfig `toml:"server"`
+	System SystemConfig `toml:"system"`
 
 	// These are helper fields for runtime use, not saved to TOML
 	Arch       string     `toml:"-"`
 	ConfigDir  string     `toml:"-"`
 	ComposeDir string     `toml:"-"`
 	RawPaths   PathConfig `toml:"-"` // Unexpanded values as read from TOML
+}
+
+// SystemConfig holds host-system integration settings.
+type SystemConfig struct {
+	// SetcapAsked records whether the one-time AutoSetcap question has
+	// already been put to the user, so it's never asked twice. Setting
+	// AutoSetcap true by hand works without this: an enabled AutoSetcap
+	// applies regardless of whether the question was ever asked.
+	SetcapAsked bool `toml:"setcap_asked"`
+	// AutoSetcap enables the optional Linux capability grant
+	// (CAP_CHOWN/CAP_FOWNER via "sudo setcap") that lets DS2 fix file
+	// ownership/permissions without sudo. When true, the grant is
+	// re-applied automatically whenever the binary lacks the capabilities
+	// (e.g. after a self-update replaced it).
+	AutoSetcap bool `toml:"auto_setcap"`
 }
 
 // ServerConfig holds SSH and web server settings.

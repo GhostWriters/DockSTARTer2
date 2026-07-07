@@ -42,3 +42,11 @@ auth_keys_file = ""      # path to authorized_keys file (pubkey mode)
 
 [server]
 host_key = ""            # path to persistent host key file; auto-generated if empty
+
+[system]
+auto_setcap  = false     # keep CAP_CHOWN/CAP_FOWNER applied to the binary (Linux only,
+                         # via "sudo setcap") so permission fixes never need sudo;
+                         # re-applied automatically after updates replace the binary.
+setcap_asked = false     # set automatically once the one-time auto_setcap question has
+                         # been answered; the question is skipped when auto_setcap is
+                         # already true (e.g. enabled here by hand)

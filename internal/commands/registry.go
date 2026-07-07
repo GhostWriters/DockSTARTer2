@@ -91,6 +91,9 @@ var Registry = map[string]Def{
 	"--start-edit-global":        {Title: "Edit Global Variables", ConsoleSafe: true}, // launches TUI; edit lock handles conflicts
 	"--edit-app":                 {Title: "Edit App Variables", ConsoleSafe: true},    // launches TUI; edit lock handles conflicts
 	"--start-edit-app":           {Title: "Edit App Variables", ConsoleSafe: true},    // launches TUI; edit lock handles conflicts
+	"--setcap":                   {Title: "Grant File Capabilities"},  // may re-exec the process — not console-safe
+	"--config-setcap":            {Title: "Enable File Capabilities"}, // may re-exec the process — not console-safe
+	"--config-no-setcap":         {Title: "Disable File Capabilities"},
 	"--config-pm":                {Title: "Select Package Manager", ConsoleSafe: true},
 	"--config-pm-auto":           {Title: "Select Package Manager", ConsoleSafe: true},
 	"--config-pm-list":           {Title: "List Known Package Managers", ConsoleSafe: true},
