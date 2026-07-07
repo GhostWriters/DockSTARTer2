@@ -8,3 +8,5 @@ package system
 // always report false and callers fall back to the sudo re-exec path.
 func hasCapChown() bool  { return false }
 func hasCapFowner() bool { return false }
+
+func fileHasFixCaps(path string) (bool, error) { return false, nil }

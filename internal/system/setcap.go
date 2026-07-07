@@ -41,7 +41,13 @@ func AutoSetcapStartup(ctx context.Context, asked, enabled, interactive bool) (n
 	if runtime.GOOS != "linux" || !interactive {
 		return asked, enabled
 	}
-	if hasCapChown() && hasCapFowner() {
+	if os.Geteuid() == 0 {
+		// Already root (a genuine root login, since sudo invocations are
+		// demoted before this runs): CAP_CHOWN/CAP_FOWNER would be strictly
+		// redundant, and asking to grant them is meaningless noise.
+		return asked, enabled
+	}
+	if binaryHasFixCaps() {
 		return asked, enabled
 	}
 
@@ -97,7 +103,7 @@ func RunSetcapCommand(ctx context.Context) (asked, enabled, applied bool, err er
 	if runtime.GOOS != "linux" {
 		return false, false, false, fmt.Errorf("file capabilities are only supported on Linux")
 	}
-	if hasCapChown() && hasCapFowner() {
+	if binaryHasFixCaps() {
 		logger.Notice(ctx, "Capabilities {{|Var|}}CAP_CHOWN{{[-]}} and {{|Var|}}CAP_FOWNER{{[-]}} are already granted; keeping them maintained automatically.")
 		return true, true, false, nil
 	}
@@ -140,15 +146,14 @@ func EnableSetcap(ctx context.Context) (applied bool, err error) {
 }
 
 // DisableSetcap removes the capability grant from the binary -- the
-// "--config-no-setcap" command. Removal is skipped when the current process
-// doesn't hold the capabilities (they bind at exec time, so a process
-// without them means the file didn't have them at launch either -- nothing
-// to remove, and no pointless sudo prompt). A no-op outside Linux.
+// "--config-no-setcap" command. Removal is skipped when the on-disk binary
+// doesn't carry the grant (nothing to remove, no pointless sudo prompt).
+// A no-op outside Linux.
 func DisableSetcap(ctx context.Context) error {
 	if runtime.GOOS != "linux" {
 		return nil
 	}
-	if !hasCapChown() && !hasCapFowner() {
+	if !binaryHasFixCaps() {
 		logger.Notice(ctx, "No file capabilities to remove.")
 		return nil
 	}
@@ -170,6 +175,26 @@ func DisableSetcap(ctx context.Context) error {
 	}
 	logger.Notice(ctx, "File capabilities removed from '"+console.FormatFilePath(exe)+"'.")
 	return nil
+}
+
+// binaryHasFixCaps reports whether the on-disk binary currently carries the
+// CAP_CHOWN+CAP_FOWNER grant -- the state auto_setcap maintains. Reads the
+// file's security.capability xattr rather than the process's capabilities:
+// the two diverge when DS2 was launched via sudo and demoted (the setuid
+// drop clears all process caps even though the file still has its grant),
+// and process caps also lag when the grant was applied or removed after
+// this process exec'd. Falls back to the process view only when the xattr
+// can't be read at all (e.g. a filesystem without xattr support).
+func binaryHasFixCaps() bool {
+	exe := selfExePath()
+	if exe == "" {
+		return hasCapChown() && hasCapFowner()
+	}
+	has, err := fileHasFixCaps(exe)
+	if err != nil {
+		return hasCapChown() && hasCapFowner()
+	}
+	return has
 }
 
 // promptGrant explains the capability grant and asks for confirmation.

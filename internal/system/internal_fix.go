@@ -1,6 +1,7 @@
 package system
 
 import (
+	"DockSTARTer2/internal/constants"
 	"fmt"
 	"os"
 	"strconv"
@@ -9,8 +10,10 @@ import (
 // InternalFixPermissionsArg is the hidden first argument that turns a DS2
 // invocation into a bare permission-fixing helper (see
 // RunInternalFixPermissions). Never shown in help output -- it exists only
-// for DS2 to invoke on itself via sudo.
-const InternalFixPermissionsArg = "--internal-fix-permissions"
+// for DS2 to invoke on itself via sudo. The value lives in constants so
+// internal/boot's init-time sudo demotion can recognize (and skip demoting)
+// this deliberately-root helper without importing this package.
+const InternalFixPermissionsArg = constants.InternalFixPermissionsArg
 
 // RunInternalFixPermissions is the entry point for the hidden elevated
 // helper mode:

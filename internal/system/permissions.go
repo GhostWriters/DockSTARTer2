@@ -33,11 +33,14 @@ import (
 //     the chown runs first within the same walk, so in both cases the
 //     process's own UID/GID matching puid:pgid is sufficient.
 //
-// DS2 refuses to run as root or via sudo (see CheckNotRoot), so the
-// invoking user normally IS puid:pgid and chmod-only fixes stay native even
-// with no capabilities granted; the UID/GID comparison is a failsafe for
-// the rare divergence case (e.g. a stale SUDO_UID/SUDO_GID env var
-// inherited from an unrelated earlier "sudo -u otheruser" shell).
+// A plain "sudo ds2" never reaches here still elevated (see CheckNotRoot),
+// so the invoking user normally IS puid:pgid and chmod-only fixes stay
+// native even with no capabilities granted; the UID/GID comparison is a
+// failsafe for the rare divergence case (e.g. a stale SUDO_UID/SUDO_GID env
+// var inherited from an unrelated earlier "sudo -u otheruser" shell). A
+// genuine root login is allowed to run DS2 (CheckNotRoot doesn't reject
+// it) and trivially satisfies this check regardless, since root always
+// matches whatever puid:pgid it's comparing against.
 func applyPermissionFix(ctx context.Context, path string, puid, pgid int, doChown, doChmod, recursive bool) error {
 	nativeChown := !doChown || hasCapChown()
 	nativeChmod := !doChmod || hasCapFowner() || (os.Getuid() == puid && os.Getgid() == pgid)

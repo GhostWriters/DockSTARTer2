@@ -14,6 +14,7 @@ import (
 
 	"DockSTARTer2/cmd"
 	"DockSTARTer2/internal/assets"
+	"DockSTARTer2/internal/boot"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/dockercheck"
@@ -77,6 +78,24 @@ func main() {
 }
 
 func run() (exitCode int) {
+	// NOTE: if DS2 was launched via "sudo ds2 ...", privileges were already
+	// dropped back to the invoking user before main() even started --
+	// internal/boot's init() (pulled in below every filesystem-touching
+	// package via internal/paths) handles it, so not even package-level
+	// initializers can compute paths from or write into root's home. True
+	// root falls through untouched and is rejected by CheckNotRoot below.
+
+	// Hidden elevated helper mode, invoked by DS2 on itself via sudo when it
+	// lacks the privileges to fix file ownership/permissions natively (see
+	// system.RunInternalFixPermissions). This child deliberately runs as
+	// root: boot's demotion skips it by recognizing the same argument, and
+	// it's dispatched here before CheckNotRoot, config loading, logging
+	// setup, or the other-instances detection (deadlock risk if the parent
+	// holds an edit lock).
+	if len(os.Args) >= 2 && os.Args[1] == system.InternalFixPermissionsArg {
+		return system.RunInternalFixPermissions(os.Args[2:])
+	}
+
 	// Handle internal tool commands immediately before any startup work.
 	// These are invoked by ds2 itself (e.g. restart watcher) and must be fast and silent.
 	if len(os.Args) == 2 {
@@ -88,17 +107,6 @@ func run() (exitCode int) {
 			fmt.Println(paths.GetTemplatesVersion())
 			return 0
 		}
-	}
-
-	// Hidden elevated helper mode, invoked by DS2 on itself via sudo when it
-	// lacks the privileges to fix file ownership/permissions natively (see
-	// system.RunInternalFixPermissions). Must be dispatched before ANY other
-	// startup work: the child deliberately runs as root, so it must never
-	// reach CheckNotRoot, config loading, logging setup, or the
-	// other-instances detection (deadlock risk if the parent holds an edit
-	// lock).
-	if len(os.Args) >= 2 && os.Args[1] == system.InternalFixPermissionsArg {
-		return system.RunInternalFixPermissions(os.Args[2:])
 	}
 
 	// Initialize logger level styles to avoid import cycle (logger -> theme -> config -> logger)
@@ -113,8 +121,16 @@ func run() (exitCode int) {
 	slog.SetDefault(logger.NewLogger())
 
 	// Must happen before any real work (including config loading, which can
-	// create files) -- see CheckNotRoot's doc comment for why.
+	// create files) -- see CheckNotRoot's doc comment for why. Normal sudo
+	// invocations never reach this as root anymore (demoted above); this
+	// rejects true root sessions, which have no user to drop back to.
 	system.CheckNotRoot(context.Background())
+
+	// Always visible (not gated behind -v): silently continuing under a
+	// different identity than the user typed would be surprising.
+	if note := boot.DemotionNotice(); note != "" {
+		logger.Notice(context.Background(), note)
+	}
 
 	// Apply spinner/line-char config early so spinner works during startup log messages.
 	{
