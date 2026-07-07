@@ -220,10 +220,10 @@ func GetDockerDaemonVersionDisplay(ctx context.Context) string {
 func GetDockerAPIVersionDisplay(ctx context.Context) string {
 	st := dockerStatus(ctx)
 	if !st.Reachable || st.APIVersion == "" {
-		return "{{|ApplicationName|}}Docker API{{[-]}} [{{|Error|}}not detected{{[-]}}]"
+		return "{{|ApplicationName|}}Docker API{{[-]}} [{{|Error|}}not detected{{[-]}}] (external dependency)"
 	}
 	ver := versionTag("v"+st.APIVersion, "https://docs.docker.com/reference/api/engine/version/v"+st.APIVersion+"/")
-	return fmt.Sprintf("{{|ApplicationName|}}Docker API{{[-]}} [%s]", ver)
+	return fmt.Sprintf("{{|ApplicationName|}}Docker API{{[-]}} [%s] (external dependency)", ver)
 }
 
 func dockerStatus(ctx context.Context) dockercheck.Status {
