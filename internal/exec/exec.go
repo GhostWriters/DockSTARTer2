@@ -80,7 +80,7 @@ func RunAndLog(ctx context.Context, runningNoticeType, outputNoticeType, errorNo
 			line := scanner.Text()
 			if line != "" { // Skip empty lines
 				if prefix != "" {
-					prefixedLine := fmt.Sprintf("{{|RunningCommand|}}%s{{[-]}} %s", prefix, line)
+					prefixedLine := fmt.Sprintf("\t{{|RunningCommand|}}%s{{[-]}} %s", prefix, line)
 					logByType(ctx, parsedNoticeType, prefixedLine)
 				} else {
 					logByType(ctx, parsedNoticeType, line)

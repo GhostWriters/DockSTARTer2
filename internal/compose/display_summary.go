@@ -136,7 +136,7 @@ func (p *consoleEventProcessor) prependSummary(lines []string, timers []timerEnt
 	// (the header is often the widest line for teardown commands with no image/layer rows).
 	summaryW := utf8.RuneCountInString(semstyle.ToPlain(summary))
 	lines = p.attachTimers(lines, timers, summaryW)
-	if vp := console.GlobalViewport; vp != nil && vp.IsActive() {
+	if vp := console.GlobalViewport; vp != nil && vp.IsActive() && !p.forceSummary {
 		return lines
 	}
 	if summary == "" {
@@ -176,7 +176,7 @@ func (p *consoleEventProcessor) logSummary() {
 		}
 	}
 
-	const pfx = "{{|RunningCommand|}}compose:{{[-]}} "
+	const pfx = "\t{{|RunningCommand|}}compose:{{[-]}} "
 
 	// Log uses a fixed width, not the live terminal width, so the persisted output
 	// (including proportional bar sizes) is deterministic regardless of terminal size.

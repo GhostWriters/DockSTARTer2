@@ -148,6 +148,7 @@ type consoleEventProcessor struct {
 	asciiMode     bool            // when true, use ASCII spinners, icons, and progress bar chars
 	verbose       bool            // when true, show individual layer rows under each image
 	staticOut     bool            // when true (redirected stdout, no TTY/TUI), skip live rendering and emit final lines once in Done
+	forceSummary  bool            // when true, prependSummary includes the header even if GlobalViewport still reports active -- set around the final pre-Deactivate render, whose whole point is baking the summary into the scrollback dump
 
 	dockerClient imageInspector // Docker client for pre-flight and post-pull ImageInspect
 
@@ -362,11 +363,16 @@ func (p *consoleEventProcessor) Done(_ string, _ bool) {
 		if vp := console.GlobalViewport; vp != nil {
 			// Prepend the summary to lastComposeLines so it appears in the scrollback
 			// dump. The live header was shown via SetHeader; now bake it into the lines.
+			// The viewport hasn't been Deactivate()'d yet at this point (that happens
+			// below, using these lines), so it still reports IsActive() -- forceSummary
+			// overrides prependSummary's live-mode skip for this one render.
 			termW := goterm.Width()
 			if termW <= 0 {
 				termW = 80
 			}
+			p.forceSummary = true
 			rawLines := p.buildLines(termW, p.verbose)
+			p.forceSummary = false
 			finalLines := make([]string, len(rawLines))
 			for i, l := range rawLines {
 				finalLines[i] = semstyle.ToANSI(l)
