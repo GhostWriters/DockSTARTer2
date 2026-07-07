@@ -207,16 +207,32 @@ func GetComposeSdkVersionDisplay() string {
 // skipped this invocation). The daemon is the one piece DS2 doesn't ship,
 // hence the "external dependency" label.
 func GetDockerDaemonVersionDisplay(ctx context.Context) string {
+	st := dockerStatus(ctx)
+	if !st.Reachable || st.ServerVersion == "" {
+		return "{{|ApplicationName|}}Docker Engine{{[-]}} [{{|Error|}}not detected{{[-]}}] (external dependency)"
+	}
+	ver := versionTag("v"+st.ServerVersion, "https://github.com/moby/moby/releases/tag/docker-v"+st.ServerVersion)
+	return fmt.Sprintf("{{|ApplicationName|}}Docker Engine{{[-]}} [%s] (external dependency)", ver)
+}
+
+// GetDockerAPIVersionDisplay returns a formatted version string for the
+// Docker daemon's API version, shown alongside GetDockerDaemonVersionDisplay.
+func GetDockerAPIVersionDisplay(ctx context.Context) string {
+	st := dockerStatus(ctx)
+	if !st.Reachable || st.APIVersion == "" {
+		return "{{|ApplicationName|}}Docker API{{[-]}} [{{|Error|}}not detected{{[-]}}]"
+	}
+	ver := versionTag("v"+st.APIVersion, "https://docs.docker.com/reference/api/engine/version/v"+st.APIVersion+"/")
+	return fmt.Sprintf("{{|ApplicationName|}}Docker API{{[-]}} [%s]", ver)
+}
+
+func dockerStatus(ctx context.Context) dockercheck.Status {
 	st := dockercheck.Last()
 	if st == nil {
 		fresh := dockercheck.Check(ctx)
 		st = &fresh
 	}
-	if !st.Reachable || st.ServerVersion == "" {
-		return "{{|ApplicationName|}}Docker Engine{{[-]}} [{{|Error|}}not detected{{[-]}}] (external dependency)"
-	}
-	ver := versionTag(st.ServerVersion, "https://github.com/moby/moby/releases/tag/docker-v"+st.ServerVersion)
-	return fmt.Sprintf("{{|ApplicationName|}}Docker Engine{{[-]}} [%s] (external dependency)", ver)
+	return *st
 }
 
 func checkAppUpdate(ctx context.Context) (updateAvailable bool, ver string, hadError bool) {

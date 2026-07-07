@@ -3,9 +3,14 @@
 package system
 
 import (
+	dsexec "DockSTARTer2/internal/exec"
+	"context"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
+	"syscall"
 )
 
 // fixPermissions applies ownership (to puid:pgid) and/or DS2's target modes
@@ -63,6 +68,75 @@ func fixEntry(p string, info os.FileInfo, puid, pgid int, doChown, doChmod bool)
 		if err := os.Chmod(p, want); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// FixOwnerMode makes path owned by uid:gid with exactly the given mode,
+// natively wherever the process's own privileges allow it, falling back to
+// sudo chown/chmod only for whichever piece it can't do natively.
+//
+// Unlike applyPermissionFix (which enforces the PUID/PGID + 0664/0775
+// appdata convention via the --internal-fix-permissions re-exec helper),
+// this takes an explicit owner and mode: it exists for self-update, which
+// needs to restore an executable's ownership/mode (0755, not 0664) after a
+// sudo mv into a system directory, matching the destination directory's
+// owner rather than the app's configured puid:pgid.
+func FixOwnerMode(ctx context.Context, path string, uid, gid int, mode os.FileMode) error {
+	needChown := true
+	needChmod := true
+	if info, err := os.Lstat(path); err == nil {
+		if st, ok := info.Sys().(*syscall.Stat_t); ok {
+			needChown = int(st.Uid) != uid || int(st.Gid) != gid
+		}
+		needChmod = info.Mode().Perm() != mode.Perm()
+	}
+
+	nativeChown := !needChown || hasCapChown()
+	// Native chmod needs either CAP_FOWNER, or the file to already be owned
+	// by this process's own uid -- true after a native chown above only if
+	// uid matches our own; after a sudo chown it generally isn't.
+	nativeChmod := !needChmod || hasCapFowner() || (nativeChown && os.Getuid() == uid)
+
+	if needChown {
+		if nativeChown {
+			if err := os.Lchown(path, uid, gid); err != nil {
+				return fmt.Errorf("failed to chown: %w", err)
+			}
+		} else if err := sudoChown(ctx, path, uid, gid); err != nil {
+			return err
+		}
+	}
+	if needChmod {
+		if nativeChmod {
+			if err := os.Chmod(path, mode); err != nil {
+				return fmt.Errorf("failed to chmod: %w", err)
+			}
+		} else if err := sudoChmod(ctx, path, mode); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func sudoChown(ctx context.Context, path string, uid, gid int) error {
+	cmd, err := dsexec.SudoCommand(ctx, "chown", fmt.Sprintf("%d:%d", uid, gid), path)
+	if err != nil {
+		return err
+	}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("sudo chown failed: %s: %w", strings.TrimSpace(string(out)), err)
+	}
+	return nil
+}
+
+func sudoChmod(ctx context.Context, path string, mode os.FileMode) error {
+	cmd, err := dsexec.SudoCommand(ctx, "chmod", fmt.Sprintf("%o", mode.Perm()), path)
+	if err != nil {
+		return err
+	}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("sudo chmod failed: %s: %w", strings.TrimSpace(string(out)), err)
 	}
 	return nil
 }
