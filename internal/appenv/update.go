@@ -204,8 +204,21 @@ func NeedsUpdate(ctx context.Context, force bool, file string) bool {
 		return true
 	}
 
-	// Check if .env changed relative to app file (dependency check)
 	composeEnv := filepath.Join(conf.ComposeDir, constants.EnvFileName)
+
+	// Check if the app's template default file changed (e.g. a template
+	// repo update edited its .meta.toml/.env.app.* defaults). Without this,
+	// editing an existing variable's default/metadata in the templates repo
+	// would never be picked up by a plain template update -- only a fresh
+	// .env.app.* file (no marker yet) or a manual --reset (which wipes all
+	// markers) would trigger a resync.
+	if appDefaultFile := appTemplateDefaultFile(ctx, filename, composeEnv); appDefaultFile != "" {
+		if updateFileChanged(appDefaultFile, filename+"_template") {
+			return true
+		}
+	}
+
+	// Check if .env changed relative to app file (dependency check)
 	if updateFileChanged(composeEnv, filename+"_"+filepath.Base(composeEnv)) {
 		// If main env changed, we check if ENABLED status changed for this app
 		appName := ""
@@ -289,8 +302,33 @@ func UnsetNeedsUpdate(ctx context.Context, file string) {
 
 			// Also update the dependency timestamp (main env vs this app)
 			recordUpdateFileState(composeEnv, filename+"_"+filepath.Base(composeEnv))
+
+			// And the template-default dependency timestamp (see NeedsUpdate).
+			if appDefaultFile := appTemplateDefaultFile(ctx, filename, composeEnv); appDefaultFile != "" {
+				recordUpdateFileState(appDefaultFile, filename+"_template")
+			}
 		}
 	}
+}
+
+// appTemplateDefaultFile returns the resolved template default file
+// (.env.app.<name> under the instances dir, kept in sync with the
+// templates repo by AppInstanceFile) backing the app env file named by
+// filename, or "" if the app is user-defined and has no template. Shared
+// by NeedsUpdate and UnsetNeedsUpdate so both track the same dependency.
+func appTemplateDefaultFile(ctx context.Context, filename string, composeEnv string) string {
+	if !strings.HasPrefix(filename, constants.AppEnvFileNamePrefix) {
+		return ""
+	}
+	appName := strings.ToUpper(strings.TrimPrefix(filename, constants.AppEnvFileNamePrefix))
+	if appName == "" || IsAppUserDefined(ctx, appName, composeEnv) {
+		return ""
+	}
+	templateFile, err := AppInstanceFile(ctx, appName, ".env.app.*")
+	if err != nil {
+		return ""
+	}
+	return templateFile
 }
 
 func updateFileChanged(path string, markerSuffix string) bool {

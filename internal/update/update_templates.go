@@ -360,6 +360,16 @@ func ApplyTemplatesUpdate(ctx context.Context, info *TemplatesUpdateInfo, yes bo
 	appenv.InvalidateAppMetaCache()
 	system.SetPermissions(ctx, paths.GetTimestampsDir())
 
+	// Resync per-app env files against the (possibly changed) templates.
+	// NeedsUpdate's template-dependency check (see appTemplateDefaultFile)
+	// makes this a no-op for apps whose template didn't actually change --
+	// without this call, though, nothing ever re-checks after a template
+	// update, so an edited default/variable would sit unnoticed until the
+	// user happened to trigger appenv.Update() some other way (or --reset).
+	if err := appenv.Update(ctx, false, ""); err != nil {
+		logger.Warn(ctx, "Failed to update environment variable files after templates update: %v", err)
+	}
+
 	return nil
 }
 
