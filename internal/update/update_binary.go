@@ -321,17 +321,16 @@ func installUpdate(ctx context.Context, assetURL string) error {
 		return fmt.Errorf("sudo update failed: %s: %w", string(out), err)
 	}
 
-	// Chown to match the parent directory owner, but only if the exe owner differs.
-	// sudo mv may leave the file owned by the wrong user depending on the OS/umask.
+	// Restore ownership (to match the parent directory owner) and mode
+	// (0755, executable): sudo mv can leave either wrong depending on the
+	// OS/umask. Native (via CAP_CHOWN/CAP_FOWNER, if this process already
+	// holds them from an earlier auto_setcap grant) wherever possible,
+	// sudo chown/chmod only for whichever piece isn't -- never assumed to
+	// need sudo just because the mv itself did.
 	if dirInfo, err := os.Stat(filepath.Dir(exe)); err == nil {
-		if exeInfo, err := os.Stat(exe); err == nil {
-			dirStat, dirOk := dirInfo.Sys().(*syscall.Stat_t)
-			exeStat, exeOk := exeInfo.Sys().(*syscall.Stat_t)
-			if dirOk && exeOk && (exeStat.Uid != dirStat.Uid || exeStat.Gid != dirStat.Gid) {
-				owner := fmt.Sprintf("%d:%d", dirStat.Uid, dirStat.Gid)
-				if chownCmd, err := dsexec.SudoCommand(ctx, "chown", owner, exe); err == nil {
-					_ = chownCmd.Run()
-				}
+		if dirStat, ok := dirInfo.Sys().(*syscall.Stat_t); ok {
+			if err := system.FixOwnerMode(ctx, exe, int(dirStat.Uid), int(dirStat.Gid), 0755); err != nil {
+				logger.Warn(ctx, "Failed to restore ownership/mode on '%s': %v", exe, err)
 			}
 		}
 	}
