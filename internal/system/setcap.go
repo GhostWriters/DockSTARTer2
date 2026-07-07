@@ -5,6 +5,7 @@ import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/version"
 	"bytes"
 	"context"
 	"fmt"
@@ -56,12 +57,12 @@ func AutoSetcapStartup(ctx context.Context, asked, enabled, interactive bool) (n
 	if enabled {
 		// Opted in; the binary lost the capabilities (most likely replaced
 		// by a self-update). Re-apply without asking.
+		announceGrant(ctx)
 		if err := applySelfCaps(ctx); err != nil {
 			logger.Warn(ctx, "Failed to re-apply file capabilities: %v", err)
 			logger.Warn(ctx, "Set {{|Var|}}auto_setcap = false{{[-]}} in '"+console.FormatFilePath(paths.GetConfigFilePath())+"' to stop these attempts.")
 			return asked, enabled, false
 		}
-		logger.Notice(ctx, "Re-applied file capabilities to '"+console.FormatFilePath(selfExePath())+"'.")
 		return asked, enabled, true
 	}
 	if asked {
@@ -83,12 +84,12 @@ func AutoSetcapStartup(ctx context.Context, asked, enabled, interactive bool) (n
 		logger.Notice(ctx, "Not granting capabilities; '{{|UserCommand|}}sudo{{[-]}}' will be used when needed. To change this later, edit {{|Var|}}auto_setcap{{[-]}} in '"+console.FormatFilePath(paths.GetConfigFilePath())+"' or run '{{|UserCommand|}}ds2 --setcap{{[-]}}'.")
 		return true, false, false
 	}
+	announceGrant(ctx)
 	if err := applySelfCaps(ctx); err != nil {
 		logger.Warn(ctx, "Failed to apply file capabilities: %v", err)
 		logger.Warn(ctx, "Will retry at the next interactive startup; set {{|Var|}}auto_setcap = false{{[-]}} in '"+console.FormatFilePath(paths.GetConfigFilePath())+"' to stop.")
 		return true, true, false
 	}
-	logger.Notice(ctx, "Capabilities granted (re-applied automatically after updates).")
 	return true, true, true
 }
 
@@ -121,12 +122,12 @@ func RunSetcapCommand(ctx context.Context) (asked, enabled, applied bool, err er
 		logger.Notice(ctx, "Not granting capabilities; '{{|UserCommand|}}sudo{{[-]}}' will be used when needed.")
 		return true, false, false, nil
 	}
+	announceGrant(ctx)
 	if err := applySelfCaps(ctx); err != nil {
 		// Keep the opt-in: startup will retry, and the failure cause is
 		// reported to the caller for a proper non-zero exit.
 		return true, true, false, fmt.Errorf("failed to apply file capabilities: %w", err)
 	}
-	logger.Notice(ctx, "Capabilities granted (re-applied automatically whenever an update replaces the binary).")
 	return true, true, true, nil
 }
 
@@ -140,11 +141,21 @@ func EnableSetcap(ctx context.Context) (applied bool, err error) {
 		return false, fmt.Errorf("file capabilities are only supported on Linux")
 	}
 	hadCaps := hasCapChown() && hasCapFowner()
+	announceGrant(ctx)
 	if err := applySelfCaps(ctx); err != nil {
 		return false, fmt.Errorf("failed to apply file capabilities: %w", err)
 	}
-	logger.Notice(ctx, "Capabilities {{|Var|}}CAP_CHOWN{{[-]}} and {{|Var|}}CAP_FOWNER{{[-]}} granted to '"+console.FormatFilePath(selfExePath())+"' (re-applied automatically whenever an update replaces the binary).")
 	return !hadCaps, nil
+}
+
+// announceGrant logs the two-line notice shown immediately before every
+// applySelfCaps call, regardless of which path triggered it (auto-startup
+// grant/re-apply, --setcap, --config-setcap): what's about to happen, and
+// how to turn it back off. applySelfCaps itself follows up with the actual
+// "Running: sudo setcap ..." command line.
+func announceGrant(ctx context.Context) {
+	logger.Notice(ctx, "Granting {{|Var|}}CAP_CHOWN{{[-]}} and {{|Var|}}CAP_FOWNER{{[-]}} capabilities to {{|ApplicationName|}}%s{{[-]}}.", version.ApplicationName)
+	logger.Notice(ctx, "Reapplies automatically after updates; disable with '{{|UserCommand|}}ds2 --config-no-setcap{{[-]}}'.")
 }
 
 // DisableSetcap removes the capability grant from the binary -- the
@@ -219,6 +230,7 @@ func applySelfCaps(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	logger.Notice(ctx, "Running: {{|RunningCommand|}}sudo setcap cap_chown,cap_fowner+ep %s{{[-]}}", exe)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
