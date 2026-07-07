@@ -11,9 +11,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 
+	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	dsexec "DockSTARTer2/internal/exec"
 	"DockSTARTer2/internal/logger"
@@ -185,6 +187,43 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 	// Reset all needs markers
 	system.SetPermissions(ctx, paths.GetTimestampsDir())
 	_ = paths.ResetNeeds()
+
+	// Offer/re-apply the file-capability grant to the just-replaced binary
+	// here, rather than waiting for the re-exec'd process's own startup
+	// check to notice and re-exec a second time. installUpdate replaces the
+	// binary file the grant was attached to, so a self-update always strips
+	// it when auto_setcap is enabled -- doing it now means the single
+	// re-exec below already has it.
+	//
+	// If the one-time offer was never answered, ask it here too: this is a
+	// moment already known to be interactive (the user just answered
+	// "update?"), so it's a better opportunity than only ever offering it
+	// on some later unrelated startup. Gated on being answerable (a
+	// TUI-connected client, or a real terminal) so an unattended run (cron,
+	// or a daemon restarting itself) never asks a question nobody can see
+	// and silently burns the one-time offer on "no".
+	if runtime.GOOS == "linux" {
+		conf := config.LoadAppConfig()
+		promptable := console.TUIConfirm != nil || (console.IsTTY() && console.IsStdoutTTY() && console.IsStdinTTY())
+		switch {
+		case !conf.System.SetcapAsked && promptable:
+			asked, enabled, _, err := system.RunSetcapCommand(ctx)
+			if err != nil {
+				logger.Warn(ctx, "Failed to offer file capabilities: %v", err)
+			}
+			if asked != conf.System.SetcapAsked || enabled != conf.System.AutoSetcap {
+				conf.System.SetcapAsked = asked
+				conf.System.AutoSetcap = enabled
+				if err := config.SaveAppConfig(conf); err != nil {
+					logger.Warn(ctx, "Failed to save auto_setcap setting: %v", err)
+				}
+			}
+		case conf.System.AutoSetcap:
+			if _, err := system.EnableSetcap(ctx); err != nil {
+				logger.Warn(ctx, "Failed to re-apply file capabilities after update: %v", err)
+			}
+		}
+	}
 
 	// Re-execution logic
 	// If no args passed, default to -e flag

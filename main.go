@@ -251,7 +251,14 @@ func run() (exitCode int) {
 	setcapCmdPresent := slices.ContainsFunc(os.Args[1:], func(a string) bool {
 		return a == "--setcap" || a == "--config-setcap" || a == "--config-no-setcap"
 	})
-	interactive := console.IsTTY() && console.IsStdoutTTY() && console.IsStdinTTY()
+	// --server-daemon runs unattended (systemd/launchd, no controlling
+	// terminal) -- never treat it as interactive here, regardless of what
+	// the TTY checks below report. A daemon's stdio can be redirected in
+	// ways that pass those checks yet still have no one able to answer a
+	// prompt (e.g. after a self-update re-exec preserves --server-daemon in
+	// argv), and asking would leave the offer hanging with no response.
+	serverDaemon := slices.Contains(os.Args[1:], "--server-daemon")
+	interactive := !serverDaemon && console.IsTTY() && console.IsStdoutTTY() && console.IsStdinTTY()
 
 	// Offer/maintain the optional CAP_CHOWN/CAP_FOWNER grant on the binary
 	// (lets permission fixes run without sudo; Linux + interactive startups
