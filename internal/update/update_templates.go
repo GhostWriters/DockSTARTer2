@@ -60,9 +60,9 @@ func CheckTemplatesUpdate(ctx context.Context, force bool, requestedBranch strin
 		Tags:       git.AllTags,
 	})
 	if err == nil || err == git.NoErrAlreadyUpToDate {
-		logger.Info(ctx, "{{|RunningCommand|}}git:{{[-]}} POST git-upload-pack (186 bytes)")
-		logger.Info(ctx, "{{|RunningCommand|}}git:{{[-]}} From https://github.com/GhostWriters/DockSTARTer-Templates")
-		logger.Info(ctx, "{{|RunningCommand|}}git:{{[-]}}  = [up to date]      %-10s -> origin/%s", requestedBranch, requestedBranch)
+		logger.Info(ctx, "\t{{|RunningCommand|}}git:{{[-]}} POST git-upload-pack (186 bytes)")
+		logger.Info(ctx, "\t{{|RunningCommand|}}git:{{[-]}} From https://github.com/GhostWriters/DockSTARTer-Templates")
+		logger.Info(ctx, "\t{{|RunningCommand|}}git:{{[-]}}  = [up to date]      %-10s -> origin/%s", requestedBranch, requestedBranch)
 	}
 	if err != nil && err != git.NoErrAlreadyUpToDate {
 		return nil, fmt.Errorf("failed to fetch templates: %w", err)
@@ -309,8 +309,8 @@ func ApplyTemplatesUpdate(ctx context.Context, info *TemplatesUpdateInfo, yes bo
 		})
 	}
 	if err == nil {
-		logger.Info(ctx, "{{|RunningCommand|}}git:{{[-]}} Already on '%s'", info.requestedBranch)
-		logger.Info(ctx, "{{|RunningCommand|}}git:{{[-]}} Your branch is up to date with 'origin/%s'.", info.requestedBranch)
+		logger.Info(ctx, "\t{{|RunningCommand|}}git:{{[-]}} Already on '%s'", info.requestedBranch)
+		logger.Info(ctx, "\t{{|RunningCommand|}}git:{{[-]}} Your branch is up to date with 'origin/%s'.", info.requestedBranch)
 	}
 
 	if err != nil {
@@ -341,9 +341,9 @@ func ApplyTemplatesUpdate(ctx context.Context, info *TemplatesUpdateInfo, yes bo
 			if commit != nil {
 				subject := strings.Split(commit.Message, "\n")[0]
 				hash := newHead.Hash().String()[:7]
-				logger.Info(ctx, "{{|RunningCommand|}}git:{{[-]}} HEAD is now at %s %s", hash, subject)
+				logger.Info(ctx, "\t{{|RunningCommand|}}git:{{[-]}} HEAD is now at %s %s", hash, subject)
 			} else {
-				logger.Info(ctx, "{{|RunningCommand|}}git:{{[-]}} Already up to date.")
+				logger.Info(ctx, "\t{{|RunningCommand|}}git:{{[-]}} Already up to date.")
 			}
 		}
 		logger.Info(ctx, "Cleaning up unnecessary files and optimizing the local repository.")
@@ -402,7 +402,7 @@ func EnsureTemplates(ctx context.Context) error {
 	branch := "main"
 
 	logger.Notice(ctx, "Running: {{|RunningCommand|}}git clone -b %s %s %s{{[-]}}", branch, url, templatesDir)
-	logger.Notice(ctx, "{{|RunningCommand|}}git:{{[-]}} Cloning into '%s'.", templatesDir)
+	logger.Notice(ctx, "\t{{|RunningCommand|}}git:{{[-]}} Cloning into '%s'.", templatesDir)
 
 	_, err := git.PlainClone(templatesDir, false, &git.CloneOptions{
 		URL:           url,

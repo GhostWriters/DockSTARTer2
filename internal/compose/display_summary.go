@@ -176,7 +176,7 @@ func (p *consoleEventProcessor) logSummary() {
 		}
 	}
 
-	const pfx = "{{|RunningCommand|}}compose:{{[-]}} "
+	const pfx = "\t{{|RunningCommand|}}compose:{{[-]}} "
 
 	// Log uses a fixed width, not the live terminal width, so the persisted output
 	// (including proportional bar sizes) is deterministic regardless of terminal size.

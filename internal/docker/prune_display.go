@@ -98,7 +98,7 @@ func LogPruneReport(ctx context.Context, r PruneReport, imageServices map[string
 	if tuiW := console.GetTUIWriter(ctx); tuiW != nil {
 		logCtx = logger.WithSuppressWriter(logCtx, tuiW)
 	}
-	const pfx = "{{|RunningCommand|}}docker:{{[-]}} "
+	const pfx = "\t{{|RunningCommand|}}docker:{{[-]}} "
 	for _, line := range lines {
 		logger.Notice(logCtx, pfx+"%s", semstyle.ToPlain(line))
 	}
