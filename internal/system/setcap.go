@@ -34,21 +34,23 @@ import (
 // Linux-only (file capabilities don't exist elsewhere), and skipped
 // entirely on non-interactive startups (daemons, cron, piped): applying
 // requires sudo, which may need a password prompt, and offering requires a
-// user present to answer. Capabilities granted during an interactive run
-// take effect at the next exec, so an already-running daemon benefits after
-// its next restart.
-func AutoSetcapStartup(ctx context.Context, asked, enabled, interactive bool) (newAsked, newEnabled bool) {
+// user present to answer. Capabilities granted during a run only bind at
+// the next exec (a kernel property, not a DS2 choice) -- applied reports
+// whether that just happened, so the caller can re-exec with the original
+// command line instead of continuing this run without them and telling the
+// user to run the command again.
+func AutoSetcapStartup(ctx context.Context, asked, enabled, interactive bool) (newAsked, newEnabled bool, applied bool) {
 	if runtime.GOOS != "linux" || !interactive {
-		return asked, enabled
+		return asked, enabled, false
 	}
 	if os.Geteuid() == 0 {
 		// Already root (a genuine root login, since sudo invocations are
 		// demoted before this runs): CAP_CHOWN/CAP_FOWNER would be strictly
 		// redundant, and asking to grant them is meaningless noise.
-		return asked, enabled
+		return asked, enabled, false
 	}
 	if binaryHasFixCaps() {
-		return asked, enabled
+		return asked, enabled, false
 	}
 
 	if enabled {
@@ -57,37 +59,37 @@ func AutoSetcapStartup(ctx context.Context, asked, enabled, interactive bool) (n
 		if err := applySelfCaps(ctx); err != nil {
 			logger.Warn(ctx, "Failed to re-apply file capabilities: %v", err)
 			logger.Warn(ctx, "Set {{|Var|}}auto_setcap = false{{[-]}} in '"+console.FormatFilePath(paths.GetConfigFilePath())+"' to stop these attempts.")
-		} else {
-			logger.Notice(ctx, "Re-applied file capabilities to '"+console.FormatFilePath(selfExePath())+"' (they take effect on the next run).")
+			return asked, enabled, false
 		}
-		return asked, enabled
+		logger.Notice(ctx, "Re-applied file capabilities to '"+console.FormatFilePath(selfExePath())+"'.")
+		return asked, enabled, true
 	}
 	if asked {
 		// Declined previously; never ask again.
-		return asked, enabled
+		return asked, enabled, false
 	}
 
 	// Never asked before: offer once.
 	exe := selfExePath()
 	if exe == "" {
-		return asked, enabled
+		return asked, enabled, false
 	}
 	yes, err := promptGrant(ctx, exe)
 	if err != nil {
 		// Aborted (e.g. Ctrl-C): leave unasked so a future startup asks again.
-		return asked, enabled
+		return asked, enabled, false
 	}
 	if !yes {
 		logger.Notice(ctx, "Not granting capabilities; '{{|UserCommand|}}sudo{{[-]}}' will be used when needed. To change this later, edit {{|Var|}}auto_setcap{{[-]}} in '"+console.FormatFilePath(paths.GetConfigFilePath())+"' or run '{{|UserCommand|}}ds2 --setcap{{[-]}}'.")
-		return true, false
+		return true, false, false
 	}
 	if err := applySelfCaps(ctx); err != nil {
 		logger.Warn(ctx, "Failed to apply file capabilities: %v", err)
 		logger.Warn(ctx, "Will retry at the next interactive startup; set {{|Var|}}auto_setcap = false{{[-]}} in '"+console.FormatFilePath(paths.GetConfigFilePath())+"' to stop.")
-	} else {
-		logger.Notice(ctx, "Capabilities granted (they take effect on the next run, and are re-applied automatically after updates).")
+		return true, true, false
 	}
-	return true, true
+	logger.Notice(ctx, "Capabilities granted (re-applied automatically after updates).")
+	return true, true, true
 }
 
 // RunSetcapCommand implements the explicit "--setcap" CLI command: ask the

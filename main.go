@@ -258,12 +258,25 @@ func run() (exitCode int) {
 	// only). The user's answer is persisted so they're only ever asked once.
 	if !setcapCmdPresent {
 		conf := config.LoadAppConfig()
-		asked, enabled := system.AutoSetcapStartup(ctx, conf.System.SetcapAsked, conf.System.AutoSetcap, interactive)
+		asked, enabled, applied := system.AutoSetcapStartup(ctx, conf.System.SetcapAsked, conf.System.AutoSetcap, interactive)
 		if asked != conf.System.SetcapAsked || enabled != conf.System.AutoSetcap {
 			conf.System.SetcapAsked = asked
 			conf.System.AutoSetcap = enabled
 			if err := config.SaveAppConfig(conf); err != nil {
 				logger.Warn(ctx, "Failed to save auto_setcap setting: %v", err)
+			}
+		}
+		// File capabilities only bind at exec time -- re-exec with the
+		// original command line (nothing has been consumed yet; cmd.Parse
+		// hasn't run) so this invocation actually benefits from the grant
+		// just applied, instead of finishing this run without it and
+		// telling the user their command needs to be run again.
+		if applied {
+			exePath, err := os.Executable()
+			if err != nil {
+				logger.Warn(ctx, "Cannot re-exec to pick up the new capabilities: %v", err)
+			} else if err := update.ReExec(ctx, exePath, os.Args[1:]); err == nil {
+				return 0
 			}
 		}
 	}
