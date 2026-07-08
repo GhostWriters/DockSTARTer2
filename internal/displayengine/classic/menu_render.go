@@ -2,80 +2,137 @@ package classic
 
 import (
 	"DockSTARTer2/internal/strutil"
+	"DockSTARTer2/internal/theme"
 	"strings"
 
 	"charm.land/lipgloss/v2"
 )
 
-// renderCheckboxGlyph renders a checkbox/radio glyph with cbStyle applied to the entire string.
-func renderCheckboxGlyph(cb string, cbStyle lipgloss.Style) string {
-	return cbStyle.Render(cb)
+// renderCheckboxGlyphSplit renders a 3-rune checkbox/radio glyph (e.g. "[✓]",
+// "( )", " x "), applying bracketStyle to the outer two characters (the
+// brackets/parens, or their blank placeholder when bare) and contentStyle to
+// the inner checkmark/bullet/space character.
+func renderCheckboxGlyphSplit(cb string, contentStyle, bracketStyle lipgloss.Style) string {
+	runes := []rune(cb)
+	if len(runes) < 3 {
+		return contentStyle.Render(cb)
+	}
+	return bracketStyle.Render(string(runes[0])) +
+		contentStyle.Render(string(runes[1:len(runes)-1])) +
+		bracketStyle.Render(string(runes[len(runes)-1]))
+}
+
+// checkboxStylePair resolves the content and bracket theme styles for a
+// checkbox/radio glyph, from the state-suffixed tag family the user's
+// ds2theme defines: Checkbox|Radio + Brackets? + On|Off + Focused?, e.g.
+// "CheckboxOn", "RadioBracketsOffFocused". isRadio picks Checkbox vs Radio;
+// on picks On vs Off; focused appends the Focused suffix.
+func checkboxStylePair(isRadio, on, focused bool) (content, bracket lipgloss.Style) {
+	base := "Checkbox"
+	if isRadio {
+		base = "Radio"
+	}
+	state := "Off"
+	if on {
+		state = "On"
+	}
+	suffix := ""
+	if focused {
+		suffix = "Focused"
+	}
+	content = theme.ThemeSemanticStyle("{{|" + base + state + suffix + "|}}")
+	bracket = theme.ThemeSemanticStyle("{{|" + base + "Brackets" + state + suffix + "|}}")
+	return content, bracket
 }
 
 // renderCheckbox selects the correct glyph for a checkbox or radio button and renders it.
-// focused controls whether the bracket/parens are shown at all -- when false,
-// the glyph renders "bare" (no brackets/parens, same width, but the
-// checkmark/bullet itself still shows if checked): for a checkbox this simply
-// hides an unfocused row's brackets; for a radio button it means the bullet
-// marking the CHECKED item always shows, but the parens themselves only
-// appear on whichever row currently has keyboard focus, effectively
-// "traveling" with the cursor independent of which item is checked. Callers
-// rendering a flow/grid list should always pass focused=true to keep that
-// list's checkboxes/radios bracketed unconditionally, matching how flow
-// lists rendered before this.
-func renderCheckbox(isRadio, checked, lineChars, focused bool, cbStyle lipgloss.Style) string {
+//
+// focused is the row's actual keyboard-focus state; brackets/parens always
+// show when true, regardless of mode -- otherwise the cursor position would
+// be illegible in "never" mode. mode is the user's ui.checkbox_brackets or
+// ui.radio_brackets setting ("never", "selected", or "always"):
+//
+//	"never"    -- only the focused row is bracketed.
+//	"selected" -- bracketed when focused OR checked (the historical default).
+//	"always"   -- every row is bracketed.
+//
+// When brackets are hidden, the glyph renders "bare" (no brackets/parens,
+// same width, but the checkmark/bullet itself still shows if checked).
+// Callers rendering a flow/grid list should pass mode="always" (and
+// focused=true) to keep that list's checkboxes/radios bracketed
+// unconditionally, matching how flow lists rendered before this -- flow
+// items don't respect the user setting.
+//
+// contentStyle/bracketStyle are typically resolved via checkboxStylePair,
+// separated so a caller can drive bracket visibility (mode/focused above)
+// independently from which style pair colors the glyph -- e.g. a flow list
+// forces brackets on unconditionally but still wants the color to reflect
+// real keyboard focus, not the forced bracket state.
+func renderCheckbox(isRadio, checked, lineChars, focused bool, mode string, contentStyle, bracketStyle lipgloss.Style) string {
+	showBrackets := focused
+	if !showBrackets {
+		switch mode {
+		case "always":
+			showBrackets = true
+		case "selected":
+			showBrackets = checked
+		}
+		// "never" (or any unrecognized value) leaves showBrackets false.
+	}
+
 	var cb string
 	if lineChars {
 		switch {
-		case isRadio && focused:
-			cb = radioOff
-			if checked {
-				cb = radioOn
-			}
 		case isRadio:
 			cb = radioOffBare
 			if checked {
 				cb = radioOnBare
 			}
-		case focused:
-			cb = checkOff
-			if checked {
-				cb = checkOn
+			if showBrackets {
+				cb = radioOff
+				if checked {
+					cb = radioOn
+				}
 			}
 		default:
 			cb = checkOffBare
-			// Checked items always show brackets, even unfocused -- unlike
-			// unchecked/radio, a checked state is the thing a user scans a
-			// long list for, so it stays visually distinct regardless of focus.
 			if checked {
-				cb = checkOn
+				cb = checkOnBare
+			}
+			if showBrackets {
+				cb = checkOff
+				if checked {
+					cb = checkOn
+				}
 			}
 		}
 	} else {
 		switch {
-		case isRadio && focused:
-			cb = radioOffAscii
-			if checked {
-				cb = radioOnAscii
-			}
 		case isRadio:
 			cb = radioOffBareAscii
 			if checked {
 				cb = radioOnBareAscii
 			}
-		case focused:
-			cb = checkOffAscii
-			if checked {
-				cb = checkOnAscii
+			if showBrackets {
+				cb = radioOffAscii
+				if checked {
+					cb = radioOnAscii
+				}
 			}
 		default:
 			cb = checkOffBareAscii
 			if checked {
-				cb = checkOnAscii
+				cb = checkOnBareAscii
+			}
+			if showBrackets {
+				cb = checkOffAscii
+				if checked {
+					cb = checkOnAscii
+				}
 			}
 		}
 	}
-	return renderCheckboxGlyph(cb, cbStyle)
+	return renderCheckboxGlyphSplit(cb, contentStyle, bracketStyle)
 }
 
 // listScrollPercent returns the current scroll position in [0.0, 1.0] for the list.

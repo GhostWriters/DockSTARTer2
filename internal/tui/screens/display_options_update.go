@@ -473,6 +473,8 @@ func (s *DisplayOptionsScreen) applyPreview(themeName string) {
 	s.config.UI.PanelTitleAlign = staged.PanelTitleAlign
 	s.config.UI.PanelLocal = staged.PanelLocal
 	s.config.UI.PanelRemote = staged.PanelRemote
+	s.config.UI.CheckboxBrackets = staged.CheckboxBrackets
+	s.config.UI.RadioBrackets = staged.RadioBrackets
 
 	s.syncOptionsMenu()
 	if s.outerMenu != nil {
@@ -511,6 +513,10 @@ func (s *DisplayOptionsScreen) syncOptionsMenu() {
 			items[i].Desc = s.dropdownDesc(s.panelModeToDesc(s.config.UI.PanelLocal))
 		case "Remote Panel Mode":
 			items[i].Desc = s.dropdownDesc(s.panelModeToDesc(s.config.UI.PanelRemote))
+		case "Checkbox Brackets":
+			items[i].Desc = s.dropdownDesc(bracketModeDesc(s.config.UI.CheckboxBrackets))
+		case "Radio Brackets":
+			items[i].Desc = s.dropdownDesc(bracketModeDesc(s.config.UI.RadioBrackets))
 		}
 	}
 	s.optionsMenu.SetItems(items)
