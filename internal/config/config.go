@@ -122,6 +122,8 @@ type UIConfig struct {
 	PanelTitleAlign   string `toml:"panel_title_align"`   // "center" or "left"
 	PanelLocal        string `toml:"panel_local"`         // "log", "console", or "none" (for local sessions)
 	PanelRemote       string `toml:"panel_remote"`        // "log", "console", or "none" (for ssh/web sessions)
+	CheckboxBrackets  string `toml:"checkbox_brackets"`   // "never", "selected", or "always" -- the focused row's brackets always show regardless
+	RadioBrackets     string `toml:"radio_brackets"`      // "never", "selected", or "always" -- the focused row's brackets always show regardless
 }
 
 // PathConfig holds directory path settings.
@@ -300,6 +302,18 @@ func sanitizeConfig(ctx context.Context, conf *AppConfig) {
 	default:
 		warn("panel_remote", ui.PanelRemote, def.UI.PanelRemote)
 		ui.PanelRemote = def.UI.PanelRemote
+	}
+	switch ui.CheckboxBrackets {
+	case "never", "selected", "always":
+	default:
+		warn("checkbox_brackets", ui.CheckboxBrackets, def.UI.CheckboxBrackets)
+		ui.CheckboxBrackets = def.UI.CheckboxBrackets
+	}
+	switch ui.RadioBrackets {
+	case "never", "selected", "always":
+	default:
+		warn("radio_brackets", ui.RadioBrackets, def.UI.RadioBrackets)
+		ui.RadioBrackets = def.UI.RadioBrackets
 	}
 
 	isValidPath := func(p string) bool {
@@ -551,6 +565,10 @@ func UnmarshalRobust(data []byte, v any) (map[string]bool, error) {
 				present["PanelLocal"] = true
 			case "ui.panel_remote":
 				present["PanelRemote"] = true
+			case "ui.checkbox_brackets":
+				present["CheckboxBrackets"] = true
+			case "ui.radio_brackets":
+				present["RadioBrackets"] = true
 			case "server.ssh.port":
 				present["SSHPort"] = true
 			case "server.web.port":
@@ -779,6 +797,7 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 		"ConfigFolder", "ComposeFolder",
 		"Theme", "Borders", "LargeButtons", "LargeTitleBars", "LineCharacters", "Scrollbar", "Spinner", "SpinnerSpeed", "Shadow", "ShadowLevel", "BorderColor",
 		"DialogTitleAlign", "SubmenuTitleAlign", "PanelTitleAlign", "PanelLocal", "PanelRemote",
+		"CheckboxBrackets", "RadioBrackets",
 		"SSHPort", "WebPort", "AuthMode",
 	}
 	displayNames := map[string]string{
@@ -800,6 +819,8 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 		"PanelTitleAlign":   "Panel Title Align",
 		"PanelLocal":        "Panel Local",
 		"PanelRemote":       "Panel Remote",
+		"CheckboxBrackets":  "Checkbox Brackets",
+		"RadioBrackets":     "Radio Brackets",
 		"SSHPort":           "SSH Port",
 		"WebPort":           "Web Port",
 		"AuthMode":          "Auth Mode",
@@ -864,6 +885,10 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.PanelLocal)
 		case "PanelRemote":
 			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.PanelRemote)
+		case "CheckboxBrackets":
+			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.CheckboxBrackets)
+		case "RadioBrackets":
+			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.RadioBrackets)
 		case "SSHPort":
 			if conf.Server.SSH.Port > 0 {
 				value = fmt.Sprintf("{{|Var|}}%d{{[-]}}", conf.Server.SSH.Port)

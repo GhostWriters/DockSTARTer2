@@ -120,6 +120,8 @@ func NewFlagSet() *pflag.FlagSet {
 	fs.String("theme-dialog-title", "", "Set dialog title alignment (left/center)")
 	fs.String("theme-submenu-title", "", "Set submenu title alignment (left/center)")
 	fs.String("theme-log-title", "", "Set log title alignment (left/center)")
+	fs.String("theme-checkbox-brackets", "", "Set checkbox brackets mode (never/selected/always)")
+	fs.String("theme-radio-brackets", "", "Set radio brackets mode (never/selected/always)")
 	fs.String("theme-extract", "", "Extract a theme to a directory for customization")
 	fs.Bool("theme-extract-all", false, "Extract all embedded themes to a directory")
 

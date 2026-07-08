@@ -116,6 +116,15 @@ func parseTitleAlign(ctx context.Context, arg, label string) (string, error) {
 	return "", fmt.Errorf("invalid %s alignment", label)
 }
 
+func parseBracketMode(ctx context.Context, arg, label string) (string, error) {
+	switch strings.ToLower(arg) {
+	case "never", "selected", "always":
+		return strings.ToLower(arg), nil
+	}
+	logger.Error(ctx, "Invalid %s brackets mode: %s (use never, selected, or always)", label, arg)
+	return "", fmt.Errorf("invalid %s brackets mode", label)
+}
+
 func HandleThemeSettings(ctx context.Context, group *CommandGroup) error {
 	conf := config.LoadAppConfig()
 	switch group.Command {
@@ -266,6 +275,28 @@ func HandleThemeSettings(ctx context.Context, group *CommandGroup) error {
 			conf.UI.PanelTitleAlign = v
 		} else {
 			logger.Display(ctx, "Current panel title alignment: %s", conf.UI.PanelTitleAlign)
+			return nil
+		}
+	case "--theme-checkbox-brackets":
+		if len(group.Args) > 0 {
+			v, err := parseBracketMode(ctx, group.Args[0], "checkbox")
+			if err != nil {
+				return err
+			}
+			conf.UI.CheckboxBrackets = v
+		} else {
+			logger.Display(ctx, "Current checkbox brackets mode: %s", conf.UI.CheckboxBrackets)
+			return nil
+		}
+	case "--theme-radio-brackets":
+		if len(group.Args) > 0 {
+			v, err := parseBracketMode(ctx, group.Args[0], "radio")
+			if err != nil {
+				return err
+			}
+			conf.UI.RadioBrackets = v
+		} else {
+			logger.Display(ctx, "Current radio brackets mode: %s", conf.UI.RadioBrackets)
 			return nil
 		}
 	}

@@ -44,12 +44,10 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 
 		tagStyle := theme.ThemeSemanticStyle("{{|Tag|}}")
 		keyStyle := theme.ThemeSemanticStyle("{{|TagKey|}}")
-		checkboxStyle := theme.ThemeSemanticStyle("{{|CheckboxOff|}}")
 
 		if isSelected {
 			tagStyle = theme.ThemeSemanticStyle("{{|TagFocused|}}")
 			keyStyle = theme.ThemeSemanticStyle("{{|TagKeyFocused|}}")
-			checkboxStyle = theme.ThemeSemanticStyle("{{|CheckboxFocused|}}")
 		}
 
 		neutralStyle := lipgloss.NewStyle().Background(dialogBG)
@@ -57,8 +55,10 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 		// Checkbox/Radio visual
 		prefix := ""
 		if item.IsRadioButton || item.IsCheckbox {
-			// Flow/grid lists always keep their brackets, regardless of focus.
-			prefix = renderCheckbox(item.IsRadioButton, item.Checked, ctx.LineCharacters, true, checkboxStyle) + neutralStyle.Render(" ")
+			// Flow/grid lists always keep their brackets, regardless of focus,
+			// but the color still follows real keyboard focus (isSelected).
+			content, bracket := checkboxStylePair(item.IsRadioButton, item.Checked, isSelected)
+			prefix = renderCheckbox(item.IsRadioButton, item.Checked, ctx.LineCharacters, true, "always", content, bracket) + neutralStyle.Render(" ")
 		}
 
 		// Tag with first-letter shortcut
@@ -230,17 +230,17 @@ func (m *MenuModel) renderColumnContent(maxWidth, numCols int) string {
 
 			tagStyle := theme.ThemeSemanticStyle("{{|Tag|}}")
 			keyStyle := theme.ThemeSemanticStyle("{{|TagKey|}}")
-			checkboxStyle := theme.ThemeSemanticStyle("{{|CheckboxOff|}}")
 			if isSelected {
 				tagStyle = theme.ThemeSemanticStyle("{{|TagFocused|}}")
 				keyStyle = theme.ThemeSemanticStyle("{{|TagKeyFocused|}}")
-				checkboxStyle = theme.ThemeSemanticStyle("{{|CheckboxFocused|}}")
 			}
 
 			prefix := ""
 			if item.IsRadioButton || item.IsCheckbox {
-				// Flow/grid lists always keep their brackets, regardless of focus.
-				prefix = renderCheckbox(item.IsRadioButton, item.Checked, ctx.LineCharacters, true, checkboxStyle) + neutralStyle.Render(" ")
+				// Flow/grid lists always keep their brackets, regardless of focus,
+				// but the color still follows real keyboard focus (isSelected).
+				content, bracket := checkboxStylePair(item.IsRadioButton, item.Checked, isSelected)
+				prefix = renderCheckbox(item.IsRadioButton, item.Checked, ctx.LineCharacters, true, "always", content, bracket) + neutralStyle.Render(" ")
 			}
 
 			tag := item.Tag

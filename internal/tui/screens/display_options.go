@@ -264,6 +264,22 @@ func (s *DisplayOptionsScreen) initMenus() {
 				func() string { return s.config.UI.PanelTitleAlign },
 				func(cfg *config.AppConfig, v string) { cfg.UI.PanelTitleAlign = v }),
 		},
+		{
+			Tag:  "Checkbox Brackets",
+			Desc: s.dropdownDesc(bracketModeDesc(s.config.UI.CheckboxBrackets)),
+			Help: "When checkbox brackets are shown in lists (Enter for options)",
+			Action: s.showBracketModeDropdown("checkbox_brackets", "Checkbox Brackets",
+				func() string { return s.config.UI.CheckboxBrackets },
+				func(cfg *config.AppConfig, v string) { cfg.UI.CheckboxBrackets = v }),
+		},
+		{
+			Tag:  "Radio Brackets",
+			Desc: s.dropdownDesc(bracketModeDesc(s.config.UI.RadioBrackets)),
+			Help: "When radio button brackets are shown in lists (Enter for options)",
+			Action: s.showBracketModeDropdown("radio_brackets", "Radio Brackets",
+				func() string { return s.config.UI.RadioBrackets },
+				func(cfg *config.AppConfig, v string) { cfg.UI.RadioBrackets = v }),
+		},
 	}
 
 	if s.connType == "local" {
@@ -546,6 +562,17 @@ func titleAlignDesc(v string) string {
 	return "Center"
 }
 
+func bracketModeDesc(v string) string {
+	switch strings.ToLower(v) {
+	case "never":
+		return "Never"
+	case "always":
+		return "Always"
+	default:
+		return "Selected"
+	}
+}
+
 func (s *DisplayOptionsScreen) panelModeToDesc(v string) string {
 	switch strings.ToLower(v) {
 	case "none":
@@ -587,6 +614,35 @@ func (s *DisplayOptionsScreen) showTitleAlignDropdown(menuName, label string, ge
 		if current == "left" {
 			menu.Select(0)
 		} else {
+			menu.Select(1)
+		}
+		return displayengine.ShowDialogMsg{Dialog: menu}
+	}
+}
+
+// showBracketModeDropdown shows the Never/Selected/Always picker for
+// ui.checkbox_brackets/ui.radio_brackets. Reuses titleAlignAction, which is
+// generic (apply a value, close the dialog) despite its title-align-specific
+// name.
+func (s *DisplayOptionsScreen) showBracketModeDropdown(menuName, label string, getter func() string, apply func(*config.AppConfig, string)) tea.Cmd {
+	return func() tea.Msg {
+		current := strings.ToLower(getter())
+		items := []displayengine.MenuItem{
+			{Tag: "Never", Desc: "Only the focused row is bracketed", Help: "Only the focused row is bracketed", Action: s.titleAlignAction(apply, "never")},
+			{Tag: "Selected", Desc: "Bracketed when focused or checked", Help: "Bracketed when focused or checked", Action: s.titleAlignAction(apply, "selected")},
+			{Tag: "Always", Desc: "Every row is bracketed", Help: "Every row is bracketed", Action: s.titleAlignAction(apply, "always")},
+		}
+		menu := displayengine.NewMenuModel(menuName, label, "Select mode", items)
+		menu.SetButtons([]displayengine.ButtonDef{
+			{Label: "Select", ZoneID: "btn-select", Help: "Confirm and execute the selected action."},
+			{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return displayengine.CloseDialogMsg{} }, Help: "Cancel and close."},
+		})
+		switch current {
+		case "never":
+			menu.Select(0)
+		case "always":
+			menu.Select(2)
+		default:
 			menu.Select(1)
 		}
 		return displayengine.ShowDialogMsg{Dialog: menu}

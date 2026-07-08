@@ -357,6 +357,7 @@ func GetUsage(target string, noHeading bool) string {
 		"--theme-refresh-rate",
 		"--theme-border-color",
 		"--theme-dialog-title", "--theme-submenu-title", "--theme-panel-title",
+		"--theme-checkbox-brackets", "--theme-radio-brackets",
 		"--theme-extract", "--theme-extract-all") {
 		printStr(
 			"{{|UsageCommand|}}-T --theme{{[-]}} [{{|UsageTheme|}}<themename>{{[-]}} | {{|UsageTheme|}}user:<themename>{{[-]}} | {{|UsageTheme|}}<path>.ds2theme{{[-]}} | {{|UsageTheme|}}file:<path>{{[-]}}]",
@@ -393,6 +394,10 @@ func GetUsage(target string, noHeading bool) string {
 			"	Set submenu title alignment ({{|UsageOption|}}left{{[-]}} or {{|UsageOption|}}center{{[-]}})",
 			"{{|UsageCommand|}}--theme-panel-title{{[-]}} {{|UsageOption|}}<align>{{[-]}}",
 			"	Set log panel title alignment ({{|UsageOption|}}left{{[-]}} or {{|UsageOption|}}center{{[-]}})",
+			"{{|UsageCommand|}}--theme-checkbox-brackets{{[-]}} {{|UsageOption|}}<mode>{{[-]}}",
+			"	Set checkbox bracket visibility ({{|UsageOption|}}never{{[-]}}, {{|UsageOption|}}selected{{[-]}}, or {{|UsageOption|}}always{{[-]}})",
+			"{{|UsageCommand|}}--theme-radio-brackets{{[-]}} {{|UsageOption|}}<mode>{{[-]}}",
+			"	Set radio button bracket visibility ({{|UsageOption|}}never{{[-]}}, {{|UsageOption|}}selected{{[-]}}, or {{|UsageOption|}}always{{[-]}})",
 			"{{|UsageCommand|}}--theme-extract{{[-]}} {{|UsageTheme|}}<themename>{{[-]}} {{|UsageOption|}}<destdir>{{[-]}} {{|UsageOption|}}<filename>{{[-]}}",
 			"	Extract a theme to a file (use {{|UsageTheme|}}user:<name>{{[-]}} for user themes; {{|UsageOption|}}user:{{[-]}} as destdir for the user themes folder)",
 			"{{|UsageCommand|}}--theme-extract-all{{[-]}} {{|UsageOption|}}<destdir>{{[-]}}",

@@ -280,6 +280,8 @@ type Styles struct {
 	DialogTitleAlign  string
 	SubmenuTitleAlign string
 	PanelTitleAlign   string
+	CheckboxBrackets  string
+	RadioBrackets     string
 
 	// Option value (dropdown/inline value in flow menus)
 	OptionValueFocused lipgloss.Style
@@ -362,6 +364,8 @@ type StyleContext struct {
 	DialogTitleAlign     string
 	SubmenuTitleAlign    string
 	PanelTitleAlign      string
+	CheckboxBrackets     string
+	RadioBrackets        string
 	Prefix               string // Prefix for semantic tag remapping (e.g. "Preview_")
 	DrawShadow           bool   // Whether to draw shadows for this context
 }
@@ -434,6 +438,8 @@ func GetActiveContext() StyleContext {
 		DialogTitleAlign:     CurrentStyles.DialogTitleAlign,
 		SubmenuTitleAlign:    CurrentStyles.SubmenuTitleAlign,
 		PanelTitleAlign:      CurrentStyles.PanelTitleAlign,
+		CheckboxBrackets:     CurrentStyles.CheckboxBrackets,
+		RadioBrackets:        CurrentStyles.RadioBrackets,
 		Prefix:               "", // Global context has no prefix
 		DrawShadow:           currentConfig.UI.Shadow,
 	}
@@ -777,6 +783,8 @@ func InitStyles(cfg config.AppConfig) {
 	CurrentStyles.DialogTitleAlign = cfg.UI.DialogTitleAlign
 	CurrentStyles.SubmenuTitleAlign = cfg.UI.SubmenuTitleAlign
 	CurrentStyles.PanelTitleAlign = cfg.UI.PanelTitleAlign
+	CurrentStyles.CheckboxBrackets = cfg.UI.CheckboxBrackets
+	CurrentStyles.RadioBrackets = cfg.UI.RadioBrackets
 }
 
 // Helper functions for common style operations
