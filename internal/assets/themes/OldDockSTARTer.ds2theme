@@ -104,7 +104,7 @@ HeadingTag = "{{[white:-:-R]}}"
 HeadingValue = "{{[-:-:-RB]}}"
 HeadingAppDescription = "{{[yellow:-:-b]}}"
 CheckboxOff = "{{|Dialog|}}"
-CheckboxOn = "{{|TagKey|}}"
+CheckboxOn = "{{|Dialog|}}"
 CheckboxFocused = "{{|TagFocused|}}"
 
 

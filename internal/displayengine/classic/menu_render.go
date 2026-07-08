@@ -44,8 +44,11 @@ func renderCheckbox(isRadio, checked, lineChars, focused bool, cbStyle lipgloss.
 			}
 		default:
 			cb = checkOffBare
+			// Checked items always show brackets, even unfocused -- unlike
+			// unchecked/radio, a checked state is the thing a user scans a
+			// long list for, so it stays visually distinct regardless of focus.
 			if checked {
-				cb = checkOnBare
+				cb = checkOn
 			}
 		}
 	} else {
@@ -68,7 +71,7 @@ func renderCheckbox(isRadio, checked, lineChars, focused bool, cbStyle lipgloss.
 		default:
 			cb = checkOffBareAscii
 			if checked {
-				cb = checkOnBareAscii
+				cb = checkOnAscii
 			}
 		}
 	}

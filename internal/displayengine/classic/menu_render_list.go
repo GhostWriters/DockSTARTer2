@@ -239,17 +239,14 @@ func (m *MenuModel) renderVariableHeightList() string {
 				if enableFocused {
 					ce = checkOff
 				}
+				// Checked/Enabled always show brackets, even unfocused -- unlike
+				// the unchecked/unfocused case, a checked state is the thing a
+				// user scans a long list for, so it stays visually distinct.
 				if item.Checked {
-					ca = checkOnBare
-					if addFocused {
-						ca = checkOn
-					}
+					ca = checkOn
 				}
 				if item.Enabled {
-					ce = checkOnBare
-					if enableFocused {
-						ce = checkOn
-					}
+					ce = checkOn
 				}
 				cbAdd3 = renderCheckboxGlyph(ca, cbAStyle)
 				cbEnabled3 = renderCheckboxGlyph(ce, cbEStyle)
@@ -275,16 +272,10 @@ func (m *MenuModel) renderVariableHeightList() string {
 					ceText = checkOffAscii
 				}
 				if item.Checked {
-					caText = checkOnBareAscii
-					if addFocused {
-						caText = checkOnAscii
-					}
+					caText = checkOnAscii
 				}
 				if item.Enabled {
-					ceText = checkOnBareAscii
-					if enableFocused {
-						ceText = checkOnAscii
-					}
+					ceText = checkOnAscii
 				}
 				cbAdd3 = renderCheckboxGlyph(caText, cbAStyle)
 				cbEnabled3 = renderCheckboxGlyph(ceText, cbEStyle)
@@ -932,16 +923,10 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 				cE = checkOff
 			}
 			if item.Checked {
-				cA = checkOnBare
-				if addFocused {
-					cA = checkOn
-				}
+				cA = checkOn
 			}
 			if item.Enabled {
-				cE = checkOnBare
-				if enableFocused {
-					cE = checkOn
-				}
+				cE = checkOn
 			}
 			checkboxA3 = renderCheckboxGlyph(cA, cbStyleA)
 			checkboxE3 = renderCheckboxGlyph(cE, cbStyleE)
@@ -953,12 +938,12 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 			if item.Enabled {
 				ceA = checkOnAscii
 			}
-			if addFocused {
+			if addFocused || item.Checked {
 				checkboxA3 = neutralStyle.Render("[") + cbStyleA.Render(string(caA[1])) + neutralStyle.Render("]")
 			} else {
 				checkboxA3 = neutralStyle.Render(" ") + cbStyleA.Render(string(caA[1])) + neutralStyle.Render(" ")
 			}
-			if enableFocused {
+			if enableFocused || item.Enabled {
 				checkboxE3 = neutralStyle.Render("[") + cbStyleE.Render(string(ceA[1])) + neutralStyle.Render("]")
 			} else {
 				checkboxE3 = neutralStyle.Render(" ") + cbStyleE.Render(string(ceA[1])) + neutralStyle.Render(" ")
