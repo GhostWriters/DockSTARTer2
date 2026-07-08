@@ -197,6 +197,8 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.activeColumn = ColAdd
 			case "enable":
 				m.activeColumn = ColEnable
+			case "expand":
+				m.activeColumn = ColExpand
 			}
 
 			// Right click on a menu item triggers its context menu
