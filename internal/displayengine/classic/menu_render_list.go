@@ -191,10 +191,11 @@ func (m *MenuModel) renderVariableHeightList() string {
 			}
 			checkbox = tStyle.Render(cb)
 		} else if item.IsRadioButton || item.IsCheckbox {
-			// Regular (non-flow, non-app-select) checkbox/radio rows show their
-			// bracket/parens only when this row has cursor focus; the checked
-			// item's bullet/checkmark still shows regardless (see renderCheckbox).
-			checkbox = renderCheckbox(item.IsRadioButton, item.Checked, ctx.LineCharacters, isSelected, cbStyle)
+			// Regular (non-flow, non-app-select) checkbox/radio rows: for now,
+			// always pass focused=true so every row's bracket/parens show
+			// unconditionally (matching flow/grid lists), not just the one
+			// under cursor focus -- was: ctx.LineCharacters, isSelected, cbStyle).
+			checkbox = renderCheckbox(item.IsRadioButton, item.Checked, ctx.LineCharacters, true, cbStyle)
 		}
 
 		var cbAdd3, cbEnabled3, cbExpand3 string
@@ -224,24 +225,15 @@ func (m *MenuModel) renderVariableHeightList() string {
 			// instance..." row, which have no arrow of their own.
 			canExpand := item.IsGroupHeader || (item.IsCheckbox && !item.IsSubItem && !item.IsAddInstance)
 
-			// Each column's brackets show only when it's the specific one with
-			// keyboard focus, matching cbAStyle/cbEStyle's own per-column
-			// highlighting above rather than "is this row selected at all".
-			addFocused := isSelected && m.activeColumn == ColAdd
-			enableFocused := isSelected && m.activeColumn == ColEnable
+			// The expand-arrow's brackets still show only when that specific
+			// column has keyboard focus; the checkbox columns (below) are now
+			// always bracketed regardless of focus.
 			expandFocused := isSelected && m.activeColumn == ColExpand
 
 			if ctx.LineCharacters {
-				ca, ce := checkOffBare, checkOffBare
-				if addFocused {
-					ca = checkOff
-				}
-				if enableFocused {
-					ce = checkOff
-				}
-				// Checked/Enabled always show brackets, even unfocused -- unlike
-				// the unchecked/unfocused case, a checked state is the thing a
-				// user scans a long list for, so it stays visually distinct.
+				// For now, always bracket both columns regardless of focus or
+				// checked state (was: checkOffBare unless addFocused/enableFocused).
+				ca, ce := checkOff, checkOff
 				if item.Checked {
 					ca = checkOn
 				}
@@ -264,13 +256,9 @@ func (m *MenuModel) renderVariableHeightList() string {
 					cbExpand3 = neutralStyle.Render("   ")
 				}
 			} else {
-				caText, ceText := checkOffBareAscii, checkOffBareAscii
-				if addFocused {
-					caText = checkOffAscii
-				}
-				if enableFocused {
-					ceText = checkOffAscii
-				}
+				// For now, always bracket both columns regardless of focus or
+				// checked state (was: checkOffBareAscii unless addFocused/enableFocused).
+				caText, ceText := checkOffAscii, checkOffAscii
 				if item.Checked {
 					caText = checkOnAscii
 				}
@@ -908,20 +896,12 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 			}
 		}
 
-		// Brackets show only on the specific column with keyboard focus, same
-		// convention as the top-level app row's cbAdd3/cbEnabled3 above.
-		addFocused := isSelected && subFocused && !item.IsEditing && m.activeColumn == ColAdd
-		enableFocused := isSelected && subFocused && !item.IsEditing && m.activeColumn == ColEnable
-
+		// For now, both columns are always bracketed regardless of focus or
+		// checked state (was: focus-dependent, same convention as the
+		// top-level app row's cbAdd3/cbEnabled3 above).
 		var checkboxA3, checkboxE3 string
 		if ctx.LineCharacters {
-			cA, cE := checkOffBare, checkOffBare
-			if addFocused {
-				cA = checkOff
-			}
-			if enableFocused {
-				cE = checkOff
-			}
+			cA, cE := checkOff, checkOff
 			if item.Checked {
 				cA = checkOn
 			}
@@ -938,16 +918,8 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 			if item.Enabled {
 				ceA = checkOnAscii
 			}
-			if addFocused || item.Checked {
-				checkboxA3 = neutralStyle.Render("[") + cbStyleA.Render(string(caA[1])) + neutralStyle.Render("]")
-			} else {
-				checkboxA3 = neutralStyle.Render(" ") + cbStyleA.Render(string(caA[1])) + neutralStyle.Render(" ")
-			}
-			if enableFocused || item.Enabled {
-				checkboxE3 = neutralStyle.Render("[") + cbStyleE.Render(string(ceA[1])) + neutralStyle.Render("]")
-			} else {
-				checkboxE3 = neutralStyle.Render(" ") + cbStyleE.Render(string(ceA[1])) + neutralStyle.Render(" ")
-			}
+			checkboxA3 = neutralStyle.Render("[") + cbStyleA.Render(string(caA[1])) + neutralStyle.Render("]")
+			checkboxE3 = neutralStyle.Render("[") + cbStyleE.Render(string(ceA[1])) + neutralStyle.Render("]")
 		}
 
 		// Sub-menus require a 10-character indent to align with the top/bottom borders.
