@@ -17,8 +17,8 @@ border_color       = 3             # 1=primary border colour, 2=secondary, 3=bot
 dialog_title_align  = "center"     # "center" or "left"
 submenu_title_align = "left"       # "center" or "left"
 panel_title_align   = "center"     # "center" or "left"
-panel_local         = "console"    # "none", "log", "console", or "system" (for local sessions)
-panel_remote        = "console"    # "none", "log", "console", or "system" (for ssh/web sessions)
+panel_local         = "log"        # "none", "log", "console", or "system" (for local sessions)
+panel_remote        = "log"        # "none", "log", "console", or "system" (for ssh/web sessions)
 checkbox_brackets   = "selected"   # "never", "selected", or "always" -- the focused row's brackets always show regardless
 radio_brackets      = "never"      # "never", "selected", or "always" -- the focused row's brackets always show regardless
 
