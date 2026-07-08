@@ -282,7 +282,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 		},
 	}
 
-	if s.connType == "local" {
+	if s.connType != "web" {
 		optionItems = append(optionItems, displayengine.MenuItem{
 			Tag:           "Local Panel Mode",
 			Desc:          s.dropdownDesc(s.panelModeToDesc(s.config.UI.PanelLocal)),
