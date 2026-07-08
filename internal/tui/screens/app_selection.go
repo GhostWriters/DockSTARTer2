@@ -491,7 +491,12 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *displayengine.Men
 			// Case: Left click moves selection and handles region focus
 			m.Select(idx)
 
-			// Helper to trigger expansion/collapse
+			// Helper to trigger expansion/collapse. An already-expanded group
+			// collapses on click when it can (no real instances to hide --
+			// see collapseGroupIfNeeded); when it can't (has real named
+			// instances), collapsing is a dedicated Ctrl/Alt+Left action
+			// instead (see the help line), so a click just moves focus to
+			// the expand column rather than being a silent dead end.
 			handleExpand := func() {
 				base := item.BaseApp
 				if ni, ok := s.collapseGroupIfNeeded(m.GetItems(), base); ok {
@@ -502,9 +507,10 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *displayengine.Men
 							break
 						}
 					}
-				} else {
-					s.expandGroup(base)
 				}
+				// Either way -- collapsed or left expanded -- the expand
+				// column ends up focused, since that's what was clicked.
+				m.SetActiveColumn(displayengine.ColExpand)
 				s.collapseAllEmptyGroups(base)
 			}
 
