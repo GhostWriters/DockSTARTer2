@@ -80,7 +80,11 @@ func (m *MenuModel) renderVariableHeightList() string {
 	tagStyleSel := theme.ThemeSemanticStyle("{{|TagFocused|}}")
 	keyStyleSel := theme.ThemeSemanticStyle("{{|TagKeyFocused|}}")
 	itemStyleSel := theme.ThemeSemanticStyle("{{|ItemFocused|}}")
-	checkboxStyleSel := theme.ThemeSemanticStyle("{{|CheckboxFocused|}}")
+	// CheckboxOffFocused, not the removed generic CheckboxFocused tag: used
+	// for decorative focus markers with no real on/off state of their own
+	// (the expand arrow, the inert "-" shown on an expanded group header's
+	// A/E columns), not an actual checked/unchecked glyph.
+	checkboxStyleSel := theme.ThemeSemanticStyle("{{|CheckboxOffFocused|}}")
 	neutralStyle := lipgloss.NewStyle().Background(dialogBG)
 
 	var mainItems []MenuItem
@@ -198,10 +202,6 @@ func (m *MenuModel) renderVariableHeightList() string {
 
 		var cbAdd3, cbEnabled3, cbExpand3 string
 		if isAppSelect && (item.IsCheckbox || item.IsGroupHeader) {
-			addColFocused := isSelected && m.activeColumn == ColAdd
-			enableColFocused := isSelected && m.activeColumn == ColEnable
-			cAContent, cABracket := checkboxStylePair(false, item.Checked, addColFocused)
-			cEContent, cEBracket := checkboxStylePair(false, item.Enabled, enableColFocused)
 			cbXStyle := neutralStyle
 			if isSelected && m.activeColumn == ColExpand {
 				cbXStyle = checkboxStyleSel
@@ -212,38 +212,97 @@ func (m *MenuModel) renderVariableHeightList() string {
 			// instance..." row, which have no arrow of their own.
 			canExpand := item.IsGroupHeader || (item.IsCheckbox && !item.IsSubItem && !item.IsAddInstance)
 
-			// The expand-arrow's brackets still show only when that specific
-			// column has keyboard focus. The checkbox columns respect the
-			// user's ui.checkbox_brackets setting (App Select has no radio
-			// columns), with the focused column always bracketed regardless.
 			addFocused := isSelected && m.activeColumn == ColAdd
 			enableFocused := isSelected && m.activeColumn == ColEnable
 			expandFocused := isSelected && m.activeColumn == ColExpand
-			addBrackets := addFocused || ctx.CheckboxBrackets == "always" || (ctx.CheckboxBrackets == "selected" && item.Checked)
-			enableBrackets := enableFocused || ctx.CheckboxBrackets == "always" || (ctx.CheckboxBrackets == "selected" && item.Enabled)
+
+			if item.IsGroupHeader {
+				// Expanded: the header's own A/E columns are inert (toggling
+				// them here does nothing -- the real, actionable checkboxes
+				// are the sub-item rows below), so showing a bracketed
+				// checkbox would be misleading. An unstyled "-" makes that
+				// explicit; a blank glyph would be ambiguous with "unchecked"
+				// under ui.checkbox_brackets = "never"/"selected". The
+				// focused column still gets the same bracket+color treatment
+				// as the expand arrow, so cursor position stays visible.
+				aStyle := neutralStyle
+				if addFocused {
+					aStyle = checkboxStyleSel
+				}
+				eStyle := neutralStyle
+				if enableFocused {
+					eStyle = checkboxStyleSel
+				}
+				if addFocused {
+					cbAdd3 = aStyle.Render("[-]")
+				} else {
+					cbAdd3 = neutralStyle.Render(" - ")
+				}
+				if enableFocused {
+					cbEnabled3 = eStyle.Render("[-]")
+				} else {
+					cbEnabled3 = neutralStyle.Render(" - ")
+				}
+			} else {
+				addColFocused := isSelected && m.activeColumn == ColAdd
+				enableColFocused := isSelected && m.activeColumn == ColEnable
+				cAContent, cABracket := checkboxStylePair(false, item.Checked, addColFocused)
+				cEContent, cEBracket := checkboxStylePair(false, item.Enabled, enableColFocused)
+
+				// The checkbox columns respect the user's ui.checkbox_brackets
+				// setting (App Select has no radio columns), with the
+				// focused column always bracketed regardless.
+				addBrackets := addFocused || ctx.CheckboxBrackets == "always" || (ctx.CheckboxBrackets == "selected" && item.Checked)
+				enableBrackets := enableFocused || ctx.CheckboxBrackets == "always" || (ctx.CheckboxBrackets == "selected" && item.Enabled)
+
+				if ctx.LineCharacters {
+					ca, ce := checkOffBare, checkOffBare
+					if item.Checked {
+						ca = checkOnBare
+					}
+					if item.Enabled {
+						ce = checkOnBare
+					}
+					if addBrackets {
+						ca = checkOff
+						if item.Checked {
+							ca = checkOn
+						}
+					}
+					if enableBrackets {
+						ce = checkOff
+						if item.Enabled {
+							ce = checkOn
+						}
+					}
+					cbAdd3 = renderCheckboxGlyphSplit(ca, cAContent, cABracket)
+					cbEnabled3 = renderCheckboxGlyphSplit(ce, cEContent, cEBracket)
+				} else {
+					caText, ceText := checkOffBareAscii, checkOffBareAscii
+					if item.Checked {
+						caText = checkOnBareAscii
+					}
+					if item.Enabled {
+						ceText = checkOnBareAscii
+					}
+					if addBrackets {
+						caText = checkOffAscii
+						if item.Checked {
+							caText = checkOnAscii
+						}
+					}
+					if enableBrackets {
+						ceText = checkOffAscii
+						if item.Enabled {
+							ceText = checkOnAscii
+						}
+					}
+					cbAdd3 = renderCheckboxGlyphSplit(caText, cAContent, cABracket)
+					cbEnabled3 = renderCheckboxGlyphSplit(ceText, cEContent, cEBracket)
+				}
+			}
 
 			if ctx.LineCharacters {
-				ca, ce := checkOffBare, checkOffBare
-				if item.Checked {
-					ca = checkOnBare
-				}
-				if item.Enabled {
-					ce = checkOnBare
-				}
-				if addBrackets {
-					ca = checkOff
-					if item.Checked {
-						ca = checkOn
-					}
-				}
-				if enableBrackets {
-					ce = checkOff
-					if item.Enabled {
-						ce = checkOn
-					}
-				}
-				cbAdd3 = renderCheckboxGlyphSplit(ca, cAContent, cABracket)
-				cbEnabled3 = renderCheckboxGlyphSplit(ce, cEContent, cEBracket)
 				if canExpand {
 					arrow := subMenuCollapsed
 					if item.IsGroupHeader {
@@ -258,27 +317,6 @@ func (m *MenuModel) renderVariableHeightList() string {
 					cbExpand3 = neutralStyle.Render("   ")
 				}
 			} else {
-				caText, ceText := checkOffBareAscii, checkOffBareAscii
-				if item.Checked {
-					caText = checkOnBareAscii
-				}
-				if item.Enabled {
-					ceText = checkOnBareAscii
-				}
-				if addBrackets {
-					caText = checkOffAscii
-					if item.Checked {
-						caText = checkOnAscii
-					}
-				}
-				if enableBrackets {
-					ceText = checkOffAscii
-					if item.Enabled {
-						ceText = checkOnAscii
-					}
-				}
-				cbAdd3 = renderCheckboxGlyphSplit(caText, cAContent, cABracket)
-				cbEnabled3 = renderCheckboxGlyphSplit(ceText, cEContent, cEBracket)
 				if canExpand {
 					arrow := subMenuCollapsedAscii
 					if item.IsGroupHeader {
