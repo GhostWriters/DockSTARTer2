@@ -226,11 +226,32 @@ func (s *AppSelectionScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return s, cmd
 	}
+	// The "just added this instance" marker (IsNew) is transient -- clear it
+	// on the next keypress or click, before that input is otherwise handled,
+	// so it never lingers past the interaction that follows the add.
+	switch msg.(type) {
+	case tea.KeyPressMsg, displayengine.LayerHitMsg:
+		s.clearJustAdded()
+	}
+
 	m, cmd := s.menu.Update(msg)
 	if mm, ok := m.(*displayengine.MenuModel); ok {
 		s.menu = mm
 	}
 	return s, cmd
+}
+
+// clearJustAdded removes the transient IsNew marker from whichever row
+// currently carries it (see confirmEdit), if any.
+func (s *AppSelectionScreen) clearJustAdded() {
+	items := s.menu.GetItems()
+	for i, it := range items {
+		if it.IsNew {
+			items[i].IsNew = false
+			s.menu.SetItems(items)
+			return
+		}
+	}
 }
 
 func (s *AppSelectionScreen) HelpContext(maxWidth int) displayengine.HelpContext {

@@ -994,7 +994,20 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 		if item.IsEditing {
 			nameSep = neutralStyle.Render("[")
 		}
-		rowContent := vStyleLight.Render(vBorderChar) + neutralStyle.Render(" ") + checkboxA3 + neutralStyle.Render(" ") + checkboxE3 + nameSep + tagStr
+		// The mandatory internal space right after the border doubles as a
+		// transient "you just added this" marker -- same glyph as the
+		// top-level list's own expand/collapse indicator, cleared by
+		// AppSelectionScreen on the next keypress/click (see IsNew's
+		// clearing logic), at which point this reverts to a plain space.
+		leadSpace := neutralStyle.Render(" ")
+		if item.IsNew {
+			arrow := subMenuCollapsed
+			if !ctx.LineCharacters {
+				arrow = subMenuCollapsedAscii
+			}
+			leadSpace = RenderThemeText("{{|MarkerAdded|}}"+arrow+"{{[-]}}", neutralStyle)
+		}
+		rowContent := vStyleLight.Render(vBorderChar) + leadSpace + checkboxA3 + neutralStyle.Render(" ") + checkboxE3 + nameSep + tagStr
 		rowWidth := subListWidth - 1
 		pContent := rowContent + neutralStyle.Render(strutil.Repeat(" ", max(0, rowWidth-lipgloss.Width(GetPlainText(rowContent)))))
 
