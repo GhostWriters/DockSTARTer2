@@ -591,11 +591,15 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *displayengine.Men
 			// collapse. skipBase exempts the group this click just entered
 			// or expanded (so opening an empty group doesn't immediately
 			// undo itself); it defaults to the clicked item's own group and
-			// is cleared to "" by actions that complete on the current row
-			// instead of entering it (Add/Enable toggles), since by then the
-			// action already happened at a known-good index and re-checking
-			// this row's own group too is exactly the point (e.g. unchecking
-			// a group's last real instance should collapse it immediately).
+			// is cleared to "" only for a group header's own Add/Enable
+			// click (the inert "-" dash) -- that's not really inside the
+			// bordered instance list, so it can self-collapse immediately.
+			// A real subitem's own Add/Enable toggle, by contrast, IS
+			// inside the list the user is actively working in -- even if
+			// the toggle makes the group newly collapsible (e.g. unchecking
+			// its last active instance), collapsing it out from under that
+			// same click would eject the user mid-interaction; it still
+			// collapses, just on whatever click follows instead.
 			skipBase := item.BaseApp
 			var cmd tea.Cmd
 
@@ -605,14 +609,16 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *displayengine.Men
 				m.SetActiveColumn(displayengine.ColAdd)
 				if !item.IsGroupHeader {
 					cmd = s.toggleItem(idx)
+				} else {
+					skipBase = ""
 				}
-				skipBase = ""
 			case "enable":
 				m.SetActiveColumn(displayengine.ColEnable)
 				if !item.IsGroupHeader {
 					cmd = s.toggleItem(idx)
+				} else {
+					skipBase = ""
 				}
-				skipBase = ""
 			case "expand":
 				if item.IsSubItem {
 					if !item.IsReferenced && !item.WasAdded {
