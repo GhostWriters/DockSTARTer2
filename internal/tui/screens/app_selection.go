@@ -119,6 +119,11 @@ func (s *AppSelectionScreen) HelpText() string {
 		}
 	} else if item.IsGroupHeader && col == displayengine.ColName {
 		return "Go to documentation for " + appenv.StyledAppName(context.Background(), item.BaseApp)
+	} else if item.IsGroupHeader && col == displayengine.ColExpand {
+		// Mirrors the collapsed row's "Expand instance list of X" -- clicking
+		// here descends into the already-expanded list (or collapses it, but
+		// only if it's empty; "Enter" describes what a click reliably does).
+		return "Enter instance list of " + appenv.StyledAppName(context.Background(), item.BaseApp)
 	} else if item.IsAddInstance {
 		// Same text regardless of column -- the row has no real per-column
 		// behavior of its own, Space/Enter always starts adding one.
