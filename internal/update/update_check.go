@@ -217,13 +217,22 @@ func GetDockerDaemonVersionDisplay(ctx context.Context) string {
 
 // GetDockerAPIVersionDisplay returns a formatted version string for the
 // Docker daemon's API version, shown alongside GetDockerDaemonVersionDisplay.
+// Normally this is just the daemon's max API version. If the client actually
+// negotiated down to something lower (e.g. DOCKER_API_VERSION pinning an
+// older version), both are shown as [negotiated/max], with the negotiated
+// version in the Error style to flag that it's not using the daemon's full
+// capability.
 func GetDockerAPIVersionDisplay(ctx context.Context) string {
 	st := dockerStatus(ctx)
 	if !st.Reachable || st.APIVersion == "" {
 		return "{{|ApplicationName|}}Docker API{{[-]}} [{{|Error|}}not detected{{[-]}}] (external dependency)"
 	}
-	ver := versionTag("v"+st.APIVersion, "https://docs.docker.com/reference/api/engine/version/v"+st.APIVersion+"/")
-	return fmt.Sprintf("{{|ApplicationName|}}Docker API{{[-]}} [%s] (external dependency)", ver)
+	maxVer := versionTag("v"+st.APIVersion, "https://docs.docker.com/reference/api/engine/version/v"+st.APIVersion+"/")
+	if st.NegotiatedAPIVersion == "" || st.NegotiatedAPIVersion == st.APIVersion {
+		return fmt.Sprintf("{{|ApplicationName|}}Docker API{{[-]}} [%s] (external dependency)", maxVer)
+	}
+	negotiated := console.FormatLink("Error", "v"+st.NegotiatedAPIVersion, "https://docs.docker.com/reference/api/engine/version/v"+st.NegotiatedAPIVersion+"/")
+	return fmt.Sprintf("{{|ApplicationName|}}Docker API{{[-]}} [%s/%s] (external dependency)", negotiated, maxVer)
 }
 
 func dockerStatus(ctx context.Context) dockercheck.Status {
