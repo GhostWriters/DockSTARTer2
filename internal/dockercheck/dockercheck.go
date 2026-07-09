@@ -47,8 +47,15 @@ type Status struct {
 	// TooOld is true when the daemon answered but its API version is below
 	// MinAPIVersion.
 	TooOld bool
-	// APIVersion is the daemon's reported API version (when reachable).
+	// APIVersion is the daemon's reported maximum API version (when
+	// reachable) -- the raw ping header, not necessarily the version
+	// actually in use for requests.
 	APIVersion string
+	// NegotiatedAPIVersion is the API version the client actually
+	// negotiated down to for requests (e.g. via DOCKER_API_VERSION or a
+	// client-side max lower than the daemon's). Equal to APIVersion unless
+	// negotiation picked something lower.
+	NegotiatedAPIVersion string
 	// ServerVersion is the daemon's engine version, e.g. "27.3.1" (when
 	// reachable).
 	ServerVersion string
@@ -94,6 +101,11 @@ func Check(ctx context.Context) Status {
 		if st.APIVersion == "" {
 			st.APIVersion = sv.APIVersion
 		}
+	}
+	cli.NegotiateAPIVersionPing(ping)
+	st.NegotiatedAPIVersion = cli.ClientVersion()
+	if st.NegotiatedAPIVersion == "" {
+		st.NegotiatedAPIVersion = st.APIVersion
 	}
 	if st.APIVersion != "" && versions.LessThan(st.APIVersion, MinAPIVersion) {
 		st.TooOld = true
