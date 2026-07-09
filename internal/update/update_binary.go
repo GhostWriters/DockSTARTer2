@@ -247,6 +247,7 @@ func ReExec(ctx context.Context, exePath string, args []string) error {
 		fullCmd += " " + strings.Join(args, " ")
 	}
 
+	logger.Notice(ctx, "Restarting {{|ApplicationName|}}%s{{[-]}}", version.ApplicationName)
 	logger.Notice(ctx, "Running: {{|RunningCommand|}}exec %s{{[-]}}", fullCmd)
 
 	// Store for main thread execution
