@@ -798,9 +798,11 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 		w := lipgloss.Width(GetPlainText(item.Tag))
 		if item.IsEditing {
 			// The opening "[" replaces one of the two blank spaces already
-			// before the tag (see rowContent below), but the closing "]" has
-			// no space slot to replace -- account for that 1 extra character.
-			w++
+			// before the tag (see rowContent below), but the closing " ]" has
+			// no space slot to replace -- account for those 2 extra characters
+			// (the space leaves room for the hardware cursor to be visible
+			// instead of sitting directly on top of "]").
+			w += 2
 		}
 		if w > subGroupTagMaxW {
 			subGroupTagMaxW = w
@@ -912,13 +914,14 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 			// unstyled brackets -- the edited text itself keeps the standard
 			// edit styling (red background/bold). The opening "[" is added by
 			// rowContent below, replacing one of the blank separator spaces
-			// rather than adding width; only the closing "]" is added here.
-			// The real hardware cursor (see AppSelectionScreen.GetInputCursor)
-			// marks the actual edit position, so no visual cursor glyph is
-			// embedded in the text.
+			// rather than adding width; the closing " ]" is added here, with
+			// a leading space so the hardware cursor (see
+			// AppSelectionScreen.GetInputCursor, which lands right after the
+			// typed text) has room to be visible instead of sitting directly
+			// on top of "]".
 			editTag := GetPlainText(item.Tag)
 			editStyle := theme.ThemeSemanticStyle("{{|ItemFocused|}}")
-			tagStr += editStyle.Render(editTag) + neutralStyle.Render("]")
+			tagStr += editStyle.Render(editTag) + neutralStyle.Render(" ]")
 		} else if len(item.Tag) > 0 {
 			runes := []rune(item.Tag)
 			tagStr += kStyle.Render(string(runes[0])) + tStyle.Render(string(runes[1:]))
