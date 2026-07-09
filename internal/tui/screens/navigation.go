@@ -61,6 +61,29 @@ func navigateToAppSelection(connType string) tea.Cmd {
 	}
 }
 
+// navigateToFullSetup returns a command that starts the guided setup wizard:
+// Edit Global Variables, then Select Applications, then Configure
+// Applications. All three screens are navigated to in one NavigateMsg via
+// PushStack, so each screen's own unmodified Back action -- already just a
+// stack pop -- naturally reveals the next step in sequence, rather than
+// needing every screen in the chain to support a custom "on complete"
+// callback. The final Back (from Configure Applications) lands back on
+// whatever screen Full Setup was launched from, same as any other
+// single-screen navigation.
+func navigateToFullSetup(connType string) tea.Cmd {
+	return func() tea.Msg {
+		tui.CurrentEditorApp = ""
+		cfg := config.LoadAppConfig()
+		configApps := NewConfigAppsMenuScreen(connType)
+		appSelection := NewAppSelectionScreen(cfg, false, connType)
+		globalVars := NewEnvEditorGlobal(navigateBack(), true, connType)
+		return tui.NavigateMsg{
+			Screen:    globalVars,
+			PushStack: []tui.ScreenModel{configApps, appSelection},
+		}
+	}
+}
+
 // navigateBack returns a command to navigate back
 func navigateBack() tea.Cmd {
 	return func() tea.Msg {

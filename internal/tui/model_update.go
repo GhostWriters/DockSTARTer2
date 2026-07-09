@@ -340,6 +340,22 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.screenStack = append(m.screenStack, m.activeScreen)
 		}
+		if len(msg.PushStack) > 0 {
+			m.screenStack = append(m.screenStack, msg.PushStack...)
+			// Don't call Init() on these now -- every message (including
+			// whatever a screen's own Init() cmd eventually produces, e.g.
+			// App Select's async data load completing) is routed only to
+			// m.activeScreen.Update(), so firing Init() while a screen is
+			// still buried in the stack would strand its result message
+			// nowhere ("No results found" -- Init() ran, but the loaded-data
+			// message had no active screen to land on). Flag them instead;
+			// NavigateBackMsg calls Init() at the moment one of these
+			// actually becomes active, same as this handler already does
+			// for msg.Screen below.
+			for _, s := range msg.PushStack {
+				m.needsInit[s] = true
+			}
+		}
 		m.activeScreen = msg.Screen
 		if m.activeScreen != nil {
 			CurrentPageName = m.activeScreen.MenuName()
@@ -406,6 +422,15 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.activeScreen.SetSize(caW, caH)
 				}
 				m.backdrop.SetHelpText(m.activeScreen.HelpText())
+
+				// A screen pushed via NavigateMsg.PushStack (see that
+				// handler above) never got Init() called on it -- do so now
+				// that it's actually the active screen, so its Init() cmd's
+				// eventual result message has somewhere to land.
+				if m.needsInit[m.activeScreen] {
+					delete(m.needsInit, m.activeScreen)
+					cmds = append(cmds, logger.BatchRecoverTUI(m.ctx, m.activeScreen.Init()))
+				}
 
 				// Sync current lock state to the restored screen immediately
 				if m.lockedByOthers {

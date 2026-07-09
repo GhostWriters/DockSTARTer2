@@ -65,9 +65,16 @@ type HaloProvider interface {
 
 // Navigation messages
 type (
-	// NavigateMsg requests navigation to a new screen
+	// NavigateMsg requests navigation to a new screen. PushStack, if set, is
+	// pushed onto the navigation stack (bottom to top) below Screen at the
+	// same time -- e.g. for a wizard-like flow of N screens navigated to in
+	// one shot, where each screen's own (unmodified) Back action naturally
+	// reveals the next one in sequence, purely from existing stack-pop
+	// behavior (see NavigateBackMsg) rather than needing every screen in
+	// the chain to support a custom "on complete" callback.
 	NavigateMsg struct {
-		Screen ScreenModel
+		Screen    ScreenModel
+		PushStack []ScreenModel
 	}
 
 	// NavigateBackMsg requests navigation back to previous screen.
@@ -229,6 +236,17 @@ type AppModel struct {
 	activeScreen ScreenModel
 	screenStack  []ScreenModel
 
+	// needsInit tracks screens pushed onto screenStack via NavigateMsg.PushStack
+	// that haven't been made active (and therefore haven't had Init() called)
+	// yet. Every message -- including whatever a screen's own Init() cmd
+	// eventually produces -- is routed only to m.activeScreen.Update(), so
+	// calling Init() on a screen while it's still buried in the stack would
+	// fire the cmd but strand its result message nowhere; NavigateBackMsg's
+	// handler calls Init() (and clears the entry here) at the moment a
+	// pushed screen actually becomes active instead, matching how every
+	// other screen already gets Init() called via NavigateMsg.
+	needsInit map[ScreenModel]bool
+
 	// Persistent backdrop (header + separator + helpline)
 	backdrop *displayengine.BackdropModel
 
@@ -293,6 +311,7 @@ func NewAppModel(ctx context.Context, cfg config.AppConfig, clientIP, connType s
 		connType:     connType,
 		activeScreen: startScreen,
 		screenStack:  stack,
+		needsInit:    make(map[ScreenModel]bool),
 		backdrop:     bd,
 		panel:        displayengine.NewPanelModel(displayengine.EffectivePanelMode(cfg, connType), connType),
 	}
@@ -303,13 +322,14 @@ func NewAppModelStandalone(ctx context.Context, cfg config.AppConfig, clientIP, 
 	bd := displayengine.NewBackdropModel("")
 	bd.SetConnType(connType)
 	return &AppModel{
-		ctx:      ctx,
-		config:   cfg,
-		clientIP: clientIP,
-		connType: connType,
-		backdrop: bd,
-		panel:    displayengine.NewPanelModel(displayengine.EffectivePanelMode(cfg, connType), connType),
-		dialog:   dialog,
+		ctx:       ctx,
+		config:    cfg,
+		clientIP:  clientIP,
+		connType:  connType,
+		needsInit: make(map[ScreenModel]bool),
+		backdrop:  bd,
+		panel:     displayengine.NewPanelModel(displayengine.EffectivePanelMode(cfg, connType), connType),
+		dialog:    dialog,
 	}
 }
 
