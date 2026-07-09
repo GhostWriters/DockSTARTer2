@@ -415,6 +415,35 @@ func (s *AppSelectionScreen) collapseGroupIfNeeded(items []displayengine.MenuIte
 	return newItems, true
 }
 
+// sortGroupInstances re-sorts base's subitem rows by instance appName,
+// in place at their existing (contiguous) positions -- the header and
+// "+ Add instance..." row, if present, keep their own positions relative to
+// that block. Matches the ordering buildAllItems/expandGroup already use
+// when first constructing a group, which confirmEdit's in-place
+// insert/replace doesn't otherwise preserve.
+func sortGroupInstances(items []displayengine.MenuItem, base string) []displayengine.MenuItem {
+	var idxs []int
+	for i, it := range items {
+		if it.IsSubItem && it.BaseApp == base {
+			idxs = append(idxs, i)
+		}
+	}
+	if len(idxs) < 2 {
+		return items
+	}
+	sub := make([]displayengine.MenuItem, len(idxs))
+	for k, i := range idxs {
+		sub[k] = items[i]
+	}
+	slices.SortFunc(sub, func(a, b displayengine.MenuItem) int {
+		return strings.Compare(a.Metadata["appName"], b.Metadata["appName"])
+	})
+	for k, i := range idxs {
+		items[i] = sub[k]
+	}
+	return items
+}
+
 func (s *AppSelectionScreen) collapseAllEmptyGroups(skipBase string) {
 	cur := s.menu.GetItems()
 

@@ -253,7 +253,12 @@ func (s *AppSelectionScreen) confirmEdit() {
 	displayName := appenv.InstanceDisplayName(baseNiceName, newAppName)
 	checkedState := true
 	enabledState := true
-	if s.isRenaming {
+	// Renaming a real instance (already checked or persisted) preserves its
+	// checked/enabled state. Renaming an inert, never-added placeholder --
+	// e.g. giving the base app's own unchecked row a suffix -- is really an
+	// add wearing a rename's clothes, so it gets the same true/true a fresh
+	// add gets instead of carrying over "unchecked".
+	if s.isRenaming && (s.renamingOriginal.Checked || s.renamingOriginal.WasAdded) {
 		checkedState = s.renamingOriginal.Checked
 		enabledState = s.renamingOriginal.Enabled
 	}
@@ -305,6 +310,9 @@ func (s *AppSelectionScreen) confirmEdit() {
 			newItems = cleaned
 		}
 	}
+	newItems = sortGroupInstances(newItems, base)
+
+	wasRenaming := s.isRenaming
 	s.isEditing = false
 	s.isRenaming = false
 	s.convertedFromSimple = false
@@ -315,4 +323,27 @@ func (s *AppSelectionScreen) confirmEdit() {
 	s.editError = ""
 	s.editingIdx = -1
 	s.menu.SetItems(newItems)
+
+	// Land explicitly on the right row by identity rather than relying on
+	// whatever raw index happened to fall out of the edits above (pruning
+	// the placeholder row, folding into an existing one, and sorting can
+	// all shift positions independently of each other). Renaming lands on
+	// the instance just renamed; adding stays on "+ Add instance..." so
+	// adding several in a row doesn't require re-navigating back down each
+	// time.
+	if wasRenaming {
+		for i, it := range newItems {
+			if it.Metadata["appName"] == newAppName {
+				s.menu.Select(i)
+				break
+			}
+		}
+	} else {
+		for i, it := range newItems {
+			if it.IsAddInstance && it.BaseApp == base {
+				s.menu.Select(i)
+				break
+			}
+		}
+	}
 }
