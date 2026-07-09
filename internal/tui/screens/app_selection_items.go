@@ -418,6 +418,24 @@ func (s *AppSelectionScreen) collapseGroupIfNeeded(items []displayengine.MenuIte
 func (s *AppSelectionScreen) collapseAllEmptyGroups(skipBase string) {
 	cur := s.menu.GetItems()
 
+	// Snapshot the currently selected row's identity before anything moves,
+	// so it can be re-found afterward regardless of how many rows above it
+	// got removed by a collapse elsewhere in the list -- selection is a raw
+	// index, and any collapse before that index shifts everything after it
+	// without this.
+	prevIdx := s.menu.Index()
+	var selAppName string
+	var selBase string
+	var selIsGroupHeader, selIsAddInstance bool
+	haveSel := prevIdx >= 0 && prevIdx < len(cur)
+	if haveSel {
+		sel := cur[prevIdx]
+		selAppName = sel.Metadata["appName"]
+		selBase = sel.BaseApp
+		selIsGroupHeader = sel.IsGroupHeader
+		selIsAddInstance = sel.IsAddInstance
+	}
+
 	// Prune phantoms first
 	pruned := make([]displayengine.MenuItem, 0, len(cur))
 	for _, it := range cur {
@@ -442,15 +460,32 @@ func (s *AppSelectionScreen) collapseAllEmptyGroups(skipBase string) {
 			changed = true
 		}
 	}
-	if changed {
-		s.menu.SetItems(cur)
-		if skipBase != "" {
-			for i, it := range cur {
-				if it.BaseApp == skipBase {
-					s.menu.Select(i)
-					return
-				}
+	if !changed {
+		return
+	}
+	s.menu.SetItems(cur)
+	if !haveSel {
+		return
+	}
+	// Match on appName plus role together -- a group header and its own
+	// unnamed base subitem legitimately share the same appName (both copy
+	// the base row's Metadata in expandGroup), so appName alone isn't a
+	// unique key and would let the header steal a subitem's reselect.
+	if selAppName != "" {
+		for i, it := range cur {
+			if it.Metadata["appName"] == selAppName && it.IsGroupHeader == selIsGroupHeader && it.IsAddInstance == selIsAddInstance {
+				s.menu.Select(i)
+				return
 			}
+		}
+	}
+	for i, it := range cur {
+		if it.BaseApp != selBase {
+			continue
+		}
+		if it.IsGroupHeader == selIsGroupHeader && it.IsAddInstance == selIsAddInstance {
+			s.menu.Select(i)
+			return
 		}
 	}
 }
