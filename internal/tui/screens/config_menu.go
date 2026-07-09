@@ -19,7 +19,7 @@ func NewConfigMenuScreen(isRoot bool, connType string) tui.ScreenModel {
 			Tag:           "Full Setup",
 			Desc:          "Run complete setup wizard",
 			Help:          "Guided setup for all applications",
-			Action:        nil, // Not implemented yet
+			Action:        navigateToFullSetup(connType),
 			IsDestructive: true,
 		},
 		{
