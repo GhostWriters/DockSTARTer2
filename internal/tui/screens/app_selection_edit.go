@@ -130,7 +130,7 @@ func (s *AppSelectionScreen) startRenaming(subIdx int) {
 
 	editRow := displayengine.MenuItem{
 		Tag:        s.editingTag(appenv.GetNiceName(context.Background(), subItem.BaseApp), suffix, ""),
-		Help:       "Rename instance of " + appenv.StyledInstanceName(context.Background(), subItem.Metadata["appName"]) + ". Press {{|KeyCap|}}[Enter]{{[-]}} to confirm, {{|KeyCap|}}[Esc]{{[-]}} to cancel.",
+		Help:       "Rename instance " + appenv.StyledInstanceName(context.Background(), subItem.Metadata["appName"]) + ". Press {{|KeyCap|}}[Enter]{{[-]}} to confirm, {{|KeyCap|}}[Esc]{{[-]}} to cancel.",
 		IsEditing:  true,
 		IsSubItem:  true,
 		IsCheckbox: subItem.IsCheckbox,
