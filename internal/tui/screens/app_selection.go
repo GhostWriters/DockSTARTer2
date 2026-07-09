@@ -511,23 +511,34 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *displayengine.Men
 				// Either way -- collapsed or left expanded -- the expand
 				// column ends up focused, since that's what was clicked.
 				m.SetActiveColumn(displayengine.ColExpand)
-				s.collapseAllEmptyGroups(base)
 			}
+
+			// Every click ends with a sweep for empty groups that should
+			// collapse. skipBase exempts the group this click just entered
+			// or expanded (so opening an empty group doesn't immediately
+			// undo itself); it defaults to the clicked item's own group and
+			// is cleared to "" by actions that complete on the current row
+			// instead of entering it (Add/Enable toggles), since by then the
+			// action already happened at a known-good index and re-checking
+			// this row's own group too is exactly the point (e.g. unchecking
+			// a group's last real instance should collapse it immediately).
+			skipBase := item.BaseApp
+			var cmd tea.Cmd
 
 			// 1. Process specific region suffixes
 			switch suffix {
 			case "add":
 				m.SetActiveColumn(displayengine.ColAdd)
 				if !item.IsGroupHeader {
-					return s.toggleItem(idx), true
+					cmd = s.toggleItem(idx)
 				}
-				return nil, true
+				skipBase = ""
 			case "enable":
 				m.SetActiveColumn(displayengine.ColEnable)
 				if !item.IsGroupHeader {
-					return s.toggleItem(idx), true
+					cmd = s.toggleItem(idx)
 				}
-				return nil, true
+				skipBase = ""
 			case "expand":
 				if item.IsSubItem {
 					if !item.IsReferenced && !item.WasAdded {
@@ -539,41 +550,58 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *displayengine.Men
 					s.startEditing(item.BaseApp)
 				} else {
 					s.expandGroup(item.BaseApp)
-					s.collapseAllEmptyGroups(item.BaseApp)
+					// expandGroup selects the new first subitem row, but
+					// subitems have no visible focus indicator for
+					// ColExpand (only Add/Enable draw focus brackets) --
+					// leaving whatever column was active before this click
+					// (e.g. ColExpand, from clicking the expand arrow
+					// itself) would land on a selected row with no visibly
+					// focused cell at all.
+					m.SetActiveColumn(displayengine.ColAdd)
 				}
-				return nil, true
-			case "parent":
-				// Clicks on the instance border now "enter" the list by selecting the first instance
-				m.Select(idx)
-				s.collapseAllEmptyGroups(item.BaseApp)
-				return nil, true
-			case "border":
-				// Clicks on the instance background or margin select that instance
-				m.Select(idx)
-				s.collapseAllEmptyGroups(item.BaseApp)
-				return nil, true
+			case "parent", "border":
+				// Clicks on the instance border/background now "enter" the
+				// list by selecting that instance (m.Select(idx) above
+				// already did the work).
+			default:
+				// 2. Default Action: no specific region suffix was hit
+				// (standard row click) -- same Expansion/Selection logic as
+				// the "expand" region.
+				if item.IsSubItem {
+					if !item.IsReferenced && !item.WasAdded {
+						s.startRenaming(idx)
+					}
+				} else if item.IsGroupHeader {
+					handleExpand()
+				} else if item.IsAddInstance {
+					s.startEditing(item.BaseApp)
+				} else {
+					s.expandGroup(item.BaseApp)
+					// expandGroup selects the new first subitem row, but
+					// subitems have no visible focus indicator for
+					// ColExpand (only Add/Enable draw focus brackets) --
+					// leaving whatever column was active before this click
+					// (e.g. ColExpand, from clicking the expand arrow
+					// itself) would land on a selected row with no visibly
+					// focused cell at all.
+					m.SetActiveColumn(displayengine.ColAdd)
+				}
 			}
 
-			// 2. Default Action: If no specific region suffix was hit (standard row click)
-			// we trigger the same Expansion/Selection logic as the "expand" region.
-			if item.IsSubItem {
-				if !item.IsReferenced && !item.WasAdded {
-					s.startRenaming(idx)
-				}
-			} else if item.IsGroupHeader {
-				handleExpand()
-			} else if item.IsAddInstance {
-				s.startEditing(item.BaseApp)
-			} else {
-				// Simple row: select it
-				s.expandGroup(item.BaseApp)
-				s.collapseAllEmptyGroups(item.BaseApp)
-			}
-			return nil, true
+			s.collapseAllEmptyGroups(skipBase)
+			return cmd, true
 		}
 
 		// Swallow all clicks targeting this menu ID but not a specific item index
 		if hitMsg.ID == m.ID() {
+			// A click on the list's own background/margin -- still inside the
+			// app list, just not on any row -- counts as clicking away from
+			// whatever group is expanded, so check whether it should now
+			// collapse (empty, no real instances). skipBase="" means no
+			// group is exempt. Clicks outside the list entirely (Done/Back/
+			// Exit) fall through to "return nil, false" below and don't
+			// apply here.
+			s.collapseAllEmptyGroups("")
 			return nil, true
 		}
 		return nil, false
