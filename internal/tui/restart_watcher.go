@@ -55,6 +55,12 @@ func isRestartSafeLocally() bool {
 	if CurrentPageName == "tabbed_vars" {
 		return false
 	}
+	// Page-scoped rather than a bare bool check so a screen that somehow
+	// left without explicitly clearing this (e.g. Back/Exit mid-edit) can
+	// never permanently wedge future restarts once the page changes away.
+	if CurrentPageName == "app-select" && CurrentScreenHasUnsavedEdit {
+		return false
+	}
 	if sessionlocks.Sessions.HoldEditLockLocal() {
 		return false
 	}
@@ -116,9 +122,19 @@ func startRestartWatcher(ctx context.Context) {
 // checkPendingRestart is called whenever the active screen changes. If a restart
 // is pending and the new page is safe, it fires the re-exec immediately rather
 // than waiting for the next poll cycle.
+//
+// triggerPendingRestart is dispatched on its own goroutine rather than called
+// directly: this function runs synchronously inside the Bubble Tea Update()
+// call chain (the same goroutine that runs p.Run()'s event loop), but
+// triggerPendingRestart ends in Shutdown(), which calls p.Quit() and then
+// blocks waiting for p.Run() to return. p.Run() can never return while it's
+// still waiting on this very Update() call to finish -- calling it inline
+// here deadlocks the session on itself. Running it on a separate goroutine
+// lets this Update() call return immediately, so Run()'s loop can actually
+// process the pending Quit() and exit.
 func checkPendingRestart(ctx context.Context) {
 	if update.RestartPending && isRestartSafe() {
-		triggerPendingRestart(ctx)
+		go triggerPendingRestart(ctx)
 	}
 }
 

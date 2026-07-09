@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"DockSTARTer2/internal/appenv"
@@ -42,6 +43,13 @@ var (
 	// Only meaningful when CurrentPageName == "tabbed_vars".
 	CurrentEditorApp string
 
+	// CurrentScreenHasUnsavedEdit lets a screen other than the tabbed vars
+	// editor (which is instead identified by CurrentPageName == "tabbed_vars")
+	// report that it's mid-edit with in-progress, unconfirmed state a forced
+	// restart would silently discard -- e.g. App Select's inline instance
+	// rename/add-instance text field. Checked by isRestartSafeLocally.
+	CurrentScreenHasUnsavedEdit bool
+
 	// currentClientIP is the IP address of the active TUI session (set at startup).
 	currentClientIP string
 
@@ -54,8 +62,17 @@ var (
 	// update restores the full navigation stack.
 	isRootSession bool
 
-	// programExited is used to synchronize TUI shutdown for updates
-	programExited chan struct{}
+	// activeSessions tracks every currently-running TUI program (one per
+	// concurrent local/SSH/web session when running as --server-daemon,
+	// where Start/StartEditor/StartVarEditor each run in their own
+	// goroutine within the same process). Registered by registerSession,
+	// removed by unregisterSession. Consulted by Shutdown (which quits
+	// every active session -- used for a re-exec, since the whole process
+	// is about to be replaced regardless of any one session's state) as
+	// opposed to a session's own panic-recovery/context-cancellation path,
+	// which only ever quits and waits on its own program.
+	sessionsMu     sync.Mutex
+	activeSessions = map[*tea.Program]chan struct{}{}
 
 	// webOutbound is a channel for sending JSON messages to the browser (web sessions only).
 	webOutbound chan<- []byte
@@ -433,10 +450,18 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 
 	captureExePath()
 
+	// p/exited are declared here (rather than via := at their point of
+	// assignment below) so the panic-recovery and context-cancellation
+	// closures below -- both defined before the program exists -- close
+	// over this session's own program once it's created, instead of
+	// falling back to whatever the package-level Shutdown() would affect.
+	var p *tea.Program
+	var exited chan struct{}
+
 	// Global panic recovery
 	defer func() {
 		if r := recover(); r != nil {
-			Shutdown()
+			shutdownSelf(p, exited)
 			logger.FatalWithStack(ctx, "TUI Panic: %v", r)
 		}
 	}()
@@ -481,10 +506,11 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 
 	// Create and run the Bubble Tea program
 	// Note: AltScreen is set via View().AltScreen in v2
-	p := NewProgram(model, pOpts)
+	p = NewProgram(model, pOpts)
 
-	// Initialize re-execution sync
-	programExited = make(chan struct{})
+	// Register this session so Shutdown (re-exec) can find it, and so
+	// shutdownSelf above has something to quit/wait on.
+	exited = registerSession(p)
 
 	// Forward window resize events from remote sessions (no-op for local terminal)
 	startWindowSizeForwarder(ctx, p, pOpts)
@@ -504,14 +530,15 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	// Listen for context cancellation to shutdown program
 	go func() {
 		<-ctx.Done()
-		Shutdown()
+		shutdownSelf(p, exited)
 	}()
 
 	// Run the program
 	finalModel, err := p.Run()
 
 	// Signal that the program has exited
-	close(programExited)
+	close(exited)
+	unregisterSession(p)
 
 	if !isSSH {
 		// Drain any buffered mouse events from stdin before disabling mouse tracking.
@@ -586,9 +613,11 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 	logger.TUIMode = true
 	defer func() { logger.TUIMode = false }()
 
+	var p *tea.Program
+	var exited chan struct{}
 	defer func() {
 		if r := recover(); r != nil {
-			Shutdown()
+			shutdownSelf(p, exited)
 			logger.FatalWithStack(ctx, "TUI Panic: %v", r)
 		}
 	}()
@@ -627,8 +656,8 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 	}
 
 	model := NewAppModel(ctx, displayengine.CurrentConfig(), ip, ctype, startScreen, initialStack...)
-	p := NewProgram(model, pOpts)
-	programExited = make(chan struct{})
+	p = NewProgram(model, pOpts)
+	exited = registerSession(p)
 
 	startWindowSizeForwarder(ctx, p, pOpts)
 
@@ -638,11 +667,12 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 	startRestartWatcher(ctx)
 	go func() {
 		<-ctx.Done()
-		Shutdown()
+		shutdownSelf(p, exited)
 	}()
 
 	finalModel, err := p.Run()
-	close(programExited)
+	close(exited)
+	unregisterSession(p)
 	if !isSSH {
 		drainStdin()
 		fmt.Print("\x1b[0m\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1049l\n")
@@ -697,9 +727,11 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 	logger.TUIMode = true
 	defer func() { logger.TUIMode = false }()
 
+	var p *tea.Program
+	var exited chan struct{}
 	defer func() {
 		if r := recover(); r != nil {
-			Shutdown()
+			shutdownSelf(p, exited)
 			logger.FatalWithStack(ctx, "TUI Panic: %v", r)
 		}
 	}()
@@ -782,8 +814,8 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 	console.SetClientIP(ip)
 	pOpts.RefreshRate = resolveRefreshRate(ctype, pOpts.WebToken)
 	model := NewAppModel(ctx, displayengine.CurrentConfig(), ip, ctype, startScreen)
-	p := NewProgram(model, pOpts)
-	programExited = make(chan struct{})
+	p = NewProgram(model, pOpts)
+	exited = registerSession(p)
 
 	startWindowSizeForwarder(ctx, p, pOpts)
 
@@ -793,11 +825,12 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 	startRestartWatcher(ctx)
 	go func() {
 		<-ctx.Done()
-		Shutdown()
+		shutdownSelf(p, exited)
 	}()
 
 	finalModel, err := p.Run()
-	close(programExited)
+	close(exited)
+	unregisterSession(p)
 	if !isSSH {
 		drainStdin()
 		fmt.Print("\x1b[0m\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1049l\n")
@@ -816,14 +849,55 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 	return nil
 }
 
-// Shutdown signals the running Bubble Tea program to exit and waits for it to finish
+// registerSession records a newly started program as active and returns the
+// channel that will be closed once its Run() call returns. Called by
+// Start/StartEditor/StartVarEditor once their *tea.Program exists.
+func registerSession(p *tea.Program) chan struct{} {
+	exited := make(chan struct{})
+	sessionsMu.Lock()
+	activeSessions[p] = exited
+	sessionsMu.Unlock()
+	return exited
+}
+
+// unregisterSession removes a session from the active set once its Run()
+// call has returned (its exited channel is closed separately by the caller).
+func unregisterSession(p *tea.Program) {
+	sessionsMu.Lock()
+	delete(activeSessions, p)
+	sessionsMu.Unlock()
+}
+
+// shutdownSelf quits this session's own program and waits for it to actually
+// exit, unaffected by any other concurrently running session. Used for a
+// session's own panic recovery and context-cancellation shutdown -- p/exited
+// may still be nil if the panic happened before the program was created.
+func shutdownSelf(p *tea.Program, exited chan struct{}) {
+	if p == nil {
+		return
+	}
+	p.Quit()
+	if exited != nil {
+		<-exited
+	}
+	sessionlocks.Sessions.ReleaseEditLock()
+}
+
+// Shutdown quits every currently active TUI session and waits for each to
+// actually exit. Registered as console.TUIShutdown, called before a re-exec
+// -- the whole process (every session in it) is about to be replaced
+// regardless of which session's restart-watcher triggered it, so unlike
+// shutdownSelf this deliberately targets all of them, not just one.
 func Shutdown() {
-	if program != nil {
-		program.Quit()
-		// Wait for the program to actually restore terminal state
-		if programExited != nil {
-			<-programExited
-		}
+	sessionsMu.Lock()
+	snapshot := make(map[*tea.Program]chan struct{}, len(activeSessions))
+	for p, exited := range activeSessions {
+		snapshot[p] = exited
+	}
+	sessionsMu.Unlock()
+	for p, exited := range snapshot {
+		p.Quit()
+		<-exited
 	}
 	sessionlocks.Sessions.ReleaseEditLock()
 }

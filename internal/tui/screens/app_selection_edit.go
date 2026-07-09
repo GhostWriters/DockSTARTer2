@@ -3,6 +3,7 @@ package screens
 import (
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/displayengine"
+	"DockSTARTer2/internal/tui"
 	"context"
 	"fmt"
 )
@@ -105,6 +106,7 @@ func (s *AppSelectionScreen) startEditing(baseApp string) {
 	newItems = append(newItems, workItems[insertAt:]...)
 
 	s.isEditing = true
+	tui.CurrentScreenHasUnsavedEdit = true
 	s.editingBaseApp = baseApp
 	s.editingIdx = insertAt
 	s.editContent = ""
@@ -144,6 +146,7 @@ func (s *AppSelectionScreen) startRenaming(subIdx int) {
 	newItems[subIdx] = editRow
 
 	s.isEditing = true
+	tui.CurrentScreenHasUnsavedEdit = true
 	s.isRenaming = true
 	s.renamingOriginal = subItem
 	s.editingBaseApp = subItem.BaseApp
@@ -191,6 +194,7 @@ func (s *AppSelectionScreen) cancelEdit() {
 		}
 	}
 	s.isEditing = false
+	tui.CurrentScreenHasUnsavedEdit = false
 	s.isRenaming = false
 	s.convertedFromSimple = false
 	s.convertedSimpleOriginal = displayengine.MenuItem{}
@@ -314,6 +318,7 @@ func (s *AppSelectionScreen) confirmEdit() {
 
 	wasRenaming := s.isRenaming
 	s.isEditing = false
+	tui.CurrentScreenHasUnsavedEdit = false
 	s.isRenaming = false
 	s.convertedFromSimple = false
 	s.convertedSimpleOriginal = displayengine.MenuItem{}
