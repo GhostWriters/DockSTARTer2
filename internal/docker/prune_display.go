@@ -77,10 +77,15 @@ const (
 	statusFailed                     // ⚠ Failed — expected but not in deleted list
 )
 
-// LogPruneReport formats and outputs a structured prune report.
+// LogPruneReport formats and outputs a structured prune report. Matches
+// compose's display_summary.go behavior: layer rows are gated by
+// console.GlobalVerbose for the console/TUI print, but the log file always
+// gets them regardless of -v, so log lines are built separately with
+// showLayers forced true rather than reusing the (possibly layer-less)
+// display lines for both.
 func LogPruneReport(ctx context.Context, r PruneReport, imageServices map[string][]string) {
-	lines, errs := buildPruneLines(r, imageServices)
-	if len(lines) == 0 && len(errs) == 0 {
+	dispLines, errs := buildPruneLines(r, imageServices, console.GlobalVerbose)
+	if len(dispLines) == 0 && len(errs) == 0 {
 		return
 	}
 
@@ -89,7 +94,7 @@ func LogPruneReport(ctx context.Context, r PruneReport, imageServices map[string
 		out = w
 	}
 	console.PauseSpinner()
-	for _, line := range lines {
+	for _, line := range dispLines {
 		fmt.Fprintln(out, line)
 	}
 	console.ResumeSpinner()
@@ -98,8 +103,9 @@ func LogPruneReport(ctx context.Context, r PruneReport, imageServices map[string
 	if tuiW := console.GetTUIWriter(ctx); tuiW != nil {
 		logCtx = logger.WithSuppressWriter(logCtx, tuiW)
 	}
+	logLines, _ := buildPruneLines(r, imageServices, true)
 	const pfx = "\t{{|RunningCommand|}}docker:{{[-]}} "
-	for _, line := range lines {
+	for _, line := range logLines {
 		logger.Notice(logCtx, pfx+"%s", semstyle.ToPlain(line))
 	}
 	for _, e := range errs {
@@ -107,7 +113,7 @@ func LogPruneReport(ctx context.Context, r PruneReport, imageServices map[string
 	}
 }
 
-func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string, []string) {
+func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayers bool) ([]string, []string) {
 	doneIcon := "{{|DockerMarkerDone|}}✓{{[-]}}"
 	errorIcon := "{{|DockerMarkerError|}}×{{[-]}}"
 	if r.AsciiMode {
@@ -301,7 +307,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string) ([]string
 			add(imgLine)
 
 			// Layer rows — only shown in verbose mode, compact dim style like compose.
-			if console.GlobalVerbose {
+			if showLayers {
 				for _, l := range g.layers {
 					var lIcon, lStatus string
 					if l.status == statusFailed {
