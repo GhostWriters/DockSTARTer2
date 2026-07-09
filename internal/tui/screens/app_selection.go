@@ -713,7 +713,9 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *displayengine.Men
 				s.confirmEdit()
 			case "esc":
 				s.cancelEdit()
-			case "backspace":
+			case "backspace", "ctrl+h":
+				// Some terminals/keyboard protocols send ctrl+h for
+				// backspace instead of a dedicated backspace keycode.
 				if len(s.editContent) > 0 {
 					runes := []rune(s.editContent)
 					s.editContent = string(runes[:len(runes)-1])
