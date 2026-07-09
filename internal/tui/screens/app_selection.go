@@ -77,7 +77,55 @@ func (s *AppSelectionScreen) View() tea.View              { return s.menu.View()
 func (s *AppSelectionScreen) ViewString() string          { return s.menu.ViewString() }
 func (s *AppSelectionScreen) Layers() []*lipgloss.Layer   { return s.menu.Layers() }
 func (s *AppSelectionScreen) Title() string               { return s.menu.Title() }
-func (s *AppSelectionScreen) HelpText() string            { return s.menu.HelpText() }
+func (s *AppSelectionScreen) HelpText() string {
+	items := s.menu.GetItems()
+	idx := s.menu.Cursor()
+	if idx < 0 || idx >= len(items) {
+		return s.menu.HelpText()
+	}
+	item := items[idx]
+	if item.IsEditing {
+		// The active column here is leftover from whatever was focused
+		// before the edit started (e.g. ColEnable, per startRenaming), not
+		// a real column focus on the edit row itself -- always show its own
+		// dedicated Help text instead of a column-based override.
+		return s.menu.HelpText()
+	}
+	col := s.menu.ActiveColumn()
+	// Columns share one Help string per row today (MenuModel.HelpText isn't
+	// column-aware), so override it here with column- and row-type-specific
+	// wording instead -- distinct text per column, and per top-level app vs.
+	// instance, styled like every other app name in the app ({{|App|}}).
+	if item.IsCheckbox && !item.IsGroupHeader {
+		name := appenv.StyledAppName(context.Background(), item.BaseApp)
+		switch col {
+		case displayengine.ColAdd:
+			if item.IsSubItem {
+				return "Add or remove instance of " + name
+			}
+			return "Add or remove " + name
+		case displayengine.ColEnable:
+			if item.IsSubItem {
+				return "Enable or disable instance of " + name
+			}
+			return "Enable or disable " + name
+		case displayengine.ColExpand:
+			if item.IsSubItem {
+				return "Rename instance of " + name
+			}
+			return "Expand instance list of " + name
+		case displayengine.ColName:
+			return "Go to documentation for " + name
+		}
+	} else if item.IsGroupHeader && col == displayengine.ColName {
+		return "Go to documentation for " + appenv.StyledAppName(context.Background(), item.BaseApp)
+	} else if item.IsAddInstance {
+		// Same text regardless of column -- the row has no real per-column
+		// behavior of its own, Space/Enter always starts adding one.
+		return "Add an instance of " + appenv.StyledAppName(context.Background(), item.BaseApp)
+	}
+	return s.menu.HelpText()
+}
 func (s *AppSelectionScreen) SetSize(w, h int)            { s.menu.SetSize(w, h) }
 func (s *AppSelectionScreen) SetFocused(f bool)           { s.menu.SetFocused(f) }
 func (s *AppSelectionScreen) SetListFocusOverride(v bool) { s.menu.SetListFocusOverride(v) }
@@ -729,6 +777,13 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *displayengine.Men
 					// Up/Down can now browse rows while it stays focused, and Space
 					// (toggleItem's ColExpand case) is what actually triggers it.
 					m.SetActiveColumn(displayengine.ColExpand)
+					return nil, true
+				}
+				if item.IsAddInstance {
+					// This row has no further column to move to -- Ctrl/Alt+Right
+					// here does the same thing Space/Enter does, matching the
+					// "+ Add instance..." row's own Help text.
+					s.startEditing(item.BaseApp)
 					return nil, true
 				}
 			}

@@ -9,6 +9,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"DockSTARTer2/internal/console"
+
 	"go.yaml.in/yaml/v4"
 )
 
@@ -111,6 +113,27 @@ func InstanceDisplayName(baseNiceName, appName string) string {
 		return baseNiceName
 	}
 	return baseNiceName + "__" + CapitalizeFirstLetter(suffix)
+}
+
+// StyledAppName returns appName's nice name in the app's standard {{|App|}}
+// style, hyperlinked to its docs page (AppURL) when one exists, ready to
+// drop into any themed message. appName may be instance-qualified (e.g.
+// "radarr__4k") -- both the nice name and the docs link are always resolved
+// against the base app, since instances don't have their own.
+func StyledAppName(ctx context.Context, appName string) string {
+	base := AppNameToBaseAppName(appName)
+	return console.FormatLink("App", GetNiceName(ctx, base), AppURL(base))
+}
+
+// StyledInstanceName is StyledAppName but the visible label keeps the
+// instance suffix (e.g. "Radarr__4k" instead of just "Radarr") -- the
+// hyperlink still resolves to the base app's docs page, since instances
+// don't have their own. Falls back to the plain base name when appName has
+// no instance suffix.
+func StyledInstanceName(ctx context.Context, appName string) string {
+	base := AppNameToBaseAppName(appName)
+	label := InstanceDisplayName(GetNiceName(ctx, base), appName)
+	return console.FormatLink("App", label, AppURL(base))
 }
 
 // GetNiceName returns a nicely formatted app name.

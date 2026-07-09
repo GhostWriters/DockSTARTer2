@@ -171,7 +171,7 @@ func (s *AppSelectionScreen) applyLoadedItems(data appSelectLoadedMsg) {
 			items = append(items, displayengine.MenuItem{
 				Tag:               niceName,
 				Desc:              "{{|ListItem|}}" + desc,
-				Help:              fmt.Sprintf("Toggle %s. Press Ctrl/Alt+Right to manage instances.", niceName),
+				Help:              appenv.StyledAppName(ctx, base),
 				Selectable:        true,
 				IsCheckbox:        true,
 				Checked:           addedMap[base],
@@ -247,7 +247,7 @@ func (s *AppSelectionScreen) applyLoadedItems(data appSelectLoadedMsg) {
 				} else {
 					items = append(items, displayengine.MenuItem{
 						Tag:               displayName,
-						Help:              fmt.Sprintf("Toggle %s", displayName),
+						Help:              appenv.StyledAppName(ctx, ie.appName),
 						Selectable:        true,
 						IsSubItem:         true,
 						IsCheckbox:        true,
@@ -312,7 +312,7 @@ func (s *AppSelectionScreen) expandGroup(baseApp string) {
 	}
 	baseSubRow := displayengine.MenuItem{
 		Tag:               niceName,
-		Help:              fmt.Sprintf("Toggle %s", niceName),
+		Help:              appenv.StyledAppName(ctx, baseApp),
 		IsSubItem:         true,
 		IsCheckbox:        true,
 		Selectable:        true,
@@ -387,7 +387,7 @@ func (s *AppSelectionScreen) collapseGroupIfNeeded(items []displayengine.MenuIte
 	simpleRow := displayengine.MenuItem{
 		Tag:               niceName,
 		Desc:              "{{|ListItem|}}" + desc,
-		Help:              fmt.Sprintf("Toggle %s. Press Ctrl/Alt+Right to manage instances.", niceName),
+		Help:              appenv.StyledAppName(ctx, base),
 		IsCheckbox:        true,
 		Selectable:        true,
 		Checked:           checked,

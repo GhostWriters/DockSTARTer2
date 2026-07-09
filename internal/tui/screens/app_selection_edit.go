@@ -69,7 +69,7 @@ func (s *AppSelectionScreen) startEditing(baseApp string) {
 
 	editRow := displayengine.MenuItem{
 		Tag:        s.editingTag(appenv.GetNiceName(context.Background(), baseApp), "", ""),
-		Help:       "Type instance suffix (blank = base). Enter to confirm, Esc to cancel.",
+		Help:       "Type name of new instance of " + appenv.StyledAppName(context.Background(), baseApp) + ". Press {{|KeyCap|}}[Enter]{{[-]}} to confirm, {{|KeyCap|}}[Esc]{{[-]}} to cancel.",
 		IsEditing:  true,
 		IsSubItem:  true,
 		IsCheckbox: true,
@@ -130,7 +130,7 @@ func (s *AppSelectionScreen) startRenaming(subIdx int) {
 
 	editRow := displayengine.MenuItem{
 		Tag:        s.editingTag(appenv.GetNiceName(context.Background(), subItem.BaseApp), suffix, ""),
-		Help:       "Edit instance name. Enter to confirm, Esc to cancel.",
+		Help:       "Rename instance of " + appenv.StyledInstanceName(context.Background(), subItem.Metadata["appName"]) + ". Press {{|KeyCap|}}[Enter]{{[-]}} to confirm, {{|KeyCap|}}[Esc]{{[-]}} to cancel.",
 		IsEditing:  true,
 		IsSubItem:  true,
 		IsCheckbox: subItem.IsCheckbox,
