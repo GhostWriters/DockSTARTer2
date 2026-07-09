@@ -339,6 +339,14 @@ func ReplaceOutputLines(lines []string) {
 	}
 }
 
+// SetProgramBoxHeader updates the running ProgramBoxModel's subtitle and/or
+// command-line display -- e.g. once a choice-dependent command (like
+// Stop/Down) becomes known partway through the task, having started the
+// dialog without one.
+func SetProgramBoxHeader(subtitle, command string) {
+	Send(SetProgramBoxHeaderMsg{Subtitle: subtitle, Command: command})
+}
+
 func init() {
 	console.ReplaceOutputLinesFn = ReplaceOutputLines
 	console.OutputContentWidthFn = displayengine.OutputContentWidth
@@ -1111,9 +1119,28 @@ func GetNavArgs() []string {
 	return nil
 }
 
-// CmdLine builds a styled command string for program box subtitles.
+// CmdLine builds a styled command string for program box subtitles. Flags
+// are read live from console's current state (not console.CurrentFlags,
+// which is fixed at the flags this process was originally invoked with) so
+// the displayed command line reflects flags the user toggled at runtime via
+// the Global Flags dialog, not just how the process was started.
 func CmdLine(args ...string) string {
-	parts := append([]string{version.CommandName}, console.CurrentFlags...)
+	parts := []string{version.CommandName}
+	if console.Verbose() {
+		parts = append(parts, "--verbose")
+	}
+	if console.Debug() {
+		parts = append(parts, "--debug")
+	}
+	if console.Force() {
+		parts = append(parts, "--force")
+	}
+	if console.GUI() {
+		parts = append(parts, "--gui")
+	}
+	if console.AssumeYes() {
+		parts = append(parts, "--yes")
+	}
 	parts = append(parts, args...)
 	return "{{[-]}} {{|CommandLine|}}" + strings.Join(parts, " ") + "{{[-]}}"
 }
@@ -1315,11 +1342,13 @@ func TriggerComposeStop() tea.Cmd {
 			choice := PromptChoice("Docker Compose", question, "Stop", "Down", "Cancel")
 			switch choice {
 			case 0: // Stop
+				SetProgramBoxHeader(compose.YesNotice("stop", ""), CmdLine("--compose", "stop"))
 				if err := compose.ExecuteCompose(ctx, true, console.Force(), "stop"); err != nil {
 					logger.Error(ctx, "%v", err)
 					return err
 				}
 			case 1: // Down
+				SetProgramBoxHeader(compose.YesNotice("down", ""), CmdLine("--compose", "down"))
 				if err := compose.ExecuteCompose(ctx, true, console.Force(), "down"); err != nil {
 					logger.Error(ctx, "%v", err)
 					return err
@@ -1327,7 +1356,12 @@ func TriggerComposeStop() tea.Cmd {
 			}
 			return nil
 		}
-		dialog := NewProgramBoxModel("Docker Compose", "Stopping or removing running containers.", CmdLine("--compose")).WithDialogType(displayengine.DialogTypeSuccess)
+		// The command line is deliberately blank at creation -- Stop vs. Down
+		// isn't decided until the PromptChoice above resolves, and showing a
+		// guessed command line before that would be misleading. The subtitle
+		// itself is still fine to show generically. SetProgramBoxHeader fills
+		// in both properly once the choice is known.
+		dialog := NewProgramBoxModel("Docker Compose", "Stopping or removing running containers.", "").WithDialogType(displayengine.DialogTypeSuccess)
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)

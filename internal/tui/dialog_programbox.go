@@ -36,7 +36,6 @@ type Task struct {
 // ProgramBoxModel represents a dialog that displays streaming program output
 type ProgramBoxModel struct {
 	title        string
-	subtitle     string
 	command      string // Command being executed (displayed above output)
 	sv           streamvp.Model
 	titleSpinner displayengine.TitleSpinner // title-bar spinner (advanced by global tick)
@@ -81,9 +80,10 @@ type ProgramBoxModel struct {
 	// stay on this wrapper (see dialog_programbox_view.go / this file's
 	// Update).
 	outer           *displayengine.MenuModel
+	subtitleSection *displayengine.MenuModel // subtitle, as a standard plain-text Content section
 	commandSection  *displayengine.MenuModel // nil when command == ""
 	viewportSection *displayengine.MenuModel
-	headerSection   *displayengine.MenuModel
+	headerSection   *displayengine.MenuModel // Tasks/Percent only -- subtitle moved to subtitleSection
 }
 
 // UpdateTaskMsg updates a task's status or active app
@@ -98,6 +98,15 @@ type UpdatePercentMsg struct {
 	Percent float64
 }
 
+// SetProgramBoxHeaderMsg updates a running ProgramBoxModel's subtitle and/or
+// command-line display -- e.g. once a choice-dependent command (like
+// Stop/Down) is actually known, having started the dialog without one. Sent
+// via SetProgramBoxHeader from the task goroutine.
+type SetProgramBoxHeaderMsg struct {
+	Subtitle string
+	Command  string
+}
+
 // newProgramBox creates a new program box dialog (internal use)
 func newProgramBox(title, subtitle, command string) *ProgramBoxModel {
 	styles := displayengine.GetStyles()
@@ -108,7 +117,6 @@ func newProgramBox(title, subtitle, command string) *ProgramBoxModel {
 
 	m := &ProgramBoxModel{
 		title:           title,
-		subtitle:        subtitle,
 		command:         command,
 		sv:              sv,
 		Tasks:           []Task{},
@@ -137,12 +145,12 @@ func newProgramBox(title, subtitle, command string) *ProgramBoxModel {
 	// No SetButtons call here -- the OK button is only added once the task
 	// completes (outputDoneMsg calls outer.SetButtons(m.okButtons())), so
 	// there's never a moment where a button exists but shouldn't be shown.
+	m.subtitleSection = displayengine.NewPlainTextSection("programbox_subtitle", subtitle)
+	outer.AddContentSection(m.subtitleSection)
 	m.headerSection = newProgramBoxHeaderSection("programbox_header", m)
 	outer.AddContentSection(m.headerSection)
-	if command != "" {
-		m.commandSection = newProgramBoxCommandSection("programbox_command", m)
-		outer.AddContentSection(m.commandSection)
-	}
+	m.commandSection = newProgramBoxCommandSection("programbox_command", m)
+	outer.AddContentSection(m.commandSection)
 	m.viewportSection = newStreamOutputSection("programbox_viewport", m)
 	outer.AddContentSection(m.viewportSection)
 	m.outer = outer
@@ -441,6 +449,22 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.SetPercent(msg.Percent)
 		m.headerSection.InvalidateCache()
 		m.outer.InvalidateCache()
+		return m, nil
+
+	case SetProgramBoxHeaderMsg:
+		if m.subtitleSection != nil {
+			m.subtitleSection.SetPlainText(msg.Subtitle)
+		}
+		m.command = msg.Command
+		// InvalidateCache alone only clears the cached rendered string --
+		// each section's actual row-height allocation is computed by
+		// calculateSectionLayout, which only runs from SetSize. Without
+		// re-triggering it here, the header/command rows keep whatever
+		// height was allocated when the dialog was first shown (when
+		// subtitle/command may have been blank or shorter), so the newly
+		// rendered content ends up squeezed into or floating in a stale
+		// size instead of the box actually resizing to fit it.
+		m.outer.SetSize(m.outer.Width(), m.outer.Height())
 		return m, nil
 	}
 
