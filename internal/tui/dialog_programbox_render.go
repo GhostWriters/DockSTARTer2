@@ -16,38 +16,21 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// renderHeaderUI renders the tasks and progress bar
+// renderHeaderUI renders the tasks and progress bar. Subtitle is rendered by
+// its own plain-text Content section (subtitleSection) instead of here.
 func (m *ProgramBoxModel) renderHeaderUI(width int) string {
-	if m.subtitle == "" && len(m.Tasks) == 0 && m.Percent == 0 {
+	if len(m.Tasks) == 0 && m.Percent == 0 {
 		return ""
 	}
 
 	var b strings.Builder
 	ctx := displayengine.GetActiveContext()
 	bgStyle := ctx.Dialog
-	hasPrevious := false
 
 	spacer := bgStyle.Width(width).Render("")
 
-	// Subtitle (rendered as a heading).
-	// {{|Dialog|}} establishes the base style first so the terminal doesn't paint a
-	// reversed cell before the text; {{|CommandLine|}} then styles the command text.
-	if m.subtitle != "" {
-		subtitleText := displayengine.RenderThemeTextCtx("{{|Subtitle|}}"+m.subtitle+"{{[-]}}", ctx)
-		renderedSubtitle := lipgloss.NewStyle().
-			Width(width).
-			Background(ctx.Dialog.GetBackground()).
-			Render(subtitleText)
-		b.WriteString(renderedSubtitle + "\n")
-		hasPrevious = true
-	}
-
 	// Tasks
 	if len(m.Tasks) > 0 {
-		if hasPrevious {
-			b.WriteString(spacer + "\n") // Gap after subtitle
-		}
-
 		maxLabelLen := 0
 		for _, t := range m.Tasks {
 			if len(t.Label) > maxLabelLen {
@@ -160,23 +143,13 @@ func (m *ProgramBoxModel) renderHeaderUI(width int) string {
 	return strings.TrimSuffix(b.String(), "\n")
 }
 
-// calculateHeaderHeight returns the estimated height of the header UI
+// calculateHeaderHeight returns the estimated height of the header UI.
+// Subtitle is measured by its own plain-text Content section (subtitleSection)
+// instead of here.
 func (m *ProgramBoxModel) calculateHeaderHeight(width int) int {
 	headerHeight := 0
-	hasPrevious := false
-
-	if m.subtitle != "" {
-		// Render subtitle to calculate its actual wrapped height
-		wrappedSubtitle := lipgloss.NewStyle().Width(width).Render(m.subtitle)
-		headerHeight += lipgloss.Height(wrappedSubtitle)
-		hasPrevious = true
-	}
 
 	if len(m.Tasks) > 0 {
-		if hasPrevious {
-			headerHeight++ // Gap after subtitle
-		}
-
 		for i, t := range m.Tasks {
 			if i > 0 && t.Label != m.Tasks[i-1].Label {
 				headerHeight++ // Blank line between task categories
