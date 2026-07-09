@@ -226,11 +226,26 @@ func (s *AppSelectionScreen) confirmEdit() {
 		return
 	}
 	items := s.menu.GetItems()
-	for _, item := range items {
+	// A group always keeps an inert placeholder row for the base app itself
+	// (unchecked, not added -- see the prune below) so there's somewhere to
+	// convert back into a simple row later. If the name being confirmed
+	// collides with that placeholder specifically, fold into it (check it)
+	// instead of a spurious "already exists" -- it was never really there
+	// from the user's perspective. A row that's merely Referenced (present
+	// in config but never formally added) is the same story -- as long as
+	// it's not actually checked/added, folding into it treats this confirm
+	// as adding (and enabling) it, same as any other new instance. Only a
+	// row that's genuinely already checked or added is a real collision.
+	existingIdx := -1
+	for i, item := range items {
 		if item.IsSubItem && item.BaseApp == base && item.Metadata["appName"] == newAppName {
-			s.editError = "already exists"
-			s.refreshEditRow()
-			return
+			if item.Checked || item.WasAdded {
+				s.editError = "already exists"
+				s.refreshEditRow()
+				return
+			}
+			existingIdx = i
+			break
 		}
 	}
 	ctx := context.Background()
@@ -257,9 +272,16 @@ func (s *AppSelectionScreen) confirmEdit() {
 	}
 	newItems := make([]displayengine.MenuItem, 0, len(items))
 	for i, item := range items {
-		if i == s.editingIdx {
+		switch i {
+		case existingIdx:
 			newItems = append(newItems, newSubRow)
-		} else {
+		case s.editingIdx:
+			// Folding into existingIdx above -- drop the temporary edit row
+			// entirely rather than also inserting newSubRow here.
+			if existingIdx < 0 {
+				newItems = append(newItems, newSubRow)
+			}
+		default:
 			newItems = append(newItems, item)
 		}
 	}
