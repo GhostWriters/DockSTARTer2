@@ -614,10 +614,18 @@ func (m *SessionManager) ReadInstalledVersion(exePath string) string {
 }
 
 // SeedInstalledVersion writes the current running version to the installed-
-// version file if it is missing or out of date. Called at every startup so the
-// file is always present for the watcher to compare against.
+// version file only if no file exists yet, so the watcher always has
+// something to compare against on a machine that's never recorded a version
+// before. Deliberately does NOT overwrite an existing value just because it
+// differs from currentVersion -- a differing value may be a legitimate
+// "a newer version was installed" signal from another process that this one
+// hasn't picked up yet, and stomping it here on every startup would
+// silently erase that signal for every other session watching the same
+// file (the exact scenario this was called for: a session starting on the
+// old version while a pending restart, triggered by a different session's
+// update, is still waiting for all sessions to reach a safe page).
 func (m *SessionManager) SeedInstalledVersion(exePath, currentVersion string) {
-	if m.ReadInstalledVersion(exePath) == currentVersion {
+	if m.ReadInstalledVersion(exePath) != "" {
 		return
 	}
 	_ = m.WriteInstalledVersion(exePath, currentVersion)

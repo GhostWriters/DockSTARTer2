@@ -829,6 +829,12 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case UpdateHeaderMsg:
 		m.backdrop.Header.SyncFlags()
+		// SyncFlags only refreshes the header's own flag cache -- the
+		// backdrop's cached rendered frame also needs invalidating, or
+		// state that only the header reads at render time (e.g.
+		// update.RestartPending) won't visibly appear until something else
+		// happens to invalidate it later (a resize, a real ConfigChangedMsg).
+		m.backdrop.InvalidateBackdropCache()
 		return m, nil
 
 	case displayengine.ConfigChangedMsg:
