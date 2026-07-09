@@ -215,7 +215,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool, connType string) 
 	menu := displayengine.NewMenuModel(
 		"app-select",
 		"Select Applications",
-		"{{[-]}}Choose which apps you would like to install:\nUse {{|KeyCap|}}[up]{{[-]}}/{{|KeyCap|}}[down]{{[-]}} and {{|KeyCap|}}[space]{{[-]}} to select; {{|KeyCap|}}[ctrl+←/→]{{[-]}} to move between Add/Enable columns.",
+		"{{[-]}}Choose which apps you would like to install:\nUse {{|KeyCap|}}[up]{{[-]}}/{{|KeyCap|}}[down]{{[-]}} and {{|KeyCap|}}[space]{{[-]}} to select; {{|KeyCap|}}[ctrl+←/→]{{[-]}} to move between columns.",
 		nil,
 	)
 	s.menu = menu
