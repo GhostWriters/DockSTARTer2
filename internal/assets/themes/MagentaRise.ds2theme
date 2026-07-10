@@ -167,6 +167,8 @@ EnvReadOnly = "{{|Dialog:::D|}}"
 # List item overrides
 ListItem = ""
 ListItemUserDefined = "{{[$secondary:$primary]}}"
+ListItemFocused = "{{|ItemFocused|}}"
+ListItemUserDefinedFocused = "{{|ItemFocused|}}"
 
 # Keys, progress, and indicators
 KeyCap = "{{[::-R]}}"
