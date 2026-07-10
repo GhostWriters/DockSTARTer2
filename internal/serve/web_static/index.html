@@ -54,6 +54,36 @@
 
     var display = loadDisplaySettings();
 
+    // Explicit ANSI 16-color palette -- without this, xterm.js falls back to
+    // its own default palette plus contrast heuristics that can silently
+    // override a color it judges too close to the background (e.g. an
+    // unbold yellow foreground rendering as white), and reverse-video
+    // (SGR 7) styling can look wrong against that guessed palette. This is
+    // a standard, well-tested 16-color scheme (matching VS Code's default
+    // terminal theme) rather than an attempt to exactly replicate any one
+    // native terminal's own palette.
+    const ds2TermTheme = {
+      background: '#000000',
+      foreground: '#e5e5e5',
+      cursor: '#e5e5e5',
+      black: '#000000',
+      red: '#cd3131',
+      green: '#0dbc79',
+      yellow: '#e5e510',
+      blue: '#2472c8',
+      magenta: '#bc3fbc',
+      cyan: '#11a8cd',
+      white: '#e5e5e5',
+      brightBlack: '#666666',
+      brightRed: '#f14c4c',
+      brightGreen: '#23d18b',
+      brightYellow: '#f5f543',
+      brightBlue: '#3b8eea',
+      brightMagenta: '#d670d6',
+      brightCyan: '#29b8db',
+      brightWhite: '#e5e5e5',
+    };
+
     const term = new Terminal({
       cursorBlink: true,
       allowProposedApi: true,
@@ -61,6 +91,7 @@
       fontSize: display.fontSize,
       lineHeight: 1.0,
       letterSpacing: 0,
+      theme: ds2TermTheme,
     });
 
     // Treat Unicode ambiguous-width characters (░▒▓ etc.) as single-cell so
@@ -74,15 +105,22 @@
     term.open(document.getElementById('terminal'));
 
     // Use the WebGL renderer for pixel-accurate box-drawing character rendering.
-    // Falls back to the default canvas renderer if WebGL is unavailable.
-    try {
-      const webglAddon = new WebglAddon.WebglAddon();
-      webglAddon.onContextLoss(function() {
-        webglAddon.dispose();
-      });
-      term.loadAddon(webglAddon);
-    } catch (e) {
-      console.warn('WebGL renderer unavailable, falling back to canvas:', e);
+    // Falls back to the default canvas renderer if WebGL is unavailable, or
+    // if ?nowebgl=1 is in the URL -- a diagnostic escape hatch for
+    // comparing rendering against the canvas renderer without a redeploy,
+    // since the WebGL addon has known bugs with some SGR combinations
+    // (bold-off + explicit color, reverse-video) that the canvas renderer
+    // doesn't share.
+    if (new URLSearchParams(location.search).get('nowebgl') !== '1') {
+      try {
+        const webglAddon = new WebglAddon.WebglAddon();
+        webglAddon.onContextLoss(function() {
+          webglAddon.dispose();
+        });
+        term.loadAddon(webglAddon);
+      } catch (e) {
+        console.warn('WebGL renderer unavailable, falling back to canvas:', e);
+      }
     }
 
     fitAddon.fit();
