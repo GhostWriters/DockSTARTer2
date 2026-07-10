@@ -69,10 +69,9 @@ type KeyMap struct {
 	InputBegin              key.Binding
 	InputEnd                key.Binding
 
-
 	InsertLine key.Binding
-	Undo                       key.Binding
-	Redo                       key.Binding
+	Undo       key.Binding
+	Redo       key.Binding
 
 	// Copy selection or value to clipboard
 	Copy key.Binding
@@ -111,15 +110,15 @@ func DefaultKeyMap() KeyMap {
 		InputBegin:              key.NewBinding(key.WithKeys("ctrl+home", "alt+<", "ctrl+alt+home", "ctrl+alt+<"), key.WithHelp("alt+<", "input begin")),
 		InputEnd:                key.NewBinding(key.WithKeys("ctrl+end", "alt+>", "ctrl+alt+end", "ctrl+alt+>"), key.WithHelp("alt+>", "input end")),
 
-		InsertLine:                 key.NewBinding(key.WithKeys("ctrl+o", "alt+o", "ctrl+alt+o"), key.WithHelp("alt+o", "insert line")),
-		Undo:                       key.NewBinding(key.WithKeys("ctrl+z", "alt+z", "ctrl+alt+z"), key.WithHelp("alt+z", "undo")),
-		Redo:                       key.NewBinding(key.WithKeys("ctrl+y", "alt+y", "ctrl+alt+y"), key.WithHelp("alt+y", "redo")),
-		Copy:                       key.NewBinding(key.WithKeys("ctrl+c", "alt+c", "ctrl+alt+c"), key.WithHelp("alt+c", "copy")),
-		SelectLeft:                 key.NewBinding(key.WithKeys("shift+left"), key.WithHelp("shift+left", "select left")),
-		SelectRight:                key.NewBinding(key.WithKeys("shift+right"), key.WithHelp("shift+right", "select right")),
-		SelectHome:                 key.NewBinding(key.WithKeys("shift+home"), key.WithHelp("shift+home", "select to start")),
-		SelectEnd:                  key.NewBinding(key.WithKeys("shift+end"), key.WithHelp("shift+end", "select to end")),
-		ToggleInsert:               key.NewBinding(key.WithKeys("insert"), key.WithHelp("insert", "toggle insert/overwrite")),
+		InsertLine:   key.NewBinding(key.WithKeys("ctrl+o", "alt+o", "ctrl+alt+o"), key.WithHelp("alt+o", "insert line")),
+		Undo:         key.NewBinding(key.WithKeys("ctrl+z", "alt+z", "ctrl+alt+z"), key.WithHelp("alt+z", "undo")),
+		Redo:         key.NewBinding(key.WithKeys("ctrl+y", "alt+y", "ctrl+alt+y"), key.WithHelp("alt+y", "redo")),
+		Copy:         key.NewBinding(key.WithKeys("ctrl+c", "alt+c", "ctrl+alt+c"), key.WithHelp("alt+c", "copy")),
+		SelectLeft:   key.NewBinding(key.WithKeys("shift+left"), key.WithHelp("shift+left", "select left")),
+		SelectRight:  key.NewBinding(key.WithKeys("shift+right"), key.WithHelp("shift+right", "select right")),
+		SelectHome:   key.NewBinding(key.WithKeys("shift+home"), key.WithHelp("shift+home", "select to start")),
+		SelectEnd:    key.NewBinding(key.WithKeys("shift+end"), key.WithHelp("shift+end", "select to end")),
+		ToggleInsert: key.NewBinding(key.WithKeys("insert"), key.WithHelp("insert", "toggle insert/overwrite")),
 	}
 }
 
@@ -206,22 +205,23 @@ type Styles struct {
 // For an introduction to styling with Lip Gloss see:
 // https://github.com/charmbracelet/lipgloss
 type StyleState struct {
-	Base                       lipgloss.Style
-	Text                       lipgloss.Style
-	LineNumber                 lipgloss.Style
+	Base                      lipgloss.Style
+	Text                      lipgloss.Style
+	LineNumber                lipgloss.Style
 	LineNumberFocused         lipgloss.Style // cursor line
-	LineNumberModified         lipgloss.Style // line differs from default
+	LineNumberModified        lipgloss.Style // line differs from default
 	LineNumberModifiedFocused lipgloss.Style // cursor line + differs from default
-	CursorLine                 lipgloss.Style
-	EndOfBuffer                lipgloss.Style
-	Placeholder                lipgloss.Style
-	Prompt                     lipgloss.Style
-	ModifiedText               lipgloss.Style
-	ReadOnlyText               lipgloss.Style
-	CommentText                lipgloss.Style
-	InvalidText                lipgloss.Style
-	DuplicateText              lipgloss.Style
-	BuiltinText                lipgloss.Style
+	LineNumberBrackets        lipgloss.Style // focused-line bracket indicator
+	CursorLine                lipgloss.Style
+	EndOfBuffer               lipgloss.Style
+	Placeholder               lipgloss.Style
+	Prompt                    lipgloss.Style
+	ModifiedText              lipgloss.Style
+	ReadOnlyText              lipgloss.Style
+	CommentText               lipgloss.Style
+	InvalidText               lipgloss.Style
+	DuplicateText             lipgloss.Style
+	BuiltinText               lipgloss.Style
 	// UserDefinedText removed — user-defined var keys now use ModifiedText
 	PendingDeleteText lipgloss.Style
 	GutterAdded       lipgloss.Style // + marker for new lines
@@ -261,6 +261,10 @@ func (s StyleState) computedEndOfBuffer() lipgloss.Style {
 
 func (s StyleState) computedLineNumber() lipgloss.Style {
 	return s.LineNumber.Inherit(s.Base).Inline(true)
+}
+
+func (s StyleState) computedLineNumberBrackets() lipgloss.Style {
+	return s.LineNumberBrackets.Inherit(s.Base).Inline(true)
 }
 
 func (s StyleState) computedPlaceholder() lipgloss.Style {
@@ -310,6 +314,14 @@ type Model struct {
 	// ShowLineNumbers, if enabled, causes line numbers to be printed
 	// after the prompt.
 	ShowLineNumbers bool
+
+	// LineNumberBrackets, if enabled, wraps the focused line's number in a
+	// pair of themed brackets (LineNumberBrackets style, same glyphs as the
+	// app's other focused-row bracket indicators). LineNumberBracketOpen/
+	// Close hold the actual glyphs to use, set by the caller.
+	LineNumberBrackets     bool
+	LineNumberBracketOpen  string
+	LineNumberBracketClose string
 
 	// EndOfBufferCharacter is displayed at the end of the input.
 	EndOfBufferCharacter rune
@@ -501,56 +513,56 @@ func DefaultStyles(isDark bool) Styles {
 
 	var s Styles
 	s.Focused = StyleState{
-		Base:                       lipgloss.NewStyle(),
-		CursorLine:                 lipgloss.NewStyle(),
-		LineNumber:                 lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("249"), lipgloss.Color("7"))),
+		Base:                      lipgloss.NewStyle(),
+		CursorLine:                lipgloss.NewStyle(),
+		LineNumber:                lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("249"), lipgloss.Color("7"))),
 		LineNumberFocused:         lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("240"), lipgloss.Color("240"))),
-		LineNumberModified:         lipgloss.NewStyle().Foreground(lipgloss.Color("3")), // Yellow
+		LineNumberModified:        lipgloss.NewStyle().Foreground(lipgloss.Color("3")), // Yellow
 		LineNumberModifiedFocused: lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Bold(true),
-		EndOfBuffer:                lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("254"), lipgloss.Color("0"))),
-		Placeholder:                lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
-		Prompt:                     lipgloss.NewStyle().Foreground(lipgloss.Color("7")),
-		Text:                       lipgloss.NewStyle(),
-		ModifiedText:               lipgloss.NewStyle().Foreground(lipgloss.Color("3")),   // Yellow
-		ReadOnlyText:               lipgloss.NewStyle().Foreground(lipgloss.Color("240")), // Dark Grey
-		CommentText:                lipgloss.NewStyle().Foreground(lipgloss.Color("240")), // Default to same as ReadOnly
-		InvalidText:                lipgloss.NewStyle().Foreground(lipgloss.Color("9")),   // Red
-		DuplicateText:              lipgloss.NewStyle().Foreground(lipgloss.Color("13")),  // Magenta
-		BuiltinText:                lipgloss.NewStyle(),                                   // Inherit from text by default
-		PendingDeleteText:          lipgloss.NewStyle().Strikethrough(true).Foreground(lipgloss.Color("240")),
-		GutterAdded:                lipgloss.NewStyle().Foreground(lipgloss.Color("2")), // Green
-		GutterDeleted:              lipgloss.NewStyle().Foreground(lipgloss.Color("1")), // Red
-		GutterModified:             lipgloss.NewStyle().Foreground(lipgloss.Color("3")), // Yellow
-		GutterInvalid:              lipgloss.NewStyle().Foreground(lipgloss.Color("9")), // Bright red
-		ScrollbarTrack:             lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
-		ScrollbarThumb:             lipgloss.NewStyle().Foreground(lipgloss.Color("7")),
-		SelectionText:              lipgloss.NewStyle().Reverse(true),
+		EndOfBuffer:               lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("254"), lipgloss.Color("0"))),
+		Placeholder:               lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+		Prompt:                    lipgloss.NewStyle().Foreground(lipgloss.Color("7")),
+		Text:                      lipgloss.NewStyle(),
+		ModifiedText:              lipgloss.NewStyle().Foreground(lipgloss.Color("3")),   // Yellow
+		ReadOnlyText:              lipgloss.NewStyle().Foreground(lipgloss.Color("240")), // Dark Grey
+		CommentText:               lipgloss.NewStyle().Foreground(lipgloss.Color("240")), // Default to same as ReadOnly
+		InvalidText:               lipgloss.NewStyle().Foreground(lipgloss.Color("9")),   // Red
+		DuplicateText:             lipgloss.NewStyle().Foreground(lipgloss.Color("13")),  // Magenta
+		BuiltinText:               lipgloss.NewStyle(),                                   // Inherit from text by default
+		PendingDeleteText:         lipgloss.NewStyle().Strikethrough(true).Foreground(lipgloss.Color("240")),
+		GutterAdded:               lipgloss.NewStyle().Foreground(lipgloss.Color("2")), // Green
+		GutterDeleted:             lipgloss.NewStyle().Foreground(lipgloss.Color("1")), // Red
+		GutterModified:            lipgloss.NewStyle().Foreground(lipgloss.Color("3")), // Yellow
+		GutterInvalid:             lipgloss.NewStyle().Foreground(lipgloss.Color("9")), // Bright red
+		ScrollbarTrack:            lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+		ScrollbarThumb:            lipgloss.NewStyle().Foreground(lipgloss.Color("7")),
+		SelectionText:             lipgloss.NewStyle().Reverse(true),
 	}
 	s.Blurred = StyleState{
-		Base:                       lipgloss.NewStyle(),
-		CursorLine:                 lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("245"), lipgloss.Color("7"))),
-		LineNumber:                 lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("249"), lipgloss.Color("7"))),
+		Base:                      lipgloss.NewStyle(),
+		CursorLine:                lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("245"), lipgloss.Color("7"))),
+		LineNumber:                lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("249"), lipgloss.Color("7"))),
 		LineNumberFocused:         lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("249"), lipgloss.Color("7"))),
-		LineNumberModified:         lipgloss.NewStyle().Foreground(lipgloss.Color("3")),
+		LineNumberModified:        lipgloss.NewStyle().Foreground(lipgloss.Color("3")),
 		LineNumberModifiedFocused: lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Bold(true),
-		EndOfBuffer:                lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("254"), lipgloss.Color("0"))),
-		Placeholder:                lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
-		Prompt:                     lipgloss.NewStyle().Foreground(lipgloss.Color("7")),
-		Text:                       lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("245"), lipgloss.Color("7"))),
-		ModifiedText:               lipgloss.NewStyle().Foreground(lipgloss.Color("3")),
-		ReadOnlyText:               lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
-		CommentText:                lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
-		InvalidText:                lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
-		DuplicateText:              lipgloss.NewStyle().Foreground(lipgloss.Color("13")),
-		BuiltinText:                lipgloss.NewStyle().Foreground(lipgloss.Color("6")),
-		PendingDeleteText:          lipgloss.NewStyle().Strikethrough(true).Foreground(lipgloss.Color("240")),
-		GutterAdded:                lipgloss.NewStyle().Foreground(lipgloss.Color("2")),
-		GutterDeleted:              lipgloss.NewStyle().Foreground(lipgloss.Color("1")),
-		GutterModified:             lipgloss.NewStyle().Foreground(lipgloss.Color("3")),
-		GutterInvalid:              lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
-		ScrollbarTrack:             lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
-		ScrollbarThumb:             lipgloss.NewStyle().Foreground(lipgloss.Color("7")),
-		SelectionText:              lipgloss.NewStyle().Reverse(true),
+		EndOfBuffer:               lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("254"), lipgloss.Color("0"))),
+		Placeholder:               lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+		Prompt:                    lipgloss.NewStyle().Foreground(lipgloss.Color("7")),
+		Text:                      lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("245"), lipgloss.Color("7"))),
+		ModifiedText:              lipgloss.NewStyle().Foreground(lipgloss.Color("3")),
+		ReadOnlyText:              lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+		CommentText:               lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+		InvalidText:               lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
+		DuplicateText:             lipgloss.NewStyle().Foreground(lipgloss.Color("13")),
+		BuiltinText:               lipgloss.NewStyle().Foreground(lipgloss.Color("6")),
+		PendingDeleteText:         lipgloss.NewStyle().Strikethrough(true).Foreground(lipgloss.Color("240")),
+		GutterAdded:               lipgloss.NewStyle().Foreground(lipgloss.Color("2")),
+		GutterDeleted:             lipgloss.NewStyle().Foreground(lipgloss.Color("1")),
+		GutterModified:            lipgloss.NewStyle().Foreground(lipgloss.Color("3")),
+		GutterInvalid:             lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
+		ScrollbarTrack:            lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+		ScrollbarThumb:            lipgloss.NewStyle().Foreground(lipgloss.Color("7")),
+		SelectionText:             lipgloss.NewStyle().Reverse(true),
 	}
 	s.Cursor = CursorStyle{
 		Color: lipgloss.Color("7"),
@@ -2144,11 +2156,23 @@ func (m Model) lineNumberView(n int, isCursorLine bool, dataLine int) (str strin
 	digits := max(3, numDigits(m.MaxHeight))
 
 	// Apply line number style ONLY to the digits themselves.
-	// The outer right spacing is rendered natively so it inherits
-	// the dialogue base background color rather than the line number background.
+	// The outer spacing is rendered natively so it inherits the dialogue
+	// base background color rather than the line number background.
 	formattedNum := fmt.Sprintf("%*v", digits, str)
 
-	return lineNumberStyle.Render(formattedNum) + " "
+	// A single-cell slot is always reserved on each side of the digits for
+	// the bracket indicator, blank when not the cursor line (or when the
+	// option is off) so the digits never shift -- same convention as the
+	// app's other focused-row bracket indicators.
+	openChar := " "
+	closeChar := " "
+	if isCursorLine && m.LineNumberBrackets {
+		bracketStyle := m.activeStyle().computedLineNumberBrackets()
+		openChar = bracketStyle.Render(m.LineNumberBracketOpen)
+		closeChar = bracketStyle.Render(m.LineNumberBracketClose)
+	}
+
+	return openChar + lineNumberStyle.Render(formattedNum) + closeChar
 }
 
 // placeholderView returns the prompt and placeholder, if any.

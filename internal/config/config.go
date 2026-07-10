@@ -105,26 +105,27 @@ type AuthConfig struct {
 
 // UIConfig holds user interface related settings.
 type UIConfig struct {
-	Theme             string `toml:"theme"`
-	Borders           bool   `toml:"borders"`
-	LargeButtons      bool   `toml:"large_buttons"`
-	LargeTitleBars    bool   `toml:"large_title_bars"`
-	LineCharacters    bool   `toml:"line_characters"`
-	Shadow            bool   `toml:"shadow"`
-	ShadowLevel       int    `toml:"shadow_level"` // 0=off, 1=light(░), 2=medium(▒), 3=dark(▓), 4=solid(█)
-	Scrollbar         bool   `toml:"scrollbar"`
-	Spinner           bool   `toml:"spinner"`
-	SpinnerSpeed      int    `toml:"spinner_speed"`       // milliseconds per frame, default 120
-	RefreshRate       int    `toml:"refresh_rate"`        // screen repaint interval in milliseconds, default 60
-	BorderColor       int    `toml:"border_color"`        // 1=Border, 2=Border2, 3=Both
-	DialogTitleAlign  string `toml:"dialog_title_align"`  // "center" or "left"
-	SubmenuTitleAlign string `toml:"submenu_title_align"` // "center" or "left"
-	PanelTitleAlign   string `toml:"panel_title_align"`   // "center" or "left"
-	PanelLocal        string `toml:"panel_local"`         // "log", "console", or "none" (for local sessions)
-	PanelRemote       string `toml:"panel_remote"`        // "log", "console", or "none" (for ssh/web sessions)
-	CheckboxBrackets  string `toml:"checkbox_brackets"`   // "never", "selected", or "always" -- the focused row's brackets always show regardless
-	RadioBrackets     string `toml:"radio_brackets"`      // "never", "selected", or "always" -- the focused row's brackets always show regardless
-	MenuBrackets      bool   `toml:"menu_brackets"`       // wrap the focused menu item's tag in [brackets]
+	Theme              string `toml:"theme"`
+	Borders            bool   `toml:"borders"`
+	LargeButtons       bool   `toml:"large_buttons"`
+	LargeTitleBars     bool   `toml:"large_title_bars"`
+	LineCharacters     bool   `toml:"line_characters"`
+	Shadow             bool   `toml:"shadow"`
+	ShadowLevel        int    `toml:"shadow_level"` // 0=off, 1=light(░), 2=medium(▒), 3=dark(▓), 4=solid(█)
+	Scrollbar          bool   `toml:"scrollbar"`
+	Spinner            bool   `toml:"spinner"`
+	SpinnerSpeed       int    `toml:"spinner_speed"`        // milliseconds per frame, default 120
+	RefreshRate        int    `toml:"refresh_rate"`         // screen repaint interval in milliseconds, default 60
+	BorderColor        int    `toml:"border_color"`         // 1=Border, 2=Border2, 3=Both
+	DialogTitleAlign   string `toml:"dialog_title_align"`   // "center" or "left"
+	SubmenuTitleAlign  string `toml:"submenu_title_align"`  // "center" or "left"
+	PanelTitleAlign    string `toml:"panel_title_align"`    // "center" or "left"
+	PanelLocal         string `toml:"panel_local"`          // "log", "console", or "none" (for local sessions)
+	PanelRemote        string `toml:"panel_remote"`         // "log", "console", or "none" (for ssh/web sessions)
+	CheckboxBrackets   string `toml:"checkbox_brackets"`    // "never", "selected", or "always" -- the focused row's brackets always show regardless
+	RadioBrackets      string `toml:"radio_brackets"`       // "never", "selected", or "always" -- the focused row's brackets always show regardless
+	MenuBrackets       bool   `toml:"menu_brackets"`        // wrap the focused menu item's tag in [brackets]
+	LineNumberBrackets bool   `toml:"line_number_brackets"` // wrap the focused line's number in [brackets] in the env editor
 }
 
 // PathConfig holds directory path settings.
@@ -572,6 +573,8 @@ func UnmarshalRobust(data []byte, v any) (map[string]bool, error) {
 				present["RadioBrackets"] = true
 			case "ui.menu_brackets":
 				present["MenuBrackets"] = true
+			case "ui.line_number_brackets":
+				present["LineNumberBrackets"] = true
 			case "server.ssh.port":
 				present["SSHPort"] = true
 			case "server.web.port":
@@ -800,34 +803,35 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 		"ConfigFolder", "ComposeFolder",
 		"Theme", "Borders", "LargeButtons", "LargeTitleBars", "LineCharacters", "Scrollbar", "Spinner", "SpinnerSpeed", "Shadow", "ShadowLevel", "BorderColor",
 		"DialogTitleAlign", "SubmenuTitleAlign", "PanelTitleAlign", "PanelLocal", "PanelRemote",
-		"CheckboxBrackets", "RadioBrackets", "MenuBrackets",
+		"CheckboxBrackets", "RadioBrackets", "MenuBrackets", "LineNumberBrackets",
 		"SSHPort", "WebPort", "AuthMode",
 	}
 	displayNames := map[string]string{
-		"ConfigFolder":      "Config Folder",
-		"ComposeFolder":     "Compose Folder",
-		"Theme":             "Theme",
-		"Borders":           "Borders",
-		"LargeButtons":      "Large Buttons",
-		"LargeTitleBars":    "Large Title Bars",
-		"LineCharacters":    "Line Characters",
-		"Scrollbar":         "Scrollbar",
-		"Spinner":           "Spinner",
-		"SpinnerSpeed":      "Spinner Speed",
-		"Shadow":            "Shadow",
-		"ShadowLevel":       "Shadow Level",
-		"BorderColor":       "Border Color",
-		"DialogTitleAlign":  "Dialog Title Align",
-		"SubmenuTitleAlign": "Submenu Title Align",
-		"PanelTitleAlign":   "Panel Title Align",
-		"PanelLocal":        "Panel Local",
-		"PanelRemote":       "Panel Remote",
-		"CheckboxBrackets":  "Checkbox Brackets",
-		"RadioBrackets":     "Radio Brackets",
-		"MenuBrackets":      "Menu Brackets",
-		"SSHPort":           "SSH Port",
-		"WebPort":           "Web Port",
-		"AuthMode":          "Auth Mode",
+		"ConfigFolder":       "Config Folder",
+		"ComposeFolder":      "Compose Folder",
+		"Theme":              "Theme",
+		"Borders":            "Borders",
+		"LargeButtons":       "Large Buttons",
+		"LargeTitleBars":     "Large Title Bars",
+		"LineCharacters":     "Line Characters",
+		"Scrollbar":          "Scrollbar",
+		"Spinner":            "Spinner",
+		"SpinnerSpeed":       "Spinner Speed",
+		"Shadow":             "Shadow",
+		"ShadowLevel":        "Shadow Level",
+		"BorderColor":        "Border Color",
+		"DialogTitleAlign":   "Dialog Title Align",
+		"SubmenuTitleAlign":  "Submenu Title Align",
+		"PanelTitleAlign":    "Panel Title Align",
+		"PanelLocal":         "Panel Local",
+		"PanelRemote":        "Panel Remote",
+		"CheckboxBrackets":   "Checkbox Brackets",
+		"RadioBrackets":      "Radio Brackets",
+		"MenuBrackets":       "Menu Brackets",
+		"LineNumberBrackets": "Line Number Brackets",
+		"SSHPort":            "SSH Port",
+		"WebPort":            "Web Port",
+		"AuthMode":           "Auth Mode",
 	}
 
 	var data []string
@@ -895,6 +899,8 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.RadioBrackets)
 		case "MenuBrackets":
 			value = boolToYesNo(conf.UI.MenuBrackets)
+		case "LineNumberBrackets":
+			value = boolToYesNo(conf.UI.LineNumberBrackets)
 		case "SSHPort":
 			if conf.Server.SSH.Port > 0 {
 				value = fmt.Sprintf("{{|Var|}}%d{{[-]}}", conf.Server.SSH.Port)

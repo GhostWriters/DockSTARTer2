@@ -274,16 +274,17 @@ type Styles struct {
 	SepChar string
 
 	// Settings
-	LineCharacters    bool
-	DrawBorders       bool
-	LargeButtons      bool
-	LargeTitleBars    bool
-	DialogTitleAlign  string
-	SubmenuTitleAlign string
-	PanelTitleAlign   string
-	CheckboxBrackets  string
-	RadioBrackets     string
-	MenuBrackets      bool
+	LineCharacters     bool
+	DrawBorders        bool
+	LargeButtons       bool
+	LargeTitleBars     bool
+	DialogTitleAlign   string
+	SubmenuTitleAlign  string
+	PanelTitleAlign    string
+	CheckboxBrackets   string
+	RadioBrackets      string
+	MenuBrackets       bool
+	LineNumberBrackets bool
 
 	// Option value (dropdown/inline value in flow menus)
 	OptionValueFocused lipgloss.Style
@@ -369,6 +370,7 @@ type StyleContext struct {
 	CheckboxBrackets     string
 	RadioBrackets        string
 	MenuBrackets         bool
+	LineNumberBrackets   bool
 	Prefix               string // Prefix for semantic tag remapping (e.g. "Preview_")
 	DrawShadow           bool   // Whether to draw shadows for this context
 }
@@ -444,6 +446,7 @@ func GetActiveContext() StyleContext {
 		CheckboxBrackets:     CurrentStyles.CheckboxBrackets,
 		RadioBrackets:        CurrentStyles.RadioBrackets,
 		MenuBrackets:         CurrentStyles.MenuBrackets,
+		LineNumberBrackets:   CurrentStyles.LineNumberBrackets,
 		Prefix:               "", // Global context has no prefix
 		DrawShadow:           currentConfig.UI.Shadow,
 	}
@@ -790,6 +793,7 @@ func InitStyles(cfg config.AppConfig) {
 	CurrentStyles.CheckboxBrackets = cfg.UI.CheckboxBrackets
 	CurrentStyles.RadioBrackets = cfg.UI.RadioBrackets
 	CurrentStyles.MenuBrackets = cfg.UI.MenuBrackets
+	CurrentStyles.LineNumberBrackets = cfg.UI.LineNumberBrackets
 }
 
 // Helper functions for common style operations

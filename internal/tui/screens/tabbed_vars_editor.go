@@ -178,6 +178,8 @@ func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec
 		editor := enveditor.New()
 		editor.ShowLineNumbers = true
 		editor.SetLineCharacters(displayengine.GetActiveContext().LineCharacters)
+		editor.LineNumberBrackets = displayengine.GetActiveContext().LineNumberBrackets
+		editor.LineNumberBracketOpen, editor.LineNumberBracketClose = displayengine.TagBracketGlyphs()
 		editor.SetVirtualCursor(false)
 		editor.ScrollbarFunc = func(content string, total, visible, offset int, lineChars bool) string {
 			return displayengine.ApplyScrollbarColumn(content, total, visible, offset, lineChars, displayengine.GetActiveContext())

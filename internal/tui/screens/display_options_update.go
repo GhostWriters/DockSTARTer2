@@ -544,6 +544,8 @@ func (s *DisplayOptionsScreen) syncOptionsMenu() {
 			items[i].Checked = s.config.UI.Scrollbar
 		case "Menu Brackets":
 			items[i].Checked = s.config.UI.MenuBrackets
+		case "Line Number Brackets":
+			items[i].Checked = s.config.UI.LineNumberBrackets
 		case "Shadow Level":
 			items[i].Desc = s.dropdownDesc(s.shadowLevelToDesc(s.config.UI.ShadowLevel))
 		case "Border Color":
