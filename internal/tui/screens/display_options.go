@@ -60,6 +60,13 @@ type DisplayOptionsScreen struct {
 	// affects behavior while this screen is open, not anything persisted.
 	loadThemeDefaults bool
 
+	// themeChangedFields holds the config.UIConfig struct field names whose
+	// value the most recent applyPreview call actually changed via the
+	// theme's own [defaults] table. Drives the transient "changed" marker
+	// (same glyph/tag as App Select's just-added/renamed marker) shown in
+	// front of the corresponding Options row until the next interaction.
+	themeChangedFields map[string]bool
+
 	connType string // "local", "ssh", or "web"
 }
 
@@ -380,7 +387,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 	s.optionsMenu.SetButtons([]displayengine.ButtonDef{})
 	s.optionsMenu.SetFlowMode(true)
 	s.optionsMenu.SetMaximized(true) // Fill available width
-	s.optionsMenu.SetShowLockGutter(false)
+	s.optionsMenu.SetShowLockGutter(true)
 
 	// 4. Outer "Appearance Settings" dialog (sections container + buttons)
 	outerMenu := displayengine.NewMenuModel("appearance_outer", "Appearance Settings", "", nil)

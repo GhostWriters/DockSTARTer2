@@ -82,6 +82,14 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 				lockChar = RenderThemeText("{{|MarkerInvalid|}}"+invalidMarker+"{{[-]}}", neutralStyle)
 			} else if item.Locked {
 				lockChar = RenderThemeText("{{|MarkerLocked|}}!{{[-]}}", neutralStyle)
+			} else if item.IsNew {
+				// Same transient "changed" indicator as App Select's
+				// just-added/renamed marker, reusing the same field and glyph.
+				arrow := subMenuCollapsed
+				if !ctx.LineCharacters {
+					arrow = subMenuCollapsedAscii
+				}
+				lockChar = RenderThemeText("{{|MarkerAdded|}}"+arrow+"{{[-]}}", neutralStyle)
 			} else {
 				lockChar = neutralStyle.Render(" ")
 			}
