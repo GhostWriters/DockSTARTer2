@@ -214,4 +214,4 @@ border_color = 1
 dialog_title_align = "center"
 submenu_title_align = "left"
 panel_title_align = "center"
-menu_brackets = false
+menu_brackets = true
