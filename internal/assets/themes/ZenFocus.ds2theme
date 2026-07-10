@@ -143,11 +143,11 @@ No = "{{|TitleError|}}"
 
 # Env editor
 LineComment = "{{|Dialog:::RB|}}"
-ModifiedText = "{{[$secondary:$highlight:-]}}"
-LineNumber = "{{|Dialog|}}"
-LineNumberFocused = "{{[$secondary:$highlight]}}"
+ModifiedText = "{{[$secondary:$accent:-]}}"
+LineNumber = "{{|Dialog:::-D|}}"
+LineNumberFocused = "{{|Dialog:$accent::-B|}}"
 LineNumberModified = "{{|ModifiedText|}}"
-LineNumberModifiedFocused = "{{[$secondary:$highlight:B]}}"
+LineNumberModifiedFocused = "{{|LineNumberModified:::-B|}}"
 LineNumberBrackets = "{{|TagBrackets|}}"
 
 # Markers and cursor
@@ -216,3 +216,4 @@ dialog_title_align = "center"
 submenu_title_align = "left"
 panel_title_align = "center"
 menu_brackets = true
+line_number_brackets = true
