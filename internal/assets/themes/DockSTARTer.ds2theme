@@ -143,13 +143,13 @@ Yes = "{{|TitleSuccess|}}"
 No = "{{|TitleError|}}"
 
 # Env editor
-LineComment = "{{|Dialog:::RB|}}"
-ModifiedText = "{{|Dialog:::R|}}"
-LineNumber = "{{|Dialog|}}"
-LineNumberFocused = "{{[black:white]}}"
+LineComment = "{{|Dialog:::-RB|}}"
+ModifiedText = "{{|Dialog:::-R|}}"
+LineNumber = "{{|Dialog:::-D|}}"
+LineNumberFocused = "{{|Dialog:red::-B|}}"
 LineNumberModified = "{{|ModifiedText|}}"
-LineNumberModifiedFocused = "{{[blue:white]}}"
-LineNumberBrackets = "{{|TagBrackets|}}"
+LineNumberModifiedFocused = "{{[red:black:B]}}"
+LineNumberBrackets = "{{|Dialog|}}"
 
 # Markers and cursor
 Marker = ""
@@ -213,3 +213,4 @@ dialog_title_align = "center"
 submenu_title_align = "left"
 panel_title_align = "center"
 menu_brackets = false
+line_number_brackets = true
