@@ -322,6 +322,11 @@ func (m *MenuModel) renderVariableHeightList() string {
 				}
 			}
 
+			// The Expand arrow isn't a checkbox -- it's the same kind of
+			// focus/navigate indicator as the Name column's [AppName] and
+			// rename brackets, so it uses TagBrackets (bracketGlyphs) rather
+			// than the checkbox bracket styling used by Add/Enable.
+			expandOpen, expandClose := bracketGlyphs(ctx)
 			if ctx.LineCharacters {
 				if canExpand {
 					arrow := subMenuCollapsed
@@ -329,7 +334,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 						arrow = subMenuExpanded
 					}
 					if expandFocused {
-						cbExpand3 = cbXStyle.Render("[") + cbXStyle.Render(arrow) + cbXStyle.Render("]")
+						cbExpand3 = RenderThemeText("{{[-]}}{{|TagBrackets|}}"+expandOpen+"{{[-]}}", neutralStyle) + cbXStyle.Render(arrow) + RenderThemeText("{{[-]}}{{|TagBrackets|}}"+expandClose+"{{[-]}}", neutralStyle)
 					} else {
 						cbExpand3 = neutralStyle.Render(" ") + cbXStyle.Render(arrow) + neutralStyle.Render(" ")
 					}
@@ -343,7 +348,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 						arrow = subMenuExpandedAscii
 					}
 					if expandFocused {
-						cbExpand3 = cbXStyle.Render("[") + cbXStyle.Render(arrow) + cbXStyle.Render("]")
+						cbExpand3 = RenderThemeText("{{[-]}}{{|TagBrackets|}}"+expandOpen+"{{[-]}}", neutralStyle) + cbXStyle.Render(arrow) + RenderThemeText("{{[-]}}{{|TagBrackets|}}"+expandClose+"{{[-]}}", neutralStyle)
 					} else {
 						cbExpand3 = neutralStyle.Render(" ") + cbXStyle.Render(arrow) + neutralStyle.Render(" ")
 					}

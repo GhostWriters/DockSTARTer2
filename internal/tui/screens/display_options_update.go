@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"reflect"
 	"strings"
 
 	"DockSTARTer2/internal/displayengine"
@@ -10,6 +11,23 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 )
+
+// specifiedThemeDefaultFields returns the set of config.UIConfig struct field
+// names a theme's [defaults] table specifies (i.e. whose pointer is non-nil
+// in d) -- theme.ThemeDefaults' field names match config.UIConfig's 1:1 for
+// every field it can suggest. Used to mark which Options rows the theme set,
+// regardless of whether the resulting value actually differs from before.
+func specifiedThemeDefaultFields(d theme.ThemeDefaults) map[string]bool {
+	specified := make(map[string]bool)
+	v := reflect.ValueOf(d)
+	t := v.Type()
+	for i := 0; i < t.NumField(); i++ {
+		if !v.Field(i).IsNil() {
+			specified[t.Field(i).Name] = true
+		}
+	}
+	return specified
+}
 
 // itemConfigValue returns the config value (e.g. "user:MyTheme") for a theme menu item.
 // Falls back to Tag (display name) if no Metadata entry was set.
@@ -44,6 +62,19 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if s.themeMenu != nil {
 		if action := s.themeMenu.AbsorbMessage(msg); action != nil {
 			return s, action
+		}
+	}
+
+	// The "changed by theme" marker (IsNew) is transient -- clear it on the
+	// next keypress or click, before that input is otherwise handled, same
+	// convention as App Select's just-added/renamed marker. If this same
+	// message goes on to trigger a new theme preview, applyPreview sets
+	// fresh markers afterward, so they still show through this call.
+	switch msg.(type) {
+	case tea.KeyPressMsg, displayengine.LayerHitMsg:
+		if len(s.themeChangedFields) > 0 {
+			s.themeChangedFields = nil
+			s.syncOptionsMenu()
 		}
 	}
 
@@ -515,8 +546,13 @@ func (s *DisplayOptionsScreen) applyPreview(themeName string) {
 	// staged options above -- winning for whatever fields it specifies, and
 	// leaving everything else (including any option the user just changed
 	// by hand) as-is. When off, theme selection never touches options at all.
+	s.themeChangedFields = nil
 	if s.loadThemeDefaults && defaults != nil {
 		theme.ApplyThemeDefaults(&s.config, *defaults)
+		// Mark every field the theme's [defaults] table specifies, not just
+		// ones whose value actually differed from what was already staged --
+		// the marker means "the theme set this", not "this changed".
+		s.themeChangedFields = specifiedThemeDefaultFields(*defaults)
 	}
 
 	s.syncOptionsMenu()
@@ -526,9 +562,33 @@ func (s *DisplayOptionsScreen) applyPreview(themeName string) {
 	displayengine.ClearSemanticCachePrefix("Preview_")
 }
 
+// optionTagToUIField maps each Options row's Tag to the config.UIConfig
+// struct field name it displays, so syncOptionsMenu can look up
+// s.themeChangedFields by the same name diffUIConfigFieldSet produces.
+var optionTagToUIField = map[string]string{
+	"Shadows":              "Shadow",
+	"Borders":              "Borders",
+	"Large Buttons":        "LargeButtons",
+	"Large Title Bars":     "LargeTitleBars",
+	"Line Characters":      "LineCharacters",
+	"Scrollbars":           "Scrollbar",
+	"Menu Brackets":        "MenuBrackets",
+	"Line Number Brackets": "LineNumberBrackets",
+	"Shadow Level":         "ShadowLevel",
+	"Border Color":         "BorderColor",
+	"Dialog Title":         "DialogTitleAlign",
+	"Submenu Title":        "SubmenuTitleAlign",
+	"Log Title":            "PanelTitleAlign",
+	"Local Panel Mode":     "PanelLocal",
+	"Remote Panel Mode":    "PanelRemote",
+	"Checkbox Brackets":    "CheckboxBrackets",
+	"Radio Brackets":       "RadioBrackets",
+}
+
 func (s *DisplayOptionsScreen) syncOptionsMenu() {
 	items := s.optionsMenu.GetItems()
 	for i := range items {
+		items[i].IsNew = s.themeChangedFields[optionTagToUIField[items[i].Tag]]
 		switch items[i].Tag {
 		case "Shadows":
 			items[i].Checked = s.config.UI.Shadow
