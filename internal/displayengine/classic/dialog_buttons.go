@@ -341,7 +341,8 @@ func renderCenteredButtonsImpl(contentWidth int, useBorders bool, ctx StyleConte
 			if edgeCharL != "" {
 				rendered = renderedEdgeL + buttonPart + renderedEdgeR
 			} else {
-				rendered = bracketStyle.Render("<") + buttonPart + bracketStyle.Render(">")
+				open, closeCh := buttonBracketGlyphs(ctx)
+				rendered = bracketStyle.Render(open) + buttonPart + bracketStyle.Render(closeCh)
 			}
 		}
 		renderedButtons = append(renderedButtons, rendered)

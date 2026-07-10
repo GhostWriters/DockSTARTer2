@@ -76,4 +76,16 @@ const (
 	ResizeUpWidgetAscii = "^"
 	ResizeDnWidget      = "▼" // Black Down-Pointing Triangle (U+25BC)
 	ResizeDnWidgetAscii = "v"
+
+	// TagBracket - focused-row bracket indicator (App Select, Menu Brackets, rename)
+	TagBracketOpen       = "❮"
+	TagBracketClose      = "❯"
+	TagBracketOpenAscii  = "["
+	TagBracketCloseAscii = "]"
+
+	// ButtonBracket - small/flat button brackets
+	ButtonBracketOpen       = "«"
+	ButtonBracketClose      = "»"
+	ButtonBracketOpenAscii  = "<"
+	ButtonBracketCloseAscii = ">"
 )
