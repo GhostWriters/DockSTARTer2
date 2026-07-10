@@ -401,11 +401,21 @@ func (m *MenuModel) renderVariableHeightList() string {
 
 		var descStr string
 		if (isSelected || isParentOfSelected) && item.Desc != "" {
-			// item.Desc is normally pre-wrapped in its own semstyle tag (e.g.
-			// "{{|ListItem|}}..."), which overrides dStyle entirely -- strip
-			// tags here so dStyle (itemStyleSel) actually takes effect, same
-			// as the plain isSelected case already did.
-			descStr = dStyle.Render(GetPlainText(item.Desc))
+			switch {
+			case strings.HasPrefix(item.Desc, "{{|ListItemUserDefined|}}"):
+				// Swap to the focused variant instead of stripping the tag,
+				// so the user-defined/built-in distinction survives focus
+				// instead of collapsing to the generic selected-row style.
+				descStr = RenderThemeText(strings.Replace(item.Desc, "{{|ListItemUserDefined|}}", "{{|ListItemUserDefinedFocused|}}", 1), dStyle)
+			case strings.HasPrefix(item.Desc, "{{|ListItem|}}"):
+				descStr = RenderThemeText(strings.Replace(item.Desc, "{{|ListItem|}}", "{{|ListItemFocused|}}", 1), dStyle)
+			default:
+				// item.Desc is normally pre-wrapped in its own semstyle tag (e.g.
+				// "{{|ListItem|}}..."), which overrides dStyle entirely -- strip
+				// tags here so dStyle (itemStyleSel) actually takes effect, same
+				// as the plain isSelected case already did.
+				descStr = dStyle.Render(GetPlainText(item.Desc))
+			}
 		} else {
 			descStr = RenderThemeText(item.Desc, dStyle)
 		}
