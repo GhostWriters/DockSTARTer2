@@ -147,6 +147,7 @@ LineNumber = "{{|Dialog|}}"
 LineNumberFocused = "{{|Dialog::white|}}"
 LineNumberModified = "{{|ModifiedText::R|}}"
 LineNumberModifiedFocused = "{{|ModifiedText:white|}}"
+LineNumberBrackets = "{{|TagBrackets|}}"
 
 # Markers and cursor
 Marker = ""

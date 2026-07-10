@@ -148,6 +148,7 @@ LineNumber = "{{|Dialog|}}"
 LineNumberFocused = "{{[$secondary:$highlight]}}"
 LineNumberModified = "{{|ModifiedText|}}"
 LineNumberModifiedFocused = "{{[$secondary:$highlight:B]}}"
+LineNumberBrackets = "{{|TagBrackets|}}"
 
 # Markers and cursor
 Marker = "{{[$secondary:-:]}}"

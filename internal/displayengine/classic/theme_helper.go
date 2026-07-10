@@ -5,8 +5,8 @@ import (
 	"strings"
 	"sync"
 
-	semstyle "github.com/GhostWriters/semstyle/lg"
 	"DockSTARTer2/internal/theme"
+	semstyle "github.com/GhostWriters/semstyle/lg"
 
 	"charm.land/lipgloss/v2"
 )
@@ -53,6 +53,13 @@ func SemanticRawStyle(name string) lipgloss.Style {
 // Used to set the cursor color on textinput and enveditor models.
 func TextCursorColor() color.Color {
 	return SemanticRawStyle("TextCursor").GetForeground()
+}
+
+// TagBracketGlyphs returns the open/close glyphs used for focused-row bracket
+// indicators (App Select, Menu Brackets, and now line-number brackets),
+// following the active ui.line_characters setting.
+func TagBracketGlyphs() (open, closeCh string) {
+	return bracketGlyphs(GetActiveContext())
 }
 
 // Color parsing now uses tcell/v3/colors for RGB conversion via semstyle.GetHexForColor().

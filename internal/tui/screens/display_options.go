@@ -276,6 +276,15 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Selectable:  true,
 			SpaceAction: s.toggleMenuBrackets(),
 		},
+		{
+			Tag:         "Line Number Brackets",
+			Desc:        "Wrap the focused line number in [brackets]",
+			Help:        "Bracket the focused line's number in the env editor (Space to toggle)",
+			IsCheckbox:  true,
+			Checked:     s.config.UI.LineNumberBrackets,
+			Selectable:  true,
+			SpaceAction: s.toggleLineNumberBrackets(),
+		},
 
 		// -- Brackets --
 		{
@@ -1006,6 +1015,15 @@ func (s *DisplayOptionsScreen) toggleMenuBrackets() tea.Cmd {
 		newState := !s.config.UI.MenuBrackets
 		return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
 			cfg.UI.MenuBrackets = newState
+		}}
+	}
+}
+
+func (s *DisplayOptionsScreen) toggleLineNumberBrackets() tea.Cmd {
+	return func() tea.Msg {
+		newState := !s.config.UI.LineNumberBrackets
+		return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
+			cfg.UI.LineNumberBrackets = newState
 		}}
 	}
 }

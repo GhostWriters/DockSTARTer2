@@ -523,6 +523,8 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return displayengine.ApplyScrollbarColumn(content, total, visible, offset, lineChars, displayengine.GetActiveContext())
 			}
 			m.tabs[i].editor.SetLineCharacters(displayengine.GetActiveContext().LineCharacters)
+			m.tabs[i].editor.LineNumberBrackets = displayengine.GetActiveContext().LineNumberBrackets
+			m.tabs[i].editor.LineNumberBracketOpen, m.tabs[i].editor.LineNumberBracketClose = displayengine.TagBracketGlyphs()
 
 			// Apply theme-aware env-specific styles
 			editorStyles := m.tabs[i].editor.Styles()
@@ -530,6 +532,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			editorStyles.Focused.LineNumberFocused = displayengine.SemanticRawStyle("LineNumberFocused")
 			editorStyles.Focused.LineNumberModified = displayengine.SemanticRawStyle("LineNumberModified")
 			editorStyles.Focused.LineNumberModifiedFocused = displayengine.SemanticRawStyle("LineNumberModifiedFocused")
+			editorStyles.Focused.LineNumberBrackets = displayengine.SemanticRawStyle("LineNumberBrackets")
 			editorStyles.Focused.InvalidText = displayengine.SemanticRawStyle("EnvInvalid")
 			editorStyles.Focused.DuplicateText = displayengine.SemanticRawStyle("EnvDuplicate")
 			editorStyles.Focused.BuiltinText = displayengine.SemanticRawStyle("EnvBuiltin")
@@ -547,6 +550,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			editorStyles.Blurred.LineNumberFocused = displayengine.SemanticRawStyle("LineNumberFocused")
 			editorStyles.Blurred.LineNumberModified = displayengine.SemanticRawStyle("LineNumberModified")
 			editorStyles.Blurred.LineNumberModifiedFocused = displayengine.SemanticRawStyle("LineNumberModifiedFocused")
+			editorStyles.Blurred.LineNumberBrackets = displayengine.SemanticRawStyle("LineNumberBrackets")
 			editorStyles.Blurred.InvalidText = displayengine.SemanticRawStyle("EnvInvalid")
 			editorStyles.Blurred.DuplicateText = displayengine.SemanticRawStyle("EnvDuplicate")
 			editorStyles.Blurred.BuiltinText = displayengine.SemanticRawStyle("EnvBuiltin")

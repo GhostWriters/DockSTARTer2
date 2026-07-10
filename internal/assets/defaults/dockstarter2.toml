@@ -2,26 +2,27 @@
 # Edit this file to customise your installation.
 
 [ui]
-theme              = "DockSTARTer"
-borders            = true
-large_buttons      = true
-large_title_bars   = true
-line_characters    = true
-shadow             = true
-shadow_level       = 2             # 0=off 1=light(░) 2=medium(▒) 3=dark(▓) 4=solid(█)
-scrollbar          = true
-spinner            = true
-spinner_speed      = 120           # milliseconds per spinner frame
-refresh_rate       = 60            # screen repaint interval in milliseconds
-border_color       = 3             # 1=primary border colour, 2=secondary, 3=both
-dialog_title_align  = "center"     # "center" or "left"
-submenu_title_align = "left"       # "center" or "left"
-panel_title_align   = "center"     # "center" or "left"
-panel_local         = "log"        # "none", "log", "console", or "system" (for local sessions)
-panel_remote        = "log"        # "none", "log", "console", or "system" (for ssh/web sessions)
-checkbox_brackets   = "selected"   # "never", "selected", or "always" -- the focused row's brackets always show regardless
-radio_brackets      = "never"      # "never", "selected", or "always" -- the focused row's brackets always show regardless
-menu_brackets       = false        # wrap the focused menu item's tag in [brackets]
+theme                = "DockSTARTer"
+borders              = true
+large_buttons        = true
+large_title_bars     = true
+line_characters      = true
+shadow               = true
+shadow_level         = 2           # 0=off 1=light(░) 2=medium(▒) 3=dark(▓) 4=solid(█)
+scrollbar            = true
+spinner              = true
+spinner_speed        = 120         # milliseconds per spinner frame
+refresh_rate         = 60          # screen repaint interval in milliseconds
+border_color         = 3           # 1=primary border colour, 2=secondary, 3=both
+dialog_title_align   = "center"    # "center" or "left"
+submenu_title_align  = "left"      # "center" or "left"
+panel_title_align    = "center"    # "center" or "left"
+panel_local          = "log"       # "none", "log", "console", or "system" (for local sessions)
+panel_remote         = "log"       # "none", "log", "console", or "system" (for ssh/web sessions)
+checkbox_brackets    = "selected"  # "never", "selected", or "always" -- the focused row's brackets always show regardless
+radio_brackets       = "never"     # "never", "selected", or "always" -- the focused row's brackets always show regardless
+menu_brackets        = false       # wrap the focused menu item's tag in [brackets]
+line_number_brackets = true        # wrap the focused line's number in [brackets] in the env editor
 
 [paths]
 config_folder  = "${XDG_CONFIG_HOME}"
@@ -33,23 +34,23 @@ compose_folder = "${XDG_CONFIG_HOME}/compose"
 # Ports 0 (default) mean the server is disabled.
 
 [server.ssh]
-port = 40022              # e.g. 22
+port = 40022                       # e.g. 22
 
 [server.web]
-port = 40080              # e.g. 80
+port = 40080                       # e.g. 80
 
 [server.auth]
-mode          = "none"    # "none", "password", or "pubkey"
-password      = ""        # bcrypt hash; set via the TUI settings screen
-auth_keys_file = ""       # path to authorized_keys file (pubkey mode)
+mode          = "none"             # "none", "password", or "pubkey"
+password      = ""                 # bcrypt hash; set via the TUI settings screen
+auth_keys_file = ""                # path to authorized_keys file (pubkey mode)
 
 [server]
-host_key = ""             # path to persistent host key file; auto-generated if empty
+host_key = ""                      # path to persistent host key file; auto-generated if empty
 
 [system]
-auto_setcap  = false      # keep CAP_CHOWN/CAP_FOWNER applied to the binary (Linux only,
-                          # via "sudo setcap") so permission fixes never need sudo;
-                          # re-applied automatically after updates replace the binary.
-setcap_asked = false      # set automatically once the one-time auto_setcap question has
-                          # been answered; the question is skipped when auto_setcap is
-                          # already true (e.g. enabled here by hand)
+auto_setcap  = false               # keep CAP_CHOWN/CAP_FOWNER applied to the binary (Linux only,
+                                   # via "sudo setcap") so permission fixes never need sudo;
+                                   # re-applied automatically after updates replace the binary.
+setcap_asked = false               # set automatically once the one-time auto_setcap question has
+                                   # been answered; the question is skipped when auto_setcap is
+                                   # already true (e.g. enabled here by hand)

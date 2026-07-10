@@ -147,6 +147,7 @@ LineNumber = "{{|Dialog:::D|}}"
 LineNumberFocused = "{{|LineNumber::$accent:d|}}"
 LineNumberModified = "{{|ModifiedText|}}"
 LineNumberModifiedFocused = "{{|ModifiedText::$accent:B|}}"
+LineNumberBrackets = "{{|TagBrackets|}}"
 
 # Markers and cursor
 Marker = "{{|Dialog|}}"

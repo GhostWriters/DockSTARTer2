@@ -327,6 +327,7 @@ var (
 	ShowInputContextMenuWithTitle  = classic.ShowInputContextMenuWithTitle
 	SinputSectionInit              = classic.SinputSectionInit
 	SplitWidth                     = classic.SplitWidth
+	TagBracketGlyphs               = classic.TagBracketGlyphs
 	TextCursorColor                = classic.TextCursorColor
 	TitleBarWidgetRegions          = classic.TitleBarWidgetRegions
 	TitleBarWidgetY                = classic.TitleBarWidgetY
