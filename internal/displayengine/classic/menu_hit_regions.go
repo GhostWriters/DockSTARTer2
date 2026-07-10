@@ -305,6 +305,14 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		flowLine := 0
 		currentLineWidth := 0
 
+		// Matches renderFlowContent's itemGutter, which prepends a lock-gutter
+		// column (lockChar, always 1 char when showLockGutter is true) before
+		// every item's checkbox/tag content.
+		lockMarkerWidth := 0
+		if m.showLockGutter {
+			lockMarkerWidth = m.StatusGutterWidth()
+		}
+
 		for i, item := range m.items {
 			if item.IsSeparator {
 				continue
@@ -332,7 +340,7 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 				cbWidth = lipgloss.Width(glyph)
 			}
 
-			itemWidth := cbWidth + lipgloss.Width(GetPlainText(item.Tag))
+			itemWidth := lockMarkerWidth + cbWidth + lipgloss.Width(GetPlainText(item.Tag))
 			if !item.IsCheckbox && !item.IsRadioButton && item.Desc != "" {
 				itemWidth += 1 + lipgloss.Width(GetPlainText(item.Desc))
 			}
