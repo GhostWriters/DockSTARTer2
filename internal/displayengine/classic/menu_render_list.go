@@ -12,6 +12,26 @@ import (
 
 const vIdxBorderFlag = 0x40000000
 
+// bracketGlyphs returns the open/close glyphs for the focused-row bracket
+// indicator (App Select's [AppName], Menu Brackets), following the same
+// ui.line_characters toggle as every other Unicode/ASCII glyph pair.
+func bracketGlyphs(ctx StyleContext) (open, closeCh string) {
+	if ctx.LineCharacters {
+		return tagBracketOpen, tagBracketClose
+	}
+	return tagBracketOpenAscii, tagBracketCloseAscii
+}
+
+// buttonBracketGlyphs returns the open/close glyphs for small/flat button
+// brackets, following the same ui.line_characters toggle as bracketGlyphs
+// but with its own (visually distinct) glyph pair.
+func buttonBracketGlyphs(ctx StyleContext) (open, closeCh string) {
+	if ctx.LineCharacters {
+		return buttonBracketOpen, buttonBracketClose
+	}
+	return buttonBracketOpenAscii, buttonBracketCloseAscii
+}
+
 // renderVariableHeightList renders items vertically with dynamic heights for word wrapping
 func (m *MenuModel) renderVariableHeightList() string {
 	ctx := GetActiveContext()
@@ -374,13 +394,17 @@ func (m *MenuModel) renderVariableHeightList() string {
 			if menuBracketsShown {
 				// Same reserved slots the spinner uses above: the leading
 				// "sep" character (blanked out below, same as isProcessingItem
-				// does) becomes "[", and the trailing "]" eats into the
-				// already-reserved minGap the same way spinR does -- no new
-				// width added on either side. Reset ({{[-]}}) before applying
-				// the tag so bold/dim attributes from the adjacent tag text
-				// don't leak through a raw Style.Render() call.
-				openB := RenderThemeText("{{[-]}}{{|TagBrackets|}}[{{[-]}}", neutralStyle)
-				closeB := RenderThemeText("{{[-]}}{{|TagBrackets|}}]{{[-]}}", neutralStyle)
+				// does) becomes the open bracket, and the close bracket eats
+				// into the already-reserved minGap the same way spinR does
+				// (see the width-aware spinTagExtra calc below -- the ASCII
+				// glyphs are 1 cell so this is a no-op shift, but the fullwidth
+				// Unicode variant is 2 cells and needs the wider accounting).
+				// Reset ({{[-]}}) before applying the tag so bold/dim
+				// attributes from the adjacent tag text don't leak through a
+				// raw Style.Render() call.
+				open, closeCh := bracketGlyphs(ctx)
+				openB := RenderThemeText("{{[-]}}{{|TagBrackets|}}"+open+"{{[-]}}", neutralStyle)
+				closeB := RenderThemeText("{{[-]}}{{|TagBrackets|}}"+closeCh+"{{[-]}}", neutralStyle)
 				tagStr = openB + tagStr + closeB
 			}
 		}
@@ -455,12 +479,18 @@ func (m *MenuModel) renderVariableHeightList() string {
 		nameFocused := isAppSelect && isSelected && m.activeColumn == ColName
 		nameSep := neutralStyle.Render(" ")
 		nameClose := ""
+		nameCloseWidth := 0
 		if nameFocused {
 			// Reset ({{[-]}}) before applying the tag -- a raw Style.Render()
 			// call doesn't emit a leading full reset, so bold/dim attributes
 			// from the adjacent tag text can otherwise leak through.
-			nameSep = RenderThemeText("{{[-]}}{{|TagBrackets|}}[{{[-]}}", neutralStyle)
-			nameClose = RenderThemeText("{{[-]}}{{|TagBrackets|}}]{{[-]}}", neutralStyle)
+			open, closeCh := bracketGlyphs(ctx)
+			nameSep = RenderThemeText("{{[-]}}{{|TagBrackets|}}"+open+"{{[-]}}", neutralStyle)
+			nameClose = RenderThemeText("{{[-]}}{{|TagBrackets|}}"+closeCh+"{{[-]}}", neutralStyle)
+			// Net extra width beyond the tag's own footprint: the open
+			// bracket replaces the reserved 1-char sep (extra only if wider
+			// than that), plus the full width of the close bracket.
+			nameCloseWidth = (lipgloss.Width(open) - m.itemPaddingWidth) + lipgloss.Width(closeCh)
 		}
 
 		prefixPadding := ""
@@ -489,14 +519,16 @@ func (m *MenuModel) renderVariableHeightList() string {
 			// Net extra chars = +2 spinners - 1 sep = +1; shrink gap by 1 to keep desc aligned.
 			spinTagExtra = 1
 		} else if menuBracketsShown {
-			// Same accounting as the spinner case above: the leading "[" replaces
-			// the 1-char sep (blanked below), and the trailing "]" is offset by
-			// shrinking the gap by 1.
-			spinTagExtra = 1
+			// Same accounting as the spinner case above: the open bracket
+			// replaces the 1-char sep (blanked below), and the close bracket
+			// is offset by shrinking the gap -- width-aware so the fullwidth
+			// Unicode variant (2 cells) shrinks the gap correctly too, not
+			// just the 1-cell ASCII glyphs.
+			open, closeCh := bracketGlyphs(ctx)
+			spinTagExtra = (lipgloss.Width(open) - m.itemPaddingWidth) + lipgloss.Width(closeCh)
 		}
 		if nameFocused {
-			// The trailing "]" adds a character beyond the tag's own width.
-			spinTagExtra++
+			spinTagExtra += nameCloseWidth
 		}
 		gapWidth := (maxTagLen - lipgloss.Width(GetPlainText(item.Tag))) + (menuPrefixWidth - prefixWidth) + minGap - spinTagExtra
 		paddingSpaces := strutil.Repeat(" ", max(0, gapWidth))
@@ -942,18 +974,21 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 
 		tagStr := ""
 		if item.IsEditing {
-			// Same [Name]-style indicator as the top-level Name column, with
-			// unstyled brackets -- the edited text itself keeps the standard
-			// edit styling (red background/bold). The opening "[" is added by
+			// Same bracket-style indicator as the top-level Name column,
+			// themed via TagBrackets (see bracketGlyphs) rather than left
+			// unstyled -- the edited text itself keeps the standard edit
+			// styling (red background/bold). The opening bracket is added by
 			// rowContent below, replacing one of the blank separator spaces
-			// rather than adding width; the closing " ]" is added here, with
-			// a leading space so the hardware cursor (see
+			// rather than adding width; the closing bracket is added here,
+			// with a leading space so the hardware cursor (see
 			// AppSelectionScreen.GetInputCursor, which lands right after the
 			// typed text) has room to be visible instead of sitting directly
-			// on top of "]".
+			// on top of it.
 			editTag := GetPlainText(item.Tag)
 			editStyle := theme.ThemeSemanticStyle("{{|ItemFocused|}}")
-			tagStr += editStyle.Render(editTag) + neutralStyle.Render(" ]")
+			_, closeCh := bracketGlyphs(ctx)
+			closeB := RenderThemeText("{{[-]}}{{|TagBrackets|}}"+closeCh+"{{[-]}}", neutralStyle)
+			tagStr += editStyle.Render(editTag) + neutralStyle.Render(" ") + closeB
 		} else if len(item.Tag) > 0 {
 			runes := []rune(item.Tag)
 			tagStr += kStyle.Render(string(runes[0])) + tStyle.Render(string(runes[1:]))
@@ -1019,12 +1054,13 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 		indent := neutralStyle.Render(strutil.Repeat(" ", 8))
 
 		// The rowContent starts with the left border, followed by a mandatory internal space.
-		// The single separator before the tag becomes "[" while editing rather
-		// than adding a new character -- matches the top-level Name column's
-		// own [AppName] indicator, which does the same.
+		// The single separator before the tag becomes the open bracket while
+		// editing rather than adding a new character -- matches the
+		// top-level Name column's own [AppName] indicator, which does the same.
 		nameSep := neutralStyle.Render(" ")
 		if item.IsEditing {
-			nameSep = neutralStyle.Render("[")
+			open, _ := bracketGlyphs(ctx)
+			nameSep = RenderThemeText("{{[-]}}{{|TagBrackets|}}"+open+"{{[-]}}", neutralStyle)
 		}
 		// The mandatory internal space right after the border doubles as a
 		// transient "you just added this" marker -- same glyph as the
