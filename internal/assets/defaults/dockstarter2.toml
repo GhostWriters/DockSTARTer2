@@ -21,6 +21,7 @@ panel_local         = "log"        # "none", "log", "console", or "system" (for 
 panel_remote        = "log"        # "none", "log", "console", or "system" (for ssh/web sessions)
 checkbox_brackets   = "selected"   # "never", "selected", or "always" -- the focused row's brackets always show regardless
 radio_brackets      = "never"      # "never", "selected", or "always" -- the focused row's brackets always show regardless
+menu_brackets       = false        # wrap the focused menu item's tag in [brackets]
 
 [paths]
 config_folder  = "${XDG_CONFIG_HOME}"

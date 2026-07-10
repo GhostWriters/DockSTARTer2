@@ -283,6 +283,7 @@ type ThemeDefaults struct {
 	ShadowLevel       *int    `mapstructure:"shadow_level"`
 	Scrollbar         *bool   `mapstructure:"scrollbar"`
 	Spinner           *bool   `mapstructure:"spinner"`
+	MenuBrackets      *bool   `mapstructure:"menu_brackets"`
 	BorderColor       *int    `mapstructure:"border_color"`
 	DialogTitleAlign  *string `mapstructure:"dialog_title_align"`
 	SubmenuTitleAlign *string `mapstructure:"submenu_title_align"`
@@ -367,6 +368,10 @@ func ApplyThemeDefaults(conf *config.AppConfig, defaults ThemeDefaults) map[stri
 	if defaults.Spinner != nil {
 		conf.UI.Spinner = *defaults.Spinner
 		applied["Spinner"] = fmt.Sprintf("%v", conf.UI.Spinner)
+	}
+	if defaults.MenuBrackets != nil {
+		conf.UI.MenuBrackets = *defaults.MenuBrackets
+		applied["Menu Brackets"] = fmt.Sprintf("%v", conf.UI.MenuBrackets)
 	}
 	if defaults.BorderColor != nil {
 		conf.UI.BorderColor = *defaults.BorderColor

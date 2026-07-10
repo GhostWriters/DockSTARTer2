@@ -142,15 +142,33 @@ func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []displayengi
 	}
 	contentY := 1 + largeTitleOffset
 
+	// Load Theme Defaults menu regions (rendered first, above the theme list)
+	loadDefaultsRegions := s.loadDefaultsMenu.GetHitRegions(offsetX+contentX, offsetY+contentY)
+	regions = append(regions, loadDefaultsRegions...)
+
+	// Load Theme Defaults panel hit region
+	regions = append(regions, displayengine.HitRegion{
+		ID:     displayengine.IDLoadDefaultsPanel,
+		X:      offsetX + contentX,
+		Y:      offsetY + contentY,
+		Width:  s.loadDefaultsMenu.Width(),
+		Height: s.loadDefaultsMenu.Height(),
+		ZOrder: displayengine.ZScreen + 1,
+		Label:  "Load Theme Defaults",
+	})
+
+	// Theme menu is rendered directly BELOW the Load Theme Defaults menu
+	themeY := contentY + s.loadDefaultsMenu.Height()
+
 	// Theme menu regions
-	themeRegions := s.themeMenu.GetHitRegions(offsetX+contentX, offsetY+contentY)
+	themeRegions := s.themeMenu.GetHitRegions(offsetX+contentX, offsetY+themeY)
 	regions = append(regions, themeRegions...)
 
 	// Theme panel hit region
 	regions = append(regions, displayengine.HitRegion{
 		ID:     displayengine.IDThemePanel,
 		X:      offsetX + contentX,
-		Y:      offsetY + contentY,
+		Y:      offsetY + themeY,
 		Width:  s.themeMenu.Width(),
 		Height: s.themeMenu.Height(),
 		ZOrder: displayengine.ZScreen + 1,
@@ -162,7 +180,7 @@ func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []displayengi
 	dialogContentWidth := dl.menuWidth
 
 	// Options menu is rendered directly BELOW the Theme menu
-	optionsY := contentY + s.themeMenu.Height()
+	optionsY := themeY + s.themeMenu.Height()
 
 	optionsRegions := s.optionsMenu.GetHitRegions(offsetX+contentX, offsetY+optionsY)
 	regions = append(regions, optionsRegions...)
@@ -184,8 +202,8 @@ func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []displayengi
 	})
 
 	// Button row regions
-	// buttonY = 1 (top border) + largeTitleOffset + themeHeight + optionsHeight
-	buttonY := 1 + largeTitleOffset + s.themeMenu.Height() + s.optionsMenu.Height()
+	// buttonY = 1 (top border) + largeTitleOffset + loadDefaultsHeight + themeHeight + optionsHeight
+	buttonY := 1 + largeTitleOffset + s.loadDefaultsMenu.Height() + s.themeMenu.Height() + s.optionsMenu.Height()
 	btnRowWidth := dialogContentWidth - layout.ContentMarginWidth()
 
 	// Button panel background — height matches flat (1) vs bordered (3) from outerMenu layout.

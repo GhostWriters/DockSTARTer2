@@ -70,6 +70,7 @@ const (
 	IDPanelResize          = classic.IDPanelResize
 	IDPanelViewport        = classic.IDPanelViewport
 	IDStatusBar            = classic.IDStatusBar
+	IDLoadDefaultsPanel    = classic.IDLoadDefaultsPanel
 	IDThemePanel           = classic.IDThemePanel
 	IDOptionsPanel         = classic.IDOptionsPanel
 	IDButtonPanel          = classic.IDButtonPanel

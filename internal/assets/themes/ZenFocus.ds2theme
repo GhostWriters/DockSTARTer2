@@ -171,6 +171,7 @@ ListItem = ""
 ListItemUserDefined = "{{[$secondary:$primary:-B]}}"
 ListItemFocused = "{{|ItemFocused|}}"
 ListItemUserDefinedFocused = "{{[$secondary:$accent:-B]}}"
+TagBrackets = "{{|Dialog|}}"
 
 # Keys, progress, and indicators
 KeyCap = "{{[::-R]}}"
@@ -213,3 +214,4 @@ border_color = 1
 dialog_title_align = "center"
 submenu_title_align = "left"
 panel_title_align = "center"
+menu_brackets = false

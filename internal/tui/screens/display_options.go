@@ -21,16 +21,18 @@ import (
 type DisplayOptionsFocus int
 
 const (
-	FocusThemes DisplayOptionsFocus = iota
+	FocusLoadDefaults DisplayOptionsFocus = iota
+	FocusThemes
 	FocusOptions
 	FocusButtons
 )
 
 // DisplayOptionsScreen allows the user to configure UI settings and themes together.
 type DisplayOptionsScreen struct {
-	themeMenu    *displayengine.MenuModel
-	optionsMenu  *displayengine.MenuModel
-	focusedPanel DisplayOptionsFocus
+	loadDefaultsMenu *displayengine.MenuModel
+	themeMenu        *displayengine.MenuModel
+	optionsMenu      *displayengine.MenuModel
+	focusedPanel     DisplayOptionsFocus
 	// focusedButton index: 0=Apply, 1=Back (or Exit when isRoot), 2=Exit (only when !isRoot)
 	focusedButton int
 	buttonFocused bool // true when a button is highlighted while a submenu also stays focused
@@ -52,8 +54,18 @@ type DisplayOptionsScreen struct {
 	themeDefaults  map[string]*theme.ThemeDefaults // Cache parsed defaults
 	themeFileCache map[string]theme.ThemeFile      // Cache GetThemeFile results for help text
 
+	// loadThemeDefaults controls whether focusing a theme in the list stages
+	// that theme's own [defaults] table on top of the current options. This is
+	// a screen-local preference, not part of config.AppConfig -- it only
+	// affects behavior while this screen is open, not anything persisted.
+	loadThemeDefaults bool
+
 	connType string // "local", "ssh", or "web"
 }
+
+// toggleLoadThemeDefaultsMsg flips loadThemeDefaults. Handled directly rather
+// than via updateDisplayOptionMsg since it's not a config.AppConfig field.
+type toggleLoadThemeDefaultsMsg struct{}
 
 // updateDisplayOptionMsg is sent when an option is changed in the menu
 type updateDisplayOptionMsg struct {
@@ -72,15 +84,16 @@ func NewDisplayOptionsScreen(isRoot bool, connType string) *DisplayOptionsScreen
 	current := cfg.UI.Theme // ConfigValue e.g. "DockSTARTer" or "user:MyTheme"
 
 	s := &DisplayOptionsScreen{
-		isRoot:         isRoot,
-		connType:       connType,
-		config:         cfg,
-		baseConfig:     cfg,
-		themes:         themes,
-		currentTheme:   current,
-		previewTheme:   current,
-		themeDefaults:  make(map[string]*theme.ThemeDefaults),
-		themeFileCache: make(map[string]theme.ThemeFile),
+		isRoot:            isRoot,
+		connType:          connType,
+		config:            cfg,
+		baseConfig:        cfg,
+		themes:            themes,
+		currentTheme:      current,
+		previewTheme:      current,
+		themeDefaults:     make(map[string]*theme.ThemeDefaults),
+		themeFileCache:    make(map[string]theme.ThemeFile),
+		loadThemeDefaults: true,
 	}
 	s.themeDefaults[current], _ = theme.Load(current, "Preview")
 
@@ -149,8 +162,36 @@ func (s *DisplayOptionsScreen) initMenus() {
 	s.themeMenu.SetShowLockGutter(false)
 	s.themeMenu.SetNoLeftMargin(true)
 
-	// 2. Options Menu
+	// 2. Load Theme Defaults Menu (own section, above the theme list, since
+	// toggling it affects how focusing a theme below behaves)
+	loadDefaultsItems := []displayengine.MenuItem{
+		{
+			Tag:        "Load Theme Defaults",
+			Desc:       "Stage a theme's suggested options when focused",
+			Help:       "When on, browsing themes stages that theme's own suggested options below (Space to toggle)",
+			IsCheckbox: true,
+			Checked:    s.loadThemeDefaults,
+			Selectable: true,
+			SpaceAction: func() tea.Msg {
+				return toggleLoadThemeDefaultsMsg{}
+			},
+		},
+	}
+	loadDefaultsMenu := displayengine.NewMenuModel(displayengine.IDLoadDefaultsPanel, "", "", loadDefaultsItems)
+	s.loadDefaultsMenu = loadDefaultsMenu
+	s.loadDefaultsMenu.SetHelpItemPrefix("Option")
+	s.loadDefaultsMenu.SetHelpPageText("Controls whether focusing a theme below stages that theme's own suggested options.")
+	s.loadDefaultsMenu.SetSubMenuMode(true)
+	s.loadDefaultsMenu.SetIsDialog(false)
+	s.loadDefaultsMenu.SetButtons([]displayengine.ButtonDef{})
+	s.loadDefaultsMenu.SetFlowMode(true)
+	s.loadDefaultsMenu.SetMaximized(true)
+	s.loadDefaultsMenu.SetShowLockGutter(false)
+
+	// 3. Options Menu
+	// Grouped: visual toggles, then brackets, then title alignment, then performance.
 	optionItems := []displayengine.MenuItem{
+		// -- Visual toggles --
 		{
 			Tag:         "Borders",
 			Desc:        "Show borders on all dialogs",
@@ -188,45 +229,13 @@ func (s *DisplayOptionsScreen) initMenus() {
 			SpaceAction: s.toggleLineChars(),
 		},
 		{
-			Tag:         "Shadow",
+			Tag:         "Shadows",
 			Desc:        "Enable drop shadows",
 			Help:        "Toggle drop shadow effect (Space to toggle)",
 			IsCheckbox:  true,
 			Checked:     s.config.UI.Shadow,
 			Selectable:  true,
 			SpaceAction: s.toggleShadow(),
-		},
-		{
-			Tag:         "Scrollbar",
-			Desc:        "Show scrollbar in lists",
-			Help:        "Toggle scrollbar in scrollable lists (Space to toggle)",
-			IsCheckbox:  true,
-			Checked:     s.config.UI.Scrollbar,
-			Selectable:  true,
-			SpaceAction: s.toggleScrollbar(),
-		},
-		{
-			Tag:         "Spinner",
-			Desc:        "Show loading spinner animations",
-			Help:        "Toggle spinner animations during loading (Space to toggle)",
-			IsCheckbox:  true,
-			Checked:     s.config.UI.Spinner,
-			Selectable:  true,
-			SpaceAction: s.toggleSpinner(),
-		},
-		{
-			Tag:        "Spinner Speed",
-			Desc:       fmt.Sprintf("{{|OptionValue|}}%dms{{[-]}}", s.config.UI.SpinnerSpeed),
-			Help:       "Spinner frame speed in milliseconds (Enter to change)",
-			Action:     s.promptSpinnerSpeed(),
-			Selectable: true,
-		},
-		{
-			Tag:        "Refresh Rate",
-			Desc:       fmt.Sprintf("{{|OptionValue|}}%dms{{[-]}}", s.config.UI.RefreshRate),
-			Help:       "Screen repaint interval in milliseconds (Enter to change). Applies on restart.",
-			Action:     s.promptRefreshRate(),
-			Selectable: true,
 		},
 		{
 			Tag:    "Shadow Level",
@@ -240,6 +249,53 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Help:   "Choose theme colors for borders (Select/Enter for list)",
 			Action: s.showBorderColorDropdown(),
 		},
+		{
+			Tag:         "Scrollbars",
+			Desc:        "Show scrollbar in lists",
+			Help:        "Toggle scrollbar in scrollable lists (Space to toggle)",
+			IsCheckbox:  true,
+			Checked:     s.config.UI.Scrollbar,
+			Selectable:  true,
+			SpaceAction: s.toggleScrollbar(),
+		},
+		{
+			Tag:         "Spinners",
+			Desc:        "Show loading spinner animations",
+			Help:        "Toggle spinner animations during loading (Space to toggle)",
+			IsCheckbox:  true,
+			Checked:     s.config.UI.Spinner,
+			Selectable:  true,
+			SpaceAction: s.toggleSpinner(),
+		},
+		{
+			Tag:         "Menu Brackets",
+			Desc:        "Wrap the focused menu item in [brackets]",
+			Help:        "Bracket the focused row's tag (Space to toggle)",
+			IsCheckbox:  true,
+			Checked:     s.config.UI.MenuBrackets,
+			Selectable:  true,
+			SpaceAction: s.toggleMenuBrackets(),
+		},
+
+		// -- Brackets --
+		{
+			Tag:  "Checkbox Brackets",
+			Desc: s.dropdownDesc(bracketModeDesc(s.config.UI.CheckboxBrackets)),
+			Help: "When checkbox brackets are shown in lists (Enter for options)",
+			Action: s.showBracketModeDropdown("checkbox_brackets", "Checkbox Brackets",
+				func() string { return s.config.UI.CheckboxBrackets },
+				func(cfg *config.AppConfig, v string) { cfg.UI.CheckboxBrackets = v }),
+		},
+		{
+			Tag:  "Radio Brackets",
+			Desc: s.dropdownDesc(bracketModeDesc(s.config.UI.RadioBrackets)),
+			Help: "When radio button brackets are shown in lists (Enter for options)",
+			Action: s.showBracketModeDropdown("radio_brackets", "Radio Brackets",
+				func() string { return s.config.UI.RadioBrackets },
+				func(cfg *config.AppConfig, v string) { cfg.UI.RadioBrackets = v }),
+		},
+
+		// -- Title alignment --
 		{
 			Tag:  "Dialog Title",
 			Desc: s.dropdownDesc(titleAlignDesc(s.config.UI.DialogTitleAlign)),
@@ -264,21 +320,21 @@ func (s *DisplayOptionsScreen) initMenus() {
 				func() string { return s.config.UI.PanelTitleAlign },
 				func(cfg *config.AppConfig, v string) { cfg.UI.PanelTitleAlign = v }),
 		},
+
+		// -- Performance --
 		{
-			Tag:  "Checkbox Brackets",
-			Desc: s.dropdownDesc(bracketModeDesc(s.config.UI.CheckboxBrackets)),
-			Help: "When checkbox brackets are shown in lists (Enter for options)",
-			Action: s.showBracketModeDropdown("checkbox_brackets", "Checkbox Brackets",
-				func() string { return s.config.UI.CheckboxBrackets },
-				func(cfg *config.AppConfig, v string) { cfg.UI.CheckboxBrackets = v }),
+			Tag:        "Refresh Rate",
+			Desc:       fmt.Sprintf("{{|OptionValue|}}%dms{{[-]}}", s.config.UI.RefreshRate),
+			Help:       "Screen repaint interval in milliseconds (Enter to change). Applies on restart.",
+			Action:     s.promptRefreshRate(),
+			Selectable: true,
 		},
 		{
-			Tag:  "Radio Brackets",
-			Desc: s.dropdownDesc(bracketModeDesc(s.config.UI.RadioBrackets)),
-			Help: "When radio button brackets are shown in lists (Enter for options)",
-			Action: s.showBracketModeDropdown("radio_brackets", "Radio Brackets",
-				func() string { return s.config.UI.RadioBrackets },
-				func(cfg *config.AppConfig, v string) { cfg.UI.RadioBrackets = v }),
+			Tag:        "Spinner Speed",
+			Desc:       fmt.Sprintf("{{|OptionValue|}}%dms{{[-]}}", s.config.UI.SpinnerSpeed),
+			Help:       "Spinner frame speed in milliseconds (Enter to change)",
+			Action:     s.promptSpinnerSpeed(),
+			Selectable: true,
 		},
 	}
 
@@ -317,7 +373,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 	s.optionsMenu.SetMaximized(true) // Fill available width
 	s.optionsMenu.SetShowLockGutter(false)
 
-	// 3. Outer "Appearance Settings" dialog (sections container + buttons)
+	// 4. Outer "Appearance Settings" dialog (sections container + buttons)
 	outerMenu := displayengine.NewMenuModel("appearance_outer", "Appearance Settings", "", nil)
 	if s.isRoot {
 		outerMenu.SetButtons([]displayengine.ButtonDef{
@@ -331,12 +387,13 @@ func (s *DisplayOptionsScreen) initMenus() {
 			{Label: "Exit", ZoneID: displayengine.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
 		})
 	}
+	outerMenu.AddContentSection(loadDefaultsMenu)
 	outerMenu.AddContentSection(themeMenu)
 	outerMenu.AddContentSection(optionsMenu)
 	s.outerMenu = outerMenu
 
 	// Set initial focus state — applied properly when SetFocused(true) is called by AppModel.
-	s.focusedPanel = FocusThemes
+	s.focusedPanel = FocusLoadDefaults
 	s.buttonFocused = true
 	s.focusedButton = 0
 }
@@ -376,6 +433,7 @@ func (s *DisplayOptionsScreen) updateFocusStates() {
 		s.buttonFocused = false
 	}
 	// Submenus stay visually focused when a button is also highlighted (buttonFocused).
+	s.loadDefaultsMenu.SetSubFocused(s.focused && s.focusedPanel == FocusLoadDefaults)
 	s.themeMenu.SetSubFocused(s.focused && s.focusedPanel == FocusThemes)
 	s.optionsMenu.SetSubFocused(s.focused && s.focusedPanel == FocusOptions)
 
@@ -441,6 +499,9 @@ func formatThemeDefaults(d *theme.ThemeDefaults) string {
 	if d.Scrollbar != nil {
 		lines = append(lines, fmt.Sprintf("  Scrollbar: %s", boolStr(*d.Scrollbar)))
 	}
+	if d.MenuBrackets != nil {
+		lines = append(lines, fmt.Sprintf("  Menu Brackets: %s", boolStr(*d.MenuBrackets)))
+	}
 	if d.BorderColor != nil {
 		lines = append(lines, fmt.Sprintf("  Border Color: %d", *d.BorderColor))
 	}
@@ -503,6 +564,8 @@ func (s *DisplayOptionsScreen) HelpContext(maxWidth int) displayengine.HelpConte
 
 	var inner displayengine.HelpContext
 	switch s.focusedPanel {
+	case FocusLoadDefaults:
+		inner = s.loadDefaultsMenu.HelpContext(maxWidth)
 	case FocusThemes:
 		inner = s.themeMenu.HelpContext(maxWidth)
 		// Enrich with theme description, author, and defaults
@@ -934,6 +997,15 @@ func (s *DisplayOptionsScreen) toggleScrollbar() tea.Cmd {
 		newState := !s.config.UI.Scrollbar
 		return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
 			cfg.UI.Scrollbar = newState
+		}}
+	}
+}
+
+func (s *DisplayOptionsScreen) toggleMenuBrackets() tea.Cmd {
+	return func() tea.Msg {
+		newState := !s.config.UI.MenuBrackets
+		return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
+			cfg.UI.MenuBrackets = newState
 		}}
 	}
 }

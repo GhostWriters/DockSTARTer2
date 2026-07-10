@@ -335,6 +335,8 @@ func (m *MenuModel) renderVariableHeightList() string {
 
 		tagStr := ""
 		isProcessingItem := m.processingItemIdx >= 0 && i == m.processingItemIdx
+		menuBracketsShown := ctx.MenuBrackets && isSelected && !isProcessingItem && !isAppSelect &&
+			!item.IsCheckbox && !item.IsRadioButton && !item.IsGroupHeader
 		if len(item.Tag) > 0 {
 			runes := []rune(item.Tag)
 			letterIdx := 0
@@ -368,6 +370,18 @@ func (m *MenuModel) renderVariableHeightList() string {
 					spinStyle := GetStyles().TagSpinner
 					tagStr = spinStyle.Render(spinL) + tagStr + spinStyle.Render(spinR)
 				}
+			}
+			if menuBracketsShown {
+				// Same reserved slots the spinner uses above: the leading
+				// "sep" character (blanked out below, same as isProcessingItem
+				// does) becomes "[", and the trailing "]" eats into the
+				// already-reserved minGap the same way spinR does -- no new
+				// width added on either side. Reset ({{[-]}}) before applying
+				// the tag so bold/dim attributes from the adjacent tag text
+				// don't leak through a raw Style.Render() call.
+				openB := RenderThemeText("{{[-]}}{{|TagBrackets|}}[{{[-]}}", neutralStyle)
+				closeB := RenderThemeText("{{[-]}}{{|TagBrackets|}}]{{[-]}}", neutralStyle)
+				tagStr = openB + tagStr + closeB
 			}
 		}
 
@@ -442,8 +456,11 @@ func (m *MenuModel) renderVariableHeightList() string {
 		nameSep := neutralStyle.Render(" ")
 		nameClose := ""
 		if nameFocused {
-			nameSep = neutralStyle.Render("[")
-			nameClose = neutralStyle.Render("]")
+			// Reset ({{[-]}}) before applying the tag -- a raw Style.Render()
+			// call doesn't emit a leading full reset, so bold/dim attributes
+			// from the adjacent tag text can otherwise leak through.
+			nameSep = RenderThemeText("{{[-]}}{{|TagBrackets|}}[{{[-]}}", neutralStyle)
+			nameClose = RenderThemeText("{{[-]}}{{|TagBrackets|}}]{{[-]}}", neutralStyle)
 		}
 
 		prefixPadding := ""
@@ -471,6 +488,11 @@ func (m *MenuModel) renderVariableHeightList() string {
 			// We replace the 1-char sep with spinL, and add spinR after the tag.
 			// Net extra chars = +2 spinners - 1 sep = +1; shrink gap by 1 to keep desc aligned.
 			spinTagExtra = 1
+		} else if menuBracketsShown {
+			// Same accounting as the spinner case above: the leading "[" replaces
+			// the 1-char sep (blanked below), and the trailing "]" is offset by
+			// shrinking the gap by 1.
+			spinTagExtra = 1
 		}
 		if nameFocused {
 			// The trailing "]" adds a character beyond the tag's own width.
@@ -493,7 +515,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 		gutterSpaces := neutralStyle.Render(strutil.Repeat(" ", m.StatusGutterWidth()))
 
 		sep := paddingStr
-		if isAppSelect || isProcessingItem {
+		if isAppSelect || isProcessingItem || menuBracketsShown {
 			sep = ""
 		}
 		// Continuation lines always use the normal separator width so they align
