@@ -167,6 +167,7 @@ ListItem = ""
 ListItemUserDefined = "{{|ListItem:::R|}}"
 ListItemFocused = "{{|ItemFocused|}}"
 ListItemUserDefinedFocused = "{{|ItemFocused|}}"
+TagBrackets = "{{|Dialog|}}"
 
 # Keys, progress, and indicators
 KeyCap = "{{[::-R]}}"
@@ -205,3 +206,4 @@ LargeExitIconInactive = "{{|ExitIconInactive|}}"
 dialog_title_align = "center"
 submenu_title_align = "left"
 panel_title_align = "center"
+menu_brackets = true

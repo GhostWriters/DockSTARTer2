@@ -358,6 +358,7 @@ func GetUsage(target string, noHeading bool) string {
 		"--theme-border-color",
 		"--theme-dialog-title", "--theme-submenu-title", "--theme-panel-title",
 		"--theme-checkbox-brackets", "--theme-radio-brackets",
+		"--theme-menu-brackets", "--theme-no-menu-brackets",
 		"--theme-extract", "--theme-extract-all") {
 		printStr(
 			"{{|UsageCommand|}}-T --theme{{[-]}} [{{|UsageTheme|}}<themename>{{[-]}} | {{|UsageTheme|}}user:<themename>{{[-]}} | {{|UsageTheme|}}<path>.ds2theme{{[-]}} | {{|UsageTheme|}}file:<path>{{[-]}}]",
@@ -398,6 +399,8 @@ func GetUsage(target string, noHeading bool) string {
 			"	Set checkbox bracket visibility ({{|UsageOption|}}never{{[-]}}, {{|UsageOption|}}selected{{[-]}}, or {{|UsageOption|}}always{{[-]}})",
 			"{{|UsageCommand|}}--theme-radio-brackets{{[-]}} {{|UsageOption|}}<mode>{{[-]}}",
 			"	Set radio button bracket visibility ({{|UsageOption|}}never{{[-]}}, {{|UsageOption|}}selected{{[-]}}, or {{|UsageOption|}}always{{[-]}})",
+			"{{|UsageCommand|}}--theme-menu-brackets{{[-]}} | {{|UsageCommand|}}--theme-no-menu-brackets{{[-]}}",
+			"	Turn brackets around the focused menu item's tag on or off",
 			"{{|UsageCommand|}}--theme-extract{{[-]}} {{|UsageTheme|}}<themename>{{[-]}} {{|UsageOption|}}<destdir>{{[-]}} {{|UsageOption|}}<filename>{{[-]}}",
 			"	Extract a theme to a file (use {{|UsageTheme|}}user:<name>{{[-]}} for user themes; {{|UsageOption|}}user:{{[-]}} as destdir for the user themes folder)",
 			"{{|UsageCommand|}}--theme-extract-all{{[-]}} {{|UsageOption|}}<destdir>{{[-]}}",

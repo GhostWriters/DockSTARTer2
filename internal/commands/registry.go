@@ -137,6 +137,8 @@ var Registry = map[string]Def{
 	"--theme-panel-title":        {Title: "Set Panel Title Align", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--theme-checkbox-brackets":  {Title: "Set Checkbox Brackets Mode", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--theme-radio-brackets":     {Title: "Set Radio Brackets Mode", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-menu-brackets":      {Title: "Turning on menu brackets.", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-no-menu-brackets":   {Title: "Turning off menu brackets.", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--config-panel":             {Title: "Set Panel Mode", ConfigChanging: true},
 }
 

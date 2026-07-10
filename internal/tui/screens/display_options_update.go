@@ -1,10 +1,11 @@
 package screens
 
 import (
+	"strings"
+
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/tui"
-	"strings"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
@@ -121,6 +122,12 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseWheelMsg:
 		// ONLY interact with the focused panel, no mouse-over fallback
 		switch s.focusedPanel {
+		case FocusLoadDefaults:
+			updated, uCmd := s.loadDefaultsMenu.Update(msg)
+			if m, ok := updated.(*displayengine.MenuModel); ok {
+				s.loadDefaultsMenu = m
+			}
+			return s, uCmd
 		case FocusThemes:
 			updated, uCmd := s.themeMenu.Update(msg)
 			if m, ok := updated.(*displayengine.MenuModel); ok {
@@ -153,6 +160,11 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case displayengine.LayerHitMsg:
 		// 1. Focus routing via panel hit
 		switch msg.ID {
+		case displayengine.IDLoadDefaultsPanel:
+			s.buttonFocused = false
+			s.focusedPanel = FocusLoadDefaults
+			s.updateFocusStates()
+			return s, nil
 		case displayengine.IDThemePanel:
 			s.buttonFocused = false
 			s.focusedPanel = FocusThemes
@@ -218,7 +230,15 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// 3. Delegation to sub-menus (handles items and internal buttons)
-		if strings.Contains(msg.ID, displayengine.IDThemePanel) {
+		if strings.Contains(msg.ID, displayengine.IDLoadDefaultsPanel) {
+			s.focusedPanel = FocusLoadDefaults
+			s.updateFocusStates()
+			updated, uCmd := s.loadDefaultsMenu.Update(msg)
+			if m, ok := updated.(*displayengine.MenuModel); ok {
+				s.loadDefaultsMenu = m
+			}
+			return s, uCmd
+		} else if strings.Contains(msg.ID, displayengine.IDThemePanel) {
 			s.focusedPanel = FocusThemes
 			s.updateFocusStates()
 			updated, uCmd := s.themeMenu.Update(msg)
@@ -226,6 +246,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				s.themeMenu = m
 			}
 			// Hook for theme preview: if theme changed (Left Click), apply it
+			// and update the radio Checked states.
 			if msg.Button == tea.MouseLeft && strings.HasPrefix(msg.ID, "item-") {
 				idx := s.themeMenu.Index()
 				items := s.themeMenu.GetItems()
@@ -261,6 +282,12 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case displayengine.ToggleFocusedMsg:
 		// Middle click: activate the currently focused item in the hovered panel
 		switch s.focusedPanel {
+		case FocusLoadDefaults:
+			updated, uCmd := s.loadDefaultsMenu.Update(msg)
+			if m, ok := updated.(*displayengine.MenuModel); ok {
+				s.loadDefaultsMenu = m
+			}
+			return s, uCmd
 		case FocusThemes:
 			// Activate radio item
 			idx := s.themeMenu.Index()
@@ -294,13 +321,29 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, uCmd
 		}
 
-		// 1. Panel Cycling (Tab / Shift-Tab) - Themes <-> Options only
-		if key.Matches(msg, displayengine.Keys.CycleTab) || key.Matches(msg, displayengine.Keys.CycleShiftTab) {
+		// 1. Panel Cycling (Tab / Shift-Tab) - LoadDefaults -> Themes -> Options -> LoadDefaults
+		if key.Matches(msg, displayengine.Keys.CycleTab) {
 			s.buttonFocused = false
-			if s.focusedPanel == FocusThemes {
-				s.focusedPanel = FocusOptions
-			} else {
+			switch s.focusedPanel {
+			case FocusLoadDefaults:
 				s.focusedPanel = FocusThemes
+			case FocusThemes:
+				s.focusedPanel = FocusOptions
+			default:
+				s.focusedPanel = FocusLoadDefaults
+			}
+			s.updateFocusStates()
+			return s, nil
+		}
+		if key.Matches(msg, displayengine.Keys.CycleShiftTab) {
+			s.buttonFocused = false
+			switch s.focusedPanel {
+			case FocusOptions:
+				s.focusedPanel = FocusThemes
+			case FocusThemes:
+				s.focusedPanel = FocusLoadDefaults
+			default:
+				s.focusedPanel = FocusOptions
 			}
 			s.updateFocusStates()
 			return s, nil
@@ -360,6 +403,12 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			s.updateFocusStates()
 		}
 		switch s.focusedPanel {
+		case FocusLoadDefaults:
+			updated, uCmd := s.loadDefaultsMenu.Update(msg)
+			if m, ok := updated.(*displayengine.MenuModel); ok {
+				s.loadDefaultsMenu = m
+			}
+			return s, uCmd
 		case FocusThemes:
 			// Specific radio logic for Space on theme list
 			if key.Matches(msg, displayengine.Keys.Space) {
@@ -405,6 +454,17 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return s, nil
 
+	case toggleLoadThemeDefaultsMsg:
+		s.loadThemeDefaults = !s.loadThemeDefaults
+		s.syncOptionsMenu()
+		if s.optionsMenu != nil {
+			s.optionsMenu.ClearProcessingState()
+		}
+		if s.outerMenu != nil {
+			s.outerMenu.InvalidateCache()
+		}
+		return s, nil
+
 	case displayOptionsAbortMsg:
 		s.ClearProcessingState()
 		return s, nil
@@ -434,13 +494,11 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (s *DisplayOptionsScreen) applyPreview(themeName string) {
 	s.previewTheme = themeName
 
-	// Preserve all staged UI options the user has changed interactively.
-	// We only reset s.config to baseConfig so that theme defaults get a clean
-	// base, then we re-apply the user's staged choices on top.
+	// Carry forward every option exactly as currently staged (whatever the
+	// user has set so far, or the base config if nothing's changed yet).
 	staged := s.config.UI
-
-	// Reset to base configs
 	s.config = s.baseConfig
+	s.config.UI = staged
 
 	// Always load to ensure tags are registered in registry
 	defaults, err := theme.Load(themeName, "Preview")
@@ -453,28 +511,13 @@ func (s *DisplayOptionsScreen) applyPreview(themeName string) {
 	}
 	s.themeDefaults[themeName] = defaults
 
-	if defaults != nil {
+	// When on, the newly-focused theme's own suggested defaults overlay the
+	// staged options above -- winning for whatever fields it specifies, and
+	// leaving everything else (including any option the user just changed
+	// by hand) as-is. When off, theme selection never touches options at all.
+	if s.loadThemeDefaults && defaults != nil {
 		theme.ApplyThemeDefaults(&s.config, *defaults)
 	}
-
-	// Re-apply staged UI options on top of theme defaults.
-	// This preserves choices like PanelLocal/PanelRemote, Borders, Shadow, etc.
-	// that the user has changed since opening this screen.
-	s.config.UI.Borders = staged.Borders
-	s.config.UI.LargeButtons = staged.LargeButtons
-	s.config.UI.LargeTitleBars = staged.LargeTitleBars
-	s.config.UI.LineCharacters = staged.LineCharacters
-	s.config.UI.Shadow = staged.Shadow
-	s.config.UI.ShadowLevel = staged.ShadowLevel
-	s.config.UI.Scrollbar = staged.Scrollbar
-	s.config.UI.BorderColor = staged.BorderColor
-	s.config.UI.DialogTitleAlign = staged.DialogTitleAlign
-	s.config.UI.SubmenuTitleAlign = staged.SubmenuTitleAlign
-	s.config.UI.PanelTitleAlign = staged.PanelTitleAlign
-	s.config.UI.PanelLocal = staged.PanelLocal
-	s.config.UI.PanelRemote = staged.PanelRemote
-	s.config.UI.CheckboxBrackets = staged.CheckboxBrackets
-	s.config.UI.RadioBrackets = staged.RadioBrackets
 
 	s.syncOptionsMenu()
 	if s.outerMenu != nil {
@@ -487,6 +530,8 @@ func (s *DisplayOptionsScreen) syncOptionsMenu() {
 	items := s.optionsMenu.GetItems()
 	for i := range items {
 		switch items[i].Tag {
+		case "Shadows":
+			items[i].Checked = s.config.UI.Shadow
 		case "Borders":
 			items[i].Checked = s.config.UI.Borders
 		case "Large Buttons":
@@ -495,10 +540,10 @@ func (s *DisplayOptionsScreen) syncOptionsMenu() {
 			items[i].Checked = s.config.UI.LargeTitleBars
 		case "Line Characters":
 			items[i].Checked = s.config.UI.LineCharacters
-		case "Shadow":
-			items[i].Checked = s.config.UI.Shadow
-		case "Scrollbar":
+		case "Scrollbars":
 			items[i].Checked = s.config.UI.Scrollbar
+		case "Menu Brackets":
+			items[i].Checked = s.config.UI.MenuBrackets
 		case "Shadow Level":
 			items[i].Desc = s.dropdownDesc(s.shadowLevelToDesc(s.config.UI.ShadowLevel))
 		case "Border Color":
@@ -527,8 +572,11 @@ func (s *DisplayOptionsScreen) Title() string {
 }
 
 func (s *DisplayOptionsScreen) HelpText() string {
-	if s.themeMenu == nil || s.optionsMenu == nil {
+	if s.loadDefaultsMenu == nil || s.themeMenu == nil || s.optionsMenu == nil {
 		return ""
+	}
+	if s.focusedPanel == FocusLoadDefaults {
+		return s.loadDefaultsMenu.HelpText()
 	}
 	if s.focusedPanel == FocusThemes {
 		return s.themeMenu.HelpText()

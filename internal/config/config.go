@@ -124,6 +124,7 @@ type UIConfig struct {
 	PanelRemote       string `toml:"panel_remote"`        // "log", "console", or "none" (for ssh/web sessions)
 	CheckboxBrackets  string `toml:"checkbox_brackets"`   // "never", "selected", or "always" -- the focused row's brackets always show regardless
 	RadioBrackets     string `toml:"radio_brackets"`      // "never", "selected", or "always" -- the focused row's brackets always show regardless
+	MenuBrackets      bool   `toml:"menu_brackets"`       // wrap the focused menu item's tag in [brackets]
 }
 
 // PathConfig holds directory path settings.
@@ -569,6 +570,8 @@ func UnmarshalRobust(data []byte, v any) (map[string]bool, error) {
 				present["CheckboxBrackets"] = true
 			case "ui.radio_brackets":
 				present["RadioBrackets"] = true
+			case "ui.menu_brackets":
+				present["MenuBrackets"] = true
 			case "server.ssh.port":
 				present["SSHPort"] = true
 			case "server.web.port":
@@ -797,7 +800,7 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 		"ConfigFolder", "ComposeFolder",
 		"Theme", "Borders", "LargeButtons", "LargeTitleBars", "LineCharacters", "Scrollbar", "Spinner", "SpinnerSpeed", "Shadow", "ShadowLevel", "BorderColor",
 		"DialogTitleAlign", "SubmenuTitleAlign", "PanelTitleAlign", "PanelLocal", "PanelRemote",
-		"CheckboxBrackets", "RadioBrackets",
+		"CheckboxBrackets", "RadioBrackets", "MenuBrackets",
 		"SSHPort", "WebPort", "AuthMode",
 	}
 	displayNames := map[string]string{
@@ -821,6 +824,7 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 		"PanelRemote":       "Panel Remote",
 		"CheckboxBrackets":  "Checkbox Brackets",
 		"RadioBrackets":     "Radio Brackets",
+		"MenuBrackets":      "Menu Brackets",
 		"SSHPort":           "SSH Port",
 		"WebPort":           "Web Port",
 		"AuthMode":          "Auth Mode",
@@ -889,6 +893,8 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.CheckboxBrackets)
 		case "RadioBrackets":
 			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.RadioBrackets)
+		case "MenuBrackets":
+			value = boolToYesNo(conf.UI.MenuBrackets)
 		case "SSHPort":
 			if conf.Server.SSH.Port > 0 {
 				value = fmt.Sprintf("{{|Var|}}%d{{[-]}}", conf.Server.SSH.Port)

@@ -176,17 +176,18 @@ const (
 	IDStatusBar = "status_bar"
 
 	// Display Options IDs
-	IDThemePanel       = "theme_panel"
-	IDOptionsPanel     = "options_panel"
-	IDButtonPanel      = "button_panel"
-	IDListPanel        = "list_panel"
-	IDSaveButton       = "save_button"
-	IDApplyButton      = "apply_button"
-	IDBackButton       = "back_button"
-	IDExitButton       = "exit_button"
-	IDHeaderFlags      = "header_flags"
-	IDHeaderWebDisplay = "header_web_display"
-	IDHelpline         = "helpline"
+	IDLoadDefaultsPanel = "load_defaults_panel"
+	IDThemePanel        = "theme_panel"
+	IDOptionsPanel      = "options_panel"
+	IDButtonPanel       = "button_panel"
+	IDListPanel         = "list_panel"
+	IDSaveButton        = "save_button"
+	IDApplyButton       = "apply_button"
+	IDBackButton        = "back_button"
+	IDExitButton        = "exit_button"
+	IDHeaderFlags       = "header_flags"
+	IDHeaderWebDisplay  = "header_web_display"
+	IDHelpline          = "helpline"
 
 	// INS/OVR mode toggle hit region ID
 	IDInsOvr = "ins_ovr"
@@ -282,6 +283,7 @@ type Styles struct {
 	PanelTitleAlign   string
 	CheckboxBrackets  string
 	RadioBrackets     string
+	MenuBrackets      bool
 
 	// Option value (dropdown/inline value in flow menus)
 	OptionValueFocused lipgloss.Style
@@ -366,6 +368,7 @@ type StyleContext struct {
 	PanelTitleAlign      string
 	CheckboxBrackets     string
 	RadioBrackets        string
+	MenuBrackets         bool
 	Prefix               string // Prefix for semantic tag remapping (e.g. "Preview_")
 	DrawShadow           bool   // Whether to draw shadows for this context
 }
@@ -440,6 +443,7 @@ func GetActiveContext() StyleContext {
 		PanelTitleAlign:      CurrentStyles.PanelTitleAlign,
 		CheckboxBrackets:     CurrentStyles.CheckboxBrackets,
 		RadioBrackets:        CurrentStyles.RadioBrackets,
+		MenuBrackets:         CurrentStyles.MenuBrackets,
 		Prefix:               "", // Global context has no prefix
 		DrawShadow:           currentConfig.UI.Shadow,
 	}
@@ -785,6 +789,7 @@ func InitStyles(cfg config.AppConfig) {
 	CurrentStyles.PanelTitleAlign = cfg.UI.PanelTitleAlign
 	CurrentStyles.CheckboxBrackets = cfg.UI.CheckboxBrackets
 	CurrentStyles.RadioBrackets = cfg.UI.RadioBrackets
+	CurrentStyles.MenuBrackets = cfg.UI.MenuBrackets
 }
 
 // Helper functions for common style operations

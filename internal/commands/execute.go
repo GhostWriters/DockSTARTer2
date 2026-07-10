@@ -69,7 +69,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			"--theme-shadows", "--theme-no-shadows", "--theme-shadow", "--theme-no-shadow", "--theme-shadow-level",
 			"--theme-scrollbar", "--theme-no-scrollbar", "--theme-border-color", "--theme-table",
 			"--theme-dialog-title", "--theme-submenu-title", "--theme-panel-title",
-			"--theme-checkbox-brackets", "--theme-radio-brackets",
+			"--theme-checkbox-brackets", "--theme-radio-brackets", "--theme-menu-brackets", "--theme-no-menu-brackets",
 			"--theme-extract", "--theme-extract-all", "--man",
 			"--theme-spinner", "--theme-no-spinner":
 		default:
@@ -251,7 +251,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				"--theme-shadows", "--theme-no-shadows", "--theme-shadow", "--theme-no-shadow", "--theme-shadow-level",
 				"--theme-scrollbar", "--theme-no-scrollbar", "--theme-border-color",
 				"--theme-dialog-title", "--theme-submenu-title", "--theme-panel-title",
-				"--theme-checkbox-brackets", "--theme-radio-brackets",
+				"--theme-checkbox-brackets", "--theme-radio-brackets", "--theme-menu-brackets", "--theme-no-menu-brackets",
 				"--theme-spinner", "--theme-no-spinner":
 				return HandleThemeSettings(innerCtx, &group)
 			case "-c", "--compose":
