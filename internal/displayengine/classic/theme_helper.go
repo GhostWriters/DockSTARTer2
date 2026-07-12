@@ -62,6 +62,50 @@ func TagBracketGlyphs() (open, closeCh string) {
 	return bracketGlyphs(GetActiveContext())
 }
 
+// TagOverride is one entry in a ResolveThemeOverrides result: the resolved
+// style and flags an option wants a tag to use instead of its plain
+// theme-defined value.
+type TagOverride struct {
+	Style lipgloss.Style
+	Flags semstyle.StyleFlags
+}
+
+// ResolveThemeOverrides reads the untouched <prefix>Border/<prefix>Border2
+// semantic tags and computes what each should resolve to given the Border
+// Color mode (1 = Border wins, 2 = Border2 wins, anything else = each tag
+// keeps its own theme-defined value), returning the result as a small
+// derived map keyed by unprefixed tag name ("Border", "Border2") instead of
+// writing back into the shared semstyle registry. An earlier version of
+// this logic overwrote one tag's raw code with the other's directly in the
+// registry, which corrupted later lookups once a tag's original theme
+// value had been overwritten (e.g. mode 1 then mode 2 would read the
+// mode-1-corrupted Border2 instead of the theme's real value) -- computing
+// a fresh map every call avoids that entirely.
+//
+// Border Color is the only option resolved today; this is the shape to
+// extend if more options need the same kind of tag-merging behavior later.
+// prefix matches the namespace used elsewhere for non-active-theme
+// registrations (e.g. "Preview_" for the Appearance Settings mockup); pass
+// "" for the main active theme.
+func ResolveThemeOverrides(borderColorMode int, prefix string) map[string]TagOverride {
+	p := strings.TrimSuffix(prefix, "_")
+	borderTag, border2Tag := "Border", "Border2"
+	if p != "" {
+		borderTag, border2Tag = p+"_Border", p+"_Border2"
+	}
+	overrides := map[string]TagOverride{
+		"Border":  {SemanticRawStyle(borderTag), semstyle.CodeToFlags(semstyle.GetRawTagCode(borderTag))},
+		"Border2": {SemanticRawStyle(border2Tag), semstyle.CodeToFlags(semstyle.GetRawTagCode(border2Tag))},
+	}
+	switch borderColorMode {
+	case 1:
+		overrides["Border2"] = overrides["Border"]
+	case 2:
+		overrides["Border"] = overrides["Border2"]
+	}
+	return overrides
+}
+
 // Color parsing now uses tcell/v3/colors for RGB conversion via semstyle.GetHexForColor().
 // This ensures all colors are resolved to RGB/hex values, allowing proper color profile
 // downgrading for terminals with limited color support.

@@ -121,6 +121,7 @@ type (
 	ConsoleLockMsg             = classic.ConsoleLockMsg
 	Content                    = classic.Content
 	ContentRow                 = classic.ContentRow
+	TagOverride                = classic.TagOverride
 	ContextMenuItem            = classic.ContextMenuItem
 	ContextMenuModel           = classic.ContextMenuModel
 	DialogLayout               = classic.DialogLayout
@@ -312,6 +313,7 @@ var (
 	RenderUniformBlockDialog       = classic.RenderUniformBlockDialog
 	RenderUniformBlockDialogCtx    = classic.RenderUniformBlockDialogCtx
 	RenderWithBackdrop             = classic.RenderWithBackdrop
+	ResolveThemeOverrides          = classic.ResolveThemeOverrides
 	ScanForHyperlinks              = classic.ScanForHyperlinks
 	StripHyperlinks                = classic.StripHyperlinks
 	HyperlinkPath                  = classic.HyperlinkPath
