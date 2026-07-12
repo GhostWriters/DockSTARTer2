@@ -144,13 +144,21 @@ func buildScrollbarColumn(info ScrollbarInfo, lineChars bool, ctx StyleContext) 
 	col := make([]string, height)
 
 	bg := ctx.ContentBackground.GetBackground()
-	trackStyle := lipgloss.NewStyle().
-		Background(bg).
-		Foreground(ctx.Border2Color)
 
-	thumbStyle := lipgloss.NewStyle().
-		Background(bg).
-		Foreground(ctx.BorderColor)
+	trackStyle := SemanticRawStyle("Scrollbar")
+	if _, noBG := trackStyle.GetBackground().(lipgloss.NoColor); noBG {
+		trackStyle = trackStyle.Background(bg)
+	}
+
+	thumbStyle := SemanticRawStyle("ScrollbarThumb")
+	if _, noBG := thumbStyle.GetBackground().(lipgloss.NoColor); noBG {
+		thumbStyle = thumbStyle.Background(bg)
+	}
+
+	arrowStyle := SemanticRawStyle("ScrollbarArrows")
+	if _, noBG := arrowStyle.GetBackground().(lipgloss.NoColor); noBG {
+		arrowStyle = arrowStyle.Background(bg)
+	}
 
 	// No scrollbar needed — fill with spaces to hold the gutter width.
 	if !info.Needed || height < 1 {
@@ -179,9 +187,9 @@ func buildScrollbarColumn(info ScrollbarInfo, lineChars bool, ctx StyleContext) 
 	for i := range col {
 		switch {
 		case i == 0:
-			col[i] = thumbStyle.Render(upArrow)
+			col[i] = arrowStyle.Render(upArrow)
 		case i == height-1:
-			col[i] = thumbStyle.Render(downArrow)
+			col[i] = arrowStyle.Render(downArrow)
 		case i >= info.ThumbStart && i < info.ThumbEnd:
 			col[i] = thumbStyle.Render(thumbChar)
 		default:
