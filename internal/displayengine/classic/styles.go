@@ -605,26 +605,12 @@ func InitStyles(cfg config.AppConfig) {
 
 	CurrentStyles.DialogTitleHelp = SemanticRawStyle("TitleHelp")
 
-	// Border colors and flags
-	switch cfg.UI.BorderColor {
-	case 1:
-		CurrentStyles.BorderColor = SemanticRawStyle("Border").GetForeground()
-		CurrentStyles.Border2Color = SemanticRawStyle("Border").GetForeground()
-		CurrentStyles.BorderFlags = semstyle.CodeToFlags(semstyle.GetRawTagCode("border"))
-		CurrentStyles.Border2Flags = CurrentStyles.BorderFlags
-	case 2:
-		CurrentStyles.BorderColor = SemanticRawStyle("Border2").GetForeground()
-		CurrentStyles.Border2Color = SemanticRawStyle("Border2").GetForeground()
-		CurrentStyles.BorderFlags = semstyle.CodeToFlags(semstyle.GetRawTagCode("border2"))
-		CurrentStyles.Border2Flags = CurrentStyles.BorderFlags
-	case 3:
-		fallthrough
-	default:
-		CurrentStyles.BorderColor = SemanticRawStyle("Border").GetForeground()
-		CurrentStyles.Border2Color = SemanticRawStyle("Border2").GetForeground()
-		CurrentStyles.BorderFlags = semstyle.CodeToFlags(semstyle.GetRawTagCode("border"))
-		CurrentStyles.Border2Flags = semstyle.CodeToFlags(semstyle.GetRawTagCode("border2"))
-	}
+	// Border colors and flags, merged per the Border Color mode setting.
+	borderOverrides := ResolveThemeOverrides(cfg.UI.BorderColor, "")
+	CurrentStyles.BorderColor = borderOverrides["Border"].Style.GetForeground()
+	CurrentStyles.Border2Color = borderOverrides["Border2"].Style.GetForeground()
+	CurrentStyles.BorderFlags = borderOverrides["Border"].Flags
+	CurrentStyles.Border2Flags = borderOverrides["Border2"].Flags
 
 	CurrentStyles.BorderDisabledColor = SemanticRawStyle("BorderDisabled").GetForeground()
 	CurrentStyles.Border2DisabledColor = SemanticRawStyle("Border2Disabled").GetForeground()

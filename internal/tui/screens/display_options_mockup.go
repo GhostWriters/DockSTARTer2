@@ -1,11 +1,12 @@
 package screens
 
 import (
+	"image/color"
+	"strings"
+
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/strutil"
-	"image/color"
-	"strings"
 
 	"charm.land/lipgloss/v2"
 )
@@ -13,21 +14,19 @@ import (
 func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	width := 44 // Reduced width to fit the screen better
 
+	// Resolve the Preview_Border/Preview_Border2 tags based on the staged
+	// Border Color setting, so the mockup reflects the same merge every
+	// other border consumer gets for free -- without touching the shared
+	// theme registry.
+	borderOverrides := displayengine.ResolveThemeOverrides(s.config.UI.BorderColor, "Preview_")
+
 	bgStyle := displayengine.SemanticRawStyle("Preview_Screen")
 	dContent := displayengine.SemanticRawStyle("Preview_Dialog")
-	dBorder1 := displayengine.SemanticRawStyle("Preview_Border")
-	dBorder2 := displayengine.SemanticRawStyle("Preview_Border2")
+	dBorder1 := borderOverrides["Border"].Style
+	dBorder2 := borderOverrides["Border2"].Style
 
 	pMode := displayengine.EffectivePanelMode(s.config, s.connType)
 	showStrip := pMode != "none"
-
-	// Adjust border colors based on setting
-	switch s.config.UI.BorderColor {
-	case 1:
-		dBorder2 = dBorder1
-	case 2:
-		dBorder1 = dBorder2
-	}
 
 	var b lipgloss.Border
 	if !s.config.UI.Borders {
@@ -237,6 +236,16 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	if showStrip {
 		fixedLines++ // logStripRow
 	}
+	// The outer "Preview" wrap (rendered by the caller, using the real/applied
+	// context) uses a large title bar under the same rule it always does --
+	// title non-empty, not RAW/submenu -- whenever LargeTitleBars is on.
+	// RenderBorderedBoxCtx auto-downgrades to a small title bar when the
+	// content is too tall to leave room for the extra 2 rows; reserving that
+	// overhead here keeps the mockup's title bar large/small in sync with the
+	// setting instead of silently falling back to small under a tight budget.
+	if displayengine.GetActiveContext().LargeTitleBars {
+		fixedLines += displayengine.LargeTitleBarOverhead
+	}
 	backdropHeight := targetHeight - fixedLines
 	if backdropHeight < 10 {
 		backdropHeight = 10
@@ -343,7 +352,11 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	}
 	mockup := lipgloss.JoinVertical(lipgloss.Left, mockupParts...)
 
-	// Wrap in a standard dialog using the current (active) theme
+	// Wrap in a standard dialog using the staged preview context, not the
+	// active/applied one -- only the mockup's own inner content (built above
+	// with previewCtx) reflects staged options; the outer "Preview" frame is
+	// part of the real Appearance Settings dialog chrome and stays on the
+	// currently active theme, same as the rest of that dialog.
 	mockupWidth := lipgloss.Width(mockup)
 	// Synchronize preview height with settings dialog
 	return displayengine.RenderBorderedBoxCtx("Preview", mockup, mockupWidth, targetHeight, false, true, false, displayengine.GetActiveContext().DialogTitleAlign, "Title", displayengine.GetActiveContext())
