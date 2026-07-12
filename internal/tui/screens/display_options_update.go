@@ -713,7 +713,10 @@ func (s *DisplayOptionsScreen) SetSize(width, height int) {
 }
 
 func (s *DisplayOptionsScreen) IsMaximized() bool {
-	return true
+	if s.outerMenu == nil {
+		return true
+	}
+	return s.outerMenu.IsMaximized()
 }
 
 // EscapeAction implements tui.EscapeActioner: mirrors the Esc key handler.

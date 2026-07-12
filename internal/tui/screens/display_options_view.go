@@ -104,16 +104,28 @@ func (s *DisplayOptionsScreen) Layers() []*lipgloss.Layer {
 		layout := displayengine.GetLayout()
 		gutter := layout.VisualGutter(tui.IsShadowEnabled())
 
-		// 1. Render Preview at far right; measure actual rendered width for precise positioning.
-		preview := s.renderPreviewDialog(height)
+		// 1. Render the settings dialog first, at the full available height --
+		// it shrinks to its own natural content height internally (outerMenu
+		// isn't maximized), same as ViewString() does. The preview must be
+		// sized to that ACTUAL rendered height, not the raw available height,
+		// or the two disagree and the shared centering offset (computed from
+		// ViewString()'s measurement) no longer matches what Layers() draws.
+		s.outerMenu.SetSize(dl.settingsDialogWidth, height)
+		settingsDialog := s.outerMenu.ViewString()
+		settingsHeight := lipgloss.Height(settingsDialog)
+
+		// 2. Render Preview at far right, matched to the settings dialog's
+		// actual height; measure actual rendered width for precise positioning.
+		preview := s.renderPreviewDialog(settingsHeight)
 		previewW := lipgloss.Width(preview)
 		previewX := width - previewW
 
-		// 2. Settings dialog uses the width computed by SetSize (settingsDialogWidth).
-		// Re-size to the exact available space so it fills up to the gutter edge.
+		// 3. Re-size the settings dialog to fill up to the gutter edge at the
+		// exact available width, matching ViewString()'s final sizing pass.
 		settingsW := previewX - gutter
 		s.outerMenu.SetSize(settingsW, height)
-		settingsDialog := s.outerMenu.ViewString()
+		settingsDialog = s.outerMenu.ViewString()
+
 		return []*lipgloss.Layer{
 			lipgloss.NewLayer(settingsDialog).X(0).Y(0).Z(displayengine.ZScreen),
 			lipgloss.NewLayer(preview).X(previewX).Y(0).Z(displayengine.ZScreen),

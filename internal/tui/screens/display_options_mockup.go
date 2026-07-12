@@ -236,6 +236,16 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	if showStrip {
 		fixedLines++ // logStripRow
 	}
+	// The outer "Preview" wrap (rendered by the caller, using the real/applied
+	// context) uses a large title bar under the same rule it always does --
+	// title non-empty, not RAW/submenu -- whenever LargeTitleBars is on.
+	// RenderBorderedBoxCtx auto-downgrades to a small title bar when the
+	// content is too tall to leave room for the extra 2 rows; reserving that
+	// overhead here keeps the mockup's title bar large/small in sync with the
+	// setting instead of silently falling back to small under a tight budget.
+	if displayengine.GetActiveContext().LargeTitleBars {
+		fixedLines += displayengine.LargeTitleBarOverhead
+	}
 	backdropHeight := targetHeight - fixedLines
 	if backdropHeight < 10 {
 		backdropHeight = 10
