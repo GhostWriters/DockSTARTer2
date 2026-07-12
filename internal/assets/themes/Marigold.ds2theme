@@ -171,6 +171,11 @@ ListItemFocused = "{{|ItemFocused|}}"
 ListItemUserDefinedFocused = "{{|ItemFocused|}}"
 TagBrackets = "{{|Dialog|}}"
 
+# Scrollbar
+Scrollbar = "{{|Border2|}}"
+ScrollbarThumb = "{{|Border|}}"
+ScrollbarArrows = "{{|Border|}}"
+
 # Keys, progress, and indicators
 KeyCap = "{{[::-R]}}"
 ProgressWaiting = "{{[white:black]}}"
