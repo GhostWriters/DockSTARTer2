@@ -44,7 +44,16 @@ func (s *DisplayOptionsScreen) ViewString() (result string) {
 	}
 
 	settingsHeight := lipgloss.Height(settingsDialog)
-	preview := s.renderPreviewDialog(settingsHeight)
+	// The preview may render taller than the settings dialog (e.g. its inner
+	// fake dialog needs 2 more rows to show a staged large title bar that
+	// wouldn't otherwise fit) -- the gutter must match whichever is taller,
+	// or its extra rows fall back to JoinHorizontal's unstyled pad fill.
+	preview := s.renderPreviewDialog(settingsHeight, height)
+	previewHeight := lipgloss.Height(preview)
+	gutterHeight := settingsHeight
+	if previewHeight > gutterHeight {
+		gutterHeight = previewHeight
+	}
 
 	styles := displayengine.GetStyles()
 	previewW := lipgloss.Width(preview)
@@ -55,12 +64,17 @@ func (s *DisplayOptionsScreen) ViewString() (result string) {
 		gutterW = 1
 	}
 	gutterStyle := lipgloss.NewStyle().Background(styles.Screen.GetBackground())
-	gutterStr := gutterStyle.Height(settingsHeight).Width(gutterW).Render("")
+	gutterStr := gutterStyle.Height(gutterHeight).Width(gutterW).Render("")
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, settingsDialog, gutterStr, preview)
 }
 
-func (s *DisplayOptionsScreen) renderPreviewDialog(targetHeight int) string {
+// renderPreviewDialog renders the preview panel at targetHeight (matching the
+// settings dialog), but never taller than maxHeight -- the actual available
+// content-area height, which may be less than what a screen's own natural
+// content would otherwise justify (e.g. the log console panel is expanded,
+// eating rows out of the terminal).
+func (s *DisplayOptionsScreen) renderPreviewDialog(targetHeight, maxHeight int) string {
 	for _, t := range s.themes {
 		if t.ConfigValue == s.previewTheme && t.IsInvalid {
 			const contentWidth = 44 // matches renderMockup width
@@ -82,7 +96,7 @@ func (s *DisplayOptionsScreen) renderPreviewDialog(targetHeight int) string {
 			return displayengine.RenderBorderedBoxCtx("Preview", strings.Join(lines, "\n"), contentWidth, targetHeight, false, true, false, ctx.DialogTitleAlign, "Title", ctx)
 		}
 	}
-	return s.renderMockup(targetHeight)
+	return s.renderMockup(targetHeight, maxHeight)
 }
 
 func (s *DisplayOptionsScreen) View() tea.View {
@@ -116,7 +130,7 @@ func (s *DisplayOptionsScreen) Layers() []*lipgloss.Layer {
 
 		// 2. Render Preview at far right, matched to the settings dialog's
 		// actual height; measure actual rendered width for precise positioning.
-		preview := s.renderPreviewDialog(settingsHeight)
+		preview := s.renderPreviewDialog(settingsHeight, height)
 		previewW := lipgloss.Width(preview)
 		previewX := width - previewW
 
@@ -125,10 +139,28 @@ func (s *DisplayOptionsScreen) Layers() []*lipgloss.Layer {
 		settingsW := previewX - gutter
 		s.outerMenu.SetSize(settingsW, height)
 		settingsDialog = s.outerMenu.ViewString()
+		settingsHeight = lipgloss.Height(settingsDialog)
+		previewHeight := lipgloss.Height(preview)
+
+		// Each panel centers independently within the available content
+		// height, using each layer's own Y (the compositor already supports
+		// per-layer X/Y/Z -- no need to route through one shared outer
+		// offset). Otherwise the preview growing taller than the settings
+		// dialog (e.g. its inner fake dialog needing room for a staged large
+		// title bar) would shift the settings dialog's position too, even
+		// though its own height never changed.
+		settingsY := (height - settingsHeight) / 2
+		if settingsY < 0 {
+			settingsY = 0
+		}
+		previewY := (height - previewHeight) / 2
+		if previewY < 0 {
+			previewY = 0
+		}
 
 		return []*lipgloss.Layer{
-			lipgloss.NewLayer(settingsDialog).X(0).Y(0).Z(displayengine.ZScreen),
-			lipgloss.NewLayer(preview).X(previewX).Y(0).Z(displayengine.ZScreen),
+			lipgloss.NewLayer(settingsDialog).X(0).Y(settingsY).Z(displayengine.ZScreen),
+			lipgloss.NewLayer(preview).X(previewX).Y(previewY).Z(displayengine.ZScreen),
 		}
 	}
 
@@ -142,6 +174,23 @@ func (s *DisplayOptionsScreen) Layers() []*lipgloss.Layer {
 // GetHitRegions implements HitRegionProvider for mouse hit testing
 func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []displayengine.HitRegion {
 	var regions []displayengine.HitRegion
+
+	// Layers() centers the settings dialog independently within the
+	// available content height (settingsY) when the preview panel fits
+	// alongside it, rather than relying on the generic outer offset
+	// model_view.go would otherwise apply (skipped now since IsMaximized()
+	// returns true). offsetY here is only the plain content-area top, so
+	// settingsY must be re-applied here too, or hit regions drift out of
+	// alignment with what's actually drawn. When the preview doesn't fit,
+	// Layers() places the settings dialog at Y(0) unconditionally -- no
+	// offset to add there.
+	if dl := s.computePanelLayout(s.width); dl.previewFits && s.outerMenu != nil {
+		settingsHeight := s.outerMenu.Height()
+		settingsY := (s.height - settingsHeight) / 2
+		if settingsY > 0 {
+			offsetY += settingsY
+		}
+	}
 
 	// Content starts at outer border (1) + content side margin (1) from left; 1 from top (outer border).
 	layout := displayengine.GetLayout()
@@ -280,7 +329,7 @@ func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []displayengi
 	// Preview Mockup Regions (when it fits)
 	if dl.previewFits {
 		// Calculate preview position matching Layers()
-		preview := s.renderPreviewDialog(s.height)
+		preview := s.renderPreviewDialog(s.height, s.height)
 		previewW := lipgloss.Width(preview)
 		previewX := s.width - previewW
 

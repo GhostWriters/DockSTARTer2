@@ -11,7 +11,12 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
+// renderMockup renders the fake preview dialog at targetHeight (matching the
+// settings dialog) but never taller than maxHeight -- the real available
+// content-area height, which can shrink out from under a screen's own
+// natural content need (e.g. the log console panel expanding eats rows out
+// of the terminal that were never reserved for this screen at all).
+func (s *DisplayOptionsScreen) renderMockup(targetHeight, maxHeight int) string {
 	width := 44 // Reduced width to fit the screen better
 
 	// Resolve the Preview_Border/Preview_Border2 tags based on the staged
@@ -231,32 +236,6 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 	}
 	dTitle := displayengine.RenderThemeTextCtx(strings.Join(titleParts, " "), previewCtx)
 
-	layout := displayengine.GetLayout()
-	fixedLines := layout.BorderHeight() + 3 // headerRow + bottomBorderRow + helpRow
-	if showStrip {
-		fixedLines++ // logStripRow
-	}
-	// The outer "Preview" wrap (rendered by the caller, using the real/applied
-	// context) uses a large title bar under the same rule it always does --
-	// title non-empty, not RAW/submenu -- whenever LargeTitleBars is on.
-	// RenderBorderedBoxCtx auto-downgrades to a small title bar when the
-	// content is too tall to leave room for the extra 2 rows; reserving that
-	// overhead here keeps the mockup's title bar large/small in sync with the
-	// setting instead of silently falling back to small under a tight budget.
-	if displayengine.GetActiveContext().LargeTitleBars {
-		fixedLines += displayengine.LargeTitleBarOverhead
-	}
-	backdropHeight := targetHeight - fixedLines
-	if backdropHeight < 10 {
-		backdropHeight = 10
-	}
-	backdropLines := make([]string, backdropHeight)
-	filler := bgStyle.Render(strutil.Repeat(" ", width))
-	for i := range backdropLines {
-		backdropLines[i] = filler
-	}
-	backdropBlock := lipgloss.JoinVertical(lipgloss.Left, backdropLines...)
-
 	dialogBox := displayengine.RenderBorderedBoxCtx(dTitle, contentStr, 38, 0, true, true, false, previewCtx.DialogTitleAlign, "Title", previewCtx, displayengine.TitleBarState{Show: true})
 	dialogBox = displayengine.AddShadowCtx(dialogBox, previewCtx)
 
@@ -274,7 +253,6 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 		}
 		dialogBox = strings.Join(dLines, "\n")
 	}
-	backdropBlock = displayengine.Overlay(dialogBox, backdropBlock, displayengine.OverlayCenter, displayengine.OverlayCenter, 0, 0)
 
 	// --- 3. Help Line ---
 	helpStyle := displayengine.SemanticRawStyle("Preview_Helpline")
@@ -338,28 +316,129 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight int) string {
 		label +
 		consoleBorderStyle.Render(" "+rightT+rightDashes+topRightC)
 
-	mockupParts := []string{
-		headerRow,
-		bottomBorderRow,
-		backdropBlock,
-		helpRow,
-	}
-	if showStrip {
-		mockupParts = append(mockupParts, logStripRow)
-	}
-	for i, p := range mockupParts {
-		mockupParts[i] = strings.TrimRight(p, "\n")
-	}
-	mockup := lipgloss.JoinVertical(lipgloss.Left, mockupParts...)
+	// --- 5. Assemble as real Content sections instead of hand-computed
+	// height arithmetic ---
+	//
+	// Each piece becomes a borderless, non-focusable leaf section (matching
+	// the NewPlainTextSection convention: SubMenuMode+Borderless+
+	// NonFocusable+no buttons+Maximized) stacked inside one outer sectioned
+	// MenuModel. The outer MenuModel's own calculateSectionLayout/
+	// viewWithSections machinery -- the exact same code path outerMenu (the
+	// real Appearance Settings dialog) uses -- then owns the height/large-
+	// title-bar/border decisions, so this mockup's title bar and total
+	// height can no longer silently drift out of sync with the real dialog
+	// the way the old hand-computed fixedLines/backdropHeight arithmetic did.
+	layout := displayengine.GetLayout()
 
-	// Wrap in a standard dialog using the staged preview context, not the
-	// active/applied one -- only the mockup's own inner content (built above
-	// with previewCtx) reflects staged options; the outer "Preview" frame is
-	// part of the real Appearance Settings dialog chrome and stays on the
-	// currently active theme, same as the rest of that dialog.
-	mockupWidth := lipgloss.Width(mockup)
-	// Synchronize preview height with settings dialog
-	return displayengine.RenderBorderedBoxCtx("Preview", mockup, mockupWidth, targetHeight, false, true, false, displayengine.GetActiveContext().DialogTitleAlign, "Title", displayengine.GetActiveContext())
+	newLeafSection := func(id string) *displayengine.MenuModel {
+		leaf := displayengine.NewMenuModel(id, "", "", nil)
+		leaf.SetSubMenuMode(true)
+		leaf.SetBorderless(true)
+		leaf.SetNonFocusable(true)
+		leaf.SetButtons(nil)
+		leaf.SetMaximized(true)
+		return leaf
+	}
+
+	// Header: status bar + separator, stacked as one borderless block.
+	// Height is measured directly from the rendered content instead of
+	// re-deriving the 1/2/3-line decision separately -- the one true source
+	// of truth is what actually got rendered above.
+	headerBlock := headerRow + "\n" + bottomBorderRow
+	headerHeight := lipgloss.Height(headerBlock)
+	headerSection := newLeafSection("appearance_preview_header")
+	headerSection.ContentRenderer = func(_ int) string { return headerBlock }
+	headerSection.SectionHeightOverride = func(_ int) int { return headerHeight }
+
+	// Backdrop + fake dialog: the sole expandable section, absorbing
+	// whatever height is left over -- same role themeMenu plays in the real
+	// settings dialog. Reads its own assigned Height() at render time
+	// (available once calculateSectionLayout has already sized it) instead
+	// of a separately hand-computed backdropHeight.
+	backdropSection := newLeafSection("appearance_preview_backdrop")
+	backdropSection.SetVariableHeight(true)
+	// Its natural need is whatever the fake dialog itself actually requires
+	// (e.g. 2 taller when staged Large Title Bars makes it switch to a large
+	// title) -- feeding this into the natural-height measurement pass below
+	// is what lets the whole mockup grow when the inner dialog needs more
+	// room than the settings dialog's own height provides.
+	backdropNaturalHeight := lipgloss.Height(dialogBox)
+	if backdropNaturalHeight < 10 {
+		backdropNaturalHeight = 10
+	}
+	backdropSection.SectionHeightOverride = func(_ int) int { return backdropNaturalHeight }
+	backdropSection.ContentRenderer = func(_ int) string {
+		h := backdropSection.Height()
+		if h < 10 {
+			h = 10
+		}
+		backdropLines := make([]string, h)
+		filler := bgStyle.Render(strutil.Repeat(" ", width))
+		for i := range backdropLines {
+			backdropLines[i] = filler
+		}
+		backdropBlock := lipgloss.JoinVertical(lipgloss.Left, backdropLines...)
+		return displayengine.Overlay(dialogBox, backdropBlock, displayengine.OverlayCenter, displayengine.OverlayCenter, 0, 0)
+	}
+
+	// Help line.
+	helpHeight := lipgloss.Height(helpRow)
+	helpSection := newLeafSection("appearance_preview_help")
+	helpSection.ContentRenderer = func(_ int) string { return helpRow }
+	helpSection.SectionHeightOverride = func(_ int) int { return helpHeight }
+
+	mockupMenu := displayengine.NewMenuModel("appearance_preview_mockup", "Preview", "", nil)
+	mockupMenu.SetButtons(nil)
+	mockupMenu.AddContentSection(headerSection)
+	mockupMenu.AddContentSection(backdropSection)
+	mockupMenu.AddContentSection(helpSection)
+	if showStrip {
+		stripHeight := lipgloss.Height(logStripRow)
+		stripSection := newLeafSection("appearance_preview_strip")
+		stripSection.ContentRenderer = func(_ int) string { return logStripRow }
+		stripSection.SectionHeightOverride = func(_ int) int { return stripHeight }
+		mockupMenu.AddContentSection(stripSection)
+	}
+
+	// Size it so each section's own inset content width comes out to the
+	// same fixed `width` (44) every render above has always used --
+	// BorderWidth + ContentMarginWidth is exactly what calculateSectionLayout
+	// subtracts before assigning section width.
+	mockupTotalWidth := layout.BorderWidth() + layout.ContentMarginWidth() + width
+
+	// Measure the mockup's own natural required height first (reusing
+	// calculateSectionLayout's existing shrink-to-natural-height logic via
+	// !maximized, rather than re-deriving the border/large-title-bar/section
+	// overhead formula by hand): size it generously large, read back the
+	// height it actually settled on, then lock it at max(targetHeight,
+	// naturalHeight) so it matches the settings dialog when there's room to,
+	// but grows past that when its own content (e.g. the fake dialog
+	// switching to a large title bar) genuinely needs more.
+	mockupMenu.SetMaximized(false)
+	mockupMenu.SetSize(mockupTotalWidth, 200)
+	naturalHeight := mockupMenu.Height()
+	effectiveHeight := targetHeight
+	if naturalHeight > effectiveHeight {
+		effectiveHeight = naturalHeight
+	}
+	// Never claim more than what's actually available -- growing to fit our
+	// own content is only correct up to the real ceiling; past that we must
+	// shrink back down like every other dialog does; the backdrop section
+	// (the sole expandable one) absorbs the squeeze first.
+	if maxHeight > 0 && effectiveHeight > maxHeight {
+		effectiveHeight = maxHeight
+	}
+	mockupMenu.SetMaximized(true)
+	mockupMenu.SetSize(mockupTotalWidth, effectiveHeight)
+
+	// The outer "Preview" frame renders through viewWithSections, which
+	// (like every other dialog) reads the real/applied theme via
+	// GetActiveContext() internally for its border/title/large-title-bar
+	// decision -- only the sections' own ContentRenderer closures above use
+	// previewCtx (staged options) for their internal painting. This is the
+	// same staged-vs-applied split the manual RenderBorderedBoxCtx call used
+	// to enforce by hand, now structural instead of a call-site convention.
+	return mockupMenu.ViewString()
 }
 
 // getPreviewShadowColor extracts the shadow color from the preview theme
