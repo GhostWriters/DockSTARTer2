@@ -51,41 +51,56 @@ func getSystemInfo() []string {
 
 	// Process Info
 	executable, _ := os.Executable()
-	info = append(info, fmt.Sprintf("Currently running as: %s (PID %d)", executable, os.Getpid()))
+	info = append(info, fmt.Sprintf("Currently running as: %s (PID %d)", console.FormatFilePath(executable), os.Getpid()))
 	info = append(info, "")
 
-	// System Info
-	info = append(info, fmt.Sprintf("ARCH:             %s", runtime.GOARCH))
-	info = append(info, fmt.Sprintf("OS:               %s", runtime.GOOS))
-
-	// Executable Path
+	// System / Paths -- one cohesive block, matching DS1's get_system_info()
+	// grouping (ARCH/SCRIPTPATH/SCRIPTNAME/COMPOSE_FOLDER/CONFIG_FOLDER all
+	// together, no blank lines between them) rather than fragmenting it into
+	// several blank-separated sections. The config/compose app folders are
+	// added via ExtraPathsInfo since they require a loaded AppConfig, and
+	// internal/config already depends on logger -- logger must not import
+	// it back. Paths use console.FormatFilePath/FormatFolderPath so each
+	// segment gets {{|File|}}/{{|Folder|}} styling and (session permitting) a
+	// clickable file:// hyperlink.
 	base := filepath.Base(executable)
 	dir := filepath.Dir(executable)
-	info = append(info, fmt.Sprintf("EXECUTABLEPATH:   %s", dir))
-	info = append(info, fmt.Sprintf("EXECUTABLENAME:   %s", base))
-	info = append(info, "")
-
-	// Paths (DS2-owned; the config/compose app folders are added via
-	// ExtraPathsInfo since they require a loaded AppConfig, and
-	// internal/config already depends on logger -- logger must not import
-	// it back).
-	info = append(info, fmt.Sprintf("DOCKSTARTER2_TOML: %s", paths.GetConfigFilePath()))
-	info = append(info, fmt.Sprintf("TEMPLATES_FOLDER: %s", paths.GetTemplatesDir()))
-	info = append(info, fmt.Sprintf("STATE_FOLDER:     %s", paths.GetStateDir()))
+	info = append(info, fmt.Sprintf("%-19s %s", "Architecture:", runtime.GOARCH))
+	info = append(info, fmt.Sprintf("%-19s %s", "OS:", runtime.GOOS))
+	info = append(info, fmt.Sprintf("%-19s %s", "Executable Path:", console.FormatFolderPath(dir)))
+	info = append(info, fmt.Sprintf("%-19s %s", "Executable Name:", console.FormatFileName(base, executable)))
+	info = append(info, fmt.Sprintf("%-19s %s", "Templates Folder:", console.FormatFolderPath(paths.GetTemplatesDir())))
+	info = append(info, fmt.Sprintf("%-19s %s", "State Folder:", console.FormatFolderPath(paths.GetStateDir())))
 	if ExtraPathsInfo != nil {
 		info = append(info, ExtraPathsInfo()...)
 	}
 	info = append(info, "")
 
-	// User Info
+	// User Info -- DS1 groups APPLICATION_INI_FILE (the config file) here,
+	// with the user/group/homedir facts, not in the Arch/paths block above.
+	info = append(info, fmt.Sprintf("%-19s %s", "Config File:", console.FormatFilePath(paths.GetConfigFilePath())))
 	currentUser, err := user.Current()
 	if err == nil {
-		info = append(info, fmt.Sprintf("DETECTED_PUID:    %s", currentUser.Uid))
-		info = append(info, fmt.Sprintf("DETECTED_UNAME:   %s", currentUser.Username))
-		info = append(info, fmt.Sprintf("DETECTED_GID:     %s", currentUser.Gid))
-		info = append(info, fmt.Sprintf("DETECTED_HOMEDIR: %s", currentUser.HomeDir))
+		groupName := currentUser.Gid
+		if g, gerr := user.LookupGroupId(currentUser.Gid); gerr == nil {
+			groupName = g.Name
+		}
+		info = append(info, fmt.Sprintf("%-19s %s (%s)", "User:", currentUser.Username, currentUser.Uid))
+		info = append(info, fmt.Sprintf("%-19s %s (%s)", "Group:", groupName, currentUser.Gid))
+		info = append(info, fmt.Sprintf("%-19s %s", "Home Directory:", console.FormatFolderPath(currentUser.HomeDir)))
 	} else {
 		info = append(info, fmt.Sprintf("User Info Error: %v", err))
+	}
+
+	// OS Release Info (Linux only; the file simply doesn't exist elsewhere).
+	if runtime.GOOS == "linux" {
+		if data, err := os.ReadFile("/etc/os-release"); err == nil {
+			info = append(info, "")
+			info = append(info, "{{|RunningCommand|}}cat /etc/os-release{{[-]}}:")
+			for _, line := range strings.Split(strings.TrimRight(string(data), "\n"), "\n") {
+				info = append(info, "  "+line)
+			}
+		}
 	}
 
 	return info
@@ -97,9 +112,6 @@ func getSystemInfo() []string {
 // --sysinfo`, so a user can be asked to run that and paste the output.
 func PrintSystemInfo(ctx context.Context) {
 	for _, line := range getSystemInfo() {
-		if line == "" {
-			continue
-		}
 		Display(ctx, line)
 	}
 }
