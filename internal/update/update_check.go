@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/dockercheck"
 	"DockSTARTer2/internal/logger"
@@ -207,7 +208,22 @@ func GetComposeSdkVersionDisplay() string {
 // skipped this invocation). The daemon is the one piece DS2 doesn't ship,
 // hence the "external dependency" label.
 func GetDockerDaemonVersionDisplay(ctx context.Context) string {
-	st := dockerStatus(ctx)
+	return formatDockerDaemonVersion(dockerStatus(ctx))
+}
+
+// GetDockerAPIVersionDisplay returns a formatted version string for the
+// Docker daemon's API version, shown alongside GetDockerDaemonVersionDisplay.
+// Normally this is just the daemon's max API version. If the client actually
+// negotiated down to something lower (e.g. DOCKER_API_VERSION pinning an
+// older version), both are shown as [max/negotiated negotiated], max first
+// (the daemon's installed capability) then the negotiated version explicitly
+// labeled and in the Error style to flag that it's not using the daemon's
+// full capability.
+func GetDockerAPIVersionDisplay(ctx context.Context) string {
+	return formatDockerAPIVersion(dockerStatus(ctx))
+}
+
+func formatDockerDaemonVersion(st dockercheck.Status) string {
 	if !st.Reachable || st.ServerVersion == "" {
 		return "{{|ApplicationName|}}Docker Engine{{[-]}} [{{|Error|}}not detected{{[-]}}] (external dependency)"
 	}
@@ -215,15 +231,7 @@ func GetDockerDaemonVersionDisplay(ctx context.Context) string {
 	return fmt.Sprintf("{{|ApplicationName|}}Docker Engine{{[-]}} [%s] (external dependency)", ver)
 }
 
-// GetDockerAPIVersionDisplay returns a formatted version string for the
-// Docker daemon's API version, shown alongside GetDockerDaemonVersionDisplay.
-// Normally this is just the daemon's max API version. If the client actually
-// negotiated down to something lower (e.g. DOCKER_API_VERSION pinning an
-// older version), both are shown as [negotiated/max], with the negotiated
-// version in the Error style to flag that it's not using the daemon's full
-// capability.
-func GetDockerAPIVersionDisplay(ctx context.Context) string {
-	st := dockerStatus(ctx)
+func formatDockerAPIVersion(st dockercheck.Status) string {
 	if !st.Reachable || st.APIVersion == "" {
 		return "{{|ApplicationName|}}Docker API{{[-]}} [{{|Error|}}not detected{{[-]}}] (external dependency)"
 	}
@@ -232,7 +240,38 @@ func GetDockerAPIVersionDisplay(ctx context.Context) string {
 		return fmt.Sprintf("{{|ApplicationName|}}Docker API{{[-]}} [%s] (external dependency)", maxVer)
 	}
 	negotiated := console.FormatLink("Error", "v"+st.NegotiatedAPIVersion, "https://docs.docker.com/reference/api/engine/version/v"+st.NegotiatedAPIVersion+"/")
-	return fmt.Sprintf("{{|ApplicationName|}}Docker API{{[-]}} [%s/%s] (external dependency)", negotiated, maxVer)
+	return fmt.Sprintf("{{|ApplicationName|}}Docker API{{[-]}} [%s/%s {{|Error|}}negotiated{{[-]}}] (external dependency)", maxVer, negotiated)
+}
+
+// fatalSystemInfo builds the extra diagnostic lines (Compose SDK, Docker
+// Engine, Docker API) appended to logger's fatal-crash system info. The
+// Docker lines use only the startup probe's cached status (dockercheck.Last)
+// -- never a fresh probe -- since a fatal handler must not block on a
+// network/socket call while the process is already crashing; if no check
+// has run yet, those lines are simply omitted rather than shown as
+// misleadingly "not detected".
+func fatalSystemInfo() []string {
+	lines := []string{GetComposeSdkVersionDisplay()}
+	if st := dockercheck.Last(); st != nil {
+		lines = append(lines, formatDockerDaemonVersion(*st), formatDockerAPIVersion(*st))
+	}
+	return lines
+}
+
+// fatalPathsInfo builds the extra path lines (the user's compose/config app
+// folders) appended to logger's fatal-crash Paths section. Loading the
+// config here is just a local TOML read, safe for a fatal handler.
+func fatalPathsInfo() []string {
+	conf := config.LoadAppConfig()
+	return []string{
+		fmt.Sprintf("CONFIG_FOLDER:    %s", conf.ConfigDir),
+		fmt.Sprintf("COMPOSE_FOLDER:   %s", conf.ComposeDir),
+	}
+}
+
+func init() {
+	logger.ExtraSystemInfo = fatalSystemInfo
+	logger.ExtraPathsInfo = fatalPathsInfo
 }
 
 func dockerStatus(ctx context.Context) dockercheck.Status {

@@ -48,6 +48,15 @@ func HandleVersion(ctx context.Context) error {
 	return nil
 }
 
+// HandleSysInfo prints the same diagnostic system info shown in a
+// fatal-crash report, for troubleshooting issues that don't produce an
+// actual crash -- a user can be asked to run `ds2 --sysinfo` and paste the
+// output.
+func HandleSysInfo(ctx context.Context) error {
+	logger.PrintSystemInfo(ctx)
+	return nil
+}
+
 func HandleInstall(ctx context.Context, group *CommandGroup, state *CmdState) error {
 	logger.Warn(ctx, fmt.Sprintf("The '{{|UserCommand|}}%s{{[-]}}' command is deprecated. The only dependency is '{{|UserCommand|}}docker{{[-]}}'.", group.Command))
 	if state.Force {

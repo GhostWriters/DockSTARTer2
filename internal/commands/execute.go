@@ -61,7 +61,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 	shouldValidate := false
 	for _, g := range groups {
 		switch g.Command {
-		case "-h", "--help", "-V", "--version", "--config-show", "--show-config",
+		case "-h", "--help", "-V", "--version", "--sysinfo", "--config-show", "--show-config",
 			"--config-folder", "--config-compose-folder", "-T", "--theme", "--theme-list",
 			"--theme-lines", "--theme-no-lines", "--theme-line", "--theme-no-line",
 			"--theme-borders", "--theme-no-borders", "--theme-border", "--theme-no-border",
@@ -172,6 +172,8 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				return HandleHelp(innerCtx, &group)
 			case "-V", "--version":
 				return HandleVersion(innerCtx)
+			case "--sysinfo":
+				return HandleSysInfo(innerCtx)
 			case "--man":
 				return HandleMan(innerCtx, &group)
 			case "-i", "--install":

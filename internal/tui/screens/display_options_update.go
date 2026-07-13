@@ -712,11 +712,13 @@ func (s *DisplayOptionsScreen) SetSize(width, height int) {
 	s.outerMenu.SetSize(dl.settingsDialogWidth, height)
 }
 
+// IsMaximized reports true so model_view.go's generic outer centering (one
+// shared offset applied uniformly to every layer) is skipped -- Layers()
+// computes each panel's own Y independently instead, so the settings dialog
+// and the preview mockup can differ in height without one shifting the
+// other's position.
 func (s *DisplayOptionsScreen) IsMaximized() bool {
-	if s.outerMenu == nil {
-		return true
-	}
-	return s.outerMenu.IsMaximized()
+	return true
 }
 
 // EscapeAction implements tui.EscapeActioner: mirrors the Esc key handler.
