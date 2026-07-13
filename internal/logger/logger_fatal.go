@@ -17,6 +17,21 @@ import (
 	"time"
 )
 
+// ExtraSystemInfo, when set, supplies additional diagnostic lines (e.g.
+// dependency versions) appended to the fatal-crash system info block below
+// the app/templates lines. Packages that already depend on logger (like
+// internal/update, which also depends on internal/dockercheck) wire this up
+// via their own init() -- logger itself must not import them back, since
+// that would create an import cycle.
+var ExtraSystemInfo func() []string
+
+// ExtraPathsInfo, when set, supplies additional path lines (e.g. the
+// user's compose/config app folders, which require a loaded AppConfig)
+// appended to the Paths section below the DS2-owned paths. Same import-cycle
+// rationale as ExtraSystemInfo -- wired up by internal/update's init(),
+// since internal/config already depends on logger.
+var ExtraPathsInfo func() []string
+
 func getSystemInfo() []string {
 	var info []string
 
@@ -29,6 +44,9 @@ func getSystemInfo() []string {
 		tmplURL = "https://github.com/GhostWriters/DockSTARTer-Templates/commit/" + hash
 	}
 	info = append(info, fmt.Sprintf("{{|ApplicationName|}}DockSTARTer-Templates{{[-]}} [%s]", console.FormatLink("Version", tmplVer, tmplURL)))
+	if ExtraSystemInfo != nil {
+		info = append(info, ExtraSystemInfo()...)
+	}
 	info = append(info, "")
 
 	// Process Info
@@ -40,11 +58,23 @@ func getSystemInfo() []string {
 	info = append(info, fmt.Sprintf("ARCH:             %s", runtime.GOARCH))
 	info = append(info, fmt.Sprintf("OS:               %s", runtime.GOOS))
 
-	// Script/Binary Path
+	// Executable Path
 	base := filepath.Base(executable)
 	dir := filepath.Dir(executable)
-	info = append(info, fmt.Sprintf("SCRIPTPATH:       %s", dir))
-	info = append(info, fmt.Sprintf("SCRIPTNAME:       %s", base))
+	info = append(info, fmt.Sprintf("EXECUTABLEPATH:   %s", dir))
+	info = append(info, fmt.Sprintf("EXECUTABLENAME:   %s", base))
+	info = append(info, "")
+
+	// Paths (DS2-owned; the config/compose app folders are added via
+	// ExtraPathsInfo since they require a loaded AppConfig, and
+	// internal/config already depends on logger -- logger must not import
+	// it back).
+	info = append(info, fmt.Sprintf("DOCKSTARTER2_TOML: %s", paths.GetConfigFilePath()))
+	info = append(info, fmt.Sprintf("TEMPLATES_FOLDER: %s", paths.GetTemplatesDir()))
+	info = append(info, fmt.Sprintf("STATE_FOLDER:     %s", paths.GetStateDir()))
+	if ExtraPathsInfo != nil {
+		info = append(info, ExtraPathsInfo()...)
+	}
 	info = append(info, "")
 
 	// User Info
@@ -59,6 +89,19 @@ func getSystemInfo() []string {
 	}
 
 	return info
+}
+
+// PrintSystemInfo displays the same diagnostic system info block shown in a
+// fatal-crash report (app/dependency versions, process/path/user info), for
+// troubleshooting cases that don't produce an actual crash -- e.g. `ds2
+// --sysinfo`, so a user can be asked to run that and paste the output.
+func PrintSystemInfo(ctx context.Context) {
+	for _, line := range getSystemInfo() {
+		if line == "" {
+			continue
+		}
+		Display(ctx, line)
+	}
 }
 
 // Fatal logs a message at FatalLevel and exits

@@ -445,6 +445,12 @@ func GetUsage(target string, noHeading bool) string {
 			"	Display version information. Optionally specify branches to check remote versions.",
 		)
 	}
+	if match("--sysinfo") {
+		printStr(
+			"{{|UsageCommand|}}--sysinfo{{[-]}}",
+			"	Display diagnostic system info (versions, paths, user info) -- the same info shown in a fatal-crash report. Handy for troubleshooting issues that don't produce an actual crash.",
+		)
+	}
 	if match("--print-version") {
 		printStr(
 			"{{|UsageCommand|}}--print-version{{[-]}}",
