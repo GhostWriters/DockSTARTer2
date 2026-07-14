@@ -612,10 +612,10 @@ func InitStyles(cfg config.AppConfig) {
 	CurrentStyles.BorderFlags = borderOverrides["Border"].Flags
 	CurrentStyles.Border2Flags = borderOverrides["Border2"].Flags
 
-	CurrentStyles.BorderDisabledColor = SemanticRawStyle("BorderDisabled").GetForeground()
-	CurrentStyles.Border2DisabledColor = SemanticRawStyle("Border2Disabled").GetForeground()
-	CurrentStyles.BorderDisabledFlags = semstyle.CodeToFlags(semstyle.GetRawTagCode("borderdisabled"))
-	CurrentStyles.Border2DisabledFlags = semstyle.CodeToFlags(semstyle.GetRawTagCode("border2disabled"))
+	CurrentStyles.BorderDisabledColor = borderOverrides["BorderDisabled"].Style.GetForeground()
+	CurrentStyles.Border2DisabledColor = borderOverrides["Border2Disabled"].Style.GetForeground()
+	CurrentStyles.BorderDisabledFlags = borderOverrides["BorderDisabled"].Flags
+	CurrentStyles.Border2DisabledFlags = borderOverrides["Border2Disabled"].Flags
 
 	// Shadow defines the shadow color and any attributes (e.g. dim, bold) for shade characters.
 	shadowDef := SemanticRawStyle("Shadow")

@@ -70,17 +70,45 @@ type TagOverride struct {
 	Flags semstyle.StyleFlags
 }
 
+// ResolveDisabledStyle returns tag's own "<tag>Disabled" variant if the
+// active theme explicitly defines one (semstyle.GetRawTagCode returns ""
+// for an unregistered tag, the signal used here), otherwise tag's own
+// enabled style with Dim applied on top. This lets themes author an
+// explicit disabled color only where they actually want one, with every
+// other disable-able element getting a sensible dimmed-enabled-color
+// default for free instead of requiring a hand-authored *Disabled tag for
+// every themeable element.
+func ResolveDisabledStyle(tag string) (style lipgloss.Style, flags semstyle.StyleFlags) {
+	disabledTag := tag + "Disabled"
+	if semstyle.GetRawTagCode(disabledTag) != "" {
+		return SemanticRawStyle(disabledTag), semstyle.CodeToFlags(semstyle.GetRawTagCode(disabledTag))
+	}
+	// Only override Bold specifically -- Bold+Dim together render as still-
+	// bright on many terminals (Bold effectively cancels Dim's visual
+	// effect), but every other attribute the base tag has (Underline,
+	// Italic, etc.) is kept rather than reset wholesale.
+	flags = semstyle.CodeToFlags(semstyle.GetRawTagCode(tag))
+	flags.Bold = false
+	flags.Dim = true
+	return flags.Apply(SemanticRawStyle(tag)), flags
+}
+
 // ResolveThemeOverrides reads the untouched <prefix>Border/<prefix>Border2
-// semantic tags and computes what each should resolve to given the Border
-// Color mode (1 = Border wins, 2 = Border2 wins, anything else = each tag
-// keeps its own theme-defined value), returning the result as a small
-// derived map keyed by unprefixed tag name ("Border", "Border2") instead of
-// writing back into the shared semstyle registry. An earlier version of
-// this logic overwrote one tag's raw code with the other's directly in the
-// registry, which corrupted later lookups once a tag's original theme
-// value had been overwritten (e.g. mode 1 then mode 2 would read the
-// mode-1-corrupted Border2 instead of the theme's real value) -- computing
-// a fresh map every call avoids that entirely.
+// (and their BorderDisabled/Border2Disabled counterparts) semantic tags and
+// computes what each should resolve to given the Border Color mode (1 =
+// Border wins, 2 = Border2 wins, anything else = each tag keeps its own
+// theme-defined value), returning the result as a small derived map keyed
+// by unprefixed tag name ("Border", "Border2", "BorderDisabled",
+// "Border2Disabled") instead of writing back into the shared semstyle
+// registry. An earlier version of this logic overwrote one tag's raw code
+// with the other's directly in the registry, which corrupted later lookups
+// once a tag's original theme value had been overwritten (e.g. mode 1 then
+// mode 2 would read the mode-1-corrupted Border2 instead of the theme's
+// real value) -- computing a fresh map every call avoids that entirely.
+// The disabled variants merge under the same mode as their enabled
+// counterparts, so a disabled border reflects the same Border Color choice
+// instead of always following the theme's own disabled colors regardless
+// of the setting.
 //
 // Border Color is the only option resolved today; this is the shape to
 // extend if more options need the same kind of tag-merging behavior later.
@@ -93,15 +121,21 @@ func ResolveThemeOverrides(borderColorMode int, prefix string) map[string]TagOve
 	if p != "" {
 		borderTag, border2Tag = p+"_Border", p+"_Border2"
 	}
+	borderDisabledStyle, borderDisabledFlags := ResolveDisabledStyle(borderTag)
+	border2DisabledStyle, border2DisabledFlags := ResolveDisabledStyle(border2Tag)
 	overrides := map[string]TagOverride{
-		"Border":  {SemanticRawStyle(borderTag), semstyle.CodeToFlags(semstyle.GetRawTagCode(borderTag))},
-		"Border2": {SemanticRawStyle(border2Tag), semstyle.CodeToFlags(semstyle.GetRawTagCode(border2Tag))},
+		"Border":          {SemanticRawStyle(borderTag), semstyle.CodeToFlags(semstyle.GetRawTagCode(borderTag))},
+		"Border2":         {SemanticRawStyle(border2Tag), semstyle.CodeToFlags(semstyle.GetRawTagCode(border2Tag))},
+		"BorderDisabled":  {borderDisabledStyle, borderDisabledFlags},
+		"Border2Disabled": {border2DisabledStyle, border2DisabledFlags},
 	}
 	switch borderColorMode {
 	case 1:
 		overrides["Border2"] = overrides["Border"]
+		overrides["Border2Disabled"] = overrides["BorderDisabled"]
 	case 2:
 		overrides["Border"] = overrides["Border2"]
+		overrides["BorderDisabled"] = overrides["Border2Disabled"]
 	}
 	return overrides
 }
