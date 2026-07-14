@@ -22,14 +22,10 @@ StatusBarBorder = "{{|StatusBar|}}"
 Dialog = "{{[black:blue:-]}}"
 Border = "{{[cyan:blue:-]}}"
 Border2 = "{{[black:blue:-]}}"
-BorderDisabled = "{{|Border:::-D|}}"
-Border2Disabled = "{{|Border2:::-D|}}"
 Shadow = "{{|Screen:::D|}}"
 ProgramBox = "{{[white:black:-]}}"
 ConsoleBorder = "{{|Helpline|}}"
 PositionIndicator = "{{[red]}}"
-Scrollbar = "{{[white]}}"
-ScrollbarZone = "{{[black]}}"
 
 # Header bar
 StatusFields = "{{|Screen|}}"
@@ -68,7 +64,6 @@ TitleUnfocusedIndicator = ""
 # Submenu titles
 TitleSubMenu = "{{|Title|}}"
 TitleSubMenuFocused = "{{|Title:::R|}}"
-TitleSubMenuDisabled = "{{|TitleSubMenu:::-D|}}"
 
 # Menu, buttons, and help
 CommandLine = "{{[-]}}{{[yellow::B]}}"
