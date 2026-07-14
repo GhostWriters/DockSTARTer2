@@ -264,8 +264,8 @@ func fatalSystemInfo() []string {
 func fatalPathsInfo() []string {
 	conf := config.LoadAppConfig()
 	return []string{
-		fmt.Sprintf("%-19s %s", "App Config Folder:", console.FormatFolderPath(conf.ConfigDir)),
-		fmt.Sprintf("%-19s %s", "Compose Folder:", console.FormatFolderPath(conf.ComposeDir)),
+		fmt.Sprintf("%-21s %s", "App Config Folder:", console.FormatFolderPath(conf.ConfigDir)),
+		fmt.Sprintf("%-21s %s", "Compose Folder:", console.FormatFolderPath(conf.ComposeDir)),
 	}
 }
 
