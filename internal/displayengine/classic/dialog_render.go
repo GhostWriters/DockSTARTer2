@@ -327,28 +327,10 @@ func RenderTitleSegmentCtx(rawTitle string, borderFocused bool, contentFocused b
 	if len(spinnerIndicator) > 1 {
 		spinIndR = spinnerIndicator[1]
 	}
-	// Submenu titles resolve through the pre-computed Go-level styles (ctx.SubmenuTitle*)
-	// instead of a runtime theme-tag-string lookup, mirroring how BorderColor/BorderFlags
-	// already bypass the tag registry for Border/Border2. This matters specifically for
-	// the *Disabled variant: SubmenuTitleDisabled is filled in by ResolveDisabledStyle,
-	// which falls back to TitleSubMenu with Bold stripped/Dim applied when the theme
-	// defines no explicit TitleSubMenuDisabled tag -- a bare "{{|TitleSubMenuDisabled|}}"
-	// tag lookup has no such fallback and silently renders wrong for every theme that
-	// doesn't author that tag.
-	var renderedTitle string
-	switch titleTag {
-	case "TitleSubMenu":
-		renderedTitle = ctx.SubmenuTitle.Render(rawTitle)
-	case "TitleSubMenuFocused":
-		renderedTitle = ctx.SubmenuTitleFocused.Render(rawTitle)
-	case "TitleSubMenuDisabled":
-		renderedTitle = ctx.SubmenuTitleDisabled.Render(rawTitle)
-	default:
-		if titleTag != "" {
-			rawTitle = semstyle.WrapSemantic(titleTag) + rawTitle
-		}
-		renderedTitle = RenderThemeTextCtx(rawTitle, ctx)
+	if titleTag != "" {
+		rawTitle = semstyle.WrapSemantic(titleTag) + rawTitle
 	}
+	renderedTitle := RenderThemeTextCtx(rawTitle, ctx)
 
 	var leftT, rightT string
 	if !ctx.DrawBorders {
@@ -504,7 +486,7 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 		tbsState = tbs[0]
 	}
 
-	isSubmenu := titleTag == "TitleSubMenu" || titleTag == "TitleSubMenuFocused"
+	isSubmenu := titleTag == "TitleSubMenu" || titleTag == "TitleSubMenuFocused" || strings.HasPrefix(titleTag, "TitleSubMenu:")
 	useLarge := ctx.LargeTitleBars && GetPlainText(rawTitle) != "" && titleTag != "RAW" && !isSubmenu
 	if useLarge && targetHeight > 0 {
 		// Fall back if there isn't room for the extra 2 lines.
