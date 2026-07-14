@@ -364,7 +364,7 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 	if m.subMenuMode {
 		align = GetActiveContext().SubmenuTitleAlign
 		if m.disabled {
-			titleTag = "TitleSubMenuDisabled"
+			titleTag = DisabledTagRef("TitleSubMenu")
 		} else if focused {
 			titleTag = "TitleSubMenuFocused"
 		} else {

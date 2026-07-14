@@ -93,6 +93,26 @@ func ResolveDisabledStyle(tag string) (style lipgloss.Style, flags semstyle.Styl
 	return flags.Apply(SemanticRawStyle(tag)), flags
 }
 
+// DisabledTagRef returns a semantic tag reference usable as a titleTag or
+// embedded directly in a "{{|...|}}" string: tag's own "<tag>Disabled" name
+// if the active theme explicitly defines one, else an inline
+// "<tag>:::bD" override reference. The trailing "bD" (bold off, dim on) is
+// not a leading-dash reset -- semstyle's nested-tag resolver (parse.go's
+// resolveThemeValue) merges non-reset flag overrides onto the referenced
+// tag's own resolved flags rather than replacing them, so this preserves
+// every other attribute (Underline, Italic, etc.) the base tag carries,
+// exactly like ResolveDisabledStyle's Go-level fallback -- just expressed as
+// text so it also works at call sites that embed the tag name literally
+// (e.g. panel_render.go's "{{|"+inputTitleTag+"|}}Command{{[-]}}") where a
+// Go-resolved lipgloss.Style can't reach the embedded string at all.
+func DisabledTagRef(tag string) string {
+	disabledTag := tag + "Disabled"
+	if semstyle.GetRawTagCode(disabledTag) != "" {
+		return disabledTag
+	}
+	return tag + ":::bD"
+}
+
 // ResolveThemeOverrides reads the untouched <prefix>Border/<prefix>Border2
 // (and their BorderDisabled/Border2Disabled counterparts) semantic tags and
 // computes what each should resolve to given the Border Color mode (1 =
