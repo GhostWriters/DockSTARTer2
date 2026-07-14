@@ -3,7 +3,6 @@ package logger
 import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/paths"
-	"github.com/GhostWriters/semstyle"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/version"
 	"context"
@@ -15,6 +14,8 @@ import (
 	"runtime/debug"
 	"strings"
 	"time"
+
+	"github.com/GhostWriters/semstyle"
 )
 
 // ExtraSystemInfo, when set, supplies additional diagnostic lines (e.g.
@@ -47,47 +48,37 @@ func getSystemInfo() []string {
 	if ExtraSystemInfo != nil {
 		info = append(info, ExtraSystemInfo()...)
 	}
+
 	info = append(info, "")
 
 	// Process Info
 	executable, _ := os.Executable()
-	info = append(info, fmt.Sprintf("Currently running as: %s (PID %d)", console.FormatFilePath(executable), os.Getpid()))
+	info = append(info, fmt.Sprintf("Currently running as: %s (PID %d)", console.FormatFile("RunningCommand", executable), os.Getpid()))
+
 	info = append(info, "")
 
-	// System / Paths -- one cohesive block, matching DS1's get_system_info()
-	// grouping (ARCH/SCRIPTPATH/SCRIPTNAME/COMPOSE_FOLDER/CONFIG_FOLDER all
-	// together, no blank lines between them) rather than fragmenting it into
-	// several blank-separated sections. The config/compose app folders are
-	// added via ExtraPathsInfo since they require a loaded AppConfig, and
-	// internal/config already depends on logger -- logger must not import
-	// it back. Paths use console.FormatFilePath/FormatFolderPath so each
-	// segment gets {{|File|}}/{{|Folder|}} styling and (session permitting) a
-	// clickable file:// hyperlink.
-	base := filepath.Base(executable)
-	dir := filepath.Dir(executable)
-	info = append(info, fmt.Sprintf("%-19s %s", "Architecture:", runtime.GOARCH))
-	info = append(info, fmt.Sprintf("%-19s %s", "OS:", runtime.GOOS))
-	info = append(info, fmt.Sprintf("%-19s %s", "Executable Path:", console.FormatFolderPath(dir)))
-	info = append(info, fmt.Sprintf("%-19s %s", "Executable Name:", console.FormatFileName(base, executable)))
-	info = append(info, fmt.Sprintf("%-19s %s", "Templates Folder:", console.FormatFolderPath(paths.GetTemplatesDir())))
-	info = append(info, fmt.Sprintf("%-19s %s", "State Folder:", console.FormatFolderPath(paths.GetStateDir())))
+	info = append(info, fmt.Sprintf("%-21s %s", "Architecture:", runtime.GOARCH))
+
+	info = append(info, fmt.Sprintf("%-21s %s", "OS:", runtime.GOOS))
+	info = append(info, "")
+
+	info = append(info, fmt.Sprintf("%-21s %s", "Config File:", console.FormatFilePath(paths.GetConfigFilePath())))
+	info = append(info, fmt.Sprintf("%-21s %s", "Templates Folder:", console.FormatFolderPath(paths.GetTemplatesDir())))
+	info = append(info, fmt.Sprintf("%-21s %s", "State Folder:", console.FormatFolderPath(paths.GetStateDir())))
 	if ExtraPathsInfo != nil {
 		info = append(info, ExtraPathsInfo()...)
 	}
 	info = append(info, "")
 
-	// User Info -- DS1 groups APPLICATION_INI_FILE (the config file) here,
-	// with the user/group/homedir facts, not in the Arch/paths block above.
-	info = append(info, fmt.Sprintf("%-19s %s", "Config File:", console.FormatFilePath(paths.GetConfigFilePath())))
 	currentUser, err := user.Current()
 	if err == nil {
 		groupName := currentUser.Gid
 		if g, gerr := user.LookupGroupId(currentUser.Gid); gerr == nil {
 			groupName = g.Name
 		}
-		info = append(info, fmt.Sprintf("%-19s %s (%s)", "User:", currentUser.Username, currentUser.Uid))
-		info = append(info, fmt.Sprintf("%-19s %s (%s)", "Group:", groupName, currentUser.Gid))
-		info = append(info, fmt.Sprintf("%-19s %s", "Home Directory:", console.FormatFolderPath(currentUser.HomeDir)))
+		info = append(info, fmt.Sprintf("%-21s %s (%s)", "User:", currentUser.Username, currentUser.Uid))
+		info = append(info, fmt.Sprintf("%-21s %s (%s)", "Group:", groupName, currentUser.Gid))
+		info = append(info, fmt.Sprintf("%-21s %s", "Home Directory:", console.FormatFolderPath(currentUser.HomeDir)))
 	} else {
 		info = append(info, fmt.Sprintf("User Info Error: %v", err))
 	}

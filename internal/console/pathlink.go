@@ -93,19 +93,52 @@ func FormatFolderPath(path string) string {
 // nonexistent path in the process's working/root directory. When a real
 // full path IS the thing to display, call FormatFilePath directly instead.
 func FormatFileName(name, path string) string {
-	return formatNamedTag("File", name, path)
+	return FormatFile("File", path, name)
 }
 
 // FormatFolderName is FormatFileName's {{|Folder|}}-styled counterpart.
 func FormatFolderName(name, path string) string {
-	return formatNamedTag("Folder", name, path)
+	return FormatFolder("Folder", path, name)
 }
 
-func formatNamedTag(tag, name, path string) string {
+// FormatFile returns raw (unresolved) semstyle tag markup for path, styled
+// with tag (the caller's choice -- lets a path be hyperlinked under any
+// semantic style, not just "File") and hyperlinked to path itself when the
+// active session permits it. Displays path verbatim as the visible text
+// unless a different label is given via the optional name -- most callers
+// have nothing shorter to show than the real path, so this avoids having to
+// pass path twice. Never forces a trailing slash, since path is understood
+// to reference a single file, not a directory.
+func FormatFile(tag, path string, name ...string) string {
+	return formatPathTag(tag, pathLabel(path, name), path, false)
+}
+
+// FormatFolder is FormatFile's directory counterpart: same tag flexibility
+// and optional-name default, but always forces a trailing slash on the
+// hyperlink target (via ensureTrailingSlash) regardless of what tag is used,
+// so it can only ever resolve to a directory -- this is keyed off the
+// caller's explicit choice of FormatFile vs FormatFolder, not by
+// string-matching tag, so it stays correct even when tag isn't literally
+// "Folder".
+func FormatFolder(tag, path string, name ...string) string {
+	return formatPathTag(tag, pathLabel(path, name), path, true)
+}
+
+// pathLabel returns name[0] if given and non-empty, else falls back to path
+// itself -- the default-argument pattern for FormatFile/FormatFolder's
+// optional display label.
+func pathLabel(path string, name []string) string {
+	if len(name) > 0 && name[0] != "" {
+		return name[0]
+	}
+	return path
+}
+
+func formatPathTag(tag, name, path string, isFolder bool) string {
 	if path == "" || blocksHyperlink() {
 		return "{{|" + tag + "|}}" + name + "{{[-]}}"
 	}
-	if tag == "Folder" {
+	if isFolder {
 		path = ensureTrailingSlash(path)
 	}
 	return "{{|" + tag + "::::" + strutil.FileURL(path) + "|}}" + name + "{{[-]}}"
