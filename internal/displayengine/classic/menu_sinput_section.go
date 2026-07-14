@@ -44,6 +44,18 @@ func newSinputSectionWithEcho(id, title, initialValue string, echoMode textinput
 	tiStyles.Cursor.Color = TextCursorColor()
 	ti.SetStyles(tiStyles)
 
+	// Disabled counterpart of tiStyles above -- ResolveDisabledStyle("Item")
+	// matches styles.ItemNormal's own "Item" tag, same rule every other
+	// disabled element uses (explicit ItemDisabled if the theme defines one,
+	// else Item with Bold stripped and Dim applied).
+	disabledItemStyle, _ := ResolveDisabledStyle("Item")
+	tiStylesDisabled := textinput.DefaultStyles(true)
+	tiStylesDisabled.Focused.Prompt = disabledItemStyle.Background(bg)
+	tiStylesDisabled.Focused.Text = disabledItemStyle.Background(bg)
+	tiStylesDisabled.Blurred.Prompt = disabledItemStyle.Background(bg)
+	tiStylesDisabled.Blurred.Text = disabledItemStyle.Background(bg)
+	tiStylesDisabled.Cursor.Color = TextCursorColor()
+
 	inp := sinput.New(ti)
 	inpPtr := &inp
 
@@ -57,6 +69,17 @@ func newSinputSectionWithEcho(id, title, initialValue string, echoMode textinput
 	m.SetNoLeftMargin(true)
 
 	m.ContentRenderer = func(contentWidth int) string {
+		// tiStyles was baked into the input at construction time and never
+		// re-evaluated afterward -- unlike every other disabled element,
+		// which resolves its style fresh on each render, this needs an
+		// explicit re-check against the section's current disabled state
+		// (toggled later via SetDisabled) or a disabled section's input
+		// text never dims.
+		if m.disabled {
+			(*inpPtr).SetStyles(tiStylesDisabled)
+		} else {
+			(*inpPtr).SetStyles(tiStyles)
+		}
 		return styles.Dialog.
 			Width(contentWidth).
 			Padding(0, 1).

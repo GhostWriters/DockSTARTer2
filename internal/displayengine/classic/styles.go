@@ -761,7 +761,12 @@ func InitStyles(cfg config.AppConfig) {
 	// Submenu Title
 	CurrentStyles.SubmenuTitle = SemanticRawStyle("TitleSubMenu")
 	CurrentStyles.SubmenuTitleFocused = SemanticRawStyle("TitleSubMenuFocused")
-	CurrentStyles.SubmenuTitleDisabled = SemanticRawStyle("TitleSubMenuDisabled")
+	// ResolveDisabledStyle, not a plain lookup: themes rarely define an explicit
+	// TitleSubMenuDisabled tag, and a bare lookup of a tag the theme never
+	// registered resolves to an undefined/generic style instead of falling back
+	// to TitleSubMenu with Bold stripped and Dim applied (the same rule every
+	// other disabled element uses -- see ResolveDisabledStyle).
+	CurrentStyles.SubmenuTitleDisabled, _ = ResolveDisabledStyle("TitleSubMenu")
 
 	// Large Title Bar
 	CurrentStyles.LargeTitleArea = SemanticRawStyle("LargeTitleArea")
