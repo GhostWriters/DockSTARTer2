@@ -26,8 +26,11 @@ func renderCheckboxGlyphSplit(cb string, contentStyle, bracketStyle lipgloss.Sty
 // checkbox/radio glyph, from the state-suffixed tag family the user's
 // ds2theme defines: Checkbox|Radio + Brackets? + On|Off + Focused?, e.g.
 // "CheckboxOn", "RadioBracketsOffFocused". isRadio picks Checkbox vs Radio;
-// on picks On vs Off; focused appends the Focused suffix.
-func checkboxStylePair(isRadio, on, focused bool) (content, bracket lipgloss.Style) {
+// on picks On vs Off; focused appends the Focused suffix. disabled routes
+// both through ResolveDisabledStyle instead (a whole disabled section, or a
+// single locked item) -- an explicit "<...>Disabled" tag if the theme
+// defines one, else the normal style dimmed.
+func checkboxStylePair(isRadio, on, focused, disabled bool) (content, bracket lipgloss.Style) {
 	base := "Checkbox"
 	if isRadio {
 		base = "Radio"
@@ -40,8 +43,15 @@ func checkboxStylePair(isRadio, on, focused bool) (content, bracket lipgloss.Sty
 	if focused {
 		suffix = "Focused"
 	}
-	content = theme.ThemeSemanticStyle("{{|" + base + state + suffix + "|}}")
-	bracket = theme.ThemeSemanticStyle("{{|" + base + "Brackets" + state + suffix + "|}}")
+	contentTag := base + state + suffix
+	bracketTag := base + "Brackets" + state + suffix
+	if disabled {
+		content, _ = ResolveDisabledStyle(contentTag)
+		bracket, _ = ResolveDisabledStyle(bracketTag)
+		return content, bracket
+	}
+	content = theme.ThemeSemanticStyle("{{|" + contentTag + "|}}")
+	bracket = theme.ThemeSemanticStyle("{{|" + bracketTag + "|}}")
 	return content, bracket
 }
 

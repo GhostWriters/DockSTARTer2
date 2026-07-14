@@ -100,6 +100,18 @@ func (m *MenuModel) renderVariableHeightList() string {
 	tagStyleSel := theme.ThemeSemanticStyle("{{|TagFocused|}}")
 	keyStyleSel := theme.ThemeSemanticStyle("{{|TagKeyFocused|}}")
 	itemStyleSel := theme.ThemeSemanticStyle("{{|ItemFocused|}}")
+	// A whole disabled section (m.disabled) or a single locked item
+	// (item.Locked) dims its tag/key/description -- an explicit
+	// "<...>Disabled" theme tag if defined, else the normal style dimmed
+	// (see ResolveDisabledStyle). Separate Focused variants so the cursor
+	// stays visible on a disabled/locked row instead of every disabled row
+	// looking identical regardless of focus.
+	tagStyleDisabled, _ := ResolveDisabledStyle("Tag")
+	keyStyleDisabled, _ := ResolveDisabledStyle("TagKey")
+	itemStyleDisabled, _ := ResolveDisabledStyle("Item")
+	tagStyleDisabledSel, _ := ResolveDisabledStyle("TagFocused")
+	keyStyleDisabledSel, _ := ResolveDisabledStyle("TagKeyFocused")
+	itemStyleDisabledSel, _ := ResolveDisabledStyle("ItemFocused")
 	// CheckboxOffFocused, not the removed generic CheckboxFocused tag: used
 	// for decorative focus markers with no real on/off state of their own
 	// (the expand arrow, the inert "-" shown on an expanded group header's
@@ -134,10 +146,20 @@ func (m *MenuModel) renderVariableHeightList() string {
 			}
 		}
 
+		isDisabled := m.disabled || item.Locked
+
 		tStyle := tagStyleBase
 		kStyle := keyStyleBase
 		dStyle := itemStyleBase
-		if isSelected {
+		if isDisabled && isSelected {
+			tStyle = tagStyleDisabledSel
+			kStyle = keyStyleDisabledSel
+			dStyle = itemStyleDisabledSel
+		} else if isDisabled {
+			tStyle = tagStyleDisabled
+			kStyle = keyStyleDisabled
+			dStyle = itemStyleDisabled
+		} else if isSelected {
 			tStyle = tagStyleSel
 			kStyle = keyStyleSel
 			dStyle = itemStyleSel
@@ -189,7 +211,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 		if item.IsEditing && !isActuallySub {
 			cbStr := ""
 			if item.IsCheckbox {
-				content, bracket := checkboxStylePair(false, item.Checked, isSelected)
+				content, bracket := checkboxStylePair(false, item.Checked, isSelected, isDisabled)
 				cbStr = renderCheckbox(false, item.Checked, ctx.LineCharacters, true, "always", content, bracket) + neutralStyle.Render(" ")
 			}
 			editStr := RenderThemeText(item.Tag, dStyle)
@@ -216,7 +238,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 			if item.IsRadioButton {
 				mode = ctx.RadioBrackets
 			}
-			content, bracket := checkboxStylePair(item.IsRadioButton, item.Checked, isSelected)
+			content, bracket := checkboxStylePair(item.IsRadioButton, item.Checked, isSelected, isDisabled)
 			checkbox = renderCheckbox(item.IsRadioButton, item.Checked, ctx.LineCharacters, isSelected, mode, content, bracket)
 		}
 
@@ -266,8 +288,8 @@ func (m *MenuModel) renderVariableHeightList() string {
 			} else {
 				addColFocused := isSelected && m.activeColumn == ColAdd
 				enableColFocused := isSelected && m.activeColumn == ColEnable
-				cAContent, cABracket := checkboxStylePair(false, item.Checked, addColFocused)
-				cEContent, cEBracket := checkboxStylePair(false, item.Enabled, enableColFocused)
+				cAContent, cABracket := checkboxStylePair(false, item.Checked, addColFocused, isDisabled)
+				cEContent, cEBracket := checkboxStylePair(false, item.Enabled, enableColFocused, isDisabled)
 
 				// The checkbox columns respect the user's ui.checkbox_brackets
 				// setting (App Select has no radio columns), with the
@@ -933,10 +955,17 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 	for i, item := range items {
 		visibleIdx := startVisibleIndex + i
 		isSelected := visibleIdx == selectedVisibleIndex && m.IsListActive()
+		isDisabled := m.disabled || item.Locked
 
 		tStyle := tagStyleBase
 		kStyle := keyStyleBase
-		if isSelected {
+		if isDisabled && isSelected {
+			tStyle, _ = ResolveDisabledStyle("TagFocused")
+			kStyle, _ = ResolveDisabledStyle("TagKeyFocused")
+		} else if isDisabled {
+			tStyle, _ = ResolveDisabledStyle("Tag")
+			kStyle, _ = ResolveDisabledStyle("TagKey")
+		} else if isSelected {
 			tStyle = tagStyleSel
 			kStyle = keyStyleSel
 		}
@@ -1008,8 +1037,8 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 		enableFocused := isSelected && subFocused && !item.IsEditing && m.activeColumn == ColEnable
 		addBrackets := addFocused || ctx.CheckboxBrackets == "always" || (ctx.CheckboxBrackets == "selected" && item.Checked)
 		enableBrackets := enableFocused || ctx.CheckboxBrackets == "always" || (ctx.CheckboxBrackets == "selected" && item.Enabled)
-		cAContent, cABracket := checkboxStylePair(false, item.Checked, addFocused)
-		cEContent, cEBracket := checkboxStylePair(false, item.Enabled, enableFocused)
+		cAContent, cABracket := checkboxStylePair(false, item.Checked, addFocused, isDisabled)
+		cEContent, cEBracket := checkboxStylePair(false, item.Enabled, enableFocused, isDisabled)
 
 		var checkboxA3, checkboxE3 string
 		if ctx.LineCharacters {
