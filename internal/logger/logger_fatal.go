@@ -63,11 +63,11 @@ func getSystemInfo() []string {
 	info = append(info, "")
 
 	info = append(info, fmt.Sprintf("%-21s %s", "Config File:", console.FormatFilePath(paths.GetConfigFilePath())))
-	info = append(info, fmt.Sprintf("%-21s %s", "Templates Folder:", console.FormatFolderPath(paths.GetTemplatesDir())))
-	info = append(info, fmt.Sprintf("%-21s %s", "State Folder:", console.FormatFolderPath(paths.GetStateDir())))
 	if ExtraPathsInfo != nil {
 		info = append(info, ExtraPathsInfo()...)
 	}
+	info = append(info, fmt.Sprintf("%-21s %s", "Templates Folder:", console.FormatFolderPath(paths.GetTemplatesDir())))
+	info = append(info, fmt.Sprintf("%-21s %s", "State Folder:", console.FormatFolderPath(paths.GetStateDir())))
 	info = append(info, "")
 
 	currentUser, err := user.Current()
