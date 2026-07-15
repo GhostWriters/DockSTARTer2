@@ -45,7 +45,7 @@ StatusUpdateMarker = "{{|StatusUpdate|}}"
 StatusHostname = "{{|StatusFields|}}"
 StatusBarFocused = "{{|TagFocused|}}"
 
-# Titles and messages
+# Titles
 Title = "{{|Dialog:::U|}}"
 TitleHelp = "{{|Title|}}"
 TitleNotice = "{{|Title:green::B|}}"
@@ -58,130 +58,12 @@ ConsoleTitle = "{{|ConsoleBorder|}}"
 ConsoleTitleChangedIndicator = "{{|TitleNotice|}}"
 TitleCheckbox = ""
 TitleCheckboxFocused = "{{|TitleSubMenuFocused|}}"
-
-# Focus indicators
+TitleSubMenu = "{{|Title|}}"
+TitleSubMenuFocused = "{{|Title:::R|}}"
 TitleFocusIndicator = "{{[::-B]}}"
 TitleUnfocusedIndicator = ""
 
-# Submenu titles
-TitleSubMenu = "{{|Title|}}"
-TitleSubMenuFocused = "{{|Title:::R|}}"
-
-# Menu, buttons, and help
-CommandLine = "{{[-]}}"
-ButtonActive = "{{[$fg:$bg:B]}}"
-ButtonInactive = "{{|Dialog|}}"
-ButtonSpinner = ""
-ButtonSpinnerLarge = ""
-ButtonKeyActive = "{{|ButtonActive|}}"
-ButtonKeyInactive = "{{|ButtonInactive:$accent|}}"
-IconFocused = "{{|ButtonActive|}}"
-IconPressed = "{{[blue:yellow:B]}}"
-IconInactive = ""
-HelpIconInactive = "{{|IconInactive|}}"
-RefreshIconInactive = "{{|IconInactive|}}"
-ExitIconInactive = "{{[::R]}}"
-ResizeUpIconInactive = "{{|ConsoleBorder|}}"
-ResizeDnIconInactive = "{{|ConsoleBorder|}}"
-TagKey = "{{|Dialog|}}"
-Tag = "{{|Dialog:::B|}}"
-Item = "{{|Dialog|}}"
-OptionValue = "{{[white:green:B]}}"
-TagKeyFocused = "{{[$fg:$accent:B]}}"
-TagFocused = "{{[$fg:$accent:B]}}"
-TagSpinner = ""
-ItemFocused = "{{[$fg:$bg:B]}}"
-OptionValueFocused = "{{|OptionValue:::B|}}"
-Helpline = "{{|Dialog|}}"
-HelpTag = "{{|Tag|}}"
-HelpItem = "{{|Item|}}"
-Subtitle = "{{[-:-:R]}}"
-Heading = "{{[-:-:-R]}}"
-HeadingTag = "{{[-:-:-B]}}"
-HeadingValue = "{{[-:-:-BU]}}"
-HeadingAppDescription = "{{[-]}}"
-CheckboxOff = "{{|Dialog|}}"
-CheckboxOn = "{{|TagKey|}}"
-CheckboxBracketsOff = "{{|Dialog|}}"
-CheckboxBracketsOn = "{{|Dialog|}}"
-CheckboxOnFocused = "{{|TagFocused|}}"
-CheckboxOffFocused = "{{|TagFocused|}}"
-CheckboxBracketsOnFocused = "{{|TagFocused|}}"
-CheckboxBracketsOffFocused = "{{|TagFocused|}}"
-RadioOff = "{{|Dialog|}}"
-RadioOn = "{{|TagKey|}}"
-RadioBracketsOff = "{{|Dialog|}}"
-RadioBracketsOn = "{{|Dialog|}}"
-RadioOnFocused = "{{|TagFocused|}}"
-RadioOffFocused = "{{|TagFocused|}}"
-RadioBracketsOnFocused = "{{|TagFocused|}}"
-RadioBracketsOffFocused = "{{|TagFocused|}}"
-
-# Inline text highlights
-Highlight = "{{[-:-:-BH]}}"
-ApplicationName = "{{|Highlight|}}"
-RunningCommand = "{{|Highlight|}}"
-FailingCommand = "{{|TitleError|}}"
-UserCommand = "{{|Highlight|}}"
-Branch = "{{|Highlight|}}"
-Version = "{{|Highlight|}}"
-MenuPage = "{{|Highlight|}}"
-File = "{{|Highlight|}}"
-Folder = "{{|Highlight|}}"
-App = "{{|Highlight|}}"
-IPAddress = "{{|Highlight|}}"
-URL = "{{|Highlight:::U|}}"
-Var = "{{|Highlight|}}"
-User = "{{|Highlight|}}"
-Theme = "{{|Highlight|}}"
-Yes = "{{|TitleSuccess|}}"
-No = "{{|TitleError|}}"
-
-# Env editor
-LineComment = "{{|Dialog:::DR|}}"
-ModifiedText = "{{|Dialog:::R|}}"
-LineNumber = "{{|Dialog|}}"
-LineNumberFocused = "{{|LineNumber|}}{{[white::R]}}"
-LineNumberModified = "{{|LineNumber:::R|}}"
-LineNumberModifiedFocused = "{{|LineNumber:::B|}}{{[white::R]}}"
-LineNumberBrackets = "{{|TagBrackets|}}"
-
-# Markers and cursor
-Marker = "{{[black:-:]}}"
-MarkerAdded = "{{|Marker::green|}}"
-MarkerDeleted = "{{|Marker::red|}}"
-MarkerModified = "{{|Marker::yellow|}}"
-MarkerInvalid = "{{[white:red:B]}}"
-TextCursor = "{{[:white:]}}"
-MarkerLocked = "{{|MarkerInvalid|}}"
-MarkerLockedLarge = "{{|MarkerLocked|}}"
-
-# Env variable types
-EnvBuiltin = "{{|Dialog:::B|}}"
-EnvInvalid = "{{|Dialog:red|}}"
-EnvDuplicate = "{{|Dialog:magenta|}}"
-EnvPendingDelete = "{{|Dialog:::DS|}}"
-EnvReadOnly = "{{|Dialog:::D|}}"
-
-# List item overrides
-ListItem = ""
-ListItemUserDefined = "{{[::R]}}"
-ListItemFocused = "{{|ItemFocused|}}"
-ListItemUserDefinedFocused = "{{|ItemFocused|}}"
-TagBrackets = "{{|Dialog|}}"
-
-# Scrollbar
-Scrollbar = "{{|Border2|}}"
-ScrollbarThumb = "{{|Border|}}"
-ScrollbarArrows = "{{|Border|}}"
-
-# Keys, progress, and indicators
-KeyCap = "{{[::-R]}}"
-ProgressWaiting = "{{|Dialog|}}"
-ProgressInProgress = "{{|Dialog:::B|}}"
-ProgressCompleted = "{{|Dialog:::R|}}"
-
-# Large Title Bar
+# Large Titles
 LargeTitleArea = "{{[$bg:$fg:-]}}"
 LargeTitleAreaHelp = "{{|LargeTitleArea|}}"
 LargeTitleAreaNotice = "{{|LargeTitleArea|}}"
@@ -207,6 +89,134 @@ LargeIconPressed = "{{[blue:yellow:B]}}"
 LargeHelpIconInactive = "{{|HelpIconInactive|}}"
 LargeRefreshIconInactive = "{{|HelpIconInactive|}}"
 LargeExitIconInactive = "{{|ExitIconInactive|}}"
+
+# Subtitles
+Subtitle = "{{[-:-:R]}}"
+CommandLine = "{{[-]}}"
+
+# Headings
+Heading = "{{[-:-:-R]}}"
+HeadingTag = "{{[-:-:-B]}}"
+HeadingValue = "{{[-:-:-BU]}}"
+HeadingAppDescription = "{{[-]}}"
+
+# Menus
+TagBrackets = "{{|Dialog|}}"
+TagSpinner = ""
+TagKey = "{{|Dialog|}}"
+Tag = "{{|Dialog:::B|}}"
+Item = "{{|Dialog|}}"
+TagKeyFocused = "{{[$fg:$accent:B]}}"
+TagFocused = "{{[$fg:$accent:B]}}"
+ItemFocused = "{{[$fg:$bg:B]}}"
+ListItem = ""
+ListItemFocused = "{{|ItemFocused|}}"
+ListItemUserDefined = "{{[::R]}}"
+ListItemUserDefinedFocused = "{{|ItemFocused|}}"
+OptionValue = "{{[white:green:B]}}"
+OptionValueFocused = "{{|OptionValue:::B|}}"
+
+# Help
+Helpline = "{{|Dialog|}}"
+HelpTag = "{{|Tag|}}"
+HelpItem = "{{|Item|}}"
+
+# Checkboxes
+CheckboxOff = "{{|Dialog|}}"
+CheckboxOn = "{{|TagKey|}}"
+CheckboxBracketsOff = "{{|Dialog|}}"
+CheckboxBracketsOn = "{{|Dialog|}}"
+CheckboxOnFocused = "{{|TagFocused|}}"
+CheckboxOffFocused = "{{|TagFocused|}}"
+CheckboxBracketsOnFocused = "{{|TagFocused|}}"
+CheckboxBracketsOffFocused = "{{|TagFocused|}}"
+
+# Radio buttons
+RadioOff = "{{|Dialog|}}"
+RadioOn = "{{|TagKey|}}"
+RadioBracketsOff = "{{|Dialog|}}"
+RadioBracketsOn = "{{|Dialog|}}"
+RadioOnFocused = "{{|TagFocused|}}"
+RadioOffFocused = "{{|TagFocused|}}"
+RadioBracketsOnFocused = "{{|TagFocused|}}"
+RadioBracketsOffFocused = "{{|TagFocused|}}"
+
+# Buttons
+ButtonActive = "{{[$fg:$bg:B]}}"
+ButtonInactive = "{{|Dialog|}}"
+ButtonSpinner = ""
+ButtonSpinnerLarge = ""
+ButtonKeyActive = "{{|ButtonActive|}}"
+ButtonKeyInactive = "{{|ButtonInactive:$accent|}}"
+
+# Icons
+IconFocused = "{{|ButtonActive|}}"
+IconPressed = "{{[blue:yellow:B]}}"
+IconInactive = ""
+HelpIconInactive = "{{|IconInactive|}}"
+RefreshIconInactive = "{{|IconInactive|}}"
+ExitIconInactive = "{{[::R]}}"
+ResizeUpIconInactive = "{{|ConsoleBorder|}}"
+ResizeDnIconInactive = "{{|ConsoleBorder|}}"
+
+# Env editor variable types
+EnvBuiltin = "{{|Dialog:::B|}}"
+EnvInvalid = "{{|Dialog:red|}}"
+EnvDuplicate = "{{|Dialog:magenta|}}"
+EnvPendingDelete = "{{|Dialog:::DS|}}"
+EnvReadOnly = "{{|Dialog:::D|}}"
+
+# Env editor
+LineComment = "{{|Dialog:::DR|}}"
+ModifiedText = "{{|Dialog:::R|}}"
+
+# Env editor line numbers
+LineNumber = "{{|Dialog|}}"
+LineNumberFocused = "{{|LineNumber|}}{{[white::R]}}"
+LineNumberModified = "{{|LineNumber:::R|}}"
+LineNumberModifiedFocused = "{{|LineNumber:::B|}}{{[white::R]}}"
+LineNumberBrackets = "{{|TagBrackets|}}"
+
+# Markers and cursor
+Marker = "{{[black:-:]}}"
+MarkerAdded = "{{|Marker::green|}}"
+MarkerDeleted = "{{|Marker::red|}}"
+MarkerModified = "{{|Marker::yellow|}}"
+MarkerInvalid = "{{[white:red:B]}}"
+MarkerLocked = "{{|MarkerInvalid|}}"
+MarkerLockedLarge = "{{|MarkerLocked|}}"
+TextCursor = "{{[:white:]}}"
+
+# Scrollbar
+Scrollbar = "{{|Border2|}}"
+ScrollbarThumb = "{{|Border|}}"
+ScrollbarArrows = "{{|Border|}}"
+
+# Keys, progress, and indicators
+KeyCap = "{{[::-R]}}"
+ProgressWaiting = "{{|Dialog|}}"
+ProgressInProgress = "{{|Dialog:::B|}}"
+ProgressCompleted = "{{|Dialog:::R|}}"
+
+# Inline text highlights
+Highlight = "{{[-:-:-BH]}}"
+ApplicationName = "{{|Highlight|}}"
+RunningCommand = "{{|Highlight|}}"
+FailingCommand = "{{|TitleError|}}"
+UserCommand = "{{|Highlight|}}"
+Branch = "{{|Highlight|}}"
+Version = "{{|Highlight|}}"
+MenuPage = "{{|Highlight|}}"
+File = "{{|Highlight|}}"
+Folder = "{{|Highlight|}}"
+App = "{{|Highlight|}}"
+IPAddress = "{{|Highlight|}}"
+URL = "{{|Highlight:::U|}}"
+Var = "{{|Highlight|}}"
+User = "{{|Highlight|}}"
+Theme = "{{|Highlight|}}"
+Yes = "{{|TitleSuccess|}}"
+No = "{{|TitleError|}}"
 
 [defaults]
 dialog_title_align = "center"
