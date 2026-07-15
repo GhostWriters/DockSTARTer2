@@ -32,9 +32,13 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Allow resizing to proceed
 		case EnvLoadDoneMsg, RefreshAppsListMsg, SubDialogMsg, SubDialogResultMsg,
 			UniversalPromptMsg, ShowConfirmDialogMsg, ShowPromptDialogMsg, ShowMessageDialogMsg,
-			ConfirmQuitMsg:
+			ConfirmQuitMsg, displayengine.ConsoleLockMsg:
 			// Allow data-loading, dialog triggers, and results to pass through
-			// even if terminal size isn't yet synced.
+			// even if terminal size isn't yet synced. ConsoleLockMsg must also pass:
+			// the lockfile watcher's startup goroutine sends the pre-existing
+			// edit.lock state almost immediately, racing the first WindowSizeMsg --
+			// if dropped here, m.lockedByOthers never gets set and no menu ever
+			// shows the lock markers for a lock that was already held at launch.
 		default:
 			return m, nil
 		}
