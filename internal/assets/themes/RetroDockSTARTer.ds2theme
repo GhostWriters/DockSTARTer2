@@ -165,9 +165,9 @@ EnvReadOnly = "{{|Dialog:::D|}}"
 
 # List item overrides
 ListItem = ""
-ListItemUserDefined = "{{[black::R]}}"
+ListItemUserDefined = "{{[magenta:black]}}"
 ListItemFocused = "{{|ItemFocused|}}"
-ListItemUserDefinedFocused = "{{|ItemFocused|}}"
+ListItemUserDefinedFocused = "{{|ListItemUserDefined:red|}}"
 TagBrackets = "{{|Dialog|}}"
 
 # Scrollbar
