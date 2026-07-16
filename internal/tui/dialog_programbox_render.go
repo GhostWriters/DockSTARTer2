@@ -242,7 +242,7 @@ func RunProgramBox(ctx context.Context, title, subtitle, command string, task fu
 	dialogModel.SetMaximized(true)
 
 	// Create full app model with standalone dialog to include log panel and backdrop
-	model := NewAppModelStandalone(ctx, cfg, "local", "cli", dialogModel)
+	model := NewAppModelStandalone(ctx, cfg, "local", "cli", parseSessionKey(nil), dialogModel)
 
 	// Create Bubble Tea program
 	p := NewProgram(model, ProgramOptions{RefreshRate: cfg.UI.RefreshRate})

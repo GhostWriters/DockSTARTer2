@@ -65,6 +65,15 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateExitLockedState(msg.Locked)
 		return m, logger.BatchRecoverTUI(m.ctx, cmds...)
 
+	case triggerComposeUpdateMsg:
+		return m, func() tea.Msg { return doTriggerComposeUpdate(m.clientIP, m.connType, m.sessionKey) }
+
+	case triggerComposeStopMsg:
+		return m, func() tea.Msg { return doTriggerComposeStop(m.clientIP, m.connType, m.sessionKey) }
+
+	case triggerDockerPruneMsg:
+		return m, func() tea.Msg { return doTriggerDockerPrune(m.clientIP, m.connType, m.sessionKey) }
+
 	case displayengine.LockStateChangedMsg:
 		// Broadcast lock changes to both the active screen and any open dialog
 		// to ensure background items update even if a dialog has focus.
@@ -321,7 +330,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if msg.Screen != nil && msg.Screen.IsDestructive() {
-			if !sessionlocks.Sessions.AcquireEditLock(m.clientIP, msg.Screen.Title(), "menu", m.connType) {
+			if !sessionlocks.Sessions.AcquireEditLock(m.clientIP, msg.Screen.Title(), "menu", m.connType, m.sessionKey) {
 				info := sessionlocks.Sessions.ReadEditInfo()
 				busyMsg := editLockBusyMsg(info, msg.Screen.Title())
 				return m, func() tea.Msg {
@@ -901,7 +910,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// edit.lock state sync
 		if msg.ID == "edit.lock" {
 			// Only lock menu items when a genuinely external session holds the lock.
-			lockedByOthers := msg.Locked && !sessionlocks.Sessions.HoldEditLockLocal()
+			lockedByOthers := msg.Locked && !sessionlocks.Sessions.HoldEditLockAs(m.sessionKey)
 			if lockedByOthers != m.lockedByOthers {
 				m.lockedByOthers = lockedByOthers
 				cmds = append(cmds, func() tea.Msg { return displayengine.LockStateChangedMsg{LockedByOthers: lockedByOthers} })

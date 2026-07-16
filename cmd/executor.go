@@ -287,7 +287,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			if os.Getenv("SSH_CONNECTION") != "" {
 				cliTransport = "ssh"
 			}
-			if !sessionlocks.Sessions.AcquireEditLock("local", cmdStr, "cli", cliTransport) {
+			if !sessionlocks.Sessions.AcquireEditLock("local", cmdStr, "cli", cliTransport, fmt.Sprintf("cli-%d", os.Getpid())) {
 				info := sessionlocks.Sessions.ReadEditInfo()
 				closing := fmt.Sprintf("Cannot run '{{|UserCommand|}}%s{{[-]}}' while the configuration is being edited.", cmdStr)
 				logger.Error(ctx, sessionlocks.EditLockLines(info, closing))

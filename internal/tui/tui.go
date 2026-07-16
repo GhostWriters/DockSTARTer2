@@ -50,12 +50,6 @@ var (
 	// rename/add-instance text field. Checked by isRestartSafeLocally.
 	CurrentScreenHasUnsavedEdit bool
 
-	// currentClientIP is the IP address of the active TUI session (set at startup).
-	currentClientIP string
-
-	// currentTransport is the transport type of the active TUI session: "local", "ssh", or "web".
-	currentTransport string
-
 	// isRootSession is true when the TUI was started with a plain -M pagename (no start- prefix).
 	// Root sessions suppress the Back button on the entry screen and re-exec to the same plain
 	// pagename after a self-update. Non-root sessions re-exec with the "start-" prefix so the
@@ -399,6 +393,24 @@ func parseClientInfo(environ []string) (clientIP, connType string, viaOwnServer 
 	return clientIP, connType, viaOwnServer
 }
 
+// parseSessionKey extracts the per-connection session identifier the SSH/web
+// listener registered (DS2_SESSION_ID, set by ssh_handler.go's RegisterSession
+// call). This is the identity used for edit-lock re-entry: a server-daemon
+// process serves many concurrent SSH/web sessions from one OS process, so
+// distinguishing "the same session re-entering" from "a different session
+// that happens to use the same lockSource category" requires an identifier
+// per actual connection, not per process. A plain foreground/local invocation
+// (no listener involved) never sets this env var, so it falls back to a
+// PID-based key -- correct there since each such invocation is its own process.
+func parseSessionKey(environ []string) string {
+	for _, env := range environ {
+		if strings.HasPrefix(env, "DS2_SESSION_ID=") {
+			return strings.TrimPrefix(env, "DS2_SESSION_ID=")
+		}
+	}
+	return fmt.Sprintf("local-%d", os.Getpid())
+}
+
 // startWindowSizeForwarder launches a goroutine that reads from opts.WindowSize
 // and sends tea.WindowSizeMsg to the program. The goroutine exits when ctx is
 // cancelled or the channel is closed.
@@ -429,8 +441,7 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 		pOpts = opts[0]
 	}
 	clientIP, connType, viaOwnServer := parseClientInfo(pOpts.Environ)
-	currentClientIP = clientIP
-	currentTransport = connType
+	sessionKey := parseSessionKey(pOpts.Environ)
 	console.SetViaOwnServer(viaOwnServer)
 	console.SetClientIP(clientIP)
 	isSSH := pOpts.Input != nil
@@ -506,7 +517,7 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	}
 
 	// Create the app model
-	model := NewAppModel(ctx, displayengine.CurrentConfig(), clientIP, connType, startScreen, initialStack...)
+	model := NewAppModel(ctx, displayengine.CurrentConfig(), clientIP, connType, sessionKey, startScreen, initialStack...)
 
 	if console.IsPuTTY() {
 		logger.Info(ctx, "PuTTY terminal detected")
@@ -639,6 +650,7 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 
 	isRootSession = isRoot
 	ip, ctype, viaOwnServer := parseClientInfo(pOpts.Environ)
+	sessionKey := parseSessionKey(pOpts.Environ)
 	activeConnType = ctype
 	console.SetViaOwnServer(viaOwnServer)
 	console.SetClientIP(ip)
@@ -663,7 +675,7 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 		}
 	}
 
-	model := NewAppModel(ctx, displayengine.CurrentConfig(), ip, ctype, startScreen, initialStack...)
+	model := NewAppModel(ctx, displayengine.CurrentConfig(), ip, ctype, sessionKey, startScreen, initialStack...)
 	p = NewProgram(model, pOpts)
 	exited = registerSession(p)
 
@@ -818,10 +830,11 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 	startScreen := varEditorFactory(varName, displayAppName, appDesc, file, origVal, opts, helpText, docMarkdown, docAppName, onSave, tea.Quit)
 
 	ip, ctype, viaOwnServer := parseClientInfo(pOpts.Environ)
+	sessionKey := parseSessionKey(pOpts.Environ)
 	console.SetViaOwnServer(viaOwnServer)
 	console.SetClientIP(ip)
 	pOpts.RefreshRate = resolveRefreshRate(ctype, pOpts.WebToken)
-	model := NewAppModel(ctx, displayengine.CurrentConfig(), ip, ctype, startScreen)
+	model := NewAppModel(ctx, displayengine.CurrentConfig(), ip, ctype, sessionKey, startScreen)
 	p = NewProgram(model, pOpts)
 	exited = registerSession(p)
 
@@ -1306,90 +1319,114 @@ func editLockBusyMsg(info sessionlocks.SessionInfo, attempted string) string {
 	return msg
 }
 
-// TriggerComposeUpdate returns a tea.Cmd that starts all enabled apps via docker compose update.
+// triggerComposeUpdateMsg, triggerComposeStopMsg, and triggerDockerPruneMsg are
+// requests dispatched by the Config menu's buttons. The actual edit-lock check
+// and dialog construction happens in AppModel.Update (see model_update.go),
+// not here -- these buttons' Action closures are built once at screen
+// construction time, shared by every session in a server-daemon process, so
+// they can't close over a specific session's clientIP/connType/sessionKey.
+// Routing through Update instead lets each session's own AppModel fields
+// drive the lock check that actually runs when the button is pressed.
+type triggerComposeUpdateMsg struct{}
+type triggerComposeStopMsg struct{}
+type triggerDockerPruneMsg struct{}
+
+// TriggerComposeUpdate returns a tea.Cmd that requests starting all enabled apps via docker compose update.
 func TriggerComposeUpdate() tea.Cmd {
-	return func() tea.Msg {
-		if !sessionlocks.Sessions.AcquireEditLock(currentClientIP, "Start All Applications", "menu:compose-start", currentTransport) {
-			return ShowMessageDialogMsg{Title: "Resource Busy", Message: editLockBusyMsg(sessionlocks.Sessions.ReadEditInfo(), ""), Type: MessageError}
-		}
-		task := func(ctx context.Context, w io.Writer) error {
-			defer sessionlocks.Sessions.ReleaseEditLock()
-			ctx = console.WithTUIWriter(ctx, w)
-			if err := compose.ExecuteCompose(ctx, console.AssumeYes(), console.Force(), "update"); err != nil {
-				logger.Error(ctx, "%v", err)
-				return err
-			}
-			return nil
-		}
-		dialog := NewProgramBoxModel("Docker Compose", compose.YesNotice("update", ""), CmdLine("--compose", "update")).WithDialogType(displayengine.DialogTypeSuccess)
-		dialog.SetTask(task)
-		dialog.SetIsDialog(true)
-		dialog.SetMaximized(true)
-		return displayengine.ShowDialogMsg{Dialog: dialog}
-	}
+	return func() tea.Msg { return triggerComposeUpdateMsg{} }
 }
 
-// TriggerComposeStop returns a tea.Cmd that prompts Stop/Down/Cancel then runs the chosen compose op.
+// TriggerComposeStop returns a tea.Cmd that requests prompting Stop/Down/Cancel then running the chosen compose op.
 func TriggerComposeStop() tea.Cmd {
-	return func() tea.Msg {
-		if !sessionlocks.Sessions.AcquireEditLock(currentClientIP, "Stop All Applications", "menu:compose-stop", currentTransport) {
-			return ShowMessageDialogMsg{Title: "Resource Busy", Message: editLockBusyMsg(sessionlocks.Sessions.ReadEditInfo(), ""), Type: MessageError}
-		}
-		question := "Would you like to {{|Highlight|}}Stop{{[-]}} all containers, or bring all containers {{|Highlight|}}Down{{[-]}}?\n\n{{|Highlight|}}Stop{{[-]}} will stop them, {{|Highlight|}}Down{{[-]}} will stop and remove them."
-		task := func(ctx context.Context, w io.Writer) error {
-			defer sessionlocks.Sessions.ReleaseEditLock()
-			ctx = console.WithTUIWriter(ctx, w)
-			choice := PromptChoice("Docker Compose", question, "Stop", "Down", "Cancel")
-			switch choice {
-			case 0: // Stop
-				SetProgramBoxHeader(compose.YesNotice("stop", ""), CmdLine("--compose", "stop"))
-				if err := compose.ExecuteCompose(ctx, true, console.Force(), "stop"); err != nil {
-					logger.Error(ctx, "%v", err)
-					return err
-				}
-			case 1: // Down
-				SetProgramBoxHeader(compose.YesNotice("down", ""), CmdLine("--compose", "down"))
-				if err := compose.ExecuteCompose(ctx, true, console.Force(), "down"); err != nil {
-					logger.Error(ctx, "%v", err)
-					return err
-				}
-			}
-			return nil
-		}
-		// The command line is deliberately blank at creation -- Stop vs. Down
-		// isn't decided until the PromptChoice above resolves, and showing a
-		// guessed command line before that would be misleading. The subtitle
-		// itself is still fine to show generically. SetProgramBoxHeader fills
-		// in both properly once the choice is known.
-		dialog := NewProgramBoxModel("Docker Compose", "Stopping or removing running containers.", "").WithDialogType(displayengine.DialogTypeSuccess)
-		dialog.SetTask(task)
-		dialog.SetIsDialog(true)
-		dialog.SetMaximized(true)
-		return displayengine.ShowDialogMsg{Dialog: dialog}
-	}
+	return func() tea.Msg { return triggerComposeStopMsg{} }
 }
 
-// TriggerDockerPrune returns a tea.Cmd that runs docker system prune.
+// TriggerDockerPrune returns a tea.Cmd that requests running docker system prune.
 func TriggerDockerPrune() tea.Cmd {
-	return func() tea.Msg {
-		if !sessionlocks.Sessions.AcquireEditLock(currentClientIP, "Prune Docker System", "menu:docker-prune", currentTransport) {
-			return ShowMessageDialogMsg{Title: "Resource Busy", Message: editLockBusyMsg(sessionlocks.Sessions.ReadEditInfo(), ""), Type: MessageError}
+	return func() tea.Msg { return triggerDockerPruneMsg{} }
+}
+
+// doTriggerComposeUpdate performs the actual edit-lock check and starts all
+// enabled apps via docker compose update, using the acquiring session's own identity.
+func doTriggerComposeUpdate(clientIP, connType, sessionKey string) tea.Msg {
+	if !sessionlocks.Sessions.AcquireEditLock(clientIP, "Start All Applications", "menu:compose-start", connType, sessionKey) {
+		return ShowMessageDialogMsg{Title: "Resource Busy", Message: editLockBusyMsg(sessionlocks.Sessions.ReadEditInfo(), ""), Type: MessageError}
+	}
+	task := func(ctx context.Context, w io.Writer) error {
+		defer sessionlocks.Sessions.ReleaseEditLock()
+		ctx = console.WithTUIWriter(ctx, w)
+		if err := compose.ExecuteCompose(ctx, console.AssumeYes(), console.Force(), "update"); err != nil {
+			logger.Error(ctx, "%v", err)
+			return err
 		}
-		task := func(ctx context.Context, w io.Writer) error {
-			defer sessionlocks.Sessions.ReleaseEditLock()
-			ctx = console.WithTUIWriter(ctx, w)
-			if err := docker.Prune(ctx, console.AssumeYes()); err != nil {
+		return nil
+	}
+	dialog := NewProgramBoxModel("Docker Compose", compose.YesNotice("update", ""), CmdLine("--compose", "update")).WithDialogType(displayengine.DialogTypeSuccess)
+	dialog.SetTask(task)
+	dialog.SetIsDialog(true)
+	dialog.SetMaximized(true)
+	return displayengine.ShowDialogMsg{Dialog: dialog}
+}
+
+// doTriggerComposeStop performs the actual edit-lock check and prompts
+// Stop/Down/Cancel then runs the chosen compose op, using the acquiring session's own identity.
+func doTriggerComposeStop(clientIP, connType, sessionKey string) tea.Msg {
+	if !sessionlocks.Sessions.AcquireEditLock(clientIP, "Stop All Applications", "menu:compose-stop", connType, sessionKey) {
+		return ShowMessageDialogMsg{Title: "Resource Busy", Message: editLockBusyMsg(sessionlocks.Sessions.ReadEditInfo(), ""), Type: MessageError}
+	}
+	question := "Would you like to {{|Highlight|}}Stop{{[-]}} all containers, or bring all containers {{|Highlight|}}Down{{[-]}}?\n\n{{|Highlight|}}Stop{{[-]}} will stop them, {{|Highlight|}}Down{{[-]}} will stop and remove them."
+	task := func(ctx context.Context, w io.Writer) error {
+		defer sessionlocks.Sessions.ReleaseEditLock()
+		ctx = console.WithTUIWriter(ctx, w)
+		choice := PromptChoice("Docker Compose", question, "Stop", "Down", "Cancel")
+		switch choice {
+		case 0: // Stop
+			SetProgramBoxHeader(compose.YesNotice("stop", ""), CmdLine("--compose", "stop"))
+			if err := compose.ExecuteCompose(ctx, true, console.Force(), "stop"); err != nil {
 				logger.Error(ctx, "%v", err)
 				return err
 			}
-			return nil
+		case 1: // Down
+			SetProgramBoxHeader(compose.YesNotice("down", ""), CmdLine("--compose", "down"))
+			if err := compose.ExecuteCompose(ctx, true, console.Force(), "down"); err != nil {
+				logger.Error(ctx, "%v", err)
+				return err
+			}
 		}
-		dialog := NewProgramBoxModel("Docker Prune", "Removing unused docker resources.", CmdLine("--prune")).WithDialogType(displayengine.DialogTypeSuccess)
-		dialog.SetTask(task)
-		dialog.SetIsDialog(true)
-		dialog.SetMaximized(true)
-		return displayengine.ShowDialogMsg{Dialog: dialog}
+		return nil
 	}
+	// The command line is deliberately blank at creation -- Stop vs. Down
+	// isn't decided until the PromptChoice above resolves, and showing a
+	// guessed command line before that would be misleading. The subtitle
+	// itself is still fine to show generically. SetProgramBoxHeader fills
+	// in both properly once the choice is known.
+	dialog := NewProgramBoxModel("Docker Compose", "Stopping or removing running containers.", "").WithDialogType(displayengine.DialogTypeSuccess)
+	dialog.SetTask(task)
+	dialog.SetIsDialog(true)
+	dialog.SetMaximized(true)
+	return displayengine.ShowDialogMsg{Dialog: dialog}
+}
+
+// doTriggerDockerPrune performs the actual edit-lock check and runs docker
+// system prune, using the acquiring session's own identity.
+func doTriggerDockerPrune(clientIP, connType, sessionKey string) tea.Msg {
+	if !sessionlocks.Sessions.AcquireEditLock(clientIP, "Prune Docker System", "menu:docker-prune", connType, sessionKey) {
+		return ShowMessageDialogMsg{Title: "Resource Busy", Message: editLockBusyMsg(sessionlocks.Sessions.ReadEditInfo(), ""), Type: MessageError}
+	}
+	task := func(ctx context.Context, w io.Writer) error {
+		defer sessionlocks.Sessions.ReleaseEditLock()
+		ctx = console.WithTUIWriter(ctx, w)
+		if err := docker.Prune(ctx, console.AssumeYes()); err != nil {
+			logger.Error(ctx, "%v", err)
+			return err
+		}
+		return nil
+	}
+	dialog := NewProgramBoxModel("Docker Prune", "Removing unused docker resources.", CmdLine("--prune")).WithDialogType(displayengine.DialogTypeSuccess)
+	dialog.SetTask(task)
+	dialog.SetIsDialog(true)
+	dialog.SetMaximized(true)
+	return displayengine.ShowDialogMsg{Dialog: dialog}
 }
 
 // Send sends a message to the running Bubble Tea program

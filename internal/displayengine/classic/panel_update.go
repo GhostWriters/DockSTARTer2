@@ -189,7 +189,7 @@ func (m *PanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 				logger.Notice(cmdCtx, "Console command: '{{|UserCommand|}}%s{{[-]}}'", cmdStr)
 			}
 
-			commands.Execute(cmdCtx, groups)
+			commands.Execute(cmdCtx, groups, m.clientIP, m.connType, m.sessionKey)
 			pw.Close()
 		}()
 

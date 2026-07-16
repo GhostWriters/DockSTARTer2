@@ -220,10 +220,11 @@ const (
 
 // AppModel is the root Bubble Tea model
 type AppModel struct {
-	ctx      context.Context
-	config   config.AppConfig
-	clientIP string
-	connType string
+	ctx        context.Context
+	config     config.AppConfig
+	clientIP   string
+	connType   string
+	sessionKey string // identifies this session for edit-lock re-entry (see sessionlocks.SessionManager.localSessionKey)
 
 	// lockedByOthers indicates if the configuration is locked by another session
 	lockedByOthers bool
@@ -291,7 +292,7 @@ type AppModel struct {
 // NewAppModel creates a new application model.
 // initialStack is optional; pass parent screens (outermost first) to pre-populate
 // the navigation stack so that Back navigates to the parent rather than quitting.
-func NewAppModel(ctx context.Context, cfg config.AppConfig, clientIP, connType string, startScreen ScreenModel, initialStack ...ScreenModel) *AppModel {
+func NewAppModel(ctx context.Context, cfg config.AppConfig, clientIP, connType, sessionKey string, startScreen ScreenModel, initialStack ...ScreenModel) *AppModel {
 	// Get initial help text from screen if available
 	helpText := ""
 	if startScreen != nil {
@@ -309,27 +310,29 @@ func NewAppModel(ctx context.Context, cfg config.AppConfig, clientIP, connType s
 		config:       cfg,
 		clientIP:     clientIP,
 		connType:     connType,
+		sessionKey:   sessionKey,
 		activeScreen: startScreen,
 		screenStack:  stack,
 		needsInit:    make(map[ScreenModel]bool),
 		backdrop:     bd,
-		panel:        displayengine.NewPanelModel(displayengine.EffectivePanelMode(cfg, connType), connType),
+		panel:        displayengine.NewPanelModel(displayengine.EffectivePanelMode(cfg, connType), connType, clientIP, sessionKey),
 	}
 }
 
 // NewAppModelStandalone creates a new application model that starts with a modal dialog only
-func NewAppModelStandalone(ctx context.Context, cfg config.AppConfig, clientIP, connType string, dialog tea.Model) *AppModel {
+func NewAppModelStandalone(ctx context.Context, cfg config.AppConfig, clientIP, connType, sessionKey string, dialog tea.Model) *AppModel {
 	bd := displayengine.NewBackdropModel("")
 	bd.SetConnType(connType)
 	return &AppModel{
-		ctx:       ctx,
-		config:    cfg,
-		clientIP:  clientIP,
-		connType:  connType,
-		needsInit: make(map[ScreenModel]bool),
-		backdrop:  bd,
-		panel:     displayengine.NewPanelModel(displayengine.EffectivePanelMode(cfg, connType), connType),
-		dialog:    dialog,
+		ctx:        ctx,
+		config:     cfg,
+		clientIP:   clientIP,
+		connType:   connType,
+		sessionKey: sessionKey,
+		needsInit:  make(map[ScreenModel]bool),
+		backdrop:   bd,
+		panel:      displayengine.NewPanelModel(displayengine.EffectivePanelMode(cfg, connType), connType, clientIP, sessionKey),
+		dialog:     dialog,
 	}
 }
 

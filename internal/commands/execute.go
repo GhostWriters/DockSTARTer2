@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/config"
@@ -42,8 +41,19 @@ func SetUIProvider(p UIProvider) {
 
 // Execute runs a sequence of command groups in console mode (no TUI, no GUI wrapping).
 // Non-consoleSafe commands are rejected with a warning line.
+// sessionKey identifies the caller (TUI session or standalone CLI process) so the
+// edit lock's re-entry check can tell "same session running another command" apart
+// from "a different session that happens to also be entering via console" -- see
+// sessionlocks.SessionManager.localSessionKey. clientIP is the owning session's
+// real client address (not "local") so the lock's terminal/browser attribution
+// (shown in "Resource Busy" details) reflects who actually holds it, instead of
+// always falling back to the server process's own terminal. connType is the
+// owning session's real transport ("local", "ssh-server", or "web") -- passed
+// through rather than inferred from the server daemon's own SSH_CONNECTION env
+// var, which reflects how the DAEMON process was started, not which session is
+// actually running this console command (see sessionlocks.SessionLabel).
 // Returns the exit code (0 = success).
-func Execute(ctx context.Context, groups []CommandGroup) int {
+func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, sessionKey string) int {
 	// Ensure globals are reset on exit so console flags don't leak into the TUI.
 	defer func() {
 		console.GlobalYes = false
@@ -153,11 +163,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 
 		// Block action commands when someone else is currently editing the configuration.
 		if def.SessionLocked {
-			cliTransport := "local"
-			if os.Getenv("SSH_CONNECTION") != "" {
-				cliTransport = "ssh"
-			}
-			if !sessionlocks.Sessions.AcquireEditLock("local", cmdStr, "console", cliTransport) {
+			if !sessionlocks.Sessions.AcquireEditLock(clientIP, cmdStr, "console", connType, sessionKey) {
 				info := sessionlocks.Sessions.ReadEditInfo()
 				closing := fmt.Sprintf("Cannot run '{{|UserCommand|}}%s{{[-]}}' while the configuration is being edited.", cmdStr)
 				logger.Error(ctx, sessionlocks.EditLockLines(info, closing))

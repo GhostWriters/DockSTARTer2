@@ -13,6 +13,7 @@ import (
 
 	"DockSTARTer2/internal/paths"
 	"github.com/gofrs/flock"
+	"github.com/google/uuid"
 	"github.com/pelletier/go-toml/v2"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -81,8 +82,14 @@ type SessionManager struct {
 	disconnectReqPath string // $STATE/disconnect.request
 	stopReqPath       string // $STATE/stop.request
 
-	localOwner  string // tracks which part of the current process holds the lock (e.g. "Menu", "Console")
-	localSource string // "menu", "cli", or "console" — used to allow re-entry from same source
+	localOwner      string // tracks which part of the current process holds the lock (e.g. "Menu", "Console")
+	localSource     string // "menu", "cli", or "console" — informational only, recorded in the lock file
+	localSessionKey string // identifies the actual session/process that holds the lock -- used to allow
+	// re-entry (multiple destructive screens/commands within the SAME session), while still correctly
+	// blocking a DIFFERENT session even when it uses the same lockSource category. Plain lockSource
+	// equality isn't enough: a server-daemon process serves many concurrent SSH/web sessions that all
+	// go through e.g. "menu", so comparing lockSource alone would let one session's lock be silently
+	// reused by an unrelated session that happened to enter through the same code path.
 }
 
 // SessionInfo holds the details read from a session lock file.
@@ -184,19 +191,58 @@ func (m *SessionManager) IsEditLocked() bool {
 	return true
 }
 
-// HoldEditLockLocal reports whether the current process holds the edit lock.
+// HoldEditLockLocal reports whether this process holds the edit lock, without
+// regard to which of its sessions acquired it. Correct for restart-safety
+// checks (restarting the process would disrupt whichever session holds it,
+// regardless of which session is asking), but NOT for deciding whether a
+// specific session should treat the lock as "held by others" -- a
+// server-daemon process serves many concurrent sessions, and this alone
+// can't tell them apart. Use HoldEditLockAs for that.
 func (m *SessionManager) HoldEditLockLocal() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.editActive
 }
 
-func (m *SessionManager) AcquireEditLock(clientIP, connType, lockSource, transport string) bool {
+// HoldEditLockAs reports whether this process holds the edit lock on behalf
+// of the given session specifically, AND that lock is merely a navigation
+// lock (lockSource "menu" -- the session is sitting inside a destructive
+// screen, not actively running anything). Use this (not HoldEditLockLocal)
+// when deciding whether the lock should read as "held by others" from a
+// particular session's point of view -- e.g. whether to dim/mark its
+// destructive menu items.
+//
+// A DIFFERENT session's lock always counts as "others" here (see
+// heldByLocked). But even the OWNING session's own lock still counts as
+// "others" -- i.e. this still returns false -- when it was acquired for an
+// actively-running command (lockSource "console", "cli", or any
+// "menu:<action>" like compose start/stop/prune), rather than plain
+// navigation: an in-progress operation should visibly block other
+// destructive items even in your own session, so you don't kick off a
+// conflicting action while one is already running. Only bare "menu"
+// (navigating between destructive screens with nothing actively executing)
+// is safe to exempt for the owning session.
+func (m *SessionManager) HoldEditLockAs(sessionKey string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.heldByLocked(sessionKey) && m.localSource == "menu"
+}
+
+// heldByLocked is the single definition of "does session sessionKey hold the
+// edit lock", shared by AcquireEditLock's re-entry check and HoldEditLockAs
+// so the two can't drift out of sync. Caller must already hold m.mu.
+func (m *SessionManager) heldByLocked(sessionKey string) bool {
+	return m.editActive && m.localSessionKey == sessionKey
+}
+
+// sessionKey identifies the actual caller (session or standalone process),
+// not merely which subsystem it entered through -- see localSessionKey.
+func (m *SessionManager) AcquireEditLock(clientIP, connType, lockSource, transport, sessionKey string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	if m.editActive {
-		return m.localSource == lockSource
+		return m.heldByLocked(sessionKey)
 	}
 
 	for i := 0; i < 3; i++ {
@@ -209,6 +255,7 @@ func (m *SessionManager) AcquireEditLock(clientIP, connType, lockSource, transpo
 			m.editActive = true
 			m.localOwner = connType
 			m.localSource = lockSource
+			m.localSessionKey = sessionKey
 			terminal := DetectTerminal()
 			if clientIP != "" && clientIP != "local" {
 				for _, cs := range m.ListConnectedSessions() {
@@ -268,6 +315,7 @@ func (m *SessionManager) ReleaseEditLock() {
 	m.editActive = false
 	m.localOwner = ""
 	m.localSource = ""
+	m.localSessionKey = ""
 	if m.editFlock != nil {
 		_ = m.editFlock.Unlock()
 	}
@@ -477,12 +525,16 @@ type ConnectedSession struct {
 }
 
 // RegisterSession writes a session file for an active incoming connection.
-// Returns the session ID to pass to UnregisterSession on disconnect.
+// Returns the session ID to pass to UnregisterSession on disconnect. This ID
+// also becomes the session's edit-lock identity (see AcquireEditLock's
+// re-entry check), so it must be collision-proof -- a random UUID rather than
+// a PID+timestamp composite, which could theoretically collide if two
+// connections register at the same clock tick.
 // terminal is a human-readable identifier: for SSH it's e.g. "WezTerm/xterm-256color",
 // for web it's a simplified browser name from the User-Agent.
 func (m *SessionManager) RegisterSession(clientIP, connType, terminal string) string {
 	_ = os.MkdirAll(m.sessionsDir, 0755)
-	id := fmt.Sprintf("%d_%d", os.Getpid(), time.Now().UnixNano())
+	id := uuid.NewString()
 	path := filepath.Join(m.sessionsDir, id)
 	_ = writeTomlFile(path, sessionRecord{
 		ClientIP:  clientIP,
@@ -743,6 +795,7 @@ func (m *SessionManager) ForceRelease() {
 	m.editActive = false
 	m.localOwner = ""
 	m.localSource = ""
+	m.localSessionKey = ""
 	if m.editFlock != nil {
 		_ = m.editFlock.Unlock()
 	}
