@@ -68,9 +68,12 @@ func buildConfigAppItems(ctx context.Context, apps []string, envFile string, con
 		isUserDefined := appenv.IsAppUserDefined(ctx, appName, envFile)
 
 		descText := displayengine.GetPlainText(desc)
-		if isUserDefined {
+		switch {
+		case isUserDefined:
 			descText = "{{|ListItemUserDefined|}}" + descText
-		} else {
+		case appenv.IsAppDeprecated(ctx, appenv.AppNameToBaseAppName(appName)):
+			descText = "{{|ListItemDeprecated|}}" + descText
+		default:
 			descText = "{{|ListItem|}}" + descText
 		}
 
