@@ -20,14 +20,12 @@ const InternalFixPermissionsArg = constants.InternalFixPermissionsArg
 //
 //	sudo ds2 --internal-fix-permissions <puid> <pgid> <chown 0|1> <chmod 0|1> <recursive 0|1> <path>
 //
-// applyPermissionFix re-execs DS2 via sudo into this mode when the current
-// process lacks the privileges to fix ownership/permissions natively; the
-// elevated child performs the exact same single-walk native fix, just as
-// root. It must be dispatched as the very first thing in main() -- before
-// config loading, logging setup, instance detection, and especially
-// CheckNotRoot (this child deliberately runs as root) -- and does nothing
-// but parse its arguments, run the fix, and report any error on stderr for
-// the parent to relay into its own log.
+// applyPermissionFix re-execs DS2 via sudo into this mode when it lacks the
+// privileges to fix ownership/permissions natively; the elevated child runs
+// the same single-walk native fix as root. Must be dispatched as the very
+// first thing in main(), before CheckNotRoot (this child deliberately runs
+// as root) -- parses arguments, runs the fix, reports any error on stderr
+// for the parent to relay into its own log.
 func RunInternalFixPermissions(args []string) int {
 	if len(args) != 6 {
 		fmt.Fprintln(os.Stderr, "usage:", InternalFixPermissionsArg, "<puid> <pgid> <chown 0|1> <chmod 0|1> <recursive 0|1> <path>")

@@ -639,15 +639,12 @@ func (d *WebDisplayDialog) SetSize(width, height int) {
 		contentW = 1
 	}
 
-	// Fixed budget for every section OTHER than the font-family flow-grid,
-	// via the same per-section formula calculateSectionLayout uses
-	// internally (SectionHeight) -- no re-derivation here. Font Size and
-	// Refresh Rate share one displayengine.ContentRow, so their combined contribution is
-	// the max of the two (they're side by side, same convention
-	// displayengine.ContentRow.SectionHeight uses), not the sum of each measured
-	// separately -- summing them here would double-count and leave the
-	// row's actual (shorter) height as unclaimed blank space below the
-	// buttons.
+	// Fixed budget for every section other than the font-family flow-grid,
+	// via the same per-section SectionHeight formula calculateSectionLayout
+	// uses internally. Font Size and Refresh Rate share one
+	// displayengine.ContentRow, so their combined contribution is the max of
+	// the two (side by side), not the sum -- summing would double-count and
+	// leave the row's actual (shorter) height as unclaimed blank space.
 	defaultH := d.defaultSection.SectionHeight(contentW)
 	rowContentW := displayengine.SplitWidth(contentW, 2)
 	sizeRowH := d.sizeSection.SectionHeight(rowContentW[0])

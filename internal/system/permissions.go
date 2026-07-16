@@ -14,33 +14,27 @@ import (
 	"strings"
 )
 
-// applyPermissionFix performs the actual ownership/permission changes for
-// SetPermissions/TakeOwnership: natively in-process (see fixPermissions)
-// when this process holds the privileges each requested operation needs,
-// otherwise by re-executing DS2 via sudo into the hidden
-// --internal-fix-permissions helper, which runs the exact same native fix
-// as root. Either way the chown/chmod binaries are no longer involved and
-// the whole fix is a single tree walk; the only difference between the
-// branches is which process the walk runs in.
+// applyPermissionFix runs the ownership/permission fix natively in-process
+// (see fixPermissions) when this process already holds the privileges each
+// requested operation needs, otherwise re-execs DS2 via sudo into the hidden
+// --internal-fix-permissions helper to run the same native fix as root.
+// Either way it's a single tree walk with no chown/chmod binaries involved;
+// only which process runs the walk differs.
 //
-// Native eligibility, judged per operation:
-//   - chown requires CAP_CHOWN (changing a file's owner is privileged
-//     regardless of who currently owns it -- see "sudo setcap
-//     cap_chown,cap_fowner+ep <binary>" for the opt-in that grants it).
+// Native eligibility, per operation:
+//   - chown requires CAP_CHOWN (see "sudo setcap cap_chown,cap_fowner+ep
+//     <binary>" for the opt-in that grants it).
 //   - chmod requires owning the files, or CAP_FOWNER. Ownership is judged
 //     against puid/pgid: checkPermissions guarantees everything is already
-//     owned by puid:pgid when doChown is false, and when doChown is true
-//     the chown runs first within the same walk, so in both cases the
-//     process's own UID/GID matching puid:pgid is sufficient.
+//     owned by puid:pgid when doChown is false, and when doChown is true the
+//     chown runs first in the same walk -- either way the process's own
+//     UID/GID matching puid:pgid is sufficient.
 //
-// A plain "sudo ds2" never reaches here still elevated (see CheckNotRoot),
-// so the invoking user normally IS puid:pgid and chmod-only fixes stay
-// native even with no capabilities granted; the UID/GID comparison is a
-// failsafe for the rare divergence case (e.g. a stale SUDO_UID/SUDO_GID env
-// var inherited from an unrelated earlier "sudo -u otheruser" shell). A
-// genuine root login is allowed to run DS2 (CheckNotRoot doesn't reject
-// it) and trivially satisfies this check regardless, since root always
-// matches whatever puid:pgid it's comparing against.
+// A plain "sudo ds2" never reaches here still elevated (see CheckNotRoot), so
+// the invoking user is normally already puid:pgid and chmod-only fixes stay
+// native with no capabilities granted; the UID/GID check is a failsafe for
+// rare divergence (e.g. a stale SUDO_UID/SUDO_GID from an unrelated earlier
+// "sudo -u otheruser" shell). A genuine root login trivially satisfies it.
 func applyPermissionFix(ctx context.Context, path string, puid, pgid int, doChown, doChmod, recursive bool) error {
 	nativeChown := !doChown || hasCapChown()
 	nativeChmod := !doChmod || hasCapFowner() || (os.Getuid() == puid && os.Getgid() == pgid)

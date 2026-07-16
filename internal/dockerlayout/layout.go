@@ -103,14 +103,14 @@ func imageRefURL(name string) string {
 	return "https://hub.docker.com/_/" + bare
 }
 
-// StyleImageRef styles an image reference with DockerImage/DockerTag tags.
-// When the terminal supports hyperlinks, the image name becomes a clickable
-// link to its registry page. Handles three forms:
-//   - "registry/name:tag"  → name styled as DockerImage (linked), ":tag" as DockerTag
-//   - "sha256:digest"      → "sha256:" as DockerTag (dim), digest as DockerImage (no link)
-//   - "name" (no colon)    → entire string as DockerImage (linked)
-// StyleImageRef returns a semstyle tag string for an image reference.
-// Callers must convert to ANSI with semstyle.ToANSI when ready to output.
+// StyleImageRef styles an image reference with DockerImage/DockerTag tags,
+// returning a semstyle tag string (callers convert to ANSI with
+// semstyle.ToANSI when ready to output). When the terminal supports
+// hyperlinks, the image name becomes a clickable link to its registry page.
+// Handles three forms:
+//   - "registry/name:tag" → name styled as DockerImage (linked), ":tag" as DockerTag
+//   - "sha256:digest"     → "sha256:" as DockerTag (dim), digest as DockerImage (no link)
+//   - "name" (no colon)   → entire string as DockerImage (linked)
 func StyleImageRef(ref string) string {
 	if strings.HasPrefix(ref, "sha256:") {
 		return "{{|DockerTag|}}sha256:{{[-]}}{{|DockerImage|}}" + ref[7:] + "{{[-]}}"

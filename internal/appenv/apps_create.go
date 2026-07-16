@@ -12,18 +12,12 @@ import (
 	"strings"
 )
 
-// CreateAll generates environment variables for all added applications.
-//
-// This function mirrors appvars_create_all.sh and performs the following steps:
-//  1. Checks if an update is required via timestamp tracking
-//  2. Ensures the main .env file exists via EnvCreate
-//  3. Identifies all "added" applications (those with __ENABLED variables)
-//  4. For each added app, creates its environment variables via CreateApp
-//
-// The function will log progress and continue processing remaining apps even if
-// individual app creation fails.
-//
-// Returns an error only if critical initialization (EnvCreate or ListAdded) fails.
+// CreateAll generates environment variables for all added applications,
+// mirroring appvars_create_all.sh: checks timestamp tracking for whether an
+// update is needed, ensures .env exists via EnvCreate, then creates
+// variables for each "added" app (those with __ENABLED) via CreateApp.
+// Logs and continues past a single app's failure; returns an error only if
+// critical initialization (EnvCreate or ListAdded) fails.
 func CreateAll(ctx context.Context, force bool, conf config.AppConfig) error {
 	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
 

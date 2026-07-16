@@ -15,31 +15,24 @@ import (
 )
 
 // AutoSetcapStartup manages the optional CAP_CHOWN/CAP_FOWNER grant on the
-// DS2 binary at startup. With those capabilities present, permission fixes
-// (see applyPermissionFix) run natively in-process and never need sudo at
-// all. The grant is strictly opt-in, controlled by two persisted config
-// values (config.SystemConfig) passed in and returned for the caller to
-// save back if changed:
+// DS2 binary at startup, which lets permission fixes (see applyPermissionFix)
+// run natively without sudo. Strictly opt-in via two persisted config values
+// (config.SystemConfig), passed in and returned for the caller to save back:
 //
-//	enabled (auto_setcap)  -- keep the capabilities applied: re-run
-//	        "sudo setcap" whenever the binary lacks them (file capabilities
-//	        are attached to the binary itself, so a self-update replacing
-//	        it strips them). Applies regardless of asked, so setting it
-//	        true by hand in the config enables the grant without ever
-//	        being asked.
-//	asked (setcap_asked)   -- the one-time question has been answered;
-//	        never ask again. Only set here, after the user actually
-//	        answers (an aborted prompt leaves it false so a later startup
-//	        offers again).
+//	enabled (auto_setcap) -- keep the capabilities applied: re-run
+//	        "sudo setcap" whenever the binary lacks them (a self-update
+//	        replacing the binary strips file capabilities). Applies
+//	        regardless of asked, so setting it true by hand skips the prompt.
+//	asked (setcap_asked)  -- the one-time question has been answered; only
+//	        set after the user actually answers (an aborted prompt leaves it
+//	        false so a later startup asks again).
 //
-// Linux-only (file capabilities don't exist elsewhere), and skipped
-// entirely on non-interactive startups (daemons, cron, piped): applying
-// requires sudo, which may need a password prompt, and offering requires a
-// user present to answer. Capabilities granted during a run only bind at
-// the next exec (a kernel property, not a DS2 choice) -- applied reports
-// whether that just happened, so the caller can re-exec with the original
-// command line instead of continuing this run without them and telling the
-// user to run the command again.
+// Linux-only, and skipped on non-interactive startups (daemons, cron,
+// piped) since applying needs sudo (possibly a password prompt) and no user
+// is present to ask. Capabilities granted this run only bind at the next
+// exec (a kernel property), so applied reports whether that just happened,
+// letting the caller re-exec with the original command line instead of
+// continuing without them.
 func AutoSetcapStartup(ctx context.Context, asked, enabled, interactive bool) (newAsked, newEnabled bool, applied bool) {
 	if runtime.GOOS != "linux" || !interactive {
 		return asked, enabled, false

@@ -44,11 +44,9 @@ type AppMeta struct {
 	Variables map[string]VarMeta
 }
 
-// GetVarMeta returns the metadata for a specific variable name.
-//
-// AppInstanceFile processes the template before loading, substituting
-// <__INSTANCE> with the actual instance value (or empty string). So all keys
-// in the loaded Variables map are concrete — no pattern matching is needed.
+// GetVarMeta returns the metadata for a specific variable name. Keys in
+// Variables are concrete (LoadAppMeta already substitutes <__INSTANCE>), so
+// no pattern matching is needed here.
 //
 // App-specific vars (.env.app.appname): key is "APPNAME[__INSTANCE]:VARNAME"
 //   - e.g. "PLEX:VERSION" (no instance) or "PLEX__2:VERSION" (instance "2")
@@ -76,17 +74,13 @@ func (m *AppMeta) GetVarMeta(varName, appName string) (VarMeta, bool) {
 	return v, ok
 }
 
-// LoadAppMeta loads variable metadata for the given app instance.
+// LoadAppMeta loads variable metadata for the given app instance, via
+// AppInstanceFile's processed .meta.toml path (substitutes <__INSTANCE>
+// markers with the actual instance value, so keys come back concrete).
 //
-// It uses AppInstanceFile to obtain the processed .meta.toml path, which
-// substitutes <__INSTANCE> markers with the actual instance value (or empty
-// string for the base app). This means the keys in the returned AppMeta are
-// concrete — no wildcard matching is needed in GetVarMeta.
-//
-// Results are cached in memory for the lifetime of the process. Call
-// InvalidateAppMetaCache() after a templates update to clear stale entries.
-//
-// Returns nil (not an error) if no meta file exists for the app.
+// Cached in memory for the process lifetime; call InvalidateAppMetaCache()
+// after a templates update to clear stale entries. Returns nil (not an
+// error) if no meta file exists for the app.
 func LoadAppMeta(ctx context.Context, appName string) (*AppMeta, error) {
 	if appName == "" {
 		return nil, nil

@@ -7,19 +7,19 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-// newStreamOutputSection builds a borderless, variable-height displayengine.Content section
-// wrapping a ProgramBoxModel's streaming output viewport (box.sv) -- the
-// first variable-height contentRenderer section in the codebase, following
-// the displayengine.NewSinputSection recipe (contentRenderer + extraHitRegions +
-// SetUpdateInterceptor) but reporting IsVariableHeight() true so it fills
-// whatever height calculateSectionLayout has left after the fixed header/
-// command sections and buttons, the same "grow to fill" mechanism Config
-// Apps Menu's app list already uses for its own list.
+// newStreamOutputSection builds a borderless, variable-height
+// displayengine.Content section wrapping a ProgramBoxModel's streaming
+// output viewport (box.sv), following the displayengine.NewSinputSection
+// recipe (contentRenderer + extraHitRegions + SetUpdateInterceptor) but
+// reporting IsVariableHeight() true so it fills whatever height
+// calculateSectionLayout has left after the fixed header/command sections
+// and buttons -- the same "grow to fill" mechanism Config Apps Menu's app
+// list uses.
 //
-// The viewport owns its own fully self-contained inner border (with a
-// scroll-percent bottom border when content overflows) -- rendered inside
-// this section's contentRenderer closure -- so the section itself is
-// borderless (SetBorderless) to avoid a double-nested border.
+// The viewport owns its own self-contained inner border (with a
+// scroll-percent bottom border on overflow), rendered inside this section's
+// contentRenderer closure, so the section itself is borderless
+// (SetBorderless) to avoid a double-nested border.
 func newStreamOutputSection(id string, box *ProgramBoxModel) *displayengine.MenuModel {
 	m := displayengine.NewMenuModel(id, "", "", nil)
 	m.SetSubMenuMode(true)

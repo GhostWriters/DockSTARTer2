@@ -44,18 +44,12 @@ type ButtonSpec struct {
 	Help         string // Help text for right-click context
 }
 
-// GetButtonHitRegions returns hit regions for a row of buttons.
-// Use this when you need clickable buttons - it ensures hit regions
-// GetButtonHitRegions returns a slice of HitRegions for a horizontal row of buttons.
-// The provided hCtx is used as a template for the HelpContext of each button hit region,
-// allowing for both screen-level and button-specific help to be displayed.
-// Parameters:
-//   - hCtx: template for HelpContext, providing ScreenName, PageTitle, PageText
-//   - dialogID: prefix for zone IDs to disambiguate multiple dialogs (can be empty)
-//   - offsetX, offsetY: position of the button row in the dialog
-//   - contentWidth: same width passed to RenderCenteredButtons
-//   - baseZ: z-order for the hit regions (typically ZDialog + 20)
-//   - buttons: same button specs passed to RenderCenteredButtons
+// GetButtonHitRegions returns hit regions for a horizontal row of buttons.
+// hCtx is a template for each button's HelpContext (ScreenName, PageTitle,
+// PageText), so both screen-level and button-specific help can be shown.
+// dialogID prefixes zone IDs to disambiguate multiple dialogs (can be
+// empty). offsetX/offsetY, contentWidth, and buttons should match the
+// values passed to RenderCenteredButtons; baseZ is typically ZDialog + 20.
 func GetButtonHitRegions(hCtx HelpContext, dialogID string, offsetX, offsetY, contentWidth, baseZ int, buttons ...ButtonSpec) []HitRegion {
 	return getButtonHitRegionsImpl(hCtx, dialogID, offsetX, offsetY, contentWidth, baseZ, buttonsFitWithBorders(contentWidth, GetActiveContext(), buttons), buttons...)
 }

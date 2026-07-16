@@ -177,13 +177,10 @@ func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []displayengi
 
 	// Layers() centers the settings dialog independently within the
 	// available content height (settingsY) when the preview panel fits
-	// alongside it, rather than relying on the generic outer offset
-	// model_view.go would otherwise apply (skipped now since IsMaximized()
-	// returns true). offsetY here is only the plain content-area top, so
+	// alongside it. offsetY here is only the plain content-area top, so
 	// settingsY must be re-applied here too, or hit regions drift out of
-	// alignment with what's actually drawn. When the preview doesn't fit,
-	// Layers() places the settings dialog at Y(0) unconditionally -- no
-	// offset to add there.
+	// alignment with what's drawn. When the preview doesn't fit, Layers()
+	// places the settings dialog at Y(0), no offset to add.
 	if dl := s.computePanelLayout(s.width); dl.previewFits && s.outerMenu != nil {
 		settingsHeight := s.outerMenu.Height()
 		settingsY := (s.height - settingsHeight) / 2

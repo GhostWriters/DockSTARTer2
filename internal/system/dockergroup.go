@@ -13,16 +13,13 @@ import (
 	"strings"
 )
 
-// OfferDockerGroupFix handles the permission-denied-on-docker-socket case
-// when it's specifically caused by the invoking user not being in the
-// "docker" group: it explains the cause and offers to fix it (DS1's
-// self-heal, but with an explicit prompt -- DS1 could piggyback the fix on
-// its Docker install flow, while DS2 doesn't install Docker, so detecting
-// exactly this problem IS its consent moment). Returns true when it
-// produced the user-facing messaging (offer shown, fixed, declined, or the
-// fix failed) so the caller skips the generic permission warning; false
-// when the situation doesn't match (no docker group, already a member,
-// lookup failure, non-Unix) and the generic warning should run instead.
+// OfferDockerGroupFix handles permission-denied-on-docker-socket when caused
+// specifically by the invoking user not being in the "docker" group:
+// explains the cause and offers to fix it. Returns true when it produced
+// user-facing messaging (offer shown, fixed, declined, or fix failed) so
+// the caller skips the generic permission warning; false when the situation
+// doesn't match (no docker group, already a member, lookup failure,
+// non-Unix) and the generic warning should run instead.
 //
 // Group membership changes only apply to NEW login sessions -- the running
 // process (and the user's current shell) cannot pick it up, not even via

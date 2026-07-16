@@ -57,14 +57,11 @@ var (
 	isRootSession bool
 
 	// activeSessions tracks every currently-running TUI program (one per
-	// concurrent local/SSH/web session when running as --server-daemon,
-	// where Start/StartEditor/StartVarEditor each run in their own
-	// goroutine within the same process). Registered by registerSession,
-	// removed by unregisterSession. Consulted by Shutdown (which quits
-	// every active session -- used for a re-exec, since the whole process
-	// is about to be replaced regardless of any one session's state) as
-	// opposed to a session's own panic-recovery/context-cancellation path,
-	// which only ever quits and waits on its own program.
+	// concurrent local/SSH/web session under --server-daemon). Registered by
+	// registerSession, removed by unregisterSession. Consulted by Shutdown,
+	// which quits every active session for a re-exec, as opposed to a
+	// session's own panic-recovery/context-cancellation path, which only
+	// quits and waits on its own program.
 	sessionsMu     sync.Mutex
 	activeSessions = map[*tea.Program]chan struct{}{}
 
@@ -230,22 +227,17 @@ func SendWebMsg(msg []byte) {
 
 // OpenAppLink opens url using whichever mechanism fits the current session.
 //
-// Web sessions relay the URL to the browser over the WebSocket so it opens
-// there -- unlike a mouse click on a rendered OSC8 hyperlink, which xterm.js
-// already intercepts and opens client-side with no server involvement, a
-// keyboard-triggered open has no click for it to catch, so it must always be
-// driven from here.
+// Web sessions relay the URL to the browser over the WebSocket, since a
+// keyboard-triggered open (unlike a mouse click on a rendered OSC8
+// hyperlink, which xterm.js intercepts client-side) has no click to catch.
 //
-// Local sessions just open the URL on that machine directly via console.OpenURL.
+// Local sessions open the URL directly via console.OpenURL.
 //
-// SSH sessions have no equivalent to the web session's WebSocket to relay a
-// URL back to whatever client the user is actually sitting at, and a mouse
-// click only reaches a local browser if the SSH client terminal supports
-// OSC8 hyperlinks itself (works in e.g. WezTerm, not in e.g. MobaXterm). So
-// for keyboard-triggered opens over SSH, copy the URL to the client's
-// clipboard via OSC52 (tea.SetClipboard) as a best effort -- not all
-// terminals support that either -- and always also show it in a message
-// dialog so the user can read/copy it manually regardless.
+// SSH sessions have no WebSocket to relay through, and a mouse click only
+// reaches a local browser if the client terminal supports OSC8 (e.g.
+// WezTerm, not MobaXterm). So keyboard-triggered opens over SSH copy the URL
+// to the client's clipboard via OSC52 as a best effort, and always also show
+// it in a message dialog so the user can read/copy it manually regardless.
 func OpenAppLink(ctx context.Context, url string) tea.Cmd {
 	if url == "" {
 		return nil
@@ -347,19 +339,15 @@ func init() {
 }
 
 // parseClientInfo extracts IP and connection type from environment strings.
-// The returned viaOwnServer flag reports whether the session arrived through
-// one of DS2's own listeners (its wish SSH server or its web server) as
-// opposed to a plain foreground CLI/TUI invocation -- these are the only
-// cases where DS2 knows for certain that the terminal/browser rendering the
-// output is on a different machine than the one that built the output. It's
-// computed BEFORE the real-shell SSH fallback below, which intentionally
-// folds "invoked directly inside a real SSH login shell" into connType=="ssh"
-// for a different purpose (OpenAppLink's browser-opening decision) but should
-// NOT affect viaOwnServer -- a real SSH terminal may well render file://
-// hyperlinks correctly, and DS2 has no way to know either way, so callers
-// that only care about "did this go through our own server" (e.g. deciding
-// whether to emit a file:// hyperlink at all) should use viaOwnServer, not
-// connType.
+// viaOwnServer reports whether the session arrived through one of DS2's own
+// listeners (wish SSH or web server) -- the only cases where DS2 knows for
+// certain the rendering terminal/browser is on a different machine.
+// Computed before the real-shell SSH fallback below, which folds "invoked
+// inside a real SSH login shell" into connType=="ssh" for a different
+// purpose (OpenAppLink's browser-opening decision) but must not affect
+// viaOwnServer -- a real SSH terminal may render file:// hyperlinks fine and
+// DS2 has no way to know, so "did this go through our own server" callers
+// should use viaOwnServer, not connType.
 func parseClientInfo(environ []string) (clientIP, connType string, viaOwnServer bool) {
 	clientIP = "local"
 	connType = "local"
@@ -394,14 +382,10 @@ func parseClientInfo(environ []string) (clientIP, connType string, viaOwnServer 
 }
 
 // parseSessionKey extracts the per-connection session identifier the SSH/web
-// listener registered (DS2_SESSION_ID, set by ssh_handler.go's RegisterSession
-// call). This is the identity used for edit-lock re-entry: a server-daemon
-// process serves many concurrent SSH/web sessions from one OS process, so
-// distinguishing "the same session re-entering" from "a different session
-// that happens to use the same lockSource category" requires an identifier
-// per actual connection, not per process. A plain foreground/local invocation
-// (no listener involved) never sets this env var, so it falls back to a
-// PID-based key -- correct there since each such invocation is its own process.
+// listener registered (DS2_SESSION_ID, set by ssh_handler.go's
+// RegisterSession), used for edit-lock re-entry (see sessionlocks.
+// localSessionKey). Falls back to a PID-based key for a plain
+// foreground/local invocation, correct since each is its own process.
 func parseSessionKey(environ []string) string {
 	for _, env := range environ {
 		if strings.HasPrefix(env, "DS2_SESSION_ID=") {
@@ -1323,14 +1307,12 @@ func editLockBusyMsg(info sessionlocks.SessionInfo, attempted string) string {
 	return msg
 }
 
-// triggerComposeUpdateMsg, triggerComposeStopMsg, and triggerDockerPruneMsg are
-// requests dispatched by the Config menu's buttons. The actual edit-lock check
-// and dialog construction happens in AppModel.Update (see model_update.go),
-// not here -- these buttons' Action closures are built once at screen
-// construction time, shared by every session in a server-daemon process, so
-// they can't close over a specific session's clientIP/connType/sessionKey.
-// Routing through Update instead lets each session's own AppModel fields
-// drive the lock check that actually runs when the button is pressed.
+// triggerComposeUpdateMsg, triggerComposeStopMsg, and triggerDockerPruneMsg
+// are requests dispatched by the Config menu's buttons; the actual edit-lock
+// check and dialog construction happens in AppModel.Update (model_update.go)
+// instead, since these buttons' Action closures are built once at screen
+// construction time shared by every session in a server-daemon process and
+// can't close over a specific session's clientIP/connType/sessionKey.
 type triggerComposeUpdateMsg struct{}
 type triggerComposeStopMsg struct{}
 type triggerDockerPruneMsg struct{}

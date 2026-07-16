@@ -10,28 +10,22 @@ import (
 )
 
 // checkPermissions reports whether root's tree already has the ownership
-// and/or permission bits SetPermissions/TakeOwnership would otherwise
-// apply, letting the caller skip whichever of chown/chmod isn't actually
-// needed -- and skip both entirely when nothing needs to change. Stat
-// comparisons need no elevated privileges, so this check never requires
+// and/or permission bits SetPermissions/TakeOwnership would apply, letting
+// the caller skip whichever of chown/chmod isn't needed (or skip both).
+// Stat comparisons need no elevated privileges, so this never requires
 // sudo -- only fixing a mismatch does.
 //
-// Non-recursive mode (used by TakeOwnership) checks just root's own
-// ownership and mode. Recursive mode (used by SetPermissions) walks the
-// whole tree checking every entry, stopping as soon as both needsChown and
-// needsChmod are known true (no further mismatches can add information at
-// that point) -- since anything to fix falls through to the same full
-// recursive "sudo chown -R"/"sudo chmod -R" pass that would otherwise
-// always run, the worst case (both needed) costs only a little extra walk
-// time before the same work already being done, while the common case
-// (already correct) skips both sudo calls entirely, and a partial mismatch
-// (only one dimension wrong) now skips the other operation too instead of
-// always running both together.
+// Non-recursive mode (TakeOwnership) checks just root's own ownership and
+// mode. Recursive mode (SetPermissions) walks the whole tree, stopping once
+// both needsChown and needsChmod are known true. Worst case (both needed)
+// costs a little extra walk time before the same full recursive fix that
+// would run anyway; common case (already correct) skips both sudo calls;
+// partial mismatch now skips the unneeded operation instead of always
+// running both together.
 //
-// Target permissions mirror "chmod -R a=,a+rX,u+w,g+w": directories end up
-// 0775 (rwxrwxr-x), regular files 0664 (rw-rw-r--). Symlinks are skipped
-// entirely during a recursive check, matching chmod/chown -R's convention
-// of leaving the link itself alone during recursion.
+// Target permissions mirror "chmod -R a=,a+rX,u+w,g+w": directories 0775
+// (rwxrwxr-x), files 0664 (rw-rw-r--). Symlinks are skipped entirely during
+// a recursive check, matching chmod/chown -R's convention.
 func checkPermissions(root string, puid, pgid int, recursive bool) (needsChown, needsChmod bool) {
 	if !recursive {
 		info, err := os.Lstat(root)

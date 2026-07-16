@@ -420,15 +420,12 @@ func (m *MenuModel) renderVariableHeightList() string {
 			}
 			if menuBracketsShown {
 				// Same reserved slots the spinner uses above: the leading
-				// "sep" character (blanked out below, same as isProcessingItem
-				// does) becomes the open bracket, and the close bracket eats
-				// into the already-reserved minGap the same way spinR does
-				// (see the width-aware spinTagExtra calc below -- the ASCII
-				// glyphs are 1 cell so this is a no-op shift, but the fullwidth
-				// Unicode variant is 2 cells and needs the wider accounting).
-				// Reset ({{[-]}}) before applying the tag so bold/dim
-				// attributes from the adjacent tag text don't leak through a
-				// raw Style.Render() call.
+				// "sep" character becomes the open bracket, and the close
+				// bracket eats into the already-reserved minGap the same way
+				// spinR does (ASCII glyphs are 1 cell, a no-op shift; the
+				// fullwidth Unicode variant is 2 cells, see spinTagExtra
+				// below). Reset ({{[-]}}) before the tag so bold/dim from
+				// adjacent text doesn't leak through a raw Style.Render() call.
 				open, closeCh := bracketGlyphs(ctx)
 				openB := RenderThemeText("{{[-]}}{{|TagBrackets|}}"+open+"{{[-]}}", neutralStyle)
 				closeB := RenderThemeText("{{[-]}}{{|TagBrackets|}}"+closeCh+"{{[-]}}", neutralStyle)
@@ -1011,15 +1008,11 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 		tagStr := ""
 		if item.IsEditing {
 			// Same bracket-style indicator as the top-level Name column,
-			// themed via TagBrackets (see bracketGlyphs) rather than left
-			// unstyled -- the edited text itself keeps the standard edit
-			// styling (red background/bold). The opening bracket is added by
-			// rowContent below, replacing one of the blank separator spaces
-			// rather than adding width; the closing bracket is added here,
-			// with a leading space so the hardware cursor (see
-			// AppSelectionScreen.GetInputCursor, which lands right after the
-			// typed text) has room to be visible instead of sitting directly
-			// on top of it.
+			// themed via TagBrackets. The opening bracket is added by
+			// rowContent below, replacing a blank separator space rather than
+			// adding width; the closing bracket is added here with a leading
+			// space so the hardware cursor (AppSelectionScreen.GetInputCursor,
+			// landing right after the typed text) has room to be visible.
 			editTag := GetPlainText(item.Tag)
 			editStyle := theme.ThemeSemanticStyle("{{|ItemFocused|}}")
 			_, closeCh := bracketGlyphs(ctx)

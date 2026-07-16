@@ -35,17 +35,14 @@ func (m *ProgramBoxModel) View() tea.View {
 	return v
 }
 
-// Layers implements LayeredView. When a sub-dialog is active, its layers are
-// returned as SIBLINGS of the base layer (not nested children) -- the caller
-// (model_view.go's modal-stack loop) applies its own X/Y/Z modal offset to
-// each TOP-LEVEL layer this method returns, but does NOT recurse into a
-// layer's children to apply that same offset. Nesting the sub-dialog as a
-// child of the base layer left it at the child's own small Z (e.g.
-// displayengine.ZScreen+10) while the base layer got bumped to the much larger modalZBase,
-// so the sub-dialog silently rendered underneath (and was fully covered by)
-// ProgramBox's own content despite compositing correctly in every other
-// respect. Returning siblings lets both receive the identical modal offset,
-// preserving their relative Z ordering.
+// Layers implements LayeredView. When a sub-dialog is active, its layers
+// are returned as SIBLINGS of the base layer, not nested children -- the
+// caller (model_view.go's modal-stack loop) applies its own X/Y/Z modal
+// offset to each top-level layer this method returns but does not recurse
+// into a layer's children. Nesting the sub-dialog as a child left it at its
+// own small Z while the base layer got bumped to modalZBase, so it silently
+// rendered underneath ProgramBox's content. Siblings get the same offset,
+// preserving relative Z ordering.
 func (m *ProgramBoxModel) Layers() []*lipgloss.Layer {
 	base := m.outer.Layers()
 	if m.subDialog == nil {

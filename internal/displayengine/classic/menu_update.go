@@ -519,18 +519,16 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // renderFlow, GetFlowHeight → menu_render_flow.go
 // renderVariableHeightList → menu_render_list.go
 
-// menuTitleBarCloseCmd returns the action to run when the title bar's
-// Close widget activates: fire the first back/cancel button if present,
-// otherwise the first exit button, with the same spinner treatment as a
-// normal button click. Returns nil if no matching button exists (Close
-// then just blurs the title bar, same as TitleBarFocus's default nil-closeCmd
-// behavior).
+// menuTitleBarCloseCmd returns the action to run when the title bar's Close
+// widget activates: fire the first back/cancel button if present, otherwise
+// the first exit button, with the same spinner treatment as a normal button
+// click. Returns nil if no matching button exists (Close then just blurs
+// the title bar).
 //
-// This is passed as the closeCmd argument to HandleTitleBarKey/HandleTitleBarHit,
-// which evaluate it eagerly as a plain tea.Cmd argument regardless of which key
-// was pressed. The button search (and its focus/spinner side effects) must not
-// run until the returned tea.Cmd is actually invoked by Bubble Tea, so the body
-// is wrapped in a closure rather than executed directly here.
+// Passed as the closeCmd argument to HandleTitleBarKey/HandleTitleBarHit,
+// which evaluate it eagerly regardless of which key was pressed -- the
+// button search (and its focus/spinner side effects) must not run until
+// Bubble Tea actually invokes the returned tea.Cmd, hence the closure.
 func (m *MenuModel) menuTitleBarCloseCmd() tea.Cmd {
 	return func() tea.Msg {
 		for i, btn := range m.buttons {

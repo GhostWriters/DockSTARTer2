@@ -41,14 +41,9 @@ func Get(key, file string) (string, error) {
 		}
 	}
 
-	// 2. Unquoted value: matches until we hit " #" (space followed by hash)
-	// or until end of string.
-	// We also need to handle the case where it starts with # (it shouldn't be matched as a comment unless it's " #")
-	// The Bash regex (?:[^\s]+(?:\s+(?!#)[^\s]+)*)) actually implies it can't START with a space,
-	// but can start with # if it's not a space.
-	// Actually, if val is "#Value", it should be returned as is.
-	// If val is "Value #Comment", it should be "Value".
-	// If val is "Value#NotAComment", it should be "Value#NotAComment".
+	// 2. Unquoted value: matches until " #" (space + hash) or end of string.
+	// "#Value" is returned as-is (not treated as a comment); "Value #Comment"
+	// becomes "Value"; "Value#NotAComment" is unchanged (no preceding space).
 
 	if idx := strings.Index(val, " #"); idx != -1 {
 		return strings.TrimRight(val[:idx], " \t"), nil

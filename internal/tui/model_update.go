@@ -355,16 +355,12 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if len(msg.PushStack) > 0 {
 			m.screenStack = append(m.screenStack, msg.PushStack...)
-			// Don't call Init() on these now -- every message (including
-			// whatever a screen's own Init() cmd eventually produces, e.g.
-			// App Select's async data load completing) is routed only to
+			// Don't call Init() on these now -- messages are routed only to
 			// m.activeScreen.Update(), so firing Init() while a screen is
 			// still buried in the stack would strand its result message
-			// nowhere ("No results found" -- Init() ran, but the loaded-data
-			// message had no active screen to land on). Flag them instead;
-			// NavigateBackMsg calls Init() at the moment one of these
-			// actually becomes active, same as this handler already does
-			// for msg.Screen below.
+			// nowhere. Flag them instead; NavigateBackMsg calls Init() when
+			// one actually becomes active, same as this handler does for
+			// msg.Screen below.
 			for _, s := range msg.PushStack {
 				m.needsInit[s] = true
 			}

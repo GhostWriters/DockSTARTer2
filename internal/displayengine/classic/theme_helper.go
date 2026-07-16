@@ -95,16 +95,16 @@ func ResolveDisabledStyle(tag string) (style lipgloss.Style, flags semstyle.Styl
 
 // DisabledTagRef returns a semantic tag reference usable as a titleTag or
 // embedded directly in a "{{|...|}}" string: tag's own "<tag>Disabled" name
-// if the active theme explicitly defines one, else an inline
-// "<tag>:::bD" override reference. The trailing "bD" (bold off, dim on) is
-// not a leading-dash reset -- semstyle's nested-tag resolver (parse.go's
-// resolveThemeValue) merges non-reset flag overrides onto the referenced
-// tag's own resolved flags rather than replacing them, so this preserves
-// every other attribute (Underline, Italic, etc.) the base tag carries,
-// exactly like ResolveDisabledStyle's Go-level fallback -- just expressed as
-// text so it also works at call sites that embed the tag name literally
-// (e.g. panel_render.go's "{{|"+inputTitleTag+"|}}Command{{[-]}}") where a
-// Go-resolved lipgloss.Style can't reach the embedded string at all.
+// if the active theme explicitly defines one, else an inline "<tag>:::bD"
+// override reference. The trailing "bD" (bold off, dim on) is not a
+// leading-dash reset -- semstyle's nested-tag resolver merges non-reset flag
+// overrides onto the referenced tag's own resolved flags rather than
+// replacing them, preserving every other attribute (Underline, Italic, etc.)
+// the base tag carries, same as ResolveDisabledStyle's Go-level fallback --
+// just expressed as text so it also works where the tag name is embedded
+// literally in a string (e.g. panel_render.go's
+// "{{|"+inputTitleTag+"|}}Command{{[-]}}") and a Go-resolved lipgloss.Style
+// can't reach it.
 func DisabledTagRef(tag string) string {
 	disabledTag := tag + "Disabled"
 	if semstyle.GetRawTagCode(disabledTag) != "" {
@@ -117,18 +117,15 @@ func DisabledTagRef(tag string) string {
 // (and their BorderDisabled/Border2Disabled counterparts) semantic tags and
 // computes what each should resolve to given the Border Color mode (1 =
 // Border wins, 2 = Border2 wins, anything else = each tag keeps its own
-// theme-defined value), returning the result as a small derived map keyed
-// by unprefixed tag name ("Border", "Border2", "BorderDisabled",
-// "Border2Disabled") instead of writing back into the shared semstyle
-// registry. An earlier version of this logic overwrote one tag's raw code
-// with the other's directly in the registry, which corrupted later lookups
-// once a tag's original theme value had been overwritten (e.g. mode 1 then
-// mode 2 would read the mode-1-corrupted Border2 instead of the theme's
-// real value) -- computing a fresh map every call avoids that entirely.
-// The disabled variants merge under the same mode as their enabled
-// counterparts, so a disabled border reflects the same Border Color choice
-// instead of always following the theme's own disabled colors regardless
-// of the setting.
+// theme-defined value), returning a small derived map keyed by unprefixed
+// tag name ("Border", "Border2", "BorderDisabled", "Border2Disabled")
+// instead of writing back into the shared semstyle registry -- writing back
+// would corrupt later lookups once a tag's original theme value had been
+// overwritten (e.g. mode 1 then mode 2 would read the mode-1-corrupted
+// Border2 instead of the theme's real value). The disabled variants merge
+// under the same mode as their enabled counterparts, so a disabled border
+// reflects the same Border Color choice instead of always following the
+// theme's own disabled colors regardless of the setting.
 //
 // Border Color is the only option resolved today; this is the shape to
 // extend if more options need the same kind of tag-merging behavior later.

@@ -213,12 +213,10 @@ func GetDockerDaemonVersionDisplay(ctx context.Context) string {
 
 // GetDockerAPIVersionDisplay returns a formatted version string for the
 // Docker daemon's API version, shown alongside GetDockerDaemonVersionDisplay.
-// Normally this is just the daemon's max API version. If the client actually
+// Normally this is just the daemon's max API version. If the client
 // negotiated down to something lower (e.g. DOCKER_API_VERSION pinning an
-// older version), both are shown as [max/negotiated negotiated], max first
-// (the daemon's installed capability) then the negotiated version explicitly
-// labeled and in the Error style to flag that it's not using the daemon's
-// full capability.
+// older version), shows both as [max/negotiated], the negotiated value in
+// Error style to flag it's not using the daemon's full capability.
 func GetDockerAPIVersionDisplay(ctx context.Context) string {
 	return formatDockerAPIVersion(dockerStatus(ctx))
 }
