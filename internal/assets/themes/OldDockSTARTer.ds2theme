@@ -88,8 +88,8 @@ LargeRefreshIconInactive = "{{|HelpIconInactive|}}"
 LargeExitIconInactive = "{{|ExitIconInactive|}}"
 
 # Subtitles
-Subtitle = "{{[-:-:RB]}}"
-CommandLine = "{{[-]}}{{[yellow::B]}}"
+Subtitle = "{{[blue:black:-B]}}"
+CommandLine = "{{|Dialog:yellow::-B|}}"
 
 # Headings
 Heading = "{{[-:-:-R]}}"
