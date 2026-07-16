@@ -132,6 +132,12 @@ func run() (exitCode int) {
 		logger.Notice(context.Background(), note)
 	}
 
+	// Wire up embedded theme callbacks (breaks theme→assets→logger→theme cycle)
+	// before the first LoadAppConfig() call below -- a fresh-install/DS1
+	// migration needs these to load the chosen theme's suggested defaults.
+	theme.EmbeddedThemeLister = assets.ListThemes
+	theme.EmbeddedThemeReader = assets.GetTheme
+
 	// Apply spinner/line-char config early so spinner works during startup log messages.
 	{
 		earlyConf := config.LoadAppConfig()
@@ -190,10 +196,6 @@ func run() (exitCode int) {
 
 	// Defer cleanup to ensure it runs even if we return early or panic
 	defer cleanup(ctx)
-
-	// Wire up embedded theme callbacks (breaks theme→assets→logger→theme cycle)
-	theme.EmbeddedThemeLister = assets.ListThemes
-	theme.EmbeddedThemeReader = assets.GetTheme
 
 	// Ensure user themes directory exists
 	themesDir := paths.GetThemesDir()
