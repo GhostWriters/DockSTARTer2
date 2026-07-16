@@ -224,12 +224,10 @@ No = "{{|TitleError|}}"
 BoxTitle = "{{[$primary:$secondary]}}"
 
 [defaults]
-borders = true
-line_characters = true
-shadow = false
-border_color = 1
 dialog_title_align = "center"
 submenu_title_align = "left"
 panel_title_align = "center"
+shadow = false
+border_color = 1
 menu_brackets = true
 line_number_brackets = true
