@@ -58,26 +58,23 @@ func checkboxStylePair(isRadio, on, focused, disabled bool) (content, bracket li
 // renderCheckbox selects the correct glyph for a checkbox or radio button and renders it.
 //
 // focused is the row's actual keyboard-focus state; brackets/parens always
-// show when true, regardless of mode -- otherwise the cursor position would
-// be illegible in "never" mode. mode is the user's ui.checkbox_brackets or
-// ui.radio_brackets setting ("never", "selected", or "always"):
+// show when true regardless of mode, otherwise the cursor position would be
+// illegible in "never" mode. mode is the user's ui.checkbox_brackets or
+// ui.radio_brackets setting:
 //
 //	"never"    -- only the focused row is bracketed.
 //	"selected" -- bracketed when focused OR checked (the historical default).
 //	"always"   -- every row is bracketed.
 //
 // When brackets are hidden, the glyph renders "bare" (no brackets/parens,
-// same width, but the checkmark/bullet itself still shows if checked).
-// Callers rendering a flow/grid list should pass mode="always" (and
-// focused=true) to keep that list's checkboxes/radios bracketed
-// unconditionally, matching how flow lists rendered before this -- flow
-// items don't respect the user setting.
+// same width, but the checkmark/bullet still shows if checked). Flow/grid
+// lists don't respect the user setting -- pass mode="always" and
+// focused=true to keep them bracketed unconditionally.
 //
-// contentStyle/bracketStyle are typically resolved via checkboxStylePair,
-// separated so a caller can drive bracket visibility (mode/focused above)
-// independently from which style pair colors the glyph -- e.g. a flow list
-// forces brackets on unconditionally but still wants the color to reflect
-// real keyboard focus, not the forced bracket state.
+// contentStyle/bracketStyle (typically from checkboxStylePair) are separate
+// so a caller can drive bracket visibility independently of glyph color --
+// e.g. a flow list forces brackets on but still wants color to reflect real
+// keyboard focus, not the forced bracket state.
 func renderCheckbox(isRadio, checked, lineChars, focused bool, mode string, contentStyle, bracketStyle lipgloss.Style) string {
 	showBrackets := focused
 	if !showBrackets {

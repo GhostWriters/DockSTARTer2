@@ -15,24 +15,20 @@ import (
 
 // demoteSudoPrivileges makes an accidental "sudo ds2" behave like a plain
 // invocation by the original user, instead of contaminating their config
-// tree with root-owned files: when the process is root AND sudo's
-// SUDO_UID/SUDO_GID breadcrumbs identify the real invoking user, it drops
-// all privileges back to that user (supplementary groups, then gid, then
-// uid -- order matters, a dropped uid can no longer change the others) and
-// re-points HOME/XDG at their account. No capability is involved: the drop
-// is authorized purely by being root, which sudo already made us.
+// tree with root-owned files: when root AND sudo's SUDO_UID/SUDO_GID
+// identify the real invoking user, drops privileges back to that user
+// (supplementary groups, then gid, then uid -- a dropped uid can no longer
+// change the others) and re-points HOME/XDG at their account.
 //
-// Three situations:
+// Three cases:
 //   - root via sudo (SUDO_UID present, non-root): demote, scrub env, go on.
-//   - true root (no usable SUDO_UID -- direct root login, or root sudo'ing
-//     to root): left untouched; CheckNotRoot rejects it with a properly
-//     formatted fatal once logging is initialized.
-//   - not root at all: only scrub stale SUDO_* breadcrumbs. Chains like
-//     "sudo su <user>" or "sudo -u <user> ..." leave SUDO_UID pointing at
-//     the ORIGINAL account while the process actually runs as the account
-//     that was switched TO -- the one the user chose on purpose. Clearing
-//     the stale values makes everything downstream (GetIDs, ownership
-//     targets, capability failsafes) trust the real current user.
+//   - true root (direct login, or root sudo'ing to root): left untouched;
+//     CheckNotRoot rejects it once logging is initialized.
+//   - not root: only scrub stale SUDO_* breadcrumbs. Chains like
+//     "sudo su <user>" leave SUDO_UID pointing at the original account
+//     while the process runs as the account switched TO -- clearing the
+//     stale values makes downstream code (GetIDs, ownership targets,
+//     capability failsafes) trust the real current user.
 func demoteSudoPrivileges() error {
 	if os.Geteuid() != 0 && os.Getuid() != 0 {
 		clearSudoEnv()

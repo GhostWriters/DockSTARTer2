@@ -189,19 +189,16 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 	_ = paths.ResetNeeds()
 
 	// Offer/re-apply the file-capability grant to the just-replaced binary
-	// here, rather than waiting for the re-exec'd process's own startup
-	// check to notice and re-exec a second time. installUpdate replaces the
-	// binary file the grant was attached to, so a self-update always strips
-	// it when auto_setcap is enabled -- doing it now means the single
-	// re-exec below already has it.
+	// here rather than waiting for the re-exec'd process's own startup check
+	// -- installUpdate strips the grant (attached to the binary file) when
+	// auto_setcap is enabled, so doing it now means the re-exec below
+	// already has it.
 	//
-	// If the one-time offer was never answered, ask it here too: this is a
-	// moment already known to be interactive (the user just answered
-	// "update?"), so it's a better opportunity than only ever offering it
-	// on some later unrelated startup. Gated on being answerable (a
-	// TUI-connected client, or a real terminal) so an unattended run (cron,
-	// or a daemon restarting itself) never asks a question nobody can see
-	// and silently burns the one-time offer on "no".
+	// Ask the one-time offer here too if unanswered: the user just answered
+	// "update?" so this is known interactive, a better moment than a later
+	// unrelated startup. Gated on being answerable (TUI-connected client or
+	// real terminal) so an unattended run (cron, daemon restart) never asks
+	// a question nobody can see and silently burns the offer on "no".
 	if runtime.GOOS == "linux" {
 		conf := config.LoadAppConfig()
 		promptable := console.TUIConfirm != nil || (console.IsTTY() && console.IsStdoutTTY() && console.IsStdinTTY())

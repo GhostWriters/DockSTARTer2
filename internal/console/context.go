@@ -30,14 +30,9 @@ func WithPanelWriter(ctx context.Context, w io.Writer) context.Context {
 type confirmFuncKey struct{}
 
 // WithConfirmFunc attaches a session-scoped Yes/No confirm callback to ctx.
-// QuestionPrompt prefers this over the global TUIConfirm var when present --
-// the global var is shared process-wide (whichever session most recently
-// started owns it), so a background task that runs long enough for another
-// session to start in the meantime (e.g. a console command's docker compose
-// or prune) could otherwise show its confirm dialog in -- or worse, hang
-// waiting to send it to -- an unrelated or already-exited session. Set this
-// once per session (e.g. panel_update.go's console-command goroutine) using
-// that session's own Program reference, not the global one.
+// QuestionPrompt prefers this over the global TUIConfirm var, which is
+// shared process-wide and can point at the wrong (or an already-exited)
+// session in a server-daemon process serving multiple concurrent sessions.
 func WithConfirmFunc(ctx context.Context, fn func(title, question string, defaultYes bool) bool) context.Context {
 	return context.WithValue(ctx, confirmFuncKey{}, fn)
 }

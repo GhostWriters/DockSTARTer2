@@ -316,18 +316,13 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight, maxHeight int) string 
 		label +
 		consoleBorderStyle.Render(" "+rightT+rightDashes+topRightC)
 
-	// --- 5. Assemble as real Content sections instead of hand-computed
-	// height arithmetic ---
-	//
-	// Each piece becomes a borderless, non-focusable leaf section (matching
-	// the NewPlainTextSection convention: SubMenuMode+Borderless+
-	// NonFocusable+no buttons+Maximized) stacked inside one outer sectioned
-	// MenuModel. The outer MenuModel's own calculateSectionLayout/
-	// viewWithSections machinery -- the exact same code path outerMenu (the
-	// real Appearance Settings dialog) uses -- then owns the height/large-
-	// title-bar/border decisions, so this mockup's title bar and total
-	// height can no longer silently drift out of sync with the real dialog
-	// the way the old hand-computed fixedLines/backdropHeight arithmetic did.
+	// Assemble as real Content sections: each piece becomes a borderless,
+	// non-focusable leaf section (matching the NewPlainTextSection
+	// convention) stacked inside one outer sectioned MenuModel. The outer
+	// MenuModel's own calculateSectionLayout/viewWithSections machinery --
+	// the same code path outerMenu (the real Appearance Settings dialog)
+	// uses -- owns the height/large-title-bar/border decisions, so this
+	// mockup can't drift out of sync with the real dialog.
 	layout := displayengine.GetLayout()
 
 	newLeafSection := func(id string) *displayengine.MenuModel {

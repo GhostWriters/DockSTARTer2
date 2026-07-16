@@ -12,19 +12,12 @@ import (
 	"strings"
 )
 
-// RunAndLog mirrors the Bash RunAndLog function.
-// It executes a command, captures output, prefixes each line, and logs appropriately.
+// RunAndLog mirrors the Bash RunAndLog function: executes a command,
+// captures output, prefixes each line, and logs appropriately.
 //
-// Parameters:
-//   - ctx: Context for the command execution
-//   - runningNoticeType: Notice type for logging the "Running:" message ("notice", "info", etc.). Empty string to skip.
-//   - outputNoticeType: Notice type for logging output. Can include prefix like "git:info" or "docker:notice". Empty string to skip.
-//   - errorNoticeType: Notice type for logging errors ("error", "warn", etc.). Empty string to skip.
-//   - errorMessage: Message to log on error
-//   - command: Command name (e.g., "docker", "git")
-//   - args: Command arguments
-//
-// Returns error if command fails.
+// runningNoticeType/outputNoticeType/errorNoticeType are notice types
+// ("notice", "info", "error", "warn", etc.; outputNoticeType can include a
+// prefix like "git:info") -- pass "" to skip logging that part.
 func RunAndLog(ctx context.Context, runningNoticeType, outputNoticeType, errorNoticeType, errorMessage, command string, args ...string) error {
 	cmdText := command
 	if len(args) > 0 {

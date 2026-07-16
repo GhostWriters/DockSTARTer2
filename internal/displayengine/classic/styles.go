@@ -70,32 +70,27 @@ func (regions HitRegions) FindHit(x, y int) *HitRegion {
 var hyperlinkRegex = regexp.MustCompile(`\x1b\]8;.*?;(.*?)(?:\x07|\x1b\\)(.*?)\x1b\]8;;(?:\x07|\x1b\\)`)
 
 // StripHyperlinks removes OSC 8 hyperlink wrappers from rendered text while
-// keeping the label's own styling (e.g. SGR color codes) intact -- for
-// notices referencing a local file path, a file:// link only ever resolves
-// on the machine the DS2 process itself is running on, so it's meaningless
-// (not just suboptimal) for SSH and web sessions: unlike an https:// docs
-// link, there's no clipboard-copy fallback that helps either, since the
-// remote user's machine doesn't have that file at all. Callers should call
-// this for any non-local session before displaying such text.
+// keeping the label's own styling intact -- a file:// link only resolves on
+// the machine DS2 itself runs on, so it's meaningless for SSH and web
+// sessions (unlike an https:// docs link, there's no useful fallback since
+// the remote machine doesn't have the file). Call for any non-local session
+// before displaying such text.
 func StripHyperlinks(rendered string) string {
 	return hyperlinkRegex.ReplaceAllString(rendered, "$2")
 }
 
 // HyperlinkPath renders path as a clickable OSC 8 hyperlink to itself
 // (file://path). styleTag is a semantic tag ("{{|Tag|}}") or a direct style
-// code ("{{[fg:bg:attrs]}}"), resolved the same way as any other themed
-// text (see theme.ThemeSemanticStyle). Intended for building a path out of
-// several independently-clickable segments (e.g. each directory component
-// plus the filename, each opening that specific file or folder) -- call this
-// once per segment rather than trying to express multiple destinations in a
-// single call. See StripHyperlinks for why this is local-session-only.
+// code ("{{[fg:bg:attrs]}}"), resolved like any other themed text. Call once
+// per independently-clickable path segment (e.g. each directory component
+// plus the filename) rather than trying to express multiple destinations in
+// one call. See StripHyperlinks for why this is local-session-only.
 //
-// This renders immediately (like calling style.Render() directly) -- it is
-// NOT deferred semstyle tag markup, so it's meant for callers that already
-// have a resolved rendering context (e.g. building a viewport string
-// directly), not for building a logger.Notice/Info message string that gets
-// resolved later per-destination (console/file/TUI). For that case, build
-// the raw tag with strutil.FileURL yourself instead (see console.FormatFilePath).
+// Renders immediately (like style.Render()) -- not deferred semstyle
+// markup, so it's for callers with an already-resolved rendering context,
+// not for a logger.Notice/Info message resolved later per-destination
+// (console/file/TUI). For that, build the raw tag with strutil.FileURL
+// yourself (see console.FormatFilePath).
 func HyperlinkPath(styleTag, path string) string {
 	return theme.ThemeSemanticStyle(styleTag).Hyperlink(strutil.FileURL(path)).Render(path)
 }

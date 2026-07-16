@@ -103,31 +103,19 @@ func CheckTemplatesUpdate(ctx context.Context, force bool, requestedBranch strin
 // resolveTemplatesTarget determines the remote ref to update the templates
 // repo to, and its display string (tag name, or "<branch> commit <hash>").
 //
-// When the resolved branch is "main" (whether auto-detected from HEAD, or
-// explicitly named -- naming the branch is "pick which branch to track",
-// not "opt out of the release policy"), this applies a release policy
-// instead of main's literal tip: renovate and other CI commits land on main
-// between releases, so main's tip is frequently NOT the commit the user was
-// actually on -- restrict to the latest tag reachable from origin/main's
-// history instead. If no such tag exists yet (e.g. a fresh repo before any
-// release), falls back to main's tip.
+// For branch "main", targets the latest tag reachable from origin/main
+// instead of main's literal tip, since CI commits land between releases and
+// the tip is rarely what the user was actually on. Falls back to main's tip
+// if no tag exists yet. An explicit tag name or commit hash bypasses this
+// policy entirely (resolved separately below).
 //
-// If currentBranch already equals requestedBranch (i.e. this is an update
-// check/apply while staying on the same branch, not a switch onto main from
-// elsewhere) and the resolved target is an ancestor of (or equal to)
-// current HEAD -- e.g. the user is already ahead of the latest tag -- this
-// returns current HEAD itself as the target, so callers see "no update
-// available" rather than incorrectly offering to move backward to an older
-// tag. This check is skipped when switching branches: a different branch
-// (e.g. one that forked from main after the latest tag) being a descendant
-// of that tag must never block the switch itself.
+// If staying on the same branch (currentBranch == requestedBranch) and the
+// resolved target is an ancestor of current HEAD, returns HEAD itself so
+// callers see "no update available" instead of offering to move backward.
+// Skipped when switching branches, since a branch forked after the latest
+// tag being a descendant of it must never block the switch.
 //
-// Only an explicit literal tag name or commit hash bypasses this policy --
-// those resolve via the refs/tags/ or raw-hash fallback below and are
-// never equal to the branch name "main", so they naturally skip it.
-//
-// head is the repo's current HEAD reference (already resolved by the
-// caller), used only for the ancestor-of-latest-tag check above.
+// head is the caller-resolved current HEAD, used only for that ancestor check.
 func resolveTemplatesTarget(repo *git.Repository, head *plumbing.Reference, currentBranch, requestedBranch string) (*plumbing.Reference, string, error) {
 	remoteRef, err := repo.Reference(plumbing.ReferenceName("refs/remotes/origin/"+requestedBranch), true)
 	if err != nil {
@@ -178,17 +166,15 @@ func templatesRefDisplay(repo *git.Repository, requestedBranch string, remoteRef
 }
 
 // latestReachableTag returns the most recently committed tag (by the
-// tagged commit's committer date -- NOT by comparing tag name strings,
-// see below) that is an ancestor of (or equal to) branchRef's commit. ok
-// is false if no tag reaches branchRef at all.
+// tagged commit's committer date, not by comparing tag name strings) that
+// is an ancestor of (or equal to) branchRef's commit. ok is false if no tag
+// reaches branchRef at all.
 //
-// This deliberately does not use compareVersions (name-string comparison):
-// a repo that has changed its tag-naming scheme over time (e.g.
-// "v2026.01.19-1" -> "v1.20260628.1") can have two tags whose names sort
-// in the wrong chronological order relative to each other -- a real case
-// found when porting this same policy to DockSTARTer's bash update
-// scripts. Comparing by actual commit date is immune to naming-scheme
-// changes entirely.
+// Deliberately does not use compareVersions (name-string comparison): a
+// repo that has changed its tag-naming scheme over time (e.g.
+// "v2026.01.19-1" -> "v1.20260628.1") can have two tags whose names sort in
+// the wrong chronological order. Comparing by commit date is immune to
+// naming-scheme changes.
 func latestReachableTag(repo *git.Repository, branchRef *plumbing.Reference) (ref *plumbing.Reference, name string, ok bool) {
 	branchCommit, err := repo.CommitObject(branchRef.Hash())
 	if err != nil {

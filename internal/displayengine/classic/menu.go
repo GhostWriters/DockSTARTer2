@@ -392,15 +392,12 @@ func (m *MenuModel) MarkScrollPending() tea.Cmd {
 	return scrollDoneCmd(m.id)
 }
 
-// IsScrollbarDragging reports whether the menu is currently processing a scrollbar thumb drag.
-// AppModel uses this interface to give the active screen drag priority --
-// without this, mouse motion/release during a drag never reaches
-// Update(), since AppModel's top-level dispatch only forwards those message
-// types unconditionally when IsScrollbarDragging() is true (model_mouse.go).
-// Recurses into content sections: a plain *MenuModel container (no custom
-// screen wrapper, e.g. any outer-container + inner-submenu-section screen)
-// has no scrollbar of its own -- the drag is happening on a nested section's
-// Scroll instead, and nothing else would report it up to AppModel.
+// IsScrollbarDragging reports whether the menu is currently processing a
+// scrollbar thumb drag. AppModel uses this to give the active screen drag
+// priority (model_mouse.go) -- mouse motion/release during a drag would
+// otherwise never reach Update(). Recurses into content sections: a plain
+// *MenuModel container has no scrollbar of its own, so the drag is
+// happening on a nested section's Scroll instead.
 func (m *MenuModel) IsScrollbarDragging() bool {
 	if m.Scroll.Drag.Dragging {
 		return true
@@ -1308,15 +1305,11 @@ func (m *MenuModel) HandleContextMenuKey() (tea.Model, tea.Cmd, bool) {
 
 	// m's actual screen position varies: a maximized screen is always at
 	// (EdgeIndent, ContentStartY), but a centered dialog (e.g. Main Menu) is
-	// positioned by DialogPosition based on its own content size -- there is
-	// no fixed formula, so GetActiveDialogOffset reports whatever AppModel.View()
-	// actually computed for m this frame (see its SetActiveDialogOffset call
-	// sites in model_view.go). Crucially, m.GetHitRegions already recurses
-	// into every content section at the correct cumulative offset (see
-	// menu_hit_regions.go's "Section hit regions" step) -- the same regions
-	// the mouse-click path relies on via AppModel's hit-region collection --
-	// so querying m (not target) here reuses that existing offset math
-	// instead of reimplementing it.
+	// positioned by DialogPosition based on its own content size, so
+	// GetActiveDialogOffset reports whatever AppModel.View() computed for m
+	// this frame. m.GetHitRegions already recurses into every content
+	// section at the correct cumulative offset, so querying m (not target)
+	// reuses that existing offset math instead of reimplementing it.
 	absOffsetX, absOffsetY := GetActiveDialogOffset()
 
 	x, y := target.width/2+absOffsetX, target.height/2+absOffsetY

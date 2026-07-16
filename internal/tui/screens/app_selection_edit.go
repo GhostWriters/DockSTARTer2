@@ -231,15 +231,12 @@ func (s *AppSelectionScreen) confirmEdit() {
 	}
 	items := s.menu.GetItems()
 	// A group always keeps an inert placeholder row for the base app itself
-	// (unchecked, not added -- see the prune below) so there's somewhere to
-	// convert back into a simple row later. If the name being confirmed
-	// collides with that placeholder specifically, fold into it (check it)
-	// instead of a spurious "already exists" -- it was never really there
-	// from the user's perspective. A row that's merely Referenced (present
-	// in config but never formally added) is the same story -- as long as
-	// it's not actually checked/added, folding into it treats this confirm
-	// as adding (and enabling) it, same as any other new instance. Only a
-	// row that's genuinely already checked or added is a real collision.
+	// (unchecked, not added) so there's somewhere to convert back into a
+	// simple row later. If the confirmed name collides with that placeholder,
+	// fold into it (check it) instead of a spurious "already exists" -- it
+	// was never really there from the user's perspective. A merely
+	// Referenced row (in config but not formally added) is the same story.
+	// Only a row that's genuinely already checked or added is a real collision.
 	existingIdx := -1
 	for i, item := range items {
 		if item.IsSubItem && item.BaseApp == base && item.Metadata["appName"] == newAppName {

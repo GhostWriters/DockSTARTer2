@@ -119,19 +119,17 @@ func startRestartWatcher(ctx context.Context) {
 	}()
 }
 
-// checkPendingRestart is called whenever the active screen changes. If a restart
-// is pending and the new page is safe, it fires the re-exec immediately rather
-// than waiting for the next poll cycle.
+// checkPendingRestart is called whenever the active screen changes. If a
+// restart is pending and the new page is safe, it fires the re-exec
+// immediately rather than waiting for the next poll cycle.
 //
-// triggerPendingRestart is dispatched on its own goroutine rather than called
-// directly: this function runs synchronously inside the Bubble Tea Update()
-// call chain (the same goroutine that runs p.Run()'s event loop), but
-// triggerPendingRestart ends in Shutdown(), which calls p.Quit() and then
-// blocks waiting for p.Run() to return. p.Run() can never return while it's
-// still waiting on this very Update() call to finish -- calling it inline
-// here deadlocks the session on itself. Running it on a separate goroutine
-// lets this Update() call return immediately, so Run()'s loop can actually
-// process the pending Quit() and exit.
+// triggerPendingRestart is dispatched on its own goroutine, not called
+// directly: this runs inside Bubble Tea's Update() call chain, but
+// triggerPendingRestart ends in Shutdown(), which calls p.Quit() and blocks
+// waiting for p.Run() to return -- which can't happen while still waiting on
+// this very Update() call, so calling it inline would deadlock. A separate
+// goroutine lets Update() return immediately so Run()'s loop can process
+// the pending Quit().
 func checkPendingRestart(ctx context.Context) {
 	if update.RestartPending && isRestartSafe() {
 		go triggerPendingRestart(ctx)

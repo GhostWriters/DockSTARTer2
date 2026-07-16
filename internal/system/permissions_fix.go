@@ -15,19 +15,14 @@ import (
 
 // fixPermissions applies ownership (to puid:pgid) and/or DS2's target modes
 // (0775 directories / 0664 regular files, mirroring
-// "chmod -R a=,a+rX,u+w,g+w") to root natively via syscalls -- the chown and
-// chmod binaries are not involved, so behavior is identical across
-// coreutils implementations (GNU, BSD, uutils) and both operations happen
-// in ONE tree walk instead of the two that "chown -R" + "chmod -R" cost.
-// Entries already correct are left untouched (no metadata churn), symlinks
-// are skipped entirely (same convention as checkPermissions and
-// chown/chmod -R recursion), and directories are fixed before their
-// contents are read, so a directory whose old mode blocked traversal
-// becomes readable as the walk descends into it.
+// "chmod -R a=,a+rX,u+w,g+w") to root natively via syscalls in a single tree
+// walk. Entries already correct are left untouched, symlinks are skipped
+// (matching checkPermissions and chown/chmod -R convention), and
+// directories are fixed before their contents are read, so a directory
+// whose old mode blocked traversal becomes readable as the walk descends.
 //
-// Fails fast with the first real error; os.Lchown/os.Chmod errors are
-// *os.PathError values carrying the operation and path, unlike the old
-// shelled-out chown/chmod whose stderr was discarded.
+// Fails fast on the first real error; os.Lchown/os.Chmod errors are
+// *os.PathError values carrying the operation and path.
 func fixPermissions(root string, puid, pgid int, doChown, doChmod, recursive bool) error {
 	if !recursive {
 		info, err := os.Lstat(root)

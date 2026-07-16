@@ -46,31 +46,24 @@ func blocksHyperlink() bool {
 }
 
 // FormatFilePath returns raw (unresolved) semstyle tag markup for a file
-// reference -- unquoted, since call sites are inconsistent about whether
-// they quote a path in the surrounding message text; add quotes yourself if
-// the original message had them. Suitable for building a
-// logger.Notice/Info/etc. message string, which gets resolved later by each
-// destination's own renderer (console/file/TUI viewport). Each path segment
-// (each directory component, plus the filename) gets its own hyperlink to
-// that segment's own path -- so a folder segment can be clicked to open that
-// folder without needing to click the final file. Separators between
-// segments are colored to match but never wrapped in a hyperlink, so only
-// whole segments are clickable. The final segment is tagged {{|File|}};
-// every segment before it is tagged {{|Folder|}}, and its target URL gets a
-// trailing "/" (see ensureTrailingSlash) so it can only ever resolve to a
-// directory, never execute a same-named file. Unless the active session
-// is connected through DS2's own SSH or web server from a different machine
-// (see blocksHyperlink), each tag carries an explicit file:// URL for its
-// own cumulative path so it renders as a clickable hyperlink wherever it's
-// eventually shown; otherwise the tags carry no URL, since DS2 knows for
-// certain the file only exists on a machine other than the one rendering
-// the output.
+// reference -- unquoted (add quotes yourself if the surrounding message
+// needs them). Suitable for a logger.Notice/Info/etc. message string,
+// resolved later by each destination's own renderer (console/file/TUI
+// viewport). Each path segment (directory component, plus filename) gets
+// its own hyperlink to that segment's own path, so a folder segment opens
+// that folder without needing the final file; separators are colored to
+// match but never wrapped in a hyperlink. The final segment is tagged
+// {{|File|}}; earlier segments are {{|Folder|}} with a trailing "/" on
+// their target URL (see ensureTrailingSlash) so they can only resolve to a
+// directory, never execute a same-named file. Tags carry an explicit
+// file:// URL unless the session is connected through DS2's own SSH/web
+// server from a different machine (see blocksHyperlink), in which case DS2
+// knows the file can't exist on the rendering machine and omits the URL.
 //
-// This must NOT call displayengine.HyperlinkPath/HyperlinkText -- those
-// render immediately using the CURRENT rendering context, which would bake
-// in the wrong styling (e.g. TUI colors leaking into a file-logged line that
-// should have all tags stripped) instead of deferring to whichever handler
-// processes this message later.
+// Must NOT call displayengine.HyperlinkPath/HyperlinkText -- those render
+// immediately using the current rendering context (e.g. baking in TUI
+// colors that should be stripped for a file-logged line) instead of
+// deferring to whichever handler processes this message later.
 func FormatFilePath(path string) string {
 	return formatPathSegments(path, true)
 }
@@ -83,15 +76,12 @@ func FormatFolderPath(path string) string {
 }
 
 // FormatFileName returns raw (unresolved), unquoted semstyle tag markup for
-// a display name (e.g. a conceptual/short label like ".env" rather than the
-// actual on-disk name) that should link to path -- for cases where the
-// message wants to show a friendlier or more concise label than the real
-// full path, but a real path is still known and worth linking to (e.g. a
-// temp file standing in for ".env" during a write). If no real path is
-// available at all, pass an empty path: the name is still styled, just
-// without a hyperlink -- linking to "" would otherwise point at a
-// nonexistent path in the process's working/root directory. When a real
-// full path IS the thing to display, call FormatFilePath directly instead.
+// a display name (e.g. a short label like ".env" rather than the actual
+// on-disk name) that should link to path. Pass an empty path if no real
+// path is known: the name is still styled, just without a hyperlink, since
+// linking to "" would otherwise point at the process's working/root
+// directory. Call FormatFilePath directly when the full path is the thing
+// to display.
 func FormatFileName(name, path string) string {
 	return FormatFile("File", path, name)
 }

@@ -588,18 +588,14 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *displayengine.Men
 			}
 
 			// Every click ends with a sweep for empty groups that should
-			// collapse. skipBase exempts the group this click just entered
-			// or expanded (so opening an empty group doesn't immediately
-			// undo itself); it defaults to the clicked item's own group and
-			// is cleared to "" only for a group header's own Add/Enable
-			// click (the inert "-" dash) -- that's not really inside the
-			// bordered instance list, so it can self-collapse immediately.
-			// A real subitem's own Add/Enable toggle, by contrast, IS
-			// inside the list the user is actively working in -- even if
-			// the toggle makes the group newly collapsible (e.g. unchecking
-			// its last active instance), collapsing it out from under that
-			// same click would eject the user mid-interaction; it still
-			// collapses, just on whatever click follows instead.
+			// collapse. skipBase exempts the group this click just entered or
+			// expanded, so opening an empty group doesn't immediately undo
+			// itself. Cleared to "" only for a group header's own Add/Enable
+			// click (not really inside the bordered instance list, so it can
+			// self-collapse immediately) -- a real subitem's own toggle is
+			// inside the list the user is actively working in, so it still
+			// exempts collapse this click even if it made the group
+			// newly-collapsible, deferring to whatever click follows instead.
 			skipBase := item.BaseApp
 			var cmd tea.Cmd
 

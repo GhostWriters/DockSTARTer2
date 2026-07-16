@@ -86,13 +86,8 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	// deferred MenuDeferredActionMsg/buttonRowDeferredActionMsg is scoped to
 	// its own instanceID and arrives one tick after the click, by which
 	// point normal message routing may no longer reach it (e.g. it's not
-	// the focused section, or the message type isn't one updateSections'
-	// switch below has a case for at all). Without this, a section's click
-	// is silently dropped -- the same bug class fixed earlier this session
-	// via AbsorbMessage for DisplayOptionsScreen/ServerOptionsScreen, but
-	// those screens wire it manually in their own custom Update(); a plain
-	// *MenuModel container (no custom screen wrapper) has nowhere else to
-	// call it from, so updateSections must do it unconditionally itself.
+	// the focused section). A plain *MenuModel container has no custom
+	// Update() to wire this manually, so updateSections does it here.
 	for _, sec := range m.contentSections {
 		if cmd := sec.AbsorbMessage(msg); cmd != nil {
 			m.InvalidateCache()
@@ -336,14 +331,11 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 
 	case tea.MouseMotionMsg, tea.MouseReleaseMsg:
 		// Scrollbar thumb drag continuation/release: a drag started on the
-		// focused section's scrollbar (via its own LayerHitMsg ".sb.thumb"
-		// handling) needs these follow-up events routed back to that same
-		// section regardless of the mouse's current on-screen position --
-		// the top-level (non-sectioned) MenuModel.Update handles this
-		// unconditionally at the very top for its own Scroll (menu_update.go),
-		// but a section's Scroll is a different object nested one level
-		// down, and nothing else forwards these message types to it once
-		// contentSections is non-empty.
+		// focused section's scrollbar needs these follow-up events routed
+		// back to that section regardless of the mouse's current position.
+		// A section's Scroll is nested one level down from the top-level
+		// MenuModel's own (menu_update.go), so nothing else forwards these
+		// once contentSections is non-empty.
 		if m.focusedSection >= 0 && m.focusedSection < n {
 			cmd := m.updateSection(m.focusedSection, msg)
 			m.InvalidateCache()

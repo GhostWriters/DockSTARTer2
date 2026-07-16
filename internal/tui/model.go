@@ -237,15 +237,12 @@ type AppModel struct {
 	activeScreen ScreenModel
 	screenStack  []ScreenModel
 
-	// needsInit tracks screens pushed onto screenStack via NavigateMsg.PushStack
-	// that haven't been made active (and therefore haven't had Init() called)
-	// yet. Every message -- including whatever a screen's own Init() cmd
-	// eventually produces -- is routed only to m.activeScreen.Update(), so
-	// calling Init() on a screen while it's still buried in the stack would
-	// fire the cmd but strand its result message nowhere; NavigateBackMsg's
-	// handler calls Init() (and clears the entry here) at the moment a
-	// pushed screen actually becomes active instead, matching how every
-	// other screen already gets Init() called via NavigateMsg.
+	// needsInit tracks screens pushed onto screenStack via
+	// NavigateMsg.PushStack that haven't been made active (and therefore
+	// haven't had Init() called) yet -- calling Init() while still buried in
+	// the stack would strand its result message, since messages route only
+	// to m.activeScreen. NavigateBackMsg calls Init() (and clears the entry)
+	// when a pushed screen actually becomes active.
 	needsInit map[ScreenModel]bool
 
 	// Persistent backdrop (header + separator + helpline)

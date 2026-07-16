@@ -14,10 +14,6 @@ import (
 )
 
 // parsePortArgs reads up to two port values from args.
-// Returns -1 for any argument that is missing or empty (meaning "not specified / keep original").
-// Returns 0 for an explicit "0" or "" sentinel meaning "disable" (web port only).
-// The distinction: missing arg → -1 (keep), explicit "" or "0" → 0 (disable/auto-detect).
-// parsePortArgs reads up to two port values from args.
 // Missing or empty ("") arg → -1 (not specified / keep original).
 // Explicit "0" → 0 (disable web, or auto-detect target).
 // Any positive number → that port.

@@ -349,18 +349,12 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case outputLinesMsg, displayengine.ReplaceOutputMsg, UpdateTaskMsg, UpdatePercentMsg:
 			// Streaming output and task/progress state must keep flowing into
 			// the viewport/header even while a sub-dialog (e.g. a confirm
-			// prompt raised mid-task) is up -- these aren't interactive
-			// messages the sub-dialog needs, and buffering them until the
-			// sub-dialog closes left the viewport looking frozen/blank until
-			// the next unrelated redraw (e.g. opening the log panel) forced
-			// it to catch up. Fall through to the normal switch below
-			// instead of exclusively delegating. outputDoneMsg is
-			// deliberately NOT included here -- the task goroutine that
-			// sends it is blocked upstream on the sub-dialog's own answer
-			// channel, so it structurally cannot have finished yet; letting
-			// it through would show the OK button (and mark done) before
-			// the sub-dialog is actually answered if anything ever causes
-			// it to arrive early.
+			// prompt raised mid-task) is up, or the viewport looks frozen
+			// until an unrelated redraw catches it up. Fall through instead
+			// of exclusively delegating. outputDoneMsg is deliberately NOT
+			// included -- its task goroutine is blocked upstream on the
+			// sub-dialog's own answer channel, so letting it through early
+			// would show the OK button before the sub-dialog is answered.
 		default:
 			// Exclusive delegation for interaction while sub-dialog is active
 			m.subDialog, subCmd = m.subDialog.Update(msg)
@@ -457,13 +451,11 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.command = msg.Command
 		// InvalidateCache alone only clears the cached rendered string --
-		// each section's actual row-height allocation is computed by
-		// calculateSectionLayout, which only runs from SetSize. Without
-		// re-triggering it here, the header/command rows keep whatever
-		// height was allocated when the dialog was first shown (when
-		// subtitle/command may have been blank or shorter), so the newly
-		// rendered content ends up squeezed into or floating in a stale
-		// size instead of the box actually resizing to fit it.
+		// row-height allocation is computed by calculateSectionLayout, which
+		// only runs from SetSize. Without re-triggering it, the header/
+		// command rows keep whatever height was allocated when first shown
+		// (possibly blank/shorter), so new content ends up squeezed into a
+		// stale size instead of the box resizing to fit it.
 		m.outer.SetSize(m.outer.Width(), m.outer.Height())
 		return m, nil
 	}

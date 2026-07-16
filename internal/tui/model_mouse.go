@@ -525,20 +525,17 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 					}
 				}
 			}
-			// Hyperlinks (IDs are "link:<URL>"). Real OSC8-aware terminals (e.g.
-			// WezTerm) typically intercept a modifier-click on rendered hyperlink
-			// text themselves, client-side, before it ever reaches us as a mouse
-			// event here -- so this only fires for terminals without that support
-			// (e.g. MobaXterm), where a plain click still reaches us as a normal
-			// click. Route it through the same connType-aware helper Space on
-			// App Selection's Name column uses, rather than always assuming a
-			// local browser is reachable.
+			// Hyperlinks (IDs are "link:<URL>"). OSC8-aware terminals (e.g.
+			// WezTerm) intercept a modifier-click on hyperlink text client-side
+			// before it reaches us, so this only fires for terminals without
+			// that support (e.g. MobaXterm). Routed through the same
+			// connType-aware helper Space uses on App Selection's Name column.
 			//
-			// Only when no modal dialog is active: hit regions from the screen
-			// underneath a dialog (e.g. other app-name links behind an open
-			// "Docs Page" message box) are still present in m.hitRegions, so
-			// without this guard a click outside the dialog's bounds would
-			// keep opening more dialogs instead of being ignored/dismissed.
+			// Guarded on no modal dialog: hit regions from the screen underneath
+			// a dialog (e.g. app-name links behind an open "Docs Page" message
+			// box) are still present in m.hitRegions, so without this a click
+			// outside the dialog's bounds would open more dialogs instead of
+			// being ignored/dismissed.
 			if m.dialog == nil && strings.HasPrefix(hitID, "link:") {
 				if me, ok := msg.(tea.MouseClickMsg); ok && me.Button == tea.MouseLeft {
 					url := strings.TrimPrefix(hitID, "link:")

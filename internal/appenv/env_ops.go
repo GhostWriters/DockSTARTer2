@@ -17,18 +17,11 @@ import (
 	"github.com/adrg/xdg"
 )
 
-// EnvCreate initializes the DockSTARTer environment file.
-//
-// This function mirrors env_create.sh and performs the following steps:
-//  1. Creates the compose folder if it doesn't exist
-//  2. If .env exists: backs it up and sanitizes it
-//  3. If .env missing: creates it from the default template and sanitizes it
-//  4. If no apps are added: automatically enables WATCHTOWER as the default app
-//
-// The sanitization process ensures all required variables are present and sets
-// platform-specific defaults for PUID, PGID, TZ, HOME, and Docker paths.
-//
-// Returns an error if critical operations like folder creation or file writing fail.
+// EnvCreate initializes the DockSTARTer environment file, mirroring
+// env_create.sh: creates the compose folder if missing, backs up and
+// sanitizes an existing .env (or creates one from the default template),
+// and enables WATCHTOWER by default if no apps are added yet. Sanitization
+// sets platform-specific defaults for PUID, PGID, TZ, HOME, and Docker paths.
 func EnvCreate(ctx context.Context, conf config.AppConfig) error {
 	// 1. Ensure ComposeFolder exists
 	if info, err := os.Stat(conf.Paths.ComposeFolder); err == nil && !info.IsDir() {

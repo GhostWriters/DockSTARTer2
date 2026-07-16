@@ -47,15 +47,11 @@ func init() {
 	}
 
 	// semstyle auto-detects the color profile at its own init (respecting
-	// NO_COLOR, TTY status, etc. via colorprofile.Detect), but ToANSI renders
-	// unconditionally unless a RenderPolicy is set -- without this, every
-	// tag (including OSC 8 hyperlinks) would still be emitted even when
-	// output is redirected to a file or the terminal can't handle color,
-	// producing raw escape-sequence garbage instead of plain text.
-	// IsTUIEnabled is exempted since bubbletea manages its own output
-	// stream/profile independent of stdout/stderr -- NOT the TUIMode var,
-	// which (despite the name) is never actually assigned anywhere in the
-	// codebase and would always evaluate false here.
+	// NO_COLOR, TTY status, etc.), but ToANSI renders unconditionally unless
+	// a RenderPolicy is set -- without this, tags would still emit raw
+	// escape-sequence garbage when output is redirected to a file or the
+	// terminal can't handle color. IsTUIEnabled is exempted since bubbletea
+	// manages its own output stream/profile independent of stdout/stderr.
 	semstyle.RenderPolicy = func() bool {
 		return IsTUIEnabled() || GetPreferredProfile() > colorprofile.Ascii
 	}

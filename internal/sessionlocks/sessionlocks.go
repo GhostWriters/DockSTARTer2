@@ -84,12 +84,7 @@ type SessionManager struct {
 
 	localOwner      string // tracks which part of the current process holds the lock (e.g. "Menu", "Console")
 	localSource     string // "menu", "cli", or "console" — informational only, recorded in the lock file
-	localSessionKey string // identifies the actual session/process that holds the lock -- used to allow
-	// re-entry (multiple destructive screens/commands within the SAME session), while still correctly
-	// blocking a DIFFERENT session even when it uses the same lockSource category. Plain lockSource
-	// equality isn't enough: a server-daemon process serves many concurrent SSH/web sessions that all
-	// go through e.g. "menu", so comparing lockSource alone would let one session's lock be silently
-	// reused by an unrelated session that happened to enter through the same code path.
+	localSessionKey string // identifies the actual session/process holding the lock, for re-entry checks (see heldByLocked) -- a server-daemon process serves many sessions that all use the same lockSource, so lockSource alone can't tell them apart
 }
 
 // SessionInfo holds the details read from a session lock file.
@@ -191,37 +186,23 @@ func (m *SessionManager) IsEditLocked() bool {
 	return true
 }
 
-// HoldEditLockLocal reports whether this process holds the edit lock, without
-// regard to which of its sessions acquired it. Correct for restart-safety
-// checks (restarting the process would disrupt whichever session holds it,
-// regardless of which session is asking), but NOT for deciding whether a
-// specific session should treat the lock as "held by others" -- a
-// server-daemon process serves many concurrent sessions, and this alone
-// can't tell them apart. Use HoldEditLockAs for that.
+// HoldEditLockLocal reports whether this process holds the edit lock,
+// regardless of which of its sessions acquired it. Correct for
+// restart-safety checks; use HoldEditLockAs to check a specific session.
 func (m *SessionManager) HoldEditLockLocal() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.editActive
 }
 
-// HoldEditLockAs reports whether this process holds the edit lock on behalf
-// of the given session specifically, AND that lock is merely a navigation
-// lock (lockSource "menu" -- the session is sitting inside a destructive
-// screen, not actively running anything). Use this (not HoldEditLockLocal)
-// when deciding whether the lock should read as "held by others" from a
-// particular session's point of view -- e.g. whether to dim/mark its
-// destructive menu items.
-//
-// A DIFFERENT session's lock always counts as "others" here (see
-// heldByLocked). But even the OWNING session's own lock still counts as
-// "others" -- i.e. this still returns false -- when it was acquired for an
-// actively-running command (lockSource "console", "cli", or any
-// "menu:<action>" like compose start/stop/prune), rather than plain
-// navigation: an in-progress operation should visibly block other
-// destructive items even in your own session, so you don't kick off a
-// conflicting action while one is already running. Only bare "menu"
-// (navigating between destructive screens with nothing actively executing)
-// is safe to exempt for the owning session.
+// HoldEditLockAs reports whether the given session holds the edit lock via
+// plain navigation (lockSource "menu"). Use this (not HoldEditLockLocal)
+// to decide whether the lock reads as "held by others" for a session's
+// destructive menu items: a different session's lock always counts as
+// others, and so does the owning session's own lock if it's for an
+// actively-running command ("console", "cli", "menu:<action>") rather than
+// navigation -- an in-progress operation should still block other
+// destructive items in the same session.
 func (m *SessionManager) HoldEditLockAs(sessionKey string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -665,17 +646,12 @@ func (m *SessionManager) ReadInstalledVersion(exePath string) string {
 	return strings.TrimSpace(string(data))
 }
 
-// SeedInstalledVersion writes the current running version to the installed-
-// version file only if no file exists yet, so the watcher always has
-// something to compare against on a machine that's never recorded a version
-// before. Deliberately does NOT overwrite an existing value just because it
-// differs from currentVersion -- a differing value may be a legitimate
-// "a newer version was installed" signal from another process that this one
-// hasn't picked up yet, and stomping it here on every startup would
-// silently erase that signal for every other session watching the same
-// file (the exact scenario this was called for: a session starting on the
-// old version while a pending restart, triggered by a different session's
-// update, is still waiting for all sessions to reach a safe page).
+// SeedInstalledVersion writes currentVersion to the installed-version file
+// only if no file exists yet. Never overwrites an existing value even if it
+// differs from currentVersion -- a differing value may be a legitimate "a
+// newer version was installed" signal from another process this one hasn't
+// picked up yet, and stomping it would erase that signal for other sessions
+// watching the same file.
 func (m *SessionManager) SeedInstalledVersion(exePath, currentVersion string) {
 	if m.ReadInstalledVersion(exePath) != "" {
 		return
