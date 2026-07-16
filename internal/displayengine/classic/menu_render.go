@@ -440,7 +440,15 @@ func (m *MenuModel) viewSubMenu() string {
 	if m.ContentRenderer != nil {
 		innerParts = append(innerParts, m.ContentRenderer(contentWidth))
 	} else if m.flowMode {
-		innerParts = append(innerParts, m.renderFlowContent(contentWidth))
+		// renderFlowContent's own lineStyle adds 2 back (Padding(0,1)'s
+		// compensation for its other caller, renderFlow, which pre-subtracts
+		// 2); mirror that pre-subtraction here so the returned lines are
+		// exactly contentWidth, not contentWidth+2.
+		flowWidth := contentWidth - 2
+		if flowWidth < 1 {
+			flowWidth = 1
+		}
+		innerParts = append(innerParts, m.renderFlowContent(flowWidth))
 	} else {
 		content := m.renderVerticalListBlock(ctx)
 		leftPad := layout.ContentSideMargin
