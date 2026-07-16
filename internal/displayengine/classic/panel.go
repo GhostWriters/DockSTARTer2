@@ -93,6 +93,7 @@ type PanelModel struct {
 	sessionKey           string // identifies the owning TUI session for edit-lock re-entry (see sessionlocks.SessionManager.localSessionKey)
 	logSub               <-chan string // this panel's own subscription to logger.SubscribeLogLines -- see UnsubscribeLog
 	logUnsub             func()        // releases logSub; call once when this panel's session ends (see UnsubscribeLog)
+	confirmFunc          func(title, question string, defaultYes bool) bool // this session's own confirm callback, set via SetConfirmFunc; attached to console commands' ctx so their prompts reach this session, not whichever session's Program is currently the global tui.program
 	titleSpinner         TitleSpinner
 	lastLineTime         time.Time // when the last log line arrived; spinner runs until idle for spinnerIdleTimeout
 	panelChanged         bool      // new content arrived while collapsed; cleared on expand
@@ -200,6 +201,20 @@ func (m *PanelModel) UnsubscribeLog() {
 	if m.logUnsub != nil {
 		m.logUnsub()
 	}
+}
+
+// SetConfirmFunc sets this panel's session-scoped confirm callback (see
+// confirmFunc). Called once by the tui package after this session's own
+// *tea.Program is constructed, since PanelModel is built before that Program
+// exists (NewProgram needs the already-built AppModel/PanelModel as input).
+func (m *PanelModel) SetConfirmFunc(fn func(title, question string, defaultYes bool) bool) {
+	m.confirmFunc = fn
+}
+
+// ConfirmFunc returns this panel's session-scoped confirm callback, or nil
+// if SetConfirmFunc was never called.
+func (m *PanelModel) ConfirmFunc() func(title, question string, defaultYes bool) bool {
+	return m.confirmFunc
 }
 
 // vpHeight returns the viewport height for the current panel state.

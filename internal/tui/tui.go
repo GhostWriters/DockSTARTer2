@@ -526,6 +526,7 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	// Create and run the Bubble Tea program
 	// Note: AltScreen is set via View().AltScreen in v2
 	p = NewProgram(model, pOpts)
+	model.panel.SetConfirmFunc(sessionConfirmFunc(p))
 
 	// Register this session so Shutdown (re-exec) can find it, and so
 	// shutdownSelf above has something to quit/wait on.
@@ -678,6 +679,7 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 
 	model := NewAppModel(ctx, displayengine.CurrentConfig(), ip, ctype, sessionKey, startScreen, initialStack...)
 	p = NewProgram(model, pOpts)
+	model.panel.SetConfirmFunc(sessionConfirmFunc(p))
 	exited = registerSession(p)
 
 	startWindowSizeForwarder(ctx, p, pOpts)
@@ -837,6 +839,7 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 	pOpts.RefreshRate = resolveRefreshRate(ctype, pOpts.WebToken)
 	model := NewAppModel(ctx, displayengine.CurrentConfig(), ip, ctype, sessionKey, startScreen)
 	p = NewProgram(model, pOpts)
+	model.panel.SetConfirmFunc(sessionConfirmFunc(p))
 	exited = registerSession(p)
 
 	startWindowSizeForwarder(ctx, p, pOpts)
