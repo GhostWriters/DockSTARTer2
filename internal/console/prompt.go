@@ -79,12 +79,19 @@ func QuestionPrompt(ctx context.Context, printer Printer, title, question string
 	// Log the YN prompt regardless of mode (matches bash notice behavior)
 	printer(ctx, "%s", ynPrompt)
 
-	// Check if we should use TUI for this prompt
-	if TUIConfirm != nil {
+	// Check if we should use TUI for this prompt. Prefer a session-scoped
+	// confirm callback attached to ctx (see WithConfirmFunc) over the global
+	// TUIConfirm var, which is shared process-wide and can point at the wrong
+	// (or an already-exited) session in a server-daemon process.
+	confirm := ConfirmFuncFromContext(ctx)
+	if confirm == nil {
+		confirm = TUIConfirm
+	}
+	if confirm != nil {
 		defaultYes := strings.EqualFold(defaultValue, "y")
 		// Pass raw (unprocessed) strings so the TUI dialog can expand semantic tags
 		// using the active theme instead of the hardcoded console color registry.
-		answer := TUIConfirm(title, question, defaultYes)
+		answer := confirm(title, question, defaultYes)
 		if answer {
 			printer(ctx, "%s", semstyle.Sprintf("Answered: {{|Yes|}}Yes{{[-]}}"))
 		} else {

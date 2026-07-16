@@ -172,6 +172,9 @@ func (m *PanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 		m.replaceHeaderCount = -1
 		pr, pw := io.Pipe()
 		cmdCtx := console.WithPanelWriter(ctx, pw)
+		if fn := m.ConfirmFunc(); fn != nil {
+			cmdCtx = console.WithConfirmFunc(cmdCtx, fn)
+		}
 
 		go func() {
 			// Log the command header into the pipe first

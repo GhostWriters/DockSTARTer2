@@ -2,6 +2,28 @@ package tui
 
 import tea "charm.land/bubbletea/v2"
 
+// sessionConfirmFunc returns a confirm callback bound to p specifically,
+// instead of the global program var -- used to give each session's
+// PanelModel its own callback (see PanelModel.SetConfirmFunc) so a console
+// command's confirm prompt reaches the session that issued it even if
+// another session has since become the current global program.
+func sessionConfirmFunc(p *tea.Program) func(title, question string, defaultYes bool) bool {
+	return func(title, question string, defaultYes bool) bool {
+		if p == nil {
+			return defaultYes
+		}
+		resultChan := make(chan bool)
+		p.Send(UniversalPromptMsg{
+			Title:      title,
+			Question:   question,
+			DefaultYes: defaultYes,
+			ResultChan: resultChan,
+			Type:       PromptTypeConfirm,
+		})
+		return <-resultChan
+	}
+}
+
 // Confirm shows a confirmation dialog and returns the user's choice.
 // If a program is already running, it sends a message to the active program.
 func Confirm(title, question string, defaultYes bool) bool {
