@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"charm.land/lipgloss/v2"
@@ -46,17 +47,52 @@ func isSuppressed(ctx context.Context, w io.Writer) bool {
 	return ok
 }
 
-// logLineCh carries TUI-formatted log lines to the log panel.
-var logLineCh = make(chan string, 200)
+// logSubs holds one delivery channel per active subscriber (one per
+// concurrent session's log/console panel). A single shared channel would
+// mean every session's panel goroutine competes to read the SAME line --
+// in a server-daemon process serving multiple concurrent SSH/web sessions,
+// each log line would go to whichever session's goroutine happened to win
+// that particular read, silently splitting one line's worth of output
+// across unrelated sessions instead of delivering it to all of them.
+var (
+	logSubMu sync.Mutex
+	logSubs  = make(map[chan string]struct{})
+)
 
 // LevelStyleFunc is a function that returns a styled string for a log level tag.
 // This is set by main.go to avoid import cycles.
 var LevelStyleFunc func(tag string, label string) lipgloss.Style
 
-// SubscribeLogLines returns a read-only channel that receives every log line
-// formatted for TUI display (same format written to TUI writer).
-func SubscribeLogLines() <-chan string {
-	return logLineCh
+// SubscribeLogLines registers a new subscriber and returns a channel that
+// receives its own copy of every TUI-formatted log line (same format written
+// to TUI writer), plus an unsubscribe function the caller must invoke when
+// done (e.g. when its session/panel ends) to stop receiving lines and free
+// the subscription slot. Call once per subscriber lifetime -- not once per
+// line -- and read repeatedly from the returned channel.
+func SubscribeLogLines() (ch <-chan string, unsubscribe func()) {
+	c := make(chan string, 200)
+	logSubMu.Lock()
+	logSubs[c] = struct{}{}
+	logSubMu.Unlock()
+	return c, func() {
+		logSubMu.Lock()
+		delete(logSubs, c)
+		logSubMu.Unlock()
+	}
+}
+
+// publishLogLine delivers line to every current subscriber's channel. A
+// subscriber whose buffer is full is skipped for this line (rather than
+// blocking every other subscriber on one slow reader).
+func publishLogLine(line string) {
+	logSubMu.Lock()
+	defer logSubMu.Unlock()
+	for c := range logSubs {
+		select {
+		case c <- line:
+		default:
+		}
+	}
 }
 
 // logFilePath and logDir are set during NewLogger so fatal/cleanup paths use the same location.

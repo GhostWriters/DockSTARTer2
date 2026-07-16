@@ -263,6 +263,7 @@ func RunProgramBox(ctx context.Context, title, subtitle, command string, task fu
 
 	// Run the program (Init will start the task)
 	finalModel, err := p.Run()
+	model.Cleanup()
 
 	// Reset terminal colors on exit to prevent "bleeding" into the shell prompt
 	fmt.Print("\x1b[0m\n")

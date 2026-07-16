@@ -558,6 +558,7 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	// Signal that the program has exited
 	close(exited)
 	unregisterSession(p)
+	model.Cleanup()
 
 	if !isSSH {
 		// Drain any buffered mouse events from stdin before disabling mouse tracking.

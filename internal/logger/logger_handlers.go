@@ -34,18 +34,14 @@ func (h *TUIHandler) Handle(ctx context.Context, r slog.Record) error {
 	tuiMsg := timeLevel + r.Message
 
 	if h.global {
-		// Skip global channel when a panel writer is active — the panel already
-		// receives lines via its pipe scanner, so logLineCh would double-log.
+		// Skip the broadcast when a panel writer is active — the panel already
+		// receives lines via its pipe scanner, so publishLogLine would double-log.
 		// Program box writers use TUIWriterKey only (no PanelWriterKey), so they
-		// still reach the panel via logLineCh.
+		// still reach subscribers via publishLogLine.
 		if ctx.Value(console.PanelWriterKey) != nil {
 			return nil
 		}
-		select {
-		case logLineCh <- tuiMsg:
-		default:
-			// Drop if full to prevent blocking
-		}
+		publishLogLine(tuiMsg)
 	} else {
 		if w, ok := ctx.Value(console.TUIWriterKey).(io.Writer); ok {
 			if !isSuppressed(ctx, w) {

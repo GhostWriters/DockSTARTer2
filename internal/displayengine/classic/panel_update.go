@@ -14,7 +14,6 @@ import (
 	"DockSTARTer2/internal/commands"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
-	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/tui/components/sinput"
 	"DockSTARTer2/internal/version"
 
@@ -50,10 +49,12 @@ func preloadPanelLog() tea.Msg {
 	return PanelLineMsg(strings.Join(all, "\n"))
 }
 
-// waitForPanelLine blocks until the logger sends a line, then returns it as a message.
-func waitForPanelLine() tea.Cmd {
+// waitForPanelLine blocks until the panel's own log subscription channel
+// (ch, from logger.SubscribeLogLines -- see PanelModel.logSub) sends a line,
+// then returns it as a message.
+func waitForPanelLine(ch <-chan string) tea.Cmd {
 	return func() tea.Msg {
-		line, ok := <-logger.SubscribeLogLines()
+		line, ok := <-ch
 		if !ok {
 			return nil
 		}
@@ -157,21 +158,12 @@ func (m *PanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 			return func() tea.Msg { return ConsoleDoneMsg{} }
 		}
 
-		// Pre-check the edit lock for any session-locked command so the panel
-		// shows a clear error immediately, instead of a line that can get
-		// buried under unrelated background output once execution is blocked.
-		for _, g := range groups {
-			if def, ok := commands.Registry[g.Command]; ok && def.SessionLocked {
-				if sessionlocks.Sessions.IsEditLocked() {
-					info := sessionlocks.Sessions.ReadEditInfo()
-					closing := fmt.Sprintf("Cannot run '{{|UserCommand|}}%s{{[-]}}' while the configuration is being edited.", cmdStr)
-					logger.Error(context.Background(), sessionlocks.EditLockLines(info, closing))
-					return func() tea.Msg { return ConsoleDoneMsg{} }
-				}
-				break
-			}
-		}
-
+		// The edit-lock check happens per-group inside commands.Execute (matching
+		// CLI behavior exactly), not here -- a pre-check across all groups
+		// upfront would abort the entire command line at the first locked group,
+		// silently skipping (and never logging) any earlier group that could
+		// have run successfully, e.g. "ds2 --list-enabled -yp" should still run
+		// --list-enabled even if -p is currently locked.
 		configChanged := commands.GroupsNeedConfigReload(groups)
 		appsChanged := commands.GroupsNeedAppsRefresh(groups)
 
@@ -302,7 +294,7 @@ func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.panelChanged = true
 		}
 		m.Sv.AppendLines(strings.Split(string(msg), "\n"), panelRenderFn())
-		return m, waitForPanelLine()
+		return m, waitForPanelLine(m.logSub)
 
 	case ConsoleLinesMsg:
 		m.lastLineTime = time.Now()

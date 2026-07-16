@@ -336,6 +336,14 @@ func NewAppModelStandalone(ctx context.Context, cfg config.AppConfig, clientIP, 
 	}
 }
 
+// Cleanup releases per-session resources that would otherwise leak for the
+// lifetime of a long-running server-daemon process (e.g. this session's log
+// subscription channel and its blocked reader goroutine). Call once after
+// this AppModel's Program.Run() returns.
+func (m *AppModel) Cleanup() {
+	m.panel.UnsubscribeLog()
+}
+
 // Init implements tea.Model
 func (m *AppModel) Init() tea.Cmd {
 	cmds := []tea.Cmd{
