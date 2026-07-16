@@ -5,6 +5,7 @@ import (
 	"context"
 	"time"
 
+	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/tui/components/sinput"
 	"DockSTARTer2/internal/tui/components/streamvp"
 	"charm.land/bubbles/v2/textinput"
@@ -90,6 +91,8 @@ type PanelModel struct {
 	connType             string // "local", "ssh", or "web"
 	clientIP             string // the owning session's real client IP/address, for edit-lock terminal attribution (see sessionlocks.SessionManager.AcquireEditLock)
 	sessionKey           string // identifies the owning TUI session for edit-lock re-entry (see sessionlocks.SessionManager.localSessionKey)
+	logSub               <-chan string // this panel's own subscription to logger.SubscribeLogLines -- see UnsubscribeLog
+	logUnsub             func()        // releases logSub; call once when this panel's session ends (see UnsubscribeLog)
 	titleSpinner         TitleSpinner
 	lastLineTime         time.Time // when the last log line arrived; spinner runs until idle for spinnerIdleTimeout
 	panelChanged         bool      // new content arrived while collapsed; cleared on expand
@@ -170,6 +173,7 @@ func NewPanelModel(panelMode string, connType string, clientIP string, sessionKe
 	ti.Prompt = "> "
 	inp := sinput.New(ti)
 
+	logSub, logUnsub := logger.SubscribeLogLines()
 	m := PanelModel{
 		Sv:                 streamvp.New(),
 		Input:              inp,
@@ -178,11 +182,24 @@ func NewPanelModel(panelMode string, connType string, clientIP string, sessionKe
 		connType:           connType,
 		clientIP:           clientIP,
 		sessionKey:         sessionKey,
+		logSub:             logSub,
+		logUnsub:           logUnsub,
 		Expanded:           false,
 		replaceHeaderCount: -1,
 	}
 	m.applyInputStyles()
 	return m
+}
+
+// UnsubscribeLog releases this panel's log-line subscription. Call once when
+// the owning session ends -- otherwise its subscription (and the goroutine
+// blocked reading from it) leaks for the lifetime of a long-running
+// server-daemon process, since a new subscription is created per session but
+// nothing else ever removes it.
+func (m *PanelModel) UnsubscribeLog() {
+	if m.logUnsub != nil {
+		m.logUnsub()
+	}
 }
 
 // vpHeight returns the viewport height for the current panel state.
@@ -356,7 +373,7 @@ func (m *PanelModel) SetSize(width, totalTermHeight int) {
 func (m PanelModel) Init() tea.Cmd {
 	return tea.Batch(
 		func() tea.Msg { return preloadPanelLog() },
-		waitForPanelLine(),
+		waitForPanelLine(m.logSub),
 	)
 }
 
