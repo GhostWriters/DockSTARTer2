@@ -151,6 +151,10 @@ func (s *AppSelectionScreen) applyLoadedItems(data appSelectLoadedMsg) {
 
 		niceName := appenv.GetNiceName(ctx, base)
 		desc := displayengine.GetPlainText(appenv.GetDescriptionFromTemplate(ctx, base, envFile))
+		descTag := "{{|ListItem|}}"
+		if appenv.IsAppDeprecated(ctx, base) {
+			descTag = "{{|ListItemDeprecated|}}"
+		}
 
 		instances := addedByBase[base]
 		slices.Sort(instances)
@@ -170,7 +174,7 @@ func (s *AppSelectionScreen) applyLoadedItems(data appSelectLoadedMsg) {
 		if nonBaseCount == 0 {
 			items = append(items, displayengine.MenuItem{
 				Tag:               niceName,
-				Desc:              "{{|ListItem|}}" + desc,
+				Desc:              descTag + desc,
 				Help:              appenv.StyledAppName(ctx, base),
 				Selectable:        true,
 				IsCheckbox:        true,
@@ -195,7 +199,7 @@ func (s *AppSelectionScreen) applyLoadedItems(data appSelectLoadedMsg) {
 
 			items = append(items, displayengine.MenuItem{
 				Tag:               niceName,
-				Desc:              "{{|ListItem|}}" + desc,
+				Desc:              descTag + desc,
 				Help:              fmt.Sprintf("Press Ctrl/Alt+Right to manage %s instances", niceName),
 				Selectable:        true,
 				IsGroupHeader:     true,
@@ -295,9 +299,13 @@ func (s *AppSelectionScreen) expandGroup(baseApp string) {
 	envFile := filepath.Join(s.conf.ComposeDir, constants.EnvFileName)
 	niceName := appenv.GetNiceName(ctx, baseApp)
 	desc := displayengine.GetPlainText(appenv.GetDescriptionFromTemplate(ctx, baseApp, envFile))
+	descTag := "{{|ListItem|}}"
+	if appenv.IsAppDeprecated(ctx, baseApp) {
+		descTag = "{{|ListItemDeprecated|}}"
+	}
 	groupHeader := displayengine.MenuItem{
 		Tag:           niceName,
-		Desc:          "{{|ListItem|}}" + desc,
+		Desc:          descTag + desc,
 		Help:          fmt.Sprintf("Press Ctrl/Alt+Right to manage %s instances. Ctrl/Alt+Left to collapse.", niceName),
 		IsGroupHeader: true,
 		Checked:       orig.Checked,
@@ -384,9 +392,13 @@ func (s *AppSelectionScreen) collapseGroupIfNeeded(items []displayengine.MenuIte
 	envFile := filepath.Join(s.conf.ComposeDir, constants.EnvFileName)
 	niceName := appenv.GetNiceName(ctx, base)
 	desc := displayengine.GetPlainText(appenv.GetDescriptionFromTemplate(ctx, base, envFile))
+	descTag := "{{|ListItem|}}"
+	if appenv.IsAppDeprecated(ctx, base) {
+		descTag = "{{|ListItemDeprecated|}}"
+	}
 	simpleRow := displayengine.MenuItem{
 		Tag:               niceName,
-		Desc:              "{{|ListItem|}}" + desc,
+		Desc:              descTag + desc,
 		Help:              appenv.StyledAppName(ctx, base),
 		IsCheckbox:        true,
 		Selectable:        true,

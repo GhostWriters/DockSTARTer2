@@ -110,6 +110,8 @@ ListItem = ""
 ListItemFocused = "{{|ItemFocused|}}"
 ListItemUserDefined = "{{|ListItem:::R|}}"
 ListItemUserDefinedFocused = "{{|ItemFocused|}}"
+ListItemDeprecated = "{{|ListItemUserDefined|}}"
+ListItemDeprecatedFocused = "{{|ListItemUserDefinedFocused|}}"
 OptionValue = "{{[white:red:B]}}"
 OptionValueFocused = "{{|OptionValue:::B|}}"
 

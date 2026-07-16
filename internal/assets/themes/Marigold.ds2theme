@@ -111,6 +111,8 @@ ListItem = ""
 ListItemFocused = "{{|ItemFocused|}}"
 ListItemUserDefined = "{{[$bg:$fg]}}"
 ListItemUserDefinedFocused = "{{|ItemFocused|}}"
+ListItemDeprecated = "{{|ListItemUserDefined|}}"
+ListItemDeprecatedFocused = "{{|ListItemUserDefinedFocused|}}"
 OptionValue = "{{|Dialog:::RB|}}"
 OptionValueFocused = "{{|OptionValue:::B|}}"
 

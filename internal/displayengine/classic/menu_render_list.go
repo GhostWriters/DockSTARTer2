@@ -472,6 +472,8 @@ func (m *MenuModel) renderVariableHeightList() string {
 				// so the user-defined/built-in distinction survives focus
 				// instead of collapsing to the generic selected-row style.
 				descStr = RenderThemeText(strings.Replace(item.Desc, "{{|ListItemUserDefined|}}", "{{|ListItemUserDefinedFocused|}}", 1), dStyle)
+			case strings.HasPrefix(item.Desc, "{{|ListItemDeprecated|}}"):
+				descStr = RenderThemeText(strings.Replace(item.Desc, "{{|ListItemDeprecated|}}", "{{|ListItemDeprecatedFocused|}}", 1), dStyle)
 			case strings.HasPrefix(item.Desc, "{{|ListItem|}}"):
 				descStr = RenderThemeText(strings.Replace(item.Desc, "{{|ListItem|}}", "{{|ListItemFocused|}}", 1), dStyle)
 			default:
