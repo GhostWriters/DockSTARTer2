@@ -88,6 +88,8 @@ type PanelModel struct {
 
 	PanelMode            string // "log", "console", "system", or "none"
 	connType             string // "local", "ssh", or "web"
+	clientIP             string // the owning session's real client IP/address, for edit-lock terminal attribution (see sessionlocks.SessionManager.AcquireEditLock)
+	sessionKey           string // identifies the owning TUI session for edit-lock re-entry (see sessionlocks.SessionManager.localSessionKey)
 	titleSpinner         TitleSpinner
 	lastLineTime         time.Time // when the last log line arrived; spinner runs until idle for spinnerIdleTimeout
 	panelChanged         bool      // new content arrived while collapsed; cleared on expand
@@ -163,7 +165,7 @@ func (m *PanelModel) applyInputStyles() {
 }
 
 // NewPanelModel creates a new console panel in the requested state.
-func NewPanelModel(panelMode string, connType string) PanelModel {
+func NewPanelModel(panelMode string, connType string, clientIP string, sessionKey string) PanelModel {
 	ti := textinput.New()
 	ti.Prompt = "> "
 	inp := sinput.New(ti)
@@ -174,6 +176,8 @@ func NewPanelModel(panelMode string, connType string) PanelModel {
 		historyIdx:         -1,
 		PanelMode:          panelMode,
 		connType:           connType,
+		clientIP:           clientIP,
+		sessionKey:         sessionKey,
 		Expanded:           false,
 		replaceHeaderCount: -1,
 	}

@@ -61,26 +61,11 @@ func tuiMiddleware(startMenu string) wish.Middleware {
 			sessCtx, cancel := context.WithCancel(ctx)
 			defer cancel()
 
-			envs := s.Environ()
-			envs = append(envs, "TERM="+ptyReq.Term)
-			envs = append(envs, "DS2_CLIENT_IP="+clientIP)
-			if s.User() != "web" {
-				envs = append(envs, "DS2_CONN_TYPE=ssh-server")
-			}
-			opts := tui.ProgramOptions{
-				Input:         s,
-				Output:        s,
-				WindowSize:    makeWindowSizeChan(ptyReq, windowCh, sessCtx),
-				Environ:       envs,
-				InitialWidth:  ptyReq.Window.Width,
-				InitialHeight: ptyReq.Window.Height,
-				WebOutbound:   webmsg.Get(webToken),
-				WebToken:      webToken,
-			}
-
-			logger.Info(ctx, "SSH session started from %s", s.RemoteAddr())
-
-			// Register the active connection so startup warnings can show it.
+			// Register the active connection so startup warnings can show it,
+			// and so its sessionID can be threaded into the TUI as the
+			// identity edit-lock re-entry checks against (see AcquireEditLock)
+			// -- computed before opts/envs so it can ride along in Environ,
+			// same as DS2_CLIENT_IP below.
 			connType := "SSH"
 			var terminal string
 			if s.User() == "web" {
@@ -96,6 +81,26 @@ func tuiMiddleware(startMenu string) wish.Middleware {
 			}
 			sessionID := sessionlocks.Sessions.RegisterSession(clientIP, connType, terminal)
 			defer sessionlocks.Sessions.UnregisterSession(sessionID)
+
+			envs := s.Environ()
+			envs = append(envs, "TERM="+ptyReq.Term)
+			envs = append(envs, "DS2_CLIENT_IP="+clientIP)
+			envs = append(envs, "DS2_SESSION_ID="+sessionID)
+			if s.User() != "web" {
+				envs = append(envs, "DS2_CONN_TYPE=ssh-server")
+			}
+			opts := tui.ProgramOptions{
+				Input:         s,
+				Output:        s,
+				WindowSize:    makeWindowSizeChan(ptyReq, windowCh, sessCtx),
+				Environ:       envs,
+				InitialWidth:  ptyReq.Window.Width,
+				InitialHeight: ptyReq.Window.Height,
+				WebOutbound:   webmsg.Get(webToken),
+				WebToken:      webToken,
+			}
+
+			logger.Info(ctx, "SSH session started from %s", s.RemoteAddr())
 
 			// Watch for graceful disconnect requests (global or per-session).
 			go func() {
