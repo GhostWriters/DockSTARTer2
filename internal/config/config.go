@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"runtime"
 	"strings"
@@ -36,6 +37,11 @@ func defaultConfigBytes() []byte {
 	b, _ := assets.GetDefaultConfig()
 	return b
 }
+
+// ThemeDefaultsOverlayHook, if set, is the last step of MigrateFromLegacy:
+// it overlays the theme's suggested defaults for fields not in
+// legacyPresent. Set by the theme package to avoid a config->theme cycle.
+var ThemeDefaultsOverlayHook func(conf *AppConfig, legacyPresent map[string]bool)
 
 // DefaultConfig returns an AppConfig populated purely from the embedded defaults TOML.
 func DefaultConfig() AppConfig {
@@ -369,17 +375,51 @@ func LoadAppConfig() AppConfig {
 		// No config file found. Attempt migration from legacy.
 		migrationCtx := context.WithValue(context.Background(), migrationModeKey{}, true)
 		logNotice(migrationCtx, "No {{|ApplicationName|}}%s{{[-]}} config file detected. Performing initial configuration.", "DockSTARTer2")
-		if migrated, ok := MigrateFromLegacy(migrationCtx); ok {
-			// Save the migrated config so we don't migrate again next time
-			_ = SaveAppConfig(migrated)
-			// Re-load to ensure all paths and late-stage initializations are performed correctly
-			conf = LoadAppConfig()
+		migrated, foundLegacy, foundCompose := MigrateFromLegacy(migrationCtx)
+
+		cfgPath := paths.GetConfigFilePath()
+		dir := filepath.Dir(cfgPath)
+		if info, err := os.Stat(dir); err == nil && !info.IsDir() {
+			logger.Info(context.Background(), "Removing existing file '"+console.FormatFilePath(dir)+"' before folder can be created.")
+			if err := os.Remove(dir); err != nil {
+				logger.FatalWithStack(context.Background(), []string{
+					"Failed to remove existing file.",
+					"Failing command: {{|FailingCommand|}}rm -f \"%s\"{{[-]}}",
+				}, dir)
+			}
+		}
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+			logNotice(context.Background(), "Creating '"+console.FormatFolderPath(dir)+"'.")
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				logger.FatalWithStack(context.Background(), []string{
+					"Failed to create config folder.",
+					"Failing command: {{|FailingCommand|}}mkdir -p \"%s\"{{[-]}}",
+				}, dir)
+			}
+		}
+
+		var baseline AppConfig
+		_ = toml.Unmarshal(defaultConfigBytes(), &baseline)
+		if reflect.DeepEqual(migrated, baseline) {
+			// Unchanged from pristine defaults -- keep the file's comments.
+			_ = os.WriteFile(cfgPath, defaultConfigBytes(), 0644)
+			logNotice(context.Background(), "Copying '"+console.FormatFileName("embedded defaults", "")+"' to '"+console.FormatFilePath(cfgPath)+"'.")
+		} else if merged, err := toml.Marshal(migrated); err == nil {
+			_ = os.WriteFile(cfgPath, merged, 0644)
+			logNotice(context.Background(), "Writing migrated configuration to '"+console.FormatFilePath(cfgPath)+"'.")
+		} else {
+			_ = os.WriteFile(cfgPath, defaultConfigBytes(), 0644)
+			logNotice(context.Background(), "Copying '"+console.FormatFileName("embedded defaults", "")+"' to '"+console.FormatFilePath(cfgPath)+"'.")
+		}
+
+		conf = LoadAppConfig()
+		if foundLegacy || foundCompose {
 			// Show the config after migration, matching bash version behavior
 			logNotice(migrationCtx, " ")
 			ShowAppConfig(migrationCtx, &conf)
 			logNotice(migrationCtx, " ")
-			return conf
 		}
+		return conf
 	} else {
 		// Overlay user config on top of defaults.
 		// Use Robust unmarshaling to handle any loose types from manual edits
@@ -402,30 +442,11 @@ func LoadAppConfig() AppConfig {
 		}
 	}
 
-	// No user config found; write the embedded defaults to disk (preserving comments).
-	cfgPath := paths.GetConfigFilePath()
-	dir := filepath.Dir(cfgPath)
-	if info, err := os.Stat(dir); err == nil && !info.IsDir() {
-		logger.Info(context.Background(), "Removing existing file '"+console.FormatFilePath(dir)+"' before folder can be created.")
-		if err := os.Remove(dir); err != nil {
-			logger.FatalWithStack(context.Background(), []string{
-				"Failed to remove existing file.",
-				"Failing command: {{|FailingCommand|}}rm -f \"%s\"{{[-]}}",
-			}, dir)
-		}
-	}
-
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		logNotice(context.Background(), "Creating '"+console.FormatFolderPath(dir)+"'.")
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			logger.FatalWithStack(context.Background(), []string{
-				"Failed to create config folder.",
-				"Failing command: {{|FailingCommand|}}mkdir -p \"%s\"{{[-]}}",
-			}, dir)
-		}
-	}
-	_ = os.WriteFile(cfgPath, defaultConfigBytes(), 0644)
-	logNotice(context.Background(), "Copying '"+console.FormatFileName("embedded defaults", "")+"' to '"+console.FormatFilePath(cfgPath)+"'.")
+	// Existing config file could not be parsed even robustly (corrupt file).
+	// Fall back to the embedded defaults, preserving comments, without going
+	// through the migration/theme-overlay flow (there's nothing to migrate).
+	_ = os.WriteFile(path, defaultConfigBytes(), 0644)
+	logNotice(context.Background(), "Config file at '"+console.FormatFilePath(path)+"' could not be parsed; reset to embedded defaults.")
 	sanitizeConfig(context.Background(), &conf)
 	conf.RawPaths = conf.Paths
 	conf.Paths.ConfigFolder = filepath.Clean(ExpandVariables(conf.Paths.ConfigFolder))
@@ -683,15 +704,17 @@ func UnmarshalLegacyIni(data []byte, v *AppConfig) (map[string]bool, error) {
 	return present, nil
 }
 
-// MigrateFromLegacy coordinates the discovery and ingestion of legacy configuration.
-// It returns the migrated configuration and true if any legacy data was found.
-func MigrateFromLegacy(ctx context.Context) (AppConfig, bool) {
-	conf := AppConfig{}
-	foundLegacy := false
+// MigrateFromLegacy always starts from the embedded defaults, overlays a
+// legacy DS1 config if found, resolves the compose folder, and overlays the
+// theme's suggested defaults for fields not already set. foundLegacy and
+// foundCompose are for the caller's migration-summary display only.
+func MigrateFromLegacy(ctx context.Context) (conf AppConfig, foundLegacy bool, foundCompose bool) {
+	_ = toml.Unmarshal(defaultConfigBytes(), &conf)
+	legacyPresent := map[string]bool{}
 
-	// 1. Build priority list of legacy files (matches Bash pattern)
 	var legacyFiles []string
-	// Priority 1-N: Legacy .ini files (XDG then script folder)
+	// DS1's current .toml format takes priority over its older .ini format.
+	legacyFiles = append(legacyFiles, filepath.Join(xdg.ConfigHome, "dockstarter", "dockstarter.toml"))
 	legacyFiles = append(legacyFiles, paths.GetLegacyIniPaths()...)
 
 	for _, path := range legacyFiles {
@@ -699,6 +722,28 @@ func MigrateFromLegacy(ctx context.Context) (AppConfig, bool) {
 		if err != nil {
 			continue // Try next file
 		}
+
+		if strings.HasSuffix(path, ".toml") {
+			var probe AppConfig
+			present, unmarshalErr := UnmarshalRobust(data, &probe)
+			if unmarshalErr != nil || len(present) == 0 {
+				continue // Try next file
+			}
+			logNotice(ctx, "Detected legacy config file at '"+console.FormatFilePath(path)+"'.")
+			heading := "Configuration options in legacy config file '" + console.FormatFilePath(path) + "':"
+			logNotice(ctx, " ")
+			ShowAppConfigWithTitleAndPresent(ctx, &probe, heading, present)
+			logNotice(ctx, " ")
+			logNotice(ctx, "Migrating '"+console.FormatFilePath(path)+"' to '"+console.FormatFilePath(paths.GetConfigFilePath())+"'.")
+
+			// Apply to the actual merged config (defaults already unmarshalled above)
+			legacyPresent, _ = UnmarshalRobust(data, &conf)
+			conf.Paths.ConfigFolder = ExpandVariables(conf.Paths.ConfigFolder)
+			conf.Paths.ComposeFolder = ExpandVariables(conf.Paths.ComposeFolder)
+			foundLegacy = true
+			break // STOP after the first successful migration source is processed
+		}
+
 		raw := ReadLegacyMap(data)
 		if len(raw) > 0 {
 			logNotice(ctx, "Detected legacy config file at '"+console.FormatFilePath(path)+"'.")
@@ -759,26 +804,22 @@ func MigrateFromLegacy(ctx context.Context) (AppConfig, bool) {
 			logNotice(ctx, " ")
 			logNotice(ctx, "Migrating '"+console.FormatFilePath(path)+"' to '"+console.FormatFilePath(paths.GetConfigFilePath())+"'.")
 
-			// Start with defaults so the final saved file is complete
-			_ = toml.Unmarshal(defaultConfigBytes(), &conf)
-
-			// Apply to the actual merged config
-			_, _ = UnmarshalLegacyIni(data, &conf)
+			// Apply to the actual merged config (defaults already unmarshalled above)
+			legacyPresent, _ = UnmarshalLegacyIni(data, &conf)
 			foundLegacy = true
 			break // STOP after the first successful migration source is processed
 		}
 	}
 
-	// 3. Detect Compose Folder
 	before := conf.Paths.ComposeFolder
 	ResolveComposeFolder(ctx, &conf, logNotice)
-	foundComposeMigration := conf.Paths.ComposeFolder != before
+	foundCompose = conf.Paths.ComposeFolder != before
 
-	if !foundLegacy && !foundComposeMigration {
-		return conf, false
+	if ThemeDefaultsOverlayHook != nil {
+		ThemeDefaultsOverlayHook(&conf, legacyPresent)
 	}
 
-	return conf, true
+	return conf, foundLegacy, foundCompose
 }
 
 // ShowAppConfig prints a summary table of the current configuration.

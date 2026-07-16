@@ -407,6 +407,91 @@ func ApplyThemeDefaults(conf *config.AppConfig, defaults ThemeDefaults) map[stri
 	return applied
 }
 
+func init() {
+	config.ThemeDefaultsOverlayHook = applyMigrationThemeDefaults
+}
+
+// applyMigrationThemeDefaults backfills the theme's suggested defaults for
+// fields not in legacyPresent, and resets an unrecognized DS1 theme name to
+// the default theme.
+func applyMigrationThemeDefaults(conf *config.AppConfig, legacyPresent map[string]bool) {
+	if legacyPresent["Theme"] && !isBuiltInTheme(conf.UI.Theme) {
+		conf.UI.Theme = "DockSTARTer"
+	}
+	tf, err := GetThemeFile(conf.UI.Theme)
+	if err != nil {
+		return
+	}
+	defaults, err := FileDefaults(tf)
+	if err != nil || defaults == nil {
+		return
+	}
+	filtered := *defaults
+	if legacyPresent["Borders"] {
+		filtered.Borders = nil
+	}
+	if legacyPresent["LargeButtons"] {
+		filtered.LargeButtons = nil
+	}
+	if legacyPresent["LargeTitleBars"] {
+		filtered.LargeTitleBars = nil
+	}
+	if legacyPresent["LineCharacters"] {
+		filtered.LineCharacters = nil
+	}
+	if legacyPresent["Shadow"] {
+		filtered.Shadow = nil
+	}
+	if legacyPresent["ShadowLevel"] {
+		filtered.ShadowLevel = nil
+	}
+	if legacyPresent["Scrollbar"] {
+		filtered.Scrollbar = nil
+	}
+	if legacyPresent["Spinner"] {
+		filtered.Spinner = nil
+	}
+	if legacyPresent["MenuBrackets"] {
+		filtered.MenuBrackets = nil
+	}
+	if legacyPresent["BorderColor"] {
+		filtered.BorderColor = nil
+	}
+	if legacyPresent["DialogTitleAlign"] {
+		filtered.DialogTitleAlign = nil
+	}
+	if legacyPresent["SubmenuTitleAlign"] {
+		filtered.SubmenuTitleAlign = nil
+	}
+	if legacyPresent["PanelTitleAlign"] {
+		filtered.PanelTitleAlign = nil
+	}
+	if legacyPresent["PanelLocal"] {
+		filtered.PanelLocal = nil
+	}
+	if legacyPresent["PanelRemote"] {
+		filtered.PanelRemote = nil
+	}
+	ApplyThemeDefaults(conf, filtered)
+}
+
+// isBuiltInTheme reports whether name matches one of DS2's embedded themes.
+func isBuiltInTheme(name string) bool {
+	if EmbeddedThemeLister == nil {
+		return true // can't verify; don't reset a theme we can't check
+	}
+	names, err := EmbeddedThemeLister()
+	if err != nil {
+		return true
+	}
+	for _, n := range names {
+		if n == name {
+			return true
+		}
+	}
+	return false
+}
+
 func parseThemeTOMLData(data []byte, prefix string) (*ThemeDefaults, error) {
 	rawDefaults, err := semtheme.RegisterInto(data, prefix)
 	if err != nil {
