@@ -224,5 +224,4 @@ submenu_title_align = "left"
 panel_title_align = "center"
 shadow = true
 border_color = 3
-menu_brackets = false
 line_number_brackets = true
