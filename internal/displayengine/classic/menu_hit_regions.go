@@ -297,7 +297,7 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		// Flow mode: items are arranged horizontally across multiple lines.
 		// Uses flowMaxWidth (computed above) to match renderFlowContent wrapping exactly.
 		ctx := GetActiveContext()
-		const itemSpacing = 3
+		itemSpacing := FlowItemSpacing
 		// lineContentX: items start 1 char past listX because renderFlowContent applies
 		// lineStyle.Padding(0, 1) which adds a 1-char left margin.
 		lineContentX := listX + 1

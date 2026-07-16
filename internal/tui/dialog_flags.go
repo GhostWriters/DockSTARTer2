@@ -76,7 +76,7 @@ func NewFlagsToggleDialog() *FlagsToggleDialog {
 	list := displayengine.NewMenuModel(displayengine.IDListPanel, "", "", items)
 	list.SetCheckboxMode(true) // Use the standard checkbox mode like app_selection.go
 	list.SetSubMenuMode(true)
-	list.SetVariableHeight(false)
+	list.SetVariableHeight(true)
 	list.SetIsDialog(false)
 	list.SetButtons([]displayengine.ButtonDef{})
 	list.SetMaximized(true)

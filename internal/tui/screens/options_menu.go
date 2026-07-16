@@ -35,7 +35,7 @@ func NewOptionsMenuScreen(isRoot bool, connType string) tui.ScreenModel {
 	list.SetHelpPageText("Application settings and preferences. Configure the visual theme, UI display options, and other tool behaviors.")
 	list.SetHelpItemPrefix("Action")
 	list.SetSubMenuMode(true)
-	list.SetVariableHeight(false)
+	list.SetVariableHeight(true)
 	list.SetIsDialog(false)
 	list.SetButtons([]displayengine.ButtonDef{})
 	list.SetMaximized(true)

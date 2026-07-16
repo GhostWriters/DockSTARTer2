@@ -495,15 +495,28 @@ func (m *MenuModel) SectionNaturalWidth(maxWidth int) int {
 	}
 	layout := GetLayout()
 	maxTagLen, maxDescLen := calculateMaxTagAndDescLength(m.items)
-	// Width = tag + spacing(2) + desc + margins(2) + buffer(4), same formula
-	// as menu_update.go's calculateLayout -- plus the checkbox glyph prefix
-	// (e.g. "[ ] ") when in checkbox mode, which the render path
-	// (menu_render_list.go's menuPrefixWidth) adds but this formula's
-	// tag/desc-only measurement doesn't otherwise account for.
-	natural := maxTagLen + 2 + maxDescLen + 2 + 4
-	if m.checkboxMode {
-		natural += layout.CheckboxWidth()
+	// Mirrors menu_render_list.go's own availableWidth formula (scrollbar
+	// gutter + totalGutterWidth + menuPrefixWidth + maxTagLen + minGap),
+	// inverted to solve for the sectionWidth that fits maxDescLen unwrapped.
+	menuPrefixWidth := 0
+	if m.id == "app-select" {
+		menuPrefixWidth = 11 // cbAdd(3) + sp(1) + cbEnabled(3) + cbExpand(3) + sp(1), matching menu_render_list.go
+	} else {
+		for _, it := range m.items {
+			if it.IsCheckbox || it.IsRadioButton || it.IsGroupHeader {
+				menuPrefixWidth = layout.CheckboxWidth()
+				break
+			}
+		}
 	}
+	const minGap = 3
+	// Overhead subtracted between this section's assigned width and the
+	// actual text-formatting budget: viewSubMenu's own border (BorderWidth,
+	// 2) + ScrollbarGutterWidth (calculateLayout) + listContentWidth's own
+	// -1 (menu_render_list.go).
+	const scrollbarGutter = 4
+	totalGutterWidth := m.StatusGutterWidth() + m.itemPaddingWidth
+	natural := maxTagLen + maxDescLen + minGap + scrollbarGutter + totalGutterWidth + menuPrefixWidth
 	if natural > maxWidth {
 		natural = maxWidth
 	}
@@ -623,7 +636,14 @@ func (m *MenuModel) calculateSectionLayout() {
 			naturalInner += LargeTitleBarOverhead
 		}
 		naturalHeight := naturalInner + layout.BorderHeight()
-		if naturalHeight > m.height && m.showButtons && buttonHeight == DialogButtonHeight {
+		// Only pre-decide flat buttons for a fixed-only dialog: with an
+		// expandable section, expandableNaturalTotal is its full unscrolled
+		// size, which is routinely bigger than the terminal by design (it's
+		// meant to scroll) -- naturalHeight > m.height there is normal and
+		// must not force flat buttons. The later remaining < buttonThreshold
+		// check (based on actual available space, not full natural size)
+		// still handles that case correctly.
+		if expandableCount == 0 && naturalHeight > m.height && m.showButtons && buttonHeight == DialogButtonHeight {
 			// Bordered buttons don't fit naturally within the given height -- retry flat.
 			buttonHeight = 1
 			buttonBudget = 1

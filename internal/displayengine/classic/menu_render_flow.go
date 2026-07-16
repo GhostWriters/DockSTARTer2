@@ -9,6 +9,12 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+// FlowItemSpacing is the gap between adjacent items on a flow-mode row.
+// Shared by renderFlowContent, GetFlowHeight, and HitRegions' flow-mode hit
+// testing -- all three must agree or wrapping/hit-boxes desync from the
+// actual render.
+const FlowItemSpacing = 2
+
 // renderFlow renders items in a horizontal flow layout for compact menus
 func (m *MenuModel) renderFlow() string {
 	layout := GetLayout()
@@ -34,7 +40,7 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 	var lines []string
 	var currentLine []string
 	currentLineWidth := 0
-	itemSpacing := 3
+	itemSpacing := FlowItemSpacing
 
 	for i, item := range m.items {
 		if item.IsSeparator {
@@ -360,7 +366,7 @@ func (m *MenuModel) GetFlowHeight(maxWidth int) int {
 
 	lines := 1
 	currentLineWidth := 0
-	itemSpacing := 3
+	itemSpacing := FlowItemSpacing
 
 	for _, item := range m.items {
 		if item.IsSeparator {
