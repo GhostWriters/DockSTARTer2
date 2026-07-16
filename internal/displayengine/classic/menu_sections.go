@@ -620,12 +620,27 @@ func (m *MenuModel) calculateSectionLayout() {
 	// that section's own natural height). With multiple expandable sections
 	// in a non-maximized dialog, remaining still divides evenly rather than
 	// per-section-natural -- not needed by any current screen.
+	// Decide bordered vs. flat buttons before locking in m.height: a
+	// fixed-only dialog (expandableCount == 0) has no expandable section to
+	// absorb rows freed by a later demotion, so the button height must be
+	// final by the time naturalHeight is computed.
 	if !m.maximized {
 		naturalInner := fixedTotal + expandableNaturalTotal + buttonBudget
-		if enabled := m.title != "" && currentConfig.UI.LargeTitleBars; enabled {
+		titleBarEnabled := m.title != "" && currentConfig.UI.LargeTitleBars
+		if titleBarEnabled {
 			naturalInner += LargeTitleBarOverhead
 		}
 		naturalHeight := naturalInner + layout.BorderHeight()
+		if naturalHeight > m.height && m.showButtons && buttonHeight == DialogButtonHeight {
+			// Bordered buttons don't fit naturally within the given height -- retry flat.
+			buttonHeight = 1
+			buttonBudget = 1
+			naturalInner = fixedTotal + expandableNaturalTotal + buttonBudget
+			if titleBarEnabled {
+				naturalInner += LargeTitleBarOverhead
+			}
+			naturalHeight = naturalInner + layout.BorderHeight()
+		}
 		if naturalHeight < m.height {
 			m.height = naturalHeight
 			innerHeight = naturalInner
@@ -652,9 +667,9 @@ func (m *MenuModel) calculateSectionLayout() {
 
 	remaining := innerHeight - fixedTotal - buttonBudget
 
-	// Height-based button border fallback: drop to flat only when expandable
-	// sections would have no room at all. Fixed-only dialogs use remaining < 0
-	// since they have no expandable budget to protect.
+	// Height-based button border fallback for maximized dialogs, or
+	// non-maximized dialogs with an expandable section: drop to flat only
+	// when expandable sections would have no room at all.
 	buttonThreshold := minExpandable
 	if expandableCount == 0 {
 		buttonThreshold = 0
