@@ -42,7 +42,7 @@ func NewMainMenuScreen(connType string) tui.ScreenModel {
 	list.SetHelpPageText("The main navigation menu for " + version.ApplicationName + ". Select an action to configure your Docker application stack, apply updates, or adjust settings.")
 	list.SetHelpItemPrefix("Action")
 	list.SetSubMenuMode(true)
-	list.SetVariableHeight(false)
+	list.SetVariableHeight(true)
 	list.SetIsDialog(false)
 	list.SetButtons([]displayengine.ButtonDef{})
 	list.SetMaximized(true)

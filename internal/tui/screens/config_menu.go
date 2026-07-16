@@ -71,7 +71,7 @@ func NewConfigMenuScreen(isRoot bool, connType string) tui.ScreenModel {
 	list.SetHelpPageText("Docker and " + version.ApplicationName + " configuration tasks. Run the full setup wizard, edit environment variables, enable or disable applications, and manage your running containers.")
 	list.SetHelpItemPrefix("Action")
 	list.SetSubMenuMode(true)
-	list.SetVariableHeight(false)
+	list.SetVariableHeight(true)
 	list.SetIsDialog(false)
 	list.SetButtons([]displayengine.ButtonDef{})
 	list.SetMaximized(true)

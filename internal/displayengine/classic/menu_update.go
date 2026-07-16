@@ -798,14 +798,10 @@ func (m *MenuModel) calculateLayout() {
 	// Constrain width to fit within terminal dialog area using Layout helpers
 	var maxListWidth int
 	if m.subMenuMode {
-		// Submenu: scrollbar sits flush against the right border (no right margin),
-		// so only subtract the left margin, not both -- unless this section
-		// has no left margin of its own (noLeftMargin), e.g. a section nested
-		// inside an outer sectioned dialog's viewWithSections, which already
-		// applies its own margin around every section -- subtracting a
-		// second column here would leave the list (and its trailing
-		// scrollbar) one column narrower than the space it's actually
-		// rendered into, shifting the scrollbar left of the border.
+		// viewSubMenu always wraps this section's content in its own border
+		// (renderBorderWithTitle), so the content width available to the
+		// list is m.width minus that border, minus the left margin unless
+		// suppressed (noLeftMargin).
 		maxListWidth, _ = layout.InnerContentSize(m.width, m.height)
 		if !m.noLeftMargin {
 			maxListWidth -= layout.ContentSideMargin
