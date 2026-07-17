@@ -287,6 +287,18 @@ func (m *ProgramBoxModel) Choice(title, question string, choices ...string) int 
 	return PromptChoice(title, question, choices...)
 }
 
+// ReplaceOutput replaces this dialog's current viewport output with lines,
+// using this dialog's session-scoped send callback if set (see sendFunc),
+// falling back to the global Send otherwise. Suitable for
+// console.WithReplaceOutputFunc, e.g. for compose's live progress lines.
+func (m *ProgramBoxModel) ReplaceOutput(lines []string) {
+	send := m.sendFunc
+	if send == nil {
+		send = Send
+	}
+	send(displayengine.ReplaceOutputMsg{Lines: lines})
+}
+
 // SetFocused sets the focus state
 func (m *ProgramBoxModel) SetFocused(focused bool) {
 	m.focused = focused

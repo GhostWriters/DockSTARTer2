@@ -1343,16 +1343,18 @@ func doTriggerComposeUpdate(clientIP, connType, sessionKey string) tea.Msg {
 	if !sessionlocks.Sessions.AcquireEditLock(clientIP, "Start All Applications", "menu:compose-start", connType, sessionKey) {
 		return ShowMessageDialogMsg{Title: "Resource Busy", Message: editLockBusyMsg(sessionlocks.Sessions.ReadEditInfo(), ""), Type: MessageError}
 	}
+	var dialog *ProgramBoxModel
 	task := func(ctx context.Context, w io.Writer) error {
 		defer sessionlocks.Sessions.ReleaseEditLock()
 		ctx = console.WithTUIWriter(ctx, w)
+		ctx = console.WithReplaceOutputFunc(ctx, dialog.ReplaceOutput)
 		if err := compose.ExecuteCompose(ctx, console.AssumeYes(), console.Force(), "update"); err != nil {
 			logger.Error(ctx, "%v", err)
 			return err
 		}
 		return nil
 	}
-	dialog := NewProgramBoxModel("Docker Compose", compose.YesNotice("update", ""), CmdLine("--compose", "update")).WithDialogType(displayengine.DialogTypeSuccess)
+	dialog = NewProgramBoxModel("Docker Compose", compose.YesNotice("update", ""), CmdLine("--compose", "update")).WithDialogType(displayengine.DialogTypeSuccess)
 	dialog.SetTask(task)
 	dialog.SetIsDialog(true)
 	dialog.SetMaximized(true)
@@ -1370,6 +1372,7 @@ func doTriggerComposeStop(clientIP, connType, sessionKey string) tea.Msg {
 	task := func(ctx context.Context, w io.Writer) error {
 		defer sessionlocks.Sessions.ReleaseEditLock()
 		ctx = console.WithTUIWriter(ctx, w)
+		ctx = console.WithReplaceOutputFunc(ctx, dialog.ReplaceOutput)
 		choice := dialog.Choice("Docker Compose", question, "Stop", "Down", "Cancel")
 		switch choice {
 		case 0: // Stop

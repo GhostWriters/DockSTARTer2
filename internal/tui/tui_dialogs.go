@@ -105,26 +105,6 @@ func ConfirmExitAction() tea.Cmd {
 	}
 }
 
-// Message shows an info message dialog
-func Message(title, message string) {
-	ShowInfoDialog(title, message)
-}
-
-// Success shows a success message dialog
-func Success(title, message string) {
-	ShowSuccessDialog(title, message)
-}
-
-// Warning shows a warning message dialog
-func Warning(title, message string) {
-	ShowWarningDialog(title, message)
-}
-
-// Error shows an error message dialog
-func Error(title, message string) {
-	ShowErrorDialog(title, message)
-}
-
 // PromptConfirm displays a blocking confirmation dialog.
 // It is used by the console package via callback.
 func PromptConfirm(title, question string, defaultYes bool) bool {
