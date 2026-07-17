@@ -235,6 +235,16 @@ type AppModel struct {
 	connType   string
 	sessionKey string // identifies this session for edit-lock re-entry (see sessionlocks.SessionManager.localSessionKey)
 
+	// program is this session's own *tea.Program, set via SetProgram once it
+	// exists (AppModel is constructed before NewProgram(model, ...) returns
+	// it, so this can't be captured at construction time -- same two-phase
+	// pattern as PanelModel.SetConfirmFunc/SetPromptFunc). Given to dialogs
+	// that need to deliver a tea.Msg back from an external goroutine (e.g.
+	// ProgramBoxModel's task-output streaming), instead of them reaching for
+	// the process-wide global program var, which can point at the wrong
+	// session in a --server-daemon serving multiple concurrent sessions.
+	program *tea.Program
+
 	// lockedByOthers indicates if the configuration is locked by another session
 	lockedByOthers bool
 
@@ -353,6 +363,22 @@ func NewAppModelStandalone(ctx context.Context, cfg config.AppConfig, clientIP, 
 // this AppModel's Program.Run() returns.
 func (m *AppModel) Cleanup() {
 	m.panel.UnsubscribeLog()
+}
+
+// SetProgram sets this session's own *tea.Program (see the program field's
+// doc comment). Called once by the tui package after NewProgram returns it.
+func (m *AppModel) SetProgram(p *tea.Program) {
+	m.program = p
+}
+
+// Send delivers msg to this session's own Program, safe to call from any
+// goroutine (Bubble Tea's Program.Send is designed for exactly this). Used
+// by dialogs this session owns (see ProgramBoxModel.SetSendFunc) instead of
+// the process-wide global program var.
+func (m *AppModel) Send(msg tea.Msg) {
+	if m.program != nil {
+		m.program.Send(msg)
+	}
 }
 
 // Init implements tea.Model

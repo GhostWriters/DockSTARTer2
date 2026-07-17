@@ -58,6 +58,28 @@ func sessionPromptFunc(p *tea.Program) func(title, question string, sensitive bo
 	}
 }
 
+// sessionChoiceFunc returns a choice callback bound to p specifically,
+// instead of the global program var -- mirrors sessionConfirmFunc/
+// sessionPromptFunc but for PromptChoice-style multi-choice sub-dialogs
+// (see ProgramBoxModel.SetChoiceFunc).
+func sessionChoiceFunc(p *tea.Program) func(title, question string, choices ...string) int {
+	return func(title, question string, choices ...string) int {
+		if p == nil {
+			return -1
+		}
+		ch := make(chan int)
+		dialog := newChoiceDialog(title, question, choices)
+		dialog.onResult = func(i int) tea.Msg {
+			return SubDialogResultMsg{Result: i}
+		}
+		p.Send(SubDialogMsg{
+			Model: dialog,
+			Chan:  ch,
+		})
+		return <-ch
+	}
+}
+
 // Confirm shows a confirmation dialog and returns the user's choice.
 // If a program is already running, it sends a message to the active program.
 func Confirm(title, question string, defaultYes bool) bool {

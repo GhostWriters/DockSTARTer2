@@ -479,6 +479,14 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.dialog = msg.Dialog
 		if m.dialog != nil {
+			// Give a ProgramBoxModel this session's own Send/Choice callbacks
+			// (see AppModel.Send's doc comment) -- it doesn't otherwise know
+			// which session owns it, since it's constructed before being
+			// shown via this message.
+			if pb, ok := m.dialog.(*ProgramBoxModel); ok {
+				pb.SetSendFunc(m.Send)
+				pb.SetChoiceFunc(sessionChoiceFunc(m.program))
+			}
 			// Ensure MenuModels are marked as dialogs so they render with shadows
 			if menu, ok := m.dialog.(*displayengine.MenuModel); ok {
 				menu.SetIsDialog(true)
