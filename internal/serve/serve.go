@@ -16,6 +16,7 @@ import (
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/sessionlocks"
+	"DockSTARTer2/internal/tui"
 
 	"charm.land/wish/v2"
 	"charm.land/wish/v2/logging"
@@ -181,6 +182,11 @@ func StartSSHServer(ctx context.Context, cfg config.ServerConfig, startMenu stri
 		defer shutCancel()
 		_ = srv.Shutdown(shutCtx)
 	}()
+
+	// Poll for a binary update independent of any connected session -- a
+	// per-session watcher only runs while someone is connected, so an idle
+	// daemon would otherwise never notice an update until the next connection.
+	tui.StartDaemonRestartWatcher(ctx)
 
 	if err := srv.ListenAndServe(); err != nil {
 		// ErrServerClosed is expected on clean shutdown.

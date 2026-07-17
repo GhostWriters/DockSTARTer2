@@ -177,13 +177,6 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 		logger.Info(ctx, "Application location is '"+console.FormatFilePath(exePath)+"'.")
 	}
 
-	// Record the installed version so other running instances detect the update.
-	if exePath != "unknown" {
-		if err := sessionlocks.Sessions.WriteInstalledVersion(exePath, remoteVersion); err != nil {
-			logger.Warn(ctx, "Could not write installed version record: %v", err)
-		}
-	}
-
 	// Reset all needs markers
 	system.SetPermissions(ctx, paths.GetTimestampsDir())
 	_ = paths.ResetNeeds()
@@ -219,6 +212,17 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 			if _, err := system.EnableSetcap(ctx); err != nil {
 				logger.Warn(ctx, "Failed to re-apply file capabilities after update: %v", err)
 			}
+		}
+	}
+
+	// Record the installed version so other running instances detect the
+	// update -- deliberately after the setcap step above, not before: any
+	// watcher (including a daemon-level one with no connected session)
+	// treats this as the "safe to restart into" signal, so it must not fire
+	// until the binary is actually fully ready.
+	if exePath != "unknown" {
+		if err := sessionlocks.Sessions.WriteInstalledVersion(exePath, remoteVersion); err != nil {
+			logger.Warn(ctx, "Could not write installed version record: %v", err)
 		}
 	}
 

@@ -119,6 +119,49 @@ func startRestartWatcher(ctx context.Context) {
 	}()
 }
 
+// StartDaemonRestartWatcher launches a background poller at the daemon's own
+// top level, independent of any connected session, so an update is picked up
+// even while nobody is connected -- startRestartWatcher only runs per
+// connected session, so an idle daemon otherwise has nothing polling for a
+// version change. Restarts only when no connected session is mid-edit
+// (sessionlocks.Sessions.AnyRestartUnsafe(); there's no local page state to
+// check here since this isn't a session). Stops when ctx is cancelled.
+func StartDaemonRestartWatcher(ctx context.Context) {
+	exePath := sessionlocks.ResolvedExePath()
+	go func() {
+		ticker := time.NewTicker(restartWatchInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				installed := sessionlocks.Sessions.ReadInstalledVersion(exePath)
+				if installed == "" || installed == version.Version {
+					continue
+				}
+				if sessionlocks.Sessions.AnyRestartUnsafe() {
+					continue
+				}
+
+				// Double-check what the binary on disk actually reports,
+				// same as triggerPendingRestart.
+				onDiskVer := binaryVersionAt(exePath)
+				if onDiskVer == "" {
+					continue
+				}
+				_ = sessionlocks.Sessions.WriteInstalledVersion(exePath, onDiskVer)
+				if onDiskVer == version.Version {
+					continue // stale version file, no restart needed
+				}
+
+				_ = update.ReExec(ctx, exePath, []string{"--server-daemon"})
+				return
+			}
+		}
+	}()
+}
+
 // checkPendingRestart is called whenever the active screen changes. If a
 // restart is pending and the new page is safe, it fires the re-exec
 // immediately rather than waiting for the next poll cycle.
@@ -139,8 +182,14 @@ func checkPendingRestart(ctx context.Context) {
 // binaryVersion runs registeredExePath --print-version and returns the trimmed
 // output, or "" on failure.
 func binaryVersion() string {
+	return binaryVersionAt(registeredExePath)
+}
+
+// binaryVersionAt runs exePath --print-version and returns the trimmed
+// output, or "" on failure.
+func binaryVersionAt(exePath string) string {
 	var buf bytes.Buffer
-	cmd := exec.Command(registeredExePath, "--print-version")
+	cmd := exec.Command(exePath, "--print-version")
 	cmd.Stdout = &buf
 	if err := cmd.Run(); err != nil {
 		return ""
