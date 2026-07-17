@@ -1,6 +1,10 @@
 package tui
 
-import tea "charm.land/bubbletea/v2"
+import (
+	"DockSTARTer2/internal/console"
+
+	tea "charm.land/bubbletea/v2"
+)
 
 // sessionConfirmFunc returns a confirm callback bound to p specifically,
 // instead of the global program var -- used to give each session's
@@ -21,6 +25,36 @@ func sessionConfirmFunc(p *tea.Program) func(title, question string, defaultYes 
 			Type:       PromptTypeConfirm,
 		})
 		return <-resultChan
+	}
+}
+
+// sessionPromptFunc returns a text-prompt callback bound to p specifically,
+// instead of the global program var -- used to give each session's
+// PanelModel its own callback (see PanelModel.SetPromptFunc), mirroring
+// sessionConfirmFunc but for text prompts (e.g. the sudo password prompt).
+func sessionPromptFunc(p *tea.Program) func(title, question string, sensitive bool, initialValue ...string) (string, error) {
+	return func(title, question string, sensitive bool, initialValue ...string) (string, error) {
+		if p == nil {
+			return "", console.ErrUserAborted
+		}
+		iv := ""
+		if len(initialValue) > 0 {
+			iv = initialValue[0]
+		}
+		resultChan := make(chan promptResultMsg)
+		p.Send(UniversalPromptMsg{
+			Title:        title,
+			Question:     question,
+			Sensitive:    sensitive,
+			InitialValue: iv,
+			ResultChan:   resultChan,
+			Type:         PromptTypeText,
+		})
+		res := <-resultChan
+		if !res.confirmed {
+			return "", console.ErrUserAborted
+		}
+		return res.result, nil
 	}
 }
 

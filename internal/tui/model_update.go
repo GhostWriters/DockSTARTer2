@@ -612,6 +612,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dialog = dialog
 		m.updateComponentFocus()
 		m.pendingConfirm = msg.ResultChan
+		m.pendingConfirmOnResult = msg.OnResult
 		return m, logger.RecoverTUI(m.ctx, m.dialog.Init())
 
 	case ShowMessageDialogMsg:
@@ -729,137 +730,17 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, logger.BatchRecoverTUI(m.ctx, cmds...)
 
 	case displayengine.CloseDialogMsg:
-		// If we're waiting for a confirmation, send the result
-		if m.pendingConfirm != nil {
-			if b, ok := msg.Result.(bool); ok {
-				m.pendingConfirm <- b
-			} else {
-				m.pendingConfirm <- false
-			}
-			m.pendingConfirm = nil
+		onResult := m.pendingConfirmOnResult
+		m.pendingConfirmOnResult = nil
+		var confirmed bool
+		if b, ok := msg.Result.(bool); ok {
+			confirmed = b
 		}
-
-		// If we're waiting for a prompt, send the result
-		if m.pendingPrompt != nil {
-			if r, ok := msg.Result.(promptResultMsg); ok {
-				m.pendingPrompt <- r
-			} else {
-				m.pendingPrompt <- promptResultMsg{confirmed: false}
-			}
-			m.pendingPrompt = nil
+		newModel, cmd := m.handleCloseDialog(msg)
+		if onResult != nil {
+			return newModel, tea.Batch(cmd, onResult(confirmed))
 		}
-
-		// If the dialog handles its own sub-dialogs (e.g. ProgramBox), forward it
-		// and return instead of clearing the main dialog.
-		if pb, ok := m.dialog.(*ProgramBoxModel); ok && pb.subDialog != nil {
-			var cmd tea.Cmd
-			m.dialog, cmd = m.dialog.Update(msg)
-			return m, logger.BatchRecoverTUI(m.ctx, cmd)
-		}
-
-		// Revert lock ConnType to the parent dialog+screen context (or just screen if no parent dialog).
-		if m.activeScreen != nil && m.activeScreen.IsDestructive() {
-			connType := m.activeScreen.Title()
-			if len(m.dialogStack) > 0 {
-				parent := m.dialogStack[len(m.dialogStack)-1]
-				if titled, ok := parent.(interface{ Title() string }); ok {
-					if t := titled.Title(); t != "" {
-						connType += "|" + t
-					}
-				}
-			}
-			sessionlocks.Sessions.UpdateEditLockConnType(connType)
-		}
-
-		// Capture whether the closing dialog was a context menu before clearing
-		_, closingContextMenu := m.dialog.(*displayengine.ContextMenuModel)
-
-		// Clear current dialog and try to pop from stack
-		m.dialog = nil
-		if len(m.dialogStack) > 0 {
-			if shouldForwardResult(msg.Result) && !msg.ForwardToParent {
-				// Result targets the active screen (e.g. ApplyVarValueMsg from a context
-				// submenu): drain the entire stack so all menus close, then forward.
-				m.dialogStack = nil
-				m.updateComponentFocus()
-				if m.activeScreen != nil {
-					fwd := msg.Result
-					return m, func() tea.Msg { return fwd }
-				}
-				return m, nil
-			}
-
-			// Pop parent dialog from stack and restore it.
-			m.dialog = m.dialogStack[len(m.dialogStack)-1]
-			m.dialogStack = m.dialogStack[:len(m.dialogStack)-1]
-
-			// Re-focus and re-size the popped dialog
-			if m.dialog != nil {
-				dW, dH := m.getDialogArea(m.dialog)
-				if sizable, ok := m.dialog.(interface{ SetSize(int, int) }); ok {
-					sizable.SetSize(dW, dH)
-				}
-				if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
-					focusable.SetFocused(true)
-				}
-				// Blur the title bar of the restored dialog so widgets don't stay focused.
-				if tb, ok := m.dialog.(displayengine.TitleBarFocusable); ok {
-					tb.BlurTitleBar()
-				}
-			}
-
-			// ForwardToParent: deliver Result to the restored parent dialog.
-			if msg.ForwardToParent && shouldForwardResult(msg.Result) {
-				fwd := msg.Result
-				return m, (func() tea.Msg { return fwd })
-			}
-			return m, nil
-		}
-
-		// Fallback: if stack is empty and no screen, we quit.
-		if m.activeScreen == nil {
-			// If the dialog signaled success (e.g. "OK" button pressed), skip confirmation and quit immediately.
-			// Do NOT set m.dialog = nil yet, so the caller can still inspect the final state (errors, etc).
-			if result, ok := msg.Result.(bool); ok && result {
-				return m, tea.Quit
-			}
-			return m, m.exitOrWarn()
-		}
-
-		// When returning to screen: restore focus to the active screen.
-		// Clear header focus so version numbers don't stay selected after a dialog closes.
-		// Exception: context menu opened from a header widget — preserve focus so ESC
-		// closes the menu first; a second ESC then unfocuses the widget.
-		// Blur any title bar that may have been focused before the dialog opened.
-		if !closingContextMenu {
-			// Clear any in-flight spinner on the screen — the dialog has resolved.
-			if m.activeScreen != nil {
-				if cp, ok := m.activeScreen.(interface{ ClearProcessingState() }); ok {
-					cp.ClearProcessingState()
-				}
-			}
-			m.setHeaderFocus(displayengine.HeaderFocusNone)
-			if m.activeScreen != nil {
-				if tb, ok := m.activeScreen.(displayengine.TitleBarFocusable); ok {
-					tb.BlurTitleBar()
-				}
-			}
-			m.updateComponentFocus()
-		}
-		// Forward any followup message or command piggybacked on Result (e.g. from context menus).
-		// Skip the known confirm (bool) and prompt (promptResultMsg) types already handled above.
-		if msg.Result != nil && m.activeScreen != nil {
-			fwd := msg.Result
-			if cmd, ok := fwd.(tea.Cmd); ok {
-				return m, cmd
-			}
-			if _, isBool := fwd.(bool); !isBool {
-				if _, isPrompt := fwd.(promptResultMsg); !isPrompt {
-					return m, func() tea.Msg { return fwd }
-				}
-			}
-		}
-		return m, nil
+		return newModel, cmd
 
 	case UpdateHeaderMsg:
 		m.backdrop.Header.SyncFlags()
@@ -969,6 +850,144 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	m.updateExitLocked()
 	return m, logger.BatchRecoverTUI(m.ctx, cmds...)
+}
+
+// handleCloseDialog is CloseDialogMsg's handler, extracted from Update so its
+// result can be wrapped with ShowConfirmDialogMsg.OnResult's follow-up Cmd
+// (see the CloseDialogMsg case in Update) without touching every internal
+// return point below.
+func (m *AppModel) handleCloseDialog(msg displayengine.CloseDialogMsg) (tea.Model, tea.Cmd) {
+	// If we're waiting for a confirmation, send the result
+	if m.pendingConfirm != nil {
+		if b, ok := msg.Result.(bool); ok {
+			m.pendingConfirm <- b
+		} else {
+			m.pendingConfirm <- false
+		}
+		m.pendingConfirm = nil
+	}
+
+	// If we're waiting for a prompt, send the result
+	if m.pendingPrompt != nil {
+		if r, ok := msg.Result.(promptResultMsg); ok {
+			m.pendingPrompt <- r
+		} else {
+			m.pendingPrompt <- promptResultMsg{confirmed: false}
+		}
+		m.pendingPrompt = nil
+	}
+
+	// If the dialog handles its own sub-dialogs (e.g. ProgramBox), forward it
+	// and return instead of clearing the main dialog.
+	if pb, ok := m.dialog.(*ProgramBoxModel); ok && pb.subDialog != nil {
+		var cmd tea.Cmd
+		m.dialog, cmd = m.dialog.Update(msg)
+		return m, logger.BatchRecoverTUI(m.ctx, cmd)
+	}
+
+	// Revert lock ConnType to the parent dialog+screen context (or just screen if no parent dialog).
+	if m.activeScreen != nil && m.activeScreen.IsDestructive() {
+		connType := m.activeScreen.Title()
+		if len(m.dialogStack) > 0 {
+			parent := m.dialogStack[len(m.dialogStack)-1]
+			if titled, ok := parent.(interface{ Title() string }); ok {
+				if t := titled.Title(); t != "" {
+					connType += "|" + t
+				}
+			}
+		}
+		sessionlocks.Sessions.UpdateEditLockConnType(connType)
+	}
+
+	// Capture whether the closing dialog was a context menu before clearing
+	_, closingContextMenu := m.dialog.(*displayengine.ContextMenuModel)
+
+	// Clear current dialog and try to pop from stack
+	m.dialog = nil
+	if len(m.dialogStack) > 0 {
+		if shouldForwardResult(msg.Result) && !msg.ForwardToParent {
+			// Result targets the active screen (e.g. ApplyVarValueMsg from a context
+			// submenu): drain the entire stack so all menus close, then forward.
+			m.dialogStack = nil
+			m.updateComponentFocus()
+			if m.activeScreen != nil {
+				fwd := msg.Result
+				return m, func() tea.Msg { return fwd }
+			}
+			return m, nil
+		}
+
+		// Pop parent dialog from stack and restore it.
+		m.dialog = m.dialogStack[len(m.dialogStack)-1]
+		m.dialogStack = m.dialogStack[:len(m.dialogStack)-1]
+
+		// Re-focus and re-size the popped dialog
+		if m.dialog != nil {
+			dW, dH := m.getDialogArea(m.dialog)
+			if sizable, ok := m.dialog.(interface{ SetSize(int, int) }); ok {
+				sizable.SetSize(dW, dH)
+			}
+			if focusable, ok := m.dialog.(interface{ SetFocused(bool) }); ok {
+				focusable.SetFocused(true)
+			}
+			// Blur the title bar of the restored dialog so widgets don't stay focused.
+			if tb, ok := m.dialog.(displayengine.TitleBarFocusable); ok {
+				tb.BlurTitleBar()
+			}
+		}
+
+		// ForwardToParent: deliver Result to the restored parent dialog.
+		if msg.ForwardToParent && shouldForwardResult(msg.Result) {
+			fwd := msg.Result
+			return m, (func() tea.Msg { return fwd })
+		}
+		return m, nil
+	}
+
+	// Fallback: if stack is empty and no screen, we quit.
+	if m.activeScreen == nil {
+		// If the dialog signaled success (e.g. "OK" button pressed), skip confirmation and quit immediately.
+		// Do NOT set m.dialog = nil yet, so the caller can still inspect the final state (errors, etc).
+		if result, ok := msg.Result.(bool); ok && result {
+			return m, tea.Quit
+		}
+		return m, m.exitOrWarn()
+	}
+
+	// When returning to screen: restore focus to the active screen.
+	// Clear header focus so version numbers don't stay selected after a dialog closes.
+	// Exception: context menu opened from a header widget — preserve focus so ESC
+	// closes the menu first; a second ESC then unfocuses the widget.
+	// Blur any title bar that may have been focused before the dialog opened.
+	if !closingContextMenu {
+		// Clear any in-flight spinner on the screen — the dialog has resolved.
+		if m.activeScreen != nil {
+			if cp, ok := m.activeScreen.(interface{ ClearProcessingState() }); ok {
+				cp.ClearProcessingState()
+			}
+		}
+		m.setHeaderFocus(displayengine.HeaderFocusNone)
+		if m.activeScreen != nil {
+			if tb, ok := m.activeScreen.(displayengine.TitleBarFocusable); ok {
+				tb.BlurTitleBar()
+			}
+		}
+		m.updateComponentFocus()
+	}
+	// Forward any followup message or command piggybacked on Result (e.g. from context menus).
+	// Skip the known confirm (bool) and prompt (promptResultMsg) types already handled above.
+	if msg.Result != nil && m.activeScreen != nil {
+		fwd := msg.Result
+		if cmd, ok := fwd.(tea.Cmd); ok {
+			return m, cmd
+		}
+		if _, isBool := fwd.(bool); !isBool {
+			if _, isPrompt := fwd.(promptResultMsg); !isPrompt {
+				return m, func() tea.Msg { return fwd }
+			}
+		}
+	}
+	return m, nil
 }
 
 // setPanelFocus updates panelFocused and tells the active screen to

@@ -218,10 +218,18 @@ func TextPrompt(ctx context.Context, printer Printer, title, question string, se
 	}
 	printer(ctx, "%s: ", questionStr)
 
-	if TUIPrompt != nil {
+	// Prefer a session-scoped prompt callback attached to ctx (see
+	// WithPromptFunc) over the global TUIPrompt var, which is shared
+	// process-wide and can point at the wrong (or an already-exited)
+	// session in a server-daemon process.
+	prompt := PromptFuncFromContext(ctx)
+	if prompt == nil {
+		prompt = TUIPrompt
+	}
+	if prompt != nil {
 		// Pass raw (unprocessed) strings so the TUI dialog can expand semantic tags
 		// using the active theme instead of the hardcoded console color registry.
-		return TUIPrompt(title, question, sensitive, initialValue...)
+		return prompt(title, question, sensitive, initialValue...)
 	}
 
 	if sensitive {

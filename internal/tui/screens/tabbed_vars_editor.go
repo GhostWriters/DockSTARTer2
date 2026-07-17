@@ -406,10 +406,17 @@ func (m *TabbedVarsEditorModel) hasChanges() bool {
 
 func (m *TabbedVarsEditorModel) promptUnsavedChanges(onConfirm tea.Cmd) tea.Cmd {
 	return func() tea.Msg {
-		if tui.Confirm("Unsaved Changes", "You have unsaved changes. Do you want to leave without saving?", false) {
-			return onConfirm()
+		return tui.ShowConfirmDialogMsg{
+			Title:      "Unsaved Changes",
+			Question:   "You have unsaved changes. Do you want to leave without saving?",
+			DefaultYes: false,
+			OnResult: func(confirmed bool) tea.Cmd {
+				if !confirmed {
+					return nil
+				}
+				return onConfirm
+			},
 		}
-		return nil
 	}
 }
 
@@ -420,14 +427,28 @@ func (m *TabbedVarsEditorModel) confirmExitAction() tea.Cmd {
 	hasChanges := m.hasChanges()
 	return func() tea.Msg {
 		if hasChanges {
-			if tui.Confirm("Exit "+version.ApplicationName, "You have unsaved changes. Discard changes and exit "+version.ApplicationName+"?", false) {
-				return tea.Quit()
+			return tui.ShowConfirmDialogMsg{
+				Title:      "Exit " + version.ApplicationName,
+				Question:   "You have unsaved changes. Discard changes and exit " + version.ApplicationName + "?",
+				DefaultYes: false,
+				OnResult: func(confirmed bool) tea.Cmd {
+					if !confirmed {
+						return nil
+					}
+					return tea.Quit
+				},
 			}
-			return nil
 		}
-		if tui.Confirm("Exit "+version.ApplicationName, "Do you want to exit "+version.ApplicationName+"?", true) {
-			return tea.Quit()
+		return tui.ShowConfirmDialogMsg{
+			Title:      "Exit " + version.ApplicationName,
+			Question:   "Do you want to exit " + version.ApplicationName + "?",
+			DefaultYes: true,
+			OnResult: func(confirmed bool) tea.Cmd {
+				if !confirmed {
+					return nil
+				}
+				return tea.Quit
+			},
 		}
-		return nil
 	}
 }

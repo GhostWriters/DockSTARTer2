@@ -933,14 +933,27 @@ func (m *setValueDialogModel) EscapeAction() tea.Cmd {
 }
 
 func (m *setValueDialogModel) cancelOrConfirm() tea.Cmd {
-	return func() tea.Msg {
-		if m.hasChanges() && !tui.Confirm("Discard Changes", "Discard changes to "+m.varName+"?", false) {
-			return nil
-		}
+	closeAction := func() tea.Cmd {
 		if m.onCancel != nil {
-			return m.onCancel()
+			return m.onCancel
 		}
-		return displayengine.CloseDialogMsg{}
+		return func() tea.Msg { return displayengine.CloseDialogMsg{} }
+	}
+	return func() tea.Msg {
+		if !m.hasChanges() {
+			return closeAction()()
+		}
+		return tui.ShowConfirmDialogMsg{
+			Title:      "Discard Changes",
+			Question:   "Discard changes to " + m.varName + "?",
+			DefaultYes: false,
+			OnResult: func(confirmed bool) tea.Cmd {
+				if !confirmed {
+					return nil
+				}
+				return closeAction()
+			},
+		}
 	}
 }
 

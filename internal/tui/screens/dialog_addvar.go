@@ -481,10 +481,20 @@ func (m *addVarDialogModel) closeWith(result any) tea.Cmd {
 
 func (m *addVarDialogModel) cancelOrConfirm() tea.Cmd {
 	return func() tea.Msg {
-		if m.input.Value() != "" && !tui.Confirm("Discard Input", "Discard the variable name you entered?", false) {
-			return nil
+		if m.input.Value() == "" {
+			return displayengine.CloseDialogMsg{}
 		}
-		return displayengine.CloseDialogMsg{}
+		return tui.ShowConfirmDialogMsg{
+			Title:      "Discard Input",
+			Question:   "Discard the variable name you entered?",
+			DefaultYes: false,
+			OnResult: func(confirmed bool) tea.Cmd {
+				if !confirmed {
+					return nil
+				}
+				return func() tea.Msg { return displayengine.CloseDialogMsg{} }
+			},
+		}
 	}
 }
 

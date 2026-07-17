@@ -125,12 +125,21 @@ type (
 	// Use this instead of calling Confirm() inside a tea.Cmd (which deadlocks).
 	ConfirmQuitMsg struct{}
 
-	// ShowConfirmDialogMsg shows a confirmation dialog with a result channel
+	// ShowConfirmDialogMsg shows a confirmation dialog. Prefer OnResult over
+	// ResultChan for a follow-up tea.Msg: since this message (and the dialog's
+	// eventual result) is always handled within the issuing session's own
+	// AppModel.Update loop, OnResult's returned Cmd is guaranteed to land back
+	// in the same session -- unlike tui.Confirm/PromptChoice, which resolve via
+	// the process-wide global program var and can route to the wrong session
+	// when multiple are connected to one --server-daemon. ResultChan is still
+	// useful for a caller that only needs the answer as a plain value (e.g. a
+	// side effect with no further tea.Msg to dispatch), not a next message.
 	ShowConfirmDialogMsg struct {
 		Title      string
 		Question   string
 		DefaultYes bool
 		ResultChan chan bool
+		OnResult   func(confirmed bool) tea.Cmd
 	}
 
 	// ShowMessageDialogMsg shows a message dialog (info/success/warning/error)
@@ -272,6 +281,11 @@ type AppModel struct {
 
 	// Channel for receiving confirmation result from a modal dialog
 	pendingConfirm chan bool
+
+	// Optional follow-up, set alongside pendingConfirm from
+	// ShowConfirmDialogMsg.OnResult -- invoked with the result when the
+	// dialog resolves, its returned Cmd added to that Update() call's batch.
+	pendingConfirmOnResult func(confirmed bool) tea.Cmd
 
 	// Channel for receiving prompt result from a modal dialog
 	pendingPrompt chan promptResultMsg

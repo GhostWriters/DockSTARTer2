@@ -94,6 +94,7 @@ type PanelModel struct {
 	logSub               <-chan string // this panel's own subscription to logger.SubscribeLogLines -- see UnsubscribeLog
 	logUnsub             func()        // releases logSub; call once when this panel's session ends (see UnsubscribeLog)
 	confirmFunc          func(title, question string, defaultYes bool) bool // this session's own confirm callback, set via SetConfirmFunc; attached to console commands' ctx so their prompts reach this session, not whichever session's Program is currently the global tui.program
+	promptFunc           func(title, question string, sensitive bool, initialValue ...string) (string, error) // this session's own text-prompt callback, set via SetPromptFunc; same purpose as confirmFunc but for TextPrompt (e.g. the sudo password prompt)
 	titleSpinner         TitleSpinner
 	lastLineTime         time.Time // when the last log line arrived; spinner runs until idle for spinnerIdleTimeout
 	panelChanged         bool      // new content arrived while collapsed; cleared on expand
@@ -215,6 +216,18 @@ func (m *PanelModel) SetConfirmFunc(fn func(title, question string, defaultYes b
 // if SetConfirmFunc was never called.
 func (m *PanelModel) ConfirmFunc() func(title, question string, defaultYes bool) bool {
 	return m.confirmFunc
+}
+
+// SetPromptFunc sets this panel's session-scoped text-prompt callback (see
+// promptFunc). Called alongside SetConfirmFunc for the same reason.
+func (m *PanelModel) SetPromptFunc(fn func(title, question string, sensitive bool, initialValue ...string) (string, error)) {
+	m.promptFunc = fn
+}
+
+// PromptFunc returns this panel's session-scoped text-prompt callback, or
+// nil if SetPromptFunc was never called.
+func (m *PanelModel) PromptFunc() func(title, question string, sensitive bool, initialValue ...string) (string, error) {
+	return m.promptFunc
 }
 
 // vpHeight returns the viewport height for the current panel state.

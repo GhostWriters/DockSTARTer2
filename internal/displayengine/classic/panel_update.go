@@ -175,6 +175,9 @@ func (m *PanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 		if fn := m.ConfirmFunc(); fn != nil {
 			cmdCtx = console.WithConfirmFunc(cmdCtx, fn)
 		}
+		if fn := m.PromptFunc(); fn != nil {
+			cmdCtx = console.WithPromptFunc(cmdCtx, fn)
+		}
 
 		go func() {
 			// Log the command header into the pipe first
@@ -213,7 +216,13 @@ func (m *PanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 
 	if containsSudo && m.PanelMode == "system" {
 		return tea.Batch(func() tea.Msg {
-			pass, err := PromptTextHook("Sudo Password", "Password for '"+cmdStr+"':", true)
+			var pass string
+			var err error
+			if prompt := m.PromptFunc(); prompt != nil {
+				pass, err = prompt("Sudo Password", "Password for '"+cmdStr+"':", true)
+			} else {
+				pass, err = PromptTextHook("Sudo Password", "Password for '"+cmdStr+"':", true)
+			}
 			if err != nil {
 				if err == console.ErrUserAborted {
 					return ConsoleDoneMsg{}
