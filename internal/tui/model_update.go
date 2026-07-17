@@ -597,7 +597,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Drain the channel in a goroutine and send tea.Quit when confirmed.
 		go func() {
 			if result := <-resultChan; result {
-				program.Send(tea.QuitMsg{})
+				m.Send(tea.QuitMsg{})
 			}
 		}()
 		return m, logger.RecoverTUI(m.ctx, m.dialog.Init())

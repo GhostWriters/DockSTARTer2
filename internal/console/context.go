@@ -3,6 +3,8 @@ package console
 import (
 	"context"
 	"io"
+
+	tea "charm.land/bubbletea/v2"
 )
 
 type contextKey string
@@ -58,6 +60,26 @@ func WithPromptFunc(ctx context.Context, fn func(title, question string, sensiti
 // via WithPromptFunc, or nil if none is present.
 func PromptFuncFromContext(ctx context.Context) func(title, question string, sensitive bool, initialValue ...string) (string, error) {
 	fn, _ := ctx.Value(promptFuncKey{}).(func(title, question string, sensitive bool, initialValue ...string) (string, error))
+	return fn
+}
+
+// sendFuncKey is the context key for a session-scoped tea.Msg delivery callback.
+type sendFuncKey struct{}
+
+// WithSendFunc attaches a session-scoped message-delivery callback to ctx --
+// for code that needs to deliver a tea.Msg back to the session that
+// triggered it (e.g. from a background goroutine), instead of the
+// process-wide global program var, which can point at the wrong (or an
+// already-exited) session in a server-daemon process serving multiple
+// concurrent sessions.
+func WithSendFunc(ctx context.Context, fn func(tea.Msg)) context.Context {
+	return context.WithValue(ctx, sendFuncKey{}, fn)
+}
+
+// SendFuncFromContext returns the session-scoped send callback attached via
+// WithSendFunc, or nil if none is present.
+func SendFuncFromContext(ctx context.Context) func(tea.Msg) {
+	fn, _ := ctx.Value(sendFuncKey{}).(func(tea.Msg))
 	return fn
 }
 

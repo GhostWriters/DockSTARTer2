@@ -522,7 +522,7 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	startWindowSizeForwarder(ctx, p, pOpts)
 
 	// Start background update checker
-	go startUpdateChecker(ctx)
+	go startUpdateChecker(ctx, model.Send)
 
 	// Watch config file for external changes (e.g. ds2 CLI or web server)
 	startConfigWatcher(ctx, p)
@@ -672,7 +672,7 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 
 	startWindowSizeForwarder(ctx, p, pOpts)
 
-	go startUpdateChecker(ctx)
+	go startUpdateChecker(ctx, model.Send)
 	startConfigWatcher(ctx, p)
 	startLockFileWatcher(ctx, p)
 	startRestartWatcher(ctx)
@@ -834,7 +834,7 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 
 	startWindowSizeForwarder(ctx, p, pOpts)
 
-	go startUpdateChecker(ctx)
+	go startUpdateChecker(ctx, model.Send)
 	startConfigWatcher(ctx, p)
 	startLockFileWatcher(ctx, p)
 	startRestartWatcher(ctx)
@@ -952,13 +952,15 @@ func EmergencyShutdown() {
 	logger.TUIMode = false
 }
 
-// startUpdateChecker runs the background update check
-func startUpdateChecker(ctx context.Context) {
+// startUpdateChecker runs the background update check. send delivers the
+// header-refresh notification to this session's own Program (see
+// AppModel.Send), not the process-wide global program var, which can point
+// at a different session in a server-daemon serving several concurrently --
+// each session runs its own copy of this checker.
+func startUpdateChecker(ctx context.Context, send func(tea.Msg)) {
 	// Initial check
 	update.GetUpdateStatus(ctx)
-	if program != nil {
-		program.Send(UpdateHeaderMsg{})
-	}
+	send(UpdateHeaderMsg{})
 
 	ticker := time.NewTicker(3 * time.Minute)
 	defer ticker.Stop()
@@ -973,9 +975,7 @@ func startUpdateChecker(ctx context.Context) {
 			errorOld := update.UpdateCheckError
 			update.GetUpdateStatus(ctx)
 			if update.AppUpdateAvailable != appUpdateOld || update.TmplUpdateAvailable != tmplUpdateOld || update.UpdateCheckError != errorOld {
-				if program != nil {
-					program.Send(UpdateHeaderMsg{})
-				}
+				send(UpdateHeaderMsg{})
 			}
 		}
 	}
@@ -992,13 +992,12 @@ func RunCommand(ctx context.Context, title, subtitle, command string, task func(
 	}
 
 	// If TUI is already running, show dialog within existing program
-	if program != nil {
-		dialog := NewProgramBoxModel(title, subtitle, command).WithDialogType(displayengine.DialogTypeSuccess)
-		dialog.SetContext(ctx)
-		dialog.SetTask(wrappedTask)
-		dialog.SetIsDialog(true)
-		dialog.SetMaximized(true)
-		program.Send(displayengine.ShowDialogMsg{Dialog: dialog})
+	dialog := NewProgramBoxModel(title, subtitle, command).WithDialogType(displayengine.DialogTypeSuccess)
+	dialog.SetContext(ctx)
+	dialog.SetTask(wrappedTask)
+	dialog.SetIsDialog(true)
+	dialog.SetMaximized(true)
+	if bridgeSend(ctx, displayengine.ShowDialogMsg{Dialog: dialog}) {
 		return nil
 	}
 

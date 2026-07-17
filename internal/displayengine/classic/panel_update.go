@@ -178,6 +178,9 @@ func (m *PanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 		if fn := m.PromptFunc(); fn != nil {
 			cmdCtx = console.WithPromptFunc(cmdCtx, fn)
 		}
+		if fn := m.SendFunc(); fn != nil {
+			cmdCtx = console.WithSendFunc(cmdCtx, fn)
+		}
 
 		go func() {
 			// Log the command header into the pipe first

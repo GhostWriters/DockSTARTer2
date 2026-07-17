@@ -95,6 +95,7 @@ type PanelModel struct {
 	logUnsub             func()        // releases logSub; call once when this panel's session ends (see UnsubscribeLog)
 	confirmFunc          func(title, question string, defaultYes bool) bool // this session's own confirm callback, set via SetConfirmFunc; attached to console commands' ctx so their prompts reach this session, not whichever session's Program is currently the global tui.program
 	promptFunc           func(title, question string, sensitive bool, initialValue ...string) (string, error) // this session's own text-prompt callback, set via SetPromptFunc; same purpose as confirmFunc but for TextPrompt (e.g. the sudo password prompt)
+	sendFunc             func(tea.Msg) // this session's own message-delivery callback, set via SetSendFunc; same purpose as confirmFunc but for a bare tea.Msg (e.g. TUIBridge navigation, RunCommand's dialog)
 	titleSpinner         TitleSpinner
 	lastLineTime         time.Time // when the last log line arrived; spinner runs until idle for spinnerIdleTimeout
 	panelChanged         bool      // new content arrived while collapsed; cleared on expand
@@ -228,6 +229,17 @@ func (m *PanelModel) SetPromptFunc(fn func(title, question string, sensitive boo
 // nil if SetPromptFunc was never called.
 func (m *PanelModel) PromptFunc() func(title, question string, sensitive bool, initialValue ...string) (string, error) {
 	return m.promptFunc
+}
+
+// SetSendFunc sets this panel's session-scoped message-delivery callback (see sendFunc).
+func (m *PanelModel) SetSendFunc(fn func(tea.Msg)) {
+	m.sendFunc = fn
+}
+
+// SendFunc returns this panel's session-scoped message-delivery callback, or
+// nil if SetSendFunc was never called.
+func (m *PanelModel) SendFunc() func(tea.Msg) {
+	return m.sendFunc
 }
 
 // vpHeight returns the viewport height for the current panel state.
