@@ -153,43 +153,55 @@ func prepareCommand(ctx context.Context, command string, args []string) (*exec.C
 // It checks if sudo requires a password, prompts the user via TUI/CLI if necessary,
 // and securely passes the password to sudo via standard input.
 func SudoCommand(ctx context.Context, command string, args ...string) (*exec.Cmd, error) {
-	// If TUI is available and sudo needs a password, prompt via TUI dialog and pass via -S.
-	// Otherwise, let sudo prompt natively (no -S, no stdin injection).
-	if console.TUIPrompt != nil {
-		checkCmd := exec.CommandContext(ctx, "sudo", "-n", "true")
-		if err := checkCmd.Run(); err != nil {
-			// Password required — prompt via TUI dialog with retry on wrong password.
-			fullCmd := command
-			if len(args) > 0 {
-				fullCmd += " " + strings.Join(args, " ")
-			}
-			const maxAttempts = 3
-			for attempt := 0; attempt < maxAttempts; attempt++ {
-				title := "{{|TitleQuestion|}}Sudo Password Required{{[-]}}"
-				if attempt > 0 {
-					title = "{{|TitleError|}}Incorrect Password — Try Again{{[-]}}"
-				}
-				password, err := console.TextPrompt(ctx, func(context.Context, any, ...any) {}, title, fullCmd, true)
-				if err != nil {
-					return nil, fmt.Errorf("sudo prompt cancelled: %w", err)
-				}
-				// Validate the password before building the real command.
-				validateCmd := exec.CommandContext(ctx, "sudo", "-S", "-v")
-				validateCmd.Stdin = strings.NewReader(password + "\n")
-				var discard bytes.Buffer
-				validateCmd.Stderr = &discard
-				if validateCmd.Run() == nil {
-					sudoArgs := append([]string{"-S", command}, args...)
-					cmd := exec.CommandContext(ctx, "sudo", sudoArgs...)
-					cmd.Stdin = strings.NewReader(password + "\n")
-					return cmd, nil
-				}
-			}
-			return nil, fmt.Errorf("sudo: authentication failed after %d attempts", maxAttempts)
+	// Always pre-check with "sudo -n true" (non-interactive: succeeds only if
+	// a cached credential covers this, never prompts) before ever considering
+	// a real sudo invocation. If that fails, a password is genuinely needed:
+	// prompt via TUI if one is available, let sudo prompt natively on a real
+	// terminal, or fail fast rather than risk blocking on a password prompt
+	// nobody can answer (e.g. an unattended --server-daemon run).
+	checkCmd := exec.CommandContext(ctx, "sudo", "-n", "true")
+	if err := checkCmd.Run(); err != nil {
+		hasTerminal := console.IsTTY() && console.IsStdoutTTY() && console.IsStdinTTY()
+		if console.TUIPrompt == nil && !hasTerminal {
+			return nil, fmt.Errorf("sudo requires a password and no prompt is available (unattended context)")
 		}
+		if console.TUIPrompt == nil {
+			// Real terminal, no TUI dialog wiring -- let sudo prompt natively.
+			sudoArgs := append([]string{command}, args...)
+			return exec.CommandContext(ctx, "sudo", sudoArgs...), nil
+		}
+
+		// Password required — prompt via TUI dialog with retry on wrong password.
+		fullCmd := command
+		if len(args) > 0 {
+			fullCmd += " " + strings.Join(args, " ")
+		}
+		const maxAttempts = 3
+		for attempt := 0; attempt < maxAttempts; attempt++ {
+			title := "{{|TitleQuestion|}}Sudo Password Required{{[-]}}"
+			if attempt > 0 {
+				title = "{{|TitleError|}}Incorrect Password — Try Again{{[-]}}"
+			}
+			password, err := console.TextPrompt(ctx, func(context.Context, any, ...any) {}, title, fullCmd, true)
+			if err != nil {
+				return nil, fmt.Errorf("sudo prompt cancelled: %w", err)
+			}
+			// Validate the password before building the real command.
+			validateCmd := exec.CommandContext(ctx, "sudo", "-S", "-v")
+			validateCmd.Stdin = strings.NewReader(password + "\n")
+			var discard bytes.Buffer
+			validateCmd.Stderr = &discard
+			if validateCmd.Run() == nil {
+				sudoArgs := append([]string{"-S", command}, args...)
+				cmd := exec.CommandContext(ctx, "sudo", sudoArgs...)
+				cmd.Stdin = strings.NewReader(password + "\n")
+				return cmd, nil
+			}
+		}
+		return nil, fmt.Errorf("sudo: authentication failed after %d attempts", maxAttempts)
 	}
 
-	// No TUI, or no password required — let sudo handle it natively.
+	// No password required (cached credential covers it) — safe to run natively.
 	sudoArgs := append([]string{command}, args...)
 	return exec.CommandContext(ctx, "sudo", sudoArgs...), nil
 }
