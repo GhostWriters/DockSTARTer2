@@ -125,12 +125,21 @@ type (
 	// Use this instead of calling Confirm() inside a tea.Cmd (which deadlocks).
 	ConfirmQuitMsg struct{}
 
-	// ShowConfirmDialogMsg shows a confirmation dialog with a result channel
+	// ShowConfirmDialogMsg shows a confirmation dialog. Prefer OnResult over
+	// ResultChan for a follow-up tea.Msg: since this message (and the dialog's
+	// eventual result) is always handled within the issuing session's own
+	// AppModel.Update loop, OnResult's returned Cmd is guaranteed to land back
+	// in the same session -- unlike tui.Confirm/PromptChoice, which resolve via
+	// the process-wide global program var and can route to the wrong session
+	// when multiple are connected to one --server-daemon. ResultChan is still
+	// useful for a caller that only needs the answer as a plain value (e.g. a
+	// side effect with no further tea.Msg to dispatch), not a next message.
 	ShowConfirmDialogMsg struct {
 		Title      string
 		Question   string
 		DefaultYes bool
 		ResultChan chan bool
+		OnResult   func(confirmed bool) tea.Cmd
 	}
 
 	// ShowMessageDialogMsg shows a message dialog (info/success/warning/error)
@@ -226,6 +235,16 @@ type AppModel struct {
 	connType   string
 	sessionKey string // identifies this session for edit-lock re-entry (see sessionlocks.SessionManager.localSessionKey)
 
+	// program is this session's own *tea.Program, set via SetProgram once it
+	// exists (AppModel is constructed before NewProgram(model, ...) returns
+	// it, so this can't be captured at construction time -- same two-phase
+	// pattern as PanelModel.SetConfirmFunc/SetPromptFunc). Given to dialogs
+	// that need to deliver a tea.Msg back from an external goroutine (e.g.
+	// ProgramBoxModel's task-output streaming), instead of them reaching for
+	// the process-wide global program var, which can point at the wrong
+	// session in a --server-daemon serving multiple concurrent sessions.
+	program *tea.Program
+
 	// lockedByOthers indicates if the configuration is locked by another session
 	lockedByOthers bool
 
@@ -272,6 +291,11 @@ type AppModel struct {
 
 	// Channel for receiving confirmation result from a modal dialog
 	pendingConfirm chan bool
+
+	// Optional follow-up, set alongside pendingConfirm from
+	// ShowConfirmDialogMsg.OnResult -- invoked with the result when the
+	// dialog resolves, its returned Cmd added to that Update() call's batch.
+	pendingConfirmOnResult func(confirmed bool) tea.Cmd
 
 	// Channel for receiving prompt result from a modal dialog
 	pendingPrompt chan promptResultMsg
@@ -339,6 +363,22 @@ func NewAppModelStandalone(ctx context.Context, cfg config.AppConfig, clientIP, 
 // this AppModel's Program.Run() returns.
 func (m *AppModel) Cleanup() {
 	m.panel.UnsubscribeLog()
+}
+
+// SetProgram sets this session's own *tea.Program (see the program field's
+// doc comment). Called once by the tui package after NewProgram returns it.
+func (m *AppModel) SetProgram(p *tea.Program) {
+	m.program = p
+}
+
+// Send delivers msg to this session's own Program, safe to call from any
+// goroutine (Bubble Tea's Program.Send is designed for exactly this). Used
+// by dialogs this session owns (see ProgramBoxModel.SetSendFunc) instead of
+// the process-wide global program var.
+func (m *AppModel) Send(msg tea.Msg) {
+	if m.program != nil {
+		m.program.Send(msg)
+	}
 }
 
 // Init implements tea.Model

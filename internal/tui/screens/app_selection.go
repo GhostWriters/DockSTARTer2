@@ -279,10 +279,17 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool, connType string) 
 			} else {
 				msg = "Go back?"
 			}
-			if !tui.Confirm("Go Back", msg, false) {
-				return nil
+			return tui.ShowConfirmDialogMsg{
+				Title:      "Go Back",
+				Question:   msg,
+				DefaultYes: false,
+				OnResult: func(confirmed bool) tea.Cmd {
+					if !confirmed {
+						return nil
+					}
+					return func() tea.Msg { return tui.NavigateBackMsg{} }
+				},
 			}
-			return tui.NavigateBackMsg{}
 		}
 	}
 

@@ -467,17 +467,7 @@ func (s *ServerOptionsScreen) disconnectAction(force bool, enabled bool) tea.Cmd
 // ── Apply ────────────────────────────────────────────────────────────────────
 
 func (s *ServerOptionsScreen) handleApply() tea.Cmd {
-	return func() tea.Msg {
-		if s.settingsMenu.AnyLocked() {
-			return nil
-		}
-		if len(sessionlocks.Sessions.ListServerInfos()) > 0 {
-			if !tui.Confirm("Server Is Running",
-				"Changing server settings while the server is running may disconnect active remote sessions.\n\nApply anyway?",
-				false) {
-				return nil
-			}
-		}
+	doApply := func() tea.Msg {
 		if err := config.SaveAppConfig(s.config); err != nil {
 			return tui.ShowMessageDialogMsg{
 				Title:   "Save Failed",
@@ -490,6 +480,25 @@ func (s *ServerOptionsScreen) handleApply() tea.Cmd {
 			Message: "Server settings saved. Restart the SSH server for changes to take effect.",
 			Type:    tui.MessageSuccess,
 		}
+	}
+	return func() tea.Msg {
+		if s.settingsMenu.AnyLocked() {
+			return nil
+		}
+		if len(sessionlocks.Sessions.ListServerInfos()) > 0 {
+			return tui.ShowConfirmDialogMsg{
+				Title:      "Server Is Running",
+				Question:   "Changing server settings while the server is running may disconnect active remote sessions.\n\nApply anyway?",
+				DefaultYes: false,
+				OnResult: func(confirmed bool) tea.Cmd {
+					if !confirmed {
+						return nil
+					}
+					return doApply
+				},
+			}
+		}
+		return doApply()
 	}
 }
 

@@ -44,6 +44,23 @@ func ConfirmFuncFromContext(ctx context.Context) func(title, question string, de
 	return fn
 }
 
+// promptFuncKey is the context key for a session-scoped text-prompt callback.
+type promptFuncKey struct{}
+
+// WithPromptFunc attaches a session-scoped text-prompt callback to ctx.
+// TextPrompt prefers this over the global TUIPrompt var, for the same reason
+// QuestionPrompt prefers WithConfirmFunc over TUIConfirm (see its doc comment).
+func WithPromptFunc(ctx context.Context, fn func(title, question string, sensitive bool, initialValue ...string) (string, error)) context.Context {
+	return context.WithValue(ctx, promptFuncKey{}, fn)
+}
+
+// PromptFuncFromContext returns the session-scoped prompt callback attached
+// via WithPromptFunc, or nil if none is present.
+func PromptFuncFromContext(ctx context.Context) func(title, question string, sensitive bool, initialValue ...string) (string, error) {
+	fn, _ := ctx.Value(promptFuncKey{}).(func(title, question string, sensitive bool, initialValue ...string) (string, error))
+	return fn
+}
+
 // IsTUI returns true if the context has a TUI writer attached or TUI mode is globally enabled.
 func IsTUI(ctx context.Context) bool {
 	return ctx.Value(TUIWriterKey) != nil || IsTUIEnabled()

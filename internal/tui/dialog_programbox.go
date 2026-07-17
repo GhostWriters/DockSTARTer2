@@ -58,6 +58,16 @@ type ProgramBoxModel struct {
 	focused    bool
 	ctx        context.Context
 
+	// sendFunc, if set, delivers a tea.Msg to the owning session's own
+	// Program (see AppModel.Send) instead of the process-wide global program
+	// var -- set via SetSendFunc when this dialog is shown (model_update.go),
+	// since ProgramBoxModel doesn't otherwise know which session owns it.
+	sendFunc func(tea.Msg)
+
+	// choiceFunc, if set, is a session-scoped equivalent of the package-level
+	// PromptChoice, for the same reason as sendFunc.
+	choiceFunc func(title, question string, choices ...string) int
+
 	// displayengine.Overlay prompts (for blocking prompts during task)
 	subDialog     tea.Model
 	subDialogChan any
@@ -257,6 +267,26 @@ func (m *ProgramBoxModel) SetContext(ctx context.Context) {
 	}
 }
 
+// SetSendFunc sets this dialog's session-scoped Send callback (see sendFunc).
+func (m *ProgramBoxModel) SetSendFunc(fn func(tea.Msg)) {
+	m.sendFunc = fn
+}
+
+// SetChoiceFunc sets this dialog's session-scoped choice callback (see choiceFunc).
+func (m *ProgramBoxModel) SetChoiceFunc(fn func(title, question string, choices ...string) int) {
+	m.choiceFunc = fn
+}
+
+// Choice shows a blocking multi-choice sub-dialog, using this dialog's
+// session-scoped callback if set (see choiceFunc), falling back to the
+// package-level (global-program-based) PromptChoice otherwise.
+func (m *ProgramBoxModel) Choice(title, question string, choices ...string) int {
+	if m.choiceFunc != nil {
+		return m.choiceFunc(title, question, choices...)
+	}
+	return PromptChoice(title, question, choices...)
+}
+
 // SetFocused sets the focus state
 func (m *ProgramBoxModel) SetFocused(focused bool) {
 	m.focused = focused
@@ -294,12 +324,14 @@ func (m *ProgramBoxModel) Init() tea.Cmd {
 				errChan := make(chan error, 1)
 
 				// Start reading output in a goroutine — sends each line immediately to the viewport.
+				send := m.sendFunc
+				if send == nil {
+					send = Send
+				}
 				go func() {
 					scanner := bufio.NewScanner(reader)
 					for scanner.Scan() {
-						if program != nil {
-							program.Send(outputLinesMsg{lines: []string{scanner.Text()}})
-						}
+						send(outputLinesMsg{lines: []string{scanner.Text()}})
 					}
 				}()
 

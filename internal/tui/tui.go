@@ -511,6 +511,8 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	// Note: AltScreen is set via View().AltScreen in v2
 	p = NewProgram(model, pOpts)
 	model.panel.SetConfirmFunc(sessionConfirmFunc(p))
+	model.panel.SetPromptFunc(sessionPromptFunc(p))
+	model.SetProgram(p)
 
 	// Register this session so Shutdown (re-exec) can find it, and so
 	// shutdownSelf above has something to quit/wait on.
@@ -664,6 +666,8 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 	model := NewAppModel(ctx, displayengine.CurrentConfig(), ip, ctype, sessionKey, startScreen, initialStack...)
 	p = NewProgram(model, pOpts)
 	model.panel.SetConfirmFunc(sessionConfirmFunc(p))
+	model.panel.SetPromptFunc(sessionPromptFunc(p))
+	model.SetProgram(p)
 	exited = registerSession(p)
 
 	startWindowSizeForwarder(ctx, p, pOpts)
@@ -824,6 +828,8 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 	model := NewAppModel(ctx, displayengine.CurrentConfig(), ip, ctype, sessionKey, startScreen)
 	p = NewProgram(model, pOpts)
 	model.panel.SetConfirmFunc(sessionConfirmFunc(p))
+	model.panel.SetPromptFunc(sessionPromptFunc(p))
+	model.SetProgram(p)
 	exited = registerSession(p)
 
 	startWindowSizeForwarder(ctx, p, pOpts)
@@ -1361,10 +1367,11 @@ func doTriggerComposeStop(clientIP, connType, sessionKey string) tea.Msg {
 		return ShowMessageDialogMsg{Title: "Resource Busy", Message: editLockBusyMsg(sessionlocks.Sessions.ReadEditInfo(), ""), Type: MessageError}
 	}
 	question := "Would you like to {{|Highlight|}}Stop{{[-]}} all containers, or bring all containers {{|Highlight|}}Down{{[-]}}?\n\n{{|Highlight|}}Stop{{[-]}} will stop them, {{|Highlight|}}Down{{[-]}} will stop and remove them."
+	var dialog *ProgramBoxModel
 	task := func(ctx context.Context, w io.Writer) error {
 		defer sessionlocks.Sessions.ReleaseEditLock()
 		ctx = console.WithTUIWriter(ctx, w)
-		choice := PromptChoice("Docker Compose", question, "Stop", "Down", "Cancel")
+		choice := dialog.Choice("Docker Compose", question, "Stop", "Down", "Cancel")
 		switch choice {
 		case 0: // Stop
 			SetProgramBoxHeader(compose.YesNotice("stop", ""), CmdLine("--compose", "stop"))
@@ -1382,11 +1389,11 @@ func doTriggerComposeStop(clientIP, connType, sessionKey string) tea.Msg {
 		return nil
 	}
 	// The command line is deliberately blank at creation -- Stop vs. Down
-	// isn't decided until the PromptChoice above resolves, and showing a
+	// isn't decided until the Choice call above resolves, and showing a
 	// guessed command line before that would be misleading. The subtitle
 	// itself is still fine to show generically. SetProgramBoxHeader fills
 	// in both properly once the choice is known.
-	dialog := NewProgramBoxModel("Docker Compose", "Stopping or removing running containers.", "").WithDialogType(displayengine.DialogTypeSuccess)
+	dialog = NewProgramBoxModel("Docker Compose", "Stopping or removing running containers.", "").WithDialogType(displayengine.DialogTypeSuccess)
 	dialog.SetTask(task)
 	dialog.SetIsDialog(true)
 	dialog.SetMaximized(true)
