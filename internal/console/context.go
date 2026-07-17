@@ -83,6 +83,30 @@ func SendFuncFromContext(ctx context.Context) func(tea.Msg) {
 	return fn
 }
 
+// replaceOutputFuncKey is the context key for a session-scoped live
+// output-replacement callback (e.g. compose progress lines).
+type replaceOutputFuncKey struct{}
+
+// WithReplaceOutputFunc attaches a session-scoped output-replacement
+// callback to ctx. Typed as func([]string) rather than reusing WithSendFunc
+// so packages that only need this (e.g. internal/compose) don't have to
+// depend on tea.Msg or construct a displayengine.ReplaceOutputMsg
+// themselves -- internal/compose is imported by internal/commands, which
+// internal/displayengine already imports, so compose importing displayengine
+// (or bubbletea's tea.Msg-typed callback) directly would cycle. Prefer this
+// over the global console.ReplaceOutputLinesFn, for the same reason
+// WithSendFunc is preferred over the global program var.
+func WithReplaceOutputFunc(ctx context.Context, fn func([]string)) context.Context {
+	return context.WithValue(ctx, replaceOutputFuncKey{}, fn)
+}
+
+// ReplaceOutputFuncFromContext returns the session-scoped output-replacement
+// callback attached via WithReplaceOutputFunc, or nil if none is present.
+func ReplaceOutputFuncFromContext(ctx context.Context) func([]string) {
+	fn, _ := ctx.Value(replaceOutputFuncKey{}).(func([]string))
+	return fn
+}
+
 // IsTUI returns true if the context has a TUI writer attached or TUI mode is globally enabled.
 func IsTUI(ctx context.Context) bool {
 	return ctx.Value(TUIWriterKey) != nil || IsTUIEnabled()

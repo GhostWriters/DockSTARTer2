@@ -439,7 +439,10 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 		})
 		var updateFn func([]string)
 		if hasTUIWriter {
-			updateFn = console.ReplaceOutputLinesFn
+			updateFn = console.ReplaceOutputFuncFromContext(ctx)
+			if updateFn == nil {
+				updateFn = console.ReplaceOutputLinesFn
+			}
 		}
 		bus = NewConsoleEventProcessor(ctx, outStream, command, imageServices, imageOrder, containerToService, project.Name, !conf.UI.LineCharacters, console.GlobalVerbose, staticOut, updateFn, dockerCLI.Client())
 	}
