@@ -167,6 +167,7 @@ func fmtWebPort(webPort int) string {
 // daemon can restore navigation state for reconnecting web/SSH sessions.
 func handleServeDaemon(ctx context.Context, group *CommandGroup, conf *config.AppConfig) error {
 	console.IsDaemon = true
+	console.DaemonArgs = os.Args[1:]
 	startMenu := extractNavArg(group.Args)
 	sshPort, webPort := parsePortArgs(group.Args)
 	if sshPort > 0 {
