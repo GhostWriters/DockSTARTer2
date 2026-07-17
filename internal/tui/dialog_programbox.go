@@ -345,9 +345,7 @@ func (m *ProgramBoxModel) Init() tea.Cmd {
 
 				go func() {
 					err := <-errChan
-					if program != nil {
-						program.Send(outputDoneMsg{err: err})
-					}
+					send(outputDoneMsg{err: err})
 				}()
 
 				return nil
