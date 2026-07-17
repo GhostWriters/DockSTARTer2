@@ -40,13 +40,25 @@ func IsRestartSafeLocally() bool {
 func RestartForConfigChange(ctx context.Context) {
 	var reExecArgs []string
 	if console.IsDaemon {
-		reExecArgs = append(reExecArgs, "--server-daemon")
+		reExecArgs = daemonReExecArgs()
 	} else {
 		reExecArgs = append(reExecArgs, console.CurrentFlags...)
 		reExecArgs = append(reExecArgs, GetNavArgs()...)
 		reExecArgs = append(reExecArgs, console.RestArgs...)
 	}
 	_ = update.ReExec(ctx, registeredExePath, reExecArgs)
+}
+
+// daemonReExecArgs returns the args to re-exec a --server-daemon process
+// with, preserving whatever it was actually launched with (notably a
+// non-default port override, which only exists in these args, not the
+// shared config file). Falls back to a bare --server-daemon if somehow
+// unset, rather than failing to restart at all.
+func daemonReExecArgs() []string {
+	if len(console.DaemonArgs) > 0 {
+		return console.DaemonArgs
+	}
+	return []string{"--server-daemon"}
 }
 
 // isRestartSafeLocally returns true when this process is in a safe state to
@@ -83,16 +95,28 @@ func isRestartSafe() bool {
 	if !isRestartSafeLocally() {
 		return false
 	}
-	return !sessionlocks.Sessions.AnyRestartUnsafe()
+	return !sessionlocks.Sessions.SelfRestartUnsafe()
 }
 
-// startRestartWatcher launches a background goroutine that polls the installed-
-// version file for the current executable. When a newer version is recorded it
-// sets update.RestartPending and triggers a header refresh. If the current page
-// is already safe it fires the re-exec immediately; otherwise re-exec is
-// deferred until the user navigates to a safe page (checkPendingRestart).
+// startRestartWatcher starts this session's restart-safety marker and, for a
+// local (non-daemon) process, a background goroutine that polls the
+// installed-version file, sets update.RestartPending when it finds a newer
+// version, and fires the re-exec once safe (or defers to checkPendingRestart
+// until the user navigates to a safe page).
+//
+// Under --server-daemon, StartDaemonRestartWatcher (started once for the
+// whole daemon, not per session) is the sole detector/decision-maker: every
+// connected session shares update.RestartPending/PendingRestartVersion as
+// process-wide state, so a per-session poller here would just duplicate that
+// work and race to be the one that re-execs. A session still needs its own
+// marker kept current (updateRestartSafeMarker, also called on every page
+// transition) since the daemon watcher's safety check aggregates across all
+// connected sessions.
 func startRestartWatcher(ctx context.Context) {
 	updateRestartSafeMarker()
+	if console.IsDaemon {
+		return
+	}
 	go func() {
 		defer sessionlocks.Sessions.MarkRestartSafe()
 		ticker := time.NewTicker(restartWatchInterval)
@@ -121,11 +145,17 @@ func startRestartWatcher(ctx context.Context) {
 
 // StartDaemonRestartWatcher launches a background poller at the daemon's own
 // top level, independent of any connected session, so an update is picked up
-// even while nobody is connected -- startRestartWatcher only runs per
-// connected session, so an idle daemon otherwise has nothing polling for a
-// version change. Restarts only when no connected session is mid-edit
-// (sessionlocks.Sessions.AnyRestartUnsafe(); there's no local page state to
-// check here since this isn't a session). Stops when ctx is cancelled.
+// even while nobody is connected -- and, per startRestartWatcher's doc
+// comment, is the sole restart detector/decision-maker for every session
+// connected to this daemon. Sets update.RestartPending/PendingRestartVersion
+// as soon as a newer version is found (visible to every connected session's
+// header on its next render), then defers the actual restart until no
+// connected session is mid-edit (sessionlocks.Sessions.SelfRestartUnsafe(),
+// which aggregates every session sharing this daemon process's PID -- it
+// deliberately does not check other, unrelated processes, e.g. a different
+// --server-daemon instance on another port, since restarting this one has no
+// effect on them; there's no local page state to check here since this isn't
+// a session). Stops when ctx is cancelled.
 func StartDaemonRestartWatcher(ctx context.Context) {
 	exePath := sessionlocks.ResolvedExePath()
 	go func() {
@@ -136,35 +166,47 @@ func StartDaemonRestartWatcher(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				installed := sessionlocks.Sessions.ReadInstalledVersion(exePath)
-				if installed == "" || installed == version.Version {
-					continue
+				if !update.RestartPending {
+					installed := sessionlocks.Sessions.ReadInstalledVersion(exePath)
+					if installed != "" && installed != version.Version {
+						PendingRestartVersion = installed
+						update.RestartPending = true
+						Send(UpdateHeaderMsg{})
+					}
 				}
-				if sessionlocks.Sessions.AnyRestartUnsafe() {
-					continue
+				if update.RestartPending && !sessionlocks.Sessions.SelfRestartUnsafe() {
+					triggerDaemonRestart(ctx, exePath)
+					return
 				}
-
-				// Double-check what the binary on disk actually reports,
-				// same as triggerPendingRestart.
-				onDiskVer := binaryVersionAt(exePath)
-				if onDiskVer == "" {
-					continue
-				}
-				_ = sessionlocks.Sessions.WriteInstalledVersion(exePath, onDiskVer)
-				if onDiskVer == version.Version {
-					continue // stale version file, no restart needed
-				}
-
-				_ = update.ReExec(ctx, exePath, []string{"--server-daemon"})
-				return
 			}
 		}
 	}()
 }
 
-// checkPendingRestart is called whenever the active screen changes. If a
-// restart is pending and the new page is safe, it fires the re-exec
-// immediately rather than waiting for the next poll cycle.
+// triggerDaemonRestart is StartDaemonRestartWatcher's equivalent of
+// triggerPendingRestart, using an explicit exePath since there's no
+// per-session registeredExePath here.
+func triggerDaemonRestart(ctx context.Context, exePath string) {
+	update.RestartPending = false
+
+	onDiskVer := binaryVersionAt(exePath)
+	if onDiskVer != "" {
+		if onDiskVer == version.Version {
+			_ = sessionlocks.Sessions.WriteInstalledVersion(exePath, onDiskVer)
+			Send(UpdateHeaderMsg{})
+			return
+		}
+		_ = sessionlocks.Sessions.WriteInstalledVersion(exePath, onDiskVer)
+	}
+
+	_ = update.ReExec(ctx, exePath, daemonReExecArgs())
+}
+
+// checkPendingRestart is called whenever the active screen changes. Under
+// --server-daemon, StartDaemonRestartWatcher is the sole restart trigger (see
+// startRestartWatcher's doc comment), so this only matters for a local
+// (non-daemon) process: if a restart is pending and the new page is safe, it
+// fires the re-exec immediately rather than waiting for the next poll cycle.
 //
 // triggerPendingRestart is dispatched on its own goroutine, not called
 // directly: this runs inside Bubble Tea's Update() call chain, but
@@ -174,6 +216,9 @@ func StartDaemonRestartWatcher(ctx context.Context) {
 // goroutine lets Update() return immediately so Run()'s loop can process
 // the pending Quit().
 func checkPendingRestart(ctx context.Context) {
+	if console.IsDaemon {
+		return
+	}
 	if update.RestartPending && isRestartSafe() {
 		go triggerPendingRestart(ctx)
 	}
@@ -220,7 +265,7 @@ func triggerPendingRestart(ctx context.Context) {
 
 	var reExecArgs []string
 	if console.IsDaemon {
-		reExecArgs = append(reExecArgs, "--server-daemon")
+		reExecArgs = daemonReExecArgs()
 	} else {
 		reExecArgs = append(reExecArgs, console.CurrentFlags...)
 		reExecArgs = append(reExecArgs, GetNavArgs()...)
@@ -238,8 +283,12 @@ func captureExePath() {
 
 // showPendingRestartDialog returns a tea.Cmd that shows the appropriate dialog
 // when the user clicks the app version block while a restart is pending.
-// On safe pages: confirm restart with version info.
-// On unsafe pages: warn about unsaved changes and confirm restart.
+//   - This session unsafe (mid-edit locally): warn about unsaved changes.
+//   - This session safe, but another session sharing this process (e.g.
+//     another connection to the same --server-daemon) is unsafe: identify
+//     that session (same detail used for edit-lock warnings elsewhere) and
+//     offer to disconnect it before restarting.
+//   - Otherwise: plain confirm.
 func showPendingRestartDialog(ctx context.Context) tea.Cmd {
 	return func() tea.Msg {
 		ver := PendingRestartVersion
@@ -248,25 +297,50 @@ func showPendingRestartDialog(ctx context.Context) tea.Cmd {
 			verSuffix = " to " + ver
 		}
 
+		localUnsafe := !isRestartSafeLocally()
+		otherUnsafe := !localUnsafe && sessionlocks.Sessions.SelfRestartUnsafe()
+
 		var question string
-		if isRestartSafeLocally() {
-			question = "The application was updated" + verSuffix + ". Restart now to use the new version?"
-		} else {
+		var onConfirm func()
+		switch {
+		case localUnsafe:
 			question = "The application was updated" + verSuffix + ". You have unsaved changes — restart anyway and lose them?"
+			onConfirm = func() { triggerPendingRestart(ctx) }
+		case otherUnsafe:
+			detail := "Another connection"
+			if lines, _ := sessionlocks.EditLockDetail(sessionlocks.Sessions.ReadEditInfo()); len(lines) > 0 {
+				detail = strings.Join(lines, "\n")
+			}
+			question = "The application was updated" + verSuffix + ". " + detail +
+				"\n\nDisconnecting it will lose its unsaved changes. Disconnect and restart?"
+			onConfirm = func() {
+				_ = sessionlocks.Sessions.Disconnect(ctx, true)
+				if !console.IsDaemon {
+					// No separate daemon watcher to fall back to locally --
+					// finish the restart ourselves.
+					triggerPendingRestart(ctx)
+				}
+				// Under --server-daemon, StartDaemonRestartWatcher notices
+				// the now-cleared unsafe state on its next poll and restarts
+				// on its own (the sole restart trigger for daemon sessions).
+			}
+		default:
+			question = "The application was updated" + verSuffix + ". Restart now to use the new version?"
+			onConfirm = func() { triggerPendingRestart(ctx) }
 		}
 
 		resultChan := make(chan bool, 1)
 		go func() {
 			confirmed := <-resultChan
 			if confirmed {
-				triggerPendingRestart(ctx)
+				onConfirm()
 			}
 		}()
 
 		return ShowConfirmDialogMsg{
 			Title:      "Restart Pending",
 			Question:   question,
-			DefaultYes: isRestartSafeLocally(),
+			DefaultYes: !localUnsafe && !otherUnsafe,
 			ResultChan: resultChan,
 		}
 	}

@@ -450,7 +450,7 @@ func (m *SessionManager) UnregisterProc() {
 
 // MarkRestartUnsafe acquires a shared flock on this process's .restartunsafe
 // file, holding it until MarkRestartSafe is called or the process exits.
-// AnyRestartUnsafe uses TryLock to detect live holders without PID parsing.
+// SelfRestartUnsafe uses TryLock to detect a live holder without PID parsing.
 func (m *SessionManager) MarkRestartUnsafe() {
 	_ = os.MkdirAll(m.procsDir, 0755)
 	path := filepath.Join(m.procsDir, strconv.Itoa(os.Getpid())+".restartunsafe")
@@ -470,29 +470,28 @@ func (m *SessionManager) MarkRestartSafe() {
 	_ = os.Remove(filepath.Join(m.procsDir, strconv.Itoa(os.Getpid())+".restartunsafe"))
 }
 
-// AnyRestartUnsafe returns true if any live process holds a restart-unsafe flock.
-// Stale files (no flock held) are removed as they are encountered.
-func (m *SessionManager) AnyRestartUnsafe() bool {
-	entries, err := os.ReadDir(m.procsDir)
+// SelfRestartUnsafe reports whether this process currently holds its own
+// restart-unsafe marker (see MarkRestartUnsafe). Deliberately scoped to this
+// process only, not every live process system-wide: a restart only replaces
+// the calling process's own image (syscall.Exec), so it can never disrupt a
+// session belonging to a different process (a different --server-daemon
+// instance on another port, or an unrelated local invocation) -- the only
+// resource genuinely shared across processes is the edit lock itself
+// (editLockPath), tracked separately from these per-PID markers. For a
+// --server-daemon, every connected session shares this one process's PID, so
+// this still correctly aggregates "is any session I'm hosting unsafe."
+func (m *SessionManager) SelfRestartUnsafe() bool {
+	path := filepath.Join(m.procsDir, strconv.Itoa(os.Getpid())+".restartunsafe")
+	f := flock.New(path)
+	locked, err := f.TryLock()
 	if err != nil {
-		return false
+		return true // can't tell; assume unsafe
 	}
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".restartunsafe") {
-			continue
-		}
-		path := filepath.Join(m.procsDir, e.Name())
-		f := flock.New(path)
-		locked, err := f.TryLock()
-		if err != nil {
-			continue // can't tell; assume live
-		}
-		if !locked {
-			return true // shared flock held — process is alive and restart-unsafe
-		}
-		_ = f.Unlock()
-		_ = os.Remove(path) // exclusive lock succeeded — no live holder
+	if !locked {
+		return true // shared flock held (by ourselves) — unsafe
 	}
+	_ = f.Unlock()
+	_ = os.Remove(path)
 	return false
 }
 

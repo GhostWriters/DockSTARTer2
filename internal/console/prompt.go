@@ -47,6 +47,13 @@ var ServerDisconnect func()
 // Used by the update path to ensure re-exec restarts as a daemon.
 var IsDaemon bool
 
+// DaemonArgs is the exact argv (os.Args[1:]) this --server-daemon process was
+// launched with, captured once at startup. Used by the update/restart path
+// to re-exec with the same args -- notably any port override, since a daemon
+// on a non-default port only knows that port from these args, not from the
+// shared config file (see cmd/executor_serve.go's parsePortArgs).
+var DaemonArgs []string
+
 // GlobalYes is set to true when the -y/--yes flag is passed to the application.
 // QuestionPrompt prompts the user with a Yes/No question.
 // It returns true if the user answers Yes, false otherwise.
