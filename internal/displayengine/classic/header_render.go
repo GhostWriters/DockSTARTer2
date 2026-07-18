@@ -349,8 +349,8 @@ func (m HeaderModel) renderVersions() (appText, tmplText string) {
 		return MaintainBackground(RenderThemeText(text, styles.HeaderBG), styles.HeaderBG)
 	}
 
-	appText = renderVersionBlock(appVer, "A", update.AppUpdateAvailable, update.UpdateCheckError, update.RestartPending, m.focus == HeaderFocusApp, true)
-	tmplText = renderVersionBlock(tmplVer, "T", update.TmplUpdateAvailable, update.UpdateCheckError, false, m.focus == HeaderFocusTmpl, false)
+	appText = renderVersionBlock(appVer, "A", update.AppUpdateAvailable, update.AppUpdateCheckError, update.RestartPending, m.focus == HeaderFocusApp, true)
+	tmplText = renderVersionBlock(tmplVer, "T", update.TmplUpdateAvailable, update.TmplUpdateCheckError, false, m.focus == HeaderFocusTmpl, false)
 
 	return appText, tmplText
 }

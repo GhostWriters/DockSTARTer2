@@ -960,7 +960,8 @@ func EmergencyShutdown() {
 // each session runs its own copy of this checker.
 func startUpdateChecker(ctx context.Context, send func(tea.Msg)) {
 	// Initial check
-	update.GetUpdateStatus(ctx)
+	update.CheckAppUpdate(ctx)
+	update.CheckTmplUpdate(ctx)
 	send(UpdateHeaderMsg{})
 
 	ticker := time.NewTicker(3 * time.Minute)
@@ -973,9 +974,12 @@ func startUpdateChecker(ctx context.Context, send func(tea.Msg)) {
 		case <-ticker.C:
 			appUpdateOld := update.AppUpdateAvailable
 			tmplUpdateOld := update.TmplUpdateAvailable
-			errorOld := update.UpdateCheckError
-			update.GetUpdateStatus(ctx)
-			if update.AppUpdateAvailable != appUpdateOld || update.TmplUpdateAvailable != tmplUpdateOld || update.UpdateCheckError != errorOld {
+			appErrorOld := update.AppUpdateCheckError
+			tmplErrorOld := update.TmplUpdateCheckError
+			update.CheckAppUpdate(ctx)
+			update.CheckTmplUpdate(ctx)
+			if update.AppUpdateAvailable != appUpdateOld || update.TmplUpdateAvailable != tmplUpdateOld ||
+				update.AppUpdateCheckError != appErrorOld || update.TmplUpdateCheckError != tmplErrorOld {
 				send(UpdateHeaderMsg{})
 			}
 		}
@@ -1191,7 +1195,7 @@ func TriggerAppUpdate() tea.Cmd {
 			err := update.SelfUpdate(ctx, force, yes, "", reExecArgs)
 			if err == nil {
 				// Refresh update status and UI
-				update.GetUpdateStatus(ctx)
+				update.CheckAppUpdate(ctx)
 				Send(UpdateHeaderMsg{})
 			}
 			return err
@@ -1219,7 +1223,7 @@ func TriggerTemplateUpdate() tea.Cmd {
 			err := update.UpdateTemplates(ctx, force, yes, "")
 			if err == nil {
 				// Refresh update status and UI
-				update.GetUpdateStatus(ctx)
+				update.CheckTmplUpdate(ctx)
 				Send(UpdateHeaderMsg{})
 				Send(TemplateUpdateSuccessMsg{})
 			}
@@ -1272,7 +1276,8 @@ func TriggerUpdate() tea.Cmd {
 			err := update.SelfUpdate(ctx, force, yes, "", reExecArgs)
 			if err == nil {
 				// Refresh update status and UI
-				update.GetUpdateStatus(ctx)
+				update.CheckAppUpdate(ctx)
+				update.CheckTmplUpdate(ctx)
 				Send(UpdateHeaderMsg{})
 				Send(TemplateUpdateSuccessMsg{})
 			}

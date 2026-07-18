@@ -27,6 +27,15 @@ import (
 	selfupdate "github.com/creativeprojects/go-selfupdate"
 )
 
+// latestChannelTag returns the most recent tag for the given channel.
+func latestChannelTag(channel string) (string, error) {
+	tags, err := channelTagsDescending(channel)
+	if err != nil || len(tags) == 0 {
+		return "", err
+	}
+	return tags[0], nil
+}
+
 // SelfUpdate handles updating the application binary using GitHub Releases.
 func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion string, restArgs []string) error {
 	// Get current executable path for logging later

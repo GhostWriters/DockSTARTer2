@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -41,22 +42,24 @@ func CheckCurrentStatus(ctx context.Context) error {
 	return nil
 }
 
-// GetUpdateStatus checks for updates in the background without prompting.
-func GetUpdateStatus(ctx context.Context) (appUpdate bool, tmplUpdate bool) {
-	// Check Application Updates
-	appUpdate, appVer, appErr := checkAppUpdate(ctx)
+// CheckAppUpdate checks for an application update and updates the
+// AppUpdateAvailable/LatestAppVersion/AppUpdateCheckError globals.
+func CheckAppUpdate(ctx context.Context) (updateAvailable bool) {
+	updateAvailable, ver, hadError := checkAppUpdate(ctx)
+	AppUpdateAvailable = updateAvailable
+	LatestAppVersion = ver
+	AppUpdateCheckError = hadError
+	return updateAvailable
+}
 
-	// Check Template Updates
-	tmplUpdate, tmplVer, tmplErr := checkTmplUpdate(ctx)
-
-	// Set global state
-	AppUpdateAvailable = appUpdate
-	LatestAppVersion = appVer
-	TmplUpdateAvailable = tmplUpdate
-	LatestTmplVersion = tmplVer
-	UpdateCheckError = appErr || tmplErr
-
-	return appUpdate, tmplUpdate
+// CheckTmplUpdate checks for a templates update and updates the
+// TmplUpdateAvailable/LatestTmplVersion/TmplUpdateCheckError globals.
+func CheckTmplUpdate(ctx context.Context) (updateAvailable bool) {
+	updateAvailable, ver, hadError := checkTmplUpdate(ctx)
+	TmplUpdateAvailable = updateAvailable
+	LatestTmplVersion = ver
+	TmplUpdateCheckError = hadError
+	return updateAvailable
 }
 
 const updateCheckCacheFile = "update_check"
@@ -98,18 +101,20 @@ func CheckUpdates(ctx context.Context) {
 	checkCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
-	// Run update check synchronously (before user command executes)
-	GetUpdateStatus(checkCtx)
+	// Run update checks synchronously (before user command executes).
+	CheckAppUpdate(checkCtx)
+	CheckTmplUpdate(checkCtx)
 
-	if UpdateCheckError {
+	if AppUpdateCheckError && TmplUpdateCheckError {
 		logger.Warn(ctx, "Failed to check for updates (network timeout or error).")
 		return
 	}
 
-	// Touch the timestamp so we skip the check for the next 24 hours.
 	touchUpdateCheckTimestamp()
 
-	if AppUpdateAvailable {
+	if AppUpdateCheckError {
+		logger.Warn(ctx, fmt.Sprintf("Failed to check for {{|ApplicationName|}}%s{{[-]}} updates (network timeout or error).", version.ApplicationName))
+	} else if AppUpdateAvailable {
 		logger.Warn(ctx, []string{
 			GetAppVersionDisplay(),
 			fmt.Sprintf("An update to {{|ApplicationName|}}%s{{[-]}} is available.", version.ApplicationName),
@@ -118,7 +123,9 @@ func CheckUpdates(ctx context.Context) {
 	} else {
 		logger.Info(ctx, GetAppVersionDisplay())
 	}
-	if TmplUpdateAvailable {
+	if TmplUpdateCheckError {
+		logger.Warn(ctx, "Failed to check for {{|ApplicationName|}}DockSTARTer-Templates{{[-]}} updates (network timeout or error).")
+	} else if TmplUpdateAvailable {
 		logger.Warn(ctx, []string{
 			GetTmplVersionDisplay(),
 			fmt.Sprintf("An update to {{|ApplicationName|}}%s{{[-]}} is available.", "DockSTARTer-Templates"),
@@ -281,6 +288,10 @@ func dockerStatus(ctx context.Context) dockercheck.Status {
 	return *st
 }
 
+// maxChannelTagFallbacks bounds how many recent tags checkAppUpdate will try
+// before giving up (a freshly pushed tag can briefly have no release yet).
+const maxChannelTagFallbacks = 3
+
 func checkAppUpdate(ctx context.Context) (updateAvailable bool, ver string, hadError bool) {
 	slug := "GhostWriters/DockSTARTer2"
 	repo := selfupdate.ParseSlug(slug)
@@ -289,11 +300,11 @@ func checkAppUpdate(ctx context.Context) (updateAvailable bool, ver string, hadE
 
 	// Quick check using git ls-remote to see if tags for this channel exist.
 	// This avoids hitting the GitHub releases API unnecessarily.
-	channelTag, err := latestChannelTag(channel)
+	channelTags, err := channelTagsDescending(channel)
 	if err != nil {
 		return false, "", true
 	}
-	if channelTag == "" {
+	if len(channelTags) == 0 {
 		return false, "", false
 	}
 
@@ -302,16 +313,23 @@ func checkAppUpdate(ctx context.Context) (updateAvailable bool, ver string, hadE
 		return false, "", true
 	}
 
-	latest, found, err := updater.DetectVersion(ctx, repo, channelTag)
-	if err != nil || !found {
-		return false, "", true
+	// Try newest tag first, falling back to older tags with a published release.
+	attempts := len(channelTags)
+	if attempts > maxChannelTagFallbacks {
+		attempts = maxChannelTagFallbacks
+	}
+	for _, tag := range channelTags[:attempts] {
+		latest, found, err := updater.DetectVersion(ctx, repo, tag)
+		if err != nil || !found {
+			continue
+		}
+		if compareVersions(latest.Version(), version.Version) > 0 {
+			return true, latest.Version(), false
+		}
+		return false, version.Version, false
 	}
 
-	if compareVersions(latest.Version(), version.Version) > 0 {
-		return true, latest.Version(), false
-	}
-
-	return false, version.Version, false
+	return false, "", true
 }
 
 func checkTmplUpdate(_ context.Context) (updateAvailable bool, ver string, hadError bool) {
@@ -476,10 +494,8 @@ func getUpdater(_ context.Context, channel string) (*selfupdate.Updater, error) 
 	return selfupdate.NewUpdater(cfg)
 }
 
-// latestChannelTag returns the most recent tag for the given channel by
-// listing remote tags and picking the lexicographically greatest match.
-// Version tags sort correctly lexicographically (v2.YYYYMMDD.N[-suffix]).
-func latestChannelTag(channel string) (string, error) {
+// channelTagsDescending lists remote tags for the given channel, newest first.
+func channelTagsDescending(channel string) ([]string, error) {
 	remote := git.NewRemote(nil, &gitConfig.RemoteConfig{
 		Name: "origin",
 		URLs: []string{"https://github.com/GhostWriters/DockSTARTer2.git"},
@@ -487,10 +503,10 @@ func latestChannelTag(channel string) (string, error) {
 
 	refs, err := remote.List(&git.ListOptions{})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	latest := ""
+	var tags []string
 	for _, ref := range refs {
 		if !ref.Name().IsTag() {
 			continue
@@ -499,11 +515,12 @@ func latestChannelTag(channel string) (string, error) {
 		if GetChannelFromVersion(tagName) != channel {
 			continue
 		}
-		if compareVersions(tagName, latest) > 0 {
-			latest = tagName
-		}
+		tags = append(tags, tagName)
 	}
-	return latest, nil
+	sort.Slice(tags, func(i, j int) bool {
+		return compareVersions(tags[i], tags[j]) > 0
+	})
+	return tags, nil
 }
 
 // GetCurrentChannel returns the update channel based on the current version string.
