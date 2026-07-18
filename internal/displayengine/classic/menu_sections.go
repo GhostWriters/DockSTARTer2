@@ -456,13 +456,17 @@ func (m *MenuModel) SectionHeight(sectionWidth int) int {
 		// section whose height depends on dynamic subtitle/task-list/
 		// progress-bar content, not a single fixed line.
 		return m.SectionHeightOverride(sectionWidth)
-	case m.plainText != "":
+	case m.isPlainTextKind:
 		// Borderless kind -- no BorderHeight contribution, unlike every other
-		// case here. Measure the actual rendered line count (word-wrap aware)
+		// case here. Empty text (a subtitle not yet set) takes zero rows.
+		// Otherwise measure the actual rendered line count (word-wrap aware)
 		// rather than assuming 1, matching how the plain-list subtitle height
 		// is measured in menu_update.go's calculateLayout. Measured at
 		// sectionWidth directly (not via m.width) since SectionHeight is
 		// called before this section's own SetSize has assigned m.width.
+		if m.plainText == "" {
+			return 0
+		}
 		return lipgloss.Height(m.renderPlainText(sectionWidth))
 	case m.flowMode:
 		flowContentW := sectionWidth - layout.BorderWidth()
@@ -490,7 +494,10 @@ func (m *MenuModel) SectionHeight(sectionWidth int) int {
 // sinput have no narrower natural width than whatever they're given, so
 // they simply return maxWidth.
 func (m *MenuModel) SectionNaturalWidth(maxWidth int) int {
-	if m.plainText != "" {
+	if m.isPlainTextKind {
+		if m.plainText == "" {
+			return 0
+		}
 		natural := lipgloss.Width(RenderThemeText(m.plainTextThemeTag + m.plainText))
 		if natural > maxWidth {
 			natural = maxWidth

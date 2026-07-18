@@ -18,7 +18,7 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	// hover, or focus -- never in Tab-cycling (Focusable() is false) and
 	// never routed through the list/subtitle/section hit-region math below,
 	// which assumes the standard list rendering path.
-	if m.plainText != "" {
+	if m.isPlainTextKind {
 		return regions
 	}
 

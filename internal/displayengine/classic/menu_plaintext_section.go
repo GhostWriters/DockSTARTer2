@@ -6,11 +6,12 @@ package classic
 // Content kind) rather than special-cased subtitle layout/render logic.
 // text is wrapped in the {{|Subtitle|}} theme tag, matching the styling the
 // plain-list subtitle rendering already uses (menu_render.go's viewSubMenu
-// and non-sectioned ViewString tail). Never call this with an empty string --
-// callers should simply not add a section at all when there is no subtitle,
-// so it takes zero space rather than rendering an empty line.
+// and non-sectioned ViewString tail). text may be "" for a section whose
+// content is set later via SetPlainText (e.g. ProgramBoxModel's
+// SetProgramBoxHeaderMsg) -- it renders as zero space until then.
 func NewPlainTextSection(id, text string) *MenuModel {
 	m := NewMenuModel(id, "", "", nil)
+	m.isPlainTextKind = true
 	m.plainText = text
 	m.plainTextThemeTag = "{{|Subtitle|}}"
 	m.SetSubMenuMode(true)
