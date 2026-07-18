@@ -367,32 +367,6 @@ func (d *WebDisplayDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	if kp, ok := msg.(tea.KeyPressMsg); ok && d.isBrowserDefault() {
-		if key.Matches(kp, displayengine.Keys.CycleTab) {
-			fs := d.outer.GetFocusedSection()
-			if fs == 0 {
-				// Tab from default section → skip familyMenu (disabled) and
-				// sizeSection (also disabled, forced to the default), land
-				// on refreshSection, the row's second child.
-				d.outer.SetFocusedSection(2)
-				if row, ok := d.outer.GetContentSections()[2].(*displayengine.ContentRow); ok {
-					row.SetSubFocusIndex(1)
-				}
-				return d, nil
-			}
-		}
-		if key.Matches(kp, displayengine.Keys.CycleShiftTab) {
-			fs := d.outer.GetFocusedSection()
-			row, isRow := d.outer.GetContentSections()[2].(*displayengine.ContentRow)
-			if fs == 2 && (!isRow || row.SubFocusIndex() == 1) {
-				// Shift-Tab from refreshSection (or the row generally, if we
-				// can't tell which child) → skip sizeSection/familyMenu
-				// (both disabled), go to default section.
-				d.outer.SetFocusedSection(0)
-				return d, nil
-			}
-		}
-	}
 
 	switch msg.(type) {
 	case applyWebDisplayMsg:

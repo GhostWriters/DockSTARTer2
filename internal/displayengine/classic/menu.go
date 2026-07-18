@@ -659,7 +659,7 @@ func (m *MenuModel) SetWantsAllMessages(v bool) {
 // non-focusable via SetNonFocusable; every other kind can receive Tab focus.
 // Part of the Content interface.
 func (m *MenuModel) Focusable() bool {
-	return m.plainText == "" && !m.nonFocusable
+	return m.plainText == "" && !m.nonFocusable && !m.disabled
 }
 
 // SetBorderless skips viewSubMenu's outer bordered-box wrap for this

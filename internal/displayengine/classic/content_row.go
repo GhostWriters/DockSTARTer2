@@ -82,6 +82,29 @@ func (r *ContentRow) NumTabStops() int {
 	return len(r.items)
 }
 
+// NextFocusableSub returns the next child index after from that is
+// Focusable() (e.g. skipping a disabled sibling like Font Size when browser
+// defaults are forced), or (-1, false) if none remains.
+func (r *ContentRow) NextFocusableSub(from int) (int, bool) {
+	for i := from + 1; i < len(r.items); i++ {
+		if r.items[i].Focusable() {
+			return i, true
+		}
+	}
+	return -1, false
+}
+
+// PrevFocusableSub returns the previous child index before from that is
+// Focusable(), or (-1, false) if none remains.
+func (r *ContentRow) PrevFocusableSub(from int) (int, bool) {
+	for i := from - 1; i >= 0; i-- {
+		if r.items[i].Focusable() {
+			return i, true
+		}
+	}
+	return -1, false
+}
+
 // Items returns the row's child Content items, in left-to-right order.
 func (r *ContentRow) Items() []Content {
 	return r.items
