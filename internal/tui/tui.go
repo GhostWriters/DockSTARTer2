@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -562,12 +563,12 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 		fmt.Print("\x1b[0m\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1049l\n")
 	}
 
-	if err != nil {
+	if err != nil && !errors.Is(err, tea.ErrInterrupted) {
 		logger.FatalWithStack(ctx, "TUI Error: %v", err)
 	}
 
 	// Check if the model exited via ForceQuit (ctrl-c)
-	if m, ok := finalModel.(*AppModel); ok && m.Fatal {
+	if m, ok := finalModel.(*AppModel); errors.Is(err, tea.ErrInterrupted) || (ok && m.Fatal) {
 		logger.TUIMode = false
 		console.AbortHandler(ctx)
 		return ErrUserAborted
@@ -689,11 +690,11 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 		fmt.Print("\x1b[0m\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1049l\n")
 	}
 
-	if err != nil {
+	if err != nil && !errors.Is(err, tea.ErrInterrupted) {
 		logger.FatalWithStack(ctx, "TUI Error: %v", err)
 	}
 
-	if m, ok := finalModel.(*AppModel); ok && m.Fatal {
+	if m, ok := finalModel.(*AppModel); errors.Is(err, tea.ErrInterrupted) || (ok && m.Fatal) {
 		logger.TUIMode = false
 		console.AbortHandler(ctx)
 		return ErrUserAborted
@@ -851,11 +852,11 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 		fmt.Print("\x1b[0m\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1049l\n")
 	}
 
-	if err != nil {
+	if err != nil && !errors.Is(err, tea.ErrInterrupted) {
 		logger.FatalWithStack(ctx, "TUI Error: %v", err)
 	}
 
-	if m, ok := finalModel.(*AppModel); ok && m.Fatal {
+	if m, ok := finalModel.(*AppModel); errors.Is(err, tea.ErrInterrupted) || (ok && m.Fatal) {
 		logger.TUIMode = false
 		console.AbortHandler(ctx)
 		return ErrUserAborted
