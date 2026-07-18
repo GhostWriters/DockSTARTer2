@@ -1284,7 +1284,7 @@ func TriggerUpdate() tea.Cmd {
 			return err
 		}
 
-		dialog := NewProgramBoxModel("Updating DockSTARTer2", "Updating DockSTARTer2 to the latest version.", CmdLine("--update")).WithDialogType(displayengine.DialogTypeSuccess)
+		dialog := NewProgramBoxModel("Updating DockSTARTer2", "Updating DockSTARTer2 and Templates to the latest versions.", CmdLine("--update")).WithDialogType(displayengine.DialogTypeSuccess)
 		dialog.SetTask(task)
 		dialog.SetIsDialog(true)
 		dialog.SetMaximized(true)
