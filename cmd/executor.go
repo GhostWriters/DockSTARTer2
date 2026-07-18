@@ -305,6 +305,12 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			switch group.Command {
 			case "-c", "--compose":
 				subtitle = commands.ComposeSubtitle(&group)
+			case "-u", "--update":
+				subtitle = fmt.Sprintf("Updating %s and Templates to the latest versions.", version.ApplicationName)
+			case "--update-app":
+				subtitle = fmt.Sprintf("Updating %s.", version.ApplicationName)
+			case "--update-templates":
+				subtitle = "Updating app templates."
 			}
 			err := tui.RunCommand(ctx, title, subtitle, cmdLine, task)
 			if err != nil {
