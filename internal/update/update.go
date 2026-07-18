@@ -5,8 +5,12 @@ var (
 	AppUpdateAvailable bool
 	// TmplUpdateAvailable is true if a template update is available.
 	TmplUpdateAvailable bool
-	// UpdateCheckError is true if the last update check failed due to network/timeout errors.
-	UpdateCheckError bool
+	// AppUpdateCheckError is true if the last application update check failed
+	// due to network/timeout errors.
+	AppUpdateCheckError bool
+	// TmplUpdateCheckError is true if the last templates update check failed
+	// due to network/timeout errors.
+	TmplUpdateCheckError bool
 	// LatestAppVersion is the tag name of the latest application release.
 	LatestAppVersion string
 	// LatestTmplVersion is the short hash of the latest template commit.
