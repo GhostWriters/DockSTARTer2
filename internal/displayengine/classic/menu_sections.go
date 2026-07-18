@@ -119,11 +119,12 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			// A ContentRow contributes one Tab stop per child (Left/Right at
 			// this level already means "jump to the button row," so a row
 			// can't also claim it for intra-row navigation -- Tab must visit
-			// each child individually instead).
+			// each child individually instead), skipping any disabled child
+			// (e.g. Font Size, forced off when browser defaults are on).
 			if m.focusedSection >= 0 && m.focusedSection < n && m.focusedItem == FocusList {
 				if row, ok := m.contentSections[m.focusedSection].(*ContentRow); ok {
-					if row.SubFocusIndex() < row.NumTabStops()-1 {
-						row.SetSubFocusIndex(row.SubFocusIndex() + 1)
+					if i, ok := row.NextFocusableSub(row.SubFocusIndex()); ok {
+						row.SetSubFocusIndex(i)
 						cmd := m.updateSectionFocus()
 						m.InvalidateCache()
 						return m, cmd, true
@@ -141,7 +142,9 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				m.focusedSection = next
 				m.focusedItem = FocusList
 				if row, ok := m.contentSections[next].(*ContentRow); ok {
-					row.SetSubFocusIndex(0)
+					if i, ok := row.NextFocusableSub(-1); ok {
+						row.SetSubFocusIndex(i)
+					}
 				}
 			}
 			cmd := m.updateSectionFocus()
@@ -151,8 +154,8 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		if key.Matches(msg, Keys.CycleShiftTab) {
 			if m.focusedSection >= 0 && m.focusedSection < n && m.focusedItem == FocusList {
 				if row, ok := m.contentSections[m.focusedSection].(*ContentRow); ok {
-					if row.SubFocusIndex() > 0 {
-						row.SetSubFocusIndex(row.SubFocusIndex() - 1)
+					if i, ok := row.PrevFocusableSub(row.SubFocusIndex()); ok {
+						row.SetSubFocusIndex(i)
 						cmd := m.updateSectionFocus()
 						m.InvalidateCache()
 						return m, cmd, true
@@ -167,18 +170,22 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				prev--
 			}
 			if prev < 0 {
-				// No focusable section before this point -- clamp forward to
-				// the first focusable section instead (mirrors the pre-skip
-				// logic's clamp-to-0 behavior for the flat-index case).
-				prev = 0
-				for prev < n && !m.contentSections[prev].Focusable() {
-					prev++
-				}
+				// Shift-Tab off the front lands on the buttons, mirroring
+				// Tab's forward overflow landing on the buttons (next >= n
+				// above) rather than wrapping straight past them to the last
+				// section.
+				m.focusedSection = -1
+				m.focusedItem = FocusSelectBtn
+				cmd := m.updateSectionFocus()
+				m.InvalidateCache()
+				return m, cmd, true
 			}
 			m.focusedSection = prev
 			m.focusedItem = FocusList
 			if row, ok := m.contentSections[m.focusedSection].(*ContentRow); ok {
-				row.SetSubFocusIndex(row.NumTabStops() - 1)
+				if i, ok := row.PrevFocusableSub(row.NumTabStops()); ok {
+					row.SetSubFocusIndex(i)
+				}
 			}
 			cmd := m.updateSectionFocus()
 			m.InvalidateCache()
