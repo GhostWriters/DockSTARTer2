@@ -180,7 +180,12 @@ func (m *MenuModel) ViewString() string {
 	// Plain-text kind: a single borderless, theme-styled line -- e.g. a
 	// dialog's subtitle expressed as its own content section. Checked before
 	// subMenuMode since a plain-text section never wants viewSubMenu's border.
-	if m.plainText != "" {
+	// Empty text (a subtitle not yet set) renders as nothing, not viewSubMenu's
+	// bordered empty-list box.
+	if m.isPlainTextKind {
+		if m.plainText == "" {
+			return ""
+		}
 		return m.viewPlainText()
 	}
 

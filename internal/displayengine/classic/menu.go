@@ -186,10 +186,16 @@ type MenuModel struct {
 	// only via SetNonFocusable.
 	nonFocusable bool
 
-	// plainText, when non-empty, makes this MenuModel render as a borderless,
-	// non-focusable single line of theme-styled text instead of a list --
-	// the "plain text" Content kind, used e.g. for a dialog's subtitle
-	// expressed as its own content section. Set only via NewPlainTextSection.
+	// isPlainTextKind marks this MenuModel as the "plain text" Content kind
+	// (set only via NewPlainTextSection) -- a borderless, non-focusable
+	// single line of theme-styled text instead of a list, used e.g. for a
+	// dialog's subtitle expressed as its own content section. Kept separate
+	// from plainText being non-empty so a plain-text section constructed
+	// with "" (a subtitle set later, e.g. ProgramBoxModel's
+	// SetProgramBoxHeaderMsg) still renders as zero-height/borderless
+	// instead of falling through to viewSubMenu's bordered list rendering.
+	isPlainTextKind bool
+	// plainText holds the plain-text kind's current line of text.
 	plainText string
 	// plainTextThemeTag wraps plainText for RenderThemeText -- "{{|Subtitle|}}"
 	// for menu subtitles (default), "" for dialog question/body text that
@@ -659,7 +665,7 @@ func (m *MenuModel) SetWantsAllMessages(v bool) {
 // non-focusable via SetNonFocusable; every other kind can receive Tab focus.
 // Part of the Content interface.
 func (m *MenuModel) Focusable() bool {
-	return m.plainText == "" && !m.nonFocusable && !m.disabled
+	return !m.isPlainTextKind && !m.nonFocusable && !m.disabled
 }
 
 // SetBorderless skips viewSubMenu's outer bordered-box wrap for this
