@@ -66,7 +66,9 @@ func NewConfigMenuScreen(isRoot bool, connType string) tui.ScreenModel {
 	}
 
 	list := displayengine.NewMenuModel(displayengine.IDListPanel, "", "", items)
-	list.SetMenuName("")
+	// Unique key for cursor-position persistence, distinct from other
+	// screens' lists that share the IDListPanel id.
+	list.SetMenuName("config_menu")
 	list.SetConnType(connType)
 	list.SetHelpPageText("Docker and " + version.ApplicationName + " configuration tasks. Run the full setup wizard, edit environment variables, enable or disable applications, and manage your running containers.")
 	list.SetHelpItemPrefix("Action")
