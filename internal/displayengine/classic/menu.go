@@ -244,6 +244,7 @@ type MenuModel struct {
 	renderVersion       int // Incremented on item changes to invalidate list cache and top-level view cache
 	showLockGutter      bool
 	noLeftMargin        bool
+	tabEntersButtons    bool // Tab/Shift-Tab wrap into the button row at the end of the section cycle; off by default (Left/Right always reach buttons regardless)
 	statusGutterWidth   int
 	activityGutterWidth int
 	itemPaddingWidth    int    // Optional padding after getters
@@ -583,6 +584,15 @@ func (m *MenuModel) SetNoLeftMargin(v bool) {
 	m.renderVersion++
 }
 
+// SetTabEntersButtons controls whether Tab/Shift-Tab wrap into the button row
+// at the end of the content-section cycle. Off by default: Enter already
+// activates the dual-focused button from any section, and Left/Right always
+// reach every button regardless of this setting, so most dialogs don't need
+// Tab as a third path there.
+func (m *MenuModel) SetTabEntersButtons(v bool) {
+	m.tabEntersButtons = v
+}
+
 // Title returns the menu title
 func (m *MenuModel) Title() string {
 	return m.title
@@ -753,11 +763,21 @@ func (m *MenuModel) SetFocusedItem(item FocusItem) {
 	m.focusedItem = item
 }
 
+// GetFocusedItem returns which UI element currently has focus (list or a button).
+func (m *MenuModel) GetFocusedItem() FocusItem {
+	return m.focusedItem
+}
+
 // SetFocusedBtnIndex sets the focused button index within the buttons slice.
 func (m *MenuModel) SetFocusedBtnIndex(idx int) {
 	m.focusedBtnIndex = idx
 	m.focusedItem = FocusBtn
 	m.InvalidateCache()
+}
+
+// GetFocusedBtnIndex returns the index of the currently focused button.
+func (m *MenuModel) GetFocusedBtnIndex() int {
+	return m.focusedBtnIndex
 }
 
 // SetButtons replaces the button row with an arbitrary slice of ButtonDef entries.
