@@ -66,6 +66,10 @@ func (m *MenuModel) updateSection(i int, msg tea.Msg) tea.Cmd {
 	}
 	if !wasProcessing && sec.IsProcessing() && len(m.buttons) > 0 {
 		m.btnRow.MarkProcessing(m.buttons[0].ZoneID)
+		// Specs() highlights both the focused index and whatever's
+		// processing independently, so keep them pointing at the same button.
+		m.focusedItem = FocusBtn
+		m.focusedBtnIndex = 0
 	}
 	return cmd
 }
@@ -222,6 +226,16 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				}
 				cmd := m.updateSection(m.focusedSection, msg)
 				m.InvalidateCache()
+				// Enter left unhandled by the section (nil cmd) activates the
+				// outer's own "btn-select" button instead.
+				if cmd == nil && key.Matches(msg, Keys.Enter) {
+					for _, btn := range m.buttons {
+						if btn.ZoneID == "btn-select" && btn.Action != nil {
+							action := btn.Action
+							return m, m.SetProcessingBtnDeferred(btn.ZoneID, func() tea.Msg { return action() }), true
+						}
+					}
+				}
 				return m, cmd, true
 			}
 			// Dual-focus: button is highlighted but section still active.

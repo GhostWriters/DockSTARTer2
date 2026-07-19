@@ -800,6 +800,10 @@ func (m *MenuModel) SetFocused(f bool) {
 			m.titleSpinner.Stop()
 		}
 		m.btnRow.Clear()
+		// Screens are reused pointers across Back navigation, not
+		// reconstructed, so focus must be reset explicitly here.
+		m.focusedItem = FocusList
+		m.focusedBtnIndex = 0
 	}
 	m.updateDelegate()
 	m.InvalidateCache()
