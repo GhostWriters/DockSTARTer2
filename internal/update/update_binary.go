@@ -36,6 +36,18 @@ func latestChannelTag(channel string) (string, error) {
 	return tags[0], nil
 }
 
+// getUpdater returns a configured selfupdate.Updater for the given channel.
+func getUpdater(_ context.Context, channel string) (*selfupdate.Updater, error) {
+	cfg := selfupdate.Config{}
+	// Only allow prereleases if the user is on a prerelease/dev channel
+	if !strings.EqualFold(channel, "stable") {
+		cfg.Prerelease = true
+	} else {
+		cfg.Prerelease = false
+	}
+	return selfupdate.NewUpdater(cfg)
+}
+
 // SelfUpdate handles updating the application binary using GitHub Releases.
 func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion string, restArgs []string) error {
 	// Get current executable path for logging later
@@ -117,6 +129,11 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 				attempts = maxChannelTagFallbacks
 			}
 			for _, tag := range tags[:attempts] {
+				// Skip the real API call (DetectVersion) entirely for tags
+				// that don't even have this platform's asset published yet.
+				if !assetExistsForTag(ctx, tag) {
+					continue
+				}
 				latest, found, err = updater.DetectVersion(ctx, repo, tag)
 				if err == nil && found {
 					break

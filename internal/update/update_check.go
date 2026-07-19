@@ -3,8 +3,10 @@ package update
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -18,9 +20,9 @@ import (
 	"DockSTARTer2/internal/version"
 
 	"github.com/Masterminds/semver/v3"
-	selfupdate "github.com/creativeprojects/go-selfupdate"
 	"github.com/go-git/go-git/v5"
 	gitConfig "github.com/go-git/go-git/v5/config"
+	"github.com/go-git/go-git/v5/plumbing"
 )
 
 // CheckCurrentStatus verifies if the current channel still exists on GitHub.
@@ -63,14 +65,14 @@ func CheckTmplUpdate(ctx context.Context) (updateAvailable bool) {
 }
 
 const updateCheckCacheFile = "update_check"
-const updateCheckCacheDuration = 24 * time.Hour
+const updateCheckCacheDuration = 15 * time.Minute
 
 func updateCheckTimestampPath() string {
 	return filepath.Join(paths.GetTimestampsDir(), updateCheckCacheFile)
 }
 
 // updateCheckFresh returns true if the update check timestamp is less than
-// 24 hours old, meaning we can skip the network check.
+// updateCheckCacheDuration old, meaning we can skip the network check.
 func updateCheckFresh() bool {
 	info, err := os.Stat(updateCheckTimestampPath())
 	return err == nil && time.Since(info.ModTime()) < updateCheckCacheDuration
@@ -89,9 +91,25 @@ func touchUpdateCheckTimestamp() {
 	}
 }
 
+// CheckUpdatesIfDue runs CheckAppUpdate/CheckTmplUpdate only if the shared
+// updateCheckCacheDuration cache has expired, touching the shared timestamp
+// on completion so this and CheckUpdates never both fire within the window.
+// Reports whether a check actually ran. Callers that already hold onto the
+// pre-call AppUpdateAvailable/TmplUpdateAvailable values can diff them
+// against the post-call globals to detect a state change worth acting on.
+func CheckUpdatesIfDue(ctx context.Context) (ran bool) {
+	if updateCheckFresh() {
+		return false
+	}
+	CheckAppUpdate(ctx)
+	CheckTmplUpdate(ctx)
+	touchUpdateCheckTimestamp()
+	return true
+}
+
 // CheckUpdates performs a startup update check and notifies the user if updates
-// are available. Skipped if the check was performed within the last 24 hours,
-// unless --force is set.
+// are available. Skipped if the check was performed within
+// updateCheckCacheDuration, unless --force is set.
 func CheckUpdates(ctx context.Context) {
 	if !console.Force() && updateCheckFresh() {
 		return
@@ -293,9 +311,6 @@ func dockerStatus(ctx context.Context) dockercheck.Status {
 const maxChannelTagFallbacks = 3
 
 func checkAppUpdate(ctx context.Context) (updateAvailable bool, ver string, hadError bool) {
-	slug := "GhostWriters/DockSTARTer2"
-	repo := selfupdate.ParseSlug(slug)
-
 	channel := GetCurrentChannel()
 
 	// Quick check using git ls-remote to see if tags for this channel exist.
@@ -308,28 +323,51 @@ func checkAppUpdate(ctx context.Context) (updateAvailable bool, ver string, hadE
 		return false, "", false
 	}
 
-	updater, err := getUpdater(ctx, channel)
-	if err != nil {
-		return false, "", true
-	}
-
-	// Try newest tag first, falling back to older tags with a published release.
+	// Try newest tag first, falling back to older tags with a published
+	// release. Uses a HEAD request against the release asset's direct
+	// download URL (assetExistsForTag) rather than go-selfupdate's
+	// DetectVersion, so this check never touches the GitHub REST API at
+	// all -- only SelfUpdate, when an update is actually applied, does.
 	attempts := len(channelTags)
 	if attempts > maxChannelTagFallbacks {
 		attempts = maxChannelTagFallbacks
 	}
 	for _, tag := range channelTags[:attempts] {
-		latest, found, err := updater.DetectVersion(ctx, repo, tag)
-		if err != nil || !found {
+		if !assetExistsForTag(ctx, tag) {
 			continue
 		}
-		if compareVersions(latest.Version(), version.Version) > 0 {
-			return true, latest.Version(), false
+		if compareVersions(tag, version.Version) > 0 {
+			return true, tag, false
 		}
 		return false, version.Version, false
 	}
 
 	return false, "", true
+}
+
+// assetExistsForTag reports whether the release asset for this platform
+// exists for the given tag, via a HEAD request against its direct download
+// URL -- github.com's release-download path isn't subject to the REST API's
+// rate limits, unlike go-selfupdate's DetectVersion. Asset name must match
+// .goreleaser.yaml's archive name_template
+// ({{.ProjectName}}_{{.Version}}_{{.Os}}_{{.Arch}}.tar.gz).
+func assetExistsForTag(ctx context.Context, tag string) bool {
+	assetVersion := strings.TrimPrefix(tag, "v")
+	assetName := fmt.Sprintf("ds2_%s_%s_%s.tar.gz", assetVersion, runtime.GOOS, runtime.GOARCH)
+	url := fmt.Sprintf("https://github.com/GhostWriters/DockSTARTer2/releases/download/%s/%s", tag, assetName)
+
+	reqCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodHead, url, nil)
+	if err != nil {
+		return false
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode == http.StatusOK
 }
 
 func checkTmplUpdate(_ context.Context) (updateAvailable bool, ver string, hadError bool) {
@@ -341,6 +379,26 @@ func checkTmplUpdate(_ context.Context) (updateAvailable bool, ver string, hadEr
 	repo, err := git.PlainOpen(templatesDir)
 	if err != nil {
 		return false, "", false // Not an error - just no git repo yet
+	}
+
+	head, err := repo.Head()
+	if err != nil {
+		return false, "", false // Repo issue, not network error
+	}
+
+	// Determine which remote branch to compare against (stay on current branch)
+	currentBranch := "main"
+	if head.Name().IsBranch() {
+		currentBranch = head.Name().Short()
+	}
+
+	// remoteBranchUnchanged does a cheap ref listing (git ls-remote, not a
+	// fetch -- no objects downloaded) and skips the real fetch below when the
+	// remote branch tip's hash matches what the last real fetch already
+	// cached in refs/remotes/origin/<branch>, since that's the only ref
+	// resolveTemplatesTarget's reachable-tag search can walk from.
+	if unchanged, err := remoteBranchUnchanged(repo, currentBranch); err == nil && unchanged {
+		return false, paths.GetTemplatesVersion(), false
 	}
 
 	// Fetch updates with timeout
@@ -356,18 +414,6 @@ func checkTmplUpdate(_ context.Context) (updateAvailable bool, ver string, hadEr
 		return false, "", true
 	}
 
-	// Compare current HEAD with the remote tracking branch for the current branch
-	head, err := repo.Head()
-	if err != nil {
-		return false, "", false // Repo issue, not network error
-	}
-
-	// Determine which remote branch to compare against (stay on current branch)
-	currentBranch := "main"
-	if head.Name().IsBranch() {
-		currentBranch = head.Name().Short()
-	}
-
 	// resolveTemplatesTarget applies the same main-means-latest-reachable-tag
 	// policy as the real update flow in update_templates.go, so this
 	// indicator never disagrees with it.
@@ -381,6 +427,49 @@ func checkTmplUpdate(_ context.Context) (updateAvailable bool, ver string, hadEr
 	}
 
 	return false, paths.GetTemplatesVersion(), false
+}
+
+// remoteBranchUnchanged reports whether origin/branch's tip on the remote
+// still matches the locally cached refs/remotes/origin/branch ref, via a
+// git ls-remote-equivalent ref listing (no objects downloaded, unlike
+// FetchContext). A cache miss (ref doesn't exist locally yet) or list error
+// is reported as changed/unknown so the caller falls through to a real fetch.
+func remoteBranchUnchanged(repo *git.Repository, branch string) (bool, error) {
+	cached, err := repo.Reference(plumbing.ReferenceName("refs/remotes/origin/"+branch), true)
+	if err != nil {
+		return false, err
+	}
+
+	remoteURLs, err := remoteURLsFor(repo, "origin")
+	if err != nil {
+		return false, err
+	}
+	remote := git.NewRemote(nil, &gitConfig.RemoteConfig{Name: "origin", URLs: remoteURLs})
+	refs, err := remote.List(&git.ListOptions{})
+	if err != nil {
+		return false, err
+	}
+
+	branchRefName := plumbing.NewBranchReferenceName(branch)
+	for _, ref := range refs {
+		if ref.Name() == branchRefName {
+			return ref.Hash() == cached.Hash(), nil
+		}
+	}
+	return false, fmt.Errorf("remote branch %s not found", branch)
+}
+
+// remoteURLsFor returns the configured URLs for the given remote name.
+func remoteURLsFor(repo *git.Repository, name string) ([]string, error) {
+	cfg, err := repo.Config()
+	if err != nil {
+		return nil, err
+	}
+	remoteCfg, ok := cfg.Remotes[name]
+	if !ok {
+		return nil, fmt.Errorf("remote %s not configured", name)
+	}
+	return remoteCfg.URLs, nil
 }
 
 // compareVersions compares two version strings and returns:
@@ -482,17 +571,6 @@ func compareVersions(v1, v2 string) int {
 	return 0
 }
 
-// getUpdater returns a configured selfupdate.Updater for the given channel.
-func getUpdater(_ context.Context, channel string) (*selfupdate.Updater, error) {
-	cfg := selfupdate.Config{}
-	// Only allow prereleases if the user is on a prerelease/dev channel
-	if !strings.EqualFold(channel, "stable") {
-		cfg.Prerelease = true
-	} else {
-		cfg.Prerelease = false
-	}
-	return selfupdate.NewUpdater(cfg)
-}
 
 // channelTagsDescending lists remote tags for the given channel, newest first.
 func channelTagsDescending(channel string) ([]string, error) {
