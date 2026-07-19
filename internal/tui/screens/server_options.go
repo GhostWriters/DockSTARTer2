@@ -16,24 +16,13 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-// ServerOptionsFocus defines which area of the screen has focus.
-type ServerOptionsFocus int
-
-const (
-	FocusServerSettings ServerOptionsFocus = iota
-	FocusServerStatus
-	FocusServerButtons
-)
-
 // ServerOptionsScreen allows the user to configure the SSH (and web) server.
 type ServerOptionsScreen struct {
 	settingsMenu *displayengine.MenuModel
 	statusMenu   *displayengine.MenuModel
 	outerMenu    *displayengine.MenuModel
 
-	focusedPanel  ServerOptionsFocus
-	focusedButton int
-	isRoot        bool
+	isRoot bool
 
 	config   config.AppConfig
 	connType string
@@ -75,12 +64,12 @@ func (s *ServerOptionsScreen) initMenus() {
 	outerMenu := displayengine.NewMenuModel("server_outer", "Server Settings", "", nil)
 	if s.isRoot {
 		outerMenu.SetButtons([]displayengine.ButtonDef{
-			{Label: "Apply", ZoneID: displayengine.IDApplyButton, Help: "Apply and save server settings."},
+			{Label: "Apply", ZoneID: "btn-select", Action: s.handleApply(), Help: "Apply and save server settings."},
 			{Label: "Exit", ZoneID: displayengine.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
 		})
 	} else {
 		outerMenu.SetButtons([]displayengine.ButtonDef{
-			{Label: "Apply", ZoneID: displayengine.IDApplyButton, Help: "Apply and save server settings."},
+			{Label: "Apply", ZoneID: "btn-select", Action: s.handleApply(), Help: "Apply and save server settings."},
 			{Label: "Back", ZoneID: displayengine.IDBackButton, Action: outerBack, Help: "Return to the previous screen."},
 			{Label: "Exit", ZoneID: displayengine.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
 		})
@@ -89,9 +78,7 @@ func (s *ServerOptionsScreen) initMenus() {
 	outerMenu.AddContentSection(s.settingsMenu)
 	outerMenu.AddContentSection(s.statusMenu)
 	s.outerMenu = outerMenu
-
-	s.focusedPanel = FocusServerSettings
-	s.updateFocusStates()
+	s.outerMenu.SetFocused(s.focused)
 }
 
 func (s *ServerOptionsScreen) buildSettingsMenu() *displayengine.MenuModel {
@@ -220,6 +207,15 @@ func (s *ServerOptionsScreen) buildStatusMenu() *displayengine.MenuModel {
 // refreshStatus rebuilds the status menu from live session data and reconnects
 // it to the outer menu (which uses a slice reference that must be replaced).
 func (s *ServerOptionsScreen) refreshStatus() {
+	// Preserve focus position across the rebuild below.
+	var focusedSection, focusedBtnIndex int
+	var focusedItem displayengine.FocusItem
+	if s.outerMenu != nil {
+		focusedSection = s.outerMenu.GetFocusedSection()
+		focusedItem = s.outerMenu.GetFocusedItem()
+		focusedBtnIndex = s.outerMenu.GetFocusedBtnIndex()
+	}
+
 	s.statusMenu = s.buildStatusMenu()
 	// Rebuild the outer container so it holds the updated section reference.
 	var outerBack tea.Cmd
@@ -229,12 +225,12 @@ func (s *ServerOptionsScreen) refreshStatus() {
 	outer := displayengine.NewMenuModel("server_outer", "Server Settings", "", nil)
 	if s.isRoot {
 		outer.SetButtons([]displayengine.ButtonDef{
-			{Label: "Apply", ZoneID: displayengine.IDApplyButton, Help: "Apply and save server settings."},
+			{Label: "Apply", ZoneID: "btn-select", Action: s.handleApply(), Help: "Apply and save server settings."},
 			{Label: "Exit", ZoneID: displayengine.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
 		})
 	} else {
 		outer.SetButtons([]displayengine.ButtonDef{
-			{Label: "Apply", ZoneID: displayengine.IDApplyButton, Help: "Apply and save server settings."},
+			{Label: "Apply", ZoneID: "btn-select", Action: s.handleApply(), Help: "Apply and save server settings."},
 			{Label: "Back", ZoneID: displayengine.IDBackButton, Action: outerBack, Help: "Return to the previous screen."},
 			{Label: "Exit", ZoneID: displayengine.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
 		})
@@ -246,8 +242,10 @@ func (s *ServerOptionsScreen) refreshStatus() {
 		outer.SetSize(s.width, s.height)
 	}
 	outer.SetFocused(s.focused)
+	outer.SetFocusedSection(focusedSection)
+	outer.SetFocusedBtnIndex(focusedBtnIndex)
+	outer.SetFocusedItem(focusedItem)
 	s.outerMenu = outer
-	s.updateFocusStates()
 }
 
 // syncSettingsMenu updates item labels/states from s.config without rebuilding.
@@ -504,47 +502,11 @@ func (s *ServerOptionsScreen) handleApply() tea.Cmd {
 
 // ── Focus ────────────────────────────────────────────────────────────────────
 
-func (s *ServerOptionsScreen) maxFocusedButton() int {
-	if s.isRoot {
-		return 1
-	}
-	return 2
-}
-
-func (s *ServerOptionsScreen) execFocusedButton() (tea.Model, tea.Cmd) {
-	switch s.focusedButton {
-	case 0:
-		return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDApplyButton, s.handleApply())
-	case 1:
-		if s.isRoot {
-			return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDExitButton, tui.ConfirmExitAction())
-		}
-		return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDBackButton, navigateBack())
-	case 2:
-		return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDExitButton, tui.ConfirmExitAction())
-	}
-	return s, nil
-}
-
-func (s *ServerOptionsScreen) updateFocusStates() {
-	s.settingsMenu.SetSubFocused(s.focused && s.focusedPanel == FocusServerSettings)
-	s.statusMenu.SetSubFocused(s.focused && s.focusedPanel == FocusServerStatus)
-
-	if s.outerMenu == nil {
-		return
-	}
-	s.outerMenu.SetFocused(s.focused)
-	if s.focusedPanel == FocusServerButtons {
-		s.outerMenu.SetFocusedBtnIndex(s.focusedButton)
-	} else {
-		s.outerMenu.SetFocusedItem(displayengine.FocusList)
-	}
-	s.outerMenu.InvalidateCache()
-}
-
 func (s *ServerOptionsScreen) SetFocused(f bool) {
 	s.focused = f
-	s.updateFocusStates()
+	if s.outerMenu != nil {
+		s.outerMenu.SetFocused(f)
+	}
 }
 
 // ── ScreenModel interface ────────────────────────────────────────────────────
@@ -558,10 +520,13 @@ func (s *ServerOptionsScreen) Title() string {
 }
 
 func (s *ServerOptionsScreen) HelpText() string {
-	if s.focusedPanel == FocusServerSettings {
-		return s.settingsMenu.HelpText()
+	if s.outerMenu == nil {
+		return ""
 	}
-	if s.focusedPanel == FocusServerStatus {
+	switch s.outerMenu.GetFocusedSection() {
+	case 0:
+		return s.settingsMenu.HelpText()
+	case 1:
 		return s.statusMenu.HelpText()
 	}
 	return "Tab to cycle panels, Enter to Apply, Esc to Cancel"
@@ -624,11 +589,13 @@ func (s *ServerOptionsScreen) HelpContext(maxWidth int) displayengine.HelpContex
 	pageText := "Configure remote access to the DS2 TUI. SSH must be enabled and configured before the web server can be used."
 
 	var inner displayengine.HelpContext
-	switch s.focusedPanel {
-	case FocusServerSettings:
-		inner = s.settingsMenu.HelpContext(maxWidth)
-	case FocusServerStatus:
-		inner = s.statusMenu.HelpContext(maxWidth)
+	if s.outerMenu != nil {
+		switch s.outerMenu.GetFocusedSection() {
+		case 0:
+			inner = s.settingsMenu.HelpContext(maxWidth)
+		case 1:
+			inner = s.statusMenu.HelpContext(maxWidth)
+		}
 	}
 
 	inner.ScreenName = screenName

@@ -139,6 +139,12 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			for next < n && !m.contentSections[next].Focusable() {
 				next++
 			}
+			if next >= n && !m.tabEntersButtons {
+				next = 0
+				for next < n && !m.contentSections[next].Focusable() {
+					next++
+				}
+			}
 			if next >= n {
 				m.focusedSection = -1
 				m.focusedItem = FocusSelectBtn
@@ -174,15 +180,21 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				prev--
 			}
 			if prev < 0 {
-				// Shift-Tab off the front lands on the buttons, mirroring
-				// Tab's forward overflow landing on the buttons (next >= n
-				// above) rather than wrapping straight past them to the last
-				// section.
-				m.focusedSection = -1
-				m.focusedItem = FocusSelectBtn
-				cmd := m.updateSectionFocus()
-				m.InvalidateCache()
-				return m, cmd, true
+				if m.tabEntersButtons {
+					m.focusedSection = -1
+					m.focusedItem = FocusSelectBtn
+					cmd := m.updateSectionFocus()
+					m.InvalidateCache()
+					return m, cmd, true
+				}
+				// Wrap to the last focusable section instead of the button row.
+				prev = n - 1
+				for prev >= 0 && !m.contentSections[prev].Focusable() {
+					prev--
+				}
+				if prev < 0 {
+					return m, nil, true
+				}
 			}
 			m.focusedSection = prev
 			m.focusedItem = FocusList

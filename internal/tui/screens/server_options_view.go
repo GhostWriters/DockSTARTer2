@@ -2,10 +2,7 @@ package screens
 
 import (
 	"DockSTARTer2/internal/displayengine"
-	"DockSTARTer2/internal/tui"
-	"strings"
 
-	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
@@ -21,284 +18,11 @@ func (s *ServerOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, action
 		}
 	}
-	if s.settingsMenu != nil {
-		if action := s.settingsMenu.AbsorbMessage(msg); action != nil {
-			return s, action
-		}
-	}
-	if s.statusMenu != nil {
-		if action := s.statusMenu.AbsorbMessage(msg); action != nil {
-			return s, action
-		}
-	}
-
-	var cmd tea.Cmd
-
-	// Forward drag/scroll done messages to inner menus.
-	switch dmsg := msg.(type) {
-	case displayengine.DragDoneMsg:
-		updated, c1 := s.settingsMenu.Update(dmsg)
-		if m, ok := updated.(*displayengine.MenuModel); ok {
-			s.settingsMenu = m
-		}
-		updated, c2 := s.statusMenu.Update(dmsg)
-		if m, ok := updated.(*displayengine.MenuModel); ok {
-			s.statusMenu = m
-		}
-		return s, tea.Batch(c1, c2)
-	case displayengine.ScrollDoneMsg:
-		updated, c1 := s.settingsMenu.Update(dmsg)
-		if m, ok := updated.(*displayengine.MenuModel); ok {
-			s.settingsMenu = m
-		}
-		updated, c2 := s.statusMenu.Update(dmsg)
-		if m, ok := updated.(*displayengine.MenuModel); ok {
-			s.statusMenu = m
-		}
-		return s, tea.Batch(c1, c2)
-	}
-
-	// Forward raw mouse drag/release to the dragging sub-menu.
-	if s.IsScrollbarDragging() {
-		target := s.settingsMenu
-		if s.statusMenu.IsScrollbarDragging() {
-			target = s.statusMenu
-		}
-		if _, ok := msg.(tea.MouseMotionMsg); ok {
-			updated, uCmd := target.Update(msg)
-			if m, ok := updated.(*displayengine.MenuModel); ok {
-				if target == s.settingsMenu {
-					s.settingsMenu = m
-				} else {
-					s.statusMenu = m
-				}
-			}
-			return s, uCmd
-		}
-		if _, ok := msg.(tea.MouseReleaseMsg); ok {
-			updated, uCmd := target.Update(msg)
-			if m, ok := updated.(*displayengine.MenuModel); ok {
-				if target == s.settingsMenu {
-					s.settingsMenu = m
-				} else {
-					s.statusMenu = m
-				}
-			}
-			return s, uCmd
-		}
-	}
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		s.SetSize(msg.Width, msg.Height)
 		return s, nil
-
-	case tea.MouseClickMsg:
-		return s, nil
-
-	case tea.MouseWheelMsg:
-		switch s.focusedPanel {
-		case FocusServerSettings:
-			updated, uCmd := s.settingsMenu.Update(msg)
-			if m, ok := updated.(*displayengine.MenuModel); ok {
-				s.settingsMenu = m
-			}
-			return s, uCmd
-		case FocusServerStatus:
-			updated, uCmd := s.statusMenu.Update(msg)
-			if m, ok := updated.(*displayengine.MenuModel); ok {
-				s.statusMenu = m
-			}
-			return s, uCmd
-		case FocusServerButtons:
-			maxBtn := s.maxFocusedButton()
-			switch msg.Button {
-			case tea.MouseWheelUp:
-				if s.focusedButton > 0 {
-					s.focusedButton--
-				}
-			case tea.MouseWheelDown:
-				if s.focusedButton < maxBtn {
-					s.focusedButton++
-				}
-			}
-			return s, nil
-		}
-
-	case displayengine.LayerHitMsg:
-		// Panel focus routing
-		switch msg.ID {
-		case "server_settings":
-			s.focusedPanel = FocusServerSettings
-			s.updateFocusStates()
-			return s, nil
-		case "server_status":
-			s.focusedPanel = FocusServerStatus
-			s.updateFocusStates()
-			return s, nil
-		case displayengine.IDButtonPanel:
-			s.focusedPanel = FocusServerButtons
-			s.updateFocusStates()
-			return s, nil
-		}
-
-		// Global button actions
-		if displayengine.ButtonIDMatches(msg.ID, displayengine.IDApplyButton) {
-			if msg.Button == tea.MouseLeft {
-				s.focusedPanel = FocusServerButtons
-				s.focusedButton = 0
-				s.updateFocusStates()
-				return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDApplyButton, s.handleApply())
-			}
-			if msg.Button == displayengine.HoverButton {
-				s.focusedPanel = FocusServerButtons
-				s.focusedButton = 0
-				s.updateFocusStates()
-				return s, nil
-			}
-		} else if displayengine.ButtonIDMatches(msg.ID, displayengine.IDBackButton) {
-			if msg.Button == tea.MouseLeft {
-				s.focusedPanel = FocusServerButtons
-				s.focusedButton = 1
-				s.updateFocusStates()
-				if s.isRoot {
-					return s, nil
-				}
-				return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDBackButton, navigateBack())
-			}
-			if msg.Button == displayengine.HoverButton {
-				s.focusedPanel = FocusServerButtons
-				s.focusedButton = 1
-				s.updateFocusStates()
-				return s, nil
-			}
-		} else if displayengine.ButtonIDMatches(msg.ID, displayengine.IDExitButton) {
-			if msg.Button == tea.MouseLeft {
-				s.focusedPanel = FocusServerButtons
-				s.focusedButton = s.maxFocusedButton()
-				s.updateFocusStates()
-				return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDExitButton, tui.ConfirmExitAction())
-			}
-			if msg.Button == displayengine.HoverButton {
-				s.focusedPanel = FocusServerButtons
-				s.focusedButton = s.maxFocusedButton()
-				s.updateFocusStates()
-				return s, nil
-			}
-		}
-
-		// Delegate to sub-menus
-		if strings.Contains(msg.ID, "server_settings") {
-			s.focusedPanel = FocusServerSettings
-			s.updateFocusStates()
-			updated, uCmd := s.settingsMenu.Update(msg)
-			if m, ok := updated.(*displayengine.MenuModel); ok {
-				s.settingsMenu = m
-			}
-			return s, uCmd
-		} else if strings.Contains(msg.ID, "server_status") {
-			s.focusedPanel = FocusServerStatus
-			s.updateFocusStates()
-			updated, uCmd := s.statusMenu.Update(msg)
-			if m, ok := updated.(*displayengine.MenuModel); ok {
-				s.statusMenu = m
-			}
-			return s, uCmd
-		}
-
-		// Title widget clicks — delegate to outerMenu
-		if s.outerMenu != nil && displayengine.IsTitleWidgetID(msg.ID) {
-			updated, uCmd := s.outerMenu.Update(msg)
-			if m, ok := updated.(*displayengine.MenuModel); ok {
-				s.outerMenu = m
-			}
-			return s, uCmd
-		}
-
-	case displayengine.ToggleFocusedMsg:
-		switch s.focusedPanel {
-		case FocusServerSettings:
-			updated, uCmd := s.settingsMenu.Update(msg)
-			if m, ok := updated.(*displayengine.MenuModel); ok {
-				s.settingsMenu = m
-			}
-			return s, uCmd
-		case FocusServerStatus:
-			updated, uCmd := s.statusMenu.Update(msg)
-			if m, ok := updated.(*displayengine.MenuModel); ok {
-				s.statusMenu = m
-			}
-			return s, uCmd
-		case FocusServerButtons:
-			return s.execFocusedButton()
-		}
-		return s, nil
-
-	case tea.KeyPressMsg:
-		// Title bar focus: delegate all keys to outer menu when its title bar is focused.
-		if s.outerMenu != nil && s.outerMenu.TitleBarFocused() {
-			updated, uCmd := s.outerMenu.Update(msg)
-			if m, ok := updated.(*displayengine.MenuModel); ok {
-				s.outerMenu = m
-			}
-			return s, uCmd
-		}
-
-		// Tab / Shift-Tab: cycle between panels
-		if key.Matches(msg, displayengine.Keys.CycleTab) || key.Matches(msg, displayengine.Keys.CycleShiftTab) {
-			switch s.focusedPanel {
-			case FocusServerSettings:
-				s.focusedPanel = FocusServerStatus
-			default:
-				s.focusedPanel = FocusServerSettings
-			}
-			s.updateFocusStates()
-			return s, nil
-		}
-
-		// Left/Right: cycle buttons
-		if key.Matches(msg, displayengine.Keys.Left) {
-			s.focusedPanel = FocusServerButtons
-			s.focusedButton--
-			if s.focusedButton < 0 {
-				s.focusedButton = s.maxFocusedButton()
-			}
-			s.updateFocusStates()
-			return s, nil
-		}
-		if key.Matches(msg, displayengine.Keys.Right) {
-			s.focusedPanel = FocusServerButtons
-			s.focusedButton++
-			if s.focusedButton > s.maxFocusedButton() {
-				s.focusedButton = 0
-			}
-			s.updateFocusStates()
-			return s, nil
-		}
-
-		if key.Matches(msg, displayengine.Keys.Enter) {
-			return s.execFocusedButton()
-		}
-
-		if key.Matches(msg, displayengine.Keys.Esc) {
-			return s, s.EscapeAction()
-		}
-
-		// Up/Down/Space: route to focused panel
-		switch s.focusedPanel {
-		case FocusServerSettings:
-			updated, uCmd := s.settingsMenu.Update(msg)
-			if m, ok := updated.(*displayengine.MenuModel); ok {
-				s.settingsMenu = m
-			}
-			return s, uCmd
-		case FocusServerStatus:
-			updated, uCmd := s.statusMenu.Update(msg)
-			if m, ok := updated.(*displayengine.MenuModel); ok {
-				s.statusMenu = m
-			}
-			return s, uCmd
-		}
 
 	case updateServerOptionMsg:
 		msg.update(&s.config)
@@ -317,19 +41,29 @@ func (s *ServerOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			s.outerMenu.InvalidateCache()
 		}
 		return s, nil
-
-	case displayengine.LockStateChangedMsg:
-		updated, c1 := s.settingsMenu.Update(msg)
-		if m, ok := updated.(*displayengine.MenuModel); ok {
-			s.settingsMenu = m
-		}
-		updated, c2 := s.statusMenu.Update(msg)
-		if m, ok := updated.(*displayengine.MenuModel); ok {
-			s.statusMenu = m
-		}
-		return s, tea.Batch(c1, c2)
 	}
 
+	if s.outerMenu == nil {
+		return s, nil
+	}
+	newOuter, cmd := s.outerMenu.Update(msg)
+	if m, ok := newOuter.(*displayengine.MenuModel); ok {
+		s.outerMenu = m
+	}
+	// Keep the named settingsMenu/statusMenu fields in sync with outerMenu's
+	// own content sections, since syncSettingsMenu/HelpText/HelpContext/etc.
+	// read them directly.
+	secs := s.outerMenu.GetContentSections()
+	if len(secs) >= 1 {
+		if mm, ok := secs[0].(*displayengine.MenuModel); ok {
+			s.settingsMenu = mm
+		}
+	}
+	if len(secs) >= 2 {
+		if mm, ok := secs[1].(*displayengine.MenuModel); ok {
+			s.statusMenu = mm
+		}
+	}
 	return s, cmd
 }
 

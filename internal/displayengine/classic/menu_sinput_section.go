@@ -108,7 +108,7 @@ func newSinputSectionWithEcho(id, title, initialValue string, echoMode textinput
 	m.SetUpdateInterceptor(func(msg tea.Msg, menu *MenuModel) (tea.Cmd, bool) {
 		switch msg := msg.(type) {
 		case tea.KeyPressMsg:
-			if key.Matches(msg, Keys.CycleTab) || key.Matches(msg, Keys.CycleShiftTab) {
+			if key.Matches(msg, Keys.CycleTab) || key.Matches(msg, Keys.CycleShiftTab) || key.Matches(msg, Keys.Enter) {
 				return nil, false
 			}
 			newInp, cmd := (*inpPtr).Update(msg)
