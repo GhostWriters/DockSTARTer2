@@ -100,6 +100,12 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, m.btnRow.SetProcessing(displayengine.IDSaveButton, m.saveEnv())
 			}
+		} else if displayengine.ButtonIDMatches(msg.ID, displayengine.IDRefreshButton) {
+			if msg.Button == tea.MouseLeft {
+				m.focus = envFocusButtons
+				m.btnIdx = m.buttonIndex("Refresh")
+				return m, m.btnRow.SetProcessing(displayengine.IDRefreshButton, func() tea.Msg { return envRefreshMsg{} })
+			}
 		} else if displayengine.ButtonIDMatches(msg.ID, displayengine.IDBackButton) {
 			if msg.Button == tea.MouseLeft {
 				m.focus = envFocusButtons
@@ -137,7 +143,9 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.Button == tea.MouseLeft {
 				m.BlurTitleBar()
 				pressCmd := m.PressWidgetID(displayengine.IDTitleWidgetRefresh, msg.ID)
-				return m, tea.Batch(pressCmd, func() tea.Msg { return envRefreshMsg{} })
+				m.focus = envFocusButtons
+				m.btnIdx = m.buttonIndex("Refresh")
+				return m, tea.Batch(pressCmd, m.btnRow.SetProcessing(displayengine.IDRefreshButton, func() tea.Msg { return envRefreshMsg{} }))
 			}
 		} else if msg.ID == "tabbed_vars."+displayengine.IDInsOvr {
 			if msg.Button == tea.MouseLeft && len(m.tabs) > 0 {
@@ -215,7 +223,9 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case displayengine.IDTitleWidgetRefresh:
 					pressCmd := m.PressWidgetID(displayengine.IDTitleWidgetRefresh, "key")
 					m.BlurTitleBar()
-					return m, tea.Batch(pressCmd, func() tea.Msg { return envRefreshMsg{} })
+					m.focus = envFocusButtons
+					m.btnIdx = m.buttonIndex("Refresh")
+					return m, tea.Batch(pressCmd, m.btnRow.SetProcessing(displayengine.IDRefreshButton, func() tea.Msg { return envRefreshMsg{} }))
 				}
 			case "esc":
 				m.BlurTitleBar()
@@ -262,7 +272,9 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case key.Matches(msg, displayengine.Keys.EnvRefresh):
-			return m, func() tea.Msg { return envRefreshMsg{} }
+			m.focus = envFocusButtons
+			m.btnIdx = m.buttonIndex("Refresh")
+			return m, m.btnRow.SetProcessing(displayengine.IDRefreshButton, func() tea.Msg { return envRefreshMsg{} })
 		case key.Matches(msg, displayengine.Keys.ContextMenu):
 			if m.focus == envFocusEditor && len(m.tabs) > 0 {
 				editor := m.tabs[m.activeTab].editor
@@ -287,7 +299,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			case "enter":
 				if m.btnIdx >= 0 && m.btnIdx < len(m.buttons) {
-					zoneByName := map[string]string{"Save": displayengine.IDSaveButton, "Back": displayengine.IDBackButton, "Exit": displayengine.IDExitButton}
+					zoneByName := map[string]string{"Save": displayengine.IDSaveButton, "Refresh": displayengine.IDRefreshButton, "Back": displayengine.IDBackButton, "Exit": displayengine.IDExitButton}
 					btnName := m.buttons[m.btnIdx]
 					switch btnName {
 					case "Save":
@@ -301,6 +313,8 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							}
 						}
 						return m, m.btnRow.SetProcessing(zoneByName[btnName], m.saveEnv())
+					case "Refresh":
+						return m, m.btnRow.SetProcessing(zoneByName[btnName], func() tea.Msg { return envRefreshMsg{} })
 					case "Back":
 						if m.hasChanges() {
 							return m, m.btnRow.SetProcessing(zoneByName[btnName], m.promptUnsavedChanges(m.onClose))
@@ -496,6 +510,11 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.SetSize(m.width, m.height)
+		// envRefreshMsg resolves synchronously within this Update call, unlike
+		// Save/Back/Exit whose spinners clear when a sub-dialog they open
+		// later closes (see ClearProcessingState) -- nothing else would ever
+		// stop the Refresh button's spinner otherwise.
+		m.btnRow.Clear()
 		return m, nil
 	case tui.EnvLoadDoneMsg:
 		m.loading = false

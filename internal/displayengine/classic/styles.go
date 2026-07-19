@@ -177,6 +177,7 @@ const (
 	IDButtonPanel       = "button_panel"
 	IDListPanel         = "list_panel"
 	IDSaveButton        = "save_button"
+	IDRefreshButton     = "refresh_button"
 	IDApplyButton       = "apply_button"
 	IDResetButton       = "reset_button"
 	IDBackButton        = "back_button"

@@ -103,6 +103,7 @@ const (
 	IDTitleWidgetHelp      = classic.IDTitleWidgetHelp
 	IDTitleWidgetRefresh   = classic.IDTitleWidgetRefresh
 	IDSaveButton           = classic.IDSaveButton
+	IDRefreshButton        = classic.IDRefreshButton
 	DialogButtonHeight     = classic.DialogButtonHeight
 )
 
@@ -333,6 +334,7 @@ var (
 	TagBracketGlyphs               = classic.TagBracketGlyphs
 	TextCursorColor                = classic.TextCursorColor
 	TitleBarWidgetRegions          = classic.TitleBarWidgetRegions
+	TitleBarHitRegionsFor          = classic.TitleBarHitRegionsFor
 	TitleBarWidgetY                = classic.TitleBarWidgetY
 	ToStyle                        = classic.ToStyle
 	TruncateLeft                   = classic.TruncateLeft
