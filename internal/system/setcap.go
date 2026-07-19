@@ -206,9 +206,16 @@ func binaryHasFixCaps() bool {
 // promptGrant explains the capability grant and asks for confirmation.
 // QuestionPrompt auto-accepts when -y/--yes is in effect.
 func promptGrant(ctx context.Context, exe string) (bool, error) {
-	logger.Notice(ctx, "{{|ApplicationName|}}DockSTARTer2{{[-]}} can be granted the Linux capabilities {{|Var|}}CAP_CHOWN{{[-]}} and {{|Var|}}CAP_FOWNER{{[-]}}, letting it fix file ownership and permissions without any '{{|UserCommand|}}sudo{{[-]}}' password prompts.")
-	logger.Notice(ctx, "This runs '{{|UserCommand|}}sudo setcap cap_chown,cap_fowner+ep %s{{[-]}}' once now, and again automatically whenever an update replaces the binary.", exe)
-	return console.QuestionPrompt(ctx, logger.Notice, "Grant Capabilities", "Grant these capabilities now?", "Y", false)
+	question := strings.Join([]string{
+		"",
+		fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} can be granted the Linux capabilities {{|Var|}}CAP_CHOWN{{[-]}} and {{|Var|}}CAP_FOWNER{{[-]}},", version.ApplicationName),
+		"letting it fix file ownership and permissions without any '{{|UserCommand|}}sudo{{[-]}}' password prompts.",
+		fmt.Sprintf("This runs '{{|UserCommand|}}sudo setcap cap_chown,cap_fowner+ep %s{{[-]}}' once now,", exe),
+		"and again automatically whenever an update replaces the binary.",
+		"",
+		"Grant these capabilities now?",
+	}, "\n")
+	return console.QuestionPrompt(ctx, logger.Notice, "Grant Capabilities", question, "Y", false)
 }
 
 // applySelfCaps grants CAP_CHOWN/CAP_FOWNER to the running binary's on-disk
