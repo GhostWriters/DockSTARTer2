@@ -537,7 +537,7 @@ func formatThemeDefaults(d *theme.ThemeDefaults) string {
 		lines = append(lines, fmt.Sprintf("  Submenu Title: %s", *d.SubmenuTitleAlign))
 	}
 	if d.PanelTitleAlign != nil {
-		lines = append(lines, fmt.Sprintf("  Log Title: %s", *d.PanelTitleAlign))
+		lines = append(lines, fmt.Sprintf("  Panel Title: %s", *d.PanelTitleAlign))
 	}
 	if len(lines) == 0 {
 		return ""

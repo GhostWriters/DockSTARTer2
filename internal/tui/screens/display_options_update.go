@@ -595,7 +595,7 @@ var optionTagToUIField = map[string]string{
 	"Border Color":         "BorderColor",
 	"Dialog Title":         "DialogTitleAlign",
 	"Submenu Title":        "SubmenuTitleAlign",
-	"Log Title":            "PanelTitleAlign",
+	"Panel Title":          "PanelTitleAlign",
 	"Local Panel Mode":     "PanelLocal",
 	"Remote Panel Mode":    "PanelRemote",
 	"Checkbox Brackets":    "CheckboxBrackets",
@@ -631,7 +631,7 @@ func (s *DisplayOptionsScreen) syncOptionsMenu() {
 			items[i].Desc = s.dropdownDesc(titleAlignDesc(s.config.UI.DialogTitleAlign))
 		case "Submenu Title":
 			items[i].Desc = s.dropdownDesc(titleAlignDesc(s.config.UI.SubmenuTitleAlign))
-		case "Log Title":
+		case "Panel Title":
 			items[i].Desc = s.dropdownDesc(titleAlignDesc(s.config.UI.PanelTitleAlign))
 		case "Local Panel Mode":
 			items[i].Desc = s.dropdownDesc(s.panelModeToDesc(s.config.UI.PanelLocal))
