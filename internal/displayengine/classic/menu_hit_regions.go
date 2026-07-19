@@ -467,36 +467,23 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	// 5. Hyperlink hit regions
 	regions = append(regions, ScanForHyperlinks(m.ViewString(), offsetX, offsetY, baseZ)...)
 
-	// 6. Title bar widget hit regions ([?] and [×]/[X])
-	// Widget layout in title bar: "[?] [×]" = 7 chars + 1 end pad before TopRight corner.
+	// 6. Title bar widget hit regions (e.g. [?] [×], or [↺] [?] [×] when
+	// ConfigureWidgets adds extras). Sized from the actual active widget
+	// count, not a hardcoded 2-widget assumption, so a configured widget set
+	// wider than the default [Help, Close] still gets correct hit regions.
 	// Widgets appear at the right of the title bar (row 0). Sub-menus never get widgets.
 	if m.title != "" && !m.subMenuMode {
-		const widgetTotalWidth = 7 // "[?] [×]" or "[?] [X]"
-		const endPad = 1
-		// Use actual rendered dialog width, not m.width — non-maximized menus render
-		// narrower than m.width based on content, so the widget X must match.
-		dialogWidth := m.GetInnerContentWidth() + GetLayout().BorderWidth()
-		widgetsStartX := offsetX + dialogWidth - 1 - endPad - widgetTotalWidth
-		// Widget layout: "[?]" (3) + " " (1) + "[×]" (3) — help starts at 0, close at +4.
-		helpWidgetX := widgetsStartX
-		closeWidgetX := widgetsStartX + 4 // "[?] " = 4 chars
-		widgetY := TitleBarWidgetY(offsetY, m.Layout.LargeTitleBar)
-		regions = append(regions,
-			HitRegion{
-				ID: m.id + "." + IDTitleWidgetHelp,
-				X:  helpWidgetX, Y: widgetY, Width: 3, Height: 1,
-				ZOrder: baseZ + 25,
-				Label:  "Help",
-				Help:   &HelpContext{ScreenName: m.title, PageTitle: "Help", PageText: "Open help for this dialog."},
-			},
-			HitRegion{
-				ID: m.id + "." + IDTitleWidgetClose,
-				X:  closeWidgetX, Y: widgetY, Width: 3, Height: 1,
-				ZOrder: baseZ + 25,
-				Label:  "Close",
-				Help:   &HelpContext{ScreenName: m.title, PageTitle: "Close", PageText: "Close this dialog."},
-			},
-		)
+		widgets := m.ActiveWidgets()
+		if len(widgets) > 0 {
+			widgetWidth := len(widgets)*4 - 1 // "[X]" (3) + " " (1) between each, no trailing space
+			const endPad = 1
+			// Use actual rendered dialog width, not m.width — non-maximized menus render
+			// narrower than m.width based on content, so the widget X must match.
+			dialogWidth := m.GetInnerContentWidth() + GetLayout().BorderWidth()
+			widgetsStartX := offsetX + dialogWidth - 1 - endPad - widgetWidth
+			widgetY := TitleBarWidgetY(offsetY, m.Layout.LargeTitleBar)
+			regions = append(regions, TitleBarWidgetRegions(m.id, widgets, widgetsStartX, widgetY, baseZ)...)
+		}
 	}
 
 	// Extra hit regions from section helpers (e.g. sinput text area).

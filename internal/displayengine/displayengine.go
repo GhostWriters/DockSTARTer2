@@ -76,6 +76,7 @@ const (
 	IDButtonPanel          = classic.IDButtonPanel
 	IDListPanel            = classic.IDListPanel
 	IDApplyButton          = classic.IDApplyButton
+	IDResetButton          = classic.IDResetButton
 	IDBackButton           = classic.IDBackButton
 	IDExitButton           = classic.IDExitButton
 	IDHeaderFlags          = classic.IDHeaderFlags

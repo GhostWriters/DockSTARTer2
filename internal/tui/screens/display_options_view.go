@@ -283,6 +283,7 @@ func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []displayengi
 	// Individual buttons
 	btnSpecs := []displayengine.ButtonSpec{
 		{Text: "Apply", ZoneID: displayengine.IDApplyButton, Help: "Save all changed display options to your configuration file."},
+		{Text: "Reset", ZoneID: displayengine.IDResetButton, Help: "Discard staged changes and revert to the current saved settings."},
 	}
 	if s.isRoot {
 		btnSpecs = append(btnSpecs, displayengine.ButtonSpec{
