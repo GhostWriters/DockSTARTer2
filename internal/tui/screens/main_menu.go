@@ -37,7 +37,9 @@ func NewMainMenuScreen(connType string) tui.ScreenModel {
 	}
 
 	list := displayengine.NewMenuModel(displayengine.IDListPanel, "", "", items)
-	list.SetMenuName("")
+	// Unique key for cursor-position persistence, distinct from other
+	// screens' lists that share the IDListPanel id.
+	list.SetMenuName("main_menu")
 	list.SetConnType(connType)
 	list.SetHelpPageText("The main navigation menu for " + version.ApplicationName + ". Select an action to configure your Docker application stack, apply updates, or adjust settings.")
 	list.SetHelpItemPrefix("Action")
@@ -57,7 +59,7 @@ func NewMainMenuScreen(connType string) tui.ScreenModel {
 	outer := displayengine.NewMenuModel("main_menu_outer", "Main Menu", "", nil)
 	outer.SetShowButtons(true)
 	outer.SetButtons([]displayengine.ButtonDef{
-		{Label: "Select", ZoneID: displayengine.IDApplyButton, Action: func() tea.Msg {
+		{Label: "Select", ZoneID: "btn-select", Action: func() tea.Msg {
 			item := list.SelectedItem()
 			if item.Action != nil {
 				return item.Action()

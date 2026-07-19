@@ -631,6 +631,14 @@ func (m *MenuModel) handleEnter() (tea.Model, tea.Cmd) {
 			return m, m.deferAction(m.enterAction)
 		}
 
+		// 3. Fall back to the btn-select button's own explicit Action.
+		for _, btn := range m.buttons {
+			if btn.ZoneID == "btn-select" && btn.Action != nil {
+				action := btn.Action
+				return m, m.SetProcessingBtnDeferred(btn.ZoneID, func() tea.Msg { return action() })
+			}
+		}
+
 	}
 
 	return m, nil

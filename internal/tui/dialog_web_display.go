@@ -285,6 +285,12 @@ func radioGroupInterceptor(id string) func(tea.Msg, *displayengine.MenuModel) (t
 
 // NewWebDisplayDialog creates a new WebDisplayDialog with the given current settings.
 func NewWebDisplayDialog(current WebDisplaySettings) *WebDisplayDialog {
+	// current.RefreshRate may be unset (<=0); fall back before it's baked
+	// into initial/appliedFont/appliedRefresh, or Reset/Cancel would revert
+	// the field to that raw zero value instead of the rate actually shown.
+	if current.RefreshRate <= 0 {
+		current.RefreshRate = defaultRefreshRate()
+	}
 	d := &WebDisplayDialog{initial: current, appliedRefresh: current.RefreshRate, appliedFont: current}
 	d.defaultSection = buildDefaultSection(current.UseDefaultFont)
 	d.familyMenu = buildFamilyMenu(current.FontFamily)
@@ -297,11 +303,7 @@ func NewWebDisplayDialog(current WebDisplaySettings) *WebDisplayDialog {
 		initialSize = DefaultWebDisplaySettings().FontSize
 	}
 	d.sizeSection, d.sizeInput = displayengine.NewNumberSinputSection("web_display_size", "Font Size", strconv.Itoa(initialSize))
-	refreshRate := current.RefreshRate
-	if refreshRate <= 0 {
-		refreshRate = defaultRefreshRate()
-	}
-	d.refreshSection, d.refreshInput = displayengine.NewNumberSinputSection("web_display_refresh", "Refresh Rate (ms)", strconv.Itoa(refreshRate))
+	d.refreshSection, d.refreshInput = displayengine.NewNumberSinputSection("web_display_refresh", "Refresh Rate (ms)", strconv.Itoa(current.RefreshRate))
 	d.refreshSection.SectionHelp = refreshRateHelp()
 
 	outer := displayengine.NewMenuModel("web_display", "Browser Settings", "", nil)
@@ -312,12 +314,15 @@ func NewWebDisplayDialog(current WebDisplaySettings) *WebDisplayDialog {
 	outer.SetEscAction(func() tea.Msg { return displayengine.CloseDialogMsg{} })
 	outer.SetButtons([]displayengine.ButtonDef{
 		{Label: "Apply", ZoneID: "btn-select", Action: func() tea.Msg { return applyWebDisplayMsg{} }, Help: "Apply settings to the browser terminal."},
-		{Label: "Reset", ZoneID: "btn-reset", Action: func() tea.Msg { return resetWebDisplayMsg{} }, Help: "Reset to default font settings."},
+		{Label: "Reset", ZoneID: "btn-reset", Action: func() tea.Msg { return resetWebDisplayMsg{} }, Help: "Discard staged changes and revert to the last applied settings."},
 		{Label: "Back", ZoneID: "btn-back", Action: func() tea.Msg { return backWebDisplayMsg{} }, Help: "Close without reverting changes."},
 		{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return cancelWebDisplayMsg{} }, Help: "Revert to original settings and close."},
 	})
 	d.familyMenu.SetDisabled(current.UseDefaultFont)
 	d.sizeSection.SetDisabled(current.UseDefaultFont)
+	// Title-bar refresh icon mirrors the Reset button, matching Appearance
+	// Settings and the tabbed vars editor's use of the same widget.
+	outer.ConfigureWidgets(displayengine.WidgetRefresh, displayengine.WidgetHelp, displayengine.WidgetClose)
 	outer.AddContentSection(d.defaultSection)
 	outer.AddContentSection(d.familyMenu)
 	outer.AddContentRow(d.sizeSection, d.refreshSection)
@@ -426,21 +431,41 @@ func (d *WebDisplayDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return d, CloseDialog()
 
+	case displayengine.TitleBarRefreshMsg:
+		// Title-bar [↺] icon mirrors the Reset button -- focus it and show its
+		// spinner too, matching what a real click on Reset gets for free via
+		// MenuModel's own generic button-click handling (handleEnter).
+		d.outer.SetFocusedItem(displayengine.FocusBtn)
+		d.outer.SetFocusedBtnIndex(1)
+		return d, d.outer.SetProcessingBtnDeferred("btn-reset", func() tea.Msg { return resetWebDisplayMsg{} })
+
 	case resetWebDisplayMsg:
-		defaults := DefaultWebDisplaySettings()
-		d.defaultSection = buildDefaultSection(defaults.UseDefaultFont)
-		d.familyMenu = buildFamilyMenu(defaults.FontFamily)
-		d.sizeSection, d.sizeInput = displayengine.NewNumberSinputSection("web_display_size", "Font Size", strconv.Itoa(defaults.FontSize))
-		d.refreshSection, d.refreshInput = displayengine.NewNumberSinputSection("web_display_refresh", "Refresh Rate (ms)", strconv.Itoa(defaults.RefreshRate))
+		// Discards staged edits back to the last-applied settings (appliedFont/
+		// appliedRefresh), not the hardcoded application defaults -- Font
+		// Family/Size are already effectively reset by the "Use default
+		// browser font" checkbox at Apply time (see collectSettings), so this
+		// button's distinct value is Refresh Rate plus clearing stale UI text
+		// left in the disabled fields. Cancel (d.initial) remains the way back
+		// to the dialog's opening state.
+		reverted := d.appliedFont
+		reverted.RefreshRate = d.appliedRefresh
+		d.defaultSection = buildDefaultSection(reverted.UseDefaultFont)
+		d.familyMenu = buildFamilyMenu(reverted.FontFamily)
+		d.sizeSection, d.sizeInput = displayengine.NewNumberSinputSection("web_display_size", "Font Size", strconv.Itoa(reverted.FontSize))
+		d.refreshSection, d.refreshInput = displayengine.NewNumberSinputSection("web_display_refresh", "Refresh Rate (ms)", strconv.Itoa(reverted.RefreshRate))
 		d.refreshSection.SectionHelp = refreshRateHelp()
-		d.familyMenu.SetDisabled(defaults.UseDefaultFont)
-		d.sizeSection.SetDisabled(defaults.UseDefaultFont)
+		d.familyMenu.SetDisabled(reverted.UseDefaultFont)
+		d.sizeSection.SetDisabled(reverted.UseDefaultFont)
 		d.outer.ReplaceSections(d.defaultSection, d.familyMenu, displayengine.NewContentRow(d.sizeSection, d.refreshSection))
 		w, h := d.outer.Width(), d.outer.Height()
 		d.outer.SetSize(w, h)
 		d.outer.ClearProcessingState()
+		// Land on the checkbox (section 0), not wherever focus previously was --
+		// that section could be familyMenu/sizeSection, which SetDisabled above
+		// may have just re-disabled.
+		d.outer.SetFocusedSection(0)
 		d.outer.SetFocusedItem(displayengine.FocusList)
-		d.sendAndStore(defaults)
+		d.sendAndStore(reverted)
 		return d, nil
 	}
 

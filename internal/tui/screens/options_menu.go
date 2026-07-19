@@ -30,7 +30,9 @@ func NewOptionsMenuScreen(isRoot bool, connType string) tui.ScreenModel {
 	}
 
 	list := displayengine.NewMenuModel(displayengine.IDListPanel, "", "", items)
-	list.SetMenuName("")
+	// Unique key for cursor-position persistence, distinct from other
+	// screens' lists that share the IDListPanel id.
+	list.SetMenuName("options_menu")
 	list.SetConnType(connType)
 	list.SetHelpPageText("Application settings and preferences. Configure the visual theme, UI display options, and other tool behaviors.")
 	list.SetHelpItemPrefix("Action")

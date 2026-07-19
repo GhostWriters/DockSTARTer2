@@ -5,7 +5,14 @@ import "charm.land/lipgloss/v2"
 // nextButtonFocus moves focus right through buttons, clamping at the last button (no wrap).
 func (m *MenuModel) nextButtonFocus() FocusItem {
 	if m.focusedItem == FocusList {
-		m.focusedBtnIndex = 0
+		start := 0
+		// Select already renders as active while the list has focus (see
+		// GetButtonSpecsForState), so landing on it here would look like the
+		// keypress did nothing -- skip straight to the next button instead.
+		if len(m.buttons) > 1 && m.buttons[0].ZoneID == "btn-select" {
+			start = 1
+		}
+		m.focusedBtnIndex = start
 		return FocusBtn
 	}
 	// FocusBtn / FocusSelectBtn: advance index, clamp at end
@@ -25,10 +32,22 @@ func (m *MenuModel) prevButtonFocus() FocusItem {
 	return FocusSelectBtn
 }
 
-// GetButtonSpecsForState returns the current button configuration based on state
+// GetButtonSpecsForState returns the current button configuration based on state.
+// While the list has focus, the "btn-select" button (if present) also renders
+// as active -- Enter already activates the selected item in this state, and
+// for a Select button with no explicit Action, that IS its behavior (see
+// handleEnter's list-item fallback), so this is a purely visual reinforcement
+// that Select/Enter are the same action, not a change to what Enter does.
 func (m *MenuModel) GetButtonSpecsForState() []ButtonSpec {
 	if !m.showButtons {
 		return nil
+	}
+	if m.focusedItem == FocusList {
+		for i, btn := range m.buttons {
+			if btn.ZoneID == "btn-select" {
+				return m.btnRow.Specs(true, i)
+			}
+		}
 	}
 	return m.btnRow.Specs(m.focusedItem == FocusBtn, m.focusedBtnIndex)
 }

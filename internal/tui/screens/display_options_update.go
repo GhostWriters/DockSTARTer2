@@ -370,8 +370,10 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// 1. Panel Cycling (Tab / Shift-Tab) - LoadDefaults -> Themes -> Options -> LoadDefaults
+		// Preserves buttonFocused (unlike Up/Down within a submenu) so a
+		// dual-focused button, e.g. Apply after Reset or screen entry, stays
+		// highlighted while switching which submenu is sub-focused.
 		if key.Matches(msg, displayengine.Keys.CycleTab) {
-			s.buttonFocused = false
 			switch s.focusedPanel {
 			case FocusLoadDefaults:
 				s.focusedPanel = FocusThemes
@@ -384,7 +386,6 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, nil
 		}
 		if key.Matches(msg, displayengine.Keys.CycleShiftTab) {
-			s.buttonFocused = false
 			switch s.focusedPanel {
 			case FocusOptions:
 				s.focusedPanel = FocusThemes
@@ -445,9 +446,11 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, s.EscapeAction()
 		}
 
-		// 3. Up/Down/Space: Routed to focused panel; clear button highlight when navigating submenus.
+		// 3. Up/Down/Space: routed to focused panel below. Preserves
+		// buttonFocused, same as Tab/Shift-Tab, so a dual-focused button stays
+		// highlighted while moving the cursor within a submenu; still calls
+		// updateFocusStates so outerMenu's cache is invalidated.
 		if key.Matches(msg, displayengine.Keys.Up) || key.Matches(msg, displayengine.Keys.Down) {
-			s.buttonFocused = false
 			s.updateFocusStates()
 		}
 		switch s.focusedPanel {
