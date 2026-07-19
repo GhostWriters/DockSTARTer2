@@ -429,13 +429,16 @@ func checkTmplUpdate(_ context.Context) (updateAvailable bool, ver string, hadEr
 	return false, paths.GetTemplatesVersion(), false
 }
 
-// remoteBranchUnchanged reports whether origin/branch's tip on the remote
-// still matches the locally cached refs/remotes/origin/branch ref, via a
-// git ls-remote-equivalent ref listing (no objects downloaded, unlike
-// FetchContext). A cache miss (ref doesn't exist locally yet) or list error
-// is reported as changed/unknown so the caller falls through to a real fetch.
+// remoteBranchUnchanged reports whether origin/branch's tip AND its tag set
+// on the remote still match local state, via a single git ls-remote-equivalent
+// ref listing (no objects downloaded, unlike FetchContext). Checking tags too
+// (not just the branch tip) matters because a release can add a new tag
+// pointing at a commit that's already the local tip -- e.g. re-releasing
+// unchanged content -- which a branch-hash-only comparison would miss
+// entirely. A cache miss (ref doesn't exist locally yet) or list error is
+// reported as changed/unknown so the caller falls through to a real fetch.
 func remoteBranchUnchanged(repo *git.Repository, branch string) (bool, error) {
-	cached, err := repo.Reference(plumbing.ReferenceName("refs/remotes/origin/"+branch), true)
+	cachedBranch, err := repo.Reference(plumbing.ReferenceName("refs/remotes/origin/"+branch), true)
 	if err != nil {
 		return false, err
 	}
@@ -451,12 +454,24 @@ func remoteBranchUnchanged(repo *git.Repository, branch string) (bool, error) {
 	}
 
 	branchRefName := plumbing.NewBranchReferenceName(branch)
+	branchFound := false
 	for _, ref := range refs {
 		if ref.Name() == branchRefName {
-			return ref.Hash() == cached.Hash(), nil
+			branchFound = true
+			if ref.Hash() != cachedBranch.Hash() {
+				return false, nil
+			}
+		} else if ref.Name().IsTag() {
+			localTag, err := repo.Reference(ref.Name(), true)
+			if err != nil || localTag.Hash() != ref.Hash() {
+				return false, nil // missing or stale local tag
+			}
 		}
 	}
-	return false, fmt.Errorf("remote branch %s not found", branch)
+	if !branchFound {
+		return false, fmt.Errorf("remote branch %s not found", branch)
+	}
+	return true, nil
 }
 
 // remoteURLsFor returns the configured URLs for the given remote name.
