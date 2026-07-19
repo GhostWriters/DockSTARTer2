@@ -100,16 +100,28 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 		// Specific version requested
 		latest, found, err = updater.DetectVersion(ctx, repo, requestedVersion)
 	} else {
-		// Find the latest tag for this specific channel, then detect that version.
-		// This avoids DetectLatest returning a release from a different channel.
-		channelTag, tagErr := latestChannelTag(requestedVersion)
+		// Find the latest tag for this specific channel, then detect that
+		// version, trying older tags if the newest one has no published
+		// release yet (the release workflow pushes the tag before
+		// goreleaser finishes building, so there's a window where the
+		// newest tag 404s) -- same fallback checkAppUpdate uses.
+		tags, tagErr := channelTagsDescending(requestedVersion)
 		if tagErr != nil {
 			logger.Debug(ctx, "Channel tag lookup failed: %v (falling back to DetectLatest)", tagErr)
 			latest, found, err = updater.DetectLatest(ctx, repo)
-		} else if channelTag == "" {
+		} else if len(tags) == 0 {
 			found = false
 		} else {
-			latest, found, err = updater.DetectVersion(ctx, repo, channelTag)
+			attempts := len(tags)
+			if attempts > maxChannelTagFallbacks {
+				attempts = maxChannelTagFallbacks
+			}
+			for _, tag := range tags[:attempts] {
+				latest, found, err = updater.DetectVersion(ctx, repo, tag)
+				if err == nil && found {
+					break
+				}
+			}
 		}
 	}
 
@@ -121,7 +133,7 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 			logger.Error(ctx, "{{|ApplicationName|}}%s{{[-]}} channel '%s' does not exist on origin.", version.ApplicationName, AppBranchLink(requestedVersion))
 			return fmt.Errorf("channel '%s' does not exist", requestedVersion)
 		}
-		// Tag exists but release asset not yet published — mid-publish. Treat as up to date.
+		// None of the attempted tags had a published release.
 		logger.Notice(ctx, "{{|ApplicationName|}}%s{{[-]}} is already up to date on channel '%s'.", version.ApplicationName, AppBranchLink(requestedVersion))
 		logger.Notice(ctx, "Current version is '%s'.", AppVersionLink(version.Version))
 		return nil
