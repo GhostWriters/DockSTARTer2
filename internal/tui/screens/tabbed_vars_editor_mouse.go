@@ -9,8 +9,6 @@ import (
 	"strconv"
 	"strings"
 
-	"charm.land/lipgloss/v2"
-
 	tea "charm.land/bubbletea/v2"
 	"github.com/atotto/clipboard"
 )
@@ -119,13 +117,7 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []displayeng
 
 	// Title widget regions — widgets are on the title row (row 1) for large titlebars,
 	// or on the top border (row 0) for small titlebars.
-	activeW := m.ActiveWidgets()
-	ctx := displayengine.GetActiveContext()
-	widgetStr := displayengine.BuildInactiveTitleWidgetsFor(activeW, ctx)
-	widgetWidth := lipgloss.Width(displayengine.GetPlainText(widgetStr))
-	widgetsStartX := offsetX + m.width - 1 - 1 - widgetWidth
-	widgetY := displayengine.TitleBarWidgetY(offsetY, m.largeTitleOverhead > 0)
-	regions = append(regions, displayengine.TitleBarWidgetRegions("tabbed_vars", activeW, widgetsStartX, widgetY, displayengine.ZDialog)...)
+	regions = append(regions, displayengine.TitleBarHitRegionsFor("tabbed_vars", offsetX, offsetY, m.width, m.largeTitleOverhead > 0, m.ActiveWidgets(), displayengine.ZDialog)...)
 
 	return regions
 }
