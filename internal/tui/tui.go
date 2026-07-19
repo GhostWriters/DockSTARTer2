@@ -976,8 +976,13 @@ func startUpdateChecker(ctx context.Context, send func(tea.Msg)) {
 			tmplUpdateOld := update.TmplUpdateAvailable
 			appErrorOld := update.AppUpdateCheckError
 			tmplErrorOld := update.TmplUpdateCheckError
-			update.CheckAppUpdate(ctx)
-			update.CheckTmplUpdate(ctx)
+			// Ticks every 3 minutes but only actually checks the network
+			// when the shared startup cache has gone stale, so a TUI
+			// session sitting open doesn't check any more often than a
+			// stream of CLI invocations would.
+			if !update.CheckUpdatesIfDue(ctx) {
+				continue
+			}
 			if update.AppUpdateAvailable != appUpdateOld || update.TmplUpdateAvailable != tmplUpdateOld ||
 				update.AppUpdateCheckError != appErrorOld || update.TmplUpdateCheckError != tmplErrorOld {
 				send(UpdateHeaderMsg{})
