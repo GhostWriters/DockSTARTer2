@@ -31,14 +31,15 @@ func RenderTwoColumnRow(label, value string, cursor, focused bool, maxLabelW, ma
 	}
 	cursorRendered := neutralStyle.Render(cursorStr + " ")
 
-	if lipgloss.Width(label) > maxLabelW {
-		label = displayengine.TruncateRight(label, maxLabelW)
-	}
-	labelW := lipgloss.Width(label)
-	labelStr := displayengine.RenderHotkeyLabelCtx(label, focused, ctx)
-
 	if value == "" {
-		// Label-only row: fill to maxItemW.
+		// Label-only row (no tag column, e.g. a stock variable name or the
+		// "Add All Stock Variables" button): use the full item width, not
+		// maxLabelW, which only reflects tagged rows' narrower tag column.
+		if lipgloss.Width(label) > maxItemW {
+			label = displayengine.TruncateRight(label, maxItemW)
+		}
+		labelW := lipgloss.Width(label)
+		labelStr := displayengine.RenderHotkeyLabelCtx(label, focused, ctx)
 		trailW := maxItemW + 1 - 2 - labelW
 		if trailW < 0 {
 			trailW = 0
@@ -47,6 +48,11 @@ func RenderTwoColumnRow(label, value string, cursor, focused bool, maxLabelW, ma
 	}
 
 	// Two-column row.
+	if lipgloss.Width(label) > maxLabelW {
+		label = displayengine.TruncateRight(label, maxLabelW)
+	}
+	labelW := lipgloss.Width(label)
+	labelStr := displayengine.RenderHotkeyLabelCtx(label, focused, ctx)
 	pad := maxLabelW - labelW
 	paddingStr := neutralStyle.Render(strutil.Repeat(" ", pad+2)) // align + 2-space gap
 
