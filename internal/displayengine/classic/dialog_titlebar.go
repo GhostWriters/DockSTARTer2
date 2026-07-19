@@ -236,16 +236,6 @@ func (t *TitleBarFocus) HandleTitleBarHit(msg LayerHitMsg, closeCmd tea.Cmd) (ha
 	return false, nil
 }
 
-// buildTitleBarWidgets returns the rendered [?]-[x] widget string for this dialog,
-// with the correct active/inactive styling based on current title bar focus state.
-// Uses large or small widget styles depending on ctx.LargeTitleBars.
-func (b *BaseDialogModel) buildTitleBarWidgets(ctx StyleContext) string {
-	if ctx.LargeTitleBars {
-		return buildLargeTitleBarWidgets(b.tbFocused, b.tbWidget, b.tbPressed, b.ActiveWidgets(), ctx)
-	}
-	return buildDialogTitleWidgets(b.tbFocused, b.tbWidget, b.tbPressed, b.ActiveWidgets(), ctx)
-}
-
 // minWidthForWidgets returns the minimum content width required so that right-side
 // widgets fit after the title is positioned (accounting for centering).
 // w is the starting content width candidate; the return value is >= w.
@@ -364,16 +354,26 @@ func buildDialogTitleWidgets(focused bool, activeWidget, pressedWidget string, w
 
 // TitleBarHitRegions returns hit regions for the title bar widgets.
 func (b *BaseDialogModel) TitleBarHitRegions(offsetX, offsetY, contentWidth, baseZ int) []HitRegion {
+	return TitleBarHitRegionsFor(b.ID, offsetX, offsetY, contentWidth+2, b.Layout.LargeTitleBar, b.ActiveWidgets(), baseZ)
+}
+
+// TitleBarHitRegionsFor computes hit regions for a set of title-bar widgets,
+// measuring their actual rendered width (via BuildInactiveTitleWidgetsFor) so
+// the region always matches what's drawn regardless of widget count or
+// ASCII/line-character mode -- the single source of truth every title-bar
+// owner (BaseDialogModel, MenuModel, the tabbed vars editor) should call
+// instead of each re-deriving this math.
+// dialogWidth is the full bordered width (content + both side borders).
+func TitleBarHitRegionsFor(id string, offsetX, offsetY, dialogWidth int, largeTitleBar bool, widgets []WidgetDef, baseZ int) []HitRegion {
 	ctx := GetActiveContext()
 	// Use GetPlainText to strip theme tags before measuring (large titlebar widgets are raw tags).
-	widgetWidth := lipgloss.Width(GetPlainText(b.buildTitleBarWidgets(ctx)))
+	widgetWidth := lipgloss.Width(GetPlainText(BuildInactiveTitleWidgetsFor(widgets, ctx)))
 	if widgetWidth == 0 {
 		return nil
 	}
-	dialogWidth := contentWidth + 2
-	endPad := 1
+	const endPad = 1
 	widgetsStartX := offsetX + dialogWidth - 1 - endPad - widgetWidth
-	return TitleBarWidgetRegions(b.ID, b.ActiveWidgets(), widgetsStartX, TitleBarWidgetY(offsetY, b.Layout.LargeTitleBar), baseZ)
+	return TitleBarWidgetRegions(id, widgets, widgetsStartX, TitleBarWidgetY(offsetY, largeTitleBar), baseZ)
 }
 
 // TitleBarWidgetY returns the screen Y coordinate for title bar widgets.

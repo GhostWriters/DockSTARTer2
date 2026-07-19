@@ -187,9 +187,9 @@ func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec
 		tabs = append(tabs, envTab{spec: spec, editor: editor})
 	}
 
-	buttons := []string{"Save", "Back", "Exit"}
+	buttons := []string{"Save", "Refresh", "Back", "Exit"}
 	if !showBack {
-		buttons = []string{"Save", "Exit"}
+		buttons = []string{"Save", "Refresh", "Exit"}
 	}
 
 	m := &TabbedVarsEditorModel{

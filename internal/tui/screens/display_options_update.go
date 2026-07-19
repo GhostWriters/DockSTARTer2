@@ -143,6 +143,10 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		s.SetSize(msg.Width, msg.Height)
 		return s, nil
 
+	case displayengine.TitleBarRefreshMsg:
+		// Title-bar [↺] icon mirrors the Reset button.
+		return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDResetButton, s.handleReset())
+
 	case tea.MouseClickMsg:
 		// Regular clicks are handled by hit regions (LayerHitMsg).
 		// For cases not covered by hit regions (e.g., clicking the background to focus),
@@ -227,10 +231,23 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				s.updateFocusStates()
 				return s, nil
 			}
-		} else if displayengine.ButtonIDMatches(msg.ID, displayengine.IDBackButton) {
+		} else if displayengine.ButtonIDMatches(msg.ID, displayengine.IDResetButton) {
 			if msg.Button == tea.MouseLeft {
 				s.focusedPanel = FocusButtons
 				s.focusedButton = 1
+				s.updateFocusStates()
+				return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDResetButton, s.handleReset())
+			}
+			if msg.Button == displayengine.HoverButton {
+				s.focusedPanel = FocusButtons
+				s.focusedButton = 1
+				s.updateFocusStates()
+				return s, nil
+			}
+		} else if displayengine.ButtonIDMatches(msg.ID, displayengine.IDBackButton) {
+			if msg.Button == tea.MouseLeft {
+				s.focusedPanel = FocusButtons
+				s.focusedButton = 2
 				s.updateFocusStates()
 				if s.isRoot {
 					return s, nil
@@ -240,7 +257,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if msg.Button == displayengine.HoverButton {
 				s.focusedPanel = FocusButtons
-				s.focusedButton = 1
+				s.focusedButton = 2
 				s.updateFocusStates()
 				return s, nil
 			}
@@ -578,7 +595,7 @@ var optionTagToUIField = map[string]string{
 	"Border Color":         "BorderColor",
 	"Dialog Title":         "DialogTitleAlign",
 	"Submenu Title":        "SubmenuTitleAlign",
-	"Log Title":            "PanelTitleAlign",
+	"Panel Title":          "PanelTitleAlign",
 	"Local Panel Mode":     "PanelLocal",
 	"Remote Panel Mode":    "PanelRemote",
 	"Checkbox Brackets":    "CheckboxBrackets",
@@ -614,7 +631,7 @@ func (s *DisplayOptionsScreen) syncOptionsMenu() {
 			items[i].Desc = s.dropdownDesc(titleAlignDesc(s.config.UI.DialogTitleAlign))
 		case "Submenu Title":
 			items[i].Desc = s.dropdownDesc(titleAlignDesc(s.config.UI.SubmenuTitleAlign))
-		case "Log Title":
+		case "Panel Title":
 			items[i].Desc = s.dropdownDesc(titleAlignDesc(s.config.UI.PanelTitleAlign))
 		case "Local Panel Mode":
 			items[i].Desc = s.dropdownDesc(s.panelModeToDesc(s.config.UI.PanelLocal))
@@ -731,7 +748,7 @@ func (s *DisplayOptionsScreen) EscapeAction() tea.Cmd {
 		return s.outerMenu.SetProcessingBtnDeferred(displayengine.IDExitButton, tui.ConfirmExitAction())
 	}
 	s.focusedPanel = FocusButtons
-	s.focusedButton = 1 // Back
+	s.focusedButton = 2 // Back
 	s.updateFocusStates()
 	return s.outerMenu.SetProcessingBtnDeferred(displayengine.IDBackButton, navigateBack())
 }

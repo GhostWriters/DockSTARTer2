@@ -127,14 +127,16 @@ func (m *TabbedVarsEditorModel) View() tea.View {
 
 func (m *TabbedVarsEditorModel) getButtonSpecs() []displayengine.ButtonSpec {
 	zoneByName := map[string]string{
-		"Save": displayengine.IDSaveButton,
-		"Back": displayengine.IDBackButton,
-		"Exit": displayengine.IDExitButton,
+		"Save":    displayengine.IDSaveButton,
+		"Refresh": displayengine.IDRefreshButton,
+		"Back":    displayengine.IDBackButton,
+		"Exit":    displayengine.IDExitButton,
 	}
 	helpByName := map[string]string{
-		"Save": "Save all changes in all tabs to the environment file.",
-		"Back": "Discard all changes and return (prompts if unsaved changes exist).",
-		"Exit": "Discard all changes and exit the application.",
+		"Save":    "Save all changes in all tabs to the environment file.",
+		"Refresh": "Reformat and re-stage all tabs (same as pressing F5).",
+		"Back":    "Discard all changes and return (prompts if unsaved changes exist).",
+		"Exit":    "Discard all changes and exit the application.",
 	}
 	var specs []displayengine.ButtonSpec
 	for i, btn := range m.buttons {

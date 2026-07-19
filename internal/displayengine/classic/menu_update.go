@@ -248,7 +248,7 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		switch buttonID {
-		case IDTitleWidgetHelp, IDTitleWidgetClose:
+		case IDTitleWidgetHelp, IDTitleWidgetClose, IDTitleWidgetRefresh:
 			if handled, cmd := m.HandleTitleBarHit(msg, m.menuTitleBarCloseCmd()); handled {
 				return m, cmd
 			}

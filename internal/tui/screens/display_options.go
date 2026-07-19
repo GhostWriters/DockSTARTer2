@@ -33,7 +33,7 @@ type DisplayOptionsScreen struct {
 	themeMenu        *displayengine.MenuModel
 	optionsMenu      *displayengine.MenuModel
 	focusedPanel     DisplayOptionsFocus
-	// focusedButton index: 0=Apply, 1=Back (or Exit when isRoot), 2=Exit (only when !isRoot)
+	// focusedButton index: 0=Apply, 1=Reset, 2=Back (or Exit when isRoot), 3=Exit (only when !isRoot)
 	focusedButton int
 	buttonFocused bool // true when a button is highlighted while a submenu also stays focused
 	isRoot        bool // true when launched directly via -M appearance; hides Back button
@@ -394,15 +394,22 @@ func (s *DisplayOptionsScreen) initMenus() {
 	if s.isRoot {
 		outerMenu.SetButtons([]displayengine.ButtonDef{
 			{Label: "Apply", ZoneID: displayengine.IDApplyButton, Help: "Apply and save appearance settings."},
+			{Label: "Reset", ZoneID: displayengine.IDResetButton, Help: "Discard staged changes and revert to the current saved settings."},
 			{Label: "Exit", ZoneID: displayengine.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
 		})
 	} else {
 		outerMenu.SetButtons([]displayengine.ButtonDef{
 			{Label: "Apply", ZoneID: displayengine.IDApplyButton, Help: "Apply and save appearance settings."},
+			{Label: "Reset", ZoneID: displayengine.IDResetButton, Help: "Discard staged changes and revert to the current saved settings."},
 			{Label: "Back", ZoneID: displayengine.IDBackButton, Action: navigateBack(), Help: "Return to the previous screen."},
 			{Label: "Exit", ZoneID: displayengine.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
 		})
 	}
+	// Title-bar refresh icon mirrors the Reset button, matching the tabbed
+	// vars editor's use of the same widget for its own reload action. Extra
+	// widgets go before Help/Close, which stay rightmost by convention (see
+	// TitleBarFocus doc comment).
+	outerMenu.ConfigureWidgets(displayengine.WidgetRefresh, displayengine.WidgetHelp, displayengine.WidgetClose)
 	outerMenu.AddContentSection(loadDefaultsMenu)
 	outerMenu.AddContentSection(themeMenu)
 	outerMenu.AddContentSection(optionsMenu)
@@ -415,13 +422,13 @@ func (s *DisplayOptionsScreen) initMenus() {
 }
 
 // maxFocusedButton returns the highest valid focusedButton index.
-// When isRoot there is no Back button: Apply=0, Exit=1 (two buttons).
-// Otherwise: Apply=0, Back=1, Exit=2 (three buttons).
+// When isRoot there is no Back button: Apply=0, Reset=1, Exit=2 (three buttons).
+// Otherwise: Apply=0, Reset=1, Back=2, Exit=3 (four buttons).
 func (s *DisplayOptionsScreen) maxFocusedButton() int {
 	if s.isRoot {
-		return 1
+		return 2
 	}
-	return 2
+	return 3
 }
 
 // execFocusedButton runs the action for the current focusedButton index.
@@ -430,13 +437,15 @@ func (s *DisplayOptionsScreen) execFocusedButton() (tea.Model, tea.Cmd) {
 	case 0:
 		return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDApplyButton, s.handleApply())
 	case 1:
+		return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDResetButton, s.handleReset())
+	case 2:
 		if s.isRoot {
 			theme.Unload("Preview")
 			return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDExitButton, tui.ConfirmExitAction())
 		}
 		theme.Unload("Preview")
 		return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDBackButton, navigateBack())
-	case 2:
+	case 3:
 		theme.Unload("Preview")
 		return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDExitButton, tui.ConfirmExitAction())
 	}
@@ -528,7 +537,7 @@ func formatThemeDefaults(d *theme.ThemeDefaults) string {
 		lines = append(lines, fmt.Sprintf("  Submenu Title: %s", *d.SubmenuTitleAlign))
 	}
 	if d.PanelTitleAlign != nil {
-		lines = append(lines, fmt.Sprintf("  Log Title: %s", *d.PanelTitleAlign))
+		lines = append(lines, fmt.Sprintf("  Panel Title: %s", *d.PanelTitleAlign))
 	}
 	if len(lines) == 0 {
 		return ""
@@ -1142,6 +1151,24 @@ func (s *DisplayOptionsScreen) handleApply() tea.Cmd {
 		}
 
 		// 4. Trigger synchronized style update
+		return displayengine.ConfigChangedMsg{Config: s.config}
+	}
+}
+
+// handleReset discards every staged change and reverts to baseConfig (the
+// settings as of the last Apply, or as loaded on screen entry). Rebuilds all
+// three inner menus from scratch via initMenus so their checkbox/radio/dropdown
+// states reflect the reverted config, then re-applies focus since initMenus
+// only resets the bookkeeping fields, not the new MenuModels' own focus state.
+func (s *DisplayOptionsScreen) handleReset() tea.Cmd {
+	return func() tea.Msg {
+		s.config = s.baseConfig
+		s.currentTheme = s.baseConfig.UI.Theme
+		s.previewTheme = s.currentTheme
+		s.themeChangedFields = nil
+		s.themeDefaults[s.currentTheme], _ = theme.Load(s.currentTheme, "Preview")
+		s.initMenus()
+		s.updateFocusStates()
 		return displayengine.ConfigChangedMsg{Config: s.config}
 	}
 }
