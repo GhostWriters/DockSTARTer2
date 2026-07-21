@@ -424,14 +424,11 @@ func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.MouseMotionMsg:
+		// Applied unconditionally on every event -- the render itself (not
+		// this state update) is what gets coalesced during a fast drag, at
+		// the AppModel level.
 		if m.ResizeDrag.Dragging {
-			m.ResizeDrag.PendingDragY = msg.Y
-			if !m.ResizeDrag.DragPending {
-				m.ResizeDrag.LastDragY = msg.Y
-				m.applyDragY(msg.Y)
-				m.ResizeDrag.DragPending = true
-				return m, DragDoneCmd(ResizeZoneID)
-			}
+			m.applyDragY(msg.Y)
 			return m, nil
 		}
 
