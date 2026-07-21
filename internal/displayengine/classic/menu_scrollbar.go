@@ -699,15 +699,13 @@ func (s *Scrollbar) Update(msg tea.Msg, currentOffset, totalItems, visibleItems 
 		}
 
 	case tea.MouseMotionMsg:
+		// Applied unconditionally on every event, same as the log panel's
+		// DragScrollbar -- the render itself (not this state update) is what
+		// gets coalesced during a fast drag, at the AppModel level.
 		if s.Drag.Dragging {
-			s.Drag.PendingDragY = msg.Y
-			if !s.Drag.DragPending {
-				newOff, changed := s.Drag.ScrollOffset(msg.Y, s.AbsTopY, maxOff, s.Info)
-				if changed {
-					s.Drag.LastDragY = msg.Y
-					s.Drag.DragPending = true
-					return newOff, DragDoneCmd(s.ID), true
-				}
+			newOff, changed := s.Drag.ScrollOffset(msg.Y, s.AbsTopY, maxOff, s.Info)
+			if changed {
+				return newOff, nil, true
 			}
 		}
 

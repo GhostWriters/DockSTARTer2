@@ -270,15 +270,11 @@ func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.MouseMotionMsg:
+		// Applied unconditionally on every event -- the render itself (not
+		// this state update) is what gets coalesced during a fast drag, at
+		// the AppModel level.
 		if m.sbDrag.Dragging {
-			m.sbDrag.PendingDragY = msg.Y // always record latest, even if render in-flight
-			if !m.sbDrag.DragPending {
-				if m.applySbDrag(msg.Y) {
-					m.sbDrag.LastDragY = msg.Y
-					m.sbDrag.DragPending = true
-					return m, displayengine.DragDoneCmd("setvalue_preset_box")
-				}
-			}
+			m.applySbDrag(msg.Y)
 		}
 		if m.input.IsSelecting() {
 			m.input.HandleDragTo(msg.X)
