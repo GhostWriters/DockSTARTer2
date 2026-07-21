@@ -169,7 +169,12 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	// both item wrapping and GetFlowHeight so the two stay in sync.
 	var flowMaxWidth int
 	if m.subMenuMode {
-		flowMaxWidth = m.width - layout.BorderWidth()
+		// Matches viewSubMenu's flowWidth: contentWidth minus 2 (renderFlowContent's
+		// own lineStyle padding compensation), clamped to 1.
+		flowMaxWidth = m.width - layout.BorderWidth() - 2
+		if flowMaxWidth < 1 {
+			flowMaxWidth = 1
+		}
 	} else {
 		flowMaxWidth, _ = layout.InnerContentSize(m.width, m.height)
 		if flowMaxWidth > 2 {
@@ -273,14 +278,22 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 			x += colWidths[col] + colGap
 		}
 
+		// Clip to the same scrolled window renderColumnContent draws --
+		// otherwise a scrolled column-mode menu hit-tests rows that aren't
+		// on screen and mispositions the ones that are.
+		startRow, endRow := columnModeVisibleRows(rows, m.MaxFlowRows, m.ViewStartY)
+
 		// Emit hit regions using (col, row) → (x, y) mapping.
 		for ni, ii := range itemIndices {
 			col := ni / rows
 			row := ni % rows
+			if row < startRow || row >= endRow {
+				continue
+			}
 			regions = append(regions, HitRegion{
 				ID:     GetMenuItemID(m.id, ii),
 				X:      offsetX + lineContentX + colOffsets[col],
-				Y:      offsetY + listY + row,
+				Y:      offsetY + listY + (row - startRow),
 				Width:  itemWidths[ni],
 				Height: 1,
 				ZOrder: baseZ + 10,
@@ -305,13 +318,10 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		flowLine := 0
 		currentLineWidth := 0
 
-		// Matches renderFlowContent's itemGutter, which prepends a lock-gutter
-		// column (lockChar, always 1 char when showLockGutter is true) before
-		// every item's checkbox/tag content.
-		lockMarkerWidth := 0
-		if m.showLockGutter {
-			lockMarkerWidth = m.StatusGutterWidth()
-		}
+		// Matches renderFlowContent's itemGutter: a lock-gutter column (when
+		// showLockGutter) plus activityGutterWidth spaces, which render adds
+		// unconditionally regardless of showLockGutter -- so this must too.
+		lockMarkerWidth := m.StatusGutterWidth()
 
 		for i, item := range m.items {
 			if item.IsSeparator {
