@@ -397,6 +397,12 @@ func (m *AppModel) View() (v tea.View) {
 		}
 	}
 
+	textInputActive := v.Cursor != nil
+	if textInputActive != m.lastTextInputActive {
+		m.lastTextInputActive = textInputActive
+		SendTextInputFocusMsg(textInputActive)
+	}
+
 	m.cachedView = v
 	return v
 }
