@@ -15,19 +15,7 @@ func (m PanelModel) ViewString() string {
 		return ""
 	}
 	ctx := GetActiveContext()
-
-	marker := "^"
-	if m.Expanded {
-		marker = "v"
-	}
-	titleText := "Console"
-	switch m.PanelMode {
-	case "log":
-		titleText = "Log"
-	case "system":
-		titleText = "System Console"
-	}
-	title := marker + " " + titleText + " " + marker
+	title := m.Title()
 
 	upGlyph, dnGlyph := resizeUpWidget, resizeDnWidget
 	if !ctx.LineCharacters {

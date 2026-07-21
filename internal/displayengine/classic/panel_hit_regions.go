@@ -20,27 +20,13 @@ func (m PanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	}
 
 	ctx := GetActiveContext()
-	marker := "^"
-	if m.Expanded {
-		marker = "v"
-	}
-	title := marker + " Console " + marker
+	title := m.Title()
 
-	titleWidth := WidthWithoutZones(RenderThemeText(title, ctx.Dialog))
-	titleSectionLen := 1 + 1 + titleWidth + 1 + 1
-	actualWidth := m.width - 2
-	var leftPad int
-	if ctx.PanelTitleAlign == "left" {
-		leftPad = 0
-	} else {
-		leftPad = (actualWidth - titleSectionLen) / 2
-	}
-	if leftPad < 0 {
-		leftPad = 0
-	}
-
-	titleStart := 1 + leftPad
-	titleEnd := titleStart + titleSectionLen
+	consoleTitleStyle := SemanticRawStyle("ConsoleTitle")
+	titleWidth := WidthWithoutZones(RenderThemeText(title, consoleTitleStyle))
+	titleLayout := ComputeTitleBarLayout(titleWidth, m.width, ctx.PanelTitleAlign)
+	titleStart := titleLayout.Start
+	titleEnd := titleLayout.End
 
 	// ZPanelHeader: the panel title bar (drag handle) must beat any non-modal screen or dialog
 	// content so it remains clickable when dragged up to overlap the bottom of the active screen.
@@ -62,7 +48,7 @@ func (m PanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		ID:     IDPanelToggle,
 		X:      offsetX + titleStart,
 		Y:      offsetY,
-		Width:  titleSectionLen,
+		Width:  titleLayout.TitleSectionLen,
 		Height: 1,
 		ZOrder: ZPanelHeader,
 		Label:  "Console Panel",
