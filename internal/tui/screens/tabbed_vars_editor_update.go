@@ -46,6 +46,12 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if len(m.tabs) > 0 {
 					m.tabs[m.activeTab].editor.Focus()
 				}
+				// Subtitle height (and everything derived from it -- editor
+				// height, button/editor Y positions) depends on the active
+				// tab's description length, so switching tabs must
+				// recompute layout the same way the keyboard Next/Prev Tab
+				// handlers already do below.
+				m.SetSize(m.width, m.height)
 				return m, nil
 			}
 		}

@@ -316,14 +316,17 @@ func (m *TabbedVarsEditorModel) calcSubtitleHeight() int {
 		// Global tab: just the file path, 1 line
 		return 1
 	}
-	// App tab: "Application: AppName" (1 line) + word-wrapped description
+	// App tab: "Application: AppName" (1 line) + word-wrapped description.
+	// Must measure the same plain text renderSubtitle actually wraps
+	// (theme markup stripped) -- counting raw markup as text overestimates
+	// word lengths, wrapping to more lines than are actually rendered.
 	h := 1
 	if tab.description != "" {
 		valueW := m.contentWidth - headingLabelW
 		if valueW < 10 {
 			valueW = 10
 		}
-		h += subtitleWrapLines(tab.description, valueW)
+		h += subtitleWrapLines(displayengine.GetPlainText(tab.description), valueW)
 	}
 	return h
 }
