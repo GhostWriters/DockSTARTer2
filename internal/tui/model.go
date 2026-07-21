@@ -289,6 +289,32 @@ type AppModel struct {
 	// msgs from painting a partial frame between hide and reflow settling.
 	suppressRender bool
 
+	// lastInteractionRender is when a mouse motion/wheel event last triggered
+	// a real render. Motion/wheel events can arrive far faster than a frame
+	// can be composed (e.g. one motion event per terminal cell crossed while
+	// dragging a scrollbar thumb), so this bounds how often they're allowed
+	// to trigger a new View() composition -- see renderSkipped and cachedView.
+	lastInteractionRender time.Time
+
+	// renderSkipped, when true, tells View() to return cachedView instead of
+	// recomposing the frame. Set only for coalesced motion/wheel events (see
+	// Update's mouse-message case); every other message resets it to false,
+	// so anything that actually changes the screen still renders promptly.
+	renderSkipped bool
+
+	// cachedView is the most recently composed frame, returned by View()
+	// when renderSkipped is set.
+	cachedView tea.View
+
+	// lastPanelInteraction / lastDialogInteraction record when a wheel event
+	// last landed on the log panel / modal dialog respectively. Streamed
+	// output targeting that same component is coalesced to the interaction
+	// frame budget while its timestamp is recent -- mouse activity elsewhere
+	// on screen must not affect it, only interaction with that component's
+	// own viewport (see panelInteractionActive/dialogInteractionActive).
+	lastPanelInteraction  time.Time
+	lastDialogInteraction time.Time
+
 	// Channel for receiving confirmation result from a modal dialog
 	pendingConfirm chan bool
 

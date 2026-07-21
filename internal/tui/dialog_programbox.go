@@ -428,6 +428,7 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case outputLinesMsg:
+		m.sv.SetFollowFrozen(m.Scroll.Drag.Dragging)
 		m.sv.CommandRunning = true
 		m.sv.AppendLines(msg.lines, pbRenderFn())
 		// Both caches must be invalidated: the viewport section's own (keyed
@@ -444,6 +445,10 @@ func (m *ProgramBoxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case displayengine.ReplaceOutputMsg:
+		// Freeze auto-follow while the scrollbar thumb is being dragged, so a
+		// burst of new output lines can't yank the view back to the bottom
+		// out from under the user's manual scroll.
+		m.sv.SetFollowFrozen(m.Scroll.Drag.Dragging)
 		displayengine.SetActiveOutputWidth(m.sv.Width())
 		m.sv.CommandRunning = false
 		if m.headerLineCount < 0 {

@@ -257,6 +257,38 @@ func (m *PanelModel) vpHeight() int {
 // CollapsedHeight returns the height the panel always occupies (the toggle strip).
 func (m PanelModel) CollapsedHeight() int { return 1 }
 
+// HasInputBox reports whether this panel mode renders the 3-row command
+// input box below the viewport (console/system modes) or just the viewport
+// on its own (e.g. log mode).
+func (m PanelModel) HasInputBox() bool {
+	return m.PanelMode == "console" || m.PanelMode == "system"
+}
+
+// ViewportHeight returns the console viewport's row count: the title row
+// (and, when HasInputBox is true, the 3-row input box) subtracted from
+// PanelHeight. This is the single source of truth for that figure --
+// rendering, hit-region placement, and scrollbar-drag math all call this
+// so they can't drift out of sync with each other.
+func (m PanelModel) ViewportHeight() int {
+	vpH := m.PanelHeight - 1
+	if m.HasInputBox() {
+		vpH -= 3
+	}
+	if vpH < 1 {
+		if m.totalHeight > 0 {
+			fullH := (m.totalHeight / 2) - 1
+			if m.HasInputBox() {
+				fullH -= 3
+			}
+			vpH = fullH
+		}
+		if vpH < 1 {
+			vpH = 1
+		}
+	}
+	return vpH
+}
+
 // Height returns the current rendered height of the panel.
 func (m PanelModel) Height() int {
 	if m.Expanded {

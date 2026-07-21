@@ -88,6 +88,15 @@ func (m *AppModel) View() (v tea.View) {
 		return v
 	}
 
+	if m.renderSkipped {
+		// A fast drag/scroll coalesced this frame -- state was already applied
+		// by handleMouseMsg, only the (expensive) recomposition below is
+		// skipped. Returning the previous frame verbatim is safe because
+		// nothing else can have changed since renderSkipped is reset to false
+		// at the top of Update() for every non-motion/wheel message.
+		return m.cachedView
+	}
+
 	// Use displayengine.Layout helpers for consistent positioning
 	layout := displayengine.GetLayout()
 	// Query the backdrop for the actual rendered chrome height (header + bottom border).
@@ -388,6 +397,7 @@ func (m *AppModel) View() (v tea.View) {
 		}
 	}
 
+	m.cachedView = v
 	return v
 }
 

@@ -37,23 +37,8 @@ func (m PanelModel) ViewString() string {
 	baseStyle := ctx.BorderFlags.Apply(consoleBorderStyle)
 
 	// Input box occupies 3 rows (top border + 1 content + bottom border).
-	hasInput := m.PanelMode == "console" || m.PanelMode == "system"
-	vpH := m.PanelHeight - 1
-	if hasInput {
-		vpH -= 3
-	}
-	if vpH < 1 {
-		if m.totalHeight > 0 {
-			fullH := (m.totalHeight / 2) - 1
-			if hasInput {
-				fullH -= 3
-			}
-			vpH = fullH
-		}
-		if vpH < 1 {
-			vpH = 1
-		}
-	}
+	hasInput := m.HasInputBox()
+	vpH := m.ViewportHeight()
 	if m.Sv.Height() != vpH {
 		m.Sv.SetSize(m.Sv.Width(), vpH)
 	}

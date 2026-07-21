@@ -108,7 +108,7 @@ func (m PanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	}
 
 	if m.Expanded {
-		vpH := m.PanelHeight - 4
+		vpH := m.ViewportHeight()
 		regions = append(regions, HitRegion{
 			ID:     IDPanelViewport,
 			X:      offsetX,
@@ -120,30 +120,32 @@ func (m PanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 			Help:   panelHelp,
 		})
 
-		// Input bar region (3 rows: top border + content + bottom border)
-		// Text X: 1 (input box left border) + promptWidth
-		m.Input.SetScreenTextX(offsetX + 1 + m.Input.PromptWidth())
-		regions = append(regions, HitRegion{
-			ID:     IDConsoleInput,
-			X:      offsetX,
-			Y:      offsetY + 1 + vpH,
-			Width:  m.width,
-			Height: 3,
-			ZOrder: ZPanel + 1,
-			Label:  "Console Input",
-			Help:   inputHelp,
-		})
-		// INS/OVR hit region — bottom border of the input box.
-		regions = append(regions, HitRegion{
-			ID:     IDPanel + "." + IDInsOvr,
-			X:      offsetX + 1, // after the left border corner
-			Y:      offsetY + 1 + vpH + 2,
-			Width:  3,
-			Height: 1,
-			ZOrder: ZPanel + 2,
-			Label:  "INS/OVR",
-			Help:   &HelpContext{ScreenName: "Console Panel", PageTitle: "Insert/Overwrite", PageText: "Toggle between insert and overwrite mode."},
-		})
+		if m.HasInputBox() {
+			// Input bar region (3 rows: top border + content + bottom border)
+			// Text X: 1 (input box left border) + promptWidth
+			m.Input.SetScreenTextX(offsetX + 1 + m.Input.PromptWidth())
+			regions = append(regions, HitRegion{
+				ID:     IDConsoleInput,
+				X:      offsetX,
+				Y:      offsetY + 1 + vpH,
+				Width:  m.width,
+				Height: 3,
+				ZOrder: ZPanel + 1,
+				Label:  "Console Input",
+				Help:   inputHelp,
+			})
+			// INS/OVR hit region — bottom border of the input box.
+			regions = append(regions, HitRegion{
+				ID:     IDPanel + "." + IDInsOvr,
+				X:      offsetX + 1, // after the left border corner
+				Y:      offsetY + 1 + vpH + 2,
+				Width:  3,
+				Height: 1,
+				ZOrder: ZPanel + 2,
+				Label:  "INS/OVR",
+				Help:   &HelpContext{ScreenName: "Console Panel", PageTitle: "Insert/Overwrite", PageText: "Toggle between insert and overwrite mode."},
+			})
+		}
 
 		// Scrollbar hit regions
 		if currentConfig.UI.Scrollbar {
