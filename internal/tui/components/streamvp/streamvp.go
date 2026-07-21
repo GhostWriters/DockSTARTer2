@@ -33,7 +33,16 @@ type Model struct {
 	// CommandRunning controls the inline spinner: true while a command is executing.
 	CommandRunning bool
 
+	// FollowFrozen, when true, stops new content from auto-scrolling the
+	// viewport to the bottom even if it was already there. Set by the owner
+	// while a scrollbar drag is repositioning the view, so a burst of new
+	// output lines can't fight the user's manual scroll mid-drag.
+	FollowFrozen bool
 }
+
+// SetFollowFrozen controls whether new content is allowed to auto-scroll the
+// viewport to the bottom (see FollowFrozen).
+func (m *Model) SetFollowFrozen(frozen bool) { m.FollowFrozen = frozen }
 
 // New creates a new Model.
 func New() Model {
@@ -48,9 +57,10 @@ func (m *Model) Viewport() *viewport.Model { return &m.viewport }
 
 // SetSize updates the viewport dimensions and re-wraps all lines.
 func (m *Model) SetSize(width, height int) {
+	wasAtBottom := m.viewport.AtBottom()
 	m.viewport.SetWidth(width)
 	m.viewport.SetHeight(height)
-	m.reRenderLines()
+	m.reRenderLines(wasAtBottom)
 }
 
 // Width returns the current viewport width.
@@ -233,7 +243,7 @@ func (m *Model) setViewportContent(scrollToBottom bool) {
 	atBottom := m.viewport.AtBottom()
 	savedOffset := m.viewport.YOffset()
 	m.viewport.SetContent(content)
-	if scrollToBottom || atBottom {
+	if !m.FollowFrozen && (scrollToBottom || atBottom) {
 		if m.viewport.Height() > 0 {
 			m.viewport.GotoBottom()
 		}
@@ -243,20 +253,18 @@ func (m *Model) setViewportContent(scrollToBottom bool) {
 	}
 }
 
-func (m *Model) reRenderLines() {
-	if len(m.rawLines) == 0 {
-		m.setViewportContent(true)
-		return
-	}
-	// Re-render is caller-driven via a provided renderFn — but we don't store
-	// renderFn on the struct to keep it stateless. Instead callers call
-	// ReRenderWith when they have a renderFn available (e.g. on resize).
-	// setViewportContent still rebuilds from the already-rendered m.lines.
-	m.setViewportContent(true)
+// reRenderLines rebuilds the viewport content from the already-rendered
+// m.lines. scrollToBottom should reflect whether the viewport was at the
+// bottom before whatever triggered this call (e.g. a resize) -- forcing it
+// unconditionally would yank the view back to the bottom even when the user
+// had deliberately scrolled elsewhere.
+func (m *Model) reRenderLines(scrollToBottom bool) {
+	m.setViewportContent(scrollToBottom)
 }
 
 // ReRenderWith re-wraps all raw lines using renderFn (call on resize).
 func (m *Model) ReRenderWith(renderFn func(string) string) {
+	wasAtBottom := m.viewport.AtBottom()
 	w := m.viewport.Width()
 	m.lines = make([]string, 0, len(m.rawLines))
 	style := lipgloss.NewStyle().MaxWidth(w)
@@ -268,7 +276,7 @@ func (m *Model) ReRenderWith(renderFn func(string) string) {
 		m.lines = append(m.lines, rendered)
 	}
 	m.trimHistory()
-	m.setViewportContent(true)
+	m.setViewportContent(wasAtBottom)
 }
 
 func (m *Model) trimHistory() {

@@ -26,6 +26,11 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	var cmds []tea.Cmd
 
+	// Reset each cycle so only the coalesced-motion/wheel case below (which
+	// re-sets it when throttling) can make View() return the cached frame --
+	// every other message type always gets a fresh render.
+	m.renderSkipped = false
+
 	if !m.ready {
 		switch msg.(type) {
 		case tea.WindowSizeMsg:
@@ -143,8 +148,15 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, logger.BatchRecoverTUI(m.ctx, globalTickCmd())
 
 	case displayengine.PanelLineMsg:
+		// Freeze auto-follow while the log-panel scrollbar thumb is being
+		// dragged, so new lines can't yank the view back to the bottom out
+		// from under the user's manual scroll.
+		m.panel.Sv.FollowFrozen = m.panelSbDrag.Dragging
 		updated, cmd := m.panel.Update(msg)
 		m.panel = updated.(displayengine.PanelModel)
+		if m.panelInteractionActive() {
+			m.renderSkipped = !m.interactionRenderDue()
+		}
 		return m, logger.BatchRecoverTUI(m.ctx, cmd)
 
 	case displayengine.ReplaceOutputMsg:
@@ -152,21 +164,38 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// (e.g. compose progress). Route it there, never to the panel, even if
 		// the panel also has a command pipe open — otherwise an unrelated
 		// programbox's live output bleeds into the console panel.
+		//
+		// While the dialog/panel is actively being dragged or was just
+		// wheel-scrolled, these renders are throttled to the same frame
+		// budget as mouse motion (state is still applied on every message;
+		// only the redraw is coalesced). Scoped per-component so mouse
+		// activity elsewhere on screen has no effect on this viewport.
 		if pb, ok := m.dialog.(*ProgramBoxModel); ok && !pb.done {
 			dialog, cmd := pb.Update(msg)
 			m.dialog = dialog
+			if m.dialogInteractionActive() {
+				m.renderSkipped = !m.interactionRenderDue()
+			}
 			return m, logger.BatchRecoverTUI(m.ctx, cmd)
 		}
 		if m.panel.ConsoleCancel != nil {
+			m.panel.Sv.FollowFrozen = m.panelSbDrag.Dragging
 			updated, cmd := m.panel.Update(msg)
 			m.panel = updated.(displayengine.PanelModel)
+			if m.panelInteractionActive() {
+				m.renderSkipped = !m.interactionRenderDue()
+			}
 			return m, logger.BatchRecoverTUI(m.ctx, cmd)
 		}
 
 	case displayengine.ConsoleLinesMsg:
+		m.panel.Sv.FollowFrozen = m.panelSbDrag.Dragging
 		updated, cmd := m.panel.Update(msg)
 		m.panel = updated.(displayengine.PanelModel)
 		m.updateExitLocked()
+		if m.panelInteractionActive() {
+			m.renderSkipped = !m.interactionRenderDue()
+		}
 		return m, logger.BatchRecoverTUI(m.ctx, cmd)
 
 	case displayengine.ConsoleDoneMsg:
@@ -212,6 +241,19 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Convert to tea.MouseMsg interface for the handler
 		resModel, resCmd, handled := m.handleMouseMsg(msg.(tea.MouseMsg))
 		m = resModel.(*AppModel) // Preserve any state changes from handleMouseMsg
+
+		// Motion and wheel events can arrive far faster than a frame can be
+		// composed (one motion event per cell crossed while dragging a
+		// scrollbar thumb or resize handle; fast wheel/trackpad scrolling).
+		// handleMouseMsg above has already applied this event's state
+		// unconditionally, so coalescing the render here only drops
+		// redundant intermediate frames -- the next tick or the eventual
+		// click/release (never throttled) always flushes the latest state.
+		switch msg.(type) {
+		case tea.MouseMotionMsg, tea.MouseWheelMsg:
+			m.renderSkipped = !m.interactionRenderDue()
+		}
+
 		if handled {
 			// Update helpline on click/wheel/release — selection can change.
 			// Skip on motion: hover doesn't change the active item, and motion

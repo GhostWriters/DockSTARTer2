@@ -3,9 +3,59 @@ package tui
 import (
 	"DockSTARTer2/internal/displayengine"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 )
+
+// interactionWindow is how recently a wheel event must have landed on a
+// component for panelInteractionActive/dialogInteractionActive to still
+// consider it active. Mirrors the frame budget below.
+func (m *AppModel) interactionWindow() time.Duration {
+	interval := time.Duration(m.config.UI.RefreshRate) * time.Millisecond
+	if interval <= 0 {
+		interval = 100 * time.Millisecond
+	}
+	return interval
+}
+
+// panelInteractionActive reports whether the log panel is being dragged or
+// was just wheel-scrolled. Streamed output should only coalesce its render
+// against the log panel specifically when this is true -- mouse activity
+// elsewhere on screen must not affect it.
+func (m *AppModel) panelInteractionActive() bool {
+	if m.panel.ResizeDrag.Dragging || m.panelSbDrag.Dragging {
+		return true
+	}
+	return time.Since(m.lastPanelInteraction) < m.interactionWindow()
+}
+
+// dialogInteractionActive reports whether the modal dialog (e.g. a
+// ProgramBox) is being scrollbar-dragged or was just wheel-scrolled.
+// Streamed output should only coalesce its render against the dialog
+// specifically when this is true -- mouse activity elsewhere must not
+// affect it.
+func (m *AppModel) dialogInteractionActive() bool {
+	type sbDragger interface{ IsScrollbarDragging() bool }
+	if d, ok := m.dialog.(sbDragger); ok && d.IsScrollbarDragging() {
+		return true
+	}
+	return time.Since(m.lastDialogInteraction) < m.interactionWindow()
+}
+
+// interactionRenderDue reports whether enough time has passed since the last
+// coalesced render to allow another one, and if so records now as the new
+// baseline. Mirrors the frame budget already driving the FPS ticker
+// (m.config.UI.RefreshRate), so a coalesced drag or scroll never renders
+// more often than the ticker would flush to the terminal anyway.
+func (m *AppModel) interactionRenderDue() bool {
+	now := time.Now()
+	if now.Sub(m.lastInteractionRender) < m.interactionWindow() {
+		return false
+	}
+	m.lastInteractionRender = now
+	return true
+}
 
 // isButtonHitID returns true if the hit ID belongs to a button region.
 // Button IDs from menus use the "btn-" prefix; button IDs from screens/dialogs
@@ -226,6 +276,7 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		// Check if hovering over log panel - if so, focus and scroll it
 		if hitID == displayengine.IDPanel || hitID == displayengine.IDPanelViewport {
 			m.setPanelFocus(true)
+			m.lastPanelInteraction = time.Now()
 			updated, cmd := m.panel.Update(msg)
 			m.panel = updated.(displayengine.PanelModel)
 			return m, cmd, true
@@ -284,6 +335,7 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		// Forward the wheel event to scroll
 		var cmd tea.Cmd
 		if m.dialog != nil {
+			m.lastDialogInteraction = time.Now()
 			m.dialog, cmd = m.dialog.Update(msg)
 		} else if m.activeScreen != nil {
 			updated, sCmd := m.activeScreen.Update(msg)
@@ -571,7 +623,7 @@ func (m *AppModel) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 					m.setPanelFocus(true)
 					sbAbsTopY := m.height - m.panel.Height() + 1
 					m.panelSbAbsTopY = sbAbsTopY
-					vpH := m.panel.Height() - 1
+					vpH := m.panel.ViewportHeight()
 					total := m.panel.Sv.TotalLineCount()
 					visible := m.panel.Sv.Height()
 					m.panelSbInfo = displayengine.ComputeScrollbarInfo(total, visible, m.panel.Sv.YOffset(), vpH)
