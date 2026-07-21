@@ -315,6 +315,12 @@ type AppModel struct {
 	lastPanelInteraction  time.Time
 	lastDialogInteraction time.Time
 
+	// lastTextInputActive tracks whether the hardware cursor (see View's
+	// InputCursorProvider checks) was showing on the last frame, so web
+	// sessions only get a text-input-focus message on an actual transition,
+	// not every render.
+	lastTextInputActive bool
+
 	// Channel for receiving confirmation result from a modal dialog
 	pendingConfirm chan bool
 

@@ -125,6 +125,33 @@
 
     fitAddon.fit();
 
+    // Suppress the mobile on-screen keyboard by default -- xterm.js's hidden
+    // textarea otherwise pops it open on any tap inside the terminal, even
+    // taps that are really just mouse clicks forwarded to the TUI app (menu
+    // items, buttons). The server sends 'text-input-focus' messages when a
+    // real text-editing cursor is showing, toggling this so the keyboard is
+    // only offered while a genuine text field has focus.
+    if (term.textarea) {
+      term.textarea.setAttribute('inputmode', 'none');
+    }
+
+    function setTextInputActive(active) {
+      if (!term.textarea) return;
+      if (active) {
+        // Toggle the attribute on the already-focused textarea (the user's
+        // own tap already focused it via xterm's default click handling)
+        // rather than calling focus() ourselves -- a focus() call outside
+        // the original user gesture is unreliable for raising the keyboard
+        // on some mobile browsers (notably iOS Safari).
+        term.textarea.removeAttribute('inputmode');
+      } else {
+        term.textarea.setAttribute('inputmode', 'none');
+        // Dismissing (unlike opening) doesn't need a user gesture, so this
+        // reliably hides the keyboard as soon as no text field is focused.
+        term.textarea.blur();
+      }
+    }
+
     // WebSocket connection with automatic reconnect on unexpected close.
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     let ws = null;
@@ -167,6 +194,10 @@
               }
               if (msg.type === 'open-url' && msg.url) {
                 window.open(msg.url, '_blank');
+                return;
+              }
+              if (msg.type === 'text-input-focus') {
+                setTextInputActive(!!msg.active);
                 return;
               }
               if (msg.type === 'display-settings') {

@@ -216,6 +216,23 @@ func globalTickCmd() tea.Cmd {
 	})
 }
 
+// SendTextInputFocusMsg notifies the browser (web sessions only) whether a
+// real text-editing cursor is currently visible. xterm.js otherwise pops the
+// mobile on-screen keyboard open on every tap, including ones that are
+// really just mouse clicks forwarded to the TUI (menu items, buttons) --
+// the browser uses this to only allow/show the keyboard while a genuine
+// text field has focus.
+func SendTextInputFocusMsg(active bool) {
+	if GetConnType() != "web" {
+		return
+	}
+	data, _ := json.Marshal(map[string]any{
+		"type":   "text-input-focus",
+		"active": active,
+	})
+	SendWebMsg(data)
+}
+
 // SendWebMsg sends a JSON message to the browser if a web outbound channel is set.
 func SendWebMsg(msg []byte) {
 	if webOutbound != nil {
