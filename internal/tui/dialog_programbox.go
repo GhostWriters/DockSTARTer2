@@ -307,9 +307,13 @@ func (m *ProgramBoxModel) SetFocused(focused bool) {
 
 func (m *ProgramBoxModel) IsFocused() bool { return m.focused }
 
-// IsScrollbarDragging reports whether the viewport scrollbar thumb is being dragged.
+// IsScrollbarDragging reports whether the viewport scrollbar thumb is being
+// dragged. m.Scroll is owned directly by ProgramBoxModel (shared via
+// closures with the viewport content section, see newStreamOutputSection),
+// not by any section's own Scroll field, so m.outer.IsScrollbarDragging()
+// -- which only recurses into sections' own Scroll -- can never see it.
 func (m *ProgramBoxModel) IsScrollbarDragging() bool {
-	return m.outer.IsScrollbarDragging()
+	return m.Scroll.Drag.Dragging || m.outer.IsScrollbarDragging()
 }
 
 // FocusTitleBar, BlurTitleBar, TitleBarFocused implement displayengine.TitleBarFocusable

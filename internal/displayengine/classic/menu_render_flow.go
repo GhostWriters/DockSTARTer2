@@ -163,6 +163,29 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }
 
+// columnModeVisibleRows returns the [startRow, endRow) window of column-mode
+// rows actually drawn, given the total row count and the menu's current
+// MaxFlowRows/ViewStartY scroll state. Used by both renderColumnContent and
+// its hit-region counterpart so a scrolled column-mode menu can't render one
+// window while hit-testing against a different one.
+func columnModeVisibleRows(rows, maxFlowRows, viewStartY int) (startRow, endRow int) {
+	if maxFlowRows <= 0 {
+		return 0, rows
+	}
+	startRow = viewStartY
+	if startRow > rows-maxFlowRows {
+		startRow = rows - maxFlowRows
+	}
+	if startRow < 0 {
+		startRow = 0
+	}
+	endRow = startRow + maxFlowRows
+	if endRow > rows {
+		endRow = rows
+	}
+	return startRow, endRow
+}
+
 // renderColumnContent renders items in N balanced vertical columns.
 // Column widths are determined by the widest item in each column.
 func (m *MenuModel) renderColumnContent(maxWidth, numCols int) string {
@@ -219,21 +242,7 @@ func (m *MenuModel) renderColumnContent(maxWidth, numCols int) string {
 	}
 
 	// Clip to viewport when maxFlowRows is set.
-	startRow := 0
-	endRow := rows
-	if m.MaxFlowRows > 0 {
-		startRow = m.ViewStartY
-		if startRow > rows-m.MaxFlowRows {
-			startRow = rows - m.MaxFlowRows
-		}
-		if startRow < 0 {
-			startRow = 0
-		}
-		endRow = startRow + m.MaxFlowRows
-		if endRow > rows {
-			endRow = rows
-		}
-	}
+	startRow, endRow := columnModeVisibleRows(rows, m.MaxFlowRows, m.ViewStartY)
 
 	// Build each row: render each item then pad to its column width.
 	var lines []string

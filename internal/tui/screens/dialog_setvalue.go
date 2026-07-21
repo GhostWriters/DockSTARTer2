@@ -270,15 +270,11 @@ func (m *setValueDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.MouseMotionMsg:
+		// Applied unconditionally on every event -- the render itself (not
+		// this state update) is what gets coalesced during a fast drag, at
+		// the AppModel level.
 		if m.sbDrag.Dragging {
-			m.sbDrag.PendingDragY = msg.Y // always record latest, even if render in-flight
-			if !m.sbDrag.DragPending {
-				if m.applySbDrag(msg.Y) {
-					m.sbDrag.LastDragY = msg.Y
-					m.sbDrag.DragPending = true
-					return m, displayengine.DragDoneCmd("setvalue_preset_box")
-				}
-			}
+			m.applySbDrag(msg.Y)
 		}
 		if m.input.IsSelecting() {
 			m.input.HandleDragTo(msg.X)
@@ -746,19 +742,28 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []displayengin
 	ctx := displayengine.GetActiveContext()
 	contentW := m.innerWidth()
 
-	largeTitleOverhead := 0
-	if ctx.LargeTitleBars {
-		largeTitleOverhead = displayengine.LargeTitleBarOverhead
-	}
-
 	headingRaw := FormatMenuHeading(MenuHeadingParams{
 		AppName: m.appName, AppDescription: m.appDesc,
 		FilePath: m.filePath,
 		VarName:  m.varName, OriginalValue: m.origVal, CurrentValue: m.input.Value(),
 	}, contentW)
 	headingH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToANSI(headingRaw, "")))
+	currentValueH := 3
+	btnH := displayengine.ButtonRowHeight(contentW, 0, displayengine.ButtonSpec{Text: "Save"}, displayengine.ButtonSpec{Text: "Cancel"}, displayengine.ButtonSpec{Text: "Exit"})
+
+	// Matches ViewString's titleBudget2/DecideLargeTitleBar call exactly, so a
+	// budget too tight to afford a large title bar downgrades identically
+	// here instead of assuming the large title bar always matches the raw
+	// config flag regardless of available space.
+	titleBudget := m.height - 2 - headingH - currentValueH - btnH - 2
+	useLarge, _ := displayengine.DecideLargeTitleBar(ctx.LargeTitleBars, titleBudget, 3)
+	largeTitleOverhead := 0
+	if useLarge {
+		largeTitleOverhead = displayengine.LargeTitleBarOverhead
+	}
+
 	// outer border(1) + largeTitleOverhead + headingH + "Current Value" section(3)
-	listTop := 1 + largeTitleOverhead + headingH + 3
+	listTop := 1 + largeTitleOverhead + headingH + currentValueH
 
 	// Cover the full preset content area (including blank rows) so clicking
 	// anywhere in the box focuses the list.
@@ -801,9 +806,11 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []displayengin
 		Help:   &displayengine.HelpContext{ScreenName: m.setValueTitle(), PageTitle: "Insert/Overwrite", PageText: "Toggle between insert and overwrite mode."},
 	})
 
-	btnH := displayengine.ButtonRowHeight(contentW, 0, displayengine.ButtonSpec{Text: "Save"}, displayengine.ButtonSpec{Text: "Cancel"}, displayengine.ButtonSpec{Text: "Exit"})
 	// Use exactly the same layout math as ViewString()
-	presetTargetH := m.height - 2 - headingH - 3 - btnH
+	presetTargetH := m.height - 2 - largeTitleOverhead - headingH - currentValueH - btnH
+	if presetTargetH < 3 {
+		presetTargetH = 3
+	}
 
 	// Physical inner height: presetTargetH - 2 (borders)
 	innerH := presetTargetH - 2
@@ -894,7 +901,7 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []displayengin
 	const widgetTotalWidth = 7
 	const endPad = 1
 	widgetsStartX := offsetX + m.width - 1 - endPad - widgetTotalWidth
-	widgetY := displayengine.TitleBarWidgetY(offsetY, ctx.LargeTitleBars)
+	widgetY := displayengine.TitleBarWidgetY(offsetY, useLarge)
 	regions = append(regions,
 		displayengine.HitRegion{
 			ID: "setvalue_dialog." + displayengine.IDTitleWidgetHelp,

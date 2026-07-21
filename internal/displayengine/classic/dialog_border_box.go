@@ -118,16 +118,9 @@ func RenderTopBorderBoxCtx(title, rightTitle, rightSuffix, content string, conte
 		}
 	}
 
-	titleSectionLen := 1 + 1 + WidthWithoutZones(renderedTitle) + 1 + 1
-	var leftPad int
-	if ctx.PanelTitleAlign == "left" {
-		leftPad = 0
-	} else {
-		leftPad = (actualWidth - titleSectionLen) / 2
-	}
-	if leftPad < 0 {
-		leftPad = 0
-	}
+	titleLayout := ComputeTitleBarLayout(WidthWithoutZones(renderedTitle), contentWidth, ctx.PanelTitleAlign)
+	titleSectionLen := titleLayout.TitleSectionLen
+	leftPad := titleLayout.LeftPad
 
 	// Calculate right padding, accounting for rightTitle (T-bar wrapped) and rightSuffix
 	remainingWidth := actualWidth - titleSectionLen - leftPad

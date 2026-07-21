@@ -264,6 +264,62 @@ func (m PanelModel) HasInputBox() bool {
 	return m.PanelMode == "console" || m.PanelMode == "system"
 }
 
+// Title returns the panel's title-bar text (marker-wrapped, mode-dependent:
+// "Log", "Console", or "System Console"). Used by both rendering and
+// hit-region placement.
+func (m PanelModel) Title() string {
+	marker := "^"
+	if m.Expanded {
+		marker = "v"
+	}
+	titleText := "Console"
+	switch m.PanelMode {
+	case "log":
+		titleText = "Log"
+	case "system":
+		titleText = "System Console"
+	}
+	return marker + " " + titleText + " " + marker
+}
+
+// TitleBarLayout describes where the title text sits along the panel's top
+// border, in columns relative to the border's left edge (0 = the corner).
+type TitleBarLayout struct {
+	// TitleSectionLen is the rendered width of "<space><title><space>"
+	// including its flanking T-bar connector columns.
+	TitleSectionLen int
+	// LeftPad is the number of border-line characters before the title
+	// section (0 when PanelTitleAlign is "left").
+	LeftPad int
+	// Start/End are the title section's column range: Start is the first
+	// connector column, End is one past the last (both relative to the
+	// border's left edge, i.e. Start already includes the leading corner).
+	Start int
+	End   int
+}
+
+// ComputeTitleBarLayout computes where a RenderTopBorderBoxCtx title section
+// lands for the given rendered title width and content width. Used by both
+// rendering and hit-region placement.
+func ComputeTitleBarLayout(renderedTitleWidth, contentWidth int, panelTitleAlign string) TitleBarLayout {
+	actualWidth := contentWidth - 2
+	titleSectionLen := 1 + 1 + renderedTitleWidth + 1 + 1
+	leftPad := 0
+	if panelTitleAlign != "left" {
+		leftPad = (actualWidth - titleSectionLen) / 2
+	}
+	if leftPad < 0 {
+		leftPad = 0
+	}
+	start := 1 + leftPad
+	return TitleBarLayout{
+		TitleSectionLen: titleSectionLen,
+		LeftPad:         leftPad,
+		Start:           start,
+		End:             start + titleSectionLen,
+	}
+}
+
 // ViewportHeight returns the console viewport's row count: the title row
 // (and, when HasInputBox is true, the 3-row input box) subtracted from
 // PanelHeight. This is the single source of truth for that figure --

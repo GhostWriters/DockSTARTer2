@@ -269,15 +269,11 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.MouseMotionMsg:
+		// Applied unconditionally on every event -- the render itself (not
+		// this state update) is what gets coalesced during a fast drag, at
+		// the AppModel level.
 		if m.sbDrag.Dragging {
-			m.sbDrag.PendingDragY = msg.Y // always record latest, even if render in-flight
-			if !m.sbDrag.DragPending {
-				if m.applySbDrag(msg.Y) {
-					m.sbDrag.LastDragY = msg.Y
-					m.sbDrag.DragPending = true
-					return m, displayengine.DragDoneCmd("addvar_list_box")
-				}
-			}
+			m.applySbDrag(msg.Y)
 		}
 		if m.input.IsSelecting() {
 			m.input.HandleDragTo(msg.X)
@@ -921,15 +917,24 @@ func (m *addVarDialogModel) GetHitRegions(offsetX, offsetY int) []displayengine.
 	ctx := displayengine.GetActiveContext()
 	contentW := m.innerWidth()
 
+	headingRaw := FormatMenuHeading(MenuHeadingParams{AppName: m.appName, AppDescription: m.appDesc}, contentW)
+	headingH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToANSI(headingRaw, "")))
+	varNameH := 3
+	buttonRowH := displayengine.ButtonRowHeight(contentW, 0, displayengine.ButtonSpec{Text: "Create"}, displayengine.ButtonSpec{Text: "Cancel"}, displayengine.ButtonSpec{Text: "Exit"})
+
+	// Matches ViewString's titleBudget2/DecideLargeTitleBar call exactly, so a
+	// budget too tight to afford a large title bar downgrades identically
+	// here instead of assuming the large title bar always matches the raw
+	// config flag regardless of available space.
+	titleBudget := m.height - 2 - headingH - varNameH - buttonRowH - 2
+	useLarge, _ := displayengine.DecideLargeTitleBar(ctx.LargeTitleBars, titleBudget, 3)
 	largeTitleOverhead := 0
-	if ctx.LargeTitleBars {
+	if useLarge {
 		largeTitleOverhead = displayengine.LargeTitleBarOverhead
 	}
 
-	headingRaw := FormatMenuHeading(MenuHeadingParams{AppName: m.appName, AppDescription: m.appDesc}, contentW)
-	headingH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToANSI(headingRaw, "")))
 	// list starts at: outer border(1) + largeTitleOverhead + headingH + "Variable Name" section(3)
-	listTop := 1 + largeTitleOverhead + headingH + 3
+	listTop := 1 + largeTitleOverhead + headingH + varNameH
 
 	listH := 0
 	rowBudget := m.maxVis
@@ -963,9 +968,11 @@ func (m *addVarDialogModel) GetHitRegions(offsetX, offsetY int) []displayengine.
 			totalRows++
 		}
 	}
-	buttonRowH := displayengine.ButtonRowHeight(contentW, 0, displayengine.ButtonSpec{Text: "Create"}, displayengine.ButtonSpec{Text: "Cancel"}, displayengine.ButtonSpec{Text: "Exit"})
 	// Use exactly the same layout math as ViewString()
-	availableTargetH := m.height - 2 - headingH - 3 - buttonRowH
+	availableTargetH := m.height - 2 - largeTitleOverhead - headingH - varNameH - buttonRowH
+	if availableTargetH < 3 {
+		availableTargetH = 3
+	}
 
 	// Physical inner height: availableTargetH - 2 (borders)
 	innerH := availableTargetH - 2
@@ -1066,7 +1073,7 @@ func (m *addVarDialogModel) GetHitRegions(offsetX, offsetY int) []displayengine.
 	widgetStr := displayengine.BuildInactiveTitleWidgetsFor(activeW, ctx)
 	widgetWidth := lipgloss.Width(displayengine.GetPlainText(widgetStr))
 	widgetsStartX := offsetX + m.width - 1 - 1 - widgetWidth
-	widgetY := displayengine.TitleBarWidgetY(offsetY, ctx.LargeTitleBars)
+	widgetY := displayengine.TitleBarWidgetY(offsetY, useLarge)
 	regions = append(regions, displayengine.TitleBarWidgetRegions("addvar_dialog", activeW, widgetsStartX, widgetY, displayengine.ZDialog)...)
 
 	return regions

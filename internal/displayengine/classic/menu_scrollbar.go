@@ -58,7 +58,11 @@ func ComputeScrollbarInfo(total, visible, offset, height int) ScrollbarInfo {
 	thumbTrackStart := 0
 	maxOff := total - visible
 	if maxOff > 0 {
-		thumbTrackStart = (trackH - thumbH) * offset / maxOff
+		// Round to nearest, not floor: this and ScrollOffset's inverse mapping
+		// are round-trip conversions of each other, and two floors in a row
+		// bias the thumb consistently toward the track's start (visually
+		// "above" the mouse), most noticeable with a small thumb/short track.
+		thumbTrackStart = ((trackH-thumbH)*offset + maxOff/2) / maxOff
 		if thumbTrackStart > trackH-thumbH {
 			thumbTrackStart = trackH - thumbH
 		}
@@ -452,7 +456,8 @@ func (s *ScrollbarDragState) ScrollOffset(mouseY, sbAbsTopY, maxOff int, info Sc
 	}
 	trackTopAbs := sbAbsTopY + 1
 	thumbTrackStart := s.ThumbTop(mouseY, trackTopAbs, thumbTravel)
-	newOff := thumbTrackStart * maxOff / thumbTravel
+	// Round to nearest (see ComputeScrollbarInfo) rather than floor.
+	newOff := (thumbTrackStart*maxOff + thumbTravel/2) / thumbTravel
 	if newOff < 0 {
 		newOff = 0
 	}
@@ -694,15 +699,13 @@ func (s *Scrollbar) Update(msg tea.Msg, currentOffset, totalItems, visibleItems 
 		}
 
 	case tea.MouseMotionMsg:
+		// Applied unconditionally on every event, same as the log panel's
+		// DragScrollbar -- the render itself (not this state update) is what
+		// gets coalesced during a fast drag, at the AppModel level.
 		if s.Drag.Dragging {
-			s.Drag.PendingDragY = msg.Y
-			if !s.Drag.DragPending {
-				newOff, changed := s.Drag.ScrollOffset(msg.Y, s.AbsTopY, maxOff, s.Info)
-				if changed {
-					s.Drag.LastDragY = msg.Y
-					s.Drag.DragPending = true
-					return newOff, DragDoneCmd(s.ID), true
-				}
+			newOff, changed := s.Drag.ScrollOffset(msg.Y, s.AbsTopY, maxOff, s.Info)
+			if changed {
+				return newOff, nil, true
 			}
 		}
 

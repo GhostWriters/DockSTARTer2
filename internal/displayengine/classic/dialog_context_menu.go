@@ -5,9 +5,11 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// itemHeight returns the number of display rows an item occupies (2 if it has a SubLabel).
+// itemHeight returns the number of display rows an item occupies. Matches
+// ViewString exactly: disabled items never render their SubLabel line, even
+// when SubLabel is set.
 func itemHeight(item ContextMenuItem) int {
-	if !item.IsSeparator && !item.IsHeader && item.SubLabel != "" {
+	if !item.Disabled && !item.IsSeparator && !item.IsHeader && item.SubLabel != "" {
 		return 2
 	}
 	return 1
