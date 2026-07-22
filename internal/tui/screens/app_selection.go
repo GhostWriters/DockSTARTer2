@@ -513,6 +513,51 @@ func (s *AppSelectionScreen) navDown(m *displayengine.MenuModel, items []display
 	}
 }
 
+// pageJump moves the selection by one viewport page (PgUp/PgDn, and the
+// scrollbar's above/below-thumb track clicks -- both are the same "jump a
+// page" operation). Works entirely in row-space: shifts ViewStartY by a
+// page of rows, then selects whatever occupies the same relative row via
+// IndexForRowOffset (RowOffsetForIndex's inverse).
+func (s *AppSelectionScreen) pageJump(m *displayengine.MenuModel, items []displayengine.MenuItem, idx int, forward bool) {
+	pageSize := m.Layout.ViewportHeight
+	if pageSize < 1 {
+		pageSize = 5
+	}
+	currentRow := m.RowOffsetForIndex(idx) - m.ViewStartY
+	if currentRow < 0 {
+		currentRow = 0
+	}
+	var newViewStartY int
+	if forward {
+		newViewStartY = m.ViewStartY + pageSize
+	} else {
+		newViewStartY = m.ViewStartY - pageSize
+		if newViewStartY < 0 {
+			newViewStartY = 0
+		}
+	}
+	cur := m.IndexForRowOffset(newViewStartY + currentRow)
+	// Never land selection inside an expanded instance list or on a divider
+	// -- snap to the nearest real main-list item in the scroll direction.
+	if forward {
+		for cur < len(items)-1 && (items[cur].IsSeparator || s.isSubRow(items[cur])) {
+			cur++
+		}
+		if cur >= len(items) {
+			cur = len(items) - 1
+		}
+	} else {
+		for cur > 0 && (items[cur].IsSeparator || s.isSubRow(items[cur])) {
+			cur--
+		}
+		if cur < 0 {
+			cur = 0
+		}
+	}
+	m.Select(cur)
+	m.ViewStartY = newViewStartY
+}
+
 func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *displayengine.MenuModel) (tea.Cmd, bool) {
 	idx := m.Index()
 	items := m.GetItems()
@@ -528,6 +573,23 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *displayengine.Men
 	if hitMsg, ok := msg.(displayengine.LayerHitMsg); ok && (hitMsg.Button == tea.MouseLeft || hitMsg.Button == tea.MouseRight) {
 		if s.isEditing {
 			return nil, true
+		}
+
+		// Scrollbar track clicks above/below the thumb are a page jump, same
+		// as PgUp/PgDn -- intercept them here instead of letting the generic
+		// Scrollbar.Update path handle it, since that path's own
+		// syncSelectionToViewport just snaps the cursor to whichever
+		// viewport edge it ends up outside of, not the same relative row
+		// pageJump preserves.
+		if hitMsg.Button == tea.MouseLeft {
+			if strings.HasSuffix(hitMsg.ID, ".sb.above") {
+				s.pageJump(m, items, idx, false)
+				return nil, true
+			}
+			if strings.HasSuffix(hitMsg.ID, ".sb.below") {
+				s.pageJump(m, items, idx, true)
+				return nil, true
+			}
 		}
 
 		// Handle suffix-based IDs from grouped regions
@@ -848,15 +910,7 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *displayengine.Men
 				}
 				m.Select(first)
 			} else {
-				const pageSize = 5
-				moved, cur := 0, idx
-				for i := idx - 1; i >= 0 && moved < pageSize; i-- {
-					if !items[i].IsSeparator && !s.isSubRow(items[i]) {
-						cur = i
-						moved++
-					}
-				}
-				m.Select(cur)
+				s.pageJump(m, items, idx, false)
 			}
 			return nil, true
 		case "pgdown", "ctrl+f", "ctrl+down", "ctrl+d":
@@ -870,15 +924,7 @@ func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *displayengine.Men
 				}
 				m.Select(last)
 			} else {
-				const pageSize = 5
-				moved, cur := 0, idx
-				for i := idx + 1; i < len(items) && moved < pageSize; i++ {
-					if !items[i].IsSeparator && !s.isSubRow(items[i]) {
-						cur = i
-						moved++
-					}
-				}
-				m.Select(cur)
+				s.pageJump(m, items, idx, true)
 			}
 			return nil, true
 		case "home", "ctrl+home":
