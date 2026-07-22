@@ -605,6 +605,8 @@ func (m *MenuModel) renderVariableHeightList() string {
 		totalContentHeight += h
 	}
 	m.lastScrollTotal = totalContentHeight
+	m.lastItemHeights = itemHeights
+	m.lastItemMappings = itemMappings
 
 	for i, item := range renderedItems {
 		linesRows := strings.Split(item, "\n")

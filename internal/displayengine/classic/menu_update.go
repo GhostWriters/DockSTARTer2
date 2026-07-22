@@ -81,6 +81,20 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseWheelMsg, LayerWheelMsg:
 		skipScrollbarWheel = !isColumnScroll
 	}
+	// Scrollbar above/below-thumb track clicks are a page jump. An
+	// interceptor that wants to compute its own page-jump target (e.g. one
+	// that accounts for variable-height rows) gets first refusal on these
+	// two specific hit IDs, ahead of the generic Scroll.Update handling
+	// below, which only shifts ViewStartY and lets syncSelectionToViewport
+	// clamp the cursor to whichever edge it ends up outside of.
+	if hitMsg, ok := msg.(LayerHitMsg); ok && m.Interceptor != nil &&
+		(strings.HasSuffix(hitMsg.ID, ".sb.above") || strings.HasSuffix(hitMsg.ID, ".sb.below")) {
+		if cmd, handled := m.Interceptor(msg, m); handled {
+			m.InvalidateCache()
+			return m, cmd
+		}
+	}
+
 	if !skipScrollbarWheel {
 		if newOff, cmd, changed := m.Scroll.Update(msg, m.ViewStartY, m.ScrollTotal(), m.Layout.ViewportHeight); changed {
 			m.ViewStartY = newOff

@@ -241,6 +241,14 @@ type MenuModel struct {
 	lastViewStartY  int                                           // Previous scroll offset for memoization check
 	lastScrollTotal int                                           // Total content height from last renderVariableHeightList (for scrollbar)
 
+	// lastItemHeights/lastItemMappings mirror the itemHeights/itemMappings
+	// arrays computed by the last renderVariableHeightList pass -- rendered
+	// row height per visible row, and which m.items index (or, for a group's
+	// synthetic border row, that index with vIdxBorderFlag set) each one
+	// corresponds to. Read by RowOffsetForIndex/IndexForRowOffset.
+	lastItemHeights  []int
+	lastItemMappings []int
+
 	renderVersion       int // Incremented on item changes to invalidate list cache and top-level view cache
 	showLockGutter      bool
 	noLeftMargin        bool
@@ -642,6 +650,72 @@ func (m *MenuModel) IsVariableHeight() bool { return m.variableHeight }
 // ScrollID returns the ID of this menu's own scrollbar, for ScrollDoneMsg
 // routing. Part of the Content interface.
 func (m *MenuModel) ScrollID() string { return m.Scroll.ID }
+
+// RowOffsetForIndex returns the rendered row position of the item at idx
+// within m.items -- NOT the same as idx itself whenever a variable-height
+// row appears before it. Two things can make a row taller than 1: a normal
+// item's description word-wrapping to multiple lines (variable-height
+// lists), and an expanded instance group's synthetic top/bottom border rows
+// (see renderSubListSequence), which have no entry in m.items at all.
+//
+// Reads lastItemHeights/lastItemMappings, the exact per-row heights the
+// last real render pass computed, rather than re-deriving wrap widths
+// independently -- that formula depends on several width/gutter/tag-length
+// values only the render pass assembles.
+func (m *MenuModel) RowOffsetForIndex(idx int) int {
+	if idx < 0 {
+		idx = 0
+	}
+	if len(m.lastItemMappings) == 0 || len(m.lastItemHeights) != len(m.lastItemMappings) {
+		// No render has happened yet to populate the cache -- 1 row per item
+		// is the best available guess.
+		return idx
+	}
+	row := 0
+	for k, mapped := range m.lastItemMappings {
+		if (mapped &^ vIdxBorderFlag) >= idx {
+			break
+		}
+		row += m.lastItemHeights[k]
+	}
+	return row
+}
+
+// IndexForRowOffset is RowOffsetForIndex's inverse: given a rendered row,
+// returns the m.items index of whichever item occupies (or, for a
+// multi-line wrapped row, starts at or spans) that row. If the row falls on
+// an expanded group's synthetic border (see RowOffsetForIndex), returns the
+// nearest real item instead, since a border row has none of its own.
+func (m *MenuModel) IndexForRowOffset(row int) int {
+	if row < 0 {
+		row = 0
+	}
+	if len(m.lastItemMappings) == 0 || len(m.lastItemHeights) != len(m.lastItemMappings) {
+		return row
+	}
+	acc := 0
+	lastReal := -1
+	for k, mapped := range m.lastItemMappings {
+		h := m.lastItemHeights[k]
+		if row < acc+h {
+			if mapped&vIdxBorderFlag != 0 {
+				if lastReal >= 0 {
+					return lastReal
+				}
+				return mapped &^ vIdxBorderFlag
+			}
+			return mapped
+		}
+		if mapped&vIdxBorderFlag == 0 {
+			lastReal = mapped
+		}
+		acc += h
+	}
+	if lastReal >= 0 {
+		return lastReal
+	}
+	return len(m.items) - 1
+}
 
 // MatchesID reports whether msgID belongs to this menu (hit-region IDs like
 // "item-{id}-{index}" contain the section's own id as a substring). Part of
