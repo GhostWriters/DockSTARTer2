@@ -44,8 +44,16 @@ func CheckTemplatesUpdate(ctx context.Context, force bool, requestedBranch strin
 	}
 
 	if requestedBranch == "" {
-		if head, err := repo.Head(); err == nil && head.Name().IsBranch() {
-			requestedBranch = head.Name().Short()
+		if head, err := repo.Head(); err == nil {
+			if head.Name().IsBranch() {
+				requestedBranch = head.Name().Short()
+			} else {
+				// Detached HEAD: pinned to a specific tag/version rather
+				// than tracking a branch. Re-resolve that same tag/version
+				// on the next fetch instead of defaulting to main, which
+				// this install was never actually tracking.
+				requestedBranch = paths.GetTemplatesVersion()
+			}
 		} else {
 			requestedBranch = "main"
 		}
@@ -277,16 +285,21 @@ func ApplyTemplatesUpdate(ctx context.Context, info *TemplatesUpdateInfo, yes bo
 		Force:  true,
 	})
 	if err != nil {
+		// A tag (a pinned version, not a tracked branch like main) takes
+		// priority over creating a same-named local branch below -- tags
+		// are never branches, so checking out a tag must land on that tag
+		// (detached HEAD), not on a synthetic local branch that shares its
+		// name.
 		err = w.Checkout(&git.CheckoutOptions{
-			Hash:   info.remoteRef.Hash(),
-			Branch: plumbing.NewBranchReferenceName(info.requestedBranch),
-			Create: true,
+			Branch: plumbing.NewTagReferenceName(info.requestedBranch),
 			Force:  true,
 		})
 	}
 	if err != nil {
 		err = w.Checkout(&git.CheckoutOptions{
-			Branch: plumbing.NewTagReferenceName(info.requestedBranch),
+			Hash:   info.remoteRef.Hash(),
+			Branch: plumbing.NewBranchReferenceName(info.requestedBranch),
+			Create: true,
 			Force:  true,
 		})
 	}
@@ -396,5 +409,50 @@ func EnsureTemplates(ctx context.Context) error {
 		URL:           url,
 		ReferenceName: plumbing.ReferenceName("refs/heads/" + branch),
 	})
-	return err
+	if err != nil {
+		return err
+	}
+
+	// The main clone above is a valid working state on its own -- from here
+	// on, a failure just leaves the install on main's tip instead of the
+	// latest release, so each step is logged rather than returned.
+	repo, openErr := git.PlainOpen(templatesDir)
+	if openErr != nil {
+		logger.Warn(ctx, "Failed to reopen {{|ApplicationName|}}DockSTARTer-Templates{{[-]}} after cloning: %v", openErr)
+		return nil
+	}
+	paths.InvalidateTemplatesVersionCache()
+	logger.Notice(ctx, "Cloned {{|ApplicationName|}}DockSTARTer-Templates{{[-]}} at '%s'.", TmplVersionLink(paths.GetTemplatesVersion()))
+
+	// Resolves latestReachableTag directly instead of going through
+	// CheckTemplatesUpdate: that function's "already at/past the latest
+	// tag while tracking main" case exists to avoid offering an active
+	// main-tracker what looks like a downgrade, but a freshly cloned main
+	// tip is *always* at or ahead of the latest tag, so it would report no
+	// update every time and this step would never actually do anything.
+	mainRef, refErr := repo.Reference(plumbing.ReferenceName("refs/remotes/origin/"+branch), true)
+	if refErr != nil {
+		logger.Warn(ctx, "Failed to resolve {{|ApplicationName|}}DockSTARTer-Templates{{[-]}} origin/%s after cloning: %v", branch, refErr)
+		return nil
+	}
+	tagRef, tagName, ok := latestReachableTag(repo, mainRef)
+	if !ok {
+		// No tagged release reachable from main yet -- main's tip stands.
+		return nil
+	}
+	if tagRef.Hash() == mainRef.Hash() {
+		// main's tip is already the latest release -- nothing to check out.
+		return nil
+	}
+
+	info := &TemplatesUpdateInfo{
+		HasUpdate:       true,
+		CurrentDisplay:  paths.GetTemplatesVersion(),
+		RemoteDisplay:   tagName,
+		repo:            repo,
+		remoteRef:       tagRef,
+		requestedBranch: tagName,
+		force:           false,
+	}
+	return ApplyTemplatesUpdate(ctx, info, true)
 }
