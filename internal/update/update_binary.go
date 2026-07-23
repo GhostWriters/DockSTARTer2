@@ -152,7 +152,9 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 		}
 		// None of the attempted tags had a published release.
 		logger.Notice(ctx, "{{|ApplicationName|}}%s{{[-]}} is already up to date on channel '%s'.", version.ApplicationName, AppBranchLink(requestedVersion))
-		logger.Notice(ctx, "Current version is '%s'.", AppVersionLink(version.Version))
+		if requestedVersion != version.Version {
+			logger.Notice(ctx, "Current version is '%s'.", AppVersionLink(version.Version))
+		}
 		return nil
 	}
 
@@ -178,7 +180,9 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 
 	if compareVersions(currentVersion, remoteVersion) == 0 {
 		logger.Notice(ctx, "{{|ApplicationName|}}%s{{[-]}} is already up to date on channel '%s'.", version.ApplicationName, AppBranchLink(requestedVersion))
-		logger.Notice(ctx, "Current version is '%s'.", AppVersionLink(currentVersion))
+		if requestedVersion != currentVersion {
+			logger.Notice(ctx, "Current version is '%s'.", AppVersionLink(currentVersion))
+		}
 
 		if force {
 			question = fmt.Sprintf("Would you like to forcefully re-apply {{|ApplicationName|}}%s{{[-]}} update '%s'?", version.ApplicationName, AppVersionLink(currentVersion))
