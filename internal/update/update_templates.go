@@ -238,7 +238,9 @@ func ApplyTemplatesUpdate(ctx context.Context, info *TemplatesUpdateInfo, yes bo
 	var question, initiationNotice string
 	if !info.HasUpdate {
 		logger.Notice(ctx, "{{|ApplicationName|}}%s{{[-]}} is already up to date on branch '%s'.", targetName, TmplBranchLink(info.requestedBranch))
-		logger.Notice(ctx, "Current version is '%s'", TmplVersionLink(info.CurrentDisplay))
+		if info.requestedBranch != info.CurrentDisplay {
+			logger.Notice(ctx, "Current version is '%s'", TmplVersionLink(info.CurrentDisplay))
+		}
 		return nil
 	}
 
