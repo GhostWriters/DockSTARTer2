@@ -130,6 +130,17 @@ func (m *Model) ActiveLines() []string {
 	return out
 }
 
+// AllLines returns the buffer as a []string, including PendingDelete lines --
+// used where a staged deletion must still count as present, e.g. when
+// preserving it across ReformatEnv's preservePendingDeletes=true auto-refresh.
+func (m *Model) AllLines() []string {
+	out := make([]string, len(m.value))
+	for i, l := range m.value {
+		out[i] = string(l)
+	}
+	return out
+}
+
 // CurrentLineMeta returns the meta information of the current line
 func (m *Model) CurrentLineMeta() (Line, bool) {
 	if m.row < len(m.lineMeta) {
