@@ -395,8 +395,9 @@ func (m *Model) ReformatEnv(defaultFunc func(string) string, readOnlyVars []stri
 		}
 		key := strings.TrimSpace(line[:eqIdx])
 		if snap, ok := snapshot[key]; ok {
-			if snap.PendingDelete && !meta.PendingDelete {
-				// Was pending-delete before refresh, now restored by template at default
+			if snap.PendingDelete && !preservePendingDeletes {
+				// Manual F5: the line was excluded from the formatter's input above, so
+				// its reappearance here means the template reintroduced it at its default
 				// value. Keep InitialLine so it shows as modified (~) rather than new (+),
 				// but clear the pending-delete state.
 				m.lineMeta[i].InitialLine = snap.InitialLine

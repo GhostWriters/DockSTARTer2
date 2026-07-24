@@ -455,7 +455,18 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		globalLines := make(map[string][]string)
 		for i := range m.tabs {
 			if m.tabs[i].spec.IsGlobal {
-				globalLines[strings.ToUpper(m.tabs[i].spec.App)] = m.tabs[i].editor.ActiveLines()
+				// Auto-refresh (preservePendingDeletes) sees a pending-deleted
+				// ENABLED line as still present, so a staged-but-unconfirmed
+				// deletion doesn't prematurely flip classification. Manual F5
+				// confirms the deletion: if ENABLED is the confirmed-deleted var,
+				// the app must be treated as truly gone so no built-in vars get
+				// reintroduced from the template -- only ActiveLines (which
+				// excludes it) gives that result.
+				if msg.preservePendingDeletes {
+					globalLines[strings.ToUpper(m.tabs[i].spec.App)] = m.tabs[i].editor.AllLines()
+				} else {
+					globalLines[strings.ToUpper(m.tabs[i].spec.App)] = m.tabs[i].editor.ActiveLines()
+				}
 			}
 		}
 		for i := range m.tabs {
@@ -508,12 +519,13 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Otherwise user had edited this var — leave initialVars[k] unchanged so
 				// hasChanges() still detects the diff.
 			}
-			// Remove keys that no longer exist after refresh.
-			for k := range tab.initialVars {
-				if _, exists := refreshed[k]; !exists {
-					delete(tab.initialVars, k)
-				}
-			}
+			// Deliberately no longer prunes tab.initialVars for keys missing from
+			// the post-refresh buffer: a confirmed deletion (manual F5 on a var
+			// with no template default, or on APPNAME__ENABLED itself, which
+			// isn't reintroduced -- see the classification comment above) can
+			// purge a key from the buffer entirely, and initialVars must keep
+			// that key so SyncVariables can still see it as "removed" at save
+			// time. A key only leaves initialVars once Save actually runs.
 		}
 		m.SetSize(m.width, m.height)
 		// envRefreshMsg resolves synchronously within this Update call, unlike
