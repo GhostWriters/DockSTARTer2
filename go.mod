@@ -8,7 +8,7 @@ require (
 	charm.land/lipgloss/v2 v2.0.5
 	charm.land/log/v2 v2.0.0
 	charm.land/wish/v2 v2.0.1
-	github.com/GhostWriters/semstyle v0.2.2
+	github.com/GhostWriters/semstyle v0.2.3
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/adrg/xdg v0.5.3
 	github.com/atotto/clipboard v0.1.4
@@ -30,7 +30,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/gofrs/flock v0.13.0
 	github.com/google/uuid v1.6.0
-	github.com/mattn/go-runewidth v0.0.24
+	github.com/mattn/go-runewidth v0.0.27
 	github.com/mattn/go-sixel v0.0.12
 	github.com/moby/moby/client v0.5.0
 	github.com/muesli/termenv v0.16.0
