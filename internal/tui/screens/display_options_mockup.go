@@ -481,6 +481,12 @@ func (s *DisplayOptionsScreen) buildPreviewSection() *displayengine.MenuModel {
 		switch m := msg.(type) {
 		case tea.KeyPressMsg:
 			switch m.String() {
+			case "up":
+				s.previewViewport.ScrollUp(1)
+				return nil, true
+			case "down":
+				s.previewViewport.ScrollDown(1)
+				return nil, true
 			case "pgup":
 				s.previewViewport.PageUp()
 				return nil, true
