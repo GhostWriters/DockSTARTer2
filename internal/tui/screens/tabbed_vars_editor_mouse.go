@@ -16,13 +16,21 @@ import (
 func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []displayengine.HitRegion {
 	var regions []displayengine.HitRegion
 
-	m.lastOffsetX = offsetX
-	m.lastOffsetY = offsetY
+	// lastOffsetX/Y is the active pane's own origin (dialog origin + its pane
+	// offset when split) -- every formula below and elsewhere measuring from
+	// it stays correct for whichever pane is active. dialogOffsetX/Y keeps
+	// the raw origin too, for paneBoxAt/editorRelCoords.
+	m.dialogOffsetX = offsetX
+	m.dialogOffsetY = offsetY
+	m.lastOffsetX = offsetX + m.activePaneOffsetX
+	m.lastOffsetY = offsetY + m.activePaneOffsetY
 
 	layout := displayengine.GetLayout()
 
-	// Tabs hit regions
-	if len(m.tabs) > 0 {
+	// Tabs hit regions -- only in maximized mode. Split mode has no shared
+	// tab strip to switch within (each pane permanently shows one tab);
+	// clicking the other pane's background (below) switches focus instead.
+	if len(m.tabs) > 0 && !m.splitMode {
 		ctx := displayengine.GetActiveContext()
 		// Calculate total width of all tabs to determine centering offset
 		totalTitleWidth := 0
@@ -71,12 +79,13 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []displayeng
 		}
 	}
 
-	// Editor hit region
+	// Editor hit region (active pane only -- the inactive pane, when split,
+	// is covered by its own click-to-focus background region below instead).
 	// Editor content is inside nesting (outer border + margin + inner border).
 	regions = append(regions, displayengine.HitRegion{
 		ID:     "tabbed_vars.editor",
-		X:      offsetX + layout.NestedLeftOffset(),
-		Y:      offsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight,
+		X:      m.lastOffsetX + layout.NestedLeftOffset(),
+		Y:      m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight,
 		Width:  m.contentWidth - layout.BorderWidth(), // inner box content width
 		Height: m.editorHeight,
 		ZOrder: displayengine.ZDialog + 5,
@@ -91,10 +100,10 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []displayeng
 	// INS/OVR hit region — bottom-left of the inner editor box border.
 	// Inner editor box bottom border = NestedTopOffset + largeTitleOverhead + subtitleHeight + editorHeight
 	// (NestedTopOffset already accounts for outer border + inner top border/tab row)
-	insOvrY := offsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight + m.editorHeight
+	insOvrY := m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight + m.editorHeight
 	regions = append(regions, displayengine.HitRegion{
 		ID:     "tabbed_vars." + displayengine.IDInsOvr,
-		X:      offsetX + layout.NestedLeftOffset() + 1, // +1 to skip the corner char
+		X:      m.lastOffsetX + layout.NestedLeftOffset() + 1, // +1 to skip the corner char
 		Y:      insOvrY,
 		Width:  3,
 		Height: 1,
@@ -103,7 +112,58 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []displayeng
 		Help:   &displayengine.HelpContext{ScreenName: m.title, PageTitle: "Insert/Overwrite", PageText: "Toggle between insert and overwrite mode."},
 	})
 
-	// Button regions (standardized width — matches m.contentWidth which is already margin-reduced)
+	// Click-to-focus background for the inactive pane, when split -- a click
+	// anywhere in it switches which tab is active (see Update's
+	// "tabbed_vars.pane-" case).
+	if m.splitMode {
+		inactive := 1 - m.activeTab
+		inactiveOffX, inactiveOffY := 0, 0
+		if inactive == 1 {
+			inactiveOffX, inactiveOffY = m.pane1OffsetX, m.pane1OffsetY
+		}
+		paneHeight := m.editorHeight + layout.BorderHeight()
+		regions = append(regions, displayengine.HitRegion{
+			ID:     "tabbed_vars.pane-" + strconv.Itoa(inactive),
+			X:      offsetX + inactiveOffX,
+			Y:      offsetY + inactiveOffY,
+			Width:  m.contentWidth,
+			Height: paneHeight,
+			ZOrder: displayengine.ZDialog - 1,
+			Label:  m.tabs[inactive].spec.Title,
+			Help: &displayengine.HelpContext{
+				ScreenName: m.title,
+				ItemTitle:  m.tabs[inactive].spec.Title,
+				ItemText:   "Click to switch editing focus to this file.",
+			},
+		})
+	}
+
+	// Per-pane layout widgets, from the same widget set renderPane draws so
+	// the click target matches what's shown. Only the active pane renders in
+	// Maximized mode. Appended after the pane-background region above so
+	// they win at their narrow spot on the inactive pane's border too.
+	visiblePanes := []int{m.activeTab}
+	if m.splitMode {
+		visiblePanes = []int{0, 1}
+	}
+	widgets := m.paneLayoutWidgets()
+	for _, idx := range visiblePanes {
+		if len(widgets) == 0 {
+			continue
+		}
+		paneOffX, paneOffY := 0, 0
+		if idx == 1 && m.splitMode {
+			paneOffX, paneOffY = m.pane1OffsetX, m.pane1OffsetY
+		}
+		boxX := offsetX + paneOffX + 1 + layout.ContentSideMargin
+		boxY := offsetY + paneOffY + 1 + m.largeTitleOverhead + m.subtitleHeight
+		regions = append(regions, displayengine.TitleBarHitRegionsFor(
+			"tabbed_vars.pane"+strconv.Itoa(idx), boxX, boxY, m.contentWidth, false,
+			widgets, displayengine.ZDialog,
+		)...)
+	}
+
+	// Button regions (full dialog width, shared below both panes)
 	btnY := m.height - m.buttonHeight - 1
 	regions = append(regions, displayengine.GetButtonHitRegions(
 		displayengine.HelpContext{
@@ -111,7 +171,7 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []displayeng
 			PageTitle:  "Variables Editor",
 			PageText:   "Grouped environment variable editor. Right-click any row for specific options.",
 		},
-		"tabbed_vars", offsetX+1+layout.ContentSideMargin, offsetY+btnY, m.contentWidth, displayengine.ZDialog+20,
+		"tabbed_vars", offsetX+1+layout.ContentSideMargin, offsetY+btnY, m.fullContentWidth, displayengine.ZDialog+20,
 		m.getButtonSpecs()...,
 	)...)
 

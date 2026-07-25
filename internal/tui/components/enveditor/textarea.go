@@ -841,6 +841,13 @@ func (m *Model) LineCount() int {
 	return len(m.value)
 }
 
+// TotalDisplayLines returns the total rendered rows including soft wraps --
+// the same figure the scrollbar is sized against. Compare this to Height(),
+// not LineCount, when deciding whether to show a scroll-percent indicator.
+func (m Model) TotalDisplayLines() int {
+	return m.totalDisplayLines()
+}
+
 // Line returns the 0-indexed row position of the cursor.
 func (m Model) Line() int {
 	return m.row
@@ -2163,10 +2170,13 @@ func (m Model) lineNumberView(n int, isCursorLine bool, dataLine int) (str strin
 	// A single-cell slot is always reserved on each side of the digits for
 	// the bracket indicator, blank when not the cursor line (or when the
 	// option is off) so the digits never shift -- same convention as the
-	// app's other focused-row bracket indicators.
+	// app's other focused-row bracket indicators. n > 0 excludes a
+	// soft-wrapped continuation row (blank line number): isCursorLine alone
+	// stays true for every wrapped segment of the cursor's line, which would
+	// otherwise bracket the blank slot on those rows too.
 	openChar := " "
 	closeChar := " "
-	if isCursorLine && m.LineNumberBrackets {
+	if isCursorLine && m.LineNumberBrackets && n > 0 {
 		bracketStyle := m.activeStyle().computedLineNumberBrackets()
 		openChar = bracketStyle.Render(m.LineNumberBracketOpen)
 		closeChar = bracketStyle.Render(m.LineNumberBracketClose)

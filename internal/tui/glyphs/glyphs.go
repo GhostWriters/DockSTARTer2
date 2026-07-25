@@ -77,6 +77,17 @@ const (
 	ResizeDnWidget      = "▼" // Black Down-Pointing Triangle (U+25BC)
 	ResizeDnWidgetAscii = "v"
 
+	// Tabbed editor layout widgets. SideBySide uses vertical stripes (▥, a
+	// vertical dividing line between columns); Stacked uses horizontal
+	// stripes (▤, a horizontal dividing line between rows) -- matching each
+	// glyph's visual line direction to the split it represents.
+	MaximizeWidget        = "□" // White Square (U+25A1)
+	MaximizeWidgetAscii   = "+"
+	SideBySideWidget      = "▥" // Square With Vertical Fill (U+25A5)
+	SideBySideWidgetAscii = "|"
+	StackedWidget         = "▤" // Square With Horizontal Fill (U+25A4)
+	StackedWidgetAscii    = "-"
+
 	// TagBracket - focused-row bracket indicator (App Select, Menu Brackets, rename)
 	TagBracketOpen       = "❮"
 	TagBracketClose      = "❯"

@@ -68,24 +68,24 @@ func HandleTheme(ctx context.Context, group *CommandGroup) error {
 		conf.UI.Theme = newTheme
 		if tf, err := theme.GetThemeFile(newTheme); err == nil {
 			if defaults, derr := theme.FileDefaults(tf); derr == nil && defaults != nil {
-			changes := theme.ApplyThemeDefaults(&conf, *defaults)
-			if len(changes) > 0 {
-				var lines []string
-				for k, v := range changes {
-					var status string
-					switch v {
-					case "true":
-						status = "{{|Var|}}ON{{[-]}}"
-					case "false":
-						status = "{{|Var|}}OFF{{[-]}}"
-					default:
-						status = fmt.Sprintf("{{|Var|}}%s{{[-]}}", v)
+				changes := theme.ApplyThemeDefaults(&conf, *defaults)
+				if len(changes) > 0 {
+					var lines []string
+					for k, v := range changes {
+						var status string
+						switch v {
+						case "true":
+							status = "{{|Var|}}ON{{[-]}}"
+						case "false":
+							status = "{{|Var|}}OFF{{[-]}}"
+						default:
+							status = fmt.Sprintf("{{|Var|}}%s{{[-]}}", v)
+						}
+						lines = append(lines, fmt.Sprintf("\t- %s: %s", k, status))
 					}
-					lines = append(lines, fmt.Sprintf("\t- %s: %s", k, status))
+					logger.Notice(ctx, "Applying settings from theme file:\n%s", strings.Join(lines, "\n"))
 				}
-				logger.Notice(ctx, "Applying settings from theme file:\n%s", strings.Join(lines, "\n"))
 			}
-		}
 		}
 		if err := config.SaveAppConfig(conf); err != nil {
 			logger.Error(ctx, "Failed to save theme setting: %v", err)
@@ -123,6 +123,15 @@ func parseBracketMode(ctx context.Context, arg, label string) (string, error) {
 	}
 	logger.Error(ctx, "Invalid %s brackets mode: %s (use never, selected, or always)", label, arg)
 	return "", fmt.Errorf("invalid %s brackets mode", label)
+}
+
+func parseTabLayout(ctx context.Context, arg string) (string, error) {
+	switch strings.ToLower(arg) {
+	case "maximized", "sidebyside", "stacked":
+		return strings.ToLower(arg), nil
+	}
+	logger.Error(ctx, "Invalid tab layout: %s (use maximized, sidebyside, or stacked)", arg)
+	return "", fmt.Errorf("invalid tab layout")
 }
 
 func HandleThemeSettings(ctx context.Context, group *CommandGroup) error {
@@ -303,6 +312,17 @@ func HandleThemeSettings(ctx context.Context, group *CommandGroup) error {
 		conf.UI.MenuBrackets = true
 	case "--theme-no-menu-brackets":
 		conf.UI.MenuBrackets = false
+	case "--theme-tab-layout":
+		if len(group.Args) > 0 {
+			v, err := parseTabLayout(ctx, group.Args[0])
+			if err != nil {
+				return err
+			}
+			conf.UI.TabLayout = v
+		} else {
+			logger.Display(ctx, "Current tab layout: %s", conf.UI.TabLayout)
+			return nil
+		}
 	}
 
 	if err := config.SaveAppConfig(conf); err != nil {
@@ -333,6 +353,9 @@ func HandleThemeSettings(ctx context.Context, group *CommandGroup) error {
 	}
 	if group.Command == "--theme-border-color" && len(group.Args) > 0 {
 		logger.Notice(ctx, "Border color set to: {{|Var|}}%s{{[-]}}", group.Args[0])
+	}
+	if group.Command == "--theme-tab-layout" && len(group.Args) > 0 {
+		logger.Notice(ctx, "Tab layout set to: {{|Var|}}%s{{[-]}}", conf.UI.TabLayout)
 	}
 	if group.Command == "--theme-shadow-level" && len(group.Args) > 0 {
 		var percent int

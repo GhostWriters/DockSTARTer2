@@ -64,6 +64,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			"--theme-border-color", "--theme-table",
 			"--theme-dialog-title", "--theme-submenu-title", "--theme-panel-title",
 			"--theme-checkbox-brackets", "--theme-radio-brackets",
+			"--theme-menu-brackets", "--theme-no-menu-brackets", "--theme-tab-layout",
 			"--theme-extract", "--theme-extract-all", "--man":
 			// Skip validation for meta/config commands
 		default:
@@ -242,7 +243,8 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				"--theme-spinner", "--theme-no-spinner", "--theme-spinners", "--theme-no-spinners", "--theme-spinner-speed",
 				"--theme-border-color",
 				"--theme-dialog-title", "--theme-submenu-title", "--theme-panel-title",
-				"--theme-checkbox-brackets", "--theme-radio-brackets":
+				"--theme-checkbox-brackets", "--theme-radio-brackets",
+				"--theme-menu-brackets", "--theme-no-menu-brackets", "--theme-tab-layout":
 				ranCommand = true
 				return commands.HandleThemeSettings(subCtx, &group)
 			case "-p", "--prune":

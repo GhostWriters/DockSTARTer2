@@ -304,6 +304,14 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Selectable:  true,
 			SpaceAction: s.toggleLineNumberBrackets(),
 		},
+		{
+			Tag:  "Tab Layout",
+			Desc: s.dropdownDesc(tabLayoutDesc(s.config.UI.TabLayout)),
+			Help: "Default view when the vars editor has 2 tabs open (Enter for options)",
+			Action: s.showTabLayoutDropdown("tab_layout", "Tab Layout",
+				func() string { return s.config.UI.TabLayout },
+				func(cfg *config.AppConfig, v string) { cfg.UI.TabLayout = v }),
+		},
 
 		// -- Brackets --
 		{
@@ -648,6 +656,17 @@ func bracketModeDesc(v string) string {
 	}
 }
 
+func tabLayoutDesc(v string) string {
+	switch strings.ToLower(v) {
+	case "sidebyside":
+		return "Side by side"
+	case "stacked":
+		return "Stacked"
+	default:
+		return "Maximized"
+	}
+}
+
 func (s *DisplayOptionsScreen) panelModeToDesc(v string) string {
 	switch strings.ToLower(v) {
 	case "none":
@@ -736,6 +755,35 @@ func (s *DisplayOptionsScreen) showBracketModeDropdown(menuName, label string, g
 			menu.Select(2)
 		default:
 			menu.Select(1)
+		}
+		return displayengine.ShowDialogMsg{Dialog: menu}
+	}
+}
+
+// showTabLayoutDropdown mirrors showBracketModeDropdown's shape for
+// ui.tab_layout's 3 fixed options.
+func (s *DisplayOptionsScreen) showTabLayoutDropdown(menuName, label string, getter func() string, apply func(*config.AppConfig, string)) tea.Cmd {
+	return func() tea.Msg {
+		current := strings.ToLower(getter())
+		items := []displayengine.MenuItem{
+			{Tag: "Maximized", Desc: "Show one tab at a time", Help: "Show one tab at a time", IsRadioButton: true, Selectable: true, Checked: current != "sidebyside" && current != "stacked"},
+			{Tag: "Side by side", Desc: "Show tabs side by side", Help: "Show tabs side by side", IsRadioButton: true, Selectable: true, Checked: current == "sidebyside"},
+			{Tag: "Stacked", Desc: "Show tabs stacked vertically", Help: "Show tabs stacked vertically", IsRadioButton: true, Selectable: true, Checked: current == "stacked"},
+		}
+		applyFuncs := []tea.Cmd{s.titleAlignAction(apply, "maximized"), s.titleAlignAction(apply, "sidebyside"), s.titleAlignAction(apply, "stacked")}
+		menu := displayengine.NewMenuModel(menuName, label, "Select layout", items)
+		menu.SetUpdateInterceptor(tui.RadioGroupInterceptor(menuName))
+		menu.SetButtons([]displayengine.ButtonDef{
+			{Label: "Done", ZoneID: "btn-select", Action: radioMenuSelectAction(menu, applyFuncs), Help: "Confirm the marked layout."},
+			{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return displayengine.CloseDialogMsg{} }, Help: "Cancel and close."},
+		})
+		switch current {
+		case "sidebyside":
+			menu.Select(1)
+		case "stacked":
+			menu.Select(2)
+		default:
+			menu.Select(0)
 		}
 		return displayengine.ShowDialogMsg{Dialog: menu}
 	}

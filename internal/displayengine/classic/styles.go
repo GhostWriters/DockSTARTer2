@@ -190,9 +190,12 @@ const (
 	IDInsOvr = "ins_ovr"
 
 	// Title bar widget IDs (suffix appended to menu ID)
-	IDTitleWidgetRefresh = "title_widget_refresh"
-	IDTitleWidgetHelp    = "title_widget_help"
-	IDTitleWidgetClose   = "title_widget_close"
+	IDTitleWidgetRefresh    = "title_widget_refresh"
+	IDTitleWidgetHelp       = "title_widget_help"
+	IDTitleWidgetClose      = "title_widget_close"
+	IDTitleWidgetMaximize   = "title_widget_maximize"
+	IDTitleWidgetSideBySide = "title_widget_sidebyside"
+	IDTitleWidgetStacked    = "title_widget_stacked"
 
 	// Panel resize widget IDs
 	IDPanelResizeUp = "panel_resize_up"

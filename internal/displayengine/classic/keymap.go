@@ -35,18 +35,18 @@ type KeyMap struct {
 	Esc   key.Binding
 
 	// Viewport scrolling (programbox)
-	PageUp       key.Binding
-	PageDown     key.Binding
-	Home         key.Binding
-	End          key.Binding
+	PageUp   key.Binding
+	PageDown key.Binding
+	Home     key.Binding
+	End      key.Binding
 
 	// Utility
 	Help      key.Binding
 	ForceQuit key.Binding
 
 	// Panel
-	ToggleLog        key.Binding
-	FocusPanelTitle  key.Binding
+	ToggleLog       key.Binding
+	FocusPanelTitle key.Binding
 
 	// Mouse (Mock bindings for help display)
 	MouseLeft  key.Binding
@@ -54,16 +54,17 @@ type KeyMap struct {
 	MouseWheel key.Binding
 
 	// Environment Editor specific keys (shortcuts defined in textarea and tabbed_vars_editor)
-	EnvRefresh   key.Binding
-	EnvAddVar    key.Binding
-	EnvDelete    key.Binding
-	EnvReorderU  key.Binding
-	EnvReorderD  key.Binding
-	EnvInsert    key.Binding
-	EnvSplitLine key.Binding
-	EnvEditValue key.Binding
-	EnvNextTab    key.Binding
-	EnvPrevTab    key.Binding
+	EnvRefresh     key.Binding
+	EnvAddVar      key.Binding
+	EnvDelete      key.Binding
+	EnvReorderU    key.Binding
+	EnvReorderD    key.Binding
+	EnvInsert      key.Binding
+	EnvSplitLine   key.Binding
+	EnvEditValue   key.Binding
+	EnvNextTab     key.Binding
+	EnvPrevTab     key.Binding
+	EnvCycleLayout key.Binding
 
 	// Program-wide context menu (keyboard equiv of right-click)
 	ContextMenu key.Binding
@@ -227,6 +228,10 @@ var Keys = KeyMap{
 	EnvPrevTab: key.NewBinding(
 		key.WithKeys("ctrl+left", "alt+left", "ctrl+pgup", "alt+pgup", "ctrl+alt+left"),
 		key.WithHelp("alt+←", "prev tab"),
+	),
+	EnvCycleLayout: key.NewBinding(
+		key.WithKeys("f6", "ctrl+w", "alt+w", "ctrl+alt+w"),
+		key.WithHelp("F6/alt+w", "cycle layout"),
 	),
 	ContextMenu: key.NewBinding(
 		key.WithKeys("f3", "ctrl+space", "alt+space", "ctrl+alt+space", "shift+F10", "alt+enter", "ctrl+enter", "ctrl+alt+enter", "menu"),

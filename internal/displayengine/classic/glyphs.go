@@ -43,6 +43,12 @@ const (
 	resizeUpWidgetAscii   = glyphs.ResizeUpWidgetAscii
 	resizeDnWidget        = glyphs.ResizeDnWidget
 	resizeDnWidgetAscii   = glyphs.ResizeDnWidgetAscii
+	maximizeWidget        = glyphs.MaximizeWidget
+	maximizeWidgetAscii   = glyphs.MaximizeWidgetAscii
+	sideBySideWidget      = glyphs.SideBySideWidget
+	sideBySideWidgetAscii = glyphs.SideBySideWidgetAscii
+	stackedWidget         = glyphs.StackedWidget
+	stackedWidgetAscii    = glyphs.StackedWidgetAscii
 	tagBracketOpen          = glyphs.TagBracketOpen
 	tagBracketClose         = glyphs.TagBracketClose
 	tagBracketOpenAscii     = glyphs.TagBracketOpenAscii
