@@ -676,6 +676,19 @@ func (s *DisplayOptionsScreen) panelModeToDesc(v string) string {
 	}
 }
 
+// radioMenuSelectAction runs the applyFuncs entry for whichever item is
+// marked Checked, not the cursor-focused item.
+func radioMenuSelectAction(menu *displayengine.MenuModel, applyFuncs []tea.Cmd) tea.Cmd {
+	return func() tea.Msg {
+		for i, item := range menu.GetItems() {
+			if item.Checked && i < len(applyFuncs) && applyFuncs[i] != nil {
+				return applyFuncs[i]()
+			}
+		}
+		return displayengine.CloseDialogMsg{}
+	}
+}
+
 func (s *DisplayOptionsScreen) titleAlignAction(apply func(*config.AppConfig, string), val string) func() tea.Msg {
 	return func() tea.Msg {
 		return tea.Batch(
@@ -691,12 +704,14 @@ func (s *DisplayOptionsScreen) showTitleAlignDropdown(menuName, label string, ge
 	return func() tea.Msg {
 		current := getter()
 		items := []displayengine.MenuItem{
-			{Tag: "Left", Help: "Align title to the left", Action: s.titleAlignAction(apply, "left"), IsRadioButton: true, Checked: current == "left"},
-			{Tag: "Center", Help: "Center the title", Action: s.titleAlignAction(apply, "center"), IsRadioButton: true, Checked: current != "left"},
+			{Tag: "Left", Help: "Align title to the left", IsRadioButton: true, Selectable: true, Checked: current == "left"},
+			{Tag: "Center", Help: "Center the title", IsRadioButton: true, Selectable: true, Checked: current != "left"},
 		}
+		applyFuncs := []tea.Cmd{s.titleAlignAction(apply, "left"), s.titleAlignAction(apply, "center")}
 		menu := displayengine.NewMenuModel(menuName, label, "Select alignment", items)
+		menu.SetUpdateInterceptor(tui.RadioGroupInterceptor(menuName))
 		menu.SetButtons([]displayengine.ButtonDef{
-			{Label: "Select", ZoneID: "btn-select", Help: "Confirm and execute the selected action."},
+			{Label: "Done", ZoneID: "btn-select", Action: radioMenuSelectAction(menu, applyFuncs), Help: "Confirm the marked alignment."},
 			{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return displayengine.CloseDialogMsg{} }, Help: "Cancel and close."},
 		})
 		if current == "left" {
@@ -716,13 +731,15 @@ func (s *DisplayOptionsScreen) showBracketModeDropdown(menuName, label string, g
 	return func() tea.Msg {
 		current := strings.ToLower(getter())
 		items := []displayengine.MenuItem{
-			{Tag: "Never", Desc: "Only the focused row is bracketed", Help: "Only the focused row is bracketed", Action: s.titleAlignAction(apply, "never"), IsRadioButton: true, Checked: current == "never"},
-			{Tag: "Selected", Desc: "Bracketed when focused or checked", Help: "Bracketed when focused or checked", Action: s.titleAlignAction(apply, "selected"), IsRadioButton: true, Checked: current != "never" && current != "always"},
-			{Tag: "Always", Desc: "Every row is bracketed", Help: "Every row is bracketed", Action: s.titleAlignAction(apply, "always"), IsRadioButton: true, Checked: current == "always"},
+			{Tag: "Never", Desc: "Only the focused row is bracketed", Help: "Only the focused row is bracketed", IsRadioButton: true, Selectable: true, Checked: current == "never"},
+			{Tag: "Selected", Desc: "Bracketed when focused or checked", Help: "Bracketed when focused or checked", IsRadioButton: true, Selectable: true, Checked: current != "never" && current != "always"},
+			{Tag: "Always", Desc: "Every row is bracketed", Help: "Every row is bracketed", IsRadioButton: true, Selectable: true, Checked: current == "always"},
 		}
+		applyFuncs := []tea.Cmd{s.titleAlignAction(apply, "never"), s.titleAlignAction(apply, "selected"), s.titleAlignAction(apply, "always")}
 		menu := displayengine.NewMenuModel(menuName, label, "Select mode", items)
+		menu.SetUpdateInterceptor(tui.RadioGroupInterceptor(menuName))
 		menu.SetButtons([]displayengine.ButtonDef{
-			{Label: "Select", ZoneID: "btn-select", Help: "Confirm and execute the selected action."},
+			{Label: "Done", ZoneID: "btn-select", Action: radioMenuSelectAction(menu, applyFuncs), Help: "Confirm the marked mode."},
 			{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return displayengine.CloseDialogMsg{} }, Help: "Cancel and close."},
 		})
 		switch current {
@@ -781,26 +798,29 @@ func (s *DisplayOptionsScreen) showPanelDropdown(isLocalSetting bool) tea.Cmd {
 
 		currentLower := strings.ToLower(currentMode)
 		var items []displayengine.MenuItem
+		var applyFuncs []tea.Cmd
 
 		// None option: always available
 		items = append(items, displayengine.MenuItem{
 			Tag:           "None",
 			Desc:          "Hide the panel entirely",
 			Help:          "Removes the panel and stretches content to the bottom of the screen.",
-			Action:        func() tea.Msg { return confirmChange("none")() },
 			IsRadioButton: true,
+			Selectable:    true,
 			Checked:       currentLower == "none",
 		})
+		applyFuncs = append(applyFuncs, func() tea.Msg { return confirmChange("none")() })
 
 		// Log option: always available
 		items = append(items, displayengine.MenuItem{
 			Tag:           "Log",
 			Desc:          "Show read-only log viewer",
 			Help:          "Displays application logs but hides the command input bar.",
-			Action:        func() tea.Msg { return confirmChange("log")() },
 			IsRadioButton: true,
+			Selectable:    true,
 			Checked:       currentLower == "log",
 		})
+		applyFuncs = append(applyFuncs, func() tea.Msg { return confirmChange("log")() })
 
 		// Console (ds2-only): always available for both local and remote —
 		// it only accepts ds2 subcommands so it is safe in all session types.
@@ -808,10 +828,11 @@ func (s *DisplayOptionsScreen) showPanelDropdown(isLocalSetting bool) tea.Cmd {
 			Tag:           "Console",
 			Desc:          "ds2 commands only",
 			Help:          "Accepts ds2 subcommands only. Safe for remote sessions.",
-			Action:        func() tea.Msg { return applyChange("console")() },
 			IsRadioButton: true,
+			Selectable:    true,
 			Checked:       currentLower == "console",
 		})
+		applyFuncs = append(applyFuncs, func() tea.Msg { return applyChange("console")() })
 
 		// System Console: full shell access.
 		// Always show in the dropdown, but require sudo auth if remote.
@@ -863,18 +884,20 @@ func (s *DisplayOptionsScreen) showPanelDropdown(isLocalSetting bool) tea.Cmd {
 			Tag:           "System Console",
 			Desc:          "Full shell access",
 			Help:          "Passes commands directly to the OS shell. Use with caution for remote sessions.",
-			Action:        systemAction,
 			IsRadioButton: true,
+			Selectable:    true,
 			Checked:       currentLower == "system",
 		})
+		applyFuncs = append(applyFuncs, systemAction)
 
 		title := "Remote Panel Mode"
 		if isLocalSetting {
 			title = "Local Panel Mode"
 		}
 		menu := displayengine.NewMenuModel("panel_dropdown", title, "Choose layout", items)
+		menu.SetUpdateInterceptor(tui.RadioGroupInterceptor("panel_dropdown"))
 		menu.SetButtons([]displayengine.ButtonDef{
-			{Label: "Select", ZoneID: "btn-select", Help: "Confirm and execute the selected action."},
+			{Label: "Done", ZoneID: "btn-select", Action: radioMenuSelectAction(menu, applyFuncs), Help: "Confirm the marked layout."},
 			{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return displayengine.CloseDialogMsg{} }, Help: "Cancel and close."},
 		})
 
@@ -912,29 +935,32 @@ func (s *DisplayOptionsScreen) showShadowDropdown() tea.Cmd {
 			}
 		}
 		var items []displayengine.MenuItem
+		var applyFuncs []tea.Cmd
 		for i, e := range entries {
 			level := i
 			items = append(items, displayengine.MenuItem{
-				Tag:  e.label,
-				Desc: e.value,
-				Help: fmt.Sprintf("Set shadow to %s", e.label),
-				Action: func() tea.Msg {
-					return tea.Batch(
-						func() tea.Msg {
-							return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
-								cfg.UI.ShadowLevel = level
-							}}
-						},
-						tui.CloseDialog(),
-					)()
-				},
+				Tag:           e.label,
+				Desc:          e.value,
+				Help:          fmt.Sprintf("Set shadow to %s", e.label),
 				IsRadioButton: true,
+				Selectable:    true,
 				Checked:       level == s.config.UI.ShadowLevel,
+			})
+			applyFuncs = append(applyFuncs, func() tea.Msg {
+				return tea.Batch(
+					func() tea.Msg {
+						return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
+							cfg.UI.ShadowLevel = level
+						}}
+					},
+					tui.CloseDialog(),
+				)()
 			})
 		}
 		menu := displayengine.NewMenuModel("shadow_dropdown", "Shadow Level", "Select shadow fill pattern", items)
+		menu.SetUpdateInterceptor(tui.RadioGroupInterceptor("shadow_dropdown"))
 		menu.SetButtons([]displayengine.ButtonDef{
-			{Label: "Select", ZoneID: "btn-select", Help: "Confirm and execute the selected action."},
+			{Label: "Done", ZoneID: "btn-select", Action: radioMenuSelectAction(menu, applyFuncs), Help: "Confirm the marked shadow level."},
 			{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return displayengine.CloseDialogMsg{} }, Help: "Cancel and close."},
 		})
 		menu.Select(s.config.UI.ShadowLevel)
@@ -954,29 +980,32 @@ func (s *DisplayOptionsScreen) showBorderColorDropdown() tea.Cmd {
 			{3, "Both (3D Effect)", "{{|OptionValue|}}(3D){{[-]}}"},
 		}
 		var items []displayengine.MenuItem
+		var applyFuncs []tea.Cmd
 		for _, e := range entries {
 			mode := e.mode
 			items = append(items, displayengine.MenuItem{
-				Tag:  e.label,
-				Desc: e.value,
-				Help: fmt.Sprintf("Set border coloring to %s", e.label),
-				Action: func() tea.Msg {
-					return tea.Batch(
-						func() tea.Msg {
-							return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
-								cfg.UI.BorderColor = mode
-							}}
-						},
-						tui.CloseDialog(),
-					)()
-				},
+				Tag:           e.label,
+				Desc:          e.value,
+				Help:          fmt.Sprintf("Set border coloring to %s", e.label),
 				IsRadioButton: true,
+				Selectable:    true,
 				Checked:       mode == s.config.UI.BorderColor,
+			})
+			applyFuncs = append(applyFuncs, func() tea.Msg {
+				return tea.Batch(
+					func() tea.Msg {
+						return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
+							cfg.UI.BorderColor = mode
+						}}
+					},
+					tui.CloseDialog(),
+				)()
 			})
 		}
 		menu := displayengine.NewMenuModel("border_dropdown", "Border Coloring", "Select which theme colors highlight borders", items)
+		menu.SetUpdateInterceptor(tui.RadioGroupInterceptor("border_dropdown"))
 		menu.SetButtons([]displayengine.ButtonDef{
-			{Label: "Select", ZoneID: "btn-select", Help: "Confirm and execute the selected action."},
+			{Label: "Done", ZoneID: "btn-select", Action: radioMenuSelectAction(menu, applyFuncs), Help: "Confirm the marked border coloring."},
 			{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return displayengine.CloseDialogMsg{} }, Help: "Cancel and close."},
 		})
 		menu.Select(s.config.UI.BorderColor - 1)

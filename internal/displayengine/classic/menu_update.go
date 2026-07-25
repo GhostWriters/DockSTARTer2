@@ -721,6 +721,10 @@ func (m *MenuModel) handleSpace() (tea.Model, tea.Cmd) {
 			if item.SpaceAction != nil {
 				return m, item.SpaceAction
 			}
+			// Fall back to Action (via handleEnter, for matching spinner bookkeeping).
+			if item.Action != nil {
+				return m.handleEnter()
+			}
 			return m, nil
 		}
 	}

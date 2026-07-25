@@ -154,16 +154,16 @@ func buildFamilyMenu(current string) *displayengine.MenuModel {
 	m.SetNoLeftMargin(true)
 	m.SetFlowMode(true)
 	m.SetFlowColumns(2)
-	m.SetUpdateInterceptor(radioGroupInterceptor("web_display_family"))
+	m.SetUpdateInterceptor(RadioGroupInterceptor("web_display_family"))
 	m.Select(checkedIdx)
 	return m
 }
 
-// radioGroupInterceptor returns an interceptor that enforces single-selection
+// RadioGroupInterceptor returns an interceptor that enforces single-selection
 // among all radio items in the menu.  When the menu is in scrollable column mode
 // (maxFlowRows > 0 and total rows exceed the viewport), Up/Down navigate
 // across columns at the same row rather than down the item list.
-func radioGroupInterceptor(id string) func(tea.Msg, *displayengine.MenuModel) (tea.Cmd, bool) {
+func RadioGroupInterceptor(id string) func(tea.Msg, *displayengine.MenuModel) (tea.Cmd, bool) {
 	return func(msg tea.Msg, m *displayengine.MenuModel) (tea.Cmd, bool) {
 		// Reading-order navigation when scrollbar is active (viewport is clipped).
 		// Up/Down step through items in reading order (left→right per row) so the
