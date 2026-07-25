@@ -104,3 +104,31 @@ var (
 	_ SubFocusable = (*ContentRow)(nil)
 	_ SubFocusable = (*ContentColumn)(nil)
 )
+
+// resolveSubFocusHit finds which of items has a LayerHitMsg/LayerWheelMsg
+// target (via MatchesID), points *subFocus at it, and calls setSubFocused to
+// re-apply the highlight immediately -- the outer dialog's own focus
+// propagation runs before a section's own Update, using whatever subFocus was
+// in effect before this click, so a click that changes which child is active
+// would otherwise leave the stale child highlighted until some later
+// interaction. Shared by ContentRow and ContentColumn's otherwise-identical
+// Update logic; returns nil if msg isn't a hit/wheel message or matches
+// nothing.
+func resolveSubFocusHit(items []Content, subFocus *int, msg tea.Msg, setSubFocused func(bool) tea.Cmd) tea.Cmd {
+	var id string
+	switch m := msg.(type) {
+	case LayerHitMsg:
+		id = m.ID
+	case LayerWheelMsg:
+		id = m.ID
+	default:
+		return nil
+	}
+	for i, item := range items {
+		if item.MatchesID(id) {
+			*subFocus = i
+			return setSubFocused(true)
+		}
+	}
+	return nil
+}
