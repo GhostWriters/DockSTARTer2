@@ -326,6 +326,7 @@ var optionTagToUIField = map[string]string{
 	"Remote Panel Mode":    "PanelRemote",
 	"Checkbox Brackets":    "CheckboxBrackets",
 	"Radio Brackets":       "RadioBrackets",
+	"Tab Layout":           "TabLayout",
 }
 
 func (s *DisplayOptionsScreen) syncOptionsMenu() {
@@ -349,6 +350,8 @@ func (s *DisplayOptionsScreen) syncOptionsMenu() {
 			items[i].Checked = s.config.UI.MenuBrackets
 		case "Line Number Brackets":
 			items[i].Checked = s.config.UI.LineNumberBrackets
+		case "Tab Layout":
+			items[i].Desc = s.dropdownDesc(tabLayoutDesc(s.config.UI.TabLayout))
 		case "Shadow Level":
 			items[i].Desc = s.dropdownDesc(s.shadowLevelToDesc(s.config.UI.ShadowLevel))
 		case "Border Color":
