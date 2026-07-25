@@ -85,3 +85,22 @@ type Content interface {
 }
 
 var _ Content = (*MenuModel)(nil)
+
+// SubFocusable is implemented by a Content that itself contains multiple Tab
+// stops (e.g. ContentRow, ContentColumn, or a composite wrapping one of
+// them) -- Tab/Shift-Tab cycling (menu_sections.go) checks for this instead
+// of a concrete type so any such container is recursed into uniformly,
+// regardless of how deeply it's nested or what wraps it.
+type SubFocusable interface {
+	NumTabStops() int
+	SubFocusIndex() int
+	SetSubFocusIndex(i int)
+	NextFocusableSub(from int) (int, bool)
+	PrevFocusableSub(from int) (int, bool)
+	Items() []Content
+}
+
+var (
+	_ SubFocusable = (*ContentRow)(nil)
+	_ SubFocusable = (*ContentColumn)(nil)
+)

@@ -38,29 +38,44 @@ func itemConfigValue(item displayengine.MenuItem) string {
 	return item.Tag
 }
 
-// IsScrollbarDragging reports whether any sub-menu is currently dragging a scrollbar thumb.
+// IsScrollbarDragging reports whether any sub-menu, or the preview panel's
+// own scrollbar, is currently dragging a scrollbar thumb.
 func (s *DisplayOptionsScreen) IsScrollbarDragging() bool {
-	return s.themeMenu.IsScrollbarDragging() || s.optionsMenu.IsScrollbarDragging()
+	return s.themeMenu.IsScrollbarDragging() || s.optionsMenu.IsScrollbarDragging() || s.previewScroll.Drag.Dragging
+}
+
+// delegateToOuterMenu forwards msg to outerMenu generically (Tab-cycling,
+// Left/Right, Space/click radio toggling, scrolling, etc. are all now
+// handled by the shared section-focus framework, not a screen-local copy of
+// it), then checks whether the theme list's Checked item changed as a
+// result -- Space/click/middle-click on a theme item are all handled
+// generically now by MenuModel's own radio logic, so this is the one
+// remaining screen-specific hook: applying the newly-marked theme as the
+// live preview.
+func (s *DisplayOptionsScreen) delegateToOuterMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
+	updated, cmd := s.outerMenu.Update(msg)
+	if m, ok := updated.(*displayengine.MenuModel); ok {
+		s.outerMenu = m
+	}
+	if s.themeMenu != nil {
+		for _, it := range s.themeMenu.GetItems() {
+			if it.Checked && itemConfigValue(it) != s.previewTheme {
+				s.applyPreview(itemConfigValue(it))
+				break
+			}
+		}
+	}
+	return s, cmd
 }
 
 func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Every inner menu must see its own deferred-action messages (button
 	// clicks on outerMenu, item Action clicks like the Options dropdowns on
 	// optionsMenu/themeMenu) before any early-return branch below can drop
-	// them -- each menu's menuDeferredActionMsg is scoped to its own
-	// instanceID, so only that menu can absorb it.
+	// them -- outerMenu.AbsorbMessage recurses generically through
+	// appearanceLayoutRow/ContentColumn into every inner menu.
 	if s.outerMenu != nil {
 		if action := s.outerMenu.AbsorbMessage(msg); action != nil {
-			return s, action
-		}
-	}
-	if s.optionsMenu != nil {
-		if action := s.optionsMenu.AbsorbMessage(msg); action != nil {
-			return s, action
-		}
-	}
-	if s.themeMenu != nil {
-		if action := s.themeMenu.AbsorbMessage(msg); action != nil {
 			return s, action
 		}
 	}
@@ -78,11 +93,12 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	var cmd tea.Cmd
-
-	// Forward coalescing done-messages to whichever inner menu owns them.
-	// These messages are sent by inner menus' dragDoneCmd/scrollDoneCmd after a render cycle.
-	// Without forwarding, dragPending/scrollPending would be stuck true permanently on inner menus.
+	// Forward coalescing done-messages to whichever scrollbar owns them.
+	// These messages are sent by dragDoneCmd/scrollDoneCmd after a render
+	// cycle. Without forwarding, dragPending/scrollPending would be stuck
+	// true permanently -- previewScroll needs this exactly like the two
+	// MenuModel-owned scrollbars (a Pending stuck true is precisely why wheel
+	// scroll over the preview would scroll one line and then stop).
 	switch dmsg := msg.(type) {
 	case displayengine.DragDoneMsg:
 		updated, uCmd := s.themeMenu.Update(dmsg)
@@ -93,6 +109,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m, ok := updated.(*displayengine.MenuModel); ok {
 			s.optionsMenu = m
 		}
+		_, _, _ = s.previewScroll.Update(dmsg, s.previewViewport.YOffset(), s.previewViewport.TotalLineCount(), s.previewViewport.VisibleLineCount())
 		return s, tea.Batch(uCmd, uCmd2)
 	case displayengine.ScrollDoneMsg:
 		updated, uCmd := s.themeMenu.Update(dmsg)
@@ -103,38 +120,53 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m, ok := updated.(*displayengine.MenuModel); ok {
 			s.optionsMenu = m
 		}
+		_, _, _ = s.previewScroll.Update(dmsg, s.previewViewport.YOffset(), s.previewViewport.TotalLineCount(), s.previewViewport.VisibleLineCount())
 		return s, tea.Batch(uCmd, uCmd2)
 	}
 
-	// Forward raw mouse drag/release events to the dragging sub-menu before the type switch
-	// so the drag continues while AppModel routes events via section-2 priority.
+	// Forward raw mouse drag/release events to whichever scrollbar is
+	// dragging before the type switch, so the drag continues while AppModel
+	// routes events via section-2 priority. Preview's scrollbar lives on the
+	// screen itself (previewScroll/previewViewport), not a MenuModel, so it's
+	// driven directly rather than through target.Update.
 	if s.IsScrollbarDragging() {
-		target := s.themeMenu
-		if s.optionsMenu.IsScrollbarDragging() {
-			target = s.optionsMenu
-		}
+		if s.previewScroll.Drag.Dragging {
+			switch msg.(type) {
+			case tea.MouseMotionMsg, tea.MouseReleaseMsg:
+				if newOff, cmd, changed := s.previewScroll.Update(msg, s.previewViewport.YOffset(), s.previewViewport.TotalLineCount(), s.previewViewport.VisibleLineCount()); changed {
+					s.previewViewport.SetYOffset(newOff)
+					return s, cmd
+				}
+				return s, nil
+			}
+		} else {
+			target := s.themeMenu
+			if s.optionsMenu.IsScrollbarDragging() {
+				target = s.optionsMenu
+			}
 
-		if _, ok := msg.(tea.MouseMotionMsg); ok {
-			updated, uCmd := target.Update(msg)
-			if m, ok := updated.(*displayengine.MenuModel); ok {
-				if target == s.themeMenu {
-					s.themeMenu = m
-				} else {
-					s.optionsMenu = m
+			if _, ok := msg.(tea.MouseMotionMsg); ok {
+				updated, uCmd := target.Update(msg)
+				if m, ok := updated.(*displayengine.MenuModel); ok {
+					if target == s.themeMenu {
+						s.themeMenu = m
+					} else {
+						s.optionsMenu = m
+					}
 				}
+				return s, uCmd
 			}
-			return s, uCmd
-		}
-		if _, ok := msg.(tea.MouseReleaseMsg); ok {
-			updated, uCmd := target.Update(msg)
-			if m, ok := updated.(*displayengine.MenuModel); ok {
-				if target == s.themeMenu {
-					s.themeMenu = m
-				} else {
-					s.optionsMenu = m
+			if _, ok := msg.(tea.MouseReleaseMsg); ok {
+				updated, uCmd := target.Update(msg)
+				if m, ok := updated.(*displayengine.MenuModel); ok {
+					if target == s.themeMenu {
+						s.themeMenu = m
+					} else {
+						s.optionsMenu = m
+					}
 				}
+				return s, uCmd
 			}
-			return s, uCmd
 		}
 	}
 
@@ -154,210 +186,8 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// or focus the panel.
 		return s, nil
 
-	case tea.MouseWheelMsg:
-		// ONLY interact with the focused panel, no mouse-over fallback
-		switch s.focusedPanel {
-		case FocusLoadDefaults:
-			updated, uCmd := s.loadDefaultsMenu.Update(msg)
-			if m, ok := updated.(*displayengine.MenuModel); ok {
-				s.loadDefaultsMenu = m
-			}
-			return s, uCmd
-		case FocusThemes:
-			updated, uCmd := s.themeMenu.Update(msg)
-			if m, ok := updated.(*displayengine.MenuModel); ok {
-				s.themeMenu = m
-			}
-			return s, uCmd
-		case FocusOptions:
-			updated, uCmd := s.optionsMenu.Update(msg)
-			if m, ok := updated.(*displayengine.MenuModel); ok {
-				s.optionsMenu = m
-			}
-			return s, uCmd
-		case FocusButtons:
-			// Scroll wheel cycles the focused button (up=left, down=right) — clamps, no wrap.
-			maxBtn := s.maxFocusedButton()
-			switch msg.Button {
-			case tea.MouseWheelUp:
-				if s.focusedButton > 0 {
-					s.focusedButton--
-				}
-			case tea.MouseWheelDown:
-				if s.focusedButton < maxBtn {
-					s.focusedButton++
-				}
-			}
-			return s, nil
-		}
-		return s, nil
-
-	case displayengine.LayerHitMsg:
-		// 1. Focus routing via panel hit
-		switch msg.ID {
-		case displayengine.IDLoadDefaultsPanel:
-			s.buttonFocused = false
-			s.focusedPanel = FocusLoadDefaults
-			s.updateFocusStates()
-			return s, nil
-		case displayengine.IDThemePanel:
-			s.buttonFocused = false
-			s.focusedPanel = FocusThemes
-			s.updateFocusStates()
-			return s, nil
-		case displayengine.IDOptionsPanel:
-			s.buttonFocused = false
-			s.focusedPanel = FocusOptions
-			s.updateFocusStates()
-			return s, nil
-		case displayengine.IDButtonPanel:
-			s.buttonFocused = false
-			s.focusedPanel = FocusButtons
-			s.updateFocusStates()
-			return s, nil
-		}
-
-		// 2. Button actions (global buttons not belonging to a sub-menu)
-		if displayengine.ButtonIDMatches(msg.ID, displayengine.IDApplyButton) {
-			if msg.Button == tea.MouseLeft {
-				s.focusedPanel = FocusButtons
-				s.focusedButton = 0
-				s.updateFocusStates()
-				return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDApplyButton, s.handleApply())
-			}
-			if msg.Button == displayengine.HoverButton {
-				s.focusedPanel = FocusButtons
-				s.focusedButton = 0
-				s.updateFocusStates()
-				return s, nil
-			}
-		} else if displayengine.ButtonIDMatches(msg.ID, displayengine.IDResetButton) {
-			if msg.Button == tea.MouseLeft {
-				s.focusedPanel = FocusButtons
-				s.focusedButton = 1
-				s.updateFocusStates()
-				return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDResetButton, s.handleReset())
-			}
-			if msg.Button == displayengine.HoverButton {
-				s.focusedPanel = FocusButtons
-				s.focusedButton = 1
-				s.updateFocusStates()
-				return s, nil
-			}
-		} else if displayengine.ButtonIDMatches(msg.ID, displayengine.IDBackButton) {
-			if msg.Button == tea.MouseLeft {
-				s.focusedPanel = FocusButtons
-				s.focusedButton = 2
-				s.updateFocusStates()
-				if s.isRoot {
-					return s, nil
-				}
-				theme.Unload("Preview")
-				return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDBackButton, navigateBack())
-			}
-			if msg.Button == displayengine.HoverButton {
-				s.focusedPanel = FocusButtons
-				s.focusedButton = 2
-				s.updateFocusStates()
-				return s, nil
-			}
-		} else if displayengine.ButtonIDMatches(msg.ID, displayengine.IDExitButton) {
-			if msg.Button == tea.MouseLeft {
-				s.focusedPanel = FocusButtons
-				s.focusedButton = s.maxFocusedButton()
-				s.updateFocusStates()
-				theme.Unload("Preview")
-				return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDExitButton, tui.ConfirmExitAction())
-			}
-			if msg.Button == displayengine.HoverButton {
-				s.focusedPanel = FocusButtons
-				s.focusedButton = s.maxFocusedButton()
-				s.updateFocusStates()
-				return s, nil
-			}
-		}
-
-		// 3. Delegation to sub-menus (handles items and internal buttons)
-		if strings.Contains(msg.ID, displayengine.IDLoadDefaultsPanel) {
-			s.focusedPanel = FocusLoadDefaults
-			s.updateFocusStates()
-			updated, uCmd := s.loadDefaultsMenu.Update(msg)
-			if m, ok := updated.(*displayengine.MenuModel); ok {
-				s.loadDefaultsMenu = m
-			}
-			return s, uCmd
-		} else if strings.Contains(msg.ID, displayengine.IDThemePanel) {
-			s.focusedPanel = FocusThemes
-			s.updateFocusStates()
-			updated, uCmd := s.themeMenu.Update(msg)
-			if m, ok := updated.(*displayengine.MenuModel); ok {
-				s.themeMenu = m
-			}
-			// Hook for theme preview: if theme changed (Left Click), apply it
-			// and update the radio Checked states.
-			if msg.Button == tea.MouseLeft && strings.HasPrefix(msg.ID, "item-") {
-				idx := s.themeMenu.Index()
-				items := s.themeMenu.GetItems()
-				if idx >= 0 && idx < len(items) {
-					// Update radio button states
-					for i := range items {
-						items[i].Checked = (i == idx)
-					}
-					s.themeMenu.SetItems(items)
-					s.applyPreview(itemConfigValue(items[idx]))
-				}
-			}
-			return s, uCmd
-		} else if strings.Contains(msg.ID, displayengine.IDOptionsPanel) {
-			s.focusedPanel = FocusOptions
-			s.updateFocusStates()
-			updated, uCmd := s.optionsMenu.Update(msg)
-			if m, ok := updated.(*displayengine.MenuModel); ok {
-				s.optionsMenu = m
-			}
-			return s, uCmd
-		}
-
-		// Title widget clicks — delegate to outerMenu
-		if s.outerMenu != nil && displayengine.IsTitleWidgetID(msg.ID) {
-			updated, uCmd := s.outerMenu.Update(msg)
-			if m, ok := updated.(*displayengine.MenuModel); ok {
-				s.outerMenu = m
-			}
-			return s, uCmd
-		}
-
-	case displayengine.ToggleFocusedMsg:
-		// Middle click: activate the currently focused item in the hovered panel
-		switch s.focusedPanel {
-		case FocusLoadDefaults:
-			updated, uCmd := s.loadDefaultsMenu.Update(msg)
-			if m, ok := updated.(*displayengine.MenuModel); ok {
-				s.loadDefaultsMenu = m
-			}
-			return s, uCmd
-		case FocusThemes:
-			// Activate radio item
-			idx := s.themeMenu.Index()
-			items := s.themeMenu.GetItems()
-			if idx >= 0 && idx < len(items) {
-				for i := range items {
-					items[i].Checked = (i == idx)
-				}
-				s.themeMenu.SetItems(items)
-				s.applyPreview(itemConfigValue(items[idx]))
-			}
-			return s, nil
-		case FocusOptions:
-			updated, uCmd := s.optionsMenu.Update(msg)
-			if m, ok := updated.(*displayengine.MenuModel); ok {
-				s.optionsMenu = m
-			}
-			return s, uCmd
-		case FocusButtons:
-			return s.execFocusedButton()
-		}
-		return s, nil
+	case tea.MouseWheelMsg, displayengine.LayerHitMsg, displayengine.ToggleFocusedMsg:
+		return s.delegateToOuterMenu(msg)
 
 	case tea.KeyPressMsg:
 		// Title bar focus: delegate all keys to outer menu when its title bar is focused.
@@ -368,125 +198,10 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return s, uCmd
 		}
-
-		// 1. Panel Cycling (Tab / Shift-Tab) - LoadDefaults -> Themes -> Options -> LoadDefaults
-		// Preserves buttonFocused (unlike Up/Down within a submenu) so a
-		// dual-focused button, e.g. Apply after Reset or screen entry, stays
-		// highlighted while switching which submenu is sub-focused.
-		if key.Matches(msg, displayengine.Keys.CycleTab) {
-			switch s.focusedPanel {
-			case FocusLoadDefaults:
-				s.focusedPanel = FocusThemes
-			case FocusThemes:
-				s.focusedPanel = FocusOptions
-			default:
-				s.focusedPanel = FocusLoadDefaults
-			}
-			s.updateFocusStates()
-			return s, nil
-		}
-		if key.Matches(msg, displayengine.Keys.CycleShiftTab) {
-			switch s.focusedPanel {
-			case FocusOptions:
-				s.focusedPanel = FocusThemes
-			case FocusThemes:
-				s.focusedPanel = FocusLoadDefaults
-			default:
-				s.focusedPanel = FocusOptions
-			}
-			s.updateFocusStates()
-			return s, nil
-		}
-
-		// 2. Strict Navigation (Workstation Model)
-
-		// Left/Right: cycle buttons; when on a submenu, keep it focused too (buttonFocused).
-		if key.Matches(msg, displayengine.Keys.Left) {
-			if s.focusedPanel == FocusButtons || s.buttonFocused {
-				s.buttonFocused = s.focusedPanel != FocusButtons
-				s.focusedButton--
-				if s.focusedButton < 0 {
-					s.focusedButton = s.maxFocusedButton()
-				}
-			} else {
-				s.buttonFocused = true
-				s.focusedButton = s.maxFocusedButton()
-			}
-			s.updateFocusStates()
-			return s, nil
-		}
-		if key.Matches(msg, displayengine.Keys.Right) {
-			if s.focusedPanel == FocusButtons || s.buttonFocused {
-				s.buttonFocused = s.focusedPanel != FocusButtons
-				s.focusedButton++
-				if s.focusedButton > s.maxFocusedButton() {
-					s.focusedButton = 0
-				}
-			} else {
-				s.buttonFocused = true
-				s.focusedButton = 0
-			}
-			s.updateFocusStates()
-			return s, nil
-		}
-
-		if key.Matches(msg, displayengine.Keys.Enter) {
-			if s.buttonFocused || s.focusedPanel == FocusButtons {
-				s.buttonFocused = false
-				return s.execFocusedButton()
-			}
-		}
-
-		// Esc: Cancel — same as clicking the close widget
 		if key.Matches(msg, displayengine.Keys.Esc) {
-			if s.buttonFocused {
-				s.buttonFocused = false
-				s.updateFocusStates()
-			}
 			return s, s.EscapeAction()
 		}
-
-		// 3. Up/Down/Space: routed to focused panel below. Preserves
-		// buttonFocused, same as Tab/Shift-Tab, so a dual-focused button stays
-		// highlighted while moving the cursor within a submenu; still calls
-		// updateFocusStates so outerMenu's cache is invalidated.
-		if key.Matches(msg, displayengine.Keys.Up) || key.Matches(msg, displayengine.Keys.Down) {
-			s.updateFocusStates()
-		}
-		switch s.focusedPanel {
-		case FocusLoadDefaults:
-			updated, uCmd := s.loadDefaultsMenu.Update(msg)
-			if m, ok := updated.(*displayengine.MenuModel); ok {
-				s.loadDefaultsMenu = m
-			}
-			return s, uCmd
-		case FocusThemes:
-			// Specific radio logic for Space on theme list
-			if key.Matches(msg, displayengine.Keys.Space) {
-				items := s.themeMenu.GetItems()
-				cursor := s.themeMenu.Index()
-				if cursor >= 0 && cursor < len(items) {
-					for i := range items {
-						items[i].Checked = (i == cursor)
-					}
-					s.themeMenu.SetItems(items)
-					s.applyPreview(itemConfigValue(items[cursor]))
-					return s, nil
-				}
-			}
-
-			updated, uCmd := s.themeMenu.Update(msg)
-			if m, ok := updated.(*displayengine.MenuModel); ok {
-				s.themeMenu = m
-			}
-			return s, uCmd
-		case FocusOptions:
-			updated, uCmd := s.optionsMenu.Update(msg)
-			if m, ok := updated.(*displayengine.MenuModel); ok {
-				s.optionsMenu = m
-			}
-			return s, uCmd
-		}
+		return s.delegateToOuterMenu(msg)
 
 	case updateDisplayOptionMsg:
 		msg.update(&s.config)
@@ -539,7 +254,15 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	}
 
-	return s, cmd
+	// Anything not matched above (notably MenuDeferredActionMsg, the
+	// 50ms-delayed tick that actually runs a clicked item's Action) still
+	// needs to reach outerMenu.Update -- unlike outerMenu.AbsorbMessage
+	// (only checks its own instanceID/button row, never recurses into
+	// contentSections), Update's own updateSections routes it correctly
+	// through appearanceLayoutRow/ContentColumn to whichever inner menu
+	// actually owns it. Without this, a nested item's deferred action (e.g.
+	// an Options dropdown) never runs and its spinner never clears.
+	return s.delegateToOuterMenu(msg)
 }
 
 func (s *DisplayOptionsScreen) applyPreview(themeName string) {
@@ -654,69 +377,10 @@ func (s *DisplayOptionsScreen) Title() string {
 }
 
 func (s *DisplayOptionsScreen) HelpText() string {
-	if s.loadDefaultsMenu == nil || s.themeMenu == nil || s.optionsMenu == nil {
-		return ""
-	}
-	if s.focusedPanel == FocusLoadDefaults {
-		return s.loadDefaultsMenu.HelpText()
-	}
-	if s.focusedPanel == FocusThemes {
-		return s.themeMenu.HelpText()
-	}
-	if s.focusedPanel == FocusOptions {
-		return s.optionsMenu.HelpText()
+	if m := s.focusedSettingsMenu(); m != nil {
+		return m.HelpText()
 	}
 	return "Tab to cycle panels, Enter to Apply, Esc to Cancel"
-}
-
-// panelLayout holds the computed split-panel sizing for DisplayOptionsScreen.
-// Used by SetSize, ViewString, Layers, and GetHitRegions to guarantee consistent calculations.
-type panelLayout struct {
-	previewFits         bool
-	settingsDialogWidth int // outer width passed to renderSettingsDialog
-	menuWidth           int // inner content width for sub-menus, buttons, and hit regions
-}
-
-// Panel layout constants — single definition used by all rendering paths.
-const (
-	displayPreviewInnerWidth = 44 // preview inner content width (border added via BorderWidth)
-	displayPreviewMinWidth   = 50 // minimum preview panel width
-	displayMinMenuWidth      = 40 // minimum settings menu inner content width
-)
-
-// computePanelLayout is the single source of truth for the split-panel layout.
-// All rendering paths (SetSize, ViewString, Layers, GetHitRegions) delegate here.
-func (s *DisplayOptionsScreen) computePanelLayout(width int) panelLayout {
-	layout := displayengine.GetLayout()
-	gutter := layout.VisualGutter(tui.IsShadowEnabled())
-
-	fullPreviewW := displayPreviewInnerWidth + layout.BorderWidth()
-	minSettingsOuterW := displayMinMenuWidth + layout.BorderWidth()
-	previewFits := width >= minSettingsOuterW+gutter+displayPreviewMinWidth
-
-	var settingsDialogWidth int
-	if previewFits {
-		// Subtract shadow space (= BorderWidth) so outer dialog + shadow fits in settingsW.
-		settingsW := (width - fullPreviewW) - gutter
-		settingsDialogWidth = settingsW - layout.BorderWidth()
-	} else {
-		// Reserve shadow space on the right for manual composition in ViewString.
-		settingsDialogWidth = width - layout.BorderWidth()
-	}
-	if settingsDialogWidth < minSettingsOuterW {
-		settingsDialogWidth = minSettingsOuterW
-	}
-
-	menuWidth := settingsDialogWidth - layout.BorderWidth()
-	if menuWidth < displayMinMenuWidth {
-		menuWidth = displayMinMenuWidth
-	}
-
-	return panelLayout{
-		previewFits:         previewFits,
-		settingsDialogWidth: settingsDialogWidth,
-		menuWidth:           menuWidth,
-	}
 }
 
 func (s *DisplayOptionsScreen) SetSize(width, height int) {
@@ -727,32 +391,27 @@ func (s *DisplayOptionsScreen) SetSize(width, height int) {
 		return
 	}
 
-	dl := s.computePanelLayout(width)
-	// outerMenu.SetSize propagates to sections via calculateSectionLayout().
-	s.outerMenu.SetSize(dl.settingsDialogWidth, height)
+	// outerMenu.SetSize propagates to sections via calculateSectionLayout(),
+	// including the settings/preview row. The preview itself is rebuilt in
+	// ViewString (called every render), not here (called only on resize) --
+	// see ViewString's comment for why.
+	s.outerMenu.SetSize(width, height)
 }
 
-// IsMaximized reports true so model_view.go's generic outer centering (one
-// shared offset applied uniformly to every layer) is skipped -- Layers()
-// computes each panel's own Y independently instead, so the settings dialog
-// and the preview mockup can differ in height without one shifting the
-// other's position.
+// IsMaximized reports false so model_view.go's generic centering positions
+// the whole (naturally-sized) outerMenu dialog within the content area --
+// settings and preview are now one dialog, not two independently-positioned
+// panels needing a custom Layers() override.
 func (s *DisplayOptionsScreen) IsMaximized() bool {
-	return true
+	return false
 }
 
 // EscapeAction implements tui.EscapeActioner: mirrors the Esc key handler.
 func (s *DisplayOptionsScreen) EscapeAction() tea.Cmd {
 	theme.Unload("Preview")
 	if s.isRoot {
-		s.focusedPanel = FocusButtons
-		s.focusedButton = s.maxFocusedButton()
-		s.updateFocusStates()
 		return s.outerMenu.SetProcessingBtnDeferred(displayengine.IDExitButton, tui.ConfirmExitAction())
 	}
-	s.focusedPanel = FocusButtons
-	s.focusedButton = 2 // Back
-	s.updateFocusStates()
 	return s.outerMenu.SetProcessingBtnDeferred(displayengine.IDBackButton, navigateBack())
 }
 

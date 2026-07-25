@@ -512,6 +512,21 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if _, ok := m.dialog.(*displayengine.ContextMenuModel); !ok {
 				m.dialogStack = append(m.dialogStack, m.dialog)
 			}
+			// Clear its spinner before it's hidden behind the new dialog --
+			// same reasoning as the screen-push/pop cases below, just never
+			// applied to dialog-over-dialog/dialog-over-screen before: a
+			// deferred item action (e.g. an Options dropdown) marks its
+			// owning dialog/screen's button row processing while it resolves,
+			// and without this it stays stuck spinning whenever what it
+			// resolves to is opening another dialog rather than finishing
+			// within the same one.
+			if cp, ok := m.dialog.(interface{ ClearProcessingState() }); ok {
+				cp.ClearProcessingState()
+			}
+		} else if m.activeScreen != nil {
+			if cp, ok := m.activeScreen.(interface{ ClearProcessingState() }); ok {
+				cp.ClearProcessingState()
+			}
 		}
 
 		// Safeguard: Prevent pushing the active screen as its own dialog

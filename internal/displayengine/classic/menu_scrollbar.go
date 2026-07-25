@@ -178,7 +178,7 @@ func buildScrollbarColumn(info ScrollbarInfo, lineChars bool, ctx StyleContext) 
 	var upArrow, downArrow string
 	if lineChars {
 		trackChar = "┃"
-		thumbChar = "█"
+		thumbChar = "▓"
 		upArrow = "▴"
 		downArrow = "▾"
 	} else {

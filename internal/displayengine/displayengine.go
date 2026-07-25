@@ -123,6 +123,7 @@ type (
 	ConsoleLockMsg             = classic.ConsoleLockMsg
 	Content                    = classic.Content
 	ContentRow                 = classic.ContentRow
+	ContentColumn              = classic.ContentColumn
 	TagOverride                = classic.TagOverride
 	ContextMenuItem            = classic.ContextMenuItem
 	ContextMenuModel           = classic.ContextMenuModel
@@ -274,6 +275,7 @@ var (
 	NewBackdropModel               = classic.NewBackdropModel
 	NewButtonRow                   = classic.NewButtonRow
 	NewContentRow                  = classic.NewContentRow
+	NewContentColumn               = classic.NewContentColumn
 	NewContextMenuModel            = classic.NewContextMenuModel
 	NewHeaderModel                 = classic.NewHeaderModel
 	NewHelplineModel               = classic.NewHelplineModel

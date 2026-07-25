@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 
 	"DockSTARTer2/internal/config"
@@ -17,26 +18,12 @@ import (
 	"DockSTARTer2/internal/tui"
 )
 
-// DisplayOptionsFocus defines which area of the screen has focus
-type DisplayOptionsFocus int
-
-const (
-	FocusLoadDefaults DisplayOptionsFocus = iota
-	FocusThemes
-	FocusOptions
-	FocusButtons
-)
-
 // DisplayOptionsScreen allows the user to configure UI settings and themes together.
 type DisplayOptionsScreen struct {
 	loadDefaultsMenu *displayengine.MenuModel
 	themeMenu        *displayengine.MenuModel
 	optionsMenu      *displayengine.MenuModel
-	focusedPanel     DisplayOptionsFocus
-	// focusedButton index: 0=Apply, 1=Reset, 2=Back (or Exit when isRoot), 3=Exit (only when !isRoot)
-	focusedButton int
-	buttonFocused bool // true when a button is highlighted while a submenu also stays focused
-	isRoot        bool // true when launched directly via -M appearance; hides Back button
+	isRoot           bool // true when launched directly via -M appearance; hides Back button
 
 	config       config.AppConfig
 	themes       []theme.ThemeMetadata
@@ -47,6 +34,17 @@ type DisplayOptionsScreen struct {
 	height int
 
 	outerMenu *displayengine.MenuModel // outer "Appearance Settings" dialog with sections + buttons
+	layoutRow *appearanceLayoutRow     // pairs the settings column with the preview section
+
+	// previewViewport/previewScroll hold the preview panel's scroll position
+	// across renders. buildPreviewSection rebuilds the mockup's rendered
+	// content fresh every render (to stay live), but reuses these persistent
+	// fields so scrolling isn't reset to the top each time -- SetContent
+	// preserves viewport.Model's YOffset (only clamping it if it's now past
+	// the new content's end), so this works as long as the same instances
+	// are threaded through instead of constructing fresh ones per render.
+	previewViewport viewport.Model
+	previewScroll   displayengine.Scrollbar
 
 	focused bool // tracks global screen focus (header/log panel interaction)
 
@@ -101,7 +99,19 @@ func NewDisplayOptionsScreen(isRoot bool, connType string) *DisplayOptionsScreen
 		themeDefaults:     make(map[string]*theme.ThemeDefaults),
 		themeFileCache:    make(map[string]theme.ThemeFile),
 		loadThemeDefaults: true,
+		previewViewport:   viewport.New(),
+		// Must match mockupMenu's own ID in buildPreviewSection exactly --
+		// MatchesID checks msgID.Contains(m.ID()), so the scrollbar's hit
+		// region IDs ("<ID>.sb.*") need mockupMenu's ID as a substring or its
+		// clicks/hovers never resolve to the preview section at all.
+		previewScroll: displayengine.Scrollbar{ID: "appearance_preview_mockup"},
 	}
+	// Without this, bubbles/viewport only renders as many rows as the
+	// content actually has -- any content shorter than the assigned height
+	// (even by one line, e.g. from an off-by-one in the backdrop's own
+	// fill-to-height math) leaves an unstyled gap at the bottom instead of
+	// the viewport padding it out itself.
+	s.previewViewport.FillHeight = true
 	s.themeDefaults[current], _ = theme.Load(current, "Preview")
 
 	s.initMenus()
@@ -131,6 +141,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Desc:          descTag + desc,
 			Help:          desc,
 			IsRadioButton: true,
+			Selectable:    true,
 			Checked:       checked,
 			IsInvalid:     t.IsInvalid,
 			IsUserDefined: t.IsUserTheme,
@@ -150,6 +161,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Desc:          "{{|ListItemUserDefined|}}Source file not found — using cached version",
 			Help:          "Theme source file is missing. The cached version remains active until you choose another theme.",
 			IsRadioButton: true,
+			Selectable:    true,
 			Checked:       true,
 			IsUserDefined: true,
 			Metadata:      map[string]string{"config_value": s.currentTheme},
@@ -391,16 +403,18 @@ func (s *DisplayOptionsScreen) initMenus() {
 
 	// 4. Outer "Appearance Settings" dialog (sections container + buttons)
 	outerMenu := displayengine.NewMenuModel("appearance_outer", "Appearance Settings", "", nil)
+	applyAction := func() tea.Msg { return s.handleApply()() }
+	resetAction := func() tea.Msg { return s.handleReset()() }
 	if s.isRoot {
 		outerMenu.SetButtons([]displayengine.ButtonDef{
-			{Label: "Apply", ZoneID: displayengine.IDApplyButton, Help: "Apply and save appearance settings."},
-			{Label: "Reset", ZoneID: displayengine.IDResetButton, Help: "Discard staged changes and revert to the current saved settings."},
+			{Label: "Apply", ZoneID: displayengine.IDApplyButton, Action: applyAction, Help: "Apply and save appearance settings."},
+			{Label: "Reset", ZoneID: displayengine.IDResetButton, Action: resetAction, Help: "Discard staged changes and revert to the current saved settings."},
 			{Label: "Exit", ZoneID: displayengine.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
 		})
 	} else {
 		outerMenu.SetButtons([]displayengine.ButtonDef{
-			{Label: "Apply", ZoneID: displayengine.IDApplyButton, Help: "Apply and save appearance settings."},
-			{Label: "Reset", ZoneID: displayengine.IDResetButton, Help: "Discard staged changes and revert to the current saved settings."},
+			{Label: "Apply", ZoneID: displayengine.IDApplyButton, Action: applyAction, Help: "Apply and save appearance settings."},
+			{Label: "Reset", ZoneID: displayengine.IDResetButton, Action: resetAction, Help: "Discard staged changes and revert to the current saved settings."},
 			{Label: "Back", ZoneID: displayengine.IDBackButton, Action: navigateBack(), Help: "Return to the previous screen."},
 			{Label: "Exit", ZoneID: displayengine.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
 		})
@@ -410,74 +424,50 @@ func (s *DisplayOptionsScreen) initMenus() {
 	// widgets go before Help/Close, which stay rightmost by convention (see
 	// TitleBarFocus doc comment).
 	outerMenu.ConfigureWidgets(displayengine.WidgetRefresh, displayengine.WidgetHelp, displayengine.WidgetClose)
-	outerMenu.AddContentSection(loadDefaultsMenu)
-	outerMenu.AddContentSection(themeMenu)
-	outerMenu.AddContentSection(optionsMenu)
+	// Apply/Reset/Back/Exit are real, unrelated buttons -- an Options
+	// dropdown (or any other nested item) starting its own deferred action
+	// has no business visually activating Apply, unlike a simple
+	// single-list dialog where an item click IS conceptually "press Select".
+	outerMenu.SetSuppressChildProcessingMark(true)
+	settingsColumn := displayengine.NewContentColumn(loadDefaultsMenu, themeMenu, optionsMenu)
+	s.layoutRow = newAppearanceLayoutRow(settingsColumn, s.buildPreviewSection())
+	outerMenu.AddContentSection(s.layoutRow)
 	s.outerMenu = outerMenu
-
-	// Set initial focus state — applied properly when SetFocused(true) is called by AppModel.
-	s.focusedPanel = FocusLoadDefaults
-	s.buttonFocused = true
-	s.focusedButton = 0
 }
 
-// maxFocusedButton returns the highest valid focusedButton index.
-// When isRoot there is no Back button: Apply=0, Reset=1, Exit=2 (three buttons).
-// Otherwise: Apply=0, Reset=1, Back=2, Exit=3 (four buttons).
-func (s *DisplayOptionsScreen) maxFocusedButton() int {
-	if s.isRoot {
-		return 2
+// focusedSettingsMenu returns whichever of loadDefaultsMenu/themeMenu/
+// optionsMenu currently holds section-internal focus, or nil when focus is
+// elsewhere (buttons, or the preview side once it's a real Tab stop) --
+// outerMenu/layoutRow track focus generically now (GetFocusedSection/
+// GetFocusedItem, and the row's own subFocus/settings.SubFocusIndex), so
+// this just reads that state instead of a separate parallel one.
+func (s *DisplayOptionsScreen) focusedSettingsMenu() *displayengine.MenuModel {
+	if s.outerMenu == nil || s.layoutRow == nil {
+		return nil
 	}
-	return 3
-}
-
-// execFocusedButton runs the action for the current focusedButton index.
-func (s *DisplayOptionsScreen) execFocusedButton() (tea.Model, tea.Cmd) {
-	switch s.focusedButton {
+	if s.outerMenu.GetFocusedItem() != displayengine.FocusList || s.outerMenu.GetFocusedSection() != 0 {
+		return nil
+	}
+	if s.layoutRow.subFocus == 1 {
+		return nil
+	}
+	switch s.layoutRow.settings.SubFocusIndex() {
 	case 0:
-		return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDApplyButton, s.handleApply())
+		return s.loadDefaultsMenu
 	case 1:
-		return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDResetButton, s.handleReset())
+		return s.themeMenu
 	case 2:
-		if s.isRoot {
-			theme.Unload("Preview")
-			return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDExitButton, tui.ConfirmExitAction())
-		}
-		theme.Unload("Preview")
-		return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDBackButton, navigateBack())
-	case 3:
-		theme.Unload("Preview")
-		return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDExitButton, tui.ConfirmExitAction())
+		return s.optionsMenu
 	}
-	return s, nil
+	return nil
 }
 
-func (s *DisplayOptionsScreen) updateFocusStates() {
-	// Explicit button panel focus clears the dual-focus state.
-	if s.focusedPanel == FocusButtons {
-		s.buttonFocused = false
-	}
-	// Submenus stay visually focused when a button is also highlighted (buttonFocused).
-	s.loadDefaultsMenu.SetSubFocused(s.focused && s.focusedPanel == FocusLoadDefaults)
-	s.themeMenu.SetSubFocused(s.focused && s.focusedPanel == FocusThemes)
-	s.optionsMenu.SetSubFocused(s.focused && s.focusedPanel == FocusOptions)
-
-	if s.outerMenu == nil {
-		return
-	}
-	s.outerMenu.SetFocused(s.focused)
-	if s.focusedPanel == FocusButtons || s.buttonFocused {
-		s.outerMenu.SetFocusedBtnIndex(s.focusedButton)
-	} else {
-		s.outerMenu.SetFocusedItem(displayengine.FocusList)
-	}
-	s.outerMenu.InvalidateCache()
-}
-
-// SetFocused updates the global focus state for this screen
+// SetFocused updates the global focus state for this screen.
 func (s *DisplayOptionsScreen) SetFocused(f bool) {
 	s.focused = f
-	s.updateFocusStates()
+	if s.outerMenu != nil {
+		s.outerMenu.SetFocused(f)
+	}
 }
 
 // getThemeFile returns a cached ThemeFile for the given config value.
@@ -587,13 +577,12 @@ func (s *DisplayOptionsScreen) HelpContext(maxWidth int) displayengine.HelpConte
 	screenName := s.outerMenu.Title()
 	pageText := "Configure the visual appearance of the application, including theme selection, borders, shadows, and other display options."
 
-	var inner displayengine.HelpContext
-	switch s.focusedPanel {
-	case FocusLoadDefaults:
-		inner = s.loadDefaultsMenu.HelpContext(maxWidth)
-	case FocusThemes:
-		inner = s.themeMenu.HelpContext(maxWidth)
-		// Enrich with theme description, author, and defaults
+	// outerMenu.HelpContext already resolves to whichever leaf is actually
+	// focused (via focusedSectionMenu's SubFocusable recursion through
+	// ContentColumn/appearanceLayoutRow), so this only needs to layer the
+	// theme-specific enrichment on top when that leaf happens to be themeMenu.
+	inner := s.outerMenu.HelpContext(maxWidth)
+	if s.focusedSettingsMenu() == s.themeMenu {
 		items := s.themeMenu.GetItems()
 		idx := s.themeMenu.Index()
 		if idx >= 0 && idx < len(items) {
@@ -604,8 +593,6 @@ func (s *DisplayOptionsScreen) HelpContext(maxWidth int) displayengine.HelpConte
 				inner.ItemText = txt
 			}
 		}
-	case FocusOptions:
-		inner = s.optionsMenu.HelpContext(maxWidth)
 	}
 
 	inner.ScreenName = screenName
@@ -1209,7 +1196,9 @@ func (s *DisplayOptionsScreen) handleReset() tea.Cmd {
 		s.themeChangedFields = nil
 		s.themeDefaults[s.currentTheme], _ = theme.Load(s.currentTheme, "Preview")
 		s.initMenus()
-		s.updateFocusStates()
+		if s.outerMenu != nil {
+			s.outerMenu.SetFocused(s.focused)
+		}
 		return displayengine.ConfigChangedMsg{Config: s.config}
 	}
 }
