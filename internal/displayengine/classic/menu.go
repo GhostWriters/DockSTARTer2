@@ -508,8 +508,10 @@ func NewMenuModel(id, title, subtitle string, items []MenuItem) *MenuModel {
 	// Calculate max tag and desc length for sizing
 	maxTagLen, maxDescLen := calculateMaxTagAndDescLength(items)
 
-	// Calculate initial width based on actual content
-	// Width = tag + spacing(2) + desc + margins(2)
+	// Seed width for list.New only -- calculateLayout (via the SetSize every
+	// dialog-display path calls before first render) always recomputes and
+	// overwrites this, so it doesn't need to be exact (e.g. no radio/checkbox
+	// glyph accounting here; see calculateLayout for the authoritative width).
 	initialWidth := maxTagLen + 2 + maxDescLen + 2 + ScrollbarGutterWidth
 
 	// Create bubbles list
