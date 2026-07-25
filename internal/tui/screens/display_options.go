@@ -691,8 +691,8 @@ func (s *DisplayOptionsScreen) showTitleAlignDropdown(menuName, label string, ge
 	return func() tea.Msg {
 		current := getter()
 		items := []displayengine.MenuItem{
-			{Tag: "Left", Help: "Align title to the left", Action: s.titleAlignAction(apply, "left")},
-			{Tag: "Center", Help: "Center the title", Action: s.titleAlignAction(apply, "center")},
+			{Tag: "Left", Help: "Align title to the left", Action: s.titleAlignAction(apply, "left"), IsRadioButton: true, Checked: current == "left"},
+			{Tag: "Center", Help: "Center the title", Action: s.titleAlignAction(apply, "center"), IsRadioButton: true, Checked: current != "left"},
 		}
 		menu := displayengine.NewMenuModel(menuName, label, "Select alignment", items)
 		menu.SetButtons([]displayengine.ButtonDef{
@@ -716,9 +716,9 @@ func (s *DisplayOptionsScreen) showBracketModeDropdown(menuName, label string, g
 	return func() tea.Msg {
 		current := strings.ToLower(getter())
 		items := []displayengine.MenuItem{
-			{Tag: "Never", Desc: "Only the focused row is bracketed", Help: "Only the focused row is bracketed", Action: s.titleAlignAction(apply, "never")},
-			{Tag: "Selected", Desc: "Bracketed when focused or checked", Help: "Bracketed when focused or checked", Action: s.titleAlignAction(apply, "selected")},
-			{Tag: "Always", Desc: "Every row is bracketed", Help: "Every row is bracketed", Action: s.titleAlignAction(apply, "always")},
+			{Tag: "Never", Desc: "Only the focused row is bracketed", Help: "Only the focused row is bracketed", Action: s.titleAlignAction(apply, "never"), IsRadioButton: true, Checked: current == "never"},
+			{Tag: "Selected", Desc: "Bracketed when focused or checked", Help: "Bracketed when focused or checked", Action: s.titleAlignAction(apply, "selected"), IsRadioButton: true, Checked: current != "never" && current != "always"},
+			{Tag: "Always", Desc: "Every row is bracketed", Help: "Every row is bracketed", Action: s.titleAlignAction(apply, "always"), IsRadioButton: true, Checked: current == "always"},
 		}
 		menu := displayengine.NewMenuModel(menuName, label, "Select mode", items)
 		menu.SetButtons([]displayengine.ButtonDef{
@@ -779,31 +779,38 @@ func (s *DisplayOptionsScreen) showPanelDropdown(isLocalSetting bool) tea.Cmd {
 			}
 		}
 
+		currentLower := strings.ToLower(currentMode)
 		var items []displayengine.MenuItem
 
 		// None option: always available
 		items = append(items, displayengine.MenuItem{
-			Tag:    "None",
-			Desc:   "Hide the panel entirely",
-			Help:   "Removes the panel and stretches content to the bottom of the screen.",
-			Action: func() tea.Msg { return confirmChange("none")() },
+			Tag:           "None",
+			Desc:          "Hide the panel entirely",
+			Help:          "Removes the panel and stretches content to the bottom of the screen.",
+			Action:        func() tea.Msg { return confirmChange("none")() },
+			IsRadioButton: true,
+			Checked:       currentLower == "none",
 		})
 
 		// Log option: always available
 		items = append(items, displayengine.MenuItem{
-			Tag:    "Log",
-			Desc:   "Show read-only log viewer",
-			Help:   "Displays application logs but hides the command input bar.",
-			Action: func() tea.Msg { return confirmChange("log")() },
+			Tag:           "Log",
+			Desc:          "Show read-only log viewer",
+			Help:          "Displays application logs but hides the command input bar.",
+			Action:        func() tea.Msg { return confirmChange("log")() },
+			IsRadioButton: true,
+			Checked:       currentLower == "log",
 		})
 
 		// Console (ds2-only): always available for both local and remote —
 		// it only accepts ds2 subcommands so it is safe in all session types.
 		items = append(items, displayengine.MenuItem{
-			Tag:    "Console",
-			Desc:   "ds2 commands only",
-			Help:   "Accepts ds2 subcommands only. Safe for remote sessions.",
-			Action: func() tea.Msg { return applyChange("console")() },
+			Tag:           "Console",
+			Desc:          "ds2 commands only",
+			Help:          "Accepts ds2 subcommands only. Safe for remote sessions.",
+			Action:        func() tea.Msg { return applyChange("console")() },
+			IsRadioButton: true,
+			Checked:       currentLower == "console",
 		})
 
 		// System Console: full shell access.
@@ -853,10 +860,12 @@ func (s *DisplayOptionsScreen) showPanelDropdown(isLocalSetting bool) tea.Cmd {
 			return applyChange("system")()
 		}
 		items = append(items, displayengine.MenuItem{
-			Tag:    "System Console",
-			Desc:   "Full shell access",
-			Help:   "Passes commands directly to the OS shell. Use with caution for remote sessions.",
-			Action: systemAction,
+			Tag:           "System Console",
+			Desc:          "Full shell access",
+			Help:          "Passes commands directly to the OS shell. Use with caution for remote sessions.",
+			Action:        systemAction,
+			IsRadioButton: true,
+			Checked:       currentLower == "system",
 		})
 
 		title := "Remote Panel Mode"
@@ -870,9 +879,8 @@ func (s *DisplayOptionsScreen) showPanelDropdown(isLocalSetting bool) tea.Cmd {
 		})
 
 		// Set initial selection — "system" maps to tag "System Console"
-		current := strings.ToLower(currentMode)
 		for i, item := range items {
-			if strings.ToLower(item.Tag) == current {
+			if strings.ToLower(item.Tag) == currentLower {
 				menu.Select(i)
 				break
 			}
@@ -920,6 +928,8 @@ func (s *DisplayOptionsScreen) showShadowDropdown() tea.Cmd {
 						tui.CloseDialog(),
 					)()
 				},
+				IsRadioButton: true,
+				Checked:       level == s.config.UI.ShadowLevel,
 			})
 		}
 		menu := displayengine.NewMenuModel("shadow_dropdown", "Shadow Level", "Select shadow fill pattern", items)
@@ -960,6 +970,8 @@ func (s *DisplayOptionsScreen) showBorderColorDropdown() tea.Cmd {
 						tui.CloseDialog(),
 					)()
 				},
+				IsRadioButton: true,
+				Checked:       mode == s.config.UI.BorderColor,
 			})
 		}
 		menu := displayengine.NewMenuModel("border_dropdown", "Border Coloring", "Select which theme colors highlight borders", items)
