@@ -400,7 +400,13 @@ func (s *DisplayOptionsScreen) computePreviewContent() previewContent {
 // also discard its interaction state (focus in particular), which a content
 // change has no business affecting.
 func (s *DisplayOptionsScreen) buildPreviewSection() *displayengine.MenuModel {
-	scrollSection := displayengine.NewMenuModel("appearance_preview_scroll", "", "", nil)
+	// ID matches mockupMenu's own ID (and previewScroll.ID below) rather than
+	// a distinct "_scroll" suffix -- MatchesID is substring-based, and both
+	// appearanceLayoutRow's outer redirect and mockupMenu's own
+	// updateSections section-routing need the scrollbar's hit-region IDs
+	// (built from previewScroll.ID) to match, or a thumb-drag click never
+	// reaches this section at all.
+	scrollSection := displayengine.NewMenuModel("appearance_preview_mockup", "", "", nil)
 	scrollSection.SetSubMenuMode(true)
 	scrollSection.SetBorderless(true)
 	scrollSection.SetButtons(nil)
