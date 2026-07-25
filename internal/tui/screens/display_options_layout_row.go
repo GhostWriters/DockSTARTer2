@@ -214,13 +214,19 @@ func (r *appearanceLayoutRow) canFocusPreview() bool {
 // whichever group is currently active.
 func (r *appearanceLayoutRow) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if kp, ok := msg.(tea.KeyPressMsg); ok && r.canFocusPreview() {
-		if key.Matches(kp, displayengine.Keys.EnvNextTab) || key.Matches(kp, displayengine.Keys.EnvPrevTab) {
+		if key.Matches(kp, displayengine.Keys.EnvNextTab) {
 			if r.subFocus == 0 {
 				r.subFocus = 1
-			} else {
-				r.subFocus = 0
+				return r, r.SetSubFocused(true)
 			}
-			return r, r.SetSubFocused(true)
+			return r, nil
+		}
+		if key.Matches(kp, displayengine.Keys.EnvPrevTab) {
+			if r.subFocus == 1 {
+				r.subFocus = 0
+				return r, r.SetSubFocused(true)
+			}
+			return r, nil
 		}
 	}
 	switch m := msg.(type) {

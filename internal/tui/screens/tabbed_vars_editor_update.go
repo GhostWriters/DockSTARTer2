@@ -246,20 +246,17 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.btnIdx = m.buttonIndex("Back")
 			return m, m.btnRow.SetProcessing(displayengine.IDBackButton, m.EscapeAction())
 		case key.Matches(msg, displayengine.Keys.EnvNextTab): // Next Tab
-			if m.focus == envFocusEditor && len(m.tabs) > 1 {
+			if m.focus == envFocusEditor && m.activeTab < len(m.tabs)-1 {
 				m.tabs[m.activeTab].editor.Blur()
-				m.activeTab = (m.activeTab + 1) % len(m.tabs)
+				m.activeTab++
 				m.tabs[m.activeTab].editor.Focus()
 				m.SetSize(m.width, m.height)
 				return m, nil
 			}
 		case key.Matches(msg, displayengine.Keys.EnvPrevTab): // Prev Tab
-			if m.focus == envFocusEditor && len(m.tabs) > 1 {
+			if m.focus == envFocusEditor && m.activeTab > 0 {
 				m.tabs[m.activeTab].editor.Blur()
 				m.activeTab--
-				if m.activeTab < 0 {
-					m.activeTab = len(m.tabs) - 1
-				}
 				m.tabs[m.activeTab].editor.Focus()
 				m.SetSize(m.width, m.height)
 				return m, nil
