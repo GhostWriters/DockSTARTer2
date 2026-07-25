@@ -15,6 +15,14 @@ const (
 	displayMinMenuWidth    = 40 // minimum settings column content width
 )
 
+// settingsPanelBGID/previewPanelBGID identify the row's own catch-all
+// background regions (see GetHitRegions) -- clicking blank space inside
+// either panel (not on a specific item) still switches which side is active.
+const (
+	settingsPanelBGID = "appearance_settings_panelbg"
+	previewPanelBGID  = "appearance_preview_panelbg"
+)
+
 // appearanceLayoutRow pairs the settings column with the preview section.
 // Unlike the generic ContentRow (even split, always shows every child), it
 // gives the preview section a fixed width and hides it entirely when there
@@ -33,6 +41,7 @@ type appearanceLayoutRow struct {
 	settingsWidth int
 	gutterWidth   int
 	subFocus      int
+	isDialog      bool // mirrors MenuModel's own baseZ decision -- see GetHitRegions
 }
 
 var _ displayengine.Content = (*appearanceLayoutRow)(nil)
@@ -146,13 +155,42 @@ func (r *appearanceLayoutRow) ViewString() string {
 }
 
 // GetHitRegions offsets the preview's regions by the settings column's
-// rendered width plus the gutter.
+// rendered width plus the gutter. Each side also gets a low-Z catch-all
+// background region covering its full rect. model_view.go sorts all hit
+// regions by ZOrder before FindHit's reverse scan, so this must sit below
+// the *actual* Z every nested item uses -- mirroring MenuModel's own
+// ZScreen-vs-ZDialog baseZ decision (menu_hit_regions.go) rather than a
+// hardcoded value, which previously let this catch-all outrank real items
+// whenever nested content ended up on the ZScreen tier instead of ZDialog.
 func (r *appearanceLayoutRow) GetHitRegions(offsetX, offsetY int) []displayengine.HitRegion {
-	regions := r.settings.GetHitRegions(offsetX, offsetY)
+	baseZ := displayengine.ZScreen
+	if r.isDialog {
+		baseZ = displayengine.ZDialog
+	}
+	panelBGZ := baseZ - 2
+
+	settingsView := r.settings.ViewString()
+	regions := []displayengine.HitRegion{{
+		ID:     settingsPanelBGID,
+		X:      offsetX,
+		Y:      offsetY,
+		Width:  r.settingsWidth,
+		Height: lipgloss.Height(settingsView),
+		ZOrder: panelBGZ,
+	}}
+	regions = append(regions, r.settings.GetHitRegions(offsetX, offsetY)...)
 	if !r.previewFits {
 		return regions
 	}
-	previewX := offsetX + lipgloss.Width(r.settings.ViewString()) + r.gutterWidth
+	previewX := offsetX + lipgloss.Width(settingsView) + r.gutterWidth
+	regions = append(regions, displayengine.HitRegion{
+		ID:     previewPanelBGID,
+		X:      previewX,
+		Y:      offsetY,
+		Width:  previewSectionWidth(),
+		Height: lipgloss.Height(r.preview.ViewString()),
+		ZOrder: panelBGZ,
+	})
 	return append(regions, r.preview.GetHitRegions(previewX, offsetY)...)
 }
 
@@ -229,32 +267,55 @@ func (r *appearanceLayoutRow) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return r, nil
 		}
 	}
+	// Whether this hit/wheel resolves subFocus to a specific side (background
+	// catch-all included) is tracked separately from "forward into the
+	// background-matched child" -- the panel background catch-all itself has
+	// no child item to forward a click into, but subFocus still must resolve
+	// and get a SetSubFocused call.
+	var resolved, isPanelBG bool
 	switch m := msg.(type) {
 	case displayengine.LayerHitMsg:
-		if r.previewFits && r.preview.MatchesID(m.ID) {
-			r.subFocus = 1
-		} else if r.settings.MatchesID(m.ID) {
-			r.subFocus = 0
+		switch {
+		case m.ID == previewPanelBGID && r.previewFits:
+			r.subFocus, resolved, isPanelBG = 1, true, true
+		case m.ID == settingsPanelBGID:
+			r.subFocus, resolved, isPanelBG = 0, true, true
+		case r.previewFits && r.preview.MatchesID(m.ID):
+			r.subFocus, resolved = 1, true
+		case r.settings.MatchesID(m.ID):
+			r.subFocus, resolved = 0, true
 		}
 	case displayengine.LayerWheelMsg:
 		if r.previewFits && r.preview.MatchesID(m.ID) {
-			r.subFocus = 1
+			r.subFocus, resolved = 1, true
 		} else if r.settings.MatchesID(m.ID) {
-			r.subFocus = 0
+			r.subFocus, resolved = 0, true
 		}
+	}
+	// A resolved side must be re-focused here, after subFocus is finalized --
+	// the outer dialog's own updateSectionFocus (which also calls
+	// SetSubFocused) runs before this Update, still using whatever subFocus
+	// was in effect before this click, so a click that switches sides would
+	// otherwise leave the stale side highlighted until some later interaction.
+	var focusCmd tea.Cmd
+	if resolved {
+		focusCmd = r.SetSubFocused(true)
+	}
+	if isPanelBG {
+		return r, focusCmd
 	}
 	if r.subFocus == 1 && r.canFocusPreview() {
 		updated, cmd := r.preview.Update(msg)
 		if p, ok := updated.(*displayengine.MenuModel); ok {
 			r.preview = p
 		}
-		return r, cmd
+		return r, tea.Batch(focusCmd, cmd)
 	}
 	updated, cmd := r.settings.Update(msg)
 	if s, ok := updated.(*displayengine.ContentColumn); ok {
 		r.settings = s
 	}
-	return r, cmd
+	return r, tea.Batch(focusCmd, cmd)
 }
 
 // SetSubFocused propagates focus to whichever column holds row-internal
@@ -269,6 +330,7 @@ func (r *appearanceLayoutRow) SetSubFocused(focused bool) tea.Cmd {
 }
 
 func (r *appearanceLayoutRow) SetIsDialog(isDialog bool) {
+	r.isDialog = isDialog
 	r.settings.SetIsDialog(isDialog)
 	r.preview.SetIsDialog(isDialog)
 }
@@ -300,6 +362,9 @@ func (r *appearanceLayoutRow) ID() string {
 func (r *appearanceLayoutRow) ScrollID() string { return "" }
 
 func (r *appearanceLayoutRow) MatchesID(msgID string) bool {
+	if msgID == settingsPanelBGID || (r.previewFits && msgID == previewPanelBGID) {
+		return true
+	}
 	return r.settings.MatchesID(msgID) || (r.previewFits && r.preview.MatchesID(msgID))
 }
 

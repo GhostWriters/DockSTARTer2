@@ -213,22 +213,7 @@ func (r *ContentRow) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if len(r.items) == 0 {
 		return r, nil
 	}
-	switch msg := msg.(type) {
-	case LayerHitMsg:
-		for i, item := range r.items {
-			if item.MatchesID(msg.ID) {
-				r.subFocus = i
-				break
-			}
-		}
-	case LayerWheelMsg:
-		for i, item := range r.items {
-			if item.MatchesID(msg.ID) {
-				r.subFocus = i
-				break
-			}
-		}
-	}
+	focusCmd := resolveSubFocusHit(r.items, &r.subFocus, msg, r.SetSubFocused)
 	if r.subFocus < 0 || r.subFocus >= len(r.items) {
 		r.subFocus = 0
 	}
@@ -236,7 +221,7 @@ func (r *ContentRow) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if c, ok := updated.(Content); ok {
 		r.items[r.subFocus] = c
 	}
-	return r, cmd
+	return r, tea.Batch(focusCmd, cmd)
 }
 
 // SetSubFocused propagates sub-focus to the child currently holding
