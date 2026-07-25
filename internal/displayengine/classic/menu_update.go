@@ -691,6 +691,15 @@ func (m *MenuModel) handleSpace() (tea.Model, tea.Cmd) {
 			default:
 				if item.IsRadioButton {
 					item.Checked = true
+					// Radio semantics: exactly one item in the list stays checked.
+					for oi, oitem := range m.items {
+						if oi != idx && oitem.IsRadioButton && oitem.Checked {
+							oitem.Checked = false
+							oitem.Selected = false
+							m.items[oi] = oitem
+							m.list.SetItem(oi, oitem)
+						}
+					}
 				} else {
 					item.Checked = !item.Checked
 				}

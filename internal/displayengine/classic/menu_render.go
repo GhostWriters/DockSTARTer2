@@ -442,7 +442,28 @@ func (m *MenuModel) viewSubMenu() string {
 	}
 
 	// Render core list with scrollbar (or flow layout if flowMode is set)
-	if m.ContentRenderer != nil {
+	if len(m.contentSections) > 0 {
+		// A submenu that's itself sectioned (e.g. the Appearance Settings
+		// preview, composed of header/backdrop/help/strip leaf sections) --
+		// sizing already ran via SetSize -> calculateLayout ->
+		// calculateSectionLayout regardless of subMenuMode, so this just
+		// joins each already-sized child's own rendering, same as
+		// viewWithSections does for the non-submenu dialog case.
+		var parts []string
+		for _, sec := range m.contentSections {
+			parts = append(parts, sec.ViewString())
+		}
+		content := lipgloss.JoinVertical(lipgloss.Left, parts...)
+		leftPad := layout.ContentSideMargin
+		if m.noLeftMargin {
+			leftPad = 0
+		}
+		paddedContent := lipgloss.NewStyle().
+			Padding(0, 0, 0, leftPad).
+			Width(contentWidth).
+			Render(content)
+		innerParts = append(innerParts, paddedContent)
+	} else if m.ContentRenderer != nil {
 		innerParts = append(innerParts, m.ContentRenderer(contentWidth))
 	} else if m.flowMode {
 		// renderFlowContent's own lineStyle adds 2 back (Padding(0,1)'s

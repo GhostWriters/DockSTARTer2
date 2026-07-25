@@ -125,6 +125,17 @@ type MenuModel struct {
 	maximized   bool // Whether to maximize the dialog to fill available space
 	showButtons bool // Whether to show any buttons (default true)
 
+	// suppressChildProcessingMark disables updateSection's "mark my own
+	// first button processing when a content section's item starts an
+	// in-flight action" mirroring (see updateSection's doc comment). Default
+	// off, matching the existing behavior everywhere it was already relied
+	// on (a simple single-list dialog where an item click IS conceptually
+	// "press Select") -- opt in for a multi-section dialog with its own
+	// unrelated, real buttons (e.g. Appearance Settings' Apply/Reset/Back/
+	// Exit), where an unrelated nested item's action has no business
+	// visually activating them.
+	suppressChildProcessingMark bool
+
 	// Key override actions
 	escAction   tea.Cmd
 	enterAction tea.Cmd
@@ -585,6 +596,13 @@ func (m *MenuModel) SetItemPaddingWidth(width int) {
 func (m *MenuModel) SetShowLockGutter(show bool) {
 	m.showLockGutter = show
 	m.renderVersion++
+}
+
+// SetSuppressChildProcessingMark disables updateSection's "mark my own
+// first button processing too" mirroring for a content section's in-flight
+// item action -- see the field's doc comment for when to use this.
+func (m *MenuModel) SetSuppressChildProcessingMark(suppress bool) {
+	m.suppressChildProcessingMark = suppress
 }
 
 // SetNoLeftMargin removes the ContentSideMargin left indent from the list in subMenuMode.
@@ -1381,7 +1399,7 @@ func (m *MenuModel) focusedSectionMenu() *MenuModel {
 	}
 	c := m.contentSections[m.focusedSection]
 	for {
-		if row, ok := c.(*ContentRow); ok {
+		if row, ok := c.(SubFocusable); ok {
 			items := row.Items()
 			idx := row.SubFocusIndex()
 			if idx < 0 || idx >= len(items) {

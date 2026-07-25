@@ -64,7 +64,7 @@ func (m *MenuModel) updateSection(i int, msg tea.Msg) tea.Cmd {
 		sec = s
 		m.contentSections[i] = s
 	}
-	if !wasProcessing && sec.IsProcessing() && len(m.buttons) > 0 {
+	if !wasProcessing && sec.IsProcessing() && len(m.buttons) > 0 && !m.suppressChildProcessingMark {
 		m.btnRow.MarkProcessing(m.buttons[0].ZoneID)
 		// Specs() highlights both the focused index and whatever's
 		// processing independently, so keep them pointing at the same button.
@@ -126,7 +126,7 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			// each child individually instead), skipping any disabled child
 			// (e.g. Font Size, forced off when browser defaults are on).
 			if m.focusedSection >= 0 && m.focusedSection < n && m.focusedItem == FocusList {
-				if row, ok := m.contentSections[m.focusedSection].(*ContentRow); ok {
+				if row, ok := m.contentSections[m.focusedSection].(SubFocusable); ok {
 					if i, ok := row.NextFocusableSub(row.SubFocusIndex()); ok {
 						row.SetSubFocusIndex(i)
 						cmd := m.updateSectionFocus()
@@ -151,7 +151,7 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			} else {
 				m.focusedSection = next
 				m.focusedItem = FocusList
-				if row, ok := m.contentSections[next].(*ContentRow); ok {
+				if row, ok := m.contentSections[next].(SubFocusable); ok {
 					if i, ok := row.NextFocusableSub(-1); ok {
 						row.SetSubFocusIndex(i)
 					}
@@ -163,7 +163,7 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 		if key.Matches(msg, Keys.CycleShiftTab) {
 			if m.focusedSection >= 0 && m.focusedSection < n && m.focusedItem == FocusList {
-				if row, ok := m.contentSections[m.focusedSection].(*ContentRow); ok {
+				if row, ok := m.contentSections[m.focusedSection].(SubFocusable); ok {
 					if i, ok := row.PrevFocusableSub(row.SubFocusIndex()); ok {
 						row.SetSubFocusIndex(i)
 						cmd := m.updateSectionFocus()
@@ -198,7 +198,7 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			}
 			m.focusedSection = prev
 			m.focusedItem = FocusList
-			if row, ok := m.contentSections[m.focusedSection].(*ContentRow); ok {
+			if row, ok := m.contentSections[m.focusedSection].(SubFocusable); ok {
 				if i, ok := row.PrevFocusableSub(row.NumTabStops()); ok {
 					row.SetSubFocusIndex(i)
 				}
@@ -271,7 +271,7 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				// updateSectionFocus, so SetSubFocused propagates to the
 				// correct child rather than whatever child previously had
 				// sub-focus.
-				if row, ok := sec.(*ContentRow); ok {
+				if row, ok := sec.(SubFocusable); ok {
 					for ci, item := range row.Items() {
 						if item.MatchesID(msg.ID) {
 							row.SetSubFocusIndex(ci)
@@ -654,8 +654,7 @@ func (m *MenuModel) calculateSectionLayout() {
 	// "listHeight = totalItemHeight; if ... || m.maximized { shrink }"). Done
 	// once here, generically, so every future non-maximized sectioned dialog
 	// gets this for free instead of re-deriving its own natural-height clamp
-	// per dialog (the exact duplication that caused the Browser Settings
-	// large-title-bar/blank-space bug fixed earlier this session). Expandable
+	// per dialog. Expandable
 	// sections' natural height (expandableNaturalTotal, from Pass 1 above)
 	// is folded in so a "grow to fit content, cap at available space, then
 	// scroll" dialog (e.g. Config Apps Menu's app list) shrinks correctly
@@ -671,7 +670,11 @@ func (m *MenuModel) calculateSectionLayout() {
 	// final by the time naturalHeight is computed.
 	if !m.maximized {
 		naturalInner := fixedTotal + expandableNaturalTotal + buttonBudget
-		titleBarEnabled := m.title != "" && currentConfig.UI.LargeTitleBars
+		// Submenus never render a separate title-bar row -- viewSubMenu
+		// embeds the title in the border line itself (tbs.Show is forced
+		// false for subMenuMode) -- so reserving LargeTitleBarOverhead rows
+		// here for one would leave a permanent gap nothing ever fills.
+		titleBarEnabled := m.title != "" && currentConfig.UI.LargeTitleBars && !m.subMenuMode
 		if titleBarEnabled {
 			naturalInner += LargeTitleBarOverhead
 		}
@@ -711,7 +714,7 @@ func (m *MenuModel) calculateSectionLayout() {
 	if expandableCount == 0 {
 		titleBarMinRemaining = 0
 	}
-	enabled := m.title != "" && currentConfig.UI.LargeTitleBars
+	enabled := m.title != "" && currentConfig.UI.LargeTitleBars && !m.subMenuMode
 	useLargeTitleBar, _ := DecideLargeTitleBar(enabled, innerHeight-fixedTotal-buttonBudget, titleBarMinRemaining)
 	if useLargeTitleBar {
 		innerHeight -= LargeTitleBarOverhead

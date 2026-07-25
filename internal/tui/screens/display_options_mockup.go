@@ -8,16 +8,46 @@ import (
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/strutil"
 
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
 
-// renderMockup renders the fake preview dialog at targetHeight (matching the
-// settings dialog) but never taller than maxHeight -- the real available
-// content-area height, which can shrink out from under a screen's own
-// natural content need (e.g. the log console panel expanding eats rows out
-// of the terminal that were never reserved for this screen at all).
-func (s *DisplayOptionsScreen) renderMockup(targetHeight, maxHeight int) string {
-	width := 44 // Reduced width to fit the screen better
+// previewContentWidth is the fixed inner content width every piece of the
+// mockup below assumes.
+const previewContentWidth = 44
+
+// previewContent holds the preview mockup's rendered pieces for the screen's
+// current previewTheme/config. Returned by computePreviewContent, which is
+// called fresh on every render (from the persistent preview section's
+// ContentRenderer/SectionHeightOverride closures in buildPreviewSection) --
+// nothing here is cached across renders.
+type previewContent struct {
+	invalid       bool // true if the staged theme failed to load; only invalidLabel is meaningful then
+	invalidLabel  string
+	headerBlock   string
+	buildBackdrop func(h int) string
+	helpRow       string
+	logStripRow   string
+	showStrip     bool
+	fixedOverhead int
+	naturalHeight int
+}
+
+// computePreviewContent renders the fake preview dialog's pieces from the
+// screen's current previewTheme/config. Kept separate from buildPreviewSection
+// so the persistent preview section's closures can call it fresh every
+// render instead of the section itself needing to be reconstructed to stay
+// theme-live -- rebuilding the whole MenuModel would also discard its
+// interaction state (focus, in particular), which content changes have no
+// business affecting.
+func (s *DisplayOptionsScreen) computePreviewContent() previewContent {
+	for _, t := range s.themes {
+		if t.ConfigValue == s.previewTheme && t.IsInvalid {
+			return previewContent{invalid: true, invalidLabel: "Invalid theme"}
+		}
+	}
+
+	width := previewContentWidth
 
 	// Resolve the Preview_Border/Preview_Border2 tags based on the staged
 	// Border Color setting, so the mockup reflects the same merge every
@@ -316,56 +346,19 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight, maxHeight int) string 
 		label +
 		consoleBorderStyle.Render(" "+rightT+rightDashes+topRightC)
 
-	// Assemble as real Content sections: each piece becomes a borderless,
-	// non-focusable leaf section (matching the NewPlainTextSection
-	// convention) stacked inside one outer sectioned MenuModel. The outer
-	// MenuModel's own calculateSectionLayout/viewWithSections machinery --
-	// the same code path outerMenu (the real Appearance Settings dialog)
-	// uses -- owns the height/large-title-bar/border decisions, so this
-	// mockup can't drift out of sync with the real dialog.
-	layout := displayengine.GetLayout()
-
-	newLeafSection := func(id string) *displayengine.MenuModel {
-		leaf := displayengine.NewMenuModel(id, "", "", nil)
-		leaf.SetSubMenuMode(true)
-		leaf.SetBorderless(true)
-		leaf.SetNonFocusable(true)
-		leaf.SetButtons(nil)
-		leaf.SetMaximized(true)
-		return leaf
-	}
-
-	// Header: status bar + separator, stacked as one borderless block.
-	// Height is measured directly from the rendered content instead of
-	// re-deriving the 1/2/3-line decision separately -- the one true source
-	// of truth is what actually got rendered above.
-	headerBlock := headerRow + "\n" + bottomBorderRow
-	headerHeight := lipgloss.Height(headerBlock)
-	headerSection := newLeafSection("appearance_preview_header")
-	headerSection.ContentRenderer = func(_ int) string { return headerBlock }
-	headerSection.SectionHeightOverride = func(_ int) int { return headerHeight }
-
-	// Backdrop + fake dialog: the sole expandable section, absorbing
-	// whatever height is left over -- same role themeMenu plays in the real
-	// settings dialog. Reads its own assigned Height() at render time
-	// (available once calculateSectionLayout has already sized it) instead
-	// of a separately hand-computed backdropHeight.
-	backdropSection := newLeafSection("appearance_preview_backdrop")
-	backdropSection.SetVariableHeight(true)
-	// Its natural need is whatever the fake dialog itself actually requires
-	// (e.g. 2 taller when staged Large Title Bars makes it switch to a large
-	// title) -- feeding this into the natural-height measurement pass below
-	// is what lets the whole mockup grow when the inner dialog needs more
-	// room than the settings dialog's own height provides.
+	// Backdrop + fake dialog: built at buildBackdrop(h) call time (inside
+	// the ContentRenderer closure below), not baked in here -- it stretches
+	// to fill any extra height the submenu is given beyond what's needed
+	// (centering the fake dialog within the extra room), but never shrinks
+	// below backdropNaturalHeight, so scrolling (not squeezing) is what
+	// handles genuinely cramped space.
 	backdropNaturalHeight := lipgloss.Height(dialogBox)
 	if backdropNaturalHeight < 10 {
 		backdropNaturalHeight = 10
 	}
-	backdropSection.SectionHeightOverride = func(_ int) int { return backdropNaturalHeight }
-	backdropSection.ContentRenderer = func(_ int) string {
-		h := backdropSection.Height()
-		if h < 10 {
-			h = 10
+	buildBackdrop := func(h int) string {
+		if h < backdropNaturalHeight {
+			h = backdropNaturalHeight
 		}
 		backdropLines := make([]string, h)
 		filler := bgStyle.Render(strutil.Repeat(" ", width))
@@ -376,64 +369,166 @@ func (s *DisplayOptionsScreen) renderMockup(targetHeight, maxHeight int) string 
 		return displayengine.Overlay(dialogBox, backdropBlock, displayengine.OverlayCenter, displayengine.OverlayCenter, 0, 0)
 	}
 
-	// Help line.
+	headerBlock := headerRow + "\n" + bottomBorderRow
+	headerHeight := lipgloss.Height(headerBlock)
 	helpHeight := lipgloss.Height(helpRow)
-	helpSection := newLeafSection("appearance_preview_help")
-	helpSection.ContentRenderer = func(_ int) string { return helpRow }
-	helpSection.SectionHeightOverride = func(_ int) int { return helpHeight }
+	stripHeight := 0
+	if showStrip {
+		stripHeight = lipgloss.Height(logStripRow)
+	}
+	fixedOverhead := headerHeight + helpHeight + stripHeight
+	naturalHeight := fixedOverhead + backdropNaturalHeight
+
+	return previewContent{
+		headerBlock:   headerBlock,
+		buildBackdrop: buildBackdrop,
+		helpRow:       helpRow,
+		logStripRow:   logStripRow,
+		showStrip:     showStrip,
+		fixedOverhead: fixedOverhead,
+		naturalHeight: naturalHeight,
+	}
+}
+
+// buildPreviewSection builds the fake preview dialog as a submenu-mode
+// Content section (title "Preview"), for nesting inside the outer Appearance
+// Settings dialog's own section tree instead of rendering as an independent
+// top-level dialog. Built once, like the settings sections, and reused for
+// the screen's lifetime: its ContentRenderer/SectionHeightOverride closures
+// call computePreviewContent fresh every render instead of this MenuModel
+// being torn down and rebuilt to stay theme-live -- reconstructing it would
+// also discard its interaction state (focus in particular), which a content
+// change has no business affecting.
+func (s *DisplayOptionsScreen) buildPreviewSection() *displayengine.MenuModel {
+	scrollSection := displayengine.NewMenuModel("appearance_preview_scroll", "", "", nil)
+	scrollSection.SetSubMenuMode(true)
+	scrollSection.SetBorderless(true)
+	scrollSection.SetButtons(nil)
+	scrollSection.SetMaximized(true)
+	scrollSection.SetVariableHeight(true)
+	scrollSection.SetWantsAllMessages(true)
+	scrollSection.SectionHeightOverride = func(_ int) int {
+		pc := s.computePreviewContent()
+		if pc.invalid {
+			return 3
+		}
+		return pc.naturalHeight
+	}
+	scrollSection.ContentRenderer = func(contentWidth int) string {
+		pc := s.computePreviewContent()
+		h := scrollSection.Height()
+		if h < 1 {
+			h = 1
+		}
+		if pc.invalid {
+			leftPad := (previewContentWidth - len(pc.invalidLabel)) / 2
+			rightPad := previewContentWidth - len(pc.invalidLabel) - leftPad
+			centeredLine := strutil.Repeat(" ", leftPad) + pc.invalidLabel + strutil.Repeat(" ", rightPad)
+			lines := make([]string, h)
+			for i := range lines {
+				lines[i] = strutil.Repeat(" ", previewContentWidth)
+			}
+			lines[(h-1)/2] = centeredLine
+			return strings.Join(lines, "\n")
+		}
+		parts := []string{pc.headerBlock, pc.buildBackdrop(h - pc.fixedOverhead), pc.helpRow}
+		if pc.showStrip {
+			parts = append(parts, pc.logStripRow)
+		}
+		content := lipgloss.JoinVertical(lipgloss.Left, parts...)
+		ctx := displayengine.GetActiveContext()
+		s.previewViewport.SetWidth(contentWidth)
+		s.previewViewport.SetHeight(h)
+		s.previewViewport.SetContent(content)
+		viewportOutput := s.previewViewport.View()
+		// Pad any shortfall ourselves rather than relying on
+		// viewport.FillHeight -- that pads with truly empty (unstyled)
+		// rows, which shows as a mismatched-background gap instead of a
+		// themed one. This also covers the near-bottom-of-scroll case,
+		// where the remaining slice of content is shorter than h even
+		// though the total content isn't.
+		if short := h - lipgloss.Height(viewportOutput); short > 0 {
+			bgStyle := displayengine.SemanticRawStyle("Preview_Screen")
+			filler := bgStyle.Render(strutil.Repeat(" ", previewContentWidth))
+			fillLines := make([]string, short)
+			for i := range fillLines {
+				fillLines[i] = filler
+			}
+			viewportOutput = viewportOutput + "\n" + strings.Join(fillLines, "\n")
+		}
+		return displayengine.ApplyScrollbar(&s.previewScroll, viewportOutput,
+			s.previewViewport.TotalLineCount(), s.previewViewport.VisibleLineCount(),
+			s.previewViewport.YOffset(), ctx.LineCharacters, ctx)
+	}
+	scrollSection.ExtraHitRegions = func(offsetX, offsetY, baseZ int) []displayengine.HitRegion {
+		if !s.previewScroll.Info.Needed {
+			return nil
+		}
+		sbX := offsetX + s.previewViewport.Width()
+		return s.previewScroll.HitRegions(sbX, offsetY, baseZ+20, "Preview") // no left border to offset past (SetBorderless)
+	}
+	scrollSection.SetUpdateInterceptor(func(msg tea.Msg, _ *displayengine.MenuModel) (tea.Cmd, bool) {
+		if newOff, cmd, changed := s.previewScroll.Update(msg, s.previewViewport.YOffset(), s.previewViewport.TotalLineCount(), s.previewViewport.VisibleLineCount()); changed {
+			s.previewViewport.SetYOffset(newOff)
+			return cmd, true
+		}
+		switch m := msg.(type) {
+		case tea.KeyPressMsg:
+			switch m.String() {
+			case "pgup":
+				s.previewViewport.PageUp()
+				return nil, true
+			case "pgdown":
+				s.previewViewport.PageDown()
+				return nil, true
+			case "home":
+				s.previewViewport.SetYOffset(0)
+				return nil, true
+			case "end":
+				s.previewViewport.SetYOffset(s.previewViewport.TotalLineCount())
+				return nil, true
+			}
+		case displayengine.LayerHitMsg, displayengine.LayerWheelMsg,
+			tea.MouseClickMsg, tea.MouseWheelMsg, tea.MouseMotionMsg, tea.MouseReleaseMsg:
+			return nil, true
+		}
+		return nil, false
+	})
 
 	mockupMenu := displayengine.NewMenuModel("appearance_preview_mockup", "Preview", "", nil)
 	mockupMenu.SetButtons(nil)
-	mockupMenu.AddContentSection(headerSection)
-	mockupMenu.AddContentSection(backdropSection)
-	mockupMenu.AddContentSection(helpSection)
-	if showStrip {
-		stripHeight := lipgloss.Height(logStripRow)
-		stripSection := newLeafSection("appearance_preview_strip")
-		stripSection.ContentRenderer = func(_ int) string { return logStripRow }
-		stripSection.SectionHeightOverride = func(_ int) int { return stripHeight }
-		mockupMenu.AddContentSection(stripSection)
-	}
+	mockupMenu.AddContentSection(scrollSection)
 
-	// Size it so each section's own inset content width comes out to the
-	// same fixed `width` (44) every render above has always used --
-	// BorderWidth + ContentMarginWidth is exactly what calculateSectionLayout
-	// subtracts before assigning section width.
-	mockupTotalWidth := layout.BorderWidth() + layout.ContentMarginWidth() + width
-
-	// Measure the mockup's own natural required height first (reusing
-	// calculateSectionLayout's existing shrink-to-natural-height logic via
-	// !maximized, rather than re-deriving the border/large-title-bar/section
-	// overhead formula by hand): size it generously large, read back the
-	// height it actually settled on, then lock it at max(targetHeight,
-	// naturalHeight) so it matches the settings dialog when there's room to,
-	// but grows past that when its own content (e.g. the fake dialog
-	// switching to a large title bar) genuinely needs more.
-	mockupMenu.SetMaximized(false)
-	mockupMenu.SetSize(mockupTotalWidth, 200)
-	naturalHeight := mockupMenu.Height()
-	effectiveHeight := targetHeight
-	if naturalHeight > effectiveHeight {
-		effectiveHeight = naturalHeight
-	}
-	// Never claim more than what's actually available -- growing to fit our
-	// own content is only correct up to the real ceiling; past that we must
-	// shrink back down like every other dialog does; the backdrop section
-	// (the sole expandable one) absorbs the squeeze first.
-	if maxHeight > 0 && effectiveHeight > maxHeight {
-		effectiveHeight = maxHeight
-	}
+	// Rendered as a nested submenu section (title "Preview") instead of a
+	// top-level dialog -- the caller (the row pairing this with the settings
+	// column) owns sizing, same as any other Content.
+	mockupMenu.SetSubMenuMode(true)
+	mockupMenu.SetIsDialog(false)
 	mockupMenu.SetMaximized(true)
-	mockupMenu.SetSize(mockupTotalWidth, effectiveHeight)
+	return mockupMenu
+}
 
-	// The outer "Preview" frame renders through viewWithSections, which
-	// (like every other dialog) reads the real/applied theme via
-	// GetActiveContext() internally for its border/title/large-title-bar
-	// decision -- only the sections' own ContentRenderer closures above use
-	// previewCtx (staged options) for their internal painting. This is the
-	// same staged-vs-applied split the manual RenderBorderedBoxCtx call used
-	// to enforce by hand, now structural instead of a call-site convention.
-	return mockupMenu.ViewString()
+// previewSectionWidth returns the outer width to assign the preview section
+// via SetSize so its inner content area works out to the fixed 44-column
+// mockup width every leaf section's ContentRenderer closure above assumes.
+func previewSectionWidth() int {
+	layout := displayengine.GetLayout()
+	return layout.BorderWidth() + layout.ContentMarginWidth() + previewContentWidth
+}
+
+// previewNaturalHeight measures mockupMenu's natural (unmaximized) height at
+// previewSectionWidth() -- mirrors calculateSectionLayout's shrink-to-natural
+// pass for expandable sections in the real settings dialog, since a nested
+// sectioned MenuModel isn't handled by the generic Sizer path (SectionHeight
+// has no case for "a MenuModel with its own content sections"). Leaves
+// mockupMenu maximized afterward; callers must still SetSize it to the real
+// target height before rendering.
+func previewNaturalHeight(mockupMenu *displayengine.MenuModel) int {
+	mockupMenu.SetMaximized(false)
+	mockupMenu.SetSize(previewSectionWidth(), 200)
+	h := mockupMenu.Height()
+	mockupMenu.SetMaximized(true)
+	return h
 }
 
 // getPreviewShadowColor extracts the shadow color from the preview theme
