@@ -100,7 +100,7 @@ func (m *TabbedVarsEditorModel) renderPane(idx int, focused bool) string {
 		if focused {
 			styleTag = "TitleSubMenuFocused"
 		}
-		tabRow = displayengine.RenderTitleSegmentCtx(tab.spec.Title, focused, true, true, styleTag, ctx)
+		tabRow = displayengine.RenderTitleSegmentCtx(tab.spec.Title, focused, focused, true, styleTag, ctx)
 	} else {
 		tabRow = m.renderTabs()
 	}
