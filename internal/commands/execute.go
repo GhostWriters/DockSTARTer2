@@ -72,6 +72,7 @@ func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, ses
 			"--theme-scrollbar", "--theme-no-scrollbar", "--theme-border-color", "--theme-table",
 			"--theme-dialog-title", "--theme-submenu-title", "--theme-panel-title",
 			"--theme-checkbox-brackets", "--theme-radio-brackets", "--theme-menu-brackets", "--theme-no-menu-brackets",
+			"--theme-tab-layout",
 			"--theme-extract", "--theme-extract-all", "--man",
 			"--theme-spinner", "--theme-no-spinner":
 		default:
@@ -252,6 +253,7 @@ func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, ses
 				"--theme-scrollbar", "--theme-no-scrollbar", "--theme-border-color",
 				"--theme-dialog-title", "--theme-submenu-title", "--theme-panel-title",
 				"--theme-checkbox-brackets", "--theme-radio-brackets", "--theme-menu-brackets", "--theme-no-menu-brackets",
+				"--theme-tab-layout",
 				"--theme-spinner", "--theme-no-spinner":
 				return HandleThemeSettings(innerCtx, &group)
 			case "-c", "--compose":

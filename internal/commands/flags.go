@@ -125,6 +125,7 @@ func NewFlagSet() *pflag.FlagSet {
 	fs.String("theme-radio-brackets", "", "Set radio brackets mode (never/selected/always)")
 	fs.Bool("theme-menu-brackets", false, "Turn menu item brackets on")
 	fs.Bool("theme-no-menu-brackets", false, "Turn menu item brackets off")
+	fs.String("theme-tab-layout", "", "Set tab layout for the vars editor (maximized/sidebyside/stacked)")
 	fs.String("theme-extract", "", "Extract a theme to a directory for customization")
 	fs.Bool("theme-extract-all", false, "Extract all embedded themes to a directory")
 

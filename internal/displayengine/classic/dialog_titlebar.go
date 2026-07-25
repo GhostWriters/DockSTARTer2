@@ -405,7 +405,10 @@ func (t *TitleBarFocus) FocusedWidgetID() string {
 func IsTitleWidgetID(id string) bool {
 	return strings.HasSuffix(id, "."+IDTitleWidgetHelp) ||
 		strings.HasSuffix(id, "."+IDTitleWidgetClose) ||
-		strings.HasSuffix(id, "."+IDTitleWidgetRefresh)
+		strings.HasSuffix(id, "."+IDTitleWidgetRefresh) ||
+		strings.HasSuffix(id, "."+IDTitleWidgetMaximize) ||
+		strings.HasSuffix(id, "."+IDTitleWidgetSideBySide) ||
+		strings.HasSuffix(id, "."+IDTitleWidgetStacked)
 }
 
 // TitleBarWidgetRegions builds HitRegions for a set of widgets starting at x, y.

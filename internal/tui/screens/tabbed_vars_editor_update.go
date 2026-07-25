@@ -158,20 +158,78 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.tabs[m.activeTab].editor.ToggleOverwrite()
 			}
 			return m, nil
+		} else if strings.HasPrefix(msg.ID, "tabbed_vars.pane") && strings.Contains(msg.ID, ".title_widget_") {
+			// Per-pane layout widget: "tabbed_vars.paneN.title_widget_*" --
+			// whichever pane the click landed on becomes the active/focused
+			// tab (matches the pane-background click-to-focus behavior),
+			// regardless of which widget was clicked.
+			if msg.Button == tea.MouseLeft {
+				rest := strings.TrimPrefix(msg.ID, "tabbed_vars.pane")
+				dot := strings.IndexByte(rest, '.')
+				if dot > 0 {
+					idxStr, widgetID := rest[:dot], rest[dot+1:]
+					if idx, err := strconv.Atoi(idxStr); err == nil && idx >= 0 && idx < len(m.tabs) {
+						pressCmd := m.PressWidgetID(widgetID, msg.ID)
+						m.focus = envFocusEditor
+						m.tabs[m.activeTab].editor.Blur()
+						m.activeTab = idx
+						m.tabs[m.activeTab].editor.Focus()
+						switch widgetID {
+						case displayengine.IDTitleWidgetMaximize:
+							m.layoutMode = envLayoutMaximized
+						case displayengine.IDTitleWidgetSideBySide:
+							m.layoutMode = envLayoutSideBySide
+						case displayengine.IDTitleWidgetStacked:
+							m.layoutMode = envLayoutStacked
+						}
+						m.SetSize(m.width, m.height)
+						return m, pressCmd
+					}
+				}
+			}
+			return m, nil
+		} else if strings.HasPrefix(msg.ID, "tabbed_vars.pane-") {
+			if msg.Button == tea.MouseLeft {
+				idxStr := strings.TrimPrefix(msg.ID, "tabbed_vars.pane-")
+				if idx, err := strconv.Atoi(idxStr); err == nil && idx >= 0 && idx < len(m.tabs) {
+					m.focus = envFocusEditor
+					m.focusPane(idx)
+					m.tabs[m.activeTab].editor.Focus()
+					// Forward the click itself, not just the focus switch --
+					// this region covers the whole pane box including its
+					// scrollbar, so one click both focuses and acts on it.
+					relX, relY := m.editorRelCoords(idx, msg.X, msg.Y)
+					var cmd tea.Cmd
+					m.tabs[idx].editor, cmd = m.tabs[idx].editor.Update(tea.MouseClickMsg{
+						X:      relX,
+						Y:      relY,
+						Button: msg.Button,
+					})
+					return m, cmd
+				}
+			}
+			return m, nil
 		}
 		return m, nil
 
 	case tea.MouseClickMsg:
 		// Scrollbar thumb drag initiation routed by model_mouse.go section B0.
+		// Carries absolute coordinates but no hit-region ID, so paneBoxAt
+		// determines which pane it landed on (switching focus first if it's
+		// the inactive one) rather than assuming m.activeTab.
 		if msg.Button == tea.MouseLeft && len(m.tabs) > 0 {
-			// Translate coordinates to editor-relative and only forward if within editor bounds.
+			idx, ok := m.paneBoxAt(msg.X, msg.Y)
+			if ok {
+				m.focusPane(idx)
+			} else {
+				idx = m.activeTab
+			}
 			layout := displayengine.GetLayout()
-			relX := msg.X - (m.lastOffsetX + layout.NestedLeftOffset())
-			relY := msg.Y - (m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight)
+			relX, relY := m.editorRelCoords(idx, msg.X, msg.Y)
 			editorW := m.contentWidth - layout.BorderWidth()
 			if relX >= 0 && relY >= 0 && relY < m.editorHeight && relX < editorW {
 				var cmd tea.Cmd
-				m.tabs[m.activeTab].editor, cmd = m.tabs[m.activeTab].editor.Update(tea.MouseClickMsg{
+				m.tabs[idx].editor, cmd = m.tabs[idx].editor.Update(tea.MouseClickMsg{
 					X:      relX,
 					Y:      relY,
 					Button: msg.Button,
@@ -182,15 +240,29 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case displayengine.LayerWheelMsg, tea.MouseWheelMsg:
 		var wheelBtn tea.MouseButton
-		if mwMsg, ok := msg.(tea.MouseWheelMsg); ok {
-			wheelBtn = mwMsg.Button
-		} else if lwMsg, ok := msg.(displayengine.LayerWheelMsg); ok {
-			wheelBtn = lwMsg.Button
+		targetIdx := m.activeTab
+		switch wm := msg.(type) {
+		case tea.MouseWheelMsg:
+			wheelBtn = wm.Button
+			if idx, ok := m.paneBoxAt(wm.X, wm.Y); ok {
+				targetIdx = idx
+			}
+		case displayengine.LayerWheelMsg:
+			wheelBtn = wm.Button
+			// "tabbed_vars.pane-N" is the inactive pane's background (see
+			// GetHitRegions); anything else (notably "tabbed_vars.editor")
+			// already means the active pane.
+			if idxStr, found := strings.CutPrefix(wm.ID, "tabbed_vars.pane-"); found {
+				if idx, err := strconv.Atoi(idxStr); err == nil && idx >= 0 && idx < len(m.tabs) {
+					targetIdx = idx
+				}
+			}
 		}
 
 		if (wheelBtn == tea.MouseWheelUp || wheelBtn == tea.MouseWheelDown) && len(m.tabs) > 0 {
 			var cmd tea.Cmd
 			m.focus = envFocusEditor
+			m.focusPane(targetIdx)
 			m.tabs[m.activeTab].editor.Focus()
 
 			// Translate wheel to up/down arrows for enveditor
@@ -206,6 +278,27 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.KeyMsg:
+		// When the active pane's own border widgets have focus (a level
+		// below the dialog's own title bar -- see CyclePaneTitleFocus),
+		// handle navigation between them.
+		if m.paneTitleFocused {
+			switch msg.String() {
+			case "left":
+				m.cyclePaneWidget(-1)
+				return m, nil
+			case "right":
+				m.cyclePaneWidget(+1)
+				return m, nil
+			case "enter", " ":
+				return m, m.activatePaneWidget()
+			case "esc":
+				m.paneTitleFocused = false
+				m.tabs[m.activeTab].editor.Focus()
+				return m, nil
+			}
+			return m, nil
+		}
+
 		// When titlebar has focus, handle navigation between widgets.
 		if m.TitleBarFocused() {
 			switch msg.String() {
@@ -261,6 +354,19 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.SetSize(m.width, m.height)
 				return m, nil
 			}
+		case key.Matches(msg, displayengine.Keys.EnvCycleLayout): // Cycle Maximized -> Side-by-side -> Stacked -> Maximized
+			if len(m.tabs) == 2 {
+				switch m.layoutMode {
+				case envLayoutMaximized:
+					m.layoutMode = envLayoutSideBySide
+				case envLayoutSideBySide:
+					m.layoutMode = envLayoutStacked
+				default: // envLayoutStacked
+					m.layoutMode = envLayoutMaximized
+				}
+				m.SetSize(m.width, m.height)
+			}
+			return m, nil
 		case msg.String() == "tab" || msg.String() == "shift+tab":
 			if m.focus == envFocusEditor {
 				m.focus = envFocusButtons
@@ -390,6 +496,10 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			})
 			return m, cmd
 		}
+	case envSetLayoutMsg:
+		m.layoutMode = msg.mode
+		m.SetSize(m.width, m.height)
+		return m, nil
 	case envSaveSuccessMsg:
 		// Reload from disk — ParseEnv will fully reset editor state (clears all
 		// gutter markers, removes pending-delete lines, updates InitialLine).

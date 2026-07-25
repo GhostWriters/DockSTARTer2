@@ -66,7 +66,16 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			}
 			return m, nil, true
 		} else if m.activeScreen != nil && m.backdrop.Header.GetFocus() == displayengine.HeaderFocusNone {
-			// No dialog, no focused panel, no header focus: toggle active screen title bar.
+			// No dialog, no focused panel, no header focus: try any nested
+			// (submenu-style) border widgets first -- e.g. the tabbed vars
+			// editor's per-pane Maximize/Side-by-side/Stacked icons -- before
+			// falling through to the screen's own dialog-level title bar.
+			if p, ok := m.activeScreen.(displayengine.PaneTitleBarFocusable); ok {
+				if p.CyclePaneTitleFocus() {
+					return m, nil, true
+				}
+			}
+			// Toggle active screen title bar.
 			if tb, ok := m.activeScreen.(displayengine.TitleBarFocusable); ok {
 				if tb.TitleBarFocused() {
 					tb.BlurTitleBar()

@@ -342,6 +342,18 @@ type TitleBarFocusable interface {
 	TitleBarFocused() bool
 }
 
+// PaneTitleBarFocusable is an optional refinement of TitleBarFocusable for
+// screens with their own nested border widgets below the dialog's own title
+// bar (e.g. the tabbed vars editor's per-pane layout icons). The global
+// FocusPanelTitle key (F9/Ctrl+T) tries CyclePaneTitleFocus first: content ->
+// pane border (only if it has any widgets) -> dialog border -> content.
+// Returns true if handled at the pane level; false to fall through to the
+// plain dialog-level toggle.
+type PaneTitleBarFocusable interface {
+	TitleBarFocusable
+	CyclePaneTitleFocus() bool
+}
+
 // FocusTitleBar overrides the embedded TitleBarFocus method to also clear
 // button-row focus (so a button doesn't stay visually "active" while the
 // title bar is also focused) and invalidate the render cache — callers may

@@ -20,42 +20,42 @@ type Def struct {
 // DockSTARTer/includes/cmdline.sh.
 var Registry = map[string]Def{
 	// ── Read-only ──────────────────────────────────────────────────────────────
-	"-h":                      {Title: "Help", ConsoleSafe: true},
-	"--help":                  {Title: "Help", ConsoleSafe: true},
-	"-V":                      {Title: "Version", ConsoleSafe: true},
-	"--version":               {Title: "Version", ConsoleSafe: true},
-	"--sysinfo":               {Title: "System Info", ConsoleSafe: true},
+	"-h":                        {Title: "Help", ConsoleSafe: true},
+	"--help":                    {Title: "Help", ConsoleSafe: true},
+	"-V":                        {Title: "Version", ConsoleSafe: true},
+	"--version":                 {Title: "Version", ConsoleSafe: true},
+	"--sysinfo":                 {Title: "System Info", ConsoleSafe: true},
 	"--print-version":           {Title: "Print Version", ConsoleSafe: true},
 	"--print-templates-version": {Title: "Print Templates Version", ConsoleSafe: true},
-	"--man":                   {Title: "Application Documentation", ConsoleSafe: true},
-	"-l":                      {Title: "List All Applications", ConsoleSafe: true},
-	"--list":                  {Title: "List All Applications", ConsoleSafe: true},
-	"--list-builtin":          {Title: "List Builtin Applications", ConsoleSafe: true},
-	"--list-deprecated":       {Title: "List Deprecated Applications", ConsoleSafe: true},
-	"--list-nondeprecated":    {Title: "List Non-Deprecated Applications", ConsoleSafe: true},
-	"--list-added":            {Title: "List Added Applications", ConsoleSafe: true},
-	"--list-enabled":          {Title: "List Enabled Applications", ConsoleSafe: true},
-	"--list-disabled":         {Title: "List Disabled Applications", ConsoleSafe: true},
-	"--list-referenced":       {Title: "List Referenced Applications", ConsoleSafe: true},
-	"-s":                      {Title: "Application Status", ConsoleSafe: true},
-	"--status":                {Title: "Application Status", ConsoleSafe: true},
-	"--env-appvars":           {Title: "Variables for Application", ConsoleSafe: true},
-	"--env-appvars-lines":     {Title: "Variable Lines for Application", ConsoleSafe: true},
-	"--env-get":               {Title: "Get Value of Variable", ConsoleSafe: true},
-	"--env-get-lower":         {Title: "Get Value of Variable", ConsoleSafe: true},
-	"--env-get-line":          {Title: "Get Line of Variable", ConsoleSafe: true},
-	"--env-get-lower-line":    {Title: "Get Line of Variable", ConsoleSafe: true},
-	"--env-get-literal":       {Title: "Get Literal Value of Variable", ConsoleSafe: true},
-	"--env-get-lower-literal": {Title: "Get Literal Value of Variable", ConsoleSafe: true},
-	"--config-show":           {Title: "Show Configuration", ConsoleSafe: true},
-	"--show-config":           {Title: "Show Configuration", ConsoleSafe: true},
-	"--theme-list":            {Title: "List Themes", ConsoleSafe: true},
-	"--theme-table":           {Title: "List Themes", ConsoleSafe: true},
-	"--theme-extract":         {Title: "Extract Theme", ConsoleSafe: true},
-	"--theme-extract-all":     {Title: "Extract All Themes", ConsoleSafe: true},
-	"--server":                {Title: "Server Management"}, // needs serve package — not console-safe
-	"--server-daemon":         {Title: "Server Daemon"},     // launches daemon — not console-safe
-	"--disconnect":            {Title: "Disconnect Session"},
+	"--man":                     {Title: "Application Documentation", ConsoleSafe: true},
+	"-l":                        {Title: "List All Applications", ConsoleSafe: true},
+	"--list":                    {Title: "List All Applications", ConsoleSafe: true},
+	"--list-builtin":            {Title: "List Builtin Applications", ConsoleSafe: true},
+	"--list-deprecated":         {Title: "List Deprecated Applications", ConsoleSafe: true},
+	"--list-nondeprecated":      {Title: "List Non-Deprecated Applications", ConsoleSafe: true},
+	"--list-added":              {Title: "List Added Applications", ConsoleSafe: true},
+	"--list-enabled":            {Title: "List Enabled Applications", ConsoleSafe: true},
+	"--list-disabled":           {Title: "List Disabled Applications", ConsoleSafe: true},
+	"--list-referenced":         {Title: "List Referenced Applications", ConsoleSafe: true},
+	"-s":                        {Title: "Application Status", ConsoleSafe: true},
+	"--status":                  {Title: "Application Status", ConsoleSafe: true},
+	"--env-appvars":             {Title: "Variables for Application", ConsoleSafe: true},
+	"--env-appvars-lines":       {Title: "Variable Lines for Application", ConsoleSafe: true},
+	"--env-get":                 {Title: "Get Value of Variable", ConsoleSafe: true},
+	"--env-get-lower":           {Title: "Get Value of Variable", ConsoleSafe: true},
+	"--env-get-line":            {Title: "Get Line of Variable", ConsoleSafe: true},
+	"--env-get-lower-line":      {Title: "Get Line of Variable", ConsoleSafe: true},
+	"--env-get-literal":         {Title: "Get Literal Value of Variable", ConsoleSafe: true},
+	"--env-get-lower-literal":   {Title: "Get Literal Value of Variable", ConsoleSafe: true},
+	"--config-show":             {Title: "Show Configuration", ConsoleSafe: true},
+	"--show-config":             {Title: "Show Configuration", ConsoleSafe: true},
+	"--theme-list":              {Title: "List Themes", ConsoleSafe: true},
+	"--theme-table":             {Title: "List Themes", ConsoleSafe: true},
+	"--theme-extract":           {Title: "Extract Theme", ConsoleSafe: true},
+	"--theme-extract-all":       {Title: "Extract All Themes", ConsoleSafe: true},
+	"--server":                  {Title: "Server Management"}, // needs serve package — not console-safe
+	"--server-daemon":           {Title: "Server Daemon"},     // launches daemon — not console-safe
+	"--disconnect":              {Title: "Disconnect Session"},
 
 	// ── Session-locked (modifies env files / shared state) ────────────────────
 	"-a":                         {Title: "Add Application", SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
@@ -92,8 +92,8 @@ var Registry = map[string]Def{
 	"--start-edit-global":        {Title: "Edit Global Variables", ConsoleSafe: true}, // launches TUI; edit lock handles conflicts
 	"--edit-app":                 {Title: "Edit App Variables", ConsoleSafe: true},    // launches TUI; edit lock handles conflicts
 	"--start-edit-app":           {Title: "Edit App Variables", ConsoleSafe: true},    // launches TUI; edit lock handles conflicts
-	"--setcap":                   {Title: "Grant File Capabilities"},  // may re-exec the process — not console-safe
-	"--config-setcap":            {Title: "Enable File Capabilities"}, // may re-exec the process — not console-safe
+	"--setcap":                   {Title: "Grant File Capabilities"},                  // may re-exec the process — not console-safe
+	"--config-setcap":            {Title: "Enable File Capabilities"},                 // may re-exec the process — not console-safe
 	"--config-no-setcap":         {Title: "Disable File Capabilities"},
 	"--config-pm":                {Title: "Select Package Manager", ConsoleSafe: true},
 	"--config-pm-auto":           {Title: "Select Package Manager", ConsoleSafe: true},
@@ -128,10 +128,10 @@ var Registry = map[string]Def{
 	"--theme-no-borders":         {Title: "Turning off borders.", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--theme-border":             {Title: "Turning on borders.", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--theme-no-border":          {Title: "Turning off borders.", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
-	"--theme-large-buttons":       {Title: "Turning on large buttons.", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
-	"--theme-no-large-buttons":    {Title: "Turning off large buttons.", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
-	"--theme-large-titlebars":     {Title: "Turning on large title bars.", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
-	"--theme-no-large-titlebars":  {Title: "Turning off large title bars.", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-large-buttons":      {Title: "Turning on large buttons.", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-no-large-buttons":   {Title: "Turning off large buttons.", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-large-titlebars":    {Title: "Turning on large title bars.", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-no-large-titlebars": {Title: "Turning off large title bars.", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--theme-border-color":       {Title: "Set Border Color", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--theme-dialog-title":       {Title: "Set Dialog Title Align", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--theme-submenu-title":      {Title: "Set Submenu Title Align", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
@@ -140,6 +140,7 @@ var Registry = map[string]Def{
 	"--theme-radio-brackets":     {Title: "Set Radio Brackets Mode", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--theme-menu-brackets":      {Title: "Turning on menu brackets.", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--theme-no-menu-brackets":   {Title: "Turning off menu brackets.", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-tab-layout":         {Title: "Set Tab Layout", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--config-panel":             {Title: "Set Panel Mode", ConfigChanging: true},
 }
 

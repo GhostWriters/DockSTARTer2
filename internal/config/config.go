@@ -132,6 +132,7 @@ type UIConfig struct {
 	RadioBrackets      string `toml:"radio_brackets"`       // "never", "selected", or "always" -- the focused row's brackets always show regardless
 	MenuBrackets       bool   `toml:"menu_brackets"`        // wrap the focused menu item's tag in [brackets]
 	LineNumberBrackets bool   `toml:"line_number_brackets"` // wrap the focused line's number in [brackets] in the env editor
+	TabLayout          string `toml:"tab_layout"`           // "maximized", "sidebyside", or "stacked" -- default view when the tabbed vars editor has 2 tabs open
 }
 
 // PathConfig holds directory path settings.
@@ -310,6 +311,12 @@ func sanitizeConfig(ctx context.Context, conf *AppConfig) {
 	default:
 		warn("panel_remote", ui.PanelRemote, def.UI.PanelRemote)
 		ui.PanelRemote = def.UI.PanelRemote
+	}
+	switch ui.TabLayout {
+	case "maximized", "sidebyside", "stacked":
+	default:
+		warn("tab_layout", ui.TabLayout, def.UI.TabLayout)
+		ui.TabLayout = def.UI.TabLayout
 	}
 	switch ui.CheckboxBrackets {
 	case "never", "selected", "always":
@@ -844,7 +851,7 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 		"ConfigFolder", "ComposeFolder",
 		"Theme", "Borders", "LargeButtons", "LargeTitleBars", "LineCharacters", "Scrollbar", "Spinner", "SpinnerSpeed", "Shadow", "ShadowLevel", "BorderColor",
 		"DialogTitleAlign", "SubmenuTitleAlign", "PanelTitleAlign", "PanelLocal", "PanelRemote",
-		"CheckboxBrackets", "RadioBrackets", "MenuBrackets", "LineNumberBrackets",
+		"CheckboxBrackets", "RadioBrackets", "MenuBrackets", "LineNumberBrackets", "TabLayout",
 		"SSHPort", "WebPort", "AuthMode",
 	}
 	displayNames := map[string]string{
@@ -870,6 +877,7 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 		"RadioBrackets":      "Radio Brackets",
 		"MenuBrackets":       "Menu Brackets",
 		"LineNumberBrackets": "Line Number Brackets",
+		"TabLayout":          "Tab Layout",
 		"SSHPort":            "SSH Port",
 		"WebPort":            "Web Port",
 		"AuthMode":           "Auth Mode",
@@ -942,6 +950,8 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 			value = boolToYesNo(conf.UI.MenuBrackets)
 		case "LineNumberBrackets":
 			value = boolToYesNo(conf.UI.LineNumberBrackets)
+		case "TabLayout":
+			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.TabLayout)
 		case "SSHPort":
 			if conf.Server.SSH.Port > 0 {
 				value = fmt.Sprintf("{{|Var|}}%d{{[-]}}", conf.Server.SSH.Port)
