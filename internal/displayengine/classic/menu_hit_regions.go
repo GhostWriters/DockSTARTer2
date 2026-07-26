@@ -392,10 +392,17 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	// 3b. Scrollbar hit regions (when scrollbar is active)
 	if currentConfig.UI.Scrollbar && m.Scroll.Info.Needed {
 		var sbX int
-		if m.FlowColumns >= 2 && m.MaxFlowRows > 0 {
+		switch {
+		case m.FlowColumns >= 2 && m.MaxFlowRows > 0:
 			// Column mode: scrollbar is at the right edge of the content area.
 			sbX = offsetX + listX + (m.width - layout.BorderWidth() - ScrollbarGutterWidth)
-		} else {
+		case m.flowMode && m.FlowColumns < 2 && m.MaxFlowRows > 0:
+			// Wrap mode: scrollbar sits immediately after the padded content
+			// line -- must mirror renderFlowContent's lineW calc exactly
+			// (maxWidth+2, minus the scrollbar's own reserved column) or
+			// this hit region drifts from where the scrollbar is drawn.
+			sbX = offsetX + listX + (flowMaxWidth + 2 - ScrollbarGutterWidth)
+		default:
 			sbX = offsetX + listX + m.list.Width()
 		}
 		regions = append(regions, m.Scroll.HitRegions(sbX, offsetY+listY, baseZ, m.title)...)
@@ -412,6 +419,13 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 			listHeight := m.list.Height()
 			if m.flowMode {
 				listHeight = m.GetFlowHeight(flowMaxWidth)
+				// GetFlowHeight returns the true natural row count -- cap to
+				// the actually-rendered height so buttons position right
+				// after the visible (possibly scrolled) content, not where
+				// the full unscrolled content would end.
+				if m.MaxFlowRows > 0 && listHeight > m.MaxFlowRows {
+					listHeight = m.MaxFlowRows
+				}
 			}
 			buttonY = listY + listHeight
 			if !m.subMenuMode {
@@ -479,8 +493,9 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 
 	// 6. Title bar widget hit regions (e.g. [?] [×], or [↺] [?] [×] when
 	// ConfigureWidgets adds extras). Widgets appear at the right of the
-	// title bar (row 0). Sub-menus never get widgets.
-	if m.title != "" && !m.subMenuMode {
+	// title bar (row 0). Sub-menus only get them if opted in (see
+	// SetSubmenuWidgetsEnabled) -- most never do.
+	if m.title != "" && (!m.subMenuMode || m.submenuWidgets) {
 		// Use actual rendered dialog width, not m.width — non-maximized menus render
 		// narrower than m.width based on content, so the widget X must match.
 		dialogWidth := m.GetInnerContentWidth() + GetLayout().BorderWidth()

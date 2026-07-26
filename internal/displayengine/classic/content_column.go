@@ -146,6 +146,50 @@ func (c *ContentColumn) SetSize(width, height int) {
 	if len(expandable) == 0 {
 		copy(c.heights, natural)
 	} else {
+		// Reserve a floor for each expandable item so it never gets
+		// clamped to zero just because fixed items' combined natural
+		// height alone exceeds the available space (e.g. an Options
+		// section wrapping into many rows at a narrow width would
+		// otherwise starve a theme list entirely). Fixed items give up
+		// space -- shrinking below their own natural height -- before the
+		// floor is touched; a shrunk fixed section stays usable via its
+		// own scroll support (MenuModel's flow-mode auto scroll-cap, see
+		// SetSize in menu_update.go) rather than being silently clipped.
+		// 8 = 2 border rows + room for ~3 theme entries at 2 rows each
+		// (name + wrapped description).
+		const minExpandableFloor = 8
+		availableForFixed := height - minExpandableFloor*len(expandable)
+		if availableForFixed < 0 {
+			availableForFixed = 0
+		}
+
+		fixedHeights := make([]int, len(c.items))
+		copy(fixedHeights, natural)
+		if fixedTotal > availableForFixed && fixedTotal > 0 {
+			// Shrink each fixed item proportionally to its own natural
+			// share of the total, floored so no section (e.g. a
+			// single-row header) collapses to nothing.
+			const minFixedFloor = 3
+			shortfall := fixedTotal - availableForFixed
+			for i, item := range c.items {
+				if item.IsVariableHeight() {
+					continue
+				}
+				share := shortfall * natural[i] / fixedTotal
+				h := natural[i] - share
+				if h < minFixedFloor {
+					h = minFixedFloor
+				}
+				fixedHeights[i] = h
+			}
+			fixedTotal = 0
+			for i, item := range c.items {
+				if !item.IsVariableHeight() {
+					fixedTotal += fixedHeights[i]
+				}
+			}
+		}
+
 		remaining := height - fixedTotal
 		if remaining < 0 {
 			remaining = 0
@@ -157,7 +201,7 @@ func (c *ContentColumn) SetSize(width, height int) {
 				c.heights[i] = perExpandable[ei]
 				ei++
 			} else {
-				c.heights[i] = natural[i]
+				c.heights[i] = fixedHeights[i]
 			}
 		}
 	}

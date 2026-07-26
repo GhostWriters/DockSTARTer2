@@ -133,6 +133,7 @@ type UIConfig struct {
 	MenuBrackets       bool   `toml:"menu_brackets"`        // wrap the focused menu item's tag in [brackets]
 	LineNumberBrackets bool   `toml:"line_number_brackets"` // wrap the focused line's number in [brackets] in the env editor
 	TabLayout          string `toml:"tab_layout"`           // "maximized", "sidebyside", or "stacked" -- default view when the tabbed vars editor has 2 tabs open
+	ShowPreview        bool   `toml:"show_preview"`         // default visibility of the Appearance Settings preview panel
 }
 
 // PathConfig holds directory path settings.
@@ -851,7 +852,7 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 		"ConfigFolder", "ComposeFolder",
 		"Theme", "Borders", "LargeButtons", "LargeTitleBars", "LineCharacters", "Scrollbar", "Spinner", "SpinnerSpeed", "Shadow", "ShadowLevel", "BorderColor",
 		"DialogTitleAlign", "SubmenuTitleAlign", "PanelTitleAlign", "PanelLocal", "PanelRemote",
-		"CheckboxBrackets", "RadioBrackets", "MenuBrackets", "LineNumberBrackets", "TabLayout",
+		"CheckboxBrackets", "RadioBrackets", "MenuBrackets", "LineNumberBrackets", "TabLayout", "ShowPreview",
 		"SSHPort", "WebPort", "AuthMode",
 	}
 	displayNames := map[string]string{
@@ -878,6 +879,7 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 		"MenuBrackets":       "Menu Brackets",
 		"LineNumberBrackets": "Line Number Brackets",
 		"TabLayout":          "Tab Layout",
+		"ShowPreview":        "Show Preview",
 		"SSHPort":            "SSH Port",
 		"WebPort":            "Web Port",
 		"AuthMode":           "Auth Mode",
@@ -952,6 +954,8 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 			value = boolToYesNo(conf.UI.LineNumberBrackets)
 		case "TabLayout":
 			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.TabLayout)
+		case "ShowPreview":
+			value = boolToYesNo(conf.UI.ShowPreview)
 		case "SSHPort":
 			if conf.Server.SSH.Port > 0 {
 				value = fmt.Sprintf("{{|Var|}}%d{{[-]}}", conf.Server.SSH.Port)

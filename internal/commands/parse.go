@@ -366,7 +366,8 @@ func Parse(args []string) ([]CommandGroup, error) {
 			"--theme-shadows", "--theme-no-shadows", "--theme-shadow", "--theme-no-shadow",
 			"--theme-scrollbar", "--theme-no-scrollbar",
 			"--theme-spinner", "--theme-no-spinner",
-			"--theme-menu-brackets", "--theme-no-menu-brackets":
+			"--theme-menu-brackets", "--theme-no-menu-brackets",
+			"--theme-show-preview", "--theme-no-show-preview":
 			// Do nothing, consumesUntilDash is false
 
 		default:

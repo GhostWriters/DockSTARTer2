@@ -186,7 +186,10 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// or focus the panel.
 		return s, nil
 
-	case tea.MouseWheelMsg, displayengine.LayerHitMsg, displayengine.ToggleFocusedMsg:
+	case displayengine.LayerHitMsg:
+		return s.delegateToOuterMenu(msg)
+
+	case tea.MouseWheelMsg, displayengine.ToggleFocusedMsg:
 		return s.delegateToOuterMenu(msg)
 
 	case tea.KeyPressMsg:
@@ -327,6 +330,7 @@ var optionTagToUIField = map[string]string{
 	"Checkbox Brackets":    "CheckboxBrackets",
 	"Radio Brackets":       "RadioBrackets",
 	"Tab Layout":           "TabLayout",
+	"Show Preview":         "ShowPreview",
 }
 
 func (s *DisplayOptionsScreen) syncOptionsMenu() {
@@ -350,6 +354,8 @@ func (s *DisplayOptionsScreen) syncOptionsMenu() {
 			items[i].Checked = s.config.UI.MenuBrackets
 		case "Line Number Brackets":
 			items[i].Checked = s.config.UI.LineNumberBrackets
+		case "Show Preview":
+			items[i].Checked = s.config.UI.ShowPreview
 		case "Tab Layout":
 			items[i].Desc = s.dropdownDesc(tabLayoutDesc(s.config.UI.TabLayout))
 		case "Shadow Level":

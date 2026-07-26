@@ -8,6 +8,17 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+// ComfortableMinHeight is implemented by an expandable content section that
+// wants more headroom than the generic minExpandable floor before the outer
+// dialog resorts to squeezing it -- e.g. one whose own children have a
+// cheaper internal degradation path (a child that scrolls, or its own
+// floor) that should be exhausted first. See calculateSectionLayout's
+// buttonThreshold, which flattens the button row -- a purely cosmetic loss
+// -- before squeezing such a section below what it reports here.
+type ComfortableMinHeight interface {
+	ComfortableMinHeight() int
+}
+
 // AddContentSection appends a sub-menu (or ContentRow) as a stacked section
 // rendered inside this menu's border, one section = one row. When sections
 // are present the standard list is not rendered.
@@ -312,6 +323,20 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 		return m, nil, false
 
+	case WidgetClearPressMsg:
+		// No reliable per-section routing key (see HandleWidgetClearPress's
+		// own comment) -- broadcast to every section regardless of focus,
+		// same as AbsorbMessage does for deferred-action messages. Each
+		// section's own HandleWidgetClearPress no-ops unless its own
+		// tbPressed is actually set, so this is safe to send everywhere.
+		var cmds []tea.Cmd
+		for i := range m.contentSections {
+			if cmd := m.updateSection(i, msg); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		return m, tea.Batch(cmds...), true
+
 	case DragDoneMsg:
 		// Route to whichever section owns this scrollbar ID so DragPending
 		// gets cleared -- without this, a section's scrollbar thumb drag
@@ -500,7 +525,18 @@ func (m *MenuModel) SectionHeight(sectionWidth int) int {
 			flowContentW = 1
 		}
 		flowH := m.GetFlowHeight(flowContentW)
-		if m.MaxFlowRows > 0 && flowH > m.MaxFlowRows {
+		// FlowColumns>=2 (grid mode) callers set MaxFlowRows explicitly and
+		// persistently -- a deliberate "only ever wants N rows" pagination
+		// choice independent of caller, so honoring it here is correct.
+		// FlowColumns<2 (wrap mode) instead derives MaxFlowRows fresh inside
+		// SetSize from whatever height it was last given (see
+		// menu_update.go) -- a transient result of the PREVIOUS render, not
+		// this section's actual need. A parent computing "how much does
+		// this want" (e.g. ContentColumn deciding how much room to hand
+		// back in SetSize) must see the true uncapped natural height here,
+		// or a stale small cap and a stale small allocation reinforce each
+		// other indefinitely even once real room becomes available again.
+		if m.FlowColumns >= 2 && m.MaxFlowRows > 0 && flowH > m.MaxFlowRows {
 			flowH = m.MaxFlowRows
 		}
 		return flowH + layout.BorderHeight()
@@ -724,10 +760,26 @@ func (m *MenuModel) calculateSectionLayout() {
 
 	// Height-based button border fallback for maximized dialogs, or
 	// non-maximized dialogs with an expandable section: drop to flat only
-	// when expandable sections would have no room at all.
+	// when expandable sections would have no room at all. An expandable
+	// section can raise this threshold via ComfortableMinHeight when it has
+	// its own cheaper internal degradation (e.g. a child that scrolls) it
+	// would rather use before being squeezed further -- flattening the
+	// button row first is a purely cosmetic loss, unlike clipping/over-
+	// scrolling that section's own content.
 	buttonThreshold := minExpandable
 	if expandableCount == 0 {
 		buttonThreshold = 0
+	} else {
+		for _, sec := range m.contentSections {
+			if !sec.IsVariableHeight() {
+				continue
+			}
+			if ch, ok := sec.(ComfortableMinHeight); ok {
+				if want := ch.ComfortableMinHeight(); want > buttonThreshold {
+					buttonThreshold = want
+				}
+			}
+		}
 	}
 	if m.showButtons && buttonHeight == DialogButtonHeight && remaining < buttonThreshold {
 		buttonHeight = 1
@@ -763,7 +815,13 @@ func (m *MenuModel) calculateSectionLayout() {
 		} else {
 			h = sectionHeights[i]
 		}
-		sec.SetSize(sectionWidth, h)
+		w := sectionWidth
+		if rms, ok := sec.(RightMarginSuppressor); ok && rms.SuppressRightMargin() {
+			// Reclaim the column viewWithSections' matching asymmetric
+			// padding won't spend on this section's right margin.
+			w++
+		}
+		sec.SetSize(w, h)
 	}
 
 	shadowHeight := 0

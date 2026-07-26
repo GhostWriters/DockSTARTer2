@@ -133,9 +133,9 @@ func (t *TitleBarFocus) BlurTitleBar() {
 }
 
 func (t *TitleBarFocus) TitleBarFocused() bool { return t.tbFocused }
-func (t *TitleBarFocus) ActiveWidget() string   { return t.tbWidget }
-func (t *TitleBarFocus) SetWidget(id string)    { t.tbWidget = id }
-func (t *TitleBarFocus) PressedWidget() string  { return t.tbPressed }
+func (t *TitleBarFocus) ActiveWidget() string  { return t.tbWidget }
+func (t *TitleBarFocus) SetWidget(id string)   { t.tbWidget = id }
+func (t *TitleBarFocus) PressedWidget() string { return t.tbPressed }
 
 // State returns the TitleBarState for rendering, populated from this
 // TitleBarFocus's current focus/widget state. Show defaults to true;
@@ -161,10 +161,18 @@ func (t *TitleBarFocus) PressWidget(w WidgetDef, id string) tea.Cmd {
 // ClearPress clears the pressed flash state. Call when WidgetClearPressMsg is received.
 func (t *TitleBarFocus) ClearPress() { t.tbPressed = "" }
 
-// HandleWidgetClearPress checks if msg is a WidgetClearPressMsg for this instance
-// and clears the pressed state if so. Returns true if handled.
+// HandleWidgetClearPress checks if msg is a WidgetClearPressMsg for this
+// instance and clears the pressed state if so. Returns true if handled.
+// Guarded on t.tbPressed != "" -- WidgetClearPressMsg carries no reliable
+// per-instance scoping (its id field is the literal string "key" for the
+// keyboard press path, not a hit-region-style prefixed ID), so every
+// MenuModel in a nested chain sees the same message. Without this guard,
+// whichever instance's Update runs first (e.g. an outer dialog wrapping a
+// content-section child that actually owns the press) would swallow it via
+// the early return below, and it would never reach the instance that
+// actually needs it.
 func (t *TitleBarFocus) HandleWidgetClearPress(msg tea.Msg) bool {
-	if _, ok := msg.(WidgetClearPressMsg); ok {
+	if _, ok := msg.(WidgetClearPressMsg); ok && t.tbPressed != "" {
 		t.ClearPress()
 		return true
 	}
@@ -286,7 +294,7 @@ func BuildInactiveLargeTitleWidgets(ctx StyleContext) string {
 // It is NOT pre-rendered -- callers must render it via RenderThemeTextCtx in the correct
 // area context so it picks up the type-specific LargeTitleArea* background.
 func buildLargeTitleBarWidgets(focused bool, activeWidget, pressedWidget string, widgets []WidgetDef, ctx StyleContext) string {
-	isActive  := func(id string) bool { return pressedWidget == id || (focused && activeWidget == id) }
+	isActive := func(id string) bool { return pressedWidget == id || (focused && activeWidget == id) }
 	isPressed := func(id string) bool { return pressedWidget == id }
 
 	var parts []string
@@ -324,7 +332,7 @@ func buildDialogTitleWidgets(focused bool, activeWidget, pressedWidget string, w
 		Foreground(ctx.BorderColor).
 		Background(ctx.Dialog.GetBackground())
 	isPressed := func(id string) bool { return pressedWidget == id }
-	isActive  := func(id string) bool { return pressedWidget == id || (focused && activeWidget == id) }
+	isActive := func(id string) bool { return pressedWidget == id || (focused && activeWidget == id) }
 
 	var parts []string
 	for _, w := range widgets {
@@ -418,8 +426,8 @@ func TitleBarWidgetRegions(id string, widgets []WidgetDef, startX, y, baseZ int)
 	x := startX
 	for _, w := range widgets {
 		regions = append(regions, HitRegion{
-			ID:     id + "." + w.ID,
-			X:      x, Y: y, Width: 3, Height: 1,
+			ID: id + "." + w.ID,
+			X:  x, Y: y, Width: 3, Height: 1,
 			ZOrder: baseZ + 25,
 			Label:  w.Label,
 			Help:   &HelpContext{PageTitle: w.Label, PageText: w.HelpText},

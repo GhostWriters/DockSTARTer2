@@ -154,13 +154,44 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 		lines = append(lines, strings.Join(currentLine, strutil.Repeat(" ", itemSpacing)))
 	}
 
-	// Apply 1-char side margins to match MenuItemDelegate.Render
-	lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(maxWidth + 2)
-	for i, line := range lines {
-		lines[i] = lineStyle.Render(line)
+	// Clip to viewport when maxFlowRows is set -- same windowing helper
+	// renderColumnContent uses for the FlowColumns>=2 grid case.
+	rows := len(lines)
+	startRow, endRow := columnModeVisibleRows(rows, m.MaxFlowRows, m.ViewStartY)
+	visible := lines[startRow:endRow]
+	scrolling := m.MaxFlowRows > 0 && rows > m.MaxFlowRows
+
+	// Apply 1-char side margins to match MenuItemDelegate.Render. maxWidth+2
+	// undoes renderFlow/viewSubMenu's own pre-subtraction (see this func's
+	// doc comment); reserve one more column for the scrollbar when scrolling.
+	lineW := maxWidth + 2
+	if scrolling {
+		lineW -= ScrollbarGutterWidth
+	}
+	lineStyle := lipgloss.NewStyle().Background(dialogBG).Padding(0, 1).Width(lineW)
+	for i, line := range visible {
+		visible[i] = lineStyle.Render(line)
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+	if !scrolling {
+		return lipgloss.JoinVertical(lipgloss.Left, visible...)
+	}
+
+	visibleRows := endRow - startRow
+	sbStr := m.Scroll.Render(visibleRows, rows, visibleRows, startRow, ctx.LineCharacters, ctx)
+	sbLines := strings.Split(sbStr, "\n")
+	blank := lipgloss.NewStyle().Background(dialogBG).Render(" ")
+	for len(sbLines) < visibleRows {
+		sbLines = append(sbLines, blank)
+	}
+	for i, line := range visible {
+		sb := blank
+		if i < len(sbLines) {
+			sb = sbLines[i]
+		}
+		visible[i] = line + sb
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, visible...)
 }
 
 // columnModeVisibleRows returns the [startRow, endRow) window of column-mode
@@ -353,6 +384,7 @@ func (m *MenuModel) renderColumnContent(maxWidth, numCols int) string {
 // maxWidth must already be the usable content width (same value passed to renderFlowContent).
 func (m *MenuModel) GetFlowHeight(maxWidth int) int {
 	if len(m.items) == 0 {
+		m.lastFlowRows = 0
 		return 0
 	}
 
@@ -427,5 +459,78 @@ func (m *MenuModel) GetFlowHeight(maxWidth int) int {
 		}
 	}
 
+	// Always the true, uncapped natural row count -- MaxFlowRows for
+	// FlowColumns<2 wrap mode is derived fresh inside SetSize from whatever
+	// height was last given (see menu_update.go), not a stable property of
+	// this content, so baking it into GetFlowHeight's own return value would
+	// leak a transient, possibly-stale cap into every caller, including ones
+	// (like SectionHeight, asking "how much do you actually need") that
+	// must see the real natural size to avoid a stale-cap/stale-allocation
+	// feedback loop. Callers that specifically want the capped, currently-
+	// rendered row count (SetSize's own flowLines, hit-region button
+	// positioning) apply MaxFlowRows themselves at their own call site.
+	m.lastFlowRows = lines
 	return lines
+}
+
+// flowRowForCursor returns which wrapped row (0-based) m.cursor's item
+// currently falls on, for FlowColumns<2 wrap mode. Unlike the FlowColumns>=2
+// grid case (rows derivable from index arithmetic alone), a wrap row depends
+// on cumulative item width, so this replays the same line-break logic
+// GetFlowHeight uses -- needed so the scrolled viewport can follow the
+// keyboard cursor correctly (see SetSize's viewStartY-follows-cursor block).
+func (m *MenuModel) flowRowForCursor(maxWidth int) int {
+	ctx := GetActiveContext()
+	row := 0
+	currentLineWidth := 0
+	itemSpacing := FlowItemSpacing
+
+	for i, item := range m.items {
+		if item.IsSeparator {
+			continue
+		}
+		cbWidth := 0
+		if item.IsRadioButton || item.IsCheckbox {
+			glyph := ""
+			if ctx.LineCharacters {
+				if item.IsRadioButton {
+					glyph = radioOff + " "
+				} else {
+					glyph = checkOff + " "
+				}
+			} else {
+				if item.IsRadioButton {
+					glyph = radioOffAscii + " "
+				} else {
+					glyph = checkOffAscii + " "
+				}
+			}
+			cbWidth = lipgloss.Width(glyph)
+		}
+
+		lockMarkerWidth := 0
+		if m.showLockGutter {
+			lockMarkerWidth = m.StatusGutterWidth()
+		}
+
+		itemWidth := lockMarkerWidth + cbWidth + lipgloss.Width(GetPlainText(item.Tag))
+		if !item.IsCheckbox && !item.IsRadioButton && item.Desc != "" {
+			itemWidth += 1 + lipgloss.Width(GetPlainText(item.Desc))
+		}
+
+		if currentLineWidth > 0 && currentLineWidth+itemSpacing+itemWidth > maxWidth {
+			row++
+			currentLineWidth = itemWidth
+		} else {
+			if currentLineWidth > 0 {
+				currentLineWidth += itemSpacing
+			}
+			currentLineWidth += itemWidth
+		}
+
+		if i == m.cursor {
+			return row
+		}
+	}
+	return row
 }

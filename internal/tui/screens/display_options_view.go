@@ -45,7 +45,8 @@ func (s *DisplayOptionsScreen) View() tea.View {
 // GetHitRegions implements HitRegionProvider for mouse hit testing --
 // delegates entirely to outerMenu, whose single content section (the
 // settings/preview row, via ContentColumn/appearanceLayoutRow) recursively
-// supplies every child region below it.
+// supplies every child region below it, including the collapsed-preview
+// expand indicator (see appearanceLayoutRow.GetHitRegions).
 func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []displayengine.HitRegion {
 	if s.outerMenu == nil {
 		return nil
