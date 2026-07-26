@@ -85,6 +85,8 @@ const (
 	IDPanelResizeUp         = classic.IDPanelResizeUp
 	IDPanelResizeDn         = classic.IDPanelResizeDn
 	OverlayCenter           = classic.OverlayCenter
+	OverlayTop              = classic.OverlayTop
+	OverlayRight            = classic.OverlayRight
 	ZScreen                 = classic.ZScreen
 	ZPanel                  = classic.ZPanel
 	ZModalBaseOffset        = classic.ZModalBaseOffset
@@ -122,6 +124,7 @@ type (
 	ButtonSpec                 = classic.ButtonSpec
 	CheckboxColumn             = classic.CheckboxColumn
 	CloseDialogMsg             = classic.CloseDialogMsg
+	ComfortableMinHeight       = classic.ComfortableMinHeight
 	ConfigChangedMsg           = classic.ConfigChangedMsg
 	ConsoleLockMsg             = classic.ConsoleLockMsg
 	Content                    = classic.Content
@@ -145,6 +148,7 @@ type (
 	HelplineModel              = classic.HelplineModel
 	HitRegion                  = classic.HitRegion
 	HitRegionProvider          = classic.HitRegionProvider
+	RightMarginSuppressor      = classic.RightMarginSuppressor
 	HitRegions                 = classic.HitRegions
 	KeyMap                     = classic.KeyMap
 	LayerHitMsg                = classic.LayerHitMsg

@@ -517,6 +517,18 @@ func (s *DisplayOptionsScreen) buildPreviewSection() *displayengine.MenuModel {
 	mockupMenu.SetSubMenuMode(true)
 	mockupMenu.SetIsDialog(false)
 	mockupMenu.SetMaximized(true)
+
+	// A Close widget on the preview's own border lets the user hide it --
+	// dispatches appearancePreviewHideMsg, intercepted directly by
+	// appearanceLayoutRow.Update (this MenuModel has no idea the row can
+	// hide it). Opt-in since submenus don't render widgets by default.
+	mockupMenu.SetSubmenuWidgetsEnabled(true)
+	closeWidget := displayengine.WidgetClose
+	closeWidget.HelpText = "Hide the preview panel."
+	closeWidget.Action = func() tea.Cmd {
+		return func() tea.Msg { return appearancePreviewHideMsg{} }
+	}
+	mockupMenu.ConfigureWidgets(closeWidget)
 	return mockupMenu
 }
 

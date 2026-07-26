@@ -120,6 +120,13 @@ type MenuModel struct {
 	focusedSub  bool // If false, use normal borders. If true, use thick borders.
 	disabled    bool // When true, renders title with TitleSubMenuDisabled style.
 
+	// submenuWidgets opts a submenu-mode menu into rendering its own title
+	// bar widgets (via ConfigureWidgets) on its border -- off by default so
+	// every other existing submenu (the vast majority never call
+	// SetSubmenuWidgetsEnabled) keeps rendering exactly as before. See
+	// SetSubmenuWidgetsEnabled.
+	submenuWidgets bool
+
 	// Bubbles list model
 	list        list.Model
 	maximized   bool // Whether to maximize the dialog to fill available space
@@ -251,6 +258,8 @@ type MenuModel struct {
 	ViewStartY      int                                           // Persistent scroll offset for variable height lists
 	lastViewStartY  int                                           // Previous scroll offset for memoization check
 	lastScrollTotal int                                           // Total content height from last renderVariableHeightList (for scrollbar)
+	lastFlowRows    int                                           // Total wrapped rows from last GetFlowHeight (FlowColumns<2 wrap mode, for scrollbar -- mirrors lastScrollTotal)
+	lastFlowWidth   int                                           // Content width from the last SetSize call, reused by cursor-follow/clamp logic in Update (wrap-mode row math needs the same width GetFlowHeight/renderFlowContent used)
 
 	// lastItemHeights/lastItemMappings mirror the itemHeights/itemMappings
 	// arrays computed by the last renderVariableHeightList pass -- rendered
@@ -462,6 +471,12 @@ func (m *MenuModel) ScrollTotal() int {
 			}
 		}
 		return (n + m.FlowColumns - 1) / m.FlowColumns
+	}
+	if m.flowMode && m.FlowColumns < 2 && m.MaxFlowRows > 0 {
+		// Wrap-mode flow (dynamic row breaks, not a fixed grid) -- row count
+		// isn't derivable from item count alone, so use the total GetFlowHeight
+		// cached on its last call (mirrors lastScrollTotal's own memoization).
+		return m.lastFlowRows
 	}
 	return len(m.items)
 }
@@ -978,6 +993,13 @@ func (m *MenuModel) SetSubMenuMode(v bool) {
 		m.showButtons = false
 	}
 	m.calculateLayout()
+}
+
+// SetSubmenuWidgetsEnabled opts a submenu-mode menu into rendering title bar
+// widgets (configured via ConfigureWidgets) on its own border -- submenus
+// otherwise never show them (title only, embedded in the border line).
+func (m *MenuModel) SetSubmenuWidgetsEnabled(v bool) {
+	m.submenuWidgets = v
 }
 
 // SetDisabled marks the section as disabled, rendering its title with TitleSubMenuDisabled style.

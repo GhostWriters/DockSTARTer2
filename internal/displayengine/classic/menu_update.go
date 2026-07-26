@@ -74,8 +74,15 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// For cursor-driven lists, don't let the scrollbar handle wheel — the cursor
 	// code below calls scrollLineUp/Down which also update viewStartY via the list
 	// component's own pagination. Column-scroll mode (variableHeight + flow columns)
-	// drives viewStartY directly so wheel is allowed there.
+	// drives viewStartY directly so wheel is allowed there. Wrap-mode flow
+	// content squeezed into a scroll cap (isFlowWrapScroll) still wants wheel
+	// to move the cursor one item at a time, same as Up/Down -- so unlike
+	// column-scroll, it does NOT skip scrollbar-wheel handling here; it falls
+	// through to the plain scrollLineUp/Down path below instead. Scrollbar
+	// drag/click (any other message type) still goes through Scroll.Update
+	// regardless, since skipScrollbarWheel only ever gates wheel messages.
 	isColumnScroll := m.FlowColumns >= 2 && m.MaxFlowRows > 0
+	isFlowWrapScroll := m.flowMode && m.FlowColumns < 2 && m.MaxFlowRows > 0
 	skipScrollbarWheel := false
 	switch msg.(type) {
 	case tea.MouseWheelMsg, LayerWheelMsg:
@@ -98,7 +105,11 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if !skipScrollbarWheel {
 		if newOff, cmd, changed := m.Scroll.Update(msg, m.ViewStartY, m.ScrollTotal(), m.Layout.ViewportHeight); changed {
 			m.ViewStartY = newOff
-			m.syncSelectionToViewport()
+			if isFlowWrapScroll {
+				m.syncFlowWrapSelectionToViewport()
+			} else {
+				m.syncSelectionToViewport()
+			}
 			m.InvalidateCache()
 			return m, cmd
 		}
@@ -118,7 +129,10 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// For standard lists, ensure viewStartY follows the cursor.
 	// Column scroll mode skips this — viewStartY is driven by wheel/explicit nav
 	// in the interceptor, not by cursor position (which would pull viewStartY back).
-	if !m.variableHeight && (m.FlowColumns < 2 || m.MaxFlowRows == 0) {
+	// Wrap-mode flow scroll (isFlowWrapScroll) gets its own row-based variant
+	// below instead -- m.ViewStartY there is a wrapped-row index, not an item
+	// index, so the plain m.list.Index() comparison here would be wrong.
+	if !m.variableHeight && (m.FlowColumns < 2 || m.MaxFlowRows == 0) && !isFlowWrapScroll {
 		visible := m.Layout.ViewportHeight
 		if visible > 0 {
 			cursorRow := m.list.Index()
@@ -126,6 +140,16 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.ViewStartY = cursorRow
 			} else if cursorRow >= m.ViewStartY+visible {
 				m.ViewStartY = cursorRow - visible + 1
+			}
+		}
+	} else if isFlowWrapScroll {
+		visible := m.Layout.ViewportHeight
+		if visible > 0 && m.lastFlowWidth > 0 {
+			row := m.flowRowForCursor(m.lastFlowWidth)
+			if row < m.ViewStartY {
+				m.ViewStartY = row
+			} else if row >= m.ViewStartY+visible {
+				m.ViewStartY = row - visible + 1
 			}
 		}
 	}
@@ -160,13 +184,29 @@ func (m *MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Route messages to content sections when present.
+	// Route messages to content sections when present. Title bar widget hits
+	// that belong to THIS menu (e.g. our own submenu Close button, see
+	// SetSubmenuWidgetsEnabled) are excluded: a content section's ID can be a
+	// substring match against "<menuID>.<widgetID>" hit IDs (e.g. a section
+	// sharing the parent's own ID for scrollbar-hit-region purposes), which
+	// would otherwise swallow the click into the section's own
+	// routing/interceptor before it ever reaches the widget switch below.
+	// Must check the ID actually belongs to m (not just "looks like" a
+	// widget ID) -- a nested child's own title-widget hit (e.g. the preview
+	// mockup's Close button, nested inside a content section here) still
+	// needs to route through updateSections to reach that child at all.
 	if len(m.contentSections) > 0 {
-		if updated, cmd, handled := m.updateSections(msg); handled {
-			if mm, ok := updated.(*MenuModel); ok {
-				*m = *mm
+		skipSections := false
+		if hitMsg, ok := msg.(LayerHitMsg); ok && strings.HasPrefix(hitMsg.ID, m.id+".") && IsTitleWidgetID(hitMsg.ID) {
+			skipSections = true
+		}
+		if !skipSections {
+			if updated, cmd, handled := m.updateSections(msg); handled {
+				if mm, ok := updated.(*MenuModel); ok {
+					*m = *mm
+				}
+				return m, cmd
 			}
-			return m, cmd
 		}
 	}
 
@@ -773,7 +813,33 @@ func (m *MenuModel) SetSize(width, height int) {
 		if flowMaxW > 2 {
 			flowMaxW -= 2
 		}
+		m.lastFlowWidth = flowMaxW
+		if m.FlowColumns < 2 {
+			// Auto-derive a scroll cap purely from the height actually given.
+			// Unlike FlowColumns>=2 (whose callers cap explicitly via
+			// SetMaxFlowRows for their own paging reasons -- left untouched
+			// here), wrap-mode content has no existing convention for this,
+			// so recompute fresh every call rather than trusting a stale cap
+			// from a previous, possibly narrower/shorter SetSize -- without
+			// that, a section squeezed once would stay capped even after
+			// later regaining enough room to show everything uncapped again.
+			m.MaxFlowRows = 0
+			natural := m.GetFlowHeight(flowMaxW)
+			available := height - layout.BorderHeight()
+			if available < 1 {
+				available = 1
+			}
+			if natural > available {
+				m.MaxFlowRows = available
+			}
+		}
 		flowLines := m.GetFlowHeight(flowMaxW)
+		// GetFlowHeight always returns the true natural row count now (see
+		// its own doc comment) -- apply MaxFlowRows here explicitly for the
+		// actual rendered/occupied height this SetSize call produces.
+		if m.MaxFlowRows > 0 && flowLines > m.MaxFlowRows {
+			flowLines = m.MaxFlowRows
+		}
 		// +2 for top/bottom borders
 		m.Layout.ViewportHeight = flowLines
 		m.Layout.Height = flowLines + 2
@@ -1174,6 +1240,31 @@ func (m *MenuModel) syncSelectionToViewport() {
 		for m.list.Index() > 0 && m.items[m.list.Index()].IsSeparator {
 			m.list.CursorUp()
 		}
+	}
+}
+
+// syncFlowWrapSelectionToViewport is syncSelectionToViewport's counterpart
+// for FlowColumns<2 wrap mode, where m.ViewStartY is a wrapped-row index,
+// not an item index -- a wrap row isn't derivable from item index arithmetic
+// (see flowRowForCursor), so this steps the cursor item-by-item until its
+// own row falls back within [ViewStartY, ViewStartY+visible) rather than
+// jumping straight to a computed index the way syncSelectionToViewport does.
+func (m *MenuModel) syncFlowWrapSelectionToViewport() {
+	visible := m.Layout.ViewportHeight
+	if visible <= 0 || len(m.items) == 0 || m.lastFlowWidth <= 0 {
+		return
+	}
+	low := m.ViewStartY
+	high := m.ViewStartY + visible - 1
+
+	row := m.flowRowForCursor(m.lastFlowWidth)
+	for guard := 0; row < low && m.list.Index() < len(m.items)-1 && guard < len(m.items); guard++ {
+		m.list.CursorDown()
+		row = m.flowRowForCursor(m.lastFlowWidth)
+	}
+	for guard := 0; row > high && m.list.Index() > 0 && guard < len(m.items); guard++ {
+		m.list.CursorUp()
+		row = m.flowRowForCursor(m.lastFlowWidth)
 	}
 
 	m.cursor = m.list.Index()

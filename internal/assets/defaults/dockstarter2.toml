@@ -24,6 +24,7 @@ radio_brackets       = "always"    # "never", "selected", or "always" -- the foc
 menu_brackets        = true        # wrap the focused menu item's tag in [brackets]
 line_number_brackets = true        # wrap the focused line's number in [brackets] in the env editor
 tab_layout           = "sidebyside" # "maximized", "sidebyside", or "stacked" -- default view when the tabbed vars editor has 2 tabs open
+show_preview         = true        # default visibility of the Appearance Settings preview panel
 
 [paths]
 config_folder  = "${XDG_CONFIG_HOME}"

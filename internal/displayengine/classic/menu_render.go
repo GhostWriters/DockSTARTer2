@@ -400,7 +400,7 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 		ctx.Border2Flags = ctx.Border2DisabledFlags
 	}
 	tbs := m.State()
-	tbs.Show = m.title != "" && !m.subMenuMode
+	tbs.Show = m.title != "" && (!m.subMenuMode || m.submenuWidgets)
 	if m.titleSpinnerIndicator != nil {
 		tbs.SpinnerIndicator, tbs.SpinnerIndicatorRight = m.titleSpinnerIndicator()
 	} else if m.loadingText != "" {
@@ -591,6 +591,15 @@ func (m *MenuModel) renderVerticalListBlock(ctx StyleContext) string {
 	return ApplyScrollbar(&m.Scroll, content, total, m.Layout.ViewportHeight, m.ViewStartY, ctx.LineCharacters, ctx)
 }
 
+// RightMarginSuppressor is implemented by a content section that wants its
+// own right-side content margin dropped -- e.g. because it's using that
+// column itself for a control (see appearanceLayoutRow) -- mirroring
+// MenuModel's own noLeftMargin flag, but as an interface since
+// viewWithSections wraps arbitrary Content values, not just MenuModels.
+type RightMarginSuppressor interface {
+	SuppressRightMargin() bool
+}
+
 // viewWithSections renders an outer dialog that stacks content sections (sub-menus)
 // vertically inside its border, followed by a standard button row.
 // This path is taken when m.contentSections is non-empty and m.subMenuMode is false.
@@ -607,6 +616,9 @@ func (m *MenuModel) viewWithSections() string {
 	marginStyle := lipgloss.NewStyle().
 		Background(styles.Dialog.GetBackground()).
 		Padding(0, layout.ContentSideMargin)
+	noRightMarginStyle := lipgloss.NewStyle().
+		Background(styles.Dialog.GetBackground()).
+		PaddingLeft(layout.ContentSideMargin)
 	sectionWidth := contentWidth - layout.ContentMarginWidth()
 
 	var parts []string
@@ -615,7 +627,12 @@ func (m *MenuModel) viewWithSections() string {
 	for _, sec := range m.contentSections {
 		// Use the rendered string without trimming trailing newlines that are part of the height budget.
 		v := sec.ViewString()
-		if v != "" {
+		if v == "" {
+			continue
+		}
+		if rms, ok := sec.(RightMarginSuppressor); ok && rms.SuppressRightMargin() {
+			parts = append(parts, noRightMarginStyle.Render(v))
+		} else {
 			parts = append(parts, marginStyle.Render(v))
 		}
 	}

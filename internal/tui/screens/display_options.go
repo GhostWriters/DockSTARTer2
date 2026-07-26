@@ -312,6 +312,15 @@ func (s *DisplayOptionsScreen) initMenus() {
 				func() string { return s.config.UI.TabLayout },
 				func(cfg *config.AppConfig, v string) { cfg.UI.TabLayout = v }),
 		},
+		{
+			Tag:         "Show Preview",
+			Desc:        "Show the preview panel by default (some prefer a less busy screen)",
+			Help:        "Default visibility of this preview panel (Space to toggle)",
+			IsCheckbox:  true,
+			Checked:     s.config.UI.ShowPreview,
+			Selectable:  true,
+			SpaceAction: s.toggleShowPreview(),
+		},
 
 		// -- Brackets --
 		{
@@ -437,8 +446,16 @@ func (s *DisplayOptionsScreen) initMenus() {
 	// has no business visually activating Apply, unlike a simple
 	// single-list dialog where an item click IS conceptually "press Select".
 	outerMenu.SetSuppressChildProcessingMark(true)
+	// Without this, calculateSectionLayout's "!m.maximized" pass shrinks the
+	// whole dialog down to its content sections' summed natural heights
+	// instead of filling the space the screen actually has available --
+	// unlike a small popup dialog, this is a full-screen settings surface
+	// (every child section below already calls SetMaximized(true) for the
+	// same reason) and should always claim the height it's given.
+	outerMenu.SetMaximized(true)
 	settingsColumn := displayengine.NewContentColumn(loadDefaultsMenu, themeMenu, optionsMenu)
 	s.layoutRow = newAppearanceLayoutRow(settingsColumn, s.buildPreviewSection())
+	s.layoutRow.previewHidden = !s.config.UI.ShowPreview
 	outerMenu.AddContentSection(s.layoutRow)
 	s.outerMenu = outerMenu
 }
@@ -1120,6 +1137,15 @@ func (s *DisplayOptionsScreen) toggleLineNumberBrackets() tea.Cmd {
 	}
 }
 
+func (s *DisplayOptionsScreen) toggleShowPreview() tea.Cmd {
+	return func() tea.Msg {
+		newState := !s.config.UI.ShowPreview
+		return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
+			cfg.UI.ShowPreview = newState
+		}}
+	}
+}
+
 func (s *DisplayOptionsScreen) toggleSpinner() tea.Cmd {
 	return func() tea.Msg {
 		newState := !s.config.UI.Spinner
@@ -1204,6 +1230,11 @@ func (s *DisplayOptionsScreen) handleApply() tea.Cmd {
 		_ = config.SaveAppConfig(s.config)
 		s.baseConfig = s.config
 
+		var previewCmd tea.Cmd
+		if s.layoutRow != nil {
+			previewCmd = s.layoutRow.SetPreviewHidden(!s.config.UI.ShowPreview)
+		}
+
 		// 3. Refresh rate can only take effect at program construction time
 		// (tea.WithFPS has no live-update API), so it needs a restart rather
 		// than the live ConfigChangedMsg sync path used by other settings.
@@ -1227,7 +1258,7 @@ func (s *DisplayOptionsScreen) handleApply() tea.Cmd {
 		}
 
 		// 4. Trigger synchronized style update
-		return displayengine.ConfigChangedMsg{Config: s.config}
+		return tea.Batch(func() tea.Msg { return displayengine.ConfigChangedMsg{Config: s.config} }, previewCmd)()
 	}
 }
 
