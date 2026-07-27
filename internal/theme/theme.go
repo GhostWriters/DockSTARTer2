@@ -493,12 +493,17 @@ func isBuiltInTheme(name string) bool {
 }
 
 func parseThemeTOMLData(data []byte, prefix string) (*ThemeDefaults, error) {
+	// Fallback rules must exist before RegisterInto resolves the theme's raw
+	// values, since a tag referenced inline (e.g. "{{|PanelBorder|}}") that
+	// the theme itself omits is resolved against these rules at parse time
+	// -- registering them after RegisterInto would leave every reference in
+	// the very first theme load unresolved.
+	if prefix == "" {
+		registerTagFallbacksOnce.Do(registerTagFallbacks)
+	}
 	rawDefaults, err := semtheme.RegisterInto(data, prefix)
 	if err != nil {
 		return nil, err
-	}
-	if prefix == "" {
-		registerTagFallbacksOnce.Do(registerTagFallbacks)
 	}
 	return decodeThemeDefaults(rawDefaults)
 }
