@@ -52,13 +52,32 @@ func RestartForConfigChange(ctx context.Context) {
 // daemonReExecArgs returns the args to re-exec a --server-daemon process
 // with, preserving whatever it was actually launched with (notably a
 // non-default port override, which only exists in these args, not the
-// shared config file). Falls back to a bare --server-daemon if somehow
-// unset, rather than failing to restart at all.
+// shared config file) but always dropping any nav args (--menu/-M/
+// --start-edit-*): those only make sense as a one-time start page for new
+// connections, not something to keep blindly reapplying forever across
+// every subsequent restart (including unattended auto-update restarts).
+// Falls back to a bare --server-daemon if somehow unset, rather than
+// failing to restart at all.
 func daemonReExecArgs() []string {
-	if len(console.DaemonArgs) > 0 {
-		return console.DaemonArgs
+	args := console.DaemonArgs
+	if len(args) == 0 {
+		return []string{"--server-daemon"}
 	}
-	return []string{"--server-daemon"}
+	clean := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--menu", "-M", "--start-edit-app":
+			i++ // also skip its value
+			continue
+		case "--start-edit-global":
+			continue
+		}
+		clean = append(clean, args[i])
+	}
+	if len(clean) == 0 {
+		return []string{"--server-daemon"}
+	}
+	return clean
 }
 
 // isRestartSafeLocally returns true when this process is in a safe state to
