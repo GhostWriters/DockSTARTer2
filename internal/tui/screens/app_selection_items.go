@@ -151,9 +151,9 @@ func (s *AppSelectionScreen) applyLoadedItems(data appSelectLoadedMsg) {
 
 		niceName := appenv.GetNiceName(ctx, base)
 		desc := displayengine.GetPlainText(appenv.GetDescriptionFromTemplate(ctx, base, envFile))
-		descTag := "{{|ListItem|}}"
+		descTag := "{{|ItemList|}}"
 		if appenv.IsAppDeprecated(ctx, base) {
-			descTag = "{{|ListItemDeprecated|}}"
+			descTag = "{{|ItemListDeprecated|}}"
 		}
 
 		instances := addedByBase[base]
@@ -299,9 +299,9 @@ func (s *AppSelectionScreen) expandGroup(baseApp string) {
 	envFile := filepath.Join(s.conf.ComposeDir, constants.EnvFileName)
 	niceName := appenv.GetNiceName(ctx, baseApp)
 	desc := displayengine.GetPlainText(appenv.GetDescriptionFromTemplate(ctx, baseApp, envFile))
-	descTag := "{{|ListItem|}}"
+	descTag := "{{|ItemList|}}"
 	if appenv.IsAppDeprecated(ctx, baseApp) {
-		descTag = "{{|ListItemDeprecated|}}"
+		descTag = "{{|ItemListDeprecated|}}"
 	}
 	groupHeader := displayengine.MenuItem{
 		Tag:           niceName,
@@ -392,9 +392,9 @@ func (s *AppSelectionScreen) collapseGroupIfNeeded(items []displayengine.MenuIte
 	envFile := filepath.Join(s.conf.ComposeDir, constants.EnvFileName)
 	niceName := appenv.GetNiceName(ctx, base)
 	desc := displayengine.GetPlainText(appenv.GetDescriptionFromTemplate(ctx, base, envFile))
-	descTag := "{{|ListItem|}}"
+	descTag := "{{|ItemList|}}"
 	if appenv.IsAppDeprecated(ctx, base) {
-		descTag = "{{|ListItemDeprecated|}}"
+		descTag = "{{|ItemListDeprecated|}}"
 	}
 	simpleRow := displayengine.MenuItem{
 		Tag:               niceName,

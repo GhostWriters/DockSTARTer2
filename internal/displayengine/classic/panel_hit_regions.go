@@ -22,7 +22,7 @@ func (m PanelModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	ctx := GetActiveContext()
 	title := m.Title()
 
-	consoleTitleStyle := SemanticRawStyle("ConsoleTitle")
+	consoleTitleStyle := SemanticRawStyle("TitleConsole")
 	titleWidth := WidthWithoutZones(RenderThemeText(title, consoleTitleStyle))
 	titleLayout := ComputeTitleBarLayout(titleWidth, m.width, ctx.PanelTitleAlign)
 	titleStart := titleLayout.Start

@@ -497,7 +497,169 @@ func parseThemeTOMLData(data []byte, prefix string) (*ThemeDefaults, error) {
 	if err != nil {
 		return nil, err
 	}
+	if prefix == "" {
+		registerTagFallbacksOnce.Do(registerTagFallbacks)
+	}
 	return decodeThemeDefaults(rawDefaults)
+}
+
+// registerTagFallbacksOnce guards registerTagFallbacks so it runs exactly
+// once per process, not on every theme load -- see registerTagFallbacks'
+// doc comment for why.
+var registerTagFallbacksOnce sync.Once
+
+// registerTagFallbacks declares every optional-tag fallback rule DS2 defines
+// via semstyle's RegisterFallback. These are structural relationships in
+// DS2's own tag-naming scheme (e.g. "a Radio tag falls back to its Checkbox
+// equivalent") that hold regardless of which theme is loaded, not per-theme
+// state, so they're registered once rather than re-registered on every
+// theme load/switch -- semstyle.ClearThemeMap (called by Unload before every
+// load, including the first) deliberately leaves fallback rules untouched
+// for exactly this reason. Resolution itself is handled entirely by
+// semstyle -- lazily, at the point something actually resolves the tag
+// (GetRawTagCode, GetColorDefinition, or inline "{{|name|}}" text expansion)
+// -- so registration order among these calls doesn't matter, and every
+// existing (and future) call site referencing e.g. "TitleWarn" or
+// "IconMaximizeFocused" by name gets the fallback for free with no
+// per-call-site resolution code needed anywhere.
+func registerTagFallbacks() {
+	for _, tf := range titleFallbackTags {
+		semstyle.RegisterFallback(tf.name, tf.fallback)
+	}
+	for _, tf := range itemListFallbackTags {
+		semstyle.RegisterFallback(tf.name, tf.fallback)
+	}
+	for _, tf := range iconFallbackTags() {
+		semstyle.RegisterFallback(tf.name, tf.fallback)
+	}
+	for _, tf := range checkboxFallbackTags() {
+		semstyle.RegisterFallback(tf.name, tf.fallback)
+	}
+}
+
+// titleFallbackTags lists optional Title-variant tags that fall back to
+// another tag when the active theme doesn't define them.
+//
+// Large* variants fall back to their own small tag (LargeTitleWarn ->
+// TitleWarn), not to the generic LargeTitle -- matching what every bundled
+// theme already does explicitly for these (LargeTitleWarn =
+// "{{|TitleWarn|}}", not "{{|LargeTitle|}}"). LargeTitleHelp is the one
+// exception left out here: most bundled themes point it at the generic
+// LargeTitle instead of TitleHelp, and the two don't necessarily resolve to
+// the same color, so it keeps requiring an explicit per-theme definition
+// rather than getting an assumed fallback.
+var titleFallbackTags = []struct{ name, fallback string }{
+	{"TitleHelp", "Title"},
+	{"TitleNotice", "Title"},
+	{"TitleWarn", "Title"},
+	{"TitleWarning", "Title"},
+	{"TitleError", "Title"},
+	{"TitleSuccess", "Title"},
+	{"TitleQuestion", "Title"},
+	{"TitleSubMenu", "Title"},
+	{"TitleFocused", "Title"},
+	{"TitleSubMenuFocused", "TitleFocused"},
+	// *Focused variants of each title state -- unused by any bundled theme
+	// or call site today (only SubMenu currently has a distinct focused
+	// look), but a theme designer may want a dialog type's title to look
+	// different while focused, so these are wired up ready for that even
+	// though nothing queries them yet.
+	{"TitleHelpFocused", "TitleFocused"},
+	{"TitleNoticeFocused", "TitleFocused"},
+	{"TitleWarnFocused", "TitleFocused"},
+	{"TitleWarningFocused", "TitleFocused"},
+	{"TitleErrorFocused", "TitleFocused"},
+	{"TitleSuccessFocused", "TitleFocused"},
+	{"TitleQuestionFocused", "TitleFocused"},
+	{"LargeTitleNotice", "TitleNotice"},
+	{"LargeTitleWarn", "TitleWarn"},
+	{"LargeTitleWarning", "TitleWarning"},
+	{"LargeTitleError", "TitleError"},
+	{"LargeTitleSuccess", "TitleSuccess"},
+	{"LargeTitleQuestion", "TitleQuestion"},
+	{"LargeTitleSubMenu", "TitleSubMenu"},
+	{"LargeTitleSubMenuFocused", "TitleSubMenuFocused"},
+	{"LargeTitleHelpFocused", "TitleHelpFocused"},
+	{"LargeTitleNoticeFocused", "TitleNoticeFocused"},
+	{"LargeTitleWarnFocused", "TitleWarnFocused"},
+	{"LargeTitleWarningFocused", "TitleWarningFocused"},
+	{"LargeTitleErrorFocused", "TitleErrorFocused"},
+	{"LargeTitleSuccessFocused", "TitleSuccessFocused"},
+	{"LargeTitleQuestionFocused", "TitleQuestionFocused"},
+}
+
+// itemListFallbackTags lists optional ItemList-variant tags that fall back
+// to another tag when the active theme doesn't define them, same idea as
+// titleFallbackTags. The bare ItemList tag itself is deliberately not
+// included: 11 of 13 bundled themes set it to "" (a deliberate "render
+// unstyled" choice, not an oversight), and GetRawTagCode can't distinguish
+// an explicit "" from "not defined" -- adding a fallback for it would
+// silently reintroduce an Item-derived color into every one of those
+// themes. ItemListUserDefinedFocused/ItemListDeprecatedFocused already
+// vary legitimately per theme (some derive from their own base tag with
+// Bold instead of the generic ItemFocused), so this only supplies a
+// fallback for when a theme skips them entirely, never overriding an
+// existing per-theme definition.
+var itemListFallbackTags = []struct{ name, fallback string }{
+	{"ItemListFocused", "ItemFocused"},
+	{"ItemListUserDefinedFocused", "ItemFocused"},
+	{"ItemListDeprecated", "ItemListUserDefined"},
+	{"ItemListDeprecatedFocused", "ItemListUserDefinedFocused"},
+}
+
+// iconWidgets is every title-bar/pane-layout widget with its own optional
+// Icon<Name><State>/LargeIcon<Name><State> tag family -- Help/Refresh/Exit
+// (dialog_titlebar.go's WidgetDef), ResizeUp/ResizeDn (panel resize
+// widgets), and Maximize/SideBySide/Stacked (the tabbed vars editor's pane
+// layout widgets).
+var iconWidgets = []string{"Help", "Refresh", "Exit", "ResizeUp", "ResizeDn", "Maximize", "SideBySide", "Stacked"}
+
+// iconFallbackTags returns, for every widget in iconWidgets, its Inactive/
+// Focused/Pressed and LargeIcon* fallback rules: IconWidgetFocused/Pressed
+// fall back to the generic IconFocused/IconPressed; IconWidgetInactive falls
+// back to the generic IconInactive; LargeIconWidgetFocused/Pressed fall back
+// to the generic LargeIconFocused/LargeIconPressed; LargeIconWidgetInactive
+// falls back to the small IconWidgetInactive tag (itself already
+// fallback-resolved) rather than a generic LargeIconInactive, since none
+// exists -- matching what every bundled theme already does explicitly for
+// the pre-existing widgets (LargeIconExitInactive would otherwise need its
+// own generic large counterpart that was never defined).
+func iconFallbackTags() []struct{ name, fallback string } {
+	var tags []struct{ name, fallback string }
+	for _, w := range iconWidgets {
+		tags = append(tags,
+			struct{ name, fallback string }{"Icon" + w + "Inactive", "IconInactive"},
+			struct{ name, fallback string }{"Icon" + w + "Focused", "IconFocused"},
+			struct{ name, fallback string }{"Icon" + w + "Pressed", "IconPressed"},
+			struct{ name, fallback string }{"LargeIcon" + w + "Inactive", "Icon" + w + "Inactive"},
+			struct{ name, fallback string }{"LargeIcon" + w + "Focused", "LargeIconFocused"},
+			struct{ name, fallback string }{"LargeIcon" + w + "Pressed", "LargeIconPressed"},
+		)
+	}
+	return tags
+}
+
+// checkboxFallbackTags returns the Radio*->Checkbox* and Checkbox*Focused/
+// Radio*Focused->TagFocused fallback rules matching checkboxStylePair
+// (internal/displayengine/classic/menu_render.go)'s tag-name construction:
+// Checkbox|Radio + Brackets? + On|Off + Focused?. Every bundled theme
+// already either duplicates or explicitly aliases Radio's tags to
+// Checkbox's, and Checkbox*Focused to the generic TagFocused.
+func checkboxFallbackTags() []struct{ name, fallback string } {
+	var tags []struct{ name, fallback string }
+	for _, brackets := range []string{"", "Brackets"} {
+		for _, state := range []string{"On", "Off"} {
+			for _, suffix := range []string{"", "Focused"} {
+				checkboxTag := "Checkbox" + brackets + state + suffix
+				radioTag := "Radio" + brackets + state + suffix
+				tags = append(tags, struct{ name, fallback string }{radioTag, checkboxTag})
+				if suffix == "Focused" {
+					tags = append(tags, struct{ name, fallback string }{checkboxTag, "TagFocused"})
+				}
+			}
+		}
+	}
+	return tags
 }
 
 var (

@@ -96,9 +96,9 @@ func (s *DisplayOptionsScreen) computePreviewContent() previewContent {
 		IconFocused:         displayengine.SemanticRawStyle("Preview_IconFocused"),
 		IconPressed:         displayengine.SemanticRawStyle("Preview_IconPressed"),
 		IconInactive:        displayengine.SemanticRawStyle("Preview_IconInactive"),
-		HelpIconInactive:    displayengine.SemanticRawStyle("Preview_HelpIconInactive"),
-		RefreshIconInactive: displayengine.SemanticRawStyle("Preview_RefreshIconInactive"),
-		ExitIconInactive:    displayengine.SemanticRawStyle("Preview_ExitIconInactive"),
+		IconHelpInactive:    displayengine.SemanticRawStyle("Preview_IconHelpInactive"),
+		IconRefreshInactive: displayengine.SemanticRawStyle("Preview_IconRefreshInactive"),
+		IconExitInactive:    displayengine.SemanticRawStyle("Preview_IconExitInactive"),
 		ItemNormal:          displayengine.SemanticRawStyle("Preview_Item"),
 		ItemFocused:         displayengine.SemanticRawStyle("Preview_ItemFocused"),
 		TagNormal:           displayengine.SemanticRawStyle("Preview_Tag"),
@@ -230,7 +230,7 @@ func (s *DisplayOptionsScreen) computePreviewContent() previewContent {
 		"",
 		// Menu Items Simulation
 		" {{|Item|}}Item 1      Item Description{{[-]}}",
-		" {{|Item|}}Item 2      {{|ListItemUserDefined|}}User Description{{[-]}}",
+		" {{|Item|}}Item 2      {{|ItemListUserDefined|}}User Description{{[-]}}",
 		"",
 		" {{|LineComment|}}### Sample comment{{[-]}}",
 		" Var='Default'",
@@ -293,8 +293,8 @@ func (s *DisplayOptionsScreen) computePreviewContent() previewContent {
 	helpRow := paddedLine(" Help: [Tab] Cycle | [Esc] Back", helpStyle, " ", helpCtx)
 
 	// --- 4. Console Toggle Strip ---
-	// Both strip and label: ConsoleTitle fg on ConsoleBox bg.
-	consoleTitleStyle := displayengine.SemanticRawStyle("Preview_ConsoleTitle")
+	// Both strip and label: TitleConsole fg on ConsoleBox bg.
+	consoleTitleStyle := displayengine.SemanticRawStyle("Preview_TitleConsole")
 	consoleBorderStyle := displayengine.SemanticRawStyle("Preview_ConsoleBorder")
 
 	marker := "^"

@@ -70,11 +70,11 @@ func buildConfigAppItems(ctx context.Context, apps []string, envFile string, con
 		descText := displayengine.GetPlainText(desc)
 		switch {
 		case isUserDefined:
-			descText = "{{|ListItemUserDefined|}}" + descText
+			descText = "{{|ItemListUserDefined|}}" + descText
 		case appenv.IsAppDeprecated(ctx, appenv.AppNameToBaseAppName(appName)):
-			descText = "{{|ListItemDeprecated|}}" + descText
+			descText = "{{|ItemListDeprecated|}}" + descText
 		default:
-			descText = "{{|ListItem|}}" + descText
+			descText = "{{|ItemList|}}" + descText
 		}
 
 		items = append(items, displayengine.MenuItem{

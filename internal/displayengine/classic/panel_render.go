@@ -102,7 +102,7 @@ func (m PanelModel) ViewString() string {
 		combined += "\n" + inputBox
 	}
 
-	consoleTitleStyle := SemanticRawStyle("ConsoleTitle")
+	consoleTitleStyle := SemanticRawStyle("TitleConsole")
 
 	// Sep between resize widgets uses the console border color, not the dialog border color.
 	lineChar := "─"
@@ -112,7 +112,7 @@ func (m PanelModel) ViewString() string {
 	rightTitle := ""
 	rightSuffix := ""
 	if m.Expanded {
-		upTag, dnTag := "ResizeUpIconInactive", "ResizeDnIconInactive"
+		upTag, dnTag := "IconResizeUpInactive", "IconResizeDnInactive"
 		if m.PressedWidget() == PanelWidgetUp {
 			upTag = "IconPressed"
 		} else if m.PressedWidget() == PanelWidgetDn {
