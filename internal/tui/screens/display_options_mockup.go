@@ -293,9 +293,9 @@ func (s *DisplayOptionsScreen) computePreviewContent() previewContent {
 	helpRow := paddedLine(" Help: [Tab] Cycle | [Esc] Back", helpStyle, " ", helpCtx)
 
 	// --- 4. Console Toggle Strip ---
-	// Both strip and label: TitleConsole fg on ConsoleBox bg.
-	consoleTitleStyle := displayengine.SemanticRawStyle("Preview_TitleConsole")
-	consoleBorderStyle := displayengine.SemanticRawStyle("Preview_ConsoleBorder")
+	// Both strip and label: PanelTitle fg on ConsoleBox bg.
+	panelTitleStyle := displayengine.SemanticRawStyle("Preview_PanelTitle")
+	panelBorderStyle := displayengine.SemanticRawStyle("Preview_PanelBorder")
 
 	marker := "^"
 	titleText := "Console"
@@ -305,7 +305,7 @@ func (s *DisplayOptionsScreen) computePreviewContent() previewContent {
 	case "system":
 		titleText = "System Console"
 	}
-	label := consoleTitleStyle.Render(" " + marker + " " + titleText + " " + marker + " ")
+	label := panelTitleStyle.Render(" " + marker + " " + titleText + " " + marker + " ")
 
 	var leftT, rightT, borderTop, topLeftC, topRightC string
 	if s.config.UI.LineCharacters {
@@ -342,9 +342,9 @@ func (s *DisplayOptionsScreen) computePreviewContent() previewContent {
 	rightDashes := strutil.Repeat(borderTop, remaining)
 
 	// Render in pieces to prevent inner resets from Clearing the background
-	logStripRow := consoleBorderStyle.Render(topLeftC+leftDashes+leftT+" ") +
+	logStripRow := panelBorderStyle.Render(topLeftC+leftDashes+leftT+" ") +
 		label +
-		consoleBorderStyle.Render(" "+rightT+rightDashes+topRightC)
+		panelBorderStyle.Render(" "+rightT+rightDashes+topRightC)
 
 	// Backdrop + fake dialog: built at buildBackdrop(h) call time (inside
 	// the ContentRenderer closure below), not baked in here -- it stretches
