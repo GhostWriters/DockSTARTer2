@@ -223,15 +223,14 @@ type StyleState struct {
 	InvalidText               lipgloss.Style
 	DuplicateText             lipgloss.Style
 	BuiltinText               lipgloss.Style
-	// UserDefinedText removed — user-defined var keys now use ModifiedText
-	PendingDeleteText lipgloss.Style
-	GutterAdded       lipgloss.Style // + marker for new lines
-	GutterDeleted     lipgloss.Style // - marker for pending-delete lines
-	GutterModified    lipgloss.Style // ~ marker for changed lines
-	GutterInvalid     lipgloss.Style // ! marker for protected vars entered in user-defined section
-	ScrollbarTrack    lipgloss.Style
-	ScrollbarThumb    lipgloss.Style
-	SelectionText     lipgloss.Style
+	PendingDeleteText         lipgloss.Style
+	GutterAdded               lipgloss.Style // + marker for new lines
+	GutterDeleted             lipgloss.Style // - marker for pending-delete lines
+	GutterModified            lipgloss.Style // ~ marker for changed lines
+	GutterInvalid             lipgloss.Style // ! marker for protected vars entered in user-defined section
+	ScrollbarTrack            lipgloss.Style
+	ScrollbarThumb            lipgloss.Style
+	SelectionText             lipgloss.Style
 }
 
 func (s StyleState) computedCursorLine() lipgloss.Style {
