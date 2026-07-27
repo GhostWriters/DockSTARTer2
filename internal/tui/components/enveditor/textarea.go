@@ -2069,8 +2069,12 @@ func (m Model) promptView(displayLine, dataLine int) (prompt string) {
 				char = glyphs.InvalidMarker
 			case meta.IsNewLine || meta.InitialLine == "":
 				char = "+"
-			default:
+			case string(m.value[dataLine]) != meta.InitialLine:
 				char = "~"
+			default:
+				// Content matches InitialLine exactly -- the only other
+				// reason gutterStyleFor flagged this line is isDirectlyMoved.
+				char = "M"
 			}
 			return gutterStyle.Render(char)
 		}
@@ -2132,9 +2136,11 @@ func (m Model) lineNumberView(n int, isCursorLine bool, dataLine int) (str strin
 		meta := &m.lineMeta[dataLine]
 		isModified := false
 
-		// Check if the entire line differs from the one initially loaded from file.
-		// This captures key changes, which getDiffMask (focused on values) skips.
-		if meta.InitialLine != "" && string(m.value[dataLine]) != meta.InitialLine {
+		// Check if the entire line differs from the one initially loaded from file,
+		// or if it was directly reordered via MoveVariableUp/Down and hasn't
+		// returned to its original neighbor. This captures key changes, which
+		// getDiffMask (focused on values) skips.
+		if meta.InitialLine != "" && (string(m.value[dataLine]) != meta.InitialLine || m.isDirectlyMoved(dataLine)) {
 			isModified = true
 		}
 

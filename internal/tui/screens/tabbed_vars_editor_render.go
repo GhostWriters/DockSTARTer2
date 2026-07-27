@@ -523,6 +523,7 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) displayengine.Help
 		"{{|MarkerAdded|}}+{{[-]}} Added | " +
 		"{{|MarkerDeleted|}}-{{[-]}} Deleted | " +
 		"{{|MarkerModified|}}~{{[-]}} Changed | " +
+		"{{|MarkerModified|}}M{{[-]}} Moved | " +
 		"{{|MarkerInvalid|}}!{{[-]}} Invalid |"
 
 	meta, ok := tab.editor.CurrentLineMeta()
@@ -579,6 +580,7 @@ func (m *TabbedVarsEditorModel) getVariableHelpContext(varName string, tab *envT
 		"{{|MarkerAdded|}}+{{[-]}} Added | " +
 		"{{|MarkerDeleted|}}-{{[-]}} Deleted | " +
 		"{{|MarkerModified|}}~{{[-]}} Changed | " +
+		"{{|MarkerModified|}}M{{[-]}} Moved | " +
 		"{{|MarkerInvalid|}}!{{[-]}} Invalid |"
 
 	meta, ok := tab.editor.GetVariableMeta(varName)
